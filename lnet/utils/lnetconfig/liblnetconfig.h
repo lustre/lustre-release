@@ -1014,4 +1014,17 @@ int lustre_lnet_show_peer_debug_info(char *peer_nid, int seq_no,
 int lustre_lnet_set_peer_state(int state, char *lpni_nid, int seq_no,
 			       struct cYAML **err_rc);
 
+int
+lnet_yaml_int_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
+		      const char *key, const void *val, int size);
+int
+lnet_yaml_uint_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
+		       const char *key, const void *val, int size);
+int
+lnet_yaml_bool_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
+		       const char *key, const char *val);
+int
+lnet_yaml_str_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
+		      const char *key, const char *val);
+
 #endif /* LIB_LNET_CONFIG_API_H */

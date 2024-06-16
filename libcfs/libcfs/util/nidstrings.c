@@ -1029,6 +1029,20 @@ libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
 	return *nidp != LNET_NID_ANY;
 }
 
+int
+libcfs_stranynid(struct lnet_nid *nid, const char *str)
+{
+	if (!strcmp(str, "*")) {
+		*nid = LNET_ANY_NID;
+		return 1;
+	}
+
+	if (libcfs_strnid(nid, str) < 0)
+		*nid = LNET_ANY_NID;
+
+	return !LNET_NID_IS_ANY(nid);
+}
+
 /**
  * Nid range list syntax.
  * \verbatim

@@ -528,14 +528,58 @@ free_reply:
 	return rc == 1 ? 0 : rc;
 }
 
+static int
+fault_attr_parse_nid(char *str, struct lnet_nid *nid)
+{
+	int rc = 0;
+	__u32 net;
+
+	if (!str) {
+		*nid = LNET_ANY_NID;
+		return 0;
+	}
+
+	if (strlen(str) > 2 && str[0] == '*' && str[1] == '@') {
+		net = libcfs_str2net(str + 2);
+		if (net == LNET_NET_ANY) {
+			rc = -EINVAL;
+			goto failed;
+		}
+
+		lnet_nid4_to_nid(LNET_MKNID(net, LNET_NIDADDR(LNET_NID_ANY)),
+				 nid);
+	} else {
+		rc = libcfs_stranynid(nid, str);
+		if (rc != 1)
+			rc = -EINVAL;
+	}
+failed:
+	if (rc < 0)
+		fprintf(stderr, "Invalid NID: %s\n", str);
+
+	return rc;
+}
+
 static char *
 fault_opc_to_str(__u32 opc)
 {
 	switch (opc) {
+	case LNET_CTL_DROP_ADD:
+		return "add drop rule";
+	case LNET_CTL_DELAY_ADD:
+		return "add delay rule";
 	case LNET_CTL_DROP_LIST:
 		return "list drop rule";
 	case LNET_CTL_DELAY_LIST:
 		return "list delay rules";
+	case LNET_CTL_DROP_DEL:
+		return "delete drop rule";
+	case LNET_CTL_DELAY_DEL:
+		return "delete delay rule";
+	case LNET_CTL_DROP_RESET:
+		return "drop_reset rule";
+	case LNET_CTL_DELAY_RESET:
+		return "delay reset_rule";
 	default:
 		return "unrecognized command";
 	}
@@ -546,14 +590,56 @@ int yaml_lnet_fault_rule(yaml_document_t *results, __u32 opc, char *src,
 			 struct lnet_fault_attr *attr)
 {
 	struct nl_sock *sk = NULL;
-	char num[INT_STRING_LEN];
+	struct lnet_nid fa_local_nid;
+	struct lnet_nid fa_src;
+	struct lnet_nid fa_dst;
 	const char *msg = NULL;
-	int flags = NLM_F_DUMP;
 	yaml_emitter_t output;
 	yaml_parser_t reply;
 	yaml_event_t event;
-	int rc;
+	int flags, rc;
 
+	switch (opc) {
+	case LNET_CTL_DROP_ADD:
+	case LNET_CTL_DELAY_ADD:
+		flags = NLM_F_CREATE;
+		break;
+	case LNET_CTL_DROP_RESET:
+	case LNET_CTL_DELAY_RESET:
+		flags = NLM_F_REPLACE;
+		break;
+	case LNET_CTL_DROP_LIST:
+	case LNET_CTL_DELAY_LIST:
+		flags = NLM_F_DUMP;
+		break;
+	case LNET_CTL_DROP_DEL:
+	case LNET_CTL_DELAY_DEL:
+	default:
+		flags = 0;
+		break;
+	}
+
+	if (opc == LNET_CTL_DROP_LIST || opc == LNET_CTL_DELAY_LIST ||
+	    opc == LNET_CTL_DROP_RESET || opc == LNET_CTL_DELAY_RESET)
+		goto skip_options;
+
+	rc = fault_attr_parse_nid(src, &fa_src);
+	if (rc < 0)
+		return rc;
+
+	rc = fault_attr_parse_nid(dst, &fa_dst);
+	if (rc < 0)
+		return rc;
+
+	if (local_nid) {
+		rc = fault_attr_parse_nid(local_nid, &fa_local_nid);
+		if (rc < 0)
+			return rc;
+	} else {
+		fa_local_nid = LNET_ANY_NID;
+	}
+
+skip_options:
 	/* Create Netlink emitter to send request to kernel */
 	sk = nl_socket_alloc();
 	if (!sk)
@@ -592,25 +678,97 @@ int yaml_lnet_fault_rule(yaml_document_t *results, __u32 opc, char *src,
 	if (rc == 0)
 		goto emitter_error;
 
-	yaml_scalar_event_initialize(&event, NULL,
-				     (yaml_char_t *)YAML_STR_TAG,
-				     (yaml_char_t *)"rule_type",
-				     strlen("rule_type"), 1, 0,
-				     YAML_PLAIN_SCALAR_STYLE);
-	rc = yaml_emitter_emit(&output, &event);
+	rc = lnet_yaml_uint_mapping(&event, &output, "rule_type", &opc,
+				    sizeof(__u32));
 	if (rc == 0)
 		goto emitter_error;
 
-	snprintf(num, sizeof(num), "%d", opc);
-	yaml_scalar_event_initialize(&event, NULL,
-				     (yaml_char_t *)YAML_INT_TAG,
-				     (yaml_char_t *)num,
-				     strlen(num), 1, 0,
-				     YAML_PLAIN_SCALAR_STYLE);
-	rc = yaml_emitter_emit(&output, &event);
+	if (opc == LNET_CTL_DROP_LIST || opc == LNET_CTL_DELAY_LIST ||
+	    opc == LNET_CTL_DROP_RESET || opc == LNET_CTL_DELAY_RESET)
+		goto yaml_mapping_end_event;
+
+	rc = lnet_yaml_str_mapping(&event, &output, "fa_src",
+				   libcfs_nidstr(&fa_src));
 	if (rc == 0)
 		goto emitter_error;
 
+	rc = lnet_yaml_str_mapping(&event, &output, "fa_dst",
+				   libcfs_nidstr(&fa_dst));
+	if (rc == 0)
+		goto emitter_error;
+
+	if (opc == LNET_CTL_DROP_DEL || opc == LNET_CTL_DELAY_DEL)
+		goto yaml_mapping_end_event;
+
+	rc = lnet_yaml_str_mapping(&event, &output, "fa_local_nid",
+				   libcfs_nidstr(&fa_local_nid));
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = lnet_yaml_uint_mapping(&event, &output, "fa_ptl_mask",
+				    &attr->fa_ptl_mask,
+				    sizeof(attr->fa_ptl_mask));
+	if (rc == 0)
+		goto emitter_error;
+
+	rc = lnet_yaml_uint_mapping(&event, &output, "fa_msg_mask",
+				    &attr->fa_msg_mask,
+				    sizeof(attr->fa_msg_mask));
+	if (rc == 0)
+		goto emitter_error;
+
+	if (opc == LNET_CTL_DROP_ADD) {
+		rc = lnet_yaml_uint_mapping(&event, &output, "da_rate",
+					    &attr->u.drop.da_rate,
+					    sizeof(attr->u.drop.da_rate));
+		if (rc == 0)
+			goto emitter_error;
+
+		rc = lnet_yaml_uint_mapping(&event, &output, "da_interval",
+					    &attr->u.drop.da_interval,
+					    sizeof(attr->u.drop.da_interval));
+		if (rc == 0)
+			goto emitter_error;
+
+		rc = lnet_yaml_uint_mapping(&event, &output,
+					    "da_health_error_mask",
+					    &attr->u.drop.da_health_error_mask,
+					    sizeof(attr->u.drop.da_health_error_mask));
+		if (rc == 0)
+			goto emitter_error;
+
+		rc = lnet_yaml_bool_mapping(&event, &output, "da_random",
+					    attr->u.drop.da_random ? "True" :
+								     "False");
+		if (rc == 0)
+			goto emitter_error;
+
+		rc = lnet_yaml_bool_mapping(&event, &output, "da_drop_all",
+					    attr->u.drop.da_drop_all ? "True" :
+								       "False");
+		if (rc == 0)
+			goto emitter_error;
+	} else if (opc == LNET_CTL_DELAY_ADD) {
+		rc = lnet_yaml_uint_mapping(&event, &output, "la_rate",
+					    &attr->u.delay.la_rate,
+					    sizeof(attr->u.delay.la_rate));
+		if (rc == 0)
+			goto emitter_error;
+
+		rc = lnet_yaml_uint_mapping(&event, &output, "la_interval",
+					    &attr->u.delay.la_interval,
+					    sizeof(attr->u.delay.la_interval));
+		if (rc == 0)
+			goto emitter_error;
+
+		rc = lnet_yaml_uint_mapping(&event, &output, "la_latency",
+					    &attr->u.delay.la_latency,
+					    sizeof(attr->u.delay.la_latency));
+		if (rc == 0)
+			goto emitter_error;
+	}
+
+yaml_mapping_end_event:
 	yaml_mapping_end_event_initialize(&event);
 	rc = yaml_emitter_emit(&output, &event);
 	if (rc == 0)
@@ -6114,4 +6272,131 @@ int lustre_yaml_exec(char *f, int len, struct cYAML **show_rc,
 {
 	return lustre_yaml_cb_helper(f, len, lookup_exec_tbl,
 				     show_rc, err_rc);
+}
+
+static int
+val_to_str(char *buf, int buf_size, const void *val, int size,
+	   bool is_unsigned)
+{
+	int rc = 0;
+
+	if (is_unsigned) {
+		switch (size) {
+		case sizeof(__u8):
+			rc = snprintf(buf, buf_size, "%u", *((__u8 *)val));
+			break;
+		case sizeof(__u16):
+			rc = snprintf(buf, buf_size, "%u", *((__u16 *)val));
+			break;
+		case sizeof(__u32):
+			rc = snprintf(buf, buf_size, "%u", *((__u32 *)val));
+			break;
+		case sizeof(__u64):
+			rc = snprintf(buf, buf_size, "%llu", *((__u64 *)val));
+			break;
+		default:
+			return -EINVAL;
+		}
+	} else {
+		switch (size) {
+		case sizeof(__s8):
+			rc = snprintf(buf, buf_size, "%d", *((__s8 *)val));
+			break;
+		case sizeof(__s16):
+			rc = snprintf(buf, buf_size, "%d", *((__s16 *)val));
+			break;
+		case sizeof(__s32):
+			rc = snprintf(buf, buf_size, "%d", *((__s32 *)val));
+			break;
+		case sizeof(__s64):
+			rc = snprintf(buf, buf_size, "%lld", *((__s64 *)val));
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	return (rc >= 0 && rc < buf_size) ? 0 : -EOVERFLOW;
+}
+
+static int
+lnet_yaml_event_helper(yaml_event_t *event, yaml_emitter_t *emitter,
+		       const char *key, yaml_char_t *tag, const void *val,
+		       int size, bool is_unsigned)
+{
+	int rc;
+
+	yaml_scalar_event_initialize(event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)key,
+				     strlen(key), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(emitter, event);
+	if (rc == 0)
+		return rc;
+
+	if (strcmp((char *)tag, YAML_INT_TAG) == 0) {
+		char num[INT_STRING_LEN];
+
+		if (val_to_str(num, INT_STRING_LEN, val, size, is_unsigned))
+			return 0;
+
+		yaml_scalar_event_initialize(event, NULL,
+					     (yaml_char_t *)YAML_INT_TAG,
+					     (yaml_char_t *)num,
+					     strlen(num), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+	} else if (strcmp((char *)tag, YAML_STR_TAG) == 0) {
+		yaml_scalar_event_initialize(event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)val,
+					     strlen((char *)val), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+	} else if (strcmp((char *)tag, YAML_BOOL_TAG) == 0) {
+		yaml_scalar_event_initialize(event, NULL,
+					     (yaml_char_t *)YAML_BOOL_TAG,
+					     (yaml_char_t *)val,
+					     strlen((char *)val), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+	} else {
+		return 0;
+	}
+
+	return yaml_emitter_emit(emitter, event);
+}
+
+int
+lnet_yaml_int_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
+		      const char *key, const void *val, int size)
+{
+	return lnet_yaml_event_helper(event, emitter, key,
+				      (yaml_char_t *)YAML_INT_TAG, val, size,
+				      false);
+}
+
+int
+lnet_yaml_uint_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
+		       const char *key, const void *val, int size)
+{
+	return lnet_yaml_event_helper(event, emitter, key,
+				      (yaml_char_t *)YAML_INT_TAG, val, size,
+				      true);
+}
+
+int
+lnet_yaml_bool_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
+		       const char *key, const char *val)
+{
+	return lnet_yaml_event_helper(event, emitter, key,
+				      (yaml_char_t *)YAML_BOOL_TAG, val, 0,
+				      false);
+}
+
+int
+lnet_yaml_str_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
+		      const char *key, const char *val)
+{
+	return lnet_yaml_event_helper(event, emitter, key,
+				      (yaml_char_t *)YAML_STR_TAG, val, 0,
+				      false);
 }

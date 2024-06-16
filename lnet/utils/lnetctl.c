@@ -32,9 +32,11 @@ static int jt_config_lnet(int argc, char **argv);
 static int jt_unconfig_lnet(int argc, char **argv);
 static int jt_add_route(int argc, char **argv);
 static int jt_add_ni(int argc, char **argv);
+static int jt_add_fault(int argc, char **argv);
 static int jt_set_routing(int argc, char **argv);
 static int jt_del_route(int argc, char **argv);
 static int jt_del_ni(int argc, char **argv);
+static int jt_del_fault(int argc, char **argv);
 static int jt_show_route(int argc, char **argv);
 static int jt_show_net(int argc, char **argv);
 static int jt_show_routing(int argc, char **argv);
@@ -55,6 +57,7 @@ static int jt_set_rtr_sensitivity(int argc, char **argv);
 static int jt_set_hsensitivity(int argc, char **argv);
 static int jt_set_max_recovery_ping_interval(int argc, char **argv);
 static int jt_reset_stats(int argc, char **argv);
+static int jt_reset_fault(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
 static int jt_set_max_intf(int argc, char **argv);
@@ -299,6 +302,22 @@ command_t udsp_cmds[] = {
 };
 
 command_t fault_cmds[] = {
+	{"add", jt_add_fault, 0, "add LNet fault rule\n"
+	 "\t--rule_type:   Add rules of type t.\n"
+	 "\t--source nid:  Add rule entry with source NID.\n"
+	 "\t--dest nid:	   Add rule entry with destination NID.\n"
+	 "\t--rate:	   Rule entry rate.\n"
+	 "\t--interval:    How long to run the rule.\n"
+	 "\t--portal:	   Rule portal.\n"
+	 "\t--message:	   Type of message <PUT|ACK|GET|REPLY>.\n"
+	 "\t--health_error: Act on a specific health error (drop only).\n"
+	 "\t--latency:	   Delay sending a message (delay only).\n"},
+	{"del", jt_del_fault, 0, "delete LNet fault rule\n"
+	 "\t--rule_type:   Delete all rules of type t.\n"
+	 "\t--source nid:  Delete rule entry with source NID\n"
+	 "\t--dest nid:	   Delete rule entry with destination NID\n"},
+	{"reset", jt_reset_fault, 0, "reset_fault\n"
+	 "\t--rule_type t: Reset the LNet rule t.\n"},
 	{"show", jt_show_fault, 0, "show fault rules\n"
 	 "\t--rule_type t: Show LNet fault rules of type t.\n"},
 	{ 0, 0, 0, NULL }
@@ -5492,6 +5511,312 @@ static int jt_del_udsp(int argc, char **argv)
 	cYAML_free_tree(err_rc);
 
 	return rc;
+}
+
+static int
+fault_attr_nid_parse(char *str, lnet_nid_t *nid_p)
+{
+	lnet_nid_t nid;
+	__u32 net;
+	int rc = 0;
+
+	/* NB: can't support range ipaddress except * and *@net */
+	if (strlen(str) > 2 && str[0] == '*' && str[1] == '@') {
+		net = libcfs_str2net(str + 2);
+		if (net == LNET_NET_ANY)
+			goto failed;
+
+		nid = LNET_MKNID(net, LNET_NIDADDR(LNET_NID_ANY));
+	} else {
+		rc = libcfs_str2anynid(&nid, str);
+		if (!rc)
+			goto failed;
+	}
+
+	*nid_p = nid;
+	return 0;
+failed:
+	fprintf(stderr, "Invalid NID : %s\n", str);
+	return -1;
+}
+
+static int
+fault_attr_health_error_parse(char *error, __u32 *mask)
+{
+	if (!strcasecmp(error, "local_interrupt")) {
+		*mask |= HSTATUS_LOCAL_INTERRUPT_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_dropped")) {
+		*mask |= HSTATUS_LOCAL_DROPPED_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_aborted")) {
+		*mask |= HSTATUS_LOCAL_ABORTED_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_no_route")) {
+		*mask |= HSTATUS_LOCAL_NO_ROUTE_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_error")) {
+		*mask |= HSTATUS_LOCAL_ERROR_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_timeout")) {
+		*mask |= HSTATUS_LOCAL_TIMEOUT_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "remote_error")) {
+		*mask |= HSTATUS_REMOTE_ERROR_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "remote_dropped")) {
+		*mask |= HSTATUS_REMOTE_DROPPED_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "remote_timeout")) {
+		*mask |= HSTATUS_REMOTE_TIMEOUT_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "network_timeout")) {
+		*mask |= HSTATUS_NETWORK_TIMEOUT_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "random")) {
+		*mask = HSTATUS_RANDOM;
+		return 0;
+	}
+
+	return -1;
+}
+
+static int jt_add_fault(int argc, char **argv)
+{
+	const char *const short_options = "r:s:d:o:r:i:l:p:m:e:nx";
+	static const struct option long_options[] = {
+		{ .name = "rule_type",	.has_arg = required_argument, .val = 't' },
+		{ .name = "source",	.has_arg = required_argument, .val = 's' },
+		{ .name = "dest",	.has_arg = required_argument, .val = 'd' },
+		{ .name = "rate",	.has_arg = required_argument, .val = 'r' },
+		{ .name = "interval",	.has_arg = required_argument, .val = 'i' },
+		{ .name = "random",	.has_arg = no_argument,       .val = 'n' },
+		{ .name = "latency",	.has_arg = required_argument, .val = 'l' },
+		{ .name = "portal",	.has_arg = required_argument, .val = 'p' },
+		{ .name = "message",	.has_arg = required_argument, .val = 'm' },
+		{ .name = "health_error", .has_arg = required_argument, .val = 'e' },
+		{ .name = "local_nid",	.has_arg = required_argument, .val = 'o' },
+		{ .name = "drop_all",	.has_arg = no_argument, .val = 'x' },
+		{ .name = NULL }
+	};
+	int opc = 0, opt, rc2, rc = 0;
+	struct lnet_fault_attr attr;
+	yaml_document_t results;
+	yaml_emitter_t debug;
+
+	rc = check_cmd(fault_cmds, "fault", "add", 2, argc, argv);
+	if (rc < 0)
+		return rc;
+
+	attr.fa_local_nid = LNET_NID_ANY;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 't':
+			if (strcmp(optarg, "delay") == 0)
+				opc = LNET_CTL_DELAY_ADD;
+			else if (strcmp(optarg, "drop") == 0)
+				opc = LNET_CTL_DROP_ADD;
+			else
+				rc = -EINVAL;
+			break;
+
+		case 'o':
+			rc2 = fault_attr_nid_parse(optarg, &attr.fa_local_nid);
+			if (rc2 < 0 && !rc)
+				rc = rc2;
+			break;
+
+		case 's': /* source NID/NET */
+			rc2 = fault_attr_nid_parse(optarg, &attr.fa_src);
+			if (rc2 < 0 && !rc)
+				rc = rc2;
+			break;
+
+		case 'd': /* dest NID/NET */
+			rc2 = fault_attr_nid_parse(optarg, &attr.fa_dst);
+			if (rc2 < 0 && !rc)
+				rc = rc2;
+			break;
+
+		case 'r': /* drop rate */
+			if (opc == LNET_CTL_DROP_ADD)
+				attr.u.drop.da_rate = strtoul(optarg, NULL, 0);
+			else
+				attr.u.delay.la_rate = strtoul(optarg, NULL, 0);
+			break;
+
+		case 'e':
+			if (opc == LNET_CTL_DROP_ADD) {
+				rc2 = fault_attr_health_error_parse(optarg,
+								    &attr.u.drop.da_health_error_mask);
+				if (rc2 < 0 && !rc)
+					rc = rc2;
+			}
+			break;
+
+		case 'x':
+			if (opc == LNET_CTL_DROP_ADD)
+				attr.u.drop.da_drop_all = true;
+			break;
+
+		case 'n':
+			if (opc == LNET_CTL_DROP_ADD)
+				attr.u.drop.da_random = true;
+			break;
+
+		case 'i': /* time interval (# seconds) for message drop */
+			if (opc == LNET_CTL_DROP_ADD)
+				attr.u.drop.da_interval = strtoul(optarg,
+								  NULL, 0);
+			else
+				attr.u.delay.la_interval = strtoul(optarg,
+								   NULL, 0);
+			break;
+		default:
+			return 0;
+		}
+	}
+	if (rc < 0)
+		return rc;
+
+	rc = yaml_lnet_fault_rule(&results, opc, NULL, NULL, NULL, NULL);
+	if (rc < 0)
+		return rc;
+
+	rc = yaml_emitter_initialize(&debug);
+	if (rc == 0)
+		return -EINVAL;
+
+	yaml_emitter_set_indent(&debug, LNET_DEFAULT_INDENT);
+	yaml_emitter_set_output_file(&debug, stdout);
+	rc = yaml_emitter_dump(&debug, &results);
+
+	yaml_emitter_delete(&debug);
+	yaml_document_delete(&results);
+
+	return rc == 0 ? -EINVAL : 0;
+}
+
+static int jt_del_fault(int argc, char **argv)
+{
+	const char *const short_options = "t:";
+	static const struct option long_options[] = {
+		{ .name = "rule_type",	.has_arg = required_argument, .val = 't' },
+		{ .name = "source", .has_arg = required_argument, .val = 's' },
+		{ .name = "dest",   .has_arg = required_argument, .val = 'd' },
+		{ .name = NULL }
+	};
+	struct lnet_fault_attr attr;
+	yaml_document_t results;
+	yaml_emitter_t debug;
+	int opc = 0, opt, rc;
+
+	rc = check_cmd(fault_cmds, "fault", "del", 2, argc, argv);
+	if (rc < 0)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 't':
+			if (strcmp(optarg, "delay") == 0)
+				opc = LNET_CTL_DELAY_DEL;
+			else if (strcmp(optarg, "drop") == 0)
+				opc = LNET_CTL_DROP_DEL;
+			else
+				rc = -EINVAL;
+			break;
+		case 's': /* source NID/NET */
+			rc = fault_attr_nid_parse(optarg, &attr.fa_src);
+			break;
+
+		case 'd': /* dest NID/NET */
+			rc = fault_attr_nid_parse(optarg, &attr.fa_dst);
+			break;
+		default:
+			return 0;
+		}
+	}
+	if (rc < 0)
+		return rc;
+
+	rc = yaml_lnet_fault_rule(&results, opc, NULL, NULL, NULL, NULL);
+	if (rc < 0)
+		return rc;
+
+	rc = yaml_emitter_initialize(&debug);
+	if (rc == 0)
+		return -EINVAL;
+
+	yaml_emitter_set_indent(&debug, LNET_DEFAULT_INDENT);
+	yaml_emitter_set_output_file(&debug, stdout);
+	rc = yaml_emitter_dump(&debug, &results);
+	yaml_emitter_delete(&debug);
+	yaml_document_delete(&results);
+
+	return rc == 0 ? -EINVAL : 0;
+}
+
+static int jt_reset_fault(int argc, char **argv)
+{
+	const char *const short_options = "r:";
+	static const struct option long_options[] = {
+		{ .name = "rule_type",	.has_arg = required_argument, .val = 't' },
+		{ .name = NULL }
+	};
+	yaml_document_t results;
+	yaml_emitter_t debug;
+	int opc = 0, opt, rc;
+
+	rc = check_cmd(fault_cmds, "fault", "reset", 2, argc, argv);
+	if (rc < 0)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 't':
+			if (strcmp(optarg, "delay") == 0)
+				opc = LNET_CTL_DELAY_RESET;
+			else if (strcmp(optarg, "drop") == 0)
+				opc = LNET_CTL_DROP_RESET;
+			else
+				rc = -EINVAL;
+			break;
+		default:
+			return 0;
+		}
+	}
+	if (rc < 0)
+		return rc;
+
+	rc = yaml_lnet_fault_rule(&results, opc, NULL, NULL, NULL, NULL);
+	if (rc < 0)
+		return rc;
+
+	rc = yaml_emitter_initialize(&debug);
+	if (rc == 0)
+		return -EINVAL;
+
+	yaml_emitter_set_indent(&debug, LNET_DEFAULT_INDENT);
+	yaml_emitter_set_output_file(&debug, stdout);
+	rc = yaml_emitter_dump(&debug, &results);
+	yaml_emitter_delete(&debug);
+	yaml_document_delete(&results);
+
+	return rc == 0 ? -EINVAL : 0;
 }
 
 int jt_show_fault(int argc, char **argv)

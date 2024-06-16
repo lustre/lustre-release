@@ -2925,6 +2925,33 @@ nla_extract_val(struct nlattr **attr, int *rem,
 	RETURN(rc);
 }
 
+int
+nla_strnid(struct nlattr **attr, struct lnet_nid *nid, int *rem,
+	   struct netlink_ext_ack *extack)
+{
+	char nidstr[LNET_NIDSTR_SIZE];
+	int rc;
+
+	ENTRY;
+	rc = nla_extract_val(attr, rem, LN_SCALAR_ATTR_VALUE,
+			     nidstr, sizeof(nidstr), extack);
+	if (rc < 0) {
+		NL_SET_ERR_MSG(extack, "failed to copy nidstring attribute");
+		RETURN(rc);
+	}
+
+	rc = libcfs_strnid(nid, strim(nidstr));
+	if (rc < 0) {
+		CDEBUG(D_NET, "Invalid nidstr \"%s\"\n", nidstr);
+		NL_SET_ERR_MSG(extack, "failed to convert nidstring to NID");
+		RETURN(rc);
+	}
+
+	CDEBUG(D_NET, "%s -> %s\n", nidstr, libcfs_nidstr(nid));
+
+	RETURN(0);
+}
+
 static struct genl_family lnet_family;
 
 /**
@@ -9555,6 +9582,169 @@ int lnet_old_fault_show_dump(struct sk_buff *msg, struct netlink_callback *cb)
 }
 #endif
 
+static int lnet_fault_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlmsghdr *nlh = nlmsg_hdr(skb);
+	struct genlmsghdr *gnlh = nlmsg_data(nlh);
+	struct nlattr *params = genlmsg_data(gnlh);
+	struct netlink_ext_ack *extack = NULL;
+	struct lnet_fault_large_attr fattr;
+	int msg_len, rem, rc = 0;
+	struct nlattr *entry;
+	s64 opc = 0;
+
+	ENTRY;
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	extack = info->extack;
+#endif
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		GENL_SET_ERR_MSG(info, "no configuration");
+		RETURN(-ENOMSG);
+	}
+
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		GENL_SET_ERR_MSG(info, "invalid configuration");
+		RETURN(-EINVAL);
+	}
+
+	fattr.fa_src = LNET_ANY_NID;
+	fattr.fa_dst = LNET_ANY_NID;
+
+	nla_for_each_attr(entry, params, msg_len, rem) {
+		u64 tmp;
+
+		CDEBUG(D_NET, "attr type: %d\n", nla_type(entry));
+		if (nla_type(entry) != LN_SCALAR_ATTR_VALUE)
+			continue;
+
+		if (nla_strcmp(entry, "rule_type") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &opc, sizeof(opc), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+		} else if (nla_strcmp(entry, "fa_src") == 0) {
+			rc = nla_strnid(&entry, &fattr.fa_src, &rem, extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+		} else if (nla_strcmp(entry, "fa_dst") == 0) {
+			rc = nla_strnid(&entry, &fattr.fa_dst, &rem, extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+		} else if (nla_strcmp(entry, "fa_local_nid") == 0) {
+			rc = nla_strnid(&entry, &fattr.fa_local_nid, &rem,
+					extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+		} else if (nla_strcmp(entry, "fa_ptl_mask") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.fa_ptl_mask = tmp;
+		} else if (nla_strcmp(entry, "fa_msg_mask") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.fa_msg_mask = tmp;
+		} else if (nla_strcmp(entry, "da_rate") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.u.drop.da_rate = tmp;
+		} else if (nla_strcmp(entry, "da_interval") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.u.drop.da_interval = tmp;
+		} else if (nla_strcmp(entry, "da_health_error_mask") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.u.drop.da_health_error_mask = tmp;
+		} else if (nla_strcmp(entry, "da_random") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.u.drop.da_random = !!tmp;
+		} else if (nla_strcmp(entry, "da_drop_all") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.u.drop.da_drop_all = !!tmp;
+		} else if (nla_strcmp(entry, "la_rate") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.u.delay.la_rate = tmp;
+		} else if (nla_strcmp(entry, "la_interval") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.u.delay.la_interval = tmp;
+		} else if (nla_strcmp(entry, "la_latency") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+
+			fattr.u.delay.la_latency = tmp;
+		}
+	}
+
+	if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
+		if (opc == LNET_CTL_DROP_ADD)
+			rc = lnet_drop_rule_add(&fattr);
+		else
+			rc = lnet_delay_rule_add(&fattr);
+	} else if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE) {
+		if (opc == LNET_CTL_DROP_RESET)
+			lnet_drop_rule_reset();
+		else
+			lnet_delay_rule_reset();
+	} else if (!(info->nlhdr->nlmsg_flags & (NLM_F_CREATE | NLM_F_REPLACE))) {
+		if (opc == LNET_CTL_DROP_DEL)
+			rc = lnet_drop_rule_del(&fattr.fa_src, &fattr.fa_dst);
+		else
+			rc = lnet_delay_rule_del(&fattr.fa_src, &fattr.fa_dst,
+						 false);
+		if (rc == 0)
+			rc = -ENOENT;
+		else
+			rc = 0;
+	}
+report_error:
+	RETURN(rc);
+}
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
@@ -9667,6 +9857,7 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.dumpit		= lnet_old_fault_show_dump,
 #endif
 		.done		= lnet_fault_show_done,
+		.doit		= lnet_fault_cmd,
 	},
 };
 

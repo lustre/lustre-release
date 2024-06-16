@@ -2503,11 +2503,12 @@ fault_attr_health_error_parse(char *error, __u32 *mask)
 static int
 fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 {
-	struct libcfs_ioctl_data  data = { { 0 } };
-	struct lnet_fault_attr    attr;
+	char *fa_src = NULL, *fa_dst = NULL, *fa_local_nid = NULL;
+	struct libcfs_ioctl_data data = { { 0 } };
+	struct lnet_fault_attr attr;
+	yaml_document_t results;
 	char *optstr;
 	int rc;
-
 	static const struct option opts[] = {
 	{ .name = "source",   .has_arg = required_argument, .val = 's' },
 	{ .name = "dest",     .has_arg = required_argument, .val = 'd' },
@@ -2520,7 +2521,8 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 	{ .name = "health_error",  .has_arg = required_argument, .val = 'e' },
 	{ .name = "local_nid",  .has_arg = required_argument, .val = 'o' },
 	{ .name = "drop_all",  .has_arg = no_argument, .val = 'x' },
-	{ .name = NULL } };
+	{ .name = NULL }
+	};
 
 	if (argc == 1) {
 		fprintf(stderr,
@@ -2538,20 +2540,14 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 
 		switch (c) {
 		case 'o':
-			rc = fault_attr_nid_parse(optarg, &attr.fa_local_nid);
-			if (rc != 0)
-				goto getopt_failed;
+			fa_local_nid = optarg;
 			break;
 		case 's': /* source NID/NET */
-			rc = fault_attr_nid_parse(optarg, &attr.fa_src);
-			if (rc != 0)
-				goto getopt_failed;
+			fa_src = optarg;
 			break;
 
 		case 'd': /* dest NID/NET */
-			rc = fault_attr_nid_parse(optarg, &attr.fa_dst);
-			if (rc != 0)
-				goto getopt_failed;
+			fa_dst = optarg;
 			break;
 
 		case 'r': /* drop rate */
@@ -2642,15 +2638,36 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 		}
 	}
 
-	if (attr.fa_src == 0 || attr.fa_dst == 0) {
+	if (!(fa_src && fa_dst)) {
 		fprintf(stderr,
 			"Please provide both source and destination of %s rule\n",
 			name);
 		return -1;
 	}
 
-	if (attr.fa_local_nid == 0)
+	rc = yaml_lnet_fault_rule(&results, opc, fa_src, fa_dst, fa_local_nid,
+				  &attr);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
+	rc = fault_attr_nid_parse(fa_src, &attr.fa_src);
+	if (rc)
+		goto getopt_failed;
+
+	rc = fault_attr_nid_parse(fa_dst, &attr.fa_dst);
+	if (rc)
+		goto getopt_failed;
+
+	if (fa_local_nid) {
+		rc = fault_attr_nid_parse(fa_local_nid, &attr.fa_local_nid);
+		if (rc)
+			goto getopt_failed;
+	} else {
 		attr.fa_local_nid = LNET_NID_ANY;
+	}
 
 	data.ioc_flags = opc;
 	data.ioc_inllen1 = sizeof(attr);
@@ -2695,15 +2712,18 @@ static int
 fault_simul_rule_del(__u32 opc, char *name, int argc, char **argv)
 {
 	struct libcfs_ioctl_data data = { { 0 } };
-	struct lnet_fault_attr   attr;
+	struct lnet_fault_attr attr;
+	yaml_document_t results;
+	char *fa_src = NULL;
+	char *fa_dst = NULL;
 	bool all = false;
 	int rc;
-
 	static const struct option opts[] = {
 		{ .name = "source", .has_arg = required_argument, .val = 's' },
 		{ .name = "dest",   .has_arg = required_argument, .val = 'd' },
 		{ .name = "all",    .has_arg = no_argument,	  .val = 'a' },
-		{ .name = NULL } };
+		{ .name = NULL }
+	};
 
 	if (argc == 1) {
 		fprintf(stderr,
@@ -2720,20 +2740,13 @@ fault_simul_rule_del(__u32 opc, char *name, int argc, char **argv)
 
 		switch (c) {
 		case 's':
-			rc = fault_attr_nid_parse(optarg, &attr.fa_src);
-			if (rc != 0)
-				goto getopt_failed;
+			fa_src = optarg;
 			break;
 		case 'd':
-			rc = fault_attr_nid_parse(optarg, &attr.fa_dst);
-			if (rc != 0)
-				goto getopt_failed;
+			fa_dst = optarg;
 			break;
 		case 'a':
-			attr.fa_src = 0;
-			attr.fa_dst = 0;
 			all = true;
-
 			break;
 		default:
 			fprintf(stderr, "error: %s: option '%s' unrecognized\n",
@@ -2742,6 +2755,34 @@ fault_simul_rule_del(__u32 opc, char *name, int argc, char **argv)
 		}
 	}
 	optind = 1;
+
+	if (!all && !(fa_src && fa_dst)) {
+		fprintf(stderr,
+			"Failed, please provide source and destination of rule\n");
+		return -1;
+	} else if (all && (fa_src || fa_dst)) {
+		fprintf(stderr, "'-s' or '-d' cannot be combined with '-a'\n");
+		return -1;
+	}
+
+	rc = yaml_lnet_fault_rule(&results, opc, fa_src, fa_dst, NULL, NULL);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
+	if (fa_src) {
+		rc = fault_attr_nid_parse(fa_src, &attr.fa_src);
+		if (rc != 0)
+			goto getopt_failed;
+	}
+
+	if (fa_dst) {
+		rc = fault_attr_nid_parse(fa_dst, &attr.fa_dst);
+		if (rc != 0)
+			goto getopt_failed;
+	}
 
 	data.ioc_flags = opc;
 	data.ioc_inllen1 = sizeof(attr);
@@ -2784,9 +2825,17 @@ jt_ptl_delay_del(int argc, char **argv)
 static int
 fault_simul_rule_reset(__u32 opc, char *name, int argc, char **argv)
 {
-	struct libcfs_ioctl_data   data = { { 0 } };
-	int			   rc;
+	struct libcfs_ioctl_data data = { { 0 } };
+	yaml_document_t results;
+	int rc;
 
+	rc = yaml_lnet_fault_rule(&results, opc, NULL, NULL, NULL, NULL);
+	if (rc <= 0) {
+		if (rc == -EOPNOTSUPP)
+			goto old_api;
+		return rc;
+	}
+old_api:
 	LIBCFS_IOC_INIT(data);
 	data.ioc_flags = opc;
 

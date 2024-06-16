@@ -289,20 +289,9 @@ fi
 if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
 	if ! intf_has_ipv4 "${INTERFACES[0]}"; then
 		always_except LU-5960 230
-		always_except LU-9680 204
-		always_except LU-9680 205
-		always_except LU-9680 206
-		always_except LU-9680 207
-		always_except LU-9680 209
-		always_except LU-9680 210
-		always_except LU-9680 211
-		always_except LU-9680 212
 		always_except LU-9680 213
-		always_except LU-9680 216
-		always_except LU-9680 218
 		always_except LU-9680 231
 		always_except LU-9680 302
-		always_except LU-9680 500
 		always_except LU-14288 101
 		always_except LU-14288 103
 		always_except LU-17458 220

@@ -173,8 +173,7 @@ lnet_fault_stat_inc(struct lnet_fault_stat *stat, unsigned int type)
  * There is no check for duplicated drop rule, all rules will be checked for
  * incoming message.
  */
-static int
-lnet_drop_rule_add(struct lnet_fault_large_attr *attr)
+int lnet_drop_rule_add(struct lnet_fault_large_attr *attr)
 {
 	struct lnet_drop_rule *rule;
 	ENTRY;
@@ -222,8 +221,7 @@ lnet_drop_rule_add(struct lnet_fault_large_attr *attr)
  * If \a dst is zero, then all rules have \a src as source will be removed
  * If both of them are zero, all rules will be removed
  */
-static int
-lnet_drop_rule_del(struct lnet_nid *src, struct lnet_nid *dst)
+int lnet_drop_rule_del(struct lnet_nid *src, struct lnet_nid *dst)
 {
 	struct lnet_drop_rule *rule;
 	struct lnet_drop_rule *tmp;
@@ -231,6 +229,8 @@ lnet_drop_rule_del(struct lnet_nid *src, struct lnet_nid *dst)
 	int n = 0;
 	ENTRY;
 
+	CDEBUG(D_NET, "src %s dst %s\n", libcfs_nidstr(src),
+	       libcfs_nidstr(dst));
 	lnet_net_lock(LNET_LOCK_EX);
 	list_for_each_entry_safe(rule, tmp, &the_lnet.ln_drop_rules, dr_link) {
 		if (!(LNET_NID_IS_ANY(src) || nid_same(&rule->dr_attr.fa_src, src)))
@@ -318,8 +318,7 @@ int lnet_drop_rule_collect(struct lnet_genl_fault_rule_list *rlist)
 /**
  * reset counters for all drop rules
  */
-static void
-lnet_drop_rule_reset(void)
+void lnet_drop_rule_reset(void)
 {
 	struct lnet_drop_rule *rule;
 	int		       cpt;
@@ -958,13 +957,14 @@ lnet_delay_rule_del(struct lnet_nid *src, struct lnet_nid *dst, bool shutdown)
 	bool cleanup;
 	ENTRY;
 
-	if (shutdown)
-		src = dst = 0;
-
 	mutex_lock(&delay_dd.dd_mutex);
 	lnet_net_lock(LNET_LOCK_EX);
 
 	list_for_each_entry_safe(rule, tmp, &the_lnet.ln_delay_rules, dl_link) {
+		CDEBUG(D_NET, "src %s dst %s fa_src %s fa_dst %s\n",
+		       libcfs_nidstr(src), libcfs_nidstr(dst),
+		       libcfs_nidstr(&rule->dl_attr.fa_src),
+		       libcfs_nidstr(&rule->dl_attr.fa_dst));
 		if (!(LNET_NID_IS_ANY(src) || nid_same(&rule->dl_attr.fa_src, src)))
 			continue;
 

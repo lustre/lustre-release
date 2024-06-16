@@ -830,12 +830,15 @@ struct lnet_genl_fault_rule_list {
 };
 
 int lnet_fault_ctl(int cmd, struct libcfs_ioctl_data *data);
+int lnet_drop_rule_add(struct lnet_fault_large_attr *attr);
+int lnet_drop_rule_del(struct lnet_nid *fa_src, struct lnet_nid *fa_dst);
 int lnet_fault_init(void);
 void lnet_fault_fini(void);
 
 bool lnet_drop_rule_match(struct lnet_hdr *hdr, struct lnet_nid *local_nid,
 			  enum lnet_msg_hstatus *hstatus);
 int lnet_drop_rule_collect(struct lnet_genl_fault_rule_list *rlist);
+void lnet_drop_rule_reset(void);
 int lnet_delay_rule_add(struct lnet_fault_large_attr *attr);
 int lnet_delay_rule_del(struct lnet_nid *src, struct lnet_nid *dst,
 			bool shutdown);
