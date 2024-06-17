@@ -7695,7 +7695,7 @@ host_id() {
 # Description:
 #   Returns list of ip addresses for each interface
 local_addr_list() {
-	ip addr | awk '/inet / {print $2}' | awk -F/ '{print $1}'
+	ip -o a s | awk '{print $4}' | awk -F/ '{print $1}'
 }
 
 # Description:
@@ -7752,9 +7752,13 @@ local_node() {
 
 	if [ -z "${!is_local-}" ] ; then
 		eval $is_local=false
-		local host_ip=$(getent ahostsv4 $host_name |
-					awk 'NR == 1 { print $1 }')
-		is_local_addr "$host_ip" && eval $is_local=true
+		local ip4=$(getent ahostsv4 $host_name |
+			    awk 'NR == 1 { print $1 }')
+		local ip6=$(getent ahostsv6 $host_name |
+			    awk 'NR == 1 { print $1 }')
+		if is_local_addr $ip4 || is_local_addr $ip6 ; then
+			eval $is_local=true
+		fi
 	fi
 	${!is_local}
 }

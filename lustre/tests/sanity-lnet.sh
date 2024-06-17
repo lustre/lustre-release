@@ -1778,31 +1778,31 @@ test_109() {
 run_test 109 "Add NI using a network interface alias (LU-16859)"
 
 test_110() {
-	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+	[[ $NETTYPE =~ (tcp|o2ib) ]] || skip "Need tcp or o2ib NETTYPE"
 
-	cleanup_netns || error "Failed to cleanup netns before test execution"
-	cleanup_lnet || error "Failed to unload modules before test execution"
+	reinit_dlc || return $?
 
-	configure_dlc || error "Failed to configure DLC rc = $?"
+	add_net ${NETTYPE} ${INTERFACES[0]} || return $?
 
-	LOCAL_ADDR_LIST=$(local_addr_list)
-	set -- $LOCAL_ADDR_LIST
-	do_lnetctl net add --nid $2@tcp ||
-		error "Failed to add net tcp for IP $2@tcp"
+	local nid=$($LCTL list_nids)
 
-	$LNETCTL net show --net tcp | grep -q "nid: $2@tcp" ||
-		error "Failed to configure $2@tcp"
+	reinit_dlc || return $?
 
-	do_lnetctl net del --nid $2@tcp ||
-		error "Failed to del net tcp for IP $2@tcp"
+	do_lnetctl net add --nid $nid ||
+		error "Failed to add net via nid \"$nid\""
 
-	$LNETCTL net show | grep -q "nid: $2@tcp"&&
-		error "$2@tcp should have been deleted"
+	$LNETCTL net show --net $NETTYPE | grep -q "nid: $nid" ||
+		error "Failed to configure $nid"
+
+	do_lnetctl net del --nid $nid ||
+		error "Failed to del net via nid \"$nid\""
+
+	$LNETCTL net show | grep -q "nid: $nid" &&
+		error "$nid should have been deleted"
 
 	cleanup_lnet
-	setup_netns
 }
-run_test 110 "Add NI using a specific TCP / IP address"
+run_test 110 "Configure NI using lnetctl net add --nid"
 
 test_111() {
 	[[ $(uname -r | grep "3.10") ]] &&
