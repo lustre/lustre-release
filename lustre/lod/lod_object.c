@@ -2846,7 +2846,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 	mutex_lock(&lo->ldo_layout_mutex);
 
 	array_cnt = lo->ldo_comp_cnt + comp_v1->lcm_entry_count;
-	OBD_ALLOC_PTR_ARRAY(comp_array, array_cnt);
+	OBD_ALLOC_PTR_ARRAY_LARGE(comp_array, array_cnt);
 	if (comp_array == NULL) {
 		mutex_unlock(&lo->ldo_layout_mutex);
 		RETURN(-ENOMEM);
@@ -2928,7 +2928,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		GOTO(error, rc);
 	}
 
-	OBD_FREE_PTR_ARRAY(old_array, old_array_cnt);
+	OBD_FREE_PTR_ARRAY_LARGE(old_array, old_array_cnt);
 
 	LASSERT(lo->ldo_mirror_count == 1);
 	lo->ldo_mirrors[0].lme_end = array_cnt - 1;
@@ -2946,7 +2946,7 @@ error:
 			lod_comp->llc_pool = NULL;
 		}
 	}
-	OBD_FREE_PTR_ARRAY(comp_array, array_cnt);
+	OBD_FREE_PTR_ARRAY_LARGE(comp_array, array_cnt);
 	mutex_unlock(&lo->ldo_layout_mutex);
 
 	RETURN(rc);
@@ -4810,7 +4810,7 @@ static int lod_layout_repeat_comp(const struct lu_env *env,
 
 	CDEBUG(D_LAYOUT, "repeating component %d\n", index);
 
-	OBD_ALLOC_PTR_ARRAY(comp_array, new_cnt);
+	OBD_ALLOC_PTR_ARRAY_LARGE(comp_array, new_cnt);
 	if (comp_array == NULL)
 		GOTO(out, rc = -ENOMEM);
 
@@ -4858,7 +4858,7 @@ static int lod_layout_repeat_comp(const struct lu_env *env,
 		new_comp->llc_ostlist.op_array = op_array;
 	}
 
-	OBD_FREE_PTR_ARRAY(lo->ldo_comp_entries, lo->ldo_comp_cnt);
+	OBD_FREE_PTR_ARRAY_LARGE(lo->ldo_comp_entries, lo->ldo_comp_cnt);
 	lo->ldo_comp_entries = comp_array;
 	lo->ldo_comp_cnt = new_cnt;
 
@@ -4872,7 +4872,7 @@ static int lod_layout_repeat_comp(const struct lu_env *env,
 	EXIT;
 out:
 	if (rc)
-		OBD_FREE_PTR_ARRAY(comp_array, new_cnt);
+		OBD_FREE_PTR_ARRAY_LARGE(comp_array, new_cnt);
 
 	return rc;
 }
@@ -5000,7 +5000,7 @@ static int lod_layout_del_prep_layout(const struct lu_env *env,
 	if (info->lti_count > 0) {
 		struct lod_layout_component *comp_array;
 
-		OBD_ALLOC_PTR_ARRAY(comp_array, info->lti_count);
+		OBD_ALLOC_PTR_ARRAY_LARGE(comp_array, info->lti_count);
 		if (comp_array == NULL)
 			GOTO(out, rc = -ENOMEM);
 
@@ -5010,7 +5010,8 @@ static int lod_layout_del_prep_layout(const struct lu_env *env,
 			       sizeof(*comp_array));
 		}
 
-		OBD_FREE_PTR_ARRAY(lo->ldo_comp_entries, lo->ldo_comp_cnt);
+		OBD_FREE_PTR_ARRAY_LARGE(lo->ldo_comp_entries,
+					 lo->ldo_comp_cnt);
 		lo->ldo_comp_entries = comp_array;
 		lo->ldo_comp_cnt = info->lti_count;
 	} else {
@@ -8126,7 +8127,7 @@ static int lod_declare_pccro_set(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	new_cnt = lo->ldo_comp_cnt + 1;
-	OBD_ALLOC_PTR_ARRAY(comp_array, new_cnt);
+	OBD_ALLOC_PTR_ARRAY_LARGE(comp_array, new_cnt);
 	if (comp_array == NULL) {
 		OBD_FREE_PTR_ARRAY(mirror_array, mirror_cnt);
 		RETURN(-ENOMEM);
@@ -8170,7 +8171,7 @@ static int lod_declare_pccro_set(const struct lu_env *env,
 
 	if (lo->ldo_mirrors)
 		OBD_FREE_PTR_ARRAY(lo->ldo_mirrors, lo->ldo_mirror_count);
-	OBD_FREE_PTR_ARRAY(lo->ldo_comp_entries, lo->ldo_comp_cnt);
+	OBD_FREE_PTR_ARRAY_LARGE(lo->ldo_comp_entries, lo->ldo_comp_cnt);
 
 	/*
 	 * The @ldo_mirror will be refilled by lod_fill_mirrors() when
