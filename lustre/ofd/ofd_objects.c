@@ -167,7 +167,7 @@ int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo)
 		return -EINVAL;
 	}
 
-	filter_fid_le_to_cpu(ff, ff, rc);
+	filter_fid_le_to_cpu(ff, ff, sizeof(*ff));
 
 	return 0;
 }
