@@ -20,17 +20,17 @@
 #include "console.h"
 #include "conrpc.h"
 
-#define LST_NODE_STATE_COUNTER(nd, p)                   \
-do {                                                    \
-        if ((nd)->nd_state == LST_NODE_ACTIVE)          \
-                (p)->nle_nactive ++;                    \
-        else if ((nd)->nd_state == LST_NODE_BUSY)       \
-                (p)->nle_nbusy ++;                      \
-        else if ((nd)->nd_state == LST_NODE_DOWN)       \
-                (p)->nle_ndown ++;                      \
-        else                                            \
-                (p)->nle_nunknown ++;                   \
-        (p)->nle_nnode ++;                              \
+#define LST_NODE_STATE_COUNTER(nd, p)			\
+do {							\
+	if ((nd)->nd_state == LST_NODE_ACTIVE)		\
+		(p)->nle_nactive++;			\
+	else if ((nd)->nd_state == LST_NODE_BUSY)	\
+		(p)->nle_nbusy++;			\
+	else if ((nd)->nd_state == LST_NODE_DOWN)	\
+		(p)->nle_ndown++;			\
+	else						\
+		(p)->nle_nunknown++;			\
+	(p)->nle_nnode++;				\
 } while (0)
 
 struct lstcon_session console_session;
@@ -38,9 +38,9 @@ struct lstcon_session console_session;
 static void
 lstcon_node_get(struct lstcon_node *nd)
 {
-        LASSERT (nd->nd_ref >= 1);
+	LASSERT(nd->nd_ref >= 1);
 
-        nd->nd_ref++;
+	nd->nd_ref++;
 }
 
 static int
@@ -63,8 +63,8 @@ lstcon_node_find(struct lnet_process_id id, struct lstcon_node **ndpp,
 		return 0;
 	}
 
-        if (!create)
-                return -ENOENT;
+	if (!create)
+		return -ENOENT;
 
 	LIBCFS_ALLOC(*ndpp, sizeof(**ndpp) + sizeof(*ndl));
 	if (*ndpp == NULL)
@@ -83,7 +83,8 @@ lstcon_node_find(struct lnet_process_id id, struct lstcon_node **ndpp,
 
 	/* queued in global hash & list, no refcount is taken by
 	 * global hash & list, if caller release his refcount,
-	 * node will be released */
+	 * node will be released
+	 */
 	list_add_tail(&ndl->ndl_hlink, &console_session.ses_ndl_hash[idx]);
 	list_add_tail(&ndl->ndl_link, &console_session.ses_ndl_list);
 
@@ -134,21 +135,21 @@ lstcon_ndlink_find(struct list_head *hash, struct lnet_process_id id,
 		return 0;
 	}
 
-        if (create == 0)
-                return -ENOENT;
+	if (create == 0)
+		return -ENOENT;
 
-        /* find or create in session hash */
-        rc = lstcon_node_find(id, &nd, (create == 1) ? 1 : 0);
-        if (rc != 0)
-                return rc;
+	/* find or create in session hash */
+	rc = lstcon_node_find(id, &nd, (create == 1) ? 1 : 0);
+	if (rc != 0)
+		return rc;
 
 	LIBCFS_ALLOC(ndl, sizeof(*ndl));
-        if (ndl == NULL) {
-                lstcon_node_put(nd);
-                return -ENOMEM;
-        }
+	if (ndl == NULL) {
+		lstcon_node_put(nd);
+		return -ENOMEM;
+	}
 
-        *ndlpp = ndl;
+	*ndlpp = ndl;
 
 	ndl->ndl_node = nd;
 	INIT_LIST_HEAD(&ndl->ndl_link);
@@ -164,9 +165,9 @@ lstcon_ndlink_release(struct lstcon_ndlink *ndl)
 	LASSERT(!list_empty(&ndl->ndl_hlink));
 
 	list_del(&ndl->ndl_hlink); /* delete from hash */
-        lstcon_node_put(ndl->ndl_node);
+	lstcon_node_put(ndl->ndl_node);
 
-        LIBCFS_FREE(ndl, sizeof(*ndl));
+	LIBCFS_FREE(ndl, sizeof(*ndl));
 }
 
 static int
@@ -176,11 +177,11 @@ lstcon_group_alloc(char *name, struct lstcon_group **grpp)
 	int i;
 
 	LIBCFS_ALLOC(grp, offsetof(struct lstcon_group,
-                                   grp_ndl_hash[LST_NODE_HASHSIZE]));
-        if (grp == NULL)
-                return -ENOMEM;
+				   grp_ndl_hash[LST_NODE_HASHSIZE]));
+	if (grp == NULL)
+		return -ENOMEM;
 
-        grp->grp_ref = 1;
+	grp->grp_ref = 1;
 	if (name != NULL) {
 		if (strlen(name) > sizeof(grp->grp_name)-1) {
 			LIBCFS_FREE(grp, offsetof(struct lstcon_group,
@@ -315,28 +316,28 @@ lstcon_sesrpc_condition(int transop, struct lstcon_node *nd, void *arg)
 {
 	struct lstcon_group *grp = arg;
 
-        switch (transop) {
-        case LST_TRANS_SESNEW:
-                if (nd->nd_state == LST_NODE_ACTIVE)
-                        return 0;
-                break;
+	switch (transop) {
+	case LST_TRANS_SESNEW:
+		if (nd->nd_state == LST_NODE_ACTIVE)
+			return 0;
+		break;
 
-        case LST_TRANS_SESEND:
-                if (nd->nd_state != LST_NODE_ACTIVE)
-                        return 0;
+	case LST_TRANS_SESEND:
+		if (nd->nd_state != LST_NODE_ACTIVE)
+			return 0;
 
-                if (grp != NULL && nd->nd_ref > 1)
-                        return 0;
-                break;
+		if (grp != NULL && nd->nd_ref > 1)
+			return 0;
+		break;
 
-        case LST_TRANS_SESQRY:
-                break;
+	case LST_TRANS_SESQRY:
+		break;
 
-        default:
-                LBUG();
-        }
+	default:
+		LBUG();
+	}
 
-        return 1;
+	return 1;
 }
 
 static int
@@ -345,27 +346,27 @@ lstcon_sesrpc_readent(int transop, struct srpc_msg *msg,
 {
 	struct srpc_debug_reply *rep;
 
-        switch (transop) {
-        case LST_TRANS_SESNEW:
-        case LST_TRANS_SESEND:
-                return 0;
+	switch (transop) {
+	case LST_TRANS_SESNEW:
+	case LST_TRANS_SESEND:
+		return 0;
 
-        case LST_TRANS_SESQRY:
-                rep = &msg->msg_body.dbg_reply;
+	case LST_TRANS_SESQRY:
+		rep = &msg->msg_body.dbg_reply;
 
 		if (copy_to_user(&ent_up->rpe_priv[0],
-                                     &rep->dbg_timeout, sizeof(int)) ||
+				 &rep->dbg_timeout, sizeof(int)) ||
 		    copy_to_user(&ent_up->rpe_payload[0],
-                                     &rep->dbg_name, LST_NAME_SIZE))
-                        return -EFAULT;
+				 &rep->dbg_name, LST_NAME_SIZE))
+			return -EFAULT;
 
-                return 0;
+		return 0;
 
-        default:
-                LBUG();
-        }
+	default:
+		LBUG();
+	}
 
-        return 0;
+	return 0;
 }
 
 static int
@@ -381,59 +382,60 @@ lstcon_group_nodes_add(struct lstcon_group *grp,
 	int i;
 	int rc;
 
-        rc = lstcon_group_alloc(NULL, &tmp);
-        if (rc != 0) {
-                CERROR("Out of memory\n");
-                return -ENOMEM;
-        }
+	rc = lstcon_group_alloc(NULL, &tmp);
+	if (rc != 0) {
+		CERROR("Out of memory\n");
+		return -ENOMEM;
+	}
 
-        for (i = 0 ; i < count; i++) {
+	for (i = 0 ; i < count; i++) {
 		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
-                        rc = -EFAULT;
-                        break;
-                }
+			rc = -EFAULT;
+			break;
+		}
 
-                /* skip if it's in this group already */
-                rc = lstcon_group_ndlink_find(grp, id, &ndl, 0);
-                if (rc == 0)
-                        continue;
+		/* skip if it's in this group already */
+		rc = lstcon_group_ndlink_find(grp, id, &ndl, 0);
+		if (rc == 0)
+			continue;
 
-                /* add to tmp group */
-                rc = lstcon_group_ndlink_find(tmp, id, &ndl, 1);
-                if (rc != 0) {
-                        CERROR("Can't create ndlink, out of memory\n");
-                        break;
-                }
-        }
+		/* add to tmp group */
+		rc = lstcon_group_ndlink_find(tmp, id, &ndl, 1);
+		if (rc != 0) {
+			CERROR("Can't create ndlink, out of memory: rc = %d\n",
+			       rc);
+			break;
+		}
+	}
 
-        if (rc != 0) {
+	if (rc != 0) {
 		lstcon_group_decref(tmp);
-                return rc;
-        }
+		return rc;
+	}
 
-        rc = lstcon_rpc_trans_ndlist(&tmp->grp_ndl_list,
-                                     &tmp->grp_trans_list, LST_TRANS_SESNEW,
-                                     tmp, lstcon_sesrpc_condition, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
+	rc = lstcon_rpc_trans_ndlist(&tmp->grp_ndl_list, &tmp->grp_trans_list,
+				     LST_TRANS_SESNEW, tmp,
+				     lstcon_sesrpc_condition, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc = %d\n", rc);
 		lstcon_group_decref(tmp);
-                return rc;
-        }
+		return rc;
+	}
 
-        /* post all RPCs */
-        lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
+	/* post all RPCs */
+	lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
 
-        rc = lstcon_rpc_trans_interpreter(trans, result_up,
-                                          lstcon_sesrpc_readent);
+	rc = lstcon_rpc_trans_interpreter(trans, result_up,
+					  lstcon_sesrpc_readent);
 	*featp = trans->tas_features;
 
-        /* destroy all RPGs */
-        lstcon_rpc_trans_destroy(trans);
+	/* destroy all RPGs */
+	lstcon_rpc_trans_destroy(trans);
 
-        lstcon_group_move(tmp, grp);
+	lstcon_group_move(tmp, grp);
 	lstcon_group_decref(tmp);
 
-        return rc;
+	return rc;
 }
 
 static int
@@ -448,47 +450,47 @@ lstcon_group_nodes_remove(struct lstcon_group *grp,
 	int rc;
 	int i;
 
-        /* End session and remove node from the group */
+	/* End session and remove node from the group */
 
-        rc = lstcon_group_alloc(NULL, &tmp);
-        if (rc != 0) {
-                CERROR("Out of memory\n");
-                return -ENOMEM;
-        }
+	rc = lstcon_group_alloc(NULL, &tmp);
+	if (rc != 0) {
+		CERROR("Out of memory\n");
+		return -ENOMEM;
+	}
 
-        for (i = 0; i < count; i++) {
+	for (i = 0; i < count; i++) {
 		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
-                        rc = -EFAULT;
-                        goto error;
-                }
+			rc = -EFAULT;
+			goto error;
+		}
 
-                /* move node to tmp group */
-                if (lstcon_group_ndlink_find(grp, id, &ndl, 0) == 0)
-                        lstcon_group_ndlink_move(grp, tmp, ndl);
-        }
+		/* move node to tmp group */
+		if (lstcon_group_ndlink_find(grp, id, &ndl, 0) == 0)
+			lstcon_group_ndlink_move(grp, tmp, ndl);
+	}
 
-        rc = lstcon_rpc_trans_ndlist(&tmp->grp_ndl_list,
-                                     &tmp->grp_trans_list, LST_TRANS_SESEND,
-                                     tmp, lstcon_sesrpc_condition, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
-                goto error;
-        }
+	rc = lstcon_rpc_trans_ndlist(&tmp->grp_ndl_list, &tmp->grp_trans_list,
+				    LST_TRANS_SESEND, tmp,
+				    lstcon_sesrpc_condition, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc = %d\n", rc);
+		goto error;
+	}
 
-        lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
+	lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
 
-        rc = lstcon_rpc_trans_interpreter(trans, result_up, NULL);
+	rc = lstcon_rpc_trans_interpreter(trans, result_up, NULL);
 
-        lstcon_rpc_trans_destroy(trans);
-        /* release nodes anyway, because we can't rollback status */
+	lstcon_rpc_trans_destroy(trans);
+	/* release nodes anyway, because we can't rollback status */
 	lstcon_group_decref(tmp);
 
-        return rc;
+	return rc;
 error:
-        lstcon_group_move(tmp, grp);
+	lstcon_group_move(tmp, grp);
 	lstcon_group_decref(tmp);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -497,18 +499,19 @@ lstcon_group_add(char *name)
 	struct lstcon_group *grp;
 	int rc;
 
-        rc = (lstcon_group_find(name, &grp) == 0)? -EEXIST: 0;
-        if (rc != 0) {
-                /* find a group with same name */
+	rc = (lstcon_group_find(name, &grp) == 0) ? -EEXIST : 0;
+	if (rc != 0) {
+		/* find a group with same name */
 		lstcon_group_decref(grp);
-                return rc;
-        }
+		return rc;
+	}
 
-        rc = lstcon_group_alloc(name, &grp);
-        if (rc != 0) {
-                CERROR("Can't allocate descriptor for group %s\n", name);
-                return -ENOMEM;
-        }
+	rc = lstcon_group_alloc(name, &grp);
+	if (rc != 0) {
+		CERROR("%s: Can't allocate descriptor for group: rc = %d\n",
+		       name, rc);
+		return -ENOMEM;
+	}
 
 	list_add_tail(&grp->grp_link, &console_session.ses_grp_list);
 
@@ -517,33 +520,33 @@ lstcon_group_add(char *name)
 
 int
 lstcon_nodes_add(char *name, int count, struct lnet_process_id __user *ids_up,
-		 unsigned *featp, struct list_head __user *result_up)
+		 unsigned int *featp, struct list_head __user *result_up)
 {
-	struct lstcon_group         *grp;
-        int                     rc;
+	struct lstcon_group *grp;
+	int rc;
 
-        LASSERT (count > 0);
-        LASSERT (ids_up != NULL);
+	LASSERT(count > 0);
+	LASSERT(ids_up != NULL);
 
-        rc = lstcon_group_find(name, &grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group %s\n", name);
-                return rc;
-        }
+	rc = lstcon_group_find(name, &grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "%s: Can't find group: rc = %d\n", name, rc);
+		return rc;
+	}
 
-        if (grp->grp_ref > 2) {
-                /* referred by other threads or test */
-                CDEBUG(D_NET, "Group %s is busy\n", name);
+	if (grp->grp_ref > 2) {
+		/* referred by other threads or test */
+		CDEBUG(D_NET, "Group %s is busy\n", name);
 		lstcon_group_decref(grp);
 
-                return -EBUSY;
-        }
+		return -EBUSY;
+	}
 
 	rc = lstcon_group_nodes_add(grp, count, ids_up, featp, result_up);
 
 	lstcon_group_decref(grp);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -553,38 +556,39 @@ lstcon_group_del(char *name)
 	struct lstcon_group *grp;
 	int rc;
 
-        rc = lstcon_group_find(name, &grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group: %s\n", name);
-                return rc;
-        }
+	rc = lstcon_group_find(name, &grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "%s: Can't find group: rc = %d\n", name, rc);
+		return rc;
+	}
 
-        if (grp->grp_ref > 2) {
-                /* referred by others threads or test */
-                CDEBUG(D_NET, "Group %s is busy\n", name);
+	if (grp->grp_ref > 2) {
+		/* referred by others threads or test */
+		CDEBUG(D_NET, "Group %s is busy\n", name);
 		lstcon_group_decref(grp);
-                return -EBUSY;
-        }
+		return -EBUSY;
+	}
 
-        rc = lstcon_rpc_trans_ndlist(&grp->grp_ndl_list,
-                                     &grp->grp_trans_list, LST_TRANS_SESEND,
-                                     grp, lstcon_sesrpc_condition, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
+	rc = lstcon_rpc_trans_ndlist(&grp->grp_ndl_list,
+				     &grp->grp_trans_list, LST_TRANS_SESEND,
+				     grp, lstcon_sesrpc_condition, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc = %d\n", rc);
 		lstcon_group_decref(grp);
-                return rc;
-        }
+		return rc;
+	}
 
-        lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
+	lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
 
-        lstcon_rpc_trans_destroy(trans);
+	lstcon_rpc_trans_destroy(trans);
 
 	lstcon_group_decref(grp);
-        /* -ref for session, it's destroyed,
-         * status can't be rolled back, destroy group anway */
+	/* -ref for session, it's destroyed,
+	 * status can't be rolled back, destroy group anway
+	 */
 	lstcon_group_decref(grp);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -593,23 +597,23 @@ lstcon_group_clean(char *name, int args)
 	struct lstcon_group *grp = NULL;
 	int rc;
 
-        rc = lstcon_group_find(name, &grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group %s\n", name);
-                return rc;
-        }
+	rc = lstcon_group_find(name, &grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "%s: Can't find group: rc = %d\n", name, rc);
+		return rc;
+	}
 
-        if (grp->grp_ref > 2) {
-                /* referred by test */
-                CDEBUG(D_NET, "Group %s is busy\n", name);
+	if (grp->grp_ref > 2) {
+		/* referred by test */
+		CDEBUG(D_NET, "Group %s is busy\n", name);
 		lstcon_group_decref(grp);
-                return -EBUSY;
-        }
+		return -EBUSY;
+	}
 
-        args = (LST_NODE_ACTIVE | LST_NODE_BUSY |
-                LST_NODE_DOWN | LST_NODE_UNKNOWN) & ~args;
+	args = (LST_NODE_ACTIVE | LST_NODE_BUSY |
+		LST_NODE_DOWN | LST_NODE_UNKNOWN) & ~args;
 
-        lstcon_group_drain(grp, args);
+	lstcon_group_drain(grp, args);
 
 	lstcon_group_decref(grp);
 	/* release empty group */
@@ -627,20 +631,20 @@ lstcon_nodes_remove(char *name, int count,
 	struct lstcon_group *grp = NULL;
 	int rc;
 
-        rc = lstcon_group_find(name, &grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group: %s\n", name);
-                return rc;
-        }
+	rc = lstcon_group_find(name, &grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "%s: Can't find group: rc = %d\n", name, rc);
+		return rc;
+	}
 
-        if (grp->grp_ref > 2) {
-                /* referred by test */
-                CDEBUG(D_NET, "Group %s is busy\n", name);
+	if (grp->grp_ref > 2) {
+		/* referred by test */
+		CDEBUG(D_NET, "Group %s is busy\n", name);
 		lstcon_group_decref(grp);
-                return -EBUSY;
-        }
+		return -EBUSY;
+	}
 
-        rc = lstcon_group_nodes_remove(grp, count, ids_up, result_up);
+	rc = lstcon_group_nodes_remove(grp, count, ids_up, result_up);
 
 	lstcon_group_decref(grp);
 	/* release empty group */
@@ -657,39 +661,39 @@ lstcon_group_refresh(char *name, struct list_head __user *result_up)
 	struct lstcon_group *grp;
 	int rc;
 
-        rc = lstcon_group_find(name, &grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group: %s\n", name);
-                return rc;
-        }
+	rc = lstcon_group_find(name, &grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "%s: Can't find group: rc = %d\n", name, rc);
+		return rc;
+	}
 
-        if (grp->grp_ref > 2) {
-                /* referred by test */
-                CDEBUG(D_NET, "Group %s is busy\n", name);
+	if (grp->grp_ref > 2) {
+		/* referred by test */
+		CDEBUG(D_NET, "Group %s is busy\n", name);
 		lstcon_group_decref(grp);
-                return -EBUSY;
-        }
+		return -EBUSY;
+	}
 
-        /* re-invite all inactive nodes int the group */
-        rc = lstcon_rpc_trans_ndlist(&grp->grp_ndl_list,
-                                     &grp->grp_trans_list, LST_TRANS_SESNEW,
-                                     grp, lstcon_sesrpc_condition, &trans);
-        if (rc != 0) {
-                /* local error, return */
-                CDEBUG(D_NET, "Can't create transaction: %d\n", rc);
+	/* re-invite all inactive nodes int the group */
+	rc = lstcon_rpc_trans_ndlist(&grp->grp_ndl_list, &grp->grp_trans_list,
+				     LST_TRANS_SESNEW, grp,
+				     lstcon_sesrpc_condition, &trans);
+	if (rc != 0) {
+		/* local error, return */
+		CDEBUG(D_NET, "Can't create transaction: rc = %d\n", rc);
 		lstcon_group_decref(grp);
-                return rc;
-        }
+		return rc;
+	}
 
-        lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
+	lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
 
-        rc = lstcon_rpc_trans_interpreter(trans, result_up, NULL);
+	rc = lstcon_rpc_trans_interpreter(trans, result_up, NULL);
 
-        lstcon_rpc_trans_destroy(trans);
-        /* -ref for me */
+	lstcon_rpc_trans_destroy(trans);
+	/* -ref for me */
 	lstcon_group_decref(grp);
 
-        return rc;
+	return rc;
 }
 
 static int
@@ -710,26 +714,26 @@ lstcon_nodes_getent(struct list_head *head, int *index_p,
 		if (index++ < *index_p)
 			continue;
 
-                if (count >= *count_p)
-                        break;
+		if (count >= *count_p)
+			break;
 
-                nd = ndl->ndl_node;
+		nd = ndl->ndl_node;
 		if (copy_to_user(&dents_up[count].nde_id,
-                                     &nd->nd_id, sizeof(nd->nd_id)) ||
+				 &nd->nd_id, sizeof(nd->nd_id)) ||
 		    copy_to_user(&dents_up[count].nde_state,
-                                     &nd->nd_state, sizeof(nd->nd_state)))
-                        return -EFAULT;
+				 &nd->nd_state, sizeof(nd->nd_state)))
+			return -EFAULT;
 
-                count ++;
-        }
+		count++;
+	}
 
-        if (index <= *index_p)
-                return -ENOENT;
+	if (index <= *index_p)
+		return -ENOENT;
 
-        *count_p = count;
-        *index_p = index;
+	*count_p = count;
+	*index_p = index;
 
-        return 0;
+	return 0;
 }
 
 int
@@ -742,32 +746,32 @@ lstcon_group_info(char *name, struct lstcon_ndlist_ent __user *gents_p,
 	struct lstcon_ndlink *ndl;
 	int rc;
 
-        rc = lstcon_group_find(name, &grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group %s\n", name);
-                return rc;
-        }
+	rc = lstcon_group_find(name, &grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "%s: Can't find group: rc = %d\n", name, rc);
+		return rc;
+	}
 
 	if (dents_up != NULL) {
-                /* verbose query */
-                rc = lstcon_nodes_getent(&grp->grp_ndl_list,
-                                         index_p, count_p, dents_up);
+		/* verbose query */
+		rc = lstcon_nodes_getent(&grp->grp_ndl_list, index_p,
+					 count_p, dents_up);
 		lstcon_group_decref(grp);
 
-                return rc;
-        }
+		return rc;
+	}
 
-        /* non-verbose query */
+	/* non-verbose query */
 	CFS_ALLOC_PTR(gentp);
-        if (gentp == NULL) {
-                CERROR("Can't allocate ndlist_ent\n");
+	if (gentp == NULL) {
+		CERROR("Can't allocate ndlist_ent\n");
 		lstcon_group_decref(grp);
 
-                return -ENOMEM;
-        }
+		return -ENOMEM;
+	}
 
 	list_for_each_entry(ndl, &grp->grp_ndl_list, ndl_link)
-                LST_NODE_STATE_COUNTER(ndl->ndl_node, gentp);
+		LST_NODE_STATE_COUNTER(ndl->ndl_node, gentp);
 
 	rc = copy_to_user(gents_p, gentp,
 			  sizeof(struct lstcon_ndlist_ent)) ? -EFAULT : 0;
@@ -801,17 +805,17 @@ lstcon_batch_add(char *name)
 	int i;
 	int rc;
 
-        rc = (lstcon_batch_find(name, &bat) == 0)? -EEXIST: 0;
-        if (rc != 0) {
-                CDEBUG(D_NET, "Batch %s already exists\n", name);
-                return rc;
-        }
+	rc = (lstcon_batch_find(name, &bat) == 0) ? -EEXIST : 0;
+	if (rc != 0) {
+		CDEBUG(D_NET, "Batch %s already exists\n", name);
+		return rc;
+	}
 
 	LIBCFS_ALLOC(bat, sizeof(*bat));
-        if (bat == NULL) {
-                CERROR("Can't allocate descriptor for batch %s\n", name);
-                return -ENOMEM;
-        }
+	if (bat == NULL) {
+		CERROR("Can't allocate descriptor for batch %s\n", name);
+		return -ENOMEM;
+	}
 
 	CFS_ALLOC_PTR_ARRAY(bat->bat_cli_hash, LST_NODE_HASHSIZE);
 	if (bat->bat_cli_hash == NULL) {
@@ -837,25 +841,25 @@ lstcon_batch_add(char *name)
 		return -E2BIG;
 	}
 	strncpy(bat->bat_name, name, sizeof(bat->bat_name));
-        bat->bat_hdr.tsb_index = 0;
-        bat->bat_hdr.tsb_id.bat_id = ++console_session.ses_id_cookie;
+	bat->bat_hdr.tsb_index = 0;
+	bat->bat_hdr.tsb_id.bat_id = ++console_session.ses_id_cookie;
 
-        bat->bat_ntest = 0;
-        bat->bat_state = LST_BATCH_IDLE;
+	bat->bat_ntest = 0;
+	bat->bat_state = LST_BATCH_IDLE;
 
 	INIT_LIST_HEAD(&bat->bat_cli_list);
 	INIT_LIST_HEAD(&bat->bat_srv_list);
 	INIT_LIST_HEAD(&bat->bat_test_list);
 	INIT_LIST_HEAD(&bat->bat_trans_list);
 
-        for (i = 0; i < LST_NODE_HASHSIZE; i++) {
+	for (i = 0; i < LST_NODE_HASHSIZE; i++) {
 		INIT_LIST_HEAD(&bat->bat_cli_hash[i]);
 		INIT_LIST_HEAD(&bat->bat_srv_hash[i]);
-        }
+	}
 
 	list_add_tail(&bat->bat_link, &console_session.ses_bat_list);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -889,11 +893,11 @@ lstcon_batch_info(char *name, struct lstcon_test_batch_ent __user *ent_up,
 	struct lstcon_ndlink *ndl;
 	int rc;
 
-        rc = lstcon_batch_find(name, &bat);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find batch %s\n", name);
-                return -ENOENT;
-        }
+	rc = lstcon_batch_find(name, &bat);
+	if (rc != 0) {
+		CDEBUG(D_NET, "Can't find batch %s\n", name);
+		return -ENOENT;
+	}
 
 	if (testidx > 0) {
 		/* query test, test index start from 1 */
@@ -902,38 +906,36 @@ lstcon_batch_info(char *name, struct lstcon_test_batch_ent __user *ent_up,
 				break;
 		}
 
-                if (testidx > 0) {
-                        CDEBUG(D_NET, "Can't find specified test in batch\n");
-                        return -ENOENT;
-                }
-        }
+		if (testidx > 0) {
+			CDEBUG(D_NET, "Can't find specified test in batch\n");
+			return -ENOENT;
+		}
+	}
 
-        clilst = (test == NULL) ? &bat->bat_cli_list :
-                                  &test->tes_src_grp->grp_ndl_list;
-        srvlst = (test == NULL) ? &bat->bat_srv_list :
-                                  &test->tes_dst_grp->grp_ndl_list;
+	clilst = (test == NULL) ? &bat->bat_cli_list :
+				  &test->tes_src_grp->grp_ndl_list;
+	srvlst = (test == NULL) ? &bat->bat_srv_list :
+				  &test->tes_dst_grp->grp_ndl_list;
 
-        if (dents_up != NULL) {
-                rc = lstcon_nodes_getent((server ? srvlst: clilst),
-                                         index_p, ndent_p, dents_up);
-                return rc;
-        }
+	if (dents_up != NULL) {
+		rc = lstcon_nodes_getent((server ? srvlst : clilst),
+					 index_p, ndent_p, dents_up);
+		return rc;
+	}
 
-        /* non-verbose query */
+	/* non-verbose query */
 	CFS_ALLOC_PTR(entp);
-        if (entp == NULL)
-                return -ENOMEM;
+	if (entp == NULL)
+		return -ENOMEM;
 
-        if (test == NULL) {
-                entp->u.tbe_batch.bae_ntest = bat->bat_ntest;
-                entp->u.tbe_batch.bae_state = bat->bat_state;
-
-        } else {
-
-                entp->u.tbe_test.tse_type   = test->tes_type;
-                entp->u.tbe_test.tse_loop   = test->tes_loop;
-                entp->u.tbe_test.tse_concur = test->tes_concur;
-        }
+	if (test == NULL) {
+		entp->u.tbe_batch.bae_ntest = bat->bat_ntest;
+		entp->u.tbe_batch.bae_state = bat->bat_state;
+	} else {
+		entp->u.tbe_test.tse_type   = test->tes_type;
+		entp->u.tbe_test.tse_loop   = test->tes_loop;
+		entp->u.tbe_test.tse_concur = test->tes_concur;
+	}
 
 	list_for_each_entry(ndl, clilst, ndl_link)
 		LST_NODE_STATE_COUNTER(ndl->ndl_node, &entp->tbe_cli_nle);
@@ -952,23 +954,23 @@ lstcon_batch_info(char *name, struct lstcon_test_batch_ent __user *ent_up,
 static int
 lstcon_batrpc_condition(int transop, struct lstcon_node *nd, void *arg)
 {
-        switch (transop) {
-        case LST_TRANS_TSBRUN:
-                if (nd->nd_state != LST_NODE_ACTIVE)
-                        return -ENETDOWN;
-                break;
+	switch (transop) {
+	case LST_TRANS_TSBRUN:
+		if (nd->nd_state != LST_NODE_ACTIVE)
+			return -ENETDOWN;
+		break;
 
-        case LST_TRANS_TSBSTOP:
-                if (nd->nd_state != LST_NODE_ACTIVE)
-                        return 0;
-                break;
+	case LST_TRANS_TSBSTOP:
+		if (nd->nd_state != LST_NODE_ACTIVE)
+			return 0;
+		break;
 
-        case LST_TRANS_TSBCLIQRY:
-        case LST_TRANS_TSBSRVQRY:
-                break;
-        }
+	case LST_TRANS_TSBCLIQRY:
+	case LST_TRANS_TSBSRVQRY:
+		break;
+	}
 
-        return 1;
+	return 1;
 }
 
 static int
@@ -976,23 +978,23 @@ lstcon_batch_op(struct lstcon_batch *bat, int transop,
 		struct list_head __user *result_up)
 {
 	struct lstcon_rpc_trans *trans;
-        int                 rc;
+	int rc;
 
-        rc = lstcon_rpc_trans_ndlist(&bat->bat_cli_list,
-                                     &bat->bat_trans_list, transop,
-                                     bat, lstcon_batrpc_condition, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
-                return rc;
-        }
+	rc = lstcon_rpc_trans_ndlist(&bat->bat_cli_list,
+				     &bat->bat_trans_list, transop,
+				     bat, lstcon_batrpc_condition, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc = %d\n", rc);
+		return rc;
+	}
 
-        lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
+	lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
 
-        rc = lstcon_rpc_trans_interpreter(trans, result_up, NULL);
+	rc = lstcon_rpc_trans_interpreter(trans, result_up, NULL);
 
-        lstcon_rpc_trans_destroy(trans);
+	lstcon_rpc_trans_destroy(trans);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -1001,20 +1003,20 @@ lstcon_batch_run(char *name, int timeout, struct list_head __user *result_up)
 	struct lstcon_batch *bat;
 	int rc;
 
-        if (lstcon_batch_find(name, &bat) != 0) {
-                CDEBUG(D_NET, "Can't find batch %s\n", name);
-                return -ENOENT;
-        }
+	if (lstcon_batch_find(name, &bat) != 0) {
+		CDEBUG(D_NET, "Can't find batch %s\n", name);
+		return -ENOENT;
+	}
 
-        bat->bat_arg = timeout;
+	bat->bat_arg = timeout;
 
-        rc = lstcon_batch_op(bat, LST_TRANS_TSBRUN, result_up);
+	rc = lstcon_batch_op(bat, LST_TRANS_TSBRUN, result_up);
 
-        /* mark batch as running if it's started in any node */
-        if (lstcon_tsbop_stat_success(lstcon_trans_stat(), 0) != 0)
-                bat->bat_state = LST_BATCH_RUNNING;
+	/* mark batch as running if it's started in any node */
+	if (lstcon_tsbop_stat_success(lstcon_trans_stat(), 0) != 0)
+		bat->bat_state = LST_BATCH_RUNNING;
 
-        return rc;
+	return rc;
 }
 
 int
@@ -1023,20 +1025,20 @@ lstcon_batch_stop(char *name, int force, struct list_head __user *result_up)
 	struct lstcon_batch *bat;
 	int rc;
 
-        if (lstcon_batch_find(name, &bat) != 0) {
-                CDEBUG(D_NET, "Can't find batch %s\n", name);
-                return -ENOENT;
-        }
+	if (lstcon_batch_find(name, &bat) != 0) {
+		CDEBUG(D_NET, "Can't find batch %s\n", name);
+		return -ENOENT;
+	}
 
-        bat->bat_arg = force;
+	bat->bat_arg = force;
 
-        rc = lstcon_batch_op(bat, LST_TRANS_TSBSTOP, result_up);
+	rc = lstcon_batch_op(bat, LST_TRANS_TSBSTOP, result_up);
 
-        /* mark batch as stopped if all RPCs finished */
-        if (lstcon_tsbop_stat_failure(lstcon_trans_stat(), 0) == 0)
-                bat->bat_state = LST_BATCH_IDLE;
+	/* mark batch as stopped if all RPCs finished */
+	if (lstcon_tsbop_stat_failure(lstcon_trans_stat(), 0) == 0)
+		bat->bat_state = LST_BATCH_IDLE;
 
-        return rc;
+	return rc;
 }
 
 static void
@@ -1106,28 +1108,26 @@ lstcon_testrpc_condition(int transop, struct lstcon_node *nd, void *arg)
 	batch = test->tes_batch;
 	LASSERT(batch != NULL);
 
-        if (test->tes_oneside &&
-            transop == LST_TRANS_TSBSRVADD)
-                return 0;
+	if (test->tes_oneside && transop == LST_TRANS_TSBSRVADD)
+		return 0;
 
-        if (nd->nd_state != LST_NODE_ACTIVE)
-                return -ENETDOWN;
+	if (nd->nd_state != LST_NODE_ACTIVE)
+		return -ENETDOWN;
 
-        if (transop == LST_TRANS_TSBCLIADD) {
-                hash = batch->bat_cli_hash;
-                head = &batch->bat_cli_list;
+	if (transop == LST_TRANS_TSBCLIADD) {
+		hash = batch->bat_cli_hash;
+		head = &batch->bat_cli_list;
+	} else {
+		LASSERT(transop == LST_TRANS_TSBSRVADD);
 
-        } else {
-                LASSERT (transop == LST_TRANS_TSBSRVADD);
+		hash = batch->bat_srv_hash;
+		head = &batch->bat_srv_list;
+	}
 
-                hash = batch->bat_srv_hash;
-                head = &batch->bat_srv_list;
-        }
+	LASSERT(nd->nd_id.nid != LNET_NID_ANY);
 
-        LASSERT (nd->nd_id.nid != LNET_NID_ANY);
-
-        if (lstcon_ndlink_find(hash, nd->nd_id, &ndl, 1) != 0)
-                return -ENOMEM;
+	if (lstcon_ndlink_find(hash, nd->nd_id, &ndl, 1) != 0)
+		return -ENOMEM;
 
 	if (list_empty(&ndl->ndl_link))
 		list_add_tail(&ndl->ndl_link, head);
@@ -1144,48 +1144,47 @@ lstcon_test_nodes_add(struct lstcon_test *test,
 	int transop;
 	int rc;
 
-        LASSERT (test->tes_src_grp != NULL);
-        LASSERT (test->tes_dst_grp != NULL);
+	LASSERT(test->tes_src_grp != NULL);
+	LASSERT(test->tes_dst_grp != NULL);
 
-        transop = LST_TRANS_TSBSRVADD;
-        grp  = test->tes_dst_grp;
+	transop = LST_TRANS_TSBSRVADD;
+	grp  = test->tes_dst_grp;
 again:
-        rc = lstcon_rpc_trans_ndlist(&grp->grp_ndl_list,
-                                     &test->tes_trans_list, transop,
-                                     test, lstcon_testrpc_condition, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
-                return rc;
-        }
+	rc = lstcon_rpc_trans_ndlist(&grp->grp_ndl_list,
+				     &test->tes_trans_list, transop,
+				     test, lstcon_testrpc_condition, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc= %d\n", rc);
+		return rc;
+	}
 
-        lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
+	lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
 
-        if (lstcon_trans_stat()->trs_rpc_errno != 0 ||
-            lstcon_trans_stat()->trs_fwk_errno != 0) {
-                lstcon_rpc_trans_interpreter(trans, result_up, NULL);
+	if (lstcon_trans_stat()->trs_rpc_errno != 0 ||
+	    lstcon_trans_stat()->trs_fwk_errno != 0) {
+		lstcon_rpc_trans_interpreter(trans, result_up, NULL);
 
-                lstcon_rpc_trans_destroy(trans);
-                /* return if any error */
-                CDEBUG(D_NET, "Failed to add test %s, "
-                              "RPC error %d, framework error %d\n",
-                       transop == LST_TRANS_TSBCLIADD ? "client" : "server",
-                       lstcon_trans_stat()->trs_rpc_errno,
-                       lstcon_trans_stat()->trs_fwk_errno);
+		lstcon_rpc_trans_destroy(trans);
+		/* return if any error */
+		CDEBUG(D_NET, "Failed to add test %s, RPC error %d, framework error %d\n",
+		       transop == LST_TRANS_TSBCLIADD ? "client" : "server",
+		       lstcon_trans_stat()->trs_rpc_errno,
+		       lstcon_trans_stat()->trs_fwk_errno);
 
-                return rc;
-        }
+		return rc;
+	}
 
-        lstcon_rpc_trans_destroy(trans);
+	lstcon_rpc_trans_destroy(trans);
 
-        if (transop == LST_TRANS_TSBCLIADD)
-                return rc;
+	if (transop == LST_TRANS_TSBCLIADD)
+		return rc;
 
-        transop = LST_TRANS_TSBCLIADD;
-        grp = test->tes_src_grp;
-        test->tes_cliidx = 0;
+	transop = LST_TRANS_TSBCLIADD;
+	grp = test->tes_src_grp;
+	test->tes_cliidx = 0;
 
-        /* requests to test clients */
-        goto again;
+	/* requests to test clients */
+	goto again;
 }
 
 static int
@@ -1220,9 +1219,8 @@ lstcon_verify_group(const char *name, struct lstcon_group **grp)
 	}
 
 	list_for_each_entry(ndl, &(*grp)->grp_ndl_list, ndl_link) {
-		if (ndl->ndl_node->nd_state == LST_NODE_ACTIVE) {
+		if (ndl->ndl_node->nd_state == LST_NODE_ACTIVE)
 			return 0;
-		}
 	}
 
 	CDEBUG(D_NET, "Group %s has no ACTIVE nodes\n", name);
@@ -1344,15 +1342,15 @@ lstcon_tsbrpc_readent(int transop, struct srpc_msg *msg,
 {
 	struct srpc_batch_reply *rep = &msg->msg_body.bat_reply;
 
-        LASSERT (transop == LST_TRANS_TSBCLIQRY ||
-                 transop == LST_TRANS_TSBSRVQRY);
+	LASSERT(transop == LST_TRANS_TSBCLIQRY ||
+		transop == LST_TRANS_TSBSRVQRY);
 
-        /* positive errno, framework error code */
+	/* positive errno, framework error code */
 	if (copy_to_user(&ent_up->rpe_priv[0],
-                             &rep->bar_active, sizeof(rep->bar_active)))
-                return -EFAULT;
+			 &rep->bar_active, sizeof(rep->bar_active)))
+		return -EFAULT;
 
-        return 0;
+	return 0;
 }
 
 int
@@ -1368,53 +1366,53 @@ lstcon_test_batch_query(char *name, int testidx, int client,
 	int transop;
 	int rc;
 
-        rc = lstcon_batch_find(name, &batch);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find batch: %s\n", name);
-                return rc;
-        }
-
-        if (testidx == 0) {
-                translist = &batch->bat_trans_list;
-                ndlist    = &batch->bat_cli_list;
-                hdr       = &batch->bat_hdr;
-
-        } else {
-                /* query specified test only */
-                rc = lstcon_test_find(batch, testidx, &test);
-                if (rc != 0) {
-                        CDEBUG(D_NET, "Can't find test: %d\n", testidx);
-                        return rc;
-                }
-
-                translist = &test->tes_trans_list;
-                ndlist    = &test->tes_src_grp->grp_ndl_list;
-                hdr       = &test->tes_hdr;
+	rc = lstcon_batch_find(name, &batch);
+	if (rc != 0) {
+		CDEBUG(D_NET, "Can't find batch: %s\n", name);
+		return rc;
 	}
 
-        transop = client ? LST_TRANS_TSBCLIQRY : LST_TRANS_TSBSRVQRY;
+	if (testidx == 0) {
+		translist = &batch->bat_trans_list;
+		ndlist    = &batch->bat_cli_list;
+		hdr       = &batch->bat_hdr;
+	} else {
+		/* query specified test only */
+		rc = lstcon_test_find(batch, testidx, &test);
+		if (rc != 0) {
+			CDEBUG(D_NET,
+			       "Can't find test with index: %d: rc = %d\n",
+			       testidx, rc);
+			return rc;
+		}
+		translist = &test->tes_trans_list;
+		ndlist    = &test->tes_src_grp->grp_ndl_list;
+		hdr       = &test->tes_hdr;
+	}
 
-        rc = lstcon_rpc_trans_ndlist(ndlist, translist, transop, hdr,
-                                     lstcon_batrpc_condition, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
-                return rc;
-        }
+	transop = client ? LST_TRANS_TSBCLIQRY : LST_TRANS_TSBSRVQRY;
 
-        lstcon_rpc_trans_postwait(trans, timeout);
+	rc = lstcon_rpc_trans_ndlist(ndlist, translist, transop, hdr,
+				     lstcon_batrpc_condition, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc = %d\n", rc);
+		return rc;
+	}
 
-        if (testidx == 0 && /* query a batch, not a test */
-            lstcon_rpc_stat_failure(lstcon_trans_stat(), 0) == 0 &&
-            lstcon_tsbqry_stat_run(lstcon_trans_stat(), 0) == 0) {
-                /* all RPCs finished, and no active test */
-                batch->bat_state = LST_BATCH_IDLE;
-        }
+	lstcon_rpc_trans_postwait(trans, timeout);
 
-        rc = lstcon_rpc_trans_interpreter(trans, result_up,
-                                          lstcon_tsbrpc_readent);
-        lstcon_rpc_trans_destroy(trans);
+	if (testidx == 0 && /* query a batch, not a test */
+	    lstcon_rpc_stat_failure(lstcon_trans_stat(), 0) == 0 &&
+	    lstcon_tsbqry_stat_run(lstcon_trans_stat(), 0) == 0) {
+		/* all RPCs finished, and no active test */
+		batch->bat_state = LST_BATCH_IDLE;
+	}
 
-        return rc;
+	rc = lstcon_rpc_trans_interpreter(trans, result_up,
+					  lstcon_tsbrpc_readent);
+	lstcon_rpc_trans_destroy(trans);
+
+	return rc;
 }
 
 static int
@@ -1426,8 +1424,8 @@ lstcon_statrpc_readent(int transop, struct srpc_msg *msg,
 	struct srpc_counters __user *srpc_stat;
 	struct lnet_counters_common __user *lnet_stat;
 
-        if (rep->str_status != 0)
-                return 0;
+	if (rep->str_status != 0)
+		return 0;
 
 	sfwk_stat = (struct sfw_counters __user *)&ent_up->rpe_payload[0];
 	srpc_stat = (struct srpc_counters __user *)
@@ -1438,9 +1436,9 @@ lstcon_statrpc_readent(int transop, struct srpc_msg *msg,
 	if (copy_to_user(sfwk_stat, &rep->str_fw, sizeof(*sfwk_stat)) ||
 	    copy_to_user(srpc_stat, &rep->str_rpc, sizeof(*srpc_stat)) ||
 	    copy_to_user(lnet_stat, &rep->str_lnet, sizeof(*lnet_stat)))
-                return -EFAULT;
+		return -EFAULT;
 
-        return 0;
+	return 0;
 }
 
 static int
@@ -1451,20 +1449,20 @@ lstcon_ndlist_stat(struct list_head *ndlist,
 	struct lstcon_rpc_trans *trans;
 	int rc;
 
-        rc = lstcon_rpc_trans_ndlist(ndlist, &head,
-                                     LST_TRANS_STATQRY, NULL, NULL, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
-                return rc;
-        }
+	rc = lstcon_rpc_trans_ndlist(ndlist, &head, LST_TRANS_STATQRY, NULL,
+				     NULL, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc = %d\n", rc);
+		return rc;
+	}
 
-        lstcon_rpc_trans_postwait(trans, LST_VALIDATE_TIMEOUT(timeout));
+	lstcon_rpc_trans_postwait(trans, LST_VALIDATE_TIMEOUT(timeout));
 
-        rc = lstcon_rpc_trans_interpreter(trans, result_up,
-                                          lstcon_statrpc_readent);
-        lstcon_rpc_trans_destroy(trans);
+	rc = lstcon_rpc_trans_interpreter(trans, result_up,
+					  lstcon_statrpc_readent);
+	lstcon_rpc_trans_destroy(trans);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -1474,17 +1472,17 @@ lstcon_group_stat(char *grp_name, int timeout,
 	struct lstcon_group *grp;
 	int rc;
 
-        rc = lstcon_group_find(grp_name, &grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Can't find group %s\n", grp_name);
-                return rc;
-        }
+	rc = lstcon_group_find(grp_name, &grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "Can't find group %s\n", grp_name);
+		return rc;
+	}
 
-        rc = lstcon_ndlist_stat(&grp->grp_ndl_list, timeout, result_up);
+	rc = lstcon_ndlist_stat(&grp->grp_ndl_list, timeout, result_up);
 
 	lstcon_group_decref(grp);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -1497,38 +1495,38 @@ lstcon_nodes_stat(int count, struct lnet_process_id __user *ids_up,
 	int i;
 	int rc;
 
-        rc = lstcon_group_alloc(NULL, &tmp);
-        if (rc != 0) {
-                CERROR("Out of memory\n");
-                return -ENOMEM;
-        }
+	rc = lstcon_group_alloc(NULL, &tmp);
+	if (rc != 0) {
+		CERROR("Out of memory\n");
+		return -ENOMEM;
+	}
 
-        for (i = 0 ; i < count; i++) {
+	for (i = 0 ; i < count; i++) {
 		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
-                        rc = -EFAULT;
-                        break;
-                }
+			rc = -EFAULT;
+			break;
+		}
 
-                /* add to tmp group */
-                rc = lstcon_group_ndlink_find(tmp, id, &ndl, 2);
-                if (rc != 0) {
-                        CDEBUG((rc == -ENOMEM) ? D_ERROR : D_NET,
-                               "Failed to find or create %s: %d\n",
-                               libcfs_id2str(id), rc);
-                        break;
-                }
-        }
+		/* add to tmp group */
+		rc = lstcon_group_ndlink_find(tmp, id, &ndl, 2);
+		if (rc != 0) {
+			CDEBUG((rc == -ENOMEM) ? D_ERROR : D_NET,
+			       "Failed to find or create %s: rc = %d\n",
+			       libcfs_id2str(id), rc);
+			break;
+		}
+	}
 
-        if (rc != 0) {
+	if (rc != 0) {
 		lstcon_group_decref(tmp);
-                return rc;
-        }
+		return rc;
+	}
 
-        rc = lstcon_ndlist_stat(&tmp->grp_ndl_list, timeout, result_up);
+	rc = lstcon_ndlist_stat(&tmp->grp_ndl_list, timeout, result_up);
 
 	lstcon_group_decref(tmp);
 
-        return rc;
+	return rc;
 }
 
 static int
@@ -1539,27 +1537,27 @@ lstcon_debug_ndlist(struct list_head *ndlist,
 	struct lstcon_rpc_trans *trans;
 	int rc;
 
-        rc = lstcon_rpc_trans_ndlist(ndlist, translist, LST_TRANS_SESQRY,
-                                     NULL, lstcon_sesrpc_condition, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
-                return rc;
-        }
+	rc = lstcon_rpc_trans_ndlist(ndlist, translist, LST_TRANS_SESQRY, NULL,
+				     lstcon_sesrpc_condition, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc = %d\n", rc);
+		return rc;
+	}
 
-        lstcon_rpc_trans_postwait(trans, LST_VALIDATE_TIMEOUT(timeout));
+	lstcon_rpc_trans_postwait(trans, LST_VALIDATE_TIMEOUT(timeout));
 
-        rc = lstcon_rpc_trans_interpreter(trans, result_up,
-                                          lstcon_sesrpc_readent);
-        lstcon_rpc_trans_destroy(trans);
+	rc = lstcon_rpc_trans_interpreter(trans, result_up,
+					  lstcon_sesrpc_readent);
+	lstcon_rpc_trans_destroy(trans);
 
-        return rc;
+	return rc;
 }
 
 int
 lstcon_session_debug(int timeout, struct list_head __user *result_up)
 {
-        return lstcon_debug_ndlist(&console_session.ses_ndl_list,
-                                   NULL, timeout, result_up);
+	return lstcon_debug_ndlist(&console_session.ses_ndl_list, NULL,
+				   timeout, result_up);
 }
 
 int
@@ -1569,15 +1567,14 @@ lstcon_batch_debug(int timeout, char *name,
 	struct lstcon_batch *bat;
 	int rc;
 
-        rc = lstcon_batch_find(name, &bat);
-        if (rc != 0)
-                return -ENOENT;
+	rc = lstcon_batch_find(name, &bat);
+	if (rc != 0)
+		return -ENOENT;
 
-        rc = lstcon_debug_ndlist(client ? &bat->bat_cli_list :
-                                          &bat->bat_srv_list,
-                                 NULL, timeout, result_up);
+	rc = lstcon_debug_ndlist(client ? &bat->bat_cli_list :
+				 &bat->bat_srv_list, NULL, timeout, result_up);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -1587,15 +1584,14 @@ lstcon_group_debug(int timeout, char *name,
 	struct lstcon_group *grp;
 	int rc;
 
-        rc = lstcon_group_find(name, &grp);
-        if (rc != 0)
-                return -ENOENT;
+	rc = lstcon_group_find(name, &grp);
+	if (rc != 0)
+		return -ENOENT;
 
-        rc = lstcon_debug_ndlist(&grp->grp_ndl_list, NULL,
-                                 timeout, result_up);
+	rc = lstcon_debug_ndlist(&grp->grp_ndl_list, NULL, timeout, result_up);
 	lstcon_group_decref(grp);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -1609,37 +1605,36 @@ lstcon_nodes_debug(int timeout, int count,
 	int i;
 	int rc;
 
-        rc = lstcon_group_alloc(NULL, &grp);
-        if (rc != 0) {
-                CDEBUG(D_NET, "Out of memory\n");
-                return rc;
-        }
+	rc = lstcon_group_alloc(NULL, &grp);
+	if (rc != 0) {
+		CDEBUG(D_NET, "Out of memory\n");
+		return rc;
+	}
 
-        for (i = 0; i < count; i++) {
+	for (i = 0; i < count; i++) {
 		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
-                        rc = -EFAULT;
-                        break;
-                }
+			rc = -EFAULT;
+			break;
+		}
 
-                /* node is added to tmp group */
-                rc = lstcon_group_ndlink_find(grp, id, &ndl, 1);
-                if (rc != 0) {
-                        CERROR("Can't create node link\n");
-                        break;
-                }
-        }
+		/* node is added to tmp group */
+		rc = lstcon_group_ndlink_find(grp, id, &ndl, 1);
+		if (rc != 0) {
+			CERROR("Can't create node link\n");
+			break;
+		}
+	}
 
-        if (rc != 0) {
+	if (rc != 0) {
 		lstcon_group_decref(grp);
-                return rc;
-        }
+		return rc;
+	}
 
-        rc = lstcon_debug_ndlist(&grp->grp_ndl_list, NULL,
-                                 timeout, result_up);
+	rc = lstcon_debug_ndlist(&grp->grp_ndl_list, NULL, timeout, result_up);
 
 	lstcon_group_decref(grp);
 
-        return rc;
+	return rc;
 }
 
 int
@@ -1667,26 +1662,26 @@ lstcon_new_session_id(struct lst_session_id *sid)
 }
 
 int
-lstcon_session_new(char *name, int key, unsigned feats,
+lstcon_session_new(char *name, int key, unsigned int feats,
 		   int timeout, int force)
 {
-        int     rc = 0;
-        int     i;
+	int rc = 0;
+	int i;
 
-        if (console_session.ses_state != LST_SESSION_NONE) {
-                /* session exists */
-                if (!force) {
+	if (console_session.ses_state != LST_SESSION_NONE) {
+		/* session exists */
+		if (!force) {
 			CNETERR("Session %s already exists\n",
 				console_session.ses_name);
-                        return -EEXIST;
-                }
+			return -EEXIST;
+		}
 
-                rc = lstcon_session_end();
+		rc = lstcon_session_end();
 
-                /* lstcon_session_end() only return local error */
-                if  (rc != 0)
-                        return rc;
-        }
+		/* lstcon_session_end() only return local error */
+		if  (rc != 0)
+			return rc;
+	}
 
 	if ((feats & ~LST_FEATS_MASK) != 0) {
 		CNETERR("Unknown session features %x\n",
@@ -1699,8 +1694,8 @@ lstcon_session_new(char *name, int key, unsigned feats,
 
 	lstcon_new_session_id(&console_session.ses_id);
 
-	console_session.ses_key	    = key;
-	console_session.ses_force   = !!force;
+	console_session.ses_key = key;
+	console_session.ses_force = !!force;
 	console_session.ses_features = feats;
 	console_session.ses_feats_updated = 0;
 	console_session.ses_timeout = (timeout <= 0) ?
@@ -1737,32 +1732,32 @@ int lstcon_session_end(void)
 	struct lstcon_batch *bat;
 	int rc = 0;
 
-        LASSERT (console_session.ses_state == LST_SESSION_ACTIVE);
+	LASSERT(console_session.ses_state == LST_SESSION_ACTIVE);
 
-	rc = lstcon_rpc_trans_ndlist(&console_session.ses_ndl_list,
-                                     NULL, LST_TRANS_SESEND, NULL,
-                                     lstcon_sesrpc_condition, &trans);
-        if (rc != 0) {
-                CERROR("Can't create transaction: %d\n", rc);
-                return rc;
-        }
+	rc = lstcon_rpc_trans_ndlist(&console_session.ses_ndl_list, NULL,
+				     LST_TRANS_SESEND, NULL,
+				     lstcon_sesrpc_condition, &trans);
+	if (rc != 0) {
+		CERROR("Can't create transaction: rc = %d\n", rc);
+		return rc;
+	}
 
-        console_session.ses_shutdown = 1;
+	console_session.ses_shutdown = 1;
 
-        lstcon_rpc_pinger_stop();
+	lstcon_rpc_pinger_stop();
 
-        lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
+	lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
 
-        lstcon_rpc_trans_destroy(trans);
-        /* User can do nothing even rpc failed, so go on */
+	lstcon_rpc_trans_destroy(trans);
+	/* User can do nothing even rpc failed, so go on */
 
-        /* waiting for orphan rpcs to die */
-        lstcon_rpc_cleanup_wait();
+	/* waiting for orphan rpcs to die */
+	lstcon_rpc_cleanup_wait();
 
-        console_session.ses_id    = LST_INVALID_SID;
-        console_session.ses_state = LST_SESSION_NONE;
-        console_session.ses_key   = 0;
-        console_session.ses_force = 0;
+	console_session.ses_id    = LST_INVALID_SID;
+	console_session.ses_state = LST_SESSION_NONE;
+	console_session.ses_key   = 0;
+	console_session.ses_force = 0;
 	console_session.ses_feats_updated = 0;
 
 	/* destroy all batches */
@@ -1792,7 +1787,7 @@ int lstcon_session_end(void)
 }
 
 int
-lstcon_session_feats_check(unsigned feats)
+lstcon_session_feats_check(unsigned int feats)
 {
 	int rc = 0;
 
@@ -1815,8 +1810,7 @@ lstcon_session_feats_check(unsigned feats)
 	spin_unlock(&console_session.ses_rpc_lock);
 
 	if (rc != 0) {
-		CERROR("remote features %x do not match with "
-		       "session features %x of console\n",
+		CERROR("remote features %x do not match with session features %x of console\n",
 		       feats, console_session.ses_features);
 	}
 
@@ -1839,7 +1833,8 @@ lstcon_acceptor_handle(struct srpc_server_rpc *rpc)
 	mutex_lock(&console_session.ses_mutex);
 
 	jrep->join_sid.ses_stamp = console_session.ses_id.ses_stamp;
-	jrep->join_sid.ses_nid = lnet_nid_to_nid4(&console_session.ses_id.ses_nid);
+	jrep->join_sid.ses_nid =
+		lnet_nid_to_nid4(&console_session.ses_id.ses_nid);
 
 	if (LNET_NID_IS_ANY(&console_session.ses_id.ses_nid)) {
 		jrep->join_status = ESRCH;
@@ -1912,10 +1907,10 @@ static struct srpc_service lstcon_acceptor_service;
 
 static void lstcon_init_acceptor_service(void)
 {
-        /* initialize selftest console acceptor service table */
-        lstcon_acceptor_service.sv_name    = "join session";
-        lstcon_acceptor_service.sv_handler = lstcon_acceptor_handle;
-        lstcon_acceptor_service.sv_id      = SRPC_SERVICE_JOIN;
+	/* initialize selftest console acceptor service table */
+	lstcon_acceptor_service.sv_name    = "join session";
+	lstcon_acceptor_service.sv_handler = lstcon_acceptor_handle;
+	lstcon_acceptor_service.sv_id      = SRPC_SERVICE_JOIN;
 	lstcon_acceptor_service.sv_wi_total = SFW_FRWK_WI_MAX;
 }
 
@@ -1927,8 +1922,8 @@ static struct notifier_block lstcon_ioctl_handler = {
 int
 lstcon_console_init(void)
 {
-        int     i;
-        int     rc;
+	int i;
+	int rc;
 
 	console_session.ses_id		    = LST_INVALID_SID;
 	console_session.ses_state	    = LST_SESSION_NONE;
@@ -1954,9 +1949,8 @@ lstcon_console_init(void)
 	for (i = 0; i < LST_GLOBAL_HASHSIZE; i++)
 		INIT_LIST_HEAD(&console_session.ses_ndl_hash[i]);
 
-
-        /* initialize acceptor service table */
-        lstcon_init_acceptor_service();
+	/* initialize acceptor service table */
+	lstcon_init_acceptor_service();
 
 	rc = srpc_add_service(&lstcon_acceptor_service);
 	LASSERT(rc != -EBUSY);
@@ -1969,9 +1963,9 @@ lstcon_console_init(void)
 	rc = srpc_service_add_buffers(&lstcon_acceptor_service,
 				      lstcon_acceptor_service.sv_wi_total);
 	if (rc != 0) {
-                rc = -ENOMEM;
-                goto out;
-        }
+		rc = -ENOMEM;
+		goto out;
+	}
 
 	rc = lstcon_init_netlink();
 	if (rc < 0)
@@ -2009,13 +2003,13 @@ lstcon_console_fini(void)
 
 	mutex_lock(&console_session.ses_mutex);
 
-        srpc_shutdown_service(&lstcon_acceptor_service);
-        srpc_remove_service(&lstcon_acceptor_service);
+	srpc_shutdown_service(&lstcon_acceptor_service);
+	srpc_remove_service(&lstcon_acceptor_service);
 
-        if (console_session.ses_state != LST_SESSION_NONE)
-                lstcon_session_end();
+	if (console_session.ses_state != LST_SESSION_NONE)
+		lstcon_session_end();
 
-        lstcon_rpc_module_fini();
+	lstcon_rpc_module_fini();
 
 	mutex_unlock(&console_session.ses_mutex);
 
