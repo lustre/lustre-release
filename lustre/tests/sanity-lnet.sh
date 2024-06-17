@@ -64,7 +64,7 @@ TESTNS='test_ns'
 FAKE_IF="test1pg"
 FAKE_IP="10.1.2.3"
 FAKE_IP_ALIAS="10.1.2.31"
-FAKE_IPV6="2001:0db8:0:f101::1"
+FAKE_IPV6="2001:db8:0:f101::1"
 do_ns() {
 	echo "ip netns exec $TESTNS $*"
 	ip netns exec $TESTNS "$@"
@@ -109,7 +109,7 @@ cleanup_netns() {
 configure_dlc() {
 	echo "Loading LNet and configuring DLC"
 	load_lnet || return $?
-	do_lnetctl lnet configure
+	do_lnetctl lnet configure $LNET_CONFIG_OPT
 }
 
 GLOBAL_YAML_FILE=$TMP/sanity-lnet-global.yaml
@@ -122,7 +122,7 @@ reinit_dlc() {
 	if lsmod | grep -q lnet; then
 		do_lnetctl lnet unconfigure ||
 			error "lnetctl lnet unconfigure failed $?"
-		do_lnetctl lnet configure ||
+		do_lnetctl lnet configure $LNET_CONFIG_OPT ||
 			error "lnetctl lnet configure failed $?"
 	else
 		configure_dlc || error "configure_dlc failed $?"
@@ -264,6 +264,28 @@ ip_is_v4() {
 	return 0
 }
 
+ip_is_v6() {
+	local ipv6_re='^([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}$'
+
+	if ! [[ $1 =~ $ipv6_re ]]; then
+		return 1
+	fi
+
+	local segment
+	for segment in ${1//:/ }; do
+		((0x$segment <= 0xFFFF)) || return 1
+	done
+
+	return 0
+}
+
+intf_has_ipv6() {
+	local addr=$(ip -o -6 a s "$1" | awk '{print $4}' | head -n 1 |
+		     grep -v '^fe80::' | sed 's,/[0-9]\+$,,')
+
+	ip_is_v6 "${addr}"
+}
+
 intf_has_ipv4() {
 	local addr=$(ip -o -4 a s "$1" | awk '{print $4}' | head -n 1 |
 		     sed 's,/[0-9]\+$,,')
@@ -286,18 +308,39 @@ if [[ -z ${INTERFACES[@]} ]]; then
 	error "Did not identify any LNet interfaces"
 fi
 
+# If we don't have IPv6 addresses then make sure the test suite runs in
+# "IPv4 mode". If we have IPv6, but not IPv4, then make sure we run in
+# "IPv6 mode". In a mixed environment we take whatever has been specified
+# by the test environment configuration.
+if ! intf_has_ipv6 ${INTERFACES[0]}; then
+	FORCE_LARGE_NID=false
+	LNET_CONFIG_INIT_OPT="--all"
+	LNET_CONFIG_OPT=""
+elif ! intf_has_ipv4 ${INTERFACES[0]}; then
+	FORCE_LARGE_NID=true
+	LNET_CONFIG_INIT_OPT="--all --large"
+	LNET_CONFIG_OPT="-l"
+fi
+
 if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
-	if ! intf_has_ipv4 "${INTERFACES[0]}"; then
-		always_except LU-5960 230
-		always_except LU-9680 213
-		always_except LU-9680 231
-		always_except LU-9680 302
+	if $FORCE_LARGE_NID; then
 		always_except LU-14288 101
 		always_except LU-14288 103
-		always_except LU-17458 220
+		always_except LU-17986 111
 		always_except LU-17457 208
-		always_except LU-17457 255
+		always_except LU-9680 213
 		always_except LU-17460 214
+		always_except LU-17458 220
+		always_except LU-5960 230
+		always_except LU-9680 231
+		always_except LU-17457 255
+		always_except LU-9680 302
+		always_except LU-17460 303
+		always_except LU-17460 500
+
+		FAKE_NID="${FAKE_IPV6}@tcp"
+	else
+		FAKE_NID="${FAKE_IP}@tcp"
 	fi
 fi
 
@@ -1230,8 +1273,11 @@ init_router_test_vars() {
 	do_nodes $rnodes $LUSTRE_RMMOD ||
 		error "failed to unload modules"
 
-	do_rpc_nodes $rnodes "load_lnet config_on_load=1" ||
-		error "Failed to load and configure LNet"
+	do_rpc_nodes $rnodes "load_lnet" ||
+		error "Failed to load LNet"
+
+	do_nodes $rnodes "$LNETCTL lnet configure $LNET_CONFIG_INIT_OPT" ||
+		error "Failed to configure LNet on $rnodes rc = $?"
 
 	for router in ${ROUTERS[@]}; do
 		ROUTER_INTERFACES[$router]=$(do_rpc_nodes --quiet \
@@ -1329,7 +1375,7 @@ setup_router_test() {
 	do_rpc_nodes $all_nodes load_lnet "${mod_opts}" ||
 		error "Failed to load lnet"
 
-	do_nodes $all_nodes "$LNETCTL lnet configure" ||
+	do_nodes $all_nodes "$LNETCTL lnet configure $LNET_CONFIG_OPT" ||
 		error "Failed to initialize DLC"
 
 	for router in ${!ROUTER_INTERFACES[@]}; do
@@ -1677,7 +1723,7 @@ test_108() {
 	add_net "tcp" "$FAKE_IF" || return $?
 
 	cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
-      -     nid: ${FAKE_IP}@tcp
+      -     nid: $FAKE_NID
             status: up
             interfaces:
                   0: ${FAKE_IF}
@@ -1776,43 +1822,48 @@ run_test 111 "Test many routes"
 test_200() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"
-	cleanup_lnet || exit 1
+	cleanup_lnet || return $?
 	load_lnet "networks=\"\""
-	do_ns $LNETCTL lnet configure --all || exit 1
-	$LNETCTL net show --net tcp | grep -q "nid: ${FAKE_IP}@tcp$"
+	do_ns $LNETCTL lnet configure $LNET_CONFIG_INIT_OPT ||
+		error "Failed to configure LNet in non-default namespace rc = $?"
+	$LNETCTL net show --net tcp | grep -q "nid: $FAKE_NID$"
 }
 run_test 200 "load lnet w/o module option, configure in a non-default namespace"
 
 test_201() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"
-	cleanup_lnet || exit 1
+	cleanup_lnet || return $?
 	load_lnet "networks=tcp($FAKE_IF)"
-	do_ns $LNETCTL lnet configure --all || exit 1
-	$LNETCTL net show --net tcp | grep -q "nid: ${FAKE_IP}@tcp$"
+	do_ns $LNETCTL lnet configure $LNET_CONFIG_INIT_OPT ||
+		error "Failed to configure LNet in non-default namespace rc = $?"
+	$LNETCTL net show --net tcp | grep -q "nid: $FAKE_NID$"
 }
 run_test 201 "load lnet using networks module options in a non-default namespace"
 
 test_202() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"
-	cleanup_lnet || exit 1
+	cleanup_lnet || return $?
 	load_lnet "networks=\"\" ip2nets=\"tcp0($FAKE_IF) ${FAKE_IP}\""
-	do_ns $LNETCTL lnet configure --all || exit 1
+	do_ns $LNETCTL lnet configure --all ||
+		error "Failed to configure LNet in non-default namespace rc = $?"
 	$LNETCTL net show | grep -q "nid: ${FAKE_IP}@tcp$"
 }
 run_test 202 "load lnet using ip2nets in a non-default namespace"
-
 
 ### Add the interfaces in the target namespace
 
 test_203() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"
-	cleanup_lnet || exit 1
+	cleanup_lnet || return $?
 	load_lnet
-	do_lnetctl lnet configure || exit 1
-	do_ns $LNETCTL net add --net tcp0 --if $FAKE_IF
+	do_lnetctl lnet configure $LNET_CONFIG_OPT ||
+		error "Failed to configure LNet in non-default namespace rc = $?"
+	do_ns $LNETCTL net add --net tcp0 --if $FAKE_IF ||
+		error "Failed to add net in non-default namespace"
+	do_ns $LNETCTL net show | grep -q "nid: $FAKE_NID$"
 }
 run_test 203 "add a network using an interface in the non-default namespace"
 
@@ -1943,7 +1994,6 @@ RNIDS=( )
 LNIDS=( )
 setup_health_test() {
 	local need_mr=$1
-	local rc=0
 
 	[[ ${NETTYPE} == kfi* ]] && skip "kfi doesn't support drop rules"
 
@@ -1962,7 +2012,10 @@ setup_health_test() {
 	RNIDS=( $(do_node $RNODE $LCTL list_nids | xargs echo) )
 
 	if [[ -z ${RNIDS[@]} ]]; then
-		do_rpc_nodes $RNODE load_lnet "config_on_load=1"
+		do_rpc_nodes $RNODE load_lnet ||
+			error "load_lnet failed on $RNODE rc = $?"
+		do_node $RNODE $LNETCTL lnet configure $LNET_CONFIG_INIT_OPT ||
+			error "Failed to configure lnet on $RNODE rc = $?"
 		RLOADED=true
 		RNIDS=( $(do_node $RNODE $LCTL list_nids | xargs echo) )
 	fi
@@ -2013,29 +2066,23 @@ setup_health_test() {
 		[[ -z $if ]] &&
 			error "Failed to determine interface for $RNODE"
 
-		do_rpc_nodes $RNODE "$LNETCTL lnet configure"
+		do_node $RNODE "$LNETCTL lnet configure $LNET_CONFIG_OPT" ||
+			error "Failed to configure LNet on $RNODE rc = $?"
 		do_rpc_nodes $RNODE "$LNETCTL net add --net $net --if $if" ||
-			rc=$?
-		if [[ $rc -ne 0 ]]; then
-			error "Failed to add interface to $RNODE rc=$?"
-		else
-			RNIDS[1]="${RNIDS[0]}1"
-			NET_DEL_ARGS="--net $net --if $if"
-		fi
+			error "Failed to add interface to $RNODE rc = $?"
+		RNIDS[1]="${RNIDS[0]}1"
+		NET_DEL_ARGS="--net $net --if $if"
 	fi
 
 	if ${need_mr} && [[ ${#LNIDS[@]} -lt 2 ]]; then
 		local net=${LNIDS[0]}
 		net="${net//*@/}1"
 
-		do_lnetctl lnet configure &&
-			do_lnetctl net add --net $net --if ${INTERFACES[0]} ||
-			rc=$?
-		if [[ $rc -ne 0 ]]; then
-			error "Failed to add interface rc=$?"
-		else
-			LNIDS[1]="${LNIDS[0]}1"
-		fi
+		do_lnetctl lnet configure $LNET_CONFIG_OPT ||
+			error "Failed to configure LNet rc = $?"
+		do_lnetctl net add --net $net --if ${INTERFACES[0]} ||
+			error "Failed to add interface rc = $?"
+		LNIDS[1]="${LNIDS[0]}1"
 	fi
 
 	$LNETCTL net show
@@ -2207,7 +2254,7 @@ test_208_load_and_check_lnet() {
 
 	load_lnet "networks=\"\" ip2nets=\"${ip2nets_str}\""
 
-	$LCTL net up ||
+	$LCTL net up $LNET_CONFIG_OPT ||
 		error "Failed to load LNet with ip2nets \"${ip2nets_str}\""
 
 	[[ -n $s_nid ]] &&
@@ -2276,8 +2323,8 @@ test_208() {
 	echo "alt syntax with missing IF \"$ip2nets_str\""
 	load_lnet "networks=\"\" ip2nets=\"${ip2nets_str}\""
 
-	echo "$LCTL net up should fail"
-	$LCTL net up &&
+	echo "$LCTL net up $LNET_CONFIG_OPT should fail"
+	$LCTL net up $LNET_CONFIG_OPT &&
 		error "LNet bring up should have failed"
 
 	cleanup_lnet
@@ -2618,7 +2665,10 @@ test_212() {
 	local rloaded=false
 
 	if [[ -z $rnodenids ]]; then
-		do_rpc_nodes $rnode load_lnet "config_on_load=1"
+		do_rpc_nodes $rnode load_lnet ||
+			error "load_lnet failed on $rnode rc = $?"
+		do_node $rnode $LNETCTL lnet configure $LNET_CONFIG_INIT_OPT ||
+			error "Failed to configure LNet on $rnode rc = $?"
 		rloaded=true
 		rnodenids=$(do_node $rnode $LCTL list_nids | xargs echo)
 	fi
@@ -3774,7 +3824,7 @@ test_255() {
 	load_lnet "networks=\"${network_str}\" routes=\"${routes_str}\"" ||
 		error "Failed to load LNet"
 
-	$LCTL net up ||
+	$LCTL net up $LNET_CONFIG_OPT ||
 		error "Failed to load LNet with networks=\"${network_str}\" routes=\"${routes_str}\""
 
 	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
@@ -3942,7 +3992,7 @@ test_300() {
 		skip_env "$CC is not installed"
 	fi
 
-	cleanup_lnet || exit 1
+	cleanup_lnet || return $?
 	load_lnet
 
 	local cc_args="-Wall -Werror -std=c99 -c -x c /dev/null -o $out"
@@ -4132,7 +4182,8 @@ static_config() {
 	load_module "${module}" "${setting}" ||
 		error "Failed to load module ${module} rc = $?"
 
-	do_lnetctl lnet configure --all || error "lnet configure failed rc = $?"
+	do_lnetctl lnet configure $LNET_CONFIG_INIT_OPT ||
+		error "lnet configure $LNET_CONFIG_INIT_OPT failed rc = $?"
 
 	return 0
 }

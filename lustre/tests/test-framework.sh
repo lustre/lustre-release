@@ -693,6 +693,18 @@ init_test_env() {
 
 	[[ $OST1_VERSION -lt $(version_code 2.13.52) ]] ||
 		export OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o localrecov"}
+
+	# Force large nid testing, if unset or false then large NIDs will only
+	# be used if they are the only addresses assigned to the LNet
+	# interfaces
+	export FORCE_LARGE_NID=${FORCE_LARGE_NID:-false}
+	if ${FORCE_LARGE_NID}; then
+		export LNET_CONFIG_INIT_OPT="--all --large"
+		export LNET_CONFIG_OPT="-l"
+	else
+		export LNET_CONFIG_INIT_OPT="--all"
+		export LNET_CONFIG_OPT=""
+	fi
 }
 
 check_cpt_number() {
@@ -1009,7 +1021,7 @@ load_lnet() {
 	unset MODOPTS_LIBCFS
 
 	set_default_debug "neterror net nettrace malloc"
-	if [ "$1" = "config_on_load=1" ]; then
+	if [[ $1 == config_on_load=1 ]]; then
 		load_module ../lnet/lnet/lnet
 	else
 		load_module ../lnet/lnet/lnet "$@"
@@ -1030,9 +1042,14 @@ load_lnet() {
 	fi
 	load_module ../lnet/klnds/$LNETLND
 
-	if [ "$1" = "config_on_load=1" ]; then
-		do_lnetctl lnet configure --all ||
-			return $?
+	if [[ $1 == config_on_load=1 ]]; then
+		if $FORCE_LARGE_NID; then
+			do_lnetctl lnet configure -a -l ||
+				return $?
+		else
+			do_lnetctl lnet configure -a ||
+				return $?
+		fi
 	fi
 }
 
