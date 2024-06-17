@@ -25,12 +25,12 @@
  * sorted by increasing expiry time. The number of slots is 2**7 (128),
  * to cover a time period of 1024 seconds into the future before wrapping.
  */
-#define STTIMER_MINPOLL        3   /* log2 min poll interval (8 s) */
-#define STTIMER_SLOTTIME       (1 << STTIMER_MINPOLL)
-#define STTIMER_SLOTTIMEMASK   (~(STTIMER_SLOTTIME - 1))
-#define STTIMER_NSLOTS	       (1 << 7)
-#define STTIMER_SLOT(t)	       (&stt_data.stt_hash[(((t) >> STTIMER_MINPOLL) & \
-                                                    (STTIMER_NSLOTS - 1))])
+#define STTIMER_MINPOLL		3   /* log2 min poll interval (8 s) */
+#define STTIMER_SLOTTIME	(1 << STTIMER_MINPOLL)
+#define STTIMER_SLOTTIMEMASK	(~(STTIMER_SLOTTIME - 1))
+#define STTIMER_NSLOTS		(1 << 7)
+#define STTIMER_SLOT(t)		(&stt_data.stt_hash[(((t) >> STTIMER_MINPOLL) \
+					& (STTIMER_NSLOTS - 1))])
 
 static struct st_timer_data {
 	spinlock_t		stt_lock;
@@ -100,7 +100,7 @@ stt_del_timer(struct stt_timer *timer)
 static int
 stt_expire_list(struct list_head *slot, time64_t now)
 {
-	int	     expired = 0;
+	int expired = 0;
 	struct stt_timer *timer;
 
 	while (!list_empty(slot)) {
@@ -124,9 +124,8 @@ stt_expire_list(struct list_head *slot, time64_t now)
 static int
 stt_check_timers(time64_t *last)
 {
+	time64_t this_slot, now;
 	int expired = 0;
-	time64_t now;
-	time64_t this_slot;
 
 	now = ktime_get_real_seconds();
 	this_slot = now & STTIMER_SLOTTIMEMASK;
@@ -145,9 +144,9 @@ stt_check_timers(time64_t *last)
 
 
 static int
-stt_timer_main (void *arg)
+stt_timer_main(void *arg)
 {
-        int rc = 0;
+	int rc = 0;
 
 	while (!stt_data.stt_shuttingdown) {
 		stt_check_timers(&stt_data.stt_prev_slot);
@@ -164,7 +163,7 @@ stt_timer_main (void *arg)
 }
 
 static int
-stt_start_timer_thread (void)
+stt_start_timer_thread(void)
 {
 	struct task_struct *task;
 
@@ -182,25 +181,27 @@ stt_start_timer_thread (void)
 
 
 int
-stt_startup (void)
+stt_startup(void)
 {
-        int rc = 0;
-        int i;
+	int rc = 0;
+	int i;
 
-        stt_data.stt_shuttingdown = 0;
-	stt_data.stt_prev_slot = ktime_get_real_seconds() & STTIMER_SLOTTIMEMASK;
+	stt_data.stt_shuttingdown = 0;
+	stt_data.stt_prev_slot = ktime_get_real_seconds() &
+					STTIMER_SLOTTIMEMASK;
 
 	spin_lock_init(&stt_data.stt_lock);
-        for (i = 0; i < STTIMER_NSLOTS; i++)
+	for (i = 0; i < STTIMER_NSLOTS; i++)
 		INIT_LIST_HEAD(&stt_data.stt_hash[i]);
 
 	stt_data.stt_nthreads = 0;
 	init_waitqueue_head(&stt_data.stt_waitq);
 	rc = stt_start_timer_thread();
 	if (rc != 0)
-		CERROR ("Can't spawn timer thread: %d\n", rc);
+		CERROR("%s: Can't spawn timer thread: rc = %d\n", "st_timer",
+		       rc);
 
-        return rc;
+	return rc;
 }
 
 void
