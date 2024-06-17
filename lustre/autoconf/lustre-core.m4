@@ -4207,30 +4207,16 @@ AC_DEFUN([LC_HAVE_CLASS_CREATE_MODULE_ARG], [
 ]) # LC_HAVE_CLASS_CREATE_MODULE_ARG
 
 #
-# LC_HAVE_FILEMAP_SPLICE_READ
+# LC_EXPORTS_FILEMAP_SPLICE_READ
 #
 # linux kernel v6.4-rc2-29-gc6585011bc1d
 #   splice: Remove generic_file_splice_read()
 #
-AC_DEFUN([LC_SRC_HAVE_FILEMAP_SPLICE_READ], [
-	LB2_LINUX_TEST_SRC([filemap_splice_read], [
-		#include <linux/fs.h>
-	],[
-		struct file *in = NULL;
-		loff_t pos = 0;
-		struct pipe_inode_info *pipe = NULL;
-		ssize_t count __attribute__ ((unused));
-
-		count = filemap_splice_read(in, &pos, pipe, 0, 0);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_FILEMAP_SPLICE_READ], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'filemap_splice_read' is available],
-	[filemap_splice_read], [
-		AC_DEFINE(HAVE_FILEMAP_SPLICE_READ, 1,
-			['filemap_splice_read' is available])
-	])
-]) # LC_HAVE_FILEMAP_SPLICE_READ
+AC_DEFUN([LC_EXPORTS_FILEMAP_SPLICE_READ], [
+LB_CHECK_EXPORT([filemap_splice_read], [mm/filemap.c],
+	[AC_DEFINE(HAVE_FILEMAP_SPLICE_READ, 1,
+			['filemap_splice_read' is exported])])
+]) # LC_EXPORTS_FILEMAP_SPLICE_READ
 
 #
 # LC_HAVE_ENUM_ITER_PIPE
@@ -4832,7 +4818,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG
 
 	# 6.5
-	LC_SRC_HAVE_FILEMAP_SPLICE_READ
 	LC_SRC_HAVE_ENUM_ITER_PIPE
 	LC_SRC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 	LC_SRC_HAVE_FOLIO_BATCH
@@ -5146,11 +5131,11 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_CLASS_CREATE_MODULE_ARG
 
 	# 6.5
-	LC_HAVE_FILEMAP_SPLICE_READ
 	LC_HAVE_ENUM_ITER_PIPE
 	LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 	LC_HAVE_FOLIO_BATCH
 	LC_HAVE_STRUCT_PAGEVEC
+	LC_EXPORTS_FILEMAP_SPLICE_READ
 
 	# 6.6
 	LC_HAVE_FLUSH___WORKQUEUE
