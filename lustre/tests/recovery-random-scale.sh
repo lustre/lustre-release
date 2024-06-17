@@ -15,9 +15,9 @@ ONLY=${ONLY:-"$*"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-. $LUSTRE/tests/recovery-scale-lib.sh
 init_test_env "$@"
 init_logging
+. $LUSTRE/tests/recovery-scale-lib.sh
 
 # bug number for skipped test:
 ALWAYS_EXCEPT="$RECOVERY_RANDOM_SCALE_EXCEPT "
