@@ -338,6 +338,9 @@ struct lnet_lnd {
 	int (*lnd_nl_set)(int cmd, struct nlattr *attr, int type, void *data);
 
 	const struct ln_key_list *lnd_keys;
+
+	/* get LND timeout */
+	int (*lnd_get_timeout)(void);
 };
 
 struct lnet_tx_queue {

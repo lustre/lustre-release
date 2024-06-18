@@ -98,6 +98,9 @@
 
 #define KFILND_MY_PROCID 49152
 
+/* default kfilnd timeout in seconds */
+#define KFILND_TIMEOUT_DEFAULT 125
+
 /* 256 Rx contexts max */
 #define KFILND_FAB_RX_CTX_BITS 8
 
@@ -123,6 +126,7 @@ enum kfilnd_ni_lnd_tunables_attr {
 	LNET_NET_KFILND_TUNABLES_ATTR_PROV_MINOR,
 	LNET_NET_KFILND_TUNABLES_ATTR_AUTH_KEY,
 	LNET_NET_KFILND_TUNABLES_ATTR_TRAFFIC_CLASS,
+	LNET_NET_KFILND_TUNABLES_ATTR_TIMEOUT,
 	__LNET_NET_KFILND_TUNABLES_ATTR_MAX_PLUS_ONE,
 };
 
@@ -137,6 +141,7 @@ extern const struct file_operations kfilnd_reset_stats_file_ops;
 
 extern struct workqueue_struct *kfilnd_wq;
 
+extern int kfi_timeout;
 extern unsigned int cksum;
 extern unsigned int tx_scale_factor;
 extern unsigned int rx_cq_scale_factor;
@@ -254,6 +259,11 @@ static inline bool kfilnd_peer_deleted(struct kfilnd_peer *kp)
 	return atomic_read(&kp->kp_remove_peer) > 0;
 }
 
+static inline int kfilnd_timeout(void)
+{
+	return kfi_timeout ?: lnet_get_lnd_timeout();
+}
+
 /* Values for kp_hello_state. Valid transitions:
  * NONE -> INIT
  * INIT -> NONE (only when fail to allocate kfilnd_tn for hello req)
@@ -303,11 +313,11 @@ static inline bool kfilnd_peer_needs_hello(struct kfilnd_peer *kp,
 			return true;
 		else if (proactive_handshake &&
 			 ktime_before(kp->kp_last_alive +
-				      lnet_get_lnd_timeout() * 2,
+				      kfilnd_timeout() * 2,
 				      ktime_get_seconds()))
 			return true;
 	} else if (hello_state == KP_HELLO_SENDING &&
-		   ktime_before(kp->kp_hello_ts + lnet_get_lnd_timeout(),
+		   ktime_before(kp->kp_hello_ts + kfilnd_timeout(),
 				ktime_get_seconds())) {
 		/* Sent hello but never received reply */
 		CDEBUG(D_NET,

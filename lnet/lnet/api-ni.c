@@ -3284,6 +3284,7 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 {
 	size_t min_size = 0;
 	int i;
+	const struct lnet_lnd *net_lnd;
 
 	if (!ni || !cfg_ni || !tun || !nid_is_nid4(&ni->ni_nid))
 		return;
@@ -3307,6 +3308,27 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 						       LNET_STATS_TYPE_RECV);
 		stats->iel_drop_count = lnet_sum_stats(&ni->ni_stats,
 						       LNET_STATS_TYPE_DROP);
+	}
+
+	/* Update the tunables timeout value from the dynamic timeout API */
+	net_lnd = ni->ni_net->net_lnd;
+
+	switch (net_lnd->lnd_type) {
+	case SOCKLND:
+		ni->ni_lnd_tunables.lnd_tun_u.lnd_sock.lnd_timeout =
+			net_lnd->lnd_get_timeout();
+		break;
+	case O2IBLND:
+		ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib.lnd_timeout =
+			net_lnd->lnd_get_timeout();
+		break;
+	case KFILND:
+		ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi.lnd_timeout =
+			net_lnd->lnd_get_timeout();
+		break;
+	case GNILND:
+		ni->ni_lnd_tunables.lnd_tun_u.lnd_gni.lnd_timeout =
+			net_lnd->lnd_get_timeout();
 	}
 
 	/*

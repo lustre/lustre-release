@@ -52,8 +52,15 @@
 #define INT_STRING_LEN		23
 #define LNET_DEFAULT_INDENT	6
 
+/* LNet module parameter path */
 #define modparam_path "/sys/module/lnet/parameters/"
-#define o2ib_modparam_path "/sys/module/ko2iblnd/parameters/"
+
+/* LND module parameter paths */
+#define o2iblnd_modparam_path "/sys/module/ko2iblnd/parameters/"
+#define socklnd_modparam_path "/sys/module/ksocklnd/parameters/"
+#define kfilnd_modparam_path "/sys/module/kkfilnd/parameters/"
+#define gnilnd_modparam_path "/sys/module/kgnilnd/parameters/"
+
 #define gni_nid_path "/proc/cray_xt/"
 
 enum lnetctl_cmd {
@@ -423,6 +430,20 @@ int lustre_lnet_show_hsensitivity(int seq_no, struct cYAML **show_rc,
  */
 int lustre_lnet_show_rtr_sensitivity(int seq_no, struct cYAML **show_rc,
 				     struct cYAML **err_rc);
+
+/* lustre_lnet_config_lnd_timeout
+ *   sets the LND timeout which defines how long the LND should take to complete
+ *   a network transaction, by writing the timeout value to the sysfs file
+ *   (usually under /sys/module/<lnd>/parameters/).
+ *
+ *   timeout - timeout value to configure, in seconds
+ *   net_type - LND id to configure the timeout on
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_lnd_timeout(int timeout, __u32 net_type, int seq_no,
+				   struct cYAML **err_rc);
 
 /*
  * lustre_lnet_config_transaction_to

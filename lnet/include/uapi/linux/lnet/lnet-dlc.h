@@ -108,6 +108,7 @@ struct lnet_ioctl_config_kfilnd_tunables {
 	__u32 lnd_auth_key;
 	char lnd_traffic_class_str[LNET_MAX_STR_LEN];
 	__u32 lnd_traffic_class;
+	__u32 lnd_timeout;
 };
 
 struct lnet_ioctl_config_socklnd_tunables {

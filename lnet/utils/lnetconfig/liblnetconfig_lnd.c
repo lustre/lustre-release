@@ -114,6 +114,10 @@ lustre_kfilnd_show_tun(struct cYAML *lndparams,
 				lnd_cfg->lnd_traffic_class) == NULL)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
+	if (cYAML_create_number(lndparams, "timeout",
+				lnd_cfg->lnd_timeout) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 #endif

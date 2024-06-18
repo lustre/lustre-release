@@ -1588,9 +1588,9 @@ static struct kfilnd_transaction *kfilnd_tn_alloc_common(struct kfilnd_ep *ep,
 	tn->tn_response_rx = ep->end_context_id;
 	tn->tn_state = TN_STATE_IDLE;
 	tn->hstatus = LNET_MSG_STATUS_OK;
-	tn->deadline = ktime_get_seconds() + lnet_get_lnd_timeout();
+	tn->deadline = ktime_get_seconds() + kfilnd_timeout();
 	tn->tn_replay_deadline = ktime_sub(tn->deadline,
-					   (lnet_get_lnd_timeout() / 2));
+					   (kfilnd_timeout() / 2));
 	tn->is_initiator = is_initiator;
 	INIT_WORK(&tn->timeout_work, kfilnd_tn_timeout_work);
 

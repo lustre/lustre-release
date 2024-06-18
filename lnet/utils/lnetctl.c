@@ -176,7 +176,9 @@ command_t net_cmds[] = {
 	 "\t--verbose: display detailed output per network."
 		       " Optional argument of '2' outputs more stats\n"},
 	{"set", jt_set_ni_value, 0, "set local NI specific parameter\n"
-	 "\t--nid: NI NID to set the\n"
+	 "\t--nid: NI NID to set the value on\n"
+	 "\t--net: network to set the value on (e.g. tcp, o2ib, kfi)\n"
+	 "\t--lnd-timeout: set LND timeout (seconds) for LND used by --net argument\n"
 	 "\t--health: specify health value to set\n"
 	 "\t--conns-per-peer: number of connections per peer\n"
 	 "\t--all: set all NIs value to the one specified\n"},
@@ -2844,67 +2846,9 @@ old_api:
 	return rc;
 }
 
-static int set_value_helper(int argc, char **argv, int cmd,
-			    int (*cb)(int, bool, char*, int, int, struct cYAML**))
-{
-	char *nidstr = NULL;
-	long int healthv = -1;
-	bool all = false;
-	long int state = -1;
-	long int cpp = -1;
-	int rc, opt;
-	struct cYAML *err_rc = NULL;
-	const char *const short_options = "t:n:m:s:a";
-	static const struct option long_options[] = {
-		{ .name = "nid", .has_arg = required_argument, .val = 'n' },
-		{ .name = "health", .has_arg = required_argument, .val = 't' },
-		{ .name = "conns-per-peer", .has_arg = required_argument, .val = 'm' },
-		{ .name = "state", .has_arg = required_argument, .val = 's' },
-		{ .name = "all", .has_arg = no_argument, .val = 'a' },
-		{ .name = NULL }
-	};
-
-	while ((opt = getopt_long(argc, argv, short_options,
-				  long_options, NULL)) != -1) {
-		switch (opt) {
-		case 'n':
-			nidstr = optarg;
-			break;
-		case 't':
-			if (parse_long(optarg, &healthv) != 0)
-				healthv = -1;
-			break;
-		case 's':
-			if (cmd != LNET_CMD_PEERS ||
-			    parse_long(optarg, &state) != 0)
-				state = -1;
-			break;
-		case 'm':
-			if (cmd != LNET_CMD_NETS ||
-			    parse_long(optarg, &cpp) != 0)
-				cpp = -1;
-			break;
-
-		case 'a':
-			all = true;
-			break;
-		default:
-			return 0;
-		}
-	}
-
-	rc = cb(healthv, all, nidstr, cmd == LNET_CMD_PEERS ? state : cpp, -1,
-		&err_rc);
-	if (rc != LUSTRE_CFG_RC_NO_ERR)
-		cYAML_print_tree2file(stderr, err_rc);
-
-	cYAML_free_tree(err_rc);
-
-	return rc;
-}
-
-int yaml_lnet_config_ni_healthv(int healthv, bool all, char *nidstr, int cpp,
-				int seq_no, struct cYAML **err_rc)
+static int yaml_lnet_config_ni_value(int healthv, bool all, char *nidstr,
+				     int cpp, int lnd_timeout, __u32 net,
+				     int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_config_lnd_tunables tunables;
 	struct lnet_dlc_network_descr nw_descr;
@@ -2912,8 +2856,12 @@ int yaml_lnet_config_ni_healthv(int healthv, bool all, char *nidstr, int cpp,
 	int rc = 0;
 
 	/* For NI you can't have both setting all NIDs and a requested NID */
-	if (!all && !nidstr)
+	if (all && nidstr)
 		return -EINVAL;
+
+	if (lnd_timeout > -1)
+		return lustre_lnet_config_lnd_timeout(lnd_timeout, net,
+						      -1, err_rc);
 
 	if (cpp == -1 && healthv == -1)
 		return 0;
@@ -2957,17 +2905,6 @@ old_api:
 		rc = lustre_lnet_config_ni_healthv(healthv, all, nidstr,
 						   -1, err_rc);
 	return rc;
-}
-
-static int jt_set_ni_value(int argc, char **argv)
-{
-	int rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
-
-	if (rc < 0)
-		return rc;
-
-	return set_value_helper(argc, argv, LNET_CMD_NETS,
-				yaml_lnet_config_ni_healthv);
 }
 
 static int yaml_lnet_peer_display(yaml_parser_t *reply, bool list_only)
@@ -3463,8 +3400,9 @@ free_reply:
 	return rc == 1 ? 0 : rc;
 }
 
-int yaml_lnet_config_peer_ni_healthv(int healthv, bool all, char *lpni_nid,
-				     int state, int seq_no, struct cYAML **err_rc)
+static int yaml_lnet_config_peer_ni_healthv(int healthv, bool all,
+					    char *lpni_nid, int state,
+					    int seq_no, struct cYAML **err_rc)
 {
 	int rc;
 
@@ -3486,6 +3424,121 @@ old_api:
 	return rc;
 }
 
+static int set_value_helper(int argc, char **argv, int cmd)
+{
+	char *nidstr = NULL;
+	long healthv = -1;
+	__u32 net = 0;
+	int lnd_timeout = -1;
+	bool all = false;
+	long state = -1;
+	long cpp = -1;
+	int seq_no = -1;
+	int rc, opt;
+	struct cYAML *err_rc = NULL;
+	char err_str[LNET_MAX_STR_LEN] = "";
+	static const struct option long_options[] = {
+		{ .val = 'a', .name = "all", .has_arg = no_argument },
+		{ .val = 'i', .name = "net", .has_arg = required_argument },
+		{ .val = 'l', .name = "lnd-timeout",
+		  .has_arg = required_argument },
+		{ .val = 'm', .name = "conns-per-peer",
+		  .has_arg = required_argument },
+		{ .val = 'n', .name = "nid", .has_arg = required_argument },
+		{ .val = 's', .name = "state", .has_arg = required_argument },
+		{ .val = 't', .name = "health", .has_arg = required_argument },
+		{ .name = NULL }
+	};
+
+	while ((opt = getopt_long(argc, argv, "ai:l:m:n:s:t:",
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'a':
+			all = true;
+			break;
+		case 'i':
+			net = libcfs_str2net(optarg);
+			if (net == LNET_NET_ANY) {
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				snprintf(err_str, sizeof(err_str),
+					 "\"Invalid network type: %s\"",
+					 optarg);
+				goto out;
+			}
+			break;
+		case 'l':
+			lnd_timeout = atoi(optarg);
+			if (lnd_timeout < 0) {
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				snprintf(err_str, sizeof(err_str),
+					 "\"Invalid LND timeout value '%s', must be >= 0\"",
+					 optarg);
+				goto out;
+			}
+			break;
+		case 'm':
+			if (cmd != LNET_CMD_NETS ||
+			    parse_long(optarg, &cpp) != 0)
+				cpp = -1;
+			break;
+		case 'n':
+			nidstr = optarg;
+			break;
+		case 's':
+			if (cmd != LNET_CMD_PEERS ||
+			    parse_long(optarg, &state) != 0)
+				state = -1;
+			break;
+		case 't':
+			if (parse_long(optarg, &healthv) != 0)
+				healthv = -1;
+			break;
+		case '?':
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			snprintf(err_str, sizeof(err_str),
+				 "\"Invalid option or missing argument\"");
+			goto out;
+		default:
+			return 0;
+		}
+	}
+
+	if (lnd_timeout >= 0 && net == 0) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, sizeof(err_str),
+			 "\"Specified --lnd-timeout without --net option\"");
+		goto out;
+	}
+
+	if (cmd == LNET_CMD_PEERS)
+		rc = yaml_lnet_config_peer_ni_healthv(healthv, all, nidstr,
+						      state, seq_no, &err_rc);
+	else
+		rc = yaml_lnet_config_ni_value(healthv, all, nidstr, cpp,
+					       lnd_timeout, net, seq_no,
+					       &err_rc);
+
+out:
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_build_error(rc, -1, "net", "set", err_str, &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+	}
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_ni_value(int argc, char **argv)
+{
+	int rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
+
+	if (rc < 0)
+		return rc;
+
+	return set_value_helper(argc, argv, LNET_CMD_NETS);
+}
+
 static int jt_set_peer_ni_value(int argc, char **argv)
 {
 	int rc = check_cmd(peer_cmds, "peer", "set", 0, argc, argv);
@@ -3493,8 +3546,7 @@ static int jt_set_peer_ni_value(int argc, char **argv)
 	if (rc < 0)
 		return rc;
 
-	return set_value_helper(argc, argv, LNET_CMD_PEERS,
-				yaml_lnet_config_peer_ni_healthv);
+	return set_value_helper(argc, argv, LNET_CMD_PEERS);
 }
 
 static int yaml_debug_recovery(enum lnet_health_type type)

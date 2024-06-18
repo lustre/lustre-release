@@ -16,6 +16,10 @@ unsigned int cksum;
 module_param(cksum, uint, 0444);
 MODULE_PARM_DESC(cksum, "Enable checksums for non-zero messages (not RDMA)");
 
+int kfi_timeout = KFILND_TIMEOUT_DEFAULT;
+module_param(kfi_timeout, int, 0644);
+MODULE_PARM_DESC(kfi_timeout, "KFI LND timeout (seconds)");
+
 /* Scale factor for TX context queue depth. The factor is applied to the number
  * of credits to determine queue depth.
  */
@@ -195,6 +199,8 @@ int kfilnd_tunables_setup(struct lnet_ni *ni)
 		       kfilnd_tunables->lnd_traffic_class_str);
 		return -EINVAL;
 	}
+
+	kfilnd_tunables->lnd_timeout = kfilnd_timeout();
 
 	return 0;
 }

@@ -3373,6 +3373,50 @@ int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc)
 	return rc;
 }
 
+int lustre_lnet_config_lnd_timeout(int timeout, __u32 net, int seq_no,
+				   struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN] = "";
+	char val[INT_STRING_LEN];
+	__u32 lnd = LNET_NETTYP(net);
+
+	snprintf(val, sizeof(val), "%d", timeout);
+
+	switch (lnd) {
+	case SOCKLND:
+		rc = write_sysfs_file(socklnd_modparam_path, "sock_timeout",
+				      val, 1, strlen(val) + 1);
+		break;
+	case O2IBLND:
+		rc = write_sysfs_file(o2iblnd_modparam_path, "timeout", val, 1,
+				      strlen(val) + 1);
+		break;
+	case KFILND:
+		rc = write_sysfs_file(kfilnd_modparam_path, "kfi_timeout", val,
+				      1, strlen(val) + 1);
+		break;
+	case GNILND:
+		rc = write_sysfs_file(gnilnd_modparam_path, "timeout", val, 1,
+				      strlen(val) + 1);
+		break;
+	default:
+		snprintf(err_str, sizeof(err_str),
+			 "\"Net %s does not accept a LND timeout\"",
+			 libcfs_lnd2str(lnd));
+		rc = -EINVAL;
+	}
+
+	/* Check return code from writing sysfs file */
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"Failed to set LND timeout for net %s\"",
+			 libcfs_lnd2str(lnd));
+
+	cYAML_build_error(rc, seq_no, "set", "lnd_timeout", err_str, err_rc);
+	return rc;
+}
+
 int lustre_lnet_config_transaction_to(int timeout, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -4503,7 +4547,7 @@ int lustre_lnet_calc_service_id(__u64 *service_id)
 	char val[LNET_MAX_STR_LEN];
 	int service_port = -1, l_errno = 0;
 
-	rc = read_sysfs_file(o2ib_modparam_path, "service", val,
+	rc = read_sysfs_file(o2iblnd_modparam_path, "service", val,
 			     1, sizeof(val));
 	if (rc) {
 		l_errno = errno;

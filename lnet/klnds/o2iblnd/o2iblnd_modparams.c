@@ -23,7 +23,7 @@ static int cksum = 0;
 module_param(cksum, int, 0644);
 MODULE_PARM_DESC(cksum, "set non-zero to enable message (not RDMA) checksums");
 
-static int timeout;
+static int timeout = IBLND_TIMEOUT_DEFAULT;
 module_param(timeout, int, 0644);
 MODULE_PARM_DESC(timeout, "timeout (seconds)");
 

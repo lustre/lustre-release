@@ -2753,6 +2753,7 @@ static const struct lnet_lnd the_ksocklnd = {
 	.lnd_nl_get		= ksocknal_nl_get,
 	.lnd_nl_set		= ksocknal_nl_set,
 	.lnd_keys		= &ksocknal_tunables_keys,
+	.lnd_get_timeout	= ksocknal_timeout,
 };
 
 static int __init ksocklnd_init(void)

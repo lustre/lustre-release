@@ -115,22 +115,43 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 	}
 }
 
+/* get_msg_deadline
+ *   Gets the message deadline in nanoseconds.
+ *   If the LND for this message implements its own lnd_get_timeout()
+ *   function via its exposed API, we use this to calculate the LNet
+ *   transaction timeout (LTT) value, based on the message's NI LND timeout
+ *   (LNDT) and global retry count (LRC):
+ *   LTT = LNDT * (LRC + 1) + 1
+ *   If the LND did not implement the lnd_get_timeout() function or the LNDT
+ *   was set to zero, fall back to default global LTT implementation.
+ */
+static ktime_t get_msg_deadline(struct lnet_ni *msg_ni)
+{
+	unsigned int msg_timeout = lnet_transaction_timeout;
+
+	if (msg_ni && msg_ni->ni_net->net_lnd->lnd_get_timeout) {
+		int lnd_timeout = msg_ni->ni_net->net_lnd->lnd_get_timeout();
+
+		if (lnd_timeout > 0)
+			msg_timeout = lnd_timeout * (lnet_retry_count + 1) + 1;
+	}
+	return ktime_add_ns(ktime_get(), msg_timeout * NSEC_PER_SEC);
+}
+
 void
 lnet_msg_commit(struct lnet_msg *msg, int cpt)
 {
 	struct lnet_msg_container *container = the_lnet.ln_msg_containers[cpt];
 	struct lnet_counters_common *common;
-	s64 timeout_ns;
 
-	/* set the message deadline */
-	timeout_ns = lnet_transaction_timeout * NSEC_PER_SEC;
-	msg->msg_deadline = ktime_add_ns(ktime_get(), timeout_ns);
-
-	/* routed message can be committed for both receiving and sending */
+	/* A routed message can be committed for both receiving and sending */
 	LASSERT(!msg->msg_tx_committed);
 
 	if (msg->msg_sending) {
 		LASSERT(!msg->msg_receiving);
+
+		/* Set the message deadline using msg send NI */
+		msg->msg_deadline = get_msg_deadline(msg->msg_txni);
 		msg->msg_tx_cpt = cpt;
 		msg->msg_tx_committed = 1;
 		if (msg->msg_rx_committed) { /* routed message REPLY */
@@ -139,6 +160,9 @@ lnet_msg_commit(struct lnet_msg *msg, int cpt)
 		}
 	} else {
 		LASSERT(!msg->msg_sending);
+
+		/* Set the message deadline using msg recv NI */
+		msg->msg_deadline = get_msg_deadline(msg->msg_rxni);
 		msg->msg_rx_cpt = cpt;
 		msg->msg_rx_committed = 1;
 	}

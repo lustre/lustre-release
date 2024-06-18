@@ -63,6 +63,7 @@ const struct lnet_lnd the_kgnilnd = {
 	.lnd_eager_recv = kgnilnd_eager_recv,
 	.lnd_nl_get	= kgnilnd_nl_get,
 	.lnd_nl_set	= kgnilnd_nl_set,
+	.lnd_get_timeout = kgnilnd_timeout,
 };
 
 kgn_data_t      kgnilnd_data;

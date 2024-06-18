@@ -15,6 +15,11 @@
 
 #include "kfilnd.h"
 
+/* Time limit we can go without hearing from a peer before
+ * removing it from the cache. Default: 5x LND timeouts.
+ */
+#define KP_PURGE_LIMIT (kfilnd_timeout() * 5)
+
 void kfilnd_peer_put(struct kfilnd_peer *kp);
 struct kfilnd_peer *kfilnd_peer_get(struct kfilnd_dev *dev, lnet_nid_t nid);
 void kfilnd_peer_alive(struct kfilnd_peer *kp);

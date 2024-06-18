@@ -889,9 +889,7 @@ extern int _kgnilnd_schedule_delay_conn(kgn_conn_t *conn);
 
 static inline int kgnilnd_timeout(void)
 {
-	return *kgnilnd_tunables.kgn_timeout ?
-	       *kgnilnd_tunables.kgn_timeout :
-	       lnet_get_lnd_timeout();
+	return *kgnilnd_tunables.kgn_timeout ?: lnet_get_lnd_timeout();
 }
 
 /* Macro wrapper for _kgnilnd_schedule_conn. This will store the function

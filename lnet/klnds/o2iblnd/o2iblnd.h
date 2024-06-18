@@ -127,6 +127,8 @@ extern struct lnet_ioctl_config_o2iblnd_tunables kib_default_tunables;
 #define IBLND_CREDITS_DEFAULT        8          /* default # of peer_ni credits */
 #define IBLND_CREDITS_MAX          ((typeof(((struct kib_msg *) 0)->ibm_credits)) - 1)  /* Max # of peer_ni credits */
 
+#define IBLND_TIMEOUT_DEFAULT	50	/* Default o2iblnd timeout in seconds */
+
 #ifdef HAVE_OFED_RDMA_CREATE_ID_5ARG
 # define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) \
 	 rdma_create_id((ns) ? (ns) : &init_net, cb, dev, ps, qpt)
@@ -708,8 +710,7 @@ int kiblnd_msg_queue_size(int version, struct lnet_ni *ni);
 
 static inline int kiblnd_timeout(void)
 {
-	return *kiblnd_tunables.kib_timeout ? *kiblnd_tunables.kib_timeout :
-		lnet_get_lnd_timeout();
+	return *kiblnd_tunables.kib_timeout ?: lnet_get_lnd_timeout();
 }
 
 /* lnd_connreq_timeout = lnd_timeout / 4 */

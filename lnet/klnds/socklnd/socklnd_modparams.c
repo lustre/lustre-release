@@ -24,7 +24,7 @@
 
 #define CURRENT_LND_VERSION 1
 
-static int sock_timeout;
+static int sock_timeout = SOCKNAL_TIMEOUT_DEFAULT;
 module_param(sock_timeout, int, 0644);
 MODULE_PARM_DESC(sock_timeout, "dead socket timeout (seconds)");
 
