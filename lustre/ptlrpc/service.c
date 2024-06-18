@@ -1683,8 +1683,6 @@ ptlrpc_server_check_resend_in_progress(struct ptlrpc_request *req)
 	return NULL;
 
 found:
-	DEBUG_REQ(D_HA, req, "Found duplicate req in processing");
-	DEBUG_REQ(D_HA, tmp, "Request being processed");
 	return tmp;
 }
 
@@ -1859,6 +1857,10 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 			bool linked;
 
 			spin_unlock_bh(&exp->exp_rpc_lock);
+
+			DEBUG_REQ(D_HA, req,
+				  "Found duplicate req in processing");
+			DEBUG_REQ(D_HA, orig, "Request being processed");
 
 			/*
 			 * When the client resend request and the server has
