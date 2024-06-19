@@ -100,6 +100,11 @@ it is still possible to lock or unlock encrypted directories,
 as these operations only need read access to fscrypt metadata.
 .br
 - quota_ops, to allow quota modifications.
+.br
+- server_upcall, to define which identity upcall to use. If set, identity upcall
+is defined by server side tunable. If not set, identity upcall is forced to
+INTERNAL, so that servers trust supplementary groups as provided by clients.
+.br
 Apart from all, any role not explicitly specified is forbidden.
 And to forbid all roles, use 'none' value.
 .RE

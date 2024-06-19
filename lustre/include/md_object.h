@@ -724,6 +724,7 @@ struct lu_ucred {
 	int			 uc_rbac_byfid_ops:1;
 	int			 uc_rbac_chlg_ops:1;
 	int			 uc_rbac_fscrypt_admin:1;
+	int			 uc_rbac_server_upcall:1;
 };
 
 struct lu_ucred *lu_ucred(const struct lu_env *env);

@@ -32,6 +32,7 @@ static const struct nodemap_rbac_name {
 	{ NODEMAP_RBAC_BYFID_OPS,	"byfid_ops"	},
 	{ NODEMAP_RBAC_CHLG_OPS,	"chlg_ops"	},
 	{ NODEMAP_RBAC_FSCRYPT_ADMIN,   "fscrypt_admin"	},
+	{ NODEMAP_RBAC_SERVER_UPCALL,	"server_upcall"	},
 };
 
 struct nodemap_pde {

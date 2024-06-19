@@ -5866,10 +5866,14 @@ cleanup_64() {
 
 test_64a() {
 	local testfile=$DIR/$tdir/$tfile
+	local srv_uc=""
 	local rbac
 
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
 		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+		srv_uc="server_upcall"
 
 	stack_trap cleanup_64 EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -5883,14 +5887,18 @@ test_64a() {
 		    byfid_ops \
 		    chlg_ops \
 		    fscrypt_admin \
+		    $srv_uc \
 		    ;
 	do
 		[[ "$rbac" =~ "$role" ]] ||
 			error "role '$role' not in default '$rbac'"
 	done
 
+	rbac="file_perms"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property rbac --value file_perms
+		 --property rbac --value $rbac ||
+		error "setting rbac $rbac failed (1)"
 	wait_nm_sync c0 rbac
 	touch $testfile
 	stack_trap "set +vx"
@@ -5901,7 +5909,15 @@ test_64a() {
 	$LFS project -p 1000 $testfile || error "setting project failed"
 	set +vx
 	rm -f $testfile
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	rbac="none"
+	if [ -z "$srv_uc" ]; then
+		rbac="none"
+	else
+		rbac="$srv_uc"
+	fi
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac ||
+		error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 	touch $testfile
 	set -vx
@@ -5916,11 +5932,16 @@ run_test 64a "Nodemap enforces file_perms RBAC roles"
 test_64b() {
 	local testdir=$DIR/$tdir/${tfile}.d
 	local dir_restripe
+	local srv_uc=""
+	local rbac
 
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
 		skip "Need MDS >= 2.15.54 for role-based controls"
 
 	(( MDSCOUNT >= 2 )) || skip "mdt count $MDSCOUNT, skipping dne_ops role"
+
+	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+		srv_uc="server_upcall"
 
 	stack_trap cleanup_64 EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -5934,8 +5955,11 @@ test_64b() {
 			error "enabling dir_restripe failed"
 	stack_trap "do_nodes $(comma_list $(all_mdts_nodes)) \
 	      $LCTL set_param mdt.*.enable_dir_restripe=$dir_restripe" EXIT
+	rbac="dne_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
-		 --value dne_ops
+		 --value $rbac ||
+		error "setting rbac $rbac failed (1)"
 	wait_nm_sync c0 rbac
 	$LFS mkdir -i 0 ${testdir}_for_migr ||
 		error "$LFS mkdir ${testdir}_for_migr failed (1)"
@@ -5967,7 +5991,15 @@ test_64b() {
 	$LFS mkdir -i 1 ${testdir}_mdt1 ||
 		error "$LFS mkdir ${testdir}_mdt1 failed (2)"
 
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	rbac="none"
+	if [ -z "$srv_uc" ]; then
+		rbac="none"
+	else
+		rbac="$srv_uc"
+	fi
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac ||
+		error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 	set -vx
 	$LFS mkdir -i 1 $testdir && error "$LFS mkdir should fail (1)"
@@ -5984,15 +6016,24 @@ test_64b() {
 run_test 64b "Nodemap enforces dne_ops RBAC roles"
 
 test_64c() {
+	local srv_uc=""
+	local rbac
+
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
 		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+		srv_uc="server_upcall"
 
 	stack_trap cleanup_64 EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	setup_64
 
+	rbac="quota_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property rbac --value quota_ops
+		 --property rbac --value $rbac ||
+		error "setting rbac $rbac failed (1)"
 	wait_nm_sync c0 rbac
 	set -vx
 	$LFS setquota -u $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT ||
@@ -6025,7 +6066,15 @@ test_64c() {
 	$LFS setquota -p 1000 --delete $MOUNT
 	set +vx
 
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	rbac="none"
+	if [ -z "$srv_uc" ]; then
+		rbac="none"
+	else
+		rbac="$srv_uc"
+	fi
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac ||
+		error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 
 	set -vx
@@ -6060,17 +6109,25 @@ run_test 64c "Nodemap enforces quota_ops RBAC roles"
 
 test_64d() {
 	local testfile=$DIR/$tdir/$tfile
+	local srv_uc=""
+	local rbac
 	local fid
 
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
 		skip "Need MDS >= 2.15.54 for role-based controls"
 
+	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+		srv_uc="server_upcall"
+
 	stack_trap cleanup_64 EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	setup_64
 
+	rbac="byfid_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property rbac --value byfid_ops
+		 --property rbac --value $rbac ||
+		error "setting rbac $rbac failed (1)"
 	wait_nm_sync c0 rbac
 
 	touch $testfile
@@ -6081,7 +6138,15 @@ test_64d() {
 	lfs rmfid $MOUNT $fid || error "lfs rmfid failed"
 	set +vx
 
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	rbac="none"
+	if [ -z "$srv_uc" ]; then
+		rbac="none"
+	else
+		rbac="$srv_uc"
+	fi
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac ||
+		error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 
 	touch $testfile
@@ -6098,9 +6163,14 @@ run_test 64d "Nodemap enforces byfid_ops RBAC roles"
 test_64e() {
 	local testfile=$DIR/$tdir/$tfile
 	local testdir=$DIR/$tdir/${tfile}.d
+	local srv_uc=""
+	local rbac
 
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
 		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+		srv_uc="server_upcall"
 
 	stack_trap cleanup_64 EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -6117,8 +6187,11 @@ test_64e() {
 	mkdir $testdir || error "failed to mkdir $testdir"
 	touch $testfile || error "failed to touch $testfile"
 
+	rbac="chlg_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property rbac --value chlg_ops
+		 --property rbac --value $rbac ||
+		error "setting rbac $rbac failed (1)"
 	wait_nm_sync c0 rbac
 
 	# access changelogs
@@ -6129,7 +6202,15 @@ test_64e() {
 
 	rm -rf $testdir $testfile || error "rm -rf $testdir $testfile failed"
 
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value none
+	rbac="none"
+	if [ -z "$srv_uc" ]; then
+		rbac="none"
+	else
+		rbac="$srv_uc"
+	fi
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac ||
+		error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 
 	# do some IOs
@@ -6143,7 +6224,9 @@ test_64e() {
 	changelog_clear 0 && error "clear changelogs should fail"
 	rm -rf $testdir $testfile
 
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac --value all
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		--property rbac --value all ||
+		error "setting rbac all failed (3)"
 	wait_nm_sync c0 rbac
 }
 run_test 64e "Nodemap enforces chlg_ops RBAC roles"
@@ -6153,9 +6236,14 @@ test_64f() {
 	local cli_enc
 	local policy
 	local protector
+	local srv_uc=""
+	local rbac
 
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
 		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+		srv_uc="server_upcall"
 
 	cli_enc=$($LCTL get_param mdc.*.import | grep client_encryption)
 	[ -n "$cli_enc" ] || skip "Need enc support, skip fscrypt_admin role"
@@ -6174,8 +6262,11 @@ test_64f() {
 	stack_trap "rm -rf $MOUNT/.fscrypt"
 
 	# file_perms is required because fscrypt uses chmod/chown
+	rbac="fscrypt_admin,file_perms"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
-		--value fscrypt_admin,file_perms
+		--value $rbac ||
+		error "setting rbac $rbac failed (1)"
 	wait_nm_sync c0 rbac
 
 	mkdir -p $vaultdir
@@ -6194,8 +6285,11 @@ test_64f() {
 
 	cancel_lru_locks
 	# file_perms is required because fscrypt uses chmod/chown
+	rbac="file_perms"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
-		--value file_perms
+		--value $rbac ||
+		error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 
 	set -vx
@@ -6214,7 +6308,9 @@ test_64f() {
 	set +vx
 
 	cancel_lru_locks
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac  --value all
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		--property rbac  --value all ||
+		error "setting rbac all failed (3)"
 	wait_nm_sync c0 rbac
 
 	set -vx
@@ -6227,6 +6323,46 @@ test_64f() {
 	rm -rf ${vaultdir}*
 }
 run_test 64f "Nodemap enforces fscrypt_admin RBAC roles"
+
+test_64g() {
+	local testfile=$DIR/$tdir/$tfile
+
+	(( MDS1_VERSION >= $(version_code 2.16.50) )) ||
+		skip "Need MDS >= 2.16.50 for role-based controls"
+
+	# Add groups, and client to new group, on client only.
+	# Server is not aware.
+	groupadd -g 5000 grptest64g1
+	stack_trap "groupdel grptest64g1" EXIT
+	groupadd -g 5001 grptest64g2
+	stack_trap "groupdel grptest64g2" EXIT
+	groupadd -g 5002 grptest64g3
+	stack_trap "groupdel grptest64g3" EXIT
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 750 $DIR/$tdir
+	chgrp grptest64g1 $DIR/$tdir
+	echo hi > $DIR/$tdir/fileA
+	chmod 640 $DIR/$tdir/fileA
+	chgrp grptest64g3 $DIR/$tdir/fileA
+	setfacl -m g:grptest64g2:r $DIR/$tdir/fileA
+	ls -lR $DIR/$tdir
+
+	setup_64
+	stack_trap cleanup_64 EXIT
+
+	# remove server_upcall from rbac roles,
+	# to make this client use INTERNAL upcall
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property rbac --value file_perms ||
+		error "setting rbac file_perms failed"
+	wait_nm_sync c0 rbac
+
+	$RUNAS cat $DIR/$tdir/fileA && error "cat $DIR/$tdir/fileA should fail"
+	$RUNAS -G 5000,5001 cat $DIR/$tdir/fileA ||
+		error "cat $DIR/$tdir/fileA failed"
+}
+run_test 64g "Nodemap enforces server_upcall RBAC role"
 
 look_for_files() {
 	local pattern=$1

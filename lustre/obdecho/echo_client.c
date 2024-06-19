@@ -1839,6 +1839,7 @@ static void echo_ucred_init(struct lu_env *env)
 	ucred->uc_rbac_byfid_ops = 1;
 	ucred->uc_rbac_chlg_ops = 1;
 	ucred->uc_rbac_fscrypt_admin = 1;
+	ucred->uc_rbac_server_upcall = 1;
 }
 
 static void echo_ucred_fini(struct lu_env *env)

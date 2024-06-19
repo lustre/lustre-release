@@ -928,6 +928,7 @@ int mdt_restriper_start(struct mdt_device *mdt)
 	uc->uc_rbac_byfid_ops = 1;
 	uc->uc_rbac_chlg_ops = 1;
 	uc->uc_rbac_fscrypt_admin = 1;
+	uc->uc_rbac_server_upcall = 1;
 
 	task = kthread_create(mdt_restriper_main, info, "mdt_restriper_%03d",
 			      mdt_seq_site(mdt)->ss_node_id);

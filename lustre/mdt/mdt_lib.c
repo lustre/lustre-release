@@ -61,10 +61,25 @@ static __u64 get_mrc_cr_flags(struct mdt_rec_create *mrc)
 	return (__u64)(mrc->cr_flags_l) | ((__u64)mrc->cr_flags_h << 32);
 }
 
+static struct upcall_cache *get_cache(struct mdt_thread_info *info)
+{
+	/* If nodemap does not have server_upcall role,
+	 * use dedicated INTERNAL upcall cache, unless
+	 * Kerberos is enforced, in which case we do not trust the client's
+	 * provided supplementary groups.
+	 */
+	struct ptlrpc_request *req = mdt_info_req(info);
+
+	if (SPTLRPC_FLVR_MECH(req->rq_flvr.sf_rpc) == SPTLRPC_MECH_GSS_KRB5 ||
+	    mdt_ucred(info)->uc_rbac_server_upcall)
+		return info->mti_mdt->mdt_identity_cache;
+
+	return info->mti_mdt->mdt_identity_cache_int;
+}
+
 void mdt_exit_ucred(struct mdt_thread_info *info)
 {
 	struct lu_ucred   *uc  = mdt_ucred(info);
-	struct mdt_device *mdt = info->mti_mdt;
 
 	LASSERT(uc != NULL);
 	if (uc->uc_valid != UCRED_INIT) {
@@ -74,8 +89,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
 			uc->uc_ginfo = NULL;
 		}
 		if (uc->uc_identity) {
-			mdt_identity_put(mdt->mdt_identity_cache,
-					 uc->uc_identity);
+			mdt_identity_put(get_cache(info), uc->uc_identity);
 			uc->uc_identity = NULL;
 		}
 		uc->uc_valid = UCRED_INIT;
@@ -190,6 +204,7 @@ static void ucred_set_rbac_roles(struct mdt_thread_info *info,
 	uc->uc_rbac_byfid_ops = !!(rbac & NODEMAP_RBAC_BYFID_OPS);
 	uc->uc_rbac_chlg_ops = !!(rbac & NODEMAP_RBAC_CHLG_OPS);
 	uc->uc_rbac_fscrypt_admin = !!(rbac & NODEMAP_RBAC_FSCRYPT_ADMIN);
+	uc->uc_rbac_server_upcall = !!(rbac & NODEMAP_RBAC_SERVER_UPCALL);
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
@@ -265,10 +280,12 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		/* deny access before we get identity ref */
 		GOTO(out, rc = -EACCES);
 
+	ucred_set_rbac_roles(info, ucred);
+
 	/* Fetch external identity info, if enabled */
 
-	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
-		identity = mdt_identity_get(mdt->mdt_identity_cache,
+	if (!is_identity_get_disabled(get_cache(info))) {
+		identity = mdt_identity_get(get_cache(info),
 					    pud->pud_uid, info);
 		if (IS_ERR(identity)) {
 			if (unlikely(PTR_ERR(identity) == -EREMCHG ||
@@ -387,7 +404,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	ucred_set_jobid(info, ucred);
 	ucred_set_nid(info, ucred);
 	ucred_set_audit_enabled(info, ucred);
-	ucred_set_rbac_roles(info, ucred);
 
 	ucred->uc_valid = UCRED_NEW;
 
@@ -400,8 +416,7 @@ out:
 			ucred->uc_ginfo = NULL;
 		}
 		if (ucred->uc_identity) {
-			mdt_identity_put(mdt->mdt_identity_cache,
-					 ucred->uc_identity);
+			mdt_identity_put(get_cache(info), ucred->uc_identity);
 			ucred->uc_identity = NULL;
 		}
 	}
@@ -535,8 +550,10 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		/* deny access before we get identity ref */
 		RETURN(-EACCES);
 
-	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
-		identity = mdt_identity_get(mdt->mdt_identity_cache,
+	ucred_set_rbac_roles(info, uc);
+
+	if (!is_identity_get_disabled(get_cache(info))) {
+		identity = mdt_identity_get(get_cache(info),
 					    uc->uc_fsuid, info);
 		if (IS_ERR(identity)) {
 			if (unlikely(PTR_ERR(identity) == -EREMCHG ||
@@ -602,7 +619,6 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	ucred_set_jobid(info, uc);
 	ucred_set_nid(info, uc);
 	ucred_set_audit_enabled(info, uc);
-	ucred_set_rbac_roles(info, uc);
 
 	uc->uc_valid = UCRED_OLD;
 
