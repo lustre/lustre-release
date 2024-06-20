@@ -2264,6 +2264,61 @@ test_27a() {
 }
 run_test 27a "test fileset in various nodemaps"
 
+test_27aa() { #LU-17922
+	local idmap
+	local id=500
+
+	do_facet mgs $LCTL nodemap_add Test17922 ||
+		error "unable to add Test17922 as nodemap"
+	stack_trap "do_facet mgs $LCTL nodemap_del Test17922 || true"
+
+	do_facet mgs $LCTL nodemap_add_idmap --name Test17922 \
+		 --idtype uid --idmap 500-509:10000-10009 ||
+		 error "unable to add idmap range 500-509:10000-10009"
+
+	idmap=$(do_facet mgs $LCTL get_param nodemap.Test17922.idmap | grep idtype)
+	while IFS= read -r idmap; do
+		if (( $id <= 509 )); then
+			[[ "$idmap" == *"client_id: $id"* ]] ||
+				error "could not find 'client_id: ${id}' inside of ${idmap}"
+		fi
+		((id++))
+	done < <(echo "$idmap")
+
+	do_facet mgs $LCTL nodemap_del_idmap --name Test17922 \
+		 --idtype uid --idmap 505-509:10005 ||
+			error "cannot delete idmap range 505-509:10005"
+
+	id=500
+	idmap=$(do_facet mgs $LCTL get_param nodemap.Test17922.idmap | grep idtype)
+	while IFS= read -r idmap; do
+		if (( $id <= 504 )); then
+			[[ "$idmap" == *"client_id: $id"* ]] ||
+				error "could not find 'client_id: ${id}' inside of ${idmap}"
+		else
+			[[ "$idmap" =~ "client_id: $id" ]] &&
+				error "found 'client_id: $id' in $idmap"
+		fi
+		((id++))
+	done < <(echo "$idmap")
+
+	do_facet mgs $LCTL nodemap_del_idmap --name Test17922 \
+		 --idtype uid --idmap 500-504:10000
+
+	#expected error, invalid secondary range supplied
+	do_facet mgs $LCTL nodemap_add --name Test17922 \
+		 --idtype uid --idmap 500-509:10000-10010 &&
+		 error "Invalid range 10000-10010 was added"
+
+	(( $(do_facet mgs $LCTL get_param nodemap.Test17922.idmap |
+		grep -c idtype) == 0 )) ||
+		error "invalid range 10000-10010 supplied and passed"
+
+	do_facet mgs $LCTL nodemap_del Test17922 ||
+		error "failed to remove nodemap Test17922"
+}
+run_test 27aa "test nodemap idmap range"
+
 test_27b() { #LU-10703
 	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS >= 2.11.50"

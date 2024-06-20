@@ -132,7 +132,8 @@ int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp);
 void nodemap_del_member(struct obd_export *exp);
 int nodemap_parse_range(const char *range_string, struct lnet_nid range[2],
 			u8 *netmask);
-int nodemap_parse_idmap(char *idmap_string, __u32 idmap[2]);
+int nodemap_parse_idmap(const char *nodemap_name, char *idmap_str,
+			__u32 idmap[2], u32 *range_count);
 int nodemap_add_range(const char *name, const struct lnet_nid nid[2],
 		      u8 netmask);
 int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
@@ -150,9 +151,9 @@ int nodemap_set_audit_mode(const char *name, bool enable_audit);
 int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption);
 int nodemap_set_readonly_mount(const char *name, bool readonly_mount);
 bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id);
-int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
+int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
-int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
+int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_set_fileset(const char *name, const char *fileset);
 char *nodemap_get_fileset(const struct lu_nodemap *nodemap);

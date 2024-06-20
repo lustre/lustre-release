@@ -353,17 +353,25 @@ EXPORT_SYMBOL(nodemap_parse_range);
  * parse a string containing an id map of form "client_id:filesystem_id"
  * into an array of __u32 * for use in mapping functions
  *
+ * the string can also be a range of "ci_start-ci_end:fs_start[-fs_end]"
+ *
+ * \param	nodemap_name		nodemap name string
  * \param	idmap_str		map string
  * \param	idmap			array[2] of __u32
+ * \param	range_count		potential idmap range u32
  *
  * \retval	0 on success
  * \retval	-EINVAL if idmap cannot be parsed
  */
-int nodemap_parse_idmap(char *idmap_str, __u32 idmap[2])
+int nodemap_parse_idmap(const char *nodemap_name, char *idmap_str,
+			__u32 idmap[2], u32 *range_count)
 {
-	char			*sep;
-	long unsigned int	 idmap_buf;
-	int			 rc;
+	char *sep;
+	char *sep_range;
+	char *potential_range;
+	unsigned long id;
+	int rc;
+	int range = 1;
 
 	if (idmap_str == NULL)
 		return -EINVAL;
@@ -374,15 +382,52 @@ int nodemap_parse_idmap(char *idmap_str, __u32 idmap[2])
 	*sep = '\0';
 	sep++;
 
-	rc = kstrtoul(idmap_str, 10, &idmap_buf);
-	if (rc != 0)
-		return -EINVAL;
-	idmap[0] = idmap_buf;
+	/* see if range is passed in idmap_str */
+	sep_range = strchr(idmap_str, '-');
+	if (sep_range)
+		*sep_range++ = '\0';
 
-	rc = kstrtoul(sep, 10, &idmap_buf);
-	if (rc != 0)
+	rc = kstrtoul(idmap_str, 10, &id);
+	if (rc)
 		return -EINVAL;
-	idmap[1] = idmap_buf;
+	idmap[0] = id;
+
+	/* parse cid range end if it is supplied */
+	if (sep_range) {
+		rc = kstrtoul(sep_range, 10, &id);
+		if (rc)
+			return -EINVAL;
+
+		range = id - idmap[0] + 1;
+		if (range <= 0)
+			return -ERANGE;
+	}
+
+	potential_range = strchr(sep, '-');
+	if (potential_range)
+		*potential_range++ = '\0';
+
+	rc = kstrtoul(sep, 10, &id);
+	if (rc)
+		return -EINVAL;
+	idmap[1] = id;
+
+	/* parse fsid range end if it is supplied */
+	if (potential_range) {
+		rc = kstrtoul(potential_range, 10, &id);
+		if (rc)
+			return -ERANGE;
+
+		/* make sure fsid range is equal to cid range */
+		if (id - idmap[1] + 1 != range) {
+			rc = -EINVAL;
+			CERROR("%s: range length mismatch between client id %s-%s and fs id %s-%s: rc = %d\n",
+			       nodemap_name, idmap_str, sep_range, sep,
+			       potential_range, rc);
+			return rc;
+		}
+	}
+	*range_count = range;
 
 	return 0;
 }
@@ -522,7 +567,21 @@ out:
 	return rc;
 }
 
-int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
+int nodemap_add_idmap_range(const char *nodemap_name, enum nodemap_id_type id_type,
+			    const __u32 map[2], const u32 range_count)
+{
+	int rc = 0;
+	int i;
+
+	for (i = 0; i < range_count && !rc; i++) {
+		rc = nodemap_add_idmap(nodemap_name, id_type,
+				       (int[2]){map[0] + i, map[1] + i});
+	}
+
+	return rc;
+}
+
+int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2])
 {
 	struct lu_nodemap	*nodemap = NULL;
@@ -531,7 +590,7 @@ int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
 	ENTRY;
 
 	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(name);
+	nodemap = nodemap_lookup(nodemap_name);
 	if (IS_ERR(nodemap)) {
 		mutex_unlock(&active_config_lock);
 		GOTO(out, rc = PTR_ERR(nodemap));
@@ -563,7 +622,7 @@ EXPORT_SYMBOL(nodemap_add_idmap);
  *
  * \retval	0 on success
  */
-int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
+int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2])
 {
 	struct lu_nodemap	*nodemap = NULL;
@@ -573,7 +632,7 @@ int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
 	ENTRY;
 
 	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(name);
+	nodemap = nodemap_lookup(nodemap_name);
 	if (IS_ERR(nodemap)) {
 		mutex_unlock(&active_config_lock);
 		GOTO(out, rc = PTR_ERR(nodemap));
@@ -603,6 +662,20 @@ out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(nodemap_del_idmap);
+
+int nodemap_del_idmap_range(const char *nodemap_name, enum nodemap_id_type id_type,
+		      const __u32 map[2], const u32 range_count)
+{
+	int rc = 0;
+	int i;
+
+	for (i = 0; i < range_count && !rc; i++) {
+		rc = nodemap_del_idmap(nodemap_name, id_type,
+				       (int[2]) {map[0] + i, map[1] + i});
+	}
+
+	return rc;
+}
 
 /**
  * Get nodemap assigned to given export. Takes a reference on the nodemap.
@@ -2023,6 +2096,7 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 	bool bool_switch;
 	u8 netmask = 0;
 	u32 idmap[2];
+	u32 range_count;
 	u32 int_id;
 	int rc = 0;
 
@@ -2182,36 +2256,36 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 	case LCFG_NODEMAP_ADD_UIDMAP:
 	case LCFG_NODEMAP_ADD_GIDMAP:
 	case LCFG_NODEMAP_ADD_PROJIDMAP:
-		rc = nodemap_parse_idmap(param, idmap);
+		rc = nodemap_parse_idmap(nodemap_name, param, idmap, &range_count);
 		if (rc != 0)
 			break;
 		if (cmd == LCFG_NODEMAP_ADD_UIDMAP)
-			rc = nodemap_add_idmap(nodemap_name, NODEMAP_UID,
-					       idmap);
+			rc = nodemap_add_idmap_range(nodemap_name, NODEMAP_UID,
+						     idmap, range_count);
 		else if (cmd == LCFG_NODEMAP_ADD_GIDMAP)
-			rc = nodemap_add_idmap(nodemap_name, NODEMAP_GID,
-					       idmap);
+			rc = nodemap_add_idmap_range(nodemap_name, NODEMAP_GID,
+						     idmap, range_count);
 		else if (cmd == LCFG_NODEMAP_ADD_PROJIDMAP)
-			rc = nodemap_add_idmap(nodemap_name, NODEMAP_PROJID,
-					       idmap);
+			rc = nodemap_add_idmap_range(nodemap_name, NODEMAP_PROJID,
+						     idmap, range_count);
 		else
 			rc = -EINVAL;
 		break;
 	case LCFG_NODEMAP_DEL_UIDMAP:
 	case LCFG_NODEMAP_DEL_GIDMAP:
 	case LCFG_NODEMAP_DEL_PROJIDMAP:
-		rc = nodemap_parse_idmap(param, idmap);
+		rc = nodemap_parse_idmap(nodemap_name, param, idmap, &range_count);
 		if (rc != 0)
 			break;
 		if (cmd == LCFG_NODEMAP_DEL_UIDMAP)
-			rc = nodemap_del_idmap(nodemap_name, NODEMAP_UID,
-					       idmap);
+			rc = nodemap_del_idmap_range(nodemap_name, NODEMAP_UID,
+						     idmap, range_count);
 		else if (cmd == LCFG_NODEMAP_DEL_GIDMAP)
-			rc = nodemap_del_idmap(nodemap_name, NODEMAP_GID,
-					       idmap);
+			rc = nodemap_del_idmap_range(nodemap_name, NODEMAP_GID,
+						     idmap, range_count);
 		else if (cmd == LCFG_NODEMAP_DEL_PROJIDMAP)
-			rc = nodemap_del_idmap(nodemap_name, NODEMAP_PROJID,
-					       idmap);
+			rc = nodemap_del_idmap_range(nodemap_name, NODEMAP_PROJID,
+						     idmap, range_count);
 		else
 			rc = -EINVAL;
 		break;
