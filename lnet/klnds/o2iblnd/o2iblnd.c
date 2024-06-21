@@ -117,9 +117,6 @@ static int kiblnd_unpack_rd(struct kib_msg *msg, bool flip)
 	int n;
 	int i;
 
-	LASSERT(msg->ibm_type == IBLND_MSG_GET_REQ ||
-		msg->ibm_type == IBLND_MSG_PUT_ACK);
-
 	rd = msg->ibm_type == IBLND_MSG_GET_REQ ?
 		&msg->ibm_u.get.ibgm_rd :
 		&msg->ibm_u.putack.ibpam_rd;

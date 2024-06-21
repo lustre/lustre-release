@@ -1039,9 +1039,6 @@ kiblnd_rd_consume_frag(struct kib_rdma_desc *rd, int index, __u32 nob)
 static inline int
 kiblnd_rd_msg_size(struct kib_rdma_desc *rd, int msgtype, int n)
 {
-        LASSERT (msgtype == IBLND_MSG_GET_REQ ||
-                 msgtype == IBLND_MSG_PUT_ACK);
-
         return msgtype == IBLND_MSG_GET_REQ ?
 	       offsetof(struct kib_get_msg, ibgm_rd.rd_frags[n]) :
 	       offsetof(struct kib_putack_msg, ibpam_rd.rd_frags[n]);

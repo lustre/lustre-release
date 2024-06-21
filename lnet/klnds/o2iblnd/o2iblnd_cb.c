@@ -354,10 +354,10 @@ kiblnd_handle_rx(struct kib_rx *rx)
 
                 conn->ibc_credits += credits;
 
-                /* This ensures the credit taken by NOOP can be returned */
-                if (msg->ibm_type == IBLND_MSG_NOOP &&
-                    !IBLND_OOB_CAPABLE(conn->ibc_version)) /* v1 only */
-                        conn->ibc_outstanding_credits++;
+		/* This ensures the credit taken by NOOP can be returned */
+		if (msg->ibm_type == IBLND_MSG_NOOP &&
+		    !IBLND_OOB_CAPABLE(conn->ibc_version)) /* v1 only */
+			conn->ibc_outstanding_credits++;
 
 		kiblnd_check_sends_locked(conn);
 		spin_unlock(&conn->ibc_lock);
@@ -365,10 +365,11 @@ kiblnd_handle_rx(struct kib_rx *rx)
 
         switch (msg->ibm_type) {
         default:
-                CERROR("Bad IBLND message type %x from %s\n",
-		       msg->ibm_type, libcfs_nidstr(&conn->ibc_peer->ibp_nid));
+		rc = -EPROTO;
+                CERROR("Bad IBLND message type %x from %s: rc = %d\n",
+		       msg->ibm_type, libcfs_nidstr(&conn->ibc_peer->ibp_nid),
+		       rc);
                 post_credit = IBLND_POSTRX_NO_CREDIT;
-                rc = -EPROTO;
                 break;
 
         case IBLND_MSG_NOOP:
@@ -420,14 +421,20 @@ kiblnd_handle_rx(struct kib_rx *rx)
 			list_del(&tx->tx_list);
 		spin_unlock(&conn->ibc_lock);
 
-                if (tx == NULL) {
-                        CERROR("Unmatched PUT_ACK from %s\n",
-			       libcfs_nidstr(&conn->ibc_peer->ibp_nid));
-                        rc = -EPROTO;
-                        break;
-                }
+		if (tx == NULL) {
+			rc = -EPROTO;
+			CERROR("Unmatched PUT_ACK from %s: rc = %d\n",
+			       libcfs_nidstr(&conn->ibc_peer->ibp_nid), rc);
+			break;
+		}
 
-                LASSERT (tx->tx_waiting);
+		if (!tx->tx_waiting) {
+			rc = -EPROTO;
+			CERROR("Matching PUT_ACK from %s is not waiting: rc = %d\n",
+			       libcfs_nidstr(&conn->ibc_peer->ibp_nid), rc);
+			break;
+		}
+
                 /* CAVEAT EMPTOR: I could be racing with tx_complete, but...
                  * (a) I can overwrite tx_msg since my peer_ni has received it!
                  * (b) tx_waiting set tells tx_complete() it's not done. */
@@ -439,7 +446,7 @@ kiblnd_handle_rx(struct kib_rx *rx)
                                        &msg->ibm_u.putack.ibpam_rd,
                                        msg->ibm_u.putack.ibpam_dst_cookie);
                 if (rc2 < 0)
-                        CERROR("Can't setup rdma for PUT to %s: %d\n",
+			CERROR("Can't setup rdma for PUT to %s: rc = %d\n",
 			       libcfs_nidstr(&conn->ibc_peer->ibp_nid), rc2);
 
 		spin_lock(&conn->ibc_lock);
@@ -2198,7 +2205,10 @@ kiblnd_handle_early_rxs(struct kib_conn *conn)
 	struct kib_rx *rx;
 
 	LASSERT(!in_interrupt());
-	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
+	if (conn->ibc_state < IBLND_CONN_ESTABLISHED) {
+		CERROR("conn %p: bad state %d\n", conn, conn->ibc_state);
+		return;
+	}
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 	while ((rx = list_first_entry_or_null(&conn->ibc_early_rxs,
@@ -3437,7 +3447,6 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 		CNETERR("%s: UNREACHABLE %d cm_id %p conn %p ibc_state: %d\n",
 			libcfs_nidstr(&conn->ibc_peer->ibp_nid),
 			event->status, cmid, conn, conn->ibc_state);
-		LASSERT(conn->ibc_state != IBLND_CONN_INIT);
 
 		if (conn->ibc_state != IBLND_CONN_ACTIVE_CONNECT &&
 		    conn->ibc_state != IBLND_CONN_PASSIVE_WAIT)
