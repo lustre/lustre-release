@@ -2880,6 +2880,8 @@ lock_parents:
 	rc = mdt_lookup_version_check(info, mtgtdir, &rr->rr_tgt_name, new_fid,
 				      3);
 	if (rc == 0) {
+		bool child_reverse_lock = false;
+
 		/* the new_fid should have been filled at this moment */
 		if (lu_fid_eq(old_fid, new_fid))
 			GOTO(out_put_old, rc);
@@ -2923,13 +2925,30 @@ lock_parents:
 			GOTO(out_put_new, rc = -EISDIR);
 
 		lh_oldp = &info->mti_lh[MDT_LH_OLD];
+		lh_newp = &info->mti_lh[MDT_LH_NEW];
+
+		/* We will lock in child fid order here to avoid a
+		 * deadlock related to hardlinks thats only possible with
+		 * regular files. LU-15491
+		 */
+		if (!S_ISDIR(lu_object_attr(&mold->mot_obj)) &&
+		    lu_fid_cmp(old_fid, new_fid) > 0) {
+			child_reverse_lock = true;
+			rc = mdt_object_check_lock(info, mtgtdir, mnew, lh_newp,
+						   MDS_INODELOCK_LOOKUP |
+						   MDS_INODELOCK_UPDATE,
+						   LCK_EX);
+			if (rc < 0)
+				GOTO(out_unlock_new, rc);
+		}
+
 		lh_lookup = &info->mti_lh[MDT_LH_LOOKUP];
 		rc = mdt_rename_source_lock(info, msrcdir, mold, lh_oldp,
 					    lh_lookup,
 					    MDS_INODELOCK_LOOKUP |
 					    MDS_INODELOCK_XATTR);
 		if (rc < 0)
-			GOTO(out_put_new, rc);
+			GOTO(out_unlock_new, rc);
 
 		/* Check if @msrcdir is subdir of @mnew, before locking child
 		 * to avoid reverse locking.
@@ -2940,7 +2959,7 @@ lock_parents:
 			if (rc) {
 				if (rc == 1)
 					rc = -EINVAL;
-				GOTO(out_unlock_old, rc);
+				GOTO(out_unlock_new, rc);
 			}
 		}
 
@@ -2950,12 +2969,14 @@ lock_parents:
 		 * lock. See LU-4002.
 		 */
 
-		lh_newp = &info->mti_lh[MDT_LH_NEW];
-		rc = mdt_object_check_lock(info, mtgtdir, mnew, lh_newp,
-					   MDS_INODELOCK_LOOKUP |
-					   MDS_INODELOCK_UPDATE, LCK_EX);
-		if (rc != 0)
-			GOTO(out_unlock_new, rc);
+		if (!child_reverse_lock) {
+			rc = mdt_object_check_lock(info, mtgtdir, mnew, lh_newp,
+						   MDS_INODELOCK_LOOKUP |
+						   MDS_INODELOCK_UPDATE,
+						   LCK_EX);
+			if (rc != 0)
+				GOTO(out_unlock_new, rc);
+		}
 
 		/* get and save version after locking */
 		mdt_version_get_save(info, mnew, 3);
@@ -3007,7 +3028,7 @@ out_unlock_new:
 	if (mnew != NULL)
 		/* mnew is gone, no need to keep lock */
 		mdt_object_unlock(info, mnew, lh_newp, 1);
-out_unlock_old:
+
 	mdt_object_unlock(info, NULL, lh_lookup, rc);
 	mdt_object_unlock(info, mold, lh_oldp, rc);
 out_put_new:
