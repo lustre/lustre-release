@@ -4459,6 +4459,10 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 		result = __osd_oi_insert(env, obj, fid, th);
 		if (result && inode) {
+			set_bit(LU_OBJECT_HEARD_BANSHEE,
+				&obj->oo_dt.do_lu.lo_header->loh_flags);
+			obj->oo_dt.do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
+
 			spin_lock(&obj->oo_guard);
 			clear_nlink(inode);
 			spin_unlock(&obj->oo_guard);
