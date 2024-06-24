@@ -3,9 +3,6 @@
 # lsvcgss      Lustre GSS daemon
 #
 
-# Must be identical to what lsvcgss.service uses
-PIDFILE=/var/run/lsvcgss.pid
-
 # If service is not configured, launch with all mechs
 # -k -- Enable kerberos support
 # -s -- Enable shared key support
@@ -17,6 +14,5 @@ LSVCGSSDARGS="-k -s -z"
 
 /usr/sbin/lsvcgssd ${LSVCGSSDARGS}
 RETVAL=$?
-[ $RETVAL -eq 0 ] && echo $(pidof -s lsvcgssd) > $PIDFILE
 
 exit $RETVAL

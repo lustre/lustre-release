@@ -7,7 +7,6 @@ After=network-online.target openibd.service rdma.service opa.service
 Type=forking
 RemainAfterExit=yes
 StandardOutput=syslog
-PIDFile=/var/run/lsvcgss.pid
 ExecStart=/usr/bin/lsvcgss_sysd
 ExecReload=/bin/kill -HUP $MAINPID
 
