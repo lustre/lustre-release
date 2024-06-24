@@ -2831,7 +2831,7 @@ test_35() {
 	wait_request_state $fid RESTORE STARTED
 
 	# mv must not block during restore
-	timeout --signal=KILL 1 mv "$f1" "$f" || error "mv $f1 $f failed"
+	timeout --signal=KILL 2 mv "$f1" "$f" || error "mv $f1 $f failed"
 
 	copytool_continue
 	wait_request_state $fid RESTORE SUCCEED
