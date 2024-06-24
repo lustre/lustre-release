@@ -360,7 +360,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 			struct obd_export *exp = ll_i2mdexp(i_dir);
 			enum mds_ibits_locks ibits = MDS_INODELOCK_LOOKUP;
 
-			if (ll_have_md_lock(exp, i_dir, &ibits, LCK_MINMODE))
+			if (ll_have_md_lock(exp, i_dir, &ibits, LCK_MINMODE, 0))
 				pfid = *ll_inode2fid(i_dir);
 		}
 		dput(parent);

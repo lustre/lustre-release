@@ -3944,7 +3944,8 @@ static enum ldlm_mode
 lmv_lock_match(struct obd_export *exp, __u64 flags,
 	       const struct lu_fid *fid, enum ldlm_type type,
 	       union ldlm_policy_data *policy,
-	       enum ldlm_mode mode, struct lustre_handle *lockh)
+	       enum ldlm_mode mode, enum ldlm_match_flags match_flags,
+	       struct lustre_handle *lockh)
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;
@@ -3975,7 +3976,7 @@ lmv_lock_match(struct obd_export *exp, __u64 flags,
 			if (!tgt || !tgt->ltd_exp || !tgt->ltd_active)
 				continue;
 			rc = md_lock_match(tgt->ltd_exp, flags, fid, type,
-					   policy, mode, lockh);
+					   policy, mode, match_flags, lockh);
 			if (rc)
 				break;
 		}
@@ -3983,7 +3984,7 @@ lmv_lock_match(struct obd_export *exp, __u64 flags,
 		tgt = lmv_fid2tgt(lmv, fid);
 		if (!IS_ERR(tgt) && tgt->ltd_exp && tgt->ltd_active)
 			rc = md_lock_match(tgt->ltd_exp, flags, fid, type,
-					   policy, mode, lockh);
+					   policy, mode, match_flags, lockh);
 	}
 
 	CDEBUG(D_INODE, "Lock match for "DFID": %d\n", PFID(fid), rc);

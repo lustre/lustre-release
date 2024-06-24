@@ -1839,6 +1839,7 @@ static inline enum ldlm_mode md_lock_match(struct obd_export *exp, __u64 flags,
 					   enum ldlm_type type,
 					   union ldlm_policy_data *policy,
 					   enum ldlm_mode mode,
+					   enum ldlm_match_flags match_flags,
 					   struct lustre_handle *lockh)
 {
 	int rc;
@@ -1850,6 +1851,7 @@ static inline enum ldlm_mode md_lock_match(struct obd_export *exp, __u64 flags,
 	return exp->exp_obd->obd_type->typ_md_ops->m_lock_match(exp, flags,
 								fid, type,
 								policy, mode,
+								match_flags,
 								lockh);
 }
 

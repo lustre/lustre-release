@@ -80,8 +80,8 @@ static int mdc_dom_lock_match(const struct lu_env *env, struct obd_export *exp,
 			      union ldlm_policy_data *policy,
 			      enum ldlm_mode mode, __u64 *flags,
 			      struct osc_object *obj,
-			      struct lustre_handle *lockh,
-			      enum ldlm_match_flags match_flags)
+			      enum ldlm_match_flags match_flags,
+			      struct lustre_handle *lockh)
 {
 	struct obd_device *obd = exp->exp_obd;
 	__u64 lflags = *flags;
@@ -90,7 +90,7 @@ static int mdc_dom_lock_match(const struct lu_env *env, struct obd_export *exp,
 	ENTRY;
 
 	rc = ldlm_lock_match_with_skip(obd->obd_namespace, lflags, 0,
-			     res_id, type, policy, mode, lockh, match_flags);
+			     res_id, type, policy, mode, match_flags, lockh);
 	if (rc == 0 || lflags & LDLM_FL_TEST_LOCK)
 		RETURN(rc);
 
@@ -156,7 +156,7 @@ again:
 	 * writers can share a single PW lock. */
 	mode = mdc_dom_lock_match(env, osc_export(obj), resname, LDLM_IBITS,
 				  policy, LCK_PR | LCK_PW | LCK_GROUP, &flags,
-				  obj, &lockh, match_flags);
+				  obj, match_flags, &lockh);
 	if (mode != 0) {
 		lock = ldlm_handle2lock(&lockh);
 		/* RACE: the lock is cancelled so let's try again */
@@ -722,7 +722,7 @@ static int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 		match_flags = LDLM_MATCH_GROUP;
 	mode = ldlm_lock_match_with_skip(obd->obd_namespace, search_flags, 0,
 					 res_id, einfo->ei_type, policy, mode,
-					 &lockh, match_flags);
+					 match_flags, &lockh);
 	if (mode) {
 		struct ldlm_lock *matched;
 
@@ -1540,7 +1540,7 @@ static int mdc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 		flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_LVB_READY;
 		mode = mdc_dom_lock_match(env, exp, resid, LDLM_IBITS, policy,
 					  LCK_PR | LCK_PW | LCK_GROUP,
-					  &flags, osc, &lockh, 0);
+					  &flags, osc, 0, &lockh);
 		fmkey->lfik_oa.o_valid |= OBD_MD_FLFLAGS;
 		if (mode) { /* lock is cached on client */
 			fmkey->lfik_oa.o_flags &= ~OBD_FL_SRVLOCK;

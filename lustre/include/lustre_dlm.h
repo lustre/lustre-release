@@ -1023,6 +1023,7 @@ enum ldlm_match_flags {
 	LDLM_MATCH_AST_ANY = BIT(2),
 	LDLM_MATCH_RIGHT   = BIT(3),
 	LDLM_MATCH_GROUP   = BIT(4),
+	LDLM_MATCH_SKIP_UNUSED = BIT(5),
 };
 
 #ifdef HAVE_INTERVAL_TREE_CACHED
@@ -1641,18 +1642,19 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 					 enum ldlm_type type,
 					 union ldlm_policy_data *policy,
 					 enum ldlm_mode mode,
-					 struct lustre_handle *lh,
-					 enum ldlm_match_flags match_flags);
+					 enum ldlm_match_flags match_flags,
+					 struct lustre_handle *lh);
 static inline enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns,
 					     __u64 flags,
 					     const struct ldlm_res_id *res_id,
 					     enum ldlm_type type,
 					     union ldlm_policy_data *policy,
 					     enum ldlm_mode mode,
+					     enum ldlm_match_flags m_flags,
 					     struct lustre_handle *lh)
 {
 	return ldlm_lock_match_with_skip(ns, flags, 0, res_id, type, policy,
-					 mode, lh, 0);
+					 mode, m_flags, lh);
 }
 struct ldlm_lock *search_itree(struct ldlm_resource *res,
 			       struct ldlm_match_data *data);

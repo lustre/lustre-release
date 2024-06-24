@@ -129,7 +129,9 @@ int mdc_batch_add(struct obd_export *exp, struct lu_batch *bh,
 enum ldlm_mode mdc_lock_match(struct obd_export *exp, __u64 flags,
 			      const struct lu_fid *fid, enum ldlm_type type,
 			      union ldlm_policy_data *policy,
-			      enum ldlm_mode mode, struct lustre_handle *lockh);
+			      enum ldlm_mode mode,
+			      enum ldlm_match_flags match_flags,
+			      struct lustre_handle *lockh);
 
 
 #define MDC_CHANGELOG_DEV_COUNT LMV_MAX_STRIPE_COUNT

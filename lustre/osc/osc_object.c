@@ -263,7 +263,7 @@ static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
 			       LDLM_FL_BLOCK_GRANTED | LDLM_FL_LVB_READY,
 			       &resid, LDLM_EXTENT, &policy,
-			       LCK_PR | LCK_PW, &lockh);
+			       LCK_PR | LCK_PW, 0, &lockh);
 	fmkey->lfik_oa.o_valid |= OBD_MD_FLFLAGS;
 	if (mode) { /* lock is cached on client */
 		fmkey->lfik_oa.o_flags &= ~OBD_FL_SRVLOCK;

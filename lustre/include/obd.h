@@ -1358,6 +1358,7 @@ struct md_ops {
 				       enum ldlm_type type,
 				       union ldlm_policy_data *policy,
 				       enum ldlm_mode mode,
+				       enum ldlm_match_flags match_flags,
 				       struct lustre_handle *lockh);
 
 	int (*m_cancel_unused)(struct obd_export *exp, const struct lu_fid *fid,

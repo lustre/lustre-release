@@ -1185,6 +1185,10 @@ static bool lock_matches(struct ldlm_lock *lock, void *vdata)
 	    lock->l_readers == 0 && lock->l_writers == 0)
 		return false;
 
+	if (data->lmd_match & LDLM_MATCH_SKIP_UNUSED &&
+	    lock->l_readers == 0 && lock->l_writers == 0)
+		return false;
+
 	if (!(lock->l_req_mode & *data->lmd_mode))
 		return false;
 
@@ -1389,6 +1393,18 @@ EXPORT_SYMBOL(ldlm_lock_allow_match);
  * If 'flags' contains LDLM_FL_TEST_LOCK, then don't actually reference a lock,
  *     just tell us if we would have matched.
  *
+ * If @match_flags contains LDLM_MATCH_UNREF, then we don't match unreferenced
+ *    locks
+ * If @match_flags contains LDLM_MATCH_AST, then we don't match lock without
+ *    ast_data
+ * If @match_flags contains LDLM_MATCH_AST_ANY, then we'd match lock with
+ *    ast_data
+ * If @match_flags contains LDLM_MATCH_RIGHT, then we'd match extent lock at
+ *    the right region for the desired lock
+ * If @match_flags contains LDLM_MATCH_GROUP, then we'd match group lock
+ * If @match_flags contains LDLM_MATCH_SKIP_UNUSED, then we don't match any
+ *    unused locks
+ *
  * \retval 1 if it finds an already-existing lock that is compatible; in this
  * case, lockh is filled in with a addref()ed lock
  *
@@ -1402,8 +1418,8 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 					 enum ldlm_type type,
 					 union ldlm_policy_data *policy,
 					 enum ldlm_mode mode,
-					 struct lustre_handle *lockh,
-					 enum ldlm_match_flags match_flags)
+					 enum ldlm_match_flags match_flags,
+					 struct lustre_handle *lockh)
 {
 	struct ldlm_match_data data = {
 		.lmd_old = NULL,

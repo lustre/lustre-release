@@ -3173,7 +3173,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		match_flags = LDLM_MATCH_GROUP;
 	mode = ldlm_lock_match_with_skip(obd->obd_namespace, search_flags, 0,
 					 res_id, einfo->ei_type, policy, mode,
-					 &lockh, match_flags);
+					 match_flags, &lockh);
 	if (mode) {
 		struct ldlm_lock *matched;
 
@@ -3280,8 +3280,8 @@ int osc_match_base(const struct lu_env *env, struct obd_export *exp,
 
 	/* Next, search for already existing extent locks that will cover us */
 	rc = ldlm_lock_match_with_skip(obd->obd_namespace, lflags, 0,
-					res_id, type, policy, mode, lockh,
-					match_flags);
+					res_id, type, policy, mode,
+					match_flags, lockh);
 	if (rc == 0 || lflags & LDLM_FL_TEST_LOCK)
 		RETURN(rc);
 

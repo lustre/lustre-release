@@ -397,7 +397,7 @@ static int ll_md_close(struct inode *inode, struct file *file)
 	/* LU-4398: do not cache write open lock if the file has exec bit */
 	if ((lockmode == LCK_CW && inode->i_mode & 0111) ||
 	    !md_lock_match(ll_i2mdexp(inode), flags, ll_inode2fid(inode),
-			   LDLM_IBITS, &policy, lockmode, &lockh))
+			   LDLM_IBITS, &policy, lockmode, 0, &lockh))
 		rc = ll_md_real_close(inode, lfd->fd_omode);
 
 out:
@@ -5874,12 +5874,14 @@ ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
  * - if found clear the common lock bits in *bits
  * - the bits not found, are kept in *bits
  * \param inode [IN]
- * \param bits [IN] searched lock bits [IN]
- * \param l_req_mode [IN] searched lock mode
+ * \param bits [IN]		searched lock bits [IN]
+ * \param l_req_mode [IN]	searched lock mode
+ * \param match_flags [IN]	match flags
  * \retval boolean, true iff all bits are found
  */
 int ll_have_md_lock(struct obd_export *exp, struct inode *inode,
-		    enum mds_ibits_locks *bits, enum ldlm_mode l_req_mode)
+		    enum mds_ibits_locks *bits, enum ldlm_mode l_req_mode,
+		    enum ldlm_match_flags match_flags)
 {
 	struct lustre_handle lockh;
 	union ldlm_policy_data policy;
@@ -5904,7 +5906,7 @@ int ll_have_md_lock(struct obd_export *exp, struct inode *inode,
 			continue;
 
 		if (md_lock_match(exp, flags, fid, LDLM_IBITS, &policy, mode,
-				  &lockh)) {
+				  match_flags, &lockh)) {
 			struct ldlm_lock *lock;
 
 			lock = ldlm_handle2lock(&lockh);
@@ -5933,7 +5935,7 @@ enum ldlm_mode ll_take_md_lock(struct inode *inode, __u64 bits,
 	CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
 
 	rc = md_lock_match(ll_i2mdexp(inode), LDLM_FL_BLOCK_GRANTED|flags,
-			   fid, LDLM_IBITS, &policy, mode, lockh);
+			   fid, LDLM_IBITS, &policy, mode, 0, lockh);
 
 	RETURN(rc);
 }
