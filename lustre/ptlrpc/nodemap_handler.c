@@ -211,6 +211,76 @@ static bool allow_op_on_nm(struct lu_nodemap *nodemap)
 }
 
 /**
+ * Check if sub-nodemap can raise privileges
+ *
+ * \param	nodemap		the nodemap to modify
+ * \param	priv		the attempted privilege raise
+ * \param	val		new value for the field
+ * \retval	true		if the modification is allowed
+ *
+ * The following properties are checked:
+ * - nmf_allow_root_access
+ * - nmf_trust_client_ids
+ * - nmf_deny_unknown
+ * - nmf_readonly_mount
+ * - nmf_rbac
+ * - nmf_rbac_raise
+ * - nmf_forbid_encryption
+ * If nmf_raise_privs grants corresponding privilege, any change on these
+ * properties is permitted. Otherwise, only lowering privileges is possible,
+ * which means:
+ * - nmf_allow_root_access from 1 (parent) to 0
+ * - nmf_trust_client_ids from 1 (parent) to 0
+ * - nmf_deny_unknown from 0 (parent) to 1
+ * - nmf_readonly_mount from 0 (parent) to 1
+ * - nmf_rbac to fewer roles
+ * - nmf_rbac_raise to fewer roles
+ * - nmf_forbid_encryption from 1 (parent) to 0
+ */
+static bool check_privs_for_op(struct lu_nodemap *nodemap,
+			       enum nodemap_raise_privs priv, u64 val)
+{
+	u32 prop_val = (u32)(0xffffffff & val);
+	/* only relevant with priv == NODEMAP_RAISE_PRIV_RAISE */
+	u32 rbac_raise = (u32)(val >> 32);
+
+	if (!allow_op_on_nm(nodemap))
+		return false;
+
+	if (!nodemap->nm_dyn)
+		return true;
+
+	if (!nodemap->nm_parent_nm)
+		return false;
+
+	if (nodemap->nm_parent_nm->nmf_raise_privs & priv)
+		return true;
+
+	switch (priv) {
+	case NODEMAP_RAISE_PRIV_RAISE:
+		return !(~nodemap->nm_parent_nm->nmf_raise_privs & prop_val) &&
+			!(~nodemap->nm_parent_nm->nmf_rbac_raise & rbac_raise);
+	case NODEMAP_RAISE_PRIV_ADMIN:
+		return (nodemap->nm_parent_nm->nmf_allow_root_access ||
+			!prop_val);
+	case NODEMAP_RAISE_PRIV_TRUSTED:
+		return (nodemap->nm_parent_nm->nmf_trust_client_ids ||
+			!prop_val);
+	case NODEMAP_RAISE_PRIV_DENY_UNKN:
+		return (!nodemap->nm_parent_nm->nmf_deny_unknown || prop_val);
+	case NODEMAP_RAISE_PRIV_RO:
+		return (!nodemap->nm_parent_nm->nmf_readonly_mount || prop_val);
+	case NODEMAP_RAISE_PRIV_RBAC:
+		return !(~nodemap->nm_parent_nm->nmf_rbac & prop_val);
+	case NODEMAP_RAISE_PRIV_FORBID_ENC:
+		return (nodemap->nm_parent_nm->nmf_forbid_encryption ||
+			!prop_val);
+	default:
+		return true;
+	}
+}
+
+/**
  * Check for valid nodemap name
  *
  * \param	name		nodemap name
@@ -976,6 +1046,8 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_rbac = NODEMAP_RBAC_ALL;
 		dst->nmf_deny_mount = 0;
 		dst->nmf_fileset_use_iam = 0;
+		dst->nmf_raise_privs = NODEMAP_RAISE_PRIV_NONE;
+		dst->nmf_rbac_raise = NODEMAP_RBAC_NONE;
 
 		dst->nm_squash_uid = NODEMAP_NOBODY_UID;
 		dst->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1000,7 +1072,8 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_rbac = src->nmf_rbac;
 		dst->nmf_deny_mount = src->nmf_deny_mount;
 		dst->nmf_fileset_use_iam = 0;
-
+		dst->nmf_raise_privs = src->nmf_raise_privs;
+		dst->nmf_rbac_raise = src->nmf_rbac_raise;
 		dst->nm_squash_uid = src->nm_squash_uid;
 		dst->nm_squash_gid = src->nm_squash_gid;
 		dst->nm_squash_projid = src->nm_squash_projid;
@@ -1710,7 +1783,8 @@ int nodemap_set_deny_unknown(const char *name, bool deny_unknown)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
-	if (!allow_op_on_nm(nodemap))
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_DENY_UNKN,
+				deny_unknown))
 		GOTO(out_putref, rc = -EPERM);
 
 	nodemap->nmf_deny_unknown = deny_unknown;
@@ -1741,7 +1815,7 @@ int nodemap_set_allow_root(const char *name, bool allow_root)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
-	if (!allow_op_on_nm(nodemap))
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_ADMIN, allow_root))
 		GOTO(out_putref, rc = -EPERM);
 
 	nodemap->nmf_allow_root_access = allow_root;
@@ -1773,7 +1847,8 @@ int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
-	if (!allow_op_on_nm(nodemap))
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_TRUSTED,
+				trust_client_ids))
 		GOTO(out_putref, rc = -EPERM);
 
 	nodemap->nmf_trust_client_ids = trust_client_ids;
@@ -1812,6 +1887,34 @@ out:
 }
 EXPORT_SYMBOL(nodemap_set_mapping_mode);
 
+int nodemap_idx_cluster_roles_modify(struct lu_nodemap *nodemap,
+				     enum nodemap_rbac_roles old_rbac,
+				     enum nodemap_raise_privs old_privs,
+				     enum nodemap_rbac_roles old_rbac_raise)
+{
+	int rc;
+
+	if (nodemap->nmf_rbac == NODEMAP_RBAC_ALL &&
+	    nodemap->nmf_raise_privs == NODEMAP_RAISE_PRIV_NONE &&
+	    nodemap->nmf_rbac_raise == NODEMAP_RBAC_NONE)
+		/* if new value is the default, just delete
+		 * NODEMAP_CLUSTER_ROLES idx
+		 */
+		rc = nodemap_idx_cluster_roles_del(nodemap);
+	else if (old_rbac == NODEMAP_RBAC_ALL &&
+		 old_privs == NODEMAP_RAISE_PRIV_NONE &&
+		 old_rbac_raise == NODEMAP_RBAC_NONE)
+		/* if old value is the default, need to insert
+		 * new NODEMAP_CLUSTER_ROLES idx
+		 */
+		rc = nodemap_idx_cluster_roles_add(nodemap);
+	else
+		/* otherwise just update existing NODEMAP_CLUSTER_ROLES idx */
+		rc = nodemap_idx_cluster_roles_update(nodemap);
+
+	return rc;
+}
+
 int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
 {
 	struct lu_nodemap *nodemap = NULL;
@@ -1823,7 +1926,7 @@ int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
-	if (!allow_op_on_nm(nodemap))
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RBAC, rbac))
 		GOTO(put, rc = -EPERM);
 
 	if (is_default_nodemap(nodemap))
@@ -1835,19 +1938,9 @@ int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
 		GOTO(put, rc = 0);
 
 	nodemap->nmf_rbac = rbac;
-	if (rbac == NODEMAP_RBAC_ALL)
-		/* if new value is ALL (default), just delete
-		 * NODEMAP_CLUSTER_ROLES idx
-		 */
-		rc = nodemap_idx_cluster_roles_del(nodemap);
-	else if (old_rbac == NODEMAP_RBAC_ALL)
-		/* if old value is ALL (default), need to insert
-		 * NODEMAP_CLUSTER_ROLES idx
-		 */
-		rc = nodemap_idx_cluster_roles_add(nodemap);
-	else
-		/* otherwise just update existing NODEMAP_CLUSTER_ROLES idx */
-		rc = nodemap_idx_cluster_roles_update(nodemap);
+	rc = nodemap_idx_cluster_roles_modify(nodemap, old_rbac,
+					      nodemap->nmf_raise_privs,
+					      nodemap->nmf_rbac_raise);
 
 	nm_member_revoke_locks(nodemap);
 put:
@@ -2047,15 +2140,16 @@ EXPORT_SYMBOL(nodemap_set_audit_mode);
  */
 int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(name);
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
-	if (!allow_op_on_nm(nodemap))
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_FORBID_ENC,
+				forbid_encryption))
 		GOTO(out_putref, rc = -EPERM);
 
 	nodemap->nmf_forbid_encryption = forbid_encryption;
@@ -2068,6 +2162,52 @@ out:
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_set_forbid_encryption);
+
+/**
+ * Set the rbac_raise and nmf_rbac_raise properties.
+ * If NODEMAP_RAISE_PRIV_RAISE is not set on parent, it is only possible to
+ * reduce the scope.
+ * \param	name			nodemap name
+ * \param	privs			bitfield for privs that can be raised
+ * \param	rbac_raise		bitfield for roles that can be raised
+ * \retval	0 on success
+ *
+ */
+int nodemap_set_raise_privs(const char *name, enum nodemap_raise_privs privs,
+			    enum nodemap_rbac_roles rbac_raise)
+{
+	struct lu_nodemap *nodemap = NULL;
+	enum nodemap_raise_privs old_privs;
+	enum nodemap_rbac_roles old_rbac_raise;
+	int rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RAISE,
+				privs | (u64)rbac_raise << 32))
+		GOTO(out_putref, rc = -EPERM);
+
+	old_privs = nodemap->nmf_raise_privs;
+	old_rbac_raise = nodemap->nmf_rbac_raise;
+	/* if value does not change, do nothing */
+	if (privs == old_privs && rbac_raise == old_rbac_raise)
+		GOTO(out_putref, rc = 0);
+
+	nodemap->nmf_raise_privs = privs;
+	nodemap->nmf_rbac_raise = rbac_raise;
+	rc = nodemap_idx_cluster_roles_modify(nodemap, nodemap->nmf_rbac,
+					      old_privs, old_rbac_raise);
+
+	nm_member_revoke_locks(nodemap);
+out_putref:
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_raise_privs);
 
 /**
  * Set the nmf_readonly_mount flag to true or false.
@@ -2086,7 +2226,8 @@ int nodemap_set_readonly_mount(const char *name, bool readonly_mount)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
-	if (!allow_op_on_nm(nodemap))
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RO,
+				readonly_mount))
 		GOTO(out_putref, rc = -EPERM);
 
 	nodemap->nmf_readonly_mount = readonly_mount;
@@ -2150,6 +2291,11 @@ int nodemap_add(const char *nodemap_name, bool dynamic)
 	}
 
 	rc = nodemap_idx_nodemap_add(nodemap);
+	if (rc == 0 &&
+	    (nodemap->nmf_rbac != NODEMAP_RBAC_ALL ||
+	     nodemap->nmf_raise_privs != NODEMAP_RAISE_PRIV_NONE ||
+	     nodemap->nmf_rbac_raise != NODEMAP_RBAC_NONE))
+		rc = nodemap_idx_cluster_roles_add(nodemap);
 	if (rc == 0)
 		rc = lprocfs_nodemap_register(nodemap, 0);
 
@@ -2923,6 +3069,58 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 		rc = nodemap_set_rbac(nodemap_name, rbac);
 		break;
 	}
+	case LCFG_NODEMAP_RAISE_PRIVS:
+	{
+		enum nodemap_raise_privs privs = NODEMAP_RAISE_PRIV_NONE;
+		enum nodemap_rbac_roles rbac = NODEMAP_RBAC_NONE;
+		char *p;
+
+		if (strcmp(param, "all") == 0) {
+			privs = NODEMAP_RAISE_PRIV_ALL;
+			rbac = NODEMAP_RBAC_ALL;
+		} else if (strcmp(param, "none") != 0) {
+			while ((p = strsep(&param, ",")) != NULL) {
+				int i;
+
+				if (!*p)
+					break;
+
+				for (i = 0; i < ARRAY_SIZE(nodemap_priv_names);
+				     i++) {
+					if (strcmp(p,
+						 nodemap_priv_names[i].npn_name)
+					    == 0) {
+						privs |=
+						 nodemap_priv_names[i].npn_priv;
+						break;
+					}
+				}
+				if (i != ARRAY_SIZE(nodemap_priv_names))
+					continue;
+				for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names);
+				     i++) {
+					if (strcmp(p,
+						 nodemap_rbac_names[i].nrn_name)
+					    == 0) {
+						privs |=
+							NODEMAP_RAISE_PRIV_RBAC;
+						rbac |=
+						 nodemap_rbac_names[i].nrn_mode;
+						break;
+					}
+				}
+				if (i == ARRAY_SIZE(nodemap_rbac_names))
+					break;
+			}
+			if (p) {
+				rc = -EINVAL;
+				break;
+			}
+		}
+
+		rc = nodemap_set_raise_privs(nodemap_name, privs, rbac);
+		break;
+	}
 	case LCFG_NODEMAP_TRUSTED:
 		rc = kstrtobool(param, &bool_switch);
 		if (rc)
@@ -3143,6 +3341,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 	case LCFG_NODEMAP_MAP_MODE:
 	case LCFG_NODEMAP_AUDIT_MODE:
 	case LCFG_NODEMAP_FORBID_ENCRYPT:
+	case LCFG_NODEMAP_RAISE_PRIVS:
 	case LCFG_NODEMAP_READONLY_MOUNT:
 	case LCFG_NODEMAP_DENY_MOUNT:
 	case LCFG_NODEMAP_RBAC:

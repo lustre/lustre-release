@@ -7106,7 +7106,7 @@ dyn_nm_helper() {
 	local mgsnids2=1.0.0.[1-100]@tcp
 	local mgsclid=600
 	local mgsfsid=2000
-	local nm=nm_test71a
+	local nm=nm_test72
 	local nids=1.1.1.[1-100]@tcp
 	local startnid=1.1.1.1@tcp
 	local endnid=1.1.1.100@tcp
@@ -7122,6 +7122,7 @@ dyn_nm_helper() {
 			  readonly_mount"
 	local sepol="1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f"
 	local rbac_val
+	local raise
 	local val
 
 	activedefault=$(do_facet mgs $LCTL get_param -n nodemap.active)
@@ -7134,6 +7135,17 @@ dyn_nm_helper() {
 	do_facet mgs $LCTL nodemap_set_fileset --name default \
 		--fileset "/deffset" ||
 			error "setting fileset on default failed"
+	raise=$(do_facet mgs $LCTL get_param -n \
+		nodemap.default.child_raise_privileges)
+	if [[ -n "$raise" ]]; then
+		do_facet mgs $LCTL nodemap_modify --name default \
+		    --property child_raise_privileges --value all ||
+		       error "modify raise_privileges for default on MGS failed"
+		wait_nm_sync default child_raise_privileges
+		stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+			--property child_raise_privileges --value $raise" EXIT
+	fi
+
 	do_facet mgs $LCTL nodemap_add $mgsnm ||
 		error "adding $mgsnm on MGS failed"
 	stack_trap "do_facet mgs $LCTL nodemap_del $mgsnm" EXIT
@@ -7375,6 +7387,118 @@ test_72b() {
 	dyn_nm_helper mds1
 }
 run_test 72b "dynamic nodemap properties on MDS"
+
+test_72c() {
+	local mgsnm=mgsnm
+	local nm=nm_test72c
+	local val
+
+	(( MDS1_VERSION >= $(version_code 2.16.52) )) ||
+		skip "Need MDS >= 2.16.52 dynamic nodemaps"
+
+	do_facet mgs $LCTL nodemap_add $mgsnm ||
+		error "adding $mgsnm on MGS failed"
+	stack_trap "do_facet mgs $LCTL nodemap_del $mgsnm" EXIT
+
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property child_raise_privileges --value trusted ||
+		error "modify raise_privileges for $mgsnm on MGS failed (1)"
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property admin --value 0 ||
+		error "modify admin for $mgsnm on MGS failed"
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property trusted --value 0 ||
+		error "modify trusted for $mgsnm on MGS failed"
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property deny_unknown --value 0 ||
+		error "modify deny_unknown for $mgsnm on MGS failed"
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property readonly_mount --value 0 ||
+		error "modify readonly_mount for $mgsnm on MGS failed"
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property rbac --value file_perms,quota_ops,byfid_ops ||
+		error "modify rbac for $mgsnm on MGS failed"
+	wait_nm_sync $mgsnm rbac '' inactive
+
+	do_facet mds1 $LCTL nodemap_add -d -p $mgsnm $nm ||
+		error "dynamic nodemap on server failed (1)"
+	stack_trap "do_facet mds1 $LCTL nodemap_del $nm || true" EXIT
+	val=$(do_facet mds1 $LCTL get_param -n nodemap.$nm.id)
+	if [[ -z "$val" || "$val" == "0" ]]; then
+		error "dynamic nodemap wrong id $val (1)"
+	fi
+	val=$(do_facet mds1 $LCTL get_param -n \
+		nodemap.$nm.child_raise_privileges)
+	[[ $val == "trusted" ]] ||
+		error "dyn nodemap should inherit child_raise_privileges"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+		--property admin --value 1 &&
+		error "modify admin for $nm on mds1 should fail"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+		--property trusted --value 1 ||
+		error "modify trusted for $nm on mds1 failed"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+		--property deny_unknown --value 1 ||
+		error "modify deny_unknown for $nm on mds1 failed"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+		--property readonly_mount --value 1 ||
+		error "modify readonly_mount for $nm on mds1 failed"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+	       --property rbac --value file_perms,quota_ops,byfid_ops,dne_ops &&
+		error "modify rbac for $nm on mds1 should fail"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+		--property rbac --value file_perms ||
+		error "modify rbac for $nm on mds1 failed (1)"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+	       --property child_raise_privileges \
+	       --value trusted,admin &&
+	    error "modify nm.child_raise_privileges for $nm on mds1 should fail"
+
+	do_facet mds1 $LCTL nodemap_del $nm ||
+		error "failed to delete dynamic nodemap $nm"
+
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property child_raise_privileges --value trusted,dne_ops ||
+		error "modify raise_privileges for $mgsnm on MGS failed (2)"
+	wait_nm_sync $mgsnm child_raise_privileges '' inactive
+
+	do_facet mds1 $LCTL nodemap_add -d -p $mgsnm $nm ||
+		error "dynamic nodemap on server failed (2)"
+	val=$(do_facet mds1 $LCTL get_param -n nodemap.$nm.id)
+	if [[ -z "$val" || "$val" == "0" ]]; then
+		error "dynamic nodemap wrong id $val (2)"
+	fi
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+	       --property rbac --value file_perms,quota_ops,byfid_ops,dne_ops ||
+		error "modify rbac for $nm on mds1 failed (2)"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+	       --property child_raise_privileges \
+	       --value trusted ||
+	    error "modify nm.child_raise_privileges for $nm on mds1 failed (1)"
+
+	do_facet mds1 $LCTL nodemap_del $nm ||
+		error "failed to delete dynamic nodemap $nm"
+
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property child_raise_privileges \
+		--value child_raise_privs,trusted,dne_ops ||
+		error "modify raise_privileges for $mgsnm on MGS failed (3)"
+	wait_nm_sync $mgsnm child_raise_privileges '' inactive
+
+	do_facet mds1 $LCTL nodemap_add -d -p $mgsnm $nm ||
+		error "dynamic nodemap on server failed (3)"
+	val=$(do_facet mds1 $LCTL get_param -n nodemap.$nm.id)
+	if [[ -z "$val" || "$val" == "0" ]]; then
+		error "dynamic nodemap wrong id $val (3)"
+	fi
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+	       --property child_raise_privileges \
+	       --value child_raise_privs,trusted,dne_ops,admin ||
+	    error "modify nm.child_raise_privileges for $nm on mds1 failed (2)"
+
+	do_facet mds1 $LCTL get_param -R nodemap.*
+}
+run_test 72c "child_raise_privileges nodemap property"
 
 test_73() {
 	local vaultdir1=$DIR/$tdir/vault1

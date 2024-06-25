@@ -790,6 +790,73 @@ static int nodemap_forbid_encryption_seq_show(struct seq_file *m, void *data)
 }
 
 /**
+ * Reads and prints the raise_privs property for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_raise_privs_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	char *sep = "";
+	int i, rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	if (nodemap->nmf_raise_privs == NODEMAP_RAISE_PRIV_ALL) {
+		for (i = 0; i < ARRAY_SIZE(nodemap_priv_names); i++)
+			seq_printf(m, "%s%s", i == 0 ? "" : ",",
+				   nodemap_priv_names[i].npn_name);
+		sep = ",";
+	} else if (nodemap->nmf_raise_privs == NODEMAP_RAISE_PRIV_NONE) {
+		seq_puts(m, "none");
+	} else {
+		for (i = 0; i < ARRAY_SIZE(nodemap_priv_names); i++) {
+			if (nodemap->nmf_raise_privs &
+			    nodemap_priv_names[i].npn_priv) {
+				seq_printf(m, "%s%s", sep,
+					   nodemap_priv_names[i].npn_name);
+				sep = ",";
+			}
+		}
+	}
+
+	if (!(nodemap->nmf_raise_privs & NODEMAP_RAISE_PRIV_RBAC))
+		goto putref;
+
+	if (nodemap->nmf_rbac_raise == NODEMAP_RBAC_ALL) {
+		for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++) {
+			seq_printf(m, "%s%s", sep,
+				   nodemap_rbac_names[i].nrn_name);
+			sep = ",";
+		}
+	} else if (nodemap->nmf_rbac_raise != NODEMAP_RBAC_NONE) {
+		for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++) {
+			if (nodemap->nmf_rbac_raise &
+			    nodemap_rbac_names[i].nrn_mode) {
+				seq_printf(m, "%s%s", sep,
+					   nodemap_rbac_names[i].nrn_name);
+				sep = ",";
+			}
+		}
+	}
+
+putref:
+	seq_puts(m, "\n");
+	nodemap_putref(nodemap);
+	return 0;
+}
+
+/**
  * Reads and prints the readonly_mount flag for the given nodemap.
  *
  * \param	m		seq file in proc fs
@@ -903,6 +970,7 @@ LDEBUGFS_SEQ_FOPS_RO(nodemap_offset);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_rbac);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_audit_mode);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_forbid_encryption);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_raise_privs);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_readonly_mount);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_deny_mount);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_parent);
@@ -973,6 +1041,10 @@ static struct ldebugfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "parent",
 		.fops		= &nodemap_parent_fops,
+	},
+	{
+		.name		= "child_raise_privileges",
+		.fops		= &nodemap_raise_privs_fops,
 	},
 	{
 		.name		= "ranges",
@@ -1048,6 +1120,10 @@ static struct ldebugfs_vars lprocfs_default_nodemap_vars[] = {
 	{
 		.name		= "map_mode",
 		.fops		= &nodemap_map_mode_fops,
+	},
+	{
+		.name		= "child_raise_privileges",
+		.fops		= &nodemap_raise_privs_fops,
 	},
 	{
 		.name		= "readonly_mount",

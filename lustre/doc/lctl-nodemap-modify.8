@@ -1,4 +1,4 @@
-.TH LCTL-NODEMAP_MODIFY 8 2024-08-14 Lustre "Lustre Configuration Utilities"
+.TH LCTL-NODEMAP_MODIFY 8 2025-02-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-nodemap_modify \- modify a nodemap property
 .SH SYNOPSIS
@@ -85,6 +85,30 @@ map UIDs, gid to map GIDs, both to map UIDs and GIDs, and projid to map PROJIDs.
 Defaults to 0, which means encryption is allowed.
 Set to 1 to prevent clients from using encryption.
 .TP
+.B child_raise_privileges
+Defaults to none, allowing child nodemaps to only lower privileges established
+by parent nodemap. Other possible values (multiple can be specified, comma
+separated) are the nodemap properties names that support privilege raise:
+.br
+- admin
+.br
+- trusted
+.br
+- deny_unknown
+.br
+- readonly_mount
+.br
+- forbid_encryption
+.br
+- child_raise_privs
+.br
+It is also possible to specify any roles accepted by the
+.B rbac
+property (see below).
+.br
+Any privilege not explicitly specified cannot be raised. To allow all privileges
+to be raised, use 'all' value.
+.TP
 .B readonly_mount
 Defaults to 0, which lets clients mount in read-write mode. If set to 1,
 clients are forced to a read-only mount if not specified explicitly.
@@ -133,6 +157,7 @@ and
 .BI --value " VALUE"
 is invalid.
 .SH EXAMPLES
+Commands illustrating how to modify nodemap properties:
 .EX
 .B # lctl nodemap_modify --name remotesite --property trusted --value 1
 .B # lctl nodemap_modify --name remotesite --property admin --value 1

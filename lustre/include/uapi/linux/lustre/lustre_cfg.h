@@ -127,6 +127,7 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_READONLY_MOUNT	= 0x00ce05e, /**< read-only mount */
 	LCFG_NODEMAP_RBAC	  = 0x00ce05f, /**< rbac */
 	LCFG_NODEMAP_DENY_MOUNT	  = 0x00ce060, /**< deny mount */
+	LCFG_NODEMAP_RAISE_PRIVS	= 0x00ce061, /**< sub-nm raise privs */
 };
 
 struct lustre_cfg_bufs {

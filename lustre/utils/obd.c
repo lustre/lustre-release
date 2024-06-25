@@ -4705,6 +4705,8 @@ int jt_nodemap_modify(int argc, char **argv)
 		cmd = LCFG_NODEMAP_AUDIT_MODE;
 	} else if (strcmp("forbid_encryption", param) == 0) {
 		cmd = LCFG_NODEMAP_FORBID_ENCRYPT;
+	} else if (strcmp("child_raise_privileges", param) == 0) {
+		cmd = LCFG_NODEMAP_RAISE_PRIVS;
 	} else if (strcmp("readonly_mount", param) == 0) {
 		cmd = LCFG_NODEMAP_READONLY_MOUNT;
 	} else if (strcmp("rbac", param) == 0) {

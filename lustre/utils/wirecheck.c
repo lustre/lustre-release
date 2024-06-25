@@ -3016,9 +3016,9 @@ static void check_nodemap_cluster_roles_rec(void)
 	BLANK_LINE();
 	CHECK_STRUCT(nodemap_cluster_roles_rec);
 	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_roles);
-	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_padding1);
-	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_padding2);
-	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_padding3);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_privs);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_roles_raise);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_unused1);
 }
 
 static void check_nodemap_fileset_rec(void)
@@ -3100,6 +3100,16 @@ static void check_nodemap_key(void)
 	CHECK_VALUE_X(NODEMAP_RBAC_LOCAL_ADMIN);
 	CHECK_VALUE_X(NODEMAP_RBAC_NONE);
 	CHECK_VALUE_X(NODEMAP_RBAC_ALL);
+
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_RAISE);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_ADMIN);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_TRUSTED);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_DENY_UNKN);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_RO);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_RBAC);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_FORBID_ENC);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_NONE);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_ALL);
 }
 
 static void check_scrub_file(void)
@@ -3361,6 +3371,7 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_NODEMAP_READONLY_MOUNT);
 	CHECK_VALUE_X(LCFG_NODEMAP_RBAC);
 	CHECK_VALUE_X(LCFG_NODEMAP_DENY_MOUNT);
+	CHECK_VALUE_X(LCFG_NODEMAP_RAISE_PRIVS);
 	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE(PORTALS_CFG_TYPE);

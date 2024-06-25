@@ -102,9 +102,9 @@ static void nodemap_cluster_roles_rec_init(union nodemap_rec *nr,
 	struct nodemap_cluster_roles_rec *ncrr = &nr->ncrr;
 
 	ncrr->ncrr_roles = cpu_to_le64(nodemap->nmf_rbac);
-	ncrr->ncrr_padding1 = 0;
-	ncrr->ncrr_padding2 = 0;
-	ncrr->ncrr_padding3 = 0;
+	ncrr->ncrr_privs = cpu_to_le64(nodemap->nmf_raise_privs);
+	ncrr->ncrr_roles_raise = cpu_to_le64(nodemap->nmf_rbac_raise);
+	ncrr->ncrr_unused1 = 0;
 }
 
 static void nodemap_offset_rec_init(union nodemap_rec *nr,
@@ -1407,8 +1407,12 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	nodemap->nmf_deny_mount = flags2 & NM_FL2_DENY_MOUNT;
 	nodemap->nmf_fileset_use_iam = flags2 & NM_FL2_FILESET_USE_IAM;
 
-	/* by default, and in the absence of cluster_roles, grant all roles */
+	/* by default, and in the absence of cluster_roles, grant all rbac roles
+	 * and prevent raising privileges
+	 */
 	nodemap->nmf_rbac = NODEMAP_RBAC_ALL;
+	nodemap->nmf_raise_privs = NODEMAP_RAISE_PRIV_NONE;
+	nodemap->nmf_rbac_raise = NODEMAP_RBAC_NONE;
 
 	/*
 	 * If the use IAM flag has not been set on the nodemap, a llog-based
@@ -1456,6 +1460,8 @@ static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
 					const union nodemap_rec *rec)
 {
 	nodemap->nmf_rbac = le64_to_cpu(rec->ncrr.ncrr_roles);
+	nodemap->nmf_raise_privs = le64_to_cpu(rec->ncrr.ncrr_privs);
+	nodemap->nmf_rbac_raise = le64_to_cpu(rec->ncrr.ncrr_roles_raise);
 
 	return 0;
 }
@@ -1909,9 +1915,11 @@ nodemap_save_config_cache(const struct lu_env *env,
 		}
 
 		/* only insert NODEMAP_CLUSTER_ROLES idx in saved config cache
-		 * if nmf_rbac is not default value NODEMAP_RBAC_ALL
+		 * if rbac or raise privs are not the default value
 		 */
-		if (nodemap->nmf_rbac != NODEMAP_RBAC_ALL) {
+		if (nodemap->nmf_rbac != NODEMAP_RBAC_ALL ||
+		    nodemap->nmf_raise_privs != NODEMAP_RAISE_PRIV_NONE ||
+		    nodemap->nmf_rbac_raise != NODEMAP_RBAC_NONE) {
 			nodemap_cluster_key_init(&nk, nodemap->nm_id,
 						 NODEMAP_CLUSTER_ROLES);
 			nodemap_cluster_roles_rec_init(&nr, nodemap);

@@ -44,6 +44,19 @@ struct nodemap_pde {
 	struct list_head	 npe_list_member;
 };
 
+static const struct nodemap_priv_name {
+	enum nodemap_raise_privs	npn_priv;
+	const char		       *npn_name;
+} nodemap_priv_names[] = {
+	{ NODEMAP_RAISE_PRIV_RAISE,		"child_raise_privs"	},
+	{ NODEMAP_RAISE_PRIV_ADMIN,		"admin"			},
+	{ NODEMAP_RAISE_PRIV_TRUSTED,		"trusted"		},
+	{ NODEMAP_RAISE_PRIV_DENY_UNKN,		"deny_unknown"		},
+	{ NODEMAP_RAISE_PRIV_RO,		"readonly_mount"	},
+	/* NODEMAP_RAISE_PRIV_RBAC uses the rbac roles directly */
+	{ NODEMAP_RAISE_PRIV_FORBID_ENC,	"forbid_encryption"	},
+};
+
 /** The nodemap id 0 will be the default nodemap. It will have a configuration
  * set by the MGS, but no ranges will be allowed as all NIDs that do not map
  * will be added to the default nodemap
@@ -65,6 +78,10 @@ struct lu_nodemap {
 	enum nodemap_mapping_modes nmf_map_mode;
 	/* bitmap for rbac, enum nodemap_rbac_roles */
 	enum nodemap_rbac_roles	 nmf_rbac;
+	/* bitmap for privilege raise, enum nodemap_raise_privs */
+	enum nodemap_raise_privs nmf_raise_privs;
+	/* bitmap for rbac raise, enum nodemap_rbac_roles */
+	enum nodemap_rbac_roles nmf_rbac_raise;
 	/* unique ID set by MGS */
 	unsigned int		 nm_id;
 	/* nodemap ref counter */
@@ -167,6 +184,8 @@ int nodemap_set_squash_gid(const char *name, gid_t gid);
 int nodemap_set_squash_projid(const char *name, projid_t projid);
 int nodemap_set_audit_mode(const char *name, bool enable_audit);
 int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption);
+int nodemap_set_raise_privs(const char *name, enum nodemap_raise_privs privs,
+			    enum nodemap_rbac_roles rbac_raise);
 int nodemap_set_readonly_mount(const char *name, bool readonly_mount);
 int nodemap_set_deny_mount(const char *name, bool deny_mount);
 bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id);

@@ -317,9 +317,9 @@ struct nodemap_global_rec {
 
 struct nodemap_cluster_roles_rec {
 	__u64 ncrr_roles;		/* enum nodemap_rbac_roles */
-	__u64 ncrr_padding1;		/* zeroed since 2.16 (always) */
-	__u64 ncrr_padding2;		/* zeroed since 2.16 (always) */
-	__u64 ncrr_padding3;		/* zeroed since 2.16 (always) */
+	__u64 ncrr_privs;		/* enum nodemap_raise_privs */
+	__u64 ncrr_roles_raise;		/* enum nodemap_rbac_roles */
+	__u64 ncrr_unused1;		/* zeroed since 2.16 (always) */
 };
 
 struct nodemap_offset_rec {
