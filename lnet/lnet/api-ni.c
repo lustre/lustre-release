@@ -2925,7 +2925,7 @@ nla_extract_val(struct nlattr **attr, int *rem,
 	RETURN(rc);
 }
 
-int
+static int
 nla_strnid(struct nlattr **attr, struct lnet_nid *nid, int *rem,
 	   struct netlink_ext_ack *extack)
 {
@@ -9294,7 +9294,7 @@ lnet_fault_dump_ctx(struct netlink_callback *cb)
 	return (struct lnet_genl_fault_rule_list *)cb->args[0];
 }
 
-int lnet_fault_show_done(struct netlink_callback *cb)
+static int lnet_fault_show_done(struct netlink_callback *cb)
 {
 	struct lnet_genl_fault_rule_list *rlist = lnet_fault_dump_ctx(cb);
 
@@ -9308,7 +9308,7 @@ int lnet_fault_show_done(struct netlink_callback *cb)
 	RETURN(0);
 }
 
-int lnet_fault_show_start(struct netlink_callback *cb)
+static int lnet_fault_show_start(struct netlink_callback *cb)
 {
 	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
 	struct netlink_ext_ack *extack = NULL;
@@ -9456,7 +9456,8 @@ static const struct ln_key_list fault_attr_list = {
 	},
 };
 
-int lnet_fault_show_dump(struct sk_buff *msg, struct netlink_callback *cb)
+static int lnet_fault_show_dump(struct sk_buff *msg,
+				struct netlink_callback *cb)
 {
 	struct lnet_genl_fault_rule_list *rlist = lnet_fault_dump_ctx(cb);
 #ifdef HAVE_NL_PARSE_WITH_EXT_ACK

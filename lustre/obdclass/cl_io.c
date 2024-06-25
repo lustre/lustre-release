@@ -1465,7 +1465,7 @@ EXPORT_SYMBOL(ll_release_user_pages);
 #endif
 
 /* copy IO data to/from internal buffer and userspace iovec */
-ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
+static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 {
 	struct iov_iter *iter = &sdio->csd_iter;
 	struct ll_dio_pages *pvec = &sdio->csd_dio_pages;
@@ -1615,7 +1615,7 @@ struct dio_user_copy_data {
 	ssize_t ducd_result;
 };
 
-int ll_dio_user_copy_helper(void *data)
+static int ll_dio_user_copy_helper(void *data)
 {
 	struct dio_user_copy_data *ducd = data;
 	struct cl_sub_dio *sdio = ducd->ducd_sdio;
