@@ -111,12 +111,17 @@ do {									\
 # define LINVRNT(exp) ((void)sizeof!!(exp))
 #endif
 
-void __noreturn lbug_with_loc(struct libcfs_debug_msg_data *msg);
+void
+#ifdef HAVE_LBUG_WITH_LOC_IN_OBJTOOL
+__noreturn
+#endif
+lbug_with_loc(struct libcfs_debug_msg_data *msg);
 
 #define LBUG()                                                          \
 do {                                                                    \
-        LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);             \
-        lbug_with_loc(&msgdata);                                        \
+	LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);             \
+	lbug_with_loc(&msgdata);                                        \
+	break;                                                          \
 } while(0)
 
 /*

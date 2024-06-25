@@ -483,6 +483,7 @@ int lustre_shrink_msg(struct lustre_msg *msg, int segment,
 		return lustre_shrink_msg_v2(msg, segment, newlen, move_data);
 	default:
 		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+		return -EINVAL;
 	}
 }
 EXPORT_SYMBOL(lustre_shrink_msg);
@@ -534,6 +535,7 @@ int lustre_grow_msg(struct lustre_msg *msg, int segment, unsigned int newlen)
 		return lustre_grow_msg_v2(msg, segment, newlen);
 	default:
 		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+		return -EINVAL;
 	}
 }
 EXPORT_SYMBOL(lustre_grow_msg);

@@ -490,6 +490,23 @@ Kernel module loading support is highly recommended.
 	])
 ])
 
+#
+# LC_LBUG_WITH_LOC_IN_OBJTOOL
+#
+# Linux v6.4-rc2-10-g34245659debd
+# objtool: Remove superfluous global_noreturns entries
+#
+AC_DEFUN([LC_LBUG_WITH_LOC_IN_OBJTOOL], [
+	AC_MSG_CHECKING([if lbug_with_loc is in objtool global_noreturns array])
+	AS_IF([grep -q lbug_with_loc $LINUX_OBJ/tools/objtool/objtool],[
+		AC_DEFINE(HAVE_LBUG_WITH_LOC_IN_OBJTOOL, 1,
+			  [lbug_with_loc is in objtool global_noreturns array])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+]) # LC_LBUG_WITH_LOC_IN_OBJTOOL
+
 AC_DEFUN([LB_PROG_LINUX_SRC], [
 	LB2_SRC_CHECK_CONFIG([MODULES])
 	LB2_SRC_CHECK_CONFIG([MODVERSIONS])
@@ -512,6 +529,8 @@ LB_LINUX_PATH
 LB_LINUX_SYMVERFILE
 # 2.6.28
 LC_MODULE_LOADING
+# 6.5
+LC_LBUG_WITH_LOC_IN_OBJTOOL
 ])
 
 #

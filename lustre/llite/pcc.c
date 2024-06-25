@@ -451,6 +451,7 @@ pcc_get_opcode_delim(enum pcc_field_op opc)
 		return PCC_EXPRESSION_DELIM_GT;
 	default:
 		LBUG();
+		return NULL;
 	}
 }
 

@@ -2433,6 +2433,7 @@ static int osp_object_print(const struct lu_env *env, void *cookie,
 static int osp_object_invariant(const struct lu_object *o)
 {
 	LBUG();
+	return -EINVAL;
 }
 
 const struct lu_object_operations osp_lu_obj_ops = {
