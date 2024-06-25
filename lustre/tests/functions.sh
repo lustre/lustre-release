@@ -792,9 +792,10 @@ run_cascading_rw() {
 run_write_append_truncate() {
 	[ "$NFSCLIENT" ] && skip "skipped for NFSCLIENT mode"
 	# location is lustre/tests dir
-	if ! which write_append_truncate > /dev/null 2>&1 ; then
+	WRITE_APPEND_TRUNCATE=${WRITE_APPEND_TRUNCATE:-$(which \
+		write_append_truncate 2> /dev/null || true)}
+	[[ -n "$WRITE_APPEND_TRUNCATE" ]] ||
 		skip_env "write_append_truncate not found"
-	fi
 
 	# threads per client
 	write_THREADS=${write_THREADS:-8}
@@ -814,7 +815,7 @@ run_write_append_truncate() {
 
 	chmod 0777 $testdir
 
-	local cmd="write_append_truncate -n $write_REP $file"
+	local cmd="$WRITE_APPEND_TRUNCATE -n $write_REP $file"
 
 	echo "+ $cmd"
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
