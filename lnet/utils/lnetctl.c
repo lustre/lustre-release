@@ -5081,9 +5081,10 @@ report_reply_error:
 	return rc2 ? rc2 : rc;
 }
 
-static int yaml_lnet_ping(char *group, int timeout, char *src_nidstr,
+static int yaml_lnet_ping(char *group, int timeout, struct lnet_nid *src_nid,
 			  int start, int end, char **nids, int flags)
 {
+	struct nid_node head, *entry;
 	struct nl_sock *sk = NULL;
 	const char *msg = NULL;
 	yaml_emitter_t output;
@@ -5151,8 +5152,10 @@ static int yaml_lnet_ping(char *group, int timeout, char *src_nidstr,
 	if (rc == 0)
 		goto emitter_error;
 
-	if (timeout != 1000 || src_nidstr) {
-		if (src_nidstr) {
+	if (timeout != 1000 || (src_nid && nid_addr_is_set(src_nid))) {
+		if (src_nid) {
+			char *src_nidstr = libcfs_nidstr(src_nid);
+
 			yaml_scalar_event_initialize(&event, NULL,
 						     (yaml_char_t *)YAML_STR_TAG,
 						     (yaml_char_t *)"source",
@@ -5212,17 +5215,33 @@ static int yaml_lnet_ping(char *group, int timeout, char *src_nidstr,
 	if (rc == 0)
 		goto emitter_error;
 
+	NL_INIT_LIST_HEAD(&head.children);
+	nl_init_list_head(&head.list);
 	for (i = start; i < end; i++) {
+		rc = lustre_lnet_parse_nid_range(&head, nids[i], &msg);
+		if (rc < 0) {
+			lustre_lnet_free_list(&head);
+			yaml_emitter_delete(&output);
+			errno = rc;
+			rc = 0;
+			goto free_reply;
+		}
+	}
+
+	if (nl_list_empty(&head.children))
+		goto skip_nids;
+
+	nl_list_for_each_entry(entry, &head.children, list) {
 		yaml_scalar_event_initialize(&event, NULL,
 					     (yaml_char_t *)YAML_STR_TAG,
-					     (yaml_char_t *)nids[i],
-					     strlen(nids[i]), 1, 0,
+					     (yaml_char_t *)entry->nidstr,
+					     strlen(entry->nidstr), 1, 0,
 					     YAML_PLAIN_SCALAR_STYLE);
 		rc = yaml_emitter_emit(&output, &event);
 		if (rc == 0)
 			goto emitter_error;
 	}
-
+skip_nids:
 	yaml_sequence_end_event_initialize(&event);
 	rc = yaml_emitter_emit(&output, &event);
 	if (rc == 0)
@@ -5270,6 +5289,7 @@ static int jt_ping(int argc, char **argv)
 {
 	struct cYAML *err_rc = NULL;
 	struct cYAML *show_rc = NULL;
+	struct lnet_nid src = { };
 	int timeout = 1000;
 	int rc = 0, opt;
 	char *src_nidstr = NULL;
@@ -5286,6 +5306,7 @@ static int jt_ping(int argc, char **argv)
 		switch (opt) {
 		case 's':
 			src_nidstr = optarg;
+			rc = libcfs_strnid(&src, src_nidstr);
 			break;
 		case 't':
 			timeout = 1000 * atol(optarg);
@@ -5300,9 +5321,11 @@ static int jt_ping(int argc, char **argv)
 			return 0;
 		}
 	}
+	if (rc < 0)
+		return rc;
 
-	rc = yaml_lnet_ping("ping", timeout, src_nidstr, optind, argc,
-			    argv, NLM_F_DUMP);
+	rc = yaml_lnet_ping("ping", timeout, &src, optind, argc, argv,
+			    NLM_F_DUMP);
 	if (rc <= 0) {
 		if (rc != -EOPNOTSUPP)
 			return rc;

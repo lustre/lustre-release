@@ -4164,6 +4164,27 @@ EOF
 }
 run_test 304 "Check locked primary peer nid consolidation"
 
+test_305() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	local nid=$($LCTL list_nids)
+
+	do_lnetctl ping ${nid} ||
+		error "pinging self failed $?"
+
+	[[ "${nid%@*}" == "$(hostname -i | awk '{print $1}')" ]] ||
+		skip "IP $(hostname -i) isn't NID $nid"
+
+	nid="$(hostname -s)@${NETTYPE}"
+	do_lnetctl ping $nid ||
+		error "pinging own hostname $nid failed $?"
+}
+run_test 305 "Resolve hostname before lnetctl ping"
+
 check_parameter() {
 	local para=$1
 	local value=$2

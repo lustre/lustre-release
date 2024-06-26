@@ -2148,7 +2148,9 @@ int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
 
 		if (!tmp && !tmp2) {
 			char *end = strchr(nidstr, ',');
+			char orig[LNET_MAX_STR_LEN];
 			struct nid_node *item;
+			struct lnet_nid NID;
 			int count;
 
 			item = calloc(1, sizeof(struct nid_node));
@@ -2159,8 +2161,20 @@ int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
 			}
 
 			count = end ? end - nidstr : strlen(nidstr);
-			snprintf(item->nidstr, sizeof(item->nidstr),
-				 "%s@%.*s", nid, count, nidstr);
+			snprintf(orig, sizeof(orig), "%s@%.*s", nid, count,
+				 nidstr);
+
+			/* Allow hostname version of the NID. We have to
+			 * translate them to address type NID.
+			 */
+			rc = libcfs_strnid(&NID, orig);
+			if (rc < 0) {
+				*errmsg = "Unable to parse nidlist: invalid NID in nidstr";
+				goto err;
+			}
+
+			libcfs_nidstr_r(&NID, item->nidstr,
+					sizeof(item->nidstr));
 			nl_init_list_head(&item->list);
 			nl_list_add_tail(&item->list, &head->children);
 		} else {
