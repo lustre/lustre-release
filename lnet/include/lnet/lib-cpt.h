@@ -31,19 +31,25 @@
  *
  *   . User can also specify CPU partitions by string pattern
  *
- *     Examples: cpu_partitions="0[0,1], 1[2,3]"
- *		 cpu_partitions="N 0[0-3], 1[4-8]"
+ *     Examples: cpu_pattern="0[0,1] 1[2,3]"
+ *		 cpu_pattern="N 0[0-3] 1[4-8]"
+ *		 cpu_pattern="C[0-3]"
  *
- *     The first character "N" means following numbers are numa ID
+ *     The first character "N" means following numbers are NUMA ID.
+ *
+ *     The first character "C" means the relative cores are excluded from each
+ *     NUMA node. This allows reserving cores on each node for non-Lustre tasks,
+ *     such as HA/monitors.
  *
  *   . NUMA allocators, CPU affinity threads are built over CPU partitions,
  *     instead of HW CPUs or HW nodes.
  *
  *   . By default, Lustre modules should refer to the global cfs_cpt_tab,
  *     instead of accessing HW CPUs directly, so concurrency of Lustre can be
- *     configured by cpu_npartitions of the global cfs_cpt_tab
+ *     configured by cpu_npartitions of the global cfs_cpt_tab. This is
+ *     equivalent to specifying cpu_pattern="N"
  *
- *   . If cpu_npartitions=1(all CPUs in one pool), lustre should work the
+ *   . If cpu_npartitions=1 (all CPUs in one pool), Lustre should work the
  *     same way as 2.2 or earlier versions
  *
  * Author: liang@whamcloud.com
@@ -127,7 +133,7 @@ unsigned int cfs_cpt_distance(struct cfs_cpt_table *cptab, int cpt1, int cpt2);
 int cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt);
 /**
  * add \a cpu to CPU partition @cpt of \a cptab, return 1 for success,
- * otherwise 0 is returned
+ * otherwise return 0
  */
 int cfs_cpt_set_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu);
 /**
@@ -154,6 +160,19 @@ int cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node);
  * remove all cpus in NUMA node \a node from CPU partition \a cpt
  */
 void cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node);
+/**
+ * add all cpus in NUMA node within include range \a node to
+ * CPU partition \a return 1 if succesfully set selected node
+ * cores, otherwise return 0
+ */
+int cfs_cpt_set_node_core(struct cfs_cpt_table *cptab, int cpt,
+			  int include_lo, int include_hi);
+/**
+ * remove all cpus in NUMA node within exclude range \a node to
+ * CPU partition \a cpt
+ */
+void cfs_cpt_unset_node_core(struct cfs_cpt_table *cptab, int cpt,
+			  int exclude_lo, int exclude_hi);
 /**
  * add all cpus in node mask \a mask to CPU partition \a cpt
  * return 1 if successfully set all CPUs, otherwise return 0

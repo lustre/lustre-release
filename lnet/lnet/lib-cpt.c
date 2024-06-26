@@ -73,13 +73,20 @@ MODULE_PARM_DESC(cpu_npartitions, "# of CPU partitions");
 /**
  * modparam for setting CPU partitions patterns:
  *
- * i.e: "0[0,1,2,3] 1[4,5,6,7]", number before bracket is CPU partition ID,
+ * i.e:	"0[0-3] 1[4,5,7]", number before bracket is CPU partition ID,
  *	number in bracket is processor ID (core or HT)
  *
- * i.e: "N 0[0,1] 1[2,3]" the first character 'N' means numbers in bracket
+ * i.e:	"N 0[0,1] 1[2,3]" the first character 'N' means numbers in bracket
  *	are NUMA node ID, number before bracket is CPU partition ID.
  *
- * i.e: "N", shortcut expression to create CPT from NUMA & CPU topology
+ * i.e:	"N C[0-1]" or "C[0-1], the character 'C' means numbers in bracket are
+ *	relative core numbers to exclude for each NUMA node, all other cores
+ *	are included. As per the example, the first two cores of each NUMA node
+ *	will be excluded, all other cores on all nodes are included.
+ *
+ * i.e:	"N", shortcut expression to create CPT from NUMA & CPU topology
+ *	This is the default behavior if the cpu_pattern and cpu_npartitions
+ *	are not specified.
  *
  * NB: If user specified cpu_pattern, cpu_npartitions will be ignored
  */
@@ -303,7 +310,8 @@ EXPORT_SYMBOL(cfs_cpt_weight);
 
 int cfs_cpt_online(struct cfs_cpt_table *cptab, int cpt)
 {
-	LASSERT(cpt == CFS_CPT_ANY || (cpt >= 0 && cpt < cptab->ctb_nparts));
+	LASSERTF(cpt == CFS_CPT_ANY || (cpt >= 0 && cpt < cptab->ctb_nparts),
+		 "cpt=%d, nparts=%d\n", cpt, cptab->ctb_nparts);
 
 	return cpt == CFS_CPT_ANY ?
 	       cpumask_any_and(cptab->ctb_cpumask,
@@ -469,7 +477,8 @@ static void cfs_cpt_del_node(struct cfs_cpt_table *cptab, int cpt, int node)
 
 int cfs_cpt_set_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 {
-	LASSERT(cpt >= 0 && cpt < cptab->ctb_nparts);
+	LASSERTF(cpt >= 0 && cpt < cptab->ctb_nparts, "cpt=%d, nparts=%d\n",
+		 cpt, cptab->ctb_nparts);
 
 	if (cpu < 0 || cpu >= nr_cpu_ids || !cpu_online(cpu)) {
 		CDEBUG(D_INFO, "CPU %d is invalid or it's offline\n", cpu);
@@ -580,8 +589,12 @@ int cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node)
 
 	mask = cpumask_of_node(node);
 
-	for_each_cpu(cpu, mask)
-		cfs_cpt_add_cpu(cptab, cpt, cpu);
+	if (!cpumask_empty(mask))
+		for_each_cpu(cpu, mask) {
+			CDEBUG(D_INFO,
+		       "set_node() cpu=%d cpt=%d\n", cpu, cpt);
+			cfs_cpt_add_cpu(cptab, cpt, cpu);
+		}
 
 	cfs_cpt_add_node(cptab, cpt, node);
 
@@ -602,12 +615,61 @@ void cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node)
 
 	mask = cpumask_of_node(node);
 
-	for_each_cpu(cpu, mask)
-		cfs_cpt_del_cpu(cptab, cpt, cpu);
+	if (!cpumask_empty(mask))
+		for_each_cpu(cpu, mask)
+			cfs_cpt_del_cpu(cptab, cpt, cpu);
 
 	cfs_cpt_del_node(cptab, cpt, node);
 }
 EXPORT_SYMBOL(cfs_cpt_unset_node);
+
+int cfs_cpt_set_node_core(struct cfs_cpt_table *cptab, int cpt,
+			     int include_lo, int include_hi)
+{
+	const cpumask_t *mask;
+	int node, cpu;
+	int offset = -1;
+
+	for_each_online_node(node) {
+		mask = cpumask_of_node(node);
+		if (cpumask_empty(mask))
+			continue;
+
+		for_each_cpu(cpu, mask) {
+			if (offset < 0)
+				offset = cpu;
+			if (include_lo + offset <= cpu &&
+			    include_hi + offset >= cpu)
+				cfs_cpt_add_cpu(cptab, cpt, cpu);
+		}
+	}
+
+	return 1;
+}
+EXPORT_SYMBOL(cfs_cpt_set_node_core);
+
+void cfs_cpt_unset_node_core(struct cfs_cpt_table *cptab, int cpt,
+			     int exclude_lo, int exclude_hi)
+{
+	const cpumask_t *mask;
+	int node, cpu;
+	int offset = -1;
+
+	for_each_online_node(node) {
+		mask = cpumask_of_node(node);
+		if (cpumask_empty(mask))
+			continue;
+
+		for_each_cpu(cpu, mask) {
+			if (offset < 0)
+				offset = cpu;
+			if (exclude_lo + offset <= cpu &&
+			    exclude_hi + offset >= cpu)
+				cfs_cpt_del_cpu(cptab, cpt, cpu);
+		}
+	}
+}
+EXPORT_SYMBOL(cfs_cpt_unset_node_core);
 
 int cfs_cpt_set_nodemask(struct cfs_cpt_table *cptab, int cpt,
 			 const nodemask_t *mask)
@@ -931,10 +993,11 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 	char *pattern_dup;
 	char *bracket;
 	char *str;
+	bool exclude = false;
 	int node = 0;
 	int ncpt = 0;
 	int cpt = 0;
-	int high;
+	int high = 0;
 	int rc;
 	int c;
 	int i;
@@ -950,33 +1013,39 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 		str++; /* skip 'N' char */
 		node = 1; /* NUMA pattern */
 		if (*str == '\0') {
-			node = -1;
-			for_each_online_node(i) {
-				if (!cpumask_empty(cpumask_of_node(i)))
-					ncpt++;
-			}
-			if (ncpt == 1) { /* single NUMA node */
+			if (cpu_npartitions) {
 				kfree(pattern_dup);
 				return cfs_cpt_table_create(cpu_npartitions);
 			}
+			node = -1;
+			for_each_online_node(i)
+				if (!cpumask_empty(cpumask_of_node(i)))
+					ncpt++;
 		}
+		str = strim(str);
 	}
 
-	if (!ncpt) { /* scanning bracket which is mark of partition */
+	if (*str == 'c' || *str == 'C') {
+		str++; /* skip 'C' char */
+		exclude = true;
+		node = -1; /* initialize all nodes to be set */
+		for_each_online_node(i)
+			if (!cpumask_empty(cpumask_of_node(i)))
+				ncpt++;
+	} else if (!ncpt) { /* scan for bracket at start of partition */
 		bracket = str;
 		while ((bracket = strchr(bracket, '['))) {
 			bracket++;
 			ncpt++;
 		}
-	}
-
-	if (!ncpt ||
-	    (node && ncpt > num_online_nodes()) ||
-	    (!node && ncpt > num_online_cpus())) {
-		CERROR("Invalid pattern '%s', or too many partitions %d\n",
-		       pattern_dup, ncpt);
-		rc = -EINVAL;
-		goto err_free_str;
+		if ((!ncpt && !exclude) ||
+		    (node && ncpt > num_online_nodes()) ||
+		    (!node && ncpt > num_online_cpus())) {
+			CERROR("Invalid pattern '%s', or too many partitions %d\n",
+			pattern_dup, ncpt);
+			rc = -EINVAL;
+			goto err_free_str;
+		}
 	}
 
 	cptab = cfs_cpt_table_alloc(ncpt);
@@ -996,12 +1065,23 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 				rc = -EINVAL;
 				goto err_free_table;
 			}
+
+			if (exclude) {
+				c = 0;
+				for_each_cpu(rc, cpumask_of_node(i))
+					c++;
+				if (high == 0 || c < high)
+					high = c;
+			}
 		}
-		kfree(pattern_dup);
-		return cptab;
+		if (!exclude) {
+			kfree(pattern_dup);
+			return cptab;
+		}
 	}
 
-	high = node ? nr_node_ids - 1 : nr_cpu_ids - 1;
+	if (!exclude)
+		high = node ? nr_node_ids - 1 : nr_cpu_ids - 1;
 
 	for (str = strim(str), c = 0; /* until break */; c++) {
 		struct cfs_range_expr *range;
@@ -1011,10 +1091,11 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 		bracket = strchr(str, '[');
 		if (!bracket) {
 			if (*str) {
-				CERROR("Invalid pattern '%s'\n", str);
+				CERROR("Invalid pattern '%s'\n",
+				       str);
 				rc = -EINVAL;
 				goto err_free_table;
-			} else if (c != ncpt) {
+			} else if (!exclude && c != ncpt) {
 				CERROR("Expect %d partitions but found %d\n",
 				       ncpt, c);
 				rc = -EINVAL;
@@ -1023,28 +1104,29 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 			break;
 		}
 
-		if (sscanf(str, "%d%n", &cpt, &n) < 1) {
+		if (!exclude && sscanf(str, "%d%n", &cpt, &n) < 1) {
 			CERROR("Invalid CPU pattern '%s'\n", str);
 			rc = -EINVAL;
 			goto err_free_table;
 		}
 
-		if (cpt < 0 || cpt >= ncpt) {
+		if (!exclude && (cpt < 0 || cpt >= ncpt)) {
 			CERROR("Invalid partition id %d, total partitions %d\n",
 			       cpt, ncpt);
 			rc = -EINVAL;
 			goto err_free_table;
 		}
 
-		if (cfs_cpt_weight(cptab, cpt)) {
+		if (!exclude && cfs_cpt_weight(cptab, cpt)) {
 			CERROR("Partition %d has already been set.\n", cpt);
 			rc = -EPERM;
 			goto err_free_table;
 		}
 
-		str = strim(str + n);
-		if (str != bracket) {
-			CERROR("Invalid pattern '%s'\n", str);
+		str = exclude ? bracket : strim(str + n); /* jump to next '[' */
+		if (!exclude && str != bracket) {
+			CERROR("Invalid pattern '%s' does not start with '['\n",
+			       str);
 			rc = -EINVAL;
 			goto err_free_table;
 		}
@@ -1066,12 +1148,29 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 		}
 
 		list_for_each_entry(range, &el->el_exprs, re_link) {
+			if (exclude && node) {
+				for (cpt = 0; cpt < ncpt; cpt++) {
+					cfs_cpt_unset_node_core(cptab, cpt,
+								range->re_lo,
+								range->re_hi);
+					if (!cfs_cpt_online(cptab, cpt)) {
+						CERROR("All cores are excluded on partition %d\n",
+						       cpt);
+						rc = -ENODEV;
+						goto err_free_table;
+					}
+				}
+				continue;
+			}
+
 			for (i = range->re_lo; i <= range->re_hi; i++) {
 				if ((i - range->re_lo) % range->re_stride)
 					continue;
 
-				rc = node ? cfs_cpt_set_node(cptab, cpt, i)
-					  : cfs_cpt_set_cpu(cptab, cpt, i);
+				rc = node ?
+				     cfs_cpt_set_node(cptab, cpt, i)
+				     : cfs_cpt_set_cpu(cptab, cpt, i);
+
 				if (!rc) {
 					cfs_expr_list_free(el);
 					rc = -EINVAL;
@@ -1082,7 +1181,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 
 		cfs_expr_list_free(el);
 
-		if (!cfs_cpt_online(cptab, cpt)) {
+		if (!exclude && !cfs_cpt_online(cptab, cpt)) {
 			CERROR("No online CPU is found on partition %d\n", cpt);
 			rc = -ENODEV;
 			goto err_free_table;

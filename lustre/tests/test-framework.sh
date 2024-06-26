@@ -1021,7 +1021,9 @@ load_lnet() {
 	# system with 2 or 4 cores
 	local saved_opts="$MODOPTS_LIBCFS"
 
-	if [ $ncpus -le 4 ] && [ $ncpus -gt 1 ]; then
+	echo "MODOPTS_LIBCFS=$MODOPTS_LIBCFS"
+	if ! [[ "$MODOPTS_LIBCFS" =~ "cpu_" ]] &&
+	   (( $ncpus <= 4 && $ncpus > 1 )); then
 		# force to enable multiple CPU partitions
 		echo "Force libcfs to create 2 CPU partitions"
 		MODOPTS_LIBCFS="cpu_npartitions=2 $MODOPTS_LIBCFS"

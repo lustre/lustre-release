@@ -11706,6 +11706,7 @@ test_152() {
 	local nostdevname=$(ostdevname $nost)
 
 	setupall
+	stack_trap "reformat_and_config"
 	test_mkdir -i 1 -c1 $DIR/$tdir || error "can't mkdir"
 
 	log "ADD OST$nost"
@@ -11995,6 +11996,175 @@ test_154() {
 		error "e2fsck returned $?"
 }
 run_test 154 "expand .. on rename after MDT backup restore"
+
+cleanup_200() {
+	local modopts=$1
+	stopall
+	$LUSTRE_RMMOD
+	[[ -z $modopts ]] || MODOPTS_LIBCFS=$modopts
+}
+
+test_200a() {
+	cleanup_200
+
+	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
+	local old_modopts=$MODOPTS_LIBCFS
+	stack_trap "cleanup_200 $old_modopts"
+
+	MODOPTS_LIBCFS="cpu_npartitions=$cpus"
+
+	load_modules_local libcfs
+	$LCTL get_param -n cpu_partition_table
+
+	local expected=$(cat /sys/module/libcfs/parameters/cpu_npartitions)
+	local result=$($LCTL get_param -n cpu_partition_table | wc -l)
+
+	(( $result == $expected )) ||
+		error "CPU partitions not $expected, found: $result"
+}
+run_test 200a "check CPU partitions"
+
+test_200b() {
+	cleanup_200
+
+	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
+	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
+	local old_modopts=$MODOPTS_LIBCFS
+	stack_trap "cleanup_200 $old_modopts"
+
+	local pattern="0[$(lscpu | awk '/CPU.s. list:/ {print $NF}')]"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	grep . /sys/module/libcfs/parameters/cpu*
+	$LCTL get_param -n cpu_partition_table
+	local expected=cpus
+	local table=$($LCTL get_param -n cpu_partition_table)
+	# ignore partition num and ':'
+	local actual=$(( $(awk '{print NF; exit}' <<< $table) - 2 ))
+
+	(( expected == actual )) || {
+		echo -e "layout wrong:\n$table"
+		error "partition 0 is missing CPUs from pattern: '$pattern'"
+	}
+
+	(( $(echo $table | wc -l) == 1 )) || {
+		echo -e "layout wrong\n$table"
+		error "layout has too many partitions from pattern: '$pattern'"
+	}
+
+	(( cpus >= 4 )) || skip "need at least 4 cpu cores"
+	cleanup
+
+	pattern="0[1-2]"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	$LCTL get_param -n cpu_partition_table
+	expected="0	: 1 2"
+	table=$($LCTL get_param -n cpu_partition_table)
+
+	[[ $table == $expected ]] ||
+		error "CPU pattern not $expected, found: $table"
+}
+run_test 200b "set CPU pattern using core selection"
+
+test_200c() {
+	cleanup_200
+
+	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
+	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
+
+	local old_modopts=$MODOPTS_LIBCFS
+	stack_trap "cleanup_200 $old_modopts"
+
+	local pattern="N"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	grep . /sys/module/libcfs/parameters/cpu*
+	$LCTL get_param -n cpu_partition_table
+	local expected=$nodes
+	local table=$($LCTL get_param -n cpu_partition_table)
+	local actual=$(echo $table | wc -l)
+
+	(( actual == expected )) ||
+		error "CPU partitions not $expected, found: $actual"
+
+	cleanup
+
+	pattern="0[$(lscpu | awk '/^NUMA node0 CPU.s.:/ {print $NF}')]"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	expected=$($LCTL get_param -n cpu_partition_table)
+
+	cleanup
+
+	pattern="N 0[0]"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	$LCTL get_param -n cpu_partition_table
+	local table=$($LCTL get_param -n cpu_partition_table)
+
+	[[ $table == $expected ]] ||
+		error "CPU pattern not $expected, found: $table"
+}
+run_test 200c "set CPU pattern using NUMA node layout"
+
+test_200e() {
+	cleanup_200
+
+	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
+	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
+
+	local old_modopts=$MODOPTS_LIBCFS
+	stack_trap "cleanup_200 $old_modopts"
+
+	pattern="N"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	echo "full_table:"
+	$LCTL get_param -n cpu_partition_table
+	local full_table=$($LCTL get_param -n cpu_partition_table)
+	(( $(awk '/0.:/ {print NF - 3; exit}' <<< $full_table) > 0 )) ||
+		skip "need at least 2 cores in each CPT to exclude one"
+
+	cleanup
+
+	pattern="N C[0]"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	echo "table:"
+	grep . /sys/module/libcfs/parameters/cpu*
+	$LCTL get_param -n cpu_partition_table
+	table=$($LCTL get_param -n cpu_partition_table)
+
+	local expected
+	local actual
+	local excluded
+	local partition
+
+	for (( i = 0; i < nodes; i++ )); do
+		expected=$(awk '/'$i'.:/ {print NF - 3; exit}' <<< $full_table)
+		actual=$(awk '/'$i'.:/ {print NF - 2; exit}' <<< $table)
+
+		(( actual == expected )) ||
+			error "CPU count not $expected, found: $actual"
+
+		excluded=$(awk '/'$i'.:/ {print $3; exit}' <<< $full_table)
+		partition=$(awk '/'$i'.:/ {print $3; exit}' <<< $table)
+
+		! [[ "$partition" =~ "$excluded" ]] || {
+			echo -e "layout wrong:\n$table"
+			error "excluded the wrong CPU with pattern: $pattern"
+		}
+	done
+}
+run_test 200e "set CPU pattern using relative core exclusion"
 
 #
 # (This was sanity/802a)
