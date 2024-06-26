@@ -2611,7 +2611,9 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 
 		CDEBUG(D_CACHE, "requesting %d bytes grant\n", grants);
 		spin_lock(&cli->cl_loi_list_lock);
-		if (osc_reserve_grant(cli, grants) == 0) {
+		if (osc_reserve_grant(cli, grants) == 0 &&
+		    cli->cl_dirty_pages + page_count <
+						    cli->cl_dirty_max_pages) {
 			list_for_each_entry(oap, list, oap_pending_item) {
 				osc_consume_write_grant(cli,
 							&oap->oap_brw_page);
@@ -2622,12 +2624,12 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 		} else {
 			/* We cannot report ENOSPC correctly if we do parallel
 			 * DIO (async RPC submission), so turn off parallel dio
-			 * if there is not sufficient grant available.  This
-			 * makes individual RPCs synchronous.
+			 * if there is not sufficient grant or dirty pages
+			 * available. This makes individual RPCs synchronous.
 			 */
 			io->ci_parallel_dio = false;
 			CDEBUG(D_CACHE,
-			"not enough grant available, switching to sync for this i/o\n");
+			"not enough grant or dirty pages available, switching to sync for this i/o\n");
 		}
 		spin_unlock(&cli->cl_loi_list_lock);
 		osc_update_next_shrink(cli);
