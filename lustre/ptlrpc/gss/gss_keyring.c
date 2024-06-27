@@ -103,9 +103,9 @@ static inline void keyring_upcall_unlock(struct gss_sec_keyring *gsec_kr)
 #endif
 }
 
-static inline void key_revoke_locked(struct key *key)
+static inline void key_invalidate_locked(struct key *key)
 {
-        set_bit(KEY_FLAG_REVOKED, &key->flags);
+	set_bit(KEY_FLAG_INVALIDATED, &key->flags);
 }
 
 static void ctx_upcall_timeout_kr(cfs_timer_cb_arg_t data)
@@ -118,7 +118,7 @@ static void ctx_upcall_timeout_kr(cfs_timer_cb_arg_t data)
 
 	if (key)
 		CDEBUG(D_SEC,
-		       "%s: GSS context (%p) negotiation timeout, revoking key (%p)\n",
+		       "%s: GSS context (%p) negotiation timeout, invalidating key (%p)\n",
 		       imp->imp_obd->obd_name, ctx, key);
 	else
 		CDEBUG(D_SEC,
@@ -127,7 +127,7 @@ static void ctx_upcall_timeout_kr(cfs_timer_cb_arg_t data)
 
 	cli_ctx_expire(ctx);
 	if (key)
-		key_revoke_locked(key);
+		key_invalidate_locked(key);
 }
 
 static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, time64_t timeout)
@@ -364,16 +364,17 @@ static void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
  */
 static void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
-	/* give up on revoked key, someone else already took care of it */
-	if (test_bit(KEY_FLAG_REVOKED, &key->flags)) {
-		CDEBUG(D_SEC, "key %08x already revoked\n", key->serial);
+	/* give up on invalidated or empty key,
+	 * someone else already took care of it
+	 */
+	if (test_bit(KEY_FLAG_INVALIDATED, &key->flags) ||
+	    key_get_payload(key, 0) != ctx) {
+		CDEBUG(D_SEC, "key %08x already handled\n", key->serial);
 		return;
 	}
 
-	LASSERT(key_get_payload(key, 0) == ctx);
-
-	/* must revoke the key, or others may treat it as newly created */
-	key_revoke_locked(key);
+	/* must invalidate the key, or others may find it during lookup */
+	key_invalidate_locked(key);
 	request_key_unlink(key);
 
 	key_set_payload(key, 0, NULL);
@@ -1067,12 +1068,9 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 			CDEBUG(D_SEC, "installed key %p <-> ctx %p (sec %p)\n",
 			       key, ctx, sec);
 		} else {
-			/* we'd prefer to call key_revoke(), but we more like
-			 * to revoke it within this key->sem locked period.
-			 */
-			CDEBUG(D_SEC, "revoking key %08x (%p)\n",
+			CDEBUG(D_SEC, "invalidating key %08x (%p)\n",
 			       key->serial, key);
-			key_revoke_locked(key);
+			key_invalidate_locked(key);
 		}
 
 		create_new = 1;
@@ -1135,9 +1133,9 @@ void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
 		kill_key_locked(key);
 
 		/* kill_key_locked() should usually revoke the key, but we
-		 * revoke it again to make sure, e.g. some case the key may
-		 * not well coupled with a context. */
-		key_revoke_locked(key);
+		 * invalidate it as well to completely get rid of it.
+		 */
+		key_invalidate_locked(key);
 
 		up_write(&key->sem);
 		key_put(key);
@@ -1676,22 +1674,20 @@ out:
 	 * opinions here. */
 	if (rc == 0) {
 		gss_cli_ctx_uptodate(gctx);
-		/* The companion key for root ctx can now be unbound,
-		 * if it is still enlisted and up-to-date.
+		/* In case of success, only the companion key for root ctx can
+		 * be unbound. User keys are required to be able to retrieve
+		 * the associated gss context.
 		 */
-		if (ctx->cc_vcred.vc_uid == 0 &&
-		    test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) &&
-		    test_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags))
+		if (ctx->cc_vcred.vc_uid == 0)
 			unbind_key_ctx(key, ctx);
 	} else {
-		/* this will also revoke the key. has to be done before
-		 * wakeup waiters otherwise they can find the stale key */
-		kill_key_locked(key);
-
-		cli_ctx_expire(ctx);
-
+		/* In case of failure, unbind the companion key for all contexts
+		 * i.e root and regular users. It will also invalidate the key.
+		 */
+		unbind_key_ctx(key, ctx);
 		if (rc != -ERESTART)
 			set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
+		cli_ctx_expire(ctx);
 	}
 
 	/* let user space think it's a success */
@@ -1750,8 +1746,6 @@ static void gss_kt_revoke(struct key *key)
 	CDEBUG(D_SEC, "revoking key %08x (%p) ref %d\n",
 	       key->serial, key, ll_read_key_usage(key));
 	kill_key_locked(key);
-	key_revoke_locked(key);
-	key_put(key);
 	CDEBUG(D_SEC, "key %08x (%p) revoked ref %d\n",
 	       key->serial, key, ll_read_key_usage(key));
 }
