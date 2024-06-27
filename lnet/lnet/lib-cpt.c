@@ -1323,7 +1323,7 @@ failed_alloc_table:
 	if (lustre_cpu_online > 0)
 		cpuhp_remove_state_nocalls(lustre_cpu_online);
 failed_cpu_online:
-	cpuhp_remove_state_nocalls(CPUHP_AP_ONLINE_DYN);
+	cpuhp_remove_state_nocalls(CPUHP_BP_PREPARE_DYN);
 failed_cpu_dead:
 #else
 	unregister_hotcpu_notifier(&cfs_cpu_notifier);
