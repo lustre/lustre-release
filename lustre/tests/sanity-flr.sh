@@ -491,13 +491,7 @@ test_0c() {
 	# verify components ${ids[6]}, ${ids[8]} and ${ids[10]}
 	for i in 6 8 10; do
 		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
-		# ffdf which is -33 and matches LOV_ALL_STRIPES_MIN
-		local decimal_lov_lower_limit=-33
-		#C_opt is -c option which can be -1 to -32
-		local C_opt=-1
-		local count_exp=$(($decimal_lov_lower_limit + $C_opt + 1))
-
-		verify_comp_attr stripe-count $tf ${ids[$i]} $count_exp
+		verify_comp_attr stripe-count $tf ${ids[$i]} -1
 		verify_comp_attr pool $tf ${ids[$i]} archive
 		verify_comp_extent $tf ${ids[$i]} 536870912 EOF
 	done
@@ -708,13 +702,7 @@ test_0f() {
 	# verify components ${ids[9]}, ${ids[11]} and ${ids[13]}
 	for i in 9 11 13; do
 		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
-		# ffdf which is -33 and matches LOV_ALL_STRIPES_MIN
-		local decimal_lov_lower_limit=-33
-		#C_opt is -c option which can be -1 to -32
-		local C_opt=-1
-		local count_exp=$(($decimal_lov_lower_limit + $C_opt + 1))
-
-		verify_comp_attr stripe-count $tf ${ids[$i]} $count_exp
+		verify_comp_attr stripe-count $tf ${ids[$i]} -1
 		verify_comp_attr pool $tf ${ids[$i]} archive
 		verify_comp_extent $tf ${ids[$i]} 536870912 EOF
 	done

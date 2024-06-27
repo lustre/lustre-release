@@ -1308,7 +1308,7 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 
 static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
 {
-	if (stripes >= LOV_ALL_STRIPES_MIN && stripes <= LOV_ALL_STRIPES_MAX)
+	if (stripes <= LOV_ALL_STRIPES && stripes >= LOV_ALL_STRIPES_WIDE)
 		stripes = 0;
 
 	if (lmm_magic == LOV_MAGIC_V1)

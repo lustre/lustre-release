@@ -2731,8 +2731,8 @@ __u16 lod_comp_entry_stripe_count(struct lod_object *lo, int comp_idx,
 	entry = &lo->ldo_comp_entries[comp_idx];
 	if (lod_comp_inited(entry))
 		return entry->llc_stripe_count;
-	if (entry->llc_stripe_count >= LOV_ALL_STRIPES_MIN &&
-	     entry->llc_stripe_count <= LOV_ALL_STRIPES_MAX)
+	if (entry->llc_stripe_count <= LOV_ALL_STRIPES &&
+	    entry->llc_stripe_count >= LOV_ALL_STRIPES_WIDE)
 		return lod_get_stripe_count_plain(lod, lo,
 						  entry->llc_stripe_count,
 						  entry->llc_pattern &
@@ -2886,8 +2886,8 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		    (lod_comp_inited(lod_comp) ||
 		     lod_comp->llc_extent.e_start <
 		     lod_comp->llc_extent.e_end) &&
-		     !(lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_MIN &&
-		       lod_comp->llc_stripe_count <= LOV_ALL_STRIPES_MAX) &&
+		    !(lod_comp->llc_stripe_count <= LOV_ALL_STRIPES &&
+		      lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_WIDE) &&
 		    ext->e_end != OBD_OBJECT_EOF &&
 		    (__u64)(lod_comp->llc_stripe_count *
 			    lod_comp->llc_stripe_size) >
@@ -5509,15 +5509,11 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 			}
 		}
 
-		CDEBUG(D_LAYOUT, DFID" magic = %#08x, pattern = %#x, stripe_count = %hu, stripe_size = %u, stripe_offset = %hu, append_pool = '%s', append_stripe_count = %d\n",
-		       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
-		       v1->lmm_magic,
-		       v1->lmm_pattern,
-		       v1->lmm_stripe_count,
-		       v1->lmm_stripe_size,
-		       v1->lmm_stripe_offset,
-		       append_pool ?: "",
-		       append_stripe_count);
+		CDEBUG(D_LAYOUT, DFID" magic = %#08x, pattern = %#x, stripe_count = %hd, stripe_size = %u, stripe_offset = %hd, append_pool = '%s', append_stripe_count = %d\n",
+		       PFID(lu_object_fid(&lo->ldo_obj.do_lu)), v1->lmm_magic,
+		       v1->lmm_pattern, (__s16)v1->lmm_stripe_count,
+		       v1->lmm_stripe_size, (__s16)v1->lmm_stripe_offset,
+		       append_pool ?: "", append_stripe_count);
 
 		if (!lov_pattern_supported(v1->lmm_pattern) &&
 		    !(v1->lmm_pattern & LOV_PATTERN_F_RELEASED)) {

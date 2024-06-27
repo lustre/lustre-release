@@ -160,7 +160,7 @@ retry:
 		     "%s: MDT index %u more than MDT count %u\n",
 		     obd->obd_name, index, lmv->lmv_mdt_count);
 
-	if (index >= LOV_V1_INSANE_STRIPE_COUNT)
+	if (index >= LOV_V1_INSANE_STRIPE_INDEX)
 		return NULL;
 
 	if (now > next_print) {

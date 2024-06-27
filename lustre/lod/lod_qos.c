@@ -2069,30 +2069,28 @@ __u16 lod_get_stripe_count_plain(struct lod_device *lod, struct lod_object *lo,
 {
 	struct lov_desc *lov_desc = &lod->lod_ost_descs.ltd_lov_desc;
 
-	/* Overstriping allows more stripes than targets */
-	if (stripe_count > lov_desc->ld_active_tgt_count) {
-		if (overstriping) {
-			if (stripe_count >= LOV_ALL_STRIPES_MIN &&
-				stripe_count <= LOV_ALL_STRIPES_MAX) {
-				stripe_count =
-				((stripe_count - LOV_ALL_STRIPES_MIN) + 1) *
-				lov_desc->ld_active_tgt_count;
-			}
-		} else {
-			*flags |= LOD_USES_DEFAULT_STRIPE;
-			if ((stripe_count >= LOV_ALL_STRIPES_MIN &&
-			     stripe_count <= LOV_ALL_STRIPES_MAX) &&
-			     lod->lod_max_stripecount)
-				stripe_count = lod->lod_max_stripecount;
-			else
-				stripe_count = lov_desc->ld_active_tgt_count;
-		}
-	}
-
 	if (!stripe_count)
 		stripe_count = lov_desc->ld_default_stripe_count;
 
-	if (overstriping && stripe_count > LOV_MAX_STRIPE_COUNT)
+	/* Overstriping allows more stripes than targets */
+	if (stripe_count > lov_desc->ld_active_tgt_count) {
+		if (!overstriping) {
+			*flags |= LOD_USES_DEFAULT_STRIPE;
+			if (stripe_count == LOV_ALL_STRIPES &&
+			    lod->lod_max_stripecount)
+				stripe_count = lod->lod_max_stripecount;
+			else
+				stripe_count = lov_desc->ld_active_tgt_count;
+		} else if (stripe_count <= LOV_ALL_STRIPES &&
+			   stripe_count >= LOV_ALL_STRIPES_WIDE) {
+			stripe_count = lov_desc->ld_active_tgt_count *
+				(LOV_ALL_STRIPES - stripe_count + 1);
+		}
+	}
+	if (!stripe_count)
+		stripe_count = 1;
+
+	if (stripe_count > LOV_MAX_STRIPE_COUNT)
 		stripe_count = LOV_MAX_STRIPE_COUNT;
 
 	return stripe_count;
@@ -2308,9 +2306,9 @@ int lod_use_defined_striping(const struct lu_env *env,
 		    !(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
 		    (lod_comp_inited(lod_comp) ||
 		     lod_comp->llc_extent.e_start <
-		     lod_comp->llc_extent.e_end) &&
-		    !(lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_MIN &&
-		      lod_comp->llc_stripe_count <= LOV_ALL_STRIPES_MAX) &&
+						lod_comp->llc_extent.e_end) &&
+		    !(lod_comp->llc_stripe_count <= LOV_ALL_STRIPES &&
+		      lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_WIDE) &&
 		    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
 		    (__u64)lod_comp->llc_stripe_count *
 			   lod_comp->llc_stripe_size >
@@ -2605,11 +2603,11 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		 */
 		if (lo->ldo_is_composite &&
 		    !(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
-		    !(lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_MIN &&
-		      lod_comp->llc_stripe_count <= LOV_ALL_STRIPES_MAX) &&
+		    !(lod_comp->llc_stripe_count <= LOV_ALL_STRIPES &&
+		      lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_WIDE) &&
 		    (lod_comp_inited(lod_comp) ||
 		     lod_comp->llc_extent.e_start <
-		     lod_comp->llc_extent.e_end) &&
+						lod_comp->llc_extent.e_end) &&
 		    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
 		    lod_comp->llc_stripe_count * lod_comp->llc_stripe_size >
 		    (lod_comp->llc_extent.e_end - lod_comp->llc_extent.e_start))

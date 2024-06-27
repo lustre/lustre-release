@@ -1667,6 +1667,8 @@ test_27ce() {
 			osts=$osts","
 		fi
 	done
+
+	echo "$LFS setstripe -o $osts $DIR/$tdir/$tfile"
 	$LFS setstripe -o $osts $DIR/$tdir/$tfile || error "setstripe failed"
 	local getstripe=$($LFS getstripe $DIR/$tdir/$tfile)
 	echo "$getstripe"
@@ -1675,7 +1677,7 @@ test_27ce() {
 	local getstripe_osts=$(echo "$getstripe" | sed -e '1,/obdidx/d' |\
 		awk '{print $1}' | tr '\n' ' ' | sed -e 's/[[:space:]]*$//')
 	[ "$getstripe_osts" = "${osts//,/ }" ] ||
-		error "stripes not on specified OSTs"
+		error "stripes '$getstripe_osts' not on given OSTs ${osts//,/ }"
 
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 || error "dd failed"
 }
@@ -1840,8 +1842,13 @@ test_27m() {
 	stack_trap simple_cleanup_common
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile.1
-	dd if=/dev/zero of=$DIR/$tdir/$tfile.1 bs=1024 count=$MAXFREE &&
-		error "dd should fill OST0"
+	if check_fallocate_supported $ost1; then
+		fallocate -l ${MAXFREE}k $DIR/$tdir/$tfile.1 &&
+			error "fallocate should fill OST0"
+	else
+		dd if=/dev/zero of=$DIR/$tdir/$tfile.1 bs=1024 count=$MAXFREE &&
+			error "dd should fill OST0"
+	fi
 	i=2
 	while $LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile.$i; do
 		i=$((i + 1))
@@ -2627,15 +2634,18 @@ test_27Cj() {
 		skip "need MDS >= 2.15.61.76"
 
 	stack_trap "rm -f $DIR/$tfile"
+
+	#check that beyond -32 it fails
+	echo "setstripe -C -33 should fail"
+	$LFS setstripe -C -33 $DIR/$tfile && error "setstripe should fail"
+
 	# start_full_debug_logging
 	# number of stripes created will be 32*ost count
 	$LFS setstripe  -C -32 $DIR/$tfile || error "create $tfile failed"
 	local count=$($LFS getstripe -c $DIR/$tfile)
 	local stripe_cnt=$(($OSTCOUNT * 32))
 	(( $count == $stripe_cnt )) ||
-		error "$DIR/$tfile stripe count $count != $OSTCOUNT"
-	#check that beyond -32 it fails
-	!($LFS setstripe  -C -34 $DIR/$tfile) || error "setstripe should fail"
+		error "$DIR/$tfile stripe count $count != $stripe_cnt"
 }
 run_test 27Cj "overstriping with -C for max values in multiple of targets"
 

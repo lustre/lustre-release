@@ -298,7 +298,7 @@ retry_new_ost:
 				lov->desc.ld_uuid.uuid, POSTID(&loi->loi_oi),
 				loi->loi_ost_idx, lov->desc.ld_tgt_count);
 
-			if ((u32)loi->loi_ost_idx >= LOV_V1_INSANE_STRIPE_COUNT)
+			if ((u32)loi->loi_ost_idx >= LOV_V1_INSANE_STRIPE_INDEX)
 				GOTO(out_lsme, rc = -EINVAL);
 
 			if (now > next_print) {

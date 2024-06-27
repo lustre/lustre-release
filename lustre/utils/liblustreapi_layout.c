@@ -683,12 +683,11 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 		else
 			comp->llc_stripe_size = v1->lmm_stripe_size;
 
-		if (v1->lmm_stripe_count >= (typeof(v1->lmm_stripe_count))
-		     LOV_ALL_STRIPES_MIN && v1->lmm_stripe_count <=
-		     (typeof(v1->lmm_stripe_count)) LOV_ALL_STRIPES_MAX)
-			comp->llc_stripe_count =
-			LLAPI_LAYOUT_WIDE_MIN +
-			(v1->lmm_stripe_count -  LOV_ALL_STRIPES_MIN);
+		if (v1->lmm_stripe_count >= LOV_ALL_STRIPES_WIDE &&
+		    v1->lmm_stripe_count <= LOV_ALL_STRIPES)
+			comp->llc_stripe_count = LLAPI_LAYOUT_WIDE_MIN +
+						(LOV_ALL_STRIPES -
+						 v1->lmm_stripe_count);
 		else if (v1->lmm_stripe_count == 0)
 			comp->llc_stripe_count = LLAPI_LAYOUT_DEFAULT;
 		else
@@ -876,8 +875,9 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 			blob->lmm_stripe_count = 0;
 		else if (comp->llc_stripe_count >= LLAPI_LAYOUT_WIDE_MIN &&
 			 comp->llc_stripe_count <= LLAPI_LAYOUT_WIDE_MAX) {
-			blob->lmm_stripe_count = LOV_ALL_STRIPES_MIN +
-			(comp->llc_stripe_count - LLAPI_LAYOUT_WIDE_MIN);
+			blob->lmm_stripe_count = LOV_ALL_STRIPES -
+				(comp->llc_stripe_count -
+				 LLAPI_LAYOUT_WIDE_MIN);
 		}
 		else
 			blob->lmm_stripe_count = comp->llc_stripe_count;
@@ -1309,9 +1309,7 @@ bool llapi_layout_stripe_count_is_valid(int64_t stripe_count)
 	return stripe_count == LLAPI_LAYOUT_DEFAULT ||
 		(stripe_count >= LLAPI_LAYOUT_WIDE_MIN &&
 		 stripe_count <= LLAPI_LAYOUT_WIDE_MAX) ||
-		(stripe_count != 0 && !(stripe_count <=
-		 LLAPI_MIN_STRIPE_COUNT &&
-		 stripe_count >= LLAPI_MAX_STRIPE_COUNT) &&
+		(stripe_count > 0 &&
 		 llapi_stripe_count_is_valid(stripe_count));
 }
 

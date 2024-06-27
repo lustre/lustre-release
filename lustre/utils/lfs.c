@@ -2789,7 +2789,7 @@ static int lsa_args_stripe_count_check(struct lfs_setstripe_args *lsa)
 		if (lsa->lsa_stripe_count > 0 &&
 		    lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
 		    !(lsa->lsa_stripe_count >= LLAPI_LAYOUT_WIDE_MIN &&
-		     lsa->lsa_stripe_count <= LLAPI_LAYOUT_WIDE_MAX) &&
+		      lsa->lsa_stripe_count <= LLAPI_LAYOUT_WIDE_MAX) &&
 		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
 			fprintf(stderr, "stripe_count(%lld) != nr_tgts(%d)\n",
 				lsa->lsa_stripe_count,
@@ -3877,16 +3877,18 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					progname, argv[0]);
 				goto usage_error;
 			}
-			if (migrate_mode)
-				overstriped = true;
-			else
+			overstriped = true;
+			if (!migrate_mode)
 				lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 			fallthrough;
 		case 'c':
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
+			/* only allow count -2..-32 for overstriped files */
 			if (errno != 0 || *end != '\0'|| optarg == end ||
-			    lsa.lsa_stripe_count < LLAPI_MAX_STRIPE_COUNT ||
+			    lsa.lsa_stripe_count <
+				(overstriped ? LLAPI_OVERSTRIPE_COUNT_MAX :
+					       LLAPI_OVERSTRIPE_COUNT_MIN) ||
 			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"%s %s: invalid stripe count '%s'\n",
@@ -3894,10 +3896,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 
-			if (lsa.lsa_stripe_count <= LLAPI_MIN_STRIPE_COUNT &&
-			    lsa.lsa_stripe_count >= LLAPI_MAX_STRIPE_COUNT) {
-				lsa.lsa_stripe_count = LLAPI_LAYOUT_WIDE_MIN +
-				    abs(lsa.lsa_stripe_count + 1);
+			if (lsa.lsa_stripe_count <=
+						LLAPI_OVERSTRIPE_COUNT_MIN &&
+			    lsa.lsa_stripe_count >=
+						LLAPI_OVERSTRIPE_COUNT_MAX) {
+				lsa.lsa_stripe_count = LLAPI_LAYOUT_WIDE_MIN -
+					(lsa.lsa_stripe_count + 1);
 			}
 			break;
 		case 'd':
@@ -3975,8 +3979,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			errno = 0;
 			lsa.lsa_stripe_off = strtol(optarg, &end, 0);
 			if (errno != 0 || *end != '\0' || optarg == end ||
-			    lsa.lsa_stripe_off < -1 ||
-			    lsa.lsa_stripe_off > LOV_V1_INSANE_STRIPE_COUNT) {
+			    lsa.lsa_stripe_off < (__s16)LOV_ALL_STRIPES ||
+			    lsa.lsa_stripe_off > LOV_V1_INSANE_STRIPE_INDEX) {
 				fprintf(stderr,
 					"%s %s: invalid stripe offset '%s'\n",
 					progname, argv[0], optarg);
@@ -4484,9 +4488,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			param->lsp_stripe_size = lsa.lsa_stripe_size;
 		if (lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT) {
 			if (lsa.lsa_stripe_count >= LLAPI_LAYOUT_WIDE_MIN &&
-				lsa.lsa_stripe_count < LLAPI_LAYOUT_WIDE_MAX)
-				param->lsp_stripe_count = LOV_ALL_STRIPES_MIN +
-				(lsa.lsa_stripe_count - LLAPI_LAYOUT_WIDE_MIN);
+			    lsa.lsa_stripe_count <= LLAPI_LAYOUT_WIDE_MAX)
+				param->lsp_stripe_count =
+					LLAPI_LAYOUT_WIDE_MIN -
+					(lsa.lsa_stripe_count + 1);
 			else
 				param->lsp_stripe_count = lsa.lsa_stripe_count;
 		}
@@ -7166,7 +7171,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		if (!(tp->st_op & ops))
 			continue;
 
-		for (index = 0; index < LOV_ALL_STRIPES_MAX &&
+		for (index = 0; index < LOV_ALL_STRIPES &&
 		     (!lsb || lsb->sb_count < LL_STATFS_MAX); index++) {
 			memset(&stat_buf, 0, sizeof(struct obd_statfs));
 			memset(&uuid_buf, 0, sizeof(struct obd_uuid));
@@ -7345,7 +7350,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
 			if (errno != 0 || *end != '\0' ||
-			    lsa.lsa_stripe_count < LLAPI_MAX_STRIPE_COUNT ||
+			    lsa.lsa_stripe_count < LLAPI_OVERSTRIPE_COUNT_MAX ||
 			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"%s: invalid stripe count '%s'\n",
@@ -9106,7 +9111,7 @@ static int tgt_name2index(const char *tgtname, unsigned int *idx)
 	dash += 4;
 
 	*idx = strtoul(dash, &endp, 16);
-	if (*idx > LOV_V1_INSANE_STRIPE_COUNT) {
+	if (*idx > LOV_V1_INSANE_STRIPE_INDEX) {
 		fprintf(stderr, "wrong index %s\n", tgtname);
 		return -ERANGE;
 	}
@@ -9637,7 +9642,7 @@ static int lfs_quota(int argc, char **argv)
 		case 'm':
 			errno = 0;
 			idx = strtol(optarg, &endp, 0);
-			if (errno != 0 || idx > LOV_V1_INSANE_STRIPE_COUNT ||
+			if (errno != 0 || idx > LOV_V1_INSANE_STRIPE_INDEX ||
 			    idx < 0 || *endp != '\0') {
 				fprintf(stderr,
 					"%s quota: invalid MDT index '%s'\n",
@@ -9658,7 +9663,7 @@ static int lfs_quota(int argc, char **argv)
 			idx = strtol(optarg, &endp, 0);
 			/* simple digit, treat it as a numerical OST index */
 			if (*endp == '\0') {
-				if (idx > LOV_V1_INSANE_STRIPE_COUNT ||
+				if (idx > LOV_V1_INSANE_STRIPE_INDEX ||
 				    idx < 0) {
 					fprintf(stderr,
 						"%s quota: invalid OST index '%s'\n",

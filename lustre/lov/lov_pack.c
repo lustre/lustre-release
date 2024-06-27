@@ -69,7 +69,7 @@ static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
 	if (stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
 		CDEBUG_LIMIT(level,
 			     "bad stripe_count %u > max_stripe_count %u\n",
-			     stripe_count, LOV_V1_INSANE_STRIPE_COUNT);
+			     stripe_count, LOV_V1_INSANE_STRIPE_INDEX);
 		return;
 	}
 
