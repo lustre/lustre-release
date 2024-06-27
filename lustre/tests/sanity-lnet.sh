@@ -4159,7 +4159,8 @@ EOF
 	#   LNET_PEER_DISCOVERED(4) | LNET_PEER_NIDS_UPTODATE(8)
 	(( $locked_peer_state != "1048849")) &&
 		error "Wrong peer state \"$locked_peer_state\" expected 1048849"
-	return 0
+
+	cleanup_lnet
 }
 run_test 304 "Check locked primary peer nid consolidation"
 
