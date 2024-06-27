@@ -326,7 +326,6 @@ if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
 	if $FORCE_LARGE_NID; then
 		always_except LU-14288 101
 		always_except LU-14288 103
-		always_except LU-17986 111
 		always_except LU-17457 208
 		always_except LU-9680 213
 		always_except LU-17460 214
@@ -1808,14 +1807,23 @@ test_111() {
 	[[ $(uname -r | grep "3.10") ]] &&
 		skip "Unsupported on RHEL7"
 
-	reinit_dlc || return $?
-	add_net "${NETTYPE}" "${INTERFACES[0]}"
+	setup_router_test || return $?
 
-	for index in {2..500}
+	local i
+	local gw=( ${ROUTER_NIDS[${ROUTERS[0]}]} )
+
+	for i in {2..500}
 	do
-		do_lnetctl route add --net ${NETTYPE}${index} --gateway ${GW_NID}
+		do_lnetctl route add -n ${REMOTE_NET}${i} -g ${gw[0]} ||
+			error "Failed to add route rc=$?"
 	done
-	do_lnetctl route show || return $?
+
+	local num_routes=$($LNETCTL route show 2>/dev/null | grep -c gateway)
+
+	(( num_routes == 499 )) ||
+		error "Expect 499 routes but found $num_routes"
+
+	cleanup_router_test
 }
 run_test 111 "Test many routes"
 
