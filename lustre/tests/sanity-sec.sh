@@ -16,7 +16,7 @@ init_logging
 
 ALWAYS_EXCEPT="$SANITY_SEC_EXCEPT "
 if [[ "$MDS1_OS_ID_LIKE" =~ "rhel" ]] &&
-   (( $MDS1_OS_VERSION_CODE == $(version_code 9.3) )); then
+   (( $MDS1_OS_VERSION_CODE >= $(version_code 9.3) )); then
 	always_except LU-16915 51
 fi
 
