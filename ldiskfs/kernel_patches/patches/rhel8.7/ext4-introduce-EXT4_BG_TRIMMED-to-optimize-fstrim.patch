@@ -24,11 +24,11 @@ Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
 Change-Id: I7faaca4754b1726ad05d0aafe3e90e0e9f591617
 Reviewed-on: https://review.whamcloud.com/51923
 
-Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
+Index: linux-4.18.0-425.10.1.el8_7/fs/ext4/ext4.h
 ===================================================================
---- linux-3.10.0-1160.88.1.el7.orig/fs/ext4/ext4.h
-+++ linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
-@@ -334,6 +334,7 @@ struct flex_groups {
+--- linux-4.18.0-425.10.1.el8_7.orig/fs/ext4/ext4.h
++++ linux-4.18.0-425.10.1.el8_7/fs/ext4/ext4.h
+@@ -358,6 +358,7 @@ struct flex_groups {
  #define EXT4_BG_INODE_UNINIT	0x0001 /* Inode table/bitmap not in use */
  #define EXT4_BG_BLOCK_UNINIT	0x0002 /* Block bitmap not in use */
  #define EXT4_BG_INODE_ZEROED	0x0004 /* On-disk itable initialized to zero */
@@ -36,7 +36,7 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
  
  /*
   * Macro-instructions used to manage group descriptors
-@@ -1086,6 +1087,7 @@ struct ext4_inode_info {
+@@ -1124,6 +1125,7 @@ struct ext4_inode_info {
  #define EXT2_FLAGS_SIGNED_HASH		0x0001  /* Signed dirhash in use */
  #define EXT2_FLAGS_UNSIGNED_HASH	0x0002  /* Unsigned dirhash in use */
  #define EXT2_FLAGS_TEST_FILESYS		0x0004	/* to test development code */
@@ -44,17 +44,17 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
  
  /*
   * Mount flags set via mount options or defaults
-@@ -1189,6 +1191,9 @@ extern void ext4_set_bits(void *bm, int
- /* Number of quota types we support */
- #define EXT4_MAXQUOTAS 3
+@@ -1223,6 +1225,9 @@ extern void ext4_set_bits(void *bm, int
+ #define EXT4_DFL_MAX_MNT_COUNT		20	/* Allow 20 mounts */
+ #define EXT4_DFL_CHECKINTERVAL		0	/* Don't use interval check */
  
 +/* Default min freed blocks which we could clear BG_TRIMMED flag */
 +#define EXT4_DEF_BG_TRIMMED_THRESHOLD	128
 +
  /*
-  * Structure of the super block
+  * Behaviour when detecting errors
   */
-@@ -1456,6 +1461,9 @@ struct ext4_sb_info {
+@@ -1527,6 +1532,9 @@ struct ext4_sb_info {
  	/* the size of zero-out chunk */
  	unsigned int s_extent_max_zeroout_kb;
  
@@ -62,9 +62,9 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
 +	unsigned long s_bg_trimmed_threshold;
 +
  	unsigned int s_log_groups_per_flex;
- 	struct flex_groups *s_flex_groups;
+ 	struct flex_groups * __rcu *s_flex_groups;
  	ext4_group_t s_flex_groups_allocated;
-@@ -2796,6 +2804,7 @@ struct ext4_group_info {
+@@ -3168,6 +3176,7 @@ struct ext4_group_info {
  	struct rb_root  bb_free_root;
  	ext4_grpblk_t	bb_first_free;	/* first free block */
  	ext4_grpblk_t	bb_free;	/* total free blocks */
@@ -72,15 +72,15 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
  	ext4_grpblk_t	bb_fragments;	/* nr of freespace fragments */
  	ext4_grpblk_t	bb_largest_free_order;/* order of largest frag in BG */
  	struct          list_head bb_prealloc_list;
-@@ -2820,7 +2826,6 @@ struct ext4_group_info {
+@@ -3183,7 +3192,6 @@ struct ext4_group_info {
  };
  
  #define EXT4_GROUP_INFO_NEED_INIT_BIT		0
 -#define EXT4_GROUP_INFO_WAS_TRIMMED_BIT		1
  #define EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT	2
+ #define EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT	3
  #define EXT4_GROUP_INFO_BBITMAP_CORRUPT		\
- 	(1 << EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT)
-@@ -2836,12 +2841,6 @@ struct ext4_group_info {
+@@ -3199,12 +3207,6 @@ struct ext4_group_info {
  #define EXT4_MB_GRP_IBITMAP_CORRUPT(grp)	\
  	(test_bit(EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT, &((grp)->bb_state)))
  
@@ -93,11 +93,11 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4.h
  #define EXT4_MB_GRP_TEST(grp)	\
  	(test_bit(EXT4_GROUP_INFO_BBITMAP_READ_BIT, &((grp)->bb_state)))
  #define EXT4_MB_GRP_TEST_AND_SET_READ(grp)	\
-Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4_jbd2.h
+Index: linux-4.18.0-425.10.1.el8_7/fs/ext4/ext4_jbd2.h
 ===================================================================
---- linux-3.10.0-1160.88.1.el7.orig/fs/ext4/ext4_jbd2.h
-+++ linux-3.10.0-1160.88.1.el7/fs/ext4/ext4_jbd2.h
-@@ -135,7 +135,8 @@ static inline int ext4_jbd2_credits_xatt
+--- linux-4.18.0-425.10.1.el8_7.orig/fs/ext4/ext4_jbd2.h
++++ linux-4.18.0-425.10.1.el8_7/fs/ext4/ext4_jbd2.h
+@@ -123,7 +123,8 @@
  #define EXT4_HT_MOVE_EXTENTS     9
  #define EXT4_HT_XATTR           10
  #define EXT4_HT_EXT_CONVERT     11
@@ -107,19 +107,19 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/ext4_jbd2.h
  
  /**
   *   struct ext4_journal_cb_entry - Base structure for callback information.
-Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
+Index: linux-4.18.0-425.10.1.el8_7/fs/ext4/mballoc.c
 ===================================================================
---- linux-3.10.0-1160.88.1.el7.orig/fs/ext4/mballoc.c
-+++ linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
-@@ -2859,6 +2859,7 @@ int ext4_mb_add_groupinfo(struct super_b
+--- linux-4.18.0-425.10.1.el8_7.orig/fs/ext4/mballoc.c
++++ linux-4.18.0-425.10.1.el8_7/fs/ext4/mballoc.c
+@@ -2956,6 +2956,7 @@ int ext4_mb_add_groupinfo(struct super_b
  	init_rwsem(&meta_group_info[i]->alloc_sem);
  	meta_group_info[i]->bb_free_root = RB_ROOT;
  	meta_group_info[i]->bb_largest_free_order = -1;  /* uninit */
 +	meta_group_info[i]->bb_freed_since_trim = 0;
  
- #ifdef DOUBLE_CHECK
- 	{
-@@ -3115,6 +3116,8 @@ int ext4_mb_init(struct super_block *sb)
+ 	mb_group_bb_bitmap_alloc(sb, meta_group_info[i], group);
+ 	return 0;
+@@ -3209,6 +3210,8 @@ int ext4_mb_init(struct super_block *sb)
  	if (sbi->s_mb_prefetch_limit > ext4_get_groups_count(sb))
  		sbi->s_mb_prefetch_limit = ext4_get_groups_count(sb);
  
@@ -128,7 +128,7 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
  	if (sbi->s_locality_groups == NULL) {
  		ret = -ENOMEM;
-@@ -3315,15 +3318,6 @@ static void ext4_free_data_callback(stru
+@@ -3382,15 +3385,6 @@ static void ext4_free_data_in_buddy(stru
  	rb_erase(&entry->efd_node, &(db->bb_free_root));
  	mb_free_blocks(NULL, &e4b, entry->efd_start_cluster, entry->efd_count);
  
@@ -144,7 +144,7 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  	if (!db->bb_free_root.rb_node) {
  		/* No more items in the per group rb tree
  		 * balance refcounts from ext4_mb_free_metadata()
-@@ -5421,8 +5413,7 @@ do_more:
+@@ -5624,8 +5618,7 @@ do_more:
  					 " group:%d block:%d count:%lu failed"
  					 " with %d", block_group, bit, count,
  					 err);
@@ -154,7 +154,7 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  
  		ext4_lock_group(sb, block_group);
  		mb_clear_bits(bitmap_bh->b_data, bit, count_clusters);
-@@ -5437,6 +5430,22 @@ do_more:
+@@ -5635,6 +5628,22 @@ do_more:
  	ret = ext4_free_group_clusters(sb, gdp) + count_clusters;
  	ext4_free_group_clusters_set(sb, gdp, ret);
  	ext4_block_bitmap_csum_set(sb, block_group, gdp, bitmap_bh);
@@ -177,7 +177,7 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  	ext4_group_desc_csum_set(sb, block_group, gdp);
  	ext4_unlock_group(sb, block_group);
  
-@@ -5676,9 +5685,16 @@ ext4_trim_all_free(struct super_block *s
+@@ -5889,9 +5898,16 @@ ext4_trim_all_free(struct super_block *s
  	void *bitmap;
  	ext4_grpblk_t next, count = 0, free_count = 0;
  	struct ext4_buddy e4b;
@@ -194,7 +194,7 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  
  	ret = ext4_mb_load_buddy(sb, group, &e4b);
  	if (ret)
-@@ -5682,10 +5700,12 @@ ext4_trim_all_free(struct super_block *s
+@@ -5899,10 +5915,12 @@ ext4_trim_all_free(struct super_block *s
  	bitmap = e4b.bd_bitmap;
  
  	ext4_lock_group(sb, group);
@@ -208,7 +208,7 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  	start = (e4b.bd_info->bb_first_free > start) ?
  		e4b.bd_info->bb_first_free : start;
  
-@@ -5721,14 +5741,46 @@ ext4_trim_all_free(struct super_block *s
+@@ -5938,14 +5956,46 @@ ext4_trim_all_free(struct super_block *s
  			break;
  	}
  
@@ -258,19 +258,19 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  	ext4_debug("trimmed %d blocks in the group %d\n",
  		count, group);
  
-Index: linux-3.10.0-1160.88.1.el7/fs/ext4/super.c
+Index: linux-4.18.0-425.10.1.el8_7/fs/ext4/sysfs.c
 ===================================================================
---- linux-3.10.0-1160.88.1.el7.orig/fs/ext4/super.c
-+++ linux-3.10.0-1160.88.1.el7/fs/ext4/super.c
-@@ -2936,6 +2936,7 @@ EXT4_RW_ATTR_SBI_UI(mb_prefetch, s_mb_pr
- EXT4_RW_ATTR_SBI_UI(mb_prefetch_limit, s_mb_prefetch_limit);
- EXT4_DEPRECATED_ATTR(max_writeback_mb_bump, 128);
+--- linux-4.18.0-425.10.1.el8_7.orig/fs/ext4/sysfs.c
++++ linux-4.18.0-425.10.1.el8_7/fs/ext4/sysfs.c
+@@ -223,6 +223,7 @@ EXT4_RW_ATTR_SBI_UI(mb_small_req, s_mb_s
+ EXT4_RW_ATTR_SBI_UI(mb_large_req, s_mb_large_req);
+ EXT4_RW_ATTR_SBI_UI(mb_group_prealloc, s_mb_group_prealloc);
  EXT4_RW_ATTR_SBI_UI(extent_max_zeroout_kb, s_extent_max_zeroout_kb);
 +EXT4_RW_ATTR_SBI_UI(bg_trimmed_threshold, s_bg_trimmed_threshold);
- EXT4_ATTR(trigger_fs_error, 0200, NULL, trigger_test_error);
+ EXT4_ATTR(trigger_fs_error, 0200, trigger_test_error);
  EXT4_RW_ATTR_SBI_UI(err_ratelimit_interval_ms, s_err_ratelimit_state.interval);
  EXT4_RW_ATTR_SBI_UI(err_ratelimit_burst, s_err_ratelimit_state.burst);
-@@ -2969,6 +2970,7 @@ static struct attribute *ext4_attrs[] =
+@@ -262,6 +263,7 @@ static struct attribute *ext4_attrs[] =
  	ATTR_LIST(mb_group_prealloc),
  	ATTR_LIST(max_writeback_mb_bump),
  	ATTR_LIST(extent_max_zeroout_kb),
