@@ -29631,15 +29631,23 @@ test_411b() {
 	# LU-9966
 	[ -e "$cg_basedir/memory.kmem.limit_in_bytes" ] ||
 		skip "no setup for cgroup"
-	$LFS setstripe -c 2 $DIR/$tfile || error "unable to setstripe"
-	# (x86) testing suggests we can't reliably avoid OOM with a 64M-256M
-	# limit, so we have 384M in cgroup
-	# (arm) this seems to hit OOM more often than x86, so 1024M
-	if [[ $(uname -m) = aarch64 ]]; then
-		local memlimit_mb=1024
-	else
-		local memlimit_mb=384
-	fi
+
+	local count=2
+
+	(( OSTCOUNT < 2 )) && count=$OSTCOUNT
+	$LFS setstripe -c $count $DIR/$tfile || error "unable to setstripe"
+
+	# To avoid testing failures on x86 and arm, we set the memcg limit
+	# with 1024M on both systems.
+	local memlimit_mb=1024
+	local min_size_ost=$($LFS df | awk "/$FSNAME-OST/ { print \$4 }" |
+			     sort -un | head -1)
+
+	(( memlimit_mb * 4 * 1024 < min_size_ost * count - 100 )) ||
+		skip "OST space are too small: ${min_size_ost}K"
+
+	echo "count=$count/$OSTCOUNT min_size_ost=${min_size_ost}K"
+	$LFS df
 
 	# Create a cgroup and set memory limit
 	# (tfile is used as an easy way to get a recognizable cgroup name)
@@ -29657,7 +29665,7 @@ test_411b() {
 	cancel_lru_locks osc
 
 	rm -f $DIR/$tfile
-	$LFS setstripe -c 2 $DIR/$tfile || error "unable to setstripe"
+	$LFS setstripe -c $count $DIR/$tfile || error "unable to setstripe"
 
 	# Try writing at a larger block size
 	# NB: if block size is >= 1/2 cgroup size, we sometimes get OOM killed
@@ -29670,9 +29678,13 @@ test_411b() {
 	sync
 	cancel_lru_locks osc
 	rm -f $DIR/$tfile
-	$LFS setstripe -c 2 $DIR/$tfile.{1..4} || error "unable to setstripe"
+
+	$LFS setstripe -c $count $DIR/$tfile.{1..4} || error "unable to setstripe"
 
 	# Try writing multiple files at once
+	(( memlimit_mb * 4 * 1024 * 2 < min_size_ost * count - 100 )) ||
+		skip "OST space are too small: ${min_size_ost}K"
+
 	echo "writing multiple files"
 	bash -c "echo \$$ > $cgdir/tasks && dd if=/dev/zero of=$DIR/$tfile.1 bs=32M count=$((memlimit_mb * 4 / 64))" &
 	local pid1=$!
