@@ -542,20 +542,6 @@ static inline struct timespec current_time(struct inode *inode)
 								     flags)
 #endif
 
-/* Linux commit v5.15-12273-gab2f9d2d3626
- *   mm: unexport {,un}lock_page_memcg
- *
- * Note that the functions are still defined or declared breaking
- * the simple approach of just defining the missing functions here
- */
-#ifdef HAVE_LOCK_PAGE_MEMCG
-#define vvp_lock_page_memcg(page)	lock_page_memcg((page))
-#define vvp_unlock_page_memcg(page)	unlock_page_memcg((page))
-#else
-#define vvp_lock_page_memcg(page)
-#define vvp_unlock_page_memcg(page)
-#endif
-
 #ifndef KMEM_CACHE_USERCOPY
 #define kmem_cache_create_usercopy(name, size, align, flags, useroffset, \
 				   usersize, ctor)			 \

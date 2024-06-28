@@ -266,6 +266,11 @@ struct lu_device_type vvp_device_type = {
 
 unsigned int (*vvp_account_page_dirtied)(struct page *page,
 					 struct address_space *mapping);
+#if !defined(FOLIO_MEMCG_LOCK_EXPORTED) && defined(HAVE_FOLIO_MEMCG_LOCK) && \
+     defined(HAVE_KALLSYMS_LOOKUP_NAME)
+void (*vvp_folio_memcg_lock)(struct folio *folio);
+void (*vvp_folio_memcg_unlock)(struct folio *folio);
+#endif
 
 /**
  * A mutex serializing calls to vvp_inode_fini() under extreme memory
@@ -291,6 +296,17 @@ int vvp_global_init(void)
 	vvp_account_page_dirtied = (void *)
 		cfs_kallsyms_lookup_name("account_page_dirtied");
 #endif
+#endif
+
+#if !defined(FOLIO_MEMCG_LOCK_EXPORTED) && defined(HAVE_FOLIO_MEMCG_LOCK) && \
+     defined(HAVE_KALLSYMS_LOOKUP_NAME)
+	vvp_folio_memcg_lock = (void *)
+		cfs_kallsyms_lookup_name("folio_memcg_lock");
+	LASSERT(vvp_folio_memcg_lock);
+
+	vvp_folio_memcg_unlock = (void *)
+		cfs_kallsyms_lookup_name("folio_memcg_unlock");
+	LASSERT(vvp_folio_memcg_unlock);
 #endif
 
 	return 0;

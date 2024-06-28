@@ -1859,6 +1859,8 @@ AC_DEFUN([LC_D_IN_LOOKUP], [
 # Kernel version 4.6 adds lock_page_memcg(page)
 # Linux commit v5.15-12273-gab2f9d2d3626
 #   mm: unexport {,un}lock_page_memcg
+# and removed in v6.4-rc4-327-g6c77b607ee26
+#   mm: kill lock|unlock_page_memcg()
 #
 AC_DEFUN([LC_SRC_LOCK_PAGE_MEMCG], [
 	LB2_LINUX_TEST_SRC([lock_page_memcg], [
@@ -3406,6 +3408,27 @@ AC_DEFUN([LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG], [
 ]) # LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 
 #
+# LC_FOLIO_MEMCG_LOCK
+#
+# kernel v5.15-rc3-45-gf70ad4487415
+#    mm/memcg: Add folio_memcg_lock() and folio_memcg_unlock()
+# Use folio_memcg_[un]lock when [un]lock_page_memcg is removed.
+#
+AC_DEFUN([LC_SRC_FOLIO_MEMCG_LOCK], [
+	LB2_LINUX_TEST_SRC([folio_memcg_lock], [
+		#include <linux/memcontrol.h>
+	],[
+		folio_memcg_lock(NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_FOLIO_MEMCG_LOCK], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'folio_memcg_lock' is defined],
+	[folio_memcg_lock], [
+		AC_DEFINE(HAVE_FOLIO_MEMCG_LOCK, 1, [folio_memcg_lock is defined])
+	])
+]) # LC_FOLIO_MEMCG_LOCK
+
+#
 # LC_HAVE_KIOCB_COMPLETE_2ARGS
 #
 # kernel v5.15-rc6-145-g6b19b766e8f0
@@ -3435,6 +3458,18 @@ AC_DEFUN([LC_HAVE_KIOCB_COMPLETE_2ARGS], [
 ]) # LC_HAVE_KIOCB_COMPLETE_2ARGS
 
 #
+# LC_FOLIO_MEMCG_LOCK_EXPORTED
+#
+# Linux commit v5.15-12272-g913ffbdd9985
+#   mm: unexport folio_memcg_{,un}lock
+#
+AC_DEFUN([LC_FOLIO_MEMCG_LOCK_EXPORTED], [
+LB_CHECK_EXPORT([folio_memcg_lock], [mm/memcontrol.c],
+	[AC_DEFINE(FOLIO_MEMCG_LOCK_EXPORTED, 1,
+			[folio_memcg_{,un}lock are exported])])
+]) # LC_FOLIO_MEMCG_LOCK_EXPORTED
+
+#
 # LC_EXPORTS_DELETE_FROM_PAGE_CACHE
 #
 # Linux commit v5.16-rc4-44-g452e9e6992fe
@@ -3447,7 +3482,6 @@ LB_CHECK_EXPORT([delete_from_page_cache], [mm/filemap.c],
 	[AC_DEFINE(HAVE_DELETE_FROM_PAGE_CACHE, 1,
 			[delete_from_page_cache is exported])])
 ]) # LC_EXPORTS_DELETE_FROM_PAGE_CACHE
-
 
 #
 # LC_HAVE_WB_STAT_MOD
@@ -4825,6 +4859,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 5.16
 	LC_SRC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
+	LC_SRC_FOLIO_MEMCG_LOCK
 	LC_SRC_HAVE_KIOCB_COMPLETE_2ARGS
 
 	# 5.17
@@ -5129,9 +5164,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_FILEATTR_GET
 	LC_HAVE_COPY_PAGE_FROM_ITER_ATOMIC
 
-        # 5.15
-        LC_HAVE_GET_ACL_RCU_ARG
-
 	# 5.15
 	LC_HAVE_GET_ACL_RCU_ARG
 	LC_HAVE_INVALIDATE_LOCK
@@ -5139,7 +5171,9 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.16
 	LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
+	LC_FOLIO_MEMCG_LOCK
 	LC_HAVE_KIOCB_COMPLETE_2ARGS
+	LC_FOLIO_MEMCG_LOCK_EXPORTED
 	LC_EXPORTS_DELETE_FROM_PAGE_CACHE
 	LC_HAVE_WB_STAT_MOD
 

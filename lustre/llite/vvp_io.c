@@ -1085,12 +1085,12 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 
 			ClearPageReclaim(page);
 
-			vvp_lock_page_memcg(page);
+			folio_memcg_lock_page(page);
 			if (TestSetPageDirty(page)) {
 				/* page is already dirty .. no extra work needed
 				 * set a flag for the i'th page to be skipped
 				 */
-				vvp_unlock_page_memcg(page);
+				folio_memcg_unlock_page(page);
 				skip_pages |= (1ul << pgno++);
 				LASSERTF(pgno <= BITS_PER_LONG,
 					 "Limit exceeded pgno: %d/%d\n", pgno,
@@ -1124,7 +1124,7 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 			WARN_ON_ONCE(!PagePrivate(page) && !PageUptodate(page));
 			ll_account_page_dirtied(page, mapping);
 			dirtied++;
-			vvp_unlock_page_memcg(page);
+			folio_memcg_unlock_page(page);
 		}
 	}
 	ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
