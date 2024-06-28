@@ -27848,6 +27848,7 @@ test_311() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local old_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
+	echo "old_iused=$old_iused"
 	local mdts=$(comma_list $(mdts_nodes))
 
 	mkdir -p $DIR/$tdir
@@ -27856,11 +27857,13 @@ test_311() {
 
 	# statfs data is not real time, let's just calculate it
 	old_iused=$((old_iused + 1000))
+	echo "suppose current old_iused=$old_iused"
 
 	local count=$(do_facet $SINGLEMDS "$LCTL get_param -n \
 			osp.*OST0000*MDT0000.create_count")
 	local max_count=$(do_facet $SINGLEMDS "$LCTL get_param -n \
 				osp.*OST0000*MDT0000.max_create_count")
+	echo "create_count=$count, max_create_count=$max_count"
 	do_nodes $mdts "$LCTL set_param -n osp.*OST0000*.max_create_count=0"
 
 	$LFS setstripe -i 0 $DIR/$tdir/$tfile || error "setstripe failed"
@@ -27868,6 +27871,7 @@ test_311() {
 	[ $index -ne 0 ] || error "$tfile stripe index is 0"
 
 	unlinkmany $DIR/$tdir/$tfile. 1000
+	wait_delete_completed
 
 	do_nodes $mdts "$LCTL set_param -n \
 			osp.*OST0000*.max_create_count=$max_count"
@@ -27880,15 +27884,16 @@ test_311() {
 	local new_iused
 	for i in $(seq 120); do
 		new_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
+		echo -n "$new_iused "
 		# system may be too busy to destroy all objs in time, use
 		# a somewhat small value to not fail autotest
-		[ $((old_iused - new_iused)) -gt 400 ] && break
+		((old_iused - new_iused > 400)) && break
 		sleep 1
 	done
 
-	echo "waited $i sec, old Iused $old_iused, new Iused $new_iused"
-	[ $((old_iused - new_iused)) -gt 400 ] ||
-		error "objs not destroyed after unlink"
+	echo -e "\nwaited $i sec, old Iused $old_iused, new Iused $new_iused"
+	((old_iused - new_iused > 400)) ||
+		error "objs not destroyed after unlink $new_iused > $old_iused"
 }
 run_test 311 "disable OSP precreate, and unlink should destroy objs"
 
