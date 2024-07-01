@@ -3680,6 +3680,31 @@ int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss)
 	RETURN(rc);
 }
 
+static int ll_hsm_data_version_sync(struct inode *inode, __u64 data_version)
+{
+	struct obd_export *exp = ll_i2mdexp(inode);
+	struct md_op_data *op_data;
+	int rc;
+	ENTRY;
+
+	if (!data_version)
+		RETURN(-EINVAL);
+
+	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
+
+	op_data->op_data_version = data_version;
+
+	rc = obd_iocontrol(LL_IOC_HSM_DATA_VERSION, exp, sizeof(*op_data),
+			   op_data, NULL);
+
+	ll_finish_md_op_data(op_data);
+
+	RETURN(rc);
+}
+
 static int ll_hsm_import(struct inode *inode, struct file *file,
 			 struct hsm_user_import *hui)
 {
@@ -4685,6 +4710,16 @@ out:
 skip_copy:
 		ll_finish_md_op_data(op_data);
 		OBD_FREE_PTR(hca);
+		RETURN(rc);
+	}
+	case LL_IOC_HSM_DATA_VERSION: {
+		__u64 data_version;
+
+		if (get_user(data_version, (u64 __user *)arg))
+			RETURN(-EFAULT);
+
+		rc = ll_hsm_data_version_sync(inode, data_version);
+
 		RETURN(rc);
 	}
 	case LL_IOC_SET_LEASE_OLD: {

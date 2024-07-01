@@ -655,6 +655,7 @@ struct ll_ioc_lease_id {
 						struct lu_pcc_detach_fid)
 #define LL_IOC_PCC_STATE		_IOR('f', 252, struct lu_pcc_state)
 #define LL_IOC_PROJECT			_IOW('f', 253, struct lu_project)
+#define LL_IOC_HSM_DATA_VERSION		_IOW('f', 254, struct ioc_data_version)
 
 #ifndef	FS_IOC_FSGETXATTR
 /*

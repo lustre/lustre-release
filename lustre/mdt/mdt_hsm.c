@@ -393,6 +393,69 @@ out:
 }
 
 /**
+ * Set the data version in the HSM xattr of a file.
+ *
+ * This is MDS_HSM_DATA_VERSION RPC handler.
+ */
+int mdt_hsm_data_version(struct tgt_session_info *tsi)
+{
+	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
+	struct mdt_object	*obj = info->mti_object;
+	struct md_attr          *ma = &info->mti_attr;
+	struct mdt_lock_handle	*lh;
+	int			 rc;
+	ENTRY;
+
+	if (info->mti_body == NULL || obj == NULL)
+		GOTO(out, rc = -EPROTO);
+
+	/* Only valid if client is remote */
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc < 0)
+		GOTO(out, rc = err_serious(rc));
+
+	lh = &info->mti_lh[MDT_LH_CHILD];
+	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP |
+			     MDS_INODELOCK_XATTR, LCK_PW);
+	if (rc < 0)
+		GOTO(out_ucred, rc);
+
+	/* Read current HSM info */
+	ma->ma_valid = 0;
+	ma->ma_need = MA_HSM;
+	rc = mdt_attr_get_complex(info, obj, ma);
+	if (rc)
+		GOTO(out_unlock, rc);
+
+	if (unlikely(!info->mti_body->mbo_version)) {
+		CDEBUG(D_HSM, "Can't set HSM xattr data version to zero "
+		       DFID"\n", PFID(&info->mti_body->mbo_fid1));
+		GOTO(out_unlock, rc = -EINVAL);
+	} else {
+		CDEBUG(D_HSM, "Setting HSM xattr data version to %llu "DFID"\n",
+		       info->mti_body->mbo_version,
+		       PFID(&info->mti_body->mbo_fid1));
+	}
+
+	ma->ma_hsm.mh_arch_ver = info->mti_body->mbo_version;
+
+	/* Save the data version */
+	rc = mdt_hsm_attr_set(info, obj, &ma->ma_hsm);
+	if (rc)
+		GOTO(out_unlock, rc);
+
+	EXIT;
+
+out_unlock:
+	mdt_object_unlock(info, obj, lh, 1);
+out_ucred:
+	mdt_exit_ucred(info);
+out:
+	mdt_thread_info_fini(info);
+	return rc;
+}
+
+/**
  * Retrieve undergoing HSM requests for the fid provided in RPC body.
  * Current requests are read from coordinator states.
  *

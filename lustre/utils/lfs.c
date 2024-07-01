@@ -498,8 +498,9 @@ command_t cmdlist[] = {
 	 "usage: path2fid [--parents] <path> ..."},
 	{"rmfid", lfs_rmfid, 0, "Remove file(s) by FID(s)\n"
 	 "usage: rmfid <fsname|rootpath> <fid> ..."},
-	{"data_version", lfs_data_version, 0, "Display file data version for "
-	 "a given path.\n" "usage: data_version [-n|-r|-w] <path>"},
+	{"data_version", lfs_data_version, 0, "Display file data version or "
+	 "set the data version in the HSM xattr for a given path.\n"
+	"usage: data_version [-n|-r|-w|-s] <path>"},
 	{"hsm_state", lfs_hsm_state, 0, "Display the HSM information (states, "
 	 "undergoing actions) for given files.\n usage: hsm_state <file> ..."},
 	{"hsm_set", lfs_hsm_set, 0, "Set HSM user flag on specified files.\n"
@@ -10861,6 +10862,7 @@ static int lfs_data_version(int argc, char **argv)
 	int data_version_flags = LL_DV_RD_FLUSH; /* Read by default */
 	__u64 data_version;
 	char *path;
+	bool hsm_sync = false;
 	int fd;
 	int rc;
 	int c;
@@ -10871,7 +10873,7 @@ static int lfs_data_version(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	while ((c = getopt(argc, argv, "hnrw")) != -1) {
+	while ((c = getopt(argc, argv, "hnrws")) != -1) {
 		switch (c) {
 		case 'n':
 			data_version_flags = 0;
@@ -10881,6 +10883,9 @@ static int lfs_data_version(int argc, char **argv)
 			break;
 		case 'w':
 			data_version_flags |= LL_DV_WR_FLUSH;
+			break;
+		case 's':
+			hsm_sync = true;
 			break;
 		default:
 			fprintf(stderr,
@@ -10907,12 +10912,23 @@ static int lfs_data_version(int argc, char **argv)
 	}
 
 	rc = llapi_get_data_version(fd, &data_version, data_version_flags);
-	if (rc < 0)
+	if (rc < 0) {
 		fprintf(stderr,
 			"%s data_version: cannot get version for '%s': %s\n",
 			progname, path, strerror(-rc));
-	else
+	} else {
 		printf("%ju" "\n", (uintmax_t)data_version);
+
+		if (hsm_sync) {
+			rc = llapi_hsm_data_version_set(fd, data_version);
+			if (rc < 0)
+				fprintf(stderr,
+					"%s data_version: cannot set version %llu for"
+					" '%s': %s\n", progname,
+					(unsigned long long)data_version, path,
+					strerror(-rc));
+		}
+	}
 
 	close(fd);
 	return rc;

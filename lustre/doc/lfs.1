@@ -9,7 +9,7 @@ lfs \- client utility for Lustre-specific file layout and other attributes
 .br
 .B lfs check \fR<\fBmgts\fR|\fBmdts\fR|\fBosts\fR|\fBall\fR> [\fIpath\fR]
 .br
-.B lfs data_version \fR[\fB-nrw\fR] \fB<\fIfilename\fR>
+.B lfs data_version \fR[\fB-nrws\fR] \fB<\fIfilename\fR>
 .br
 .B lfs df \fR[\fB-ihlv\fR] [\fB--pool\fR|\fB-p \fR<\fIfsname\fR>[.<\fIpool\fR>]] [\fIpath\fR]
 .br
@@ -155,14 +155,15 @@ Display the status of the MGTs, MDTs or OSTs (as specified in the command) or
 all the servers (MGTs, MDTs and OSTs). If \fBpath\fR is provided, display
 the status of the lustre file system mounted at specified \fBpath\fR only.
 .TP
-.B data_version [-nrw] <filename>
-Display the current version of file data. If -n is specified, the data version
-is read without taking a lock. As a consequence, the data version could be
-outdated if there are dirty caches on filesystem clients, but this option will
-not force data flushes and has less of an impact on the filesystem. If -r is
-specified, the data version is read after dirty pages on clients are flushed. If
--w is specified, the data version is read after all caching pages on clients are
-flushed.
+.B data_version [-nrws] <filename>
+Display the current version of file data and optionally set the data version
+stored in the HSM xattr. If -n is specified, the data version is read without
+taking a lock. As a consequence, the data version could be outdated if there are
+dirty caches on filesystem clients, but this option will not force data flushes
+and has less of an impact on the filesystem. If -r is specified, the data
+version is read after dirty pages on clients are flushed. If -w is specified,
+the data version is read after all caching pages on clients are flushed. If -s
+is specified, the data version that was read, is also written to the HSM xattr.
 
 Even with -r or -w, race conditions are possible and the data version should be
 checked before and after an operation to be confident the data did not change

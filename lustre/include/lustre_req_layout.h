@@ -258,6 +258,7 @@ extern struct req_format RQF_MDS_HSM_PROGRESS;
 extern struct req_format RQF_MDS_HSM_CT_REGISTER;
 extern struct req_format RQF_MDS_HSM_CT_UNREGISTER;
 extern struct req_format RQF_MDS_HSM_REQUEST;
+extern struct req_format RQF_MDS_HSM_DATA_VERSION;
 /* OST req_format */
 extern struct req_format RQF_OST_CONNECT;
 extern struct req_format RQF_OST_DISCONNECT;

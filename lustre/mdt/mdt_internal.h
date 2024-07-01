@@ -1077,6 +1077,7 @@ int mdt_hsm_progress(struct tgt_session_info *tsi);
 int mdt_hsm_ct_register(struct tgt_session_info *tsi);
 int mdt_hsm_ct_unregister(struct tgt_session_info *tsi);
 int mdt_hsm_request(struct tgt_session_info *tsi);
+int mdt_hsm_data_version(struct tgt_session_info *tsi);
 
 /* mdt/mdt_hsm_cdt_actions.c */
 extern const struct file_operations mdt_hsm_actions_fops;

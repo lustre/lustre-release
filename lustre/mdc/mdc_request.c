@@ -2051,6 +2051,44 @@ out:
 	return rc;
 }
 
+static int mdc_ioc_hsm_data_version(struct obd_export *exp,
+				    struct md_op_data *op_data)
+{
+	struct ptlrpc_request	*req;
+	struct mdt_body		*b;
+	int			 rc;
+	ENTRY;
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_MDS_HSM_DATA_VERSION);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_HSM_DATA_VERSION);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, 0, 0,
+		      op_data->op_suppgids[0], 0);
+
+	b = req_capsule_client_get(&req->rq_pill, &RMF_MDT_BODY);
+	LASSERT(b);
+
+	b->mbo_version = op_data->op_data_version;
+
+	ptlrpc_request_set_replen(req);
+
+	ptlrpc_get_mod_rpc_slot(req);
+	rc = ptlrpc_queue_wait(req);
+	ptlrpc_put_mod_rpc_slot(req);
+
+	GOTO(out, rc);
+out:
+	ptlrpc_req_put(req);
+	return rc;
+}
 static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
                                 struct lustre_kernelcomm *lk);
 static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
@@ -2259,6 +2297,9 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, rc);
 	case LL_IOC_HSM_REQUEST:
 		rc = mdc_ioc_hsm_request(exp, karg);
+		GOTO(out, rc);
+	case LL_IOC_HSM_DATA_VERSION:
+		rc = mdc_ioc_hsm_data_version(exp, karg);
 		GOTO(out, rc);
 	case OBD_IOC_CLIENT_RECOVER:
 		rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1, 0);

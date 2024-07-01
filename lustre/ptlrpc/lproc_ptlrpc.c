@@ -98,6 +98,7 @@ static struct ll_rpc_opcode {
 	{ MDS_SWAP_LAYOUTS,	"mds_swap_layouts" },
 	{ MDS_RMFID,        "mds_rmfid" },
 	{ MDS_BATCH,        "mds_batch" },
+	{ MDS_HSM_DATA_VERSION, "mds_hsm_data_version" },
 	{ LDLM_ENQUEUE,     "ldlm_enqueue" },
 	{ LDLM_CONVERT,     "ldlm_convert" },
 	{ LDLM_CANCEL,      "ldlm_cancel" },

@@ -771,6 +771,11 @@ static const struct req_msg_field *mdt_hsm_request[] = {
 	&RMF_GENERIC_DATA,
 };
 
+static const struct req_msg_field *mdt_hsm_data_version[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY
+};
+
 static const struct req_msg_field *obd_lfsck_request[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_LFSCK_REQUEST,
@@ -849,6 +854,7 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_HSM_STATE_SET,
 	&RQF_MDS_HSM_ACTION,
 	&RQF_MDS_HSM_REQUEST,
+	&RQF_MDS_HSM_DATA_VERSION,
 	&RQF_MDS_SWAP_LAYOUTS,
 	&RQF_MDS_RMFID,
 #ifdef HAVE_SERVER_SUPPORT
@@ -1707,6 +1713,10 @@ EXPORT_SYMBOL(RQF_MDS_HSM_STATE_SET);
 struct req_format RQF_MDS_HSM_REQUEST =
 	DEFINE_REQ_FMT0("MDS_HSM_REQUEST", mdt_hsm_request, empty);
 EXPORT_SYMBOL(RQF_MDS_HSM_REQUEST);
+
+struct req_format RQF_MDS_HSM_DATA_VERSION =
+	DEFINE_REQ_FMT0("MDS_HSM_DATA_VERSION", mdt_hsm_data_version, empty);
+EXPORT_SYMBOL(RQF_MDS_HSM_DATA_VERSION);
 
 struct req_format RQF_MDS_SWAP_LAYOUTS =
 	DEFINE_REQ_FMT0("MDS_SWAP_LAYOUTS",

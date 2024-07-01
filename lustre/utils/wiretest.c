@@ -210,7 +210,9 @@ void lustre_assert_wire_constants(void)
 		 (long long)MDS_RMFID);
 	LASSERTF(MDS_BATCH == 63, "found %lld\n",
 		 (long long)MDS_BATCH);
-	LASSERTF(MDS_LAST_OPC == 64, "found %lld\n",
+	LASSERTF(MDS_HSM_DATA_VERSION == 64, "found %lld\n",
+		 (long long)MDS_BATCH);
+	LASSERTF(MDS_LAST_OPC == 65, "found %lld\n",
 		 (long long)MDS_LAST_OPC);
 	LASSERTF(REINT_SETATTR == 1, "found %lld\n",
 		 (long long)REINT_SETATTR);

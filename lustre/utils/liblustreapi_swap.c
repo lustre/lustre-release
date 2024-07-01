@@ -91,6 +91,24 @@ int llapi_get_ost_layout_version(int fd, __u32 *layout_version)
 	return rc;
 }
 
+/**
+ * Set the data version in the HSM xattr on the MDT inode of a file to a
+ * specific value.
+ *
+ * \retval 0 on success.
+ * \retval -errno on error.
+ */
+int llapi_hsm_data_version_set(int fd, __u64 data_version)
+{
+	int rc;
+
+	rc = ioctl(fd, LL_IOC_HSM_DATA_VERSION, &data_version);
+	if (rc)
+		rc = -errno;
+
+	return rc;
+}
+
 /*
  * Create a file without any name and open it for read/write
  *

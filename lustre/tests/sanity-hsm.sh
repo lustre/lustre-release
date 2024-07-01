@@ -5623,6 +5623,30 @@ test_409b()
 }
 run_test 409b "getattr released file with CDT stopped after remount"
 
+test_410()
+{
+	[ "$MDS1_VERSION" -lt $(version_code 2.15.3.2) ] &&
+		skip "need MDS version at least 2.15.3.2"
+
+	[ "$CLIENT_VERSION" -lt $(version_code 2.15.3.2) ] &&
+		skip "need client version at least 2.15.3.2"
+
+	mkdir_on_mdt0 $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local fid=$(create_small_file $f)
+
+	copytool setup
+
+	$LFS hsm_set --exists --archived $f ||
+		error "could not change hsm flags"
+	$LFS hsm_release $f 2>&1 > /dev/null && error "HSM release should fail"
+
+	$LFS data_version -ws $f 2>&1 > /dev/null
+	$LFS hsm_release $f || error "could not release file"
+}
+run_test 410 "lfs data_version -s allows release of force-archived file"
+
 test_500()
 {
 	[ "$MDS1_VERSION" -lt $(version_code 2.6.92) ] &&

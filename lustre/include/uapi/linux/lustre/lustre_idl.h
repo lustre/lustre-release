@@ -1790,6 +1790,7 @@ enum mds_cmd {
 	MDS_SWAP_LAYOUTS	= 61,
 	MDS_RMFID		= 62,
 	MDS_BATCH		= 63,
+	MDS_HSM_DATA_VERSION	= 64,
 	MDS_LAST_OPC
 };
 
