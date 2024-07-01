@@ -3033,6 +3033,7 @@ run_test 140b "local mount is excluded from recovery"
 test_141() {
 	local oldc
 	local newc
+	local oldgen
 
 	[ "$PARALLEL" == "yes" ] && skip "skip parallel run"
 	combined_mgs_mds || skip "needs combined MGS/MDT"
@@ -3040,12 +3041,17 @@ test_141() {
 		skip "cannot run in local mode or from build tree"
 
 	# some get_param have a bug to handle dot in param name
-	do_rpc_nodes $(facet_active_host $SINGLEMDS) cancel_lru_locks MGC
-	oldc=$(do_facet $SINGLEMDS $LCTL get_param -n \
+	oldgen=$(do_facet ost1 $LCTL get_param -n mgc.*.import |
+		 awk '/generation:/{print $NF}')
+	do_rpc_nodes $(facet_active_host ost1) cancel_lru_locks MGC
+	oldc=$(do_facet ost1 $LCTL get_param -n \
 		'ldlm.namespaces.MGC*.lock_count')
 	fail $SINGLEMDS
-	do_rpc_nodes $(facet_active_host $SINGLEMDS) cancel_lru_locks MGC
-	newc=$(do_facet $SINGLEMDS $LCTL get_param -n \
+	wait_mgc_import_state ost1 FULL
+	wait_update_facet_cond ost1 "$LCTL get_param -n mgc.*.import |
+		awk '/generation:/{print}' | cut -d':' -f2" != " $oldgen"
+	do_rpc_nodes $(facet_active_host ost1) cancel_lru_locks MGC
+	newc=$(do_facet ost1 $LCTL get_param -n \
 		'ldlm.namespaces.MGC*.lock_count')
 
 	[ $oldc -eq $newc ] || error "mgc lost locks ($oldc != $newc)"
