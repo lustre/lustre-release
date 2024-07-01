@@ -1501,6 +1501,8 @@ static int after_reply(struct ptlrpc_request *req)
 
 	work_start = ktime_get_real();
 	timediff = ktime_us_delta(work_start, req->rq_sent_ns);
+	if (unlikely(timediff < 0))
+		timediff = 1;
 
 	/*
 	 * NB Until this point, the whole of the incoming message,

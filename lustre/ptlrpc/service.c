@@ -2287,6 +2287,8 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	work_start = ktime_get_real();
 	arrived = timespec64_to_ktime(request->rq_arrival_time);
 	timediff_usecs = ktime_us_delta(work_start, arrived);
+	if (unlikely(timediff_usecs < 0))
+		timediff_usecs = 1;
 	if (likely(svc->srv_stats != NULL)) {
 		lprocfs_counter_add(svc->srv_stats, PTLRPC_REQWAIT_CNTR,
 				    timediff_usecs);
@@ -2359,7 +2361,11 @@ put_conn:
 
 	work_end = ktime_get_real();
 	timediff_usecs = ktime_us_delta(work_end, work_start);
+	if (unlikely(timediff_usecs < 0))
+		timediff_usecs = 1;
 	arrived_usecs = ktime_us_delta(work_end, arrived);
+	if (unlikely(arrived_usecs < 0))
+		arrived_usecs = 1;
 	CDEBUG(D_RPCTRACE,
 	       "Handled RPC req@%p pname:cluuid+ref:pid:xid:nid:opc:job %s:%s+%d:%d:x%llu:%s:%d:%s Request processed in %lldus (%lldus total) trans %llu rc %d/%d\n",
 	       request, current->comm,
