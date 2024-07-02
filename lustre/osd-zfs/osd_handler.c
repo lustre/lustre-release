@@ -736,20 +736,6 @@ static const struct dt_device_operations osd_dt_ops = {
 	.dt_reserve_or_free_quota = osd_reserve_or_free_quota,
 };
 
-/*
- * DMU OSD device type methods
- */
-static int osd_type_init(struct lu_device_type *t)
-{
-	LU_CONTEXT_KEY_INIT(&osd_key);
-	return lu_context_key_register(&osd_key);
-}
-
-static void osd_type_fini(struct lu_device_type *t)
-{
-	lu_context_key_degister(&osd_key);
-}
-
 static void *osd_key_init(const struct lu_context *ctx,
 			  struct lu_context_key *key)
 {
@@ -1562,13 +1548,7 @@ const struct lu_device_operations osd_lu_ops = {
 	.ldo_fid_alloc		= fid_alloc_generic,
 };
 
-static void osd_type_start(struct lu_device_type *t)
-{
-}
-
-static void osd_type_stop(struct lu_device_type *t)
-{
-}
+LU_TYPE_INIT_FINI(osd, &osd_key);
 
 static const struct lu_device_type_operations osd_device_type_ops = {
 	.ldto_init		= osd_type_init,
