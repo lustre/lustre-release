@@ -2845,7 +2845,9 @@ static inline int dt_invalidate(const struct lu_env *env, struct dt_object *dt)
 {
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
-	LASSERT(dt->do_ops->do_invalidate);
+
+	if (!dt->do_ops->do_invalidate)
+		return 0;
 
 	return dt->do_ops->do_invalidate(env, dt);
 }
