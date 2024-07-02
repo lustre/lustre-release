@@ -9678,8 +9678,18 @@ restore_to_default_flavor()
 set_flavor_all()
 {
 	local flavor=${1:-null}
+	local maxtime=$(( 2 * $(request_timeout client)))
+	local clients=${CLIENTS:-$HOSTNAME}
 
 	echo "setting all flavor to $flavor"
+
+	# make sure all oscs are connected
+	for c in ${clients//,/ }; do
+		do_node $c lfs df -h
+		do_rpc_nodes $c wait_import_state "FULL" \
+			"osc.*.ost_server_uuid" $maxtime ||
+		error "OSCs not in FULL state for client $c"
+	done
 
 	# FIXME need parameter to this fn
 	# and remove global vars
