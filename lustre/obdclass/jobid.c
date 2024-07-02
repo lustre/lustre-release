@@ -768,6 +768,9 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 			l = 0;
 			break;
 		}
+		/* truncate jobid if it is too long */
+		if (l > joblen)
+			l = joblen;
 		jobid += l;
 		joblen -= l;
 	}

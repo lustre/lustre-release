@@ -157,7 +157,7 @@ do {						\
 #define LIBCFS_ALLOC_PRE(size, mask)					    \
 do {									    \
 	LASSERT(!in_interrupt() ||					    \
-		((size) <= LIBCFS_VMALLOC_SIZE &&			    \
+		(((size) <= LIBCFS_VMALLOC_SIZE) &&			    \
 		 ((mask) & GFP_ATOMIC)) != 0);				    \
 } while (0)
 
@@ -227,9 +227,9 @@ do {									    \
 
 #define LIBCFS_FREE(ptr, size)						\
 do {									\
-	int s = (size);							\
+	size_t s = (size);						\
 	if (unlikely((ptr) == NULL)) {					\
-		CERROR("LIBCFS: free NULL '" #ptr "' (%d bytes) at "	\
+		CERROR("LIBCFS: free NULL '" #ptr "' (%zd bytes) at "	\
 		       "%s:%d\n", s, __FILE__, __LINE__);		\
 		break;							\
 	}								\

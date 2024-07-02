@@ -42,7 +42,7 @@ int qword_print(FILE *f, const char *str);
 int qword_printhex(FILE *f, char *str, int slen);
 void qword_printint(FILE *f, int num);
 int qword_eol(FILE *f);
-int readline(int fd, char **buf, int *lenp);
+int readline(int fd, char **buf, ssize_t *lenp);
 int qword_get(char **bpp, char *dest, int bufsize);
 int qword_get_int(char **bpp, int *anint);
 

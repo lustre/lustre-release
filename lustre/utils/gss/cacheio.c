@@ -266,14 +266,14 @@ int qword_get_int(char **bpp, int *anint)
 
 #define READLINE_BUFFER_INCREMENT 2048
 
-int readline(int fd, char **buf, int *lenp)
+int readline(int fd, char **buf, ssize_t *lenp)
 {
 	/* read a line into *buf, which is malloced *len long
 	 * realloc if needed until we find a \n
 	 * nul out the \n and return
 	 * 0 of eof, 1 of success
 	 */
-	int len;
+	ssize_t len;
 
 	if (*lenp == 0) {
 		char *b = malloc(READLINE_BUFFER_INCREMENT);
@@ -284,7 +284,7 @@ int readline(int fd, char **buf, int *lenp)
 	}
 	len = read(fd, *buf, *lenp);
 	if (len <= 0) {
-		printerr(0, "readline: read error: len %d errno %d (%s)\n",
+		printerr(0, "readline: read error: len %zd errno %d (%s)\n",
 			 len, errno, strerror(errno));
 		return 0;
 	}
@@ -293,7 +293,7 @@ int readline(int fd, char **buf, int *lenp)
 	 * so we have to keep reading after re-alloc
 	 */
 		char *new;
-		int nl;
+		ssize_t nl;
 		*lenp += READLINE_BUFFER_INCREMENT;
 		new = realloc(*buf, *lenp);
 		if (new == NULL)
@@ -301,14 +301,14 @@ int readline(int fd, char **buf, int *lenp)
 		*buf = new;
 		nl = read(fd, *buf +len, *lenp - len);
 		if (nl <= 0 ) {
-			printerr(0, "readline: read error: len %d "
+			printerr(0, "readline: read error: len %zd "
 				 "errno %d (%s)\n", nl, errno, strerror(errno));
 			return 0;
 		}
 		len += nl;
 	}
 	(*buf)[len-1] = 0;
-	printerr(3, "readline: read %d chars into buffer of size %d:\n%s\n",
+	printerr(3, "readline: read %zd chars into buffer of size %zd:\n%s\n",
 		 len, *lenp, *buf);
 	return 1;
 }

@@ -223,7 +223,9 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		     struct llog_rec_hdr ***recs,
 		     int *recs_number)
 {
-	int rc = 0, recs_num, rd = 0;
+	ssize_t rd = 0;
+	ssize_t nbytes;
+	int rc = 0, recs_num;
 	long long file_size;
 	struct stat st;
 	char *file_buf = NULL, *recs_buf = NULL;
@@ -260,15 +262,15 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	*llog = (struct llog_log_hdr *)file_buf;
 
 	do {
-		rc = read(fd, file_buf + rd, file_size - rd);
-		if (rc > 0)
-			rd += rc;
-	} while (rc > 0 && rd < file_size);
+		nbytes = read(fd, file_buf + rd, file_size - rd);
+		if (nbytes > 0)
+			rd += nbytes;
+	} while (nbytes > 0 && rd < file_size);
 
 	if (rd < file_size) {
 		rc = rc < 0 ? -errno : -EIO;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "Error reading llog header: need %zd, got %d",
+			    "Error reading llog header: need %zd, got %zd",
 			    sizeof(**llog), rd);
 		goto clear_file_buf;
 	}

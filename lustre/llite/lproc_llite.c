@@ -114,6 +114,8 @@ static s64 ll_stats_pid_write(const char __user *buf, size_t len)
 	char kernbuf[16];
 	int rc;
 
+	if (len == 0)
+		return -EINVAL;
 	rc = kstrtoull_from_user(buf, len, 0, &value);
 	if (rc < 0 && len < sizeof(kernbuf)) {
 		if (copy_from_user(kernbuf, buf, len))

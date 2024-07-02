@@ -1614,7 +1614,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
  *
  * which doesn't work for globally shared files like /last_rcvd.
  */
-static int osd_ldiskfs_readlink(struct inode *inode, char *buffer, int buflen)
+static int osd_ldiskfs_readlink(struct inode *inode, char *buffer,
+				size_t buflen)
 {
 	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
 

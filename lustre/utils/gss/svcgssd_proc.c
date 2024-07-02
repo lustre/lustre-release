@@ -907,7 +907,7 @@ int handle_channel_request(int fd)
 	char out_handle_buf[15];
 	uint32_t lustre_mech;
 	static char *lbuf;
-	static int lbuflen;
+	static ssize_t lbuflen;
 	static char *cp;
 	int get_len;
 	int rc;
