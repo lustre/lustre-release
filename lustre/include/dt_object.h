@@ -2595,7 +2595,10 @@ static inline int dt_ladvise(const struct lu_env *env, struct dt_object *dt,
 {
 	LASSERT(dt);
 	LASSERT(dt->do_body_ops);
-	LASSERT(dt->do_body_ops->dbo_ladvise);
+
+	if (!dt->do_body_ops->dbo_ladvise)
+		return -EOPNOTSUPP;
+
 	return dt->do_body_ops->dbo_ladvise(env, dt, start, end, advice);
 }
 
@@ -2604,10 +2607,13 @@ static inline int dt_declare_fallocate(const struct lu_env *env,
 				       __u64 end, int mode, struct thandle *th)
 {
 	LASSERT(dt);
+
 	if (!dt->do_body_ops)
 		return -EOPNOTSUPP;
-	LASSERT(dt->do_body_ops);
-	LASSERT(dt->do_body_ops->dbo_declare_fallocate);
+
+	if (!dt->do_body_ops->dbo_declare_fallocate)
+		return -EOPNOTSUPP;
+
 	return dt->do_body_ops->dbo_declare_fallocate(env, dt, start, end,
 						      mode, th);
 }
@@ -2617,10 +2623,13 @@ static inline int dt_falloc(const struct lu_env *env, struct dt_object *dt,
 			      struct thandle *th)
 {
 	LASSERT(dt);
+
 	if (!dt->do_body_ops)
 		return -EOPNOTSUPP;
-	LASSERT(dt->do_body_ops);
-	LASSERT(dt->do_body_ops->dbo_fallocate);
+
+	if (!dt->do_body_ops->dbo_fallocate)
+		return -EOPNOTSUPP;
+
 	return dt->do_body_ops->dbo_fallocate(env, dt, start, end, mode, th);
 }
 

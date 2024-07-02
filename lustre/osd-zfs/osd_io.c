@@ -1287,48 +1287,6 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 				 0, oh, NULL, OSD_QID_BLK));
 }
 
-static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
-		       __u64 start, __u64 end, enum lu_ladvise_type advice)
-{
-	int rc;
-
-	ENTRY;
-	switch (advice) {
-	default:
-		rc = -ENOTSUPP;
-		break;
-	}
-
-	RETURN(rc);
-}
-
-static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
-			 __u64 start, __u64 end, int mode, struct thandle *th)
-{
-	int rc = -EOPNOTSUPP;
-
-	ENTRY;
-	 /*
-	  * space preallocation is not supported for ZFS
-	  * Returns -EOPNOTSUPP for now
-	  */
-	RETURN(rc);
-}
-
-static int osd_declare_fallocate(const struct lu_env *env,
-				 struct dt_object *dt, __u64 start, __u64 end,
-				 int mode, struct thandle *th)
-{
-	int rc = -EOPNOTSUPP;
-
-	ENTRY;
-	 /*
-	  * space preallocation is not supported for ZFS
-	  * Returns -EOPNOTSUPP for now
-	  */
-	RETURN(rc);
-}
-
 static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 			loff_t offset, int whence)
 {
@@ -1406,9 +1364,6 @@ const struct dt_body_operations osd_body_ops = {
 	.dbo_read_prep			= osd_read_prep,
 	.dbo_declare_punch		= osd_declare_punch,
 	.dbo_punch			= osd_punch,
-	.dbo_ladvise			= osd_ladvise,
-	.dbo_declare_fallocate		= osd_declare_fallocate,
-	.dbo_fallocate			= osd_fallocate,
 	.dbo_lseek			= osd_lseek,
 };
 
