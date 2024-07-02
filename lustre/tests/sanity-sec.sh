@@ -2523,6 +2523,7 @@ test_31() {
 	local net2=${NETTYPE}999
 	local mdsnid=$(do_facet mds1 $LCTL list_nids | head -1)
 	local addr1=${mdsnid%@*}
+	local nid2=${addr}@$net2
 	local addr2 failover_mds1
 
 	export LNETCTL=$(which lnetctl 2> /dev/null)
@@ -2576,7 +2577,19 @@ test_31() {
 		umount_client $MOUNT || error "umount $MOUNT failed"
 	fi
 
+	do_facet mgs "$LCTL set_param mgs.MGS.exports.clear=clear"
+	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
+		"$LCTL set_param *.${FSNAME}*.exports.clear=clear"
+
 	# check exports on servers are empty for client
+	wait_update_facet_cond mgs \
+		"$LCTL get_param -N mgs.MGS.exports.* | grep $nid |
+		cut -d'.' -f4-" '!=' $nid
+	for node in $(mdts_nodes) $(osts_nodes); do
+		wait_update_cond $node \
+			"$LCTL get_param -N *.${FSNAME}*.exports | grep $nid |
+			cut -d'.' -f4-" '!=' $nid
+	done
 	do_facet mgs "lctl get_param *.MGS*.exports.*.export"
 	do_facet mgs "lctl get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null |
 		      grep -q -" && error "export on MGS should be empty"
@@ -2641,10 +2654,10 @@ test_31() {
 	[ $? -ne 0 ] ||	error "export for $nid on MGS should not exist"
 
 	do_facet mgs \
-		"lctl get_param -n *.MGS*.exports.'${addr}@$net2'.uuid \
+		"lctl get_param -n *.MGS*.exports.'$nid2'.uuid \
 		 2>/dev/null | grep -"
 	[ $? -eq 0 ] ||
-		error "export for ${addr}@$net2 on MGS should exist"
+		error "export for $nid2 on MGS should exist"
 
 	# check {mdc,osc} imports
 	lctl get_param mdc.${FSNAME}-*.import | grep current_connection |
@@ -2668,6 +2681,20 @@ test_31() {
 
 	# unmount client
 	zconf_umount $HOSTNAME $MOUNT || error "unable to umount client"
+
+	do_facet mgs "$LCTL set_param mgs.MGS.exports.clear=clear"
+	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
+		"$LCTL set_param *.${FSNAME}*.exports.clear=clear"
+
+	wait_update_facet_cond mgs \
+		"$LCTL get_param -N mgs.MGS.exports.* | grep $nid2 |
+		cut -d'.' -f4-" '!=' $nid2
+	for node in $(mdts_nodes) $(osts_nodes); do
+		wait_update_cond $node \
+			"$LCTL get_param -N *.${FSNAME}*.exports | grep $nid2 |
+			cut -d'.' -f4-" '!=' $nid2
+	done
+	do_facet mgs "lctl get_param *.MGS*.exports.*.export"
 
 	# on client, configure LNet and turn LNet Dynamic Discovery on (default)
 	$LUSTRE_RMMOD || error "$LUSTRE_RMMOD failed (2)"

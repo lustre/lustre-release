@@ -187,6 +187,7 @@ int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 LPROC_SEQ_FOPS_RO_TYPE(mgs, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mgs, evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mgs, ir_timeout);
+LPROC_SEQ_FOPS_RW_TYPE(mgs, nid_stats_clear);
 
 static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
 	{ .name	=	"hash_stats",
@@ -301,6 +302,9 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
                 obd->obd_proc_exports_entry = NULL;
 		GOTO(out, rc);
         }
+	if (obd->obd_proc_exports_entry)
+		lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
+				   obd, &mgs_nid_stats_clear_fops);
 
 	rc = sysfs_create_link(&obd->obd_kset.kobj, &mgs->mgs_bottom->dd_kobj,
 			       "osd");
