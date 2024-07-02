@@ -2183,11 +2183,6 @@ static int osd_invalidate(const struct lu_env *env, struct dt_object *dt)
 	return 0;
 }
 
-static bool osd_check_stale(struct dt_object *dt)
-{
-	return false;
-}
-
 static const struct dt_object_operations osd_obj_ops = {
 	.do_read_lock		= osd_read_lock,
 	.do_write_lock		= osd_write_lock,
@@ -2215,7 +2210,6 @@ static const struct dt_object_operations osd_obj_ops = {
 	.do_xattr_list		= osd_xattr_list,
 	.do_object_sync		= osd_object_sync,
 	.do_invalidate		= osd_invalidate,
-	.do_check_stale		= osd_check_stale,
 };
 
 static const struct lu_object_operations osd_lu_obj_ops = {

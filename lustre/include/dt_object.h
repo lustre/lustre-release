@@ -2375,7 +2375,9 @@ static inline bool dt_object_stale(struct dt_object *dt)
 {
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
-	LASSERT(dt->do_ops->do_check_stale);
+
+	if (!dt->do_ops->do_check_stale)
+		return false;
 
 	return dt->do_ops->do_check_stale(dt);
 }
