@@ -138,6 +138,12 @@ int parse_devname(char *func, char *name, int dev_id);
 char *jt_cmdname(char *func);
 
 
+/* lustre_param.c */
+struct param_opts;
+int jt_lcfg_getparam(int argc, char **argv);
+int jt_lcfg_setparam(int argc, char **argv);
+int jt_lcfg_listparam(int argc, char **argv);
+
 /* lustre_cfg.c */
 int lcfg_set_devname(char *name);
 char *lcfg_get_devname(void);
@@ -152,10 +158,8 @@ int jt_lcfg_add_conn(int argc, char **argv);
 int jt_lcfg_del_conn(int argc, char **argv);
 int jt_lcfg_param(int argc, char **argv);
 int jt_lcfg_confparam(int argc, char **argv);
-int jt_lcfg_getparam(int argc, char **argv);
-int jt_lcfg_setparam(int argc, char **argv);
 int jt_lcfg_applyyaml(int argc, char **argv);
-int jt_lcfg_listparam(int argc, char **argv);
+int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt);
 
 int jt_pool_cmd(int argc, char **argv);
 int jt_del_ost(int argc, char **argv);

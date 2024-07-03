@@ -173,8 +173,6 @@ command_t cmdlist[] = {
 	{"recover", jt_obd_recover, 0,
 	 "try to restore a lost connection immediately\n"
 	 "usage: recover [MDC/OSC device]"},
-	{"set_timeout", jt_lcfg_set_timeout, 0,
-	 "usage: conf_param obd_timeout=<secs>\n"},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	{"conf_param", jt_lcfg_confparam, 0,
 	 "set a permanent config parameter.\n"
@@ -182,8 +180,6 @@ command_t cmdlist[] = {
 	 "usage: conf_param [-d] <target.keyword=val>\n"
 	 "  -d  Delete the permanent setting from the configuration."},
 #endif
-	{"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
-	 "usage: local_param <target.keyword=val>\n"},
 	{"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
 	 "usage: get_param [--classify|-F] [--header|-H] [--links|-l]\n"
 	 "		   [--no-links|-L] [--no-name|-n] [--only-name|-N]\n"
