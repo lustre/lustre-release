@@ -68,8 +68,9 @@ void fileset_alt_destroy(struct lu_fileset_alt *fileset)
 }
 EXPORT_SYMBOL(fileset_alt_destroy);
 
-void fileset_alt_destroy_tree(struct rb_root *root)
+void fileset_alt_destroy_tree(struct lu_nodemap *nodemap)
 {
+	struct rb_root *root = &nodemap->nm_fileset_alt;
 	struct lu_fileset_alt *fileset;
 	struct lu_fileset_alt *tmp;
 
@@ -77,6 +78,7 @@ void fileset_alt_destroy_tree(struct rb_root *root)
 		fileset_alt_destroy(fileset);
 
 	*root = RB_ROOT;
+	nodemap->nm_fileset_alt_sz = 0;
 }
 EXPORT_SYMBOL(fileset_alt_destroy_tree);
 
@@ -108,8 +110,9 @@ static unsigned int get_first_free_id(struct rb_root *root)
 }
 
 /**
- * fileset_alt_add() - Insert a fileset into the rb tree
- * @root: pointer to the root of the rb tree
+ * fileset_alt_add() - Insert an alt fileset into a nodemap
+ *
+ * @nodemap: pointer to the nodemap
  * @fileset: fileset to insert
  *
  * If fileset->nfa_id is 0, the first free id is assigned and used. The caller
@@ -120,8 +123,9 @@ static unsigned int get_first_free_id(struct rb_root *root)
  * * %-EEXIST if the fileset id already exists
  * * %-ENOSPC if the fileset id exceeds LUSTRE_NODEMAP_FILESET_NUM_MAX
  */
-int fileset_alt_add(struct rb_root *root, struct lu_fileset_alt *fileset)
+int fileset_alt_add(struct lu_nodemap *nodemap, struct lu_fileset_alt *fileset)
 {
+	struct rb_root *root = &nodemap->nm_fileset_alt;
 	struct rb_node **new = &(root->rb_node);
 	struct rb_node *parent = NULL;
 	struct lu_fileset_alt *this = NULL;
@@ -147,22 +151,26 @@ int fileset_alt_add(struct rb_root *root, struct lu_fileset_alt *fileset)
 	/* insert the new node and rebalance tree */
 	rb_link_node(&fileset->nfa_rb, parent, new);
 	rb_insert_color(&fileset->nfa_rb, root);
+	nodemap->nm_fileset_alt_sz++;
 
 	return 0;
 }
 EXPORT_SYMBOL(fileset_alt_add);
 
 /**
- * fileset_alt_delete() - Delete a fileset from the rb tree.
- * @root: pointer to the root of the rb tree
+ * fileset_alt_delete() - Delete an alt fileset from a nodemap
+ *
+ * @nodemap: pointer to the nodemap
  * @fileset: fileset to delete
  *
  * Return:
  * * %0 id of the deleted fileset
  * * %-EINVAL fileset is NULL
  */
-int fileset_alt_delete(struct rb_root *root, struct lu_fileset_alt *fileset)
+int fileset_alt_delete(struct lu_nodemap *nodemap,
+		       struct lu_fileset_alt *fileset)
 {
+	struct rb_root *root = &nodemap->nm_fileset_alt;
 	unsigned int fset_id;
 
 	if (fileset == NULL)
@@ -170,6 +178,7 @@ int fileset_alt_delete(struct rb_root *root, struct lu_fileset_alt *fileset)
 
 	fset_id = fileset->nfa_id;
 	rb_erase(&fileset->nfa_rb, root);
+	nodemap->nm_fileset_alt_sz--;
 	fileset_alt_destroy(fileset);
 
 	return fset_id;
@@ -238,8 +247,14 @@ struct lu_fileset_alt *fileset_alt_search_path(struct rb_root *root,
 	for (node = rb_first(root); node; node = rb_next(node)) {
 		fileset = rb_entry(node, struct lu_fileset_alt, nfa_rb);
 		if (prefix_search) {
-			rc = strncmp(fileset_path, fileset->nfa_path,
-				     strlen(fileset->nfa_path));
+			/* accepted (rc = 0) if fileset_path starts like alt
+			 * fileset, and is followed by '/' (subdirectory)
+			 * or '\0' (identical)
+			 */
+			rc = (strstr(fileset_path, fileset->nfa_path)
+				!= fileset_path ||
+			     (fileset_path[strlen(fileset->nfa_path)] != '/' &&
+			      fileset_path[strlen(fileset->nfa_path)] != '\0'));
 		} else {
 			rc = strcmp(fileset_path, fileset->nfa_path);
 		}

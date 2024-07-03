@@ -152,9 +152,10 @@ struct lu_fileset_alt *fileset_alt_init(unsigned int fileset_size);
 struct lu_fileset_alt *fileset_alt_create(const char *fileset_path,
 					  bool read_only);
 void fileset_alt_destroy(struct lu_fileset_alt *fileset);
-void fileset_alt_destroy_tree(struct rb_root *root);
-int fileset_alt_add(struct rb_root *root, struct lu_fileset_alt *fileset);
-int fileset_alt_delete(struct rb_root *root, struct lu_fileset_alt *fileset);
+void fileset_alt_destroy_tree(struct lu_nodemap *nodemap);
+int fileset_alt_add(struct lu_nodemap *nodemap, struct lu_fileset_alt *fileset);
+int fileset_alt_delete(struct lu_nodemap *nodemap,
+		       struct lu_fileset_alt *fileset);
 struct lu_fileset_alt *fileset_alt_search_id(struct rb_root *root,
 					 unsigned int fileset_id);
 struct lu_fileset_alt *fileset_alt_search_path(struct rb_root *root,

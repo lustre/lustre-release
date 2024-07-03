@@ -1715,7 +1715,7 @@ static int nodemap_cluster_rec_fileset_alt(struct lu_nodemap *nodemap,
 		}
 
 		fset_alt->nfa_id = fset_id;
-		rc = fileset_alt_add(&nodemap->nm_fileset_alt, fset_alt);
+		rc = fileset_alt_add(nodemap, fset_alt);
 		if (rc)
 			GOTO(out, rc);
 	}

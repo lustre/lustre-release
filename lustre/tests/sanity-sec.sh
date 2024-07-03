@@ -7921,7 +7921,6 @@ run_test 71 "encryption does not remove project flag"
 
 dyn_nm_helper() {
 	local facet=$1
-	local have_multi_filesets=$2
 	local mgsnm=mgsnm
 	local mgsnids=1.1.0.[1-100]@tcp
 	local mgsnids2=1.0.0.[1-100]@tcp
@@ -8069,32 +8068,6 @@ dyn_nm_helper() {
 			error "dynamic modify of $prop failed"
 	val=$(do_facet $facet $LCTL get_param -n nodemap.$nm.$prop)
 	(( val == 77 )) || error "incorrect $prop $val"
-	prop=fileset
-	do_facet $facet $LCTL nodemap_set_fileset --name $nm \
-		--fileset "/tmp" ||
-			error "dynamic modify of primary $prop failed"
-	if $have_multi_filesets; then
-		val=$(do_facet_check_fileset $facet $nm "/tmp" "primary")
-		[[ "$val" == "/tmp" ]] || error "incorrect primary $prop $val"
-		do_facet $facet $LCTL nodemap_set_fileset --name $nm \
-			--fileset "clear" ||
-			error "dynamic clear primary $prop failed"
-		val=$(do_facet_check_fileset $facet $nm "" "primary")
-		[[ -z $val ]] || error "primary $prop should be empty"
-		do_facet $facet $LCTL nodemap_fileset_add --name $nm \
-			--fileset "/alttmp" --alt ||
-			error "dynamic modify of alt $prop failed"
-		val=$(do_facet_check_fileset $facet $nm "/alttmp" "alternate")
-		[[ "$val" == "/alttmp" ]] || error "incorrect alt $prop $val"
-		do_facet $facet $LCTL nodemap_fileset_del --name $nm \
-			--fileset "/alttmp" ||
-			error "dynamic clear alt $prop failed"
-		val=$(do_facet_check_fileset $facet $nm "" "alternate")
-		[[ -z $val ]] || error "alternate $prop should be empty"
-	else
-		val=$(do_facet $facet $LCTL get_param -n nodemap.$nm.$prop)
-		[[ "$val" == "/deffset" ]] || error "incorrect $prop $val"
-	fi
 
 	prop=sepol
 	do_facet $facet $LCTL nodemap_set_sepol --name $nm \
@@ -8212,31 +8185,21 @@ dyn_nm_helper() {
 }
 
 test_72a() {
-	local have_multi_filesets=false
-
-	(( OST1_VERSION >= $(version_code 2.15.64) )) ||
-		skip "Need MDS >= 2.15.64 dynamic nodemaps"
-
-	(( OST1_VERSION >= $(version_code 2.16.56) )) &&
-		have_multi_filesets=true
+	(( OST1_VERSION >= $(version_code 2.16.54) )) ||
+		skip "Need OSS >= 2.16.54 dynamic nodemaps"
 
 	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
 		skip "Need servers on different hosts"
 
-	dyn_nm_helper ost1 $have_multi_filesets
+	dyn_nm_helper ost1
 }
 run_test 72a "dynamic nodemap properties on OSS"
 
 test_72b() {
-	local have_multi_filesets=false
+	(( MDS1_VERSION >= $(version_code 2.16.54) )) ||
+		skip "Need MDS >= 2.16.54 dynamic nodemaps"
 
-	(( MDS1_VERSION >= $(version_code 2.15.64) )) ||
-		skip "Need MDS >= 2.15.64 dynamic nodemaps"
-
-	(( MDS1_VERSION >= $(version_code 2.16.56) )) &&
-		have_multi_filesets=true
-
-	dyn_nm_helper mds1 $have_multi_filesets
+	dyn_nm_helper mds1
 }
 run_test 72b "dynamic nodemap properties on MDS"
 
@@ -8245,8 +8208,8 @@ test_72c() {
 	local nm=nm_test72c
 	local val
 
-	(( MDS1_VERSION >= $(version_code 2.16.52) )) ||
-		skip "Need MDS >= 2.16.52 dynamic nodemaps"
+	(( MDS1_VERSION >= $(version_code 2.16.54) )) ||
+		skip "Need MDS >= 2.16.54 dynamic nodemaps"
 
 	do_facet mgs $LCTL nodemap_add $mgsnm ||
 		error "adding $mgsnm on MGS failed"
@@ -8354,6 +8317,162 @@ test_72c() {
 	do_facet mds1 $LCTL get_param -R nodemap.*
 }
 run_test 72c "child_raise_privileges nodemap property"
+
+cleanup_72d() {
+	local nm_name=${1:-"c0"}
+	local dynnm1=${2:-"dyn1"}
+	local dynnm2=${3:-"dyn2"}
+
+	do_facet ost1 $LCTL nodemap_del $dynnm1 || true
+	do_facet ost1 $LCTL nodemap_del $dynnm2 || true
+	do_facet mgs $LCTL nodemap_del $nm_name
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 0
+	wait_nm_sync default trusted_nodemap
+}
+
+test_72d() {
+	local mgsnm=mgsnm
+	local nm=nm_test72d
+	local nm2=subnm_test72d
+	local val
+
+	(( OST1_VERSION >= $(version_code 2.16.56) )) ||
+		skip "Need OSS >= 2.16.56 multiple fileset"
+
+	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
+		skip "Need servers on different hosts"
+
+	stack_trap "cleanup_72d $mgsnm $nm $nm2" EXIT
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	wait_nm_sync default trusted_nodemap
+
+	do_facet mgs $LCTL nodemap_add $mgsnm ||
+		error "adding $mgsnm on MGS failed"
+	wait_nm_sync $mgsnm id '' inactive
+
+	do_facet ost1 $LCTL nodemap_add -d -p $mgsnm $nm ||
+		error "dynamic nodemap on server failed (1)"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.id)
+	if [[ -z "$val" || "$val" == "0" ]]; then
+		error "dynamic nodemap wrong id $val (1)"
+	fi
+	val=$(do_facet_check_fileset ost1 $nm "" "primary")
+	[[ "$val" == "" ]] ||
+		error "$nm should have empty fileset (1)"
+
+	local filesetp="/subdir"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm \
+		--fileset $filesetp ||
+		error "dynamic modify fileset to $filesetp failed"
+	val=$(do_facet_check_fileset ost1 $nm "$filesetp" "primary")
+	[[ "$val" == "$filesetp" ]] ||
+		error "$nm should have fileset $filesetp (1)"
+
+	do_facet ost1 $LCTL nodemap_fileset_del --name $nm \
+		--fileset $filesetp ||
+		error "dynamic del fileset $filesetp failed"
+	val=$(do_facet_check_fileset ost1 $nm "" "primary")
+	[[ "$val" == "" ]] ||
+		error "$nm should have empty fileset (2)"
+
+	do_facet mgs $LCTL nodemap_set_fileset --name $mgsnm \
+		--fileset $filesetp ||
+		error "modify fileset for $mgsnm on MGS failed"
+	wait_nm_sync $mgsnm fileset '' inactive
+
+	do_facet ost1 $LCTL nodemap_add -d -p $mgsnm $nm ||
+		error "dynamic nodemap on server failed (2)"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.id)
+	if [[ -z "$val" || "$val" == "0" ]]; then
+		error "dynamic nodemap wrong id $val (1)"
+	fi
+	val=$(do_facet_check_fileset ost1 $nm "$filesetp" "primary")
+	[[ "$val" == "$filesetp" ]] ||
+		error "$nm should have fileset $filesetp (2)"
+
+	local fileset1="/sub"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm \
+		--fileset $fileset1 &&
+		error "dynamic modify fileset to $fileset1 should fail"
+	val=$(do_facet_check_fileset ost1 $nm "$filesetp" "primary")
+	[[ "$val" == "$filesetp" ]] ||
+		error "$nm should have fileset $filesetp (3)"
+
+	local fileset2="/subdirother"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm \
+		--fileset $fileset2 &&
+		error "dynamic modify fileset to $fileset2 should fail"
+	val=$(do_facet_check_fileset ost1 $nm "$filesetp" "primary")
+	[[ "$val" == "$filesetp" ]] ||
+		error "$nm should have fileset $filesetp (4)"
+
+	local fileset3="/subdir/mydir"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm \
+		--fileset $fileset3 ||
+		error "dynamic modify fileset to $fileset3 failed (1)"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset3" "primary")
+	[[ "$val" == "$fileset3" ]] ||
+		error "$nm should have fileset $fileset3 (1)"
+
+	do_facet ost1 $LCTL nodemap_fileset_del --name $nm \
+		--fileset $fileset3 &&
+		error "dynamic del fileset $fileset3 should fail"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset3" "primary")
+	[[ "$val" == "$fileset3" ]] ||
+		error "$nm should have fileset $fileset3 (2)"
+
+	do_facet ost1 $LCTL nodemap_add -d -p $nm $nm2 ||
+		error "dynamic nodemap on server failed (3)"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm2.id)
+	if [[ -z "$val" || "$val" == "0" ]]; then
+		error "dynamic nodemap wrong id $val (2)"
+	fi
+	val=$(do_facet_check_fileset ost1 $nm2 "$fileset3" "primary")
+	[[ "$val" == "$fileset3" ]] ||
+		error "$nm2 should have fileset $fileset3 (1)"
+
+	local fileset4="/subdir/myd"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm2 \
+		--fileset $fileset4 &&
+		error "dynamic modify fileset to $fileset4 should fail"
+	val=$(do_facet_check_fileset ost1 $nm2 "$fileset3" "primary")
+	[[ "$val" == "$fileset3" ]] ||
+		error "$nm2 should have fileset $fileset3 (2)"
+
+	local fileset5="/subdir/mydirother"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm2 \
+		--fileset $fileset5 &&
+		error "dynamic modify fileset to $fileset5 should fail"
+	val=$(do_facet_check_fileset ost1 $nm2 "$fileset3" "primary")
+	[[ "$val" == "$fileset3" ]] ||
+		error "$nm2 should have fileset $fileset3 (3)"
+
+	local fileset6="/subdir/mydir/dir2"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm2 \
+		--fileset $fileset6 ||
+		error "dynamic modify fileset to $fileset6 failed"
+	val=$(do_facet_check_fileset ost1 $nm2 "$fileset6" "primary")
+	[[ "$val" == "$fileset6" ]] ||
+		error "$nm2 should have fileset $fileset6"
+
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm2 \
+		--fileset $fileset3 ||
+		error "dynamic modify fileset to $fileset3 failed (2)"
+	val=$(do_facet_check_fileset ost1 $nm2 "$fileset3" "primary")
+	[[ "$val" == "$fileset3" ]] ||
+		error "$nm2 should have fileset $fileset3"
+
+	do_facet ost1 $LCTL get_param -R nodemap.*
+}
+run_test 72d "fileset inheritance for dynamic nodemap"
 
 test_73() {
 	local vaultdir1=$DIR/$tdir/vault1

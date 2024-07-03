@@ -134,6 +134,8 @@ struct lu_nodemap {
 	struct rw_semaphore	 nm_fileset_alt_lock;
 	/* alternate fileset map */
 	struct rb_root		 nm_fileset_alt;
+	/* alternate fileset map size (# elements) */
+	unsigned int		 nm_fileset_alt_sz;
 	/* information about the expected SELinux policy on the nodes */
 	char			 nm_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
 	/* used when loading/unloading nodemaps */
