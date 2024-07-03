@@ -1,49 +1,26 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
- */
+/* SPDX-License-Identifier: GPL-2.0 */
+
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
  * Copyright (c) 2012, 2016, Intel Corporation.
  */
+
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
- * lustre/osd/osd_oi.h
- *
  * OSD Object Index
+ *
+ * Object Index (oi) service runs in the bottom layer of server stack. In
+ * translates fid local to this service to the storage cookie that uniquely
+ * and efficiently identifies object (inode) of the underlying file system.
  *
  * Author: Nikita Danilov <nikita@clusterfs.com>
  */
 
-/*
- * Object Index (oi) service runs in the bottom layer of server stack. In
- * translates fid local to this service to the storage cookie that uniquely
- * and efficiently identifies object (inode) of the underlying file system.
- */
-
 #ifndef _OSD_OI_H
 #define _OSD_OI_H
-
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>

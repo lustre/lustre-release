@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 MODULES := osd_ldiskfs
 osd_ldiskfs-objs = osd_handler.o osd_oi.o osd_lproc.o osd_iam.o \
 		   osd_iam_lfix.o osd_iam_lvar.o osd_io.o osd_compat.o \
