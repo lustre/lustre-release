@@ -82,32 +82,34 @@ case $with_o2ib in
 		# Use ofed_info to find external driver
 		AS_IF([which ofed_info 2>/dev/null], [
 			AS_IF([test x$uses_dpkg = xyes], [
-				LIST_ALL_PKG="dpkg -l | awk '{print \[$]2}'"
 				LSPKG="dpkg --listfiles"
 			], [
-				LIST_ALL_PKG="rpm -qa"
 				LSPKG="rpm -ql"
 			])
 
 			O2IBPKG="mlnx-ofed-kernel-dkms"
-			O2IBPKG+="|mlnx-ofed-kernel-modules"
-			O2IBPKG+="|mlnx-ofa_kernel-devel"
-			O2IBPKG+="|compat-rdma-devel"
-			O2IBPKG+="|kernel-ib-devel"
-			O2IBPKG+="|ofa_kernel-devel"
+			O2IBPKG+=" mlnx-ofed-kernel-modules"
+			O2IBPKG+=" mlnx-ofa_kernel-devel"
+			O2IBPKG+=" compat-rdma-devel"
+			O2IBPKG+=" kernel-ib-devel"
+			O2IBPKG+=" ofa_kernel-devel"
 
 			O2IBDIR="/ofa_kernel"
 			O2IBDIR+="|/ofa_kernel/default"
 			O2IBDIR+="|/openib"
 
-			O2IBDIR_PATH=$(eval $LIST_ALL_PKG |
-				       egrep -w "$O2IBPKG" | xargs $LSPKG |
+			O2IBDIR_PATH=$(eval $LSPKG $O2IBPKG 2>/dev/null |
 				       egrep "${O2IBDIR}$" |
 				       grep -v /ofed_scripts/ | head -n1)
 
+			# Nowadays, path should always be
+			# /usr/src/ofa_kernel/$ARCH/${LINUXRELEASE}
+			# and we could clean all that complexity
+			# but I don't know how far we should be retro-compatible.
+
 			if test -n "$O2IBDIR_PATH"; then
-				if test -d $O2IBDIR_PATH/${LINUXRELEASE}; then
-					O2IBDIR_PATH=$O2IBDIR_PATH/${LINUXRELEASE}
+				if test -d $O2IBDIR_PATH/${target_cpu}/${LINUXRELEASE}; then
+					O2IBDIR_PATH=$O2IBDIR_PATH/${target_cpu}/${LINUXRELEASE}
 				fi
 				EXT_O2IBPATHS=$(find $O2IBDIR_PATH -name rdma_cm.h |
 					sed -e 's/\/include\/rdma\/rdma_cm.h//')
