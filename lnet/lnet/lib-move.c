@@ -961,9 +961,33 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 	/* non-lnet_parse callers only receive delayed messages */
 	LASSERT(!do_recv || msg->msg_rx_delayed);
 
+	rbp = lnet_msg2bufpool(msg);
+
+	if (!do_recv) {
+		spin_lock(&lpni->lpni_lock);
+		if (lpni->lpni_rtrcredits <= 0 || rbp->rbp_credits <= 0) {
+			struct lnet_ni *ni = msg->msg_rxni;
+
+			if (ni->ni_net->net_lnd->lnd_eager_recv == NULL) {
+				msg->msg_rx_ready_delay = 1;
+			} else {
+				int rc;
+
+				spin_unlock(&lpni->lpni_lock);
+				lnet_net_unlock(msg->msg_rx_cpt);
+				rc = lnet_ni_eager_recv(ni, msg);
+				lnet_net_lock(msg->msg_rx_cpt);
+				if (rc)
+					return rc;
+				spin_lock(&lpni->lpni_lock);
+			}
+		}
+	}
+
 	if (!msg->msg_peerrtrcredit) {
 		/* lpni_lock protects the credit manipulation */
-		spin_lock(&lpni->lpni_lock);
+		if (do_recv)
+			spin_lock(&lpni->lpni_lock);
 
 		msg->msg_peerrtrcredit = 1;
 		lpni->lpni_rtrcredits--;
@@ -972,6 +996,7 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 
 		if (lpni->lpni_rtrcredits < 0) {
 			spin_unlock(&lpni->lpni_lock);
+
 			/* must have checked eager_recv before here */
 			LASSERT(msg->msg_rx_ready_delay);
 			msg->msg_rx_delayed = 1;
@@ -982,9 +1007,9 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 			return LNET_CREDIT_WAIT;
 		}
 		spin_unlock(&lpni->lpni_lock);
+	} else if (!do_recv) {
+		spin_unlock(&lpni->lpni_lock);
 	}
-
-	rbp = lnet_msg2bufpool(msg);
 
 	if (!msg->msg_rtrcredit) {
 		msg->msg_rtrcredit = 1;
@@ -4638,25 +4663,10 @@ lnet_parse_ack(struct lnet_ni *ni, struct lnet_msg *msg)
 int
 lnet_parse_forward_locked(struct lnet_ni *ni, struct lnet_msg *msg)
 {
-	int	rc = 0;
-
 	if (!the_lnet.ln_routing)
 		return -ECANCELED;
 
-	if (msg->msg_rxpeer->lpni_rtrcredits <= 0 ||
-	    lnet_msg2bufpool(msg)->rbp_credits <= 0) {
-		if (ni->ni_net->net_lnd->lnd_eager_recv == NULL) {
-			msg->msg_rx_ready_delay = 1;
-		} else {
-			lnet_net_unlock(msg->msg_rx_cpt);
-			rc = lnet_ni_eager_recv(ni, msg);
-			lnet_net_lock(msg->msg_rx_cpt);
-		}
-	}
-
-	if (rc == 0)
-		rc = lnet_post_routed_recv_locked(msg, 0);
-	return rc;
+	return lnet_post_routed_recv_locked(msg, 0);
 }
 
 int
