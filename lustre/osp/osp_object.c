@@ -1735,31 +1735,6 @@ static int osp_destroy(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
-static int osp_orphan_index_lookup(const struct lu_env *env,
-				   struct dt_object *dt,
-				   struct dt_rec *rec,
-				   const struct dt_key *key)
-{
-	return -EOPNOTSUPP;
-}
-
-static int osp_orphan_index_insert(const struct lu_env *env,
-				   struct dt_object *dt,
-				   const struct dt_rec *rec,
-				   const struct dt_key *key,
-				   struct thandle *handle)
-{
-	return -EOPNOTSUPP;
-}
-
-static int osp_orphan_index_delete(const struct lu_env *env,
-				   struct dt_object *dt,
-				   const struct dt_key *key,
-				   struct thandle *handle)
-{
-	return -EOPNOTSUPP;
-}
-
 /**
  * Initialize the OSP layer index iteration.
  *
@@ -2197,9 +2172,6 @@ static int osp_orphan_it_load(const struct lu_env *env, const struct dt_it *di,
 }
 
 static const struct dt_index_operations osp_orphan_index_ops = {
-	.dio_lookup		= osp_orphan_index_lookup,
-	.dio_insert		= osp_orphan_index_insert,
-	.dio_delete		= osp_orphan_index_delete,
 	.dio_it = {
 		.init		= osp_it_init,
 		.fini		= osp_it_fini,

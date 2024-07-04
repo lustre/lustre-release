@@ -2765,10 +2765,12 @@ static inline int dt_insert(const struct lu_env *env,
 {
 	LASSERT(dt);
 	LASSERT(dt->do_index_ops);
-	LASSERT(dt->do_index_ops->dio_insert);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_INSERT))
 		return cfs_fail_err;
+
+	if (!dt->do_index_ops->dio_insert)
+		return -EOPNOTSUPP;
 
 	return dt->do_index_ops->dio_insert(env, dt, rec, key, th);
 }
@@ -2913,10 +2915,12 @@ static inline int dt_delete(const struct lu_env *env,
 {
 	LASSERT(dt);
 	LASSERT(dt->do_index_ops);
-	LASSERT(dt->do_index_ops->dio_delete);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DELETE))
 		return cfs_fail_err;
+
+	if (!dt->do_index_ops->dio_delete)
+		return -EOPNOTSUPP;
 
 	return dt->do_index_ops->dio_delete(env, dt, key, th);
 }
@@ -2949,10 +2953,12 @@ static inline int dt_lookup(const struct lu_env *env,
 
 	LASSERT(dt);
 	LASSERT(dt->do_index_ops);
-	LASSERT(dt->do_index_ops->dio_lookup);
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_LOOKUP))
 		return cfs_fail_err;
+
+	if (!dt->do_index_ops->dio_lookup)
+		return -EOPNOTSUPP;
 
 	ret = dt->do_index_ops->dio_lookup(env, dt, rec, key);
 	if (ret > 0)

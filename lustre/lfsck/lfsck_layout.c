@@ -7292,31 +7292,6 @@ log:
 	RETURN_EXIT;
 }
 
-static int lfsck_orphan_index_lookup(const struct lu_env *env,
-				     struct dt_object *dt,
-				     struct dt_rec *rec,
-				     const struct dt_key *key)
-{
-	return -EOPNOTSUPP;
-}
-
-static int lfsck_orphan_index_insert(const struct lu_env *env,
-				     struct dt_object *dt,
-				     const struct dt_rec *rec,
-				     const struct dt_key *key,
-				     struct thandle *handle)
-{
-	return -EOPNOTSUPP;
-}
-
-static int lfsck_orphan_index_delete(const struct lu_env *env,
-				     struct dt_object *dt,
-				     const struct dt_key *key,
-				     struct thandle *handle)
-{
-	return -EOPNOTSUPP;
-}
-
 static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 					  struct dt_object *dt,
 					  __u32 attr)
@@ -7754,9 +7729,6 @@ static int lfsck_orphan_it_load(const struct lu_env *env,
 }
 
 static const struct dt_index_operations lfsck_orphan_index_ops = {
-	.dio_lookup		= lfsck_orphan_index_lookup,
-	.dio_insert		= lfsck_orphan_index_insert,
-	.dio_delete		= lfsck_orphan_index_delete,
 	.dio_it = {
 		.init		= lfsck_orphan_it_init,
 		.fini		= lfsck_orphan_it_fini,
