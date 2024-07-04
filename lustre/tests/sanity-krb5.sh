@@ -510,6 +510,42 @@ test_9() {
 }
 run_test 9 "Do not trust primary and supp gids from client"
 
+test_10() {
+	local count
+
+	$LFS mkdir -i 0 -c $MDSCOUNT $DIR/$tdir ||
+		error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+	$RUNAS ls -ld $DIR/$tdir || error "ls -ld $DIR/$tdir failed"
+	$RUNAS grep lgssc /proc/keys
+
+	# get rid of gss context and credentials for user
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context (1)"
+	$RUNAS grep lgssc /proc/keys
+	stack_trap restore_krb5_cred EXIT
+
+	# restore krb credentials
+	restore_krb5_cred
+
+	# revoke session keyring for user and access to fs in the same su -
+	su - $(id -n -u $RUNAS_ID) -c "keyctl revoke @s && ls -ld $DIR/$tdir" ||
+		error "revoke + ls failed"
+	$RUNAS grep lgssc /proc/keys
+
+	# refcount on lgssc keys should be 2
+	for ref in $($RUNAS grep lgssc /proc/keys | awk '$4~"perm"{print $3}');\
+	  do
+		[[ $ref == 2 ]] || error "bad refcnt $ref on key"
+	done
+
+	# get rid of gss context for user
+	$RUNAS $LFS flushctx $MOUNT || error "can't flush context (2)"
+	$RUNAS grep lgssc /proc/keys
+	count=$($RUNAS grep lgssc /proc/keys | grep -v "Running as" | wc -l)
+	[[ $count == 0 ]] || error "remaining $count keys for user"
+}
+run_test 10 "Support revoked session keyring"
+
 #
 # following tests will manipulate flavors and may end with any flavor set,
 # so each test should not assume any start flavor.

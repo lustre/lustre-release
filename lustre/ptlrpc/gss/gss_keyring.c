@@ -69,7 +69,7 @@ static struct key_type gss_key_type;
 
 static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
                                struct ptlrpc_svc_ctx *svc_ctx);
-static void request_key_unlink(struct key *key);
+static void request_key_unlink(struct key *key, bool fullsearch);
 
 /*
  * the timeout is only for the case that upcall child process die abnormally.
@@ -375,7 +375,7 @@ static void unbind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 
 	/* must invalidate the key, or others may find it during lookup */
 	key_invalidate_locked(key);
-	request_key_unlink(key);
+	request_key_unlink(key, false);
 
 	key_set_payload(key, 0, NULL);
 	ctx2gctx_keyring(ctx)->gck_key = NULL;
@@ -711,17 +711,89 @@ static inline struct key *get_session_keyring(const struct cred *cred)
 #endif
 
 /*
- * unlink request key from it's ring, which is linked during request_key().
- * sadly, we have to 'guess' which keyring it's linked to.
+ * Get the appropriate destination keyring for the request.
+ *
+ * The keyring selected is returned with an extra reference upon it which the
+ * caller must release.
  */
-static void request_key_unlink(struct key *key)
+/*
+ * Function inspired from the kernel's one, unfortunately not exported.
+ */
+static int construct_get_dest_keyring(struct key **_dest_keyring)
 {
-	struct cred *cred = (struct cred *)current_cred(), *new_cred = NULL;
+	struct key *dest_keyring = *_dest_keyring;
+	const struct cred *cred = current_cred();
+
+	if (dest_keyring) {
+		/* the caller supplied one */
+		key_get(dest_keyring);
+		return 0;
+	}
+
+	switch (cred->jit_keyring) {
+	case KEY_REQKEY_DEFL_DEFAULT:
+	case KEY_REQKEY_DEFL_REQUESTOR_KEYRING:
+#ifdef HAVE_GET_REQUEST_KEY_AUTH
+		if (cred->request_key_auth) {
+			struct request_key_auth *rka;
+			struct key *authkey = cred->request_key_auth;
+
+			down_read(&authkey->sem);
+			rka = get_request_key_auth(authkey);
+			if (!test_bit(KEY_FLAG_REVOKED, &authkey->flags))
+				dest_keyring = key_get(rka->dest_keyring);
+			up_read(&authkey->sem);
+			if (dest_keyring)
+				break;
+		}
+#endif
+		fallthrough;
+	case KEY_REQKEY_DEFL_THREAD_KEYRING:
+		dest_keyring = key_get(cred->thread_keyring);
+		if (dest_keyring)
+			break;
+		fallthrough;
+	case KEY_REQKEY_DEFL_PROCESS_KEYRING:
+		dest_keyring = key_get(cred->process_keyring);
+		if (dest_keyring)
+			break;
+		fallthrough;
+	case KEY_REQKEY_DEFL_SESSION_KEYRING:
+		rcu_read_lock();
+		dest_keyring = key_get(rcu_dereference(cred->session_keyring));
+		rcu_read_unlock();
+		if (dest_keyring) {
+			if (!test_bit(KEY_FLAG_REVOKED, &dest_keyring->flags))
+				break;
+			key_put(dest_keyring);
+		}
+		fallthrough;
+	case KEY_REQKEY_DEFL_USER_SESSION_KEYRING:
+		dest_keyring = get_user_session_keyring(cred);
+		break;
+	case KEY_REQKEY_DEFL_USER_KEYRING:
+		dest_keyring = get_user_keyring(cred);
+		break;
+	case KEY_REQKEY_DEFL_GROUP_KEYRING:
+	default:
+		LBUG();
+	}
+
+	*_dest_keyring = dest_keyring;
+	return 0;
+}
+
+/*
+ * Unlink key from its keyring, which was linked during request_key().
+ */
+static void request_key_unlink(struct key *key, bool fullsearch)
+{
 	kuid_t kuid_orig = current_cred()->user->uid;
 #ifdef HAVE_USER_UID_KEYRING
 	struct key *root_uid_keyring = NULL;
 #endif
 	const struct cred *old_cred = NULL;
+	struct cred *new_cred = NULL;
 	struct key *ring = NULL;
 	uid_t uid, key_uid;
 	int res;
@@ -742,67 +814,21 @@ static void request_key_unlink(struct key *key)
 		new_cred->user->uid_keyring = NULL;
 #endif
 		old_cred = override_creds(new_cred);
-		cred = new_cred;
 	}
 
 	/* User keys are linked to the user keyring. So get it now. */
-	if (key_uid) {
+	if (key_uid && !fullsearch) {
 		/* Getting a key(ring) normally increases its refcount by 1.
 		 * But if we overrode creds above, calling get_user_keyring()
 		 * will add one more ref, because of the user switch.
 		 */
-		ring = get_user_keyring(cred);
-		goto do_unlink;
-	}
-
+		ring = get_user_keyring(current_cred());
+	} else {
 search:
-	switch (cred->jit_keyring) {
-	case KEY_REQKEY_DEFL_DEFAULT:
-	case KEY_REQKEY_DEFL_REQUESTOR_KEYRING:
-#ifdef HAVE_GET_REQUEST_KEY_AUTH
-		if (cred->request_key_auth) {
-			struct request_key_auth *rka;
-			struct key *authkey = cred->request_key_auth;
-
-			down_read(&authkey->sem);
-			rka = get_request_key_auth(authkey);
-			if (!test_bit(KEY_FLAG_REVOKED, &authkey->flags))
-				ring = key_get(rka->dest_keyring);
-			up_read(&authkey->sem);
-			if (ring)
-				break;
-		}
-#endif
-		fallthrough;
-	case KEY_REQKEY_DEFL_THREAD_KEYRING:
-		ring = key_get(cred->thread_keyring);
-		if (ring)
-			break;
-		fallthrough;
-	case KEY_REQKEY_DEFL_PROCESS_KEYRING:
-		ring = key_get(cred->process_keyring);
-		if (ring)
-			break;
-		fallthrough;
-	case KEY_REQKEY_DEFL_SESSION_KEYRING:
-		rcu_read_lock();
-		ring = key_get(rcu_dereference(cred->session_keyring));
-		rcu_read_unlock();
-		if (ring)
-			break;
-		fallthrough;
-	case KEY_REQKEY_DEFL_USER_SESSION_KEYRING:
-		ring = get_user_session_keyring(cred);
-		break;
-	case KEY_REQKEY_DEFL_USER_KEYRING:
-		ring = get_user_keyring(cred);
-		break;
-	case KEY_REQKEY_DEFL_GROUP_KEYRING:
-	default:
-		LBUG();
+		if (construct_get_dest_keyring(&ring))
+			ring = NULL;
 	}
 
-do_unlink:
 	if (ring) {
 		res = key_unlink(ring, key);
 		CDEBUG(D_SEC,
@@ -1024,18 +1050,6 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	}
 	CDEBUG(D_SEC, "obtained key %08x for %s\n", key->serial, desc);
 
-	/* We want user keys to be linked to the user keyring (see call to
-	 * keyctl_instantiate() from prepare_and_instantiate() in userspace).
-	 * But internally request_key() tends to also link the key to the
-	 * session keyring. So do our best to avoid that by trying to unlink
-	 * the key from the session keyring right now. It will spare us pain
-	 * when we need to remove the key later on.
-	 */
-	if (!is_root && current_cred()->session_keyring) {
-		key_get(current_cred()->session_keyring);
-		(void)key_unlink(current_cred()->session_keyring, key);
-		key_put(current_cred()->session_keyring);
-	}
 	/* once payload.data was pointed to a ctx, it never changes until
 	 * we de-associate them; but parallel request_key() may return
 	 * a key with payload.data == NULL at the same time. so we still
@@ -1078,8 +1092,15 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 
 	up_write(&key->sem);
 
-	if (is_root && create_new)
-		request_key_unlink(key);
+	/* We want user keys to be linked to the user keyring (see call to
+	 * keyctl_instantiate() from prepare_and_instantiate() in userspace).
+	 * But internally request_key() links the key to the session or
+	 * user session keyring, depending on jit_keyring value. Avoid that by
+	 * unlinking the key from this keyring. It will spare
+	 * us pain when we need to remove the key later on.
+	 */
+	if (!is_root || create_new)
+		request_key_unlink(key, true);
 
 	key_put(key);
 out:
@@ -1105,26 +1126,45 @@ void gss_sec_release_ctx_kr(struct ptlrpc_sec *sec,
  * Note here we suppose only to flush _my_ context, the "uid" will
  * be ignored in the search.
  */
-static
-void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
-                             uid_t uid,
-                             int grace, int force)
+static void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec, uid_t uid,
+				    int grace, int force)
 {
-        struct key              *key;
-        char                     desc[24];
+	const struct cred *old_cred = NULL;
+	struct cred *new_cred = NULL;
+	struct key *key;
+	char desc[24];
 
-        /* nothing to do for reverse or rootonly sec */
-        if (sec_is_reverse(sec) || sec_is_rootonly(sec))
-                return;
+	/* nothing to do for reverse or rootonly sec */
+	if (sec_is_reverse(sec) || sec_is_rootonly(sec))
+		return;
 
-        construct_key_desc(desc, sizeof(desc), sec, uid);
+	construct_key_desc(desc, sizeof(desc), sec, uid);
+
+	if (uid) {
+		/* If the session keyring is revoked, it must not be used by
+		 * request_key(), otherwise we would get -EKEYREVOKED and
+		 * the user keyring would not even be searched.
+		 * So prepare new creds with no session keyring.
+		 */
+		if (current_cred()->session_keyring &&
+		    test_bit(KEY_FLAG_REVOKED,
+			     &current_cred()->session_keyring->flags)) {
+			new_cred = prepare_creds();
+			if (new_cred) {
+				new_cred->session_keyring = NULL;
+				old_cred = override_creds(new_cred);
+			}
+		}
+	}
 
 	/* there should be only one valid key, but we put it in the
 	 * loop in case of any weird cases */
 	for (;;) {
 		key = request_key(&gss_key_type, desc, NULL);
 		if (IS_ERR(key)) {
-			CDEBUG(D_SEC, "No more key found for current user\n");
+			CDEBUG(D_SEC,
+			       "No more key found for current user: rc=%ld\n",
+				PTR_ERR(key));
 			break;
 		}
 
@@ -1139,6 +1179,11 @@ void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
 
 		up_write(&key->sem);
 		key_put(key);
+	}
+
+	if (old_cred) {
+		revert_creds(old_cred);
+		put_cred(new_cred);
 	}
 }
 
