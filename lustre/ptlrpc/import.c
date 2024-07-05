@@ -556,7 +556,7 @@ static int import_select_connection(struct obd_import *imp)
 
 		/* make it quick at first round */
 		if (timeout > CONNECTION_SWITCH_MIN)
-			at_reset(at, CONNECTION_SWITCH_MAX);
+			at_reset(at, CONNECTION_SWITCH_MIN);
 	} else if (imp->imp_conn_list.next == &imp_conn->oic_item) {
 		struct adaptive_timeout *at = &imp->imp_at.iat_net_latency;
 		timeout_t timeout = obd_at_get(imp->imp_obd, at);
