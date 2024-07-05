@@ -2332,14 +2332,45 @@ static int sptlrpc_svc_check_from(struct ptlrpc_request *req, int svc_rc)
 		}
 		break;
 	case LUSTRE_SP_MGS:
-	case LUSTRE_SP_MGC:
 		if (!req->rq_auth_usr_root && !req->rq_auth_usr_mdt &&
 		    !req->rq_auth_usr_ost) {
 			/* The below message is checked in sanity-sec test_33 */
-			DEBUG_REQ(D_ERROR, req, "faked source MGC/MGS");
+			DEBUG_REQ(D_ERROR, req, "faked source MGS");
 			svc_rc = SECSVC_DROP;
 		}
 		break;
+	case LUSTRE_SP_MGC: {
+		bool faked = false;
+
+		/* For krb, at most one of rq_auth_usr_root, rq_auth_usr_mdt,
+		 * rq_auth_usr_ost can be non zero.
+		 * For SSK, all of rq_auth_usr_root rq_auth_usr_mdt
+		 * rq_auth_usr_ost must be 1 for server/root access, and all 0
+		 * for user access.
+		 */
+		switch (SPTLRPC_FLVR_MECH(req->rq_flvr.sf_rpc)) {
+		case SPTLRPC_MECH_GSS_KRB5:
+			if (req->rq_auth_usr_root + req->rq_auth_usr_mdt +
+			    req->rq_auth_usr_ost > 1)
+				faked = true;
+			break;
+		case SPTLRPC_MECH_GSS_SK:
+			if ((!req->rq_auth_usr_root || !req->rq_auth_usr_mdt ||
+			     !req->rq_auth_usr_ost) &&
+			    (req->rq_auth_usr_root || req->rq_auth_usr_mdt ||
+			     req->rq_auth_usr_ost))
+				faked = true;
+			break;
+		default:
+			faked = false;
+		}
+		if (faked) {
+			/* The below message is checked in sanity-sec test_33 */
+			DEBUG_REQ(D_ERROR, req, "faked source MGC");
+			svc_rc = SECSVC_DROP;
+		}
+		break;
+	}
 	case LUSTRE_SP_ANY:
 	default:
 		DEBUG_REQ(D_ERROR, req, "invalid source %u", req->rq_sp_from);

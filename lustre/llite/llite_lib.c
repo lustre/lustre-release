@@ -3492,10 +3492,14 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 int ll_flush_ctx(struct inode *inode)
 {
 	struct ll_sb_info  *sbi = ll_i2sbi(inode);
+	struct lustre_sb_info *lsi = sbi->lsi;
 
 	CDEBUG(D_SEC, "flush context for user %d\n",
 	       from_kuid(&init_user_ns, current_uid()));
 
+	obd_set_info_async(NULL, lsi->lsi_mgc->u.cli.cl_mgc_mgsexp,
+			   sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
+			   0, NULL, NULL);
 	obd_set_info_async(NULL, sbi->ll_md_exp,
 			   sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
 			   0, NULL, NULL);

@@ -905,6 +905,54 @@ test_151() {
 }
 run_test 151 "secure mgs connection: server flavor control"
 
+exit_152() {
+	zconf_umount $HOSTNAME $MOUNT
+
+	# remove mgs rule
+	set_rule _mgs any any
+
+	zconf_mount $HOSTNAME $MOUNT
+	if [ "$MOUNT_2" ]; then
+		zconf_mount $HOSTNAME $MOUNT2
+	fi
+}
+
+test_152() {
+	local mount_opts
+	local count
+
+	(( MDS1_VERSION >= $(version_code 2.15.64) )) ||
+		skip "Need MDS >= 2.15.64 for user context with MGS"
+
+	stack_trap exit_152 EXIT
+
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	zconf_umount $HOSTNAME $MOUNT || error "umount $MOUNT failed"
+
+	# set mgs rule to only accept krb5p
+	set_rule _mgs any any krb5p
+
+	# start gss daemon on mgs node
+	combined_mgs_mds || start_gss_daemons $mgs_HOST $LSVCGSSD "-vvv"
+
+	# re-mount client with mgssec=krb5p
+	mount_opts="${MOUNT_OPTS:+$MOUNT_OPTS,}mgssec=krb5p"
+	zconf_mount $HOSTNAME $MOUNT $mount_opts ||
+		error "unable to mount client"
+
+	$RUNAS $LFS check mgts || error "check mgts as user failed"
+	$RUNAS grep lgssc /proc/keys
+
+	$RUNAS $LFS flushctx $MOUNT || error "flushctx as user failed"
+	$RUNAS grep lgssc /proc/keys
+	count=$($RUNAS grep lgssc /proc/keys | grep -v "Running as" | wc -l)
+	[[ $count == 0 ]] || error "remaining $count keys for user"
+}
+run_test 152 "secure mgs connection: user access"
+
 test_200() {
 	local nid=$(lctl list_nids | grep ${NETTYPE} | head -n1)
 	local nidstr="peer_nid: ${nid},"

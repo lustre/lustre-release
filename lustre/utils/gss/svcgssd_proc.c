@@ -351,7 +351,8 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	sname[name.length] = '\0';
 	gss_release_buffer(&min_stat, &name);
 
-	if (lustre_svc == LUSTRE_GSS_SVC_MDS &&
+	if ((lustre_svc == LUSTRE_GSS_SVC_MDS ||
+	     lustre_svc == LUSTRE_GSS_SVC_MGS) &&
 	    lookup_id(client_name, sname, nid, &cred->cr_mapped_uid))
 		printerr(LL_DEBUG, "no id found for %s\n", sname);
 
@@ -376,24 +377,24 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	if (host) {
 		if (lnet_nid2hostname(nid, namebuf, namebuf_size)) {
 			printerr(LL_ERR,
-				 "ERROR: failed to resolve hostname for %s/%s@%s from %016llx\n",
-				 sname, host, realm, nid);
+				 "ERROR: failed to resolve hostname for %s/%s@%s from %s\n",
+				 sname, host, realm, libcfs_nid2str(nid));
 			goto out_free;
 		}
 
 		if (strcasecmp(host, namebuf)) {
 			printerr(LL_ERR,
-				 "ERROR: %s/%s@%s claimed hostname doesn't match %s, nid %016llx\n",
+				 "ERROR: %s/%s@%s claimed hostname doesn't match %s, nid %s\n",
 				 sname, host, realm,
-				 namebuf, nid);
+				 namebuf, libcfs_nid2str(nid));
 			goto out_free;
 		}
 	} else {
 		if (!strcmp(sname, GSSD_SERVICE_MDS) ||
 		    !strcmp(sname, GSSD_SERVICE_OSS)) {
 			printerr(LL_ERR,
-				 "ERROR: %s@%s from %016llx doesn't bind with hostname\n",
-				 sname, realm, nid);
+				 "ERROR: %s@%s from %s doesn't bind with hostname\n",
+				 sname, realm, libcfs_nid2str(nid));
 			goto out_free;
 		}
 	}
@@ -408,9 +409,10 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 			/* Prevent access to unmapped user from remote realm */
 			if (cred->cr_mapped_uid == -1) {
 				printerr(LL_ERR,
-					 "ERROR: %s%s%s@%s from %016llx is remote but without mapping\n",
+					 "ERROR: %s%s%s@%s from %s is remote but without mapping\n",
 					 sname, host ? "/" : "",
-					 host ? host : "", realm, nid);
+					 host ? host : "", realm,
+					 libcfs_nid2str(nid));
 				break;
 			}
 			goto valid;
@@ -436,8 +438,8 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		}
 		if (cred->cr_mapped_uid != -1) {
 			printerr(LL_INFO,
-				 "user %s from %016llx is mapped to %u\n",
-				 sname, nid,
+				 "user %s from %s is mapped to %u\n",
+				 sname, libcfs_nid2str(nid),
 				 cred->cr_mapped_uid);
 			goto valid;
 		}
@@ -448,8 +450,8 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 				 sname, cred->cr_uid);
 			goto valid;
 		}
-		printerr(LL_ERR, "ERROR: invalid user, %s/%s@%s from %016llx\n",
-			 sname, host, realm, nid);
+		printerr(LL_ERR, "ERROR: invalid user, %s/%s@%s from %s\n",
+			 sname, host, realm, libcfs_nid2str(nid));
 		break;
 
 valid:
@@ -470,10 +472,17 @@ valid:
 			cred->cr_uid = 0;
 			cred->cr_usr_mds = 1;
 		}
+		if (cred->cr_mapped_uid != -1) {
+			printerr(LL_INFO,
+				 "user %s from %s is mapped to %u\n",
+				 sname, libcfs_nid2str(nid),
+				 cred->cr_mapped_uid);
+			goto valid;
+		}
 		if (cred->cr_uid == -1) {
 			printerr(LL_ERR,
-				 "ERROR: svc %d doesn't accept user %s from %016llx\n",
-				 lustre_svc, sname, nid);
+				 "ERROR: svc %d doesn't accept user %s from %s\n",
+				 lustre_svc, sname, libcfs_nid2str(nid));
 			break;
 		}
 		res = 0;
@@ -484,9 +493,10 @@ valid:
 
 out_free:
 	if (!res)
-		printerr(LL_WARN, "%s: authenticated %s%s%s@%s from %016llx\n",
+		printerr(LL_WARN, "%s: authenticated %s%s%s@%s from %s\n",
 			 lustre_svc_name[lustre_svc], sname,
-			 host ? "/" : "", host ? host : "", realm, nid);
+			 host ? "/" : "", host ? host : "", realm,
+			 libcfs_nid2str(nid));
 	free(sname);
 	return res;
 }

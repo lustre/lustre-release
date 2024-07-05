@@ -2064,7 +2064,10 @@ int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 	else
 		CDEBUG(D_SEC, "%s: create svc ctx %p: accept user %u from %s\n",
 		       target->obd_name,
-		       grctx->src_ctx, grctx->src_ctx->gsc_uid,
+		       grctx->src_ctx,
+		       grctx->src_ctx->gsc_mapped_uid != -1 ?
+			 grctx->src_ctx->gsc_mapped_uid :
+			 grctx->src_ctx->gsc_uid,
 		       libcfs_nidstr(&req->rq_peer.nid));
 
 	if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
@@ -2284,7 +2287,10 @@ int gss_svc_handle_data(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 
 	CERROR("svc %u failed: major 0x%08x: req xid %llu ctx %p idx %#llx(%u->%s)\n",
 	       gw->gw_svc, major, req->rq_xid, grctx->src_ctx,
-	       gss_handle_to_u64(&gw->gw_handle), grctx->src_ctx->gsc_uid,
+	       gss_handle_to_u64(&gw->gw_handle),
+	       grctx->src_ctx->gsc_mapped_uid != -1 ?
+		 grctx->src_ctx->gsc_mapped_uid :
+		 grctx->src_ctx->gsc_uid,
 	       libcfs_nidstr(&req->rq_peer.nid));
 error:
 	/* we only notify client in case of NO_CONTEXT/BAD_SIG, which
@@ -2323,7 +2329,10 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 
 	CDEBUG(D_SEC, "destroy svc ctx %p idx %#llx (%u->%s)\n",
 	       grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
-	       grctx->src_ctx->gsc_uid, libcfs_nidstr(&req->rq_peer.nid));
+	       grctx->src_ctx->gsc_mapped_uid != -1 ?
+		 grctx->src_ctx->gsc_mapped_uid :
+		 grctx->src_ctx->gsc_uid,
+	       libcfs_nidstr(&req->rq_peer.nid));
 
 	gss_svc_upcall_destroy_ctx(grctx->src_ctx);
 
@@ -2451,7 +2460,9 @@ void gss_svc_invalidate_ctx(struct ptlrpc_svc_ctx *svc_ctx)
 	grctx = gss_svc_ctx2reqctx(svc_ctx);
 
 	CWARN("gss svc invalidate ctx %p(%u)\n", grctx->src_ctx,
-	      grctx->src_ctx->gsc_uid);
+	      grctx->src_ctx->gsc_mapped_uid != -1 ?
+		grctx->src_ctx->gsc_mapped_uid :
+		grctx->src_ctx->gsc_uid);
 	gss_svc_upcall_destroy_ctx(grctx->src_ctx);
 
 	EXIT;

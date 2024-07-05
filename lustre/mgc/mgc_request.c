@@ -1099,6 +1099,13 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		RETURN(rc);
 	}
 
+	if (KEY_IS(KEY_FLUSH_CTX)) {
+		struct obd_import *imp = class_exp2cliimp(exp);
+
+		sptlrpc_import_flush_my_ctx(imp);
+		RETURN(0);
+	}
+
 #ifdef HAVE_SERVER_SUPPORT
 	rc = mgc_set_info_async_server(env, exp, keylen, key, vallen, val, set);
 #endif

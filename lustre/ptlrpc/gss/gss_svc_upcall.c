@@ -887,7 +887,10 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	rscp->sc_target = target;
 
 	CDEBUG(D_SEC, "%s: server create rsc %p(%u->%s)\n",
-	       target->obd_name, rscp, rscp->sc_ctx.gsc_uid,
+	       target->obd_name, rscp,
+	       rscp->sc_ctx.gsc_mapped_uid != -1 ?
+		 rscp->sc_ctx.gsc_mapped_uid :
+		 rscp->sc_ctx.gsc_uid,
 	       libcfs_nidstr(&req->rq_peer.nid));
 
 	if (rsip->si_out_handle.len > PTLRPC_GSS_MAX_HANDLE_SIZE) {
