@@ -2773,23 +2773,14 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 			obj = ext->oe_obj;
 
 		/* for unaligned writes, we do the data copying here */
-		if (sdio && sdio->csd_unaligned && sdio->csd_write &&
-		    !sdio->csd_write_copied) {
-			/* note a single sdio can correspond to multiple RPCs,
-			 * so we use this lock to ensure the data copy is only
-			 * done once (an sdio can also correspond to multiple
-			 * extents, which is also handled by this)
+		if (sdio && sdio->csd_unaligned && sdio->csd_write) {
+			rc = ll_dio_user_copy(sdio);
+			if (rc < 0)
+				GOTO(out, rc);
+			/* dio_user_copy has some concurrency handling in it,
+			 * so we add this assert to ensure it did its job...
 			 */
-			spin_lock(&sdio->csd_lock);
-			if (!sdio->csd_write_copied) {
-				rc = ll_dio_user_copy(sdio);
-				if (rc <= 0) {
-					spin_unlock(&sdio->csd_lock);
-					GOTO(out, rc);
-				}
-				sdio->csd_write_copied = true;
-			}
-			spin_unlock(&sdio->csd_lock);
+			LASSERT(sdio->csd_write_copied);
 		}
 	}
 

@@ -1475,6 +1475,7 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 	size_t original_count = count;
 	int short_copies = 0;
 	bool mm_used = false;
+	bool locked = false;
 	int status = 0;
 	int i = 0;
 	int rw;
@@ -1488,6 +1489,18 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 	else
 		rw = READ;
 
+	/* read copying is protected by the reference count on the sdio, since
+	 * it's done as part of getting rid of the sdio, but write copying is
+	 * done at the start, where there may be multiple ptlrpcd threads
+	 * using this sdio, so we must lock and check if the copying has
+	 * been done
+	 */
+	if (rw == WRITE) {
+		spin_lock(&sdio->csd_lock);
+		locked = true;
+		if (sdio->csd_write_copied)
+			GOTO(out, status = 0);
+	}
 	/* if there's no mm, io is being done from a kernel thread, so there's
 	 * no need to transition to its mm context anyway.
 	 *
@@ -1596,14 +1609,20 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 		i++;
 	}
 
-out:
+	if (rw == WRITE && status == 0)
+		sdio->csd_write_copied = true;
+
 	/* if we complete successfully, we should reach all of the pages */
 	LASSERTF(ergo(status == 0, i == pvec->ldp_count - 1),
 		 "status: %d, i: %d, pvec->ldp_count %zu, count %zu\n",
 		  status, i, pvec->ldp_count, count);
 
+out:
 	if (mm_used)
 		kthread_unuse_mm(mm);
+
+	if (locked)
+		spin_unlock(&sdio->csd_lock);
 
 	/* the total bytes copied, or status */
 	RETURN(original_count - count ? original_count - count : status);
