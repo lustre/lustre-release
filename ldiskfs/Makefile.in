@@ -10,8 +10,9 @@ linux_headers := $(wildcard @LINUX@/include/linux/ext4*.h)
 uapi_linux_headers := $(wildcard @LINUX@/include/uapi/linux/ext4*.h)
 linux_new_headers := htree_lock.h
 trace_headers := $(wildcard @LINUX@/include/trace/events/ext4*.h)
+backfs_unit_tests := $(wildcard @EXT4_SRC_DIR@/*-test.c)
 
-backfs_sources := $(filter-out %.mod.c %/inode-test.c @EXT4_CRYPTO@,$(wildcard @EXT4_SRC_DIR@/*.c))
+backfs_sources := $(filter-out %.mod.c $(backfs_unit_tests) @EXT4_CRYPTO@,$(wildcard @EXT4_SRC_DIR@/*.c))
 
 new_sources := mmp.c htree_lock.c critical_encode.h encdata.h
 new_headers :=

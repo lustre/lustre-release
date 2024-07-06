@@ -25,9 +25,9 @@
  fs/ext4/ext4.h        | 107 ++++++++++++++-
  fs/ext4/fast_commit.c |   2 +-
  fs/ext4/inline.c      |   8 +-
- fs/ext4/namei.c       | 295 ++++++++++++++++++++++++++++++++++++------
+ fs/ext4/namei.c       | 297 ++++++++++++++++++++++++++++++++++++------
  fs/ext4/super.c       |   4 +-
- 6 files changed, 369 insertions(+), 56 deletions(-)
+ 6 files changed, 370 insertions(+), 57 deletions(-)
 
 diff --git a/fs/ext4/dir.c b/fs/ext4/dir.c
 index 3985f8c3..b8e4df14 100644
@@ -305,7 +305,7 @@ index 012d9259..b86441a6 100644
  			ext4_set_de_type(inode->i_sb, &fake, S_IFDIR);
  			de = &fake;
 diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
-index 8fafbe65..38858511 100644
+index 8fafbe65..deb7fc46 100644
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -290,7 +290,8 @@ static unsigned dx_get_count(struct dx_entry *entries);
@@ -351,9 +351,12 @@ index 8fafbe65..38858511 100644
  
  	if (offset)
  		*offset = count_offset;
-@@ -558,11 +560,12 @@ ext4_next_entry(struct ext4_dir_entry_2 *p, unsigned long blocksize)
+@@ -556,13 +558,14 @@ ext4_next_entry(struct ext4_dir_entry_2 *p, unsigned long blocksize)
+  * Future: use high four bits of block for coalesce-on-delete flags
+  * Mask them off for now.
   */
- struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
+-struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
++static struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
  {
 +	BUG_ON(de->name_len != 1);
  	/* get dotdot first */
