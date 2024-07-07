@@ -5866,10 +5866,10 @@ int jt_show_fault(int argc, char **argv)
 			else if (strcmp(optarg, "drop") == 0)
 				opc = LNET_CTL_DROP_LIST;
 			else
-				return -EINVAL;
+				rc = -EINVAL;
 			break;
 		default:
-			return 0;
+			rc = -EINVAL;
 		}
 	}
 	if (rc < 0)
