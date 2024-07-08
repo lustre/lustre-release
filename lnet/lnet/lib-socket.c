@@ -264,12 +264,19 @@ retry:
 
 			if (interface >= 0 && remaddr) {
 				struct sockaddr_in6 *rem = (void *)remaddr;
+				struct net_device *dev;
 
-				ipv6_dev_get_saddr(ns,
-						   dev_get_by_index(ns,
-								    interface),
-						   &rem->sin6_addr, 0,
+				rcu_read_lock();
+				dev = dev_get_by_index_rcu(ns, interface);
+				if (!dev) {
+					CERROR("No net device for interface %d\n",
+					       interface);
+					rcu_read_unlock();
+					goto failed;
+				}
+				ipv6_dev_get_saddr(ns, dev, &rem->sin6_addr, 0,
 						   &sin6->sin6_addr);
+				rcu_read_unlock();
 			}
 			sin6->sin6_port = htons(local_port);
 			break;
