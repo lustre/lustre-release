@@ -357,7 +357,7 @@ static int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 	}
 
 	/* Init fid sequence client for this mdc and add new fld target.  */
-	rc = obd_fid_init(mdc_obd, mdc_exp, LUSTRE_SEQ_METADATA);
+	rc = client_fid_init(mdc_obd, mdc_exp, LUSTRE_SEQ_METADATA);
 	if (rc)
 		RETURN(rc);
 
@@ -566,7 +566,7 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 		CERROR("%s: Can't del fld targets: rc = %d\n",
 		       tgt->ltd_exp->exp_obd->obd_name, rc);
 
-	rc = obd_fid_fini(tgt->ltd_exp->exp_obd);
+	rc = client_fid_fini(tgt->ltd_exp->exp_obd);
 	if (rc)
 		CERROR("%s: Can't finalize fids factory: rc = %d\n",
 		       tgt->ltd_exp->exp_obd->obd_name, rc);

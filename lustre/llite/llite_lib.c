@@ -442,8 +442,8 @@ retry_connect:
 
 	sbi->ll_md_exp->exp_connect_data = *data;
 
-	err = obd_fid_init(sbi->ll_md_exp->exp_obd, sbi->ll_md_exp,
-			   LUSTRE_SEQ_METADATA);
+	err = client_fid_init(sbi->ll_md_exp->exp_obd, sbi->ll_md_exp,
+			      LUSTRE_SEQ_METADATA);
 	if (err) {
 		CERROR("%s: Can't init metadata layer FID infrastructure: rc = %d\n",
 		       sbi->ll_md_exp->exp_obd->obd_name, err);
@@ -464,7 +464,7 @@ retry_connect:
 		CERROR("%s: mount failed with %d, forcing read-only mount.\n",
 		       sbi->ll_md_exp->exp_obd->obd_name, err);
 		sb->s_flags |= SB_RDONLY;
-		obd_fid_fini(sbi->ll_md_exp->exp_obd);
+		client_fid_fini(sbi->ll_md_exp->exp_obd);
 		obd_disconnect(sbi->ll_md_exp);
 		GOTO(retry_connect, err);
 	} else if (err) {
@@ -682,8 +682,8 @@ retry_connect:
 				sbi->ll_ra_info.ra_max_pages_per_file;
 	}
 
-	err = obd_fid_init(sbi->ll_dt_exp->exp_obd, sbi->ll_dt_exp,
-			   LUSTRE_SEQ_METADATA);
+	err = client_fid_init(sbi->ll_dt_exp->exp_obd, sbi->ll_dt_exp,
+			      LUSTRE_SEQ_METADATA);
 	if (err) {
 		CERROR("%s: Can't init data layer FID infrastructure: rc = %d\n",
 		       sbi->ll_dt_exp->exp_obd->obd_name, err);
@@ -854,13 +854,13 @@ retry_connect:
 out_root:
 	iput(root);
 out_lock_cn_cb:
-	obd_fid_fini(sbi->ll_dt_exp->exp_obd);
+	client_fid_fini(sbi->ll_dt_exp->exp_obd);
 out_dt:
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
 	sbi->ll_dt_obd = NULL;
 out_md_fid:
-	obd_fid_fini(sbi->ll_md_exp->exp_obd);
+	client_fid_fini(sbi->ll_md_exp->exp_obd);
 out_md:
 	obd_disconnect(sbi->ll_md_exp);
 	sbi->ll_md_exp = NULL;
@@ -956,13 +956,13 @@ static void client_common_put_super(struct super_block *sb)
 
 	cl_sb_fini(sb);
 
-	obd_fid_fini(sbi->ll_dt_exp->exp_obd);
+	client_fid_fini(sbi->ll_dt_exp->exp_obd);
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
 
 	ll_debugfs_unregister_super(sb);
 
-	obd_fid_fini(sbi->ll_md_exp->exp_obd);
+	client_fid_fini(sbi->ll_md_exp->exp_obd);
 	obd_disconnect(sbi->ll_md_exp);
 	sbi->ll_md_exp = NULL;
 

@@ -1126,11 +1126,6 @@ struct obd_ops {
 			   void *localdata);
 	int (*o_disconnect)(struct obd_export *exp);
 
-	/* Initialize/finalize fids infrastructure. */
-	int (*o_fid_init)(struct obd_device *obd,
-			  struct obd_export *exp, enum lu_cli_type type);
-	int (*o_fid_fini)(struct obd_device *obd);
-
 	/* Allocate new fid according to passed @hint. */
 	int (*o_fid_alloc)(const struct lu_env *env, struct obd_export *exp,
 			   struct lu_fid *fid, struct md_op_data *op_data);

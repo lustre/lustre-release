@@ -650,7 +650,7 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 		osp_last_used_fini(env, d);
 	}
 
-	obd_fid_fini(d->opd_obd);
+	client_fid_fini(d->opd_obd);
 
 	RETURN(rc);
 }
@@ -1227,8 +1227,8 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 
 	osp_tunables_init(osp);
 
-	rc = obd_fid_init(osp->opd_obd, NULL, osp->opd_connect_mdt ?
-			  LUSTRE_SEQ_METADATA : LUSTRE_SEQ_DATA);
+	rc = client_fid_init(osp->opd_obd, NULL, osp->opd_connect_mdt ?
+			     LUSTRE_SEQ_METADATA : LUSTRE_SEQ_DATA);
 	if (rc) {
 		CERROR("%s: fid init error: rc = %d\n",
 		       osp->opd_obd->obd_name, rc);
@@ -1298,7 +1298,7 @@ out_last_used:
 	if (!osp->opd_connect_mdt)
 		osp_last_used_fini(env, osp);
 out_fid:
-	obd_fid_fini(osp->opd_obd);
+	client_fid_fini(osp->opd_obd);
 out_proc:
 	osp_tunables_fini(osp);
 	client_obd_cleanup(obd);
@@ -1886,8 +1886,6 @@ static const struct obd_ops osp_obd_device_ops = {
 	.o_import_event	= osp_import_event,
 	.o_iocontrol	= osp_iocontrol,
 	.o_statfs	= osp_obd_statfs,
-	.o_fid_init	= client_fid_init,
-	.o_fid_fini	= client_fid_fini,
 };
 
 /**
