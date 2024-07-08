@@ -29567,6 +29567,41 @@ test_401aa() {
 }
 run_test 401aa "Verify that 'lctl list_param -p' lists the correct path names"
 
+test_401ab() {
+	$LCTL list_param -pr "*" | while read path; do
+		[[ -r $path ]] || error "'$path' not readable"
+	done
+
+	$LCTL list_param -pLr "*" | while read path; do
+		[[ -r $path ]] || error "'$path' not readable (--no-links)"
+	done
+}
+run_test 401ab "Check that 'lctl list_param -r' lists only readable params"
+
+test_401ac() {
+	$LCTL list_param -pw "*" | while read path; do
+		[[ -w $path ]] || error "'$path' not writable"
+	done
+
+	$LCTL list_param -pLw "*" | while read path; do
+		[[ -w $path ]] || error "'$path' not writable (--no-links)"
+	done
+}
+run_test 401ac "Check that 'lctl list_param -w' lists only writable params"
+
+test_401ad() {
+	$LCTL list_param -prw "*" | while read path; do
+		[[ -r $path && -w $path ]] ||
+			error "'$path' not readable and writable"
+	done
+
+	$LCTL list_param -pLrw "*" | while read path; do
+		[[ -r $path && -w $path ]] ||
+			error "'$path' not readable and writable (--no-links)"
+	done
+}
+run_test 401ad "Check that 'lctl list_param -wr' is conjunctive"
+
 test_401b() {
 	# jobid_var may not allow arbitrary values, so use jobid_name
 	# if available

@@ -8,7 +8,9 @@ lctl-list_param \- list configuration parameter names
 .RB [ --links | -l ]
 .RB [ --no-links | -L ]
 .RB [ --path | -p ]
+.RB [ --readable | -r ]
 .RB [ --recursive | -R ]
+.RB [ --writeable | -w ]
 .IR PARAM_PATH1 " [" PARAM_PATH2 " ...]"
 .YS
 .SH DESCRIPTION
@@ -37,10 +39,20 @@ Do not follow symlinks while searching for parameters.
 .BR -p ", " --path
 Print the path name instead of the parameter name.
 .TP
+.BR -r ", " --readable
+Print only parameters that have read permission. Can be used with
+.RB [ -w | --writable ]
+to print parameters that are both readable and writable.
+.TP
 .BR -R ", " --recursive
 Recursively list all parameters under the specified parameter search string. If
 .I param_search
 is unspecified, all the parameters will be shown.
+.TP
+.BR -w ", " --writable
+Print only parameters that have write permission. Can be used with
+.RB [ -r | --readable ]
+to print parameters that are both readable and writable.
 .SH EXAMPLES
 Use wildcards to obtain all matching parameters:
 .RS

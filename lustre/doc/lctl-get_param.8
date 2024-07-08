@@ -9,7 +9,9 @@ lctl-get_param \- retrieve configuration parameters
 .RB [ --no-links | -L ]
 .RB [ --no-name | -n ]
 .RB [ --only-name | -N ]
+.RB [ --readable | -r ]
 .RB [ --recursive | -R ]
+.RB [ --writable | -w ]
 .RB [ --yaml | -y ]
 .IR PARAM_PATH1 " [" PARAM_PATH2 " ...]"
 .YS
@@ -67,8 +69,18 @@ Print only matched parameter names and not the values. This is especially
 useful when using patterns. This option is equivalent to
 .BR "lctl list_param".
 .TP
+.BR -r ", " --readable
+Print only parameters that are have read permission. Can be used with
+.RB [ -w | --writable ]
+to print parameters that are both readable and writable.
+.TP
 .BR -R ", " --recursive
 Recursively show all of the parameter names below the specified name.
+.TP
+.BR -w ", " --writable
+Print only parameters that are have write permission. Can be used with
+.RB [ -r | --readable ]
+to print parameters that are both readable and writable.
 .TP
 .BR -y ", " --yaml
 Some paramters can be presented in a YAML format but are not by default. This

@@ -469,6 +469,9 @@ static int do_param_op(struct param_opts *popt, char *pattern, char *value,
 			continue;
 		if (popt->po_only_dir && !S_ISDIR(st.st_mode))
 			continue;
+		if (popt->po_permissions &&
+		    (st.st_mode & popt->po_permissions) != popt->po_permissions)
+			continue;
 
 		param_name = display_name(paths.gl_pathv[i], &st, popt);
 		if (!param_name) {
@@ -631,7 +634,9 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'F',	.name = "classify",	.has_arg = no_argument},
 	{ .val = 'l',	.name = "links",	.has_arg = no_argument},
 	{ .val = 'L',	.name = "no-links",	.has_arg = no_argument},
+	{ .val = 'r',	.name = "readable",	.has_arg = no_argument},
 	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
+	{ .val = 'w',	.name = "writable",	.has_arg = no_argument},
 	};
 
 	int ch;
@@ -642,7 +647,7 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 	/* reset optind for each getopt_long() in case of multiple calls */
 	optind = 0;
-	while ((ch = getopt_long(argc, argv, "DFlLpR",
+	while ((ch = getopt_long(argc, argv, "DFlLprRw",
 				      long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'D':
@@ -660,8 +665,14 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 		case 'p':
 			popt->po_only_pathname = 1;
 			break;
+		case 'r':
+			popt->po_permissions |= S_IREAD;
+			break;
 		case 'R':
 			popt->po_recursive = 1;
+			break;
+		case 'w':
+			popt->po_recursive |= S_IWRITE;
 			break;
 		default:
 			return -1;
@@ -727,7 +738,9 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'L',	.name = "no-links",	.has_arg = no_argument},
 	{ .val = 'n',	.name = "no-name",	.has_arg = no_argument},
 	{ .val = 'N',	.name = "only-name",	.has_arg = no_argument},
+	{ .val = 'r',	.name = "readable",	.has_arg = no_argument},
 	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
+	{ .val = 'w',	.name = "writable",	.has_arg = no_argument},
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument},
 	};
 
@@ -738,7 +751,7 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 	/* reset optind for each getopt_long() in case of multiple calls */
 	optind = 0;
-	while ((ch = getopt_long(argc, argv, "FHlLnNRy",
+	while ((ch = getopt_long(argc, argv, "FHlLnNrRwy",
 				      long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'F':
@@ -759,8 +772,14 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 		case 'N':
 			popt->po_only_name = 1;
 			break;
+		case 'r':
+			popt->po_permissions |= S_IREAD;
+			break;
 		case 'R':
 			popt->po_recursive = 1;
+			break;
+		case 'w':
+			popt->po_permissions |= S_IWRITE;
 			break;
 		case 'y':
 			popt->po_yaml = 1;
