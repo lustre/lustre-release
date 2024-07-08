@@ -85,7 +85,6 @@ EXTRA_DIST = \
 	lu_target.h \
 	lvfs.h \
 	md_object.h \
-	obd_cache.h \
 	obd_cksum.h \
 	obd_class.h \
 	obd.h \
