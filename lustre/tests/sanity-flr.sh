@@ -518,15 +518,16 @@ test_0d() {
 	# create parent directory
 	mkdir $td || error "mkdir $td failed"
 
-	$mirror_cmd $tf &> /dev/null && error "miss -N option"
 	$mirror_cmd -N $tf &> /dev/null && error "$tf does not exist"
 
 	# create a non-mirrored file, convert it to a mirrored file and extend
 	touch $tf || error "touch $tf failed"
 	$mirror_cmd -N $tf || error "convert and extend $tf failed"
 	verify_mirror_count $tf 2
+	$mirror_cmd $tf || error "extend $tf without --mirror-count|-N failed"
+	verify_mirror_count $tf 3
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
-	for ((i = 0; i < 2; i++)); do
+	for ((i = 0; i < 3; i++)); do
 		verify_comp_attrs $tf ${ids[$i]}
 		verify_comp_extent $tf ${ids[$i]} 0 EOF
 	done

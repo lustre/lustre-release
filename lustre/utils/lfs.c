@@ -181,6 +181,24 @@ static inline int lfs_mirror_create(int argc, char **argv)
 
 static inline int lfs_mirror_extend(int argc, char **argv)
 {
+	int i;
+
+	for (i = 0; i < argc; i++)
+		if (strstr(argv[i], "-N") ||
+		    strstr(argv[i], "--mirror-count"))
+			break;
+
+	/* add -N if not specified */
+	if (i == argc) {
+		char *tmp[argc + 1];
+
+		tmp[0] = argv[0]; /* extend */
+		tmp[1] = "-N";
+		memcpy(tmp + 2, argv + 1, (argc - 1) * sizeof(*argv));
+
+		return lfs_setstripe_internal(argc + 1, tmp, SO_MIRROR_EXTEND);
+	}
+
 	return lfs_setstripe_internal(argc, argv, SO_MIRROR_EXTEND);
 }
 

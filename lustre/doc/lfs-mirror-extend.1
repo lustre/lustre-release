@@ -6,7 +6,7 @@ lfs-mirror-extend \- add mirror(s) to an existing file
 .ad l
 .B lfs mirror extend
 [\fB\-\-no\-verify\fR]
-\fB\-\-mirror\-count\fR|\fB\-N\fR[\fIMIRROR_COUNT\fR]
+[\fB\-\-mirror\-count\fR|\fB\-N\fR[\fIMIRROR_COUNT\fR]]
 [\fB\-\-bandwidth\-limit\fR|\fB\-W\fR \fIBANDWIDTH\fR]
 [\fB\-\-stats\fR|\fB\-\-stats\-interval\fR=\fISTATS_INTERVAL\fR]
 [\fISETSTRIPE_OPTIONS\fR|\fB\-f\fR \fIVICTIM_FILE\fR]
@@ -19,11 +19,12 @@ The file \fIFILENAME\fR can already be a mirrored file, or just a regular
 non-mirrored file. If it's a non-mirrored file, then the command will convert it
 to a mirrored file.
 .br
-The \fB\-\-mirror\-count\fR|\fB\-N\fR option is required and indicates how many
+The \fB\-\-mirror\-count\fR|\fB\-N\fR option is optional and indicates how many
 mirrors that have the same layout will be added. It can be repeated multiple
 times to separate mirrors that have different layouts. The \fIMIRROR_COUNT\fR
 argument is optional and defaults to 1 if it's not specified; if specified, it
-must follow the option without a space.
+must follow the option without a space. If \fB\-\-mirror\-count\fR|\fB\-N\fR is
+not specified, the default value of 1 will be used.
 .br
 The \fISETSTRIPE_OPTIONS\fR specify the specific layout for the mirror. It can
 be a plain layout with specific striping pattern or a composite layout like
