@@ -3386,7 +3386,7 @@ static int __pcc_file_reset_projid(struct file *file, __u32 projid)
 	if (!inode->i_op->fileattr_set)
 		return -EOPNOTSUPP;
 
-	rc = inode->i_op->fileattr_set(&init_user_ns, dentry, &fa);
+	rc = inode->i_op->fileattr_set(&nop_mnt_idmap, dentry, &fa);
 #else
 	struct fsxattr fsx = { .fsx_projid = projid };
 	mm_segment_t old_fs;
