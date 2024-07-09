@@ -3233,6 +3233,8 @@ static int osd_transfer_project(struct inode *inode, __u32 projid,
 	if (projid_eq(kprojid, LDISKFS_I(inode)->i_projid))
 		return 0;
 
+	dquot_initialize(inode);
+
 	err = ldiskfs_get_inode_loc(inode, &iloc);
 	if (err)
 		return err;
@@ -3254,7 +3256,6 @@ static int osd_transfer_project(struct inode *inode, __u32 projid,
 	}
 	brelse(iloc.bh);
 
-	dquot_initialize(inode);
 	transfer_to[PRJQUOTA] = dqget(sb, make_kqid_projid(kprojid));
 	if (transfer_to[PRJQUOTA]) {
 		lock_dquot_transfer(inode);
