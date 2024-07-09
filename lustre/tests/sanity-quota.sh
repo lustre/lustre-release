@@ -201,8 +201,9 @@ getquota() {
 	[ ! -z "$5" ] && pool_arg="--pool $5 "
 	[ "$uuid" = "global" ] && uuid=$DIR
 
+	$LFS quota -v "$1" "$2" $pool_arg $DIR 1>&2
 	$LFS quota -v "$1" "$2" $pool_arg $DIR |
-		awk 'BEGIN { num='$spec' } { if ($1 == "'$uuid'") \
+		awk 'BEGIN { num='$spec' } { if ($1 ~ "'$uuid'") \
 		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
 		| tr -d "*"
 }
@@ -564,7 +565,7 @@ wait_quota_synced() {
 check_system_is_clean() {
 	local used
 
-	lfs quota -uv $TSTUSR $MOUNT
+	lfs quota -v -u $TSTUSR $MOUNT
 	for cur in "curspace" "curinodes";
 	do
 		used=$(getquota -u $TSTUSR global $cur)
@@ -1260,7 +1261,7 @@ test_1i() {
 	$LFS setquota -u $TSTUSR -B 0 --pool $qpool1 $DIR ||
 		error "set user quota failed"
 
-	$LFS quota -uv $TSTUSR --pool $qpool1 $DIR
+	$LFS quota -v -u $TSTUSR --pool $qpool1 $DIR
 	$RUNAS $DD of=$testfile1 count=$((limit1/2)) ||
 		quota_error u $TSTUSR "write failure, but expect success"
 
@@ -2146,7 +2147,7 @@ test_7a() {
 	resetquota -u $TSTUSR
 	set_ost_qtype "none" || error "disable ost quota failed"
 
-	local OSTUUID=$(ostuuid_from_index 0)
+	local OSTUUID=$(ostname_from_index 0)
 	USED=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
 	[ $USED -ne 0 ] &&
 		error "limit($USED) on $OSTUUID for user $TSTUSR isn't 0"
@@ -2213,7 +2214,7 @@ test_7b() {
 	resetquota -u $TSTUSR
 	set_ost_qtype "none" || error "disable ost quota failed"
 
-	local OSTUUID=$(ostuuid_from_index 0)
+	local OSTUUID=$(ostname_from_index 0)
 	USED=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
 	[ $USED -ne 0 ] &&
 		error "limit($USED) on $OSTUUID for user $TSTUSR isn't 0"
@@ -2685,7 +2686,7 @@ test_13(){
 	[ $nlock -eq $init_nlock ] || error "per-ID lock isn't cleared"
 
 	# spare quota should be released
-	local OSTUUID=$(ostuuid_from_index 0)
+	local OSTUUID=$(ostname_from_index 0)
 	local limit=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
 	local space=$(getquota -u $TSTUSR $OSTUUID curspace)
 	[ $limit -le $space ] ||
@@ -3229,7 +3230,7 @@ test_23_sub() {
 
 	cleanup_quota_test
 
-	local OST0_UUID=$(ostuuid_from_index 0)
+	local OST0_UUID=$(ostname_from_index 0)
 	local OST0_QUOTA_USED=$(getquota -u $TSTUSR $OST0_UUID curspace)
 	[ $OST0_QUOTA_USED -ne 0 ] &&
 		($SHOW_QUOTA_USER; \
@@ -4127,11 +4128,11 @@ test_get_allquota() {
 	eval $($LFS quota -a -s $start_qid -e $end_qid -u $MOUNT |
 	    awk 'NR > 2 {printf("u_blimits[%d]=%d;u_ilimits[%d]=%d; \
 		 u_busage[%d]=%d;u_iusage[%d]=%d;", \
-		 NR, $4, NR, $8, NR, $2, NR, $6)}')
+		 NR, $5, NR, $9, NR, $3, NR, $7)}')
 	eval $($LFS quota -a -s $start_qid -e $end_qid -g $MOUNT |
 	    awk 'NR > 2 {printf("g_blimits[%d]=%d;g_ilimits[%d]=%d; \
 		 g_busage[%d]=%d;g_iusage[%d]=%d;", \
-		 NR, $4, NR, $8, NR, $2, NR, $6)}')
+		 NR, $5, NR, $9, NR, $3, NR, $7)}')
 
 	for i in $(seq $qid_cnt); do
 		[ $i -le 2 ] && continue
@@ -4176,11 +4177,11 @@ test_get_allquota() {
 	eval $($LFS quota -a -s $start_qid -e $end_qid -u $MOUNT |
 	    awk 'NR > 2 {printf("u_blimits[%d]=%d;u_ilimits[%d]=%d; \
 		 u_busage2[%d]=%d;u_iusage2[%d]=%d;", \
-		 NR, $4, NR, $8, NR, $2, NR, $6)}')
+		 NR, $5, NR, $9, NR, $3, NR, $7)}')
 	eval $($LFS quota -a -s $start_qid -e $end_qid  -g $MOUNT |
 	    awk 'NR > 2 {printf("g_blimits[%d]=%d;g_ilimits[%d]=%d; \
 		 g_busage2[%d]=%d;g_iusage2[%d]=%d;", \
-		 NR, $4, NR, $8, NR, $2, NR, $6)}')
+		 NR, $5, NR, $9, NR, $3, NR, $7)}')
 
 	sz=$((sz / 1024))
 	for i in $(seq $qid_cnt); do
@@ -4240,7 +4241,7 @@ test_49()
 	do_facet mds1 $LCTL set_param fail_loc=0
 
 	start=$SECONDS
-	$LFS quota -a -u $MOUNT | tail -n 100
+	$LFS quota -a -u $MOUNT | head -n 100
 	echo "get all usr quota: $total_file_cnt / $((SECONDS - start)) seconds"
 
 	start=$SECONDS
@@ -5609,7 +5610,7 @@ test_72()
 	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
 	echo "used $used"
 	[ $used -ge $limit ] || error "used($used) is less than limit($limit)"
-	# check that lfs quota -uv --pool prints only OST that
+	# check that lfs quota -v -u --pool prints only OST that
 	# was added in a pool
 	lfs quota -v -u $TSTUSR --pool $qpool $DIR | grep -v "OST0001" |
 		grep "OST\|MDT" && error "$qpool consists wrong targets"
@@ -5719,12 +5720,13 @@ test_74()
 	[ $tmp -eq $((limit2 * 1024)) ] || error "wrong limit $tmp for $qpool2"
 
 	# check limits in pools
+	$LFS quota -u $TSTUSR --pool $DIR
 	tmp=$($LFS quota -u $TSTUSR --pool $DIR | \
-	      grep -A4 $qpool | awk 'NR == 4{print $4}')
+	      grep -A4 $qpool | awk 'NR == 2{print $4}')
 	echo "pool limit for $qpool $tmp"
-	[ $tmp -eq $((limit * 1024)) ] || error "wrong limit:tmp for $qpool"
+	[ $tmp -eq $((limit * 1024)) ] || error "wrong limit:$tmp for $qpool"
 	tmp=$($LFS quota -u $TSTUSR --pool $DIR | \
-	      grep -A4 $qpool2 | awk 'NR == 4{print $4}')
+	      grep -A4 $qpool2 | awk 'NR == 2{print $4}')
 	echo "pool limit for $qpool2 $tmp"
 	[ $tmp -eq $((limit2 * 1024)) ] || error "wrong limit:$tmp for $qpool2"
 }
@@ -6098,7 +6100,7 @@ test_80()
 	lfs getstripe $dir2
 	sleep 3
 
-	$LFS quota -uv $TSTUSR $DIR
+	$LFS quota -v -u $TSTUSR $DIR
 	#define OBD_FAIL_QUOTA_PREACQ            0xA06
 	do_facet mds1 $LCTL set_param fail_loc=0xa06
 	$RUNAS $DD of=$TESTFILE3 count=3 ||
@@ -6109,16 +6111,16 @@ test_80()
 		quota_error u $TSTUSR "write failed"
 	sync
 	sleep 3
-	$LFS quota -uv --pool $qpool $TSTUSR $DIR
+	$LFS quota -v -u --pool $qpool $TSTUSR $DIR
 
 	rm -f $TESTFILE2
 	stop ost2
 	do_facet mds1 $LCTL set_param fail_loc=0
 	start ost2 $(ostdevname 2) $OST_MOUNT_OPTS || error "start ost2 failed"
-	$LFS quota -uv $TSTUSR --pool $qpool $DIR
+	$LFS quota -v -u $TSTUSR --pool $qpool $DIR
 	# OST0 needs some time to update quota usage after removing TESTFILE2
 	sleep 4
-	$LFS quota -uv $TSTUSR --pool $qpool $DIR
+	$LFS quota -v -u $TSTUSR --pool $qpool $DIR
 	$RUNAS $DD of=$TESTFILE0 count=2 oflag=direct ||
 		quota_error u $TSTUSR "write failure, but expect success"
 }
@@ -6283,8 +6285,8 @@ test_84()
 	# the grant quota should be larger than 0
 	waited=0
 	while (( $waited < 60 )); do
-		grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit $qp)
-		grant2=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit)
+		grant=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit $qp)
+		grant2=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit)
 		(( ${grant} > 0 && ${grant2} > 0 )) && break
 
 		do_facet ost1 $LCTL set_param \
@@ -6315,8 +6317,8 @@ test_84()
 	# the grant quota should be set as insane value
 	waited=0
 	while (( $waited < 60 )); do
-		grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit $qp)
-		grant2=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit)
+		grant=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit $qp)
+		grant2=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit)
 		(( ${#grant} == 20 && ${#grant2} == 20 )) && break
 
 		sleep 1
@@ -6343,9 +6345,9 @@ test_84()
 	$LFS quota -gv --pool $qp $TSTUSR $DIR
 
 	# the grant quota should be reset
-	grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit)
+	grant=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit)
 	(( ${#grant} == 20 )) && error "grant is not cleared"
-	grant=$(getquota -g $TSTUSR lustre-OST0000_UUID bhardlimit $qp)
+	grant=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit $qp)
 	(( ${#grant} == 20 )) && error "pool grant is not cleared"
 
 	$LFS quota -gv $TSTUSR --pool $qp $DIR
@@ -6452,7 +6454,7 @@ test_86()
 
 	local test_dir="$DIR/$tdir/test_dir"
 
-	setup_quota_test || error "setup quota failed with %?"
+	setup_quota_test || error "setup quota failed with $?"
 	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 
 	$LFS setdirstripe -c 1 -i 0 $test_dir || error "setdirstripe failed"
@@ -6465,6 +6467,99 @@ test_86()
 	test_preacquired_quota "$test_dir" "-p" "prj" "1000"
 }
 run_test 86 "Pre-acquired quota should be released if quota is over limit"
+
+check_quota_no_mount()
+{
+	local opts="$1"
+	local id="$2"
+
+	echo "cmd: $LFS quota $opts $id"
+	local expected=$($LFS quota $opts $id $MOUNT)
+	local actual=$($LFS quota $opts $id)
+
+	[[ "$actual" == "$expected" ]] ||
+		error "quota info not $expected, found: $actual"
+}
+
+check_quota_two_mounts()
+{
+	local opts="$1"
+	local id="$2"
+
+	local cmd="$LFS quota -q $opts $id $MOUNT $MOUNT2"
+	echo "cmd: $cmd"
+#	remove the header for comparison
+	local actual
+	local full=$($cmd)
+	local head=$($LFS quota -q $opts $id $MOUNT)
+	local tail=$($LFS quota -q $opts $id $MOUNT2)
+
+	actual=$(echo "$full" | head -n$(echo "$head" | wc -l))
+	[[ "$actual" == "$head" ]] ||
+		error "quota info from $MOUNT not '$head', found '$actual'"
+
+	actual=$(echo "$full" | tail -n$(echo "$tail" | wc -l))
+	[[ "$actual" == "$tail" ]] ||
+		error "quota info from $MOUNT2 not '$tail', found '$actual'"
+}
+
+test_90a()
+{
+	(( MDS1_VERSION >= $(version_code 2.15.60) )) ||
+		skip "Need MDS version at least 2.15.60"
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	stack_trap cleanup_quota_test
+
+	check_quota_no_mount
+	check_quota_no_mount -u $TSTUSR
+	check_quota_no_mount "-a -u"
+	check_quota_no_mount "-t -u"
+	check_quota_no_mount -U
+	check_quota_no_mount -g $TSTUSR
+	check_quota_no_mount "-a -g"
+	check_quota_no_mount "-t -g"
+	check_quota_no_mount -G
+
+	! is_project_quota_supported &&
+		skip "Project quota is not supported"
+	check_quota_no_mount -p 100
+	check_quota_no_mount "-a -p"
+	check_quota_no_mount "-t -p"
+	check_quota_no_mount -P
+}
+run_test 90a "lfs quota should work without mount point"
+
+test_90b()
+{
+	(( MDS1_VERSION >= $(version_code 2.15.60) )) ||
+		skip "Need MDS version at least 2.15.60"
+
+	setup_quota_test || error "setup quota failed with $?"
+	mount_client $MOUNT2
+
+	stack_trap "umount $MOUNT2"
+	stack_trap cleanup_quota_test
+
+	check_quota_two_mounts -u $TSTUSR
+	check_quota_two_mounts "-a -u"
+	check_quota_two_mounts "-t -u"
+	check_quota_two_mounts -U
+	check_quota_two_mounts -g $TSTUSR
+	check_quota_two_mounts "-a -g"
+	check_quota_two_mounts "-t -g"
+	check_quota_two_mounts -G
+
+	! is_project_quota_supported &&
+		skip "Project quota is not supported"
+	check_quota_two_mounts -p 1000
+	check_quota_two_mounts "-a -p"
+	check_quota_two_mounts "-t -p"
+	check_quota_two_mounts -P
+}
+run_test 90b "lfs quota should work with multiple mount points"
+
 
 quota_fini()
 {

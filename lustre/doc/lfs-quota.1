@@ -2,28 +2,37 @@
 .SH NAME
 lfs-quota \- display quota limits and status for users, groups, or projects.
 .SH SYNOPSIS
-.BR "lfs quota " [ -hqv "] [" --ost " \fIobd_uuid\fR|" --mdt " \fIMDT_IDX\fR]
-       [\fB-u \fIUSER\fR|\fB-g <\fIGROUP\fR>|\fB-p \fIPROJID\fR]
-[\fB--pool\fR \fIPOOL_NAME\fR] \fIFILESYSTEM
+.BR "lfs quota " [ -q "] [" -v "] [" -h "] [" -o
+.IR OBD_UUID | \fB-i
+.IR MDT_IDX | \fB-I
+.IR OST_IDX "] [" \fB-u
+.IR USER | \fB-g
+.IR GROUP | \fB-p
+.IR PROJID "] [" \fB--pool
+.IR OST_POOL_NAME "] [" MOUNT_POINT " ...]"
 
 .br
-.BR "lfs quota " [ -hq "] {" -U | -G | -P } " " \fIFILESYSTEM
+.BR "lfs quota " [ -hq "] {" -U | -G | -P }
+.RI [ MOUNT_POINT " ...]"
 .br
 
 .br
-.BR "lfs quota " -t " {" -u | -g | -p "} " \fIFILESYSTEM
+.BR "lfs quota " -t " {" -u | -g | -p }
+.RI [ MOUNT_POINT " ...]"
 .br
 
 .br
-.B lfs quota -a \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
+.BR "lfs quota " -a " {" -u | -g | -p }
+.RI [ MOUNT_POINT " ...]"
 .br
 
 .TP
 .SH DESCRIPTION
 .PP
 .TP
-.B lfs quota \fIFILESYSTEM
-Display disk usage and limits for individual users, groups, and projects.
+.BR "lfs quota " [ \fIMOUNT_POINT " ...]"
+Display disk usage and limits for individual users, groups, and projects for
+each MOUNT_POINT.
 An asterisk is displayed when the quota is exceeded.
 By default the statistics for the entire filesystem are displayed but
 individual MDTs and OSTs can be specified with the
@@ -33,6 +42,7 @@ or
 options.  A user, group, or project ID can be specified.
 If user, group, and project are omitted, quotas for the
 current uid/gid/projid are shown.
+If no MOUNT_POINT is specified, quotas for all Lustre mountpoints will be shown.
 .TP
 .BR -h | --human-readable
 This will change the formatting of
@@ -63,8 +73,14 @@ Display quota information for project \fIPROJID\fR.
 Display only the line containing the data.
 The line saying what the data is, and the column headers will not be printed.
 .TP
-.BR -u | --user " {" \fIUSER | \fIUID }
-Display quota information for user name \fIUSER\fR or numeric \fIUID\fR.
+.BR -u | --user " {" \fIUSER \fR| \fIUID \fR}
+Display quota information for user name
+.I USER
+or numeric
+.IR UID .
+Can be used without specifying the mount point to get quota information
+from all filesystems for the specified
+.IR USER | UID .
 .TP
 .BR -v | --verbose
 Display per-MDT and per-OST statistics in addition
@@ -73,7 +89,7 @@ the quota is exceeded only for that specific target. The user is over the
 quota only if an asterisk is near the whole filesystem usage.
 Inactive target will also be printed but marked as "inact".
 .TP
-.BR "lfs quota " { -U | -G | -P "} " FILESYSTEM
+.BR "lfs quota " { -U | -G | -P "} " MOUNT_POINT
 Display default quota values for users, groups, or projects.
 This command requires super user permissions.
 .TP
@@ -86,11 +102,15 @@ Display default quota limits for project \fIPROJID\fR.
 .BR -U | --default-usr " {" \fIUSER | UID }
 Display default quota limits for username \fIUSER\fR or numeric \fIUID\fR.
 .TP
-.BR "lfs quota -a" " {" -u | -g | -p "} " \fIFILESYSTEM
+.BR "lfs quota -a" " {" -u | -g | -p "} " \fIMOUNT_POINT
 .TP
 Display all quota setting for all users, groups, or projects.
 .TP
-.BR "lfs quota -t" | --times " {" -u | -g | -p "} [" --pool " \fIPOOL_NAME\fR] " \fIFILESYSTEM
+.B "lfs quota -a -u"
+.TP
+Display all quota settings for all users across all mounted filesystems.
+.TP
+.BR "lfs quota -t" | --times " {" -u | -g | -p "} [" --pool " \fIPOOL_NAME\fR] " \fIMOUNT_POINT
 Display grace times for users, groups, or projects.
 Time values use the "XXwXXdXXhXXmXXs" format, which specifies
 weeks, days, hours, minutes, seconds.

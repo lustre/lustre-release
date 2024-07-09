@@ -7,20 +7,20 @@ lfs-setquota \- set quota limits or grace time for users, groups or projects.
        [\fB-b|\fB--block-softlimit\fR \fIBLOCK_SOFTLIMIT\fR[\fBKMGTPE\fR]]
        [\fB-B|\fB--block-hardlimit\fR \fIBLOCK_HARDLIMIT\fR[\fBKMGTPE\fR]]
        [\fB-i|\fB--inode-softlimit\fR \fIINODE_SOFTLIMIT\fR[\fBKMGTPE\fR]]
-       [\fB-I|\fB--inode-hardlimit\fR \fIINODE_HARDLIMIT\fR[\fBKMGTPE\fR]] \fIFILESYSTEM
+       [\fB-I|\fB--inode-hardlimit\fR \fIINODE_HARDLIMIT\fR[\fBKMGTPE\fR]] \fIMOUNT_POINT
 .TP
 .BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fIID
- {\fB--default\fR|\fB-D\fR|\fB--delete\fR} \fIFILESYSTEM
+ {\fB--default\fR|\fB-D\fR|\fB--delete\fR} \fIMOUNT_POINT
 .TP
 .BR "lfs setquota " { -t | --times "} {" -h | -u | -g | -p "} [" "--pool " \fIPOOLNAME ]
  [\fB-b\fR|\fB--block-grace\fR \fIBLOCK_GRACE_TIME\fR]
- [\fB-i\fR|\fB--inode-grace\fR \fIINODE_GRACE_TIME\fR] \fIFILESYSTEM
+ [\fB-i\fR|\fB--inode-grace\fR \fIINODE_GRACE_TIME\fR] \fIMOUNT_POINT
 .TP
 .BR "lfs setquota " { -U | --default-usr | -G | --default-grp | -P | --default-prj }
        [\fB-b\fR|\fB--block-softlimit\fR \fIBLOCK_SOFTLIMIT\fR[\fBKMGTPE\fR]]
        [\fB-B\fR|\fB--block-hardlimit\fR \fIBLOCK_HARDLIMIT\fR[\fBKMGTPE\fR]]
        [\fB-i\fR|\fB--inode-softlimit\fR \fIINODE_SOFTLIMIT\fR[\fBKMGTPE\fR]]
-       [\fB-I\fR|\fB--inode-hardlimit\fR \fIINODE_HARDLIMIT\fR[\fBKMGTPE\fR]] \fIFILESYSTEM
+       [\fB-I\fR|\fB--inode-hardlimit\fR \fIINODE_HARDLIMIT\fR[\fBKMGTPE\fR]] \fIMOUNT_POINT
 .TP
 .BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fIUID\fR|\fIGID\fR|\fIPROJID\fR
        [\fB--delete\fR] <\fIfilesystem\fR>
