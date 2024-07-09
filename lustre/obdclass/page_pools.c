@@ -147,7 +147,7 @@ static inline int get_pool_index(struct shrinker *shrinker)
 
 static int element_size(struct obd_page_pool *pool)
 {
-	return 1 << pool->opp_order;
+	return PAGE_SIZE << pool->opp_order;
 }
 
 /*
@@ -323,26 +323,28 @@ static unsigned long pool_shrink_count(struct shrinker *s,
 {
 	int pool_order;
 	struct obd_page_pool *pool;
+	unsigned long max_objects;
 
 	pool_order = get_pool_index(s);
 	pool = page_pools[pool_order];
+	max_objects = PTLRPC_MAX_BRW_PAGES >> pool_order;
 
 	/*
 	 * if no pool access for a long time, we consider it's fully
 	 * idle. A little race here is fine.
 	 */
-	if (unlikely(ktime_get_seconds() - pool->opp_last_access >
+	if (pool->opp_idle_idx != IDLE_IDX_MAX &&
+	    unlikely(ktime_get_seconds() - pool->opp_last_access >
 		     CACHE_QUIESCENT_PERIOD)) {
 		spin_lock(&pool->opp_lock);
 		pool->opp_idle_idx = IDLE_IDX_MAX;
 		spin_unlock(&pool->opp_lock);
 	}
-
 	LASSERT(pool->opp_idle_idx <= IDLE_IDX_MAX);
 
-	return (pool->opp_free_pages <= PTLRPC_MAX_BRW_PAGES) ? 0 :
-		(pool->opp_free_pages - PTLRPC_MAX_BRW_PAGES) *
-		(IDLE_IDX_MAX - pool->opp_idle_idx) / IDLE_IDX_MAX;
+	return (pool->opp_free_pages <= max_objects) ? 0 :
+		(pool->opp_free_pages - max_objects) *
+		 pool->opp_idle_idx / IDLE_IDX_MAX;
 }
 
 /*
@@ -353,38 +355,27 @@ static unsigned long pool_shrink_scan(struct shrinker *s,
 {
 	int pool_order;
 	struct obd_page_pool *pool;
+	unsigned long max_objects;
 
 	pool_order = get_pool_index(s);
 	pool = page_pools[pool_order];
+	max_objects = PTLRPC_MAX_BRW_PAGES >> pool_order;
 
 	spin_lock(&pool->opp_lock);
-	if (pool->opp_free_pages <= PTLRPC_MAX_BRW_PAGES)
+	if (pool->opp_free_pages <= max_objects)
 		sc->nr_to_scan = 0;
 	else
 		sc->nr_to_scan = min_t(unsigned long, sc->nr_to_scan,
-			      pool->opp_free_pages - PTLRPC_MAX_BRW_PAGES);
+				       pool->opp_free_pages - max_objects);
 	if (sc->nr_to_scan > 0) {
 		pool_release_free_pages(sc->nr_to_scan, pool);
-		CDEBUG(D_SEC, "released %ld pages, %ld left\n",
-		       (long)sc->nr_to_scan, pool->opp_free_pages);
-
 		pool->opp_st_shrinks++;
 		pool->opp_last_shrink = ktime_get_seconds();
 	}
 	spin_unlock(&pool->opp_lock);
-
-	/*
-	 * if no pool access for a long time, we consider it's fully idle.
-	 * a little race here is fine.
-	 */
-	if (unlikely(ktime_get_seconds() - pool->opp_last_access >
-		     CACHE_QUIESCENT_PERIOD)) {
-		spin_lock(&pool->opp_lock);
-		pool->opp_idle_idx = IDLE_IDX_MAX;
-		spin_unlock(&pool->opp_lock);
-	}
-
-	LASSERT(pool->opp_idle_idx <= IDLE_IDX_MAX);
+	if (sc->nr_to_scan > 0)
+		CDEBUG(D_SEC, "released %lu objects, %ld left, order:%u\n",
+		       sc->nr_to_scan, pool->opp_free_pages, pool->opp_order);
 
 	return sc->nr_to_scan;
 }
@@ -587,7 +578,7 @@ static int pool_add_pages(int npages, struct obd_page_pool *page_pool)
 	LASSERT(alloced == npages);
 
 	pool_insert_ptrs(ptr_pages, nptr_pages, npages, page_pool);
-	CDEBUG(D_SEC, "added %d pages into pool\n", npages);
+	CDEBUG(D_SEC, "added %d elements into pool:%d\n", npages, pool_order);
 	OBD_FREE_PTR_ARRAY(ptr_pages, nptr_pages);
 	rc = 0;
 
@@ -842,6 +833,7 @@ int obd_pool_get_pages_array(struct page **pa, unsigned int count)
 }
 EXPORT_SYMBOL(obd_pool_get_pages_array);
 
+/* get 2^order pages region */
 int obd_pool_get_pages(void **pages, unsigned int order)
 {
 	return __obd_pool_get_pages((void *)pages, 1, order,
@@ -854,6 +846,7 @@ static int __obd_pool_put_pages(void *array, unsigned int count,
 				    void **(*page_from)(void *, int))
 {
 	struct obd_page_pool *page_pool;
+	unsigned long this_idle;
 	int p_idx, g_idx;
 	int i, rc = 0;
 
@@ -895,6 +888,21 @@ static int __obd_pool_put_pages(void *array, unsigned int count,
 	page_pool->opp_free_pages += count;
 	pool_wakeup(page_pool);
 
+	/*
+	 * Recalculate opp_idle_idx in __sptlrpc_pool_put_pages the
+	 * same way as it done in __sptlrpc_pool_get_pages. It is
+	 * possible that opp_idle_idx might become 0 or very small
+	 * (less than 10). If there is no new allocations it would
+	 * be impossible to free anything from the pool during 40
+	 * seconds(CACHE_QUIESCENT_PERIOD) despite the large amount
+	 * of free elements ready to shrinking.
+	 */
+	this_idle = page_pool->opp_free_pages * IDLE_IDX_MAX /
+		page_pool->opp_total_pages;
+	page_pool->opp_idle_idx = (page_pool->opp_idle_idx *
+			IDLE_IDX_WEIGHT + this_idle) /
+			(IDLE_IDX_WEIGHT + 1);
+
 out_unlock:
 	spin_unlock(&page_pool->opp_lock);
 	return rc;
@@ -929,6 +937,7 @@ void obd_pool_put_pages_array(struct page **pa, unsigned int count)
 }
 EXPORT_SYMBOL(obd_pool_put_pages_array);
 
+/* put 2^order pages region */
 void obd_pool_put_pages(void *buf, unsigned int order)
 {
 	int rc;
