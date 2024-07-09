@@ -56,8 +56,8 @@ is not given, then use the project ID on the top-level directory
 if checking a directory and or recursively, print only files that do not match.
 .TP
 .B -0
-Print pathnames found by -c with a trailing NUL for use by
-.BR \' xargs "(1) " -0 \'.
+Print pathnames returned by -c with a trailing NUL, suitable for use by
+.B 'xargs -0 lfs project -p'.
 .TP
 .BR "lfs project" " -C [" -d | -r "] [" -k ]
 .RI < file | directory...>
