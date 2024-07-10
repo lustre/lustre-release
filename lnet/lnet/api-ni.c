@@ -5749,9 +5749,9 @@ skip_udsp:
 
 				send_stats = nla_nest_start(msg, LNET_NET_LOCAL_NI_ATTR_SEND_STATS);
 				send_attr = nla_nest_start(msg, 0);
-				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
-					    msg_stats.im_send_stats.ico_get_count);
 				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT,
+					    msg_stats.im_send_stats.ico_get_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
 					    msg_stats.im_send_stats.ico_put_count);
 				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT,
 					    msg_stats.im_send_stats.ico_reply_count);
@@ -5764,9 +5764,9 @@ skip_udsp:
 
 				recv_stats = nla_nest_start(msg, LNET_NET_LOCAL_NI_ATTR_RECV_STATS);
 				recv_attr = nla_nest_start(msg, 0);
-				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
-					    msg_stats.im_recv_stats.ico_get_count);
 				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT,
+					    msg_stats.im_recv_stats.ico_get_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
 					    msg_stats.im_recv_stats.ico_put_count);
 				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT,
 					    msg_stats.im_recv_stats.ico_reply_count);
@@ -5780,9 +5780,9 @@ skip_udsp:
 				drop_stats = nla_nest_start(msg,
 							    LNET_NET_LOCAL_NI_ATTR_DROPPED_STATS);
 				drop_attr = nla_nest_start(msg, 0);
-				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
-					    msg_stats.im_drop_stats.ico_get_count);
 				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT,
+					    msg_stats.im_drop_stats.ico_get_count);
+				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_PUT_COUNT,
 					    msg_stats.im_drop_stats.ico_put_count);
 				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_REPLY_COUNT,
 					    msg_stats.im_drop_stats.ico_reply_count);
