@@ -1700,7 +1700,8 @@ struct kfilnd_transaction *kfilnd_tn_alloc(struct kfilnd_dev *dev, int cpt,
 	return tn;
 
 err_put_key:
-	kfilnd_ep_put_key(ep, key);
+	if (need_key)
+		kfilnd_ep_put_key(ep, key);
 err:
 	return ERR_PTR(rc);
 }
