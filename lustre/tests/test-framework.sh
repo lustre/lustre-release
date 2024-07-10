@@ -1072,7 +1072,11 @@ load_modules_local() {
 	udevadm control --reload-rules
 	udevadm trigger
 
-	load_lnet
+	if $FORCE_LARGE_NID; then
+		load_lnet config_on_load=1
+	else
+		load_lnet
+	fi
 
 	load_module obdclass/obdclass
 	if ! client_only; then
