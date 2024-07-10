@@ -11,6 +11,7 @@ lctl-get_param \- retrieve configuration parameters
 .RB [ --only-name | -N ]
 .RB [ --readable | -r ]
 .RB [ --recursive | -R ]
+.RB [ --tunable | -t ]
 .RB [ --writable | -w ]
 .RB [ --yaml | -y ]
 .IR PARAM_PATH1 " [" PARAM_PATH2 " ...]"
@@ -76,6 +77,12 @@ to print parameters that are both readable and writable.
 .TP
 .BR -R ", " --recursive
 Recursively show all of the parameter names below the specified name.
+.TP
+.BR -t ", " --tunable
+Print only tunable parameters. This avoids all parameters containing any of the
+following:
+.br
+.BR console | debug_ | fail_ | force | import | nis | panic_ | srpc_sepol | stats | target_obd
 .TP
 .BR -w ", " --writable
 Print only parameters that are have write permission. Can be used with

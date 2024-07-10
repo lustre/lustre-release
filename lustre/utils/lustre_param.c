@@ -67,6 +67,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <string.h>
+#include <lstddef.h>
 
 #include "obdctl.h"
 #include <stdio.h>
@@ -264,25 +265,22 @@ static int clean_path(struct param_opts *popt, char *path)
 
 /**
  * The application lctl can perform three operations for lustre
- * tunables. This enum defines those four operations which are
+ * tunables. This enum defines those three operations which are
  *
  * 1) LIST_PARAM	- list available tunables
  * 2) GET_PARAM		- report the current setting of a tunable
  * 3) SET_PARAM		- set the tunable to a new value
- * 4) LIST_PATHNAME	- list paths of available tunables
  */
 enum parameter_operation {
 	LIST_PARAM,
 	GET_PARAM,
 	SET_PARAM,
-	LIST_PATHNAME,
 };
 
 char *parameter_opname[] = {
 	[LIST_PARAM] = "list_param",
 	[GET_PARAM] = "get_param",
 	[SET_PARAM] = "set_param",
-	[LIST_PATHNAME] = "list_pathname",
 };
 
 /**
@@ -395,6 +393,32 @@ int write_param(const char *path, const char *param_name,
 	return rc;
 }
 
+bool stats_param(const char *pattern)
+{
+	char * const flag_v[] = {
+	"console",
+	"debug_",
+	"fail_",
+	"force",
+	"import",
+	"panic_",
+	"peers",
+	"srpc_sepol",
+	"stats",
+	"target_obd",
+	};
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(flag_v); i++)
+		if (strstr(pattern, flag_v[i]))
+			return true;
+
+	if (strncmp(pattern, "nis", strlen(pattern)) == 0)
+		return true;
+
+	return false;
+}
+
 /**
  * Perform a read, write or just a listing of a parameter
  *
@@ -472,6 +496,8 @@ static int do_param_op(struct param_opts *popt, char *pattern, char *value,
 		if (popt->po_permissions &&
 		    (st.st_mode & popt->po_permissions) != popt->po_permissions)
 			continue;
+		if (popt->po_tunable && stats_param(paths.gl_pathv[i]))
+			continue;
 
 		param_name = display_name(paths.gl_pathv[i], &st, popt);
 		if (!param_name) {
@@ -536,21 +562,8 @@ static int do_param_op(struct param_opts *popt, char *pattern, char *value,
 			dup_cache[dup_count++] = strdup(param_name);
 
 			if (popt->po_show_name)
-				printf("%s\n", param_name);
-			break;
-		case LIST_PATHNAME:
-			for (j = 0; j < dup_count; j++) {
-				if (!strcmp(dup_cache[j], param_name))
-					break;
-			}
-			if (j != dup_count) {
-				free(param_name);
-				param_name = NULL;
-				continue;
-			}
-			dup_cache[dup_count++] = strdup(param_name);
-			if (popt->po_show_name)
-				printf("%s\n", paths.gl_pathv[i]);
+				printf("%s\n", popt->po_only_pathname ?
+					       paths.gl_pathv[i] : param_name);
 			break;
 		}
 
@@ -636,6 +649,7 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'L',	.name = "no-links",	.has_arg = no_argument},
 	{ .val = 'r',	.name = "readable",	.has_arg = no_argument},
 	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
+	{ .val = 't',	.name = "tunable",	.has_arg = no_argument},
 	{ .val = 'w',	.name = "writable",	.has_arg = no_argument},
 	};
 
@@ -647,7 +661,7 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 	/* reset optind for each getopt_long() in case of multiple calls */
 	optind = 0;
-	while ((ch = getopt_long(argc, argv, "DFlLprRw",
+	while ((ch = getopt_long(argc, argv, "DFlLprRtw",
 				      long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'D':
@@ -670,6 +684,9 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 			break;
 		case 'R':
 			popt->po_recursive = 1;
+			break;
+		case 't':
+			popt->po_tunable = 1;
 			break;
 		case 'w':
 			popt->po_recursive |= S_IWRITE;
@@ -707,8 +724,7 @@ int jt_lcfg_listparam(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = do_param_op(&popt, path, NULL, popt.po_only_pathname ?
-				  LIST_PATHNAME : LIST_PARAM, NULL);
+		rc2 = do_param_op(&popt, path, NULL, LIST_PARAM, NULL);
 		if (rc2 < 0) {
 			if (rc == 0)
 				rc = rc2;
@@ -738,8 +754,10 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'L',	.name = "no-links",	.has_arg = no_argument},
 	{ .val = 'n',	.name = "no-name",	.has_arg = no_argument},
 	{ .val = 'N',	.name = "only-name",	.has_arg = no_argument},
+	{ .val = 'N',	.name = "name-only",	.has_arg = no_argument},
 	{ .val = 'r',	.name = "readable",	.has_arg = no_argument},
 	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
+	{ .val = 't',	.name = "tunable",	.has_arg = no_argument},
 	{ .val = 'w',	.name = "writable",	.has_arg = no_argument},
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument},
 	};
@@ -751,7 +769,7 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 	/* reset optind for each getopt_long() in case of multiple calls */
 	optind = 0;
-	while ((ch = getopt_long(argc, argv, "FHlLnNrRwy",
+	while ((ch = getopt_long(argc, argv, "FHlLnNrRtwy",
 				      long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'F':
@@ -777,6 +795,9 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 			break;
 		case 'R':
 			popt->po_recursive = 1;
+			break;
+		case 't':
+			popt->po_tunable = 1;
 			break;
 		case 'w':
 			popt->po_permissions |= S_IWRITE;

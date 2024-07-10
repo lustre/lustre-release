@@ -366,7 +366,7 @@ command_t cmdlist[] = {
 	 "usage: get_param [--classify|-F] [--header|-H] [--links|-l]\n"
 	 "		   [--no-links|-L] [--no-name|-n] [--only-name|-N]\n"
 	 "		   [--readable|-r] [--recursive|-R]\n"
-	 "		   [--writable|-w] [--yaml|-y]\n"
+	 "		   [--tunable|-t] [--writable|-w] [--yaml|-y]\n"
 	 "		   <param_path1 param_path2 ...>\n"
 	 "Get the value of Lustre or LNET parameter from the specified path.\n"
 	 "The path can contain shell-style filename patterns.\n"},
@@ -386,7 +386,7 @@ command_t cmdlist[] = {
 	 "list the Lustre or LNET parameter name\n"
 	 "usage: list_param [--dir-only|-D] [--classify|-F] [--links|-l]\n"
 	 "		    [--no-links|-L] [--path|-p] [--readable|-r]\n"
-	 "		    [--recursive|-R] [--writable|-w]\n"
+	 "		    [--recursive|-R] [--tunable|-t] [--writable|-w]\n"
 	 "		    <param_path1 param_path2 ...>\n"
 	 "List the name of Lustre or LNet parameter from the specified path.\n"},
 	{"del_ost", jt_del_ost, 0, "permanently delete OST records\n"
