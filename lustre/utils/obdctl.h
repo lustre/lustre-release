@@ -141,6 +141,8 @@ const char *jt_cmdname(const char *func);
 
 /* lustre_param.c */
 struct param_opts;
+struct param;
+struct param_dir;
 int jt_clean_path(struct param_opts *popt, char *path);
 int jt_lcfg_getparam(int argc, char **argv);
 int jt_lcfg_setparam(int argc, char **argv);

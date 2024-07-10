@@ -448,11 +448,13 @@ command_t cmdlist[] = {
 	 "  -d  Delete the permanent setting from the configuration."},
 #endif
 	{"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
-	 "usage: get_param [--classify|-F] [--header|-H] [--links|-l]\n"
+	 "usage: get_param [--dshbak|-b] [--color|-c auto|always|never]\n"
+	 "		   [--classify|-F] [--header|-H] [--links|-l]\n"
 	 "		   [--no-links|-L] [--no-name|-n] [--only-name|-N]\n"
-	 "		   [--readable|-r] [--recursive|-R]\n"
-	 "		   [--tunable|-t] [--writable|-w] [--yaml|-y]\n"
-	 "		   PARAM_PATH1 [PARAM_PATH2 ...]\n"
+	 "		   [--merge|-m] [--no-merge|-M] [--path|-p]\n"
+	 "		   [--readable|-r] [--recursive|-R] [--only-tunable|-t]\n"
+	 "		   [--writable|-w] [--yaml|-y]\n"
+	 "		   PARAM1 [PARAM2 ...]\n"
 	 "Get the value of Lustre or LNET parameter from the specified path.\n"
 	 "The path can contain shell-style filename patterns.\n"},
 	{"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
@@ -462,16 +464,18 @@ command_t cmdlist[] = {
 	 " [--thread|-t[THREAD_COUNT]]"
 #endif
 	 "\n"
-	 "		   PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"
+	 "		 PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"
 	 "Set the value of the Lustre or LNET parameter at the specified path.\n"},
 	{"apply_yaml", jt_lcfg_applyyaml, 0, "alias for 'set_param -F'\n"
 	 "usage: apply_yaml YAML_PARAM_FILE\n"},
 	{"list_param", jt_lcfg_listparam, 0,
 	 "list the Lustre or LNET parameter name\n"
-	 "usage: list_param [--dir-only|-D] [--classify|-F] [--links|-l]\n"
-	 "		    [--no-links|-L] [--path|-p] [--readable|-r]\n"
-	 "		    [--recursive|-R] [--tunable|-t] [--writable|-w]\n"
-	 "		    PARAM_PATH1 [PARAM_PATH2 ...]\n"
+	 "usage: list_param [--dshbak|-b] [--color|-c auto|always|never]\n"
+	 "		    [--only-dir|-D] [--classify|-F] [--links|-l]\n"
+	 "		    [--no-links|-L] [--merge|-m] [--no-merge|-M]\n"
+	 "		    [--path|-p] [--readable|-r] [--recursive|-R]\n"
+	 "		    [--only-tunable|-t] [--writable|-w]\n"
+	 "		    PARAM1 [PARAM2 ...]\n"
 	 "List the name of Lustre or LNet parameter from the specified path.\n"},
 	{"del_ost", jt_del_ost, 0, "permanently delete OST records\n"
 	 "usage: del_ost [--dryrun] --target FSNAME-OSTxxxx\n"

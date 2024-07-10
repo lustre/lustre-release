@@ -3,12 +3,17 @@
 lctl-get_param \- retrieve configuration parameters
 .SH SYNOPSIS
 .SY "lctl get_param"
+.RB [ --dshbak | -b ]
+.RB [ --color | -c ]
 .RB [ --classify | -F ]
 .RB [ --header | -H ]
 .RB [ --links | -l ]
 .RB [ --no-links | -L ]
 .RB [ --no-name | -n ]
 .RB [ --only-name | -N ]
+.RB [ --merge | -m ]
+.RB [ --no-merge | -M ]
+.RB [ --path | -p ]
 .RB [ --readable | -r ]
 .RB [ --recursive | -R ]
 .RB [ --tunable | -t ]
@@ -38,13 +43,28 @@ is the name of a Lustre device, like
 but may be a specific component, or contain wildcards to match some or all
 devices on the node. Many parameters are readable as a regular user, though
 some of them are accessible only by the root user for security or
-implementation reasons.
+implementation reasons. Parameters that match a directory will be shown in blue
+and symlinks will be shown in cyan.
 .SH OPTIONS
 .TP
+.BR -b ", " --dshbak
+Aggregate parameters with wildcards whenever a device number appears in the
+parameter name.
+By default --merge is enabled with this option to merge the simplified names.
+Specify --no-merge if you want the parameter names with wildcards but do not
+want them to be merged. See
+.BR lctl-list_param (8)
+for examples.
+.TP
+.BR -c ", " --color=auto|always|never
+Use one of auto|always|never as the rule of when to apply color. The default is
+auto which will display color only when the output is to a terminal.
+The NO_COLOR environment variable is supported.
+.TP
 .BR -F ", " --classify
-Append a '/', '@', or '=' suffix for directories, symlinks,
-and writeable parameters, respectively.
-.B lctl get_param -NF
+Append a '/', '@', or '=' suffix for directories, symlinks, and writeable
+parameters, respectively.
+.B "lctl get_param -NF"
 is equivalent to
 .BR "lctl list_param -F" .
 .TP
@@ -65,10 +85,22 @@ This may be confusing if multiple parameter names are specified,
 as the parameters are not identified,
 and may not be returned in the order that they are specified.
 .TP
+.BR -m ", " --merge
+Merge all parameters that have the same name and value such that only the
+first one will be shown. Parameters with the same name but different values have
+the difference highlighted in red.
+.TP
+.BR -M ", " --no-merge
+Do not merge parameters. All parameters will be shown, regardless if they are
+have the same name and value or not. Duplicate parameters will be printed in
+yellow, if the values are different the difference will be highlighted in red.
+.TP
 .BR -N ", " --only-name
 Print only matched parameter names and not the values. This is especially
 useful when using patterns. This option is equivalent to
-.BR "lctl list_param".
+.TP
+.B -p ", " --path
+Print the parameter path instead of the parameter name.
 .TP
 .BR -r ", " --readable
 Print only parameters that are have read permission. Can be used with

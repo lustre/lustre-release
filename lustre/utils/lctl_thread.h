@@ -34,6 +34,25 @@
 #ifndef STRINGIFY
 #define STRINGIFY(a) #a
 #endif
+#include <sys/stat.h>
+
+struct lctl_param_file {
+	char			 *lpf_val;
+	char			**lpf_val_list;
+	char			 *lpf_name;
+	unsigned int		  lpf_val_c;
+	mode_t			  lpf_mode;
+	unsigned int		  lpf_is_symlink:1;
+};
+
+struct lctl_param_dir {
+	char			 *lpd_path;
+	struct lctl_param_dir	**lpd_child_list;
+	struct lctl_param_file	**lpd_param_list;
+	unsigned int		  lpd_child_c;
+	unsigned int		  lpd_param_c;
+	unsigned int		  lpd_max_param_c;
+};
 
 struct param_opts {
 	unsigned int po_only_name:1;
@@ -50,10 +69,14 @@ struct param_opts {
 	unsigned int po_header:1;
 	unsigned int po_follow_symlinks:1;
 	unsigned int po_tunable:1;
+	unsigned int po_merge:1;
+	unsigned int po_dshbak:1;
+	unsigned int po_color:1;
 	unsigned int po_client:1;
 	unsigned int po_parallel_threads;
 	unsigned int po_permissions;
 	char *po_fsname;
+	struct lctl_param_dir *po_root_dir;
 };
 
 #ifdef HAVE_LIBPTHREAD

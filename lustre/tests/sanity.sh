@@ -181,7 +181,7 @@ test_0d() { # LU-3397
 
 	local mgs_exp="mgs.MGS.exports"
 	local client_uuid=$($LCTL get_param -n mgc.*.uuid)
-	local exp_client_nid
+	local exp_uuid
 	local exp_client_version
 	local exp_val
 	local imp_val
@@ -191,13 +191,14 @@ test_0d() { # LU-3397
 	# save mgc import file to $temp_imp
 	$LCTL get_param mgc.*.import | tee $temp_imp
 	# Check if client uuid is found in MGS export
-	for exp_client_nid in $(do_facet mgs $LCTL get_param -N $mgs_exp.*); do
-		[ $(do_facet mgs $LCTL get_param -n $exp_client_nid.uuid) == \
-			$client_uuid ] &&
-			break;
+	for exp_uuid in $(do_facet mgs $LCTL get_param -N $mgs_exp.*.uuid); do
+		echo $exp_uuid
+		do_facet mgs $LCTL get_param -n $exp_uuid
+		[[ $(do_facet mgs $LCTL get_param -n $exp_uuid) == \
+		   $client_uuid ]] && break
 	done
 	# save mgs export file to $temp_exp
-	do_facet mgs $LCTL get_param $exp_client_nid.export | tee $temp_exp
+	do_facet mgs $LCTL get_param ${exp_uuid%.uuid}.export | tee $temp_exp
 
 	# Compare the value of field "connect_flags"
 	imp_val=$(grep "connect_flags" $temp_imp)

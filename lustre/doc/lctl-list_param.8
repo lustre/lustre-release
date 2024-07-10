@@ -3,10 +3,14 @@
 lctl-list_param \- list configuration parameter names
 .SH SYNOPSIS
 .SY "lctl list_param"
+.RB [ --dshbak | -b ]
+.RB [ --color | -c ]
 .RB [ --dir-only | -D ]
 .RB [ --classify | -F ]
 .RB [ --links | -l ]
 .RB [ --no-links | -L ]
+.RB [ --merge | -m ]
+.RB [ --no-merge | -M ]
 .RB [ --path | -p ]
 .RB [ --readable | -r ]
 .RB [ --recursive | -R ]
@@ -25,6 +29,17 @@ The various options supported by
 .BR lctl list_param
 are listed and explained below:
 .TP
+.BR -b ", " --dshbak
+Aggregate parameters with wildcards whenever a device number appears in the
+parameter name.
+By default --merge is enabled with this option to merge the simplified names.
+Specify --no-merge if you want the parameter names with wildcards but do not
+want them to be merged.
+.TP
+.BR -c ", " --color=auto|always|never
+Use one of auto|always|never as the rule of when to apply color. The default is
+auto which will display color only when the output is a terminal.
+.TP
 .BR -D ", " --dir-only
 Only list directories.
 .TP
@@ -37,8 +52,16 @@ Follow symlinks while searching for parameters. (enabled by default)
 .BR -L ", " --no-links
 Do not follow symlinks while searching for parameters.
 .TP
+.BR -m ", " --merge
+Merge all parameters that have the same name such that only one will be shown.
+Enabled by default.
+.TP
+.BR -M ", " --no-merge
+Do not merge parameters. All parameters will be shown, regardless if they are
+have the same name or not. Duplicate parameters will be printed in yellow.
+.TP
 .BR -p ", " --path
-Print the path name instead of the parameter name.
+Print the parameter path instead of the parameter name.
 .TP
 .BR -r ", " --readable
 Print only parameters that have read permission. Can be used with
@@ -51,8 +74,8 @@ Recursively list all parameters under the specified parameter search string. If
 is unspecified, all the parameters will be shown.
 .TP
 .BR -t ", " --tunable
-Print only tunable parameters. This avoids all parameters containing any of the
-following:
+Print only tunable parameters. This avoids printing directories and all
+parameters containing any of the following:
 .br
 .BR console | debug_ | fail_ | force | import | nis | panic_ | srpc_sepol | stats | target_obd
 .TP
@@ -148,6 +171,71 @@ mgs.MGS.osd.quota_slave_md.timeout
 mgs.MGS.uuid
 mgs.MGS.filesystems
 mgs.MGS.gss
+.B ...
+.EE
+.RE
+.PP
+To get a full list of tunable parameters on the filesystem combine -t with -wr
+.RS
+.EX
+.B # lctl list_param -R -L -t -wr ost.OSS.ost_seq
+ost.OSS.ost_seq.high_priority_ratio
+ost.OSS.ost_seq.threads_max
+ost.OSS.ost_seq.threads_min
+ost.OSS.ost_seq.nrs_crrn_quantum
+ost.OSS.ost_seq.nrs_delay_max
+ost.OSS.ost_seq.nrs_delay_min
+ost.OSS.ost_seq.nrs_delay_pct
+ost.OSS.ost_seq.nrs_policies
+ost.OSS.ost_seq.nrs_tbf_rule
+ost.OSS.ost_seq.req_buffer_history_max
+ost.OSS.ost_seq.req_buffers_max
+.EE
+.RE
+.PP
+Using --merge will collapse copies of the same parameter if they have the exact
+same name. Multiple copies are often caused by symlinks pointing to the same
+directory that has already been searched
+.RS
+.EX
+.B # lctl list_param -R --no-merge osp.lustre-OST0000-osc-MDT0000
+osp.lustre-OST0000-osc-MDT0000
+.I osp.lustre-OST0000-osc-MDT0000 <- symlink
+osp.lustre-OST0000-osc-MDT0000.active
+osp.lustre-OST0000-osc-MDT0000.active
+osp.lustre-OST0000-osc-MDT0000.blocksize
+osp.lustre-OST0000-osc-MDT0000.blocksize
+.B ...
+.P
+.B # lctl list_param -R --merge osp.lustre-OST0000-osc-MDT0000
+osp.lustre-OST0000-osc-MDT0000
+osp.lustre-OST0000-osc-MDT0000.active
+osp.lustre-OST0000-osc-MDT0000.blocksize
+osp.lustre-OST0000-osc-MDT0000.create_count
+.B ...
+.EE
+.RE
+.PP
+Using --dshbak will collapse multiple OSTs and MDTs so params are easier to read
+.RS
+.EX
+.B # lctl list_param -R osp.*
+osp.lustre-OST0000-osc-MDT0000.active
+osp.lustre-OST0000-osc-MDT0000.blocksize
+osp.lustre-OST0000-osc-MDT0000.create_count
+osp.lustre-OST0000-osc-MDT0000.destroys_in_flight
+.B ...
+osp.lustre-OST0001-osc-MDT0000.active
+osp.lustre-OST0001-osc-MDT0000.blocksize
+osp.lustre-OST0001-osc-MDT0000.create_count
+osp.lustre-OST0001-osc-MDT0000.destroys_in_flight
+.B ...
+.P
+.B # lctl list_param -R --dshbak osp.*
+osp.lustre-OST*-osc-MDT*.active
+osp.lustre-OST*-osc-MDT*.blocksize
+osp.lustre-OST*-osc-MDT*.create_count
+osp.lustre-OST*-osc-MDT*.destroys_in_flight
 .B ...
 .EE
 .RE
