@@ -1,0 +1,17 @@
+# For kABI and Module.symvers:
+#   pkg-config --variable=symversdir lnet
+# for user space utils use
+#   pkg-config --cflags --libs lnet
+#
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+version=@PACKAGE_VERSION@
+symversdir=${prefix}/src/lustre
+
+Cflags: -I${includedir}/libcfs -I${includedir}/lnet
+Libs: -L${libdir} -llnetconfig
+Description: Lustre Network API and kAPI
+Name: lnet-kapi
+Version: @PACKAGE_VERSION@

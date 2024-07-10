@@ -419,6 +419,7 @@ AC_DEFUN([LB_CONFIG_FILES], [
 		AC_PACKAGE_TARNAME[-dkms.spec]
 		ldiskfs/Makefile
 		ldiskfs/autoMakefile
+		lnet/utils/lnet.pc
 		lustre/utils/lustre.pc
 		lustre-iokit/Makefile
 		lustre-iokit/obdfilter-survey/Makefile

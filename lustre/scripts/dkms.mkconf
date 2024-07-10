@@ -29,6 +29,8 @@ PRE_BUILD="lustre-dkms_pre-build.sh \$module \$module_version \$kernelver \$kern
 # to ensure all just built Lustre kernel modules will be saved for further install
 POST_BUILD="lustre-dkms_post-build.sh \$module \$module_version \$kernelver \$kernel_source_dir \
 	 \$arch \$source_tree \$dkms_tree \$kmoddir"
+POST_REMOVE="lustre-dkms_post-remove.sh \$module \$module_version \$kernelver \$kernel_source_dir \
+	 \$arch \$source_tree \$dkms_tree \$kmoddir"
 EOF
 if [ $pkgname = "lustre-zfs" -o $pkgname = "lustre-all" ] ; then
 	cat >>${filename} <<EOF

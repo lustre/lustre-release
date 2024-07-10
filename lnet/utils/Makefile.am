@@ -16,6 +16,9 @@ AM_LDFLAGS := -L. $(UTILS_LDFLAGS)
 
 SUBDIRS = lnetconfig
 
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = lnet.pc
+
 if UTILS
 sbin_PROGRAMS = routerstat lst lnetctl
 

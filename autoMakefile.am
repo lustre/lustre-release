@@ -186,6 +186,7 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	config.h.in			\
 	lustre-dkms_pre-build.sh	\
 	lustre-dkms_post-build.sh	\
+	lustre-dkms_post-remove.sh	\
 	LUSTRE-VERSION-GEN		\
 	LUSTRE-VERSION-FILE		\
 	undef.h				\

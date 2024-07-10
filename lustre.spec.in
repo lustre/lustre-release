@@ -161,6 +161,7 @@
 		%global requires_kmod_tests_name kmod-%{lustre_name}-tests
 	%endif
 	%global requires_kmod_version %{version}
+	%global kmod_devel_pkg kmod-%{lustre_name}-devel
 #for Suse
 %else
 	%global requires_kmod_name %{lustre_name}-kmp
@@ -173,7 +174,9 @@
 	%else
 		%global requires_kmod_version %{version}_%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
 	%endif
+	%global kmod_devel_pkg %{lustre_name}-kmp-devel
 %endif
+%global requires_release_major_minor %(echo %version | cut -d. -f1).%(echo %version | cut -d. -f2)
 %endif
 
 # RHEL >= 7 comes with systemd
@@ -243,7 +246,11 @@ Source20: kmp-lnet-in-kernel-o2iblnd.files
 URL: https://wiki.whamcloud.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 %if %{with lustre_modules}
+%if 0%{?suse_version} < 1500 || 0%{?rhel} < 8 || 0%{?fedora} < 34
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
+%else
+Requires: (%{lustre_name}-dkms or %{requires_kmod_name} >= %{requires_release_major_minor})
+%endif
 %endif
 %if %{with lustre_tests_lutf}
 Requires: python3 >= 3.6.0
@@ -388,7 +395,12 @@ BuildRequires: pkgconfig(mount)
 Provides: %{name}-osd-mount = %{version}
 Obsoletes: lustre-osd-mount < %{version}
 %if 0%{confzfsdobjpath} != 0
+%if 0%{?suse_version} < 1500 || 0%{?rhel} < 8 || 0%{?fedora} < 34
+# 'or' is not available so default is assuming 'zfs' is defined
+BuildRequires: libzfs%{?zfs}-devel
+%else
 BuildRequires: (libzfs-devel or libzfs4-devel or libzfs5-devel)
+%endif
 %endif
 # end confzfsdobjpath
 # Tests also require zpool from zfs package:
@@ -425,7 +437,11 @@ Summary: Lustre include headers
 Provides: lustre-devel = %{version}
 Requires: %{lustre_name} = %{version}
 %if %{with lustre_modules}
-Requires: %{requires_kmod_name} = %{requires_kmod_version}
+%if 0%{?suse_version} < 1500 || 0%{?rhel} < 8 || 0%{?fedora} < 34
+Requires: %{requires_kmod_name} >= %{requires_release_major_minor}
+%else
+Requires: (%{lustre_name}-dkms or %{requires_kmod_name} >= %{requires_release_major_minor})
+%endif
 %endif
 
 %description devel
@@ -448,8 +464,12 @@ Requires: lustre-devel = %{version}
 Requires: python3 >= 3.6.0, python3-PyYAML
 %endif
 %if %{with lustre_modules}
+%if 0%{?suse_version} < 1500 || 0%{?rhel} < 8 || 0%{?fedora} < 34
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
-Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
+%else
+Requires: (%{lustre_name}-dkms or %{requires_kmod_name} >= %{requires_release_major_minor})
+%endif
+Requires: %{requires_kmod_tests_name} >= %{requires_release_major_minor}
 %endif
 %if %{with lustre_tests_lutf}
 Requires: python3 >= 3.6.0
@@ -513,6 +533,17 @@ echo $TMPFILE
 %kernel_module_package -n %{name}-lnet-kfilnd -p %SOURCE17 -f %SOURCE18 %{_flavor}
 %endif
 # end multiple_lnds
+%endif
+
+%if %{with lustre_modules}
+%package -n %kmod_devel_pkg
+Summary: Includes and Module.symvers for kernel packages depending on Lustre/LNet
+
+%description -n %kmod_devel_pkg
+This package includes:
+  Module.symvers
+  package config file: lnet.pc
+  kernel headers
 %endif
 
 %if %{with lustre_iokit}
@@ -733,6 +764,18 @@ make install DESTDIR=$RPM_BUILD_ROOT
 # kernel_module_path macro.
 basemodpath=$RPM_BUILD_ROOT%{modules_fs_path}/%{name}
 %{__install} -D -m 0644 ${PWD}/Module.symvers %{buildroot}/Module.symvers
+%if %{with lustre_modules}
+%{__install} -D -m 0644 ${PWD}/Module.symvers %{buildroot}/%{_usrsrc}/lustre-%{version}/%{_arch}/%{_flavor}/Module.symvers
+%{__install} -D -m 0644 ${PWD}/config.h %{buildroot}/%{_usrsrc}/lustre-%{version}/%{_arch}/%{_flavor}/config.h
+for fname in $(find lnet/include -type f -name \*.h); do
+	target=$(echo ${fname} | sed 's:^lnet/include/::g')
+	%{__install} -D -m 0644 ${fname} %{buildroot}/%{_usrsrc}/lustre-%{version}/${target}
+done
+for fname in $(find libcfs/include/libcfs -type f -name \*.h); do
+	target=$(echo ${fname} | sed -e 's:^libcfs/include/::g')
+	%{__install} -D -m 0644 ${fname} %{buildroot}/%{_usrsrc}/lustre-%{version}/${target}
+done
+%endif
 %if %{with ldiskfs}
 mkdir -p $basemodpath-osd-ldiskfs/fs
 mv $basemodpath/fs/osd_ldiskfs.ko $basemodpath-osd-ldiskfs/fs/osd_ldiskfs.ko
@@ -877,6 +920,12 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %exclude %{_includedir}/linux/lustre
 %endif
 
+%if %{with lustre_modules}
+%files -n %kmod_devel_pkg
+%{_libdir}/pkgconfig/lnet.pc
+%{_usrsrc}/lustre-%{version}
+%endif
+
 %files -f lustre.files
 %defattr(-,root,root)
 %{_sbindir}/*
@@ -1018,6 +1067,14 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %if %{with systemd}
 %systemd_postun_with_restart lnet.service
 %systemd_postun_with_restart lsvcgss.service
+%endif
+
+%if %{with lustre_modules}
+%post -n %kmod_devel_pkg
+alternatives --install %{_usrsrc}/lustre lustre %{_usrsrc}/lustre-%{version} 50
+
+%preun -n %kmod_devel_pkg
+alternatives --remove lustre %{_usrsrc}/lustre-%{version}
 %endif
 
 %clean
