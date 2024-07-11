@@ -246,39 +246,6 @@ validate_gateway_nids() {
 	validate_nids
 }
 
-# TODO: Switch to ipcalc if/when we need more sophisticated validation
-ip_is_v4() {
-	local ipv4_re='^([0-9]{1,3}\.){3,3}[0-9]{1,3}$'
-
-	if ! [[ $1 =~ $ipv4_re ]]; then
-		return 1
-	fi
-
-	local quads=(${1//\./ })
-
-	(( ${#quads[@]} == 4)) || return 1
-
-	(( quads[0] < 256 && quads[1] < 256 &&
-	   quads[2] < 256 && quads[3] < 256 )) || return 1
-
-	return 0
-}
-
-ip_is_v6() {
-	local ipv6_re='^([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}$'
-
-	if ! [[ $1 =~ $ipv6_re ]]; then
-		return 1
-	fi
-
-	local segment
-	for segment in ${1//:/ }; do
-		((0x$segment <= 0xFFFF)) || return 1
-	done
-
-	return 0
-}
-
 intf_has_ipv6() {
 	local addr=$(ip -o -6 a s "$1" | awk '{print $4}' | head -n 1 |
 		     grep -v '^fe80::' | sed 's,/[0-9]\+$,,')

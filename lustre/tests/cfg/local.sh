@@ -74,6 +74,7 @@ OST_INDEX_LIST=${OST_INDEX_LIST:-}
 # The default index value of an individual OST is its facet number minus 1.
 # More specific ones override more general ones. See facet_index().
 
+FORCE_LARGE_NID=${FORCE_LARGE_NID:-false}
 NETTYPE=${NETTYPE:-tcp}
 MGSNID=${MGSNID:-$(h2nettype $mgs_HOST)}
 

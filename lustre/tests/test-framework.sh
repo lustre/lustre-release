@@ -4357,9 +4357,66 @@ host_nids_address() {
 	do_nodes $nodes "$LCTL list_nids | grep -w $net | cut -f 1 -d @"
 }
 
+ip_is_v4() {
+	local ipv4_re='^([0-9]{1,3}\.){3,3}[0-9]{1,3}$'
+
+	if ! [[ $1 =~ $ipv4_re ]]; then
+		return 1
+	fi
+
+	local quads=(${1//\./ })
+
+	(( ${#quads[@]} == 4)) || return 1
+
+	(( quads[0] < 256 && quads[1] < 256 &&
+	   quads[2] < 256 && quads[3] < 256 )) || return 1
+
+	return 0
+}
+
+ip_is_v6() {
+	local ipv6_re='^([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}$'
+
+	if ! [[ $1 =~ $ipv6_re ]]; then
+		return 1
+	fi
+
+	local segment
+	for segment in ${1//:/ }; do
+		((0x$segment <= 0xFFFF)) || return 1
+	done
+
+	return 0
+}
+
 h2name_or_ip() {
-	if [ "$1" = "'*'" ]; then echo \'*\'; else
-		echo $1"@$2"
+	if [[ "$1" == '*' ]]; then
+		echo \'*\'
+	elif ip_is_v4 "$1" || ip_is_v6 "$1" ; then
+		echo "$1@$2"
+	else
+		local addr nidlist large_nidlist
+		local iplist=$(do_node $1 hostname -I | sed "s/$1://")
+
+		for addr in ${iplist}; do
+			nid="${addr}@$2"
+			ip_is_v4 "$addr" &&
+				nidlist="${nidlist:+$nidlist,}${nid}" ||
+				large_nidlist="${large_nidlist:+$large_nidlist,}${nid}"
+		done
+		if [[ -n $nidlist ]] && [[ -n $large_nidlist ]]; then
+			if ${FORCE_LARGE_NID}; then
+				echo "$large_nidlist"
+			else
+				echo "$nidlist"
+			fi
+		elif [[ -n $nidlist ]]; then
+			echo "$nidlist"
+		elif [[ -n $large_nidlist ]]; then
+			echo "$large_nidlist"
+		else
+			echo "$1@$2"
+		fi
 	fi
 }
 
