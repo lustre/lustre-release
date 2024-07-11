@@ -6218,15 +6218,14 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
 	mdt_llog_ctxt_unclone(env, m, LLOG_AGENT_ORIG_CTXT);
 	mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
-
+	target_recovery_fini(obd);
 	if (m->mdt_namespace != NULL)
 		ldlm_namespace_free_prior(m->mdt_namespace, NULL,
 					  d->ld_obd->obd_force);
+	mdt_quota_fini(env, m);
 
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
-
-	mdt_quota_fini(env, m);
 
 	cfs_free_nidlist(&m->mdt_squash.rsi_nosquash_nids);
 
@@ -6234,8 +6233,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	 * error path
 	 */
 	mdt_tunables_fini(m);
-
-	target_recovery_fini(obd);
 	upcall_cache_cleanup(m->mdt_identity_cache);
 	m->mdt_identity_cache = NULL;
 

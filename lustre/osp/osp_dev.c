@@ -484,6 +484,8 @@ static int osp_disconnect(struct osp_device *d)
 
 	ptlrpc_deactivate_import(imp);
 
+	ldlm_namespace_cleanup(obd->obd_namespace, LDLM_FL_LOCAL_ONLY);
+
 	/* Some non-replayable imports (MDS's OSCs) are pinged, so just
 	 * delete it regardless.  (It's safe to delete an import that was
 	 * never added.) */
