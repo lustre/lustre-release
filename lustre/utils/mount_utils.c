@@ -948,11 +948,15 @@ int file_create(char *path, __u64 size)
 /* Get rid of symbolic hostnames for tcp, since kernel can't do lookups */
 #define MAXNIDSTR 1024
 
-char *convert_hostnames(char *s1, bool mount)
+char *convert_hostnames(char *buf, bool mount)
 {
-	char *converted, *s2 = 0, *c, *end, sep;
+	char *converted, *c, *end, sep;
+	char *delimiter = buf;
 	int left = MAXNIDSTR;
 	struct lnet_nid nid;
+	int hex_count = 0;
+	int hex_sections = 0;
+	bool is_ipv6 = true;
 
 	converted = malloc(left);
 	if (!converted) {
@@ -963,53 +967,75 @@ char *convert_hostnames(char *s1, bool mount)
 
 	/* end is different between mount and mkfs case */
 	if (mount) {
-		end = strchr(s1, '/');
+		end = strchr(buf, '/');
 		if (!end) {
 			fprintf(stderr, "%s: Invalid mount string: %s\n",
-				progname, s1);
+				progname, buf);
 			goto out_bad_mnt_str;
 		}
 		end--;
 	} else {
-		end = s1 + strlen(s1);
+		end = buf + strlen(buf);
 	}
 
 	c = converted;
-	while ((left > 0) && (s1 < end)) {
+	/* parse all NIDs */
+	while ((left > 0) && (delimiter < end)) {
 		int rc;
+		hex_count = 0;
+		hex_sections = 0;
+		is_ipv6 = true;
 
-		/* Needed to skip : in IPv6 / GUID strings. Lustre uses
-		 * ':' as a seperator as well which makes this complicated.
+		/* previous delimiter */
+		if (*delimiter == ',' || *delimiter == ':')
+			delimiter++;
+
+		/* address parsing */
+		while (*delimiter != ',' && *delimiter != ' ' && *delimiter != '\0') {
+			/* Need to skip : in IPv6 / GUID NIDs. Lustre also uses
+			 * ':' as a separator, which makes this complicated.
+			 */
+			if (*delimiter == '@') {
+				while (*delimiter != ':' && *delimiter != ','
+				    && *delimiter != ' ' && *delimiter != '\0')
+					delimiter++;
+				break;
+			}
+			/* IPv6 addresses are in 0-4 hex digit groups */
+			else if ((isxdigit(*delimiter) || *delimiter == ':') &&
+				 hex_count <= 4 && is_ipv6) {
+				if (*delimiter == ':') {
+					hex_sections++;
+					hex_count = 0;
+				} else {
+					hex_count++;
+				}
+			} else { /* NID is not IPv6 */
+				is_ipv6 = false;
+				if (*delimiter == ':')
+					break;
+
+			}
+			delimiter++;
+		}
+		/* sets the position of the found delimiter to null
+		 * temporarily so when we pass it into parse_nid
+		 * or parse_net it only uses the found NID
 		 */
-		s2 = strchr(s1, '@');
-		if (!s2 || s2 > end) {
-			fprintf(stderr, "%s: Invalid NID string '%s'\n",
-				progname, s1);
-			goto out_free;
-		}
+		sep = *delimiter;
+		*delimiter = '\0';
 
-		s2 = strpbrk(s2, ",:");
-		if (!s2) {
-			s2 = end;
-		} else if (s2 > end) {
-			fprintf(stderr, "%s: Invalid NID string '%s'\n",
-				progname, s1);
-			goto out_free;
-		}
-		sep = *s2;
-		*s2 = '\0';
-
-		rc = libcfs_strnid(&nid, s1);
+		rc = libcfs_strnid(&nid, buf);
 		if (rc < 0) {
 			fprintf(stderr, "%s: Unsupported NID '%s': rc = %s.\n",
-				progname, s1, strerror(rc));
+				progname, buf, strerror(rc));
 			goto out_free;
 		}
-		*s2 = sep;	/* back to original string */
+		*delimiter = sep;      /* back to original string */
 
 		if (LNET_NID_IS_ANY(&nid)) {
 			fprintf(stderr, "%s: Cannot resolve hostname '%s'.\n",
-				progname, s1);
+				progname, buf);
 			goto out_free;
 		}
 
@@ -1018,16 +1044,17 @@ char *convert_hostnames(char *s1, bool mount)
 				       sep);
 		else
 			c += scnprintf(c, left, "%s", libcfs_nidstr(&nid));
+
 		left = converted + MAXNIDSTR - c;
-		s1 = s2 + 1;
+		buf = delimiter + 1;
 	}
 
 	if (mount)
-		snprintf(c, left, "%s", s1);
+		snprintf(c, left, "%s", buf);
 
 	return converted;
 out_free:
-	fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
+	fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, buf);
 out_bad_mnt_str:
 	free(converted);
 	return NULL;

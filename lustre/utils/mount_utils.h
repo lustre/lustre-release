@@ -178,7 +178,7 @@ int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 int update_utab_entry(struct mount_opts *mop);
 int check_mountfsoptions(char *mountopts, char *wanted_mountopts);
 void trim_mountfsoptions(char *s);
-char *convert_hostnames(char *s1, bool mount);
+char *convert_hostnames(char *buf, bool mount);
 #ifdef HAVE_SERVER_SUPPORT
 __u64 get_device_size(char* device);
 int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,

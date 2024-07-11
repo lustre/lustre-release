@@ -11216,6 +11216,83 @@ test_153a() {
 }
 run_test 153a "bypass invalid NIDs quickly"
 
+#LU-17367
+test_153b() {
+	reformat_and_config
+	setupall
+
+	local IPv6_1="6699:7654::1234:1234:d84@tcp"
+	local IPv6_2="2001:0db8:85a3:0000:0000:8a2e:0370:7334@tcp"
+	local IPv6_3="5031:db8:85a3:8d3:1319:8a2e:370:7348@tcp"
+	local IPv4_1="127.0.0.5"
+	local IPv4_2="193.168.0.240@tcp"
+	local IPv4_3="162.32.0.100"
+
+	local mgslist
+
+	umount $MOUNT
+
+	mgslist="$IPv6_1:$mgs_HOST"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$mgs_HOST:$mgs_HOST:$mgs_HOST"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$mgs_HOST:$IPv6_1"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$mgs_HOST:$IPv4_1"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$IPv4_1:$mgs_HOST"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$IPv4_2:$IPv4_1:$mgs_HOST"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$IPv6_1,$IPv4_2,$IPv4_1:$mgs_HOST"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1\
+:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1\
+:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1\
+:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1\
+:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1\
+:$IPv4_1:$IPv4_1:$mgs_HOST"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3,$IPv4_3,$IPv6_2:$mgs_HOST"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+
+	mgslist="$IPv4_2,$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3,$IPv4_3:$IPv6_2\
+,$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3,$IPv4_3:$IPv6_2,$IPv6_1,$IPv4_2\
+,$IPv4_1:$IPv6_3,$IPv4_3:$IPv6_2,$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3\
+,$IPv4_3:$IPv6_2,$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3,$IPv4_3:$IPv6_2\
+:$mgs_HOST"
+	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
+		error "mount failed with $mgslist:/$FSNAME $MOUNT"
+	umount $MOUNT
+}
+run_test 153b "added IPv6 NID support"
+
 test_154() {
 	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"
 	(( $MDS1_VERSION >= $(version_code 2.15.63.1) )) ||
