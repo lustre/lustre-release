@@ -1235,6 +1235,20 @@ static inline void dio_aio_complete(struct kiocb *iocb, ssize_t res)
 #endif
 }
 
+void cl_dio_pages_2queue(struct cl_dio_pages *cdp)
+{
+	int i = 0;
+
+	cl_2queue_init(&cdp->cdp_queue);
+
+	for (i = 0; i < cdp->cdp_count; i++) {
+		struct cl_page *page = cdp->cdp_cl_pages[i];
+
+		cl_page_list_add(&cdp->cdp_queue.c2_qin, page, false);
+	}
+}
+EXPORT_SYMBOL(cl_dio_pages_2queue);
+
 static void cl_dio_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 {
 	struct cl_dio_aio *aio = container_of(anchor, typeof(*aio), cda_sync);
@@ -1259,16 +1273,32 @@ static inline void csd_dup_free(struct cl_iter_dup *dup)
 static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 {
 	struct cl_sub_dio *sdio = container_of(anchor, typeof(*sdio), csd_sync);
+	struct cl_dio_pages *cdp = &sdio->csd_dio_pages;
 	ssize_t ret = anchor->csi_sync_rc;
+	bool array_incomplete = false;
+	int i;
 
 	ENTRY;
 
-	/* release pages */
-	while (sdio->csd_pages.pl_nr > 0) {
-		struct cl_page *page = cl_page_list_first(&sdio->csd_pages);
-
-		cl_page_list_del(env, &sdio->csd_pages, page, false);
-		cl_page_put(env, page);
+	if (cdp->cdp_cl_pages) {
+		for (i = 0; i < cdp->cdp_count; i++) {
+			struct cl_page *page = cdp->cdp_cl_pages[i];
+			/* if we failed allocating pages, the page array may be
+			 * incomplete, so check the pointers
+			 *
+			 * FIXME: This extra tracking of array completeness is
+			 * just a debug check and will be removed later in the
+			 * series.
+			 */
+			if (page)
+				cl_page_put(env, page);
+			else if (array_incomplete)
+				LASSERT(!page);
+			else
+				array_incomplete = true;
+		}
+		OBD_FREE_PTR_ARRAY_LARGE(cdp->cdp_cl_pages,
+					 cdp->cdp_count);
 	}
 
 	if (sdio->csd_unaligned) {
@@ -1281,7 +1311,7 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		 */
 		if (!sdio->csd_write && sdio->csd_bytes > 0)
 			ret = ll_dio_user_copy(sdio);
-		ll_free_dio_buffer(&sdio->csd_dio_pages);
+		ll_free_dio_buffer(cdp);
 		/* handle the freeing here rather than in cl_sub_dio_free
 		 * because we have the unmodified iovec pointer
 		 */
@@ -1290,8 +1320,7 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		/* unaligned DIO does not get user pages, so it doesn't have to
 		 * release them, but aligned I/O must
 		 */
-		ll_release_user_pages(sdio->csd_dio_pages.cdp_pages,
-				      sdio->csd_dio_pages.cdp_count);
+		ll_release_user_pages(cdp->cdp_pages, cdp->cdp_count);
 	}
 	cl_sync_io_note(env, &sdio->csd_ll_aio->cda_sync, ret);
 
@@ -1344,7 +1373,6 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 		 */
 		cl_sync_io_init_notify(&sdio->csd_sync, 1, sdio,
 				       cl_sub_dio_end);
-		cl_page_list_init(&sdio->csd_pages);
 
 		sdio->csd_ll_aio = ll_aio;
 		sdio->csd_creator_free = sync;

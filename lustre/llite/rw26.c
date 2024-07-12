@@ -363,8 +363,8 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 {
 	struct cl_dio_pages *cdp = &sdio->csd_dio_pages;
 	struct cl_sync_io *anchor = &sdio->csd_sync;
-	struct cl_2queue *queue = &io->ci_queue;
 	struct cl_object *obj = io->ci_obj;
+	struct cl_2queue *queue = NULL;
 	struct cl_page *page;
 	int iot = rw == READ ? CRT_READ : CRT_WRITE;
 	loff_t offset = cdp->cdp_file_offset;
@@ -377,7 +377,15 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	cdp->cdp_from = offset & ~PAGE_MASK;
 	cdp->cdp_to = (offset + size) & ~PAGE_MASK;
 
-	cl_2queue_init(queue);
+	/* this is a special temporary allocation which lets us track the
+	 * cl_pages and convert them to a list
+	 *
+	 * this is used in 'pushing down' the conversion to a page queue
+	 */
+	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_cl_pages, cdp->cdp_count);
+	if (!cdp->cdp_cl_pages)
+		GOTO(out, rc = -ENOMEM);
+
 	while (size > 0) {
 		size_t from = offset & ~PAGE_MASK;
 		size_t to = min(from + size, PAGE_SIZE);
@@ -400,10 +408,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 			 */
 			page->cp_inode = inode;
 		}
-		/* We keep the refcount from cl_page_find, so we don't need
-		 * another one here
-		 */
-		cl_page_list_add(&queue->c2_qin, page, false);
+		cdp->cdp_cl_pages[i] = page;
 		/*
 		 * Call page clip for incomplete pages, to set range of bytes
 		 * in the page and to tell transfer formation engine to send
@@ -423,6 +428,8 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	LASSERT(i == cdp->cdp_count);
 	LASSERT(size == 0);
 
+	cl_dio_pages_2queue(cdp);
+	queue = &cdp->cdp_queue;
 	atomic_add(io_pages, &anchor->csi_sync_nr);
 	/*
 	 * Avoid out-of-order execution of adding inflight
@@ -430,13 +437,20 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	 */
 	smp_mb();
 	rc = cl_io_submit_rw(env, io, iot, queue);
+	/* pages must be off the queue when they're freed */
 	if (rc == 0) {
-		cl_page_list_splice(&queue->c2_qout, &sdio->csd_pages);
+		while (queue->c2_qout.pl_nr > 0) {
+			page = cl_page_list_first(&queue->c2_qout);
+			cl_page_list_del(env, &queue->c2_qout, page,
+						 false);
+		}
 	} else {
 		atomic_add(-queue->c2_qin.pl_nr,
 			   &anchor->csi_sync_nr);
-		cl_page_list_for_each(page, &queue->c2_qin)
+		for (i = 0; i < cdp->cdp_count; i++) {
+			page = cdp->cdp_cl_pages[i];
 			page->cp_sync_io = NULL;
+		}
 	}
 	/* handle partially submitted reqs */
 	if (queue->c2_qin.pl_nr > 0) {
@@ -448,11 +462,9 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	}
 
 out:
-	/* if pages were not submitted successfully above, this takes care of
-	 * taking them off the list and removing the single reference they have
-	 * from when they were created
+	/* cleanup of the page array is handled by cl_sub_dio_end, so there's
+	 * no work to do on error here
 	 */
-	cl_2queue_fini(env, queue);
 	RETURN(rc);
 }
 

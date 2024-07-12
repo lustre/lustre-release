@@ -2462,6 +2462,7 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 struct cl_sync_io;
 struct cl_dio_aio;
 struct cl_sub_dio;
+struct cl_dio_pages;
 
 typedef void (cl_sync_io_end_t)(const struct lu_env *, struct cl_sync_io *);
 
@@ -2474,6 +2475,7 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		     int ioret);
 int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret);
+void cl_dio_pages_2queue(struct cl_dio_pages *ldp);
 struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 				    bool is_aio);
 struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
@@ -2514,6 +2516,9 @@ struct cl_dio_pages {
 	 * pages, but for unaligned i/o, this is the internal buffer
 	 */
 	struct page		**cdp_pages;
+
+	struct cl_page		**cdp_cl_pages;
+	struct cl_2queue	cdp_queue;
 	/** # of pages in the array. */
 	size_t			cdp_count;
 	/* the file offset of the first page. */
@@ -2547,7 +2552,6 @@ struct cl_iter_dup {
  */
 struct cl_sub_dio {
 	struct cl_sync_io	csd_sync;
-	struct cl_page_list	csd_pages;
 	ssize_t			csd_bytes;
 	struct cl_dio_aio	*csd_ll_aio;
 	struct cl_dio_pages	csd_dio_pages;
