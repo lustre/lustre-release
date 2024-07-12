@@ -90,9 +90,6 @@ int ll_set_acl(struct mnt_idmap *map,
 	switch (type) {
 	case ACL_TYPE_ACCESS:
 		name = XATTR_NAME_POSIX_ACL_ACCESS;
-		if (acl)
-			rc = posix_acl_update_mode(map, inode,
-						   &inode->i_mode, &acl);
 		break;
 
 	case ACL_TYPE_DEFAULT:
