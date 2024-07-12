@@ -1251,6 +1251,7 @@ struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 		 */
 		cl_sync_io_init_notify(&aio->cda_sync, 1, aio, cl_dio_aio_end);
 		aio->cda_iocb = iocb;
+		aio->cda_is_aio = is_aio;
 		aio->cda_no_aio_complete = !is_aio;
 		/* if this is true AIO, the memory is freed by the last call
 		 * to cl_sync_io_note (when all the I/O is complete), because

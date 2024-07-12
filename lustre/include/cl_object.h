@@ -2541,7 +2541,8 @@ struct cl_dio_aio {
 	ssize_t			cda_bytes;
 	struct mm_struct	*cda_mm;
 	unsigned		cda_no_aio_complete:1,
-				cda_creator_free:1;
+				cda_creator_free:1,
+				cda_is_aio:1;
 };
 
 struct cl_iter_dup {

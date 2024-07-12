@@ -575,6 +575,10 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	LASSERT(ll_dio_aio);
 	LASSERT(ll_dio_aio->cda_iocb == iocb);
 
+	/* unaligned AIO is not supported - see LU-18032 */
+	if (unaligned && ll_dio_aio->cda_is_aio)
+		RETURN(-EINVAL);
+
 	/* We cannot do parallel submission of sub-I/Os - for AIO or regular
 	 * DIO - unless lockless because it causes us to release the lock
 	 * early.

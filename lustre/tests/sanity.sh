@@ -42,6 +42,7 @@ always_except LU-6493  42b
 always_except LU-16515 118c 118d
 always_except LU-8411  407
 always_except LU-17525 56x 56xa 56xb
+always_except LU-18032 119i
 
 if $SHARED_KEY; then
 	always_except LU-14181 64e 64f
@@ -14719,6 +14720,8 @@ test_119h()
 }
 run_test 119h "basic tests of memory unaligned dio"
 
+# Unaligned AIO is disabled and may not be reenabled
+# See LU-18032
 # aiocp with the '-a' option makes testing memory unaligned aio trivial
 test_119i()
 {
@@ -28715,9 +28718,10 @@ test_398d() { #  LU-13846
 	diff $DIR/$tfile $aio_file || error "file diff after aiocp"
 
 	# test memory unaligned aio
-	aiocp -a 512 -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file ||
-		error "unaligned aio failed"
-	diff $DIR/$tfile $aio_file || error "file diff after aiocp"
+	# LU-18032 - unaligned AIO is disabled
+	#aiocp -a 512 -b 64M -s 64M -f O_DIRECT $DIR/$tfile $aio_file ||
+	#	error "unaligned aio failed"
+	#diff $DIR/$tfile $aio_file || error "file diff after aiocp"
 
 	rm -f $DIR/$tfile $aio_file
 }
