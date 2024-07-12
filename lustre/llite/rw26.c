@@ -451,7 +451,6 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	}
 
 out:
-	cl_2queue_disown(env, queue);
 	cl_2queue_fini(env, queue);
 	RETURN(rc);
 }
