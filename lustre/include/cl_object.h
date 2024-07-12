@@ -2508,21 +2508,21 @@ struct cl_sync_io {
 };
 
 /** direct IO pages */
-struct ll_dio_pages {
+struct cl_dio_pages {
 	/*
 	 * page array for RDMA - for aligned i/o, this is the user provided
 	 * pages, but for unaligned i/o, this is the internal buffer
 	 */
-	struct page		**ldp_pages;
+	struct page		**cdp_pages;
 	/** # of pages in the array. */
-	size_t			ldp_count;
+	size_t			cdp_count;
 	/* the file offset of the first page. */
-	loff_t                  ldp_file_offset;
+	loff_t                  cdp_file_offset;
 	/* the first and last page can be incomplete, this records the
 	 * offsets
 	 */
-	int			ldp_from;
-	int			ldp_to;
+	int			cdp_from;
+	int			cdp_to;
 };
 
 /* Top level struct used for AIO and DIO */
@@ -2550,7 +2550,7 @@ struct cl_sub_dio {
 	struct cl_page_list	csd_pages;
 	ssize_t			csd_bytes;
 	struct cl_dio_aio	*csd_ll_aio;
-	struct ll_dio_pages	csd_dio_pages;
+	struct cl_dio_pages	csd_dio_pages;
 	struct iov_iter		csd_iter;
 	struct cl_iter_dup	csd_dup;
 	spinlock_t		csd_lock;
@@ -2566,8 +2566,8 @@ static inline u64 cl_io_nob_aligned(u64 off, u32 nob, u32 pgsz)
 }
 
 void ll_release_user_pages(struct page **pages, int npages);
-int ll_allocate_dio_buffer(struct ll_dio_pages *pvec, size_t io_size);
-void ll_free_dio_buffer(struct ll_dio_pages *pvec);
+int ll_allocate_dio_buffer(struct cl_dio_pages *cdp, size_t io_size);
+void ll_free_dio_buffer(struct cl_dio_pages *cdp);
 ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio);
 
 #ifndef HAVE_KTHREAD_USE_MM
