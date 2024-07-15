@@ -1135,7 +1135,7 @@ static int lov_flush_empty(const struct lu_env *env, struct cl_object *obj,
 	return 0;
 }
 
-const static struct lov_layout_operations lov_dispatch[] = {
+static const struct lov_layout_operations lov_dispatch[] = {
 	[LLT_EMPTY] = {
 		.llo_init      = lov_init_empty,
 		.llo_delete    = lov_delete_empty,

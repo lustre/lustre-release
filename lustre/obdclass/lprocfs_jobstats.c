@@ -480,7 +480,7 @@ static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 
 static const char spaces[] = "                    ";
 
-static int inline width(const char *str, int len)
+static inline int width(const char *str, int len)
 {
 	return len - min((int)strlen(str), 15);
 }

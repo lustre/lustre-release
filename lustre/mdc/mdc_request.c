@@ -1330,12 +1330,15 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	int npages;
 	int i;
 	int rc;
+	gfp_t gfp;
+
 	ENTRY;
 
 	max_pages = rp->rp_exp->exp_obd->u.cli.cl_max_pages_per_rpc;
 	inode = op_data->op_data;
 	fid = &op_data->op_fid1;
 	LASSERT(inode != NULL);
+	gfp = mapping_gfp_mask(inode->i_mapping);
 
 	OBD_ALLOC_PTR_ARRAY_LARGE(page_pool, max_pages);
 	if (page_pool != NULL) {
@@ -1346,7 +1349,7 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	}
 
 	for (npages = 1; npages < max_pages; npages++) {
-		page = page_cache_alloc(inode->i_mapping);
+		page = __page_cache_alloc(gfp);
 		if (page == NULL)
 			break;
 		page_pool[npages] = page;

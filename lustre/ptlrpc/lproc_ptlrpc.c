@@ -182,7 +182,7 @@ const char *ll_opcode2str(__u32 opcode)
 	return ll_rpc_opcode_table[offset].opname;
 }
 
-const int ll_str2opcode(const char *ops)
+int ll_str2opcode(const char *ops)
 {
 	int i;
 

@@ -434,8 +434,9 @@ int gss_crypt_rawobjs(struct crypto_sync_skcipher *tfm, __u8 *iv,
 		}
 
 		skcipher_request_set_crypt(req, &src, &dst, src.length, iv);
-		if (!iv)
+		if (!iv) {
 			skcipher_request_set_crypt_iv(req);
+		}
 
 		if (enc)
 			rc = crypto_skcipher_encrypt_iv(req, &dst, &src,

@@ -4274,11 +4274,11 @@ AC_DEFUN([LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG], [
 	LB2_LINUX_TEST_SRC([class_create_without_module_arg], [
 		#include <linux/device/class.h>
 	],[
-		struct class *class __attribute__ ((unused));
+		struct class *class;
 
 		class = class_create("empty");
 		if (IS_ERR(class))
-			/* checked */;
+			return PTR_ERR(class);
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_CLASS_CREATE_MODULE_ARG], [
