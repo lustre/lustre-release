@@ -368,8 +368,8 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		RETURN(-EINVAL);
 	}
 
-	if (LUSTRE_CFG_BUFLEN(lcfg, 1) > 37) {
-		CERROR("client UUID must be less than 38 characters\n");
+	if (LUSTRE_CFG_BUFLEN(lcfg, 1) > UUID_MAX) {
+		CERROR("client UUID must be %u characters or less\n", UUID_MAX);
 		RETURN(-EINVAL);
 	}
 
@@ -378,8 +378,8 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		RETURN(-EINVAL);
 	}
 
-	if (LUSTRE_CFG_BUFLEN(lcfg, 2) > 37) {
-		CERROR("target UUID must be less than 38 characters\n");
+	if (LUSTRE_CFG_BUFLEN(lcfg, 2) > UUID_MAX) {
+		CERROR("target UUID must be %u characters or less\n", UUID_MAX);
 		RETURN(-EINVAL);
 	}
 

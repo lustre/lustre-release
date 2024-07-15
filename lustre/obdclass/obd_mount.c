@@ -220,6 +220,46 @@ SERVER_ONLY_EXPORT_SYMBOL(lustre_start_simple);
 
 static DEFINE_MUTEX(mgc_start_lock);
 
+/* 9 for '_%x' (INT_MAX as hex is 8 chars - '7FFFFFFF') and 1 for '\0' */
+#define NIDUUID_SUFFIX_MAX_LEN 10
+static inline int mgc_niduuid_create(char **niduuid, char *nidstr)
+{
+	size_t niduuid_len = strlen(nidstr) + strlen(LUSTRE_MGC_OBDNAME) +
+			     NIDUUID_SUFFIX_MAX_LEN;
+
+	LASSERT(niduuid);
+
+	/* See comment in niduuid_create() */
+	if (niduuid_len > UUID_MAX) {
+		nidstr += niduuid_len - UUID_MAX;
+		niduuid_len = strlen(LUSTRE_MGC_OBDNAME) +
+			      strlen(nidstr) + NIDUUID_SUFFIX_MAX_LEN;
+	}
+
+	OBD_ALLOC(*niduuid, niduuid_len);
+	if (!*niduuid)
+		return -ENOMEM;
+
+	snprintf(*niduuid, niduuid_len, "%s%s", LUSTRE_MGC_OBDNAME, nidstr);
+	return 0;
+}
+
+static inline void mgc_niduuid_destroy(char **niduuid)
+{
+	if (*niduuid) {
+		char *tmp = strchr(*niduuid, '_');
+
+		/* If the "_%x" suffix hasn't been added yet then the size
+		 * calculation below should still be correct
+		 */
+		if (tmp)
+			*tmp = '\0';
+
+		OBD_FREE(*niduuid, strlen(*niduuid) + NIDUUID_SUFFIX_MAX_LEN);
+	}
+	*niduuid = NULL;
+}
+
 /**
  * Set up a MGC OBD to process startup logs
  *
@@ -239,7 +279,7 @@ int lustre_start_mgc(struct super_block *sb)
 	char nidstr[LNET_NIDSTR_SIZE];
 	char *mgcname = NULL, *niduuid = NULL, *mgssec = NULL;
 	bool large_nids = false;
-	char *ptr;
+	char *ptr, *niduuid_suffix;
 	int rc = 0, i = 0, j;
 	size_t len;
 
@@ -287,9 +327,10 @@ int lustre_start_mgc(struct super_block *sb)
 	libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr));
 	len = strlen(LUSTRE_MGC_OBDNAME) + strlen(nidstr) + 1;
 	OBD_ALLOC(mgcname, len);
-	OBD_ALLOC(niduuid, len + 2);
-	if (mgcname == NULL || niduuid == NULL)
+	rc = mgc_niduuid_create(&niduuid, nidstr);
+	if (rc || mgcname == NULL)
 		GOTO(out_free, rc = -ENOMEM);
+
 	snprintf(mgcname, len, "%s%s", LUSTRE_MGC_OBDNAME, nidstr);
 
 	mgssec = lsi->lsi_lmd->lmd_mgssec ? lsi->lsi_lmd->lmd_mgssec : "";
@@ -366,7 +407,8 @@ int lustre_start_mgc(struct super_block *sb)
 
 	/* Add the primary NIDs for the MGS */
 	i = 0;
-	snprintf(niduuid, len + 2, "%s_%x", mgcname, i);
+	niduuid_suffix = niduuid + strlen(niduuid);
+	snprintf(niduuid_suffix, NIDUUID_SUFFIX_MAX_LEN, "_%x", i);
 	if (IS_SERVER(lsi)) {
 		ptr = lsi->lsi_lmd->lmd_mgs;
 		CDEBUG(D_MOUNT, "mgs NIDs %s.\n", ptr);
@@ -444,7 +486,7 @@ int lustre_start_mgc(struct super_block *sb)
 	while (ptr && ((*ptr == ':' ||
 	       class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0))) {
 		/* New failover node */
-		sprintf(niduuid, "%s_%x", mgcname, i);
+		snprintf(niduuid_suffix, NIDUUID_SUFFIX_MAX_LEN, "_%x", i);
 		j = 0;
 		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
 			if (!nid_is_nid4(&nid))
@@ -532,8 +574,8 @@ out_free:
 		OBD_FREE_PTR(data);
 	if (mgcname)
 		OBD_FREE(mgcname, len);
-	if (niduuid)
-		OBD_FREE(niduuid, len + 2);
+	mgc_niduuid_destroy(&niduuid);
+
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_start_mgc);
@@ -542,7 +584,8 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct obd_device *obd;
-	char niduuid[MAX_OBD_NAME + 6], *ptr = NULL;
+	char *niduuid = NULL, *niduuid_suffix;
+	char nidstr[LNET_NIDSTR_SIZE];
 	int i, rc = 0;
 
 	ENTRY;
@@ -553,6 +596,16 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 	if (!obd)
 		RETURN(-ENOENT);
 	lsi->lsi_mgc = NULL;
+
+	/* Reconstruct the NID uuid from the obd_name */
+	strscpy(nidstr, &obd->obd_name[0] + strlen(LUSTRE_MGC_OBDNAME),
+		sizeof(nidstr));
+
+	rc = mgc_niduuid_create(&niduuid, nidstr);
+	if (rc)
+		RETURN(-ENOMEM);
+
+	niduuid_suffix = niduuid + strlen(niduuid);
 
 	mutex_lock(&mgc_start_lock);
 	LASSERT(atomic_read(&obd->u.cli.cl_mgc_refcount) > 0);
@@ -582,19 +635,12 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 			CDEBUG(D_MOUNT, "disconnect failed %d\n", rc);
 	}
 
-	/*
-	 * Cache the obdname for cleaning the nid uuids, which are
-	 * obdname_XX before calling class_manual_cleanup
-	 */
-	strcpy(niduuid, obd->obd_name);
-	ptr = niduuid + strlen(niduuid);
-
 	rc = class_manual_cleanup(obd);
 	if (rc)
 		GOTO(out, rc);
 
 	for (i = 0; i < lsi->lsi_lmd->lmd_mgs_failnodes; i++) {
-		sprintf(ptr, "_%x", i);
+		snprintf(niduuid_suffix, NIDUUID_SUFFIX_MAX_LEN, "_%x", i);
 		rc = do_lcfg(LUSTRE_MGC_OBDNAME, 0, LCFG_DEL_UUID,
 			     niduuid, NULL, NULL, NULL);
 		if (rc)
@@ -604,6 +650,9 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 out:
 	/* class_import_put will get rid of the additional connections */
 	mutex_unlock(&mgc_start_lock);
+
+	mgc_niduuid_destroy(&niduuid);
+
 	RETURN(rc);
 }
 SERVER_ONLY_EXPORT_SYMBOL(lustre_stop_mgc);

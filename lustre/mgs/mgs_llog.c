@@ -132,11 +132,15 @@ fini:
 
 static inline int name_create(char **newname, char *prefix, char *suffix)
 {
+	size_t newname_len = strlen(prefix) + strlen(suffix) + 1;
+
 	LASSERT(newname);
-	OBD_ALLOC(*newname, strlen(prefix) + strlen(suffix) + 1);
+
+	OBD_ALLOC(*newname, newname_len);
 	if (!*newname)
 		return -ENOMEM;
-	sprintf(*newname, "%s%s", prefix, suffix);
+
+	snprintf(*newname, newname_len, "%s%s", prefix, suffix);
 	return 0;
 }
 
@@ -145,6 +149,34 @@ static inline void name_destroy(char **name)
 	if (*name)
 		OBD_FREE(*name, strlen(*name) + 1);
 	*name = NULL;
+}
+
+static inline int niduuid_create(char **niduuid, char *nidstr)
+{
+	size_t niduuid_len = strlen(nidstr) + 1;
+
+	LASSERT(niduuid);
+
+	/* Large NIDs may be longer than UUID_MAX. In this case we skip bytes at
+	 * the start of the string because the bytes at the end of the NID
+	 * should be more unique
+	 */
+	if (niduuid_len > UUID_MAX) {
+		nidstr += niduuid_len - UUID_MAX;
+		niduuid_len = strlen(nidstr) + 1;
+	}
+
+	OBD_ALLOC(*niduuid, niduuid_len);
+	if (!*niduuid)
+		return -ENOMEM;
+
+	snprintf(*niduuid, niduuid_len, "%s", nidstr);
+	return 0;
+}
+
+static inline void niduuid_destroy(char **niduuid)
+{
+	name_destroy(niduuid);
 }
 
 static inline int name_create_osp(char **ospname, char **devtype, char *tgtname,
@@ -1220,8 +1252,8 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 		ptr = mrd->target.mti_params;
 		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
 			if (!mrd->nodeuuid) {
-				rc = name_create(&mrd->nodeuuid,
-						 libcfs_nidstr(&nid), "");
+				rc = niduuid_create(&mrd->nodeuuid,
+						    libcfs_nidstr(&nid));
 				if (rc) {
 					CERROR("Can't create uuid for "
 						"nid  %s, device %s\n",
@@ -1256,7 +1288,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 			       libcfs_nidstr(&nid),
 			       mrd->nodeuuid ? mrd->nodeuuid : "NULL",
 			       mrd->target.mti_svname);
-			name_destroy(&mrd->nodeuuid);
+			niduuid_destroy(&mrd->nodeuuid);
 			return -ENXIO;
 		} else {
 			mrd->state = REPLACE_SETUP;
@@ -1279,7 +1311,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 				  /* s4 is not changed */
 				  lustre_cfg_string(lcfg, 4));
 
-		name_destroy(&mrd->nodeuuid);
+		niduuid_destroy(&mrd->nodeuuid);
 		if (rc)
 			return rc;
 
@@ -1287,9 +1319,8 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 			ptr = mrd->failover;
 			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
 				if (mrd->nodeuuid == NULL) {
-					rc =  name_create(&mrd->nodeuuid,
-							  libcfs_nidstr(&nid),
-							  "");
+					rc = niduuid_create(&mrd->nodeuuid,
+							   libcfs_nidstr(&nid));
 					if (rc)
 						return rc;
 				}
@@ -1303,7 +1334,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 						mrd->target.mti_svname,
 						libcfs_nidstr(&nid),
 						mrd->nodeuuid, rc);
-					name_destroy(&mrd->nodeuuid);
+					niduuid_destroy(&mrd->nodeuuid);
 					return rc;
 				}
 				if (*ptr == ':') {
@@ -1311,7 +1342,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 						mrd->temp_llh,
 						lustre_cfg_string(lcfg, 0),
 						mrd->nodeuuid);
-					name_destroy(&mrd->nodeuuid);
+					niduuid_destroy(&mrd->nodeuuid);
 					if (rc)
 						return rc;
 				}
@@ -1320,7 +1351,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 				rc = record_add_conn(env, mrd->temp_llh,
 						     lustre_cfg_string(lcfg, 0),
 						     mrd->nodeuuid);
-				name_destroy(&mrd->nodeuuid);
+				niduuid_destroy(&mrd->nodeuuid);
 				if (rc)
 					return rc;
 			}
@@ -2834,7 +2865,7 @@ static int mgs_write_log_failnids(const struct lu_env *env,
 				/* We don't know the failover node name,
 				 * so just use the first nid as the uuid */
 				libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr));
-				rc = name_create(&failnodeuuid, nidstr, "");
+				rc = niduuid_create(&failnodeuuid, nidstr);
 				if (rc != 0)
 					return rc;
 			}
@@ -2850,13 +2881,13 @@ static int mgs_write_log_failnids(const struct lu_env *env,
 			if (*ptr == ':') {
 				rc = record_add_conn(env, llh, cliname,
 						     failnodeuuid);
-				name_destroy(&failnodeuuid);
+				niduuid_destroy(&failnodeuuid);
 				failnodeuuid = NULL;
 			}
 		}
 		if (failnodeuuid) {
 			rc = record_add_conn(env, llh, cliname, failnodeuuid);
-			name_destroy(&failnodeuuid);
+			niduuid_destroy(&failnodeuuid);
 			failnodeuuid = NULL;
 		}
 	}
@@ -2895,7 +2926,7 @@ static int mgs_write_log_mdc_to_lmv(const struct lu_env *env,
 		nidstr = mti->mti_nidlist[0];
 	}
 
-	rc = name_create(&nodeuuid, nidstr, "");
+	rc = niduuid_create(&nodeuuid, nidstr);
 	if (rc)
 		RETURN(rc);
 	rc = name_create(&mdcname, mti->mti_svname, "-mdc");
@@ -2963,7 +2994,7 @@ out_free:
 	name_destroy(&lmvuuid);
 	name_destroy(&mdcuuid);
 	name_destroy(&mdcname);
-	name_destroy(&nodeuuid);
+	niduuid_destroy(&nodeuuid);
 	RETURN(rc);
 }
 
@@ -3025,7 +3056,7 @@ static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 		nidstr = mti->mti_nidlist[0];
 	}
 
-	rc = name_create(&nodeuuid, nidstr, "");
+	rc = niduuid_create(&nodeuuid, nidstr);
 	if (rc)
 		GOTO(out_destory, rc);
 
@@ -3108,7 +3139,7 @@ out_destory:
 	name_destroy(&lovuuid);
 	name_destroy(&lovname);
 	name_destroy(&ospname);
-	name_destroy(&nodeuuid);
+	niduuid_destroy(&nodeuuid);
 	name_destroy(&mdtname);
 	RETURN(rc);
 }
@@ -3331,7 +3362,7 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 		nidstr = mti->mti_nidlist[0];
 	}
 
-	rc = name_create(&nodeuuid, nidstr, "");
+	rc = niduuid_create(&nodeuuid, nidstr);
 	if (rc)
 		RETURN(rc);
 	rc = name_create(&svname, mti->mti_svname, "-osc");
@@ -3425,7 +3456,7 @@ out_free:
 	name_destroy(&oscuuid);
 	name_destroy(&oscname);
 	name_destroy(&svname);
-	name_destroy(&nodeuuid);
+	niduuid_destroy(&nodeuuid);
 	RETURN(rc);
 }
 
