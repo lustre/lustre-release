@@ -33,6 +33,7 @@ ORIG_PWD=${PWD}
 TSTID=${TSTID:-"$(id -u $TSTUSR)"}
 TSTID2=${TSTID2:-"$(id -u $TSTUSR2)"}
 TSTPRJID=${TSTPRJID:-1000}
+TSTPRJID2=${TSTPRJID2:-1001}
 BLK_SZ=1024
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
@@ -482,6 +483,9 @@ check_system_is_clean() {
 			used=$(getquota -p $TSTPRJID global $cur)
 			[ $used -ne 0 ] && quota_error p $TSTPRJID \
 				"Used ${cur:3}($used) for project $TSTPRJID isn't 0"
+			used=$(getquota -p $TSTPRJID2 global $cur)
+			[ $used -ne 0 ] && quota_error p $TSTPRJID \
+				"Used ${cur:3}($used) for project $TSTPRJID isn't 0"
 		fi
 	done
 	return 0
@@ -685,6 +689,7 @@ test_1a() {
 		"project quota isn't released after deletion"
 
 	resetquota -p $TSTPRJID
+	resetquota -p $TSTPRJID2
 }
 run_test 1a "Block hard limit (normal use and out of quota)"
 
@@ -1208,11 +1213,14 @@ test_1i() {
 run_test 1i "Quota pools: different limit and usage relations"
 
 test_1j() {
-	local limit=20 # MB
-	local testfile="$DIR/$tdir/$tfile-0"
+	local limit=40 # MB
+	local limit2=$((limit*2)) # MB
+	local testf="$DIR/$tdir/$tfile-0"
+	local testf1="$DIR/$tdir/$tfile-1"
+	local testf2="$DIR/$tdir/$tfile-2"
 
-	(( $OST1_VERSION >= $(version_code 2.15.52.206) )) ||
-		skip "need OST at least 2.15.52.206"
+	(( $OST1_VERSION >= $(version_code 2.14.0.74) )) ||
+		skip "need OST at least 2.14.0.74"
 
 	is_project_quota_supported ||
 		skip "skip project quota unsupported"
@@ -1228,22 +1236,55 @@ test_1j() {
 	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
 		error "set project quota failed"
 
-	$LFS setstripe $testfile -c 1 -i 0 || error "setstripe $testfile failed"
-	change_project -p $TSTPRJID $testfile
+	$LFS setquota -p $TSTPRJID2 -b 0 -B ${limit2}M -i 0 -I 0 $DIR ||
+		error "set project quota failed"
 
-	local procf=osd-$ost1_FSTYPE.$FSNAME-OST0000.quota_slave.root_prj_enable
+	$LFS setstripe $testf -c 1 -i 0 || error "setstripe $testf failed"
+	$LFS setstripe $testf1 -c 1 -i 1 || error "setstripe $testf1 failed"
+	$LFS setstripe $testf2 -c 1 -i 0 || error "setstripe $testf2 failed"
+	change_project -p $TSTPRJID $testf
+	change_project -p $TSTPRJID $testf1
+	change_project -p $TSTPRJID2 $testf2
+
+	$LFS quota -pv $TSTPRJID $DIR
+	$LFS quota -pv $TSTPRJID2 $DIR
+
+	runas -u 0 -g 0 $DD of=$testf count=$limit oflag=direct || true
+	runas -u 0 -g 0 $DD of=$testf count=$((limit/2)) \
+		seek=$limit oflag=direct || true
+
+	local procf=osd-$ost1_FSTYPE.$FSNAME-*.quota_slave.root_prj_enable
 	do_facet ost1 $LCTL set_param $procf=1 ||
 		error "enable root quotas for project failed"
 	stack_trap "do_facet ost1 $LCTL set_param $procf=0"
+	do_facet ost2 $LCTL set_param $procf=1 ||
+		error "enable root quotas for project failed"
+	stack_trap "do_facet ost2 $LCTL set_param $procf=0"
+	lctl get_param *.*.quota_slave.root_prj_enable
 
-	runas -u 0 -g 0 $DD of=$testfile count=$limit oflag=direct || true
-	runas -u 0 -g 0 $DD of=$testfile count=$((limit/2)) seek=$limit oflag=direct &&
+	$LFS quota -pv $TSTPRJID $DIR
+	$LFS quota -pv $TSTPRJID2 $DIR
+
+	# check that after enabling root_prj_enable,
+	# root gets EDQUOT as earlier hit the limit
+	runas -u 0 -g 0 $DD of=$testf1 count=$limit oflag=direct || true
+	runas -u 0 -g 0 $DD of=$testf1 count=$((limit/2)) \
+		seek=$limit oflag=direct &&
 		quota_error "project" $TSTPRJID "root write to project success"
+
+	# check that ROOT still can write to the directories
+	# with different PRJID with larger limit
+	runas -u 0 -g 0 $DD of=$testf2 count=$limit oflag=direct || true
+	runas -u 0 -g 0 $DD of=$testf2 count=$((limit/2)) \
+		seek=$limit oflag=direct ||
+		quota_error "project" $TSTPRJID2 "root write to project success"
 
 	do_facet ost1 $LCTL set_param $procf=0 ||
 		error "disable root quotas for project failed"
+	do_facet ost2 $LCTL set_param $procf=0 ||
+		error "disable root quotas for project failed"
 
-	runas -u 0 -g 0 $DD of=$testfile count=$limit seek=$limit oflag=direct ||
+	runas -u 0 -g 0 $DD of=$testf count=$limit seek=$limit oflag=direct ||
 		quota_error "project" $TSTPRJID "root write to project failed"
 
 	# cleanup
