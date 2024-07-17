@@ -1100,7 +1100,6 @@ srpc_client_rpc_expired (void *data)
 	      rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
 	      rpc->crpc_timeout);
 
-	LBUG();
 	spin_lock(&rpc->crpc_lock);
 
 	rpc->crpc_timeout = 0;
