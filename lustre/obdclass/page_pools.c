@@ -128,6 +128,23 @@ static struct obd_page_pool {
 	struct mutex add_pages_mutex;
 } **page_pools;
 
+static struct shrinker **pool_shrinkers;
+
+static inline int get_pool_index(struct shrinker *shrinker)
+{
+	int i;
+
+	for (i = 0; i < POOLS_COUNT; i++)
+		if (pool_shrinkers[i] == shrinker)
+			return i;
+
+	CERROR("Shrinker %p has not been found among %i pools\n",
+	       shrinker, POOLS_COUNT);
+	LBUG();
+
+	return -1;
+}
+
 static int element_size(struct obd_page_pool *pool)
 {
 	return 1 << pool->opp_order;
@@ -298,16 +315,18 @@ static void pool_release_free_pages(long npages, struct obd_page_pool *pool)
 	}
 }
 
-#define SEEKS_TO_ORDER(s) (((s)->seeks >> 8) & 0xff)
-#define ORDER_TO_SEEKS(i) (DEFAULT_SEEKS | (i << 8))
 /*
  * we try to keep at least PTLRPC_MAX_BRW_PAGES pages in the pool.
  */
 static unsigned long pool_shrink_count(struct shrinker *s,
 				       struct shrink_control *sc)
 {
-	unsigned int pool_order = SEEKS_TO_ORDER(s);
-	struct obd_page_pool *pool = page_pools[pool_order];
+	int pool_order;
+	struct obd_page_pool *pool;
+
+	pool_order = get_pool_index(s);
+	pool = page_pools[pool_order];
+
 	/*
 	 * if no pool access for a long time, we consider it's fully
 	 * idle. A little race here is fine.
@@ -332,9 +351,11 @@ static unsigned long pool_shrink_count(struct shrinker *s,
 static unsigned long pool_shrink_scan(struct shrinker *s,
 				      struct shrink_control *sc)
 {
-	/* Get pool number passed as part of pool_shrinker_seeks value */
-	unsigned int pool_order = SEEKS_TO_ORDER(s);
-	struct obd_page_pool *pool = page_pools[pool_order];
+	int pool_order;
+	struct obd_page_pool *pool;
+
+	pool_order = get_pool_index(s);
+	pool = page_pools[pool_order];
 
 	spin_lock(&pool->opp_lock);
 	if (pool->opp_free_pages <= PTLRPC_MAX_BRW_PAGES)
@@ -1020,6 +1041,11 @@ int obd_pool_init(void)
 	OBD_ALLOC(page_pools, POOLS_COUNT * sizeof(*page_pools));
 	if (page_pools == NULL)
 		RETURN(-ENOMEM);
+
+	OBD_ALLOC(pool_shrinkers, POOLS_COUNT * sizeof(*pool_shrinkers));
+	if (pool_shrinkers == NULL)
+		GOTO(fail2, rc = -ENOMEM);
+
 	for (pool_order = 0; pool_order < POOLS_COUNT; pool_order++) {
 		OBD_ALLOC(page_pools[pool_order], sizeof(**page_pools));
 		if (page_pools[pool_order] == NULL)
@@ -1049,18 +1075,19 @@ int obd_pool_init(void)
 		pool->opp_shops.scan_objects = pool_shrink_scan;
 #else
 		pool->opp_shops.shrink = pool_shrink;
+		pool->opp_shops.seeks = DEFAULT_SEEKS;
 #endif
-		pool->opp_shops.seeks = ORDER_TO_SEEKS(pool_order);
-
 		pool->pool_shrinker = ll_shrinker_create(&pool->opp_shops, 0,
 							 "obd_pool");
 		if (IS_ERR(pool->pool_shrinker))
 			GOTO(fail, rc = PTR_ERR(pool->pool_shrinker));
 
+		pool_shrinkers[pool_order] = pool->pool_shrinker;
 		mutex_init(&pool->add_pages_mutex);
 	}
 
 	RETURN(0);
+
 fail:
 	to_revert = pool_order;
 	for (pool_order = 0; pool_order <= to_revert; pool_order++) {
@@ -1071,8 +1098,10 @@ fail:
 			OBD_FREE(pool, sizeof(**page_pools));
 		}
 	}
-	OBD_FREE(page_pools, POOLS_COUNT * sizeof(*page_pools));
+	OBD_FREE(pool_shrinkers, POOLS_COUNT * sizeof(*pool_shrinkers));
 
+fail2:
+	OBD_FREE(page_pools, POOLS_COUNT * sizeof(*page_pools));
 	RETURN(rc);
 }
 EXPORT_SYMBOL(obd_pool_init);
@@ -1113,5 +1142,6 @@ void obd_pool_fini(void)
 	}
 
 	OBD_FREE(page_pools, POOLS_COUNT * sizeof(*page_pools));
+	OBD_FREE(pool_shrinkers, POOLS_COUNT * sizeof(*pool_shrinkers));
 }
 EXPORT_SYMBOL(obd_pool_fini);
