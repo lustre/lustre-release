@@ -2007,6 +2007,8 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 
 	if (!(ma->ma_valid & MA_LOV)) {
 		/* Even empty file are released */
+		ma->ma_lmm = (void *)info->mti_xattr_buf;
+		LASSERT(sizeof(*ma->ma_lmm) < sizeof(info->mti_xattr_buf));
 		memset(ma->ma_lmm, 0, sizeof(*ma->ma_lmm));
 		ma->ma_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1_DEFINED);
 		ma->ma_lmm->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
