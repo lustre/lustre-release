@@ -985,13 +985,13 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
 			if (!exp_connect_flr(info->mti_exp)) {
 				if (rc > 0 &&
-				    mdt_lmm_is_flr(info->mti_big_lmm))
+				    mdt_lmm_is_flr(info->mti_big_lov))
 					GOTO(out_put, rc = -EOPNOTSUPP);
 			}
 
 			if (!exp_connect_overstriping(info->mti_exp)) {
 				if (rc > 0 &&
-				    mdt_lmm_is_overstriping(info->mti_big_lmm))
+				    mdt_lmm_is_overstriping(info->mti_big_lov))
 					GOTO(out_put, rc = -EOPNOTSUPP);
 			}
 		}

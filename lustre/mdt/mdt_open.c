@@ -1076,7 +1076,7 @@ static int mdt_refetch_lovea(struct mdt_thread_info *info,
 		return 0;
 
 	ma->ma_valid &= ~MA_LOV;
-	info->mti_big_lmm_used = 0;
+	info->mti_big_lov_used = 0;
 	ma->ma_lmm = req_capsule_server_get(info->mti_pill, &RMF_MDT_MD);
 	ma->ma_lmm_size = req_capsule_get_size(info->mti_pill, &RMF_MDT_MD,
 					       RCL_SERVER);

@@ -523,7 +523,8 @@ struct mdt_thread_info {
 
 	__u32                      mti_cross_ref:1,
 	/* big_lmm buffer was used and must be used in reply */
-				   mti_big_lmm_used:1,
+				   mti_big_lov_used:1,
+				   mti_big_lmv_used:1,
 				   mti_big_acl_used:1,
 				   mti_som_strict:1,
 	/* Batch processing environment */
@@ -592,9 +593,11 @@ struct mdt_thread_info {
 	struct lu_name             mti_name;
 	char			   mti_filename[NAME_MAX + 1];
 	/* per-thread values, can be re-used, may be vmalloc'd */
-	void			  *mti_big_lmm;
+	void			  *mti_big_lov;  /* was _lmm */
+	void			  *mti_big_lmv;
 	void			  *mti_big_acl;
-	int			   mti_big_lmmsize;
+	int			   mti_big_lovsize;
+	int			   mti_big_lmvsize;
 	int			   mti_big_aclsize;
 	/* should be enough to fit lustre_mdt_attrs */
 	char			   mti_xattr_buf[128];

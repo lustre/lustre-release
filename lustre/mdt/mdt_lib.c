@@ -847,7 +847,8 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 
         /* MDT_MD buffer may be bigger than packed value, let's shrink all
          * buffers before growing it */
-	if (info->mti_big_lmm_used) {
+	if (info->mti_big_lov_used || info->mti_big_lmv_used) {
+
 		/* big_lmm buffer may be used even without packing the result
 		 * into reply, just for internal server needs */
 		if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
@@ -856,7 +857,8 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 
 		/* free big lmm if md_size is not needed */
 		if (md_size == 0 || md_packed == 0) {
-			info->mti_big_lmm_used = 0;
+			info->mti_big_lov_used = 0;
+			info->mti_big_lmv_used = 0;
 		} else {
 			/* buffer must be allocated separately */
 			LASSERT(info->mti_attr.ma_lmm !=
@@ -902,22 +904,23 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 	 */
 
 	/* Grow MD buffer if needed finally */
-	if (info->mti_big_lmm_used) {
-                void *lmm;
+	if (info->mti_big_lov_used || info->mti_big_lmv_used) {
+		void *lmm;
 
-                LASSERT(md_size > md_packed);
-                CDEBUG(D_INFO, "Enlarge reply buffer, need extra %d bytes\n",
-                       md_size - md_packed);
+		LASSERT(md_size > md_packed);
+		CDEBUG(D_INFO, "Enlarge reply buffer, need extra %d bytes\n",
+		       md_size - md_packed);
 
-                rc = req_capsule_server_grow(pill, &RMF_MDT_MD, md_size);
-                if (rc) {
-                        /* we can't answer with proper LOV EA, drop flags,
-                         * the rc is also returned so this request is
-                         * considered as failed */
+		rc = req_capsule_server_grow(pill, &RMF_MDT_MD, md_size);
+		if (rc) {
+			/* we can't answer with proper LOV EA, drop flags,
+			 * the rc is also returned so this request is
+			 * considered as failed
+			 */
 			body->mbo_valid &= ~(OBD_MD_FLDIREA | OBD_MD_FLEASIZE);
-                        /* don't return transno along with error */
-                        lustre_msg_set_transno(pill->rc_req->rq_repmsg, 0);
-                } else {
+			/* don't return transno along with error */
+			lustre_msg_set_transno(pill->rc_req->rq_repmsg, 0);
+		} else {
 			/* now we need to pack right LOV/LMV EA */
 			lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
 			if (info->mti_attr.ma_valid & MA_LOV) {
@@ -939,7 +942,8 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 		if (info->mti_mdt->mdt_max_mdsize < info->mti_attr.ma_lmm_size)
 			info->mti_mdt->mdt_max_mdsize =
 						info->mti_attr.ma_lmm_size;
-		info->mti_big_lmm_used = 0;
+		info->mti_big_lov_used = 0;
+		info->mti_big_lmv_used = 0;
 	}
 
 	if (info->mti_big_acl_used) {

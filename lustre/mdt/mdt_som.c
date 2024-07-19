@@ -219,10 +219,10 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 		RETURN(rc);
 
 	/**
-	 * If mti_big_lmm_used is set, it indicates that mti_big_lmm
-	 * should contain valid LOV EA data, and can be used directly.
+	 * If mti_big_lov_used is set, it indicates that mti_big_lov should
+	 * contain valid LOV EA data, and can be used directly.
 	 */
-	if (!info->mti_big_lmm_used) {
+	if (!info->mti_big_lov_used) {
 		rc = mdt_big_xattr_get(info, o, XATTR_NAME_LOV);
 		if (rc < 0 && rc != -ENODATA)
 			RETURN(rc);
@@ -240,7 +240,7 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 	 * MDS only updates LSOM of the file if the size or block
 	 * size is being increased or the file is being truncated.
 	 */
-	if (!mdt_lmm_dom_only(info->mti_big_lmm) &&
+	if (!mdt_lmm_dom_only(info->mti_big_lov) &&
 	    !(tmp_ma->ma_valid & MA_INODE && tmp_ma->ma_attr.la_nlink == 0)) {
 		__u64 size;
 		__u64 blocks;
