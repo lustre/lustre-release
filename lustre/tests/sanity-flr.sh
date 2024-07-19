@@ -4143,7 +4143,7 @@ test_204f() {
 }
 run_test 204f "FLR write/stale/resync sel w/forced extension"
 
-function test_205() {
+function test_205a() {
 	local tf=$DIR/$tfile
 	local mirrors
 
@@ -4158,22 +4158,39 @@ function test_205() {
 
 	$($LFS getstripe $tf | grep lcme_flags: | tail -1 | grep -q prefer) ||
 		error "prefer flag was not set on the new mirror"
+}
+run_test 205a "lfs mirror extend to set prefer flag"
 
-	$LFS mirror extend -N --flags=nocompr $tf
+function test_205b() {
+	if (( MDS1_VERSION <= $(version_code v2_15_61-245-g37e1316050) )) ; then
+		skip "Need MDS > v2_15_61-245-g37e1316050 to test nocompr flag"
+	fi
+
+	local tf=$DIR/$tfile
+	local mirrors
+
+	$LFS setstripe -c1 $tf ||
+		error "$LFS setstripe -c $tf failed"
+
+	$LFS mirror extend -N --flags=nocompr $tf ||
+		error "$LFS mirror extend -N --flags=nocompr $tf failed"
+
 	mirrors=$($LFS getstripe $tf | grep lcme_mirror_id | wc -l )
-	(( $mirrors == 4 )) || error "no new mirror with nocompr flag was created?"
+	(( $mirrors == 2 )) || error "no new mirror with nocompr flag was created?"
 
 	$($LFS getstripe $tf | grep lcme_flags: | tail -1 | grep -q nocompr) ||
 		error "nocompr flag was not set on the new mirror"
 
-	$LFS mirror extend -N --flags=prefer,nocompr $tf
+	$LFS mirror extend -N --flags=prefer,nocompr $tf ||
+		error "$LFS mirror extend -N --flags=prefer,nocompr $tf failed"
 	mirrors=$($LFS getstripe $tf | grep lcme_mirror_id | wc -l )
-	(( $mirrors == 5 )) || error "no new mirror with prefer,nocompr flags was created?"
+
+	(( $mirrors == 3 )) || error "no new mirror with prefer,nocompr flags was created?"
 
 	$($LFS getstripe $tf | grep lcme_flags: | tail -1 | grep -q "prefer,nocompr") ||
 		error "prefer,nocompr flags were not set on the new mirror"
 }
-run_test 205 "lfs mirror extend to set prefer and nocompr flags"
+run_test 205b "lfs mirror extend to set nocompr flag"
 
 function test_206() {
 	# create a new OST pool
