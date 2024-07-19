@@ -616,7 +616,7 @@ extern struct lu_context_key mdt_thread_key;
 
 static inline struct mdt_thread_info *mdt_th_info(const struct lu_env *env)
 {
-	return lu_env_info(env, &mdt_thread_key);
+	return lu_env_info_get(env, &mdt_thread_key);
 }
 
 struct cdt_req_progress {

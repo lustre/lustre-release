@@ -171,16 +171,9 @@ int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 		RETURN(-ENOENT);
 
 	LASSERT(env);
-	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-	if (!info) {
-		rc = lu_env_refill_by_tags((struct lu_env *)env,
-					   LCT_MD_THREAD, 0);
-		if (rc)
-			GOTO(out_env, rc);
-		info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-		if (!info)
-			GOTO(out_env, rc = -ENOMEM);
-	}
+	info = mdt_th_info(env);
+	if (!info)
+		GOTO(out_env, rc = -ENOMEM);
 
 	fid = &info->mti_tmp_fid2;
 	fid_extract_from_res_name(fid, &res->lr_name);
@@ -347,15 +340,9 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 		GOTO(out, rc);
 	}
 
-	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-	if (!info) {
-		rc = lu_env_refill_by_tags(env, LCT_MD_THREAD, 0);
-		if (rc)
-			GOTO(out, rc);
-		info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-		if (!info)
-			GOTO(out, rc = -ENOMEM);
-	}
+	info = mdt_th_info(env);
+	if (!info)
+		GOTO(out, rc = -ENOMEM);
 
 	/* DOM LVB is used by glimpse and IO completion when
 	 * DoM bits is always alone.

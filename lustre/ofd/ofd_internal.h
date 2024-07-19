@@ -440,7 +440,7 @@ int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
 
 static inline struct ofd_thread_info *ofd_info(const struct lu_env *env)
 {
-	return lu_env_info(env, &ofd_thread_key);
+	return lu_env_info_get(env, &ofd_thread_key);
 }
 
 static inline struct ofd_thread_info *ofd_info_init(const struct lu_env *env,

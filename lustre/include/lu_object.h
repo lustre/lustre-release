@@ -1154,19 +1154,29 @@ void lu_env_fini(struct lu_env *env);
 int  lu_env_refill(struct lu_env *env);
 int  lu_env_refill_by_tags(struct lu_env *env, __u32 ctags, __u32 stags);
 
-static inline void *lu_env_info(const struct lu_env *env,
-				const struct lu_context_key *key)
+static inline void *__lu_env_info(const struct lu_env *env,
+				  const struct lu_context_key *key, int tags)
 {
 	void *info;
 
 	info = lu_context_key_get(&env->le_ctx, key);
 	if (!info) {
-		if (!lu_env_refill((struct lu_env *)env))
+		int rc;
+
+		if (tags)
+			rc = lu_env_refill_by_tags((struct lu_env *)env,
+						   key->lct_tags, 0);
+		else
+			rc = lu_env_refill((struct lu_env *)env);
+		if (!rc)
 			info = lu_context_key_get(&env->le_ctx, key);
 	}
 	LASSERT(info);
 	return info;
 }
+
+#define	lu_env_info(env, key) __lu_env_info(env, key, 0)
+#define	lu_env_info_get(env, key) __lu_env_info(env, key, 1)
 
 struct lu_env *lu_env_find(void);
 int lu_env_add(struct lu_env *env);
