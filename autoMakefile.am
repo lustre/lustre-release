@@ -554,6 +554,7 @@ debs: undef.h debs_common
 	export KSRC_TREE=$(LINUX) && \
 	KSRC=$${KSRC:-$(LINUX_OBJ)} && \
 	TARBALL=$$(realpath usr/src/lustre-$${SRC_GIT_HASH}.tar.bz2) \
+	CC=$(CC) RELAX_CC_CHECK=$(CC) \
 	m-a build $${KSRC:+-k $$KSRC} $${KVERS:+-l $$KVERS} -i -u $$(pwd) lustre && \
 	popd && \
 	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog) && \
@@ -572,6 +573,7 @@ debs: undef.h debs_common
 	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
 	   ../lustre-*-dbgsym_$${VER}_*.ddeb ../lustre_$${VER}_*.buildinfo \
+	   ../lustre-*-dbgsym_$${VER}_*.deb \
 	   debs/ 2> /dev/null || true
 
 dkms-debs: undef.h debs_common

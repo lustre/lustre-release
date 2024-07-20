@@ -474,6 +474,7 @@ binary-kern-mods:
 	# Build client or server modules
 	mkdir -p debian/m-a_root/usr_src/modules
 	ln -s ../../../../ debian/m-a_root/usr_src/modules/lustre
+	CC=$(CC) RELAX_CC_CHECK=$(CC) \
 	m-a -t -u debian/m-a_root/ -d -v -k $(KSRC) build lustre
 	mv -f debian/m-a_root/*.deb ..
 
