@@ -395,7 +395,7 @@ static const struct lu_device_type_operations lwp_device_type_ops = {
 };
 
 struct lu_device_type lwp_device_type = {
-	.ldt_tags     = LU_DEVICE_DT,
+	.ldt_tags     = LU_DEVICE_MISC,
 	.ldt_name     = LUSTRE_LWP_NAME,
 	.ldt_ops      = &lwp_device_type_ops,
 	.ldt_ctx_tags = LCT_MD_THREAD

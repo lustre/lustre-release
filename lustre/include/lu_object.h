@@ -314,16 +314,18 @@ struct lu_device {
 
 struct lu_device_type_operations;
 
-/**
+/*
  * Tag bits for device type. They are used to distinguish certain groups of
  * device types.
  */
 enum lu_device_tag {
-	/** this is meta-data device */
+	/* this device doesn't implement any particular API */
+	LU_DEVICE_MISC = 0,
+	/* this is meta-data device */
 	LU_DEVICE_MD = BIT(0),
-	/** this is data device */
+	/* this is data device */
 	LU_DEVICE_DT = BIT(1),
-	/** data device in the client stack */
+	/* data device in the client stack */
 	LU_DEVICE_CL = BIT(2)
 };
 
