@@ -395,7 +395,7 @@ static int mdt_auto_split(struct mdt_thread_info *info)
 
 	lhc = &info->mti_lh[MDT_LH_CHILD];
 	rc = mdt_object_stripes_lock(info, parent, child, lhc, einfo,
-				     MDS_INODELOCK_FULL, LCK_EX);
+				     MDS_INODELOCK_ELC, LCK_EX);
 	if (rc)
 		GOTO(unlock_parent, rc);
 

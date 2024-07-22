@@ -384,7 +384,7 @@ int mdt_dir_layout_update(struct mdt_thread_info *info)
 	/* lock object */
 	lhc = &info->mti_lh[MDT_LH_CHILD];
 	rc = mdt_object_stripes_lock(info, pobj, obj, lhc, einfo,
-				     MDS_INODELOCK_FULL, LCK_EX);
+				     MDS_INODELOCK_ELC, LCK_EX);
 	if (rc)
 		GOTO(unlock_pobj, rc);
 

@@ -3960,6 +3960,12 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
 	struct lustre_handle *handle;
 	int rc;
 
+	/* DoM lock shouln't be combined with other ibits when it is
+	 * taken locally due to potential conflict with GROUP lock.
+	 * Consider trylock either for DoM bit or for others
+	 */
+	LASSERT(!(*ibits & MDS_INODELOCK_DOM && *ibits & ~MDS_INODELOCK_DOM));
+
 	policy->l_inodebits.bits = *ibits;
 	policy->l_inodebits.try_bits = trybits;
 	policy->l_inodebits.li_gid = lh->mlh_gid;

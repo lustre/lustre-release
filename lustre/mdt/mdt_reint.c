@@ -436,7 +436,7 @@ static int mdt_restripe(struct mdt_thread_info *info,
 	/* lock object */
 	lhc = &info->mti_lh[MDT_LH_CHILD];
 	rc = mdt_object_stripes_lock(info, parent, child, lhc, einfo,
-				     MDS_INODELOCK_FULL, LCK_PW);
+				     MDS_INODELOCK_ELC, LCK_PW);
 	if (rc)
 		GOTO(unlock_child, rc);
 
