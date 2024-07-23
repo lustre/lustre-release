@@ -464,6 +464,9 @@ static bool llapi_layout_lum_truncated(struct lov_user_md *lum, size_t lum_size)
 	else if (lum->lmm_magic == LOV_MAGIC_V3 ||
 		 lum->lmm_magic == __swab32(LOV_MAGIC_V3))
 		magic = LOV_MAGIC_V3;
+	else if (lum->lmm_magic == LOV_MAGIC_SPECIFIC ||
+		 lum->lmm_magic == __swab32(LOV_MAGIC_SPECIFIC))
+		magic = LOV_MAGIC_V3;
 	else if (lum->lmm_magic == LOV_MAGIC_COMP_V1 ||
 		 lum->lmm_magic == __swab32(LOV_MAGIC_COMP_V1))
 		magic = LOV_MAGIC_COMP_V1;
@@ -588,7 +591,8 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 		layout->llot_gen = comp_v1->lcm_layout_gen;
 		layout->llot_flags = comp_v1->lcm_flags;
 	} else if (lum->lmm_magic == LOV_MAGIC_V1 ||
-		   lum->lmm_magic == LOV_MAGIC_V3) {
+		   lum->lmm_magic == LOV_MAGIC_V3 ||
+		   lum->lmm_magic == LOV_MAGIC_SPECIFIC) {
 		ent_count = 1;
 		layout->llot_is_composite = false;
 

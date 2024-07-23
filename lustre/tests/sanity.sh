@@ -9735,6 +9735,22 @@ test_56ei() {
 }
 run_test 56ei "test lfs find --printf prints correct projid for special files"
 
+test_56ej() {
+	test_mkdir $DIR/$tdir.src ||
+		error "mkdir failed on $DIR/$tdir.src"
+	test_mkdir $DIR/$tdir.dest ||
+		error "mkdir failed on $DIR/$tdir.dest"
+	local f_mgrt=$DIR/$tdir.dest/$tfile.mgrt
+
+	$LFS setstripe -o 1 $DIR/$tdir.src
+	$LFS setstripe -o 0 $DIR/$tdir.dest
+	dd if=/dev/random of=$f_mgrt bs=1M count=1
+
+	$LFS migrate  --non-block --copy $DIR/$tdir.src $f_mgrt ||
+		error "migrate remote dir error $DIR/$tdir.src $f_mgrt"
+}
+run_test 56ej "lfs migration --non-block copy"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local
