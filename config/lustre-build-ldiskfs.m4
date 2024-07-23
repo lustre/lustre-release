@@ -91,6 +91,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	    ])
 ], [test x$UBUNTU_KERNEL = xyes], [
         BASEVER=$(echo $LINUXRELEASE | cut -d'-' -f1)
+	AS_VERSION_COMPARE([$BASEVER],[6.10.0],[
 	AS_VERSION_COMPARE([$BASEVER],[6.8.0],[
 	AS_VERSION_COMPARE([$BASEVER],[5.19.0],[
 	AS_VERSION_COMPARE([$BASEVER],[5.15.0],[
@@ -157,7 +158,9 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	[LDISKFS_SERIES="5.19.0-35-ubuntu.series"],
 	[LDISKFS_SERIES="5.19.0-35-ubuntu.series"])],
 	[LDISKFS_SERIES="6.7-ml.series"],
-	[LDISKFS_SERIES="6.7-ml.series"])
+	[LDISKFS_SERIES="6.7-ml.series"])],
+	[LDISKFS_SERIES="6.10-ml.series"],
+	[LDISKFS_SERIES="6.10-ml.series"])
 ], [test x$OPENEULER_KERNEL = xyes], [
 	case $OPENEULER_VERSION_NO in
 	2203.0) LDISKFS_SERIES="5.10.0-oe2203.series" ;;
@@ -186,7 +189,11 @@ AS_IF([test -z "$LDISKFS_SERIES"],
 	AS_VERSION_COMPARE([$LINUXRELEASE],[6.7.0], [
 		LDISKFS_SERIES="6.6-ml.series"], [
 		LDISKFS_SERIES="6.7-ml.series"], [
-		LDISKFS_SERIES="6.7-ml.series"]
+	AS_VERSION_COMPARE([$LINUXRELEASE],[6.10.0], [
+		LDISKFS_SERIES="6.7-ml.series"], [
+		LDISKFS_SERIES="6.10-ml.series"], [
+		LDISKFS_SERIES="6.10-ml.series"]
+	)] # 6.10
 	)] # 6.7
 	)] # 6.6
 	)] # 6.1

@@ -1,0 +1,185 @@
+commit e239a14001b62d96c186ae2c9f58402f73e63dcc
+Author:     Andrew Perepechko <andrew.perepechko@hpe.com>
+AuthorDate: Mon Jan 31 19:55:31 2022 +0300
+LU-15404 ldiskfs: truncate during setxattr leads to kernel panic
+
+When changing a large xattr value to a different large xattr value,
+the old xattr inode is freed. Truncate during the final iput causes
+current transaction restart. Eventually, parent inode bh is marked
+dirty and kernel panic happens when jbd2 figures out that this bh
+belongs to the committed transaction.
+
+A possible fix is to call this final iput in a separate thread.
+This way, setxattr transactions will never be split into two.
+Since the setxattr code adds xattr inodes with nlink=0 into the
+orphan list, old xattr inodes will be properly cleaned up in
+any case.
+
+Change-Id: Idd70befa6a83818ece06daccf9bb6256812674b9
+Signed-off-by: Andrew Perepechko <andrew.perepechko@hpe.com>
+HPE-bug-id: LUS-10534
+Reviewed-on: https://review.whamcloud.com/46358
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Alexander Zarochentsev <alexander.zarochentsev@hpe.com>
+---
+ fs/ext4/ext4.h    |  7 +++++--
+ fs/ext4/page-io.c |  2 +-
+ fs/ext4/super.c   | 15 ++++++++-------
+ fs/ext4/xattr.c   | 39 +++++++++++++++++++++++++++++++++++++--
+ 4 files changed, 51 insertions(+), 12 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index a3276ccc..25fb849f 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1665,8 +1665,11 @@ struct ext4_sb_info {
+ 	struct flex_groups * __rcu *s_flex_groups;
+ 	ext4_group_t s_flex_groups_allocated;
+ 
+-	/* workqueue for reserved extent conversions (buffered io) */
+-	struct workqueue_struct *rsv_conversion_wq;
++	/*
++	 * workqueue for reserved extent conversions (buffered io)
++	 * and large ea inodes reclaim
++	 */
++	struct workqueue_struct *s_misc_wq;
+ 
+ 	/* timer for periodic error stats printing */
+ 	struct timer_list s_err_report;
+diff --git a/fs/ext4/page-io.c b/fs/ext4/page-io.c
+index ad554386..aea9ce61 100644
+--- a/fs/ext4/page-io.c
++++ b/fs/ext4/page-io.c
+@@ -229,7 +229,7 @@ static void ext4_add_complete_io(ext4_io_end_t *io_end)
+ 	WARN_ON(!(io_end->flag & EXT4_IO_END_UNWRITTEN));
+ 	WARN_ON(!io_end->handle && sbi->s_journal);
+ 	spin_lock_irqsave(&ei->i_completed_io_lock, flags);
+-	wq = sbi->rsv_conversion_wq;
++	wq = sbi->s_misc_wq;
+ 	if (list_empty(&ei->i_rsv_conversion_list))
+ 		queue_work(wq, &ei->i_rsv_conversion_work);
+ 	list_add_tail(&io_end->list, &ei->i_rsv_conversion_list);
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 56dfb89a..8465e403 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -1296,10 +1296,11 @@ static void ext4_put_super(struct super_block *sb)
+ 			 &sb->s_uuid);
+ 
+ 	ext4_unregister_li_request(sb);
++	flush_workqueue(sbi->s_misc_wq);
+ 	ext4_quotas_off(sb, EXT4_MAXQUOTAS);
+ 
+ 	flush_work(&sbi->s_sb_upd_work);
+-	destroy_workqueue(sbi->rsv_conversion_wq);
++	destroy_workqueue(sbi->s_misc_wq);
+ 	ext4_release_orphan_info(sb);
+ 
+ 	if (sbi->s_journal) {
+@@ -5443,9 +5444,9 @@ static int __ext4_fill_super(struct fs_context *fc, struct super_block *sb)
+ 	 * The maximum number of concurrent works can be high and
+ 	 * concurrency isn't really necessary.  Limit it to 1.
+ 	 */
+-	EXT4_SB(sb)->rsv_conversion_wq =
+-		alloc_workqueue("ext4-rsv-conversion", WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
+-	if (!EXT4_SB(sb)->rsv_conversion_wq) {
++	EXT4_SB(sb)->s_misc_wq =
++		alloc_workqueue("ext4-misc", WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
++	if (!EXT4_SB(sb)->s_misc_wq) {
+ 		printk(KERN_ERR "EXT4-fs: failed to create workqueue\n");
+ 		err = -ENOMEM;
+ 		goto failed_mount4;
+@@ -5618,8 +5619,8 @@ failed_mount4a:
+ 	sb->s_root = NULL;
+ failed_mount4:
+ 	ext4_msg(sb, KERN_ERR, "mount failed");
+-	if (EXT4_SB(sb)->rsv_conversion_wq)
+-		destroy_workqueue(EXT4_SB(sb)->rsv_conversion_wq);
++	if (EXT4_SB(sb)->s_misc_wq)
++		destroy_workqueue(EXT4_SB(sb)->s_misc_wq);
+ failed_mount_wq:
+ 	ext4_xattr_destroy_cache(sbi->s_ea_inode_cache);
+ 	sbi->s_ea_inode_cache = NULL;
+@@ -6306,7 +6307,7 @@ static int ext4_sync_fs(struct super_block *sb, int wait)
+ 		return 0;
+ 
+ 	trace_ext4_sync_fs(sb, wait);
+-	flush_workqueue(sbi->rsv_conversion_wq);
++	flush_workqueue(sbi->s_misc_wq);
+ 	/*
+ 	 * Writeback quota in non-journalled quota case - journalled quota has
+ 	 * no dirty dquots
+diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
+index 7dcb257b..7e6da3a6 100644
+--- a/fs/ext4/xattr.c
++++ b/fs/ext4/xattr.c
+@@ -1658,6 +1658,36 @@ out_err:
+ 	return ERR_PTR(err);
+ }
+ 
++struct delayed_iput_work {
++	struct work_struct work;
++	struct inode *inode;
++};
++
++static void delayed_iput_fn(struct work_struct *work)
++{
++	struct delayed_iput_work *diwork;
++
++	diwork = container_of(work, struct delayed_iput_work, work);
++	iput(diwork->inode);
++	kfree(diwork);
++}
++
++static void delayed_iput(struct inode *inode, struct delayed_iput_work *work)
++{
++	if (!inode) {
++		kfree(work);
++		return;
++	}
++
++	if (!work) {
++		iput(inode);
++	} else {
++		INIT_WORK(&work->work, delayed_iput_fn);
++		work->inode = inode;
++		queue_work(EXT4_SB(inode->i_sb)->s_misc_wq, &work->work);
++	}
++}
++
+ /*
+  * Reserve min(block_size/8, 1024) bytes for xattr entries/names if ea_inode
+  * feature is enabled.
+@@ -1675,6 +1705,7 @@ static int ext4_xattr_set_entry(struct ext4_xattr_info *i,
+ 	size_t min_offs = s->end - s->base, name_len = strlen(i->name);
+ 	int in_inode = i->in_inode;
+ 	struct inode *old_ea_inode = NULL;
++	struct delayed_iput_work *diwork = NULL;
+ 	size_t old_size, new_size;
+ 	int ret;
+ 
+@@ -1751,7 +1782,11 @@ static int ext4_xattr_set_entry(struct ext4_xattr_info *i,
+ 	 * Finish that work before doing any modifications to the xattr data.
+ 	 */
+ 	if (!s->not_found && here->e_value_inum) {
+-		ret = ext4_xattr_inode_iget(inode,
++		diwork = kmalloc(sizeof(*diwork), GFP_NOFS);
++		if (!diwork)
++			ret = -ENOMEM;
++		else
++			ret = ext4_xattr_inode_iget(inode,
+ 					    le32_to_cpu(here->e_value_inum),
+ 					    le32_to_cpu(here->e_hash),
+ 					    &old_ea_inode);
+@@ -1886,7 +1921,7 @@ update_hash:
+ 
+ 	ret = 0;
+ out:
+-	iput(old_ea_inode);
++	delayed_iput(old_ea_inode, diwork);
+ 	return ret;
+ }
+ 
+-- 
+2.34.1
+
