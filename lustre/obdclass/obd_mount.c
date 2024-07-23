@@ -1664,7 +1664,7 @@ bad_string:
 					 */
 					len -= strlen(args->from) + 2;
 					s2 = s1 + len;
-					memmove(options, s2, strlen(s2) + 1);
+					memmove(s1, s2, strlen(s2) + 1);
 					opts += len;
 				}
 			}
