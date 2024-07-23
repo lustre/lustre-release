@@ -2420,8 +2420,8 @@ test_44e() {
 	local size2
 
 	test_mkdir $DIR/$tdir
-	[ $MDS1_VERSION -ge $(version_code 2.14.52) ] ||
-		skip "Need MDS version at least 2.14.52"
+	(( $MDS1_VERSION >= $(version_code v2_15_50-155-ga3f1c4622a) )) ||
+		skip "Need MDS version >= 2.15.50.155 for SOM tunable"
 
 	$LFS mirror create -N2 $tf || error "create mirrored file $tf failed"
 
@@ -2442,7 +2442,7 @@ test_44e() {
 	$LFS getsom $tf
 
 	((size1 == size2)) ||
-		error "mirrored file with strict SOM $size1 != disabled SOM $size2"
+		error "mirrored file with strict SOM $size1 != no SOM $size2"
 
 	# Remount client to clear cached size information
 	remount_client $MOUNT
@@ -2457,8 +2457,8 @@ test_44e() {
 	# 'getsom' here is just for debugging
 	$LFS getsom $tf
 
-	((size2 == size1)) ||
-		error "mirrored file in sync with som disabled, size with som disabled ($size2) and without som disabled ($size1) should agree"
+	(( size2 == size1 )) ||
+		error "mirror file with SOM disabled, SOM size $size2 != $size1"
 }
 run_test 44e "basic FLR SOM tests + disable SOM"
 
