@@ -9374,6 +9374,14 @@ test_56eb() {
 }
 run_test 56eb "check lfs getstripe on symlink"
 
+test_56ebb() {
+
+	mkdir $DIR/$tdir
+	mkfifo $DIR/$tdir/$tfile-fifo
+	$LFS getdirstripe -r $DIR/$tdir || error "$LFS getdirstripe -r: $DIR"
+}
+run_test 56ebb "check $LFS getdirstripe for FIFO file"
+
 test_56ec() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 	local dir=$DIR/$tdir

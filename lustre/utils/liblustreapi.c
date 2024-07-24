@@ -1675,9 +1675,15 @@ again:
 	 */
 	if (ret < 0 && errno == ENOTTY && !did_nofollow) {
 		int fd, ret2;
+		struct stat st;
 
 		did_nofollow = true;
-		fd = open(path, O_RDONLY | O_NOFOLLOW);
+		if (stat(path, &st) != 0)
+			return -errno;
+		if (S_ISFIFO(st.st_mode))
+			fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+		else
+			fd = open(path, O_RDONLY | O_NOFOLLOW);
 		if (fd < 0) {
 			/* restore original errno */
 			errno = ENOTTY;
@@ -6728,6 +6734,7 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 	struct find_param *param = (struct find_param *)data;
 	int d = dp == NULL ? -1 : *dp, fd = -1;
 	int ret = 0;
+	struct stat st;
 
 	if (p == -1 && d == -1)
 		return -EINVAL;
@@ -6757,6 +6764,11 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 
 		if (param->fp_no_follow)
 			flag = O_RDONLY | O_NOFOLLOW;
+		if (stat(path, &st) != 0)
+			return -errno;
+		if (S_ISFIFO(st.st_mode))
+			flag |= O_NONBLOCK;
+
 		fd = open(path, flag);
 
 		if (fd == -1)
