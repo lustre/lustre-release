@@ -312,8 +312,6 @@ test_0a() {
 	# create parent directory
 	mkdir $td || error "mkdir $td failed"
 
-	$mirror_cmd $tf &> /dev/null && error "miss -N option"
-
 	$mirror_cmd -N $tf || error "create mirrored file $tf failed"
 	verify_mirror_count $tf 1
 	id=$($LFS getstripe -I $tf)

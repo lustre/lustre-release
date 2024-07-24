@@ -19,12 +19,21 @@ The file \fIFILENAME\fR can already be a mirrored file, or just a regular
 non-mirrored file. If it's a non-mirrored file, then the command will convert it
 to a mirrored file.
 .br
-The \fB\-\-mirror\-count\fR|\fB\-N\fR option is optional and indicates how many
+The
+.BR --mirror-count | -N
+option is optional and indicates how many
 mirrors that have the same layout will be added. It can be repeated multiple
 times to separate mirrors that have different layouts. The \fIMIRROR_COUNT\fR
-argument is optional and defaults to 1 if it's not specified; if specified, it
-must follow the option without a space. If \fB\-\-mirror\-count\fR|\fB\-N\fR is
-not specified, the default value of 1 will be used.
+can be specified with a preceding '=' to indicate the number of total mirrors
+desired for the layout, such as
+\fB\-\-mirror\-count\fR==\fITOTAL_MIRROR_COUNT\fR or
+\fB\-N\fR=\fITOTAL_MIRROR_COUNT\fR. This will create mirrors until the total
+number of mirrors in the layout match \fITOTAL_MIRROR_COUNT\fR, this also means
+that if there are already at least \fITOTAL_MIRROR_COUNT\fR mirrors in the
+layout then no new mirrors will be created. The \fIMIRROR_COUNT\fR argument is
+optional and defaults to 1 if it's not specified; if specified, it must follow
+the option without a space. If \fB\-\-mirror\-count\fR|\fB\-N\fR is not
+specified, the default value of 1 will be used.
 .br
 The \fISETSTRIPE_OPTIONS\fR specify the specific layout for the mirror. It can
 be a plain layout with specific striping pattern or a composite layout like

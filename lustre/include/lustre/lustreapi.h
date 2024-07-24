@@ -176,6 +176,7 @@ int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 int llapi_file_lookup(int dirfd, const char *name);
 void llapi_set_command_name(const char *cmd);
 void llapi_clear_command_name(void);
+int llapi_get_lmm_from_path(const char *path, struct lov_user_md_v1 **lmmbuf);
 
 enum llapi_layout_verbose  {
 	VERBOSE_STRIPE_COUNT	=      0x1,

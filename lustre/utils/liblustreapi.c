@@ -1950,6 +1950,39 @@ retry_getfileinfo:
 	return ret;
 }
 
+/**
+ * Get the mirror layout info from a file.
+ *
+ * \param path [in]		a string containing the file path
+ * \param lmmbuf [out]		pointer to an lov_user_md_v1 buffer
+ *				that will be set with the mirror layout info
+ *				from the file specified by \a path.
+ *
+ * \retval 0			success
+ * \retval -errno		on error
+ */
+int llapi_get_lmm_from_path(const char *path, struct lov_user_md_v1 **lmmbuf)
+{
+	size_t lmmlen;
+	int p = -1;
+	int rc = 0;
+
+	lmmlen = get_mds_md_size(path);
+	if (lmmlen < 0)
+		return -EINVAL;
+
+	p = open_parent(path);
+
+	*lmmbuf = calloc(1, lmmlen);
+	if (*lmmbuf == NULL)
+		return -errno;
+
+	rc = get_lmd_info_fd(path, p, 0, *lmmbuf, lmmlen, GET_LMD_STRIPE);
+	if (p != -1)
+		close(p);
+	return rc;
+}
+
 static int llapi_semantic_traverse(char *path, int size, int parent,
 				   semantic_func_t sem_init,
 				   semantic_func_t sem_fini, void *data,

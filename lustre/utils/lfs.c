@@ -193,24 +193,6 @@ static inline int lfs_mirror_create(int argc, char **argv)
 
 static inline int lfs_mirror_extend(int argc, char **argv)
 {
-	int i;
-
-	for (i = 0; i < argc; i++)
-		if (strstr(argv[i], "-N") ||
-		    strstr(argv[i], "--mirror-count"))
-			break;
-
-	/* add -N if not specified */
-	if (i == argc) {
-		char *tmp[argc + 1];
-
-		tmp[0] = argv[0]; /* extend */
-		tmp[1] = "-N";
-		memcpy(tmp + 2, argv + 1, (argc - 1) * sizeof(*argv));
-
-		return lfs_setstripe_internal(argc + 1, tmp, SO_MIRROR_EXTEND);
-	}
-
 	return lfs_setstripe_internal(argc, argv, SO_MIRROR_EXTEND);
 }
 
@@ -283,11 +265,10 @@ command_t mirror_cmdlist[] = {
 	},
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
-		"Usage: lfs mirror extend "
-		"--mirror-count|-N[MIRROR_COUNT] [--no-verify]|\n"
-		"\t\t[--stats|--stats-interval=STATS_INTERVAL]|\n"
+"Usage: lfs mirror extend [--mirror-count|-N[MIRROR_COUNT]]\n"
+		"\t\t[--no-verify] [--stats|--stats-interval=STATS_INTERVAL]\n"
 		"\t\t[--bandwidth-limit|--W BANDWIDTH]\n"
-		"\t\t[[-f VICTIM_FILE] |\n"
+		"\t\t[-f VICTIM_FILE]\n"
 		"\t\t" SSM_SETSTRIPE_OPT "]"
 		" FILENAME ...\n" },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
@@ -3647,7 +3628,7 @@ enum {
 	LFS_STATS_INTERVAL_OPT,
 	LFS_LINKS_OPT,
 	LFS_ATTRS_OPT,
-	LFS_XATTRS_MATCH_OPT
+	LFS_XATTRS_MATCH_OPT,
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -3659,39 +3640,40 @@ enum {
 static int lfs_setstripe_internal(int argc, char **argv,
 				  enum setstripe_origin opc)
 {
-	struct lfs_setstripe_args	 lsa = { 0 };
-	struct llapi_stripe_param	*param = NULL;
-	struct find_param		 migrate_mdt_param = {
+	struct lfs_setstripe_args lsa = { 0 };
+	struct llapi_stripe_param *param = NULL;
+	struct find_param migrate_mdt_param = {
 		.fp_max_depth = -1,
 		.fp_mdt_index = -1,
 	};
-	char				*fname;
-	int				 result = 0;
-	int				 result2 = 0;
-	char				*end;
-	int				 c;
-	int				 delete = 0;
-	unsigned long long		 size_units = 1;
-	bool				 migrate_mode = false;
-	bool				 migrate_mdt_mode = false;
-	bool				 setstripe_mode = false;
-	bool				 migration_block = false;
-	__u64				 migration_flags = 0;
-	__u32				 tgts[LOV_MAX_STRIPE_COUNT] = { 0 };
-	int				 comp_del = 0, comp_set = 0;
-	int				 comp_add = 0;
-	__u32				 comp_id = 0;
-	struct llapi_layout		*layout = NULL;
-	struct llapi_layout		**lpp = &layout;
-	bool				 mirror_mode = false;
-	bool				 has_m_file = false;
-	__u32				 mirror_count = 0;
-	enum mirror_flags		 mirror_flags = 0;
-	struct mirror_args		*mirror_list = NULL;
-	struct mirror_args		*new_mirror = NULL;
-	struct mirror_args		*last_mirror = NULL;
-	__u16				 mirror_id = 0;
-	char				 cmd[PATH_MAX];
+	char *fname;
+	int result = 0;
+	int result2 = 0;
+	char *end;
+	int c;
+	int delete = 0;
+	unsigned long long size_units = 1;
+	bool migrate_mode = false;
+	bool migrate_mdt_mode = false;
+	bool setstripe_mode = false;
+	bool migration_block = false;
+	__u64 migration_flags = 0;
+	__u32 tgts[LOV_MAX_STRIPE_COUNT] = { 0 };
+	int comp_del = 0, comp_set = 0;
+	int comp_add = 0;
+	__u32 comp_id = 0;
+	struct llapi_layout *layout = NULL;
+	struct llapi_layout **lpp = &layout;
+	bool mirror_mode = false;
+	bool mirror_total_mode = false;
+	bool has_m_file = false;
+	__u32 mirror_count = 0;
+	enum mirror_flags mirror_flags = 0;
+	struct mirror_args *mirror_list = NULL;
+	struct mirror_args *new_mirror = NULL;
+	struct mirror_args *last_mirror = NULL;
+	__u16 mirror_id = 0;
+	char cmd[PATH_MAX];
 	bool from_yaml = false;
 	bool from_copy = false;
 	char *template = NULL;
@@ -4189,12 +4171,18 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			migration_flags |= LLAPI_MIGRATION_NONBLOCK;
 			break;
 		case 'N':
+create_mirror:
 			if (opc == SO_SETSTRIPE) {
 				opc = SO_MIRROR_CREATE;
 				mirror_mode = true;
 			}
+			mirror_total_mode = false;
 			mirror_count = 1;
 			if (optarg) {
+				if (optarg[0] == '=') {
+					mirror_total_mode = true;
+					optarg++; /* skip '=' */
+				}
 				errno = 0;
 				mirror_count = strtoul(optarg, &end, 0);
 				if (errno != 0 || *end != '\0' ||
@@ -4205,6 +4193,32 @@ static int lfs_setstripe_internal(int argc, char **argv,
 						progname, optarg);
 					result = -EINVAL;
 					goto error;
+				}
+			}
+
+			if (mirror_total_mode) {
+				char *path = argv[argc-1];
+				struct lov_comp_md_v1 *comp_v1;
+
+				result = llapi_get_lmm_from_path(path, (struct lov_user_md_v1 **)&comp_v1);
+				if (result) {
+					fprintf(stderr,
+						"error: %s: cannot get layout from %s: %s\n",
+						progname, path, strerror(-result));
+					goto error;
+				}
+
+				if (comp_v1->lcm_mirror_count >= mirror_count)
+					mirror_count = 0;
+				else
+					mirror_count -= comp_v1->lcm_mirror_count;
+
+				if (!mirror_count) {
+					fprintf(stderr,
+						"warning: the file '%s' already has %d mirrors. No new mirrors will be created\n",
+						path,
+						comp_v1->lcm_mirror_count);
+					break;
 				}
 			}
 
@@ -4382,15 +4396,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		return CMD_HELP;
 	}
 
-	if (mirror_mode && mirror_count == 0) {
-		fprintf(stderr,
-			"error: %s: --mirror-count|-N option is required\n",
-			progname);
-		result = -EINVAL;
-		goto error;
-	}
-
-	if (mirror_mode) {
+	if (mirror_mode && (!mirror_total_mode || mirror_count)) {
+		if (mirror_count == 0)
+			goto create_mirror;
 		if (!setstripe_args_specified(&lsa))
 			last_mirror->m_inherit = true;
 		if (lsa.lsa_comp_end == 0)
