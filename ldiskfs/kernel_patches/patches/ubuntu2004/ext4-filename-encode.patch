@@ -222,7 +222,7 @@ index 00000000..8dc0d1c5
 +
 +#endif /* _CRITICAL_ENCODE_H */
 diff --git a/fs/ext4/dir.c b/fs/ext4/dir.c
-index 068744b3..15229dbb 100644
+index 6db6302d..9842a650 100644
 --- a/fs/ext4/dir.c
 +++ b/fs/ext4/dir.c
 @@ -29,6 +29,7 @@
@@ -296,7 +296,7 @@ index e4d44ab4..a4335db6 100644
  #include <trace/events/ext4.h>
  
 diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
-index 659bfcbe..4ad4d5eb 100644
+index 0134c7e7..2545816f 100644
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -41,6 +41,7 @@
@@ -307,7 +307,7 @@ index 659bfcbe..4ad4d5eb 100644
  
  #include <trace/events/ext4.h>
  /*
-@@ -1393,7 +1394,7 @@ static int htree_dirblock_to_tree(struct file *dir_file,
+@@ -1345,7 +1346,7 @@ static int htree_dirblock_to_tree(struct file *dir_file,
  					   EXT4_DIR_REC_LEN(0));
  #ifdef CONFIG_FS_ENCRYPTION
  	/* Check if the directory is encrypted */
@@ -316,7 +316,7 @@ index 659bfcbe..4ad4d5eb 100644
  		err = fscrypt_get_encryption_info(dir);
  		if (err < 0) {
  			brelse(bh);
-@@ -1429,22 +1430,31 @@ static int htree_dirblock_to_tree(struct file *dir_file,
+@@ -1381,22 +1382,31 @@ static int htree_dirblock_to_tree(struct file *dir_file,
  				   hinfo->hash, hinfo->minor_hash, de,
  				   &tmp_str);
  		} else {
@@ -351,7 +351,7 @@ index 659bfcbe..4ad4d5eb 100644
  		}
  		if (err != 0) {
  			count = err;
-@@ -1737,7 +1747,7 @@ void ext4_fname_setup_ci_filename(struct inode *dir, const struct qstr *iname,
+@@ -1682,7 +1692,7 @@ void ext4_fname_setup_ci_filename(struct inode *dir, const struct qstr *iname,
   */
  static inline bool ext4_match(const struct inode *parent,
  			      const struct ext4_filename *fname,
@@ -360,7 +360,7 @@ index 659bfcbe..4ad4d5eb 100644
  {
  	struct fscrypt_name f;
  #ifdef CONFIG_UNICODE
-@@ -1765,7 +1775,7 @@ static inline bool ext4_match(const struct inode *parent,
+@@ -1710,7 +1720,7 @@ static inline bool ext4_match(const struct inode *parent,
  	}
  #endif
  
@@ -369,7 +369,7 @@ index 659bfcbe..4ad4d5eb 100644
  }
  
  /*
-@@ -1776,16 +1786,30 @@ int ext4_search_dir(struct buffer_head *bh, char *search_buf, int buf_size,
+@@ -1721,16 +1731,30 @@ int ext4_search_dir(struct buffer_head *bh, char *search_buf, int buf_size,
  		    unsigned int offset, struct ext4_dir_entry_2 **res_dir)
  {
  	struct ext4_dir_entry_2 * de;
@@ -385,7 +385,7 @@ index 659bfcbe..4ad4d5eb 100644
 +	 */
 +	probablytrunc = !IS_LUSTRE_MOUNT(dir->i_sb) && IS_ENCRYPTED(dir) &&
 +		fname->disk_name.len & 31;
- 	while ((char *) de < dlimit - EXT4_BASE_DIR_LEN) {
+ 	while ((char *) de < dlimit) {
  		/* this code is executed quadratically often */
  		/* do minimal checking `by hand' */
 +		denamelen = de->name_len;
@@ -396,13 +396,13 @@ index 659bfcbe..4ad4d5eb 100644
 +			 * should not be any collision between names.
 +			 */
 +			denamelen = fname->disk_name.len;
- 		if (de->name + de->name_len <= dlimit &&
+ 		if ((char *) de + de->name_len <= dlimit &&
 -		    ext4_match(dir, fname, de)) {
 +		    ext4_match(dir, fname, de, denamelen)) {
  			/* found a match - just to be sure, do
  			 * a full check */
  			if (ext4_check_dir_entry(dir, NULL, de, bh, search_buf,
-@@ -1985,7 +2009,7 @@ struct buffer_head *ext4_find_entry_locked(struct inode *dir,
+@@ -1930,7 +1954,7 @@ struct buffer_head *ext4_find_entry_locked(struct inode *dir,
  	struct ext4_filename fname;
  	struct buffer_head *bh;
  
@@ -411,7 +411,7 @@ index 659bfcbe..4ad4d5eb 100644
  	if (err == -ENOENT)
  		return NULL;
  	if (err)
-@@ -1993,7 +2017,9 @@ struct buffer_head *ext4_find_entry_locked(struct inode *dir,
+@@ -1938,7 +1962,9 @@ struct buffer_head *ext4_find_entry_locked(struct inode *dir,
  
  	bh = __ext4_find_entry(dir, &fname, res_dir, inlined, lck);
  
@@ -422,7 +422,7 @@ index 659bfcbe..4ad4d5eb 100644
  	return bh;
  }
  
-@@ -2107,7 +2133,7 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, unsi
+@@ -2052,7 +2078,7 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, unsi
  		}
  		if (!IS_ERR(inode) && IS_ENCRYPTED(dir) &&
  		    (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode)) &&
@@ -431,7 +431,7 @@ index 659bfcbe..4ad4d5eb 100644
  			ext4_warning(inode->i_sb,
  				     "Inconsistent encryption contexts: %lu/%lu",
  				     dir->i_ino, inode->i_ino);
-@@ -2390,7 +2416,7 @@ int ext4_find_dest_de(struct inode *dir, struct inode *inode,
+@@ -2329,7 +2355,7 @@ int ext4_find_dest_de(struct inode *dir, struct inode *inode,
  		if (ext4_check_dir_entry(dir, NULL, de, bh,
  					 buf, buf_size, offset))
  			return -EFSCORRUPTED;

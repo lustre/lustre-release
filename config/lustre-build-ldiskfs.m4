@@ -70,7 +70,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 			grep -A3 ext4_update_dx_flag $LINUX/fs/ext4/ext4.h \
 			  | grep ext4_test_inode_flag
 			if test $? -eq 0; then
-				LDISKFS_SERIES="5.4.0-66-ubuntu20.series"
+				LDISKFS_SERIES="5.3.18-sles15sp2.series"
 			fi
 			;; # (
 		15sp3 ) LDISKFS_SERIES="5.3.18-sles15sp3.series"

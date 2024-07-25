@@ -33,6 +33,6 @@ base/ext4-projid-xattrs.patch
 linux-5.8/ext4-enc-flag.patch
 base/ext4-delayed-iput.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
-sles15sp3/ext4-filename-encode.patch
+ubuntu2004/ext4-filename-encode.patch
 sles15sp3/ext4-encdata.patch
 rhel8/ext4-add-periodic-superblock-update.patch

@@ -3,8 +3,8 @@ linux-5.4/ext4-lookup-dotdot.patch
 suse15/ext4-print-inum-in-htree-warning.patch
 rhel8/ext4-prealloc.patch
 ubuntu18/ext4-osd-iop-common.patch
-ubuntu2004/ext4-misc.patch
-rhel8.3/ext4-mballoc-extra-checks.patch
+ubuntu19/ext4-misc.patch
+rhel8/ext4-mballoc-extra-checks.patch
 linux-5.4/ext4-hash-indexed-dir-dotdot-update.patch
 linux-5.4/ext4-kill-dx-root.patch
 rhel7.6/ext4-mballoc-pa-free-mismatch.patch
@@ -12,8 +12,8 @@ linux-5.4/ext4-data-in-dirent.patch
 rhel8/ext4-nocmtime.patch
 base/ext4-htree-lock.patch
 ubuntu2004/ext4-pdirop.patch
-linux-5.8/ext4-max-dir-size.patch
-rhel8.3/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
+rhel8/ext4-max-dir-size.patch
+rhel8/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
 linux-5.4/ext4-give-warning-with-dir-htree-growing.patch
 ubuntu18/ext4-jcb-optimization.patch
 linux-5.4/ext4-attach-jinode-in-writepages.patch
@@ -24,8 +24,8 @@ rhel8/ext4-export-mb-stream-allocator-variables.patch
 ubuntu19/ext4-iget-with-flags.patch
 linux-5.4/export-ext4fs-dirhash-helper.patch
 linux-5.4/ext4-misc.patch
-linux-5.4/ext4-simple-blockalloc.patch
-linux-5.4/ext4-xattr-disable-credits-check.patch
+rhel8/ext4-simple-blockalloc.patch
+rhel8/ext4-xattr-disable-credits-check.patch
 base/ext4-no-max-dir-size-limit-for-iam-objects.patch
 rhel8/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 rhel8/ext4-ext-merge.patch
@@ -35,3 +35,4 @@ base/ext4-delayed-iput.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
 ubuntu2004/ext4-filename-encode.patch
 sles15sp3/ext4-encdata.patch
+rhel8/ext4-add-periodic-superblock-update.patch
