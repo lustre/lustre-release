@@ -11598,6 +11598,8 @@ check_filefrag_77n() {
 }
 
 test_77n() {
+	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
+	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
 	[[ "$CKSUM_TYPES" =~ t10 ]] || skip "no T10 checksum support on osc"
 
 	touch $DIR/$tfile
@@ -16264,8 +16266,8 @@ cleanup_130() {
 }
 
 test_130a() {
-	local filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[[ -z "$filefrag_op" ]] || skip_env "filefrag does not support FIEMAP"
+	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
+	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
 
 	trap cleanup_130 EXIT RETURN
 

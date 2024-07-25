@@ -45,6 +45,10 @@ get_distro_kdir() {
 			;;
 		esac
 		;;
+	6.4)
+		distro=sles15.6
+		kdir=updates-sles15.6-src
+		;;
 	esac
 
 	case $1 in

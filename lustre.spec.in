@@ -490,7 +490,12 @@ BuildRequires: mpich-devel
 %if "%{_vendor}" == "redhat" || 0%{?openEuler} || 0%{?suse_version} < 1500
 BuildRequires: openmpi-devel
 %else
+%if 0%{?sle_version} && 0%{?sle_version} >= 150600
+BuildRequires: openmpi4-devel
+%else
 BuildRequires: openmpi2-devel
+%endif
+# openmpi-devel
 %endif
 # openmpi
 %endif

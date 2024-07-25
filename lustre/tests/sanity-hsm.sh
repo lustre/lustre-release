@@ -4501,6 +4501,9 @@ test_227() {
 run_test 227 "changelog when explicit setting of HSM flags"
 
 test_228() {
+	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
+	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
+
 	# test needs a running copytool
 	copytool setup
 	mkdir_on_mdt0 $DIR/$tdir

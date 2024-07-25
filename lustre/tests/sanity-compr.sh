@@ -50,6 +50,9 @@ test_sanityn()
 run_test sanityn "Run sanityn with PFL layout"
 
 test_1000() {
+	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
+	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
+
 	local blocks=128
 	local dense=$(do_facet ost1 lctl get_param -n \
 			      osd*.*OST0000*.extents_dense)

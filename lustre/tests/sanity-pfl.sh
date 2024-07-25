@@ -2466,6 +2466,8 @@ cleanup_24() {
 }
 
 test_24a() {
+	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
+	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
 	[ "$OSTCOUNT" -lt "3" ] && skip_env "needs >= 3 OSTs"
 
 	trap cleanup_24 EXIT RETURN
