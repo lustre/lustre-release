@@ -45,10 +45,14 @@
 #include <lustre_dlm.h>
 #include <lustre_sec.h>
 
-/* we have a pool for every power of 2 number of pages <= MAX_BRW_BITS.
- * most pools will be unused, but that's OK - unused pools are very cheap
+/* We have a pool for every power of 2 number of pages. Each pool must
+ * be able to provide at least one object of PTLRPC_MAX_BRW_SIZE * 2.
+ * Multiplying MAX_BRW_SIZE by 2 is a hack required to successfully
+ * compress and uncompress chunks in decompress/compress_request(ask
+ * Artem(ablagodarenko@ddn.com) for details why it failed). Most pools
+ * will be unused, but that's OK - unused pools are very cheap.
  */
-#define POOLS_COUNT (PTLRPC_MAX_BRW_BITS + 1)
+#define POOLS_COUNT (PTLRPC_MAX_BRW_BITS - PAGE_SHIFT + 1)
 #define PAGES_TO_MiB(pages)	((pages) >> (20 - PAGE_SHIFT))
 #define MiB_TO_PAGES(mb)	((mb) << (20 - PAGE_SHIFT))
 /* deprecated - see pool_max_memory_mb below */
@@ -329,6 +333,10 @@ static unsigned long pool_shrink_count(struct shrinker *s,
 	pool = page_pools[pool_order];
 	max_objects = PTLRPC_MAX_BRW_PAGES >> pool_order;
 
+	/* Always have at least one element */
+	if (max_objects == 0)
+		max_objects = 1;
+
 	/*
 	 * if no pool access for a long time, we consider it's fully
 	 * idle. A little race here is fine.
@@ -360,6 +368,9 @@ static unsigned long pool_shrink_scan(struct shrinker *s,
 	pool_order = get_pool_index(s);
 	pool = page_pools[pool_order];
 	max_objects = PTLRPC_MAX_BRW_PAGES >> pool_order;
+	/* Always have at least one element */
+	if (max_objects == 0)
+		max_objects = 1;
 
 	spin_lock(&pool->opp_lock);
 	if (pool->opp_free_pages <= max_objects)
