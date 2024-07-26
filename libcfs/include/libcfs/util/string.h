@@ -90,6 +90,9 @@ struct netstrfns {
 	int	(*nf_print_addrlist)(char *buffer, int count,
 				     struct list_head *list);
 	int	(*nf_match_addr)(__u32 addr, struct list_head *list);
+	int	(*nf_match_netmask)(const __be32 *addr, size_t asize,
+				    const __be32 *netmask,
+				    const __be32 *netaddr);
 	int	(*nf_min_max)(struct list_head *nidlist, __u32 *min_nid,
 			      __u32 *max_nid);
 	int	(*nf_expand_addrrange)(struct list_head *addrranges,
@@ -137,10 +140,14 @@ int cfs_ip_addr_parse(char *str, int len, struct list_head *list);
 int cfs_ip_addr_range_gen(__u32 *ip_list, int count,
 			  struct list_head *ip_addr_expr);
 int cfs_ip_addr_match(__u32 addr, struct list_head *list);
+int libcfs_ip_in_netmask(const __be32 *addr, size_t asize,
+			 const __be32 *netmask,
+			 const __be32 *netaddr);
 int cfs_expand_nidlist(struct list_head *nidlist, lnet_nid_t *lnet_nidlist,
 		       int max_nids);
 int cfs_parse_nid_parts(char *str, struct list_head *addr,
 			struct list_head *net_num, __u32 *net_type);
 int cfs_abs_path(const char *request_path, char **resolved_path);
+char *strim(char *s);
 
 #endif

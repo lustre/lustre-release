@@ -230,10 +230,62 @@ void lustre_lnet_init_nw_descr(struct lnet_dlc_network_descr *nw_descr)
 	}
 }
 
+int lustre_lnet_debug_nidlist(char *nidstr, char *match_nid)
+{
+	struct list_head nidlist;
+	int rc;
+	char *buf = NULL;
+	size_t bsize = strlen(nidstr) + 1;
+
+	buf = malloc(bsize);
+	if (!buf) {
+		fprintf(stderr, "Cannot allocate memory for buffer\n");
+		return -ENOMEM;
+	}
+
+	INIT_LIST_HEAD(&nidlist);
+	rc = cfs_parse_nidlist(nidstr, strlen(nidstr), &nidlist);
+	if (!rc) {
+		fprintf(stderr, "Unable to parse nidlist from: %s\n", nidstr);
+		goto failed;
+	}
+
+	if (cfs_print_nidlist(buf, bsize, &nidlist))
+		printf("nidlist parsed to: %s\n", buf);
+
+	if (match_nid) {
+		struct lnet_nid nid;
+
+		rc = libcfs_strnid(&nid, match_nid);
+		if (rc < 0) {
+			fprintf(stderr, "Invalid nid for matching %s\n",
+				match_nid);
+			goto failed;
+		}
+
+		rc = cfs_match_nid(&nid, &nidlist);
+		if (rc)
+			printf("%s matches nidlist %s\n", match_nid, nidstr);
+		else
+			printf("%s does not match nidlist %s\n", match_nid,
+			       nidstr);
+	}
+
+	cfs_free_nidlist(&nidlist);
+	free(buf);
+
+	return 0;
+failed:
+	cfs_free_nidlist(&nidlist);
+	if (buf)
+		free(buf);
+	return LUSTRE_CFG_RC_BAD_PARAM;
+}
+
 int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
 			     int max_nids, char *err_str)
 {
-	int rc, num_nids = 0;
+	int num_nids = 0;
 	struct list_head nidlist;
 
 	if (!nidstr) {
@@ -248,16 +300,9 @@ int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
 	}
 
 	INIT_LIST_HEAD(&nidlist);
-	rc = cfs_parse_nidlist(nidstr, strlen(nidstr), &nidlist);
-	if (rc == 0) {
+	if (!cfs_parse_nidlist(nidstr, strlen(nidstr), &nidlist)) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
 			 "Unable to parse nidlist from: %s\n", nidstr);
-		return LUSTRE_CFG_RC_BAD_PARAM;
-	}
-
-	if (list_empty(&nidlist)) {
-		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "\"%s\" does not specify any valid nid lists", nidstr);
 		return LUSTRE_CFG_RC_BAD_PARAM;
 	}
 

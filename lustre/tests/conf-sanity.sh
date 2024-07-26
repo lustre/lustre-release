@@ -4271,6 +4271,41 @@ test_42() { #bug 14693
 }
 run_test 42 "allow client/server mount/unmount with invalid config param"
 
+test_43a_check_nosquash_nids() {
+	local nidlist="$1"
+
+	set_persistent_param_and_check mds1                             \
+		"mdt.$FSNAME-MDT0000.nosquash_nids"                     \
+		"$FSNAME-MDTall.mdt.nosquash_nids"                      \
+		"$nidlist"
+	wait_update $HOSTNAME                                           \
+		"$LCTL get_param -n llite.${FSNAME}*.nosquash_nids"     \
+		"$nidlist" ||
+		error "check llite nosquash_nids failed!"
+
+	ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-rootfile)
+	dd if=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null ||
+		error "$ST: root read permission is denied"
+	echo "$ST: root read permission is granted - ok"
+
+	echo "666" |
+	dd conv=notrunc of=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null ||
+		error "$ST: root write permission is denied"
+	echo "$ST: root write permission is granted - ok"
+
+	ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tdir-rootdir)
+	rm $DIR/$tdir-rootdir/tfile-1 ||
+		error "$ST: root unlink permission is denied"
+	echo "$ST: root unlink permission is granted - ok"
+	touch $DIR/$tdir-rootdir/tfile-2 ||
+		error "$ST: root create permission is denied"
+	echo "$ST: root create permission is granted - ok"
+
+	# Re-create test file deleted above in case this function is called
+	# again
+	touch $DIR/$tdir-rootdir/tfile-1 || error "touch failed"
+}
+
 test_43a() {
 	[[ "$MGS_VERSION" -ge $(version_code 2.5.58) ]] ||
 		skip "Need MDS version at least 2.5.58"
@@ -4389,35 +4424,44 @@ test_43a() {
 	#   put client's NID into nosquash_nids list,
 	#   root should be able to access root file after that
 	#
-	local NIDLIST=$($LCTL list_nids all | tr '\n' ' ')
-	NIDLIST="2@gni $NIDLIST 192.168.0.[2,10]@tcp"
-	NIDLIST=$(echo $NIDLIST | tr -s ' ' ' ')
-	set_persistent_param_and_check mds1				\
-		"mdt.$FSNAME-MDT0000.nosquash_nids"			\
-		"$FSNAME-MDTall.mdt.nosquash_nids"			\
-		"$NIDLIST"
-	wait_update $HOSTNAME						\
-		"$LCTL get_param -n llite.${FSNAME}*.nosquash_nids"	\
-		"$NIDLIST" ||
-		error "check llite nosquash_nids failed!"
+	local nidlist=$($LCTL list_nids all | tr '\n' ' ')
+	nidlist="2@gni $nidlist 192.168.0.[2,10]@tcp"
+	nidlist=$(echo $nidlist | tr -s ' ' ' ')
 
-	ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-rootfile)
-	dd if=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null ||
-		error "$ST: root read permission is denied"
-	echo "$ST: root read permission is granted - ok"
+	test_43a_check_nosquash_nids "$nidlist"
 
-	echo "666" |
-	dd conv=notrunc of=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null ||
-		error "$ST: root write permission is denied"
-	echo "$ST: root write permission is granted - ok"
+	if ! [[ $NETTYPE =~ ^(tcp|o2ib) ]]; then
+		log "Skip nidmask test for NETTYPE = $NETTYPE"
+		cleanup || error "cleanup failed with $?"
+		return 0
+	fi
 
-	ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tdir-rootdir)
-	rm $DIR/$tdir-rootdir/tfile-1 ||
-		error "$ST: root unlink permission is denied"
-	echo "$ST: root unlink permission is granted - ok"
-	touch $DIR/$tdir-rootdir/tfile-2 ||
-		error "$ST: root create permission is denied"
-	echo "$ST: root create permission is granted - ok"
+	# check nosquash_nids:
+	#   create a nidmask that contains the client's NID and place it
+	#   into nosquash_nids list.
+	#   root should be able to access root file after that
+	local interfaces=( $(lnet_if_list) )
+	local intf netmasks nm
+
+	for intf in ${interfaces[@]}; do
+		nm=$(ip -o -4 a s ${intf} | awk '{print $4}')
+		[[ -n $nm ]] && netmasks+=" $nm@${NETTYPE}"
+		nm=$(ip -o -6 a s ${intf} | grep -v 'fe80::' | awk '{print $4}')
+		[[ -n $nm ]] && netmasks+=" $nm@${NETTYPE}"
+	done
+
+	netmasks="${netmasks/ }"
+
+	if [[ -z $netmasks ]]; then
+		error "Unable to determine netmasks for ${interfaces[@]}"
+	fi
+
+	test_43a_check_nosquash_nids "$netmasks"
+
+	# cleanup test dir/files
+	rm -rf $DIR/$tfile-* $DIR/$tdir-rootdir ||
+		error "Failed to remove test files/dir rc = $?"
+
 	cleanup || error "cleanup failed with $?"
 }
 run_test 43a "check root_squash and nosquash_nids"

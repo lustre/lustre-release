@@ -103,11 +103,7 @@ int libcfs_stranynid(struct lnet_nid *nid, const char *str);
 int libcfs_num_parse(char *str, int len, struct list_head *list);
 char *libcfs_id2str(struct lnet_process_id id);
 void cfs_free_nidlist(struct list_head *list);
-#ifdef __KERNEL__
-int cfs_parse_nidlist(char *str, struct list_head *list);
-#else
 int cfs_parse_nidlist(char *str, int len, struct list_head *list);
-#endif
 int cfs_print_nidlist(char *buffer, int count, struct list_head *list);
 int cfs_match_nid(struct lnet_nid *nid, struct list_head *list);
 int cfs_match_net(__u32 net_id, __u32 net_type,
@@ -115,6 +111,9 @@ int cfs_match_net(__u32 net_id, __u32 net_type,
 
 int cfs_ip_addr_parse(char *str, int len, struct list_head *list);
 int cfs_ip_addr_match(__u32 addr, struct list_head *list);
+int libcfs_ip_in_netmask(const __be32 *addr, size_t asize,
+			 const __be32 *netmask,
+			 const __be32 *netaddr);
 int cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,
 			       char *max_nid, __kernel_size_t nidstr_length);
 void cfs_expr_list_free_list(struct list_head *list);

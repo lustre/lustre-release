@@ -1195,24 +1195,21 @@ static int nrs_tbf_nid_rule_init(struct ptlrpc_nrs_policy *policy,
 				 struct nrs_tbf_rule *rule,
 				 struct nrs_tbf_cmd *start)
 {
-	LASSERT(start->u.tc_start.ts_nids_str);
-	OBD_ALLOC(rule->tr_nids_str,
-		  strlen(start->u.tc_start.ts_nids_str) + 1);
-	if (rule->tr_nids_str == NULL)
-		return -ENOMEM;
+	size_t len = strlen(start->u.tc_start.ts_nids_str);
 
-	memcpy(rule->tr_nids_str,
-	       start->u.tc_start.ts_nids_str,
-	       strlen(start->u.tc_start.ts_nids_str));
+	LASSERT(start->u.tc_start.ts_nids_str);
+
+	rule->tr_nids_str = kstrndup(start->u.tc_start.ts_nids_str,
+				     len, GFP_KERNEL);
+	if (!rule->tr_nids_str)
+		return -ENOMEM;
 
 	INIT_LIST_HEAD(&rule->tr_nids);
 	if (!list_empty(&start->u.tc_start.ts_nids)) {
-		if (cfs_parse_nidlist(rule->tr_nids_str,
-				      &rule->tr_nids) < 0) {
+		if (cfs_parse_nidlist(rule->tr_nids_str, len, &rule->tr_nids)) {
 			CERROR("nids {%s} illegal\n",
 			       rule->tr_nids_str);
-			OBD_FREE(rule->tr_nids_str,
-				 strlen(start->u.tc_start.ts_nids_str) + 1);
+			kfree(rule->tr_nids_str);
 			return -EINVAL;
 		}
 	}
@@ -1254,20 +1251,21 @@ static void nrs_tbf_nid_cmd_fini(struct nrs_tbf_cmd *cmd)
 static int nrs_tbf_nid_parse(struct nrs_tbf_cmd *cmd, char *id)
 {
 	int rc;
+	size_t len;
 
 	rc = nrs_tbf_check_id_value(&id, "nid");
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_nids_str, strlen(id) + 1);
-	if (cmd->u.tc_start.ts_nids_str == NULL)
+	len = strlen(id);
+
+	cmd->u.tc_start.ts_nids_str = kstrndup(id, len, GFP_KERNEL);
+	if (!cmd->u.tc_start.ts_nids_str)
 		return -ENOMEM;
 
-	strcpy(cmd->u.tc_start.ts_nids_str, id);
-
 	/* parse NID list */
-	if (cfs_parse_nidlist(cmd->u.tc_start.ts_nids_str,
-			      &cmd->u.tc_start.ts_nids) < 0) {
+	if (cfs_parse_nidlist(cmd->u.tc_start.ts_nids_str, len,
+			      &cmd->u.tc_start.ts_nids)) {
 		nrs_tbf_nid_cmd_fini(cmd);
 		return -EINVAL;
 	}
@@ -1867,7 +1865,7 @@ nrs_tbf_expression_parse(char *str, struct list_head *cond_list)
 	len -= 2;
 
 	if (strcmp(field, "nid") == 0) {
-		if (cfs_parse_nidlist(str, &expr->te_cond) < 0)
+		if (cfs_parse_nidlist(str, len, &expr->te_cond) < 0)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_NID;
 	} else if (strcmp(field, "jobid") == 0) {

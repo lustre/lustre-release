@@ -2344,7 +2344,7 @@ int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 		RETURN(count);
 	}
 
-	if (cfs_parse_nidlist(kernbuf, &tmp) < 0) {
+	if (cfs_parse_nidlist(kernbuf, strlen(kernbuf), &tmp)) {
 		errmsg = "can't parse";
 		GOTO(failed, rc = -EINVAL);
 	}

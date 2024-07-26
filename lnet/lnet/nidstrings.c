@@ -17,6 +17,9 @@
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lnet/nidstr.h>
 #include <lnet/lib-types.h>
+#include <linux/ctype.h>
+#include <linux/inet.h>
+#include <linux/inetdevice.h>
 
 /* max value for numeric network address */
 #define MAX_NUMERIC_VALUE 0xffffffff
@@ -59,26 +62,29 @@ libcfs_next_nidstring(void)
 }
 EXPORT_SYMBOL(libcfs_next_nidstring);
 
-/**
- * Nid range list syntax.
+/* NID range list syntax.
  * \verbatim
  *
  * <nidlist>	     :== <nidrange> [ ' ' <nidrange> ]
  * <nidrange>	     :== <addrrange> '@' <net>
  * <addrrange>	     :== '*' |
- *			 <ipaddr_range> |
- *			 <cfs_expr_list>
- * <ipaddr_range>    :== <cfs_expr_list>.<cfs_expr_list>.<cfs_expr_list>.
- *			 <cfs_expr_list>
- * <cfs_expr_list>   :== <number> |
+ *			 <netmask> |
+ *			 <ipv6_addr> |
+ *			 <ipv4_addr_range> |
+ *			 <numaddr_range>
+ * <netmask>	     :== An IPv4 or IPv6 network mask in CIDR notation.
+ *			 e.g. 192.168.1.0/24 or 2001:0db8::/32
+ * <ipv6_addr>	     :== A single IPv6 address
+ * <ipv4_addr_range> :==
+ *	<numaddr_range>.<numaddr_range>.<numaddr_range>.<numaddr_range>
+ * <numaddr_range>   :== <number> |
  *			 <expr_list>
  * <expr_list>	     :== '[' <range_expr> [ ',' <range_expr>] ']'
- * <range_expr>      :== <number> |
+ * <range_expr>	     :== <number> |
  *			 <number> '-' <number> |
  *			 <number> '-' <number> '/' <number>
  * <net>	     :== <netname> | <netname><number>
- * <netname>	     :== "lo" | "tcp" | "o2ib" | "cib" | "openib" | "iib" |
- *			 "vib" | "ra" | "elan" | "mx" | "ptl"
+ * <netname>	     :== "lo" | "tcp" | "o2ib" | "gni" | "gip" | "ptlf" | "kfi"
  * \endverbatim
  */
 
@@ -98,6 +104,10 @@ struct nidrange {
 	 */
 	struct list_head nr_addrranges;
 	/**
+	 * List head for nidmask::nm_link.
+	 */
+	struct list_head nr_nidmasks;
+	/**
 	 * Flag indicating that *@<net> is found.
 	 */
 	int nr_all;
@@ -109,6 +119,35 @@ struct nidrange {
 	 * Number of network. E.g. 5 if \<net\> is "elan5".
 	 */
 	int nr_netnum;
+};
+
+struct nidmask {
+	/* Link to nidrange::nr_nidmasks */
+	struct list_head nm_link;
+
+	/* This is the base address that was parsed */
+	union {
+		struct in_addr ipv4;
+		struct in6_addr ipv6;
+	} nm_addr;
+
+	/* Netmask derived from the prefix length */
+	union {
+		struct in_addr ipv4;
+		struct in6_addr ipv6;
+	} nm_netmask;
+
+	/* Network address derived from the base address and the netmask */
+	union {
+		struct in_addr ipv4;
+		struct in6_addr ipv6;
+	} nm_netaddr;
+
+	/* Address family */
+	sa_family_t nm_family;
+
+	/* Prefix length */
+	u8 nm_prefix_len;
 };
 
 /**
@@ -415,6 +454,102 @@ parse_addrange(char *str, struct nidrange *nidrange)
 						&addrrange->ar_numaddr_ranges);
 }
 
+static void
+init_ipv4_nidmask(struct sockaddr_in *sa, struct nidmask *nm)
+{
+	memcpy(&nm->nm_addr.ipv4, &sa->sin_addr.s_addr, sizeof(struct in_addr));
+	nm->nm_netmask.ipv4.s_addr = inet_make_mask(nm->nm_prefix_len);
+	nm->nm_netaddr.ipv4.s_addr = sa->sin_addr.s_addr &
+				     nm->nm_netmask.ipv4.s_addr;
+}
+
+/* Note: The memory of struct nidmask is allocated via CFS_ALLOC_PTR, so it has
+ * been set to zero as required by this function.
+ */
+static void
+init_ipv6_nidmask(struct sockaddr_in6 *sa, struct nidmask *nm)
+{
+	int i, j;
+
+	memcpy(&nm->nm_addr.ipv6, &sa->sin6_addr.s6_addr,
+	       sizeof(struct in6_addr));
+
+	for (i = nm->nm_prefix_len, j = 0; i > 0; i -= 8, j++) {
+		if (i >= 8)
+			nm->nm_netmask.ipv6.s6_addr[j] = 0xff;
+		else
+			nm->nm_netmask.ipv6.s6_addr[j] =
+					(unsigned long)(0xffU << (8 - i));
+	}
+
+	for (i = 0; i < sizeof(struct in6_addr); i++)
+		nm->nm_netaddr.ipv6.s6_addr[i] = sa->sin6_addr.s6_addr[i] &
+						 nm->nm_netmask.ipv6.s6_addr[i];
+}
+
+static u8
+parse_prefix_len(char *str)
+{
+	unsigned int max;
+	unsigned int prefix_len;
+	char *slash = strchr(str, '/');
+
+	/* IPv4 netmask must include an explicit prefix length */
+	if (!(slash || strchr(str, ':')))
+		return 0;
+
+	/* We treat an IPv6 address without a prefix length as having /128 */
+	if (!slash)
+		return 128;
+
+	if (strchr(str, ':'))
+		max = 128;
+	else
+		max = 32;
+
+	if (kstrtouint(slash + 1, 10, &prefix_len))
+		return 0;
+
+	if (prefix_len < 1 || prefix_len > max)
+		return 0;
+
+	return (u8)prefix_len;
+}
+
+static int
+parse_nidmask(char *str, struct nidrange *nr)
+{
+	struct nidmask *nm;
+	struct sockaddr_storage sa;
+	char *addrstr;
+
+	CFS_ALLOC_PTR(nm);
+	if (!nm)
+		return -ENOMEM;
+
+	/* Add to nr_nidmasks so that our caller can free us on error */
+	list_add_tail(&nm->nm_link, &nr->nr_nidmasks);
+
+	nm->nm_prefix_len = parse_prefix_len(str);
+	if (!nm->nm_prefix_len)
+		return -EINVAL;
+
+	addrstr = strsep(&str, "/");
+	if (rpc_pton(&init_net, addrstr, strlen(addrstr),
+		     (struct sockaddr *)&sa, sizeof(sa)) == 0)
+		return -EINVAL;
+
+	nm->nm_family = sa.ss_family;
+	if (nm->nm_family == AF_INET6)
+		init_ipv6_nidmask((struct sockaddr_in6 *)&sa, nm);
+	else if (nm->nm_family == AF_INET)
+		init_ipv4_nidmask((struct sockaddr_in *)&sa, nm);
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
 /**
  * Finds or creates struct nidrange.
  *
@@ -462,6 +597,7 @@ add_nidrange(char *str, struct list_head *nidlist)
 		return NULL;
 	list_add_tail(&nr->nr_link, nidlist);
 	INIT_LIST_HEAD(&nr->nr_addrranges);
+	INIT_LIST_HEAD(&nr->nr_nidmasks);
 	nr->nr_netstrfns = nf;
 	nr->nr_all = 0;
 	nr->nr_netnum = netnum;
@@ -480,26 +616,30 @@ parse_nidrange(char *str, struct list_head *nidlist)
 {
 	char *addrrange;
 	char *net;
+	char *slash;
 	struct nidrange *nr;
+	int rc;
 
 	addrrange = strim(strsep(&str, "@"));
 	if (!str)
-		goto failed;
+		return -EINVAL;
 
 	net = strim(str);
-	if (strchr(net, '@') != NULL || !*net)
-		goto failed;
+	if (strchr(net, '@') || !*net)
+		return -EINVAL;
 
 	nr = add_nidrange(net, nidlist);
-	if (nr == NULL)
-		goto failed;
+	if (!nr)
+		return -EINVAL;
 
-	if (parse_addrange(addrrange, nr) != 0)
-		goto failed;
+	/* Check for a '/' that does not appear inside '[]' */
+	slash = strchr(addrrange, '/');
+	if (strchr(addrrange, ':') || (slash && !strchr(slash, ']')))
+		rc = parse_nidmask(addrrange, nr);
+	else
+		rc = parse_addrange(addrrange, nr);
 
-	return 0;
-failed:
-	return -EINVAL;
+	return rc;
 }
 
 /**
@@ -524,6 +664,19 @@ free_addrranges(struct list_head *list)
 	}
 }
 
+static void
+free_nidmasks(struct list_head *list)
+{
+	struct nidmask *nm;
+
+	while ((nm = list_first_entry_or_null(list,
+					      struct nidmask,
+					      nm_link)) != NULL) {
+		list_del(&nm->nm_link);
+		CFS_FREE_PTR(nm);
+	}
+}
+
 /**
  * Frees nidrange strutures of \a list.
  *
@@ -541,6 +694,7 @@ cfs_free_nidlist(struct list_head *list)
 	list_for_each_safe(pos, next, list) {
 		nr = list_entry(pos, struct nidrange, nr_link);
 		free_addrranges(&nr->nr_addrranges);
+		free_nidmasks(&nr->nr_nidmasks);
 		list_del(pos);
 		CFS_FREE_PTR(nr);
 	}
@@ -561,12 +715,12 @@ EXPORT_SYMBOL(cfs_free_nidlist);
  * \retval -errno otherwise (-ENOMEM or -EINVAL)
  */
 int
-cfs_parse_nidlist(char *orig, struct list_head *nidlist)
+cfs_parse_nidlist(char *orig, int len, struct list_head *nidlist)
 {
 	int rc = 0;
 	char *str;
 
-	orig = kstrdup(orig, GFP_KERNEL);
+	orig = kstrndup(orig, len, GFP_KERNEL);
 	if (!orig)
 		return -ENOMEM;
 
@@ -587,6 +741,30 @@ cfs_parse_nidlist(char *orig, struct list_head *nidlist)
 }
 EXPORT_SYMBOL(cfs_parse_nidlist);
 
+static int
+match_nidmask(struct lnet_nid *nid, struct nidmask *nm, struct netstrfns *nf)
+{
+	__be32 addr[4] = { nid->nid_addr[0], nid->nid_addr[1],
+			   nid->nid_addr[2], nid->nid_addr[3] };
+	__be32 *netmask, *netaddr;
+
+	if (!nf->nf_match_netmask)
+		return 0;
+
+	if (nid_is_nid4(nid) && nm->nm_family == AF_INET) {
+		netmask = (__be32 *)&nm->nm_netmask.ipv4.s_addr;
+		netaddr = (__be32 *)&nm->nm_netaddr.ipv4.s_addr;
+	} else if (!nid_is_nid4(nid) && nm->nm_family == AF_INET6) {
+		netmask = (__be32 *)&nm->nm_netmask.ipv6.s6_addr;
+		netaddr = (__be32 *)&nm->nm_netaddr.ipv6.s6_addr;
+	} else {
+		return 0;
+	}
+
+	return nf->nf_match_netmask(addr, NID_ADDR_BYTES(nid), netmask,
+				    netaddr);
+}
+
 /**
  * Matches a nid (\a nid) against the compiled list of nidranges (\a nidlist).
  *
@@ -598,10 +776,9 @@ EXPORT_SYMBOL(cfs_parse_nidlist);
 int cfs_match_nid(struct lnet_nid *nid, struct list_head *nidlist)
 {
 	struct nidrange *nr;
+	struct nidmask *nm;
 	struct addrrange *ar;
 
-	if (!nid_is_nid4(nid))
-		return 0;
 	list_for_each_entry(nr, nidlist, nr_link) {
 		if (nr->nr_netstrfns->nf_type != nid->nid_type)
 			continue;
@@ -609,6 +786,11 @@ int cfs_match_nid(struct lnet_nid *nid, struct list_head *nidlist)
 			continue;
 		if (nr->nr_all)
 			return 1;
+
+		list_for_each_entry(nm, &nr->nr_nidmasks, nm_link)
+			if (match_nidmask(nid, nm, nr->nr_netstrfns))
+				return 1;
+
 		list_for_each_entry(ar, &nr->nr_addrranges, ar_link)
 			if (nr->nr_netstrfns->nf_match_addr(
 				    be32_to_cpu(nid->nid_addr[0]),
@@ -660,6 +842,42 @@ cfs_print_addrranges(char *buffer, int count, struct list_head *addrranges,
 	return i;
 }
 
+static int
+cfs_print_nidmasks(char *buffer, int count, struct list_head *nidmasks,
+		   struct nidrange *nr)
+{
+	int i = 0;
+	struct nidmask *nm;
+	struct sockaddr_storage sa = {};
+	u8 max;
+
+	list_for_each_entry(nm, nidmasks, nm_link) {
+		if (i != 0)
+			i += scnprintf(buffer + i, count - i, " ");
+
+		/* parse_nidmask() ensures nm_family is set to either AF_INET
+		 * or AF_INET6
+		 */
+		sa.ss_family = nm->nm_family;
+		if (nm->nm_family == AF_INET) {
+			memcpy(&((struct sockaddr_in *)(&sa))->sin_addr.s_addr,
+			       &nm->nm_addr.ipv4, sizeof(struct in_addr));
+			max = 32;
+		} else {
+			memcpy(&((struct sockaddr_in6 *)(&sa))->sin6_addr.s6_addr,
+			       &nm->nm_addr.ipv6, sizeof(struct in6_addr));
+			max = 128;
+		}
+		i += rpc_ntop((struct sockaddr *)&sa, buffer + i, count - i);
+		if (nm->nm_prefix_len < max)
+			i += scnprintf(buffer + i, count - i, "/%u",
+				       nm->nm_prefix_len);
+		i += cfs_print_network(buffer + i, count - i, nr);
+	}
+
+	return i;
+}
+
 /**
  * Print a list of nidranges (\a nidlist) into the specified \a buffer.
  * At max \a count characters can be printed into \a buffer.
@@ -671,6 +889,7 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *nidlist)
 {
 	int i = 0;
 	struct nidrange *nr;
+	bool need_space = false;
 
 	if (count <= 0)
 		return 0;
@@ -679,14 +898,26 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *nidlist)
 		if (i != 0)
 			i += scnprintf(buffer + i, count - i, " ");
 
-		if (nr->nr_all != 0) {
+		if (nr->nr_all) {
 			LASSERT(list_empty(&nr->nr_addrranges));
+			LASSERT(list_empty(&nr->nr_nidmasks));
 			i += scnprintf(buffer + i, count - i, "*");
 			i += cfs_print_network(buffer + i, count - i, nr);
-		} else {
+			continue;
+		}
+
+		if (!list_empty(&nr->nr_nidmasks)) {
+			i += cfs_print_nidmasks(buffer + i, count - i,
+						&nr->nr_nidmasks, nr);
+			need_space = true;
+		}
+		if (!list_empty(&nr->nr_addrranges)) {
+			if (need_space)
+				i += scnprintf(buffer + i, count - i, " ");
 			i += cfs_print_addrranges(buffer + i, count - i,
 						  &nr->nr_addrranges, nr);
 		}
+		need_space = false;
 	}
 	return i;
 }
@@ -923,6 +1154,43 @@ cfs_ip_addr_match(__u32 addr, struct list_head *list)
 }
 
 /**
+ * Matches address (\a addr) against the netmask encoded in \a netmask and
+ * \a netaddr.
+ *
+ * \retval 1 if \a addr matches
+ * \retval 0 otherwise
+ */
+int
+libcfs_ip_in_netmask(const __be32 *addr, size_t asize, const __be32 *netmask,
+		     const __be32 *netaddr)
+{
+	if (asize == 4) {
+		struct in_addr nid_addr, masked_addr;
+
+		memcpy(&nid_addr.s_addr, addr, asize);
+
+		masked_addr.s_addr = nid_addr.s_addr &
+				     (*(struct in_addr *)netmask).s_addr;
+
+		return memcmp(&masked_addr, netaddr, sizeof(masked_addr)) == 0;
+	} else if (asize == 16) {
+		struct in6_addr nid_addr, masked_addr;
+		int i;
+
+		memcpy(&nid_addr.s6_addr, addr, asize);
+
+		for (i = 0; i < 16; i++)
+			masked_addr.s6_addr[i] =
+				nid_addr.s6_addr[i] &
+				(*(struct in6_addr *)netmask).s6_addr[i];
+
+		return memcmp(&masked_addr, netaddr, sizeof(masked_addr)) == 0;
+	}
+
+	return 0;
+}
+
+/**
  * Print the network part of the nidrange \a nr into the specified \a buffer.
  *
  * \retval number of characters written
@@ -1023,7 +1291,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 	  .nf_str2addr_size	= libcfs_ip_str2addr_size,
 	  .nf_parse_addrlist	= cfs_ip_addr_parse,
 	  .nf_print_addrlist	= libcfs_ip_addr_range_print,
-	  .nf_match_addr	= cfs_ip_addr_match
+	  .nf_match_addr	= cfs_ip_addr_match,
+	  .nf_match_netmask	= libcfs_ip_in_netmask
 	},
 	{ .nf_type		= O2IBLND,
 	  .nf_name		= "o2ib",
@@ -1032,7 +1301,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 	  .nf_str2addr		= libcfs_ip_str2addr,
 	  .nf_parse_addrlist	= cfs_ip_addr_parse,
 	  .nf_print_addrlist	= libcfs_ip_addr_range_print,
-	  .nf_match_addr	= cfs_ip_addr_match
+	  .nf_match_addr	= cfs_ip_addr_match,
+	  .nf_match_netmask	= libcfs_ip_in_netmask
 	},
 	{ .nf_type		= GNILND,
 	  .nf_name		= "gni",

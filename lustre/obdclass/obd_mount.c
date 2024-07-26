@@ -1444,21 +1444,11 @@ static bool lmd_parse_nidlist(char *buf)
 		end += pos;
 		c = end[0];
 		end[0] = '\0';
-		/* FIXME !!! Add IPv6 support to cfs_parse_nidlist */
-		if (strchr(buf, ':')) {
-			struct lnet_nid nid;
-
-			if (libcfs_strnid(&nid, buf) < 0) {
-				invalid = true;
-				goto failed;
-			}
+		if (cfs_parse_nidlist(buf, strlen(buf), &nidlist)) {
+			invalid = true;
+			goto failed;
 		} else {
-			if (cfs_parse_nidlist(buf, &nidlist) < 0) {
-				invalid = true;
-				goto failed;
-			} else {
-				cfs_free_nidlist(&nidlist);
-			}
+			cfs_free_nidlist(&nidlist);
 		}
 		end[0] = c;
 		end++;

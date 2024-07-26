@@ -4181,8 +4181,8 @@ static int parse_nid_range(char *nodemap_range, char *nid_range, int range_len)
 
 	INIT_LIST_HEAD(&nidlist);
 
-	if (cfs_parse_nidlist(nodemap_range, strlen(nodemap_range),
-			      &nidlist) <= 0) {
+	if (!cfs_parse_nidlist(nodemap_range, strlen(nodemap_range),
+			       &nidlist)) {
 		fprintf(stderr,
 			"error: nodemap_xxx_range: can't parse nid range: %s\n",
 			nodemap_range);

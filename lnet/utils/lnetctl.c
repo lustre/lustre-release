@@ -43,6 +43,7 @@ static int jt_show_routing(int argc, char **argv);
 static int jt_show_stats(int argc, char **argv);
 static int jt_show_peer(int argc, char **argv);
 static int jt_show_recovery(int argc, char **argv);
+static int jt_debug_nidlist(int argc, char **argv);
 static int jt_show_global(int argc, char **argv);
 static int jt_show_udsp(int argc, char **argv);
 static int jt_show_fault(int argc, char **argv);
@@ -199,6 +200,7 @@ command_t debug_cmds[] = {
 		"\t--peer : list peer recovery queue\n"},
 	{"peer", jt_show_peer_debug_info, 0, "show peer debug info\n"
 		"\t--nid: peer's NID\n"},
+	{"nidlist", jt_debug_nidlist, 0, "debug nidlist parsing\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -3658,6 +3660,25 @@ old_api:
 
 	cYAML_free_tree(err_rc);
 	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
+static int jt_debug_nidlist(int argc, char **argv)
+{
+	int rc;
+
+	if (argc < 2) {
+		fprintf(stderr, "Missing nidlist argument\n");
+		return -EINVAL;
+	} else if (argc == 2) {
+		rc = lustre_lnet_debug_nidlist(argv[1], NULL);
+	} else if (argc == 3) {
+		rc = lustre_lnet_debug_nidlist(argv[1], argv[2]);
+	} else {
+		fprintf(stderr, "Too many arguments\n");
+		return -EINVAL;
+	}
 
 	return rc;
 }

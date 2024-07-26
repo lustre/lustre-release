@@ -967,6 +967,7 @@ int lustre_lnet_parse_interfaces(char *intf_str,
 int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
 			     int max_nids, char *err_str);
 
+int lustre_lnet_debug_nidlist(char *nidstr, char *match_nid);
 /* lustre_lnet_add_udsp
  *	Add a selection policy.
  *	src - source NID descriptor

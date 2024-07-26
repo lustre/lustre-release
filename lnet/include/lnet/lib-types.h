@@ -248,6 +248,9 @@ struct netstrfns {
 	int	(*nf_print_addrlist)(char *buffer, int count,
 				     struct list_head *list);
 	int	(*nf_match_addr)(u32 addr, struct list_head *list);
+	int	(*nf_match_netmask)(const __be32 *addr, size_t asize,
+				    const __be32 *netmask,
+				    const __be32 *netaddr);
 	int	(*nf_min_max)(struct list_head *nidlist, u32 *min_nid,
 			      u32 *max_nid);
 };
