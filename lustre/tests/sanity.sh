@@ -5890,6 +5890,122 @@ test_44a() {
 }
 run_test 44a "test sparse pwrite ==============================="
 
+test_44b() {
+	(( $OST1_VERSION >= $(version_code 2.15.61.137) )) ||
+		skip "Need OST >= 2.15.61.137 for large object handling"
+
+	$LFS setstripe -c 1 $DIR/$tfile || error "setstripe failed"
+	local off=$((2**32*4096-8192))
+	dd if=/dev/zero of=$DIR/$tfile bs=1 count=1 seek=$off conv=notrunc ||
+		error "dd failed"
+	cancel_lru_locks osc
+	$CHECKSTAT -s $((2**32*4096-8192+1)) $DIR/$tfile || error "wrong size"
+}
+run_test 44b "write one byte at offset 0xfffffffe000"
+
+test_44c() {
+	(( $OST1_VERSION >= $(version_code 2.15.61.137) )) ||
+		skip "Need OST >= 2.15.61.137 for large object handling"
+
+	local osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
+	local max_object_bytes=$(import_param $osc_tgt max_object_bytes)
+
+	$LFS setstripe -c 1 $DIR/$tfile || error "setstripe failed"
+
+	dd if=/dev/zero of=$DIR/$tfile conv=notrunc bs=1 count=1 \
+		seek=$((max_object_bytes - 1)) || error "dd failed"
+	cancel_lru_locks osc
+	$CHECKSTAT -s $max_object_bytes $DIR/$tfile || error "wrong size"
+}
+run_test 44c "write 1 byte at max_object_bytes - 1 offset"
+
+test_44d() {
+	(( $OST1_VERSION >= $(version_code 2.15.61.137) )) ||
+		skip "Need OST >= 2.15.61.137 for large object handling"
+
+	local osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
+	local max_object_bytes=$(import_param $osc_tgt max_object_bytes)
+
+	$LFS setstripe -c 2 $DIR/$tfile || error "setstripe failed"
+
+	local stripe_size=$($LFS getstripe -S $DIR/$tfile)
+	local off=$((max_object_bytes & ~(stripe_size - 1)))
+
+	$TRUNCATE $DIR/$tfile $off
+	dd if=/dev/zero of=$DIR/$tfile bs=1 count=1 seek=$off
+	local rc1=$?
+	dd if=/dev/zero of=$DIR/$tfile oflag=append conv=notrunc bs=1 count=1 \
+		seek=$off
+	local rc2=$?
+	[[ $rc1 -eq 0 && $rc2 -eq 0 ]] || error "one of dd commands failed"
+}
+run_test 44d "if write at position fails (EFBIG), so should do append"
+
+# write file until maximal size is reached
+max_file_size() {
+	local file=$1
+
+	off=1
+	minoff=1
+	while true; do
+		echo a | dd of=$1 bs=1 count=1 conv=notrunc seek=$off status=progress \
+			2>/dev/null
+		[[ $? -ne 0 ]] && break
+		minoff=$off
+		off=$(echo "$off * 2" | bc)
+	done
+	maxoff=$off
+	minoff_1=$(echo $off + 1 | bc)
+	while [[ maxoff -ne minoff_1 ]]; do
+		off=$(echo "($maxoff + $minoff) / 2" | bc)
+		echo a | dd of=$1 bs=1 count=1 conv=notrunc seek=$off status=progress \
+			2>/dev/null
+		[[ $? -eq 0 ]] && minoff=$off || maxoff=$off
+		minoff_1=$(echo $off + 1 | bc)
+	done
+	stat -c %s $file
+}
+
+test_44e_write_read()
+{
+	local ifile=$1
+	local ofile=$2
+	local stripe_count=$3
+	local stripe_size=$($LFS getstripe -S $ofile)
+	local file_size=$(max_file_size $ofile)
+	local write_count=$((stripe_count * stripe_size))
+	local offset=$((file_size - write_count))
+
+	dd if=/dev/urandom of=$ifile bs=$write_count count=1 ||
+		error "failed to write random data"
+
+	dd if=$ifile of=$ofile bs=$write_count count=1 oflag=seek_bytes \
+		seek=$offset conv=notrunc || error "dd failed"
+	cancel_lru_locks osc
+	cmp $ifile $ofile -i 0:$offset -n $write_count || error "cmp failed"
+}
+
+test_44e() {
+	(( $OST1_VERSION >= $(version_code 2.15.61.137) )) ||
+		    skip "Need OST >= 2.15.61.137 for large object handling"
+
+	local TF="$(mktemp --tmpdir -u $tfile.XXXXXX)"
+
+	$LFS setstripe -S 1M -c $OSTCOUNT $DIR/$tfile ||
+		error "lfs setstripe -S 1M -c $OSTCOUNT failed"
+	test_44e_write_read $TF $DIR/$tfile $OSTCOUNT
+	rm -f $DIR/$tfile
+	rm -f $TF
+
+	$LFS setstripe -S 1M -c $OSTCOUNT -C $((OSTCOUNT * 2)) $DIR/$tfile ||
+		error "lfs setstripe -S 1M -c $OSTCOUNT -C [* 2] failed"
+	test_44e_write_read $TF $DIR/$tfile $((OSTCOUNT * 2))
+
+	rm -f $DIR/$tfile
+	rm -f $TF
+}
+run_test 44e "write and read maximal stripes"
+
 dirty_osc_total() {
 	tot=0
 	for d in `lctl get_param -n ${OSC}.*.cur_dirty_bytes`; do
@@ -10126,13 +10242,6 @@ test_64c() {
 	$LCTL set_param osc.*OST0000-osc-[^mM]*.cur_grant_bytes=0
 }
 run_test 64c "verify grant shrink"
-
-import_param() {
-	local tgt=$1
-	local param=$2
-
-	$LCTL get_param osc.$tgt.import | awk "/$param/ { print \$2 }"
-}
 
 # this does exactly what osc_request.c:osc_announce_cached() does in
 # order to calculate max amount of grants to ask from server

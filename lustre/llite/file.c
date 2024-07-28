@@ -2411,6 +2411,9 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 	if (count >= PAGE_SIZE ||
 	    (iocb->ki_pos & (PAGE_SIZE-1)) + count > PAGE_SIZE)
 		RETURN(0);
+	/* For aarch64's 64k pages maxbytes is inside of a page. */
+	if (iocb->ki_pos + count > ll_file_maxbytes(inode))
+		RETURN(-EFBIG);
 
 	if (unlikely(lock_inode))
 		ll_inode_lock(inode);

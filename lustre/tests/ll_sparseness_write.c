@@ -50,7 +50,7 @@
 int main(int argc, char **argv)
 {
 	int p_size;
-	unsigned int offset;
+	loff_t offset;
 	char *filename;
 	int fd;
 	char buf[] = "+++";

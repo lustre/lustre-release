@@ -959,7 +959,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 			if (++i != pages)
 				continue;
 		}
-		if (fp->index + clen >= max_page_index)
+		if (fp->index + clen > max_page_index)
 			GOTO(cleanup, rc = -EFBIG);
 		/* process found extent */
 		map.m_lblk = fp->index * blocks_per_page;

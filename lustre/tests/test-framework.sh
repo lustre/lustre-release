@@ -8887,6 +8887,13 @@ wait_clients_import_ready() {
 	wait_clients_import_state "$1" "$2" "\(FULL\|IDLE\)"
 }
 
+import_param() {
+	local tgt=$1
+	local param=$2
+
+	$LCTL get_param osc.$tgt.import | awk "/$param/ { print \$2 }"
+}
+
 wait_osp_active() {
 	local facet=$1
 	local tgt_name=$2

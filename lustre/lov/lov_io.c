@@ -1027,7 +1027,7 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 		 "pos %lld, [%lld, %lld)\n", io->u.ci_rw.crw_pos,
 		 lse->lsme_extent.e_start, lse->lsme_extent.e_end);
 	next = min_t(__u64, next, lse->lsme_extent.e_end);
-	next = min_t(loff_t, next, lio->lis_io_endpos);
+	next = min_t(__u64, next, lio->lis_io_endpos);
 
 	io->ci_continue = next < lio->lis_io_endpos;
 	io->u.ci_rw.crw_bytes = next - io->u.ci_rw.crw_pos;

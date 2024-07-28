@@ -330,10 +330,22 @@ retry_new_ost:
 					    lov->desc.ld_tgt_count :
 					    lsme->lsme_stripe_count;
 
-		if (min_stripe_maxbytes <= (LLONG_MAX / stripe_count))
-			lov_bytes = min_stripe_maxbytes * stripe_count;
-		else
+		if (min_stripe_maxbytes <= LLONG_MAX / stripe_count) {
+			/*
+			 * If min_stripe_maxbytes is not an even multiple of
+			 * stripe_size, then the last stripe in each object
+			 * cannot be completely filled and would leave a series
+			 * of unwritable holes in the file.
+			 * Trim the maximum file size to the last full stripe
+			 * for each object, plus the maximum object size for
+			 * the 0th stripe.
+			 */
+			lov_bytes = (rounddown(min_stripe_maxbytes,
+					      lsme->lsme_stripe_size) *
+				    (stripe_count - 1)) + min_stripe_maxbytes;
+		} else {
 			lov_bytes = MAX_LFS_FILESIZE;
+		}
 out_dom1:
 		*maxbytes = min_t(loff_t, lov_bytes, MAX_LFS_FILESIZE);
 	}
