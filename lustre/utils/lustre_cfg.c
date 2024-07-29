@@ -747,7 +747,9 @@ static int yaml_get_device_index(char *source)
 error:
 	if (rc == 0) {
 		yaml_emitter_log_error(&request, stderr);
+		yaml_emitter_delete(&request);
 		rc = -EINVAL;
+		goto free_reply;
 	}
 	yaml_emitter_delete(&request);
 
@@ -773,14 +775,15 @@ error:
 						yaml_event_delete(&event);
 						rc = -errno;
 					}
-					return rc;
+					goto free_reply;
 				}
 			}
 		}
 		done = (event.type == YAML_STREAM_END_EVENT);
 		yaml_event_delete(&event);
 	}
-
+free_reply:
+	yaml_parser_delete(&reply);
 	nl_socket_free(sk);
 
 	return rc;
