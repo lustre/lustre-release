@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 MODULES := fld
 fld-objs := fld_request.o fld_cache.o lproc_fld.o
 @SERVER_TRUE@fld-objs += fld_handler.o fld_index.o

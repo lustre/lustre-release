@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 MODULES := fid
 fid-objs := fid_request.o lproc_fid.o
 @SERVER_TRUE@fid-objs += fid_handler.o fid_store.o fid_lib.o
