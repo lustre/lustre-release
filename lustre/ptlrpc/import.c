@@ -1615,9 +1615,9 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		if (strcmp(imp->imp_obd->obd_type->typ_name,
 			   LUSTRE_MGC_NAME) != 0 &&
 		    (connect_flags & OBD_CONNECT_LIGHTWEIGHT) == 0) {
-			LCONSOLE_ERROR("%s: This client was evicted by %.*s; in progress operations using this service will fail.\n",
-				       imp->imp_obd->obd_name, target_len,
-				       target_start);
+			/* below message checked in test-framework client_evicted() */
+			LCONSOLE(D_ERROR, "%s: This client was evicted by %.*s; in progress operations using this service will fail.\n",
+				 imp->imp_obd->obd_name, target_len, target_start);
 			LASSERTF(!obd_lbug_on_eviction, "LBUG upon eviction\n");
 		}
 		CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",

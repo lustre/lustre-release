@@ -1273,8 +1273,7 @@ test_32() {
 
 	$LFS df $DIR
 
-	local testid=$(echo $TESTNAME | tr '_' ' ')
-	dmesg | tac | sed "/$testid/,$ d" | grep "This client was evicted" &&
+	client_evicted $CLIENT1 &&
 		error "client got evicted due to aborted recovery"
 	return 0
 }
