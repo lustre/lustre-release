@@ -8220,11 +8220,14 @@ test_98()
 	setup
 	check_mount || error "mount failed"
 	mountopt="user_xattr"
-	for ((x = 1; x <= PAGE_SIZE/11; x++)); do
+	for ((x = 1; x <= PAGE_SIZE/10; x++)); do
 		mountopt="$mountopt,user_xattr"
 	done
-	mount_client $MOUNT remount,$mountopt 2>&1 | grep "too long" ||
+	mount.lustre -o remount,$mountopt -v $MGSNID:/$FSNAME $MOUNT 2>&1 |
+		tee $TMP/$tfile.out
+	grep "too long" $TMP/$tfile.out ||
 		error "Buffer overflow check failed"
+
 	cleanup || error "cleanup failed"
 }
 run_test 98 "Buffer-overflow check while parsing mount_opts"

@@ -242,7 +242,11 @@ static int append_option(char *options, size_t options_len,
 	}
 	return 0;
 out_err:
-	fprintf(stderr, "error: mount options %s%s too long\n", param, value);
+	/* this 'too long' message is checked in conf-sanity test_98 */
+	fprintf(stderr,
+		"error: add mount options %s%s too long, %zu over limit %zu\n",
+		param, value, strlen(options) + strlen(param) + strlen(value),
+		options_len);
 	return E2BIG;
 }
 
@@ -819,7 +823,7 @@ int main(int argc, char *const argv[])
 	g_pagesize = sysconf(_SC_PAGESIZE);
 	if (g_pagesize == -1) {
 		rc = errno;
-		printf("error: %d failed to get page size.\n", rc);
+		printf("error: failed to get page size: %s\n", strerror(rc));
 		return rc;
 	}
 	maxopt_len = MIN(g_pagesize, 64 * 1024);
@@ -833,7 +837,8 @@ int main(int argc, char *const argv[])
 			printf("arg[%d] = %s\n", i, argv[i]);
 		printf("source = %s (%s), target = %s\n", mop.mo_usource,
 		       mop.mo_source, mop.mo_target);
-		printf("options = %s\n", mop.mo_orig_options);
+		printf("options(%zu/%zu) = %s\n", strlen(mop.mo_orig_options),
+		       maxopt_len, mop.mo_orig_options);
 	}
 
 	options = malloc(maxopt_len);
@@ -844,7 +849,11 @@ int main(int argc, char *const argv[])
 	}
 
 	if (strlen(mop.mo_orig_options) >= maxopt_len) {
-		fprintf(stderr, "error: mount options too long\n");
+		/* this 'too long' message is checked in conf-sanity test_98 */
+
+		fprintf(stderr,
+			"error: mount options too long, %zu over limit %zu\n",
+			strlen(mop.mo_orig_options), maxopt_len);
 		rc = E2BIG;
 		goto out_options;
 	}
