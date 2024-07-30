@@ -661,6 +661,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 			discard_cl_pages(env, io, pvec, index);
 			index = 0;
 
+			cond_resched();
 			spin_lock(&cli->cl_lru_list_lock);
 		}
 
