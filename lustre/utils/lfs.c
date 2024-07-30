@@ -51,6 +51,7 @@
 #include <err.h>
 #include <pwd.h>
 #include <grp.h>
+#include <regex.h>
 #include <sys/ioctl.h>
 #include <sys/quota.h>
 #include <sys/time.h>
@@ -6160,79 +6161,96 @@ static int lfs_find(int argc, char **argv)
 		case 'm':
 		case 'i':
 		case 'O': {
-			char *buf, *token, *next, *p;
-			int len = 1;
-			void *tmp;
-
-			buf = strdup(optarg);
-			if (!buf) {
-				ret = -ENOMEM;
-				goto err;
-			}
+			int len, rc2;
+			int *p_num, *p_alloc;
+			struct obd_uuid **pp_uuid, *tmp;
+			const char *p1 = optarg, *p2;
+			char buf[UUID_MAX];
+			const char *pattern = "^([0-9]+)-([0-9]+)$";
+			regex_t reg;
+			regmatch_t pmatch[3];
 
 			param.fp_exclude_obd = !!neg_opt;
-
-			token = buf;
-			while (token && *token) {
-				token = strchr(token, ',');
-				if (token) {
-					len++;
-					token++;
-				}
-			}
 			if (c == 'm') {
-				param.fp_exclude_mdt = !!neg_opt;
-				param.fp_num_alloc_mdts += len;
-				tmp = realloc(param.fp_mdt_uuid,
-					      param.fp_num_alloc_mdts *
-					      sizeof(*param.fp_mdt_uuid));
-				if (!tmp) {
-					ret = -ENOMEM;
-					goto err_free;
-				}
-
-				param.fp_mdt_uuid = tmp;
+				p_num = &param.fp_num_mdts;
+				p_alloc = &param.fp_num_alloc_mdts;
+				pp_uuid = &param.fp_mdt_uuid;
 			} else {
-				param.fp_exclude_obd = !!neg_opt;
-				param.fp_num_alloc_obds += len;
-				tmp = realloc(param.fp_obd_uuid,
-					      param.fp_num_alloc_obds *
-					      sizeof(*param.fp_obd_uuid));
-				if (!tmp) {
-					ret = -ENOMEM;
-					goto err_free;
-				}
-
-				param.fp_obd_uuid = tmp;
+				p_num = &param.fp_num_obds;
+				p_alloc = &param.fp_num_alloc_obds;
+				pp_uuid = &param.fp_obd_uuid;
 			}
-			for (token = buf; token && *token; token = next) {
-				struct obd_uuid *puuid;
+			regcomp(&reg, pattern, REG_EXTENDED);
 
-				if (c == 'm') {
-					puuid =
-					&param.fp_mdt_uuid[param.fp_num_mdts++];
-				} else {
-					puuid =
-					&param.fp_obd_uuid[param.fp_num_obds++];
-				}
-				p = strchr(token, ',');
-				next = 0;
-				if (p) {
-					*p = 0;
-					next = p+1;
-				}
+			while (p1 && *p1 != '\0') {
+				/* grab one uuid/idx/idx_range */
+				p2 = strchr(p1, ',');
+				if (p2 == NULL)
+					p2 = p1 + strlen(p1);
 
-				if (strlen(token) > sizeof(puuid->uuid) - 1) {
+				len = p2 - p1;
+				if (len >= sizeof(buf)) {
+					regfree(&reg);
 					ret = -E2BIG;
-					goto err_free;
+					goto err;
+				}
+				strncpy(buf, p1, len);
+				buf[len] = '\0';
+
+				if (*p2 == '\0')
+					p1 = p2;
+				else
+					p1 = p2 + 1;
+
+				/* extend array if necessary */
+				if (*p_num >= *p_alloc) {
+					tmp = realloc(*pp_uuid,
+						      (*p_alloc + 16) *
+						      sizeof((*pp_uuid)[0]));
+					if (tmp == NULL) {
+						regfree(&reg);
+						ret = -ENOMEM;
+						goto err;
+					}
+					*pp_uuid = tmp;
+					*p_alloc += 16;
 				}
 
-				strncpy(puuid->uuid, token,
-					sizeof(puuid->uuid));
+				/* check pattern */
+				rc2 = regexec(&reg, buf, 3, pmatch, 0);
+				if (rc2 == 0) {
+					/* idx range such as 0-3 */
+					int start, end;
+
+					start = atoi(&buf[pmatch[1].rm_so]);
+					end = atoi(&buf[pmatch[2].rm_so]);
+					for ( ; start <= end; start++) {
+						if (*p_num >= *p_alloc) {
+							tmp = realloc(*pp_uuid,
+								      (*p_alloc + 16) *
+								      sizeof((*pp_uuid)[0]));
+							if (tmp == NULL) {
+								regfree(&reg);
+								ret = -ENOMEM;
+								goto err;
+							}
+							*pp_uuid = tmp;
+							*p_alloc += 16;
+						}
+						sprintf(buf, "%d", start);
+						strcpy((*pp_uuid)[(*p_num)++].uuid, buf);
+					}
+				} else if (rc2 == REG_NOMATCH) {
+					/* single idx or uuid */
+					strcpy((*pp_uuid)[(*p_num)++].uuid, buf);
+				} else {
+					regfree(&reg);
+					ret = -errno;
+					goto err;
+				}
 			}
-err_free:
-			if (buf)
-				free(buf);
+
+			regfree(&reg);
 			break;
 		}
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 18, 53, 0)

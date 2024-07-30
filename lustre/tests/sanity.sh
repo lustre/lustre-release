@@ -7124,6 +7124,33 @@ test_56i() {
 }
 run_test 56i "check 'lfs find -ost UUID' skips directories"
 
+test_56ib() {
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local idx=$((RANDOM % $OSTCOUNT))
+	local find_file
+	local cmd
+
+	test_mkdir $dir
+	echo "create file $file on OST $idx"
+	$LFS setstripe $file -o $idx||
+		error "failed to create test file $file"
+
+	cmd="$LFS find --ost 0,1-$idx,$idx $dir"
+	echo "Command: $cmd"
+	find_file=$($cmd)
+	echo "lfs find result: $find_file"
+	[[ "$find_file" == "$file" ]] ||
+		error "file $file is NOT found"
+
+	cmd="$LFS find ! --ost $idx-$((OSTCOUNT-1)),$idx $dir"
+	echo "Command: $cmd"
+	find_file=$($cmd)
+	[[ -z "$find_file" ]]  ||
+		error "should NOT find any file, but find $find_file"
+}
+run_test 56ib "check 'lfs find -ost INDEX_RANGE' command"
+
 test_56j() {
 	local dir=$DIR/d$(basetest $testnum)g.$TESTSUITE
 
