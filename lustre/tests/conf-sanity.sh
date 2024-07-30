@@ -1310,42 +1310,51 @@ test_30b() {
 
 	local orignids=$($LCTL get_param -n \
 		osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
-
 	local orignidcount=$(echo "$orignids" | wc -w)
 
-	# Make a fake nid.  Use the OST nid, and add 20 to the least significant
-	# numerical part of it. Hopefully that's not already a failover address
-	# for the server.
-	local OSTNID=$(do_facet ost1 "$LCTL get_param nis" | tail -1 | \
-		awk '{print $1}')
-	local ORIGVAL=$(echo $OSTNID | egrep -oi "[0-9]*@")
-	local NEWVAL=$((($(echo $ORIGVAL | egrep -oi "[0-9]*") + 20) % 256))
-	local NEW=$(echo $OSTNID | sed "s/$ORIGVAL/$NEWVAL@/")
-	echo "Using fake nid $NEW"
+	# Make a fake NID.  Use the OST NID, and increase the least significant
+	# field. Hopefully that's not already a failover address for an existing
+	# node, but if so try again until it is an unused NID for this cluster.
+	local ostnid=$(do_facet ost1 "$LCTL list_nids | tail -1")
+	local origval=$(echo $ostnid | egrep -oi "[0-9a-f]*@")
+	# this will match on first loop, but keeps fake NID logic in one place
+	local newnid=$ostnid
 
-	local TEST="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
-		grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
+	echo "Checking peer and local NIDs:"
+	while { $LNETCTL peer show | awk '/nid/{print $NF}' | sort -u
+		$LCTL list_nids; } | grep -w $newnid; do
+		local newval=$(((0x${origval%@} + $RANDOM) % 256))
+		newnid=${ostnid/$origval/$newval@}
+	done
+
+	echo "Changing $ostnid to fake NID $newnid"
+
+	local test="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
+		    grep failover_nids | sed -n 's/.*\($newnid\).*/\1/p'"
 	if [[ $PERM_CMD == *"set_param -P"* ]]; then
-		PARAM="osc.$FSNAME-OST0000-osc-[^M]*.import"
-		echo "Setting $PARAM from $TEST to $NEW"
-		do_facet mgs "$PERM_CMD $PARAM='connection=$NEW'" ||
-			error "$PERM_CMD $PARAM failed"
+		param="osc.$FSNAME-OST0000-osc-[^M]*.import"
+		echo "Setting $param from $ostnid to $newnid"
+		do_facet mgs "$PERM_CMD $param='connection=$newnid'" ||
+			error "$PERM_CMD $param failed"
 	else
-		PARAM="$FSNAME-OST0000.failover.node"
-		echo "Setting $PARAM from $TEST to $NEW"
-		do_facet mgs "$PERM_CMD $PARAM='$NEW'" ||
-			error "$PARAM $PARAM failed"
+		param="$FSNAME-OST0000.failover.node"
+		echo "Setting $param from $ostnid to $newnid"
+		do_facet mgs "$PERM_CMD $param='$newnid'" ||
+			error "$PERM_CMD $param failed"
 	fi
-	wait_update_facet client "$TEST" "$NEW" ||
-		error "check $PARAM failed!"
+	wait_update_facet client "$test" "$newnid" || {
+		$LCTL get_param  osc.$FSNAME-OST0000-osc-[^M]*.import
+		error "check $param for '$newnid' failed!"
+	}
 
-	local NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
-		grep failover_nids)
-	local NIDCOUNT=$(echo "$NIDS" | wc -w)
-	echo "should have $((orignidcount + 1)) entries \
-		in failover nids string, have $NIDCOUNT"
-	[ $NIDCOUNT -eq $((orignidcount + 1)) ] ||
-		error "Failover nid not added"
+	local nids=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
+		     grep failover_nids)
+	local nidcount=$(echo "$nids" | wc -w)
+	echo "should have $((orignidcount + 1)) failover NIDs, have $nidcount"
+	(( $nidcount == $((orignidcount + 1)) )) || {
+		echo $nids
+		error "Failover NID '$newnid' not added"
+	}
 
 	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs "$PERM_CMD -d osc.$FSNAME-OST0000-osc-*.import"
@@ -1353,15 +1362,17 @@ test_30b() {
 		do_facet mgs "$PERM_CMD -d $FSNAME-OST0000.failover.node" ||
 			error "$PERM_CMD delete failed"
 	fi
-	umount_client $MOUNT
+	umount_client $MOUNT || error "umount_client $MOUNT failed"
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
 
-	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
-		grep failover_nids)
-	NIDCOUNT=$(echo "$NIDS" | wc -w)
-	echo "only $orignidcount final entries should remain \
-		in failover nids string, have $NIDCOUNT"
-	[ $NIDCOUNT -eq $orignidcount ] || error "Failover nids not removed"
+	nids=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
+	       grep failover_nids)
+	nidcount=$(echo "$nids" | wc -w)
+	echo "only $orignidcount failover NIDs should be left, have $nidcount"
+	(( $nidcount == $orignidcount )) || {
+		echo "$nids"
+		error "Failover NID '$newnid' not removed"
+	}
 
 	cleanup || error "cleanup failed with rc $?"
 }
