@@ -3530,10 +3530,13 @@ test_27T() {
 	[ $(facet_host client) == $(facet_host ost1) ] &&
 		skip "need ost1 and client on different nodes"
 
-#define OBD_FAIL_OSC_NO_GRANT            0x411
-	$LCTL set_param fail_loc=0x20000411 fail_val=1
-#define OBD_FAIL_OST_ENOSPC              0x215
-	do_facet ost1 "$LCTL set_param fail_loc=0x80000215"
+	# CFS_FAIL_ONCE is needed to get cfs_fail_count reset
+	#define OBD_FAIL_OSC_NO_GRANT            0x411
+	#define CFS_FAIL_SKIP                    0x20000000
+	#define CFS_FAIL_ONCE                    0x80000000
+	$LCTL set_param fail_loc=0xa0000411 fail_val=1
+	#define OBD_FAIL_OST_ENOSPC_VALID        0x255
+	do_facet ost1 "$LCTL set_param fail_loc=0x80000255"
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 	# DIO does not support partial writes to a single stripe - a write to
 	# each stripe will fail or succeed entirely.  So we disable hybrid IO
@@ -3541,8 +3544,17 @@ test_27T() {
 	local hybrid=$($LCTL get_param -n llite.*.hybrid_io)
 	$LCTL set_param llite.*.hybrid_io=0
 	stack_trap "$LCTL set_param -n llite.*.hybrid_io=$hybrid" EXIT
-	$MULTIOP $DIR/$tfile oO_WRONLY:P$((4 * 1024 * 1024 + 10 * 4096))c ||
+
+	local pagesz=$(getconf PAGESIZE)
+	local pagenr=$($LCTL get_param -n osc.*-OST0000-*.max_pages_per_rpc)
+
+	$MULTIOP $DIR/$tfile oO_WRONLY:P$(((pagenr + 10) * pagesz))c ||
 		error "multiop failed"
+	(( $(stat -c '%s' $DIR/$tfile) == pagenr * pagesz )) ||
+		error "wrong size"
+
+	# this is to reset cfs_fail_count and to clear ar_force_sync flags
+	$MULTIOP $DIR/$tfile oO_WRONLY:w${pagesz}c
 }
 run_test 27T "no eio on close on partial write due to enosp"
 

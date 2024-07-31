@@ -2750,6 +2750,12 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	    ptlrpc_connection_is_local(exp->exp_connection))
 		mpflags = memalloc_noreclaim_save();
 
+	/* it is incorrect to return ENOSPC when granted space has been used */
+	if (unlikely(!(remote_nb[0].rnb_flags & OBD_BRW_FROM_GRANT))) {
+		if (CFS_FAIL_CHECK(OBD_FAIL_OST_ENOSPC_VALID))
+			RETURN(err_serious(-ENOSPC));
+	}
+
 	req_capsule_set_size(&req->rq_pill, &RMF_RCS, RCL_SERVER,
 			     niocount * sizeof(*rcs));
 	rc = req_capsule_server_pack(&req->rq_pill);
