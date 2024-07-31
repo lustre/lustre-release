@@ -311,7 +311,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 		sf->sf_items_igif++;
 
 	/* verify inode */
-	inode = osd_iget(info, dev, lid);
+	inode = osd_iget(info, dev, lid, 0);
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
 		/* someone removed the inode. */
@@ -376,7 +376,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 			GOTO(skip, rc = 0);
 
 		/* verify existing mapping */
-		inode2 = osd_iget(info, dev, lid2);
+		inode2 = osd_iget(info, dev, lid2, 0);
 		if (IS_ERR(inode2)) {
 			rc = PTR_ERR(inode2);
 			if (rc == -ENOENT || rc == -ESTALE)
@@ -653,7 +653,7 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 #endif
 
 	osd_id_gen(lid, pos, OSD_OII_NOGEN);
-	inode = osd_iget(info, dev, lid);
+	inode = osd_iget(info, dev, lid, LDISKFS_IGET_NO_CHECKS);
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
 		/* The inode may be removed after bitmap searching, or the
@@ -3119,7 +3119,7 @@ static int osd_scan_ml_file(const struct lu_env *env, struct osd_device *dev,
 	if (!fid_is_sane(fid))
 		inode = osd_iget_fid(info, dev, &id, fid);
 	else
-		inode = osd_iget(info, dev, &id);
+		inode = osd_iget(info, dev, &id, 0);
 
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
@@ -3170,7 +3170,7 @@ static int osd_scan_ml_file_dir(const struct lu_env *env,
 	ENTRY;
 
 	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
-	inode = osd_iget(info, dev, &id);
+	inode = osd_iget(info, dev, &id, 0);
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
 
@@ -3198,7 +3198,7 @@ static int osd_scan_ml_file_seq(const struct lu_env *env,
 	ENTRY;
 
 	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
-	inode = osd_iget(info, dev, &id);
+	inode = osd_iget(info, dev, &id, 0);
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
 
@@ -3310,7 +3310,7 @@ static int osd_scan_lastid_dir(const struct lu_env *env, struct osd_device *dev,
 	ENTRY;
 
 	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
-	inode = osd_iget(info, dev, &id);
+	inode = osd_iget(info, dev, &id, 0);
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
 
@@ -3352,7 +3352,7 @@ static int osd_scan_lastid_seq(const struct lu_env *env, struct osd_device *dev,
 	ENTRY;
 
 	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
-	inode = osd_iget(info, dev, &id);
+	inode = osd_iget(info, dev, &id, 0);
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
 
@@ -3477,7 +3477,7 @@ static int osd_scan_O_seq(const struct lu_env *env, struct osd_device *dev,
 	ENTRY;
 
 	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
-	inode = osd_iget(info, dev, &id);
+	inode = osd_iget(info, dev, &id, 0);
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
 

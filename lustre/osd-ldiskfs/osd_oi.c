@@ -90,7 +90,7 @@ static int osd_oi_index_create_one(struct osd_thread_info *info,
 	if (!IS_ERR(bh)) {
 		osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
 		brelse(bh);
-		inode = osd_iget(info, osd, id);
+		inode = osd_iget(info, osd, id, 0);
 		if (!IS_ERR(inode)) {
 			iput(inode);
 			inode = ERR_PTR(-EEXIST);
@@ -715,7 +715,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 			return 1;
 
 		/* Check whether the mapping for oi_id is valid or not. */
-		inode = osd_iget(info, osd, oi_id);
+		inode = osd_iget(info, osd, oi_id, 0);
 		if (IS_ERR(inode)) {
 			rc = PTR_ERR(inode);
 			if (rc == -ENOENT || rc == -ESTALE)

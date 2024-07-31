@@ -35,3 +35,4 @@ rhel8/ext4-old_ea_inodes_handling_fix.patch
 ubuntu20.04.5/ext4-filename-encode.patch
 rhel9.1/ext4-enc-flag.patch
 linux-6.6/ext4-encdata.patch
+rhel9.4/ext4-add-IGET_NO_CHECKS-flag.patch

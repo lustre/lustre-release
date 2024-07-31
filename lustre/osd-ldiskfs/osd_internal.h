@@ -809,7 +809,7 @@ int osd_register_proc_index_in_idif(struct osd_device *osd);
 int osd_statfs(const struct lu_env *env, struct dt_device *dev,
 	       struct obd_statfs *sfs, struct obd_statfs_info *info);
 struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
-		       struct osd_inode_id *id);
+		       struct osd_inode_id *id, int flags);
 struct inode *
 osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	     struct osd_inode_id *id, struct lu_fid *fid);
@@ -949,14 +949,15 @@ static inline void i_projid_write(struct inode *inode, __u32 projid)
 #endif
 
 #ifdef HAVE_LDISKFS_IGET_WITH_FLAGS
-# define osd_ldiskfs_iget(sb, inum)				\
-	ldiskfs_iget((sb), (inum), LDISKFS_IGET_HANDLE)
-# define osd_ldiskfs_iget_special(sb, inum, special)		\
-	ldiskfs_iget((sb), (inum), LDISKFS_IGET_HANDLE |		\
-				  ((special) ? LDISKFS_IGET_SPECIAL : 0))
+# define osd_ldiskfs_iget(sb, inum, flags)				\
+	ldiskfs_iget((sb), (inum), LDISKFS_IGET_HANDLE | flags)
 #else
-# define osd_ldiskfs_iget(sb, inum) ldiskfs_iget((sb), (inum))
-# define osd_ldiskfs_iget_special(sb, inum, special) ldiskfs_iget((sb), (inum))
+# define osd_ldiskfs_iget(sb, inum, flags) ldiskfs_iget((sb), (inum))
+# define LDISKFS_IGET_SPECIAL 0
+#endif
+
+#ifndef HAVE_LDISKFS_IGET_EA_INODE
+# define LDISKFS_IGET_NO_CHECKS 0
 #endif
 
 #ifdef HAVE_LDISKFS_INFO_JINODE

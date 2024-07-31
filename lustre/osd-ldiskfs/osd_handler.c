@@ -297,7 +297,7 @@ static void osd_idc_dump_lma(const struct lu_env *env,
 	struct inode *inode;
 	int rc;
 
-	inode = osd_ldiskfs_iget(osd_sb(osd), ino);
+	inode = osd_ldiskfs_iget(osd_sb(osd), ino, 0);
 	if (IS_ERR(inode)) {
 		CERROR("%s: can't get inode %lu: rc = %d\n",
 		       osd->od_svname, ino, (int)PTR_ERR(inode));
@@ -485,7 +485,7 @@ int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
  **/
 static struct inode *osd_iget2(struct osd_thread_info *info,
 			       struct osd_device *dev, struct osd_inode_id *id,
-			       bool special, int *err)
+			       int flags, int *err)
 {
 	struct inode *inode = NULL;
 	int rc = 0;
@@ -497,7 +497,7 @@ static struct inode *osd_iget2(struct osd_thread_info *info,
 	 */
 	 /* LASSERT(current->journal_info == NULL); */
 
-	inode = osd_ldiskfs_iget_special(osd_sb(dev), id->oii_ino, special);
+	inode = osd_ldiskfs_iget(osd_sb(dev), id->oii_ino, flags);
 	if (IS_ERR(inode)) {
 		CDEBUG(D_INODE, "no inode: ino = %u, rc = %ld\n",
 		       id->oii_ino, PTR_ERR(inode));
@@ -549,12 +549,12 @@ static struct inode *osd_iget2(struct osd_thread_info *info,
 }
 
 struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
-		       struct osd_inode_id *id)
+		       struct osd_inode_id *id, int flags)
 {
 	struct inode *inode;
 	int rc = 0;
 
-	inode = osd_iget2(info, dev, id, 0, &rc);
+	inode = osd_iget2(info, dev, id, flags, &rc);
 
 	if (rc) {
 		iput(inode);
@@ -618,7 +618,7 @@ osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	struct inode *inode;
 	int rc;
 
-	inode = osd_iget(info, dev, id);
+	inode = osd_iget(info, dev, id, 0);
 	if (IS_ERR(inode))
 		return inode;
 
@@ -658,7 +658,8 @@ static struct inode *osd_iget_check(struct osd_thread_info *info,
 	if (unlikely(fid_is_acct(fid)))
 		special = true;
 again:
-	inode = osd_iget2(info, dev, id, special, &rc);
+	inode = osd_iget2(info, dev, id,
+			  special ? LDISKFS_IGET_SPECIAL : 0, &rc);
 	if (rc) {
 		if (!trusted && (rc == -ENOENT || rc == -ESTALE))
 			goto check_oi;
@@ -952,7 +953,7 @@ static int osd_stripe_dir_filldir(void *buf,
 		return 0;
 
 	osd_id_gen(id, ino, OSD_OII_NOGEN);
-	inode = osd_iget(oti, dev, id);
+	inode = osd_iget(oti, dev, id, 0);
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 
@@ -6176,7 +6177,7 @@ again:
 		if (inode != NULL)
 			goto trigger;
 
-		inode = osd_iget(oti, dev, id);
+		inode = osd_iget(oti, dev, id, 0);
 		/* The inode has been removed (by race maybe). */
 		if (IS_ERR(inode)) {
 			rc = PTR_ERR(inode);
@@ -6202,7 +6203,7 @@ again:
 trigger:
 	if (scrub->os_running) {
 		if (inode == NULL) {
-			inode = osd_iget(oti, dev, id);
+			inode = osd_iget(oti, dev, id, 0);
 			/* The inode has been removed (by race maybe). */
 			if (IS_ERR(inode)) {
 				rc = PTR_ERR(inode);
@@ -6258,7 +6259,7 @@ static int osd_fail_fid_lookup(struct osd_thread_info *oti,
 	int rc;
 
 	osd_id_gen(&oic->oic_lid, ino, OSD_OII_NOGEN);
-	inode = osd_iget(oti, dev, &oic->oic_lid);
+	inode = osd_iget(oti, dev, &oic->oic_lid, 0);
 	if (IS_ERR(inode)) {
 		fid_zero(&oic->oic_fid);
 		return PTR_ERR(inode);
@@ -7466,7 +7467,7 @@ osd_dirent_check_repair(const struct lu_env *env, struct osd_object *obj,
 	}
 
 	osd_id_gen(id, ent->oied_ino, OSD_OII_NOGEN);
-	inode = osd_iget(info, dev, id);
+	inode = osd_iget(info, dev, id, 0);
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
 		if (rc == -ENOENT || rc == -ESTALE) {
