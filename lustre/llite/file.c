@@ -3378,8 +3378,6 @@ int ll_fid2path(struct inode *inode, void __user *arg)
 	if (get_user(pathlen, &gfin->gf_pathlen))
 		RETURN(-EFAULT);
 
-	if (pathlen > PATH_MAX)
-		RETURN(-EINVAL);
 	pathlen_orig = pathlen;
 
 gf_alloc:

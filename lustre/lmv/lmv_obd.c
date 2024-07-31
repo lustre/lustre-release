@@ -630,6 +630,7 @@ static int lmv_fid2path(struct obd_export *exp, int len, void *karg,
 	int remote_gf_size = 0;
 	int currentisenc = 0;
 	int globalisenc = 0;
+	int excess;
 	int rc;
 
 	gf = karg;
@@ -689,10 +690,11 @@ repeat_fid2path:
 		}
 	}
 
-	CDEBUG(D_INFO, "%s: get path %s "DFID" rec: %llu ln: %u\n",
+	excess = gf->gf_pathlen > 3072 ? gf->gf_pathlen - 3072 : 0;
+	CDEBUG(D_INFO, "%s: get path %.*s "DFID" rec: %llu ln: %u\n",
 	       tgt->ltd_exp->exp_obd->obd_name,
-	       gf->gf_u.gf_path, PFID(&gf->gf_fid), gf->gf_recno,
-	       gf->gf_linkno);
+	       gf->gf_pathlen - excess, gf->gf_u.gf_path + excess,
+	       PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno);
 
 	if (rc == 0)
 		GOTO(out_fid2path, rc);

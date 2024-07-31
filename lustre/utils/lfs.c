@@ -10426,7 +10426,8 @@ static int lfs_fid2path(int argc, char **argv)
 	bool print_link = false;
 	bool print_fid = false;
 	bool print_mnt_dir;
-	char mnt_dir[PATH_MAX] = "";
+	char *mnt_dir = NULL;
+	int mnt_dir_len = PATH_MAX + 1;
 	int mnt_fd = -1;
 	char *path_or_fsname;
 	long long recno = -1;
@@ -10495,6 +10496,13 @@ static int lfs_fid2path(int argc, char **argv)
 	}
 
 	path_or_fsname = argv[optind];
+	if (path_or_fsname && strlen(path_or_fsname))
+		mnt_dir_len = strlen(path_or_fsname) + 1;
+	mnt_dir = malloc(mnt_dir_len + 1);
+	if (!mnt_dir) {
+		rc = -ENOMEM;
+		goto out;
+	}
 
 	if (*path_or_fsname == '/') {
 		print_mnt_dir = true;
@@ -10524,6 +10532,8 @@ static int lfs_fid2path(int argc, char **argv)
 
 	for (i = optind + 1; i < argc; i++) {
 		const char *fid_str = argv[i];
+		int path_len = PATH_MAX;
+		char *path_buf;
 		struct lu_fid fid;
 		char *ptr = NULL;
 		int rc2;
@@ -10541,15 +10551,35 @@ static int lfs_fid2path(int argc, char **argv)
 
 		int linktmp = (linkno >= 0) ? linkno : 0;
 
+		path_buf = malloc(path_len);
+		if (!path_buf) {
+			if (rc == 0)
+				rc = -ENOMEM;
+			continue;
+		}
+
 		while (1) {
 			int oldtmp = linktmp;
 			long long rectmp = recno;
-			char path_buf[PATH_MAX];
 
+fid2path:
 			rc2 = llapi_fid2path_at(mnt_fd, &fid, path_buf,
-						sizeof(path_buf), &rectmp,
+						path_len, &rectmp,
 						&linktmp);
 			if (rc2 < 0) {
+				if (rc2 == -ERANGE) {
+					char *tmpbuf;
+
+					path_len += PATH_MAX;
+					tmpbuf = realloc(path_buf, path_len);
+					if (!tmpbuf) {
+						if (rc == 0)
+							rc = -ENOMEM;
+						break;
+					}
+					path_buf = tmpbuf;
+					goto fid2path;
+				}
 				fprintf(stderr,
 					"%s fid2path: cannot find %s %s: %s\n",
 					progname, path_or_fsname, fid_str,
@@ -10615,10 +10645,12 @@ static int lfs_fid2path(int argc, char **argv)
 				/* no more links */
 				break;
 		}
+		free(path_buf);
 	}
 out:
 	if (!(mnt_fd < 0))
 		close(mnt_fd);
+	free(mnt_dir);
 
 	return rc;
 }

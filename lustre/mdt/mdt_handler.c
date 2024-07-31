@@ -7708,7 +7708,8 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 {
 	struct mdt_device *mdt = info->mti_mdt;
 	struct mdt_object *obj;
-	int    rc;
+	int excess;
+	int rc;
 
 	ENTRY;
 
@@ -7761,9 +7762,10 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 
 	rc = mdt_path(info, obj, fp, root_fid);
 
-	CDEBUG(D_INFO, "fid "DFID", path %s recno %#llx linkno %u\n",
-	       PFID(&fp->gf_fid), fp->gf_u.gf_path,
-	       fp->gf_recno, fp->gf_linkno);
+	excess = fp->gf_pathlen > 3072 ? fp->gf_pathlen - 3072 : 0;
+	CDEBUG(D_INFO, "fid "DFID", path %.*s recno %#llx linkno %u\n",
+	       PFID(&fp->gf_fid), fp->gf_pathlen - excess,
+	       fp->gf_u.gf_path + excess, fp->gf_recno, fp->gf_linkno);
 
 	mdt_object_put(info->mti_env, obj);
 

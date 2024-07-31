@@ -18401,6 +18401,33 @@ test_154h()
 }
 run_test 154h "Verify interactive path2fid"
 
+test_154i()
+{
+	local long=thislongpathnameisforaverydeepsubdirthatwewanttotestagainst
+	local depth
+	local path
+	local max
+	local fid
+
+	mkdir -p $DIR/$tdir
+	cd $DIR/$tdir
+
+	# create a directory tree with full path longer than PATH_MAX=4096
+	max=$((4096 / $(wc -c <<< $long) + 5))
+	for (( depth = 0; depth <= max; depth++)); do
+		mkdir -v $long$depth || error "mkdir $long$depth failed"
+		cd $long$depth
+	done
+
+	fid=$($LFS path2fid .) || error "path2fid failed"
+	path=$($LFS fid2path $MOUNT $fid) || error "fid2path failed (1)"
+	echo -e "Path for fid $fid is:\n$path"
+
+	path=$($LFS fid2path $(cd ..; pwd) $fid) || error "fid2path failed (2)"
+	echo -e "Path for fid $fid is:\n$path"
+}
+run_test 154i "fid2path for path longer than PATH_MAX"
+
 test_155_small_load() {
     local temp=$TMP/$tfile
     local file=$DIR/$tfile
