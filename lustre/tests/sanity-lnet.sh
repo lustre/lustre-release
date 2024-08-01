@@ -3971,16 +3971,19 @@ check_sysctl() {
 		   ]]; then
 			value=$(sysctl -n "${BASH_REMATCH[1]}" 2>/dev/null)
 			if [ -z "${value}" ]; then
-				error "Parameter ${BASH_REMATCH[1]} not set"
+				echo "Parameter ${BASH_REMATCH[1]} not set"
+				return 1
 			fi
 			echo "found: ${BASH_REMATCH[1]} ${value}"
 			if [ "${value}" != "${BASH_REMATCH[2]}" ]; then
-				error "Parameter ${BASH_REMATCH[1]} \
+				echo "Parameter ${BASH_REMATCH[1]} \
 					wrong value: ${value} \
 					expected: ${BASH_REMATCH[2]}"
+				return 2
 			fi
 		fi
 	done < "$1"
+	return 0
 }
 
 ### Test that linux route is added for each ni
@@ -3989,6 +3992,8 @@ test_260() {
 	local sysctl_file="/etc/lnet-sysctl.conf"
 	local sysctl_conf_bak="/etc/lnet-sysctl.bak"
 	local sysctl_bak=$TMP/lnet-sysctl.bak
+	local -i max_retries=3
+	local -i retries=0
 
 	echo "Setting default values and create backup for check"
 
@@ -4000,7 +4005,16 @@ test_260() {
 	sysctl -w net.ipv6.neigh.default.gc_thresh3=1024 >> "$sysctl_bak"
 
 	echo "Check default configuration"
-	check_sysctl "${sysctl_bak}"
+	retries=0
+	until check_sysctl "${sysctl_bak}"
+	do
+		if (( retries >= max_retries )); then
+			error "Values not set"
+		fi
+		sleep 1
+		retries+=1
+	done
+
 
 	load_modules || error "Failed to load Modules"
 
@@ -4018,7 +4032,15 @@ test_260() {
 		error "setup-sysctl failed"
 
 	echo "Check new configuration"
-	check_sysctl "${sysctl_file}"
+	retries=0
+	until check_sysctl "${sysctl_file}"
+	do
+		if (( retries >= max_retries )); then
+			error "Values not set"
+		fi
+		sleep 1
+		retries+=1
+	done
 
 	echo "Reset to original values"
 	echo 0 > /sys/module/lnet/parameters/enable_sysctl_setup 2>&1
@@ -4030,7 +4052,15 @@ test_260() {
 		error "setup-sysctl failed"
 
 	echo "Check original configuration"
-	check_sysctl "${sysctl_bak}"
+	retries=0
+	until check_sysctl "${sysctl_bak}"
+	do
+		if (( retries >= max_retries )); then
+			error "Values not set"
+		fi
+		sleep 1
+		retries+=1
+	done
 
 	rm -f "${sysctl_bak}"
 
