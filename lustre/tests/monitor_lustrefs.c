@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 		len = read(fd, (void *)&buf[0], sizeof(buf));
 		if (len < 0 && errno != EAGAIN) {
 			fprintf(stderr,
-				"failed to read from fanotiify file descriptor."
+				"failed to read from fanotify file descriptor."
 				" %d:%s",
 				errno, strerror(errno));
 			exit(EXIT_FAILURE);

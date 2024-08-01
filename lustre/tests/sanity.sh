@@ -33134,7 +33134,7 @@ test_851() {
 
 	test_mkdir $dir || error "failed to create dir $dir"
 
-	$fanotify_prog $DIR > $report &
+	stdbuf -o0 $fanotify_prog $DIR > $report &
 	pid=$!
 
 	sleep 1
@@ -33146,8 +33146,8 @@ test_851() {
 	stack_trap "rm -f $report"
 
 	echo "1234567890" > $file
-	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 30 ||
-		error "fanotify did not report anything after 30 seconds"
+	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 60 ||
+		error "fanotify did not report anything after 60 seconds"
 	grep -a -E "open.*:$file:" $report ||
 		error "no open event for writing $file"
 	grep -a -E "write.*:$file:" $report ||
@@ -33157,8 +33157,8 @@ test_851() {
 
 	> $report
 	cat $file
-	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 30 ||
-		error "fanotify did not report anything after 30 seconds"
+	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 60 ||
+		error "fanotify did not report anything after 60 seconds"
 	grep -a -E "open.*:$file:" $report ||
 		error "no open event for reading $file"
 	grep -a -E "read.*:$file:" $report ||
