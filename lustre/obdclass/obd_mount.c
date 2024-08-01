@@ -238,6 +238,7 @@ int lustre_start_mgc(struct super_block *sb)
 	struct lnet_nid nid;
 	char nidstr[LNET_NIDSTR_SIZE];
 	char *mgcname = NULL, *niduuid = NULL, *mgssec = NULL;
+	bool large_nids = false;
 	char *ptr;
 	int rc = 0, i = 0, j;
 	size_t len;
@@ -252,10 +253,13 @@ int lustre_start_mgc(struct super_block *sb)
 		ptr = lsi->lsi_lmd->lmd_mgs;
 		if (lsi->lsi_lmd->lmd_mgs &&
 		    (class_parse_nid(lsi->lsi_lmd->lmd_mgs, &nid, &ptr) == 0)) {
+			if (!nid_is_nid4(&nid))
+				large_nids = true;
 			i++;
 		} else if (IS_MGS(lsi)) {
 			struct lnet_processid id;
 
+			large_nids = true;
 			while ((rc = LNetGetId(i++, &id, true)) != -ENOENT) {
 				if (nid_is_lo0(&id.nid))
 					continue;
@@ -267,8 +271,11 @@ int lustre_start_mgc(struct super_block *sb)
 	} else { /* client */
 		/* Use NIDs from mount line: uml1,1@elan:uml2,2@elan:/lustre */
 		ptr = lsi->lsi_lmd->lmd_dev;
-		if (class_parse_nid(ptr, &nid, &ptr) == 0)
+		if (class_parse_nid(ptr, &nid, &ptr) == 0) {
+			if (!nid_is_nid4(&nid))
+				large_nids = true;
 			i++;
+		}
 	}
 	if (i == 0) {
 		CERROR("No valid MGS NIDs found.\n");
@@ -440,6 +447,9 @@ int lustre_start_mgc(struct super_block *sb)
 		sprintf(niduuid, "%s_%x", mgcname, i);
 		j = 0;
 		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
+			if (!nid_is_nid4(&nid))
+				large_nids = true;
+
 			rc = do_lcfg_nid(mgcname, &nid, LCFG_ADD_UUID,
 					 niduuid);
 			if (rc == 0)
@@ -496,8 +506,17 @@ int lustre_start_mgc(struct super_block *sb)
 		GOTO(out, rc);
 	}
 
+	/* Having a MGS export setup does not mean we can reach it. When this
+	 * is the case check the connect flags which will be zero since we
+	 * couldn't reach the MGS. If the mgsnode= contains a large NID we
+	 * should enable large NID support so we can mount on servers when
+	 * the MGS is down.
+	 */
+	if (exp_connect_flags(exp) == 0 && large_nids) {
+		exp->exp_connect_data.ocd_connect_flags = OBD_CONNECT_FLAGS2;
+		exp->exp_connect_data.ocd_connect_flags2 = OBD_CONNECT2_LARGE_NID;
+	}
 	obd->u.cli.cl_mgc_mgsexp = exp;
-
 out:
 	/*
 	 * Keep the MGC info in the sb. Note that many lsi's can point
