@@ -11245,6 +11245,11 @@ changelog2array()
 		x)
 			key=xattr
 			;;
+		s)
+			key=source-fid
+			value="${value#[}"
+			value="${value%]}"
+			;;
 		*)
 			;;
 		esac

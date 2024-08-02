@@ -32,6 +32,11 @@
 
 #define LL_CRYPTO_BLOCK_SIZE		16
 
+/* Extracts the second-to-last ciphertext block; see explanation below */
+#define LLCRYPT_FNAME_DIGEST(name, len)				\
+	((name) + round_down((len) - LL_CRYPTO_BLOCK_SIZE - 1,	\
+			     LL_CRYPTO_BLOCK_SIZE))
+
 struct llcrypt_ctx;
 struct llcrypt_info;
 
@@ -197,12 +202,6 @@ extern int llcrypt_fname_disk_to_usr(struct inode *, u32, u32,
 			const struct llcrypt_str *, struct llcrypt_str *);
 
 #define LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE	32
-
-/* Extracts the second-to-last ciphertext block; see explanation below */
-#define LLCRYPT_FNAME_DIGEST(name, len)	\
-	((name) + round_down((len) - LL_CRYPTO_BLOCK_SIZE - 1, \
-			     LL_CRYPTO_BLOCK_SIZE))
-
 #define LLCRYPT_FNAME_DIGEST_SIZE	LL_CRYPTO_BLOCK_SIZE
 
 /**

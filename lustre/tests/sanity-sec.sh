@@ -6749,6 +6749,147 @@ test_72() {
 }
 run_test 72 "dynamic nodemap properties"
 
+test_73() {
+	local vaultdir1=$DIR/$tdir/vault1
+	local vaultdir2=$DIR/$tdir/vault2
+	local shortfname="short=a"
+	local longfname="longfilenamewitha=inthemiddletotestbehaviorregardingthedigestedform"
+	local fid
+	local digshort1
+	local digshort2
+	local diglong1
+	local diglong2
+
+	(( $MDS1_VERSION >= $(version_code 2.16.50) )) ||
+		skip "Need MDS version at least 2.16.50"
+
+	[[ $($LCTL get_param mdc.*.import) =~ client_encryption ]] ||
+		skip "need encryption support"
+	which fscrypt || skip_env "Need fscrypt"
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	yes | fscrypt setup --force --verbose ||
+		echo "fscrypt global setup already done"
+	sed -i 's/\(.*\)policy_version\(.*\):\(.*\)\"[0-9]*\"\(.*\)/\1policy_version\2:\3"2"\4/' \
+		/etc/fscrypt.conf
+	yes | fscrypt setup --verbose $MOUNT ||
+		echo "fscrypt setup $MOUNT already done"
+	stack_trap "rm -rf $MOUNT/.fscrypt"
+
+	# enable_filename_encryption tunable only available for client
+	# built against embedded llcrypt. If client is built against in-kernel
+	# fscrypt, file names are always encrypted.
+	$LCTL get_param mdc.*.connect_flags | grep -q name_encryption &&
+	  nameenc=$(lctl get_param -n llite.*.enable_filename_encryption |
+			head -n1)
+
+	# begin with non-encrypted names
+	if [ -n "$nameenc" ] && (( nameenc != 0 )); then
+	        $LCTL set_param llite.*.enable_filename_encryption=0
+		[ $? -eq 0 ] ||
+			error "set_param \
+			       llite.*.enable_filename_encryption=1 failed"
+	fi
+
+	mkdir -p $vaultdir1
+	stack_trap "rm -rf $vaultdir1"
+
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+	     --source=custom_passphrase --name=protector_73a $vaultdir1 ||
+		error "fscrypt encrypt $vaultdir1 failed"
+
+	# activate changelogs
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
+	changelog_chmask ALL
+
+	touch $vaultdir1/$shortfname ||
+		error "touch $vaultdir1/$shortfname failed"
+	fid=$($LFS path2fid $vaultdir1/$shortfname)
+	fid="${fid:1:-1}"
+	fscrypt lock $vaultdir1 || error "fscrypt lock $vaultdir1 failed"
+	digshort1=$($LFS fid2path $MOUNT $fid)
+	digshort1=$(basename $digshort1)
+	echo mypass | fscrypt unlock $vaultdir1 ||
+		error "fscrypt unlock $vaultdir1 failed"
+	mrename $vaultdir1/$shortfname $vaultdir1/$longfname ||
+		error "mrename $vaultdir1/$shortfname failed"
+	fscrypt lock $vaultdir1 || error "fscrypt lock $vaultdir1 failed"
+	diglong1=$($LFS fid2path $MOUNT $fid)
+	diglong1=$(basename $diglong1)
+
+	# access changelogs
+	echo "changelogs dump"
+	changelog_dump || error "failed to dump changelogs"
+	digshort2=$(changelog_find -type CREAT -target-fid $fid |
+			awk '{print $12}')
+	[[ $digshort1 == $digshort2 ]] ||
+		error "name $digshort2 in CREAT is not $digshort1"
+	digshort2=$(changelog_find -type RENME -source-fid $fid |
+			awk '{print $15}')
+	[[ $digshort1 == $digshort2 ]] ||
+		error "name $digshort2 in RENME is not $digshort1"
+	diglong2=$(changelog_find -type RENME -source-fid $fid |
+			awk '{print $12}')
+	[[ $diglong1 == $diglong2 ]] ||
+		error "name $diglong2 in RENME is not $diglong1"
+
+	echo "changelogs clear"
+	changelog_clear 0 || error "failed to clear changelogs"
+
+	# now switch to encrypted names
+	if [ -n "$nameenc" ] && (( nameenc != 1 )); then
+	        $LCTL set_param llite.*.enable_filename_encryption=1
+		[ $? -eq 0 ] ||
+			error "set_param \
+			       llite.*.enable_filename_encryption=1 failed"
+		stack_trap \
+			"$LCTL set_param llite.*.enable_filename_encryption=0"
+	fi
+
+	$LFS mkdir -c1 -i $((MDSCOUNT-1)) $vaultdir2
+	stack_trap "rm -rf $vaultdir2"
+
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+	     --source=custom_passphrase --name=protector_73b $vaultdir2 ||
+		error "fscrypt encrypt $vaultdir2 failed"
+
+	touch $vaultdir2/$shortfname ||
+		error "touch $vaultdir2/$shortfname failed"
+	fid=$($LFS path2fid $vaultdir2/$shortfname)
+	fid="${fid:1:-1}"
+	fscrypt lock $vaultdir2 || error "fscrypt lock $vaultdir2 failed"
+	digshort1=$($LFS fid2path $MOUNT $fid)
+	digshort1=$(basename $digshort1)
+	echo mypass | fscrypt unlock $vaultdir2 ||
+		error "fscrypt unlock $vaultdir2 failed"
+	mrename $vaultdir2/$shortfname $vaultdir2/$longfname ||
+		error "mrename $vaultdir2/$shortfname failed"
+	fscrypt lock $vaultdir2 || error "fscrypt lock $vaultdir2 failed"
+	diglong1=$($LFS fid2path $MOUNT $fid)
+	diglong1=$(basename $diglong1)
+
+	# access changelogs
+	echo "changelogs dump"
+	changelog_dump || error "failed to dump changelogs"
+	digshort2=$(changelog_find -type CREAT -target-fid $fid |
+			awk '{print $12}')
+	[[ $digshort1 == $digshort2 ]] ||
+		error "name $digshort2 in CREAT is not $digshort1"
+	digshort2=$(changelog_find -type RENME -source-fid $fid |
+			awk '{print $15}')
+	[[ $digshort1 == $digshort2 ]] ||
+		error "name $digshort2 in RENME is not $digshort1"
+	diglong2=$(changelog_find -type RENME -source-fid $fid |
+			awk '{print $12}')
+	[[ $diglong1 == $diglong2 ]] ||
+		error "name $diglong2 in RENME is not $diglong1"
+}
+run_test 73 "encrypted names in changelogs"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

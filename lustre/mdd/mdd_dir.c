@@ -23,6 +23,8 @@
 #include <lustre_fid.h>
 #include <lustre_lmv.h>
 #include <lustre_idmap.h>
+#include <lustre_crypto.h>
+#include <uapi/linux/lustre/lgss.h>
 
 #include "mdd_internal.h"
 
@@ -1140,6 +1142,120 @@ static int mdd_changelog_ns_pfid_set(const struct lu_env *env,
 	return rc;
 }
 
+/* The digested form is made of a FID (16 bytes) followed by the second-to-last
+ * ciphertext block (16 bytes), so a total length of 32 bytes.
+ */
+/* Must be identical to ll_digest_filename in llite_internal.h */
+struct changelog_digest_filename {
+	struct lu_fid	cdf_fid;
+	char		cdf_excerpt[LL_CRYPTO_BLOCK_SIZE];
+};
+
+/**
+ * Utility function to process filename in changelog
+ *
+ * \param[in] name     file name
+ * \param[in] namelen  file name len
+ * \param[in] fid      file FID
+ * \param[in] enc      is object encrypted?
+ * \param[out]ln       pointer to the struct lu_name to hold the real name
+ *
+ * If file is not encrypted, output name is just the file name.
+ * If file is encrypted, file name needs to be decoded then digested if the name
+ * is also encrypted. In this case a new buffer is allocated, and ln->ln_name
+ * needs to be freed by the caller.
+ *
+ * \retval   0, on success
+ * \retval -ve, on error
+ */
+static int changelog_name2digest(const char *name, int namelen,
+				 const struct lu_fid *fid,
+				 bool enc, struct lu_name *ln)
+{
+	struct changelog_digest_filename *digest = NULL;
+	char *buf = NULL, *bufout = NULL, *p, *q;
+	int len, bufoutlen;
+	int rc = 0;
+
+	ENTRY;
+
+	ln->ln_name = name;
+	ln->ln_namelen = namelen;
+
+	if (!enc)
+		GOTO(out, rc);
+
+	/* now we know file is encrypted */
+	if (strnchr(name, namelen, '=')) {
+		/* only proceed to critical decode if
+		 * encrypted name contains espace char '='
+		 */
+		buf = kmalloc(namelen, GFP_NOFS);
+		if (!buf)
+			GOTO(out, rc = -ENOMEM);
+
+		namelen = critical_decode(name, namelen, buf);
+		ln->ln_name = buf;
+		ln->ln_namelen = namelen;
+	}
+
+	p = (char *)ln->ln_name;
+	len = namelen;
+	while (len--) {
+		if (!isprint(*p++))
+			break;
+	}
+
+	/* len == -1 means we went through the whole decoded name without
+	 * finding any non-printable character, so consider it is not encrypted
+	 */
+	if (len == -1)
+		GOTO(out, rc);
+
+	/* now we know the name has some non-printable characters */
+	if (namelen > LL_CRYPTO_BLOCK_SIZE * 2) {
+		if (!fid)
+			GOTO(out, rc = -EPROTO);
+
+		OBD_ALLOC_PTR(digest);
+		if (!digest)
+			GOTO(out, rc = -ENOMEM);
+
+		digest->cdf_fid = *fid;
+		memcpy(digest->cdf_excerpt,
+		       LLCRYPT_FNAME_DIGEST(ln->ln_name, ln->ln_namelen),
+		       LL_CRYPTO_BLOCK_SIZE);
+		p = (char *)digest;
+		len = sizeof(*digest);
+	} else {
+		p = (char *)ln->ln_name;
+		len = ln->ln_namelen;
+	}
+
+	bufoutlen = BASE64URL_CHARS(len) + 2;
+	bufout = kmalloc(digest ? bufoutlen + 1 : bufoutlen, GFP_NOFS);
+	if (!bufout)
+		GOTO(free_digest, rc = -ENOMEM);
+
+	q = bufout;
+	if (digest)
+		*q++ = LLCRYPT_DIGESTED_CHAR;
+	/* beware that gss_base64url_encode adds a trailing space */
+	gss_base64url_encode(&q, &bufoutlen, (__u8 *)p, len);
+	if (bufoutlen == -1) {
+		kfree(bufout);
+	} else {
+		kfree(buf);
+		ln->ln_name = bufout;
+		ln->ln_namelen = q - bufout - 1;
+	}
+
+free_digest:
+	OBD_FREE_PTR(digest);
+out:
+	RETURN(rc);
+}
+
 /** Store a namespace change changelog record
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.
@@ -1167,12 +1283,16 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 			   const struct lu_name *sname,
 			   struct thandle *handle)
 {
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct lu_name *ltname = NULL, *lsname = NULL;
 	const struct lu_ucred *uc = lu_ucred(env);
 	struct llog_changelog_rec *rec;
+	__u64 xflags = CLFE_INVALID;
+	struct lu_fid *tfid = NULL;
 	struct lu_buf *buf;
 	int reclen;
-	__u64 xflags = CLFE_INVALID;
-	int rc;
+	bool enc;
+	int rc = 0;
 
 	ENTRY;
 
@@ -1183,10 +1303,42 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	LASSERT(tname != NULL);
 	LASSERT(handle != NULL);
 
-	reclen = mdd_llog_record_calc_size(env, tname, sname);
+	if (tname) {
+		OBD_ALLOC_PTR(ltname);
+		if (!ltname)
+			GOTO(out, rc = -ENOMEM);
+
+		if (sname) {
+			enc = info->mdi_tpattr.la_valid & LA_FLAGS &&
+				info->mdi_tpattr.la_flags & LUSTRE_ENCRYPT_FL;
+			tfid = (struct lu_fid *)sfid;
+		} else {
+			enc = info->mdi_pattr.la_valid & LA_FLAGS &&
+				info->mdi_pattr.la_flags & LUSTRE_ENCRYPT_FL;
+			tfid = (struct lu_fid *)mdd_object_fid(target);
+		}
+		rc = changelog_name2digest(tname->ln_name, tname->ln_namelen,
+					   tfid, enc, ltname);
+		if (rc)
+			GOTO(out_ltname, rc);
+	}
+	if (sname) {
+		OBD_ALLOC_PTR(lsname);
+		if (!lsname)
+			GOTO(out_ltname, rc = -ENOMEM);
+
+		enc = info->mdi_pattr.la_valid & LA_FLAGS &&
+			info->mdi_pattr.la_flags & LUSTRE_ENCRYPT_FL;
+		rc = changelog_name2digest(sname->ln_name, sname->ln_namelen,
+					   tfid, enc, lsname);
+		if (rc)
+			GOTO(out_lsname, rc);
+	}
+
+	reclen = mdd_llog_record_calc_size(env, ltname, lsname);
 	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mdi_chlg_buf, reclen);
 	if (buf->lb_buf == NULL)
-		RETURN(-ENOMEM);
+		GOTO(out_lsname, rc = -ENOMEM);
 	rec = buf->lb_buf;
 
 	clf_flags &= CLF_FLAGMASK;
@@ -1200,7 +1352,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		xflags |= CLFE_NID_BE;
 	}
 
-	if (sname != NULL)
+	if (lsname != NULL)
 		clf_flags |= CLF_RENAME;
 	else
 		clf_flags |= CLF_VERSION;
@@ -1221,10 +1373,11 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	rc = mdd_changelog_ns_pfid_set(env, mdd, parent, pattr,
 				       &rec->cr.cr_pfid);
 	if (rc < 0)
-		RETURN(rc);
+		GOTO(out_lsname, rc);
 
-	rec->cr.cr_namelen = tname->ln_namelen;
-	memcpy(changelog_rec_name(&rec->cr), tname->ln_name, tname->ln_namelen);
+	rec->cr.cr_namelen = ltname->ln_namelen;
+	memcpy(changelog_rec_name(&rec->cr), ltname->ln_name,
+	       ltname->ln_namelen);
 
 	if (clf_flags & CLF_RENAME) {
 		struct lu_fid spfid;
@@ -1232,9 +1385,9 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		rc = mdd_changelog_ns_pfid_set(env, mdd, sparent, spattr,
 					       &spfid);
 		if (rc < 0)
-			RETURN(rc);
+			GOTO(out_lsname, rc);
 
-		mdd_changelog_rec_ext_rename(&rec->cr, sfid, &spfid, sname);
+		mdd_changelog_rec_ext_rename(&rec->cr, sfid, &spfid, lsname);
 	}
 
 	if (clf_flags & CLF_JOBID)
@@ -1251,12 +1404,21 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	if (rc < 0) {
 		CERROR("%s: cannot store changelog record: type = %d, name = '%s', t = "
 		       DFID", p = "DFID": rc = %d\n",
-		       mdd2obd_dev(mdd)->obd_name, type, tname->ln_name,
+		       mdd2obd_dev(mdd)->obd_name, type, ltname->ln_name,
 		       PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid), rc);
-		return -EFAULT;
+		GOTO(out_lsname, rc = -EFAULT);
 	}
 
-	return 0;
+out_lsname:
+	if (lsname && lsname->ln_name != sname->ln_name)
+		kfree(lsname->ln_name);
+	OBD_FREE_PTR(lsname);
+out_ltname:
+	if (ltname && ltname->ln_name != tname->ln_name)
+		kfree(ltname->ln_name);
+	OBD_FREE_PTR(ltname);
+out:
+	RETURN(rc);
 }
 
 static int __mdd_links_add(const struct lu_env *env,
