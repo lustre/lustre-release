@@ -1,3 +1,9 @@
+/* SPDX-License-Identifier: LGPL-2.1 WITH Linux-syscall-note */
+
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ */
+
 #ifndef _LUSTRE_ACCESS_LOG_H
 # define _LUSTRE_ACCESS_LOG_H
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
@@ -10,10 +10,7 @@
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
- * lustre/include/obd_class.h
- *
  * Header defining common operations on OBD devices.
- *
  */
 
 #ifndef __CLASS_OBD_H
