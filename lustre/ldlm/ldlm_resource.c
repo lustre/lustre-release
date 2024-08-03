@@ -535,10 +535,7 @@ static ssize_t dump_stack_on_error_store(struct kobject *kobj,
 	if (err != 0)
 		return -EINVAL;
 
-	if (tmp != 0)
-		ns->ns_dump_stack_on_error = 1;
-	else
-		ns->ns_dump_stack_on_error = 0;
+	ns->ns_dump_stack_on_error = tmp;
 
 	return count;
 }

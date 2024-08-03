@@ -13689,8 +13689,7 @@ test_105f() {
 run_test 105f "Enqueue same range flocks"
 
 test_105g() {
-
-	(( $CLIENT_VERSION >= $(version_code 2.15.63.127) )) ||
+	(( $CLIENT_VERSION >= $(version_code 2.15.64.117) )) ||
 		skip "Need Client >= 2.15.63.127 for ldlm dump stack"
 
 	flock_is_enabled || skip_env "mount w/o flock enabled"
