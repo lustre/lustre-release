@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.0
+/* SPDX-License-Identifier: LGPL-2.1 WITH Linux-syscall-note */
 
 /* Copyright (c) 2021,  UT-Battelle, LLC
  *

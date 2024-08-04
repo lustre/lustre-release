@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.0
+// SPDX-License-Identifier: LGPL-2.1
 
 /*
  * Copyright (c) 2015, James Simmons

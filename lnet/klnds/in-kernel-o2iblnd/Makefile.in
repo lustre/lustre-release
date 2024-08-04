@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 MODULES := in-kernel-ko2iblnd
 in-kernel-ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
 
