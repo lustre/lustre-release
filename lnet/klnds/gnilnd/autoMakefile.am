@@ -1,7 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
 # Copyright (C) 2009  Cray, Inc.
 #
-# This code is issued under the GNU General Public License.
-# See the file COPYING in this distribution
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
 
 if MODULES
 if BUILD_GNILND
