@@ -77,7 +77,7 @@ struct changelog_private {
 	/* Current position in buffer */
 	char				*clp_buf_pos;
 	/* Read buffer with records read from system */
-	char				 clp_buf[0];
+	char				 clp_buf[];
 };
 
 /**

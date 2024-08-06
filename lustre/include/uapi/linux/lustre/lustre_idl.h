@@ -155,7 +155,7 @@ struct lu_seq_range {
 struct lu_seq_range_array {
 	__u32 lsra_count;
 	__u32 lsra_padding;
-	struct lu_seq_range lsra_lsr[0];
+	struct lu_seq_range lsra_lsr[];
 };
 
 #define LU_SEQ_RANGE_MDT	0x0
@@ -644,7 +644,7 @@ struct lustre_msg_v2 {
 	 * message buffers are packed after padded lm_buflens[] array,
 	 * padded to a multiple of 8 bytes each to align contents.
 	 */
-	__u32 lm_buflens[0];
+	__u32 lm_buflens[];
 };
 
 /* The returned result of the SUB request in a batch request */
@@ -2345,7 +2345,7 @@ struct lmv_mds_md_v1 {
 	__u32 lmv_padding2;
 	__u64 lmv_padding3;
 	char lmv_pool_name[LOV_MAXPOOLNAME + 1];	/* pool name */
-	struct lu_fid lmv_stripe_fids[0];	/* FIDs for each stripe */
+	struct lu_fid lmv_stripe_fids[];	/* FIDs for each stripe */
 };
 
 /* stripe count before directory split */
@@ -2742,8 +2742,8 @@ struct mgs_nidtbl_entry {
 	__u8		mne_nid_size;	/* size of each NID, by bytes */
 	__u8		mne_nid_count;	/* # of NIDs in buffer */
 	union {
-		lnet_nid_t nids[0];	/* variable size buffer for NIDs. */
-		struct lnet_nid nidlist[0];
+		DECLARE_FLEX_ARRAY(lnet_nid_t, nids); /* variable size buffer for NIDs. */
+		DECLARE_FLEX_ARRAY(struct lnet_nid, nidlist);
 	} u;
 };
 
@@ -3456,7 +3456,7 @@ struct getparent {
 	struct lu_fid	gp_fid;         /**< parent FID */
 	__u32		gp_linkno;	/**< hardlink number */
 	__u32		gp_name_size;   /**< size of the name field */
-	char		gp_name[0];     /**< zero-terminated link name */
+	char		gp_name[];      /**< zero-terminated link name */
 } __attribute__((packed));
 
 enum layout_intent_opc {
@@ -3649,7 +3649,7 @@ struct batch_update_request {
 	 * it can locate the next request message via the function
 	 * @batch_update_reqmsg_next() in lustre/include/obj_update.h
 	 */
-	struct lustre_msg	burq_reqmsg[0];
+	struct lustre_msg	burq_reqmsg[];
 };
 
 #define BUT_HEADER_MAGIC	0xBADF0001
@@ -3674,7 +3674,7 @@ struct but_update_header {
 	/* Unused padding field. */
 	__u32	buh_padding;
 	/* Inline buffer used when the RPC request can be packed inline. */
-	__u32	buh_inline_data[0];
+	__u32	buh_inline_data[];
 };
 
 struct but_update_buffer {
@@ -3696,7 +3696,7 @@ struct batch_update_reply {
 	 * It can locate the next reply message buffer via the function
 	 * @batch_update_repmsg_next() in lustre/include/obj_update.h
 	 */
-	struct lustre_msg	burp_repmsg[0];
+	struct lustre_msg	burp_repmsg[];
 };
 
 /**

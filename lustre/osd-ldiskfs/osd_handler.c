@@ -1545,7 +1545,7 @@ struct osd_xattr_entry {
 	size_t			oxe_namelen;
 	bool			oxe_exist;
 	struct rcu_head		oxe_rcu;
-	char			oxe_buf[0];
+	char			oxe_buf[];
 };
 
 static int osd_oxc_get(struct osd_object *obj, const char *name,

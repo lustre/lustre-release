@@ -2169,7 +2169,7 @@ static int snapshot_list_all(struct snapshot_instance *si)
 	struct snapshot_target *st = si->si_mdt0;
 	struct list_sub_item {
 		struct list_head lsi_list;
-		char lsi_ssname[0];
+		char lsi_ssname[];
 	};
 
 	struct list_head list_sub_items;

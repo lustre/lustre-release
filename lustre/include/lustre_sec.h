@@ -916,7 +916,7 @@ struct ptlrpc_user_desc {
 	__u32           pud_fsgid;
 	__u32           pud_cap;
 	__u32           pud_ngroups;
-	__u32           pud_groups[0];
+	__u32           pud_groups[];
 };
 
 /*
@@ -947,7 +947,7 @@ struct ptlrpc_bulk_sec_desc {
 	__u8            bsd_svc;        /* SPTLRPC_BULK_SVC_XXXX */
 	__u8            bsd_flags;      /* flags */
 	__u32           bsd_nob;        /* nob of bulk data */
-	__u8            bsd_data[0];    /* policy-specific token */
+	__u8            bsd_data[];     /* policy-specific token */
 };
 
 extern struct dentry *sptlrpc_debugfs_dir;

@@ -52,7 +52,7 @@ struct lstcon_group {
 
 	struct list_head	grp_trans_list;	/* transaction list */
 	struct list_head	grp_ndl_list;	/* nodes list */
-	struct list_head	grp_ndl_hash[0];/* hash table for nodes */
+	struct list_head	grp_ndl_hash[]; /* hash table for nodes */
 };
 
 #define LST_BATCH_IDLE          0xB0            /* idle batch */
@@ -112,7 +112,7 @@ struct lstcon_test {
 	struct lstcon_group	*tes_src_grp;   /* group run the test */
 	struct lstcon_group	*tes_dst_grp;   /* target group */
 	int			tes_paramlen;   /* test parameter length */
-	char			tes_param[0];   /* test parameter */
+	char			tes_param[];    /* test parameter */
 };
 
 #define LST_GLOBAL_HASHSIZE     503   /* global nodes hash table size */

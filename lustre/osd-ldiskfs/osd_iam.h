@@ -430,7 +430,7 @@ struct iam_idle_head {
 	__le16 iih_magic;
 	__le16 iih_count; /* how many idle blocks in this head */
 	__le32 iih_next; /* next head for idle blocks */
-	__le32 iih_blks[0];
+	__le32 iih_blks[];
 };
 
 /*

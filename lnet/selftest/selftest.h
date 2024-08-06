@@ -217,7 +217,7 @@ struct srpc_bulk {
 	int			bk_sink; /* sink/source */
 	int			bk_alloc; /* # allocated iov */
 	int			bk_niov; /* # iov in bk_iovs */
-	struct bio_vec		bk_iovs[0];
+	struct bio_vec		bk_iovs[];
 };
 
 /* message buffer descriptor */

@@ -240,8 +240,8 @@ struct kib_hca_dev {
 #define IBLND_POOL_RETRY        1
 
 struct kib_pages {
-        int                     ibp_npages;             /* # pages */
-        struct page            *ibp_pages[0];           /* page array */
+	int                     ibp_npages;             /* # pages */
+	struct page            *ibp_pages[];            /* page array */
 };
 
 struct kib_pool;

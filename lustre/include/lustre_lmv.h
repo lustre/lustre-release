@@ -51,7 +51,7 @@ struct lmv_stripe_md {
 	__u32	lsm_md_migrate_offset;
 	__u32	lsm_md_migrate_hash;
 	char	lsm_md_pool_name[LOV_MAXPOOLNAME + 1];
-	struct lmv_oinfo lsm_md_oinfo[0];
+	struct lmv_oinfo lsm_md_oinfo[];
 };
 
 struct lmv_stripe_object {

@@ -153,7 +153,7 @@ struct llapi_stripe_param {
 	bool			lsp_is_create;
 	__u8			lsp_max_inherit;
 	__u8			lsp_max_inherit_rr;
-	__u32			lsp_osts[0];
+	__u32			lsp_osts[];
 };
 
 #define lsp_tgts	lsp_osts

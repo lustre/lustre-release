@@ -52,7 +52,7 @@ static struct lstcon_trans_stat	trans_stat;
 typedef struct list_string {
 	struct list_string *lstr_next;
 	int                 lstr_sz;
-	char                lstr_str[0];
+	char                lstr_str[];
 } lstr_t;
 
 #ifndef offsetof

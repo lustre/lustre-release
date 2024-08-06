@@ -57,7 +57,7 @@ struct libcfs_ioctl_data {
 	__u32 ioc_plen2; /* buffers in userspace */
 	void __user *ioc_pbuf2;
 
-	char ioc_bulk[0];
+	char ioc_bulk[];
 };
 
 #define IOCTL_LIBCFS_TYPE		  long

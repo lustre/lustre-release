@@ -1089,7 +1089,7 @@ struct lustre_handle_array {
 	unsigned int		ha_count;
 	/* ha_map is used as bit flag to indicate handle is remote or local */
 	DECLARE_BITMAP(ha_map, LMV_MAX_STRIPE_COUNT);
-	struct lustre_handle	ha_handles[0];
+	struct lustre_handle	ha_handles[];
 };
 
 /**

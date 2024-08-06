@@ -1063,7 +1063,7 @@ out_bad_mnt_str:
 #ifdef HAVE_SERVER_SUPPORT
 struct lustre_cfg_entry {
 	struct list_head lce_list;
-	char		 lce_name[0];
+	char		 lce_name[];
 };
 
 static struct lustre_cfg_entry *lustre_cfg_entry_init(const char *name)

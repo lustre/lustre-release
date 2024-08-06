@@ -66,13 +66,13 @@
 #define FLAG_ACCEPTOR_SUBKEY            0x04
 
 struct krb5_header {
-        __u16           kh_tok_id;      /* token id */
-        __u8            kh_flags;       /* acceptor flags */
-        __u8            kh_filler;      /* 0xff */
-        __u16           kh_ec;          /* extra count */
-        __u16           kh_rrc;         /* right rotation count */
-        __u64           kh_seq;         /* sequence number */
-        __u8            kh_cksum[0];    /* checksum */
+	__u16           kh_tok_id;      /* token id */
+	__u8            kh_flags;       /* acceptor flags */
+	__u8            kh_filler;      /* 0xff */
+	__u16           kh_ec;          /* extra count */
+	__u16           kh_rrc;         /* right rotation count */
+	__u64           kh_seq;         /* sequence number */
+	__u8            kh_cksum[];     /* checksum */
 };
 
 struct krb5_ctx {

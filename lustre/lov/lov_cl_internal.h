@@ -423,7 +423,7 @@ struct lov_lock {
 	/* Number of sub-locks in this lock */
 	int			lls_nr;
 	/* sublock array */
-	struct lov_lock_sub	lls_sub[0];
+	struct lov_lock_sub	lls_sub[];
 };
 
 /* Bottom half. */

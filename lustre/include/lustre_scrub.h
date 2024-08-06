@@ -227,7 +227,7 @@ struct lustre_index_restore_unit {
 	struct lu_fid		liru_cfid;
 	__u64			liru_clid;
 	int			liru_len;
-	char			liru_name[0];
+	char			liru_name[];
 };
 
 void scrub_file_init(struct lustre_scrub *scrub, guid_t uuid);

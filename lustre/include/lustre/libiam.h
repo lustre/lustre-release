@@ -70,7 +70,7 @@ struct iam_lfix_root {
 	struct dx_countlimit limit;
 	u_int32_t idle_blocks;
 	u_int8_t  ilr_paddingdd2[12];
-	unsigned char entries[0];
+	unsigned char entries[];
 } __attribute__((packed));
 
 struct iam_leaf_head {
@@ -90,13 +90,13 @@ struct iam_idle_head {
 	__le16 iih_magic;
 	__le16 iih_count; /* how many idle blocks in this head */
 	__le32 iih_next; /* next head for idle blocks */
-	__le32 iih_blks[0];
+	__le32 iih_blks[];
 } __attribute__((packed));
 
 struct iam_index_head {
 	struct dx_countlimit limit;
 	u_int8_t  paddingdd[16];
-	unsigned char entries[0];
+	unsigned char entries[];
 } __attribute__((packed));
 
 struct lvar_root {
@@ -112,7 +112,7 @@ struct lvar_root {
 struct lvar_leaf_entry {
 	u_int32_t vle_hash;
 	u_int16_t vle_keysize;
-	u_int8_t  vle_key[0];
+	u_int8_t  vle_key[];
 } __attribute__((packed));
 
 struct osd_inode_id {

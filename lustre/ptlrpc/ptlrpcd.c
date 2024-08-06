@@ -71,7 +71,7 @@ struct ptlrpcd {
 	int			pd_cursor;
 	int			pd_nthreads;
 	int			pd_groupsize;
-	struct ptlrpcd_ctl	pd_threads[0];
+	struct ptlrpcd_ctl	pd_threads[];
 };
 
 /*

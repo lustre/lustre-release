@@ -2921,7 +2921,7 @@ struct lmv_dir_ctxt {
 	struct md_readdir_info  *ldc_mrinfo;
 	__u64			 ldc_hash;
 	int			 ldc_count;
-	struct stripe_dirent	 ldc_stripes[0];
+	struct stripe_dirent	 ldc_stripes[];
 };
 
 static inline void stripe_dirent_unload(struct stripe_dirent *stripe)

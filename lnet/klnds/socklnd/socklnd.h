@@ -273,7 +273,7 @@ struct ksock_tx {			/* transmit packet */
 	int		tx_desc_size;	/* size of this descriptor */
 	enum lnet_msg_hstatus tx_hstatus; /* health status of tx */
 	struct kvec	tx_hdr;		/* virt hdr */
-	struct bio_vec	tx_payload[0];	/* paged payload */
+	struct bio_vec	tx_payload[];	/* paged payload */
 };
 
 #define KSOCK_NOOP_TX_SIZE  ((int)offsetof(struct ksock_tx, tx_payload[0]))

@@ -1114,7 +1114,7 @@ struct cfs_var_array {
 	unsigned int		va_count;	/* # of buffers */
 	unsigned int		va_size;	/* size of each var */
 	struct cfs_cpt_table	*va_cptab;	/* cpu partition table */
-	void			*va_ptrs[0];	/* buffer addresses */
+	void			*va_ptrs[];	/* buffer addresses */
 };
 
 /* free per-cpu data, see more detail in cfs_percpt_free */

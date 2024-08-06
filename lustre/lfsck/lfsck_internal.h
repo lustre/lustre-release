@@ -352,7 +352,7 @@ struct lfsck_layout {
 	u64	ll_reserved_2[7];
 
 	/* OST target bitmap to record OSTs that contain non-verified OST-obj */
-	__u8	ll_ost_bitmap[0];
+	__u8	ll_ost_bitmap[];
 };
 
 struct lfsck_assistant_object {

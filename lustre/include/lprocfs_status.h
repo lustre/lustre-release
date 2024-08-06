@@ -174,7 +174,7 @@ struct lprocfs_counter {
 };
 
 struct lprocfs_percpu {
-	struct lprocfs_counter lp_cntr[0];
+	DECLARE_FLEX_ARRAY(struct lprocfs_counter, lp_cntr);
 };
 
 enum lprocfs_stats_lock_ops {
@@ -211,7 +211,7 @@ struct lprocfs_stats {
 
 	/* has ls_num of counter headers */
 	struct lprocfs_counter_header	*ls_cnt_header;
-	struct lprocfs_percpu		*ls_percpu[0];
+	struct lprocfs_percpu		*ls_percpu[];
 };
 
 #define OPC_RANGE(seg) (seg ## _LAST_OPC - seg ## _FIRST_OPC)

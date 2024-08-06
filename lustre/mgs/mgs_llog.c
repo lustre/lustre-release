@@ -4986,7 +4986,7 @@ struct mgs_lcfg_fork_data {
 	struct llog_handle	*mlfd_llh;
 	const char		*mlfd_oldname;
 	const char		*mlfd_newname;
-	char			 mlfd_data[0];
+	char			 mlfd_data[];
 };
 
 static bool contain_valid_fsname(char *buf, const char *fsname,

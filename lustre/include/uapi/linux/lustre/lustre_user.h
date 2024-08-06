@@ -1507,7 +1507,7 @@ struct identity_downcall_data {
 	__u32                            idd_nperms;
 	__u32                            idd_ngroups;
 	struct perm_downcall_data idd_perms[N_PERMS_MAX];
-	__u32                            idd_groups[0];
+	__u32                            idd_groups[];
 };
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
@@ -1517,7 +1517,7 @@ struct sepol_downcall_data_old {
 	__u32		sdd_magic;
 	__s64		sdd_sepol_mtime;
 	__u16		sdd_sepol_len;
-	char		sdd_sepol[0];
+	char		sdd_sepol[];
 };
 #endif
 
@@ -1527,7 +1527,7 @@ struct sepol_downcall_data {
 	__u16		sdd_sepol_len;
 	__u16		sdd_padding1;
 	__s64		sdd_sepol_mtime;
-	char		sdd_sepol[0];
+	char		sdd_sepol[];
 };
 
 #ifdef NEED_QUOTA_DEFS
@@ -2918,7 +2918,7 @@ enum obd_heat_type {
 struct lu_heat {
 	__u32 lh_count;
 	__u32 lh_flags;
-	__u64 lh_heat[0];
+	__u64 lh_heat[];
 };
 
 enum lu_pcc_type {
@@ -3061,7 +3061,7 @@ struct fid_array {
 	/* make header's size equal lu_fid */
 	__u32 fa_padding0;
 	__u64 fa_padding1;
-	struct lu_fid fa_fids[0];
+	struct lu_fid fa_fids[];
 };
 #define OBD_MAX_FIDS_IN_ARRAY	4096
 

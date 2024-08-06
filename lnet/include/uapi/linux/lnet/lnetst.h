@@ -126,7 +126,7 @@ struct lstcon_rpc_ent {
 	struct lst_sid		rpe_sid;		/* peer's session id */
 	int			rpe_fwk_errno;		/* framework errno */
 	int			rpe_priv[4];		/* private data */
-	char			rpe_payload[0];		/* private reply payload */
+	char			rpe_payload[];		/* private reply payload */
 };
 
 struct lstcon_trans_stat {

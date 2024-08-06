@@ -367,7 +367,7 @@ struct kkuc_reg {
 	struct obd_uuid	 kr_uuid;
 	int		 kr_uid;
 	struct file	*kr_fp;
-	char		 kr_data[0];
+	char		 kr_data[];
 };
 
 static struct list_head kkuc_groups[KUC_GRP_MAX + 1];

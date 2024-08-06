@@ -46,7 +46,7 @@ typedef u32 lvar_hash_t;
 struct lvar_leaf_entry {
 	__le32 vle_hash;
 	__le16 vle_keysize;
-	u8 vle_key[0];
+	u8 vle_key[];
 };
 
 #define PDIFF(ptr0, ptr1) (((char *)(ptr0)) - ((char *)(ptr1)))

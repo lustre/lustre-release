@@ -160,7 +160,7 @@ struct lustre_cfg {
 	__u32 lcfg_nal;		/* not used any more */
 
 	__u32 lcfg_bufcount;
-	__u32 lcfg_buflens[0];
+	__u32 lcfg_buflens[];
 };
 
 struct lcfg_type_data {
