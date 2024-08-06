@@ -3796,14 +3796,14 @@ struct llog_update_record {
  * of search easily
  */
 enum nodemap_id_type {
-	NODEMAP_UID,
-	NODEMAP_GID,
-	NODEMAP_PROJID,
+	NODEMAP_UID		= 0,
+	NODEMAP_GID		= 1,
+	NODEMAP_PROJID		= 2,
 };
 
 enum nodemap_tree_type {
-	NODEMAP_FS_TO_CLIENT,
-	NODEMAP_CLIENT_TO_FS,
+	NODEMAP_FS_TO_CLIENT	= 0,
+	NODEMAP_CLIENT_TO_FS	= 1,
 };
 
 enum nodemap_mapping_modes {

@@ -319,6 +319,17 @@ struct nodemap_cluster_roles_rec {
 	__u64 ncrr_padding3;		/* zeroed since 2.16 (always) */
 };
 
+struct nodemap_offset_rec {
+	__u32 nor_start_uid;
+	__u32 nor_limit_uid;
+	__u32 nor_start_gid;
+	__u32 nor_limit_gid;
+	__u32 nor_start_projid;
+	__u32 nor_limit_projid;
+	__u32 nor_padding1;
+	__u32 nor_padding2;
+};
+
 union nodemap_rec {
 	struct nodemap_cluster_rec ncr;
 	struct nodemap_range_rec nrr;
@@ -326,12 +337,14 @@ union nodemap_rec {
 	struct nodemap_id_rec nir;
 	struct nodemap_global_rec ngr;
 	struct nodemap_cluster_roles_rec ncrr;
+	struct nodemap_offset_rec nor;
 };
 
 /* sub-keys for records of type NODEMAP_CLUSTER_IDX */
 enum nodemap_cluster_rec_subid {
 	NODEMAP_CLUSTER_REC = 0,   /* nodemap_cluster_rec */
 	NODEMAP_CLUSTER_ROLES = 1, /* nodemap_cluster_roles_rec */
+	NODEMAP_CLUSTER_OFFSET = 2, /* UID/GID/PROJID offset for a nm cluster */
 };
 
 /* first 4 bits of the nodemap_id is the index type */

@@ -1,0 +1,51 @@
+.TH LCTL-NODEMAP_DEL_OFFSET 8 2024-08-21 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_del_offset \- remove ID mapping offset from a nodemap
+.SH SYNOPSIS
+.SY "lctl nodemap_del_offset"
+.BI --name " NAME"
+.YS
+.SH DESCRIPTION
+.B nodemap_del_offset
+removes an identity mapping offset from a nodemap for the UID, GID and PROJID types.
+.SH OPTIONS
+.TP
+.BI --name " NAME"
+The name of the nodemap to remove the offset from.
+.SH NOTES
+Removing an offset from a nodemap does
+.B not
+affect the UID, GID, or PROJID of any files that were previously created under
+this nodemap. If these files are mapped into a different nodemap, then their
+UID, GID, and PROJID must be changed on a trusted client with access to the
+unmapped, canonical file system IDs using
+.BR chown (1),
+.BR chgrp (1),
+and
+.BR "lfs project" (1)
+from the old offset range to the new offset. As such, removing an offset from a
+nodemap should be avoided whenever possible.
+.SH EXAMPLES
+Remove the already existing offset from nodemap remotesite:
+.RS
+.EX
+.B # lctl nodemap_del_offset --name remotesite
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl nodemap_del_offset
+is part of the
+.BR lustre (7)
+filesystem package since release 2.16.0
+.\" Added in commit v2.15.99~
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-add-offset (8),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-modify (8)

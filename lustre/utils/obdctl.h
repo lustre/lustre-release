@@ -180,6 +180,8 @@ int jt_nodemap_activate(int argc, char **argv);
 int jt_nodemap_add(int argc, char **argv);
 int jt_nodemap_del(int argc, char **argv);
 int jt_nodemap_modify(int argc, char **argv);
+int jt_nodemap_add_offset(int argc, char **argv);
+int jt_nodemap_del_offset(int argc, char **argv);
 int jt_nodemap_add_range(int argc, char **argv);
 int jt_nodemap_test_nid(int argc, char **argv);
 int jt_nodemap_del_range(int argc, char **argv);

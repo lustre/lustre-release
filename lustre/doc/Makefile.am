@@ -242,6 +242,8 @@ SERVER_MANFILES =				\
 	lctl-nodemap-modify.8			\
 	lctl-nodemap-set-fileset.8		\
 	lctl-nodemap-set-sepol.8		\
+	lctl-nodemap-add-offset.8		\
+	lctl-nodemap-del-offset.8		\
 	lctl-snapshot-create.8			\
 	lctl-snapshot-destroy.8			\
 	lctl-snapshot-list.8			\

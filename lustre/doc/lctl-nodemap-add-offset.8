@@ -1,0 +1,79 @@
+.TH LCTL-NODEMAP_ADD_OFFSET 8 2024-08-21 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_add_offset \- define ID mapping offset for a nodemap
+.SH SYNOPSIS
+.SY "lctl nodemap_add_offset"
+.BI --name " NAME"
+.BI --offset " OFFSET"
+.BI --limit  " FSID_COUNT"
+.YS
+.SH DESCRIPTION
+.B nodemap_add_offset
+adds an identity mapping offset to a nodemap for the UID, GID and PROJID types.
+This command allows admins to create offset ranges for client systems to avoid
+overlapping assignments in multi-tenant systems. The
+.I FSID_COUNT
+is used to specify the number of IDs mapped by the range, starting with the
+.BR root (0)
+user/group/project ID and extending through
+.BR FSID_COUNT-1 .
+.PP
+An offset range cannot overlap into another's offset range.
+.PP
+A nodemap can only have one offset defined. To modify the offset already
+defined, remove it first and recreate it with new values.
+Any existing files will
+.B not
+automatically be remapped to the new
+.I OFFSET
+range. IDs must be manually changed on all files for that nodemap with
+.BR chown (1)
+and
+.BR lfs-project (1)
+on a trusted client that has access to the unmapped, canonical file system IDs.
+So modifying a nodemap offset should be avoided if possible.
+.SH OPTIONS
+.TP
+.BI --name " NAME"
+The name of the nodemap that the offset will be applied to.
+.TP
+.BI --offset " OFFSET"
+The given start value for the offset.
+.TP
+.BI --limit " FSID_COUNT"
+The number of IDs in the offset range.
+.SH EXAMPLES
+Map the client UID, GID, and PROJID values from the range 0-99999 to the
+filesystem UID, GID, and PROJID values to the range 100000-199999:
+.RS
+.EX
+.B # lctl nodemap_add_offset --name remotesite --offset 100000 --limit 100000
+.EE
+.RE
+.PP
+This map the "-2" user ID used by some systems for the
+.B nobody
+user to the user ID 65534, which will then be offset by OFFSET to a final UID of
+165534 in this example:
+.RS
+.EX
+.B # lctl nodemap_add_idmap --name remotesite --idtype uid --idmap 4294967294:65534
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl nodemap_add_offset
+is part of the
+.BR lustre (7)
+filesystem package since release 2.16.0
+.\" Added in commit v2.15.99~
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-del-offset (8),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-modify (8)

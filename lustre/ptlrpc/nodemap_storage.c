@@ -125,6 +125,20 @@ static void nodemap_cluster_roles_rec_init(union nodemap_rec *nr,
 	ncrr->ncrr_padding3 = 0;
 }
 
+static void nodemap_offset_rec_init(union nodemap_rec *nr,
+				    const struct lu_nodemap *nodemap)
+{
+	struct nodemap_offset_rec *nor = &nr->nor;
+
+	memset(nor, 0, sizeof(struct nodemap_offset_rec));
+	nor->nor_start_uid = cpu_to_le32(nodemap->nm_offset_start_uid);
+	nor->nor_limit_uid = cpu_to_le32(nodemap->nm_offset_limit_uid);
+	nor->nor_start_gid = cpu_to_le32(nodemap->nm_offset_start_gid);
+	nor->nor_limit_gid = cpu_to_le32(nodemap->nm_offset_limit_gid);
+	nor->nor_start_projid = cpu_to_le32(nodemap->nm_offset_start_projid);
+	nor->nor_limit_projid = cpu_to_le32(nodemap->nm_offset_limit_projid);
+}
+
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
 				   enum nodemap_id_type id_type,
 				   u32 id_client)
@@ -479,6 +493,9 @@ static int nodemap_idx_cluster_add_update(const struct lu_nodemap *nodemap,
 	case NODEMAP_CLUSTER_ROLES:
 		nodemap_cluster_roles_rec_init(&nr, nodemap);
 		break;
+	case NODEMAP_CLUSTER_OFFSET:
+		nodemap_offset_rec_init(&nr, nodemap);
+		break;
 	default:
 		CWARN("%s: unknown subtype %u\n", nodemap->nm_name, subid);
 		GOTO(fini, rc = -EINVAL);
@@ -530,6 +547,11 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 		RETURN(rc);
 
 	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_ROLES);
+	rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
+	if (rc2 < 0 && rc2 != -ENOENT)
+		rc = rc2;
+
+	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_OFFSET);
 	rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
 	if (rc2 < 0 && rc2 != -ENOENT)
 		rc = rc2;
@@ -620,6 +642,36 @@ int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap)
 		RETURN(rc);
 
 	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_ROLES);
+	rc = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
+
+	lu_env_fini(&env);
+	RETURN(rc);
+}
+
+int nodemap_idx_offset_add(const struct lu_nodemap *nodemap)
+{
+	return nodemap_idx_cluster_add_update(nodemap, NULL, NM_ADD,
+					      NODEMAP_CLUSTER_OFFSET);
+}
+
+int nodemap_idx_offset_del(const struct lu_nodemap *nodemap)
+{
+	struct nodemap_key nk;
+	struct lu_env env;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!nodemap_mgs()) {
+		CERROR("cannot add nodemap config to non-existing MGS.\n");
+		return -EINVAL;
+	}
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc != 0)
+		RETURN(rc);
+
+	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_OFFSET);
 	rc = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
 
 	lu_env_fini(&env);
@@ -938,9 +990,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	switch (type) {
 	case NODEMAP_EMPTY_IDX:
 		if (nodemap_id != 0)
-			CWARN("Found nodemap config record without type field, "
-			      " nodemap_id=%d. nodemap config file corrupt?\n",
-			      nodemap_id);
+			CWARN("%s: Found nodemap config record without type field, nodemap_id=%d. nodemap config file corrupt?\n",
+			      nodemap->nm_name, nodemap_id);
 		break;
 	case NODEMAP_CLUSTER_IDX:
 		switch (nodemap_get_key_subtype(key)) {
@@ -952,6 +1003,14 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			break;
 		case NODEMAP_CLUSTER_ROLES:
 			rc = nodemap_cluster_roles_helper(nodemap, rec);
+			if (rc != 0)
+				GOTO(out, rc);
+			break;
+		case NODEMAP_CLUSTER_OFFSET:
+			/* only works for offset UID = GID = PROJID */
+			rc = nodemap_add_offset_helper(nodemap,
+					   le32_to_cpu(rec->nor.nor_start_uid),
+					   le32_to_cpu(rec->nor.nor_limit_uid));
 			if (rc != 0)
 				GOTO(out, rc);
 			break;
@@ -1235,6 +1294,13 @@ nodemap_save_config_cache(const struct lu_env *env,
 			if (rc2 < 0)
 				rc = rc2;
 		}
+
+		nodemap_cluster_key_init(&nk, nodemap->nm_id,
+					 NODEMAP_CLUSTER_OFFSET);
+		nodemap_offset_rec_init(&nr, nodemap);
+		rc2 = nodemap_idx_insert(env, o, &nk, &nr);
+		if (rc2 < 0)
+			rc = rc2;
 
 		down_read(&active_config->nmc_range_tree_lock);
 		list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,

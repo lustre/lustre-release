@@ -26,6 +26,7 @@
  *
  * Author: Joshua Walgenbach <jjw@iu.edu>
  */
+
 #include <linux/module.h>
 #include <linux/sort.h>
 #include <uapi/linux/lnet/nidstr.h>
@@ -782,8 +783,11 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_id_type id_type,
 		     enum nodemap_tree_type tree_type, __u32 id)
 {
-	struct lu_idmap		*idmap = NULL;
-	__u32			 found_id;
+	struct lu_idmap *idmap = NULL;
+	__u32 offset_start;
+	__u32 offset_limit;
+	__u32 found_id = id;
+	bool attempted_squash = false;
 
 	ENTRY;
 
@@ -801,18 +805,18 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 
 	if (id_type == NODEMAP_UID &&
 	    !(nodemap->nmf_map_mode & NODEMAP_MAP_UID))
-		goto out;
+		goto offset;
 
 	if (id_type == NODEMAP_GID &&
 	    !(nodemap->nmf_map_mode & NODEMAP_MAP_GID))
-		goto out;
+		goto offset;
 
 	if (id_type == NODEMAP_PROJID &&
 	    !(nodemap->nmf_map_mode & NODEMAP_MAP_PROJID))
-		goto out;
+		goto offset;
 
 	if (nodemap->nmf_trust_client_ids)
-		goto out;
+		goto offset;
 
 map:
 	if (is_default_nodemap(nodemap))
@@ -830,17 +834,51 @@ map:
 	else
 		found_id = idmap->id_fs;
 	up_read(&nodemap->nm_idmap_lock);
-	RETURN(found_id);
+	GOTO(offset, found_id);
 
 squash:
 	if (id_type == NODEMAP_UID)
-		RETURN(nodemap->nm_squash_uid);
-	if (id_type == NODEMAP_GID)
-		RETURN(nodemap->nm_squash_gid);
-	if (id_type == NODEMAP_PROJID)
-		RETURN(nodemap->nm_squash_projid);
+		found_id = nodemap->nm_squash_uid;
+	else if (id_type == NODEMAP_GID)
+		found_id = nodemap->nm_squash_gid;
+	else if (id_type == NODEMAP_PROJID)
+		found_id = nodemap->nm_squash_projid;
+	attempted_squash = true;
+offset:
+	if (id_type == NODEMAP_UID) {
+		offset_start = nodemap->nm_offset_start_uid;
+		offset_limit = nodemap->nm_offset_limit_uid;
+	} else if (id_type == NODEMAP_GID) {
+		offset_start = nodemap->nm_offset_start_uid;
+		offset_limit = nodemap->nm_offset_limit_gid;
+	} else if (id_type == NODEMAP_PROJID) {
+		offset_start = nodemap->nm_offset_start_projid;
+		offset_limit = nodemap->nm_offset_limit_projid;
+	} else {
+		CERROR("%s: nodemap invalid id_type provided\n",
+		       nodemap->nm_name);
+		GOTO(out, id);
+	}
+
+	if (offset_start == 0 && offset_limit == 0)
+		GOTO(out, found_id);
+
+	if (tree_type == NODEMAP_FS_TO_CLIENT) {
+		found_id -= offset_start;
+	} else {
+		if (found_id >= offset_limit && !attempted_squash)
+			GOTO(squash, found_id);
+
+		if (attempted_squash) {
+			CERROR("%s: squash_id for type %u is outside nodemap limit %u, use unmapped value %u\n",
+			       nodemap->nm_name, id_type, offset_limit,
+			       found_id);
+			GOTO(out, found_id);
+		}
+		found_id += offset_start;
+	}
 out:
-	RETURN(id);
+	RETURN(found_id);
 }
 EXPORT_SYMBOL(nodemap_map_id);
 
@@ -1333,6 +1371,12 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nm_squash_projid = NODEMAP_NOBODY_PROJID;
 		nodemap->nm_fileset[0] = '\0';
 		nodemap->nm_sepol[0] = '\0';
+		nodemap->nm_offset_start_uid = 0;
+		nodemap->nm_offset_limit_uid = 0;
+		nodemap->nm_offset_start_gid = 0;
+		nodemap->nm_offset_limit_gid = 0;
+		nodemap->nm_offset_start_projid = 0;
+		nodemap->nm_offset_limit_projid = 0;
 		if (!is_default)
 			CWARN("adding nodemap '%s' to config without"
 			      " default nodemap\n", nodemap->nm_name);
@@ -1355,6 +1399,12 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nm_squash_projid = default_nodemap->nm_squash_projid;
 		nodemap->nm_fileset[0] = '\0';
 		nodemap->nm_sepol[0] = '\0';
+		nodemap->nm_offset_start_uid = 0;
+		nodemap->nm_offset_limit_uid = 0;
+		nodemap->nm_offset_start_gid = 0;
+		nodemap->nm_offset_limit_gid = 0;
+		nodemap->nm_offset_start_projid = 0;
+		nodemap->nm_offset_limit_projid = 0;
 	}
 
 	RETURN(nodemap);
@@ -1877,6 +1927,201 @@ out:
 }
 EXPORT_SYMBOL(nodemap_del);
 
+/* Do not call this method directly unless the ranges and nodemap have been
+ * previously verified.
+ * Store separate offset+limit in case this needs to be changed
+ * in the future, but for now there is no good reason to expose
+ * this complexity to userspace.
+ * TODO allow individual setting of values
+ */
+int nodemap_add_offset_helper(struct lu_nodemap *nodemap, __u32 offset_start,
+			      __u32 offset_limit)
+{
+	if (IS_ERR_OR_NULL(nodemap))
+		return -ENOENT;
+
+	nodemap->nm_offset_start_uid = offset_start;
+	nodemap->nm_offset_limit_uid = offset_limit;
+	nodemap->nm_offset_start_gid = offset_start;
+	nodemap->nm_offset_limit_gid = offset_limit;
+	nodemap->nm_offset_start_projid = offset_start;
+	nodemap->nm_offset_limit_projid = offset_limit;
+	return 0;
+}
+
+/**
+ * The nodemap offset shifts client UID/GID/PROJIDs from the range [0,limit)
+ * to a new range [offset,offset+limit).  This is useful for clusters that share
+ * a single filesystem among several tenants that administer their IDs
+ * independently. The offsets provide non-overlapping spaces with "limit"
+ * IDs each without having to configure individual idmaps for each ID.
+ *
+ * \param	name		name of nodemmap
+ * \param	offset		offset+limit
+ * \retval	0		success
+ * \retval	-EINVAL		invalid input
+ * \retval	-ENOENT		no existing nodemap
+ */
+int nodemap_add_offset(const char *nodemap_name, char *offset)
+{
+	struct lu_nodemap *nodemap;
+	struct lu_nodemap *nm_iterating;
+	struct lu_nodemap *nm_tmp;
+	unsigned long offset_start, offset_limit;
+	unsigned long min, max;
+	bool overlap = false;
+	LIST_HEAD(nodemap_list_head);
+	char *offset_max;
+	int rc = 0;
+
+	offset_max = strchr(offset, '+');
+	if (offset_max == NULL)
+		GOTO(out, rc = -EINVAL);
+	*offset_max = '\0';
+	offset_max++;
+
+	rc = kstrtoul(offset, 10, &offset_start);
+	if (rc) {
+		CERROR("%s: nodemap offset_start '%lu' not valid: rc = %d\n",
+		       nodemap_name, offset_start, rc);
+		GOTO(out, rc);
+	}
+	rc = kstrtoul(offset_max, 10, &offset_limit);
+	if (rc) {
+		CERROR("%s: nodemap offset_limit '%lu' not valid: rc = %d\n",
+		       nodemap_name, offset_limit, rc);
+		GOTO(out, rc);
+	}
+	if (offset_start == 0 || offset_start >= UINT_MAX) {
+		rc = -EINVAL;
+		CERROR("%s: nodemap offset_start '%lu' is invalid: rc = %d\n",
+		       nodemap_name, offset_start, rc);
+		GOTO(out, rc);
+	}
+	if (offset_limit == 0 || offset_limit >= UINT_MAX) {
+		rc = -EINVAL;
+		CERROR("%s: nodemap offset_limit '%lu' is invalid: rc = %d\n",
+		       nodemap_name, offset_limit, rc);
+		GOTO(out, rc);
+	}
+	if (offset_start + offset_limit >= UINT_MAX) {
+		rc = -EINVAL;
+		CERROR("%s: nodemap offset_start+offset_limit '%s+%s' would overflow: rc = %d\n",
+		       nodemap_name, offset, offset_max, rc);
+		GOTO(out, rc);
+	}
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(nodemap_name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = -ENOENT);
+	}
+
+	if (is_default_nodemap(nodemap))
+		GOTO(out_putref, rc = -EINVAL);
+
+	if (nodemap->nm_offset_start_uid) {
+		/* nodemap has already offset  */
+		nm_iterating = nodemap;
+		GOTO(overlap, rc = -ERANGE);
+	}
+
+	cfs_hash_for_each_safe(active_config->nmc_nodemap_hash,
+			       nm_hash_list_cb, &nodemap_list_head);
+
+	list_for_each_entry_safe(nm_iterating, nm_tmp, &nodemap_list_head,
+				 nm_list) {
+		if (nodemap_name == nm_iterating->nm_name)
+			continue;
+		min = nm_iterating->nm_offset_start_uid;
+		max = nm_iterating->nm_offset_start_uid +
+			nm_iterating->nm_offset_limit_uid;
+		if (min == 0 && max == 0) /* nodemaps with no set offset */
+			continue;
+		/* seeing if new offset / offset_max overlaps with other
+		 * existing nodemap offsets
+		 */
+		if (offset_start <= max - 1 &&
+		    offset_start + offset_limit - 1 >= min) {
+			overlap = true;
+			break;
+		}
+	}
+
+	if (overlap) {
+overlap:
+		rc = -ERANGE;
+		CERROR("%s: new offset %lu+%lu overlaps with existing nodemap %s offset %u+%u: rc = %d\n",
+		       nodemap_name, offset_start, offset_limit,
+		       nm_iterating->nm_name, nm_iterating->nm_offset_start_uid,
+		       nm_iterating->nm_offset_limit_uid, rc);
+		GOTO(out_putref, rc);
+	}
+
+	rc = nodemap_add_offset_helper(nodemap, offset_start, offset_limit);
+	if (rc == 0)
+		rc = nodemap_idx_offset_add(nodemap);
+	if (rc == 0)
+		nm_member_revoke_locks(nodemap);
+
+out_putref:
+	mutex_unlock(&active_config_lock);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+
+int nodemap_del_offset_helper(struct lu_nodemap *nodemap)
+{
+	if (IS_ERR_OR_NULL(nodemap))
+		return -ENOENT;
+
+	nodemap->nm_offset_start_uid = 0;
+	nodemap->nm_offset_limit_uid = 0;
+	nodemap->nm_offset_start_gid = 0;
+	nodemap->nm_offset_limit_gid = 0;
+	nodemap->nm_offset_start_projid = 0;
+	nodemap->nm_offset_limit_projid = 0;
+	return 0;
+}
+
+/**
+ * Delete mapping offset.
+ *
+ * \param	name		name of nodemmap
+ * \retval	0		success
+ * \retval	-EINVAL		invalid input
+ * \retval	-ENOENT		no existing nodemap
+ */
+int nodemap_del_offset(const char *nodemap_name)
+{
+	struct lu_nodemap *nodemap;
+	int rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(nodemap_name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = -ENOENT);
+	}
+
+	if (is_default_nodemap(nodemap))
+		GOTO(out_putref, rc = -EINVAL);
+
+	rc = nodemap_del_offset_helper(nodemap);
+	if (rc == 0)
+		rc = nodemap_idx_offset_del(nodemap);
+	if (rc == 0)
+		nm_member_revoke_locks(nodemap);
+
+out_putref:
+	mutex_unlock(&active_config_lock);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+
 /**
  * activate nodemap functions
  *
@@ -2345,6 +2590,12 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 			break;
 		rc = nodemap_set_squash_projid(nodemap_name, int_id);
 		break;
+	case LCFG_NODEMAP_ADD_OFFSET:
+		rc = nodemap_add_offset(nodemap_name, param);
+		break;
+	case LCFG_NODEMAP_DEL_OFFSET:
+		rc = nodemap_del_offset(nodemap_name);
+		break;
 	case LCFG_NODEMAP_ADD_UIDMAP:
 	case LCFG_NODEMAP_ADD_GIDMAP:
 	case LCFG_NODEMAP_ADD_PROJIDMAP:
@@ -2439,6 +2690,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 		break;
 	case LCFG_NODEMAP_ADD:
 	case LCFG_NODEMAP_DEL:
+	case LCFG_NODEMAP_DEL_OFFSET:
 		if (lcfg->lcfg_bufcount != 2)
 			GOTO(out_lcfg, rc = -EINVAL);
 		nodemap_name = lustre_cfg_string(lcfg, 1);
@@ -2495,6 +2747,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 				 sizeof(fs_idstr)) != 0)
 			GOTO(out_lcfg, rc = -EINVAL);
 		break;
+	case LCFG_NODEMAP_ADD_OFFSET:
 	case LCFG_NODEMAP_ADD_RANGE:
 	case LCFG_NODEMAP_DEL_RANGE:
 	case LCFG_NODEMAP_ADD_UIDMAP:

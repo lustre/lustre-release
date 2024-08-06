@@ -101,6 +101,18 @@ struct lu_nodemap {
 	struct list_head	 nm_list;
 	/* is a dynamic nodemap */
 	bool			 nm_dyn;
+	/* value to start UID offset */
+	unsigned int		 nm_offset_start_uid;
+	/* number of values allocated to UID offset */
+	unsigned int		 nm_offset_limit_uid;
+	/* value to start GID offset */
+	unsigned int		 nm_offset_start_gid;
+	/* number of values allocated to GID offset */
+	unsigned int		 nm_offset_limit_gid;
+	/* value to start PROJID offset */
+	unsigned int		 nm_offset_start_projid;
+	/* number of values allocated to PROJID offset */
+	unsigned int		 nm_offset_limit_projid;
 };
 
 /* Store handles to local MGC storage to save config locally. In future
@@ -132,6 +144,8 @@ int nodemap_set_deny_unknown(const char *name, bool deny_unknown);
 int nodemap_set_mapping_mode(const char *name,
 			     enum nodemap_mapping_modes map_mode);
 int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac);
+int nodemap_add_offset(const char *nodemap_name, char *offset);
+int nodemap_del_offset(const char *nodemap_name);
 int nodemap_set_squash_uid(const char *name, uid_t uid);
 int nodemap_set_squash_gid(const char *name, gid_t gid);
 int nodemap_set_squash_projid(const char *name, projid_t projid);

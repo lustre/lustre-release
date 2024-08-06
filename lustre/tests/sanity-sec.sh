@@ -2331,6 +2331,112 @@ test_27aa() { #LU-17922
 }
 run_test 27aa "test nodemap idmap range"
 
+test_27ab() { #LU-18109
+	local idmap
+	local id=500
+	local offset
+
+	do_facet mgs $LCTL nodemap_add Test18109 ||
+		error "unable to add Test18109 as nodemap"
+	stack_trap "do_facet mgs $LCTL nodemap_del Test18109 || true"
+
+	do_facet mgs $LCTL nodemap_add OffsetTest ||
+		error "unable to add OffsetTest as nodemap"
+	stack_trap "do_facet mgs $LCTL nodemap_del OffsetTest || true"
+
+	do_facet mgs $LCTL nodemap_add_offset --name Test18109 \
+		--offset 100000 --limit 200000 ||
+			error "cannot set offset 100000-299999 for Test18109"
+
+	#expected error, invalid offset range supplied
+	do_facet mgs $LCTL nodemap_add_offset --name OffsetTest \
+		--offset 150000 --limit 100000 &&
+			error "cannot set offset 150000-249999 for OffsetTest"
+
+	do_facet mgs $LCTL nodemap_add_idmap --name Test18109 \
+		 --idtype uid --idmap 500-509:0-9 ||
+		 error "unable to add idmap range 500-509:0-9"
+
+	idmap=$(do_facet mgs $LCTL get_param nodemap.Test18109.idmap |
+		grep idtype)
+	while IFS= read -r idmap; do
+		if (( $id <= 509 )); then
+			[[ "$idmap" == *"client_id: $id"* ]] ||
+				error "could not find 'client_id: ${id}' inside of ${idmap}"
+		fi
+		((id++))
+	done < <(echo "$idmap")
+
+	do_facet mgs $LCTL nodemap_del_idmap --name Test18109 \
+		 --idtype uid --idmap 500-509:0 ||
+			error "cannot delete idmap range 500-509:0"
+
+	#expected error, invalid secondary range supplied
+	do_facet mgs $LCTL nodemap_add --name Test18109 \
+		 --idtype uid --idmap 500-509:200000-200010 &&
+		 error "Invalid range 200000-200010 was supplied"
+
+	(( $(do_facet mgs $LCTL get_param nodemap.Test18109.idmap |
+		grep -c idtype) == 0 )) ||
+		error "invalid range 200000-200010 supplied and passed"
+
+	offset=$(do_facet mgs $LCTL get_param nodemap.Test18109.offset |
+		 grep start_uid)
+	[[ "$offset" == *"start_uid: 100000"* ]] ||
+		error "expected start_uid of 100000 not found before remounting"
+
+	offset=$(do_facet mgs $LCTL get_param nodemap.Test18109.offset |
+		 grep limit_uid)
+	[[ "$offset" == *"limit_uid: 200000"* ]] ||
+		error "expected limit_uid of 200000 not found before remounting"
+
+	stopall || error "failed to unmount servers"
+	setupall || error "failed to remount servers"
+
+	offset=$(do_facet mgs $LCTL get_param nodemap.Test18109.offset |
+		 grep start_uid)
+	[[ "$offset" == *"start_uid: 100000"* ]] ||
+		error "expected start_uid of 100000 not found after remounting"
+
+	offset=$(do_facet mgs $LCTL get_param nodemap.Test18109.offset |
+		 grep limit_uid)
+	[[ "$offset" == *"limit_uid: 200000"* ]] ||
+		error "expected limit_uid of 200000 not found after remounting"
+
+	do_facet mgs $LCTL nodemap_del_offset --name Test18109 ||
+		error "cannot del offset from Test18109"
+
+	offset=$(do_facet mgs $LCTL get_param nodemap.Test18109.offset |
+		 grep start_uid)
+	[[ "$offset" == *"start_uid: 0"* ]] ||
+		error "expected start_uid 0, found $offset"
+
+	offset=$(do_facet mgs $LCTL get_param nodemap.Test18109.offset |
+		 grep limit_uid)
+	[[ "$offset" == *"limit_uid: 0"* ]] ||
+		error "expected limit_uid 0, found $offset"
+
+	stopall || error "failed to unmount servers"
+	setupall || error "failed to remount servers"
+
+	offset=$(do_facet mgs $LCTL get_param nodemap.Test18109.offset |
+		 grep start_uid)
+	[[ "$offset" == *"start_uid: 0"* ]] ||
+		error "expected start_uid 0, found $offset after remounting"
+
+	offset=$(do_facet mgs $LCTL get_param nodemap.Test18109.offset |
+		 grep limit_uid)
+	[[ "$offset" == *"limit_uid: 0"* ]] ||
+		error "expected limit_uid 0, found $offset after remounting"
+
+	do_facet mgs $LCTL nodemap_del Test18109 ||
+		error "failed to remove nodemap Test18109"
+
+	do_facet mgs $LCTL nodemap_del OffsetTest ||
+		error "failed to remove nodemap OffsetTest"
+}
+run_test 27ab "test nodemap idmap offset"
+
 test_27b() { #LU-10703
 	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS >= 2.11.50"

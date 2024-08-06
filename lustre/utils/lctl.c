@@ -517,6 +517,12 @@ command_t cmdlist[] = {
 	{"nodemap_modify", jt_nodemap_modify, 0,
 	 "modify a nodemap parameters\n"
 	 "usage: nodemap_modify nodemap_name param value"},
+	{"nodemap_add_offset", jt_nodemap_add_offset, 0,
+	 "add an offset for UID/GID/PROJID mappings\n"
+	 "usage: nodemap_add_offset --name NODEMAP_NAME --offset OFFSET --limit LIMIT\n"},
+	{"nodemap_del_offset", jt_nodemap_del_offset, 0,
+	 "delete an offset for UID/GID/PROJID mappings\n"
+	 "usage: nodemap_del_offset --name NODEMAP_NAME --offset OFFSET\n"},
 	{"nodemap_add_idmap", jt_nodemap_add_idmap, 0,
 	 "add a UID or GID mapping to a nodemap"},
 	{"nodemap_del_idmap", jt_nodemap_del_idmap, 0,

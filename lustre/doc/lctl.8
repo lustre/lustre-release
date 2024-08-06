@@ -233,8 +233,14 @@ Delete an existing UID or GID mapping from a nodemap.
 .BR lctl-nodemap-modify (8)
 Modify a nodemap property.
 .TP
-.BR lctl-nodemap-set-fileset(8)
+.BR lctl-nodemap-set-fileset (8)
 Add a fileset to a nodemap.
+.TP
+.BR lctl-nodemap-add-offset (8)
+Set a UID/GID/PROJID offset value
+.TP
+.BR lctl-nodemap-del-offset (8)
+Remove a UID/GID/PROJID offset from a nodemap.
 .TP
 .BR lctl-nodemap-set-sepol (8)
 Set SELinux policy info on a nodemap.
@@ -435,6 +441,8 @@ filesystem package since release 0.5.0
 .BR lctl-nodemap-del-idmap (8),
 .BR lctl-nodemap-del-range (8),
 .BR lctl-nodemap-modify (8),
+.BR lctl-nodemap-add-offset (8),
+.BR lctl-nodemap-del-offset (8),
 .BR lctl-pcc (8),
 .BR lctl-set_param (8),
 .BR lctl-snapshot-create (8),

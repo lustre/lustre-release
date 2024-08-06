@@ -102,6 +102,8 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_ADMIN	  = 0x00ce049, /**< allow cluster to use id 0 */
 	LCFG_NODEMAP_ADD_PROJIDMAP	  = 0x00ce04a, /**< add a projidmap */
 	LCFG_NODEMAP_DEL_PROJIDMAP	  = 0x00ce04b, /**< delete projidmap */
+	LCFG_NODEMAP_ADD_OFFSET	  = 0x00ce04c, /**< UID/GID/PROJID add offset */
+	LCFG_NODEMAP_DEL_OFFSET	  = 0x00ce04d, /**< UID/GID/PROJID del offset */
 	LCFG_NODEMAP_TRUSTED	  = 0x00ce050, /**< trust a clusters ids */
 	LCFG_NODEMAP_SQUASH_UID	  = 0x00ce051, /**< default map uid */
 	LCFG_NODEMAP_SQUASH_GID	  = 0x00ce052, /**< default map gid */

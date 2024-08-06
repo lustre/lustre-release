@@ -2959,6 +2959,20 @@ static void check_nodemap_id_rec(void)
 	CHECK_MEMBER(nodemap_id_rec, nir_padding4);
 }
 
+static void check_nodemap_offset_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_offset_rec);
+	CHECK_MEMBER(nodemap_offset_rec, nor_start_uid);
+	CHECK_MEMBER(nodemap_offset_rec, nor_limit_uid);
+	CHECK_MEMBER(nodemap_offset_rec, nor_start_gid);
+	CHECK_MEMBER(nodemap_offset_rec, nor_limit_gid);
+	CHECK_MEMBER(nodemap_offset_rec, nor_start_projid);
+	CHECK_MEMBER(nodemap_offset_rec, nor_limit_projid);
+	CHECK_MEMBER(nodemap_offset_rec, nor_padding1);
+	CHECK_MEMBER(nodemap_offset_rec, nor_padding2);
+}
+
 static void check_nodemap_global_rec(void)
 {
 	BLANK_LINE();
@@ -3008,6 +3022,7 @@ static void check_nodemap_key(void)
 
 	CHECK_VALUE(NODEMAP_CLUSTER_REC);
 	CHECK_VALUE(NODEMAP_CLUSTER_ROLES);
+	CHECK_VALUE(NODEMAP_CLUSTER_OFFSET);
 
 	CHECK_VALUE_X(NM_TYPE_MASK);
 	CHECK_VALUE(NM_TYPE_SHIFT);
@@ -3287,6 +3302,8 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_NODEMAP_ADMIN);
 	CHECK_VALUE_X(LCFG_NODEMAP_ADD_PROJIDMAP);
 	CHECK_VALUE_X(LCFG_NODEMAP_DEL_PROJIDMAP);
+	CHECK_VALUE_X(LCFG_NODEMAP_ADD_OFFSET);
+	CHECK_VALUE_X(LCFG_NODEMAP_DEL_OFFSET);
 	CHECK_VALUE_X(LCFG_NODEMAP_TRUSTED);
 	CHECK_VALUE_X(LCFG_NODEMAP_SQUASH_UID);
 	CHECK_VALUE_X(LCFG_NODEMAP_SQUASH_GID);
@@ -3753,6 +3770,7 @@ main(int argc, char **argv)
 	check_nodemap_range_rec();
 	check_nodemap_range2_rec();
 	check_nodemap_id_rec();
+	check_nodemap_offset_rec();
 	check_nodemap_global_rec();
 	check_nodemap_cluster_roles_rec();
 	check_nodemap_rec();

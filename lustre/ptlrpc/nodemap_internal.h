@@ -148,6 +148,9 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 			     struct lu_nodemap *nodemap,
 			     const struct lnet_nid nid[2],
 			     u8 netmask, unsigned int range_id);
+int nodemap_add_offset_helper(struct lu_nodemap *nodemap, __u32 offset_start,
+			      __u32 offset_limit);
+int nodemap_del_offset_helper(struct lu_nodemap *nodemap);
 
 void nodemap_getref(struct lu_nodemap *nodemap);
 void nodemap_putref(struct lu_nodemap *nodemap);
@@ -163,6 +166,8 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap);
 int nodemap_idx_cluster_roles_add(const struct lu_nodemap *nodemap);
 int nodemap_idx_cluster_roles_update(const struct lu_nodemap *nodemap);
 int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap);
+int nodemap_idx_offset_add(const struct lu_nodemap *nodemap);
+int nodemap_idx_offset_del(const struct lu_nodemap *nodemap);
 int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const __u32 map[2]);

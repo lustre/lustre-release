@@ -4598,6 +4598,137 @@ int jt_nodemap_modify(int argc, char **argv)
 	return rc;
 }
 
+/**
+ * Add a nodemap's UID/GID/PROJID offset
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ * --offset			UID/GID/PROJID offset
+ * --limit			number of maximum entries
+ *
+ * \retval			0 on success
+ */
+int jt_nodemap_add_offset(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	__u32 offset = 0;
+	__u32 limit = 0;
+	char param[24];
+	int rc = 0;
+	int c;
+
+	static struct option long_opts[] = {
+	{ .val = 'l',	.name = "limit",	.has_arg = required_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'o',	.name = "offset",	.has_arg = required_argument },
+	{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "l:n:o:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'l':
+			limit = strtol(optarg, NULL, 10);
+			if (errno == ERANGE) {
+				fprintf(stderr,
+					"Invalid limit value input: %u\n",
+					limit);
+				return -1;
+			}
+			break;
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'o':
+			offset = strtol(optarg, NULL, 10);
+			if (errno == ERANGE) {
+				fprintf(stderr,
+					"Invalid offset value input: %u\n",
+					offset);
+				return -1;
+			}
+			break;
+		}
+	}
+
+	if (!nodemap_name || !offset || !limit ||
+	    offset <= 0 || offset >= UINT_MAX || errno != 0) {
+		fprintf(stderr, "%s: invalid nodemap '%s' offset '%s'\n",
+			jt_cmdname(argv[0]), nodemap_name, optarg);
+		return CMD_HELP;
+	}
+
+	/* user warnings for setting offset to 0 or less than 65536 */
+	if (offset < 65536)
+		fprintf(stderr,
+			"It is not recomended to have an offset before 65536 as the nobody/squash id's will not be mapped properly.\n");
+
+	snprintf(param, sizeof(param), "%u+%u", offset, limit);
+
+	rc = nodemap_cmd(LCFG_NODEMAP_ADD_OFFSET, false, NULL, 0,
+			 argv[0], nodemap_name, param, NULL);
+
+	if (rc == -ERANGE) {
+		fprintf(stderr,
+			"%s: cannot set offset %s to nodemap '%s' because it overlaps with existing offset: %s\n",
+			*argv, param, nodemap_name, strerror(-rc));
+	} else if (rc != 0) {
+		fprintf(stderr,
+			"%s: cannot set offset %s to nodemap '%s': %s\n",
+			*argv, param, nodemap_name, strerror(-rc));
+	}
+
+	return rc;
+}
+
+/**
+ * Delete a nodemap's UID/GID/PROJID offset
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ *
+ * \retval			0 on success
+ */
+int jt_nodemap_del_offset(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	int rc = 0;
+	int c;
+
+	static struct option long_opts[] = {
+		{ .val = 'n',	.name = "name",	.has_arg = required_argument },
+		{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "n:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		}
+	}
+
+	if (!nodemap_name || errno != 0) {
+		fprintf(stderr, "%s: invalid nodemap '%s' offset '%s'\n",
+			jt_cmdname(argv[0]), nodemap_name, optarg);
+		return CMD_HELP;
+	}
+
+	rc = nodemap_cmd(LCFG_NODEMAP_DEL_OFFSET, false, NULL, 0,
+			 argv[0], nodemap_name, NULL);
+
+	if (rc != 0) {
+		fprintf(stderr,
+			"%s: cannot del offset from nodemap '%s': %s\n",
+			*argv, nodemap_name, strerror(-rc));
+	}
+
+	return rc;
+}
+
 int jt_nodemap_add_idmap(int argc, char **argv)
 {
 	int			c;
@@ -4742,6 +4873,20 @@ int jt_nodemap_del(int argc, char **argv)
 }
 
 int jt_nodemap_modify(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_add_offset(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n",
+		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_del_offset(int argc, char **argv)
 {
 	fprintf(stderr, "error: %s: invalid ioctl\n",
 		jt_cmdname(argv[0]));

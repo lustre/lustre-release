@@ -118,6 +118,39 @@ static int nodemap_idmap_open(struct inode *inode, struct file *file)
 }
 
 /**
+ * Reads and prints the UID/GID/PROJID offsets for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_offset_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("%s: nodemap not found: rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	seq_printf(m, "start_uid: %u\n", nodemap->nm_offset_start_uid);
+	seq_printf(m, "limit_uid: %u\n", nodemap->nm_offset_limit_uid);
+	seq_printf(m, "start_gid: %u\n", nodemap->nm_offset_start_gid);
+	seq_printf(m, "limit_gid: %u\n", nodemap->nm_offset_limit_gid);
+	seq_printf(m, "start_projid: %u\n", nodemap->nm_offset_start_projid);
+	seq_printf(m, "limit_projid: %u\n", nodemap->nm_offset_limit_projid);
+
+	nodemap_putref(nodemap);
+	return 0;
+}
+
+/**
  * Reads and prints the NID ranges for the given nodemap.
  *
  * \param	m		seq file in proc fs
@@ -800,6 +833,7 @@ LPROC_SEQ_FOPS_RO(nodemap_squash_projid);
 
 LPROC_SEQ_FOPS_RO(nodemap_deny_unknown);
 LPROC_SEQ_FOPS_RO(nodemap_map_mode);
+LPROC_SEQ_FOPS_RO(nodemap_offset);
 LPROC_SEQ_FOPS_RO(nodemap_rbac);
 LPROC_SEQ_FOPS_RO(nodemap_audit_mode);
 LPROC_SEQ_FOPS_RO(nodemap_forbid_encryption);
@@ -859,6 +893,10 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "idmap",
 		.fops		= &nodemap_idmap_fops,
+	},
+	{
+		.name		= "offset",
+		.fops		= &nodemap_offset_fops,
 	},
 	{
 		.name		= "map_mode",
