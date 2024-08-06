@@ -250,7 +250,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		__swab64s(&arr->arr_hai.hai_gid);
 		/*
 		 * no swabing for opaque data
-		 * hai_data[0];
+		 * hai_data[];
 		 */
 		break;
 	}

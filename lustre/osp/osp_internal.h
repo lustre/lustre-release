@@ -313,7 +313,7 @@ struct osp_xattr_entry {
 	unsigned short		 oxe_exist:1,
 				 oxe_ready:1,
 				 oxe_largebuf:1;
-	char			 oxe_name[0];
+	char			 oxe_name[];
 };
 
 /* this is a top object */

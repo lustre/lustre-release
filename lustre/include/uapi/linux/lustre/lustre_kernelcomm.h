@@ -111,7 +111,7 @@ struct lustre_kernelcomm {
 	__u32 lk_group;
 	__u32 lk_data_count;
 	__u32 lk_flags;
-	__u32 lk_data[0];
+	__u32 lk_data[];
 } __attribute__((packed));
 
 #endif	/* __UAPI_KERNELCOMM_H__ */

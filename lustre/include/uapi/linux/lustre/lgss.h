@@ -96,7 +96,7 @@ struct rsi_downcall_data {
 	/* sid_val contains in_handle, in_token,
 	 * out_handle, out_token
 	 */
-	char	  sid_val[0];
+	char	  sid_val[];
 };
 
 #define RSC_DOWNCALL_MAGIC	0x6d6dd62b
@@ -123,7 +123,7 @@ struct rsc_downcall_data {
 	__u32		scd_len;
 	__u32		scd_padding;
 	/* scd_val contains handle and context token */
-	char		scd_val[0];
+	char		scd_val[];
 };
 
 /*

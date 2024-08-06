@@ -29,7 +29,7 @@ struct kib_connparams {
 
 struct kib_immediate_msg {
 	struct lnet_hdr_nid4	ibim_hdr;	/* portals header */
-	char			ibim_payload[0];/* piggy-backed payload */
+	char			ibim_payload[]; /* piggy-backed payload */
 } __packed;
 
 struct kib_rdma_frag {
@@ -40,7 +40,7 @@ struct kib_rdma_frag {
 struct kib_rdma_desc {
 	u32			rd_key;		/* local/remote key */
 	u32			rd_nfrags;	/* # fragments */
-	struct kib_rdma_frag	rd_frags[0];	/* buffer frags */
+	struct kib_rdma_frag	rd_frags[];	/* buffer frags */
 } __packed;
 
 struct kib_putreq_msg {

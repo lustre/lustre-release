@@ -477,7 +477,7 @@ struct kfilnd_immed_msg {
 	struct lnet_hdr_nid4	hdr;
 
 	/* Entire LNet message payload. */
-	char payload[0];
+	char payload[];
 } __packed;
 
 /* Bulk request message header. */

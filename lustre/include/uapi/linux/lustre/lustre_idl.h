@@ -511,7 +511,7 @@ struct lu_dirpage {
 	__u64            ldp_hash_end;
 	__u32            ldp_flags;
 	__u32            ldp_pad0;
-	struct lu_dirent ldp_entries[0];
+	struct lu_dirent ldp_entries[];
 };
 
 enum lu_dirpage_flags {
@@ -1245,7 +1245,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 	/* lmm_stripe_count used to be __u32 */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	__u16 lmm_layout_gen;     /* layout generation number */
-	struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+	struct lov_ost_data_v1 lmm_objects[]; /* per-stripe data */
 };
 
 #define MAX_MD_SIZE_OLD (sizeof(struct lov_mds_md) +			\
@@ -1303,7 +1303,7 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	__u16 lmm_layout_gen;     /* layout generation number */
 	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /* must be 32bit aligned */
-	struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+	struct lov_ost_data_v1 lmm_objects[]; /* per-stripe data */
 };
 
 static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
@@ -3436,7 +3436,7 @@ struct link_ea_header {
 struct link_ea_entry {
 	unsigned char      lee_reclen[2]; /* __u16 big-endian, unaligned */
 	unsigned char      lee_parent_fid[sizeof(struct lu_fid)];
-	char               lee_name[0];
+	char               lee_name[];
 } __attribute__((packed));
 
 /** fid2path request/reply structure */
@@ -3746,11 +3746,11 @@ struct update_op {
 } __attribute__((packed));
 
 struct update_ops {
-	struct update_op	uops_op[0];
+	DECLARE_FLEX_ARRAY(struct update_op, uops_op);
 };
 
 struct update_params {
-	struct object_update_param	up_params[0];
+	DECLARE_FLEX_ARRAY(struct object_update_param, up_params);
 };
 
 enum update_records_flag {
@@ -3855,7 +3855,7 @@ enum nodemap_rbac_roles {
  */
 typedef struct netobj_s {
 	__u32 len;
-	__u8 data[0];
+	__u8 data[];
 } netobj_t;
 
 typedef struct rawobj_s {
@@ -3946,7 +3946,7 @@ struct ladvise_hdr {
 	__u32			lah_value1;	/* unused */
 	__u32			lah_value2;	/* unused */
 	__u64			lah_value3;	/* unused */
-	struct lu_ladvise	lah_advise[0];	/* advices in this header */
+	struct lu_ladvise	lah_advise[];	/* advices in this header */
 };
 
 #if defined(__cplusplus)

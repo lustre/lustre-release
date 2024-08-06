@@ -94,7 +94,7 @@ struct hsm_action_list {
    __u64 hal_flags;
    __u32 hal_archive_id;    /* which archive backend */
    __u32 padding1;
-   char hal_fsname[0];      /* null\-terminated name of filesystem */
+   char hal_fsname[];       /* null\-terminated name of filesystem */
 };
 
 struct hsm_action_item {
@@ -105,7 +105,7 @@ struct hsm_action_item {
     struct hsm_extent hai_extent;  /* byte range to operate on */
     __u64      hai_cookie;  /* action cookie from coordinator */
     __u64      hai_gid;     /* grouplock id */
-    char       hai_data[0]; /* variable length */
+    char       hai_data[];  /* variable length */
 };
 .ft P
 .fi

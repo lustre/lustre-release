@@ -560,7 +560,7 @@ enum {
 struct kkuc_ct_data {
 	__u32		kcd_magic;
 	__u32		kcd_nr_archives;
-	__u32		kcd_archives[0];
+	__u32		kcd_archives[];
 };
 
 /** @} export */

@@ -3944,7 +3944,7 @@ static void ko2inlnd_assert_wire_constants(void)
 	BUILD_BUG_ON((int)offsetof(struct kib_immediate_msg, ibim_hdr) != 0);
 	BUILD_BUG_ON((int)sizeof(((struct kib_immediate_msg *)0)->ibim_hdr) != 72);
 	BUILD_BUG_ON((int)offsetof(struct kib_immediate_msg, ibim_payload) != 72);
-	BUILD_BUG_ON((int)sizeof(((struct kib_immediate_msg *)0)->ibim_payload) != 0);
+	BUILD_BUG_ON((int)sizeof(*((struct kib_immediate_msg *)0)->ibim_payload) != 1);
 
 	BUILD_BUG_ON((int)sizeof(struct kib_rdma_frag) != 12);
 	BUILD_BUG_ON((int)offsetof(struct kib_rdma_frag, rf_nob) != 0);
@@ -3958,7 +3958,7 @@ static void ko2inlnd_assert_wire_constants(void)
 	BUILD_BUG_ON((int)offsetof(struct kib_rdma_desc, rd_nfrags) != 4);
 	BUILD_BUG_ON((int)sizeof(((struct kib_rdma_desc *)0)->rd_nfrags) != 4);
 	BUILD_BUG_ON((int)offsetof(struct kib_rdma_desc, rd_frags) != 8);
-	BUILD_BUG_ON((int)sizeof(((struct kib_rdma_desc *)0)->rd_frags) != 0);
+	BUILD_BUG_ON((int)sizeof(*((struct kib_rdma_desc *)0)->rd_frags) != 12);
 
 	BUILD_BUG_ON((int)sizeof(struct kib_putreq_msg) != 80);
 	BUILD_BUG_ON((int)offsetof(struct kib_putreq_msg, ibprm_hdr) != 0);
@@ -4023,7 +4023,7 @@ static void ko2inlnd_assert_wire_constants(void)
 	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.immediate.ibim_hdr) != 48);
 	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.immediate.ibim_hdr) != 72);
 	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.immediate.ibim_payload) != 120);
-	BUILD_BUG_ON((int)sizeof(((struct kib_msg *)0)->ibm_u.immediate.ibim_payload) != 0);
+	BUILD_BUG_ON((int)sizeof(*((struct kib_msg *)0)->ibm_u.immediate.ibim_payload) != 1);
 
 	/* PUT req message */
 	BUILD_BUG_ON((int)offsetof(struct kib_msg, ibm_u.putreq.ibprm_hdr) != 48);

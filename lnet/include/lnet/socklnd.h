@@ -23,7 +23,7 @@ struct ksock_hello_msg {
 	__u64			kshm_dst_incarnation; /* destination's incarnation */
 	__u32			kshm_ctype;	/* SOCKLND_CONN_* */
 	__u32			kshm_nips;	/* always sent as zero */
-	__u32			kshm_ips[0];	/* deprecated */
+	__u32			kshm_ips[];	/* deprecated */
 } __packed;
 
 struct ksock_hello_msg_nid4 {
@@ -37,7 +37,7 @@ struct ksock_hello_msg_nid4 {
 	__u64			kshm_dst_incarnation; /* destination's incarnation */
 	__u32			kshm_ctype;	/* SOCKLND_CONN_* */
 	__u32			kshm_nips;	/* sent as zero */
-	__u32			kshm_ips[0];	/* deprecated */
+	__u32			kshm_ips[];	/* deprecated */
 } __packed;
 
 struct ksock_msg_hdr {

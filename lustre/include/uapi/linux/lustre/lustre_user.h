@@ -571,7 +571,7 @@ struct ll_ioc_lease {
 	__u32		lil_mode;
 	__u32		lil_flags;
 	__u32		lil_count;
-	__u32		lil_ids[0];
+	__u32		lil_ids[];
 };
 
 struct ll_ioc_lease_id {
@@ -581,7 +581,7 @@ struct ll_ioc_lease_id {
 	__u16		lil_mirror_id;
 	__u16		lil_padding1;
 	__u64		lil_padding2;
-	__u32		lil_ids[0];
+	__u32		lil_ids[];
 };
 
 /*
@@ -850,7 +850,7 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 					   * used when reading
 					   */
 	};
-	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+	struct lov_user_ost_data_v1 lmm_objects[]; /* per-stripe data */
 } __attribute__((packed, __may_alias__));
 
 struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
@@ -868,7 +868,7 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 					   */
 	};
 	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /* pool name */
-	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+	struct lov_user_ost_data_v1 lmm_objects[]; /* per-stripe data */
 } __attribute__((packed, __may_alias__));
 
 struct lov_foreign_md {
@@ -2538,7 +2538,7 @@ struct hsm_user_item {
 
 struct hsm_user_request {
 	struct hsm_request	hur_request;
-	struct hsm_user_item	hur_user_item[0];
+	struct hsm_user_item	hur_user_item[];
 	/* extra data blob at end of struct (after all
 	 * hur_user_items), only use helpers to access it
 	 */
@@ -2608,7 +2608,7 @@ struct hsm_action_item {
 	struct hsm_extent hai_extent;  /* byte range to operate on */
 	__u64      hai_cookie;  /* action cookie from coordinator */
 	__u64      hai_gid;     /* grouplock id */
-	char       hai_data[0]; /* variable length */
+	char       hai_data[];  /* variable length */
 } __attribute__((packed));
 
 /**
@@ -2837,7 +2837,7 @@ struct llapi_ladvise_hdr {
 	__u32			lah_value1;	/* unused */
 	__u32			lah_value2;	/* unused */
 	__u64			lah_value3;	/* unused */
-	struct llapi_lu_ladvise	lah_advise[0];	/* advices in this header */
+	struct llapi_lu_ladvise	lah_advise[];	/* advices in this header */
 };
 
 #define LAH_COUNT_MAX	(1024)
