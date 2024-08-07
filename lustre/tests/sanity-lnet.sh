@@ -1084,6 +1084,19 @@ test_27() {
 }
 run_test 27 "Import bad config should fail gracefully"
 
+test_28() {
+	reinit_dlc || return $?
+
+	do_lnetctl peer add --prim_nid 1.1.1.1@tcp --ni 7.7.7.7@tcp ||
+		error "First peer add failed $?"
+	do_lnetctl peer add --prim_nid 1.1.1.2@tcp --nid 7.7.7.8@tcp ||
+		error "Second peer add failed $?"
+
+	count=$(do_lnetctl peer list | awk '/-\s+nid:/{print $NF}' | wc -l)
+	[[ $count -eq 2 ]] || error "wrong number of peers reported"
+}
+run_test 28 "Test peer_list"
+
 test_99a() {
 	reinit_dlc || return $?
 

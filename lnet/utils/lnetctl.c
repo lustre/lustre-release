@@ -3026,17 +3026,14 @@ static int yaml_lnet_peer_display(yaml_parser_t *reply, bool list_only)
 				if (rc == 0)
 					break;
 
-				/* skip reset */
-				while (event.type != YAML_MAPPING_END_EVENT) {
+				/* skip ALL peer_ni info */
+				while (event.type != YAML_SEQUENCE_END_EVENT) {
 					rc = yaml_parser_parse(reply, &event);
 					if (rc == 0)
 						goto report_reply_error;
 				}
 
-				/* we can have map end, seq end, map end or
-				 * just map end event. If we see seq end event
-				 * then skip to next mapping end event
-				 */
+				/* But keep sequence end event */
 				rc = yaml_parser_parse(reply, &event);
 				if (rc == 0)
 					goto report_reply_error;
@@ -3065,8 +3062,10 @@ merge_event:
 		yaml_document_delete(&errmsg);
 	}
 out_err:
-	if (rc == 0)
+	if (rc == 0) {
 		yaml_emitter_log_error(&debug, stderr);
+		rc = -EINVAL; /* Avoid reporting as reply error */
+	}
 report_reply_error:
 	yaml_emitter_delete(&debug);
 
@@ -3449,7 +3448,6 @@ emitter_error:
 			if (msg && strcmp(msg, "No peers found") == 0)
 				rc = 1;
 		}
-
 	}
 	yaml_emitter_delete(&output);
 free_reply:
