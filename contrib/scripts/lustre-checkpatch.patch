@@ -111,6 +111,32 @@ index 2b812210b4..a6c52d361c 100755
  		if ($linenr == $first_line and $line =~ m@^.\s*\*@) {
  			$in_comment = 1;
  		}
+@@ -2705,6 +2705,7 @@ sub process {
+ 	my $comment_edge = 0;
+ 	my $first_line = 0;
+ 	my $p1_prefix = '';
++	my $manfile = '';
+
+ 	my $prev_values = 'E';
+
+@@ -2905,6 +2906,17 @@ sub process {
+ 			$found_file = 1;
+ 		}
+
++#handle man pages
++		if ($line =~ /^diff --git.*?(\S+\.[1-8])$/ ||
++			$line =~ /^\+\+\+\s+(\S+\.[1-8])$/) {
++				if ($manfile !~ $1) {
++					$manfile = $1;
++					local @ARGV = $manfile;
++					system($^X, "contrib/scripts/checkpatch-man.pl", @ARGV);
++					$found_file = 1;
++				}
++			}
++
+ #make up the handle for any error we report on this line
+ 		if ($showfile) {
+ 			$prefix = "$realfile:$realline: "
 @@ -3241,15 +3273,6 @@ sub process {
  			     "A patch subject line should describe the change not the tool that found it\n" . $herecurr);
  		}
@@ -118,7 +144,7 @@ index 2b812210b4..a6c52d361c 100755
 -# Check for Gerrit Change-Ids not in any patch context
 -		if ($realfile eq '' && !$has_patch_separator && $line =~ /^\s*change-id:/i) {
 -			if (ERROR("GERRIT_CHANGE_ID",
--			          "Remove Gerrit Change-Id's before submitting upstream\n" . $herecurr) &&
+-				  "Remove Gerrit Change-Id's before submitting upstream\n" . $herecurr) &&
 -			    $fix) {
 -				fix_delete_line($fixlinenr, $rawline);
 -			}

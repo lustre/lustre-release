@@ -2705,6 +2705,7 @@ sub process {
 	my $comment_edge = 0;
 	my $first_line = 0;
 	my $p1_prefix = '';
+	my $manfile = '';
 
 	my $prev_values = 'E';
 
@@ -2905,6 +2906,17 @@ sub process {
 			$found_file = 1;
 		}
 
+#handle man pages
+		if ($line =~ /^diff --git.*?(\S+\.[1-8])$/ ||
+		    $line =~ /^\+\+\+\s+(\S+\.[1-8])$/) {
+			if ($manfile !~ $1) {
+				$manfile = $1;
+				local @ARGV = $manfile;
+				system($^X, "contrib/scripts/checkpatch-man.pl", @ARGV);
+				$found_file = 1;
+			}
+		}
+
 #make up the handle for any error we report on this line
 		if ($showfile) {
 			$prefix = "$realfile:$realline: "
@@ -3084,7 +3096,6 @@ sub process {
 					$fixed[$fixlinenr] =
 					    "$ucfirst_sign_off $email";
 				}
-
 			}
 			if (!defined $space_after || $space_after ne " ") {
 				if (WARN("BAD_SIGN_OFF",

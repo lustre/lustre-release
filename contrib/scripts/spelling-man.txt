@@ -1,0 +1,59 @@
+# The format of each line is:
+# mistake||correction
+#
+# Preferred Terms
+bitmask||bit mask
+builtin||built-in
+epoch||Epoch
+file name||filename
+file system||filesystem
+host name||hostname
+i-node||inode
+lower case||lowercase
+lower-case||lowercase
+non-zero||nonzero
+path name||pathname
+pseudo-terminal||pseudoterminal
+reserved port||privileged port
+system port||privileged port
+realtime||real-time
+real time||real-time
+runtime||run time
+saved group ID||saved set-group-ID
+saved set-GID||saved set-group-ID
+saved user ID||saved set-user-ID
+saved set-UID||saved set-user-ID
+set-GID||set-group-ID
+setgid||set-group-ID
+set-UID||set-user-ID
+setuid||set-user-ID
+super user||superuser
+super-user||superuser
+super block||superblock
+super-block||superblock
+time stamp||timestamp
+time zone||timezone
+upper case||uppercase
+upper-case||uppercase
+useable||usable
+userspace||user space
+x86_64||x86-64
+zeroes||zeros
+#
+# Terms to avoid
+64bit||64-bit
+32bit||32-bit
+16bit||16-bit
+8bit||8-bit
+current process||calling process
+manpage||man page
+minus infinity||negative infinity
+non-root||unprivileged user
+non-superuser||unprivileged user
+nonprivileged||unprivileged
+OS||operating system
+plus infinity||positive infinity
+pty||pseudoterminal
+tty||terminal
+Unices||UNIX systems
+Unixes||UNIX systems
