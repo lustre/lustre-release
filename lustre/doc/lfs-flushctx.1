@@ -6,20 +6,20 @@ lfs-flushctx \- flush security context of current user.
 .RB [ --help | -h "] [" -k "] [" -r "] [" \fIrootpath\fR "]"
 .br
 .SH DESCRIPTION
-Flush security context of current user, for Lustre file system as specified by
-\fBrootpath\fR, or for all mounted Lustre file systems.
+Flush the security context of the current user, for Lustre file system
+as specified by \fBrootpath\fR, or for all mounted Lustre file systems.
 .P
-If \fB-k\fR is specified, proceed to Kerberos credentials cache destroy as well,
-by calling kdestroy.
+If \fB-k\fR is specified, proceed to destroy the Kerberos credentials
+cache by calling kdestroy.
 .P
 If \fB-r\fR is specified, reap revoked keys from the session keyring.
 .SH OPTIONS
 .TP
 .BR -k
-Proceed to Kerberos credentials cache destroy.
+Destroy the Kerberos credentials cache.
 .TP
 .BR -r
-Reap revoked keys from the session keyring.
+Remove revoked keys from the session keyring.
 .TP
 .BR -h
 Print usage message.
