@@ -1,90 +1,113 @@
-.TH LFS-HSM 1 "April 20, 2022" Lustre "Lustre/HSM binding utility"
+.TH LFS-HSM 1 2024-08-30 Lustre "Lustre User Utilities"
 .SH NAME
 hsm_state, hsm_action, hsm_set, hsm_clear \- lfs commands used to interact with HSM features
 .SH SYNOPSIS
-.B lfs hsm_state
-[\fI\,FILE\/\fR]...
-.PP
-.B lfs hsm_action
-[\fI\,FILE\/\fR]...
-.PP
-.B lfs hsm_set
-[\fB\-\-norelease\fR]
-[\fB\-\-noarchive\fR]
-[\fB\-\-exists\fR]
-[\fB\-\-archived\fR]
-[\fB\-\-lost\fR]
-[\fB\-\-archive-id\fR \fINUM\fR]
-[\fI\,FILE\/\fR]...
-.PP
-.B lfs hsm_clear
-[\fB\-\-norelease\fR]
-[\fB\-\-noarchive\fR]
-[\fB\-\-exists\fR]
-[\fB\-\-archived\fR]
-[\fB\-\-lost\fR]
-[\fI\,FILE\/\fR]...
-.PP
+.SY "lfs hsm_state"
+.RI [ FILE "] ..."
+.SY "lfs hsm_action"
+.RI [ FILE "] ..."
+.SY "lfs hsm_set"
+.RB [ --norelease ]
+.RB [ --noarchive ]
+.RB [ --exists ]
+.RB [ --archived ]
+.RB [ --lost ]
+.RB [ --archive-id
+.IR NUM ]
+.RB [ FILE "] ..."
+.SY "lfs hsm_clear"
+.RB [ --norelease ]
+.RB [ --noarchive ]
+.RB [ --exists ]
+.RB [ --archived ]
+.RB [ --lost ]
+.RB [ FILE "] ..."
+.YS
 .SH DESCRIPTION
 These are a set of lfs commands used to interact with Lustre/HSM binding feature.
 .TP
-.B lfs hsm_state \fR[\fI\,FILE\/\fR]...
+.BR "lfs hsm_state " [ , \fIFILE / ]...
 Display the current HSM flags and archive ID for provided files.
 .TP
-.B lfs hsm_action \fR[\fI\,FILE\/\fR]...
+.BR "lfs hsm_action " [ , \fIFILE / ]...
 Display the in-progress HSM actions for provided files.
 .TP
-.B lfs hsm_set \fR[\fI\,OPTION\/\fR]... [\fI\,FILE\/\fR]...
+.BR "lfs hsm_set " [ , \fIOPTION / "]... [" , \fIFILE / ]...
 Set provided HSM flags on file list.
 .TP
-.B lfs hsm_clear \fR[\fI\,OPTION\/\fR]... [\fI\,FILE\/\fR]...
+.BR "lfs hsm_clear " [ , \fIOPTION / "]... [" , \fIFILE / ]...
 Clear the HSM related flags on file list.
 .PP
 Non-privileged user can only change the following flags:
-.B norelease
-,
+.BR norelease ,
 .B noarchive
 and
-.B dirty.
-.PP
+.BR dirty .
 .SH OPTIONS
 .TP
-.B \\--norelease
-File should never be released. File data will stay in Lustre even if a copy exists in HSM backend.
+.B --norelease
+File should never be released.
+File data will stay in Lustre even if a copy exists in HSM backend.
 .TP
-.B \\--noarchive
+.B --noarchive
 File should never be archived. Useful if this is a temporary file, for example.
 .TP
-.B \\--dirty
-File content is not in sync with HSM backend. File should be archived again. (root only)
+.B --dirty
+File content is not in sync with HSM backend.
+File should be archived again. (root only)
 .TP
-.B \\--exists
+.B --exists
 A file copy exists in HSM backend. Useful mostly for debugging. (root only)
 .TP
-.B \\--archived
-An up-to-date file copy exists in HSM backend. Useful mostly for debugging. (root only)
+.B --archived
+An up-to-date file copy exists in HSM backend.
+Useful mostly for debugging. (root only)
 .TP
-.B \\--lost
-File copy in HSM backend is not usable anymore and file could not be restored. It should be archived again. (root only)
+.B --lost
+File copy in HSM backend is not usable anymore and file could not be restored.
+It should be archived again. (root only)
 .TP
-.B \\--archive-id \fINUM\fR
-Set archive number identifier to value \fINUM\fR. If archive-id is 0 or option is not provided, then default identifier 0 is used and means no identifier change.
+.BI --archive-id " NUM"
+Set archive number identifier to value
+.IR NUM .
+If archive-id is 0 or option is not provided,
+then default identifier 0 is used and means no identifier change.
 .SH EXAMPLES
-.TP
-.B Display current HSM flag for foo:
-$ lfs hsm_state /mnt/lustre/foo
-
+Display current HSM flag for foo:
+.RS
+.EX
+.B # lfs hsm_state /mnt/lustre/foo
 /mnt/lustre/foo: (0x0000000b) exists dirty archived, archive_id: 1
-
-.TP
-.B Force a file to be considered as modified in lustre (dirty)
-$ lfs hsm_set --dirty /mnt/lustre/motd
-
-.SH AUTHOR
-Written by Aurelien Degremont.
-
-.SH KNOWN BUGS
+.EE
+.RE
 .PP
-Please report all bugs to https://jira.whamcloud.com/
+Force a file to be considered as modified in lustre (dirty):
+.RS
+.EX
+.B # lfs hsm_set --dirty /mnt/lustre/motd
+.EE
+.RE
+.SH AUTHORS
+Written by Aurelien Degremont.
+.SH AVAILABILITY
+.BR "lfs hsm_action" ,
+.BR "lfs hsm_clear" ,
+.B lfs hsm_set
+and
+.B lfs hsm_state
+are part of the
+.BR lustre (7)
+filesystem package.
+.B lfs hsm_action
+was added in release 1.7.0.
+.\" Added in commit 1.6.1-2914-g4c1c3b4d33
+.B lfs hsm_clear
+was added in release 2.4.0.
+.\" Added in commit v2_3_60-5-gc42b426c87
+.B lfs hsm_set
+and
+.B lfs hsm_state
+were added in release 2.0.0.
+.\" Added in commit v2_0_0-rc1a-339-g2e0ad6d400
 .SH SEE ALSO
 .BR lfs (1)
