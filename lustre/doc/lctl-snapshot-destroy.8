@@ -20,9 +20,9 @@ section. Then,  the snapshot pieces are destroyed on every Lustre target
 .BR -f ", " --force
 Destroy the specified snapshot by force. If the snapshot is mounted (see
 .BR snapshot_mount ),
-it will be umounted firstly, then destroyed. Even if some pieces of the
-snapshot are lost or broken for some reason(s), the remained parts of the
-snapshot still can be destroyed with this option specified.
+it will be unmounted first and then destroyed. Even if some pieces of the
+snapshot are lost or broken for some reason(s), the remaining parts of the
+snapshot can still be destroyed with this option specified.
 .TP
 .BR  -F ", " --fsname " "\fIfsname
 The filesystem name.

@@ -7,10 +7,10 @@ lctl-snapshot_mount \- mount Lustre snapshot
              {-n | --name ssname} [-r | --rsh remote_shell]
 .br
 .SH DESCRIPTION
-Mount the specified snapshot on the servers. Since it is a read-only mode
-Lustre filesystem, if the snapshot is mounted, then it cannot be renamed.
-It is the user's duty to mount client (must as read only mode with "-o ro")
-to the snapshot when needed.
+Mount the specified snapshot on the servers. As a read-only filesystem,
+mounted snapshots cannot be renamed.
+It is the user's duty to mount client (must be mounted in read-only mode
+with "-o ro") to the snapshot when needed.
 .B NOTE:
 the snapshot has its own fsname that is different from the original
 filesystem fsname, it can be queried via
