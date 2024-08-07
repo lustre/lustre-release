@@ -11,7 +11,7 @@ lfs-ladvise \- give file access advices or hints to server.
 .br
 .SH DESCRIPTION
 Give file access advices or hints to Lustre server side, usually OSS. This lfs
-command is simlar to the Linux
+command is similar to the Linux
 .BR fadvise64 (2)
 system call and
 .BR posix_fadvise (2),
@@ -56,7 +56,7 @@ Typically,
 .B lfs ladvise
 forwards the advice to Lustre servers without
 guaranteeing how and when servers will react to the advice. Actions may or
-may not be triggered when the advices are recieved, depending on the type of
+may not be triggered when the advices are received, depending on the type of
 the advice, whether the backing filesystem type supports that advice, as well
 as the real-time decision of the affected server-side components.
 

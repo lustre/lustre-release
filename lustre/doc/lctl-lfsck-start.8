@@ -27,7 +27,7 @@ multiple devices on current server.
 .TP
 .B  -A, --all
 Start LFSCK on all available devices in the system by single LFSCK command.
-Such LFSCK command can be executed on any MDT deivce in the system.
+Such LFSCK command can be executed on any MDT device in the system.
 .TP
 .B  -c, --create-ostobj [on | off]
 Create the lost OST-object for dangling LOV EA: 'off' (default) or 'on'. Under
@@ -45,10 +45,10 @@ re-create the missed MDT-object.
 Delay to create the lost OST-object for dangling LOV EA until orphan OST-objects
 handled: 'off' (default) or 'on'. If both "--create-ostobj" and the delay option
 are 'on', then the LFSCK will NOT create the OST-object to repair dangling LOV
-EA unless all the OST-objects have been handled. It can avoid reparing dangling
+EA unless all the OST-objects have been handled. It can avoid repairing dangling
 LOV EA incorrectly because of LOV EA corruption. The side-effect is that as long
 as one OST does not join the layout LFSCK or fail to complete the scanning, then
-reparing dangling LOV EA will be skipped. For a large system with a lot of OSTs,
+repairing dangling LOV EA will be skipped. For a large system with a lot of OSTs,
 such condition may be a bit strict. The default value is 'off'.
 .TP
 .B  -e, --error <error_handle>

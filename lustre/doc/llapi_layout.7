@@ -143,7 +143,7 @@ Example 2: Create file with composite layout.
 	comp = llapi_layout_alloc();
 	llapi_layout_comp_add(head, comp);
 	llapi_layout_comp_extent_set(head, comp, 67108864,
-			     (u_int64t)-1); //[64M, EOF)
+			     (uint64_t)-1); //[64M, EOF)
 	llapi_layout_stripe_count_set(comp, LLAPI_LAYOUT_WIDE);
 
 	/* Create file with specified composite layout */

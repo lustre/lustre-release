@@ -68,7 +68,7 @@ in another cases). To start the MGS service only:
 mount -t lustre <MDT partition> -o nosvc <mount point>
 Note the replace_nids command skips any invalidated records in the configuration log.
 The previous log is backed up with the suffix '.bak'.
-Failover nids must be passed after ':' symbol. More then
+Failover nids must be passed after ':' symbol. More than
 one failover can be set (every failover nids after ':' symbol).
 .TP
 .BI ping " <nid> timeout"
@@ -269,7 +269,7 @@ replacing the old lfsck tool for kinds of Lustre inconsistency verification,
 including: corrupted or lost OI mapping, corrupted or lost link EA, corrupted
 or lost FID in name entry, dangling name entry, multiple referenced name entry,
 unmatched MDT-object and name entry pairs, orphan MDT-object, incorrect
-MDT-object links count, corrupted namespace, corrupted or lost lov EA, lost
+MDT-object links count, corrupted namespace, corrupted or lost LOV EA, lost
 OST-object, multiple referenced OST-object, unmatched MDT-object and OST-object
 pairs, orphan OST-object, and so on.
 

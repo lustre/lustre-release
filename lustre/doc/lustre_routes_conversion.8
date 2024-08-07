@@ -5,7 +5,7 @@ the new syntax.
 .SH SYNOPSIS
 .B "lustre_routes_conversion"
 .SH DESCRIPTION
-lustre_route_conversion takes as a first parameter a file with routes
+lustre_routes_conversion takes as a first parameter a file with routes
 configured as follows:
 .LP
 <network> [<hop>] <gateway>@<exit network>[:<priority>];
@@ -13,7 +13,7 @@ configured as follows:
 Then converts it to:
 .LP
 <network>: { gateway: <gateway>@<exit network> [hop: <hop>]
-             [priority: <prioirty>] }
+             [priority: <priority>] }
 .LP
 and appends it to the output file passed in as the second parameter to
 the script.
