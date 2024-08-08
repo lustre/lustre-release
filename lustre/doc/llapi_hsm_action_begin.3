@@ -47,7 +47,7 @@ hsm_action\fP\&.
 .sp
 Once the HSM request has been performed, the destination file must be
 closed, and \fBllapi_hsm_action_end\fP() must be called to free\-up the
-allocated ressources and signal Lustre that the file is now available
+allocated resources and signal Lustre that the file is now available
 to consumers. \fIerrval\fP is set to 0 on success. On error, it must be an
 errno, and hp_flags can be set to \fBHP_FLAG_RETRY\fP if the request is
 retryable, 0 otherwise. \fIhe\fP is the interval (\fIoffset\fP, \fIlength\fP) of
