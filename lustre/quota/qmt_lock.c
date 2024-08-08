@@ -269,7 +269,7 @@ out:
 }
 
 /* clear lge_qunit/edquot_nu flags -
- * slave recieved new qunit and edquot.
+ * slave received new qunit and edquot.
  *
  * \retval	true if revoke is needed - qunit
  *		for this slave reaches least_qunit

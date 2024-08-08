@@ -508,7 +508,7 @@ enum lnet_net_attrs {
  * @LNET_NET_LOCAL_NI_ATTR_STATS:		NI general msg stats (NLA_NESTED)
  * @LNET_NET_LOCAL_NI_ATTR_UDSP_INFO:		NI UDSP state (NLA_NESTED)
  * @LNET_NET_LOCAL_NI_ATTR_SEND_STATS:		NI send stats (NLA_NESTED)
- * @LNET_NET_LOCAL_NI_ATTR_RECV_STATS:		NI recieved stats (NLA_NESTED)
+ * @LNET_NET_LOCAL_NI_ATTR_RECV_STATS:		NI received stats (NLA_NESTED)
  * @LNET_NET_LOCAL_NI_ATTR_DROPPED_STATS:	NI dropped stats (NLA_NESTED)
  * @LNET_NET_LOCAL_NI_ATTR_HEALTH_STATS:	NI health stats (NLA_NESTED)
  * @LNET_NET_LOCAL_NI_ATTR_TUNABLES:		NI tunables (NLA_NESTED)
@@ -568,7 +568,7 @@ enum lnet_net_local_ni_intf_attrs {
  *
  * @LNET_NET_LOCAL_NI_STATS_ATTR_SEND_COUNT:	Number of sent messages
  *						(NLA_U32)
- * @LNET_NET_LOCAL_NI_STATS_ATTR_RECV_COUNT:	Number of recieved messages
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_RECV_COUNT:	Number of received messages
  *						(NLA_U32)
  * @LNET_NET_LOCAL_NI_STATS_ATTR_DROP_COUNT:	Number of dropped messages
  *						(NLA_U32)
@@ -791,13 +791,13 @@ enum lnet_peer_ni_attrs {
  * @LNET_PEER_NI_LIST_ATTR_REFCOUNT:		Remote peer reference count
  *						(NLA_U32)
  * @LNET_PEER_NI_LIST_ATTR_STATS_COUNT:		Remote peer general stats,
- *						reports sent, recieved, and
+ *						reports sent, received, and
  *						dropped packets. (NLA_NESTED)
  *
  * @LNET_PEER_NI_LIST_ATTR_SENT_STATS:		Remote peer sent stats,
  *						reports gets, puts, acks, and
  *						hello packets. (NLA_NESTED)
- * @LNET_PEER_NI_LIST_ATTR_RECV_STATS:		Remote peer recieved stats,
+ * @LNET_PEER_NI_LIST_ATTR_RECV_STATS:		Remote peer received stats,
  *						reports gets, puts, acks, and
  *						hello packets. (NLA_NESTED)
  * @LNET_PEER_NI_LIST_ATTR_DROP_STATS:		Remote peer dropped stats,
@@ -847,7 +847,7 @@ enum lnet_peer_ni_list_attr {
  *
  * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_SEND_COUNT:	Number of sent packets for
  *							remote peer (NLA_U32)
- * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_RECV_COUNT:	Numebr of recieved packets
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_RECV_COUNT:	Number of received packets
  *							for remote peer (NLA_U32)
  * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_DROP_COUNT:	Number of dropped packets
  *							for remote peer (NLA_U32)
