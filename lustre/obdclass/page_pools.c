@@ -1072,7 +1072,7 @@ int obd_pool_init(void)
 			GOTO(fail, rc = -ENOMEM);
 
 		pool = page_pools[pool_order];
-		pool->opp_max_pages = pool_max_pages;
+		pool->opp_max_pages = pool_max_pages >> pool_order;
 
 		pool->opp_max_ptr_pages =
 			npages_to_nptr_pages(pool->opp_max_pages);
