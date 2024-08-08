@@ -365,7 +365,10 @@ int lnet_ni_add_interface(struct lnet_ni *ni, char *iface)
 	if (ni == NULL)
 		return -ENOMEM;
 
-	if (ni->ni_interface != NULL) {
+	if (!iface || !strlen(iface))
+		return -EINVAL;
+
+	if (ni->ni_interface && strlen(ni->ni_interface)) {
 		LCONSOLE_ERROR("%s: interface %s already set for net %s: rc = %d\n",
 			       iface, ni->ni_interface,
 			       libcfs_net2str(LNET_NID_NET(&ni->ni_nid)),
@@ -452,7 +455,7 @@ lnet_ni_alloc_common(struct lnet_net *net, struct lnet_nid *nid, char *iface)
 	 * if an interface name is provided then make sure to add in that
 	 * interface name in NI
 	 */
-	if (iface)
+	if (iface && strlen(iface))
 		if (lnet_ni_add_interface(ni, iface) != 0)
 			goto failed;
 

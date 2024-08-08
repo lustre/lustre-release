@@ -5576,6 +5576,7 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		struct nlattr *local_ni, *ni_attr;
+		bool send_lnd_keys = false;
 		struct lnet_ni *ni;
 		int dev = 0;
 
@@ -5592,16 +5593,16 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 					       "LND not setup for NI");
 				GOTO(net_unlock, rc = -ENODEV);
 			}
-			if (net->net_lnd != lnd)
+			if (net->net_lnd != lnd) {
+				send_lnd_keys = true;
 				lnd = net->net_lnd;
-			else
-				lnd = NULL;
+			}
 		}
 
 		/* We need to resend the key table every time the base LND
 		 * changed.
 		 */
-		if (!idx || lnd) {
+		if (!idx || send_lnd_keys) {
 			const struct ln_key_list *all[] = {
 				&net_props_list, &local_ni_list,
 				&local_ni_interfaces_list,

@@ -2644,7 +2644,7 @@ kgnilnd_startup(struct lnet_ni *ni)
 
 	kgnilnd_tunables_setup(ni);
 
-	if (!ni->ni_interface) {
+	if (!ni->ni_interface || !strlen(ni->ni_interface)) {
 		rc = lnet_ni_add_interface(ni, "ipogif0");
 		if (rc < 0)
 			CWARN("gnilnd failed to allocate ni_interface\n");

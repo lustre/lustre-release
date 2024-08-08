@@ -1794,6 +1794,24 @@ test_111() {
 }
 run_test 111 "Test many routes"
 
+test_112() {
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	setup_fakeif || error "Failed to add fake IF"
+
+	reinit_dlc || return $?
+
+	$LNETCTL net add --net tcp1 --if ${INTERFACES[0]}
+	$LNETCTL net add --nid ${FAKE_IP}@tcp2
+
+	local count=$($LNETCTL net show -v 3 2>/dev/null | grep -c "lnd tunables:")
+	(( count == 2 )) || error "missing lnd tunables"
+
+	cleanup_lnet
+	cleanup_fakeif
+}
+run_test 112 "multiple net configurations"
+
 test_199() {
 	[[ ${NETTYPE} == tcp* || ${NETTYPE} == o2ib* ]] ||
 		skip "Need tcp or o2ib NETTYPE"

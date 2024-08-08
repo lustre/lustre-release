@@ -3838,7 +3838,7 @@ kiblnd_startup(struct lnet_ni *ni)
 	}
 
 	net->ibn_dev = ibdev;
-	if (!ni->ni_interface) {
+	if (!ni->ni_interface || !strlen(ni->ni_interface)) {
 		rc = lnet_ni_add_interface(ni, ifaces[i].li_name);
 		if (rc < 0)
 			CWARN("ko2iblnd failed to allocate ni_interface\n");

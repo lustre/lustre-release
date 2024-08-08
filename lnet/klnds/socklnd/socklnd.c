@@ -2652,7 +2652,7 @@ ksocknal_startup(struct lnet_ni *ni)
 	if (if_idx < 0)
 		goto out_net;
 
-	if (!ni->ni_interface) {
+	if (!ni->ni_interface || !strlen(ni->ni_interface)) {
 		rc = lnet_ni_add_interface(ni, ifaces[if_idx].li_name);
 		if (rc < 0)
 			CWARN("ksocklnd failed to allocate ni_interface\n");
