@@ -2113,7 +2113,7 @@ static inline void pcc_inode_mapping_reset(struct inode *inode)
 	 * The file is detaching, firstly write out all dirty pages and then
 	 * unmap and remove all pagecache associated with the PCC backend.
 	 */
-	rc = filemap_write_and_wait_range(mapping, 0, LUSTRE_EOF);
+	rc = filemap_write_and_wait(mapping);
 	if (rc)
 		CWARN("%s: Failed to write out data for file fid="DFID"\n",
 		      ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)));
@@ -2895,7 +2895,7 @@ static int pcc_mmap_mapping_set(struct inode *inode, struct inode *pcc_inode)
 	 * mapping from the PCC copy to the Lustre file for PCC mmap().
 	 */
 
-	rc = filemap_write_and_wait_range(mapping, 0, LUSTRE_EOF);
+	rc = filemap_write_and_wait(mapping);
 	if (rc)
 		return rc;
 
@@ -2905,7 +2905,7 @@ static int pcc_mmap_mapping_set(struct inode *inode, struct inode *pcc_inode)
 	wait_event_idle(pcci->pcci_waitq,
 			atomic_read(&pcci->pcci_active_ios) == 0);
 
-	rc = filemap_write_and_wait_range(pcc_inode->i_mapping, 0, LUSTRE_EOF);
+	rc = filemap_write_and_wait(pcc_inode->i_mapping);
 	if (rc)
 		return rc;
 
