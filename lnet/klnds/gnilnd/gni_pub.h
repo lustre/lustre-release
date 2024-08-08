@@ -462,7 +462,7 @@ typedef enum gni_fma_cmd_type {
 	GNI_FMA_ATOMIC_FAX_C   = 0x01C,    /* cached atomic FETCH AND exclusive OR */
 	GNI_FMA_ATOMIC_CSWAP   = 0x00D,    /* atomic COMPARE and SWAP */
 	GNI_FMA_ATOMIC_CSWAP_C = 0x01D,    /* cached atomic COMPARE and SWAP */
-	/* Second generation commands ( GET sematics ) */
+	/* Second generation commands ( GET semantics ) */
 	GNI_FMA_ATOMIC2_FAND_S    = 0x240,    /* atomic fetching logical AND (32-bit operands) */
 	GNI_FMA_ATOMIC2_FAND      = 0x041,    /* atomic FETCH and AND */
 	GNI_FMA_ATOMIC2_FAND_SC   = 0x260,    /* cached atomic fetching logical AND (32-bit operands) */
@@ -522,7 +522,7 @@ typedef enum gni_fma_cmd_type {
 	GNI_FMA_ATOMIC_XOR_C   = 0x11B,    /* cached atomic exclusive OR */
 	GNI_FMA_ATOMIC_AX      = 0x10C,    /* atomic AND exclusive OR */
 	GNI_FMA_ATOMIC_AX_C    = 0x11C,    /* cached atomic AND exclusive OR */
-	/* Second generation commands ( PUT sematics ) */
+	/* Second generation commands ( PUT semantics ) */
 	GNI_FMA_ATOMIC2_AND_S    = 0x340,    /* atomic AND (32-bit operands) */
 	GNI_FMA_ATOMIC2_AND      = 0x141,    /* atomic AND */
 	GNI_FMA_ATOMIC2_AND_SC   = 0x360,    /* cached atomic AND (32-bit operands) */
