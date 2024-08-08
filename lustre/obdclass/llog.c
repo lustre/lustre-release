@@ -1538,14 +1538,16 @@ out_close:
 EXPORT_SYMBOL(llog_backup);
 
 /* just count processed records */
-int llog_validate_record(const struct lu_env *env, struct llog_handle *llh,
-			 struct llog_rec_hdr *rec, void *data)
+static inline int llog_validate_record(const struct lu_env *env,
+				       struct llog_handle *llh,
+				       struct llog_rec_hdr *rec, void *data)
 {
 	int *recs = data;
 
 	(*recs)++;
 	return 0;
 }
+
 /* validate plain llog by reading all its records */
 int llog_validate(const struct lu_env *env, struct llog_ctxt *ctxt, char *name)
 {
