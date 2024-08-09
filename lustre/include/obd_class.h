@@ -160,11 +160,11 @@ void obd_pool_fini(void);
 void obd_pool_add_user(void);
 int obd_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc);
 int obd_pool_get_pages_array(struct page **pa, unsigned int count);
-int obd_pool_get_pages(void **buf, unsigned int order);
+int obd_pool_get_objects(void **buf, unsigned int order);
 void obd_pool_put_desc_pages(struct ptlrpc_bulk_desc *desc);
 void obd_pool_put_pages_array(struct page **pa, unsigned int count);
-void obd_pool_put_pages(void *buf, unsigned int order);
-int obd_pool_get_free_pages(unsigned int order);
+void obd_pool_put_objects(void *buf, unsigned int order);
+int obd_pool_get_free_objects(unsigned int order);
 int pool_is_at_full_capacity(int order);
 
 int encrypt_page_pools_seq_show(struct seq_file *m, void *v);

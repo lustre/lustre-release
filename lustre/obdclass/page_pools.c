@@ -77,7 +77,7 @@ MODULE_PARM_DESC(pool_max_memory_mb,
 #define CACHE_QUIESCENT_PERIOD  (20)
 
 static struct obd_page_pool {
-	unsigned long opp_max_pages;   /* maximum pages can hold, const */
+	unsigned long opp_max_objects;   /* maximum objects can hold, const */
 	unsigned int opp_max_ptr_pages;   /* number of ptr_pages, const */
 
 	/*
@@ -106,17 +106,17 @@ static struct obd_page_pool {
 
 	/* in-pool pages bookkeeping */
 	spinlock_t opp_lock; /* protect following fields */
-	unsigned long opp_total_pages; /* total pages in pool */
-	unsigned long opp_free_pages;  /* current pages available */
+	unsigned long opp_total_objects; /* total objects in pool */
+	unsigned long opp_free_objects;  /* current objects available */
 
 	/* statistics */
-	unsigned long opp_st_max_pages;      /* # of pages ever reached */
+	unsigned long opp_st_max_objects;      /* # of objects ever reached */
 	unsigned int opp_st_grows;          /* # of grows */
 	unsigned int opp_st_grow_fails;     /* # of add pages failures */
 	unsigned int opp_st_shrinks;        /* # of shrinks */
 	unsigned long opp_st_access;         /* # of access */
 	unsigned long opp_st_missings;       /* # of cache missing */
-	unsigned long opp_st_lowfree;        /* lowest free pages reached */
+	unsigned long opp_st_lowfree;        /* lowest free objects reached */
 	unsigned int opp_st_max_wqlen;      /* highest waitqueue length */
 	ktime_t opp_st_max_wait; /* in nanoseconds */
 	unsigned long opp_st_outofmem; /* # of out of mem requests */
@@ -149,7 +149,7 @@ static inline int get_pool_index(struct shrinker *shrinker)
 	return -1;
 }
 
-static int element_size(struct obd_page_pool *pool)
+static int object_size(struct obd_page_pool *pool)
 {
 	return PAGE_SIZE << pool->opp_order;
 }
@@ -168,14 +168,14 @@ int encrypt_page_pools_seq_show(struct seq_file *m, void *v)
 	seq_printf(m,
 		"physical pages:          %lu\n"
 		"pages per pool:          %lu\n"
-		"max pages:               %lu\n"
+		"max objects:               %lu\n"
 		"max pools:               %u\n"
-		"total pages:             %lu\n"
+		"total objects:             %lu\n"
 		"total free:              %lu\n"
 		"idle index:              %lu/100\n"
 		"last shrink:             %llds\n"
 		"last access:             %llds\n"
-		"max pages reached:       %lu\n"
+		"max objects reached:       %lu\n"
 		"grows:                   %u\n"
 		"grows failure:           %u\n"
 		"shrinks:                 %u\n"
@@ -186,14 +186,14 @@ int encrypt_page_pools_seq_show(struct seq_file *m, void *v)
 		"max wait time ms:        %lld\n"
 		"out of mem:              %lu\n",
 		cfs_totalram_pages(), PTRS_PER_PAGE,
-		pool->opp_max_pages,
+		pool->opp_max_objects,
 		pool->opp_max_ptr_pages,
-		pool->opp_total_pages,
-		pool->opp_free_pages,
+		pool->opp_total_objects,
+		pool->opp_free_objects,
 		pool->opp_idle_idx,
 		ktime_get_seconds() - pool->opp_last_shrink,
 		ktime_get_seconds() - pool->opp_last_access,
-		pool->opp_st_max_pages,
+		pool->opp_st_max_objects,
 		pool->opp_st_grows,
 		pool->opp_st_grow_fails,
 		pool->opp_st_shrinks,
@@ -227,14 +227,14 @@ int page_pools_seq_show(struct seq_file *m, void *v)
 			continue;
 		spin_lock(&pool->opp_lock);
 		seq_printf(m, "  pool_%dk:\n"
-			   "    max_pages: %lu\n"
+			   "    max_objects: %lu\n"
 			   "    max_items: %lu\n"
-			   "    total_pages: %lu\n"
+			   "    total_objects: %lu\n"
 			   "    total_free: %lu\n"
 			   "    idle_index: %lu/100\n"
 			   "    last_shrink: %llds\n"
 			   "    last_access: %llds\n"
-			   "    max_pages_reached: %lu\n"
+			   "    max_objects_reached: %lu\n"
 			   "    grows: %u\n"
 			   "    grows_failure: %u\n"
 			   "    shrinks: %u\n"
@@ -245,15 +245,15 @@ int page_pools_seq_show(struct seq_file *m, void *v)
 			   "    max_wait_time_ms: %lld\n"
 			   "    out_of_mem: %lu\n",
 			   /* convert from bytes to KiB */
-			   element_size(pool) >> 10,
-			   pool->opp_max_pages,
+			   object_size(pool) >> 10,
+			   pool->opp_max_objects,
 			   pool->opp_max_ptr_pages * PTRS_PER_PAGE,
-			   pool->opp_total_pages,
-			   pool->opp_free_pages,
+			   pool->opp_total_objects,
+			   pool->opp_free_objects,
 			   pool->opp_idle_idx,
 			   ktime_get_seconds() - pool->opp_last_shrink,
 			   ktime_get_seconds() - pool->opp_last_access,
-			   pool->opp_st_max_pages,
+			   pool->opp_st_max_objects,
 			   pool->opp_st_grows,
 			   pool->opp_st_grow_fails,
 			   pool->opp_st_shrinks,
@@ -270,30 +270,30 @@ int page_pools_seq_show(struct seq_file *m, void *v)
 }
 EXPORT_SYMBOL(page_pools_seq_show);
 
-static void pool_release_free_pages(long npages, struct obd_page_pool *pool)
+static void pool_release_free_objects(long nobjects, struct obd_page_pool *pool)
 {
 	int p_idx, g_idx;
 	int p_idx_max1, p_idx_max2;
 
-	LASSERT(npages > 0);
-	LASSERT(npages <= pool->opp_free_pages);
-	LASSERT(pool->opp_free_pages <= pool->opp_total_pages);
+	LASSERT(nobjects > 0);
+	LASSERT(nobjects <= pool->opp_free_objects);
+	LASSERT(pool->opp_free_objects <= pool->opp_total_objects);
 
 	/* max pool index before the release */
-	p_idx_max2 = (pool->opp_total_pages - 1) / PTRS_PER_PAGE;
+	p_idx_max2 = (pool->opp_total_objects - 1) / PTRS_PER_PAGE;
 
-	pool->opp_free_pages -= npages;
-	pool->opp_total_pages -= npages;
+	pool->opp_free_objects -= nobjects;
+	pool->opp_total_objects -= nobjects;
 
 	/* max pool index after the release */
-	p_idx_max1 = pool->opp_total_pages == 0 ? -1 :
-		((pool->opp_total_pages - 1) / PTRS_PER_PAGE);
+	p_idx_max1 = pool->opp_total_objects == 0 ? -1 :
+		((pool->opp_total_objects - 1) / PTRS_PER_PAGE);
 
-	p_idx = pool->opp_free_pages / PTRS_PER_PAGE;
-	g_idx = pool->opp_free_pages % PTRS_PER_PAGE;
+	p_idx = pool->opp_free_objects / PTRS_PER_PAGE;
+	g_idx = pool->opp_free_objects % PTRS_PER_PAGE;
 	LASSERT(pool->opp_ptr_pages[p_idx]);
 
-	while (npages--) {
+	while (nobjects--) {
 		LASSERT(pool->opp_ptr_pages[p_idx]);
 		LASSERT(pool->opp_ptr_pages[p_idx][g_idx] != NULL);
 
@@ -301,7 +301,7 @@ static void pool_release_free_pages(long npages, struct obd_page_pool *pool)
 			__free_page(pool->opp_ptr_pages[p_idx][g_idx]);
 		else
 			OBD_FREE_LARGE(pool->opp_ptr_pages[p_idx][g_idx],
-				       element_size(pool));
+				       object_size(pool));
 		pool->opp_ptr_pages[p_idx][g_idx] = NULL;
 
 		if (++g_idx == PTRS_PER_PAGE) {
@@ -350,8 +350,8 @@ static unsigned long pool_shrink_count(struct shrinker *s,
 	}
 	LASSERT(pool->opp_idle_idx <= IDLE_IDX_MAX);
 
-	return (pool->opp_free_pages <= max_objects) ? 0 :
-		(pool->opp_free_pages - max_objects) *
+	return (pool->opp_free_objects <= max_objects) ? 0 :
+		(pool->opp_free_objects - max_objects) *
 		 pool->opp_idle_idx / IDLE_IDX_MAX;
 }
 
@@ -373,20 +373,20 @@ static unsigned long pool_shrink_scan(struct shrinker *s,
 		max_objects = 1;
 
 	spin_lock(&pool->opp_lock);
-	if (pool->opp_free_pages <= max_objects)
+	if (pool->opp_free_objects <= max_objects)
 		sc->nr_to_scan = 0;
 	else
 		sc->nr_to_scan = min_t(unsigned long, sc->nr_to_scan,
-				       pool->opp_free_pages - max_objects);
+				       pool->opp_free_objects - max_objects);
 	if (sc->nr_to_scan > 0) {
-		pool_release_free_pages(sc->nr_to_scan, pool);
+		pool_release_free_objects(sc->nr_to_scan, pool);
 		pool->opp_st_shrinks++;
 		pool->opp_last_shrink = ktime_get_seconds();
 	}
 	spin_unlock(&pool->opp_lock);
 	if (sc->nr_to_scan > 0)
 		CDEBUG(D_SEC, "released %lu objects, %ld left, order:%u\n",
-		       sc->nr_to_scan, pool->opp_free_pages, pool->opp_order);
+		       sc->nr_to_scan, pool->opp_free_objects, pool->opp_order);
 
 	return sc->nr_to_scan;
 }
@@ -405,13 +405,13 @@ static int pool_shrink(struct shrinker *shrinker, struct shrink_control *sc)
 #endif /* HAVE_SHRINKER_COUNT */
 
 static inline
-int npages_to_nptr_pages(unsigned long npages)
+int nobjects_to_nptr_pages(unsigned long nobjects)
 {
-	return (int) ((npages + PTRS_PER_PAGE - 1) / PTRS_PER_PAGE);
+	return (int) ((nobjects + PTRS_PER_PAGE - 1) / PTRS_PER_PAGE);
 }
 
 /*
- * return how many pages cleaned up.
+ * return how many objects cleaned up.
  */
 static unsigned long pool_cleanup(void ***ptr_pages, int nptr_pages,
 				  struct obd_page_pool *pool)
@@ -427,7 +427,7 @@ static unsigned long pool_cleanup(void ***ptr_pages, int nptr_pages,
 						__free_page(ptr_pages[i][j]);
 					} else {
 						OBD_FREE_LARGE(ptr_pages[i][j],
-							element_size(pool));
+							object_size(pool));
 					}
 					cleaned++;
 				}
@@ -441,22 +441,23 @@ static unsigned long pool_cleanup(void ***ptr_pages, int nptr_pages,
 }
 
 /*
- * merge @nptr_pages pointed by @ptr_pages which contains @npages new pages
- * into current pool.
+ * merge @nptr_objects pointed by @ptr_pages which contains @nobjects
+ * new objects into current pool.
  *
  * we have options to avoid most memory copy with some tricks. but we choose
  * the simplest way to avoid complexity. It's not frequently called.
  */
-static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int npages,
+static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int nobjects,
 			     struct obd_page_pool *page_pool)
 {
 	int freeslot;
 	int op_idx, np_idx, og_idx, ng_idx;
 	int cur_nptr_page, end_nptr_page;
 
-	LASSERT(npages > 0);
-	LASSERT(page_pool->opp_total_pages+npages <= page_pool->opp_max_pages);
-	LASSERT(npages_to_nptr_pages(npages) == nptr_pages);
+	LASSERT(nobjects > 0);
+	LASSERT(page_pool->opp_total_objects + nobjects <=
+					page_pool->opp_max_objects);
+	LASSERT(nobjects_to_nptr_pages(nobjects) == nptr_pages);
 	LASSERT(page_pool->opp_growing);
 
 	spin_lock(&page_pool->opp_lock);
@@ -468,15 +469,15 @@ static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int npages,
 	 * free slots are those left by rent pages, and the extra ones with
 	 * index >= total_pages, locate at the tail of last pool.
 	 */
-	freeslot = page_pool->opp_total_pages % PTRS_PER_PAGE;
+	freeslot = page_pool->opp_total_objects % PTRS_PER_PAGE;
 	if (freeslot != 0)
 		freeslot = PTRS_PER_PAGE - freeslot;
-	freeslot += page_pool->opp_total_pages - page_pool->opp_free_pages;
+	freeslot += page_pool->opp_total_objects - page_pool->opp_free_objects;
 
-	op_idx = page_pool->opp_free_pages / PTRS_PER_PAGE;
-	og_idx = page_pool->opp_free_pages % PTRS_PER_PAGE;
+	op_idx = page_pool->opp_free_objects / PTRS_PER_PAGE;
+	og_idx = page_pool->opp_free_objects % PTRS_PER_PAGE;
 	np_idx = nptr_pages - 1;
-	ng_idx = (npages - 1) % PTRS_PER_PAGE;
+	ng_idx = (nobjects - 1) % PTRS_PER_PAGE;
 
 	while (freeslot) {
 		LASSERT(page_pool->opp_ptr_pages[op_idx][og_idx] == NULL);
@@ -503,9 +504,9 @@ static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int npages,
 	/*
 	 * (2) add ptr pages if needed.
 	 */
-	cur_nptr_page = (page_pool->opp_total_pages + PTRS_PER_PAGE - 1) /
+	cur_nptr_page = (page_pool->opp_total_objects + PTRS_PER_PAGE - 1) /
 		      PTRS_PER_PAGE;
-	end_nptr_page = (page_pool->opp_total_pages + npages +
+	end_nptr_page = (page_pool->opp_total_objects + nobjects +
 		      PTRS_PER_PAGE - 1) / PTRS_PER_PAGE;
 	LASSERT(end_nptr_page <= page_pool->opp_max_ptr_pages);
 
@@ -530,39 +531,42 @@ static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int npages,
 		ptr_pages[np_idx++] = NULL;
 	}
 
-	page_pool->opp_total_pages += npages;
-	page_pool->opp_free_pages += npages;
-	page_pool->opp_st_lowfree = page_pool->opp_free_pages;
+	page_pool->opp_total_objects += nobjects;
+	page_pool->opp_free_objects += nobjects;
+	page_pool->opp_st_lowfree = page_pool->opp_free_objects;
 
-	if (page_pool->opp_total_pages > page_pool->opp_st_max_pages)
-		page_pool->opp_st_max_pages = page_pool->opp_total_pages;
+	if (page_pool->opp_total_objects > page_pool->opp_st_max_objects)
+		page_pool->opp_st_max_objects = page_pool->opp_total_objects;
 
-	CDEBUG(D_SEC, "add %d pages to total %lu\n", npages,
-	       page_pool->opp_total_pages);
+	CDEBUG(D_SEC, "add %d pages to total %lu\n", nobjects,
+	       page_pool->opp_total_objects);
 
 	spin_unlock(&page_pool->opp_lock);
 }
 
 #define POOL_INIT_SIZE (PTLRPC_MAX_BRW_SIZE / 4)
-static int pool_add_pages(int npages, struct obd_page_pool *page_pool)
+static int pool_add_objects(int nobjects, struct obd_page_pool *page_pool)
 {
 	void ***ptr_pages;
 	int nptr_pages, alloced = 0;
 	int i, j, rc = -ENOMEM;
 	unsigned int pool_order = page_pool->opp_order;
 
-	if (npages < POOL_INIT_SIZE / element_size(page_pool))
-		npages = POOL_INIT_SIZE / element_size(page_pool);
+	if (nobjects < POOL_INIT_SIZE / object_size(page_pool))
+		nobjects = POOL_INIT_SIZE / object_size(page_pool);
 
 	mutex_lock(&page_pool->add_pages_mutex);
 
-	if (npages + page_pool->opp_total_pages > page_pool->opp_max_pages)
-		npages = page_pool->opp_max_pages - page_pool->opp_total_pages;
-	LASSERT(npages > 0);
+	if (nobjects + page_pool->opp_total_objects >
+					page_pool->opp_max_objects) {
+		nobjects = page_pool->opp_max_objects -
+			page_pool->opp_total_objects;
+	}
+	LASSERT(nobjects > 0);
 
 	page_pool->opp_st_grows++;
 
-	nptr_pages = npages_to_nptr_pages(npages);
+	nptr_pages = nobjects_to_nptr_pages(nobjects);
 	OBD_ALLOC_PTR_ARRAY(ptr_pages, nptr_pages);
 	if (ptr_pages == NULL)
 		goto out;
@@ -572,13 +576,13 @@ static int pool_add_pages(int npages, struct obd_page_pool *page_pool)
 		if (ptr_pages[i] == NULL)
 			goto out_ptr_pages;
 
-		for (j = 0; j < PTRS_PER_PAGE && alloced < npages; j++) {
+		for (j = 0; j < PTRS_PER_PAGE && alloced < nobjects; j++) {
 			if (pool_order == 0)
 				ptr_pages[i][j] = alloc_page(GFP_NOFS |
 					__GFP_HIGHMEM);
 			else {
 				OBD_ALLOC_LARGE(ptr_pages[i][j],
-					element_size(page_pool));
+					object_size(page_pool));
 			}
 			if (ptr_pages[i][j] == NULL)
 				goto out_ptr_pages;
@@ -586,10 +590,10 @@ static int pool_add_pages(int npages, struct obd_page_pool *page_pool)
 			alloced++;
 		}
 	}
-	LASSERT(alloced == npages);
+	LASSERT(alloced == nobjects);
 
-	pool_insert_ptrs(ptr_pages, nptr_pages, npages, page_pool);
-	CDEBUG(D_SEC, "added %d elements into pool:%d\n", npages, pool_order);
+	pool_insert_ptrs(ptr_pages, nptr_pages, nobjects, page_pool);
+	CDEBUG(D_SEC, "added %d elements into pool:%d\n", nobjects, pool_order);
 	OBD_FREE_PTR_ARRAY(ptr_pages, nptr_pages);
 	rc = 0;
 
@@ -600,7 +604,7 @@ out_ptr_pages:
 out:
 	if (rc) {
 		page_pool->opp_st_grow_fails++;
-		CERROR("Failed to allocate %d pages\n", npages);
+		CERROR("Failed to allocate %d objects: rc = %d\n", nobjects, rc);
 	}
 
 	mutex_unlock(&page_pool->add_pages_mutex);
@@ -622,11 +626,12 @@ static int pool_should_grow(int needed, struct obd_page_pool *pool)
 	 * don't grow if someone else is growing the pool right now,
 	 * or the pool has reached its full capacity
 	 */
-	if (pool->opp_growing || pool->opp_total_pages == pool->opp_max_pages)
+	if (pool->opp_growing ||
+	    pool->opp_total_objects == pool->opp_max_objects)
 		return 0;
 
-	/* if total pages is not enough, we need to grow */
-	if (pool->opp_total_pages < needed)
+	/* if total objects is not enough, we need to grow */
+	if (pool->opp_total_objects < needed)
 		return 1;
 	/*
 	 * we wanted to return 0 here if there was a shrink just
@@ -644,21 +649,21 @@ static int pool_should_grow(int needed, struct obd_page_pool *pool)
 }
 
 /*
- * Export the number of free pages in the pool of 'order'
+ * Export the number of free objects in the pool of 'order'
  */
-int obd_pool_get_free_pages(unsigned int order)
+int obd_pool_get_free_objects(unsigned int order)
 {
-	return page_pools[order]->opp_free_pages;
+	return page_pools[order]->opp_free_objects;
 }
-EXPORT_SYMBOL(obd_pool_get_free_pages);
+EXPORT_SYMBOL(obd_pool_get_free_objects);
 
 /*
  * Let outside world know if pool full capacity is reached
  */
 int pool_is_at_full_capacity(int order)
 {
-	return (page_pools[order]->opp_total_pages ==
-		page_pools[order]->opp_max_pages);
+	return (page_pools[order]->opp_total_objects ==
+		page_pools[order]->opp_max_objects);
 }
 EXPORT_SYMBOL(pool_is_at_full_capacity);
 
@@ -676,7 +681,7 @@ static inline void **page_from_pagearray(void *array, int index)
 	return (void **)&pa[index];
 }
 
-static inline void **page_from_bufarray(void *array, int index)
+static inline void **object_from_bufarray(void *array, int index)
 {
 	return (void **)array;
 }
@@ -684,11 +689,11 @@ static inline void **page_from_bufarray(void *array, int index)
 static bool __grow_pool_try(int needed, struct obd_page_pool *pool);
 
 /*
- * we allocate the requested pages atomically.
+ * we allocate the requested objects atomically.
  */
-static inline int __obd_pool_get_pages(void *array, unsigned int count,
+static inline int __obd_pool_get_objects(void *array, unsigned int count,
 				       unsigned int order,
-				       void **(*page_from)(void *, int))
+				       void **(*object_from)(void *, int))
 {
 	struct obd_page_pool *page_pool = page_pools[order];
 	wait_queue_entry_t waitlink;
@@ -697,21 +702,21 @@ static inline int __obd_pool_get_pages(void *array, unsigned int count,
 	int p_idx, g_idx;
 	int i, rc = 0;
 
-	if (!array || count <= 0 || count > page_pool->opp_max_pages)
+	if (!array || count <= 0 || count > page_pool->opp_max_objects)
 		return -EINVAL;
 
 	spin_lock(&page_pool->opp_lock);
 
 	page_pool->opp_st_access++;
 again:
-	if (unlikely(page_pool->opp_free_pages < count)) {
+	if (unlikely(page_pool->opp_free_objects < count)) {
 		if (tick_ns == 0)
 			tick_ns = ktime_get_ns();
 
 		page_pool->opp_st_missings++;
 		page_pool->opp_pages_short += count;
 
-		/* if we aren't able to add pages, check if someone else is
+		/* if we aren't able to add objects, check if someone else is
 		 * growing the pool and sleep if so, otherwise we return
 		 * ENOMEM because we can't sleep here waiting for other ops to
 		 * complete (main user is ptlrpcd, which must not sleep waiting
@@ -768,17 +773,17 @@ again:
 	}
 
 	/* proceed with rest of allocation */
-	page_pool->opp_free_pages -= count;
+	page_pool->opp_free_objects -= count;
 
-	p_idx = page_pool->opp_free_pages / PTRS_PER_PAGE;
-	g_idx = page_pool->opp_free_pages % PTRS_PER_PAGE;
+	p_idx = page_pool->opp_free_objects / PTRS_PER_PAGE;
+	g_idx = page_pool->opp_free_objects % PTRS_PER_PAGE;
 
 	for (i = 0; i < count; i++) {
-		void **pagep = page_from(array, i);
+		void **objp = object_from(array, i);
 
 		if (page_pool->opp_ptr_pages[p_idx][g_idx] == NULL)
 			GOTO(out_unlock, rc = -EPROTO);
-		*pagep = page_pool->opp_ptr_pages[p_idx][g_idx];
+		*objp = page_pool->opp_ptr_pages[p_idx][g_idx];
 		page_pool->opp_ptr_pages[p_idx][g_idx] = NULL;
 
 		if (++g_idx == PTRS_PER_PAGE) {
@@ -787,16 +792,16 @@ again:
 		}
 	}
 
-	if (page_pool->opp_free_pages < page_pool->opp_st_lowfree)
+	if (page_pool->opp_free_objects < page_pool->opp_st_lowfree)
 		page_pool->opp_st_lowfree =
-			page_pool->opp_free_pages;
+			page_pool->opp_free_objects;
 
 	/*
 	 * new idle index = (old * weight + new) / (weight + 1)
 	 */
 	if (this_idle == -1) {
-		this_idle = page_pool->opp_free_pages * IDLE_IDX_MAX /
-			page_pool->opp_total_pages;
+		this_idle = page_pool->opp_free_objects * IDLE_IDX_MAX /
+			page_pool->opp_total_objects;
 	}
 	page_pool->opp_idle_idx = (page_pool->opp_idle_idx *
 			IDLE_IDX_WEIGHT + this_idle) /
@@ -814,7 +819,7 @@ int obd_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc)
 	int rc;
 
 	LASSERT(desc->bd_iov_count > 0);
-	LASSERT(desc->bd_iov_count <= page_pools[0]->opp_max_pages);
+	LASSERT(desc->bd_iov_count <= page_pools[0]->opp_max_objects);
 
 	/* resent bulk, enc iov might have been allocated previously */
 	if (desc->bd_enc_vec != NULL)
@@ -825,7 +830,7 @@ int obd_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc)
 	if (desc->bd_enc_vec == NULL)
 		return -ENOMEM;
 
-	rc = __obd_pool_get_pages((void *)desc, desc->bd_iov_count, 0,
+	rc = __obd_pool_get_objects((void *)desc, desc->bd_iov_count, 0,
 				      page_from_bulkdesc);
 	if (rc) {
 		OBD_FREE_LARGE(desc->bd_enc_vec,
@@ -839,22 +844,22 @@ EXPORT_SYMBOL(obd_pool_get_desc_pages);
 
 int obd_pool_get_pages_array(struct page **pa, unsigned int count)
 {
-	return __obd_pool_get_pages((void *)pa, count, 0,
+	return __obd_pool_get_objects((void *)pa, count, 0,
 					page_from_pagearray);
 }
 EXPORT_SYMBOL(obd_pool_get_pages_array);
 
 /* get 2^order pages region */
-int obd_pool_get_pages(void **pages, unsigned int order)
+int obd_pool_get_objects(void **pages, unsigned int order)
 {
-	return __obd_pool_get_pages((void *)pages, 1, order,
-					page_from_bufarray);
+	return __obd_pool_get_objects((void *)pages, 1, order,
+					object_from_bufarray);
 }
-EXPORT_SYMBOL(obd_pool_get_pages);
+EXPORT_SYMBOL(obd_pool_get_objects);
 
-static int __obd_pool_put_pages(void *array, unsigned int count,
+static int __obd_pool_put_objects(void *array, unsigned int count,
 				    unsigned int order,
-				    void **(*page_from)(void *, int))
+				    void **(*object_from)(void *, int))
 {
 	struct obd_page_pool *page_pool;
 	unsigned long this_idle;
@@ -864,7 +869,7 @@ static int __obd_pool_put_pages(void *array, unsigned int count,
 	LASSERTF(order < POOLS_COUNT, "count %u, pool %u\n",
 		 count, order);
 	if (!array) {
-		CERROR("Faled to put %u pages, from pool %u\n",
+		CERROR("Faled to put %u objects, from pool %u\n",
 		       count, order);
 		return -EINVAL;
 	}
@@ -874,29 +879,29 @@ static int __obd_pool_put_pages(void *array, unsigned int count,
 
 	spin_lock(&page_pool->opp_lock);
 
-	p_idx = page_pool->opp_free_pages / PTRS_PER_PAGE;
-	g_idx = page_pool->opp_free_pages % PTRS_PER_PAGE;
+	p_idx = page_pool->opp_free_objects / PTRS_PER_PAGE;
+	g_idx = page_pool->opp_free_objects % PTRS_PER_PAGE;
 
-	if (page_pool->opp_free_pages + count > page_pool->opp_total_pages)
+	if (page_pool->opp_free_objects + count > page_pool->opp_total_objects)
 		GOTO(out_unlock, rc = -EPROTO);
 	if (!page_pool->opp_ptr_pages[p_idx])
 		GOTO(out_unlock, rc = -EPROTO);
 
 	for (i = 0; i < count; i++) {
-		void **pagep = page_from(array, i);
+		void **objp = object_from(array, i);
 
-		if (!*pagep ||
+		if (!*objp ||
 		    page_pool->opp_ptr_pages[p_idx][g_idx] != NULL)
 			GOTO(out_unlock, rc = -EPROTO);
 
-		page_pool->opp_ptr_pages[p_idx][g_idx] = *pagep;
+		page_pool->opp_ptr_pages[p_idx][g_idx] = *objp;
 		if (++g_idx == PTRS_PER_PAGE) {
 			p_idx++;
 			g_idx = 0;
 		}
 	}
 
-	page_pool->opp_free_pages += count;
+	page_pool->opp_free_objects += count;
 	pool_wakeup(page_pool);
 
 	/*
@@ -908,8 +913,8 @@ static int __obd_pool_put_pages(void *array, unsigned int count,
 	 * seconds(CACHE_QUIESCENT_PERIOD) despite the large amount
 	 * of free elements ready to shrinking.
 	 */
-	this_idle = page_pool->opp_free_pages * IDLE_IDX_MAX /
-		page_pool->opp_total_pages;
+	this_idle = page_pool->opp_free_objects * IDLE_IDX_MAX /
+		page_pool->opp_total_objects;
 	page_pool->opp_idle_idx = (page_pool->opp_idle_idx *
 			IDLE_IDX_WEIGHT + this_idle) /
 			(IDLE_IDX_WEIGHT + 1);
@@ -926,7 +931,7 @@ void obd_pool_put_desc_pages(struct ptlrpc_bulk_desc *desc)
 	if (desc->bd_enc_vec == NULL)
 		return;
 
-	rc = __obd_pool_put_pages((void *)desc, desc->bd_iov_count, 0,
+	rc = __obd_pool_put_objects((void *)desc, desc->bd_iov_count, 0,
 				      page_from_bulkdesc);
 	if (rc)
 		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
@@ -941,7 +946,7 @@ void obd_pool_put_pages_array(struct page **pa, unsigned int count)
 {
 	int rc;
 
-	rc = __obd_pool_put_pages((void *)pa, count, 0, page_from_pagearray);
+	rc = __obd_pool_put_objects((void *)pa, count, 0, page_from_pagearray);
 
 	if (rc)
 		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
@@ -949,15 +954,15 @@ void obd_pool_put_pages_array(struct page **pa, unsigned int count)
 EXPORT_SYMBOL(obd_pool_put_pages_array);
 
 /* put 2^order pages region */
-void obd_pool_put_pages(void *buf, unsigned int order)
+void obd_pool_put_objects(void *buf, unsigned int order)
 {
 	int rc;
 
-	rc = __obd_pool_put_pages(buf, 1, order, page_from_bufarray);
+	rc = __obd_pool_put_objects(buf, 1, order, object_from_bufarray);
 	if (rc)
-		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
+		CDEBUG(D_SEC, "error putting objects in pool: %d\n", rc);
 }
-EXPORT_SYMBOL(obd_pool_put_pages);
+EXPORT_SYMBOL(obd_pool_put_objects);
 
 /* called with pool->opp_lock held */
 static bool __grow_pool_try(int needed, struct obd_page_pool *pool)
@@ -975,7 +980,7 @@ static bool __grow_pool_try(int needed, struct obd_page_pool *pool)
 		 * first use
 		 */
 		if (pool->opp_order == 0 &&
-		    pool->opp_total_pages == 0)
+		    pool->opp_total_objects == 0)
 			to_add = PTLRPC_MAX_BRW_PAGES * 2;
 		else /* otherwise, we add requested or at least 8 items */
 			to_add = max(needed, 8);
@@ -984,9 +989,9 @@ static bool __grow_pool_try(int needed, struct obd_page_pool *pool)
 		CDEBUG(D_SEC,
 		       "pool %d is %lu elements (size %d bytes), growing by %d items\n",
 			pool->opp_order, pool->opp_pages_short,
-			element_size(pool), to_add);
+			object_size(pool), to_add);
 		/* we can't hold a spinlock over page allocation */
-		rc = pool_add_pages(to_add, pool);
+		rc = pool_add_objects(to_add, pool);
 		if (rc == 0)
 			pool_grown = true;
 
@@ -1072,10 +1077,10 @@ int obd_pool_init(void)
 			GOTO(fail, rc = -ENOMEM);
 
 		pool = page_pools[pool_order];
-		pool->opp_max_pages = pool_max_pages >> pool_order;
+		pool->opp_max_objects = pool_max_pages >> pool_order;
 
 		pool->opp_max_ptr_pages =
-			npages_to_nptr_pages(pool->opp_max_pages);
+			nobjects_to_nptr_pages(pool->opp_max_objects);
 
 		init_waitqueue_head(&pool->opp_waitq);
 		pool->opp_last_shrink = ktime_get_seconds();
@@ -1136,18 +1141,18 @@ void obd_pool_fini(void)
 		pool = page_pools[pool_order];
 		shrinker_free(pool->pool_shrinker);
 		LASSERT(pool->opp_ptr_pages);
-		LASSERT(pool->opp_total_pages == pool->opp_free_pages);
+		LASSERT(pool->opp_total_objects == pool->opp_free_objects);
 
-		nptr_pages = npages_to_nptr_pages(pool->opp_total_pages);
+		nptr_pages = nobjects_to_nptr_pages(pool->opp_total_objects);
 		cleaned = pool_cleanup(pool->opp_ptr_pages, nptr_pages, pool);
-		LASSERT(cleaned == pool->opp_total_pages);
+		LASSERT(cleaned == pool->opp_total_objects);
 
 		pool_ptrs_free(pool);
 
 		if (pool->opp_st_access > 0) {
 			CDEBUG(D_SEC,
-			       "max pages %lu, grows %u, grow fails %u, shrinks %u, access %lu, missing %lu, max qlen %u, max wait ms %lld, out of mem %lu\n",
-			       pool->opp_st_max_pages,
+			       "max objects %lu, grows %u, grow fails %u, shrinks %u, access %lu, missing %lu, max qlen %u, max wait ms %lld, out of mem %lu\n",
+			       pool->opp_st_max_objects,
 			       pool->opp_st_grows,
 			       pool->opp_st_grow_fails,
 			       pool->opp_st_shrinks,

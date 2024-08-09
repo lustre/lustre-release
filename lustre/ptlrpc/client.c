@@ -1693,7 +1693,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 	/* do not try to go further if there is not enough memory in pool */
 	if (req->rq_sent && req->rq_bulk)
 		if (req->rq_bulk->bd_iov_count >
-		    obd_pool_get_free_pages(0) &&
+		    obd_pool_get_free_objects(0) &&
 		    pool_is_at_full_capacity(0))
 			RETURN(-ENOMEM);
 
