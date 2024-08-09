@@ -83,6 +83,17 @@ struct ll_dentry_data {
 
 #define ll_d2d(de) ((struct ll_dentry_data *)((de)->d_fsdata))
 
+static inline void set_lld_invalid(struct dentry *de, int flag)
+{
+	struct ll_dentry_data *lld;
+
+	rcu_read_lock();
+	lld = ll_d2d(de);
+	if (lld)
+		lld->lld_invalid = flag;
+	rcu_read_unlock();
+}
+
 #define LLI_INODE_MAGIC                 0x111d0de5
 #define LLI_INODE_DEAD                  0xdeadd00d
 
@@ -1459,14 +1470,8 @@ void ll_io_set_mirror(struct cl_io *io, const struct file *file);
 extern const struct dentry_operations ll_d_ops;
 #ifndef HAVE_D_INIT
 bool ll_d_setup(struct dentry *de, bool do_put);
-
-static inline bool lld_is_init(struct dentry *dentry)
-{
-	return ll_d2d(dentry);
-}
 #else
 #define ll_d_setup(de, do_put) (true)
-#define lld_is_init(dentry) (true)
 #endif
 
 void ll_intent_drop_lock(struct lookup_intent *lookup);
@@ -1935,10 +1940,14 @@ dentry_may_statahead(struct inode *dir, struct dentry *dentry)
 	 * bypass interacting with statahead cache by checking
 	 * 'lld_sa_generation == lli->lli_sa_generation'.
 	 */
+	rcu_read_lock();
 	ldd = ll_d2d(dentry);
 	if (ldd != NULL && lli->lli_sa_generation &&
-	    ldd->lld_sa_generation == lli->lli_sa_generation)
+	    ldd->lld_sa_generation == lli->lli_sa_generation) {
+		rcu_read_unlock();
 		return false;
+	}
+	rcu_read_unlock();
 
 	if (lli->lli_sa_pattern & LSA_PATTERN_ADVISE)
 		return true;
@@ -2005,7 +2014,16 @@ static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,
 
 static inline int d_lustre_invalid(const struct dentry *dentry)
 {
-	return !ll_d2d(dentry) || ll_d2d(dentry)->lld_invalid;
+	struct ll_dentry_data *lld;
+	int rc = 1;
+
+	rcu_read_lock();
+	lld = ll_d2d(dentry);
+	if (lld)
+		rc = lld->lld_invalid;
+	rcu_read_unlock();
+
+	return rc;
 }
 
 /* 8 MiB is where reads are reliably better as DIO on most configs */
@@ -2026,16 +2044,14 @@ static inline void d_lustre_invalidate(struct dentry *dentry)
 	       dentry->d_parent, dentry->d_inode, ll_d_count(dentry));
 
 	spin_lock(&dentry->d_lock);
-	if (lld_is_init(dentry))
-		ll_d2d(dentry)->lld_invalid = 1;
+	set_lld_invalid(dentry, 1);
 	spin_unlock(&dentry->d_lock);
 }
 
 static inline void d_lustre_revalidate(struct dentry *dentry)
 {
 	spin_lock(&dentry->d_lock);
-	LASSERT(ll_d2d(dentry));
-	ll_d2d(dentry)->lld_invalid = 0;
+	set_lld_invalid(dentry, 0);
 	spin_unlock(&dentry->d_lock);
 }
 
