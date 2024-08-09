@@ -2876,11 +2876,6 @@ test_27J() {
 	(( $MDS1_VERSION > $(version_code 2.12.51) )) ||
 		skip "Need MDS version newer than 2.12.51"
 
-	# skip basic ops on file with foreign LOV tests on 5.12-6.2 kernels
-	# until the filemap_read() issue is fixed by v6.2-rc4-61-g5956592ce337
-	(( $LINUX_VERSION_CODE < $(version_code 5.12.0) ||
-	   $LINUX_VERSION_CODE >= $(version_code 6.2.0) )) ||
-		skip "Need kernel < 5.12.0 or >= 6.2.0 for filemap_read() fix"
 
 	test_mkdir $DIR/$tdir
 	local uuid1=$(cat /proc/sys/kernel/random/uuid)
@@ -2949,14 +2944,19 @@ test_27J() {
 	$LFS setstripe -c 2 $DIR/$tdir/${tfile}2 &&
 		error "$DIR/$tdir/${tfile}2: setstripe should fail"
 
-	# R/W should fail
-	cat $DIR/$tdir/$tfile && error "$DIR/$tdir/$tfile: read should fail"
-	cat $DIR/$tdir/${tfile}2 &&
-		error "$DIR/$tdir/${tfile}2: read should fail"
-	cat /etc/passwd > $DIR/$tdir/$tfile &&
-		error "$DIR/$tdir/$tfile: write should fail"
-	cat /etc/passwd > $DIR/$tdir/${tfile}2 &&
-		error "$DIR/$tdir/${tfile}2: write should fail"
+	# skip basic ops on file with foreign LOV tests on >5.12 kernels
+	(( $LINUX_VERSION_CODE < $(version_code 5.12.0) )) && {
+		# kernel >= 5.12.0 would skip filemap_read() with 0 sized file
+		# R/W should fail
+		cat $DIR/$tdir/$tfile &&
+			error "$DIR/$tdir/$tfile: read should fail"
+		cat $DIR/$tdir/${tfile}2 &&
+			error "$DIR/$tdir/${tfile}2: read should fail"
+		cat /etc/passwd > $DIR/$tdir/$tfile &&
+			error "$DIR/$tdir/$tfile: write should fail"
+		cat /etc/passwd > $DIR/$tdir/${tfile}2 &&
+			error "$DIR/$tdir/${tfile}2: write should fail"
+	}
 
 	# chmod should work
 	chmod 222 $DIR/$tdir/$tfile ||
