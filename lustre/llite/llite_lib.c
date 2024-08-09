@@ -381,7 +381,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				   OBD_CONNECT2_BATCH_RPC |
 				   OBD_CONNECT2_DMV_IMP_INHERIT |
 				   OBD_CONNECT2_UNALIGNED_DIO |
-				   OBD_CONNECT2_PCCRO;
+				   OBD_CONNECT2_PCCRO |
+				   OBD_CONNECT2_MIRROR_ID_FIX;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
 	if (test_bit(LL_SBI_LRU_RESIZE, sbi->ll_flags))

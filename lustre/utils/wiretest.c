@@ -1492,6 +1492,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT2_UNALIGNED_DIO);
 	LASSERTF(OBD_CONNECT2_CONN_POLICY == 0x800000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_CONN_POLICY);
+	LASSERTF(OBD_CONNECT2_MIRROR_ID_FIX == 0x2000000000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT2_MIRROR_ID_FIX);
 
 	LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)OBD_CKSUM_CRC32);
@@ -3530,14 +3532,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding7));
 	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding7) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding7));
-	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding8) == 128, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding8));
-	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding8) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding8));
-	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_mirror_id) == 132, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_rec_resync, rs_mirror_id));
-	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_mirror_id) == 2, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_mirror_id));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_mirror_id_new) == 128, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_mirror_id_new));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_mirror_id_new) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_mirror_id_new));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_mirror_id_old) == 132, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_mirror_id_old));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_mirror_id_old) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_mirror_id_old));
 	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding9) == 134, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding9));
 	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding9) == 2, "found %lld\n",
@@ -3634,10 +3636,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_rec_reint, rr_umask));
 	LASSERTF((int)sizeof(((struct mdt_rec_reint *)0)->rr_umask) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_rec_reint *)0)->rr_umask));
-	LASSERTF((int)offsetof(struct mdt_rec_reint, rr_mirror_id) == 132, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_rec_reint, rr_mirror_id));
-	LASSERTF((int)sizeof(((struct mdt_rec_reint *)0)->rr_mirror_id) == 2, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_rec_reint *)0)->rr_mirror_id));
+	LASSERTF((int)offsetof(struct mdt_rec_reint, rr_mirror_id_old) == 132, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_reint, rr_mirror_id_old));
+	LASSERTF((int)sizeof(((struct mdt_rec_reint *)0)->rr_mirror_id_old) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_reint *)0)->rr_mirror_id_old));
 	LASSERTF((int)offsetof(struct mdt_rec_reint, rr_padding_4) == 134, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_rec_reint, rr_padding_4));
 	LASSERTF((int)sizeof(((struct mdt_rec_reint *)0)->rr_padding_4) == 2, "found %lld\n",

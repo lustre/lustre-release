@@ -703,6 +703,7 @@ check_obd_connect_data(void)
 	CHECK_DEFINE_64X(OBD_CONNECT2_COMPRESS);
 	CHECK_DEFINE_64X(OBD_CONNECT2_UNALIGNED_DIO);
 	CHECK_DEFINE_64X(OBD_CONNECT2_CONN_POLICY);
+	CHECK_DEFINE_64X(OBD_CONNECT2_MIRROR_ID_FIX);
 
 	BLANK_LINE();
 	CHECK_VALUE_X(OBD_CKSUM_CRC32);
@@ -1564,8 +1565,8 @@ check_mdt_rec_resync(void)
 	CHECK_MEMBER(mdt_rec_resync, rs_padding5);
 	CHECK_MEMBER(mdt_rec_resync, rs_padding6);
 	CHECK_MEMBER(mdt_rec_resync, rs_padding7);
-	CHECK_MEMBER(mdt_rec_resync, rs_padding8);
-	CHECK_MEMBER(mdt_rec_resync, rs_mirror_id);
+	CHECK_MEMBER(mdt_rec_resync, rs_mirror_id_new);
+	CHECK_MEMBER(mdt_rec_resync, rs_mirror_id_old);
 	CHECK_MEMBER(mdt_rec_resync, rs_padding9);
 }
 
@@ -1596,7 +1597,7 @@ check_mdt_rec_reint(void)
 	CHECK_MEMBER(mdt_rec_reint, rr_flags);
 	CHECK_MEMBER(mdt_rec_reint, rr_flags_h);
 	CHECK_MEMBER(mdt_rec_reint, rr_umask);
-	CHECK_MEMBER(mdt_rec_reint, rr_mirror_id);
+	CHECK_MEMBER(mdt_rec_reint, rr_mirror_id_old);
 	CHECK_MEMBER(mdt_rec_reint, rr_padding_4);
 }
 

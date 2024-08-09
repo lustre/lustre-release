@@ -567,7 +567,10 @@ int mdc_file_resync(struct obd_export *exp, struct md_op_data *op_data)
 	rec->rs_cap	= ll_capability_u32(op_data->op_cap);
 	rec->rs_fid	= op_data->op_fid1;
 	rec->rs_bias	= op_data->op_bias;
-	rec->rs_mirror_id = op_data->op_mirror_id;
+	if (exp_connect_mirror_id_fix(exp))
+		rec->rs_mirror_id_new = op_data->op_mirror_id;
+	else
+		rec->rs_mirror_id_old = op_data->op_mirror_id;
 
 	lock = ldlm_handle2lock(&op_data->op_lease_handle);
 	if (lock != NULL) {

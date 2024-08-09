@@ -1290,7 +1290,8 @@ static int mdt_close_handle_unpack(struct mdt_thread_info *info)
 	RETURN(0);
 }
 
-static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
+static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info)
+{
 	struct req_capsule *pill = info->mti_pill;
 
 	if (!info->mti_intent_lock &&
@@ -1898,6 +1899,7 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 
 static int mdt_resync_unpack(struct mdt_thread_info *info)
 {
+	struct obd_export *exp = mdt_info_req(info)->rq_export;
 	struct req_capsule *pill = info->mti_pill;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct lu_ucred *uc = mdt_ucred(info);
@@ -1915,8 +1917,11 @@ static int mdt_resync_unpack(struct mdt_thread_info *info)
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->rs_cap);
 
-	rr->rr_fid1   = &rec->rs_fid;
-	rr->rr_mirror_id = rec->rs_mirror_id;
+	rr->rr_fid1 = &rec->rs_fid;
+	if (exp_connect_mirror_id_fix(exp))
+		rr->rr_mirror_id = (__u16)rec->rs_mirror_id_new;
+	else
+		rr->rr_mirror_id = rec->rs_mirror_id_old;
 
 	/* cookie doesn't need to be swapped but it has been swapped
 	 * in lustre_swab_mdt_rec_reint() as rr_mtime, so here it needs

@@ -654,6 +654,8 @@ static const char *const obd_connect_names[] = {
 	"compressed_file",		/* 0x200000000 */
 	"unaligned_dio",		/* 0x400000000 */
 	"conn_policy",			/* 0x800000000 */
+	"sparse_read",		       /* 0x1000000000 */
+	"mirror_id_fix",	       /* 0x2000000000 */
 	NULL
 };
 

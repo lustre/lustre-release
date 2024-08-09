@@ -352,56 +352,58 @@ static inline int exp_max_brw_size(struct obd_export *exp)
 	return ONE_MB_BRW_SIZE;
 }
 
-static inline int exp_connect_multibulk(struct obd_export *exp)
+static inline bool exp_connect_multibulk(struct obd_export *exp)
 {
 	return exp_max_brw_size(exp) > ONE_MB_BRW_SIZE;
 }
 
-static inline int exp_connect_cancelset(struct obd_export *exp)
+static inline bool exp_connect_cancelset(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_CANCELSET);
+	return exp_connect_flags(exp) & OBD_CONNECT_CANCELSET;
 }
 
-static inline int exp_connect_lru_resize(struct obd_export *exp)
+static inline bool exp_connect_lru_resize(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_LRU_RESIZE);
+	return exp_connect_flags(exp) & OBD_CONNECT_LRU_RESIZE;
 }
 
-static inline int exp_connect_vbr(struct obd_export *exp)
+static inline bool exp_connect_vbr(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);
 	LASSERT(exp->exp_connection);
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_VBR);
+	return exp_connect_flags(exp) & OBD_CONNECT_VBR;
 }
 
-static inline int exp_connect_umask(struct obd_export *exp)
+static inline bool exp_connect_umask(struct obd_export *exp)
 {
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_UMASK);
+	return exp_connect_flags(exp) & OBD_CONNECT_UMASK;
 }
 
-static inline int imp_connect_lru_resize(struct obd_import *imp)
+static inline bool imp_connect_lru_resize(struct obd_import *imp)
 {
 	struct obd_connect_data *ocd;
 
 	LASSERT(imp != NULL);
 	ocd = &imp->imp_connect_data;
-	return !!(ocd->ocd_connect_flags & OBD_CONNECT_LRU_RESIZE);
+	return ocd->ocd_connect_flags & OBD_CONNECT_LRU_RESIZE;
 }
 
-static inline int exp_connect_layout(struct obd_export *exp)
+static inline bool exp_connect_layout(struct obd_export *exp)
 {
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_LAYOUTLOCK);
+	return exp_connect_flags(exp) & OBD_CONNECT_LAYOUTLOCK;
 }
 
 static inline bool exp_connect_lvb_type(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);
-	if (exp_connect_flags(exp) & OBD_CONNECT_LVB_TYPE)
-		return true;
-	else
-		return false;
+	return exp_connect_flags(exp) & OBD_CONNECT_LVB_TYPE;
+}
+
+static inline bool exp_connect_mirror_id_fix(struct obd_export *exp)
+{
+	return exp_connect_flags2(exp) & OBD_CONNECT2_MIRROR_ID_FIX;
 }
 
 static inline bool imp_connect_lvb_type(struct obd_import *imp)
@@ -410,10 +412,7 @@ static inline bool imp_connect_lvb_type(struct obd_import *imp)
 
 	LASSERT(imp != NULL);
 	ocd = &imp->imp_connect_data;
-	if (ocd->ocd_connect_flags & OBD_CONNECT_LVB_TYPE)
-		return true;
-	else
-		return false;
+	return ocd->ocd_connect_flags & OBD_CONNECT_LVB_TYPE;
 }
 
 static inline bool imp_connect_disp_stripe(struct obd_import *imp)

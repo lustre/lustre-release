@@ -866,6 +866,7 @@ struct ptlrpc_body_v2 {
  */
 #define OBD_CONNECT2_UNALIGNED_DIO	0x400000000ULL /* unaligned DIO */
 #define OBD_CONNECT2_CONN_POLICY	0x800000000ULL /* server-side connection policy */
+#define OBD_CONNECT2_MIRROR_ID_FIX     0x2000000000ULL /* rr_mirror_id move */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.  Email adilger@whamcloud.com
@@ -936,7 +937,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_ENCRYPT_FID2PATH | \
 				OBD_CONNECT2_DMV_IMP_INHERIT |\
 				OBD_CONNECT2_UNALIGNED_DIO | \
-				OBD_CONNECT2_PCCRO)
+				OBD_CONNECT2_PCCRO | \
+				OBD_CONNECT2_MIRROR_ID_FIX)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
@@ -2236,8 +2238,16 @@ struct mdt_rec_resync {
 	__u32           rs_padding5;	/* rr_mode */
 	__u32           rs_padding6;	/* rr_flags */
 	__u32           rs_padding7;	/* rr_flags_h */
-	__u32           rs_padding8;	/* rr_umask */
-	__u16           rs_mirror_id;
+	/* The rr_mirror_id_old field used the last reserved field
+	 * in mdt_rec_reint but is not used for any other reint type.
+	 * There are lots of unused fields in this strict that could be
+	 * used instead, so rr_umask was chosen for rs_mirror_id_new
+	 * since it is unlikely that a file resync operation will ever
+	 * need it.  The other unused fields could potentially be needed
+	 * eventually (timestamps or size/blocks) so they were not used.
+	 */
+	__u32           rs_mirror_id_new; /* rr_umask */
+	__u16           rs_mirror_id_old; /* deprecated 2.16.0 */
 	__u16           rs_padding9;	/* rr_padding_4 */
 };
 
@@ -2272,9 +2282,10 @@ struct mdt_rec_reint {
 	__u32           rr_flags;
 	__u32           rr_flags_h;
 	__u32           rr_umask;
-	__u16		rr_mirror_id;
+	__u16		rr_mirror_id_old; /* deprecated 2.16.0 */
 	__u16           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
 };
+#define rr_mirror_id_new rr_umask
 
 #define LMV_DESC_QOS_MAXAGE_DEFAULT 60  /* Seconds */
 
