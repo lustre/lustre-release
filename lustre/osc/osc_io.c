@@ -1351,7 +1351,8 @@ int osc_io_init(const struct lu_env *env,
 	CL_IO_SLICE_CLEAN(oio, oi_cl);
 	cl_io_slice_add(io, &oio->oi_cl, obj, &osc_io_ops);
 
-	cl_io_top(io)->ci_target_is_zfs = exp_connect_target_is_zfs(exp);
+	if (exp_connect_target_is_zfs(exp))
+		cl_io_top(io)->ci_target_is_zfs = 1;
 	if (!exp_connect_unaligned_dio(exp))
 		cl_io_top(io)->ci_allow_unaligned_dio = false;
 

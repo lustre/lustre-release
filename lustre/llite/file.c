@@ -1699,6 +1699,7 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 	 * avaliable mirror for write.
 	 */
 	io->ci_ndelay = !(iot == CIT_WRITE);
+	io->ci_target_is_zfs = 0;
 	/* unaligned DIO has compat issues with some older servers, but we find
 	 * out if there are such servers while setting up the IO, so it starts
 	 * out allowed
