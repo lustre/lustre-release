@@ -923,10 +923,11 @@ AC_DEFUN([LC_SRC_IOPS_RENAME_WITH_FLAGS], [
 	LB2_LINUX_TEST_SRC([iops_rename_with_flags], [
 		#include <linux/fs.h>
 	],[
+		struct inode_operations *iops = NULL;
 		struct inode *i1 = NULL, *i2 = NULL;
 		struct dentry *d1 = NULL, *d2 = NULL;
-		int rc;
-		rc = ((struct inode_operations *)0)->rename(i1, d1, i2, d2, 0);
+
+		iops->rename(i1, d1, i2, d2, 0);
 	])
 ]) # LC_IOPS_RENAME_WITH_FLAGS
 AC_DEFUN([LC_IOPS_RENAME_WITH_FLAGS], [
@@ -1391,10 +1392,11 @@ AC_DEFUN([LC_SRC_SYMLINK_OPS_USE_NAMEIDATA], [
 		#include <linux/namei.h>
 		#include <linux/fs.h>
 	],[
+		struct inode_operations *iops = NULL;
 		struct nameidata *nd = NULL;
 
-		((struct inode_operations *)0)->follow_link(NULL, nd);
-		((struct inode_operations *)0)->put_link(NULL, nd, NULL);
+		iops->follow_link(NULL, nd);
+		iops->put_link(NULL, nd, NULL);
 	])
 ])
 AC_DEFUN([LC_SYMLINK_OPS_USE_NAMEIDATA], [
@@ -2262,9 +2264,10 @@ AC_DEFUN([LC_SRC_INODEOPS_ENHANCED_GETATTR], [
 	LB2_LINUX_TEST_SRC([getattr_path], [
 		#include <linux/fs.h>
 	],[
+		struct inode_operations *iops = NULL;
 		struct path path;
 
-		((struct inode_operations *)1)->getattr(&path, NULL, 0, 0);
+		iops->getattr(&path, NULL, 0, 0);
 	])
 ])
 AC_DEFUN([LC_INODEOPS_ENHANCED_GETATTR], [
@@ -3323,7 +3326,9 @@ AC_DEFUN([LC_SRC_HAVE_GET_ACL_RCU_ARG], [
 	LB2_LINUX_TEST_SRC([get_acl_rcu_argument], [
 		#include <linux/fs.h>
 	],[
-		((struct inode_operations *)1)->get_acl((struct inode *)NULL, 0, false);
+		struct inode_operations *iops = NULL;
+
+		iops->get_acl((struct inode *)NULL, 0, false);
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_GET_ACL_RCU_ARG], [
@@ -4095,9 +4100,10 @@ AC_DEFUN([LC_SRC_HAVE_ACL_WITH_DENTRY], [
 	LB2_LINUX_TEST_SRC([acl_with_dentry], [
 		#include <linux/fs.h>
 	],[
+		struct inode_operations *iops = NULL;
 		struct dentry *dentry = NULL;
 
-		((struct inode_operations *)1)->get_acl(NULL, dentry, 0);
+		iops->get_acl(NULL, dentry, 0);
 		(void)dentry;
 	],[-Werror])
 ])
@@ -4145,8 +4151,9 @@ AC_DEFUN([LC_SRC_HAVE_MNT_IDMAP_ARG], [
 		#include <linux/mount.h>
 		#include <linux/fs.h>
 	],[
-		((struct inode_operations *)1)->getattr((struct mnt_idmap *)NULL,
-							NULL, NULL, 0, 0);
+		struct inode_operations *iops = NULL;
+
+		iops->getattr((struct mnt_idmap *)NULL,	NULL, NULL, 0, 0);
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_MNT_IDMAP_ARG], [
