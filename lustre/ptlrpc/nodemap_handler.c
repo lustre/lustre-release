@@ -567,8 +567,9 @@ out:
 	return rc;
 }
 
-int nodemap_add_idmap_range(const char *nodemap_name, enum nodemap_id_type id_type,
-			    const __u32 map[2], const u32 range_count)
+static int nodemap_add_idmap_range(const char *nodemap_name,
+				   enum nodemap_id_type id_type,
+				   const __u32 map[2], const u32 range_count)
 {
 	int rc = 0;
 	int i;
@@ -663,8 +664,9 @@ out:
 }
 EXPORT_SYMBOL(nodemap_del_idmap);
 
-int nodemap_del_idmap_range(const char *nodemap_name, enum nodemap_id_type id_type,
-		      const __u32 map[2], const u32 range_count)
+static int nodemap_del_idmap_range(const char *nodemap_name,
+				   enum nodemap_id_type id_type,
+				   const __u32 map[2], const u32 range_count)
 {
 	int rc = 0;
 	int i;
