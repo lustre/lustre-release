@@ -851,6 +851,8 @@ test_0j() {
 run_test 0j "test lfs mirror read/write commands"
 
 test_0k() {
+	(( $MDS1_VERSION >= $(version_code 2.15.6) )) ||
+		skip "MDS version older than 2.15.6"
 	[[ $OSTCOUNT -lt 3 ]] && skip "need >= 3 OSTs" && return
 
 	mkdir $DIR/$tdir
