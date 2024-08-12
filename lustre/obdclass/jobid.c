@@ -80,7 +80,7 @@ struct session_jobid {
 	struct pid		*sj_session;
 	struct rhash_head	sj_linkage;
 	struct rcu_head		sj_rcu;
-	char			sj_jobid[1];
+	char			sj_jobid[];
 };
 
 static const struct rhashtable_params jobid_params = {
@@ -120,13 +120,13 @@ int jobid_set_current(char *jobid)
 	int ret;
 	int len = strlen(jobid);
 
-	sj = kmalloc(sizeof(*sj) + len, GFP_KERNEL);
+	sj = kmalloc(sizeof(*sj) + len + 1, GFP_KERNEL);
 	if (!sj)
 		return -ENOMEM;
 	rcu_read_lock();
 	sid = task_session(current);
 	sj->sj_session = get_pid(sid);
-	strncpy(sj->sj_jobid, jobid, len+1);
+	strncpy(sj->sj_jobid, jobid, len + 1);
 	origsj = rhashtable_lookup_get_insert_fast(&session_jobids,
 						   &sj->sj_linkage,
 						   jobid_params);
