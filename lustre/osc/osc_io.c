@@ -67,7 +67,7 @@ void osc_read_ahead_release(const struct lu_env *env, struct cl_read_ahead *ra)
 	oio->oi_is_readahead = 0;
 	ldlm_lock2handle(dlmlock, &lockh);
 	ldlm_lock_decref(&lockh, LCK_PR);
-	LDLM_LOCK_PUT(dlmlock);
+	ldlm_lock_put(dlmlock);
 }
 EXPORT_SYMBOL(osc_read_ahead_release);
 

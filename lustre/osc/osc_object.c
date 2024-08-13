@@ -416,7 +416,7 @@ static void osc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 
 		oa->o_handle = lock->l_remote_handle;
 		oa->o_valid |= OBD_MD_FLHANDLE;
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 }
 

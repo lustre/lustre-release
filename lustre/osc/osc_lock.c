@@ -53,12 +53,12 @@
  */
 static struct ldlm_lock *osc_handle_ptr(struct lustre_handle *handle)
 {
-        struct ldlm_lock *lock;
+	struct ldlm_lock *lock;
 
-        lock = ldlm_handle2lock(handle);
-        if (lock != NULL)
-                LDLM_LOCK_PUT(lock);
-        return lock;
+	lock = ldlm_handle2lock(handle);
+	if (lock)
+		ldlm_lock_put(lock);
+	return lock;
 }
 
 /**
@@ -336,7 +336,7 @@ static int osc_lock_upcall_speculative(void *cookie,
 	osc_lock_lvb_update(env, osc, dlmlock, NULL);
 
 	unlock_res_and_lock(dlmlock);
-	LDLM_LOCK_PUT(dlmlock);
+	ldlm_lock_put(dlmlock);
 
 out:
 	cl_object_put(env, osc2cl(osc));
@@ -571,7 +571,7 @@ int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
 	matchdata.lmd_flags = LDLM_FL_TEST_LOCK | LDLM_FL_CBPENDING;
 	matchdata.lmd_match = LDLM_MATCH_UNREF | LDLM_MATCH_AST_ANY;
 
-	LDLM_LOCK_GET(dlmlock);
+	ldlm_lock_get(dlmlock);
 
 	/* If any dlmlock has l_ast_data set, we must find it or we risk
 	 * missing a size update done under a different lock.
@@ -583,7 +583,7 @@ int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
 			cl_object_get(obj);
 		}
 		unlock_res_and_lock(dlmlock);
-		LDLM_LOCK_RELEASE(dlmlock);
+		ldlm_lock_put(dlmlock);
 
 		dlmlock = NULL;
 
@@ -1082,7 +1082,7 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
 
 	/* release a reference taken in osc_lock_upcall(). */
 	LASSERT(olck->ols_has_ref);
-	LDLM_LOCK_RELEASE(dlmlock);
+	ldlm_lock_put(dlmlock);
 	olck->ols_has_ref = 0;
 
 	EXIT;

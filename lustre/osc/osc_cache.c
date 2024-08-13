@@ -352,7 +352,7 @@ static void osc_extent_free(struct kref *kref)
 	LASSERT(RB_EMPTY_NODE(&ext->oe_node));
 
 	if (ext->oe_dlmlock) {
-		LDLM_LOCK_RELEASE(ext->oe_dlmlock);
+		ldlm_lock_put(ext->oe_dlmlock);
 		ext->oe_dlmlock = NULL;
 	}
 #if 0
@@ -700,7 +700,7 @@ static struct osc_extent *osc_extent_find(const struct lu_env *env,
 	cur->oe_mppr    = max_pages;
 	if (olck->ols_dlmlock != NULL) {
 		LASSERT(olck->ols_hold);
-		cur->oe_dlmlock = LDLM_LOCK_GET(olck->ols_dlmlock);
+		cur->oe_dlmlock = ldlm_lock_get(olck->ols_dlmlock);
 	}
 
 	/* grants has been allocated by caller */
@@ -2598,7 +2598,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 	}
 	oscl = oio->oi_write_osclock ? : oio->oi_read_osclock;
 	if (oscl && oscl->ols_dlmlock != NULL) {
-		ext->oe_dlmlock = LDLM_LOCK_GET(oscl->ols_dlmlock);
+		ext->oe_dlmlock = ldlm_lock_get(oscl->ols_dlmlock);
 	}
 	if (ext->oe_dio && !ext->oe_rw) { /* direct io write */
 		int grants;
@@ -3175,7 +3175,7 @@ static bool check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 						info->oti_fn_index =
 							CL_PAGE_EOF;
 				}
-				LDLM_LOCK_PUT(tmp);
+				ldlm_lock_put(tmp);
 			} else {
 				info->oti_ng_index = CL_PAGE_EOF;
 				discard = true;

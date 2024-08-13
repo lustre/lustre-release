@@ -3088,7 +3088,7 @@ static int osc_enqueue_interpret(const struct lu_env *env,
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_CANCEL_RACE, 10);
 
 	ldlm_lock_decref(lockh, mode);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 	RETURN(rc);
 }
 
@@ -3169,7 +3169,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 			unlock_res_and_lock(matched);
 
 			ldlm_lock_decref(&lockh, mode);
-			LDLM_LOCK_PUT(matched);
+			ldlm_lock_put(matched);
 			RETURN(rc);
 		} else if (osc_set_lock_data(matched, einfo->ei_cbdata)) {
 			*flags |= LDLM_FL_LVB_READY;
@@ -3178,11 +3178,11 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 			(*upcall)(cookie, &lockh, ELDLM_LOCK_MATCHED);
 
 			ldlm_lock_decref(&lockh, mode);
-			LDLM_LOCK_PUT(matched);
+			ldlm_lock_put(matched);
 			RETURN(ELDLM_OK);
 		} else {
 			ldlm_lock_decref(&lockh, mode);
-			LDLM_LOCK_PUT(matched);
+			ldlm_lock_put(matched);
 		}
 	}
 
@@ -3270,7 +3270,7 @@ int osc_match_base(const struct lu_env *env, struct obd_export *exp,
 			ldlm_lock_decref(lockh, rc);
 			rc = 0;
 		}
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 	RETURN(rc);
 }
