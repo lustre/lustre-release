@@ -1,10 +1,10 @@
-.TH LCTL-LCFG_CLEAR 8 "2023-03-28" Lustre "configuration utilities"
+.TH LCTL-LCFG_CLEAR 8 2024-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
-lctl\-lcfg_clear \- clear filesystem config llog
+lctl-lcfg_clear \- clear filesystem config llog
 .SH SYNOPSIS
-.br
-.B lctl lcfg_clear \fIFSNAME\fR|\fIDEVNAME
-.br
+.SY "lctl lcfg_clear"
+.IR FSNAME | DEVNAME
+.YS
 .SH DESCRIPTION
 .B lcfg_clear
 (alias
@@ -26,12 +26,12 @@ backed up on the MGS disk with the suffix
 .IR 'config.timestamp.bak' ,
 such as
 .IR 'testfs-MDT0000.1476454535.bak' .
-
 .SH AVAILABILITY
 .B lctl-lcfg_clear
 is part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 2.11.0
+.\" Added in commit v2_10_58_0-78-g2a9518b1f8
 .SH SEE ALSO
 .BR lctl (8),
 .BR lctl-lcfg_erase (8),

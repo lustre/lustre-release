@@ -222,8 +222,11 @@ SERVER_MANFILES =				\
 	lctl-lcfg_erase.8			\
 	lctl-lcfg_fork.8			\
 	lctl-lfsck-query.8			\
+	lctl-lfsck_query.8			\
 	lctl-lfsck-start.8			\
+	lctl-lfsck_start.8			\
 	lctl-lfsck-stop.8			\
+	lctl-lfsck_stop.8			\
 	lctl-llog_cancel.8			\
 	lctl-llog_catlist.8			\
 	lctl-llog_info.8			\

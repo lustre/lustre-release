@@ -1,39 +1,45 @@
-.TH LCTL-LFSCK_QUERY 8 "2017-05-13" Lustre "configuration utilities"
+.TH LCTL-LFSCK_QUERY 8 2024-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-lfsck_query \- get Lustre File System Check global status
 .SH SYNOPSIS
-.br
-.B lctl lfsck_query \fR[-M | --device MDT_device] [-h | --help]
-            \fR[-t | --type lfsck_type[,lfsck_type...]] [-w | --wait]
-.br
+.SY "lctl lfsck_query"
+.RB [ -M | --device
+.IR MDT_DEVICE ]
+.RB [ -h | --help ]
+.RB [ -t | --type
+.IR LFSCK_TYPE [, LFSCK_TYPE ...]]
+.RB [ -w | --wait ]
+.YS
 .SH DESCRIPTION
 Get the LFSCK global status via the specified MDT device. If "-M" option
 is not specified, it will select the available Lustre device on current
 server automatically. But if there are multiple devices on current server
 those belong to different Lustre filesystems, you need to specify the
-device (see "-M" option) explicitly.
+device (see
+.RB " -M "
+option) explicitly.
 .SH OPTIONS
 .TP
-.B  -M, --device <MDT_device>
+.BR -M ", " --device \ \fIMDT_DEVICE
 Specify the MDT device on which the LFSCK runs or ever ran.
 .TP
-.B  -t, --type <lfsck_type[,lfsck_type...]>
+.BR -t ", " --type \ \fILFSCK_TYPE\fR[,\fILFSCK_TYPE\fR...]
 Specify what kind(s) of LFSCK to be checked. If no type is given, the default
 is to check all types of LFSCK status. Valid types are a comma-separated list
 of one or more of: namespace, layout, all.
 .TP
-.B  -h, --help
+.BR -h ", " --help
 Show this help.
 .TP
-.B  -w, --wait
+.BR -w ", " --wait
 Do not return until there is no on-going LFSCK scanning on any target
 associated with this filesystem (MDT or OST).
-
 .SH AVAILABILITY
 .B lctl-lfsck-query
 is part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 2.9.0
+.\" Added in commit v2_8_50_0-22-g6871453b05
 .SH SEE ALSO
 .BR lctl (8),
 .BR lctl-lfsck-start (8),

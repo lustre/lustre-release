@@ -1,8 +1,10 @@
-.TH LCTL-LCFG_ERASE 8 "2023-03-28" Lustre "configuration utilities"
+.TH LCTL-LCFG_ERASE 8 2024-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
-lctl\-lcfg_erase \- erase filesystem config llog
+lctl-lcfg_erase \- erase filesystem config llog
 .SH SYNOPSIS
-.BI "lctl lcfg_erase " FSNAME
+.SY "lctl lcfg_erase"
+.I FSNAME
+.YS
 .SH DESCRIPTION
 .B lcfg_erase
 (alias
@@ -14,12 +16,12 @@ remove the backup configuration or delete inactive filesystem (or snapshot)
 from a shared MGS. To see the available configuration logs, use
 .B lctl
 .BR llog_catlist .
-
 .SH AVAILABILITY
 .B lctl-lcfg_erase
 is part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 2.10.0
+.\" Added in commit v2_9_54_0-28-g61718da8ba
 .SH SEE ALSO
 .BR lctl (8),
 .BR lctl-lcfg_clear (8),

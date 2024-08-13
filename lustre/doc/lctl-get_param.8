@@ -1,8 +1,8 @@
-.TH LCTL-GET_PARAM 8 "2019-06-17" Lustre "configuration utilities"
+.TH LCTL-GET_PARAM 8 2024-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-get_param \- retrieve configuration parameters
 .SH SYNOPSIS
-.B "\fBlctl get_param "
+.SY "lctl get_param"
 .RB [ --classify | -F ]
 .RB [ --header | -H ]
 .RB [ --links | -l ]
@@ -11,17 +11,19 @@ lctl-get_param \- retrieve configuration parameters
 .RB [ --only-name | -N ]
 .RB [ --recursive | -R ]
 .RB [ --yaml | -y ]
-.IR PARAM_PATH1 " " PARAM_PATH2 " ..."
+.IR PARAM_PATH1 " [" PARAM_PATH2 " ...]"
+.YS
 .SH DESCRIPTION
 Get the value of the named Lustre or LNet
-.I parameter
-on the local node.  Parameter names consist of one or more components,
-separated by a '.' (period).  Each component may be specified by plain text
+.I PARAMETER
+on the local node. Parameter names consist of one or more components,
+separated by a '.' (period). Each component may be specified by plain text
 or by a wildcard in the
 .BR glob (7)
-format.  When wildcards are used, more than one parameter may match and
-be returned.  Parameters are often, but not always, of the form
-.IR obd_name.obd_instance.parameter_name ,
+format.
+When wildcards are used, more than one parameter may match and be returned.
+Parameters are often, but not always, of the form
+.IR obd_name . obd_instance . parameter_name ,
 where
 .I obd_name
 is one of the OBD object types, like
@@ -31,93 +33,98 @@ etc., and
 is the name of a Lustre device, like
 .BR testfs-OST0000 ,
 but may be a specific component, or contain wildcards to match some or all
-devices on the node.  Many parameters are readable as a regular user, though
+devices on the node. Many parameters are readable as a regular user, though
 some of them are accessible only by the root user for security or
 implementation reasons.
 .SH OPTIONS
 .TP
-.B -F ", " --classify
-Append a '/', '@', or '=' suffix for directories, symlinks, and writeable
-parameters, respectively.
-.B "lctl get_param -NF"
+.BR -F ", " --classify
+Append a '/', '@', or '=' suffix for directories, symlinks,
+and writeable parameters, respectively.
+.B lctl get_param -NF
 is equivalent to
 .BR "lctl list_param -F" .
 .TP
-.B -H ", " --header
-Prefix each parameter value line with the parameter name, as a header. It
-also print a line for empty values. It could be useful when wildcards are
-used and filtering the output.
+.BR -H ", " --header
+Prefix each parameter value line with the parameter name, as a header.
+It also print a line for empty values.
+It could be useful when wildcards are used and filtering the output.
 .TP
-.B -l ", " --links
+.BR -l ", " --links
 Follow symlinks while searching for parameters. (enabled by default)
 .TP
-.B -L ", " --no-links
+.BR -L ", " --no-links
 Do not follow symlinks while searching for parameters.
 .TP
-.B -n ", " --no-name
-Print only the parameter value and not parameter name.  This may be confusing
-if multiple parameter names are specified, as the parameters are not
-identified, and may not be returned in the order that they are specified.
+.BR -n ", " --no-name
+Print only the parameter value and not parameter name.
+This may be confusing if multiple parameter names are specified,
+as the parameters are not identified,
+and may not be returned in the order that they are specified.
 .TP
-.B -N ", " --only-name
+.BR -N ", " --only-name
 Print only matched parameter names and not the values. This is especially
 useful when using patterns. This option is equivalent to
 .BR "lctl list_param".
 .TP
-.B -R ", " --recursive
+.BR -R ", " --recursive
 Recursively show all of the parameter names below the specified name.
 .TP
-.B -y ", " --yaml
-Some parameters can be presented in a YAML format but are not by default. This
+.BR -y ", " --yaml
+Some paramters can be presented in a YAML format but are not by default. This
 will format the parameter data in YAML. If the YAML provides a source: field
 it can be suppressed with the -n option.
-
 .SH EXAMPLES
-.B $ lctl get_param osc.*.max_pages_per_rpc
-.br
+Use wildcards to obtain all matching parameters:
+.RS
+.EX
+.B # lctl get_param osc.*.max_pages_per_rpc
 osc.myth-OST0000-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
-.br
 osc.myth-OST0001-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
-.br
 osc.testfs-OST0000-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
-.br
 osc.testfs-OST0001-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
-.br
 osc.testfs-OST0002-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
-.br
-.B $ lctl get_param -n debug
-.br
-super warning dlmtrace error emerg rpctrace vfstrace config console
-.br
-.B $ lctl get_param {mdc,osc}.testfs-*.max_rpcs_in_flight
-.br
+.P
+.B # lctl get_param {mdc,osc}.testfs-*.max_rpcs_in_flight
 mdc.testfs-MDT0000-mdc-ffff8803c9c0f000.max_rpcs_in_flight=16
-.br
 osc.testfs-OST0000-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
-.br
 osc.testfs-OST0001-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
-.br
 osc.testfs-OST0002-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
-.br
-.B $ lctl get_param -n devices
-.br
- 0 UP osd-ldiskfs MGS-osd MGS-osd_UUID 4
-.br
-.B $ lctl get_param -y devices
-.br
+.EE
+.RE
+.PP
+Use -n to obtain output that can be pipped into further commands:
+.RS
+.EX
+.B # lctl get_param -n debug
+super warning dlmtrace error emerg rpctrace vfstrace config console
+.P
+.B # lctl get_param -n devices
+0 UP osd-ldiskfs MGS-osd MGS-osd_UUID 4
+.EE
+.RE
+.PP
+Some parameters can be shown in a YAML format but require the
+.B -y
+option to do so:
+.RS
+.EX
+.B # lctl get_param -y devices
 devices:
-.br
 - index: 0
-.br
   status: UP
-.br
   type: osd-ldiskfs
-.br
   name: MGS-osd
-.br
   uuid: MGS-osd_UUID
-.br
   refcount: 4
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl get_param
+is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.1-673-g04af22fc24
 .SH SEE ALSO
 .BR lustre (7),
 .BR lctl (8),

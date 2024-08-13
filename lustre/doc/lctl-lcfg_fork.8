@@ -1,8 +1,11 @@
-.TH LCTL-FORK_LCFG 8 "2023-03-28" Lustre "configuration utilities"
+.TH LCTL-LCFG_FORK 8 2024-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-lcfg_fork \- duplicate and rename filesystem config llog
 .SH SYNOPSIS
-.IR "\fBlctl lcfg_fork" " <" FSNAME "> <" NEWNAME >
+.SY "lctl lcfg_fork"
+.RI < FSNAME >
+.RI < NEWNAME >
+.YS
 .SH DESCRIPTION
 .B lcfg_fork
 (alias
@@ -23,12 +26,12 @@ as the filesystem name. It can be used to
 backup the system configuration, or generate configuration for the
 snapshot that has the same configuration as the original filesystem
 but with different filesystem names.
-
 .SH AVAILABILITY
 .B lctl-lcfg_fork
 is part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 2.10.0
+.\" Added in commit v2_9_54_0-28-g61718da8ba
 .SH SEE ALSO
 .BR lctl (8),
 .BR lctl-lcfg_clear (8),
