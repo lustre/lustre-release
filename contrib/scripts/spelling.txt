@@ -150,3 +150,6 @@ version_code.*2.1[7-9]||version 2.16.x should be used
 vui_tot_count||vui_tot_bytes
 wait_queue_t||wait_queue_entry_t
 xa_insert||ll_xa_insert
+LDLM_LOCK_PUT||ldlm_lock_put
+LDLM_LOCK_RELEASE||ldlm_lock_put
+LDLM_LOCK_GET||ldlm_lock_get
