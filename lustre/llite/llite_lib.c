@@ -3768,7 +3768,7 @@ int ll_prep_inode(struct inode **inode, struct req_capsule *pill,
 			conf.u.coc_layout = md.layout;
 			(void)ll_layout_conf(*inode, &conf);
 		}
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 
 	if (default_lmv_deleted)

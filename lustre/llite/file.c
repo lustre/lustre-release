@@ -1402,7 +1402,7 @@ static int ll_lease_close_intent(struct obd_client_handle *och,
 		lock_res_and_lock(lock);
 		cancelled = ldlm_is_cancel(lock);
 		unlock_res_and_lock(lock);
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 
 	CDEBUG(D_INODE, "lease for "DFID" broken? %d, bias: %x\n",
@@ -4721,7 +4721,7 @@ skip_copy:
 					fmode = och->och_flags;
 
 				unlock_res_and_lock(lock);
-				LDLM_LOCK_PUT(lock);
+				ldlm_lock_put(lock);
 			}
 		}
 		mutex_unlock(&lli->lli_och_mutex);
@@ -5653,7 +5653,7 @@ int ll_have_md_lock(struct obd_export *exp, struct inode *inode, __u64 *bits,
 			if (lock) {
 				*bits &=
 					~(lock->l_policy_data.l_inodebits.bits);
-				LDLM_LOCK_PUT(lock);
+				ldlm_lock_put(lock);
 			} else {
 				*bits &= ~policy.l_inodebits.bits;
 			}
@@ -6564,7 +6564,7 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, enum ldlm_mode mode,
 	wait_layout = rc == -EBUSY;
 	EXIT;
 out:
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 	ldlm_lock_decref(lockh, mode);
 
 	/* wait for IO to complete if it's still being used. */
