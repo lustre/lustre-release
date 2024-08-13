@@ -518,7 +518,7 @@ int ldlm_cli_enqueue_local(const struct lu_env *env,
 	LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");
 	EXIT;
  out:
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
  out_nolock:
 	return err;
 }
@@ -791,8 +791,8 @@ cleanup:
 	if (cleanup_phase == 1 && rc)
 		failed_lock_cleanup(ns, lock, einfo->ei_mode);
 	/* Put lock 2 times, the second reference is held by ldlm_cli_enqueue */
-	LDLM_LOCK_PUT(lock);
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
+	ldlm_lock_put(lock);
 	return rc;
 }
 EXPORT_SYMBOL(ldlm_cli_enqueue_fini);
@@ -1029,7 +1029,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 		req = ldlm_enqueue_pack(exp, lvb_len);
 		if (IS_ERR(req)) {
 			failed_lock_cleanup(ns, lock, einfo->ei_mode);
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			RETURN(PTR_ERR(req));
 		}
 
@@ -1090,7 +1090,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 			if (einfo->ei_mod_slot)
 				ptlrpc_put_mod_rpc_slot(req);
 			failed_lock_cleanup(ns, lock, einfo->ei_mode);
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			if (!req_passed_in)
 				ptlrpc_req_put(req);
 			GOTO(out, rc);
@@ -1115,7 +1115,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	 * one reference that we took
 	 */
 	if (err == -ENOLCK)
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 	else
 		rc = err;
 
@@ -1621,7 +1621,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 	if (ldlm_is_bl_ast(lock)) {
 		if (ldlm_is_ast_sent(lock)) {
 			unlock_res_and_lock(lock);
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			RETURN(0);
 		}
 		if (ldlm_is_canceling(lock))
@@ -1634,7 +1634,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 			unlock_res_and_lock(lock);
 			wait_event_idle(lock->l_waitq, is_bl_done(lock));
 		}
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 		RETURN(0);
 	}
 
@@ -1647,7 +1647,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 
 	rc = ldlm_cli_cancel_local(lock);
 	if (rc == LDLM_FL_LOCAL_ONLY || flags & LCF_LOCAL) {
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 		RETURN(0);
 	} else if (rc == LDLM_FL_BL_AST) {
 		/* BL_AST lock must not wait. */
@@ -1660,7 +1660,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 	 * waiting for the batch to be handled. */
 	if (separate) {
 		ldlm_cli_cancel_req(exp, lock, NULL, 1, flags);
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 		RETURN(0);
 	}
 
@@ -1725,7 +1725,7 @@ int ldlm_cli_cancel_list_local(struct list_head *cancels, int count,
 		if (rc == LDLM_FL_LOCAL_ONLY) {
 			/* CANCEL RPC should not be sent to server. */
 			list_del_init(&lock->l_bl_ast);
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			count--;
 		}
 	}
@@ -1980,7 +1980,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 
 		last_use = lock->l_last_used;
 
-		LDLM_LOCK_GET(lock);
+		ldlm_lock_get(lock);
 		spin_unlock(&ns->ns_lock);
 
 		/*
@@ -2000,7 +2000,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		 */
 		result = pf(ns, lock, added, min);
 		if (result == LDLM_POLICY_KEEP_LOCK) {
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			break;
 		}
 
@@ -2013,7 +2013,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 				spin_unlock(&ns->ns_lock);
 			}
 
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			continue;
 		}
 
@@ -2030,7 +2030,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 			 * pages could be put under it.
 			 */
 			unlock_res_and_lock(lock);
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			continue;
 		}
 		LASSERT(!lock->l_readers && !lock->l_writers);
@@ -2186,7 +2186,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 				 lock_flags;
 		LASSERT(list_empty(&lock->l_bl_ast));
 		list_add(&lock->l_bl_ast, cancels);
-		LDLM_LOCK_GET(lock);
+		ldlm_lock_get(lock);
 		count++;
 	}
 	unlock_res(res);
@@ -2450,7 +2450,7 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
 	 */
 	if (!(lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_BL_DONE))) {
 		list_add(&lock->l_pending_chain, list);
-		LDLM_LOCK_GET(lock);
+		ldlm_lock_get(lock);
 	}
 
 	return LDLM_ITER_CONTINUE;
@@ -2501,7 +2501,7 @@ static int replay_lock_interpret(const struct lu_env *env,
 
 	LDLM_DEBUG(lock, "replayed lock:");
 	ptlrpc_import_recovery_state_machine(req->rq_import);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 out:
 	if (rc != ELDLM_OK)
 		ptlrpc_connect_import(req->rq_import);
@@ -2665,11 +2665,11 @@ static int __ldlm_replay_locks(struct obd_import *imp, bool rate_limit)
 		/* If we disconnected in the middle - cleanup and let
 		 * reconnection to happen again. LU-14027 */
 		if (rc || (imp->imp_state != LUSTRE_IMP_REPLAY_LOCKS)) {
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			continue;
 		}
 		rc = replay_one_lock(imp, lock);
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 
 		if (rate_limit)
 			wait_event_idle_exclusive(imp->imp_replay_waitq,

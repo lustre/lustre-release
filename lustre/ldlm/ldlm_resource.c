@@ -1065,7 +1065,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
 				continue;
 
 			lock = tmp;
-			LDLM_LOCK_GET(lock);
+			ldlm_lock_get(lock);
 			ldlm_set_cleaned(lock);
 			break;
 		}
@@ -1103,7 +1103,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
 			if (lock->l_completion_ast)
 				lock->l_completion_ast(lock,
 						       LDLM_FL_FAILED, NULL);
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 			continue;
 		}
 
@@ -1121,7 +1121,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
 				   "Freeing a lock still held by a client node");
 			ldlm_lock_cancel(lock);
 		}
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 	} while (1);
 }
 

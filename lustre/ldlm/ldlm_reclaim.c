@@ -137,7 +137,7 @@ static int ldlm_reclaim_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			ldlm_set_ast_sent(lock);
 			LASSERT(list_empty(&lock->l_rk_ast));
 			list_add(&lock->l_rk_ast, &data->rcd_rpc_list);
-			LDLM_LOCK_GET(lock);
+			ldlm_lock_get(lock);
 			if (++data->rcd_added == data->rcd_total) {
 				rc = 1; /* stop the iteration */
 				break;

@@ -557,7 +557,7 @@ reprocess:
 							 lock->l_granted_mode);
 
 		ldlm_flock_add_lock(res, &res->lr_granted, new2);
-		LDLM_LOCK_RELEASE(new2);
+		ldlm_lock_put(new2);
 		break;
 	}
 
@@ -880,7 +880,7 @@ ldlm_export_flock_get(struct cfs_hash *hs, struct hlist_node *hnode)
 	struct ldlm_flock *flock;
 
 	lock = hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
-	LDLM_LOCK_GET(lock);
+	ldlm_lock_get(lock);
 
 	flock = &lock->l_policy_data.l_flock;
 	LASSERT(flock->blocking_export != NULL);
@@ -903,7 +903,7 @@ ldlm_export_flock_put(struct cfs_hash *hs, struct hlist_node *hnode)
 		flock->blocking_owner = 0;
 		flock->blocking_export = NULL;
 	}
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
 }
 
 static struct cfs_hash_ops ldlm_export_flock_ops = {

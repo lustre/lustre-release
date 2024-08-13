@@ -395,7 +395,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
 
 	/* drop reference from hashtable only for first destroy */
 	if (first) {
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 	}
 	EXIT;
 }
@@ -409,7 +409,7 @@ void ldlm_lock_destroy_nolock(struct ldlm_lock *lock)
 	first = ldlm_lock_destroy_internal(lock);
 	/* drop reference from hashtable only for first destroy */
 	if (first) {
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 	}
 	EXIT;
 }
@@ -504,7 +504,7 @@ struct ldlm_lock *ldlm_lock_new_testing(struct ldlm_resource *resource)
 	if (!rc)
 		return lock;
 	ldlm_lock_destroy(lock);
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
 	return NULL;
 }
 EXPORT_SYMBOL(ldlm_lock_new_testing);
@@ -613,7 +613,7 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
 	if (lock->l_export != NULL && lock->l_export->exp_failed) {
 		CDEBUG(D_INFO, "lock export failed: lock %p, exp %p\n",
 		       lock, lock->l_export);
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 		RETURN(NULL);
 	}
 
@@ -631,7 +631,7 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
 	if (unlikely(ldlm_is_destroyed(lock))) {
 		unlock_res_and_lock(lock);
 		CDEBUG(D_INFO, "lock already destroyed: lock %p\n", lock);
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 		RETURN(NULL);
 	}
 
@@ -639,7 +639,7 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
 	if (flags != 0) {
 		if ((lock->l_flags & flags) != 0) {
 			unlock_res_and_lock(lock);
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 			RETURN(NULL);
 		}
 
@@ -690,10 +690,10 @@ static void ldlm_add_bl_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 		 */
 		if (list_empty(&lock->l_bl_ast)) {
 			list_add(&lock->l_bl_ast, work_list);
-			LDLM_LOCK_GET(lock);
+			ldlm_lock_get(lock);
 		}
 		LASSERT(lock->l_blocking_lock == NULL);
-		lock->l_blocking_lock = LDLM_LOCK_GET(new);
+		lock->l_blocking_lock = ldlm_lock_get(new);
 	}
 }
 
@@ -706,7 +706,7 @@ static void ldlm_add_cp_work_item(struct ldlm_lock *lock,
 		LDLM_DEBUG(lock, "lock granted; sending completion AST.");
 		LASSERT(list_empty(&lock->l_cp_ast));
 		list_add(&lock->l_cp_ast, work_list);
-		LDLM_LOCK_GET(lock);
+		ldlm_lock_get(lock);
 	}
 }
 
@@ -740,7 +740,7 @@ void ldlm_lock_addref(const struct lustre_handle *lockh, enum ldlm_mode mode)
 	lock = ldlm_handle2lock(lockh);
 	LASSERTF(lock != NULL, "Non-existing lock: %#llx\n", lockh->cookie);
 	ldlm_lock_addref_internal(lock, mode);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 }
 EXPORT_SYMBOL(ldlm_lock_addref);
 
@@ -761,7 +761,7 @@ void ldlm_lock_addref_internal_nolock(struct ldlm_lock *lock,
 	if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS | LCK_TXN)) {
 		lock->l_writers++;
 	}
-	LDLM_LOCK_GET(lock);
+	ldlm_lock_get(lock);
 	LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
 
@@ -788,7 +788,7 @@ int ldlm_lock_addref_try(const struct lustre_handle *lockh, enum ldlm_mode mode)
 			result = 0;
 		}
 		unlock_res_and_lock(lock);
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 	return result;
 }
@@ -826,7 +826,7 @@ void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock,
 		lock->l_writers--;
 	}
 
-	LDLM_LOCK_RELEASE(lock);    /* matches the LDLM_LOCK_GET() in addref */
+	ldlm_lock_put(lock);    /* matches the LDLM_LOCK_GET() in addref */
 }
 
 /**
@@ -876,7 +876,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 				 "final decref done on %sCBPENDING lock",
 				 mask & D_WARNING ? "non-local " : "");
 
-		LDLM_LOCK_GET(lock); /* dropped by bl thread */
+		ldlm_lock_get(lock); /* dropped by bl thread */
 		ldlm_lock_remove_from_lru(lock);
 		unlock_res_and_lock(lock);
 
@@ -920,7 +920,7 @@ void ldlm_lock_decref(const struct lustre_handle *lockh, enum ldlm_mode mode)
 
 	LASSERTF(lock != NULL, "Non-existing lock: %#llx\n", lockh->cookie);
 	ldlm_lock_decref_internal(lock, mode);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 }
 EXPORT_SYMBOL(ldlm_lock_decref);
 
@@ -944,7 +944,7 @@ void ldlm_lock_decref_and_cancel(const struct lustre_handle *lockh,
 	ldlm_set_cbpending(lock);
 	unlock_res_and_lock(lock);
 	ldlm_lock_decref_internal(lock, mode);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 }
 EXPORT_SYMBOL(ldlm_lock_decref_and_cancel);
 
@@ -1249,7 +1249,7 @@ matched:
 	 */
 	if ((data->lmd_flags & LDLM_FL_TEST_LOCK) ||
 	    (ldlm_is_cbpending(lock) && (data->lmd_match & LDLM_MATCH_GROUP))) {
-		LDLM_LOCK_GET(lock);
+		ldlm_lock_get(lock);
 		ldlm_lock_touch_in_lru(lock);
 	} else {
 		ldlm_lock_addref_internal_nolock(lock, match);
@@ -1457,7 +1457,7 @@ repeat:
 	if (group_lock) {
 		l_wait_event_abortable(group_lock->l_waitq,
 				       ldlm_is_destroyed(lock));
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 		goto repeat;
 	}
 	ldlm_resource_putref(res);
@@ -1500,7 +1500,7 @@ repeat:
 
 out_fail_match:
 		if (flags & LDLM_FL_TEST_LOCK)
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 		else if (!matched)
 			ldlm_lock_decref_internal(lock, mode);
 	}
@@ -1516,7 +1516,7 @@ out_fail_match:
 				  res_id->name[3] : policy->l_extent.end);
 	}
 	if (data.lmd_old != NULL)
-		LDLM_LOCK_PUT(data.lmd_old);
+		ldlm_lock_put(data.lmd_old);
 
 	return matched;
 }
@@ -1551,7 +1551,7 @@ enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
 out:
 	if (lock != NULL) {
 		unlock_res_and_lock(lock);
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 	return mode;
 }
@@ -1717,7 +1717,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 
 out:
 	ldlm_lock_destroy(lock);
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
 	RETURN(ERR_PTR(rc));
 }
 
@@ -1782,7 +1782,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 			 */
 			if (lock != *lockp) {
 				ldlm_lock_destroy(lock);
-				LDLM_LOCK_RELEASE(lock);
+				ldlm_lock_put(lock);
 			}
 			*flags |= LDLM_FL_LOCK_CHANGED;
 			RETURN(0);
@@ -2086,7 +2086,7 @@ void ldlm_discard_bl_list(struct list_head *bl_list)
 		ldlm_clear_ast_sent(lock);
 		LASSERT(lock->l_bl_ast_run == 0);
 		ldlm_clear_blocking_lock(lock);
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 	}
 	EXIT;
 }
@@ -2120,7 +2120,7 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	 */
 	if (!ldlm_is_ast_sent(lock)) {
 		unlock_res_and_lock(lock);
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 		RETURN(0);
 	}
 
@@ -2161,7 +2161,7 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 
 	rc = lock->l_blocking_ast(lock, &d, (void *)arg, LDLM_CB_BLOCKING);
 
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
 
 	RETURN(rc);
 }
@@ -2189,7 +2189,7 @@ ldlm_work_revoke_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	desc.l_granted_mode = 0;
 
 	rc = lock->l_blocking_ast(lock, &desc, (void *)arg, LDLM_CB_BLOCKING);
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
 
 	RETURN(rc);
 }
@@ -2225,7 +2225,7 @@ int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	else if (rc == -ELDLM_NO_LOCK_DATA)
 		ldlm_lvbo_update(lock->l_resource, lock, NULL, 1);
 
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
 	if (gl_work->gl_flags & LDLM_GL_WORK_SLAB_ALLOCATED)
 		OBD_SLAB_FREE_PTR(gl_work, ldlm_glimpse_work_kmem);
 	else
@@ -2276,7 +2276,7 @@ ldlm_work_cp_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 
 	if (completion_callback != NULL)
 		rc = completion_callback(lock, 0, (void *)arg);
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
 
 	RETURN(rc);
 }
@@ -2528,7 +2528,7 @@ int ldlm_lock_set_data(const struct lustre_handle *lockh, void *data)
 			lock->l_ast_data = data;
 		if (lock->l_ast_data == data)
 			rc = 0;
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 	RETURN(rc);
 }
@@ -2574,9 +2574,9 @@ ldlm_cancel_locks_for_export_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	struct obd_export	*exp  = ecl->ecl_exp;
 	struct ldlm_lock	*lock = cfs_hash_object(hs, hnode);
 
-	LDLM_LOCK_GET(lock);
+	ldlm_lock_get(lock);
 	ldlm_cancel_lock_for_export(exp, lock, ecl);
-	LDLM_LOCK_RELEASE(lock);
+	ldlm_lock_put(lock);
 
 	return 0;
 }
@@ -2607,7 +2607,7 @@ int ldlm_export_cancel_blocked_locks(struct obd_export *exp)
 		if (!list_empty(&exp->exp_bl_list)) {
 			lock = list_first_entry(&exp->exp_bl_list,
 						struct ldlm_lock, l_exp_list);
-			LDLM_LOCK_GET(lock);
+			ldlm_lock_get(lock);
 			list_del_init(&lock->l_exp_list);
 		} else {
 			lock = NULL;
@@ -2618,7 +2618,7 @@ int ldlm_export_cancel_blocked_locks(struct obd_export *exp)
 			break;
 
 		ldlm_cancel_lock_for_export(exp, lock, &ecl);
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 	}
 
 	lu_env_fini(&env);
@@ -2745,7 +2745,7 @@ void ldlm_lock_dump_handle(int level, const struct lustre_handle *lockh)
 
 	LDLM_DEBUG_LIMIT(level, lock, "###");
 
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 }
 EXPORT_SYMBOL(ldlm_lock_dump_handle);
 
