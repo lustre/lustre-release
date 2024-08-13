@@ -115,7 +115,7 @@ static void mdt_prolong_dom_lock(struct tgt_session_info *tsi,
 			LASSERT(lock->l_export == data->lpa_export);
 			ldlm_lock_prolong_one(lock, data);
 			lock->l_last_used = ktime_get();
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 			if (data->lpa_locks_cnt > 0)
 				RETURN_EXIT;
 		}
@@ -1288,7 +1288,7 @@ static int mdt_do_glimpse(const struct lu_env *env, struct ldlm_namespace *ns,
 	/* Populate the gl_work structure.
 	 * Grab additional reference on the lock which will be released in
 	 * ldlm_work_gl_ast_lock() */
-	gl_work->gl_lock = LDLM_LOCK_GET(lock);
+	gl_work->gl_lock = ldlm_lock_get(lock);
 	/* The glimpse callback is sent to one single IO lock. As a result,
 	 * the gl_work list is just composed of one element */
 	list_add_tail(&gl_work->gl_list, &gl_list);
@@ -1303,13 +1303,13 @@ static int mdt_do_glimpse(const struct lu_env *env, struct ldlm_namespace *ns,
 	/* If the list is not empty, we failed to glimpse a lock and
 	 * must clean it up. Usually due to a race with unlink.*/
 	if (!list_empty(&gl_list)) {
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 		OBD_SLAB_FREE_PTR(gl_work, ldlm_glimpse_work_kmem);
 	}
 	rc = 0;
 	EXIT;
 out:
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 	return rc;
 }
 
@@ -1594,7 +1594,7 @@ bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
 	/* check if lock from the same client */
 	rc = (lock->l_export->exp_handle.h_cookie ==
 	      info->mti_exp->exp_handle.h_cookie);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 	return rc;
 }
 
@@ -1739,7 +1739,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		lock = ldlm_handle2lock(lh);
 		if (lock) {
 			dom_lock = ldlm_has_dom(lock) && ldlm_has_layout(lock);
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 		}
 	}
 
@@ -2008,7 +2008,7 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 		unlock_res_and_lock(lock);
 		ldlm_lock_decref_and_cancel(&dom_lh, LCK_PW);
 	}
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 
 	RETURN_EXIT;
 }

@@ -1758,7 +1758,7 @@ static int mdt_migrate_link_parent_lock(struct mdt_thread_info *info,
 			lock_res_and_lock(lock);
 			ldlm_set_atomic_cb(lock);
 			unlock_res_and_lock(lock);
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 		}
 
 		mdt_object_unlock(info, lnkp, lhl, 1);
@@ -2164,7 +2164,7 @@ static int mdd_migrate_close(struct mdt_thread_info *info,
 	ldlm_lock_cancel(lease);
 	ldlm_reprocess_all(lease->l_resource,
 			   lease->l_policy_data.l_inodebits.bits);
-	LDLM_LOCK_PUT(lease);
+	ldlm_lock_put(lease);
 
 close:
 	rc2 = mdt_close_internal(info, mdt_info_req(info), NULL);
@@ -3145,7 +3145,7 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 out_unlock:
 	up_write(&mo->mot_open_sem);
 out_put_lease:
-	LDLM_LOCK_PUT(lease);
+	ldlm_lock_put(lease);
 out_obj:
 	mdt_object_put(info->mti_env, mo);
 out:

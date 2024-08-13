@@ -681,7 +681,7 @@ int mdt_pack_size2body(struct mdt_thread_info *info,
 		lock = ldlm_handle2lock(lh);
 		if (lock != NULL) {
 			dom_lock = ldlm_has_dom(lock);
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 		}
 	}
 
@@ -2297,7 +2297,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		}
 		fid_extract_from_res_name(child_fid,
 					  &lock->l_resource->lr_name);
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 		child = mdt_object_find(info->mti_env, info->mti_mdt,
 					child_fid);
 		if (IS_ERR(child))
@@ -2518,10 +2518,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 				ldlm_inodebits_drop(lock, MDS_INODELOCK_DOM);
 				unlock_res_and_lock(lock);
 			}
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 			GOTO(unlock_parent, rc = 0);
 		}
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 
 	EXIT;
@@ -3844,10 +3844,10 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 			      DFID"\n",
 			      info->mti_exp->exp_obd->obd_name,
 			      PFID(mdt_object_fid(mo)));
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 			RETURN(-EPROTO);
 		}
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 		return 0;
 	}
 	return 1;
@@ -4051,7 +4051,7 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
 		lock = ldlm_handle2lock(handle);
 		LASSERT(lock);
 		*ibits = lock->l_policy_data.l_inodebits.bits;
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 
 	return rc;
@@ -4319,7 +4319,7 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 				CDEBUG(D_HA, "sync_lock, do async commit\n");
 				mdt_device_commit_async(info->mti_env, mdt);
 			}
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 		}
 		h->cookie = 0ull;
 	}
@@ -4356,7 +4356,7 @@ static void mdt_save_remote_lock(struct mdt_thread_info *info,
 		if (decref || !req || !(mode & (LCK_PW | LCK_EX)) ||
 		    !tgt_ses_info(info->mti_env)->tsi_has_trans) {
 			ldlm_lock_decref_and_cancel(h, mode);
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 		} else {
 			tgt_save_slc_lock(&info->mti_mdt->mdt_lut, lock,
 					  req->rq_transno);
@@ -4696,7 +4696,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 		LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
 			MSG_RESENT);
 
-		LDLM_LOCK_RELEASE(new_lock);
+		ldlm_lock_put(new_lock);
 		lh->mlh_reg_lh.cookie = 0;
 		RETURN(ELDLM_LOCK_REPLACED);
 	}
@@ -4729,7 +4729,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 		     &new_lock->l_remote_handle,
 		     &new_lock->l_exp_hash);
 
-	LDLM_LOCK_RELEASE(new_lock);
+	ldlm_lock_put(new_lock);
 	lh->mlh_reg_lh.cookie = 0;
 
 	RETURN(ELDLM_LOCK_REPLACED);

@@ -2121,7 +2121,7 @@ out_unlock:
 out_reprocess:
 	ldlm_reprocess_all(lease->l_resource,
 			   lease->l_policy_data.l_inodebits.bits);
-	LDLM_LOCK_PUT(lease);
+	ldlm_lock_put(lease);
 
 	ma->ma_valid = 0;
 	ma->ma_need = 0;
@@ -2349,7 +2349,7 @@ out_obj:
 			   lease->l_policy_data.l_inodebits.bits);
 
 out_lease:
-	LDLM_LOCK_PUT(lease);
+	ldlm_lock_put(lease);
 
 	if (ma != NULL) {
 		ma->ma_valid = 0;
@@ -2468,7 +2468,7 @@ out_unlock:
 out_reprocess:
 	ldlm_reprocess_all(lease->l_resource,
 			   lease->l_policy_data.l_inodebits.bits);
-	LDLM_LOCK_PUT(lease);
+	ldlm_lock_put(lease);
 
 	ma->ma_valid = 0;
 	ma->ma_need = 0;

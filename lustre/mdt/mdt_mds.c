@@ -188,7 +188,7 @@ static int ldlm_enqueue_hpreq_check(struct ptlrpc_request *req)
 			rc = lock->l_granted_mode == lock->l_req_mode;
 			if (rc)
 				LDLM_DEBUG(lock, "hpreq resend");
-			LDLM_LOCK_RELEASE(lock);
+			ldlm_lock_put(lock);
 		}
 	}
 
