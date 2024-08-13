@@ -4255,7 +4255,8 @@ test_102() {
 	setup_pcc_mapping client \
 		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
 
-	local thresh=$($LCTL get_param -n llite.*.pcc_async_threshold)
+	local thresh=$($LCTL get_param -n llite.*.pcc_async_threshold |
+		       head -n 1)
 
 	stack_trap "do_facet $SINGLEAGT $LCTL set_param \
 		    llite.*.pcc_async_threshold=$thresh"
