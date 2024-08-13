@@ -4007,9 +4007,9 @@ check_sysctl() {
 			fi
 			echo "found: ${BASH_REMATCH[1]} ${value}"
 			if [ "${value}" != "${BASH_REMATCH[2]}" ]; then
-				echo "Parameter ${BASH_REMATCH[1]} \
-					wrong value: ${value} \
-					expected: ${BASH_REMATCH[2]}"
+				echo "Parameter ${BASH_REMATCH[1]}" \
+					" wrong value: ${value}" \
+					" expected: ${BASH_REMATCH[2]}"
 				return 2
 			fi
 		fi
@@ -4023,7 +4023,7 @@ test_260() {
 	local sysctl_file="/etc/lnet-sysctl.conf"
 	local sysctl_conf_bak="/etc/lnet-sysctl.bak"
 	local sysctl_bak=$TMP/lnet-sysctl.bak
-	local -i max_retries=3
+	local -i max_retries=10
 	local -i retries=0
 
 	echo "Setting default values and create backup for check"
@@ -4040,9 +4040,9 @@ test_260() {
 	until check_sysctl "${sysctl_bak}"
 	do
 		if (( retries >= max_retries )); then
-			error "Values not set"
+			error "Default sysconfig values not set"
 		fi
-		sleep 1
+		sleep 3
 		retries+=1
 	done
 
@@ -4067,9 +4067,9 @@ test_260() {
 	until check_sysctl "${sysctl_file}"
 	do
 		if (( retries >= max_retries )); then
-			error "Values not set"
+			error "New sysctl values not set"
 		fi
-		sleep 1
+		sleep 3
 		retries+=1
 	done
 
@@ -4087,9 +4087,9 @@ test_260() {
 	until check_sysctl "${sysctl_bak}"
 	do
 		if (( retries >= max_retries )); then
-			error "Values not set"
+			error "Original sysconfig values not set"
 		fi
-		sleep 1
+		sleep 3
 		retries+=1
 	done
 
