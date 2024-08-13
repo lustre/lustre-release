@@ -109,7 +109,7 @@ int mdc_set_lock_data(struct obd_export *exp, const struct lustre_handle *lockh,
 		*bits = lock->l_policy_data.l_inodebits.bits;
 
 	unlock_res_and_lock(lock);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 
 	RETURN(0);
 }
@@ -788,7 +788,7 @@ int mdc_finish_enqueue(struct obd_export *exp,
 			ldlm_lock_decref(lockh, einfo->ei_mode);
 			einfo->ei_mode = lock->l_req_mode;
 		}
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 
 	lockrep = req_capsule_server_get(pill, &RMF_DLM_REP);
@@ -963,7 +963,7 @@ int mdc_finish_enqueue(struct obd_export *exp,
 		unlock_res_and_lock(lock);
 	}
 out_lock:
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 
 	RETURN(rc);
 }
@@ -1274,7 +1274,7 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 				 PLDLMRES(lock->l_resource),
 				 PFID(&body->mbo_fid1));
 		}
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 
 		memcpy(&old_lock, lockh, sizeof(*lockh));
 		if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,

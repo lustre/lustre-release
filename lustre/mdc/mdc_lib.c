@@ -522,7 +522,7 @@ static void mdc_close_intent_pack(struct req_capsule *pill,
 	lock = ldlm_handle2lock(&op_data->op_lease_handle);
 	if (lock != NULL) {
 		data->cd_handle = lock->l_remote_handle;
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 	ldlm_cli_cancel(&op_data->op_lease_handle, LCF_LOCAL);
 

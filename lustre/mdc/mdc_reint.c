@@ -572,7 +572,7 @@ int mdc_file_resync(struct obd_export *exp, struct md_op_data *op_data)
 	lock = ldlm_handle2lock(&op_data->op_lease_handle);
 	if (lock != NULL) {
 		rec->rs_lease_handle = lock->l_remote_handle;
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 
 	ptlrpc_request_set_replen(req);
