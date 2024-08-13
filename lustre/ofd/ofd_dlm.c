@@ -155,7 +155,7 @@ static bool ofd_intent_cb(struct ldlm_lock *lock, struct ofd_intent_args *arg)
 	}
 
 	/* Populate the gl_work structure. */
-	gl_work->gl_lock = LDLM_LOCK_GET(lock);
+	gl_work->gl_lock = ldlm_lock_get(lock);
 	list_add_tail(&gl_work->gl_list, &arg->gl_list);
 	/* There is actually no need for a glimpse descriptor when glimpsing
 	 * extent locks
@@ -345,7 +345,7 @@ out:
 	 * must clean up.  Usually due to a race with unlink.*/
 	list_for_each_entry_safe(pos, tmp, &arg.gl_list, gl_list) {
 		list_del(&pos->gl_list);
-		LDLM_LOCK_RELEASE(pos->gl_lock);
+		ldlm_lock_put(pos->gl_lock);
 		OBD_SLAB_FREE_PTR(pos, ldlm_glimpse_work_kmem);
 	}
 
