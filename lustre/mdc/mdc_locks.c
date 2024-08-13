@@ -1212,7 +1212,7 @@ static int mdc_enqueue_async_interpret(const struct lu_env *env,
 	rc = ldlm_cli_enqueue_fini(exp, &req->rq_pill, &einfo, 1,
 				  &mea->mea_flags, NULL, 0, &lockh, rc, true);
 	if (rc == -ENOLCK)
-		LDLM_LOCK_RELEASE(lock);
+		ldlm_lock_put(lock);
 
 	/* we expect failed_lock_cleanup() to destroy lock */
 	if (rc != 0)
@@ -1221,7 +1221,7 @@ static int mdc_enqueue_async_interpret(const struct lu_env *env,
 	if (mea->mea_upcall != NULL)
 		mea->mea_upcall(lock, rc);
 
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 
 	RETURN(rc);
 }

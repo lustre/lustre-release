@@ -1604,25 +1604,6 @@ enum ldlm_error ldlm_errno2error(int err_no);
 void ldlm_dump_export_locks(struct obd_export *exp);
 #endif
 
-/* Release temporary lock got by ldlm_handle2lock() or __ldlm_handle2lock() */
-#define LDLM_LOCK_PUT(lock)                     \
-do {                                            \
-	ldlm_lock_put(lock);                    \
-} while (0)
-
-/**
- * Release a lock reference obtained by some other means (see
- * LDLM_LOCK_PUT()).
- */
-#define LDLM_LOCK_RELEASE(lock) ldlm_lock_put(lock)
-
-#define LDLM_LOCK_GET(lock)                     \
-({                                              \
-	ldlm_lock_get(lock);                    \
-	/*LDLM_DEBUG((lock), "get");*/          \
-	lock;                                   \
-})
-
 #define ldlm_lock_list_put(head, member, count)			\
 ({								\
 	struct ldlm_lock *_lock, *_next;			\
@@ -1631,7 +1612,7 @@ do {                                            \
 		if (c-- == 0)					\
 			break;					\
 		list_del_init(&_lock->member);			\
-		LDLM_LOCK_RELEASE(_lock);			\
+		ldlm_lock_put(_lock);				\
 	}							\
 	LASSERT(c <= 0);					\
 })

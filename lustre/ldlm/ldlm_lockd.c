@@ -1794,7 +1794,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 		if (lock->l_export != req->rq_export) {
 			LDLM_DEBUG_NOLOCK("server-side cancel mismatched export (cookie %llx)",
 					dlm_req->lock_handle[i].cookie);
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 			continue;
 		}
 

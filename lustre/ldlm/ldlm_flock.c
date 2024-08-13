@@ -379,12 +379,12 @@ reprocess:
 				lock->l_flags |= LDLM_FL_AST_SENT;
 				ldlm_resource_unlink_lock(lock);
 				ldlm_add_ast_work_item(lock, NULL, &rpc_list);
-				LDLM_LOCK_GET(lock);
+				ldlm_lock_get(lock);
 				unlock_res_and_lock(req);
 				ldlm_run_ast_work(ns, &rpc_list,
 						  LDLM_WORK_CP_AST);
 				ldlm_lock_cancel(lock);
-				LDLM_LOCK_RELEASE(lock);
+				ldlm_lock_put(lock);
 				lock_res_and_lock(req);
 				break;
 			}
