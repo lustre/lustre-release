@@ -18291,6 +18291,40 @@ test_154e()
 }
 run_test 154e ".lustre is not returned by readdir"
 
+test_154ea()
+{
+	stack_trap "rm -rf $MOUNT/[abcdeg]*" EXIT
+
+	# long specially selected names are to displace .lustre out of
+	# first directory block
+	touch $MOUNT/$(printf "a%0100x" 6)
+	for i in 11 15
+	do
+	    touch $MOUNT/$(printf "a%0254x" $i)
+	done
+	touch $MOUNT/$(printf "b%0254x" $i)
+	for i in 16 6 7
+	do
+	    touch $MOUNT/$(printf "c%0254x" $i)
+	done
+	for i in 4 10 8
+	do
+	    touch $MOUNT/$(printf "d%0254x" $i)
+	done
+	for i in 1 14
+	do
+	    touch /mnt/lustre/$(printf "e%0254x" $i)
+	done
+	for i in 13 14
+	do
+	    touch /mnt/lustre/$(printf "g%0254x" $i)
+	done
+	if ls -a $MOUNT | grep -q '^\.lustre$'; then
+	    error ".lustre returned by readdir"
+	fi
+}
+run_test 154ea ".lustre is not returned by readdir (2)"
+
 test_154f() {
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 

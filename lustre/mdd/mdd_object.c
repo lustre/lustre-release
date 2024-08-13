@@ -4092,14 +4092,20 @@ out:
 		last->lde_reclen = 0; /* end mark */
 	}
 out_err:
-	if (result > 0)
+	if (result > 0) {
 		/* end of directory */
 		dp->ldp_hash_end = cpu_to_le64(MDS_DIR_END_OFF);
-	else if (result < 0)
+		if (last == NULL && fid_is_dot_lustre(&fid))
+			/*
+			 * .lustre is last in directory and alone in
+			 * last directory block
+			 */
+			dp->ldp_flags = cpu_to_le32(LDF_EMPTY);
+	} else if (result < 0) {
 		CWARN("%s: build page failed for "DFID": rc = %d\n",
 		      lu_dev_name(obj->do_lu.lo_dev),
 		      PFID(lu_object_fid(&obj->do_lu)), result);
-
+	}
 	return result;
 }
 
