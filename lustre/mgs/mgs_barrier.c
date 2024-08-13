@@ -131,7 +131,7 @@ again:
 		if (!work->gl_lock)
 			break;
 
-		LDLM_LOCK_RELEASE(work->gl_lock);
+		ldlm_lock_put(work->gl_lock);
 		work->gl_lock = NULL;
 	}
 
@@ -151,7 +151,7 @@ again:
 		struct ldlm_lock *lock = list_entry(pos, struct ldlm_lock,
 						    l_res_link);
 
-		work->gl_lock = LDLM_LOCK_GET(lock);
+		work->gl_lock = ldlm_lock_get(lock);
 		work->gl_flags = 0;
 		work->gl_desc = desc;
 		work->gl_interpret_reply = mgs_barrier_gl_interpret_reply;
@@ -191,7 +191,7 @@ out:
 	list_for_each_entry_safe(work, tmp, &gl_list, gl_list) {
 		list_del(&work->gl_list);
 		if (work->gl_lock)
-			LDLM_LOCK_RELEASE(work->gl_lock);
+			ldlm_lock_put(work->gl_lock);
 		OBD_FREE_PTR(work);
 	}
 
