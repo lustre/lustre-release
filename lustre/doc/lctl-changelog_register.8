@@ -1,33 +1,43 @@
-.TH LCTL-CHANGELOG_REGISTER 8 "2021-06-18" Lustre "configuration utilities"
+.TH LCTL-CHANGELOG_REGISTER 8 2024-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
-lctl-changelog_register \- register a new changelog user for particular device.
+lctl-changelog_register \- register changelog user for device
 .SH SYNOPSIS
-.B lctl changelog_register
+.SY lctl
+.B --device
+.I MDT_NAME
+.B changelog_register
 .RB [ --help | -h ]
 .RB [ --mask | -m
 .IR MASK ]
 .RB [ --nameonly | -n ]
 .RB [ --user | -u
 .IR USERNAME ]
-.br
+.YS
 .SH DESCRIPTION
 This command is used to register a new changelog user on selected device. New
-user may set specific \fImask\fR and/or specific unique \fIusername\fR.
+user may set specific
+.I MASK
+and/or specific unique
+.IR username .
 Changelog entries will not be purged beyond any registered users' set point.
-See also \fBlfs changelog_clear\fR.
-.br
+See also
+.B lfs
+changelog_clear.
 .SH OPTIONS
 .TP
-.BR --help | -h
+.BR -h ", " --help
 Output brief command usage help.
 .TP
-.BR --mask | -m\ \fI MASK
-Sets per-user changelog \fImask\fR. Mask is specified as set of keywords
-in form [+|-]\fImask1\fR[<,|+|->\fImask2\fR...]. Masks are separated by comma
-or '+' to indicate a mask to be added and by '-' to indicate mask to be
-removed. If mask list is started with '+' or '-' then masks are relative
-to the default changelog mask, otherwise mask is absolute. Possible mask
-keywords are:
+.BR -m ", " --mask \fI MASK
+Sets per-user changelog
+.IR MASK .
+Mask is specified as set of keywords in form
+.RI [+|-] MASK1 [<,|+|-> MASK2 ...].
+Masks are separated by comma or '+' to indicate a mask to be added
+and by '-' to indicate mask to be removed.
+If mask list is started with '+' or '-' then masks are relative
+to the default changelog mask, otherwise mask is absolute.
+Possible mask keywords are:
 .BR mark ", " creat ", " mkdir ", " hlink ", " slink ", " mknod ", "
 .BR unlnk ", " rmdir ", " renme ", " rnmto ", " open ", " close ", "
 .BR lyout ", " trunc ", " sattr ", " xattr ", " hsm ", " mtime ", "
@@ -36,49 +46,62 @@ The default changelog mask consists of all masks excluding:
 ``atime, open, gxatr, nopen''. Both uppercase and lowercase are accepted for
 keywords.
 .TP
-.BR --nameonly | -n
+.BR -n ", " --nameonly
 The output format modifier. If set then command outputs just changelog user
-name in format 'cl<\fIID\fR>[-<\fIusername\fR>]. Where \fIID\fR stands for
-assigned changelog user \fBID\fR.
+name in format
+.RB' cl\c
+.IR ID [- USERNAME ].
+Where
+.I ID
+stands for assigned changelog user
+.BR ID .
 .TP
-.BR --user | -u \ \fI USERNAME
+.BR -u ", " --user \fI USERNAME
 Specific username assigment. Unique name can be assigned to a new changelog
 user. Name must start with a letter and consist of letters, digits, '-' and
 \'_' symbols with total length limited by 15 symbols.
 .SH EXAMPLES
-.TP
-Simple changelog user register on device \fBtestfs-MDT0000\fR:
-.br
-# lctl --device testfs-MDT0000 changelog_register
-.br
+Simple changelog user register on device
+.BR testfs-MDT0000 :
+.RS
+.EX
+.B # lctl --device testfs-MDT0000 changelog_register
 testfs-MDT0000: Registered changelog userid 'cl1'
-.TP
-Register changelog user with specific name \fBtestname\fR:
-.br
-# lctl --device testfs-MDT0000 changelog_register -u testname
-.br
+.EE
+.RE
+.PP
+Register changelog user with specific name
+.BR testname :
+.RS
+.EX
+.B # lctl --device testfs-MDT0000 changelog_register -u testname
 lustre-MDT0000: Registered changelog userid 'cl1-testname'
-.TP
+.EE
+.RE
+.PP
 Register changelog user with specific mask:
-.br
-# lctl --device testfs-MDT0000 changelog_register -m +open,atime,-hlink
-.br
+.RS
+.EX
+.B # lctl --device testfs-MDT0000 changelog_register -m +open,atime,-hlink
 lustre-MDT0000: Registered changelog userid 'cl1'
-.TP
+.EE
+.RE
+.PP
 Register changelog user with terse output:
-.br
-# lctl --device testfs-MDT0000 changelog_register -n
-.br
+.RS
+.EX
+.B # lctl --device testfs-MDT0000 changelog_register -n
 cl1
-
+.EE
+.RE
 .SH AVAILABILITY
 .B lctl changelog_register
 is a subcommand of
 .BR lctl (8)
 and is distributed as part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.0-2540-g2c74bfcb7a
 .SH SEE ALSO
 .BR lctl (8),
 .BR lctl-changelog_deregister (8)
-

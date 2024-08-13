@@ -1,12 +1,12 @@
-.TH lctl-del_ost 8 "2022-06-13" Lustre "configuration utilities"
+.TH LCTL-DEL_OST 8 2024-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-del_ost \- permanently delete OST records
 .SH SYNOPSIS
-.B lctl del_ost
-.RB "[ --dryrun ]"
-.RB --target
-.IR OST_LABEL
-
+.SY "lctl del_ost"
+.RB [ --dryrun ]
+.B --target
+.I OST_LABEL
+.YS
 .SH DESCRIPTION
 .B lctl del_ost
 cancels the config records for an OST specified by
@@ -14,13 +14,13 @@ cancels the config records for an OST specified by
 to permanently forget about it. It should be run on the MGS and will
 search for the specified OST in the Lustre configuration log files for
 all MDTs and clients. If
-.RB --dryrun
+.B --dryrun
 is not specified, it will modify the configuration log files to
 permanently disable the OST records. Newly mounted MDTs and clients
 will not process deleted OSTs anymore. This method allows to permanently
 remove OSTs on a live filesystem without the use of --writeconf with
 .BR tunefs.lustre (8).
-
+.P
 Before using this command, you probably want to migrate
 file objects still on the OST by using
 .BR lfs-migrate (1)
@@ -33,39 +33,41 @@ which can find files by OST index.
 It is then recommended to first deactivate the OST using
 .BR lctl (8)
 with:
-.TP
-.B $ lctl conf_param lustre-OST0001.osc.active=0
-.TP
-and finally use \fBlctl del_ost\fR to remove it from the configuration logs.
-.TP
+.RS 8
+.B # lctl conf_param lustre-OST0001.osc.active=0
+.RE
+and finally use
+.B lctl del_ost
+to remove it from the configuration logs.
 .SH OPTIONS
 .TP
-\fB\-n\fR, \fB\-\-dryrun\fR
+.BR -n ", " --dryrun
 An option provided so that the system administrator can see which
 records would have been cancelled, but without actually cancelling them.
 When deleting OST records, it is recommended to first use this option
 and check that there are no errors.
 .TP
-\fB\-t\fR, \fB\-\-target\fR
+.BR -t ", " --target
 This option is required and used to specify the OST label to permanently
 delete from the records. The target label should be of the form
 .BR "fsname-OST0a19" .
-.TP
 .SH EXAMPLES
-.TP
-.B $ lctl --device MGS del_ost --target lustre-OST0001
+.EX
+.B # lctl --device MGS del_ost --target lustre-OST0001
+.EE
 .SH AVAILABILITY
 .B lctl del_ost
 is a subcommand of
 .BR lctl (8)
 and is distributed as part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 2.11.0
+.\" Added in commit v2_10_55_0-41-gd62efba975
 .SH SEE ALSO
-.BR lctl (8),
 .BR lfs-find (1),
 .BR lfs-migrate (1),
 .BR lfs_migrate (1),
+.BR lustre (7),
+.BR lctl (8),
 .BR lctl-llog_cancel (8),
 .BR tunefs.lustre (8),
-.BR lustre (7)
