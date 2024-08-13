@@ -1262,7 +1262,7 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 	lock = ldlm_handle2lock(&qbody->qb_glb_lockh);
 	if (lock == NULL)
 		RETURN(-ENOLCK);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 
 	uuid = &req->rq_export->exp_client_uuid;
 	stype = qmt_uuid2idx(uuid, &idx);
@@ -1293,7 +1293,7 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 
 		if (!obd_uuid_equals(&lock->l_export->exp_client_uuid, uuid)) {
 			/* sorry, no way to cheat ... */
-			LDLM_LOCK_PUT(lock);
+			ldlm_lock_put(lock);
 			RETURN(-ENOLCK);
 		}
 
@@ -1310,7 +1310,7 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 			/* lock is being cancelled, prolong timeout */
 			ldlm_refresh_waiting_lock(lock, timeout);
 		}
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 	}
 
 	/* extract quota information from global index FID packed in the

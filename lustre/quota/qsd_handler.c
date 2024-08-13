@@ -137,7 +137,7 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 
 	/* return remote lock handle to be packed in quota request */
 	lustre_handle_copy(lockh, &lock->l_remote_handle);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 
 	RETURN(0);
 }

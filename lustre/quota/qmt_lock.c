@@ -106,7 +106,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 		lock = ldlm_handle2lock(&reqbody->qb_glb_lockh);
 		if (lock == NULL)
 			GOTO(out, rc = -ENOLCK);
-		LDLM_LOCK_PUT(lock);
+		ldlm_lock_put(lock);
 
 		stype = qmt_uuid2idx(uuid, &idx);
 		if (stype < 0)
@@ -590,7 +590,7 @@ static void qmt_free_lock_array(struct qmt_gl_lock_array *array)
 
 	for (i = 0; i < array->q_cnt; i++) {
 		LASSERT(array->q_locks[i]);
-		LDLM_LOCK_RELEASE(array->q_locks[i]);
+		ldlm_lock_put(array->q_locks[i]);
 		array->q_locks[i] = NULL;
 	}
 	array->q_cnt = 0;
@@ -631,7 +631,7 @@ again:
 
 		count++;
 		if (array->q_max != 0 && array->q_cnt < array->q_max) {
-			array->q_locks[array->q_cnt] = LDLM_LOCK_GET(lock);
+			array->q_locks[array->q_cnt] = ldlm_lock_get(lock);
 			array->q_cnt++;
 		}
 	}
@@ -805,7 +805,7 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 		CERROR("%s: failed to notify %s of new quota settings\n",
 		       qmt->qmt_svname,
 		       obd_uuid2str(&work->gl_lock->l_export->exp_client_uuid));
-		LDLM_LOCK_RELEASE(work->gl_lock);
+		ldlm_lock_put(work->gl_lock);
 		OBD_FREE_PTR(work);
 	}
 out:

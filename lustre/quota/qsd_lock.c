@@ -555,7 +555,7 @@ int qsd_id_lock_match(struct lustre_handle *lockh, struct lustre_handle *rlockh)
 	lock = ldlm_handle2lock(lockh);
 	LASSERT(lock != NULL);
 	lustre_handle_copy(rlockh, &lock->l_remote_handle);
-	LDLM_LOCK_PUT(lock);
+	ldlm_lock_put(lock);
 
 	RETURN(0);
 }
