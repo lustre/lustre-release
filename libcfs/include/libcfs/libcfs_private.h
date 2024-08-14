@@ -228,16 +228,13 @@ do {									    \
 #define LIBCFS_FREE(ptr, size)						\
 do {									\
 	size_t s = (size);						\
-	if (unlikely((ptr) == NULL)) {					\
-		CERROR("LIBCFS: free NULL '" #ptr "' (%zd bytes) at "	\
-		       "%s:%d\n", s, __FILE__, __LINE__);		\
-		break;							\
+	if (likely(ptr)) {						\
+		LIBCFS_FREE_PRE(ptr, (size), "kfreed");			\
+		if (unlikely(s > LIBCFS_VMALLOC_SIZE))			\
+			libcfs_vfree_atomic(ptr);			\
+		else							\
+			kfree(ptr);					\
 	}								\
-	LIBCFS_FREE_PRE(ptr, (size), "kfreed");				\
-	if (unlikely(s > LIBCFS_VMALLOC_SIZE))				\
-		libcfs_vfree_atomic(ptr);				\
-	else								\
-		kfree(ptr);						\
 } while (0)
 
 /******************************************************************************/
