@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 MODULES := lquota
 
 quota-objs := lproc_quota.o lquota_lib.o lquota_disk.o lquota_entry.o
