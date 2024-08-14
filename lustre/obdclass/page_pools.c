@@ -27,13 +27,10 @@
 #include <lustre_sec.h>
 
 /* We have a pool for every power of 2 number of pages. Each pool must
- * be able to provide at least one object of PTLRPC_MAX_BRW_SIZE * 2.
- * Multiplying MAX_BRW_SIZE by 2 is a hack required to successfully
- * compress and uncompress chunks in decompress/compress_request(ask
- * Artem(ablagodarenko@ddn.com) for details why it failed). Most pools
- * will be unused, but that's OK - unused pools are very cheap.
+ * be able to provide at least one object of PTLRPC_MAX_BRW_SIZE.
+ * Most pools will be unused, but that's OK - unused pools are very cheap.
  */
-#define POOLS_COUNT (PTLRPC_MAX_BRW_BITS - PAGE_SHIFT + 1)
+#define POOLS_COUNT (PTLRPC_MAX_BRW_BITS - PAGE_SHIFT)
 #define PAGES_TO_MiB(pages)	((pages) >> (20 - PAGE_SHIFT))
 #define MiB_TO_PAGES(mb)	((mb) << (20 - PAGE_SHIFT))
 /* deprecated - see pool_max_memory_mb below */
