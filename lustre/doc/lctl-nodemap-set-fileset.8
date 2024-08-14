@@ -1,56 +1,53 @@
-.TH LCTL-NODEMAP_SET_FILESET 8 "2019-01-17" Lustre "configuration utilities"
+.TH LCTL-NODEMAP_SET_FILESET 8 2024-08-14 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-nodemap_set_fileset \- add a fileset to a nodemap
 .SH SYNOPSIS
-.br
-.B lctl nodemap_set_fileset --name
-.RI < nodemap >
-.B --fileset
-.RI < fileset >
-.br
+.SY "lctl nodemap_set_fileset"
+.BI --name " NODEMAP"
+.BI --fileset " SUBDIRECTORY"
+.YS
 .SH DESCRIPTION
 .B nodemap_set_fileset
 adds
-.I fileset
+.I FILESET
 to the specified
-.IR nodemap .
+.IR NODEMAP .
 The
-.I fileset
-must
-begin with '/'. Clients belonging to
-.I nodemap
+.I SUBDIRECTORY
+must begin with '/'. Clients belonging to
+.I NODEMAP
 will be automatically
 presented the corresponding
-.I fileset
-when mounting. This means these clients
-are doing an implicit subdirectory mount on the subdirectory represented by
-the defined
-.IR fileset .
-
+.I SUBDIRECTORY
+when mounting.
+This means these clients are doing an implicit subdirectory
+mount on the subdirectory represented by the defined
+.IR SUBDIRECTORY .
 .SH OPTIONS
-.I nodemap
-is the name of the nodemap that this fileset should be associated with.
-
-.I fileset
-is the fileset to restrict the clients to. The fileset must begin with '/'.
-
+.TP
+.BI --name " NODEMAP"
+The name of the nodemap that this fileset should be associated with.
+.TP
+.BI --fileset " SUBDIRECTORY"
+The fileset to restrict the clients to. The fileset must begin with '/'.
 .SH EXAMPLES
-.nf
-# lctl nodemap_set_fileset --name tenant1 --fileset '/dir1'
-# lctl nodemap_set_fileset --name admins --fileset ''
-.fi
-
+.EX
+.B # lctl nodemap_set_fileset --name tenant1 --fileset '/dir1'
+.B # lctl nodemap_set_fileset --name admins --fileset ''
+.EE
 .SH AVAILABILITY
-.B lctl
+.B lctl nodemap_set_fileset
 is part of the
-.BR Lustre (7)
-filesystem package.
+.BR lustre (7)
+filesystem package since release 2.9.0
+.\" Added in commit v2_8_53_0-63-g25420c75e4
 .SH SEE ALSO
 .BR lustre (7),
 .BR lctl-nodemap-activate (8),
 .BR lctl-nodemap-add (8),
-.BR lctl-nodemap-del (8),
-.BR lctl-nodemap-del-range (8),
 .BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del (8),
 .BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
 .BR lctl-nodemap-modify (8)
