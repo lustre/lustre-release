@@ -463,8 +463,7 @@ static int tx_extend_args(struct thandle_exec_args *ta, int new_alloc_ta)
 out:
 	if (rc != 0) {
 		for (i = 0; i < new_alloc_ta; i++) {
-			if (new_ta[i] != NULL)
-				OBD_FREE_PTR(new_ta[i]);
+			OBD_FREE_PTR(new_ta[i]);
 		}
 		OBD_FREE_PTR_ARRAY(new_ta, new_alloc_ta);
 	}

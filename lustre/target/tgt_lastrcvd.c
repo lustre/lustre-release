@@ -2311,8 +2311,7 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 out:
 	if (hash != NULL)
 		cfs_hash_putref(hash);
-	if (trd != NULL)
-		OBD_FREE_PTR(trd);
+	OBD_FREE_PTR(trd);
 	return rc;
 }
 

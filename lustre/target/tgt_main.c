@@ -635,8 +635,7 @@ out_put:
 		dt_object_put(env, lut->lut_last_rcvd);
 		lut->lut_last_rcvd = NULL;
 	}
-	if (lut->lut_client_bitmap != NULL)
-		OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
+	OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
 	lut->lut_client_bitmap = NULL;
 	if (lut->lut_reply_data != NULL)
 		dt_object_put(env, lut->lut_reply_data);
@@ -752,8 +751,7 @@ static void tgt_key_fini(const struct lu_context *ctx,
 	int				i;
 
 	for (i = 0; i < args->ta_alloc_args; i++) {
-		if (args->ta_args[i] != NULL)
-			OBD_FREE_PTR(args->ta_args[i]);
+		OBD_FREE_PTR(args->ta_args[i]);
 	}
 
 	if (args->ta_args != NULL)

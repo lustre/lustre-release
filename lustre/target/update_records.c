@@ -1195,8 +1195,7 @@ static void update_key_fini(const struct lu_context *ctx,
 	int			  i;
 
 	for (i = 0; i < args->ta_alloc_args; i++) {
-		if (args->ta_args[i] != NULL)
-			OBD_FREE_PTR(args->ta_args[i]);
+		OBD_FREE_PTR(args->ta_args[i]);
 	}
 
 	if (args->ta_args != NULL)
