@@ -371,8 +371,7 @@ out_free:
 		OBD_FREE_PTR_ARRAY(update_bufs, update_buf_count);
 	}
 
-	if (trd)
-		OBD_FREE_PTR(trd);
+	OBD_FREE_PTR(trd);
 
 	if (desc != NULL)
 		ptlrpc_free_bulk(desc);

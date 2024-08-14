@@ -476,8 +476,7 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	EXIT;
 out:
 	mdt_thread_info_fini(info);
-	if (buffer)
-		OBD_FREE(buffer, PATH_MAX+1);
+	OBD_FREE(buffer, PATH_MAX+1);
 	return rc;
 }
 
@@ -5500,8 +5499,7 @@ static int mdt_register_seq_exp(struct mdt_device *mdt)
 		GOTO(out_free, rc);
 	}
 out_free:
-	if (lwp_name != NULL)
-		OBD_FREE(lwp_name, MAX_OBD_NAME);
+	OBD_FREE(lwp_name, MAX_OBD_NAME);
 
 	return rc;
 }
@@ -5750,8 +5748,7 @@ static int mdt_connect_to_next(const struct lu_env *env, struct mdt_device *m,
 	}
 
 out:
-	if (data)
-		OBD_FREE_PTR(data);
+	OBD_FREE_PTR(data);
 	RETURN(rc);
 }
 
@@ -5897,10 +5894,8 @@ put_profile:
 free_bufs:
 	OBD_FREE_PTR(bufs);
 cleanup_mem:
-	if (name)
-		OBD_FREE(name, name_size);
-	if (uuid)
-		OBD_FREE(uuid, uuid_size);
+	OBD_FREE(name, name_size);
+	OBD_FREE(uuid, uuid_size);
 	RETURN(rc);
 }
 
@@ -6037,14 +6032,10 @@ lcfg_cleanup:
 put_profile:
 	class_put_profile(lprof);
 cleanup_mem:
-	if (bufs)
-		OBD_FREE_PTR(bufs);
-	if (qmtname)
-		OBD_FREE(qmtname, MAX_OBD_NAME);
-	if (uuid)
-		OBD_FREE(uuid, UUID_MAX);
-	if (data)
-		OBD_FREE_PTR(data);
+	OBD_FREE_PTR(bufs);
+	OBD_FREE(qmtname, MAX_OBD_NAME);
+	OBD_FREE(uuid, UUID_MAX);
+	OBD_FREE_PTR(data);
 	return rc;
 }
 
@@ -7400,9 +7391,8 @@ static int mdt_destroy_export(struct obd_export *exp)
 	ENTRY;
 
 	target_destroy_export(exp);
-	if (exp->exp_used_slots)
-		OBD_FREE(exp->exp_used_slots,
-			 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
+	OBD_FREE(exp->exp_used_slots,
+		 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
 
 	/* destroy can be called from failed obd_setup, so
 	 * checking uuid is safer than obd_self_export

@@ -690,8 +690,7 @@ err:
 	seq_release(inode, file);
 	if (aai && aai->aai_env.le_ses)
 		OBD_FREE_PTR(aai->aai_env.le_ses);
-	if (aai)
-		OBD_FREE_PTR(aai);
+	OBD_FREE_PTR(aai);
 out:
 	return rc;
 }

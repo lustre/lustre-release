@@ -1960,8 +1960,7 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 	}
 	up_read(&cdt->cdt_request_lock);
 
-	if (hal != NULL)
-		OBD_FREE(hal, hal_sz);
+	OBD_FREE(hal, hal_sz);
 
 	/* cancel all on-disk records */
 	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt, mdt_cancel_all_cb,

@@ -456,8 +456,7 @@ static int mdt_lvbo_free(struct ldlm_resource *res)
 	}
 
 	/* Data-on-MDT lvbo free */
-	if (res->lr_lvb_data != NULL)
-		OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
+	OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
 	return 0;
 }
 

@@ -137,8 +137,7 @@ out_free:
 
 	if (ha != NULL && ha->ha_archive_id != NULL)
 		OBD_FREE_PTR_ARRAY(ha->ha_archive_id, ha->ha_archive_cnt);
-	if (ha != NULL)
-		OBD_FREE_PTR(ha);
+	OBD_FREE_PTR(ha);
 out:
 	/* wake the coordinator to potentially schedule requests */
 	if (rc == -EEXIST || rc == 0)

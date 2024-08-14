@@ -400,8 +400,7 @@ again:
 				   param->idd_uid, param);
 
 out:
-	if (param != NULL)
-		OBD_FREE(param, size);
+	OBD_FREE(param, size);
 
 	return rc ? rc : count;
 }
