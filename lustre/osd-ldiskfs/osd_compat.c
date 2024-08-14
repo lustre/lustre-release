@@ -1027,8 +1027,7 @@ struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
 cleanup:
 	mutex_unlock(&map->om_dir_init_mutex);
 	if (rc != 0) {
-		if (osd_seq != NULL)
-			OBD_FREE_PTR(osd_seq);
+		OBD_FREE_PTR(osd_seq);
 		RETURN(ERR_PTR(rc));
 	}
 

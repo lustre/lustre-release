@@ -8146,8 +8146,7 @@ static void osd_key_fini(const struct lu_context *ctx,
 		info->oti_ins_cache = NULL;
 		info->oti_ins_cache_size = 0;
 	}
-	if (info->oti_lookup_cache)
-		OBD_FREE_PTR(info->oti_lookup_cache);
+	OBD_FREE_PTR(info->oti_lookup_cache);
 	OBD_FREE_PTR(info);
 }
 

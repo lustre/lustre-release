@@ -462,8 +462,7 @@ out:
 		if (osd_seq != NULL && osd_seq->os_compat_dirs != NULL)
 			OBD_FREE_PTR_ARRAY(osd_seq->os_compat_dirs,
 					   osd_seq->os_subdir_count);
-		if (osd_seq != NULL)
-			OBD_FREE_PTR(osd_seq);
+		OBD_FREE_PTR(osd_seq);
 		osd_seq = ERR_PTR(rc);
 	}
 	RETURN(osd_seq);
