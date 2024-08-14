@@ -236,8 +236,7 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	INIT_LIST_HEAD(&sbi->ll_all_quota_list);
 	RETURN(sbi);
 out_destroy_ra:
-	if (sbi->ll_foreign_symlink_prefix)
-		OBD_FREE(sbi->ll_foreign_symlink_prefix, sizeof("/mnt/"));
+	OBD_FREE(sbi->ll_foreign_symlink_prefix, sizeof("/mnt/"));
 	if (sbi->ll_cache) {
 		cl_cache_decref(sbi->ll_cache);
 		sbi->ll_cache = NULL;
@@ -826,10 +825,8 @@ retry_connect:
 	if (uuid != NULL)
 		sb->s_dev = get_uuid2int(uuid->uuid, strlen(uuid->uuid));
 
-	if (data != NULL)
-		OBD_FREE_PTR(data);
-	if (osfs != NULL)
-		OBD_FREE_PTR(osfs);
+	OBD_FREE_PTR(data);
+	OBD_FREE_PTR(osfs);
 
 	if (sbi->ll_dt_obd) {
 		err = sysfs_create_link(&sbi->ll_kset.kobj,
@@ -869,10 +866,8 @@ out_md:
 	sbi->ll_md_exp = NULL;
 	sbi->ll_md_obd = NULL;
 out:
-	if (data != NULL)
-		OBD_FREE_PTR(data);
-	if (osfs != NULL)
-		OBD_FREE_PTR(osfs);
+	OBD_FREE_PTR(data);
+	OBD_FREE_PTR(osfs);
 	return err;
 }
 
@@ -1234,8 +1229,7 @@ static int ll_options(char *options, struct super_block *sb)
 				OBD_ALLOC_POST(sbi->ll_foreign_symlink_prefix,
 					       sbi->ll_foreign_symlink_prefix_size,
 					       "kmalloced");
-				if (old)
-					OBD_FREE(old, old_len);
+				OBD_FREE(old, old_len);
 
 				/* enable foreign symlink support */
 				set_bit(token, sbi->ll_flags);
@@ -1497,11 +1491,9 @@ int ll_fill_super(struct super_block *sb)
 	sbi->ll_client_common_fill_super_succeeded = 1;
 
 out_free_md:
-	if (md)
-		OBD_FREE(md, md_len);
+	OBD_FREE(md, md_len);
 out_free_dt:
-	if (dt)
-		OBD_FREE(dt, dt_len);
+	OBD_FREE(dt, dt_len);
 out_profile:
 	if (lprof)
 		class_put_profile(lprof);
@@ -1509,8 +1501,7 @@ out_debugfs:
 	if (err < 0)
 		ll_debugfs_unregister_super(sb);
 out_free_cfg:
-	if (cfg)
-		OBD_FREE_PTR(cfg);
+	OBD_FREE_PTR(cfg);
 
 	if (err)
 		ll_put_super(sb);

@@ -544,8 +544,7 @@ ssize_t foreign_symlink_prefix_store(struct kobject *kobj,
 	sbi->ll_foreign_symlink_prefix_size = new_len + 1;
 	up_write(&sbi->ll_foreign_symlink_sem);
 
-	if (old)
-		OBD_FREE(old, old_len);
+	OBD_FREE(old, old_len);
 
 	return new_len;
 }

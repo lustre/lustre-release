@@ -1103,8 +1103,7 @@ out:
 		ll_finish_md_op_data(op_data);
 	}
 
-	if (lum != NULL)
-		OBD_FREE_PTR(lum);
+	OBD_FREE_PTR(lum);
 
 	ptlrpc_req_put(req);
 	return retval;
@@ -1894,8 +1893,7 @@ err_exit:
 		ptlrpc_req_put(request);
 	if (!IS_ERR_OR_NULL(op_data))
 		ll_finish_md_op_data(op_data);
-	if (lum)
-		OBD_FREE_PTR(lum);
+	OBD_FREE_PTR(lum);
 
 	RETURN(err);
 }
@@ -2133,8 +2131,7 @@ out_fini:
 	ll_finish_md_op_data(op_data);
 	ll_intent_release(&mkdir_it);
 	ptlrpc_req_put(request);
-	if (lum)
-		OBD_FREE_PTR(lum);
+	OBD_FREE_PTR(lum);
 
 out_tally:
 	if (rc == 0)

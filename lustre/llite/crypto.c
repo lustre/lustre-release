@@ -148,8 +148,7 @@ int ll_file_open_encrypt(struct inode *inode, struct file *filp)
 
 void llcrypt_free_ctx(void *encctx, __u32 size)
 {
-	if (encctx)
-		OBD_FREE(encctx, size);
+	OBD_FREE(encctx, size);
 }
 
 #ifdef HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED

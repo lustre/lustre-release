@@ -1311,8 +1311,7 @@ out_close:
 out_release_it:
 	ll_intent_release(&it);
 out:
-	if (och != NULL)
-		OBD_FREE_PTR(och);
+	OBD_FREE_PTR(och);
 	RETURN(ERR_PTR(rc));
 }
 
@@ -1377,8 +1376,7 @@ static int ll_swap_layouts_close(struct obd_client_handle *och,
 	och = NULL; /* freed in ll_close_inode_openhandle() */
 
 out_free_och:
-	if (och != NULL)
-		OBD_FREE_PTR(och);
+	OBD_FREE_PTR(och);
 
 	RETURN(rc);
 }
@@ -3639,8 +3637,7 @@ putgl:
 	}
 
 free:
-	if (llss != NULL)
-		OBD_FREE_PTR(llss);
+	OBD_FREE_PTR(llss);
 
 	RETURN(rc);
 }
@@ -3733,11 +3730,9 @@ static int ll_hsm_import(struct inode *inode, struct file *file,
 	inode_unlock(inode);
 
 out:
-	if (hss != NULL)
-		OBD_FREE_PTR(hss);
+	OBD_FREE_PTR(hss);
 
-	if (attr != NULL)
-		OBD_FREE_PTR(attr);
+	OBD_FREE_PTR(attr);
 
 	RETURN(rc);
 }

@@ -225,9 +225,8 @@ static void pcc_cmd_fini(struct pcc_cmd *cmd)
 	if (cmd->pccc_cmd == PCC_ADD_DATASET) {
 		if (!list_empty(&cmd->u.pccc_add.pccc_conds))
 			pcc_rule_conds_free(&cmd->u.pccc_add.pccc_conds);
-		if (cmd->u.pccc_add.pccc_conds_str)
-			OBD_FREE(cmd->u.pccc_add.pccc_conds_str,
-				 strlen(cmd->u.pccc_add.pccc_conds_str) + 1);
+		OBD_FREE(cmd->u.pccc_add.pccc_conds_str,
+			 strlen(cmd->u.pccc_add.pccc_conds_str) + 1);
 	}
 }
 

@@ -2113,8 +2113,7 @@ lmv_out_free:
 		/* in v1 and v3 cases lumv1 points to data */
 		rc = ll_dir_setstripe(inode, lumv1_ptr, set_default);
 out:
-		if (lumv3)
-			OBD_FREE(lumv3, lum_size);
+		OBD_FREE(lumv3, lum_size);
 		RETURN(rc);
 	}
 	case LL_IOC_LMV_GETSTRIPE: {
