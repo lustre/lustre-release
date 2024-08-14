@@ -304,8 +304,7 @@ void lu_tgt_descs_fini(struct lu_tgt_descs *ltd)
 
 	bitmap_free(ltd->ltd_tgt_bitmap);
 	for (i = 0; i < ARRAY_SIZE(ltd->ltd_tgt_idx); i++) {
-		if (ltd->ltd_tgt_idx[i])
-			OBD_FREE_PTR(ltd->ltd_tgt_idx[i]);
+		OBD_FREE_PTR(ltd->ltd_tgt_idx[i]);
 	}
 	ltd->ltd_tgts_size = 0;
 }

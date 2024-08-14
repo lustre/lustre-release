@@ -1121,12 +1121,9 @@ static int class_add_profile(int proflen, char *prof, int osclen, char *osc,
 	RETURN(err);
 
 out:
-	if (lprof->lp_md)
-		OBD_FREE(lprof->lp_md, mdclen);
-	if (lprof->lp_dt)
-		OBD_FREE(lprof->lp_dt, osclen);
-	if (lprof->lp_profile)
-		OBD_FREE(lprof->lp_profile, proflen);
+	OBD_FREE(lprof->lp_md, mdclen);
+	OBD_FREE(lprof->lp_dt, osclen);
+	OBD_FREE(lprof->lp_profile, proflen);
 	OBD_FREE(lprof, sizeof(*lprof));
 	RETURN(err);
 }
@@ -1176,8 +1173,7 @@ void class_put_profile(struct lustre_profile *lprof)
 	LASSERT(lprof->lp_list_deleted);
 	OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
 	OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
-	if (lprof->lp_md)
-		OBD_FREE(lprof->lp_md, strlen(lprof->lp_md) + 1);
+	OBD_FREE(lprof->lp_md, strlen(lprof->lp_md) + 1);
 	OBD_FREE(lprof, sizeof(*lprof));
 }
 EXPORT_SYMBOL(class_put_profile);
@@ -2020,8 +2016,7 @@ int class_config_llog_handler(const struct lu_env *env,
 		OBD_FREE(lcfg_new, lustre_cfg_len(lcfg_new->lcfg_bufcount,
 						  lcfg_new->lcfg_buflens));
 out_inst:
-		if (inst_name)
-			OBD_FREE(inst_name, inst_len);
+		OBD_FREE(inst_name, inst_len);
 		break;
 	}
 	default:

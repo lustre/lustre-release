@@ -979,8 +979,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 					 obd->obd_recovery_start));
 		}
 
-		if (buf != NULL)
-			OBD_FREE(buf, size);
+		OBD_FREE(buf, size);
 
 		if (likely(count > 0))
 			goto out;

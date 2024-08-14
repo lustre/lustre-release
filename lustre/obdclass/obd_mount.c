@@ -568,12 +568,9 @@ out:
 out_free:
 	mutex_unlock(&mgc_start_lock);
 
-	if (uuid)
-		OBD_FREE_PTR(uuid);
-	if (data)
-		OBD_FREE_PTR(data);
-	if (mgcname)
-		OBD_FREE(mgcname, len);
+	OBD_FREE_PTR(uuid);
+	OBD_FREE_PTR(data);
+	OBD_FREE(mgcname, len);
 	mgc_niduuid_destroy(&niduuid);
 
 	RETURN(rc);
@@ -699,36 +696,27 @@ static int lustre_free_lsi(struct lustre_sb_info *lsi)
 
 	llcrypt_sb_free(lsi);
 	if (lsi->lsi_lmd != NULL) {
-		if (lsi->lsi_lmd->lmd_dev != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_dev,
-				strlen(lsi->lsi_lmd->lmd_dev) + 1);
-		if (lsi->lsi_lmd->lmd_profile != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_profile,
-				strlen(lsi->lsi_lmd->lmd_profile) + 1);
-		if (lsi->lsi_lmd->lmd_fileset != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_fileset,
-				strlen(lsi->lsi_lmd->lmd_fileset) + 1);
-		if (lsi->lsi_lmd->lmd_mgssec != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_mgssec,
-				strlen(lsi->lsi_lmd->lmd_mgssec) + 1);
-		if (lsi->lsi_lmd->lmd_opts != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_opts,
-				strlen(lsi->lsi_lmd->lmd_opts) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_dev,
+			 strlen(lsi->lsi_lmd->lmd_dev) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_profile,
+			 strlen(lsi->lsi_lmd->lmd_profile) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_fileset,
+			 strlen(lsi->lsi_lmd->lmd_fileset) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_mgssec,
+			 strlen(lsi->lsi_lmd->lmd_mgssec) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_opts,
+			 strlen(lsi->lsi_lmd->lmd_opts) + 1);
 		if (lsi->lsi_lmd->lmd_exclude_count)
 			OBD_FREE(lsi->lsi_lmd->lmd_exclude,
 				sizeof(lsi->lsi_lmd->lmd_exclude[0]) *
 				lsi->lsi_lmd->lmd_exclude_count);
-		if (lsi->lsi_lmd->lmd_mgs != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_mgs,
-				 strlen(lsi->lsi_lmd->lmd_mgs) + 1);
-		if (lsi->lsi_lmd->lmd_osd_type != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_osd_type,
-				 strlen(lsi->lsi_lmd->lmd_osd_type) + 1);
-		if (lsi->lsi_lmd->lmd_params != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_params, 4096);
-		if (lsi->lsi_lmd->lmd_nidnet != NULL)
-			OBD_FREE(lsi->lsi_lmd->lmd_nidnet,
-				strlen(lsi->lsi_lmd->lmd_nidnet) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_mgs,
+			 strlen(lsi->lsi_lmd->lmd_mgs) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_osd_type,
+			 strlen(lsi->lsi_lmd->lmd_osd_type) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_params, 4096);
+		OBD_FREE(lsi->lsi_lmd->lmd_nidnet,
+			 strlen(lsi->lsi_lmd->lmd_nidnet) + 1);
 
 		OBD_FREE_PTR(lsi->lsi_lmd);
 	}
