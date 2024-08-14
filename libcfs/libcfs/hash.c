@@ -903,16 +903,14 @@ cfs_hash_dual_bd_finddel_locked(struct cfs_hash *hs, struct cfs_hash_bd *bds,
 
 static void
 cfs_hash_buckets_free(struct cfs_hash_bucket **buckets,
-                      int bkt_size, int prev_size, int size)
+		      int bkt_size, int prev_size, int size)
 {
-        int     i;
+	int i;
 
-        for (i = prev_size; i < size; i++) {
-                if (buckets[i] != NULL)
-                        LIBCFS_FREE(buckets[i], bkt_size);
-        }
+	for (i = prev_size; i < size; i++)
+		LIBCFS_FREE(buckets[i], bkt_size);
 
-        LIBCFS_FREE(buckets, sizeof(buckets[0]) * size);
+	LIBCFS_FREE(buckets, sizeof(buckets[0]) * size);
 }
 
 /*

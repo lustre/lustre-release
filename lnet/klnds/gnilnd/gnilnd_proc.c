@@ -139,10 +139,8 @@ unwind:
 			__free_page(dest[i].bv_page);
 	}
 
-	if (src != NULL)
-		CFS_FREE_PTR_ARRAY(src, GNILND_MAX_IOV);
-	if (dest != NULL)
-		CFS_FREE_PTR_ARRAY(dest, GNILND_MAX_IOV);
+	CFS_FREE_PTR_ARRAY(src, GNILND_MAX_IOV);
+	CFS_FREE_PTR_ARRAY(dest, GNILND_MAX_IOV);
 	return rc;
 }
 
@@ -623,8 +621,7 @@ kgnilnd_smsg_seq_stop(struct seq_file *s, void *iter)
 {
 	kgn_smsg_seq_iter_t     *gseq = iter;
 
-	if (gseq != NULL)
-		LIBCFS_FREE(gseq, sizeof(*gseq));
+	LIBCFS_FREE(gseq, sizeof(*gseq));
 }
 
 static void *
@@ -838,8 +835,7 @@ kgnilnd_conn_seq_stop(struct seq_file *s, void *iter)
 {
 	kgn_conn_seq_iter_t     *gseq = iter;
 
-	if (gseq != NULL)
-		LIBCFS_FREE(gseq, sizeof(*gseq));
+	LIBCFS_FREE(gseq, sizeof(*gseq));
 }
 
 static void *
@@ -1181,8 +1177,7 @@ kgnilnd_peer_seq_stop(struct seq_file *s, void *iter)
 {
 	kgn_peer_seq_iter_t     *gseq = iter;
 
-	if (gseq != NULL)
-		LIBCFS_FREE(gseq, sizeof(*gseq));
+	LIBCFS_FREE(gseq, sizeof(*gseq));
 }
 
 static void *

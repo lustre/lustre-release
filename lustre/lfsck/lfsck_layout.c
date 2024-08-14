@@ -7356,8 +7356,7 @@ out:
 
 	lfsck_instance_put(env, lfsck);
 	if (rc != 0) {
-		if (it != NULL)
-			OBD_FREE_PTR(it);
+		OBD_FREE_PTR(it);
 
 		it = (struct lfsck_orphan_it *)ERR_PTR(rc);
 	}

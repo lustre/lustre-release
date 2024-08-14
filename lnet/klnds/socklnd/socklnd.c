@@ -1307,9 +1307,8 @@ failed_2:
 	ksocknal_peer_decref(peer_ni);
 
 failed_1:
-	if (hello != NULL)
-		LIBCFS_FREE(hello, offsetof(struct ksock_hello_msg,
-					    kshm_ips[LNET_INTERFACES_NUM]));
+	LIBCFS_FREE(hello, offsetof(struct ksock_hello_msg,
+				    kshm_ips[LNET_INTERFACES_NUM]));
 
 	LIBCFS_FREE(conn, sizeof(*conn));
 

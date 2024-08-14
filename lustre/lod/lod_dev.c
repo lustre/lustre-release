@@ -2040,10 +2040,8 @@ static int lod_connect_to_osd(const struct lu_env *env, struct lod_device *lod,
 	lod->lod_child = lu2dt_dev(lod->lod_child_exp->exp_obd->obd_lu_dev);
 
 out:
-	if (data)
-		OBD_FREE_PTR(data);
-	if (nextdev)
-		OBD_FREE(nextdev, len);
+	OBD_FREE_PTR(data);
+	OBD_FREE(nextdev, len);
 	RETURN(rc);
 }
 

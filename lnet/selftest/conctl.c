@@ -97,8 +97,7 @@ lst_debug_ioctl(struct lstio_debug_args *args)
 	}
 
 out:
-	if (name != NULL)
-		LIBCFS_FREE(name, args->lstio_dbg_nmlen + 1);
+	LIBCFS_FREE(name, args->lstio_dbg_nmlen + 1);
 
 	return rc;
 }
@@ -538,8 +537,7 @@ lst_stat_query_ioctl(struct lstio_stat_args *args)
 		rc = -EINVAL;
 	}
 
-	if (name != NULL)
-		LIBCFS_FREE(name, args->lstio_sta_nmlen + 1);
+	LIBCFS_FREE(name, args->lstio_sta_nmlen + 1);
 	return rc;
 }
 
@@ -623,17 +621,13 @@ static int lst_test_add_ioctl(struct lstio_test_args *args)
 		rc = (copy_to_user(args->lstio_tes_retp, &ret,
 				   sizeof(ret))) ? -EFAULT : 0;
 out:
-	if (batch_name != NULL)
-		LIBCFS_FREE(batch_name, args->lstio_tes_bat_nmlen + 1);
+	LIBCFS_FREE(batch_name, args->lstio_tes_bat_nmlen + 1);
 
-	if (src_name != NULL)
-		LIBCFS_FREE(src_name, args->lstio_tes_sgrp_nmlen + 1);
+	LIBCFS_FREE(src_name, args->lstio_tes_sgrp_nmlen + 1);
 
-	if (dst_name != NULL)
-		LIBCFS_FREE(dst_name, args->lstio_tes_dgrp_nmlen + 1);
+	LIBCFS_FREE(dst_name, args->lstio_tes_dgrp_nmlen + 1);
 
-	if (param != NULL)
-		LIBCFS_FREE(param, args->lstio_tes_param_len);
+	LIBCFS_FREE(param, args->lstio_tes_param_len);
 
 	return rc;
 }

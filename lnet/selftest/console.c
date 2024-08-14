@@ -1307,9 +1307,8 @@ lstcon_test_add(char *batch_name, int type, int loop,
 	/*  hold groups so nobody can change them */
 	return rc;
 out:
-	if (test != NULL)
-		LIBCFS_FREE(test, offsetof(struct lstcon_test,
-					   tes_param[paramlen]));
+	LIBCFS_FREE(test, offsetof(struct lstcon_test,
+				   tes_param[paramlen]));
 
 	if (dst_grp != NULL)
 		lstcon_group_decref(dst_grp);

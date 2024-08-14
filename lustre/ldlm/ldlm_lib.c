@@ -107,8 +107,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
 	spin_unlock(&imp->imp_lock);
 	RETURN(0);
 out_free:
-	if (imp_conn)
-		OBD_FREE(imp_conn, sizeof(*imp_conn));
+	OBD_FREE(imp_conn, sizeof(*imp_conn));
 out_put:
 	ptlrpc_connection_put(ptlrpc_conn);
 	RETURN(rc);
@@ -558,9 +557,8 @@ err_import:
 err_ldlm:
 	ldlm_put_ref();
 err:
-	if (cli->cl_mod_tag_bitmap != NULL)
-		OBD_FREE(cli->cl_mod_tag_bitmap,
-			 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
+	OBD_FREE(cli->cl_mod_tag_bitmap,
+		 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
 	cli->cl_mod_tag_bitmap = NULL;
 
 	RETURN(rc);
@@ -581,9 +579,8 @@ int client_obd_cleanup(struct obd_device *obd)
 
 	ldlm_put_ref();
 
-	if (cli->cl_mod_tag_bitmap != NULL)
-		OBD_FREE(cli->cl_mod_tag_bitmap,
-			 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
+	OBD_FREE(cli->cl_mod_tag_bitmap,
+		 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
 	cli->cl_mod_tag_bitmap = NULL;
 
 	RETURN(0);
@@ -921,8 +918,7 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 				      target->obd_name, abs(timeout) / 60,
 				      abs(timeout) % 60, target->obd_name);
 
-		if (buf != NULL)
-			OBD_FREE(buf, size);
+		OBD_FREE(buf, size);
 	}
 
 out_already:

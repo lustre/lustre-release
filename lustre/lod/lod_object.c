@@ -1966,8 +1966,7 @@ static int lod_dir_declare_create_stripes(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 out:
-	if (slave_lmm != NULL)
-		OBD_FREE_PTR(slave_lmm);
+	OBD_FREE_PTR(slave_lmm);
 
 	RETURN(rc);
 }
@@ -4512,8 +4511,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		rc = lod_sub_xattr_set(env, dt_object_child(dt),
 				       &lmv_buf, XATTR_NAME_LMV, fl, th);
 out:
-	if (slave_lmm != NULL)
-		OBD_FREE_PTR(slave_lmm);
+	OBD_FREE_PTR(slave_lmm);
 
 	RETURN(rc);
 }

@@ -55,8 +55,7 @@ static void lov_finish_set(struct lov_request_set *set)
 					       struct lov_request,
 					       rq_link)) != NULL) {
 		list_del_init(&req->rq_link);
-		if (req->rq_oi.oi_osfs)
-			OBD_FREE_PTR(req->rq_oi.oi_osfs);
+		OBD_FREE_PTR(req->rq_oi.oi_osfs);
 		OBD_FREE_PTR(req);
 	}
 

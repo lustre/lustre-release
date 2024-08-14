@@ -1505,8 +1505,7 @@ static void ldlm_resource_free(struct ldlm_resource *res)
 			OBD_SLAB_FREE(res->lr_itree, ldlm_interval_tree_slab,
 				      sizeof(*res->lr_itree) * LCK_MODE_NUM);
 	} else if (res->lr_type == LDLM_IBITS) {
-		if (res->lr_ibits_queues != NULL)
-			OBD_FREE_PTR(res->lr_ibits_queues);
+		OBD_FREE_PTR(res->lr_ibits_queues);
 	}
 
 	call_rcu(&res->lr_rcu, __ldlm_resource_free);

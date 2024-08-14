@@ -1031,11 +1031,9 @@ kiblnd_destroy_conn(struct kib_conn *conn)
 	if (conn->ibc_rx_pages != NULL)
 		kiblnd_unmap_rx_descs(conn);
 
-	if (conn->ibc_rxs != NULL)
-		CFS_FREE_PTR_ARRAY(conn->ibc_rxs, IBLND_RX_MSGS(conn));
+	CFS_FREE_PTR_ARRAY(conn->ibc_rxs, IBLND_RX_MSGS(conn));
 
-	if (conn->ibc_connvars != NULL)
-		LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
+	LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
 
 	if (conn->ibc_hdev != NULL)
 		kiblnd_hdev_decref(conn->ibc_hdev);
@@ -2426,24 +2424,20 @@ kiblnd_destroy_tx_pool(struct kib_pool *pool)
 		int	  wrq_sge = *kiblnd_tunables.kib_wrq_sge;
 
 		list_del(&tx->tx_list);
-		if (tx->tx_pages != NULL)
-			CFS_FREE_PTR_ARRAY(tx->tx_pages, LNET_MAX_IOV);
-		if (tx->tx_frags != NULL)
-			CFS_FREE_PTR_ARRAY(tx->tx_frags,
-					   IBLND_MAX_RDMA_FRAGS);
-		if (tx->tx_wrq != NULL)
-			CFS_FREE_PTR_ARRAY(tx->tx_wrq,
-					   IBLND_MAX_RDMA_FRAGS);
+		CFS_FREE_PTR_ARRAY(tx->tx_pages, LNET_MAX_IOV);
+		CFS_FREE_PTR_ARRAY(tx->tx_frags,
+				   IBLND_MAX_RDMA_FRAGS);
+		CFS_FREE_PTR_ARRAY(tx->tx_wrq,
+				   IBLND_MAX_RDMA_FRAGS);
 		if (tx->tx_sge != NULL) {
 			/* +1 is for the lnet header/message itself */
 			CFS_FREE_PTR_ARRAY(tx->tx_sge,
 					   (IBLND_MAX_RDMA_FRAGS *
 					   wrq_sge + 1));
 		}
-		if (tx->tx_rd != NULL)
-			LIBCFS_FREE(tx->tx_rd,
-				    offsetof(struct kib_rdma_desc,
-					     rd_frags[IBLND_MAX_RDMA_FRAGS]));
+		LIBCFS_FREE(tx->tx_rd,
+			    offsetof(struct kib_rdma_desc,
+				     rd_frags[IBLND_MAX_RDMA_FRAGS]));
 	}
 
 	CFS_FREE_PTR_ARRAY(tpo->tpo_tx_descs, pool->po_size);

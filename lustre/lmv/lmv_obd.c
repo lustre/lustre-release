@@ -728,8 +728,7 @@ repeat_fid2path:
 	goto repeat_fid2path;
 
 out_fid2path:
-	if (remote_gf != NULL)
-		OBD_FREE(remote_gf, remote_gf_size);
+	OBD_FREE(remote_gf, remote_gf_size);
 	RETURN(rc);
 }
 
