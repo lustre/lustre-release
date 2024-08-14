@@ -114,8 +114,7 @@ struct qsd_fsinfo *qsd_get_fsinfo(char *name, bool create)
 out:
 	spin_unlock(&qfs_list_lock);
 
-	if (new)
-		OBD_FREE_PTR(new);
+	OBD_FREE_PTR(new);
 	RETURN(qfs);
 }
 

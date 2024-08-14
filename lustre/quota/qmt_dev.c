@@ -186,8 +186,7 @@ static int qmt_connect_to_osd(const struct lu_env *env, struct qmt_device *qmt,
 	ld->ld_site = qmt->qmt_child_exp->exp_obd->obd_lu_dev->ld_site;
 	EXIT;
 out:
-	if (data)
-		OBD_FREE_PTR(data);
+	OBD_FREE_PTR(data);
 	return rc;
 }
 

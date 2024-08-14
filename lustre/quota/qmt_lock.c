@@ -809,9 +809,8 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 		OBD_FREE_PTR(work);
 	}
 out:
-	if (descs)
-		OBD_FREE(descs,
-			 sizeof(struct ldlm_gl_lquota_desc) * locks_count);
+	OBD_FREE(descs,
+		 sizeof(struct ldlm_gl_lquota_desc) * locks_count);
 
 	RETURN(rc);
 }

@@ -442,8 +442,7 @@ out_noadjust:
 	}
 	lqe_putref(lqe);
 
-	if (lvb)
-		OBD_FREE_PTR(lvb);
+	OBD_FREE_PTR(lvb);
 	EXIT;
 }
 
