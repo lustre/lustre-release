@@ -1,26 +1,30 @@
-.TH LCTL-NETWORK 8 "2016-09-06" Lustre "configuration utilities"
+.TH LCTL-NETWORK 8 2024-08-14 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-network \- start or stop an LNet network or set network type
 .SH SYNOPSIS
-.B lctl network
-.I up
+.SY "lctl network"
+.RB { up | down }
 |
-.I down
+.RB { configure | unconfigure }
 |
-.I configure
-|
-.I unconfigure
-|
-.RI < tcp / o2ib >
-
-.B net
-can be substituted for
-.B network
+.RB { tcp | o2ib }
+.YS
 .SH DESCRIPTION
-.B lfs network
-is used to start or stop LNet and LNet configuration on a client, server, or router.
+.B lctl network
+is used to start or stop LNet and LNet configuration on a client, server,
+or router.
+.B lctl net
+is an alias for
+.BR "lctl network" .
+However,
+.B netctl lnet
+is the preferred command for configuring and unconfiguring network interfaces.
 .P
-The Lustre software automatically starts and stops LNet, but it can also be manually stopped or started in a standalone manner. This is particularly useful to verify that your networking setup is working correctly before you attempt to start the Lustre file system, or necessary for Lustre routers which only need the LND and LNet modules.
+The Lustre software automatically starts and stops LNet,
+but it can also be manually stopped or started in a standalone manner.
+This is particularly useful to verify that your networking setup is working
+correctly before you attempt to start the Lustre file system,
+or necessary for Lustre routers which only need the LND and LNet modules.
 .SH OPTIONS
 .TP
 .B up
@@ -33,34 +37,16 @@ Stops LNet
 Loads LNet configuration
 .TP
 .B unconfigure
-Clears LNet configuration. This step is necessary for standalone routers to remove LNet references before the LNet modules can be removed.
-.SH EXAMPLES
-.TP
-To load the module and start LNet
-# modprobe lnet
-.br
-# lctl network up
-.br
-LNet configured
-.TP
-To stop LNet and remove the module
-# lctl network down
-.br
-LNet ready to unload
-.br
-# rmmod lnet
-.TP
-To load LNet configuration in standalone mode
-# lctl network configure
-.br
-LNet configured
-.TP
-To clear the LNet configuration
-# lctl network unconfigure
-LNet ready to unload
+Clears LNet configuration.
+This step is necessary for standalone routers to remove
+LNet references before the LNet modules can be removed.
 .SH NOTES
-.P
-The lustre_rmmod utility does not work if you have manually run the
+Since Lustre 2.15.0 the lustre_rmmod script calls
+.B lnetctl lnet unconfigure
+or
+.B lctl network down
+command internally to stop the LNet network interfaces.
+Otherwise the lustre_rmmod utility does not work if you have manually run the
 .B lctl network
 .I up
 command.
@@ -70,12 +56,48 @@ Attempting to remove
 modules prior to stopping the network may result in a crash or an LNet hang.
 If this occurs, the node must be rebooted (in most cases). Make sure that the
 Lustre network and file system are stopped prior to unloading the modules.
+.SH EXAMPLES
+To load the module and start LNet:
+.RS
+.EX
+.B # modprobe lnet
+.B # lctl network up
+LNet configured
+.EE
+.RE
+.PP
+To stop LNet and remove the module:
+.RS
+.EX
+.B # lctl network down
+LNet ready to unload
+.B # rmmod lnet
+.EE
+.RE
+.PP
+To load LNet configuration in standalone mode:
+.RS
+.EX
+.B # lctl network configure
+LNet configured
+.EE
+.RE
+.PP
+To clear the LNet configuration:
+.RS
+.EX
+.B # lctl network unconfigure
+LNet ready to unload
+.EE
+.RE
 .SH AVAILABILITY
 .B lctl network
 is a subcommand of
 .BR lctl (8)
 and is distributed as part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 0.6.0
+.\" Added in commit 0.0.0-1251-ge772702b4c
 .SH SEE ALSO
-.BR lctl (8)
+.BR lctl (8),
+.BR lnetctl (8)

@@ -1,20 +1,21 @@
-.TH LCTL-LLOG_CATLIST 8 "2020-06-12" Lustre "configuration utilities"
+.TH LCTL-LLOG_CATLIST 8 2024-08-14 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-llog_catlist \- list Lustre configuration log files
 .SH SYNOPSIS
-.B lctl
-[--device <\fIdevice\fR>]
-.B llog_catlist
+.SY "lctl llog_catlist"
+.RB [ --device
+.IR device ]
+.YS
 .SH DESCRIPTION
 .B lctl llog_catlist
 is used to list the configuration log files on the MGS, or other target.
 This is useful to find the names of all the configuration files available.
 The
-.IR fsname -client
+.IR FSNAME -client
 logs contains configuration records for the client nodes, the
-.IR fsname -MDT xxxx
+.IR FSNAME -MDT XXXX
 logs contain records for the MDT(s), the
-.IR fsname -OST xxxx
+.IR FSNAME -OST XXXX
 logs contain records for the OSTs.  The
 .B lctl conf_param
 parameters are stored in these log files for the specified filesystem.  The
@@ -24,43 +25,40 @@ log file contains the
 parameters for all filesystems serviced by this MGS.
 .SH OPTIONS
 .TP
-.B --device \fIdevice\fR
+.BI --device " device"
 The
 .I device
 to be used. By default MGS device is used for this operation.
 .SH EXAMPLES
-.TP
 To list all of the configuration logs on the MGS:
-.br
-# lctl llog_catlist
-.br
+.RS
+.EX
+.B # lctl llog_catlist
 config_log: testfs-OST0000
-.br
 config_log: testfs-MDT0000
-.br
 config_log: testfs-OST0001
-.br
 config_log: testfs-client
-.br
 config_log: params
-.br
-.TP
+.EE
+.RE
+.PP
 To list all of the recovery llog files on the MGS:
-.br
-# lctl --device testfs-MDT0000 llog_catlist
-.br
+.RS
+.EX
+.B # lctl --device testfs-MDT0000 llog_catlist
 catalog_log: [0x5:0x1:0x0]:0
-.br
 catalog_log: [0x6:0x1:0x0]:0
-.br
 catalog_log: [0x7:0x1:0x0]:0
+.EE
+.RE
 .SH AVAILABILITY
 .B lctl llog_catlist
 is a subcommand of
 .BR lctl (8)
 and is distributed as part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 0.9.0
+.\" Added in commit 0.0.0-3210-gc5050e4125
 .SH SEE ALSO
 .BR lctl (8),
 .BR lctl-llog_cancel (8),

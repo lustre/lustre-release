@@ -1,15 +1,16 @@
-.TH LCTL-LIST_PARAM 8 "2019-06-16" Lustre "configuration utilities"
+.TH LCTL-LIST_PARAM 8 2024-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-list_param \- list configuration parameter names
 .SH SYNOPSIS
-.B "\fBlctl list_param "
+.SY "lctl list_param"
 .RB [ --dir-only | -D ]
 .RB [ --classify | -F ]
 .RB [ --links | -l ]
 .RB [ --no-links | -L ]
 .RB [ --path | -p ]
 .RB [ --recursive | -R ]
-.IR PARAM_PATH1 " " PARAM_PATH2 " ..."
+.IR PARAM_PATH1 " [" PARAM_PATH2 " ...]"
+.YS
 .SH DESCRIPTION
 List the Lustre or LNet parameter name(s) matching
 .IR param_search .
@@ -18,98 +19,127 @@ The parameter name(s) may contain wildcards using
 pathname patterns.
 .SH OPTIONS
 The various options supported by
-.B lctl list_param
+.BR lctl list_param
 are listed and explained below:
 .TP
-.B -D ", " --dir-only
+.BR -D ", " --dir-only
 Only list directories.
 .TP
-.B -F ", " --classify
+.BR -F ", " --classify
 Append '/', '@' or '=' for dirs, symlinks and writeable files, respectively.
 .TP
-.B -l ", " --links
+.BR -l ", " --links
 Follow symlinks while searching for parameters. (enabled by default)
 .TP
-.B -L ", " --no-links
+.BR -L ", " --no-links
 Do not follow symlinks while searching for parameters.
 .TP
-.b -p ", " --path
+.BR -p ", " --path
 Print the path name instead of the parameter name.
 .TP
-.B -R ", " --recursive
+.BR -R ", " --recursive
 Recursively list all parameters under the specified parameter search string. If
 .I param_search
 is unspecified, all the parameters will be shown.
 .SH EXAMPLES
-.B
-# lctl list_param ost.*
-.br
-  ost.OSS
-.br
-  ost.num_refs
-.br
-.B
-# lctl list_param -F ost.* debug
-.br
-  ost.OSS/
-.br
-  ost.num_refs
-.br
-  debug=
-.br
-.B
-# lctl list_param -p ost.*
-.br
-  /sys/fs/lustre/ost/OSS
-.br
-  /sys/fs/lustre/ost/num_refs
-.br
-.B
-# lctl list_param -R mdt
-.br
-  mdt
-.br
-  mdt.lustre-MDT0000
-.br
-  mdt.lustre-MDT0000.capa
-.br
-  mdt.lustre-MDT0000.capa_count
-.br
-  mdt.lustre-MDT0000.capa_key_timeout
-.br
-  mdt.lustre-MDT0000.capa_timeout
-.br
-  mdt.lustre-MDT0000.commit_on_sharing
-.br
-  mdt.lustre-MDT0000.evict_client
-.br
-  ...
-.br
-.B
-# lctl list_param -L -R mgs.MGS | grep -c .osd
-.br
-  0
-.br
-# mgs.MGS.osd is a \fIsymlink\fR -> ../../osd-ldiskfs/lustre-MDT0000
-.br
-Compare this to the same command with --links enabled
-.br
-.B
-# lctl list_param -l -R mgs.MGS | grep .osd
-.br
-  mgs.MGS.osd
-.br
-  mgs.MGS.osd.auto_scrub
-.br
-  mgs.MGS.osd.blocksize
-.br
-  mgs.MGS.osd.enable_projid.xattr
-.br
-  mgs.MGS.osd.extent_bytes_allocation
-.br
-  ...
+Use wildcards to obtain all matching parameters:
+.RS
+.EX
+.B # lctl list_param ost.*
+ost.OSS
+ost.num_refs
+.EE
+.RE
+.PP
+Show the file type with
+.BR -F ,
+this can be useful in combination with
+.B grep
+to find certain types of parameters:
+.RS
+.EX
+.B # lctl list_param -F ost.* debug
+ost.OSS/
+ost.num_refs
+debug=
+.EE
+.RE
+.PP
+Since there are multiple location that hold paramters, use
+.B -p
+to get the full filepath for more efficient use by external mornitoring tools:
+.RS
+.EX
+.B # lctl list_param -p ost.*
+/sys/fs/lustre/ost/OSS
+/sys/fs/lustre/ost/num_refs
+.EE
+.RE
+.PP
+Search recursively through the directory tree with
+.B -R
+to get the full list of both directories and parameters in the tree:
+.RS
+.EX
+.B # lctl list_param -R mdt
+mdt
+mdt.lustre-MDT0000
+mdt.lustre-MDT0000.capa
+mdt.lustre-MDT0000.capa_count
+mdt.lustre-MDT0000.capa_key_timeout
+mdt.lustre-MDT0000.capa_timeout
+mdt.lustre-MDT0000.commit_on_sharing
+mdt.lustre-MDT0000.evict_client
+.B ...
+.EE
+.RE
+.PP
+To avoid following symlinks which can lead to duplicate output use
+.BR --no-links .
+Note that
+.I mgs.MGS.osd
+is a symlink to
+.I ../../ost-ldiskfs/lustre-MDT0000:
+.RS
+.EX
+.B # lctl list_param -L -R mgs.MGS
+.B ...
+mgs.MGS.mgs.timeouts
+mgs.MGS.mntdev
+mgs.MGS.num_exports
+mgs.MGS.uuid
+mgs.MGS.filesystems
+mgs.MGS.gss
+.B ...
+.EE
+.RE
+Compare this to the same command with --links enabled:
+.RS
+.EX
+.B # lctl list_param -l -R mgs.MGS
+.B ...
+mgs.MGS.mgs.timeouts
+mgs.MGS.mntdev
+mgs.MGS.num_exports
+mgs.MGS.osd
+mgs.MGS.osd.auto_scrub
+.B ...
+mgs.MGS.osd.quota_slave_md.root_prj_enable
+mgs.MGS.osd.quota_slave_md.timeout
+mgs.MGS.uuid
+mgs.MGS.filesystems
+mgs.MGS.gss
+.B ...
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl list_param
+is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.1-3050-g04248c9069
 .SH SEE ALSO
+.BR lfs (1),
 .BR lustre (7),
 .BR lctl-get_param (8),
-.BR lctl-set_param (8),
-.BR lfs (1)
+.BR lctl-set_param (8)

@@ -1,20 +1,20 @@
-.TH LCTL-LLOG_CANCEL 8 "2020-06-12" Lustre "configuration utilities"
+.TH LCTL-LLOG_CANCEL 8 2024-08-14 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-llog_cancel \- cancel a record in a Lustre log file
 .SH SYNOPSIS
-.B lctl
-.B llog_cancel --log_idx
-.RI < index >
-.RI < logname >
-
+.SY "lctl llog_cancel"
+.B --log_idx
+.I INDEX
+.I LOGNAME
+.YS
 .SH DESCRIPTION
 .B lctl llog_cancel
 is used to cancel the configuration record given by
-.I index
+.I INDEX
 from the
-.I logname
-configuration log, typically on the MGS.  This is useful if a persistent
-configuration record was set incorrectly or is no longer needed.  Note
+.I LOGNAME
+configuration log, typically on the MGS. This is useful if a persistent
+configuration record was set incorrectly or is no longer needed. Note
 that cancelling a record does not "undo" any effect it had on currently
 mounted clients, it only prevents the record from being seen in the future.
 See
@@ -22,32 +22,40 @@ See
 for a list of configuration logs.
 .SH OPTIONS
 .TP
-.B --log_idx
-.I index
+.BI --log_idx " INDEX"
 The record
-.I index
+.I INDEX
 number to cancel, as printed by
 .B lctl llog_print
 for that log.
-.TP
 .SH EXAMPLES
-.TP
-To cancel record 15 from the \fBtestfs-client\fR conf_param log:
-.br
-# lctl llog_cancel --log_idx=15 testfs-client
-.TP
-To cancel record 22 from the \fBparams\fR set_param log:
-.br
-# lctl llog_cancel --log_idx=22 params
+To cancel record 15 from the
+.B testfs-client
+conf_param log:
+.RS
+.EX
+.B # lctl llog_cancel --log_idx=15 testfs-client
+.EE
+.RE
+.PP
+To cancel record 22 from the
+.B params
+set_param log:
+.RS
+.EX
+.B # lctl llog_cancel --log_idx=22 params
+.EE
+.RE
 .SH AVAILABILITY
 .B lctl llog_cancel
 is a subcommand of
 .BR lctl (8)
 and is distributed as part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 0.10.0
+.\" Added in commit 0.0.0-3210-gc5050e4125
 .SH SEE ALSO
 .BR lctl (8),
-.BR lctl-llog_info (8),
 .BR lctl-llog_catlist (8),
+.BR lctl-llog_info (8),
 .BR lctl-llog_print (8)
