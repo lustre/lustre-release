@@ -574,8 +574,7 @@ static int ofd_register_seq_exp(struct ofd_device *ofd)
 		GOTO(out_free, rc);
 	}
 out_free:
-	if (lwp_name != NULL)
-		OBD_FREE(lwp_name, MAX_OBD_NAME);
+	OBD_FREE(lwp_name, MAX_OBD_NAME);
 
 	return rc;
 }

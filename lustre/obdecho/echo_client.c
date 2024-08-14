@@ -305,8 +305,7 @@ static void echo_object_delete(const struct lu_env *env, struct lu_object *obj)
 	list_del_init(&eco->eo_obj_chain);
 	spin_unlock(&ec->ec_lock);
 
-	if (eco->eo_oinfo)
-		OBD_FREE_PTR(eco->eo_oinfo);
+	OBD_FREE_PTR(eco->eo_oinfo);
 }
 
 static void echo_object_free_rcu(struct rcu_head *head)
@@ -958,8 +957,7 @@ cl_echo_object_find(struct echo_device *d, const struct ost_id *oi)
 	}
 
 out:
-	if (oinfo)
-		OBD_FREE_PTR(oinfo);
+	OBD_FREE_PTR(oinfo);
 
 	cl_env_put(env, &refcheck);
 	RETURN(eco);
@@ -1954,8 +1952,7 @@ static int echo_md_handler(struct echo_device *ed, int command,
 	echo_ucred_fini(env);
 
 out_name:
-	if (name)
-		OBD_FREE(name, namelen + 1);
+	OBD_FREE(name, namelen + 1);
 out_put:
 	lu_object_put(env, parent);
 out_free:

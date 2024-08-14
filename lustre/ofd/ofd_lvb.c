@@ -60,8 +60,7 @@
  */
 static int ofd_lvbo_free(struct ldlm_resource *res)
 {
-	if (res->lr_lvb_data)
-		OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
+	OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
 
 	return 0;
 }

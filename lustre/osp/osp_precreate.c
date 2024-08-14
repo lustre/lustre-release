@@ -1757,8 +1757,7 @@ int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 	}
 out:
 	ptlrpc_req_put(req);
-	if (oa)
-		OBD_FREE_PTR(oa);
+	OBD_FREE_PTR(oa);
 	RETURN(rc);
 }
 

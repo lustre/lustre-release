@@ -1721,8 +1721,7 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 err_llog:
 	osp_sync_llog_fini(env, d);
 err_id:
-	if (args)
-		OBD_FREE_PTR(args);
+	OBD_FREE_PTR(args);
 	return rc;
 }
 

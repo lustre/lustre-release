@@ -1281,8 +1281,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 	rc = ptlrpc_init_import(imp);
 	if (rc)
 		GOTO(out, rc);
-	if (osdname)
-		OBD_FREE(osdname, MAX_OBD_NAME);
+	OBD_FREE(osdname, MAX_OBD_NAME);
 	init_waitqueue_head(&osp->opd_out_waitq);
 	RETURN(0);
 
@@ -1309,8 +1308,7 @@ out_ref:
 out_disconnect:
 	obd_disconnect(osp->opd_storage_exp);
 out_fini:
-	if (osdname)
-		OBD_FREE(osdname, MAX_OBD_NAME);
+	OBD_FREE(osdname, MAX_OBD_NAME);
 	RETURN(rc);
 }
 

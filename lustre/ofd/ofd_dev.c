@@ -143,8 +143,7 @@ static int ofd_connect_to_next(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_dt_dev.dd_lu_dev.ld_site->ls_top_dev = &m->ofd_dt_dev.dd_lu_dev;
 
 out:
-	if (data)
-		OBD_FREE_PTR(data);
+	OBD_FREE_PTR(data);
 	RETURN(rc);
 }
 
