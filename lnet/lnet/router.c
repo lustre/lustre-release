@@ -639,10 +639,8 @@ __must_hold(&the_lnet.ln_api_mutex)
 	if (route == NULL || rnet == NULL) {
 		CERROR("Out of memory creating route %s %d %s\n",
 		       libcfs_net2str(net), hops, libcfs_nidstr(gateway));
-		if (route != NULL)
-			LIBCFS_FREE(route, sizeof(*route));
-		if (rnet != NULL)
-			LIBCFS_FREE(rnet, sizeof(*rnet));
+		LIBCFS_FREE(route, sizeof(*route));
+		LIBCFS_FREE(rnet, sizeof(*rnet));
 		return -ENOMEM;
 	}
 

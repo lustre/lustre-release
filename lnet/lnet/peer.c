@@ -1259,8 +1259,7 @@ remove_nid_entry:
 	spin_unlock(&lpni->lpni_lock);
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	if (ne)
-		LIBCFS_FREE(ne, sizeof(*ne));
+	LIBCFS_FREE(ne, sizeof(*ne));
 out:
 	CDEBUG(D_NET, "peer %s nid %s: %d\n",
 	       libcfs_nidstr(&lp->lp_primary_nid), libcfs_nidstr(nid), rc);
@@ -1997,10 +1996,8 @@ __must_hold(&the_lnet.ln_api_mutex)
 
 out_err:
 	if (rc) {
-		if (lpn)
-			LIBCFS_FREE(lpn, sizeof(*lpn));
-		if (lp)
-			LIBCFS_FREE(lp, sizeof(*lp));
+		LIBCFS_FREE(lpn, sizeof(*lpn));
+		LIBCFS_FREE(lp, sizeof(*lp));
 		lpni = ERR_PTR(rc);
 	}
 out:

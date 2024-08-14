@@ -161,20 +161,16 @@ failed_setting_ctb_parts:
 		}
 	}
 
-	if (cptab->ctb_parts)
-		CFS_FREE_PTR_ARRAY(cptab->ctb_parts, cptab->ctb_nparts);
+	CFS_FREE_PTR_ARRAY(cptab->ctb_parts, cptab->ctb_nparts);
 
 failed_alloc_ctb_parts:
-	if (cptab->ctb_node2cpt)
-		CFS_FREE_PTR_ARRAY(cptab->ctb_node2cpt, nr_node_ids);
+	CFS_FREE_PTR_ARRAY(cptab->ctb_node2cpt, nr_node_ids);
 
 failed_alloc_node2cpt:
-	if (cptab->ctb_cpu2cpt)
-		CFS_FREE_PTR_ARRAY(cptab->ctb_cpu2cpt, nr_cpu_ids);
+	CFS_FREE_PTR_ARRAY(cptab->ctb_cpu2cpt, nr_cpu_ids);
 
 failed_alloc_cpu2cpt:
-	if (cptab->ctb_nodemask)
-		LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
+	LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
 failed_alloc_nodemask:
 	free_cpumask_var(cptab->ctb_cpumask);
 failed_alloc_cpumask:
@@ -187,11 +183,9 @@ void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 {
 	int i;
 
-	if (cptab->ctb_cpu2cpt)
-		CFS_FREE_PTR_ARRAY(cptab->ctb_cpu2cpt, nr_cpu_ids);
+	CFS_FREE_PTR_ARRAY(cptab->ctb_cpu2cpt, nr_cpu_ids);
 
-	if (cptab->ctb_node2cpt)
-		CFS_FREE_PTR_ARRAY(cptab->ctb_node2cpt, nr_node_ids);
+	CFS_FREE_PTR_ARRAY(cptab->ctb_node2cpt, nr_node_ids);
 
 	for (i = 0; cptab->ctb_parts && i < cptab->ctb_nparts; i++) {
 		struct cfs_cpu_partition *part = &cptab->ctb_parts[i];
@@ -203,16 +197,13 @@ void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 
 		free_cpumask_var(part->cpt_cpumask);
 
-		if (part->cpt_distance)
-			CFS_FREE_PTR_ARRAY(part->cpt_distance,
-					   cptab->ctb_nparts);
+		CFS_FREE_PTR_ARRAY(part->cpt_distance,
+				   cptab->ctb_nparts);
 	}
 
-	if (cptab->ctb_parts)
-		CFS_FREE_PTR_ARRAY(cptab->ctb_parts, cptab->ctb_nparts);
+	CFS_FREE_PTR_ARRAY(cptab->ctb_parts, cptab->ctb_nparts);
 
-	if (cptab->ctb_nodemask)
-		LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
+	LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
 	free_cpumask_var(cptab->ctb_cpumask);
 
 	LIBCFS_FREE(cptab, sizeof(*cptab));
@@ -1127,8 +1118,7 @@ cfs_percpt_free(void *vars)
 	arr = container_of(vars, struct cfs_var_array, va_ptrs[0]);
 
 	for (i = 0; i < arr->va_count; i++) {
-		if (arr->va_ptrs[i])
-			LIBCFS_FREE(arr->va_ptrs[i], arr->va_size);
+		LIBCFS_FREE(arr->va_ptrs[i], arr->va_size);
 	}
 
 	LIBCFS_FREE(arr, offsetof(struct cfs_var_array,

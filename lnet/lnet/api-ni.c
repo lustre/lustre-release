@@ -6345,8 +6345,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 		}
 	}
 out:
-	if (tun)
-		LIBCFS_FREE(tun, sizeof(struct lnet_ioctl_config_lnd_tunables));
+	LIBCFS_FREE(tun, sizeof(struct lnet_ioctl_config_lnd_tunables));
 
 	return rc;
 }

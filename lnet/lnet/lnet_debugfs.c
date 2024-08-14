@@ -96,8 +96,7 @@ static int proc_cpt_table(struct ctl_table *table, int write,
 
 	rc = cfs_trace_copyout_string(buffer, nob, buf + pos, NULL);
 out:
-	if (buf)
-		LIBCFS_FREE(buf, len);
+	LIBCFS_FREE(buf, len);
 	return rc;
 }
 
@@ -137,8 +136,7 @@ static int proc_cpt_distance(struct ctl_table *table, int write,
 
 	rc = cfs_trace_copyout_string(buffer, nob, buf + pos, NULL);
 out:
-	if (buf)
-		LIBCFS_FREE(buf, len);
+	LIBCFS_FREE(buf, len);
 	return rc;
 }
 
