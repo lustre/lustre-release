@@ -759,9 +759,7 @@ static int construct_get_dest_keyring(struct key **_dest_keyring)
 			break;
 		fallthrough;
 	case KEY_REQKEY_DEFL_SESSION_KEYRING:
-		rcu_read_lock();
-		dest_keyring = key_get(rcu_dereference(cred->session_keyring));
-		rcu_read_unlock();
+		dest_keyring = get_session_keyring(cred);
 		if (dest_keyring) {
 			if (!test_bit(KEY_FLAG_REVOKED, &dest_keyring->flags))
 				break;
@@ -808,7 +806,10 @@ static void request_key_unlink(struct key *key, bool fullsearch)
 
 		new_cred->uid = key->uid;
 		new_cred->user->uid = key->uid;
-		new_cred->user_ns = &init_user_ns;
+		if (new_cred->user_ns != &init_user_ns) {
+			put_user_ns(new_cred->user_ns);
+			new_cred->user_ns = get_user_ns(&init_user_ns);
+		}
 #ifdef HAVE_USER_UID_KEYRING
 		root_uid_keyring = current_cred()->user->uid_keyring;
 		new_cred->user->uid_keyring = NULL;
@@ -851,7 +852,8 @@ search:
 		 * for kernel implementation based on user keyring pinned from
 		 * the user_struct struct.
 		 */
-		key_put(ring);
+		if (key_uid && !fullsearch)
+			key_put(ring);
 		if (root_uid_keyring)
 			current_cred()->user->uid_keyring = root_uid_keyring;
 #endif
