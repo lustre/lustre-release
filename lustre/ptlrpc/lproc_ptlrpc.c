@@ -800,8 +800,7 @@ default_queue:
 
 	mutex_unlock(&nrs_core.nrs_mutex);
 out:
-	if (cmd_copy)
-		OBD_FREE(cmd_copy, LPROCFS_NRS_WR_MAX_CMD);
+	OBD_FREE(cmd_copy, LPROCFS_NRS_WR_MAX_CMD);
 
 	RETURN(rc < 0 ? rc : count);
 }
@@ -948,8 +947,7 @@ ptlrpc_lprocfs_svc_req_history_stop(struct seq_file *s, void *iter)
 {
 	struct ptlrpc_srh_iterator *srhi = iter;
 
-	if (srhi != NULL)
-		OBD_FREE(srhi, sizeof(*srhi));
+	OBD_FREE(srhi, sizeof(*srhi));
 }
 
 static void *
