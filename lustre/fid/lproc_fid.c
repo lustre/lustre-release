@@ -362,8 +362,7 @@ out:
 	if (rc != 0) {
 		if (env_init == 1)
 			lu_env_fini(&param->fsp_env);
-		if (param != NULL)
-			OBD_FREE_PTR(param);
+		OBD_FREE_PTR(param);
 	}
 	return rc;
 }

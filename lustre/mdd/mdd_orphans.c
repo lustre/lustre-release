@@ -549,8 +549,7 @@ static int mdd_orphan_cleanup_thread(void *args)
 	lu_env_fini(env);
 	GOTO(out, rc);
 out:
-	if (env)
-		OBD_FREE_PTR(env);
+	OBD_FREE_PTR(env);
 	complete(&thread->mgt_finished);
 	return rc;
 }
@@ -576,8 +575,7 @@ out:
 	if (rc)
 		CERROR("%s: start orphan cleanup thread failed: rc = %d\n",
 		       mdd2obd_dev(d)->obd_name, rc);
-	if (name)
-		OBD_FREE(name, MTI_NAME_MAXLEN);
+	OBD_FREE(name, MTI_NAME_MAXLEN);
 
 	return rc;
 }

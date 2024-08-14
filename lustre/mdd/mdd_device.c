@@ -130,8 +130,7 @@ static int mdd_connect_to_next(const struct lu_env *env, struct mdd_device *m,
 	lu_dev_add_linkage(lud->ld_site, lud);
 
 out:
-	if (data)
-		OBD_FREE(data, sizeof(*data));
+	OBD_FREE(data, sizeof(*data));
 	RETURN(rc);
 }
 

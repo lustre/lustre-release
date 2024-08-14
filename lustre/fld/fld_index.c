@@ -431,8 +431,7 @@ out_it_put:
 out_it_fini:
 	iops->fini(env, it);
 out:
-	if (attr)
-		OBD_FREE_PTR(attr);
+	OBD_FREE_PTR(attr);
 
 	if (rc < 0) {
 		if (dt_obj)

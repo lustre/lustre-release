@@ -146,8 +146,7 @@ static inline int name_create(char **newname, char *prefix, char *suffix)
 
 static inline void name_destroy(char **name)
 {
-	if (*name)
-		OBD_FREE(*name, strlen(*name) + 1);
+	OBD_FREE(*name, strlen(*name) + 1);
 	*name = NULL;
 }
 
@@ -552,10 +551,8 @@ static void mgs_free_fsdb(struct mgs_device *mgs, struct fs_db *fsdb)
 	if (fsdb->fsdb_mgs)
 		mgs_ir_fini_fs(mgs, fsdb);
 
-	if (fsdb->fsdb_ost_index_map)
-		OBD_FREE(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
-	if (fsdb->fsdb_mdt_index_map)
-		OBD_FREE(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
+	OBD_FREE(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
+	OBD_FREE(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
 	name_destroy(&fsdb->fsdb_clilov);
 	name_destroy(&fsdb->fsdb_clilmv);
 	mgs_free_fsdb_srpc(fsdb);
@@ -5285,8 +5282,7 @@ out:
 		llog_close(env, old_llh);
 	if (new_llh)
 		llog_close(env, new_llh);
-	if (name_buf)
-		OBD_FREE(name_buf, name_buflen);
+	OBD_FREE(name_buf, name_buflen);
 	if (ctxt)
 		llog_ctxt_put(ctxt);
 
@@ -6067,8 +6063,7 @@ out_unlock:
 out_mti:
 	OBD_FREE_PTR(mti);
 out_cancel:
-	if (canceled_label)
-		OBD_FREE(canceled_label, label_sz);
+	OBD_FREE(canceled_label, label_sz);
 out_label:
 	OBD_FREE(label, label_sz);
 out_fsdb:

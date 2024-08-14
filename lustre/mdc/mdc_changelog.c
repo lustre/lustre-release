@@ -850,8 +850,7 @@ out_listrm:
 
 out_unlock:
 	mutex_unlock(&chlg_registered_dev_lock);
-	if (entry)
-		OBD_FREE_PTR(entry);
+	OBD_FREE_PTR(entry);
 	RETURN(rc);
 }
 
