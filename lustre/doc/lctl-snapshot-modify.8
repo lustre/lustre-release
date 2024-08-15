@@ -1,12 +1,20 @@
-.TH LCTL-SNAPSHOT_MODIFY 8 "2017-05-13" Lustre "configuration utilities"
+.TH LCTL-SNAPSHOT_MODIFY 8 2024-08-14 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-snapshot_modify \- modify Lustre snapshot
 .SH SYNOPSIS
-.TP
-.B lctl snapshot_modify \fR[-c | --comment comment] {-F | --fsname fsname}
-              [-h | --help] {-n | --name ssname} [-N | --new new_ssname]
-              [-r | --rsh remote_shell]
-.br
+.SY "lctl snapshot_modify"
+.RB [ -c | --comment
+.IR COMMENT ]
+.RB { -F | --fsname
+.IR FSNAME }
+.RB [ -h | --help ]
+.RB { -n | --name
+.IR SSNAME }
+.RB [ -N | --new
+.IR NEW_SSNAME ]
+.RB [ -r | --rsh
+.IR REMOTE_SHELL ]
+.YS
 .SH DESCRIPTION
 Modify the specified snapshot. The tool loads system configuration from
 the file
@@ -18,41 +26,41 @@ section. Then, the snapshot pieces are modified on every Lustre target
 (MGT/MDT/OST).
 .SH OPTIONS
 .TP
-.BR  -c ", " --comment " "\fIcomment
+.BR -c ", " --comment \ \fICOMMENT
 Add comment (if it had not been specified with
 .BR snapshot_create )
 or change the comment for the given snapshot.
 .TP
-.BR  -F ", " --fsname " "\fIfsname
+.BR -F ", " --fsname \ \fIFSNAME
 The filesystem name.
 .TP
-.BR  -h ", " --help
+.BR -h ", " --help
 For help information.
 .TP
-.BR  -n ", " --name " "\fIssname
+.BR -n ", " --name \ \fISSNAME
 The snapshot (to be modified) name must be specified.
 .TP
-.BR  -N ", " --new " "\fInew_ssname
+.BR -N ", " --new \ \fINEW_SSNAME
 Rename the snapshot to the new name. It follows the general ZFS snapshot name
 rules, such as the max length is 256 bytes, cannot conflict with the reserved
 names, and so on.
 .TP
-.BR  -r ", " --rsh " "\fIremote_shell
+.BR -r ", " --rsh \ \fIREMOTE_SHELL
 Specify a shell to communicate with remote targets. The default value is
 .BR ssh .
 It is the system admin's duty to guarantee that the specified
-.I remote_shell
+.I REMOTE_SHELL
 works well among targets without password authentication.
-
 .SH AVAILABILITY
 .B lctl-snapshot-modify
 is part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 2.10.0
+.\" Added in commit v2_9_54_0-67-gd73849a05e
 .SH SEE ALSO
 .BR lctl (8),
-.BR lctl-lcfg (8),
 .BR lctl-barrier (8),
+.BR lctl-lcfg (8),
 .BR lctl-snapshot-create (8),
 .BR lctl-snapshot-destroy (8),
 .BR lctl-snapshot-list (8),

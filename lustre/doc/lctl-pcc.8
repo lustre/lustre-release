@@ -1,68 +1,87 @@
-.TH LCTL-PCC 8 "2019-04-24" Lustre "configuration utilities"
+.TH LCTL-PCC 8 2024-08-14 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-pcc \- commands used to interact with PCC features
 .SH SYNOPSIS
-.B lctl pcc add \fR<\fImntpath\fR> <\fIpccpath\fR> [\fB--param\fR|\fB-p\fR <\fIparam\fR>]
-.br
-.B lctl pcc del [\fB--keep\fR|\fB-k\fR] <\fImntpath\fR> <\fIpccpath\fR>
-.br
-.B lctl pcc clear [\fB--keep\fR|\fB-k\fR] <\fImntpath\fR>
-.br
-.B lctl pcc list <\fImntpath\fR>
+.SY "lctl pcc add"
+.I MNTPATH
+.I PCCPATH
+.RB [ --param | -p
+.IR PARAM ]
+.SY "lctl pcc del"
+.RB [ --keep | -k ]
+.I MNTPATH
+.I PCCPATH
+.SY "lctl pcc clear" [ --keep | -k ]
+.I MNTPATH
+.SY "lctl pcc list"
+.I MNTPATH
+.YS
 .SH DESCRIPTION
 .TP
-.B lctl pcc add \fR<\fImntpath\fR> <\fIpccpath\fR> [\fB--param\fR|\fB-p\fR <\fIparam\fR>]
+.BR "lctl pcc add " \fIMNTPATH\ PCCPATH " " [ --param | -p " " \fIPARAM ]
 Add a PCC backend specified by HSM root path
-.IR pccpath
+.I PCCPATH
 on a Lustre filesystem client instances with the mount point referenced by
-.IR mntpath .
+.IR MNTPATH .
 The parameter
-.IR param
+.IR PARAM
 is a string in the form of name-value pairs to config the PCC backend such as
 read-write attach id (archive ID) or read-only attach id and auto caching rule.
-i.e. for the string "projid={500}&fname={*.h5} rwid=2", the first substring of
-the config parameter is the auto caching rule. Where "&" represents the logical
-conjunction operator while "," represents the logical disjunction operator. The
-example rule means that new files are only auto cached if the project ID is 500
-and the suffix of the file name is "h5". "rwid" represents the read-write
-attach id (2) which value is same as the archive ID of the copytool agent
-running on this PCC node.
-In addition to the equal (=) operator, it also supports greater than (>) and
-less than (<) comparison operators.
+i.e. for the string "projid={500}&fname={*.h5} rwid=2",
+the first substring of the config parameter is the auto caching rule.
+Where "&" represents the logical conjunction operator
+while "," represents the logical disjunction operator.
+The example rule means that new files are only auto cached
+if the project ID is 500 and the suffix of the file name is "h5".
+"rwid" represents the read-write attach id (2) which value is same
+as the archive ID of the copytool agent running on this PCC node.
+In addition to the equal (=) operator,
+it also supports greater than (>) and less than (<) comparison operators.
 The following rule expressions are supported:
+.EX
 - "projid={100}&size>{1M}&size<{500G}"
 - "projid>{100}&projid<{110}"
 - "uid<{1500}&uid>{1000}"
-Currently each PCC backend only has one rule which is configured when setup PCC
-backend on a client. If a user wants to change the rule, the PCC backend needs
-to be removed first and then added back with a new rule.
+.EE
+Currently each PCC backend only has one rule
+which is configured when setup PCC backend on a client.
+If a user wants to change the rule,
+the PCC backend needs to be removed first and then added back with a new rule.
 .TP
-.B lctl pcc del [\fB--keep\fR|\fB-k\fR] <\fImntpath\fR> <\fIpccpath\fR>
+.BR "lctl pcc del " [ --keep | -k ] \ \fIMNTPATH\ PCCPATH
 Delete a PCC backend specified by path
 .IR pccpath
 on a Lustre client referenced by the mount point of
 .IR mntpath .
 .TP
-.B lctl pcc clear [\fB--keep\fR|\fB-k\fR] <\fImntpath\fR>
+.BR "lctl pcc clear " [ --keep | -k ] \ \fIMNTPATH
 Remove all PCC backend on a Lustre client referenced by the mount point of
 .IR mntpath .
 .TP
-.B lctl pcc list <\fImntpath\fR>
+.B lctl pcc list \fIMNTPATH
 List all PCC backends on a Lustre client referenced by the mount point of
 .IR mntpath .
 .SH OPTIONS
 .TP
-.B --param | -p
+.BR -p ", " --param
 Specifies the configuration parameters for a PCC backend.
 .TP
-.B --keep | -k
-By default, when remove a PCC backend from a client, the action is to scan the
-PCC backend fs, and then uncache (detach and remove) all scanned PCC copies
-from PCC by FIDs. With the option "--keep|-k", the "lctl pcc del|clear" command
-just removes the PCC backend from the Lustre client, and retains the data on the
-cache. In this way, the PCC-RW backend falls back as a tranditional HSM storage
-solution since the copytool is still running at this client.
+.BR -k ", " --keep
+By default, when remove a PCC backend from a client,
+the action is to scan the PCC backend fs,
+and then uncache (detach and remove) all scanned PCC copies from PCC by FIDs.
+With the option "--keep|-k", the "lctl pcc del|clear" command
+just removes the PCC backend from the Lustre client,
+and retains the data on the cache. In this way,
+the PCC-RW backend falls back as a tranditional HSM storage solution
+since the copytool is still running at this client.
 .TP
+.SH AVAILABILITY
+.B lctl pcc
+is part of the
+.BR lustre (7)
+filesystem package since release 2.13.0
+.\" Added in commit v2_12_53-113-gf172b11688
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-hsm (1),

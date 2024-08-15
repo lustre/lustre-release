@@ -1,81 +1,84 @@
-.TH LCTL-SET_PARAM 8 "2019-05-10" Lustre "configuration utilities"
+.TH LCTL-SET_PARAM 8 2024-08-14 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-set_param \- Lustre filesystem set parameter utility
 .SH SYNOPSIS
-.B "\fBlctl set_param "
+.SY "lctl set_param"
 .RB [ --delete | -d ]
 .RB [ --file | -F ]
 .RB [ --no-name | -n ]
 .RB [ --permanent | -P ]
-.RB [ --thread | -t [ \fITHREAD_COUNT ]]
+.RB [ --thread | -t\c
+.RI [ THREAD_COUNT ]]
 .IR PARAMETER \= VALUE " ..."
-.br
-.B lctl set_param -F
-.IR FILENAME
+.SY lctl set_param -F
+.I FILENAME
+.YS
 .SH DESCRIPTION
 Set the value of the named Lustre or LNet
-.I parameter
+.I PARAMETER
 to
-.I value
-on the local node.  Parameter names consist of one or more components,
-separated by a '.' (period).  Each component may be specified by plain text
-or by a wildcard in the
+.I VALUE
+on the local node. Parameter names consist of one or more components,
+separated by a '.' (period).
+Each component may be specified by plain text or by a wildcard in the
 .BR glob (7)
-format.  When wildcards are used, more than one parameter may match and
-be changed.  Parameters are often, but not always, of the form
-.IR obd_name.obd_instance.parameter_name ,
+format. When wildcards are used, more than one parameter may match and
+be changed. Parameters are often, but not always, of the form
+.IR OBD_NAME.OBD_INSTANCE.PARAMETER_NAME ,
 where
-.I obd_name
+.I OBD_NAME
 is one of the OBD object types, like
 .BR ldlm ", " llite ", " lmv ", " lov ", " mdc ", " osc ,
 etc., and
-.I obd_instance
+.I OBD_INSTANCE
 is the name of a Lustre device, like
 .BR testfs-OST0000 ,
-but may be a specific component, or contain wildcards to match some or all
-devices on the node.  Parameters can only be modified by the root user for
-security reasons.
+but may be a specific component,
+or contain wildcards to match some or all devices on the node.
+Parameters can only be modified by the root user for security reasons.
 .SH OPTIONS
 The various options supported by
 .B lctl list_param
 are listed and explained below:
 .TP
-.B -d ", " --delete
+.BR -d ", " --delete
 Remove the permanent setting (only for parameters set with the
 .B -P
 option).
 .TP
-.B -F ", " --file
+.BR -F ", " --file
 Set parameters from
-.I filename
-instead of from the command-line.  The contents of
-.I filename
+.I FILENAME
+instead of from the command-line. The contents of
+.I FILENAME
 is YAML format, created as an output from
-.RB ' "lctl --device MGS llog_print " \fIFSNAME\fB "-client" '
+.RB ' "lctl --device MGS llog_print"
+.I FSNAME\c
+.BR -client '
 or any other valid llog configuration log as listed by
 .RB ' "lctl --device MGS llog_catlist" '
 .TP
-.B -n ", " --no-name
+.BR -n ", " --no-name
 Disable printing of the parameter name after setting it.
 .TP
-.B -P ", " --permanent
+.BR -P ", " --permanent
 Set
-.I parameter
+.I PARAMETER
 permanently on
 .B all
-nodes connected to the MGS on which the command is run.  To limit wildcard
-.I parameter
+nodes connected to the MGS on which the command is run. To limit wildcard
+.I PARAMETER
 matching to specific filesystems or parameters, ensure that
-.I parameter
+.I PARAMETER
 contains a suitably-specific expression for the
-.I obd_name
+.I OBD_NAME
 and
-.IR obd_instance ,
-such as the filesystem and/or target name.  This option is only available
+.IR OBD_INSTANCE ,
+such as the filesystem and/or target name. This option is only available
 in Lustre 2.5.0 and later clients, older clients cannot set persistent
 parameters, nor will they see them.
 .TP
-.B -t ", " --thread
+.BR -t ", " --thread " ["\fITHREAD_COUNT\fR]
 Spawn threads to set multiple parameters in parallel, optionally specifying
 the maximum number of threads to run (with no space between
 .B -t
@@ -85,41 +88,32 @@ Without this option parameter(s) are set serially.
 If
 .B lctl
 was compiled without pthread support, a warning message will be
-printed and parameters will be set serially.  If
+printed and parameters will be set serially. If
 .B -t
 is specified without any argument, it runs up to 8 threads by default.
 .SH EXAMPLES
+.EX
 .B # lctl set_param fail_loc=0 timeout=20
-.br
 fail_loc=0
-.br
 timeout=20
-.br
 .B # lctl set_param -n fail_loc=0 timeout=20
-.br
 0
-.br
 20
-.br
-.B
-# lctl set_param -t2 "ldlm.namespaces.*osc*.lru_size=clear"
-.br
+.B # lctl set_param -t2 "ldlm.namespaces.*osc*.lru_size=clear"
 ldlm.namespaces.fsname-OST0001-osc-MDT0000.lru_size=clear
-.br
 ldlm.namespaces.fsname-OST0000-osc-MDT0000.lru_size=clear
-.br
 .B # lctl set_param -P osc.testfs-OST*.max_dirty_mb=512
-.br
 osc.testfs-OST0000-osc-ffff8803c9c0f000.max_dirty_mb=512
-.br
 osc.testfs-OST0001-osc-ffff8803c9c0f000.max_dirty_mb=512
-.br
 osc.testfs-OST0002-osc-ffff8803c9c0f000.max_dirty_mb=512
-.br
 osc.testfs-OST0003-osc-ffff8803c9c0f000.max_dirty_mb=512
-.br
 osc.testfs-OST0004-osc-ffff8803c9c0f000.max_dirty_mb=512
-.br
+.SH AVAILABILITY
+.B lctl set_param
+is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.0-903-g04af22fc24
 .SH SEE ALSO
 .BR lustre (7),
 .BR lctl (8),
