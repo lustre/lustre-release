@@ -1,5 +1,5 @@
 lnxmaj="5.14.0"
-lnxrel="427.24.1.el9_4"
+lnxrel="427.31.1.el9_4"
 
 KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
 SERIES=5.14-rhel9.4.series
