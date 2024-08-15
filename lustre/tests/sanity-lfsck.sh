@@ -1492,6 +1492,13 @@ test_12a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
 		skip "MDS older than 2.5.55, LU-3950"
+	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+		lfsck_start="lfsck start"
+		lfsck_stop="lfsck stop"
+	else
+		lfsck_start="lfsck_start"
+		lfsck_stop="lfsck_stop"
+	fi
 
 	check_mount_and_prep
 	for k in $(seq $MDSCOUNT); do
@@ -1501,21 +1508,21 @@ test_12a() {
 	done
 
 	echo "Start namespace LFSCK on all targets by single command (-s 1)."
-	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t namespace -A \
+	do_facet mds1 $LCTL $lfsck_start -M ${FSNAME}-MDT0000 -t namespace -A \
 		-s 1 -r || error "(2) Fail to start LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'scanning-phase1' status."
 	wait_all_targets namespace scanning-phase1 3
 
 	echo "Stop namespace LFSCK on all targets by single lctl command."
-	do_facet mds1 $LCTL lfsck_stop -M ${FSNAME}-MDT0000 -A ||
+	do_facet mds1 $LCTL $lfsck_stop -M ${FSNAME}-MDT0000 -A ||
 		error "(4) Fail to stop LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'stopped' status."
 	wait_all_targets_blocked namespace stopped 5
 
 	echo "Re-start namespace LFSCK on all targets by single command (-s 0)."
-	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t namespace -A \
+	do_facet mds1 $LCTL $lfsck_start -M ${FSNAME}-MDT0000 -t namespace -A \
 		-s 0 -r || error "(6) Fail to start LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'completed' status."
@@ -1524,14 +1531,14 @@ test_12a() {
 	start_full_debug_logging
 
 	echo "Start layout LFSCK on all targets by single command (-s 1)."
-	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t layout -A \
+	do_facet mds1 $LCTL $lfsck_start -M ${FSNAME}-MDT0000 -t layout -A \
 		-s 1 -r || error "(8) Fail to start LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'scanning-phase1' status."
 	wait_all_targets layout scanning-phase1 9
 
 	echo "Stop layout LFSCK on all targets by single lctl command."
-	do_facet mds1 $LCTL lfsck_stop -M ${FSNAME}-MDT0000 -A ||
+	do_facet mds1 $LCTL $lfsck_stop -M ${FSNAME}-MDT0000 -A ||
 		error "(10) Fail to stop LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'stopped' status."
@@ -1546,7 +1553,7 @@ test_12a() {
 	done
 
 	echo "Re-start layout LFSCK on all targets by single command (-s 0)."
-	do_facet mds1 $LCTL lfsck_start -M ${FSNAME}-MDT0000 -t layout -A \
+	do_facet mds1 $LCTL $lfsck_start -M ${FSNAME}-MDT0000 -t layout -A \
 		-s 0 -r || error "(13) Fail to start LFSCK on all devices!"
 
 	echo "All the LFSCK targets should be in 'completed' status."

@@ -47,12 +47,26 @@
 #include <lustre/lustreapi.h>
 #include "lctl_thread.h"
 
-static int jt_pcc(int argc, char **argv);
+#define JT_SUBCMD(name)						\
+static int jt_##name(int argc, char **argv)			\
+{								\
+	char cmd[PATH_MAX];					\
+	int rc = 0;						\
+								\
+	setlinebuf(stdout);					\
+								\
+	snprintf(cmd, sizeof(cmd), "%s %s",			\
+		 program_invocation_short_name, argv[0]);	\
+	program_invocation_short_name = cmd;			\
+	rc = cfs_parser(argc, argv, name##_cmdlist);		\
+								\
+	return rc < 0 ? -rc : rc;				\
+}
 
 /**
  * command_t pccdev_cmdlist - lctl pcc commands.
  */
-command_t pccdev_cmdlist[] = {
+command_t pcc_cmdlist[] = {
 	{ .pc_name = "add", .pc_func = jt_pcc_add,
 	  .pc_help = "Add a PCC backend to a client.\n"
 		"usage: lctl pcc add <mntpath> <pccpath> [--param|-p <param>]\n"
@@ -61,7 +75,7 @@ command_t pccdev_cmdlist[] = {
 		"\tparam:   Setting parameters for PCC backend.\n" },
 	{ .pc_name = "del", .pc_func = jt_pcc_del,
 	  .pc_help = "Delete the specified PCC backend on a client.\n"
-		"usage: clt pcc del <mntpath> <pccpath>\n" },
+		"usage: lctl pcc del <mntpath> <pccpath>\n" },
 	{ .pc_name = "clear", .pc_func = jt_pcc_clear,
 	  .pc_help = "Remove all PCC backend on a client.\n"
 		"usage: lctl pcc clear <mntpath>\n" },
@@ -70,6 +84,37 @@ command_t pccdev_cmdlist[] = {
 		"usage: lctl pcc list <mntpath>\n" },
 	{ .pc_help = NULL }
 };
+JT_SUBCMD(pcc);
+
+#ifdef HAVE_SERVER_SUPPORT
+/**
+ * command_t lfsck_cmdlist - lctl lfsck commands.
+ */
+command_t lfsck_cmdlist[] = {
+	{ .pc_name = "start", .pc_func = jt_lfsck_start,
+	  .pc_help = "Start online Lustre File System Check.\n"
+	 "usage: lfsck start [--device|-M {MDT,OST}_DEVICE]\n"
+	 "		     [--all|-A] [--create-ostobj|-c [on | off]]\n"
+	 "		     [--create-mdtobj|-C [on | off]]\n"
+	 "		     [--delay-create-ostobj|-d [on | off]]\n"
+	 "		     [--error|-e {continue | abort}] [--help|-h]\n"
+	 "		     [--dryrun|-n [on | off]] [--orphan|-o]\n"
+	 "		     [--reset|-r] [--speed|-s SPEED_LIMIT]\n"
+	 "		     [--type|-t {all|default|scrub|layout|namespace}]\n"
+	 "		     [--window-size|-w SIZE]"},
+	{ .pc_name = "stop", .pc_func = jt_lfsck_stop,
+	  .pc_help = "Stop online Lustre File System Check.\n"
+	 "usage: lfsck stop [--device|-M {MDT,OST}_DEVICE]\n"
+	 "		    [--all|-A] [--help|-h]"},
+	{ .pc_name = "query", .pc_func = jt_lfsck_query,
+	  .pc_help = "Get Lustre File System Check global status.\n"
+	 "usage: lfsck query [--device|-M MDT_DEVICE] [--help|-h]\n"
+	 "		     [--type|-t {all|default|scrub|layout|namespace}]\n"
+	 "		     [--wait|-w]"},
+	{ .pc_help = NULL }
+};
+JT_SUBCMD(lfsck);
+#endif
 
 command_t cmdlist[] = {
 	/* Metacommands */
@@ -366,7 +411,7 @@ command_t cmdlist[] = {
 
 	/* Persistent Client Cache (PCC) commands */
 	{"=== Persistent Client Cache ===", NULL, 0, "PCC user management"},
-	{"pcc", jt_pcc, pccdev_cmdlist,
+	{"pcc", jt_pcc, pcc_cmdlist,
 	 "lctl commands used to interact with PCC features:\n"
 	 "lctl pcc add    - add a PCC backend to a client\n"
 	 "lctl pcc del    - delete a PCC backend on a client\n"
@@ -408,6 +453,7 @@ command_t cmdlist[] = {
 	 "usage: lfsck_query [--device|-M MDT_device] [--help|-h]\n"
 	 "		     [--type|-t lfsck_type[,lfsck_type...]]\n"
 	 "		     [--wait|-w]"},
+	{"lfsck", jt_lfsck, lfsck_cmdlist, ""},
 
 	/* Llog operations */
 	{"==== LLOG ====", NULL, 0, "LLOG"},
@@ -557,31 +603,6 @@ command_t cmdlist[] = {
 	 "	 getobjversion -i <id> -g <group>"},
 	{ 0, 0, 0, NULL }
 };
-
-/**
- * jt_pcc() - Parse and execute lctl pcc commands.
- * @argc: The count of lctl pcc command line arguments.
- * @argv: Array of strings for lctl pcc command line arguments.
- *
- * This function parses lfs pcc commands and performs the
- * corresponding functions specified in pccdev_cmdlist[].
- *
- * Return: 0 on success or an error code on failure.
- */
-static int jt_pcc(int argc, char **argv)
-{
-	char cmd[PATH_MAX];
-	int rc = 0;
-
-	setlinebuf(stdout);
-
-	snprintf(cmd, sizeof(cmd), "%s %s", program_invocation_short_name,
-		 argv[0]);
-	program_invocation_short_name = cmd;
-	rc = cfs_parser(argc, argv, pccdev_cmdlist);
-
-	return rc < 0 ? -rc : rc;
-}
 
 static int lctl_main(int argc, char **argv)
 {
