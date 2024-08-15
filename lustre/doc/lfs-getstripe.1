@@ -1,40 +1,58 @@
-.TH lfs-getstripe 1 "2018-01-24" Lustre "user utilities"
+.so lustre/doc/lgroff-macros
+.TH LFS-GETSTRIPE 1 2024-08-15 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-getstripe \- Lustre client command to print layout parameters of a file
 .SH SYNOPSIS
-.B lfs getstripe
-[\fB--component-count\fR|\fB--comp-count\fR]
-      [\fB--component-end\fR|\fB--comp-end\fR|\fB-E\fR[\fB=\fR[\fB+-\fR]\fIEND_OFFSET\fR[\fBKMGTPE\fR]]
-      [\fB--component-flags\fR|\fB--comp-flags\fR[\fB=\fICOMP_FLAGS\fR]]
-      [\fB--component-id\fR|\fB--comp-id\fR[=\fICOMP_ID\fR]|\fB-I\fR[\fICOMP_ID\fR]]
-      [\fB--component-start\fR[\fB=\fR[\fB+-\fR]\fISTART_OFFSET\fR[\fBKMGTPE\fR]]]
-      [\fB--extension-size\fR|\fB--ext-size\fR|\fB-z\fR]
-      [\fB--directory\fR|\fB-d\fR]
-[\fB--fid\fR|\fB-F\fR]
-[\fB--generation\fR|\fB-g\fR]
-[\fB--help\fR|\fB-h\fR]
-[\fB--hex-idx\fR]
-      [\fB--layout\fR|\fB-L\fR]
-[\fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR]
-[\fB--ost\fR|\fB-O\fR \fIOST_NAME\fR]
-      [\fB--pool\fR|\fB-p\fR]
-[\fB--quiet\fR|\fB-q\fR]
-[\fB--recursive\fR|\fB-r\fR]
-      [\fB--raw\fR|\fB-R\fR]
-[\fB--stripe-count\fR|\fB-c\fR]
-[\fB--stripe-index\fR|\fB-i\fR]
-      [\fB--stripe-size\fR|\fB-S\fR] [\fB--mirror-count\fR|\fB-N\fR]
-      [[\fB!\fR] \fB--mirror-index\fR=[\fB+-\fR]\fIMIRROR_INDEX\fR | [\fB!\fR] \fB--mirror-id\fR=[\fB+-\fR]\fIMIRROR_ID\fR]
-      [\fB--verbose\fR|\fB-v\fR]
-[\fB--yaml\fR|\fB-y\fR][\fB--no-follow\fR]
-\fIFILENAME\fR|\fIDIRECTORY\fR ...
-
+.SY "lfs getstripe"
+.RB [ --component-count | --comp-count ]
+.br
+.RB [ --component-end | --comp-end | -E [ = [ +- ]\c
+.I END_OFFSET
+.RB [ KMGTPE ]]
+.br
+.RB [ --component-flags | --comp-flags [ =\c
+.IR COMP_FLAGS ]]
+.br
+.RB [ --component-id | --comp-id
+.RI [= COMP_ID ]\c
+.RB | -I\c
+.RI [ COMP_ID ]]
+.br
+.RB [ --component-start [ = [ +- ]\c
+.I START_OFFSET\c
+.RB [ KMGTPE ]]]
+.br
+.RB [ --extension-size | --ext-size | -z ]
+.RB [ --directory | -d ]
+.RB [ --fid | -F ]
+.RB [ --generation | -g ]
+.RB [ --help | -h ]
+.RB [ --hex-idx ]
+.RB [ --layout | -L ]
+.RB [ --mdt | --mdt-index | -m ]
+.RB [ --ost | -O \ \c
+.IR OST_NAME ]
+.RB [ --pool | -p ]
+.RB [ --quiet | -q ]
+.RB [ --recursive | -r ]
+.RB [ --raw | -R ]
+.RB [ --stripe-count | -c ]
+.RB [ --stripe-index | -i ]
+.RB [ --stripe-size | -S ]
+.RB [ --mirror-count | -N ]
+.RB [[ ! ] --mirror-index =[ +- ]\c
+.I MIRROR_INDEX\c
+.RB " | [" ! ] --mirror-id =[ +- ]\c
+.IR MIRROR_ID ]
+.RB [ --verbose | -v ]
+.RB [ --yaml | -y ]
+.RB [ --no-follow ]
+.IR FILENAME | DIRECTORY " ..."
+.YS
 .SH DESCRIPTION
-.nh
-.ad l
 .B lfs getstripe
 is used to list the layout/striping information for a given filename or
-directory tree.  By default the stripe_count, stripe_size, stripe_offset,
+directory tree. By default the stripe_count, stripe_size, stripe_offset,
 and allocated OST objects for each file will be shown. If you only want
 specific layout information to be printed, then the
 .BR --stripe-count ,
@@ -74,18 +92,19 @@ sign must be used.
 .PP
 The default behavior when a directory is specified is to list the striping
 information for all files within the specified directory (like
-.RB ' "ls -l \fIDIRECTORY\fR" ').
+.RB ' "ls -l"
+.IR DIRECTORY ').
 .SH OPTIONS
 .TP
-.BR --component-count | --comp-count
+.BR --component-count ", " --comp-count
 Print only the number of components in the file's layout.
 .TP
-.BR --component-end | --comp-end | -E \fR[[ +- \fR] \fIEND_OFFSET\fR [ KMGTPE ]]
+.BR -E ", " --component-end ", " --comp-end [[ +- ] \fIEND_OFFSET [ KMGTPE ]]
 Print only the component end offset (in bytes) for the component(s).
 If the component
 .I end
 offset is specified (with optional suffix for SI units), print only the
-attributes of the component(s) with the given end offset.  If
+attributes of the component(s) with the given end offset. If
 .BI + END_OFFSET
 or
 .BI - END_OFFSET
@@ -93,23 +112,23 @@ is used, print components with respectively a larger or smaller
 .I END_OFFSET
 offset.
 .TP
-.BR --component-flags \fR| --comp-flags \fR[ \fB^ \fR] \fICOMP_FLAG\fR ,...
-Print only the component flags.  If
+.BR --component-flags ", " --comp-flags [ ^ ] \fICOMP_FLAG ,...
+Print only the component flags. If
 .I COMP_FLAG
 is specified, print only components matching the specified
 .I COMP_FLAG
-set.  If
+set. If
 .BI ^ COMP_FLAG
 is used, print only components not matching
 .IR COMP_FLAG .
-Multiple flags may be specified, separated by commas.  Valid flag names are:
+Multiple flags may be specified, separated by commas. Valid flag names are:
 .RS 1.2i
 .TP
 .B init
 Component has been initialized (has allocated OST objects).
 .TP
 .B stale
-Replicated (mirrored) components that do not have up-to-date data.  Stale
+Replicated (mirrored) components that do not have up-to-date data. Stale
 components will not be used for read or write operations, and need to be
 resynched using
 .B lfs mirror resync
@@ -127,13 +146,16 @@ Replicated (mirrored) components that are preferred for read.
 Replicated (mirrored) components that are preferred for write.
 .TP
 .B nosync
-Replicated (mirrored) components that do not resync using \fB
-lfs mirror resync\fR.  Files with the \fBnosync\fR flag will also
+Replicated (mirrored) components that do not resync using
+.BR "lfs mirror resync" .
+Files with the
+.B nosync
+flag will also
 print the timestamp when the flag was set on the replica.
 .RE
 .TP
-.BR --component-id | --comp-id | -I \fR[ \fICOMP_ID\fR ]
-Print only the component COMP_ID number for the component(s).  The file-unique
+.BR -I ", " --component-id ", " --comp-id [ \fICOMP_ID ]
+Print only the component COMP_ID number for the component(s). The file-unique
 component COMP_ID is assigned as each component is created, and is not re-used.
 The COMP_ID is
 .B not
@@ -143,12 +165,12 @@ If
 .I COMP_ID
 is specified, then print only the fields for the matching component.
 .TP
-.BR --component-start \fR| --comp-start \fR[ +- \fR] \fISTART_OFFSET\fR [ KMGTPE ]
+.BR --component-start ", " --comp-start [ +- ] \fISTART_OFFSET [ KMGTPE ]
 Print only the component start offset (in bytes) for the component(s).
 If the component
 .I START_OFFSET
 offset is specified (with optional suffix for SI units), print only the
-attributes of the component(s) with the given starting offset.  If
+attributes of the component(s) with the given starting offset. If
 .BI + START_OFFSET
 or
 .BI - START_OFFSET
@@ -156,17 +178,17 @@ is used, print components with respectively a larger or smaller
 .I START_OFFSET
 offset.
 .TP
-.BR --directory | -d
+.BR -d ", " --directory
 Get striping information for only the specified directory, like
 .RB ' "ls -d" '.
 .TP
-.BR --fid | -F
+.BR -F ", " --fid
 Show only the 128-bit unique Lustre File Identifier (FID).
 .TP
-.BR --generation \fR| -g
+.BR -g ", " --generation
 Print only the layout generation number.
 .TP
-.BR --help | -h
+.BR -h ", " --help
 Print usage message.
 .TP
 .BR --hex-idx
@@ -186,33 +208,45 @@ HSM-archived files that are not resident in the filesystem.
 Files that have the first data component on an MDT.
 .RE
 .TP
-.BR --mdt \fR| --mdt-index \fR| -m
+.BR -m ", " --mdt ", " --mdt-index
 Show the MDT index on which the file or directory inode is located.
 .TP
-.BR --mirror-count \fR| -N
+.BR -N ", " --mirror-count
 Print the number of mirrors on the file.
 .TP
-.BR --mirror-index=\fR[\fB+-\fR]\fR\fIMIRROR_INDEX\fR
-Print only the components of \fIMIRROR_INDEX\fR-th mirror, based on the order
-that the mirror components are stored in the file layout. The \fIMIRROR_INDEX\fR
+.BR --mirror-index =[ +- ] \fIMIRROR_INDEX
+Print only the components of
+.IR MIRROR_INDEX-th
+mirror,
+based on the order that the mirror components are stored in the file layout.
+The
+.I MIRROR_INDEX
 starts at 1. If
 .BI + MIRROR_INDEX
 or
 .BI - MIRROR_INDEX
 is used, print components of mirror(s) respectively later or earlier than
-the \fIMIRROR_INDEX\fR-th mirror.
+the
+.IR MIRROR_INDEX -th
+mirror.
 .RS 1.2i
 .TP
 .B !
-Negates the meaning. Using + before \fIMIRROR_INDEX\fR means mirror appears 'later
-than \fIMIRROR_INDEX\fR',
-- before \fIMIRROR_INDEX\fR means mirror appears 'earlier
-than \fIMIRROR_INDEX\fR'. If
-neither is used, it means 'equal to \fIMIRROR_INDEX\fR'.
+Negates the meaning. Using + before
+.I MIRROR_INDEX
+means mirror appears 'later than
+.IR MIRROR_INDEX ',
+- before
+.I MIRROR_INDEX
+means mirror appears 'earlier than
+.I MIRROR_INDEX '.
+If neither is used, it means 'equal to
+.IR MIRROR_INDEX '.
 .RE
 .TP
-.B --mirror-id=\fR[\fB+-\fR]\fR\fIMIRROR_ID\fR
-Print only the components of the mirror with ID of \fIMIRROR_ID\fR.
+.B --mirror-id =[ +- ] \fIMIRROR_ID
+Print only the components of the mirror with ID of
+.IR MIRROR_ID .
 The mirror IDs are assigned to new mirrors as they are created,
 but may not be sequential if some mirrors are removed. If
 .BI + MIRROR_ID
@@ -225,85 +259,133 @@ mirror ID of
 .RS 1.2i
 .TP
 .B !
-Negates the meaning. Using \fB+\fR before \fIMIRROR_ID\fR means mirror with ID
-'larger than \fIMIRROR_ID\fR', \fB-\fR before \fIMIRROR_ID\fR means mirror
-with ID 'smaller than \fIMIRROR_ID\fR'. If neither is used,
-it means 'equal to \fIMIRROR_ID\fR'.
+Negates the meaning. Using
+.B +
+before
+.I MIRROR_ID
+means mirror with ID 'larger than
+.IR MIRROR_ID ',
+.B -
+before
+.I MIRROR_ID
+means mirror with ID 'smaller than
+.IR MIRROR_ID '.
+If neither is used, it means 'equal to
+.IR MIRROR_ID '.
 .RE
 .TP
-.BR --ost \fR| -O \fIOST_NAME\fR
-Print only file layouts and OST objects on the specified \fIOST_NAME\fR.
+.BR -O ", " --ost \ \fIOST_NAME
+Print only file layouts and OST objects on the specified
+.IR OST_NAME .
 .TP
-.BR --pool \fR| -p
+.BR -p ", " --pool
 Print only the OST pool name on which the file was created.
 .TP
-.BR --quiet \fR| -q
+.BR -q ", " --quiet
 Print only allocated objects for each file, not other layout parameters.
 .TP
-.BR --raw \fR| -R
+.BR -R ", " --raw
 Print layout information without substituting the filesystem's default values
 for unspecified fields. If the file layout is not set, 0, 0, and -1 will be
 printed for the stripe_count, stripe_size, and stripe_offset respectively.
 .TP
-.BR --recursive \fR| -r
+.BR -r ", " --recursive
 Recurse into all subdirectories.
 .TP
-.BR --stripe-count \fR| -c
-Print the number of stripes in the file.  For composite files this is
+.BR -c ", " --stripe-count
+Print the number of stripes in the file. For composite files this is
 the stripe count of the last initialized component.
 .TP
-.BR --stripe-index \fR| -i
+.BR -i ", " --stripe-index
 Print the starting OST index for the file layout.
 .TP
-.BR --stripe-size \fR| -S
-Print the stripe size in bytes.  For composite files this is the stripe
+.BR -S ", " --stripe-size
+Print the stripe size in bytes. For composite files this is the stripe
 size of the last initialized component.
 .TP
-.BR --extension-size \fR| --ext-size \fR| -z
+.BR -z ", " --extension-size ", " --ext-size
 Print the extension size in bytes. For composite files this is the extension
 size of the first extension component.
 .TP
-.BR --verbose \fR| -v
+.BR -v ", " --verbose
 Also print the layout magic, FID sequence, FID object ID, and FID, in
 addition to the normally-printed attributes.
 .TP
-.BR --yaml \fR| -y
+.BR -y ", " --yaml
 Always print the layout in YAML format, rather than only using this
 format for composite files.
 .TP
 .BR --no-follow
 Print the stripe information of symbolic link itself.
-.br
 .SH EXAMPLES
-.TP
-.B $ lfs getstripe -v /mnt/lustre/file1
-List the detailed object allocation of the given file.
-.TP
-.B $ lfs getstripe -v -I2 /mnt/lustre/file1
-List the detailed information of only component with ID 2 of the given file.
-.TP
-.B $ lfs getstripe --mirror-index=+1 /mnt/lustre/file1
-Print the mirror(s) appearing later than the first mirror in the the file.
-.TP
-.B $ lfs getstripe ! --mirror-id=2 /mnt/lustre/file1
-Print the mirror(s) with mirror ID other than 2 in the file.
-.TP
-.B $ lfs getstripe --component-flags=^init -I /mnt/lustre/file1
-Print only the component IDs for all the uninitialized components.
-.TP
-.B $ lfs getstripe --component-flags=init,^stale -I /mnt/lustre/file1
-Print only the component(s) that are instantiated but not stale.
-.TP
-.B $ lfs getstripe -E-64M /mnt/lustre/file1
-List information of components in a file with extent end less than 64MiB.
-.TP
-.B $ lfs getstripe -I3 --component-start /mnt/lustre/file1
-Print only the component start for the component with ID of 3
-.TP
-.B $ lfs getstripe --yaml /mnt/lustre/file1
-Lists the information of the components of a file in YAML format.
-.SH AUTHOR
-The lfs command is part of the Lustre filesystem.
+List the detailed object allocation of the given file:
+.RS
+.EX
+.B # lfs getstripe -v /mnt/lustre/file1
+.EE
+.RE
+.PP
+List the detailed information of only component with ID 2 of the given file:
+.RS
+.EX
+.B # lfs getstripe -v -I2 /mnt/lustre/file1
+.EE
+.RE
+.PP
+Print the mirror(s) appearing later than the first mirror in the file:
+.RS
+.EX
+.B # lfs getstripe --mirror-index=+1 /mnt/lustre/file1
+.EE
+.RE
+.PP
+Print the mirror(s) with mirror ID other than 2 in the file:
+.RS
+.EX
+.B # lfs getstripe ! --mirror-id=2 /mnt/lustre/file1
+.EE
+.RE
+.PP
+Print only the component IDs for all the uninitialized components:
+.RS
+.EX
+.B # lfs getstripe --component-flags=^init -I /mnt/lustre/file1
+.EE
+.RE
+.PP
+Print only the component(s) that are instantiated but not stale:
+.RS
+.EX
+.B # lfs getstripe --component-flags=init,^stale -I /mnt/lustre/file1
+.EE
+.RE
+.PP
+List information of components in a file with extent end less than 64MiB:
+.RS
+.EX
+.B # lfs getstripe -E-64M /mnt/lustre/file1
+.EE
+.RE
+.PP
+Print only the component start for the component with ID of 3:
+.RS
+.EX
+.B # lfs getstripe -I3 --component-start /mnt/lustre/file1
+.EE
+.RE
+.PP
+Lists the information of the components of a file in YAML format:
+.RS
+.EX
+.B # lfs getstripe --yaml /mnt/lustre/file1
+.EE
+.RE
+.SH AVAILABILITY
+.B lfs getstripe
+is part of the
+.BR lustre (7)
+filesystem package since release 0.10.0
+.\" Added in commit 0.9.1
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-find (1),

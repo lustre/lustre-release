@@ -1,21 +1,25 @@
-.TH lfs-df 1 "2016 Dec 7" Lustre "user utilities"
+.so lustre/doc/lgroff-macros
+.TH LFS-DF 1 2024-08-15 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-df \- report Lustre filesystem disk usage
 .SH SYNOPSIS
-.BR "lfs df" " [" -i "] [" -h | -H ]
+.SY "lfs df"
+.RB [ -i ]
+.RB [ -h | -H ]
 .RB [ --lazy | -l ]
 .RB [ --pool | -p
-.IR <fsname> [. <pool> ]]
+.IR FSNAME [. POOL ]]
 .RB [ --mdt | -m ]
 .RB [ --ost | -o ]
 .RB [ --verbose | -v ]
 .RI [ path ]
+.YS
 .SH DESCRIPTION
 .B lfs df
 displays filesystem usage information by default for each Lustre
 filesystem currently mounted on that node, or for the filesystem
 that contains
-.I path
+.I PATH
 if given. It displays the current usage and totals for each MDT and
 OST separately, as well as a per-filesystem summary that matches
 .BR df (1)
@@ -24,11 +28,11 @@ output for each filesystem.
 By default
 .B lfs df
 reports the
-.I space
+.I SPACE
 usage of the OSTs (the MDT space usage is shown only for reference).  With
 .B -i
 it reports the
-.I inode
+.I INODE
 (object) usage for each target and in the summary.  For ZFS-backed
 targets, the
 .B IUsed
@@ -38,7 +42,7 @@ but the
 total and
 .B Free
 inode counts are
-.I estimated
+.I ESTIMATED
 based on the current average (mean) space used per object on each target,
 and may fluctuate over time to reflect the current usage pattern of
 the target.  The estimate becomes more accurate as the target becomes
@@ -55,14 +59,14 @@ RAID reconstruction.  This state is marked on the server automatically
 for ZFS targets via
 .BR zed (8),
 or a (user-supplied) script that monitors the target device and sets
-.B 'lctl set_param obdfilter.\fI<target>\fB.degraded=1'
+.BI "'lctl set_param obdfilter." TARGET ".degraded=1'"
 on the OST.  This target will be avoided for new allocations, but
 will still be used for existing files located there or if there are
 not enough non-degraded OSTs to make up a widely-striped file.
 .TP
 .B N: no-precreate
 The target is configured to deny object precreation by the
-.B 'lctl set_param obdfilter.\fI<target>\fB.no_precreate=1'
+.BI "'lctl set_param obdfilter." TARGET ".no_precreate=1'"
 parameter or
 .B '-o no_precreate'
 mount option.  This may be done to add an OST to the filesystem without
@@ -114,7 +118,7 @@ total,
 and
 .B IFree
 counts typically reflect the
-.I sum
+.I SUM
 of values from the MDTs.  If the total number of objects available
 on the OSTs is smaller (factoring in the filesystem default
 .BR stripe_count ,
@@ -124,7 +128,7 @@ then the reported
 and
 .B IFree
 values will be reduced to reflect the
-.I minimum
+.I MINIMUM
 number of files that could potentially be created with the default
 stripe count.  The actual total number of files that can be created
 may be different.
@@ -145,27 +149,27 @@ to show both types of devices, which is equivalent to having neither option.
 .TP
 .BR -o ", " --ost
 Filter output to show information on
-.B OST
+.B OSTc
 devices. Can be used with
 .BR -m
 to show both types of devices, which is equivalent to having neither option.
 .TP
 .BR -p ", " --pool= [ \fIfsname\fR .] \fIpool\fR
 Limit the usage to report only MDTs and OSTs that are in the specified
-.IR pool .
+.IR POOL .
 If multiple filesystems are mounted, list OSTs in
-.I pool
+.I POOL
 for every filesystem, or limit the display to only a pool for a
 specific filesystem if
-.I fsname.pool
+.I FSNAME.POOL
 is given.  Specifying both the fsname and pool like:
 .br
-.BI "lfs df --pool=" fsname.pool
+.BI "lfs df --pool=" FSNAME.POOL
 .br
 is equivalent to specifying the mountpoint for the given
-.IR fsname :
+.IR FSNAME :
 .br
-.BI "lfs df --pool=" "pool /mnt/fsname"
+.BI "lfs df --pool=" "pool /mnt/FSNAME"
 .TP
 .BR -v ", " --verbose
 Show deactivated MDTs and OSTs in the listing, along with any
@@ -173,30 +177,22 @@ additional status flags for each MDT and OST.  By default, any
 MDTs and OSTs that are deactivated by the administrator are not shown.
 However, targets that are only temporarily inaccessible are still shown.
 .SH EXAMPLES
-.TP
-.B $ lfs df -hv /mnt/testfs
 Lists space usage per OST and MDT for the
 .B testfs
-filesystem in human readable format.
-.PP
-.RS 0.75i
+filesystem in human readable format:
+.RS
+.EX
+.B # lfs df -hv /mnt/testfs
 UUID                 bytes  Used   Avail Use% Mounted on
-.br
 testfs-MDT0000_UUID  13.0G  1.2G   11.0G  10% /testfs[MDT:0]
-.br
 testfs-OST0000_UUID   3.6T  2.9T  585.7G  84% /testfs[OST:0]
-.br
 testfs-OST0001_UUID   3.6T  3.1T  472.5G  87% /testfs[OST:1] D
-.br
 testfs-OST0002_UUID   3.6T  3.0T  570.3G  84% /testfs[OST:2] DR
-.br
 OST0003           : inactive device
-.br
 testfs-OST0006_UUID   5.4T  4.9T  417.8G  92% /testfs[OST:3]
-.br
-
+.P
 filesystem_summary:  16.2T 13.8T    2.0T  88% /testfs
-.br
+.EE
 .RE
 .PP
 The above example output shows that
@@ -220,40 +216,48 @@ while
 is also marked
 .BR R ead-only,
 after detecting non-recoverable corruption in the backing filesystem.
-.TP
-.B $ lfs df -iH
-List inode usage per OST and MDT for all mounted Lustre filesystems.
-.RS 0.75i
+.PP
+List inode usage per OST and MDT for all mounted Lustre filesystems:
+.RS
+.EX
+.B # lfs df -iH
 UUID                Inodes  IUsed  IFree IUse% Mounted on
-.br
 testfs-MDT0000_UUID 932.2k 884.6k  47.6k  95% /testfs[MDT:0]
-.br
 testfs-OST0000_UUID 267.5k 179.6k  87.8k  67% /testfs[OST:0]
-.br
 testfs-OST0001_UUID 268.9k 173.5k  95.4k  64% /testfs[OST:1] D
-.br
 testfs-OST0002_UUID 267.5k 169.6k  97.9k  63% /testfs[OST:2] DR
-.br
 OST0003           : inactive device
-.br
 testfs-OST0006_UUID 426.1k 377.4k  48.7k  88% /testfs[OST:3]
-.br
-
+.P
 filesystem_summary: 932.1k 884.6k  47.6k  95% /testfs
-.br
+.EE
 .RE
-.TP
-.B $ lfs df --pool ssd /mnt/testfs
+.PP
 List space usage for only the
 .B ssd
 pool of the
 .B testfs
-filesystem.
-.TP
-.B $ lfs df -v /mnt/testfs
+filesystem:
+.RS
+.EX
+.B # lfs df --pool ssd /mnt/testfs
+.EE
+.RE
+.PP
 List all MDTs and OSTs for the
 .B testfs
-filesystem, even if not currently connected.
+filesystem, even if not currently connected:
+.RS
+.EX
+.B # lfs df -v /mnt/testfs
+.EE
+.RE
+.SH AVAILABILITY
+.B lfs df
+is part of the
+.BR lustre (7)
+filesystem package since release 1.4.0
+.\" Added in commit 1.3.4-1130-g113303973e
 .SH SEE ALSO
 .BR lfs (1),
 .BR lustre (7)

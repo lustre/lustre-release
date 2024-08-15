@@ -1,47 +1,170 @@
-.TH lfs-find 1 "2018-01-24" Lustre "user utilities"
+.so lustre/doc/lgroff-macros
+.TH LFS-FIND 1 2024-08-15" Lustre "Lustre User Utilities"
 .SH NAME
 lfs-find \- Lustre client utility to list files with specific attributes
 .SH SYNOPSIS
-.B lfs find \fR<\fIdirectory\fR|\fIfilename \fR...>
-      [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn[smhdwy]\fR]
-[[\fB!\fR] \fB--attrs\fR=\fI[^]ATTR[,...]\fR]
-[[\fB!\fR] \fB--blocks\fR|\fB-b\fR [\fB+-\fR]\fIn\fR]
-      [[\fB!\fR] \fB--btime\fR|\fB-B\fR [\fB+-\fR]\fIn[smhdwy]\fR]
-[[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn[smhdwy]\fR]
-      [[\fB!\fR] \fB--component-count|\fB--comp-count\fR [\fB+-\fR]\fIn\fR]
-      [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
-      [[\fB!\fR] \fB--component-flags|\fB--comp-flags\fR [^]\fIFLAG\fB,\fR...]
-      [[\fB!\fR] \fB--component-start|\fB--comp-start\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
-      [[\fB!\fR] \fB--extension-size|\fB-z\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
-      [[\fB!\fR] \fB--foreign\fR [\fITYPE\fR]]
-[[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR \fIGNAME\fR|\fIGID\fR>]
-      [\fB--help\fR|\fB-h\fR]
-[[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
-[\fB--lazy|-l\fR]
-      [[\fB!\fR] \fB--links\fR [\fB+-\fR]\fIn\fR] [\fB--maxdepth\fR|\fB-D\fI n\fR] [\fB--mindepth\fR|\fB-d\fI n\fR]
-      [[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR \fIUUID\fR|\fIINDEX\fR,...]
-      [[\fB!\fR] \fB--mdt-count\fR|\fB-T\fR [\fB+-\fR]\fIn\fR]
-[[\fB!\fR] \fB--mdt-hash\fR|\fB-H \fR<[^]\fIHASHFLAG\fR,[^]\fIHASHTYPE\fR,...>]
-      [[\fB!\fR] \fB--mirror-count|\fB-N\fR [\fB+-\fR]\fIn\fR]
-[[\fB!\fR] \fB--mirror-state\fR [^]\fISTATE\fR]
-      [[\fB!\fR] \fB--mtime\fR|\fB-M\fR [\fB-+\fR]\fIn[smhdwy]\fR]
-[[\fB!\fR] \fB--name\fR|\fB-n \fIPATTERN\fR]
-      [[\fB!\fR] \fB--newer\fR[\fBXY\fR] \fIREFERENCE\fR]
-      [[\fB!\fR] \fB--ost\fR|\fB-O\fR \fIINDEX\fR,...]
-      [[\fB!\fR] \fB--perm\fR [\fB/-\fR]\fIMODE\fR ]
-[[\fB!\fR] \fB--pool\fR \fIPOOL\fR]
-[\fB--print\fR|\fB-P\fR]
-      [\fB--print0\fR|\fB-0\fR]
-[\fB--printf\fR \fIFORMAT\fR]
-[[\fB!\fR] \fB--projid\fR \fIPROJID\fR]
-      [[\fB!\fR] \fB--size|\fB-s\fR [\fB-+\fR]\fIn\fR[\fBKMGTPE\fR]]
-      [\fB--skip\fR|\fB-k]\fR \fIPERCENT\fR]
-[[\fB!\fR] \fB--stripe-count|\fB-c\fR [\fB+-\fR]\fIn\fR]
-      [[\fB!\fR] \fB--stripe-index|\fB-i\fR \fIn\fR,...]
-[[\fB!\fR] \fB--stripe-size|\fB-S\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
-      [[\fB!\fR] \fB--type\fR|\fB-t\fR {\fBbcdflps\fR}]
-[[\fB!\fR] \fB--uid\fR|\fB-u\fR|\fB--user\fR|\fB-U  \fIUNAME\fR|\fIUID\fR]
-      [[\fB!\fR] \fB--xattr\fR \fINAME\fR[\fB=\fIVALUE\fR]]
+.SY "lfs find"
+.IR DIRECTORY | FILENAME " ..."
+.br
+.RB [[ ! ]
+.BR --atime | -A
+.RB [ -+ ]\c
+.IR N [ smhdwy ]]
+.br
+.RB [[ ! ]
+.BR --attrs =\c
+.RI [ ^ ] ATTR [,...]]
+.br
+.RB [[ ! ]
+.BR --blocks | -b
+.RB [ +- ]\c
+.IR N ]
+.br
+.RB [[ ! ]
+.BR --btime | -B
+.RB [ +- ]\c
+.IR N [ smhdwy ]]
+.br
+.RB [[ ! ]
+.BR --ctime | -C
+.RB [ +- ]\c
+.IR N [ smhdwy ]]
+.br
+.RB [[ ! ]
+.BR --component-count | --comp-count
+.RB [ +- ]\c
+.IR N ]
+.br
+.RB [[ ! ]
+.BR --component-end | --comp-end | -E
+.RB [ +- ]\c
+.I N\c
+.RB [ KMGTPE ]]
+.br
+.RB [[ ! ]
+.BR --component-flags | --comp-flags
+.RI [ ^ ] FLAG ", ...]"
+.br
+.RB [[ ! ]
+.BR --component-start | --comp-start
+.RB [ +- ]\c
+.I N\c
+.RB [ KMGTPE ]]
+.br
+.RB [[ ! ]
+.BR --extension-size | -z
+.RB [ +- ]\c
+.I N\c
+.RB [ KMG ]]
+.br
+.RB [[ ! ]
+.B --foreign
+.RI [ TYPE ]]
+.br
+.RB [[ ! ]
+.BR --gid | -g | --group | -G
+.IR GNAME | GID ]
+.RB [ --help | -h ]
+.br
+.RB [[ ! ]
+.BR --layout | -L
+.BR mdt | raid0 | released ]
+.RB [ --lazy | -l ]
+.br
+.RB [[ ! ]
+.B --links
+.RB [ +- ]\c
+.IR N ]
+.RB [ --maxdepth | -D
+.IR N ]
+.RB [ --mindepth | -d
+.IR N ]
+.br
+.RB [[ ! ]
+.BR --mdt | --mdt-index | -m
+.IR UUID | INDEX ", ...]"
+.br
+.RB [[ ! ]
+.BR --mdt-count | -T
+.RB [ +- ]\c
+.IR N]
+.br
+.RB [[ ! ]
+.BR --mdt-hash | -H
+.RI [ ^ ] HASHFLAG ,[ ^ ] HASHTYPE ", ...]"
+.br
+.RB [[ ! ]
+.BR --mirror-count | -N
+.RB [ +- ]\c
+.IR N ]
+.RB [[ ! ]
+.B --mirror-state
+.RI [ ^ ] STATE ]
+.br
+.RB [[ ! ]
+.BR --mtime | -M
+.RB [ -+ ]
+.IR N [ smhdwy ]]
+.RB [[ ! ]
+.BR --name | -n
+.IR PATTERN ]
+.br
+.RB [[ ! ]
+.BR --newer [ XY ]
+.IR REFERENCE ]
+.RB [[ ! ]
+.BR --ost | -O
+.IR INDEX ", ...]"
+.br
+.RB [[ ! ]
+.B --perm
+.RB [ /- ]
+.IR MODE ]
+.RB [[ ! ]
+.B --pool
+.IR POOL ]
+.RB [ --print | -P ]
+.br
+.RB [ --print0 | -0 ]
+.RB [ --printf
+.IR FORMAT ]
+.RB [[ ! ]
+.B --projid
+.IR PROJID ]
+.br
+.RB [[ ! ]
+.BR --size | -s
+.RB [ -+ ]\c
+.I N\c
+.RB [ KMGTPE ]]
+.RB [ --skip | -k]
+.IR PERCENT ]
+.br
+.RB [[ ! ]
+.BR --stripe-count | -c
+.RB [ +- ]\c
+.IR N ]
+.br
+.RB [[ ! ]
+.BR --stripe-index | -i
+.IR n ", ...]"
+.RB [[ ! ]
+.RB --stripe-size | -S
+.RB [ +- ]\c
+.I N\c
+.RB [ KMG ]]
+.br
+.RB [[ ! ]
+.BR --type | -t
+.RB { bcdflps }]
+.RB [[ ! ]
+.BR --uid | -u | --user | -U
+.IR UNAME | UID ]
+.br
+.RB [[ ! ]
+.BR --xattr
+.IR NAME [= VALUE ]]
+.YS
 .SH DESCRIPTION
 .B lfs find
 is similar to the standard
@@ -54,17 +177,30 @@ as well as Lustre-specific attributes such as stripe count and size,
 OST and MDT location, and composite layout attributes.
 .SH OPTIONS
 .TP
-.BR --atime | -A
-File was last accessed \fIn\fR*24 hours ago (if no units are given),
-or \fIn\fR*\fBs\fReconds, \fBm\fRinutes, \fBh\fRours, \fBd\fRays,
-\fBw\fReeks, or \fBy\fRears ago within a margin of error of 24h
-if no unit is specified.  Multiple units can be specified,
-for example \fB8h20m\fR is equivalent to \fB500m\fR.  If multiple units
-are specified, the margin of error is based on the smallest unit used, so
+.BR -A ", " --atime
+File was last accessed
+.IR N *24
+hours ago (if no units are given),
+or
+.IR N *\c
+.BR s econds,
+.BR m inutes,
+.BR h ours,
+.BR d ays,
+.BR w eeks,
+or
+.BR y ears
+ago within a margin of error of 24h if no unit is specified.
+Multiple units can be specified, for example
+.B 8h20m
+is equivalent to
+.BR  500m .
+If multiple units are specified,
+the margin of error is based on the smallest unit used, so
 .B -atime 3d
 has a margin of error of one day, while
 .B -atime 72h
-has a margin of error of one hour.  If both
+has a margin of error of one hour. If both
 .BI "-atime +" older
 and
 .BI "-atime -" newer
@@ -77,42 +213,62 @@ File has ATTRS attribute flags. Supported attributes are (non exhaustive list):
 Compressed (c), Immutable (i), Append_Only (a), No_Dump (d), Encrypted (E),
 Automount (M)
 .TP
-.BR --blocks | -b
-Blocks allocated by the file is \fIn\fR 512-byte \fBb\fRlocks (if no units
-are given), or \fBc\fRhars (bytes), \fBK\fRibi-, \fBM\fRebi-, \fBG\fRibi-,
-\fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-bytes if that suffix is given.
+.BR -b ", " --blocks
+Blocks allocated by the file is
+.I N
+512-byte
+.BR b locks
+(if no units are given), or
+.BR c hars
+(bytes),
+.BR K ibi-,
+.BR M ebi-,
+.BR G Ribi-,
+.BR T Rebi-,
+.BR P Rebi-,
+or
+.BR E bi-bytes
+if that suffix is given.
 .TP
-.BR --btime | --Btime | -B
-File was created \fIn\fR*24 hours ago, see
---atime
+.BR -B ", " --btime ", " --Btime
+File was created
+.IR N *24
+hours ago, see
+.B --atime
 for full details and options.
 .TP
-.BR --ctime | -C
-File's status was last changed \fIn\fR*24 hours ago, see
---atime
+.BR -C ", " --ctime
+File's status was last changed
+.IR N *24
+hours ago, see
+.B --atime
 for full details and options.
 .TP
-.BR --component-count | --comp-count
-The file has \fIn\fR components in its layout.
+.BR --component-count ", " --comp-count
+The file has
+.I N
+components in its layout.
 .TP
-.BR --component-end | --comp-end
-The file has component end offset \fIn\fR (in bytes) for any component.
+.BR --component-end ", " --comp-end
+The file has component end offset
+.I N
+(in bytes) for any component.
 .TP
-.BR --component-flags | --comp-flags
+.BR --component-flags ", " --comp-flags
 The file has components with the specified
 .I flag
-set.  If
+set. If
 .BI ^ flag
 is used, print only components not matching
 .IR flag .
-Multiple flags can be specified, separated by commas.  Valid flag names are:
+Multiple flags can be specified, separated by commas. Valid flag names are:
 .RS 1.2i
 .TP
 .B init
 Component has been initialized (has allocated OST objects).
 .TP
 .B stale
-Replicated (mirrored) components that do not have up-to-date data.  Stale
+Replicated (mirrored) components that do not have up-to-date data. Stale
 components will not be used for read or write operations, and need to be
 resynched using
 .B lfs mirror resync
@@ -130,28 +286,30 @@ Replicated (mirrored) components that are preferred for read.
 Replicated (mirrored) components that are preferred for write.
 .RE
 .TP
-.BR --component-start | --comp-start
-The file has component start offset \fIn\fR (in bytes) for any component.
+.BR --component-start ", " --comp-start
+The file has component start offset
+.I N
+(in bytes) for any component.
 .TP
 .BR --foreign
 File has a foreign (non-Lustre/free format) layout and is of the given
 .IR type ,
-if specified.  Presently only
+if specified. Presently only
 .B none
 or
 .B symlink
 are defined types, though 32-bit numeric types can also be used.
 .TP
-.BR --gid | -g
+.BR -g ", " --gid
 File has specified numeric group ID.
 .TP
-.BR --group | -G
+.BR -G ", " --group
 File belongs to specified group, numeric group ID allowed.
 .TP
-.BR --help | -h
+.BR -h ", " --help
 Print usage message.
 .TP
-.BR --layout | -L
+.BR -L ", " --layout
 File has a layout of the given type, one of:
 .RS 1.2i
 .TP
@@ -165,22 +323,28 @@ HSM-archived files that are not resident in the filesystem.
 Files that have the first data component on an MDT.
 .RE
 .TP
-.BR --lazy|-l
+.BR -l ", " --lazy
 Use file size and blocks from MDT, if available, to avoid extra RPCs.
 .TP
 .BR --links
-File has \fIn\fR links.
+File has
+.I N
+links.
 .TP
 .BR --maxdepth
-Limits find to decend at most \fIn\fR levels of directory tree.
+Limits find to decend at most
+.I N
+levels of directory tree.
 .TP
 .BR --mindepth
-Starts find at \fIn\fR levels of directory tree.
+Starts find at
+.I N
+levels of directory tree.
 .TP
-.BR --mdt | --mdt-index | -m
+.BR -m ", " --mdt ", " --mdt-index
 File or directory inode is located on the specified MDT(s).
 .TP
-.BR --mdt-hash | -H
+.BR -H ", " --mdt-hash
 DNE striped directory uses the given filename hashing function, one of:
 .RS 1.2i
 .TP
@@ -200,14 +364,16 @@ This implicitly selects only directories to be matched, like
 .B -type d
 and not other file types.
 .TP
-.BR --mdt-count | -T
-The DNE striped directory has the given number of MDT shards.  This
+.BR -T ", " --mdt-count
+The DNE striped directory has the given number of MDT shards. This
 implicitly selects only directories to be matched, like
 .B -type d
 and not other file types.
 .TP
-.BR --mirror-count | -N
-The file has \fIn\fR mirrors in its layout.
+.BR -N ", " --mirror-count
+The file has
+.I N
+mirrors in its layout.
 .TP
 .BR --mirror-state
 The file has a state of
@@ -230,36 +396,53 @@ The mirrored file is in a state of being written.
 The mirrored file is in a state of being resynchronized.
 .RE
 .TP
-.BR --mtime | -M
-File's data was last modified \fIn\fR*24 hours ago, see
---atime
+.BR -M ", " --mtime
+File's data was last modified
+.IR N *24
+hours ago, see
+.B --atime
 for full details and options.
 .TP
-.BR --name | -n
+.BR -n ", " --name
 Filename matches the given filename, or regular expression using
 standard
 .BR glob (7)
 file name regular expressions and wildcards.
 .TP
 .BR --newer [ XY "] " \fIreference
-Succeeds if timestamp \fIX\fR of the file being considered is newer
-than timestamp \fIY\fR of the file
+Succeeds if timestamp
+.I X
+of the file being considered is newer
+than timestamp
+.I Y
+of the file
 .IR reference .
-The letters \fIX\fR and \fIY\fR can be any of the following letters:
-
-.TS
-ll
-ll
-ll
-ll
-llw(2i).
-a       The access time of the file \fIreference\fR
-b|B     The birth time of the file \fIreference\fR
-c       The inode status change time of \fIreference\fR
-m       The modification time of the file \fIreference\fR
-t       \fIreference\fR is interpreted directly as a time
-.TE
-
+The letters
+.I X
+and
+.I Y
+can be any of the following letters:
+.TP 4
+.B a
+The access time of the file
+.I reference
+.TP
+.B b|B
+The birth time of the file
+.I reference
+.TP
+.B c
+The inode status change time of
+.I reference
+.TP
+.B m
+The modification time of the file
+.I reference
+.TP
+.B t
+.I reference
+is interpreted directly as a time
+.PP
 Some combinations are invalid; for example, it is invalid for
 .I X
 to be
@@ -270,59 +453,74 @@ is equivalent to
 .BR -newermm .
 When
 .IR reference
-is interpreted directly as a time, currently it must be in one of the
-following formats: "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d",
-"%H:%M:%S", "%H:%M", to represent year, month, day, hour, minute, seconds,
-with unspecified times at the start of that minute or day, unspecified dates
-being "today", and "@%s" or "%s" the seconds since the Unix epoch (see
+is interpreted directly as a time,
+currently it must be in one of the following formats:
+"%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%H:%M:%S", "%H:%M",
+to represent year, month, day, hour, minute, seconds,
+with unspecified times at the start of that minute or day,
+unspecified dates being "today",
+and "@%s" or "%s" the seconds since the Unix epoch (see
 .BR strftime (3)
-for details of the time formats).  Otherwise, it will report an error.
-If you try to use the birth time of a reference file, and the birth
-time cannot be determined, a fatal error message results.  If you
-specify a test which refers to the birth time of files being examined,
+for details of the time formats). Otherwise, it will report an error.
+If you try to use the birth time of a reference file,
+and the birth time cannot be determined, a fatal error message results.
+If you specify a test which refers to the birth time of files being examined,
 this test will fail for any files where the birth time is unknown.
 .TP
-.BR --ost | -O
-File has an object on the specified OST(s).  The OST names can be specified
-using the whole OST target name, or just the OST index number. If multiple
-OSTs are given in a comma-separated list, the file may have an object on
-any of the given OSTs.  Specifying multiple OSTs allows scanning the
-filesystem only once when migrating objects off multiple OSTs for evacuation
-and replacement using
+.BR -O ", " --ost
+File has an object on the specified OST(s).
+The OST names can be specified using the whole OST target name,
+or just the OST index number.
+If multiple OSTs are given in a comma-separated list,
+the file may have an object on any of the given OSTs.
+Specifying multiple OSTs allows scanning the filesystem only once
+when migrating objects off multiple OSTs for evacuation and replacement using
 .BR lfs-migrate (1).
 .TP
-.BR "--perm \fImode\fR"
-File's permission are exactly \fImode\fR (octal or symbolic).
+.BI --perm " MODE"
+File's permission are exactly
+.I MODE
+(octal or symbolic).
 .TP
-.BR "--perm /\fImode\fR"
-All of the permission bits \fImode\fR are set for the file.
+.BR --perm /\fIMODE
+All of the permission bits
+.I MODE
+are set for the file.
 .TP
-.BR "--perm -\fImode\fR"
-Any of the permission bits \fImode\fR are set for the file. If no permission
-bits in \fImode\fR are set, this test matches any file.
+.BR --perm -\fIMODE
+Any of the permission bits
+.I MODE
+are set for the file. If no permission bits in
+.I MODE
+are set, this test matches any file.
 .TP
 .BR --pool
 Layout was created with the specified
 .I pool
-name.  For composite files, this may match the pool of any component.
-.BR --print | -P
+name. For composite files, this may match the pool of any component.
+.BR -P ", " --print
 Prints the file or directory name to standard output if it matches
 all specified parameters, one file per line with a trailing linefeed.
 This is the default behaviour for any matching files.
 .TP
-.BR --print0 | -0
+.BR -0 ", " --print0
 Print full file name to standard output if it matches the specified
-parameters, followed by a NUL character.  This is for use together with
+parameters, followed by a NUL character. This is for use together with
 .BR xargs (1)
 with the
 .B -0
 option to handle filenames with embedded spaces or other special characters.
 .TP
-.BR "--printf \fIformat\fR"
-Print \fIformat\fR to standard output for each matching file, interpreting
-`\' escapes and `%' directives.  Unlike \fB--print\fR, the \fB--printf\fR option
-does not automatically add a newline to the end of the string. The escapes and
-directives are:
+.BI --printf " FORMAT"
+Print
+.I FORMAT
+to standard output for each matching file, interpreting
+`\' escapes and `%' directives. Unlike
+.BR --print ,
+the
+.B --printf
+option does not automatically add a newline to the end of the string.
+The escapes and directives are:
 .RS 1.2i
 .TP
 .B \en
@@ -347,7 +545,8 @@ File\'s last access time in seconds since Jan. 1, 1970, 00:00 GMT.
 The amount of disk space used for the file (in 512-byte blocks).
 .TP
 .B %c
-File\'s last status change time in the format returned by the C \`ctime\' function.
+File\'s last status change time in the format
+returned by the C \`ctime\' function.
 .TP
 .B %C@
 File\'s last status change time in seconds since Jan. 1, 1970, 00:00 GMT.
@@ -377,7 +576,8 @@ File's name.
 File size in bytes.
 .TP
 .B %t
-File\'s last modification time in the format returned by the C \`ctime\' function.
+File\'s last modification time in the format
+returned by the C \`ctime\' function.
 .TP
 .B %T@
 File\'s last modification time in seconds since Jan. 1, 1970, 00:00 GMT.
@@ -411,7 +611,7 @@ unknown attributes.
 .RE
 .TP
 .B %Lc
-File\'s stripe count.  For a composite file, this is the stripe count of the last
+File\'s stripe count. For a composite file, this is the stripe count of the last
 instantiated component.
 .TP
 .B %LF
@@ -429,8 +629,8 @@ component.
 List of all OST/MDT indices associated with a file or directory.
 .TP
 .B %Lp
-File\'s OST pool name.  For a composite file, this is the pool associated
-with the last instantiated component.  (NOTE: This can also be used for
+File\'s OST pool name. For a composite file, this is the pool associated
+with the last instantiated component. (NOTE: This can also be used for
 directories, but since MDT pools are not currently implemented, nothing will
 be printed.)
 .TP
@@ -438,72 +638,123 @@ be printed.)
 Numeric project ID assigned to the file or directory.
 .TP
 .B %LS
-File's stripe size.  For a composite file, this is the stripe size of the last
+File's stripe size. For a composite file, this is the stripe size of the last
 instantiated component.
 .TP
 .BR --projid
 File has specified numeric project ID.
 .TP
-.BR --size | -s
-File size is \fIn\fR 512-byte blocks (if no unit is given), or
-\fIn\fR \fBc\fRhars (bytes), \fBK\fRibi-, \fBM\fRebi-,
-\fBG\fRibi-, \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-bytes if a
-suffix is given.
+.BR -s ", " --size
+File size is
+.I N
+512-byte blocks (if no unit is given), or
+.I N
+.BR c hars
+(bytes),
+.BR K ibi-,
+.BR M Rebi-,
+.BR G Ribi-,
+.BR T Rebi-,
+.BR P Rebi-,
+or
+.BR E Rbi-bytes
+if a suffix is given.
 .TP
-.BR --skip | -k
-Skip \fIPERCENT\fR of the total that match the other filters. This is
+.BR -k ", " --skip
+Skip
+.I PERCENT
+of the total that match the other filters. This is
 useful together with
 .BR lfs-migrate (1)
 to allow processing only a fraction of the files to rebalance files when new
 OSTs are added to the filesystem.
 .TP
-.BR --stripe-count | -c
-File has \fIn\fR stripes allocated.  For composite files, this
+.BR -c ", " --stripe-count
+File has
+.I N
+stripes allocated. For composite files, this
 matches the stripe count of the last initialized component.
 .TP
-.BR --stripe-index | -i
-File has stripe on OST index \fIn\fR.  Multiple OST indices can be
-specified in a comma-separated list, which indicates that the file
-has a stripe on \fIany\fR of the specified OSTs.  This allows a
+.BR -i ", " --stripe-index
+File has stripe on OST index
+.IR N .
+Multiple OST indices can be specified in a comma-separated list,
+which indicates that the file has a stripe on \
+.B any
+of the specified OSTs. This allows a
 single namespace scan for files on multiple different OSTs, if there
 are multiple OSTs that are being replaced.
 .TP
-.BR --stripe-size | -S
-Stripe size is \fIn\fR bytes, or \fBK\fRibi-, \fBM\fRebi-,
-\fBG\fRibi-, \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-abytes if a
-suffix is given.  For composite files, this matches the stripe
-size of the last initialized non-extension component.
+.BR -S ", " --stripe-size
+Stripe size is
+.I N
+bytes, or
+.BR K Ribi-,
+.BR M Rebi-,
+.BR G Ribi-,
+.BR T Rebi-,
+.BR P Rebi-,
+or
+.BR E Rbi-abytes
+if a suffix is given. For composite files,
+this matches the stripe size of the last initialized non-extension component.
 .TP
-.BR --extension-size | --ext-size | -z
-Extension size is \fIn\fR bytes, or \fBK\fRibi-, \fBM\fRebi-,
-\fBG\fRibi-, \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-abytes if a
-suffix is given.  For composite files, this matches the extension
-size of any extension component.
+.BR -z ", " --extension-size ", " --ext-size
+Extension size is
+.I N bytes, or
+.BR K Ribi-,
+.BR M Rebi-,
+.BR G Ribi-,
+.BR T Rebi-,
+.BR P Rebi-,
+or
+.BR E Rbi-abytes
+if a suffix is given.
+For composite files, this matches the extension size of any extension component.
 .TP
-.BR --type | -t
-File has type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory,
-\fBf\fRile, \fBp\fRipe, sym\fBl\fRink, or \fBs\fRocket.
+.BR -t ", " --type
+File has type:
+.BR b Rlock,
+.BR c haracter,
+.BR d irectory,
+.BR f ile,
+.BR p ipe,
+.RB sym l ink,
+or
+.BR s ocket.
 .TP
-.BR --uid | -u
+.BR -u ", " --uid
 File has specified numeric user ID.
 .TP
-.BR --user | -U
+.BR -U ", " --user
 File owned by specified user, numeric user ID also allowed.
 .TP
-\fB--xattr \fINAME\fR[\fB=\fIVALUE\fR]
+.B --xattr \fINAME\fR[\fB=\fIVALUE\fR]
 File has an extended attribute with name matching the regular expression
 .RB ( regex (7))
-\fINAME\fR, and optionally value matching the regular expression \fIVALUE\fR.
+.IR NAME ,
+and optionally value matching the regular expression
+.IR VALUE .
 The regular expressions must match the complete attribute names and values,
 and not just a substring.
 This option may be specified multiple times, and the file must match all
 provided arguments.
 .SH NOTES
-Specifying \fB!\fR before an option negates its meaning (\fIfiles
-NOT matching the parameter\fR). Using \fB+\fR before a numeric
-value means 'more than \fIn\fR', while \fB-\fR before a numeric value
-means 'less than \fIn\fR'.  If neither is used, it means 'equal to
-\fIn\fR', within the bounds of the unit specified (if any).
+Specifying
+.B !
+before an option negates its meaning
+.RI ( "files NOT matching the parameter" ).
+Using
+.B +
+before a numeric value means 'more than
+.IR N ',
+while
+.B -
+before a numeric value means 'less than
+IR N '.
+If neither is used, it means 'equal to
+.IR N ',
+within the bounds of the unit specified (if any).
 .PP
 Numeric suffixes are in binary SI (power-of-two) units.
 .PP
@@ -515,57 +766,10 @@ leading dash.
 The order of parameters does not affect how the files are matched.
 .B lfs find
 will first scan the directory for any specified filename, and then fetch
-MDT inode attributes for each matching filename.  If it can make a
+MDT inode attributes for each matching filename. If it can make a
 positive or negative decision for a file based only on the MDT attributes
-(e.g.  newer than specified time, user/group/project ID) it will not fetch
+(e.g. newer than specified time, user/group/project ID) it will not fetch
 the OST object attributes for that file.
-.SH EXAMPLES
-.TP
-.B $ lfs find /mnt/lustre
-Efficiently lists all files in a given directory and its subdirectories,
-without fetching any file attributes.
-.TP
-.B $ lfs find /mnt/lustre -printf "%u %M %i \n"
-Prints a formatted find string, listing the username, access mode and inode
-number.
-.TP
-.B $ lfs find /mnt/lustre -mtime +30 -type f -print
-Recursively list all regular files in given directory more than 30 days old.
-.TP
-.B $ lfs find /mnt/lustre/test -o OST0002,OST0003 -print0 | lfs_migrate -y
-Recursively find all files in
-.B test
-that have objects on OST0002 or OST0003 and migrate them to other OSTs.  See
-.BR lfs_migrate (1)
-for more details.
-.TP
-.B $ lfs find -name "*.mpg" --component-count +3 /mnt/lustre
-Recursively list all files ending with
-.B .mpg
-that have more than 3 components.
-.TP
-.B $ lfs find --component-flags=init,prefer,^stale /mnt/lustre
-Recursively list all files that have at least one component with both 'init'
-and 'prefer' flags set, and doesn't have flag 'stale' set.
-.TP
-.B $ lfs find --mirror-count +2 /mnt/lustre
-Recursively list all mirrored files that have more than 2 mirrors.
-.TP
-.B $ lfs find ! --mirror-state=ro /mnt/lustre
-Recursively list all out-of-sync mirrored files.
-.TP
-.B $ lfs find ! --foreign=symlink /mnt/lustre
-Recursively list all but foreign files/dirs of
-.B symlink
-type.
-.TP
-.B $ lfs find -xattr user.job=202310.* /mnt/lustre
-Recursively list all files with the specified "user.job" extended attribute.
-.TP
-.B $ lfs find -xattr security.selinux ! -xattr security.selinux=.*httpd.* /var/www
-Recursively list all files in /var/www that have any SELinux extended attribute,
-but that do NOT have an SELinux extended attribute with a value containing
-"httpd".
 .SH BUGS
 The
 .B lfs find
@@ -573,18 +777,110 @@ command isn't as comprehensive as
 .BR find (1).
 In particular, it doesn't support complex boolean expressions with
 .B -o
-(logical OR), only logical AND of all expressions.  The order that parameters
+(logical OR), only logical AND of all expressions. The order that parameters
 are specified does not affect how the files are matched.
-.SH AUTHOR
-The
-.B lfs
-command is part of the Lustre filesystem.
+.SH EXAMPLES
+Efficiently lists all files in a given directory and its subdirectories,
+without fetching any file attributes:
+.RS
+.EX
+.B # lfs find /mnt/lustre
+.EE
+.RE
+.PP
+Prints a formatted find string, listing the username, access mode and inode
+number.
+.RS
+.EX
+.B # lfs find /mnt/lustre -printf "%u %M %i \n"
+.EE
+.RE
+.PP
+Recursively list all regular files in given directory more than 30 days old:
+.RS
+.EX
+.B # lfs find /mnt/lustre -mtime +30 -type f -print
+.EE
+.RE
+.PP
+Recursively find all files in
+.B test
+that have objects on OST0002 or OST0003 and migrate them to other OSTs. See
+.BR lfs_migrate (1)
+for more details:
+.RS
+.EX
+.B # lfs find /mnt/lustre/test -o OST0002,OST0003 -print0 | lfs_migrate -y
+.EE
+.RE
+.PP
+Recursively list all files ending with
+.B .mpg
+that have more than 3 components:
+.RS
+.EX
+.B # lfs find -name "*.mpg" --component-count +3 /mnt/lustre
+.EE
+.RE
+.PP
+Recursively list all files that have at least one component with both 'init'
+and 'prefer' flags set, and doesn't have flag 'stale' set:
+.RS
+.EX
+.B # lfs find --component-flags=init,prefer,^stale /mnt/lustre
+.EE
+.RE
+.PP
+Recursively list all mirrored files that have more than 2 mirrors:
+.RS
+.EX
+.B # lfs find --mirror-count +2 /mnt/lustre
+.EE
+.RE
+.PP
+Recursively list all out-of-sync mirrored files:
+.RS
+.EX
+.B # lfs find ! --mirror-state=ro /mnt/lustre
+.EE
+.RE
+.PP
+Recursively list all but foreign files/dirs of
+.B symlink
+type:
+.RS
+.EX
+.B # lfs find ! --foreign=symlink /mnt/lustre
+.EE
+.RE
+.PP
+Recursively list all files with the specified "user.job" extended attribute:
+.RS
+.EX
+.B # lfs find -xattr user.job=202310.* /mnt/lustre
+.EE
+.RE
+.PP
+Recursively list all files in /var/www that have any SELinux extended attribute,
+but that do NOT have an SELinux extended attribute with a value containing
+"httpd":
+.RS
+.EX
+.B # lfs find -xattr security.selinux ! -xattr security.selinux=.*httpd.* \
+/var/www
+.EE
+.RE
+.SH AVAILABILITY
+.B lfs find
+is part of the
+.BR lustre (7)
+filesystem package since release 0.10.0
+.\" Added in commit 0.9.1
 .SH SEE ALSO
 .BR lfs (1),
-.BR lfs-getstripe (1),
 .BR lfs-getdirstripe (1),
+.BR lfs-getstripe (1),
 .BR lfs-migrate (1),
-.BR lfs_migrate (1),
+.BR xargs (1),
 .BR lustre (7),
-.BR regex (7),
-.BR xargs (1)
+.BR regex (7)

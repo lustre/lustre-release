@@ -1,8 +1,11 @@
-.TH LFS-GETDIRSTRIPE 1 2017-11-07 "Lustre" "Lustre Utilities"
+.TH LFS-GETDIRSTRIPE 1 2024-08-15 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-getdirstripe \- list the layout pattern of a given directory
 .SH SYNOPSIS
-.BR "lfs getdirstripe" " [" -cDhHimOrTXvy "]... " \fIDIR\fR...
+.SY "lfs getdirstripe"
+.RB [ -cDhHimOrTXvy ]...
+.IR DIR ...
+.YS
 .SH DESCRIPTION
 Get the layout pattern of striped directories. This
 .BR lfs (1)
@@ -11,58 +14,65 @@ command is similar to
 but is used for the directory layout.
 .SH OPTIONS
 .TP
-.BR \-c ", " \-T ", " \-\-mdt-count
+.BR -c ", " -T ", " --mdt-count
 Only show the number of MDTs the directory is striped across.
 .TP
-.BR \-D ", " \-\-default
+.BR -D ", " --default
 Show the default layout used when creating new subdirectories.
 .TP
-.BR \-F ", " \-\-fid
+.BR -F ", " --fid
 Show only the 128-bit unique Lustre File Identifier (FID).
 .TP
-.BR \-h ", " \-\-help
+.BR -h ", " --help
 Print usage message.
 .TP
-.BR \-H ", " \-\-mdt-hash
-Only show the hash function being used for this directory.  Also shows hash
+.BR -H ", " --mdt-hash
+Only show the hash function being used for this directory. Also shows hash
 flags, such as overstriping (>1 stripe per MDT).
 .TP
 .BR --hex-idx
 Print MDT indexes in hexadecimal rather than decimal.
 .TP
-.BR \-i ", " \-m ", " \-\-mdt-index
+.BR -i ", " -m ", " --mdt-index
 Only show the master MDT index of the directory.
 .TP
-\fB\-O\fR, \fB\-\-obd\fR=\fIFSNAME-MDTnnnn_UUID\fR
+.BR -O ", " --obd =\fIFSNAME-MDTnnnn_UUID
 Limit the returned directories to those with objects on a specific MDT,
 whose UUID is
 .I FSNAME-MDTnnnn_UUID.
 .TP
-.BR \-r ", " \-\-recursive
+.BR -r ", " --recursive
 The default behavior when a directory is specified is to list the striping
 information for all sub-directories within the specified directory. This
 can be expanded with
 .BR --recursive ,
 which will recurse into all subdirectories.
 .TP
-.BR \-X ",  " \-\-max-inherit
+.BR -X ", " --max-inherit
 Show the inherit depth of default layout.
 .TP
-.BR \-y ", " \-\-yaml
+.BR -y ", " --yaml
 Show the layout in YAML format for easier parsing.
 .TP
-.BR \-\-max-inherit-rr
+.BR --max-inherit-rr
 Show the inherit depth of default layout to roundrobin mkdir.
 .SH EXAMPLES
-.TP
-.B $ lfs getdirstripe -O lustre-MDT0001_UUID -r /mnt/lustre/dir1
 List the striping information of sub-directories, that are located on MDT1,
 under
-.BR /mnt/lustre/dir1 .
-.SH AVAILABILTY
-The lfs getdirstripe command is part of the Lustre filesystem.
+.BR /mnt/lustre/dir1:
+.RS
+.EX
+.B # lfs getdirstripe -O lustre-MDT0001_UUID -r /mnt/lustre/dir1
+.EE
+.RE
+.SH AVAILABILITY
+.B lfs getdirstripe
+is part of the
+.BR lustre (7)
+filesystem package since release 2.4.0
+.\" Added in commit v2_3_60-39-g2ad263c602
 .SH SEE ALSO
 .BR lfs (1),
-.BR lfs-setdirstripe (1),
 .BR lfs-getstripe (1),
+.BR lfs-setdirstripe (1),
 .BR lustre (7)

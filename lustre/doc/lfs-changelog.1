@@ -1,16 +1,21 @@
-.TH lfs-changelog 1 "2022-11-22" Lustre "user utilities"
+.TH LFS-CHANGELOG 1 2024-08-15 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-changelog, lfs-changelog_clear \- client utility to read and clear Lustre changelogs
 .SH SYNOPSIS
-.br
-.B lfs changelog \fR[\fB--follow\fR] \fIMDTNAME\fR [\fISTARTREC \fR[\fIENDREC\fR]]
-.br
-.B lfs changelog_clear \fIMDTNAME\fR \fIID\fR \fIENDREC\fR
-.br
+.SY "lfs changelog"
+.RB [ --follow ]
+.I MDTNAME
+.RI [ STARTREC
+.RI [ ENDREC ]]
+.SY "lfs changelog_clear"
+.I MDTNAME
+.I ID
+.I ENDREC
+.YS
 .SH DESCRIPTION
 .TP
 .B lfs changelog
-Show the metadata changes on an MDT.  Start point
+Show the metadata changes on an MDT. Start point
 .I STARTREC
 and end point
 .I ENDREC
@@ -35,21 +40,20 @@ MDT node using:
 .br
 .BI "lctl --device " MDT_NAME " changelog_register"
 .SH RETURN VALUES
-.PP
 Return 0 on success or a errno value on failure.
 .SH ERRORS
 .TP 15
-.SM EINVAL
+.B EINVAL
 One or more invalid arguments are given.
 .TP
-.SM ENOENT
+.B ENOENT
 MDT's changelog char device or changelog user not found.
 .TP
-.SM EACCES
+.B EACCES
 Not enough permissions to open the changelog char device. By default, the device
 is only accessible to the root user.
 .TP
-.SM EIO
+.B EIO
 Failed to read the changelog record on the MDT.
 .SH NOTES
 Certain userspace tools might rely on past Lustre behavior of displaying the
@@ -57,55 +61,61 @@ shard's parent FID instead of the real parent FID, in changelog records related
 to striped directories or filesystem objects contained within them; if this
 behavior is needed for compatibility, please set mdd.*.enable_shard_pfid=1. This
 tunable might be deprecated in a future Lustre release.
-.SH EXAMPLE
-.TP
-Register 2 changelog consumers on the MDT0000
-.br
-[root@mds]: lctl --device lustrefs-MDT0000 changelog_register
-.br
+.SH EXAMPLES
+Register 2 changelog consumers on the MDT0000:
+.RS
+.EX
+.B [root@mds]# lctl --device lustrefs-MDT0000 changelog_register
 lustrefs-MDT0000: Registered changelog userid 'cl1'
-.br
-[root@mds]: lctl --device lustrefs-MDT0000 changelog_register
-.br
+.B [root@mds]# lctl --device lustrefs-MDT0000 changelog_register
 lustrefs-MDT0000: Registered changelog userid 'cl2'
-.TP
-Set changelog mask to generate changelogs for file creations
-.br
-[root@mds]: lctl set_param mdd.lustrefs-MDT0000.changelog_mask=CREAT
-.br
+.RE
+.PP
+Set changelog mask to generate changelogs for file creations:
+.RS
+.B [root@mds]# lctl set_param mdd.lustrefs-MDT0000.changelog_mask=CREAT
 mdd.lustrefs-MDT0000.changelog_mask=CREAT
-.TP
-Generate changelogs by creating some files on the fs
-.br
-[root@client]: touch /mnt/lustrefs/test{1..101}
-.TP
-Read changelog from number 0 to 99 on MDT0000
-.br
-[root@client]: lfs changelog lustrefs-MDT0000 0 99
-.nf
-0 01CREAT 11:03:54.129724442 2022.11.22 ...  p=[0x200000007:0x1:0x0] test1
+.RE
+Generate changelogs by creating some files on the fs:
+.RS
+.B [root@client]# touch /mnt/lustrefs/test{1..101}
+.RE
+Read changelog from number 0 to 99 on MDT0000:
+.RS
+.B [root@client]# lfs changelog lustrefs-MDT0000 0 99
+0 01CREAT 11:03:54.129724442 2022.11.22 ... p=[0x200000007:0x1:0x0] test1
  ....
-99 01CREAT 11:03:54.129724465 2022.11.22 ...  p=[0x200000007:0x1:0x0] test100
-.fi
-.TP
-Indicate to MDT0000 that the changelogs lower than 100 are not needed for cl1
-.br
-[root@client]: lfs changelog_clear  lustrefs-MDT0000 cl1 99
-.br
-.TP
-Indicate to MDT0000 that the changelogs lower than 100 are not needed for cl2
-.br
-[root@client]: lfs changelog_clear  lustrefs-MDT0000 cl2 99
-.br
-.TP
+99 01CREAT 11:03:54.129724465 2022.11.22 ... p=[0x200000007:0x1:0x0] test100
+.RE
+.PP
+Indicate to MDT0000 that the changelogs lower than 100 are not needed for cl1:
+.RS
+.B [root@client]# lfs changelog_clear lustrefs-MDT0000 cl1 99
+.RE
+.PP
+Indicate to MDT0000 that the changelogs lower than 100 are not needed for cl2:
+.RS
+.B [root@client]# lfs changelog_clear lustrefs-MDT0000 cl2 99
+.RE
+.PP
 The changelogs from 0 to 99 are cleared by the MDT:
-[root@client]: lfs changelog lustrefs-MDT0000 0
-.br
-100 01CREAT 11:03:54.129724492 2022.11.22  ...  p=[0x200000007:0x1:0x0] test101
+.RS
+.B [root@client]# lfs changelog lustrefs-MDT0000 0
+100 01CREAT 11:03:54.129724492 2022.11.22 ... p=[0x200000007:0x1:0x0] test101
+.EE
+.RE
+.SH AVAILABILITY
+.B lfs changelog
+and
+.B lfs changelog_clear
+are part of the
+.BR lustre (7)
+filesystem package since release 2.0.0
+.\" Added in commit 1.6.0-2259-g0e660eab78
 .SH SEE ALSO
 .BR lfs (1),
-.BR llapi_changelog_clear (3)
-.BR llapi_changelog_recv (3)
-.BR llapi_changelog_start (3)
+.BR llapi_changelog_clear (3),
+.BR llapi_changelog_recv (3),
+.BR llapi_changelog_start (3),
+.BR lctl-changelog_deregister (8),
 .BR lctl-changelog_register (8)
-.BR lctl-changelog_deregister (8)

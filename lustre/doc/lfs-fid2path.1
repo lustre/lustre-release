@@ -1,52 +1,60 @@
-.TH lfs-fid2path 1 "2018-11-24" Lustre "user utilities"
+.TH LFS-FID2PATH 1 2024-08-15 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-fid2path \- print the pathname(s) for a file identifier
 .SH SYNOPSIS
-.BR "lfs fid2path "
-[\fI\,OPTION\/\fR]... <\fI\,FSNAME\/\fR|\fI\,MOUNT_POINT\/\fR> <\fI\,FID\/\fR>...
+.SY "lfs fid2path"
+.RI [ OPTION ]...
+.IR FSNAME | MOUNT_POINT
+.IR FID ...
+.YS
 .SH DESCRIPTION
 .B lfs fid2path
 maps a numeric Lustre File IDentifier (FID) to one or more pathnames that
-have hard links to that file.  This allows resolving filenames for FIDs used
+have hard links to that file. This allows resolving filenames for FIDs used
 in console error messages, and resolving all of the pathnames for a file
-that has multiple hard links.  Pathnames are resolved relative to the
+that has multiple hard links. Pathnames are resolved relative to the
 .I MOUNT_POINT
 specified, or relative to the filesystem mount point if
 .I FSNAME
 is provided.
 .SH OPTIONS
 .TP
-\fB\-0\fR, \fB\-\-print0\fR
-Print the full pathname, followed by a NUL character instead of the newline character.
+.BR -0 ", " --print0
+Print the full pathname,
+followed by a NUL character instead of the newline character.
 .TP
-\fB\-f\fR, \fB\-\-print\-fid\fR
+.BR -f ", " --print-fid
 Print the FID with the path.
 .TP
-\fB\-c\fR, \fB\-\-print\-link\fR
+.BR -c ", " --print-link
 Print the current link number with each pathname or parent directory.
 .TP
-\fB\-l\fR, \fB\-\-link\fR=\fI\,LINK\/\fR
-If a file has multiple hard links, then print only the specified LINK,
-starting at link 0.  If multiple FIDs are given, but only one
+.BR -l ", " --link\fR=\fILINK_NUM
+If a file has multiple hard links, then print only the specified
+.IR LINK_NUM ,
+starting at link 0. If multiple FIDs are given, but only one
 pathname is needed for each file, use
 .BR "--link=0" .
 .TP
-\fB\-n\fR, \fB\-\-name\fR
+.BR -n ", " --name
 Print only the filename instead of whole pathname
 .SH EXAMPLES
-.TP
-.B $ lfs fid2path /mnt/testfs [0x200000403:0x11f:0x0]
+.EX
+.B # lfs fid2path /mnt/testfs [0x200000403:0x11f:0x0]
 /mnt/testfs/etc/hosts
-.TP
-.B $ lfs fid2path -0 /mnt/lustre 0x200000401:0x6:0x0 | xargs --null
+.B # lfs fid2path -0 /mnt/lustre 0x200000401:0x6:0x0 | xargs --null
 /mnt/lustre/Test_
-.br
- file /mnt/lustre/Link_
-.br
- file
-.TP
-.B $ lfs fid2path -n /mnt/testfs [0x200000403:0x11f:0x0]
+file /mnt/lustre/Link_
+file
+.B # lfs fid2path -n /mnt/testfs [0x200000403:0x11f:0x0]
 hosts
+.EE
+.SH AVAILABILITY
+.B lfs fid2path
+is part of the
+.BR lustre (7)
+filesystem package since release 2.0.0
+.\" Added in commit 1.6.0-2259-g0e660eab78
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-getstripe (1),

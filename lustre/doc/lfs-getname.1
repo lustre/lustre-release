@@ -1,48 +1,55 @@
-.TH LFS-GETSOM 1 2018-10-04 "Lustre" "lustre Utilities"
+.TH LFS-GETNAME 1 2024-08-15 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-getname \- retrieve the filesystem name and instance ID
 .SH SYNOPSIS
-.B lfs getname
-.RB [ --help | -h "] [" --instance | -i "] [" --fsname | -n ]
-.RI [ pathname ...]
+.SY "lfs getname"
+.RB [ --help | -h ]
+.RB [ --instance | -i ]
+.RB [ --fsname | -n ]
+.RI [ PATHNAME ...]
+.YS
 .SH DESCRIPTION
 Print the filesystem name, instance ID, and mountpoint for all
 Lustre mount points on the local client. If one or more
-.I pathname
+.I PATHNAME
 arguments are provided, then only print the Lustre filesystem name
 and instance ID for these mount points.
 .SH OPTIONS
 .TP
-.BR --help | -h
+.BR -h ", " --help
 Print usage message.
 .TP
-.BR --fsname | -n
+.BR -n ", " --fsname
 Print only the Lustre filesystem name for each filesystem.  If
 .B -n
 is used with a single
-.I pathname
+.I PATHNAME
 then the filesystem name is printed without the mountpoint.
 .TP
-.BR --instance | -i
+.BR -i ", " --instance
 Only show the mount instance ID for each filesystem.  If
 .B -i
 is used with a single
-.I pathname
+.I PATHNAME
 then the instance ID is printed without the mountpoint.
 .SH EXAMPLES
-.B $ lfs getname
-.br
+.EX
+.B # lfs getname
 myth-ffff880428703400 /myth
-.br
 testfs-ffff937009271000 /mnt/testfs
 .P
-.B $ lfs getname -n /mnt/testfs
-.br
+.B # lfs getname -n /mnt/testfs
 testfs
 .P
-.B $ lfs getname -i /mnt/testfs
-.br
+.B # lfs getname -i /mnt/testfs
 ffff937009271000
+.EE
+.SH AVAILABILITY
+.B lfs getname
+is part of the
+.BR lustre (7)
+filesystem package since release 2.2.0
+.\" Added in commit 2.1.53~17
 .SH SEE ALSO
 .BR lfs (1),
 .BR llapi_getname (3),
