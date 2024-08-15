@@ -1,26 +1,34 @@
-.TH lfs_migrate 1 "Dec 19, 2017" Lustre "utilities"
+.TH LFS_MIGRATE 1 2024-08-20 Lustre "Lustre User Utilities"
 .SH NAME
-.B lfs_migrate
-\- migrate files between Lustre OSTs
+lfs_migrate \- migrate files between Lustre OSTs
 .SH SYNOPSIS
-.B lfs_migrate
-.RB [ "-A " [ -C \fI<cap> \fR] [ -M \fI<min_free> \fR] [ -X \fI<max_free> \fR]]
+.SY "lfs_migrate"
+.RB [ -A
+.RB [ -C
+.IR CAP ]
+.RB [ -M
+.IR MIN_FREE ]
+.RB [ -X
+.I MAX_FREE ]]
 .RB [ --cp ]
 .RB [ --dry-run | -n ]
 .RB [ --help | -h ]
 .RB [ --no-rsync | --rsync ]
-.RB [ --pool | -p \fI<pool> \fR]
+.RB [ --pool | -p
+.IR POOL ]
 .RB [ --quiet | -q ]
 .RB [ --restripe | -R ]
-.RB [ --stripe-count | -c \fI<stripe_count> \fR]
-.RB [ --stripe-size | -S \fI<stripe_size> \fR]
+.RB [ --stripe-count | -c
+.IR STRIPE_COUNT ]
+.RB [ --stripe-size | -S
+.I STRIPE_SIZE ]
 .RB [ --skip | -s ]
 .RB [ --verbose | -v ]
 .RB [ --yes | -y ]
 .RB [ -D ]
 .RB [ -0 ]
 .RI [ FILE | DIR ] ...
-.br
+.YS
 .SH DESCRIPTION
 .B lfs_migrate
 is a tool to assist migration of files between Lustre OSTs, possibly also
@@ -34,9 +42,9 @@ on older versions of Lustre). This allows balancing space usage between OSTs,
 moving files off OSTs that are starting to show hardware problems but are still
 functional, or OSTs that will be removed from the filesystem.
 .PP
-Files to be migrated can be specified as command-line arguments.  If a
+Files to be migrated can be specified as command-line arguments. If a
 directory is specified on the command-line then all files within that
-directory are migrated.  If no files are specified on the command-line,
+directory are migrated. If no files are specified on the command-line,
 then a list of files is read from the standard input, making
 .B lfs_migrate
 suitable for use with
@@ -54,10 +62,12 @@ and
 .BR lfs-setstripe (1)
 for a complete list of options.
 .PP
-To maintain backward compatibility, the \fI-n \fRoption is used by the
+To maintain backward compatibility, the
+.B -n
+option is used by the
 script to indicate a dry-run (no modifications made), and is not passed to
 .B lfs migrate
-as the non-block option.  To specify non-block, use the long option
+as the non-block option. To specify non-block, use the long option
 .BR --non-block .
 .PP
 The current file allocation policies on MDS dictate where the new files
@@ -77,87 +87,126 @@ Force use of
 to copy files instead of
 .BR rsync (1).
 .TP
-.B \\--dry-run|-n
+.BR -n ", " --dry-run
 Only print the names of files to be migrated.
 .TP
-.B \\-D
+.B -D
 Do not use direct I/O to copy file contents.
 .TP
-.B \\-A
+.B -A
 Automatically determine the stripe count for the file, using the algorithm
-count = sqrt(filesize_in_GB) + 1.  This option may not be specified at the
-same time as the \fB-c \fRor \\-R \fRoptions.
+count = sqrt(filesize_in_GB) + 1. This option may not be specified at the
+same time as the
+.B -c
+or
+.B -R
+options.
 .TP
-.B \\--stripe-count|-c \fI<stripe_count>
-Restripe file using the specified \fIstripe_count\fR. This option may not be
-specified at the same time as the \fB-A \fRor \fB-R \fRoptions.
+.BR -c ", " --stripe-count \fISTRIPE_COUNT
+Restripe file using the specified
+.IR STRIPE_COUNT .
+This option may not be specified at the same time as the
+.B -A
+or
+.B -R
+options.
 .TP
-.B \\-C \fI<cap>
-When \fB-A \fRis set, limit the migrated file to use on each OST at most
-1/\fIcap \fRof the available space of the smallest OST.  If this option is not
+.BI -C " CAP"
+When
+.B -A
+is set, limit the migrated file to use on each OST at most
+.RI 1/ CAP
+of the available space of the smallest OST. If this option is not
 set, a default value of 100 is used, limiting the object size to 1% of available
 space.
 .TP
-.B \\--help|-h
+.BR -h ", " --help
 Display usage message.
 .TP
-.B \\--no-rsync
+.B --no-rsync
 Do not fall back to using rsync if
-.BR lfs-migrate (1) " fails."
-Cannot be used at the same time as \fB--rsync\fR.
+.BR lfs-migrate (1)
+fails. Cannot be used at the same time as
+.BR --rsync .
 .TP
-.B \\--min-free|-M \fI<min_free>
-When \fB-A \fRis set, only consider OSTs with free space greater than the
-\fImin_free \fRvalue to be available for migration.  The value is specified in
+.BR -M ", " --min-free \fIMIN_FREE
+When
+.B -A
+is set, only consider OSTs with free space greater than the
+.I MIN_FREE
+value to be available for migration. The value is specified in
 KB. If this option is not set, a default of 256MB is used.
 .TP
-.BR \\--pool | -q \fI<pool>
+.BR -p ", " --pool \fIPOOL
 Migrate files to specified pool.
 .TP
-.BR \\--quiet | -q
+.BR -q ", " --quiet
 Run quietly (don't print filenames or status).
 .TP
-.B \\--rsync
+.B --rsync
 Force rsync to be used instead of
 .BR lfs-migrate (1) .
 May not be used at the same time as
 .BR --no-rsync .
 .TP
-.B \\--restripe|-R
+.BR -R ", " --restripe
 Restripe file using default directory striping instead of keeping striping.
-This option may not be specified at the same time as the \fB-A\fR, \fB-c\fR, or
-\fB-S \fRoptions.  (these options are passed through to
+This option may not be specified at the same time as the
+.BR -A ", " -c ,
+or
+.B -S
+options. (these options are passed through to
 .BR "lfs migrate" ,
 and are therefore not listed here).
 .TP
-.B \\--skip|-s
-Skip file data comparison after migrate.  Default is to compare migrated file
+.BR -s ", " --skip
+Skip file data comparison after migrate. Default is to compare migrated file
 against original to verify correctness.
 .TP
-.B \\--stripe-size|-S
-.I <stripe_size>
+.BR -S ", " --stripe-size \fISTRIPE_SIZE
 Restripe file using the specified stripe size. This option may not be
-specified at the same time as the \fB-R \fRoption.
+specified at the same time as the
+.B -R
+option.
 .TP
-.B \\--verbose|-v
+.BR -v ", " --verbose
 Show verbose debug messages.
 .TP
-.B \\--max-free|-X \fI<max_free>
-When \fB-A \fRis set, \fImax_free \fRis the maximum amount of free space that
-can be considered available for the migration of the file on each OST.  The
-value is specified in KB.  This option is useful for testing, by simulating
-OSTs that are nearly full.
+.BR -X ", " --max-free \fIMAX_FREE
+When
+.B -A
+is set,
+.I MAX_FREE
+is the maximum amount of free space that can be considered available
+for the migration of the file on each OST. The value is specified in KB.
+This option is useful for testing, by simulating OSTs that are nearly full.
 .TP
-.B \\--yes|-y
+.BR -y ", " --yes
 Answer 'y' to usage warning without prompt (--rsync only, use with caution).
 .TP
-.B \\-0
+.B -0
 Input file names on stdin are separated by a null character.
+.SH NOTES
+In versions prior to 2.5,
+.B lfs_migrate
+is
+.B not
+closely integrated with the MDS, and cannot determine whether a file
+is currently open and/or in-use by other applications or nodes. That makes
+it
+.B UNSAFE
+for use on files that might be modified by other applications, since the
+migrated file is only a copy of the current file. This will result in the
+old file becoming an open-unlinked file, and any modifications to that file
+will be lost.
 .SH EXAMPLES
 To rebalance all files within
 .IR /testfs/jobs/2011 :
-.IP
-lfs_migrate /testfs/jobs/2011
+.RS
+.EX
+.B # lfs_migrate /testfs/jobs/2011
+.EE
+.RE
 .PP
 To migrate files within the
 .I /testfs
@@ -166,34 +215,28 @@ larger than 4GB (because it is more efficient to migrate a few large files than
 many small ones), and older than two days (to avoid files that are in use) to
 use auto-restriping for these files, after disabling file creation on
 testfs-OST0004 (this is needed on all MDS nodes):
-.IP
-.nf
-mds# lctl set_param osp.testfs-OST0004*.max_create_count=0
-client# lfs find /testfs -obd testfs-OST0004 -size +4G -mtime +2d | lfs_migrate -A
-mds# lctl set_param osp.testfs-OST0004*.max_create_count=20000
-.fi
+.RS
+.EX
+.B "[   mds]#" lctl set_param osp.testfs-OST0004*.max_create_count=0
+.B "[client]#" lfs find /testfs -obd testfs-OST0004 -size +4G -mtime +2d \
+| lfs_migrate -A
+.B "[   mds]#" lctl set_param osp.testfs-OST0004*.max_create_count=20000
+.EE
+.RE
 .PP
 To use automatic restriping, and limit the object size per OST to 5% of
 current free space:
-.IP
-lfs_migrate -A -C 20 /testfs/jobs/2011
-.SH NOTES
-In versions prior to 2.5,
-.B lfs_migrate
-is
-.B not
-closely integrated with the MDS, and cannot determine whether a file
-is currently open and/or in-use by other applications or nodes.  That makes
-it
-.B UNSAFE
-for use on files that might be modified by other applications, since the
-migrated file is only a copy of the current file. This will result in the
-old file becoming an open-unlinked file, and any modifications to that file
-will be lost.
+.RS
+.EX
+.B # lfs_migrate -A -C 20 /testfs/jobs/2011
+.EE
+.RE
 .SH AVAILABILITY
 .B lfs_migrate
 is part of the
-.BR Lustre (7)
-filesystem package.  Added in the 1.8.4 release.
+.BR lustre (7)
+filesystem package. Added in release 1.8.4.
+.\" Added in commit v1_10_0_43-29-g1c3bb7cd68
 .SH SEE ALSO
-.BR lfs (1)
+.BR lfs (1),
+.BR lfs-migrate (1)

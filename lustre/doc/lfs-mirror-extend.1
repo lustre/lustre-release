@@ -1,143 +1,214 @@
-.TH LFS-MIRROR-EXTEND 1 2017-07-25 "Lustre" "Lustre Utilities"
+.TH LFS-MIRROR-EXTEND 1 2024-08-20 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-extend \- add mirror(s) to an existing file
 .SH SYNOPSIS
-.nh
-.ad l
-.B lfs mirror extend
-[\fB\-\-no\-verify\fR]
-[\fB\-\-mirror\-count\fR|\fB\-N\fR[\fIMIRROR_COUNT\fR]]
-[\fB\-\-bandwidth\-limit\fR|\fB\-W\fR \fIBANDWIDTH\fR]
-[\fB\-\-stats\fR|\fB\-\-stats\-interval\fR=\fISTATS_INTERVAL\fR]
-[\fISETSTRIPE_OPTIONS\fR|\fB\-f\fR \fIVICTIM_FILE\fR]
-\fIFILENAME\fR ...
+.SY "lfs mirror extend"
+.RB [ --no-verify ]
+.RB [ --mirror-count | -N\c
+.RI [ MIRROR_COUNT ]]
+.RB [ --bandwidth-limit | -W
+.IR BANDWIDTH ]
+.RB [ --stats | --stats-interval\c
+.RI = STATS_INTERVAL ]
+.RI [ SETSTRIPE_OPTIONS |\c
+.B -f
+.IR VICTIM_FILE ]
+.IR FILENAME " ..."
+.YS
 .SH DESCRIPTION
 This command adds mirror(s) to an existing file specified by the path name
-\fIFILENAME\fR.
-.br
-The file \fIFILENAME\fR can already be a mirrored file, or just a regular
-non-mirrored file. If it's a non-mirrored file, then the command will convert it
-to a mirrored file.
-.br
+.IR FILENAME .
+.P
+The file
+.I FILENAME
+can already be a mirrored file, or just a regular non-mirrored file.
+If it's a non-mirrored file,
+then the command will convert it to a mirrored file.
+.P
 The
 .BR --mirror-count | -N
 option is optional and indicates how many
 mirrors that have the same layout will be added. It can be repeated multiple
-times to separate mirrors that have different layouts. The \fIMIRROR_COUNT\fR
+times to separate mirrors that have different layouts. The
+.I MIRROR_COUNT
 can be specified with a preceding '=' to indicate the number of total mirrors
 desired for the layout, such as
-\fB\-\-mirror\-count\fR==\fITOTAL_MIRROR_COUNT\fR or
-\fB\-N\fR=\fITOTAL_MIRROR_COUNT\fR. This will create mirrors until the total
-number of mirrors in the layout match \fITOTAL_MIRROR_COUNT\fR, this also means
-that if there are already at least \fITOTAL_MIRROR_COUNT\fR mirrors in the
-layout then no new mirrors will be created. The \fIMIRROR_COUNT\fR argument is
-optional and defaults to 1 if it's not specified; if specified, it must follow
-the option without a space. If \fB\-\-mirror\-count\fR|\fB\-N\fR is not
-specified, the default value of 1 will be used.
-.br
-The \fISETSTRIPE_OPTIONS\fR specify the specific layout for the mirror. It can
+.BI --mirror-count== TOTAL_MIRROR_COUNT
+or
+.B -N=\c
+.IR TOTAL_MIRROR_COUNT .
+This will create mirrors until the total
+number of mirrors in the layout match
+.IR TOTAL_MIRROR_COUNT ,
+this also means that if there are already at least
+.I TOTAL_MIRROR_COUNT
+mirrors in the layout then no new mirrors will be created. The
+.I MIRROR_COUNT
+argument is optional and defaults to 1 if it's not specified;
+if specified, it must follow the option without a space. If
+.BR --mirror-count | -N
+is not specified, the default value of 1 will be used.
+.P
+The
+.I SETSTRIPE_OPTIONS
+specify the specific layout for the mirror. It can
 be a plain layout with specific striping pattern or a composite layout like
-Progressive File Layout (PFL) (see \fBlfs-setstripe\fR(1)).
-If \fISETSTRIPE_OPTIONS\fR are not specified,
+Progressive File Layout (PFL) (see
+.BR lfs-setstripe (1)).
+If
+.I SETSTRIPE_OPTIONS
+are not specified,
 then the stripe options inherited from the previous component will be used.
-If \fIVICTIM_FILE\fR exists, then the
+If
+.I VICTIM_FILE
+exists, then the
 command will merge the layout from that file as a mirror added to the
 mirrored file. After the command is finished, the victim file will be
-removed.  The \fISETSTRIPE_OPTIONS\fR cannot be specified with
-\fB\-f\fR \fIVICTIM_FILE\fR option in one command line.
-.br
-If \fIVICTIM_FILE\fR is specified, the utility will verify that the file contents
-from \fIVICTIM_FILE\fR are the same as \fIFILENAME\fR. Otherwise the command
-will return failure. However, option \fB\-\-no\-verify\fR can be used to
-override this verification. The option can save significant time on file
-comparison if the file size is large, but use it only when the file contents
-are known to be the same.
-.br
+removed. The
+.I SETSTRIPE_OPTIONS
+cannot be specified with
+.B -f
+.I VICTIM_FILE
+option in one command line.
+.P
+If
+.I VICTIM_FILE
+is specified, the utility will verify that the file contents
+from
+.I VICTIM_FILE
+are the same as
+.IR FILENAME .
+Otherwise the command will return failure. However, option
+.B --no-verify
+can be used to override this verification.
+The option can save siginificant time on file
+comparison if the file size is large,
+but use it only when the file contents are known to be the same.
+.P
 If no option is specified, then the command will return an error.
 .SH OPTIONS
 .TP
-.BR \-\-mirror\-count\fR|\fB\-N\fR[\fIMIRROR_COUNT\fR]
+.BR -N ", " --mirror-count [\fIMIRROR_COUNT ]
 The number of mirrors that have the same layout to be added. The option can be
 repeated multiple times to separate mirrors that have different layouts. The
-\fIMIRROR_COUNT\fR argument is optional and defaults to 1 if it's not specified;
+.I MIRROR_COUNT
+argument is optional and defaults to 1 if it's not specified;
 if specified, it must follow the option without a space.
 .TP
 .I SETSTRIPE_OPTIONS
 The layout of one mirror. The options are the same as those for
-\fBlfs-setstripe\fR(1) command.
-If \fISETSTRIPE_OPTIONS\fR are not specified, then the stripe options inherited
+.BR lfs-setstripe (1)
+command.
+If
+.I SETSTRIPE_OPTIONS
+are not specified, then the stripe options inherited
 from the previous component will be used. This option cannot be specified with
-\fB\-f\fR \fIVICTIM_FILE\fR option.
-.TP
-.BR \-f\fR\ \fIVICTIM_FILE\fR
-The layout of \fIVICTIM_FILE\fR will be merged as a mirror added to the
-mirrored file. This option cannot be specified with \fISETSTRIPE_OPTIONS\fR
+.B -f
+.I VICTIM_FILE
 option.
 .TP
-.BR \-\-no\-verify
+.BI -f " VICTIM_FILE"
+The layout of
+.I VICTIM_FILE
+will be merged as a mirror added to the mirrored file.
+This option cannot be specified with
+.I SETSTRIPE_OPTIONS
+option.
+.TP
+.BR --no-verify
 This option indicates not to verify the mirror(s) from victim file(s) in case
 the victim file(s) contains the same data as the original mirrored file.
 .TP
-.BR \-\-stats
+.BR --stats
 This option enables progress updates every 5 seconds, in YAML format.
 .TP
-.BR \-\-stats-interval=\fISTATS_INTERVAL
-This option enables progress updates every \fISTATS_INTERVAL\fR seconds, in YAML format.
+.BR --stats-interval =\fISTATS_INTERVAL
+This option enables progress updates every
+.I STATS_INTERVAL
+seconds, in YAML format.
 .TP
-.BR \-\-bandwidth\-limit\fR|\fB\-W\fR\fIBANDWIDTH\fR
+.BR -W ", " --bandwidth-limit " \fIBANDWIDTH"
 This option enables throttling so that mirror extending writes no more than
-\fIBANDWIDTH\fR bytes a second.  An optional suffix can be used to
-specify the units in
+.I BANDWIDTH
+bytes a second. An optional suffix can be used to specify the units in
 .BR K ilobytes,
 .BR M egabytes
 or
-.BR  G igabytes.
+.BR G igabytes.
 .SH EXAMPLES
-.TP
-.B lfs mirror extend -N2 /mnt/lustre/file1
 Add 2 mirrors to /mnt/lustre/file1. If file1 is a non-mirrored file, then the
 command will convert it to a mirrored file first and then add mirrors. Each
-mirror has the same default striping pattern with \fIstripe_count\fR and
-\fIstripe_size\fR inherited from filesystem-wide default values, and
-OST \fIpool_name\fR inherited from parent directory.
-.LP
-.B lfs mirror extend -N3 -E 1M -c 1 -E 32M -c 4 -S 16M -E eof -c -1
-.B /mnt/lustre/file1
-.in
+mirror has the same default striping pattern with
+.I STRIPE_COUNT
+and
+.I STRIPE_SIZE
+inherited from filesystem-wide default values, and OST
+.I POOL_NAME
+inherited from parent directory:
+.RS
+.EX
+.B # lfs mirror extend -N2 /mnt/lustre/file1
+.EE
+.RE
+.PP
 Add 3 PFL mirrors to /mnt/lustre/file1. Each mirror has the same specified PFL
-layout.
-.LP
-.B lfs mirror extend -N -c 1 -S 4M -N -c 2 -o 2,3 -p flash
-.B -N -p none /mnt/lustre/file1
-.in
+layout:
+.RS
+.EX
+.B # lfs mirror extend -N3 -E 1M -c 1 -E 32M -c 4 -S 16M -E eof -c -1 \
+/mnt/lustre/file1
+.EE
+.RE
+.PP
 Add 3 plain layout mirrors to /mnt/lustre/file1. The first mirror has a single
 stripe and 4MB stripe size. The second mirror has two stripes and locates on
-OSTs with indices 2 and 3 allocated from the \fBflash\fR OST pool.
+OSTs with indices 2 and 3 allocated from the
+.B flash
+OST pool.
 It also has 4MB stripe size inherited from the first mirror.
 The third mirror has two stripes and 4MB stripe size inherited from the previous
-mirror, and also has inherited OST \fIpool_name\fR from parent directory.
-.LP
-.B lfs mirror extend -N2 -E 4M -c 2 --pool flash -E eof -c 4 -N3 -E 16M -c 4
-.B -S 16M --pool archive -E eof -c -1 /mnt/lustre/file1
-.in
+mirror, and also has inherited OST
+.I POOL_NAME
+from parent directory:
+.RS
+.EX
+.B # lfs mirror extend -N -c 1 -S 4M -N -c 2 -o 2,3 -p flash \
+-N -p none /mnt/lustre/file1
+.EE
+.RE
+.PP
 Add 5 PFL mirrors to /mnt/lustre/file1. The first and second mirrors have the
 same PFL layout. All of the components are allocated from the flash OST pool.
 The last three mirrors have the same PFL layout. All of these components have a
-stripe size of 16MB and use OSTs in the archive pool.
-.LP
-.B lfs mirror extend --no-verify -N -f /mnt/lustre/file2 -N -f /mnt/lustre/file3
-.B /mnt/lustre/file1
-.in
+stripe size of 16MB and use OSTs in the archive pool:
+.RS
+.EX
+.B # lfs mirror extend -N2 -E 4M -c 2 --pool flash -E eof -c 4 -N3 -E 16M -c 4 \
+-S 16M --pool archive -E eof -c -1 /mnt/lustre/file1
+.EE
+.RE
+.PP
 Merge the layouts from /mnt/lustre/file2 and /mnt/lustre/file3, which contain
 the same data as /mnt/lustre/file1, use the layouts as mirrors and add them to
-/mnt/lustre/file1 without verification.
-.SH AUTHOR
-The \fBlfs mirror extend\fR command is part of the Lustre filesystem.
+/mnt/lustre/file1 without verification:
+.RS
+.EX
+.B # lfs mirror extend --no-verify -N -f /mnt/lustre/file2 -N -f \
+/mnt/lustre/file3 /mnt/lustre/file1
+.EE
+.RE
+.SH AVAILABILITY
+The
+.B lfs mirror extend
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.11.0
+.\" Added in commit v2_10_55_0-55-g125f98fb5c
 .SH SEE ALSO
 .BR lfs (1),
-.BR lfs-setstripe (1),
 .BR lfs-mirror-create (1),
 .BR lfs-mirror-delete (1),
-.BR lfs-mirror-split (1),
 .BR lfs-mirror-resync (1),
-.BR lfs-mirror-verify (1)
+.BR lfs-mirror-split (1),
+.BR lfs-mirror-verify (1),
+.BR lfs-setstripe (1)

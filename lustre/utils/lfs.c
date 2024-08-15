@@ -211,9 +211,9 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 
 #define SSM_SETSTRIPE_OPT \
 	"[--component-add|--component-del|--delete|-d]\n"	\
-	"\t\t[--comp-set --comp-id|-I COMP_ID|--comp-flags=COMP_FLAGS]\n"	\
+	"\t\t[--comp-set --comp-id|-I COMP_ID|--comp-flags=COMP_FLAGS]\n"     \
 	"\t\t[--component-end|-E END_OFFSET]\n"			\
-	"\t\t[--copy=SOURCE_LAYOUT_FILE]|--yaml|-y YAML_TEMPLATE_FILE]\n"	\
+	"\t\t[--copy=SOURCE_LAYOUT_FILE]|--yaml|-y YAML_TEMPLATE_FILE]\n"     \
 	"\t\t[--extension-size|--ext-size|-z EXT_SIZE]\n"	\
 	"\t\t[--help|-h]\n"					\
 	"\t\t[--foreign=FOREIGN_TYPE --xattr|-x LAYOUT]\n"	\
@@ -281,26 +281,26 @@ command_t mirror_cmdlist[] = {
 	"\t		[-f NEW_FILE] MIRRORED_FILE ...\n" },
 	{ .pc_name = "read", .pc_func = lfs_mirror_read,
 	  .pc_help = "Read the content of a specified mirror of a file.\n"
-		"usage: lfs mirror read {--mirror-id|-N MIRROR_ID}\n"
-		"\t\t[--outfile|-o <output_file>] <mirrored_file>\n" },
+		"usage: lfs mirror read --mirror-id|-N MIRROR_ID\n"
+		"\t\t[--outfile|-o OUTPUT_FILE] MIRRORED_FILE\n" },
 	{ .pc_name = "write", .pc_func = lfs_mirror_write,
 	  .pc_help = "Write to a specified mirror of a file.\n"
 		"usage: lfs mirror write {--mirror-id|-N MIRROR_ID}\n"
-		"\t\t[--inputfile|-i <input_file>] <mirrored_file>\n" },
+		"\t\t[--inputfile|-i INPUT_FILE] MIRRORED_FILE\n" },
 	{ .pc_name = "copy", .pc_func = lfs_mirror_copy,
 	  .pc_help = "Copy a specified mirror to other mirror(s) of a file.\n"
-		"usage: lfs mirror copy {--read-mirror|-i MIRROR_ID0}\n"
-		"\t\t{--write-mirror|-o MIRROR_ID1[,...]} <mirrored_file>\n" },
+		"usage: lfs mirror copy --read-mirror|-i SRC_MIRROR_ID0\n"
+		"\t\t--write-mirror|-o TGT_MIRROR_ID1[,...] MIRROR_FILE\n" },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
-		"usage: lfs mirror resync [--only MIRROR_ID[,...]>]|\n"
-		"\t\t--stats|--stats-interval=<sec>|\n"
-		"\t\t--W <bandwidth>|--bandwidth-limit=<bandwidth>\n"
-		"\t\t<mirrored_file> [<mirrored_file2>...]\n" },
+		"usage: lfs mirror resync [--only MIRROR_ID[,...]]|\n"
+		"\t\t[--stats|--stats-interval=SECONDS]\n"
+		"\t\t[--W |--bandwidth-limit=BANDWIDTH_MB]\n"
+		"\t\tMIRRORED_FILE [MIRRORED_FILE2...]\n" },
 	{ .pc_name = "verify", .pc_func = lfs_mirror_verify,
 	  .pc_help = "Verify mirrored file(s).\n"
 		"usage: lfs mirror verify [--only MIRROR_ID[,...]]\n"
-		"\t\t[--verbose|-v] <mirrored_file> [<mirrored_file2> ...]\n" },
+		"\t\t[--verbose|-v] MIRRORED_FILE [MIRRORED_FILE2 ...]\n" },
 	{ .pc_help = NULL }
 };
 

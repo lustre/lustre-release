@@ -1,64 +1,99 @@
-.TH LFS-MIRROR-RESYNC 1 2017-07-25 "Lustre" "Lustre Utilities"
+.TH LFS-MIRROR-RESYNC 1 2024-08-20 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-resync \- resynchronize an out-of-sync mirrored file
 .SH SYNOPSIS
-.B lfs mirror resync
-[\fB\-\-only\fR <\fImirror_id\fR[,...]>]
-<\fB\-\-bandwidth\-limit=\fR|\fB\-W\fR[\fIbandwidth_limit\fR]>
-[\fB\-\-stats\fR]
-<\fB\-\-stats\-interval\fR=\fIinterval_in_sec\fR>
-<\fImirrored_file\fR> [<\fImirrored_file2\fR>...]
+.SY "lfs mirror resync"
+.RB [ --only
+.IR MIRROR_ID [,...]]
+.RB [ --bandwidth-limit= | -W
+.IR BANDWIDTH_MB ]
+.RB [ --stats ]
+.RB [ --stats-interval=\c
+.IR INTERVAL_SECONDS ]
+.IR MIRRORED_FILE " [" MIRRORED_FILE2 " ...]"
+.YS
 .SH DESCRIPTION
 This command resynchronizes out-of-sync mirrored file(s) specified by the path
-name \fImirrored_file\fR.
-.br
-If there is no stale mirror for the \fImirrored_file(s)\fR, then the command does
-nothing. Otherwise, it will copy data from synced mirror to stale mirror(s), and
-mark all successfully copied mirror(s) as SYNC.
-.br
-If \fB\-\-only\fR option is not specified, the \fBnosync\fR mirror(s) (i.e.
+name
+.IR MIRRORED_FILE .
+.P
+If there is no stale mirror for the
+.IR MIRRORED_FILE (s),
+then the command does nothing.
+Otherwise, it will copy data from synced mirror to stale mirror(s),
+and mark all successfully copied mirror(s) as SYNC.
+.P
+If
+.B --only
+option is not specified, the
+.B nosync
+mirror(s) (i.e.
 components that have this flag set) will not be synced.
-.br
-If \fB\-\-only\fR <\fImirror_id\fR[,...]> option is specified, then the
-command will resynchronize the mirror(s) specified by the \fImirror_id\fR(s),
+.P
+If
+.B --only
+.IR MIRROR_ID [,...]
+option is specified,
+then the command will resynchronize the mirror(s) specified by the
+IR MIRROR_ID (s),
 even nosync mirror(s) will be resynchronized as well.
 This option cannot be used when multiple mirrored files are specified.
 .SH OPTIONS
 .TP
-.BR \-\-only\fR\ <\fImirror_id\fR[,...]>
-This option indicates which mirror(s) specified by \fImirror_id\fR(s) needs to
-be resynchronized. The \fImirror_id\fR is the numerical unique identifier for
-a mirror. Multiple \fImirror_id\fRs are separated by comma. This option cannot
+.BR "--only \fIMIRROR_ID" [ , ...]
+This option indicates which mirror(s) specified by
+.IR MIRROR_ID (s)
+needs to be resynchronized. The
+.I MIRROR_ID
+is the numerical unique identifier for a mirror. Multiple
+.IR MIRROR_ID s
+are separated by comma. This option cannot
 be used when multiple mirrored files are specified.
 .TP
-.BR \-\-stats
+.BR --stats
 This option enables progress updates every 5 seconds, in YAML format.
 .TP
-.BR \-\-stats-interval=\fIstats_interval
-This option enables progress updates every \fIstats_interval\fR seconds, in YAML format.
+.BI --stats-interval= STATS_INTERVAL
+This option enables progress updates every
+.I STATS_INTERVAL
+seconds, in YAML format.
 .TP
-.BR \-\-bandwidth\-limit\fR|\fB\-W\fR\fIbandwidth_limit\fR
+.BR -W ", " --bandwidth-limit " \fIBANDWIDTH_MB"
 This option enables throttling so that mirror extending writes no more than
-\fIbandwidth_limit\fR bytes a second.  An optional suffix can be used to
-specify the units in
+.I BANDWIDTH_MB
+(default unit megabyte) a second. An optional suffix can be used to specify the
+units in
 .BR K ilobytes,
 .BR M egabytes
 or
-.BR  G igabytes.
+.BR G igabytes.
 .SH EXAMPLES
-.TP
-.B lfs mirror resync /mnt/lustre/file1 /mnt/lustre/file2
-Resynchronize all of the stale and sync-able mirror(s) for /mnt/lustre/file1 and /mnt/lustre/file2.
-.TP
-.B lfs mirror resync --only 4,5 /mnt/lustre/file1
+Resynchronize all of the stale and sync-able mirror(s) for /mnt/lustre/file1
+and /mnt/lustre/file2:
+.RS
+.EX
+.B # lfs mirror resync /mnt/lustre/file1 /mnt/lustre/file2
+.EE
+.RE
+.PP
 Resynchronize mirrors with mirror ID 4 and 5 for /mnt/lustre/file1 even if they
-are not marked as STALE.
-.SH AUTHOR
-The \fBlfs mirror resync\fR command is part of the Lustre filesystem.
+are not marked as STALE:
+.RS
+.EX
+.B # lfs mirror resync --only 4,5 /mnt/lustre/file1
+.EE
+.RE
+.SH AVAILABILITY
+The
+.B lfs mirror resync
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.11.0
+.\" Added in commit v2_10_55_0-57-g79da3738df
 .SH SEE ALSO
 .BR lfs (1),
-.BR lfs-setstripe (1),
 .BR lfs-mirror-create (1),
 .BR lfs-mirror-extend (1),
 .BR lfs-mirror-split (1),
-.BR lfs-mirror-verify (1)
+.BR lfs-mirror-verify (1),
+.BR lfs-setstripe (1)

@@ -1,45 +1,68 @@
-.TH LFS-MIRROR-WRITE 1 2018-09-23 "Lustre" "Lustre Utilities"
+.TH LFS-MIRROR-WRITE 1 2024-08-20 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-write \- write a mirror's content of a mirrored file
 .SH SYNOPSIS
-.B lfs mirror write
-{\fB\-\-mirror-id|\-N\fR <\fImirror_id\fR>}
-[\fB\-\-inputfile|\-i\fR <\fIinput_file\fR>]
-<\fImirrored_file\fR>
+.SY "lfs mirror write"
+.BR --mirror-id | -N
+.IR MIRROR_ID
+.RB [ --inputfile | -i
+.IR INPUT_FILE ]
+.I MIRRORED_FILE
+.YS
 .SH DESCRIPTION
 This command writes the content of a file's mirror, the file is specified by the
-path name \fImirrored_file\fR, the mirror is specified by its mirror ID
-\fImirror_id\fR.
+path name
+.IR MIRRORED_FILE ,
+the mirror is specified by its mirror ID
+.IR MIRROR_ID .
 .SH OPTIONS
 .TP
-.BR \-\-mirror-id|\-N\fR\ <\fImirror_id\fR>
-This option indicates the content of which mirror specified by \fImirror_id\fR
-needs to be written. The \fImirror_id\fR is the numerical unique identifier for
-a mirror.
+.BR -N ", " --mirror-id " \fIMIRROR_ID"
+This option indicates the content of which mirror specified by
+.I MIRROR_ID
+needs to be written. The
+.I MIRROR_ID
+is the numerical unique identifier for a mirror.
 .TP
-.BR \-\-inputfile|\-i\fR\ <\fIinput_file\fR>
-The path name of the input file, if not specified, the standard input stream
-will be used. The input stream or input_file cannot be the same mirrored file
-as the \fImirrored_file\fR. if you'd like to copy a mirror's content to
-another mirror of the same mirrored file, use \fBlfs mirror copy\fR command.
+.BR -i ", " --inputfile " \fIINPUT_FILE"
+The path name of the input file,
+if not specified, the standard input stream will be used.
+The input stream or input_file cannot be the same mirrored file as the
+.IR MIRRORED_FILE .
+if you'd like to copy a mirror's content to
+another mirror of the same mirrored file, use
+.B lfs mirror copy
+command.
 .SH EXAMPLES
-.TP
-.B lfs mirror write --mirror-id 3 /mnt/lustre/file1 < /tmp/m2
-Write the content of /mnt/m2 to the mirror with mirror ID 3 for
-/mnt/lustre/file1.
-.TP
-.B lfs mirror write -N2 -i /tmp/m2 /mnt/lustre/file1
-Write the content of /mnt/m2 to the mirror with mirror ID 2 for
-/mnt/lustre/file1.
-.SH AUTHOR
-The \fBlfs mirror write\fR command is part of the Lustre filesystem.
+Write the content of /tmp/src_file to the mirror with ID 3 for
+/mnt/lustre/file1:
+.RS
+.EX
+.B # lfs mirror write --mirror-id 3 /mnt/lustre/file1 < /tmp/src_file
+.EE
+.RE
+.PP
+Write the content of /tmp/src_file to the mirror with mirror ID 2 for
+/mnt/lustre/file1:
+.RS
+.EX
+.B # lfs mirror write -N2 -i /tmp/src_file /mnt/lustre/file1
+.EE
+.RE
+.SH AVAILABILITY
+The
+.B lfs mirror write
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.12.0
+.\" Added in commit v2_11_56_0-70-g14171e787d
 .SH SEE ALSO
 .BR lfs (1),
-.BR lfs-setstripe (1),
 .BR lfs-getstripe (1),
+.BR lfs-mirror-copy (1),
 .BR lfs-mirror-create (1),
 .BR lfs-mirror-extend (1),
+.BR lfs-mirror-read (1),
 .BR lfs-mirror-split (1),
 .BR lfs-mirror-verify (1),
-.BR lfs-mirror-read (1)
-.BR lfs-mirror-copy (1)
+.BR lfs-setstripe (1)
