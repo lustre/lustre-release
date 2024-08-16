@@ -24,12 +24,12 @@ Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
 ---
  fs/ext4/Makefile |   1 +
  fs/ext4/ext4.h   |  78 ++++++++
- fs/ext4/namei.c  | 465 ++++++++++++++++++++++++++++++++++++++++++-----
+ fs/ext4/namei.c  | 467 ++++++++++++++++++++++++++++++++++++++++++-----
  fs/ext4/super.c  |   1 +
- 4 files changed, 504 insertions(+), 41 deletions(-)
+ 4 files changed, 505 insertions(+), 42 deletions(-)
 
 diff --git a/fs/ext4/Makefile b/fs/ext4/Makefile
-index 49e7af6..f7ced03 100644
+index 49e7af6c..f7ced03e 100644
 --- a/fs/ext4/Makefile
 +++ b/fs/ext4/Makefile
 @@ -7,6 +7,7 @@ obj-$(CONFIG_EXT4_FS) += ext4.o
@@ -41,7 +41,7 @@ index 49e7af6..f7ced03 100644
  		mmp.o move_extent.o namei.o page-io.o readpage.o resize.o \
  		super.o symlink.o sysfs.o xattr.o xattr_hurd.o xattr_trusted.o \
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
-index 54734be..fa5d5d6 100644
+index 3747c1cb..321e8683 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
 @@ -28,6 +28,7 @@
@@ -52,7 +52,7 @@ index 54734be..fa5d5d6 100644
  #include <linux/sched/signal.h>
  #include <linux/blockgroup_lock.h>
  #include <linux/percpu_counter.h>
-@@ -1020,6 +1021,9 @@ struct ext4_inode_info {
+@@ -1023,6 +1024,9 @@ struct ext4_inode_info {
  	__u32	i_dtime;
  	ext4_fsblk_t	i_file_acl;
  
@@ -62,7 +62,7 @@ index 54734be..fa5d5d6 100644
  	/*
  	 * i_block_group is the number of the block group which contains
  	 * this file's inode.  Constant across the lifetime of the inode,
-@@ -2509,6 +2513,72 @@ struct dx_hash_info
+@@ -2526,6 +2530,72 @@ struct dx_hash_info
   */
  #define HASH_NB_ALWAYS		1
  
@@ -135,7 +135,7 @@ index 54734be..fa5d5d6 100644
  struct ext4_filename {
  	const struct qstr *usr_fname;
  	struct fscrypt_str disk_name;
-@@ -2887,12 +2957,20 @@ void ext4_insert_dentry(struct inode *dir, struct inode *inode,
+@@ -2908,12 +2978,20 @@ void ext4_insert_dentry(struct inode *dir, struct inode *inode,
  			void *data);
  static inline void ext4_update_dx_flag(struct inode *inode)
  {
@@ -157,7 +157,7 @@ index 54734be..fa5d5d6 100644
  static const unsigned char ext4_filetype_table[] = {
  	DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK
 diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
-index 51c950b..1b8c80e 100644
+index 598212ed..f98f3cd3 100644
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -56,6 +56,7 @@ struct buffer_head *ext4_append(handle_t *handle,
@@ -179,19 +179,17 @@ index 51c950b..1b8c80e 100644
  	*block = inode->i_size >> inode->i_sb->s_blocksize_bits;
  	map.m_lblk = *block;
  	map.m_len = 1;
-@@ -73,21 +78,27 @@ struct buffer_head *ext4_append(handle_t *handle,
- 	 * directory.
+@@ -74,15 +79,18 @@ struct buffer_head *ext4_append(handle_t *handle,
  	 */
  	err = ext4_map_blocks(NULL, inode, &map, 0);
--	if (err < 0)
-+	if (err < 0) {
-+		up(&ei->i_append_sem);
- 		return ERR_PTR(err);
-+	}
+ 	if (err < 0)
+-		return ERR_PTR(err);
++		goto err_unlock;
  	if (err) {
-+		up(&ei->i_append_sem);
  		EXT4_ERROR_INODE(inode, "Logical block already allocated");
- 		return ERR_PTR(-EFSCORRUPTED);
+-		return ERR_PTR(-EFSCORRUPTED);
++		err = -EFSCORRUPTED;
++		goto err_unlock;
  	}
  
  	bh = ext4_bread(handle, inode, *block, EXT4_GET_BLOCKS_CREATE);
@@ -202,14 +200,23 @@ index 51c950b..1b8c80e 100644
 +	}
  	inode->i_size += inode->i_sb->s_blocksize;
  	EXT4_I(inode)->i_disksize = inode->i_size;
- 	BUFFER_TRACE(bh, "get_write_access");
- 	err = ext4_journal_get_write_access(handle, inode->i_sb, bh,
+ 	err = ext4_mark_inode_dirty(handle, inode);
+@@ -93,11 +101,14 @@ struct buffer_head *ext4_append(handle_t *handle,
  					    EXT4_JTR_NONE);
+ 	if (err)
+ 		goto out;
 +	up(&ei->i_append_sem);
- 	if (err) {
- 		brelse(bh);
- 		ext4_std_error(inode->i_sb, err);
-@@ -291,7 +302,8 @@ static unsigned dx_node_limit(struct inode *dir);
+ 	return bh;
+ 
+ out:
+ 	brelse(bh);
+ 	ext4_std_error(inode->i_sb, err);
++err_unlock:
++	up(&ei->i_append_sem);
+ 	return ERR_PTR(err);
+ }
+ 
+@@ -296,7 +307,8 @@ static unsigned dx_node_limit(struct inode *dir);
  static struct dx_frame *dx_probe(struct ext4_filename *fname,
  				 struct inode *dir,
  				 struct dx_hash_info *hinfo,
@@ -219,7 +226,7 @@ index 51c950b..1b8c80e 100644
  static void dx_release(struct dx_frame *frames);
  static int dx_make_map(struct inode *dir, struct buffer_head *bh,
  		       struct dx_hash_info *hinfo,
-@@ -307,12 +319,13 @@ static void dx_insert_block(struct dx_frame *frame,
+@@ -312,12 +324,13 @@ static void dx_insert_block(struct dx_frame *frame,
  static int ext4_htree_next_block(struct inode *dir, __u32 hash,
  				 struct dx_frame *frame,
  				 struct dx_frame *frames,
@@ -236,7 +243,7 @@ index 51c950b..1b8c80e 100644
  
  /* checksumming functions */
  void ext4_initialize_dirent_tail(struct buffer_head *bh,
-@@ -797,6 +810,227 @@ static inline void htree_rep_invariant_check(struct dx_entry *at,
+@@ -804,6 +817,227 @@ static inline void htree_rep_invariant_check(struct dx_entry *at,
  }
  #endif /* DX_DEBUG */
  
@@ -464,7 +471,7 @@ index 51c950b..1b8c80e 100644
  /*
   * Probe for a directory leaf block to search.
   *
-@@ -808,10 +1042,11 @@ static inline void htree_rep_invariant_check(struct dx_entry *at,
+@@ -815,10 +1049,11 @@ static inline void htree_rep_invariant_check(struct dx_entry *at,
   */
  static struct dx_frame *
  dx_probe(struct ext4_filename *fname, struct inode *dir,
@@ -478,7 +485,7 @@ index 51c950b..1b8c80e 100644
  	struct dx_root_info *info;
  	struct dx_frame *frame = frame_in;
  	struct dx_frame *ret_err = ERR_PTR(ERR_BAD_DX_DIR);
-@@ -895,8 +1130,16 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
+@@ -908,8 +1143,16 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
  	level = 0;
  	blocks[0] = 0;
  	while (1) {
@@ -495,7 +502,7 @@ index 51c950b..1b8c80e 100644
  			ext4_warning_inode(dir,
  					   "dx entry: count %u beyond limit %u",
  					   count, dx_get_limit(entries));
-@@ -923,6 +1166,74 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
+@@ -936,6 +1179,74 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
  		frame->entries = entries;
  		frame->at = at;
  
@@ -570,7 +577,7 @@ index 51c950b..1b8c80e 100644
  		block = dx_get_block(at);
  		for (i = 0; i <= level; i++) {
  			if (blocks[i] == block) {
-@@ -932,8 +1243,7 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
+@@ -945,8 +1256,7 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
  				goto fail;
  			}
  		}
@@ -580,7 +587,7 @@ index 51c950b..1b8c80e 100644
  		blocks[level] = block;
  		frame++;
  		frame->bh = ext4_read_dirblock(dir, block, INDEX);
-@@ -1004,7 +1314,7 @@ static void dx_release(struct dx_frame *frames)
+@@ -1017,7 +1327,7 @@ static void dx_release(struct dx_frame *frames)
  static int ext4_htree_next_block(struct inode *dir, __u32 hash,
  				 struct dx_frame *frame,
  				 struct dx_frame *frames,
@@ -589,7 +596,7 @@ index 51c950b..1b8c80e 100644
  {
  	struct dx_frame *p;
  	struct buffer_head *bh;
-@@ -1019,12 +1329,22 @@ static int ext4_htree_next_block(struct inode *dir, __u32 hash,
+@@ -1032,12 +1342,22 @@ static int ext4_htree_next_block(struct inode *dir, __u32 hash,
  	 * this loop, num_frames indicates the number of interior
  	 * nodes need to be read.
  	 */
@@ -614,7 +621,7 @@ index 51c950b..1b8c80e 100644
  		p--;
  	}
  
-@@ -1047,6 +1367,13 @@ static int ext4_htree_next_block(struct inode *dir, __u32 hash,
+@@ -1060,6 +1380,13 @@ static int ext4_htree_next_block(struct inode *dir, __u32 hash,
  	 * block so no check is necessary
  	 */
  	while (num_frames--) {
@@ -628,7 +635,7 @@ index 51c950b..1b8c80e 100644
  		bh = ext4_read_dirblock(dir, dx_get_block(p->at), INDEX);
  		if (IS_ERR(bh))
  			return PTR_ERR(bh);
-@@ -1055,6 +1382,7 @@ static int ext4_htree_next_block(struct inode *dir, __u32 hash,
+@@ -1068,6 +1395,7 @@ static int ext4_htree_next_block(struct inode *dir, __u32 hash,
  		p->bh = bh;
  		p->at = p->entries = ((struct dx_node *) bh->b_data)->entries;
  	}
@@ -636,7 +643,7 @@ index 51c950b..1b8c80e 100644
  	return 1;
  }
  
-@@ -1216,10 +1544,10 @@ int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
+@@ -1234,10 +1562,10 @@ int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
  	}
  	hinfo.hash = start_hash;
  	hinfo.minor_hash = 0;
@@ -649,7 +656,7 @@ index 51c950b..1b8c80e 100644
  	/* Add '.' and '..' from the htree header */
  	if (!start_hash && !start_minor_hash) {
  		de = (struct ext4_dir_entry_2 *) frames[0].bh->b_data;
-@@ -1259,7 +1587,7 @@ int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
+@@ -1277,7 +1605,7 @@ int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
  		count += ret;
  		hashval = ~0;
  		ret = ext4_htree_next_block(dir, HASH_NB_ALWAYS,
@@ -658,7 +665,7 @@ index 51c950b..1b8c80e 100644
  		*next_hash = hashval;
  		if (ret < 0) {
  			err = ret;
-@@ -1579,7 +1907,7 @@ static int is_dx_internal_node(struct inode *dir, ext4_lblk_t block,
+@@ -1600,7 +1928,7 @@ static int is_dx_internal_node(struct inode *dir, ext4_lblk_t block,
  static struct buffer_head *__ext4_find_entry(struct inode *dir,
  					     struct ext4_filename *fname,
  					     struct ext4_dir_entry_2 **res_dir,
@@ -667,7 +674,7 @@ index 51c950b..1b8c80e 100644
  {
  	struct super_block *sb;
  	struct buffer_head *bh_use[NAMEI_RA_SIZE];
-@@ -1621,7 +1949,7 @@ static struct buffer_head *__ext4_find_entry(struct inode *dir,
+@@ -1641,7 +1969,7 @@ static struct buffer_head *__ext4_find_entry(struct inode *dir,
  		goto restart;
  	}
  	if (is_dx(dir)) {
@@ -676,7 +683,7 @@ index 51c950b..1b8c80e 100644
  		/*
  		 * On success, or if the error was file not found,
  		 * return.  Otherwise, fall back to doing a search the
-@@ -1631,6 +1959,7 @@ static struct buffer_head *__ext4_find_entry(struct inode *dir,
+@@ -1651,6 +1979,7 @@ static struct buffer_head *__ext4_find_entry(struct inode *dir,
  			goto cleanup_and_exit;
  		dxtrace(printk(KERN_DEBUG "ext4_find_entry: dx failed, "
  			       "falling back\n"));
@@ -684,7 +691,7 @@ index 51c950b..1b8c80e 100644
  		ret = NULL;
  	}
  	nblocks = dir->i_size >> EXT4_BLOCK_SIZE_BITS(sb);
-@@ -1721,10 +2050,10 @@ cleanup_and_exit:
+@@ -1741,10 +2070,10 @@ cleanup_and_exit:
  	return ret;
  }
  
@@ -697,7 +704,7 @@ index 51c950b..1b8c80e 100644
  {
  	int err;
  	struct ext4_filename fname;
-@@ -1736,12 +2065,14 @@ static struct buffer_head *ext4_find_entry(struct inode *dir,
+@@ -1756,12 +2085,14 @@ static struct buffer_head *ext4_find_entry(struct inode *dir,
  	if (err)
  		return ERR_PTR(err);
  
@@ -713,7 +720,7 @@ index 51c950b..1b8c80e 100644
  static struct buffer_head *ext4_lookup_entry(struct inode *dir,
  					     struct dentry *dentry,
  					     struct ext4_dir_entry_2 **res_dir)
-@@ -1757,7 +2088,7 @@ static struct buffer_head *ext4_lookup_entry(struct inode *dir,
+@@ -1777,7 +2108,7 @@ static struct buffer_head *ext4_lookup_entry(struct inode *dir,
  	if (err)
  		return ERR_PTR(err);
  
@@ -722,7 +729,7 @@ index 51c950b..1b8c80e 100644
  
  	ext4_fname_free_filename(&fname);
  	return bh;
-@@ -1765,7 +2096,8 @@ static struct buffer_head *ext4_lookup_entry(struct inode *dir,
+@@ -1785,7 +2116,8 @@ static struct buffer_head *ext4_lookup_entry(struct inode *dir,
  
  static struct buffer_head * ext4_dx_find_entry(struct inode *dir,
  			struct ext4_filename *fname,
@@ -732,7 +739,7 @@ index 51c950b..1b8c80e 100644
  {
  	struct super_block * sb = dir->i_sb;
  	struct dx_frame frames[EXT4_HTREE_LEVEL], *frame;
-@@ -1776,7 +2108,7 @@ static struct buffer_head * ext4_dx_find_entry(struct inode *dir,
+@@ -1796,7 +2128,7 @@ static struct buffer_head * ext4_dx_find_entry(struct inode *dir,
  #ifdef CONFIG_FS_ENCRYPTION
  	*res_dir = NULL;
  #endif
@@ -741,7 +748,7 @@ index 51c950b..1b8c80e 100644
  	if (IS_ERR(frame))
  		return (struct buffer_head *) frame;
  	do {
-@@ -1798,7 +2130,7 @@ static struct buffer_head * ext4_dx_find_entry(struct inode *dir,
+@@ -1818,7 +2150,7 @@ static struct buffer_head * ext4_dx_find_entry(struct inode *dir,
  
  		/* Check to see if we should continue to search */
  		retval = ext4_htree_next_block(dir, fname->hinfo.hash, frame,
@@ -750,7 +757,7 @@ index 51c950b..1b8c80e 100644
  		if (retval < 0) {
  			ext4_warning_inode(dir,
  				"error %d reading directory index block",
-@@ -1987,8 +2319,9 @@ static struct ext4_dir_entry_2 *dx_pack_dirents(struct inode *dir, char *base,
+@@ -2007,8 +2339,9 @@ static struct ext4_dir_entry_2 *dx_pack_dirents(struct inode *dir, char *base,
   * Returns pointer to de in block into which the new entry will be inserted.
   */
  static struct ext4_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
@@ -762,7 +769,7 @@ index 51c950b..1b8c80e 100644
  {
  	unsigned blocksize = dir->i_sb->s_blocksize;
  	unsigned continued;
-@@ -2065,8 +2398,14 @@ static struct ext4_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
+@@ -2085,8 +2418,14 @@ static struct ext4_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
  					hash2, split, count-split));
  
  	/* Fancy dance to stay within two buffers */
@@ -779,7 +786,7 @@ index 51c950b..1b8c80e 100644
  	de = dx_pack_dirents(dir, data1, blocksize);
  	de->rec_len = ext4_rec_len_to_disk(data1 + (blocksize - csum_size) -
  					   (char *) de,
-@@ -2084,12 +2423,21 @@ static struct ext4_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
+@@ -2104,12 +2443,21 @@ static struct ext4_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
  	dxtrace(dx_show_leaf(dir, hinfo, (struct ext4_dir_entry_2 *) data2,
  			blocksize, 1));
  
@@ -806,7 +813,7 @@ index 51c950b..1b8c80e 100644
  	err = ext4_handle_dirty_dirblock(handle, dir, bh2);
  	if (err)
  		goto journal_error;
-@@ -2388,7 +2736,7 @@ static int make_indexed_dir(handle_t *handle, struct ext4_filename *fname,
+@@ -2391,7 +2739,7 @@ static int make_indexed_dir(handle_t *handle, struct ext4_filename *fname,
  	if (retval)
  		goto out_frames;
  
@@ -815,7 +822,7 @@ index 51c950b..1b8c80e 100644
  	if (IS_ERR(de)) {
  		retval = PTR_ERR(de);
  		goto out_frames;
-@@ -2497,8 +2845,8 @@ out:
+@@ -2608,8 +2956,8 @@ out:
   * may not sleep between calling this and putting something into
   * the entry, as someone else might have used it while you slept.
   */
@@ -826,7 +833,7 @@ index 51c950b..1b8c80e 100644
  {
  	struct inode *dir = d_inode(dentry->d_parent);
  	struct buffer_head *bh = NULL;
-@@ -2547,9 +2895,10 @@ static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
+@@ -2659,9 +3007,10 @@ static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
  		return ext4_update_dotdot(handle, dentry, inode);
  
  	if (is_dx(dir)) {
@@ -838,7 +845,7 @@ index 51c950b..1b8c80e 100644
  		/* Can we just ignore htree data? */
  		if (ext4_has_metadata_csum(sb)) {
  			EXT4_ERROR_INODE(dir,
-@@ -2612,12 +2961,14 @@ out:
+@@ -2724,12 +3073,14 @@ out:
  		ext4_set_inode_state(inode, EXT4_STATE_NEWENTRY);
  	return retval;
  }
@@ -854,7 +861,7 @@ index 51c950b..1b8c80e 100644
  {
  	struct dx_frame frames[EXT4_HTREE_LEVEL], *frame;
  	struct dx_entry *entries, *at;
-@@ -2629,7 +2980,7 @@ static int ext4_dx_add_entry(handle_t *handle, struct ext4_filename *fname,
+@@ -2741,7 +3092,7 @@ static int ext4_dx_add_entry(handle_t *handle, struct ext4_filename *fname,
  
  again:
  	restart = 0;
@@ -863,7 +870,7 @@ index 51c950b..1b8c80e 100644
  	if (IS_ERR(frame))
  		return PTR_ERR(frame);
  	entries = frame->entries;
-@@ -2664,6 +3015,12 @@ again:
+@@ -2776,6 +3127,12 @@ again:
  		struct dx_node *node2;
  		struct buffer_head *bh2;
  
@@ -876,7 +883,7 @@ index 51c950b..1b8c80e 100644
  		while (frame > frames) {
  			if (dx_get_count((frame - 1)->entries) <
  			    dx_get_limit((frame - 1)->entries)) {
-@@ -2767,8 +3124,32 @@ again:
+@@ -2879,8 +3236,32 @@ again:
  			restart = 1;
  			goto journal_error;
  		}
@@ -910,7 +917,7 @@ index 51c950b..1b8c80e 100644
  	if (IS_ERR(de)) {
  		err = PTR_ERR(de);
  		goto cleanup;
-@@ -2779,6 +3160,8 @@ again:
+@@ -2891,6 +3272,8 @@ again:
  journal_error:
  	ext4_std_error(dir->i_sb, err); /* this is a no-op if err == 0 */
  cleanup:
@@ -920,12 +927,12 @@ index 51c950b..1b8c80e 100644
  	dx_release(frames);
  	/* @restart is true means htree-path has been changed, we need to
 diff --git a/fs/ext4/super.c b/fs/ext4/super.c
-index a2fcbf8..82ea5f6 100644
+index e9a837a6..0d69b1d3 100644
 --- a/fs/ext4/super.c
 +++ b/fs/ext4/super.c
-@@ -1291,6 +1291,7 @@ static struct inode *ext4_alloc_inode(struct super_block *sb)
- 
+@@ -1288,6 +1288,7 @@ static struct inode *ext4_alloc_inode(struct super_block *sb)
  	inode_set_iversion(&ei->vfs_inode, 1);
+ 	ei->i_flags = 0;
  	spin_lock_init(&ei->i_raw_lock);
 +	sema_init(&ei->i_append_sem, 1);
  	INIT_LIST_HEAD(&ei->i_prealloc_list);

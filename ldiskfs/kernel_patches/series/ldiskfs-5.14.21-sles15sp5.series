@@ -1,7 +1,7 @@
 rhel8/ext4-inode-version.patch
 linux-5.4/ext4-lookup-dotdot.patch
 linux-5.14/ext4-print-inum-in-htree-warning.patch
-linux-5.14/ext4-prealloc.patch
+sles15sp4/ext4-prealloc.patch
 ubuntu18/ext4-osd-iop-common.patch
 sles15sp4/ext4-misc.patch
 linux-5.14/ext4-mballoc-extra-checks.patch
@@ -24,6 +24,7 @@ linux-5.14/ext4-export-mb-stream-allocator-variables.patch
 ubuntu19/ext4-iget-with-flags.patch
 linux-5.14/export-ext4fs-dirhash-helper.patch
 linux-5.8/ext4-no-max-dir-size-limit-for-iam-objects.patch
+rhel9/ext4-dquot-commit-speedup.patch
 linux-5.14/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 linux-5.14/ext4-projid-xattrs.patch
 sles15sp4/ext4-delayed-iput.patch
@@ -31,6 +32,8 @@ rhel8/ext4-ext-merge.patch
 linux-5.14/ext4-xattr-disable-credits-check.patch
 linux-5.10/ext4-fiemap-kernel-data.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
-linux-5.14/ext4-enc-flag.patch
+ubuntu20.04.5/ext4-filename-encode.patch
+rhel9.1/ext4-enc-flag.patch
+rhel9.2/ext4-encdata.patch
 rhel9/ext4-add-periodic-superblock-update.patch
 rhel9.4/ext4-add-IGET_NO_CHECKS-flag.patch
