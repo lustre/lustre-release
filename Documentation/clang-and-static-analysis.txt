@@ -19,7 +19,8 @@ Contents
 4. Coverity
 	4.1 Context
 	4.2 References
-5. Miscellaneous Tools
+5. Coccinelle
+6. Miscellaneous Tools
 
 ===================
 = 1. Introduction =
@@ -131,8 +132,43 @@ details.
 Early Coverity: https://wiki.lustre.org/images/8/8a/LUG2013-Lustre_Static_Code_Analysis-Bull.pdf
 Coverity Scan Page: https://scan.coverity.com/projects/lustre
 
+=================
+= 5. Coccinelle =
+=================
+
+5.1 Context
+===========
+
+Coccinelle is a automated refactoring tool for C code. Coccinelle uses it's native
+understanding of the C language to automatically apply semantic patches (i.e Coccinelle
+scripts) to C files. This can be used to remove cruft, fix common coding mistakes,
+update APIs, and more. Coccinelle can readily obtained as a package in common Linux
+distributions.
+
+The primary tools for interacting with Coccinelle is `spatch`. A simple invocation could
+be:
+
+	spatch --sp-file test.cocci --in-place --dir lustre/
+
+This applies the `test.cocci` semantic patch directory to the Lustre codebase. The
+tool doesn't actually create patch files, so the developer must still manually
+create granular commits. Some example scripts can be found in `contrib/cocci`.
+
+For automatically generated patches, it's useful to include a message like:
+
+	The patch has been generated with the coccinelle script below.
+
+Either the full script should be added to the commit message, or a pointer should
+be provided to the source.
+
+5.2 References
+==============
+
+Official Website: https://coccinelle.gitlabpages.inria.fr/website/documentation.html
+Kernel Documentation: https://www.kernel.org/doc/html/latest/dev-tools/coccinelle.html
+
 ==========================
-= 5. Miscellaneous Tools =
+= 6. Miscellaneous Tools =
 ==========================
 
 Other tools that might be investigated, for those interested:
