@@ -9,6 +9,7 @@ noinst_DATA =
 noinst_DATA += disk2_7-ldiskfs.tar.bz2 disk2_7-zfs.tar.bz2
 noinst_DATA += disk2_9-zfs.tar.bz2 disk2_9-ldiskfs.tar.bz2
 noinst_DATA += disk2_10-ldiskfs.tar.bz2 disk2_12-ldiskfs.tar.bz2
+noinst_DATA += disk2_15-ldiskfs.tar.bz2 disk2_15-zfs.tar.bz2
 noinst_DATA += ldiskfs_mdt1_2_11.tar.bz2 ldiskfs_mdt2_2_11.tar.bz2
 noinst_DATA += ldiskfs_ost1_2_11.tar.bz2 ldiskfs_ost2_2_11.tar.bz2
 noinst_DATA += zfs_mdt1_2_11.tar.bz2 zfs_mdt2_2_11.tar.bz2

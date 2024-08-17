@@ -92,12 +92,6 @@ lustre_fail() {
 	do_nodes $NODES "lctl set_param fail_val=$fail_val fail_loc=$fail_loc"
 }
 
-change_project()
-{
-	echo "lfs project $*"
-	lfs project $* || error "lfs project $* failed"
-}
-
 RUNAS="runas -u $TSTID -g $TSTID"
 RUNAS2="runas -u $TSTID2 -g $TSTID2"
 DD="dd if=/dev/zero bs=1M"
@@ -166,106 +160,6 @@ quota_log() {
 	quota_scan $1 $2
 	shift 2
 	log "$*"
-}
-
-# get quota for a user or a group
-# usage: getquota -u|-g|-p <username>|<groupname>|<projid> global|<obd_uuid> \
-#		  bhardlimit|bsoftlimit|bgrace|ihardlimit|isoftlimit|igrace \
-#		  <pool_name>
-getquota() {
-	local spec
-	local uuid
-	local pool_arg
-
-	sync_all_data > /dev/null 2>&1 || true
-
-	[ "$#" != 4 -a "$#" != 5 ] &&
-		error "getquota: wrong number of arguments: $#"
-	[ "$1" != "-u" -a "$1" != "-g" -a "$1" != "-p" ] &&
-		error "getquota: wrong u/g/p specifier $1 passed"
-
-	uuid="$3"
-
-	case "$4" in
-		curspace)   spec=1;;
-		bsoftlimit) spec=2;;
-		bhardlimit) spec=3;;
-		bgrace)     spec=4;;
-		curinodes)  spec=5;;
-		isoftlimit) spec=6;;
-		ihardlimit) spec=7;;
-		igrace)     spec=8;;
-		*)          error "unknown quota parameter $4";;
-	esac
-
-	[ ! -z "$5" ] && pool_arg="--pool $5 "
-	[ "$uuid" = "global" ] && uuid=$DIR
-
-	$LFS quota -v "$1" "$2" $pool_arg $DIR 1>&2
-	$LFS quota -v "$1" "$2" $pool_arg $DIR |
-		awk 'BEGIN { num='$spec' } { if ($1 ~ "'$uuid'") \
-		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
-		| tr -d "*"
-}
-
-# set mdt quota type
-# usage: set_mdt_qtype ugp|u|g|p|none
-set_mdt_qtype() {
-	local qtype=$1
-	local varsvc
-	local mdts=$(get_facets MDS)
-	local cmd
-	[[ "$qtype" =~ "p" ]] && ! is_project_quota_supported &&
-		qtype=$(tr -d 'p' <<<$qtype)
-
-	if [[ $PERM_CMD == *"set_param -P"* ]]; then
-		do_facet mgs $PERM_CMD \
-			osd-*.$FSNAME-MDT*.quota_slave.enabled=$qtype
-	else
-		do_facet mgs $PERM_CMD $FSNAME.quota.mdt=$qtype
-	fi
-	# we have to make sure each MDT received config changes
-	for mdt in ${mdts//,/ }; do
-		varsvc=${mdt}_svc
-		cmd="$LCTL get_param -n "
-		cmd=${cmd}osd-$(facet_fstype $mdt).${!varsvc}
-		cmd=${cmd}.quota_slave.enabled
-
-		if $(facet_up $mdt); then
-			wait_update_facet $mdt "$cmd" "$qtype" || return 1
-		fi
-	done
-	return 0
-}
-
-# set ost quota type
-# usage: set_ost_qtype ugp|u|g|p|none
-set_ost_qtype() {
-	local qtype=$1
-	local varsvc
-	local osts=$(get_facets OST)
-	local cmd
-	[[ "$qtype" =~ "p" ]] && ! is_project_quota_supported &&
-		qtype=$(tr -d 'p' <<<$qtype)
-
-	if [[ $PERM_CMD == *"set_param -P"* ]]; then
-		do_facet mgs $PERM_CMD \
-			osd-*.$FSNAME-OST*.quota_slave.enabled=$qtype
-	else
-		do_facet mgs $PERM_CMD $FSNAME.quota.ost=$qtype
-	fi
-	# we have to make sure each OST received config changes
-	for ost in ${osts//,/ }; do
-		varsvc=${ost}_svc
-		cmd="$LCTL get_param -n "
-		cmd=${cmd}osd-$(facet_fstype $ost).${!varsvc}
-		cmd=${cmd}.quota_slave.enabled
-
-		if $(facet_up $ost); then
-			wait_update_facet $ost "$cmd" "$qtype" || return 1
-		fi
-	done
-	return 0
 }
 
 wait_reintegration() {

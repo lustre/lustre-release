@@ -1391,6 +1391,7 @@ T32_BLIMIT=40960 # Kbytes
 T32_ILIMIT=4
 T32_PRJID=1000
 T32_PROLIMIT=$((T32_BLIMIT/10))
+T32_POOLLIMIT=$((T32_BLIMIT/2))
 #
 # This is not really a test but a tool to create new disk
 # image tarballs for the upgrade tests.
@@ -1418,20 +1419,16 @@ test_32newtarball() {
 	local pj_quota_file_old
 	local target_dir
 
-	if [ $FSNAME != t32fs -o \( -z "$MDSDEV" -a -z "$MDSDEV1" \) -o	\
-	$OSTCOUNT -ne 2 -o -z "$OSTDEV1" ]; then
+	[[ "$FSNAME" == "t32fs" && ( -n "$MDSDEV" || -n "$MDSDEV1" ) &&
+	   -n "$OSTDEV1" ]] && (( $OSTCOUNT == 2 )) ||
 		error   "Needs FSNAME=t32fs MDSCOUNT=2 "		\
 			"MDSDEV1=<nonexistent_file> "			\
 			"MDSDEV2=<nonexistent_file> "			\
 			"(or MDSDEV, in the case of b1_8) "		\
 			"OSTCOUNT=2 OSTDEV1=<nonexistent_file> "	\
 			"OSTDEV2=<nonexistent_file>"
-	fi
 
-	mkdir $tmp || {
-		echo "Found stale $tmp"
-		return 1
-	}
+	mkdir $tmp || error "Found stale $tmp"
 
 	mkdir $tmp/src || return 1
 	tar cf - -C $src . | tar xf - -C $tmp/src
@@ -1442,18 +1439,18 @@ test_32newtarball() {
 
 	setupall
 
-	[[ "$MDS1_VERSION" -ge $(version_code 2.3.50) ]] ||
+	(( "$MDS1_VERSION" >= $(version_code 2.3.50) )) ||
 		$LFS quotacheck -ug /mnt/$FSNAME
 	$LFS setquota -u $T32_QID -b 0 -B $T32_BLIMIT -i 0 -I $T32_ILIMIT \
 		/mnt/$FSNAME
 
-	if [[ $MDSCOUNT -ge 2 ]]; then
+	if (( $MDSCOUNT >= 2 )); then
 		remote_dir=/mnt/$FSNAME/remote_dir
 		$LFS mkdir -i 1 $remote_dir
 		tar cf - -C $tmp/src . | tar xf - -C $remote_dir
 
 		target_dir=$remote_dir
-		if [[ $MDS1_VERSION -ge $(version_code 2.7.0) ]]; then
+		if (( $MDS1_VERSION >= $(version_code 2.7.0) )); then
 			striped_dir=/mnt/$FSNAME/striped_dir_old
 			$LFS mkdir -i 1 -c 2 $striped_dir
 			tar cf - -C $tmp/src . | tar xf - -C $striped_dir
@@ -1496,53 +1493,176 @@ test_32newtarball() {
 	}
 
 	#####################
-	tar cf - -C $tmp/src . | tar xf - -C /mnt/$FSNAME
-
-	#if [[ $MDSCOUNT -ge 2 ]]; then
-	#	remote_dir=/mnt/$FSNAME/remote_dir
-	#	$LFS mkdir -i 1 $remote_dir
-	#	tar cf - -C $tmp/src . | tar xf - -C $remote_dir
-
-	#	if [[ "$MDS1_VERSION" -ge $(version_code 2.7.0) ]]; then
-	#		striped_dir=/mnt/$FSNAME/striped_dir_old
-	#		$LFS mkdir -i 1 -c 2 $striped_dir
-	#		tar cf - -C $tmp/src . | tar xf - -C $striped_dir
-	#	fi
-	#fi
 
 	# PFL file #
-	if [[ $MDS1_VERSION -ge $(version_code 2.9.51) ]]; then
+	if (( $MDS1_VERSION >= $(version_code 2.9.51) )); then
 		pfl_dir=$target_dir/pfl_dir
 		pfl_file=$pfl_dir/pfl_file
 		mkdir -p $pfl_dir
-		$LFS setstripe -E 2M -c 1 -o 0 -E -1 -S 2M -c 1 -o 1 \
-					$pfl_file ||
+		$LFS setstripe -E 2M -c1 -o0 -E -1 -S2M -c1 -o1 $pfl_dir ||
 			error "Create PFL file failed"
 
-		dd if=/dev/urandom of=$pfl_file bs=1k count=3k
+		dd if=/dev/urandom of=$pfl_file bs=1M count=3
 		mkdir -p $tmp/src/pfl_dir
 		cp $pfl_file $tmp/src/pfl_dir/
 	fi
 
 	############
 	# DoM / FLR file #
-	if [[ $MDS1_VERSION -ge $(version_code 2.10.56) ]]; then
+	if (( $MDS1_VERSION >= $(version_code 2.10.56) )); then
 		dom_dir=$target_dir/dom_dir
 		dom_file=$dom_dir/dom_file
 		flr_dir=$target_dir/flr_dir
 		flr_file=$flr_dir/flr_file
 
 		mkdir -p $dom_dir
-		$LFS setstripe -E 1M -L mdt -E -1 -S 4M $dom_file
-		dd if=/dev/urandom of=$dom_file bs=1k count=2k
+		$LFS setstripe -E 1M -L mdt -E -1 -S 4M $dom_dir
+		dd if=/dev/urandom of=$dom_file bs=1M count=2 ||
+			error "create $dom_file failed"
 		mkdir -p $tmp/src/dom_dir
 		cp $dom_file $tmp/src/dom_dir
 	# FLR #
 		mkdir -p $flr_dir
 		$LFS mirror create -N2 $flr_file
-		dd if=/dev/urandom of=$flr_file bs=1k count=1
+		dd if=/dev/urandom of=$flr_file bs=1k count=1 ||
+			error "create $flr_file failed"
 		mkdir -p $tmp/src/flr_dir
 		cp $flr_file $tmp/src/flr_dir
+	fi
+	############
+
+	############
+	# OST pool quota #
+	if (( $MDS1_VERSION >= $(version_code 2.13.56) )); then
+		local qpool=testpool
+		local pool_name=$FSNAME.$qpool
+		local pool_dir=$target_dir/pool_dir
+		local pool_list=$pool_dir/pool_list
+		local pool_file=$pool_dir/pool_file
+
+		$LCTL pool_new $pool_name || error "pool_new $pool_name failed"
+		$LCTL pool_add $pool_name $FSNAME-OST[0-1/1] ||
+			error "pool_add $pool_name failed"
+
+		mkdir_on_mdt0 $pool_dir || error "mkdir $pool_dir failed"
+		chmod 0777 $pool_dir || error "chmod $pool_dir failed"
+		$LFS setstripe -E 1M -c 1 --pool $qpool -E eof -c 2 $pool_dir ||
+			error "setstripe $pool_dir failed"
+		touch $pool_file || error "touch $pool_file failed"
+		chown $T32_QID:$T32_QID $pool_file ||
+			error "chown $pool_file failed"
+
+		$LCTL pool_list $pool_name > $pool_list ||
+			error "create $pool_list failed"
+
+		set_ost_qtype ugp ||
+			error "enable ost quota failed"
+
+		$LFS setquota -u $T32_QID -B $T32_POOLLIMIT --pool $qpool \
+			$pool_dir || error "set user quota on $pool_dir failed"
+
+		mkdir -p $tmp/src/pool_dir
+		cp -t $tmp/src/pool_dir $pool_file $pool_list
+	fi
+	############
+
+	############
+	# fscrypt file data #
+	if (( $MDS1_VERSION >= $(version_code 2.13.55) )) &&
+		which fscrypt; then
+		local fscrypt_data_pass=$target_dir/fscrypt_data_pass
+		local fscrypt_data_dir=$target_dir/fscrypt_data_dir
+		local fscrypt_data_file=$fscrypt_data_dir/fscrypt_data_file
+		local fscrypt_data_dom=$fscrypt_data_dir/fscrypt_data_dom
+		local my_pass="mypass"
+
+		yes | fscrypt setup --force --verbose ||
+			error "fscrypt global setup failed"
+		sed -i 's/\(.*\)policy_version\(.*\):\(.*\)\"[0-9]*\"\(.*\)/\1policy_version\2:\3"2"\4/' \
+			/etc/fscrypt.conf
+		yes | fscrypt setup --verbose /mnt/$FSNAME ||
+			error "fscrypt setup /mnt/$FSNAME failed"
+
+		mkdir_on_mdt0 $fscrypt_data_dir ||
+			error "mkdir $fscrypt_data_dir failed"
+
+		echo -e 'mypass\nmypass' |
+			fscrypt encrypt --verbose --source=custom_passphrase \
+			--name=protector $fscrypt_data_dir ||
+			error "fscrypt encrypt $fscrypt_data_dir failed"
+
+		echo "$my_pass" > $fscrypt_data_pass ||
+			error "save $fscrypt_data_pass failed"
+
+		dd if=/dev/urandom of=$fscrypt_data_file bs=128k count=1 ||
+			error "write $fscrypt_data_file failed"
+
+		$LFS setstripe -E 64K -L mdt -E eof -c 1 $fscrypt_data_dom ||
+			error "setstripe $fscrypt_data_dom failed"
+		dd if=/dev/urandom of=$fscrypt_data_dom bs=128k count=1 ||
+			error "write $fscrypt_data_dom failed"
+
+		ls -R $fscrypt_data_dir ||
+			error "ls -R $fscrypt_data_dir failed"
+		local filecount=$(find $fscrypt_data_dir -type f | wc -l)
+		(( filecount == 2 )) || error "found $filecount files"
+
+		mkdir -p $tmp/src/fscrypt_data_dir
+		cp -t $tmp/src/fscrypt_data_dir \
+			$fscrypt_data_file $fscrypt_data_dom
+		cp $fscrypt_data_pass $tmp/src
+	fi
+	############
+
+	############
+	# fscrypt file name #
+	if (( $MDS1_VERSION >= $(version_code 2.14.57) )) &&
+		which fscrypt; then
+		local fscrypt_name_pass=$target_dir/fscrypt_name_pass
+		local fscrypt_name_dir=$target_dir/fscrypt_name_dir
+		local fscrypt_name_file=$fscrypt_name_dir/fscrypt_name_file
+		local fscrypt_name_dom=$fscrypt_name_dir/fscrypt_name_dom
+
+		[[ -s $fscrypt_data_pass ]] &&
+			my_pass=$(cat $fscrypt_data_pass) ||
+			my_pass="mypass"
+
+		mkdir_on_mdt0 $fscrypt_name_dir ||
+			error "mkdir $fscrypt_name_dir failed"
+
+		$LCTL set_param -P llite.*.enable_filename_encryption=1 ||
+			error "enable filename encryption failed"
+
+		wait_update_facet --verbose client \
+			"$LCTL get_param -n llite.*.enable_filename_encryption \
+			| head -n1" 1 30 ||
+			error "enable_filename_encryption not set on client"
+
+		echo -e 'mypass\nmypass' |
+			fscrypt encrypt --verbose --source=custom_passphrase \
+			--name=protector2 $fscrypt_name_dir ||
+			error "fscrypt encrypt $fscrypt_name_dir failed"
+
+		echo "$my_pass" > $fscrypt_name_pass ||
+			error "save $fscrypt_name_pass failed"
+
+		dd if=/dev/urandom of=$fscrypt_name_file bs=128k count=1 ||
+			error "write $fscrypt_name_file failed"
+
+		$LFS setstripe -E 64K -L mdt -E eof -c 1 $fscrypt_name_dom ||
+			error "setstripe $fscrypt_name_dom failed"
+		dd if=/dev/urandom of=$fscrypt_name_dom bs=128k count=1 ||
+			error "write $fscrypt_name_dom failed"
+
+		ls -R $fscrypt_name_dir ||
+			error "ls -R $fscrypt_name_dir failed"
+		local filecount=$(find $fscrypt_name_dir -type f | wc -l)
+		(( filecount == 2 )) || error "found $filecount files"
+
+		mkdir -p $tmp/src/fscrypt_name_dir
+		cp -t $tmp/src/fscrypt_name_dir \
+			$fscrypt_name_file $fscrypt_name_dom
+		cp $fscrypt_name_pass $tmp/src
 	fi
 	############
 
@@ -1554,11 +1674,31 @@ test_32newtarball() {
 	setfattr -n user.fooattr -v $(printf "%c" {1..4096} ) $xattr_file ||
 		rm -f $xattr_file
 
+	tar cf - -C $tmp/src . | tar xf - -C /mnt/$FSNAME
+
 	stopall
 
 	mkdir $tmp/img || return 1
 
 	setupall
+
+	if [[ -n $fscrypt_data_pass ]]; then
+		local unlock_status=$(fscrypt status $fscrypt_data_dir |
+				      awk '/Unlocked:/{print $2}')
+		[[ $unlock_status == Yes ]] ||
+			cat $fscrypt_data_pass |
+			fscrypt unlock --verbose $fscrypt_data_dir ||
+				error "unlock $fscrypt_data_dir failed"
+	fi
+
+	if [[ -n $fscrypt_name_pass ]]; then
+		local unlock_status=$(fscrypt status $fscrypt_name_dir |
+				      awk '/Unlocked:/{print $2}')
+		[[ $unlock_status == Yes ]] ||
+			cat $fscrypt_name_pass |
+			fscrypt unlock --verbose $fscrypt_name_dir ||
+				error "unlock $fscrypt_name_dir failed"
+	fi
 
 	pushd_dir=/mnt/$FSNAME
 	if [[ $MDSCOUNT -ge 2 ]]; then
@@ -1592,12 +1732,53 @@ test_32newtarball() {
 	echo $T32_BLIMIT > $tmp/img/blimit
 	echo $T32_ILIMIT > $tmp/img/ilimit
 
+	# OST pool quota #
+	if (( $MDS1_VERSION >= $(version_code 2.13.56) )); then
+		$LFS quota -v -u $T32_QID --pool $qpool $pool_dir
+		DIR=$pool_dir getquota -u $T32_QID global curspace $qpool \
+			> $tmp/img/bspace_pool
+		echo $T32_POOLLIMIT > $tmp/img/blimit_pool
+	fi
+
+	# fscrypt file data #
+	if [[ -n $fscrypt_data_pass ]]; then
+		unlock_status=$(fscrypt status $fscrypt_data_dir |
+				awk '/Unlocked:/{print $2}')
+
+		if [[ $unlock_status == Yes ]]; then
+			fscrypt lock --verbose $fscrypt_data_dir ||
+				error "fscrypt lock $fscrypt_data_dir failed"
+		fi
+
+		ls -l $fscrypt_data_dir ||
+			error "ls -l $fscrypt_data_dir failed"
+		ls $fscrypt_data_file || error "ls $fscrypt_data_file failed"
+		ls $fscrypt_data_dom || error "ls $fscrypt_data_dom failed"
+	fi
+
+	# fscrypt file name #
+	if [[ -n $fscrypt_name_pass ]]; then
+		unlock_status=$(fscrypt status $fscrypt_name_dir |
+				awk '/Unlocked:/{print $2}')
+
+		if [[ $unlock_status == Yes ]]; then
+			fscrypt lock --verbose $fscrypt_name_dir ||
+				error "fscrypt lock $fscrypt_name_dir failed"
+		fi
+
+		ls -l $fscrypt_name_dir ||
+			error "ls -l $fscrypt_name_dir failed"
+		! ls $fscrypt_name_file ||
+			error "ls $fscrypt_name_file should fail"
+		! ls $fscrypt_name_dom ||
+			error "ls $fscrypt_name_dom should fail"
+	fi
+
 	$MULTIOP /mnt/$FSNAME/orph_file Ouw_c&
 	pid=$!
 	sync
 	stop_mdt_no_force 1
 	debugfs -R "ls /PENDING" ${MDSDEV1:-$MDSDEV}
-	cp ${MDSDEV1:-$MDSDEV} $tmp/img
 	start_mdt 1
 	kill -s USR1 $pid
 	wait $pid
@@ -1634,7 +1815,7 @@ test_32newtarball() {
 
 		[[ num -eq 1 ]] && image_name=ost || image_name=ost$num
 		[[ $(facet_fstype $facet) != zfs ]] ||
-			devname=$(ostdevname $num)
+			devname=$(ostvdevname $num)
 		dd conv=sparse bs=4k if=$devname of=$tmp/img/$image_name
 	done
 
@@ -1647,7 +1828,7 @@ test_32newtarball() {
 
 	rm -r $tmp
 }
-# run_test 32newtarball "Create a new test_32 disk image tarball for this version"
+# run_test 32newtarball "Create new test_32 disk image tarball for this version"
 
 #
 # The list of applicable tarballs is returned via the caller's
@@ -1849,10 +2030,57 @@ t32_verify_quota() {
 	}
 	unlinkmany $mnt/t32_qf_ $img_ilimit
 
+	# OST pool quota #
+	if (( $(version_code $img_commit) >= $(version_code 2.13.56) )) &&
+		[[ "$pool_quota_upgrade" == "yes" ]]; then
+		$mdt2_is_available || pool_dir=$mnt/pool_dir
+		local pool_file_new=$pool_dir/pool_file_new
+
+		local qpool=$($LFS getstripe -p $pool_dir)
+		[[ -n "$qpool" ]] || {
+			echo "no OST pool on $pool_dir"
+			return 1
+		}
+
+		$LFS quota -v -u $T32_QID --pool $qpool $pool_dir
+
+		qval=$(DIR=$pool_dir getquota -u $T32_QID \
+		       global curspace $qpool)
+		[[ $qval == $img_bspace_pool ]] || {
+			echo "bspace_pool, act:$qval, exp:$img_bspace_pool"
+			return 1
+		}
+
+		qval=$(DIR=$pool_dir getquota -u $T32_QID \
+		       global bhardlimit $qpool)
+		[[ $qval == $img_blimit_pool ]] || {
+			echo "blimit_pool, act:$qval, exp:$img_blimit_pool"
+			return 1
+		}
+
+		touch $pool_file_new || {
+			echo "touch $pool_file_new failed"
+			return 1
+		}
+
+		chown $T32_QID:$T32_QID $pool_file_new || {
+			echo "chown $pool_file_new failed"
+			return 1
+		}
+
+		runas -u $T32_QID -g $T32_QID \
+			dd if=/dev/zero of=$pool_file_new \
+			bs=1M count=$((img_blimit_pool / 1024)) oflag=sync && {
+			echo "Write $pool_file_new succeed, but expect -EDQUOT"
+			return 1
+		}
+		rm -f $pool_file_new
+	fi
+
 	return 0
 }
 
-getquota() {
+get_project_quota() {
 	local spec=$4
 	local uuid=$3
 	local mnt=$5
@@ -1878,6 +2106,9 @@ t32_test() {
 	local project_quota_upgrade=${project_quota_upgrade:-"no"}
 	local dom_new_upgrade=${dom_new_upgrade:-"no"}
 	local flr_upgrade=${flr_upgrade:-"no"}
+	local pool_quota_upgrade=${pool_quota_upgrade:-"no"}
+	local fscrypt_data_upgrade=${fscrypt_data_upgrade:-"no"}
+	local fscrypt_name_upgrade=${fscrypt_name_upgrade:-"no"}
 	local shall_cleanup_mdt=false
 	local shall_cleanup_mdt1=false
 	local shall_cleanup_ost=false
@@ -1892,8 +2123,10 @@ t32_test() {
 	local img_kernel
 	local img_arch
 	local img_bspace
+	local img_bspace_pool
 	local img_ispace
 	local img_blimit
+	local img_blimit_pool
 	local img_ilimit
 	local fsname=t32fs
 	local nid
@@ -1913,6 +2146,11 @@ t32_test() {
 	local flr_file=$tmp/mnt/lustre/remote_dir/flr_dir/flr_file
 	local dom_file=$tmp/mnt/lustre/remote_dir/dom_dir/dom_file
 	local quota_dir=$tmp/mnt/lustre/remote_dir/project_quota_dir
+	local pool_dir=$tmp/mnt/lustre/remote_dir/pool_dir
+	local fscrypt_data_dir=$tmp/mnt/lustre/remote_dir/fscrypt_data_dir
+	local fscrypt_data_pass=$tmp/mnt/lustre/remote_dir/fscrypt_data_pass
+	local fscrypt_name_dir=$tmp/mnt/lustre/remote_dir/fscrypt_name_dir
+	local fscrypt_name_pass=$tmp/mnt/lustre/remote_dir/fscrypt_name_pass
 
 	combined_mgs_mds || stop_mgs || error "Unable to stop MGS"
 	trap 'trap - RETURN; t32_test_cleanup' RETURN
@@ -1931,6 +2169,13 @@ t32_test() {
 	img_arch=$($r cat $tmp/arch)
 	img_bspace=$($r cat $tmp/bspace)
 	img_ispace=$($r cat $tmp/ispace)
+
+	if (( $(version_code $img_commit) >= $(version_code 2.13.56) )); then
+		img_bspace_pool=$($r cat $tmp/bspace_pool)
+		img_blimit_pool=$($r cat $tmp/blimit_pool)
+	else
+		pool_quota_upgrade="no"
+	fi
 
 	# older images did not have "blimit" and "ilimit" files
 	# use old values for T32_BLIMIT and T32_ILIMIT
@@ -1963,6 +2208,7 @@ t32_test() {
 		local poolname_list="t32fs-mdt1 t32fs-ost1"
 
 		! $mdt2_is_available || poolname_list+=" t32fs-mdt2"
+		! $ost2_is_available || poolname_list+=" t32fs-ost2"
 
 		for poolname in $poolname_list; do
 			$r "modprobe zfs;
@@ -2388,10 +2634,104 @@ t32_test() {
 		shall_cleanup_lustre=true
 		$r $LCTL set_param debug="$PTLDEBUG"
 
+		# OST pool quota #
+		$mdt2_is_available || pool_dir=$tmp/mnt/lustre/pool_dir
+		local pool_list=$pool_dir/pool_list
+		if (( $(version_code $img_commit) >=
+		      $(version_code 2.13.56) )) &&
+		   [[ "$pool_quota_upgrade" == "yes" ]] &&
+		   [[ -s $pool_list ]]; then
+			local pool_name=$(head -1 $pool_list | awk '{print $2}')
+
+			$r $LCTL pool_new $pool_name || {
+				error_noexit "create $pool_name failed"
+				return 1
+			}
+
+			$r $LCTL pool_add $pool_name $fsname-OST[0-1/1] || {
+				error_noexit "add $pool_name failed"
+				return 1
+			}
+
+			$r $LCTL pool_list $pool_name || {
+				error_noexit "list $pool_name failed"
+				return 1
+			}
+		fi
+
 		t32_verify_quota $SINGLEMDS $fsname $tmp/mnt/lustre || {
 			error_noexit "verify quota failed"
 			return 1
 		}
+
+		# fscrypt file data #
+		if ! $mdt2_is_available; then
+			fscrypt_data_dir=$tmp/mnt/lustre/fscrypt_data_dir
+			fscrypt_data_pass=$tmp/mnt/lustre/fscrypt_data_pass
+		fi
+		if (( $MDS1_VERSION >= $(version_code 2.13.55) )) &&
+			which fscrypt && [[ -s $fscrypt_data_pass ]]; then
+
+			yes | fscrypt setup --force --verbose ||
+				error "fscrypt global setup failed"
+			sed -i 's/\(.*\)policy_version\(.*\):\(.*\)\"[0-9]*\"\(.*\)/\1policy_version\2:\3"2"\4/' \
+				/etc/fscrypt.conf
+
+			local unlock_status=$(fscrypt status $fscrypt_data_dir |
+					      awk '/Unlocked:/{print $2}')
+
+			if [[ $unlock_status == No ]]; then
+				local lockedfiles=( $(find $fscrypt_data_dir/ \
+						      -maxdepth 1 -type f) )
+
+				for ((i = 0; i < ${#lockedfiles[@]}; i++)); do
+					! md5sum ${lockedfiles[i]} ||
+						error "read ${lockedfiles[i]} should fail without key"
+				done
+
+				! touch $fscrypt_data_dir/nokey ||
+					error "touch $fscrypt_data_dir/nokey should fail without key"
+
+				cat $fscrypt_data_pass |
+				fscrypt unlock --verbose $fscrypt_data_dir ||
+					error "unlock $fscrypt_data_dir failed"
+
+				for ((i = 0; i < ${#lockedfiles[@]}; i++)); do
+					md5sum ${lockedfiles[i]} ||
+						error "read ${lockedfiles[i]} failed"
+				done
+			fi
+		fi
+
+		# fscrypt file name #
+		if ! $mdt2_is_available; then
+			fscrypt_name_dir=$tmp/mnt/lustre/fscrypt_name_dir
+			fscrypt_name_pass=$tmp/mnt/lustre/fscrypt_name_pass
+		fi
+		if (( $MDS1_VERSION >= $(version_code 2.14.57) )) &&
+			which fscrypt && [[ -s $fscrypt_name_pass ]]; then
+
+			local unlock_status=$(fscrypt status $fscrypt_name_dir |
+					      awk '/Unlocked:/{print $2}')
+
+			if [[ $unlock_status == No ]]; then
+				ls -l $fscrypt_name_dir ||
+					error "ls $fscrypt_name_dir failed"
+				! ls $fscrypt_name_dir/fscrypt_name_file ||
+					error "ls $fscrypt_name_dir/fscrypt_name_file should fail"
+				! ls $fscrypt_name_dir/fscrypt_name_dom ||
+					error "ls $fscrypt_name_dir/fscrypt_name_dom should fail"
+
+				cat $fscrypt_name_pass |
+				fscrypt unlock --verbose $fscrypt_name_dir ||
+					error "unlock $fscrypt_name_dir failed"
+
+				ls $fscrypt_name_dir/fscrypt_name_file ||
+					error "ls $fscrypt_name_dir/fscrypt_name_file failed"
+				ls $fscrypt_name_dir/fscrypt_name_dom ||
+					error "ls $fscrypt_name_dir/fscrypt_name_dom failed"
+			fi
+		fi
 
 		if $r test -f $tmp/list; then
 			echo "== list verification =="
@@ -2596,10 +2936,47 @@ t32_test() {
 			local hardlimit
 
 			echo "== check Project Quota =="
-			hardlimit=$(getquota -p $T32_PRJID global 3 \
+			hardlimit=$(get_project_quota -p $T32_PRJID global 3 \
 							${tmp}/mnt/lustre)
 			[ $hardlimit == $T32_PROLIMIT ] || {
 				error_noexit "wrong hardlimit $hardlimit"
+				return 1
+			}
+		fi
+
+		# OST pool #
+		$mdt2_is_available || pool_dir=$tmp/mnt/lustre/pool_dir
+		local pool_list=$pool_dir/pool_list
+		local pool_file=$pool_dir/pool_file
+		if (( $(version_code $img_commit) >=
+		      $(version_code 2.13.56) )) &&
+		   [[ "$pool_quota_upgrade" == "yes" ]] &&
+		   [[ -s $pool_list ]]; then
+			local pool_name=$(head -1 $pool_list | awk '{print $2}')
+			local act_pool_list=$tmp/pool_list
+
+			$r "$LCTL pool_list $pool_name" > $act_pool_list || {
+				rm -f $act_pool_list
+				error_noexit "pool_list $pool_name failed"
+				return 1
+			}
+
+			cmp --verbose $pool_list $act_pool_list || {
+				rm -f $act_pool_list
+				error_noexit "OST pool list, act:$act_pool_list, exp:$pool_list"
+				return 1
+			}
+			rm -f $act_pool_list
+
+			local exp_qpool=${pool_name##$fsname.}
+			local act_qpool=$($LFS getstripe -p $pool_file)
+			[[ -n "$act_qpool" ]] || {
+				error_noexit "no OST pool on $pool_file"
+				return 1
+			}
+
+			[[ "$act_qpool" == "$exp_qpool" ]] || {
+				error_noexit "OST pool name, act:$act_qpool, exp:$exp_qpool"
 				return 1
 			}
 		fi
@@ -2658,6 +3035,8 @@ t32_test() {
 			# LU-2393 - do both sorts on same node to ensure locale
 			# is identical
 			$r cat $tmp/sha1sums | sort -k 2 >$tmp/sha1sums.orig
+			which fscrypt ||
+				sed -i '/fscrypt_.*_dir/d' $tmp/sha1sums.orig
 			if [[ "$dne_upgrade" != "no" ]]; then
 				if [[ -d $tmp/mnt/lustre/striped_dir/remote_dir ]]; then
 					pushd $tmp/mnt/lustre/striped_dir/remote_dir
@@ -3019,6 +3398,63 @@ test_32g() {
 	return $rc
 }
 run_test 32g "flr/dom upgrade test"
+
+test_32h() {
+	(( $MDS1_VERSION >= $(version_code 2.13.56) )) ||
+		skip "Need MDS >= 2.13.56 for OST pool quotas"
+
+	local tarballs
+	local tarball
+	local rc=0
+
+	t32_check
+	for tarball in $tarballs; do
+		[[ $tarball =~ "2_15" ]] ||
+			{ echo "skip $(basename $tarball)"; continue; }
+		pool_quota_upgrade=yes t32_test $tarball writeconf ||
+			let "rc += $?"
+	done
+	return $rc
+}
+run_test 32h "pool quota upgrade test"
+
+test_32i() {
+	(( $MDS1_VERSION >= $(version_code 2.13.55) )) ||
+		skip "Need MDS >= 2.13.55 for fscrypt data encryption"
+
+	local tarballs
+	local tarball
+	local rc=0
+
+	t32_check
+	for tarball in $tarballs; do
+		[[ $tarball =~ "2_15" && $tarball =~ "ldiskfs" ]] ||
+			{ echo "skip $(basename $tarball)"; continue; }
+		fscrypt_data_upgrade=yes t32_test $tarball writeconf ||
+			let "rc += $?"
+	done
+	return $rc
+}
+run_test 32i "fscrypt data encryption upgrade test"
+
+test_32j() {
+	(( $MDS1_VERSION >= $(version_code 2.14.57) )) ||
+		skip "Need MDS >= 2.14.56 for fscrypt filename encryption"
+
+	local tarballs
+	local tarball
+	local rc=0
+
+	t32_check
+	for tarball in $tarballs; do
+		[[ $tarball =~ "2_15" && $tarball =~ "ldiskfs" ]] ||
+			{ echo "skip $(basename $tarball)"; continue; }
+		fscrypt_name_upgrade=yes t32_test $tarball writeconf ||
+			let "rc += $?"
+	done
+	return $rc
+}
+run_test 32j "fscrypt filename encryption upgrade test"
 
 test_33a() { # bug 12333, was test_33
 	local FSNAME2=test-$testnum
