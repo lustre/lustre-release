@@ -6036,6 +6036,22 @@ test_44e() {
 }
 run_test 44e "write and read maximal stripes"
 
+test_44f() {
+	[ "$FSTYPE" != "zfs" ] ||
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
+
+	local i
+	# required space: NUMFILES_44f * 20Mb
+	local NUMFILES_44f=${NUMFILES_44f:-50}
+
+	for (( i=0; i<NUMFILES_44f; i++ )); do
+		multiop $DIR/$tfile-$i \
+			Ow10485760Z10485760w10485760Ic ||
+			error "multiop failed"
+	done
+}
+run_test 44f "Check fiemap for sparse files"
+
 dirty_osc_total() {
 	tot=0
 	for d in `lctl get_param -n ${OSC}.*.cur_dirty_bytes`; do

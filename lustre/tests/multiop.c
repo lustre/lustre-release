@@ -82,6 +82,7 @@ char usage[] =
 "	 G gid get grouplock\n"
 "	 g gid put grouplock\n"
 "	 H[num] create HSM released file with num stripes\n"
+"	 I  fiemap\n"
 "	 K  link path to filename\n"
 "	 L  link\n"
 "	 l  symlink filename to path\n"
@@ -233,6 +234,39 @@ static int statahead(char *dname)
 out_closedir:
 	closedir(d);
 	return rc;
+}
+
+static int do_fiemap(int fd)
+{
+	struct fiemap *pf;
+	int extents;
+	int save_errno;
+	int i;
+
+	extents = 0;
+	for (i = 0; i < 2; i++) {
+		if ((pf = malloc(sizeof(struct fiemap) +
+			extents * sizeof(struct fiemap_extent))) == NULL) {
+			perror("malloc failed");
+			exit(1);
+		}
+		pf->fm_start = 0;
+		pf->fm_length = FIEMAP_MAX_OFFSET;
+		pf->fm_flags = FIEMAP_FLAG_SYNC;
+		pf->fm_extent_count = extents;
+
+		if (ioctl(fd, FS_IOC_FIEMAP, pf) < 0) {
+			save_errno = errno;
+			if (i == 0)
+				perror("probe fiemap failed");
+			else
+				perror("fiemap failed");
+			exit(save_errno);
+		}
+		extents = pf->fm_mapped_extents;
+		free(pf);
+	}
+	return 0;
 }
 
 #define POP_ARG() (pop_arg(argc, argv))
@@ -477,6 +511,9 @@ int main(int argc, char **argv)
 				exit(save_errno);
 			}
 			rc = fd;
+			break;
+		case 'I':
+			do_fiemap(fd);
 			break;
 		case 'j':
 			if (flock(fd, LOCK_EX) == -1)
