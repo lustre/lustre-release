@@ -721,7 +721,7 @@ static void ofd_procfs_fini(struct ofd_device *ofd)
 	tgt_tunables_fini(&ofd->ofd_lut);
 	lprocfs_free_per_client_stats(obd);
 	lprocfs_obd_cleanup(obd);
-	lprocfs_free_obd_stats(obd);
+	ldebugfs_free_obd_stats(obd);
 	lprocfs_job_stats_fini(obd);
 }
 

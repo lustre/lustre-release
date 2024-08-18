@@ -1635,6 +1635,6 @@ void mdt_tunables_fini(struct mdt_device *mdt)
 	tgt_tunables_fini(&mdt->mdt_lut);
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_md_stats(obd);
-	lprocfs_free_obd_stats(obd);
+	ldebugfs_free_obd_stats(obd);
 	lprocfs_job_stats_fini(obd);
 }

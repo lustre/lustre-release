@@ -687,7 +687,8 @@ int jt_lcfg_listparam(int argc, char **argv)
 				rc = rc2;
 
 			if (rc2 == -ENOENT && getuid() != 0)
-				rc2 = llapi_param_display_value(path, 0, 0,
+				rc2 = llapi_param_display_value(path, 0,
+								PARAM_FLAGS_SHOW_SOURCE,
 								stdout);
 			if (rc2 < 0) {
 				fprintf(stderr, "error: %s: listing '%s': %s\n",
@@ -958,10 +959,20 @@ int jt_lcfg_setparam(int argc, char **argv)
 			break;
 
 		rc = do_param_op(&popt, path, value, SET_PARAM, wq_ptr);
-		if (rc < 0)
-			fprintf(stderr, "error: %s: setting '%s'='%s': %s\n",
-				jt_cmdname(argv[0]), path, value,
-				strerror(-rc));
+		if (rc < 0) {
+			if (rc == -ENOENT && getuid() != 0) {
+				rc = llapi_param_set_value(path, value,
+							   LUSTRE_GENL_VERSION,
+							   0, stdout);
+			}
+
+			if (rc < 0) {
+				fprintf(stderr,
+					"error: %s: setting '%s'='%s': %s\n",
+					jt_cmdname(argv[0]), path, value,
+					strerror(-rc));
+			}
+		}
 	}
 
 	if (popt_is_parallel(popt)) {

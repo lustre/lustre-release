@@ -69,7 +69,9 @@ static int osd_stats_init(struct osd_device *osd)
 	int result = -ENOMEM;
 
 	ENTRY;
-	osd->od_stats = lprocfs_stats_alloc(LPROC_OSD_LAST, 0);
+	osd->od_stats = ldebugfs_stats_alloc(LPROC_OSD_LAST, "stats",
+					     osd->od_dt_dev.dd_debugfs_entry,
+					     &osd->od_dt_dev.dd_kobj, 0);
 	if (osd->od_stats) {
 		lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
 				LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV |
@@ -109,8 +111,8 @@ static int osd_stats_init(struct osd_device *osd)
 		result = 0;
 	}
 
-	ldebugfs_register_osd_stats(osd->od_dt_dev.dd_debugfs_entry,
-				    &osd->od_brw_stats, osd->od_stats);
+	ldebugfs_register_brw_stats(osd->od_dt_dev.dd_debugfs_entry,
+				    &osd->od_brw_stats);
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 	osd_symlink_brw_stats(osd);

@@ -820,8 +820,10 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 	ldlm_add_var(&pool_vars[0], pl->pl_debugfs_entry, "state", pl,
 		     &lprocfs_pool_state_fops);
 
-	pl->pl_stats = lprocfs_stats_alloc(LDLM_POOL_LAST_STAT -
-					   LDLM_POOL_FIRST_STAT, 0);
+	pl->pl_stats = ldebugfs_stats_alloc(LDLM_POOL_LAST_STAT -
+					    LDLM_POOL_FIRST_STAT, "stats",
+					    pl->pl_debugfs_entry,
+					    &pl->pl_kobj, 0);
 	if (!pl->pl_stats)
 		GOTO(out, rc = -ENOMEM);
 
@@ -857,8 +859,6 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_TIMING_STAT,
 			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_SECS,
 			     "recalc_timing");
-	debugfs_create_file("stats", 0644, pl->pl_debugfs_entry,
-			    pl->pl_stats, &ldebugfs_stats_seq_fops);
 
 	EXIT;
 out:
@@ -912,11 +912,11 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
 		pl->pl_recalc_period = LDLM_POOL_CLI_DEF_RECALC_PERIOD;
 	}
 	pl->pl_client_lock_volume = 0;
-	rc = ldlm_pool_debugfs_init(pl);
+	rc = ldlm_pool_sysfs_init(pl);
 	if (rc)
 		RETURN(rc);
 
-	rc = ldlm_pool_sysfs_init(pl);
+	rc = ldlm_pool_debugfs_init(pl);
 	if (rc)
 		RETURN(rc);
 

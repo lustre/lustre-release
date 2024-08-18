@@ -704,34 +704,22 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
 	return 0;
 }
 
-int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned int num_stats)
+int ldebugfs_alloc_obd_stats(struct obd_device *obd, unsigned int num_stats)
 {
-	struct lprocfs_stats *stats;
-	int rc;
-
-	LASSERT(obd->obd_stats == NULL);
-	LASSERT(obd->obd_proc_entry != NULL);
-
-	stats = lprocfs_stats_alloc(num_stats, 0);
-	if (stats == NULL)
-		return -ENOMEM;
-
-	rc = lprocfs_stats_register(obd->obd_proc_entry, "stats", stats);
-	if (rc < 0)
-		lprocfs_stats_free(&stats);
-	else
-		obd->obd_stats = stats;
-
-	return rc;
+	LASSERT(!obd->obd_stats);
+	obd->obd_stats = ldebugfs_stats_alloc(num_stats, "stats",
+					      obd->obd_debugfs_entry,
+					      &obd->obd_type->typ_kobj, 0);
+	return obd->obd_stats ? 0 : -ENOMEM;
 }
-EXPORT_SYMBOL(lprocfs_alloc_obd_stats);
+EXPORT_SYMBOL(ldebugfs_alloc_obd_stats);
 
-void lprocfs_free_obd_stats(struct obd_device *obd)
+void ldebugfs_free_obd_stats(struct obd_device *obd)
 {
 	if (obd->obd_stats)
 		lprocfs_stats_free(&obd->obd_stats);
 }
-EXPORT_SYMBOL(lprocfs_free_obd_stats);
+EXPORT_SYMBOL(ldebugfs_free_obd_stats);
 
 static void display_brw_stats(struct seq_file *seq, const char *name,
 			      const char *units, struct obd_hist_pcpu *read,
@@ -866,9 +854,8 @@ void lprocfs_fini_brw_stats(struct brw_stats *brw_stats)
 }
 EXPORT_SYMBOL(lprocfs_fini_brw_stats);
 
-void ldebugfs_register_osd_stats(struct dentry *parent,
-				 struct brw_stats *brw_stats,
-				 struct lprocfs_stats *stats)
+void ldebugfs_register_brw_stats(struct dentry *parent,
+				 struct brw_stats *brw_stats)
 {
 	int i;
 
@@ -889,12 +876,8 @@ void ldebugfs_register_osd_stats(struct dentry *parent,
 
 	debugfs_create_file("brw_stats", 0644, parent, brw_stats,
 			    &brw_stats_fops);
-
-	if (stats)
-		debugfs_create_file("stats", 0644, parent, stats,
-				    &ldebugfs_stats_seq_fops);
 }
-EXPORT_SYMBOL(ldebugfs_register_osd_stats);
+EXPORT_SYMBOL(ldebugfs_register_brw_stats);
 
 int lprocfs_hash_seq_show(struct seq_file *m, void *data)
 {

@@ -2074,12 +2074,6 @@ struct lnet {
 	atomic_t                        ln_pb_update_ready;
 };
 
-struct genl_filter_list {
-	struct list_head	 lp_list;
-	void			*lp_cursor;
-	bool			 lp_first;
-};
-
 static const struct nla_policy scalar_attr_policy[LN_SCALAR_MAX + 1] = {
 	[LN_SCALAR_ATTR_LIST]		= { .type = NLA_NESTED },
 	[LN_SCALAR_ATTR_LIST_SIZE]	= { .type = NLA_U16 },

@@ -35,8 +35,10 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/glob.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
+#include <lustre_kernelcomm.h>
 
 #ifdef CONFIG_PROC_FS
 
@@ -1262,6 +1264,9 @@ struct lprocfs_stats *lprocfs_stats_alloc(unsigned int num,
 	stats->ls_flags = flags;
 	stats->ls_init = ktime_get_real();
 	spin_lock_init(&stats->ls_lock);
+	kref_init(&stats->ls_refcount);
+	stats->ls_source = NULL;
+	stats->ls_index = -1;
 
 	/* alloc num of counter headers */
 	CFS_ALLOC_PTR_ARRAY(stats->ls_cnt_header, stats->ls_num);
@@ -1285,16 +1290,63 @@ fail:
 }
 EXPORT_SYMBOL(lprocfs_stats_alloc);
 
-void lprocfs_stats_free(struct lprocfs_stats **statsh)
+/* stats_list is a mirror of those parts of debugfs which contain lustre
+ * statistics. It is used to provide netlink access to those statistics.
+ * Any lustre module and register or deregister a set of statistics.
+ */
+static atomic_t lstats_count = ATOMIC_INIT(0);
+static DEFINE_XARRAY_ALLOC(lstats_list);
+
+struct lprocfs_stats *ldebugfs_stats_alloc(int num, char *name,
+					   struct dentry *debugfs_entry,
+					   struct kobject *kobj,
+					   enum lprocfs_stats_flags flags)
 {
-	struct lprocfs_stats *stats = *statsh;
+	struct lprocfs_stats *stats = lprocfs_stats_alloc(num, flags);
+	char *param;
+	int rc;
+
+	if (!stats)
+		return NULL;
+
+	xa_lock(&lstats_list);
+	stats->ls_index = atomic_read(&lstats_count);
+	rc = __xa_alloc(&lstats_list, &stats->ls_index, stats, xa_limit_31b,
+			GFP_KERNEL);
+	if (rc < 0) {
+		xa_unlock(&lstats_list);
+		lprocfs_stats_free(&stats);
+		return NULL;
+	}
+	atomic_inc(&lstats_count);
+	xa_unlock(&lstats_list);
+
+	stats->ls_source = kobject_get_path(kobj, GFP_KERNEL);
+	if (!stats->ls_source) {
+		lprocfs_stats_free(&stats);
+		return NULL;
+	}
+
+	param = stats->ls_source;
+	while ((param = strchr(param, '/')) != NULL)
+		*param = '.';
+
+	debugfs_create_file(name, 0644, debugfs_entry, stats,
+			    &ldebugfs_stats_seq_fops);
+	return stats;
+}
+EXPORT_SYMBOL(ldebugfs_stats_alloc);
+
+static void stats_free(struct kref *kref)
+{
+	struct lprocfs_stats *stats = container_of(kref, struct lprocfs_stats,
+						   ls_refcount);
 	unsigned int num_entry;
 	unsigned int percpusize;
 	unsigned int i;
 
 	if (!stats || stats->ls_num == 0)
 		return;
-	*statsh = NULL;
 
 	if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
 		num_entry = 1;
@@ -1313,9 +1365,110 @@ void lprocfs_stats_free(struct lprocfs_stats **statsh)
 		CFS_FREE_PTR_ARRAY(stats->ls_cnt_header, stats->ls_num);
 	}
 
+	if (stats->ls_index != -1) {
+		xa_lock(&lstats_list);
+		__xa_erase(&lstats_list, stats->ls_index);
+		atomic_dec(&lstats_count);
+		xa_unlock(&lstats_list);
+	}
+
+	kfree(stats->ls_source); /* allocated by kobject_get_path */
+
 	LIBCFS_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_entry]));
 }
+
+void lprocfs_stats_free(struct lprocfs_stats **statsh)
+{
+	struct lprocfs_stats *stats = *statsh;
+
+	if (!stats)
+		return;
+
+	if (kref_put(&stats->ls_refcount, stats_free))
+		*statsh = NULL;
+}
 EXPORT_SYMBOL(lprocfs_stats_free);
+
+unsigned int lustre_stats_scan(struct lustre_stats_list *slist, const char *source)
+{
+	struct lprocfs_stats *item, **stats;
+	unsigned int cnt = 0, snum;
+	const char *tmp = source;
+	unsigned long idx = 0;
+
+	if (source)
+		for (snum = 0; tmp[snum]; tmp[snum] == '.' ? snum++ : *tmp++);
+
+	xa_for_each(&lstats_list, idx, item) {
+		if (!kref_get_unless_zero(&item->ls_refcount))
+			continue;
+
+		if (strlen(item->ls_source) == 0) {
+			lprocfs_stats_free(&item);
+			continue;
+		}
+
+		if (source) {
+			char filter[PATH_MAX / 8], *src = item->ls_source;
+			unsigned int num;
+
+			if (strstarts(src, ".fs.lustre."))
+				src += strlen(".fs.lustre.");
+
+			/* glob_match() has a hard time telling *.* from *.*.*
+			 * from *.*.* so we need to compare the number of '.'
+			 * and filter on that as well. This actually avoids
+			 * the overhead of calling glob_match() every time.
+			 */
+			tmp = src;
+			for (num = 0; tmp[num]; tmp[num] == '.' ? num++ : *tmp++);
+			if (snum != num) {
+				lprocfs_stats_free(&item);
+				continue;
+			}
+
+			/* glob_match() does not like *.--- patterns so
+			 * we have to do special handling in this case.
+			 * Replace '*.' with obd_type names.
+			 */
+			if (strstarts(source, "*.")) {
+				char *start = strchr(src, '.');
+				int len;
+
+				/* If start is NULL this means its a top
+				 * level stats. We are looking for "*."
+				 * which is one level down. Let's skip it.
+				 */
+				if (!start) {
+					lprocfs_stats_free(&item);
+					continue;
+				}
+
+				/* We know src -> start is the obd_type */
+				len = start - src;
+				snprintf(filter, sizeof(filter), "%.*s%s",
+					 len, src, source + 1);
+				filter[strlen(filter) - 1] = '\0';
+			} else {
+				strscpy(filter, source, strlen(source) + 1);
+			}
+			if (!glob_match(filter, src)) {
+				lprocfs_stats_free(&item);
+				continue;
+			}
+		}
+		stats = genradix_ptr_alloc(&slist->gfl_list, slist->gfl_count++,
+					   GFP_ATOMIC);
+		if (!stats) {
+			lprocfs_stats_free(&item);
+			return -ENOMEM;
+		}
+		*stats = item;
+		cnt += item->ls_num;
+	}
+
+	return slist->gfl_count ? cnt : -ENOENT;
+}
 
 u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,
 			    enum lprocfs_fields_flags field)

@@ -197,6 +197,8 @@ enum lctl_param_flags {
 
 int llapi_param_display_value(char *path, int version,
 			      enum lctl_param_flags flags, FILE *fp);
+int llapi_param_set_value(char *path, char *value, int version,
+			  enum lctl_param_flags flags, FILE *fp);
 
 enum get_lmd_info_type {
 	GET_LMD_INFO = 1,

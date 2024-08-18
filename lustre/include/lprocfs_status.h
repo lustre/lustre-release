@@ -179,8 +179,14 @@ enum lprocfs_fields_flags {
 };
 
 struct lprocfs_stats {
+	/* source for the stats */
+	char				*ls_source;
+	/* index in Xarray */
+	unsigned int			ls_index;
 	/* # of counters */
 	unsigned short			ls_num;
+	/* track reference */
+	struct kref			ls_refcount;
 	/* 1 + the biggest cpu # whose ls_percpu slot has been allocated */
 	unsigned short			ls_biggest_alloc_num;
 	enum lprocfs_stats_flags	ls_flags;
@@ -398,9 +404,8 @@ struct brw_stats {
 int lprocfs_init_brw_stats(struct brw_stats *brw_stats);
 void lprocfs_fini_brw_stats(struct brw_stats *brw_stats);
 
-void ldebugfs_register_osd_stats(struct dentry *parent,
-				 struct brw_stats *brw_stats,
-				 struct lprocfs_stats *stats);
+void ldebugfs_register_brw_stats(struct dentry *parent,
+				 struct brw_stats *brw_stats);
 #endif /* HAVE_SERVER_SUPPORT */
 
 #define EXTRA_FIRST_OPC LDLM_GLIMPSE_ENQUEUE
@@ -495,8 +500,12 @@ lprocfs_stats_alloc(unsigned int num, enum lprocfs_stats_flags flags);
 extern void lprocfs_stats_clear(struct lprocfs_stats *stats);
 extern void lprocfs_stats_free(struct lprocfs_stats **stats);
 extern void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats);
-extern int lprocfs_alloc_obd_stats(struct obd_device *obd,
-				   unsigned int num_stats);
+struct lprocfs_stats *ldebugfs_stats_alloc(int num, char *name,
+					   struct dentry *entry,
+					   struct kobject *kobj,
+					   enum lprocfs_stats_flags flags);
+extern int ldebugfs_alloc_obd_stats(struct obd_device *obd,
+				    unsigned int num_stats);
 extern int lprocfs_alloc_md_stats(struct obd_device *obd,
 				  unsigned int num_private_stats);
 extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
@@ -505,7 +514,7 @@ extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
 extern void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
 				       enum lprocfs_counter_config config,
 				       const char *name, const char *units);
-extern void lprocfs_free_obd_stats(struct obd_device *obd);
+extern void ldebugfs_free_obd_stats(struct obd_device *obd);
 extern void lprocfs_free_md_stats(struct obd_device *obd);
 struct obd_export;
 struct nid_stat;
@@ -979,20 +988,10 @@ static inline void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 {
 }
 
-static inline int lprocfs_alloc_obd_stats(struct obd_device *obd,
-					  unsigned int num_stats)
-{
-	return 0;
-}
-
 static inline int lprocfs_alloc_md_stats(struct obd_device *obd,
 					 unsigned int num_private_stats)
 {
 	return 0;
-}
-
-static inline void lprocfs_free_obd_stats(struct obd_device *obd)
-{
 }
 
 static inline void lprocfs_free_md_stats(struct obd_device *obd)

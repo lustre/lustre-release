@@ -778,7 +778,7 @@ static int echo_srv_init0(const struct lu_env *env,
 
 	obd->obd_vars = lprocfs_echo_obd_vars;
 	if (!lprocfs_obd_setup(obd, true) &&
-	    lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
+	    ldebugfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
 		lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
 				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
 				     "read_bytes");
@@ -807,7 +807,7 @@ err_out:
 	obd->obd_namespace = NULL;
 
 	lprocfs_obd_cleanup(obd);
-	lprocfs_free_obd_stats(obd);
+	ldebugfs_free_obd_stats(obd);
 	RETURN(rc);
 }
 
@@ -845,7 +845,7 @@ static void echo_srv_fini(const struct lu_env *env,
 	}
 
 	lprocfs_obd_cleanup(obd);
-	lprocfs_free_obd_stats(obd);
+	ldebugfs_free_obd_stats(obd);
 
 	leaked = atomic_read(&obd2echo(obd)->eo_prep);
 	if (leaked != 0)

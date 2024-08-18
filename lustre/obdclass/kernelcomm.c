@@ -38,8 +38,7 @@
 
 #include <linux/file.h>
 #include <linux/glob.h>
-#include <net/genetlink.h>
-#include <net/sock.h>
+#include <linux/types.h>
 
 #include <libcfs/linux/linux-net.h>
 #include <obd_class.h>
@@ -289,8 +288,532 @@ static int lustre_device_done(struct netlink_callback *cb)
 	return 0;
 }
 
+struct ln_key_list stats_params = {
+	.lkl_maxattr	= LUSTRE_PARAM_ATTR_MAX,
+	.lkl_list	= {
+		[LUSTRE_PARAM_ATTR_HDR] = {
+			.lkp_value	= "stats",
+			.lkp_key_format	= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type	= NLA_NUL_STRING,
+		},
+		[LUSTRE_PARAM_ATTR_SOURCE] = {
+			.lkp_value	= "source",
+			.lkp_data_type	= NLA_STRING,
+		},
+	},
+};
+
+static const struct ln_key_list stats_list = {
+	.lkl_maxattr			= LUSTRE_STATS_ATTR_MAX,
+	.lkl_list			= {
+		[LUSTRE_STATS_ATTR_HDR]	= {
+			.lkp_value		= "stats",
+			.lkp_key_format		= LNKF_SEQUENCE | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NUL_STRING,
+		},
+		[LUSTRE_STATS_ATTR_SOURCE]	= {
+			.lkp_value		= "source",
+			.lkp_data_type		= NLA_STRING,
+		},
+		[LUSTRE_STATS_ATTR_TIMESTAMP]	= {
+			.lkp_value		= "snapshot_time",
+			.lkp_data_type		= NLA_S64,
+		},
+		[LUSTRE_STATS_ATTR_START_TIME]	= {
+			.lkp_value		= "start_time",
+			.lkp_data_type		= NLA_S64,
+		},
+		[LUSTRE_STATS_ATTR_ELAPSE_TIME]	= {
+			.lkp_value		= "elapsed_time",
+			.lkp_data_type		= NLA_S64,
+		},
+		[LUSTRE_STATS_ATTR_DATASET]	= {
+			.lkp_key_format		= LNKF_FLOW | LNKF_MAPPING,
+			.lkp_data_type		= NLA_NESTED,
+		},
+	},
+};
+
+static const struct ln_key_list stats_dataset_list = {
+	.lkl_maxattr				= LUSTRE_STATS_ATTR_DATASET_MAX,
+	.lkl_list				= {
+		[LUSTRE_STATS_ATTR_DATASET_NAME]	= {
+			.lkp_data_type			= NLA_NUL_STRING,
+		},
+		[LUSTRE_STATS_ATTR_DATASET_COUNT]	= {
+			.lkp_value			= "samples",
+			.lkp_data_type			= NLA_U64,
+		},
+		[LUSTRE_STATS_ATTR_DATASET_UNITS]	= {
+			.lkp_value			= "units",
+			.lkp_data_type			= NLA_STRING,
+		},
+		[LUSTRE_STATS_ATTR_DATASET_MINIMUM]	= {
+			.lkp_value			= "min",
+			.lkp_data_type			= NLA_U64,
+		},
+		[LUSTRE_STATS_ATTR_DATASET_MAXIMUM]	= {
+			.lkp_value			= "max",
+			.lkp_data_type			= NLA_U64,
+		},
+		[LUSTRE_STATS_ATTR_DATASET_SUM]		= {
+			.lkp_value			= "sum",
+			.lkp_data_type			= NLA_U64,
+		},
+		[LUSTRE_STATS_ATTR_DATASET_SUMSQUARE]	= {
+			.lkp_value			= "stddev",
+			.lkp_data_type			= NLA_U64,
+		},
+	},
+};
+
+#ifndef HAVE_GENL_DUMPIT_INFO
+static struct cfs_genl_dumpit_info service_info = {
+	.family		= &lustre_family,
+};
+#endif
+
+static inline struct lustre_stats_list *
+stats_dump_ctx(struct netlink_callback *cb)
+{
+	return (struct lustre_stats_list *)cb->args[0];
+}
+
+int lustre_stats_done(struct netlink_callback *cb)
+{
+	struct lustre_stats_list *list = stats_dump_ctx(cb);
+
+	if (list) {
+		genradix_free(&list->gfl_list);
+		OBD_FREE(list, sizeof(*list));
+		cb->args[0] = 0;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(lustre_stats_done);
+
+/* Min size for key table and its matching values:
+ *	header		strlen("stats")
+ *	source		strlen("source") + MAX_OBD_NAME * 2
+ *	timestamp	strlen("snapshot_time") + s64
+ *	start time	strlen("start time") + s64
+ *	elapsed_time	strlen("elapse time") + s64
+ */
+#define STATS_MSG_MIN_SIZE	(267 + 58)
+
+/* key table + values for each dataset entry:
+ *	dataset name	25
+ *	dataset count	strlen("samples") + u64
+ *	dataset units	strlen("units") + 5
+ *	dataset min	strlen("min") + u64
+ *	dataset max	strlen("max") + u64
+ *	dataset sum	strlen("sum") + u64
+ *	dataset stdev	strlen("stddev") + u64
+ */
+#define STATS_MSG_DATASET_SIZE	(97)
+
+static int lustre_stats_start(struct netlink_callback *cb)
+{
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+	unsigned long len = STATS_MSG_MIN_SIZE;
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	struct lustre_stats_list *slist;
+	int msg_len = genlmsg_len(gnlh);
+	int rc = 0;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+#ifndef HAVE_GENL_DUMPIT_INFO
+	cb->args[1] = (unsigned long)&service_info;
+#endif
+	OBD_ALLOC(slist, sizeof(*slist));
+	if (!slist) {
+		NL_SET_ERR_MSG(extack, "failed to setup obd list");
+		return -ENOMEM;
+	}
+
+	genradix_init(&slist->gfl_list);
+	slist->gfl_index = 0;
+	cb->args[0] = (long)slist;
+
+	if (msg_len > 0) {
+		struct nlattr *params = genlmsg_data(gnlh);
+		struct nlattr *dev;
+		int rem;
+
+		if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+			NL_SET_ERR_MSG(extack, "no configuration");
+			GOTO(report_err, rc);
+		}
+
+		nla_for_each_nested(dev, params, rem) {
+			struct nlattr *item;
+			int rem2;
+
+			nla_for_each_nested(item, dev, rem2) {
+				char filter[MAX_OBD_NAME * 2];
+
+				if (nla_type(item) != LN_SCALAR_ATTR_VALUE ||
+				    nla_strcmp(item, "source") != 0)
+					continue;
+
+				item = nla_next(item, &rem2);
+				if (nla_type(item) != LN_SCALAR_ATTR_VALUE) {
+					NL_SET_ERR_MSG(extack,
+						       "source has invalid value");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				memset(filter, 0, sizeof(filter));
+				rc = nla_strscpy(filter, item, sizeof(filter));
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "source key string is invalud");
+					GOTO(report_err, rc);
+				}
+
+				rc = lustre_stats_scan(slist, filter);
+				if (rc < 0) {
+					NL_SET_ERR_MSG(extack,
+						       "stat scan failure");
+					GOTO(report_err, rc);
+				}
+
+				if (gnlh->version)
+					len += STATS_MSG_DATASET_SIZE * rc;
+				rc = 0;
+			}
+		}
+	} else {
+		rc = lustre_stats_scan(slist, NULL);
+		if (rc < 0) {
+			NL_SET_ERR_MSG(extack, "stat scan failure");
+			GOTO(report_err, rc);
+		}
+
+		if (gnlh->version)
+			len += STATS_MSG_DATASET_SIZE * rc;
+		rc = 0;
+	}
+
+	/* Older kernels only support 64K. Our stats can be huge. */
+	if (len >= (1UL << (sizeof(cb->min_dump_alloc) << 3))) {
+		struct lprocfs_stats **stats;
+		struct genradix_iter iter;
+
+		genradix_for_each(&slist->gfl_list, iter, stats)
+			lprocfs_stats_free(stats);
+		NL_SET_ERR_MSG(extack, "Netlink msg is too large");
+		rc = -EMSGSIZE;
+	} else {
+		cb->min_dump_alloc = len;
+	}
+report_err:
+	if (rc < 0)
+		lustre_stats_done(cb);
+
+	return rc;
+}
+
+int lustre_stats_dump(struct sk_buff *msg, struct netlink_callback *cb)
+{
+	const struct cfs_genl_dumpit_info *info = lnet_genl_dumpit_info(cb);
+	struct lustre_stats_list *slist = stats_dump_ctx(cb);
+	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
+#ifdef HAVE_NL_PARSE_WITH_EXT_ACK
+	struct netlink_ext_ack *extack = NULL;
+#endif
+	int portid = NETLINK_CB(cb->skb).portid;
+	struct lprocfs_stats *prev = NULL;
+	int seq = cb->nlh->nlmsg_seq;
+	int idx = slist->gfl_index;
+	int count, i, rc = 0;
+	bool started = true;
+
+#ifdef HAVE_NL_DUMP_WITH_EXT_ACK
+	extack = cb->extack;
+#endif
+	while (idx < slist->gfl_count) {
+		struct lprocfs_stats **tmp, *stats;
+		struct nlattr *dataset = NULL;
+		void *ghdr = NULL;
+		char *src;
+
+		tmp = genradix_ptr(&slist->gfl_list, idx);
+		stats = tmp[0];
+		if (!stats)
+			continue;
+
+		if (gnlh->version &&
+		   (!idx || (prev && strcmp(stats->ls_cnt_header[2].lc_name,
+					    prev->ls_cnt_header[2].lc_name) != 0))) {
+			size_t len = sizeof(struct ln_key_list);
+			int flags = NLM_F_CREATE | NLM_F_MULTI;
+			const struct ln_key_list **all;
+			struct ln_key_list *start;
+
+			/* LUSTRE_STATS_ATTR_MAX includes one stat entry
+			 * by default since we need to define what a stat
+			 * entry is.
+			 */
+			count = LUSTRE_STATS_ATTR_MAX + stats->ls_num - 1;
+			len += sizeof(struct ln_key_props) * count;
+			OBD_ALLOC(start, len);
+			if (!start) {
+				NL_SET_ERR_MSG(extack,
+					       "first key list allocation failure");
+				GOTO(out_cancel, rc = -ENOMEM);
+			}
+			*start = stats_list; /* Set initial values */
+			start->lkl_maxattr += stats->ls_num;
+			for (i = LUSTRE_STATS_ATTR_MAX + 1;
+			     i <= start->lkl_maxattr; i++)
+				start->lkl_list[i] =
+					stats_list.lkl_list[LUSTRE_STATS_ATTR_DATASET];
+
+			OBD_ALLOC_PTR_ARRAY(all, stats->ls_num + 2);
+			if (!all) {
+				NL_SET_ERR_MSG(extack,
+					       "key list allocation failure");
+				OBD_FREE(start, len);
+				GOTO(out_cancel, rc = -ENOMEM);
+			}
+
+			all[0] = start;
+			for (i = 1; i <= stats->ls_num; i++)
+				all[i] = &stats_dataset_list;
+			all[i] = NULL;
+
+			if (idx)
+				flags |= NLM_F_REPLACE;
+			rc = lnet_genl_send_scalar_list(msg, portid, seq,
+							info->family, flags,
+							gnlh->cmd, all);
+			OBD_FREE_PTR_ARRAY(all, stats->ls_num + 2);
+			OBD_FREE(start, len);
+			if (rc < 0) {
+				NL_SET_ERR_MSG(extack,
+					       "failed to send key table");
+				GOTO(out_cancel, rc);
+			}
+		} else if (!gnlh->version && !idx) {
+			/* We just want the source of the stats */
+			const struct ln_key_list *all[] = {
+				&stats_params, NULL
+			};
+
+			rc = lnet_genl_send_scalar_list(msg, portid, seq,
+							info->family,
+							NLM_F_CREATE | NLM_F_MULTI,
+							gnlh->cmd, all);
+			if (rc < 0) {
+				NL_SET_ERR_MSG(extack,
+					       "failed to send key table");
+				GOTO(out_cancel, rc);
+			}
+		}
+		prev = stats;
+
+		ghdr = genlmsg_put(msg, portid, seq, info->family, NLM_F_MULTI,
+				  gnlh->cmd);
+		if (!ghdr)
+			GOTO(out_cancel, rc = -EMSGSIZE);
+
+		if (started) {
+			nla_put_string(msg, LUSTRE_STATS_ATTR_HDR, "");
+			started = false;
+		}
+
+		src = stats->ls_source;
+		if (strstarts(stats->ls_source, ".fs.lustre."))
+			src += strlen(".fs.lustre.");
+		nla_put_string(msg, LUSTRE_STATS_ATTR_SOURCE, src);
+
+		if (!gnlh->version) { /* We just want the source of the stats */
+			idx++;
+			GOTO(out_cancel, rc = 0);
+		}
+
+		rc = nla_put_s64(msg, LUSTRE_STATS_ATTR_TIMESTAMP,
+				 ktime_get_real_ns(), LUSTRE_STATS_ATTR_PAD);
+		if (rc < 0)
+			GOTO(out_cancel, rc);
+
+		if (gnlh->version > 1) {
+			rc = nla_put_s64(msg, LUSTRE_STATS_ATTR_START_TIME,
+					 ktime_to_ns(stats->ls_init),
+					 LUSTRE_STATS_ATTR_PAD);
+			if (rc < 0)
+				GOTO(out_cancel, rc);
+
+			rc = nla_put_s64(msg, LUSTRE_STATS_ATTR_ELAPSE_TIME,
+					 ktime_to_ns(ktime_sub(stats->ls_init,
+							       ktime_get())),
+					 LUSTRE_STATS_ATTR_PAD);
+			if (rc < 0)
+				GOTO(out_cancel, rc);
+		}
+
+		i = 0;
+		for (count = 0; count < stats->ls_num; count++) {
+			struct lprocfs_counter_header *hdr;
+			struct lprocfs_counter ctr;
+			struct nlattr *stat_attr;
+
+			lprocfs_stats_collect(stats, count, &ctr);
+
+			if (ctr.lc_count == 0)
+				continue;
+
+			hdr = &stats->ls_cnt_header[count];
+			dataset = nla_nest_start(msg,
+						 LUSTRE_STATS_ATTR_DATASET + i++);
+			stat_attr = nla_nest_start(msg, 0);
+
+			nla_put_string(msg, LUSTRE_STATS_ATTR_DATASET_NAME,
+				       hdr->lc_name);
+			nla_put_u64_64bit(msg, LUSTRE_STATS_ATTR_DATASET_COUNT,
+					  ctr.lc_count,
+					  LUSTRE_STATS_ATTR_DATASET_PAD);
+
+			nla_put_string(msg, LUSTRE_STATS_ATTR_DATASET_UNITS,
+				       hdr->lc_units);
+
+			if (hdr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
+				nla_put_u64_64bit(msg,
+						  LUSTRE_STATS_ATTR_DATASET_MINIMUM,
+						  ctr.lc_min,
+						  LUSTRE_STATS_ATTR_DATASET_PAD);
+
+				nla_put_u64_64bit(msg,
+						  LUSTRE_STATS_ATTR_DATASET_MAXIMUM,
+						  ctr.lc_max,
+						  LUSTRE_STATS_ATTR_DATASET_PAD);
+
+				nla_put_u64_64bit(msg,
+						  LUSTRE_STATS_ATTR_DATASET_SUM,
+						  ctr.lc_sum,
+						  LUSTRE_STATS_ATTR_DATASET_PAD);
+
+				if (hdr->lc_config & LPROCFS_CNTR_STDDEV) {
+					nla_put_u64_64bit(msg,
+							  LUSTRE_STATS_ATTR_DATASET_SUMSQUARE,
+							  ctr.lc_sumsquare,
+							  LUSTRE_STATS_ATTR_DATASET_PAD);
+				}
+			}
+			nla_nest_end(msg, stat_attr);
+			nla_nest_end(msg, dataset);
+		}
+		idx++;
+out_cancel:
+		lprocfs_stats_free(&stats);
+		if (rc < 0) {
+			genlmsg_cancel(msg, ghdr);
+			return rc;
+		}
+		genlmsg_end(msg, ghdr);
+	}
+	slist->gfl_index = idx;
+
+	return rc;
+}
+EXPORT_SYMBOL(lustre_stats_dump);
+
+#ifndef HAVE_NETLINK_CALLBACK_START
+int lustre_old_stats_dump(struct sk_buff *msg, struct netlink_callback *cb)
+{
+	struct lustre_stats_list *slist = stats_dump_ctx(cb);
+
+	if (!slist) {
+		int rc = lustre_stats_start(cb);
+
+		if (rc < 0)
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
+	}
+
+	return lustre_stats_dump(msg, cb);
+}
+#endif
+
+static int lustre_stats_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlmsghdr *nlh = nlmsg_hdr(skb);
+	struct genlmsghdr *gnlh = nlmsg_data(nlh);
+	struct nlattr *params = genlmsg_data(gnlh);
+	int msg_len, rem, idx = 0, rc = 0;
+	struct lustre_stats_list slist;
+	struct nlattr *attr;
+
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		GENL_SET_ERR_MSG(info, "no configuration");
+		GOTO(report_err, rc = -ENOMSG);
+	}
+
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		GENL_SET_ERR_MSG(info, "invalid configuration");
+		GOTO(report_err, rc = -EINVAL);
+	}
+
+	genradix_init(&slist.gfl_list);
+	slist.gfl_count = 0;
+
+	nla_for_each_nested(attr, params, rem) {
+		struct nlattr *prop;
+		int rem2;
+
+		if (nla_type(attr) != LN_SCALAR_ATTR_LIST)
+			continue;
+
+		nla_for_each_nested(prop, attr, rem2) {
+			char source[MAX_OBD_NAME * 2];
+
+			if (nla_type(prop) != LN_SCALAR_ATTR_VALUE ||
+			    nla_strcmp(prop, "source") != 0)
+				continue;
+
+			prop = nla_next(prop, &rem2);
+			if (nla_type(prop) != LN_SCALAR_ATTR_VALUE)
+				GOTO(report_err, rc = -EINVAL);
+
+			memset(source, 0, sizeof(source));
+			rc = nla_strscpy(source, prop, sizeof(source));
+			if (rc < 0)
+				GOTO(report_err, rc);
+
+			rc = lustre_stats_scan(&slist, source);
+			if (rc < 0) {
+				GENL_SET_ERR_MSG(info,
+						 "stat scan failure");
+				GOTO(report_err, rc);
+			}
+			rc = 0;
+		}
+	}
+
+	while (idx < slist.gfl_count) {
+		struct lprocfs_stats **stats;
+
+		stats = genradix_ptr(&slist.gfl_list, idx++);
+		if (!stats[0])
+			continue;
+
+		lprocfs_stats_clear(stats[0]);
+	}
+report_err:
+	return rc;
+}
+
 static const struct genl_multicast_group lustre_mcast_grps[] = {
 	{ .name		= "devices",		},
+	{ .name		= "stats",		},
 };
 
 static const struct genl_ops lustre_genl_ops[] = {
@@ -303,6 +826,17 @@ static const struct genl_ops lustre_genl_ops[] = {
 		.dumpit		= lustre_old_device_list_dump,
 #endif
 		.done		= lustre_device_done,
+	},
+	{
+		.cmd		= LUSTRE_CMD_STATS,
+#ifdef HAVE_NETLINK_CALLBACK_START
+		.start		= lustre_stats_start,
+		.dumpit		= lustre_stats_dump,
+#else
+		.dumpit		= lustre_old_stats_dump,
+#endif
+		.done		= lustre_stats_done,
+		.doit		= lustre_stats_cmd,
 	},
 };
 

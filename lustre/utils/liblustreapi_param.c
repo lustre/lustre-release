@@ -514,8 +514,137 @@ static int print_out_devices(yaml_parser_t *reply, enum lctl_param_flags flags)
 	return rc;
 }
 
+static int print_out_stats(yaml_parser_t *reply, int version, int flags)
+{
+	bool show_path = flags & PARAM_FLAGS_SHOW_SOURCE;
+	char buf[64 * 1024], *tmp = NULL;
+	yaml_event_t event;
+	bool done = false;
+	int index = 0;
+	int rc;
+
+	bzero(buf, sizeof(buf));
+	tmp = buf;
+
+	while (!done) {
+		rc = yaml_parser_parse(reply, &event);
+		if (rc == 0)
+			break;
+
+		if (event.type == YAML_MAPPING_END_EVENT) {
+			size_t len = strlen(buf);
+
+			if (len > 0) {
+				/* eat last white space */
+				buf[len - 1] = '\0';
+				printf("%s\n",  buf);
+			}
+			bzero(buf, sizeof(buf));
+			tmp = buf;
+			index = 0;
+		}
+
+		if (event.type == YAML_SEQUENCE_START_EVENT) {
+			bzero(buf, sizeof(buf));
+			tmp = buf;
+			index = 0;
+		}
+
+		if (event.type == YAML_SCALAR_EVENT) {
+			char *value = (char *)event.data.scalar.value;
+			int64_t num;
+
+			if (strcmp(value, "snapshot_time") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				value = (char *)event.data.scalar.value;
+				num = strtoll(value, NULL, 10);
+				fprintf(stdout, "%-25s %lu.%09lu secs.nsecs\n",
+					"snapshot_time", num / 1000000000L,
+					num % 1000000000L);
+			} else if (strcmp(value, "start_time") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				value = (char *)event.data.scalar.value;
+				num = strtoll(value, NULL, 10);
+				fprintf(stdout, "%-25s %lu.%09lu secs.nsecs\n",
+					"start_time", num / 1000000000L,
+					num % 1000000000L);
+			} else if (strcmp(value, "elapsed_time") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				value = (char *)event.data.scalar.value;
+				num = strtoll(value, NULL, 10);
+				fprintf(stdout, "%-25s %lu.%09lu secs.nsecs\n",
+					"elapsed_time", num / 1000000000L,
+					num % 1000000000L);
+			} else if (strcmp(value, "source") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				if (show_path) {
+					value = (char *)event.data.scalar.value;
+					if (version) {
+						fprintf(stdout, "%s.stats=\n",
+							value);
+					} else {
+						fprintf(stdout, "%s.stats\n",
+							value);
+					}
+				}
+			} else if (strcmp(value, "samples") == 0) {
+				size_t len;
+
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				value = (char *)event.data.scalar.value;
+				len = sprintf(tmp, "%s samples", value);
+				tmp += len;
+			} else {
+				size_t len;
+
+				if (tmp != buf) {
+					yaml_event_delete(&event);
+					rc = yaml_parser_parse(reply, &event);
+					if (rc == 0)
+						break;
+				}
+
+				value = (char *)event.data.scalar.value;
+				if (tmp == buf)
+					len = sprintf(tmp, "%-26s", value);
+				else if (index == 1)
+					len = sprintf(tmp, " [%s]", value);
+				else
+					len = sprintf(tmp, " %s", value);
+				tmp += len;
+				index++;
+			}
+		}
+
+		done = (event.type == YAML_DOCUMENT_END_EVENT);
+		yaml_event_delete(&event);
+	}
+
+	return rc;
+}
+
 static int lcfg_param_get_yaml(yaml_parser_t *reply, struct nl_sock *sk,
-			       int version, char *pattern)
+			       int version, int flags, char *pattern)
 {
 	char source[PATH_MAX / 2], group[GENL_NAMSIZ + 1];
 	char *family = "lustre", *tmp;
@@ -542,6 +671,8 @@ static int lcfg_param_get_yaml(yaml_parser_t *reply, struct nl_sock *sk,
 
 	if (strcmp(group, "devices") == 0)
 		cmd = LUSTRE_CMD_DEVICES;
+	else if (strcmp(group, "stats") == 0)
+		cmd = LUSTRE_CMD_STATS;
 
 	if (!cmd)
 		return -EOPNOTSUPP;
@@ -559,7 +690,7 @@ static int lcfg_param_get_yaml(yaml_parser_t *reply, struct nl_sock *sk,
 	yaml_emitter_initialize(&request);
 	rc = yaml_emitter_set_output_netlink(&request, sk,
 					     family, version,
-					     cmd, NLM_F_DUMP);
+					     cmd, flags);
 	if (rc == 0)
 		goto error;
 
@@ -678,7 +809,7 @@ int llapi_param_display_value(char *path, int version,
 	if (!sk)
 		return -ENOMEM;
 
-	rc = lcfg_param_get_yaml(&reply, sk, version, path);
+	rc = lcfg_param_get_yaml(&reply, sk, version, NLM_F_DUMP, path);
 	if (rc < 0)
 		return rc;
 
@@ -723,6 +854,9 @@ int llapi_param_display_value(char *path, int version,
 
 				if (strcmp(value, "devices") == 0)
 					rc = print_out_devices(&reply, flags);
+				else if (strcmp(value, "stats") == 0)
+					rc = print_out_stats(&reply, version,
+							     flags);
 				if (rc == 0)
 					break;
 			}
@@ -736,6 +870,46 @@ int llapi_param_display_value(char *path, int version,
 			rc = -EINVAL;
 		}
 	}
+free_reply:
+	yaml_parser_delete(&reply);
+	nl_socket_free(sk);
+	return rc == 1 ? 0 : rc;
+}
+
+int llapi_param_set_value(char *path, char *value, int version,
+			  enum lctl_param_flags flags, FILE *fp)
+{
+	yaml_document_t results;
+	yaml_parser_t reply;
+	struct nl_sock *sk;
+	int rc;
+
+	/* Currently only stats allow changing settings */
+	if (!strstr(path, "/stats"))
+		return -ENOENT;
+
+	/* Only clear is currently supported */
+	if (strcmp(value, "clear") != 0)
+		return -EINVAL;
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -ENOMEM;
+
+	rc = lcfg_param_get_yaml(&reply, sk, version, NLM_F_REPLACE, path);
+	if (rc < 0)
+		return rc;
+
+	/* load the reply results */
+	rc = yaml_parser_load(&reply, &results);
+	if (rc == 0) {
+		yaml_parser_log_error(&reply, stderr, "set_param: ");
+		yaml_document_delete(&results);
+		rc = -EINVAL;
+		goto free_reply;
+	}
+
+	yaml_document_delete(&results);
 free_reply:
 	yaml_parser_delete(&reply);
 	nl_socket_free(sk);

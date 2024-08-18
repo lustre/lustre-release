@@ -2566,8 +2566,22 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 	ENTRY;
 	LASSERT(sbi);
 
+	/* Yes we also register sysfs mount kset here as well */
+	sbi->ll_kset.kobj.parent = llite_kobj;
+	sbi->ll_kset.kobj.ktype = &sbi_ktype;
+	init_completion(&sbi->ll_kobj_unregister);
+	err = kobject_set_name(&sbi->ll_kset.kobj, "%s", name);
+	if (err)
+		RETURN(err);
+
+	err = kset_register(&sbi->ll_kset);
+	if (err)
+		RETURN(err);
+
+	lsi->lsi_kobj = kobject_get(&sbi->ll_kset.kobj);
+
 	if (IS_ERR_OR_NULL(llite_root))
-		goto out_ll_kset;
+		RETURN(0);
 
 	sbi->ll_debugfs_entry = debugfs_create_dir(name, llite_root);
 	ldebugfs_add_vars(sbi->ll_debugfs_entry, lprocfs_llite_obd_vars, sb);
@@ -2586,9 +2600,11 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 			    &ll_rw_offset_stats_fops);
 
 	/* File operations stats */
-	sbi->ll_stats = lprocfs_stats_alloc(LPROC_LL_FILE_OPCODES,
-					    LPROCFS_STATS_FLAG_NONE);
-	if (sbi->ll_stats == NULL)
+	sbi->ll_stats = ldebugfs_stats_alloc(LPROC_LL_FILE_OPCODES, "stats",
+					     sbi->ll_debugfs_entry,
+					     &sbi->ll_kset.kobj,
+					     LPROCFS_STATS_FLAG_NONE);
+	if (!sbi->ll_stats)
 		GOTO(out_debugfs, err = -ENOMEM);
 
 	/* do counter init */
@@ -2597,9 +2613,6 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 				     llite_opcode_table[id].lfo_opcode,
 				     llite_opcode_table[id].lfo_config,
 				     llite_opcode_table[id].lfo_opname);
-
-	debugfs_create_file("stats", 0644, sbi->ll_debugfs_entry,
-			    sbi->ll_stats, &ldebugfs_stats_seq_fops);
 
 	sbi->ll_ra_stats = lprocfs_stats_alloc(ARRAY_SIZE(ra_stat_string),
 					       LPROCFS_STATS_FLAG_NONE);
@@ -2621,24 +2634,7 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 	debugfs_create_file("read_ahead_stats", 0644, sbi->ll_debugfs_entry,
 			    sbi->ll_ra_stats, &ldebugfs_stats_seq_fops);
 
-out_ll_kset:
-	/* Yes we also register sysfs mount kset here as well */
-	sbi->ll_kset.kobj.parent = llite_kobj;
-	sbi->ll_kset.kobj.ktype = &sbi_ktype;
-	init_completion(&sbi->ll_kobj_unregister);
-	err = kobject_set_name(&sbi->ll_kset.kobj, "%s", name);
-	if (err)
-		GOTO(out_ra_stats, err);
-
-	err = kset_register(&sbi->ll_kset);
-	if (err)
-		GOTO(out_ra_stats, err);
-
-	lsi->lsi_kobj = kobject_get(&sbi->ll_kset.kobj);
-
 	RETURN(0);
-out_ra_stats:
-	lprocfs_stats_free(&sbi->ll_ra_stats);
 out_stats:
 	lprocfs_stats_free(&sbi->ll_stats);
 out_debugfs:

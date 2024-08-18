@@ -19,6 +19,9 @@
 #ifndef __LUSTRE_KERNELCOMM_H__
 #define __LUSTRE_KERNELCOMM_H__
 
+#include <linux/generic-radix-tree.h>
+#include <net/genetlink.h>
+#include <net/sock.h>
 /* For declarations shared with userspace */
 #include <uapi/linux/lustre/lustre_kernelcomm.h>
 
@@ -55,6 +58,106 @@ enum lustre_device_attrs {
 };
 
 #define LUSTRE_DEVICE_ATTR_MAX (__LUSTRE_DEVICE_ATTR_MAX_PLUS_ONE - 1)
+
+/**
+ * enum lustre_param_list_attrs	      - General header to list all sources
+ *					supporting an specific query.
+ *
+ * @LUSTRE_PARAM_ATTR_UNSPEC:		unspecified attribute to catch errors
+ *
+ * @LUSTRE_PARAM_ATTR_HDR:		groups params belong to (NLA_NUL_STRING)
+ * @LUSTRE_PARAM_ATTR_SOURCE:		source of the params (NLA_STRING)
+ */
+enum lustre_param_list_attrs {
+	LUSTRE_PARAM_ATTR_UNSPEC = 0,
+
+	LUSTRE_PARAM_ATTR_HDR,
+	LUSTRE_PARAM_ATTR_SOURCE,
+
+	__LUSTRE_PARAM_ATTR_MAX_PLUS_ONE
+};
+
+#define LUSTRE_PARAM_ATTR_MAX (__LUSTRE_PARAM_ATTR_MAX_PLUS_ONE - 1)
+
+/**
+ * enum lustre_stats_attrs	     - Lustre stats netlink attributes used
+ *				       to compose messages for sending or
+ *				       receiving.
+ *
+ * @LUSTRE_STATS_ATTR_UNSPEC:	       unspecified attribute to catch errors
+ * @LUSTRE_STATS_ATTR_PAD:	       padding for 64-bit attributes, ignore
+ *
+ * @LUSTRE_STATS_ATTR_HDR:	       groups stats belong to (NLA_NUL_STRING)
+ * @LUSTRE_STATS_ATTR_SOURCE:	       source of the stats (NLA_STRING)
+ * @LUSTRE_STATS_ATTR_TIMESTAMP:       time of collection in nanoseconds
+ *				       (NLA_S64)
+ * @LUSTRE_STATS_ATTR_START_TIME:      start time of collection (NLA_S64)
+ * @LUSTRE_STATS_ATTR_ELPASE_TIME:     elpase time of collection (NLA_S64)
+ * @LUSTRE_STATS_ATTR_DATASET:	       bookmarks for that stats data
+ *				       (NLA_NESTED)
+ */
+enum lustre_stats_attrs {
+	LUSTRE_STATS_ATTR_UNSPEC = 0,
+	LUSTRE_STATS_ATTR_PAD = LUSTRE_STATS_ATTR_UNSPEC,
+
+	LUSTRE_STATS_ATTR_HDR,
+	LUSTRE_STATS_ATTR_SOURCE,
+	LUSTRE_STATS_ATTR_TIMESTAMP,
+	LUSTRE_STATS_ATTR_START_TIME,
+	LUSTRE_STATS_ATTR_ELAPSE_TIME,
+	LUSTRE_STATS_ATTR_DATASET,
+
+	__LUSTRE_STATS_ATTR_MAX_PLUS_ONE,
+};
+
+#define LUSTRE_STATS_ATTR_MAX	(__LUSTRE_STATS_ATTR_MAX_PLUS_ONE - 1)
+
+/**
+ * enum lustre_stats_dataset_attrs    - Lustre stats counter's netlink
+ *					attributes used to compose messages
+ *					for sending or receiving.
+ *
+ * @LUSTRE_STATS_ATTR_DATASET_UNSPEC:	unspecified attribute to catch errors
+ * @LUSTRE_STATS_ATTR_DATASET_PAD:	padding for 64-bit attributes, ignore
+ *
+ * @LUSTRE_STATS_ATTR_DATASET_NAME:	name of counter (NLA_NUL_STRING)
+ * @LUSTRE_STATS_ATTR_DATASET_COUNT:	counter interation (NLA_U64)
+ * @LUSTRE_STATS_ATTR_DATASET_UNITS:	units of counter values (NLA_STRING)
+ * @LUSTRE_STATS_ATTR_DATASET_MINIMUM:	smallest counter value collected
+ *					(NLA_U64)
+ * @LUSTRE_STATS_ATTR_DATASET_MAXIMUM:	largest count value collected (NLA_U64)
+ * @LUSTRE_STATS_ATTR_DATASET_SUM:	total of all values of the counter
+ *					(NLA_U64)
+ * @LUSTRE_STATS_ATTR_DATASET_SUMSQUARE: Sum of the square of all values.
+ *					 Allows user land apps to calculate
+ *					 standard deviation. (NLA_U64)
+ */
+enum lustre_stats_dataset_attrs {
+	LUSTRE_STATS_ATTR_DATASET_UNSPEC = 0,
+	LUSTRE_STATS_ATTR_DATASET_PAD = LUSTRE_STATS_ATTR_DATASET_UNSPEC,
+
+	LUSTRE_STATS_ATTR_DATASET_NAME,
+	LUSTRE_STATS_ATTR_DATASET_COUNT,
+	LUSTRE_STATS_ATTR_DATASET_UNITS,
+	LUSTRE_STATS_ATTR_DATASET_MINIMUM,
+	LUSTRE_STATS_ATTR_DATASET_MAXIMUM,
+	LUSTRE_STATS_ATTR_DATASET_SUM,
+	LUSTRE_STATS_ATTR_DATASET_SUMSQUARE,
+
+	__LUSTRE_STATS_ATTR_DATASET_MAX_PLUS_ONE,
+};
+
+#define LUSTRE_STATS_ATTR_DATASET_MAX	(__LUSTRE_STATS_ATTR_DATASET_MAX_PLUS_ONE - 1)
+
+struct lustre_stats_list {
+	GENRADIX(struct lprocfs_stats *)	gfl_list;
+	unsigned int				gfl_count;
+	unsigned int				gfl_index;
+};
+
+unsigned int lustre_stats_scan(struct lustre_stats_list *slist, const char *filter);
+int lustre_stats_dump(struct sk_buff *msg, struct netlink_callback *cb);
+int lustre_stats_done(struct netlink_callback *cb);
 
 /* prototype for callback function on kuc groups */
 typedef int (*libcfs_kkuc_cb_t)(void *data, void *cb_arg);

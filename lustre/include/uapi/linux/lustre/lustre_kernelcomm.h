@@ -22,17 +22,21 @@
 #include <linux/types.h>
 
 #define LUSTRE_GENL_NAME		"lustre"
-#define LUSTRE_GENL_VERSION		0x1
+#define LUSTRE_GENL_VERSION		0x2
 
 /*
  * enum lustre_commands		      - Supported Lustre Netlink commands
  *
  * @LUSTRE_CMD_UNSPEC:			unspecified command to catch errors
+ *
  * @LUSTRE_CMD_DEVICES:			command to manage the Lustre devices
+ * @LUSTRE_CMD_STATS:			Lustre stats collection command
  */
 enum lustre_commands {
 	LUSTRE_CMD_UNSPEC	= 0,
+
 	LUSTRE_CMD_DEVICES	= 1,
+	LUSTRE_CMD_STATS	= 5,
 
 	__LUSTRE_CMD_MAX_PLUS_ONE
 };

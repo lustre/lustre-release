@@ -205,6 +205,7 @@ static const char *ll_eopcode2str(__u32 opcode)
 static void
 ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 			 struct dentry **debugfs_root_ret,
+			 struct kobject *kobj,
 			 struct lprocfs_stats **stats_ret)
 {
 	struct dentry *svc_debugfs_entry;
@@ -216,15 +217,15 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 	LASSERT(!*debugfs_root_ret);
 	LASSERT(!*stats_ret);
 
-	svc_stats = lprocfs_stats_alloc(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES,
-					0);
-	if (!svc_stats)
-		return;
-
 	if (dir)
 		svc_debugfs_entry = debugfs_create_dir(dir, root);
 	else
 		svc_debugfs_entry = root;
+
+	svc_stats = ldebugfs_stats_alloc(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES,
+					 name, svc_debugfs_entry, kobj, 0);
+	if (!svc_stats)
+		return;
 
 	lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
 			     config | LPROCFS_TYPE_USECS, "req_waittime");
@@ -255,9 +256,6 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 				     config | LPROCFS_TYPE_USECS,
 				     ll_opcode2str(opcode));
 	}
-
-	debugfs_create_file(name, 0644, svc_debugfs_entry, svc_stats,
-			    &ldebugfs_stats_seq_fops);
 
 	if (dir)
 		*debugfs_root_ret = svc_debugfs_entry;
@@ -1243,7 +1241,8 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 	};
 
 	ptlrpc_ldebugfs_register(entry, svc->srv_name, "stats",
-				 &svc->srv_debugfs_entry, &svc->srv_stats);
+				 &svc->srv_debugfs_entry,
+				 &svc->srv_kobj, &svc->srv_stats);
 	if (!svc->srv_debugfs_entry)
 		return;
 
@@ -1257,6 +1256,7 @@ void ptlrpc_lprocfs_register_obd(struct obd_device *obd)
 {
 	ptlrpc_ldebugfs_register(obd->obd_debugfs_entry, NULL, "stats",
 				 &obd->obd_svc_debugfs_entry,
+				 &obd->obd_kset.kobj,
 				 &obd->obd_svc_stats);
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);

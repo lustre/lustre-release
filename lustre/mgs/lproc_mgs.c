@@ -360,7 +360,7 @@ void lproc_mgs_cleanup(struct mgs_device *mgs)
 
 	lprocfs_free_per_client_stats(obd);
 	lprocfs_obd_cleanup(obd);
-	lprocfs_free_obd_stats(obd);
+	ldebugfs_free_obd_stats(obd);
 	lprocfs_free_md_stats(obd);
 }
 

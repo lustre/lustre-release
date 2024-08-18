@@ -1082,7 +1082,7 @@ int ofd_tunables_init(struct ofd_device *ofd)
 		GOTO(obd_cleanup, rc);
 	}
 
-	rc = lprocfs_alloc_obd_stats(obd, LPROC_OFD_STATS_LAST);
+	rc = ldebugfs_alloc_obd_stats(obd, LPROC_OFD_STATS_LAST);
 	if (rc) {
 		CERROR("%s: lprocfs_alloc_obd_stats failed: %d.\n",
 		       obd->obd_name, rc);
@@ -1123,7 +1123,7 @@ int ofd_tunables_init(struct ofd_device *ofd)
 	RETURN(0);
 
 obd_free_stats:
-	lprocfs_free_obd_stats(obd);
+	ldebugfs_free_obd_stats(obd);
 tgt_cleanup:
 	tgt_tunables_fini(&ofd->ofd_lut);
 obd_cleanup:
