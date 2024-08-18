@@ -1027,6 +1027,28 @@ AC_DEFUN([LN_CONFIG_SOCK_CREATE_KERN], [
 ]) # LN_CONFIG_SOCK_CREATE_KERN
 
 #
+# LN_CONFIG_SOCK_NOT_OWNED_BY_ME
+#
+# Linux upstream v6.11-rc3-g151c9c724d05d5b0d changes TCP socket orphan
+# cleanup, requiring a change in ksocklnd if present. This has been back-ported
+# to 4.* and 5.* Linux distributions.
+#
+AC_DEFUN([LN_SRC_CONFIG_SOCK_NOT_OWNED_BY_ME], [
+	LB2_LINUX_TEST_SRC([sock_not_owned_by_me], [
+		#include <net/sock.h>
+	],[
+		sock_not_owned_by_me((const struct sock *)0);
+	],[-Werror])
+])
+AC_DEFUN([LN_CONFIG_SOCK_NOT_OWNED_BY_ME], [
+	LB2_MSG_LINUX_TEST_RESULT([if Linux kernel has 'sock_not_owned_by_me'],
+	[sock_not_owned_by_me], [
+		AC_DEFINE(HAVE_SOCK_NOT_OWNED_BY_ME, 1,
+			[sock_not_owned_by_me is defined in sock.h])
+	])
+]) # LN_CONFIG_SOCK_NOT_OWNED_BY_ME
+
+#
 # LN_CONFIG_SK_DATA_READY
 #
 # 3.15 for struct sock the *sk_data_ready() field only takes one argument now
@@ -1205,6 +1227,7 @@ AC_DEFUN([LN_PROG_LINUX_SRC], [
 	LN_SRC_CONFIG_SK_DATA_READY
 	# 4.x
 	LN_SRC_CONFIG_SOCK_CREATE_KERN
+	LN_SRC_CONFIG_SOCK_NOT_OWNED_BY_ME
 	# 4.6
 	LN_SRC_ETHTOOL_LINK_SETTINGS
 	# 4.14
@@ -1224,6 +1247,7 @@ AC_DEFUN([LN_PROG_LINUX_RESULTS], [
 	LN_CONFIG_SK_DATA_READY
 	# 4.x
 	LN_CONFIG_SOCK_CREATE_KERN
+	LN_CONFIG_SOCK_NOT_OWNED_BY_ME
 	# 4.6
 	LN_ETHTOOL_LINK_SETTINGS
 	# 4.14
