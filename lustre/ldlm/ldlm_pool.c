@@ -931,13 +931,6 @@ void ldlm_pool_fini(struct ldlm_pool *pl)
 	ENTRY;
 	ldlm_pool_sysfs_fini(pl);
 	ldlm_pool_debugfs_fini(pl);
-
-	/*
-	 * Pool should not be used after this point. We can't free it here as
-	 * it lives in struct ldlm_namespace, but still interested in catching
-	 * any abnormal using cases.
-	 */
-	POISON(pl, 0x5a, sizeof(*pl));
 	EXIT;
 }
 

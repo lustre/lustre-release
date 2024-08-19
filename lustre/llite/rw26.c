@@ -819,7 +819,6 @@ again:
 		 */
 		if (from == 0 && to == PAGE_SIZE) {
 			CL_PAGE_HEADER(D_PAGE, env, page, "full page write\n");
-			POISON_PAGE(vmpage, 0x11);
 		} else {
 			/* TODO: can be optimized at OSC layer to check if it
 			 * is a lockless IO. In that case, it's not necessary

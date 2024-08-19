@@ -77,7 +77,6 @@ void cl_lock_fini(const struct lu_env *env, struct cl_lock *lock)
 		list_del_init(lock->cll_layers.next);
 		slice->cls_ops->clo_fini(env, slice);
 	}
-	POISON(lock, 0x5a, sizeof(*lock));
 	EXIT;
 }
 EXPORT_SYMBOL(cl_lock_fini);

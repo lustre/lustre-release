@@ -922,33 +922,13 @@ do {									      \
 		OBD_CPT_VMALLOC(ptr, cptab, cpt, size);			      \
 } while (0)
 
-#ifdef CONFIG_DEBUG_SLAB
-#define POISON(ptr, c, s) do {} while (0)
-#define POISON_PTR(ptr)  ((void)0)
-#else
-#ifdef __underlying_memset
-#define POISON(ptr, c, s) __underlying_memset(ptr, c, s)
-#else
-#define POISON(ptr, c, s) memset(ptr, c, s)
-#endif
-#define POISON_PTR(ptr)  (ptr) = (void *)0xdeadbeef
-#endif
-
-#ifdef POISON_BULK
-#define POISON_PAGE(page, val) do {			\
-	void *kaddr = kmap_local_page(page);		\
-	memset(kaddr, val, PAGE_SIZE);			\
-	kunmap_local(kaddr);				\
-} while (0)
-#else
-#define POISON_PAGE(page, val) do { } while (0)
-#endif
+/* In the future, this belongs in include/linux/poison.h */
+#define POISON_PTR(ptr)  (ptr) = ((void *) 0x387 + POISON_POINTER_DELTA)
 
 #define OBD_FREE(ptr, size)						      \
 do {									      \
 	if (likely(ptr)) {						      \
 		OBD_FREE_PRE(ptr, size, "kfreed");			      \
-		POISON(ptr, 0x5a, size);				      \
 		kfree(ptr);						      \
 		POISON_PTR(ptr);					      \
 	}								      \
@@ -967,7 +947,6 @@ do {									\
 do {									      \
 	if (is_vmalloc_addr(ptr)) {					      \
 		OBD_FREE_PRE(ptr, size, "vfreed");			      \
-		POISON(ptr, 0x5a, size);				      \
 		compat_vfree_atomic(ptr);				      \
 		POISON_PTR(ptr);					      \
 	} else {							      \
@@ -1005,7 +984,6 @@ do {									      \
 do {									      \
 	if (likely(ptr)) {						      \
 		OBD_FREE_PRE(ptr, size, "slab-freed");			      \
-		POISON(ptr, 0x5a, size);				      \
 		kmem_cache_free(slab, ptr);				      \
 		POISON_PTR(ptr);					      \
 	}								      \
