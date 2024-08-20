@@ -6275,13 +6275,7 @@ int ll_inode_permission(struct mnt_idmap *idmap, struct inode *inode, int mask)
 	RETURN(rc);
 }
 
-#if defined(HAVE_FILEMAP_SPLICE_READ)
-# define ll_splice_read		filemap_splice_read
-#elif !defined(HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT)
-# define ll_splice_read		generic_file_splice_read
-#else
 # define ll_splice_read		pcc_file_splice_read
-#endif
 
 /* -o localflock - only provides locally consistent flock locks */
 static const struct file_operations ll_file_operations = {

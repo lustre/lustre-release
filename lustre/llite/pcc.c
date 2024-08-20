@@ -2657,7 +2657,14 @@ out:
 	RETURN(rc);
 }
 
-#ifdef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
+#if defined(HAVE_FILEMAP_SPLICE_READ)
+# define do_sys_splice_read	copy_splice_read
+#elif defined(HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT)
+# define do_sys_splice_read	default_file_splice_read
+#else
+# define do_sys_splice_read	generic_file_splice_read
+#endif
+
 ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 			     struct pipe_inode_info *pipe,
 			     size_t count, unsigned int flags)
@@ -2670,20 +2677,19 @@ ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 	ENTRY;
 	in_file->f_ra.ra_pages = 0;
 	if (!pcc_file)
-		RETURN(default_file_splice_read(in_file, ppos, pipe,
-						count, flags));
+		RETURN(do_sys_splice_read(in_file, ppos, pipe,
+					  count, flags));
 
 	pcc_io_init(inode, PIT_SPLICE_READ, in_file, &cached);
 	if (!cached)
-		RETURN(default_file_splice_read(in_file, ppos, pipe,
-						count, flags));
+		RETURN(do_sys_splice_read(in_file, ppos, pipe,
+					  count, flags));
 
-	result = default_file_splice_read(pcc_file, ppos, pipe, count, flags);
+	result = do_sys_splice_read(pcc_file, ppos, pipe, count, flags);
 
 	pcc_io_fini(inode, PIT_SPLICE_READ, result, &cached);
 	RETURN(result);
 }
-#endif /* HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT */
 
 int pcc_fsync(struct file *file, loff_t start, loff_t end,
 	      int datasync, bool *cached)
