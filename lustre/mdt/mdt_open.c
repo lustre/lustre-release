@@ -1365,6 +1365,34 @@ static inline enum ldlm_mode mdt_open_lock_mode(struct mdt_thread_info *info,
 	return (result == 0) ? LCK_PR : LCK_PW;
 }
 
+static void mdt_pack_attr_acl(struct mdt_thread_info *info,
+			      struct mdt_object *o)
+{
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct md_attr *ma = &info->mti_attr;
+	struct lu_nodemap *nodemap;
+	struct mdt_body *repbody;
+	int rc;
+
+	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+
+	rc = mdt_attr_get_complex(info, o, ma);
+	if (!rc)
+		mdt_pack_attr2body(info, repbody, &ma->ma_attr,
+				   mdt_object_fid(o));
+
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
+	if (exp_connect_flags(req->rq_export) & OBD_CONNECT_ACL) {
+		nodemap = nodemap_get_from_exp(req->rq_export);
+		if (IS_ERR(nodemap))
+			return;
+
+		(void)mdt_pack_acl2body(info, repbody, o, nodemap);
+		nodemap_putref(nodemap);
+	}
+#endif
+}
+
 int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 {
 	struct mdt_device *mdt = info->mti_mdt;
@@ -1506,8 +1534,14 @@ again_pw:
 		 PFID(mdt_object_fid(parent)), PNAME(&rr->rr_name),
 		 PFID(child_fid));
 
-	if (result != 0 && result != -ENOENT)
+	if (result != 0 && result != -ENOENT) {
+		/* in case of 'permission denied',
+		 * hint the client with supp groups and ACLs
+		 */
+		if (result == -EACCES)
+			mdt_pack_attr_acl(info, parent);
 		GOTO(out_parent_unlock, result);
+	}
 
 	CFS_RACE(OBD_FAIL_MDS_REINT_OPEN2);
 
@@ -1588,8 +1622,13 @@ again_pw:
 			if (result == 0)
 				result = mdt_attr_get_complex(info, child, ma);
 
-			if (result != 0)
+			if (result != 0) {
+				/* in case of failure to create,
+				 * hint the client with supp groups and ACLs
+				 */
+				mdt_pack_attr_acl(info, parent);
 				GOTO(out_child, result);
+			}
 		}
 		created = 1;
 		mdt_counter_incr(req, LPROC_MDT_MKNOD,

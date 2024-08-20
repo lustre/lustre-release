@@ -893,6 +893,20 @@ static __u32 get_uc_group_from_acl(const struct posix_acl *acl, int want)
 	return (__u32)__kgid_val(INVALID_GID);
 }
 
+static bool failed_it_can_retry(int retval, struct lookup_intent *it)
+{
+	int rc = 0;
+
+	if (!retval && (it->it_op & IT_OPEN_CREAT) == IT_OPEN_CREAT &&
+	    it_disposition(it, DISP_OPEN_CREATE)) {
+		rc = it_open_error(DISP_OPEN_CREATE, it);
+	} else {
+		rc = retval;
+	}
+
+	return (rc == -EACCES);
+}
+
 /* This function implements a retry mechanism on top of md_intent_lock().
  * This is useful because the client can provide at most 2 supplementary
  * groups in the request sent to the MDS, but sometimes it does not know
@@ -921,8 +935,7 @@ intent:
 	       "intent lock %d on i1 "DFID" suppgids %d %d: rc %d\n",
 	       it->it_op, PFID(&op_data->op_fid1),
 	       op_data->op_suppgids[0], op_data->op_suppgids[1], rc);
-	if (rc == -EACCES && tryagain && it->it_op & IT_OPEN &&
-	    it_disposition(it, DISP_OPEN_DENY) && *reqp) {
+	if (tryagain && *reqp && failed_it_can_retry(rc, it)) {
 		struct mdt_body *body;
 		__u32 new_suppgid;
 

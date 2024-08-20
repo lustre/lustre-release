@@ -6346,6 +6346,7 @@ test_64g() {
 	chmod 640 $DIR/$tdir/fileA
 	chgrp grptest64g3 $DIR/$tdir/fileA
 	setfacl -m g:grptest64g2:r $DIR/$tdir/fileA
+	setfacl -m g:grptest64g2:rwx $DIR/$tdir
 	ls -lR $DIR/$tdir
 
 	setup_64
@@ -6358,7 +6359,21 @@ test_64g() {
 		error "setting rbac file_perms failed"
 	wait_nm_sync c0 rbac
 
+	$RUNAS touch $DIR/$tdir/fileB &&
+		error "touch $DIR/$tdir/fileB should fail"
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID
+	$RUNAS -G 5001 touch $DIR/$tdir/fileB ||
+		error "touch $DIR/$tdir/fileB failed"
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID
+	$RUNAS -G 5000,5001 touch $DIR/$tdir/fileC ||
+		error "touch $DIR/$tdir/fileC failed"
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID
 	$RUNAS cat $DIR/$tdir/fileA && error "cat $DIR/$tdir/fileA should fail"
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID
 	$RUNAS -G 5000,5001 cat $DIR/$tdir/fileA ||
 		error "cat $DIR/$tdir/fileA failed"
 }
