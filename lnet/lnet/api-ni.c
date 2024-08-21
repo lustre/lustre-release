@@ -10019,7 +10019,6 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 	u32 *st;
 	int nob;
 	int rc;
-	int rc2;
 
 	genradix_init(&plist->lgpl_list);
 
@@ -10057,27 +10056,22 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 	init_completion(&pd.completion);
 
 	rc = LNetMDBind(&md, LNET_UNLINK, &pd.mdh);
-	if (rc != 0) {
+	if (rc) {
 		CERROR("Can't bind MD: %d\n", rc);
 		goto fail_ping_buffer_decref;
 	}
 
 	rc = LNetGet(src_nid, pd.mdh, id, LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, false);
-	if (rc != 0) {
-		/* Don't CERROR; this could be deliberate! */
-		rc2 = LNetMDUnlink(pd.mdh);
-		LASSERT(rc2 == 0);
-
-		/* NB must wait for the UNLINK event below... */
-	}
+	if (rc)
+		LASSERT(!LNetMDUnlink(pd.mdh));
 
 	/* Ensure completion in finite time... */
-	wait_for_completion_timeout(&pd.completion, timeout);
-	if (!pd.pd_unlinked) {
+	wait_for_completion_interruptible_timeout(&pd.completion,
+						  timeout);
+
+	if (!pd.pd_unlinked)
 		LNetMDUnlink(pd.mdh);
-		wait_for_completion(&pd.completion);
-	}
 
 	if (!pd.replied) {
 		rc = pd.rc ?: -EIO;
