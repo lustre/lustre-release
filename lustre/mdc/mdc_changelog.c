@@ -277,12 +277,12 @@ static int chlg_load(void *args)
 	struct obd_device *obd = NULL;
 	struct llog_ctxt *ctx = NULL;
 	struct llog_handle *llh = NULL;
+	enum llog_flag nid_be_flag = 0;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	crs->crs_last_catidx = 0;
 	crs->crs_last_idx = 0;
-
 again:
 	obd = chlg_obd_get(ced);
 	if (obd == NULL)
@@ -302,13 +302,15 @@ again:
 		GOTO(err_out, rc);
 	}
 
+	if (crs->crs_flags & CLFE_NID_BE)
+		nid_be_flag = LLOG_F_EXT_X_NID_BE;
 
 	rc = llog_init_handle(NULL, llh,
 			      LLOG_F_IS_CAT |
 			      LLOG_F_EXT_JOBID |
 			      LLOG_F_EXT_EXTRA_FLAGS |
 			      LLOG_F_EXT_X_UIDGID |
-			      LLOG_F_EXT_X_NID |
+			      LLOG_F_EXT_X_NID | nid_be_flag |
 			      LLOG_F_EXT_X_OMODE |
 			      LLOG_F_EXT_X_XATTR,
 			      NULL);

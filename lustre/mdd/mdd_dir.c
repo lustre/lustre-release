@@ -1075,12 +1075,16 @@ void mdd_changelog_rec_extra_uidgid(struct changelog_rec *rec,
 	uidgid->cr_gid = gid;
 }
 
+/* To support the new large NID structure we use all the space in
+ * struct changelog_ext_nid to store struct lnet_nid.
+ */
 void mdd_changelog_rec_extra_nid(struct changelog_rec *rec,
-				 lnet_nid_t nid)
+				 const struct lnet_nid *nid)
 {
 	struct changelog_ext_nid *clnid = changelog_rec_nid(rec);
 
-	clnid->cr_nid = nid;
+	BUILD_BUG_ON(sizeof(*clnid) < sizeof(*nid));
+	memcpy(clnid, nid, sizeof(*nid));
 }
 
 void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, u32 flags)
@@ -1213,6 +1217,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 			clf_flags |= CLF_JOBID;
 		xflags |= CLFE_UIDGID;
 		xflags |= CLFE_NID;
+		xflags |= CLFE_NID_BE;
 	}
 
 	if (sname != NULL)
@@ -1228,7 +1233,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 			mdd_changelog_rec_extra_uidgid(&rec->cr,
 						       uc->uc_uid, uc->uc_gid);
 		if (xflags & CLFE_NID)
-			mdd_changelog_rec_extra_nid(&rec->cr, uc->uc_nid);
+			mdd_changelog_rec_extra_nid(&rec->cr, &uc->uc_nid);
 	}
 
 	rec->cr.cr_type = (__u32)type;

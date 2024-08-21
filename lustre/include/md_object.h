@@ -736,7 +736,7 @@ struct lu_ucred {
 	struct group_info	*uc_ginfo;
 	struct md_identity	*uc_identity;
 	char			 uc_jobid[LUSTRE_JOBID_SIZE];
-	lnet_nid_t		 uc_nid;
+	struct lnet_nid		 uc_nid;
 	bool			 uc_enable_audit;
 	int			 uc_rbac_file_perms:1;
 	int			 uc_rbac_dne_ops:1;

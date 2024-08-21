@@ -944,6 +944,7 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 			clf_flags |= CLF_JOBID;
 		xflags |= CLFE_UIDGID;
 		xflags |= CLFE_NID;
+		xflags |= CLFE_NID_BE;
 	}
 	if (type == CL_OPEN || type == CL_DN_OPEN)
 		xflags |= CLFE_OPEN;
@@ -975,7 +976,7 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 			mdd_changelog_rec_extra_uidgid(&rec->cr,
 						       uc->uc_uid, uc->uc_gid);
 		if (xflags & CLFE_NID)
-			mdd_changelog_rec_extra_nid(&rec->cr, uc->uc_nid);
+			mdd_changelog_rec_extra_nid(&rec->cr, &uc->uc_nid);
 		if (xflags & CLFE_OPEN)
 			mdd_changelog_rec_extra_omode(&rec->cr, clf_flags);
 		if (xflags & CLFE_XATTR) {

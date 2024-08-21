@@ -148,10 +148,9 @@ static void ucred_set_jobid(struct mdt_thread_info *info, struct lu_ucred *uc)
 static void ucred_set_nid(struct mdt_thread_info *info, struct lu_ucred *uc)
 {
 	if (info && info->mti_exp && info->mti_exp->exp_connection)
-		uc->uc_nid = lnet_nid_to_nid4(
-			&info->mti_exp->exp_connection->c_peer.nid);
+		uc->uc_nid = info->mti_exp->exp_connection->c_peer.nid;
 	else
-		uc->uc_nid = LNET_NID_ANY;
+		uc->uc_nid = LNET_ANY_NID;
 }
 
 static void ucred_set_audit_enabled(struct mdt_thread_info *info,

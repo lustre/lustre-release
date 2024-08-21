@@ -151,14 +151,13 @@ int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 		warned_jobid = true;
 	}
 
-	if (flags & CHANGELOG_FLAG_FOLLOW) {
+	if (flags & (CHANGELOG_FLAG_FOLLOW | CHANGELOG_FLAG_NID_BE)) {
 		int rc;
 
-		rc = ioctl(cp->clp_fd, OBD_IOC_CHLG_SET_FLAGS,
-			   CHANGELOG_FLAG_FOLLOW);
+		rc = ioctl(cp->clp_fd, OBD_IOC_CHLG_SET_FLAGS, flags);
 		if (rc < 0)
-			llapi_err_noerrno(LLAPI_MSG_ERROR, "can't enable "
-					  "CHANGELOG_FLAG_FOLLOW");
+			llapi_err_noerrno(LLAPI_MSG_ERROR,
+					  "can't enable kernel send flags");
 	}
 
 	return 0;
@@ -217,6 +216,97 @@ int llapi_changelog_get_fd(void *priv)
 	return cp->clp_fd;
 }
 
+/**
+ * Messages containing changelog records sent by the kernel are collected in
+ * llapi_changelog_recv(). Those messages contain everything that the kernel
+ * can support. Our user land application might have no interest in many of
+ * those extra fields so we then repack the rec with only what we want.
+ */
+struct changelog_rec *
+llapi_changelog_repack_rec(const struct changelog_rec *rec,
+			   enum changelog_rec_flags crf_wanted,
+			   enum changelog_rec_extra_flags cref_want)
+{
+	enum changelog_rec_extra_flags cref = CLFE_INVALID;
+	struct changelog_rec *new_rec;
+
+	crf_wanted &= CLF_SUPPORTED;
+	cref_want &= CLFE_SUPPORTED;
+
+	new_rec = calloc(1, CR_MAXSIZE);
+	if (!new_rec)
+		return NULL;
+
+	/* Copy the changelog record header but reset the flags */
+	memcpy((char *)new_rec, (char *)rec, sizeof(struct changelog_rec));
+
+	/* Keep the lower bits of cr_flags */
+	new_rec->cr_flags = (rec->cr_flags & CLF_FLAGMASK) | CLF_VERSION;
+	if ((crf_wanted & CLF_RENAME) && (rec->cr_flags & CLF_RENAME)) {
+		new_rec->cr_flags |= CLF_RENAME;
+		memcpy(changelog_rec_rename(new_rec),
+		       changelog_rec_rename(rec),
+		       sizeof(struct changelog_ext_rename));
+	}
+
+	if ((crf_wanted & CLF_JOBID) && (rec->cr_flags & CLF_JOBID)) {
+		new_rec->cr_flags |= CLF_JOBID;
+		memcpy(changelog_rec_jobid(new_rec),
+		       changelog_rec_jobid(rec),
+		       sizeof(struct changelog_ext_jobid));
+	}
+
+	if ((crf_wanted & CLF_EXTRA_FLAGS) && (rec->cr_flags & CLF_EXTRA_FLAGS)) {
+		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
+
+		changelog_rec_extra_flags(new_rec)->cr_extra_flags = CLFE_INVALID;
+		new_rec->cr_flags |= CLF_EXTRA_FLAGS;
+	}
+
+	if (cref == CLFE_INVALID)
+		goto no_extras;
+
+	if ((cref_want & CLFE_UIDGID) && (cref & CLFE_UIDGID)) {
+		changelog_rec_extra_flags(new_rec)->cr_extra_flags |= CLFE_UIDGID;
+		memcpy(changelog_rec_uidgid(new_rec),
+		       changelog_rec_uidgid(rec),
+		       sizeof(struct changelog_ext_uidgid));
+	}
+
+	if ((cref_want & CLFE_NID) && (cref & CLFE_NID)) {
+		changelog_rec_extra_flags(new_rec)->cr_extra_flags |= CLFE_NID;
+		if ((cref_want & CLFE_NID_BE) && (cref & CLFE_NID_BE))
+			changelog_rec_extra_flags(new_rec)->cr_extra_flags |= CLFE_NID_BE;
+
+		memcpy(changelog_rec_nid(new_rec),
+		       changelog_rec_nid(rec),
+		       sizeof(struct changelog_ext_nid));
+	}
+
+	if ((cref_want & CLFE_OPEN) && (cref & CLFE_OPEN)) {
+		changelog_rec_extra_flags(new_rec)->cr_extra_flags |= CLFE_OPEN;
+		memcpy(changelog_rec_openmode(new_rec),
+		       changelog_rec_openmode(rec),
+		       sizeof(struct changelog_ext_openmode));
+	} else {
+		cref &= ~CLFE_OPEN;
+	}
+
+	if ((cref_want & CLFE_XATTR) && (cref & CLFE_XATTR)) {
+		changelog_rec_extra_flags(new_rec)->cr_extra_flags |= CLFE_XATTR;
+		memcpy(changelog_rec_xattr(new_rec),
+		       changelog_rec_xattr(rec),
+		       sizeof(struct changelog_ext_xattr));
+	}
+
+no_extras:
+	/* Lastly move the variable-length name field */
+	memcpy(changelog_rec_name(new_rec),
+	       changelog_rec_name(rec), rec->cr_namelen);
+
+	return new_rec;
+}
+
 /** Read the next changelog entry
  * @param priv Opaque private control structure
  * @param rech Changelog record handle; record will be allocated here
@@ -239,10 +329,7 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 	if (rech == NULL)
 		return -EINVAL;
 
-	*rech = malloc(CR_MAXSIZE);
-	if (*rech == NULL)
-		return -ENOMEM;
-
+	*rech = NULL;
 	if (cp->clp_send_flags & CHANGELOG_FLAG_JOBID)
 		rec_fmt |= CLF_JOBID;
 
@@ -250,8 +337,11 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 		rec_fmt |= CLF_EXTRA_FLAGS;
 		if (cp->clp_send_extra_flags & CHANGELOG_EXTRA_FLAG_UIDGID)
 			rec_extra_fmt |= CLFE_UIDGID;
-		if (cp->clp_send_extra_flags & CHANGELOG_EXTRA_FLAG_NID)
+		if (cp->clp_send_extra_flags & CHANGELOG_EXTRA_FLAG_NID) {
 			rec_extra_fmt |= CLFE_NID;
+			if (cp->clp_send_flags & CHANGELOG_FLAG_NID_BE)
+				rec_extra_fmt |= CLFE_NID_BE;
+		}
 		if (cp->clp_send_extra_flags & CHANGELOG_EXTRA_FLAG_OMODE)
 			rec_extra_fmt |= CLFE_OPEN;
 		if (cp->clp_send_extra_flags & CHANGELOG_EXTRA_FLAG_XATTR)
@@ -265,27 +355,17 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 		if (refresh == 0) {
 			/* EOF */
 			rc = 1;
-			goto out_free;
+			goto out;
 		} else if (refresh < 0) {
 			rc = refresh;
-			goto out_free;
+			goto out;
 		}
 	}
 
-	/* TODO check changelog_rec_size */
 	tmp = (struct changelog_rec *)cp->clp_buf_pos;
-
-	memcpy(*rech, cp->clp_buf_pos,
-	       changelog_rec_size(tmp) + tmp->cr_namelen);
-
+	*rech = llapi_changelog_repack_rec(tmp, rec_fmt, rec_extra_fmt);
 	cp->clp_buf_pos += changelog_rec_size(tmp) + tmp->cr_namelen;
-	changelog_remap_rec(*rech, rec_fmt, rec_extra_fmt);
-
-	return 0;
-
-out_free:
-	free(*rech);
-	*rech = NULL;
+out:
 	return rc;
 }
 

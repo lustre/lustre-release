@@ -359,7 +359,7 @@ void mdd_changelog_rec_ext_extra_flags(struct changelog_rec *rec, __u64 eflags);
 void mdd_changelog_rec_extra_uidgid(struct changelog_rec *rec,
 				    __u64 uid, __u64 gid);
 void mdd_changelog_rec_extra_nid(struct changelog_rec *rec,
-				 lnet_nid_t nid);
+				 const struct lnet_nid *nid);
 void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, u32 flags);
 void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
 				   const char *xattr_name);

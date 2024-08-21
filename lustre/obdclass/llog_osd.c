@@ -817,6 +817,201 @@ static inline void llog_skip_over(struct llog_handle *lgh, __u64 *off,
 }
 
 /**
+ * Remap a record to the desired format as specified by the crf flags.
+ * The record must be big enough to contain the final remapped version.
+ * Superfluous extension fields are removed and missing ones are added
+ * and zeroed. The flags of the record are updated accordingly to what
+ * the calling llog layer can support. Only influence user land has is
+ * to store the NID in large NID format. The user land end user will
+ * recieve all fields that supported by the kernel.
+ *
+ * The jobid and rename extensions will be added to a record, to match the
+ * format an application expects, typically. In this case, the newly added
+ * fields will be zeroed.
+ * The Jobid field can be removed, to guarantee compatibility with older
+ * clients that don't expect this field in the records they process.
+ *
+ * The following assumptions are being made:
+ *   - CLF_RENAME will not be removed
+ *   - CLF_JOBID will not be added without CLF_RENAME being added too
+ *   - CLF_EXTRA_FLAGS will not be added without CLF_JOBID being added too
+ *
+ * @rec:	The record to remap.
+ * @crf_wanted:	Flags describing the desired extensions.
+ * @cref_want:	Flags describing the desired extra extensions.
+ */
+static void changelog_remap_rec(struct changelog_rec *rec,
+				enum changelog_rec_flags crf_wanted,
+				enum changelog_rec_extra_flags cref_want)
+{
+	char *xattr_mov = NULL;
+	char *omd_mov = NULL;
+	char *nid_mov = NULL;
+	char *uidgid_mov = NULL;
+	char *ef_mov;
+	char *jid_mov;
+	char *rnm_mov;
+	enum changelog_rec_extra_flags cref = CLFE_INVALID;
+
+	crf_wanted = (enum changelog_rec_flags)
+	    (crf_wanted & CLF_SUPPORTED);
+	cref_want = (enum changelog_rec_extra_flags)
+	    (cref_want & CLFE_SUPPORTED);
+
+	if ((rec->cr_flags & CLF_SUPPORTED) == crf_wanted) {
+		if (!(rec->cr_flags & CLF_EXTRA_FLAGS) ||
+		    (rec->cr_flags & CLF_EXTRA_FLAGS &&
+		    (changelog_rec_extra_flags(rec)->cr_extra_flags &
+							CLFE_SUPPORTED) ==
+								     cref_want))
+			return;
+	}
+
+	/* First move the variable-length name field */
+	memmove((char *)rec + changelog_rec_offset(crf_wanted, cref_want),
+		changelog_rec_name(rec), rec->cr_namelen);
+
+	/* Locations of extensions in the remapped record */
+	if (rec->cr_flags & CLF_EXTRA_FLAGS) {
+		xattr_mov = (char *)rec +
+			changelog_rec_offset(
+			    (enum changelog_rec_flags)
+				    (crf_wanted & CLF_SUPPORTED),
+			    (enum changelog_rec_extra_flags)
+				    (cref_want & ~CLFE_XATTR));
+		omd_mov = (char *)rec +
+			changelog_rec_offset(
+			    (enum changelog_rec_flags)
+				    (crf_wanted & CLF_SUPPORTED),
+			    (enum changelog_rec_extra_flags)
+				    (cref_want & ~(CLFE_OPEN | CLFE_XATTR)));
+		nid_mov = (char *)rec +
+			changelog_rec_offset(
+			    (enum changelog_rec_flags)
+				(crf_wanted & CLF_SUPPORTED),
+			    (enum changelog_rec_extra_flags)
+				(cref_want &
+				 ~(CLFE_NID | CLFE_OPEN | CLFE_XATTR)));
+		uidgid_mov = (char *)rec +
+			changelog_rec_offset(
+				(enum changelog_rec_flags)
+				    (crf_wanted & CLF_SUPPORTED),
+				(enum changelog_rec_extra_flags)
+				    (cref_want & ~(CLFE_UIDGID |
+							   CLFE_NID |
+							   CLFE_OPEN |
+							   CLFE_XATTR)));
+		cref = (enum changelog_rec_extra_flags)
+			changelog_rec_extra_flags(rec)->cr_extra_flags;
+	}
+
+	ef_mov  = (char *)rec +
+		  changelog_rec_offset(
+				(enum changelog_rec_flags)
+				 (crf_wanted & ~CLF_EXTRA_FLAGS), CLFE_INVALID);
+	jid_mov = (char *)rec +
+		  changelog_rec_offset((enum changelog_rec_flags)(crf_wanted &
+				       ~(CLF_EXTRA_FLAGS | CLF_JOBID)),
+				       CLFE_INVALID);
+	rnm_mov = (char *)rec +
+		  changelog_rec_offset((enum changelog_rec_flags)(crf_wanted &
+				       ~(CLF_EXTRA_FLAGS |
+					 CLF_JOBID |
+					 CLF_RENAME)),
+				       CLFE_INVALID);
+
+	/* Move the extension fields to the desired positions */
+	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
+	    (rec->cr_flags & CLF_EXTRA_FLAGS)) {
+		if ((cref_want & CLFE_XATTR) && (cref & CLFE_XATTR))
+			memmove(xattr_mov, changelog_rec_xattr(rec),
+				sizeof(struct changelog_ext_xattr));
+
+		if ((cref_want & CLFE_OPEN) && (cref & CLFE_OPEN))
+			memmove(omd_mov, changelog_rec_openmode(rec),
+				sizeof(struct changelog_ext_openmode));
+
+		if ((cref_want & CLFE_NID) && (cref & CLFE_NID)) {
+			struct changelog_ext_nid *cen = changelog_rec_nid(rec);
+
+			if ((cref_want & CLFE_NID_BE) != (cref & CLFE_NID_BE)) {
+				struct lnet_nid *nid;
+
+				if (!(cref_want & CLFE_NID_BE)) {
+					nid = (struct lnet_nid *)cen;
+					if (nid_is_nid4(nid)) {
+						struct changelog_ext_nid *mov;
+
+						mov = (struct changelog_ext_nid *)nid_mov;
+						mov->cr_nid = lnet_nid_to_nid4(nid);
+						cref &= ~CLFE_NID_BE;
+					} else {
+						cref &= ~(CLFE_NID |
+							  CLFE_NID_BE);
+					}
+				} else {
+					nid = (struct lnet_nid *)nid_mov;
+					lnet_nid4_to_nid(cen->cr_nid, nid);
+				}
+				changelog_rec_extra_flags(rec)->cr_extra_flags =
+					cref;
+			} else {
+				memmove(nid_mov, cen, sizeof(*cen));
+			}
+		}
+
+		if ((cref_want & CLFE_UIDGID) && (cref & CLFE_UIDGID))
+			memmove(uidgid_mov, changelog_rec_uidgid(rec),
+				sizeof(struct changelog_ext_uidgid));
+
+		memmove(ef_mov, changelog_rec_extra_flags(rec),
+			sizeof(struct changelog_ext_extra_flags));
+	}
+
+	if ((crf_wanted & CLF_JOBID) && (rec->cr_flags & CLF_JOBID))
+		memmove(jid_mov, changelog_rec_jobid(rec),
+			sizeof(struct changelog_ext_jobid));
+
+	if ((crf_wanted & CLF_RENAME) && (rec->cr_flags & CLF_RENAME))
+		memmove(rnm_mov, changelog_rec_rename(rec),
+			sizeof(struct changelog_ext_rename));
+
+	/* Clear newly added fields */
+	if (xattr_mov && (cref_want & CLFE_XATTR) &&
+	    !(cref & CLFE_XATTR))
+		memset(xattr_mov, 0, sizeof(struct changelog_ext_xattr));
+
+	if (omd_mov && (cref_want & CLFE_OPEN) &&
+	    !(cref & CLFE_OPEN))
+		memset(omd_mov, 0, sizeof(struct changelog_ext_openmode));
+
+	if (nid_mov && (cref_want & CLFE_NID) &&
+	    !(cref & CLFE_NID))
+		memset(nid_mov, 0, sizeof(struct changelog_ext_nid));
+
+	if (uidgid_mov && (cref_want & CLFE_UIDGID) &&
+	    !(cref & CLFE_UIDGID))
+		memset(uidgid_mov, 0, sizeof(struct changelog_ext_uidgid));
+
+	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
+	    !(rec->cr_flags & CLF_EXTRA_FLAGS))
+		memset(ef_mov, 0, sizeof(struct changelog_ext_extra_flags));
+
+	if ((crf_wanted & CLF_JOBID) && !(rec->cr_flags & CLF_JOBID))
+		memset(jid_mov, 0, sizeof(struct changelog_ext_jobid));
+
+	if ((crf_wanted & CLF_RENAME) && !(rec->cr_flags & CLF_RENAME))
+		memset(rnm_mov, 0, sizeof(struct changelog_ext_rename));
+
+	/* Update the record's flags accordingly */
+	rec->cr_flags = (rec->cr_flags & CLF_FLAGMASK) | crf_wanted;
+	if (rec->cr_flags & CLF_EXTRA_FLAGS)
+		changelog_rec_extra_flags(rec)->cr_extra_flags =
+			changelog_rec_extra_flags(rec)->cr_extra_flags |
+			cref_want;
+}
+
+/**
  * Remove optional fields that the client doesn't expect.
  * This is typically in order to ensure compatibility with older clients.
  * It is assumed that since we exclusively remove fields, the block will be
@@ -840,7 +1035,13 @@ static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_OMODE))
 		extra_flags &= ~CLFE_OPEN;
 	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_NID))
-		extra_flags &= ~CLFE_NID;
+		extra_flags &= ~(CLFE_NID | CLFE_NID_BE);
+	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_NID_BE)) {
+		if (extra_flags & CLFE_NID_BE) {
+			/* The large nid won't be understood */
+			extra_flags &= ~CLFE_NID_BE;
+		}
+	}
 	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_UIDGID))
 		extra_flags &= ~CLFE_UIDGID;
 	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_EXTRA_FLAGS))
@@ -879,6 +1080,9 @@ static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 			break;
 		}
 
+		/* Fill up the changelog record with everything the kernel
+		 * version supports.
+		 */
 		changelog_remap_rec(rec, rec->cr_flags & flags, xflag);
 		hdr = llog_rec_hdr_next(hdr);
 		/* Yield CPU to avoid soft-lockup if there are too many records

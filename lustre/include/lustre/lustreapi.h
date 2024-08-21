@@ -602,6 +602,17 @@ int llapi_swap_layouts(const char *path1, const char *path2, __u64 dv1,
  */
 #define HAVE_CHANGELOG_EXTEND_REC 1
 
+enum changelog_send_extra_flag {
+	/* Pack uid/gid into the changelog record */
+	CHANGELOG_EXTRA_FLAG_UIDGID	= CLFE_UIDGID,
+	/* Pack nid into the changelog record */
+	CHANGELOG_EXTRA_FLAG_NID	= CLFE_NID,
+	/* Pack open mode into the changelog record */
+	CHANGELOG_EXTRA_FLAG_OMODE	= CLFE_OPEN,
+	/* Pack xattr name into the changelog record */
+	CHANGELOG_EXTRA_FLAG_XATTR	= CLFE_XATTR,
+};
+
 int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 			  const char *mdtname, long long startrec);
 int llapi_changelog_fini(void **priv);
@@ -612,8 +623,30 @@ int llapi_changelog_get_fd(void *priv);
 /* Allow records up to endrec to be destroyed; requires registered id. */
 int llapi_changelog_clear(const char *mdtname, const char *idstr,
 			  long long endrec);
-extern int llapi_changelog_set_xflags(void *priv,
-				    enum changelog_send_extra_flag extra_flags);
+int llapi_changelog_set_xflags(void *priv,
+			       enum changelog_send_extra_flag extra_flags);
+struct changelog_rec *
+llapi_changelog_repack_rec(const struct changelog_rec *rec,
+			   enum changelog_rec_flags crf_wanted,
+			   enum changelog_rec_extra_flags cref_want);
+
+#ifndef changelog_remap_rec
+static inline void changelog_remap_rec(struct changelog_rec *rec,
+				       enum changelog_rec_flags crf_wanted,
+				       enum changelog_rec_extra_flags cref_want)
+{
+	struct changelog_rec *new_rec;
+
+	new_rec = llapi_changelog_repack_rec((const struct changelog_rec *)rec,
+					     crf_wanted, cref_want);
+	if (new_rec) {
+		size_t len = changelog_rec_size(rec) + rec->cr_namelen;
+
+		memcpy(rec, new_rec, len);
+		free(new_rec);
+	}
+}
+#endif
 
 /* HSM copytool interface.
  * priv is private state, managed internally by these functions

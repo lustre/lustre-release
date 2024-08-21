@@ -1619,10 +1619,7 @@ int lr_replicate(void)
 	}
 
 	rc = llapi_changelog_set_xflags(changelog_priv,
-					CHANGELOG_EXTRA_FLAG_UIDGID |
-					CHANGELOG_EXTRA_FLAG_NID |
-					CHANGELOG_EXTRA_FLAG_OMODE |
-					CHANGELOG_EXTRA_FLAG_XATTR);
+					CHANGELOG_EXTRA_FLAG_UIDGID);
 	if (rc < 0) {
 		fprintf(stderr, "Error setting xflag in changelog for fs %s.\n",
 			status->ls_source_fs);

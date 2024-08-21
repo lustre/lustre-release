@@ -742,6 +742,7 @@ static void print_hsm_action(struct llog_agent_req_rec *larr)
 
 static void print_changelog_rec(struct llog_changelog_rec *rec)
 {
+	__u32 crf = __le32_to_cpu(rec->cr.cr_flags);
 	time_t secs;
 	struct tm ts;
 
@@ -750,15 +751,14 @@ static void print_changelog_rec(struct llog_changelog_rec *rec)
 	printf("changelog record id:0x%x index:%llu cr_flags:0x%x cr_type:%s(0x%x) date:'%02d:%02d:%02d.%09d %04d.%02d.%02d' target:"DFID,
 	       __le32_to_cpu(rec->cr_hdr.lrh_id),
 	       (unsigned long long)__le64_to_cpu(rec->cr.cr_index),
-	       __le32_to_cpu(rec->cr.cr_flags),
-	       changelog_type2str(__le32_to_cpu(rec->cr.cr_type)),
+	       crf, changelog_type2str(__le32_to_cpu(rec->cr.cr_type)),
 	       __le32_to_cpu(rec->cr.cr_type),
 	       ts.tm_hour, ts.tm_min, ts.tm_sec,
 	       (int)(__le64_to_cpu(rec->cr.cr_time) & ((1 << 30) - 1)),
 	       ts.tm_year + 1900, ts.tm_mon + 1, ts.tm_mday,
 	       PFID(&rec->cr.cr_tfid));
 
-	if (rec->cr.cr_flags & CLF_JOBID) {
+	if (crf & CLF_JOBID) {
 		struct changelog_ext_jobid *jid =
 			changelog_rec_jobid(&rec->cr);
 
@@ -766,14 +766,13 @@ static void print_changelog_rec(struct llog_changelog_rec *rec)
 			printf(" jobid:%s", jid->cr_jobid);
 	}
 
-	if (rec->cr.cr_flags & CLF_EXTRA_FLAGS) {
+	if (crf & CLF_EXTRA_FLAGS) {
 		struct changelog_ext_extra_flags *ef =
 			changelog_rec_extra_flags(&rec->cr);
+		unsigned long long cref = __le64_to_cpu(ef->cr_extra_flags);
 
-		printf(" cr_extra_flags:0x%llx",
-		       (unsigned long long)__le64_to_cpu(ef->cr_extra_flags));
-
-		if (ef->cr_extra_flags & CLFE_UIDGID) {
+		printf(" cr_extra_flags:0x%llx", cref);
+		if (cref & CLFE_UIDGID) {
 			struct changelog_ext_uidgid *uidgid =
 				changelog_rec_uidgid(&rec->cr);
 
@@ -781,15 +780,23 @@ static void print_changelog_rec(struct llog_changelog_rec *rec)
 			       __le32_to_cpu(uidgid->cr_uid),
 			       __le32_to_cpu(uidgid->cr_gid));
 		}
-		if (ef->cr_extra_flags & CLFE_NID) {
-			struct changelog_ext_nid *nid =
-				changelog_rec_nid(&rec->cr);
+		if (cref & CLFE_NID) {
+			if (cref & CLFE_NID_BE) {
+				struct changelog_ext_nid *cnid =
+					changelog_rec_nid(&rec->cr);
+				struct lnet_nid *nid = (void *)cnid;
 
-			printf(" nid:%s",
-			       libcfs_nid2str(nid->cr_nid));
+				printf(" nid:%s", libcfs_nidstr(nid));
+			} else {
+				struct changelog_ext_nid *nid =
+					changelog_rec_nid(&rec->cr);
+
+				printf(" nid:%s",
+				       libcfs_nid2str(nid->cr_nid));
+			}
 		}
 
-		if (ef->cr_extra_flags & CLFE_OPEN) {
+		if (cref & CLFE_OPEN) {
 			struct changelog_ext_openmode *omd =
 				changelog_rec_openmode(&rec->cr);
 			char mode[] = "---";
@@ -810,7 +817,7 @@ static void print_changelog_rec(struct llog_changelog_rec *rec)
 				printf(" mode:%s", mode);
 		}
 
-		if (ef->cr_extra_flags & CLFE_XATTR) {
+		if (cref & CLFE_XATTR) {
 			struct changelog_ext_xattr *xattr =
 				changelog_rec_xattr(&rec->cr);
 
@@ -824,7 +831,7 @@ static void print_changelog_rec(struct llog_changelog_rec *rec)
 		       __le32_to_cpu(rec->cr.cr_namelen),
 		       changelog_rec_name(&rec->cr));
 
-	if (rec->cr.cr_flags & CLF_RENAME) {
+	if (crf & CLF_RENAME) {
 		struct changelog_ext_rename *rnm =
 			changelog_rec_rename(&rec->cr);
 

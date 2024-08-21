@@ -4659,6 +4659,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LLOG_F_EXT_X_NID != 0x00000080);
 	BUILD_BUG_ON(LLOG_F_EXT_X_OMODE != 0x00000100);
 	BUILD_BUG_ON(LLOG_F_EXT_X_XATTR != 0x00000200);
+	BUILD_BUG_ON(LLOG_F_EXT_X_NID_BE != 0x00001000);
 
 	/* Checks for struct llogd_body */
 	LASSERTF((int)sizeof(struct llogd_body) == 48, "found %lld\n",

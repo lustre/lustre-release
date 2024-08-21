@@ -1871,31 +1871,26 @@ enum changelog_rec_extra_flags {
 	CLFE_NID	= 0x0002,
 	CLFE_OPEN	= 0x0004,
 	CLFE_XATTR	= 0x0008,
-	CLFE_SUPPORTED	= CLFE_UIDGID | CLFE_NID | CLFE_OPEN | CLFE_XATTR
+	/* NID is in network-byte-order and may be large. */
+	CLFE_NID_BE	= 0x0010,
+
+	CLFE_SUPPORTED	= CLFE_UIDGID | CLFE_NID | CLFE_OPEN | CLFE_XATTR |
+			  CLFE_NID_BE,
 };
 
 enum changelog_send_flag {
 	/* Use changelog follow mode: llapi_changelog_recv() will not stop at
 	 * the end of records and wait for new records to be generated.
 	 */
-	CHANGELOG_FLAG_FOLLOW      = 0x01,
+	CHANGELOG_FLAG_FOLLOW		= 0x01,
 	/* Deprecated since Lustre 2.10 */
-	CHANGELOG_FLAG_BLOCK       = 0x02,
+	CHANGELOG_FLAG_BLOCK		= 0x02,
 	/* Pack jobid into the changelog records if available. */
-	CHANGELOG_FLAG_JOBID       = 0x04,
+	CHANGELOG_FLAG_JOBID		= 0x04,
 	/* Pack additional flag bits into the changelog record */
-	CHANGELOG_FLAG_EXTRA_FLAGS = 0x08,
-};
-
-enum changelog_send_extra_flag {
-	/* Pack uid/gid into the changelog record */
-	CHANGELOG_EXTRA_FLAG_UIDGID = 0x01,
-	/* Pack nid into the changelog record */
-	CHANGELOG_EXTRA_FLAG_NID    = 0x02,
-	/* Pack open mode into the changelog record */
-	CHANGELOG_EXTRA_FLAG_OMODE  = 0x04,
-	/* Pack xattr name into the changelog record */
-	CHANGELOG_EXTRA_FLAG_XATTR  = 0x08,
+	CHANGELOG_FLAG_EXTRA_FLAGS	= 0x08,
+	/* Request NIDs to be packed in large big-endian format */
+	CHANGELOG_FLAG_NID_BE		= 0x10,
 };
 
 #define CR_MAXSIZE __ALIGN_KERNEL(2 * NAME_MAX + 2 + \
@@ -1950,9 +1945,10 @@ struct changelog_ext_uidgid {
 
 /* Changelog extra extension to include NID. */
 struct changelog_ext_nid {
-	/* have __u64 instead of lnet_nid_t type for use by client api */
+	/* If CLFE_NID_BE is not set cr_nid is of the lnet_nid_t type.
+	 * With CLFE_NID_BE set then all this data is struct lnet_nid
+	 */
 	__u64 cr_nid;
-	/* for use when IPv6 support is added */
 	__u64 extra;
 	__u32 padding;
 };
@@ -2152,173 +2148,6 @@ inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
 {
 	return rec->cr_namelen -
 	       (changelog_rec_sname(rec) - changelog_rec_name(rec));
-}
-
-/**
- * Remap a record to the desired format as specified by the crf flags.
- * The record must be big enough to contain the final remapped version.
- * Superfluous extension fields are removed and missing ones are added
- * and zeroed. The flags of the record are updated accordingly.
- *
- * The jobid and rename extensions can be added to a record, to match the
- * format an application expects, typically. In this case, the newly added
- * fields will be zeroed.
- * The Jobid field can be removed, to guarantee compatibility with older
- * clients that don't expect this field in the records they process.
- *
- * The following assumptions are being made:
- *   - CLF_RENAME will not be removed
- *   - CLF_JOBID will not be added without CLF_RENAME being added too
- *   - CLF_EXTRA_FLAGS will not be added without CLF_JOBID being added too
- *
- * @param[in,out]  rec         The record to remap.
- * @param[in]      crf_wanted  Flags describing the desired extensions.
- * @param[in]      cref_want   Flags describing the desired extra extensions.
- */
-static inline void changelog_remap_rec(struct changelog_rec *rec,
-				       enum changelog_rec_flags crf_wanted,
-				       enum changelog_rec_extra_flags cref_want)
-{
-	char *xattr_mov = NULL;
-	char *omd_mov = NULL;
-	char *nid_mov = NULL;
-	char *uidgid_mov = NULL;
-	char *ef_mov;
-	char *jid_mov;
-	char *rnm_mov;
-	enum changelog_rec_extra_flags cref = CLFE_INVALID;
-
-	crf_wanted = (enum changelog_rec_flags)
-	    (crf_wanted & CLF_SUPPORTED);
-	cref_want = (enum changelog_rec_extra_flags)
-	    (cref_want & CLFE_SUPPORTED);
-
-	if ((rec->cr_flags & CLF_SUPPORTED) == crf_wanted) {
-		if (!(rec->cr_flags & CLF_EXTRA_FLAGS) ||
-		    (rec->cr_flags & CLF_EXTRA_FLAGS &&
-		    (changelog_rec_extra_flags(rec)->cr_extra_flags &
-							CLFE_SUPPORTED) ==
-								     cref_want))
-			return;
-	}
-
-	/* First move the variable-length name field */
-	memmove((char *)rec + changelog_rec_offset(crf_wanted, cref_want),
-		changelog_rec_name(rec), rec->cr_namelen);
-
-	/* Locations of extensions in the remapped record */
-	if (rec->cr_flags & CLF_EXTRA_FLAGS) {
-		xattr_mov = (char *)rec +
-			changelog_rec_offset(
-			    (enum changelog_rec_flags)
-				    (crf_wanted & CLF_SUPPORTED),
-			    (enum changelog_rec_extra_flags)
-				    (cref_want & ~CLFE_XATTR));
-		omd_mov = (char *)rec +
-			changelog_rec_offset(
-			    (enum changelog_rec_flags)
-				    (crf_wanted & CLF_SUPPORTED),
-			    (enum changelog_rec_extra_flags)
-				    (cref_want & ~(CLFE_OPEN | CLFE_XATTR)));
-		nid_mov = (char *)rec +
-			changelog_rec_offset(
-			    (enum changelog_rec_flags)
-				(crf_wanted & CLF_SUPPORTED),
-			    (enum changelog_rec_extra_flags)
-				(cref_want &
-				 ~(CLFE_NID | CLFE_OPEN | CLFE_XATTR)));
-		uidgid_mov = (char *)rec +
-			changelog_rec_offset(
-				(enum changelog_rec_flags)
-				    (crf_wanted & CLF_SUPPORTED),
-				(enum changelog_rec_extra_flags)
-				    (cref_want & ~(CLFE_UIDGID |
-							   CLFE_NID |
-							   CLFE_OPEN |
-							   CLFE_XATTR)));
-		cref = (enum changelog_rec_extra_flags)
-			changelog_rec_extra_flags(rec)->cr_extra_flags;
-	}
-
-	ef_mov  = (char *)rec +
-		  changelog_rec_offset(
-				(enum changelog_rec_flags)
-				 (crf_wanted & ~CLF_EXTRA_FLAGS), CLFE_INVALID);
-	jid_mov = (char *)rec +
-		  changelog_rec_offset((enum changelog_rec_flags)(crf_wanted &
-				       ~(CLF_EXTRA_FLAGS | CLF_JOBID)),
-				       CLFE_INVALID);
-	rnm_mov = (char *)rec +
-		  changelog_rec_offset((enum changelog_rec_flags)(crf_wanted &
-				       ~(CLF_EXTRA_FLAGS |
-					 CLF_JOBID |
-					 CLF_RENAME)),
-				       CLFE_INVALID);
-
-	/* Move the extension fields to the desired positions */
-	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
-	    (rec->cr_flags & CLF_EXTRA_FLAGS)) {
-		if ((cref_want & CLFE_XATTR) && (cref & CLFE_XATTR))
-			memmove(xattr_mov, changelog_rec_xattr(rec),
-				sizeof(struct changelog_ext_xattr));
-
-		if ((cref_want & CLFE_OPEN) && (cref & CLFE_OPEN))
-			memmove(omd_mov, changelog_rec_openmode(rec),
-				sizeof(struct changelog_ext_openmode));
-
-		if ((cref_want & CLFE_NID) && (cref & CLFE_NID))
-			memmove(nid_mov, changelog_rec_nid(rec),
-				sizeof(struct changelog_ext_nid));
-
-		if ((cref_want & CLFE_UIDGID) && (cref & CLFE_UIDGID))
-			memmove(uidgid_mov, changelog_rec_uidgid(rec),
-				sizeof(struct changelog_ext_uidgid));
-
-		memmove(ef_mov, changelog_rec_extra_flags(rec),
-			sizeof(struct changelog_ext_extra_flags));
-	}
-
-	if ((crf_wanted & CLF_JOBID) && (rec->cr_flags & CLF_JOBID))
-		memmove(jid_mov, changelog_rec_jobid(rec),
-			sizeof(struct changelog_ext_jobid));
-
-	if ((crf_wanted & CLF_RENAME) && (rec->cr_flags & CLF_RENAME))
-		memmove(rnm_mov, changelog_rec_rename(rec),
-			sizeof(struct changelog_ext_rename));
-
-	/* Clear newly added fields */
-	if (xattr_mov && (cref_want & CLFE_XATTR) &&
-	    !(cref & CLFE_XATTR))
-		memset(xattr_mov, 0, sizeof(struct changelog_ext_xattr));
-
-	if (omd_mov && (cref_want & CLFE_OPEN) &&
-	    !(cref & CLFE_OPEN))
-		memset(omd_mov, 0, sizeof(struct changelog_ext_openmode));
-
-	if (nid_mov && (cref_want & CLFE_NID) &&
-	    !(cref & CLFE_NID))
-		memset(nid_mov, 0, sizeof(struct changelog_ext_nid));
-
-	if (uidgid_mov && (cref_want & CLFE_UIDGID) &&
-	    !(cref & CLFE_UIDGID))
-		memset(uidgid_mov, 0, sizeof(struct changelog_ext_uidgid));
-
-	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
-	    !(rec->cr_flags & CLF_EXTRA_FLAGS))
-		memset(ef_mov, 0, sizeof(struct changelog_ext_extra_flags));
-
-	if ((crf_wanted & CLF_JOBID) && !(rec->cr_flags & CLF_JOBID))
-		memset(jid_mov, 0, sizeof(struct changelog_ext_jobid));
-
-	if ((crf_wanted & CLF_RENAME) && !(rec->cr_flags & CLF_RENAME))
-		memset(rnm_mov, 0, sizeof(struct changelog_ext_rename));
-
-	/* Update the record's flags accordingly */
-	rec->cr_flags = (rec->cr_flags & CLF_FLAGMASK) | crf_wanted;
-	if (rec->cr_flags & CLF_EXTRA_FLAGS)
-		changelog_rec_extra_flags(rec)->cr_extra_flags =
-			changelog_rec_extra_flags(rec)->cr_extra_flags |
-			cref_want;
 }
 
 enum changelog_message_type {

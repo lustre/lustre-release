@@ -10163,6 +10163,7 @@ static int lfs_changelog(int argc, char **argv)
 	rc = llapi_changelog_start(&changelog_priv,
 				   CHANGELOG_FLAG_BLOCK |
 				   CHANGELOG_FLAG_JOBID |
+				   CHANGELOG_FLAG_NID_BE |
 				   CHANGELOG_FLAG_EXTRA_FLAGS |
 				   (follow ? CHANGELOG_FLAG_FOLLOW : 0),
 				   mdd, startrec);
@@ -10231,11 +10232,17 @@ static int lfs_changelog(int argc, char **argv)
 				       (unsigned long long)uidgid->cr_gid);
 			}
 			if (ef->cr_extra_flags & CLFE_NID) {
-				struct changelog_ext_nid *nid =
-					changelog_rec_nid(rec);
+				if (ef->cr_extra_flags & CLFE_NID_BE) {
+					struct lnet_nid *nid =
+						(void *)changelog_rec_nid(rec);
+					printf(" nid=%s", libcfs_nidstr(nid));
+				} else {
+					struct changelog_ext_nid *nid =
+						changelog_rec_nid(rec);
 
-				printf(" nid=%s",
-				       libcfs_nid2str(nid->cr_nid));
+					printf(" nid=%s",
+					       libcfs_nid2str(nid->cr_nid));
+				}
 			}
 
 			if (ef->cr_extra_flags & CLFE_OPEN) {
