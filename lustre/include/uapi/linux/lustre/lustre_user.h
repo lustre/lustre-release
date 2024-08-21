@@ -111,6 +111,29 @@ typedef struct stat     lstat_t;
 #define fstatat_f       fstatat
 #endif
 
+#ifndef DECLARE_FLEX_ARRAY
+#ifdef __cplusplus
+/* sizeof(struct{}) is 1 in C++, not 0, can't use C version of the macro. */
+#define DECLARE_FLEX_ARRAY(T, member) T member[0]
+#else
+/**
+ * DECLARE_FLEX_ARRAY() - Declare a flexible array usable in a union
+ *
+ * @TYPE: The type of each flexible array element
+ * @NAME: The name of the flexible array member
+ *
+ * In order to have a flexible array member in a union or alone in a
+ * struct, it needs to be wrapped in an anonymous struct with at least 1
+ * named member, but that member can be empty.
+ */
+#define DECLARE_FLEX_ARRAY(TYPE, NAME)	       \
+	struct {			       \
+		struct { } __empty_ ## NAME;   \
+		TYPE NAME[];		       \
+	}
+#endif
+#endif /* DECLARE_FLEX_ARRAY */
+
 #ifndef STATX_BASIC_STATS
 /*
  * Timestamp structure for the timestamps in struct statx.
@@ -2922,7 +2945,7 @@ struct ll_foreign_symlink_upcall_item {
 				/* internal storage of constant string */
 				char *string;
 				/* upcall stores constant string in a raw */
-				char bytestring[0];
+				DECLARE_FLEX_ARRAY(char, bytestring);
 			};
 		};
 	};

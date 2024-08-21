@@ -106,6 +106,10 @@ liblutf_connect.so :
 dlc_glue:
 	echo "generating liblnetconfig.i"
 	$(PYTHON) $(GEN_SWIG_INTF_PY) $(top_builddir)
+	echo "work-around SWIG limitations with flexible arrays"
+	sed -i '1i\%immutable lnet_ioctl_net_config::cfg_bulk;\n' $(LNETCONFIG_I)
+	sed -i '1i\%immutable lnet_ioctl_config_data::cfg_bulk;' $(LNETCONFIG_I)
+	sed -i '1i\%immutable lnet_ioctl_config_ni::lic_bulk;' $(LNETCONFIG_I)
 	echo "generating liblndconfig_wrap.c"
 	$(SWIG) -python $(DLC_SWIG_FLAGS) $(DLC_SWIG_INCLUDES) $(LNETCONFIG_I)
 	echo "building liblnetconfig_wrap.c"

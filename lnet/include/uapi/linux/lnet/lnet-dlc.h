@@ -141,7 +141,7 @@ struct lnet_ioctl_net_config {
 	char ni_interface[LNET_MAX_STR_LEN];
 	__u32 ni_status;
 	__u32 ni_cpts[LNET_MAX_SHOW_NUM_CPT];
-	char cfg_bulk[0];
+	char cfg_bulk[];
 };
 
 #define LNET_TINY_BUF_IDX	0
@@ -205,7 +205,7 @@ struct lnet_ioctl_config_data {
 		} cfg_buffers;
 	} cfg_config_u;
 
-	char cfg_bulk[0];
+	char cfg_bulk[];
 };
 
 struct lnet_ioctl_comm_count {
@@ -281,7 +281,7 @@ struct lnet_ioctl_config_ni {
 	__u32			lic_idx;
 	__s32			lic_dev_cpt;
 	char			pad[4];
-	char			lic_bulk[0];
+	char			lic_bulk[];
 };
 
 struct lnet_peer_ni_credit_info {
