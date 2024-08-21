@@ -161,7 +161,7 @@ llcrypt_is_direct_key_policy(const union llcrypt_policy *policy)
  */
 struct llcrypt_symlink_data {
 	__le16 len;
-	char encrypted_path[1];
+	char encrypted_path[];
 } __packed;
 
 /*
