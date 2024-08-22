@@ -31,6 +31,30 @@
       with a RAID0 layout. The OST components are not instantiated until
       a client writes or truncates the file beyond the size of the MDT
       component.</para>
+      <note>
+        <para>When specifying a DoM layout, it might be assumed that the
+          remaning layout will automatically go to the OSTs,
+          but this is not the case. As with regular PFL layouts, if an
+          <literal>EOF</literal> component is <emphasis>not</emphasis> present,
+          then writes beyond the end of the last existing component will fail
+          with error <literal>ENODATA</literal> (&quot;No data available&quot;).
+          For example, creating a DoM file with a component end at 1 MB will
+          not be writable beyond 1 MiB:</para>
+<screen>
+$ lfs setstripe -E 1M -L mdt /mnt/testfs/domdir
+$ dd if=/dev/zero of=/mnt/testfs/domdir/testfile bs=1M
+dd: error writing '/myth/tmp/pfl-mdt-only': No data available
+2+0 records in
+1+0 records out
+1048576 bytes (1.0 MB, 1.0 MiB) copied, 0.00186441 s, 562 MB/s
+</screen>
+        <para>To allow the file to grow beyond 1 MB, add one or more regular
+          OST components with an <literal>EOF</literal> component at the end:
+        </para>
+<screen>
+lfs setstripe -E 1M -L mdt -E 1G -c1 -E eof -c4 /mnt/testfs/domdir
+</screen>
+      </note>
   </section>
   <section xml:id="usercommands">
       <title>
