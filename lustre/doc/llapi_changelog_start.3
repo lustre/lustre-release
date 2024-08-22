@@ -1,4 +1,4 @@
-.TH llapi_changelog_start 3 "2022-11-08" "" "Lustre User API"
+.TH LLAPI_CHANGELOG_START 3 2024-08-22 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_changelog_start, llapi_changelog_set_xflags, llapi_changelog_fini \- Initialize and clean a read instance for MDT changelogs
 .SH SYNOPSIS
@@ -14,7 +14,6 @@ llapi_changelog_start, llapi_changelog_set_xflags, llapi_changelog_fini \- Initi
 .BI "int llapi_changelog_fini(void **" priv ");"
 .fi
 .SH DESCRIPTION
-.PP
 The function
 .B llapi_changelog_start()
 initializes a new instance
@@ -23,7 +22,7 @@ to read MDT changelogs. It opens the changelog char device
 corresponding to the MDT's name given by
 .I device
 (e.g: "lustrefs-MDT0000").
-.br
+.P
 A changelog starting point can be specified with
 .I startrec
 record number.
@@ -40,18 +39,17 @@ mask.
 .PP
 .B enum changelog_send_flag
 values:
-.nf
-.LP
+.EX
 	CHANGELOG_FLAG_FOLLOW
 	CHANGELOG_FLAG_BLOCK
 	CHANGELOG_FLAG_JOBID
 	CHANGELOG_FLAG_EXTRA_FLAGS
-.fi
+.EE
 .TP
 CHANGELOG_FLAG_FOLLOW
 Use changelog follow mode:
 .B llapi_changelog_recv()
-will not return when all records have been read.  Instead it will block until a
+will not return when all records have been read. Instead it will block until a
 new record is available. It avoids restarting an instance and re-scan for newer
 changelogs.
 .TP
@@ -78,13 +76,12 @@ parameter.
 .PP
 .B enum changelog_send_extra_flag
 values:
-.nf
-.LP
+.EX
 	CHANGELOG_EXTRA_FLAG_UIDGID
 	CHANGELOG_EXTRA_FLAG_NID
 	CHANGELOG_EXTRA_FLAG_OMODE
 	CHANGELOG_EXTRA_FLAG_XATTR
-.fi
+.EE
 .TP
 CHANGELOG_EXTRA_FLAG_UIDGID
 Pack uid/gid into the changelog record
@@ -123,11 +120,18 @@ is only accessible to the root user.
 An example can be found for in lfs.c source file.
 .B lfs_changelog()
 implements the following command:
-.br
+.EX
 .BI "lfs changelog [--follow] " MDTNAME " [" STARTREC " [" ENDREC "]]"
-.SH "SEE ALSO"
+.EE
+.SH AVAILABILITY
+.B llapi_changelog_start
+is part of the
+.BR lustre (7)
+user application interface library since release 2.4.0
+.\# Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
 .BR lfs-changelog (1),
-.BR llapi_changelog_clear (3)
+.BR llapi_changelog_clear (3),
 .BR llapi_changelog_get_fd (3),
 .BR llapi_changelog_in_buf (3),
 .BR llapi_changelog_recv (3),

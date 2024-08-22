@@ -1,4 +1,4 @@
-.TH llapi_changelog_recv 3 "2022-11-08" "" "Lustre User API"
+.TH LLAPI_CHANGELOG_RECV 3 2024-08-22 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_changelog_recv, llapi_changelog_free \- Read and free a changelog records
 .SH SYNOPSIS
@@ -10,7 +10,6 @@ llapi_changelog_recv, llapi_changelog_free \- Read and free a changelog records
 .BI "int llapi_changelog_free(struct changelog_rec **" rech ");"
 .fi
 .SH DESCRIPTION
-.PP
 The function
 .B llapi_changelog_recv()
 allocates and reads the next changelog record
@@ -54,9 +53,16 @@ Failed to read the changelog record on the MDT.
 An example can be found for in lfs.c source file.
 .B lfs_changelog()
 implements the following command:
-.br
+.EX
 .BI "lfs changelog [--follow] " MDTNAME " [" STARTREC " [" ENDREC "]]"
-.SH "SEE ALSO"
+.EE
+.SH AVAILABILITY
+.B llapi_changelog_recv
+is part of the
+.BR lustre (7)
+user application interface library since release 2.4.0
+.\# Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
 .BR lfs-changelog (1),
 .BR llapi_changelog_clear (3),
 .BR llapi_changelog_get_fd (3),

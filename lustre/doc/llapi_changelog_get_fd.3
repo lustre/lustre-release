@@ -1,4 +1,4 @@
-.TH llapi_changelog_get_fd 3 "2022-11-08" "" "Lustre User API"
+.TH LLAPI_CHANGELOG_GET_FD 3 "2024-08-22 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_changelog_get_fd \- Return the file descriptor of the changelog device
 .SH SYNOPSIS
@@ -8,7 +8,6 @@ llapi_changelog_get_fd \- Return the file descriptor of the changelog device
 .BI "int llapi_changelog_get_fd(void *" priv ");"
 .fi
 .SH DESCRIPTION
-.PP
 The function
 .B llapi_changelog_get_fd()
 returns the file descriptor of changelog char device for the instance
@@ -19,16 +18,21 @@ This can be used to call
 on the file descriptor to get events on the
 changelog device.
 .SH RETURN VALUES
-.PP
 Return the file descriptor on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15
 .SM -EINVAL
 .I priv
 argument is invalid.
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.B llapi_changelog_get_fd
+is part of the
+.BR lustre (7)
+user application interface library since release 2.4.0
+.\# Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
 .BR poll (2),
-.BR llapi_changelog_clear (3)
+.BR llapi_changelog_clear (3),
 .BR llapi_changelog_in_buf (3),
 .BR llapi_changelog_recv (3),
 .BR llapi_changelog_start (3),

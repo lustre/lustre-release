@@ -1,4 +1,4 @@
-.TH llapi_changelog_clear 3 "2022-11-08" "" "Lustre User API"
+.TH LLAPI_CHANGELOG_CLEAR 3 2024-08-22 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_changelog_clear \- Clear changelog records for a changelog consumer
 .SH SYNOPSIS
@@ -9,7 +9,6 @@ llapi_changelog_clear \- Clear changelog records for a changelog consumer
 .BI "                          long long " endrec ");"
 .fi
 .SH DESCRIPTION
-.PP
 The function
 .B llapi_changelog_clear()
 indicates that changelog records previous to
@@ -29,7 +28,6 @@ MDT node using:
 .br
 .BI "lctl --device " MDT_NAME " changelog_register"
 .SH RETURN VALUES
-.PP
 Return the file descriptor on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15
@@ -46,11 +44,18 @@ is only accessible to the root user.
 An example can be found in lfs.c source file.
 .B lfs_changelog_clear
 implements the following command:
-.br
+.EX
 .BI "lfs changelog_clear " MDTNAME " " ID " " ENDREC ""
-.SH "SEE ALSO"
+.EE
+.SH AVAILABILITY
+.B llapi_changelog_clear()
+is part of the
+.BR lustre (7)
+user application interface library since before release 2.4.0
+.\" Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
 .BR lfs-changelog_clear (1),
-.BR llapi_changelog_get_fd (3)
+.BR llapi_changelog_get_fd (3),
 .BR llapi_changelog_in_buf (3),
 .BR llapi_changelog_recv (3),
 .BR llapi_changelog_start (3),

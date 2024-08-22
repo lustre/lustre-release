@@ -1,4 +1,4 @@
-.TH llapi_changelog_in_buf 3 "2022-11-08" "" "Lustre User API"
+.TH LLAPI_CHANGELOG_IN_BUF 3 2024-08-22 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_changelog_in_buf \- Check if there is changelog records in the internal buffer
 .SH SYNOPSIS
@@ -8,7 +8,6 @@ llapi_changelog_in_buf \- Check if there is changelog records in the internal bu
 .BI "int llapi_changelog_in_buf(void *" priv ");"
 .fi
 .SH DESCRIPTION
-.PP
 The function
 .B llapi_changelog_in_buf()
 checks if there are still changelog records in the read buffer for the
@@ -20,11 +19,16 @@ with
 .B llapi_changelog_recv()
 can be used to dequeue all the changelog records still in the read buffer.
 .SH RETURN VALUES
-.PP
 Returns 1 if changelogs records are present in the internal read buffer,
 otherwise return 0.
-.SH "SEE ALSO"
-.BR llapi_changelog_clear (3)
+.SH AVAILABILITY
+.B llapi_changelog_in_buf
+is part of the
+.BR lustre (7)
+user application interface library since release 2.13.0
+.\# Added in commit 2.12.56-87-ge215002883
+.SH SEE ALSO
+.BR llapi_changelog_clear (3),
 .BR llapi_changelog_get_fd (3),
 .BR llapi_changelog_recv (3),
 .BR llapi_changelog_start (3),
