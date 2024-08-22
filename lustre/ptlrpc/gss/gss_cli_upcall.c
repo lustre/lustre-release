@@ -116,16 +116,14 @@ int ctx_init_pack_request(struct obd_import *imp,
 	/* 2. target uuid */
 	obj.len = strlen(imp->imp_obd->u.cli.cl_target_uuid.uuid) + 1;
 	obj.data = imp->imp_obd->u.cli.cl_target_uuid.uuid;
-	if (rawobj_serialize(&obj, &p, &size))
-		LBUG();
+	LASSERT(!rawobj_serialize(&obj, &p, &size));
 
 	/* 3. reverse context handle. actually only needed by root user,
 	 *    but we send it anyway. */
 	gsec = sec2gsec(req->rq_cli_ctx->cc_sec);
 	obj.len = sizeof(gsec->gs_rvs_hdl);
 	obj.data = (__u8 *) &gsec->gs_rvs_hdl;
-	if (rawobj_serialize(&obj, &p, &size))
-		LBUG();
+	LASSERT(!rawobj_serialize(&obj, &p, &size));
 
 	/* 4. now the token */
 	total_size = sizeof(__u32) + token_size;

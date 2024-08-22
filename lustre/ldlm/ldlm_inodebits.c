@@ -286,10 +286,9 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 					 * allowed, the trybits to be used
 					 * instead.
 					 */
-					if (!req->l_export &&
-					    (req_bits & MDS_INODELOCK_DOM) &&
-					    (req_bits & ~MDS_INODELOCK_DOM))
-						LBUG();
+					LASSERT(!(!req->l_export &&
+						  (req_bits & MDS_INODELOCK_DOM) &&
+						  (req_bits & ~MDS_INODELOCK_DOM)));
 
 					goto skip_work_list;
 				}

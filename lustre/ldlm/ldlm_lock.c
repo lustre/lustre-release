@@ -430,8 +430,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 
 	ENTRY;
 
-	if (resource == NULL)
-		LBUG();
+	LASSERT(resource);
 
 	OBD_SLAB_ALLOC_PTR_GFP(lock, ldlm_lock_slab, GFP_NOFS);
 	if (lock == NULL)
@@ -2396,10 +2395,8 @@ restart:
 #else
 	ENTRY;
 
-	if (!ns_is_client(ldlm_res_to_ns(res))) {
-		CERROR("This is client-side-only module, cannot handle LDLM_NAMESPACE_SERVER resource type lock.\n");
-		LBUG();
-	}
+	LASSERTF(ns_is_client(ldlm_res_to_ns(res)),
+		 "This is client-side-only module, cannot handle LDLM_NAMESPACE_SERVER resource type lock.\n");
 #endif
 	EXIT;
 }

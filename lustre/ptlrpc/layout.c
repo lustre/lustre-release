@@ -2523,17 +2523,14 @@ void req_capsule_set_size(struct req_capsule *pill,
 	    (size > 0)) {
 		__u32 rmf_size = (__u32)field->rmf_size;
 
-		if ((field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
-		    (size % rmf_size != 0)) {
-			CERROR("%s: array field size mismatch %u %% %u != 0 (%d)\n",
-				field->rmf_name, size, rmf_size, loc);
-			LBUG();
-		} else if (!(field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
-			   size < rmf_size) {
-			CERROR("%s: field size mismatch %u != %u (%d)\n",
-				field->rmf_name, size, rmf_size, loc);
-			LBUG();
-		}
+		LASSERTF(!((field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
+			   (size % rmf_size != 0)),
+			 "%s: array field size mismatch %u %% %u != 0 (%d)\n",
+			 field->rmf_name, size, rmf_size, loc);
+		LASSERTF(!(!(field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
+			   size < rmf_size),
+			 "%s: field size mismatch %u != %u (%d)\n",
+			 field->rmf_name, size, rmf_size, loc);
 	}
 
 	pill->rc_area[loc][__req_capsule_offset(pill, field, loc)] = size;

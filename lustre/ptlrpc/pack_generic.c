@@ -750,9 +750,7 @@ EXPORT_SYMBOL(lustre_msg_buflen);
 static inline void
 lustre_msg_set_buflen_v2(struct lustre_msg_v2 *m, __u32 n, __u32 len)
 {
-	if (n >= m->lm_bufcount)
-		LBUG();
-
+	LASSERT(n < m->lm_bufcount);
 	m->lm_buflens[n] = len;
 }
 

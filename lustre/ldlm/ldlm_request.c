@@ -462,10 +462,8 @@ int ldlm_cli_enqueue_local(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(!(*flags & LDLM_FL_REPLAY));
-	if (unlikely(ns_is_client(ns))) {
-		CERROR("Trying to enqueue local lock in a shadow namespace\n");
-		LBUG();
-	}
+	LASSERTF(unlikely(!ns_is_client(ns)),
+		 "Trying to enqueue local lock in a shadow namespace\n");
 
 	lock = ldlm_lock_create(ns, res_id, type, mode, &cbs, data, lvb_len,
 				lvb_type);
@@ -498,10 +496,7 @@ int ldlm_cli_enqueue_local(const struct lu_env *env,
 	if (client_cookie != NULL)
 		lock->l_client_cookie = *client_cookie;
 	if (type == LDLM_EXTENT) {
-		/* extent lock without policy is a bug */
-		if (policy == NULL)
-			LBUG();
-
+		LASSERT(policy);
 		lock->l_req_extent = policy->l_extent;
 	}
 
@@ -1017,10 +1012,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 			lock->l_policy_data = *policy;
 
 		if (einfo->ei_type == LDLM_EXTENT) {
-			/* extent lock without policy is a bug */
-			if (policy == NULL)
-				LBUG();
-
+			LASSERT(policy);
 			lock->l_req_extent = policy->l_extent;
 		} else if (einfo->ei_type == LDLM_FLOCK) {
 			ldlm_lock_add_to_enqueueing(lock);
