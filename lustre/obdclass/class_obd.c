@@ -553,14 +553,18 @@ static struct miscdevice obd_psdev = {
 	u64 __size;							       \
 	int __ret;							       \
 									       \
-	BUILD_BUG_ON(sizeof(value) >= 23);				       \
 	__ret = sysfs_memparse(value, sizeof(value) - 1, &__size, def_unit);   \
-	if (__ret != __rc)						       \
+	if (__ret != __rc) {						       \
 		CERROR("string_helper: parsing '%s' expect rc %d != got %d\n", \
 		       value, __rc, __ret);				       \
-	else if (!__ret && (u64)expect != __size)			       \
+		__ret = -EINVAL;					       \
+	} else if (!__ret && (u64)expect != __size) {			       \
 		CERROR("string_helper: parsing '%s' expect %llu != got %llu\n",\
 		       value, (u64)expect, __size);			       \
+		__ret = -EINVAL;					       \
+	} else {							       \
+		__ret = 0;						       \
+	}								       \
 	__ret;								       \
 })
 #define test_string_to_size_one(value, expect, def_unit)		       \
@@ -632,16 +636,46 @@ static int __init obd_init_checks(void)
 		RETURN(ret);
 
 	/* invalid string */
-	if (!test_string_to_size_err("256B34", 256, "B", -EINVAL)) {
+	if (test_string_to_size_err("256B34", 256, "B", -EINVAL)) {
 		CERROR("string_helpers: format should be number then units\n");
 		ret = -EINVAL;
 	}
-	if (!test_string_to_size_err("132OpQ", 132, "B", -EINVAL)) {
+	if (test_string_to_size_err("132OpQ", 132, "B", -EINVAL)) {
 		CERROR("string_helpers: invalid units should be rejected\n");
 		ret = -EINVAL;
 	}
-	if (!test_string_to_size_err("1.82B", 1, "B", -EINVAL)) {
+	if (test_string_to_size_err("1.82B", 1, "B", -EINVAL)) {
 		CERROR("string_helpers: 'B' with '.' should be invalid\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_err("10.badMib", 1, "B", -EINVAL)) {
+		CERROR("string_helpers: '10.badMib' should be invalid\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_err("10MiBbad", 1, "B", -EINVAL)) {
+		CERROR("string_helpers: '10MiBbad' should be invalid\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_err("10MBAD", 1, "B", -EINVAL)) {
+		CERROR("string_helpers: '10MBAD' should be invalid\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_err("10.123badMib", 1, "B", -EINVAL)) {
+		CERROR("string_helpers: '10.123badMib' should be invalid\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_err("1024.KG", 1, "B", -EINVAL)) {
+		CERROR("string_helpers: '1024.KG' should be invalid\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_err("102345678910234567891023456789.82M",
+				     1, "B", -EOVERFLOW)) {
+		CERROR("string_helpers: too long decimal string should be rejected\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_err(".1023456789M",
+				     1, "B", -EOVERFLOW)) {
+		CERROR("string_helpers: too long string for the fractional part should be rejected\n");
 		ret = -EINVAL;
 	}
 	if (test_string_to_size_one("343\n", 343, "B")) {
@@ -653,42 +687,49 @@ static int __init obd_init_checks(void)
 
 	/* memparse unit handling */
 	ret = 0;
-	ret += test_string_to_size_one("0B", 0, "B");
-	ret += test_string_to_size_one("512B", 512, "B");
-	ret += test_string_to_size_one("1.067kB", 1067, "B");
-	ret += test_string_to_size_one("1.042KiB", 1067, "B");
-	ret += test_string_to_size_one("8", 8388608, "M");
-	ret += test_string_to_size_one("65536", 65536, "B");
-	ret += test_string_to_size_one("128", 131072, "K");
-	ret += test_string_to_size_one("1M", 1048576, "B");
-	ret += test_string_to_size_one("0.5T", 549755813888ULL, "T");
-	ret += test_string_to_size_one("256.5G", 275414777856ULL, "G");
+	ret = ret ?: test_string_to_size_one("0B", 0, "B");
+	ret = ret ?: test_string_to_size_one("512B", 512, "B");
+	ret = ret ?: test_string_to_size_one("1.067kB", 1067, "B");
+	ret = ret ?: test_string_to_size_one("1.042KiB", 1067, "B");
+	ret = ret ?: test_string_to_size_one("8", 8388608, "M");
+	ret = ret ?: test_string_to_size_one("65536", 65536, "B");
+	ret = ret ?: test_string_to_size_one("128", 131072, "K");
+	ret = ret ?: test_string_to_size_one("1M", 1048576, "B");
+	ret = ret ?: test_string_to_size_one("0.5T", 549755813888ULL, "T");
+	ret = ret ?: test_string_to_size_one("256.5G", 275414777856ULL, "G");
+	ret = ret ?: test_string_to_size_one("0.0625M", 1ULL << 16, "M");
+	ret = ret ?: test_string_to_size_one(".03125M", 1ULL << 15, "M");
+	ret = ret ?: test_string_to_size_one(".015625M", 1ULL << 14, "M");
 	if (ret)
 		RETURN(ret);
 
 	/* string helper values */
-	ret += test_string_to_size_one("16", 16777216, "MiB");
-	ret += test_string_to_size_one("8.39MB", 8390000, "MiB");
-	ret += test_string_to_size_one("8.00MiB", 8388608, "MiB");
-	ret += test_string_to_size_one("256GB", 256000000000ULL, "GiB");
-	ret += test_string_to_size_one("238.731GiB", 256335459385ULL, "GiB");
+	ret = ret ?: test_string_to_size_one("16", 16777216, "MiB");
+	ret = ret ?: test_string_to_size_one("8.39MB", 8390000, "MiB");
+	ret = ret ?: test_string_to_size_one("8.00MiB", 8388608, "MiB");
+	ret = ret ?: test_string_to_size_one("256GB", 256000000000ULL, "GiB");
+	ret = ret ?: test_string_to_size_one("238.731GiB", 256335459385ULL,
+					     "GiB");
 	if (ret)
 		RETURN(ret);
 
 	/* huge values */
-	ret += test_string_to_size_one("0.4TB", 400000000000ULL, "TiB");
-	ret += test_string_to_size_one("12.5TiB", 13743895347200ULL, "TiB");
-	ret += test_string_to_size_one("2PB", 2000000000000000ULL, "PiB");
-	ret += test_string_to_size_one("16PiB", 18014398509481984ULL, "PiB");
+	ret = ret ?: test_string_to_size_one("0.4TB", 400000000000ULL, "TiB");
+	ret = ret ?: test_string_to_size_one("12.5TiB", 13743895347200ULL,
+					     "TiB");
+	ret = ret ?: test_string_to_size_one("2PB", 2000000000000000ULL, "PiB");
+	ret = ret ?: test_string_to_size_one("16PiB", 18014398509481984ULL,
+					     "PiB");
+	ret = ret ?: test_string_to_size_one("0.5EiB", 1ULL << 59, "EiB");
 	if (ret)
 		RETURN(ret);
 
 	/* huge values should overflow */
-	if (!test_string_to_size_err("1000EiB", 0, "EiB", -EOVERFLOW)) {
+	if (test_string_to_size_err("1000EiB", 0, "EiB", -EOVERFLOW)) {
 		CERROR("string_helpers: failed to detect binary overflow\n");
 		ret = -EINVAL;
 	}
-	if (!test_string_to_size_err("1000EB", 0, "EiB", -EOVERFLOW)) {
+	if (test_string_to_size_err("1000EB", 0, "EiB", -EOVERFLOW)) {
 		CERROR("string_helpers: failed to detect decimal overflow\n");
 		ret = -EINVAL;
 	}
@@ -701,8 +742,6 @@ static int __init obdclass_init(void)
 	int err;
 
 	LCONSOLE_INFO("Lustre: Build Version: "LUSTRE_VERSION_STRING"\n");
-
-	register_oom_notifier(&obdclass_oom);
 
 	err = libcfs_setup();
 	if (err)
@@ -718,6 +757,8 @@ static int __init obdclass_init(void)
 		       err);
 		return err;
 	}
+
+	register_oom_notifier(&obdclass_oom);
 
 	err = libcfs_kkuc_init();
 	if (err)

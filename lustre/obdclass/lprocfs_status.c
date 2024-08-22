@@ -1740,6 +1740,227 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 }
 EXPORT_SYMBOL(lprocfs_read_helper);
 
+/*
+ * Parse a decimal string and decompose it into integer and fractional values.
+ * The fractionnal part is returned with @frac_d and @frac_div the 10^x
+ * denominator. The maximum number of digits for the fractional part is 9.
+ *
+ * examples of valid inputs:
+ * - ".01"	-> int_d: 0, frac_d: 1,		frac_div: 100
+ * - "5"	-> int_d: 5, frac_d: 0,		frac_div: 1
+ * - "2.1255"	-> int_d: 2, frac_d: 1255,	frac_div: 10000
+ * - "2.0295"	-> int_d: 2, frac_d: 295,	frac_div: 10000
+ * - "2.99999"	-> int_d: 3, frac_d: 99999,	frac_div: 100000
+ */
+static int string_to_decimal(u64 *int_d, u64 *frac_d, u32 *frac_div,
+			     const char *buffer, size_t count)
+{
+	const char *str = buffer;
+	int len = 0, frac_len = 0;
+	int i;
+	int rc;
+
+	*int_d = 0;
+	*frac_d = 0;
+	*frac_div = 1;
+
+	if (!count)
+		return -EINVAL;
+
+	/* parse integer */
+	if (*str != '.') {
+		rc = sscanf(str, "%llu%n", int_d, &len);
+		if (rc < 0)
+			return rc;
+		if (rc < 1 || !len || len > count)
+			return -EINVAL;
+		str += len;
+	}
+
+	/* parse fractional  */
+	if (*str != '.')
+		return len ? len : -EINVAL;
+
+	str++;
+	len++;
+	rc = sscanf(str, "%llu%n", frac_d, &frac_len);
+	if (rc < 0)
+		return rc;
+	if (rc < 1 || !frac_len)
+		return (len == 1) ? -EINVAL : len;
+
+	len += frac_len;
+	if (len > count)
+		return -EINVAL;
+
+	/* if frac_len >= 10, the frac_div will overflow */
+	if (frac_len >= 10)
+		return -EOVERFLOW;
+
+	for (i = 0; i < frac_len; i++)
+		*frac_div *= 10;
+
+	return len;
+}
+
+static int string_to_blksize(u64 *blk_size, const char *buffer, size_t count)
+{
+	/* For string_get_size() it can support values above exabytes,
+	 * (ZiB, YiB) due to breaking the return value into a size and
+	 * bulk size to avoid 64 bit overflow. We don't break the size
+	 * up into block size units so we don't support ZiB or YiB.
+	 */
+	enum string_size_units {
+		STRING_UNITS_2 = 0,
+		STRING_UNITS_10,
+	} unit = STRING_UNITS_2;
+	static const char *const units_2[] = {
+		"K",  "M",  "G",  "T",  "P",  "E",
+	};
+	static const char *const units_10[] = {
+		"kB", "MB", "GB", "TB", "PB", "EB",
+	};
+	static const char *const *const units_str[] = {
+		[STRING_UNITS_2] = units_2,
+		[STRING_UNITS_10] = units_10,
+	};
+	static const unsigned int coeff[] = {
+		[STRING_UNITS_2] = 1024,
+		[STRING_UNITS_10] = 1000,
+	};
+	size_t len = 0;
+	int i;
+
+	*blk_size = 1;
+	if (!count || !*buffer)
+		return -EINVAL;
+
+	if (*buffer == 'B') {
+		len = 1;
+		goto check_end;
+	}
+
+	if (count >= 2 && buffer[1] == 'B')
+		unit = STRING_UNITS_10;
+
+	i = unit == STRING_UNITS_2 ? ARRAY_SIZE(units_2) - 1 :
+				     ARRAY_SIZE(units_10) - 1;
+	do {
+		size_t unit_len = min(count, strlen(units_str[unit][i]));
+
+		if (strncmp(buffer, units_str[unit][i], unit_len) == 0) {
+			len += unit_len;
+			for (; i >= 0; i--)
+				*blk_size *= coeff[unit];
+			break;
+		}
+	} while (i--);
+
+	if (*blk_size == 1) {
+		CDEBUG(D_INFO, "unknown suffix '%s'\n", buffer);
+		return -EINVAL;
+	}
+
+	/* handle the optional "iB" suffix */
+	if (unit == STRING_UNITS_2 && (count - len) >= 2 &&
+	    buffer[len] == 'i' && buffer[len + 1] == 'B')
+		len += 2;
+
+check_end:
+	if (count > len && isalnum(buffer[len]))
+		return -EINVAL;
+
+	return len;
+}
+
+/*
+ * This comes from scale64_check_overflow() (time/timekeeping.c).
+ * This is used to prevent u64 overflow for:
+ * *base = mutl * *base / div
+ */
+static int scale64_rem(u64 mult, u32 div, u64 *base, u32 *remp)
+{
+	u64 tmp = *base;
+	u64 quot;
+	u32 rem, rem2;
+
+	if (!tmp)
+		return 0;
+	if (mult > tmp)
+		swap(mult, tmp);
+
+	quot = div_u64_rem(tmp, div, &rem);
+
+	if (mult > div &&
+	    (fls64(mult) + fls64(quot) >= 8 * sizeof(u64) ||
+	    fls64(mult) + fls(rem) >= 8 * sizeof(u64)))
+		return -EOVERFLOW;
+	quot *= mult;
+
+	tmp = div_u64_rem(rem * mult, div, &rem2);
+	*base = quot + tmp;
+	if (remp)
+		*remp = rem2;
+
+	return 0;
+}
+
+static int __string_to_size(u64 *size, const char *buffer, size_t count,
+			    const char *defunit)
+{
+	u64 whole, frac, blk_size;
+	u32 frac_div;
+	const char *ptr;
+	size_t len, unit_len;
+	int rc;
+
+	*size = 0;
+
+	rc = string_to_decimal(&whole, &frac, &frac_div, buffer, count);
+	if (rc < 0)
+		return rc;
+
+	len = rc;
+	ptr = buffer + len;
+	if (len >= count || !*ptr || isspace(*ptr)) {
+		*size = whole;
+		if (!defunit)
+			return len;
+
+		ptr = defunit;
+		unit_len = strlen(defunit);
+	} else {
+		unit_len = count - len;
+	}
+
+	rc = string_to_blksize(&blk_size, ptr, unit_len);
+	if (rc < 0)
+		return rc;
+
+	if (ptr != defunit)
+		len += rc;
+
+	if (blk_size == 1 && frac)
+		return -EINVAL;
+
+	if (blk_size == 1) {
+		*size = whole;
+		return len;
+	}
+
+	if (fls64(whole) + fls64(blk_size) >= sizeof(u64) * 8)
+		return -EOVERFLOW;
+
+	whole *= blk_size;
+	rc = scale64_rem(blk_size, frac_div, &frac, NULL);
+	if (rc)
+		return rc;
+
+	*size = whole + frac;
+
+	return len;
+}
+
 /**
  * string_to_size - convert ASCII string representing a numerical
  *		    value with optional units to 64-bit binary value
@@ -1754,7 +1975,7 @@ EXPORT_SYMBOL(lprocfs_read_helper);
  * the end which can be base 2 or base 10 in value. If no units are given
  * the string is assumed to just a numerical value.
  *
- * Returns:	@count if the string is successfully parsed,
+ * Returns:	length of characters parsed,
  *		-errno on invalid input strings. Error values:
  *
  *  - ``-EINVAL``: @buffer is not a proper numerical string
@@ -1763,113 +1984,7 @@ EXPORT_SYMBOL(lprocfs_read_helper);
  */
 int string_to_size(u64 *size, const char *buffer, size_t count)
 {
-	/* For string_get_size() it can support values above exabytes,
-	 * (ZiB, YiB) due to breaking the return value into a size and
-	 * bulk size to avoid 64 bit overflow. We don't break the size
-	 * up into block size units so we don't support ZiB or YiB.
-	 */
-	static const char *const units_10[] = {
-		"kB", "MB", "GB", "TB", "PB", "EB",
-	};
-	static const char *const units_2[] = {
-		"K",  "M",  "G",  "T",  "P",  "E",
-	};
-	static const char *const *const units_str[] = {
-		[STRING_UNITS_2] = units_2,
-		[STRING_UNITS_10] = units_10,
-	};
-	static const unsigned int coeff[] = {
-		[STRING_UNITS_10] = 1000,
-		[STRING_UNITS_2] = 1024,
-	};
-	enum string_size_units unit = STRING_UNITS_2;
-	u64 whole, blk_size = 1;
-	char kernbuf[22], *end;
-	size_t len = count;
-	int rc;
-	int i;
-
-	if (count >= sizeof(kernbuf)) {
-		CERROR("count %zd > buffer %zd\n", count, sizeof(kernbuf));
-		return -E2BIG;
-	}
-
-	*size = 0;
-	/* The "iB" suffix is optionally allowed for indicating base-2 numbers.
-	 * If suffix is only "B" and not "iB" then we treat it as base-10.
-	 */
-	end = strstr(buffer, "B");
-	if (end && *(end - 1) != 'i')
-		unit = STRING_UNITS_10;
-
-	i = unit == STRING_UNITS_2 ? ARRAY_SIZE(units_2) - 1 :
-				     ARRAY_SIZE(units_10) - 1;
-	do {
-		end = strnstr(buffer, units_str[unit][i], count);
-		if (end) {
-			for (; i >= 0; i--)
-				blk_size *= coeff[unit];
-			len = end - buffer;
-			break;
-		}
-	} while (i--);
-
-	/* as 'B' is a substring of all units, we need to handle it
-	 * separately.
-	 */
-	if (!end) {
-		/* 'B' is only acceptable letter at this point */
-		end = strnchr(buffer, count, 'B');
-		if (end) {
-			len = end - buffer;
-
-			if (count - len > 2 ||
-			    (count - len == 2 && strcmp(end, "B\n") != 0)) {
-				CDEBUG(D_INFO, "unknown suffix '%s'\n", buffer);
-				return -EINVAL;
-			}
-		}
-		/* kstrtoull will error out if it has non digits */
-		goto numbers_only;
-	}
-
-	end = strnchr(buffer, count, '.');
-	if (end) {
-		/* need to limit 3 decimal places */
-		char rem[4] = "000";
-		u64 frac = 0;
-		size_t off;
-
-		len = end - buffer;
-		end++;
-
-		/* limit to 3 decimal points */
-		off = min_t(size_t, 3, strspn(end, "0123456789"));
-		/* need to limit frac_d to a u32 */
-		memcpy(rem, end, off);
-		rc = kstrtoull(rem, 10, &frac);
-		if (rc)
-			return rc;
-
-		if (fls64(frac) + fls64(blk_size) - 1 > 64)
-			return -EOVERFLOW;
-
-		frac *= blk_size;
-		do_div(frac, 1000);
-		*size += frac;
-	}
-numbers_only:
-	snprintf(kernbuf, sizeof(kernbuf), "%.*s", (int)len, buffer);
-	rc = kstrtoull(kernbuf, 10, &whole);
-	if (rc)
-		return rc;
-
-	if (whole != 0 && fls64(whole) + fls64(blk_size) - 1 > 64)
-		return -EOVERFLOW;
-
-	*size += whole * blk_size;
-
-	return count;
+	return __string_to_size(size, buffer, count, NULL);
 }
 EXPORT_SYMBOL(string_to_size);
 
@@ -1884,11 +1999,11 @@ EXPORT_SYMBOL(string_to_size);
  *
  * Parses a string into a number. The number stored at @buffer is
  * potentially suffixed with K, M, G, T, P, E. Besides these other
- * valid suffix units are shown in the string_to_size() function.
+ * valid suffix units are shown in the __string_to_size() function.
  * If the string lacks a suffix then the defunit is used. The defunit
  * should be given as a binary unit (e.g. MiB) as that is the standard
- * for tunables in Lustre. If no unit suffix is given (e.g. 'G'), then
- * it is assumed to be in binary units.
+ * for tunables in Lustre.  If no unit suffix is given (e.g. only "G"
+ * instead of "GB"), then it is assumed to be in binary units ("GiB").
  *
  * Returns:	0 on success or -errno on failure.
  */
@@ -1896,34 +2011,13 @@ int sysfs_memparse(const char *buffer, size_t count, u64 *val,
 		   const char *defunit)
 {
 	const char *param = buffer;
-	char tmp_buf[23];
 	int rc;
 
-	if (count > strlen(buffer))
-		count = strlen(buffer);
-
-	while (count > 0 && isspace(buffer[count - 1]))
-		count--;
-
+	count = strnlen(buffer, count);
 	if (!count)
 		RETURN(-EINVAL);
 
-	/* If there isn't already a unit on this value, append @defunit.
-	 * Units of 'B' don't affect the value, so don't bother adding.
-	 */
-	if (!isalpha(buffer[count - 1]) && defunit[0] != 'B') {
-		if (count + 3 >= sizeof(tmp_buf)) {
-			CERROR("count %zd > size %zd\n", count, sizeof(param));
-			RETURN(-E2BIG);
-		}
-
-		scnprintf(tmp_buf, sizeof(tmp_buf), "%.*s%s", (int)count,
-			  buffer, defunit);
-		param = tmp_buf;
-		count = strlen(param);
-	}
-
-	rc = string_to_size(val, param, count);
+	rc = __string_to_size(val, param, count, defunit);
 
 	return rc < 0 ? rc : 0;
 }
