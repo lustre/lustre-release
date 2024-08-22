@@ -2070,10 +2070,7 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 	 * must be the loopback interface.
 	 */
 	rc = lnet_ping_info_validate(&pbuf->pb_info);
-	if (rc) {
-		LCONSOLE_EMERG("Invalid ping target: %d\n", rc);
-		LBUG();
-	}
+	LASSERTF(!rc, "Invalid ping target: %d\n", rc);
 	LNET_PING_BUFFER_SEQNO(pbuf) =
 		atomic_inc_return(&the_lnet.ln_ping_target_seqno);
 }

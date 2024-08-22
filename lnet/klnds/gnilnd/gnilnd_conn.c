@@ -45,15 +45,12 @@ kgnilnd_map_fmablk(kgn_device_t *device, kgn_fma_memblock_t *fma_blk)
 				   flags, &fma_blk->gnm_hndl);
 	if (rrc != GNI_RC_SUCCESS) {
 		if (rfto != GNILND_REGFAILTO_DISABLE) {
-			if (reg_to == 0) {
+			if (reg_to == 0)
 				reg_to = jiffies + cfs_time_seconds(rfto);
-			} else if (time_after(jiffies, reg_to)) {
-				CERROR("FATAL:fmablk registration has failed "
-				       "for %ld seconds.\n",
-				       cfs_duration_sec(jiffies - reg_to) +
-						rfto);
-				LBUG();
-			}
+			else
+				LASSERTF(!time_after(jiffies, reg_to),
+					 "FATAL:fmablk registration has failed for %ld seconds.\n",
+					 cfs_duration_sec(jiffies - reg_to) + rfto);
 		}
 
 		CNETERR("register fmablk failed 0x%p mbox_size %d flags %u\n",
