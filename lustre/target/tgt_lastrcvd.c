@@ -448,11 +448,9 @@ void tgt_client_free(struct obd_export *exp)
 
 	/* Clear bit when lcd is freed */
 	LASSERT(lut && lut->lut_client_bitmap);
-	if (!test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap)) {
-		CERROR("%s: client %u bit already clear in bitmap\n",
-		       exp->exp_obd->obd_name, ted->ted_lr_idx);
-		LBUG();
-	}
+	LASSERTF(test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap),
+		 "%s: client %u bit already clear in bitmap\n",
+		 exp->exp_obd->obd_name, ted->ted_lr_idx);
 }
 EXPORT_SYMBOL(tgt_client_free);
 
@@ -1132,11 +1130,9 @@ int tgt_client_add(const struct lu_env *env,  struct obd_export *exp, int idx)
 	    exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
 		RETURN(0);
 
-	if (test_and_set_bit(idx, tgt->lut_client_bitmap)) {
-		CERROR("%s: client %d: bit already set in bitmap!!\n",
-		       tgt->lut_obd->obd_name,  idx);
-		LBUG();
-	}
+	LASSERTF(!test_and_set_bit(idx, tgt->lut_client_bitmap),
+		 "%s: client %d: bit already set in bitmap!!\n",
+		 tgt->lut_obd->obd_name, idx);
 
 	CDEBUG(D_INFO, "%s: client at idx %d with UUID '%s' added, "
 	       "generation %d\n",
@@ -1191,11 +1187,9 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 
 	/* Clear the bit _after_ zeroing out the client so we don't
 	   race with filter_client_add and zero out new clients.*/
-	if (!test_bit(ted->ted_lr_idx, tgt->lut_client_bitmap)) {
-		CERROR("%s: client %u: bit already clear in bitmap!!\n",
-		       tgt->lut_obd->obd_name, ted->ted_lr_idx);
-		LBUG();
-	}
+	LASSERTF(test_bit(ted->ted_lr_idx, tgt->lut_client_bitmap),
+		 "%s: client %u: bit already clear in bitmap!!\n",
+		 tgt->lut_obd->obd_name, ted->ted_lr_idx);
 
 	/* Do not erase record for recoverable client. */
 	if (exp->exp_flags & OBD_OPT_FAILOVER)

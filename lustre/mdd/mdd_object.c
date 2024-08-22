@@ -2756,8 +2756,9 @@ static int mdd_swap_layouts(const struct lu_env *env,
 	int retried = 0;
 	__u32 fst_gen;
 	__u32 snd_gen;
+	int steps = 0;
 	int fst_fl;
-	int rc2;
+	int rc2 = 0;
 	int rc;
 
 	ENTRY;
@@ -3007,8 +3008,6 @@ retry:
 
 out_restore:
 	if (rc != 0) {
-		int steps = 0;
-
 		/* failure on second file, but first was done, so we have
 		 * to roll back first.
 		 */
@@ -3043,19 +3042,15 @@ out_restore_hsm_fst:
 		}
 
 do_lbug:
-		if (rc2 < 0) {
-			/* very bad day */
-			CERROR("%s: unable to roll back layout swap of "DFID" and "DFID", steps: %d: rc = %d/%d\n",
-			       mdd_obj_dev_name(fst_o),
-			       PFID(mdd_object_fid(snd_o)),
-			       PFID(mdd_object_fid(fst_o)),
-			       rc, rc2, steps);
-			/* a solution to avoid journal commit is to panic,
-			 * but it has strong consequences so we use LBUG to
-			 * allow sysdamin to choose to panic or not
-			 */
-			LBUG();
-		}
+		/* very bad day - a solution to avoid journal commit
+		 * is to panic, but it has strong consequences so we
+		 * use LASSERT to allow sysdamin to choose to panic
+		 * or not
+		 */
+		LASSERTF(rc2 >= 0,
+			 "%s: unable to roll back layout swap of " DFID " and " DFID ", steps: %d: rc = %d/%d\n",
+			 mdd_obj_dev_name(fst_o), PFID(mdd_object_fid(snd_o)),
+			 PFID(mdd_object_fid(fst_o)), rc, rc2, steps);
 	}
 
 unlock:

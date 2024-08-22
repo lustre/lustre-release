@@ -1789,11 +1789,9 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
 	for (i = 0; i < ARRAY_SIZE(mps_stats); i++) {
 		lprocfs_counter_init(stats, i, LPROCFS_TYPE_REQS,
 				     mps_stats[i]);
-		if (!stats->ls_cnt_header[i].lc_name) {
-			CERROR("Missing md_stat initializer md_op operation at offset %d. Aborting.\n",
-			       i);
-			LBUG();
-		}
+		LASSERTF(stats->ls_cnt_header[i].lc_name,
+			 "Missing md_stat initializer md_op operation at offset %d. Aborting.\n",
+			 i);
 	}
 
 	rc = lprocfs_stats_register(obd->obd_proc_entry, "md_stats", stats);
