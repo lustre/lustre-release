@@ -88,6 +88,27 @@ JT_SUBCMD(pcc);
 
 #ifdef HAVE_SERVER_SUPPORT
 /**
+ * command_t barrier_cmdlist - lctl barrier commands.
+ */
+command_t barrier_cmdlist[] = {
+	{ .pc_name = "freeze", .pc_func = jt_barrier_freeze,
+	  .pc_help = "freeze write barrier on MDTs\n"
+	 "usage: barrier freeze FSNAME [TIMEOUT_SECONDS]"},
+	{ .pc_name = "thaw", .pc_func = jt_barrier_thaw,
+	  .pc_help = "thaw write barrier on MDTs\n"
+	 "usage: barrier thaw FSNAME"},
+	{ .pc_name = "stat", .pc_func = jt_barrier_stat,
+	  .pc_help = "query write barrier status on MDTs\n"
+	 "usage: barrier stat [--state|-s] [--timeout|-t] FSNAME"},
+	{ .pc_name = "rescan", .pc_func = jt_barrier_rescan,
+	  .pc_help =
+	 "rescan the system to filter out inactive MDT(s) for barrier\n"
+	 "usage: barrier rescan FSNAME [TIMEOUT_SECONDS]"},
+	{ .pc_help = NULL }
+};
+JT_SUBCMD(barrier);
+
+/**
  * command_t lfsck_cmdlist - lctl lfsck commands.
  */
 command_t lfsck_cmdlist[] = {
@@ -311,16 +332,17 @@ command_t cmdlist[] = {
 	{"===  Barrier ==", NULL, 0, "barrier management"},
 	{"barrier_freeze", jt_barrier_freeze, 0,
 	 "freeze write barrier on MDTs\n"
-	 "usage: barrier_freeze <fsname> [timeout (in seconds)]"},
+	 "usage: barrier_freeze FSNAME [TIMEOUT_SECONDS]"},
 	{"barrier_thaw", jt_barrier_thaw, 0,
 	 "thaw write barrier on MDTs\n"
-	 "usage: barrier_thaw <fsname>"},
+	 "usage: barrier_thaw FSNAME"},
 	{"barrier_stat", jt_barrier_stat, 0,
 	 "query write barrier status on MDTs\n"
-	 "usage: barrier_stat [--state|-s] [--timeout|-t] <fsname>"},
+	 "usage: barrier_stat [--state|-s] [--timeout|-t] FSNAME"},
 	{"barrier_rescan", jt_barrier_rescan, 0,
 	 "rescan the system to filter out inactive MDT(s) for barrier\n"
-	 "usage: barrier_rescan <fsname> [timeout (in seconds)]"},
+	 "usage: barrier_rescan FSNAME [TIMEOUT_SECONDS]"},
+	{"barrier", jt_barrier, barrier_cmdlist, ""},
 
 	/* Snapshot commands */
 	{"===  Snapshot ==", NULL, 0, "Snapshot management"},

@@ -32437,12 +32437,17 @@ post_801() {
 }
 
 barrier_stat() {
+	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+		barrier_stat="barrier stat"
+	else
+		barrier_stat="barrier_stat"
+	fi
 	if [ $MGS_VERSION -le $(version_code 2.10.0) ]; then
-		local st=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+		local st=$(do_facet mgs $LCTL $barrier_stat $FSNAME |
 			   awk '/The barrier for/ { print $7 }')
 		echo $st
 	else
-		local st=$(do_facet mgs $LCTL barrier_stat -s $FSNAME)
+		local st=$(do_facet mgs $LCTL $barrier_stat -s $FSNAME)
 		echo \'$st\'
 	fi
 }
@@ -32599,30 +32604,39 @@ run_test 801b "modification will be blocked by write barrier"
 
 test_801c() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+		barrier_freeze="barrier freeze"
+		barrier_thaw="barrier thaw"
+		barrier_rescan="barrier rescan"
+	else
+		barrier_freeze="barrier_freeze"
+		barrier_thaw="barrier_thaw"
+		barrier_rescan="barrier_rescan"
+	fi
 
 	prep_801
 
 	stop mds2 || error "(1) Fail to stop mds2"
 
-	do_facet mgs $LCTL barrier_freeze $FSNAME 30
+	do_facet mgs $LCTL $barrier_freeze $FSNAME 30
 
 	local b_status=$(barrier_stat)
 	[ "$b_status" = "'expired'" ] || [ "$b_status" = "'failed'" ] || {
-		do_facet mgs $LCTL barrier_thaw $FSNAME
+		do_facet mgs $LCTL $barrier_thaw $FSNAME
 		error "(2) unexpected barrier status $b_status"
 	}
 
-	do_facet mgs $LCTL barrier_rescan $FSNAME ||
+	do_facet mgs $LCTL $barrier_rescan $FSNAME ||
 		error "(3) Fail to rescan barrier bitmap"
 
 	# Do not reduce barrier time - See LU-11873
-	do_facet mgs $LCTL barrier_freeze $FSNAME 20
+	do_facet mgs $LCTL $barrier_freeze $FSNAME 20
 
 	b_status=$(barrier_stat)
 	[ "$b_status" = "'frozen'" ] ||
 		error "(4) unexpected barrier status $b_status"
 
-	do_facet mgs $LCTL barrier_thaw $FSNAME
+	do_facet mgs $LCTL $barrier_thaw $FSNAME
 	b_status=$(barrier_stat)
 	[ "$b_status" = "'thawed'" ] ||
 		error "(5) unexpected barrier status $b_status"
@@ -32631,7 +32645,7 @@ test_801c() {
 
 	start mds2 $devname $MDS_MOUNT_OPTS || error "(6) Fail to start mds2"
 
-	do_facet mgs $LCTL barrier_rescan $FSNAME ||
+	do_facet mgs $LCTL $barrier_rescan $FSNAME ||
 		error "(7) Fail to rescan barrier bitmap"
 
 	post_801
