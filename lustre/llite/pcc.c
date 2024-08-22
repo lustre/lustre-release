@@ -948,7 +948,7 @@ pcc_dataset_match_get(struct pcc_super *super, enum lu_pcc_type type,
 	list_for_each_entry(dataset, &super->pccs_datasets, pccd_linkage) {
 		if (pcc_dataset_attach_allowed(dataset, type) &&
 		    pcc_cond_match(&dataset->pccd_rule, matcher)) {
-			atomic_inc(&dataset->pccd_refcount);
+			kref_get(&dataset->pccd_refcount);
 			selected = dataset;
 			break;
 		}
@@ -1036,7 +1036,7 @@ pcc_dataset_add(struct pcc_super *super, struct pcc_cmd *cmd)
 	dataset->pccd_roid = cmd->u.pccc_add.pccc_roid;
 	dataset->pccd_flags = cmd->u.pccc_add.pccc_flags;
 	dataset->pccd_hsmtool_type = cmd->u.pccc_add.pccc_hsmtool_type;
-	atomic_set(&dataset->pccd_refcount, 1);
+	kref_init(&dataset->pccd_refcount);
 
 	rc = pcc_dataset_rule_init(&dataset->pccd_rule, cmd);
 	if (rc) {
@@ -1088,7 +1088,7 @@ pcc_dataset_get(struct pcc_super *super, enum lu_pcc_type type, __u32 id)
 		    (!(dataset->pccd_roid == id || id == 0) ||
 		     !(dataset->pccd_flags & PCC_DATASET_PCCRO)))
 			continue;
-		atomic_inc(&dataset->pccd_refcount);
+		kref_get(&dataset->pccd_refcount);
 		selected = dataset;
 		break;
 	}
@@ -1099,14 +1099,20 @@ pcc_dataset_get(struct pcc_super *super, enum lu_pcc_type type, __u32 id)
 	return selected;
 }
 
+void pcc_dataset_free(struct kref *kref)
+{
+	struct pcc_dataset *dataset = container_of(kref, struct pcc_dataset,
+						   pccd_refcount);
+
+	pcc_dataset_rule_fini(&dataset->pccd_rule);
+	path_put(&dataset->pccd_path);
+	OBD_FREE_PTR(dataset);
+}
+
 void
 pcc_dataset_put(struct pcc_dataset *dataset)
 {
-	if (atomic_dec_and_test(&dataset->pccd_refcount)) {
-		pcc_dataset_rule_fini(&dataset->pccd_rule);
-		path_put(&dataset->pccd_path);
-		OBD_FREE_PTR(dataset);
-	}
+	kref_put(&dataset->pccd_refcount, pcc_dataset_free);
 }
 
 static int

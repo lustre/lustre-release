@@ -32,10 +32,11 @@
 #ifndef LLITE_PCC_H
 #define LLITE_PCC_H
 
-#include <linux/types.h>
 #include <linux/fs.h>
-#include <linux/seq_file.h>
 #include <linux/mm.h>
+#include <linux/kref.h>
+#include <linux/types.h>
+#include <linux/seq_file.h>
 #include <uapi/linux/lustre/lustre_user.h>
 
 extern struct kmem_cache *pcc_inode_slab;
@@ -149,7 +150,7 @@ struct pcc_dataset {
 	char			pccd_pathname[PATH_MAX]; /* full path */
 	struct path		pccd_path;	 /* Root path */
 	struct list_head	pccd_linkage;  /* Linked to pccs_datasets */
-	atomic_t		pccd_refcount; /* Reference count */
+	struct kref		pccd_refcount; /* Reference count */
 	enum hsmtool_type	pccd_hsmtool_type; /* HSM copytool type */
 };
 
@@ -318,6 +319,7 @@ void pcc_create_attach_cleanup(struct super_block *sb,
 struct pcc_dataset *pcc_dataset_match_get(struct pcc_super *super,
 					  enum lu_pcc_type type,
 					  struct pcc_matcher *matcher);
+void pcc_dataset_free(struct kref *kref);
 void pcc_dataset_put(struct pcc_dataset *dataset);
 void pcc_inode_free(struct inode *inode);
 void pcc_layout_invalidate(struct inode *inode);
