@@ -1,4 +1,4 @@
-.TH lustreapi 3 "2009 Jul 22" The Lustre user application interface library
+.TH LLAPI_FILE_GET_STRIPE 3 2024-08-23 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_file_get_stripe \- get striping information for a file or a directory on a Lustre filesystem
 .SH SYNOPSIS
@@ -7,19 +7,18 @@ llapi_file_get_stripe \- get striping information for a file or a directory on a
 .B #include <sys/stat.h>
 .B #include <fcntl.h>
 .B #include <lustre/lustreapi.h>
-.sp
+.PP
 .BI "int llapi_file_get_stripe(const char *"path ", void *"lum );
-.sp
 .fi
 .SH DESCRIPTION
 .LP
-.B llapi_file_get_stripe(\|)
+.B llapi_file_get_stripe()
 returns striping information for a file or a directory 
 .I path
 in
 .I lum
 (which should point to a large enough memory region) in one of the following formats:
-
+.PP
 .nf
 struct lov_user_md_v1 {
         __u32 lmm_magic;
@@ -31,7 +30,7 @@ struct lov_user_md_v1 {
         __u16 lmm_stripe_offset;
         struct lov_user_ost_data_v1 lmm_objects[];
 } __attribute__((packed));
-
+\&
 struct lov_user_md_v3 {
         __u32 lmm_magic;
         __u32 lmm_pattern;
@@ -44,7 +43,6 @@ struct lov_user_md_v3 {
         struct lov_user_ost_data_v1 lmm_objects[];
 } __attribute__((packed));
 .fi
-
 .TP 20
 .I lmm_magic
 specifies the format of the returned striping information.
@@ -80,7 +78,7 @@ holds the OST pool name to which the file belongs.
 is an array of
 .I lmm_stripe_count
 members containing per OST file information in the following format:
-
+.PP
 .nf
 struct lov_user_ost_data_v1 {
         __u64 l_object_id;
@@ -103,7 +101,7 @@ holds the generation of the OST index.
 holds the OST index in LOV.
 .SH RETURN VALUES
 .LP
-.B llapi_file_get_stripe(\|) 
+.B llapi_file_get_stripe()
 returns:
 .TP
 0
@@ -134,63 +132,69 @@ does not point to a Lustre filesystem.
 memory region pointed by
 .I lum
 is not properly mapped.
-.SH "EXAMPLE"
+.SH EXAMPLES
 .nf
 #include <sys/vfs.h>
 #include <lustre/lustreapi.h>
-
+\&
 static inline int maxint(int a, int b)
 {
         return a > b ? a : b;
 }
-
+\&
 static void *alloc_lum()
 {
         int v1, v3, join;
-
+\&
         v1 = sizeof(struct lov_user_md_v1) +
              LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
         v3 = sizeof(struct lov_user_md_v3) +
              LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
-
+\&
         return malloc(maxint(v1, v3));
 }
-
+\&
 int main(int argc, char** argv)
 {
         struct lov_user_md *lum_file = NULL;
         int rc;
         int lum_size;
-
+\&
         if (argc != 2) {
                 fprintf(stderr, "Usage: %s <filename>\\n", argv[0]);
                 return 1;
         }
-
+\&
         lum_file = alloc_lum();
         if (lum_file == NULL) {
                 rc = ENOMEM;
                 goto cleanup;
         }
-
+\&
         rc = llapi_file_get_stripe(argv[1], lum_file);
         if (rc) {
                 rc = errno;
                 goto cleanup;
         }
-
+\&
         /* stripe_size stripe_count */
         printf("%d %d\\n",
                lum_file->lmm_stripe_size,
                lum_file->lmm_stripe_count);
-
+\&
 cleanup:
         if (lum_file != NULL)
                 free(lum_file);
-
+\&
         return rc;
 }
 .fi
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.B llapi_file_get_stripe()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.4.0
+.\" Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
 .BR lustre (7),
 .BR lustreapi (7)

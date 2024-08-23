@@ -1,4 +1,4 @@
-.TH llapi_fid_to_handle 3 "2022-11-08" "Lustre User API"
+.TH LLAPI_FID_TO_HANDLE 3 2024-08-23" "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_fid_to_handle \- allocate an NFS handle for File Identifier
 .SH SYNOPSIS
@@ -8,7 +8,6 @@ llapi_fid_to_handle \- allocate an NFS handle for File Identifier
 .BI "int llapi_fid_to_handle(struct file_handle **" handle ", struct lu_fid *" fid ");"
 .fi
 .SH DESCRIPTION
-.PP
 .BR llapi_fid_to_handle()
 allocates an NFS file
 .I handle
@@ -31,18 +30,23 @@ The memory allocated for
 and returned to the caller must be freed with
 .IR free (2).
 .SH RETURN VALUES
-.LP
 returns 0 on success or a negative errno on failure.
 .SH ERRORS
 .TP 15
-.SM -ENOMEM
+.B -ENOMEM
 No memory was available for allocating
 .IR handle .
+.SH AVAILABILITY
+.B llapi_fid_to_handle()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.16.0
+.\" Added in commit v2_15_52-154-gbdf7788d19
 .SH SEE ALSO
+.BR name_to_handle (2),
+.BR open_by_handle_at (2),
 .BR free (3),
 .BR llapi_fid_parse (3),
 .BR llapi_fid2path (3),
 .BR llapi_path2fid (3),
 .BR lustreapi (7),
-.BR name_to_handle (2)
-.BR open_by_handle_at (2)

@@ -1,4 +1,4 @@
-.TH lustreapi 3 "2009 Jul 10" The Lustre user application interface library
+.TH LLAPI_FILE_OPEN 3 2024-08-23 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_file_open, llapi_file_create \- open and possibly create a file or a device on a Lustre filesystem
 .SH SYNOPSIS
@@ -7,23 +7,22 @@ llapi_file_open, llapi_file_create \- open and possibly create a file or a devic
 .B #include <sys/stat.h>
 .B #include <fcntl.h>
 .B #include <lustre/lustreapi.h>
-.sp
+.PP
 .BI "int llapi_file_open(const char *"name ", int " flags ", int " mode "," 
 .BI "                    unsigned long long " stripe_size ", int " stripe_offset "," 
 .BI "                    int " stripe_count ", int " stripe_pattern );
-
+.PP
 .BI "int llapi_file_create(const char *" name ", unsigned long long " stripe_size ","
 .BI "                      int " stripe_offset ", int " stripe_count ","
 .BI "                      int " stripe_pattern );
 .sp
 .fi
 .SH DESCRIPTION
-.LP
-.B llapi_file_create(\|)
-call is equivalent to 
+.B llapi_file_create()
+call is equivalent to
 .B llapi_file_open
-call with 
-.I flags 
+call with
+.I flags
 equal to
 .B O_CREAT|O_WRONLY
 and
@@ -32,13 +31,13 @@ equal to
 .BR 0644 ,
 followed by file close.
 .PP
-.B llapi_file_open(\|)
-opens a file with a given 
+.B llapi_file_open()
+opens a file with a given
 .I name
 on a Lustre filesystem.
 .TP 15
 .I flags
-can be a combination of 
+can be a combination of
 .BR O_RDONLY ,
 .BR O_WRONLY ,
 .BR O_RDWR ,
@@ -55,7 +54,7 @@ can be a combination of
 .BR O_DIRECTORY ,
 .BR O_NOFOLLOW ,
 .BR O_NOATIME .
-
+.IP
 Refer to
 .BR open(2)
 man page for a detailed description.
@@ -64,27 +63,31 @@ man page for a detailed description.
 specifies the permission bits to be used for a new file when
 .BR O_CREAT
 is used.
-
+.IP
 Refer to
 .BR open(2)
 man page for a detailed description.
 .TP 15
 .I stripe_size
-specifies stripe size in bytes and should be multiple of 64 KiB not exceeding 4 GiB.
+specifies stripe size in bytes
+and should be multiple of 64 KiB not exceeding 4 GiB.
 .TP 15
 .I stripe_offset
-specifies an OST index from which the file should start, -1 to use the default setting.
+specifies an OST index from which the file should start,
+-1 to use the default setting.
 .TP 15
 .I stripe_count
-specifies number of OSTs to stripe the file across, -1 to use the default setting.
+specifies number of OSTs to stripe the file across,
+-1 to use the default setting.
 .TP 15
 .I stripe_pattern
-specifies striping pattern, only LOV_PATTERN_RAID0 is available in this Lustre version, 0 to use the default setting.
+specifies striping pattern,
+only LOV_PATTERN_RAID0 is available in this Lustre version,
+0 to use the default setting.
 .SH RETURN VALUES
-.LP
-.B llapi_file_open(\|) 
-and 
-.B llapi_file_create(\|) 
+.B llapi_file_open(\|)
+and
+.B llapi_file_create(\|)
 return:
 .TP
 >=0
@@ -118,7 +121,7 @@ Striping information has already been set and cannot be altered.
 .SM ENOTTY
 .I name
 may not point to a Lustre filesystem.
-.SH "EXAMPLE"
+.SH EXAMPLES
 .nf
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -129,10 +132,10 @@ may not point to a Lustre filesystem.
 int main(int argc, char *argv[])
 {
         int rc;
-
+\&
         if (argc != 2)
                 return -1;
-
+\&
         rc = llapi_file_create(argv[1], 1048576, 0, 2, LOV_PATTERN_RAID0);
         if (rc < 0) {
                 fprintf(stderr, "file creation has failed, %s\\n", strerror(-rc));
@@ -143,7 +146,15 @@ int main(int argc, char *argv[])
         return 0;
 }
 .fi
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.B llapi_file_open()
+and
+.B llapi_file_create()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.4.0
+.\" Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
 .BR open (2),
 .BR lustre (7),
 .BR lustreapi (7)

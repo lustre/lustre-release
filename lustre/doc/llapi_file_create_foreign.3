@@ -1,4 +1,4 @@
-.TH lustreapi 3 "2009 Jul 10" The Lustre user application interface library
+.TH LLAPI_FILE_CREATE_FOREIGN 3 2024-08-23 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_file_create_foreign \- create a file with foreign layout on a Lustre filesystem
 .SH SYNOPSIS
@@ -7,14 +7,13 @@ llapi_file_create_foreign \- create a file with foreign layout on a Lustre files
 .B #include <sys/stat.h>
 .B #include <fcntl.h>
 .B #include <lustre/lustreapi.h>
-.sp
+.PP
 .BI "int llapi_file_create_foreign(const char *" name ", mode_t " mode ","
-.BI "                    __u32 " type ", __u32 " flags ", char *" foreign_lov );
-.sp
+.BI "                              __u32 " type ", __u32 " flags ,
+.BI "                              char *" foreign_lov );
 .fi
 .SH DESCRIPTION
-.LP
-.B llapi_file_create_foreign(\|)
+.B llapi_file_create_foreign()
 creates a file with
 .I foreign_lov
 free format layout and
@@ -39,12 +38,12 @@ specifies any flags for foreign layout.
 free-format string to be set as file layout/LOV EA.
 .SH RETURN VALUES
 .LP
-.B llapi_file_create_foreign(\|)
+.B llapi_file_create_foreign()
 return:
 .TP
 >=0
 on success, for
-.B llapi_file_open
+.B llapi_file_open()
 the return value is a file descriptor.
 .TP
 <0
@@ -58,7 +57,7 @@ already exists.
 .SM ENOTTY
 .I name
 may not point to a Lustre filesystem.
-.SH "EXAMPLE"
+.SH EXAMPLES
 .nf
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -69,10 +68,10 @@ may not point to a Lustre filesystem.
 int main(int argc, char *argv[])
 {
         int rc;
-
+\&
         if (argc != 2)
                 return -1;
-
+\&
         rc = llapi_file_create_foreign(argv[1], 0600, LOV_FOREIGN_TYPE_SYMLINK,
 				       0xda05, "PUUID/CUUID");
         if (rc < 0) {
@@ -84,8 +83,14 @@ int main(int argc, char *argv[])
         return 0;
 }
 .fi
-.SH "SEE ALSO"
-.BR llapi_file_open (3)
+.SH AVAILABILITY
+.B llapi_file_create_foreign()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.13.0
+.\" Added in commit v2_12_53-14-g6a20bdcc60
+.SH SEE ALSO
+.BR open (2),
+.BR llapi_file_open (3),
 .BR lustre (7),
 .BR lustreapi (7)
-.BR open (2),
