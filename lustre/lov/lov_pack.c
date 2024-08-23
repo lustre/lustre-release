@@ -310,18 +310,12 @@ __u16 lov_get_stripe_count(struct lov_obd *lov, __u32 magic, __u16 stripe_count)
 	return stripe_count;
 }
 
-int lov_free_memmd(struct lov_stripe_md **lsmp)
+void lov_free_memmd(struct lov_stripe_md **lsmp)
 {
 	struct lov_stripe_md *lsm = *lsmp;
-	int refc;
 
 	*lsmp = NULL;
-	refc = atomic_dec_return(&lsm->lsm_refc);
-	LASSERT(refc >= 0);
-	if (refc == 0)
-		lsm_free(lsm);
-
-	return refc;
+	kref_put(&lsm->lsm_refc, lsm_free);
 }
 
 /*

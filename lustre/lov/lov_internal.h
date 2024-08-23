@@ -74,7 +74,7 @@ static inline void copy_lsm_entry(struct lov_stripe_md_entry *dst,
 }
 
 struct lov_stripe_md {
-	atomic_t	lsm_refc;
+	struct kref	lsm_refc;
 	spinlock_t	lsm_lock;
 	pid_t		lsm_lock_owner; /* debugging */
 
@@ -195,7 +195,7 @@ struct lsm_operations {
 };
 
 const struct lsm_operations *lsm_op_find(int magic);
-void lsm_free(struct lov_stripe_md *lsm);
+void lsm_free(struct kref *kref);
 
 static inline bool lov_supported_comp_magic(unsigned int magic)
 {
@@ -292,7 +292,7 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 		     size_t buf_size);
 struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
 				   size_t buf_size);
-int lov_free_memmd(struct lov_stripe_md **lsmp);
+void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
 void lov_dump_lmm_common(int level, void *lmmp);
@@ -317,8 +317,7 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 
 static inline struct lov_stripe_md *lsm_addref(struct lov_stripe_md *lsm)
 {
-	LASSERT(atomic_read(&lsm->lsm_refc) > 0);
-	atomic_inc(&lsm->lsm_refc);
+	kref_get(&lsm->lsm_refc);
 	return lsm;
 }
 
