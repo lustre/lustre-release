@@ -137,7 +137,11 @@ struct lu_nid_range *range_find(struct nodemap_config *config,
 		       (!nid_same(&range->rn_start, start_nid) ||
 			!nid_same(&range->rn_end, end_nid)))
 			range = nm_range_iter_next(range, nid4[0], nid4[1]);
-	} else if (!list_empty(&config->nmc_netmask_setup)) {
+
+		return range;
+	}
+
+	if (!list_empty(&config->nmc_netmask_setup)) {
 		struct lu_nid_range *range_temp;
 
 		/* FIXME. We scan the config for large NIDs. Each range
@@ -148,11 +152,11 @@ struct lu_nid_range *range_find(struct nodemap_config *config,
 					 rn_collect) {
 			if (nid_same(&range->rn_start, start_nid) &&
 			    range->rn_netmask == netmask)
-				break;
-			range = NULL;
+				return range;
 		}
 	}
-	return range;
+
+	return NULL;
 }
 
 /*
@@ -223,17 +227,15 @@ void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
 struct lu_nid_range *range_search(struct nodemap_config *config,
 				  struct lnet_nid *nid)
 {
-	struct lu_nid_range *range = NULL;
-
 	if (nid_is_nid4(nid)) {
 		struct nodemap_range_tree *nm_range_tree;
 
 		nm_range_tree = &config->nmc_range_tree;
-		range = nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
-					    lnet_nid_to_nid4(nid),
-					    lnet_nid_to_nid4(nid));
+		return nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
+					   lnet_nid_to_nid4(nid),
+					   lnet_nid_to_nid4(nid));
 	} else if (!list_empty(&config->nmc_netmask_setup)) {
-		struct lu_nid_range *range_temp;
+		struct lu_nid_range *range, *range_temp;
 
 		/* FIXME. We scan the config for the large NIDs. Each range
 		 * only contains one large NID for now.
@@ -242,10 +244,9 @@ struct lu_nid_range *range_search(struct nodemap_config *config,
 					 &config->nmc_netmask_setup,
 					 rn_collect) {
 			if (nid_same(&range->rn_start, nid))
-				break;
-			range = NULL;
+				return range;
 		}
 	}
 
-	return range;
+	return NULL;
 }
