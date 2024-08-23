@@ -302,7 +302,6 @@ sfw_client_rpc_fini(struct srpc_client_rpc *rpc)
 {
 	LASSERT(rpc->crpc_bulk.bk_niov == 0);
 	LASSERT(list_empty(&rpc->crpc_list));
-	LASSERT(atomic_read(&rpc->crpc_refcount) == 0);
 
 	CDEBUG(D_NET, "Outgoing framework RPC done: "
 	       "service %d, peer %s, status %s:%d:%d\n",
@@ -1572,7 +1571,6 @@ sfw_unpack_message(struct srpc_msg *msg)
 void
 sfw_abort_rpc(struct srpc_client_rpc *rpc)
 {
-	LASSERT(atomic_read(&rpc->crpc_refcount) > 0);
 	LASSERT(rpc->crpc_service <= SRPC_FRAMEWORK_SERVICE_MAX_ID);
 
 	spin_lock(&rpc->crpc_lock);

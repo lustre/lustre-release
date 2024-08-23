@@ -263,7 +263,7 @@ struct srpc_client_rpc {
 	struct list_head	crpc_list;	/* chain on user's lists */
 	spinlock_t		crpc_lock;	/* serialize */
 	int			crpc_service;
-	atomic_t		crpc_refcount;
+	struct kref		crpc_refcount;
 	/* # seconds to wait for reply */
 	int			crpc_timeout;
 	struct stt_timer	crpc_timer;
@@ -299,19 +299,16 @@ offsetof(struct srpc_client_rpc, crpc_bulk.bk_iovs[(rpc)->crpc_bulk.bk_niov])
 do {                                                                    \
 	CDEBUG(D_NET, "RPC[%p] -> %s (%d)++\n",                         \
 	       (rpc), libcfs_id2str((rpc)->crpc_dest),                  \
-	       atomic_read(&(rpc)->crpc_refcount));                     \
-	LASSERT(atomic_read(&(rpc)->crpc_refcount) > 0);                \
-	atomic_inc(&(rpc)->crpc_refcount);                              \
+	       kref_read(&(rpc)->crpc_refcount));                       \
+	kref_get(&(rpc)->crpc_refcount);                                \
 } while (0)
 
 #define srpc_client_rpc_decref(rpc)                                     \
 do {                                                                    \
 	CDEBUG(D_NET, "RPC[%p] -> %s (%d)--\n",                         \
 	       (rpc), libcfs_id2str((rpc)->crpc_dest),                  \
-	       atomic_read(&(rpc)->crpc_refcount));                     \
-	LASSERT(atomic_read(&(rpc)->crpc_refcount) > 0);                \
-	if (atomic_dec_and_test(&(rpc)->crpc_refcount))                 \
-		srpc_destroy_client_rpc(rpc);                           \
+	       kref_read(&(rpc)->crpc_refcount));                       \
+	kref_put(&(rpc)->crpc_refcount, srpc_destroy_client_rpc);       \
 } while (0)
 
 #define srpc_event_pending(rpc)   ((rpc)->crpc_bulkev.ev_fired == 0 ||  \
@@ -578,11 +575,13 @@ void sfw_shutdown(void);
 void srpc_shutdown(void);
 
 static inline void
-srpc_destroy_client_rpc(struct srpc_client_rpc *rpc)
+srpc_destroy_client_rpc(struct kref *kref)
 {
+	struct srpc_client_rpc *rpc = container_of(kref, struct srpc_client_rpc,
+						   crpc_refcount);
+
 	LASSERT(rpc != NULL);
 	LASSERT(!srpc_event_pending(rpc));
-	LASSERT(atomic_read(&rpc->crpc_refcount) == 0);
 
 	if (rpc->crpc_fini == NULL)
 		LIBCFS_FREE(rpc, srpc_client_rpc_size(rpc));
@@ -605,7 +604,7 @@ srpc_init_client_rpc(struct srpc_client_rpc *rpc, struct lnet_process_id peer,
 	swi_init_workitem(&rpc->crpc_wi, srpc_send_rpc,
 			  lst_test_wq[lnet_cpt_of_nid(peer.nid, NULL)]);
 	spin_lock_init(&rpc->crpc_lock);
-	atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
+	kref_init(&rpc->crpc_refcount); /* 1 ref for caller */
 
 	rpc->crpc_dest         = peer;
 	rpc->crpc_priv         = priv;
