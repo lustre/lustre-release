@@ -1301,7 +1301,7 @@ out:
 	       lfsck_lfsck2name(lfsck), PFID(fid), index, event, flags, rc);
 
 	if (ltd != NULL)
-		lfsck_tgt_put(ltd);
+		kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 
 	return rc;
 }

@@ -452,7 +452,7 @@ struct lfsck_tgt_desc {
 	__u32		   ltd_namespace_status;
 	__u64		   ltd_layout_repaired;
 	__u64		   ltd_namespace_repaired;
-	atomic_t	   ltd_ref;
+	struct kref	   ltd_ref;
 	__u32              ltd_index;
 	__u32		   ltd_layout_gen;
 	__u32		   ltd_namespace_gen;
@@ -988,6 +988,7 @@ int lfsck_load_sub_trace_files(const struct lu_env *env,
 			       struct lfsck_component *com,
 			       const struct dt_index_features *ft,
 			       const char *prefix, bool reset);
+void lfsck_tgt_free(struct kref *kref);
 
 /* lfsck_engine.c */
 int lfsck_unpack_ent(struct lu_dirent *ent, __u64 *cookie, __u16 *type);
@@ -1350,15 +1351,9 @@ static inline struct lfsck_tgt_desc *lfsck_tgt_get(struct lfsck_tgt_descs *ltds,
 
 	ltd = lfsck_ltd2tgt(ltds, index);
 	if (ltd != NULL)
-		atomic_inc(&ltd->ltd_ref);
+		kref_get(&ltd->ltd_ref);
 
 	return ltd;
-}
-
-static inline void lfsck_tgt_put(struct lfsck_tgt_desc *ltd)
-{
-	if (atomic_dec_and_test(&ltd->ltd_ref))
-		OBD_FREE_PTR(ltd);
 }
 
 static inline struct lfsck_component *

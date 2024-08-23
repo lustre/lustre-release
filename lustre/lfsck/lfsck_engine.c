@@ -1213,7 +1213,7 @@ again:
 
 		*gen = lad->lad_touch_gen;
 		list_move_tail(phase_list, phase_head);
-		atomic_inc(&ltd->ltd_ref);
+		kref_get(&ltd->ltd_ref);
 		laia->laia_ltd = ltd;
 		spin_unlock(&ltds->ltd_lock);
 		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
@@ -1225,7 +1225,7 @@ again:
 			       lfsck_lfsck2name(lfsck),
 			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
 			       ltd->ltd_index, lad->lad_name, rc);
-			lfsck_tgt_put(ltd);
+			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 			rc1 = rc;
 		}
 		spin_lock(&ltds->ltd_lock);
@@ -1322,7 +1322,7 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 				       "%s: LFSCK assistant fail to notify OST %x for %s start: rc = %d\n",
 				       lfsck_lfsck2name(lfsck), idx,
 				       lad->lad_name, rc);
-				lfsck_tgt_put(ltd);
+				kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 			}
 		}
 		up_read(&ltds->ltd_rw_sem);
@@ -1442,7 +1442,7 @@ again:
 						&ltd->ltd_namespace_phase_list);
 				list_del_init(&ltd->ltd_namespace_list);
 			}
-			atomic_inc(&ltd->ltd_ref);
+			kref_get(&ltd->ltd_ref);
 			laia->laia_ltd = ltd;
 			spin_unlock(&ltds->ltd_lock);
 			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
@@ -1455,7 +1455,7 @@ again:
 				       (lr->lr_flags & LEF_TO_OST) ?
 				       "OST" : "MDT", ltd->ltd_index,
 				       lad->lad_name, rc);
-				lfsck_tgt_put(ltd);
+				kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 			}
 			spin_lock(&ltds->ltd_lock);
 		}
@@ -1511,7 +1511,7 @@ again:
 			if (ltd->ltd_synced_failures)
 				continue;
 
-			atomic_inc(&ltd->ltd_ref);
+			kref_get(&ltd->ltd_ref);
 			laia->laia_ltd = ltd;
 			spin_unlock(&ltds->ltd_lock);
 			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
@@ -1522,7 +1522,7 @@ again:
 				       "%s: LFSCK assistant fail to notify MDT %x for %s phase1 done: rc = %d\n",
 				       lfsck_lfsck2name(lfsck), ltd->ltd_index,
 				       lad->lad_name, rc);
-				lfsck_tgt_put(ltd);
+				kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 			}
 			spin_lock(&ltds->ltd_lock);
 		}

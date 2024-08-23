@@ -114,7 +114,7 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 	list_for_each_entry_safe(ltd, next, &ltds->ltd_orphan,
 				 ltd_orphan_list) {
 		list_del_init(&ltd->ltd_orphan_list);
-		lfsck_tgt_put(ltd);
+		kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 	}
 
 	if (unlikely(!ltds->ltd_tgts_bitmap)) {
@@ -134,7 +134,7 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 			ltds->ltd_tgtnr--;
 			clear_bit(idx, ltds->ltd_tgts_bitmap);
 			lfsck_assign_tgt(ltds, NULL, idx);
-			lfsck_tgt_put(ltd);
+			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 		}
 	}
 
@@ -1435,7 +1435,7 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 
 		parent = lfsck_object_find_by_dev(env, ltd->ltd_tgt,
 						  &LU_LPF_FID);
-		lfsck_tgt_put(ltd);
+		kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 	}
 
 	if (IS_ERR(parent))
@@ -2252,7 +2252,7 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 	}
 
 	if (!laia->laia_shared) {
-		lfsck_tgt_put(ltd);
+		kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 		lfsck_component_put(env, com);
 	}
 
@@ -2350,7 +2350,7 @@ static int lfsck_stop_notify(const struct lu_env *env,
 		memset(laia, 0, sizeof(*laia));
 		laia->laia_com = com;
 		laia->laia_ltds = ltds;
-		atomic_inc(&ltd->ltd_ref);
+		kref_get(&ltd->ltd_ref);
 		laia->laia_ltd = ltd;
 		laia->laia_lr = lr;
 
@@ -2363,7 +2363,7 @@ static int lfsck_stop_notify(const struct lu_env *env,
 			       lfsck_lfsck2name(lfsck),
 			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
 			       ltd->ltd_index, lad->lad_name, rc);
-			lfsck_tgt_put(ltd);
+			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 		} else {
 			rc = ptlrpc_set_wait(env, set);
 		}
@@ -2385,7 +2385,7 @@ static int lfsck_async_interpret(const struct lu_env *env,
 	lfsck = container_of(laia->laia_ltds, struct lfsck_instance,
 			     li_mdt_descs);
 	lfsck_interpret(env, lfsck, req, laia, rc);
-	lfsck_tgt_put(laia->laia_ltd);
+	kref_put(&laia->laia_ltd->ltd_ref, lfsck_tgt_free);
 	if (rc != 0 && laia->laia_result != -EALREADY)
 		laia->laia_result = rc;
 
@@ -2491,7 +2491,7 @@ again:
 			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
 			       ltd->ltd_index, lad->lad_name, rc);
 			lfsck_reset_ltd_status(ltd, com->lc_type);
-			lfsck_tgt_put(ltd);
+			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 		}
 		down_read(&ltds->ltd_rw_sem);
 	}
@@ -2938,7 +2938,7 @@ static int lfsck_stop_all(const struct lu_env *env,
 					 LFSCK_NOTIFY);
 		if (rc != 0) {
 			lfsck_interpret(env, lfsck, NULL, laia, rc);
-			lfsck_tgt_put(ltd);
+			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 			CERROR("%s: cannot notify MDT %x for LFSCK stop: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), idx, rc);
 			rc1 = rc;
@@ -3008,7 +3008,7 @@ again:
 		LASSERT(ltd != NULL);
 
 		if (retry && !ltd->ltd_retry_start) {
-			lfsck_tgt_put(ltd);
+			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 			continue;
 		}
 
@@ -3022,7 +3022,7 @@ again:
 					 LFSCK_NOTIFY);
 		if (rc != 0) {
 			lfsck_interpret(env, lfsck, NULL, laia, rc);
-			lfsck_tgt_put(ltd);
+			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 			CERROR("%s: cannot notify MDT %x for LFSCK start, failout: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), idx, rc);
 			break;
@@ -3840,7 +3840,7 @@ int lfsck_add_target(const struct lu_env *env, struct dt_device *key,
 	INIT_LIST_HEAD(&ltd->ltd_layout_phase_list);
 	INIT_LIST_HEAD(&ltd->ltd_namespace_list);
 	INIT_LIST_HEAD(&ltd->ltd_namespace_phase_list);
-	atomic_set(&ltd->ltd_ref, 1);
+	kref_init(&ltd->ltd_ref);
 	ltd->ltd_index = index;
 
 	spin_lock(&lfsck_instance_lock);
@@ -3860,7 +3860,7 @@ int lfsck_add_target(const struct lu_env *env, struct dt_device *key,
 
 	rc = __lfsck_add_target(env, lfsck, ltd, for_ost, false);
 	if (rc != 0)
-		lfsck_tgt_put(ltd);
+		kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 
 	lfsck_instance_put(env, lfsck);
 
@@ -3886,7 +3886,7 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 		if (ltd->ltd_tgt == tgt) {
 			list_del_init(&ltd->ltd_orphan_list);
 			spin_unlock(&lfsck_instance_lock);
-			lfsck_tgt_put(ltd);
+			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 
 			return;
 		}
@@ -3941,7 +3941,7 @@ unlock:
 		spin_unlock(&ltds->ltd_lock);
 		lfsck_stop_notify(env, lfsck, ltds, ltd, LFSCK_TYPE_NAMESPACE);
 		lfsck_stop_notify(env, lfsck, ltds, ltd, LFSCK_TYPE_LAYOUT);
-		lfsck_tgt_put(ltd);
+		kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 	}
 
 	lfsck_instance_put(env, lfsck);
@@ -3977,16 +3977,24 @@ static void __exit lfsck_exit(void)
 	list_for_each_entry_safe(ltd, next, &lfsck_ost_orphan_list,
 				 ltd_orphan_list) {
 		list_del_init(&ltd->ltd_orphan_list);
-		lfsck_tgt_put(ltd);
+		kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 	}
 
 	list_for_each_entry_safe(ltd, next, &lfsck_mdt_orphan_list,
 				 ltd_orphan_list) {
 		list_del_init(&ltd->ltd_orphan_list);
-		lfsck_tgt_put(ltd);
+		kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 	}
 
 	lu_context_key_degister(&lfsck_thread_key);
+}
+
+void lfsck_tgt_free(struct kref *kref)
+{
+	struct lfsck_tgt_desc *ltd = container_of(kref, struct lfsck_tgt_desc,
+						  ltd_ref);
+
+	OBD_FREE_PTR(ltd);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

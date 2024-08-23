@@ -2612,7 +2612,7 @@ static int lfsck_layout_master_conditional_destroy(const struct lu_env *env,
 	GOTO(put, rc);
 
 put:
-	lfsck_tgt_put(ltd);
+	kref_put(&ltd->ltd_ref, lfsck_tgt_free);
 
 	return rc;
 }
@@ -5680,7 +5680,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 		cobj = lfsck_object_find_by_dev(env, tgt->ltd_tgt, fid);
 		if (IS_ERR(cobj)) {
 			if (lfsck_is_dead_obj(parent)) {
-				lfsck_tgt_put(tgt);
+				kref_put(&tgt->ltd_ref, lfsck_tgt_free);
 
 				GOTO(out, rc = 0);
 			}
@@ -5727,7 +5727,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 		if (lad->lad_assistant_status < 0) {
 			spin_unlock(&lad->lad_lock);
 			lfsck_layout_assistant_req_fini(env, &llr->llr_lar);
-			lfsck_tgt_put(tgt);
+			kref_put(&tgt->ltd_ref, lfsck_tgt_free);
 			RETURN(lad->lad_assistant_status);
 		}
 
@@ -5751,7 +5751,7 @@ next:
 			lfsck_object_put(env, cobj);
 
 		if (likely(tgt != NULL))
-			lfsck_tgt_put(tgt);
+			kref_put(&tgt->ltd_ref, lfsck_tgt_free);
 
 		if (rc < 0 && bk->lb_param & LPF_FAILOUT)
 			GOTO(out, rc);
