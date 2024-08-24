@@ -1786,16 +1786,20 @@ lnet_ping_buffer_alloc(int nbytes, gfp_t gfp)
 	if (pbuf) {
 		pbuf->pb_nbytes = nbytes;	/* sizeof of pb_info */
 		pbuf->pb_needs_post = false;
-		atomic_set(&pbuf->pb_refcnt, 1);
+		kref_init(&pbuf->pb_refcnt);
 	}
 
 	return pbuf;
 }
 
 void
-lnet_ping_buffer_free(struct lnet_ping_buffer *pbuf)
+lnet_ping_buffer_free(struct kref *kerf)
 {
-	LASSERT(atomic_read(&pbuf->pb_refcnt) == 0);
+	struct lnet_ping_buffer *pbuf = container_of(kerf,
+						     struct lnet_ping_buffer,
+						     pb_refcnt);
+
+	wake_up_var(&pbuf->pb_refcnt);
 	LIBCFS_FREE(pbuf, LNET_PING_BUFFER_SIZE(pbuf->pb_nbytes));
 }
 
@@ -1917,7 +1921,7 @@ lnet_ping_target_destroy(void)
 		}
 	}
 
-	lnet_ping_buffer_decref(the_lnet.ln_ping_target);
+	kref_put(&(the_lnet.ln_ping_target)->pb_refcnt, lnet_ping_buffer_free);
 	the_lnet.ln_ping_target = NULL;
 
 	lnet_net_unlock(LNET_LOCK_EX);
@@ -1929,7 +1933,7 @@ lnet_ping_target_event_handler(struct lnet_event *event)
 	struct lnet_ping_buffer *pbuf = event->md_user_ptr;
 
 	if (event->unlinked)
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 }
 
 static int
@@ -1980,13 +1984,12 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 		CERROR("Can't attach ping target MD: %d\n", rc);
 		goto fail_decref_ping_buffer;
 	}
-	lnet_ping_buffer_addref(*ppbuf);
+	kref_get(&(*ppbuf)->pb_refcnt);
 
 	return 0;
 
 fail_decref_ping_buffer:
-	LASSERT(atomic_read(&(*ppbuf)->pb_refcnt) == 1);
-	lnet_ping_buffer_decref(*ppbuf);
+	kref_put(&(*ppbuf)->pb_refcnt, lnet_ping_buffer_free);
 	*ppbuf = NULL;
 fail_free_eq:
 	return rc;
@@ -2001,7 +2004,7 @@ lnet_ping_md_unlink(struct lnet_ping_buffer *pbuf,
 
 	/* NB the MD could be busy; this just starts the unlink */
 	wait_var_event_warning(&pbuf->pb_refcnt,
-			       atomic_read(&pbuf->pb_refcnt) <= 1,
+			       kref_read(&pbuf->pb_refcnt) == 1,
 			       "Still waiting for ping data MD to unlink\n");
 }
 
@@ -2116,7 +2119,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		lnet_ping_md_unlink(old_pbuf, &old_ping_md);
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lnet_ping_buffer_decref(old_pbuf);
+		kref_put(&old_pbuf->pb_refcnt, lnet_ping_buffer_free);
 	}
 
 	lnet_push_update_to_peers(0);
@@ -2162,7 +2165,7 @@ again:
 	rc = lnet_push_target_post(pbuf, &mdh);
 	if (rc) {
 		CDEBUG(D_NET, "Failed to post push target: %d\n", rc);
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		return rc;
 	}
 
@@ -2176,7 +2179,7 @@ again:
 	if (old_pbuf) {
 		LNetMDUnlink(old_mdh);
 		/* Drop ref set by lnet_ping_buffer_alloc() */
-		lnet_ping_buffer_decref(old_pbuf);
+		kref_put(&old_pbuf->pb_refcnt, lnet_ping_buffer_free);
 	}
 
 	/* Received another push or reply that requires a larger buffer */
@@ -2207,7 +2210,7 @@ int lnet_push_target_post(struct lnet_ping_buffer *pbuf,
 	pbuf->pb_needs_post = false;
 
 	/* This reference is dropped by lnet_push_target_event_handler() */
-	lnet_ping_buffer_addref(pbuf);
+	kref_get(&pbuf->pb_refcnt);
 
 	/* initialize md content */
 	md.start     = &pbuf->pb_info;
@@ -2221,7 +2224,7 @@ int lnet_push_target_post(struct lnet_ping_buffer *pbuf,
 	rc = LNetMDAttach(me, &md, LNET_UNLINK, mdhp);
 	if (rc) {
 		CERROR("Can't attach push MD: %d\n", rc);
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		pbuf->pb_needs_post = true;
 		return rc;
 	}
@@ -2243,14 +2246,14 @@ static void lnet_push_target_event_handler(struct lnet_event *ev)
 
 	if (ev->type == LNET_EVENT_UNLINK) {
 		/* Drop ref added by lnet_push_target_post() */
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		return;
 	}
 
 	lnet_peer_push_event(ev);
 	if (ev->unlinked)
 		/* Drop ref added by lnet_push_target_post */
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 }
 
 /* Initialize the push target. */
@@ -2291,11 +2294,11 @@ static void lnet_push_target_fini(void)
 
 	/* Wait for the unlink to complete. */
 	wait_var_event_warning(&the_lnet.ln_push_target->pb_refcnt,
-			       atomic_read(&the_lnet.ln_push_target->pb_refcnt) <= 1,
+			       kref_read(&the_lnet.ln_push_target->pb_refcnt) == 1,
 			       "Still waiting for ping data MD to unlink\n");
 
 	/* Drop ref set by lnet_ping_buffer_alloc() */
-	lnet_ping_buffer_decref(the_lnet.ln_push_target);
+	kref_put(&(the_lnet.ln_push_target)->pb_refcnt, lnet_ping_buffer_free);
 	the_lnet.ln_push_target = NULL;
 	the_lnet.ln_push_target_nbytes = 0;
 
@@ -3660,7 +3663,7 @@ static int lnet_add_net_common(struct lnet_net *net,
 
 failed:
 	lnet_ping_md_unlink(pbuf, &ping_mdh);
-	lnet_ping_buffer_decref(pbuf);
+	kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 	return rc;
 }
 
@@ -10141,7 +10144,7 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 	}
 	rc = i;
 fail_ping_buffer_decref:
-	lnet_ping_buffer_decref(pbuf);
+	kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 	return rc;
 }
 

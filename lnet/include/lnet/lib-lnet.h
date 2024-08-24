@@ -384,12 +384,6 @@ lnet_peer_decref_locked(struct lnet_peer *lp)
 		lnet_destroy_peer_locked(lp);
 }
 
-static inline void
-lnet_peer_ni_addref_locked(struct lnet_peer_ni *lp)
-{
-	kref_get(&lp->lpni_kref);
-}
-
 extern void lnet_destroy_peer_ni_locked(struct kref *ref);
 
 static inline void
@@ -981,22 +975,9 @@ void lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf);
 
 int lnet_ping_info_validate(struct lnet_ping_info *pinfo);
 struct lnet_ping_buffer *lnet_ping_buffer_alloc(int bytes, gfp_t gfp);
-void lnet_ping_buffer_free(struct lnet_ping_buffer *pbuf);
+void lnet_ping_buffer_free(struct kref *kref);
 int lnet_get_link_status(struct net_device *dev);
 __u32 lnet_set_link_fatal_state(struct lnet_ni *ni, unsigned int link_state);
-
-static inline void lnet_ping_buffer_addref(struct lnet_ping_buffer *pbuf)
-{
-	atomic_inc(&pbuf->pb_refcnt);
-}
-
-static inline void lnet_ping_buffer_decref(struct lnet_ping_buffer *pbuf)
-{
-	if (atomic_dec_and_test(&pbuf->pb_refcnt)) {
-		wake_up_var(&pbuf->pb_refcnt);
-		lnet_ping_buffer_free(pbuf);
-	}
-}
 
 struct lnet_ping_iter {
 	struct lnet_ping_info	*pinfo;

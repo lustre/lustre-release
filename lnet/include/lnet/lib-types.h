@@ -1263,7 +1263,7 @@ struct lnet_ni {
  */
 struct lnet_ping_buffer {
 	int			pb_nbytes;	/* sizeof pb_info */
-	atomic_t		pb_refcnt;
+	struct kref		pb_refcnt;
 	bool			pb_needs_post;
 	struct lnet_ping_info	pb_info;
 };

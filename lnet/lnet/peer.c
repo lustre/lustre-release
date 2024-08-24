@@ -177,7 +177,7 @@ lnet_peer_ni_alloc(struct lnet_nid *nid)
 		 * list so it can be easily found and revisited.
 		 */
 		/* FIXME: per-net implementation instead? */
-		lnet_peer_ni_addref_locked(lpni);
+		kref_get(&lpni->lpni_kref);
 		list_add_tail(&lpni->lpni_on_remote_peer_ni_list,
 			      &the_lnet.ln_remote_peer_ni_list);
 	}
@@ -285,7 +285,7 @@ lnet_destroy_peer_locked(struct lnet_peer *lp)
 	LASSERT(list_empty(&lp->lp_dc_list));
 
 	if (lp->lp_data)
-		lnet_ping_buffer_decref(lp->lp_data);
+		kref_put(&lp->lp_data->pb_refcnt, lnet_ping_buffer_free);
 
 	/*
 	 * if there are messages still on the pending queue, then make
@@ -687,7 +687,7 @@ lnet_get_peer_ni_locked(struct lnet_peer_table *ptable, struct lnet_nid *nid)
 	peers = &ptable->pt_hash[lnet_nid2peerhash(nid)];
 	list_for_each_entry(lp, peers, lpni_hashlist) {
 		if (nid_same(&lp->lpni_nid, nid)) {
-			lnet_peer_ni_addref_locked(lp);
+			kref_get(&lp->lpni_kref);
 			return lp;
 		}
 	}
@@ -1583,7 +1583,7 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 		ptable = the_lnet.ln_peer_tables[lpni->lpni_cpt];
 		list_add_tail(&lpni->lpni_hashlist, &ptable->pt_hash[hash]);
 		ptable->pt_version++;
-		lnet_peer_ni_addref_locked(lpni);
+		kref_get(&lpni->lpni_kref);
 	}
 
 	/* Detach the peer_ni from an existing peer, if necessary. */
@@ -2006,7 +2006,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 	/* lnet_peer_attach_peer_ni() always returns 0 */
 	rc = lnet_peer_attach_peer_ni(lp, lpn, lpni, flags);
 
-	lnet_peer_ni_addref_locked(lpni);
+	kref_get(&lpni->lpni_kref);
 
 out_err:
 	if (rc) {
@@ -3011,10 +3011,10 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	       libcfs_nidstr(&lp->lp_primary_nid), lp->lp_peer_seqno,
 	       lp->lp_state);
 	if (lp->lp_state & LNET_PEER_DATA_PRESENT)
-		lnet_ping_buffer_decref(lp->lp_data);
+		kref_put(&lp->lp_data->pb_refcnt, lnet_ping_buffer_free);
 	else
 		lp->lp_state |= LNET_PEER_DATA_PRESENT;
-	lnet_ping_buffer_addref(pbuf);
+	kref_get(&pbuf->pb_refcnt);
 	lp->lp_data = pbuf;
 out:
 	lp->lp_state &= ~LNET_PEER_PING_SENT;
@@ -3130,7 +3130,7 @@ static void lnet_discovery_event_handler(struct lnet_event *event)
 	}
 	if (event->unlinked) {
 		pbuf = LNET_PING_INFO_TO_BUFFER(event->md_start);
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		lnet_peer_decref_locked(lp);
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
@@ -3430,7 +3430,7 @@ out:
 	CFS_FREE_PTR_ARRAY(curnis, nnis);
 	CFS_FREE_PTR_ARRAY(addnis, nnis);
 	CFS_FREE_PTR_ARRAY(delnis, nnis);
-	lnet_ping_buffer_decref(pbuf);
+	kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 	CDEBUG(D_NET, "peer %s (%p): %d\n",
 	       libcfs_nidstr(&lp->lp_primary_nid), lp, rc);
 
@@ -3474,13 +3474,13 @@ lnet_peer_set_primary_data(struct lnet_peer *lp, struct lnet_ping_buffer *pbuf)
 			lp->lp_peer_seqno = LNET_PING_BUFFER_SEQNO(pbuf);
 		} else if (lp->lp_state & LNET_PEER_DATA_PRESENT) {
 			lp->lp_state &= ~LNET_PEER_DATA_PRESENT;
-			lnet_ping_buffer_decref(pbuf);
+			kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 			pbuf = lp->lp_data;
 			lp->lp_data = NULL;
 		}
 	}
 	if (lp->lp_state & LNET_PEER_DATA_PRESENT) {
-		lnet_ping_buffer_decref(lp->lp_data);
+		kref_put(&lp->lp_data->pb_refcnt, lnet_ping_buffer_free);
 		lp->lp_data = NULL;
 		lp->lp_state &= ~LNET_PEER_DATA_PRESENT;
 	}
@@ -3624,7 +3624,7 @@ __must_hold(&lp->lp_lock)
 	 */
 	mutex_lock(&the_lnet.ln_api_mutex);
 	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		rc = -ESHUTDOWN;
 		goto out;
 	}
@@ -3635,7 +3635,7 @@ __must_hold(&lp->lp_lock)
 	 * alive. Don't do any work on it.
 	 */
 	if (list_empty(&lp->lp_peer_list)) {
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		goto out;
 	}
 
@@ -3657,7 +3657,7 @@ __must_hold(&lp->lp_lock)
 	 * can show up with only the loopback NID in the ping buffer.
 	 */
 	if (!find_primary(&nid, pbuf)) {
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		goto out;
 	}
 	/* If lp_merge_primary_nid is set, assign it as primary,
@@ -3673,7 +3673,7 @@ __must_hold(&lp->lp_lock)
 	if (nid_is_lo0(&lp->lp_primary_nid)) {
 		rc = lnet_peer_set_primary_nid(lp, &nid, flags);
 		if (rc)
-			lnet_ping_buffer_decref(pbuf);
+			kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		else
 			rc = lnet_peer_merge_data(lp, pbuf);
 	/*
@@ -3696,7 +3696,8 @@ __must_hold(&lp->lp_lock)
 				CERROR("Primary NID error %s versus %s: %d\n",
 				       libcfs_nidstr(&lp->lp_primary_nid),
 				       libcfs_nidstr(&nid), rc);
-				lnet_ping_buffer_decref(pbuf);
+				kref_put(&pbuf->pb_refcnt,
+					 lnet_ping_buffer_free);
 			} else {
 				rc = lnet_peer_merge_data(lp, pbuf);
 			}
@@ -3900,7 +3901,7 @@ __must_hold(&lp->lp_lock)
 
 	cpt = lnet_net_lock_current();
 	pbuf = the_lnet.ln_ping_target;
-	lnet_ping_buffer_addref(pbuf);
+	kref_get(&pbuf->pb_refcnt);
 	lnet_net_unlock(cpt);
 
 	/* Push source MD */
@@ -3914,7 +3915,7 @@ __must_hold(&lp->lp_lock)
 
 	rc = LNetMDBind(&md, LNET_UNLINK, &lp->lp_push_mdh);
 	if (rc) {
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		CERROR("Can't bind push source MD: %d\n", rc);
 		goto fail_error;
 	}
@@ -4541,7 +4542,8 @@ lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni,
 	}
 
 	/* This peer NI is going on the recovery queue, so take a ref on it */
-	lnet_peer_ni_addref_locked(lpni);
+	kref_get(&lpni->lpni_kref);
+
 
 	lnet_peer_ni_set_next_ping(lpni, now);
 

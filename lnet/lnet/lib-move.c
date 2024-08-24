@@ -1842,11 +1842,10 @@ lnet_handle_send(struct lnet_send_data *sd)
 	struct lnet_peer_ni *best_lpni = sd->sd_best_lpni;
 	struct lnet_peer_ni *final_dst_lpni = sd->sd_final_dst_lpni;
 	struct lnet_msg *msg = sd->sd_msg;
-	int cpt2;
 	__u32 send_case = sd->sd_send_case;
-	int rc;
 	__u32 routing = send_case & REMOTE_DST;
 	struct lnet_rsp_tracker *rspt;
+	int cpt2, rc;
 
 	/* Increment sequence number of the selected peer, peer net,
 	 * local ni and local net so that we pick the next ones
@@ -1870,14 +1869,12 @@ lnet_handle_send(struct lnet_send_data *sd)
 	       best_lpni->lpni_txcredits,
 	       best_lpni->lpni_sel_priority);
 
-	/*
-	 * grab a reference on the peer_ni so it sticks around even if
+	/* grab a reference on the peer_ni so it sticks around even if
 	 * we need to drop and relock the lnet_net_lock below.
 	 */
-	lnet_peer_ni_addref_locked(best_lpni);
+	kref_get(&best_lpni->lpni_kref);
 
-	/*
-	 * Use lnet_cpt_of_nid() to determine the CPT used to commit the
+	/* Use lnet_cpt_of_nid() to determine the CPT used to commit the
 	 * message. This ensures that we get a CPT that is correct for
 	 * the NI when the NI has been restricted to a subset of all CPTs.
 	 * If the selected CPT differs from the one currently locked, we
@@ -2097,11 +2094,11 @@ static int
 lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni, struct lnet_msg *msg,
 			     int cpt)
 {
-	struct lnet_peer *peer;
 	struct lnet_peer_ni *new_lpni;
+	struct lnet_peer *peer;
 	int rc;
 
-	lnet_peer_ni_addref_locked(lpni);
+	kref_get(&lpni->lpni_kref);
 
 	peer = lpni->lpni_peer_net->lpn_peer;
 
@@ -4129,7 +4126,7 @@ lnet_send_ping(struct lnet_nid *dest_nid,
 
 	rc = LNetMDBind(&md, LNET_UNLINK, mdh);
 	if (rc) {
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 		CERROR("Can't bind MD: %d\n", rc);
 		rc = -rc; /* change the rc to positive */
 		goto fail_error;
@@ -4253,7 +4250,7 @@ lnet_mt_event_handler(struct lnet_event *event)
 	if (event->unlinked) {
 		LIBCFS_FREE(ev_info, sizeof(*ev_info));
 		pbuf = LNET_PING_INFO_TO_BUFFER(event->md_start);
-		lnet_ping_buffer_decref(pbuf);
+		kref_put(&pbuf->pb_refcnt, lnet_ping_buffer_free);
 	}
 }
 

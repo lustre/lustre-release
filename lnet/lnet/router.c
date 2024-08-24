@@ -1168,7 +1168,7 @@ rescan:
 			       libcfs_nidstr(&rtr->lp_primary_nid));
 			continue;
 		}
-		lnet_peer_ni_addref_locked(lpni);
+		kref_get(&lpni->lpni_kref);
 
 		/* specify the net to use */
 		rtr->lp_disc_net_id = lpn->lpn_net_id;
