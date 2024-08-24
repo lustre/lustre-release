@@ -853,6 +853,7 @@ static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 
 #define KEY_CACHE_LRU_SHRINK	"cache_lru_shrink"
 #define KEY_OSP_CONNECTED	"osp_connected"
+#define KEY_FID2IDX		"fid2idx"
 
 #define KEY_UNEVICT_CACHE_SHRINK	"unevict_cache_shrink"
 

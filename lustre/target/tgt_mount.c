@@ -49,6 +49,7 @@
 #ifdef HAVE_FSMAP_H
 #include <linux/fsmap.h>
 #endif
+#include <linux/uaccess.h>
 
 #include <llog_swab.h>
 #include <lustre_disk.h>
@@ -2008,6 +2009,40 @@ static long server_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct file *root_filp;
 	struct inode *root_inode;
 	int err = -ENOTTY;
+
+	if (cmd == LL_IOC_FID2MDTIDX) {
+		union {
+			struct lu_seq_range range;
+			struct lu_fid fid;
+		} u;
+		struct lu_env *env;
+		int len;
+
+		if (copy_from_user(&u.fid, (struct lu_fid __user *)arg,
+				   sizeof(u.fid)))
+			RETURN(-EFAULT);
+
+		OBD_ALLOC_PTR(env);
+		if (env == NULL)
+			return -ENOMEM;
+		err = lu_env_init(env, LCT_DT_THREAD);
+		if (err)
+			GOTO(out, err = -ENOMEM);
+
+		/* XXX: check for size */
+		len = sizeof(struct lu_fid);
+		err = obd_get_info(env, lsi->lsi_osd_exp, sizeof(KEY_FID2IDX),
+				   KEY_FID2IDX, &len, &u.fid);
+		if (err == 0) {
+			err = -EINVAL;
+			if (u.range.lsr_flags & LU_SEQ_RANGE_MDT)
+				err = u.range.lsr_index;
+		}
+		lu_env_fini(env);
+out:
+		OBD_FREE_PTR(env);
+		return err;
+	}
 
 	if (!is_cmd_supported(cmd))
 		return err;

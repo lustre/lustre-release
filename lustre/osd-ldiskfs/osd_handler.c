@@ -8889,6 +8889,42 @@ static int osd_health_check(const struct lu_env *env, struct obd_device *obd)
 	return (osd->od_mnt == NULL || sb->s_flags & SB_RDONLY);
 }
 
+static int osd_get_info(const struct lu_env *env, struct obd_export *exp,
+			__u32 keylen, void *key, __u32 *vallen, void *val)
+{
+	struct osd_device *osd;
+	int rc = -EINVAL;
+
+	ENTRY;
+
+	if (!exp->exp_obd) {
+		CDEBUG(D_IOCTL, "invalid client export %p\n", exp);
+		RETURN(-EINVAL);
+	}
+	osd = osd_dev(exp->exp_obd->obd_lu_dev);
+
+	if (KEY_IS(KEY_FID2IDX)) {
+		struct lu_seq_range range;
+		struct lu_fid fid;
+
+		if (osd_seq_site(osd)->ss_server_fld == NULL)
+			RETURN(-EINPROGRESS);
+
+		LASSERT(*vallen = sizeof(struct lu_fid));
+		memcpy(&fid, val, sizeof(struct lu_fid));
+
+		fld_range_set_any(&range);
+
+		rc = osd_fld_lookup(env, osd, fid_seq(&fid), &range);
+		if (rc == 0) {
+			memcpy(val, &range, sizeof(range));
+			*vallen = sizeof(range);
+		}
+	}
+
+	RETURN(rc);
+}
+
 /*
  * lprocfs legacy support.
  */
@@ -8897,6 +8933,7 @@ static const struct obd_ops osd_obd_device_ops = {
 	.o_connect	= osd_obd_connect,
 	.o_disconnect	= osd_obd_disconnect,
 	.o_health_check = osd_health_check,
+	.o_get_info	= osd_get_info,
 };
 
 static ssize_t delayed_unlink_mb_show(struct kobject *kobj,
