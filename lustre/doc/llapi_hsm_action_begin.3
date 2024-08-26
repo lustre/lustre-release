@@ -1,89 +1,141 @@
-.
-.TH LLAPI_HSM_ACTION_BEGIN 3 "2014-09-24" "" "Lustre HSM User API"
+.TH LLAPI_HSM_ACTION_BEGIN 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_hsm_action_begin \- Lustre API copytool management
-.
+llapi_hsm_action_begin, llapi_hsm_action_end, llapi_hsm_action_progress, llapi_hsm_action_get_dfid, llapi_hsm_action_get_fd \- Lustre API copytool management
 .SH SYNOPSIS
-.sp
-\fB#include <lustre/lustreapi.h>\fP
-.sp
-\fBint llapi_hsm_action_begin(struct hsm_copyaction_private **\fPphcp\fB,
-const struct hsm_copytool_private *\fPct\fB, const struct
-hsm_action_item *\fPhai\fB, int\fP restore_mdt_index\fB, int\fP
-restore_open_flags\fB, bool\fP is_error\fB)\fP
-.sp
-\fBint llapi_hsm_action_end(struct hsm_copyaction_private **\fPphcp\fB,
-const struct hsm_extent *\fPhe\fB, int\fP hp_flags\fB, int\fP errval\fB)\fP
-.sp
-\fBint llapi_hsm_action_progress(struct hsm_copyaction_private *\fPhcp\fB,
-const struct hsm_extent *\fPhe\fB, __u64\fP total\fB, int\fP hp_flags\fB)\fP
-.sp
-\fBint llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *\fPhcp\fB,
-lustre_fid  *\fPfid\fB)\fP
-.sp
-\fBint llapi_hsm_action_get_fd(const struct hsm_copyaction_private *\fPhcp\fB)\fP
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_hsm_action_begin(struct hsm_copyaction_private **" phcp ,
+.BI "                           const struct hsm_copytool_private *" ct ,
+.BI "                           const struct hsm_action_item *" hai ,
+.BI "                           int " restore_mdt_index ,
+.BI "                           int " restore_open_flags ", bool " is_error );
+.PP
+.BI "int llapi_hsm_action_end(struct hsm_copyaction_private **" phcp ,
+.BI "                         const struct hsm_extent *" he ", int " hp_flags ,
+.BI "                         int " errval );
+.PP
+.BI "int llapi_hsm_action_progress(struct hsm_copyaction_private *" hcp ,
+.BI "                              const struct hsm_extent *" he ,
+.BI "                              __u64 " total ", int " hp_flags );
+.PP
+.BI "int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *" hcp ,
+.BI "                              lustre_fid  *" fid );
+.PP
+.BI "int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *" hcp );
+.fi
 .SH DESCRIPTION
-.sp
 When a copytool is ready to process an HSM action received through
-\fBllapi_hsm_copytool_recv\fP(), it must first call
-\fBllapi_hsm_action_begin\fP() to initialize the internal action
-state, stored in \fIphcp\fP\&. \fIct\fP is the opaque copytools handle
-previously returned by \fBllapi_hsm_copytool_register\fP(). \fIhai\fP is
-the request. \fIrestore_mdt_index\fP and \fIrestore_open_flags\fP are only
-used for an \fBHSMA_RESTORE\fP type of request. \fIrestore_mdt_index\fP is
-the MDT index on which to create the restored file, or \-1 for
-default. If the copytool does not intend to process the request, it
-should set \fIis_error\fP to \fBtrue\fP, and then call
-\fBllapi_hsm_action_end\fP().
-.sp
+.BR llapi_hsm_copytool_recv() ,
+it must first call
+.B llapi_hsm_action_begin()
+to initialize the internal action state, stored in
+.IR phcp .
+.I ct
+is the opaque copytools handle
+previously returned by
+.BR llapi_hsm_copytool_register() .
+.I hai
+is the request.
+.I restore_mdt_index
+and
+.I restore_open_flags
+are only used for an
+.B HSMA_RESTORE
+type of request.
+.I restore_mdt_index
+is the MDT index on which to create the restored file, or \-1 for default.
+If the copytool does not intend to process the request, it should set
+.I is_error
+to
+.BR true ,
+and then call
+.BR llapi_hsm_action_end() .
+.P
 While performing a copy (i.e. the HSM request is either
-\fBHSMA_ARCHIVE\fP or \fBHSMA_RESTORE\fP), the copytool can inform Lustre
-of the progress of the operation with \fBllapi_hsm_action_progress\fP(). \fIhe\fP is the interval (\fIoffset\fP, \fIlength\fP) of the data copied. Each
-interval must be unique; i.e. there must not be any overlap. \fIlength\fP
-is the total length that is expected to be transfered. \fIhp_flags\fP
+.B HSMA_ARCHIVE
+or
+.BR HSMA_RESTORE ),
+the copytool can inform Lustre of the progress of the operation with
+.BR llapi_hsm_action_progress() .
+.I he
+is the interval
+.RI ( offset ", " length )
+of the data copied.
+Each interval must be unique; i.e. there must not be any overlap.
+.I length
+is the total length that is expected to be transfered.
+.I hp_flags
 should be 0. The progress can be checked on any Lustre client by
-calling \fBllapi_hsm_current_action\fP(), or by using \fBlfs
-hsm_action\fP\&.
-.sp
+calling
+.BR llapi_hsm_current_action() , or by using
+.BR lfs hsm_action .
+.P
 Once the HSM request has been performed, the destination file must be
-closed, and \fBllapi_hsm_action_end\fP() must be called to free\-up the
+closed, and
+.B llapi_hsm_action_end()
+must be called to free\-up the
 allocated resources and signal Lustre that the file is now available
-to consumers. \fIerrval\fP is set to 0 on success. On error, it must be an
-errno, and hp_flags can be set to \fBHP_FLAG_RETRY\fP if the request is
-retryable, 0 otherwise. \fIhe\fP is the interval (\fIoffset\fP, \fIlength\fP) of
-the data copied. It can be the \fIhai_extent\fP of the HSM request.
-.sp
+to consumers.
+.I errval
+is set to 0 on success. On error, it must be an errno,
+and hp_flags can be set to
+.B HP_FLAG_RETRY
+if the request is retryable, 0 otherwise.
+.I he
+is the interval
+.IR ( offset ", " length )
+of the data copied. It can be the
+.I hai_extent
+of the HSM request.
+.P
 For a restore operation, a volatile file, invisible to ls, is
-created. \fBllapi_hsm_action_get_fd\fP() will return a file descriptor
-to it. It is the responsibility of the copytool to close the returned
-file descriptor when the data transfer is
-done. \fBllapi_hsm_action_get_dfid\fP() will return the FID of the volatile
-file, which can then be used with \fBllapi_open_by_fid\fP() to open
-the file in a different process, or on a different node.
-.sp
-\fBllapi_hsm_action_get_fd\fP() and \fBllapi_hsm_action_get_dfid\fP()
+created.
+.B llapi_hsm_action_get_fd()
+will return a file descriptor to it.
+It is the responsibility of the copytool to close the returned
+file descriptor when the data transfer is done.
+.B llapi_hsm_action_get_dfid()
+will return the FID of the volatile file, which can then be used with
+.B llapi_open_by_fid()
+to open the file in a different process, or on a different node.
+.P
+.B llapi_hsm_action_get_fd()
+and
+.B llapi_hsm_action_get_dfid()
 can be called for an archive operation too. The returned file
 descriptor and the FID are from the file to be archived.
 .SH RETURN VALUE
-.sp
-\fBllapi_hsm_action_get_fd\fP() returns a file descriptor on
-success. The other functions return 0 on success. All functions return
-a negative errno on failure.
+.B llapi_hsm_action_get_fd()
+returns a file descriptor on success. The other functions return 0 on success.
+All functions return a negative errno on failure.
 .SH ERRORS
-.sp
 The negative errno can be, but is not limited to:
+.TP 15
+.B -EINVAL
+An invalid value was passed, the copytool is not registered, ...
 .TP
-.B \fB\-EINVAL\fP An invalid value was passed, the copytool is not
-registered, ...
-.TP
-.B \fB\-ENOMEM\fP Not enough memory to allocate a resource.
-.SH SEE ALSO
-.sp
-\fBllapi_hsm_copytool_register\fP(3), \fBllapi_hsm_copytool_recv\fP(3),
-\fBlustreapi\fP(7), \fBlfs\fP(1)
-.sp
-See \fIlhsmtool_posix.c\fP in the Lustre sources for a use case of this
-API.
-.SH AUTHOR
+.B -ENOMEM
+Not enough memory to allocate a resource.
+.SH AUTHORS
 Frank Zago
-.
+.SH AVAILABILITY
+.BR llapi_hsm_action_begin(),
+.BR llapi_hsm_action_end(),
+.BR llapi_hsm_action_progress(),
+.B llapi_hsm_action_get_dfid()
+and
+.B llapi_hsm_action_get_fd()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.4.0
+.\" Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
+.BR lfs (1),
+.BR llapi_hsm_copytool_recv (3),
+.BR llapi_hsm_copytool_register (3),
+.BR lustreapi (7)
+.P
+See
+.I lhsmtool_posix.c
+in the Lustre sources for a use case of this API.

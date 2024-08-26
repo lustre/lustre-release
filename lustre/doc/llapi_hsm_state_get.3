@@ -1,28 +1,25 @@
-.TH lustreapi 3 "2014 Sep 22" Lustre "Lustre Application Interface Library"
+.TH LLAPI_HSM_STATE_GET 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_hsm_state_get, llapi_hsm_state_get_fd \- get HSM state
-information for a file on a Lustre filesystem
+llapi_hsm_state_get, llapi_hsm_state_get_fd \- get HSM state information for a file on a Lustre filesystem
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
-.sp
+.PP
 .BI "int llapi_hsm_state_get(const char *" path ", struct hsm_user_state *" hus ");"
-.sp
+.PP
 .BI "int llapi_hsm_state_get_fd(int " fd ", struct hsm_user_state *" hus ");"
-.sp
 .fi
 .SH DESCRIPTION
-.LP
 These functions return the HSM state flags and HSM archive ID for the
 file referred to by
-.IR path
+.I path
 or
 .IR fd .
 Information is returned in the
 .I hus
 argument which should already be allocated.
+.P
 .nf
-.LP
 struct hsm_user_state {
 	__u32	hus_states;
 	__u32	hus_archive_id;
@@ -34,12 +31,10 @@ External HSM archive ID associated with this file.
 .TP
 .I hus_states
 Flag mask for different HSM states and policy hints.
-.LP
-
+.PP
 The value of
 .I hus_states
 is formed by bitwise or'ing the following possible states:
-
 .TP 7
 .B HS_EXISTS
 The file has been assigned to an archive and provided to the backend
@@ -72,67 +67,65 @@ file, for example. This can be set by a user.
 The file content in the archive is not available, and file can not be
 restored. If this file is also HS_RELEASED, then attempts to access
 the file will fail. This flag can be set by an administrator.
-
 .SH RETURN VALUES
-.LP
-.B llapi_hsm_state_get(\|)
+.B llapi_hsm_state_get()
 and
-.B llapi_hsm_state_get_fd(\|)
+.B llapi_hsm_state_get_fd()
 return:
-.TP 7
+.TP
 .B 0
 on success
 .TP
 .B -errno
 on failure
 .SH ERRORS
-.TP 7
-.SM ENOMEM
+.TP 15
+.B -ENOMEM
 failed to allocate memory.
 .TP
-.SM ENAMETOOLONG
+.B -ENAMETOOLONG
 .I path
 was too long.
 .TP
-.SM ENOENT
+.B -ENOENT
 .I path
 does not point to a file or a directory.
 .TP
-.SM ENOTTY
+.B -ENOTTY
 .I path
 does not point to a Lustre filesystem.
-.SH EXAMPLE
+.SH EXAMPLES
 .nf
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-
+\&
 #include <lustre/lustreapi.h>
-
+\&
 int main(int argc, char **argv)
 {
 	struct hsm_user_state hus;
 	int rc;
-
+\&
 	if (argc < 2) {
 		fprintf(stderr, "usage: prog FILEPATH\\n");
 		exit(1);
 	}
-
+\&
 	rc = llapi_hsm_state_get(argv[1], &hus);
 	if (rc) {
 		fprintf(stderr, "can't get hsm state for %s: %s\\n",
 			argv[1], strerror(-rc));
 		exit(rc);
 	}
-
+\&
 	if (hus.hus_states & HS_RELEASED)
 		printf(" released");
 	if (hus.hus_states & HS_EXISTS)
 		printf(" exists");
 	if (hus.hus_states & HS_ARCHIVED)
 		printf(" archived");
-
+\&
 	/* Display settable flags */
 	if (hus.hus_states & HS_NORELEASE)
 		printf(" never_release");
@@ -142,18 +135,26 @@ int main(int argc, char **argv)
 		printf(" dirty");
 	if (hus.hus_states & HS_LOST)
 		printf(" lost_from_hsm");
-
+\&
 	if (hus.hus_archive_id != 0)
 		printf(", archive_id:%d", hus.hus_archive_id);
-
+\&
 	printf("\\n");
-
+\&
 	exit(0);
 }
 .fi
-.SH "SEE ALSO"
-.BR lustre (7),
-.BR lustreapi (7),
+.SH AVAILABILITY
+.B llapi_hsm_state_get()
+and
+.B llapi_hsm_state_get_fd()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.4.0
+.\" Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
+.BR lfs-hsm (1),
 .BR llapi_hsm_state_set (3),
 .BR llapi_hsm_state_set_fd (3),
-.BR lfs-hsm (1)
+.BR lustre (7),
+.BR lustreapi (7)

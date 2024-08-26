@@ -1,30 +1,25 @@
-.TH lustreapi 3 "2019 Jul 10" "Lustre User API"
+.TH LLAPI_GET_FSNAME_INSTANCE 3 2024-08-26 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_get_fsname_instance - get the client filesystem name and instance
-.br
-llapi_get_fsname - get the filesystem fsname from path
-.br
-llapi_get_instance - get the client filesystem instance from path
-.br
-llapi_getname - get the client filesystem identifier from path
+llapi_get_fsname_instance, llapi_get_fsname, llapi_get_instance, llapi_getname - get the client filesystem name and instance
 .SH SYNOPSIS
 .nf
 .B #include <sys/types.h>
 .B #include <sys/stat.h>
 .B #include <fcntl.h>
 .B #include <lustre/lustreapi.h>
-.sp
+.PP
 .BI "int llapi_getname(const char *" path ", char *" name ", size_t " namelen );
-.sp
+.PP
 .BI "int llapi_get_fsname_instance(const char *" path ", char *" fsname ,
-.BI					size_t " fsname_len" ", char *" instance ,
-.BI					size_t " instance_len" );
-.sp
+.BI "                              size_t " fsname_len ", char *" instance ,
+.BI "                              size_t " instance_len );
+.PP
 .BI "int llapi_get_fsname(const char *" path ", char *" fsname ,
-.BI					size_t " fsname_len" );
-.sp
+.BI "                     size_t " fsname_len );
+.PP
 .BI "int llapi_get_instance(const char *" path ", char *" instance ,
-.BI					size_t " instance_len" );
+.BI "                       size_t " instance_len );
+.fi
 .SH DESCRIPTION
 .LP
 .B llapi_get_fsname_instance()
@@ -82,16 +77,35 @@ on success, or
 error code on failure and sets errno appropriately.
 .SH ERRORS
 .TP 15
-.SM EINVAL
+.B EINVAL
 Invalid filesystem information found.
 .TP
-.SM ENAMETOOLONG
+.B ENAMETOOLONG
 The
 .IR fsname_len ,
 .IR instance_len ,
 or
 .I namelen
 buffer length was not large enough to hold the string.
+.SH AVAILABILITY
+.BR llapi_get_fsname_instance() ,
+.BR llapi_get_fsname() ,
+.BR llapi_get_instance() ,
+and
+.B llapi_getname()
+are part of the
+.BR lustre (7)
+user application interface library.
+.B llapi_get_fsname_instance
+and
+.B llapi_get_fsname
+were added in release 2.14.0.
+.\" Added in commit v2_13_51-19-g00d14521ca
+.B llapi_get_instance
+and
+.B llapi_getname
+were added in release 2.2.0.
+.\" Added in commit 2.1.52-55-g8d935e6d31
 .SH SEE ALSO
 .BR lfs-getname (1),
 .BR lustreapi (7)

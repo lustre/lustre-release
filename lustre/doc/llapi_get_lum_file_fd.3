@@ -1,9 +1,6 @@
-.TH llapi_get_lum_file_fd 3 "2019 July 15" "Lustre User API"
+.TH LLAPI_GET_LUM_FILE_FD 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_get_lum_file_fd, llapi_get_lum_dir_fd, llapi_get_lum_file,
-llapi_get_lum_dir \- get valid file attributes and LOV stripe information to
-the user.
-
+llapi_get_lum_file_fd, llapi_get_lum_dir_fd, llapi_get_lum_file, llapi_get_lum_dir \- get valid file attributes and LOV stripe information to the user.
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -14,8 +11,8 @@ the user.
 .BI "                          size_t " lumsize ");"
 .PP
 .BI "int llapi_get_lum_dir_fd(int " dir_fd ", __u64 *" valid ",
-.BI "                        lstatx_t *" statx ", struct lov_user_md *" lum ",
-.BI "                        size_t " lumsize ");"
+.BI "                         lstatx_t *" statx ", struct lov_user_md *" lum ",
+.BI "                         size_t " lumsize ");"
 .PP
 .BI "int llapi_get_lum_file(const char *" path ", __u64 *" valid ",
 .BI "                       lstatx_t *" statx ", struct lov_user_md *" lum ",
@@ -26,7 +23,6 @@ the user.
 .BI "                      size_t " lumsize ");"
 .fi
 .SH DESCRIPTION
-.PP
 The function
 .BR llapi_get_lum_file_fd() ,
 .BR llapi_get_lum_dir_fd() ,
@@ -42,7 +38,7 @@ if
 is provided, it is a relative pathname that is interpreted relative to the
 directory referred to by
 .BR dir_fd .
-
+.P
 The function
 .BR llapi_get_lum_dir_fd() ,
 .BR llapi_get_lum_file() ,
@@ -53,7 +49,7 @@ referred to by
 .BR dir_fd
 or
 .BR path .
-
+.P
 The function
 .BR llapi_get_lum_file_fd()
 can be used for applications that process lots of files. It avoids opening,
@@ -63,7 +59,7 @@ calls of this llapi can be done on the parent dir referenced by
 with a single open for all files in that directory, and it also does not
 pollute the client dcache with millions of dentries when traversing a large
 filesystem.
-
+.P
 The stripe information for the target file is returned to the user in the
 .B struct lov_user_md
 pointed to by
@@ -78,9 +74,9 @@ The output argument
 .BR valid
 contains the flags to indicate which fields in the returned file attributes
 have been validly filled in.
-
+.P
 The valid flags are as follows:
-.TP
+.TP 20
 OBD_MD_FLSIZE
 The returned file size is known strictly correct.
 .TP
@@ -138,27 +134,37 @@ and
 return 0 on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15
-.SM -ENOMEM
+.B -ENOMEM
 Insufficient memory to complete operation.
 .TP
-.SM -EFAULT
+.B -EFAULT
 Memory region is not properly mapped.
 .TP
-.SM -EINVAL
+.B -EINVAL
 One or more invalid arguments are given.
 .TP
-.SM -EOPNOTSUPP
+.B -EOPNOTSUPP
 The operation is not supported.
 .TP
-.SM -ENOTTY
+.B -ENOTTY
 File does not reside on a Lustre filesystem.
 .TP
-.SM -ENOENT
+.B -ENOENT
 .I path
 does not exist.
 .TP
-.SM -EBADF
+.B -EBADF
 .I dir_fd
 is not a valid open file descriptor.
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.BR llapi_get_lum_file_fd() ,
+.BR llapi_get_lum_file() ,
+.B llapi_get_lum_dir_fd()
+and
+.B llapi_get_lum_dir()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.13.0
+.\" Added in commit v2_12_58-78-g11aa7f8704
+.SH SEE ALSO
 .BR lustreapi (7)

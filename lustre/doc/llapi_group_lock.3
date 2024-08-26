@@ -1,4 +1,4 @@
-.TH llapi_group_lock 3 "2014 Oct 03" "Lustre User API"
+.TH LLAPI_GROUP_LOCK 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_group_lock, llapi_group_unlock, llapi_group_lock64, llapi_group_unlock64 \- get and put a Lustre group lock.
 .SH SYNOPSIS
@@ -7,7 +7,7 @@ llapi_group_lock, llapi_group_unlock, llapi_group_lock64, llapi_group_unlock64 \
 .PP
 .BI "int llapi_group_lock(int "fd ", int "gid );
 .BI "int llapi_group_lock64(int "fd ", __u64 "gid );
-
+.PP
 .BI "int llapi_group_unlock(int "fd ", int "gid );
 .BI "int llapi_group_unlock64(int "fd ", __u64 "gid );
 .fi
@@ -22,7 +22,7 @@ take a group lock on the file descriptor
 with group identifier
 .IR gid
 (int or __u64 type) .
-
+.P
 The functions
 .BR llapi_group_unlock()
 and
@@ -31,11 +31,11 @@ release a group lock identified by group identifier
 .I gid
 (int or __u64 type) on the file descriptor
 .IR fd .
-
-The group lock is a whole file lock that blocks concurrent I/O originating from descriptors that have not been locked. Multiple processes can acquire a lock by specifying the same group identifier.
-
+.P
+The group lock is a whole file lock that blocks concurrent I/O originating
+from descriptors that have not been locked.
+Multiple processes can acquire a lock by specifying the same group identifier.
 .SH RETURN VALUES
-.LP
 .B llapi_group_lock(\|),
 .B llapi_group_lock64(\|),
 .B llapi_group_unlock(\|)
@@ -44,17 +44,35 @@ and
 return 0 on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15
-.SM -EBADF
+.B -EBADF
 .I fd
 is not a valid file descriptor.
 .TP
-.SM -ENOTTY
+.B -ENOTTY
 .I fd
 does not describe an object suitable for this request.
 .TP
-.SM -EINVAL
+.B -EINVAL
 .I fd
 is already group locked with a different group identifier.
-.TP
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.BR llapi_group_lock() ,
+.BR llapi_group_unlock() ,
+.B llapi_group_lock64()
+and
+.B llapi_group_unlock64()
+are part of the
+.BR lustre (7)
+user application interface library.
+.B llapi_group_lock
+and
+.B llapi_group_unlock
+were added in releease 2.7.0.
+.\" Added in commit v2_6_53_0-11-ge73cf72b82
+.B llapi_group_lock64
+and
+.B llapi_group_unlock64
+were added in release 2.15.0.
+.\" Added in commit v2_14_51-124-gccb64cde7f
+.SH SEE ALSO
 .BR lustreapi (7)
