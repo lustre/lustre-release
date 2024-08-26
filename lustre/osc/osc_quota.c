@@ -220,7 +220,7 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
         if (rc)
                 CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
 
-	if (req->rq_repmsg) {
+	if (rc == 0 && req->rq_repmsg) {
 		struct list_head *lst = (struct list_head *)oqctl->qc_iter_list;
 
 		oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
