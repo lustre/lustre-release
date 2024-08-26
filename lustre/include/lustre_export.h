@@ -459,6 +459,11 @@ static inline int exp_connect_encrypt(struct obd_export *exp)
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_ENCRYPT);
 }
 
+static inline int exp_connect_sparse(struct obd_export *exp)
+{
+	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_SPARSE);
+}
+
 static inline int exp_connect_encrypt_fid2path(struct obd_export *exp)
 {
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_ENCRYPT_FID2PATH);

@@ -845,6 +845,7 @@ struct ptlrpc_body_v2 {
  */
 #define OBD_CONNECT2_UNALIGNED_DIO	0x400000000ULL /* unaligned DIO */
 #define OBD_CONNECT2_CONN_POLICY	0x800000000ULL /* server-side connection policy */
+#define OBD_CONNECT2_SPARSE            0x1000000000ULL /* sparse LNet read */
 #define OBD_CONNECT2_MIRROR_ID_FIX     0x2000000000ULL /* rr_mirror_id move */
 #define OBD_CONNECT2_UPDATE_LAYOUT     0x4000000000ULL /* update compressibility */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
