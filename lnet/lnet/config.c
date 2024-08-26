@@ -1583,7 +1583,8 @@ lnet_parse_ip2nets(const char **networksp, const char *ip2nets)
 		} else {
 			LCONSOLE_ERROR("No local IP interfaces for ip2nets to match\n");
 		}
-		return nip;
+		rc = nip;
+		goto out_free_addrs;
 	}
 
 	CFS_ALLOC_PTR_ARRAY(ipaddrs, nip);
