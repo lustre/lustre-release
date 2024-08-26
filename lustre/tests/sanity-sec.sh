@@ -1214,7 +1214,7 @@ create_fops_nodemaps() {
 	for client in $clients; do
 		local client_ip=$(host_nids_address $client $NETTYPE)
 		local client_nid=$(h2nettype $client_ip)
-		 [[ "$client_nid" =~ ":" ]] && client_nid+="/128"
+		[[ "$client_nid" =~ ":" ]] && client_nid+="/128"
 		do_facet mgs $LCTL nodemap_add c${i} || return 1
 		do_facet mgs $LCTL nodemap_add_range 	\
 			--name c${i} --range $client_nid || {
@@ -5059,6 +5059,7 @@ test_55() {
 
 	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
 	client_nid=$(h2nettype $client_ip)
+	[[ "$client_nid" =~ ":" ]] && client_nid+="/128"
 	do_facet mgs $LCTL nodemap_add c0
 	do_facet mgs $LCTL nodemap_add_range \
 		 --name c0 --range $client_nid
@@ -5816,6 +5817,7 @@ setup_64() {
 
 	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
 	client_nid=$(h2nettype $client_ip)
+	[[ "$client_nid" =~ ":" ]] && client_nid+="/128"
 	do_facet mgs $LCTL nodemap_add c0
 	do_facet mgs $LCTL nodemap_add_range \
 		 --name c0 --range $client_nid
