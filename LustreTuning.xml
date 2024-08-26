@@ -327,7 +327,7 @@ ko2iblnd credits=256
       forwarded to the next hop. The three different buffer sizes accommodate
       different size messages.</para>
       <para>If a message arrives that can fit in a tiny buffer then a tiny
-      buffer is used, if a message doesn’t fit in a tiny buffer, but fits in a
+      buffer is used, if a message does not fit in a tiny buffer, but fits in a
       small buffer, then a small buffer is used. Finally if a message does not
       fit in either a tiny buffer or a small buffer, a large buffer is
       used.</para>
@@ -457,7 +457,7 @@ lnet large_router_buffers=8192
         </listitem>
         <listitem>
           <para>
-          <literal>avoid_asym_router_failure</literal>– When set to 1,
+          <literal>avoid_asym_router_failure</literal> - When set to 1,
           this parameter adds the additional requirement that for a route to be
           considered up the gateway of the route must have at least one NI up on
           the remote network of the route.

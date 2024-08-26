@@ -166,10 +166,10 @@ Network Topology</title>
             nodes.</para>
           </listitem>
         </itemizedlist>
-        <screen>options lnet ip2nets=â€tcp 198.129.135.* 192.128.88.98; \
-        elan 198.128.88.98 198.129.135.3; \ 
-        routes=&apos;cp 1022@elan # Elan NID of router; \
-        elan  198.128.88.98@tcp # TCP NID of router  &apos;</screen>
+        <screen>options lnet &apos;ip2nets=&quot;tcp 198.129.135.* 192.128.88.98; \
+        elan 198.128.88.98 198.129.135.3;&quot;&apos; \ 
+        &apos;routes=&quot;tcp 1022@elan # Elan NID of router; \
+        elan  198.128.88.98@tcp # TCP NID of router&quot;&apos;</screen>
       </section>
       <section remap="h4">
           <title><indexterm><primary>configuring</primary>

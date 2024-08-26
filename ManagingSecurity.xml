@@ -170,8 +170,8 @@ other::---</screen>
       the same file system beyond normal Unix permissions/ACLs, even when users
       on the clients may have root access. Those tenants share the same file
       system, but they are isolated from each other: they cannot access or even
-      see each other’s files, and are not aware that they are sharing common
-      file system resources.</para>
+      see each other&apos;s files, and are not aware that they are sharing
+      common file system resources.</para>
     <para>Lustre Isolation leverages the Fileset feature
       (<xref linkend="SystemConfigurationUtilities.fileset" />)
       to mount only a subdirectory of the filesystem rather than the root
@@ -241,9 +241,9 @@ mgs# lctl set_param -P nodemap.tenant1.fileset=/dir1</screen>
     Checking SELinux Policy Enforced by Lustre Clients</title>
     <para>SELinux provides a mechanism in Linux for supporting Mandatory Access
       Control (MAC) policies. When a MAC policy is enforced, the operating
-      system’s (OS) kernel defines application rights, firewalling applications
-      from compromising the entire system. Regular users do not have the ability to
-      override the policy.</para>
+      system&apos;s (OS) kernel defines application rights,
+      firewalling applications from compromising the entire system.
+      Regular users do not have the ability to override the policy.</para>
     <para>One purpose of SELinux is to protect the
       <emphasis role="bold">OS</emphasis> from privilege escalation. To that
       extent, SELinux defines confined and unconfined domains for processes and
@@ -858,7 +858,9 @@ f3cc1b5cf9b8f41c  No      custom protector "bunker"</screen>
             eavesdropped during network transfer.</para>
         </listitem>
       </itemizedlist>
-      <para>Kerberos uses the “kernel keyring” client upcall mechanism.</para>
+      <para>
+        Kerberos uses the &quot;kernel keyring&quot; client upcall mechanism.
+      </para>
     </section>
     <section xml:id="managingSecurity.kerberos.securityflavor">
       <title>Security Flavor</title>

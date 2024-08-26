@@ -202,9 +202,10 @@
                 <para><literal>--daemonize | -d</literal></para>
               </entry>
               <entry>
-                <para>Optional flag to “daemonize” the program. In daemon
-                mode, the utility will scan, process the changelog records
-                and sync the LSoM xattr for files periodically.</para>
+                <para>Optional flag to run the program in the background.
+                  In daemon mode, the utility will scan and process the
+                  changelog records and sync the LSoM xattr for files
+                  periodically.</para>
               </entry>
             </row>
             <row>

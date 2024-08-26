@@ -232,7 +232,7 @@
         <para>(Optional) If you are upgrading from a release before Lustre
         2.10, to enable the project quota feature enter the following on every
         ldiskfs backend target while unmounted:
-        <screen>tune2fs –O project /dev/<replaceable>dev</replaceable></screen>
+        <screen>tune2fs -O project /dev/<replaceable>dev</replaceable></screen>
         </para>
         <note><para>Enabling the <literal>project</literal> feature will prevent
             the filesystem from being used by older versions of ldiskfs, so it

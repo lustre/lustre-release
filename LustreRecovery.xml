@@ -438,15 +438,38 @@
         with the MGS, and there is no other node to notify clients in case of MGS restart, the MGS
         will disable IR for a period when it first starts. This interval is configurable, as shown
         in <xref linkend="imperativerecoveryparameters"/></para>
-        <para>Because of the increased importance of the MGS in recovery, it is strongly recommended that the MGS node be separate from the MDS. If the MGS is co-located on the MDS node, then in case of MDS/MGS failure there will be no IR notification for the MDS restart, and clients will always use timeout-based recovery for the MDS.  IR notification would still be used in the case of OSS failure and recovery.</para>
-	<para>Unfortunately, it’s impossible for the MGS to know how many clients have been successfully notified or whether a specific client has received the restarting target information. The only thing the MGS can do is tell the target that, for example, all clients are imperative recovery-capable, so it is not necessary to wait as long for all clients to reconnect. For this reason, we still require a timeout policy on the target side, but this timeout value can be much shorter than normal recovery. </para>
+        <para>Because of the increased importance of the MGS in recovery,
+          it is strongly recommended that the MGS node be separate from the MDS.
+          If the MGS is co-located on the MDS node, then in case of MDS/MGS
+          failure there will be no IR notification for the MDS restart,
+          and clients will always use timeout-based recovery for the MDS.
+          IR notification would still be used in the case of OSS failure
+          and recovery.
+        </para>
+	<para>Unfortunately, it is impossible for the MGS to know how many
+          clients have been successfully notified or whether a specific
+          client has received the restarting target information.
+          The only thing the MGS can do is tell the target that,
+          for example, all clients are imperative recovery-capable,
+          so it is not necessary to wait as long for all clients to reconnect.
+          For this reason, we still require a timeout policy on the target side,
+          but this timeout value can be much shorter than normal recovery.
+        </para>
 	</section>
 	<section remap="h3" xml:id="imperativerecoveryparameters">
 	<title><indexterm><primary>imperative recovery</primary><secondary>Tuning</secondary></indexterm>Tuning Imperative Recovery</title>
 	<para>Imperative recovery has a default parameter set which means it can work without any extra configuration. However, the default parameter set only fits a generic configuration. The following sections discuss the configuration items for imperative recovery.</para>
 	<section remap="h5">
 	<title>ir_factor</title>
-	<para>Ir_factor is used to control targets’ recovery window. If imperative recovery is enabled, the recovery timeout window on the restarting target is calculated by: <emphasis>new timeout = recovery_time * ir_factor / 10 </emphasis>Ir_factor must be a value in range of [1, 10]. The default value of ir_factor is 5. The following example will set imperative recovery timeout to 80% of normal recovery timeout on the target testfs-OST0000: </para>
+	<para>
+          <literal>ir_factor</literal> is used to control each target&apos;s
+          recovery window. If imperative recovery is enabled,
+          the recovery timeout window on the restarting target is calculated by:
+          <emphasis>new timeout = recovery_time * ir_factor / 10</emphasis>
+          <literal>ir_factor</literal> must be a value in range of [1, 10].
+          The default value of ir_factor is 5.
+          The following example will set imperative recovery timeout to 80%
+          of normal recovery timeout on the target testfs-OST0000: </para>
 <screen>lctl conf_param obdfilter.testfs-OST0000.ir_factor=8</screen>
 		<note> <para>If this value is too small for the system, clients may be unnecessarily evicted</para> </note>
 <para>You can read the current value of the parameter in the standard manner with <emphasis>lctl get_param</emphasis>:</para>
@@ -462,13 +485,16 @@
 	<para>Imperative recovery can also be disabled on the client side with the same mount option:</para>
 	<screen># mount -t lustre -onoir mymgsnid@tcp:/testfs /mnt/testfs</screen>
 	<note><para>When a single client is deactivated in this manner, the MGS will deactivate imperative recovery for the whole cluster. IR-enabled clients will still get notification of target restart, but targets will not be allowed to shorten the recovery window. </para></note>
-	<para>You can also disable imperative recovery globally on the MGS by writing `state=disabled’ to the controlling procfs entry</para>
+	<para>You can also disable imperative recovery globally on the MGS
+        by writing <literal>state=disabled</literal> to the parameter:</para>
 	<screen># lctl set_param mgs.MGS.live.testfs="state=disabled"</screen>
-	<para>The above command will disable imperative recovery for file system named <emphasis>testfs</emphasis></para>
+	<para>The above command will disable imperative recovery for file
+        system named <emphasis>testfs</emphasis></para>
 	</section>
 	<section remap="h5">
 	<title>Checking Imperative Recovery State - MGS</title>
-	<para>You can get the imperative recovery state from the MGS. Let’s take an example and explain states of imperative recovery:</para>
+	<para>You can get the imperative recovery state from the MGS.
+        Let us take an example and explain states of imperative recovery:</para>
 <screen>
 [mgs]$ lctl get_param mgs.MGS.live.testfs
 ...
@@ -575,9 +601,11 @@ imperative_recovery_state:
 	</section>
 	<section remap="h5">
 	<title>Checking Imperative Recovery State - client</title>
-	<para>A `client’ in IR means a Lustre client or a MDT. You can get the IR state on any node which
-          running client or MDT, those nodes will always have an MGC running. An example from a
-          client:</para>
+	<para>A &apos;client&apos; in IR means a Lustre client or a MDT.
+          You can get the IR state on any node which running client or MDT,
+          those nodes will always have an MGC running.
+          An example from a client:
+        </para>
 	<screen>
 [client]$ lctl get_param mgc.*.ir_state
 mgc.MGC192.168.127.6@tcp.ir_state=
@@ -614,7 +642,9 @@ client_state:
 			</emphasis></para>
 		</entry>
 		<entry>
-			<para><literal>imperative_recovery</literal>can be ON or OFF. If it’s OFF state, then IR is disabled by administrator at mount time. Normally this should be ON state.</para>
+                <para><literal>imperative_recovery</literal>can be ON or OFF.
+                  If its OFF state, IR is disabled at mount time.
+                  Normally this should be in the ON state.</para>
 		</entry>
 		</row>
 		<row>

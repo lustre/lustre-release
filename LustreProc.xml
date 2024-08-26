@@ -373,12 +373,12 @@ testfs-MDT0000</screen></para>
         Two particularly useful baseline statistics are:</para>
       <itemizedlist>
         <listitem>
-          <para><literal>brw_stats</literal> – Histogram data characterizing I/O requests to the
+          <para><literal>brw_stats</literal> - Histogram data characterizing I/O requests to the
             OSTs. For more details, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
               linkend="monitor_ost_block_io_stream"/>.</para>
         </listitem>
         <listitem>
-          <para><literal>rpc_stats</literal> – Histogram data showing information about RPCs made by
+          <para><literal>rpc_stats</literal> - Histogram data showing information about RPCs made by
             clients. For more details, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
               linkend="MonitoringClientRCPStream"/>.</para>
         </listitem>
@@ -1388,7 +1388,7 @@ write RPCs in flight: 0
       </section>
       <section>
         <title>Tuning Directory Statahead and AGL</title>
-        <para>Many system commands, such as <literal>ls –l</literal>,
+        <para>Many system commands, such as <literal>ls -l</literal>,
         <literal>du</literal>, and <literal>find</literal>, traverse a
         directory sequentially. To make these commands run efficiently, the
         directory statahead can be enabled to improve the performance of

@@ -939,7 +939,7 @@ osc.myth-OST0004-osc-ffff8800376bdc00.cur_grant_bytes=33808384
     <screen>
 mds0# mkfs.lustre --fsname=testfs --mdt --mgs \
         --servicenode=192.168.10.2@tcp0 \
-        -–servicenode=192.168.10.1@tcp0 /dev/sda1
+        --servicenode=192.168.10.1@tcp0 /dev/sda1
 mds0# mount -t lustre /dev/sda1 /mnt/test/mdt
 oss0# mkfs.lustre --fsname=testfs --servicenode=192.168.10.20@tcp0 \
         --servicenode=192.168.10.21 --ost --index=0 \

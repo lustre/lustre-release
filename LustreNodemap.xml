@@ -114,7 +114,8 @@
       covers all Lustre server nodes. So the very first step when working with
       nodemaps is to create such a group with both properties
       <literal>admin</literal> and <literal>trusted</literal> set. It is
-      recommended to give this group an explicit label such as “TrustedSystems”
+      recommended to give this group an explicit label such as
+      <literal>TrustedSystem</literal>
       or some identifier that makes the association clear.</para>
 
       <para>Let's consider a deployment where the server nodes are in the NID
@@ -310,8 +311,8 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
     <emphasis role="bold">requires</emphasis> a group that covers all Lustre
     server nodes, with both properties <literal>admin</literal> and
     <literal>trusted</literal> set. It is recommended to give this group an
-    explicit label such as “TrustedSystems” or some identifier that makes the
-    association clear.</para>
+    explicit label such as <literal>TrustedSystems</literal> or some
+    identifier that makes the association clear.</para>
 
     <section xml:id="lustrenodemap.alteringproperties.managing" remap="h3">
       <title>Managing the Properties</title>
@@ -466,8 +467,8 @@ mgs# lctl nodemap_modify --name <replaceable>BirdAdminSite</replaceable> --prope
       <warning>
         <para>Lustre server nodes <emphasis role="bold">must</emphasis> be in a
         policy group with both these properties set to 1. It is recommended to
-        use a policy group labeled “TrustedSystems” or some identifier that
-        makes the association clear.</para>
+        use a policy group labeled <literal>TrustedSystems</literal>
+        or some identifier that makes the association clear.</para>
       </warning>
 
       <para>If a policy group has the <literal>admin</literal>

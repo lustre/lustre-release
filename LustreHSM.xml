@@ -127,11 +127,20 @@ ID must be in the range 1 to 32.</para>
 You need, at least, one copytool per ARCHIVE ID. When using the POSIX copytool,
 this ID is defined using <literal>--archive</literal> switch.</para>
 
-<para>For example: if a single Lustre file system is bound to 2 different HSMs (A and B,) ARCHIVE ID “1” can be chosen for HSM A and ARCHIVE ID “2” for HSM B. If you start 3 copytool instances for ARCHIVE ID 1, all of them will use Archive ID “1”. The same rule applies for copytool instances dealing with the HSM B, using Archive ID “2”. </para>
+<para>For example: if a single Lustre file system is bound to two
+different HSMs (A and B,) ARCHIVE ID &quot;1&quot; can be chosen for
+HSM A and ARCHIVE ID &quot;2&quot; for HSM B.
+If you start 3 copytool instances for ARCHIVE ID 1,
+all of them will use Archive ID &quot;1&quot;.
+The same rule applies for copytool instances dealing with the HSM B,
+using Archive ID &quot;2&quot;. </para>
 
-<para>When issuing HSM requests, you can use the <literal>--archive</literal> switch
-to choose the backend you want to use. In this example, file <literal>foo</literal> will be
-archived into backend ARCHIVE ID “5”:</para>
+<para>
+  When issuing HSM requests, you can use the <literal>--archive</literal>
+  switch to choose the backend you want to use.
+  In this example, file <literal>foo</literal> will be
+  archived into backend ARCHIVE ID &quot;5&quot;:
+</para>
 
 	<screen>$ lfs hsm_archive --archive=5 /mnt/lustre/foo</screen>
 
@@ -395,13 +404,17 @@ list.</para>
           <indexterm><primary>HSM</primary><secondary>changelogs</secondary></indexterm>change logs
 		</title>
 
-		<para>A changelog record type “HSM“ was added for Lustre file system
-logs that relate to HSM events.</para>
-<screen>16HSM   13:49:47.469433938 2013.10.01 0x280 t=[0x200000400:0x1:0x0]</screen>
+		<para>A changelog record type <literal>HSM</literal> was
+                  added for Lustre file system logs that relate to HSM events.
+                </para>
+<screen>
+16HSM   13:49:47.469433938 2013.10.01 0x280 t=[0x200000400:0x1:0x0]
+</screen>
 
-		<para>Two items of information are available for each HSM record: the
-FID of the modified file and a bit mask.  The bit mask codes the following
-information (lowest bits first):</para>
+		<para>Two items of information are available for each HSM
+                  record: the FID of the modified file and a bit mask.
+                  The bit mask codes the following information (low bits first):
+                </para>
 
       <itemizedlist>
         <listitem>

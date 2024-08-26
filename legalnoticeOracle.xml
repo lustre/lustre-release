@@ -17,21 +17,85 @@
 
       <para>Copyright © 2011, Oracle et/ou ses affiliés. Tous droits réservés.</para>
 
-      <para>Ce logiciel et la documentation qui l’accompagne sont protégés par les lois sur la propriété intellectuelle. Ils sont concédés sous licence et soumis à des restrictions d’utilisation et de divulgation. Sauf disposition de votre contrat de licence ou de la loi, vous ne pouvez pas copier, reproduire, traduire, diffuser, modifier, breveter, transmettre, distribuer, exposer, exécuter, publier ou afficher le logiciel, même partiellement, sous quelque forme et par quelque procédé que ce soit. Par ailleurs, il est interdit de procéder à toute ingénierie inverse du logiciel, de le désassembler ou de le décompiler, excepté à des fins d’interopérabilité avec des logiciels tiers ou tel que prescrit par la loi.</para>
+      <para>Ce logiciel et la documentation qui l&apos;accompagne sont
+      protégés par les lois sur la propriété intellectuelle.
+      Ils sont concédés sous licence et soumis à des restrictions
+      d&apos;utilisation et de divulgation.
+      Sauf disposition de votre contrat de licence ou de la loi,
+      vous ne pouvez pas copier, reproduire, traduire, diffuser,
+      modifier, breveter, transmettre, distribuer, exposer, exécuter,
+      publier ou afficher le logiciel, même partiellement,
+      sous quelque forme et par quelque procédé que ce soit.
+      Par ailleurs, il est interdit de procéder à toute ingénierie
+      inverse du logiciel, de le désassembler ou de le décompiler,
+      excepté à des fins d&apos;interopérabilité avec des
+      logiciels tiers ou tel que prescrit par la loi.</para>
 
-      <para>Les informations fournies dans ce document sont susceptibles de modification sans préavis. Par ailleurs, Oracle Corporation ne garantit pas qu’elles soient exemptes d’erreurs et vous invite, le cas échéant, à lui en faire part par écrit.</para>
+      <para>Les informations fournies dans ce document sont susceptibles
+      de modification sans préavis.
+      Par ailleurs, Oracle Corporation ne garantit pas qu&apos;elles
+      soient exemptes d&apos;erreurs et vous invite, le cas échéant,
+      à lui en faire part par écrit.</para>
 
-      <para>Si ce logiciel, ou la documentation qui l’accompagne, est concédé sous licence au Gouvernement des Etats-Unis, ou à toute entité qui délivre la licence de ce logiciel ou l’utilise pour le compte du Gouvernement des Etats-Unis, la notice suivante s’applique :</para>
+      <para>Si ce logiciel, ou la documentation qui l&apos;accompagne,
+      est concédé sous licence au Gouvernement des Etats-Unis,
+      ou à toute entité qui délivre la licence de ce logiciel ou
+      l&apos;utilise pour le compte du Gouvernement des Etats-Unis,
+      la notice suivante s&apos;applique :</para>
 
-      <para>U.S. GOVERNMENT RIGHTS. Programs, software, databases, and related documentation and technical data delivered to U.S. Government customers are "commercial computer software" or "commercial technical data" pursuant to the applicable Federal Acquisition Regulation and agency-specific supplemental regulations. As such, the use, duplication, disclosure, modification, and adaptation shall be subject to the restrictions and license terms set forth in the applicable Government contract, and, to the extent applicable by the terms of the Government contract, the additional rights set forth in FAR 52.227-19, Commercial Computer Software License (December 2007). Oracle America, Inc., 500 Oracle Parkway, Redwood City, CA 94065.</para>
+      <para>U.S. GOVERNMENT RIGHTS. Programs, software, databases,
+      and related documentation and technical data delivered to U.S.
+      Government customers are &quot;commercial computer software&quot; or
+      &quot;commercial technical data&quot; pursuant to the applicable Federal
+      Acquisition Regulation and agency-specific supplemental regulations.
+      As such, the use, duplication, disclosure, modification,
+      and adaptation shall be subject to the restrictions and license
+      terms set forth in the applicable Government contract, and,
+      to the extent applicable by the terms of the Government contract,
+      the additional rights set forth in FAR 52.227-19,
+      Commercial Computer Software License (December 2007).
+      Oracle America, Inc., 500 Oracle Parkway, Redwood City, CA 94065.</para>
 
-      <para>Ce logiciel ou matériel a été développé pour un usage général dans le cadre d’applications de gestion des informations. Ce logiciel ou matériel n’est pas conçu ni n’est destiné à être utilisé dans des applications à risque, notamment dans des applications pouvant causer des dommages corporels. Si vous utilisez ce logiciel ou matériel dans le cadre d’applications dangereuses, il est de votre responsabilité de prendre toutes les mesures de secours, de sauvegarde, de redondance et autres mesures nécessaires à son utilisation dans des conditions optimales de sécurité. Oracle Corporation et ses affiliés déclinent toute responsabilité quant aux dommages causés par l’utilisation de ce logiciel ou matériel pour ce type d’applications.</para>
+      <para>Ce logiciel ou matériel a été développé pour un usage
+      général dans le cadre d&apos;applications de gestion des informations.
+      Ce logiciel ou matériel n&apos;est pas conçu ni n&apos;est
+      destiné à être utilisé dans des applications à risque,
+      notamment dans des applications pouvant causer des dommages corporels.
+      Si vous utilisez ce logiciel ou matériel dans le cadre
+      d&apos;applications dangereuses,
+      il est de votre responsabilité de prendre toutes les mesures de secours,
+      de sauvegarde, de redondance et autres mesures nécessaires
+      à son utilisation dans des conditions optimales de sécurité.
+      Oracle Corporation et ses affiliés déclinent toute
+      responsabilité quant aux dommages causés par l&apos;utilisation
+      de ce logiciel ou matériel pour ce type d&apos;applications.</para>
 
-      <para>Oracle et Java sont des marques déposées d’Oracle Corporation et/ou de ses affiliés.Tout autre nom mentionné peut correspondre à des marques appartenant à d’autres propriétaires qu’Oracle.</para>
+      <para>Oracle et Java sont des marques déposées
+      d&apos;Oracle Corporation et/ou de ses affiliés.
+      Tout autre nom mentionné peut correspondre à des marques
+      appartenant à d&apos;autres propriétaires qu&apos;Oracle.</para>
 
-      <para>AMD, Opteron, le logo AMD et le logo AMD Opteron sont des marques ou des marques déposées d’Advanced Micro Devices. Intel et Intel Xeon sont des marques ou des marques déposées d’Intel Corporation. Toutes les marques SPARC sont utilisées sous licence et sont des marques ou des marques déposées de SPARC International, Inc. UNIX est une marque déposée concédée sous licence par X/Open Company, Ltd.</para>
+      <para>AMD, Opteron, le logo AMD et le logo AMD Opteron sont des
+      marques ou des marques déposées d&apos;Advanced Micro Devices.
+      Intel et Intel Xeon sont des marques ou des marques
+      déposées d&apos;Intel Corporation.
+      Toutes les marques SPARC sont utilisées sous licence et sont
+      des marques ou des marques déposées de SPARC International, Inc.
+      UNIX est une marque déposée concédée sous licence par X/Open Company,
+      Ltd.</para>
 
-          <para>Ce logiciel ou matériel et la documentation qui l’accompagne peuvent fournir des informations ou des liens donnant accès à des contenus, des produits et des services émanant de tiers. Oracle Corporation et ses affiliés déclinent toute responsabilité ou garantie expresse quant aux contenus, produits ou services émanant de tiers. En aucun cas, Oracle Corporation et ses affiliés ne sauraient être tenus pour responsables des pertes subies, des coûts occasionnés ou des dommages causés par l’accès à des contenus, produits ou services tiers, ou à leur utilisation.</para>
+      <para>Ce logiciel ou matériel et la documentation qui
+      l&apos;accompagne peuvent fournir des informations ou des
+      liens donnant accès à des contenus,
+      des produits et des services émanant de tiers.
+      Oracle Corporation et ses affiliés déclinent toute
+      responsabilité ou garantie expresse quant aux contenus,
+      produits ou services émanant de tiers.
+      En aucun cas, Oracle Corporation et ses affiliés ne
+      sauraient être tenus pour responsables des pertes subies,
+      des coûts occasionnés ou des dommages causés par
+      l&apos;accès à des contenus, produits ou services tiers,
+      ou à leur utilisation.</para>
 
 
       <para>This work is licensed under a Creative Commons Attribution-Share Alike 3.0 United States License. To view a copy of this license and obtain more information about Creative Commons licensing, visit <link xl:href="http://creativecommons.org/licenses/by-sa/3.0/us">Creative Commons Attribution-Share Alike 3.0 United States</link> or send a letter to Creative Commons, 171 2nd Street, Suite 300, San Francisco, California 94105, USA.</para>

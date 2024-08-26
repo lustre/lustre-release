@@ -59,7 +59,7 @@
           overwritten files from being released until the snapshot(s)
           referencing those files is deleted.  The file system administrator
           needs to establish a snapshot create/backup/remove policy according to
-          their system’s actual size and usage.</para>
+          their system&apos;s actual size and usage.</para>
       </section>
   </section>
   <section xml:id="zfssnapshotConfig">
@@ -523,7 +523,7 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
       modified. Renaming follows the general ZFS snapshot name rules, such as
       the maximum length is 256 bytes, cannot conflict with the reserved names,
       and so on.</para>
-      <para>To modify a snapshot’s attributes, use the following
+      <para>To modify a snapshot&apos;s attributes, use the following
       <literal>lctl</literal> command on the MGS:</para>
       <screen>lctl snapshot_modify [-c | --comment comment]
 &lt;-F | --fsname fsname&gt; [-h | --help] &lt;-n | --name ssname&gt;
@@ -607,11 +607,12 @@ comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
       taken, there may be user-visible namespace inconsistencies with files
       created or destroyed in the interval between the MDT and OST snapshots.
       In order to create a consistent snapshot of the file system, we are able
-      to set a global write barrier, or “freeze” the system. Once set, all
-      metadata modifications will be blocked until the write barrier is actively
-      removed (“thawed”) or expired. The user can set a timeout parameter on a
-      global barrier or the barrier can be explicitly removed. The default
-      timeout period is 30 seconds.</para>
+      to set a global write barrier, or &quot;freeze&quot; the system.
+      Once set, all metadata modifications will be blocked until the write
+      barrier is actively removed (&quot;thawed&quot;) or expired.
+      The user can set a timeout parameter on a
+      global barrier or the barrier can be explicitly removed.
+      The default timeout period is 30 seconds.</para>
       <para>It is important to note that snapshots are usable without the global
       barrier.  Only files that are currently being modified by clients (write,
       create, unlink) may be inconsistent as noted above if the barrier is not
@@ -774,18 +775,21 @@ The barrier will be expired after 7 seconds</screen>
                   </tbody>
               </tgroup>
           </table>
-          <para>If the barrier is in ’freezing_p1’, ’freezing_p2’ or ’frozen’
-          status, then the remaining lifetime will be returned also.</para>
+          <para>If the barrier is in <literal>freezing_p1</literal>,
+          <literal>freezing_p2</literal> or <literal>frozen</literal> status,
+          then the remaining lifetime will be returned also.</para>
       </section>
       <section xml:id="zfssnapshotBarrierRescan">
           <title><indexterm><primary>barrier</primary>
               <secondary>rescan</secondary></indexterm>Rescan Barrier
           </title>
           <para> To rescan a global write barrier to check which MDTs are
-          active, run the <literal>lctl barrier_rescan</literal> command on the
-          MGS:</para>
-          <screen>lctl barrier_rescan &lt;fsname&gt; [timeout (in seconds)],
-where the default timeout is 30 seconds.</screen>
+            active, run <literal>lctl barrier_rescan</literal>on the MGS
+            (with a default <replaceable>TIMEOUT_SEC</replaceable> of 30s):
+          </para>
+<screen>
+lctl barrier_rescan <replaceable>FSNAME</replaceable> [<replaceable>TIMEOUT_SEC</replaceable>]
+</screen>
           <para>For example, to rescan the barrier for filesystem
           <replaceable>testfs</replaceable>:</para>
           <screen>mgs# lctl barrier_rescan testfs

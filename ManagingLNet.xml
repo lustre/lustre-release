@@ -230,7 +230,7 @@ ents&quot;</screen>
           <para>All clients and all servers must get two rails of bandwidth.</para>
         </listitem>
       </itemizedlist>
-      <screen>ip2nets=â€   o2ib0(ib0),o2ib2(ib1)           192.168.[0-1].[0-252/2]       \
+      <screen>ip2nets=&quot;o2ib0(ib0),o2ib2(ib1)           192.168.[0-1].[0-252/2]       \
   #even servers;\
            o2ib1(ib0),o2ib3(ib1)           192.168.[0-1].[1-253/2]         \
 #odd servers;\

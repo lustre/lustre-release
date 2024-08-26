@@ -218,7 +218,7 @@ net:
         multi-rail configuration.  For the dynamic peer discovery capability
         introduced in Lustre Release 2.11.0, please see
         <xref linkend="lnet_config.dynamic_discovery" />.</para>
-        <para>When configuring peers, use the <literal>–-prim_nid</literal>
+        <para>When configuring peers, use the <literal>--prim_nid</literal>
             option to specify the key or primary nid of the peer node.  Then
             follow that with the <literal>--nid</literal> option to specify a
             set of comma separated NIDs.</para>

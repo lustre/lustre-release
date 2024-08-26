@@ -537,14 +537,18 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
 [--component-end|-E end1] [STRIPE_OPTIONS]
 [--component-end|-E end2] [STRIPE_OPTIONS] ... <replaceable>filename</replaceable></screen>
         <para>The <literal>-E</literal> option is used to specify the end offset
-          (in bytes or using a suffix “kMGTP”, e.g. 256M) of each component, and
-          it also indicates the following <literal>STRIPE_OPTIONS</literal> are
-          for this component. Each component defines the stripe pattern of the
+          (in bytes or using a suffix <literal>kMGTP</literal> e.g. 256M)
+          of each component,
+          and it also indicates the following <literal>STRIPE_OPTIONS</literal>
+          are for this component.
+          Each component defines the stripe pattern of the
           file in the range of [start, end). The first component must start from
           offset 0 and all components must be adjacent with each other, no holes
           are allowed, so each extent will start at the end of previous extent.
           A <literal>-1</literal> end offset or <literal>eof</literal> indicates
-          this is the last component extending to the end of file.</para>
+          this is the last component extending to the end of file.
+          If no <literal>EOF</literal>
+          </para>
         <para><emphasis role="bold">Example</emphasis></para>
         <screen>$ lfs setstripe -E 4M -c 1 -E 64M -c 4 -E -1 -c -1 -i 4 \
 /mnt/testfs/create_comp</screen>
@@ -600,7 +604,7 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
       lmm_pattern:       1
       lmm_layout_gen:    0
       lmm_stripe_offset: 4</screen>
-        <note><para>Only the first component’s OST objects of the PFL file are
+        <note><para>Only the first component's OST objects of the PFL file are
           instantiated when the layout is being set. Other instantiation is
           delayed to later write/truncate operations.</para></note>
         <para>If we write 128M data to this PFL file, the second and third
@@ -1344,7 +1348,7 @@ $ lfs setstripe -c 1 /mnt/testfs/testdir/dir_3comp/commnfile</screen>
 /mnt/testfs/testdir/4comp
 /mnt/testfs/testdir/dir_3comp/2comp</screen>
       <note><para>Since <literal>lfs find</literal> uses
-        &quot;<literal>!</literal>&quot; to do negative search, we don’t support
+        &quot;<literal>!</literal>&quot; to do negative search, we don't support
         flag <literal>^init</literal> here.</para></note>
     </section>
   </section>
@@ -1361,8 +1365,9 @@ $ lfs setstripe -c 1 /mnt/testfs/testdir/dir_3comp/commnfile</screen>
     applications are writing to them.</para>
     <para>Whereas PFL delays the instantiation of some components until an IO
     operation occurs on this region, SEL allows splitting such non-instantiated
-    components in two parts: an “extendable” component and an “extension”
-    component.  The extendable component is a regular PFL component, covering
+    components in two parts: an <emphasis>extendable</emphasis> component and
+    an <emphasis>extension</emphasis> component.
+    The extendable component is a regular PFL component, covering
     just a part of the region, which is small originally. The extension (or SEL)
     component is a new component type which is always non-instantiated and
     unassigned, covering the other part of the region. When a write reaches this
@@ -1379,29 +1384,29 @@ $ lfs setstripe -c 1 /mnt/testfs/testdir/dir_3comp/commnfile</screen>
     ways:</para>
     <orderedlist numeration="arabic">
       <listitem>
-        <para>Extension: continue on the same OSTs – used when not low on space
+        <para>Extension: continue on the same OST objects when not low on space
         on any of the OSTs of the current component; a particular extent is
 	granted to the extendable component.</para>
       </listitem>
       <listitem>
-        <para>Spill over: switch to next component OSTs – it is used only for
-	not the last component when <emphasis>at least one</emphasis>
+        <para>Spill over: switch to next component OSTs only 
+	when not the last component and <emphasis>at least one</emphasis>
 	of the current OSTs is low on space; the whole region of the SEL
 	component moves to the next component and the SEL component is removed
 	in its turn.</para>
       </listitem>
       <listitem>
       <para>Repeating: create a new component with the same layout but on
-        free OSTs – it is used only for the last component when <emphasis>
+        free OSTs, used only for the last component when <emphasis>
         at least one</emphasis> of the current OSTs is low on space; a new
         component has the same layout but instantiated on different OSTs (from
         the same pool) which have enough space.</para>
       </listitem>
       <listitem>
-        <para>Forced extension: continue with the current component OSTs despite
-        the low on space condition – it is used only for the last component when
-        a repeating attempt detected low on space condition as well - spillover
-        is impossible and there is no sense in the repeating.</para>
+        <para>Forced extension: continue with the current component OSTs when
+        there is a low on space condition for the last component OSTs, but
+        a repeating attempt detected low on space on other OSTs as well, then
+        spillover is impossible and there is no sense in the repeating.</para>
       </listitem>
       <listitem>
         <para>Each spill event increments the <literal>spill_hit</literal>
@@ -1874,7 +1879,8 @@ STRIPE OPTIONS:
         <para>The <literal>-z</literal> option is added to specify the extension
         size to search for.  The files which have any component with the
         extension size matched the given criteria are printed out. As always
-        “+” and “-“ signs are allowed to specify the least and the most size.
+        <literal>+</literal> and <literal>-</literal> signs are allowed to
+        specify the least and the most size.
         </para>
         <para>A new <literal>extension</literal> component flag is added.  Only
         files which have at least one SEL component are printed.</para>

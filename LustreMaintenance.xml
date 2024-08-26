@@ -388,7 +388,7 @@ mds# mkfs.lustre --reformat --fsname=<replaceable>testfs</replaceable> --mdt --m
         <listitem>
           <para>Mount the MDTs.</para>
 <screen>
-mds# mount –t lustre <replaceable>/dev/mdt4_blockdevice</replaceable> /mnt/mdt4
+mds# mount -t lustre <replaceable>/dev/mdt4_blockdevice</replaceable> /mnt/mdt4
 </screen>
         </listitem>
         <listitem>
@@ -816,12 +816,14 @@ Aborting Recovery</title>
     <section xml:id="lustremaint.determineOST">
       <title><indexterm><primary>maintenance</primary><secondary>identifying OST host</secondary></indexterm>
 Determining Which Machine is Serving an OST </title>
-      <para>In the course of administering a Lustre file system, you may need to determine which
-      machine is serving a specific OST. It is not as simple as identifying the machine’s IP
-      address, as IP is only one of several networking protocols that the Lustre software uses and,
-      as such, LNet does not use IP addresses as node identifiers, but NIDs instead. To identify the
-      NID that is serving a specific OST, run one of the following commands on a client (you do not
-      need to be a root user):
+      <para>In the course of administering a Lustre file system,
+        you may need to determine which machine is serving a specific OST.
+        It is not as simple as identifying the machine&apos;s IP address,
+        as IP is only one of several networking protocols that the Lustre
+        software uses and, as such, LNet does not use IP addresses as node
+        identifiers, but NIDs instead.
+        To identify the NID that is serving a specific OST, run one of the
+        following commands on a client (you do not need to be a root user):
       <screen>client$ lctl get_param osc.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>*.ost_conn_uuid</screen>
       For example:
       <screen>client$ lctl get_param osc.*-OST0000*.ost_conn_uuid 
@@ -917,7 +919,7 @@ mds# lctl get_param mdt.fs-MDT0000.readonly
 mdt.fs-MDT0000.readonly=1
 
 client$ touch test_file
-touch: cannot touch ‘test_file’: Read-only file system
+touch: cannot touch 'test_file': Read-only file system
 
 mds# lctl set_param mdt.fs-MDT0000.readonly=0
 mdt.fs-MDT0000.readonly=0</screen>

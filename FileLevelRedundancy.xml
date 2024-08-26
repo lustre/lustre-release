@@ -11,7 +11,7 @@
       redundancy and fault-tolerance. However, despite the expense and
       complexity of these storage systems, storage failures still occur, and
       before release 2.11, Lustre could not be more reliable than the
-      individual storage and servers’ components on which it was based. The
+      individual storage and server components on which it was based. The
       Lustre file system had no mechanism to mitigate storage hardware
       failures and files would become inaccessible if a server was inaccessible
       or otherwise out of service.</para>
@@ -179,9 +179,11 @@
       - 4: { l_ost_idx: 7, l_fid: [0x100070000:0x2:0x0] }
       - 5: { l_ost_idx: 2, l_fid: [0x100020000:0x2:0x0] }</screen>
       <para> The first mirror has 4MB stripe size and two stripes across OSTs in
-        the “flash” OST pool. The second mirror has 4MB stripe size inherited
-        from the first mirror, and stripes across all of the available OSTs in
-        the “archive” OST pool.</para>
+        the <literal>flash</literal> OST pool.
+        The second mirror has 4MB stripe size inherited from the first mirror,
+        and stripes across all of the available OSTs in the
+        <literal>archive</literal> OST pool.
+      </para>
       <para>As mentioned above, it is recommended to use the
         <literal>--pool|-p</literal> option (one of the
         <literal>lfs setstripe</literal> options) with OST pools configured with
@@ -215,9 +217,11 @@
         </itemizedlist>
       <para>The following command creates a mirrored file with 3 PFL mirrors:
       </para>
-      <screen>client# lfs mirror create -N -E 4M -p flash --flags=prefer -E eof -c 2 \
--N -E 16M -S 8M -c 4 -p archive --comp-flags=prefer -E eof -c -1 \
--N -E 32M -c 1 -p none -E eof -c -1 /mnt/testfs/file2</screen>
+<screen>
+client# lfs mirror create -N -E 4M -p flash --flags=prefer -E eof -c 2 \
+  -N -E 16M -S 8M -c 4 -p archive -E eof -c -1 \
+  -N -E 32M -c 1 -p archive2 -E eof -c -1 /mnt/testfs/file2
+</screen>
       <para>The following command displays the layout information of the
         mirrored file <literal>/mnt/testfs/file2</literal>:</para>
       <screen>client# lfs getstripe /mnt/testfs/file2
@@ -253,7 +257,7 @@
 
     lcme_id:             131075
     lcme_mirror_id:      2
-    lcme_flags:          init,prefer
+    lcme_flags:          init
     lcme_extent.e_start: 0
     lcme_extent.e_end:   16777216
       lmm_stripe_count:  4
@@ -290,8 +294,9 @@
       lmm_pattern:       raid0
       lmm_layout_gen:    0
       lmm_stripe_offset: 0
+      lmm_pool:          archive2
       lmm_objects:
-      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x3:0x0] }
+      - 0: { l_ost_idx: 8, l_fid: [0x3400000000:0x3:0x0] }
 
     lcme_id:             196614
     lcme_mirror_id:      3
@@ -302,27 +307,29 @@
       lmm_stripe_size:   8388608
       lmm_pattern:       raid0
       lmm_layout_gen:    0
-      lmm_stripe_offset: -1</screen>
+      lmm_stripe_offset: -1
+      lmm_pool:          archive2
+      </screen>
       <para>For the first mirror, the first component inherits the stripe count
         and stripe size from filesystem-wide default values. The second
         component inherits the stripe size and OST pool from the first
         component, and has two stripes. Both of the components are allocated
-        from the “flash” OST pool.  Also, the flag <literal>prefer</literal> is
+        from the <literal>flash</literal> OST pool.
+        Also, the flag <literal>prefer</literal> is
         applied to all the components of the first mirror, which tells the
         client to read data from those components whenever they are available.
       </para>
       <para>For the second mirror, the first component has an 8MB stripe size
-        and 4 stripes across OSTs in the “archive” OST pool. The second
-        component inherits the stripe size and OST pool from the first
-        component, and stripes across all of the available OSTs in the “archive”
-        OST pool. The flag <literal>prefer</literal> is only applied to the
-        first component.</para>
+        and 4 stripes across OSTs in the <literal>archive</literal> OST pool.
+        The second component inherits the stripe size and OST pool from the
+        first component, and stripes across all of the available OSTs in the
+        <literal>archive</literal> OST pool.
+      </para>
       <para>For the third mirror, the first component inherits the stripe size
         of 8MB from the last component of the second mirror, and has one single
-        stripe. The OST pool name is cleared and inherited from the parent
-        directory (if it was set with OST pool name). The second component
-        inherits stripe size from the first component, and stripes across all of
-        the available OSTs.</para>
+        stripe. The OST pool name is set to <literal>archive2</literal>.
+        The second component inherits stripe size from the first component,
+        and stripes across all of the available OSTs in that pool.</para>
     </section>
     <section xml:id="flr.operations.extendmirror">
       <title>Extending a Mirrored File</title>
@@ -984,10 +991,11 @@ ls: cannot access /mnt/testfs/victim_file: No such file or directory</screen>
       <para>The above layout information showed that data were written into the
         first component of mirror with ID <literal>1</literal>, and mirrors with
         ID <literal>2</literal> and <literal>3</literal> were marked with
-        “stale” flag.</para>
+        <literal>stale</literal> flag.</para>
       <para>Resynchronizing the stale mirror with ID <literal>2</literal> for
         the mirrored file <literal>/mnt/testfs/file1</literal>:</para>
-      <screen># lfs mirror resync --only 2 /mnt/testfs/file1
+<screen>
+# lfs mirror resync --only 2 /mnt/testfs/file1
 # lfs getstripe /mnt/testfs/file1
 /mnt/testfs/file1
   lcm_layout_gen:    7
@@ -1022,7 +1030,9 @@ ls: cannot access /mnt/testfs/victim_file: No such file or directory</screen>
     ......
 </screen>
       <para>The above layout information showed that after resynchronizing, the
-        “stale” flag was removed from mirror with ID <literal>2</literal>.</para>
+        <literal>stale</literal> flag was removed from mirror with ID
+        <literal>2</literal>.
+      </para>
       <para>Resynchronizing all of the stale mirrors for the mirrored file
         <literal>/mnt/testfs/file1</literal>:</para>
       <screen># lfs mirror resync /mnt/testfs/file1
@@ -1112,8 +1122,9 @@ ls: cannot access /mnt/testfs/victim_file: No such file or directory</screen>
         </tgroup>
       </informaltable>
       <para><emphasis role="strong">Note:</emphasis></para>
-      <para>Mirror components that have “stale” or “offline” flags will be
-        skipped and not verified.</para>
+      <para>Mirror components that have <literal>stale</literal> or
+        <literal>offline</literal> flags will be skipped and not verified.
+      </para>
       <para><emphasis role="strong">Examples:</emphasis></para>
       <para>The following command verifies that each mirror of a mirrored file
         contains exactly the same data:</para>
@@ -1238,12 +1249,12 @@ exceeds file size 0xa00000: skipped</screen>
                   files not matching <replaceable>state</replaceable>. Only one
                   state can be specified.</para>
                 <para>Valid state names are:</para>
-                <para><literal>ro</literal> – indicates the mirrored file is in
+                <para><literal>ro</literal> - indicates the mirrored file is in
                   read-only state. All of the mirrors contain the up-to-date
                   data.</para>
-                <para><literal>wp</literal> – indicates the mirrored file is in
+                <para><literal>wp</literal> - indicates the mirrored file is in
                   a state of being written.</para>
-                <para><literal>sp</literal> – indicates the mirrored file is in
+                <para><literal>sp</literal> - indicates the mirrored file is in
                   a state of being resynchronized.</para>
               </entry>
             </row>

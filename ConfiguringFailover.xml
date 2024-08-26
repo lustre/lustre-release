@@ -47,24 +47,25 @@
       <para>Failover in a Lustre file system requires the use of a remote
         power control (RPC) mechanism, which comes in different configurations.
         For example, Lustre server nodes may be equipped with IPMI/BMC devices
-        that allow remote power control. In the past, software or even
-        “sneakerware” has been used, but these are not recommended. For
-        recommended devices, refer to the list of supported RPC devices on the
-        website for the PowerMan cluster power management utility:</para>
+        that allow remote power control.
+        For recommended devices, refer to the list of supported RPC devices
+        on the website for the PowerMan cluster power management utility:</para>
       <para><link xmlns:xlink="http://www.w3.org/1999/xlink"
-             xlink:href="https://linux.die.net/man/7/powerman-devices">
-        https://linux.die.net/man/7/powerman-devices</link></para>
+        xlink:href="https://github.com/chaos/powerman/tree/master/etc/devices">
+        https://github.com/chaos/powerman/tree/master/etc/devices</link></para>
     </section>
     <section remap="h3">
       <title><indexterm>
           <primary>failover</primary>
           <secondary>power management software</secondary>
         </indexterm>Selecting Power Management Software</title>
-      <para>Lustre failover requires RPC and management capability to verify that a failed node is
-        shut down before I/O is directed to the failover node. This avoids double-mounting the two
-        nodes and the risk of unrecoverable data corruption. A variety of power management tools
-        will work. Two packages that have been commonly used with the Lustre software are PowerMan
-        and Linux-HA (aka. STONITH ).</para>
+      <para>Lustre failover requires RPC and management capability to verify
+        that a failed node is off before I/O is directed to the failover node.
+        This avoids double-mounting the two nodes and the risk of
+        unrecoverable data corruption.
+        A variety of power management tools will work.
+        Two packages that have been commonly used with the Lustre software
+        are PowerMan and Pacemaker.</para>
       <para>The PowerMan cluster power management utility is used to control
         RPC devices from a central location. PowerMan provides native support
         for several RPC varieties and Expect-like configuration simplifies
@@ -73,13 +74,12 @@
       <para><link xmlns:xlink="http://www.w3.org/1999/xlink"
              xlink:href="https://github.com/chaos/powerman">
           https://github.com/chaos/powerman</link></para>
-      <para>STONITH, or “Shoot The Other Node In The Head”, is a set of power management tools
-        provided with the Linux-HA package prior to Red Hat Enterprise Linux 6. Linux-HA has native
-        support for many power control devices, is extensible (uses Expect scripts to automate
-        control), and provides the software to detect and respond to failures. With Red Hat
-        Enterprise Linux 6, Linux-HA is being replaced in the open source community by the
-        combination of Corosync and Pacemaker. For Red Hat Enterprise Linux subscribers, cluster
-        management using CMAN is available from Red Hat.</para>
+      <para>STONITH, or &quot;Shoot The Other Node In The Head&quot;
+        is used in conjunction with High Availability node management.
+        This is implemented by Pacemaker to ensure that a peer node
+        that may be importing a shared storage device has been powered
+        off and will not corrupt the shared storage if it continues running.
+      </para>
     </section>
     <section>
       <title><indexterm>
@@ -120,11 +120,14 @@
     <para>The per-target configuration is relayed to the MGS at mount time. Some rules related to
       this are:<itemizedlist>
         <listitem>
-          <para> When a target is <emphasis role="underline"><emphasis role="italic"
-                >initially</emphasis></emphasis> mounted, the MGS reads the configuration
-            information from the target (such as mgt vs. ost, failnode, fsname) to configure the
-            target into a Lustre file system. If the MGS is reading the initial mount configuration,
-            the mounting node becomes that target's “primary” node.</para>
+          <para> When a target is
+            <emphasis role="italic">initially</emphasis> mounted,
+            the MGS reads the configuration information from the target
+            (such as mgt vs. ost, failnode, fsname) to configure the
+            target into a Lustre file system.
+            If the MGS is reading the initial mount configuration,
+            the mounting node becomes that target's &quot;primary&quot; node.
+          </para>
         </listitem>
         <listitem>
           <para>When a target is <emphasis role="underline"><emphasis role="italic"
