@@ -105,6 +105,32 @@ command_t changelog_cmdlist[] = {
 };
 JT_SUBCMD(changelog);
 
+/**
+ * command_t net_drop_cmdlist - lctl net_drop commands.
+ */
+command_t net_drop_cmdlist[] = {
+	{.pc_name = "add", .pc_func = jt_ptl_drop_add,
+	 .pc_help = "Add LNet drop rule\n"
+	 "usage: net_drop add {-s | --source NID}\n"
+	 "		      {-d | --dest NID}\n"
+	 "		      {{-r | --rate DROP_RATE} | {-i | --interval SECONDS}}\n"
+	 "		      [-p | --portal PORTAL...]\n"
+	 "		      [-m | --message {PUT|ACK|GET|REPLY...}]\n"
+	 "		      [-e | --health_error]"},
+	{.pc_name = "del", .pc_func = jt_ptl_drop_del,
+	 .pc_help = "remove LNet drop rule\n"
+	 "usage: net_drop del {-a | --all} |\n"
+	 "		      {{-s | --source NID} {-d | --dest NID}}"},
+	{.pc_name = "reset", .pc_func = jt_ptl_drop_reset,
+	 .pc_help = "reset drop rule stats\n"
+	 "usage: net_drop reset"},
+	{.pc_name = "list", .pc_func = jt_ptl_drop_list,
+	 .pc_help = "list LNet drop rules\n"
+	 "usage: net_drop list"},
+	{ .pc_help = NULL }
+};
+JT_SUBCMD(net_drop);
+
 #ifdef HAVE_SERVER_SUPPORT
 /**
  * command_t barrier_cmdlist - lctl barrier commands.
@@ -245,22 +271,23 @@ command_t cmdlist[] = {
 	 "usage: show_route"},
 	{"ping", jt_ptl_ping, 0, "Check LNET connectivity\n"
 	 "usage: ping nid [timeout [pid]]"},
+
 	{"net_drop_add", jt_ptl_drop_add, 0, "Add LNet drop rule\n"
-	 "usage: net_drop_add <-s | --source NID>\n"
-	 "		      <-d | --dest NID>\n"
-	 "		      <<-r | --rate DROP_RATE> |\n"
-	 "		      <-i | --interval SECONDS>>\n"
-	 "		      [<-p | --portal> PORTAL...]\n"
-	 "		      [<-m | --message> <PUT|ACK|GET|REPLY>...]\n"
-	 "		      [< -e | --health_error]\n"},
+	 "usage: net_drop_add {-s | --source NID}\n"
+	 "		      {-d | --dest NID}\n"
+	 "		      {{-r | --rate DROP_RATE} | {-i | --interval SECONDS}}\n"
+	 "		      [-p | --portal PORTAL...]\n"
+	 "		      [-m | --message {PUT|ACK|GET|REPLY...}]\n"
+	 "		      [-e | --health_error]"},
 	{"net_drop_del", jt_ptl_drop_del, 0, "remove LNet drop rule\n"
-	 "usage: net_drop_del <[-a | --all] |\n"
-	 "		      <-s | --source NID>\n"
-	 "		      <-d | --dest NID>>\n"},
+	 "usage: net_drop_del {-a | --all} |\n"
+	 "		      {{-s | --source NID} {-d | --dest NID}}"},
 	{"net_drop_reset", jt_ptl_drop_reset, 0, "reset drop rule stats\n"
 	 "usage: net_drop_reset"},
 	{"net_drop_list", jt_ptl_drop_list, 0, "list LNet drop rules\n"
 	 "usage: net_drop_list"},
+	{"net_drop", jt_net_drop, net_drop_cmdlist, ""},
+
 	{"net_delay_add", jt_ptl_delay_add, 0, "Add LNet delay rule\n"
 	 "usage: net_delay_add <-s | --source NID>\n"
 	 "		       <-d | --dest NID>\n"
