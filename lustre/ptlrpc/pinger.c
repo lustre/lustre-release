@@ -481,6 +481,10 @@ static int ping_evictor_main(void *arg)
 				       obd_evict_list);
 		spin_unlock(&pet_lock);
 
+		if (!strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME))
+			CFS_FAIL_TIMEOUT(OBD_FAIL_OBD_PAUSE_EVICTOR,
+					 PING_INTERVAL + PING_EVICT_TIMEOUT);
+
 		expire_time = ktime_get_real_seconds() - PING_EVICT_TIMEOUT;
 
 		CDEBUG(D_HA, "evicting all exports of obd %s older than %lld\n",

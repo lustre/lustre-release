@@ -237,9 +237,9 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 
 	if (OCD_HAS_FLAG(data, PINGLESS)) {
 		if (ptlrpc_pinger_suppress_pings()) {
-			spin_lock(&exp->exp_obd->obd_dev_lock);
-			list_del_init(&exp->exp_obd_chain_timed);
-			spin_unlock(&exp->exp_obd->obd_dev_lock);
+			spin_lock(&exp->exp_lock);
+			exp->exp_not_timed = 1;
+			spin_unlock(&exp->exp_lock);
 		} else {
 			data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
 		}

@@ -3774,6 +3774,24 @@ test_160() {
 }
 run_test 160 "MDT destroys are blocked by grouplocks"
 
+test_161() {
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+	local ping_interval=$($LCTL get_param -n ping_interval)
+	local evict_multiplier=$($LCTL get_param -n evict_multiplier)
+	local pause=$((ping_interval * (evict_multiplier + 2)))
+
+	#define OBD_FAIL_OBD_PAUSE_EVICTOR	    0x60f
+	do_facet mds1 $LCTL set_param fail_loc=0x8000060f
+
+	$LFS mkdir -i 1 $DIR/$tdir || error "mkdir $tdir"
+	$LFS mkdir -i 0 $DIR/$tdir/remote || error "mkdir $tdir/remote"
+
+	echo sleep $pause seconds
+	sleep $pause
+	rmdir $DIR/$tdir/remote || error "rmdir $tdir/remote"
+}
+run_test 161 "evict osp by ping evictor"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

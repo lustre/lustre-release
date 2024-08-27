@@ -850,8 +850,9 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 	int rc = 0;
 
 	ENTRY;
-	hdl = &exp->exp_imp_reverse->imp_remote_handle;
-	if (!exp->exp_connection || !lustre_handle_is_used(hdl)) {
+
+	if (!exp->exp_connection ||
+	    !lustre_handle_is_used(&exp->exp_imp_reverse->imp_remote_handle)) {
 		conn->cookie = exp->exp_handle.h_cookie;
 		CDEBUG(D_HA,
 		       "connect export for UUID '%s' at %p, cookie %#llx\n",
@@ -860,6 +861,7 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 	}
 
 	target = exp->exp_obd;
+	hdl = &exp->exp_imp_reverse->imp_remote_handle;
 
 	/* Might be a re-connect after a partition. */
 	if (memcmp(&conn->cookie, &hdl->cookie, sizeof(conn->cookie))) {
@@ -995,6 +997,12 @@ int rev_import_init(struct obd_export *export)
 	spin_unlock(&export->exp_lock);
 	class_import_put(revimp);
 
+	if (!export->exp_not_timed) {
+		spin_lock(&obd->obd_dev_lock);
+		list_add_tail(&export->exp_obd_chain_timed,
+			      &obd->obd_exports_timed);
+		spin_unlock(&obd->obd_dev_lock);
+	}
 	return 0;
 }
 EXPORT_SYMBOL(rev_import_init);
@@ -1431,8 +1439,16 @@ dont_check_exports:
 		rc = obd_reconnect(req->rq_svc_thread->t_env,
 				   export, target, &cluuid, data,
 				   &req->rq_peer.nid);
-		if (rc == 0)
+		if (rc == 0) {
 			reconnected = true;
+			/*
+			 * In case of recovery,
+			 * tgt_clients_data_init() created the export,
+			 * exp_imp_reverse is still needed.
+			 */
+			if (export->exp_imp_reverse == NULL)
+				rc = rev_import_init(export);
+		}
 	}
 	if (rc)
 		GOTO(out, rc);
@@ -1480,6 +1496,10 @@ dont_check_exports:
 			 * for each connect called disconnect
 			 * should be called to cleanup stuff
 			 */
+			spin_lock(&target->obd_dev_lock);
+			list_del_init(&export->exp_obd_chain_timed);
+			spin_unlock(&target->obd_dev_lock);
+
 			class_export_get(export);
 			obd_disconnect(export);
 		}

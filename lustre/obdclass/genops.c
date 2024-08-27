@@ -982,6 +982,7 @@ static struct obd_export *__class_new_export(struct obd_device *obd,
 	spin_lock_init(&export->exp_bl_list_lock);
 	INIT_LIST_HEAD(&export->exp_bl_list);
 	INIT_LIST_HEAD(&export->exp_stale_list);
+	INIT_LIST_HEAD(&export->exp_obd_chain_timed);
 	INIT_WORK(&export->exp_zombie_work, obd_zombie_exp_cull);
 
 	export->exp_sp_peer = LUSTRE_SP_ANY;
@@ -1010,12 +1011,9 @@ static struct obd_export *__class_new_export(struct obd_device *obd,
 
 	if (!is_self) {
 		class_incref(obd, "export", export);
-		list_add_tail(&export->exp_obd_chain_timed,
-			      &obd->obd_exports_timed);
 		list_add(&export->exp_obd_chain, &obd->obd_exports);
 		obd->obd_num_exports++;
 	} else {
-		INIT_LIST_HEAD(&export->exp_obd_chain_timed);
 		INIT_LIST_HEAD(&export->exp_obd_chain);
 	}
 	spin_unlock(&obd->obd_dev_lock);
