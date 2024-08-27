@@ -10984,6 +10984,11 @@ __changelog_deregister() {
 	local cl_user=$2
 	local rc=0
 
+	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+		changelog_deregister="changelog deregister"
+	else
+		changelog_deregister="changelog_deregister"
+	fi
 	# skip cleanup if no user registered for this MDT
 	[ -z "$cl_user" ] && echo "$mdt: no changelog user" && return 0
 	# user is no longer registered, skip cleanup
@@ -10993,12 +10998,17 @@ __changelog_deregister() {
 	# From this point, if any operation fails, it is an error
 	__changelog_clear $facet $cl_user 0 ||
 		error_noexit "$mdt: changelog_clear $cl_user 0 fail: $rc"
-	do_facet $facet $LCTL --device $mdt changelog_deregister $cl_user ||
+	do_facet $facet $LCTL --device $mdt $changelog_deregister $cl_user ||
 		error_noexit "$mdt: changelog_deregister '$cl_user' fail: $rc"
 }
 
 declare -Ax CL_USERS
 changelog_register() {
+	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+		changelog_register="changelog register"
+	else
+		changelog_register="changelog_register"
+	fi
 	for M in $(seq $MDSCOUNT); do
 		local facet=mds$M
 		local mdt="$(facet_svc $facet)"
@@ -11013,7 +11023,7 @@ changelog_register() {
 
 		local cl_user
 		cl_user=$(do_facet $facet $LCTL --device $mdt \
-			changelog_register -n "$@") ||
+			$changelog_register -n "$@") ||
 			error "$mdt: register changelog user failed: $?"
 		stack_trap "__changelog_deregister $facet $cl_user" EXIT
 
