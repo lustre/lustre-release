@@ -6306,6 +6306,28 @@ test_42() {
 }
 run_test 42 "LFSCK can repair inconsistent MDT-object/OST-object encryption flags"
 
+test_44() {
+	lfsck_prep 3 3
+
+	#define OBD_FAIL_LFSCK_DELAY1		0x1600
+	do_facet $SINGLEMDS $LCTL set_param fail_val=3 fail_loc=0x1600
+	$START_NAMESPACE -r || error "(31) Fail to start LFSCK for namespace!"
+	$STOP_LFSCK &
+	sleep 1
+	$STOP_LFSCK && error "(32) LFSCK_STOP had to fail"
+	stop $SINGLEMDS
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
+	start_facet $SINGLEMDS
+	wait
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(33) unexpected status"
+	}
+}
+run_test 44 "umount while lfsck is stopping"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

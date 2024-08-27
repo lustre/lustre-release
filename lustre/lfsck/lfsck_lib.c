@@ -3386,8 +3386,8 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 		/* no error if LFSCK stopped already, or not started */
 		GOTO(unlock, rc = 0);
 
-	if (thread_is_stopping(thread))
-		/* Someone is stopping LFSCK. */
+	if (thread_is_stopping(thread) && stop->ls_status != LS_PAUSED)
+		/* Someone is stopping LFSCK and it is not umount. */
 		GOTO(unlock, rc = -EINPROGRESS);
 
 	if (stop) {
