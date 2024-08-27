@@ -1,7 +1,6 @@
-.TH llapi_layout_comp_extent_get 3 "2017 Apr 7" "Lustre User API"
+.TH LLAPI_LAYOUT_COMP_EXTENT_GET 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_layout_comp_extent_get, llapi_layout_comp_extent_set \- get or set the
-extent of a layout component.
+llapi_layout_comp_extent_get, llapi_layout_comp_extent_set \- get or set the extent of a layout component.
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -13,7 +12,6 @@ extent of a layout component.
 .BI "                                 uint64_t " start ", uint64_t "end );
 .fi
 .SH DESCRIPTION
-.PP
 The extent [start, end) defines the range of a layout component.
 .PP
 .BR llapi_layout_comp_extent_get (3)
@@ -25,9 +23,10 @@ and
 .IR end .
 .PP
 .BR llapi_layout_comp_extent_set (3)
-sets the extent [\fIstart\fR, \fIend\fR) to the current component of
+sets the extent
+.RI [ start ", " end )
+to the current component of
 .IR layout .
-.PP
 .SH RETURN VALUES
 .B llapi_layout_comp_extent_get()
 and
@@ -36,9 +35,17 @@ return 0 on success, or -1 if an error occurred (in which case, errno is
 set appropriately).
 .SH ERRORS
 .TP 15
-.SM EINVAL
+.B EINVAL
 An invalid argument was specified.
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.B llapi_layout_comp_extent_get()
+and
+.B llapi_layout_comp_extent_set()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.10.0
+.\" Added in commit v2_9_55_0-18-gc4702b7443
+.SH SEE ALSO
 .BR llapi_layout_alloc (3),
 .BR llapi_layout_file_open (3),
 .BR llapi_layout (7),

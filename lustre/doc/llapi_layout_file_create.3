@@ -1,4 +1,4 @@
-.TH llapi_layout_file_open 3 "2013 Oct 31" "Lustre User API"
+.TH LLAPI_LAYOUT_FILE_CREATE 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_layout_file_open, llapi_layout_file_create \- open and apply a layout to a Lustre file
 .SH SYNOPSIS
@@ -12,7 +12,6 @@ llapi_layout_file_open, llapi_layout_file_create \- open and apply a layout to a
 .BI "                             const struct llapi_layout *" layout );
 .fi
 .SH DESCRIPTION
-.LP
 The functions
 .B llapi_layout_file_open()
 and
@@ -79,7 +78,6 @@ to
 See
 .BR llapi_layout_pool_name_set (3).
 .SH RETURN VALUES
-.LP
 .B llapi_layout_file_open()
 and
 .B llapi_layout_file_create()
@@ -87,16 +85,24 @@ return a new file descriptor, or -1 if an error occurred (in which
 case, errno is set appropriately).
 .SH ERRORS
 .TP 15
-.SM ENOTTY
+.B ENOTTY
 .I path
 does not reside on a Lustre filesystem.
 .TP
-.SM EINVAL
+.B EINVAL
 An invalid argument was specified.
-.SH "SEE ALSO"
-.BR llapi_layout (7),
-.BR lustreapi (7),
+.SH AVAILABILITY
+.B llapi_layout_file_open()
+and
+.B llapi_layout_file_create()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.7.0
+.\" Added in commit v2_6_51_0-23-g3d3a37c9c8
+.SH SEE ALSO
+.BR close (2),
+.BR open (2),
 .BR llapi_layout_alloc (3),
 .BR llapi_layout_pool_name_set (3),
-.BR open (2),
-.BR close (2)
+.BR llapi_layout (7),
+.BR lustreapi (7)

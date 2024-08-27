@@ -1,7 +1,6 @@
-.TH llapi_layout_extension_size_get 3 "2019 May 23" "Lustre User API"
+.TH LLAPI_LAYOUT_EXTENSION_SIZE_GET 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_layout_extension_size_get, llapi_layout_extension_size_set \- get or set
-the extension size of an extension component of a Lustre file
+llapi_layout_extension_size_get, llapi_layout_extension_size_set \- get or set the extension size of an extension component of a Lustre file
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -13,18 +12,22 @@ the extension size of an extension component of a Lustre file
 .BI "                                    uint64_t " ext_size );
 .fi
 .SH DESCRIPTION
-.PP
 The extension size is the unit of increase the previous component size when
-writing within the region of the current extension component. At the time of the
-change the OSTs of the previous component layout are checked if they have
-at least \fIext_size\fR free space. In case there is not enough free space,
+writing within the region of the current extension component.
+At the time of the change the OSTs of the previous component layout
+are checked if they have at least
+.I ext_size
+free space. In case there is not enough free space,
 the space covered by the extension component spills over to the next component
-(see examples in \fBlfs-setstripe (1)\fR).
+(see examples in
+.BR lfs-setstripe (1)).
 .PP
 In case of a random write to a middle of the extension component, the extension
 happens from the beginning of the extension component up to the current writing
-position plus the \fIext_size\fR. However, the check for low space is still
-done for the \fIext_size\fR.
+position plus the
+.IR ext_size .
+However, the check for low space is still done for the
+.IR ext_size .
 .PP
 .B llapi_layout_extension_size_get()
 stores into
@@ -45,13 +48,21 @@ return 0 on success, or -1 if an error occurred (in which case, errno is
 set appropriately).
 .SH ERRORS
 .TP 15
-.SM EINVAL
+.B EINVAL
 An invalid argument was specified.
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.B llapi_layout_extension_size_get()
+and
+.B llapi_layout_extension_size_set()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.13.0.
+.\" Added in commit v2_12_55-82-gfed241911f
+.SH SEE ALSO
 .BR lfs-setstripe (1),
 .BR llapi_layout_alloc (3),
 .BR llapi_layout_file_open (3),
-.BR llapi_layout_stripe_size_set (3),
 .BR llapi_layout_stripe_size_get (3),
+.BR llapi_layout_stripe_size_set (3),
 .BR llapi_layout (7),
 .BR lustreapi (7)

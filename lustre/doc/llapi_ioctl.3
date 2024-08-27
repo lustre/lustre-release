@@ -1,13 +1,13 @@
-.TH lustreapi 3 "2023 Mar 22" Lustre user application interface library
+.TH LLAPI_IOCTL 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_ioctl \- call ioctl() with possible command remapping
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
-.sp
+.PP
 .BI "int llapi_ioctl(int " fd ", unsigned int " cmd ", void *" buf ");"
+.fi
 .SH DESCRIPTION
-.LP
 .B llapi_ioctl()
 calls the
 .BR ioctl (2)
@@ -18,7 +18,6 @@ system call with the supplied arguments.  However, if the ioctl() returns
 has been remapped from an older ioctl command number the ioctl() call will
 be retried with the old ioctl command number.
 .SH RETURN VALUES
-.LP
 .B llapi_ioctl()
 typically returns:
 .TP
@@ -35,35 +34,40 @@ and errno as appropriate for the
 number, and argument
 .I buf
 passed.
-.SH "EXAMPLE"
+.SH EXAMPLES
 .nf
 #include <lustre/lustreapi.h>
-
+\&
 int main(int argc, char *argv[])
 {
         unsigned long group = 1234;
         int rc, fd;
-
+\&
         fd = open(argv[1], O_RDONLY);
         if (rc < 0) {
                 fprintf(stderr, "error opening file '%s': %s\\n",
                         argv[1], strerror(errno));
                 return -1;
         }
-
+\&
         rc = llapi_ioctl(fd, LL_IOC_GROUP_LOCK, &group);
         if (rc < 0) {
                 fprintf(stderr, "%s: ioctl error: %s\\n",
                         argv[1], strerror(errno));
                 return rc;
         }
-
+\&
         printf("%s: locked with group %lu\\n", argv[1], group);
         return 0;
 }
 .fi
-.SH "SEE ALSO"
-.BR lustre (7),
+.SH AVAILABILITY
+.B llapi_ioctl()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.16.0
+.\" Added in commit v2_15_55-173-g594b780062
+.SH SEE ALSO
 .BR ioctl (2),
+.BR lustre (7),
 .BR lustreapi (7)
-
