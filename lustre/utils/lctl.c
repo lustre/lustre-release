@@ -131,6 +131,32 @@ command_t net_drop_cmdlist[] = {
 };
 JT_SUBCMD(net_drop);
 
+/**
+ * command_t net_delay_cmdlist - lctl net_delay commands.
+ */
+command_t net_delay_cmdlist[] = {
+	{.pc_name = "add", .pc_func = jt_ptl_delay_add,
+	 .pc_help = "Add LNet delay rule\n"
+	 "usage: net_delay add {-s | --source NID}\n"
+	 "		       {-d | --dest NID}\n"
+	 "		       {{-r | --rate DELAY_RATE} | {-i | --interval SECONDS}}\n"
+	 "		       {-l | --latency SECONDS>\n"
+	 "		       [-p | --portal PORTAL...]\n"
+	 "		       [-m | --message {PUT|ACK|GET|REPLY...}]"},
+	{.pc_name = "del", .pc_func = jt_ptl_delay_del,
+	 .pc_help = "remove LNet delay rule\n"
+	 "usage: net_delay del {-a | --all} |\n"
+	 "		       {{-s | --source NID} {-d | --dest NID}}"},
+	{.pc_name = "reset", .pc_func = jt_ptl_delay_reset,
+	 .pc_help = "reset delay rule stats\n"
+	 "usage: net_delay reset"},
+	{.pc_name = "list", .pc_func = jt_ptl_delay_list,
+	 .pc_help = "list LNet delay rules\n"
+	 "usage: net_delay list"},
+	{.pc_help = NULL }
+};
+JT_SUBCMD(net_delay);
+
 #ifdef HAVE_SERVER_SUPPORT
 /**
  * command_t barrier_cmdlist - lctl barrier commands.
@@ -289,21 +315,20 @@ command_t cmdlist[] = {
 	{"net_drop", jt_net_drop, net_drop_cmdlist, ""},
 
 	{"net_delay_add", jt_ptl_delay_add, 0, "Add LNet delay rule\n"
-	 "usage: net_delay_add <-s | --source NID>\n"
-	 "		       <-d | --dest NID>\n"
-	 "		       <<-r | --rate DROP_RATE> |\n"
-	 "			<-i | --interval SECONDS>>\n"
-	 "		       <-l | --latency SECONDS>\n"
-	 "		       [<-p | --portal> PORTAL...]\n"
-	 "		       [<-m | --message> <PUT|ACK|GET|REPLY>...]\n"},
+	 "usage: net_delay_add {-s | --source NID}\n"
+	 "		       {-d | --dest NID}\n"
+	 "		       {{-r | --rate DELAY_RATE} | {-i | --interval SECONDS}}\n"
+	 "		       {-l | --latency SECONDS>\n"
+	 "		       [-p | --portal PORTAL...]\n"
+	 "		       [-m | --message {PUT|ACK|GET|REPLY...}]"},
 	{"net_delay_del", jt_ptl_delay_del, 0, "remove LNet delay rule\n"
-	 "usage: net_delay_del <[-a | --all] |\n"
-	 "		       <-s | --source NID>\n"
-	 "		       <-d | --dest NID>>\n"},
+	 "usage: net_delay_del {-a | --all} |\n"
+	 "		       {{-s | --source NID} {-d | --dest NID}}"},
 	{"net_delay_reset", jt_ptl_delay_reset, 0, "reset delay rule stats\n"
 	 "usage: net_delay_reset"},
 	{"net_delay_list", jt_ptl_delay_list, 0, "list LNet delay rules\n"
 	 "usage: net_delay_list"},
+	{"net_delay", jt_net_delay, net_delay_cmdlist, ""},
 
 	/* Device selection commands */
 	{"==== obd device selection ====", NULL, 0, "device selection"},

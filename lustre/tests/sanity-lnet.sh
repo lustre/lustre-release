@@ -3757,9 +3757,17 @@ do_expired_message_drop_test() {
 
 	delay=$((tto + 1))
 
+	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+		net_delay_add="net_delay add"
+		net_delay_del="net_delay del"
+	else
+		net_delay_add="net_delay_add"
+		net_delay_del="net_delay_del"
+	fi
+
 	for lnid in "${LNIDS[@]}"; do
 		for rnid in "${RNIDS[@]}"; do
-			$LCTL net_delay_add -s "${lnid}" -d "${rnid}" \
+			$LCTL $net_delay_add -s "${lnid}" -d "${rnid}" \
 				-l "${delay}" -r 1 -m GET ||
 				error "Failed to add delay rule"
 		done
@@ -3800,7 +3808,7 @@ do_expired_message_drop_test() {
 
 	sleep ${delay}
 
-	$LCTL net_delay_del -a
+	$LCTL $net_delay_del -a
 
 	wait
 
