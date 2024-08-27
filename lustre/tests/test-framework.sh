@@ -10670,34 +10670,45 @@ killall_process () {
 	do_nodes $clients "killall $signal $name"
 }
 
+lsnapshot () {
+	local cmd=$1
+	shift
+
+	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+		do_facet mgs "$LCTL snapshot $cmd -F $FSNAME $*"
+	else
+		do_facet mgs "$LCTL snapshot_$cmd -F $FSNAME $*"
+	fi
+}
+
 lsnapshot_create()
 {
-	do_facet mgs "$LCTL snapshot_create -F $FSNAME $*"
+	lsnapshot create $*
 }
 
 lsnapshot_destroy()
 {
-	do_facet mgs "$LCTL snapshot_destroy -F $FSNAME $*"
+	lsnapshot destroy $*
 }
 
 lsnapshot_modify()
 {
-	do_facet mgs "$LCTL snapshot_modify -F $FSNAME $*"
+	lsnapshot modify $*
 }
 
 lsnapshot_list()
 {
-	do_facet mgs "$LCTL snapshot_list -F $FSNAME $*"
+	lsnapshot list $*
 }
 
 lsnapshot_mount()
 {
-	do_facet mgs "$LCTL snapshot_mount -F $FSNAME $*"
+	lsnapshot mount $*
 }
 
 lsnapshot_umount()
 {
-	do_facet mgs "$LCTL snapshot_umount -F $FSNAME $*"
+	lsnapshot umount $*
 }
 
 lss_err()
