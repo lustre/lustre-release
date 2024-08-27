@@ -9882,7 +9882,7 @@ quota_type:
 			fprintf(stderr, "%s quota: no quota type to iterate\n",
 				progname);
 			rc = CMD_HELP;
-			return rc;
+			goto out;
 		}
 
 		if (end_qid != 0 && start_qid > end_qid) {
@@ -9890,7 +9890,7 @@ quota_type:
 				"%s quota: end qid is smaller than start qid\n",
 				progname);
 			rc = CMD_HELP;
-			return rc;
+			goto out;
 		}
 
 		qctl->qc_allquota_qid_start = start_qid;
@@ -10520,7 +10520,7 @@ static int lfs_fid2path(int argc, char **argv)
 		goto out;
 	}
 
-	if (*path_or_fsname == '/') {
+	if (path_or_fsname && *path_or_fsname == '/') {
 		print_mnt_dir = true;
 		rc = llapi_search_mounts(path_or_fsname, 0, mnt_dir, NULL);
 	} else {

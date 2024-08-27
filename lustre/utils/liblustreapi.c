@@ -1678,18 +1678,19 @@ again:
 		struct stat st;
 
 		did_nofollow = true;
-		if (stat(path, &st) != 0)
-			return -errno;
-		if (S_ISFIFO(st.st_mode))
-			fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
-		else
-			fd = open(path, O_RDONLY | O_NOFOLLOW);
+		fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
 		if (fd < 0) {
 			/* restore original errno */
 			errno = ENOTTY;
 			return ret;
 		}
-
+		if (fstat(fd, &st) != 0) {
+			errno = ENOTTY;
+			close(fd);
+			return ret;
+		}
+		if (!S_ISFIFO(st.st_mode))
+			fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK);
 		/* close original fd and set new */
 		close(*d);
 		*d = fd;
@@ -3884,26 +3885,26 @@ lov_forge_comp_v1(struct lov_user_mds_data *orig, bool is_dir)
 	struct lov_user_mds_data *new;
 	struct lov_comp_md_v1 *comp_v1;
 	struct lov_comp_md_entry_v1 *ent;
+	int lumd_hdr = offsetof(typeof(*new), lmd_lmm);
 	int lum_off = sizeof(*comp_v1) + sizeof(*ent);
 	int lum_size = lov_user_md_size(is_dir ? 0 : lum->lmm_stripe_count,
 					lum->lmm_magic);
 
-	new = malloc(offsetof(typeof(*new), lmd_lmm) + lum_off + lum_size);
+	new = malloc(sizeof(*new) + sizeof(*ent) + lum_size);
 	if (new == NULL) {
 		llapi_printf(LLAPI_MSG_NORMAL, "out of memory\n");
 		return new;
 	}
-
-	memcpy(new, orig, sizeof(new->lmd_stx) + sizeof(new->lmd_flags)
-	       + sizeof(new->lmd_lmmsize));
-
+	/* struct lov_user_mds_data header */
+	memcpy(new, orig, lumd_hdr);
+	/* fill comp_v1 */
 	comp_v1 = (struct lov_comp_md_v1 *)&new->lmd_lmm;
 	comp_v1->lcm_magic = lum->lmm_magic;
 	comp_v1->lcm_size = lum_off + lum_size;
 	comp_v1->lcm_layout_gen = is_dir ? 0 : lum->lmm_layout_gen;
 	comp_v1->lcm_flags = 0;
 	comp_v1->lcm_entry_count = 1;
-
+	/* fill entry */
 	ent = &comp_v1->lcm_entries[0];
 	ent->lcme_id = 0;
 	ent->lcme_flags = is_dir ? 0 : LCME_FL_INIT;
@@ -3911,8 +3912,8 @@ lov_forge_comp_v1(struct lov_user_mds_data *orig, bool is_dir)
 	ent->lcme_extent.e_end = LUSTRE_EOF;
 	ent->lcme_offset = lum_off;
 	ent->lcme_size = lum_size;
-
-	memcpy((char *)comp_v1 + lum_off, lum, lum_size);
+	/* fill blob at end of entry */
+	memcpy((char *)&comp_v1->lcm_entries[1], lum, lum_size);
 
 	return new;
 }
@@ -5735,6 +5736,7 @@ static int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
 			strncpy(lu_project.project_name, base_name, NAME_MAX);
 
 		ret = ioctl(dir_fd, LL_IOC_PROJECT, &lu_project);
+		close(dir_fd);
 		if (ret) {
 			llapi_error(LLAPI_MSG_ERROR, -ENOENT,
 				    "warning: %s: failed to get xattr for '%s': %s",
@@ -5742,7 +5744,6 @@ static int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
 			return -errno;
 		}
 		*projid = lu_project.project_id;
-		close(dir_fd);
 	}
 
 	return 0;
@@ -6760,19 +6761,22 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 		 * to get LMV just in case, and by opening it as a file but
 		 * with O_NOFOLLOW ...
 		 */
-		int flag = O_RDONLY;
+		int flag = O_RDONLY | O_NONBLOCK;
 
 		if (param->fp_no_follow)
-			flag = O_RDONLY | O_NOFOLLOW;
-		if (stat(path, &st) != 0)
-			return -errno;
-		if (S_ISFIFO(st.st_mode))
-			flag |= O_NONBLOCK;
+			flag |= O_NOFOLLOW;
 
 		fd = open(path, flag);
-
 		if (fd == -1)
 			return 0;
+		if (fstat(fd, &st) != 0) {
+			ret = -errno;
+			close(fd);
+			return ret;
+		}
+		/* clear O_NONBLOCK for non-PIPEs */
+		if (!S_ISFIFO(st.st_mode))
+			fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK);
 		ret = cb_get_dirstripe(path, &fd, param);
 		if (ret == 0)
 			llapi_lov_dump_user_lmm(param, path, LDF_IS_DIR);
