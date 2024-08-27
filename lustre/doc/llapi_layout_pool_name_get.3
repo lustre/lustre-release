@@ -1,19 +1,17 @@
-.TH llapi_layout_pool_name_get 3 "2013 Oct 31" "Lustre User API"
+.TH LLAPI_LAYOUT_POOL_NAME_GET 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_layout_pool_name_get, llapi_layout_pool_name_set \- get or set the
-OST pool name of a Lustre file
+llapi_layout_pool_name_get, llapi_layout_pool_name_set \- get or set the OST pool name of a Lustre file
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
 .BI "int llapi_layout_pool_name_get(const struct llapi_layout *" layout ",
 .BI "                               char *" pool_name ", size_t " n ");
-.sp
+.PP
 .BI "int llapi_layout_pool_name_set(struct llapi_layout *" layout ",
 .BI "                               const char *" pool_name );
 .fi
 .SH DESCRIPTION
-.PP
 .B llapi_layout_pool_name_get()
 stores into
 .I pool_name
@@ -45,7 +43,6 @@ will fail if given a
 .I layout
 with a pool that does not exist or contains no OSTs.
 .SH RETURN VALUES
-.LP
 .B llapi_layout_pool_name_get()
 and
 .B llapi_layout_pool_name_set()
@@ -53,10 +50,9 @@ return 0 on success, or -1 if an error occurred (in which case, errno is
 set appropriately).
 .SH ERRORS
 .TP 15
-.SM EINVAL
+.B EINVAL
 An invalid argument was specified.
 .SH NOTES
-.PP
 A pool defines a set of OSTs from which objects may be allocated
 to store a file in a Lustre filesystem.
 Pools are created by the filesystem administrator using the
@@ -66,9 +62,17 @@ existing pool, or to query the name of a pool that a file was created
 in. It does not provide an interface for creating or destroying pools.
 Refer to the Lustre Operations Manual for detailed background material
 about OST pools.
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.B llapi_layout_pool_name_get()
+and
+.B llapi_layout_pool_name_set()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.7.0
+.\" Added in commit v2_6_51_0-23-g3d3a37c9c8
+.SH SEE ALSO
+.BR lctl (1),
 .BR llapi_layout_alloc (3),
 .BR llapi_layout_file_open (3),
 .BR llapi_layout (7),
-.BR lustreapi (7),
-.BR lctl (1)
+.BR lustreapi (7)

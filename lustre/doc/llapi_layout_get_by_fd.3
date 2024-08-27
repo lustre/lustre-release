@@ -1,7 +1,6 @@
-.TH llapi_layout_get_by_fd 3 "2013 Oct 31" "Lustre User API"
+.TH LLAPI_LAYOUT_GET_BY_FD 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_layout_get_by_fd, llapi_layout_get_by_fid, llapi_layout_get_by_path, \-
-obtain the layout of a Lustre file
+llapi_layout_get_by_fd, llapi_layout_get_by_fid, llapi_layout_get_by_path, llapi_layout_get_by_xattr \- obtain the layout of a Lustre file
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -21,7 +20,6 @@ obtain the layout of a Lustre file
 .BI "                                     enum llapi_layout_get_flags " flags );
 .fi
 .SH DESCRIPTION
-.PP
 The functions
 .BR llapi_layout_get_by_xattr() ,
 .BR llapi_layout_get_by_fd() ,
@@ -36,11 +34,11 @@ containing the layout information for the file referenced by
 .IR fid ,
 or
 .IR path ,
-respectively.  The
+respectively. The
 .B struct llapi_layout
 is an opaque entity containing the layout information for a file in a
-Lustre filesystem.  Its internal structure should not be directly
-accessed by an application.  See
+Lustre filesystem. Its internal structure should not be directly
+accessed by an application. See
 .BR llapi_layout (7).
 The pointer should be freed with
 .B llapi_layout_free()
@@ -67,7 +65,7 @@ For
 identifies the Lustre filesystem containing the file represented by
 .IR fid .
 It is typically the filesystem root directory, but may also be any path beneath
-the root.  Use the function
+the root. Use the function
 .BR llapi_path2fid (3)
 to obtain a
 .B struct lu_fid
@@ -81,7 +79,7 @@ argument that names a file or directory in a Lustre filesystem.
 .PP
 Zero or more flags may be bitwise-or'd together in
 .I flags
-to control how a layout is retrieved.  Currently
+to control how a layout is retrieved. Currently
 .B llapi_layout_get_by_fd()
 and
 .B llapi_layout_get_by_fid()
@@ -91,7 +89,7 @@ while
 .B llapi_layout_get_by_path()
 accepts only one flag as follows:
 .TP 5
-.SM LLAPI_LAYOUT_GET_EXPECTED
+.B LLAPI_LAYOUT_GET_EXPECTED
 Unspecified attribute values are replaced by the literal default values
 that will be assigned when the file is created or first written to.
 A default value is inherited from the parent directory if the attribute
@@ -100,29 +98,29 @@ This flag is only recognized by
 .BR llapi_layout_get_by_path() .
 Unspecified attributes may belong to directories and never-written-to
 files.
-.sp
+.P
 By default, layouts report the abstract value
 .B LLAPI_LAYOUT_DEFAULT
-to indicate an unspecified attribute.  Use
+to indicate an unspecified attribute. Use
 .B LLAPI_LAYOUT_GET_EXPECTED
 to discover the expected literal values for new files in a given
-directory.  Do not use it if you need to distinguish between specified
-and unspecified attributes.  The flag has no effect if
+directory. Do not use it if you need to distinguish between specified
+and unspecified attributes. The flag has no effect if
 .I path
 names a file or directory with a fully specified layout.
-.sp
+.P
 For concreteness, consider a Lustre filesystem with a default stripe
-size of 1048576 and a default stripe count of 1.  A user sets the stripe
+size of 1048576 and a default stripe count of 1. A user sets the stripe
 count for directory D to 2 (thus overriding the filesystem-wide
-default) but leaves the stripe size unspecified.  Newly created files in
+default) but leaves the stripe size unspecified. Newly created files in
 D inherit a stripe count of 2 from D and a stripe size of 1048576 from
-the filesystem default.  The layout of D returned by
+the filesystem default. The layout of D returned by
 .B llapi_layout_get_by_path(D, 0)
 has the abstract stripe size value
 .BR LLAPI_LAYOUT_DEFAULT ,
 since stripe size is unspecified, while
 .B llapi_layout_get_by_path(D, LLAPI_LAYOUT_GET_EXPECTED)
-reports the literal value 1048576.  Both forms report a stripe count
+reports the literal value 1048576. Both forms report a stripe count
 of 2, since that attribute is specified.
 .PP
 Valid arguments for
@@ -131,7 +129,7 @@ with
 .B llapi_layout_get_by_xattr()
 are:
 .TP 5
-.SM LLAPI_LAYOUT_GET_CHECK
+.B LLAPI_LAYOUT_GET_CHECK
 If the
 .B LLAPI_LAYOUT_GET_CHECK
 flag is set, this function will check whether the objects count in lum
@@ -139,7 +137,7 @@ is consistent with the stripe count in lum. This check only apply to
 regular files, so it should not be passed if the xattr is a default
 layout from a directory.
 .TP
-.SM LLAPI_LAYOUT_GET_COPY
+.B LLAPI_LAYOUT_GET_COPY
 If the
 .B LLAPI_LAYOUT_GET_COPY
 flag is set, this function will use a temporary buffer for byte swapping
@@ -148,14 +146,6 @@ when necessary, leaving
 unmodified. Otherwise, the byte swapping will be done to the fields of the
 .I lov_xattr
 buffer directly.
-.SH NOTE
-When using these functions to copy an existing file's layout to create a
-new file with
-.B llapi_layout_file_open (3)
-for mirroring, migration, or as the template for a new file,
-.BR llapi_layout_ost_index_reset (3)
-should be called to reset the OST index values for each component, so that
-the file copy is not created on exactly the same OSTs as the original file.
 .SH RETURN VALUES
 These functions return a valid pointer on success or
 .B NULL
@@ -164,22 +154,40 @@ on failure with
 set to an appropriate error code.
 .SH ERRORS
 .TP 15
-.SM ENOMEM
+.B ENOMEM
 Insufficient storage space is available.
 .TP
-.SM ENOTTY
+.B ENOTTY
 File does not reside on a Lustre filesystem.
 .TP
-.SM ENOENT
+.B ENOENT
 .I path
 does not exist.
 .TP
-.SM EINVAL
+.B EINVAL
 An invalid argument was specified.
 .TP
-.SM EINTR
+.B EINTR
 The kernel returned less than the expected amount of data.
-.SH "SEE ALSO"
+.SH NOTES
+When using these functions to copy an existing file's layout to create a
+new file with
+.B llapi_layout_file_open (3)
+for mirroring, migration, or as the template for a new file,
+.BR llapi_layout_ost_index_reset (3)
+should be called to reset the OST index values for each component, so that
+the file copy is not created on exactly the same OSTs as the original file.
+.SH AVAILABILITY
+.BR llapi_layout_get_by_fd(),
+.BR llapi_layout_get_by_fid(),
+.B llapi_layout_get_by_path()
+and
+.B llapi_layout_get_by_xattr()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.7.0
+.\" Added in commit v2_6_51_0-23-g3d3a37c9c8
+.SH SEE ALSO
 .BR llapi_layout_file_open (3),
 .BR llapi_layout_ost_index_reset (3),
 .BR llapi_path2fid (3),

@@ -1,7 +1,6 @@
-.TH llapi_layout_stripe_count_get 3 "2013 Oct 31" "Lustre User API"
+.TH LLAPI_LAYOUT_STRIPE_COUNT_GET 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_layout_stripe_count_get, llapi_layout_stripe_count_set \- get or set the
-stripe count of a Lustre file
+llapi_layout_stripe_count_get, llapi_layout_stripe_count_set \- get or set the stripe count of a Lustre file
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -13,7 +12,6 @@ stripe count of a Lustre file
 .BI "                                  uint64_t " stripe_count );
 .fi
 .SH DESCRIPTION
-.PP
 The stripe count of a Lustre file defines the number of OSTs used to
 store the file.
 .PP
@@ -48,9 +46,17 @@ return 0 on success, or -1 if an error occurred (in which case, errno is
 set appropriately).
 .SH ERRORS
 .TP 15
-.SM EINVAL
+.B EINVAL
 An invalid argument was specified.
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.B llapi_layout_stripe_count_get()
+and
+.B llapi_layout_stripe_count_set()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.7.0
+.\" Added in commit v2_6_51_0-23-g3d3a37c9c8
+.SH SEE ALSO
 .BR llapi_layout_alloc (3),
 .BR llapi_layout_file_open (3),
 .BR llapi_layout (7),
