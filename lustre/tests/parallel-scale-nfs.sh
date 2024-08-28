@@ -101,6 +101,43 @@ get_mpiuser_id $MPI_USER
 MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
 $GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 
+test_1() {
+	local src_file=/tmp/testfile.txt
+	local dst_file=$TESTDIR/$tfile
+	local native_file=$MOUNT/${dst_file#$NFS_CLIMNTPT}
+	local mode=644
+	local got
+
+	touch $src_file
+	chmod $mode $src_file
+
+	cp -p $src_file $dst_file || error "copy  $src_file->$dst_file failed"
+
+	stat $dst_file
+	got="$(stat -c %a $dst_file)"
+	[[ "$got" == "$mode" ]] || error "permissions mismatch on '$dst_file'"
+
+	local xattr=system.posix_acl_access
+	local lustre_xattrs=$(do_node $LUSTRE_CLIENT_NFSSRV \
+		"getfattr -d -m - -e hex $native_file")
+
+	echo $lustre_xattrs
+	# If this fails then the mountpoint is non-Lustre or does
+	# not exist because we failed to find a native mountpoint
+	[[ "$lustre_xattrs" =~ "trusted.link" ]] ||
+		error "no trusted.link xattr in '$native_file'"
+
+	[[ "$lustre_xattrs" =~ "$xattr" ]] &&
+		error "found unexpected $xattr in '$native_file'"
+
+	do_node $LUSTRE_CLIENT_NFSSRV "stat $native_file"
+	got=$(do_node $LUSTRE_CLIENT_NFSSRV "stat -c %a $native_file")
+	[[ "$got" == "$mode" ]] || error "permission mismatch on '$native_file'"
+
+	rm -f $src_file $dst_file
+}
+run_test 1 "test copy with attributes"
+
 test_compilebench() {
 	if [[ "$TESTSUITE" =~ "parallel-scale-nfs" ]]; then
 		skip "LU-12957 and LU-13068: compilebench for $TESTSUITE"
