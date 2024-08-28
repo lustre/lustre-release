@@ -1494,6 +1494,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT2_CONN_POLICY);
 	LASSERTF(OBD_CONNECT2_MIRROR_ID_FIX == 0x2000000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_MIRROR_ID_FIX);
+	LASSERTF(OBD_CONNECT2_UPDATE_LAYOUT == 0x4000000000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT2_UPDATE_LAYOUT);
 
 	LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)OBD_CKSUM_CRC32);
@@ -5180,6 +5182,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)LAYOUT_INTENT_PCCRO_SET);
 	LASSERTF(LAYOUT_INTENT_PCCRO_CLEAR == 8, "found %lld\n",
 		 (long long)LAYOUT_INTENT_PCCRO_CLEAR);
+	LASSERTF(LAYOUT_INTENT_CHANGE == 9, "found %lld\n",
+		 (long long)LAYOUT_INTENT_CHANGE);
+	LASSERTF(LAIF_INCOMPRESSIBLE == 1, "found %lld\n",
+		 (long long)LAIF_INCOMPRESSIBLE);
 
 	/* Checks for struct hsm_action_item */
 	LASSERTF((int)sizeof(struct hsm_action_item) == 72, "found %lld\n",

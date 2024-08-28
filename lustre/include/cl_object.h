@@ -172,6 +172,7 @@ enum cl_attr_valid {
 	CAT_UID		= BIT(7),
 	CAT_GID		= BIT(8),
 	CAT_PROJID	= BIT(9),
+	CAT_COMPRESSIBLE= BIT(10),
 };
 
 /**

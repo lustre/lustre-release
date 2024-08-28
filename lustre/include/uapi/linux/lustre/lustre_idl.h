@@ -846,6 +846,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_UNALIGNED_DIO	0x400000000ULL /* unaligned DIO */
 #define OBD_CONNECT2_CONN_POLICY	0x800000000ULL /* server-side connection policy */
 #define OBD_CONNECT2_MIRROR_ID_FIX     0x2000000000ULL /* rr_mirror_id move */
+#define OBD_CONNECT2_UPDATE_LAYOUT     0x4000000000ULL /* update compressibility */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.  Email adilger@whamcloud.com
@@ -3439,6 +3440,16 @@ enum layout_intent_opc {
 	LAYOUT_INTENT_RESTORE	= 6,	/** reserved for HSM restore */
 	LAYOUT_INTENT_PCCRO_SET	= 7,	/** set read-only layout for PCC */
 	LAYOUT_INTENT_PCCRO_CLEAR = 8,	/** clear read-only layout */
+	LAYOUT_INTENT_CHANGE    = 9,    /** change layout flag */
+};
+
+/**
+ * used for lai_flags/lai_values, 32bit field; if a bit is set in lai_flags,
+ * and the corresponding bit value in lai_values determines whether that state
+ * should be set or cleared.
+ */
+enum layout_intent_flags {
+	LAIF_INCOMPRESSIBLE	= 1U << 0,   /* 0x0001 change compressibility */
 };
 
 /* enqueue layout lock with intent */
