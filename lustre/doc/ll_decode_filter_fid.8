@@ -1,11 +1,11 @@
-.TH ll_decode_filter_fid 1 "Dec 15, 2010" Lustre "utilities"
+.TH LL_DECODE_FILTER_FID 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 ll_decode_filter_fid \- display Lustre Object ID and MDT parent FID
 .SH SYNOPSIS
-.B ll_decode_filter_fid
+.SY ll_decode_filter_fid
 .I object_file
 .RI [ "object_file ..." ]
-.br
+.YS
 .SH DESCRIPTION
 .B ll_decode_filter_fid
 decodes and prints the Lustre OST object ID and MDT FID and stripe index
@@ -20,17 +20,14 @@ modified by Lustre after that time.
 .PP
 The OST object ID (objid) is useful in case of OST directory corruption,
 though normally the
-.SH EXAMPLE
-.fi
-root@oss1# cd /mnt/ost/lost+found
-.fi
-root@oss1# ll_decode_filter_fid #12345[4,5,8]
-.fi
-#123454: objid=690670 seq=0 parent=[0x751c5:0xfce6e605:0x0]
-.fi
-#123455: objid=614725 seq=0 parent=[0x18d11:0xebba84eb:0x1]
-.fi
-#123458: objid=533088 seq=0 parent=[0x21417:0x19734d61:0x0]
+.SH EXAMPLES
+.EX
+.B root@oss1# cd /mnt/ost/lost+found
+.B root@oss1# ll_decode_filter_fid #12345[4,5,8]
+\&#123454: objid=690670 seq=0 parent=[0x751c5:0xfce6e605:0x0]
+\&#123455: objid=614725 seq=0 parent=[0x18d11:0xebba84eb:0x1]
+\&#123458: objid=533088 seq=0 parent=[0x21417:0x19734d61:0x0]
+.EE
 .PP
 This shows that the 3 files in lost+found have decimal object IDs 690670,
 614725, and 533088, respectively.  The object sequence number (formerly
@@ -48,5 +45,11 @@ the internal inode number.
 .PP
 The idx field shows the stripe number of this OST object in the Lustre
 RAID-0 striped file.
+.SH AVAILABILITY
+.B ll_decode_filter_fid
+is part of the
+.BR lustre (7)
+filesystem package since release 2.0.0
+.\" Added in commit v1_10_0_43-39-g48ee13b5ee
 .SH SEE ALSO
-.BR lustre (7),
+.BR lustre (7)

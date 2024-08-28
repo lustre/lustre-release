@@ -1,26 +1,30 @@
-.TH llverfs 8 "2023 Apr 23" Lustre "configuration utilities"
+.TH LLVERFS 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 llverfs - filesystem verification tool for ldiskfs based on ext3vt
 .SH SYNOPSIS
-.BI llverfs
+.SY llverfs
 .RB [ -c
 .I CHUNKSIZE_MB
 .RB ]
 .RB [ -h ]
 .RB [ -o
 .IR OFFSET_KB ]
-.RB [ -l "] [" -p "] [" -r ]
+.RB [ -l ]
+.RB [ -p ]
+.RB [ -r ]
 .RB [ -s
 .IR SIZE_MB ]
 .RB [ -t
 .IR TIMESTAMP ]
-.RB [ -v "] [" -w ]
+.RB [ -v ]
+.RB [ -w ]
 .I DEVICE
+.YS
 .SH DESCRIPTION
 This program tests the correct operation of large filesystems and
 the underlying block storage device(s).
 This tool has two working modes:
-
+.P
 In full mode, the program creates a subdirectory in the test
 filesystem, writes n (files_in_dir, default=32) large (4GB) files to
 the directory with the test pattern at the start of each 4KB block.
@@ -29,7 +33,7 @@ run), relative file offset and per-file unique identifier (inode number,
 to detect data written to the wrong location on disk). This continues
 until the whole filesystem is full and then the tool verifies that the data
 in all of the test files is correct.
-
+.P
 In partial mode, the tool creates test directories with the
 EXT2_TOPDIR_FL flag set (if supported) to spread the directory data
 around the block device instead of localizing it in a single place.
@@ -39,25 +43,28 @@ then writes a single 1MB file in each directory. The tool then verifies
 that the data in each file is correct.
 .SH OPTIONS
 .TP
-.BR -c | --chunksize " \fICHUNKSIZE_MB"
+.BR -c ", " --chunksize " \fICHUNKSIZE_MB"
 IO chunk size in megabytes (default=1), with optional KMG suffix.
 .TP
-.BR -h | --help
+.BR -h ", " --help
 Display a brief help message.
 .TP
-.BR -l | --long | --full
+.BR -l ", " --long | --full
 Run a full check, 4GB files with 4k blocks
 .TP
-.BR -n | --num_dirs " \fICOUNT"
-\fICOUNT\fR number of sub-directories to create. (\fICOUNT\fR must be >0 and <= INT_MAX)
+.BR -n ", " --num_dirs " \fICOUNT"
+.I COUNT
+number of sub-directories to create.
+.RI ( COUNT
+must be >0 and <= INT_MAX)
 .TP
-.BR -o | --offset " \fIOFFSET_KB"
+.BR -o ", " --offset " \fIOFFSET_KB"
 offset of IO start in kilobytes (default=0), with optional KMGTP suffix.
 .TP
-.BR -p | --partial
+.BR -p ", " --partial
 Run a partial check, with 1MB files
 .TP
-.BR -r | --read
+.BR -r ", " --read
 Run test in read (verify) mode only, after having run the test in
 .B -w
 mode previously. The flag
@@ -66,20 +73,26 @@ is also needed in this case, using the timestamp printed out during the
 .B --write
 run.
 .TP
-.BR -s | --filesize " \fISIZE_MB"
+.BR -s ", " --filesize " \fISIZE_MB"
 File size in megabytes to use for the test, with optional KMGTP
-suffix.  The default is 4096MB.
+suffix. The default is 4096MB.
 .TP
-.BR -t | --timestamp " \fITIMESTAMP"
+.BR -t ", " --timestamp " \fITIMESTAMP"
 Set test start time as printed at the start of a previously interrupted test.
 This is to ensure that read phases (or multiple read phases) after a separate
 write phase will be able to check the validation data.
 (default=current time())
 .TP
-.BR -v | --verbose
+.BR -v ", " --verbose
 Run test in verbose mode, listing each read and write operation.
 .TP
-.BR -w | --write
+.BR -w ", " --write
 Run test in write (test-pattern) mode (default run both read and write)
+.SH AVAILABILITY
+.B llverfs
+is part of the
+.BR lustre (7)
+filesystem package since release 1.4.0
+.\" Added in commit 1.3.4-1130-g113303973e
 .SH SEE ALSO
 .BR llverdev (8)

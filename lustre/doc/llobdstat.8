@@ -1,25 +1,27 @@
-.TH llobdstat 1 "Jul 7, 2008" Lustre "utilities"
+.TH LLOBDSTAT 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 llobdstat \- display OST statistics
 .SH SYNOPSIS
-.B "llobdstat ost_name [interval]"
-.br
+.SY llobdstat
+.I ost_name
+.RI [ interval ]
+.YS
 .SH DESCRIPTION
 .B llobdstat
 displays a line of OST statistics for the given
-.I ost_name
+.I OST_NAME
 every
-.I interval
+.I INTERVAL
 seconds.  It should be run directly on an OSS node.
 Type control-C to stop statistics printing.
-.SH EXAMPLE
-.nf
-# llobdstat liane-OST0002 1
+.SH EXAMPLES
+.EX
+.B # llobdstat liane-OST0002 1
 /usr/bin/llobdstat on liane-OST0002
 Processor counters run at 2800.189 MHz
 Read: 1.21431e+07, Write: 9.93363e+08, create/destroy: 24/1499, stat: 34, punch: 18
 [NOTE: cx: create, dx: destroy, st: statfs, pu: punch ]
-
+\&
 Timestamp   Read-delta  ReadRate  Write-delta  WriteRate
 --------------------------------------------------------
 1217026053    0.00MB    0.00MB/s     0.00MB    0.00MB/s
@@ -29,5 +31,13 @@ Timestamp   Read-delta  ReadRate  Write-delta  WriteRate
 1217026057    0.00MB    0.00MB/s     0.00MB    0.00MB/s
 1217026058    0.00MB    0.00MB/s     0.00MB    0.00MB/s
 1217026059    0.00MB    0.00MB/s     0.00MB    0.00MB/s st:1
-...
-.fi
+\&...
+.EE
+.SH AVAILABILITY
+.B llobdstat
+is part of the
+.BR lustre (7)
+filesystem package since release 0.8.0
+.\" Added in commit 0.7.1-38-g576c9a8212
+.SH SEE ALSO
+.BR lljobstat (8)

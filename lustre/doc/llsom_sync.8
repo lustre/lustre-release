@@ -1,92 +1,93 @@
-.TH llsom_sync 8 "2018 Jan 10" Lustre "Lustre Filesystem utility"
+.TH LLSOM_SYNC 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 llsom_sync \- Utility to sync file LSOM xattr.
 .SH SYNOPSIS
-.br
-.B llsom_sync --mdt|-m <mdt>  --user|-u <user id>
-.br
-.B\t\t\t [--daemonize|-d] [--verbose|-v] [--interval|-i]
-.br
-.B\t\t\t [--min-age|-a] [--max-cache|-c] [--sync|-s] <lustre_mount_point>
-.br
-
+.SY llsom_sync
+.RB { --mdt | -m }\c
+.BI = MDT
+.RB { --user | -u }\c
+.BI = USER_ID
+.RB [ --daemonize | -d ]
+.RB [ --verbose | -v ]
+.RB [ --interval | -i ]
+.RB [ --min-age | -a ]
+.RB [ --max-cache | -c ]
+.RB [ --sync | -s ]
+.I LUSTRE_MOUNT_POINT
+.YS
 .SH DESCRIPTION
 .B llsom_sync
 is designed to sync file LSOM xattr in the Lustre Filesystem by
 using Lustre MDT changelogs.  A changelog user must be registered
 (see lctl (8) changelog_register) before using this tool.
-
 .SH OPTIONS
-
-.B --mdt=<mdt>
-.br
+.TP
+.BR -m ", " --mdt= \fIMDT
 The metadata device which need to be synced the LSOM xattr of files.
 A changelog user must be registered for this device.
-
-.B --user=<user id>
-.br
+.TP
+.BR -u ", " --user= \fIUSER_ID
 The changelog user id for the above MDT device. See lctl(8) changelog_register.
-
+.TP
 .B --daemonize
-.br
-Daemonize the program. In daemon mode, the utility will scan, process the
-changelog records and sync the LSOM xattr for files periodically.
-
+Daemonize the program. In daemon mode, the utility will scan,
+process the changelog records and sync the LSOM xattr for files periodically.
+.TP
 .B --verbose
-.br
 Produce a verbose output.
-
+.TP
 .B --interval
-.br
 The time interval to scan the Lustre changelog and process the log record in
 daemon mode.
-
+.TP
 .B --min-age
-.br
 The time that llsom_sync tool will not try to sync the SOM data for any files
-closed less than this many seconds old. The default min-age value is 600s
-(10 minutes).
-
+closed less than this many seconds old.
+The default min-age value is 600s (10 minutes).
+.TP
 .B --max-cache
-.br
 The total memory used for the FID cache which can be with a suffix [KkGgMm].
 The default max-cache value is 256MB. For the parameter value < 100, it is
 taken as the percentage of total memory size used for the FID cache instead
 of the cache size.
-
+.TP
 .B --sync
-.br
 Sync file data to make the dirty data out of cache to ensure the blocks count
 is correct when update the file LSOM xattr. This option could hurt server
 performance significantly if thousands of fsync requests are sent.
-
 .SH EXAMPLES
-
-.TP
-Register a changelog consumer for MDT lustre-MDT0000
-$ cl_user=$(ssh root@mds01 lctl --device lustre-MDT0000 changelog_register -n)
-.br
-$ echo $cl_user
-.br
+Register a changelog consumer for MDT lustre-MDT0000:
+.RS
+.EX
+.B # cl_user=$(ssh root@mds01 lctl --device lustre-MDT0000 changelog_register -n)
+.B # echo $cl_user
 cl1
-
-.TP
+.EE
+.RE
+.PP
 After perform some file operations on the Lustre Filesystem with
 mount point '/mnt/lustre' and the filesystem undergoes some changes,
 sync file LSOM xattr:
-$ llsom_sync --mdt=lustre-MDT0000 --user=$cl_user \\
-.br
-             --verbose /mnt/lustre
-
-.TP
+.RS
+.EX
+.B # llsom_sync --mdt=lustre-MDT0000 --user=$cl_user --verbose /mnt/lustre
+.EE
+.RE
+.PP
 To deregister the changelog user (e.g. after this example, or if SOM
 updates are no longer needed):
-.br
-$ ssh root@mds01 lctl --device lustre-MDT0000 changelog_deregister $cl_user
-
-.SH AUTHOR
-The llsom_sync command is part of the Lustre filesystem.
-
+.RS
+.EX
+.B # ssh root@mds01 lctl --device lustre-MDT0000 changelog_deregister $cl_user
+.EE
+.RE
+.SH AVAILABILITY
+The
+.B llsom_sync
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.12.0
+.\" Added in commit v2_11_53_0-60-gcaba6b9af0
 .SH SEE ALSO
 .BR lustre (7),
 .BR lctl (8)

@@ -1,57 +1,62 @@
-.TH llog_reader 8 "2009 Apr 02" Lustre "System management commands"
+.TH LLOG_READER 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 llog_reader \- lustre on-disk log parsing utility
 .SH SYNOPSIS
-.B "llog_reader filename"
-.br
+.SY llog_reader
+.I FILENAME
+.YS
 .SH DESCRIPTION
 .B llog_reader
 parses the binary format of Lustre's on-disk configuration logs.
-It can only read the logs.  Use
+It can only read the logs. Use
 .B tunefs.lustre
 to write to them.
-.LP
+.SH CAVEATS
+Although they are stored in the CONFIGS directory,
+.I mountdata
+files do not use the config log format and will confuse
+.BR llog_reader .
+.SH EXAMPLES
 To examine a log file on a stopped Lustre server, first mount its
 backing file system as ldiskfs, then use
 .B llog_reader
-to dump the log file's contents, e.g.
-.IP
-.nf
-mount -t ldiskfs /dev/sda /mnt/mgs
+to dump the log file's contents:
+.RS
+.EX
+.B # mount -t ldiskfs /dev/sda /mnt/mgs
 llog_reader /mnt/mgs/CONFIGS/tfs-client
-.fi
-.LP
+.EE
+.RE
+.PP
 To examine the same log file on a running Lustre server, use the
 ldiskfs-enabled debugfs utility (called
 .B debug.ldiskfs
-on some distros) to extract the file, e.g.
-.IP
-.nf
-debugfs -c -R 'dump CONFIGS/tfs-client /tmp/tfs-client' /dev/sda
+on some distros) to extract the file:
+.RS
+.EX
+.B # debugfs -c -R 'dump CONFIGS/tfs-client /tmp/tfs-client' /dev/sda
 llog_reader /tmp/tfs-client
-.fi
-.LP
+.EE
+.RE
+.PP
 To examine Changelog records on a stopped Lustre server, first mount its
 backing file system as ldiskfs, then use
 .B llog_reader
-to dump the log changelog's contents, e.g.
-.IP
-.nf
-# mount -t ldiskfs /dev/sda /mnt/mgs
-# llog_reader /mnt/mgs/changelog_catalog
+to dump the log changelog's contents:
+.RS
+.EX
+.B # mount -t ldiskfs /dev/sda /mnt/mgs
+.B # llog_reader /mnt/mgs/changelog_catalog
 rec #1 type=1064553b len=64 offset 8192
 Header size : 8192
 Time : Mon Jan 22 23:28:24 2018
 Number of records: 1
 Target uuid :
 -----------------------
-.fi
-#01 (064)id=[0x5:0x1:0x0]:0 path=
-.B "O/1/d5/5"
-
-# llog_reader /mnt/mgs/
-.B O/1/d5/5
-.nf
+\&#01 (064)id=[0x5:0x1:0x0]:0 path=
+.I "O/1/d5/5"
+.B # llog_reader /mnt/mgs/
+.I O/1/d5/5
 rec #1 type=10660000 len=136 offset 8192
 rec #2 type=10660000 len=136 offset 8328
 rec #3 type=10660000 len=128 offset 8464
@@ -60,16 +65,21 @@ Time : Mon Jan 22 23:30:01 2018
 Number of records: 3
 Target uuid :
 -----------------------
-#01 (136)changelog record id:0x0 cr_flags:0x9000 cr_type:CREAT(0x1)
+\&#01 (136)changelog record id:0x0 cr_flags:0x9000 cr_type:CREAT(0x1)
 date:'14:30:01.370700741 2018.01.22' target:[0x200000402:0x1:0x0]
 cr_extra_flags:0x3 user:0:0 nid:10.128.11.159@tcp parent:[0x200000007:0x1:0x0]
 name:fileA
-.fi
-.SH CAVEATS
-Although they are stored in the CONFIGS directory, \fImountdata\fR
-files do not use the config log format and will confuse \fBllog_reader\fR.
+.EE
+.RE
+.SH AVAILABILITY
+.B llog_reader
+is part of the
+.BR lustre (7)
+filesystem package since release 1.4.0
+.\" Added in commit 1.3.4-1130-g113303973e
 .SH SEE ALSO
-Lustre Operations Manual, Section 21.1, \fITroubleshooting Lustre\fR.
-.br
 .BR lustre (7),
 .BR tunefs.lustre (8)
+.P
+Lustre Operations Manual,
+.IR "Troubleshooting Lustre" .

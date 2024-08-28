@@ -2,23 +2,24 @@
 .\" Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
 .\" This file may be copied under the terms of the GNU Public License, v2.
 .\"
-.TH llverdev 8 "2008 Mar 15" Lustre "configuration utilities"
+.TH LLVERDEV 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 llverdev - verify a block device is functioning properly over its full size
 .SH SYNOPSIS
-.BI llverdev
+.SY llverdev
 .RB [ -c
-.IR chunksize ]
+.IR CHUNKSIZE ]
 .RB [ -f "] [" -h ]
 .RB [ -o
-.IR offset_kb ]
+.IR OFFSET_KB ]
 .RB [ -l "] [" -p "] [" -r ]
 .RB [ -s
-.IR size_mb ]
+.IR SIZE_MB ]
 .RB [ -t
-.IR timestamp ]
+.IR TIMESTAMP ]
 .RB [ -v "] [" -w ]
-.I device
+.I DEVICE
+.YS
 .SH DESCRIPTION
 Sometimes kernel drivers or hardware devices have bugs that prevent them from
 accessing the full device size correctly, or possibly have bad sectors on disk
@@ -42,68 +43,76 @@ so it is advisable to start with a partial verification to ensure the
 device is minimally sane before investing the time in a full verification.
 .SH OPTIONS
 .TP
-.BR -c | --chunksize " \fIchunk_mb"
+.BR -c ", " --chunksize \ \fICHUNK_MB
 IO chunk size in megabytes (default=1), with optional KMG suffix.
 .TP
-.BR -f | --force
+.BR -f ", " --force
 force test to run without confirmation that the device will be overwritten
 and all data therein will be permanently destroyed.
 .TP
-.BR -h | --help
+.BR -h ", " --help
 display a brief help message.
 .TP
-.BR -l | --long
+.BR -l ", " --long
 Run a full check, writing and then reading and verifying every block on the
 disk.
 .TP
-.BR -o | --offset " \fIoffset_kb"
+.BR -o ", " --offset \ \fIOFFSET_KB
 offset of IO start in kilobytes (default=0), with optional KMGTP suffix.
 .TP
-.BR -p | --partial
+.BR -p ", " --partial
 Run a partial check, only doing periodic checks across the device (1GB steps).
 .TP
-.BR -r | --read
+.BR -r ", " --read
 Run test in read (verify) mode only, after having run the test in
 .B -w
 mode previously.
 .TP
-.BR -s | --size " \fIsize_mb"
+.BR -s ", " --size \ \fISIZE_MB
 device or file size in megabytes to use for the test, with optional KMGTP
 suffix.  If unspecified, use the actual device or file size (or write until
 an error is hit if 0).
 .TP
-.BR -t | --timestamp " \fItimestamp"
+.BR -t ", " --timestamp \ \fITIMESTAMP
 Set test start time as printed at the start of a previously interrupted test
 to ensure that the validation data is the same across the whole filesystem
 (default=current time())
 .TP
-.BR -v | --verbose
+.BR -v ", " --verbose
 Run test in verbose mode, listing each read and write operation.
 .TP
-.BR -w | --write
+.BR -w ", " --write
 Run test in write (test-pattern) mode (default run both read and write)
 .SH EXAMPLES
-.TP
-Run a partial device verification on \fB/dev/sda\fR:
-.B llverdev -v -p /dev/sda
-.br
+Run a partial device verification on
+.BR /dev/sda :
+.RS
+.EX
+.B # llverdev -v -p /dev/sda
 llverdev: permanently overwrite all data on /dev/sda (yes/no)? y
-.br
 llverdev: /dev/sda is 4398046511104 bytes (4096.0 GB) in size
-.br
 Timestamp: 1009839028
-.br
 Current write offset:        4096 kB
-.TP
-Continue an interrupted verification at offset \fB4096\fRkB from the start of the device, using the same timestamp as the previous run:
-.B llverdev -f -v -p --offset=4096 --timestamp=1009839028 /dev/sda
-.br
+.EE
+.RE
+.PP
+Continue an interrupted verification at offset
+.BR 4096 kB
+from the start of the device, using the same timestamp as the previous run:
+.RS
+.EX
+.B # llverdev -f -v -p --offset=4096 --timestamp=1009839028 /dev/sda
 llverdev: /dev/sda is 4398046511104 bytes (4096.0 GB) in size
-.br
 Timestamp: 1009839028
-.br
 write complete
-.br
 read complete
+.EE
+.RE
+.SH AVAILABILITY
+.B llverdev
+is part of the
+.BR lustre (7)
+filesystem package since release 1.4.0
+.\" Added in commit 1.3.4-1130-g113303973e
 .SH SEE ALSO
 .BR llverfs (8)

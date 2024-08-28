@@ -1,10 +1,8 @@
-.TH lljobstat 8 "Oct 14, 2022" Lustre "utilities"
-
+.TH LLJOBSTAT 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lljobstat \- display top jobs and statistics
-
 .SH SYNOPSIS
-.B "llobdstat"
+.SY "llobdstat"
 .RB [ -c|--count
 .IR COUNT ]
 .RB [ -i|--interval
@@ -17,7 +15,7 @@ lljobstat \- display top jobs and statistics
 .IR PARAM ]
 .RB [ --fullname ]
 .RB [ --no-fullname ]
-
+.YS
 .SH DESCRIPTION
 .B lljobstat
 reads and parses the job_stats files on local node,
@@ -25,9 +23,9 @@ sums up the operations of each job, and displays the top jobs.
 Repeat for some times or forever with given interval.
 .P
 Type Ctrl-C to stop printing.
-
 .SS Abbreviations
-\fBlljobstat\fR displays abbreviations of operation names as listed below:
+.B lljobstat
+displays abbreviations of operation names as listed below:
 .P
 .nf
 ops: total number of operations
@@ -37,39 +35,37 @@ mn: mknod,      mv: rename,     op: open,       pa: prealloc,  pu: punch
 qc: quotactl,   rd: read,       rm: rmdir,      sa: setattr,   si: set_info
 st: statfs,     sx: setxattr,   sy: sync,       ul: unlink,    wr: write
 .fi
-
-.SH "OPTIONS"
+.SH OPTIONS
 .TP
-\fB-c|--count\fR \fICOUNT\fR
+.BR -c ", " --count \ \fICOUNT
 how many top jobs are listed. Default 5.
 .TP
-\fB-i|--interval\fR \fIINTERVAL\fR
+.BR -i ", " --interval \ \fIINTERVAL
 interval in seconds before list top jobs again. Default 10.
 .TP
-\fB-n|--repeats\fR \fIREPEATS\fR
+.BR -n ", " --repeats \ \fIREPEATS
 how many times to repeat. Default unlimited.
 .TP
-\fB-m|--mdt\fR
+.BR -m ", " --mdt
 get data from only job_stats of MDTs.
 .TP
-\fB-o|--ost\fR
+.BR -o ", " --ost
 get data from only job_stats of OSTs.
 .TP
-\fB--param\fR \fIPARAM\fR
+.BI --param " PARAM"
 get data from only PARAM path. For example, "*.lustre-*.job_stat".
 .TP
-\fB--fullname\fR
+.B --fullname
 show full name of operations. Default no.
 .TP
-\fB--no-fullname\fR
+.B --no-fullname
 show abbreviated name of operations.
 .TP
-\fB-h|--help\fR
+.BR -h ", " --help
 print help message.
-
-.SH EXAMPLE
-.nf
-# lljobstat -n 1 -c 3
+.SH EXAMPLES
+.EX
+.B # lljobstat -n 1 -c 3
 ---
 timestamp: 1665623345
 top_jobs:
@@ -77,4 +73,12 @@ top_jobs:
 - touch.500:       {ops: 48, op: 8, cl: 8, mn: 8, ga: 8, sa: 16}
 - dd.0:            {ops: 38, op: 4, cl: 4, mn: 1, ga: 1, sa: 3, gx: 3, wr: 19, pu: 3}
 \[char46]..
-.fi
+.EE
+.SH AVAILABILITY
+.B lljobstat
+is part of the
+.BR lustre (7)
+filesystem package since release 2.16.0
+.\" Added in commit v2_15_53-96-ge2812e8773
+.SH SEE ALSO
+.BR llobdstat (8)
