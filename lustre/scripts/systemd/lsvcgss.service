@@ -11,4 +11,4 @@ ExecStart=/usr/bin/lsvcgss_sysd
 ExecReload=/bin/kill -HUP $MAINPID
 
 [Install]
-WantedBy=network.target
+WantedBy=multi-user.target
