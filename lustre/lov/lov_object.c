@@ -1602,7 +1602,7 @@ static int lov_attr_get(const struct lu_env *env, struct cl_object *obj,
 }
 
 static int lov_attr_update(const struct lu_env *env, struct cl_object *obj,
-			   const struct cl_attr *attr, unsigned valid)
+			   const struct cl_attr *attr, enum cl_attr_valid valid)
 {
 	/*
 	 * No dispatch is required here, as no layout implements this.

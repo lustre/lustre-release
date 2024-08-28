@@ -95,7 +95,8 @@ static int lovsub_object_print(const struct lu_env *env, void *cookie,
 }
 
 static int lovsub_attr_update(const struct lu_env *env, struct cl_object *obj,
-			      const struct cl_attr *attr, unsigned valid)
+			      const struct cl_attr *attr,
+			      enum cl_attr_valid valid)
 {
 	struct lovsub_object *los = cl2lovsub(obj);
 	struct lov_object *lov = cl2lovsub(obj)->lso_super;

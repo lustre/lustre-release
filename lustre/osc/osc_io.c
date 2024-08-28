@@ -253,7 +253,7 @@ void osc_page_touch_at(const struct lu_env *env, struct cl_object *obj,
 {
 	struct lov_oinfo  *loi  = cl2osc(obj)->oo_oinfo;
 	struct cl_attr    *attr = &osc_env_info(env)->oti_attr;
-	int valid;
+	enum cl_attr_valid valid;
 	__u64 kms;
 
 	ENTRY;
@@ -590,7 +590,7 @@ static int osc_io_setattr_start(const struct lu_env *env,
 		result = cl_object_attr_get(env, obj, attr);
 		if (result == 0) {
 			struct ost_lvb *lvb = &io->u.ci_setattr.sa_attr;
-			unsigned int cl_valid = 0;
+			enum cl_attr_valid cl_valid = 0;
 
 			if (ia_avalid & ATTR_SIZE) {
 				attr->cat_size = size;
@@ -701,7 +701,7 @@ void osc_io_setattr_end(const struct lu_env *env,
 	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
 	struct cl_attr  *attr = &osc_env_info(env)->oti_attr;
 	struct obdo *oa = &oio->oi_oa;
-	unsigned int cl_valid = 0;
+	enum cl_attr_valid cl_valid = 0;
 	int result = 0;
 
 	if (cbargs->opc_rpc_sent) {
@@ -834,7 +834,7 @@ static void osc_io_data_version_end(const struct lu_env *env,
 	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
 	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
 	struct obdo *oa = &oio->oi_oa;
-	unsigned int cl_valid = 0;
+	enum cl_attr_valid cl_valid = 0;
 
 	ENTRY;
 	wait_for_completion(&cbargs->opc_sync);

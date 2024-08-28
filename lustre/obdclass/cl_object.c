@@ -211,7 +211,7 @@ EXPORT_SYMBOL(cl_object_attr_get);
  * to top.
  */
 int cl_object_attr_update(const struct lu_env *env, struct cl_object *top,
-			  const struct cl_attr *attr, unsigned v)
+			  const struct cl_attr *attr, enum cl_attr_valid v)
 {
 	struct cl_object *obj;
 	int result = 0;

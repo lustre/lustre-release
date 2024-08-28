@@ -147,7 +147,7 @@ int osc_attr_get(const struct lu_env *env, struct cl_object *obj,
 EXPORT_SYMBOL(osc_attr_get);
 
 int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
-		    const struct cl_attr *attr, unsigned valid)
+		    const struct cl_attr *attr, enum cl_attr_valid valid)
 {
 	struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
 	struct ost_lvb   *lvb   = &oinfo->loi_lvb;

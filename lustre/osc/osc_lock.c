@@ -135,7 +135,8 @@ void osc_lock_lvb_update(const struct lu_env *env,
 	struct cl_object *obj = osc2cl(osc);
 	struct lov_oinfo *oinfo = osc->oo_oinfo;
 	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
-	unsigned valid, setkms = 0;
+	unsigned int setkms = 0;
+	enum cl_attr_valid valid;
 
 	ENTRY;
 

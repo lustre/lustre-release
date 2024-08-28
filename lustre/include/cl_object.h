@@ -359,7 +359,8 @@ struct cl_object_operations {
 	 * cl_object_operations::coo_attr_get() is used.
 	 */
 	int (*coo_attr_update)(const struct lu_env *env, struct cl_object *obj,
-			       const struct cl_attr *attr, unsigned int valid);
+			       const struct cl_attr *attr,
+			       enum cl_attr_valid valid);
 	/**
 	 * Mark the inode dirty. By this way, the inode will add into the
 	 * writeback list of the corresponding @bdi_writeback, and then it will
@@ -2125,7 +2126,8 @@ void cl_object_attr_unlock(struct cl_object *o);
 int  cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
 			struct cl_attr *attr);
 int  cl_object_attr_update(const struct lu_env *env, struct cl_object *obj,
-			   const struct cl_attr *attr, unsigned int valid);
+			   const struct cl_attr *attr,
+			   enum cl_attr_valid valid);
 void cl_object_dirty_for_sync(const struct lu_env *env, struct cl_object *obj);
 int  cl_object_glimpse(const struct lu_env *env, struct cl_object *obj,
 		       struct ost_lvb *lvb);

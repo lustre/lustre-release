@@ -80,7 +80,7 @@ static int vvp_attr_get(const struct lu_env *env, struct cl_object *obj,
 }
 
 static int vvp_attr_update(const struct lu_env *env, struct cl_object *obj,
-			   const struct cl_attr *attr, unsigned int valid)
+			   const struct cl_attr *attr, enum cl_attr_valid valid)
 {
 	struct inode *inode = vvp_object_inode(obj);
 

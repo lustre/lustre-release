@@ -631,7 +631,7 @@ int osc_object_print(const struct lu_env *env, void *cookie,
 int osc_attr_get(const struct lu_env *env, struct cl_object *obj,
 		 struct cl_attr *attr);
 int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
-		    const struct cl_attr *attr, unsigned int valid);
+		    const struct cl_attr *attr, enum cl_attr_valid valid);
 int osc_object_glimpse(const struct lu_env *env, const struct cl_object *obj,
 		       struct ost_lvb *lvb);
 int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc);

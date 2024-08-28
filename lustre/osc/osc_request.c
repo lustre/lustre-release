@@ -470,7 +470,7 @@ static int osc_sync_interpret(const struct lu_env *env,
 	struct osc_fsync_args *fa = args;
 	struct ost_body *body;
 	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
-	unsigned long valid = 0;
+	enum cl_attr_valid valid = 0;
 	struct cl_object *obj;
 
 	ENTRY;
@@ -2627,7 +2627,7 @@ static int brw_interpret(const struct lu_env *env,
 	if (rc == 0) {
 		struct obdo *oa = aa->aa_oa;
 		struct cl_attr *attr = &osc_env_info(env)->oti_attr;
-		unsigned long valid = 0;
+		enum cl_attr_valid valid = 0;
 
 		cl_object_attr_lock(obj);
 		if (oa->o_valid & OBD_MD_FLBLOCKS) {

@@ -408,8 +408,8 @@ void mdc_lock_lvb_update(const struct lu_env *env, struct osc_object *osc,
 	struct cl_object *obj = osc2cl(osc);
 	struct lov_oinfo *oinfo = osc->oo_oinfo;
 	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
-	unsigned valid = CAT_BLOCKS | CAT_ATIME | CAT_CTIME | CAT_MTIME |
-			 CAT_SIZE;
+	enum cl_attr_valid valid = CAT_BLOCKS | CAT_ATIME | CAT_CTIME |
+				   CAT_MTIME | CAT_SIZE;
 	unsigned int setkms = 0;
 
 	ENTRY;
@@ -1071,7 +1071,7 @@ static int mdc_io_setattr_start(const struct lu_env *env,
 		rc = cl_object_attr_get(env, obj, attr);
 		if (rc == 0) {
 			struct ost_lvb *lvb = &io->u.ci_setattr.sa_attr;
-			unsigned int cl_valid = 0;
+			enum cl_attr_valid cl_valid = 0;
 
 			if (ia_avalid & ATTR_SIZE) {
 				attr->cat_size = size;
