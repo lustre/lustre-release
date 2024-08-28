@@ -1,17 +1,13 @@
-.TH llapi_root_path_open 3 "2023 Apr 21" "Lustre User API"
+.TH LLAPI_ROOT_PATH_OPEN 3 2024-08-28 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_root_path_open \- Return open fd for a given device/path provided
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
-
-.sp
+.PP
 .BI "int llapi_root_path_open(const char *"device ", int *" fd " );
-
-.sp
 .fi
 .SH DESCRIPTION
-.LP
 .B llapi_root_path_open(\|)
 is called with
 .I device
@@ -19,9 +15,7 @@ which points to the FSNAME or complete path specifying a mountpoint of Lustre
 filesystem. On success,
 .I fd
 is populated with valid descriptor.
-
 .SH RETURN VALUES
-.LP
 .B llapi_root_path_open(\|)
 return:
 .TP
@@ -30,6 +24,11 @@ on success.
 .TP
 <0
 on failure.
-.fi
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.B llapi_root_path_open()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.16.0
+.\" Added in commit v2_15_55-108-g5d93025240
+.SH SEE ALSO
 .BR lustreapi (7)

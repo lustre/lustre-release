@@ -1,4 +1,4 @@
-.TH llapi_pcc_attach 3 "2019 April 20" "Lustre User API"
+.TH LLAPI_PCC_ATTACH 3 2024-08-28 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_pcc_attach, llapi_pcc_attach_fid, llapi_pcc_attach_fid_str \- attach a file into PCC
 .SH SYNOPSIS
@@ -6,21 +6,20 @@ llapi_pcc_attach, llapi_pcc_attach_fid, llapi_pcc_attach_fid_str \- attach a fil
 .B #include <lustre/lustreapi.h>
 .PP
 .BI "int llapi_pcc_attach(const char *" path ", __u32 " id ,
-.BI "                     enum lu_pcc_type " type ");"
+.BI "                     enum lu_pcc_type " type );
 .PP
 .BI "int llapi_pcc_attach_fid(const char *" mntpath ", const struct lu_fid *" fid ,
-.BI "                         __u32 " id ", enum lu_pcc_type " type ");"
+.BI "                         __u32 " id ", enum lu_pcc_type " type );
 .PP
 .BI "int llapi_pcc_attach_fid_str(const char *" mntpath ", const char *" fidstr ,
-.BI "                             __u32 " id ", enum lu_pcc_type " type ");"
+.BI "                             __u32 " id ", enum lu_pcc_type " type );
 .fi
 .SH DESCRIPTION
-.PP
 The function
 .BR llapi_pcc_attach() ,
-.BR llapi_pcc_attach_fid() ,
+.B llapi_pcc_attach_fid()
 and
-.BR llapi_pcc_attach_fid_str()
+.B llapi_pcc_attach_fid_str()
 tries to attach the file referenced by
 .IR path ,
 .IR fid ,
@@ -54,21 +53,29 @@ means RW-PCC mode.
 LU_PCC_READONLY
 means RO-PCC mode.
 .SH RETURN VALUES
-.PP
 .B llapi_pcc_attach()
 return 0 on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15
-.SM -ENOMEM
+.B -ENOMEM
 Insufficient memory to complete operation.
 .TP
-.SM -EFAULT
+.B -EFAULT
 Memory region is not properly mapped.
 .TP
-.SM -EINVAL
+.B -EINVAL
 One or more invalid arguments are given.
 .TP
-.SM -EOPNOTSUPP
+.B -EOPNOTSUPP
 PCC attach operation is not supported.
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.BR llapi_pcc_attach() ,
+.B llapi_pcc_attach_fid()
+and
+.B llapi_pcc_attach_fid_str()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.13.0
+.\" Added in commit v2_12_53-113-gf172b11688
+.SH SEE ALSO
 .BR lustreapi (7)

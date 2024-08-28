@@ -1,7 +1,6 @@
-.TH llapi_search_rootpath 3 "2022 May 23" "Lustre User API"
+.TH LLAPI_SEARCH_ROOTPATH 3 2024-08-28 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_search_rootpath, llapi_search_rootpath_by_dev \-
-retrieve the path of a lustre mount point
+llapi_search_rootpath, llapi_search_rootpath_by_dev \- retrieve the path of a lustre mount point
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -11,22 +10,31 @@ retrieve the path of a lustre mount point
 .BI "int llapi_search_rootpath_by_dev( char *" pathname ", dev_t " dev ")
 .fi
 .SH DESCRIPTION
-.PP
-.BR llapi_search_rootpath()
+.B llapi_search_rootpath()
 and
-.BR llapi_search_rootpath_by_dev()
-find the first Lustre mount point by matching the filesystem name \fIfsname\fP or the filesystem device \fIdev\fP.
+.B llapi_search_rootpath_by_dev()
+find the first Lustre mount point by matching the filesystem name
+.I fsname
+or the filesystem device
+.IR dev .
 .PP
-The path of the mount point found is stored into \fIpathname\fP. This buffer should be sufficient to store the path.
+The path of the mount point found is stored into
+.IR pathname .
+This buffer should be sufficient to store the path.
 .PP
 .BR e.g:
 char pathname[PATH_MAX];
 .PP
 The filesystem device can be retrieved from a file with
 .BR stat()
-(field \fIst_dev\fP) or
+(field
+.IR st_dev )
+or
 .BR statx()
-(fields \fIstx_dev_major\fP and \fIstx_dev_minor\fP).
+(fields
+.I stx_dev_major
+and
+.IR stx_dev_minor ).
 .SH RETURN VALUES
 .TP
 .B 0
@@ -36,14 +44,26 @@ on success, or
 error code on failure and sets errno appropriately.
 .SH ERRORS
 .TP 15
-.SM EINVAL
-\fIpathname\fP pointer is NULL.
+.B EINVAL
+.I pathname
+pointer is NULL.
 .TP
-.SM ENODEV
+.B ENODEV
 The Lustre mount point was not found.
+.SH AVAILABILITY
+.B llapi_search_rootpath()
+and
+.B llapi_search_rootpath_by_dev()
+is part of the
+.BR lustre (7)
+user application interface library.
+.B llapi_search_rootpath
+was added in release 2.4.0.
+.\" Added in commit 2.3.53-7-gf715e4e298
+.B llapi_search_rootpath_by_dev
+was added in release 2.16.0.
+.\" Added in commit v2_15_51-73-g4fd7d5585d
 .SH SEE ALSO
-.ad l
-.nh
-.BR lustreapi (7),
 .BR stat (2),
-.BR statx (2)
+.BR statx (2),
+.BR lustreapi (7)

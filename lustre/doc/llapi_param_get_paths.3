@@ -1,12 +1,12 @@
-.TH llapi_param_get_paths 3 "2020 Feb 24" "Lustre User API"
+.TH LLAPI_PARAM_GET_PATHS 3 2024-08-27 "Lustre User API" "Lustre Library Function"
 .SH NAME
-llapi_param_get_paths \- get a list of Lustre parameter file paths
-that match the given pattern
+llapi_param_get_paths \- get a list of Lustre parameter file paths that match the given pattern
 .SH SYNOPSIS
-.B #include <lustre/lustreapi.h>
 .nf
-.BI "int llapi_param_get_paths(const char" " *pattern, " "glob_t" \
-" *paths" ")"
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_param_get_paths(const char *" pattern ", glob_t *" paths );
+.fi
 .SH DESCRIPTION
 The
 .B llapi_param_get_paths(\|)
@@ -15,7 +15,6 @@ Lustre parameters. All file names that match
 .I pattern
 and are in
 the correct locations in the file system are returned.
-
 .SH RETURN VALUES
 .TP
 .B 0
@@ -24,7 +23,12 @@ on success with the parameter paths stored in
 .TP
 -ve
 error code on failure and sets errno appropriately.
-
+.SH AVAILABILITY
+.B llapi_param_get_paths()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.14.0
+.\" Added in commit v2_13_53-8-g9b44cf70a9
 .SH SEE ALSO
 .BR llapi_param_get_value (3),
 .BR lustreapi (7),

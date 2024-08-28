@@ -1,29 +1,27 @@
-.TH llapi_pcc_detach_fid_fd 3 "2019 April 20" "Lustre User API"
+.TH LLAPI_PCC_DETACH_FID_FD 3 2024-08-28 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_pcc_detach_fid_fd, llapi_pcc_detach_fid, llapi_pcc_detach_fid_str,
-llapi_pcc_detach_file \- detach the given file from PCC
+llapi_pcc_detach_fid_fd, llapi_pcc_detach_fid, llapi_pcc_detach_fid_str, llapi_pcc_detach_file \- detach the given file from PCC
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
-.BI "int llapi_pcc_detach_fid_fd(int " dirfd ", const struct lu_fid *" fid ",
+.BI "int llapi_pcc_detach_fid_fd(int " dirfd ", const struct lu_fid *" fid ,
 .BI "                            __u32 " flags );
 .PP
 .BI "int llapi_pcc_detach_fid(const char *" mntpath ",
 .BI "                         const struct lu_fid *" fid ", __u32 " flags );
 .PP
-.BI "int llapi_pcc_detach_fid_str(const char *" mntpath ",
+.BI "int llapi_pcc_detach_fid_str(const char *" mntpath ,
 .BI "                             const char *" fidstr ", __u32 " flags );
 .PP
 .BI "int llapi_pcc_detach_file(const char *" path ", __u32 " flags );
 .fi
 .SH DESCRIPTION
-.PP
 .BR llapi_pcc_detach_fid_fd() ,
 .BR llapi_pcc_detach_fid() ,
 .BR llapi_pcc_detach_fid_str() ,
 and
-.BR llapi_pcc_detach_file()
+.B llapi_pcc_detach_file()
 detach a cached file from PCC by an ioctl on the directory or the file itself.
 The file is referenced by
 .IR fid ,
@@ -41,7 +39,6 @@ argument, which is a
 .B enum lu_pcc_detach_flags
 data structure, which contains the following values:
 .nf
-.LP
 	PCC_DETACH_FL_NONE			= 0x0,
 	PCC_DETACH_FL_UNCACHE		= 0x01,
 	PCC_DETACH_FL_KNOWN_READWRITE	= 0x02,
@@ -65,7 +62,6 @@ PCC_DETACH_FL_CACHE_REMOVED
 indicates that PCC cached copy is removed. It is used to tell the user space
 caller that the file is detached and the corresponding PCC copy is removed.
 .SH RETURN VALUES
-.LP
 .BR llapi_pcc_detach_fid_fd() ,
 .BR llapi_pcc_detach_fid() ,
 .BR llapi_pcc_detach_fid_str() ,
@@ -74,24 +70,34 @@ and
 return 0 on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15
-.SM -ENOMEM
+.B -ENOMEM
 Insufficient memory to complete operation.
 .TP
-.SM -EFAULT
+.B -EFAULT
 Memory region is not properly mapped.
 .TP
-.SM -EINVAL
+.B -EINVAL
 One or more invalid arguments are given.
 .TP
-.SM -EOPNOTSUPP
+.B -EOPNOTSUPP
 PCC state operation is not supported.
 .TP
-.SM -ENOTTY
+.B -ENOTTY
 File does not reside on a Lustre filesystem.
 .TP
-.SM -ENOENT
+.B -ENOENT
 .I path
 does not exist.
-.SH "SEE ALSO"
+.SH AVAILABILITY
+.BR llapi_pcc_detach_fid_fd() ,
+.BR llapi_pcc_detach_fid() ,
+.BR llapi_pcc_detach_fid_str() ,
+and
+.B llapi_pcc_detach_file()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.13.0
+.\" Added in commit v2_12_53-113-gf172b11688
+.SH SEE ALSO
 .BR llapi_pcc_attach (3),
 .BR lustreapi (7)

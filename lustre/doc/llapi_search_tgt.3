@@ -1,20 +1,20 @@
-.TH llapi_search_tgt 3 "2019 Jun 06" "Lustre User API"
+.TH LLAPI_SEARCH_TGT 3 2024-08-28 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_search_tgt \- verify OST or MDT is in specified pool
+llapi_search_tgt, llapi_search_mdt, llapi_search_ost \- verify OST or MDT is in specified pool
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
-.IB int " llapi_search_tgt(" "const char *fsname" ", " "const char *pool_name" ,
-.BI				 "const char *tgt_name" ", " "bool is_mdt" );
+.BI "int llapi_search_tgt(const char *" fsname ", const char *" pool_name ,
+.BI "                     const char *" tgt_name ", bool " is_mdt );
 .PP
-.IB int " llapi_search_mdt(" "const char *fsname" ", " "const char *pool_name" ,
-.BI				 "const char *tgt_name" );
+.BI "int llapi_search_mdt(const char *" fsname ", const char *" pool_name ,
+.BI "                     const char *" tgt_name );
 .PP
-.IB int " llapi_search_ost(" "const char *fsname" ", " "const char *pool_name" ,
-.BI				 "const char *tgt_name" );
+.BI "int llapi_search_ost(const char *" fsname ", const char *" pool_name ,
+.BI "                     const char *" tgt_name );
+.fi
 .SH DESCRIPTION
-.PP
 .B llapi_search_tgt()
 verifies that the specified
 .I tgt_name
@@ -28,7 +28,7 @@ respectively) in the filesystem named
 .I fsname
 and (if specified) in the pool named
 .I pool_name
-of that filesystem.  At least
+of that filesystem. At least
 .I fsname
 must be non-NULL, but
 .I pool_name
@@ -51,7 +51,6 @@ that set
 .I is_mdt
 appropriately for the target type.
 .SH RETURN VALUES
-.LP
 .B llapi_search_tgt()
 returns 1 if
 .I tgt_name
@@ -77,7 +76,7 @@ A negative errno is returned if an error occurred, in which case errno
 is also set appropriately.
 .SH ERRORS
 .TP 15
-.SM EINVAL
+.B EINVAL
 .I fsname
 is NULL or zero-length, or both
 .I pool_name
@@ -85,12 +84,21 @@ and
 .I tgt_name
 are
 .BR NULL .
-.TP 15
-.SM ENOENT
+.TP
+.B ENOENT
 .I pool_name
 is specified but is not part of
 .IR fsname .
-.SH "SEE ALSO"
-.BR llapi_pool_name_verify (3),
-.BR lustreapi (7),
+.SH AVAILABILITY
+.BR llapi_search_tgt() ,
+.B llapi_search_mdt()
+and
+.B llapi_search_ost()
+is part of the
 .BR lustre (7)
+user application interface library since release 2.4.0
+.\" Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
+.BR llapi_pool_name_verify (3),
+.BR lustre (7),
+.BR lustreapi (7)

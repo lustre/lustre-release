@@ -1,6 +1,6 @@
-.TH llapi_open_by_fid 3 "2022-11-08" "Lustre User API"
+.TH LLAPI_OPEN_BY_FID 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_open_by_fid \- open a file descriptor from a File Identifier
+llapi_open_by_fid, llapi_open_by_fid_at \- open a file descriptor from a File Identifier
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -9,7 +9,6 @@ llapi_open_by_fid \- open a file descriptor from a File Identifier
 .BI "int llapi_open_by_fid_at(int " dir_fd ", struct lu_fid *" fid ", int " oflag ");"
 .fi
 .SH DESCRIPTION
-.PP
 .BR llapi_open_by_fid()
 opens a file descriptor in the filesystem mountpoint referenced by
 .I path
@@ -34,18 +33,25 @@ is
 .B AT_CWD
 then the open is performed against the local working directory.
 .SH RETURN VALUES
-.LP
 returns file descriptor number or a negative errno value on failure.
 .SH ERRORS
 .TP 15
-.SM -EINVAL
+.B -EINVAL
 An invalid argument was specified.
 .TP 15
-.SM -ENOMEM
+.B -ENOMEM
 No memory was available during operation.
+.SH AVAILABILITY
+.B llapi_open_by_fid()
+and
+.B llapi_open_by_fid_at()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.4.0
+.\" Added in commit 2.3.53-7-gf715e4e298
 .SH SEE ALSO
 .BR llapi_fid_parse (3),
 .BR llapi_fid2path (3),
 .BR llapi_path2fid (3),
-.BR lustreapi (7),
-.BR open_by_handle_at (3)
+.BR open_by_handle_at (3),
+.BR lustreapi (7)
