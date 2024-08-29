@@ -170,7 +170,7 @@ struct nrs_tbf_rule {
 	/** Flags of the rule. */
 	enum nrs_rule_flags		 tr_flags;
 	/** Usage Reference count taken on the rule. */
-	atomic_t			 tr_ref;
+	struct kref			 tr_ref;
 	/** Generation of the rule. */
 	__u64				 tr_generation;
 };

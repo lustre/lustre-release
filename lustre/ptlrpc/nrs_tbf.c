@@ -81,34 +81,20 @@ static enum hrtimer_restart nrs_tbf_timer_cb(struct hrtimer *timer)
 
 #define NRS_TBF_DEFAULT_RULE "default"
 
-static void nrs_tbf_rule_fini(struct nrs_tbf_rule *rule)
+/* rule's usage reference count is now dropped below one. There is no more
+ * outstanding usage references left. Stops the rule in case it was already
+ * stopping.
+ */
+static void nrs_tbf_rule_fini(struct kref *kref)
 {
-	LASSERT(atomic_read(&rule->tr_ref) == 0);
+	struct nrs_tbf_rule *rule = container_of(kref, struct nrs_tbf_rule,
+						 tr_ref);
+
 	LASSERT(list_empty(&rule->tr_cli_list));
 	LASSERT(list_empty(&rule->tr_linkage));
 
 	rule->tr_head->th_ops->o_rule_fini(rule);
 	OBD_FREE_PTR(rule);
-}
-
-/**
- * Decreases the rule's usage reference count, and stops the rule in case it
- * was already stopping and have no more outstanding usage references (which
- * indicates it has no more queued or started requests, and can be safely
- * stopped).
- */
-static void nrs_tbf_rule_put(struct nrs_tbf_rule *rule)
-{
-	if (atomic_dec_and_test(&rule->tr_ref))
-		nrs_tbf_rule_fini(rule);
-}
-
-/**
- * Increases the rule's usage reference count.
- */
-static inline void nrs_tbf_rule_get(struct nrs_tbf_rule *rule)
-{
-	atomic_inc(&rule->tr_ref);
 }
 
 static void
@@ -119,7 +105,7 @@ nrs_tbf_cli_rule_put(struct nrs_tbf_client *cli)
 	spin_lock(&cli->tc_rule->tr_rule_lock);
 	list_del_init(&cli->tc_linkage);
 	spin_unlock(&cli->tc_rule->tr_rule_lock);
-	nrs_tbf_rule_put(cli->tc_rule);
+	kref_put(&cli->tc_rule->tr_ref, nrs_tbf_rule_fini);
 	cli->tc_rule = NULL;
 }
 
@@ -203,7 +189,7 @@ nrs_tbf_rule_find_nolock(struct nrs_tbf_head *head,
 	list_for_each_entry(rule, &head->th_list, tr_linkage) {
 		LASSERT((rule->tr_flags & NTRS_STOPPING) == 0);
 		if (strcmp(rule->tr_name, name) == 0) {
-			nrs_tbf_rule_get(rule);
+			kref_get(&rule->tr_ref);
 			return rule;
 		}
 	}
@@ -243,7 +229,7 @@ nrs_tbf_rule_match(struct nrs_tbf_head *head,
 	if (rule == NULL)
 		rule = head->th_rule;
 
-	nrs_tbf_rule_get(rule);
+	kref_get(&rule->tr_ref);
 	spin_unlock(&head->th_rule_lock);
 	return rule;
 }
@@ -301,7 +287,7 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 
 	rule = nrs_tbf_rule_find(head, start->tc_name);
 	if (rule) {
-		nrs_tbf_rule_put(rule);
+		kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
 		return -EEXIST;
 	}
 
@@ -314,7 +300,7 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 	rule->tr_flags = start->u.tc_start.ts_rule_flags;
 	rule->tr_nsecs_per_rpc = NSEC_PER_SEC / rule->tr_rpc_rate;
 	rule->tr_depth = tbf_depth;
-	atomic_set(&rule->tr_ref, 1);
+	kref_init(&rule->tr_ref);
 	INIT_LIST_HEAD(&rule->tr_cli_list);
 	INIT_LIST_HEAD(&rule->tr_nids);
 	INIT_LIST_HEAD(&rule->tr_linkage);
@@ -332,8 +318,8 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 	tmp_rule = nrs_tbf_rule_find_nolock(head, start->tc_name);
 	if (tmp_rule) {
 		spin_unlock(&head->th_rule_lock);
-		nrs_tbf_rule_put(tmp_rule);
-		nrs_tbf_rule_put(rule);
+		kref_put(&tmp_rule->tr_ref, nrs_tbf_rule_fini);
+		kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
 		return -EEXIST;
 	}
 
@@ -341,12 +327,12 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 		next_rule = nrs_tbf_rule_find_nolock(head, next_name);
 		if (!next_rule) {
 			spin_unlock(&head->th_rule_lock);
-			nrs_tbf_rule_put(rule);
+			kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
 			return -ENOENT;
 		}
 
 		list_add(&rule->tr_linkage, next_rule->tr_linkage.prev);
-		nrs_tbf_rule_put(next_rule);
+		kref_put(&next_rule->tr_ref, nrs_tbf_rule_fini);
 	} else {
 		/* Add on the top of the rule list */
 		list_add(&rule->tr_linkage, &head->th_list);
@@ -404,9 +390,9 @@ nrs_tbf_rule_change_rank(struct ptlrpc_nrs_policy *policy,
 
 	/* rules may be adjacent in same list, so list_move() isn't safe here */
 	list_move_tail(&rule->tr_linkage, &next_rule->tr_linkage);
-	nrs_tbf_rule_put(next_rule);
+	kref_put(&next_rule->tr_ref, nrs_tbf_rule_fini);
 out_put:
-	nrs_tbf_rule_put(rule);
+	kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
 out:
 	spin_unlock(&head->th_rule_lock);
 	return rc;
@@ -429,7 +415,7 @@ nrs_tbf_rule_change_rate(struct ptlrpc_nrs_policy *policy,
 	rule->tr_rpc_rate = rate;
 	rule->tr_nsecs_per_rpc = NSEC_PER_SEC / rule->tr_rpc_rate;
 	rule->tr_generation++;
-	nrs_tbf_rule_put(rule);
+	kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
 
 	return 0;
 }
@@ -478,8 +464,8 @@ nrs_tbf_rule_stop(struct ptlrpc_nrs_policy *policy,
 
 	list_del_init(&rule->tr_linkage);
 	rule->tr_flags |= NTRS_STOPPING;
-	nrs_tbf_rule_put(rule);
-	nrs_tbf_rule_put(rule);
+	kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
+	kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
 
 	return 0;
 }
@@ -1011,7 +997,7 @@ nrs_tbf_jobid_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
 	seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
 		   rule->tr_jobids_str, rule->tr_rpc_rate,
-		   atomic_read(&rule->tr_ref) - 1);
+		   kref_read(&rule->tr_ref) - 1);
 	return 0;
 }
 
@@ -1221,7 +1207,7 @@ nrs_tbf_nid_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
 	seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
 		   rule->tr_nids_str, rule->tr_rpc_rate,
-		   atomic_read(&rule->tr_ref) - 1);
+		   kref_read(&rule->tr_ref) - 1);
 	return 0;
 }
 
@@ -2050,7 +2036,7 @@ nrs_tbf_generic_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
 	seq_printf(m, "%s %s %llu, ref %d\n", rule->tr_name,
 		   rule->tr_conds_str, rule->tr_rpc_rate,
-		   atomic_read(&rule->tr_ref) - 1);
+		   kref_read(&rule->tr_ref) - 1);
 	return 0;
 }
 
@@ -2338,7 +2324,7 @@ nrs_tbf_opcode_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
 	seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
 		   rule->tr_opcodes_str, rule->tr_rpc_rate,
-		   atomic_read(&rule->tr_ref) - 1);
+		   kref_read(&rule->tr_ref) - 1);
 	return 0;
 }
 
@@ -2655,7 +2641,7 @@ nrs_tbf_id_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
 	seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
 		   rule->tr_ids_str, rule->tr_rpc_rate,
-		   atomic_read(&rule->tr_ref) - 1);
+		   kref_read(&rule->tr_ref) - 1);
 	return 0;
 }
 
@@ -2827,7 +2813,7 @@ static void nrs_tbf_stop(struct ptlrpc_nrs_policy *policy)
 	}
 	list_for_each_entry_safe(rule, n, &head->th_list, tr_linkage) {
 		list_del_init(&rule->tr_linkage);
-		nrs_tbf_rule_put(rule);
+		kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
 	}
 	LASSERT(list_empty(&head->th_list));
 	LASSERT(head->th_binheap != NULL);
@@ -2960,7 +2946,7 @@ static int nrs_tbf_res_get(struct ptlrpc_nrs_policy *policy,
 			} else {
 				if (cli->tc_rule_generation != rule->tr_generation)
 					nrs_tbf_cli_reset_value(head, cli);
-				nrs_tbf_rule_put(rule);
+				kref_put(&rule->tr_ref, nrs_tbf_rule_fini);
 			}
 		} else if (cli->tc_rule_generation !=
 			   cli->tc_rule->tr_generation) {
