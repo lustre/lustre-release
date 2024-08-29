@@ -5,69 +5,74 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License v2.
 .\"
-.TH mount.lustre 8 "2019 Jul 30" Lustre "configuration utilities"
+.TH MOUNT.LUSTRE 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
-mount.lustre \- mount helper for Lustre client
-mount.lustre_tgt \- mount helper for Lustre target service
+mount.lustre, mount.lustre_tgt \- mount helper for Lustre client/target service
 .SH SYNOPSIS
-.br
-.BI "mount -t lustre [-o " options "] " "<mgsname>:/<fsname> <client_mountpoint>"
-.br
-.BI "mount -t lustre_tgt [-o " options "] " "<block_device> <server_mountpoint>"
+.SY "mount -t lustre"
+.BR [ -o
+.IR OPTIONS ]
+.IR MGSNAME :/ FSNAME
+.I CLIENT_MOUNTPOINT
+.SY "mount -t lustre_tgt"
+.BR [ -o
+.IR OPTIONS ]
+.I BLOCK_DEVICE
+.I SERVER_MOUNTPOINT
+.YS
 .SH DESCRIPTION
 .B mount.lustre
 and
 .B mount.lustre_tgt
-are used to start a Lustre client or target service, respectively.  They
+are used to start a Lustre client or target service, respectively. They
 should not be called directly; rather they are helper programs invoked through
 .BR mount (8)
 as above when the
 .B lustre
 or
 .B lustre_tgt
-filesystem type is used.  Lustre clients and targets are stopped by using the
+filesystem type is used. Lustre clients and targets are stopped by using the
 .BR umount (8)
 command.
-.br
-
+.PP
 There are two forms for the device option passed to the
 .I mount
 command, depending on whether a client or a target service is started:
 .TP
-.IR <mgsname> :/ <fsname>[/<subdir>]
+.IR MGSNAME :/ FSNAME [/ SUBDIR ]
 mounts the Lustre client filesystem named
-.I fsname
+.I FSNAME
 (optionally starting at subdirectory
-.I subdir
+.I SUBDIR
 within the filesystem, if specified) on the client at the directory
-.IR client_mountpoint ,
+.IR CLIENT_MOUNTPOINT ,
 by contacting the Management Service at
-.IR mgsname .
+.IR MGSNAME .
 The format for
-.I mgsname
-is defined below.  A client filesystem will typically be listed in
+.I MGSNAME
+is defined below. A client filesystem will typically be listed in
 .BR fstab (5)
 for automatic mount at boot time, is usable like any local filesystem, and
 provides a full POSIX-compilant interface.
 .TP
-.I block_device
+.I BLOCK_DEVICE
 specifies the physical disk or ZFS dataset uses to start the target service
 formatted by the
-.IR mkfs.lustre (8)
-command.  The
-.I block_device
+.BR mkfs.lustre (8)
+command. The
+.I BLOCK_DEVICE
 may be specified using
-.BI -L label
+.BI -L LABEL
 to find the first block device with that label (e.g.
 .BR testfs-MDT0000 ),
 or by UUID using the
-.BI -U uuid
+.BI -U UUID
 option. Care should be taken if there is a device-level backup of
 the target filesystem, which would have a duplicate label and UUID if it is
 not changed with
 .BR tune2fs (8)
-or similar.  The mounted target service filesystem at
-.I mountpoint
+or similar. The mounted target service filesystem at
+.I MOUNTPOINT
 is only useful for
 .BR df (1)
 operations to show the current space usage, and appears in
@@ -75,96 +80,102 @@ operations to show the current space usage, and appears in
 to show the device is in use.
 .SH OPTIONS
 .TP
-.BI <mgsname>:= <mgsnode>[:<mgsnode>]
+.IB MGSNAME := MGSNODE [: MGSNODE ]
 The
-.I mgsname
+.I MGSNAME
 may be a colon-separated list of
-.I mgsnode
-names where the MGS service may run.  Multiple
-.I mgsnode
+.I MGSNODE
+names where the MGS service may run. Multiple
+.I MGSNODE
 values can be specified if the MGS service is configures for HA failover
 and may be running on any one of the nodes.
 .TP
-.BI <mgsnode>:= <mgsnid>[,<mgsnid>]
+.IB MGSNODE := MGSNID [, MGSNID ]
 Each
-.I mgsnode
+.I MGSNODE
 may specify a comma-separated list of NIDs, if there are different
 LNet interfaces for the same
-.IR mgsnode .
+.IR MGSNODE .
 .TP
-.BI mgssec= flavor
+.BI mgssec= FLAVOR
 Specifies the encryption flavour for the initial network RPC connection to
-the MGS node.  Non-security flavors are:
+the MGS node.
+.IP
+Non-security flavors are:
 .BR null ,
 .BR plain ,
 and
 .BR gssnull ,
 which respectively disable, or have no encryption or integrity features for
-testing purposes.  Kerberos flavors are:
+testing purposes.
+.IP
+Kerberos flavors are:
 .BR krb5n ,
 .BR krb5a ,
 .BR krb5i ,
 and
 .BR krb5p .
+.IP
 Shared-secret key flavors are:
 .BR skn ,
 .BR ska ,
 .BR ski ,
 and
-.BR skpi ,
-see
+.BR skpi .
+.IP
+See
 .BR lgss_sk (8)
-for more details.  The security flavour for client-to-server connections is
+for more details. The security flavour for client-to-server connections is
 specified in the filesystem configuration that the client fetches from the MGS.
 .TP
-.BI skpath= file|directory
+.BI skpath= FILE \fR| DIRECTORY
 Path to a file or directory with the keyfile(s) to load for this mount command.
 Keys are inserted into the KEY_SPEC_SESSION_KEYRING keyring with a description
 containing "lustre:" and a suffix which depends on whether the context of the
 mount command is for an MGS, MDT/OST, or client.
 This option is only available when built with --enable-gss.
 .TP
-.BI exclude= ostlist
+.BI exclude= OSTLIST
 Start a client or MDT with a (colon-separated) list of known inactive OSTs.
-.SH CLIENT OPTIONS
+.SS CLIENT OPTIONS
 In addition to the standard options listed in
 .BR mount (8),
 Lustre understands the following
 .B client-specific
 options:
 .TP
-.BI flock
+.B flock
 Enable full distributed
 .BR flock (2)
-support, coherent across all client nodes also using this mount option.  This
+support, coherent across all client nodes also using this mount option. This
 is useful if applications need coherent userspace file locking across multiple
 client nodes, has no measurable performance impact in modern (2.x) versions of
 Lustre, is therefore the recommended mode, and is enabled by default in Lustre
 2.12.3 and newer.
 .TP
-.BI localflock
+.B localflock
 Enable local
 .BR flock (2)
-support, using only client-local file locking.  This is faster than mounting
+support, using only client-local file locking. This is faster than mounting
 with the
 .B flock
 option, and can be used for applications that depend on functioning
 .BR flock (2)
 but run only on a single node.
 .TP
-.BI noflock
+.B noflock
 Disables
 .BR flock (2)
-support entirely.  Applications calling
+support entirely. Applications calling
 .BR flock (2)
 will get an
 .B ENOSYS
-error.  It is possible to mount clients
-with different options, and only those mounted with
+error. It is possible to mount clients with different options,
+and only those mounted with
 .B flock
 will be coherent amongst each other.
 .TP
-.BI lazystatfs
+.B lazystatfs
 Allows
 .BR statfs (2)
 (as used by
@@ -172,54 +183,53 @@ Allows
 and
 .BR lfs-df (1))
 to return even if some OST or MDT is unresponsive or has been temporarily
-or permanently disabled in the configuration.  This avoids blocking until
-all of the targets are available.  This is the default since Lustre 2.9.0.
+or permanently disabled in the configuration. This avoids blocking until
+all of the targets are available. This is the default since Lustre 2.9.0.
 .TP
-.BI nolazystatfs
+.B nolazystatfs
 Requires that
 .BR statfs (2)
 block until all OSTs and MDTs are available and have returned space usage.
 .TP
-.BI user_xattr
-Enable get/set of extended attributes by regular users.  See the
+.B user_xattr
+Enable get/set of extended attributes by regular users. See the
 .BR attr (5)
 manual page.
 .TP
-.BI nouser_xattr
-Disable use of extended attributes by regular users.  Root and system processes can still use extended attributes.
+.B nouser_xattr
+Disable use of extended attributes by regular users.
+Root and system processes can still use extended attributes.
 .TP
-.BI always_ping
+.B always_ping
 Force a client to keep pinging even if servers have enabled suppress_pings.
 .TP
-.BI verbose
+.B verbose
 Enable mount/remount/umount console messages.
 .TP
-.BI noverbose
+.B noverbose
 Disable mount/remount/umount console messages.
 .TP
-.BI user_fid2path
+.B user_fid2path
 Enable FID to path translation by regular users via
 .BR "lfs fid2path" .
 .TP
-.BI nouser_fid2path
-Disable FID to path translation by regular users.  Root and process with
+.B nouser_fid2path
+Disable FID to path translation by regular users. Root and process with
 CAP_DAC_READ_SEARCH can still perform FID to path translation.
 .TP
-.BI network= net
+.BI network= NET
 Limit connections from the client to be on the network NID specified by 'net'.
 \'net\' designates a single network NID, like 'o2ib2' or 'tcp1'.
 This option can be useful in case of several Lustre client mount
 points on the same node, with each mount point using a different
 network. It is also interesting when running Lustre clients from
 containers, by restricting each container to a specific network.
-.PP
-.RS
+.IP
 Warning! 'network' option is incompatible with LNet Dynamic Peer Discovery.
 If you want to restrict client NID, please make sure LNet Dynamic Peer Discovery
 is disabled.
-.RE
 .TP
-.BI test_dummy_encryption
+.B test_dummy_encryption
 Enable test dummy encryption mode.
 .RE
 .TP
@@ -228,7 +238,7 @@ Disable Lustre client-side encryption. By default, Lustre client-side encryption
 is enabled, letting users define encryption policies on a per-directory basis.
 fscrypt userspace tool can be used for that purpose, see
 https://github.com/google/fscrypt
-.SH SERVER OPTIONS
+.SS SERVER OPTIONS
 In addition to the standard mount options and backing disk type
 (e.g. ldiskfs) options listed in
 .BR mount (8),
@@ -237,13 +247,13 @@ Lustre understands the following
 options:
 .TP
 .BI acl
-Enable POSIX Access Control List support for all clients.  See the
+Enable POSIX Access Control List support for all clients. See the
 .BR acl (5)
 manual page.
 .TP
 .BI no_create
 Do not allow objects to be created on an OST, or new directories
-on an MDT after mounting.  This allows a (potentially newly-formatted)
+on an MDT after mounting. This allows a (potentially newly-formatted)
 MDT or OST to be started without clients starting to use it immediately.
 To allow the new target to be used for allocation, unmount and mount the
 target again without this option, or run
@@ -253,8 +263,8 @@ or
 on the server node.
 .BR NOTE :
 this does not start the OST or MDT read-only, it only disables the
-creation of new objects there.  This means existing objects can be
-be read, modified, or deleted.  If the OST or MDT is new then
+creation of new objects there. This means existing objects can be
+be read, modified, or deleted. If the OST or MDT is new then
 it will not have any objects on it yet.
 .TP
 .BI nosvc
@@ -290,63 +300,91 @@ be set to this number arbitrarily.
 .TP
 .BI recovery_time_soft= timeout
 Allow 'timeout' seconds for clients to reconnect for recovery after a server
-crash.  This timeout will be incrementally extended if it is about to expire
+crash. This timeout will be incrementally extended if it is about to expire
 and the server is still handling new connections from recoverable clients.
 The default soft recovery timeout is set to 300 seconds (5 minutes).
 .TP
 .BI recovery_time_hard= timeout
 The server will be allowed to incrementally extend its timeout up to a hard
-maximum of 'timeout' seconds.  The default hard recovery timeout is set to
-900 seconds (15 minutes).
+maximum of 'timeout' seconds.
+The default hard recovery timeout is set to 900 seconds (15 minutes).
+.SH BUGS
+Not very many mount options can be changed with
+.BR "-o remount" .
 .SH EXAMPLES
-.TP
-.B mount -t lustre cfs21@tcp0:/testfs /mnt/myfilesystem
 Start a client for the Lustre filesystem
 .B testfs
 at the mount point
 .BR /mnt/myfilesystem .
 The Management Service is running on a node reachable via NID
-.BR cfs21@tcp0 .
-.TP
-.B mount -t lustre cfs21@tcp0:/testfs/dir /mnt/myfilesystem
+.BR cfs21@tcp0 :
+.RS
+.EX
+.B # mount -t lustre cfs21@tcp0:/testfs /mnt/myfilesystem
+.EE
+.RE
+.PP
 Like above example, but mount subdirectory
 .B dir
-as fileset.
-.TP
-.B mount -t lustre mgs1@tcp0,mgs1ib@o2ib0:mgs2@tcp0,mgs2ib@o2ib0:/testfs /mnt/fs
+as fileset:
+.RS
+.EX
+.B # mount -t lustre cfs21@tcp0:/testfs/dir /mnt/myfilesystem
+.EE
+.RE
+.PP
 Like above example, but the Management Service is running on one of the service
 nodes
 .B mgs1
 and
-.B mgs2, which are two different hosts separated by a colon and
+.BR mgs2 ,
+which are two different hosts separated by a colon and
 served as a failover pair. Lustre tries the first one, and if that fails, it
 tries the second one. On each service node, the comma-separated NIDs refer to
 different interfaces on the same host, and the Lustre client chooses the best
-one for communication based on which network interfaces are available locally.
-.TP
-.B mount -t lustre_tgt /dev/sda1 /mnt/test/mdt
+one for communication based on which network interfaces are available locally:
+.RS
+.EX
+.B # mount -t lustre mgs1@tcp0,mgs1ib@o2ib0:mgs2@tcp0,mgs2ib@o2ib0:/testfs /mnt/fs
+.EE
+.RE
+.PP
 Start the Lustre metadata target service from
 .B /dev/sda1
 on mountpoint
-.BR /mnt/test/mdt .
-.TP
-.B mount -t lustre_tgt -L testfs-MDT0000 -o abort_recov /mnt/test/mdt
+.BR /mnt/test/mdt :
+.RS
+.EX
+.B # mount -t lustre_tgt /dev/sda1 /mnt/test/mdt
+.EE
+.RE
+.PP
 Start the
 .B testfs-MDT0000
 service (by using the disk label), but aborts the Lustre client recovery
-process for the case that clients are known to be unavailable.
-.SH BUGS
-Not very many mount options can be changed with
-.BR "-o remount" .
+process for the case that clients are known to be unavailable:
+.RS
+.EX
+.B # mount -t lustre_tgt -L testfs-MDT0000 -o abort_recov /mnt/test/mdt
+.EE
+.RE
 .SH AVAILABILITY
 .B mount.lustre
-is part of the
-.BR Lustre (7)
+and
+.B mount.lustre_tgt
+are part of the
+.BR lustre (7)
 filesystem package.
+.B mount.lustre
+was added in release 0.10.0
+.\" Added in commit 0.9.1
+.B mount.lustre_tgt
+was added in release 2.13.0
+.\" Added in commit v2_12_58-71-g510aea4a37
 .SH SEE ALSO
+.BR lfs (1),
 .BR lustre (7),
-.BR mount (8),
-.BR mkfs.lustre (8),
-.BR tunefs.lustre (8),
 .BR lctl (8),
-.BR lfs (1)
+.BR mkfs.lustre (8),
+.BR mount (8),
+.BR tunefs.lustre (8)

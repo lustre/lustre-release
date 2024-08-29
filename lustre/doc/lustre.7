@@ -4,7 +4,7 @@
 .\"
 .\" Copyright (c) 2015, 2016, Intel Corporation.
 .\"
-.TH LUSTRE 7 "2021 Nov 08" Lustre "A high-performance cluster file system"
+.TH LUSTRE 7 2024-08-28 Lustre "A high-performance cluster file system"
 .SH NAME
 Lustre
 .SH SYNOPSIS
@@ -13,12 +13,12 @@ A high-performance file system designed for Linux clusters.
 .B Lustre
 is a high-performance, massively-scalable, POSIX-compliant GPL network file
 system that runs on the world's largest high-performance compute clusters.
-
+.PP
 Lustre filesystems are made up of multiple services typically distributed
 across multiple server nodes.  Lustre clients can contact these server nodes
 over multiple high-speed network fabrics via LNet, the Lustre Network
 system.  Clients then present the filesystem at a mount point to userspace.
-
+.PP
 A Lustre filesystem is comprised of one or more
 .IR MDTs ,
 MetaData Targets, which store directory and file meta-information such as
@@ -31,13 +31,12 @@ mapping of file offset to one or more OST object(s), known as the file
 layout, that can be managed with the
 .BR lfs-setstripe (1)
 command.
-
+.PP
 Lustre and LNet are implemented as a series of Linux kernel modules, for both
 servers and clients.  LNet networks are defined in the modprobe.conf file on
 all nodes.  Lustre is started on the clients and servers using the
 .BR mount (8)
 command.
-
 .SH COMMANDS
 .TP
 .BR mkfs.lustre (8)
@@ -62,7 +61,7 @@ individual files.
 Please report all bugs https://jira.whamcloud.com/
 .SH AVAILABILITY
 .B The
-.BR Lustre (7)
+.BR lustre (7)
 filesystem packages are available for download at:
 .br
 https://downloads.whamcloud.com/
@@ -70,16 +69,16 @@ and GPL source code is available at:
 .br
 https://git.whamcloud.com/
 .SH SEE ALSO
-.BR mkfs.lustre (8),
-.BR tunefs.lustre (8),
-.BR mount.lustre (8),
-.BR lctl (8),
 .BR lfs (1),
+.BR lustreapi (7),
+.BR lnet (7),
+.BR lctl (8),
 .BR llobdstat (8),
 .BR llstat (8),
 .BR llverdev (8),
 .BR llog_reader (8),
 .BR lshowmount (8),
-.BR lustreapi (7),
 .BR lustre_rsync (8),
-.BR lnet (7)
+.BR mkfs.lustre (8),
+.BR mount.lustre (8),
+.BR tunefs.lustre (8)

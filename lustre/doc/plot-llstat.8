@@ -1,32 +1,34 @@
-.TH plot-llstat 1 "Jul 7, 2008" Lustre "utilities"
+.TH PLOT-LLSTAT 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 plot-llstat \- plot Lustre statistics
 .SH SYNOPSIS
-.B "plot-llstat results_filename [parameter_index]"
-.br
+.SY plot-llstat
+.I RESULTS_FILENAME
+.RI [ PARAMETER_INDEX ]
+.YS
 .SH DESCRIPTION
 The
 .B plot-llstat
 script is used to generate csv file and instructions files for gnuplot
 from the output of
-.B llstat.
+.BR llstat .
 Since
 .B llstat
 is generic in nature,
 .B plot-llstat
 is also a generic script.
-.LP
+.PP
 .I parameter_index
 can be 1 for count per interval, 2 for count per second (default),
 or 3 for total count.
-.LP
+.PP
 plot-llstat script creates dat(csv) file using number of operations
 specified by the user. Number of operations equals to number of columns in csv
 file. And values in those columns are equals to the corresponding value of
 the
-.I "parameter_index"
+.I PARAMETER_INDEX
 parameter from the output file.
-.LP
+.PP
 .B plot-llstat
 also creates .scr file that contains instructions for gnuplot to plot
 the graph. After generating .dat and .scr files
@@ -34,10 +36,16 @@ the graph. After generating .dat and .scr files
 invokes
 .B gnuplot
 to display graph.
-.SH EXAMPLE
-.nf
+.SH EXAMPLES
+.EX
 llstat -i2 -g -c lustre-OST0000 > log
 plot-llstat log 3
-.fi
+.EE
+.SH AVAILABILITY
+.B plot-llstat
+is part of the
+.BR lustre (7)
+filesystem package since release 1.4.0
+.\" Added in commit 1.3.4-1213-g373ad7359d
 .SH SEE ALSO
-llstat(8)
+.BR llstat (8)

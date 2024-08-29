@@ -5,77 +5,85 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License.
 .\"
-.TH mkfs.lustre 8 "2014 Jun 10" Lustre "configuration utilities"
+.TH MKFS.LUSTRE 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 mkfs.lustre \- format a disk for a Lustre service
 .SH SYNOPSIS
-.br
-.B mkfs.lustre
+.SY mkfs.lustre
 .RB { --ost | --mdt | --mgs }
-.BR --fsname= <\fIname\fR>
-.RI [ options ]
-.I device
-.br
-.B mkfs.lustre
+.BR --fsname=\c
+.I NAME
+.RI [ OPTIONS ]
+.I DEVICE
+.SY mkfs.lustre
 .RB { --ost | --mdt | --mgs }
 .B --backfstype=zfs
-.BR --fsname= <\fIname\fR>
-.RI [ options "] <" pool_name >/< dataset_name "> [<" zpool_specification >]
-
+.BR --fsname=\c
+.I NAME
+.RI [ OPTIONS ]
+.IR POOL_NAME / DATASET_NAME
+.RI [ ZPOOL_SPECIFICATION ]
+.YS
 .SH DESCRIPTION
 .B mkfs.lustre
 is used to format a disk device for use as part of a Lustre
 filesystem. After formatting, a disk can be mounted with
 .B mount -t lustre ...
 to start the Lustre service defined by this command.
-
 .SH OPTIONS
 .TP
-.BI \--ost
+.B --ost
 object storage target
 .TP
-.BI \--mdt
+.B --mdt
 metadata storage target
 .TP
-.BI \--mgs
+.B --mgs
 configuration management service, one per site or filesystem.  This service can
 be combined with one
-.BI \--mdt
+.B --mdt
 service by specifying both types.
 .TP
-.BI \--backfstype= fstype
+.BI --backfstype= FSTYPE
 Force a particular format for the backing fs (ldiskfs, zfs).
+.TP
+.I ZPOOL_SPECIFICATION
+Specify the zpool specifications with the following form:
 .br
-.IR zpool_specification " = [[<" vdev_type ">] <" device "> [<" device "> ...] [<" vdev_type ">] ...]"
+.RI [[ VDEV_TYPE ] " DEVICE " [DEVICE " ...] [" VDEV_TYPE "] ...]"
+.TP
+.I VDEV_TYPE
+Can be one of the following:
 .br
-.IR vdev_type " ="
 .RB { mirror , raidz , raidz2 , raidz3 , cache }
-.br
-.IR device " = { " "Linux block device" " }"
-
+.TP
+.IR DEVICE
+The linux block device.
+.IP
 If no vdev_type is given, then the devices are used in a round-robin
 (striped) manner. See
 .BR zpool (8)
 for more details.
 .TP
-.BI \--comment= comment
+.BI --comment= COMMENT
 Set user comment about this disk, ignored by Lustre.
 .TP
-.BI \--device-size= KB
+.BI --device-size= KB
 Set device size for loop devices
 .TP
-.BI \--dryrun
+.BI --dryrun
 Only print what would be done; does not affect the disk
 .TP
-.BI \--failnode= nid,...
+.BI --failnode= NID \fR,...
 Set the NID(s) of a failover partner. This option can be repeated as desired.
 Cannot be used with --servicenode.
 .TP
-.BI \--servicenode= nid,....
+.BI --servicenode= NID\fR,...
 Set the NID(s) of all service partner. This option treats all nodes as equal
-service nodes. Cannot be used with --failnode.
+service nodes. Cannot be used with
+.BR --failnode .
 .TP
-.BI \--fsname= filesystem_name
+.BI --fsname= FILESYSTEM_NAME
 The Lustre filesystem this target will be part of. Valid
 .IR filesystem_name s
 are between 1 and 8 characters long and must only use upper- and lower-case
@@ -90,16 +98,16 @@ reduce confusion for administrators/users between "lustre" as the
 and "lustre" as the literal string that must be used in places for the
 .BR filesystem_type .
 The
-.B \--fsname
+.B --fsname
 option is not valid for the MGS, since it may be used for multiple filesystems.
 .TP
-.BI \--index= index
+.BI --index= INDEX
 Specify a particular OST or MDT index. Required for all targets other than
 the MGS, and must be unique for all targets in the same filesystem. Typically
 sequential values starting from 0 are used.  The index parameter may either
 be a decimal number, or a hexadecimal number starting with '0x'.
 .TP
-.BI \--mkfsoptions= opts
+.BI --mkfsoptions= OPTS
 Additional formatting options passed through to the backing filesystem. For
 example, options for
 .B mke2fs
@@ -107,33 +115,43 @@ or
 .B zpool
 could be set here.
 .TP
-.BI \--mountfsoptions= opts
+.BI --mountfsoptions= OPTS
 Set persistent mount options that will be used when mounting Lustre targets.
-WARNING: unlike earlier versions of \fBmkfs.lustre\fR, this version completely
-replaces the default mount options with those specified on the command line,
+WARNING: unlike earlier versions of
+.BR mkfs.lustre ,
+this version completely replaces the default mount options
+with those specified on the command line,
 issuing a warning on stderr if any of the default mount options are omitted.
-The defaults for \fIldiskfs\fR are
-OST: \fIerrors=remount-ro,mballoc,extents\fR;
-MGS/MDT: \fIerrors=remount-ro,user_xattr\fR.
-\fBDO NOT\fR alter the default mount options unless you know what you are doing.
+The defaults for
+.I LDISKFS
+are:
+.TP 10
+.B OST:
+.I errors=remount-ro,mballoc,extents
 .TP
-.BI \--backfs-mount-opts=opts
+.B MGS/MDT:
+.I errors=remount-ro,user_xattr
+.PP
+.B DO NOT
+alter the default mount options unless you know what you are doing.
+.TP
+.BI --backfs-mount-opts= OPTS
 Use these options for mounting backing fs while mkfs.lustre is working.
 .TP
-.BI \--network= net,...
+.BI --network= NET,...
 Network(s) to restrict this OST/MDT to. This option can be repeated as desired.
 .TP
-.BI \--mgsnode= nid,...
+.BI --mgsnode= NID,...
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
 .TP
-.BI \--param " key=value"
+.BI --param " KEY" = VALUE
 Set permanent parameter
-.I key
+.I KEY
 to value
-.IR value .
+.IR VALUE .
 This option can be repeated as desired. Typical options might include:
 .RS
-.I \--param sys.timeout=40
+.I --param sys.timeout=40
 .RS
 System obd timeout
 .RE
@@ -145,90 +163,125 @@ Default stripe size
 .RS
 Default stripe count
 .RE
-.I \--param failover.mode=failout
+.I --param failover.mode=failout
 .RS
 Return errors instead of waiting for recovery
 .RE
 .RE
 .TP
-.BI \--quiet
+.B --quiet
 Print less information.
 .TP
-.BI \--reformat
+.B --reformat
 Reformat an existing Lustre disk as a new target
 .TP
-.BI \--replace
+.B --replace
 Used to initialize a target with the same
-.I --index
+.B --index
 as a previously used target if the old target was permanently lost for
 some reason (e.g. multiple disk failure or massive corruption).  This
 avoids having the target try to register as a new target with the MGS.
 .TP
-.BI \--stripe-count-hint= stripes
+.BI --stripe-count-hint= STRIPES
 Specify the expected common number of stripes on a file so that the MDT
 inode size can be optimized for the typical use case.
 .TP
-.BI \--force-nohostid
+.BI --force-nohostid
 Ignore unset hostid for ZFS import protection. To set hostid either set
 spl_hostid parameter for spl.ko or set /etc/hostid, see zgenhostid(8).  To
 populate the spl_hostid parameter, spl.ko must be (re)loaded after /etc/hostid
 is created.
-
 .TP
-.BI \--verbose
+.BI --verbose
 Print more information.
 .TP
-.B \-V,  \-\-version
+.BR -V ", " --version
 Output build version of the mkfs.lustre utility.
-
-.SH NID
+.SS NID
 A Lustre network identifier (NID) is used to uniquely identify a Lustre network
 endpoint by node ID and network type. The format of the NID is:
-\fInetwork_id@network_type\fR.
+.IR network_id@network_type .
 If a node has multiple network interfaces, it may have multiple NIDs, which must
 all be identified so other nodes can choose the NID that is appropriate for
 their network interfaces. Typically, NIDs are specified in a list delimited by
 commas (,). However, when failover nodes are specified, the NIDs are delimited
-by a colon (:) or by repeating a keyword such as \fI--mgsnode=\fR or
-\fI--servicenode=\fR.
-
+by a colon (:) or by repeating a keyword such as
+.B --mgsnode=
+or
+.BR --servicenode= .
 .SH EXAMPLES
-.TP
-.B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs /dev/sda1
-Combined MGS and MDT for filesystem 'testfs' on node e.g. cfs21
-.TP
-.B mkfs.lustre --fsname=testfs --index=0 --ost --mgsnode=cfs21@tcp0 /dev/sdb
-OST for filesystem 'testfs' on any node using the above MGS.
-.TP
-.B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs --servicenode=cfs21@tcp0,cfs21ib@o2ib0 --servicenode=cfs22@tcp0,cfs22ib@o2ib0 /dev/sda1
-Combined MGS and MDT for filesystem 'testfs' on failover pair cfs21 and cfs22.
-.TP
-.B mkfs.lustre --fsname=testfs --index=1 --ost --mgsnode=cfs21@tcp0,cfs21ib@o2ib0:cfs22@tcp0,cfs22ib@o2ib0 --failnode=cfs24@tcp0,cfs24ib@o2ib0 /dev/sdb
+Combined MGS and MDT for filesystem 'testfs' on node e.g. cfs21:
+.RS
+.EX
+.B # mkfs.lustre --fsname=testfs --index=0 --mdt --mgs /dev/sda1
+.EE
+.RE
+.PP
+OST for filesystem 'testfs' on any node using the above MGS:
+.RS
+.EX
+.B # mkfs.lustre --fsname=testfs --index=0 --ost --mgsnode=cfs21@tcp0 /dev/sdb
+.EE
+.RE
+.PP
+Combined MGS and MDT for filesystem 'testfs' on failover pair cfs21 and cfs22:
+.RS
+.EX
+.B # mkfs.lustre --fsname=testfs --index=0 --mdt --mgs \
+--servicenode=cfs21@tcp0,cfs21ib@o2ib0 \
+--servicenode=cfs22@tcp0,cfs22ib@o2ib0 /dev/sda1
+.EE
+.RE
+.PP
 OST for filesystem 'testfs' using the above MGS and having a failover partner
-cfs24.
-.TP
-.B mkfs.lustre --mgs /dev/sda1
-Standalone MGS on e.g. node cfs22
-.TP
-.B mkfs.lustre --fsname=myfs1 --index=0 --mdt --mgsnode=cfs22@tcp0 /dev/sda2
-MDT for filesystem 'myfs1' on any node, using the above MGS
-.TP
-.B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs zfspool/mdt1 mirror /dev/sdb /dev/sdc mirror /dev/sdd /dev/sde
+cfs24:
+.RS
+.EX
+.B # mkfs.lustre --fsname=testfs --index=1 --ost \
+--mgsnode=cfs21@tcp0,cfs21ib@o2ib0:cfs22@tcp0,cfs22ib@o2ib0 \
+--failnode=cfs24@tcp0,cfs24ib@o2ib0 /dev/sdb
+.EE
+.RE
+.PP
+Standalone MGS on e.g. node cfs22:
+.RS
+.EX
+.B # mkfs.lustre --mgs /dev/sda1
+.EE
+.RE
+.PP
+MDT for filesystem 'myfs1' on any node, using the above MGS:
+.RS
+.EX
+.B # mkfs.lustre --fsname=myfs1 --index=0 --mdt --mgsnode=cfs22@tcp0 /dev/sda2
+.EE
+.RE
+.PP
 Create zfs pool 'zfspool' on two root vdevs each a mirror of two disks and
-create mdt/mgs on filesystem 'zfspool/mdt1'.
-.TP
-.B mkfs.lustre --version
-Output build version of the mkfs.lustre utility e.g. 2.15.52_175_ge7aa83d
-
+create mdt/mgs on filesystem 'zfspool/mdt1':
+.RS
+.EX
+.B # mkfs.lustre --fsname=testfs --index=0 --mdt --mgs zfspool/mdt1 mirror \
+/dev/sdb /dev/sdc mirror /dev/sdd /dev/sde
+.EE
+.RE
+.PP
+Output build version of the mkfs.lustre utiltiy e.g. 2.15.52_175_ge7aa83d:
+.RS
+.EX
+.B # mkfs.lustre --version
+.EE
+.RE
 .SH AVAILABILITY
 .B mkfs.lustre
 is part of the
 .BR lustre (7)
-filesystem package.
+filesystem package since release 1.4.0
+.\" Added in commit 1.3.4-1130-g113303973e
 .SH SEE ALSO
-.BR lctl (8),
 .BR lfs (1),
 .BR lustre (7),
+.BR lctl (8),
 .BR mke2fs (8),
 .BR mount.lustre (8),
 .BR tunefs.lustre (8),

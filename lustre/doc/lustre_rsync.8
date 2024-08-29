@@ -1,181 +1,157 @@
-.TH lustre_rsync 8 "2009 Apr 08" Lustre "Lustre Filesystem replication utility"
+.TH LUSTRE_RSYNC 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lustre_rsync \- Utility to replicate a Lustre Filesystem
 .SH SYNOPSIS
-.br
-.B lustre_rsync --source|-s <src> --target|-t <tgt> 
-.br
-.B\t\t\t --mdt|-m <mdt>  [--user|-u <user id>] 
-.br
-.B\t\t\t [--xattr|-x <yes|no>] [--verbose|-v]
-.br
-.B\t\t\t [--statuslog|-l <log>] [--dry-run] [--abort-on-err]
-.br
-
-.br
-.B lustre_rsync  --statuslog|-l <log>
-.br
-
-.br
-.B lustre_rsync  --statuslog|-l <log> --source|-s <source>
-.br
-.br
-.B\t\t\t --target|-t <tgt> --mdt|-m <mdt>
+.SY lustre_rsync
+.RB { --source | -s
+.IR SRC }
+.RB { --target | -t
+.IR TGT }
+.RB { --mdt | -m
+.IR MDT }
+.RB [ --user | -u
+.IR USER ID ]
+.RB [ --xattr | -x " {" yes | no }]
+.RB [ --verbose | -v ]
+.RB [ --statuslog | -l
+.IR LOG ]
+.RB [ --dry-run ]
+.RB [ --abort-on-err ]
+.SY lustre_rsync
+.RB { --statuslog | -l
+.IR LOG }
+.SY lustre_rsync
+.RB { --statuslog | -l
+.IR LOG }
+.RB { --source | -s
+.IR SOURCE }
+.RB { --target | -t
+.IR TGT }
+.RB { --mdt | -m
+.IR MDT }
+.YS
 .SH DESCRIPTION
 .B lustre_rsync
 is designed to replicate a Lustre filesystem (source filesystem) to
 another target filesystem (any filesystem type) efficiently by 
 using Lustre MDT changelogs.  A changelog user must be registered
 (see lctl (8) changelog_register) before using this tool.
-
+.PP
 The source and the target filesystems must be identical before
 the changelog user is registered. If the filesystems are discrepant,
 a utility like rsync may be used to make them identical.
-
 .SH OPTIONS
-.B --source=<src>
-.br
+.TP
+.BR -s ", " --source= \fISRC
 The path to the root of the Lustre filesystem which will be replicated.
 Mandatory if a valid statuslog created during an previous replication operation
 (--statuslog) is not specified.
-
-.B --target=<tgt>
-.br
-The path to the root where the filesystem will be replicated. Mandatory
+.TP
+.BR -t ", " --target= \fITGT
+The path to the root where the filesystem we be replicated. Mandatory
 if a valid statuslog created during an previous replication operation
 (--statuslog) is not specified. This option can be repeated if
 multiple replication targets are desired.
-
-.B --mdt=<mdt>
-.br
+.TP
+.BR -m ", " --mdt= \fIMDT
 The metadata device which is to be replicated. A changelog user must be
 registered for this device. Mandatory if a valid statuslog created
 during an previous replication operation (--statuslog) is not
 specified.
-
-.B --user=<user id>
-.br
+.TP
+.BR -u ", " --user= \fIUSER_ID
 The changelog user id for the above MDT device. See lctl(8) changelog_register.
 Mandatory if a valid statuslog created during an previous replication operation
 (--statuslog) is not specified.
-
-.B --statuslog=<log>
-.br
-A status log file to which the status of replication is saved. 
+.TP
+.BR -l ", " --statuslog= \fILOG
+A status log file to which the status of replication is saved.
 When lustre_rsync is started, the state from a previous replication
 will be read from here.
-
+.IP
 If a statuslog from a previous replication operation is specified, the
 otherwise mandatory options like --source, --target and --mdt may be
 skipped.
-
+.IP
 By specifying the options like --source, --target and --mdt in
 addition to the --statuslog option, the parameters in the statuslog
 can be overridden. The command line options take precedence over the
 ones from the statuslog.
-
-.B --xattr <yes|no>
-.br
+.TP
+.BR -x ", " --xattr " {" yes | no }
 Specify whether extended attributes are replicated or not. The default
 is to replicate extended attributes. Disabling xattrs will mean that
 Lustre striping information will not be replicated.
-
-.B --verbose
-.br
+.TP
+.BR -v ", " --verbose
 Produce a verbose output.
-
+.TP
 .B --dry-run
-.br
 Shows what the program would do without actually replicating data.
-
+.TP
 .B --abort-on-err
-.br
 Stop processing upon first error.  Default is to continue processing.
-
 .SH EXAMPLES
-
-.TP
-Register a changelog consumer for MDT lustre-MDT0000
-$ ssh $MDS lctl changelog_register \\
-.br
-	     --device lustre-MDT0000 -n
-.br
+Register a changelog consumer for MDT lustre-MDT0000:
+.RS
+.EX
+.B # ssh $MDS lctl changelog_register --device lustre-MDT0000 -n
 cl1
-
-.TP
-Replicate the lustre filesystem /mnt/lustre to /mnt/target.
-$ lustre_rsync --source=/mnt/lustre --target=/mnt/target \\ 
-.br
-             --mdt=lustre-MDT0000 --user=cl1 \\
-.br
-             --statuslog replicate.log  --verbose
-.br
+.EE
+.RE
+.PP
+Replicate the lustre filesystem /mnt/lustre to /mnt/target:
+.RS
+.EX
+.B # lustre_rsync --source=/mnt/lustre --target=/mnt/target \
+--mdt=lustre-MDT0000 --user=cl1 --statuslog replicate.log  --verbose
 Lustre filesystem: lustre
-.br
 MDT device: lustre-MDT0000
-.br
 Source: /mnt/lustre
-.br
 Target: /mnt/target
-.br
 Statuslog: replicate.log
-.br
 Changelog registration: cl1
-.br
 Starting changelog record: 0
-.br
 Errors: 0
-.br
 lustre_rsync took 1 seconds
-.br
 Changelog records consumed: 22
-.br
-
-
-.TP
-After the filesystem undergoes some changes, replicate the \
-changes. Only the statuslog needs to be specified as it has all the \
-parameters passed earlier.
-.br
-$ lustre_rsync --statuslog replicate.log --verbose
-.br
+.EE
+.RE
+.PP
+After the filesystem undergoes some changes, replicate the changes.
+Only the statuslog needs to be specified as it has all the
+parameters passed earlier:
+.RS
+.EX
+.B # lustre_rsync --statuslog replicate.log --verbose
 Replicating Lustre filesystem: lustre
-.br
 MDT device: lustre-MDT0000
-.br
 Source: /mnt/lustre
-.br
 Target: /mnt/target
-.br
 Statuslog: replicate.log
-.br
 Changelog registration: cl1
-.br
 Starting changelog record: 22
-.br
 Errors: 0
-.br
 lustre_rsync took 2 seconds
-.br
 Changelog records consumed: 42
-.br
-
-.TP
-To replicate the lustre filesystem /mnt/lustre to /mnt/target1 and /mnt/target2.
-$ lustre_rsync --source=/mnt/lustre \\ 
-.br
-             --target=/mnt/target1 --target=/mnt/target2 \\ 
-.br
-             --mdt=lustre-MDT0000 --user=cl1
-.br
-             --statuslog replicate.log
-.br
-
-
-.SH AUTHOR
-The lustre_rsync command is part of the Lustre filesystem.
-
+.EE
+.RE
+.PP
+To replicate the lustre filesystem /mnt/lustre to /mnt/target1 and /mnt/target2:
+.RS
+.EX
+.B # lustre_rsync --source=/mnt/lustre --target=/mnt/target1 \
+--target=/mnt/target2 --mdt=lustre-MDT0000 --user=cl1 --statuslog replicate.log
+.EE
+.RE
+.SH AVAILABILITY
+The
+.B lustre_rsync
+command is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.1-3324-gb53302d92d
 .SH SEE ALSO
+.BR lfs (1),
 .BR lustre (7),
-.BR lctl (8),
-.BR lfs (1)
+.BR lctl (8)

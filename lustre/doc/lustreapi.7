@@ -1,28 +1,35 @@
-.TH LUSTREAPI 7 "2014-09-21" "" "The Lustre API library"
+.TH LUSTREAPI 7 2024-08-28 Lustre "The Lustre API library"
 .SH NAME
 lustreapi \- The Lustre API library
 .SH SYNOPSIS
-.sp
-\fB#include <lustre/lustreapi.h>\fP
+.nf
+.B #include <lustre/lustreapi.h>
+.fi
 .SH DESCRIPTION
-.sp
 The lustreapi library provides functions to access and/or modify
 settings specific to the Lustre filesystem (allocation policies,
 quotas, file layouts, etc).  See the referenced man pages for details.
+.SH AUTHORS
+Lustre contributors
+.SH AVAILABILITY
+.B lustreapi
+is part of the
+.B lustre (8)
+filesystem package since release 0.10.0
+.\" Added in release 0.9.1
 .SH SEE ALSO
-.sp
-.BR llapi_changelog_clear (3)
-.BR llapi_changelog_fini (3)
-.BR llapi_changelog_free (3)
-.BR llapi_changelog_get_fd (3)
-.BR llapi_changelog_in_buf (3)
-.BR llapi_changelog_recv (3)
-.BR llapi_changelog_set_xflags (3)
-.BR llapi_changelog_start (3)
+.BR llapi_changelog_clear (3),
+.BR llapi_changelog_fini (3),
+.BR llapi_changelog_free (3),
+.BR llapi_changelog_get_fd (3),
+.BR llapi_changelog_in_buf (3),
+.BR llapi_changelog_recv (3),
+.BR llapi_changelog_set_xflags (3),
+.BR llapi_changelog_start (3),
 .BR llapi_create_volatile_param (3),
 .BR llapi_fd2parent (3),
-.BR llapi_fid2path (3),
 .BR llapi_fid_parse (3),
+.BR llapi_fid2path (3),
 .BR llapi_file_create (3),
 .BR llapi_file_get_stripe (3),
 .BR llapi_file_open (3),
@@ -78,10 +85,7 @@ quotas, file layouts, etc).  See the referenced man pages for details.
 .BR llapi_rmfid (3),
 .BR llapi_rmfid_at (3),
 .BR llapi_root_path_open (3),
-.BR llapi_search_tgt (3),
 .BR llapi_search_rootpath (3),
 .BR llapi_search_rootpath_by_dev (3),
+.BR llapi_search_tgt (3),
 .BR lustre (7)
-.SH AUTHOR
-Lustre contributors
-.

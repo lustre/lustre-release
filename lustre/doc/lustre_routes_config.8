@@ -1,62 +1,76 @@
-.TH lustre_routes_config 8 "Apr 23, 2013" Lustre "utilities"
+.TH LUSTRE_ROUTES_CONFIG 8 2024-08-28 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lustre_routes_config \- Configure routes dynamically
 .SH SYNOPSIS
-.B "lustre_routes_config"
+.SY lustre_routes_config
+.RB [ --setup | --cleanup | --dry-run | --verbose ]
+.I CONFIG_FILE
+.YS
 .SH DESCRIPTION
 lustre_routes_config sets or cleans up LNET routes from the specified config
-file.  /etc/lnet_routes.conf file can be used to automatically
+file. /etc/lnet_routes.conf file can be used to automatically
 configure routes on LNET startup.
-.LP
+.PP
 The format of the config file is:
-.br
-<network>: { gateway: <gateway>@<exit network> [hop: <hop>]
-             [priority: <priority>] }
-.LP
-Usage:
-.br
-lustre_routes_config [--setup|--cleanup|--dry-run|--verbose] <config_file>
+.SY "NETWORK: {"
+.BR gateway :
+.IR GATEWAY @ EXIT_NETWORK
+.RB [ hop :
+.IR HOP ]
+.RB [ priority :
+.IR PRIOIRTY ]
+}
+.YS
+.SH OPTIONS
 .TP
-.I "\-\-setup"
+.B --setup
 Configure routes listed in config_file
 .TP
-.I "\-\-cleanup"
+.B --cleanup
 Unconfigure routes listed in config_file
 .TP
-.I "\-\-dry-run"
+.B --dry-run
 Echo commands to be run, but do not execute them
 .TP
-.I "\-\-verbose"
+.B --verbose
 Echo commands before they are executed
-.LP
-NOTE: An LNET router is identified when its local NID appears within the
-list of routes.  However, this can not be achieved by the use of this
-script, since the script only adds extra routes after the role of the
-router is determined.  To ensure that a router is identified correctly,
-make sure to add its local NID in the routes parameter in the modprobe
-lustre configuration file.
-.SH EXAMPLE
-An example of a config file that the script expects:
-.LP
-tcp1: { gateway: 10.1.1.2@tcp0, priority: 3 }
-.br
-tcp4: { gateway: 10.3.3.4@tcp }
-.br
-tcp6: { gateway: 10.3.3.6@tcp, hop: 2, priority: 5 }
-.br
-tcp7: { gateway: 10.3.3.[6-12]@tcp, priority: 20, hop: 8 }
-.LP
-An example of script execution:
-.LP
-lustre_routes_config --setup <path/to/routes_config_file>
-.br
-lustre_routes_config --cleanup <path/to/routes_config_file>
-.SH SEE ALSO
-.BR lustre (7)
-.BR nids (5)
-.BR lctl (8)
-.BR lustre_routes_conversion (8)
 .SH FILES
 /etc/lnet_routes.conf
-.SH AUTHOR
+.SH NOTES
+An LNET router is identified when its local NID appears within the
+list of routes. However, this can not be achieved by the use of this
+script, since the script only adds extra routes after the role of the
+router is determined. To ensure that a router is identified correctly,
+make sure to add its local NID in the routes parameter in the modprobe
+lustre configuration file.
+.SH EXAMPLES
+An example of a config file that the script expects:
+.RS
+.EX
+tcp1: { gateway: 10.1.1.2@tcp0, priority: 3 }
+tcp4: { gateway: 10.3.3.4@tcp }
+tcp6: { gateway: 10.3.3.6@tcp, hop: 2, priority: 5 }
+tcp7: { gateway: 10.3.3.[6-12]@tcp, priority: 20, hop: 8 }
+.EE
+.RE
+.PP
+An example of script execution:
+.RS
+.EX
+lustre_routes_config --setup <path/to/routes_config_file>
+lustre_routes_config --cleanup <path/to/routes_config_file>
+.EE
+.RE
+.SH AUTHORS
 Amir Shehata
+.SH AVAILABILITY
+.B lustre_routes_config
+is part of the
+.BR lustre (7)
+filesystem package since release 2.4.0
+.\" Added in commit v2_3_64_0-85-g56e322f722
+.SH SEE ALSO
+.BR nids (5),
+.BR lustre (7),
+.BR lctl (8),
+.BR lustre_routes_conversion (8)
