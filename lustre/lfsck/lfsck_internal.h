@@ -657,7 +657,7 @@ struct lfsck_instance {
 	/* For the lfsck_lmv_unit to be handled. */
 	struct list_head	  li_list_lmv;
 
-	atomic_t		  li_ref;
+	refcount_t		  li_ref;
 	atomic_t		  li_double_scan_count;
 	struct ptlrpc_thread	  li_thread;
 	struct task_struct	 *li_task;
@@ -1395,7 +1395,7 @@ static inline void lfsck_component_put(const struct lu_env *env,
 static inline struct lfsck_instance *
 lfsck_instance_get(struct lfsck_instance *lfsck)
 {
-	atomic_inc(&lfsck->li_ref);
+	refcount_inc(&lfsck->li_ref);
 
 	return lfsck;
 }
@@ -1403,7 +1403,7 @@ lfsck_instance_get(struct lfsck_instance *lfsck)
 static inline void lfsck_instance_put(const struct lu_env *env,
 				      struct lfsck_instance *lfsck)
 {
-	if (atomic_dec_and_test(&lfsck->li_ref))
+	if (refcount_dec_and_test(&lfsck->li_ref))
 		lfsck_instance_cleanup(env, lfsck);
 }
 

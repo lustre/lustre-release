@@ -3652,7 +3652,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 	INIT_LIST_HEAD(&lfsck->li_list_double_scan);
 	INIT_LIST_HEAD(&lfsck->li_list_idle);
 	INIT_LIST_HEAD(&lfsck->li_list_lmv);
-	atomic_set(&lfsck->li_ref, 1);
+	refcount_set(&lfsck->li_ref, 1);
 	atomic_set(&lfsck->li_double_scan_count, 0);
 	init_waitqueue_head(&lfsck->li_thread.t_ctl_waitq);
 	lfsck->li_out_notify = notify;
