@@ -1,9 +1,11 @@
-.TH lgss_sk 8 "2016 Jan 12" Lustre "configuration utilities"
+.TH LGSS_SK 8 2024-08-29 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lgss_sk \- Lustre GSS Shared-Key tool
 .SH SYNOPSIS
-.B "lgss_sk [OPTIONS] {-r|-w|-m|-l} <keyfile>"
-.br
+.SY lgss_sk
+.RI [ OPTIONS ]
+.RB { -r | -w | -m | -l }
+.I KEYFILE
 .SH DESCRIPTION
 .B lgss_sk
 can be used to read, write, modify, and load the contents of a shared-key keyfile.
@@ -11,79 +13,82 @@ can be used to read, write, modify, and load the contents of a shared-key keyfil
 .B lgss_sk
 accepts the following options:
 .TP
-.I "-l, --load <keyfile>"
+.BR -l ", " --load \ \fIKEYFILE
 Load key from file into user's session keyring.
 .TP
-.I "-m, --modify <keyfile>"
+.BR -m ", " --modify \ \fIKEYFILE
 Modify a file's key attributes.
 .TP
-.I "-r, --read <keyfile>"
+.BR -r ", " --read \ \fIKEYFILE
 Show file's key attributes.
 .TP
-.I "-w, --write <keyfile>"
+.BR -w ", " --write \ \fIKEYFILE
 Generate key file.
-.HP
-Modify/Write Options:
+.SS
+.B MODIFY/WRITE OPTIONS
 .TP
-.I "-c, --crypt <num>"
+.BR -c ", " --crypt \ \fINUM
 Cipher for encryption (Default: AES-256-CTR)
 .RS
 AES-256-CTR
 .RE
 .TP
-.I "-i, --hmac <num>"
+.BR -i ", " --hmac \ \fINUM
 Hash algorithm for integrity (Default: SHA256)
-.RS
+.EX
 SHA256
-.br
 SHA512
-.RE
+.EE
 .TP
-.I "-e, --expire <num>"
+.BR -e ", " --expire \ \fINUM
 Seconds before session contexts generated from key expire and are regenerated
 (Default: 604800 seconds (7 days)).
 .TP
-.I "-f, --fsname <name>"
+.BR -f ", " --fsname \ \fINAME
 File system name for key.
 .TP
-.I "-g, --mgsnids <nids>"
-Comma-separated list of MGS NIDs.  Only required when mgssec is used (Default: "").
+.BR -g ", " --mgsnids \ \fINIDS
+Comma-seperated list of MGS NIDs. Only required when mgssec is used (Default: "").
 .TP
-.I "-n, --nodemap <name>"
+.BR -n ", " --nodemap \ \fINAME
 Nodemap name for key (Default: "default").
 .TP
-.I "-p, --prime-bits <len>"
+.BR -p ", " --prime-bits \ \fILEN
 Length of prime (p) in bits used for the DHKE (Default: 2048).  This is
 generated only for client keys and can take a while to generate.  For server
 and MGS keys this value also sets the minimum acceptable prime length from a
-client.  If a client attempts to connect with a smaller prime it will reject
-the connection.  In this way servers can "guarantee" the minimum encryption
+client. If a client attempts to connect with a smaller prime it will reject
+the connection. In this way servers can "guarantee" the minimum encryption
 level acceptable.
 .TP
-.I "-t, --type <type>"
+.BR -t ", " --type \ \fITYPE
 The type is a mandatory parameter for writing a key and optional for modifying.
 Valid key types:
-.nf
-mgs    - is used for the MGS where --mgssec is used
-server - for MDS or OSS servers
-client - For clients as well as servers who communicate with other servers in a
-         client context (e.g. MDS communication with OSTs)
-.fi
+.TP 10
+.B mgs
+is used for the MGS where --mgssec is used
 .TP
-.I "-k, --shared <len>"
+.B server
+for MDS or OSS servers
+.TP
+.B client
+For clients as well as servers who communicate with other servers in a
+client context (e.g. MDS communication with OSTs)
+.TP
+.BR -k ", " --shared \ \fILEN
 Shared key length in bits (Default: 256).
 .TP
-.I "-d, --data <file>"
-Shared key entopy data source (default: /dev/random).  It is possible to
+.BR -d ", " --data \ \fIFILE
+Shared key entopy data source (default: /dev/random). It is possible to
 use /dev/urandom for testing, but this may provide less security in some
-cases.  You may need to press keys on the keyboard or move the mouse
+cases. You may need to press keys on the keyboard or move the mouse
 (if directly attached to the system) or cause disk IO (if system is remote),
 in order to generate entropy for the key if there is not a hardware random
 number generator on the system.
-.HP
-Other Options:
+.SS
+OTHER OPTIONS
 .TP
-.I "-v, --verbose"
+.BR -v ", " --verbose
 Increase verbosity for errors.
 .SH NOTES
 The key file is generally the same for client and servers with a few exceptions:
@@ -100,7 +105,6 @@ or
 .B mgs
 key can be distributed to a client but the clients
 must change the type to generate a prime.
-.HP
 .SH EXAMPLES
 Create a key for file system
 .B tank
@@ -109,28 +113,29 @@ for nodemap
 with type server.
 Once on the client the file should be modified to reflect that it is of type
 .B client
-and will also generate a prime for the key.
-.IP
-.nf
-[root@server ~]# lgss_sk -f tank -n biology -t server -w tank.server.biology.key
-[root@server ~]# scp tank.server.biology.key user@client:tank.client.biology.key
-
-[root@client ~]# lgss_sk -t client -m tank.client.biology.key
-.fi
-.LP
+and will also generate a prime for the key:
+.RS
+.EX
+.B [root@server ~]# lgss_sk -f tank -n biology -t server -w tank.server.biology.key
+.B [root@server ~]# scp tank.server.biology.key user@client:tank.client.biology.key
+.B [root@client ~]# lgss_sk -t client -m tank.client.biology.key
+.EE
+.RE
+.PP
 Add MGS NIDs to existing key:
-.IP
-.nf
+.RS
+.EX
 [root@server ~]# lgss_sk -g 192.168.1.101@tcp,10.10.0.101@o2ib \\
 -m tank.server.biology.key
-
+\&
 [root@client ~]# lgss_sk -g 192.168.1.101@tcp,10.10.0.101@o2ib \\
 -m tank.client.biology.key
-.fi
-.LP
+.EE
+.RE
+.PP
 Show key attributes:
-.IP
-.nf
+.RS
+.EX
 [root@server ~]# lgss_sk -r tank.server.biology.key
 Version:        1
 Type:           server
@@ -145,7 +150,7 @@ Nodemap name:   biology
 Shared key:
   0000: c160 00c6 e5ba 11df 50cb c420 ae61 c1b3  .`......P.. .a..
   0010: c76e 5a82 ce48 fde9 d319 ce26 cfc4 b91e  .nZ..H.....&....
-
+\&
 [root@client ~]# lgss_sk -r tank.client.biology.key
 Version:        1
 Type:           client
@@ -177,8 +182,13 @@ Prime (p) :
   00d0: 7fc6 e77d 1220 b807 6c7c 5660 b703 39d2  ...}. ..l|V`..9.
   00e0: 1d99 bd89 e2f1 3e40 74a1 709c 6e6c 6624  ......>@t.p.nlf$
   00f0: fad6 97bf c3e0 b0d4 cefc 3596 dd69 5223  ..........5..iR#
-
-.fi
-.br
-.SH "SEE ALSO"
+.EE
+.RE
+.SH AVAILABILITY
+.B lgss_sk
+is part of the
+.BR lustre (7)
+filesystem package since release 2.9.0
+.\" Added in commit v2_8_54_0-7-g3565394baa
+.SH SEE ALSO
 .BR nids (5)

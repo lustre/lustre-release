@@ -1,47 +1,44 @@
-.TH l_getidentity 1 "Dec 7, 2016" Lustre "utilities"
+.TH L_GETIDENTITY 8 2024-08-29 Lustre "Lustre Configuration Utilities"
 .SH NAME
 l_getidentity \- Handle Lustre user/group cache upcall
 .SH SYNOPSIS
-.B "l_getidentity {-d | mdtname} uid"
+.SY l_getidentity
+.RB { -d | mdtname }
+.I UID
+.YS
 .SH DESCRIPTION
 The identity upcall command specifies the path to an executable that,
 when properly installed, is invoked to resolve the numeric
-.I uid
+.I UID
 to a group membership list.
-.LP
+.PP
 .B l_getidentity
 is the reference implementation of the user/group cache upcall.
 This command is normally run directly by the Lustre MDS service
 and specifies the
-.I mdtname
+.B mdtname
 argument for the MDT that should be updated.
-.br
 .SS "The permissions file"
-.PP
-.I /etc/lustre/perm.conf
-supports a flat file database of permissions in the format
-.br
- UID<space>NID<space>perm1,perm2,...,permN
-.br
-
-.br
+.B /etc/lustre/perm.conf
+supports a flat file database of permissions in the format:
+.EX
+.IB UID <space> NID <space> PERM1 , PERM2 ,..., PERMN
+.EE
 where
-.B perm
+.I PERM
 is one of:
-.I [no]setuid
-.I [no]setgid
-.I [no]setgrp
-.I [no]rmtacl
-.I [no]rmtown
-.br
- 
-.br
+.B [no]setuid
+.B [no]setgid
+.B [no]setgrp
+.B [no]rmtacl
+.B [no]rmtown
+.PP
 .BR nss (5)
 modules can be enabled for auth handling by adding a 
 .B lookup 
 command with a list of nss modules to the first line of
 .BR perm.conf
-.br
+.PP
 At the time of writing, known 
 .BR nss (5)
 modules include:
@@ -49,15 +46,11 @@ modules include:
 additional modules may be documented in
 .BR nsswitch.conf (5)
 or installed separately.
-.br
- 
-.br
+.PP
 .BR nss (5)
 modules are searched in order. Once an entry is found in
 the module no further modules are searched.
-.br
- 
-.br
+.PP
 A special
 .B lustre
 module is used to enable lustre specific password and group
@@ -65,9 +58,7 @@ auth by way of
 .B /etc/lustre/passwd
 and
 .B /etc/lustre/group
-.br
- 
-.br
+.PP
 For historical reasons
 .B nss_files
 was needed to use the
@@ -79,59 +70,59 @@ This alias is now deprecated and will be removed in a future release.
 .TP
 .B -d
 Run in debug mode and print supplementary groups information for
-.I uid
+.I UID
 to
 .B stdout
 instead of updating Lustre.
+.SH FILES
+.EX
+.RI /{proc,sys}/fs/lustre/mdt/ mdt-service /identity_upcall
+.RI /etc/lustre/perm.conf
+.RI /etc/lustre/passwd
+.RI /etc/lustre/group
+.EE
+.SH LIMITS
+A maximum of 8 nss modules can be enabled.
 .SH EXAMPLES
 The identity upcall command can be specified via:
-.br
-.RI "lctl set_param mdt." mdtname .identity_upcall= path_to_upcall
-.br
- 
-.br
-Enable lustre auth and ldap
-.br
- [/etc/lustre/perm.conf]
-.br
-.B lookup lustre ldap
-.br
- 
-.br
- [/etc/lustre/passwd]
-.br
-  root:x:0:0:root:/root:/bin/bash
-.br
-  ...
-.br
- [/etc/lustre/group]
-.br
-  root:x:0:root
-.br
-  ...
-.br
-Lustre passwd and group files use the same format as the system 
+.RS
+.EX
+.BI "lctl set_param mdt." MDTNAME .identity_upcall= PATH_TO_UPCALL
+.EE
+.RE
+.PP
+Enable lustre auth and ldap:
+.RS
+.EX
+[/etc/lustre/perm.conf]
+.B # lookup lustre ldap
+\&
+[/etc/lustre/passwd]
+root:x:0:0:root:/root:/bin/bash
+\&...
+[/etc/lustre/group]
+root:x:0:root
+\&...
+.EE
+.RE
+Lustre passwd and group files use the same format as the system
 .BR passwd (5)
 and
 .BR group (5)
 files.
-.br
-In this configuration root is local to the cluster and all other perms are delegated to ldap.
-.br
-.SH LIMITS
-A maximum of 8 nss modules can be enabled.
-.b4
-.SH FILES
-.RI /{proc,sys}/fs/lustre/mdt/ mdt-service /identity_upcall
-.br
-.RI /etc/lustre/perm.conf
-.br
-.RI /etc/lustre/passwd
-.br
-.RI /etc/lustre/group
+.P
+In this configuration root is local to the cluster
+and all other perms are delegated to ldap.
+.EE
+.SH AVAILABILITY
+.B l_getidentity
+is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.0.1-152-gd2d56f38da
 .SH SEE ALSO
+.BR group (5),
 .BR nss (5),
-.BR passwd (5),
-.BR group (5)
-.br
+.BR passwd (5)
+.PP
 Lustre Programming Interfaces section of Lustre Operations Manual.
