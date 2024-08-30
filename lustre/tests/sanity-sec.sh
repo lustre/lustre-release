@@ -2286,8 +2286,10 @@ nodemap_exercise_fileset() {
 
 	# check whether fileset was removed on remote nodes
 	wait_nm_sync $nm fileset "nodemap.${nm}.fileset="
-	do_facet mgs $LCTL set_param -P -d nodemap.${nm}.fileset ||
-		error "unable to remove fileset rule on $nm nodemap"
+	if ! $have_persistent_fset_cmd; then
+		do_facet mgs $LCTL set_param -P -d nodemap.${nm}.fileset ||
+			error "unable to remove fileset rule on $nm nodemap"
+	fi
 
 	# re-mount client
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||

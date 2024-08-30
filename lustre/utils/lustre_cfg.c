@@ -414,7 +414,7 @@ int jt_lcfg_param(int argc, char **argv)
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_PARAM);
 }
 
-static int lcfg_setparam_perm(const char *func, char *buf)
+static int lcfg_setparam_perm(const char *func, char *buf, bool del)
 {
 	int rc = 0;
 	struct lustre_cfg_bufs bufs;
@@ -436,8 +436,9 @@ static int lcfg_setparam_perm(const char *func, char *buf)
 	 * future.
 	 */
 	lustre_cfg_bufs_set_string(&bufs, 0, "general");
-
 	lustre_cfg_bufs_set_string(&bufs, 1, buf);
+	if (del)
+		lustre_cfg_bufs_set_string(&bufs, 2, "del");
 
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount,
 				     bufs.lcfg_buflen));
@@ -482,21 +483,19 @@ int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt)
 			size_t len;
 
 			len = strlen(buf);
-			/* Consider param ends at the first '=' in the buffer
-			 * and make sure it always ends with '=' as well
-			 */
+			/* make sure it always ends with '=' */
 			end_pos = memchr(buf, '=', len - 1);
-			if (end_pos) {
-				*(++end_pos) = '\0';
-			} else if (buf[len - 1] != '=') {
-				buf = malloc(len + 2);
+			if (!end_pos) {
+				size_t buflen = len + 2;
+
+				buf = malloc(buflen);
 				if (buf == NULL)
 					return -ENOMEM;
-				sprintf(buf, "%s=", argv[i]);
+				snprintf(buf, buflen, "%s=", argv[i]);
 			}
 		}
 
-		rc = lcfg_setparam_perm(argv[0], buf);
+		rc = lcfg_setparam_perm(argv[0], buf, popt->po_delete);
 		if (buf != argv[i])
 			free(buf);
 	}
@@ -504,7 +503,7 @@ int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt)
 	return rc;
 }
 
-static int lcfg_conf_param(const char *func, char *buf)
+static int lcfg_conf_param(const char *func, char *buf, bool del)
 {
 	int rc;
 	struct lustre_cfg_bufs bufs;
@@ -512,6 +511,8 @@ static int lcfg_conf_param(const char *func, char *buf)
 
 	lustre_cfg_bufs_reset(&bufs, NULL);
 	lustre_cfg_bufs_set_string(&bufs, 1, buf);
+	if (del)
+		lustre_cfg_bufs_set_string(&bufs, 2, "del");
 
 	/* We could put other opcodes here. */
 	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
@@ -542,7 +543,7 @@ static int lcfg_conf_param(const char *func, char *buf)
 int jt_lcfg_confparam(int argc, char **argv)
 {
 	int rc;
-	int del = 0;
+	bool del = false;
 	char *buf = NULL;
 
 	/* mgs_setparam processes only lctl buf #1 */
@@ -552,7 +553,7 @@ int jt_lcfg_confparam(int argc, char **argv)
 	while ((rc = getopt(argc, argv, "d")) != -1) {
 		switch (rc) {
 		case 'd':
-			del = 1;
+			del = true;
 			break;
 		default:
 			return CMD_HELP;
@@ -560,28 +561,28 @@ int jt_lcfg_confparam(int argc, char **argv)
 	}
 
 	buf = argv[optind];
-
 	if (del) {
-		char *ptr;
+		char *end_pos;
+		size_t len;
 
-		/* for delete, make it "<param>=\0" */
-		buf = malloc(strlen(argv[optind]) + 2);
-		if (!buf) {
-			rc = -ENOMEM;
-			goto out;
+		len = strlen(buf);
+		/* make sure it always ends with '=' */
+		end_pos = memchr(buf, '=', len - 1);
+		if (!end_pos) {
+			size_t buflen = len + 2;
+
+			buf = malloc(buflen);
+			if (buf == NULL)
+				return -ENOMEM;
+			snprintf(buf, buflen, "%s=", argv[optind]);
 		}
-		/* put an '=' on the end in case it doesn't have one */
-		sprintf(buf, "%s=", argv[optind]);
-		/* then truncate after the first '=' */
-		ptr = strchr(buf, '=');
-		*(++ptr) = '\0';
 	}
 
-	rc = lcfg_conf_param(argv[0], buf);
+	rc = lcfg_conf_param(argv[0], buf, del);
 
 	if (buf != argv[optind])
 		free(buf);
-out:
+
 	if (rc < 0) {
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
 			strerror(-rc));
@@ -1235,9 +1236,9 @@ static int lcfg_apply_param_yaml(const char *func, const char *filename)
 			       "set_param" : "conf_param", buf);
 
 			if (confset == PT_SETPARAM)
-				rc = lcfg_setparam_perm(func, buf);
+				rc = lcfg_setparam_perm(func, buf, 0);
 			else
-				rc = lcfg_conf_param(func, buf);
+				rc = lcfg_conf_param(func, buf, 0);
 			if (rc) {
 				printf("error: failed to apply parameter rc = %d, tyring next one\n",
 				       rc);

@@ -10763,7 +10763,7 @@ test_123ag() { # LU-15142
 		grep -c jobid_name)
 	(( rec == 1)) || error "parameter is not set"
 	# usage with ordinary set_param format works too
-	do_facet mgs $LCTL set_param -P -d jobid_name="ANY"
+	do_facet mgs $LCTL set_param -P -d jobid_name="TESTNAME1"
 	rec=$(do_facet mgs $LCTL --device MGS llog_print params |
 		grep -c jobid_name)
 	(( rec == 0 )) || error "parameter was not deleted, check #2"
@@ -10873,6 +10873,114 @@ test_123ai() { #LU-16167
 
 }
 run_test 123ai "llog_print display all non skipped records"
+
+cleanup_123aj() {
+	local svc=$1
+
+	echo "cleanup test 123aj"
+
+	# cancel last TBF parameter records
+	do_facet mgs "$LCTL set_param -P -d  ${svc}.nrs_tbf_rule" || true
+	do_facet mgs "$LCTL set_param -P -d  ${svc}.nrs_policies" || true
+
+	# restore old NRS policy
+	do_nodes $(comma_list $(osts_nodes)) \
+		"$LCTL set_param ${svc}.nrs_policies=fifo"
+}
+
+check_compound_param_val() {
+	local value llog_print
+	local svc=$1
+	shift
+
+	llog_print=$(do_facet mgs "$LCTL llog_print params") ||
+		error "fail to read CONFIG/params"
+
+	for value in "$@"; do
+		local n=$(grep -c "${svc}.*$value }$" <<< "$llog_print")
+
+		(( n > 0 )) || error "fail to found '$value' in params config"
+		(( n == 1 )) || error "several records found ($n) for '$value'"
+	done
+}
+
+add_random_spaces()
+{
+	local word str
+	local spaces=$(printf '%*s' $(($RANDOM % 4)) '')
+
+	str=$spaces
+	for word in $*; do
+		spaces=$(printf '%*s' $(($RANDOM % 4)) '')
+		str+="$word $spaces"
+	done
+
+	echo "${str:0:-1}"
+}
+
+test_123aj() { #LU-17920
+	local old_policy
+	local key rule
+	local llog_print
+	local -A tbf_rules
+	local ost_io="ost.OSS.ost_io"
+
+	tbf_rules[rule1]="start rule1 uid={500 502 } rate=1000"
+	tbf_rules[rule2]="start rule2 nid={10.10.2.20@tcp} rate=1000"
+	tbf_rules[rule3]="start rule3 jobid={cat.0.0} rate=1000"
+	tbf_rules[rule4]="start rule4 jobid={fio.0.0} rate=500"
+	tbf_rules[change4_1]="change rule4 rate=50"
+	tbf_rules[change4_2]="change rule4 rate=5000"
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	(( MGS_VERSION >= $(version_code v2_16_54-23) )) ||
+		skip "need MGS >= v2_16_54-23 for compound llog records"
+
+	[ -d $MOUNT/.lustre ] || setup
+
+	stack_trap "cleanup_123aj $ost_io"
+
+	do_facet mgs "$LCTL set_param -P ${ost_io}.nrs_policies=tbf" ||
+		error "fail to set nrs_policies=tbf on MGS"
+
+	for rule in "${tbf_rules[@]}"; do
+		do_facet mgs "$LCTL set_param -P ${ost_io}.nrs_tbf_rule='$rule'" ||
+			error "fail to set nrs_tbf_rule='$rule' on MGS"
+
+		# the rec should be added only the first time
+		rule="$(add_random_spaces "$rule")"
+		do_facet mgs "$LCTL set_param -P ${ost_io}.nrs_tbf_rule='$rule'" ||
+			error "fail to set nrs_tbf_rule='$rule' on MGS"
+	done
+	check_compound_param_val $ost_io "${tbf_rules[@]}"
+
+	# remove all the rules
+	do_facet mgs "$LCTL set_param -P -d ${ost_io}.nrs_tbf_rule" ||
+		error "fail to remove all the TBF rules"
+
+	llog_print=$(do_facet mgs "$LCTL llog_print params") ||
+		error "fail to read CONFIG/params"
+	! grep -q nrs_tbf_rule <<< "$llog_print" ||
+		error "fail to remove all the TBF rules"
+
+	# re-add the rules
+	for rule in "${tbf_rules[@]}"; do
+		do_facet mgs "$LCTL set_param -P ${ost_io}.nrs_tbf_rule='$rule'" ||
+			error "fail to set nrs_tbf_rule='$rule' on MGS"
+	done
+	check_compound_param_val $ost_io "${tbf_rules[@]}"
+
+	# shuffle and remove the rule one by one
+	printf "%s\n" "${!tbf_rules[@]}" | sort -R |
+		while read key; do
+			rule="${tbf_rules[$key]}"
+			unset tbf_rules[$key]
+			do_facet mgs "$LCTL set_param -P -d ${ost_io}.nrs_tbf_rule='$rule'" ||
+				error "fail to set nrs_tbf_rule='$rule' on MGS"
+			check_compound_param_val $ost_io "${tbf_rules[@]}"
+		done
+}
+run_test 123aj "check permanent TBF rules"
 
 test_123_prep() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"

@@ -1325,13 +1325,45 @@ int llog_erase(const struct lu_env *env, struct llog_ctxt *ctxt,
 }
 EXPORT_SYMBOL(llog_erase);
 
-/*
- * Helper function for write record in llog.
+/* Get current llog cookie from llog_process_thread session */
+int llog_get_cookie(const struct lu_env *env, struct llog_cookie *out)
+{
+	struct llog_thread_info *lti = llog_info(env);
+
+	if (!out || !lti)
+		return -EINVAL;
+
+	memcpy(out, &lti->lgi_cookie, sizeof(lti->lgi_cookie));
+
+	return 0;
+}
+EXPORT_SYMBOL(llog_get_cookie);
+
+/**
+ * Helper function for write record in llog with a custom cookie.
  * It hides all transaction handling from caller.
  * Valid only with local llog.
+ *
+ * \param[in]  env		execution environment
+ * \param[in]  loghandle	llog handle of the current llog
+ * \param[in]  rec		llog record header. This is a real header of
+ *				the full llog record to write. This is
+ *				the beginning of buffer to write, the length
+ *				of buffer is stored in \a rec::lrh_len
+ * \param[in,out] reccookie	pointer to the cookie to return back if needed.
+ *				It is used for further cancel of this llog
+ *				record.
+ * \param[in]  idx		index of the llog record. If \a idx == -1 then
+ *				this is append case, otherwise \a idx is
+ *				the index of record to modify
+ *
+ * \retval			0 on successful write && \a reccookie == NULL
+ *				1 on successful write && \a reccookie != NULL
+ * \retval			negative error if write failed
  */
-int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
-	       struct llog_rec_hdr *rec, int idx)
+int llog_write_cookie(const struct lu_env *env, struct llog_handle *loghandle,
+		      struct llog_rec_hdr *rec, struct llog_cookie *cookie,
+		      int idx)
 {
 	struct dt_device	*dt;
 	struct thandle		*th;
@@ -1382,7 +1414,7 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 	need_cookie = !(idx == LLOG_HEADER_IDX || idx == LLOG_NEXT_IDX);
 
 	down_write(&loghandle->lgh_lock);
-	if (need_cookie) {
+	if (need_cookie && !cookie) {
 		struct llog_thread_info *lti = llog_info(env);
 
 		/* cookie comes from llog_process_thread */
@@ -1391,7 +1423,7 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 		/* upper layer didn`t pass cookie so change rc */
 		rc = (rc == 1 ? 0 : rc);
 	} else {
-		rc = llog_write_rec(env, loghandle, rec, NULL, idx, th);
+		rc = llog_write_rec(env, loghandle, rec, cookie, idx, th);
 	}
 	if (rc == 0 && update_attr) {
 		loghandle->lgh_timestamp = timestamp;
@@ -1404,6 +1436,13 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 out_trans:
 	dt_trans_stop(env, dt, th);
 	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_write_cookie);
+
+int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
+	       struct llog_rec_hdr *rec, int idx)
+{
+	return llog_write_cookie(env, loghandle, rec, NULL, idx);
 }
 EXPORT_SYMBOL(llog_write);
 

@@ -109,7 +109,7 @@ struct lustre_disk_data {
 #define LDD_F_IR_CAPABLE	0x2000
 /** the MGS refused to register the target. */
 #define LDD_F_ERROR		0x4000
-/** process at lctl conf_param */
+/** process at lctl set_param */
 #define LDD_F_PARAM2		0x8000
 /** the target shouldn't use local logs */
 #define LDD_F_NO_LOCAL_LOGS	0x10000

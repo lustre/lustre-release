@@ -18,6 +18,8 @@
 #ifndef _UAPI_LUSTRE_PARAM_H
 #define _UAPI_LUSTRE_PARAM_H
 
+#include <linux/string.h>
+
 /** \defgroup param param
  *
  * @{
@@ -53,6 +55,11 @@
 #define PARAM_ROOTSQUASH	   "root_squash="      /* root squash */
 #define PARAM_NOSQUASHNIDS	   "nosquash_nids="    /* no squash nids */
 #define PARAM_AUTODEGRADE	   "autodegrade="      /* autodegrade OST's */
+
+/* compound parameters */
+#define PARAM_TBFRULES          "nrs_tbf_rule="	/* start|change|stop tbf rule */
+#define PARAM_PCC		"pcc="		/* add|del|clear pcc datasets */
+#define PARAM_WBC		"wbc="		/* Metadata writeback cache */
 
 /* Prefixes for parameters handled by obd's proc methods (XXX_process_config) */
 #define PARAM_OST		"ost."

@@ -1061,6 +1061,294 @@ out_pop:
 	RETURN(rc);
 }
 
+static int param_value_cmp(const char *val1, const char *val2)
+{
+	int rc = 0;
+
+	if (!val1 || !val2)
+		return val1 != val2;
+
+	do {
+		size_t len1, len2;
+
+		val1 += strspn(val1, " ");
+		val2 += strspn(val2, " ");
+		len1 = strcspn(val1, " ");
+		len2 = strcspn(val2, " ");
+		if (len1 != len2) {
+			rc = 1;
+			break;
+		} else if (!len1) {
+			break;
+		}
+
+		rc = (strncmp(val1, val2, len1) != 0);
+		val1 += len1;
+		val2 += len2;
+	} while (!rc);
+
+	return rc;
+}
+
+enum mgs_modify_param_mode {
+	MPM_REPLACE = 0,
+	MPM_DELETE,
+	MPM_LOOKUP_VAL,
+};
+
+struct mgs_modify_param_data {
+	enum mgs_modify_param_mode mpm_mode;
+	__s64			mpm_canceltime;
+	char			*mpm_tgt;
+	char			*mpm_name;
+	char			*mpm_value;
+	struct llog_rec_hdr	*mpm_start;
+	struct llog_cookie	mpm_start_cookie;
+	int			mpm_deleted;
+};
+
+static int mgs_modify_param_hdl(const struct lu_env *env,
+				struct llog_handle *llh,
+				struct llog_rec_hdr *rec, void *data)
+{
+	struct mgs_modify_param_data *mpm = data;
+	struct lustre_cfg *lcfg = REC_DATA(rec);
+	int cfg_len = REC_DATA_LEN(rec);
+	char *name;
+	char *value;
+	bool value_match;
+	int rc;
+
+	ENTRY;
+	if (rec->lrh_type != OBD_CFG_REC) {
+		CERROR("%s: unhandled lrh_type %#x: rc = %d\n",
+		       llh->lgh_name, rec->lrh_type, -EINVAL);
+		RETURN(-EINVAL);
+	}
+
+	rc = lustre_cfg_sanity_check(lcfg, cfg_len);
+	if (rc) {
+		CERROR("%s: Insane config: rc = %d\n", llh->lgh_name, rc);
+		RETURN(rc);
+	}
+
+	/* We only care about markers */
+	if (lcfg->lcfg_command == LCFG_MARKER) {
+		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+
+		if (!(marker->cm_flags & (CM_START | CM_END)) ||
+		    (marker->cm_flags & CM_SKIP))
+			RETURN(0);
+
+		if (strcmp(mpm->mpm_name, marker->cm_comment) != 0 ||
+		    strcmp(mpm->mpm_tgt, marker->cm_tgtname) != 0)
+			RETURN(0);
+
+		marker->cm_flags |= CM_SKIP;
+		marker->cm_canceltime = mpm->mpm_canceltime;
+		if (marker->cm_flags & CM_START) {
+			/* missing end section */
+			if (unlikely(mpm->mpm_start))
+				GOTO(free_mdp, rc = -EBADMSG);
+
+			/* save the start marker to skip */
+			rc = llog_get_cookie(env, &mpm->mpm_start_cookie);
+			if (rc)
+				RETURN(rc);
+
+			OBD_ALLOC(mpm->mpm_start, rec->lrh_len);
+			if (!mpm->mpm_start)
+				RETURN(-ENOMEM);
+
+			memcpy(mpm->mpm_start, rec, rec->lrh_len);
+
+			RETURN(0);
+		}
+
+		if (!mpm->mpm_start)
+			RETURN(0);
+		if (mpm->mpm_mode == MPM_LOOKUP_VAL)
+			GOTO(free_mdp, rc = 0);
+
+		/* skip the param section : re-write CM_START marker */
+		rc = llog_write_cookie(env, llh, mpm->mpm_start,
+				       &mpm->mpm_start_cookie,
+				       mpm->mpm_start->lrh_index);
+		if (rc < 0)
+			GOTO(free_mdp, rc);
+		/* re-write CM_END marker */
+		rc = llog_write(env, llh, rec, rec->lrh_index);
+		if (rc)
+			GOTO(free_mdp, rc);
+
+		mpm->mpm_deleted++;
+		if (mpm->mpm_mode == MPM_REPLACE)
+			rc = LLOG_PROC_BREAK;
+
+		GOTO(free_mdp, rc);
+	}
+
+	if (!mpm->mpm_start)
+		RETURN(0);
+	if (lcfg->lcfg_command != LCFG_PARAM &&
+	    lcfg->lcfg_command != LCFG_SET_PARAM)
+		RETURN(0);
+
+	/* check old parameter value */
+	value = lustre_cfg_string(lcfg, 1);
+	name = strsep(&value, "=");
+
+	/* param does not match with marker comment -> ignore */
+	if (unlikely(strcmp(mpm->mpm_name, name) != 0))
+		GOTO(free_mdp, rc = 0);
+	/* no value to check */
+	if (!mpm->mpm_value)
+		RETURN(0);
+
+	value_match = value && !param_value_cmp(mpm->mpm_value, value);
+
+	switch (mpm->mpm_mode) {
+	case MPM_DELETE:
+		if (!value_match)
+			GOTO(free_mdp, rc = 0);
+		break;
+	case MPM_REPLACE:
+	case MPM_LOOKUP_VAL:
+		if (value_match)
+			GOTO(free_mdp, rc = -EEXIST);
+		break;
+	default:
+		RETURN(-EINVAL);
+	}
+
+	RETURN(0);
+
+free_mdp:
+	OBD_FREE(mpm->mpm_start, mpm->mpm_start->lrh_len);
+	mpm->mpm_start = NULL;
+
+	return rc;
+}
+
+static int param_is_compound(const char *param)
+{
+	size_t len;
+	const char *str = param;
+
+	len = strcspn(str, ".=");
+	while (str[len] == '.') {
+		str += len + 1;
+		len = strcspn(str, ".=");
+	}
+
+	if (!len || str[len] != '=')
+		return 0;
+
+	len++;
+	if (strncmp(str, PARAM_TBFRULES, len) == 0 ||
+	    strncmp(str, PARAM_PCC, len) == 0 ||
+	    strncmp(str, PARAM_WBC, len) == 0)
+		return 1;
+
+	return 0;
+}
+
+/**
+ * Mark param section with CM_SKIP matching param name and value
+ * Return code:
+ * 0 - deleted successfully,
+ * 1 - no modification was done
+ * negative - error
+ */
+static int mgs_modify_param(const struct lu_env *env, struct mgs_device *mgs,
+			    struct fs_db *fsdb, struct mgs_target_info *mti,
+			    char *logname, char *devname, char *param, bool del)
+{
+	struct llog_handle *loghandle;
+	struct llog_ctxt *ctxt;
+	struct mgs_modify_param_data mpm = { 0 };
+	char *dup;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(mutex_is_locked(&fsdb->fsdb_mutex));
+	CDEBUG(D_MGS, "modify %s/%s/%s del=%d\n", logname, devname, param, del);
+
+	if (!param || !param[0])
+		RETURN(-EINVAL);
+
+	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
+	LASSERT(ctxt != NULL);
+	rc = llog_open(env, ctxt, &loghandle, NULL, logname, LLOG_OPEN_EXISTS);
+	if (rc < 0) {
+		if (rc == -ENOENT)
+			rc = 0;
+		GOTO(out_pop, rc);
+	}
+
+	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN, NULL);
+	if (rc)
+		GOTO(out_close, rc);
+
+	if (llog_get_size(loghandle) <= 1)
+		GOTO(out_close, rc = 0);
+
+	dup = kstrdup(param, GFP_KERNEL);
+	if (!dup)
+		GOTO(out_close, rc = -ENOMEM);
+
+	mpm.mpm_value = dup;
+	mpm.mpm_name = strsep(&mpm.mpm_value, "=");
+	if (mpm.mpm_value && !mpm.mpm_value[0])
+		mpm.mpm_value = NULL;
+
+	/* for compound parameter several entries are allowed, only
+	 * check for existing entries matching name and value.
+	 */
+	if (del)
+		mpm.mpm_mode = MPM_DELETE;
+	else if (mpm.mpm_value)
+		mpm.mpm_mode = param_is_compound(param) ?
+			MPM_LOOKUP_VAL : MPM_REPLACE;
+	else
+		GOTO(out_free, rc = EINVAL);
+
+	mpm.mpm_canceltime = ktime_get_real_seconds();
+	mpm.mpm_tgt = devname;
+
+	rc = llog_process(env, loghandle, mgs_modify_param_hdl, &mpm, NULL);
+	if (unlikely(mpm.mpm_start)) {
+		OBD_FREE(mpm.mpm_start, mpm.mpm_start->lrh_len);
+		GOTO(out_free, rc = -EBADMSG);
+	}
+
+	if (rc == LLOG_PROC_BREAK)
+		rc = 0;
+	if (rc)
+		GOTO(out_free, rc);
+
+	switch (mpm.mpm_mode) {
+	case MPM_DELETE:
+		rc = mpm.mpm_deleted ? 0 : -ENOENT;
+		break;
+	default:
+		rc = !mpm.mpm_deleted;
+	}
+
+out_free:
+	kfree(dup);
+out_close:
+	llog_close(env, loghandle);
+out_pop:
+	if (rc < 0)
+		CWARN("%s: modify %s/%s (mode = %d) failed: rc = %d\n",
+		      mgs->mgs_obd->obd_name, mti->mti_svname, param,
+		      mpm.mpm_mode, rc);
+	llog_ctxt_put(ctxt);
+	RETURN(rc);
+}
+
 enum replace_state {
 	REPLACE_COPY = 0,
 	REPLACE_SKIP,
@@ -3559,11 +3847,19 @@ out_free:
 	RETURN(rc);
 }
 
-static __inline__ int mgs_param_empty(char *ptr)
+static inline void mgs_param_del_value(char *ptr)
 {
 	char *tmp = strchr(ptr, '=');
 
-	if (tmp && tmp[1] == '\0')
+	if (tmp && tmp[1])
+		tmp[1] = '\0';
+}
+
+static inline int mgs_param_empty(const char *ptr)
+{
+	char *tmp = strchr(ptr, '=');
+
+	if (!tmp || tmp[1] == '\0')
 		return 1;
 	return 0;
 }
@@ -3690,33 +3986,24 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 			struct mgs_device *mgs, struct fs_db *fsdb,
 			struct mgs_target_info *mti,
 			char *logname, struct lustre_cfg_bufs *bufs,
-			char *tgtname, char *ptr)
+			char *tgtname, char *ptr, bool del)
 {
-	char comment[MTI_NAME_MAXLEN];
-	char *tmp;
 	struct llog_cfg_rec *lcr;
-	int rc, del;
+	char *comment;
+	int rc, len;
 
-	/* Erase any old settings of this same parameter */
-	strscpy(comment, ptr, sizeof(comment));
-	/* But don't try to match the value. */
-	tmp = strchr(comment, '=');
-	if (tmp != NULL)
-		*tmp = 0;
-	/* FIXME we should skip settings that are the same as old values */
-	rc = mgs_modify(env, mgs, fsdb, mti, logname, tgtname, comment,CM_SKIP);
+	/* erase any old settings of this same parameter */
+	rc = mgs_modify_param(env, mgs, fsdb, mti, logname, tgtname, ptr, del);
+	/* nothing to do */
+	if (rc == -EEXIST)
+		return 0;
 	if (rc < 0)
 		return rc;
-	del = mgs_param_empty(ptr);
 
 	LCONSOLE_INFO("%s parameter %s.%s in log %s\n", del ? "Disabling" : rc ?
-		      "Setting" : "Modifying", tgtname, comment, logname);
-	if (del) {
-		/* mgs_modify() will return 1 if nothing had to be done */
-		if (rc == 1)
-			rc = 0;
-		return rc;
-	}
+		      "Setting" : "Modifying", tgtname, ptr, logname);
+	if (del)
+		return 0;
 
 	lustre_cfg_bufs_reset(bufs, tgtname);
 	lustre_cfg_bufs_set_string(bufs, 1, ptr);
@@ -3728,9 +4015,18 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 	if (lcr == NULL)
 		return -ENOMEM;
 
+	len = strcspn(ptr, "=");
+	comment = kstrndup(ptr, len, GFP_KERNEL);
+	if (!comment)
+		GOTO(out, rc = -ENOMEM);
+
 	rc = mgs_write_log_direct(env, mgs, fsdb, logname, lcr, tgtname,
 				  comment);
+	kfree(comment);
+
+out:
 	lustre_cfg_rec_free(lcr);
+
 	return rc;
 }
 
@@ -4225,7 +4521,8 @@ out:
 static int mgs_write_log_param2(const struct lu_env *env,
 				struct mgs_device *mgs,
 				struct fs_db *fsdb,
-				struct mgs_target_info *mti, char *ptr)
+				struct mgs_target_info *mti,
+				char *ptr, bool del)
 {
 	struct lustre_cfg_bufs bufs;
 	int rc;
@@ -4256,6 +4553,9 @@ static int mgs_write_log_param2(const struct lu_env *env,
 	 * doesn't transmit to the client. See LU-7183.
 	 */
 	if (!class_match_param(ptr, PARAM_SRPC, NULL)) {
+		if (del)
+			mgs_param_del_value(ptr);
+
 		rc = mgs_srpc_set_param(env, mgs, fsdb, mti, ptr);
 		goto end;
 	}
@@ -4268,6 +4568,9 @@ static int mgs_write_log_param2(const struct lu_env *env,
 		 * params for new targets in mgs_write_log_target.
 		 */
 		const char *param;
+
+		if (del)
+			mgs_param_del_value(ptr);
 
 		/* can't use wildcards with failover.node */
 		if (strchr(ptr, '*')) {
@@ -4302,7 +4605,7 @@ static int mgs_write_log_param2(const struct lu_env *env,
 	}
 
 	rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, PARAMS_FILENAME, &bufs,
-			  mti->mti_svname, ptr);
+			  mti->mti_svname, ptr, del);
 end:
 	RETURN(rc);
 }
@@ -4314,7 +4617,7 @@ end:
  */
 static int mgs_write_log_param(const struct lu_env *env,
 			       struct mgs_device *mgs, struct fs_db *fsdb,
-			       struct mgs_target_info *mti, char *ptr)
+			       struct mgs_target_info *mti, char *ptr, bool del)
 {
 	struct mgs_thread_info *mgi = mgs_env_info(env);
 	char *logname;
@@ -4350,6 +4653,9 @@ static int mgs_write_log_param(const struct lu_env *env,
 	}
 
 	if (class_match_param(ptr, PARAM_SRPC, NULL) == 0) {
+		if (del)
+			mgs_param_del_value(ptr);
+
 		rc = mgs_srpc_set_param(env, mgs, fsdb, mti, ptr);
 		GOTO(end, rc);
 	}
@@ -4362,17 +4668,26 @@ static int mgs_write_log_param(const struct lu_env *env,
 		 */
 		if (mti->mti_flags & LDD_F_PARAM) {
 			CDEBUG(D_MGS, "Adding failnode\n");
+			if (del)
+				mgs_param_del_value(ptr);
+
 			rc = mgs_write_log_add_failnid(env, mgs, fsdb, mti);
 		}
 		GOTO(end, rc);
 	}
 
 	if (class_match_param(ptr, PARAM_SYS, &tmp) == 0) {
+		if (del)
+			mgs_param_del_value(ptr);
+
 		rc = mgs_write_log_sys(env, mgs, fsdb, mti, ptr, tmp);
 		GOTO(end, rc);
 	}
 
 	if (class_match_param(ptr, PARAM_QUOTA, &tmp) == 0) {
+		if (del)
+			mgs_param_del_value(ptr);
+
 		rc = mgs_write_log_quota(env, mgs, fsdb, mti, ptr, tmp);
 		GOTO(end, rc);
 	}
@@ -4380,7 +4695,7 @@ static int mgs_write_log_param(const struct lu_env *env,
 	if (class_match_param(ptr, PARAM_OSC PARAM_ACTIVE, &tmp) == 0 ||
 	    class_match_param(ptr, PARAM_MDC PARAM_ACTIVE, &tmp) == 0) {
 		/* active=0 means off, anything else means on */
-		int flag = (*tmp == '0') ? CM_EXCLUDE : 0;
+		int flag = (*tmp == '0' || del) ? CM_EXCLUDE : 0;
 		bool deactive_osc = memcmp(ptr, PARAM_OSC PARAM_ACTIVE,
 					   strlen(PARAM_OSC PARAM_ACTIVE)) == 0;
 		int i;
@@ -4462,7 +4777,7 @@ active_err:
 		if (rc)
 			GOTO(end, rc);
 		rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, mti->mti_svname,
-				  &mgi->mgi_bufs, mdtlovname, ptr);
+				  &mgi->mgi_bufs, mdtlovname, ptr, del);
 		name_destroy(&logname);
 		name_destroy(&mdtlovname);
 		if (rc)
@@ -4473,7 +4788,7 @@ active_err:
 		if (rc)
 			GOTO(end, rc);
 		rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, logname, &mgi->mgi_bufs,
-				  fsdb->fsdb_clilov, ptr);
+				  fsdb->fsdb_clilov, ptr, del);
 		name_destroy(&logname);
 		GOTO(end, rc);
 	}
@@ -4526,7 +4841,7 @@ active_err:
 			GOTO(end, rc);
 		}
 		rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, logname, &mgi->mgi_bufs,
-				  cname, ptr);
+				  cname, ptr, del);
 
 		/* osc params affect the MDT as well */
 		if (!rc && (mti->mti_flags & LDD_F_SV_TYPE_OST)) {
@@ -4549,7 +4864,7 @@ active_err:
 					rc = mgs_wlp_lcfg(env, mgs, fsdb,
 							  mti, logname,
 							  &mgi->mgi_bufs,
-							  cname, ptr);
+							  cname, ptr, del);
 					if (rc)
 						break;
 				}
@@ -4598,7 +4913,8 @@ active_err:
 					break;
 
 				rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, logname,
-						  &mgi->mgi_bufs, cname, ptr);
+						  &mgi->mgi_bufs, cname,
+						  ptr, del);
 				if (rc < 0)
 					break;
 
@@ -4618,7 +4934,7 @@ active_err:
 
 				rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, logname,
 						  &mgi->mgi_bufs, lodname,
-						  param_str);
+						  param_str, del);
 				if (rc < 0)
 					break;
 			}
@@ -4659,7 +4975,7 @@ active_err:
 					goto active_err;
 				rc = mgs_wlp_lcfg(env, mgs, fsdb, mti,
 						  logname, &mgi->mgi_bufs,
-						  logname, ptr);
+						  logname, ptr, del);
 				name_destroy(&logname);
 				if (rc)
 					goto active_err;
@@ -4674,7 +4990,7 @@ active_err:
 			}
 			rc = mgs_wlp_lcfg(env, mgs, fsdb, mti,
 					  mti->mti_svname, &mgi->mgi_bufs,
-					  mti->mti_svname, ptr);
+					  mti->mti_svname, ptr, del);
 			if (rc)
 				goto active_err;
 		}
@@ -4702,7 +5018,7 @@ active_err:
 				GOTO(end, rc);
 			}
 			rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, logname,
-					  &mgi->mgi_bufs, cname, ptr2);
+					  &mgi->mgi_bufs, cname, ptr2, del);
 			name_destroy(&ptr2);
 			name_destroy(&logname);
 			name_destroy(&cname);
@@ -4720,7 +5036,7 @@ active_err:
 			GOTO(end, rc = -ENODEV);
 
 		rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, mti->mti_svname,
-				  &mgi->mgi_bufs, mti->mti_svname, ptr);
+				  &mgi->mgi_bufs, mti->mti_svname, ptr, del);
 		GOTO(end, rc);
 	}
 
@@ -4807,7 +5123,9 @@ int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 		}
 		CDEBUG(D_MGS, "remaining string: '%s', param: '%s'\n",
 		       params, buf);
-		rc = mgs_write_log_param(env, mgs, fsdb, mti, buf);
+		rc = mgs_write_log_param(env, mgs, fsdb, mti, buf, false);
+		if (rc == -EEXIST)
+			rc = 0;
 		if (rc)
 			break;
 	}
@@ -5558,7 +5876,7 @@ int mgs_params_fsdb_cleanup(const struct lu_env *env, struct mgs_device *mgs)
  **/
 static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 			      struct mgs_target_info *mti, const char *devname,
-			      const char *param)
+			      const char *param, bool del)
 {
 	struct fs_db *fsdb = NULL;
 	int dev_type;
@@ -5664,7 +5982,7 @@ static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 	 */
 	mti->mti_flags = dev_type | LDD_F_PARAM;
 	mutex_lock(&fsdb->fsdb_mutex);
-	rc = mgs_write_log_param(env, mgs, fsdb, mti, mti->mti_params);
+	rc = mgs_write_log_param(env, mgs, fsdb, mti, mti->mti_params, del);
 	mutex_unlock(&fsdb->fsdb_mutex);
 	mgs_revoke_lock(mgs, fsdb, MGS_CFG_T_CONFIG);
 
@@ -5676,7 +5994,8 @@ out:
 }
 
 static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
-			  struct mgs_target_info *mti, const char *param)
+			  struct mgs_target_info *mti,
+			  const char *param, bool del)
 {
 	struct fs_db *fsdb = NULL;
 	int dev_type;
@@ -5763,7 +6082,7 @@ static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
 	 */
 	mti->mti_flags = dev_type | LDD_F_PARAM2;
 	mutex_lock(&fsdb->fsdb_mutex);
-	rc = mgs_write_log_param2(env, mgs, fsdb, mti, mti->mti_params);
+	rc = mgs_write_log_param2(env, mgs, fsdb, mti, mti->mti_params, del);
 	mutex_unlock(&fsdb->fsdb_mutex);
 	mgs_revoke_lock(mgs, fsdb, MGS_CFG_T_PARAMS);
 	mgs_put_fsdb(mgs, fsdb);
@@ -5780,7 +6099,9 @@ int mgs_set_param(const struct lu_env *env, struct mgs_device *mgs,
 		  struct lustre_cfg *lcfg)
 {
 	const char *param = lustre_cfg_string(lcfg, 1);
+	char *delstr = lustre_cfg_string(lcfg, 2);
 	struct mgs_target_info *mti;
+	bool del;
 	int rc;
 
 	/* Create a fake mti to hold everything */
@@ -5790,18 +6111,20 @@ int mgs_set_param(const struct lu_env *env, struct mgs_device *mgs,
 
 	print_lustre_cfg(lcfg);
 
+	/* no value means delete the parameter */
+	del = mgs_param_empty(param) || (delstr && strcmp(delstr, "del") == 0);
 	if (lcfg->lcfg_command == LCFG_PARAM) {
 		/* For the case of lctl conf_param devname can be
 		 * lustre, lustre-mdtlov, lustre-client, lustre-MDT0000
 		 */
 		const char *devname = lustre_cfg_string(lcfg, 0);
 
-		rc = mgs_set_conf_param(env, mgs, mti, devname, param);
+		rc = mgs_set_conf_param(env, mgs, mti, devname, param, del);
 	} else {
 		/* In the case of lctl set_param -P lcfg[0] will always
 		 * be 'general'. At least for now.
 		 */
-		rc = mgs_set_param2(env, mgs, mti, param);
+		rc = mgs_set_param2(env, mgs, mti, param, del);
 	}
 
 	OBD_FREE_PTR(mti);
