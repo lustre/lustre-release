@@ -134,9 +134,11 @@ command_t cmdlist[] = {
 	{"--net", jt_opt_net, 0, "run <command> after selecting network <net>\n"
 	 "usage: --net <tcp/o2ib/...> <command>"},
 	{"network", jt_ptl_network, 0, "configure LNET\n"
-	 "usage: network up|down"},
+	 "usage: network [Network] <up|down> [-l]\n"
+	 "  -l: Override existing, else it will create new\n"},
 	{"net", jt_ptl_network, 0, "configure LNET\n"
-	 "usage: net up|down"},
+	 "usage: net [Network] <up|down> [-l]\n"
+	 "  -l: Override existing, else it will create new\n"},
 	{"list_nids", jt_ptl_list_nids, 0, "list local NIDs\n"
 	 "usage: list_nids [all]"},
 	{"which_nid", jt_ptl_which_nid, 0, "choose a NID\n"

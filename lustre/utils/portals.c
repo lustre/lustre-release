@@ -39,6 +39,7 @@
 #include <linux/types.h>
 
 #include <libcfs/util/ioctl.h>
+#include <libcfs/util/parser.h>
 #include <linux/lnet/libcfs_debug.h>
 #include <linux/lnet/lnet-dlc.h>
 #include <linux/lnet/lnetctl.h>
@@ -307,10 +308,8 @@ int jt_ptl_network(int argc, char **argv)
 	const char *msg = NULL;
 	int rc;
 
-	if (argc > 3) {
-		fprintf(stderr, "usage: %s <net>|up|down [-l]\n", argv[0]);
-		return -1;
-	}
+	if (argc > 3 || argc <= 1)
+		return CMD_HELP;
 
 	if (!strcmp(argv[1], "unconfigure") || !strcmp(argv[1], "down")) {
 		rc = yaml_lnet_configure(0, &msg);
@@ -350,16 +349,19 @@ int jt_ptl_network(int argc, char **argv)
 				errno, strerror(errno));
 		return -1;
 	} else if (!strcmp(argv[1], "configure") || !strcmp(argv[1], "up")) {
-		int flags = NLM_F_CREATE;
+		int flags = NLM_F_CREATE; /* Create, if it does not exist */
 
 		if (argc == 3 && argv[2] && !strcmp(argv[2], "-l"))
-			flags |= NLM_F_REPLACE;
+			flags |= NLM_F_REPLACE; /* Override existing */
 
 		rc = yaml_lnet_configure(flags, &msg);
 		if (rc != -EOPNOTSUPP) {
 			switch (rc) {
 			case 0:
-				printf("LNET configured\n");
+				if (flags & NLM_F_REPLACE)
+					printf("LNET configured: Overridden existing one\n");
+				else
+					printf("LNET configured: New Created\n");
 				break;
 			default:
 				fprintf(stderr, "LNET configure error %u: %s\n",
