@@ -531,7 +531,8 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	if (rc)
 		GOTO(out_cleanup, rc);
 
-	rc = llog_init_handle(env, ctxt->loc_handle, LLOG_F_IS_CAT, NULL);
+	rc = llog_init_handle(env, ctxt->loc_handle, LLOG_F_IS_CAT |
+			      LLOG_F_UNLCK_SEM, NULL);
 	if (rc)
 		GOTO(out_close, rc);
 

@@ -775,6 +775,17 @@ out_put:
 	return rc;
 }
 
+/* The locking here is a bit tricky. For a CHANGELOG_REC the function
+ * drops loghandle->lgh_lock for a performance reasons. All dt_write()
+ * are used own offset, so it is safe.
+ * For other records general function is called and it doesnot drop
+ * a semaphore. The callers are changelog catalog records and initialisation
+ * records. llog_cat_new_log->llog_write_rec->mdd_changelog_write_rec()
+ *
+ * Since dt_record_write() could be reordered, rec1|rec2|0x0|rec4 could be
+ * at memory, reader should care about it. When the th is commited it is
+ * impossible to have a hole, since reordered records have the same th.
+ */
 int mdd_changelog_write_rec(const struct lu_env *env,
 			    struct llog_handle *loghandle,
 			    struct llog_rec_hdr *r,
@@ -782,36 +793,106 @@ int mdd_changelog_write_rec(const struct lu_env *env,
 			    int idx, struct thandle *th)
 {
 	int rc;
+	static struct thandle *saved_th;
+
+	CDEBUG(D_TRACE, "Adding rec %u type %u to "DFID" flags %x count %d\n",
+	       idx, r->lrh_type, PLOGID(&loghandle->lgh_id),
+	       loghandle->lgh_hdr->llh_flags, loghandle->lgh_hdr->llh_count);
 
 	if (r->lrh_type == CHANGELOG_REC) {
 		struct mdd_device *mdd;
 		struct llog_changelog_rec *rec;
+		size_t left;
+		__u32 chunk_size = loghandle->lgh_hdr->llh_hdr.lrh_len;
+		struct dt_object *o = loghandle->lgh_obj;
+		loff_t offset;
+		struct lu_buf lgi_buf;
+
+		left = chunk_size - (loghandle->lgh_cur_offset &
+				     (chunk_size - 1));
 
 		mdd = lu2mdd_dev(loghandle->lgh_ctxt->loc_obd->obd_lu_dev);
 		rec = container_of(r, struct llog_changelog_rec, cr_hdr);
 
+		/* Don't use padding records because it require a slot at header
+		 * so previous result of checking llog_is_full(loghandle)
+		 * would be invalid, leave zeroes at the end of block.
+		 * A reader would care about it.
+		 */
+		if (left != 0 && left < r->lrh_len)
+			loghandle->lgh_cur_offset += left;
+
+		offset = loghandle->lgh_cur_offset;
+		loghandle->lgh_cur_offset += r->lrh_len;
+		r->lrh_index = ++loghandle->lgh_last_idx;
+
 		spin_lock(&mdd->mdd_cl.mc_lock);
-		rec->cr.cr_index = mdd->mdd_cl.mc_index + 1;
+		rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
 		spin_unlock(&mdd->mdd_cl.mc_lock);
 
-		rc = llog_osd_ops.lop_write_rec(env, loghandle, r,
-						cookie, idx, th);
+		/* drop the loghandle semaphore for parallel writes */
+		up_write(&loghandle->lgh_lock);
 
-		/*
-		 * if current llog is full, we will generate a new
-		 * llog, and since it's actually not an error, let's
-		 * avoid increasing index so that userspace apps
-		 * should not see a gap in the changelog sequence
-		 */
-		if (!(rc == -ENOSPC && llog_is_full(loghandle))) {
-			spin_lock(&mdd->mdd_cl.mc_lock);
-			++mdd->mdd_cl.mc_index;
-			spin_unlock(&mdd->mdd_cl.mc_lock);
+		REC_TAIL(r)->lrt_len = r->lrh_len;
+		REC_TAIL(r)->lrt_index = r->lrh_index;
+
+		lgi_buf.lb_len = rec->cr_hdr.lrh_len;
+		lgi_buf.lb_buf = rec;
+
+		rc = dt_record_write(env, o, &lgi_buf, &offset, th);
+
+		if (rc) {
+			CERROR("%s: failed to write changelog record file "DFID" rec idx %u off %llu chnlg idx %llu: rc = %d\n",
+			       loghandle->lgh_ctxt->loc_obd->obd_name,
+			       PFID(lu_object_fid(&o->do_lu)), r->lrh_index,
+			       offset, rec->cr.cr_index, rc);
+			return rc;
 		}
+
+		/* mark index at bitmap after successful write, increment count,
+		 * and lrt_index with a last index. Use a lgh_hdr_lock for
+		 * a synchronization with llog_cancel.
+		 */
+		spin_lock(&loghandle->lgh_hdr_lock);
+		rc = __test_and_set_bit_le(r->lrh_index,
+					   LLOG_HDR_BITMAP(loghandle->lgh_hdr));
+		LASSERTF(!rc,
+			 "%s: index %u already set in llog bitmap "DFID"\n",
+			 loghandle->lgh_ctxt->loc_obd->obd_name,
+			 r->lrh_index, PLOGID(&loghandle->lgh_id));
+		loghandle->lgh_hdr->llh_count++;
+		if (LLOG_HDR_TAIL(loghandle->lgh_hdr)->lrt_index < r->lrh_index)
+			LLOG_HDR_TAIL(loghandle->lgh_hdr)->lrt_index =
+				r->lrh_index;
+		spin_unlock(&loghandle->lgh_hdr_lock);
+
+		if (unlikely(th != saved_th)) {
+			CDEBUG(D_OTHER, "%s: wrote rec %u "DFID" count %d\n",
+			       loghandle->lgh_ctxt->loc_obd->obd_name,
+			       r->lrh_index, PLOGID(&loghandle->lgh_id),
+			       loghandle->lgh_hdr->llh_count);
+			saved_th = th;
+		}
+		lgi_buf.lb_len = loghandle->lgh_hdr_size;
+		lgi_buf.lb_buf = loghandle->lgh_hdr;
+		offset = 0;
+		CDEBUG(D_TRACE, "%s: writing header "DFID"\n",
+		       loghandle->lgh_ctxt->loc_obd->obd_name,
+		       PLOGID(&loghandle->lgh_id));
+		/* full header write, it is a local. For a mapped bh
+		 * it is memcpy() only. Probably it could be delayed as work.
+		 */
+		rc = dt_record_write(env, o, &lgi_buf, &offset, th);
 	} else {
 		rc = llog_osd_ops.lop_write_rec(env, loghandle, r,
 						cookie, idx, th);
 	}
+	if (rc < 0)
+		CERROR("%s: failed to write changelog record file "DFID" count %d offset %llu: rc = %d\n",
+		       loghandle->lgh_ctxt->loc_obd->obd_name,
+		       PLOGID(&loghandle->lgh_id),
+		       loghandle->lgh_hdr->llh_count, loghandle->lgh_cur_offset,
+		       rc);
 
 	return rc;
 }

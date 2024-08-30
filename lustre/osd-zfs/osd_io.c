@@ -325,7 +325,10 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	if (obj->oo_destroyed)
 		GOTO(out, rc = -ENOENT);
 
-	if (fid_is_llog(lu_object_fid(&dt->do_lu))) {
+	/* XXX: disable the optimization as it's not compatible
+	 * with indexed llog and multiple writes a block in few
+	 * threads */
+	if (fid_is_llog(lu_object_fid(&dt->do_lu)) && 0) {
 		osd_write_llog_header(obj, buf, pos, oh);
 	} else {
 		osd_dmu_write(osd, obj->oo_dn, offset, (uint64_t)buf->lb_len,

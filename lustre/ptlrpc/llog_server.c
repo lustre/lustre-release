@@ -259,6 +259,9 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
 
 	hdr = req_capsule_server_get(&req->rq_pill, &RMF_LLOG_LOG_HDR);
 	*hdr = *loghandle->lgh_hdr;
+	CDEBUG(D_OTHER, "%s: red llog header "DFID" count %d lgh_last_idx %d llh_cat_idx %d\n",
+	       ctxt->loc_obd->obd_name, PLOGID(&loghandle->lgh_id),
+	       hdr->llh_count, LLOG_HDR_TAIL(hdr)->lrt_index, hdr->llh_cat_idx);
 	EXIT;
 out_close:
 	llog_origin_close(req->rq_svc_thread->t_env, loghandle);

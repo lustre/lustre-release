@@ -579,6 +579,8 @@ retry:
 				up_write(&cathandle->lgh_lock);
 				llog_close(env, loghandle);
 			}
+			CERROR("%s: initialization error: rc = %d\n",
+			       loghandle2name(cathandle), rc);
 			RETURN(rc);
 		}
 	}
@@ -605,8 +607,9 @@ retry:
 			dt_attr_set(env, loghandle->lgh_obj, &lgi->lgi_attr, th);
 		}
 	}
-
-	up_write(&loghandle->lgh_lock);
+	/* llog_write_rec could unlock a semaphore */
+	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_UNLCK_SEM))
+		up_write(&loghandle->lgh_lock);
 
 	if (rc == -ENOBUFS) {
 		if (retried++ == 0)

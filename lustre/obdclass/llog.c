@@ -44,7 +44,7 @@ static struct llog_handle *llog_alloc_handle(void)
 		return NULL;
 
 	init_rwsem(&loghandle->lgh_lock);
-	mutex_init(&loghandle->lgh_hdr_mutex);
+	spin_lock_init(&loghandle->lgh_hdr_lock);
 	init_rwsem(&loghandle->lgh_last_sem);
 	INIT_LIST_HEAD(&loghandle->u.phd.phd_entry);
 	refcount_set(&loghandle->lgh_refcount, 1);
@@ -243,13 +243,15 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	down_write(&loghandle->lgh_lock);
 	/* clear bitmap */
-	mutex_lock(&loghandle->lgh_hdr_mutex);
+	spin_lock(&loghandle->lgh_hdr_lock);
 	for (i = 0; i < num; ++i) {
 		if (index[i] == 0) {
+			spin_unlock(&loghandle->lgh_hdr_lock);
 			CERROR("Can't cancel index 0 which is header\n");
 			GOTO(out_unlock, rc = -EINVAL);
 		}
 		if (!__test_and_clear_bit_le(index[i], LLOG_HDR_BITMAP(llh))) {
+			spin_unlock(&loghandle->lgh_hdr_lock);
 			CDEBUG(D_OTHER, "Catalog index %u already clear?\n",
 			       index[i]);
 			GOTO(out_unlock, rc = -ENOENT);
@@ -257,6 +259,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	}
 	loghandle->lgh_hdr->llh_count -= num;
 	subtract_count = true;
+	spin_unlock(&loghandle->lgh_hdr_lock);
 
 	/* Since llog_process_thread use lgi_cookie, it`s better to save them
 	 * and restore after using
@@ -305,26 +308,27 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 out_unlock:
 	if (rc < 0) {
 		/* restore bitmap while holding a mutex */
+		spin_lock(&loghandle->lgh_hdr_lock);
 		if (subtract_count) {
 			loghandle->lgh_hdr->llh_count += num;
 			subtract_count = false;
 		}
 		for (i = i - 1; i >= 0; i--)
 			set_bit_le(index[i], LLOG_HDR_BITMAP(llh));
+		spin_unlock(&loghandle->lgh_hdr_lock);
 	}
-	mutex_unlock(&loghandle->lgh_hdr_mutex);
 	up_write(&loghandle->lgh_lock);
 out_trans:
 	rc1 = dt_trans_stop(env, dt, th);
 	if (rc == 0)
 		rc = rc1;
 	if (rc1 < 0) {
-		mutex_lock(&loghandle->lgh_hdr_mutex);
+		spin_lock(&loghandle->lgh_hdr_lock);
 		if (subtract_count)
 			loghandle->lgh_hdr->llh_count += num;
 		for (i = i - 1; i >= 0; i--)
 			set_bit_le(index[i], LLOG_HDR_BITMAP(llh));
-		mutex_unlock(&loghandle->lgh_hdr_mutex);
+		spin_unlock(&loghandle->lgh_hdr_lock);
 	}
 	RETURN(rc);
 }
@@ -374,6 +378,7 @@ int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 		set_bit_le(0, LLOG_HDR_BITMAP(llh));
 		LLOG_HDR_TAIL(llh)->lrt_len = llh->llh_hdr.lrh_len;
 		LLOG_HDR_TAIL(llh)->lrt_index = llh->llh_hdr.lrh_index;
+		handle->lgh_cur_offset = llh->llh_hdr.lrh_len;
 		rc = 0;
 	}
 	RETURN(rc);
@@ -456,7 +461,7 @@ out:
 EXPORT_SYMBOL(llog_init_handle);
 
 #define LLOG_ERROR_REC(lgh, rec, format, a...) \
-	CERROR("%s: "DFID" rec type=%x idx=%u len=%u, " format "\n" , \
+	CDEBUG(D_OTHER, "%s: "DFID" rec type=%x idx=%u len=%u, " format "\n", \
 	       loghandle2name(lgh), PLOGID(&lgh->lgh_id), (rec)->lrh_type, \
 	       (rec)->lrh_index, (rec)->lrh_len, ##a)
 
@@ -466,7 +471,8 @@ int llog_verify_record(const struct llog_handle *llh, struct llog_rec_hdr *rec)
 
 	if ((rec->lrh_type & LLOG_OP_MASK) != LLOG_OP_MAGIC)
 		LLOG_ERROR_REC(llh, rec, "magic is bad");
-	else if (rec->lrh_len == 0 || rec->lrh_len > chunk_size)
+	else if (rec->lrh_len == 0 || rec->lrh_len > chunk_size ||
+		 rec->lrh_len < LLOG_MIN_REC_SIZE)
 		LLOG_ERROR_REC(llh, rec, "bad record len, chunk size is %d",
 			       chunk_size);
 	else if (rec->lrh_index > llog_max_idx(llh->lgh_hdr))
@@ -551,6 +557,7 @@ static int llog_process_thread(void *arg)
 	while (rc == 0) {
 		struct llog_rec_hdr *rec;
 		off_t chunk_offset = 0;
+		off_t last_chunk_offset = 0;
 		unsigned int buf_offset = 0;
 		int lh_last_idx;
 		int synced_idx = 0;
@@ -597,26 +604,31 @@ repeat:
 		 * The absolute offset of the current chunk is calculated
 		 * from cur_offset value and stored in chunk_offset variable.
 		 */
+		last_chunk_offset = chunk_offset;
 		if ((cur_offset & (chunk_size - 1)) != 0)
 			chunk_offset = cur_offset & ~(chunk_size - 1);
 		else
 			chunk_offset = cur_offset - chunk_size;
 
+		/* When reread a chunk with zeores at the end, it could
+		 * happened that index was found at next chunk. Start
+		 * processing from a beginning.
+		 */
+		if (last_chunk_offset != chunk_offset)
+			buf_offset = 0;
+
 		/* NB: when rec->lrh_len is accessed it is already swabbed
 		 * since it is used at the "end" of the loop and the rec
 		 * swabbing is done at the beginning of the loop. */
 		for (rec = (struct llog_rec_hdr *)(buf + buf_offset);
-		     (char *)rec < buf + chunk_size;
+		     (char *)rec <= buf + chunk_size - LLOG_MIN_REC_SIZE;
 		     rec = llog_rec_hdr_next(rec)) {
-
-			CDEBUG(D_OTHER, "processing rec 0x%p type %#x\n",
-			       rec, rec->lrh_type);
 
 			if (LLOG_REC_HDR_NEEDS_SWABBING(rec))
 				lustre_swab_llog_rec(rec);
 
-			CDEBUG(D_OTHER, "after swabbing, type=%#x idx=%d\n",
-			       rec->lrh_type, rec->lrh_index);
+			CDEBUG(D_OTHER, "processing rec 0x%px type=%#x idx=%d\n",
+			       rec, rec->lrh_type, rec->lrh_index);
 
 			/* start with first rec if block was skipped */
 			if (!index) {
@@ -720,9 +732,13 @@ repeat:
 			       rec->lrh_index, rec->lrh_len,
 			       (int)(buf + chunk_size - (char *)rec));
 
-			/* lgh_cur_offset is used only at llog_test_3 */
-			loghandle->lgh_cur_offset = (char *)rec - (char *)buf +
-						    chunk_offset;
+			/* lgh_cur_offset is used only at llog_test_3 and
+			 * changelog
+			 */
+			if (unlikely(loghandle->lgh_ctxt->loc_idx ==
+				     LLOG_TEST_ORIG_CTXT))
+				loghandle->lgh_cur_offset = (char *)rec -
+						(char *)buf + chunk_offset;
 
 			/* if needed, process the callback on this record */
 			if (!llog_is_index_skipable(index, llh, cd)) {

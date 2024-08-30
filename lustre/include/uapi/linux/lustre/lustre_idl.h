@@ -2893,6 +2893,10 @@ struct llog_rec_tail {
 	(rec->lrh_len - sizeof(struct llog_rec_hdr) -		\
 	 sizeof(struct llog_rec_tail))
 
+#define REC_TAIL(rec)						\
+	((struct llog_rec_tail *)((char *)rec + rec->lrh_len -	\
+			sizeof(struct llog_rec_tail)))
+
 struct llog_logid_rec {
 	struct llog_rec_hdr	lid_hdr;
 	struct llog_logid	lid_id;
@@ -3086,6 +3090,7 @@ enum llog_flag {
 	LLOG_F_RM_ON_ERR	= 0x400,
 	LLOG_F_MAX_AGE		= 0x800,
 	LLOG_F_EXT_X_NID_BE	= 0x1000,
+	LLOG_F_UNLCK_SEM	= 0x2000,
 
 	/* Note: Flags covered by LLOG_F_EXT_MASK will be inherited from
 	 * catlog to plain log, so do not add LLOG_F_IS_FIXSIZE here,
@@ -3095,7 +3100,7 @@ enum llog_flag {
 	LLOG_F_EXT_MASK = LLOG_F_EXT_JOBID | LLOG_F_EXT_EXTRA_FLAGS |
 			  LLOG_F_EXT_X_UIDGID | LLOG_F_EXT_X_NID |
 			  LLOG_F_EXT_X_OMODE | LLOG_F_EXT_X_XATTR |
-			  LLOG_F_EXT_X_NID_BE,
+			  LLOG_F_EXT_X_NID_BE | LLOG_F_UNLCK_SEM,
 };
 
 /* On-disk header structure of each log object, stored in little endian order */

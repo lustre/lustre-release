@@ -604,16 +604,14 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	lrt->lrt_len = rec->lrh_len;
 	lrt->lrt_index = rec->lrh_index;
 
-	/* the lgh_hdr_mutex protects llog header data from concurrent
+	/* the lgh_hdr_lock protects llog header data from concurrent
 	 * update/cancel, the llh_count and llh_bitmap are protected */
-	mutex_lock(&loghandle->lgh_hdr_mutex);
-	if (__test_and_set_bit_le(index, LLOG_HDR_BITMAP(llh))) {
-		CERROR("%s: index %u already set in llog bitmap "DFID"\n",
-		       o->do_lu.lo_dev->ld_obd->obd_name, index,
-		       PFID(lu_object_fid(&o->do_lu)));
-		mutex_unlock(&loghandle->lgh_hdr_mutex);
-		LBUG(); /* should never happen */
-	}
+	spin_lock(&loghandle->lgh_hdr_lock);
+	rc = __test_and_set_bit_le(index, LLOG_HDR_BITMAP(llh));
+	LASSERTF(!rc,
+		 "%s: index %u already set in llog bitmap "DFID"\n",
+		 o->do_lu.lo_dev->ld_obd->obd_name, index,
+		 PFID(lu_object_fid(&o->do_lu)));
 	llh->llh_count++;
 
 	if (!(llh->llh_flags & LLOG_F_IS_FIXSIZE)) {
@@ -623,6 +621,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		else if (reclen < llh->llh_size)
 			llh->llh_size = reclen;
 	}
+	spin_unlock(&loghandle->lgh_hdr_lock);
 
 	/*
 	 * readers (e.g. llog_osd_read_header()) must not find
@@ -681,7 +680,6 @@ static int llog_osd_write_rec(const struct lu_env *env,
 
 out_unlock:
 	/* unlock here for remote object */
-	mutex_unlock(&loghandle->lgh_hdr_mutex);
 	if (rc) {
 		dt_write_unlock(env, o);
 		GOTO(out, rc);
@@ -747,10 +745,10 @@ out_unlock:
 	RETURN(rc);
 out:
 	/* cleanup llog for error case */
-	mutex_lock(&loghandle->lgh_hdr_mutex);
+	spin_lock(&loghandle->lgh_hdr_lock);
 	clear_bit_le(index, LLOG_HDR_BITMAP(llh));
 	llh->llh_count--;
-	mutex_unlock(&loghandle->lgh_hdr_mutex);
+	spin_unlock(&loghandle->lgh_hdr_lock);
 
 	/* restore llog last_idx */
 	if (dt_object_remote(o)) {
@@ -1054,12 +1052,6 @@ static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 		struct changelog_rec *rec = (struct changelog_rec *)(hdr + 1);
 		enum changelog_rec_extra_flags xflag = CLFE_INVALID;
 
-		if (flags & CLF_EXTRA_FLAGS &&
-		    rec->cr_flags & CLF_EXTRA_FLAGS) {
-			xflag = changelog_rec_extra_flags(rec)->cr_extra_flags &
-				extra_flags;
-		}
-
 		if (unlikely(hdr->lrh_len == 0)) {
 			/* It is corruption case, we cannot know the next rec,
 			 * jump to the last one directly to avoid dead loop. */
@@ -1073,6 +1065,13 @@ static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 					 hdr->lrh_index, hdr->lrh_type,
 					 hdr->lrh_id);
 			break;
+		}
+
+
+		if (flags & CLF_EXTRA_FLAGS &&
+		    rec->cr_flags & CLF_EXTRA_FLAGS) {
+			xflag = changelog_rec_extra_flags(rec)->cr_extra_flags &
+				extra_flags;
 		}
 
 		/* Fill up the changelog record with everything the kernel
@@ -1209,8 +1208,21 @@ static int llog_osd_next_block(const struct lu_env *env,
 		rec = buf;
 		if (LLOG_REC_HDR_NEEDS_SWABBING(rec))
 			lustre_swab_llog_rec(rec);
+
+		/* caller handles bad records if any */
+		if (llog_verify_record(loghandle, rec))
+			GOTO(out, rc = 0);
+
 		tail = (struct llog_rec_tail *)((char *)buf + rc -
 						sizeof(struct llog_rec_tail));
+
+		while ((tail->lrt_index == 0 || tail->lrt_len == 0) &&
+		       (void *) tail > buf) {
+			/* looks like zeroes at the end of block */
+			/* searching real record, assume 4bytes align */
+			tail = (struct llog_rec_tail *)(((char *)tail) - 4);
+		};
+
 		tail_len = tail->lrt_len;
 		/* base on tail_len do swab */
 		if (tail_len > chunk_size) {
@@ -1228,10 +1240,6 @@ static int llog_osd_next_block(const struct lu_env *env,
 		/* get the last record in block */
 		last_rec = (struct llog_rec_hdr *)((char *)tail - tail_len +
 				sizeof(struct llog_rec_tail));
-
-		/* caller handles bad records if any */
-		if (llog_verify_record(loghandle, rec))
-			GOTO(out, rc = 0);
 
 		if (LLOG_REC_HDR_NEEDS_SWABBING(last_rec))
 			lustre_swab_llog_rec(last_rec);
