@@ -134,11 +134,16 @@ static struct obd_page_pool {
 
 static struct shrinker **pool_shrinkers;
 
+/* We try to allocate POOLS_COUNT pools,
+ * unless the node's memory is too short.
+ */
+static int pools_count = POOLS_COUNT;
+
 static inline int get_pool_index(struct shrinker *shrinker)
 {
 	int i;
 
-	for (i = 0; i < POOLS_COUNT; i++)
+	for (i = 0; i < pools_count; i++)
 		if (pool_shrinkers[i] == shrinker)
 			return i;
 
@@ -221,7 +226,7 @@ int page_pools_seq_show(struct seq_file *m, void *v)
 		      "pools:\n",
 		      cfs_totalram_pages());
 
-	for (pool_order = 0; pool_order < POOLS_COUNT; pool_order++) {
+	for (pool_order = 0; pool_order < pools_count; pool_order++) {
 		pool = page_pools[pool_order];
 		if (!pool->opp_st_access)
 			continue;
@@ -705,6 +710,14 @@ static inline int __obd_pool_get_objects(void *array, unsigned int count,
 	if (!array || count <= 0 || count > page_pool->opp_max_objects)
 		return -EINVAL;
 
+	if (order >= pools_count) {
+		CDEBUG(D_SEC,
+		       "Requested pool order %d too big, max allocated order %d (chunk size %lu): %d\n",
+		       order, pools_count - 1, PAGE_SIZE << (pools_count - 1),
+		       rc);
+		return -EINVAL;
+	}
+
 	spin_lock(&page_pool->opp_lock);
 
 	page_pool->opp_st_access++;
@@ -866,7 +879,7 @@ static int __obd_pool_put_objects(void *array, unsigned int count,
 	int p_idx, g_idx;
 	int i, rc = 0;
 
-	LASSERTF(order < POOLS_COUNT, "count %u, pool %u\n",
+	LASSERTF(order < pools_count, "count %u, pool %u\n",
 		 count, order);
 	if (!array) {
 		CERROR("Faled to put %u objects, from pool %u\n",
@@ -1081,6 +1094,17 @@ int obd_pool_init(void)
 
 		pool->opp_max_ptr_pages =
 			nobjects_to_nptr_pages(pool->opp_max_objects);
+		/* If opp_max_ptr_pages is 0, it means there is not enough
+		 * memory on the node to allocate all the pools. So stop the
+		 * loop here to avoid having empty pools.
+		 */
+		if (!pool->opp_max_ptr_pages) {
+			CWARN("Cannot allocate pool %i, not enough memory. Max available compression chunk is %lu.\n",
+			      pool_order, PAGE_SIZE << (pool_order - 1));
+			pools_count = pool_order;
+			OBD_FREE(pool, sizeof(**page_pools));
+			break;
+		}
 
 		init_waitqueue_head(&pool->opp_waitq);
 		pool->opp_last_shrink = ktime_get_seconds();
@@ -1137,7 +1161,7 @@ void obd_pool_fini(void)
 	int pool_order;
 	struct obd_page_pool *pool;
 
-	for (pool_order = 0; pool_order < POOLS_COUNT; pool_order++) {
+	for (pool_order = 0; pool_order < pools_count; pool_order++) {
 		pool = page_pools[pool_order];
 		shrinker_free(pool->pool_shrinker);
 		LASSERT(pool->opp_ptr_pages);
