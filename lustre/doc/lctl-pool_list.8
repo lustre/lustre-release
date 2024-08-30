@@ -1,0 +1,61 @@
+.TH LCTL-POOL_LIST 2024-09-08 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-pool_list \- list pools and pool members
+.SH SYNOPSIS
+.SY "lctl pool_list"
+.IR FSNAME [. POOLNAME ]
+|
+.I PATHNAME
+.YS
+.SH DESCRIPTION
+List all OSTs in the pool named
+.I POOLNAME
+in the filesystem
+.I FSNAME
+or list all pools that exist in the directory
+.I PATHNAME
+or in the filesystem
+.IR FSNAME .
+.SH OPTIONS
+.TP
+.I POOLNAME
+If specified, show the OSTs in the pool named
+.IR POOLNAME .
+.SH EXAMPLES
+List all OSTs in the pool
+.B local
+in the filesystem
+.B testfs
+.RS
+.EX
+.B # lctl pool_list testfs.local
+Pool: lustre.local
+testfs-OST0001_UUID
+.EE
+.RE
+.PP
+List all pools in the filesystem
+.B testfs
+.RS
+.EX
+.B # lctl pool_list testfs
+Pools from testfs:
+testfs.local
+testfs.remote
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl pool_list
+is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.1-1578-g665e36b780
+.SH SEE ALSO
+.BR lfs-df (1),
+.BR lfs-find (1),
+.BR lfs-setstripe (1),
+.BR lustre (7),
+.BR lctl-pool_add (8),
+.BR lctl-pool_destroy (8),
+.BR lctl-pool_list (8),
+.BR lctl-pool_new (8)

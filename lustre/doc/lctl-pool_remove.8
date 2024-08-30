@@ -1,0 +1,94 @@
+.TH LCTL-POOL_REMOVE 8 2024-08-30 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-pool_remove \- remove OST from a named pool
+.SH SYNOPSIS
+.SY "lctl pool_remove"
+.RB [ --nowait | -n ]
+.IB FSNAME . POOLNAME
+.I OSTNAME_INDEXED_LIST
+.YS
+.SH DESCRIPTION
+Remove one or more OSTs from the pool named
+.I POOLNAME
+in the filesystem named
+.IR FSNAME .
+There are several formats that the OSTs can be specified.
+Simplest is to just specify a list of
+.I OST_INDEX
+numbers or OST names. In this form the numbers must be proceeded by
+.B OST
+so that it is of the format
+.BI OST OST_INDEX .
+Where
+.I OST_INDEX
+is in hexadecimal format.
+It is also possible to specify an
+.I OST_RANGE
+expression of the form
+.BI OST[ START - END ]
+or
+.BI OST[ START - END / STEP ]
+that adds multiple OSTs with index numbers in the range from
+.I START
+to
+.I END
+(inclusive), optionally skipping every
+.I STEP
+index values.
+.SH OPTIONS
+.TP
+.BR -n ", " --nowait
+Do not wait and check if pool is updated on a client.
+This is useful when calling a lot of
+.RB \(dq "lctl pool_" *\(dq
+in a row. This avoids revoking the clients "CONFIG" lock for each
+command (by default clients retake their lock and update their configurations
+in a delay between 5-10s).
+.SH EXAMPLES
+Remove OSTs numbered 8, 9, and 10 from the
+.B testfs.local
+pool.
+.RS
+.EX
+.B # lctl pool_remove testfs.local OST0008 OST0009 OST000a
+OST lustre-OST0008_UUID removed from pool lustre.local
+OST lustre-OST0009_UUID removed from pool lustre.local
+OST lustre-OST000a_UUID removed from pool lustre.local
+or
+.B # lctl pool_remove testfs.local OST[8-a]
+OST lustre-OST0008_UUID removed from pool lustre.local
+OST lustre-OST0009_UUID removed from pool lustre.local
+OST lustre-OST000a_UUID removed from pool lustre.local
+.EE
+.RE
+.PP
+List of OSTs can be set with comma seperated values or a combined format
+.RS
+.EX
+.B # lctl pool_remove testfs.local OST[8,a]
+OST lustre-OST0008_UUID removed from pool lustre.local
+OST lustre-OST000a_UUID removed from pool lustre.local
+or
+.B # lctl pool_remove testfs.local OST[4-6,8,a]
+OST lustre-OST0004_UUID removed from pool lustre.local
+OST lustre-OST0005_UUID removed from pool lustre.local
+OST lustre-OST0006_UUID removed from pool lustre.local
+OST lustre-OST0008_UUID removed from pool lustre.local
+OST lustre-OST000a_UUID removed from pool lustre.local
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl pool_remove
+is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.1-1578-g665e36b780
+.SH SEE ALSO
+.BR lfs-df (1),
+.BR lfs-find (1),
+.BR lfs-setstripe (1),
+.BR lustre (7),
+.BR lctl-pool_add (8),
+.BR lctl-pool_destroy (8),
+.BR lctl-pool_list (8),
+.BR lctl-pool_new (8)

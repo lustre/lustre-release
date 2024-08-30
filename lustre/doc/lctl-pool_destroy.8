@@ -1,0 +1,58 @@
+.TH LCTL-POOL_DESTROY 8 2024-09-08 Lustre "Lustre Configuration Utilities"
+.SH Name
+lctl-pool_destroy \- delete an OST pool
+.SH SYNOPSIS
+.SY "lctl pool_destroy"
+.RB [ -n | --nowait ]
+.IR FSNAME . POOLNAME
+.YS
+.SH DESCRIPTION
+Delete an OST pool with the name
+.I POOLNAME
+in the filesystem named
+.IR FSNAME .
+The
+.B lctl pool_destroy
+command must be run on the MGS node and can only be used by the root user.
+.SH OPTIONS
+.TP
+.BR -n ", " --nowait
+Do not wait and check if pool is updated on a client.
+This is useful when calling a lot of
+.RB \(dq lctl \ pool_*\(dq
+in a row. This avoids revoking the clients "CONFIG" lock for each
+command (by default clients retake their lock and update their configurations
+in a delay between 5-10s).
+.SH NOTES
+After updating the MGS configuration,
+this command tries to wait and check if pools are updated on a client.
+If the MGS is on a separate node from the MDS, a Lustre client must
+be mounted on the MGS node while the
+.B lctl
+commands are being run for this. Otherwise, the client check is skipped.
+.SH EXAMPLES
+Delete a pool named
+.B local
+in the
+.B testfs
+filesystem.
+.RS
+.EX
+.B # lctl pool_destroy testfs.local
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl pool_destroy
+is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.1-1578-g665e36b780
+.SH SEE ALSO
+.BR lfs-df (1),
+.BR lfs-find (1),
+.BR lfs-setstripe (1),
+.BR lustre (7),
+.BR lctl-pool_add (8),
+.BR lctl-pool_list (8),
+.BR lctl-pool_new (8),
+.BR lctl-pool_remove (8)
