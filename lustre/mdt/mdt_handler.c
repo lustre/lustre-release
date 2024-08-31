@@ -1615,7 +1615,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		/* eadatasize from client includes NULL-terminator, so
 		 * there is no need to read it
 		 */
-		buffer->lb_len = reqbody->mbo_eadatasize - 1;
+		buffer->lb_len = 0;
+		if (reqbody->mbo_eadatasize > 0)
+			buffer->lb_len = reqbody->mbo_eadatasize - 1;
 		rc = mo_readlink(env, next, buffer);
 		if (unlikely(rc <= 0)) {
 			CERROR("%s: readlink failed for "DFID": rc = %d\n",

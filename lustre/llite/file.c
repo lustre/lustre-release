@@ -646,7 +646,7 @@ out_io:
 	EXIT;
 }
 
-static int ll_intent_file_open(struct dentry *de, void *lmm, int lmmsize,
+static int ll_intent_file_open(struct dentry *de, void *lmm, ssize_t lmmsize,
 				struct lookup_intent *itp)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(de->d_inode);
@@ -2684,7 +2684,8 @@ static ssize_t ll_file_write(struct file *file, const char __user *buf,
 #endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
-			     __u64 flags, struct lov_user_md *lum, int lum_size)
+			     __u64 flags, struct lov_user_md *lum,
+			     ssize_t lum_size)
 {
 	struct lookup_intent oit = {
 		.it_op = IT_OPEN,
@@ -2864,7 +2865,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 {
 	__u64 flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
 	struct lov_user_md *lump;
-	int lum_size = sizeof(*lump) + sizeof(struct lov_user_ost_data);
+	ssize_t lum_size = sizeof(*lump) + sizeof(struct lov_user_ost_data);
 	int rc;
 
 	ENTRY;
@@ -2907,20 +2908,20 @@ static int ll_file_getstripe(struct inode *inode, void __user *lum, size_t size)
 	RETURN(rc);
 }
 
-static int ll_lov_setstripe(struct inode *inode, struct file *file,
+static ssize_t ll_lov_setstripe(struct inode *inode, struct file *file,
 			    void __user *arg)
 {
 	struct lov_user_md __user *lum = arg;
 	struct lov_user_md *klum;
-	int lum_size, rc;
+	ssize_t	lum_size;
+	int rc;
 	__u64 flags = FMODE_WRITE;
 
 	ENTRY;
-	rc = ll_copy_user_md(lum, &klum);
-	if (rc < 0)
-		RETURN(rc);
+	lum_size = ll_copy_user_md(lum, &klum);
+	if (lum_size < 0)
+		RETURN(lum_size);
 
-	lum_size = rc;
 	rc = ll_lov_setstripe_ea_info(inode, file_dentry(file), flags, klum,
 				      lum_size);
 	if (!rc) {
