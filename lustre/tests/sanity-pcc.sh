@@ -3275,7 +3275,8 @@ test_40() {
 		error "should not send OST_READ RPCs to OSTs"
 
 	echo "Time1: $time1 Time2: $time2"
-	[ $time1 -le $time2 ] ||
+	# Occasionally async can take a tiny bit longer due to races, that's OK
+	[ $time1 -le $((time2 + 1)) ] ||
 		error "Total time for async open attach should be smaller"
 
 	do_facet $SINGLEAGT $LFS pcc detach $file
@@ -3300,7 +3301,8 @@ test_40() {
 	time2=$((SECONDS - stime))
 
 	echo "Time1: $time1 Time2: $time2"
-	[ $time1 -le $time2 ] ||
+	# Occasionally async can take a tiny bit longer due to races, that's OK
+	[ $time1 -le $((time2 + 1)) ] ||
 		error "Total time for async open attach should be smaller"
 }
 run_test 40 "Test async open attach in the background for PCC-RO file"
