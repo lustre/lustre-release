@@ -1,0 +1,51 @@
+.TH LCTL-LLOG_REMOVE 8 2024-12-09 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-llog_remove \- remove one log from catalog or plain log, erase it from disk
+.SH SYNOPSIS
+.SY "lctl llog_remove"
+.BI --log_id " ID"
+.RI { LOGNAME | FID }
+.YS
+.SH DESCRIPTION
+.B lctl llog_remove
+is used to remove log given by
+.I ID
+from the
+.I LOGNAME
+configuration log or the log's
+.IR FID ,
+typically on the MGS.
+See
+.BR lctl-llog_catlist (8)
+for a list of configuration logs.
+.SH OPTIONS
+.TP
+.BI --log_id ID
+The record
+.I ID
+number to remove, as printed by
+.B lctl llog_info
+for that log.
+.SH EXAMPLES
+To remove logid "0xa:0x3:0x0" from the
+.B testfs_client
+conf_param log:
+.RS
+.EX
+.B # lctl llog_remove testfs_client --log_id "0xa:0x3:0x0"
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl llog_remove
+is a subcommand of
+.BR lctl (8)
+and is distributed as part of the
+.BR lustre (7)
+filesystem package since release 0.6.0
+.\" Added in commit 0.0.0-2194-g040033cef2
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-llog_cancel (8),
+.BR lctl-llog_catlist (8),
+.BR lctl-llog_info (8),
+.BR lctl-llog_print (8)
