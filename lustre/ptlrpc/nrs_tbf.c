@@ -1290,16 +1290,21 @@ static unsigned int
 nrs_tbf_hop_hash(struct cfs_hash *hs, const void *key,
 		 const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, strlen(key), bits);
+	return cfs_hash_djb2_hash(key, sizeof(struct nrs_tbf_key), bits);
 }
 
-static int nrs_tbf_hop_keycmp(const void *key, struct hlist_node *hnode)
+static int nrs_tbf_hop_keycmp(const void *data, struct hlist_node *hnode)
 {
+	struct nrs_tbf_key *key = (struct nrs_tbf_key *)data;
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
 						 struct nrs_tbf_client,
 						 tc_hnode);
 
-	return (strcmp(cli->tc_key, key) == 0);
+	return nid_same(&cli->tc_nid, &key->tk_nid) &&
+	       cli->tc_opcode == key->tk_opcode &&
+	       cli->tc_id.ti_uid == key->tk_id.ti_uid &&
+	       cli->tc_id.ti_gid == key->tk_id.ti_gid &&
+	       strcmp(cli->tc_jobid, key->tk_jobid) == 0;
 }
 
 static void *nrs_tbf_hop_key(struct hlist_node *hnode)
@@ -1307,7 +1312,7 @@ static void *nrs_tbf_hop_key(struct hlist_node *hnode)
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
 						 struct nrs_tbf_client,
 						 tc_hnode);
-	return cli->tc_key;
+	return &cli->tc_key;
 }
 
 static void nrs_tbf_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
@@ -1397,12 +1402,12 @@ nrs_tbf_startup(struct ptlrpc_nrs_policy *policy, struct nrs_tbf_head *head)
 
 static struct nrs_tbf_client *
 nrs_tbf_cli_hash_lookup(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			const char *key)
+			struct nrs_tbf_key *key)
 {
 	struct hlist_node *hnode;
 	struct nrs_tbf_client *cli;
 
-	hnode = cfs_hash_bd_lookup_locked(hs, bd, (void *)key);
+	hnode = cfs_hash_bd_lookup_locked(hs, bd, key);
 	if (hnode == NULL)
 		return NULL;
 
@@ -1642,31 +1647,19 @@ static int nrs_tbf_id_cli_set(struct ptlrpc_request *req, struct tbf_id *id,
 	return rc;
 }
 
-static inline void nrs_tbf_cli_gen_key(struct nrs_tbf_client *cli,
-				       struct ptlrpc_request *req,
-				       char *keystr, size_t keystr_sz)
+static inline void nrs_tbf_cli_gen_key(struct ptlrpc_request *req,
+				       struct nrs_tbf_key *key)
 {
 	const char *jobid;
-	u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
-	struct tbf_id id;
 
-	nrs_tbf_id_cli_set(req, &id, NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID);
+	key->tk_nid = req->rq_peer.nid;
+	key->tk_opcode = lustre_msg_get_opc(req->rq_reqmsg);
+	nrs_tbf_id_cli_set(req, &key->tk_id, NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID);
+
 	jobid = lustre_msg_get_jobid(req->rq_reqmsg);
 	if (jobid == NULL)
 		jobid = NRS_TBF_JOBID_NULL;
-
-	snprintf(keystr, keystr_sz, "%s_%s_%d_%u_%u", jobid,
-		 libcfs_nidstr(&req->rq_peer.nid), opc, id.ti_uid,
-		 id.ti_gid);
-
-	if (cli) {
-		INIT_LIST_HEAD(&cli->tc_lru);
-		strscpy(cli->tc_key, keystr, sizeof(cli->tc_key));
-		strscpy(cli->tc_jobid, jobid, sizeof(cli->tc_jobid));
-		cli->tc_nid = req->rq_peer.nid;
-		cli->tc_opcode = opc;
-		cli->tc_id = id;
-	}
+	strscpy(key->tk_jobid, jobid, sizeof(key->tk_jobid));
 }
 
 static struct nrs_tbf_client *
@@ -1675,11 +1668,12 @@ nrs_tbf_cli_find(struct nrs_tbf_head *head, struct ptlrpc_request *req)
 	struct nrs_tbf_client *cli;
 	struct cfs_hash *hs = head->th_cli_hash;
 	struct cfs_hash_bd bd;
-	char keystr[NRS_TBF_KEY_LEN];
+	struct nrs_tbf_key key;
 
-	nrs_tbf_cli_gen_key(NULL, req, keystr, sizeof(keystr));
-	cfs_hash_bd_get_and_lock(hs, (void *)keystr, &bd, 1);
-	cli = nrs_tbf_cli_hash_lookup(hs, &bd, keystr);
+	memset(&key, 0, sizeof(key));
+	nrs_tbf_cli_gen_key(req, &key);
+	cfs_hash_bd_get_and_lock(hs, &key, &bd, 1);
+	cli = nrs_tbf_cli_hash_lookup(hs, &bd, &key);
 	cfs_hash_bd_unlock(hs, &bd, 1);
 
 	return cli;
@@ -1689,13 +1683,13 @@ static struct nrs_tbf_client *
 nrs_tbf_cli_findadd(struct nrs_tbf_head *head,
 		    struct nrs_tbf_client *cli)
 {
-	const char		*key;
+	struct nrs_tbf_key	*key;
 	struct nrs_tbf_client	*ret;
 	struct cfs_hash		*hs = head->th_cli_hash;
 	struct cfs_hash_bd	 bd;
 
-	key = cli->tc_key;
-	cfs_hash_bd_get_and_lock(hs, (void *)key, &bd, 1);
+	key = &cli->tc_key;
+	cfs_hash_bd_get_and_lock(hs, key, &bd, 1);
 	ret = nrs_tbf_cli_hash_lookup(hs, &bd, key);
 	if (ret == NULL) {
 		cfs_hash_bd_add_locked(hs, &bd, &cli->tc_hnode);
@@ -1749,9 +1743,8 @@ static void
 nrs_tbf_generic_cli_init(struct nrs_tbf_client *cli,
 			 struct ptlrpc_request *req)
 {
-	char keystr[NRS_TBF_KEY_LEN];
-
-	nrs_tbf_cli_gen_key(cli, req, keystr, sizeof(keystr));
+	nrs_tbf_cli_gen_key(req, &cli->tc_key);
+	INIT_LIST_HEAD(&cli->tc_lru);
 }
 
 static void
