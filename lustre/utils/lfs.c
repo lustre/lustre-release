@@ -107,6 +107,8 @@ struct quota_param {
 	unsigned int	 qp_show_default:1;
 	unsigned int	 qp_show_pools:1;
 	unsigned int	 qp_show_qid:1;
+	unsigned int	 qp_show_title:1;
+	__u32		 qp_detail;
 };
 
 static int lfs_setquota(int argc, char **argv);
@@ -531,9 +533,19 @@ command_t cmdlist[] = {
 	 "                [--pool POOL] MOUNT_POINT\n"
 	 "       setquota {-u|-g|-p ID} {--default|--delete} MOUNT_POINT\n"},
 	{"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-	 "usage: quota [-q] [-v] [-h] [-o OBD_UUID|-i MDT_IDX|-I OST_IDX]\n"
+	 "usage: quota [-q] [-v] [-h] [-o OBD_UUID|-o OST_IDX|-m MDT_IDX]\n"
 	 "             [{-u|-g|-p} UNAME|UID|GNAME|GID|PROJID]\n"
-	 "             [--pool OST_POOL_NAME] [MOUNT_POINT ...]\n"
+	 "             [--pool OST_POOL_NAME]\n"
+	 "             [--filesystem|--mount-point]\n"
+	 "             [--blocks|--busage|--space]\n"
+	 "             [--block-softlimit|--bsoftlimit]\n"
+	 "             [--block-hardlimit|--bhardlimit]\n"
+	 "             [--block-grace|--bgrace|--btime]\n"
+	 "             [--inodes|--iusage]\n"
+	 "             [--inode-softlimit|--isoftlimit]\n"
+	 "             [--inode-hardlimit|--ihardlimit]\n"
+	 "             [--inode-grace|--igrace|--itime]\n"
+	 "             [MOUNT_POINT ...]\n"
 	 "       quota -t {-u|-g|-p} [--pool OST_POOL_NAME] [MOUNT_POINT ...]\n"
 	 "       quota [-hqv] {-U|-G|-P} [--pool OST_POOL_NAME] [MOUNT_POINT ...]\n"
 	 "       quota -a {-u|-g|-p} [-s START_QID] [-e END_QID] [MOUNT_POINT ...]\n"},
@@ -3704,6 +3716,13 @@ enum {
 	LFS_ATTRS_OPT,
 	LFS_XATTRS_MATCH_OPT,
 	LFS_MIGRATE_NOFIX,
+	LFS_QUOTA_FILESYSTEM_OPT,
+	LFS_QUOTA_SPACE_OPT,
+	LFS_QUOTA_BGRACE_OPT,
+	LFS_QUOTA_INODES_OPT,
+	LFS_QUOTA_ISOFTLIMIT_OPT,
+	LFS_QUOTA_IHARDLIMIT_OPT,
+	LFS_QUOTA_IGRACE_OPT,
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -9194,26 +9213,37 @@ static void print_quota_title(char *name, struct if_quotactl *qctl,
 
 	if (param->qp_show_qid) {
 		printf("Disk %s quotas\n", qtype_name(qctl->qc_type));
-		printf("%16s %9s %7s %7s %7s %7s %7s %7s %7s %7s\n",
-		       "Filesystem", "quota_id",
-		       param->qp_human_readable ? "used" : "kbytes",
-				"quota", "limit", "grace",
-		       "files", "quota", "limit", "grace");
 	} else if (param->qp_show_default) {
 		printf("Disk default %s quota:\n", qtype_name(qctl->qc_type));
-		printf("%16s %7s %7s %7s %7s %7s %7s\n",
-		       "Filesystem", "bquota", "blimit", "bgrace",
-		       "iquota", "ilimit", "igrace");
 	} else {
 		printf("Disk quotas for %s %s (%cid %u):\n",
 		       qtype_name(qctl->qc_type), name,
 		       *qtype_name(qctl->qc_type), qctl->qc_id);
-		printf("%16s %7s %7s %7s %7s %7s %7s %7s %7s\n",
-		       "Filesystem",
-		       param->qp_human_readable ? "used" : "kbytes",
-				"quota", "limit", "grace",
-		       "files", "quota", "limit", "grace");
 	}
+
+	if (param->qp_detail & QIF_FILESYSTEM)
+		printf("%16s", "Filesystem");
+
+	if (param->qp_show_qid)
+		printf(" %9s", "quota_id");
+
+	if ((param->qp_detail & QIF_SPACE) && !param->qp_show_default)
+		printf(" %7s ", param->qp_human_readable ? "used" : "kbytes");
+	if (param->qp_detail & QIF_BSOFTLIMIT)
+		printf(" %7s", "bquota");
+	if (param->qp_detail & QIF_BHARDLIMIT)
+		printf(" %7s", "blimit");
+	if (param->qp_detail & QIF_BTIME)
+		printf(" %7s", "bgrace");
+	if ((param->qp_detail & QIF_INODES) && !param->qp_show_default)
+		printf(" %7s ", "files");
+	if (param->qp_detail & QIF_ISOFTLIMIT)
+		printf(" %7s", "iquota");
+	if (param->qp_detail & QIF_IHARDLIMIT)
+		printf(" %7s", "ilimit");
+	if (param->qp_detail & QIF_ITIME)
+		printf(" %7s", "igrace");
+	printf("\n");
 }
 
 static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
@@ -9253,7 +9283,7 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 
 #define STRBUF_LEN	24
 static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
-			int rc, bool h, bool show_default, bool show_qid)
+			int rc, struct quota_param *param)
 {
 	char *name, *tmp;
 	time_t now;
@@ -9297,56 +9327,66 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		if (tmp)
 			*tmp = '\0';
 
-		printf("%16s", mnt); /* Filesystem */
-		if (show_qid) {
+		if (param->qp_detail & QIF_FILESYSTEM)
+			printf((param->qp_detail & ~QIF_FILESYSTEM) ?
+			       "%16s" : "%s", mnt); /* Filesystem */
+
+		if (param->qp_show_qid) {
+			name = NULL;
+
 			if (qctl->qc_type == USRQUOTA) {
-				if (uid2name(&name, qctl->qc_id))
-					printf(" %9u", qctl->qc_id);
-				else
-					printf(" %9s", name);
+				uid2name(&name, qctl->qc_id);
 			} else if (qctl->qc_type == GRPQUOTA) {
-				if (gid2name(&name, qctl->qc_id))
-					printf(" %9u", qctl->qc_id);
-				else
-					printf(" %9s", name);
-			} else {
-				printf(" %9u", qctl->qc_id);
+				gid2name(&name, qctl->qc_id);
 			}
+			if (name && name[0] != '\0')
+				printf(" %9s", name);
+			else
+				printf(" %9u", qctl->qc_id);
 		}
 
-		if (show_default)
+		if (param->qp_show_default)
 			snprintf(timebuf, sizeof(timebuf), "%llu",
 				 (unsigned long long)dqb->dqb_btime);
 		else if (bover)
 			diff2str(dqb->dqb_btime, timebuf, now);
 
 		kbytes2str(lustre_stoqb(dqb->dqb_curspace),
-			   strbuf, sizeof(strbuf), h);
+			   strbuf, sizeof(strbuf), param->qp_human_readable);
 		if (rc == -EREMOTEIO)
 			sprintf(numbuf[0], "%s*", strbuf);
 		else
 			sprintf(numbuf[0], (dqb->dqb_valid & QIF_SPACE) ?
 				"%s" : "[%s]", strbuf);
 
-		kbytes2str(dqb->dqb_bsoftlimit, strbuf, sizeof(strbuf), h);
+		kbytes2str(dqb->dqb_bsoftlimit, strbuf, sizeof(strbuf),
+			   param->qp_human_readable);
 		if (type == QC_GENERAL)
 			sprintf(numbuf[1], (dqb->dqb_valid & QIF_BLIMITS) ?
 				"%s" : "[%s]", strbuf);
 		else
 			sprintf(numbuf[1], "%s", "-");
 
-		kbytes2str(dqb->dqb_bhardlimit, strbuf, sizeof(strbuf), h);
+		kbytes2str(dqb->dqb_bhardlimit, strbuf, sizeof(strbuf),
+			   param->qp_human_readable);
 		sprintf(numbuf[2], (dqb->dqb_valid & QIF_BLIMITS) ?
 			"%s" : "[%s]", strbuf);
 
-		if (show_default)
-			printf(" %7s %7s %7s", numbuf[1], numbuf[2], timebuf);
-		else
-			printf(" %7s%c %6s %7s %7s",
-			       numbuf[0], bover ? '*' : ' ', numbuf[1],
-			       numbuf[2], bover > 1 ? timebuf : "-");
+		if ((param->qp_detail & QIF_SPACE) && !param->qp_show_default)
+			printf((param->qp_detail & ~QIF_SPACE) ?
+			       " %7s%c" : "%s", numbuf[0], bover ? '*' : ' ');
+		if (param->qp_detail & QIF_BSOFTLIMIT) {
+			printf(param->qp_detail & ~QIF_BSOFTLIMIT ?
+			       " %7s" : "%s", numbuf[1]);
+		}
+		if (param->qp_detail & QIF_BHARDLIMIT)
+			printf(param->qp_detail & ~QIF_BHARDLIMIT ?
+			       " %7s" : "%s", numbuf[2]);
+		if (param->qp_detail & QIF_BTIME)
+			printf(param->qp_detail & ~QIF_BTIME ?
+			       " %7s" : "%s", bover > 1 ? timebuf : "-");
 
-		if (show_default)
+		if (param->qp_show_default)
 			snprintf(timebuf, sizeof(timebuf), "%llu",
 				 (unsigned long long)dqb->dqb_itime);
 		else if (iover)
@@ -9366,14 +9406,23 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		sprintf(numbuf[2], (dqb->dqb_valid & QIF_ILIMITS) ?
 			"%ju" : "[%ju]", (uintmax_t)dqb->dqb_ihardlimit);
 
-		if (show_default)
-			printf(" %7s %7s %7s", numbuf[1], numbuf[2], timebuf);
-		else if (type != QC_OSTIDX)
-			printf(" %7s%c %6s %7s %7s",
-			       numbuf[0], iover ? '*' : ' ', numbuf[1],
-			       numbuf[2], iover > 1 ? timebuf : "-");
-		else
-			printf(" %7s %7s %7s %7s", "-", "-", "-", "-");
+		if ((param->qp_detail & QIF_INODES) && !param->qp_show_default)
+			printf(param->qp_detail & ~QIF_INODES ?
+			       " %7s%c" : "%s", type != QC_OSTIDX ?
+			       numbuf[0] : "-", bover ? '*' : ' ');
+		if (param->qp_detail & QIF_ISOFTLIMIT) {
+			printf(param->qp_detail & ~QIF_ISOFTLIMIT ?
+			       " %7s" : "%s", type != QC_OSTIDX ?
+			       numbuf[1] : "-");
+		}
+		if (param->qp_detail & QIF_IHARDLIMIT)
+			printf(param->qp_detail & ~QIF_IHARDLIMIT ?
+			       " %7s" : "%s", type != QC_OSTIDX ?
+			       numbuf[2] : "-");
+		if (param->qp_detail & QIF_ITIME)
+			printf(param->qp_detail & ~QIF_ITIME ? " %7s" : "%s",
+			       type != QC_OSTIDX && iover > 1 ? timebuf : "-");
+
 		printf("\n");
 	} else if (qctl->qc_cmd == LUSTRE_Q_GETINFO ||
 		   qctl->qc_cmd == LUSTRE_Q_GETINFOPOOL ||
@@ -9417,7 +9466,7 @@ static int tgt_name2index(const char *tgtname, unsigned int *idx)
 }
 
 static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
-			   bool h, __u64 *total)
+			   struct quota_param *param, __u64 *total)
 {
 	int rc = 0, rc1 = 0, count = 0, i = 0;
 	char **list = NULL, *buffer = NULL;
@@ -9493,8 +9542,8 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 				       sizeof(qctl->qc_dqinfo));
 				memset(&qctl->qc_dqblk, 0,
 				       sizeof(qctl->qc_dqblk));
-				print_quota(name, qctl, qctl->qc_valid, 0, h,
-					    false, false);
+				print_quota(name, qctl, qctl->qc_valid, 0,
+					    param);
 				rc = 0;
 				continue;
 			}
@@ -9507,7 +9556,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 		}
 
 		print_quota(obd_uuid2str(&qctl->obd_uuid), qctl,
-			    qctl->qc_valid, 0, h, false, false);
+			    qctl->qc_valid, 0, param);
 		*total += is_mdt ? qctl->qc_dqblk.dqb_ihardlimit :
 				   qctl->qc_dqblk.dqb_bhardlimit;
 	}
@@ -9556,8 +9605,7 @@ static int print_one_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		((qctl->qc_dqblk.dqb_valid & (QIF_LIMITS|QIF_USAGE)) !=
 		 (QIF_LIMITS|QIF_USAGE));
 
-	print_quota(mnt, qctl, QC_GENERAL, rc, param->qp_human_readable,
-		    param->qp_show_default, param->qp_show_qid);
+	print_quota(mnt, qctl, QC_GENERAL, rc, param);
 
 	if (!param->qp_show_qid && !param->qp_show_default &&
 	    param->qp_verbose && qctl->qc_valid == QC_GENERAL &&
@@ -9565,9 +9613,9 @@ static int print_one_quota(char *mnt, char *name, struct if_quotactl *qctl,
 	    qctl->qc_cmd != LUSTRE_Q_GETINFOPOOL) {
 		char strbuf[STRBUF_LEN];
 
-		rc1 = print_obd_quota(mnt, qctl, 1, param->qp_human_readable,
+		rc1 = print_obd_quota(mnt, qctl, 1, param,
 				      &total_ialloc);
-		rc2 = print_obd_quota(mnt, qctl, 0, param->qp_human_readable,
+		rc2 = print_obd_quota(mnt, qctl, 0, param,
 				      &total_balloc);
 		kbytes2str(total_balloc, strbuf, sizeof(strbuf),
 			   param->qp_human_readable);
@@ -9906,7 +9954,8 @@ static int lfs_quota(int argc, char **argv)
 	{ .val = 'G',	.name = "default-grp",	.has_arg = no_argument },
 	{ .val = 'h',	.name = "human-readable", .has_arg = no_argument },
 	/* It is unfortunate that '-i' was used for mdt-index, and '-I' for
-	 * ost-index, because '-i' is used for ost-index everywhere else.
+	 * ost-index, because '-i' is used for ost-index everywhere else. '-i'
+	 * and '-I' are also used for soft/hard inode quotas in lfs_setquota().
 	 * These options have been this way since ancient days, but I suspect
 	 * that they are not often used. Prefer --ost and --mdt instead.
 	 */
@@ -9923,6 +9972,53 @@ static int lfs_quota(int argc, char **argv)
 	{ .val = 'u',	.name = "user",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "default-usr",	.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_FILESYSTEM_OPT,
+			.name = "filesystem",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_FILESYSTEM_OPT,
+			.name = "mount-point",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_SPACE_OPT,
+			.name = "blocks",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_SPACE_OPT,
+			.name = "busage",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_SPACE_OPT,
+			.name = "space",	.has_arg = no_argument },
+	{ .val = 'b',
+		.name = "block-softlimit",	.has_arg = no_argument },
+	{ .val = 'b',
+			.name = "bsoftlimit",	.has_arg = no_argument },
+	{ .val = 'b',	.name = "bquota",	.has_arg = no_argument },
+	{ .val = 'B',
+		.name = "block-hardlimit",	.has_arg = no_argument },
+	{ .val = 'B',	.name = "bhardlimit",	.has_arg = no_argument },
+	{ .val = 'B',	.name = "blimit",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_BGRACE_OPT,
+			.name = "block-grace",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_BGRACE_OPT,
+			.name = "bgrace",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_BGRACE_OPT,
+			.name = "btime",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_INODES_OPT,
+			.name = "inodes",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_INODES_OPT,
+			.name = "iusage",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_ISOFTLIMIT_OPT,
+		.name = "inode-softlimit",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_ISOFTLIMIT_OPT,
+			.name = "isoftlimit",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_ISOFTLIMIT_OPT,
+			.name = "iquota",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_IHARDLIMIT_OPT,
+		.name = "inode-hardlimit",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_IHARDLIMIT_OPT,
+			.name = "ihardlimit",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_IHARDLIMIT_OPT,
+			.name = "ilimit",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_IGRACE_OPT,
+			.name = "inode-grace",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_IGRACE_OPT,
+			.name = "igrace",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_IGRACE_OPT,
+			.name = "itime",	.has_arg = no_argument },
 	{ .name = NULL } };
 
 	qctl = calloc(1, sizeof(*qctl) + LOV_MAXPOOLNAME + 1);
@@ -9933,12 +10029,18 @@ static int lfs_quota(int argc, char **argv)
 	qctl->qc_type = ALLQUOTA;
 	obd_uuid = (char *)qctl->obd_uuid.uuid;
 
-	while ((c = getopt_long(argc, argv, "ae:gGhi:I:m:o:pPqs:tuUv",
+	while ((c = getopt_long(argc, argv, "abBe:gGhi:I:m:o:pPqs:tuUv",
 		long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'a':
 			param.qp_show_qid = 1;
 			qctl->qc_cmd = LUSTRE_Q_ITERQUOTA;
+			break;
+		case 'b':
+			param.qp_detail |= QIF_BSOFTLIMIT;
+			break;
+		case 'B':
+			param.qp_detail |= QIF_BHARDLIMIT;
 			break;
 		case 'e':
 			if (optarg == NULL || *optarg == '\0') {
@@ -10004,7 +10106,7 @@ static int lfs_quota(int argc, char **argv)
 
 			/* need to also handle a UUID for compatibility */
 			param.qp_valid = qctl->qc_valid = QC_UUID;
-			snprintf(obd_uuid, sizeof(*obd_uuid), "%s", optarg);
+			snprintf(obd_uuid, UUID_MAX, "%s", optarg);
 			break;
 		case 'P':
 			param.qp_show_default = 1;
@@ -10072,6 +10174,27 @@ quota_type:
 		case 'v':
 			param.qp_verbose = 1;
 			break;
+		case LFS_QUOTA_FILESYSTEM_OPT:
+			param.qp_detail |= QIF_FILESYSTEM;
+			break;
+		case LFS_QUOTA_SPACE_OPT:
+			param.qp_detail |= QIF_SPACE;
+			break;
+		case LFS_QUOTA_BGRACE_OPT:
+			param.qp_detail |= QIF_BTIME;
+			break;
+		case LFS_QUOTA_INODES_OPT:
+			param.qp_detail |= QIF_INODES;
+			break;
+		case LFS_QUOTA_ISOFTLIMIT_OPT:
+			param.qp_detail |= QIF_ISOFTLIMIT;
+			break;
+		case LFS_QUOTA_IHARDLIMIT_OPT:
+			param.qp_detail |= QIF_IHARDLIMIT;
+			break;
+		case LFS_QUOTA_IGRACE_OPT:
+			param.qp_detail |= QIF_ITIME;
+			break;
 		default:
 			fprintf(stderr, "%s quota: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
@@ -10079,6 +10202,9 @@ quota_type:
 			goto out;
 		}
 	}
+
+	if (!param.qp_detail)
+		param.qp_detail = QIF_ALL_DETAIL;
 
 	if (qctl->qc_cmd == LUSTRE_Q_ITERQUOTA) {
 		if (qctl->qc_type == ALLQUOTA) {

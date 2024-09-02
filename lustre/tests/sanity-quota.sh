@@ -5627,7 +5627,7 @@ test_73a()
 	pool_add_targets $qpool 0 $((OSTCOUNT - 1)) ||
 		error "pool_add_targets failed"
 
-	test_default_quota "-u" "data" "qpool1"
+	test_default_quota "-u" "data" $qpool
 }
 run_test 73a "default limits at OST Pool Quotas"
 

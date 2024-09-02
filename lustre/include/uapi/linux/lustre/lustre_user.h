@@ -1555,6 +1555,17 @@ struct sepol_downcall_data {
 
 #endif /* !__KERNEL__ */
 
+/* these are not defined in the kernel */
+#ifndef QIF_BSOFTLIMIT
+#define QIF_BSOFTLIMIT	1024
+#define QIF_BHARDLIMIT	QIF_BLIMITS
+#define QIF_ISOFTLIMIT	2048
+#define QIF_IHARDLIMIT	QIF_ILIMITS
+#define QIF_FILESYSTEM	4096
+#define QIF_ALL_DETAIL	(QIF_ALL | QIF_BSOFTLIMIT | QIF_ISOFTLIMIT | \
+QIF_FILESYSTEM)
+#endif
+
 /* lustre volatile file support
  * file name header: ".^L^S^T^R:volatile"
  */
