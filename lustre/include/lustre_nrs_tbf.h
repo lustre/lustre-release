@@ -41,7 +41,9 @@ enum nrs_tbf_flag {
 	NRS_TBF_FLAG_OPCODE	= 0x0000004,
 	NRS_TBF_FLAG_UID	= 0x0000008,
 	NRS_TBF_FLAG_GID	= 0x0000010,
-	NRS_TBF_FLAG_GENERIC	= 0x0000020,
+	NRS_TBF_FLAG_ALL	= NRS_TBF_FLAG_NID | NRS_TBF_FLAG_JOBID |
+				  NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID |
+				  NRS_TBF_FLAG_OPCODE,
 };
 
 struct tbf_id {
@@ -56,6 +58,7 @@ struct nrs_tbf_id {
 };
 
 struct nrs_tbf_key {
+	enum nrs_tbf_flag	tk_flags;
 	struct lnet_nid		tk_nid;
 	__u32			tk_opcode;
 	struct tbf_id		tk_id;	/* UID and GID */

@@ -4942,6 +4942,145 @@ test_77k() {
 }
 run_test 77k "check TBF policy with UID/GID/JobID/OPCode expression"
 
+cleanup_77k_jobid()
+{
+	local saved_jobid_var=$1
+	local rule_list=$2
+	local old_nrs=${3:-"fifo"}
+
+	local current_jobid_var=$($LCTL get_param -n jobid_var)
+
+	if [ $saved_jobid_var != $current_jobid_var ]; then
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" $saved_jobid_var
+	fi
+
+	cleanup_77k $rule_list $old_nrs
+}
+test_77kb() {
+	(( "$OST1_VERSION" >= $(version_code 2.16.52) )) ||
+		skip "Need OST version at least 2.16.52"
+
+	local osts=$(osts_nodes)
+	local saved_jobid_var=$($LCTL get_param -n jobid_var)
+
+	# Configure jobid_var
+	if [ $saved_jobid_var != procname_uid ]; then
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" procname_uid
+	fi
+
+	do_nodes $osts $LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ jobid+opcode" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ jobid={dd.$RUNAS_ID}\&opcode={ost_write}\ rate=20" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ jobid={dd.$RUNAS_ID}\&opcode={ost_read}\ rate=10"
+	stack_trap "cleanup_77k_jobid $saved_jobid 'ext_w ext_r'"
+	nrs_write_read "$RUNAS"
+	tbf_verify 20 10 "$RUNAS"
+}
+run_test 77kb "Check different granular TBF type combination: jobid+opcode"
+
+test_77kc() {
+	(( "$OST1_VERSION" >= $(version_code 2.16.52) )) ||
+		skip "Need OST version at least 2.16.52"
+
+	local osts=$(osts_nodes)
+	local address=$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")
+	local client_nids=$(nids_list $address "\\")
+
+	do_nodes $osts $LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ nid+opcode" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ nid={0@lo\ $client_nids}\&opcode={ost_write}\ rate=20" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ nid={0@lo\ $client_nids}\&opcode={ost_read}\ rate=10"
+	stack_trap "cleanup_77k 'ext_w ext_r' 'fifo'"
+	nrs_write_read
+	tbf_verify 20 10
+}
+run_test 77kc "Check different granular TBF type combination: nid+opcode"
+
+test_77kd() {
+	(( "$OST1_VERSION" >= $(version_code 2.16.52) )) ||
+		skip "Need OST version at least 2.16.52"
+
+	local osts=$(osts_nodes)
+	local address=$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")
+	local client_nids=$(nids_list $address "\\")
+	local saved_jobid_var=$($LCTL get_param -n jobid_var)
+
+	# Configure jobid_var
+	if [ $saved_jobid_var != procname_uid ]; then
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" procname_uid
+	fi
+
+	do_nodes $osts $LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ nid+jobid" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext\ nid={0@lo\ $client_nids}\&jobid={dd.$RUNAS_ID}\ rate=20"
+	stack_trap "cleanup_77k_jobid $saved_jobid_var 'ext'"
+	nrs_write_read "$RUNAS"
+	tbf_verify 20 20 "$RUNAS"
+}
+run_test 77kd "Check different granular TBF type combination: nid+jobid"
+
+test_77ke() {
+	(( "$OST1_VERSION" >= $(version_code 2.16.52) )) ||
+		skip "Need OST version at least 2.16.52"
+
+	local osts=$(osts_nodes)
+	local saved_jobid_var=$($LCTL get_param -n jobid_var)
+
+	# Configure jobid_var
+	if [ $saved_jobid_var != procname_uid ]; then
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" procname_uid
+	fi
+
+	do_nodes $osts $LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ jobid+opcode" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_a\ jobid={dd.$RUNAS_ID},opcode={ost_write}\ rate=20" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_b\ jobid={dd.$RUNAS_ID},opcode={ost_read}\ rate=10"
+	stack_trap "cleanup_77k_jobid $saved_jobid_var 'ext_a ext_b'"
+	nrs_write_read "$RUNAS"
+	# with parameter "RUNAS", it will match the latest rule
+	# "ext_b" first, so the limited write rate is 10.
+	tbf_verify 10 10 "$RUNAS"
+	tbf_verify 20 10
+}
+run_test 77ke "Check different granular TBF type combination: jobid+opcode"
+
+test_77kf() {
+	(( "$OST1_VERSION" >= $(version_code 2.16.52) )) ||
+		skip "Need OST version at least 2.16.52"
+
+	local osts=$(osts_nodes)
+
+	do_nodes $osts $LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ uid+gid" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_ug\ uid={$RUNAS_ID}\&gid={$RUNAS_GID}\ rate=5"
+	stack_trap "cleanup_77k 'ext_ug' 'fifo'"
+	nrs_write_read "runas -u $RUNAS_ID -g $RUNAS_GID"
+	tbf_verify 5 5 "runas -u $RUNAS_ID -g $RUNAS_GID"
+}
+run_test 77kf "Check different granular TBF type combination: uid+gid"
+
+test_77kg() {
+	(( "$OST1_VERSION" >= $(version_code 2.16.52) )) ||
+		skip "Need OST version at least 2.16.52"
+
+	local osts=$(osts_nodes)
+
+	stack_trap "cleanup_77k 'ext_uw ext_ur ext_a ext_b' 'fifo'"
+	do_nodes $osts $LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ uid+opcode" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_uw\ uid={$RUNAS_ID}\&opcode={ost_write}\ rate=20" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_ur\ uid={$RUNAS_ID}\&opcode={ost_read}\ rate=10"
+	nrs_write_read "runas -u $RUNAS_ID"
+	tbf_verify 20 10 "runas -u $RUNAS_ID"
+
+	do_nodes $osts $LCTL set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_uw" \
+		ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_ur" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_a\ uid={$RUNAS_ID},opcode={ost_write}\ rate=20" \
+		ost.OSS.ost_io.nrs_tbf_rule="start\ ext_b\ uid={$RUNAS_ID},opcode={ost_read}\ rate=10"
+	nrs_write_read "runas -u $RUNAS_ID"
+	tbf_verify 10 10 "runas -u $RUNAS_ID"
+	tbf_verify 20 10 "runas -u $RUNAS_ID"
+}
+run_test 77kg "check different granular TBF type combination: uid+opcode"
+
 test_77l() {
 	[[ "$OST1_VERSION" -ge $(version_code 2.10.56) ]] ||
 		skip "Need OST version at least 2.10.56"

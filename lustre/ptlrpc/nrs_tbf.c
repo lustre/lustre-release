@@ -216,6 +216,7 @@ nrs_tbf_cli_init(struct nrs_tbf_head *head,
 
 	memset(cli, 0, sizeof(*cli));
 	cli->tc_in_heap = false;
+	cli->tc_key.tk_flags = head->th_type_flag;
 	head->th_ops->o_cli_init(cli, req);
 	INIT_LIST_HEAD(&cli->tc_list);
 	INIT_LIST_HEAD(&cli->tc_linkage);
@@ -1236,25 +1237,94 @@ static struct nrs_tbf_ops nrs_tbf_nid_ops = {
 	.o_rule_fini	= nrs_tbf_nid_rule_fini,
 };
 
+static inline unsigned int
+__cfs_hash_djb2_hash(const void *key, size_t size, unsigned int hash)
+{
+	size_t i;
+
+	LASSERT(key != NULL);
+
+	for (i = 0; i < size; i++)
+		hash = hash * 33 + ((char *)key)[i];
+
+	return hash;
+}
+
+/* A variant of the generic djb2 hash algorithm for character arrays. */
+static inline unsigned int
+nrs_tbf_generic_hash(const struct nrs_tbf_key *key, const unsigned int bits)
+{
+	unsigned int hash = 5381;
+
+	/* All TBF types are valid: nid+uid+gid+opcode+jobid. */
+	if (key->tk_flags == NRS_TBF_FLAG_ALL)
+		return cfs_hash_djb2_hash(key, sizeof(*key), bits);
+
+	if (key->tk_flags & NRS_TBF_FLAG_NID)
+		hash = __cfs_hash_djb2_hash(&key->tk_nid,
+					    sizeof(key->tk_nid), hash);
+
+	if (key->tk_flags & NRS_TBF_FLAG_OPCODE)
+		hash = __cfs_hash_djb2_hash(&key->tk_opcode,
+					    sizeof(key->tk_opcode), hash);
+
+	if (key->tk_flags & NRS_TBF_FLAG_UID)
+		hash = __cfs_hash_djb2_hash(&key->tk_id.ti_uid,
+					    sizeof(key->tk_id.ti_uid), hash);
+
+	if (key->tk_flags & NRS_TBF_FLAG_GID)
+		hash = __cfs_hash_djb2_hash(&key->tk_id.ti_gid,
+					    sizeof(key->tk_id.ti_gid), hash);
+
+	if (key->tk_flags & NRS_TBF_FLAG_JOBID)
+		hash = __cfs_hash_djb2_hash(&key->tk_jobid,
+					    strlen(key->tk_jobid), hash);
+
+	return (hash & ((1U << bits) - 1));
+}
+
 static unsigned int
 nrs_tbf_hop_hash(struct cfs_hash *hs, const void *key,
 		 const unsigned int bits)
 {
-	return cfs_hash_djb2_hash(key, sizeof(struct nrs_tbf_key), bits);
+	return nrs_tbf_generic_hash(key, bits);
 }
 
 static int nrs_tbf_hop_keycmp(const void *data, struct hlist_node *hnode)
 {
-	struct nrs_tbf_key *key = (struct nrs_tbf_key *)data;
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
 						 struct nrs_tbf_client,
 						 tc_hnode);
+	struct nrs_tbf_key *key1 = &cli->tc_key;
+	struct nrs_tbf_key *key2 = (struct nrs_tbf_key *)data;
 
-	return nid_same(&cli->tc_nid, &key->tk_nid) &&
-	       cli->tc_opcode == key->tk_opcode &&
-	       cli->tc_id.ti_uid == key->tk_id.ti_uid &&
-	       cli->tc_id.ti_gid == key->tk_id.ti_gid &&
-	       strcmp(cli->tc_jobid, key->tk_jobid) == 0;
+	if (key1->tk_flags != key2->tk_flags)
+		return 0;
+
+	if (key1->tk_flags == NRS_TBF_FLAG_ALL)
+		return !memcmp(key1, key2, sizeof(*key1));
+
+	if ((key1->tk_flags & NRS_TBF_FLAG_NID) &&
+	    !(nid_same(&key1->tk_nid, &key2->tk_nid)))
+		return 0;
+
+	if ((key1->tk_flags & NRS_TBF_FLAG_OPCODE) &&
+	    key1->tk_opcode != key2->tk_opcode)
+		return 0;
+
+	if ((key1->tk_flags & NRS_TBF_FLAG_UID) &&
+	    key1->tk_id.ti_uid != key2->tk_id.ti_uid)
+		return 0;
+
+	if ((key1->tk_flags & NRS_TBF_FLAG_GID) &&
+	    key1->tk_id.ti_gid != key2->tk_id.ti_gid)
+		return 0;
+
+	if ((key1->tk_flags & NRS_TBF_FLAG_JOBID) &&
+	    strcmp(key1->tk_jobid, key2->tk_jobid))
+		return 0;
+
+	return 1;
 }
 
 static void *nrs_tbf_hop_key(struct hlist_node *hnode)
@@ -1600,16 +1670,22 @@ static int nrs_tbf_id_cli_set(struct ptlrpc_request *req, struct tbf_id *id,
 static inline void nrs_tbf_cli_gen_key(struct ptlrpc_request *req,
 				       struct nrs_tbf_key *key)
 {
-	const char *jobid;
+	if (key->tk_flags & NRS_TBF_FLAG_NID)
+		key->tk_nid = req->rq_peer.nid;
+	if (key->tk_flags & NRS_TBF_FLAG_OPCODE)
+		key->tk_opcode = lustre_msg_get_opc(req->rq_reqmsg);
+	if (key->tk_flags & (NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID))
+		nrs_tbf_id_cli_set(req, &key->tk_id,
+				   key->tk_flags &
+				   (NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID));
+	if (key->tk_flags & NRS_TBF_FLAG_JOBID) {
+		const char *jobid;
 
-	key->tk_nid = req->rq_peer.nid;
-	key->tk_opcode = lustre_msg_get_opc(req->rq_reqmsg);
-	nrs_tbf_id_cli_set(req, &key->tk_id, NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID);
-
-	jobid = lustre_msg_get_jobid(req->rq_reqmsg);
-	if (jobid == NULL)
-		jobid = NRS_TBF_JOBID_NULL;
-	strscpy(key->tk_jobid, jobid, sizeof(key->tk_jobid));
+		jobid = lustre_msg_get_jobid(req->rq_reqmsg);
+		if (jobid == NULL)
+			jobid = NRS_TBF_JOBID_NULL;
+		strscpy(key->tk_jobid, jobid, sizeof(key->tk_jobid));
+	}
 }
 
 static struct nrs_tbf_client *
@@ -1621,6 +1697,7 @@ nrs_tbf_cli_find(struct nrs_tbf_head *head, struct ptlrpc_request *req)
 	struct nrs_tbf_key key;
 
 	memset(&key, 0, sizeof(key));
+	key.tk_flags = head->th_type_flag;
 	nrs_tbf_cli_gen_key(req, &key);
 	cfs_hash_bd_get_and_lock(hs, &key, &bd, 1);
 	cli = nrs_tbf_cli_hash_lookup(hs, &bd, &key);
@@ -2620,38 +2697,101 @@ static struct nrs_tbf_ops nrs_tbf_gid_ops = {
 	.o_rule_fini = nrs_tbf_id_rule_fini,
 };
 
+enum nrs_tbf_type_index {
+	NRS_TBF_IDX_JOBID = 0,
+	NRS_TBF_IDX_NID,
+	NRS_TBF_IDX_OPCODE,
+	NRS_TBF_IDX_UID,
+	NRS_TBF_IDX_GID,
+	NRS_TBF_IDX_GENERIC,
+	NRS_TBF_IDX_MAX,
+};
+
 static struct nrs_tbf_type nrs_tbf_types[] = {
-	{
+	[NRS_TBF_IDX_JOBID] = {
 		.ntt_name = NRS_TBF_TYPE_JOBID,
 		.ntt_flag = NRS_TBF_FLAG_JOBID,
 		.ntt_ops = &nrs_tbf_jobid_ops,
 	},
-	{
+	[NRS_TBF_IDX_NID] = {
 		.ntt_name = NRS_TBF_TYPE_NID,
 		.ntt_flag = NRS_TBF_FLAG_NID,
 		.ntt_ops = &nrs_tbf_nid_ops,
-	},
-	{
+		},
+	[NRS_TBF_IDX_OPCODE] = {
 		.ntt_name = NRS_TBF_TYPE_OPCODE,
 		.ntt_flag = NRS_TBF_FLAG_OPCODE,
 		.ntt_ops = &nrs_tbf_opcode_ops,
 	},
-	{
-		.ntt_name = NRS_TBF_TYPE_GENERIC,
-		.ntt_flag = NRS_TBF_FLAG_GENERIC,
-		.ntt_ops = &nrs_tbf_generic_ops,
-	},
-	{
+	[NRS_TBF_IDX_UID] = {
 		.ntt_name = NRS_TBF_TYPE_UID,
 		.ntt_flag = NRS_TBF_FLAG_UID,
 		.ntt_ops = &nrs_tbf_uid_ops,
 	},
-	{
+	[NRS_TBF_IDX_GID] = {
 		.ntt_name = NRS_TBF_TYPE_GID,
 		.ntt_flag = NRS_TBF_FLAG_GID,
 		.ntt_ops = &nrs_tbf_gid_ops,
 	},
+	[NRS_TBF_IDX_GENERIC] = {
+		.ntt_name = NRS_TBF_TYPE_GENERIC,
+		.ntt_flag = NRS_TBF_FLAG_ALL,
+		.ntt_ops = &nrs_tbf_generic_ops,
+	},
 };
+
+#define NRS_TBF_TYPE_COMBINATOR	"+"
+
+static int nrs_tbf_type_parse(const char *orig, enum nrs_tbf_flag *fl)
+{
+	enum nrs_tbf_flag flags = NRS_TBF_FLAG_INVALID;
+	char *copy, *str;
+	int rc = 0;
+
+	ENTRY;
+
+	copy = kstrdup(orig, GFP_KERNEL);
+	if (!copy)
+		RETURN(-ENOMEM);
+
+	str = copy;
+	while (str && rc == 0) {
+		char *name;
+		bool found = false;
+		int i;
+
+		name = strsep(&str, NRS_TBF_TYPE_COMBINATOR);
+		if (!*name)
+			GOTO(out, rc);
+
+		for (i = 0; i < ARRAY_SIZE(nrs_tbf_types); i++) {
+			if (strcmp(name, nrs_tbf_types[i].ntt_name) == 0) {
+				flags |= nrs_tbf_types[i].ntt_flag;
+				found = true;
+				break;
+			}
+		}
+
+		if (found == false)
+			GOTO(out, rc = -EINVAL);
+	}
+out:
+	kfree(copy);
+	if (rc == 0) {
+		if (flags == NRS_TBF_FLAG_INVALID)
+			RETURN(-EINVAL);
+
+		*fl = flags;
+	}
+
+	RETURN(rc);
+}
+
+static inline bool nrs_tbf_flags_valid(__u32 flags)
+{
+	return (flags & NRS_TBF_FLAG_ALL) &&
+	       (flags & ~NRS_TBF_FLAG_ALL) == 0;
+}
 
 /**
  * nrs_tbf_start() - policy to start
@@ -2672,31 +2812,56 @@ static struct nrs_tbf_type nrs_tbf_types[] = {
  */
 static int nrs_tbf_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
-	struct nrs_tbf_head	*head;
-	struct nrs_tbf_ops	*ops;
-	__u32			 type;
-	char			*name;
-	int found = 0;
-	int i;
+	struct nrs_tbf_head *head;
+	struct nrs_tbf_ops *ops;
+	enum nrs_tbf_flag flags;
+	char *name;
 	int rc = 0;
 
-	if (arg == NULL)
+	if (arg == NULL) {
+		flags = NRS_TBF_FLAG_ALL;
 		name = NRS_TBF_TYPE_GENERIC;
-	else if (strlen(arg) < NRS_TBF_TYPE_MAX_LEN)
+	} else if (strlen(arg) < NRS_TBF_TYPE_MAX_LEN) {
 		name = arg;
-	else
+		rc = nrs_tbf_type_parse(arg, &flags);
+		if (rc)
+			GOTO(out, rc);
+	} else {
 		GOTO(out, rc = -EINVAL);
-
-	for (i = 0; i < ARRAY_SIZE(nrs_tbf_types); i++) {
-		if (strcmp(name, nrs_tbf_types[i].ntt_name) == 0) {
-			ops = nrs_tbf_types[i].ntt_ops;
-			type = nrs_tbf_types[i].ntt_flag;
-			found = 1;
-			break;
-		}
 	}
-	if (found == 0)
-		GOTO(out, rc = -ENOTSUPP);
+
+	LASSERT((flags & NRS_TBF_FLAG_ALL) != 0);
+	LASSERT((flags & ~NRS_TBF_FLAG_ALL) == 0);
+
+	/*
+	 * TODO: remove the redundant codes about separate TBF type:
+	 * nid|uid|gid|opcode|jobid.
+	 * They can all replace with the generic TBF type with only
+	 * one separate TBF flag valid.
+	 */
+	switch (flags) {
+	case NRS_TBF_FLAG_JOBID:
+		ops = nrs_tbf_types[NRS_TBF_IDX_JOBID].ntt_ops;
+		break;
+	case NRS_TBF_FLAG_NID:
+		ops = nrs_tbf_types[NRS_TBF_IDX_NID].ntt_ops;
+		break;
+	case NRS_TBF_FLAG_OPCODE:
+		ops = nrs_tbf_types[NRS_TBF_IDX_OPCODE].ntt_ops;
+		break;
+	case NRS_TBF_FLAG_UID:
+		ops = nrs_tbf_types[NRS_TBF_IDX_UID].ntt_ops;
+		break;
+	case NRS_TBF_FLAG_GID:
+		ops = nrs_tbf_types[NRS_TBF_IDX_GID].ntt_ops;
+		break;
+	default:
+		if (!nrs_tbf_flags_valid(flags))
+			GOTO(out, rc = -EINVAL);
+
+		ops = nrs_tbf_types[NRS_TBF_IDX_GENERIC].ntt_ops;
+		break;
+	}
 
 	OBD_CPT_ALLOC_PTR(head, nrs_pol2cptab(policy), nrs_pol2cptid(policy));
 	if (head == NULL)
@@ -2705,7 +2870,7 @@ static int nrs_tbf_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	memcpy(head->th_type, name, strlen(name));
 	head->th_type[strlen(name)] = '\0';
 	head->th_ops = ops;
-	head->th_type_flag = type;
+	head->th_type_flag = flags;
 
 	head->th_binheap = binheap_create(&nrs_tbf_heap_ops,
 					  CBH_FLAG_ATOMIC_GROW, 4096, NULL,
@@ -3263,15 +3428,16 @@ static int nrs_tbf_id_parse(struct nrs_tbf_cmd *cmd, char *token)
 	case NRS_TBF_FLAG_OPCODE:
 		rc = nrs_tbf_opcode_parse(cmd, token);
 		break;
-	case NRS_TBF_FLAG_GENERIC:
-		rc = nrs_tbf_generic_parse(cmd, token);
-		break;
 	case NRS_TBF_FLAG_UID:
 	case NRS_TBF_FLAG_GID:
 		rc = nrs_tbf_ug_id_parse(cmd, token);
 		break;
 	default:
-		RETURN(-EINVAL);
+		if (nrs_tbf_flags_valid(cmd->u.tc_start.ts_valid_type))
+			rc = nrs_tbf_generic_parse(cmd, token);
+		else
+			rc = -EINVAL;
+		break;
 	}
 
 	RETURN(rc);
@@ -3290,16 +3456,17 @@ static void nrs_tbf_cmd_fini(struct nrs_tbf_cmd *cmd)
 		case NRS_TBF_FLAG_OPCODE:
 			nrs_tbf_opcode_cmd_fini(cmd);
 			break;
-		case NRS_TBF_FLAG_GENERIC:
-			nrs_tbf_generic_cmd_fini(cmd);
-			break;
 		case NRS_TBF_FLAG_UID:
 		case NRS_TBF_FLAG_GID:
 			nrs_tbf_id_cmd_fini(cmd);
 			break;
 		default:
-			CWARN("unknown NRS_TBF_FLAGS:0x%x\n",
-			      cmd->u.tc_start.ts_valid_type);
+			if (nrs_tbf_flags_valid(cmd->u.tc_start.ts_valid_type))
+				nrs_tbf_generic_cmd_fini(cmd);
+			else
+				CWARN("unknown NRS_TBF_FLAGS:0x%x\n",
+				      cmd->u.tc_start.ts_valid_type);
+			break;
 		}
 	}
 }
