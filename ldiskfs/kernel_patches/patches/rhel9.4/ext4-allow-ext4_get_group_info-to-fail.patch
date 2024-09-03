@@ -1,0 +1,433 @@
+commit 5354b2af34064a4579be8bc0e2f15a7b70f14b5f
+Author:     Theodore Ts'o <tytso@mit.edu>
+AuthorDate: Sat Apr 29 00:06:28 2023 -0400
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Sat May 13 18:02:46 2023 -0400
+
+ext4: allow ext4_get_group_info() to fail
+
+Previously, ext4_get_group_info() would treat an invalid group number
+as BUG(), since in theory it should never happen.  However, if a
+malicious attaker (or fuzzer) modifies the superblock via the block
+device while it is the file system is mounted, it is possible for
+s_first_data_block to get set to a very large number.  In that case,
+when calculating the block group of some block number (such as the
+starting block of a preallocation region), could result in an
+underflow and very large block group number.  Then the BUG_ON check in
+ext4_get_group_info() would fire, resutling in a denial of service
+attack that can be triggered by root or someone with write access to
+the block device.
+
+For a quality of implementation perspective, it's best that even if
+the system administrator does something that they shouldn't, that it
+will not trigger a BUG.  So instead of BUG'ing, ext4_get_group_info()
+will call ext4_error and return NULL.  We also add fallback code in
+all of the callers of ext4_get_group_info() that it might NULL.
+
+Also, since ext4_get_group_info() was already borderline to be an
+inline function, un-inline it.  The results in a next reduction of the
+compiled text size of ext4 by roughly 2k.
+
+Cc: stable@kernel.org
+Link: https://lore.kernel.org/r/20230430154311.579720-2-tytso@mit.edu
+Reported-by: syzbot+e2efa3efc15a1c9e95c3@syzkaller.appspotmail.com
+Link: https://syzkaller.appspot.com/bug?id=69b28112e098b070f639efb356393af3ffec4220
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+Reviewed-by: Jan Kara <jack@suse.cz>
+---
+Index: linux-stage/fs/ext4/balloc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/balloc.c
++++ linux-stage/fs/ext4/balloc.c
+@@ -321,6 +321,22 @@ static ext4_fsblk_t ext4_valid_block_bit
+ 	return (next_zero_bit < bitmap_size ? next_zero_bit : 0);
+ }
+ 
++struct ext4_group_info *ext4_get_group_info(struct super_block *sb,
++					   ext4_group_t group)
++{
++	struct ext4_group_info **grp_info;
++	long indexv, indexh;
++
++	if (unlikely(group >= EXT4_SB(sb)->s_groups_count)) {
++		ext4_error(sb, "invalid group %u", group);
++		return NULL;
++	}
++	indexv = group >> (EXT4_DESC_PER_BLOCK_BITS(sb));
++	indexh = group & ((EXT4_DESC_PER_BLOCK(sb)) - 1);
++	grp_info = sbi_array_rcu_deref(EXT4_SB(sb), s_group_info, indexv);
++	return grp_info[indexh];
++}
++
+ /*
+  * Return the block number which was discovered to be invalid, or 0 if
+  * the block bitmap is valid.
+@@ -395,7 +411,7 @@ static int ext4_validate_block_bitmap(st
+ 
+ 	if (buffer_verified(bh))
+ 		return 0;
+-	if (EXT4_MB_GRP_BBITMAP_CORRUPT(grp))
++	if (!grp || EXT4_MB_GRP_BBITMAP_CORRUPT(grp))
+ 		return -EFSCORRUPTED;
+ 
+ 	ext4_lock_group(sb, block_group);
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -2903,6 +2903,8 @@ extern void ext4_check_blocks_bitmap(str
+ extern struct ext4_group_desc * ext4_get_group_desc(struct super_block * sb,
+ 						    ext4_group_t block_group,
+ 						    struct buffer_head ** bh);
++extern struct ext4_group_info *ext4_get_group_info(struct super_block *sb,
++						  ext4_group_t group);
+ extern int ext4_should_retry_alloc(struct super_block *sb, int *retries);
+ 
+ extern struct buffer_head *ext4_read_block_bitmap_nowait(struct super_block *sb,
+@@ -3546,19 +3548,6 @@ static inline void ext4_isize_set(struct
+ 	raw_inode->i_size_high = cpu_to_le32(i_size >> 32);
+ }
+ 
+-static inline
+-struct ext4_group_info *ext4_get_group_info(struct super_block *sb,
+-					    ext4_group_t group)
+-{
+-	 struct ext4_group_info **grp_info;
+-	 long indexv, indexh;
+-	 BUG_ON(group >= EXT4_SB(sb)->s_groups_count);
+-	 indexv = group >> (EXT4_DESC_PER_BLOCK_BITS(sb));
+-	 indexh = group & ((EXT4_DESC_PER_BLOCK(sb)) - 1);
+-	 grp_info = sbi_array_rcu_deref(EXT4_SB(sb), s_group_info, indexv);
+-	 return grp_info[indexh];
+-}
+-
+ /*
+  * Reading s_groups_count requires using smp_rmb() afterwards.  See
+  * the locking protocol documented in the comments of ext4_group_add()
+Index: linux-stage/fs/ext4/ialloc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
+@@ -92,7 +92,7 @@ static int ext4_validate_inode_bitmap(st
+ 
+ 	if (buffer_verified(bh))
+ 		return 0;
+-	if (EXT4_MB_GRP_IBITMAP_CORRUPT(grp))
++	if (!grp || EXT4_MB_GRP_IBITMAP_CORRUPT(grp))
+ 		return -EFSCORRUPTED;
+ 
+ 	ext4_lock_group(sb, block_group);
+@@ -295,7 +295,7 @@ void ext4_free_inode(handle_t *handle, s
+ 	}
+ 	if (!(sbi->s_mount_state & EXT4_FC_REPLAY)) {
+ 		grp = ext4_get_group_info(sb, block_group);
+-		if (unlikely(EXT4_MB_GRP_IBITMAP_CORRUPT(grp))) {
++		if (!grp || unlikely(EXT4_MB_GRP_IBITMAP_CORRUPT(grp))) {
+ 			fatal = -EFSCORRUPTED;
+ 			goto error_return;
+ 		}
+@@ -1048,7 +1048,7 @@ got_group:
+ 			 * Skip groups with already-known suspicious inode
+ 			 * tables
+ 			 */
+-			if (EXT4_MB_GRP_IBITMAP_CORRUPT(grp))
++			if (!grp || EXT4_MB_GRP_IBITMAP_CORRUPT(grp))
+ 				goto next_group;
+ 		}
+ 
+@@ -1185,6 +1185,10 @@ got:
+ 
+ 		if (!(sbi->s_mount_state & EXT4_FC_REPLAY)) {
+ 			grp = ext4_get_group_info(sb, group);
++			if (!grp) {
++				err = -EFSCORRUPTED;
++				goto out;
++			}
+ 			down_read(&grp->alloc_sem); /*
+ 						     * protect vs itable
+ 						     * lazyinit
+@@ -1538,7 +1542,7 @@ int ext4_init_inode_table(struct super_b
+ 	}
+ 
+ 	gdp = ext4_get_group_desc(sb, group, &group_desc_bh);
+-	if (!gdp)
++	if (!gdp || !grp)
+ 		goto out;
+ 
+ 	/*
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -745,6 +745,8 @@ static int __mb_check_buddy(struct ext4_
+ 	MB_CHECK_ASSERT(e4b->bd_info->bb_fragments == fragments);
+ 
+ 	grp = ext4_get_group_info(sb, e4b->bd_group);
++	if (!grp)
++		return NULL;
+ 	list_for_each(cur, &grp->bb_prealloc_list) {
+ 		ext4_group_t groupnr;
+ 		struct ext4_prealloc_space *pa;
+@@ -1059,10 +1061,10 @@ mb_set_largest_free_order(struct super_b
+ }
+ 
+ static noinline_for_stack
+-int ext4_mb_generate_buddy(struct super_block *sb,
+-				void *buddy, void *bitmap, ext4_group_t group)
++void ext4_mb_generate_buddy(struct super_block *sb,
++			   void *buddy, void *bitmap, ext4_group_t group,
++			   struct ext4_group_info *grp)
+ {
+-	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 	ext4_grpblk_t max = EXT4_CLUSTERS_PER_GROUP(sb);
+ 	ext4_grpblk_t i = 0;
+@@ -1107,7 +1109,6 @@ int ext4_mb_generate_buddy(struct super_
+ 		grp->bb_free = free;
+ 		ext4_mark_group_bitmap_corrupted(sb, group,
+ 					EXT4_GROUP_INFO_BBITMAP_CORRUPT);
+-		return -EIO;
+ 	}
+ 	mb_set_largest_free_order(sb, grp);
+ 	mb_update_avg_fragment_size(sb, grp);
+@@ -1117,8 +1118,6 @@ int ext4_mb_generate_buddy(struct super_
+ 	period = get_cycles() - period;
+ 	atomic_inc(&sbi->s_mb_buddies_generated);
+ 	atomic64_add(period, &sbi->s_mb_generation_time);
+-
+-	return 0;
+ }
+ 
+ /* The buddy information is attached the buddy cache inode
+@@ -1188,6 +1187,8 @@ static int ext4_mb_init_cache(struct pag
+ 			break;
+ 
+ 		grinfo = ext4_get_group_info(sb, group);
++		if (!grinfo)
++			continue;
+ 		/*
+ 		 * If page is uptodate then we came here after online resize
+ 		 * which added some new uninitialized group info structs, so
+@@ -1253,6 +1254,10 @@ static int ext4_mb_init_cache(struct pag
+ 				group, page->index, i * blocksize);
+ 			trace_ext4_mb_buddy_bitmap_load(sb, group);
+ 			grinfo = ext4_get_group_info(sb, group);
++			if (!grinfo) {
++				err = -EFSCORRUPTED;
++				goto out;
++			}
+ 			grinfo->bb_fragments = 0;
+ 			memset(grinfo->bb_counters, 0,
+ 			       sizeof(*grinfo->bb_counters) *
+@@ -1263,7 +1268,7 @@ static int ext4_mb_init_cache(struct pag
+ 			ext4_lock_group(sb, group);
+ 			/* init the buddy */
+ 			memset(data, 0xff, blocksize);
+-			err = ext4_mb_generate_buddy(sb, data, incore, group);
++			ext4_mb_generate_buddy(sb, data, incore, group, grinfo);
+ 			ext4_unlock_group(sb, group);
+ 			incore = NULL;
+ 		} else {
+@@ -1378,6 +1383,9 @@ int ext4_mb_init_group(struct super_bloc
+ 	might_sleep();
+ 	mb_debug(sb, "init group %u\n", group);
+ 	this_grp = ext4_get_group_info(sb, group);
++	if (!this_grp)
++		return -EFSCORRUPTED;
++
+ 	/*
+ 	 * This ensures that we don't reinit the buddy cache
+ 	 * page which map to the group from which we are already
+@@ -1452,6 +1460,8 @@ ext4_mb_load_buddy_gfp(struct super_bloc
+ 
+ 	blocks_per_page = PAGE_SIZE / sb->s_blocksize;
+ 	grp = ext4_get_group_info(sb, group);
++	if (!grp)
++		return -EFSCORRUPTED;
+ 
+ 	e4b->bd_blkbits = sb->s_blocksize_bits;
+ 	e4b->bd_info = grp;
+@@ -2182,6 +2192,8 @@ int ext4_mb_find_by_goal(struct ext4_all
+ 	struct ext4_group_info *grp = ext4_get_group_info(ac->ac_sb, group);
+ 	struct ext4_free_extent ex;
+ 
++	if (!grp)
++		return -EFSCORRUPTED;
+ 	if (!(ac->ac_flags & (EXT4_MB_HINT_TRY_GOAL | EXT4_MB_HINT_GOAL_ONLY)))
+ 		return 0;
+ 	if (grp->bb_free == 0)
+@@ -2410,7 +2422,7 @@ static bool ext4_mb_good_group(struct ex
+ 
+ 	BUG_ON(cr < 0 || cr >= 4);
+ 
+-	if (unlikely(EXT4_MB_GRP_BBITMAP_CORRUPT(grp)))
++	if (unlikely(EXT4_MB_GRP_BBITMAP_CORRUPT(grp)) || !grp)
+ 		return false;
+ 
+ 	free = grp->bb_free;
+@@ -2479,6 +2491,8 @@ static int ext4_mb_good_group_nolock(str
+ 	ext4_grpblk_t free;
+ 	int ret = 0;
+ 
++	if (!grp)
++		return -EFSCORRUPTED;
+ 	if (sbi->s_mb_stats)
+ 		atomic64_inc(&sbi->s_bal_cX_groups_considered[ac->ac_criteria]);
+ 	if (should_lock) {
+@@ -2559,7 +2573,7 @@ ext4_group_t ext4_mb_prefetch(struct sup
+ 		 * prefetch once, so we avoid getblk() call, which can
+ 		 * be expensive.
+ 		 */
+-		if (!EXT4_MB_GRP_TEST_AND_SET_READ(grp) &&
++		if (gdp && grp && !EXT4_MB_GRP_TEST_AND_SET_READ(grp) &&
+ 		    EXT4_MB_GRP_NEED_INIT(grp) &&
+ 		    ext4_free_group_clusters(sb, gdp) > 0 &&
+ 		    !(ext4_has_group_desc_csum(sb) &&
+@@ -2603,7 +2617,7 @@ void ext4_mb_prefetch_fini(struct super_
+ 		gdp = ext4_get_group_desc(sb, group, NULL);
+ 		grp = ext4_get_group_info(sb, group);
+ 
+-		if (EXT4_MB_GRP_NEED_INIT(grp) &&
++		if (grp && gdp && EXT4_MB_GRP_NEED_INIT(grp) &&
+ 		    ext4_free_group_clusters(sb, gdp) > 0 &&
+ 		    !(ext4_has_group_desc_csum(sb) &&
+ 		      (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT)))) {
+@@ -2865,6 +2879,8 @@ static int ext4_mb_seq_groups_show(struc
+ 		sizeof(struct ext4_group_info);
+ 
+ 	grinfo = ext4_get_group_info(sb, group);
++	if (!grinfo)
++		return 0;
+ 	/* Load the group info in memory only if not already loaded. */
+ 	if (unlikely(EXT4_MB_GRP_NEED_INIT(grinfo))) {
+ 		err = ext4_mb_load_buddy(sb, group, &e4b);
+@@ -2879,7 +2895,7 @@ static int ext4_mb_seq_groups_show(struc
+ 	if (gdp != NULL)
+ 		free = ext4_free_group_clusters(sb, gdp);
+ 
+-	memcpy(&sg, ext4_get_group_info(sb, group), i);
++	memcpy(&sg, grinfo, i);
+ 
+ 	if (buddy_loaded)
+ 		ext4_mb_unload_buddy(&e4b);
+@@ -3394,8 +3410,12 @@ static int ext4_mb_init_backend(struct s
+ 
+ err_freebuddy:
+ 	cachep = get_groupinfo_cache(sb->s_blocksize_bits);
+-	while (i-- > 0)
+-		kmem_cache_free(cachep, ext4_get_group_info(sb, i));
++	while (i-- > 0) {
++		struct ext4_group_info *grp = ext4_get_group_info(sb, i);
++
++		if (grp)
++			kmem_cache_free(cachep, grp);
++	}
+ 	i = sbi->s_group_info_size;
+ 	rcu_read_lock();
+ 	group_info = rcu_dereference(sbi->s_group_info);
+@@ -3730,6 +3750,8 @@ int ext4_mb_release(struct super_block *
+ 		for (i = 0; i < ngroups; i++) {
+ 			cond_resched();
+ 			grinfo = ext4_get_group_info(sb, i);
++			if (!grinfo)
++				continue;
+ 			mb_group_bb_bitmap_free(grinfo);
+ 			ext4_lock_group(sb, i);
+ 			count = ext4_mb_cleanup_pa(grinfo);
+@@ -4934,6 +4956,8 @@ static void ext4_mb_generate_from_freeli
+ 	struct ext4_free_data *entry;
+ 
+ 	grp = ext4_get_group_info(sb, group);
++	if (!grp)
++		return;
+ 	n = rb_first(&(grp->bb_free_root));
+ 
+ 	while (n) {
+@@ -5003,6 +5027,9 @@ int ext4_mb_generate_from_pa(struct supe
+ 	int err;
+ 	int len;
+ 
++	if (!grp)
++		return -EIO;
++
+ 	gdp = ext4_get_group_desc(sb, group, NULL);
+ 	if (gdp == NULL)
+ 		return -EIO;
+@@ -5256,6 +5283,8 @@ adjust_bex:
+ 
+ 	ei = EXT4_I(ac->ac_inode);
+ 	grp = ext4_get_group_info(sb, ac->ac_b_ex.fe_group);
++	if (!grp)
++		return;
+ 
+ 	pa->pa_node_lock.inode_lock = &ei->i_prealloc_lock;
+ 	pa->pa_inode = ac->ac_inode;
+@@ -5307,6 +5336,8 @@ ext4_mb_new_group_pa(struct ext4_allocat
+ 	atomic_add(pa->pa_free, &EXT4_SB(sb)->s_mb_preallocated);
+ 
+ 	grp = ext4_get_group_info(sb, ac->ac_b_ex.fe_group);
++	if (!grp)
++		return;
+ 	lg = ac->ac_lg;
+ 	BUG_ON(lg == NULL);
+ 
+@@ -5435,6 +5466,8 @@ ext4_mb_discard_group_preallocations(str
+ 	int err;
+ 	int free = 0;
+ 
++	if (!grp)
++		return 0;
+ 	mb_debug(sb, "discard preallocation for group %u\n", group);
+ 	if (list_empty(&grp->bb_prealloc_list))
+ 		goto out_dbg;
+@@ -5683,6 +5716,9 @@ static inline void ext4_mb_show_pa(struc
+ 		struct ext4_prealloc_space *pa;
+ 		ext4_grpblk_t start;
+ 		struct list_head *cur;
++
++		if (!grp)
++			continue;
+ 		ext4_lock_group(sb, i);
+ 		list_for_each(cur, &grp->bb_prealloc_list) {
+ 			pa = list_entry(cur, struct ext4_prealloc_space,
+@@ -6481,6 +6517,7 @@ static void ext4_mb_clear_bb(handle_t *h
+ 	struct buffer_head *bitmap_bh = NULL;
+ 	struct super_block *sb = inode->i_sb;
+ 	struct ext4_group_desc *gdp;
++	struct ext4_group_info *grp;
+ 	unsigned int overflow;
+ 	ext4_grpblk_t bit;
+ 	struct buffer_head *gd_bh;
+@@ -6506,8 +6543,8 @@ do_more:
+ 	overflow = 0;
+ 	ext4_get_group_no_and_offset(sb, block, &block_group, &bit);
+ 
+-	if (unlikely(EXT4_MB_GRP_BBITMAP_CORRUPT(
+-			ext4_get_group_info(sb, block_group))))
++	grp = ext4_get_group_info(sb, block_group);
++	if (unlikely(!grp || EXT4_MB_GRP_BBITMAP_CORRUPT(grp)))
+ 		return;
+ 
+ 	/*
+@@ -7169,6 +7206,8 @@ int ext4_trim_fs(struct super_block *sb,
+ 
+ 	for (group = first_group; group <= last_group; group++) {
+ 		grp = ext4_get_group_info(sb, group);
++		if (!grp)
++			continue;
+ 		/* We only do this if the grp has never been initialized */
+ 		if (unlikely(EXT4_MB_GRP_NEED_INIT(grp))) {
+ 			ret = ext4_mb_init_group(sb, group, GFP_NOFS);
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -1094,6 +1094,8 @@ void ext4_mark_group_bitmap_corrupted(st
+ 	struct ext4_group_desc *gdp = ext4_get_group_desc(sb, group, NULL);
+ 	int ret;
+ 
++	if (!grp || !gdp)
++		return;
+ 	if (flags & EXT4_GROUP_INFO_BBITMAP_CORRUPT) {
+ 		ret = ext4_test_and_set_bit(EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT,
+ 					    &grp->bb_state);

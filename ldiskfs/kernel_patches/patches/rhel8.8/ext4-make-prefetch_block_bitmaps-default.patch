@@ -1,0 +1,87 @@
+commit 21175ca434c5d49509b73cf473618b01b0b85437
+Author:     Harshad Shirwadkar <harshadshirwadkar@gmail.com>
+AuthorDate: Thu Apr 1 10:21:29 2021 -0700
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Fri Apr 9 11:34:59 2021 -0400
+
+ext4: make prefetch_block_bitmaps default
+
+Block bitmap prefetching is needed for these allocator optimization
+data structures to get populated and provide better group scanning
+order. So, turn it on bu default. prefetch_block_bitmaps mount option
+is now marked as removed and a new option no_prefetch_block_bitmaps is
+added to disable block bitmap prefetching.
+
+Signed-off-by: Harshad Shirwadkar <harshadshirwadkar@gmail.com>
+Link: https://lore.kernel.org/r/20210401172129.189766-8-harshadshirwadkar@gmail.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1178,7 +1178,7 @@ struct ext4_inode_info {
+ #define EXT4_MOUNT_JOURNAL_CHECKSUM	0x800000 /* Journal checksums */
+ #define EXT4_MOUNT_JOURNAL_ASYNC_COMMIT	0x1000000 /* Journal Async Commit */
+ #define EXT4_MOUNT_WARN_ON_ERROR	0x2000000 /* Trigger WARN_ON on error */
+-#define EXT4_MOUNT_PREFETCH_BLOCK_BITMAPS 0x4000000
++#define EXT4_MOUNT_NO_PREFETCH_BLOCK_BITMAPS 0x4000000
+ #define EXT4_MOUNT_DELALLOC		0x8000000 /* Delalloc support */
+ #define EXT4_MOUNT_DATA_ERR_ABORT	0x10000000 /* Abort on file data write */
+ #define EXT4_MOUNT_BLOCK_VALIDITY	0x20000000 /* Block validity checking */
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -1623,7 +1623,7 @@ enum {
+ 	Opt_mb_c1_threshold, Opt_mb_c2_threshold, Opt_mb_c3_threshold,
+ 	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
+ 	Opt_max_dir_size_kb, Opt_nojournal_checksum, Opt_nombcache,
+-	Opt_prefetch_block_bitmaps, Opt_mb_optimize_scan,
++	Opt_no_prefetch_block_bitmaps, Opt_mb_optimize_scan,
+ };
+ 
+ static const match_table_t tokens = {
+@@ -1717,7 +1717,8 @@ static const match_table_t tokens = {
+ 	{Opt_test_dummy_encryption, "test_dummy_encryption"},
+ 	{Opt_nombcache, "nombcache"},
+ 	{Opt_nombcache, "no_mbcache"},	/* for backward compatibility */
+-	{Opt_prefetch_block_bitmaps, "prefetch_block_bitmaps"},
++	{Opt_removed, "prefetch_block_bitmaps"},
++	{Opt_no_prefetch_block_bitmaps, "no_prefetch_block_bitmaps"},
+ 	{Opt_mb_optimize_scan, "mb_optimize_scan=%d"},
+ 	{Opt_removed, "check=none"},	/* mount option from ext2/3 */
+ 	{Opt_removed, "nocheck"},	/* mount option from ext2/3 */
+@@ -1943,7 +1944,7 @@ static const struct mount_opts {
+ 	{Opt_mb_c3_threshold, 0, MOPT_STRING},
+ 	{Opt_test_dummy_encryption, 0, MOPT_GTE0},
+ 	{Opt_nombcache, EXT4_MOUNT_NO_MBCACHE, MOPT_SET},
+-	{Opt_prefetch_block_bitmaps, EXT4_MOUNT_PREFETCH_BLOCK_BITMAPS,
++	{Opt_no_prefetch_block_bitmaps, EXT4_MOUNT_NO_PREFETCH_BLOCK_BITMAPS,
+ 	 MOPT_SET},
+ 	{Opt_mb_optimize_scan, EXT4_MOUNT2_MB_OPTIMIZE_SCAN, MOPT_GTE0},
+ 	{Opt_err, 0, 0}
+@@ -3551,11 +3552,11 @@ static struct ext4_li_request *ext4_li_r
+ 
+ 	elr->lr_super = sb;
+ 	elr->lr_first_not_zeroed = start;
+-	if (test_opt(sb, PREFETCH_BLOCK_BITMAPS))
+-		elr->lr_mode = EXT4_LI_MODE_PREFETCH_BBITMAP;
+-	else {
++	if (test_opt(sb, NO_PREFETCH_BLOCK_BITMAPS)) {
+ 		elr->lr_mode = EXT4_LI_MODE_ITABLE;
+ 		elr->lr_next_group = start;
++	} else {
++		elr->lr_mode = EXT4_LI_MODE_PREFETCH_BBITMAP;
+ 	}
+ 
+ 	/*
+@@ -3586,7 +3587,7 @@ int ext4_register_li_request(struct supe
+ 		goto out;
+ 	}
+ 
+-	if (!test_opt(sb, PREFETCH_BLOCK_BITMAPS) &&
++	if (test_opt(sb, NO_PREFETCH_BLOCK_BITMAPS) &&
+ 	    (first_not_zeroed == ngroups || sb_rdonly(sb) ||
+ 	    !test_opt(sb, INIT_INODE_TABLE)))
+ 		goto out;

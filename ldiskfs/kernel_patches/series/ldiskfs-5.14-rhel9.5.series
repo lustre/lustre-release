@@ -38,3 +38,5 @@ rhel9.1/ext4-enc-flag.patch
 rhel9.2/ext4-encdata.patch
 rhel9.5/ext4-add-periodic-superblock-update.patch
 rhel9.4/ext4-add-IGET_NO_CHECKS-flag.patch
+rhel9.4/ext4-not-skip-prefetching-BLOCK_UNINIT-groups.patch
+rhel8.8/ext4-ensure-ext4_mb_prefetch_fini-called-for-all-prefetched-bg.patch

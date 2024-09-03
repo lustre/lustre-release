@@ -1,0 +1,51 @@
+commit 3c6296046c85333bc52555a670a9093d9e2657bb
+Author:     Ojaswin Mujoo <ojaswin@linux.ibm.com>
+AuthorDate: Tue May 30 18:03:46 2023 +0530
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Mon Jun 26 19:34:56 2023 -0400
+
+ext4: Don't skip prefetching BLOCK_UNINIT groups
+
+Currently, ext4_mb_prefetch() and ext4_mb_prefetch_fini() skip
+BLOCK_UNINIT groups since fetching their bitmaps doesn't need disk IO.
+As a consequence, we end not initializing the buddy structures and CR0/1
+lists for these BGs, even though it can be done without any disk IO
+overhead. Hence, don't skip such BGs during prefetch and prefetch_fini.
+
+This improves the accuracy of CR0/1 allocation as earlier, we could have
+essentially empty BLOCK_UNINIT groups being ignored by CR0/1 due to their buddy
+not being initialized, leading to slower CR2 allocations. With this patch CR0/1
+will be able to discover these groups as well, thus improving performance.
+
+Signed-off-by: Ojaswin Mujoo <ojaswin@linux.ibm.com>
+Reviewed-by: Ritesh Harjani (IBM) <ritesh.list@gmail.com>
+Reviewed-by: Jan Kara <jack@suse.cz>
+Link: https://lore.kernel.org/r/dc3130b8daf45ffe63d8a3c1edcf00eb8ba70e1f.1685449706.git.ojaswin@linux.ibm.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -2575,9 +2575,7 @@ ext4_group_t ext4_mb_prefetch(struct sup
+ 		 */
+ 		if (gdp && grp && !EXT4_MB_GRP_TEST_AND_SET_READ(grp) &&
+ 		    EXT4_MB_GRP_NEED_INIT(grp) &&
+-		    ext4_free_group_clusters(sb, gdp) > 0 &&
+-		    !(ext4_has_group_desc_csum(sb) &&
+-		      (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT)))) {
++		    ext4_free_group_clusters(sb, gdp) > 0 ) {
+ 			bh = ext4_read_block_bitmap_nowait(sb, group, true);
+ 			if (bh && !IS_ERR(bh)) {
+ 				if (!buffer_uptodate(bh) && cnt)
+@@ -2618,9 +2616,7 @@ void ext4_mb_prefetch_fini(struct super_
+ 		grp = ext4_get_group_info(sb, group);
+ 
+ 		if (grp && gdp && EXT4_MB_GRP_NEED_INIT(grp) &&
+-		    ext4_free_group_clusters(sb, gdp) > 0 &&
+-		    !(ext4_has_group_desc_csum(sb) &&
+-		      (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT)))) {
++		    ext4_free_group_clusters(sb, gdp) > 0) {
+ 			if (ext4_mb_init_group(sb, group, GFP_NOFS))
+ 				break;
+ 		}

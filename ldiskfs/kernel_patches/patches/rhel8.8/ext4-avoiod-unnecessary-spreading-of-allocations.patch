@@ -1,0 +1,69 @@
+commit 1940265ede6683f6317cba0d428ce6505eaca944
+Author:     Jan Kara <jack@suse.cz>
+AuthorDate: Thu Sep 8 11:21:25 2022 +0200
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Wed Sep 21 22:11:41 2022 -0400
+
+ext4: avoid unnecessary spreading of allocations among groups
+
+mb_set_largest_free_order() updates lists containing groups with largest
+chunk of free space of given order. The way it updates it leads to
+always moving the group to the tail of the list. Thus allocations
+looking for free space of given order effectively end up cycling through
+all groups (and due to initialization in last to first order). This
+spreads allocations among block groups which reduces performance for
+rotating disks or low-end flash media. Change
+mb_set_largest_free_order() to only update lists if the order of the
+largest free chunk in the group changed.
+
+Fixes: 196e402adf2e ("ext4: improve cr 0 / cr 1 group scanning")
+CC: stable@kernel.org
+Reported-and-tested-by: Stefan Wahren <stefan.wahren@i2se.com>
+Tested-by: Ojaswin Mujoo <ojaswin@linux.ibm.com>
+Reviewed-by: Ritesh Harjani (IBM) <ritesh.list@gmail.com>
+Signed-off-by: Jan Kara <jack@suse.cz>
+Link: https://lore.kernel.org/all/0d81a7c2-46b7-6010-62a4-3e6cfc1628d6@i2se.com/
+Link: https://lore.kernel.org/r/20220908092136.11770-2-jack@suse.cz
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -1078,23 +1078,25 @@ mb_set_largest_free_order(struct super_b
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 	int i;
+ 
+-	if (test_opt2(sb, MB_OPTIMIZE_SCAN) && grp->bb_largest_free_order >= 0) {
++	for (i = MB_NUM_ORDERS(sb) - 1; i >= 0; i--)
++		if (grp->bb_counters[i] > 0)
++			break;
++	/* No need to move between order lists? */
++	if (!test_opt2(sb, MB_OPTIMIZE_SCAN) ||
++			i == grp->bb_largest_free_order) {
++		grp->bb_largest_free_order = i;
++		return;
++	}
++
++	if (grp->bb_largest_free_order >= 0) {
+ 		write_lock(&sbi->s_mb_largest_free_orders_locks[
+ 					grp->bb_largest_free_order]);
+ 		list_del_init(&grp->bb_largest_free_order_node);
+ 		write_unlock(&sbi->s_mb_largest_free_orders_locks[
+ 					grp->bb_largest_free_order]);
+ 	}
+-	grp->bb_largest_free_order = -1; /* uninit */
+-
+-	for (i = MB_NUM_ORDERS(sb) - 1; i >= 0; i--) {
+-		if (grp->bb_counters[i] > 0) {
+-			grp->bb_largest_free_order = i;
+-			break;
+-		}
+-	}
+-	if (test_opt2(sb, MB_OPTIMIZE_SCAN) &&
+-	    grp->bb_largest_free_order >= 0 && grp->bb_free) {
++	grp->bb_largest_free_order = i;
++	if (grp->bb_largest_free_order >= 0 && grp->bb_free) {
+ 		write_lock(&sbi->s_mb_largest_free_orders_locks[
+ 					grp->bb_largest_free_order]);
+ 		list_add_tail(&grp->bb_largest_free_order_node,

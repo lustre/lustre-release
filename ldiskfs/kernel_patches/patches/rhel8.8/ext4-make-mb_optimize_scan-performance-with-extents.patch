@@ -1,0 +1,118 @@
+commit 077d0c2c78df6f7260cdd015a991327efa44d8ad
+Author:     Ojaswin Mujoo <ojaswin@linux.ibm.com>
+AuthorDate: Tue Mar 8 15:22:01 2022 +0530
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Sat Mar 12 20:54:21 2022 -0500
+
+ext4: make mb_optimize_scan performance mount option work with extents
+
+Currently mb_optimize_scan scan feature which improves filesystem
+performance heavily (when FS is fragmented), seems to be not working
+with files with extents (ext4 by default has files with extents).
+
+This patch fixes that and makes mb_optimize_scan feature work
+for files with extents.
+
+Below are some performance numbers obtained when allocating a 10M and 100M
+file with and w/o this patch on a filesytem with no 1M contiguous block.
+
+<perf numbers>
+===============
+Workload: dd if=/dev/urandom of=test conv=fsync bs=1M count=10/100
+
+Time taken
+=====================================================
+no.     Size   without-patch     with-patch    Diff(%)
+1       10M      0m8.401s         0m5.623s     33.06%
+2       100M     1m40.465s        1m14.737s    25.6%
+
+<debug stats>
+=============
+w/o patch:
+  mballoc:
+    reqs: 17056
+    success: 11407
+    groups_scanned: 13643
+    cr0_stats:
+            hits: 37
+            groups_considered: 9472
+            useless_loops: 36
+            bad_suggestions: 0
+    cr1_stats:
+            hits: 11418
+            groups_considered: 908560
+            useless_loops: 1894
+            bad_suggestions: 0
+    cr2_stats:
+            hits: 1873
+            groups_considered: 6913
+            useless_loops: 21
+    cr3_stats:
+            hits: 21
+            groups_considered: 5040
+            useless_loops: 21
+    extents_scanned: 417364
+            goal_hits: 3707
+            2^n_hits: 37
+            breaks: 1873
+            lost: 0
+    buddies_generated: 239/240
+    buddies_time_used: 651080
+    preallocated: 705
+    discarded: 478
+
+with patch:
+  mballoc:
+    reqs: 12768
+    success: 11305
+    groups_scanned: 12768
+    cr0_stats:
+            hits: 1
+            groups_considered: 18
+            useless_loops: 0
+            bad_suggestions: 0
+    cr1_stats:
+            hits: 5829
+            groups_considered: 50626
+            useless_loops: 0
+            bad_suggestions: 0
+    cr2_stats:
+            hits: 6938
+            groups_considered: 580363
+            useless_loops: 0
+    cr3_stats:
+            hits: 0
+            groups_considered: 0
+            useless_loops: 0
+    extents_scanned: 309059
+            goal_hits: 0
+            2^n_hits: 1
+            breaks: 1463
+            lost: 0
+    buddies_generated: 239/240
+    buddies_time_used: 791392
+    preallocated: 673
+    discarded: 446
+
+Fixes: 196e402 (ext4: improve cr 0 / cr 1 group scanning)
+Cc: stable@kernel.org
+Reported-by: Geetika Moolchandani <Geetika.Moolchandani1@ibm.com>
+Reported-by: Nageswara R Sastry <rnsastry@linux.ibm.com>
+Suggested-by: Ritesh Harjani <riteshh@linux.ibm.com>
+Signed-off-by: Ojaswin Mujoo <ojaswin@linux.ibm.com>
+Link: https://lore.kernel.org/r/fc9a48f7f8dcfc83891a8b21f6dd8cdf056ed810.1646732698.git.ojaswin@linux.ibm.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -998,7 +998,7 @@ static inline int should_optimize_scan(s
+ 		return 0;
+ 	if (ac->ac_criteria >= 2)
+ 		return 0;
+-	if (ext4_test_inode_flag(ac->ac_inode, EXT4_INODE_EXTENTS))
++	if (!ext4_test_inode_flag(ac->ac_inode, EXT4_INODE_EXTENTS))
+ 		return 0;
+ 	return 1;
+ }

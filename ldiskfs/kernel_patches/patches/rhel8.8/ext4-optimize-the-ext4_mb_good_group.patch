@@ -1,0 +1,59 @@
+commit dddcd2f9ebdeca9fbd36526e950bbcd0f7c1765f
+Author:     brookxu <brookxu.cn@gmail.com>
+AuthorDate: Fri Aug 7 22:01:39 2020 +0800
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Tue Aug 18 14:18:36 2020 -0400
+
+ext4: optimize the implementation of ext4_mb_good_group()
+
+It might be better to adjust the code in two places:
+1. Determine whether grp is currupt or not should be placed first.
+2. (cr<=2 && free <ac->ac_g_ex.fe_len)should may belong to the crx
+   strategy, and it may be more appropriate to put it in the
+   subsequent switch statement block. For cr1, cr2, the conditions
+   in switch potentially realize the above judgment. For cr0, we
+   should add (free <ac->ac_g_ex.fe_len) judgment, and then delete
+   (free / fragments) >= ac->ac_g_ex.fe_len), because cr0 returns
+   true by default.
+
+Signed-off-by: Chunguang Xu <brookxu@tencent.com>
+Reviewed-by: Andreas Dilger <adilger@dilger.ca>
+Reviewed-by: Ritesh Harjani <riteshh@linux.ibm.com>
+Link: https://lore.kernel.org/r/e20b2d8f-1154-adb7-3831-a9e11ba842e9@gmail.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -2135,13 +2135,11 @@ static bool ext4_mb_good_group(struct ex
+ 
+ 	BUG_ON(cr < 0 || cr >= 4);
+ 
+-	free = grp->bb_free;
+-	if (free == 0)
+-		return false;
+-	if (cr <= 2 && free < ac->ac_g_ex.fe_len)
++	if (unlikely(EXT4_MB_GRP_BBITMAP_CORRUPT(grp)))
+ 		return false;
+ 
+-	if (unlikely(EXT4_MB_GRP_BBITMAP_CORRUPT(grp)))
++	free = grp->bb_free;
++	if (free == 0)
+ 		return false;
+ 
+ 	fragments = grp->bb_fragments;
+@@ -2158,8 +2156,10 @@ static bool ext4_mb_good_group(struct ex
+ 		    ((group % flex_size) == 0))
+ 			return false;
+ 
+-		if ((ac->ac_2order > ac->ac_sb->s_blocksize_bits+1) ||
+-		    (free / fragments) >= ac->ac_g_ex.fe_len)
++		if (free < ac->ac_g_ex.fe_len)
++			return false;
++
++		if (ac->ac_2order > ac->ac_sb->s_blocksize_bits+1)
+ 			return true;
+ 
+ 		if (grp->bb_largest_free_order < ac->ac_2order)

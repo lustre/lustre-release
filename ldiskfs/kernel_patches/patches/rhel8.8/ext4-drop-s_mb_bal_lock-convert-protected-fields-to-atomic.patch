@@ -1,0 +1,102 @@
+commit 67d25186046145748d5fe4c5019d832215e01c1e
+Author:     Harshad Shirwadkar <harshadshirwadkar@gmail.com>
+AuthorDate: Thu Apr 1 10:21:23 2021 -0700
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Fri Apr 9 11:34:58 2021 -0400
+
+ext4: drop s_mb_bal_lock and convert protected fields to atomic
+
+s_mb_buddies_generated gets used later in this patch series to
+determine if the cr 0 and cr 1 optimziations should be performed or
+not. Currently, s_mb_buddies_generated is protected under a
+spin_lock. In the allocation path, it is better if we don't depend on
+the lock and instead read the value atomically. In order to do that,
+we drop s_bal_lock altogether and we convert the only two protected
+fields by it s_mb_buddies_generated and s_mb_generation_time to atomic
+type.
+
+Signed-off-by: Harshad Shirwadkar <harshadshirwadkar@gmail.com>
+Reviewed-by: Andreas Dilger <adilger@dilger.ca>
+Reviewed-by: Ritesh Harjani <ritesh.list@gmail.com>
+Link: https://lore.kernel.org/r/20210401172129.189766-2-harshadshirwadkar@gmail.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1522,9 +1522,8 @@ struct ext4_sb_info {
+ 	/* cX loop didn't find blocks */
+ 	atomic64_t s_bal_cX_failed[4];
+ 	atomic64_t s_bal_cX_skipped[3];
+-	spinlock_t s_bal_lock;
+-	unsigned long s_mb_buddies_generated;
+-	unsigned long long s_mb_generation_time;
++	atomic_t s_mb_buddies_generated;	/* number of buddies generated */
++	atomic64_t s_mb_generation_time;
+ 	atomic_t s_mb_lost_chunks;
+ 	atomic_t s_mb_preallocated;
+ 	atomic_t s_mb_discarded;
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -824,10 +824,8 @@ int ext4_mb_generate_buddy(struct super_
+ 	clear_bit(EXT4_GROUP_INFO_NEED_INIT_BIT, &(grp->bb_state));
+ 
+ 	period = get_cycles() - period;
+-	spin_lock(&sbi->s_bal_lock);
+-	sbi->s_mb_buddies_generated++;
+-	sbi->s_mb_generation_time += period;
+-	spin_unlock(&sbi->s_bal_lock);
++	atomic_inc(&sbi->s_mb_buddies_generated);
++	atomic64_add(period, &sbi->s_mb_generation_time);
+ 
+ 	return 0;
+ }
+@@ -2810,9 +2808,10 @@ static int mb_seq_alloc_show(struct seq_
+ 		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[1]));
+ 	seq_printf(seq, "\tskipped_c2_loops: %llu\n",
+ 		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[2]));
+-	seq_printf(seq, "\tbuddies_generated: %lu\n",
+-		   sbi->s_mb_buddies_generated);
+-	seq_printf(seq, "\tbuddies_time_used: %llu\n", sbi->s_mb_generation_time);
++	seq_printf(seq, "\tbuddies_generated: %u\n",
++		   atomic_read(&sbi->s_mb_buddies_generated));
++	seq_printf(seq, "\tbuddies_time_used: %llu\n",
++		   atomic64_read(&sbi->s_mb_generation_time));
+ 	seq_printf(seq, "\tpreallocated: %u\n",
+ 		   atomic_read(&sbi->s_mb_preallocated));
+ 	seq_printf(seq, "\tdiscarded: %u\n",
+@@ -2846,8 +2845,8 @@ static ssize_t mb_seq_alloc_write(struct
+ 	atomic64_set(&sbi->s_bal_cX_skipped[2], 0);
+ 
+ 
+-	sbi->s_mb_buddies_generated = 0;
+-	sbi->s_mb_generation_time = 0;
++	atomic_set(&sbi->s_mb_buddies_generated, 0);
++	atomic64_set(&sbi->s_mb_generation_time, 0);
+ 
+ 	atomic_set(&sbi->s_mb_preallocated, 0),
+ 	atomic_set(&sbi->s_mb_discarded, 0);
+@@ -3163,7 +3162,6 @@ int ext4_mb_init(struct super_block *sb)
+ 	} while (i <= sb->s_blocksize_bits + 1);
+ 
+ 	spin_lock_init(&sbi->s_md_lock);
+-	spin_lock_init(&sbi->s_bal_lock);
+ 	sbi->s_mb_free_pending = 0;
+ 	INIT_LIST_HEAD(&sbi->s_freed_data_list);
+ 
+@@ -3360,9 +3358,9 @@ int ext4_mb_release(struct super_block *
+ 				atomic_read(&sbi->s_bal_breaks),
+ 				atomic_read(&sbi->s_mb_lost_chunks));
+ 		ext4_msg(sb, KERN_INFO,
+-		       "mballoc: %lu generated and it took %Lu",
+-				sbi->s_mb_buddies_generated,
+-				sbi->s_mb_generation_time);
++		       "mballoc: %u generated and it took %Lu",
++				atomic_read(&sbi->s_mb_buddies_generated),
++				atomic64_read(&sbi->s_mb_generation_time));
+ 		ext4_msg(sb, KERN_INFO,
+ 		       "mballoc: %u preallocated, %u discarded",
+ 				atomic_read(&sbi->s_mb_preallocated),

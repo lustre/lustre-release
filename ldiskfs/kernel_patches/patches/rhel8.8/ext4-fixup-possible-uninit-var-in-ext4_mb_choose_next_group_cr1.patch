@@ -1,0 +1,40 @@
+commit a078dff870136090b5779ca2831870a6c5539d36
+Author:     Jan Kara <jack@suse.cz>
+AuthorDate: Thu Sep 22 11:09:29 2022 +0200
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Mon Sep 26 13:21:05 2022 -0400
+
+ext4: fixup possible uninitialized variable access in ext4_mb_choose_next_group_cr1()
+
+Variable 'grp' may be left uninitialized if there's no group with
+suitable average fragment size (or larger). Fix the problem by
+initializing it earlier.
+
+Link: https://lore.kernel.org/r/20220922091542.pkhedytey7wzp5fi@quack3
+Fixes: 83e80a6e3543 ("ext4: use buckets for cr 1 block scan instead of rbtree")
+Cc: stable@kernel.org
+Reported-by: Dan Carpenter <dan.carpenter@oracle.com>
+Signed-off-by: Jan Kara <jack@suse.cz>
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -911,7 +911,7 @@ static void ext4_mb_choose_next_group_cr
+ 		int *new_cr, ext4_group_t *group, ext4_group_t ngroups)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
+-	struct ext4_group_info *grp, *iter;
++	struct ext4_group_info *grp = NULL, *iter;
+ 	int i;
+ 
+ 	if (unlikely(ac->ac_flags & EXT4_MB_CR1_OPTIMIZED)) {
+@@ -928,7 +928,6 @@ static void ext4_mb_choose_next_group_cr
+ 			read_unlock(&sbi->s_mb_avg_fragment_size_locks[i]);
+ 			continue;
+ 		}
+-		grp = NULL;
+ 		list_for_each_entry(iter, &sbi->s_mb_avg_fragment_size[i],
+                                    bb_avg_fragment_size_node) {
+ 			if (sbi->s_mb_stats)

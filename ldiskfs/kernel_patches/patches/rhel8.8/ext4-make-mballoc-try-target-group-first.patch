@@ -1,0 +1,86 @@
+commit 4fca50d440cc5d4dc570ad5484cc0b70b381bc2a
+Author:     Jan Kara <jack@suse.cz>
+AuthorDate: Thu Sep 8 11:21:24 2022 +0200
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Wed Sep 21 22:11:34 2022 -0400
+
+ext4: make mballoc try target group first even with mb_optimize_scan
+
+One of the side-effects of mb_optimize_scan was that the optimized
+functions to select next group to try were called even before we tried
+the goal group. As a result we no longer allocate files close to
+corresponding inodes as well as we don't try to expand currently
+allocated extent in the same group. This results in reaim regression
+with workfile.disk workload of upto 8% with many clients on my test
+machine:
+
+		 baseline               mb_optimize_scan
+Hmean     disk-1       2114.16 (   0.00%)     2099.37 (  -0.70%)
+Hmean     disk-41     87794.43 (   0.00%)    83787.47 *  -4.56%*
+Hmean     disk-81    148170.73 (   0.00%)   135527.05 *  -8.53%*
+Hmean     disk-121   177506.11 (   0.00%)   166284.93 *  -6.32%*
+Hmean     disk-161   220951.51 (   0.00%)   207563.39 *  -6.06%*
+Hmean     disk-201   208722.74 (   0.00%)   203235.59 (  -2.63%)
+Hmean     disk-241   222051.60 (   0.00%)   217705.51 (  -1.96%)
+Hmean     disk-281   252244.17 (   0.00%)   241132.72 *  -4.41%*
+Hmean     disk-321   255844.84 (   0.00%)   245412.84 *  -4.08%*
+
+Also this is causing huge regression (time increased by a factor of 5 or
+so) when untarring archive with lots of small files on some eMMC storage
+cards.
+
+Fix the problem by making sure we try goal group first.
+
+Fixes: 196e402adf2e ("ext4: improve cr 0 / cr 1 group scanning")
+CC: stable@kernel.org
+Reported-and-tested-by: Stefan Wahren <stefan.wahren@i2se.com>
+Tested-by: Ojaswin Mujoo <ojaswin@linux.ibm.com>
+Reviewed-by: Ritesh Harjani (IBM) <ritesh.list@gmail.com>
+Link: https://lore.kernel.org/all/20220727105123.ckwrhbilzrxqpt24@quack3/
+Link: https://lore.kernel.org/all/0d81a7c2-46b7-6010-62a4-3e6cfc1628d6@i2se.com/
+Signed-off-by: Jan Kara <jack@suse.cz>
+Link: https://lore.kernel.org/r/20220908092136.11770-1-jack@suse.cz
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -1050,8 +1050,10 @@ static void ext4_mb_choose_next_group(st
+ {
+ 	*new_cr = ac->ac_criteria;
+ 
+-	if (!should_optimize_scan(ac) || ac->ac_groups_linear_remaining)
++	if (!should_optimize_scan(ac) || ac->ac_groups_linear_remaining) {
++		*group = next_linear_group(ac, *group, ngroups);
+ 		return;
++	}
+ 
+ 	if (*new_cr == 0) {
+ 		ext4_mb_choose_next_group_cr0(ac, new_cr, group, ngroups);
+@@ -2666,7 +2668,7 @@ static noinline_for_stack int
+ ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
+ {
+ 	ext4_group_t prefetch_grp = 0, ngroups, group, i;
+-	int cr = -1;
++	int cr = -1, new_cr;
+ 	int err = 0, first_err = 0;
+ 	unsigned int nr = 0, prefetch_ios = 0;
+ 	struct ext4_sb_info *sbi;
+@@ -2756,13 +2758,12 @@ repeat:
+ 		ac->ac_groups_linear_remaining = sbi->s_mb_max_linear_groups;
+ 		prefetch_grp = group;
+ 
+-		for (i = 0; i < ngroups; group = next_linear_group(ac, group, ngroups),
+-				i++) {
+-			int ret = 0, new_cr;
++		for (i = 0, new_cr = cr; i < ngroups; i++,
++		     ext4_mb_choose_next_group(ac, &new_cr, &group, ngroups)) {
++			int ret = 0;
+ 
+ 			cond_resched();
+ 
+-			ext4_mb_choose_next_group(ac, &new_cr, &group, ngroups);
+ 			if (new_cr != cr) {
+ 				cr = new_cr;
+ 				goto repeat;

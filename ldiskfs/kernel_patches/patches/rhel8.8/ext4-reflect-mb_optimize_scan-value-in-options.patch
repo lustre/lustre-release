@@ -1,0 +1,35 @@
+commit 3fa5d23e68a34dae9df2be168750dc5e03e0e40d
+Author:     Ojaswin Mujoo <ojaswin@linux.ibm.com>
+AuthorDate: Mon Jul 4 11:16:03 2022 +0530
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Tue Aug 2 23:56:17 2022 -0400
+
+ext4: reflect mb_optimize_scan value in options file
+
+Add support to display the mb_optimize_scan value in
+/proc/fs/ext4/<dev>/options file. The option is only
+displayed when the value is non default.
+
+Signed-off-by: Ojaswin Mujoo <ojaswin@linux.ibm.com>
+Link: https://lore.kernel.org/r/20220704054603.21462-1-ojaswin@linux.ibm.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -2488,6 +2488,14 @@ static int _ext4_show_options(struct seq
+ 		SEQ_OPTS_PUTS("dax=inode");
+ 	}
+ 
++	if (sbi->s_groups_count >= MB_DEFAULT_LINEAR_SCAN_THRESHOLD &&
++			!test_opt2(sb, MB_OPTIMIZE_SCAN)) {
++		SEQ_OPTS_PUTS("mb_optimize_scan=0");
++	} else if (sbi->s_groups_count < MB_DEFAULT_LINEAR_SCAN_THRESHOLD &&
++			test_opt2(sb, MB_OPTIMIZE_SCAN)) {
++		SEQ_OPTS_PUTS("mb_optimize_scan=1");
++	}
++
+ 	ext4_show_quota_options(seq, sb);
+ 	return 0;
+ }

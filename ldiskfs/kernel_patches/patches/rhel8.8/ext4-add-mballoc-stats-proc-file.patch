@@ -1,0 +1,333 @@
+commit a6c75eaf11032f4a3d2b3ce2265a194ac6e4a7f0
+Author:     Harshad Shirwadkar <harshadshirwadkar@gmail.com>
+AuthorDate: Thu Apr 1 10:21:25 2021 -0700
+Commit:     Theodore Ts'o <tytso@mit.edu>
+CommitDate: Fri Apr 9 11:34:59 2021 -0400
+
+ext4: add mballoc stats proc file
+
+Add new stats for measuring the performance of mballoc. This patch is
+forked from Artem Blagodarenko's work that can be found here:
+
+https://github.com/lustre/lustre-release/blob/master/ldiskfs/kernel_patches/patches/rhel8/ext4-simple-blockalloc.patch
+
+This patch reorganizes the stats by cr level. This is how the output
+looks like:
+
+    mballoc:
+        reqs: 0
+        success: 0
+        groups_scanned: 0
+        cr0_stats:
+                hits: 0
+                groups_considered: 0
+                useless_loops: 0
+                bad_suggestions: 0
+        cr1_stats:
+                hits: 0
+                groups_considered: 0
+                useless_loops: 0
+                bad_suggestions: 0
+        cr2_stats:
+                hits: 0
+                groups_considered: 0
+                useless_loops: 0
+        cr3_stats:
+                hits: 0
+                groups_considered: 0
+                useless_loops: 0
+        extents_scanned: 0
+                goal_hits: 0
+                2^n_hits: 0
+                breaks: 0
+                lost: 0
+        buddies_generated: 0/40
+        buddies_time_used: 0
+        preallocated: 0
+        discarded: 0
+
+Signed-off-by: Harshad Shirwadkar <harshadshirwadkar@gmail.com>
+Reviewed-by: Andreas Dilger <adilger@dilger.ca>
+Reviewed-by: Ritesh Harjani <ritesh.list@gmail.com>
+Link: https://lore.kernel.org/r/20210401172129.189766-4-harshadshirwadkar@gmail.com
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1516,11 +1516,13 @@ struct ext4_sb_info {
+ 	atomic_t s_bal_success;	/* we found long enough chunks */
+ 	atomic_t s_bal_allocated;	/* in blocks */
+ 	atomic_t s_bal_ex_scanned;	/* total extents scanned */
++	atomic_t s_bal_groups_scanned;  /* number of groups scanned */
+ 	atomic_t s_bal_goals;	/* goal hits */
+ 	atomic_t s_bal_breaks;	/* too long searches */
+ 	atomic_t s_bal_2orders;	/* 2^order hits */
+-	/* cX loop didn't find blocks */
+-	atomic64_t s_bal_cX_failed[4];
++	atomic64_t s_bal_cX_groups_considered[4];
++	atomic64_t s_bal_cX_hits[4];
++	atomic64_t s_bal_cX_failed[4];          /* cX loop didn't find blocks */
+ 	atomic64_t s_bal_cX_skipped[3];
+ 	atomic_t s_mb_buddies_generated;	/* number of buddies generated */
+ 	atomic64_t s_mb_generation_time;
+@@ -2702,6 +2704,7 @@ extern const struct file_operations ext4
+ extern int ext4_mb_seq_last_start_seq_show(struct seq_file *m, void *v);
+ extern long ext4_mb_stats;
+ extern long ext4_mb_max_to_scan;
++extern int ext4_seq_mb_stats_show(struct seq_file *seq, void *offset);
+ extern int ext4_mb_init(struct super_block *);
+ extern int ext4_mb_release(struct super_block *);
+ extern ext4_fsblk_t ext4_mb_new_blocks(handle_t *,
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
+@@ -2191,10 +2191,13 @@ static int ext4_mb_good_group_nolock(str
+ {
+ 	struct ext4_group_info *grp = ext4_get_group_info(ac->ac_sb, group);
+ 	struct super_block *sb = ac->ac_sb;
++	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 	bool should_lock = ac->ac_flags & EXT4_MB_STRICT_CHECK;
+ 	ext4_grpblk_t free;
+ 	int ret = 0;
+ 
++	if (sbi->s_mb_stats)
++		atomic64_inc(&sbi->s_bal_cX_groups_considered[ac->ac_criteria]);
+ 	if (should_lock)
+ 		ext4_lock_group(sb, group);
+ 	free = grp->bb_free;
+@@ -2488,7 +2491,7 @@ repeat:
+ 				break;
+ 		}
+ 		/* Processed all groups and haven't found blocks */
+-		if (i == ngroups)
++		if (sbi->s_mb_stats && i == ngroups)
+ 			atomic64_inc(&sbi->s_bal_cX_failed[cr]);
+ 	}
+ 
+@@ -2517,6 +2520,9 @@ repeat:
+ 			goto repeat;
+ 		}
+ 	}
++
++	if (sbi->s_mb_stats && ac->ac_status == AC_STATUS_FOUND)
++		atomic64_inc(&sbi->s_bal_cX_hits[ac->ac_criteria]);
+ out:
+ 	if (!err && ac->ac_status != AC_STATUS_FOUND && first_err)
+ 		err = first_err;
+@@ -2623,6 +2629,67 @@ const struct seq_operations ext4_mb_seq_
+ 	.show   = ext4_mb_seq_groups_show,
+ };
+ 
++int ext4_seq_mb_stats_show(struct seq_file *seq, void *offset)
++{
++	struct super_block *sb = (struct super_block *)seq->private;
++	struct ext4_sb_info *sbi = EXT4_SB(sb);
++
++	seq_puts(seq, "mballoc:\n");
++	if (!sbi->s_mb_stats) {
++		seq_puts(seq, "\tmb stats collection turned off.\n");
++		seq_puts(seq, "\tTo enable, please write \"1\" to sysfs file mb_stats.\n");
++		return 0;
++	}
++	seq_printf(seq, "\treqs: %u\n", atomic_read(&sbi->s_bal_reqs));
++	seq_printf(seq, "\tsuccess: %u\n", atomic_read(&sbi->s_bal_success));
++
++	seq_printf(seq, "\tgroups_scanned: %u\n",  atomic_read(&sbi->s_bal_groups_scanned));
++
++	seq_puts(seq, "\tcr0_stats:\n");
++	seq_printf(seq, "\t\thits: %llu\n", atomic64_read(&sbi->s_bal_cX_hits[0]));
++	seq_printf(seq, "\t\tgroups_considered: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_groups_considered[0]));
++	seq_printf(seq, "\t\tuseless_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_failed[0]));
++
++	seq_puts(seq, "\tcr1_stats:\n");
++	seq_printf(seq, "\t\thits: %llu\n", atomic64_read(&sbi->s_bal_cX_hits[1]));
++	seq_printf(seq, "\t\tgroups_considered: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_groups_considered[1]));
++	seq_printf(seq, "\t\tuseless_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_failed[1]));
++
++	seq_puts(seq, "\tcr2_stats:\n");
++	seq_printf(seq, "\t\thits: %llu\n", atomic64_read(&sbi->s_bal_cX_hits[2]));
++	seq_printf(seq, "\t\tgroups_considered: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_groups_considered[2]));
++	seq_printf(seq, "\t\tuseless_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_failed[2]));
++
++	seq_puts(seq, "\tcr3_stats:\n");
++	seq_printf(seq, "\t\thits: %llu\n", atomic64_read(&sbi->s_bal_cX_hits[3]));
++	seq_printf(seq, "\t\tgroups_considered: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_groups_considered[3]));
++	seq_printf(seq, "\t\tuseless_loops: %llu\n",
++		   atomic64_read(&sbi->s_bal_cX_failed[3]));
++	seq_printf(seq, "\textents_scanned: %u\n", atomic_read(&sbi->s_bal_ex_scanned));
++	seq_printf(seq, "\t\tgoal_hits: %u\n", atomic_read(&sbi->s_bal_goals));
++	seq_printf(seq, "\t\t2^n_hits: %u\n", atomic_read(&sbi->s_bal_2orders));
++	seq_printf(seq, "\t\tbreaks: %u\n", atomic_read(&sbi->s_bal_breaks));
++	seq_printf(seq, "\t\tlost: %u\n", atomic_read(&sbi->s_mb_lost_chunks));
++
++	seq_printf(seq, "\tbuddies_generated: %u/%u\n",
++		   atomic_read(&sbi->s_mb_buddies_generated),
++		   ext4_get_groups_count(sb));
++	seq_printf(seq, "\tbuddies_time_used: %llu\n",
++		   atomic64_read(&sbi->s_mb_generation_time));
++	seq_printf(seq, "\tpreallocated: %u\n",
++		   atomic_read(&sbi->s_mb_preallocated));
++	seq_printf(seq, "\tdiscarded: %u\n",
++		   atomic_read(&sbi->s_mb_discarded));
++	return 0;
++}
++
+ static int ext4_mb_check_and_update_prealloc(struct ext4_sb_info *sbi,
+ 						 char *str, size_t cnt,
+ 						 int update)
+@@ -2777,97 +2844,6 @@ const struct file_operations ext4_seq_mb
+ 	.write         = ext4_mb_last_group_write,
+ };
+ 
+-static int mb_seq_alloc_show(struct seq_file *seq, void *v)
+-{
+-	struct super_block *sb = seq->private;
+-	struct ext4_sb_info *sbi = EXT4_SB(sb);
+-
+-	seq_printf(seq, "mballoc:\n");
+-	seq_printf(seq, "\tblocks: %u\n", atomic_read(&sbi->s_bal_allocated));
+-	seq_printf(seq, "\treqs: %u\n", atomic_read(&sbi->s_bal_reqs));
+-	seq_printf(seq, "\tsuccess: %u\n", atomic_read(&sbi->s_bal_success));
+-
+-	seq_printf(seq, "\textents_scanned: %u\n",
+-		   atomic_read(&sbi->s_bal_ex_scanned));
+-	seq_printf(seq, "\t\tgoal_hits: %u\n", atomic_read(&sbi->s_bal_goals));
+-	seq_printf(seq, "\t\t2^n_hits: %u\n", atomic_read(&sbi->s_bal_2orders));
+-	seq_printf(seq, "\t\tbreaks: %u\n", atomic_read(&sbi->s_bal_breaks));
+-	seq_printf(seq, "\t\tlost: %u\n", atomic_read(&sbi->s_mb_lost_chunks));
+-
+-	seq_printf(seq, "\tuseless_c0_loops: %llu\n",
+-		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[0]));
+-	seq_printf(seq, "\tuseless_c1_loops: %llu\n",
+-		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[1]));
+-	seq_printf(seq, "\tuseless_c2_loops: %llu\n",
+-		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[2]));
+-	seq_printf(seq, "\tuseless_c3_loops: %llu\n",
+-		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[3]));
+-	seq_printf(seq, "\tskipped_c0_loops: %llu\n",
+-		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[0]));
+-	seq_printf(seq, "\tskipped_c1_loops: %llu\n",
+-		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[1]));
+-	seq_printf(seq, "\tskipped_c2_loops: %llu\n",
+-		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[2]));
+-	seq_printf(seq, "\tbuddies_generated: %u\n",
+-		   atomic_read(&sbi->s_mb_buddies_generated));
+-	seq_printf(seq, "\tbuddies_time_used: %llu\n",
+-		   atomic64_read(&sbi->s_mb_generation_time));
+-	seq_printf(seq, "\tpreallocated: %u\n",
+-		   atomic_read(&sbi->s_mb_preallocated));
+-	seq_printf(seq, "\tdiscarded: %u\n",
+-		   atomic_read(&sbi->s_mb_discarded));
+-	return 0;
+-}
+-
+-static ssize_t mb_seq_alloc_write(struct file *file,
+-			      const char __user *buf,
+-			      size_t cnt, loff_t *pos)
+-{
+-	struct ext4_sb_info *sbi = EXT4_SB(PDE_DATA(file_inode(file)));
+-
+-	atomic_set(&sbi->s_bal_allocated, 0),
+-	atomic_set(&sbi->s_bal_reqs, 0),
+-	atomic_set(&sbi->s_bal_success, 0);
+-
+-	atomic_set(&sbi->s_bal_ex_scanned, 0),
+-	atomic_set(&sbi->s_bal_goals, 0),
+-	atomic_set(&sbi->s_bal_2orders, 0),
+-	atomic_set(&sbi->s_bal_breaks, 0),
+-	atomic_set(&sbi->s_mb_lost_chunks, 0);
+-
+-	atomic64_set(&sbi->s_bal_cX_failed[0], 0),
+-	atomic64_set(&sbi->s_bal_cX_failed[1], 0),
+-	atomic64_set(&sbi->s_bal_cX_failed[2], 0);
+-	atomic64_set(&sbi->s_bal_cX_failed[3], 0);
+-
+-	atomic64_set(&sbi->s_bal_cX_skipped[0], 0),
+-	atomic64_set(&sbi->s_bal_cX_skipped[1], 0),
+-	atomic64_set(&sbi->s_bal_cX_skipped[2], 0);
+-
+-
+-	atomic_set(&sbi->s_mb_buddies_generated, 0);
+-	atomic64_set(&sbi->s_mb_generation_time, 0);
+-
+-	atomic_set(&sbi->s_mb_preallocated, 0),
+-	atomic_set(&sbi->s_mb_discarded, 0);
+-
+-	return cnt;
+-}
+-
+-static int mb_seq_alloc_open(struct inode *inode, struct file *file)
+-{
+-	return single_open(file, mb_seq_alloc_show, PDE_DATA(inode));
+-}
+-
+-const struct file_operations ext4_mb_seq_alloc_fops = {
+-	.owner		= THIS_MODULE,
+-	.open		= mb_seq_alloc_open,
+-	.read		= seq_read,
+-	.llseek		= seq_lseek,
+-	.release	= single_release,
+-	.write		= mb_seq_alloc_write,
+-};
+-
+ int ext4_mb_seq_last_start_seq_show(struct seq_file *m, void *v)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(m->private);
+@@ -3350,9 +3326,10 @@ int ext4_mb_release(struct super_block *
+ 				(unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[1]),
+ 				(unsigned long long)atomic64_read(&sbi->s_bal_cX_skipped[2]));
+ 		ext4_msg(sb, KERN_INFO,
+-		      "mballoc: %u extents scanned, %u goal hits, "
++		      "mballoc: %u extents scanned, %u groups scanned, %u goal hits, "
+ 				"%u 2^N hits, %u breaks, %u lost",
+ 				atomic_read(&sbi->s_bal_ex_scanned),
++				atomic_read(&sbi->s_bal_groups_scanned),
+ 				atomic_read(&sbi->s_bal_goals),
+ 				atomic_read(&sbi->s_bal_2orders),
+ 				atomic_read(&sbi->s_bal_breaks),
+@@ -3871,12 +3848,13 @@ static void ext4_mb_collect_stats(struct
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
+ 
+-	if (sbi->s_mb_stats && ac->ac_g_ex.fe_len > 1) {
++	if (sbi->s_mb_stats && ac->ac_g_ex.fe_len >= 1) {
+ 		atomic_inc(&sbi->s_bal_reqs);
+ 		atomic_add(ac->ac_b_ex.fe_len, &sbi->s_bal_allocated);
+ 		if (ac->ac_b_ex.fe_len >= ac->ac_o_ex.fe_len)
+ 			atomic_inc(&sbi->s_bal_success);
+ 		atomic_add(ac->ac_found, &sbi->s_bal_ex_scanned);
++		atomic_add(ac->ac_groups_scanned, &sbi->s_bal_groups_scanned);
+ 		if (ac->ac_g_ex.fe_start == ac->ac_b_ex.fe_start &&
+ 				ac->ac_g_ex.fe_group == ac->ac_b_ex.fe_group)
+ 			atomic_inc(&sbi->s_bal_goals);
+Index: linux-stage/fs/ext4/sysfs.c
+===================================================================
+--- linux-stage.orig/fs/ext4/sysfs.c
++++ linux-stage/fs/ext4/sysfs.c
+@@ -477,14 +477,14 @@ int ext4_register_sysfs(struct super_blo
+ 				sb);
+ 		proc_create_seq_data("mb_groups", S_IRUGO, sbi->s_proc,
+ 				&ext4_mb_seq_groups_ops, sb);
++		proc_create_single_data("mb_stats", 0444, sbi->s_proc,
++				ext4_seq_mb_stats_show, sb);
+ 		proc_create_data("prealloc_table", S_IRUGO, sbi->s_proc,
+ 				&ext4_seq_prealloc_table_fops, sb);
+ 		proc_create_data("mb_last_group", S_IRUGO, sbi->s_proc,
+ 				&ext4_seq_mb_last_group_fops, sb);
+ 		proc_create_single_data("mb_last_start", S_IRUGO, sbi->s_proc,
+ 				ext4_mb_seq_last_start_seq_show, sb);
+-		proc_create_data("mb_alloc_stats", S_IFREG | S_IRUGO | S_IWUSR,
+-				 sbi->s_proc, &ext4_mb_seq_alloc_fops, sb);
+ 	}
+ 	return 0;
+ }
