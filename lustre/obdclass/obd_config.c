@@ -2240,7 +2240,7 @@ out_done:
 out_overflow:
 	/* Return consumed bytes.  If the buffer overflowed, zero last byte */
 	rc = ptr - buf;
-	if (rc > size) {
+	if (rc >= size) {
 		rc = -EOVERFLOW;
 		*(end - 1) = '\0';
 	}

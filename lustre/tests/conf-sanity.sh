@@ -10410,24 +10410,29 @@ run_test 123ac "llog_print with --start and --end"
 test_123ad() { # LU-11566
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
 	# older versions of lctl may not print all records properly
-	do_facet mgs "$LCTL help llog_print" 2>&1 | grep -q -- --start ||
-		skip "Need 'lctl llog_print --start' on MGS"
+	(( MGS_VERSION >= $(version_code 2.15.90) )) ||
+		skip "Need MGS version at least 2.15.90"
 
 	[ -d $MOUNT/.lustre ] || setup
 
 	# append a new record, to avoid issues if last record was cancelled
 	local old=$($LCTL get_param -n osc.*-OST0000-*.max_dirty_mb | head -1)
 	do_facet mgs $LCTL conf_param $FSNAME-OST0000.osc.max_dirty_mb=$old
+	stack_trap "do_facet mgs $LCTL conf_param -d $FSNAME-OST0000.osc.max_dirty_mb"
 
 	# logid:            [0x3:0xa:0x0]:0
 	# flags:            4 (plain)
 	# records_count:    72
 	# last_index:       72
 	local num=$(do_facet mgs $LCTL --device MGS llog_info $FSNAME-client |
-		    awk '/last_index:/ { print $2 - 1 }')
+		    awk '/last_index:/ { print $2 }')
 
-	# - { index: 71, event: set_timeout, num: 0x14, param: sys.timeout=20 }
-	local last=$(do_facet mgs $LCTL --device MGS llog_print $FSNAME-client |
+	do_facet mgs $LCTL --device MGS llog_print $FSNAME-client |
+		grep -q "$FSNAME-OST0000.*osc\.max_dirty_mb=$old" ||
+		error "ocs.max_dirty_mb=$old not found in $FSNAME-client"
+
+	# - { index: 72, event: marker, flags: 0x06, ... }
+	local last=$(do_facet mgs $LCTL --device MGS llog_print -r $FSNAME-client |
 		     tail -1 | awk '{ print $4 }' | tr -d , )
 	(( last == num )) || error "llog_print only showed $last/$num records"
 }
@@ -10759,6 +10764,39 @@ test_123G() {
 }
 run_test 123G "clear and reset all parameters using apply_yaml"
 
+test_123H() { #LU-18170
+	local old
+	local i
+
+	(( MGS_VERSION >= $(version_code 2.15.90) )) ||
+		skip "Need MGS version at least 2.15.90"
+
+	[ -d $MOUNT/.lustre ] || setup
+
+	old=$(do_facet mgs $LCTL get_param jobid_var)
+	stack_trap "do_facet mgs $LCTL set_param -d jobid_var"
+	stack_trap "do_facet mgs $LCTL set_param -P jobid_var=$old"
+
+	# fill the "params" llog file
+	for i in {1..50}; do
+		do_facet mgs $LCTL set_param -P jobid_var=TEST_123H
+		do_facet mgs $LCTL set_param -P jobid_var=$old
+	done
+
+	local llog_str
+	local num
+	llog_str=$(do_facet mgs $LCTL llog_print -r params) ||
+		error "'lctl llog_print -r params' failed"
+	num=$(wc -l <<< "$llog_str")
+
+	# llog_print parallel executions
+	do_facet mgs "seq 1 20 | "\
+		"xargs -P20 -I{} bash -c '$LCTL llog_print -r params | wc -l' | "\
+		"sort | uniq -c" |
+		awk '$2 == "'$num'" { print $0; if ($1 != 20) exit 1; }' ||
+		error "'corrupted output for 'lctl llog_print -r params'"
+}
+run_test 123H "check concurent accesses with 'lctl llog_print"
 
 test_124()
 {

@@ -216,55 +216,27 @@ int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 		  struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_print_data *lprd = data;
-	struct obd_ioctl_data *ioc_data = lprd->lprd_data;
-	static int l, remains;
-	static long from, to;
-	static char *out;
-	int cur_index;
+	size_t len;
+	long cur_index = rec->lrh_index;
 	int rc;
 
 	ENTRY;
-	if (unlikely(!ioc_data))
+	if (unlikely(!lprd->lprd_out))
 		RETURN(-EINVAL);
 
-	if (ioc_data->ioc_inllen1 > 0) {
-		l = 0;
-		remains = ioc_data->ioc_inllen4 +
-			  round_up(ioc_data->ioc_inllen1, 8) +
-			  round_up(ioc_data->ioc_inllen2, 8) +
-			  round_up(ioc_data->ioc_inllen3, 8);
-
-		rc = kstrtol(ioc_data->ioc_inlbuf2, 0, &from);
-		if (rc)
-			RETURN(rc);
-
-		rc = kstrtol(ioc_data->ioc_inlbuf3, 0, &to);
-		if (rc)
-			RETURN(rc);
-
-		out = ioc_data->ioc_bulk;
-		ioc_data->ioc_inllen1 = 0;
-		ioc_data->ioc_offset = 0;
-		ioc_data->ioc_count = remains;
-	} else if (ioc_data) {
-		out = ioc_data->ioc_bulk + ioc_data->ioc_offset;
-		remains = ioc_data->ioc_count;
-	}
-
-	cur_index = rec->lrh_index;
-	ioc_data->ioc_u32_2 = llog_idx_is_eof(handle, cur_index);
-	if (from > MARKER_DIFF && cur_index >= from - MARKER_DIFF &&
-	    cur_index < from) {
-		/* LU-15706: try to remember the marker cfg_flag that the "from"
-		 * is using, in case that the "from" record doesn't know its
-		 * "SKIP" or not flag.
-		 */
+	/* LU-15706: try to remember the marker cfg_flag that the "from"
+	 * is using, in case that the "from" record doesn't know its
+	 * "SKIP" or not flag.
+	 */
+	if (cur_index < lprd->lprd_from &&
+	    cur_index >= lprd->lprd_from - MARKER_DIFF)
 		llog_get_marker_cfg_flags(rec, &lprd->lprd_cfg_flags);
-	}
-	if (cur_index < from)
+
+	if (cur_index < lprd->lprd_from)
 		RETURN(0);
-	if (to > 0 && cur_index > to)
-		RETURN(-LLOG_EEMPTY);
+
+	if (lprd->lprd_to && cur_index > lprd->lprd_to)
+		RETURN(LLOG_PROC_BREAK);
 
 	if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
 		struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
@@ -274,36 +246,30 @@ int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 			RETURN(-EINVAL);
 		}
 
-		l = snprintf(out, remains, "[index]: %05d  [logid]: "DFID"\n",
-			     cur_index, PLOGID(&lir->lid_id));
+		len = snprintf(lprd->lprd_out, lprd->lprd_left,
+			       "[index]: %05ld  [logid]: "DFID"\n",
+			       cur_index, PLOGID(&lir->lid_id));
 	} else if (rec->lrh_type == OBD_CFG_REC) {
-		int rc;
-
-		rc = class_config_yaml_output(rec, out, remains,
+		rc = class_config_yaml_output(rec, lprd->lprd_out,
+					      lprd->lprd_left,
 					      &lprd->lprd_cfg_flags,
 					      lprd->lprd_raw);
 		if (rc < 0)
 			RETURN(rc);
-		l = rc;
+		len = rc;
 	} else {
-		l = snprintf(out, remains,
-			     "[index]: %05d  [type]: %02x  [len]: %04d\n",
-			     cur_index, rec->lrh_type, rec->lrh_len);
-	}
-	out += l;
-	remains -= l;
-	if (remains <= 0) {
-		CERROR("not enough space for print log records\n");
-		RETURN(-LLOG_EEMPTY);
+		len = snprintf(lprd->lprd_out, lprd->lprd_left,
+			       "[index]: %05ld  [type]: %02x  [len]: %04d\n",
+			       cur_index, rec->lrh_type, rec->lrh_len);
 	}
 
-	if (ioc_data) {
-		/* save offset and remains, then we don't always rely on those
-		 * static variables, which is more flexible.
-		 */
-		ioc_data->ioc_offset += l;
-		ioc_data->ioc_count = remains;
+	if (len >= lprd->lprd_left) {
+		lprd->lprd_out[lprd->lprd_left - 1] = '\0';
+		RETURN(-EOVERFLOW);
 	}
+
+	lprd->lprd_out += len;
+	lprd->lprd_left -= len;
 
 	RETURN(0);
 }
@@ -424,16 +390,47 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt,
 			GOTO(out_close, rc);
 		break;
 	case OBD_IOC_LLOG_PRINT: {
-		struct llog_print_data lprd = {
-			.lprd_data = data,
-			.lprd_raw = data->ioc_u32_1,
+		size_t bufs;
+		struct llog_print_data lprd = { 0 };
+		struct llog_process_cat_data cd = {
+			.lpcd_read_mode = LLOG_READ_MODE_NORMAL,
+			.lpcd_last_idx = 0,
 		};
 
-		LASSERT(data->ioc_inllen1 > 0);
-		rc = llog_process(env, handle, llog_print_cb, &lprd, NULL);
-		if (rc == -LLOG_EEMPTY)
+		if (!data->ioc_inllen2 || !data->ioc_inllen3)
+			GOTO(out_close, rc = -EINVAL);
+
+		bufs = data->ioc_inllen4 +
+			round_up(data->ioc_inllen1, 8) +
+			round_up(data->ioc_inllen2, 8) +
+			round_up(data->ioc_inllen3, 8);
+
+		rc = kstrtol(data->ioc_inlbuf2, 0, &lprd.lprd_from);
+		if (rc)
+			GOTO(out_close, rc);
+
+		rc = kstrtol(data->ioc_inlbuf3, 0, &lprd.lprd_to);
+		if (rc)
+			GOTO(out_close, rc);
+
+		data->ioc_inllen1 = 0;
+		data->ioc_inllen2 = 0;
+		data->ioc_inllen3 = 0;
+		data->ioc_inllen4 = 0;
+
+		lprd.lprd_out = data->ioc_bulk;
+		lprd.lprd_left = bufs;
+		lprd.lprd_raw = data->ioc_u32_1;
+		cd.lpcd_first_idx = max(0L, lprd.lprd_from - MARKER_DIFF - 1);
+
+		rc = llog_process(env, handle, llog_print_cb, &lprd, &cd);
+
+		/* rc == 0 means EOF */
+		data->ioc_u32_2 = !rc;
+		data->ioc_count = bufs - lprd.lprd_left;
+		if (rc == LLOG_PROC_BREAK)
 			rc = 0;
-		else if (rc)
+		if (rc)
 			GOTO(out_close, rc);
 		break;
 	}

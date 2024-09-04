@@ -183,9 +183,12 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 		      const struct lu_fid *fid);
 
 struct llog_print_data {
-	struct obd_ioctl_data *lprd_data;
-	unsigned int	       lprd_cfg_flags;
-	bool		       lprd_raw;
+	unsigned int		lprd_cfg_flags;
+	long			lprd_from;
+	long			lprd_to;
+	char			*lprd_out;
+	long			lprd_left;
+	bool			lprd_raw;
 };
 
 /* llog_net.c */

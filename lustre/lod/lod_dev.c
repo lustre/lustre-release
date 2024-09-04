@@ -2578,10 +2578,11 @@ static int lod_pool_del_q(struct obd_device *obd, char *poolname)
 	return err;
 }
 
-static inline int lod_sub_print_llog(const struct lu_env *env,
-				     struct dt_device *dt, void *data)
+static int lod_sub_print_llog(const struct lu_env *env, struct dt_device *dt,
+			      struct llog_print_data *lprd)
 {
 	struct llog_ctxt *ctxt;
+	size_t len = 0;
 	int rc = 0;
 
 	ENTRY;
@@ -2590,52 +2591,28 @@ static inline int lod_sub_print_llog(const struct lu_env *env,
 	if (!ctxt)
 		RETURN(0);
 
-	if (ctxt->loc_handle) {
-		struct llog_print_data *lprd = data;
-		struct obd_ioctl_data *ioc_data = lprd->lprd_data;
-		int l, remains;
-		long from;
-		char *out;
+	if (!ctxt->loc_handle)
+		GOTO(ctxt_put, rc = -EINVAL);
 
-		LASSERT(ioc_data);
-		if (ioc_data->ioc_inllen1 > 0) {
-			remains = ioc_data->ioc_inllen4 +
-				  round_up(ioc_data->ioc_inllen1, 8) +
-				  round_up(ioc_data->ioc_inllen2, 8) +
-				  round_up(ioc_data->ioc_inllen3, 8);
+	len = snprintf(lprd->lprd_out, lprd->lprd_left,
+		       "%s [catalog]: "DFID"\n",
+		       ctxt->loc_obd->obd_name,
+		       PLOGID(&ctxt->loc_handle->lgh_id));
 
-			rc = kstrtol(ioc_data->ioc_inlbuf2, 0, &from);
-			if (rc)
-				GOTO(ctxt_put, rc);
-
-			/* second iteration from jt_llog_print_iter() */
-			if (from > 1)
-				GOTO(ctxt_put, rc = 0);
-
-			out = ioc_data->ioc_bulk;
-			ioc_data->ioc_inllen1 = 0;
-		} else {
-			out = ioc_data->ioc_bulk + ioc_data->ioc_offset;
-			remains = ioc_data->ioc_count;
-		}
-
-		l = snprintf(out, remains, "%s [catalog]: "DFID"\n",
-			     ctxt->loc_obd->obd_name,
-			     PLOGID(&ctxt->loc_handle->lgh_id));
-		out += l;
-		remains -= l;
-		if (remains <= 0) {
-			CERROR("%s: not enough space for print log records: rc = %d\n",
-			       ctxt->loc_obd->obd_name, -LLOG_EEMPTY);
-			GOTO(ctxt_put, rc = -LLOG_EEMPTY);
-		}
-
-		ioc_data->ioc_offset += l;
-		ioc_data->ioc_count = remains;
-
-		rc = llog_process_or_fork(env, ctxt->loc_handle, llog_print_cb,
-					  data, NULL, false);
+	if (len >= lprd->lprd_left) {
+		lprd->lprd_out[lprd->lprd_left - 1] = '\0';
+		GOTO(ctxt_put, rc = -E2BIG);
 	}
+
+	lprd->lprd_out += len;
+	lprd->lprd_left -= len;
+	rc = llog_process_or_fork(env, ctxt->loc_handle, llog_print_cb,
+				  lprd, NULL, false);
+
+	/* multiple iterations are not supported -> stop llog_print */
+	if (rc == -EOVERFLOW)
+		rc = -E2BIG;
+
 	GOTO(ctxt_put, rc);
 ctxt_put:
 	llog_ctxt_put(ctxt);
@@ -2648,29 +2625,49 @@ static int lod_llog_print(const struct lu_env *env, struct lod_device *lod,
 			  void *data)
 {
 	struct lod_tgt_desc *mdt;
-	bool empty = true;
+	struct obd_ioctl_data *ioc_data = data;
+	struct llog_print_data lprd = {
+		.lprd_raw = false,
+	};
+	size_t bufs;
 	int rc = 0;
 
 	ENTRY;
-	rc = lod_sub_print_llog(env, lod->lod_child, data);
-	if (!rc) {
-		empty = false;
-	} else if (rc == -LLOG_EEMPTY) {
-		rc = 0;
-	} else {
+	LASSERT(ioc_data);
+
+	if (ioc_data->ioc_inllen2) {
+		rc = kstrtol(ioc_data->ioc_inlbuf2, 0, &lprd.lprd_from);
+		if (rc)
+			RETURN(rc);
+
+		/* multiple iterations are not supported -> stop llog_print */
+		if (lprd.lprd_from > 1)
+			RETURN(-E2BIG);
+	}
+
+	bufs = ioc_data->ioc_inllen4 +
+		round_up(ioc_data->ioc_inllen1, 8) +
+		round_up(ioc_data->ioc_inllen2, 8) +
+		round_up(ioc_data->ioc_inllen3, 8);
+
+	ioc_data->ioc_inllen1 = 0;
+	ioc_data->ioc_inllen2 = 0;
+	ioc_data->ioc_inllen3 = 0;
+	ioc_data->ioc_inllen4 = 0;
+
+	lprd.lprd_out = ioc_data->ioc_bulk;
+	lprd.lprd_left = bufs;
+	rc = lod_sub_print_llog(env, lod->lod_child, &lprd);
+	if (rc) {
 		CERROR("%s: llog_print failed: rc = %d\n",
 		       lod2obd(lod)->obd_name, rc);
-		RETURN(rc);
+		GOTO(out, rc);
 	}
 
 	lod_getref(&lod->lod_mdt_descs);
 	lod_foreach_mdt(lod, mdt) {
-		rc = lod_sub_print_llog(env, mdt->ltd_tgt, data);
-		if (!rc) {
-			empty = false;
-		} else if (rc == -LLOG_EEMPTY) {
-			rc = 0;
-		} else {
+		rc = lod_sub_print_llog(env, mdt->ltd_tgt, &lprd);
+		if (rc) {
 			CERROR("%s: llog_print of MDT %u failed: rc = %d\n",
 			       lod2obd(lod)->obd_name, mdt->ltd_index, rc);
 			break;
@@ -2678,7 +2675,11 @@ static int lod_llog_print(const struct lu_env *env, struct lod_device *lod,
 	}
 	lod_putref(lod, &lod->lod_mdt_descs);
 
-	RETURN(rc ? rc : empty ? -LLOG_EEMPTY : 0);
+out:
+	ioc_data->ioc_count = bufs - lprd.lprd_left;
+	ioc_data->ioc_u32_2 = 1;
+
+	RETURN((rc == LLOG_PROC_BREAK) ? 0 : rc);
 }
 
 /* cancel update catalog from update catlist */
@@ -2733,22 +2734,22 @@ static int lod_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 	switch (cmd) {
 	case OBD_IOC_LLOG_PRINT: {
-		struct llog_print_data lprd = {
-			.lprd_data = data,
-			.lprd_raw = data->ioc_u32_1,
-		};
 		char *logname;
+
+		if (!data->ioc_inllen1) {
+			rc = -EINVAL;
+			break;
+		}
 
 		logname = data->ioc_inlbuf1;
 		if (strcmp(logname, lod_update_log_name) != 0) {
 			rc = -EINVAL;
 			CERROR("%s: llog iocontrol support %s only: rc = %d\n",
 			       lod2obd(lod)->obd_name, lod_update_log_name, rc);
-			RETURN(rc);
+			break;
 		}
 
-		LASSERT(data->ioc_inllen1 > 0);
-		rc = lod_llog_print(&env, lod, &lprd);
+		rc = lod_llog_print(&env, lod, data);
 		break;
 	}
 	case OBD_IOC_LLOG_CANCEL:
@@ -2758,6 +2759,7 @@ static int lod_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);
 		break;
 	}
+
 	lu_env_fini(&env);
 
 	RETURN(rc);
