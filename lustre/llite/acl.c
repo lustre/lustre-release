@@ -52,6 +52,10 @@ struct posix_acl *ll_get_acl(
 #endif
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct posix_acl *acl = NULL;
+	char *value = NULL;
+	int len, xtype;
+	char buf[200];
+	char *xname;
 	ENTRY;
 
 #ifdef HAVE_GET_ACL_RCU_ARG
@@ -59,11 +63,58 @@ struct posix_acl *ll_get_acl(
 		return ERR_PTR(-ECHILD);
 #endif
 
+	if (type == ACL_TYPE_ACCESS && lli->lli_posix_acl)
+		goto lli_acl;
+
+	switch (type) {
+	case ACL_TYPE_ACCESS:
+		xname = XATTR_NAME_ACL_ACCESS;
+		xtype = XATTR_ACL_ACCESS_T;
+		break;
+	case ACL_TYPE_DEFAULT:
+		xname = XATTR_NAME_ACL_DEFAULT;
+		xtype = XATTR_ACL_DEFAULT_T;
+		break;
+	default:
+		return ERR_PTR(-EINVAL);
+	}
+
+	len = ll_xattr_list(inode, xname, xtype, NULL, 0, OBD_MD_FLXATTR);
+	if (len > 0) {
+		if (len > sizeof(buf))
+			value = kmalloc(len, GFP_NOFS);
+		else
+			value = buf;
+		if (!value)
+			return ERR_PTR(-ENOMEM);
+		len = ll_xattr_list(inode, xname, xtype, value, len,
+				    OBD_MD_FLXATTR);
+	}
+	if (len > 0)
+		acl = posix_acl_from_xattr(&init_user_ns, value, len);
+	else if (len == -ENODATA || len == -ENOSYS)
+		acl = NULL;
+	else
+		acl = ERR_PTR(len);
+	if (value && value != buf)
+		kfree(value);
+
+	if (IS_ERR_OR_NULL(acl))
+		goto out;
+	if (type == ACL_TYPE_DEFAULT) {
+		acl = posix_acl_dup(acl);
+		goto out;
+	}
+	if (type == ACL_TYPE_ACCESS)
+		lli_replace_acl(lli, acl);
+
+lli_acl:
 	read_lock(&lli->lli_lock);
 	/* VFS' acl_permission_check->check_acl will release the refcount */
 	acl = posix_acl_dup(lli->lli_posix_acl);
 	read_unlock(&lli->lli_lock);
 
+out:
 	RETURN(acl);
 }
 

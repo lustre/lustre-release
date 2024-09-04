@@ -487,12 +487,12 @@ static inline void lli_clear_acl(struct ll_inode_info *lli)
 }
 
 static inline void lli_replace_acl(struct ll_inode_info *lli,
-				   struct lustre_md *md)
+				   struct posix_acl *acl)
 {
 	write_lock(&lli->lli_lock);
 	if (lli->lli_posix_acl)
 		posix_acl_release(lli->lli_posix_acl);
-	lli->lli_posix_acl = md->posix_acl;
+	lli->lli_posix_acl = acl;
 	write_unlock(&lli->lli_lock);
 }
 #else
@@ -501,7 +501,7 @@ static inline void lli_clear_acl(struct ll_inode_info *lli)
 }
 
 static inline void lli_replace_acl(struct ll_inode_info *lli,
-				   struct lustre_md *md)
+				   struct posix_acl *acl)
 {
 }
 #endif
