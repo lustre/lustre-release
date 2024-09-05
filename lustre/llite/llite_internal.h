@@ -805,6 +805,11 @@ struct ra_io_arg {
 	 */
 	loff_t		ria_length;
 	loff_t		ria_bytes;
+	/*
+	 * list of cl_read_aheads used during read-ahead, used to release DLM
+	 * locks acquired during read-ahead.
+	 */
+	struct list_head	ria_cl_ra_list;
 };
 
 /* LL_HIST_MAX=32 causes an overflow */

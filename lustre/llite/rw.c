@@ -425,7 +425,7 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 		    struct cl_page_list *queue, struct ll_readahead_state *ras,
 		    struct ra_io_arg *ria, pgoff_t *ra_end, pgoff_t skip_index)
 {
-	struct cl_read_ahead ra = { 0 };
+	struct cl_read_ahead *ra = NULL;
 	/* busy page count is per stride */
 	int rc = 0, count = 0, busy_page_count = 0;
 	pgoff_t page_idx;
@@ -439,7 +439,8 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 		if (skip_index && page_idx == skip_index)
 			continue;
 		if (ras_inside_ra_window(page_idx, ria)) {
-			if (ra.cra_end_idx == 0 || ra.cra_end_idx < page_idx) {
+			if (!ra || ra->cra_end_idx == 0 ||
+			    ra->cra_end_idx < page_idx) {
 				pgoff_t end_idx;
 
 				/*
@@ -449,39 +450,46 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 				 * Do not extend read lock accross stripe if
 				 * lock contention detected.
 				 */
-				if (ra.cra_contention &&
+				if (ra && ra->cra_contention &&
 				    page_idx > ria->ria_end_idx_min) {
 					ria->ria_end_idx = *ra_end;
 					break;
 				}
 
-				cl_read_ahead_release(env, &ra);
-
-				rc = cl_io_read_ahead(env, io, page_idx, &ra);
-				if (rc < 0)
+				OBD_ALLOC_PTR(ra);
+				if (ra == NULL)
+					/* Ignore the error */
 					break;
 
+				INIT_LIST_HEAD(&ra->cra_linkage);
+				rc = cl_io_read_ahead(env, io, page_idx, ra);
+				if (rc < 0) {
+					OBD_FREE_PTR(ra);
+					break;
+				}
+
+				list_add_tail(&ra->cra_linkage,
+					      &ria->ria_cl_ra_list);
 				 /*
 				  * Only shrink ria_end_idx if the matched
 				  * LDLM lock doesn't cover more.
 				  */
-				if (page_idx > ra.cra_end_idx) {
-					ria->ria_end_idx = ra.cra_end_idx;
+				if (page_idx > ra->cra_end_idx) {
+					ria->ria_end_idx = ra->cra_end_idx;
 					break;
 				}
 
 				CDEBUG(D_READA, "idx: %lu, ra: %lu, rpc: %lu\n",
-				       page_idx, ra.cra_end_idx,
-				       ra.cra_rpc_pages);
-				LASSERTF(ra.cra_end_idx >= page_idx,
+				       page_idx, ra->cra_end_idx,
+				       ra->cra_rpc_pages);
+				LASSERTF(ra->cra_end_idx >= page_idx,
 					 "object: %px, indcies %lu / %lu\n",
-					 io->ci_obj, ra.cra_end_idx, page_idx);
+					 io->ci_obj, ra->cra_end_idx, page_idx);
 				/* update read ahead RPC size.
-				 * NB: it's racy but doesn't matter
-				 */
-				if (ras->ras_rpc_pages != ra.cra_rpc_pages &&
-				    ra.cra_rpc_pages > 0)
-					ras->ras_rpc_pages = ra.cra_rpc_pages;
+				 * NB: it's racy but doesn't matter */
+				if (ras->ras_rpc_pages != ra->cra_rpc_pages &&
+				    ra->cra_rpc_pages > 0)
+					ras->ras_rpc_pages = ra->cra_rpc_pages;
 				if (!skip_index) {
 					/* trim (align with optimal RPC size) */
 					end_idx = ras_align(ras,
@@ -545,13 +553,23 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 		}
 	}
 
-	cl_read_ahead_release(env, &ra);
-
 	if (count)
 		ll_ra_stats_add(vvp_object_inode(io->ci_obj),
 				RA_STAT_READAHEAD_PAGES, count);
 
 	return count;
+}
+
+static void ll_readahead_locks_release(const struct lu_env *env,
+				       struct list_head *cl_ra_list)
+{
+	struct cl_read_ahead *ra, *n;
+
+	list_for_each_entry_safe(ra, n, cl_ra_list, cra_linkage) {
+		list_del_init(&ra->cra_linkage);
+		cl_read_ahead_release(env, ra);
+		OBD_FREE_PTR(ra);
+	}
 }
 
 static void ll_readahead_work_free(struct ll_readahead_work *work)
@@ -643,6 +661,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 
 	ria = &ll_env_info(env)->lti_ria;
 	memset(ria, 0, sizeof(*ria));
+	INIT_LIST_HEAD(&ria->ria_cl_ra_list);
 
 	ria->ria_start_idx = work->lrw_start_idx;
 	/* Truncate RA window to end of file */
@@ -706,6 +725,8 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	if (ria->ria_end_idx == ra_end_idx && ra_end_idx == (kms >> PAGE_SHIFT))
 		ll_ra_stats_inc(inode, RA_STAT_EOF);
 
+	ll_readahead_locks_release(env, &ria->ria_cl_ra_list);
+
 	if (ra_end_idx != ria->ria_end_idx)
 		ll_ra_stats_inc(inode, RA_STAT_FAILED_REACH_END);
 
@@ -729,17 +750,15 @@ out_free_work:
 }
 
 static int ll_readahead(const struct lu_env *env, struct cl_io *io,
-			struct cl_page_list *queue,
+			struct cl_page_list *queue, struct ra_io_arg *ria,
 			struct ll_readahead_state *ras, bool hit,
 			struct file *file, pgoff_t skip_index,
 			pgoff_t *start_idx)
 {
 	struct vvp_io *vio = vvp_env_io(env);
-	struct ll_thread_info *lti = ll_env_info(env);
 	unsigned long pages, pages_min = 0;
 	pgoff_t ra_end_idx = 0, end_idx = 0;
 	struct inode *inode;
-	struct ra_io_arg *ria = &lti->lti_ria;
 	struct cl_object *clob;
 	int ret = 0;
 	__u64 kms;
@@ -762,7 +781,6 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 		RETURN(0);
 	}
 
-	memset(ria, 0, sizeof(*ria));
 	ret = ll_readahead_file_kms(env, io, &kms);
 	if (ret != 0)
 		RETURN(ret);
@@ -1679,7 +1697,7 @@ void ll_cl_remove(struct inode *inode, const struct lu_env *env)
 }
 
 int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
-			   struct cl_page *page, struct file *file)
+		    struct cl_page *page, struct file *file)
 {
 	struct inode              *inode  = vvp_object_inode(page->cp_obj);
 	struct ll_sb_info         *sbi    = ll_i2sbi(inode);
@@ -1695,6 +1713,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	pgoff_t io_start_index;
 	pgoff_t io_end_index;
 	bool unlockpage = true;
+	struct ra_io_arg *ria = NULL;
 
 	ENTRY;
 
@@ -1747,9 +1766,12 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	if (ll_readahead_enabled(sbi) && ras && !io->ci_rand_read) {
 		pgoff_t skip_index = 0;
 
+		ria = &ll_env_info(env)->lti_ria;
+		memset(ria, 0, sizeof(*ria));
+		INIT_LIST_HEAD(&ria->ria_cl_ra_list);
 		if (ras->ras_next_readahead_idx < cl_page_index(page))
 			skip_index = cl_page_index(page);
-		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
+		rc2 = ll_readahead(env, io, &queue->c2_qin, ria, ras,
 				   uptodate, file, skip_index,
 				   &ra_start_index);
 		/* Keep iotrace clean. Print only on actual page read */
@@ -1775,6 +1797,8 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 			task_io_account_read(PAGE_SIZE * count);
 	}
 
+	if (ria)
+		ll_readahead_locks_release(env, &ria->ria_cl_ra_list);
 
 	if (anchor != NULL && !cl_page_is_owned(page, io)) { /* have sent */
 		rc = cl_sync_io_wait(env, anchor, 0);

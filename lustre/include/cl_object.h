@@ -1387,8 +1387,14 @@ struct cl_read_ahead {
 	void		*cra_dlmlock;
 	void		*cra_oio;
 
+	/*
+	 * Linkage to track all cl_read_aheads for a read-ahead operations,
+	 * used for releasing DLM locks acquired during read-ahead.
+	 */
+	struct list_head cra_linkage;
+
 	/* whether lock is in contention */
-	bool		cra_contention;
+	bool		 cra_contention;
 };
 
 static inline void cl_read_ahead_release(const struct lu_env *env,
@@ -1396,7 +1402,6 @@ static inline void cl_read_ahead_release(const struct lu_env *env,
 {
 	if (ra->cra_release != NULL)
 		ra->cra_release(env, ra);
-	memset(ra, 0, sizeof(*ra));
 }
 
 
