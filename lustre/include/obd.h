@@ -1246,7 +1246,7 @@ struct obd_client_handle {
 	struct md_open_data	*och_mod;
 	struct lustre_handle	 och_lease_handle; /* open lock for lease */
 	__u32			 och_magic;
-	int			 och_flags;
+	enum mds_open_flags	 och_flags; /* Open flags from client */
 };
 
 #define OBD_CLIENT_HANDLE_MAGIC 0xd15ea5ed

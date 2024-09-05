@@ -1146,7 +1146,7 @@ struct ll_file_data {
 	struct ll_grouplock fd_grouplock;
 	__u64 lfd_pos;
 	__u32 fd_flags;
-	fmode_t fd_omode;
+	enum mds_open_flags fd_open_mode;
 	/* openhandle if lease exists for this file.
 	 * Borrow lli->lli_och_mutex to protect assignment
 	 */
@@ -1376,7 +1376,7 @@ extern enum ldlm_mode ll_take_md_lock(struct inode *inode, __u64 bits,
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_release_openhandle(struct dentry *d, struct lookup_intent *l);
-int ll_md_real_close(struct inode *inode, fmode_t fmode);
+int ll_md_real_close(struct inode *inode, enum mds_open_flags fd_open_mode);
 void ll_track_file_opens(struct inode *inode);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 			      struct ll_file_data *file, loff_t pos,

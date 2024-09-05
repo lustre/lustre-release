@@ -274,11 +274,17 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 	EXIT;
 }
 
-void mdt_mfd_set_mode(struct mdt_file_data *mfd, u64 open_flags)
+/**
+ * mdt_mfd_set_mode() - Set MDS open flags into @mfd
+ *
+ * @mfd: mdt_file_data object per open handle
+ * @open_flags: open flags passed from client
+ */
+void mdt_mfd_set_mode(struct mdt_file_data *mfd, enum mds_open_flags open_flags)
 {
 	LASSERT(mfd != NULL);
 
-	CDEBUG(D_DENTRY, DFID " Change mfd open_flags %#llo -> %#llo.\n",
+	CDEBUG(D_DENTRY, DFID " Change mfd open_flags %#lo -> %#lo.\n",
 	       PFID(mdt_object_fid(mfd->mfd_object)), mfd->mfd_open_flags,
 	       open_flags);
 
@@ -286,11 +292,19 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, u64 open_flags)
 }
 
 /**
- * prep ma_lmm/ma_lmv for md_attr from reply
+ * mdt_prep_ma_buf_from_rep() - prep ma_lmm/ma_lmv for md_attr from reply
+ *
+ * @info: Common data shared by mdt-level handlers
+ * @obj: metadata object
+ * @ma: attributes to be evaluated for that object
+ * @open_flags: open flags passed from client
+ *
+ * Return:
+ * * void
  */
 void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
 			      struct mdt_object *obj, struct md_attr *ma,
-			      __u64 open_flags)
+			      enum mds_open_flags open_flags)
 {
 	struct req_capsule *pill;
 
@@ -329,9 +343,23 @@ void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
 	}
 }
 
+/*
+ * mdt_mfd_open() - open object in metadata server
+ *
+ * @info: Common data shared by mdt-level handlers
+ * @p: Parent mdt object
+ * @o: Child mdt object
+ * @open_flags: open flags passed from client
+ * @created: Object already existing/created
+ * @rep: ldlm_reply object
+ *
+ * Return:
+ * * 0 on success
+ * * <0 on failure
+ */
 static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
-			struct mdt_object *o, u64 open_flags, int created,
-			struct ldlm_reply *rep)
+			struct mdt_object *o, enum mds_open_flags open_flags,
+			int created, struct ldlm_reply *rep)
 {
 	struct ptlrpc_request *req = mdt_info_req(info);
 	struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
@@ -510,7 +538,7 @@ err_out:
 
 static int mdt_finish_open(struct mdt_thread_info *info,
 			   struct mdt_object *p, struct mdt_object *o,
-			   u64 open_flags,
+			   enum mds_open_flags open_flags,
 			   struct ldlm_reply *rep)
 {
 	struct ptlrpc_request *req = mdt_info_req(info);
@@ -705,7 +733,7 @@ out:
 static int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep,
 			   struct mdt_lock_handle *lhc)
 {
-	u64 open_flags = info->mti_spec.sp_cr_flags;
+	enum mds_open_flags open_flags = info->mti_spec.sp_cr_flags;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct md_attr *ma = &info->mti_attr;
 	struct mdt_object *o;
@@ -767,7 +795,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 				__u64 *ibits)
 {
 	struct md_attr *ma = &info->mti_attr;
-	__u64 open_flags = info->mti_spec.sp_cr_flags;
+	enum mds_open_flags open_flags = info->mti_spec.sp_cr_flags;
 	__u64 trybits = 0;
 	enum ldlm_mode lm = LCK_PR;
 	bool acq_lease = !!(open_flags & MDS_OPEN_LEASE);
@@ -824,7 +852,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		/* Lease must be with open lock */
 		if (!(open_flags & MDS_OPEN_LOCK)) {
 			CERROR("%s: Request lease for file:"DFID ", but open lock "
-			       "is missed, open_flags = %#llo : rc = %d\n",
+			       "is missed, open_flags = %#lo : rc = %d\n",
 			       mdt_obd_name(info->mti_mdt),
 			       PFID(mdt_object_fid(obj)), open_flags, -EPROTO);
 			GOTO(out, rc = -EPROTO);
@@ -899,7 +927,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		rc = mdt_object_lock_try(info, obj, lhc, ibits, trybits, lm);
 
 	CDEBUG(D_INODE, "%s: Requested bits lock:"DFID ", ibits = %#llx/%#llx"
-	       ", open_flags = %#llo, try_layout = %d : rc = %d\n",
+	       ", open_flags = %#lo, try_layout = %d : rc = %d\n",
 	       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(obj)),
 	       *ibits, trybits, open_flags, try_layout, rc);
 
@@ -908,7 +936,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		struct mdt_lock_handle *ll = &info->mti_lh[MDT_LH_LAYOUT];
 
 		CDEBUG(D_INODE, "Will create layout, get EX layout lock:"DFID
-			", open_flags = %#llo\n",
+			", open_flags = %#lo\n",
 			PFID(mdt_object_fid(obj)), open_flags);
 
 		/* We cannot enqueue another lock for the same resource we
@@ -976,7 +1004,7 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 				   struct mdt_lock_handle *lhc,
 				   __u64 ibits, int rc)
 {
-	__u64 open_flags = info->mti_spec.sp_cr_flags;
+	enum mds_open_flags open_flags = info->mti_spec.sp_cr_flags;
 	struct mdt_lock_handle *ll = &info->mti_lh[MDT_LH_LOCAL];
 
 	ENTRY;
@@ -1199,7 +1227,8 @@ out_parent_put:
 static int mdt_cross_open(struct mdt_thread_info *info,
 			  const struct lu_fid *parent_fid,
 			  const struct lu_fid *fid,
-			  struct ldlm_reply *rep, u64 open_flags)
+			  struct ldlm_reply *rep,
+			  enum mds_open_flags open_flags)
 {
 	struct md_attr *ma = &info->mti_attr;
 	struct mdt_object *o;
@@ -1325,7 +1354,7 @@ static int mdt_lock_root_xattr(struct mdt_thread_info *info,
 static inline enum ldlm_mode mdt_open_lock_mode(struct mdt_thread_info *info,
 						struct mdt_object *p,
 						struct lu_name *name,
-						u64 open_flags)
+						enum mds_open_flags open_flags)
 {
 	int result;
 	struct lu_fid fid;
@@ -1384,7 +1413,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	struct lu_fid *child_fid = &info->mti_tmp_fid1;
 	struct lu_ucred *uc = mdt_ucred(info);
 	struct md_attr *ma = &info->mti_attr;
-	u64 open_flags = info->mti_spec.sp_cr_flags;
+	enum mds_open_flags open_flags = info->mti_spec.sp_cr_flags;
 	u64 ibits = 0;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	int result, rc;
@@ -1417,7 +1446,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		GOTO(out, result = -EROFS);
 
 	CDEBUG(D_INODE, "I am going to open "DFID"/("DNAME"->"DFID") "
-	       "cr_flag=%#llo mode=0%06o msg_flag=0x%x\n",
+	       "cr_flag=%#lo mode=0%06o msg_flag=0x%x\n",
 	       PFID(rr->rr_fid1), PNAME(&rr->rr_name), PFID(rr->rr_fid2),
 	       open_flags, ma->ma_attr.la_mode, msg_flags);
 

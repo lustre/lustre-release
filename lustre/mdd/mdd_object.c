@@ -34,7 +34,7 @@ static const struct lu_object_operations mdd_lu_obj_ops;
 
 struct mdd_object_user {
 	struct list_head	mou_list;	/* linked off mod_users */
-	u64			mou_open_flags;	/* open mode by client */
+	enum mds_open_flags	mou_open_flags;	/* open mode by client */
 	__u64			mou_uidgid;	/* uid_gid on client */
 	int			mou_opencount;	/* # opened */
 	/* time of next access denied notificaiton */
@@ -56,8 +56,7 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 
 static inline bool has_prefix(const char *str, const char *prefix);
 
-
-static u32 flags_helper(u64 open_flags)
+static u32 mdd_open_flags_to_mode(enum mds_open_flags open_flags)
 {
 	u32 open_mode = 0;
 
@@ -74,18 +73,21 @@ static u32 flags_helper(u64 open_flags)
 	return open_mode;
 }
 
-/** Allocate/init a user and its sub-structures.
+/**
+ * mdd_obj_user_alloc() - Allocate/init a user and its sub-structures.
  *
- * \param flags [IN]
- * \param uid [IN]
- * \param gid [IN]
- * \retval mou [OUT] success valid structure
- * \retval mou [OUT]
+ * @flags: open flags passed from client
+ * @uid: client uid
+ * @gid: client gid
+ *
+ * Return:
+ * * populate mdd_object_user with valid struct on success
  */
-static struct mdd_object_user *mdd_obj_user_alloc(u64 open_flags,
+static struct mdd_object_user *mdd_obj_user_alloc(enum mds_open_flags o_flags,
 						  uid_t uid, gid_t gid)
 {
 	struct mdd_object_user *mou;
+	enum mds_open_flags open_flags = o_flags;
 
 	ENTRY;
 
@@ -112,18 +114,21 @@ static void mdd_obj_user_free(struct mdd_object_user *mou)
 }
 
 /**
- * Find if UID/GID already has this file open
+ * mdd_obj_user_find() - Find if UID/GID already has this file open
  *
- * Caller should have write-locked \param mdd_obj.
- * \param mdd_obj [IN] mdd_obj
- * \param uid [IN] client uid
- * \param gid [IN] client gid
- * \retval user pointer or NULL if not found
+ * @mdd_obj: Metadata server side object
+ * @uid: Client UID
+ * @gid: Client GID
+ * @open_flags: MDS flags passed from client
+ *
+ * Caller should have write-locked on param @mdd_obj.
+ *
+ * Return: mdd_object_user pointer or NULL if not found
  */
 static
 struct mdd_object_user *mdd_obj_user_find(struct mdd_object *mdd_obj,
 					  uid_t uid, gid_t gid,
-					  u64 open_flags)
+					  enum mds_open_flags open_flags)
 {
 	struct mdd_object_user *mou;
 	__u64 uidgid;
@@ -133,8 +138,8 @@ struct mdd_object_user *mdd_obj_user_find(struct mdd_object *mdd_obj,
 	uidgid = ((__u64)uid << 32) | gid;
 	list_for_each_entry(mou, &mdd_obj->mod_users, mou_list) {
 		if (mou->mou_uidgid == uidgid &&
-		    flags_helper(mou->mou_open_flags) ==
-		    flags_helper(open_flags))
+		    mdd_open_flags_to_mode(mou->mou_open_flags) ==
+		    mdd_open_flags_to_mode(open_flags))
 			RETURN(mou);
 	}
 	RETURN(NULL);
@@ -177,6 +182,7 @@ static int mdd_obj_user_add(struct mdd_object *mdd_obj,
 
 	RETURN(0);
 }
+
 /**
  * Remove UID from the list
  *
@@ -199,6 +205,7 @@ static int mdd_obj_user_remove(struct mdd_object *mdd_obj,
 
 	RETURN(0);
 }
+
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
 	       struct lu_attr *la)
 {
@@ -3609,7 +3616,7 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 }
 
 static int mdd_accmode(const struct lu_env *env, const struct lu_attr *la,
-		       u64 open_flags)
+		       enum mds_open_flags open_flags)
 {
 	/* Sadly, NFSD reopens a file repeatedly during operation, so the
 	 * "acc_mode = 0" allowance for newly-created files isn't honoured.
@@ -3627,10 +3634,23 @@ static int mdd_accmode(const struct lu_env *env, const struct lu_attr *la,
 	return mds_accmode(open_flags);
 }
 
+/**
+ * mdd_open_sanity_check() - Check if mdd object is valid(not unlinked)
+ *
+ * @env: execution environment for this thread
+ * @obj: metadata object
+ * @attr: common attribute of the object
+ * @open_flags: MDS flags passed from client
+ * @is_replay: Additional params passed to open/create
+ *
+ * Return:
+ * * O on success
+ * * negative errno on failure
+ */
 static int mdd_open_sanity_check(const struct lu_env *env,
 				 struct mdd_object *obj,
-				 const struct lu_attr *attr, u64 open_flags,
-				 int is_replay)
+				 const struct lu_attr *attr,
+				 enum mds_open_flags open_flags, int is_replay)
 {
 	unsigned int may_mask;
 	int rc;
@@ -3674,8 +3694,20 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 	RETURN(0);
 }
 
+/**
+ * mdd_open() - Called when object under metadata is opened
+ *
+ * @env: execution environment for this thread
+ * @obj: metadata object
+ * @open_flags: MDS flags passed from client
+ * @spec: Additional params passed to open/create
+ *
+ * Return:
+ * * 0 on Success
+ * * <0 on Failure
+ */
 static int mdd_open(const struct lu_env *env, struct md_object *obj,
-		    u64 open_flags, struct md_op_spec *spec)
+		    enum mds_open_flags open_flags, struct md_op_spec *spec)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct md_device *md_dev = lu2md_dev(mdd2lu_dev(mdo2mdd(obj)));

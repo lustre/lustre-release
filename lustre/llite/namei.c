@@ -261,17 +261,17 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock,
 				lock->l_req_mode, 0);
 
 	if (bits & MDS_INODELOCK_OPEN) {
-		fmode_t fmode;
+		enum mds_open_flags fmode = MDS_FMODE_CLOSED;
 
 		switch (lock->l_req_mode) {
 		case LCK_CW:
-			fmode = FMODE_WRITE;
+			fmode = MDS_FMODE_WRITE;
 			break;
 		case LCK_PR:
-			fmode = FMODE_EXEC;
+			fmode = MDS_FMODE_EXEC;
 			break;
 		case LCK_CR:
-			fmode = FMODE_READ;
+			fmode = MDS_FMODE_READ;
 			break;
 		default:
 			LDLM_ERROR(lock, "bad lock mode for OPEN lock");
@@ -1004,7 +1004,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 			RETURN(dentry == save ? NULL : dentry);
 	}
 
-	if (it->it_op & IT_OPEN && it->it_open_flags & FMODE_WRITE &&
+	if (it->it_op & IT_OPEN && it->it_open_flags & MDS_FMODE_WRITE &&
 	    dentry->d_sb->s_flags & SB_RDONLY)
 		RETURN(ERR_PTR(-EROFS));
 
@@ -1288,9 +1288,10 @@ do {									\
 
 #endif
 
-/*
- * For cached negative dentry and new dentry, handle lookup/create/open
- * together.
+/**
+ * ll_atomic_open() - For cached negative dentry and new dentry, handle
+ *		      lookup/create/open together. This method is only called
+ *		      if the last component is negative(needs lookup)
  */
 static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			  struct file *file, unsigned int open_flags,

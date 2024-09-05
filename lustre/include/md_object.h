@@ -130,7 +130,7 @@ struct md_op_spec {
 	} u;
 
 	/** Open flags from client: such as MDS_OPEN_CREAT, and others. */
-	__u64      sp_cr_flags;
+	enum mds_open_flags      sp_cr_flags;
 
 	/* File security context for creates. */
 	const char	*sp_cr_file_secctx_name; /* (security) xattr name */
@@ -248,7 +248,7 @@ struct md_object_operations {
 			     struct md_device *m, const struct lu_fid *fid);
 
 	int (*moo_open)(const struct lu_env *env, struct md_object *obj,
-			u64 open_flags, struct md_op_spec *spec);
+			enum mds_open_flags open_flags, struct md_op_spec *spc);
 
 	int (*moo_close)(const struct lu_env *env, struct md_object *obj,
 			 struct md_attr *ma, u64 open_flags);

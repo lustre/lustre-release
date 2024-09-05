@@ -21,7 +21,16 @@
 #include <cl_object.h>
 #include "mdc_internal.h"
 
-static void set_mrc_cr_flags(struct mdt_rec_create *mrc, __u64 flags)
+/*
+ * set_mrc_cr_flags() - Move @flags into high(most significant bits (cr_flags_h)
+ *			and low(least significant bits (cr_flags_l)) field under
+ *			reint record
+ *
+ * @mrc: instance of mdt_reint_rec
+ * @flags: open flags passed from client
+ */
+static void set_mrc_cr_flags(struct mdt_rec_create *mrc,
+			     enum mds_open_flags flags)
 {
 	mrc->cr_flags_l = (__u32)(flags & 0xFFFFFFFFUll);
 	mrc->cr_flags_h = (__u32)(flags >> 32);
@@ -180,8 +189,8 @@ void mdc_create_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		     struct sptlrpc_sepol *sepol)
 {
 	struct mdt_rec_create *rec;
+	enum mds_open_flags flags;
 	char *tmp;
-	__u64 flags;
 
 	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
 		     sizeof(struct mdt_rec_create));
@@ -237,9 +246,9 @@ void mdc_create_pack(struct req_capsule *pill, struct md_op_data *op_data,
 	mdc_file_sepol_pack(pill, sepol);
 }
 
-static inline __u64 mds_pack_open_flags(__u64 flags)
+static inline __u64 mds_pack_open_flags(enum mds_open_flags flags)
 {
-	__u64 cr_flags = (flags & MDS_OPEN_FL_INTERNAL);
+	enum mds_open_flags cr_flags = (flags & MDS_OPEN_FL_INTERNAL);
 
 	if (flags & FMODE_READ)
 		cr_flags |= MDS_FMODE_READ;
@@ -276,8 +285,8 @@ void mdc_open_pack(struct req_capsule *pill, struct md_op_data *op_data,
 		   size_t lmmlen, struct sptlrpc_sepol *sepol)
 {
 	struct mdt_rec_create *rec;
+	enum mds_open_flags cr_flags;
 	char *tmp;
-	__u64 cr_flags;
 
 	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
 		     sizeof(struct mdt_rec_create));

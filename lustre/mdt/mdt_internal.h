@@ -48,7 +48,7 @@ struct mdt_file_data {
 	/* export data of portals_handle */
 	const struct mdt_export_data	*mfd_owner;
 	/** open mode provided by client */
-	u64			mfd_open_flags;
+	enum mds_open_flags	mfd_open_flags;
 	/** protected by med_open_lock */
 	struct list_head	mfd_list;
 	/** xid of the open request */
@@ -901,7 +901,7 @@ int mdt_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 int mdt_lock_new_child(struct mdt_thread_info *info,
 		       struct mdt_object *o,
 		       struct mdt_lock_handle *child_lockh);
-void mdt_mfd_set_mode(struct mdt_file_data *mfd, u64 open_flags);
+void mdt_mfd_set_mode(struct mdt_file_data *mfd, enum mds_open_flags o_flags);
 int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc);
 struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 					const struct lustre_handle *open_handle,
@@ -996,7 +996,8 @@ int mdt_pack_encctx_in_reply(struct mdt_thread_info *info,
 			     struct mdt_object *child);
 void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
 			      struct mdt_object *obj, struct md_attr *ma,
-			      __u64 open_flags);
+			      enum mds_open_flags open_flags);
+
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {

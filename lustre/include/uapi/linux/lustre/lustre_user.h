@@ -1964,7 +1964,7 @@ struct changelog_ext_nid {
 
 /* Changelog extra extension to include low 32 bits of MDS_OPEN_* flags. */
 struct changelog_ext_openmode {
-	__u32 cr_openflags;
+	__u32 cr_openflags; /* enum mds_open_flags */
 };
 
 /* Changelog extra extension to include xattr */

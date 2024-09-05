@@ -193,7 +193,7 @@ static int mdd_links_read_with_rec(const struct lu_env *env,
  *
  * \retval		0 if getting the parent FID succeeds.
  * \retval		negative errno if getting the parent FID fails.
- **/
+ */
 static inline int mdd_parent_fid(const struct lu_env *env,
 				 struct mdd_object *obj,
 				 const struct lu_attr *attr,
@@ -386,7 +386,7 @@ int mdd_dir_is_empty(const struct lu_env *env, struct mdd_object *dir)
 	RETURN(result);
 }
 
-/**
+/*
  * Determine if the target object can be hard linked, and right now it only
  * checks if the link count reach the maximum limit. Note: for ldiskfs, the
  * directory nlink count might exceed the maximum link count(see
@@ -2285,7 +2285,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 	 * XXX: Setting the lov ea is not locked but setting the attr is locked?
 	 * Should this be fixed?
 	 */
-	CDEBUG(D_OTHER, "ea %p/%u, cr_flags %#llo, no_create %u\n",
+	CDEBUG(D_OTHER, "ea %p/%u, cr_flags %#lo, no_create %u\n",
 	       spec->u.sp_ea.eadata, spec->u.sp_ea.eadatalen,
 	       spec->sp_cr_flags, spec->no_create);
 

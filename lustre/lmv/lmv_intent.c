@@ -273,11 +273,11 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 			   ldlm_blocking_callback cb_blocking,
 			   __u64 extra_lock_flags)
 {
+	enum mds_open_flags flags = it->it_open_flags;
 	struct obd_device *obd = exp->exp_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lmv_tgt_desc *tgt;
 	struct mdt_body *body;
-	__u64 flags = it->it_open_flags;
 	int rc;
 
 	ENTRY;
@@ -310,7 +310,7 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 				 * layout first, to avoid creating new file
 				 * under old layout, clear O_CREAT.
 				 */
-				it->it_open_flags &= ~O_CREAT;
+				it->it_open_flags &= ~MDS_OPEN_CREAT;
 			}
 		}
 	}
