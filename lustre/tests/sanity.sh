@@ -2599,6 +2599,8 @@ test_27Cg() {
 run_test 27Cg "test setstripe with wrong OST idx"
 
 test_27Ci() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
 	local tf=$DIR/$tfile
 
 	stack_trap "rm -f $DIR/$tfile"
@@ -3660,6 +3662,8 @@ test_27V() {
 run_test 27V "creating widely striped file races with deactivating OST"
 
 test_27W() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	local stripe_count
 	local defcount=4
