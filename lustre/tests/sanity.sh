@@ -3528,6 +3528,8 @@ test_27R() {
 run_test 27R "test max_stripecount limitation when stripe count is set to -1"
 
 test_27T() {
+	(( $OST1_VERSION >= $(version_code 2.14.57.71) )) ||
+		skip "need ost1 >= v2_14_57-71-g73d5ee7033 for ENOSPC fix"
 	[ $(facet_host client) == $(facet_host ost1) ] &&
 		skip "need ost1 and client on different nodes"
 
