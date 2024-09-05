@@ -9728,6 +9728,8 @@ test_56eh() {
 run_test 56eh "check lfs find --skip"
 
 test_56ei() {
+	(( $MDS1_VERSION >= $(version_code 2.15.64.110) )) ||
+		skip "need MDS >= v2_15_64-110-g501e5b2c8a for special projid"
 	local path=$DIR/$tdir
 	local projid=1234
 	local expected_count=3
@@ -9755,7 +9757,6 @@ test_56ei() {
 	echo -e "found_count: $found_count"
 	[[ $found_count == $expected_count ]] ||
 		error "Did not find any entries with expected projid $projid"
-
 }
 run_test 56ei "test lfs find --printf prints correct projid for special files"
 
