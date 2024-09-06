@@ -758,6 +758,7 @@ static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 	int rc, rc2;
 	struct llog_mini_rec lmr;
 	struct llog_ctxt *ctxt;
+	struct llog_process_data data = { .lpd_data = "test 5" };
 
 	ENTRY;
 
@@ -782,7 +783,7 @@ static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 
 	CWARN("5b: print the catalog entries.. we expect 2\n");
 	cat_counter = 0;
-	rc = llog_process(env, llh, cat_print_cb, "test 5", NULL);
+	rc = llog_process(env, llh, cat_print_cb, &data, NULL);
 	if (rc) {
 		CERROR("5b: process with cat_print_cb failed: %d\n", rc);
 		GOTO(out, rc);
@@ -802,7 +803,7 @@ static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 
 	CWARN("5c: print the catalog entries.. we expect 1\n");
 	cat_counter = 0;
-	rc = llog_process(env, llh, cat_print_cb, "test 5", NULL);
+	rc = llog_process(env, llh, cat_print_cb, &data, NULL);
 	if (rc) {
 		CERROR("5c: process with cat_print_cb failed: %d\n", rc);
 		GOTO(out, rc);
@@ -979,6 +980,7 @@ static int test_7_cancel_cb(const struct lu_env *env, struct llog_handle *llh,
 
 static int llog_test_7_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 {
+	struct llog_process_data data = { .lpd_data = "test 7" };
 	struct llog_handle *llh;
 	int rc = 0, i, process_count;
 	int num_recs = 0;
@@ -1024,7 +1026,7 @@ static int llog_test_7_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 		      num_recs, LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1);
 
 	plain_counter = 0;
-	rc = llog_process(env, llh, test_7_print_cb, "test 7", NULL);
+	rc = llog_process(env, llh, test_7_print_cb, &data, NULL);
 	if (rc) {
 		CERROR("7_sub: llog process failed: %d\n", rc);
 		GOTO(out_close, rc);
@@ -1565,6 +1567,7 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 	struct lu_attr la;
 	__u64 cat_max_size;
 	struct dt_device *dt;
+	struct llog_process_data data = { .lpd_data = "test 10" };
 
 	ENTRY;
 
@@ -1725,7 +1728,7 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 
 	CWARN("10d: print the catalog entries.. we expect 3\n");
 	cat_counter = 0;
-	rc = llog_process(env, cath, cat_print_cb, "test 10", NULL);
+	rc = llog_process(env, cath, cat_print_cb, &data, NULL);
 	if (rc) {
 		CERROR("10d: process with cat_print_cb failed: %d\n", rc);
 		GOTO(out, rc);
