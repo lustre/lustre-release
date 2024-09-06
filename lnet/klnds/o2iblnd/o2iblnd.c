@@ -1040,10 +1040,10 @@ kiblnd_destroy_conn(struct kib_conn *conn)
 	if (conn->ibc_state != IBLND_CONN_INIT) {
 		struct kib_net *net = peer_ni->ibp_ni->ni_data;
 
-		kiblnd_peer_decref(peer_ni);
-		rdma_destroy_id(cmid);
 		atomic_dec(&peer_ni->ibp_nconns);
 		atomic_dec(&net->ibn_nconns);
+		kiblnd_peer_decref(peer_ni);
+		rdma_destroy_id(cmid);
 	}
 }
 
