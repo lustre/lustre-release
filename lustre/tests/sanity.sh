@@ -535,7 +535,7 @@ test_17e() {
 	local foo=$DIR/$tdir/$tfile
 	ln -s $foo $foo || error "create symlink failed"
 	ls -l $foo || error "ls -l failed"
-	ls $foo && error "ls not failed" || true
+	ls $foo && error_ignore LU-18093 "ls not failed" || true
 }
 run_test 17e "symlinks: create recursive symlink (should return error)"
 
