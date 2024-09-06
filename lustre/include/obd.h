@@ -31,28 +31,28 @@
 #include <lvfs.h>
 
 struct osc_async_rc {
-        int     ar_rc;
-        int     ar_force_sync;
-        __u64   ar_min_xid;
+	int		ar_rc;
+	int		ar_force_sync;
+	__u64		ar_min_xid;
 };
 
 struct lov_oinfo {                 /* per-stripe data structure */
-	struct ost_id   loi_oi;    /* object ID/Sequence on the target OST */
-	int loi_ost_idx;           /* OST stripe index in lov_tgt_desc->tgts */
-	int loi_ost_gen;           /* generation of this loi_ost_idx */
+	struct		ost_id loi_oi;/* object ID/Sequence on the target OST */
+	int		loi_ost_idx;/* OST stripe index in lov_tgt_desc->tgts */
+	int		loi_ost_gen;/* generation of this loi_ost_idx */
 
-	unsigned long loi_kms_valid:1;
-	__u64 loi_kms;             /* known minimum size */
-	struct ost_lvb loi_lvb;
-	struct osc_async_rc     loi_ar;
+	unsigned long	loi_kms_valid:1;
+	__u64		loi_kms; /* known minimum size */
+	struct		ost_lvb loi_lvb;
+	struct		osc_async_rc loi_ar;
 };
 
 void lov_fix_ea_for_replay(void *lovea);
 
 static inline void loi_kms_set(struct lov_oinfo *oinfo, __u64 kms)
 {
-        oinfo->loi_kms = kms;
-        oinfo->loi_kms_valid = 1;
+	oinfo->loi_kms = kms;
+	oinfo->loi_kms_valid = 1;
 }
 
 struct lov_stripe_md;
@@ -63,16 +63,17 @@ typedef int (*obd_enqueue_update_f)(void *cookie, int rc);
 /* obd info for a particular level (lov, osc). */
 struct obd_info {
 	/* OBD_STATFS_* flags */
-	__u64                   oi_flags;
-	struct obd_device      *oi_obd;
-	struct lu_tgt_desc     *oi_tgt;
-        /* statfs data specific for every OSC, if needed at all. */
-        struct obd_statfs      *oi_osfs;
-        /* An update callback which is called to update some data on upper
+	__u64			oi_flags;
+	struct obd_device	*oi_obd;
+	struct lu_tgt_desc	*oi_tgt;
+	/* statfs data specific for every OSC, if needed at all. */
+	struct obd_statfs	*oi_osfs;
+	/* An update callback which is called to update some data on upper
 	 * level. E.g. it is used for update lsm->lsm_oinfo at every received
-         * request in osc level for enqueue requests. It is also possible to
-         * update some caller data from LOV layer if needed. */
-        obd_enqueue_update_f    oi_cb_up;
+	 * request in osc level for enqueue requests. It is also possible to
+	 * update some caller data from LOV layer if needed.
+	 */
+	obd_enqueue_update_f	oi_cb_up;
 };
 
 struct obd_type {
@@ -104,8 +105,8 @@ struct brw_page {
 struct timeout_item {
 	enum timeout_event ti_event;
 	time64_t	   ti_timeout;
-	timeout_cb_t       ti_cb;
-	void              *ti_cb_data;
+	timeout_cb_t	   ti_cb;
+	void		   *ti_cb_data;
 	struct list_head   ti_obd_list;
 	struct list_head   ti_chain;
 };
@@ -161,17 +162,20 @@ struct client_obd {
 	 * buffer as needed to accommodate a larger reply from the
 	 * server. The default values should be small enough to avoid wasted
 	 * memory and excessive use of vmalloc(), yet large enough to avoid
-	 * reallocating the buffer in the common use case. */
+	 * reallocating the buffer in the common use case.
+	 */
 
 	/* Default EA size for striping attributes. It is initialized at
 	 * mount-time based on the default stripe width of the filesystem,
 	 * then it tracks the largest observed EA size advertised by
-	 * the MDT, up to a maximum value of OBD_MAX_DEFAULT_EA_SIZE. */
+	 * the MDT, up to a maximum value of OBD_MAX_DEFAULT_EA_SIZE.
+	 */
 	__u32			 cl_default_mds_easize;
 
 	/* Maximum possible EA size computed at mount-time based on
 	 * the number of OSTs in the filesystem. May be increased at
-	 * run-time if a larger observed size is advertised by the MDT. */
+	 * run-time if a larger observed size is advertised by the MDT.
+	 */
 	__u32			 cl_max_mds_easize;
 
 	/* Data-on-MDT specific value to set larger reply buffer for possible
@@ -207,7 +211,8 @@ struct client_obd {
 	/* since we allocate grant by blocks, we don't know how many grant will
 	 * be used to add a page into cache. As a solution, we reserve maximum
 	 * grant before trying to dirty a page and unreserve the rest.
-	 * See osc_{reserve|unreserve}_grant for details. */
+	 * See osc_{reserve|unreserve}_grant for details.
+	 */
 	long			cl_reserved_grant;
 	wait_queue_head_t	cl_cache_waiters; /* waiting for cache/grant */
 	time64_t		cl_next_shrink_grant;	/* seconds */
@@ -215,28 +220,29 @@ struct client_obd {
 	time64_t		cl_grant_shrink_interval; /* seconds */
 
 	/* A chunk is an optimal size used by osc_extent to determine
-	 * the extent size. A chunk is max(PAGE_SIZE, OST block size) */
+	 * the extent size. A chunk is max(PAGE_SIZE, OST block size)
+	 */
 	int			cl_chunkbits;
-	/* extent insertion metadata overhead to be accounted in grant,
-	 * in bytes */
+	/* extent insertion metadata overhead to be accounted in grant(bytes) */
 	unsigned int		cl_grant_extent_tax;
 	/* maximum extent size, in number of pages */
 	unsigned int		cl_max_extent_pages;
 
 	/* keep track of objects that have lois that contain pages which
 	 * have been queued for async brw.  this lock also protects the
-	 * lists of osc_client_pages that hang off of the loi */
-        /*
-         * ->cl_loi_list_lock protects consistency of
-         * ->cl_loi_{ready,read,write}_list. ->ap_make_ready() and
-         * ->ap_completion() call-backs are executed under this lock. As we
-         * cannot guarantee that these call-backs never block on all platforms
-         * (as a matter of fact they do block on Mac OS X), type of
-         * ->cl_loi_list_lock is platform dependent: it's a spin-lock on Linux
-         * and blocking mutex on Mac OS X. (Alternative is to make this lock
-         * blocking everywhere, but we don't want to slow down fast-path of
-         * our main platform.)
-         *
+	 * lists of osc_client_pages that hang off of the loi
+	 */
+	/*
+	 * ->cl_loi_list_lock protects consistency of
+	 * ->cl_loi_{ready,read,write}_list. ->ap_make_ready() and
+	 * ->ap_completion() call-backs are executed under this lock. As we
+	 * cannot guarantee that these call-backs never block on all platforms
+	 * (as a matter of fact they do block on Mac OS X), type of
+	 * ->cl_loi_list_lock is platform dependent: it's a spin-lock on Linux
+	 * and blocking mutex on Mac OS X. (Alternative is to make this lock
+	 * blocking everywhere, but we don't want to slow down fast-path of
+	 * our main platform.)
+	 *
 	 * NB by Jinshan: though field names are still _loi_, but actually
 	 * osc_object{}s are in the list.
 	 */
@@ -266,96 +272,98 @@ struct client_obd {
 	struct obd_histogram	cl_batch_rpc_hist;
 
 	/** LRU for osc caching pages */
-	struct cl_client_cache  *cl_cache;
+	struct cl_client_cache	*cl_cache;
 	/** member of cl_cache->ccc_lru */
-	struct list_head         cl_lru_osc;
-	/** # of available LRU slots left in the per-OSC cache.
+	struct list_head	cl_lru_osc;
+	/* # of available LRU slots left in the per-OSC cache.
 	 * Available LRU slots are shared by all OSCs of the same file system,
-	 * therefore this is a pointer to cl_client_cache::ccc_lru_left. */
-	atomic_long_t           *cl_lru_left;
-	/** # of busy LRU pages. A page is considered busy if it's in writeback
-	 * queue, or in transfer. Busy pages can't be discarded so they are not
-	 * in LRU cache. */
-	atomic_long_t            cl_lru_busy;
-	/** # of LRU pages in the cache for this client_obd */
-	atomic_long_t            cl_lru_in_list;
-	/**
-	 * # of LRU pages marked with PG_mlocked in the cache on the client.
+	 * therefore this is a pointer to cl_client_cache::ccc_lru_left.
 	 */
-	atomic_long_t		 cl_unevict_lru_in_list;
-	/** # of threads are shrinking LRU cache. To avoid contention, it's not
-	 * allowed to have multiple threads shrinking LRU cache. */
-	atomic_t                 cl_lru_shrinkers;
-	/** The time when this LRU cache was last used. */
-	time64_t		 cl_lru_last_used;
-	/** stats: how many reclaims have happened for this client_obd.
+	atomic_long_t		*cl_lru_left;
+	/* # of busy LRU pages. A page is considered busy if it's in writeback
+	 * queue, or in transfer. Busy pages can't be discarded so they are not
+	 * in LRU cache.
+	 */
+	atomic_long_t		cl_lru_busy;
+	/* # of LRU pages in theucache for this client_obd */
+	atomic_long_t		cl_lru_in_list;
+	/* # of LRU pages marked with PG_mlocked in the cache on the client. */
+	atomic_long_t		cl_unevict_lru_in_list;
+	/* # of threads are shrinking LRU cache. To avoid contention, it's not
+	 * allowed to have multiple threads shrinking LRU cache.
+	 */
+	atomic_t		cl_lru_shrinkers;
+	/* The time when this LRU cache was last used. */
+	time64_t		cl_lru_last_used;
+	/* stats: how many reclaims have happened for this client_obd.
 	 * reclaim and shrink - shrink is async, voluntarily rebalancing;
 	 * reclaim is sync, initiated by IO thread when the LRU slots are
-	 * in shortage. */
-	__u64                    cl_lru_reclaim;
-	/** List of unevictable LRU pages for this client_obd */
-	struct list_head	 cl_unevict_lru_list;
-	/** List of LRU pages for this client_obd */
-	struct list_head         cl_lru_list;
-	/** Lock for LRU page list */
-	spinlock_t		 cl_lru_list_lock;
-	/** # of unstable pages in this client_obd.
+	 * in shortage.
+	 */
+	__u64			cl_lru_reclaim;
+	/* List of unevictable LRU pages for this client_obd */
+	struct list_head	cl_unevict_lru_list;
+	/* List of LRU pages for this client_obd */
+	struct list_head	cl_lru_list;
+	/* Lock for LRU page list */
+	spinlock_t		cl_lru_list_lock;
+	/* # of unstable pages in this client_obd.
 	 * An unstable page is a page state that WRITE RPC has finished but
-	 * the transaction has NOT yet committed. */
-	atomic_long_t            cl_unstable_count;
-	/** Link to osc_shrinker_list */
-	struct list_head	 cl_shrink_list;
+	 * the transaction has NOT yet committed.
+	 */
+	atomic_long_t		cl_unstable_count;
+	/* Link to osc_shrinker_list */
+	struct list_head	cl_shrink_list;
 
 	/* number of in flight destroy rpcs is limited to max_rpcs_in_flight */
-	atomic_t		 cl_destroy_in_flight;
-	wait_queue_head_t	 cl_destroy_waitq;
+	atomic_t		cl_destroy_in_flight;
+	wait_queue_head_t	cl_destroy_waitq;
 
-	/* modify rpcs in flight
-	 * currently used for metadata only */
-	__u16			 cl_max_mod_rpcs_in_flight;
-	__u16			 cl_mod_rpcs_in_flight;
-	__u16			 cl_close_rpcs_in_flight;
-	wait_queue_head_t	 cl_mod_rpcs_waitq;
+	/* modify rpcs in flight (currently used for metadata only) */
+	__u16			cl_max_mod_rpcs_in_flight;
+	__u16			cl_mod_rpcs_in_flight;
+	__u16			cl_close_rpcs_in_flight;
+	wait_queue_head_t	cl_mod_rpcs_waitq;
 	unsigned long		*cl_mod_tag_bitmap;
-	ktime_t			 cl_mod_rpcs_init;
-	struct obd_histogram	 cl_mod_rpcs_hist;
+	ktime_t			cl_mod_rpcs_init;
+	struct obd_histogram	cl_mod_rpcs_hist;
 
 	/* mgc datastruct */
-	struct mutex		  cl_mgc_mutex;
+	struct mutex		cl_mgc_mutex;
 	struct local_oid_storage *cl_mgc_los;
-	struct dt_object	 *cl_mgc_configs_dir;
-	struct obd_export        *cl_mgc_mgsexp;
-	atomic_t		  cl_mgc_refcount;
+	struct dt_object	*cl_mgc_configs_dir;
+	struct obd_export	*cl_mgc_mgsexp;
+	atomic_t		cl_mgc_refcount;
 	/* in-flight control list and total RPCs counter */
-	struct list_head	 cl_flight_waiters;
-	__u32			 cl_rpcs_in_flight;
+	struct list_head	cl_flight_waiters;
+	__u32			cl_rpcs_in_flight;
 
-        /* supported checksum types that are worked out at connect time */
-        __u32                    cl_supp_cksum_types;
-        /* checksum algorithm to be used */
-	enum cksum_types	 cl_cksum_type;
+	/* supported checksum types that are worked out at connect time */
+	__u32			cl_supp_cksum_types;
+	/* checksum algorithm to be used */
+	enum cksum_types	cl_cksum_type;
 	/* preferred checksum algorithm to be used */
-	enum cksum_types	 cl_preferred_cksum_type;
+	enum cksum_types	cl_preferred_cksum_type;
 
-        /* also protected by the poorly named _loi_list_lock lock above */
-        struct osc_async_rc      cl_ar;
+	/* also protected by the poorly named _loi_list_lock lock above */
+	struct osc_async_rc	cl_ar;
 
 	/* sequence manager */
-	struct lu_client_seq    *cl_seq;
-	struct rw_semaphore	 cl_seq_rwsem;
+	struct lu_client_seq	*cl_seq;
+	struct rw_semaphore	cl_seq_rwsem;
 
-	atomic_t		 cl_resends; /* resend count */
+	atomic_t		cl_resends; /* resend count */
 
 	/* ptlrpc work for writeback in ptlrpcd context */
 	void			*cl_writeback_work;
 	void			*cl_lru_work;
-	struct mutex		  cl_quota_mutex;
+	struct mutex		cl_quota_mutex;
 	/* quota IDs/types that have exceeded quota */
-	struct xarray		 cl_quota_exceeded_ids;
+	struct xarray		cl_quota_exceeded_ids;
 	/* the xid of the request updating the hash tables */
-	__u64			 cl_quota_last_xid;
+	__u64			cl_quota_last_xid;
 	/* Links to the global list of registered changelog devices */
-	struct list_head	 cl_chg_dev_linkage;
+	struct list_head	cl_chg_dev_linkage;
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
@@ -365,7 +373,7 @@ struct obd_id_info {
 };
 
 struct echo_client_obd {
-	struct obd_export      *ec_exp;	/* the local connection to osc/lov */
+	struct obd_export	*ec_exp; /* the local connection to osc/lov */
 	spinlock_t		ec_lock;
 	struct list_head	ec_objects;
 	struct list_head	ec_locks;
@@ -388,7 +396,7 @@ struct lov_obd {
 	struct lov_desc		desc;
 	struct lov_tgt_desc   **lov_tgts;		/* sparse array */
 	struct lu_tgt_pool	lov_packed;		/* all OSTs in a packed
-							   array */
+							 * array */
 	struct mutex		lov_lock;
 	struct obd_connect_data	lov_ocd;
 	atomic_t		lov_refcount;
@@ -465,34 +473,34 @@ struct tgt_thread_big_cache {
 	struct niobuf_local	local[PTLRPC_MAX_BRW_PAGES];
 };
 
-#define LUSTRE_FLD_NAME         "fld"
-#define LUSTRE_SEQ_NAME         "seq"
+#define LUSTRE_FLD_NAME		"fld"
+#define LUSTRE_SEQ_NAME		"seq"
 
-#define LUSTRE_MDD_NAME         "mdd"
+#define LUSTRE_MDD_NAME		"mdd"
 #define LUSTRE_OSD_LDISKFS_NAME	"osd-ldiskfs"
-#define LUSTRE_OSD_ZFS_NAME     "osd-zfs"
-#define LUSTRE_VVP_NAME         "vvp"
-#define LUSTRE_LMV_NAME         "lmv"
-#define LUSTRE_SLP_NAME         "slp"
+#define LUSTRE_OSD_ZFS_NAME	"osd-zfs"
+#define LUSTRE_VVP_NAME		"vvp"
+#define LUSTRE_LMV_NAME		"lmv"
+#define LUSTRE_SLP_NAME		"slp"
 #define LUSTRE_LOD_NAME		"lod"
 #define LUSTRE_OSP_NAME		"osp"
 #define LUSTRE_LWP_NAME		"lwp"
 
 /* obd device type names */
  /* FIXME all the references to LUSTRE_MDS_NAME should be swapped with LUSTRE_MDT_NAME */
-#define LUSTRE_MDS_NAME         "mds"
-#define LUSTRE_MDT_NAME         "mdt"
-#define LUSTRE_MDC_NAME         "mdc"
-#define LUSTRE_OSS_NAME         "ost"       /* FIXME change name to oss */
-#define LUSTRE_OST_NAME         "obdfilter" /* FIXME change name to ost */
-#define LUSTRE_OSC_NAME         "osc"
-#define LUSTRE_LOV_NAME         "lov"
-#define LUSTRE_MGS_NAME         "mgs"
-#define LUSTRE_MGC_NAME         "mgc"
+#define LUSTRE_MDS_NAME		"mds"
+#define LUSTRE_MDT_NAME		"mdt"
+#define LUSTRE_MDC_NAME		"mdc"
+#define LUSTRE_OSS_NAME		"ost"       /* FIXME change name to oss */
+#define LUSTRE_OST_NAME		"obdfilter" /* FIXME change name to ost */
+#define LUSTRE_OSC_NAME		"osc"
+#define LUSTRE_LOV_NAME		"lov"
+#define LUSTRE_MGS_NAME		"mgs"
+#define LUSTRE_MGC_NAME		"mgc"
 
-#define LUSTRE_ECHO_NAME        "obdecho"
-#define LUSTRE_ECHO_CLIENT_NAME "echo_client"
-#define LUSTRE_QMT_NAME         "qmt"
+#define LUSTRE_ECHO_NAME	"obdecho"
+#define LUSTRE_ECHO_CLIENT_NAME	"echo_client"
+#define LUSTRE_QMT_NAME		"qmt"
 
 /* Constant obd names (post-rename) */
 #define LUSTRE_MDS_OBDNAME "MDS"
@@ -502,7 +510,7 @@ struct tgt_thread_big_cache {
 
 static inline int is_lwp_on_mdt(char *name)
 {
-	char   *ptr;
+	char *ptr;
 
 	ptr = strrchr(name, '-');
 	if (ptr == NULL) {
@@ -515,7 +523,8 @@ static inline int is_lwp_on_mdt(char *name)
 	if (strncmp(ptr + 1, "MDT", 3) != 0)
 		return 0;
 
-	while (*(--ptr) != '-' && ptr != name);
+	while (*(--ptr) != '-' && ptr != name)
+		;
 
 	if (ptr == name)
 		return 0;
@@ -528,7 +537,7 @@ static inline int is_lwp_on_mdt(char *name)
 
 static inline int is_lwp_on_ost(char *name)
 {
-	char   *ptr;
+	char *ptr;
 
 	ptr = strrchr(name, '-');
 	if (ptr == NULL) {
@@ -541,7 +550,8 @@ static inline int is_lwp_on_ost(char *name)
 	if (strncmp(ptr + 1, "OST", 3) != 0)
 		return 0;
 
-	while (*(--ptr) != '-' && ptr != name);
+	while (*(--ptr) != '-' && ptr != name)
+		;
 
 	if (ptr == name)
 		return 0;
@@ -556,17 +566,17 @@ static inline int is_lwp_on_ost(char *name)
  * Events signalled through obd_notify() upcall-chain.
  */
 enum obd_notify_event {
-        /* Device connect start */
-        OBD_NOTIFY_CONNECT,
-        /* Device activated */
-        OBD_NOTIFY_ACTIVE,
-        /* Device deactivated */
-        OBD_NOTIFY_INACTIVE,
-        /* Connect data for import were changed */
-        OBD_NOTIFY_OCD,
-        /* Administratively deactivate/activate event */
-        OBD_NOTIFY_DEACTIVATE,
-        OBD_NOTIFY_ACTIVATE
+	/* Device connect start */
+	OBD_NOTIFY_CONNECT,
+	/* Device activated */
+	OBD_NOTIFY_ACTIVE,
+	/* Device deactivated */
+	OBD_NOTIFY_INACTIVE,
+	/* Connect data for import were changed */
+	OBD_NOTIFY_OCD,
+	/* Administratively deactivate/activate event */
+	OBD_NOTIFY_DEACTIVATE,
+	OBD_NOTIFY_ACTIVATE
 };
 
 /*
@@ -576,8 +586,8 @@ enum obd_notify_event {
 struct obd_notify_upcall {
 	int (*onu_upcall)(struct obd_device *host, struct obd_device *watched,
 			  enum obd_notify_event ev, void *owner);
-        /* Opaque datum supplied by upper layer listener */
-        void *onu_owner;
+	/* Opaque datum supplied by upper layer listener */
+	void *onu_owner;
 };
 
 struct target_recovery_data {
@@ -640,12 +650,13 @@ struct obd_device {
 	unsigned long			obd_no_transno:1;
 #endif
 
-        /* use separate field as it is set in interrupt to don't mess with
-         * protection of other bits using _bh lock */
-        unsigned long obd_recovery_expired:1;
-        /* uuid-export hash body */
+	/* use separate field as it is set in interrupt to not mess with
+	 * protection of other bits using _bh lock
+	 */
+	unsigned long obd_recovery_expired:1;
+	/* uuid-export hash body */
 	struct rhashtable		obd_uuid_hash;
-        /* nid-export hash body */
+	/* nid-export hash body */
 	struct rhltable			obd_nid_hash;
 	/* nid stats body */
 	struct cfs_hash             *obd_nid_stats_hash;
@@ -673,8 +684,8 @@ struct obd_device {
 	struct obd_llog_group	obd_olg;	/* default llog group */
 	struct obd_device	*obd_observer;
 	struct rw_semaphore	obd_observer_link_sem;
-        struct obd_notify_upcall obd_upcall;
-        struct obd_export       *obd_self_export;
+	struct obd_notify_upcall obd_upcall;
+	struct obd_export       *obd_self_export;
 	struct obd_export	*obd_lwp_export;
 	/* list of exports in LRU order, for ping evictor, with obd_dev_lock */
 	struct list_head	obd_exports_timed;
@@ -683,8 +694,9 @@ struct obd_device {
 	atomic_t                obd_max_recoverable_clients;
 	atomic_t                obd_connected_clients;
 	int                     obd_stale_clients;
-        /* this lock protects all recovery list_heads, timer and
-         * obd_next_recovery_transno value */
+	/* this lock protects all recovery list_heads, timer and
+	 * obd_next_recovery_transno value
+	 */
 	spinlock_t		obd_recovery_task_lock;
 	__u64			obd_next_recovery_transno;
 	int			obd_replayed_requests;
@@ -910,7 +922,7 @@ enum md_op_code {
 	LUSTRE_OPC_OPEN,
 };
 
-/**
+/*
  * GETXATTR is not included as only a couple of fields in the reply body
  * is filled, but not FID which is needed for common intent handling in
  * mdc_finish_intent_lock()
@@ -955,7 +967,8 @@ struct md_op_data {
 	enum mds_op_bias        op_bias;
 
 	/* used to transfer info between the stacks of MD client
-	 * see enum op_cli_flags */
+	 * see enum op_cli_flags
+	 */
 	enum md_cli_flags	op_cli_flags;
 
 	/* File object data version for HSM release or migrate, on client */
@@ -1099,13 +1112,13 @@ struct obd_ops {
 	struct module *o_owner;
 	int (*o_iocontrol)(unsigned int cmd, struct obd_export *exp, int len,
 			   void *karg, void __user *uarg);
-	int (*o_get_info)(const struct lu_env *env, struct obd_export *,
+	int (*o_get_info)(const struct lu_env *env, struct obd_export *exp,
 			  __u32 keylen, void *key, __u32 *vallen, void *val);
-	int (*o_set_info_async)(const struct lu_env *, struct obd_export *,
+	int (*o_set_info_async)(const struct lu_env *env, struct obd_export *exp,
 				__u32 keylen, void *key,
 				__u32 vallen, void *val,
 				struct ptlrpc_request_set *set);
-	int (*o_setup) (struct obd_device *obd, struct lustre_cfg *cfg);
+	int (*o_setup)(struct obd_device *obd, struct lustre_cfg *cfg);
 	int (*o_precleanup)(struct obd_device *obd);
 	int (*o_cleanup)(struct obd_device *obd);
 	int (*o_process_config)(struct obd_device *obd, size_t len, void *data);
@@ -1139,7 +1152,7 @@ struct obd_ops {
 	 * Object with @fid is getting deleted, we may want to do something
 	 * about this.
 	 */
-	int (*o_statfs)(const struct lu_env *, struct obd_export *exp,
+	int (*o_statfs)(const struct lu_env *env, struct obd_export *exp,
 			struct obd_statfs *osfs, time64_t max_age, __u32 flags);
 	int (*o_statfs_async)(struct obd_export *exp, struct obd_info *oinfo,
 			      time64_t max_age, struct ptlrpc_request_set *set);
@@ -1147,7 +1160,7 @@ struct obd_ops {
 			struct obdo *oa);
 	int (*o_destroy)(const struct lu_env *env, struct obd_export *exp,
 			 struct obdo *oa);
-	int (*o_setattr)(const struct lu_env *, struct obd_export *exp,
+	int (*o_setattr)(const struct lu_env *env, struct obd_export *exp,
 			 struct obdo *oa);
 	int (*o_getattr)(const struct lu_env *env, struct obd_export *exp,
 			 struct obdo *oa);
@@ -1164,18 +1177,18 @@ struct obd_ops {
 	int (*o_init_export)(struct obd_export *exp);
 	int (*o_destroy_export)(struct obd_export *exp);
 
-	int (*o_import_event)(struct obd_device *, struct obd_import *,
+	int (*o_import_event)(struct obd_device *obd, struct obd_import *imp,
 			      enum obd_import_event);
 
 	int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
 			enum obd_notify_event ev);
 
-	int (*o_health_check)(const struct lu_env *env, struct obd_device *);
-	struct obd_uuid *(*o_get_uuid) (struct obd_export *exp);
+	int (*o_health_check)(const struct lu_env *env, struct obd_device *obd);
+	struct obd_uuid *(*o_get_uuid)(struct obd_export *exp);
 
 	/* quota methods */
-	int (*o_quotactl)(struct obd_device *, struct obd_export *,
-			  struct obd_quotactl *);
+	int (*o_quotactl)(struct obd_device *obd_unused, struct obd_export *exp,
+			  struct obd_quotactl *oqctl);
 
 	/* pools methods */
 	int (*o_pool_new)(struct obd_device *obd, char *poolname);
@@ -1239,103 +1252,121 @@ struct lookup_intent;
 struct cl_attr;
 
 struct md_ops {
-	int (*m_close)(struct obd_export *, struct md_op_data *,
-		       struct md_open_data *, struct ptlrpc_request **);
+	int (*m_close)(struct obd_export *exp, struct md_op_data *op_data,
+		       struct md_open_data *mod, struct ptlrpc_request **req);
 
-	int (*m_create)(struct obd_export *, struct md_op_data *,
-			const void *, size_t, umode_t, uid_t, gid_t,
-			kernel_cap_t, __u64, struct ptlrpc_request **);
+	int (*m_create)(struct obd_export *exp, struct md_op_data *op_data,
+			const void *data, size_t datalen, umode_t mode,
+			uid_t uid, gid_t gid, kernel_cap_t cap_effective,
+			__u64 rdev, struct ptlrpc_request **req);
 
-	int (*m_enqueue)(struct obd_export *, struct ldlm_enqueue_info *,
-			 const union ldlm_policy_data *, struct md_op_data *,
-			 struct lustre_handle *, __u64);
+	int (*m_enqueue)(struct obd_export *exp, struct ldlm_enqueue_info *info,
+			 const union ldlm_policy_data *policy,
+			 struct md_op_data *op_data,
+			 struct lustre_handle *lockh, __u64 extra_lock_flags);
 
-	int (*m_enqueue_async)(struct obd_export *, struct ldlm_enqueue_info *,
-			       obd_enqueue_update_f, struct md_op_data *,
-			       const union ldlm_policy_data *, __u64);
+	int (*m_enqueue_async)(struct obd_export *exp,
+			       struct ldlm_enqueue_info *info,
+			       obd_enqueue_update_f oi_cb_up,
+			       struct md_op_data *op_data,
+			       const union ldlm_policy_data *policy,
+			       __u64 flags);
 
-	int (*m_getattr)(struct obd_export *, struct md_op_data *,
-			 struct ptlrpc_request **);
+	int (*m_getattr)(struct obd_export *exp, struct md_op_data *op_data,
+			 struct ptlrpc_request **req);
 
-	int (*m_intent_lock)(struct obd_export *, struct md_op_data *,
-			     struct lookup_intent *,
-			     struct ptlrpc_request **,
-			     ldlm_blocking_callback, __u64);
+	int (*m_intent_lock)(struct obd_export *exp, struct md_op_data *op_data,
+			     struct lookup_intent *it,
+			     struct ptlrpc_request **req,
+			     ldlm_blocking_callback cb_blocking,
+			     __u64 extra_lock_flags);
 
-	int (*m_link)(struct obd_export *, struct md_op_data *,
-		      struct ptlrpc_request **);
+	int (*m_link)(struct obd_export *exp, struct md_op_data *op_data,
+		      struct ptlrpc_request **req);
 
-	int (*m_rename)(struct obd_export *, struct md_op_data *,
-			const char *, size_t, const char *, size_t,
-			struct ptlrpc_request **);
+	int (*m_rename)(struct obd_export *exp, struct md_op_data *op_data,
+			const char *oldf, size_t oldlen, const char *newf,
+			size_t newlen, struct ptlrpc_request **req);
 
-	int (*m_setattr)(struct obd_export *, struct md_op_data *, void *,
-			 size_t , struct ptlrpc_request **);
+	int (*m_setattr)(struct obd_export *exp, struct md_op_data *op_data,
+			 void *ea, size_t easize, struct ptlrpc_request **req);
 
-	int (*m_fsync)(struct obd_export *, const struct lu_fid *,
-		       struct ptlrpc_request **);
+	int (*m_fsync)(struct obd_export *exp, const struct lu_fid *fid,
+		       struct ptlrpc_request **req);
 
-	int (*m_read_page)(struct obd_export *, struct md_op_data *,
+	int (*m_read_page)(struct obd_export *exp, struct md_op_data *op_data,
 			   struct md_readdir_info *mrinfo, __u64 hash_offset,
 			   struct page **ppage);
 
-	int (*m_unlink)(struct obd_export *, struct md_op_data *,
-			struct ptlrpc_request **);
+	int (*m_unlink)(struct obd_export *exp, struct md_op_data *op_data,
+			struct ptlrpc_request **req);
 
-	int (*m_setxattr)(struct obd_export *, const struct lu_fid *,
-			  u64, const char *, const void *, size_t, unsigned int,
-			  u32, struct ptlrpc_request **);
+	int (*m_setxattr)(struct obd_export *exp, const struct lu_fid *fid,
+			  u64 obd_md_valid, const char *name, const void *value,
+			  size_t value_size, unsigned int xattr_flags,
+			  u32 suppgid, struct ptlrpc_request **req);
 
-	int (*m_getxattr)(struct obd_export *, const struct lu_fid *,
-			  u64, const char *, size_t, struct ptlrpc_request **);
+	int (*m_getxattr)(struct obd_export *exp, const struct lu_fid *fid,
+			  u64 obd_md_valid, const char *name, size_t buf_size,
+			  struct ptlrpc_request **req);
 
-	int (*m_intent_getattr_async)(struct obd_export *,
-				      struct md_op_item *);
+	int (*m_intent_getattr_async)(struct obd_export *exp,
+				      struct md_op_item *item);
 
-        int (*m_revalidate_lock)(struct obd_export *, struct lookup_intent *,
-                                 struct lu_fid *, __u64 *bits);
+	int (*m_revalidate_lock)(struct obd_export *exp,
+				 struct lookup_intent *it, struct lu_fid *fid,
+				 __u64 *bits);
 
-	int (*m_file_resync)(struct obd_export *, struct md_op_data *);
+	int (*m_file_resync)(struct obd_export *exp,
+			     struct md_op_data *op_data);
 
-	int (*m_get_root)(struct obd_export *, const char *, struct lu_fid *);
-	int (*m_null_inode)(struct obd_export *, const struct lu_fid *);
+	int (*m_get_root)(struct obd_export *exp, const char *fileset,
+			  struct lu_fid *fid);
+	int (*m_null_inode)(struct obd_export *exp, const struct lu_fid *fid);
 
-	int (*m_getattr_name)(struct obd_export *, struct md_op_data *,
-			      struct ptlrpc_request **);
+	int (*m_getattr_name)(struct obd_export *exp,
+			      struct md_op_data *op_data,
+			      struct ptlrpc_request **req);
 
-	int (*m_init_ea_size)(struct obd_export *, __u32, __u32);
+	int (*m_init_ea_size)(struct obd_export *exp, __u32 easize,
+			      __u32 def_easize);
 
-	int (*m_get_lustre_md)(struct obd_export *, struct req_capsule *,
-			       struct obd_export *, struct obd_export *,
-			       struct lustre_md *);
+	int (*m_get_lustre_md)(struct obd_export *exp, struct req_capsule *pill,
+			       struct obd_export *dt_exp,
+			       struct obd_export *md_exp, struct lustre_md *md);
 
-	int (*m_put_lustre_md)(struct obd_export *, struct lustre_md *);
+	int (*m_put_lustre_md)(struct obd_export *exp, struct lustre_md *md);
 
-	int (*m_merge_attr)(struct obd_export *,
-			    const struct lmv_stripe_object *,
-			    struct cl_attr *attr, ldlm_blocking_callback);
+	int (*m_merge_attr)(struct obd_export *exp,
+			    const struct lmv_stripe_object *lsm_obj,
+			    struct cl_attr *attr,
+			    ldlm_blocking_callback cb_blocking);
 
-	int (*m_set_open_replay_data)(struct obd_export *,
-				      struct obd_client_handle *,
-				      struct lookup_intent *);
+	int (*m_set_open_replay_data)(struct obd_export *exp,
+				      struct obd_client_handle *och,
+				      struct lookup_intent *it);
 
-	int (*m_clear_open_replay_data)(struct obd_export *,
-					struct obd_client_handle *);
+	int (*m_clear_open_replay_data)(struct obd_export *exp,
+					struct obd_client_handle *och);
 
-	int (*m_set_lock_data)(struct obd_export *,
-			       const struct lustre_handle *, void *, __u64 *);
+	int (*m_set_lock_data)(struct obd_export *exp,
+			       const struct lustre_handle *lockh, void *data,
+			       __u64 *bits);
 
-	enum ldlm_mode (*m_lock_match)(struct obd_export *, __u64,
-				       const struct lu_fid *, enum ldlm_type,
-				       union ldlm_policy_data *, enum ldlm_mode,
-				       struct lustre_handle *);
+	enum ldlm_mode (*m_lock_match)(struct obd_export *exp, __u64 flags,
+				       const struct lu_fid *fid,
+				       enum ldlm_type type,
+				       union ldlm_policy_data *policy,
+				       enum ldlm_mode mode,
+				       struct lustre_handle *lockh);
 
-	int (*m_cancel_unused)(struct obd_export *, const struct lu_fid *,
-			       union ldlm_policy_data *, enum ldlm_mode,
+	int (*m_cancel_unused)(struct obd_export *exp, const struct lu_fid *fid,
+			       union ldlm_policy_data *policy,
+			       enum ldlm_mode mode,
 			       enum ldlm_cancel_flags flags, void *opaque);
 
-	int (*m_get_fid_from_lsm)(struct obd_export *,
-				  const struct lmv_stripe_object *,
+	int (*m_get_fid_from_lsm)(struct obd_export *exp,
+				  const struct lmv_stripe_object *lsm_obj,
 				  const char *name, int namelen,
 				  struct lu_fid *fid);
 	int (*m_stripe_object_create)(struct obd_export *exp,
@@ -1357,6 +1388,7 @@ struct md_ops {
 static inline struct md_open_data *obd_mod_alloc(void)
 {
 	struct md_open_data *mod;
+
 	OBD_ALLOC_PTR(mod);
 	if (mod == NULL)
 		return NULL;
@@ -1365,15 +1397,15 @@ static inline struct md_open_data *obd_mod_alloc(void)
 }
 
 #define obd_mod_get(mod) atomic_inc(&(mod)->mod_refcount)
-#define obd_mod_put(mod)                                          \
-({                                                                \
-	if (atomic_dec_and_test(&(mod)->mod_refcount)) {      	  \
-		if ((mod)->mod_open_req)                          \
-			ptlrpc_req_finished((mod)->mod_open_req); \
-		if ((mod)->mod_close_req)                         \
-			ptlrpc_req_finished((mod)->mod_close_req);\
-		OBD_FREE_PTR(mod);                                \
-	}                                                         \
+#define obd_mod_put(mod)						\
+({									\
+	if (atomic_dec_and_test(&(mod)->mod_refcount)) {		\
+		if ((mod)->mod_open_req)				\
+			ptlrpc_req_finished((mod)->mod_open_req);	\
+		if ((mod)->mod_close_req)				\
+			ptlrpc_req_finished((mod)->mod_close_req);	\
+		OBD_FREE_PTR(mod);					\
+	}								\
 })
 
 void obdo_from_inode(struct obdo *dst, struct inode *src, u64 valid);
@@ -1396,7 +1428,7 @@ static inline int client_should_resend(int resend, struct client_obd *cli)
  */
 static inline const char *lu_dev_name(const struct lu_device *lu_dev)
 {
-        return lu_dev->ld_obd->obd_name;
+	return lu_dev->ld_obd->obd_name;
 }
 
 static inline bool filename_is_volatile(const char *name, size_t namelen,
@@ -1435,7 +1467,8 @@ static inline bool filename_is_volatile(const char *name, size_t namelen,
 	return true;
 bad_format:
 	/* bad format of mdt idx, we cannot return an error
-	 * to caller so we use hash algo */
+	 * to caller so we use hash algo
+	 */
 	CERROR("Bad volatile file name format: %s\n",
 	       name + LUSTRE_VOLATILE_HDR_LEN);
 	return false;
@@ -1472,7 +1505,8 @@ static inline void client_adjust_max_dirty(struct client_obd *cli)
 
 	/* This value is exported to userspace through the max_dirty_mb
 	 * parameter.  So we round up the number of pages to make it a round
-	 * number of MBs. */
+	 * number of MBs.
+	 */
 	cli->cl_dirty_max_pages = round_up(cli->cl_dirty_max_pages,
 					   1 << (20 - PAGE_SHIFT));
 }
