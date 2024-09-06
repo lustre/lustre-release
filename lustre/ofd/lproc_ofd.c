@@ -347,6 +347,56 @@ LUSTRE_RW_ATTR(no_precreate);
 #endif
 
 /**
+ * Show if the OFD is in read-only mode.
+ *
+ * This means OFD has been adminstratively disabled at the OST to prevent
+ * writing to the OFD.
+ *
+ * \retval		number of bytes written
+ */
+static ssize_t readonly_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_readonly);
+}
+
+/**
+ * Set OFD to readonly mode.
+ *
+ * This is used to interface to userspace administrative tools to
+ * set the OST read-only.
+ *
+ * \param[in] count	\a buffer length
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+static ssize_t readonly_store(struct kobject *kobj, struct attribute *attr,
+			      const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&ofd->ofd_flags_lock);
+	ofd->ofd_readonly = val;
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(readonly);
+
+/**
  * Show OFD filesystem type.
  *
  * \param[in] m		seq_file handle
@@ -1023,6 +1073,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_job_cleanup_interval.attr,
 	&lustre_attr_lfsck_speed_limit.attr,
 	&lustre_attr_no_create.attr,
+	&lustre_attr_readonly.attr,
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 20, 53, 0)
 	&lustre_attr_no_precreate.attr,
 #endif

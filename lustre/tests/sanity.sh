@@ -32645,6 +32645,33 @@ test_802b() {
 }
 run_test 802b "be able to set MDTs to readonly"
 
+test_802c() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	do_facet ost1 $LCTL get_param obdfilter.*.readonly ||
+		skip "readonly option not available"
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "(1) fail to mkdir"
+
+	cp $LUSTRE/tests/test-framework.sh $DIR/$tdir/ ||
+		error "(2) Fail to copy"
+
+	# write back all cached data before setting OFD to readonly
+	cancel_lru_locks
+	sync_all_data
+
+	do_facet ost1 $LCTL set_param obdfilter.*.readonly=1
+	stack_trap "do_facet ost1 $LCTL set_param obdfilter.*.readonly=0" EXIT
+
+	echo "Modify should be refused"
+	touch $DIR/$tdir/guard && error "(6) Touch should fail under ro mode"
+
+	echo "Read should be allowed"
+	diff $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
+		error "(7) Read should succeed under ro mode"
+}
+run_test 802c "be able to set OFDs to readonly"
+
 test_803a() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
 	[ $MDS1_VERSION -lt $(version_code 2.10.54) ] &&

@@ -61,6 +61,12 @@ struct thandle *ofd_trans_create(const struct lu_env *env,
 
 	LASSERT(info);
 
+	if (unlikely(ofd->ofd_readonly)) {
+		CERROR("%s: Deny transaction for read-only OFD device\n",
+		       ofd_name(ofd));
+		return ERR_PTR(-EROFS);
+	}
+
 	th = dt_trans_create(env, ofd->ofd_osd);
 	if (IS_ERR(th))
 		return th;
