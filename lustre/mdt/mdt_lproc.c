@@ -415,7 +415,7 @@ static int mdt_site_stats_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(mdt_site_stats);
 
-#define BUFLEN (UUID_MAX + 4)
+#define BUFLEN LNET_NIDSTR_SIZE
 
 static ssize_t
 lprocfs_mds_evict_client_seq_write(struct file *file, const char __user *buf,
@@ -435,7 +435,7 @@ lprocfs_mds_evict_client_seq_write(struct file *file, const char __user *buf,
 	/*
 	 * OBD_ALLOC() will zero kbuf, but we only copy BUFLEN - 1
 	 * bytes into kbuf, to ensure that the string is NUL-terminated.
-	 * UUID_MAX should include a trailing NUL already.
+	 * LNET_NIDSTR_SIZE includes space for a trailing NUL already.
 	 */
 	if (copy_from_user(kbuf, buf, min_t(unsigned long, BUFLEN - 1, count)))
 		GOTO(out, rc = -EFAULT);

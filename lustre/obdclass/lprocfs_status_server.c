@@ -116,7 +116,7 @@ int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data)
 EXPORT_SYMBOL(lprocfs_recovery_stale_clients_seq_show);
 
 #ifdef CONFIG_PROC_FS
-#define BUFLEN (UUID_MAX + 5)
+#define BUFLEN LNET_NIDSTR_SIZE
 
 ssize_t
 lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
@@ -133,7 +133,7 @@ lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
 	/*
 	 * OBD_ALLOC() will zero kbuf, but we only copy BUFLEN - 1
 	 * bytes into kbuf, to ensure that the string is NUL-terminated.
-	 * UUID_MAX should include a trailing NUL already.
+	 * LNET_NIDSTR_SIZE includes space for a trailing NUL already.
 	 */
 	if (copy_from_user(kbuf, buffer,
 			   min_t(unsigned long, BUFLEN - 1, count))) {
