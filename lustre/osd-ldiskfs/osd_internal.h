@@ -812,7 +812,7 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       struct osd_inode_id *id, int flags);
 struct inode *
 osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
-	     struct osd_inode_id *id, struct lu_fid *fid);
+	     struct osd_inode_id *id, struct lu_fid *fid, int flags);
 int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 		   const struct lu_fid *fid, __u32 compat, __u32 incompat);
 struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,

@@ -612,13 +612,13 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 
 struct inode *
 osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
-	     struct osd_inode_id *id, struct lu_fid *fid)
+	     struct osd_inode_id *id, struct lu_fid *fid, int flags)
 {
 	struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
 	struct inode *inode;
 	int rc;
 
-	inode = osd_iget(info, dev, id, 0);
+	inode = osd_iget(info, dev, id, flags);
 	if (IS_ERR(inode))
 		return inode;
 
@@ -4171,11 +4171,14 @@ static int osd_ea_fid_get(const struct lu_env *env, struct osd_object *obj,
 {
 	struct osd_thread_info *info  = osd_oti_get(env);
 	struct inode *inode;
+	struct lu_fid *parent_fid = &obj->oo_dt.do_lu.lo_header->loh_fid;
+	int flags = lu_fid_eq(parent_fid, &LU_BACKEND_LPF_FID) ?
+		    LDISKFS_IGET_NO_CHECKS : 0;
 
 	ENTRY;
 
 	osd_id_gen(id, ino, OSD_OII_NOGEN);
-	inode = osd_iget_fid(info, osd_obj2dev(obj), id, fid);
+	inode = osd_iget_fid(info, osd_obj2dev(obj), id, fid, flags);
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
 
@@ -4380,7 +4383,7 @@ static int osd_process_scheduled_agent_removals(const struct lu_env *env,
 		OBD_FREE_PTR(oor);
 
 		osd_id_gen(&id, ino, OSD_OII_NOGEN);
-		inode = osd_iget_fid(info, osd, &id, &fid);
+		inode = osd_iget_fid(info, osd, &id, &fid, 0);
 		if (IS_ERR(inode))
 			continue;
 

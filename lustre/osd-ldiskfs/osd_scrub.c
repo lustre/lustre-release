@@ -1820,7 +1820,7 @@ static void osd_index_restore(const struct lu_env *env, struct osd_device *dev,
 
 	osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
 	brelse(bh);
-	bak_inode = osd_iget_fid(info, dev, id, &bak_fid);
+	bak_inode = osd_iget_fid(info, dev, id, &bak_fid, 0);
 	if (IS_ERR(bak_inode))
 		GOTO(log, rc = PTR_ERR(bak_inode));
 
@@ -3117,7 +3117,7 @@ static int osd_scan_ml_file(const struct lu_env *env, struct osd_device *dev,
 	osd_id_gen(&id, oie->oie_dirent->oied_ino, OSD_OII_NOGEN);
 
 	if (!fid_is_sane(fid))
-		inode = osd_iget_fid(info, dev, &id, fid);
+		inode = osd_iget_fid(info, dev, &id, fid, 0);
 	else
 		inode = osd_iget(info, dev, &id, 0);
 

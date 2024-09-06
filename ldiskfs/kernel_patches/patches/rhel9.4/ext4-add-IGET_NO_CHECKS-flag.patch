@@ -2,7 +2,15 @@ Index: linux-5.14.0-427.24.1.el9_4/fs/ext4/ext4.h
 ===================================================================
 --- linux-5.14.0-427.24.1.el9_4.orig/fs/ext4/ext4.h
 +++ linux-5.14.0-427.24.1.el9_4/fs/ext4/ext4.h
-@@ -3176,7 +3176,8 @@ typedef enum {
+@@ -1801,6 +1801,7 @@ struct ext4_sb_info {
+ 	int s_fc_debug_max_replay;
+ #endif
+ 	struct ext4_fc_replay_state s_fc_replay_state;
++	unsigned long s_lpf_ino;
+ };
+ 
+ static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
+@@ -3176,7 +3177,8 @@ typedef enum {
  	EXT4_IGET_SPECIAL =	0x0001, /* OK to iget a system inode */
  	EXT4_IGET_HANDLE = 	0x0002,	/* Inode # is from a handle */
  	EXT4_IGET_BAD =		0x0004, /* Allow to iget a bad inode */
@@ -25,3 +33,54 @@ Index: linux-5.14.0-427.24.1.el9_4/fs/ext4/inode.c
  	if (flags & EXT4_IGET_EA_INODE) {
  		if (!(EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL))
  			return "missing EA_INODE flag";
+Index: linux-5.14.0-427.24.1.el9_4/fs/ext4/namei.c
+===================================================================
+--- linux-5.14.0-427.24.1.el9_4.orig/fs/ext4/namei.c
++++ linux-5.14.0-427.24.1.el9_4/fs/ext4/namei.c
+@@ -2214,6 +2214,7 @@ static struct dentry *ext4_lookup(struct
+ 	struct inode *inode;
+ 	struct ext4_dir_entry_2 *de;
+ 	struct buffer_head *bh;
++	struct ext4_sb_info *sbi = EXT4_SB(dir->i_sb);
+ 
+ 	if (dentry->d_name.len > EXT4_NAME_LEN)
+ 		return ERR_PTR(-ENAMETOOLONG);
+@@ -2234,7 +2235,9 @@ static struct dentry *ext4_lookup(struct
+ 					 dentry);
+ 			return ERR_PTR(-EFSCORRUPTED);
+ 		}
+-		inode = ext4_iget(dir->i_sb, ino, EXT4_IGET_NORMAL);
++		inode = ext4_iget(dir->i_sb, ino,
++				  dir->i_ino == sbi->s_lpf_ino ?
++				  EXT4_IGET_NO_CHECKS : EXT4_IGET_NORMAL);
+ 		if (inode == ERR_PTR(-ESTALE)) {
+ 			EXT4_ERROR_INODE(dir,
+ 					 "deleted inode referenced: %u",
+Index: linux-5.14.0-427.24.1.el9_4/fs/ext4/super.c
+===================================================================
+--- linux-5.14.0-427.24.1.el9_4.orig/fs/ext4/super.c
++++ linux-5.14.0-427.24.1.el9_4/fs/ext4/super.c
+@@ -5740,6 +5740,9 @@ static int ext4_fill_super(struct super_
+ {
+ 	struct ext4_fs_context *ctx = fc->fs_private;
+ 	struct ext4_sb_info *sbi;
++	struct buffer_head *bh;
++	struct ext4_dir_entry_2 *de;
++	const struct qstr lpf = QSTR_INIT("lost+found", 10);
+ 	const char *descr;
+ 	int ret;
+ 
+@@ -5760,6 +5763,13 @@ static int ext4_fill_super(struct super_
+ 	if (ret < 0)
+ 		goto free_sbi;
+ 
++	bh = ext4_find_entry_locked(d_inode(sb->s_root), &lpf, &de, NULL, NULL);
++	if (!IS_ERR(bh) && bh) {
++		if (ext4_valid_inum(sb, le32_to_cpu(de->inode)))
++			sbi->s_lpf_ino = le32_to_cpu(de->inode);
++		brelse(bh);
++	}
++
+ 	if (sbi->s_journal) {
+ 		if (test_opt(sb, DATA_FLAGS) == EXT4_MOUNT_JOURNAL_DATA)
+ 			descr = " journalled data mode";
