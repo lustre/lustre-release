@@ -117,5 +117,6 @@ int libcfs_ip_in_netmask(const __be32 *addr, size_t asize,
 int cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,
 			       char *max_nid, __kernel_size_t nidstr_length);
 void cfs_expr_list_free_list(struct list_head *list);
+char *cfs_nidstr_find_delimiter(char *buf);
 
 #endif /* _LNET_NIDSTRINGS_H */

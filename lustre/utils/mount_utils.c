@@ -954,9 +954,6 @@ char *convert_hostnames(char *buf, bool mount)
 	char *delimiter = buf;
 	int left = MAXNIDSTR;
 	struct lnet_nid nid;
-	int hex_count = 0;
-	int hex_sections = 0;
-	bool is_ipv6 = true;
 
 	converted = malloc(left);
 	if (!converted) {
@@ -982,42 +979,8 @@ char *convert_hostnames(char *buf, bool mount)
 	/* parse all NIDs */
 	while ((left > 0) && (delimiter < end)) {
 		int rc;
-		hex_count = 0;
-		hex_sections = 0;
-		is_ipv6 = true;
 
-		/* previous delimiter */
-		if (*delimiter == ',' || *delimiter == ':')
-			delimiter++;
-
-		/* address parsing */
-		while (*delimiter != ',' && *delimiter != ' ' && *delimiter != '\0') {
-			/* Need to skip : in IPv6 / GUID NIDs. Lustre also uses
-			 * ':' as a separator, which makes this complicated.
-			 */
-			if (*delimiter == '@') {
-				while (*delimiter != ':' && *delimiter != ','
-				    && *delimiter != ' ' && *delimiter != '\0')
-					delimiter++;
-				break;
-			}
-			/* IPv6 addresses are in 0-4 hex digit groups */
-			else if ((isxdigit(*delimiter) || *delimiter == ':') &&
-				 hex_count <= 4 && is_ipv6) {
-				if (*delimiter == ':') {
-					hex_sections++;
-					hex_count = 0;
-				} else {
-					hex_count++;
-				}
-			} else { /* NID is not IPv6 */
-				is_ipv6 = false;
-				if (*delimiter == ':')
-					break;
-
-			}
-			delimiter++;
-		}
+		delimiter = cfs_nidstr_find_delimiter(buf);
 		/* sets the position of the found delimiter to null
 		 * temporarily so when we pass it into parse_nid
 		 * or parse_net it only uses the found NID

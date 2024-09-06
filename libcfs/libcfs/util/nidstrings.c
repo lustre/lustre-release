@@ -36,6 +36,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -2171,4 +2172,46 @@ int cfs_expand_nidlist(struct list_head *nidlist, lnet_nid_t *lnet_nidlist,
 
 	free(addrs);
 	return max_nids - count;
+}
+
+/* returns pointer to the next delimiter in nidstr or if no delimiters are
+ * found then it returns a pointer to the termining NUL character
+ * A delimiter can be a comma, colon, or space.
+ */
+char *cfs_nidstr_find_delimiter(char *nidstr)
+{
+	char *delimiter = nidstr;
+	int hex_count = 0;
+	int hex_sections = 0;
+	bool is_ipv6 = true;
+
+	/* address parsing */
+	while (*delimiter != ',' && *delimiter != ' ' && *delimiter != '\0') {
+		/* Need to skip : in IPv6 / GUID NIDs. Lustre also uses
+		 * ':' as a separator, which makes this complicated.
+		 */
+		if (*delimiter == '@') {
+			while (*delimiter != ':' && *delimiter != ',' &&
+			       *delimiter != ' ' && *delimiter != '\0')
+				delimiter++;
+			break;
+		}
+		/* IPv6 addresses are in 0-4 hex digit groups */
+		else if ((isxdigit(*delimiter) || *delimiter == ':') &&
+			 hex_count <= 4 && is_ipv6) {
+			if (*delimiter == ':') {
+				hex_sections++;
+				hex_count = 0;
+			} else {
+				hex_count++;
+			}
+		} else { /* NID is not IPv6 */
+			is_ipv6 = false;
+			if (*delimiter == ':')
+				break;
+
+		}
+		delimiter++;
+	}
+	return delimiter;
 }

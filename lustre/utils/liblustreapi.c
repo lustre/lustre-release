@@ -7095,9 +7095,22 @@ static void do_target_check(char *obd_type_name, char *obd_name,
 	struct check_target_filter *filter = args;
 
 	if (filter != NULL) {
-		/* check nid if obd type is mgc */
+		/* check NIDs if obd type is mgc */
 		if (strcmp(obd_type_name, "mgc") == 0) {
-			if (strcmp(obd_name + 3, filter->nid) != 0)
+			char *delimiter = filter->nid;
+			char *nidstr = filter->nid;
+			bool found = false;
+
+			while (*nidstr && *delimiter) {
+				delimiter = cfs_nidstr_find_delimiter(nidstr);
+				if (!strncmp(obd_name + 3, nidstr,
+					     delimiter - nidstr)) {
+					found = true;
+					break;
+				}
+				nidstr = delimiter + 1;
+			}
+			if (!found)
 				return;
 		}
 		/* check instance for other types of device (osc/mdc) */

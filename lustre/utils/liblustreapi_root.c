@@ -265,7 +265,7 @@ static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
 		strncpy(root_cached.mnt_dir, mnt.mnt_dir, mntlen);
 		root_cached.mnt_dir[mntlen] = '\0';
 		root_cached.dev = devmnt;
-		ptr_end = strchr(mnt.mnt_fsname, ':');
+		ptr_end = strstr(mnt.mnt_fsname, ":/");
 		strncpy(root_cached.nid, mnt.mnt_fsname,
 			ptr_end - mnt.mnt_fsname);
 		root_cached.nid[ptr_end - mnt.mnt_fsname] = '\0';
