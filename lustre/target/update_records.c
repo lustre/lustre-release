@@ -1,31 +1,10 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
- */
+// SPDX-License-Identifier: GPL-2.0
+
 /*
  * Copyright (c) 2015, 2017, Intel Corporation.
  */
 
 /*
- * lustre/target/update_records.c
- *
  * This file implement the methods to pack updates as update records, which
  * will be written to the disk as llog record, and might be used during
  * recovery.
@@ -38,6 +17,7 @@
  *
  * Author: Di Wang <di.wang@intel.com>
  */
+
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <lu_target.h>

@@ -1,4 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
 # This is included by ptlrpc
+#
 
 target_objs := tgt_main.o tgt_lastrcvd.o
 target_objs += tgt_handler.o out_handler.o
