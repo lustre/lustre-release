@@ -1,31 +1,27 @@
-Each file in this distribution should contain a header stating the
-copyright owner(s), and the licensing terms for that module.  Some
-files are not eligible for copyright protection, and contain neither.
-
-All files in this subtree are licensed under the terms and conditions
-of the GNU General Public License version 2.
-
-Reproduced below is the GPL v2, and Linus's clarifying statement from
-the Linux kernel source code:
-
-----------------------------------------
-
-   NOTE! This copyright does *not* cover user programs that use kernel
- services by normal system calls - this is merely considered normal use
- of the kernel, and does *not* fall under the heading of "derived work".
- Also note that the GPL below is copyrighted by the Free Software
- Foundation, but the instance of code that it refers to (the Linux
- kernel) is copyrighted by me and others who actually wrote it.
-
-			Linus Torvalds
-
-----------------------------------------
+Valid-License-Identifier: GPL-2.0
+Valid-License-Identifier: GPL-2.0-only
+Valid-License-Identifier: GPL-2.0+
+Valid-License-Identifier: GPL-2.0-or-later
+SPDX-URL: https://spdx.org/licenses/GPL-2.0.html
+Usage-Guide:
+  To use this license in source code, put one of the following SPDX
+  tag/value pairs into a comment according to the placement
+  guidelines in the licensing rules documentation.
+  For 'GNU General Public License (GPL) version 2 only' use:
+    SPDX-License-Identifier: GPL-2.0
+  or
+    SPDX-License-Identifier: GPL-2.0-only
+  For 'GNU General Public License (GPL) version 2 or any later version' use:
+    SPDX-License-Identifier: GPL-2.0+
+  or
+    SPDX-License-Identifier: GPL-2.0-or-later
+License-Text:
 
 		    GNU GENERAL PUBLIC LICENSE
 		       Version 2, June 1991
 
  Copyright (C) 1989, 1991 Free Software Foundation, Inc.
-                       59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+                       51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  Everyone is permitted to copy and distribute verbatim copies
  of this license document, but changing it is not allowed.
 
@@ -314,7 +310,7 @@ convey the exclusion of warranty; and each file should have at least
 the "copyright" line and a pointer to where the full notice is found.
 
     <one line to give the program's name and a brief idea of what it does.>
-    Copyright (C) 19yy  <name of author>
+    Copyright (C) <year>  <name of author>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -328,7 +324,7 @@ the "copyright" line and a pointer to where the full notice is found.
 
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
-    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 
 Also add information on how to contact you by electronic and paper mail.
@@ -336,7 +332,7 @@ Also add information on how to contact you by electronic and paper mail.
 If the program is interactive, make it output a short notice like this
 when it starts in an interactive mode:
 
-    Gnomovision version 69, Copyright (C) 19yy name of author
+    Gnomovision version 69, Copyright (C) year name of author
     Gnomovision comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
     This is free software, and you are welcome to redistribute it
     under certain conditions; type `show c' for details.
