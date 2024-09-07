@@ -20,11 +20,7 @@
 
 #include <linux/types.h>
 
-/** \defgroup req_layout req_layout
- *
- * @{
- */
-
+/* req_layout */
 struct req_msg_field;
 struct req_format;
 struct req_capsule;
@@ -32,30 +28,30 @@ struct req_capsule;
 struct ptlrpc_request;
 
 enum req_location {
-        RCL_CLIENT,
-        RCL_SERVER,
-        RCL_NR
+	RCL_CLIENT,
+	RCL_SERVER,
+	RCL_NR
 };
 
 /* Maximal number of fields (buffers) in a request message. */
 #define REQ_MAX_FIELD_NR 12
 
 struct req_capsule {
-        struct ptlrpc_request   *rc_req;
-	/** Request message - what client sent */
+	struct ptlrpc_request	*rc_req;
+	/* Request message - what client sent */
 	struct lustre_msg	*rc_reqmsg;
-	/** Reply message - server response */
+	/* Reply message - server response */
 	struct lustre_msg	*rc_repmsg;
-	/** Fields that help to see if request and reply were swabved or not */
+	/* Fields that help to see if request and reply were swabved or not */
 	__u32			 rc_req_swab_mask;
 	__u32			 rc_rep_swab_mask;
 	const struct req_format *rc_fmt;
-	enum req_location        rc_loc;
-	__u32                    rc_area[RCL_NR][REQ_MAX_FIELD_NR];
+	enum req_location	 rc_loc;
+	__u32			 rc_area[RCL_NR][REQ_MAX_FIELD_NR];
 };
 
 void req_capsule_init(struct req_capsule *pill, struct ptlrpc_request *req,
-                      enum req_location location);
+		      enum req_location location);
 void req_capsule_fini(struct req_capsule *pill);
 
 void req_capsule_set(struct req_capsule *pill, const struct req_format *fmt);
@@ -76,7 +72,7 @@ int  req_capsule_client_pack(struct req_capsule *pill);
 void req_capsule_set_replen(struct req_capsule *pill);
 
 void *req_capsule_client_get(struct req_capsule *pill,
-                             const struct req_msg_field *field);
+			     const struct req_msg_field *field);
 void *req_capsule_client_swab_get(struct req_capsule *pill,
 				  const struct req_msg_field *field,
 				  void *swabber);
@@ -84,18 +80,18 @@ void *req_capsule_client_sized_get(struct req_capsule *pill,
 				   const struct req_msg_field *field,
 				   __u32 len);
 void *req_capsule_server_get(struct req_capsule *pill,
-                             const struct req_msg_field *field);
+			     const struct req_msg_field *field);
 void *req_capsule_server_sized_get(struct req_capsule *pill,
 				   const struct req_msg_field *field,
 				   __u32 len);
 void *req_capsule_server_swab_get(struct req_capsule *pill,
-                                  const struct req_msg_field *field,
-                                  void *swabber);
+				  const struct req_msg_field *field,
+				  void *swabber);
 void *req_capsule_server_sized_swab_get(struct req_capsule *pill,
 					const struct req_msg_field *field,
 					__u32 len, void *swabber);
 const void *req_capsule_other_get(struct req_capsule *pill,
-                                  const struct req_msg_field *field);
+				  const struct req_msg_field *field);
 
 void req_capsule_set_size(struct req_capsule *pill,
 			  const struct req_msg_field *field,
@@ -105,15 +101,15 @@ __u32 req_capsule_get_size(const struct req_capsule *pill,
 			   enum req_location loc);
 __u32 req_capsule_msg_size(struct req_capsule *pill, enum req_location loc);
 __u32 req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
-                         enum req_location loc);
+			   enum req_location loc);
 void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt);
 
 int req_capsule_has_field(const struct req_capsule *pill,
-                          const struct req_msg_field *field,
-                          enum req_location loc);
+			  const struct req_msg_field *field,
+			  enum req_location loc);
 int req_capsule_field_present(const struct req_capsule *pill,
-                              const struct req_msg_field *field,
-                              enum req_location loc);
+			      const struct req_msg_field *field,
+			      enum req_location loc);
 void req_capsule_shrink(struct req_capsule *pill,
 			const struct req_msg_field *field,
 			__u32 newlen,
@@ -126,7 +122,7 @@ bool req_capsule_need_swab(struct req_capsule *pill, enum req_location loc,
 void req_capsule_set_swabbed(struct req_capsule *pill, enum req_location loc,
 			     __u32 index);
 
-/**
+/*
  * Returns true if request buffer at offset \a index was already swabbed
  */
 static inline bool req_capsule_req_swabbed(struct req_capsule *pill,
@@ -136,7 +132,7 @@ static inline bool req_capsule_req_swabbed(struct req_capsule *pill,
 	return pill->rc_req_swab_mask & BIT(index);
 }
 
-/**
+/*
  * Returns true if request reply buffer at offset \a index was already swabbed
  */
 static inline bool req_capsule_rep_swabbed(struct req_capsule *pill,
@@ -146,7 +142,7 @@ static inline bool req_capsule_rep_swabbed(struct req_capsule *pill,
 	return pill->rc_rep_swab_mask & BIT(index);
 }
 
-/**
+/*
  * Mark request buffer at offset \a index that it was already swabbed
  */
 static inline void req_capsule_set_req_swabbed(struct req_capsule *pill,
@@ -157,7 +153,7 @@ static inline void req_capsule_set_req_swabbed(struct req_capsule *pill,
 	pill->rc_req_swab_mask |= BIT(index);
 }
 
-/**
+/*
  * Mark request reply buffer at offset \a index that it was already swabbed
  */
 static inline void req_capsule_set_rep_swabbed(struct req_capsule *pill,
@@ -408,6 +404,5 @@ extern struct req_msg_field RMF_LFSCK_REPLY;
 
 extern struct req_msg_field RMF_OST_LADVISE_HDR;
 extern struct req_msg_field RMF_OST_LADVISE;
-/** @} req_layout */
 
 #endif /* _LUSTRE_REQ_LAYOUT_H__ */
