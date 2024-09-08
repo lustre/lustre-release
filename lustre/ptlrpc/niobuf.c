@@ -760,6 +760,19 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		RETURN(-ENODEV);
 	}
 
+	/* drop request over non-uptodate peers at connection stage,
+	 * otherwise LNet peer discovery may pin request for much longer
+	 * time than its ptlrpc expire time. LU-17906
+	 */
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_conn_current && imp->imp_conn_current->oic_uptodate <= 0 &&
+	    imp->imp_state == LUSTRE_IMP_CONNECTING) {
+		spin_unlock(&imp->imp_lock);
+		request->rq_sent = ktime_get_real_seconds();
+		RETURN(0);
+	}
+	spin_unlock(&imp->imp_lock);
+
 	connection = imp->imp_connection;
 
 	lustre_msg_set_handle(request->rq_reqmsg,
