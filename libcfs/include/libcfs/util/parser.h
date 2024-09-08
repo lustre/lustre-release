@@ -1,20 +1,16 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 
 /*
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
  * Copyright (c) 2014, 2017, Intel Corporation.
- *
  */
 
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
- * libcfs/include/libcfs/util/parser.h
- *
  * A command line parser.
- *
  */
 
 #ifndef _PARSER_H_

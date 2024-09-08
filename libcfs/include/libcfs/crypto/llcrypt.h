@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+
 /*
  * llcrypt.h: declarations for per-file encryption
  *
@@ -10,10 +11,12 @@
  * Written by Michael Halcrow, 2015.
  * Modified by Jaegeuk Kim, 2015.
  */
+
 /*
  * Linux commit 219d54332a09
  * tags/v5.4
  */
+
 #ifndef _LINUX_LLCRYPT_H
 #define _LINUX_LLCRYPT_H
 

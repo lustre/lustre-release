@@ -1,14 +1,17 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
+
 /*
  * llcrypt user API
  *
  * These ioctls can be used on filesystems that support llcrypt.  See the
  * "User API" section of Documentation/filesystems/llcrypt.rst.
  */
+
 /*
  * Linux commit 219d54332a09
  * tags/v5.4
  */
+
 #ifndef _UAPI_LINUX_LLCRYPT_H
 #define _UAPI_LINUX_LLCRYPT_H
 

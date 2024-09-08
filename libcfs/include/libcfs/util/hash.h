@@ -1,31 +1,12 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+
 /*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
+ * (C) 2002 Nadia Yvette Chambers, IBM
  */
 
-#ifndef _LINUX_HASH_H
-#define _LINUX_HASH_H
-/* Fast hashing routine for ints,  longs and pointers.
-   (C) 2002 Nadia Yvette Chambers, IBM */
-
 /*
+ * Fast hashing routine for ints,  longs and pointers.
+ *
  * Knuth recommends primes in approximately golden ratio to the maximum
  * integer representable by a machine word for multiplicative hashing.
  * Chuck Lever verified the effectiveness of this technique:
@@ -35,6 +16,9 @@
  * them can use shifts and additions instead of multiplications for
  * machines where multiplications are slow.
  */
+
+#ifndef _LINUX_HASH_H
+#define _LINUX_HASH_H
 
 #include <linux/types.h>
 

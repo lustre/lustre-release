@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+
 #ifndef _LIBCFS_FORTIFY_STRING_H
 #define _LIBCFS_FORTIFY_STRING_H
 

@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+
 #ifndef __LIBCFS_LINUX_WAIT_BIT_H
 #define __LIBCFS_LINUX_WAIT_BIT_H
 
