@@ -521,9 +521,16 @@ static int import_select_connection(struct obd_import *imp)
 		       imp->imp_obd->obd_name,
 		       libcfs_nidstr(&conn->oic_conn->c_peer.nid),
 		       conn->oic_last_attempt);
-
 		conn->oic_uptodate =
 			LNetPeerDiscovered(&conn->oic_conn->c_peer.nid);
+		/* LNET ping failed, skip peer completely */
+		if (conn->oic_uptodate == -EHOSTUNREACH) {
+			CDEBUG(D_HA, "%s: skip NID %s as unreachable\n",
+			       imp->imp_obd->obd_name,
+			       libcfs_nidstr(&conn->oic_conn->c_peer.nid));
+			continue;
+		}
+
 		/* track least recently used conn for fallback */
 		if (!lru_conn ||
 		    lru_conn->oic_last_attempt > conn->oic_last_attempt)
@@ -534,14 +541,21 @@ static int import_select_connection(struct obd_import *imp)
 		 */
 		if (conn->oic_last_attempt <= imp->imp_last_success_conn) {
 			tried_all = false;
-			if (conn->oic_uptodate) {
+			if (conn->oic_uptodate > 0) {
 				imp_conn = conn;
 				break;
 			}
-			CDEBUG(D_HA, "%s: skip NID %s as not ready\n",
+			CDEBUG(D_HA, "%s: skip NID %s as not ready: rc = %d\n",
 			       imp->imp_obd->obd_name,
-			       libcfs_nidstr(&conn->oic_conn->c_peer.nid));
+			       libcfs_nidstr(&conn->oic_conn->c_peer.nid),
+			       conn->oic_uptodate);
 		}
+	}
+	/* all connections are unreachable ATM, get just first in list */
+	if (!lru_conn) {
+		tried_all = false;
+		lru_conn = list_entry(imp->imp_conn_list.next,
+				      struct obd_import_conn, oic_item);
 	}
 
 	/* no ready connections or all are tried in this round */
