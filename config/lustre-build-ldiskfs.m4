@@ -192,7 +192,11 @@ AS_IF([test -z "$LDISKFS_SERIES"],
 	AS_VERSION_COMPARE([$LINUXRELEASE],[6.10.0], [
 		LDISKFS_SERIES="6.7-ml.series"], [
 		LDISKFS_SERIES="6.10-ml.series"], [
-		LDISKFS_SERIES="6.10-ml.series"]
+	AS_VERSION_COMPARE([$LINUXRELEASE],[6.10.5], [
+		LDISKFS_SERIES="6.10-ml.series"], [
+		LDISKFS_SERIES="6.11-ml.series"], [
+		LDISKFS_SERIES="6.11-ml.series"]
+	)] # 6.11
 	)] # 6.10
 	)] # 6.7
 	)] # 6.6
