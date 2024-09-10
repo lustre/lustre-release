@@ -249,17 +249,45 @@ do
 	fi
 done
 
-# generate list of available default gateways
-gwsline=$(/sbin/ip route | awk '/default/ { print $3 }')
-gateways=($gwsline)
+# generate list of available not-dev-specific default gateways
+gwsline=$(/sbin/ip route | awk '/default/ { if ($0 !~ /dev/) print $3 }')
+comm_gateways=($gwsline)
 
-gwsline_ipv6=$(/sbin/ip -6 route | awk '/default/ { print $3 }')
-gateways_ipv6=($gwsline_ipv6)
+gwsline_ipv6=$(/sbin/ip -6 route | awk '/default/ { if ($0 !~ /dev/) print $3 }')
+comm_gateways_ipv6=($gwsline_ipv6)
+
+# Ping the gw to check if it is alive
+pinggw() {
+	local gw=$1
+	local timeout=1  # Set the timeout for the ping command
+
+	# Determine if the IP is IPv4 or IPv6
+	if [[ $gw =~ .*:.* ]]; then
+		# IPv6: Use ping6
+		if ping6 -c 1 -W $timeout "$gw" &> /dev/null; then
+			return 0  # reachable
+		else
+			logcmd=(logger "${me}: unreachable default gateway ${gw}: skipping ")
+	                eval "${logcmd[@]}"
+			return 1  # not reachable
+		fi
+	else
+		# IPv4: Use the standard ping
+		if ping -c 1 -W $timeout "$gw" &> /dev/null; then
+			return 0  # reachable
+		else
+			logcmd=(logger "${me}: unreachable default gateway ${gw}: skipping ")
+			eval "${logcmd[@]}"
+			return 1  # not reachable
+		fi
+	fi
+}
 
 # Select a gateway on the same subnet for both IPv4 and IPv6
 selectgw() {
 	local ip=$1
 	local mask=$2
+	local interface=$3
 
 	# Check if the IP address is IPv4 or IPv6
 	if [[ $ip =~ .*:.* ]]; then
@@ -279,11 +307,24 @@ selectgw() {
 		done
 
 		local network_ipv6=$result
-		for gw in "${gateways_ipv6[@]}"; do
+		local spec_gateways_ipv6=($(/sbin/ip -6 route show dev $interface | awk '/default/ { print $3 }'))
+
+		for gw in "${spec_gateways_ipv6[@]}"; do
 			gw_network=$(netcalcipv6 "$gw" "$mask")
 			if [[ "$network_ipv6" == "$gw_network" ]]; then
-				echo $gw
-				return
+				if pinggw "$gw"; then
+					echo $gw
+					return
+				fi
+			fi
+		done
+		for gw in "${comm_gateways_ipv6[@]}"; do
+			gw_network=$(netcalcipv6 "$gw" "$mask")
+			if [[ "$network_ipv6" == "$gw_network" ]]; then
+				if pinggw "$gw"; then
+					echo $gw
+					return
+				fi
 			fi
 		done
 	else
@@ -298,11 +339,24 @@ selectgw() {
 			[ $i -lt 3 ] && network_ipv4+="."
 		done
 
-		for gw in "${gateways[@]}"; do
+		local spec_gateways=($(/sbin/ip route show dev $interface | awk '/default/ { print $3 }'))
+
+		for gw in "${spec_gateways[@]}"; do
 			gw_network=$(netcalc "$gw" "$mask")
 			if [[ "$network_ipv4" == "$gw_network" ]]; then
-				echo $gw
-				return
+				if pinggw "$gw"; then
+					echo $gw
+					return
+				fi
+			fi
+		done
+		for gw in "${comm_gateways[@]}"; do
+			gw_network=$(netcalc "$gw" "$mask")
+			if [[ "$network_ipv4" == "$gw_network" ]]; then
+				if pinggw "$gw"; then
+					echo $gw
+					return
+				fi
 			fi
 		done
 	fi
@@ -322,7 +376,7 @@ do
 		# Convert CIDR mask to mask in dot format for IPv4
 		dotmask_ipv4=$(cidr2mask ${cidrmask_ipv4[0]})
 		# Find a gateway on the same subnet for IPv4
-		gw_ipv4=$(selectgw "${addr_ipv4[0]}" "$dotmask_ipv4")
+		gw_ipv4=$(selectgw "${addr_ipv4[0]}" "$dotmask_ipv4" "$i")
 		# Build and execute route commands for IPv4
 		if [[ $gw_ipv4 == "0.0.0.0" ]]; then
 			# Gateway not found, assume local destinations for IPv4
@@ -352,7 +406,7 @@ do
 		# Convert CIDR mask to mask in dot format for IPv6
 		dotmask_ipv6=$(cidr2maskipv6 ${cidrmask_ipv6[0]})
 		# Find a gateway on the same subnet for IPv6
-		gw_ipv6=$(selectgw "${addr_ipv6[0]}" "$dotmask_ipv6")
+		gw_ipv6=$(selectgw "${addr_ipv6[0]}" "$dotmask_ipv6" "$i")
 		# Build and execute route commands for IPv6
 		if [[ $gw_ipv6 == "0.0.0.0" ]]; then
 			# Gateway not found, assume local destinations for IPv6
