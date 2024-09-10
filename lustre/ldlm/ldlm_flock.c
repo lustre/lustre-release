@@ -203,14 +203,11 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 
 		bl_exp_conn = bl_exp->exp_connection;
 		if (bl_exp->exp_flock_hash != NULL) {
-			int found;
-
-			found = obd_nid_export_for_each(bl_exp->exp_obd,
-							&bl_exp_conn->c_peer.nid,
-							ldlm_flock_lookup_cb,
-							&cb_data);
-			if (found)
-				lock = cb_data.lock;
+			obd_nid_export_for_each(bl_exp->exp_obd,
+						&bl_exp_conn->c_peer.nid,
+						ldlm_flock_lookup_cb,
+						&cb_data);
+			lock = cb_data.lock;
 		}
 		if (lock == NULL)
 			break;
@@ -218,7 +215,6 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 		class_export_put(bl_exp);
 		bl_exp = cb_data.exp;
 
-		LASSERT(req != lock);
 		flock = &lock->l_policy_data.l_flock;
 		LASSERT(flock->owner == bl_owner);
 		bl_owner = flock->blocking_owner;
@@ -228,12 +224,16 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 		cfs_hash_put(bl_exp->exp_flock_hash, &lock->l_exp_flock_hash);
 		bl_exp = bl_exp_new;
 
+		if (req == lock) {
+			class_export_put(bl_exp);
+			return 1;
+		}
 		if (bl_exp->exp_failed)
 			break;
 
 		if (bl_owner == req_owner &&
 		    nid_same(&bl_exp_conn->c_peer.nid,
-			      &req_exp->exp_connection->c_peer.nid)) {
+			     &req_exp->exp_connection->c_peer.nid)) {
 			class_export_put(bl_exp);
 			return 1;
 		}
