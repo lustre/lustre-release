@@ -4121,6 +4121,20 @@ test_101a() {
 	do_facet $SINGLEAGT "echo 10 > /proc/sys/user/max_user_namespaces"
 	stack_trap "do_facet $SINGLEAGT 'echo $maxuserns > /proc/sys/user/max_user_namespaces'"
 
+	# disable apparmor checking of userns temporarily
+	if [[ "$CLIENT_OS_ID" == "ubuntu" ]] &&
+	   (( $CLIENT_OS_VERSION_CODE >= $(version_code 24) )); then
+		local userns_val
+
+		userns_val=$(do_facet $SINGLEAGT \
+			sysctl -n kernel.apparmor_restrict_unprivileged_userns)
+		if (( "$userns_val" != 0 )); then
+			do_facet $SINGLEAGT \
+				sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+			stack_trap "do_facet $SINGLEAGT sysctl -w kernel.apparmor_restrict_unprivileged_userns=$userns_val"
+		fi
+	fi
+
 	echo "creating user namespace for $RUNAS_ID"
 	# Create a mount and user namespace with this command, and leave the
 	# process running so we can do the rest of our steps
