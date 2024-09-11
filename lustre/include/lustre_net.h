@@ -703,7 +703,7 @@ struct ptlrpc_reply_state {
 	unsigned long		rs_prealloc:1; /* rs from prealloc list */
 	/* transaction committed and rs dispatched by ptlrpc_commit_replies */
 	unsigned long		rs_committed:1;
-	atomic_t		rs_refcount; /* number of users */
+	struct kref		rs_refcount; /* number of users */
 	/** Number of locks awaiting client ACK */
 	int			rs_nlocks;
 
@@ -2324,7 +2324,7 @@ int lustre_pack_reply_flags(struct ptlrpc_request *, int count, __u32 *lens,
 int lustre_shrink_msg(struct lustre_msg *msg, int segment,
 		      unsigned int newlen, int move_data);
 int lustre_grow_msg(struct lustre_msg *msg, int segment, unsigned int newlen);
-void lustre_free_reply_state(struct ptlrpc_reply_state *rs);
+void lustre_free_reply_state(struct kref *kref);
 int __lustre_unpack_msg(struct lustre_msg *m, int len);
 __u32 lustre_msg_hdr_size(__u32 magic, __u32 count);
 __u32 lustre_msg_size(__u32 magic, int count, __u32 *lengths);
@@ -2531,21 +2531,6 @@ ptlrpc_client_wake_req(struct ptlrpc_request *req)
 		wake_up(&req->rq_set->set_waitq);
 }
 
-static inline void
-ptlrpc_rs_addref(struct ptlrpc_reply_state *rs)
-{
-	LASSERT(atomic_read(&rs->rs_refcount) > 0);
-	atomic_inc(&rs->rs_refcount);
-}
-
-static inline void
-ptlrpc_rs_decref(struct ptlrpc_reply_state *rs)
-{
-	LASSERT(atomic_read(&rs->rs_refcount) > 0);
-	if (atomic_dec_and_test(&rs->rs_refcount))
-		lustre_free_reply_state(rs);
-}
-
 /* Should only be called once per req */
 static inline void ptlrpc_req_drop_rs(struct ptlrpc_request *req)
 {
@@ -2559,7 +2544,7 @@ static inline void ptlrpc_req_drop_rs(struct ptlrpc_request *req)
 	req->rq_repmsg = NULL;
 	spin_unlock(&req->rq_early_free_lock);
 
-	ptlrpc_rs_decref(req->rq_reply_state);
+	kref_put(&req->rq_reply_state->rs_refcount, lustre_free_reply_state);
 	req->rq_reply_state = NULL;
 }
 

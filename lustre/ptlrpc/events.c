@@ -395,7 +395,7 @@ void reply_out_callback(struct lnet_event *ev)
 		 * net's ref on 'rs'
 		 */
 		LASSERT(ev->unlinked);
-		ptlrpc_rs_decref(rs);
+		kref_put(&rs->rs_refcount, lustre_free_reply_state);
 		EXIT;
 		return;
 	}

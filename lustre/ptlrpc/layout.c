@@ -2866,7 +2866,7 @@ int req_capsule_server_grow(struct req_capsule *pill,
 		rs->rs_difficult = 0;
 		rs->rs_no_ack = 0;
 	}
-	ptlrpc_rs_decref(rs);
+	kref_put(&rs->rs_refcount, lustre_free_reply_state);
 	return 0;
 }
 EXPORT_SYMBOL(req_capsule_server_grow);

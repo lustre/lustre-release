@@ -729,7 +729,7 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 		CERROR("not replying on NULL connection\n"); /* bug 9635 */
 		return -ENOTCONN;
 	}
-	ptlrpc_rs_addref(rs);  /* +1 ref for the network */
+	kref_get(&rs->rs_refcount); /* +1 ref for the network */
 
 	rc = sptlrpc_svc_wrap_reply(req);
 	if (unlikely(rc))

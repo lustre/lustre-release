@@ -2496,7 +2496,7 @@ static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 
 		class_export_put(exp);
 		rs->rs_export = NULL;
-		ptlrpc_rs_decref(rs);
+		kref_put(&rs->rs_refcount, lustre_free_reply_state);
 		if (atomic_dec_and_test(&svcpt->scp_nreps_difficult) &&
 		    svc->srv_is_stopping)
 			wake_up_all(&svcpt->scp_waitq);

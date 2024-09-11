@@ -3349,7 +3349,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 		 */
 		rs->rs_sent = 1;
 		rs->rs_unlinked = 1;
-		ptlrpc_rs_addref(rs);
+		kref_get(&rs->rs_refcount);
 	}
 
 	spin_lock(&rs->rs_lock);

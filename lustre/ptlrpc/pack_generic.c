@@ -308,7 +308,7 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
 		RETURN(rc);
 
 	rs = req->rq_reply_state;
-	atomic_set(&rs->rs_refcount, 1); /* 1 ref for rq_reply_state */
+	kref_init(&rs->rs_refcount); /* 1 ref for rq_reply_state */
 	rs->rs_cb_id.cbid_fn = reply_out_callback;
 	rs->rs_cb_id.cbid_arg = rs;
 	rs->rs_svcpt = req->rq_rqbd->rqbd_svcpt;
@@ -520,11 +520,13 @@ int lustre_grow_msg(struct lustre_msg *msg, int segment, unsigned int newlen)
 }
 EXPORT_SYMBOL(lustre_grow_msg);
 
-void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
+void lustre_free_reply_state(struct kref *kref)
 {
+	struct ptlrpc_reply_state *rs = container_of(kref,
+						     struct ptlrpc_reply_state,
+						     rs_refcount);
 	PTLRPC_RS_DEBUG_LRU_DEL(rs);
 
-	LASSERT(atomic_read(&rs->rs_refcount) == 0);
 	LASSERT(!rs->rs_difficult || rs->rs_handled);
 	LASSERT(!rs->rs_difficult || rs->rs_unlinked);
 	LASSERT(!rs->rs_scheduled);
