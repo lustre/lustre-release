@@ -330,22 +330,29 @@ int nodemap_parse_range(const char *range_str, struct lnet_nid range[2],
 	char    *start_nidstr;
 	char    *end_nidstr;
 	int     rc = 0;
+	LIST_HEAD(nidlist);
 
 	snprintf(buf, sizeof(buf), "%s", range_str);
 	ptr = buf;
 
-	/* For large NID we use netmasks. Currently we only
-	 * support /128 which is a single NID.
-	 */
-	if (strchr(ptr, '/')) {
-		start_nidstr = strsep(&ptr, "/");
+	/* For large NIDs we interpret range_str as a nidmask */
+	if (!cfs_parse_nidlist(buf, strlen(buf), &nidlist)) {
+		*netmask = cfs_nidmask_get_length(&nidlist);
+		if (!*netmask)
+			GOTO(out, rc = -EINVAL);
 
-		rc = kstrtou8(ptr, 10, netmask);
-		if (rc < 0)
-			GOTO(out, rc);
-		if (*netmask != 128)
-			GOTO(out, rc = -ERANGE);
-		end_nidstr = start_nidstr;
+		rc = cfs_nidmask_get_base_nidstr(buf, sizeof(buf), &nidlist);
+		if (rc) {
+			cfs_free_nidlist(&nidlist);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		end_nidstr = start_nidstr = buf;
+
+		cfs_free_nidlist(&nidlist);
+
+		CDEBUG(D_INFO, "nidstr: %s netmask: %u\n",
+		       start_nidstr, *netmask);
 	} else {
 		start_nidstr = strsep(&ptr, ":");
 		end_nidstr = strsep(&ptr, ":");

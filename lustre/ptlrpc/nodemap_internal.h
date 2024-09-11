@@ -66,6 +66,10 @@ struct lu_nid_range {
 	lnet_nid_t		 rn_subtree_last;
 	/* Large NID netmask */
 	u8			 rn_netmask;
+	/* The nidlist corresponding to the nidrange constructed from
+	 * rn_start and rn_netmask
+	 */
+	struct list_head	 rn_nidlist;
 	struct rb_node		 rn_rb;
 };
 

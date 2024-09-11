@@ -737,12 +737,14 @@ cfs_parse_nidlist(char *orig, int len, struct list_head *nidlist)
 		cfs_free_nidlist(nidlist);
 	else if (list_empty(nidlist))
 		rc = -EINVAL;
+
 	return rc;
 }
 EXPORT_SYMBOL(cfs_parse_nidlist);
 
 static int
-match_nidmask(struct lnet_nid *nid, struct nidmask *nm, struct netstrfns *nf)
+match_nidmask(const struct lnet_nid *nid, struct nidmask *nm,
+	      struct netstrfns *nf)
 {
 	__be32 addr[4] = { nid->nid_addr[0], nid->nid_addr[1],
 			   nid->nid_addr[2], nid->nid_addr[3] };
@@ -773,7 +775,7 @@ match_nidmask(struct lnet_nid *nid, struct nidmask *nm, struct netstrfns *nf)
  * \retval 1 on match
  * \retval 0  otherwises
  */
-int cfs_match_nid(struct lnet_nid *nid, struct list_head *nidlist)
+int cfs_match_nid(const struct lnet_nid *nid, struct list_head *nidlist)
 {
 	struct nidrange *nr;
 	struct nidmask *nm;
@@ -843,36 +845,47 @@ cfs_print_addrranges(char *buffer, int count, struct list_head *addrranges,
 }
 
 static int
+print_nidmask(char *buffer, int count, struct nidmask *nm, struct nidrange *nr,
+	      bool omit_prefix)
+{
+	int i = 0;
+	struct sockaddr_storage sa = {};
+	u8 max;
+
+	/* parse_nidmask() ensures nm_family is set to either AF_INET
+	 * or AF_INET6
+	 */
+	sa.ss_family = nm->nm_family;
+	if (nm->nm_family == AF_INET) {
+		memcpy(&((struct sockaddr_in *)(&sa))->sin_addr.s_addr,
+		       &nm->nm_addr.ipv4, sizeof(struct in_addr));
+		max = 32;
+	} else {
+		memcpy(&((struct sockaddr_in6 *)(&sa))->sin6_addr.s6_addr,
+		       &nm->nm_addr.ipv6, sizeof(struct in6_addr));
+		max = 128;
+	}
+	i += rpc_ntop((struct sockaddr *)&sa, buffer + i, count - i);
+	if (nm->nm_prefix_len < max && !omit_prefix)
+		i += scnprintf(buffer + i, count - i, "/%u",
+			       nm->nm_prefix_len);
+	i += cfs_print_network(buffer + i, count - i, nr);
+
+	return i;
+}
+
+static int
 cfs_print_nidmasks(char *buffer, int count, struct list_head *nidmasks,
 		   struct nidrange *nr)
 {
 	int i = 0;
 	struct nidmask *nm;
-	struct sockaddr_storage sa = {};
-	u8 max;
 
 	list_for_each_entry(nm, nidmasks, nm_link) {
 		if (i != 0)
 			i += scnprintf(buffer + i, count - i, " ");
 
-		/* parse_nidmask() ensures nm_family is set to either AF_INET
-		 * or AF_INET6
-		 */
-		sa.ss_family = nm->nm_family;
-		if (nm->nm_family == AF_INET) {
-			memcpy(&((struct sockaddr_in *)(&sa))->sin_addr.s_addr,
-			       &nm->nm_addr.ipv4, sizeof(struct in_addr));
-			max = 32;
-		} else {
-			memcpy(&((struct sockaddr_in6 *)(&sa))->sin6_addr.s6_addr,
-			       &nm->nm_addr.ipv6, sizeof(struct in6_addr));
-			max = 128;
-		}
-		i += rpc_ntop((struct sockaddr *)&sa, buffer + i, count - i);
-		if (nm->nm_prefix_len < max)
-			i += scnprintf(buffer + i, count - i, "/%u",
-				       nm->nm_prefix_len);
-		i += cfs_print_network(buffer + i, count - i, nr);
+		i += print_nidmask(buffer + i, count - i, nm, nr, false);
 	}
 
 	return i;
@@ -922,6 +935,47 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *nidlist)
 	return i;
 }
 EXPORT_SYMBOL(cfs_print_nidlist);
+
+/* Caller should provide a nidlist with a single nidmask */
+u8
+cfs_nidmask_get_length(struct list_head *nidlist)
+{
+	struct nidrange *nr;
+	struct nidmask *nm;
+	u8 len = 0;
+
+	list_for_each_entry(nr, nidlist, nr_link) {
+		list_for_each_entry(nm, &nr->nr_nidmasks, nm_link) {
+			if (len)
+				return 0;
+			len = nm->nm_prefix_len;
+		}
+	}
+	return len;
+}
+EXPORT_SYMBOL(cfs_nidmask_get_length);
+
+/* Caller should provide a nidlist with a single nidmask */
+int
+cfs_nidmask_get_base_nidstr(char *buf, int count, struct list_head *nidlist)
+{
+	struct nidrange *nr;
+	struct nidmask *nm;
+	bool found = false;
+
+	list_for_each_entry(nr, nidlist, nr_link) {
+		list_for_each_entry(nm, &nr->nr_nidmasks, nm_link) {
+			if (found)
+				return -EINVAL;
+
+			print_nidmask(buf, count, nm, nr, true);
+			found = true;
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(cfs_nidmask_get_base_nidstr);
 
 static int
 libcfs_lo_str2addr(const char *str, int nob, __u32 *addr)

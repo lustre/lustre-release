@@ -26,24 +26,32 @@ with the added constraint that the range must be contiguous.
 .SH Formal LNet NID Range Definition
 .EX
 NID_RANGE    :== ADDR_RANGE@NET
-ADDR_RANGE   :== '*' | IPADDR_RANGE | NUM_RANGE
+ADDR_RANGE   :== '*' | NETMASK | IPV6_ADDR | IPADDR_RANGE | NUM_RANGE
 IPADDR_RANGE :== NUM_RANGE.NUM_RANGE.NUM_RANGE.NUM_RANGE
 NUM_RANGE    :== NUMBER | EXPR_LIST
 EXPR_LIST    :== '['RANGE_EXPR[,RANGE_EXPR]']'
-RANGE_EXPR   :== NUMBER | NUMBER-NUMBER | NUMBER-NUMBER/NUMBER
+RANGE_EXPR   :== NUMBER | MIN-MAX | MIN-MAX/SKIP
 NET          :== NET_TYPE[NUMBER]
 .\" Currently supported LNet types are listed in libcfs_netstrfns[]
 NET_TYPE     :== "lo" | "tcp" | "o2ib" | "ptlf" | "gni" | "gip" | "kfi"
 NUMBER       :== NONNEGATIVE_DECIMAL | HEXADECIMAL
 .EE
 Where
+.IR NETMASK
+is an IPv4 or IPv6 network mask in CIDR notation,
+.IR IPV6_ADDR
+is a single IPv6 address,
 .IR MIN - MAX / SKIP
 indicates a sequence of numbers starting at
 .I MIN
 and incrementing by
 .I SKIP
 each time until no larger than
-.IR MAX .
+.IR MAX ,
+and
+.IR MIN - MAX
+is equivalent to
+.IR MIN - MAX / 1 .
 .SH EXAMPLES
 .EX
 .B # lctl nodemap_add_range --name remotesite --range 192.168.1.[1-254]@tcp

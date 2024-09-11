@@ -95,6 +95,9 @@ static inline char *libcfs_nidstr(const struct lnet_nid *nid)
 int libcfs_strnid(struct lnet_nid *nid, const char *str);
 #ifdef __KERNEL__
 char *libcfs_idstr(struct lnet_processid *id);
+u8 cfs_nidmask_get_length(struct list_head *nidlist);
+int cfs_nidmask_get_base_nidstr(char *buf, int count,
+				struct list_head *nidlist);
 #endif
 __u32 libcfs_str2net(const char *str);
 lnet_nid_t libcfs_str2nid(const char *str);
@@ -105,7 +108,7 @@ char *libcfs_id2str(struct lnet_process_id id);
 void cfs_free_nidlist(struct list_head *list);
 int cfs_parse_nidlist(char *str, int len, struct list_head *list);
 int cfs_print_nidlist(char *buffer, int count, struct list_head *list);
-int cfs_match_nid(struct lnet_nid *nid, struct list_head *list);
+int cfs_match_nid(const struct lnet_nid *nid, struct list_head *list);
 int cfs_match_net(__u32 net_id, __u32 net_type,
 		  struct list_head *net_num_list);
 

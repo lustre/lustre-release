@@ -1662,7 +1662,8 @@ cfs_parse_nidlist(char *orig, int len, struct list_head *nidlist)
 }
 
 static int
-match_nidmask(struct lnet_nid *nid, struct nidmask *nm, struct netstrfns *nf)
+match_nidmask(const struct lnet_nid *nid, struct nidmask *nm,
+	      struct netstrfns *nf)
 {
 	__be32 addr[4] = { nid->nid_addr[0], nid->nid_addr[1],
 			   nid->nid_addr[2], nid->nid_addr[3] };
@@ -1693,7 +1694,7 @@ match_nidmask(struct lnet_nid *nid, struct nidmask *nm, struct netstrfns *nf)
  * \retval 1 on match
  * \retval 0  otherwises
  */
-int cfs_match_nid(struct lnet_nid *nid, struct list_head *nidlist)
+int cfs_match_nid(const struct lnet_nid *nid, struct list_head *nidlist)
 {
 	struct nidrange *nr;
 	struct nidmask *nm;

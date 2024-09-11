@@ -49,9 +49,12 @@ INTERVAL_TREE_DEFINE(struct lu_nid_range, rn_rb, lnet_nid_t, rn_subtree_last,
 /*
  * range constructor
  *
- * \param	min		starting nid of the range
- * \param	max		ending nid of the range
+ * \param	config		nodemap config - used to set range id
+ * \param	start_nid	starting nid of the range
+ * \param	end_nid		ending nid of the range
+ * \param	netmask		network mask prefix length
  * \param	nodemap		nodemap that contains this range
+ * \param	range_id	should be 0 unless loading from disk
  * \retval	lu_nid_range on success, NULL on failure
  */
 struct lu_nid_range *range_create(struct nodemap_config *config,
@@ -62,6 +65,7 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 {
 	struct nodemap_range_tree *nm_range_tree;
 	struct lu_nid_range *range;
+	LIST_HEAD(tmp_nidlist);
 
 	if (LNET_NID_NET(start_nid) != LNET_NID_NET(end_nid))
 		return NULL;
@@ -75,8 +79,56 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 		if (LNET_NIDADDR(nid4[0]) > LNET_NIDADDR(nid4[1]))
 			return NULL;
 	} else if (!nid_same(start_nid, end_nid)) {
-		/* FIXME Currently we only support one large NID per nodemap */
+		/* A netmask is used with start_nid to form a nidmask. If the
+		 * start_nid and end_nid differ then this indicates the
+		 * specified range was malformed
+		 */
 		return NULL;
+	}
+
+	if (netmask) {
+		/* +4 for '/<prefix_length>' */
+		char nidstr[LNET_NIDSTR_SIZE + 4];
+		char net[LNET_NIDSTR_SIZE];
+		char *c;
+		int rc;
+
+		if (netmask > 999) {
+			/* If the netmask is somehow more than three characters
+			 * then the logic below could truncate it which could
+			 * result in creating a valid netmask value from bad
+			 * input.
+			 * cfs_parse_nidlist() will check whether the netmask
+			 * is valid for the address type
+			 */
+			CERROR("Invalid netmask %u\n", netmask);
+			return NULL;
+		}
+
+		/* nidstr = <addr>@<net> */
+		snprintf(nidstr, sizeof(nidstr), "%s",
+			 libcfs_nidstr(start_nid));
+
+		c = strchr(nidstr, '@');
+
+		/* net = @<net> */
+		strscpy(net, c, sizeof(net));
+
+		*c = '\0';
+
+		/* nidstr = <addr>/<prefix_length> */
+		snprintf(c, sizeof(nidstr) - strlen(nidstr), "/%u", netmask);
+
+		/* nidstr = <addr>/<prefix_length>@<net>
+		 * (-1 to ensure room for null byte)
+		 */
+		strncat(nidstr, net, sizeof(nidstr) - strlen(nidstr) - 1);
+
+		rc = cfs_parse_nidlist(nidstr, strlen(nidstr), &tmp_nidlist);
+		if (rc) {
+			CERROR("Invalid nidmask %s rc = %d\n", nidstr, rc);
+			return NULL;
+		}
 	}
 
 	OBD_ALLOC_PTR(range);
@@ -103,6 +155,9 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 	range->rn_end = *end_nid;
 
 	INIT_LIST_HEAD(&range->rn_list);
+	INIT_LIST_HEAD(&range->rn_nidlist);
+	if (!list_empty(&tmp_nidlist))
+		list_splice(&tmp_nidlist, &range->rn_nidlist);
 
 	return range;
 }
@@ -143,15 +198,15 @@ struct lu_nid_range *range_find(struct nodemap_config *config,
 
 	if (!list_empty(&config->nmc_netmask_setup)) {
 		struct lu_nid_range *range_temp;
+		u8 len;
 
-		/* FIXME. We scan the config for large NIDs. Each range
-		 * only contains one large NID for now.
-		 */
 		list_for_each_entry_safe(range, range_temp,
 					 &config->nmc_netmask_setup,
 					 rn_collect) {
-			if (nid_same(&range->rn_start, start_nid) &&
-			    range->rn_netmask == netmask)
+			len = cfs_nidmask_get_length(&range->rn_nidlist);
+
+			if (cfs_match_nid(start_nid, &range->rn_nidlist) &&
+			    netmask == len)
 				return range;
 		}
 	}
@@ -165,6 +220,8 @@ struct lu_nid_range *range_find(struct nodemap_config *config,
 void range_destroy(struct lu_nid_range *range)
 {
 	LASSERT(list_empty(&range->rn_list) == 0);
+	if (!list_empty(&range->rn_nidlist))
+		cfs_free_nidlist(&range->rn_nidlist);
 
 	OBD_FREE_PTR(range);
 }
@@ -172,7 +229,7 @@ void range_destroy(struct lu_nid_range *range)
 /*
  * insert an nid range into the interval tree
  *
- * \param	range		range to insetr
+ * \param	range		range to insert
  * \retval	0 on success
  *
  * This function checks that the given nid range
@@ -193,6 +250,10 @@ int range_insert(struct nodemap_config *config, struct lu_nid_range *range)
 		nm_range_insert(range,
 				&nm_range_tree->nmrt_range_interval_root);
 	} else {
+		if (range_find(config, &range->rn_start, &range->rn_end,
+			       range->rn_netmask))
+			return -EEXIST;
+
 		list_add(&range->rn_collect, &config->nmc_netmask_setup);
 	}
 	return 0;
@@ -220,7 +281,7 @@ void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
 }
 
 /*
- * search the interval tree for an nid within a range
+ * search the interval tree for a nid within a range
  *
  * \param	nid		nid to search for
  */
@@ -234,16 +295,15 @@ struct lu_nid_range *range_search(struct nodemap_config *config,
 		return nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
 					   lnet_nid_to_nid4(nid),
 					   lnet_nid_to_nid4(nid));
-	} else if (!list_empty(&config->nmc_netmask_setup)) {
+	}
+
+	if (!list_empty(&config->nmc_netmask_setup)) {
 		struct lu_nid_range *range, *range_temp;
 
-		/* FIXME. We scan the config for the large NIDs. Each range
-		 * only contains one large NID for now.
-		 */
 		list_for_each_entry_safe(range, range_temp,
 					 &config->nmc_netmask_setup,
 					 rn_collect) {
-			if (nid_same(&range->rn_start, nid))
+			if (cfs_match_nid(nid, &range->rn_nidlist))
 				return range;
 		}
 	}

@@ -20,7 +20,9 @@ The NID range that should be deleted from the nodemap.
 .SH EXAMPLES
 .EX
 .B # lctl nodemap_del_range --name remotesite --range 192.168.1.[1-254]@tcp
-.B # lctl nodemap_del_range --name othersite --range 192.168.2.[1-254]@tcp
+.B # lctl nodemap_del_range --name secondremotesite --range 192.168.2.[1-254]@tcp
+.B # lctl nodemap_del_range --name thirdremotesite --range 2001:0db8::/32@tcp
+.B # lctl nodemap_del_range --name fourthremotesite --range [1-60000]@kfi
 .EE
 .SH AVAILABILITY
 .B lctl nodemap_del_range

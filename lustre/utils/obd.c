@@ -4219,25 +4219,11 @@ static int parse_nid_range(char *nodemap_range, char *nid_range, int range_len)
 	char min_nid[LNET_NIDSTR_SIZE + 1];
 	char max_nid[LNET_NIDSTR_SIZE + 1];
 	struct list_head nidlist;
-	char *netmask = NULL;
 	int rc = 0;
 
-	netmask = strchr(nodemap_range, '/');
-	if (netmask) {
-		unsigned long mask;
-
-		/* FIXME !!! Only 128 netmask is supported. This means
-		 * nodemap will only support one large NID.
-		 */
-		mask = strtoul(++netmask, NULL, 10);
-		if (mask < 0)
-			return -errno;
-
-		if (mask != 128)
-			return -ERANGE;
-
+	if (strchr(nodemap_range, '/') || strchr(nodemap_range, ':')) {
 		strncpy(nid_range, nodemap_range, range_len);
-		return rc;
+		return 0;
 	}
 
 	INIT_LIST_HEAD(&nidlist);
