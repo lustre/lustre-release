@@ -675,7 +675,9 @@ AS_IF([test "x$enable_tests" = xyes], [
 LIBCFS_CONFIG_CDEBUG
 LC_QUOTA
 
-AS_IF([test "x$enable_dist" != xno], [],[LB_LIBMOUNT])
+AS_IF([test "x$enable_dist" != xno], [
+	AS_IF([test -z $LINUXRELEASE], [LINUXRELEASE="%{nil}"])
+	AC_SUBST(LINUXRELEASE)],[LB_LIBMOUNT])
 LB_PATH_LUSTREIOKIT
 
 LB_DEFINE_E2FSPROGS_NAMES
