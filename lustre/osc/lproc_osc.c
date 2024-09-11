@@ -780,6 +780,8 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 		   cli->cl_r_in_flight);
 	seq_printf(seq, "write RPCs in flight: %d\n",
 		   cli->cl_w_in_flight);
+	seq_printf(seq, "DIO RPCs in flight: %d\n",
+		   cli->cl_d_in_flight);
 	seq_printf(seq, "pending write pages:  %d\n",
 		   atomic_read(&cli->cl_pending_w_pages));
 	seq_printf(seq, "pending read pages:   %d\n",

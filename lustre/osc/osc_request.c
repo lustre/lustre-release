@@ -2572,6 +2572,7 @@ static int brw_interpret(const struct lu_env *env,
 	struct osc_extent *ext;
 	struct osc_extent *tmp;
 	struct lov_oinfo *loi;
+	bool srvlock = false;
 
 	ENTRY;
 
@@ -2612,6 +2613,7 @@ static int brw_interpret(const struct lu_env *env,
 	last = brw_page2oap(aa->aa_ppga[aa->aa_page_count - 1]);
 	obj = osc2cl(ext->oe_obj);
 	loi = cl2osc(obj)->oo_oinfo;
+	srvlock = oap2osc_page(last)->ops_srvlock;
 
 	if (rc == 0) {
 		struct obdo *oa = aa->aa_oa;
@@ -2708,6 +2710,8 @@ static int brw_interpret(const struct lu_env *env,
 		cli->cl_w_in_flight--;
 	else
 		cli->cl_r_in_flight--;
+	if (srvlock)
+		cli->cl_d_in_flight--;
 	osc_wake_cache_waiters(cli);
 	spin_unlock(&cli->cl_loi_list_lock);
 
@@ -2758,6 +2762,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	int page_count = 0;
 	bool soft_sync = false;
 	bool ndelay = false;
+	bool srvlock = false;
 	int grant = 0;
 	int i, rc;
 	__u32 layout_version = 0;
@@ -2833,6 +2838,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		}
 		if (ext->oe_ndelay)
 			ndelay = true;
+		if (ext->oe_srvlock)
+			srvlock = true;
 	}
 
 	/* first page in the list */
@@ -2911,10 +2918,13 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		lprocfs_oh_tally_log2(&cli->cl_write_offset_hist,
 				      starting_offset + 1);
 	}
+	if (srvlock)
+		cli->cl_d_in_flight++;
 	spin_unlock(&cli->cl_loi_list_lock);
 
-	DEBUG_REQ(D_INODE, req, "%d pages, aa %p, now %ur/%uw in flight",
-		  page_count, aa, cli->cl_r_in_flight, cli->cl_w_in_flight);
+	DEBUG_REQ(D_INODE, req, "%d pages, aa %p, now %ur/%uw/%ud in flight",
+		  page_count, aa, cli->cl_r_in_flight, cli->cl_w_in_flight,
+		  cli->cl_d_in_flight);
 	if (libcfs_debug & D_IOTRACE) {
 		struct lu_fid fid;
 
@@ -2922,10 +2932,11 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		fid.f_oid = crattr->cra_oa->o_parent_oid;
 		fid.f_ver = crattr->cra_oa->o_parent_ver;
 		CDEBUG(D_IOTRACE,
-		       DFID": %d %s pages, start %lld, end %lld, now %ur/%uw in flight\n",
+		       DFID": %d %s pages, start %lld, end %lld, now %ur/%uw/%ud in flight\n",
 		       PFID(&fid), page_count,
 		       cmd == OBD_BRW_READ ? "read" : "write", starting_offset,
-		       ending_offset, cli->cl_r_in_flight, cli->cl_w_in_flight);
+		       ending_offset, cli->cl_r_in_flight, cli->cl_w_in_flight,
+		       cli->cl_d_in_flight);
 	}
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_IO, cfs_fail_val);
 

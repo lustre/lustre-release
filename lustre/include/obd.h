@@ -247,6 +247,8 @@ struct client_obd {
 	struct list_head	cl_loi_read_list;
 	__u32			cl_r_in_flight;
 	__u32			cl_w_in_flight;
+	/* The count of direct I/Os (using server-side locking) in flight */
+	__u32			cl_d_in_flight;
 	/* just a sum of the loi/lop pending numbers to be exported by /proc */
 	atomic_t		cl_pending_w_pages;
 	atomic_t		cl_pending_r_pages;
