@@ -162,22 +162,13 @@ static ssize_t dom_threshold_free_mb_store(struct kobject *kobj,
 	struct lod_device *lod = dt2lod_dev(dt);
 	u64 val;
 	int rc;
-	char *pct;
 
-	pct = strnchr(buffer, count, '%');
-	if (pct) {
-		rc = string_to_size(&val, buffer, pct - buffer);
-		if (rc < 0)
-			return rc;
-		val = mult_frac(lod->lod_lsfs_total_mb,
-				min_t(unsigned int, val, 100), 100);
-	} else {
-		rc = sysfs_memparse(buffer, count, &val, "MiB");
-		if (rc < 0)
-			return rc;
-		val >>= 20;
-	}
+	rc = sysfs_memparse_total(buffer, count, &val,
+				  lod->lod_lsfs_total_mb << 20, "MiB");
+	if (rc < 0)
+		return rc;
 
+	val >>= 20;
 	spin_lock(&lod->lod_lsfs_lock);
 	lod->lod_dom_threshold_free_mb = val;
 	lod_dom_stripesize_recalc(lod);

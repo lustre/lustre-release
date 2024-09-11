@@ -507,7 +507,6 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 	u64 pages_number;
 	int rc;
 	char kernbuf[128], *ptr;
-	bool percent = false;
 
 	ENTRY;
 	if (count >= sizeof(kernbuf))
@@ -516,33 +515,20 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 	if (copy_from_user(kernbuf, buffer, count))
 		RETURN(-EFAULT);
 
-	if (count > 0 && kernbuf[count - 1] == '%') {
-		percent = true;
-		/* strip off the % */
-		kernbuf[count - 1] = '\0';
-	} else {
-		kernbuf[count] = '\0';
-	}
-
+	kernbuf[count] = '\0';
 	ptr = lprocfs_find_named_value(kernbuf, "max_cached_mb:", &count);
-	if (percent)
-		rc = sysfs_memparse(ptr, count, &value, "B");
-	else
-		rc = sysfs_memparse(ptr, count, &value, "MiB");
-	if (rc)
-		RETURN(rc);
-
-	if (percent)
-		pages_number = cfs_totalram_pages() * value / 100;
-	else
-		pages_number = value >> PAGE_SHIFT;
-
-	if (pages_number < 0 || pages_number > cfs_totalram_pages()) {
+	rc = sysfs_memparse_total(ptr, count, &value,
+				  cfs_totalram_pages() << PAGE_SHIFT, "MiB");
+	if (rc == -ERANGE) {
 		CERROR("%s: can't set max cache more than %lu MB\n",
 		       sbi->ll_fsname,
 		       PAGES_TO_MiB(cfs_totalram_pages()));
-		RETURN(-ERANGE);
+		RETURN(rc);
 	}
+	if (rc)
+		RETURN(rc);
+
+	pages_number = value >> PAGE_SHIFT;
 	/* Allow enough cache so clients can make well-formed RPCs */
 	pages_number = max_t(long, pages_number, PTLRPC_MAX_BRW_PAGES);
 

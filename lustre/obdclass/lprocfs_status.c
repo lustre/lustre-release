@@ -2060,10 +2060,10 @@ static int scale64_rem(u64 mult, u32 div, u64 *base, u32 *remp)
 }
 
 static int __string_to_size(u64 *size, const char *buffer, size_t count,
-			    const char *defunit)
+			    u64 total, const char *defunit)
 {
 	u64 whole, frac, blk_size;
-	u32 frac_div;
+	u32 frac_div, rem;
 	const char *ptr;
 	size_t len, unit_len;
 	int rc;
@@ -2085,6 +2085,29 @@ static int __string_to_size(u64 *size, const char *buffer, size_t count,
 		unit_len = strlen(defunit);
 	} else {
 		unit_len = count - len;
+	}
+
+	if (*ptr == '%') {
+		if (!total)
+			return -EINVAL;
+		if (whole > 100 || (whole == 100 && frac))
+			return -ERANGE;
+
+		/* *size = (total * whole + total * frac / frac_dev) / 100 */
+		rc = scale64_rem(total, 100, &whole, &rem);
+		if (rc)
+			return rc;
+		rc = scale64_rem(total, frac_div, &frac, NULL);
+		if (rc)
+			return rc;
+		frac += rem;
+		do_div(frac, 100);
+
+		*size = whole + frac;
+		if (ptr != defunit)
+			len++;
+
+		return len;
 	}
 
 	rc = string_to_blksize(&blk_size, ptr, unit_len);
@@ -2111,6 +2134,8 @@ static int __string_to_size(u64 *size, const char *buffer, size_t count,
 		return rc;
 
 	*size = whole + frac;
+	if (total && *size > total)
+		return -ERANGE;
 
 	return len;
 }
@@ -2138,7 +2163,7 @@ static int __string_to_size(u64 *size, const char *buffer, size_t count,
  */
 int string_to_size(u64 *size, const char *buffer, size_t count)
 {
-	return __string_to_size(size, buffer, count, NULL);
+	return __string_to_size(size, buffer, count, 0, NULL);
 }
 EXPORT_SYMBOL(string_to_size);
 
@@ -2171,11 +2196,50 @@ int sysfs_memparse(const char *buffer, size_t count, u64 *val,
 	if (!count)
 		RETURN(-EINVAL);
 
-	rc = __string_to_size(val, param, count, defunit);
+	rc = __string_to_size(val, param, count, 0, defunit);
 
 	return rc < 0 ? rc : 0;
 }
 EXPORT_SYMBOL(sysfs_memparse);
+
+/**
+ * sysfs_memparse_total - extend the sys_memparse() function to parse
+ *			  percent value
+ *
+ * @buffer:	kernel pointer to input string
+ * @count:	number of bytes in the input @buffer
+ * @val:	(output) binary value returned to caller
+ * @total:	total size value to compute a percentage
+ * @defunit:	default unit suffix to use if none is provided
+ *
+ * Parses a string into a number. The number stored at @buffer is
+ * potentially suffixed with K, M, G, T, P, E, %. Besides these other
+ * valid suffix units are shown in the __string_to_size() function.
+ * If the string lacks a suffix then the defunit is used. The defunit
+ * should be given as a binary unit (e.g. MiB) as that is the standard
+ * for tunables in Lustre.  If no unit suffix is given (e.g. only "G"
+ * instead of "GB"), then it is assumed to be in binary units ("GiB").
+ *
+ * The function will return -ERANGE if the parsed size exceeds the
+ * @total size (> 100%).
+ *
+ * Returns:	0 on success or -errno on failure.
+ */
+int sysfs_memparse_total(const char *buffer, size_t count, u64 *val,
+			 u64 total, const char *defunit)
+{
+	const char *param = buffer;
+	int rc;
+
+	count = strnlen(buffer, count);
+	if (!count)
+		RETURN(-EINVAL);
+
+	rc = __string_to_size(val, param, count, total, defunit);
+
+	return rc < 0 ? rc : 0;
+}
+EXPORT_SYMBOL(sysfs_memparse_total);
 
 /**
  * Find the string \a name in the input \a buffer, and return a pointer to the

@@ -628,6 +628,8 @@ lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off);
 
 int string_to_size(u64 *size, const char *buffer, size_t count);
+int sysfs_memparse_total(const char *buffer, size_t count, u64 *val,
+			 u64 total, const char *defunit);
 int sysfs_memparse(const char *buffer, size_t count, u64 *val,
 		    const char *defunit);
 char *lprocfs_find_named_value(const char *buffer, const char *name,

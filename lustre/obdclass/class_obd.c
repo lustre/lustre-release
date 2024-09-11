@@ -548,12 +548,17 @@ static struct miscdevice obd_psdev = {
 	.fops	= &obd_psdev_fops,
 };
 
-#define test_string_to_size_err(value, expect, def_unit, __rc)		       \
+#define test_string_to_size_err_total(value, expect, total, def_unit, __rc)    \
 ({									       \
 	u64 __size;							       \
 	int __ret;							       \
 									       \
-	__ret = sysfs_memparse(value, sizeof(value) - 1, &__size, def_unit);   \
+	if (total == 0)							       \
+		__ret = sysfs_memparse(value, sizeof(value) - 1, &__size,      \
+				       def_unit);			       \
+	else								       \
+		__ret = sysfs_memparse_total(value, sizeof(value) - 1,         \
+					     &__size, total, def_unit);	       \
 	if (__ret != __rc) {						       \
 		CERROR("string_helper: parsing '%s' expect rc %d != got %d\n", \
 		       value, __rc, __ret);				       \
@@ -567,8 +572,15 @@ static struct miscdevice obd_psdev = {
 	}								       \
 	__ret;								       \
 })
-#define test_string_to_size_one(value, expect, def_unit)		       \
-	test_string_to_size_err(value, expect, def_unit, 0)
+#define test_string_to_size_total(value, expect, total, def_unit) \
+	test_string_to_size_err_total(value, expect, total, def_unit, 0)
+
+#define test_string_to_size_err(value, expect, def_unit, __rc) \
+	test_string_to_size_err_total(value, expect, 0, def_unit, __rc)
+
+#define test_string_to_size_one(value, expect, def_unit) \
+	test_string_to_size_err_total(value, expect, 0, def_unit, 0)
+
 
 static int __init obd_init_checks(void)
 {
@@ -703,6 +715,49 @@ static int __init obd_init_checks(void)
 	if (ret)
 		RETURN(ret);
 
+	/* percent_memparse unit handling */
+	ret = 0;
+	ret = ret ?: test_string_to_size_total("0B", 0, 1, "B");
+	ret = ret ?: test_string_to_size_total("512B", 512, 512, "B");
+	ret = ret ?: test_string_to_size_total("1.067kB", 1067, 1 << 20, "B");
+	ret = ret ?: test_string_to_size_total("1.042KiB", 1067, 1 << 20, "B");
+	ret = ret ?: test_string_to_size_total("8", 8388608, 8 << 20, "M");
+	ret = ret ?: test_string_to_size_total("65536", 65536, 1 << 20, "B");
+	ret = ret ?: test_string_to_size_total("128", 131072, 128 << 10, "K");
+	ret = ret ?: test_string_to_size_total("1M", 1048576, 1 << 20, "B");
+	ret = ret ?: test_string_to_size_total("0.5T", 549755813888ULL,
+					 1ULL << 40, "K");
+	ret = ret ?: test_string_to_size_total("256.5G", 275414777856ULL,
+					 1ULL << 40, "G");
+
+	ret = ret ?: test_string_to_size_total("50%", 50, 100, "G");
+	ret = ret ?: test_string_to_size_total("31%", 31, 100, "G");
+	ret = ret ?: test_string_to_size_total("32.2 ", 322, 1000, "%");
+	ret = ret ?: test_string_to_size_total("32.21 ", 3221, 10000, "%");
+	ret = ret ?: test_string_to_size_total("50.5%", 505, 1000, "G");
+	ret = ret ?: test_string_to_size_total("0.5%", 5, 1000, "G");
+	ret = ret ?: test_string_to_size_total(".5%", 5, 1000, "G");
+	ret = ret ?: test_string_to_size_total("0%", 0, 1000, "G");
+	ret = ret ?: test_string_to_size_total("100%", 1000, 1000, "G");
+	ret = ret ?: test_string_to_size_total("50.012345678%", 50012,
+					       100000, "G");
+	ret = ret ?: test_string_to_size_total("50.012345678%", 500123,
+					       1000000, "G");
+	ret = ret ?: test_string_to_size_total("50.012345678%", 5001234,
+					       10000000, "G");
+
+	if (ret)
+		RETURN(ret);
+
+	if (test_string_to_size_err_total("200%", 2000, 1000, "B", -ERANGE)) {
+		CERROR("string_helpers: percent values > 100 should be rejected\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_err_total("2K", 2048, 1024, "K", -ERANGE)) {
+		CERROR("string_helpers: size values > total should be rejected\n");
+		ret = -EINVAL;
+	}
+
 	/* string helper values */
 	ret = ret ?: test_string_to_size_one("16", 16777216, "MiB");
 	ret = ret ?: test_string_to_size_one("8.39MB", 8390000, "MiB");
@@ -721,6 +776,9 @@ static int __init obd_init_checks(void)
 	ret = ret ?: test_string_to_size_one("16PiB", 18014398509481984ULL,
 					     "PiB");
 	ret = ret ?: test_string_to_size_one("0.5EiB", 1ULL << 59, "EiB");
+	ret = ret ?: test_string_to_size_total("50%", 1ULL << 62, 1ULL << 63,
+					       "%");
+	ret = ret ?: test_string_to_size_total("50%", (~0ULL) >> 1, ~0ULL, "%");
 	if (ret)
 		RETURN(ret);
 
