@@ -628,9 +628,10 @@ int cfs_cpt_set_node_core(struct cfs_cpt_table *cptab, int cpt,
 {
 	const cpumask_t *mask;
 	int node, cpu;
-	int offset = -1;
+	int offset;
 
 	for_each_online_node(node) {
+		offset = -1;
 		mask = cpumask_of_node(node);
 		if (cpumask_empty(mask))
 			continue;
@@ -653,9 +654,10 @@ void cfs_cpt_unset_node_core(struct cfs_cpt_table *cptab, int cpt,
 {
 	const cpumask_t *mask;
 	int node, cpu;
-	int offset = -1;
+	int offset;
 
 	for_each_online_node(node) {
+		offset = -1;
 		mask = cpumask_of_node(node);
 		if (cpumask_empty(mask))
 			continue;
@@ -995,7 +997,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 	char *str;
 	bool exclude = false;
 	int node = 0;
-	int ncpt = 0;
+	int ncpt = cpu_npartitions;
 	int cpt = 0;
 	int high = 0;
 	int rc;
