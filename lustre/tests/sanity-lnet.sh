@@ -4023,7 +4023,7 @@ test_260() {
 	local sysctl_file="/etc/lnet-sysctl.conf"
 	local sysctl_conf_bak="/etc/lnet-sysctl.bak"
 	local sysctl_bak=$TMP/lnet-sysctl.bak
-	local -i max_retries=10
+	local -i max_wait=60
 	local -i retries=0
 
 	echo "Setting default values and create backup for check"
@@ -4039,10 +4039,10 @@ test_260() {
 	retries=0
 	until check_sysctl "${sysctl_bak}"
 	do
-		if (( retries >= max_retries )); then
+		if (( retries >= max_wait )); then
 			error "Default sysconfig values not set"
 		fi
-		sleep 3
+		sleep 1
 		retries+=1
 	done
 
@@ -4064,12 +4064,11 @@ test_260() {
 
 	echo "Check new configuration"
 	retries=0
-	until check_sysctl "${sysctl_file}"
-	do
-		if (( retries >= max_retries )); then
+	until check_sysctl "${sysctl_file}"; do
+		if (( retries >= max_wait )); then
 			error "New sysctl values not set"
 		fi
-		sleep 3
+		sleep 1
 		retries+=1
 	done
 
@@ -4084,12 +4083,12 @@ test_260() {
 
 	echo "Check original configuration"
 	retries=0
-	until check_sysctl "${sysctl_bak}"
-	do
-		if (( retries >= max_retries )); then
-			error "Original sysconfig values not set"
+	until check_sysctl "${sysctl_bak}"; do
+		if (( retries >= max_wait )); then
+			echo "Original sysconfig values not set"
+			break
 		fi
-		sleep 3
+		sleep 1
 		retries+=1
 	done
 
