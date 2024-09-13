@@ -2014,7 +2014,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 		}
 
 		/*
-		 * ptlrpc_set_wait uses l_wait_event_abortable_timeout()
+		 * ptlrpc_set_wait uses wait_woken()
 		 * so it sets rq_intr regardless of individual rpc
 		 * timeouts. The synchronous IO waiting path sets
 		 * rq_intr irrespective of whether ptlrpcd
@@ -2537,6 +2537,7 @@ time64_t ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 {
 	struct ptlrpc_request *req;
+	sigset_t oldset, newset;
 	time64_t timeout;
 	int rc;
 
@@ -2553,7 +2554,14 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 		RETURN(0);
 
 	do {
+		DEFINE_WAIT_FUNC(wait, woken_wake_function);
+		long remaining;
+		unsigned long allow = 0;
+		int state = TASK_IDLE;
+
+		rc = 0;
 		timeout = ptlrpc_set_next_timeout(set);
+		remaining = cfs_time_seconds(timeout ? timeout : 1);
 
 		/*
 		 * wait until all complete, interrupted, or an in-flight
@@ -2562,71 +2570,39 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 		CDEBUG(D_RPCTRACE, "set %p going to sleep for %lld seconds\n",
 		       set, timeout);
 
+		add_wait_queue(&set->set_waitq, &wait);
 		if ((timeout == 0 && !signal_pending(current)) ||
 		    set->set_allow_intr) {
-			/*
-			 * No requests are in-flight (ether timed out
-			 * or delayed), so we can allow interrupts.
-			 * We still want to block for a limited time,
-			 * so we allow interrupts during the timeout.
-			 */
-			rc = l_wait_event_abortable_timeout(
-				set->set_waitq,
-				ptlrpc_check_set(NULL, set),
-				cfs_time_seconds(timeout ? timeout : 1));
-			if (rc == 0) {
-				rc = -ETIMEDOUT;
-				ptlrpc_expired_set(set);
-			} else if (rc < 0) {
-				rc = -EINTR;
-				ptlrpc_interrupted_set(set);
-			} else {
-				rc = 0;
-			}
-		} else {
-			/*
-			 * At least one request is in flight, so no
-			 * interrupts are allowed. Wait until all
-			 * complete, or an in-flight req times out.
-			 */
-			rc = wait_event_idle_timeout(
-				set->set_waitq,
-				ptlrpc_check_set(NULL, set),
-				cfs_time_seconds(timeout ? timeout : 1));
-			if (rc == 0) {
-				ptlrpc_expired_set(set);
-				rc = -ETIMEDOUT;
-			} else {
-				rc = 0;
-			}
-
-			/*
-			 * LU-769 - if we ignored the signal because
-			 * it was already pending when we started, we
-			 * need to handle it now or we risk it being
-			 * ignored forever
-			 */
-			if (rc == -ETIMEDOUT &&
-			    signal_pending(current)) {
-				sigset_t old, new;
-
-				siginitset(&new, LUSTRE_FATAL_SIGS);
-				sigprocmask(SIG_BLOCK, &new, &old);
-				/*
-				 * In fact we only interrupt for the
-				 * "fatal" signals like SIGINT or
-				 * SIGKILL. We still ignore less
-				 * important signals since ptlrpc set
-				 * is not easily reentrant from
-				 * userspace again
-				 */
-				if (signal_pending(current))
-					ptlrpc_interrupted_set(set);
-				sigprocmask(SIG_SETMASK, &old, NULL);
-			}
+			state = TASK_INTERRUPTIBLE;
+			allow = LUSTRE_FATAL_SIGS;
 		}
-
-		LASSERT(rc == 0 || rc == -EINTR || rc == -ETIMEDOUT);
+		/* block until ready or timeout occurs */
+		do {
+			if (ptlrpc_check_set(NULL, set))
+				break;
+			if (allow) {
+				siginitsetinv(&newset, allow);
+				sigprocmask(SIG_BLOCK, &newset, &oldset);
+			}
+			remaining = wait_woken(&wait, state, remaining);
+			if (allow) {
+				if (signal_pending(current))
+					remaining = -EINTR;
+				sigprocmask(SIG_SETMASK, &oldset, NULL);
+			}
+		} while (remaining > 0);
+		/*
+		 * wait_woken* returns the result from schedule_timeout() which
+		 * is always a positive number, or 0 on timeout.
+		 */
+		if (remaining == 0) {
+			rc = -ETIMEDOUT;
+			ptlrpc_expired_set(set);
+		} else if (remaining < 0) {
+			rc = -EINTR;
+			ptlrpc_interrupted_set(set);
+		}
+		remove_wait_queue(&set->set_waitq, &wait);
 
 		/*
 		 * -EINTR => all requests have been flagged rq_intr so next
