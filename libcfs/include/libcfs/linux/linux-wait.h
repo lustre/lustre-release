@@ -565,17 +565,6 @@ do {									\
 	__ret;								\
 })
 
-#define l_wait_event_abortable_timeout(wq, condition, timeout)		\
-({									\
-	sigset_t __new_blocked, __old_blocked;				\
-	int __ret = 0;							\
-	siginitsetinv(&__new_blocked, LUSTRE_FATAL_SIGS);		\
-	sigprocmask(SIG_BLOCK, &__new_blocked, &__old_blocked);		\
-	__ret = wait_event_interruptible_timeout(wq, condition, timeout);\
-	sigprocmask(SIG_SETMASK, &__old_blocked, NULL);			\
-	__ret;								\
-})
-
 #define l_wait_event_abortable_exclusive(wq, condition)			\
 ({									\
 	sigset_t __new_blocked, __old_blocked;				\
