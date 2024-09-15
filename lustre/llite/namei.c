@@ -1962,7 +1962,7 @@ again:
 				lum->lum_max_inherit;
 			md.def_lsm_obj->lso_lsm.lsm_md_max_inherit_rr =
 				lum->lum_max_inherit_rr;
-			atomic_set(&md.def_lsm_obj->lso_refs, 1);
+			kref_init(&md.def_lsm_obj->lso_refs);
 
 			err = ll_update_inode(dir, &md);
 			md_put_lustre_md(sbi->ll_md_exp, &md);

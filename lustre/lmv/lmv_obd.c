@@ -3758,7 +3758,7 @@ struct lmv_stripe_object *lmv_stripe_object_alloc(__u32 magic,
 	}
 
 	if (lsm_obj) {
-		atomic_set(&lsm_obj->lso_refs, 1);
+		kref_init(&lsm_obj->lso_refs);
 		RETURN(lsm_obj);
 	}
 
@@ -3845,31 +3845,20 @@ lmv_stripe_object_get(struct lmv_stripe_object *lsm_obj)
 	if (lsm_obj == NULL)
 		return NULL;
 
-	atomic_inc(&lsm_obj->lso_refs);
+	kref_get(&lsm_obj->lso_refs);
 	CDEBUG(D_INODE, "get %p %u\n", lsm_obj,
-	       atomic_read(&lsm_obj->lso_refs));
+	       kref_read(&lsm_obj->lso_refs));
 	return lsm_obj;
 }
 EXPORT_SYMBOL(lmv_stripe_object_get);
 
-void lmv_stripe_object_put(struct lmv_stripe_object **lsop)
+void lmv_stripe_object_free(struct kref *kref)
 {
 	struct lmv_stripe_object *lsm_obj;
 	size_t size;
 	int i;
 
-	LASSERT(lsop != NULL);
-
-	lsm_obj = *lsop;
-	if (lsm_obj == NULL)
-		return;
-
-	*lsop = NULL;
-	CDEBUG(D_INODE, "put %p %u\n", lsm_obj,
-	       atomic_read(&lsm_obj->lso_refs) - 1);
-
-	if (!atomic_dec_and_test(&lsm_obj->lso_refs))
-		return;
+	lsm_obj = container_of(kref, struct lmv_stripe_object, lso_refs);
 
 	if (lmv_dir_foreign(lsm_obj)) {
 		size = lsm_obj->lso_lfm.lfm_length +
@@ -3889,6 +3878,23 @@ void lmv_stripe_object_put(struct lmv_stripe_object **lsop)
 		size = lmv_stripe_md_size(0);
 	}
 	OBD_FREE(lsm_obj, size + offsetof(typeof(*lsm_obj), lso_lsm));
+}
+
+
+void lmv_stripe_object_put(struct lmv_stripe_object **lsop)
+{
+	struct lmv_stripe_object *lsm_obj;
+
+	LASSERT(lsop != NULL);
+
+	lsm_obj = *lsop;
+	if (lsm_obj == NULL)
+		return;
+
+	*lsop = NULL;
+	CDEBUG(D_INODE, "put %p %u\n", lsm_obj, kref_read(&lsm_obj->lso_refs));
+
+	kref_put(&lsm_obj->lso_refs, lmv_stripe_object_free);
 }
 EXPORT_SYMBOL(lmv_stripe_object_put);
 

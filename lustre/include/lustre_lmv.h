@@ -37,7 +37,7 @@ struct lmv_stripe_md {
 };
 
 struct lmv_stripe_object {
-	atomic_t			lso_refs;
+	struct kref			lso_refs;
 	union {
 		struct lmv_stripe_md	lso_lsm;
 		struct lmv_foreign_md	lso_lfm;
@@ -147,7 +147,7 @@ lmv_stripe_object_dump(int mask, const struct lmv_stripe_object *lsmo)
 
 	CDEBUG(mask,
 	       "dump LMV: magic=%#x refs=%u count=%u index=%u hash=%s:%#x max_inherit=%hhu max_inherit_rr=%hhu version=%u migrate_offset=%u migrate_hash=%s:%x pool=%.*s\n",
-	       lsm->lsm_md_magic, atomic_read(&lsmo->lso_refs),
+	       lsm->lsm_md_magic, kref_read(&lsmo->lso_refs),
 	       lsm->lsm_md_stripe_count, lsm->lsm_md_master_mdt_index,
 	       lmv_is_known_hash_type(lsm->lsm_md_hash_type) ?
 		mdt_hash_name[lsm->lsm_md_hash_type & LMV_HASH_TYPE_MASK] :
@@ -192,6 +192,7 @@ struct lmv_stripe_object *lmv_stripe_object_alloc(__u32 magic,
 						  const union lmv_mds_md *lmm,
 						  size_t lmm_size);
 
+void lmv_stripe_object_free(struct kref *kref);
 void lmv_stripe_object_put(struct lmv_stripe_object **lsm_obj);
 
 struct lmv_stripe_object *
