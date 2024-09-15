@@ -6265,7 +6265,7 @@ do_check_and_setup_lustre() {
 	# If auster does not want us to setup, then don't.
 	! ${do_setup} && return
 
-	echo "=== $TESTSUITE: start setup $(date +'%H:%M:%S (%s)') ==="
+	log "=== $TESTSUITE: start setup $(date +'%H:%M:%S (%s)') ==="
 
 	sanitize_parameters
 	nfs_client_mode && return
@@ -6367,7 +6367,11 @@ do_check_and_setup_lustre() {
 	set_params_clients
 	set_params_mdts
 	set_params_osts
-	echo "=== $TESTSUITE: finish setup $(date +'%H:%M:%S (%s)') ==="
+
+	TESTNAME="start setup" check_dmesg_for_errors ||
+		TESTNAME="test_setup" error "Error in dmesg detected"
+
+	log "=== $TESTSUITE: finish setup $(date +'%H:%M:%S (%s)') ==="
 
 	if [[ "$ONLY" == "setup" ]]; then
 		exit 0
@@ -6569,7 +6573,7 @@ log_zfs_info() {
 }
 
 do_check_and_cleanup_lustre() {
-	echo "=== $TESTSUITE: start cleanup $(date +'%H:%M:%S (%s)') ==="
+	log "=== $TESTSUITE: start cleanup $(date +'%H:%M:%S (%s)') ==="
 
 	if [[ "$LFSCK_ALWAYS" == "yes" && "$TESTSUITE" != "sanity-lfsck" && \
 	      "$TESTSUITE" != "sanity-scrub" ]]; then
@@ -6599,7 +6603,10 @@ do_check_and_cleanup_lustre() {
 		unset I_MOUNTED
 	fi
 
-	echo "=== $TESTSUITE: finish cleanup $(date +'%H:%M:%S (%s)') ==="
+	TESTNAME="start cleanup" check_dmesg_for_errors ||
+		TESTNAME="test_cleanup" error "Error in dmesg detected"
+
+	log "=== $TESTSUITE: finish cleanup $(date +'%H:%M:%S (%s)') ==="
 }
 
 check_and_cleanup_lustre() {
@@ -7492,12 +7499,17 @@ banner() {
 
 check_dmesg_for_errors() {
 	local res
-	local errors="VFS: Busy inodes after unmount of\|\
-ldiskfs_check_descriptors: Checksum for group 0 failed\|\
-group descriptors corrupted"
+	local errors
+	local testid=$(tr '_' ' ' <<< $TESTNAME)
 
-	res=$(do_nodes -q $(comma_list $(nodes_list)) "dmesg" | grep "$errors")
-	[ -z "$res" ] && return 0
+	errors="VFS: Busy inodes after unmount of"
+	errors+="\|ldiskfs_check_descriptors: Checksum for group 0 failed"
+	errors+="\|group descriptors corrupted"
+	errors+="\|UBSAN\|KASAN"
+
+	res=$(do_nodes -q $(comma_list $(nodes_list)) "dmesg" |
+		tac | sed "/$testid/,$ d" | grep "$errors")
+	[[ -n "$res" ]] || return 0
 	echo "Kernel error detected: $res"
 	return 1
 }
