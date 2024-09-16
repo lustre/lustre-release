@@ -18450,6 +18450,9 @@ test_154i()
 	local max
 	local fid
 
+	(( $MDS1_VERSION >= $(version_code v2_15_65-55-gf5251cb7af) )) ||
+		skip "need MDS >= 2.15.65.55 for fid2path > PATH_MAX handling"
+
 	mkdir -p $DIR/$tdir
 	cd $DIR/$tdir
 
