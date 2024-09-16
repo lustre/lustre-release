@@ -1,0 +1,82 @@
+diff -ur b/fs/ext4/ext4.h a/fs/ext4/ext4.h
+--- b/fs/ext4/ext4.h	2024-09-15 15:04:20.463952510 -0600
++++ a/fs/ext4/ext4.h	2024-09-15 15:13:46.530227093 -0600
+@@ -1776,6 +1776,7 @@
+ 	int s_fc_debug_max_replay;
+ #endif
+ 	struct ext4_fc_replay_state s_fc_replay_state;
++	unsigned long s_lpf_ino;
+ };
+ 
+ static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
+@@ -3184,7 +3185,8 @@
+ 	EXT4_IGET_SPECIAL =	0x0001, /* OK to iget a system inode */
+ 	EXT4_IGET_HANDLE = 	0x0002,	/* Inode # is from a handle */
+ 	EXT4_IGET_BAD =		0x0004, /* Allow to iget a bad inode */
+-	EXT4_IGET_EA_INODE =	0x0008	/* Inode should contain an EA value */
++	EXT4_IGET_EA_INODE =	0x0008,	/* Inode should contain an EA value */
++	EXT4_IGET_NO_CHECKS =	0x0010	/* Allow iget without checking */
+ } ext4_iget_flags;
+ 
+ extern struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
+diff -ur b/fs/ext4/inode.c a/fs/ext4/inode.c
+--- b/fs/ext4/inode.c	2024-09-15 15:04:20.471952424 -0600
++++ a/fs/ext4/inode.c	2024-09-15 15:13:46.530227093 -0600
+@@ -4598,6 +4598,8 @@
+ static const char *check_igot_inode(struct inode *inode, ext4_iget_flags flags)
+ 
+ {
++	if (flags & EXT4_IGET_NO_CHECKS)
++		return NULL;
+ 	if (flags & EXT4_IGET_EA_INODE) {
+ 		if (!(EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL))
+ 			return "missing EA_INODE flag";
+diff -ur b/fs/ext4/namei.c a/fs/ext4/namei.c
+--- b/fs/ext4/namei.c	2024-09-15 15:04:20.463952510 -0600
++++ a/fs/ext4/namei.c	2024-09-15 15:13:46.530227093 -0600
+@@ -2211,6 +2211,7 @@
+ 	struct inode *inode;
+ 	struct ext4_dir_entry_2 *de;
+ 	struct buffer_head *bh;
++	struct ext4_sb_info *sbi = EXT4_SB(dir->i_sb);
+ 
+ 	if (dentry->d_name.len > EXT4_NAME_LEN)
+ 		return ERR_PTR(-ENAMETOOLONG);
+@@ -2231,7 +2232,9 @@
+ 					 dentry);
+ 			return ERR_PTR(-EFSCORRUPTED);
+ 		}
+-		inode = ext4_iget(dir->i_sb, ino, EXT4_IGET_NORMAL);
++		inode = ext4_iget(dir->i_sb, ino,
++				  dir->i_ino == sbi->s_lpf_ino ?
++				  EXT4_IGET_NO_CHECKS : EXT4_IGET_NORMAL);
+ 		if (inode == ERR_PTR(-ESTALE)) {
+ 			EXT4_ERROR_INODE(dir,
+ 					 "deleted inode referenced: %u",
+diff -ur b/fs/ext4/super.c a/fs/ext4/super.c
+--- b/fs/ext4/super.c	2024-09-15 15:04:20.475952380 -0600
++++ a/fs/ext4/super.c	2024-09-15 15:21:28.621861173 -0600
+@@ -3949,6 +3949,8 @@
+ 	struct ext4_super_block *es = NULL;
+ 	struct ext4_sb_info *sbi = kzalloc(sizeof(*sbi), GFP_KERNEL);
+ 	struct flex_groups **flex_groups;
++	const struct qstr lpf = QSTR_INIT("lost+found", 10);
++	struct ext4_dir_entry_2 *de;
+ 	ext4_fsblk_t block;
+ 	ext4_fsblk_t sb_block = get_sb_block(&data);
+ 	ext4_fsblk_t logical_sb_block;
+@@ -5041,6 +5043,14 @@
+ 		if (err)
+ 			goto failed_mount10;
+ 	}
++
++	bh = ext4_find_entry_locked(d_inode(sb->s_root), &lpf, &de, NULL, NULL);
++	if (!IS_ERR(bh) && bh) {
++		if (ext4_valid_inum(sb, le32_to_cpu(de->inode)))
++			sbi->s_lpf_ino = le32_to_cpu(de->inode);
++		brelse(bh);
++	}
++
+ 	if (EXT4_SB(sb)->s_journal) {
+ 		if (test_opt(sb, DATA_FLAGS) == EXT4_MOUNT_JOURNAL_DATA)
+ 			descr = " journalled data mode";
