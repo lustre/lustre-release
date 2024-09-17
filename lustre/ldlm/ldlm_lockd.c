@@ -2889,7 +2889,7 @@ static int ldlm_bl_thread_blwi(struct ldlm_bl_pool *blp,
 		count = ldlm_cli_cancel_list_local(&blwi->blwi_head,
 						   blwi->blwi_count,
 						   LCF_BL_AST);
-		ldlm_cli_cancel_list(&blwi->blwi_head, count, NULL,
+		ldlm_cli_cancel_list(&blwi->blwi_head, count, NULL, NULL,
 				     blwi->blwi_flags);
 	} else if (blwi->blwi_lock) {
 		ldlm_handle_bl_callback(blwi->blwi_ns, &blwi->blwi_ld,
