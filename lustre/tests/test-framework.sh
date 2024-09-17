@@ -7569,7 +7569,7 @@ run_one_logged() {
 		local repeat_end_sec=$((SECONDS + ONLY_MINUTES * 60))
 	fi
 
-	local testiter=1
+	export ONLY_REPEAT_ITER=1
 	while true; do
 		local before_sub=$SECONDS
 
@@ -7578,7 +7578,7 @@ run_one_logged() {
 		if [[ -n "$append" ]]; then
 			[[ -n "$tdir" ]] && rm -rvf $DIR/$tdir*
 			[[ -n "$tfile" ]] && rm -vf $DIR/$tfile*
-			echo "subtest iteration $testiter/$repeat " \
+			echo "subtest iteration $ONLY_REPEAT_ITER/$repeat " \
 				"($(((SECONDS-before)/60))/$ONLY_MINUTES min)"
 		fi
 		# loop around subshell so stack_trap EXIT triggers each time
@@ -7620,10 +7620,10 @@ run_one_logged() {
 		# no repeat options were set, break after the first iteration
 		[[ -z "$repeat" && -z "$repeat_end_sec" ]] && break
 		# break if any repeat options were set and have been met
-		[[ -n "$repeat" ]] && (( $testiter >= $repeat )) && break
+		[[ -n "$repeat" ]] && (( ONLY_REPEAT_ITER >= repeat )) && break
 		[[ -n "$repeat_end_sec" ]] &&
 			(( $SECONDS >= $repeat_end_sec )) && break
-		((testiter++))
+		((ONLY_REPEAT_ITER++))
 	done
 
 	[[ $KPTR_ON_MOUNT ]] || kptr_restore

@@ -139,6 +139,12 @@ run_test 9 "pause bulk on OST (bug 1420)"
 test_10a() {
 	local before=$(date +%s)
 	local evict
+	local lru_param="ldlm.namespaces.*mdc*.lru_max_age"
+	local old_max_age=($($LCTL get_param -n $lru_param))
+	local old_ratelimit=$($LCTL get_param console_ratelimit)
+
+	$LCTL set_param $lru_param=3900s console_ratelimit=0
+	stack_trap "$LCTL set_param $lru_param=$old_max_age $old_ratelimit"
 
 	do_facet client "stat $DIR > /dev/null"  ||
 		error "failed to stat $DIR: $?"
@@ -149,12 +155,15 @@ test_10a() {
 	client_reconnect
 	evict=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
 	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
-	[ ! -z "$evict" ] && [[ $evict -gt $before ]] ||
+	[[ -n "$evict" ]] && (( $evict > $before )) ||
 		(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state;
 		    error "no eviction: $evict before:$before")
 
 	do_facet client checkstat -v -p 0777 $DIR ||
 		error "client checkstat failed: $?"
+
+	# console messages may be ratelimited on later iterations
+	(( ONLY_REPEAT_ITER == 1 )) || return 0
 
 	# check that the thread watchdog is working properly
 	do_facet mds1 dmesg | tac | sed "/${TESTNAME/_/ }/,$ d" |
