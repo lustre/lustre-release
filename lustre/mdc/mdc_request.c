@@ -2014,7 +2014,7 @@ static int mdc_ioc_hsm_request(struct obd_export *exp,
 
 	/* Cancel existing locks */
 	count = mdc_hsm_request_lock_to_cancel(exp, hur, &cancels);
-	ldlm_cli_cancel_list(&cancels, count, NULL, 0);
+	ldlm_cli_cancel_list(&cancels, count, NULL, NULL, 0);
 	mdc_pack_body(&req->rq_pill, NULL, 0, 0, -1, 0);
 
 	/* Copy hsm_request struct */

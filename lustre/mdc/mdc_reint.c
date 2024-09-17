@@ -494,9 +494,6 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 	if (rc)
 		GOTO(err_put_sepol, rc);
 
-	if (exp_connect_cancelset(exp) && req)
-		ldlm_cli_cancel_list(&cancels, count, req, 0);
-
 	if (op_data->op_cli_flags & CLI_MIGRATE)
 		mdc_migrate_pack(&req->rq_pill, op_data, old, oldlen);
 	else
