@@ -210,8 +210,9 @@ struct option long_opts[] = {
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
 	{ .val = 'z',	.name = "dry-run",	.has_arg = no_argument },
-	/* Undocumented options follow */
 	{ .val = 'a',	.name = "abort-on-err",	.has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	/* Undocumented options follow */
 	{ .val = 'c',	.name = "cl-clear",	.has_arg = required_argument },
 	{ .val = 'd',	.name = "debug",	.has_arg = required_argument },
 	{ .val = 'D',	.name = "debuglog",	.has_arg = required_argument },
@@ -222,18 +223,40 @@ struct option long_opts[] = {
 	{ .name = NULL } };
 
 /* Command line usage */
+void lr_usage_short(void)
+{
+	fprintf(stdout,
+	"Usage: lustre_rsync [option] -s <lustre_root_path> -t <target_path>\n"
+			"\t-m <mdt> -u <user id> -l <status log>\n");
+}
+
 void lr_usage(void)
 {
-	fprintf(stderr, "\tlustre_rsync -s <lustre_root_path> -t <target_path> "
-		"-m <mdt> -r <user id> -l <status log>\n"
-		"lustre_rsync can also pick up parameters from a "
-		"status log created earlier.\n"
-		"\tlustre_rsync -l <log_file>\n"
-		"options:\n"
-		"\t--xattr <yes|no> replicate EAs\n"
-		"\t--abort-on-err   abort at first err\n"
-		"\t--verbose\n"
-		"\t--dry-run        don't write anything\n");
+	lr_usage_short();
+	fprintf(stdout,
+	"The Lustre rsync feature works by periodically running lustre_rsync,\n"
+	"a userspace program used to synchronize changes in the Lustre file system\n"
+	"onto the target file system. lustre_rsync can also pick up parameters\n"
+	"from a status log created earlier.\n"
+	"Options:\n"
+	" -s, --source <path>\tThe source Lustre root path to be synchronized.\n"
+			"\t\t\tMandatory if --statuslog is not specified.\n"
+	" -t, --target <path>\tThe target root path where the --source file system\n"
+			"\t\t\twill be synchronized (target)\n"
+			"\t\t\tMandatory if --statuslog is not specified.\n"
+	" -m, --mdt <mdt>\tThe metadata device to be synchronized.\n"
+			"\t\t\tMandatory if --statuslog is not specified.\n"
+	" -u, --user <user id>\tThe changelog user ID for the specified MDT.\n"
+			"\t\t\tMandatory if --statuslog is not specified.\n"
+	" -l, --statuslog <log file>\n"
+			"\t\t\tLog file to which synchronization status is saved.\n"
+			"\t\t\tThe {-s,-t,-m,-u} options are read from log file\n"
+			"\t\t\tif not explicitly specified.\n"
+	" -x, --xattr <yes|no>\tSynchronize extended attributes (xattr). Default: yes.\n"
+	" -v, --verbose\t\tProduces verbose output.\n"
+	" -z, --dry-run\t\tPerform a trial run with no changes made.\n"
+	" -a, --abort-on-err\tStop on lustre_rsync error. Default: continue on error.\n"
+	" -h, --help\t\tDisplays this help message.\n");
 }
 
 /*
@@ -1449,10 +1472,11 @@ int lr_clear_cl(struct lr_info *info, int force)
 						   status->ls_registration,
 						   info->recno);
 			if (rc)
-				printf("Changelog clear (%s, %s, %lld) returned %d\n",
-				       status->ls_mdt_device,
-				       status->ls_registration, info->recno,
-				       rc);
+				fprintf(stderr,
+					"Changelog clear (%s, %s, %lld) returned %d\n",
+					status->ls_mdt_device,
+					status->ls_registration, info->recno,
+					rc);
 		}
 
 		if (!rc && !dryrun) {
@@ -1749,10 +1773,16 @@ int main(int argc, char *argv[])
 	int numtargets = 0;
 	int rc = 0;
 
-	if ((rc = lr_init_status()) != 0)
+	/* lustre_rsync needs at least one argument */
+	if (argc < 2) {
+		lr_usage_short();
+		return -1;
+	}
+	rc = lr_init_status();
+	if (rc != 0)
 		return rc;
 
-	while ((rc = getopt_long(argc, argv, "as:t:m:u:l:vx:zc:ry:n:d:D:",
+	while ((rc = getopt_long(argc, argv, "as:t:m:u:l:vx:zc:ry:n:d:D:h",
 				 long_opts, NULL)) >= 0) {
 		switch (rc) {
 		case 'a':
@@ -1855,30 +1885,39 @@ int main(int argc, char *argv[])
 				return -1;
 			}
 			break;
+		case 'h':
+			lr_usage();
+			return 0;
 		default:
 			fprintf(stderr, "error: %s: option '%s' unrecognized.\n",
 				argv[0], argv[optind - 1]);
-			lr_usage();
+			lr_usage_short();
 			return -1;
 		}
 	}
 
 	if (status->ls_last_recno == -1)
 		status->ls_last_recno = 0;
+	/* Check for mandatory options */
 	if (strnlen(status->ls_registration, LR_NAME_MAXLEN) == 0) {
-		/* No registration ID was passed in. */
-		printf("Please specify changelog consumer registration id.\n");
-		lr_usage();
+		fprintf(stderr,
+			"Please specify changelog consumer registration id (--user).\n");
+		lr_usage_short();
 		return -1;
 	}
 	if (strnlen(status->ls_source, PATH_MAX) == 0) {
-		fprintf(stderr, "Please specify the source path.\n");
-		lr_usage();
+		fprintf(stderr, "Please specify the source path (--source).\n");
+		lr_usage_short();
 		return -1;
 	}
 	if (strnlen(status->ls_targets[0], PATH_MAX) == 0) {
-		fprintf(stderr, "Please specify the target path.\n");
-		lr_usage();
+		fprintf(stderr, "Please specify the target path (--target).\n");
+		lr_usage_short();
+		return -1;
+	}
+	if (strnlen(status->ls_mdt_device, LR_NAME_MAXLEN) == 0) {
+		fprintf(stderr, "Please specify the metadata device (--mdt).\n");
+		lr_usage_short();
 		return -1;
 	}
 
