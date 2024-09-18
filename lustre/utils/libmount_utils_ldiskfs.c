@@ -143,9 +143,10 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 	char mntpt[] = "/tmp/mntXXXXXX";
 	char filepnm[192];
 	char *dev;
-	FILE *filep;
 	int ret = 0;
-	size_t num;
+	int fd;
+	size_t total_written;
+	size_t write_cnt;
 
 	/* Mount this device temporarily in order to write these files */
 	if (!mkdtemp(mntpt)) {
@@ -173,8 +174,7 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 				ret = run_command(command, sizeof(filepnm));
 				if (ret)
 					fprintf(stderr,
-						"%s: Unable to set 'mmp' "
-						"on %s: %d\n",
+						"%s: Unable to set 'mmp' on %s: %d\n",
 						progname, dev, ret);
 			} else {
 				disp_old_e2fsprogs_msg("mmp", 1);
@@ -207,6 +207,7 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 	if ((ret != 0) && (errno != EEXIST)) {
 		fprintf(stderr, "%s: Can't make configs dir %s (%s)\n",
 			progname, filepnm, strerror(errno));
+		ret = errno;
 		goto out_umnt;
 	} else if (errno == EEXIST) {
 		ret = 0;
@@ -216,22 +217,40 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 	   this file to get the real mount options. */
 	vprint("Writing %s\n", MOUNT_DATA_FILE);
 	sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
-	filep = fopen(filepnm, "w");
-	if (!filep) {
-		fprintf(stderr, "%s: Unable to create %s file: %s\n",
-			progname, filepnm, strerror(errno));
+	fd = open(filepnm, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd < 0) {
+		fprintf(stderr, "%s: Unable to create %s file: %s\n", progname,
+			filepnm, strerror(errno));
+		ret = errno;
 		goto out_umnt;
 	}
-	num = fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
-	if (num < 1 && ferror(filep)) {
-		fprintf(stderr, "%s: Unable to write to file (%s): %s\n",
-			progname, filepnm, strerror(errno));
-		fclose(filep);
-		goto out_umnt;
+	total_written = 0;
+	while (total_written < sizeof(mop->mo_ldd)) {
+		write_cnt = write(fd, &mop->mo_ldd + total_written,
+				  sizeof(mop->mo_ldd) - total_written);
+		if (write_cnt < 0) {
+			fprintf(stderr,
+				"%s: Unable to write to file (%s): %s\n",
+				progname, filepnm, strerror(errno));
+			ret = errno;
+			goto close_fd;
+		}
+		total_written += write_cnt;
 	}
-	fsync(filep->_fileno);
-	fclose(filep);
+	if (fsync(fd) < 0) {
+		fprintf(stderr, "%s: Unable to fsync file (%s): %s\n", progname,
+			filepnm, strerror(errno));
+		ret = errno;
+	}
 
+close_fd:
+	if (close(fd) < 0) {
+		fprintf(stderr, "%s: Error while closing file (%s): %s\n",
+			progname, filepnm, strerror(errno));
+		/* Don't overwrite errno if already set in previous failure */
+		if (ret == 0)
+			ret = errno;
+	}
 out_umnt:
 	umount(mntpt);
 out_rmdir:
@@ -411,7 +430,8 @@ static bool is_e2fsprogs_feature_supp(const char *feature)
 		   strncmp(feature, "-O ", 3) ? feature : feature + 3))
 		return true;
 
-	if ((fd = mkstemp(imgname)) < 0)
+	fd = mkstemp(imgname);
+	if (fd < 0)
 		return false;
 
 	close(fd);
