@@ -315,13 +315,16 @@ Requires: mlnx-ofa_kernel-kmp
 %endif
 %endif
 %endif
+%if %{defined kernel_module_package_buildreqs}
+BuildRequires: %kernel_module_package_buildreqs
+%else
 %if 0%{?rhel} >= 8 || 0%{?openEuler}
 BuildRequires: kernel-rpm-macros
 %endif
-%if 0%{?suse_version} >= 1530
+%if 0%{?sle_version} >= 150300
 BuildRequires: rpm-build >= 4.14.3
 %endif
-BuildRequires: %kernel_module_package_buildreqs
+%endif
 # need to provide a /usr/lib/${uname -r)/build dir
 BuildRequires: kernel >= 3.10
 %if "%{_vendor}" == "redhat"
