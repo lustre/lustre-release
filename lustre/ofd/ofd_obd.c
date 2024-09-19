@@ -429,7 +429,7 @@ int ofd_obd_disconnect(struct obd_export *exp)
 
 	/* Do not erase record for recoverable client. */
 	if (test_bit(OBDF_REPLAYABLE, exp->exp_obd->obd_flags) &&
-	    (!exp->exp_obd->obd_fail || exp->exp_failed)) {
+	    (!test_bit(OBDF_FAIL, exp->exp_obd->obd_flags) || exp->exp_failed)) {
 		rc = lu_env_init(&env, LCT_DT_THREAD);
 		if (rc)
 			GOTO(out, rc);

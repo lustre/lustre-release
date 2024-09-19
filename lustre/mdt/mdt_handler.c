@@ -5877,7 +5877,7 @@ static void mdt_stack_fini(const struct lu_env *env,
 	lustre_cfg_bufs_reset(bufs, mdt_obd_name(m));
 	if (test_bit(OBDF_FORCE, obd->obd_flags))
 		strcat(flags, "F");
-	if (obd->obd_fail)
+	if (test_bit(OBDF_FAIL, obd->obd_flags))
 		strcat(flags, "A");
 	lustre_cfg_bufs_set_string(bufs, 1, flags);
 	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
@@ -6806,7 +6806,7 @@ err_los_fini:
 	m->mdt_los = NULL;
 err_tgt:
 	/* keep recoverable clients */
-	obd->obd_fail = 1;
+	set_bit(OBDF_FAIL, obd->obd_flags);
 	target_recovery_fini(obd);
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();

@@ -1375,7 +1375,7 @@ static int ptlrpc_check_req(struct ptlrpc_request *req)
 			  req->rq_export->exp_conn_cnt);
 		return -EEXIST;
 	}
-	if (unlikely(obd == NULL || obd->obd_fail)) {
+	if (unlikely(obd == NULL || test_bit(OBDF_FAIL, obd->obd_flags))) {
 		/*
 		 * Failing over, don't handle any more reqs,
 		 * send error response instead.
@@ -1654,7 +1654,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 	/* RPC ref */
 	class_export_rpc_inc(reqcopy->rq_export);
 	if (reqcopy->rq_export->exp_obd &&
-	    reqcopy->rq_export->exp_obd->obd_fail)
+	    test_bit(OBDF_FAIL, reqcopy->rq_export->exp_obd->obd_flags))
 		GOTO(out_put, rc = -ENODEV);
 
 	rc = lustre_pack_reply_flags(reqcopy, 1, NULL, NULL, LPRFL_EARLY_REPLY);

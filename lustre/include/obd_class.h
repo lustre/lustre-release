@@ -438,7 +438,7 @@ void class_disconnect_stale_exports(struct obd_device *,
 
 static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
 {
-	return ((obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
+	return ((test_bit(OBDF_FAIL, obd->obd_flags) ? OBD_OPT_FAILOVER : 0) |
 		(test_bit(OBDF_FORCE, obd->obd_flags) ? OBD_OPT_FORCE : 0) |
 		(test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags) ? OBD_OPT_ABORT_RECOV : 0) |
 		0);

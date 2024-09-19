@@ -222,7 +222,7 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 	lustre_cfg_bufs_reset(&bufs, obd->obd_name);
 	if (test_bit(OBDF_FORCE, obd->obd_flags))
 		strcat(flags, "F");
-	if (obd->obd_fail)
+	if (test_bit(OBDF_FAIL, obd->obd_flags))
 		strcat(flags, "A");
 	lustre_cfg_bufs_set_string(&bufs, 1, flags);
 	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));

@@ -1127,7 +1127,7 @@ static int server_stop_servers(int lsiflags)
 	class_put_type(type);
 	if (obd && type_last) {
 		set_bit(OBDF_FORCE, obd->obd_flags);
-		/* obd_fail doesn't mean much on a server obd */
+		/* OBDF_FAIL doesn't mean much on a server obd */
 		rc = class_manual_cleanup(obd);
 	}
 
@@ -2064,7 +2064,7 @@ static void server_put_super(struct super_block *sb)
 		if (obd) {
 			CDEBUG(D_MOUNT, "stopping %s\n", obd->obd_name);
 			if (lsiflags & LSI_UMOUNT_FAILOVER)
-				obd->obd_fail = 1;
+				set_bit(OBDF_FAIL, obd->obd_flags);
 			/* We can't seem to give an error return code
 			 * to .put_super, so we better make sure we clean up!
 			 */

@@ -931,7 +931,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 				LCONSOLE(D_WARNING, "Failing over %s\n",
 					 obd->obd_name);
 				spin_lock(&obd->obd_dev_lock);
-				obd->obd_fail = 1;
+				set_bit(OBDF_FAIL, obd->obd_flags);
 #ifdef CONFIG_LUSTRE_FS_SERVER
 				obd->obd_no_transno = 1;
 #endif
@@ -2463,7 +2463,7 @@ int class_manual_cleanup(struct obd_device *obd)
 
 	if (test_bit(OBDF_FORCE, obd->obd_flags))
 		strlcat(flags, "F", sizeof(flags));
-	if (obd->obd_fail)
+	if (test_bit(OBDF_FAIL, obd->obd_flags))
 		strlcat(flags, "A", sizeof(flags));
 
 	/* Save obd_name before cleanup/detach as they may drop the

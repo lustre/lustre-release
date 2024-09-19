@@ -543,7 +543,10 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 			set_bit(OBDF_FORCE, mdc_obd->obd_flags);
 		else
 			clear_bit(OBDF_FORCE, mdc_obd->obd_flags);
-		mdc_obd->obd_fail = obd->obd_fail;
+		if (test_bit(OBDF_FAIL, obd->obd_flags))
+			set_bit(OBDF_FAIL, mdc_obd->obd_flags);
+		else
+			clear_bit(OBDF_FAIL, mdc_obd->obd_flags);
 		if (test_bit(OBDF_NO_RECOV, obd->obd_flags))
 			set_bit(OBDF_NO_RECOV, mdc_obd->obd_flags);
 		else

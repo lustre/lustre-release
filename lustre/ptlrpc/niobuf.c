@@ -737,7 +737,7 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 	/* There may be no rq_export during failover */
 
 	if (unlikely(req->rq_export && req->rq_export->exp_obd &&
-		     req->rq_export->exp_obd->obd_fail)) {
+		     test_bit(OBDF_FAIL, req->rq_export->exp_obd->obd_flags))) {
 		/* Failed obd's only send ENODEV */
 		req->rq_type = PTL_RPC_MSG_ERR;
 		req->rq_status = -ENODEV;
@@ -893,7 +893,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	LASSERT(!((lustre_msg_get_flags(request->rq_reqmsg) & MSG_REPLAY) &&
 		  (imp->imp_state == LUSTRE_IMP_FULL)));
 
-	if (unlikely(obd != NULL && obd->obd_fail)) {
+	if (unlikely(obd && test_bit(OBDF_FAIL, obd->obd_flags))) {
 		CDEBUG(D_HA, "muting rpc for failed imp obd %s\n",
 		       obd->obd_name);
 		/* this prevents us from waiting in ptlrpc_queue_wait */
