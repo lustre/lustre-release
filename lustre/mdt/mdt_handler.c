@@ -8004,7 +8004,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			/* lctl didn't set OBD_FLG_ABORT_RECOV_OST < 2.13.57 */
 			LCONSOLE_WARN("%s: Aborting client recovery\n",
 				      obd->obd_name);
-			obd->obd_abort_recovery = 1;
+			set_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
 			target_stop_recovery_thread(obd);
 		}
 		rc = 0;

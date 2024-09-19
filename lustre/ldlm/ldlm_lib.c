@@ -826,7 +826,7 @@ static inline int target_check_recovery_timer(struct obd_device *target)
 	spin_lock(&target->obd_dev_lock);
 	if (test_bit(OBDF_RECOVERING, target->obd_flags)) {
 		CERROR("%s: Aborting recovery\n", target->obd_name);
-		target->obd_abort_recovery = 1;
+		set_bit(OBDF_ABORT_RECOVERY, target->obd_flags);
 		wake_up(&target->obd_next_transno_waitq);
 	}
 	spin_unlock(&target->obd_dev_lock);
@@ -1848,7 +1848,7 @@ void target_cleanup_recovery(struct obd_device *obd)
 		return;
 	}
 	clear_bit(OBDF_RECOVERING, obd->obd_flags);
-	obd->obd_abort_recovery = 0;
+	clear_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
 	obd->obd_abort_mdt_recovery = 0;
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -1892,7 +1892,8 @@ static void target_start_recovery_timer(struct obd_device *obd)
 		return;
 
 	spin_lock(&obd->obd_dev_lock);
-	if (!test_bit(OBDF_RECOVERING, obd->obd_flags) || obd->obd_abort_recovery) {
+	if (!test_bit(OBDF_RECOVERING, obd->obd_flags) ||
+	    test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags)) {
 		spin_unlock(&obd->obd_dev_lock);
 		return;
 	}
@@ -1936,7 +1937,8 @@ static void extend_recovery_timer(struct obd_device *obd, timeout_t dr_timeout,
 	timeout_t left;
 
 	spin_lock(&obd->obd_dev_lock);
-	if (!test_bit(OBDF_RECOVERING, obd->obd_flags) || obd->obd_abort_recovery ||
+	if (!test_bit(OBDF_RECOVERING, obd->obd_flags) ||
+	    test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags) ||
 	    obd->obd_stopping) {
 		spin_unlock(&obd->obd_dev_lock);
 		return;
@@ -2167,7 +2169,7 @@ static int check_for_next_lock(struct lu_target *lut)
 	} else if (atomic_read(&obd->obd_lock_replay_clients) == 0) {
 		CDEBUG(D_HA, "waking for completed lock replay\n");
 		wake_up = 1;
-	} else if (obd->obd_abort_recovery) {
+	} else if (test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags)) {
 		CDEBUG(D_HA, "waking for aborted recovery\n");
 		wake_up = 1;
 	} else if (obd->obd_recovery_expired) {
@@ -2270,7 +2272,7 @@ repeat:
 			       "%s: there are still update replay (%#llx)in the queue.\n",
 			       obd->obd_name, next_update_transno);
 		} else {
-			obd->obd_abort_recovery = 1;
+			set_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
 			spin_unlock(&obd->obd_recovery_task_lock);
 			CWARN("%s recovery is aborted by hard timeout\n",
 			      obd->obd_name);
@@ -2446,7 +2448,7 @@ static int check_for_recovery_ready(struct lu_target *lut)
 	       "connected %d stale %d max_recoverable_clients %d abort %d expired %d\n",
 	       clnts, obd->obd_stale_clients,
 	       atomic_read(&obd->obd_max_recoverable_clients),
-	       obd->obd_abort_recovery, obd->obd_recovery_expired);
+	       test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags), obd->obd_recovery_expired);
 
 	if (!obd_recovery_abort(obd) && !obd->obd_recovery_expired) {
 		LASSERT(clnts <=
@@ -2808,7 +2810,7 @@ static int target_recovery_thread(void *arg)
 	tgt_boot_epoch_update(lut);
 
 	/* cancel update llogs upon recovery abort */
-	if (obd->obd_abort_recovery || obd->obd_abort_mdt_recovery)
+	if (test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags) || obd->obd_abort_mdt_recovery)
 		obd->obd_type->typ_dt_ops->o_iocontrol(OBD_IOC_LLOG_CANCEL,
 						       obd->obd_self_export,
 						       0, trd, NULL);
@@ -2828,7 +2830,7 @@ static int target_recovery_thread(void *arg)
 	 */
 	spin_lock(&obd->obd_dev_lock);
 	clear_bit(OBDF_RECOVERING, obd->obd_flags);
-	obd->obd_abort_recovery = 0;
+	clear_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
 	obd->obd_abort_mdt_recovery = 0;
 	spin_unlock(&obd->obd_dev_lock);
 	spin_lock(&obd->obd_recovery_task_lock);
@@ -2901,7 +2903,7 @@ void target_stop_recovery_thread(struct obd_device *obd)
 		spin_lock(&obd->obd_dev_lock);
 		if (test_bit(OBDF_RECOVERING, obd->obd_flags)) {
 			CERROR("%s: Aborting recovery\n", obd->obd_name);
-			obd->obd_abort_recovery = 1;
+			set_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
 			wake_up(&obd->obd_next_transno_waitq);
 		}
 		spin_unlock(&obd->obd_dev_lock);

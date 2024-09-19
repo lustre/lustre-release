@@ -1268,7 +1268,7 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	switch (cmd) {
 	case OBD_IOC_ABORT_RECOVERY:
 		LCONSOLE_WARN("%s: Aborting recovery\n", obd->obd_name);
-		obd->obd_abort_recovery = 1;
+		set_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
 		target_stop_recovery_thread(obd);
 		GOTO(out, rc);
 	case OBD_IOC_SYNC:
