@@ -371,7 +371,7 @@ static int ost_cleanup(struct obd_device *obd)
 	/* there is no recovery for OST OBD, all recovery is controlled by
 	 * obdfilter OBD
 	 */
-	LASSERT(obd->obd_recovering == 0);
+	LASSERT(!test_bit(OBDF_RECOVERING, obd->obd_flags));
 	mutex_lock(&ost->ost_health_mutex);
 	ptlrpc_unregister_service(ost->ost_service);
 	ptlrpc_unregister_service(ost->ost_create_service);

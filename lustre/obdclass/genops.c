@@ -1321,7 +1321,7 @@ static void class_export_recovery_cleanup(struct obd_export *exp)
 	struct obd_device *obd = exp->exp_obd;
 
 	spin_lock(&obd->obd_recovery_task_lock);
-	if (obd->obd_recovering) {
+	if (test_bit(OBDF_RECOVERING, obd->obd_flags)) {
 		if (exp->exp_in_recovery) {
 			spin_lock(&exp->exp_lock);
 			exp->exp_in_recovery = 0;

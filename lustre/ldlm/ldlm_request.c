@@ -1437,7 +1437,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct ldlm_lock *lock,
 
 			top_dev = exp->exp_obd->obd_lu_dev->ld_site->ls_top_dev;
 			if (top_dev != NULL &&
-			    top_dev->ld_obd->obd_recovering)
+			    test_bit(OBDF_RECOVERING, top_dev->ld_obd->obd_flags))
 				req->rq_allow_replay = 1;
 		}
 

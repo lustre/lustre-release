@@ -765,7 +765,7 @@ int mgs_iocontrol_barrier(const struct lu_env *env,
 		RETURN(-EINVAL);
 
 	/* NOT allow barrier operations during recovery. */
-	if (unlikely(mgs->mgs_obd->obd_recovering))
+	if (unlikely(test_bit(OBDF_RECOVERING, mgs->mgs_obd->obd_flags)))
 		RETURN(-EBUSY);
 
 	switch (bc->bc_cmd) {

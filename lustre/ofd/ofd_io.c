@@ -716,7 +716,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	LASSERT(env != NULL);
 	LASSERT(objcount == 1);
 
-	if (unlikely(exp->exp_obd->obd_recovering)) {
+	if (unlikely(test_bit(OBDF_RECOVERING, exp->exp_obd->obd_flags))) {
 		u64 seq = ostid_seq(&oa->o_oi);
 		u64 oid = ostid_id(&oa->o_oi);
 		struct ofd_seq *oseq;

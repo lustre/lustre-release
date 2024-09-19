@@ -547,7 +547,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 	 * b=15815
 	 */
 	if (req->rq_type == PTL_RPC_MSG_ERR &&
-	    (req->rq_export == NULL || obd->obd_recovering)) {
+	    (req->rq_export == NULL || test_bit(OBDF_RECOVERING, obd->obd_flags))) {
 		lustre_msg_set_timeout(req->rq_repmsg, 0);
 	} else {
 		timeout_t timeout;

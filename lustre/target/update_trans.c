@@ -1533,7 +1533,7 @@ static int distribute_txn_commit_thread(void *_arg)
 			if (tmt->tmt_batchid <= tdtd->tdtd_committed_batchid) {
 				__set_current_state(TASK_RUNNING);
 				list_move_tail(&tmt->tmt_commit_list, &list);
-			} else if (!tdtd->tdtd_lut->lut_obd->obd_recovering) {
+			} else if (!test_bit(OBDF_RECOVERING, tdtd->tdtd_lut->lut_obd->obd_flags)) {
 				__set_current_state(TASK_RUNNING);
 				LASSERTF(tmt->tmt_batchid >= batchid,
 					 "tmt %px tmt_batchid: %llu, batchid %llu\n",

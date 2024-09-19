@@ -6911,7 +6911,7 @@ static int mdt_prepare(const struct lu_env *env,
 	obd->obd_no_conn = 0;
 	spin_unlock(&obd->obd_dev_lock);
 
-	if (obd->obd_recovering == 0)
+	if (!test_bit(OBDF_RECOVERING, obd->obd_flags))
 		mdt_postrecov(env, mdt);
 
 	RETURN(rc);

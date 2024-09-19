@@ -943,7 +943,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 	LASSERT(data != NULL);
 
 	obd = lock->l_export->exp_obd;
-	if (obd->obd_recovering != 0)
+	if (test_bit(OBDF_RECOVERING, obd->obd_flags))
 		LDLM_ERROR(lock, "BUG 6063: lock collide during recovery");
 
 	ldlm_lock_reorder_req(lock);

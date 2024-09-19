@@ -572,7 +572,7 @@ static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 	 * open. */
 
 	/* Check for aborted recovery... */
-	if (unlikely(req->rq_export->exp_obd->obd_recovering)) {
+	if (unlikely(test_bit(OBDF_RECOVERING, req->rq_export->exp_obd->obd_flags))) {
 		int rc;
 		int should_process;
 
@@ -1787,7 +1787,7 @@ static int tgt_brw_lock(const struct lu_env *env, struct obd_export *exp,
 	LASSERT(mode == LCK_PR || mode == LCK_PW);
 	LASSERT(!lustre_handle_is_used(lh));
 
-	if (exp->exp_obd->obd_recovering)
+	if (test_bit(OBDF_RECOVERING, exp->exp_obd->obd_flags))
 		RETURN(0);
 
 	if (nrbufs == 0 || !(nb[0].rnb_flags & OBD_BRW_SRVLOCK))
@@ -1809,7 +1809,7 @@ static void tgt_brw_unlock(struct obd_export *exp, struct obd_ioobj *obj,
 	ENTRY;
 
 	LASSERT(mode == LCK_PR || mode == LCK_PW);
-	LASSERT((!exp->exp_obd->obd_recovering && obj->ioo_bufcnt &&
+	LASSERT((!test_bit(OBDF_RECOVERING, exp->exp_obd->obd_flags) && obj->ioo_bufcnt &&
 		 niob[0].rnb_flags & OBD_BRW_SRVLOCK) ==
 		lustre_handle_is_used(lh));
 

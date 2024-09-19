@@ -853,7 +853,8 @@ static inline void osp_set_req_replay(const struct osp_device *osp,
 	 * 1. sent during recovery, or
 	 * 2. sent before the recovery thread target_recovery_thread() start,
 	 *    such as triggered by lod_sub_recovery_thread(). */
-	if (obd->obd_recovering || (obd->obd_replayable && obd->obd_no_conn))
+	if (test_bit(OBDF_RECOVERING, obd->obd_flags) ||
+	    (obd->obd_replayable && obd->obd_no_conn))
 		req->rq_allow_replay = 1;
 }
 

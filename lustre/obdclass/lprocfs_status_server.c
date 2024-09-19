@@ -85,7 +85,7 @@ int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data)
 	struct obd_export *exp, *n;
 	int connected;
 
-	if (!obd->obd_recovering ||
+	if (!test_bit(OBDF_RECOVERING, obd->obd_flags) ||
 	    atomic_read(&obd->obd_connected_clients) >=
 	    atomic_read(&obd->obd_max_recoverable_clients))
 		/* not in recovery */
@@ -912,10 +912,10 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 	}
 
 	/* There is gap between client data read from storage and setting
-	 * obd_recovering so check obd_recovery_end as well to make sure
+	 * OBDF_RECOVERING so check obd_recovery_end as well to make sure
 	 * recovery is really finished
 	 */
-	if (obd->obd_recovery_end > 0 && !obd->obd_recovering) {
+	if (obd->obd_recovery_end > 0 && !test_bit(OBDF_RECOVERING, obd->obd_flags)) {
 		seq_printf(m, "COMPLETE\n");
 		seq_printf(m, "recovery_start: %lld\n",
 			   (s64)ktime_get_real_seconds() -

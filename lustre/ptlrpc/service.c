@@ -1149,7 +1149,7 @@ void ptlrpc_update_export_timer(struct obd_export *exp, time64_t extra_delay)
 	list_move_tail(&exp->exp_obd_chain_timed,
 		       &exp->exp_obd->obd_exports_timed);
 
-	if (exp->exp_obd->obd_recovering) {
+	if (test_bit(OBDF_RECOVERING, exp->exp_obd->obd_flags)) {
 		/* be nice to everyone during recovery */
 		spin_unlock(&exp->exp_obd->obd_dev_lock);
 		RETURN_EXIT;
@@ -1232,13 +1232,13 @@ static int ptlrpc_check_req(struct ptlrpc_request *req)
 		rc = -ENODEV;
 	} else if (lustre_msg_get_flags(req->rq_reqmsg) &
 		   (MSG_REPLAY | MSG_REQ_REPLAY_DONE) &&
-		   !obd->obd_recovering) {
+		   !test_bit(OBDF_RECOVERING, obd->obd_flags)) {
 		DEBUG_REQ(D_ERROR, req,
 			  "Invalid replay without recovery");
 		class_fail_export(req->rq_export);
 		rc = -ENODEV;
 	} else if (lustre_msg_get_transno(req->rq_reqmsg) != 0 &&
-		   !obd->obd_recovering) {
+		   !test_bit(OBDF_RECOVERING, obd->obd_flags)) {
 		DEBUG_REQ(D_ERROR, req,
 			  "Invalid req with transno %llu without recovery",
 			  lustre_msg_get_transno(req->rq_reqmsg));
@@ -3717,7 +3717,7 @@ static int ptlrpc_svcpt_health_check(struct ptlrpc_service_part *svcpt)
 
 	req_waited = right_now - request->rq_arrival_time.tv_sec;
 	svc_waited = right_now - svcpt->scp_last_request;
-	recovering = obd ? obd->obd_recovering : false;
+	recovering = obd ? test_bit(OBDF_RECOVERING, obd->obd_flags) : false;
 	spin_unlock(&svcpt->scp_req_lock);
 
 	max = obd_get_at_max(obd);

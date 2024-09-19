@@ -2376,7 +2376,7 @@ static void __ldlm_reprocess_all(struct ldlm_resource *res,
 	 * request replay stage.
 	 */
 	obd = ldlm_res_to_ns(res)->ns_obd;
-	if (obd->obd_recovering &&
+	if (test_bit(OBDF_RECOVERING, obd->obd_flags) &&
 	    atomic_read(&obd->obd_req_replay_clients) == 0)
 		RETURN_EXIT;
 restart:
