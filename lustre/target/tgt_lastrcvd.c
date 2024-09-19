@@ -166,7 +166,7 @@ static int tgt_clear_reply_slot(struct lu_target *lut, int idx)
 	int chunk;
 	int b;
 
-	if (lut->lut_obd->obd_stopping)
+	if (test_bit(OBDF_STOPPING, lut->lut_obd->obd_flags))
 		/*
 		 * in case of failover keep the bit set in order to
 		 * avoid overwriting slots in reply_data which might
@@ -877,7 +877,7 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	LIST_HEAD(client_list);
 	int			 rc;
 
-	if (tgt->lut_obd->obd_stopping)
+	if (test_bit(OBDF_STOPPING, tgt->lut_obd->obd_flags))
 		return;
 
 	rc = lu_env_init(&env, LCT_DT_THREAD);

@@ -2421,7 +2421,8 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 		struct lod_tgt_desc *tgt;
 		int rc = 1;
 
-		if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
+		if (!test_bit(OBDF_SET_UP, obd->obd_flags) ||
+		    test_bit(OBDF_STOPPING, obd->obd_flags))
 			RETURN(-EAGAIN);
 
 		d = lu2lod_dev(obd->obd_lu_dev);

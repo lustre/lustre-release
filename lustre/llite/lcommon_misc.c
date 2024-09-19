@@ -86,7 +86,7 @@ int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
 
 	if (!strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) &&
 	    test_bit(OBDF_SET_UP, watched->obd_flags) &&
-	    !watched->obd_stopping) {
+	    !test_bit(OBDF_STOPPING, watched->obd_flags)) {
 		cli = &watched->u.cli;
 		lco = owner;
 		flags = cli->cl_import->imp_connect_data.ocd_connect_flags;
@@ -106,7 +106,7 @@ int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
 		       watched->obd_type->typ_name,
 		       watched->obd_name,
 		       test_bit(OBDF_SET_UP, watched->obd_flags),
-		       watched->obd_stopping);
+		       test_bit(OBDF_STOPPING, watched->obd_flags));
 		result = -EINVAL;
 	}
 	RETURN(result);

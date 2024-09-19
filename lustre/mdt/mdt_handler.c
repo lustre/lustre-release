@@ -7409,7 +7409,7 @@ static int mdt_export_cleanup(struct obd_export *exp)
 
 			/* Don't unlink orphan on failover umount, LU-184 */
 			if (exp->exp_flags & OBD_OPT_FAILOVER ||
-			    exp->exp_obd->obd_stopping) {
+			    test_bit(OBDF_STOPPING, exp->exp_obd->obd_flags)) {
 				ma->ma_valid = MA_FLAGS;
 				ma->ma_attr_flags |= MDS_KEEP_ORPHAN;
 			}

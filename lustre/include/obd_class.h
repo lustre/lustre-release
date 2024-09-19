@@ -482,10 +482,9 @@ static inline int obd_check_dev(struct obd_device *obd)
 		return -ENODEV;
 	}
 
-	if (!test_bit(OBDF_SET_UP, (obd)->obd_flags) ||
-	    (obd)->obd_stopping) {
-		CERROR("Device %d not setup\n",
-		       (obd)->obd_minor);
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags) ||
+	    test_bit(OBDF_STOPPING, obd->obd_flags)) {
+		CERROR("Device %d not setup\n", obd->obd_minor);
 		return -ENODEV;
 	}
 
@@ -1339,7 +1338,8 @@ static inline int obd_health_check(const struct lu_env *env,
 		CERROR("cleaned up obd\n");
 		RETURN(-EOPNOTSUPP);
 	}
-	if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags) ||
+	    test_bit(OBDF_STOPPING, obd->obd_flags))
 		RETURN(0);
 	if (!obd->obd_type->typ_dt_ops->o_health_check)
 		RETURN(0);

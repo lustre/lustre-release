@@ -70,10 +70,11 @@ int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt)
 	 * in error case while obd is starting up.
 	 */
 	LASSERTF(obd->obd_starting == 1 ||
-		 obd->obd_stopping == 1 ||
+		 test_bit(OBDF_STOPPING, obd->obd_flags) ||
 		 !test_bit(OBDF_SET_UP, obd->obd_flags),
 		 "wrong obd state: %d/%d/%d\n", !!obd->obd_starting,
-		 !!obd->obd_stopping, test_bit(OBDF_SET_UP, obd->obd_flags));
+		 test_bit(OBDF_STOPPING, obd->obd_flags),
+		 test_bit(OBDF_SET_UP, obd->obd_flags));
 
 	/* cleanup the llog ctxt here */
 	if (ctxt->loc_logops->lop_cleanup)

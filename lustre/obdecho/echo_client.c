@@ -894,7 +894,7 @@ cl_echo_object_find(struct echo_device *d, const struct ost_id *oi)
 	LASSERTF(ostid_seq(oi) == FID_SEQ_ECHO, DOSTID"\n", POSTID(oi));
 
 	/* Never return an object if the obd is to be freed. */
-	if (echo_dev2cl(d)->cd_lu_dev.ld_obd->obd_stopping)
+	if (test_bit(OBDF_STOPPING, echo_dev2cl(d)->cd_lu_dev.ld_obd->obd_flags))
 		RETURN(ERR_PTR(-ENODEV));
 
 	env = cl_env_get(&refcheck);

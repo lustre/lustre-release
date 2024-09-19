@@ -620,7 +620,8 @@ static void kick_cpu_latency(struct ptlrpc_connection *conn,
 	if (ptlrpc_pmqos_use_stats_for_duration == true && obd != NULL) {
 		/* prevent racing with OBD cleanup (umount !) */
 		spin_lock(&obd->obd_dev_lock);
-		if (!obd->obd_stopping && obd->obd_svc_stats != NULL) {
+		if (!test_bit(OBDF_STOPPING, obd->obd_flags) &&
+		    obd->obd_svc_stats != NULL) {
 			struct lprocfs_counter ret;
 
 			lprocfs_stats_collect(obd->obd_svc_stats,

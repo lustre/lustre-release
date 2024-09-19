@@ -333,7 +333,8 @@ int lustre_start_mgc(struct super_block *sb)
 		GOTO(out_free, rc = -ENOMEM);
 
 	obd = class_name2obd(mgcname);
-	if (obd && !obd->obd_stopping && obd->u.cli.cl_mgc_mgsexp) {
+	if (obd && !test_bit(OBDF_STOPPING, obd->obd_flags) &&
+	    obd->u.cli.cl_mgc_mgsexp) {
 		int recov_bk;
 
 		rc = obd_set_info_async(NULL, obd->obd_self_export,

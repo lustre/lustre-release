@@ -438,7 +438,7 @@ void class_free_dev(struct obd_device *obd)
 
 	CDEBUG(D_CONFIG, "finishing cleanup of obd %s (%s)\n",
 			 obd->obd_name, obd->obd_uuid.uuid);
-	if (obd->obd_stopping) {
+	if (test_bit(OBDF_STOPPING, obd->obd_flags)) {
 		int err;
 
 		/* If we're not stopping, we were never set up */
@@ -738,7 +738,8 @@ int class_notify_sptlrpc_conf(const char *fsname, int namelen)
 
 	obd_device_lock();
 	obd_device_for_each(dev_no, obd) {
-		if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
+		if (!test_bit(OBDF_SET_UP, obd->obd_flags) ||
+		    test_bit(OBDF_STOPPING, obd->obd_flags))
 			continue;
 
 		/* only notify mdc, osc, osp, lwp, mdt, ost
@@ -998,7 +999,7 @@ static struct obd_export *__class_new_export(struct obd_device *obd,
 	spin_lock(&obd->obd_dev_lock);
 	if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
 		/* shouldn't happen, but might race */
-		if (obd->obd_stopping)
+		if (test_bit(OBDF_STOPPING, obd->obd_flags))
 			GOTO(exit_unlock, rc = -ENODEV);
 
 		rc = obd_uuid_add(obd, export);
@@ -1704,7 +1705,7 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 	/* umount already run. evict thread should stop leaving unmount thread
 	 * to take over
 	 */
-	if (obd->obd_stopping) {
+	if (test_bit(OBDF_STOPPING, obd->obd_flags)) {
 		spin_unlock(&obd->obd_dev_lock);
 		return 0;
 	}
@@ -1764,7 +1765,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 	int rc = 0;
 
 	spin_lock(&obd->obd_dev_lock);
-	if (obd->obd_stopping) {
+	if (test_bit(OBDF_STOPPING, obd->obd_flags)) {
 		spin_unlock(&obd->obd_dev_lock);
 		return 0;
 	}

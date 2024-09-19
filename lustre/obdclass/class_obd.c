@@ -439,7 +439,7 @@ out_lcfg:
 		if (!obd)
 			GOTO(out, rc = -ENOENT);
 
-		if (obd->obd_stopping)
+		if (test_bit(OBDF_STOPPING, obd->obd_flags))
 			status = "ST";
 		else if (obd->obd_inactive)
 			status = "IN";
@@ -480,7 +480,8 @@ out_lcfg:
 	}
 	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 
-	if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping) {
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags) ||
+	    test_bit(OBDF_STOPPING, obd->obd_flags)) {
 		rc = -EINVAL;
 		CERROR("obdclass: device %d not set up: rc = %d\n",
 		       data->ioc_dev, rc);

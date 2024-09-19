@@ -250,7 +250,7 @@ int gss_do_ctx_init_rpc(char *buffer, unsigned long count)
 	}
 
 	spin_lock(&obd->obd_dev_lock);
-	if (obd->obd_stopping) {
+	if (test_bit(OBDF_STOPPING, obd->obd_flags)) {
 		rc = -EINVAL;
 		CERROR("%s: obd has stopped: rc = %d\n", obdname, rc);
 		spin_unlock(&obd->obd_dev_lock);

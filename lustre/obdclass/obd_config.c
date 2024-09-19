@@ -905,13 +905,13 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	}
 
 	spin_lock(&obd->obd_dev_lock);
-	if (obd->obd_stopping) {
+	if (test_bit(OBDF_STOPPING, obd->obd_flags)) {
 		spin_unlock(&obd->obd_dev_lock);
 		CERROR("OBD %d already stopping\n", obd->obd_minor);
 		RETURN(-ENODEV);
 	}
 	/* Leave this on forever */
-	obd->obd_stopping = 1;
+	set_bit(OBDF_STOPPING, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 
 	/* wait for already-arrived-connections to finish. */

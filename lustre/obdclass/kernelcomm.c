@@ -220,7 +220,7 @@ static int lustre_device_list_dump(struct sk_buff *msg,
 			break;
 		}
 
-		if (obd->obd_stopping)
+		if (test_bit(OBDF_STOPPING, obd->obd_flags))
 			status = "ST";
 		else if (obd->obd_inactive)
 			status = "IN";

@@ -640,6 +640,7 @@ enum {
 	OBDF_VERSION_RECOV,	/* obd uses version checking */
 	OBDF_REPLAYABLE,	/* recovery enabled; inform clients */
 	OBDF_NO_RECOV,		/* fail instead of retry messages */
+	OBDF_STOPPING,		/* started cleanup */
 	OBDF_NUM_FLAGS,
 };
 
@@ -659,7 +660,6 @@ struct obd_device {
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 	unsigned long
-		obd_stopping:1,		/* started cleanup */
 		obd_starting:1,		/* started setup */
 		obd_force:1,		/* cleanup with > 0 obd refcount */
 		obd_fail:1,		/* cleanup with failover */
@@ -846,14 +846,16 @@ void obd_nid_stats_put(struct obd_device *obd, struct nid_stat *ns);
 /* both client and MDT recovery are aborted, or MDT is stopping  */
 static inline bool obd_recovery_abort(struct obd_device *obd)
 {
-	return obd->obd_stopping || test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
+	return test_bit(OBDF_STOPPING, obd->obd_flags) ||
+	       test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
 }
 
 /* MDT recovery is aborted, or MDT is stopping */
 static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 {
-	return obd->obd_stopping || test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags) ||
-		test_bit(OBDF_ABORT_MDT_RECOVERY, obd->obd_flags);
+	return test_bit(OBDF_STOPPING, obd->obd_flags) ||
+	       test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags) ||
+	       test_bit(OBDF_ABORT_MDT_RECOVERY, obd->obd_flags);
 }
 #endif
 

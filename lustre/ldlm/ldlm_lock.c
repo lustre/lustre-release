@@ -2574,7 +2574,7 @@ static void ldlm_cancel_lock_for_export(struct obd_export *exp,
 
 	ldlm_lvbo_update(res, lock, NULL, 1);
 	ldlm_lock_cancel(lock);
-	if (!exp->exp_obd->obd_stopping)
+	if (!test_bit(OBDF_STOPPING, exp->exp_obd->obd_flags))
 		ldlm_reprocess_all(res, lock->l_policy_data.l_inodebits.bits);
 	ldlm_resource_putref(res);
 
@@ -2681,7 +2681,7 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
 
 	if (ecl.ecl_loop > 0 &&
 	    atomic_read(&exp->exp_lock_hash->hs_count) == 0 &&
-	    exp->exp_obd->obd_stopping)
+	    test_bit(OBDF_STOPPING, exp->exp_obd->obd_flags))
 		ldlm_reprocess_recovery_done(exp->exp_obd->obd_namespace);
 
 	lu_env_fini(&env);

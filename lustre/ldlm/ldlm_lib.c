@@ -1182,12 +1182,13 @@ int target_handle_connect(struct ptlrpc_request *req)
 
 	atomic_inc(&target->obd_conn_inprogress);
 
-	if (target->obd_stopping || !test_bit(OBDF_SET_UP, target->obd_flags)) {
+	if (test_bit(OBDF_STOPPING, target->obd_flags) ||
+	    !test_bit(OBDF_SET_UP, target->obd_flags)) {
 		deuuidify(str, NULL, &target_start, &target_len);
 		LCONSOLE_INFO("%.*s: Not available for connect from %s (%s)\n",
 			      target_len, target_start,
 			      libcfs_nidstr(&req->rq_peer.nid),
-			      (target->obd_stopping ?
+			      (test_bit(OBDF_STOPPING, target->obd_flags) ?
 			       "stopping" : "not set up"));
 		GOTO(out, rc = -ENODEV);
 	}
@@ -1931,7 +1932,7 @@ static void abort_lock_replay_queue(struct obd_device *obd)
  * - clear the recovery flags
  * - cancel the timer
  * - free queued requests and replies, but don't send replies
- * Because the obd_stopping flag is set, no new requests should be received.
+ * Because the OBDF_STOPPING flag is set, no new requests should be received.
  */
 void target_cleanup_recovery(struct obd_device *obd)
 {
@@ -2037,7 +2038,7 @@ static void extend_recovery_timer(struct obd_device *obd, timeout_t dr_timeout,
 	spin_lock(&obd->obd_dev_lock);
 	if (!test_bit(OBDF_RECOVERING, obd->obd_flags) ||
 	    test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags) ||
-	    obd->obd_stopping) {
+	    test_bit(OBDF_STOPPING, obd->obd_flags)) {
 		spin_unlock(&obd->obd_dev_lock);
 		return;
 	}
@@ -3032,7 +3033,7 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 	       "last_transno %llu\n", obd->obd_name,
 	       atomic_read(&obd->obd_max_recoverable_clients),
 	       obd->obd_last_committed);
-	LASSERT(obd->obd_stopping == 0);
+	LASSERT(!test_bit(OBDF_STOPPING, obd->obd_flags));
 	obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
 	obd->obd_recovery_start = 0;
 	obd->obd_recovery_end = 0;
@@ -3159,7 +3160,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 		} else {
 			spin_unlock(&obd->obd_recovery_task_lock);
 			target_request_copy_put(req);
-			RETURN(obd->obd_stopping ? -ENOTCONN : 1);
+			RETURN(test_bit(OBDF_STOPPING, obd->obd_flags) ? -ENOTCONN : 1);
 		}
 	}
 	if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REQ_REPLAY_DONE) {

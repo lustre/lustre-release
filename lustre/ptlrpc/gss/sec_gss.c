@@ -1987,7 +1987,7 @@ int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 
 	uuid = (struct obd_uuid *) uuid_obj.data;
 	target = class_uuid2obd(uuid);
-	if (!target || target->obd_stopping ||
+	if (!target || test_bit(OBDF_STOPPING, target->obd_flags) ||
 	    !test_bit(OBDF_SET_UP, target->obd_flags)) {
 		char *target_start;
 		int target_len;
@@ -2002,7 +2002,7 @@ int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 			       target_len, target_start,
 			       libcfs_nidstr(&req->rq_peer.nid),
 			       target ?
-			       (target->obd_stopping ?
+			       (test_bit(OBDF_STOPPING, target->obd_flags) ?
 				"stopping" : "not set up") :
 			       "no target");
 		RETURN(rc);
