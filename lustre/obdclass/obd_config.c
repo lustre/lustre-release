@@ -756,24 +756,26 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	}
 
 	if (test_bit(OBDF_SET_UP, obd->obd_flags)) {
-		CERROR("Device %d already setup (type %s)\n",
-		       obd->obd_minor, obd->obd_type->typ_name);
-		RETURN(-EEXIST);
+		err = -EEXIST;
+		CERROR("%s: device %d already setup: rc = %d\n",
+		       obd->obd_type->typ_name, obd->obd_minor, err);
+		RETURN(err);
 	}
 
 	/* is someone else setting us up right now? (attach inits spinlock) */
 	spin_lock(&obd->obd_dev_lock);
-	if (obd->obd_starting) {
+	if (test_bit(OBDF_STARTING, obd->obd_flags)) {
 		spin_unlock(&obd->obd_dev_lock);
-		CERROR("Device %d setup in progress (type %s)\n",
-		       obd->obd_minor, obd->obd_type->typ_name);
-		RETURN(-EEXIST);
+		err = -EEXIST;
+		CERROR("%s: device %d setup already in progress: rc = %d\n",
+		       obd->obd_type->typ_name, obd->obd_minor, err);
+		RETURN(err);
 	}
 	/*
 	 * just leave this on forever.  I can't use OBDF_SET_UP here because
 	 * other fns check that status, and we're not actually set up yet.
 	 */
-	obd->obd_starting = 1;
+	set_bit(OBDF_STARTING, obd->obd_flags);
 	obd->obd_gen_hash = NULL;
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -839,7 +841,7 @@ err_nid_hash:
 err_uuid_hash:
 	rhashtable_destroy(&obd->obd_uuid_hash);
 err_starting:
-	obd->obd_starting = 0;
+	clear_bit(OBDF_STARTING, obd->obd_flags);
 	CERROR("setup %s failed (%d)\n", obd->obd_name, err);
 	return err;
 }

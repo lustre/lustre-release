@@ -273,6 +273,7 @@ OBD_RACE||CFS_RACE
 obd_recovering||OBDF_RECOVERING
 obd_replayable||OBDF_REPLAYABLE
 obd_set_up||OBDF_SET_UP
+obd_starting||OBDF_STARTING
 obd_stopping||OBDF_STOPPING
 obd_version_recov||OBDF_VERSION_RECOV
 OS_STATE_DEGRADED||OS_STATFS_DEGRADED
