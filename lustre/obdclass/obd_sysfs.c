@@ -197,7 +197,7 @@ static ssize_t no_transno_store(struct kobject *kobj,
 		return rc;
 
 	obd = class_num2obd(idx);
-	if (!obd || !obd->obd_attached) {
+	if (!obd || !test_bit(OBDF_ATTACHED, obd->obd_flags)) {
 		if (obd)
 			CERROR("%s: not attached\n", obd->obd_name);
 		return -ENODEV;
@@ -248,7 +248,7 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 		return sprintf(buf, "LBUG\n");
 
 	obd_device_lock();
-	obd_device_for_each_cond(dev_no, obd, obd->obd_attached &&
+	obd_device_for_each_cond(dev_no, obd, test_bit(OBDF_ATTACHED, obd->obd_flags) &&
 				 obd->obd_set_up && !obd->obd_stopping &&
 				 !obd->obd_read_only) {
 		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
@@ -588,7 +588,7 @@ static int obd_device_list_seq_show(struct seq_file *p, void *v)
 		status = "IN";
 	else if (obd->obd_set_up)
 		status = "UP";
-	else if (obd->obd_attached)
+	else if (test_bit(OBDF_ATTACHED, obd->obd_flags))
 		status = "AT";
 	else
 		status = "--";
@@ -693,7 +693,7 @@ health_check_seq_show(struct seq_file *m, void *unused)
 	unsigned long dev_no = 0;
 
 	obd_device_lock();
-	obd_device_for_each_cond(dev_no, obd, obd->obd_attached &&
+	obd_device_for_each_cond(dev_no, obd, test_bit(OBDF_ATTACHED, obd->obd_flags) &&
 				 obd->obd_set_up && !obd->obd_stopping) {
 		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 

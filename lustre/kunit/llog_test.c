@@ -2280,7 +2280,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	/* disk obd */
 	tgt = class_name2obd(lustre_cfg_string(lcfg, 1));
-	if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
+	if (!tgt || !test_bit(OBDF_ATTACHED, tgt->obd_flags) || !tgt->obd_set_up) {
 		CERROR("target device not attached or not set up (%s)\n",
 			lustre_cfg_string(lcfg, 1));
 		RETURN(-EINVAL);

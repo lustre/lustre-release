@@ -492,7 +492,7 @@ static int class_name2dev_nolock(const char *name)
 			 * out any references
 			 */
 			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			if (obd->obd_attached) {
+			if (test_bit(OBDF_ATTACHED, obd->obd_flags)) {
 				ret = obd->obd_minor;
 				return ret;
 			}
@@ -596,7 +596,7 @@ struct obd_device *class_name2obd(const char *name)
 			 * out any references
 			 */
 			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			if (obd->obd_attached)
+			if (test_bit(OBDF_ATTACHED, obd->obd_flags))
 				break;
 		}
 	}
@@ -688,7 +688,7 @@ struct obd_device *class_str2obd(const char *str)
 			 * out any references
 			 */
 			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			if (obd->obd_attached) {
+			if (test_bit(OBDF_ATTACHED, obd->obd_flags)) {
 				class_incref(obd, "find", current);
 				break;
 			}

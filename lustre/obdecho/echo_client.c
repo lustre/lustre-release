@@ -2446,7 +2446,7 @@ static int echo_client_setup(const struct lu_env *env,
 	}
 
 	tgt = class_name2obd(lustre_cfg_string(lcfg, 1));
-	if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
+	if (!tgt || !test_bit(OBDF_ATTACHED, tgt->obd_flags) || !tgt->obd_set_up) {
 		CERROR("device not attached or not set up (%s)\n",
 		       lustre_cfg_string(lcfg, 1));
 		RETURN(-EINVAL);

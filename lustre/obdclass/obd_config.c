@@ -666,7 +666,7 @@ int class_attach(struct lustre_cfg *lcfg)
 		RETURN(rc);
 	}
 
-	obd->obd_attached = 1;
+	set_bit(OBDF_ATTACHED, obd->obd_flags);
 	CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
 	       obd->obd_minor, typename, kref_read(&obd->obd_refcount));
 
@@ -693,7 +693,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
 
 	/* have we attached a type to this device? */
-	if (!obd->obd_attached) {
+	if (!test_bit(OBDF_ATTACHED, obd->obd_flags)) {
 		CERROR("Device %d not attached\n", obd->obd_minor);
 		RETURN(-ENODEV);
 	}
@@ -813,12 +813,12 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 	}
 
 	spin_lock(&obd->obd_dev_lock);
-	if (!obd->obd_attached) {
+	if (!test_bit(OBDF_ATTACHED, obd->obd_flags)) {
 		spin_unlock(&obd->obd_dev_lock);
 		CERROR("OBD device %d not attached\n", obd->obd_minor);
 		RETURN(-ENODEV);
 	}
-	obd->obd_attached = 0;
+	clear_bit(OBDF_ATTACHED, obd->obd_flags);
 
 	/* cleanup in progress. we don't like to find this device after now */
 	class_unregister_device(obd);
@@ -950,7 +950,7 @@ static void class_decref_free(struct kref *kref)
 	struct obd_export *exp;
 
 	obd = container_of(kref, struct obd_device, obd_refcount);
-	LASSERT(!obd->obd_attached);
+	LASSERT(!test_bit(OBDF_ATTACHED, obd->obd_flags));
 	/*
 	 * All exports have been destroyed; there should
 	 * be no more in-progress ops by this point.

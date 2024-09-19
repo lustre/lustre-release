@@ -595,7 +595,8 @@ struct obd_llog_group {
 
 /* Obd flag bits */
 enum {
-      OBDF_NUM_FLAGS,
+	OBDF_ATTACHED,		/* finished attach */
+	OBDF_NUM_FLAGS,
 };
 
 /* corresponds to one of the obd's */
@@ -614,7 +615,6 @@ struct obd_device {
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 	unsigned long
-		obd_attached:1,		/* finished attach */
 		obd_set_up:1,		/* finished setup */
 		obd_recovering:1,	/* there are recoverable clients */
 		obd_abort_recovery:1,	/* abort client and MDT recovery */

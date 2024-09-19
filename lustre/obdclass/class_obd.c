@@ -463,7 +463,7 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 			status = "IN";
 		else if (obd->obd_set_up)
 			status = "UP";
-		else if (obd->obd_attached)
+		else if (test_bit(OBDF_ATTACHED, obd->obd_flags))
 			status = "AT";
 		else
 			status = "--";
