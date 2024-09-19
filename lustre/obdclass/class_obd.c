@@ -461,7 +461,7 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 			status = "ST";
 		else if (obd->obd_inactive)
 			status = "IN";
-		else if (obd->obd_set_up)
+		else if (test_bit(OBDF_SET_UP, obd->obd_flags))
 			status = "UP";
 		else if (test_bit(OBDF_ATTACHED, obd->obd_flags))
 			status = "AT";
@@ -498,7 +498,7 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 	}
 	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 
-	if (!obd->obd_set_up || obd->obd_stopping) {
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping) {
 		rc = -EINVAL;
 		CERROR("obdclass: device %d not set up: rc = %d\n",
 		       data->ioc_dev, rc);

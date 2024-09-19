@@ -471,7 +471,8 @@ do {								\
 	if (rc)							\
 		return rc;					\
 								\
-	if (!(obd)->obd_set_up || (obd)->obd_stopping) {	\
+	if (!test_bit(OBDF_SET_UP, (obd)->obd_flags) ||	       	\
+	    (obd)->obd_stopping) {				\
 		CERROR("Device %d not setup\n",			\
 		       (obd)->obd_minor);			\
 		RETURN(-ENODEV);				\
@@ -1243,7 +1244,8 @@ static inline void obd_import_event(struct obd_device *obd,
 		return;
 	}
 
-	if (obd->obd_set_up && obd->obd_type->typ_dt_ops->o_import_event)
+	if (test_bit(OBDF_SET_UP, obd->obd_flags) &&
+	    obd->obd_type->typ_dt_ops->o_import_event)
 		obd->obd_type->typ_dt_ops->o_import_event(obd, imp, event);
 
 	EXIT;
@@ -1261,7 +1263,7 @@ static inline int obd_notify(struct obd_device *obd,
 	if (rc)
 		return rc;
 
-	if (!obd->obd_set_up) {
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags)) {
 		CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
 		RETURN(-EINVAL);
 	}
@@ -1358,7 +1360,7 @@ static inline int obd_health_check(const struct lu_env *env,
 		CERROR("cleaned up obd\n");
 		RETURN(-EOPNOTSUPP);
 	}
-	if (!obd->obd_set_up || obd->obd_stopping)
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
 		RETURN(0);
 	if (!obd->obd_type->typ_dt_ops->o_health_check)
 		RETURN(0);

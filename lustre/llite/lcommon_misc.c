@@ -93,7 +93,8 @@ int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
 	ENTRY;
 
 	if (!strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) &&
-	    watched->obd_set_up && !watched->obd_stopping) {
+	    test_bit(OBDF_SET_UP, watched->obd_flags) &&
+	    !watched->obd_stopping) {
 		cli = &watched->u.cli;
 		lco = owner;
 		flags = cli->cl_import->imp_connect_data.ocd_connect_flags;
@@ -111,7 +112,8 @@ int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
 		CERROR("unexpected notification from %s %s"
 		       "(setup:%d,stopping:%d)!\n",
 		       watched->obd_type->typ_name,
-		       watched->obd_name, watched->obd_set_up,
+		       watched->obd_name,
+		       test_bit(OBDF_SET_UP, watched->obd_flags),
 		       watched->obd_stopping);
 		result = -EINVAL;
 	}

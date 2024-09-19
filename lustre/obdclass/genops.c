@@ -758,7 +758,7 @@ int class_notify_sptlrpc_conf(const char *fsname, int namelen)
 
 	obd_device_lock();
 	obd_device_for_each(dev_no, obd) {
-		if (obd->obd_set_up == 0 || obd->obd_stopping)
+		if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
 			continue;
 
 		/* only notify mdc, osc, osp, lwp, mdt, ost

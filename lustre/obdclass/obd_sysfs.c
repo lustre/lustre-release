@@ -249,7 +249,7 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 
 	obd_device_lock();
 	obd_device_for_each_cond(dev_no, obd, test_bit(OBDF_ATTACHED, obd->obd_flags) &&
-				 obd->obd_set_up && !obd->obd_stopping &&
+				 test_bit(OBDF_SET_UP, obd->obd_flags) && !obd->obd_stopping &&
 				 !obd->obd_read_only) {
 		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 
@@ -586,7 +586,7 @@ static int obd_device_list_seq_show(struct seq_file *p, void *v)
 		status = "ST";
 	else if (obd->obd_inactive)
 		status = "IN";
-	else if (obd->obd_set_up)
+	else if (test_bit(OBDF_SET_UP, obd->obd_flags))
 		status = "UP";
 	else if (test_bit(OBDF_ATTACHED, obd->obd_flags))
 		status = "AT";
@@ -694,7 +694,7 @@ health_check_seq_show(struct seq_file *m, void *unused)
 
 	obd_device_lock();
 	obd_device_for_each_cond(dev_no, obd, test_bit(OBDF_ATTACHED, obd->obd_flags) &&
-				 obd->obd_set_up && !obd->obd_stopping) {
+				 test_bit(OBDF_SET_UP, obd->obd_flags) && !obd->obd_stopping) {
 		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 
 		class_incref(obd, __func__, current);

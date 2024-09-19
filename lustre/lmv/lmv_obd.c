@@ -326,7 +326,7 @@ static int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 	       mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
 	       tgt->ltd_uuid.uuid, obd->obd_uuid.uuid);
 
-	if (!mdc_obd->obd_set_up) {
+	if (!test_bit(OBDF_SET_UP, mdc_obd->obd_flags)) {
 		CERROR("target %s is not set up\n", tgt->ltd_uuid.uuid);
 		RETURN(-EINVAL);
 	}

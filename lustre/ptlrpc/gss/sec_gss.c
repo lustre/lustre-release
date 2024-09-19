@@ -2011,7 +2011,8 @@ int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 
 	uuid = (struct obd_uuid *) uuid_obj.data;
 	target = class_uuid2obd(uuid);
-	if (!target || target->obd_stopping || !target->obd_set_up) {
+	if (!target || target->obd_stopping ||
+	    !test_bit(OBDF_SET_UP, target->obd_flags)) {
 		char *target_start;
 		int target_len;
 

@@ -258,7 +258,7 @@ int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 		RETURN(rc);
 	}
 
-	if (unlikely(!obd->obd_set_up)) {
+	if (unlikely(!test_bit(OBDF_SET_UP, obd->obd_flags))) {
 		rc = -EINVAL;
 		CERROR("%s: obd not setup: rc = %d\n", obdname, rc);
 		RETURN(rc);

@@ -395,7 +395,7 @@ int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 		RETURN(-ENOMEM);
 
 	lwp = class_name2obd(lwpname);
-	if (lwp && lwp->obd_set_up == 1) {
+	if (lwp && test_bit(OBDF_SET_UP, lwp->obd_flags)) {
 		struct obd_uuid *uuid;
 
 		OBD_ALLOC_PTR(uuid);

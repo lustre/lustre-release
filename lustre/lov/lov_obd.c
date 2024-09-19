@@ -107,7 +107,7 @@ static int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
 	tgt_uuid = &lov->lov_tgts[index]->ltd_uuid;
 	tgt_obd = lov->lov_tgts[index]->ltd_obd;
 
-	if (!tgt_obd->obd_set_up) {
+	if (!test_bit(OBDF_SET_UP, tgt_obd->obd_flags)) {
 		rc = -EINVAL;
 		CERROR("%s: target not set up: rc = %d\n",
 		       obd_uuid2str(tgt_uuid), rc);

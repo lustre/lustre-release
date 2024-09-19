@@ -1740,7 +1740,7 @@ static int osp_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 		struct obd_device	*obd = exp->exp_obd;
 		struct osp_device	*osp;
 
-		if (!obd->obd_set_up || obd->obd_stopping)
+		if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
 			RETURN(-EAGAIN);
 
 		osp = lu2osp_dev(obd->obd_lu_dev);
@@ -1775,7 +1775,7 @@ static int osp_obd_set_info_async(const struct lu_env *env,
 	}
 
 	LASSERT(set != NULL);
-	if (!obd->obd_set_up || obd->obd_stopping)
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
 		RETURN(-EAGAIN);
 	osp = lu2osp_dev(obd->obd_lu_dev);
 

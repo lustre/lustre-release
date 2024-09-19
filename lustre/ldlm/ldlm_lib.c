@@ -1096,7 +1096,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
 	atomic_inc(&target->obd_conn_inprogress);
 
-	if (target->obd_stopping || !target->obd_set_up) {
+	if (target->obd_stopping || !test_bit(OBDF_SET_UP, target->obd_flags)) {
 		deuuidify(str, NULL, &target_start, &target_len);
 		LCONSOLE_INFO("%.*s: Not available for connect from %s (%s)\n",
 			      target_len, target_start,

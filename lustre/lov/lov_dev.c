@@ -406,7 +406,7 @@ static int lov_cl_add_target(const struct lu_env *env, struct lu_device *dev,
 	LASSERT(tgt != NULL);
 	LASSERT(tgt->ltd_obd != NULL);
 
-	if (!tgt->ltd_obd->obd_set_up) {
+	if (!test_bit(OBDF_SET_UP, tgt->ltd_obd->obd_flags)) {
 		CERROR("Target %s not set up\n", obd_uuid2str(&tgt->ltd_uuid));
 		RETURN(-EINVAL);
 	}

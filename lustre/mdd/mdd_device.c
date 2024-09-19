@@ -1605,7 +1605,7 @@ static int mdd_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 		struct obd_device	*obd = exp->exp_obd;
 		struct mdd_device	*mdd;
 
-		if (!obd->obd_set_up || obd->obd_stopping)
+		if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
 			RETURN(-EAGAIN);
 
 		mdd = lu2mdd_dev(obd->obd_lu_dev);
@@ -1628,7 +1628,7 @@ static int mdd_obd_set_info_async(const struct lu_env *env,
 	struct mdd_device	*mdd;
 	int			 rc;
 
-	if (!obd->obd_set_up || obd->obd_stopping)
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags) || obd->obd_stopping)
 		RETURN(-EAGAIN);
 
 	mdd = lu2mdd_dev(obd->obd_lu_dev);

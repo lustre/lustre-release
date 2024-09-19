@@ -698,7 +698,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		RETURN(-ENODEV);
 	}
 
-	if (obd->obd_set_up) {
+	if (test_bit(OBDF_SET_UP, obd->obd_flags)) {
 		CERROR("Device %d already setup (type %s)\n",
 		       obd->obd_minor, obd->obd_type->typ_name);
 		RETURN(-EEXIST);
@@ -713,7 +713,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		RETURN(-EEXIST);
 	}
 	/*
-	 * just leave this on forever.  I can't use obd_set_up here because
+	 * just leave this on forever.  I can't use OBDF_SET_UP here because
 	 * other fns check that status, and we're not actually set up yet.
 	 */
 	obd->obd_starting = 1;
@@ -764,7 +764,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(err_uuid_hash, err);
 #endif /* ! HAVE_SERVER_SUPPORT */
 
-	obd->obd_set_up = 1;
+	set_bit(OBDF_SET_UP, obd->obd_flags);
 
 	spin_lock(&obd->obd_dev_lock);
 	/* cleanup drops this */
@@ -807,7 +807,7 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	ENTRY;
 
-	if (obd->obd_set_up) {
+	if (test_bit(OBDF_SET_UP, obd->obd_flags)) {
 		CERROR("OBD device %d still set up\n", obd->obd_minor);
 		RETURN(-EBUSY);
 	}
@@ -846,7 +846,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	CFS_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
 
-	if (!obd->obd_set_up) {
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags)) {
 		CERROR("Device %d not setup\n", obd->obd_minor);
 		RETURN(-ENODEV);
 	}
@@ -927,7 +927,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	}
 #endif /* HAVE_SERVER_SUPPORT */
 	class_decref(obd, "setup", obd);
-	obd->obd_set_up = 0;
+	clear_bit(OBDF_SET_UP, obd->obd_flags);
 
 	RETURN(0);
 }
