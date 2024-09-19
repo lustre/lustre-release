@@ -474,7 +474,8 @@ static int osp_disconnect(struct osp_device *d)
 
 	/* Send disconnect on healthy import, do force disconnect otherwise */
 	spin_lock(&imp->imp_lock);
-	imp->imp_obd->obd_force |= imp->imp_state != LUSTRE_IMP_FULL;
+	if (imp->imp_state != LUSTRE_IMP_FULL)
+		set_bit(OBDF_FORCE, imp->imp_obd->obd_flags);
 	spin_unlock(&imp->imp_lock);
 
 	init_completion(&d->opd_disconnect_cmplt);

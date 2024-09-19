@@ -925,7 +925,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		for (flag = lustre_cfg_string(lcfg, 1); *flag != 0; flag++)
 			switch (*flag) {
 			case 'F':
-				obd->obd_force = 1;
+				set_bit(OBDF_FORCE, obd->obd_flags);
 				break;
 			case 'A':
 				LCONSOLE(D_WARNING, "Failing over %s\n",
@@ -2461,7 +2461,7 @@ int class_manual_cleanup(struct obd_device *obd)
 		RETURN(-EALREADY);
 	}
 
-	if (obd->obd_force)
+	if (test_bit(OBDF_FORCE, obd->obd_flags))
 		strlcat(flags, "F", sizeof(flags));
 	if (obd->obd_fail)
 		strlcat(flags, "A", sizeof(flags));

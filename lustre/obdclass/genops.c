@@ -61,8 +61,9 @@ static void obd_device_free(struct obd_device *obd)
 		 "obd %px obd_magic %08x != %08x\n",
 		 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
 	LASSERTF(obd->obd_namespace == NULL,
-		 "obd %px: namespace %px was not properly cleaned up (obd_force=%d)!\n",
-		 obd, obd->obd_namespace, obd->obd_force);
+		 "%s: namespace %px not properly cleaned up (force=%u)\n",
+		 obd->obd_name, obd->obd_namespace,
+		 test_bit(OBDF_FORCE, obd->obd_flags));
 	OBD_SLAB_FREE_PTR(obd, obd_device_cachep);
 }
 

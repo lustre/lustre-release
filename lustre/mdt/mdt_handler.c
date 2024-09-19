@@ -5875,7 +5875,7 @@ static void mdt_stack_fini(const struct lu_env *env,
 	/* process cleanup, pass mdt obd name to get obd umount flags */
 	/* another purpose is to let all layers to release their objects */
 	lustre_cfg_bufs_reset(bufs, mdt_obd_name(m));
-	if (obd->obd_force)
+	if (test_bit(OBDF_FORCE, obd->obd_flags))
 		strcat(flags, "F");
 	if (obd->obd_fail)
 		strcat(flags, "A");
@@ -6444,7 +6444,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	target_recovery_fini(obd);
 	if (m->mdt_namespace != NULL)
 		ldlm_namespace_free_prior(m->mdt_namespace, NULL,
-					  d->ld_obd->obd_force);
+			test_bit(OBDF_FORCE, d->ld_obd->obd_flags));
 	mdt_quota_fini(env, m);
 
 	obd_exports_barrier(obd);

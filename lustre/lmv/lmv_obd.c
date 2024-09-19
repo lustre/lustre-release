@@ -539,7 +539,10 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 	mdc_obd = class_exp2obd(tgt->ltd_exp);
 
 	if (mdc_obd) {
-		mdc_obd->obd_force = obd->obd_force;
+		if (test_bit(OBDF_FORCE, obd->obd_flags))
+			set_bit(OBDF_FORCE, mdc_obd->obd_flags);
+		else
+			clear_bit(OBDF_FORCE, mdc_obd->obd_flags);
 		mdc_obd->obd_fail = obd->obd_fail;
 		if (test_bit(OBDF_NO_RECOV, obd->obd_flags))
 			set_bit(OBDF_NO_RECOV, mdc_obd->obd_flags);
@@ -1145,7 +1148,10 @@ hsm_req_err:
 			 * mdc. Let's pass it through
 			 */
 			mdc_obd = class_exp2obd(tgt->ltd_exp);
-			mdc_obd->obd_force = obd->obd_force;
+			if (test_bit(OBDF_FORCE, obd->obd_flags))
+				set_bit(OBDF_FORCE, mdc_obd->obd_flags);
+			else
+				clear_bit(OBDF_FORCE, mdc_obd->obd_flags);
 			err = obd_iocontrol(cmd, tgt->ltd_exp, len, karg, uarg);
 			if (err) {
 				if (tgt->ltd_active) {

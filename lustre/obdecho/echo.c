@@ -815,7 +815,8 @@ static int echo_srv_init0(const struct lu_env *env,
 	RETURN(0);
 
 err_out:
-	ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
+	ldlm_namespace_free(obd->obd_namespace, NULL,
+			    test_bit(OBDF_FORCE, obd->obd_flags));
 	obd->obd_namespace = NULL;
 
 	lprocfs_obd_cleanup(obd);
@@ -843,7 +844,7 @@ static void echo_srv_fini(const struct lu_env *env,
 	class_disconnect_exports(obd);
 	if (obd->obd_namespace)
 		ldlm_namespace_free_prior(obd->obd_namespace, NULL,
-					  obd->obd_force);
+					  test_bit(OBDF_FORCE, obd->obd_flags));
 
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();

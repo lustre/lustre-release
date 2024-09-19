@@ -260,7 +260,7 @@ static int server_stop_mgs(struct super_block *sb)
 	}
 
 	/* The MGS should always stop when we say so */
-	obd->obd_force = 1;
+	set_bit(OBDF_FORCE, obd->obd_flags);
 	rc = class_manual_cleanup(obd);
 	RETURN(rc);
 }
@@ -1028,7 +1028,7 @@ static int lustre_stop_lwp(struct super_block *sb)
 		lwp = list_first_entry(&lsi->lsi_lwp_list, struct obd_device,
 				       obd_lwp_list);
 		list_del_init(&lwp->obd_lwp_list);
-		lwp->obd_force = 1;
+		set_bit(OBDF_FORCE, lwp->obd_flags);
 		mutex_unlock(&lsi->lsi_lwp_mutex);
 
 		rc = class_manual_cleanup(lwp);
@@ -1126,7 +1126,7 @@ static int server_stop_servers(int lsiflags)
 
 	class_put_type(type);
 	if (obd && type_last) {
-		obd->obd_force = 1;
+		set_bit(OBDF_FORCE, obd->obd_flags);
 		/* obd_fail doesn't mean much on a server obd */
 		rc = class_manual_cleanup(obd);
 	}
@@ -2068,7 +2068,7 @@ static void server_put_super(struct super_block *sb)
 			/* We can't seem to give an error return code
 			 * to .put_super, so we better make sure we clean up!
 			 */
-			obd->obd_force = 1;
+			set_bit(OBDF_FORCE, obd->obd_flags);
 			class_manual_cleanup(obd);
 			if (CFS_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE)) {
 				int idx;
@@ -2120,7 +2120,7 @@ static void server_put_super(struct super_block *sb)
 		obd = class_name2obd(extraname);
 		if (obd) {
 			CWARN("Cleaning orphaned obd %s\n", extraname);
-			obd->obd_force = 1;
+			set_bit(OBDF_FORCE, obd->obd_flags);
 			class_manual_cleanup(obd);
 		}
 		OBD_FREE(extraname, strlen(extraname) + 1);
@@ -2485,7 +2485,7 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 			 obd, &obd->obd_uuid, NULL, NULL);
 
 	if (rc < 0) {
-		obd->obd_force = 1;
+		set_bit(OBDF_FORCE, obd->obd_flags);
 		class_manual_cleanup(obd);
 		lsi->lsi_dt_dev = NULL;
 		RETURN(rc);

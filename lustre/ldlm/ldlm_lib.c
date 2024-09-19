@@ -798,11 +798,12 @@ int client_disconnect_export(struct obd_export *exp)
 	(void)ptlrpc_pinger_del_import(imp);
 
 	if (obd->obd_namespace != NULL) {
-		/* obd_force == local only */
+		/* OBDF_FORCE == local only */
 		ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
-				       obd->obd_force ? LCF_LOCAL : 0, NULL);
+				       test_bit(OBDF_FORCE, obd->obd_flags) ?
+				       LCF_LOCAL : 0, NULL);
 		ldlm_namespace_free_prior(obd->obd_namespace, imp,
-					  obd->obd_force);
+					  test_bit(OBDF_FORCE, obd->obd_flags));
 	}
 
 	/*

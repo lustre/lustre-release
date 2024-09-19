@@ -220,7 +220,7 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 	lu_site_purge(env, top->ld_site, ~0);
 	/* process cleanup, pass mdt obd name to get obd umount flags */
 	lustre_cfg_bufs_reset(&bufs, obd->obd_name);
-	if (obd->obd_force)
+	if (test_bit(OBDF_FORCE, obd->obd_flags))
 		strcat(flags, "F");
 	if (obd->obd_fail)
 		strcat(flags, "A");
@@ -3223,7 +3223,8 @@ err_fini_proc:
 err_fini_lut:
 	tgt_fini(env, &m->ofd_lut);
 err_free_ns:
-	ldlm_namespace_free(m->ofd_namespace, NULL, obd->obd_force);
+	ldlm_namespace_free(m->ofd_namespace, NULL,
+			    test_bit(OBDF_FORCE, obd->obd_flags));
 	obd->obd_namespace = m->ofd_namespace = NULL;
 err_fini_stack:
 	ofd_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);
@@ -3252,7 +3253,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	target_recovery_fini(obd);
 	if (m->ofd_namespace != NULL)
 		ldlm_namespace_free_prior(m->ofd_namespace, NULL,
-					  d->ld_obd->obd_force);
+			test_bit(OBDF_FORCE, d->ld_obd->obd_flags));
 
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();

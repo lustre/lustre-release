@@ -642,6 +642,7 @@ enum {
 	OBDF_NO_RECOV,		/* fail instead of retry messages */
 	OBDF_STOPPING,		/* started cleanup */
 	OBDF_STARTING,		/* started setup */
+	OBDF_FORCE,		/* cleanup with > 0 obd refcount */
 	OBDF_NUM_FLAGS,
 };
 
@@ -661,7 +662,6 @@ struct obd_device {
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 	unsigned long
-		obd_force:1,		/* cleanup with > 0 obd refcount */
 		obd_fail:1,		/* cleanup with failover */
 		obd_no_conn:1,		/* deny new connections */
 		obd_inactive:1,		/* device active/inactive

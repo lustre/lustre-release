@@ -1551,7 +1551,7 @@ void ll_put_super(struct super_block *sb)
 	if (sbi->ll_md_exp) {
 		obd = class_exp2obd(sbi->ll_md_exp);
 		if (obd)
-			force = obd->obd_force;
+			force = test_bit(OBDF_FORCE, obd->obd_flags);
 	}
 
 	/* We need to set force before the lov_disconnect in
@@ -1559,8 +1559,12 @@ void ll_put_super(struct super_block *sb)
 	 */
 	if (force) {
 		obd_device_lock();
-		obd_device_for_each_uuid(dev_no, obd, &sbi->ll_sb_uuid)
-			obd->obd_force = force;
+		obd_device_for_each_uuid(dev_no, obd, &sbi->ll_sb_uuid) {
+			if (force)
+				set_bit(OBDF_FORCE, obd->obd_flags);
+			else
+				clear_bit(OBDF_FORCE, obd->obd_flags);
+		}
 		obd_device_unlock();
 	}
 
@@ -3525,7 +3529,7 @@ void ll_umount_begin(struct super_block *sb)
 		EXIT;
 		return;
 	}
-	obd->obd_force = 1;
+	set_bit(OBDF_FORCE, obd->obd_flags);
 
 	obd = class_exp2obd(sbi->ll_dt_exp);
 	if (obd == NULL) {
@@ -3534,7 +3538,7 @@ void ll_umount_begin(struct super_block *sb)
 		EXIT;
 		return;
 	}
-	obd->obd_force = 1;
+	set_bit(OBDF_FORCE, obd->obd_flags);
 
 	OBD_ALLOC_PTR(ioc_data);
 	if (ioc_data) {

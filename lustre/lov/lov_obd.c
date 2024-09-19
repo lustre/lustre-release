@@ -262,7 +262,10 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 		 * XXX This should be an argument to disconnect,
 		 * XXX not a back-door flag on the OBD.  Ah well.
 		 */
-		osc_obd->obd_force = obd->obd_force;
+		if (test_bit(OBDF_FORCE, obd->obd_flags))
+			set_bit(OBDF_FORCE, osc_obd->obd_flags);
+		else
+			clear_bit(OBDF_FORCE, osc_obd->obd_flags);
 		osc_obd->obd_fail = obd->obd_fail;
 		if (test_bit(OBDF_NO_RECOV, obd->obd_flags))
 			set_bit(OBDF_NO_RECOV, osc_obd->obd_flags);
@@ -1101,10 +1104,13 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 			/* ll_umount_begin() sets force on lov, pass to osc */
 			osc_obd = class_exp2obd(tgt->ltd_exp);
-			if (osc_obd)
-				osc_obd->obd_force = obd->obd_force;
-			err = obd_iocontrol(cmd, tgt->ltd_exp,
-					    len, karg, uarg);
+			if (osc_obd) {
+				if (test_bit(OBDF_FORCE, obd->obd_flags))
+					set_bit(OBDF_FORCE, osc_obd->obd_flags);
+				else
+					clear_bit(OBDF_FORCE, osc_obd->obd_flags);
+			}
+			err = obd_iocontrol(cmd, tgt->ltd_exp, len, karg, uarg);
 			if (err) {
 				if (tgt->ltd_active) {
 					OBD_IOC_DEBUG(err == -ENOTTY ?

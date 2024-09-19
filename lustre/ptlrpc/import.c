@@ -1866,7 +1866,7 @@ int ptlrpc_disconnect_import_async(struct obd_import *imp, int noclose,
 
 	spin_lock(&imp->imp_lock);
 	/* probably the import has been disconnected already being idle */
-	if (imp->imp_state != LUSTRE_IMP_FULL || imp->imp_obd->obd_force) {
+	if (imp->imp_state != LUSTRE_IMP_FULL || test_bit(OBDF_FORCE, imp->imp_obd->obd_flags)) {
 
 		ptlrpc_disconnect_import_end(imp, noclose);
 
@@ -1883,7 +1883,7 @@ int ptlrpc_disconnect_import_async(struct obd_import *imp, int noclose,
 	spin_lock(&imp->imp_lock);
 
 	if (IS_ERR(req) || imp->imp_state != LUSTRE_IMP_FULL ||
-	    imp->imp_obd->obd_force) {
+	    test_bit(OBDF_FORCE, imp->imp_obd->obd_flags)) {
 
 		if (!IS_ERR(req))
 			ptlrpc_req_put_with_imp_lock(req);
@@ -1932,7 +1932,8 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
 	/* probably the import has been disconnected already being idle */
 	spin_lock(&imp->imp_lock);
-	if (imp->imp_state == LUSTRE_IMP_IDLE || imp->imp_obd->obd_force) {
+	if (imp->imp_state == LUSTRE_IMP_IDLE ||
+	    test_bit(OBDF_FORCE, imp->imp_obd->obd_flags)) {
 		ptlrpc_disconnect_import_end(imp, noclose);
 		RETURN(0);
 	}
@@ -2059,7 +2060,7 @@ int ptlrpc_disconnect_and_idle_import(struct obd_import *imp)
 
 	ENTRY;
 
-	if (imp->imp_obd->obd_force)
+	if (test_bit(OBDF_FORCE, imp->imp_obd->obd_flags))
 		RETURN(0);
 
 	if (ptlrpc_import_in_recovery(imp))
