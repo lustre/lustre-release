@@ -593,6 +593,11 @@ struct obd_llog_group {
 	spinlock_t	   olg_lock;
 };
 
+/* Obd flag bits */
+enum {
+      OBDF_NUM_FLAGS,
+};
+
 /* corresponds to one of the obd's */
 #define OBD_DEVICE_MAGIC        0XAB5CD6EF
 
@@ -607,6 +612,7 @@ struct obd_device {
 	char				 obd_name[MAX_OBD_NAME];
 
 	/* bitfield modification is protected by obd_dev_lock */
+	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 	unsigned long
 		obd_attached:1,		/* finished attach */
 		obd_set_up:1,		/* finished setup */
