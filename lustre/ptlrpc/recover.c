@@ -284,7 +284,7 @@ bool ptlrpc_import_in_recovery_disconnect(struct obd_import *imp,
 	if (imp->imp_state < LUSTRE_IMP_DISCON ||
 	    (!disconnect_is_recovery && imp->imp_state == LUSTRE_IMP_DISCON) ||
 	    imp->imp_state >= LUSTRE_IMP_FULL ||
-	    imp->imp_obd->obd_no_recov)
+	    test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags))
 		in_recovery = false;
 	spin_unlock(&imp->imp_lock);
 

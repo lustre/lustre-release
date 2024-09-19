@@ -125,7 +125,7 @@ static int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
 	imp = tgt_obd->u.cli.cl_import;
 
 	if (activate) {
-		tgt_obd->obd_no_recov = 0;
+		clear_bit(OBDF_NO_RECOV, tgt_obd->obd_flags);
 		/* FIXME this is probably supposed to be
 		   ptlrpc_set_import_active.  Horrible naming. */
 		ptlrpc_activate_import(imp, false);
@@ -264,7 +264,10 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 		 */
 		osc_obd->obd_force = obd->obd_force;
 		osc_obd->obd_fail = obd->obd_fail;
-		osc_obd->obd_no_recov = obd->obd_no_recov;
+		if (test_bit(OBDF_NO_RECOV, obd->obd_flags))
+			set_bit(OBDF_NO_RECOV, osc_obd->obd_flags);
+		else
+			clear_bit(OBDF_NO_RECOV, osc_obd->obd_flags);
 	}
 
 	obd_register_observer(osc_obd, NULL);

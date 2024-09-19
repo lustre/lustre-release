@@ -706,7 +706,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 			 * -ENODEV error is returned by ptl_send_rpc() for
 			 *  new request in such import.
 			 * -SHUTDOWN is returned by ptlrpc_import_delay_req()
-			 *  if imp_invalid is set or obd_no_recov.
+			 *  if imp_invalid is set or OBDF_NO_RECOV.
 			 * Meanwhile there is also check for LUSTRE_IMP_CLOSED
 			 * in ptlrpc_import_delay_req() as well with -EIO code.
 			 * In all such cases errors are ignored.

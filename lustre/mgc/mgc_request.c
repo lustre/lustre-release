@@ -1181,8 +1181,8 @@ static int mgc_import_event(struct obd_device *obd,
 	}
 	case IMP_EVENT_ACTIVE:
 		CDEBUG(D_INFO, "%s: Reactivating import\n", obd->obd_name);
-		/* Clearing obd_no_recov allows us to continue pinging */
-		obd->obd_no_recov = 0;
+		/* Clearing OBDF_NO_RECOV allows us to continue pinging */
+		clear_bit(OBDF_NO_RECOV, obd->obd_flags);
 		mgc_notify_active(obd);
 		if (OCD_HAS_FLAG(&imp->imp_connect_data, IMP_RECOV))
 			ptlrpc_pinger_ir_up();

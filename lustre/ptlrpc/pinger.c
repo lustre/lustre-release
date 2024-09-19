@@ -239,7 +239,7 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 		} else {
 			spin_unlock(&imp->imp_lock);
 		}
-	} else if (level != LUSTRE_IMP_FULL || imp->imp_obd->obd_no_recov ||
+	} else if (level != LUSTRE_IMP_FULL || test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags) ||
 		   imp_is_deactive(imp)) {
 		CDEBUG(level == LUSTRE_IMP_IDLE ? D_INFO : D_HA,
 		       "%s->%s: not pinging (in recovery or recovery disabled: %s)\n",
@@ -370,7 +370,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
 	CDEBUG(D_HA, "adding pingable import %s->%s\n",
 	       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
 	/* if we add to pinger we want recovery on this import */
-	imp->imp_obd->obd_no_recov = 0;
+	clear_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags);
 	ptlrpc_update_next_ping(imp, 0);
 	/* XXX sort, blah blah */
 	list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
@@ -395,7 +395,7 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
 	CDEBUG(D_HA, "removing pingable import %s->%s\n",
 	       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
 	/* if we remove from pinger we don't want recovery on this import */
-	imp->imp_obd->obd_no_recov = 1;
+	set_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags);
 	class_import_put(imp);
 	mutex_unlock(&pinger_mutex);
 	RETURN(0);

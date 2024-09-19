@@ -284,7 +284,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
 	atomic_inc(&imp->imp_inval_count);
 
-	if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
+	if (!imp->imp_invalid || test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags))
 		ptlrpc_deactivate_import(imp);
 
 	if (CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CONNECT_RACE)) {
@@ -458,7 +458,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
 	}
 
 	/* Allow reconnect attempts */
-	imp->imp_obd->obd_no_recov = 0;
+	clear_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags);
 	imp->imp_remote_handle.cookie = 0;
 	/* Attempt a new connect */
 	rc = ptlrpc_recover_import(imp, NULL, 0);

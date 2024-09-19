@@ -541,7 +541,10 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 	if (mdc_obd) {
 		mdc_obd->obd_force = obd->obd_force;
 		mdc_obd->obd_fail = obd->obd_fail;
-		mdc_obd->obd_no_recov = obd->obd_no_recov;
+		if (test_bit(OBDF_NO_RECOV, obd->obd_flags))
+			set_bit(OBDF_NO_RECOV, mdc_obd->obd_flags);
+		else
+			clear_bit(OBDF_NO_RECOV, mdc_obd->obd_flags);
 
 		if (lmv->lmv_tgts_kobj)
 			sysfs_remove_link(lmv->lmv_tgts_kobj,

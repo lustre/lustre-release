@@ -722,7 +722,7 @@ static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 {
 	bool first = true;
 
-	if (imp->imp_obd->obd_no_recov) {
+	if (test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags)) {
 		seq_printf(m, "no_recov");
 		first = false;
 	}

@@ -1390,7 +1390,7 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 			DEBUG_REQ(D_ERROR, req, "invalidate in flight");
 			*status = -EIO;
 		}
-	} else if (imp->imp_invalid || imp->imp_obd->obd_no_recov) {
+	} else if (imp->imp_invalid || test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags)) {
 		if (!imp->imp_deactive)
 			DEBUG_REQ(D_NET, req, "IMP_INVALID");
 		*status = -ESHUTDOWN; /* b=12940 */
@@ -1691,7 +1691,8 @@ static int after_reply(struct ptlrpc_request *req)
 		 */
 		if (ptlrpc_recoverable_error(rc)) {
 			if (req->rq_send_state != LUSTRE_IMP_FULL ||
-			    imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
+			    test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags) ||
+			    imp->imp_dlm_fake) {
 				RETURN(rc);
 			}
 			ptlrpc_request_handle_notconn(req);
@@ -2503,7 +2504,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 	 */
 	if (req->rq_ctx_init || req->rq_ctx_fini ||
 	    req->rq_send_state != LUSTRE_IMP_FULL ||
-	    imp->imp_obd->obd_no_recov) {
+	    test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags)) {
 		DEBUG_REQ(D_RPCTRACE, req, "err -110, sent_state=%s (now=%s)",
 			  ptlrpc_import_state_name(req->rq_send_state),
 			  ptlrpc_import_state_name(imp->imp_state));

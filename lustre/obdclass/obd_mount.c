@@ -573,7 +573,7 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 	 * The MGC has no recoverable data in any case.
 	 * force shotdown set in umount_begin
 	 */
-	obd->obd_no_recov = 1;
+	set_bit(OBDF_NO_RECOV, obd->obd_flags);
 
 	if (obd->u.cli.cl_mgc_mgsexp) {
 		/*
