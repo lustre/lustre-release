@@ -7998,7 +7998,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		if (data->ioc_type & OBD_FLG_ABORT_RECOV_MDT) {
 			LCONSOLE_WARN("%s: Aborting MDT recovery\n",
 				      obd->obd_name);
-			obd->obd_abort_mdt_recovery = 1;
+			set_bit(OBDF_ABORT_MDT_RECOVERY, obd->obd_flags);
 			wake_up(&obd->obd_next_transno_waitq);
 		} else { /* if (data->ioc_type & OBD_FLG_ABORT_RECOV_OST) */
 			/* lctl didn't set OBD_FLG_ABORT_RECOV_OST < 2.13.57 */

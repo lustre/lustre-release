@@ -1849,7 +1849,7 @@ void target_cleanup_recovery(struct obd_device *obd)
 	}
 	clear_bit(OBDF_RECOVERING, obd->obd_flags);
 	clear_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
-	obd->obd_abort_mdt_recovery = 0;
+	clear_bit(OBDF_ABORT_MDT_RECOVERY, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 
 	spin_lock(&obd->obd_recovery_task_lock);
@@ -2810,7 +2810,8 @@ static int target_recovery_thread(void *arg)
 	tgt_boot_epoch_update(lut);
 
 	/* cancel update llogs upon recovery abort */
-	if (test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags) || obd->obd_abort_mdt_recovery)
+	if (test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags) ||
+	    test_bit(OBDF_ABORT_MDT_RECOVERY, obd->obd_flags))
 		obd->obd_type->typ_dt_ops->o_iocontrol(OBD_IOC_LLOG_CANCEL,
 						       obd->obd_self_export,
 						       0, trd, NULL);
@@ -2831,7 +2832,7 @@ static int target_recovery_thread(void *arg)
 	spin_lock(&obd->obd_dev_lock);
 	clear_bit(OBDF_RECOVERING, obd->obd_flags);
 	clear_bit(OBDF_ABORT_RECOVERY, obd->obd_flags);
-	obd->obd_abort_mdt_recovery = 0;
+	clear_bit(OBDF_ABORT_MDT_RECOVERY, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 	spin_lock(&obd->obd_recovery_task_lock);
 	target_cancel_recovery_timer(obd);
