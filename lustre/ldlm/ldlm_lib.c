@@ -2188,7 +2188,7 @@ static int check_for_next_transno(struct lu_target *lut)
 			 req_transno, next_transno);
 		CDEBUG(D_HA,
 		       "%s: waking for gap in transno, VBR is %s (skip: %lld, ql: %d, comp: %d, conn: %d, next: %lld, next_update %lld last_committed: %lld)\n",
-		       obd->obd_name, obd->obd_version_recov ? "ON" : "OFF",
+		       obd->obd_name, test_bit(OBDF_VERSION_RECOV, obd->obd_flags) ? "ON" : "OFF",
 		       next_transno, queue_len, completed, connected,
 		       req_transno, update_transno, obd->obd_last_committed);
 		obd->obd_next_recovery_transno = req_transno;
@@ -2364,7 +2364,7 @@ repeat:
 
 		/** continue with VBR */
 		spin_lock(&obd->obd_dev_lock);
-		obd->obd_version_recov = 1;
+		set_bit(OBDF_VERSION_RECOV, obd->obd_flags);
 		spin_unlock(&obd->obd_dev_lock);
 		/**
 		 * reset timer, recovery will proceed with versions now,

@@ -609,6 +609,7 @@ enum {
 	OBDF_RECOVERING,	/* there are recoverable clients */
 	OBDF_ABORT_RECOVERY,	/* abort client and MDT recovery */
 	OBDF_ABORT_MDT_RECOVERY, /* abort recovery between MDTs */
+	OBDF_VERSION_RECOV,	/* obd uses version checking */
 	OBDF_NUM_FLAGS,
 };
 
@@ -628,7 +629,6 @@ struct obd_device {
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 	unsigned long
-		obd_version_recov:1,	/* obd uses version checking */
 		obd_replayable:1,	/* recovery enabled; inform clients */
 		obd_no_recov:1,		/* fail instead of retry messages */
 		obd_stopping:1,		/* started cleanup */

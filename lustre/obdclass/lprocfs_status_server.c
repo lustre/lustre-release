@@ -876,7 +876,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 			   obd->obd_replayed_requests);
 		seq_printf(m, "last_transno: %lld\n",
 			   obd->obd_next_recovery_transno - 1);
-		seq_printf(m, "VBR: %s\n", obd->obd_version_recov ?
+		seq_printf(m, "VBR: %s\n", test_bit(OBDF_VERSION_RECOV, obd->obd_flags) ?
 			   "ENABLED" : "DISABLED");
 		seq_printf(m, "IR: %s\n", obd->obd_no_ir ?
 			   "DISABLED" : "ENABLED");
