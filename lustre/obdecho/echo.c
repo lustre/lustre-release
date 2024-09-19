@@ -774,7 +774,7 @@ static int echo_srv_init0(const struct lu_env *env,
 	spin_unlock(&obd->obd_dev_lock);
 
 	/* non-replayable target */
-	obd->obd_replayable = 0;
+	clear_bit(OBDF_REPLAYABLE, obd->obd_flags);
 
 	snprintf(ns_name, sizeof(ns_name), "echotgt-%s", obd->obd_uuid.uuid);
 	obd->obd_namespace = ldlm_namespace_new(obd, ns_name,

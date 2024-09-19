@@ -3107,13 +3107,13 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	spin_lock(&obd->obd_dev_lock);
 	obd->obd_no_conn = 1;
 	spin_unlock(&obd->obd_dev_lock);
-	obd->obd_replayable = 1;
+	set_bit(OBDF_REPLAYABLE, obd->obd_flags);
 	if (cfg->lcfg_bufcount > 4 && LUSTRE_CFG_BUFLEN(cfg, 4) > 0) {
 		char *str = lustre_cfg_string(cfg, 4);
 
 		if (strchr(str, 'n')) {
 			CWARN("%s: recovery disabled\n", obd->obd_name);
-			obd->obd_replayable = 0;
+			clear_bit(OBDF_REPLAYABLE, obd->obd_flags);
 		}
 	}
 

@@ -549,7 +549,7 @@ static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 		RETURN(+1);
 	}
 
-	if (!req->rq_export->exp_obd->obd_replayable)
+	if (!test_bit(OBDF_REPLAYABLE, req->rq_export->exp_obd->obd_flags))
 		RETURN(+1);
 
 	/* sanity check: if the xid matches, the request must be marked as a
@@ -1146,7 +1146,7 @@ int tgt_obd_ping(struct tgt_session_info *tsi)
 	 *
 	 * Valid only for replayable targets, e.g. MDT and OFD
 	 */
-	if (tsi->tsi_exp->exp_obd->obd_replayable)
+	if (test_bit(OBDF_REPLAYABLE, tsi->tsi_exp->exp_obd->obd_flags))
 		tgt_fmd_expire(tsi->tsi_exp);
 
 	rc = req_capsule_server_pack(tsi->tsi_pill);

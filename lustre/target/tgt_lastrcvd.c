@@ -2008,7 +2008,7 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 		RETURN(-EINVAL);
 	}
 
-	if (!tgt->lut_obd->obd_replayable)
+	if (!test_bit(OBDF_REPLAYABLE, tgt->lut_obd->obd_flags))
 		CWARN("%s: recovery support OFF\n", tgt_name(tgt));
 
 	rc = tgt_clients_data_init(env, tgt, last_rcvd_size);

@@ -6617,7 +6617,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	 * FIXME: we do not failout mds0/mgs, which may cause some problems.
 	 * assumed whose ss_node_id == 0 XXX
 	 */
-	obd->obd_replayable = 1;
+	set_bit(OBDF_REPLAYABLE, obd->obd_flags);
 	/* No connection accepted until configurations will finish */
 	obd->obd_no_conn = 1;
 
@@ -6626,7 +6626,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
 		if (strchr(str, 'n')) {
 			CWARN("%s: recovery disabled\n", mdt_obd_name(m));
-			obd->obd_replayable = 0;
+			clear_bit(OBDF_REPLAYABLE, obd->obd_flags);
 		}
 	}
 

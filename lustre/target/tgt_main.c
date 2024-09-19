@@ -499,7 +499,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	INIT_LIST_HEAD(&lut->lut_slc_locks);
 
 	/* last_rcvd initialization is needed by replayable targets only */
-	if (!obd->obd_replayable)
+	if (!test_bit(OBDF_REPLAYABLE, obd->obd_flags))
 		RETURN(0);
 
 	/* initialize grant and statfs data in target */

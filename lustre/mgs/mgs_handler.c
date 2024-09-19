@@ -1432,7 +1432,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	}
 
 	/* No recovery for MGCs */
-	obd->obd_replayable = 0;
+	clear_bit(OBDF_REPLAYABLE, obd->obd_flags);
 	lsi = s2lsi(lmi->lmi_sb);
 	if (test_bit(LMD_FLG_NO_RCLNT, lsi->lsi_lmd->lmd_flags))
 		obd->obd_no_conn = 1;

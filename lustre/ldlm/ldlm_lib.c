@@ -1446,7 +1446,7 @@ no_export:
 	}
 
 	/* Tell the client if we support replayable requests. */
-	if (target->obd_replayable)
+	if (test_bit(OBDF_REPLAYABLE, target->obd_flags))
 		lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_REPLAYABLE);
 
 	if (export == NULL) {

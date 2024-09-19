@@ -372,7 +372,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	if (rc)
 		GOTO(out, rc);
 
-	if (obd->obd_replayable) {
+	if (test_bit(OBDF_REPLAYABLE, obd->obd_flags)) {
 		struct tg_export_data *ted = &exp->exp_target_data;
 
 		memcpy(ted->ted_lcd->lcd_uuid, cluuid,
@@ -428,7 +428,7 @@ int ofd_obd_disconnect(struct obd_export *exp)
 		tgt_grant_sanity_check(ofd_obd(ofd), __func__);
 
 	/* Do not erase record for recoverable client. */
-	if (exp->exp_obd->obd_replayable &&
+	if (test_bit(OBDF_REPLAYABLE, exp->exp_obd->obd_flags) &&
 	    (!exp->exp_obd->obd_fail || exp->exp_failed)) {
 		rc = lu_env_init(&env, LCT_DT_THREAD);
 		if (rc)
