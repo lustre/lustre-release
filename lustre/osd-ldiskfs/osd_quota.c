@@ -685,6 +685,7 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 
 	/* and now project quota */
 	qi->lqi_id.qid_projid = projid;
+	qi->lqi_ignore_root_proj_quota = th->th_ignore_root_proj_quota;
 	qi->lqi_type = PRJQUOTA;
 	rcp = osd_declare_qid(env, oh, qi, obj, true, local_flags);
 

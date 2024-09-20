@@ -2034,7 +2034,9 @@ struct thandle {
 	/* whether ignore quota */
 				th_ignore_quota:1,
 	/* whether restart transaction */
-				th_restart_tran:1;
+				th_restart_tran:1,
+	/* enforce project quota for root */
+				th_ignore_root_proj_quota:1;
 };
 
 /*

@@ -570,6 +570,7 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	/* for project quota */
 	if (osd->od_projectused_dn) {
 		qi->lqi_id.qid_projid = projid;
+		qi->lqi_ignore_root_proj_quota = th->th_ignore_root_proj_quota;
 		qi->lqi_type = PRJQUOTA;
 		rcp = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi,
 				   local_flags);

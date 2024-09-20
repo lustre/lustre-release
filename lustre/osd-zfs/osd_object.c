@@ -1181,6 +1181,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		if (!zpl_is_valid_projid(attr->la_projid))
 			GOTO(out, rc = -EINVAL);
 
+		info->oti_qi.lqi_ignore_root_proj_quota =
+			handle->th_ignore_root_proj_quota;
 		rc = qsd_transfer(env, osd_def_qsd(osd),
 				  &oh->ot_quota_trans, PRJQUOTA,
 				  obj->oo_attr.la_projid,

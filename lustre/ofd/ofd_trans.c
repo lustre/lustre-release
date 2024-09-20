@@ -19,6 +19,8 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
+#include <obd_class.h>
+#include <lustre_nodemap.h>
 #include "ofd_internal.h"
 
 /**
@@ -51,9 +53,22 @@ struct thandle *ofd_trans_create(const struct lu_env *env,
 	if (IS_ERR(th))
 		return th;
 
-	/* export can require sync operations */
-	if (info->fti_exp != NULL)
+	if (info->fti_exp != NULL) {
+		struct lu_nodemap *nodemap;
+
+		/* export can require sync operations */
 		th->th_sync |= info->fti_exp->exp_need_sync;
+
+		nodemap = nodemap_get_from_exp(info->fti_exp);
+		if (!IS_ERR_OR_NULL(nodemap)) {
+			th->th_ignore_root_proj_quota = !!(nodemap->nmf_rbac &
+						NODEMAP_RBAC_IGN_ROOT_PRJQUOTA);
+			nodemap_putref(nodemap);
+		} else {
+			th->th_ignore_root_proj_quota = 1;
+		}
+	}
+
 	return th;
 }
 

@@ -238,6 +238,8 @@ struct lquota_id_info {
 
 	/* whether we are reporting blocks or inodes */
 	bool			 lqi_is_blk;
+	/* enforce project quota for root */
+	bool			 lqi_ignore_root_proj_quota;
 };
 
 /* With the DoM, both inode quota in meta pool and block quota in data pool

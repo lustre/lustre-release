@@ -1226,6 +1226,9 @@ test_1j() {
 	local testf="$DIR/$tdir/$tfile-0"
 	local testf1="$DIR/$tdir/$tfile-1"
 	local testf2="$DIR/$tdir/$tfile-2"
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+	local nm=test_1j
 
 	(( $OST1_VERSION >= $(version_code 2.14.0.74) )) ||
 		skip "need OST at least 2.14.0.74"
@@ -1291,6 +1294,39 @@ test_1j() {
 		error "disable root quotas for project failed"
 	do_facet ost2 $LCTL set_param $procf=0 ||
 		error "disable root quotas for project failed"
+
+	if (( $OST1_VERSION >= $(version_code 2.16.50) )); then
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property admin --value 1
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property trusted --value 1
+		do_facet mgs $LCTL nodemap_add $nm
+		stack_trap "do_facet mgs $LCTL nodemap_del $nm || true"
+		do_facet mgs $LCTL nodemap_add_range 	\
+			--name $nm --range $client_nid
+		do_facet mgs $LCTL nodemap_modify --name $nm \
+			--property admin --value 1
+		do_facet mgs $LCTL nodemap_modify --name $nm \
+			--property trusted --value 1
+		# do not set ignore_root_prjquota rbac role
+		do_facet mgs $LCTL nodemap_modify --name $nm --property rbac \
+			--value file_perms,dne_ops,quota_ops,byfid_ops,chlg_ops
+		do_facet mgs $LCTL nodemap_activate 1
+		stack_trap "do_facet mgs $LCTL nodemap_activate 0"
+		wait_nm_sync active
+		wait_nm_sync default admin_nodemap
+		wait_nm_sync default trusted_nodemap
+		wait_nm_sync $nm admin_nodemap
+		wait_nm_sync $nm trusted_nodemap
+		wait_nm_sync $nm rbac
+
+		runas -u 0 -g 0 $DD of=$testf count=$((limit/2)) \
+			seek=$limit oflag=direct &&
+			quota_error "project" $TSTPRJID "root write should fail"
+
+		do_facet mgs $LCTL nodemap_activate 0
+		wait_nm_sync active
+	fi
 
 	runas -u 0 -g 0 $DD of=$testf count=$limit seek=$limit oflag=direct ||
 		quota_error "project" $TSTPRJID "root write to project failed"

@@ -40,12 +40,18 @@ struct thandle *mdd_trans_create(const struct lu_env *env,
 		return ERR_PTR(-EINPROGRESS);
 
 	th = mdd_child_ops(mdd)->dt_trans_create(env, mdd->mdd_child);
-	if (!IS_ERR(th) && uc)
+	if (IS_ERR(th)) {
+		barrier_exit(mdd->mdd_bottom);
+		goto out;
+	}
+
+	if (uc)
 		th->th_ignore_quota = !!cap_raised(uc->uc_cap, CAP_SYS_RESOURCE);
 
-	if (IS_ERR(th))
-		barrier_exit(mdd->mdd_bottom);
+	th->th_ignore_root_proj_quota =
+		uc ? uc->uc_rbac_ignore_root_prjquota : 1;
 
+out:
 	return th;
 }
 

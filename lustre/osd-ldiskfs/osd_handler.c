@@ -2946,10 +2946,12 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	int rc;
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct lquota_id_info  *qi = &info->oti_qi;
+	struct thandle *th = &oh->ot_super;
 
 	qi->lqi_type = type;
 	/* inode accounting */
 	qi->lqi_is_blk = false;
+	qi->lqi_ignore_root_proj_quota = th->th_ignore_root_proj_quota;
 
 	/* one more inode for the new id ... */
 	qi->lqi_id.qid_uid = new_id;
