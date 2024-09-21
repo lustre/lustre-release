@@ -4162,6 +4162,27 @@ AC_DEFUN([LC_IOP_GET_INODE_ACL], [
 ]) # LC_IOP_GET_INODE_ACL
 
 #
+# LC_HAVE_FOLIO_MAPCOUNT
+#
+# linux kernel v6.1-rc4-186-gcb67f4282bf9
+#   mm,thp,rmap: simplify compound page mapcount handling
+#
+AC_DEFUN([LC_SRC_HAVE_FOLIO_MAPCOUNT], [
+	LB2_LINUX_TEST_SRC([folio_mapcount], [
+		#include <linux/mm.h>
+	],[
+		(void)folio_mapcount((const struct folio *)NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FOLIO_MAPCOUNT], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'folio_mapcount()' is available],
+	[folio_mapcount], [
+		AC_DEFINE(HAVE_FOLIO_MAPCOUNT, 1,
+			['folio_mapcount()' is available])
+	])
+]) # LC_HAVE_FOLIO_MAPCOUNT
+
+#
 # LC_HAVE_U64_CAPABILITY
 #
 # linux kernel v6.2-13111-gf122a08b197d
@@ -4950,6 +4971,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 6.2
 	LC_SRC_HAVE_GET_RANDOM_U32_BELOW
 	LC_SRC_HAVE_ACL_WITH_DENTRY
+	LC_SRC_HAVE_FOLIO_MAPCOUNT
 
 	# 6.3
 	LC_SRC_HAVE_MNT_IDMAP_ARG
@@ -5266,6 +5288,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 6.2
 	LC_HAVE_GET_RANDOM_U32_BELOW
 	LC_HAVE_ACL_WITH_DENTRY
+	LC_HAVE_FOLIO_MAPCOUNT
 
 	# 6.3
 	LC_HAVE_MNT_IDMAP_ARG

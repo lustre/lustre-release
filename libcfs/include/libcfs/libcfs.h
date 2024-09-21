@@ -71,13 +71,25 @@ int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data);
 
 extern struct workqueue_struct *cfs_rehash_wq;
 
-void lnet_insert_debugfs(struct ctl_table *table, struct module *mod,
-			 void **statep);
-void lnet_remove_debugfs(struct ctl_table *table);
+#ifdef HAVE_CONST_CTR_TABLE
+#define DEFINE_CTL_TABLE_INIT(__name, init)\
+	const struct ctl_table *__name = init
+#define cfs_proc_handler(h)	(h)
+#else
+#define DEFINE_CTL_TABLE_INIT(__name, init)\
+	struct ctl_table *__name = init
+typedef int (*cfs_ctl_table_handler_t)(struct ctl_table *,
+				       int, void __user *, size_t *, loff_t *);
+#define cfs_proc_handler(h)	((cfs_ctl_table_handler_t)(h))
+#endif
+
+void lnet_insert_debugfs(const struct ctl_table *table,
+			 struct module *mod, void **statep);
+void lnet_remove_debugfs(const struct ctl_table *table);
 void lnet_debugfs_fini(void **statep);
 
 /* helper for sysctl handlers */
-int debugfs_doint(struct ctl_table *table, int write,
+int debugfs_doint(const struct ctl_table *table, int write,
 		  void __user *buffer, size_t *lenp, loff_t *ppos);
 
 /*

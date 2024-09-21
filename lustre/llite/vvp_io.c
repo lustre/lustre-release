@@ -995,7 +995,7 @@ static inline void ll_page_tag_dirty(struct page *page,
 #ifndef HAVE_RADIX_TREE_TAG_SET
 	__xa_set_mark(&mapping->i_pages, page_index(page), PAGECACHE_TAG_DIRTY);
 #else
-	radix_tree_tag_set(&mapping->page_tree, page_index(page),
+	radix_tree_tag_set(&mapping->page_tree, folio_index_page(page),
 			   PAGECACHE_TAG_DIRTY);
 #endif
 }

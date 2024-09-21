@@ -60,8 +60,9 @@
 
 #define LNET_PROC_VERSION(v)	((unsigned int)((v) & LNET_PROC_VER_MASK))
 
-static int proc_cpt_table(struct ctl_table *table, int write,
-			  void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_cpt_table(const struct ctl_table *table,
+			  int write, void __user *buffer, size_t *lenp,
+			  loff_t *ppos)
 {
 	size_t nob = *lenp;
 	loff_t pos = *ppos;
@@ -100,8 +101,9 @@ out:
 	return rc;
 }
 
-static int proc_cpt_distance(struct ctl_table *table, int write,
-			     void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_cpt_distance(const struct ctl_table *table,
+			     int write, void __user *buffer, size_t *lenp,
+			     loff_t *ppos)
 {
 	size_t nob = *lenp;
 	loff_t pos = *ppos;
@@ -140,8 +142,9 @@ out:
 	return rc;
 }
 
-static int proc_lnet_stats(struct ctl_table *table, int write,
-			   void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_lnet_stats(const struct ctl_table *table,
+			   int write, void __user *buffer, size_t *lenp,
+			   loff_t *ppos)
 {
 	int rc;
 	struct lnet_counters *ctrs;
@@ -189,8 +192,8 @@ out_no_ctrs:
 }
 
 static int
-proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
-		 size_t *lenp, loff_t *ppos)
+proc_lnet_routes(const struct ctl_table *table, int write,
+		 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	const int	tmpsiz = 256;
 	char		*tmpstr;
@@ -315,8 +318,8 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 }
 
 static int
-proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
-		  size_t *lenp, loff_t *ppos)
+proc_lnet_routers(const struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int	   rc = 0;
 	char	  *tmpstr;
@@ -420,8 +423,8 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 /* TODO: there should be no direct access to ptable. We should add a set
  * of APIs that give access to the ptable and its members */
 static int
-proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
-		size_t *lenp, loff_t *ppos)
+proc_lnet_peers(const struct ctl_table *table, int write,
+		void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	const int		tmpsiz	= 256;
 	struct lnet_peer_table	*ptable;
@@ -597,8 +600,9 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 	return rc;
 }
 
-static int proc_lnet_buffers(struct ctl_table *table, int write,
-			     void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_lnet_buffers(const struct ctl_table *table,
+			     int write, void __user *buffer, size_t *lenp,
+			     loff_t *ppos)
 {
 	size_t nob = *lenp;
 	loff_t pos = *ppos;
@@ -658,8 +662,8 @@ static int proc_lnet_buffers(struct ctl_table *table, int write,
 }
 
 static int
-proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
-	      size_t *lenp, loff_t *ppos)
+proc_lnet_nis(const struct ctl_table *table, int write,
+	      void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int	tmpsiz = 128 * LNET_CPT_NUMBER;
 	int	rc = 0;
@@ -837,8 +841,8 @@ static struct lnet_portal_rotors	portal_rotors[] = {
 	},
 };
 
-static int proc_lnet_portal_rotor(struct ctl_table *table, int write,
-				  void __user *buffer, size_t *lenp,
+static int proc_lnet_portal_rotor(const struct ctl_table *table,
+				  int write, void __user *buffer, size_t *lenp,
 				  loff_t *ppos)
 {
 	const int	buf_len	= 128;
@@ -912,55 +916,55 @@ static struct ctl_table lnet_table[] = {
 		.procname	= "cpu_partition_table",
 		.maxlen		= 128,
 		.mode		= 0444,
-		.proc_handler	= &proc_cpt_table,
+		.proc_handler	= cfs_proc_handler(&proc_cpt_table),
 	},
 	{
 		.procname	= "cpu_partition_distance",
 		.maxlen		= 128,
 		.mode		= 0444,
-		.proc_handler	= &proc_cpt_distance,
+		.proc_handler	= cfs_proc_handler(&proc_cpt_distance),
 	},
 	{
 		.procname	= "stats",
 		.mode		= 0644,
-		.proc_handler	= &proc_lnet_stats,
+		.proc_handler	= cfs_proc_handler(&proc_lnet_stats),
 	},
 	{
 		.procname	= "routes",
 		.mode		= 0444,
-		.proc_handler	= &proc_lnet_routes,
+		.proc_handler	= cfs_proc_handler(&proc_lnet_routes),
 	},
 	{
 		.procname	= "routers",
 		.mode		= 0444,
-		.proc_handler	= &proc_lnet_routers,
+		.proc_handler	= cfs_proc_handler(&proc_lnet_routers),
 	},
 	{
 		.procname	= "peers",
 		.mode		= 0644,
-		.proc_handler	= &proc_lnet_peers,
+		.proc_handler	= cfs_proc_handler(&proc_lnet_peers),
 	},
 	{
 		.procname	= "buffers",
 		.mode		= 0444,
-		.proc_handler	= &proc_lnet_buffers,
+		.proc_handler	= cfs_proc_handler(&proc_lnet_buffers),
 	},
 	{
 		.procname	= "nis",
 		.mode		= 0644,
-		.proc_handler	= &proc_lnet_nis,
+		.proc_handler	= cfs_proc_handler(&proc_lnet_nis),
 	},
 	{
 		.procname	= "portal_rotor",
 		.mode		= 0644,
-		.proc_handler	= &proc_lnet_portal_rotor,
+		.proc_handler	= cfs_proc_handler(&proc_lnet_portal_rotor),
 	},
 	{
 		.procname       = "lnet_lnd_timeout",
 		.data           = &lnet_lnd_timeout,
 		.maxlen         = sizeof(lnet_lnd_timeout),
 		.mode           = 0444,
-		.proc_handler   = &debugfs_doint,
+		.proc_handler   = cfs_proc_handler(&debugfs_doint),
 	},
 	{ .procname = NULL }
 };

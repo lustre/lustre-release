@@ -1640,7 +1640,9 @@ static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)
 
 static inline const char *blk_integrity_name(struct blk_integrity *bi)
 {
-#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
+#ifdef HAVE_BLK_INTEGRITY_NOVERIFY
+	return blk_integrity_profile_name(bi);
+#elif defined HAVE_INTERVAL_EXP_BLK_INTEGRITY
 	return bi->profile->name;
 #else
 	return bi->name;
@@ -1649,7 +1651,9 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 
 static inline unsigned int bip_size(struct bio_integrity_payload *bip)
 {
-#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+#ifdef HAVE_BLK_INTEGRITY_NOVERIFY
+	return bip->bip_iter.bi_size;
+#elif defined HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
 	return bip->bip_iter.bi_size;
 #else
 	return bip->bip_size;
@@ -1667,6 +1671,12 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 }
 #endif /* !CONFIG_BLK_DEV_INTEGRITY */
 
+#ifdef HAVE_BLK_INTEGRITY_NOVERIFY
+#define INTEGRITY_READ(flag)	(!(BLK_INTEGRITY_NOVERIFY & (flag)))
+#define INTEGRITY_WRITE(flag)	(!(BLK_INTEGRITY_NOGENERATE & (flag)))
+
+#else /* !HAVE_BLK_INTEGRITY_NOVERIFY */
+
 #ifndef INTEGRITY_FLAG_READ
 #define INTEGRITY_FLAG_READ BLK_INTEGRITY_VERIFY
 #endif
@@ -1674,6 +1684,10 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 #ifndef INTEGRITY_FLAG_WRITE
 #define INTEGRITY_FLAG_WRITE BLK_INTEGRITY_GENERATE
 #endif
+
+#define INTEGRITY_READ(flag)	(INTEGRITY_FLAG_READ & (flag))
+#define INTEGRITY_WRITE(flag)	(INTEGRITY_FLAG_WRITE & (flag))
+#endif /* HAVE_BLK_INTEGRITY_NOVERIFY */
 
 static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 {
@@ -1683,21 +1697,26 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 	if (bi == NULL)
 		return false;
 
-#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
+#ifdef HAVE_BLK_INTEGRITY_NOVERIFY
+	if (rw == 0 && INTEGRITY_READ(bi->flags))
+		return true;
+
+	if (rw == 1 && INTEGRITY_WRITE(bi->flags))
+		return true;
+
+#elif defined HAVE_INTERVAL_EXP_BLK_INTEGRITY
 	if (rw == 0 && bi->profile->verify_fn != NULL &&
-	    (bi->flags & INTEGRITY_FLAG_READ))
+	    INTEGRITY_READ(bi->flags))
 		return true;
 
 	if (rw == 1 && bi->profile->generate_fn != NULL &&
-	    (bi->flags & INTEGRITY_FLAG_WRITE))
+	    INTEGRITY_WRITE(bi->flags))
 		return true;
 #else
-	if (rw == 0 && bi->verify_fn != NULL &&
-	    (bi->flags & INTEGRITY_FLAG_READ))
+	if (rw == 0 && bi->verify_fn != NULL && INTEGRITY_READ(bi->flags))
 		return true;
 
-	if (rw == 1 && bi->generate_fn != NULL &&
-	    (bi->flags & INTEGRITY_FLAG_WRITE))
+	if (rw == 1 && bi->generate_fn != NULL && INTEGRITY_WRITE(bi->flags))
 		return true;
 #endif /* !HAVE_INTERVAL_EXP_BLK_INTEGRITY */
 #endif /* !CONFIG_BLK_DEV_INTEGRITY */

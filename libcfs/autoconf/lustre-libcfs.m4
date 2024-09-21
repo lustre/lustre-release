@@ -2453,6 +2453,57 @@ AC_DEFUN([LIBCFS_TIMER_DELETE],[
 	])
 ]) # LIBCFS_TIMER_DELETE
 
+#
+# LIBCFS_CONSTIFY_CTR_TABLE
+#
+# Linux commit v6.10-12269-g78eb4ea25cd5
+#   sysctl: treewide: constify the ctl_table argument of proc_handlers
+#
+AC_DEFUN([LIBCFS_SRC_CONSTIFY_CTR_TABLE],[
+	LB2_LINUX_TEST_SRC([constify_struct_ctl_table], [
+		#include <linux/sysctl.h>
+
+		static int handler(const struct ctl_table *table, int write,
+				   void __user *buf, size_t *lenp, loff_t *ppos)
+		{
+			return 0;
+		}
+	],[
+		static struct ctl_table ctl_tbl __attribute__ ((unused)) = {
+			.proc_handler	= &handler,
+		};
+	],[-Werror])
+])
+AC_DEFUN([LIBCFS_CONSTIFY_CTR_TABLE],[
+	LB2_MSG_LINUX_TEST_RESULT(
+	[if struct ctl_table argument to proc_handler() is const],
+	[constify_struct_ctl_table], [
+		AC_DEFINE(HAVE_CONST_CTR_TABLE, 1,
+			[struct ctl_table argument to proc_handler() is const])
+	])
+]) # LIBCFS_CONSTIFY_CTR_TABLE
+
+#
+# LIBCFS_BLK_INTEGRITY_NOVERIFY
+#
+# Linux commit v6.10-rc3-25-g9f4aa46f2a74
+#   block: invert the BLK_INTEGRITY_{GENERATE,VERIFY} flags
+#
+AC_DEFUN([LIBCFS_SRC_BLK_INTEGRITY_NOVERIFY], [
+	LB2_LINUX_TEST_SRC([blk_integrity_noverify], [
+		#include <linux/blk-integrity.h>
+	],[
+		int flag __attribute__ ((unused)) = BLK_INTEGRITY_NOVERIFY;
+	],[-Werror])
+])
+AC_DEFUN([LIBCFS_BLK_INTEGRITY_NOVERIFY], [
+	LB2_MSG_LINUX_TEST_RESULT([if BLK_INTEGRITY_NOVERIFY is available],
+	[blk_integrity_noverify], [
+		AC_DEFINE(HAVE_BLK_INTEGRITY_NOVERIFY, 1,
+			[BLK_INTEGRITY_NOVERIFY is available])
+	])
+]) # LIBCFS_BLK_INTEGRITY_NOVERIFY
+
 dnl #
 dnl # Generate and compile all of the kernel API test cases to determine
 dnl # which interfaces are available.  By invoking the kernel build system
@@ -2606,6 +2657,9 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	# 6.2
 	LIBCFS_SRC_TIMER_DELETE_SYNC
 	LIBCFS_SRC_TIMER_DELETE
+	# 6.11
+	LIBCFS_SRC_CONSTIFY_CTR_TABLE
+	LIBCFS_SRC_BLK_INTEGRITY_NOVERIFY
 ])
 
 dnl #
@@ -2759,6 +2813,9 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	# 6.2
 	LIBCFS_TIMER_DELETE_SYNC
 	LIBCFS_TIMER_DELETE
+	# 6.11
+	LIBCFS_CONSTIFY_CTR_TABLE
+	LIBCFS_BLK_INTEGRITY_NOVERIFY
 ])
 
 #

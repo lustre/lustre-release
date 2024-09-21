@@ -100,8 +100,9 @@ int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
 EXPORT_SYMBOL(libcfs_ioctl);
 #endif
 
-static int proc_dobitmasks(struct ctl_table *table, int write,
-			   void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_dobitmasks(const struct ctl_table *table,
+			   int write, void __user *buffer, size_t *lenp,
+			   loff_t *ppos)
 {
 	const int     tmpstrlen = 512;
 	char         *tmpstr = NULL;
@@ -143,8 +144,9 @@ static int proc_dobitmasks(struct ctl_table *table, int write,
 static int min_watchdog_ratelimit;		/* disable ratelimiting */
 static int max_watchdog_ratelimit = (24*60*60); /* limit to once per day */
 
-static int proc_dump_kernel(struct ctl_table *table, int write,
-			    void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_dump_kernel(const struct ctl_table *table,
+			    int write, void __user *buffer, size_t *lenp,
+			    loff_t *ppos)
 {
 	size_t nob = *lenp;
 
@@ -154,8 +156,9 @@ static int proc_dump_kernel(struct ctl_table *table, int write,
 	return cfs_trace_dump_debug_buffer_usrstr(buffer, nob);
 }
 
-static int proc_daemon_file(struct ctl_table *table, int write,
-			    void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_daemon_file(const struct ctl_table *table,
+			    int write, void __user *buffer, size_t *lenp,
+			    loff_t *ppos)
 {
 	size_t nob = *lenp;
 	loff_t pos = *ppos;
@@ -173,17 +176,18 @@ static int proc_daemon_file(struct ctl_table *table, int write,
 	return cfs_trace_daemon_command_usrstr(buffer, nob);
 }
 
-static int libcfs_force_lbug(struct ctl_table *table, int write,
-			     void __user *buffer,
-			     size_t *lenp, loff_t *ppos)
+static int libcfs_force_lbug(const struct ctl_table *table,
+			     int write, void __user *buffer, size_t *lenp,
+			     loff_t *ppos)
 {
 	if (write)
 		LBUG();
 	return 0;
 }
 
-static int proc_fail_loc(struct ctl_table *table, int write,
-			 void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_fail_loc(const struct ctl_table *table,
+			 int write, void __user *buffer, size_t *lenp,
+			 loff_t *ppos)
 {
 	int rc;
 	long old_fail_loc = cfs_fail_loc;
@@ -220,8 +224,8 @@ static int proc_fail_loc(struct ctl_table *table, int write,
 	return rc;
 }
 
-static int libcfs_debug_marker(struct ctl_table *table, int write,
-			       void __user *buffer,
+static int libcfs_debug_marker(const struct ctl_table *table,
+			       int write, void __user *buffer,
 			       size_t *lenp, loff_t *ppos)
 {
 	size_t len = min(*lenp, 4000UL);
@@ -250,7 +254,7 @@ static int libcfs_debug_marker(struct ctl_table *table, int write,
 	return *lenp > 4000 ? -EOVERFLOW : 0;
 }
 
-int debugfs_doint(struct ctl_table *table, int write,
+int debugfs_doint(const struct ctl_table *table, int write,
 		  void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int rc;
@@ -293,7 +297,7 @@ int debugfs_doint(struct ctl_table *table, int write,
 }
 EXPORT_SYMBOL(debugfs_doint);
 
-static int debugfs_dou64(struct ctl_table *table, int write,
+static int debugfs_dou64(const struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int rc;
@@ -331,8 +335,9 @@ static int debugfs_dou64(struct ctl_table *table, int write,
 	return rc;
 }
 
-static int debugfs_dostring(struct ctl_table *table, int write,
-			    void __user *buffer, size_t *lenp, loff_t *ppos)
+static int debugfs_dostring(const struct ctl_table *table,
+			    int write, void __user *buffer, size_t *lenp,
+			    loff_t *ppos)
 {
 	int len = *lenp;
 	char *kbuf = table->data;
@@ -369,96 +374,96 @@ static struct ctl_table lnet_table[] = {
 		.data		= &libcfs_debug,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_dobitmasks,
+		.proc_handler	= cfs_proc_handler(&proc_dobitmasks),
 	},
 	{
 		.procname	= "subsystem_debug",
 		.data		= &libcfs_subsystem_debug,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_dobitmasks,
+		.proc_handler	= cfs_proc_handler(&proc_dobitmasks),
 	},
 	{
 		.procname	= "printk",
 		.data		= &libcfs_printk,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_dobitmasks,
+		.proc_handler	= cfs_proc_handler(&proc_dobitmasks),
 	},
 	{
 		.procname	= "debug_log_upcall",
 		.data		= lnet_debug_log_upcall,
 		.maxlen		= sizeof(lnet_debug_log_upcall),
 		.mode		= 0644,
-		.proc_handler	= &debugfs_dostring,
+		.proc_handler	= cfs_proc_handler(&debugfs_dostring),
 	},
 	{
 		.procname	= "lnet_memused",
 		.data		= (u64 *)&libcfs_kmem.counter,
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
-		.proc_handler	= &debugfs_dou64,
+		.proc_handler	= cfs_proc_handler(&debugfs_dou64),
 	},
 	{
 		.procname	= "catastrophe",
 		.data		= &libcfs_catastrophe,
 		.maxlen		= sizeof(int),
 		.mode		= 0444,
-		.proc_handler	= &debugfs_doint,
+		.proc_handler	= cfs_proc_handler(&debugfs_doint),
 	},
 	{
 		.procname	= "dump_kernel",
 		.maxlen		= 256,
 		.mode		= 0200,
-		.proc_handler	= &proc_dump_kernel,
+		.proc_handler	= cfs_proc_handler(&proc_dump_kernel),
 	},
 	{
 		.procname	= "daemon_file",
 		.mode		= 0644,
 		.maxlen		= 256,
-		.proc_handler	= &proc_daemon_file,
+		.proc_handler	= cfs_proc_handler(&proc_daemon_file),
 	},
 	{
 		.procname	= "watchdog_ratelimit",
 		.data		= &libcfs_watchdog_ratelimit,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &debugfs_doint,
+		.proc_handler	= cfs_proc_handler(&debugfs_doint),
 		.extra1		= &min_watchdog_ratelimit,
 		.extra2		= &max_watchdog_ratelimit,
 	},
 	{
 		.procname	= "debug_marker",
 		.mode		= 0200,
-		.proc_handler	= &libcfs_debug_marker
+		.proc_handler	= cfs_proc_handler(&libcfs_debug_marker)
 	},
 	{
 		.procname	= "force_lbug",
 		.data		= NULL,
 		.maxlen		= 0,
 		.mode		= 0200,
-		.proc_handler	= &libcfs_force_lbug
+		.proc_handler	= cfs_proc_handler(&libcfs_force_lbug)
 	},
 	{
 		.procname	= "fail_loc",
 		.data		= &cfs_fail_loc,
 		.maxlen		= sizeof(cfs_fail_loc),
 		.mode		= 0644,
-		.proc_handler	= &proc_fail_loc
+		.proc_handler	= cfs_proc_handler(&proc_fail_loc)
 	},
 	{
 		.procname	= "fail_val",
 		.data		= &cfs_fail_val,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &debugfs_doint
+		.proc_handler	= cfs_proc_handler(&debugfs_doint)
 	},
 	{
 		.procname	= "fail_err",
 		.data		= &cfs_fail_err,
 		.maxlen		= sizeof(cfs_fail_err),
 		.mode		= 0644,
-		.proc_handler	= &debugfs_doint,
+		.proc_handler	= cfs_proc_handler(&debugfs_doint),
 	},
 	{
 	}
@@ -485,7 +490,7 @@ static const struct lnet_debugfs_symlink_def lnet_debugfs_symlinks[] = {
 static ssize_t lnet_debugfs_read(struct file *filp, char __user *buf,
 				 size_t count, loff_t *ppos)
 {
-	struct ctl_table *table = filp->private_data;
+	DEFINE_CTL_TABLE_INIT(table, filp->private_data);
 	loff_t old_pos = *ppos;
 	ssize_t rc = -EINVAL;
 
@@ -507,7 +512,7 @@ static ssize_t lnet_debugfs_read(struct file *filp, char __user *buf,
 static ssize_t lnet_debugfs_write(struct file *filp, const char __user *buf,
 				  size_t count, loff_t *ppos)
 {
-	struct ctl_table *table = filp->private_data;
+	DEFINE_CTL_TABLE_INIT(table, filp->private_data);
 	loff_t old_pos = *ppos;
 	ssize_t rc = -EINVAL;
 
@@ -554,8 +559,8 @@ static const struct file_operations *lnet_debugfs_fops_select(
 	return &state[2];
 }
 
-void lnet_insert_debugfs(struct ctl_table *table, struct module *mod,
-			 void **statep)
+void lnet_insert_debugfs(const struct ctl_table *table,
+			 struct module *mod, void **statep)
 {
 	struct file_operations *state = *statep;
 	if (!lnet_debugfs_root)
@@ -583,7 +588,7 @@ void lnet_insert_debugfs(struct ctl_table *table, struct module *mod,
 	 */
 	for (; table && table->procname; table++)
 		debugfs_create_file(table->procname, table->mode,
-				    lnet_debugfs_root, table,
+				    lnet_debugfs_root, (void *)table,
 				    lnet_debugfs_fops_select(table->mode,
 							     (const struct file_operations *)state));
 }
@@ -604,7 +609,7 @@ static void lnet_insert_debugfs_links(
 				       symlinks->target);
 }
 
-void lnet_remove_debugfs(struct ctl_table *table)
+void lnet_remove_debugfs(const struct ctl_table *table)
 {
 	for (; table && table->procname; table++) {
 		struct qstr dname = QSTR_INIT(table->procname,

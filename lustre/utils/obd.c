@@ -5090,8 +5090,7 @@ int parse_pool_cmd_args(int argc, char **argv, bool *wait,
 		return -ENAMETOOLONG;
 	}
 
-	strncpy(fsname, param, fsname_len);
-	fsname[fsname_len] = '\0';
+	snprintf(fsname, fsname_len + 1, "%s", param);
 	if (!ptr)
 		return 0;
 

@@ -1099,8 +1099,8 @@ void cl_page_print(const struct lu_env *env, void *cookie,
 	if (vmpage != NULL) {
 		(*printer)(env, cookie, " %lx %d:%d %lx %lu %slru",
 			   (long)vmpage->flags, page_count(vmpage),
-			   page_mapcount(vmpage), vmpage->private,
-			   page_index(vmpage),
+			   folio_mapcount_page(vmpage), vmpage->private,
+			   folio_index_page(vmpage),
 			   list_empty(&vmpage->lru) ? "not-" : "");
 	}
 

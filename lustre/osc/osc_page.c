@@ -524,7 +524,7 @@ static inline bool lru_page_busy(struct client_obd *cli, struct cl_page *page)
 		struct page *vmpage = cl_page_vmpage(page);
 
 		/* vmpage have two known users: cl_page and VM page cache */
-		if (page_count(vmpage) - page_mapcount(vmpage) > 2)
+		if ((page_count(vmpage) - folio_mapcount_page(vmpage)) > 2)
 			return true;
 	}
 	return false;
