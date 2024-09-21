@@ -1049,7 +1049,11 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		/* page list is not contiguous now, commit it now */
 		unplug = true;
 	}
-	if (unplug || io->u.ci_wr.wr_sync)
+	/* the last call into ->write_begin() can unplug the queue */
+	if (io->u.ci_wr.wr_sync && pos + len ==
+	    io->u.ci_rw.crw_pos + io->u.ci_rw.crw_bytes)
+		unplug = true;
+	if (unplug)
 		result = vvp_io_write_commit(env, io);
 
 	if (result < 0)
