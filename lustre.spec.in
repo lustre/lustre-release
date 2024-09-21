@@ -303,18 +303,6 @@ BuildRequires: pkgconfig(libselinux)
 BuildRequires: pkgconfig(libselinux) openssl-devel
 %endif
 %if %{with lustre_modules}
-%if %{with mofed}
-%if 0%{?mofed_source} > 0
-BuildRequires: mlnx-ofa_kernel-devel
-%endif
-%if %{with multiple_lnds}
-%if "%{_vendor}" == "redhat" || 0%{?openEuler}
-Requires: kmod-mlnx-ofa_kernel
-%else
-Requires: mlnx-ofa_kernel-kmp
-%endif
-%endif
-%endif
 %if %{defined kernel_module_package_buildreqs}
 BuildRequires: %kernel_module_package_buildreqs
 %else

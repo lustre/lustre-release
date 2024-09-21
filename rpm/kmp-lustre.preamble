@@ -3,3 +3,18 @@ Requires:       kernel-%1
 %endif
 Obsoletes:      %{name}-modules < %{version}
 License:        GPL-2.0-only
+# When using multiple lnd the requires are in the external ko2iblnd
+%if 0%{?enable_multi_lnds} == 0
+%if %{with mofed}
+# If not a mofed source install require the devel package
+%if 0%{?mofed_source} > 0
+BuildRequires: mlnx-ofa_kernel-devel
+%endif
+# For dist, require the mofed kernel modules package regardless
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora" || 0%{?openEuler}
+Requires: kmod-mlnx-ofa_kernel
+%else
+Requires: mlnx-ofa_kernel-kmp
+%endif
+%endif
+%endif
