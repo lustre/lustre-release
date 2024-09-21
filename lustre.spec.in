@@ -245,64 +245,29 @@ Source19: kmp-lnet-in-kernel-o2iblnd.preamble
 Source20: kmp-lnet-in-kernel-o2iblnd.files
 URL: https://wiki.whamcloud.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
+BuildRequires: libtool pkgconfig(yaml-0.1) pkgconfig(zlib) pkgconfig(libnl-3.0) flex bison
+Obsoletes: lustre-client < %{version}
+Provides: lustre-client = %{version}-%{release}
+# Lustre modules
 %if %{with lustre_modules}
+#
 %if 0%{?suse_version} >= 1500 || 0%{?rhel} >= 8 || 0%{?fedora} >= 34
 Requires: (%{lustre_name}-dkms or %{requires_kmod_name} >= %{requires_release_major_minor})
 %else
 Requires: %{requires_kmod_name} >= %{requires_release_major_minor}
 %endif
-%endif
-%if %{with lustre_tests_lutf}
-Requires: python3 >= 3.6.0
-BuildRequires: python3-devel >= 3.6.0, swig
-%endif
-BuildRequires: libtool pkgconfig(yaml-0.1) pkgconfig(zlib) pkgconfig(libnl-3.0) flex bison
-%if "%{_vendor}" == "redhat"
-BuildRequires: redhat-rpm-config
-BuildRequires: pkgconfig
-%if 0%{?rhel} > 7 || 0%{?fedora} > 33 || 0%{?rhel} < 1
-Suggests: bash-completion
-%endif
-%else
-%if 0%{?openEuler}
-BuildRequires: openEuler-rpm-config
-%if %{with ldiskfs}
-BuildRequires: kernel-debugsource
-%endif
-%endif
-BuildRequires: pkg-config
-%endif
-%if %{with gss}
-BuildRequires: krb5-devel openssl-devel
-%endif
-%if %{with lustre_modules}
+#
 # abuild (auto-build) used by SUSE Open Build Service needs kernel-source as
 # a build requirement, but the code which extracts these requirements does not
 # understand the percent-open-close-paren construct aka %%()
 #  [NOTE: a percent abovie is doubled to avoid yet another rpmbuild warning]
 # such occurances as failures.  So the following dance allows the requirements
 # to be seen by abuild, but ignored by lbuild.
-%if "%(echo $USER)" != "abuild"
-%else
+%if "%(echo $USER)" == "abuild"
 BuildRequires: kernel-source
 %endif
-%endif
-%if %{with servers}
-Requires: %{name}-osd
-Requires: %{name}-osd-mount
-Obsoletes: lustre-server < %{version}
-Provides: lustre-server = %{version}-%{release}
-%endif
-Obsoletes: lustre-client < %{version}
-Provides: lustre-client = %{version}-%{release}
-%if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora" || 0%{?openEuler}
-#suse don't support selinux
-BuildRequires: pkgconfig(libselinux)
-%endif
-%if %{with l_getsepol}
-BuildRequires: pkgconfig(libselinux) openssl-devel
-%endif
-%if %{with lustre_modules}
+#
+# KMP buildreqs
 %if %{defined kernel_module_package_buildreqs}
 BuildRequires: %kernel_module_package_buildreqs
 %else
@@ -313,21 +278,71 @@ BuildRequires: kernel-rpm-macros
 BuildRequires: rpm-build >= 4.14.3
 %endif
 %endif
+# End: KMP buildreqs
+#
 # need to provide a /usr/lib/${uname -r)/build dir
 BuildRequires: kernel >= 3.10
+#
+# RHEL w/KABI
 %if "%{_vendor}" == "redhat"
 %if %{with kabi}
 BuildRequires: kernel-abi-whitelists
 %endif
 %endif
+# End: KABI
 %endif
-
+# End: Lustre modules
+#
+# Options: lutf, gss, servers, systemd
+#
+%if %{with lustre_tests_lutf}
+Requires: python3 >= 3.6.0
+BuildRequires: python3-devel >= 3.6.0, swig
+%endif
+#
+%if %{with gss}
+BuildRequires: krb5-devel openssl-devel
+%endif
+#
+%if %{with servers}
+Requires: %{name}-osd
+Requires: %{name}-osd-mount
+Obsoletes: lustre-server < %{version}
+Provides: lustre-server = %{version}-%{release}
+%endif
+#
 %if %{with systemd}
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
 BuildRequires: pkgconfig(systemd)
 %endif
+#
+%if %{with l_getsepol}
+BuildRequires: pkgconfig(libselinux) openssl-devel
+%endif
+#
+# Vendor specifics:
+#
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora" || 0%{?openEuler}
+# selinux is used by default
+BuildRequires: pkgconfig(libselinux)
+%if 0%{?rhel} > 7 || 0%{?fedora} > 33 || 0%{?rhel} < 1
+Suggests: bash-completion
+%endif
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora"
+BuildRequires: redhat-rpm-config
+%endif
+#
+%if 0%{?openEuler}
+%if %{with ldiskfs}
+BuildRequires: kernel-debugsource
+%endif
+BuildRequires: openEuler-rpm-config
+%endif
+
+%endif
+# End: RHEL
 
 %description
 Userspace tools and files for the Lustre file system.
