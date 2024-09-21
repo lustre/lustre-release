@@ -6335,18 +6335,18 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_roles));
 	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_roles) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_roles));
-	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused1) == 8, "found %lld\n",
-		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused1));
-	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused1) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused1));
-	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused2) == 16, "found %lld\n",
-		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused2));
-	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused2) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused2));
-	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused3) == 24, "found %lld\n",
-		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_unused3));
-	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused3) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_unused3));
+	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_padding1) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_padding1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_padding1));
+	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_padding2) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_padding2));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_padding2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_padding2));
+	LASSERTF((int)offsetof(struct nodemap_cluster_roles_rec, ncrr_padding3) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_roles_rec, ncrr_padding3));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_padding3) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_roles_rec *)0)->ncrr_padding3));
 
 	/* Checks for union nodemap_rec */
 	LASSERTF((int)sizeof(union nodemap_rec) == 32, "found %lld\n",

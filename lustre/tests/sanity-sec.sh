@@ -18,7 +18,7 @@ ALWAYS_EXCEPT="$SANITY_SEC_EXCEPT "
 
 [[ "$SLOW" == "no" ]] && EXCEPT_SLOW="26"
 
-NODEMAP_TESTS=$(seq 7 26)
+NODEMAP_TESTS={7..26}
 
 if ! check_versions; then
 	echo "It is NOT necessary to test nodemap under interoperation mode"

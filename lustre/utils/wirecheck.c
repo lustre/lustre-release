@@ -2972,9 +2972,9 @@ static void check_nodemap_cluster_roles_rec(void)
 	BLANK_LINE();
 	CHECK_STRUCT(nodemap_cluster_roles_rec);
 	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_roles);
-	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_unused1);
-	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_unused2);
-	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_unused3);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_padding1);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_padding2);
+	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_padding3);
 }
 
 static void check_nodemap_rec(void)

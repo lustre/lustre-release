@@ -271,7 +271,7 @@ struct nodemap_cluster_rec {
 	char			ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	enum nm_flag_bits	ncr_flags:8;
 	enum nm_flag2_bits	ncr_flags2:8;
-	__u8			ncr_padding1;
+	__u8			ncr_padding1;	/* zeroed since 2.16 */
 	__u32			ncr_squash_projid;
 	__u32			ncr_squash_uid;
 	__u32			ncr_squash_gid;
@@ -281,42 +281,42 @@ struct nodemap_cluster_rec {
 struct nodemap_range_rec {
 	lnet_nid_t	nrr_start_nid;
 	lnet_nid_t	nrr_end_nid;
-	__u64		nrr_padding1;
-	__u64		nrr_padding2;
+	__u64		nrr_padding1;	/* zeroed since 2.16 */
+	__u64		nrr_padding2;	/* zeroed since 2.16 */
 };
 
 struct nodemap_range2_rec {
 	struct lnet_nid	nrr_nid_prefix;
-	__u32		nrr_padding1; /* these fields may be used if */
-	__u32		nrr_padding2; /* nrr_nid_prefix.nid_size > 12 */
-	__u16		nrr_padding3;
-	__u8		nrr_padding4;
+	__u32		nrr_padding1;	/* padding may be used for nid_prefix */
+	__u32		nrr_padding2;	/* if nrr_nid_prefix.nid_size > 12 */
+	__u16		nrr_padding3;	/* zeroed since 2.16 */
+	__u8		nrr_padding4;	/* zeroed since 2.16 */
 	__u8		nrr_netmask;
 };
 
 struct nodemap_id_rec {
 	__u32	nir_id_fs;
-	__u32	nir_padding1;
-	__u64	nir_padding2;
-	__u64	nir_padding3;
-	__u64	nir_padding4;
+	__u32	nir_padding1;		/* zeroed since 2.16 */
+	__u64	nir_padding2;		/* zeroed since 2.16 */
+	__u64	nir_padding3;		/* zeroed since 2.16 */
+	__u64	nir_padding4;		/* zeroed since 2.16 */
 };
 
 struct nodemap_global_rec {
 	__u8	ngr_is_active;
-	__u8	ngr_padding1;
-	__u16	ngr_padding2;
-	__u32	ngr_padding3;
-	__u64	ngr_padding4;
-	__u64	ngr_padding5;
-	__u64	ngr_padding6;
+	__u8	ngr_padding1;		/* zeroed since 2.16 */
+	__u16	ngr_padding2;		/* zeroed since 2.16 */
+	__u32	ngr_padding3;		/* zeroed since 2.16 */
+	__u64	ngr_padding4;		/* zeroed since 2.16 */
+	__u64	ngr_padding5;		/* zeroed since 2.16 */
+	__u64	ngr_padding6;		/* zeroed since 2.16 */
 };
 
 struct nodemap_cluster_roles_rec {
-	__u64 ncrr_roles;	/* enum nodemap_rbac_roles */
-	__u64 ncrr_unused1;
-	__u64 ncrr_unused2;
-	__u64 ncrr_unused3;
+	__u64 ncrr_roles;		/* enum nodemap_rbac_roles */
+	__u64 ncrr_padding1;		/* zeroed since 2.16 (always) */
+	__u64 ncrr_padding2;		/* zeroed since 2.16 (always) */
+	__u64 ncrr_padding3;		/* zeroed since 2.16 (always) */
 };
 
 union nodemap_rec {

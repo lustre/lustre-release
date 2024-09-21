@@ -87,10 +87,7 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 {
 	BUILD_BUG_ON(sizeof(nr->ncr.ncr_name) != sizeof(nodemap->nm_name));
 
-	strncpy(nr->ncr.ncr_name, nodemap->nm_name, sizeof(nr->ncr.ncr_name));
-	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
-	nr->ncr.ncr_squash_gid = cpu_to_le32(nodemap->nm_squash_gid);
-	nr->ncr.ncr_squash_projid = cpu_to_le32(nodemap->nm_squash_projid);
+	strscpy(nr->ncr.ncr_name, nodemap->nm_name, sizeof(nr->ncr.ncr_name));
 	nr->ncr.ncr_flags =
 		(nodemap->nmf_trust_client_ids ?
 			NM_FL_TRUST_CLIENT_IDS : 0) |
@@ -111,6 +108,10 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 	nr->ncr.ncr_flags2 =
 		(nodemap->nmf_readonly_mount ?
 			NM_FL2_READONLY_MOUNT : 0);
+	nr->ncr.ncr_padding1 = 0;
+	nr->ncr.ncr_squash_projid = cpu_to_le32(nodemap->nm_squash_projid);
+	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
+	nr->ncr.ncr_squash_gid = cpu_to_le32(nodemap->nm_squash_gid);
 }
 
 static void nodemap_cluster_roles_rec_init(union nodemap_rec *nr,
@@ -118,8 +119,10 @@ static void nodemap_cluster_roles_rec_init(union nodemap_rec *nr,
 {
 	struct nodemap_cluster_roles_rec *ncrr = &nr->ncrr;
 
-	memset(ncrr, 0, sizeof(struct nodemap_cluster_roles_rec));
 	ncrr->ncrr_roles = cpu_to_le64(nodemap->nmf_rbac);
+	ncrr->ncrr_padding1 = 0;
+	ncrr->ncrr_padding2 = 0;
+	ncrr->ncrr_padding3 = 0;
 }
 
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
@@ -144,6 +147,10 @@ static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
 static void nodemap_idmap_rec_init(union nodemap_rec *nr, u32 id_fs)
 {
 	nr->nir.nir_id_fs = cpu_to_le32(id_fs);
+	nr->nir.nir_padding1 = 0;
+	nr->nir.nir_padding2 = 0;
+	nr->nir.nir_padding3 = 0;
+	nr->nir.nir_padding4 = 0;
 }
 
 static void nodemap_range_key_init(struct nodemap_key *nk,
@@ -159,6 +166,10 @@ static int nodemap_range_rec_init(union nodemap_rec *nr,
 {
 	if (range->rn_netmask) {
 		nr->nrr2.nrr_nid_prefix = range->rn_start;
+		nr->nrr2.nrr_padding1 = 0;
+		nr->nrr2.nrr_padding2 = 0;
+		nr->nrr2.nrr_padding3 = 0;
+		nr->nrr2.nrr_padding4 = 0;
 		nr->nrr2.nrr_netmask = range->rn_netmask;
 
 		if (NID_BYTES(&nr->nrr2.nrr_nid_prefix) >
@@ -175,6 +186,8 @@ static int nodemap_range_rec_init(union nodemap_rec *nr,
 		nid4[1] = lnet_nid_to_nid4(&range->rn_end);
 		nr->nrr.nrr_start_nid = cpu_to_le64(nid4[0]);
 		nr->nrr.nrr_end_nid = cpu_to_le64(nid4[1]);
+		nr->nrr.nrr_padding1 = 0;
+		nr->nrr.nrr_padding2 = 0;
 	}
 
 	return 0;
@@ -189,6 +202,12 @@ static void nodemap_global_key_init(struct nodemap_key *nk)
 static void nodemap_global_rec_init(union nodemap_rec *nr, bool active)
 {
 	nr->ngr.ngr_is_active = active;
+	nr->ngr.ngr_padding1 = 0;
+	nr->ngr.ngr_padding2 = 0;
+	nr->ngr.ngr_padding3 = 0;
+	nr->ngr.ngr_padding4 = 0;
+	nr->ngr.ngr_padding5 = 0;
+	nr->ngr.ngr_padding6 = 0;
 }
 
 /* should be called with dt_write lock */
