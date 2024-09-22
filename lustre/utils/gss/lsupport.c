@@ -73,17 +73,15 @@ const char * lustre_svc_name[] =
 	[LUSTRE_GSS_SVC_OSS]    = "OSS",
 };
 
-/****************************************
- * exclusive startup                    *
- ****************************************/
+/* exclusive startup */
 
 static struct __sem_s {
-        char           *name;
-        key_t           sem_key;
-        int             sem_id;
+	char           *name;
+	key_t           sem_key;
+	int             sem_id;
 } sems[2] = {
-        [GSSD_CLI] = { "client",  0x3a92d473, 0 },
-        [GSSD_SVC] = { "server",  0x3b92d473, 0 },
+	[GSSD_CLI] = { "client",  0x3a92d473, 0 },
+	[GSSD_SVC] = { "server",  0x3b92d473, 0 },
 };
 
 void gssd_init_unique(int type)
@@ -144,13 +142,13 @@ again:
 
 void gssd_exit_unique(int type)
 {
-        assert(type == GSSD_CLI || type == GSSD_SVC);
+	assert(type == GSSD_CLI || type == GSSD_SVC);
 
-        /*
-         * do nothing. we can't remove the sem here, otherwise the race
-         * window would be much bigger. So it's sad we have to leave the
-         * sem in the system forever.
-         */
+	/*
+	 * do nothing. we can't remove the sem here, otherwise the race
+	 * window would be much bigger. So it's sad we have to leave the
+	 * sem in the system forever.
+	 */
 }
 
 /****************************************
@@ -309,7 +307,7 @@ int lolnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
 
 static int is_space(char c)
 {
-        return (c == ' ' || c == '\t' || c == '\n');
+	return (c == ' ' || c == '\t' || c == '\n');
 }
 
 static
@@ -375,8 +373,8 @@ int external_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
 }
 
 struct convert_struct {
-        char                    *name;
-        lnd_nid2hostname_t      *nid2name;
+	char                    *name;
+	lnd_nid2hostname_t      *nid2name;
 };
 
 static struct convert_struct converter[] = {
@@ -423,30 +421,30 @@ int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen)
 #define MAX_LINE_LEN            256
 
 struct user_map_item {
-        char        *principal; /* NULL means match all */
-        lnet_nid_t   nid;
-        uid_t        uid;
+	char        *principal; /* NULL means match all */
+	lnet_nid_t   nid;
+	uid_t        uid;
 };
 
 struct user_mapping {
-        int                   nitems;
-        struct user_map_item *items;
+	int                   nitems;
+	struct user_map_item *items;
 };
 
 static struct user_mapping mapping;
 /* FIXME to be finished: monitor change of mapping database */
-static int mapping_mtime = 0;
+static int mapping_mtime;
 
 void cleanup_mapping(void)
 {
-        if (mapping.items) {
-                for (; mapping.nitems > 0; mapping.nitems--)
-                        if (mapping.items[mapping.nitems-1].principal)
-                                free(mapping.items[mapping.nitems-1].principal);
+	if (mapping.items) {
+		for (; mapping.nitems > 0; mapping.nitems--)
+			if (mapping.items[mapping.nitems-1].principal)
+				free(mapping.items[mapping.nitems-1].principal);
 
-                free(mapping.items);
-                mapping.items = NULL;
-        }
+		free(mapping.items);
+		mapping.items = NULL;
+	}
 }
 
 static int grow_mapping(int nitems)
@@ -479,19 +477,19 @@ static int grow_mapping(int nitems)
 
 uid_t parse_uid(char *uidstr)
 {
-        struct passwd *pw;
-        char *p = NULL;
-        long uid;
+	struct passwd *pw;
+	char *p = NULL;
+	long uid;
 
-        pw = getpwnam(uidstr);
-        if (pw)
-                return pw->pw_uid;
+	pw = getpwnam(uidstr);
+	if (pw)
+		return pw->pw_uid;
 
-        uid = strtol(uidstr, &p, 0);
-        if (*p == '\0')
-                return (uid_t) uid;
+	uid = strtol(uidstr, &p, 0);
+	if (*p == '\0')
+		return (uid_t) uid;
 
-        return -1;
+	return -1;
 }
 
 static int read_mapping_db(void)
@@ -589,10 +587,9 @@ static inline int mapping_changed(void)
 
 		mapping_mtime = 0;
 		return 1;
-	} else {
-		printerr(LL_WARN,
-			 "Use of idmap.conf is deprecated.\nPlease consider switching to auth_to_local or equivalent as provided by Kerberos for cross-realm trust remapping.\n");
 	}
+	printerr(LL_WARN,
+		 "Use of idmap.conf is deprecated.\nPlease consider switching to auth_to_local or equivalent as provided by Kerberos for cross-realm trust remapping.\n");
 
 	if (st.st_mtime != mapping_mtime) {
 		mapping_mtime = st.st_mtime;
