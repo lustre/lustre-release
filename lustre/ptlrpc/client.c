@@ -2904,6 +2904,25 @@ void ptlrpc_req_put(struct ptlrpc_request *request)
 }
 EXPORT_SYMBOL(ptlrpc_req_put);
 
+/**
+ * obd_mod_free() - Release memory allocated for md_open_data
+ * @kref: kref when dropped below 1
+ *
+ * Used as a kref release callback, when the last user of md_open_data
+ * is released.
+ */
+void obd_mod_free(struct kref *kref)
+{
+	struct md_open_data *mod = container_of(kref, struct md_open_data,
+						mod_refcount);
+
+	if (mod->mod_open_req)
+		ptlrpc_req_put(mod->mod_open_req);
+	if (mod->mod_close_req)
+		ptlrpc_req_put(mod->mod_close_req);
+	OBD_FREE_PTR(mod);
+}
+EXPORT_SYMBOL(obd_mod_free);
 
 /**
  * ptlrpc_req_xid() - Returns XID of a @request

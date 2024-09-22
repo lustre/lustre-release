@@ -744,7 +744,7 @@ void mdc_commit_open(struct ptlrpc_request *req)
 	req->rq_committed = 1;
 	spin_unlock(&req->rq_lock);
 	req->rq_cb_data = NULL;
-	obd_mod_put(mod);
+	kref_put(&mod->mod_refcount, obd_mod_free);
 }
 
 int mdc_set_open_replay_data(struct obd_export *exp,
@@ -778,13 +778,13 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 		}
 
 		/**
-		 * Take a reference on \var mod, to be freed on mdc_close().
-		 * It protects \var mod from being freed on eviction (commit
+		 * Take a reference on @mod, to be freed on mdc_close().
+		 * It protects @mod from being freed on eviction (commit
 		 * callback is called despite rq_replay flag).
-		 * Another reference for \var och.
+		 * Another reference for @och.
 		 */
-		obd_mod_get(mod);
-		obd_mod_get(mod);
+		kref_get(&mod->mod_refcount);
+		kref_get(&mod->mod_refcount);
 
 		spin_lock(&open_req->rq_lock);
 		och->och_mod = mod;
@@ -861,7 +861,7 @@ static int mdc_clear_open_replay_data(struct obd_export *exp,
 
 	mod->mod_och = NULL;
 	och->och_mod = NULL;
-	obd_mod_put(mod);
+	kref_put(&mod->mod_refcount, obd_mod_free);
 
 	RETURN(0);
 }
@@ -1016,7 +1016,7 @@ out:
 		/* Since now, mod is accessed through open_req only,
 		 * thus close req does not keep a reference on mod anymore.
 		 */
-		obd_mod_put(mod);
+		kref_put(&mod->mod_refcount, obd_mod_free);
 	}
 	*request = req;
 

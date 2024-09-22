@@ -5945,7 +5945,7 @@ again:
 		 * the client och here, otherwise release it in out_close:
 		 */
 		if (och && body->mbo_valid & OBD_MD_CLOSE_INTENT_EXECED) {
-			obd_mod_put(och->och_mod);
+			kref_put(&och->och_mod->mod_refcount, obd_mod_free);
 			md_clear_open_replay_data(ll_i2sbi(parent)->ll_md_exp,
 						  och);
 			och->och_open_handle.cookie = DEAD_HANDLE_MAGIC;

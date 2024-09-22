@@ -1270,7 +1270,7 @@ struct md_open_data {
 	struct obd_client_handle	*mod_och;
 	struct ptlrpc_request		*mod_open_req;
 	struct ptlrpc_request		*mod_close_req;
-	atomic_t			 mod_refcount;
+	struct kref			 mod_refcount;
 	bool				 mod_is_create;
 };
 
@@ -1434,21 +1434,9 @@ static inline struct md_open_data *obd_mod_alloc(void)
 	OBD_ALLOC_PTR(mod);
 	if (mod == NULL)
 		return NULL;
-	atomic_set(&mod->mod_refcount, 1);
+	kref_init(&mod->mod_refcount);
 	return mod;
 }
-
-#define obd_mod_get(mod) atomic_inc(&(mod)->mod_refcount)
-#define obd_mod_put(mod)						\
-({									\
-	if (atomic_dec_and_test(&(mod)->mod_refcount)) {		\
-		if ((mod)->mod_open_req)				\
-			ptlrpc_req_put((mod)->mod_open_req);		\
-		if ((mod)->mod_close_req)				\
-			ptlrpc_req_put((mod)->mod_close_req);		\
-		OBD_FREE_PTR(mod);					\
-	}								\
-})
 
 void obdo_from_inode(struct obdo *dst, struct inode *src, u64 valid);
 void obdo_set_parent_fid(struct obdo *dst, const struct lu_fid *parent);
