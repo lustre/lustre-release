@@ -31,7 +31,8 @@
 #define CHLOG_MAX_IDLE_TIME 2592000 /* = 30 days */
 /* max gap allowed for a user to stay idle in number of ChangeLog records
  * this is an evaluation, assuming that chunk-size is LLOG_MIN_CHUNK_SIZE, of
- * the indexes gap for half full changelogs */
+ * the indexes gap for half full changelogs
+ */
 #define CHLOG_MAX_IDLE_INDEXES (((LLOG_MIN_CHUNK_SIZE - \
 				  offsetof(struct llog_log_hdr, \
 					   llh_bitmap[0]) - \
@@ -43,7 +44,8 @@
 /* min time in seconds between two gc thread runs if none already started */
 #define CHLOG_MIN_GC_INTERVAL 3600
 /* minimum number of free ChangeLog catalog entries (ie, between cur and
- * last indexes) before starting garbage collect */
+ * last indexes) before starting garbage collect
+ */
 #define CHLOG_MIN_FREE_CAT_ENTRIES 2
 
 /* Changelog flags */
@@ -117,15 +119,15 @@ struct mdd_generic_thread {
 };
 
 struct mdd_device {
-        struct md_device                 mdd_md_dev;
+	struct md_device                 mdd_md_dev;
 	struct obd_export               *mdd_child_exp;
-        struct dt_device                *mdd_child;
+	struct dt_device                *mdd_child;
 	struct dt_device		*mdd_bottom;
 	struct lu_fid                    mdd_root_fid; /* /ROOT */
 	struct lu_fid			 mdd_local_root_fid;
-        struct dt_device_param           mdd_dt_conf;
-        struct dt_object                *mdd_orphans; /* PENDING directory */
-        struct mdd_changelog             mdd_cl;
+	struct dt_device_param           mdd_dt_conf;
+	struct dt_object                *mdd_orphans; /* PENDING directory */
+	struct mdd_changelog             mdd_cl;
 	unsigned int			 mdd_changelog_gc;
 					 /* emrg GC is in progress */
 	bool				 mdd_changelog_emrg_gc;
@@ -136,8 +138,8 @@ struct mdd_device {
 	time64_t			 mdd_changelog_min_gc_interval;
 	unsigned int			 mdd_changelog_min_free_cat_entries;
 	time64_t			 mdd_atime_diff;
-        struct mdd_object               *mdd_dot_lustre;
-        struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
+	struct mdd_object               *mdd_dot_lustre;
+	struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
 	unsigned int			 mdd_sync_permission;
 	int				 mdd_connects;
 	int				 mdd_append_stripe_count;
@@ -175,9 +177,7 @@ struct mdd_object {
 struct mdd_thread_info {
 	struct lu_fid		  mdi_fid;
 	struct lu_fid		  mdi_fid2; /* used for be & cpu converting */
-	/**
-	* only be used by MDD interfaces, can be passed into local MDD APIs.
-	*/
+	/* only be used by MDD interfaces, can be passed into local MDD APIs */
 	struct lu_attr		  mdi_pattr;
 	struct lu_attr		  mdi_cattr;
 	struct lu_attr		  mdi_tpattr;
@@ -258,16 +258,16 @@ int mdd_finish_unlink(const struct lu_env *env, struct mdd_object *obj,
 		      const struct lu_name *lname, struct thandle *th);
 
 int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid);
-int mdd_lookup(const struct lu_env *env,
-               struct md_object *pobj, const struct lu_name *lname,
-               struct lu_fid* fid, struct md_op_spec *spec);
+int mdd_lookup(const struct lu_env *env, struct md_object *pobj,
+	       const struct lu_name *lname, struct lu_fid *fid,
+	       struct md_op_spec *spec);
 int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
 		    struct linkea_data *ldata, struct thandle *handle);
 int mdd_links_read(const struct lu_env *env,
 		   struct mdd_object *mdd_obj,
 		   struct linkea_data *ldata);
 struct lu_buf *mdd_links_get(const struct lu_env *env,
-                             struct mdd_object *mdd_obj);
+			     struct mdd_object *mdd_obj);
 int mdd_links_rename(const struct lu_env *env,
 		     struct mdd_object *mdd_obj,
 		     const struct lu_fid *oldpfid,
@@ -295,8 +295,7 @@ struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
 
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
-                                       const void *area, ssize_t len);
-
+				       const void *area, ssize_t len);
 int mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d);
 int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
 		      struct thandle *thandle);
@@ -324,10 +323,10 @@ extern struct lu_context_key mdd_thread_key;
 extern const struct lu_device_operations mdd_lu_ops;
 
 struct mdd_object *mdd_object_find(const struct lu_env *env,
-                                   struct mdd_device *d,
-                                   const struct lu_fid *f);
+				   struct mdd_device *d,
+				   const struct lu_fid *f);
 int mdd_readpage(const struct lu_env *env, struct md_object *obj,
-                 const struct lu_rdpg *rdpg);
+		 const struct lu_rdpg *rdpg);
 int mdd_declare_changelog_store(const struct lu_env *env,
 				struct mdd_device *mdd,
 				enum changelog_rec_type type,
@@ -395,28 +394,28 @@ static inline void mdd_object_get(struct mdd_object *o)
 }
 
 static inline void mdd_object_put(const struct lu_env *env,
-                                  struct mdd_object *o)
+				  struct mdd_object *o)
 {
-        lu_object_put(env, &o->mod_obj.mo_lu);
+	lu_object_put(env, &o->mod_obj.mo_lu);
 }
 
 struct thandle *mdd_trans_create(const struct lu_env *env,
-                                 struct mdd_device *mdd);
+				 struct mdd_device *mdd);
 int mdd_trans_start(const struct lu_env *env, struct mdd_device *mdd,
-                    struct thandle *th);
+		    struct thandle *th);
 int mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
 		   int rc, struct thandle *handle);
 
 /* mdd_device.c */
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *hdr,
-                                   struct lu_device *d);
+				   const struct lu_object_header *hdr,
+				   struct lu_device *d);
 int mdd_local_file_create(const struct lu_env *env, struct mdd_device *mdd,
 			  const struct lu_fid *pfid, const char *name,
 			  __u32 mode, struct lu_fid *fid);
 
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
-                  struct thandle *handle);
+		  struct thandle *handle);
 int mdd_acl_set(const struct lu_env *env, struct mdd_object *obj,
 		struct lu_attr *attr, const struct lu_buf *buf, int fl);
 int __mdd_fix_mode_acl(const struct lu_env *env, struct lu_buf *buf,
@@ -456,7 +455,7 @@ extern int lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry,
 /* inline functions */
 static inline int lu_device_is_mdd(struct lu_device *d)
 {
-        return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
+	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
 }
 
 static inline struct mdd_device *lu2mdd_dev(struct lu_device *d)
@@ -506,7 +505,7 @@ static inline struct dt_object *mdd_object_child(struct mdd_object *obj)
 
 static inline struct obd_device *mdd2obd_dev(struct mdd_device *mdd)
 {
-	return (mdd->mdd_md_dev.md_lu_dev.ld_obd);
+	return mdd->mdd_md_dev.md_lu_dev.ld_obd;
 }
 
 static inline struct mdd_device *mdd_obj2mdd_dev(struct mdd_object *obj)
@@ -583,16 +582,18 @@ static inline int mdo_attr_get(const struct lu_env *env, struct mdd_object *obj,
 			       struct lu_attr *la)
 {
 	struct dt_object *next = mdd_object_child(obj);
+
 	return dt_attr_get(env, next, la);
 }
 
 static inline int mdo_declare_attr_set(const struct lu_env *env,
-                                       struct mdd_object *obj,
-                                       const struct lu_attr *la,
-                                       struct thandle *handle)
+				       struct mdd_object *obj,
+				       const struct lu_attr *la,
+				       struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        return dt_declare_attr_set(env, next, la, handle);
+	struct dt_object *next = mdd_object_child(obj);
+
+	return dt_declare_attr_set(env, next, la, handle);
 }
 
 static inline int mdo_attr_set(const struct lu_env *env,
@@ -608,18 +609,20 @@ static inline int mdo_attr_set(const struct lu_env *env,
 	return dt_attr_set(env, next, la, handle);
 }
 
-static inline int mdo_xattr_get(const struct lu_env *env,struct mdd_object *obj,
-				struct lu_buf *buf, const char *name)
+static
+inline int mdo_xattr_get(const struct lu_env *env, struct mdd_object *obj,
+			 struct lu_buf *buf, const char *name)
 {
 	struct dt_object *next = mdd_object_child(obj);
+
 	return dt_xattr_get(env, next, buf, name);
 }
 
 static inline int mdo_declare_xattr_set(const struct lu_env *env,
-                                        struct mdd_object *obj,
-                                        const struct lu_buf *buf,
-                                        const char *name,
-                                        int fl, struct thandle *handle)
+					struct mdd_object *obj,
+					const struct lu_buf *buf,
+					const char *name, int fl,
+					struct thandle *handle)
 {
 	struct dt_object *next = mdd_object_child(obj);
 	int rc;
@@ -637,7 +640,8 @@ static inline int mdo_declare_xattr_set(const struct lu_env *env,
 	return rc;
 }
 
-static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
+static inline int mdo_xattr_set(const struct lu_env *env,
+				struct mdd_object *obj,
 				const struct lu_buf *buf, const char *name,
 				int fl, struct thandle *handle)
 {
@@ -685,16 +689,18 @@ static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
 }
 
 static inline int mdo_declare_xattr_del(const struct lu_env *env,
-                                        struct mdd_object *obj,
-                                        const char *name,
-                                        struct thandle *handle)
+					struct mdd_object *obj,
+					const char *name,
+					struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        return dt_declare_xattr_del(env, next, name, handle);
+	struct dt_object *next = mdd_object_child(obj);
+
+	return dt_declare_xattr_del(env, next, name, handle);
 }
 
-static inline int mdo_xattr_del(const struct lu_env *env,struct mdd_object *obj,
-				const char *name, struct thandle *handle)
+static inline int mdo_xattr_del(const struct lu_env *env,
+				struct mdd_object *obj, const char *name,
+				struct thandle *handle)
 {
 	struct dt_object *next = mdd_object_child(obj);
 
@@ -752,8 +758,7 @@ int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
 	struct dt_object *next	= mdd_object_child(obj);
 	int		  rc;
 
-	/*
-	 * if the object doesn't exist yet, then it's supposed to be created
+	/* if the object doesn't exist yet, then it's supposed to be created
 	 * and declaration of the creation should be enough to insert ./..
 	 */
 
@@ -767,7 +772,7 @@ int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
 				       (const struct dt_key *)name, handle);
 	}
 
-	 return rc;
+	return rc;
 }
 
 static inline
@@ -784,11 +789,12 @@ int mdo_declare_index_delete(const struct lu_env *env, struct mdd_object *obj,
 }
 
 static inline int mdo_declare_ref_add(const struct lu_env *env,
-                                      struct mdd_object *obj,
-                                      struct thandle *handle)
+				      struct mdd_object *obj,
+				      struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        return dt_declare_ref_add(env, next, handle);
+	struct dt_object *next = mdd_object_child(obj);
+
+	return dt_declare_ref_add(env, next, handle);
 }
 
 static inline int mdo_ref_add(const struct lu_env *env, struct mdd_object *obj,
@@ -803,11 +809,12 @@ static inline int mdo_ref_add(const struct lu_env *env, struct mdd_object *obj,
 }
 
 static inline int mdo_declare_ref_del(const struct lu_env *env,
-                                      struct mdd_object *obj,
-                                      struct thandle *handle)
+				      struct mdd_object *obj,
+				      struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        return dt_declare_ref_del(env, next, handle);
+	struct dt_object *next = mdd_object_child(obj);
+
+	return dt_declare_ref_del(env, next, handle);
 }
 
 static inline int mdo_ref_del(const struct lu_env *env, struct mdd_object *obj,
@@ -827,6 +834,7 @@ mdo_declare_create_object(const struct lu_env *env, struct mdd_object *obj,
 			  struct dt_object_format *dof, struct thandle *handle)
 {
 	struct dt_object *next = mdd_object_child(obj);
+
 	return dt_declare_create(env, next, attr, hint, dof, handle);
 }
 
@@ -836,23 +844,26 @@ mdo_create_object(const struct lu_env *env, struct mdd_object *obj,
 		  struct dt_object_format *dof, struct thandle *handle)
 {
 	struct dt_object *next = mdd_object_child(obj);
+
 	return dt_create(env, next, attr, hint, dof, handle);
 }
 
 static inline
 int mdo_declare_destroy(const struct lu_env *env, struct mdd_object *o,
-                        struct thandle *handle)
+			struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(o);
-        return dt_declare_destroy(env, next, handle);
+	struct dt_object *next = mdd_object_child(o);
+
+	return dt_declare_destroy(env, next, handle);
 }
 
 static inline
 int mdo_destroy(const struct lu_env *env, struct mdd_object *o,
-                struct thandle *handle)
+		struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(o);
-        return dt_destroy(env, next, handle);
+	struct dt_object *next = mdd_object_child(o);
+
+	return dt_destroy(env, next, handle);
 }
 
 static inline bool mdd_changelog_enabled(const struct lu_env *env,
