@@ -23,19 +23,18 @@
 /* mdc_setattr does its own semaphore handling */
 static int mdc_reint(struct ptlrpc_request *request, int level)
 {
-        int rc;
+	int rc;
 
-        request->rq_send_state = level;
+	request->rq_send_state = level;
 
 	ptlrpc_get_mod_rpc_slot(request);
 	rc = ptlrpc_queue_wait(request);
 	ptlrpc_put_mod_rpc_slot(request);
-        if (rc)
-                CDEBUG(D_INFO, "error in handling %d\n", rc);
-        else if (!req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY)) {
-                rc = -EPROTO;
-        }
-        return rc;
+	if (rc)
+		CDEBUG(D_INFO, "error in handling %d\n", rc);
+	else if (!req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY))
+		rc = -EPROTO;
+	return rc;
 }
 
 /* Find and cancel locally locks matched by inode @bits & @mode in the resource
@@ -53,13 +52,13 @@ int mdc_resource_cancel_unused_res(struct obd_export *exp,
 	int count;
 
 	ENTRY;
-
 	/* Return, i.e. cancel nothing, only if ELC is supported (flag in
 	 * export) but disabled through procfs (flag in NS).
 	 *
 	 * This distinguishes from a case when ELC is not supported originally,
 	 * when we still want to cancel locks in advance and just cancel them
-	 * locally, without sending any RPC. */
+	 * locally, without sending any RPC.
+	 */
 	if (exp_connect_cancelset(exp) && !ns_connect_cancelset(ns))
 		RETURN(0);
 
@@ -88,26 +87,26 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 		void *ea, size_t ealen, struct ptlrpc_request **request)
 {
 	LIST_HEAD(cancels);
-        struct ptlrpc_request *req;
-        int count = 0, rc;
-        __u64 bits;
-        ENTRY;
+	struct ptlrpc_request *req;
+	int count = 0, rc;
+	__u64 bits;
 
-        LASSERT(op_data != NULL);
+	ENTRY;
+	LASSERT(op_data != NULL);
 
-        bits = MDS_INODELOCK_UPDATE;
-        if (op_data->op_attr.ia_valid & (ATTR_MODE|ATTR_UID|ATTR_GID))
-                bits |= MDS_INODELOCK_LOOKUP;
+	bits = MDS_INODELOCK_UPDATE;
+	if (op_data->op_attr.ia_valid & (ATTR_MODE|ATTR_UID|ATTR_GID))
+		bits |= MDS_INODELOCK_LOOKUP;
 	if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
 	    (fid_is_sane(&op_data->op_fid1)))
 		count = mdc_resource_cancel_unused(exp, &op_data->op_fid1,
 						   &cancels, LCK_EX, bits);
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp),
-                                   &RQF_MDS_REINT_SETATTR);
-        if (req == NULL) {
-                ldlm_lock_list_put(&cancels, l_bl_ast, count);
-                RETURN(-ENOMEM);
-        }
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+			   	   &RQF_MDS_REINT_SETATTR);
+	if (req == NULL) {
+		ldlm_lock_list_put(&cancels, l_bl_ast, count);
+		RETURN(-ENOMEM);
+	}
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_EPOCH, RCL_CLIENT, 0);
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT, ealen);
@@ -119,7 +118,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 		RETURN(rc);
 	}
 
-        if (op_data->op_attr.ia_valid & (ATTR_MTIME | ATTR_CTIME))
+	if (op_data->op_attr.ia_valid & (ATTR_MTIME | ATTR_CTIME))
 		CDEBUG(D_INODE, "setting mtime %lld, ctime %lld\n",
 		       (s64)op_data->op_attr.ia_mtime.tv_sec,
 		       (s64)op_data->op_attr.ia_ctime.tv_sec);
@@ -127,13 +126,13 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, 0);
 
-        ptlrpc_request_set_replen(req);
+	ptlrpc_request_set_replen(req);
 
 	rc = mdc_reint(req, LUSTRE_IMP_FULL);
 	if (rc == -ERESTARTSYS)
-                rc = 0;
+		rc = 0;
 
-        *request = req;
+	*request = req;
 
 	RETURN(rc);
 }
@@ -153,7 +152,6 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 	LIST_HEAD(cancels);
 
 	ENTRY;
-
 	/* For case if upper layer did not alloc fid, do it now. */
 	if (!fid_is_sane(&op_data->op_fid2)) {
 		/*
@@ -221,7 +219,8 @@ rebuild:
 	ptlrpc_request_set_replen(req);
 
 	/* ask ptlrpc not to resend on EINPROGRESS since we have our own retry
-	 * logic here */
+	 * logic here
+	 */
 	req->rq_no_retry_einprogress = 1;
 
 	if (resends) {
@@ -239,7 +238,8 @@ rebuild:
 		goto resend;
 	} else if (rc == -EINPROGRESS) {
 		/* Retry create infinitely until succeed or get other
-		 * error code or interrupted. */
+		 * error code or interrupted.
+		 */
 		ptlrpc_req_put(req);
 		if (generation == import->imp_generation) {
 			if (signal_pending(current))
@@ -311,8 +311,8 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 	struct ptlrpc_request *req = *request;
 	struct sptlrpc_sepol *sepol;
 	int count = 0, rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(req == NULL);
 
 	if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
@@ -381,8 +381,8 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
 	struct ptlrpc_request *req;
 	struct sptlrpc_sepol *sepol;
 	int count = 0, rc;
-	ENTRY;
 
+	ENTRY;
 	if ((op_data->op_flags & MF_MDC_CANCEL_FID2) &&
 	    (fid_is_sane(&op_data->op_fid2)))
 		count = mdc_resource_cancel_unused(exp, &op_data->op_fid2,
@@ -446,7 +446,6 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 	int count = 0, rc;
 
 	ENTRY;
-
 	if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
 	    (fid_is_sane(&op_data->op_fid1)))
 		count = mdc_resource_cancel_unused(exp, &op_data->op_fid1,
@@ -536,8 +535,8 @@ int mdc_file_resync(struct obd_export *exp, struct md_op_data *op_data)
 	struct ldlm_lock *lock;
 	struct mdt_rec_resync *rec;
 	int count = 0, rc;
-	ENTRY;
 
+	ENTRY;
 	if (op_data->op_flags & MF_MDC_CANCEL_FID1 &&
 	    fid_is_sane(&op_data->op_fid1))
 		count = mdc_resource_cancel_unused(exp, &op_data->op_fid1,
