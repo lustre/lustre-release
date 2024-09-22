@@ -162,7 +162,8 @@ struct coordinator {
 	atomic_t		 cdt_remove_count;
 
 	/* started requests (struct cdt_agent_req:car_cookie_hash)
-	 * indexed by cookie */
+	 * indexed by cookie
+	 */
 	struct cfs_hash		*cdt_request_cookie_hash;
 	/* started requests (struct cdt_agent_req:car_request_list) */
 	struct list_head	 cdt_request_list;
@@ -173,7 +174,8 @@ struct coordinator {
 						       */
 
 	/* Hash of cookies to locations of record locations in agent
-	 * request log. */
+	 * request log.
+	 */
 	struct cfs_hash		*cdt_agent_record_hash;
 
 	/* Bitmasks indexed by the HSMA_XXX constants. */
@@ -251,21 +253,19 @@ struct mdt_device {
 	/* super-class */
 	struct lu_device	   mdt_lu_dev;
 	struct seq_server_site	   mdt_seq_site;
-        /* DLM name-space for meta-data locks maintained by this server */
-        struct ldlm_namespace     *mdt_namespace;
-        /* ptlrpc handle for MDS->client connections (for lock ASTs). */
-        struct ptlrpc_client      *mdt_ldlm_client;
-        /* underlying device */
+	/* DLM name-space for meta-data locks maintained by this server */
+	struct ldlm_namespace     *mdt_namespace;
+	/* ptlrpc handle for MDS->client connections (for lock ASTs). */
+	struct ptlrpc_client      *mdt_ldlm_client;
+	/* underlying device */
 	struct obd_export         *mdt_child_exp;
-        struct md_device          *mdt_child;
-        struct dt_device          *mdt_bottom;
+	struct md_device          *mdt_child;
+	struct dt_device          *mdt_bottom;
 	struct obd_export	  *mdt_bottom_exp;
 	struct local_oid_storage  *mdt_los;
-        /** target device */
-        struct lu_target           mdt_lut;
-	/*
-	 * Options bit-fields.
-	 */
+	/** target device */
+	struct lu_target           mdt_lut;
+	/* Options bit-fields. */
 	struct {
 		unsigned int       mo_user_xattr:1,
 				   mo_acl:1,
@@ -279,7 +279,8 @@ struct mdt_device {
 	struct dt_txn_callback	   mdt_txn_cb;
 
 	/* these values should be updated from lov if necessary.
-	 * or should be placed somewhere else. */
+	 * or should be placed somewhere else.
+	 */
 	int			   mdt_max_mdsize;
 
 	int			   mdt_max_ea_size;
@@ -320,7 +321,8 @@ struct mdt_device {
 				   mdt_enable_dmv_xattr:1;
 
 				   /* user with gid can create remote/striped
-				    * dir, and set default dir stripe */
+				    * dir, and set default dir stripe
+				    */
 	gid_t			   mdt_enable_remote_dir_gid;
 				   /* user with this gid can change projid */
 	gid_t			   mdt_enable_chprojid_gid;
@@ -333,7 +335,7 @@ struct mdt_device {
 	struct mdt_statfs_cache	   mdt_sum_osfs;
 	struct mdt_statfs_cache	   mdt_osfs;
 
-        /* root squash */
+	/* root squash */
 	struct root_squash_info	   mdt_squash;
 
 	struct rename_stats	   mdt_rename_stats;
@@ -380,7 +382,7 @@ struct mdt_object {
 				mot_lsom_inited:1; /* lsom was inited */
 	int			mot_write_count;
 	spinlock_t		mot_write_lock;
-        /* Lock to protect create_data */
+	/* Lock to protect create_data */
 	struct mutex		mot_lov_mutex;
 	/* Lock to protect object's SOM update. */
 	struct mutex		mot_som_mutex;
@@ -389,7 +391,8 @@ struct mdt_object {
 	/* lock to protect read/write stages for Data-on-MDT files */
 	struct rw_semaphore	mot_dom_sem;
 	/* Lock to protect lease open.
-	 * Lease open acquires write lock; normal open acquires read lock */
+	 * Lease open acquires write lock; normal open acquires read lock
+	 */
 	struct rw_semaphore	mot_open_sem;
 	atomic_t		mot_lease_count;
 	atomic_t		mot_open_count;
@@ -433,15 +436,16 @@ enum {
 };
 
 enum {
-        MDT_LOCAL_LOCK,
-        MDT_CROSS_LOCK
+	MDT_LOCAL_LOCK,
+	MDT_CROSS_LOCK
 };
 
 /* Special magical errno for communicaiton between mdt_reint_open()
  * and mdt_intent_reint() which means return the lock to the client
  * for subsequent cross ref open. Previously we used plain -EREMOTE
  * but other functions called in that path might return it too and
- * confuse us. This is not returned to the client. See LU-5370. */
+ * confuse us. This is not returned to the client. See LU-5370.
+ */
 #define MDT_EREMOTE_OPEN (EREMOTE + 1024)
 
 struct mdt_reint_record {
@@ -478,17 +482,14 @@ struct mdt_thread_info {
 	 */
 	struct req_capsule        *mti_pill;
 
-	/*
-	 * SUB request pill in a batch request.
-	 */
+	/* SUB request pill in a batch request. */
 	struct req_capsule	    mti_sub_pill;
 
 	/* although we have export in req, there are cases when it is not
-	 * available, e.g. closing files upon export destroy */
-	struct obd_export          *mti_exp;
-	/*
-	 * A couple of lock handles.
+	 * available, e.g. closing files upon export destroy
 	 */
+	struct obd_export          *mti_exp;
+	/* A couple of lock handles. */
 	struct mdt_lock_handle     mti_lh[MDT_LH_NR];
 
 	struct mdt_device         *mti_mdt;
@@ -504,18 +505,12 @@ struct mdt_thread_info {
 	 * by all requests.
 	 */
 
-	/*
-	 * Object attributes.
-	 */
+	/* Object attributes. */
 	struct md_attr             mti_attr;
 	struct md_attr             mti_attr2; /* mdt_lvb.c */
-	/*
-	 * Body for "habeo corpus" operations.
-	 */
+	/* Body for "habeo corpus" operations. */
 	const struct mdt_body     *mti_body;
-	/*
-	 * Host object. This is released at the end of mdt_handler().
-	 */
+	/* Host object. This is released at the end of mdt_handler(). */
 	struct mdt_object         *mti_object;
 	/*
 	 * Lock request for "habeo clavis" operations.
@@ -545,15 +540,11 @@ struct mdt_thread_info {
 	 * by reint requests (including mdt_reint_open()).
 	 */
 
-	/*
-	 * reint record. contains information for reint operations.
-	 */
+	/* reint record. contains information for reint operations. */
 	struct mdt_reint_record    mti_rr;
 
 	__u64                      mti_ver[PTLRPC_NUM_VERSIONS];
-	/*
-	 * Operation specification (currently create and lookup)
-	 */
+	/* Operation specification (currently create and lookup) */
 	struct md_op_spec          mti_spec;
 
 	/*
@@ -644,15 +635,14 @@ struct cdt_agent_req {
 extern struct kmem_cache *mdt_hsm_car_kmem;
 
 struct hsm_agent {
-	struct list_head ha_list;		/**< to chain the agents */
-	struct obd_uuid	 ha_uuid;		/**< agent uuid */
-	__u32		*ha_archive_id;		/**< archive id */
-	int		 ha_archive_cnt;	/**< number of archive entries
+	struct list_head ha_list;		/* to chain the agents */
+	struct obd_uuid	 ha_uuid;		/* agent uuid */
+	__u32		*ha_archive_id;		/* archive id */
+	int		 ha_archive_cnt;	/* number of archive entries
 						 *   0 means any archive */
-	atomic_t	 ha_requests;		/**< current request count */
-	atomic_t	 ha_success;		/**< number of successful
-						 * actions */
-	atomic_t	 ha_failure;		/**< number of failed actions */
+	atomic_t	 ha_requests;		/* current request count */
+	atomic_t	 ha_success;		/* num of successful actions */
+	atomic_t	 ha_failure;		/* number of failed actions */
 };
 
 struct cdt_restore_handle {
@@ -670,11 +660,11 @@ struct hsm_record_update {
 	enum agent_req_status status;
 };
 
-static inline const struct md_device_operations *
-mdt_child_ops(struct mdt_device * m)
+static inline
+const struct md_device_operations *mdt_child_ops(struct mdt_device *m)
 {
-        LASSERT(m->mdt_child);
-        return m->mdt_child->md_ops;
+	LASSERT(m->mdt_child);
+	return m->mdt_child->md_ops;
 }
 
 static inline struct md_object *mdt_object_child(struct mdt_object *o)
@@ -685,7 +675,7 @@ static inline struct md_object *mdt_object_child(struct mdt_object *o)
 
 static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
 {
-         return info->mti_pill ? info->mti_pill->rc_req : NULL;
+	return info->mti_pill ? info->mti_pill->rc_req : NULL;
 }
 
 static inline __u64 mdt_conn_flags(struct mdt_thread_info *info)
@@ -742,11 +732,12 @@ static inline u32 mdt_node_id(const struct mdt_device *mdt)
 
 static inline void mdt_export_evict(struct obd_export *exp)
 {
-        class_fail_export(exp);
+	class_fail_export(exp);
 }
 
 /* Here we use LVB_TYPE to check dne client, because it is
- * also landed on 2.4. */
+ * also landed on 2.4.
+ */
 static inline bool mdt_is_dne_client(struct obd_export *exp)
 {
 	return !!(exp_connect_flags(exp) & OBD_CONNECT_LVB_TYPE);
@@ -879,11 +870,11 @@ void mdt_object_stripes_unlock(struct mdt_thread_info *info,
 			       struct ldlm_enqueue_info *einfo, int decref);
 
 struct mdt_object *mdt_object_new(const struct lu_env *env,
-				  struct mdt_device *,
-				  const struct lu_fid *);
-struct mdt_object *mdt_object_find(const struct lu_env *,
-                                   struct mdt_device *,
-                                   const struct lu_fid *);
+				  struct mdt_device *mdt,
+				  const struct lu_fid *fid);
+struct mdt_object *mdt_object_find(const struct lu_env *env,
+				   struct mdt_device *mdt,
+				   const struct lu_fid *fid);
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
 					const struct lu_fid *f,
 					struct mdt_lock_handle *lh,
@@ -906,7 +897,7 @@ int mdt_name_unpack(struct req_capsule *pill,
 int mdt_close_unpack(struct mdt_thread_info *info);
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 void mdt_fix_lov_magic(struct mdt_thread_info *info, void *eadata);
-int mdt_reint_rec(struct mdt_thread_info *, struct mdt_lock_handle *);
+int mdt_reint_rec(struct mdt_thread_info *info, struct mdt_lock_handle *lh);
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 		      struct mdt_object *o, struct lu_nodemap *nodemap);
@@ -917,15 +908,14 @@ int mdt_pack_size2body(struct mdt_thread_info *info,
 			const struct lu_fid *fid,  struct lustre_handle *lh);
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_reint_setxattr(struct mdt_thread_info *info,
-                       struct mdt_lock_handle *lh);
+		       struct mdt_lock_handle *lh);
 
-void mdt_reconstruct(struct mdt_thread_info *, struct mdt_lock_handle *);
+void mdt_reconstruct(struct mdt_thread_info *info, struct mdt_lock_handle *lh);
 void mdt_reconstruct_generic(struct mdt_thread_info *mti,
-                             struct mdt_lock_handle *lhc);
+			     struct mdt_lock_handle *lhc);
 
-int mdt_export_stats_init(struct obd_device *obd,
-                          struct obd_export *exp,
-                          void *client_nid);
+int mdt_export_stats_init(struct obd_device *obd, struct obd_export *exp,
+			  void *client_nid);
 
 int mdt_lock_new_child(struct mdt_thread_info *info,
 		       struct mdt_object *o,
@@ -962,9 +952,10 @@ int mdt_close(struct tgt_session_info *tsi);
 int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma);
 int mdt_fix_reply(struct mdt_thread_info *info);
-int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
-			   struct md_attr *);
-void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
+int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *dir,
+			   struct md_attr *attr);
+void mdt_reconstruct_open(struct mdt_thread_info *info,
+			  struct mdt_lock_handle *lh);
 int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
 		      struct mdt_lock_handle *lhc,
 		      struct md_layout_change *spec);
@@ -974,20 +965,22 @@ int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt);
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdt_buf_const(const struct lu_env *env,
-                                   const void *area, ssize_t len);
+				   const void *area, ssize_t len);
 
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid);
 void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv);
 
 bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc);
-int mdt_check_ucred(struct mdt_thread_info *);
-int mdt_init_ucred(struct mdt_thread_info *, struct mdt_body *);
-int mdt_init_ucred_reint(struct mdt_thread_info *);
-void mdt_exit_ucred(struct mdt_thread_info *);
-int mdt_version_get_check(struct mdt_thread_info *, struct mdt_object *, int);
-void mdt_version_get_save(struct mdt_thread_info *, struct mdt_object *, int);
-int mdt_version_get_check_save(struct mdt_thread_info *, struct mdt_object *,
-                               int);
+int mdt_check_ucred(struct mdt_thread_info *info);
+int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body);
+int mdt_init_ucred_reint(struct mdt_thread_info *info);
+void mdt_exit_ucred(struct mdt_thread_info *info);
+int mdt_version_get_check(struct mdt_thread_info *info, struct mdt_object *mto,
+			  int idx);
+void mdt_version_get_save(struct mdt_thread_info *info, struct mdt_object *mto,
+			  int idx);
+int mdt_version_get_check_save(struct mdt_thread_info *info,
+			       struct mdt_object *mto, int index);
 int mdt_lookup_version_check(struct mdt_thread_info *info,
 			     struct mdt_object *p,
 			     const struct lu_name *lname,
@@ -1059,9 +1052,9 @@ extern struct upcall_cache_ops mdt_identity_upcall_cache_ops;
 struct md_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid,
 				     struct mdt_thread_info *info);
 
-void mdt_identity_put(struct upcall_cache *, struct md_identity *);
+void mdt_identity_put(struct upcall_cache *cache, struct md_identity *identity);
 
-void mdt_flush_identity(struct upcall_cache *, int);
+void mdt_flush_identity(struct upcall_cache *cache, int uid);
 
 __u32 mdt_identity_get_perm(struct md_identity *identity, struct lnet_nid *nid);
 
@@ -1193,7 +1186,7 @@ extern struct lu_context_key       mdt_thread_key;
 
 /* debug issues helper starts here*/
 static inline int mdt_fail_write(const struct lu_env *env,
-                                 struct dt_device *dd, int id)
+				 struct dt_device *dd, int id)
 {
 	if (CFS_FAIL_CHECK_ORSET(id, CFS_FAIL_ONCE)) {
 		CERROR(LUSTRE_MDT_NAME": cfs_fail_loc=%x, fail write ops\n",
@@ -1223,15 +1216,15 @@ static inline bool mdt_rdonly(struct obd_export *exp)
 }
 
 typedef void (*mdt_reconstruct_t)(struct mdt_thread_info *mti,
-                                  struct mdt_lock_handle *lhc);
+				  struct mdt_lock_handle *lhc);
 static inline int mdt_check_resent(struct mdt_thread_info *info,
-                                   mdt_reconstruct_t reconstruct,
-                                   struct mdt_lock_handle *lhc)
+				   mdt_reconstruct_t reconstruct,
+				   struct mdt_lock_handle *lhc)
 {
 	struct ptlrpc_request *req = mdt_info_req(info);
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
 		OBD_ALLOC_PTR(info->mti_reply_data);
 		if (info->mti_reply_data == NULL)
@@ -1256,10 +1249,11 @@ struct lu_ucred *mdt_ucred_check(const struct mdt_thread_info *info);
 
 static inline int is_identity_get_disabled(struct upcall_cache *cache)
 {
-        return cache ? (strcmp(cache->uc_upcall, "NONE") == 0) : 1;
+	return cache ? (strcmp(cache->uc_upcall, "NONE") == 0) : 1;
 }
 
-int mdt_blocking_ast(struct ldlm_lock*, struct ldlm_lock_desc*, void*, int);
+int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+		     void *data, int flag);
 
 static int mdt_dom_glimpse_ast(struct ldlm_lock *lock, void *reqp)
 {
@@ -1332,24 +1326,24 @@ int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 			struct ptlrpc_request *req, bool increase_only);
 
 void mdt_enable_cos(struct mdt_device *dev, bool enable);
-int mdt_cos_is_enabled(struct mdt_device *);
+int mdt_cos_is_enabled(struct mdt_device *mdt);
 
 /* lprocfs stuff */
 enum mdt_stat_idx {
 	LPROC_MDT_OPEN,
-        LPROC_MDT_CLOSE,
-        LPROC_MDT_MKNOD,
-        LPROC_MDT_LINK,
-        LPROC_MDT_UNLINK,
-        LPROC_MDT_MKDIR,
-        LPROC_MDT_RMDIR,
-        LPROC_MDT_RENAME,
-        LPROC_MDT_GETATTR,
-        LPROC_MDT_SETATTR,
-        LPROC_MDT_GETXATTR,
-        LPROC_MDT_SETXATTR,
-        LPROC_MDT_STATFS,
-        LPROC_MDT_SYNC,
+	LPROC_MDT_CLOSE,
+	LPROC_MDT_MKNOD,
+	LPROC_MDT_LINK,
+	LPROC_MDT_UNLINK,
+	LPROC_MDT_MKDIR,
+	LPROC_MDT_RMDIR,
+	LPROC_MDT_RENAME,
+	LPROC_MDT_GETATTR,
+	LPROC_MDT_SETATTR,
+	LPROC_MDT_GETXATTR,
+	LPROC_MDT_SETXATTR,
+	LPROC_MDT_STATFS,
+	LPROC_MDT_SYNC,
 	LPROC_MDT_RENAME_SAMEDIR,
 	LPROC_MDT_RENAME_PAR_FILE,
 	LPROC_MDT_RENAME_PAR_DIR,
@@ -1406,7 +1400,6 @@ static inline char *mdt_req_get_jobid(struct ptlrpc_request *req)
 }
 
 /* MDT IO */
-
 #define VALID_FLAGS (LA_TYPE | LA_MODE | LA_SIZE | LA_BLOCKS | \
 		     LA_BLKSIZE | LA_ATIME | LA_MTIME | LA_CTIME)
 
