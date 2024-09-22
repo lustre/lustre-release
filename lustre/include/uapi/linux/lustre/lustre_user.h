@@ -16,10 +16,7 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 
-/** \defgroup lustreuser lustreuser
- *
- * @{
- */
+/* lustreuser */
 #ifndef __KERNEL__
 # define __USE_ISOC99	1
 # include <stdbool.h>
@@ -59,11 +56,11 @@ extern "C" {
 #define LL_MAXQUOTAS 3
 #undef INITQFNAMES
 #define INITQFNAMES { \
-    "user",	/* USRQUOTA */ \
-    "group",	/* GRPQUOTA */ \
-    "project",	/* PRJQUOTA */ \
-    "undefined", \
-};
+	"user",		/* USRQUOTA */ \
+	"group",	/* GRPQUOTA */ \
+	"project",	/* PRJQUOTA */ \
+	"undefined", \
+}
 #ifndef USRQUOTA
 #define USRQUOTA 0
 #endif
@@ -444,7 +441,7 @@ enum lma_incompat {
 	LMAI_STRIPED		= 0x00000008, /* striped directory inode */
 	LMAI_ORPHAN		= 0x00000010, /* inode is orphan */
 	LMAI_ENCRYPT		= 0x00000020, /* inode is encrypted */
-	LMA_INCOMPAT_SUPP	= (LMAI_AGENT | LMAI_REMOTE_PARENT | \
+	LMA_INCOMPAT_SUPP	= (LMAI_AGENT | LMAI_REMOTE_PARENT |
 				   LMAI_STRIPED | LMAI_ORPHAN | LMAI_ENCRYPT)
 };
 
@@ -599,28 +596,28 @@ struct ll_ioc_lease_id {
  */
 /*	lustre_ioctl.h			101-150 */
 /* ioctl codes 128-143 are reserved for fsverity */
-#define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
-#define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
-#define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
-#define LL_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
+#define LL_IOC_GETFLAGS			_IOR('f', 151, long)
+#define LL_IOC_SETFLAGS			_IOW('f', 152, long)
+#define LL_IOC_CLRFLAGS			_IOW('f', 153, long)
+#define LL_IOC_LOV_SETSTRIPE		_IOW('f', 154, long)
 #define LL_IOC_LOV_SETSTRIPE_NEW	_IOWR('f', 154, struct lov_user_md)
-#define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
+#define LL_IOC_LOV_GETSTRIPE		_IOW('f', 155, long)
 #define LL_IOC_LOV_GETSTRIPE_NEW	_IOR('f', 155, struct lov_user_md)
-#define LL_IOC_LOV_SETEA                _IOW ('f', 156, long)
-#define LL_IOC_GROUP_LOCK               _IOW ('f', 158, long)
-#define LL_IOC_GROUP_UNLOCK             _IOW ('f', 159, long)
-#define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
-#define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)
-#define LL_IOC_GETOBDCOUNT              _IOR ('f', 168, long)
-#define LL_IOC_LLOOP_ATTACH             _IOWR('f', 169, long)
-#define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
-#define LL_IOC_LLOOP_INFO               _IOWR('f', 171, struct lu_fid)
-#define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 172, long)
-#define LL_IOC_PATH2FID                 _IOR ('f', 173, long)
-#define LL_IOC_GET_CONNECT_FLAGS        _IOWR('f', 174, __u64 *)
-#define LL_IOC_GET_MDTIDX               _IOR ('f', 175, int)
+#define LL_IOC_LOV_SETEA		_IOW('f', 156, long)
+#define LL_IOC_GROUP_LOCK		_IOW('f', 158, long)
+#define LL_IOC_GROUP_UNLOCK		_IOW('f', 159, long)
+#define IOC_OBD_STATFS			_IOWR('f', 164, struct obd_statfs *)
+#define LL_IOC_FLUSHCTX			_IOW('f', 166, long)
+#define LL_IOC_GETOBDCOUNT		_IOR('f', 168, long)
+#define LL_IOC_LLOOP_ATTACH		_IOWR('f', 169, long)
+#define LL_IOC_LLOOP_DETACH		_IOWR('f', 170, long)
+#define LL_IOC_LLOOP_INFO		_IOWR('f', 171, struct lu_fid)
+#define LL_IOC_LLOOP_DETACH_BYDEV	_IOWR('f', 172, long)
+#define LL_IOC_PATH2FID			_IOR('f', 173, long)
+#define LL_IOC_GET_CONNECT_FLAGS	_IOWR('f', 174, __u64 *)
+#define LL_IOC_GET_MDTIDX		_IOR('f', 175, int)
 #define LL_IOC_FUTIMES_3		_IOWR('f', 176, struct ll_futimes_3)
-#define LL_IOC_FLR_SET_MIRROR		_IOW ('f', 177, long)
+#define LL_IOC_FLR_SET_MIRROR		_IOW('f', 177, long)
 /*	lustre_ioctl.h			177-210 */
 #define LL_IOC_HSM_STATE_GET		_IOR('f', 211, struct hsm_user_state)
 #define LL_IOC_HSM_STATE_SET		_IOW('f', 212, struct hsm_state_set)
@@ -665,11 +662,11 @@ struct ll_ioc_lease_id {
  * Structure for FS_IOC_FSGETXATTR and FS_IOC_FSSETXATTR.
  */
 struct fsxattr {
-	__u32           fsx_xflags;     /* xflags field value (get/set) */
-	__u32           fsx_extsize;    /* extsize field value (get/set)*/
-	__u32           fsx_nextents;   /* nextents field value (get)   */
-	__u32           fsx_projid;     /* project identifier (get/set) */
-	unsigned char   fsx_pad[12];
+	__u32		fsx_xflags;     /* xflags field value (get/set) */
+	__u32		fsx_extsize;    /* extsize field value (get/set)*/
+	__u32		fsx_nextents;   /* nextents field value (get)   */
+	__u32		fsx_projid;     /* project identifier (get/set) */
+	unsigned char	fsx_pad[12];
 };
 #define FS_IOC_FSGETXATTR		_IOR('X', 31, struct fsxattr)
 #define FS_IOC_FSSETXATTR		_IOW('X', 32, struct fsxattr)
@@ -834,7 +831,7 @@ static inline bool lov_pool_is_reserved(const char *pool)
 
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
-	struct ost_id l_ost_oi;	  /* OST object ID */
+	struct ost_id l_ost_oi;   /* OST object ID */
 	__u32 l_ost_gen;          /* generation of this OST index */
 	__u32 l_ost_idx;          /* OST index in LOV */
 } __attribute__((packed));
@@ -843,7 +840,7 @@ struct lov_user_ost_data_v1 {     /* per-stripe data structure */
 struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V1 */
 	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-	struct ost_id lmm_oi;	  /* MDT parent inode id/seq (id/0 for 1.x) */
+	struct ost_id lmm_oi;     /* MDT parent inode id/seq (id/0 for 1.x) */
 	__u32 lmm_stripe_size;    /* size of stripe in bytes */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	union {
@@ -860,7 +857,7 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
 	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-	struct ost_id lmm_oi;	  /* MDT parent inode id/seq (id/0 for 1.x) */
+	struct ost_id lmm_oi;     /* MDT parent inode id/seq (id/0 for 1.x) */
 	__u32 lmm_stripe_size;    /* size of stripe in bytes */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	union {
@@ -960,7 +957,7 @@ enum lov_comp_md_entry_flags {
 #define LCME_TEMPLATE_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
 				 LCME_FL_EXTENSION)
 
-/* lcme_id can be specified as certain flags, and the the first
+/* lcme_id can be specified as certain flags, and the first
  * bit of lcme_id is used to indicate that the ID is representing
  * certain LCME_FL_* but not a real ID. Which implies we can have
  * at most 31 flags (see LCME_FL_XXX).
@@ -1504,14 +1501,14 @@ struct perm_downcall_data {
 };
 
 struct identity_downcall_data {
-	__u32                            idd_magic;
-	__u32                            idd_err;
-	__u32                            idd_uid;
-	__u32                            idd_gid;
-	__u32                            idd_nperms;
-	__u32                            idd_ngroups;
-	struct perm_downcall_data idd_perms[N_PERMS_MAX];
-	__u32                            idd_groups[];
+	__u32				idd_magic;
+	__u32				idd_err;
+	__u32				idd_uid;
+	__u32				idd_gid;
+	__u32				idd_nperms;
+	__u32				idd_ngroups;
+	struct perm_downcall_data	idd_perms[N_PERMS_MAX];
+	__u32				idd_groups[];
 };
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
