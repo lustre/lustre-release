@@ -85,15 +85,15 @@ test_0a() {
 run_test 0a "getversion for non existent file shouldn't cause kernel panic"
 
 test_0b() {
-        local var=${SINGLEMDS}_svc
-        local fid
-        local file=$DIR/$tdir/f
+	local var=${SINGLEMDS}_svc
+	local fid
+	local file=$DIR/$tdir/f
 
-        do_node $CLIENT1 mkdir -p $DIR/$tdir/
-        do_node $CLIENT1 touch $file
-        fid=$(do_node $CLIENT1 $LFS path2fid $file)
-        do_node $CLIENT1 rm -rf $file
-        do_facet $SINGLEMDS $LCTL --device ${!var} getobjversion \\\"$fid\\\" || true
+	mkdir_on_mdt0 $DIR/$tdir
+	touch $file
+	fid=$($LFS path2fid $file)
+	rm $file
+	do_facet $SINGLEMDS $LCTL --device ${!var} getobjversion \\\"$fid\\\" || true
 }
 run_test 0b "getversion for non existent fid shouldn't cause kernel panic"
 
@@ -114,45 +114,46 @@ test_1a() { # former test_0a
 run_test 1a "open and close do not change versions"
 
 test_1b() { # former test_0b
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
-    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	mkdir_on_mdt0 $MOUNT/$tdir
 
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
-    do_node $CLIENT1 openfile -f O_RDWR:O_CREAT $MOUNT/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
+	openfile -f O_RDWR:O_CREAT $MOUNT/$tdir/$tfile
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
-    if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
+	client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+	if ! $CHECKSTAT -a $DIR/$tdir/$tfile; then
 		error_and_remount "open succeeded unexpectedly"
-    fi
+	fi
 }
 run_test 1b "open (O_CREAT) checks version of parent"
 
 test_1c() { # former test_0c
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 mkdir -p -m 755 $DIR/$tdir
-    do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tdir/$tfile
+	mkdir_on_mdt0 $DIR/$tdir
+	chmod 755 $DIR/$tdir
+	openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tdir/$tfile
 
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 0777 $MOUNT2/$tdir
-    do_node $CLIENT2 chmod 0666 $MOUNT2/$tdir/$tfile
-    rmultiop_start $CLIENT1 $DIR/$tdir/$tfile o_c
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT2 chmod 0777 $MOUNT2/$tdir
+	do_node $CLIENT2 chmod 0666 $MOUNT2/$tdir/$tfile
+	rmultiop_start $CLIENT1 $DIR/$tdir/$tfile o_c
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_up $CLIENT1 || error "$CLIENT1 evicted"
-    rmultiop_stop $CLIENT1 || error "close failed"
+	client_up $CLIENT1 || error "$CLIENT1 evicted"
+	rmultiop_stop $CLIENT1 || error "close failed"
 }
 run_test 1c "open (non O_CREAT) does not checks versions"
 
@@ -173,23 +174,23 @@ test_2a() {  # extended former test_0d
 	fi
 	# mkdir
 	pre=$(chk_get_version $CLIENT1 $DIR)
-	do_node $CLIENT1 mkdir $DIR/$tfile-dir
+	mkdir_on_mdt0 $DIR/$tfile-dir
 	post=$(chk_get_version $CLIENT1 $DIR)
 	if (($pre != $post)); then
 		error "version was changed: pre $pre, post $post"
 	fi
-	do_node $CLIENT1 rmdir $DIR/$tfile-dir
+	rmdir $DIR/$tfile-dir
 
 	# mknod
 	pre=$(chk_get_version $CLIENT1 $DIR)
-	do_node $CLIENT1 mkfifo $DIR/$tfile-nod
+	mkfifo $DIR/$tfile-nod
 	post=$(chk_get_version $CLIENT1 $DIR)
 	if (($pre != $post)); then
 		error "version was changed: pre $pre, post $post"
 	fi
 	# symlink
 	pre=$(chk_get_version $CLIENT1 $DIR)
-	do_node $CLIENT1 mkfifo $DIR/$tfile-symlink
+	mkfifo $DIR/$tfile-symlink
 	post=$(chk_get_version $CLIENT1 $DIR)
 	if (($pre != $post)); then
 		error "version was changed: pre $pre, post $post"
@@ -199,36 +200,35 @@ test_2a() {  # extended former test_0d
 		#create remote dir
 		local MDT_IDX=1
 		pre=$(chk_get_version $CLIENT1 $DIR)
-		do_node $CLIENT1 $LFS mkdir -i $MDT_IDX $DIR/$tfile-remote_dir
+		$LFS mkdir -i $MDT_IDX $DIR/$tfile-remote_dir
 		post=$(chk_get_version $CLIENT1 $DIR)
 		if (($pre != $post)); then
 			error "version was changed: pre $pre, post $post"
 		fi
 	fi
-	do_node $CLIENT1 rm -rf $DIR/$tfile-*
-
+	rm -rf $DIR/$tfile-*
 }
 run_test 2a "create operations doesn't change version of parent"
 
 test_2b() { # former test_0e
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
+	mkdir_on_mdt0 $MOUNT/$tdir
 
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
-    do_node $CLIENT1 mkfifo $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
+	mkfifo $DIR/$tdir/$tfile
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
-    if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
+	client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+	if ! $CHECKSTAT -a $DIR/$tdir/$tfile; then
 		error_and_remount "create succeeded unexpectedly"
-    fi
+	fi
 }
 run_test 2b "create checks version of parent"
 
@@ -259,25 +259,25 @@ test_3a() { # former test_0f
 run_test 3a "unlink doesn't change version of parent"
 
 test_3b() { # former test_0g
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
-    do_node $CLIENT1 mcreate $DIR/$tdir/$tfile
+	mkdir_on_mdt0 $MOUNT/$tdir
+	mcreate $DIR/$tdir/$tfile
 
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
-    do_node $CLIENT1 rm $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
+	rm $DIR/$tdir/$tfile
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
-    if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
+	client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+	if $CHECKSTAT -a $DIR/$tdir/$tfile; then
 		error_and_remount "unlink succeeded unexpectedly"
-    fi
+	fi
 }
 run_test 3b "unlink checks version of parent"
 
@@ -534,11 +534,11 @@ test_5a() { # former test_0s
 	local tp_pre
 	local tp_post
 
-	do_node $CLIENT1 mcreate $DIR/$tfile
-	do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $DIR/$tdir
+	mcreate $DIR/$tfile
+	mkdir_on_mdt0 $DIR/$tdir
 	pre=$(chk_get_version $CLIENT1 $DIR/$tfile)
 	tp_pre=$(chk_get_version $CLIENT1 $DIR/$tdir)
-	do_node $CLIENT1 link $DIR/$tfile $DIR/$tdir/$tfile
+	link $DIR/$tfile $DIR/$tdir/$tfile
 	post=$(chk_get_version $CLIENT1 $DIR/$tfile)
 	tp_post=$(chk_get_version $CLIENT1 $DIR/$tdir)
 	if (($pre == $post)); then
@@ -552,48 +552,48 @@ test_5a() { # former test_0s
 run_test 5a "link changes versions of source but not target parent"
 
 test_5b() { # former test_0t
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
+	mcreate $DIR/$tfile
+	mkdir_on_mdt0 $MOUNT/$tdir
 
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
-    do_node $CLIENT1 link $DIR/$tfile $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
+	link $DIR/$tfile $DIR/$tdir/$tfile
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
-    if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
+	client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+	if ! $CHECKSTAT -a $DIR/$tdir/$tfile; then
 		error_and_remount "link should fail"
-    fi
+	fi
 }
 run_test 5b "link checks version of target parent"
 
 test_5c() { # former test_0u
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile
-    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
+	openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile
+	mkdir_on_mdt0 $MOUNT/$tdir
 
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 666 $MOUNT2/$tfile
-    do_node $CLIENT1 link $DIR/$tfile $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT2 chmod 666 $MOUNT2/$tfile
+	link $DIR/$tfile $DIR/$tdir/$tfile
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
-    if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
+	client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+	if ! $CHECKSTAT -a $DIR/$tdir/$tfile; then
 		error_and_remount "link should fail"
-    fi
+	fi
 }
 run_test 5c "link checks version of source"
 
@@ -603,8 +603,8 @@ test_6a() { # former test_0v
 	local sp_post
 	local tp_post
 
-	do_node $CLIENT1 mcreate $DIR/$tfile
-	do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
+	mcreate $DIR/$tfile
+	mkdir_on_mdt0 $MOUNT/$tdir
 	sp_pre=$(chk_get_version $CLIENT1 $DIR)
 	tp_pre=$(chk_get_version $CLIENT1 $DIR/$tdir)
 	do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
@@ -636,82 +636,82 @@ test_6b() { # former test_0w
 run_test 6b "rename within same dir doesn't change version of parent"
 
 test_6c() { # former test_0x
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
+	mcreate $DIR/$tfile
+	mkdir_on_mdt0 $MOUNT/$tdir
 
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $MOUNT2
-    do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT2 chmod 777 $MOUNT2
+	mv $DIR/$tfile $DIR/$tdir/$tfile
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
-    if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tfile; then
+	client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+	if $CHECKSTAT -a $DIR/$tfile; then
 		error_and_remount "rename should fail"
-    fi
+	fi
 }
 run_test 6c "rename checks version of source parent"
 
 test_6d() { # former test_0y
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
+	mcreate $DIR/$tfile
+	mkdir_on_mdt0 $MOUNT/$tdir
 
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
-    do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT2 chmod 777 $MOUNT2/$tdir
+	mv $DIR/$tfile $DIR/$tdir/$tfile
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
-    if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tfile; then
+	client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+	if $CHECKSTAT -a $DIR/$tfile; then
 		error_and_remount "rename should fail"
-    fi
+	fi
 }
 run_test 6d "rename checks version of target parent"
 
 # pdirops tests, bug 18143
 cycle=0
 test_7_cycle() {
-    local first=$1
-    local lost=$2
-    local last=$3
-    local rc=0
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
-    cycle=$((cycle + 1))
-    local cname=$TESTNAME.$cycle
+	local first=$1
+	local lost=$2
+	local last=$3
+	local rc=0
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
+	cycle=$((cycle + 1))
+	local cname=$TESTNAME.$cycle
 
-    echo "start cycle: $cname"
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	echo "start cycle: $cname"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 $LFS mkdir -i 0 -c 1 $MOUNT/$tdir
-    replay_barrier $SINGLEMDS
-    # first operation
-    echo "$cname first: $first"
-    do_node $CLIENT1 $first || error "$cname: Cannot do first operation"
-    # client2 operations that will be lost
-    echo "$cname lost: $lost"
-    do_node $CLIENT2 $lost || error "$cname: Cannot do 'lost' operations"
-    # second operation
-    echo "$cname last: $last"
-    do_node $CLIENT1 $last || error "$cname: Cannot do last operation"
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
-    # should fail as conflict expected
-    client_evicted $CLIENT1 || rc=1
+	mkdir_on_mdt0 $MOUNT/$tdir
+	replay_barrier $SINGLEMDS
+	# first operation
+	echo "$cname first: $first"
+	do_node $CLIENT1 $first || error "$cname: Cannot do first operation"
+	# client2 operations that will be lost
+	echo "$cname lost: $lost"
+	do_node $CLIENT2 $lost || error "$cname: Cannot do 'lost' operations"
+	# second operation
+	echo "$cname last: $last"
+	$last || error "$cname: Cannot do last operation"
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
+	# should fail as conflict expected
+	client_evicted $CLIENT1 || rc=1
 
 	wait_recovery_complete $SINGLEMDS
 	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
@@ -728,7 +728,7 @@ test_7a() {
 
 	first="createmany -o $DIR/$tdir/$tfile- 1"
 	lost="rm $MOUNT2/$tdir/$tfile-0"
-	last="$LFS mkdir -i 0 -c 1 $DIR/$tdir/$tfile-0"
+	last="mkdir $DIR/$tdir/$tfile-0"
 	test_7_cycle "$first" "$lost" "$last" || error "Test 7a.2 failed"
 
 	first="mkdir $DIR/$tdir/$tfile-0"
@@ -895,7 +895,7 @@ test_7h() {
     last="rm $DIR/$tdir/$tfile-0"
     test_7_cycle "$first" "$lost" "$last" || error "Test 7h.2 failed"
 
-    first="createmany -o $DIR/$tdir/$tfile- 1; mkdir  $DIR/$tdir/$tfile; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
+    first="createmany -o $DIR/$tdir/$tfile- 1; mkdir $DIR/$tdir/$tfile; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
     lost="rm $MOUNT2/$tdir/$tfile/$tfile-0"
     last="rmdir $DIR/$tdir/$tfile"
     #test_7_cycle "$first" "$lost" "$last" || error "Test 7h.3 failed"
@@ -934,71 +934,74 @@ run_test 7i "rename, {lost}, rename"
 # too but not fail on second create due to orphan found.
 
 test_8a() {
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 mkdir $DIR/$tfile-2
-    replay_barrier $SINGLEMDS
-    # missed replay from client2 will lead to recovery by versions
-    do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
-    do_node $CLIENT1 rm $DIR/$tfile || return 1
-    do_node $CLIENT1 touch $DIR/$tfile || return 2
+	mcreate $DIR/$tfile
+	mkdir_on_mdt0 $DIR/$tfile-2
+	replay_barrier $SINGLEMDS
+	# missed replay from client2 will lead to recovery by versions
+	do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
+	rm $DIR/$tfile || return 1
+	touch $DIR/$tfile || return 2
 
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 6
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
+	client_up $CLIENT1 || return 6
 
-    do_node $CLIENT1 rm $DIR/$tfile || error "$tfile doesn't exists"
-    return 0
+	rm $DIR/$tfile || error "$tfile doesn't exists"
+	rm -rf $DIR/$tfile-2
+	return 0
 }
 run_test 8a "create | unlink, create shouldn't fail"
 
 test_8b() {
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 touch $DIR/$tfile
-    do_node $CLIENT1 mkdir $DIR/$tfile-2
-    replay_barrier $SINGLEMDS
-    # missed replay from client2 will lead to recovery by versions
-    do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
-    do_node $CLIENT1 rm -f $MOUNT1/$tfile || return 1
-    do_node $CLIENT1 mcreate $MOUNT1/$tfile || return 2
+	do_node $CLIENT1 touch $DIR/$tfile
+	mkdir_on_mdt0 $DIR/$tfile-2
+	replay_barrier $SINGLEMDS
+	# missed replay from client2 will lead to recovery by versions
+	do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
+	rm -f $MOUNT1/$tfile || return 1
+	mcreate $MOUNT1/$tfile || return 2
 
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 6
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
+	client_up $CLIENT1 || return 6
 
-    do_node $CLIENT1 rm $MOUNT1/$tfile || error "$tfile doesn't exists"
-    return 0
+	rm $MOUNT1/$tfile || error "$tfile doesn't exists"
+	rm -rf $DIR/$tfile-2
+	return 0
 }
 run_test 8b "create | unlink, create shouldn't fail"
 
 test_8c() {
-    local var=${SINGLEMDS}_svc
-    zconf_mount $CLIENT2 $MOUNT2
+	local var=${SINGLEMDS}_svc
+	zconf_mount $CLIENT2 $MOUNT2
 
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT1 touch $DIR/$tfile
-    do_node $CLIENT1 mkdir $DIR/$tfile-2
-    replay_barrier $SINGLEMDS
-    # missed replay from client2 will lead to recovery by versions
-    do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
-    do_node $CLIENT1 rm -f $MOUNT1/$tfile || return 1
-    do_node $CLIENT1 mkdir $MOUNT1/$tfile || return 2
+	touch $DIR/$tfile
+	mkdir_on_mdt0 $DIR/$tfile-2
+	replay_barrier $SINGLEMDS
+	# missed replay from client2 will lead to recovery by versions
+	do_node $CLIENT2 touch $MOUNT2/$tfile-2/$tfile
+	rm -f $MOUNT1/$tfile || return 1
+	mkdir_on_mdt0 $MOUNT1/$tfile || return 2
 
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
-    client_up $CLIENT1 || return 6
+    	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
+	client_up $CLIENT1 || return 6
 
-    do_node $CLIENT1 rmdir $MOUNT1/$tfile || error "$tfile doesn't exists"
-    return 0
+	rmdir $MOUNT1/$tfile || error "$tfile doesn't exists"
+	rm -rf $MOUNT1/$tfile-2
+	return 0
 }
 run_test 8c "create | unlink, create shouldn't fail"
 
@@ -1140,7 +1143,7 @@ test_12a() { # former test_2a
 
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    do_node $CLIENT2 mkdir -p $MOUNT2/$tdir
+    do_node $CLIENT2 $LFS mkdir -i0 -c1 $MOUNT2/$tdir
     replay_barrier $SINGLEMDS
     do_node $CLIENT2 mcreate $MOUNT2/$tdir/$tfile
     do_node $CLIENT1 createmany -o $DIR/$tfile- 25
