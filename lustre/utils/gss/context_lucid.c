@@ -288,12 +288,14 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 		break;
 #endif
 	case ENCTYPE_AES128_CTS_HMAC_SHA1_96:
+	case ENCTYPE_AES128_CTS_HMAC_SHA256_128:
 		keylength = 16;
 #ifdef HAVE_KRB5
 		enc = &krb5int_enc_aes128;
 #endif
 		break;
 	case ENCTYPE_AES256_CTS_HMAC_SHA1_96:
+	case ENCTYPE_AES256_CTS_HMAC_SHA384_192:
 		keylength = 32;
 #ifdef HAVE_KRB5
 		enc = &krb5int_enc_aes256;

@@ -138,8 +138,8 @@ enum seal_alg {
 #define KG_EMPTY_CCACHE                          (39756044L)
 #define KG_NO_CTYPES                             (39756045L)
 
-/* per Kerberos v5 protocol spec crypto types from the wire. 
- * these get mapped to linux kernel crypto routines.  
+/* per Kerberos v5 protocol spec crypto types from the wire.
+ * these get mapped to linux kernel crypto routines.
  */
 #define ENCTYPE_NULL            0x0000
 #define ENCTYPE_DES_CBC_CRC     0x0001        /* DES cbc mode with CRC-32 */
@@ -153,6 +153,8 @@ enum seal_alg {
 #define ENCTYPE_DES3_CBC_SHA1   0x0010
 #define ENCTYPE_AES128_CTS_HMAC_SHA1_96 0x0011
 #define ENCTYPE_AES256_CTS_HMAC_SHA1_96 0x0012
+#define ENCTYPE_AES128_CTS_HMAC_SHA256_128  0x0013
+#define ENCTYPE_AES256_CTS_HMAC_SHA384_192  0x0014
 #define ENCTYPE_ARCFOUR_HMAC    0x0017
 #define ENCTYPE_ARCFOUR_HMAC_EXP 0x0018
 #define ENCTYPE_UNKNOWN         0x01ff
