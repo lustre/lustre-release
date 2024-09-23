@@ -5460,7 +5460,6 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 	struct md_op_data *op_data;
 	struct lustre_handle lockh = { 0 };
 	union ldlm_policy_data flock = { { 0 } };
-	struct file_lock flbuf = *file_lock;
 	int fl_type = file_lock->C_FLC_TYPE;
 	ktime_t kstart = ktime_get();
 	__u64 flags = 0;
@@ -5521,11 +5520,6 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 	case F_GETLK64:
 #endif
 		flags = LDLM_FL_TEST_LOCK;
-		/*
-		 * To work with lockd we should check local lock first,
-		 * else lock_owner could disappear in conflict case.
-		 */
-		posix_test_lock(file, &flbuf);
 		break;
 	case F_CANCELLK:
 		CDEBUG(D_DLMTRACE, "F_CANCELLK owner=%llx %llu-%llu\n",
@@ -5639,16 +5633,13 @@ out:
 	}
 
 	if (rc == 0 && (flags & LDLM_FL_TEST_LOCK) &&
-	    flbuf.C_FLC_TYPE != file_lock->C_FLC_TYPE) { /* Verify local & remote */
-		CERROR("Flock LR mismatch! inode="DFID", flags=%#llx, mode=%u, "
-		       "pid=%u/%u, start=%llu/%llu, end=%llu/%llu,type=%u/%u\n",
-		       PFID(ll_inode2fid(inode)), flags, einfo.ei_mode,
-		       file_lock->C_FLC_PID, flbuf.C_FLC_PID,
-		       file_lock->fl_start, flbuf.fl_start,
-		       file_lock->fl_end, flbuf.fl_end,
-		       file_lock->C_FLC_TYPE, flbuf.C_FLC_TYPE);
-		/* return local */
-		*file_lock = flbuf;
+	    file_lock->C_FLC_TYPE != F_UNLCK) {
+		struct file_lock flbuf;
+
+		/* Take a extra reference for lockowner while
+		 * working with lockd.
+		 */
+		locks_copy_conflock(&flbuf, file_lock);
 	}
 
 	if (!rc)

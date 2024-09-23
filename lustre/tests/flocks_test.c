@@ -830,11 +830,14 @@ static int t6(int argc, char *argv[])
 				}
 				if (lock.l_type == F_UNLCK)
 					break;
-				printf("FLOCK %d: RWS:%s POS:%ld LEN:%ld PID:%d\n",
-				       i, fmode2str(lock.l_type), lock.l_start,
-				       lock.l_len, lock.l_pid);
+				if (i > 0)
+					printf(";");
+				printf("%s%ld,%ld", fmode2str(lock.l_type),
+				       lock.l_start, lock.l_len);
 				lock.l_start += lock.l_len;
 			}
+			if (lock.l_start > 0)
+				printf(".\n");
 			close(fd);
 			if (rc == EXIT_FAILURE)
 				break;
@@ -849,7 +852,7 @@ static int t6(int argc, char *argv[])
 		}
 	}
 	put_fds();
-	printf("Time for processing %.03lfs\n", now() - stime);
+	fprintf(stderr, "Time for processing %.03lfs\n", now() - stime);
 	return rc;
 }
 
