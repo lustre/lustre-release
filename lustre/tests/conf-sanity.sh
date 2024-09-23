@@ -3766,7 +3766,8 @@ test_35b() { # bug 18674
 		at_max_set 0 mds client
 	fi
 
-	mkdir $MOUNT/$tdir || error "mkdir $MOUNT/$tdir failed"
+	rm -rf $MOUNT/$tdir
+	mkdir_on_mdt0 $MOUNT/$tdir || error "mkdir $MOUNT/$tdir failed"
 
 	log "Injecting EBUSY on MDS"
 	# Setting OBD_FAIL_MDS_RESEND=0x136
@@ -3955,7 +3956,8 @@ test_38() { # bug 14222
 	local FILES=$(find $SRC -type f -mtime +1 | head -n $COUNT)
 
 	log "copying $(echo $FILES | wc -w) files to $DIR/$tdir"
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	rm -rf $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	tar cf - $FILES | tar xf - -C $DIR/$tdir ||
 		error "copying $SRC to $DIR/$tdir"
 	sync
@@ -5068,7 +5070,7 @@ test_51() {
 	setup_noconfig
 	check_mount || error "check_mount failed"
 
-	mkdir $MOUNT/$tdir || error "mkdir $MOUNT/$tdir failed"
+	mkdir_on_mdt0 $MOUNT/$tdir || error "mkdir $MOUNT/$tdir failed"
 	$LFS setstripe -c -1 $MOUNT/$tdir ||
 		error "$LFS setstripe -c -1 $MOUNT/$tdir failed"
 	#define OBD_FAIL_MDS_REINT_DELAY         0x142
@@ -8733,7 +8735,7 @@ test_101a() {
 	local dev=$FSNAME-OST0000-osc-MDT0000
 	setup
 
-	mkdir $DIR1/$tdir
+	mkdir_on_mdt0 $DIR1/$tdir
 	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
 		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
 	createmany -o $DIR1/$tdir/$tfile-%d 50000 &
@@ -8764,7 +8766,7 @@ test_101b () {
 	local dir=$DIR1/$tdir
 	setup
 
-	mkdir $dir
+	mkdir_on_mdt0 $dir
 	$LFS setstripe -c 1 -i 0 $dir
 	do_facet $SINGLEMDS "$LCTL --device $dev deactivate;"
 #define OBD_FAIL_OSP_CON_EVENT_DELAY 0x2107
