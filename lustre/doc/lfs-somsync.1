@@ -1,0 +1,53 @@
+.TH LFS-SOMSYNC 1 2024-09-24 "Lustre" "Lustre User Utilities"
+.SH NAME
+lfs-somsync \- synchronize SOM xattr for given file or FID
+.SH SYNOPSIS
+.SY lfs
+.B somsync
+.IR FILE " ..."
+.SY lfs
+.B somsync
+--by-fid
+.I MOUNT
+.IR FID " ..."
+.YS
+.SH DESCRIPTION
+This command synchronizes SOM xattr(s) for given
+.I FILE\c
+(s) or
+.I FID\c
+(s).
+.br
+The
+.I MOUNT
+specifies a mountpoint of Lustre filesystem where given
+.I FID\c
+(s) are stored.
+.I FID\c
+(s) can be wrapped with square brackets.
+.SH EXAMPLES
+Synchronize SOM xattr for file /mnt/lustre/file:
+.RS
+.EX
+.B # lfs somsync /mnt/lustre/file
+.EE
+.RE
+.PP
+Synchronize SOM xattrs for FIDs [0x200000400:0x1:0x0]
+and [0x200000402:0x20:0x0]:
+.RS
+.EX
+.B # lfs somsync --by-fid /mnt/lustre [0x200000400:0x1:0x0] [0x200000402:0x20:0x0]
+.EE
+.RE
+.SH AVAILABILITY
+The
+.B lfs somsync
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.16.0.
+.\" Added in commit v2_15_91-1-gefaa7f561220
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-path2fid (1),
+.BR lustre (7)

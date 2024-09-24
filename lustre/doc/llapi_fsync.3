@@ -1,0 +1,37 @@
+.TH LLAPI_FSYNC 3 2024-09-24 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_fsync \- flush dirty pages from all Lustre clients
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_fsync(int " fd ");"
+.YS
+.fi
+.SH DESCRIPTION
+.B llapi_fsync()
+flushes dirty pages from all of the clients for a given file descriptor.
+.TP
+.I fd
+file descriptor
+.SH RETURN VALUES
+.B llapi_fsync()
+returns:
+.TP
+0
+on success
+.TP
+<0
+a negative errno value on failure
+.SH EXAMPLES
+An example can be found in lfs.c source file.
+.SH AVAILABILITY
+The
+.B llapi_fsync
+API is part of the
+.BR lustre (7)
+user application interface library since release 2.16.0.
+.\" Added in commit v2_15_91-1-g425b9f75225d
+.SH SEE ALSO
+.BR lustre (7),
+.BR lustreapi (7)

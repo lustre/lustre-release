@@ -32913,16 +32913,27 @@ test_806() {
 }
 run_test 806 "Verify Lazy Size on MDS"
 
-test_807() {
-	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
-	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
+verify_som_sync_utility() {
+	local utility=$1
+	local use_llsom_sync=false
+
+	[[ -z "$FILESET" ]] || skip "Not functional for FILESET set"
+	[[ $MDS1_VERSION -ge $(version_code 2.11.52) ]] ||
 		skip "Need MDS version at least 2.11.52"
 
-	# Registration step
-	changelog_register || error "changelog_register failed"
-	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
-	changelog_users $SINGLEMDS | grep -q $cl_user ||
-		error "User $cl_user not found in changelog_users"
+	case $utility in
+		llsom_sync ) use_llsom_sync=true ;;
+		somsync ) use_llsom_sync=false ;;
+		*) error "invalid utility $utility" ;;
+	esac
+
+	if $use_llsom_sync; then
+		# Registration step
+		changelog_register || error "changelog_register failed"
+		local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+		changelog_users $SINGLEMDS | grep -q $cl_user ||
+			error "User $cl_user not found in changelog_users"
+	fi
 
 	rm -rf $DIR/$tdir || error "rm $tdir failed"
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
@@ -32940,33 +32951,51 @@ test_807() {
 	# multi-client wirtes
 	local num=$(get_node_count ${CLIENTS//,/ })
 	local offset=0
-	local i=0
+	local -a pids
 
 	echo "Test SOM for multi-client ($num) writes"
 	touch $DIR/$tfile || error "touch $tfile failed"
 	$TRUNCATE $DIR/$tfile 0
 	for client in ${CLIENTS//,/ }; do
 		do_node $client $MULTIOP $DIR/$tfile Oz${offset}w${bs}c &
-		local pids[$i]=$!
-		i=$((i + 1))
-		offset=$((offset + $bs))
+		pids+=( $! )
+		offset=$((offset + bs))
 	done
-	for (( i=0; i < $num; i++ )); do
-		wait ${pids[$i]}
-	done
+	wait ${pids[@]}
 
 	do_rpc_nodes "$CLIENTS" cancel_lru_locks osc
 	do_nodes "$CLIENTS" "sync ; sleep 5 ; sync"
-	$LSOM_SYNC -u $cl_user -m $FSNAME-MDT0000 $MOUNT
+
+	if $use_llsom_sync; then
+		$LSOM_SYNC -u $cl_user -m $FSNAME-MDT0000 $MOUNT ||
+			error "$LSOM_SYNC failed"
+	else
+		$LFS somsync $DIR/$tfile ||
+			error "$LFS somsync $DIR/$tfile failed"
+		find $DIR/$tdir -type f | xargs $LFS path2fid |
+			awk '{print $2}' | xargs $LFS somsync --by-fid $DIR ||
+				error "$LFS somsync --by-fid $DIR failed"
+	fi
+
 	check_lsom_data $DIR/$tdir/trunc "(0)"
 	check_lsom_data $DIR/$tdir/single_dd "(1)"
 	check_lsom_data $DIR/$tfile "(2)"
 
 	rm -rf $DIR/$tdir
 	# Deregistration step
-	changelog_deregister || error "changelog_deregister failed"
+	! $use_llsom_sync || changelog_deregister ||
+		error "changelog_deregister failed"
 }
-run_test 807 "verify LSOM syncing tool"
+
+test_807a() {
+	verify_som_sync_utility llsom_sync
+}
+run_test 807a "verify LSOM syncing tool"
+
+test_807b() {
+	verify_som_sync_utility somsync
+}
+run_test 807b "verify lfs somsync utility"
 
 check_som_nologged()
 {

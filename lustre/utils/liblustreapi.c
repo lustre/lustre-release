@@ -7183,3 +7183,20 @@ int llapi_file_flush(int fd)
 
 	return llapi_get_data_version(fd, &dv, LL_DV_WR_FLUSH);
 }
+
+/**
+ * Flush dirty pages from all clients.
+ *
+ * OSTs will take LCK_PR to flush dirty pages from clients.
+ *
+ * \param[in]	fd	File descriptor
+ *
+ * \retval 0 on success.
+ * \retval -errno on error.
+ */
+int llapi_fsync(int fd)
+{
+	__u64 dv;
+
+	return llapi_get_data_version(fd, &dv, LL_DV_RD_FLUSH);
+}

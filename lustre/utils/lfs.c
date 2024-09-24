@@ -133,6 +133,7 @@ static int lfs_swap_layouts(int argc, char **argv);
 static int lfs_mv(int argc, char **argv);
 static int lfs_ladvise(int argc, char **argv);
 static int lfs_getsom(int argc, char **argv);
+static int lfs_somsync(int argc, char **argv);
 static int lfs_heat_get(int argc, char **argv);
 static int lfs_heat_set(int argc, char **argv);
 static int lfs_mirror(int argc, char **argv);
@@ -579,6 +580,10 @@ command_t cmdlist[] = {
 	 "\t-s: Only show the size value of the SOM data for a given file\n"
 	 "\t-b: Only show the blocks value of the SOM data for a given file\n"
 	 "\t-f: Only show the flags value of the SOM data for a given file\n"},
+	{"somsync", lfs_somsync, 0,
+	 "Synchronize SOM xattr(s) for given file(s) or FID(s).\n"
+	 "usage: somsync FILE ...\n"
+	 "       somsync --by-fid MOUNT FID ...\n"},
 	{"heat_get", lfs_heat_get, 0,
 	 "To get heat of files.\n"
 	 "usage: heat_get <file> ...\n"},
@@ -12357,6 +12362,169 @@ static inline int verify_mirror_id_by_fd(int fd, __u16 mirror_id)
 	llapi_layout_free(layout);
 
 	return 0;
+}
+
+static inline int lfs_somsync_by_fd(int fd)
+{
+	struct stat st;
+	int rc = 0;
+
+	/* flush dirty pages from clients */
+	rc = llapi_fsync(fd);
+	if (rc < 0)
+		goto out;
+
+	rc = fstat(fd, &st);
+	if (rc < 0)
+		rc = -errno;
+
+	/*
+	 * After call fstat(), it already gets OST attrs to the client,
+	 * when close the file, MDS will update the LSOM data itself
+	 * according the size and blocks information from the client.
+	 */
+out:
+	close(fd);
+	return rc;
+}
+
+static inline int lfs_somsync_by_path(const char *fname)
+{
+	int fd;
+	int rc = 0;
+
+	fd = open(fname, O_RDONLY | O_NOATIME);
+	if (fd < 0) {
+		rc = -errno;
+		fprintf(stderr,
+			"%s somsync: cannot open '%s': %s\n",
+			progname, fname, strerror(errno));
+		return rc;
+	}
+
+	rc = lfs_somsync_by_fd(fd);
+	if (rc < 0) {
+		fprintf(stderr,
+			"%s somsync: cannot synchronize SOM data of '%s': %s\n",
+			progname, fname, strerror(-rc));
+		return rc;
+	}
+
+	return 0;
+}
+
+static inline int lfs_somsync_by_fid(const char *lustre_dir,
+				     const struct lu_fid *fid)
+{
+	int fd = -1;
+	char fidstr[FID_LEN];
+	int rc = 0;
+
+	snprintf(fidstr, sizeof(fidstr), DFID, PFID(fid));
+	fd = llapi_open_by_fid(lustre_dir, fid, O_RDONLY | O_NOATIME);
+	if (fd < 0) {
+		rc = -errno;
+		fprintf(stderr,
+			"%s somsync: cannot open '%s': %s\n",
+			progname, fidstr, strerror(-rc));
+		return rc;
+	}
+
+	rc = lfs_somsync_by_fd(fd);
+	if (rc < 0) {
+		fprintf(stderr,
+			"%s somsync: cannot synchronize SOM data of '%s': %s\n",
+			progname, fidstr, strerror(-rc));
+		return rc;
+	}
+
+	return 0;
+}
+
+enum {
+	LFS_SOMSYNC_CLIENT_MOUNT = 1,
+};
+
+static int lfs_somsync(int argc, char **argv)
+{
+	struct option long_opts[] = {
+		{ "by-fid", required_argument, NULL, LFS_SOMSYNC_CLIENT_MOUNT },
+		{ NULL },
+	};
+	const char *client_mount = NULL;
+	int c;
+	int rc = 0, rc1;
+
+	while ((c = getopt_long(argc, argv, "", long_opts, NULL)) != -1) {
+		switch (c) {
+		case LFS_SOMSYNC_CLIENT_MOUNT:
+			client_mount = optarg;
+			break;
+		default:
+			fprintf(stderr,
+				"%s somsync: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	if (client_mount != NULL) {
+		/* lfs somsync --by-fid MOUNT FID ... */
+		char mntdir[PATH_MAX];
+		struct lu_fid fid;
+		char *fidstr;
+		int found;
+
+		if (argc == optind) {
+			fprintf(stderr, "%s somsync: missing FID\n", progname);
+			return CMD_HELP;
+		}
+
+		rc = llapi_search_mounts(client_mount, 0, mntdir, NULL);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s somsync: invalid MOUNT '%s': %s\n",
+				progname, client_mount, strerror(-rc));
+			return rc;
+		}
+
+		rc = 0;
+		while (optind < argc) {
+			found = 0;
+
+			fidstr = argv[optind++];
+			while (*fidstr == '[')
+				fidstr++;
+			found = sscanf(fidstr, SFID, RFID(&fid));
+			if (found != 3) {
+				fprintf(stderr,
+					"%s somsync: unrecognized FID: %s\n",
+					progname, argv[optind - 1]);
+				return -EINVAL;
+			}
+
+			rc1 = lfs_somsync_by_fid(mntdir, &fid);
+			if (rc1 && !rc)
+				rc = rc1;
+		}
+
+		return rc;
+	}
+
+	/* lfs somsync FILE ... */
+	if (argc == optind) {
+		fprintf(stderr, "%s somsync: missing FILE\n", progname);
+		return CMD_HELP;
+	}
+
+	rc = 0;
+	while (optind < argc) {
+		rc1 = lfs_somsync_by_path(argv[optind++]);
+		if (rc1 && !rc)
+			rc = rc1;
+	}
+
+	return rc;
 }
 
 /**
