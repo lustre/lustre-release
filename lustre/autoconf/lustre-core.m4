@@ -3960,6 +3960,30 @@ AC_DEFUN([LC_HAVE_USER_BACKED_ITER], [
 ]) # LC_HAVE_USER_BACKED_ITER
 
 #
+# LC_HAVE_IOV_ITER_IS_ALIGNED
+#
+# Linux commit v5.19-rc4-8-gcfa320f72882
+#    iov: introduce iov_iter_aligned
+#
+AC_DEFUN([LC_SRC_HAVE_IOV_ITER_IS_ALIGNED], [
+	LB2_LINUX_TEST_SRC([iov_iter_is_aligned], [
+		#include <linux/uio.h>
+	],[
+		struct iov_iter *iter = NULL;
+		bool result __attribute__ ((unused));
+
+		result = iov_iter_is_aligned(iter, ~PAGE_MASK, ~PAGE_MASK);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_IOV_ITER_IS_ALIGNED], [
+	LB2_MSG_LINUX_TEST_RESULT([if iov_iter_is_aligned() is available],
+	[iov_iter_is_aligned], [
+		AC_DEFINE(HAVE_IOV_ITER_IS_ALIGNED, 1,
+			[iov_iter_is_aligned() is available])
+	])
+]) # LC_HAVE_IOV_ITER_IS_ALIGNED
+
+#
 # LC_HAVE_GET_RANDOM_U32_AND_U64
 #
 # Linux commit v4.10-rc3-6-gc440408cf690
@@ -4893,7 +4917,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
 	LC_SRC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
 	LC_SRC_HAVE_USER_BACKED_ITER
-	LC_HAVE_ADD_TO_PAGE_CACHE_LOCKED
+	LC_SRC_HAVE_IOV_ITER_IS_ALIGNED
 
 	# 6.1
 	LC_SRC_HAVE_GET_RANDOM_U32_AND_U64
@@ -5208,6 +5232,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_VFS_SETXATTR_NON_CONST_VALUE
 	LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
 	LC_HAVE_USER_BACKED_ITER
+	LC_HAVE_IOV_ITER_IS_ALIGNED
 
 	# 6.1
 	LC_HAVE_GET_RANDOM_U32_AND_U64
@@ -5287,6 +5312,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 5.2 - Check export
 	LC_ACCOUNT_PAGE_DIRTIED
+
+	# 6.0 - Check export
+	LC_HAVE_ADD_TO_PAGE_CACHE_LOCKED
 
 ]) # LC_PROG_LINUX
 

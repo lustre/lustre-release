@@ -2150,6 +2150,6 @@ bool ll_foreign_is_removable(struct dentry *dentry, bool unset);
 
 int ll_filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf);
 
-unsigned long ll_iov_iter_alignment(struct iov_iter *i);
+bool ll_iov_iter_is_unaligned(struct iov_iter *i);
 
 #endif /* LLITE_INTERNAL_H */

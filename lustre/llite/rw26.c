@@ -338,29 +338,35 @@ static unsigned long iov_iter_alignment_vfs(const struct iov_iter *i)
  * Lustre could relax a bit for alignment, io count is not
  * necessary page alignment.
  */
-unsigned long ll_iov_iter_alignment(struct iov_iter *i)
+bool ll_iov_iter_is_unaligned(struct iov_iter *i)
 {
 	size_t orig_size = i->count;
 	size_t count = orig_size & ~PAGE_MASK;
 	unsigned long res;
 
+	if (iov_iter_count(i) & ~PAGE_MASK)
+		return true;
+
+	if (!iov_iter_is_aligned(i, ~PAGE_MASK, 0))
+		return true;
+
 	if (!count)
-		return iov_iter_alignment_vfs(i);
+		return iov_iter_alignment_vfs(i) & ~PAGE_MASK;
 
 	if (orig_size > PAGE_SIZE) {
 		iov_iter_truncate(i, orig_size - count);
 		res = iov_iter_alignment_vfs(i);
 		iov_iter_reexpand(i, orig_size);
 
-		return res;
+		return res & ~PAGE_MASK;
 	}
 
 	res = iov_iter_alignment_vfs(i);
 	/* start address is page aligned */
 	if ((res & ~PAGE_MASK) == orig_size)
-		return PAGE_SIZE;
+		return false;
 
-	return res;
+	return res & ~PAGE_MASK;
 }
 
 static int
@@ -487,7 +493,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	ssize_t tot_bytes = 0, result = 0;
 	loff_t file_offset = iocb->ki_pos;
 	bool sync_submit = false;
-	bool unaligned = false;
+	bool unaligned;
 	struct vvp_io *vio;
 	ssize_t rc2;
 
@@ -495,13 +501,8 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 
 	if (file_offset & ~PAGE_MASK)
 		unaligned = true;
-
-	if ((file_offset + count < i_size_read(inode)) && (count & ~PAGE_MASK))
-		unaligned = true;
-
-	/* Check that all user buffers are aligned as well */
-	if (ll_iov_iter_alignment(iter) & ~PAGE_MASK)
-		unaligned = true;
+	else
+		unaligned = ll_iov_iter_is_unaligned(iter);
 
 	lcc = ll_cl_find(inode);
 	if (lcc == NULL)

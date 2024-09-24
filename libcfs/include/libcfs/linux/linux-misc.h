@@ -80,7 +80,50 @@
 #ifndef HAVE_USER_BACKED_ITER
 #define iter_is_ubuf(iter)		0
 #define user_backed_iter(iter)		iter_is_iovec(iter)
-#endif
+#endif /* HAVE_USER_BACKED_ITER */
+
+#ifndef HAVE_IOV_ITER_IS_ALIGNED
+static inline bool iov_iter_aligned_iovec(const struct iov_iter *i,
+					  unsigned addr_mask, unsigned len_mask)
+{
+	const struct iovec *iov = iter_iov(i);
+	size_t size = i->count;
+	size_t skip = i->iov_offset;
+
+	do {
+		size_t len = iov->iov_len - skip;
+
+		if (len > size)
+			len = size;
+		if (len & len_mask)
+			return false;
+		if ((unsigned long)(iov->iov_base + skip) & addr_mask)
+			return false;
+
+		iov++;
+		size -= len;
+		skip = 0;
+	} while (size);
+
+	return true;
+}
+
+static inline bool iov_iter_is_aligned(const struct iov_iter *i,
+				       unsigned addr_mask, unsigned len_mask)
+{
+	if (likely(iter_is_ubuf(i))) {
+		if (i->count & len_mask)
+			return false;
+		if ((unsigned long)(iter_iov(i) + i->iov_offset) & addr_mask)
+			return false;
+		return true;
+	}
+	if (likely(iter_is_iovec(i) || iov_iter_is_kvec(i)))
+		return iov_iter_aligned_iovec(i, addr_mask, len_mask);
+
+	return true;
+}
+#endif /* HAVE_IOV_ITER_IS_ALIGNED */
 
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
 		     loff_t *pos);

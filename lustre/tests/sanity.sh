@@ -14775,6 +14775,7 @@ test_119i()
 	unaligned_dio_or_ldiskfs_with_same_page_size
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 	which aiocp || skip_env "no aiocp installed"
+	skip "LU-18032: Unaligned AIO is disabled and may not be re-enabled"
 
 	local stripe_size=$((1024 * 1024)) #1 MiB
 	# Max i/o below is ~ 4 * stripe_size, so this gives ~5 i/os

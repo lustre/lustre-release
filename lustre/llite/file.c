@@ -2259,10 +2259,8 @@ static bool is_unaligned_directio(struct kiocb *iocb, struct iov_iter *iter,
 	if (direct_io) {
 		if (iocb->ki_pos & ~PAGE_MASK)
 			unaligned = true;
-		else if (iov_iter_count(iter) & ~PAGE_MASK)
-			unaligned = true;
-		else if (ll_iov_iter_alignment(iter) & ~PAGE_MASK)
-			unaligned = true;
+		else
+			unaligned = ll_iov_iter_is_unaligned(iter);
 	}
 	return unaligned;
 #else
