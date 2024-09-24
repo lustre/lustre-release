@@ -203,11 +203,11 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, struct lnet_nid *nidlist,
 			if (NID_BYTES(&nidlist[i]) > nid_size)
 				continue;
 
-			entry->un_nid_count++;
 			memset(&entry->un_nids[entry->un_nid_count], 0,
 			       sizeof(entry->un_nids[entry->un_nid_count]));
 			memcpy(&entry->un_nids[entry->un_nid_count],
 			       &nidlist[i], nid_size);
+			entry->un_nid_count++;
 		}
 		break;
 	}
