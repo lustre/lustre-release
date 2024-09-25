@@ -1280,7 +1280,6 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		prev_version = entry->mne_version;
 
 		if (entry->mne_nid_type == 0) {
-			struct lnet_nid *nid;
 			int i;
 
 			OBD_ALLOC_PTR_ARRAY(nidlist, entry->mne_nid_count);
@@ -1296,11 +1295,8 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 				lustre_swab_mgs_nidtbl_entry_content(entry);
 
 			/* Turn old NID format to newer format. */
-			nid = nidlist;
-			for (i = 0; i < entry->mne_nid_count; i++) {
-				lnet_nid4_to_nid(entry->u.nids[i], nid);
-				nid += sizeof(struct lnet_nid);
-			}
+			for (i = 0; i < entry->mne_nid_count; i++)
+				lnet_nid4_to_nid(entry->u.nids[i], &nidlist[i]);
 		} else {
 			/* Handle the case if struct lnet_nid is expanded in
 			 * the future. The MGS should prevent this but just

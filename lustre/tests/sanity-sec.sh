@@ -2592,6 +2592,8 @@ test_31() {
 
 	export LNETCTL=$(which lnetctl 2> /dev/null)
 
+	(( $MDS1_VERSION >= $(version_code 2.15.0) )) ||
+		skip "Need MDS >= 2.15.0"
 	[ -z "$LNETCTL" ] && skip "without lnetctl support." && return
 	local_mode && skip "in local mode."
 
