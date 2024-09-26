@@ -572,7 +572,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 
 	if (loghandle->lgh_max_size > 0 &&
 	    lgi->lgi_off >= loghandle->lgh_max_size) {
-		CDEBUG(D_OTHER, "llog is getting too large (%u > %u) at %u "
+		CDEBUG(D_OTHER, "llog is getting too large (%u >= %u) at %u "
 		       DFID"\n", (unsigned)lgi->lgi_off,
 		       loghandle->lgh_max_size, (int)loghandle->lgh_last_idx,
 		       PLOGID(&loghandle->lgh_id));
@@ -733,6 +733,16 @@ out_unlock:
 	dt_write_unlock(env, o);
 	if (rc < 0)
 		GOTO(out, rc);
+
+	if (loghandle->lgh_max_size > 0 &&
+	    lgi->lgi_off >= loghandle->lgh_max_size) {
+		CDEBUG(D_OTHER, "llog is getting too large (%u >= %u) at %u "
+		       DFID"\n", (unsigned int)lgi->lgi_off,
+		       loghandle->lgh_max_size, (int)loghandle->lgh_last_idx,
+		       PLOGID(&loghandle->lgh_id));
+		/* this is to signal that this llog is full */
+		loghandle->lgh_last_idx = llog_max_idx(llh);
+	}
 
 	up_write(&loghandle->lgh_last_sem);
 
@@ -1116,11 +1126,12 @@ static int llog_osd_next_block(const struct lu_env *env,
 			       int next_idx, __u64 *cur_offset, void *buf,
 			       int len)
 {
-	struct llog_thread_info	*lgi = llog_info(env);
-	struct dt_object	*o;
-	struct dt_device	*dt;
-	int			 rc;
-	__u32			chunk_size;
+	struct llog_thread_info *lgi = llog_info(env);
+	struct dt_object *o;
+	struct dt_device *dt;
+	int rc;
+	__u32 chunk_size;
+	__u32 tail_len;
 	int last_idx = *cur_idx;
 	__u64 last_offset = *cur_offset;
 	bool force_mini_rec = !next_idx;
@@ -1217,14 +1228,27 @@ static int llog_osd_next_block(const struct lu_env *env,
 			lustre_swab_llog_rec(rec);
 		tail = (struct llog_rec_tail *)((char *)buf + rc -
 						sizeof(struct llog_rec_tail));
+		tail_len = tail->lrt_len;
+		/* base on tail_len do swab */
+		if (tail_len > chunk_size) {
+			__swab32s(&tail_len);
+			if (tail_len > chunk_size) {
+				CERROR("%s: invalid llog tail at log id "DFID":%x offset %llu tail idx %u lrt len %u read_size %d\n",
+					o->do_lu.lo_dev->ld_obd->obd_name,
+					PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
+					loghandle->lgh_id.lgl_ogen, *cur_offset,
+					tail->lrt_index, tail->lrt_len, rc);
+				/* tail is broken */
+				GOTO(out, rc = -EINVAL);
+			}
+		}
+		/* get the last record in block */
+		last_rec = (struct llog_rec_hdr *)((char *)tail - tail_len +
+				sizeof(struct llog_rec_tail));
 
 		/* caller handles bad records if any */
 		if (llog_verify_record(loghandle, rec))
 			GOTO(out, rc = 0);
-
-		/* get the last record in block */
-		last_rec = (struct llog_rec_hdr *)((char *)buf + rc -
-						   tail->lrt_len);
 
 		if (LLOG_REC_HDR_NEEDS_SWABBING(last_rec))
 			lustre_swab_llog_rec(last_rec);
@@ -1310,110 +1334,14 @@ static int llog_osd_prev_block(const struct lu_env *env,
 			       struct llog_handle *loghandle,
 			       int prev_idx, void *buf, int len)
 {
-	struct llog_thread_info	*lgi = llog_info(env);
-	struct dt_object	*o;
-	struct dt_device	*dt;
-	loff_t			 cur_offset;
-	__u32			chunk_size;
-	int			 rc;
+	loff_t cur_offset;
+	int cur_idx;
 
-	ENTRY;
+	cur_offset = loghandle->lgh_hdr->llh_hdr.lrh_len;
+	cur_idx = 1;
 
-	chunk_size = loghandle->lgh_hdr->llh_hdr.lrh_len;
-	if (len == 0 || len & (chunk_size - 1))
-		RETURN(-EINVAL);
-
-	CDEBUG(D_OTHER, "looking for log index %u\n", prev_idx);
-
-	LASSERT(loghandle);
-	LASSERT(loghandle->lgh_ctxt);
-
-	o = loghandle->lgh_obj;
-	LASSERT(o);
-	dt_read_lock(env, o, 0);
-	if (!llog_osd_exist(loghandle))
-		GOTO(out, rc = -ESTALE);
-
-	dt = lu2dt_dev(o->do_lu.lo_dev);
-	LASSERT(dt);
-
-	/* Let's only use mini record size for previous block read
-	 * for now XXX */
-	cur_offset = chunk_size;
-	llog_skip_over(loghandle, &cur_offset, 0, prev_idx,
-		       chunk_size, true);
-
-	rc = dt_attr_get(env, o, &lgi->lgi_attr);
-	if (rc)
-		GOTO(out, rc);
-
-	while (cur_offset < lgi->lgi_attr.la_size) {
-		struct llog_rec_hdr	*rec, *last_rec;
-		struct llog_rec_tail	*tail;
-
-		lgi->lgi_buf.lb_len = len;
-		lgi->lgi_buf.lb_buf = buf;
-		rc = dt_read(env, o, &lgi->lgi_buf, &cur_offset);
-		if (rc < 0) {
-			CERROR("%s: can't read llog block from log "DFID
-			       " offset %llu: rc = %d\n",
-			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       PFID(lu_object_fid(&o->do_lu)), cur_offset, rc);
-			GOTO(out, rc);
-		}
-
-		if (rc == 0) /* end of file, nothing to do */
-			GOTO(out, rc);
-
-		if (rc < sizeof(*tail)) {
-			CERROR("%s: invalid llog block at log id "DFID" offset %llu\n",
-			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       PLOGID(&loghandle->lgh_id), cur_offset);
-			GOTO(out, rc = -EINVAL);
-		}
-
-		rec = buf;
-		if (LLOG_REC_HDR_NEEDS_SWABBING(rec))
-			lustre_swab_llog_rec(rec);
-
-		tail = (struct llog_rec_tail *)((char *)buf + rc -
-						sizeof(struct llog_rec_tail));
-		/* get the last record in block */
-		last_rec = (struct llog_rec_hdr *)((char *)buf + rc -
-						   le32_to_cpu(tail->lrt_len));
-
-		if (LLOG_REC_HDR_NEEDS_SWABBING(last_rec))
-			lustre_swab_llog_rec(last_rec);
-		LASSERT(last_rec->lrh_index == tail->lrt_index);
-
-		/* this shouldn't happen */
-		if (tail->lrt_index == 0) {
-			CERROR("%s: invalid llog tail at log id "DFID" offset %llu\n",
-			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       PLOGID(&loghandle->lgh_id), cur_offset);
-			GOTO(out, rc = -EINVAL);
-		}
-		if (tail->lrt_index < prev_idx)
-			continue;
-
-		/* sanity check that the start of the new buffer is no farther
-		 * than the record that we wanted.  This shouldn't happen. */
-		if (rec->lrh_index > prev_idx) {
-			CERROR("%s: missed desired record? %u > %u\n",
-			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       rec->lrh_index, prev_idx);
-			GOTO(out, rc = -ENOENT);
-		}
-
-		/* Trim unsupported extensions for compat w/ older clients */
-		changelog_block_trim_ext(rec, last_rec, loghandle);
-
-		GOTO(out, rc = 0);
-	}
-	GOTO(out, rc = -EIO);
-out:
-	dt_read_unlock(env, o);
-	return rc;
+	return llog_osd_next_block(env, loghandle, &cur_idx, prev_idx,
+				   &cur_offset, buf, len);
 }
 
 /**
@@ -1602,7 +1530,11 @@ after_open:
 	RETURN(rc);
 
 out_put:
-	dt_object_put(env, o);
+	if (ctxt->loc_flags & LLOG_CTXT_FLAG_NORMAL_FID)
+		/* according to llog_osd_close() */
+		dt_object_put_nocache(env, o);
+	else
+		dt_object_put(env, o);
 out_name:
 	OBD_FREE(handle->lgh_name, strlen(name) + 1);
 out:

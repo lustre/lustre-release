@@ -1263,7 +1263,7 @@ int llog_open_create(const struct lu_env *env, struct llog_ctxt *ctxt,
 	d = lu2dt_dev((*res)->lgh_obj->do_lu.lo_dev);
 
 	if (unlikely(unlikely(d->dd_rdonly)))
-		RETURN(-EROFS);
+		GOTO(out, rc = -EROFS);
 
 	th = dt_trans_create(env, d);
 	if (IS_ERR(th))
@@ -1422,6 +1422,8 @@ int llog_open(const struct lu_env *env, struct llog_ctxt *ctxt,
 	rc = ctxt->loc_logops->lop_open(env, *lgh, logid, name, open_param);
 	llog_restore_resource(old_cred);
 	if (rc) {
+		CDEBUG(D_OTHER, "%s: Failed to open llog %s: rc %d\n",
+		       ctxt->loc_obd->obd_name, name ? name : "", rc);
 		llog_free_handle(*lgh);
 		*lgh = NULL;
 	}
