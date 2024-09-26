@@ -1,4 +1,3 @@
-Summary:        Lustre osd-zfs feature support
 License:        GPL-2.0-only
 %if 0%{?suse_version} > 1
 Requires:       kernel-%1
