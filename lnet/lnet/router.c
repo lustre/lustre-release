@@ -103,7 +103,7 @@ module_param_call(router_sensitivity_percentage, rtr_sensitivity_set, param_get_
 		  &router_sensitivity_percentage, S_IRUGO|S_IWUSR);
 #endif
 MODULE_PARM_DESC(router_sensitivity_percentage,
-		"How healthy a gateway should be to be used in percent");
+		"(Deprecated) How healthy a gateway should be to be used in percent");
 
 static void lnet_add_route_to_rnet(struct lnet_remotenet *rnet,
 				   struct lnet_route *route);

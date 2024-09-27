@@ -1172,20 +1172,12 @@ lnet_ni_set_next_ping(struct lnet_ni *ni, time64_t now)
 	ni->ni_next_ping = lnet_get_next_recovery_ping(ni->ni_ping_count, now);
 }
 
-/*
- * A peer NI is alive if it satisfies the following two conditions:
- *  1. peer NI health >= LNET_MAX_HEALTH_VALUE * router_sensitivity_percentage
- *  2. the cached NI status received when we discover the peer is UP
+/* We consider a peer NI to be alive if its cached NI status is UP
  */
 static inline bool
 lnet_is_peer_ni_alive(struct lnet_peer_ni *lpni)
 {
-	bool halive = false;
-
-	halive = (atomic_read(&lpni->lpni_healthv) >=
-		 (LNET_MAX_HEALTH_VALUE * router_sensitivity_percentage / 100));
-
-	return halive && lpni->lpni_ns_status == LNET_NI_STATUS_UP;
+	return lpni->lpni_ns_status == LNET_NI_STATUS_UP;
 }
 
 static inline void

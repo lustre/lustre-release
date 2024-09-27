@@ -1450,9 +1450,39 @@ lnet_find_best_lpni(struct lnet_ni *lni, struct lnet_nid *dst_nid,
 	return NULL;
 }
 
+/* Compare router peer NIs health, outstanding traffic, and available credits.
+ * \retval 1	If \lpni1 is the better peer NI
+ * \retval -1	If \lpni2 is the better peer NI
+ * \retval 0	If \lpni1 and lpni2 are equally good peer NIs
+ */
 static int
 lnet_compare_gw_lpnis(struct lnet_peer_ni *lpni1, struct lnet_peer_ni *lpni2)
 {
+	int lpni1_healthv;
+	int lpni2_healthv;
+
+	if (lpni1 && !lpni2)
+		return 1;
+
+	if (!lpni1 && lpni2)
+		return -1;
+
+	lpni1_healthv = atomic_read(&lpni1->lpni_healthv);
+	lpni2_healthv = atomic_read(&lpni2->lpni_healthv);
+
+	CDEBUG(D_NET, "n:[%s, %s] h:[%d, %d] q:[%ld, %ld] c:[%d, %d]\n",
+	       libcfs_nidstr(&lpni1->lpni_nid),
+	       libcfs_nidstr(&lpni2->lpni_nid),
+	       lpni1_healthv, lpni2_healthv,
+	       lpni1->lpni_txqnob, lpni2->lpni_txqnob,
+	       lpni1->lpni_txcredits, lpni2->lpni_txcredits);
+
+	if (lpni1_healthv > lpni2_healthv)
+		return 1;
+
+	if (lpni1_healthv < lpni2_healthv)
+		return -1;
+
 	if (lpni1->lpni_txqnob < lpni2->lpni_txqnob)
 		return 1;
 
@@ -1468,18 +1498,45 @@ lnet_compare_gw_lpnis(struct lnet_peer_ni *lpni1, struct lnet_peer_ni *lpni2)
 	return 0;
 }
 
-/* Compare route priorities and hop counts */
+/* Compare route UDSP, priorities, and hop counts.
+ * \retval 1	If \r1 is the better route
+ * \retval -1	If \r2 is the better route
+ * \retval 0	If \r1 and \r2 are equally good routes
+ */
 static int
-lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2)
+lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2,
+		    bool r1_preferred, bool r2_preferred)
 {
-	int r1_hops = (r1->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r1->lr_hops;
-	int r2_hops = (r2->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r2->lr_hops;
+	int r1_hops;
+	int r2_hops;
+
+	if (r1 && !r2)
+		return 1;
+
+	if (!r1 && r2)
+		return -1;
+
+	CDEBUG(D_NET, "n:[%s, %s] u:[%s, %s] p:[%u, %u] h:[%u, %u]\n",
+	       libcfs_nidstr(&r1->lr_gateway->lp_primary_nid),
+	       libcfs_nidstr(&r2->lr_gateway->lp_primary_nid),
+	       r1_preferred ? "Y" : "N", r2_preferred ? "Y" : "N",
+	       r1->lr_priority, r2->lr_priority,
+	       r1->lr_hops, r2->lr_hops);
+
+	if (r1_preferred && !r2_preferred)
+		return 1;
+
+	if (!r1_preferred && r2_preferred)
+		return -1;
 
 	if (r1->lr_priority < r2->lr_priority)
 		return 1;
 
 	if (r1->lr_priority > r2->lr_priority)
 		return -1;
+
+	r1_hops = (r1->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r1->lr_hops;
+	r2_hops = (r2->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r2->lr_hops;
 
 	if (r1_hops < r2_hops)
 		return 1;
@@ -1497,11 +1554,12 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 		       struct lnet_peer_ni **gwni)
 {
 	struct lnet_peer_ni *lpni, *best_gw_ni = NULL;
-	struct lnet_route *best_route;
-	struct lnet_route *last_route;
+	struct lnet_route *best_route = NULL;
+	struct lnet_route *last_route = NULL;
 	struct lnet_route *route;
 	int rc;
 	bool best_rte_is_preferred = false;
+	bool rte_is_preferred = false;
 	struct lnet_nid *gw_pnid;
 
 	CDEBUG(D_NET, "Looking up a route to %s, from %s\n",
@@ -1511,70 +1569,31 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 	list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 		if (!lnet_is_route_alive(route))
 			continue;
+
 		gw_pnid = &route->lr_gateway->lp_primary_nid;
 
-		/* no protection on below fields, but it's harmless */
-		if (last_route && (last_route->lr_seq - route->lr_seq < 0))
+		/* Track which route has the highest sequence number. i.e. the
+		 * last route that was used. This information is used by our
+		 * caller to increment the sequence number of the route we'll
+		 * select.
+		 * no protection on below fields, but it's harmless
+		 */
+		if (last_route && (last_route->lr_seq < route->lr_seq))
 			last_route = route;
 
-		/* if the best route found is in the preferred list then
-		 * tag it as preferred and use it later on. But if we
-		 * didn't find any routes which are on the preferred list
-		 * then just use the best route possible.
+		/* Check whether this router is on the destination peer NI's
+		 * preferred list
 		 */
-		rc = lnet_peer_is_pref_rtr_locked(remote_lpni, gw_pnid);
+		rte_is_preferred = lnet_peer_is_pref_rtr_locked(remote_lpni,
+								gw_pnid);
 
-		if (!best_route || (rc && !best_rte_is_preferred)) {
-			/* Restrict the selection of the router NI on the
-			 * src_net provided. If the src_net is LNET_NID_ANY,
-			 * then select the best interface available.
-			 */
-			lpni = lnet_find_best_lpni(NULL, NULL,
-						   route->lr_gateway,
-						   src_net);
-			if (!lpni) {
-				CDEBUG(D_NET,
-				       "Gateway %s does not have a peer NI on net %s\n",
-				       libcfs_nidstr(gw_pnid),
-				       libcfs_net2str(src_net));
-				continue;
-			}
-		}
-
-		if (rc && !best_rte_is_preferred) {
-			/* This is the first preferred route we found,
-			 * so it beats any route found previously
-			 */
-			best_route = route;
-			if (!last_route)
-				last_route = route;
-			best_gw_ni = lpni;
-			best_rte_is_preferred = true;
-			CDEBUG(D_NET, "preferred gw = %s\n",
-			       libcfs_nidstr(gw_pnid));
-			continue;
-		} else if ((!rc) && best_rte_is_preferred)
-			/* The best route we found so far is in the preferred
-			 * list, so it beats any non-preferred route
-			 */
-			continue;
-
-		if (!best_route) {
-			best_route = last_route = route;
-			best_gw_ni = lpni;
-			continue;
-		}
-
-		rc = lnet_compare_routes(route, best_route);
+		rc = lnet_compare_routes(route, best_route, rte_is_preferred,
+					 best_rte_is_preferred);
 		if (rc == -1)
 			continue;
 
-		/* Restrict the selection of the router NI on the
-		 * src_net provided. If the src_net is LNET_NID_ANY,
-		 * then select the best interface available.
-		 */
-		lpni = lnet_find_best_lpni(NULL, NULL, route->lr_gateway,
-					   src_net);
+		lpni = lnet_find_best_lpni(NULL, NULL,
+					   route->lr_gateway, src_net);
 		if (!lpni) {
 			CDEBUG(D_NET,
 			       "Gateway %s does not have a peer NI on net %s\n",
@@ -1583,25 +1602,31 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 			continue;
 		}
 
-		if (rc == 1) {
-			best_route = route;
-			best_gw_ni = lpni;
-			continue;
+		/* Only need to compare the peer NIs if lnet_compare_routes()
+		 * returned zero.
+		 */
+		if (rc == 0) {
+			rc = lnet_compare_gw_lpnis(lpni, best_gw_ni);
+			if (rc == -1 ||
+			    (rc == 0 && route->lr_seq > best_route->lr_seq))
+				continue;
 		}
 
-		rc = lnet_compare_gw_lpnis(lpni, best_gw_ni);
-		if (rc == -1)
-			continue;
-
-		if (rc == 1 || route->lr_seq <= best_route->lr_seq) {
-			best_route = route;
-			best_gw_ni = lpni;
-			continue;
-		}
+		best_route = route;
+		best_gw_ni = lpni;
+		best_rte_is_preferred = rte_is_preferred;
+		if (!last_route)
+			last_route = route;
 	}
 
 	*prev_route = last_route;
 	*gwni = best_gw_ni;
+
+	if (best_gw_ni)
+		CDEBUG(D_NET,
+		       "Selected next-hop %s(%p) on src net %s\n",
+		       libcfs_nidstr(&best_gw_ni->lpni_nid), best_gw_ni,
+		       libcfs_net2str(src_net));
 
 	return best_route;
 }
