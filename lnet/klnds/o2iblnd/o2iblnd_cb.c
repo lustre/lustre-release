@@ -3467,10 +3467,15 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 
 	case RDMA_CM_EVENT_REJECTED:
 		conn = cmid->context;
-		switch (conn->ibc_state) {
-		default:
-			LBUG();
+		CNETERR("%s: REJECTED %d cm_id %p conn %p ibc_state: %d\n",
+			libcfs_nidstr(&conn->ibc_peer->ibp_nid),
+			event->status, cmid, conn, conn->ibc_state);
 
+		/* ignore, if aborted by the lnd */
+		if (kiblnd_deregister_connreq(conn) == -EALREADY)
+			return 0;
+
+		switch (conn->ibc_state) {
 		case IBLND_CONN_PASSIVE_WAIT:
 			CERROR("%s: REJECTED %d cm_id %p\n",
 				libcfs_nidstr(&conn->ibc_peer->ibp_nid),
@@ -3479,14 +3484,13 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 			break;
 
 		case IBLND_CONN_ACTIVE_CONNECT:
-			/* ignore, if aborted by the lnd */
-			if (kiblnd_deregister_connreq(conn) == -EALREADY)
-				return 0;
-
 			kiblnd_rejected(conn, event->status,
 					(void *)KIBLND_CONN_PARAM(event),
 					KIBLND_CONN_PARAM_LEN(event));
 			break;
+
+		default:
+			return 0;
 		}
 		kiblnd_conn_decref(conn);
 		return 0;
