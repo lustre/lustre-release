@@ -207,6 +207,7 @@ declare     ha_lfsck_wait=${LFSCK_WAIT:-1200}
 declare     ha_lfsck_fail_on_repaired=${LFSCK_FAIL_ON_REPAIRED:-false}
 declare     ha_power_down_cmd=${POWER_DOWN:-"pm -0"}
 declare     ha_power_up_cmd=${POWER_UP:-"pm -1"}
+declare     ha_reboot=${REBOOT:-"pm -r"}
 declare     ha_power_delay=${POWER_DELAY:-60}
 declare     ha_node_up_delay=${NODE_UP_DELAY:-10}
 declare     ha_wait_nodes_up=${WAIT_NODES_UP:-600}
@@ -1034,7 +1035,7 @@ ha_power_up_delay()
 		for n in ${nodes//,/ }; do
 			local pair=$(ha_get_pair $n)
 			local status=$(ha_on $pair crm_mon -1rQ | \
-				grep -w $n | head -1)
+				grep -w $n | head -2)
 
 			ha_info "$n pair: $pair status: $status"
 			[[ "$status" == *OFFLINE* ]] ||
@@ -1118,43 +1119,75 @@ ha_wait_nodes()
 	local nodes=$1
 	local end=$(($(date +%s) + $ha_wait_nodes_up))
 
-	ha_info "Waiting for $nodes to boot up in $ha_wait_nodes_up"
-	until ha_on $nodes hostname >/dev/null 2>&1 ||
-		[ -e "$ha_stop_file" ] ||
-			(($(date +%s) >= end)); do
-		ha_sleep 1 >/dev/null
+	local attempts=5
+
+	for ((i=1; i<=attempts; i++)); do
+		ha_info "Waiting for $nodes to boot up in \
+			$ha_wait_nodes_up attempt: $i"
+		until ha_on $nodes hostname >/dev/null 2>&1 ||
+			[ -e "$ha_stop_file" ] ||
+				(($(date +%s) >= end)); do
+			ha_sleep 1 >/dev/null
+		done
+
+		ha_info "Check where we are ..."
+		[ -e "$ha_stop_file" ] &&
+			ha_info "$ha_stop_file found!"
+
+		local -a nodes_up
+		nodes_up=($(ha_on $nodes hostname | awk '{ print $2 }'))
+		ha_info "Nodes $nodes are up: ${nodes_up[@]}"
+		local -a n=(${nodes//,/ })
+		if [[ ${#nodes_up[@]} -ne ${#n[@]} ]]; then
+			ha_info "Failed boot up $nodes in \
+				$ha_wait_nodes_up sec! attempt: $i"
+			if (( i == attempts )); then
+				ha_touch fail,stop
+				return 1
+			else
+				ha_info "REBOOTING $ha_reboot $nodes, \
+					attempt: $i"
+				local cmd="$ha_reboot $nodes"
+
+				end=$(($(date +%s) + $ha_wait_nodes_up))
+				eval $cmd
+				continue
+			fi
+		else
+			break
+		fi
 	done
-
-	ha_info "Check where we are ..."
-	[ -e "$ha_stop_file" ] &&
-		ha_info "$ha_stop_file found!"
-
-	local -a nodes_up
-	nodes_up=($(ha_on $nodes hostname | awk '{ print $2 }'))
-	ha_info "Nodes $nodes are up: ${nodes_up[@]}"
-	local -a n=(${nodes//,/ })
-	if [[ ${#nodes_up[@]} -ne ${#n[@]} ]]; then
-		ha_info "Failed boot up $nodes in $ha_wait_nodes_up sec!"
-		ha_touch fail,stop
-		return 1
-	fi
 	return 0
 }
 
 ha_failback()
 {
 	local nodes=$1
-	ha_info "Failback resources on $nodes in $ha_failback_delay sec"
+	local rc=1
+	local attempts=5
+	local i
 
-	ha_sleep $ha_failback_delay
-	[ "$ha_failback_cmd" ] ||
-	{
-		ha_info "No failback command set, skiping"
-		return 0
-	}
+	for ((i=0; i<attempts; i++)); do
+		ha_info "Failback resources on $nodes in \
+			$ha_failback_delay sec, attempt: $i ($attempts); \
+			cmd: $ha_failback_cmd $nodes"
 
-	$ha_failback_cmd $nodes
+		ha_sleep $ha_failback_delay
+		[ "$ha_failback_cmd" ] ||
+		{
+			ha_info "No failback command set, skiping"
+			return 0
+		}
+		if $ha_failback_cmd $nodes ; then
+			rc=0
+			ha_info "Failback succesfully started: attempt: $i"
+			break
+		fi
+	done
 	[ -e $ha_lfsck_lock ] && ha_unlock $ha_lfsck_lock || true
+	ha_info "Failback status in $i attempt \
+		with $ha_failback_delay delay each: rc=$rc"
+	return $rc
 }
 
 ha_summarize()
