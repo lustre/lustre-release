@@ -142,21 +142,20 @@ enum seal_alg {
  * these get mapped to linux kernel crypto routines.
  */
 #define ENCTYPE_NULL            0x0000
-#define ENCTYPE_DES_CBC_CRC     0x0001        /* DES cbc mode with CRC-32 */
-#define ENCTYPE_DES_CBC_MD4     0x0002        /* DES cbc mode with RSA-MD4 */
-#define ENCTYPE_DES_CBC_MD5     0x0003        /* DES cbc mode with RSA-MD5 */
-#define ENCTYPE_DES_CBC_RAW     0x0004        /* DES cbc mode raw */
-/* XXX deprecated? */
-#define ENCTYPE_DES3_CBC_SHA    0x0005        /* DES-3 cbc mode with NIST-SHA */
-#define ENCTYPE_DES3_CBC_RAW    0x0006        /* DES-3 cbc mode raw */
-#define ENCTYPE_DES_HMAC_SHA1   0x0008
-#define ENCTYPE_DES3_CBC_SHA1   0x0010
+/* deprecated ENCTYPE_DES_CBC_CRC     0x0001  DES cbc mode with CRC-32 */
+/* deprecated ENCTYPE_DES_CBC_MD4     0x0002  DES cbc mode with RSA-MD4 */
+/* deprecated ENCTYPE_DES_CBC_MD5     0x0003  DES cbc mode with RSA-MD5 */
+/* deprecated ENCTYPE_DES_CBC_RAW     0x0004  DES cbc mode raw */
+/* deprecated ENCTYPE_DES3_CBC_SHA    0x0005  DES-3 cbc mode with NIST-SHA */
+/* deprecated ENCTYPE_DES3_CBC_RAW    0x0006  DES-3 cbc mode raw */
+/* deprecated ENCTYPE_DES_HMAC_SHA1   0x0008  des-hmac-sha1 */
+/* deprecated ENCTYPE_DES3_CBC_SHA1   0x0010  des3-cbc-sha1 */
 #define ENCTYPE_AES128_CTS_HMAC_SHA1_96 0x0011
 #define ENCTYPE_AES256_CTS_HMAC_SHA1_96 0x0012
 #define ENCTYPE_AES128_CTS_HMAC_SHA256_128  0x0013
 #define ENCTYPE_AES256_CTS_HMAC_SHA384_192  0x0014
-#define ENCTYPE_ARCFOUR_HMAC    0x0017
-#define ENCTYPE_ARCFOUR_HMAC_EXP 0x0018
+/* deprecated ENCTYPE_ARCFOUR_HMAC    0x0017 arcfour-hmac-md5 */
+/* deprecated ENCTYPE_ARCFOUR_HMAC_EXP 0x0018 arcfour-hmac-exp */
 #define ENCTYPE_UNKNOWN         0x01ff
 
 #endif /* PTLRPC_GSS_KRB5_H */

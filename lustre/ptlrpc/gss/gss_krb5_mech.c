@@ -88,23 +88,6 @@ struct krb5_enctype {
  * yet. this need to be fixed in the future.
  */
 static struct krb5_enctype enctypes[] = {
-	[ENCTYPE_DES_CBC_RAW] = {		/* des-cbc-md5 */
-		.ke_dispname	= "des-cbc-md5",
-		.ke_enc_name	= "cbc(des)",
-		.ke_hash_name	= "md5",
-		.ke_hash_size	= 16,
-		.ke_conf_size	= 8,
-	},
-#ifdef HAVE_DES3_SUPPORT
-	[ENCTYPE_DES3_CBC_RAW] = {		/* des3-hmac-sha1 */
-		.ke_dispname	= "des3-hmac-sha1",
-		.ke_enc_name	= "cbc(des3_ede)",
-		.ke_hash_name	= "sha1",
-		.ke_hash_size	= 20,
-		.ke_conf_size	= 8,
-		.ke_hash_hmac	= 1,
-	},
-#endif
 	[ENCTYPE_AES128_CTS_HMAC_SHA1_96] = {	/* aes128-cts */
 		.ke_dispname	= "aes128-cts-hmac-sha1-96",
 		.ke_enc_name	= "cbc(aes)",
@@ -137,14 +120,6 @@ static struct krb5_enctype enctypes[] = {
 		.ke_conf_size	= 16,
 		.ke_hash_hmac	= 1,
 	},
-	[ENCTYPE_ARCFOUR_HMAC] = {		/* arcfour-hmac-md5 */
-		.ke_dispname	= "arcfour-hmac-md5",
-		.ke_enc_name	= "ecb(arc4)",
-		.ke_hash_name	= "md5",
-		.ke_hash_size	= 16,
-		.ke_conf_size	= 8,
-		.ke_hash_hmac	= 1,
-	}
 };
 
 static const char * enctype2str(__u32 enctype)
@@ -168,9 +143,7 @@ int krb5_init_keys(struct krb5_ctx *kctx)
 
         ke = &enctypes[kctx->kc_enctype];
 
-	/* tfm arc4 is stateful, user should alloc-use-free by his own */
-	if (kctx->kc_enctype != ENCTYPE_ARCFOUR_HMAC &&
-	    gss_keyblock_init(&kctx->kc_keye, ke->ke_enc_name, ke->ke_enc_mode))
+	if (gss_keyblock_init(&kctx->kc_keye, ke->ke_enc_name, ke->ke_enc_mode))
 		return -1;
 
 	/* tfm hmac is stateful, user should alloc-use-free by his own */
@@ -1026,16 +999,11 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
 	/* generate confounder */
 	get_random_bytes(conf, ke->ke_conf_size);
 
-	/* get encryption blocksize. note kc_keye might not associated with
-	 * a tfm, currently only for arcfour-hmac */
-	if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-		LASSERT(kctx->kc_keye.kb_tfm == NULL);
-		blocksize = 1;
-	} else {
-		LASSERT(kctx->kc_keye.kb_tfm);
-		blocksize = crypto_sync_skcipher_blocksize(
-							kctx->kc_keye.kb_tfm);
-	}
+	/* Get encryption blocksize. Note kc_keye might be associated with
+	 * a tfm.
+	 */
+	LASSERT(kctx->kc_keye.kb_tfm);
+	blocksize = crypto_sync_skcipher_blocksize(kctx->kc_keye.kb_tfm);
 	LASSERT(blocksize <= ke->ke_conf_size);
 
 	/* padding the message */
@@ -1080,41 +1048,8 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
 	cipher.len = token->len - sizeof(*khdr);
 	LASSERT(cipher.len >= ke->ke_conf_size + msg->len + sizeof(*khdr));
 
-	if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-		rawobj_t arc4_keye = RAWOBJ_EMPTY;
-		struct crypto_sync_skcipher *arc4_tfm;
-
-		if (krb5_make_checksum(ENCTYPE_ARCFOUR_HMAC, &kctx->kc_keyi,
-				       NULL, 1, &cksum, 0, NULL, &arc4_keye,
-				       gctx->hash_func)) {
-			CERROR("failed to obtain arc4 enc key\n");
-			GOTO(arc4_out_key, rc = -EACCES);
-		}
-
-		arc4_tfm = crypto_alloc_sync_skcipher("ecb(arc4)", 0, 0);
-		if (IS_ERR(arc4_tfm)) {
-			CERROR("failed to alloc tfm arc4 in ECB mode\n");
-			GOTO(arc4_out_key, rc = -EACCES);
-		}
-
-		if (crypto_sync_skcipher_setkey(arc4_tfm, arc4_keye.data,
-						arc4_keye.len)) {
-			CERROR("failed to set arc4 key, len %d\n",
-			       arc4_keye.len);
-			GOTO(arc4_out_tfm, rc = -EACCES);
-		}
-
-		rc = gss_crypt_rawobjs(arc4_tfm, NULL, 3, data_desc,
-				       &cipher, 1);
-arc4_out_tfm:
-		crypto_free_sync_skcipher(arc4_tfm);
-arc4_out_key:
-		rawobj_free(&arc4_keye);
-	} else {
-		rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, local_iv, 3,
-				       data_desc, &cipher, 1);
-	}
-
+	rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, local_iv, 3,
+			       data_desc, &cipher, 1);
 	if (rc)
 		GOTO(out_free_cksum, major = GSS_S_FAILURE);
 
@@ -1200,15 +1135,11 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
 	/* generate confounder */
 	get_random_bytes(conf, ke->ke_conf_size);
 
-	/* get encryption blocksize. note kc_keye might not associated with
-	 * a tfm, currently only for arcfour-hmac */
-	if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-		LASSERT(kctx->kc_keye.kb_tfm == NULL);
-		blocksz = 1;
-	} else {
-		LASSERT(kctx->kc_keye.kb_tfm);
-		blocksz = crypto_sync_skcipher_blocksize(kctx->kc_keye.kb_tfm);
-	}
+	/* Get encryption blocksize. Note kc_keye might be associated with
+	 * a tfm.
+	 */
+	LASSERT(kctx->kc_keye.kb_tfm);
+	blocksz = crypto_sync_skcipher_blocksize(kctx->kc_keye.kb_tfm);
 
 	/*
 	 * we assume the size of krb5_header (16 bytes) must be n * blocksize.
@@ -1254,13 +1185,8 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
 	cipher.data = (__u8 *)(khdr + 1);
 	cipher.len = blocksz + sizeof(*khdr);
 
-	if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-		LBUG();
-		rc = 0;
-	} else {
-		rc = krb5_encrypt_bulk(kctx->kc_keye.kb_tfm, khdr,
-				       conf, desc, &cipher, adj_nob);
-	}
+	rc = krb5_encrypt_bulk(kctx->kc_keye.kb_tfm, khdr,
+			       conf, desc, &cipher, adj_nob);
 	if (rc)
 		GOTO(out_free_cksum, major = GSS_S_FAILURE);
 
@@ -1312,13 +1238,8 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
 	}
 
 	/* block size */
-	if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-		LASSERT(kctx->kc_keye.kb_tfm == NULL);
-		blocksz = 1;
-	} else {
-		LASSERT(kctx->kc_keye.kb_tfm);
-		blocksz = crypto_sync_skcipher_blocksize(kctx->kc_keye.kb_tfm);
-	}
+	LASSERT(kctx->kc_keye.kb_tfm);
+	blocksz = crypto_sync_skcipher_blocksize(kctx->kc_keye.kb_tfm);
 
 	/* expected token layout:
 	 * ----------------------------------------
@@ -1355,46 +1276,8 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
 	plain_out.data = tmpbuf;
 	plain_out.len = bodysize;
 
-	if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-		rawobj_t		 arc4_keye;
-		struct crypto_sync_skcipher *arc4_tfm;
-
-		cksum.data = token->data + token->len - ke->ke_hash_size;
-		cksum.len = ke->ke_hash_size;
-
-		if (krb5_make_checksum(ENCTYPE_ARCFOUR_HMAC, &kctx->kc_keyi,
-				       NULL, 1, &cksum, 0, NULL, &arc4_keye,
-				       gctx->hash_func)) {
-			CERROR("failed to obtain arc4 enc key\n");
-			GOTO(arc4_out, rc = -EACCES);
-		}
-
-		arc4_tfm = crypto_alloc_sync_skcipher("ecb(arc4)", 0, 0);
-		if (IS_ERR(arc4_tfm)) {
-			CERROR("failed to alloc tfm arc4 in ECB mode\n");
-			GOTO(arc4_out_key, rc = -EACCES);
-		}
-
-		if (crypto_sync_skcipher_setkey(arc4_tfm, arc4_keye.data,
-						arc4_keye.len)) {
-			CERROR("failed to set arc4 key, len %d\n",
-			       arc4_keye.len);
-			GOTO(arc4_out_tfm, rc = -EACCES);
-		}
-
-		rc = gss_crypt_rawobjs(arc4_tfm, NULL, 1, &cipher_in,
-				       &plain_out, 0);
-arc4_out_tfm:
-		crypto_free_sync_skcipher(arc4_tfm);
-arc4_out_key:
-		rawobj_free(&arc4_keye);
-arc4_out:
-		cksum = RAWOBJ_EMPTY;
-	} else {
-		rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, local_iv, 1,
-				       &cipher_in, &plain_out, 0);
-	}
-
+	rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, local_iv, 1,
+			       &cipher_in, &plain_out, 0);
 	if (rc != 0) {
 		CERROR("error decrypt\n");
 		goto out_free;
@@ -1479,14 +1362,8 @@ __u32 gss_unwrap_bulk_kerberos(struct gss_ctx *gctx,
 	}
 
 	/* block size */
-	if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-		LASSERT(kctx->kc_keye.kb_tfm == NULL);
-		blocksz = 1;
-		LBUG();
-	} else {
-		LASSERT(kctx->kc_keye.kb_tfm);
-		blocksz = crypto_sync_skcipher_blocksize(kctx->kc_keye.kb_tfm);
-	}
+	LASSERT(kctx->kc_keye.kb_tfm);
+	blocksz = crypto_sync_skcipher_blocksize(kctx->kc_keye.kb_tfm);
 	LASSERT(sizeof(*khdr) >= blocksz && sizeof(*khdr) % blocksz == 0);
 
 	/*

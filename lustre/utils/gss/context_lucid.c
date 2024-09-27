@@ -194,10 +194,6 @@ enum seal_alg {
  * We don't have "legal" access to these MIT-only
  * structures located in libk5crypto
  */
-extern void *krb5int_enc_arcfour;
-#ifdef HAVE_DES3_SUPPORT
-extern void *krb5int_enc_des3;
-#endif
 extern void *krb5int_enc_aes128;
 extern void *krb5int_enc_aes256;
 
@@ -276,17 +272,6 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 	 * values and structures located in libk5crypto
 	 */
 	switch (in->type) {
-#ifdef HAVE_DES3_SUPPORT
-	case ENCTYPE_DES3_CBC_SHA1:
-#ifdef HAVE_KRB5
-	case ENCTYPE_DES3_CBC_RAW:
-#endif
-		keylength = 24;
-#ifdef HAVE_KRB5
-		enc = &krb5int_enc_des3;
-#endif
-		break;
-#endif
 	case ENCTYPE_AES128_CTS_HMAC_SHA1_96:
 	case ENCTYPE_AES128_CTS_HMAC_SHA256_128:
 		keylength = 16;
@@ -301,6 +286,20 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 		enc = &krb5int_enc_aes256;
 #endif
 		break;
+	case ENCTYPE_DES_CBC_CRC:
+	case ENCTYPE_DES_CBC_MD4:
+	case ENCTYPE_DES_CBC_MD5:
+	case ENCTYPE_DES_CBC_RAW:
+	case ENCTYPE_DES3_CBC_SHA:
+	case ENCTYPE_DES3_CBC_RAW:
+	case ENCTYPE_DES_HMAC_SHA1:
+	case ENCTYPE_DES3_CBC_SHA1:
+	case ENCTYPE_ARCFOUR_HMAC:
+	case ENCTYPE_ARCFOUR_HMAC_EXP:
+		/* deprecated enc types */
+		printerr(0, "ERROR: %s: deprecated enc type %d\n",
+			 __func__, in->type);
+		fallthrough;
 	default:
 		code = KRB5_BAD_ENCTYPE;
 		goto out;
@@ -440,19 +439,6 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 	printerr(3, "protocol %d\n", lctx->protocol);
 	if (lctx->protocol == 0) {
 		enctype = lctx->rfc1964_kd.ctx_key.type;
-#ifdef HAVE_HEIMDAL
-		/*
-		 * The kernel gss code expects ENCTYPE_DES3_CBC_RAW (6) for
-		 * 3des keys, but Heimdal key has ENCTYPE_DES3_CBC_SHA1 (16).
-		 * Force the Heimdal enctype to 6.
-		 */
-		if (enctype == ENCTYPE_DES3_CBC_SHA1) {
-			printerr(2, "%s: overriding heimdal keytype (%d => %d)\n",
-				 __FUNCTION__, enctype, 6);
-
-			enctype = 6;
-		}
-#endif
 		keysize = lctx->rfc1964_kd.ctx_key.length;
 		numkeys = 3;	/* XXX is always gonna be three? */
 	} else {
@@ -484,25 +470,12 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 			goto out_err;
 
 		/* Kc */
-		/*
-		 * RC4 is special, it dosen't need key derivation. Actually
-		 * the Ke is based on plain text. Here we just let all three
-		 * key identical, kernel will handle everything. --ericm
-		 */
-		if (lctx->rfc1964_kd.ctx_key.type == ENCTYPE_ARCFOUR_HMAC) {
-			if (write_bytes(&p, end, lctx->rfc1964_kd.ctx_key.data,
-					lctx->rfc1964_kd.ctx_key.length))
-				goto out_err;
-		} else {
-			if (derive_key_lucid(&lctx->rfc1964_kd.ctx_key,
-					&derived_key,
-					KG_USAGE_SIGN, KEY_USAGE_SEED_CHECKSUM))
-				goto out_err;
-			if (write_bytes(&p, end, derived_key.data,
-					derived_key.length))
-				goto out_err;
-			free(derived_key.data);
-		}
+		if (derive_key_lucid(&lctx->rfc1964_kd.ctx_key, &derived_key,
+				     KG_USAGE_SIGN, KEY_USAGE_SEED_CHECKSUM))
+			goto out_err;
+		if (write_bytes(&p, end, derived_key.data, derived_key.length))
+			goto out_err;
+		free(derived_key.data);
 	} else {
 		gss_krb5_lucid_key_t *keyptr;
 		uint32_t sign_usage, seal_usage;
