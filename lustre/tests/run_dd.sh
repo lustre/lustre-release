@@ -26,18 +26,22 @@ echo $$ >$LOAD_PID_FILE
 
 TESTDIR=$MOUNT/d0.dd-$(hostname)
 
-CONTINUE=true
-while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
+while [ ! -e "$END_RUN_FILE" ]; do
 	echoerr "$(date +'%F %H:%M:%S'): dd run starting"
-	mkdir -p $TESTDIR
-	$LFS setstripe -c -1 $TESTDIR
+	rm -rf $TESTDIR
+	client_load_mkdir $TESTDIR
+	if [ $? -ne 0 ]; then
+		echoerr "$(date +'%F %H:%M:%S'): failed to create $TESTDIR"
+		echo $(hostname) >> $END_RUN_FILE
+		break
+	fi
 	cd $TESTDIR
 	sync
 
 	# suppress dd xfer stat to workaround buggy coreutils/gettext
 	# combination in RHEL5 and OEL5, see BZ 21264
 	FREE_SPACE=$(df -P $TESTDIR | awk '/:/ { print $4 }')
-	BLKS=$((FREE_SPACE * 9 / 40 / CLIENT_COUNT))
+	BLKS=$((FREE_SPACE / 4 / CLIENT_COUNT))
 	echoerr "Total free disk space is $FREE_SPACE, 4k blocks to dd is $BLKS"
 
 	df $TESTDIR || true
@@ -46,16 +50,13 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 	if [ $? -eq 0 ]; then
 		echoerr "$(date +'%F %H:%M:%S'): dd succeeded"
 		cd $TMP
-		rm -rf $TESTDIR
-		echoerr "$(date +'%F %H:%M:%S'): dd run finished"
 	else
+		enospc_detected $DEBUGLOG &&
+			echoerr "$(date +'%F %H:%M:%S'): dd ENOSPC, ignored" &&
+			continue
 		echoerr "$(date +'%F %H:%M:%S'): dd failed"
 		if [ -z "$ERRORS_OK" ]; then
 			echo $(hostname) >> $END_RUN_FILE
-		fi
-		if [ $BREAK_ON_ERROR ]; then
-			# break
-			CONTINUE=false
 		fi
 	fi
 done

@@ -3252,7 +3252,6 @@ start_client_load() {
 	eval export ${var}=$load
 
 	do_node $client "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
-			BREAK_ON_ERROR=$BREAK_ON_ERROR \
 			END_RUN_FILE=$END_RUN_FILE \
 			LOAD_PID_FILE=$LOAD_PID_FILE \
 			TESTLOG_PREFIX=$TESTLOG_PREFIX \
@@ -3260,9 +3259,12 @@ start_client_load() {
 			DBENCH_LIB=$DBENCH_LIB \
 			DBENCH_SRC=$DBENCH_SRC \
 			CLIENT_COUNT=$((CLIENTCOUNT - 1)) \
+			RECOVERY_SCALE_ENABLE_REMOTE_DIRS=$RECOVERY_SCALE_ENABLE_REMOTE_DIRS \
+			RECOVERY_SCALE_ENABLE_STRIPED_DIRS=$RECOVERY_SCALE_ENABLE_STRIPED_DIRS \
 			LFS=$LFS \
 			LCTL=$LCTL \
 			FSNAME=$FSNAME \
+			MPI_USER=$MPI_USER \
 			MPIRUN=$MPIRUN \
 			MPIRUN_OPTIONS=\\\"$MPIRUN_OPTIONS\\\" \
 			MACHINEFILE_OPTION=\\\"$MACHINEFILE_OPTION\\\" \
@@ -3805,7 +3807,7 @@ wait_for_host() {
 	for host in ${hostlist//,/ }; do
 		check_network "$host" 900
 	done
-	while ! do_nodes $hostlist hostname  > /dev/null; do sleep 5; done
+	while ! do_nodes $hostlist hostname; do sleep 5; done
 }
 
 wait_for_facet() {
@@ -4176,6 +4178,9 @@ facet_failover() {
 		local host=$(facet_active_host $facet)
 
 		hostlist=$(expand_list $hostlist $host)
+		local fhost=$(facet_host $facet)
+		local ffhost=$(facet_failover_host $facet)
+		echo "facet: $facet facet_host: $fhost facet_failover_host: $ffhost"
 		if [ $(facet_host $facet) = \
 			$(facet_failover_host $facet) ]; then
 			waithostlist=$(expand_list $waithostlist $host)
@@ -4186,7 +4191,7 @@ facet_failover() {
 		for host in ${hostlist//,/ }; do
 			reboot_node $host
 		done
-		echo "$(date +'%H:%M:%S (%s)') $hostlist rebooted"
+		echo "$(date +'%H:%M:%S (%s)') $hostlist rebooted; waithostlist: $waithostlist"
 		# We need to wait the rebooted hosts in case if
 		# facet_HOST == facetfailover_HOST
 		if ! [ -z "$waithostlist" ]; then
@@ -11287,6 +11292,26 @@ save_layout_restore_at_exit() {
 	local layout=$(save_layout $dir)
 
 	stack_trap "restore_layout $dir $layout" EXIT
+}
+
+init_stripe_dir_params() {
+	local varremote=$1
+	local varstriped=$2
+
+	if ((MDSCOUNT > 1 &&
+		$MDS1_VERSION >=
+		$(version_code 2.8.0))); then
+		eval $varremote=${!varremote:-true}
+		eval $varstriped=${!varstriped:-true}
+	elif ((MDSCOUNT > 1 &&
+		$MDS1_VERSION >=
+		$(version_code 2.5.0))); then
+		eval $varremote=${!varremote:-true}
+		eval $varstriped=${!varstriped:-false}
+	fi
+
+	eval $varremote=${!varremote:-false}
+	eval $varstriped=${!varstriped:-false}
 }
 
 verify_yaml_layout() {

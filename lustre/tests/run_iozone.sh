@@ -26,10 +26,15 @@ echo $$ >$LOAD_PID_FILE
 
 TESTDIR=$MOUNT/d0.iozone-$(hostname)
 
-CONTINUE=true
-while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
+while [ ! -e "$END_RUN_FILE" ]; do
 	echoerr "$(date +'%F %H:%M:%S'): iozone run starting"
-	mkdir -p $TESTDIR
+	rm -rf $TESTDIR
+	client_load_mkdir $TESTDIR
+	if [ $? -ne 0 ]; then
+		echoerr "$(date +'%F %H:%M:%S'): failed to create $TESTDIR"
+		echo $(hostname) >> $END_RUN_FILE
+		break
+	fi
 	cd $TESTDIR
 
 	sync
@@ -40,22 +45,15 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 	if [ ${PIPESTATUS[0]} -eq 0 ]; then
 		echoerr "$(date +'%F %H:%M:%S'): iozone succeeded"
 		cd $TMP
-		rm -rf $TESTDIR
-		if [ -d $TESTDIR ]; then
-			echoerr "$(date +'%F %H:%M:%S'): failed to remove \
-								 $TESTDIR"
-			echo $(hostname) >> $END_RUN_FILE
-			CONTINUE=false
-		fi
-		echoerr "$(date +'%F %H:%M:%S'): iozone run finished"
 	else
+		enospc_detected $DEBUGLOG &&
+			echoerr "$(date +'%F %H:%M:%S'):"\
+				"iozone ENOSPC, ignored" &&
+			continue
+
 		echoerr "$(date +'%F %H:%M:%S'): iozone failed"
 		if [ -z "$ERRORS_OK" ]; then
 			echo $(hostname) >> $END_RUN_FILE
-		fi
-		if [ $BREAK_ON_ERROR ]; then
-			# break
-			CONTINUE=false
 		fi
 	fi
 done

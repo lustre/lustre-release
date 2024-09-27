@@ -455,7 +455,8 @@ test_4() {
 	init_changelog
 
 	END_RUN_FILE=${DIR}/$tdir/run LOAD_PID_FILE=${DIR}/$tdir/pid \
-		MOUNT=${DIR}/$tdir run_iozone.sh &
+		MOUNT=${DIR}/$tdir RECOVERY_SCALE_ENABLE_REMOTE_DIRS=false \
+		RECOVERY_SCALE_ENABLE_STRIPED_DIRS=false run_iozone.sh &
 	sleep 30
 	child_pid=$(pgrep iozone)
 	stop_procs $child_pid

@@ -35,6 +35,9 @@ fi
 
 ERRORS_OK=""    # No application failures should occur during this test.
 
+init_stripe_dir_params RECOVERY_SCALE_ENABLE_REMOTE_DIRS \
+	RECOVERY_SCALE_ENABLE_STRIPED_DIRS
+
 check_and_setup_lustre
 rm -rf $DIR/[Rdfs][0-9]*
 

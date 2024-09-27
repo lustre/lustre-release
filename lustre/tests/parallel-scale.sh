@@ -5,6 +5,9 @@ LUSTRE=${LUSTRE:-$(dirname $0)/..}
 init_test_env "$@"
 init_logging
 
+init_stripe_dir_params RECOVERY_SCALE_ENABLE_REMOTE_DIRS \
+	RECOVERY_SCALE_ENABLE_STRIPED_DIRS
+
 ALWAYS_EXCEPT="$PARALLEL_SCALE_EXCEPT "
 # bug number for skipped test: LU-9429
 ALWAYS_EXCEPT+="               parallel_grouplock "

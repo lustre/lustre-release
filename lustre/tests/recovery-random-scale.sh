@@ -45,6 +45,9 @@ fi
 # but not for other clients.
 ERRORS_OK="yes"
 
+init_stripe_dir_params RECOVERY_SCALE_ENABLE_REMOTE_DIRS \
+	RECOVERY_SCALE_ENABLE_STRIPED_DIRS
+
 numfailovers () {
 	local facet
 	local var
@@ -152,8 +155,13 @@ test_fail_client_mds() {
 		if [ -e $END_RUN_FILE ]; then
 			local end_run_node
 			read end_run_node < $END_RUN_FILE
-			[[ $end_run_node = $fail_client ]] &&
-				rm -f $END_RUN_FILE || exit 13
+			if [[ $end_run_node = $fail_client ]]; then
+				rm -f $END_RUN_FILE
+			else
+				echo "failure is expected on FAIL CLIENT \
+					$fail_client, not on $end_run_node"
+				exit 13
+			fi
 		fi
 
 		restart_client_loads $fail_client $ERRORS_OK || exit $?

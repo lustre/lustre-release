@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Simple function used by run_*.sh scripts
+# functions used by other scripts
 
 assert_env() {
 	local failed=""
@@ -669,7 +669,7 @@ run_ior() {
 
 	print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
 
-	test_mkdir -p $testdir
+	client_load_mkdir $testdir
 
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
@@ -1398,4 +1398,43 @@ run_xdd() {
 	[ $rc = 0 ] || error "xdd failed: $rc"
 
 	rm -rf $testdir
+}
+
+client_load_mkdir () {
+	local dir=$1
+	local parent=$(dirname $dir)
+
+	local mdtcount=$($LFS df $parent 2> /dev/null | grep -c MDT)
+	if [ $mdtcount -le 1 ] || ! is_lustre ${parent}; then
+		mkdir $dir || return 1
+		return 0
+	else
+		mdt_idx=$((RANDOM % mdtcount))
+		if $RECOVERY_SCALE_ENABLE_STRIPED_DIRS; then
+			# stripe_count in range [1,mdtcount]
+			# $LFS mkdir treats stripe_count 0 and 1 the same
+			stripe_count_opt="-c$((RANDOM % mdtcount + 1))"
+		else
+			stripe_count_opt=""
+		fi
+	fi
+
+	if $RECOVERY_SCALE_ENABLE_REMOTE_DIRS ||
+	   $RECOVERY_SCALE_ENABLE_STRIPED_DIRS; then
+		$LFS mkdir -i$mdt_idx $stripe_count_opt $dir ||
+			return 1
+	else
+		mkdir $dir || return 1
+	fi
+	$LFS getdirstripe $dir || return 1
+
+	if [ -n "$client_load_SETSTRIPEPARAMS" ]; then
+		$LFS setstripe $client_load_SETSTRIPEPARAMS $dir ||
+		return 1
+	fi
+	$LFS getstripe $dir || return 1
+}
+
+enospc_detected () {
+	grep "No space left on device" $1 | grep -qv grep
 }
