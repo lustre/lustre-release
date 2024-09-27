@@ -10203,7 +10203,14 @@ precreated_ost_obj_count()
 			osp.$proc_path.prealloc_last_id)
 	local next_id=$(do_facet mds$((mdt_idx + 1)) lctl get_param -n \
 			osp.$proc_path.prealloc_next_id)
-	echo $((last_id - next_id + 1))
+	local ost_obj_count=$((last_id - next_id + 1))
+
+	echo " - precreated_ost_obj_count $proc_path" \
+	     "prealloc_last_id: $last_id" \
+	     "prealloc_next_id: $next_id" \
+	     "count: $ost_obj_count" 1>&2
+
+	echo $ost_obj_count
 }
 
 check_file_in_pool()

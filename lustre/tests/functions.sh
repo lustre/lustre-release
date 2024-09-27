@@ -1058,42 +1058,49 @@ run_rr_alloc() {
 	# Make sure that every osp has enough precreated objects for the file
 	# creation app
 
-	# create_count is always set to the power of 2 only, so if the files
-	# per OST are not multiple of that then it will be set to nearest
-	# lower power of 2. So set 'create_count' to the upper power of 2.
+	# The MDS does not precreate objects if there are at least
+	# create_count / 2 precreated objects available for the OST.
+	# Set 'create_count' to 2x required number to force creation.
 
 	# foeo = file on each ost. calc = calculated.
 	local foeo_calc=$((rr_alloc_NFILES * total_MNTPTS / OSTCOUNT))
 	local create_count=$((2 * foeo_calc))
+	local max_create_count=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+				 osp.*OST0000*MDT0000.max_create_count")
 
 	# create_count accepted values:
 	#   [OST_MIN_PRECREATE=32, OST_MAX_PRECREATE=20000]
-	# values exceeding OST_MAX_PRECREATE are lowered to the maximum.
-	[[ $create_count -lt 32 ]] && create_count=32
-	local i
-	for i in $(seq $MDSCOUNT); do
-		do_facet mds$i "$LCTL set_param -n \
-			lod.$FSNAME-MDT*.qos_threshold_rr=100 \
-			osp.$FSNAME-OST*-osc-MDT*.create_count=$create_count"
-	done
+	# values exceeding OST_MAX_PRECREATE are lowered to half of the maximum.
+	(( create_count >= 32 )) || create_count=32
+	(( create_count <= max_create_count )) ||
+		create_count=$((max_create_count / 2))
 
-	# Create few temporary files in order to increase the precreated objects
-	# to a desired value, before starting 'rr_alloc' app. Due to default
-	# value 32 of precreation count (OST_MIN_PRECREATE=32), precreated
-	# objects available are 32 initially, these gets exhausted very soon,
-	# which causes skip of some osps when very large number of files
-	# is created per OSTs.
-	createmany -o $DIR/$tdir/foo- $(((old_create_count + 1) * OSTCOUNT)) \
-		> /dev/null
-	unlinkmany $DIR/$tdir/foo- $(((old_create_count + 1)  * OSTCOUNT))
+	local mdts=$(comma_list $(mdts_nodes))
+
+	do_nodes $mdts "$LCTL set_param lod.*.qos_threshold_rr=100 \
+		osp.*.create_count=$create_count"
 
 	# Check for enough precreated objects... We should not
 	# fail here because code(osp_precreate.c) also takes care of it.
 	# So we have good chances of passing test even if this check fails.
-	local mdt_idx=0
-	for ((ost_idx = 0; ost_idx < $OSTCOUNT; ost_idx++ )); do
-		(($(precreated_ost_obj_count $mdt_idx $ost_idx) >= foeo_calc))||
-		echo "Warning: test may fail from too few objs on OST$ost_idx"
+	local stop=$((SECONDS + 60))
+
+	while ((SECONDS < stop)); do
+		local sleep=0
+
+		for ((mdt_idx = 0; mdt_idx < $MDSCOUNT; mdt_idx++)); do
+			for ((ost_idx = 0; ost_idx < $OSTCOUNT; ost_idx++)); do
+				local count=$(precreated_ost_obj_count \
+					$mdt_idx $ost_idx)
+				if ((count < foeo_calc)); then
+					sleep=1
+				fi
+			done
+		done
+
+		(( sleep > 0 )) || break
+
+		sleep $sleep
 	done
 
 	local cmd="$RR_ALLOC $mntpt_root/$tdir/f $rr_alloc_NFILES $num_clients"
