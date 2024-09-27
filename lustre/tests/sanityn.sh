@@ -1176,6 +1176,8 @@ test_33c() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
 		skip "DNE CoS not supported"
+	(( MDS1_VERSION < $(version_code v2_15_55-133-g1d6b96a1cf) )) ||
+		skip "DNE CoS refactored in 2.15.55.133"
 
 	# LU-13522
 	stop mds1
@@ -1238,6 +1240,8 @@ test_33d() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
 		skip "DNE CoS not supported"
+	(( MDS1_VERSION < $(version_code v2_15_55-133-g1d6b96a1cf) )) ||
+		skip "DNE CoS refactored in 2.15.55.133"
 
 	# remote directory create
 	op_trigger_cos "$LFS mkdir -i 0 $DIR/$tdir" "$LFS mkdir -i 1 $DIR/$tdir/subdir"
