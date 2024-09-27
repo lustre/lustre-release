@@ -1135,19 +1135,24 @@ ha_wait_nodes()
 			ha_info "$ha_stop_file found!"
 
 		local -a nodes_up
+		local -a nodes_down
 		nodes_up=($(ha_on $nodes hostname | awk '{ print $2 }'))
 		ha_info "Nodes $nodes are up: ${nodes_up[@]}"
 		local -a n=(${nodes//,/ })
 		if [[ ${#nodes_up[@]} -ne ${#n[@]} ]]; then
-			ha_info "Failed boot up $nodes in \
+			nodes_down=($(echo ${n[@]} ${nodes_up[@]} |\
+				tr ' ' '\n' | sort | uniq -u))
+			ha_info "Failed boot up ${nodes_down[@]} in \
 				$ha_wait_nodes_up sec! attempt: $i"
 			if (( i == attempts )); then
 				ha_touch fail,stop
 				return 1
 			else
-				ha_info "REBOOTING $ha_reboot $nodes, \
+				local down=${nodes_down[@]}
+				down=${down// /,/}
+				ha_info "REBOOTING $ha_reboot $down \
 					attempt: $i"
-				local cmd="$ha_reboot $nodes"
+				local cmd="$ha_reboot $down"
 
 				end=$(($(date +%s) + $ha_wait_nodes_up))
 				eval $cmd
