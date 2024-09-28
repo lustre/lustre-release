@@ -6390,10 +6390,14 @@ check_quota_two_mounts()
 
 	actual=$(echo "$full" | head -n$(echo "$head" | wc -l))
 	[[ "$actual" == "$head" ]] ||
+	# re-fetch head if it failed
+	[[ "$actual" == "$($LFS quota -q $opts $id $MOUNT)" ]] ||
 		error "quota info from $MOUNT not '$head', found '$actual'"
 
 	actual=$(echo "$full" | tail -n$(echo "$tail" | wc -l))
 	[[ "$actual" == "$tail" ]] ||
+	# re-fetch tail if it failed
+	[[ "$actual" == "$($LFS quota -q $opts $id $MOUNT2)" ]] ||
 		error "quota info from $MOUNT2 not '$tail', found '$actual'"
 }
 
