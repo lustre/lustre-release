@@ -21361,7 +21361,11 @@ test_247f() {
 
 	do_nodes $mdts "$LCTL set_param mdt.*.enable_remote_subdir_mount=0"
 	stack_trap "umount_client $submount"
-	FILESET="$fileset/$tdir/remote" mount_client $submount &&
+	stat=$(do_facet mds1 $LCTL get_param -n \
+		mdt.*MDT0000.enable_remote_subdir_mount)
+	# 2.16 always enables remote subdir mount
+	(( stat == 0 )) &&
+		FILESET="$fileset/$tdir/remote" mount_client $submount &&
 		error "mount remote dir $dir should fail"
 
 	for dir in $tdir/remote/subdir $tdir/striped $tdir/striped/subdir \
