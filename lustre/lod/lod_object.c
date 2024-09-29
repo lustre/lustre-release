@@ -6325,7 +6325,13 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 			lod_foreach_mdt(lod, mdt) {
 				if (mdt->ltd_index ==
 				    lo->ldo_dir_stripe_offset) {
-					rc = -EPROTO;
+					if (unlikely(hint && !hint->dah_eadata))
+						/* old client may not cache DMV,
+						 * allow it to retry.
+						 */
+						rc = -EREMOTE;
+					else
+						rc = -EPROTO;
 					/* refresh statfs */
 					dt_statfs(env, mdt->ltd_tgt,
 						  &mdt->ltd_statfs);
