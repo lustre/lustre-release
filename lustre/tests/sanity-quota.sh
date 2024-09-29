@@ -612,8 +612,10 @@ test_1a() {
 	local used=$(getquota -u $TSTUSR global curspace)
 	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
 
-	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
 	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	wait_quota_synced ost1 OST0000 usr $TSTID hardlimit $((limit*1024))
 
 	test_1_check_write $testfile "user" $limit
 
@@ -636,8 +638,10 @@ test_1a() {
 	used=$(getquota -g $TSTUSR global curspace)
 	[ $used -ne 0 ] && error "Used space ($used) for group $TSTUSR isn't 0"
 
-	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
 	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	wait_quota_synced ost1 OST0000 grp $TSTID hardlimit $((limit*1024))
 
 	test_1_check_write $testfile "group" $limit
 	rm -f $testfile
@@ -665,9 +669,11 @@ test_1a() {
 	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
 		error "set project quota failed"
 
-	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
 	chown $TSTUSR:$TSTUSR $testfile || error "chown $testfile failed"
 	change_project -p $TSTPRJID $testfile
+
+	wait_quota_synced ost1 OST0000 prj $TSTPRJID hardlimit $((limit*1024))
 
 	test_1_check_write $testfile "project" $limit
 
@@ -702,6 +708,9 @@ test_1b() {
 	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
 		error "set user quota failed"
 
+	wait_quota_synced ost1 OST0000 usr $TSTID hardlimit \
+							$((global_limit*1024))
+
 	pool_add $qpool || error "pool_add failed"
 	pool_add_targets $qpool 0 $(($OSTCOUNT - 1)) ||
 		error "pool_add_targets failed"
@@ -722,7 +731,7 @@ test_1b() {
 
 	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
 
-	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
 	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	test_1_check_write $testfile "user" $limit
@@ -744,12 +753,15 @@ test_1b() {
 	$LFS setquota -g $TSTUSR -b 0 -B ${limit}M --pool $qpool $DIR ||
 		error "set group quota failed"
 
+	wait_quota_synced ost1 OST0000 grp $TSTID hardlimit \
+							$((global_limit*1024))
+
 	testfile="$DIR/$tdir/$tfile-1"
 	# make sure the system is clean
 	used=$(getquota -g $TSTUSR global curspace $qpool)
 	[ $used -ne 0 ] && error "Used space ($used) for group $TSTUSR isn't 0"
 
-	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
 	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	test_1_check_write $testfile "group" $limit
@@ -782,8 +794,10 @@ test_1b() {
 	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M --pool $qpool $DIR ||
 		error "set project quota failed"
 
+	wait_quota_synced ost1 OST0000 prj $TSTPRJID hardlimit \
+							$((global_limit*1024))
 
-	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
 	chown $TSTUSR:$TSTUSR $testfile || error "chown $testfile failed"
 	change_project -p $TSTPRJID $testfile
 
@@ -815,6 +829,9 @@ test_1c() {
 	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
 		error "set user quota failed"
 
+	wait_quota_synced ost1 OST0000 usr $TSTID hardlimit \
+							$((global_limit*1024))
+
 	pool_add $qpool1 || error "pool_add failed"
 	pool_add_targets $qpool1 0 $(($OSTCOUNT - 1)) ||
 		error "pool_add_targets failed"
@@ -837,6 +854,9 @@ test_1c() {
 	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
 
 	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
+
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	test_1_check_write $testfile "user" $global_limit
 
