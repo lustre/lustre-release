@@ -21,8 +21,6 @@
 
 #include "qmt_internal.h"
 
-struct workqueue_struct *qmt_lvbo_free_wq;
-
 /* intent policy function called from mdt_intent_opc() when the intent is of
  * quota type */
 int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
@@ -532,6 +530,8 @@ int qmt_lvbo_fill(struct lu_device *ld, struct ldlm_lock *lock, void *lvb,
  */
 int qmt_lvbo_free(struct lu_device *ld, struct ldlm_resource *res)
 {
+	struct qmt_device *qmt = lu2qmt_dev(ld);
+
 	ENTRY;
 
 	if (res->lr_lvb_data == NULL)
@@ -540,7 +540,7 @@ int qmt_lvbo_free(struct lu_device *ld, struct ldlm_resource *res)
 	if (res->lr_name.name[LUSTRE_RES_ID_QUOTA_SEQ_OFF] != 0) {
 		struct lquota_entry *lqe = res->lr_lvb_data;
 
-		queue_work(qmt_lvbo_free_wq, &lqe->lqe_work);
+		queue_work(qmt->qmt_lvbo_free_wq, &lqe->lqe_work);
 	} else {
 		struct dt_object *obj = res->lr_lvb_data;
 		/* release object reference */
