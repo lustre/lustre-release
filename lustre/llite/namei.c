@@ -977,11 +977,8 @@ out:
 
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 				   struct lookup_intent *it,
-				   void **secctx, __u32 *secctxlen,
-				   int *secctxslot,
 				   struct pcc_create_attach *pca,
-				   bool encrypt,
-				   void **encctx, __u32 *encctxlen)
+				   unsigned int open_flags)
 {
 	ktime_t kstart = ktime_get();
 	struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -990,13 +987,18 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	struct md_op_data *op_data = NULL;
 	struct lov_user_md *lum = NULL;
 	struct ll_sb_info *sbi = ll_i2sbi(parent);
-	__u32 opc;
-	int rc;
 	struct llcrypt_name fname;
+	bool encrypt = false;
 	struct lu_fid fid;
+	void *secctx = NULL;
+	u32 secctxlen = 0;
+	int secctxslot = 0;
+	void *encctx = NULL;
+	u32 encctxlen = 0;
+	u32 opc;
+	int rc;
 
 	ENTRY;
-
 	if (dentry->d_name.len > sbi->ll_namelen)
 		RETURN(ERR_PTR(-ENAMETOOLONG));
 
@@ -1045,6 +1047,30 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))
 		it->it_create_mode &= ~current_umask();
 
+	/* For lookup open_flags will be zero */
+	if (ll_sbi_has_encrypt(sbi) && IS_ENCRYPTED(parent) && open_flags) {
+		/* In case of create, this is going to be a regular file because
+		 * ll_atomic_open() sets the S_IFREG bit for
+		 * it->it_create_mode before calling this function.
+		 */
+		rc = llcrypt_prepare_readdir(parent);
+		if (rc < 0)
+			GOTO(out, retval = ERR_PTR(rc));
+
+		encrypt = true;
+		if (open_flags & O_CREAT) {
+			/* For migration or mirroring without enc key, we still
+			 * need to be able to create a volatile file.
+			 */
+			if (!llcrypt_has_encryption_key(parent) &&
+			    (!filename_is_volatile(dentry->d_name.name,
+						   dentry->d_name.len, NULL) ||
+			    (open_flags & O_CIPHERTEXT) != O_CIPHERTEXT ||
+			    !(open_flags & O_DIRECT)))
+				GOTO(out, retval = ERR_PTR(-ENOKEY));
+		}
+	}
+
 	if (it->it_op & IT_CREAT &&
 	    test_bit(LL_SBI_FILE_SECCTX, sbi->ll_flags)) {
 		rc = ll_dentry_init_security(dentry, it->it_create_mode,
@@ -1056,19 +1082,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 					     &op_data->op_file_secctx_slot);
 		if (rc < 0)
 			GOTO(out, retval = ERR_PTR(rc));
-		if (secctx != NULL)
-			*secctx = op_data->op_file_secctx;
-		if (secctxlen != NULL)
-			*secctxlen = op_data->op_file_secctx_size;
-		if (secctxslot != NULL)
-			*secctxslot = op_data->op_file_secctx_slot;
-	} else {
-		if (secctx != NULL)
-			*secctx = NULL;
-		if (secctxlen != NULL)
-			*secctxlen = 0;
-		if (secctxslot != NULL)
-			*secctxslot = 0;
+
+		secctx = op_data->op_file_secctx;
+		secctxlen = op_data->op_file_secctx_size;
+		secctxslot = op_data->op_file_secctx_slot;
 	}
 	if (it->it_op & IT_CREAT && encrypt) {
 		if (unlikely(filename_is_volatile(dentry->d_name.name,
@@ -1140,15 +1157,8 @@ inherit:
 			if (rc)
 				GOTO(out, retval = ERR_PTR(rc));
 		}
-		if (encctx != NULL)
-			*encctx = op_data->op_file_encctx;
-		if (encctxlen != NULL)
-			*encctxlen = op_data->op_file_encctx_size;
-	} else {
-		if (encctx != NULL)
-			*encctx = NULL;
-		if (encctxlen != NULL)
-			*encctxlen = 0;
+		encctx = op_data->op_file_encctx;
+		encctxlen = op_data->op_file_encctx_size;
 	}
 
 	/* ask for security context upon intent:
@@ -1193,14 +1203,34 @@ inherit:
 	/* dir layout may change */
 	ll_unlock_md_op_lsm(op_data);
 	rc = ll_lookup_it_finish(req, it, parent, &dentry,
-				 secctx != NULL ? *secctx : NULL,
-				 secctxlen != NULL ? *secctxlen : 0,
-				 encctx != NULL ? *encctx : NULL,
-				 encctxlen != NULL ? *encctxlen : 0,
+				 secctx, secctxlen, encctx, encctxlen,
 				 kstart, encrypt);
 	if (rc != 0) {
 		ll_intent_release(it);
 		GOTO(out, retval = ERR_PTR(rc));
+	}
+
+	if (it_disposition(it, DISP_OPEN_CREATE)) {
+		/* Dentry instantiated in ll_create_it. */
+		rc = ll_create_it(parent, dentry, it, secctx, secctxlen,
+				  encrypt, encctx, encctxlen,
+				  open_flags);
+		ll_security_release_secctx(secctx, secctxlen,
+					   secctxslot);
+		llcrypt_free_ctx(encctx, encctxlen);
+		if (rc < 0) {
+			ll_intent_release(it);
+			GOTO(out, retval = ERR_PTR(rc));
+		}
+	} else if (open_flags & O_CREAT && encrypt &&
+		   d_inode(dentry)) {
+		rc = ll_set_encflags(dentry->d_inode, encctx,
+				     encctxlen, true);
+		llcrypt_free_ctx(encctx, encctxlen);
+		if (rc < 0) {
+			ll_intent_release(it);
+			GOTO(out, retval = ERR_PTR(rc));
+		}
 	}
 
 	if ((it->it_op & IT_OPEN) && dentry->d_inode &&
@@ -1213,15 +1243,15 @@ inherit:
 	GOTO(out, retval = (dentry == save) ? NULL : dentry);
 
 out:
-	if (op_data != NULL && !IS_ERR(op_data)) {
-		if (secctx != NULL && secctxlen != NULL) {
+	if (!IS_ERR_OR_NULL(op_data)) {
+		if (secctx && secctxlen != 0) {
 			/* caller needs sec ctx info, so reset it in op_data to
 			 * prevent it from being freed
 			 */
 			op_data->op_file_secctx = NULL;
 			op_data->op_file_secctx_size = 0;
 		}
-		if (encctx != NULL && encctxlen != NULL &&
+		if (encctx && encctxlen != 0 &&
 		    it->it_op & IT_CREAT && encrypt) {
 			/* caller needs enc ctx info, so reset it in op_data to
 			 * prevent it from being freed
@@ -1265,8 +1295,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 		itp = NULL;
 	else
 		itp = &it;
-	de = ll_lookup_it(parent, dentry, itp, NULL, NULL, NULL, NULL, false,
-			  NULL, NULL);
+	de = ll_lookup_it(parent, dentry, itp, NULL, 0);
 
 	if (itp != NULL)
 		ll_intent_release(itp);
@@ -1308,14 +1337,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	struct lookup_intent *it;
 	struct dentry *de;
 	long long lookup_flags = LOOKUP_OPEN;
-	void *secctx = NULL;
-	__u32 secctxlen = 0;
-	int secctxslot = 0;
-	void *encctx = NULL;
-	__u32 encctxlen = 0;
 	struct ll_sb_info *sbi = NULL;
 	struct pcc_create_attach pca = { NULL, NULL };
-	bool encrypt = false;
 	int open_threshold;
 	int rc = 0;
 
@@ -1381,27 +1404,6 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	it->it_open_flags = (open_flags & ~O_ACCMODE) | OPEN_FMODE(open_flags);
 	it->it_open_flags &= ~MDS_OPEN_FL_INTERNAL;
 
-	if (ll_sbi_has_encrypt(ll_i2sbi(dir)) && IS_ENCRYPTED(dir)) {
-		/* in case of create, this is going to be a regular file because
-		 * we set S_IFREG bit on it->it_create_mode above
-		 */
-		rc = llcrypt_prepare_readdir(dir);
-		if (rc)
-			GOTO(out_release, rc);
-		encrypt = true;
-		if (open_flags & O_CREAT) {
-			/* For migration or mirroring without enc key, we still
-			 * need to be able to create a volatile file.
-			 */
-			if (!llcrypt_has_encryption_key(dir) &&
-			    (!filename_is_volatile(dentry->d_name.name,
-						   dentry->d_name.len, NULL) ||
-			    (open_flags & O_CIPHERTEXT) != O_CIPHERTEXT ||
-			    !(open_flags & O_DIRECT)))
-				GOTO(out_release, rc = -ENOKEY);
-		}
-	}
-
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_FILE_PAUSE2, cfs_fail_val);
 
 	/* We can only arrive at this path when we have no inode, so
@@ -1419,8 +1421,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 		it->it_open_flags |= MDS_OPEN_LOCK;
 
 	/* Dentry added to dcache tree in ll_lookup_it */
-	de = ll_lookup_it(dir, dentry, it, &secctx, &secctxlen, &secctxslot,
-			  &pca, encrypt, &encctx, &encctxlen);
+	de = ll_lookup_it(dir, dentry, it, &pca, open_flags);
 	if (IS_ERR(de))
 		rc = PTR_ERR(de);
 	else if (de != NULL)
@@ -1430,20 +1431,6 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 
 	if (!rc) {
 		if (it_disposition(it, DISP_OPEN_CREATE)) {
-			/* Dentry instantiated in ll_create_it. */
-			rc = ll_create_it(dir, dentry, it, secctx, secctxlen,
-					  encrypt, encctx, encctxlen,
-					  open_flags);
-			ll_security_release_secctx(secctx, secctxlen,
-						   secctxslot);
-			llcrypt_free_ctx(encctx, encctxlen);
-			if (rc) {
-				/* We dget in ll_splice_alias. */
-				if (de != NULL)
-					dput(de);
-				goto out_release;
-			}
-
 			rc = pcc_inode_create_fini(dentry->d_inode, &pca);
 			if (rc) {
 				if (de != NULL)
@@ -1467,15 +1454,6 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			 * already created PCC copy.
 			 */
 			pcc_create_attach_cleanup(dir->i_sb, &pca);
-
-			if (open_flags & O_CREAT && encrypt &&
-			    dentry->d_inode) {
-				rc = ll_set_encflags(dentry->d_inode, encctx,
-						     encctxlen, true);
-				llcrypt_free_ctx(encctx, encctxlen);
-				if (rc)
-					GOTO(out_release, rc);
-			}
 		}
 
 		/* check also if a foreign file is openable */
