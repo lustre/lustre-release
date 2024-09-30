@@ -1186,11 +1186,13 @@ test_2() {
 	local testfile="$DIR/$tdir/$tfile-0"
 	local least_qunit=$(do_facet mds1 $LCTL get_param -n \
 		qmt.$FSNAME-QMT0000.md-0x0.info |
-		awk '/least qunit/{ print $3 }')
+		sed -e 's/least qunit/least_qunit/' |
+		awk '/least_qunit/{ print $2 }')
 	local limit
 
 	[ "$SLOW" = "no" ] && limit=$((least_qunit * 2)) ||
 		limit=$((least_qunit * 1024))
+	echo "least_qunit: '$least_qunit', limit: '$limit'"
 
 	local free_inodes=$(mdt_free_inodes 0)
 	echo "$free_inodes free inodes on master MDT"
