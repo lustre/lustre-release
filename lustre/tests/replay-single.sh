@@ -3540,6 +3540,8 @@ run_test 100b "DNE: create striped dir, fail MDT0"
 
 test_100c() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	(( $MDS1_VERSION >= $(version_code 2.15.51) )) &&
+		skip "Need MDS version not newer than 2.15.51"
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
