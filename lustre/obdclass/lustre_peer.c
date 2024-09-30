@@ -182,7 +182,7 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, struct lnet_nid *nidlist,
 
 	ENTRY;
 
-	if (nid_count >= MTI_NIDS_MAX) {
+	if (nid_count > MTI_NIDS_MAX) {
 		CDEBUG(D_NET, "too many NIDs (%d) for UUID '%s'\n",
 			nid_count, obd_uuid2str(uuid));
 		return -ENOSPC;
