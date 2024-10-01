@@ -1394,6 +1394,9 @@ struct posix_acl *ll_get_acl(
 	struct inode *inode, int type);
 #endif /* HAVE_GET_ACL_RCU_ARG */
 
+struct posix_acl *
+ll_get_inode_acl(struct inode *inode, int type, bool rcu);
+
 int ll_set_acl(struct mnt_idmap *mnt_userns,
 #ifdef HAVE_ACL_WITH_DENTRY
 	       struct dentry *dentry,

@@ -2441,6 +2441,9 @@ const struct inode_operations ll_dir_inode_operations = {
 	.removexattr	= ll_removexattr,
 #endif
 	.listxattr	= ll_listxattr,
+#ifdef HAVE_IOP_GET_INODE_ACL
+	.get_inode_acl	= ll_get_inode_acl,
+#endif
 	.get_acl	= ll_get_acl,
 #ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,
@@ -2461,6 +2464,9 @@ const struct inode_operations ll_special_inode_operations = {
 	.removexattr    = ll_removexattr,
 #endif
 	.listxattr      = ll_listxattr,
+#ifdef HAVE_IOP_GET_INODE_ACL
+	.get_inode_acl	= ll_get_inode_acl,
+#endif
 	.get_acl	= ll_get_acl,
 #ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,

@@ -6376,6 +6376,9 @@ const struct inode_operations ll_file_inode_operations = {
 #endif
 	.listxattr	= ll_listxattr,
 	.fiemap		= ll_fiemap,
+#ifdef HAVE_IOP_GET_INODE_ACL
+	.get_inode_acl	= ll_get_inode_acl,
+#endif
 	.get_acl	= ll_get_acl,
 #ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,

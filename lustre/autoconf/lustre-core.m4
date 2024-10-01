@@ -4140,6 +4140,28 @@ AC_DEFUN([LC_HAVE_ACL_WITH_DENTRY], [
 ]) # LC_HAVE_ACL_WITH_DENTRY
 
 #
+# LC_IOP_GET_INODE_ACL
+#
+# linux kernel v6.1-rc1-3-gcac2f8b8d8
+#   fs: rename current get acl method
+#
+AC_DEFUN([LC_SRC_IOP_GET_INODE_ACL], [
+	LB2_LINUX_TEST_SRC([inode_ops_get_inode_acl], [
+		#include <linux/fs.h>
+	],[
+		struct inode_operations iop;
+		iop.get_inode_acl = NULL;
+	])
+])
+AC_DEFUN([LC_IOP_GET_INODE_ACL], [
+	LB2_MSG_LINUX_TEST_RESULT([if inode_operations has .get_inode_acl member function],
+	[inode_ops_get_inode_acl], [
+		AC_DEFINE(HAVE_IOP_GET_INODE_ACL, 1,
+			[inode_operations has .get_inode_acl member function])
+	])
+]) # LC_IOP_GET_INODE_ACL
+
+#
 # LC_HAVE_U64_CAPABILITY
 #
 # linux kernel v6.2-13111-gf122a08b197d
@@ -4923,6 +4945,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_GET_RANDOM_U32_AND_U64
 	LC_SRC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
 	LC_SRC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
+	LC_SRC_IOP_GET_INODE_ACL
 
 	# 6.2
 	LC_SRC_HAVE_GET_RANDOM_U32_BELOW
@@ -5238,6 +5261,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_GET_RANDOM_U32_AND_U64
 	LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
 	LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
+	LC_IOP_GET_INODE_ACL
 
 	# 6.2
 	LC_HAVE_GET_RANDOM_U32_BELOW
