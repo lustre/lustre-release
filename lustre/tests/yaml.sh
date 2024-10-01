@@ -81,9 +81,6 @@ release() {
 		name=$(sed -n -e "s/^\([A-Za-z]\+\).*/\1/p" /etc/centos-release)
 		version=$(sed -n -e "s/${rhel_pat}/\1/p" /etc/centos-release)
 		dist="${name} ${version}"
-	elif [ -r /etc/redhat-release ]; then
-		version=$(sed -n -e "s/${rhel_pat}/\1/p" /etc/redhat-release)
-		dist="RHEL ${version}"
 	elif [ -r /etc/os-release ]; then
 		name=$(sed -n -e 's/"//g' -e 's/ [A-Za-z]*$//' \
 			-e 's/^NAME=//p' /etc/os-release)
