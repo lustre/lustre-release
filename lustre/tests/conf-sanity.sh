@@ -3201,7 +3201,7 @@ t32_test() {
 					return 1
 		fi
 
-		[[ $(do_facet mds1 pgrep orph_.*-MDD | wc -l) == 0 ]] ||
+		wait_update_facet mds1 "pgrep orph_.*-MDD | wc -l" "0" ||
 			error "MDD orphan cleanup thread not quit"
 
 		umount $tmp/mnt/lustre || {
