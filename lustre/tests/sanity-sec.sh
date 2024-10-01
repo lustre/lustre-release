@@ -2277,6 +2277,9 @@ test_27aa() { #LU-17922
 	local idmap
 	local id=500
 
+	(( $MDS1_VERSION >= $(version_code v2_15_64-86-g8445f7b92f) )) ||
+		skip "need MDS >= 2.15.64.86 for nodemap range"
+
 	do_facet mgs $LCTL nodemap_add Test17922 ||
 		error "unable to add Test17922 as nodemap"
 	stack_trap "do_facet mgs $LCTL nodemap_del Test17922 || true"
