@@ -4086,9 +4086,15 @@ static int __init ko2iblnd_init(void)
 	return 0;
 }
 
+#ifdef EXTERNAL_OFED_BUILD
+#define OFED_VERSION " (ext ofed: " EXTERNAL_OFED_VERSION ")"
+#else
+#define OFED_VERSION " (in-kernel)"
+#endif
+
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("OpenIB gen2 LNet Network Driver");
-MODULE_VERSION("2.8.0");
+MODULE_VERSION("2.8.0" OFED_VERSION);
 MODULE_LICENSE("GPL");
 
 module_init(ko2iblnd_init);

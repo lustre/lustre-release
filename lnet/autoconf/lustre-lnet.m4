@@ -170,6 +170,7 @@ AS_IF([test $ENABLEO2IB = "no"], [
 	EXT_O2IB_SYMBOLS=""
 	INT_O2IB_SYMBOLS=""
 ], [
+	EXT_O2IB_VER=""
 	# Verify in-kernel O2IB can be built (headers exist) ... or disable it.
 	int_o2ib_found=false
 	for INT_O2IBPATH in $INT_O2IBPATHS; do
@@ -282,6 +283,7 @@ Auto detection of external O2IB failed. Build of external o2ib disabled.])
 			rdma_destroy_id(NULL);
 		],[
 			EXT_O2IBLND="o2iblnd"
+			EXT_O2IB_VER=$(ofed_info -n | tr . -)
 		],[
 			case $ENABLEO2IB in
 			"yes") AC_MSG_ERROR([cannot compile with OpenIB gen2 headers]) ;;
@@ -367,6 +369,7 @@ NOTE: --enable-multiple-lnds is needed to enable both o2iblnd drivers.
 	])
 	EXTRA_CHECK_INCLUDE=""
 ])
+AC_SUBST(EXT_O2IB_VER)
 AC_SUBST(EXTRA_OFED_CONFIG)
 AC_SUBST(EXTRA_OFED_INCLUDE)
 AC_SUBST(EXT_O2IBLND)

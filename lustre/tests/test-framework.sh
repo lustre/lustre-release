@@ -1046,7 +1046,9 @@ load_lnet() {
 	LNDPATH=${LNDPATH:-"../lnet/klnds"}
 	if [ -z "$LNETLND" ]; then
 		case $NETTYPE in
-		o2ib*)	LNETLND="o2iblnd/ko2iblnd" ;;
+		o2ib*)  [[ -f ${LNDPATH}/o2iblnd/ko2iblnd.ko ]] &&
+				LNETLND="o2iblnd/ko2iblnd" ||
+				LNETLND="in-kernel-o2iblnd/ko2iblnd";;
 		tcp*)	LNETLND="socklnd/ksocklnd" ;;
 		kfi*)	LNETLND="kfilnd/kkfilnd" ;;
 		gni*)	LNETLND="gnilnd/kgnilnd" ;;

@@ -16,6 +16,6 @@ ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
 # any in-kernel OFED sources
 NOSTDINC_FLAGS += @EXTRA_OFED_CONFIG@ @EXTRA_OFED_INCLUDE@
 # Identify this as the External driver build
-NOSTDINC_FLAGS += -DEXTERNAL_OFED_BUILD
+NOSTDINC_FLAGS += -DEXTERNAL_OFED_BUILD -DEXTERNAL_OFED_VERSION='"@EXT_O2IB_VER@"'
 
 @INCLUDE_RULES@

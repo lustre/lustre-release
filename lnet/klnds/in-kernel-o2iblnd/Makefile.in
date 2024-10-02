@@ -4,8 +4,8 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := in-kernel-ko2iblnd
-in-kernel-ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
+MODULES := ko2iblnd
+ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
 
 in-kernel-ko2iblnd_headers := o2iblnd.h o2iblnd-idl.h
 in-kernel-ko2iblnd_sources := o2iblnd.c o2iblnd_cb.c o2iblnd_modparams.c
