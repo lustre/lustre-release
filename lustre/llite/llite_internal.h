@@ -2128,6 +2128,13 @@ int ll_prepare_lookup(struct inode *dir, struct dentry *de,
 int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 		      int lookup, struct llcrypt_name *fname,
 		      struct lu_fid *fid);
+#ifdef CONFIG_LL_ENCRYPTION
+const char *ll_get_symlink(struct inode *inode, const void *caddr,
+			   unsigned int max_size,
+			   struct delayed_call *done);
+#else
+#define ll_get_symlink(inode, caddr, max_size, done)   ERR_PTR(-EOPNOTSUPP)
+#endif
 int ll_fname_disk_to_usr(struct inode *inode,
 			 u32 hash, u32 minor_hash,
 			 struct llcrypt_str *iname, struct llcrypt_str *oname,

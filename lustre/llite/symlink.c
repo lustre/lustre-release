@@ -120,8 +120,8 @@ static int ll_readlink_internal(struct inode *inode,
 
 #ifdef HAVE_IOP_GET_LINK
 	if (IS_ENCRYPTED(inode)) {
-		const char *target = llcrypt_get_symlink(inode, *symname,
-							 symlen, done);
+		const char *target = ll_get_symlink(inode, *symname,
+						    symlen, done);
 		if (IS_ERR(target))
 			RETURN(PTR_ERR(target));
 		symlen = strlen(target) + 1;

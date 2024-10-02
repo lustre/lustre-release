@@ -243,7 +243,7 @@ static int ll_digest_long_name(struct inode *dir, struct llcrypt_name *fname,
 		}
 		digest = (struct ll_digest_filename *)fname->disk_name.name;
 		*fid = digest->ldf_fid;
-		if (!fid_is_sane(fid)) {
+		if (!fid_is_sane(fid) && !fid_is_zero(fid)) {
 			rc = -EINVAL;
 			goto out_free;
 		}
@@ -458,6 +458,56 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 		return rc;
 
 	return ll_digest_long_name(dir, fname, fid, digested);
+}
+
+/**
+ * ll_get_symlink() - overlay to llcrypt_get_symlink()
+ * @inode: the symlink inode
+ * @caddr: the on-disk contents of the symlink
+ * @max_size: size of @caddr buffer
+ * @done: if successful, will be set up to free the returned target if needed
+ *
+ * This overlay function is necessary to properly encode for presentation the
+ * symlink target when the encryption key is not available, in a way that is
+ * compatible with the overlay function ll_setup_filename(), so that further
+ * readlink without the encryption key works properly.
+ */
+const char *ll_get_symlink(struct inode *inode, const void *caddr,
+			   unsigned int max_size,
+			   struct delayed_call *done)
+{
+	struct llcrypt_str lltr = LLTR_INIT(NULL, 0);
+	struct llcrypt_str de_name;
+	struct lu_fid fid;
+	int rc;
+
+	rc = llcrypt_get_encryption_info(inode);
+	if (rc)
+		return ERR_PTR(rc);
+
+	/* If enc key is available, just call llcrypt function. */
+	if (llcrypt_has_encryption_key(inode))
+		return llcrypt_get_symlink(inode, caddr, max_size, done);
+
+	/* When enc key is not available, we need to build an encoded name to
+	 * userspace that can later be decoded by ll_setup_filename().
+	 */
+	rc = llcrypt_fname_alloc_buffer(inode, NAME_MAX + 1, &lltr);
+	if (rc < 0)
+		return ERR_PTR(rc);
+
+	fid_zero(&fid);
+	de_name.name = (char *)caddr;
+	de_name.len = max_size;
+	rc = ll_fname_disk_to_usr(inode, 0, 0, &de_name, &lltr, &fid);
+	if (rc) {
+		llcrypt_fname_free_buffer(&lltr);
+		return ERR_PTR(rc);
+	}
+	lltr.name[lltr.len] = '\0';
+
+	set_delayed_call(done, kfree_link, lltr.name);
+	return lltr.name;
 }
 
 /**
