@@ -181,6 +181,7 @@ void qsd_bump_version(struct qsd_qtype_info *qqi, __u64 ver, bool global)
 	list    = global ? &qqi->qqi_deferred_glb : &qqi->qqi_deferred_slv;
 
 	write_lock(&qqi->qqi_qsd->qsd_lock);
+	qqi->qqi_last_version_update_time = ktime_get_seconds();
 	*idx_ver = ver;
 	if (global)
 		qqi->qqi_glb_uptodate = 1;
@@ -207,6 +208,7 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 	struct qsd_upd_rec	*upd;
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	__u64			 cur_ver;
+	bool			 need_to_trigger_reint = false;
 	ENTRY;
 
 	CDEBUG(D_QUOTA, "%s: schedule update. global:%s, version:%llu\n",
@@ -244,16 +246,23 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 		   qqi->qqi_slv_uptodate) {
 		/* In order update, and reintegration has been done. */
 		qsd_upd_add(qsd, upd);
-	} else {
+	} else if (qqi->qqi_last_version_update_time + QSD_WB_INTERVAL >=
+		   ktime_get_seconds()) {
 		/* Out of order update (the one with smaller version hasn't
 		 * reached slave or hasn't been flushed to disk yet), or
 		 * the reintegration is in progress. Defer the update. */
 		struct list_head *list = global ? &qqi->qqi_deferred_glb :
 						  &qqi->qqi_deferred_slv;
 		qsd_add_deferred(qsd, list, upd);
+	} else {
+		qsd_upd_free(upd);
+		need_to_trigger_reint = true;
 	}
 
 	write_unlock(&qsd->qsd_lock);
+
+	if (need_to_trigger_reint)
+		qsd_start_reint_thread(qqi);
 
 	EXIT;
 }
@@ -471,6 +480,10 @@ static bool qsd_job_pending(struct qsd_instance *qsd, struct list_head *upd,
 
 		if (!qsd_type_enabled(qsd, qtype))
 			continue;
+
+		if (qqi->qqi_last_version_update_time + QSD_WB_INTERVAL <
+		    ktime_get_seconds() && !list_empty(&qqi->qqi_deferred_glb))
+			*uptodate = false;
 
 		if ((!qqi->qqi_glb_uptodate || !qqi->qqi_slv_uptodate) &&
 		     !qqi->qqi_reint)

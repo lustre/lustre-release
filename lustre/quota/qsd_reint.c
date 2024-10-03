@@ -198,6 +198,8 @@ static int qsd_reint_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 			GOTO(out, rc = -ENOMEM);
 	}
 
+	qqi->qqi_last_version_update_time = ktime_get_seconds();
+
 repeat:
 	/* initialize index_info request with FID of global index */
 	memset(ii, 0, sizeof(*ii));

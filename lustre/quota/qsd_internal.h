@@ -161,6 +161,9 @@ struct qsd_qtype_info {
 	__u64			qqi_default_hardlimit;
 	__u64			qqi_default_softlimit;
 	__u64			qqi_default_gracetime;
+
+	/* the last time of updating quota index version */
+	time64_t		qqi_last_version_update_time;
 };
 
 /*
