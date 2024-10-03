@@ -5091,6 +5091,9 @@ test_261() {
 run_test 261 "Report 0 bytes size after HSM release"
 
 test_262() {
+	(( MDS1_VERSION >= $(version_code v2_15_61-204-g5ee13823a4) )) ||
+		skip "Need MDS version at least 2.15.61"
+
 	local file=$DIR/$tdir/$tfile
 	local blocks
 	local fid
