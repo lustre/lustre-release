@@ -34,12 +34,19 @@
  *     Examples: cpu_pattern="0[0,1] 1[2,3]"
  *		 cpu_pattern="N 0[0-3] 1[4-8]"
  *		 cpu_pattern="C[0-3]"
+ *		 cpu_pattern="X[0-1]"
  *
  *     The first character "N" means following numbers are NUMA ID.
  *
  *     The first character "C" means the relative cores are excluded from each
- *     NUMA node. This allows reserving cores on each node for non-Lustre tasks,
+ *     partition. This allows reserving cores on each node for non-Lustre tasks,
  *     such as HA/monitors.
+ *
+ *     The first character "X" means that the cores in brackets are excluded
+ *     from the CPT that they belong to.
+ *
+ *     If 'N' is specified with 'C' or 'X', the default NUMA node layout is used
+ *     rather than the default configuration using the cpu_npartitions.
  *
  *   . NUMA allocators, CPU affinity threads are built over CPU partitions,
  *     instead of HW CPUs or HW nodes.
@@ -161,17 +168,28 @@ int cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node);
  */
 void cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node);
 /**
- * add all cpus in NUMA node within include range \a node to
- * CPU partition \a return 1 if succesfully set selected node
- * cores, otherwise return 0
+ * for each NUMA node, set the relative cpus \a within
+ * include range from that node
  */
-int cfs_cpt_set_node_core(struct cfs_cpt_table *cptab, int cpt,
+void cfs_set_node_core(struct cfs_cpt_table *cptab,
 			  int include_lo, int include_hi);
 /**
- * remove all cpus in NUMA node within exclude range \a node to
- * CPU partition \a cpt
+ * for each NUMA node, unset the relative cpus \a within
+ * exclude range from that node
  */
-void cfs_cpt_unset_node_core(struct cfs_cpt_table *cptab, int cpt,
+void cfs_unset_node_core(struct cfs_cpt_table *cptab,
+			  int exclude_lo, int exclude_hi);
+/**
+ * for each cpt, add the relative cpus \a within
+ * include range to that cpt
+ */
+void cfs_set_cpt_core(struct cfs_cpt_table *cptab,
+			  int include_lo, int include_hi);
+/**
+ * for each cpt, remove the relative cpus \a within
+ * exclude range from that cpt
+ */
+void cfs_unset_cpt_core(struct cfs_cpt_table *cptab,
 			  int exclude_lo, int exclude_hi);
 /**
  * add all cpus in node mask \a mask to CPU partition \a cpt

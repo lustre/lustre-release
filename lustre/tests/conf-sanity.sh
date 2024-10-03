@@ -12102,23 +12102,136 @@ test_200c() {
 }
 run_test 200c "set CPU pattern using NUMA node layout"
 
-test_200e() {
+test_200d() {
 	cleanup_200
 
 	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
 	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
+	local parts=$((cpus / 2))
 
 	local old_modopts=$MODOPTS_LIBCFS
 	stack_trap "cleanup_200 $old_modopts"
 
+	local full_cpu_count=0
+	local excluded_count=0
+
+	# First, get the full table
+	MODOPTS_LIBCFS="cpu_npartitions=$parts"
+
+	load_modules_local libcfs
+	echo "full_table:"
+	$LCTL get_param -n cpu_partition_table
+
+	local full_table=()
+	while read -r line; do
+		full_table+=("$line")
+		full_cpu_count=$((full_cpu_count + $(echo $line | wc -w) - 2))
+	done < <($LCTL get_param -n cpu_partition_table)
+
+	cleanup
+
+	# Now, set the pattern to exclude CPU 1
+	pattern="X[1]"
+	MODOPTS_LIBCFS="cpu_npartitions=$parts cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	echo "table with CPU 1 excluded:"
+	grep . /sys/module/libcfs/parameters/cpu*
+	$LCTL get_param -n cpu_partition_table
+
+	local table=()
+	while read -r line; do
+		table+=("$line")
+		excluded_count=$((excluded_count + $(echo $line | wc -w) - 2))
+	done < <($LCTL get_param -n cpu_partition_table)
+
+	# Check if CPU 1 is excluded
+	for line in "${table[@]}"; do
+		! [[ "$line" =~ " 1 " ]] ||
+			error "CPU 1 was not excluded with pattern: $pattern"
+	done
+
+	# Check if only CPU 1 is excluded
+	(( excluded_count == full_cpu_count - 1 )) ||
+		error "More than one CPU was excluded with pattern: $pattern"
+
+	cleanup
+
+	full_cpu_count=0
+	excluded_count=0
+
+	# First, get the full table
 	pattern="N"
 	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
 
 	load_modules_local libcfs
 	echo "full_table:"
 	$LCTL get_param -n cpu_partition_table
-	local full_table=$($LCTL get_param -n cpu_partition_table)
-	(( $(awk '/0.:/ {print NF - 3; exit}' <<< $full_table) > 0 )) ||
+
+	full_table=()
+	while read -r line; do
+		full_table+=("$line")
+		full_cpu_count=$((full_cpu_count + $(echo $line | wc -w) - 2))
+	done < <($LCTL get_param -n cpu_partition_table)
+
+	cleanup
+
+	# Now, set the pattern to exclude CPU 1
+	pattern="N X[1]"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	echo "table with CPU 1 excluded:"
+	grep . /sys/module/libcfs/parameters/cpu*
+	$LCTL get_param -n cpu_partition_table
+
+	table=()
+	while read -r line; do
+		table+=("$line")
+		excluded_count=$((excluded_count + $(echo $line | wc -w) - 2))
+	done < <($LCTL get_param -n cpu_partition_table)
+
+	# Check if CPU 1 is excluded
+	cpu_1_found=false
+	for line in "${table[@]}"; do
+		[[ "$line" =~ " 1 " ]] && cpu_1_found=true
+	done
+	$cpu_1_found && error "CPU 1 was not excluded with pattern: $pattern"
+
+	# Check if only CPU 1 is excluded
+	(( excluded_count == full_cpu_count - 1 )) ||
+		error "More than one CPU was excluded with pattern: $pattern"
+}
+run_test 200d "set CPU pattern to exclude only CPU 1"
+
+test_200e() {
+	cleanup_200
+
+	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
+	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
+	local npartitions=$((cpus / 2))
+	local expected
+	local actual
+	local excluded
+	local partition
+
+	local old_modopts=$MODOPTS_LIBCFS
+	stack_trap "cleanup_200 $old_modopts"
+
+	# N C[0]
+	pattern="N"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs
+	echo "full_table:"
+	$LCTL get_param -n cpu_partition_table
+
+	local full_table=()
+	while read -r line; do
+		full_table+=("$line")
+	done < <($LCTL get_param -n cpu_partition_table)
+	(( $($LCTL get_param -n cpu_partition_table |\
+	     awk '/\<0\>.*:/ {print NF - 3; exit}') > 0 )) ||
 		skip "need at least 2 cores in each CPT to exclude one"
 
 	cleanup
@@ -12127,25 +12240,72 @@ test_200e() {
 	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
 
 	load_modules_local libcfs
-	echo "table:"
 	grep . /sys/module/libcfs/parameters/cpu*
+	echo "table with npartitions=$npartitions:"
 	$LCTL get_param -n cpu_partition_table
-	table=$($LCTL get_param -n cpu_partition_table)
 
-	local expected
-	local actual
-	local excluded
-	local partition
+	local table=()
+	while read -r line; do
+		table+=("$line")
+	done < <($LCTL get_param -n cpu_partition_table)
 
-	for (( i = 0; i < nodes; i++ )); do
-		expected=$(awk '/'$i'.:/ {print NF - 3; exit}' <<< $full_table)
-		actual=$(awk '/'$i'.:/ {print NF - 2; exit}' <<< $table)
+	for (( i = 0; i < ${#table[@]}; i++ )); do
+		expected=$(echo ${full_table[$i]} | awk '{print NF - 3; exit}')
+		actual=$(echo ${table[$i]} | awk '{print NF - 2; exit}')
 
 		(( actual == expected )) ||
 			error "CPU count not $expected, found: $actual"
 
-		excluded=$(awk '/'$i'.:/ {print $3; exit}' <<< $full_table)
-		partition=$(awk '/'$i'.:/ {print $3; exit}' <<< $table)
+		excluded=$(echo ${full_table[$i]} | awk '{print $3; exit}')
+		partition=$(echo ${table[$i]} | awk '{print $3; exit}')
+
+		! [[ "$partition" =~ "$excluded" ]] || {
+			echo -e "layout wrong:\n$table"
+			error "excluded the wrong CPU with pattern: $pattern"
+		}
+	done
+
+	cleanup
+
+	# C[0] with npartitions
+	MODOPTS_LIBCFS="cpu_npartitions=$npartitions"
+
+	load_modules_local libcfs
+	echo "full_table:"
+	$LCTL get_param -n cpu_partition_table
+
+	full_table=()
+	while read -r line; do
+		full_table+=("$line")
+	done < <($LCTL get_param -n cpu_partition_table)
+	(( $($LCTL get_param -n cpu_partition_table |\
+	     awk '/\<0\>.*:/ {print NF - 3; exit}') > 0 )) ||
+		skip "need at least 2 cores in each CPT to exclude one"
+
+	cleanup
+
+	pattern="C[0]"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\" cpu_npartitions=$npartitions"
+
+	load_modules_local libcfs
+	grep . /sys/module/libcfs/parameters/cpu*
+	echo "table with npartitions=$npartitions:"
+	$LCTL get_param -n cpu_partition_table
+
+	table=()
+	while read -r line; do
+		table+=("$line")
+	done < <($LCTL get_param -n cpu_partition_table)
+
+	for (( i = 0; i < ${#table[@]}; i++ )); do
+		expected=$(echo ${full_table[$i]} | awk '{print NF - 3; exit}')
+		actual=$(echo ${table[$i]} | awk '{print NF - 2; exit}')
+
+		(( actual == expected )) ||
+			error "CPU count not $expected, found: $actual"
+
+		excluded=$(echo ${full_table[$i]} | awk '{print $3; exit}')
+		partition=$(echo ${table[$i]} | awk '{print $3; exit}')
 
 		! [[ "$partition" =~ "$excluded" ]] || {
 			echo -e "layout wrong:\n$table"

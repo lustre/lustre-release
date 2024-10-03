@@ -79,10 +79,21 @@ MODULE_PARM_DESC(cpu_npartitions, "# of CPU partitions");
  * i.e:	"N 0[0,1] 1[2,3]" the first character 'N' means numbers in bracket
  *	are NUMA node ID, number before bracket is CPU partition ID.
  *
- * i.e:	"N C[0-1]" or "C[0-1], the character 'C' means numbers in bracket are
- *	relative core numbers to exclude for each NUMA node, all other cores
- *	are included. As per the example, the first two cores of each NUMA node
- *	will be excluded, all other cores on all nodes are included.
+ * i.e:	"N C[0-1]" or "C[0-1]", the character 'C' means numbers in bracket are
+ *	relative core numbers to exclude, all other cores
+ *	are included. If 'N' is specified then the core numbers are relative to
+ *	the NUMA nodes, otherwise, they cores are relative to each partition.
+ *	As per the first example, the first two cores of each NUMA node
+ *	will be excluded, all other cores on all nodes are included with
+ *	one partition per node. In the second example, the first two cores of
+ *	each partition will be excluded, all other cores on all partitions are
+ *	included. The partition count is specified with cpu_npartitions.
+ *
+ * i.e:	"N X[0-1]" or "X[0-1]", the character 'X' means that the numbers in
+ *	brackets are processor IDs to be excluded from the CPT that they belong
+ *	to. If 'N' was specified it will use the default NUMA node layout,
+ *	otherwise it uses the default configuration for the cpu_npartitions
+ *	specified.
  *
  * i.e:	"N", shortcut expression to create CPT from NUMA & CPU topology
  *	This is the default behavior if the cpu_pattern and cpu_npartitions
@@ -623,8 +634,8 @@ void cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node)
 }
 EXPORT_SYMBOL(cfs_cpt_unset_node);
 
-int cfs_cpt_set_node_core(struct cfs_cpt_table *cptab, int cpt,
-			     int include_lo, int include_hi)
+void cfs_set_node_core(struct cfs_cpt_table *cptab,
+		      int include_lo, int include_hi)
 {
 	const cpumask_t *mask;
 	int node, cpu;
@@ -641,16 +652,16 @@ int cfs_cpt_set_node_core(struct cfs_cpt_table *cptab, int cpt,
 				offset = cpu;
 			if (include_lo + offset <= cpu &&
 			    include_hi + offset >= cpu)
-				cfs_cpt_add_cpu(cptab, cpt, cpu);
+				cfs_cpt_add_cpu(cptab,
+						cfs_cpt_of_cpu(cptab, cpu),
+						cpu);
 		}
 	}
-
-	return 1;
 }
-EXPORT_SYMBOL(cfs_cpt_set_node_core);
+EXPORT_SYMBOL(cfs_set_node_core);
 
-void cfs_cpt_unset_node_core(struct cfs_cpt_table *cptab, int cpt,
-			     int exclude_lo, int exclude_hi)
+void cfs_unset_node_core(struct cfs_cpt_table *cptab,
+			 int exclude_lo, int exclude_hi)
 {
 	const cpumask_t *mask;
 	int node, cpu;
@@ -667,11 +678,61 @@ void cfs_cpt_unset_node_core(struct cfs_cpt_table *cptab, int cpt,
 				offset = cpu;
 			if (exclude_lo + offset <= cpu &&
 			    exclude_hi + offset >= cpu)
+				cfs_cpt_del_cpu(cptab,
+						cfs_cpt_of_cpu(cptab, cpu),
+						cpu);
+		}
+	}
+}
+EXPORT_SYMBOL(cfs_unset_node_core);
+
+void cfs_set_cpt_core(struct cfs_cpt_table *cptab,
+			int include_lo, int include_hi)
+{
+	const cpumask_t *mask;
+	int cpt, cpu;
+	int offset;
+
+	for (cpt = 0; cpt < cptab->ctb_nparts; cpt++) {
+		offset = -1;
+		mask = cptab->ctb_parts[cpt].cpt_cpumask;
+		if (cpumask_empty(mask))
+			continue;
+
+		for_each_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask) {
+			if (offset < 0)
+				offset = cpu;
+			if (include_lo + offset <= cpu &&
+			    include_hi + offset >= cpu)
+				cfs_cpt_add_cpu(cptab, cpt, cpu);
+		}
+	}
+}
+EXPORT_SYMBOL(cfs_set_cpt_core);
+
+void cfs_unset_cpt_core(struct cfs_cpt_table *cptab,
+			int exclude_lo, int exclude_hi)
+{
+	const cpumask_t *mask;
+	int cpt, cpu;
+	int offset;
+
+	for (cpt = 0; cpt < cptab->ctb_nparts; cpt++) {
+		offset = -1;
+		mask = cptab->ctb_parts[cpt].cpt_cpumask;
+		if (cpumask_empty(mask))
+			continue;
+
+		for_each_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask) {
+			if (offset < 0)
+				offset = cpu;
+			if (exclude_lo + offset <= cpu &&
+			    exclude_hi + offset >= cpu)
 				cfs_cpt_del_cpu(cptab, cpt, cpu);
 		}
 	}
 }
-EXPORT_SYMBOL(cfs_cpt_unset_node_core);
+EXPORT_SYMBOL(cfs_unset_cpt_core);
 
 int cfs_cpt_set_nodemask(struct cfs_cpt_table *cptab, int cpt,
 			 const nodemask_t *mask)
@@ -996,6 +1057,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 	char *bracket;
 	char *str;
 	bool exclude = false;
+	bool relative = false;
 	int node = 0;
 	int ncpt = cpu_npartitions;
 	int cpt = 0;
@@ -1027,13 +1089,22 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 		str = strim(str);
 	}
 
+	if (*str == 'x' || *str == 'X') {
+		str++; /* skip 'X' char */
+		exclude = true;
+		str = strim(str);
+	}
+
 	if (*str == 'c' || *str == 'C') {
 		str++; /* skip 'C' char */
 		exclude = true;
-		node = -1; /* initialize all nodes to be set */
-		for_each_online_node(i)
+		relative = true;
+	}
+	if (node && !ncpt) {
+		for_each_online_node(i) {
 			if (!cpumask_empty(cpumask_of_node(i)))
 				ncpt++;
+		}
 	} else if (!ncpt) { /* scan for bracket at start of partition */
 		bracket = str;
 		while ((bracket = strchr(bracket, '['))) {
@@ -1057,28 +1128,41 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 		goto err_free_str;
 	}
 
-	if (node < 0) { /* shortcut to create CPT from NUMA & CPU topology */
-		for_each_online_node(i) {
-			if (cpumask_empty(cpumask_of_node(i)))
-				continue;
+	if (exclude || node < 0) { /* create a default cpu layout */
+		if (node) {
+			for_each_online_node(i) {
+				if (cpumask_empty(cpumask_of_node(i)))
+					continue;
 
-			rc = cfs_cpt_set_node(cptab, cpt++, i);
-			if (!rc) {
-				rc = -EINVAL;
-				goto err_free_table;
-			}
+				rc = cfs_cpt_set_node(cptab, cpt++, i);
+				if (!rc) {
+					rc = -EINVAL;
+					goto err_free_table;
+				}
 
-			if (exclude) {
-				c = 0;
-				for_each_cpu(rc, cpumask_of_node(i))
-					c++;
-				if (high == 0 || c < high)
-					high = c;
+				if (exclude) {
+					c = 0;
+					for_each_cpu(rc, cpumask_of_node(i))
+						c++;
+					if (high == 0 || c < high)
+						high = c;
+				}
 			}
-		}
-		if (!exclude) {
-			kfree(pattern_dup);
-			return cptab;
+			if (node < 0) { /* return layout for only "N" */
+				kfree(pattern_dup);
+				return cptab;
+			}
+		} else {
+			cfs_cpt_table_free(cptab); /* free old table */
+			cptab = cfs_cpt_table_create(ncpt);
+			if (!cptab) {
+				rc = -ENOMEM;
+				CERROR("Failed to allocate CPU partition table based on cpu_npartitions: rc=%d\n",
+				       -rc);
+				goto err_free_str;
+			}
+			for_each_cpu(rc, *cfs_cpt_cpumask(cptab, 0))
+				high++;
 		}
 	}
 
@@ -1150,24 +1234,28 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 		}
 
 		list_for_each_entry(range, &el->el_exprs, re_link) {
-			if (exclude && node) {
-				for (cpt = 0; cpt < ncpt; cpt++) {
-					cfs_cpt_unset_node_core(cptab, cpt,
-								range->re_lo,
-								range->re_hi);
-					if (!cfs_cpt_online(cptab, cpt)) {
-						CERROR("All cores are excluded on partition %d\n",
-						       cpt);
-						rc = -ENODEV;
-						goto err_free_table;
-					}
-				}
+			if (exclude && relative) {
+				if (node)
+					cfs_unset_node_core(cptab,
+							    range->re_lo,
+							    range->re_hi);
+				else
+					cfs_unset_cpt_core(cptab,
+							   range->re_lo,
+							   range->re_hi);
 				continue;
 			}
 
 			for (i = range->re_lo; i <= range->re_hi; i++) {
 				if ((i - range->re_lo) % range->re_stride)
 					continue;
+
+				if (exclude) {
+					cfs_cpt_unset_cpu(cptab,
+							  cfs_cpt_of_cpu(cptab,
+									 i), i);
+					continue;
+				}
 
 				rc = node ?
 				     cfs_cpt_set_node(cptab, cpt, i)
@@ -1183,7 +1271,16 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 
 		cfs_expr_list_free(el);
 
-		if (!exclude && !cfs_cpt_online(cptab, cpt)) {
+		if (exclude || relative) {
+			for (cpt = 0; cpt < ncpt; cpt++) {
+				if (!cfs_cpt_online(cptab, cpt)) {
+					rc = -ENODEV;
+					CERROR("All cores are excluded on partition %d: rc=%d\n",
+					       cpt, -rc);
+					goto err_free_table;
+				}
+			}
+		} else if (!exclude && !cfs_cpt_online(cptab, cpt)) {
 			CERROR("No online CPU is found on partition %d\n", cpt);
 			rc = -ENODEV;
 			goto err_free_table;
