@@ -17377,7 +17377,7 @@ test_133g() {
 
 	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
 	local proc_dirs_str=$(eval echo $proc_dirs)
-	local skipped_params="'force_lbug|changelog_mask|daemon_file'"
+	local skipped_params="'force_lbug|daemon_file'"
 	local facet
 	for facet in mds1 ost1; do
 		local facet_ver=$(lustre_version_code $facet)

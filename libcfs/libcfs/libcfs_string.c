@@ -93,7 +93,7 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
 		 u64 *oldmask, u64 minmask, u64 allmask, u64 defmask)
 {
 	const char *debugstr;
-	u64 newmask = minmask, found = 0;
+	u64 newmask = *oldmask, found = 0;
 
 	ENTRY;
 	/* <str> must be a list of tokens separated by whitespace or comma,
@@ -112,14 +112,13 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
 			break;
 		if (*str == '+' || *str == '-') {
 			op = *str++;
-			if (!found)
-				/* only if first token is relative */
-				newmask = *oldmask;
 			while (isspace(*str))
 				str++;
 			if (*str == 0)		/* trailing op */
 				return -EINVAL;
-		}
+		} else if (!found)
+			newmask = minmask;
+
 
 		/* find token length */
 		for (len = 0; str[len] != 0 && !isspace(str[len]) &&
