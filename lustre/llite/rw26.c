@@ -541,27 +541,10 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 		RETURN(0);
 
 	/* Unpatched older servers which cannot safely support unaligned DIO
-	 * (osd-zfs) or i/o with page size interop issues should abort here
+	 * should abort here
 	 */
-	if (unaligned && !cl_io_top(io)->ci_allow_unaligned_dio) {
-		unsigned int md0_offset;
-
-		if (cl_io_top(io)->ci_target_is_zfs)
-			RETURN(-EINVAL);
-
-		/* unpatched ldiskfs is fine, unless MD0 does not align/fit */
-		md0_offset = file_offset & (MD_MAX_INTEROP_PAGE_SIZE - 1);
-		if ((count + md0_offset) >= LNET_MTU) {
-			u64 iomax, iomin;
-
-			iomax = cl_io_nob_aligned(file_offset, count,
-						  MD_MAX_INTEROP_PAGE_SIZE);
-			iomin = cl_io_nob_aligned(file_offset, count,
-						  MD_MIN_INTEROP_PAGE_SIZE);
-			if (iomax != iomin)
-				RETURN(-EINVAL);
-		}
-	}
+	if (unaligned && !cl_io_top(io)->ci_allow_unaligned_dio)
+		RETURN(-EINVAL);
 
 	/* if one part of an I/O is unaligned, just handle all of it that way -
 	 * otherwise we create significant complexities with managing the iovec
