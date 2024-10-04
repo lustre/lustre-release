@@ -9095,7 +9095,8 @@ static int osd_get_info(const struct lu_env *env, struct obd_export *exp,
 		if (osd_seq_site(osd)->ss_server_fld == NULL)
 			RETURN(-EINPROGRESS);
 
-		LASSERT(*vallen = sizeof(struct lu_fid));
+		if (*vallen < sizeof(struct lu_fid))
+			RETURN(-EINVAL);
 		memcpy(&fid, val, sizeof(struct lu_fid));
 
 		fld_range_set_any(&range);
