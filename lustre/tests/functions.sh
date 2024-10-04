@@ -353,6 +353,24 @@ run_compilebench() {
 	rm -rf $testdir
 }
 
+# try to understand why a test is running out of space/quota
+find_space_usage() {
+	local dir=$1
+	local tmpfile=$(mktemp)
+
+	$LFS df $dir || df $dir
+	$LFS df -i $dir || df -i $dir
+	$LFS quota -u mpiuser $dir
+	$LFS quota -u root $dir
+
+	du -skx $dir/../* | sort -nr | tee $tmpfile
+	local topdir=$(awk '{ print $2; exit; }' $tmpfile)
+	du -skx $topdir/* | sort -nr | tee $tmpfile
+	topdir=$(awk '{ print $2; exit; }' $tmpfile)
+	du -skx $topdir/* | sort -nr
+	rm -f $tmpfile
+}
+
 run_metabench() {
 	local dir=${1:-$DIR}
 	local mntpt=${2:-$MOUNT}
@@ -374,6 +392,9 @@ run_metabench() {
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 
+	# try to understand why this test is running out of space/quota
+	find_space_usage $dir
+
 	# -C             Run the file creation tests. Creates zero byte files.
 	# -S             Run the file stat tests.
 	# -c nfile       Number of files to be used in each test.
@@ -393,6 +414,7 @@ run_metabench() {
 
 	local rc=$?
 	if [ $rc != 0 ] ; then
+		find_space_usage $dir
 		error "metabench failed! $rc"
 	fi
 
