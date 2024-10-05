@@ -4029,14 +4029,14 @@ test_get_allquota() {
 		qid_cnt=$((qid_cnt - end_qid + file_cnt))
 	[ $qid_cnt -le 0 ] && error "quota ID count is wrong"
 
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 5
+
 	cnt=$($LFS quota -a -s $start_qid -e $end_qid -u $MOUNT | wc -l)
 	[ $cnt -ge $((qid_cnt + 2)) ] || error "failed to get all usr quota"
 	cnt=$($LFS quota -a -s $start_qid -e $end_qid -g $MOUNT | wc -l)
 	[ $cnt -ge $((qid_cnt + 2)) ] || error "failed to get all grp quota"
-
-	cancel_lru_locks osc
-	sync; sync_all_data || true
-	sleep 5
 
 	eval $($LFS quota -a -s $start_qid -e $end_qid -u $MOUNT |
 	    awk 'NR > 2 {printf("u_blimits[%d]=%d;u_ilimits[%d]=%d; \
@@ -4130,7 +4130,7 @@ test_49()
 	local u_ilimit=10240
 	local g_blimit=204800
 	local g_ilimit=20480
-	local count=10
+	local step=1000
 
 	setup_quota_test || error "setup quota failed with $?"
 	stack_trap cleanup_quota_test EXIT
@@ -4143,7 +4143,7 @@ test_49()
 	echo "setquota for users and groups"
 	#define OBD_FAIL_QUOTA_NOSYNC		0xA09
 	do_facet mds1 $LCTL set_param fail_loc=0xa09
-	for i in $(seq $total_file_cnt); do
+	for ((i = 1; i <= total_file_cnt; i++)); do
 		$LFS setquota -u $i -B ${u_blimit} -I ${u_ilimit} $MOUNT ||
 				error "failed to setquota for usr $i"
 		$LFS setquota -g $i -B ${g_blimit} -I ${g_ilimit} $MOUNT ||
@@ -4161,18 +4161,17 @@ test_49()
 	$LFS quota -a -g $MOUNT | tail -n 100
 	echo "get all grp quota: $total_file_cnt / $((SECONDS - start)) seconds"
 
-	while true; do
-		test_get_allquota $total_file_cnt $count $((count + 5000)) \
+	for ((count = 10; count < total_file_cnt; count += step)); do
+		test_get_allquota $total_file_cnt $count $((count + step)) \
 			$u_blimit $u_ilimit $g_blimit $g_ilimit
-		test_get_allquota $total_file_cnt $count $((count + 5000)) \
+		test_get_allquota $total_file_cnt $count $((count + step)) \
 			$u_blimit $u_ilimit $g_blimit $g_ilimit
 
-		count=$((count + 5000))
-		[ $count -gt $total_file_cnt ] && break
+		count=$((count + step))
 	done;
 
 	do_facet mds1 $LCTL set_param fail_loc=0xa08
-	for i in $(seq $total_file_cnt); do
+	for ((i = 1; i <= $total_file_cnt; i++)); do
 		$LFS setquota -u $i --delete $MOUNT
 		$LFS setquota -g $i --delete $MOUNT
 	done
