@@ -2293,6 +2293,8 @@ EXPORT_SYMBOL(lu_kmem_init);
  */
 void lu_kmem_fini(struct lu_kmem_descr *caches)
 {
+	/* wait for all RCU callbacks freeing objects are done */
+	rcu_barrier();
 	for (; caches->ckd_cache != NULL; ++caches) {
 		if (*caches->ckd_cache != NULL) {
 			kmem_cache_destroy(*caches->ckd_cache);
