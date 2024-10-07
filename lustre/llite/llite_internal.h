@@ -493,6 +493,10 @@ static inline void lli_replace_acl(struct ll_inode_info *lli,
 	if (lli->lli_posix_acl)
 		posix_acl_release(lli->lli_posix_acl);
 	lli->lli_posix_acl = acl;
+	if (!acl) {
+		forget_cached_acl(&lli->lli_vfs_inode, ACL_TYPE_ACCESS);
+		forget_cached_acl(&lli->lli_vfs_inode, ACL_TYPE_DEFAULT);
+	}
 	write_unlock(&lli->lli_lock);
 }
 #else

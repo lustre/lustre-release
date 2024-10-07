@@ -13299,7 +13299,7 @@ test_103a() {
 
 	SAVE_UMASK=$(umask)
 	umask 0022
-	mkdir -p $DIR/$tdir
+	$LFS mkdir -c1 -i0 $DIR/$tdir
 	cd $DIR/$tdir
 
 	run_acl_subtest cp $ACLBIN $ACLDMN $ACLGRP
