@@ -57,7 +57,7 @@ while /bin/true; do
 				opt=${opt/create/extend}
 			else
 				opt=${opt/setstripe/migrate}
-				(( file % 8 == 0 )) && opt+=" --block"
+				(( ${file/*\//} % 8 == 0 )) && opt+=" --block"
 			fi
 		fi
 		$LFS $opt $DIR/$file 2> /dev/null || true
