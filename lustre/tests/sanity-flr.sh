@@ -2479,7 +2479,11 @@ cleanup_49() {
 }
 
 test_49a() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs"
+	(( "$OSTCOUNT" >= "2" )) || skip "needs >= 2 OSTs"
+	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
+	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
+	[[ "$ost1_FSTYPE" != "zfs" ]] ||
+		skip "LU-1941: FIEMAP unimplemented on ZFS"
 
 	trap cleanup_49 EXIT RETURN
 
