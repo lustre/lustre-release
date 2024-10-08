@@ -145,7 +145,7 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 	AS_IF([test "x$KERNEL_FOUND" = "xno"], [
 		AC_CACHE_CHECK([for Ubuntu kernel signature], lb_cv_ubuntu_kernel_sig, [
 			lb_cv_ubuntu_kernel_sig="no"
-			AS_IF([fgrep -q "CONFIG_VERSION_SIGNATURE \"Ubuntu" $LINUX_OBJ/include/generated/autoconf.h], [
+			AS_IF([fgrep -q "UTS_UBUNTU_RELEASE_ABI" $LINUX_OBJ/include/generated/utsrelease.h], [
 				lb_cv_ubuntu_kernel_sig="yes"
 			])
 		])
