@@ -567,7 +567,8 @@ out_free:
 int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
 			       struct lustre_sb_info *lsi,
 			       struct obd_device *mgc,
-			       struct config_llog_data *cld, int mgslock)
+			       struct config_llog_data *cld, int mgslock,
+			       bool copy_only)
 {
 	struct llog_ctxt *lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
 	struct client_obd *cli = &mgc->u.cli;
@@ -592,6 +593,8 @@ int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
 		if (!rc)
 			lsi->lsi_flags &= ~LDD_F_NO_LOCAL_LOGS;
 	}
+	if (copy_only)
+		GOTO(out_pop, rc);
 
 	if (!mgslock) {
 		if (unlikely(lsi->lsi_flags & LDD_F_NO_LOCAL_LOGS)) {
@@ -627,5 +630,71 @@ int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
 	RETURN(0);
 out_pop:
 	__llog_ctxt_put(env, lctxt);
+	return rc;
+}
+
+int mgc_get_local_copy(struct obd_device *mgc, struct super_block *sb,
+		       struct config_llog_data *cld)
+{
+	struct llog_ctxt *ctxt;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+	struct lu_env *env;
+	struct lustre_handle lockh = { .cookie = 0, };
+	__u64 flags = 0;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(cld);
+	if (!mgc->u.cli.cl_mgc_los || IS_MGS(lsi))
+		return 0;
+
+	mutex_lock(&cld->cld_lock);
+	if (!cld->cld_processed)
+		GOTO(out_mutex, rc = -ENODATA);
+
+	if (cld->cld_stopping)
+		GOTO(out_mutex, rc = -ENODEV);
+
+	CDEBUG(D_MGC, "Get log %s-%016lx local copy\n", cld->cld_logname,
+	       cld->cld_cfg.cfg_instance);
+
+	if (ldlm_lock_addref_try(&cld->cld_lockh, LCK_CR)) {
+		rc = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, LDLM_PLAIN, NULL,
+				 LCK_CR, &flags, NULL, cld, 0, NULL, &lockh);
+		if (rc)
+			GOTO(out_mutex, rc);
+	}
+
+	OBD_ALLOC_PTR(env);
+	if (!env)
+		GOTO(out_mutex, rc = -ENOMEM);
+
+	rc = lu_env_init(env, LCT_MG_THREAD);
+	if (rc)
+		GOTO(out_free, rc);
+
+	ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
+	LASSERT(ctxt);
+
+	rc = mgc_process_server_cfg_log(env, &ctxt, lsi, mgc, cld, 1, true);
+	if (rc)
+		CDEBUG(D_MGC, "%s: can't save local copy of '%s': rc = %d.\n",
+		       mgc->obd_name, cld->cld_logname, rc);
+
+	/* release lock */
+	if (lustre_handle_is_used(&lockh))
+		ldlm_lock_decref_and_cancel(&lockh, LCK_CR);
+	else
+		ldlm_lock_decref(&cld->cld_lockh, LCK_CR);
+
+	EXIT;
+
+	__llog_ctxt_put(env, ctxt);
+	lu_env_fini(env);
+out_free:
+	OBD_FREE_PTR(env);
+out_mutex:
+	mutex_unlock(&cld->cld_lock);
 	return rc;
 }

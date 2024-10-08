@@ -278,9 +278,8 @@ config_log_find_or_add(struct obd_device *obd, char *logname,
 	struct config_llog_instance lcfg = *cfg;
 	struct config_llog_data *cld;
 
-	/* Note class_config_llog_handler() depends on getting "obd" back */
-	/* for sptlrpc, sb is only provided to be able to make a local copy,
-	 * not for the instance
+	/* Sptlrpc config is common for all targets, so it uses MGC OBD
+	 * as instance, but have also 'sb' provided to create local copy
 	 */
 	if (sb && type != MGS_CFG_T_SPTLRPC)
 		lcfg.cfg_instance = ll_get_cfg_instance(sb);
@@ -288,8 +287,16 @@ config_log_find_or_add(struct obd_device *obd, char *logname,
 		lcfg.cfg_instance = (unsigned long)obd;
 
 	cld = config_log_find(logname, &lcfg);
-	if (unlikely(cld != NULL))
+	if (unlikely(cld)) {
+#ifdef HAVE_SERVER_SUPPORT
+		/* If a target finds existing sptlrpc config
+		 * then create its local copy explicitly
+		 */
+		if (sb && cld_is_sptlrpc(cld))
+			mgc_get_local_copy(obd, sb, cld);
+#endif
 		return cld;
+	}
 
 	return do_config_log_add(obd, logname, type, &lcfg, sb);
 }
@@ -675,7 +682,6 @@ static int mgc_requeue_thread(void *data)
 			config_log_get(cld);
 			cld->cld_lostlock = 0;
 			spin_unlock(&config_list_lock);
-
 			config_log_put(cld_prev);
 			cld_prev = cld;
 
@@ -944,11 +950,11 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 }
 
 /* Take a config lock so we can get cancel notifications */
-static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
-		       union ldlm_policy_data *policy, enum ldlm_mode mode,
-		       __u64 *flags, ldlm_glimpse_callback glimpse_callback,
-		       void *data, __u32 lvb_len, void *lvb_swabber,
-		       struct lustre_handle *lockh)
+int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
+		union ldlm_policy_data *policy, enum ldlm_mode mode,
+		__u64 *flags, ldlm_glimpse_callback glimpse_callback,
+		void *data, __u32 lvb_len, void *lvb_swabber,
+		struct lustre_handle *lockh)
 {
 	struct config_llog_data *cld = (struct config_llog_data *)data;
 	struct ldlm_enqueue_info einfo = {
@@ -982,9 +988,8 @@ static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER, 0);
 	ptlrpc_request_set_replen(req);
 
-	/* check if this is server or client */
-	if (cld->cld_cfg.cfg_sb &&
-	    IS_SERVER(s2lsi(cld->cld_cfg.cfg_sb)))
+	/* check for server by local storage set via server_mgc_set_fs() */
+	if (exp->exp_obd->u.cli.cl_mgc_los)
 		short_limit = 1;
 
 	/* Limit how long we will wait for the enqueue to complete */
@@ -1634,9 +1639,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 #endif
 	if (cld->cld_cfg.cfg_sb)
 		lsi = s2lsi(cld->cld_cfg.cfg_sb);
-	/* sptlrpc llog must not keep ref to sb,
-	 * it was just needed to get lsi
-	 */
+	/* sptlrpc is shared config and shouldn't leave sb in cld */
 	if (cld_is_sptlrpc(cld))
 		cld->cld_cfg.cfg_sb = NULL;
 
@@ -1658,7 +1661,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	if (lsi && mgc->u.cli.cl_mgc_los) {
 		if (!IS_MGS(lsi))
 			rc = mgc_process_server_cfg_log(env, &ctxt, lsi, mgc,
-							cld, !local_only);
+							cld, !local_only, 0);
 	} else if (local_only) {
 		rc = -EIO;
 	}
@@ -1843,11 +1846,8 @@ restart:
 	}
 
 	/* Now drop the lock so MGS can revoke it */
-	if (!rcl) {
-		rcl = mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, LCK_CR, &lockh);
-		if (rcl)
-			CERROR("Can't drop cfg lock: %d\n", rcl);
-	}
+	if (!rcl)
+		mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, LCK_CR, &lockh);
 	mutex_unlock(&cld->cld_lock);
 
 	/* requeue nodemap lock immediately if transfer was interrupted */

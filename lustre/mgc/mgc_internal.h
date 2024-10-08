@@ -27,6 +27,11 @@ int mgc_tunables_init(struct obd_device *obd);
 int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data);
 
 int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld);
+int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
+		union ldlm_policy_data *policy, enum ldlm_mode mode,
+		__u64 *flags, ldlm_glimpse_callback glimpse_callback,
+		void *data, __u32 lvb_len, void *lvb_swabber,
+		struct lustre_handle *lockh);
 
 /* this timeout represents how many seconds MGC should wait before
  * requeue config and recover lock to the MGS. We need to randomize this
@@ -76,9 +81,11 @@ int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
 			       struct lustre_sb_info *lsi,
 			       struct obd_device *mgc,
 			       struct config_llog_data *cld,
-			       int local_only);
+			       int local_only, bool copy_only);
 int mgc_process_config_server(struct obd_device *obd, size_t len, void *buf);
 int mgc_barrier_glimpse_ast(struct ldlm_lock *lock, void *data);
+int mgc_get_local_copy(struct obd_device *mgc, struct super_block *sb,
+		       struct config_llog_data *cld);
 #else /* HAVE_SERVER_SUPPORT */
 #define mgc_barrier_glimpse_ast NULL
 #endif /* HAVE_SERVER_SUPPORT */

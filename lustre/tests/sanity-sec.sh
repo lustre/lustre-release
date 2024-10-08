@@ -6459,9 +6459,20 @@ test_70() {
 		$param_copy' $(ostdevname 1)"
 	do_facet ost1 "llog_reader $param_copy" | grep -vE "SKIP|marker" |
 		grep "^#" > $param_copy
-	cat $param_copy
+	cat -A $param_copy
 	cmp -bl $param_mgs $param_copy ||
-		error "sptlrpc llog differ in oss"
+		error "sptlrpc llog differ at ost1"
+	rm -f $param_copy
+
+	do_facet ost2 "sync ; sync"
+	do_facet ost2 "$DEBUGFS -c -R 'ls CONFIGS/' $(ostdevname 2)"
+	do_facet ost2 "$DEBUGFS -c -R 'dump CONFIGS/$FSNAME-sptlrpc \
+		$param_copy' $(ostdevname 2)"
+	do_facet ost2 "llog_reader $param_copy" | grep -vE "SKIP|marker" |
+		grep "^#" > $param_copy
+	cat -A $param_copy
+	cmp -bl $param_mgs $param_copy ||
+		error "sptlrpc llog differ at ost2"
 }
 run_test 70 "targets have local copy of sptlrpc llog"
 
