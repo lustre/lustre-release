@@ -1593,6 +1593,8 @@ test_33e() {
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
 	(( MDS1_VERSION >= $(version_code 2.7.63) )) ||
 		skip "DNE CoS not supported"
+	(( MDS1_VERSION >= $(version_code 2.15.56.127) )) ||
+		skip "need MDS >= v2_15_56-127-g2a78a9e2cda1 for CoS fix"
 
 	$LFS mkdir -i 0 $DIR/$tdir
 	$LFS mkdir -i 0 $DIR/$tdir/d1
