@@ -3499,17 +3499,18 @@ run_test 47e "pdirops: remote mkdir and rename (tgt)"
 test_47f() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	pdo_lru_clear
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-2 &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
-	check_pdo_conflict $PID1 && { wait $PID1;
-					error "rename isn't blocked"; }
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
+	check_pdo_conflict $PID1 &&
+		{ wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
 	return 0
@@ -3521,15 +3522,16 @@ test_47g() {
 	sync
 	sync_all_data
 	pdo_lru_clear
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 					error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "stat must succeed"
@@ -3539,15 +3541,16 @@ test_47g() {
 run_test 47g "pdirops: remote mkdir vs getattr"
 
 test_50() {
-        trunc_size=4096
-        dd if=/dev/zero of=$DIR1/$tfile bs=1K count=10
-#define OBD_FAIL_OSC_CP_ENQ_RACE         0x410
-        do_facet client "lctl set_param fail_loc=0x410"
-        $TRUNCATE $DIR2/$tfile $trunc_size
-        do_facet client "lctl set_param fail_loc=0x0"
-        sleep 3
-        size=`stat -c %s $DIR2/$tfile`
-        [ $size -eq $trunc_size ] || error "wrong size"
+	local trunc_size=4096
+
+	dd if=/dev/zero of=$DIR1/$tfile bs=1K count=10
+	#define CFS_FAIL_OSC_CP_ENQ_RACE         0x410
+	do_facet client "lctl set_param fail_loc=0x410"
+	$TRUNCATE $DIR2/$tfile $trunc_size
+	do_facet client "lctl set_param fail_loc=0x0"
+	sleep 3
+	size=$(stat -c %s $DIR2/$tfile)
+	(( $size == $trunc_size )) || error "wrong size"
 }
 run_test 50 "osc lvb attrs: enqueue vs. CP AST =============="
 
@@ -4299,9 +4302,10 @@ test_76() { #LU-946
 
 	# drop all open locks and close any cached "open" files on the client
 	cancel_lru_locks mdc
+	local mdts=$(mdts_nodes)
 
 	local open_fids_cmd="$LCTL get_param -n mdt.*.exports.'$nid'.open_files"
-	local fid_list=($(do_nodes $(comma_list $(mdts_nodes)) $open_fids_cmd))
+	local fid_list=($(do_nodes $mdts $open_fids_cmd))
 	local already=${#fid_list[@]}
 	for (( i = 0; i < $already; i++ )) ; do
 		log "already open[$i]: $($LFS fid2path $DIR2 ${fid_list[i]})"
@@ -4321,7 +4325,7 @@ test_76() { #LU-946
 	done
 	echo
 
-	fid_list=($(do_nodes $(comma_list $(mdts_nodes)) $open_fids_cmd))
+	fid_list=($(do_nodes $mdts $open_fids_cmd))
 
 	# Possible errors in openfiles FID list.
 	# 1. Missing FIDs. Check 1
@@ -4429,8 +4433,7 @@ seek=\\\$i count=1 &
 test_77a() { #LU-3266
 	local rc
 
-	oss=$(comma_list $(osts_nodes))
-	do_nodes $oss lctl set_param ost.OSS.*.nrs_policies="fifo" ||
+	do_nodes $(osts_nodes) lctl set_param ost.OSS.*.nrs_policies="fifo" ||
 		rc=$?
 	[[ $rc -eq 3 ]] && skip "no NRS exists" && return
 	[[ $rc -ne 0 ]] && error "failed to set fifo policy"
@@ -4442,10 +4445,9 @@ run_test 77a "check FIFO NRS policy"
 
 test_77b() { #LU-3266
 	local rc
+	local osts=$(osts_nodes)
 
-	oss=$(comma_list $(osts_nodes))
-
-	do_nodes $oss lctl set_param ost.OSS.*.nrs_policies="crrn" \
+	do_nodes $osts lctl set_param ost.OSS.*.nrs_policies="crrn" \
 		ost.OSS.*.nrs_crrn_quantum=1 || rc=$?
 	[[ $rc -eq 3 ]] && skip "no NRS exists" && return
 	[[ $rc -ne 0 ]] && error "failed to set crrn_quantum to 1"
@@ -4453,7 +4455,7 @@ test_77b() { #LU-3266
 	echo "policy: crr-n, crrn_quantum 1"
 	nrs_write_read
 
-	do_nodes $oss lctl set_param \
+	do_nodes $osts lctl set_param \
 		ost.OSS.*.nrs_crrn_quantum=64 || rc=$?
 	[[ $rc -ne 0 ]] && error "failed to set crrn_quantum to 64"
 
@@ -4461,7 +4463,7 @@ test_77b() { #LU-3266
 	nrs_write_read
 
 	# cleanup
-	do_nodes $oss lctl set_param \
+	do_nodes $osts lctl set_param \
 		ost.OSS.ost_io.nrs_policies="fifo" || rc=$?
 	[[ $rc -ne 0 ]] && error "failed to set fifo policy"
 	return 0
@@ -4470,10 +4472,9 @@ run_test 77b "check CRR-N NRS policy"
 
 orr_trr() {
 	local policy=$1
+	local osts=$(osts_nodes)
 
-	oss=$(comma_list $(osts_nodes))
-
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies=$policy \
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies=$policy \
 		ost.OSS.*.nrs_"$policy"_quantum=1 \
 		ost.OSS.*.nrs_"$policy"_offset_type="physical" \
 		ost.OSS.*.nrs_"$policy"_supported="reads" || return $?
@@ -4482,7 +4483,7 @@ orr_trr() {
 		"physical, ${policy}_supported reads"
 	nrs_write_read
 
-	do_nodes $oss lctl set_param \
+	do_nodes $osts lctl set_param \
 		ost.OSS.*.nrs_${policy}_supported="writes" \
 		ost.OSS.*.nrs_${policy}_quantum=64 || return $?
 
@@ -4490,7 +4491,7 @@ orr_trr() {
 		"physical, ${policy}_supported writes"
 	nrs_write_read
 
-	do_nodes $oss lctl set_param \
+	do_nodes $osts lctl set_param \
 		ost.OSS.*.nrs_${policy}_supported="reads_and_writes" \
 		ost.OSS.*.nrs_${policy}_offset_type="logical" || return $?
 	echo "policy: $policy, ${policy}_quantum 64, ${policy}_offset_type " \
@@ -4498,7 +4499,7 @@ orr_trr() {
 	nrs_write_read
 
 	# cleanup
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="fifo" ||
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo" ||
 		return $?
 	return 0
 }
@@ -4597,9 +4598,9 @@ tbf_verify() {
 test_77e() {
 	local rc
 
-	oss=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid" ||
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid" ||
 		rc=$?
 	[[ $rc -eq 3 ]] && skip "no NRS TBF exists" && return
 	[[ $rc -ne 0 ]] && error "failed to set TBF NID policy"
@@ -4633,7 +4634,7 @@ test_77e() {
 	nrs_write_read
 
 	# Cleanup the TBF policy
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
 	[ $? -ne 0 ] && error "failed to set policy back to fifo"
 	nrs_write_read
 	return 0
@@ -4642,10 +4643,9 @@ run_test 77e "check TBF NID nrs policy"
 
 test_77f() {
 	local rc
+	local osts=$(osts_nodes)
 
-	oss=$(comma_list $(osts_nodes))
-
-	do_nodes $oss $LCTL set_param \
+	do_nodes $osts $LCTL set_param \
 		ost.OSS.ost_io.nrs_policies="tbf\ jobid" || rc=$?
 	[[ $rc -eq 3 ]] && skip "no NRS TBF exists" && return
 	[[ $rc -ne 0 ]] && error "failed to set TBF JOBID policy"
@@ -4687,7 +4687,7 @@ test_77f() {
 	nrs_write_read "$RUNAS"
 
 	# Cleanup the TBF policy
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
 	[ $? -ne 0 ] && error "failed to set policy back to fifo"
 	nrs_write_read "$RUNAS"
 
@@ -4703,15 +4703,14 @@ run_test 77f "check TBF JobID nrs policy"
 
 test_77g() {
 	local rc=0
+	local osts=$(osts_nodes)
 
-	oss=$(comma_list $(osts_nodes))
-
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid" ||
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid" ||
 		rc=$?
 	[[ $rc -eq 3 ]] && skip "no NRS TBF exists" && return
 	[[ $rc -ne 0 ]] && error "failed to set TBF NID policy"
 
-	do_nodes $oss lctl set_param \
+	do_nodes $osts lctl set_param \
 		ost.OSS.ost_io.nrs_policies="tbf\ jobid" || rc=$?
 	[[ $rc -ne 0 ]] && error "failed to set TBF JOBID policy"
 
@@ -4727,7 +4726,7 @@ test_77g() {
 	tbf_rule_operate ost1 "start\ dd_runas\ ${idis}{dd.$RUNAS_ID}\ ${rateis}50"
 
 	# Cleanup the TBF policy
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
 	[ $? -ne 0 ] && error "failed to set policy back to fifo"
 	return 0
 }
@@ -4791,14 +4790,10 @@ tbf_rule_check()
 test_77i() {
 	[ "$OST1_VERSION" -ge $(version_code 2.8.55) ] ||
 		skip "Need OST version at least 2.8.55"
+	local osts=$(osts_nodes)
 
-	for i in $(seq 1 $OSTCOUNT)
-	do
-		do_facet ost"$i" lctl set_param \
-			ost.OSS.ost_io.nrs_policies="tbf\ jobid"
-		[ $? -ne 0 ] &&
-			error "failed to set TBF policy"
-	done
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ jobid"||
+		error "failed to set TBF policy"
 
 	tbf_rule_check ost1 "default" "error before inserting any rule"
 
@@ -4835,8 +4830,7 @@ test_77i() {
 		error "error when moving before default"
 
 	# Cleanup the TBF policy
-	do_nodes $(comma_list $(osts_nodes)) \
-		$LCTL set_param ost.OSS.ost_io.nrs_policies=fifo
+	do_nodes $osts "$LCTL set_param ost.OSS.ost_io.nrs_policies=fifo"
 	return 0
 }
 run_test 77i "Change rank of TBF rule"
@@ -4851,8 +4845,9 @@ test_77j() {
 		idis="opcode="
 		rateis="rate="
 	fi
+	local osts=$(osts_nodes)
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param jobid_var=procname_uid \
 			ost.OSS.ost_io.nrs_policies="tbf\ opcode" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ost_r\ ${idis}{ost_read}\ ${rateis}5" \
@@ -4862,7 +4857,7 @@ test_77j() {
 	nrs_write_read
 	tbf_verify 20 5
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ost_r" \
 			ost.OSS.ost_io.nrs_tbf_rule="stop\ ost_w" \
 			ost.OSS.ost_io.nrs_policies="fifo"
@@ -4880,8 +4875,9 @@ test_id() {
 	local rate="rate=$3"
 	local runas_args="$4"
 	local createas_args="${5:-$runas_args}"
+	local osts=$(osts_nodes)
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param jobid_var=procname_uid \
 			ost.OSS.ost_io.nrs_policies="tbf\ ${idstr}" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ost_${idstr}\ ${policy}\ ${rate}"
@@ -4890,7 +4886,7 @@ test_id() {
 	nrs_write_read "runas $runas_args" "runas $createas_args"
 	tbf_verify $3 $3 "runas $runas_args" "runas $createas_args"
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ost_${idstr}" \
 			ost.OSS.ost_io.nrs_policies="fifo"
 
@@ -4923,15 +4919,15 @@ cleanup_77k()
 {
 	local rule_lists=$1
 	local old_nrs=$2
+	local osts=$(osts_nodes)
 
 	trap 0
 	for rule in $rule_lists; do
-		do_nodes $(comma_list $(osts_nodes)) \
+		do_nodes $osts \
 			lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ $rule"
 	done
 
-	do_nodes $(comma_list $(osts_nodes)) \
-		lctl set_param ost.OSS.ost_io.nrs_policies="$old_nrs"
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="$old_nrs"
 
 	sleep 3
 }
@@ -4939,8 +4935,9 @@ cleanup_77k()
 test_77k() {
 	[[ "$OST1_VERSION" -ge $(version_code 2.9.53) ]] ||
 		skip "Need OST version at least 2.9.53"
+	local osts=$(osts_nodes)
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_policies="tbf" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ jobid={dd.$RUNAS_ID}\&opcode={ost_write}\ rate=20" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ jobid={dd.$RUNAS_ID}\&opcode={ost_read}\ rate=10"
@@ -4950,7 +4947,7 @@ test_77k() {
 
 	local address=$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")
 	local client_nids=$(nids_list $address "\\")
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_w" \
 			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_r" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ nid={0@lo\ $client_nids}\&opcode={ost_write}\ rate=20" \
@@ -4959,7 +4956,7 @@ test_77k() {
 	nrs_write_read
 	tbf_verify 20 10
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_w" \
 			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_r" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext\ nid={0@lo\ $client_nids}\&jobid={dd.$RUNAS_ID}\ rate=20"
@@ -4967,7 +4964,7 @@ test_77k() {
 	nrs_write_read "$RUNAS"
 	tbf_verify 20 20 "$RUNAS"
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_a\ jobid={dd.$RUNAS_ID},opcode={ost_write}\ rate=20" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_b\ jobid={dd.$RUNAS_ID},opcode={ost_read}\ rate=10"
@@ -4983,14 +4980,14 @@ test_77k() {
 	[[ "$OST1_VERSION" -ge $(version_code 2.10.58) ]] ||
 		skip "Need OST version at least 2.10.58"
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_a" \
 			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_b" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_ug\ uid={$RUNAS_ID}\&gid={$RUNAS_GID}\ rate=5"
 	nrs_write_read "runas -u $RUNAS_ID -g $RUNAS_GID"
 	tbf_verify 5 5 "runas -u $RUNAS_ID -g $RUNAS_GID"
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_ug" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_uw\ uid={$RUNAS_ID}\&opcode={ost_write}\ rate=20" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_ur\ uid={$RUNAS_ID}\&opcode={ost_read}\ rate=10"
@@ -4998,7 +4995,7 @@ test_77k() {
 	nrs_write_read "runas -u $RUNAS_ID"
 	tbf_verify 20 10 "runas -u $RUNAS_ID"
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_uw" \
 			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_ur" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_a\ uid={$RUNAS_ID},opcode={ost_write}\ rate=20" \
@@ -5249,13 +5246,14 @@ test_77m() {
 	fi
 
 	local dir=$DIR/$tdir
+	local osts=$(osts_nodes)
 
 	mkdir $dir || error "mkdir $dir failed"
 	$LFS setstripe -c $OSTCOUNT $dir || error "setstripe to $dir failed"
 	chmod 777 $dir
 
-	local nodes=$(comma_list $(osts_nodes))
-	do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies=delay \
+	local osts=$osts
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies=delay \
 				       ost.OSS.ost_io.nrs_delay_min=4 \
 				       ost.OSS.ost_io.nrs_delay_max=4 \
 				       ost.OSS.ost_io.nrs_delay_pct=100
@@ -5265,14 +5263,14 @@ test_77m() {
 	do_nodes "${SINGLECLIENT:-$HOSTNAME}" "$RUNAS" \
 		 dd if=/dev/zero of="$dir/nrs_delay_$HOSTNAME" bs=1M count=1 \
 		   oflag=direct conv=fdatasync ||
-		{ do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
+		{ do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
 		  error "dd on client failed (1)"; }
 	local elapsed=$((SECONDS - start))
 
 	# NRS delay doesn't do sub-second timing, so a request enqueued at
 	# 0.9 seconds can be dequeued at 4.0
 	[ $elapsed -lt 3 ] &&
-		{ do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
+		{ do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
 		  error "Single 1M write should take at least 3 seconds"; }
 
 	start=$SECONDS
@@ -5284,10 +5282,10 @@ test_77m() {
 	elapsed=$((SECONDS - start))
 
 	[ $elapsed -lt 30 ] &&
-		{ do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
+		{ do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
 		  error "Ten 1M writes should take at least 30 seconds"; }
 
-	do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
 	[ $? -ne 0 ] && error "failed to set policy back to fifo"
 
 	return 0
@@ -5305,8 +5303,9 @@ test_77n() { #LU-10802
 		set_persistent_param_and_check client \
 			"jobid_var" "$FSNAME.sys.jobid_var" procname_uid
 	fi
+	local osts=$(osts_nodes)
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ jobid" \
 			ost.OSS.ost_io.nrs_tbf_rule="stop\ dd_runas" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ dd_runas\ jobid={*.$RUNAS_ID}\ rate=20"
@@ -5314,14 +5313,14 @@ test_77n() { #LU-10802
 	nrs_write_read
 	tbf_verify 20 20 "$RUNAS"
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ dd_runas" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ dd_runas\ jobid={dd.*}\ rate=20"
 
 	nrs_write_read
 	tbf_verify 20 20
 
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ dd_runas" \
 			ost.OSS.ost_io.nrs_policies="fifo"
 
@@ -5337,7 +5336,7 @@ run_test 77n "check wildcard support for TBF JobID NRS policy"
 
 test_77o() {
 	(( $OST1_VERSION > $(version_code 2.14.54) )) ||
-        	skip "need OST > 2.14.54"
+		skip "need OST > 2.14.54"
 
 	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_policies="tbf\ nid"
 	do_facet mds1 $LCTL set_param mds.MDS.mdt.nrs_tbf_rule="start\ name\ nid={192.168.*.*@tcp}\ rate=10000"
@@ -5536,10 +5535,10 @@ run_test 77r "Change type of tbf policy at run time"
 
 test_78() { #LU-6673
 	local rc
+	local osts=$(osts_nodes)
 
-	oss=$(comma_list $(osts_nodes))
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="orr" &
-	do_nodes $oss lctl set_param ost.OSS.*.nrs_orr_quantum=1
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="orr" &
+	do_nodes $osts lctl set_param ost.OSS.*.nrs_orr_quantum=1
 	rc=$?
 	[[ $rc -eq 3 ]] && skip "no NRS exists" && return
 	# Valid return codes are:
@@ -5550,7 +5549,7 @@ test_78() { #LU-6673
 		error "Expected set_param to return 0|ENODEV|EAGAIN"
 
 	# Cleanup the ORR policy
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+	do_nodes $osts lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
 	[ $? -ne 0 ] && error "failed to set policy back to fifo"
 	return 0
 }
@@ -5570,14 +5569,16 @@ test_79() {
 #define OBD_FAIL_MDS_INTENT_DELAY		0x160
 	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
 	local facet=mds$((mdtidx + 1))
+	local node=$(facet_active_host $facet)
+
 	stat $DIR/$tdir
-	set_nodes_failloc $(facet_active_host $facet) 0x80000160
+	set_nodes_failloc $node 0x80000160
 	getfattr -n trusted.name1 $DIR/$tdir 2> /dev/null  &
 	local pid=$!
 	sleep 2
 
 #define OBD_FAIL_MDS_GETXATTR_PACK       0x131
-	set_nodes_failloc $(facet_active_host $facet) 0x80000131
+	set_nodes_failloc $node 0x80000131
 
 	wait $pid
 	return 0
@@ -7095,13 +7096,13 @@ test_114() {
 	test_dmv_imp_inherit
 
 	# disable dmv_imp_inherit to simulate old client
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
-	do_nodes $mdts $LCTL set_param -n \
-		mdt.*MDT*.enable_dmv_implicit_inherit=0
+	do_nodes $mdts \
+		$LCTL set_param -n mdt.*MDT*.enable_dmv_implicit_inherit=0
 	test_dmv_imp_inherit
-	do_nodes $mdts $LCTL set_param -n \
-		mdt.*MDT*.enable_dmv_implicit_inherit=1
+	do_nodes $mdts \
+		$LCTL set_param -n mdt.*MDT*.enable_dmv_implicit_inherit=1
 }
 run_test 114 "implicit default LMV inherit"
 
