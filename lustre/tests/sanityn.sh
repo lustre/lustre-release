@@ -132,12 +132,12 @@ test_2d() {
 run_test 2d "check cached attribute updates on 2 mtpt's root ==="
 
 test_2e() {
-        chmod 755 $DIR1
-        ls -l $DIR1
-        ls -l $DIR2
-        chmod 777 $DIR1
-		$RUNAS dd if=/dev/zero of=$DIR2/$tfile count=1 ||
-			error "dd failed"
+	chmod 755 $DIR1
+	ls -l $DIR1
+	ls -l $DIR2
+	chmod 777 $DIR1
+	$RUNAS dd if=/dev/zero of=$DIR2/$tfile count=1 ||
+		error "dd failed"
 }
 run_test 2e "check chmod on root is propagated to others"
 
@@ -171,7 +171,7 @@ test_2f() {
 	$CHECKSTAT -t file $DIR2/$remote_dir/$tfile &&
 		error "unlink file still exists!"
 
-        cd $DIR2/$tdir || error "exit remote dir"
+	cd $DIR2/$tdir || error "exit remote dir"
 	rm -rf $DIR1/$tdir || error "unlink directory failed"
 }
 run_test 2f "check attr/owner updates on DNE with 2 mtpt's"
@@ -472,21 +472,21 @@ test_16c() {
 	rm -f $file1
 	wait_delete_completed
 
-	local list=$(comma_list $(osts_nodes))
-	if ! get_osd_param $list '' read_cache_enable >/dev/null; then
+	local osts=$(osts_nodes)
+	if ! get_osd_param $osts '' read_cache_enable >/dev/null; then
 		skip "not cache-capable obdfilter"
 	fi
 
-	set_osd_param $list '' read_cache_enable 0
-	set_osd_param $list '' writethrough_cache_enable 0
+	set_osd_param $osts '' read_cache_enable 0
+	set_osd_param $osts '' writethrough_cache_enable 0
 
 	$LFS setstripe -c -1 $file1 # b=10919
 	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 ||
 		error "fsx failed"
 	rm -f $file1
 
-	set_osd_param $list '' read_cache_enable 1
-	set_osd_param $list '' writethrough_cache_enable 1
+	set_osd_param $osts '' read_cache_enable 1
+	set_osd_param $osts '' writethrough_cache_enable 1
 
 	return 0
 }
@@ -876,15 +876,15 @@ test_17() { # bug 3513, 3667
 run_test 17 "resource creation/LVB creation race ==============="
 
 test_18() {
-        # turn e.g. ALWAYS_EXCEPT="18c" into "-e 3"
-        local idx
-        local excepts=
-        for idx in {a..z}; do
-                local ptr=EXCEPT_ALWAYS_18$idx
-                [ x${!ptr} = xtrue ] || continue
+	# turn e.g. ALWAYS_EXCEPT="18c" into "-e 3"
+	local idx
+	local excepts=
+	for idx in {a..z}; do
+		local ptr=EXCEPT_ALWAYS_18$idx
+		[ x${!ptr} = xtrue ] || continue
 
-                excepts="$excepts -e $(($(printf %d \'$idx)-96))"
-        done
+		excepts="$excepts -e $(($(printf %d \'$idx)-96))"
+			done
 
 	excepts="$excepts -e 7 -e 8 -e 9"
 	$LUSTRE/tests/mmap_sanity -d $MOUNT1 -m $MOUNT2 $excepts ||
@@ -971,10 +971,10 @@ test_23() { # Bug 5972
 
 	echo "starting reads"
 	multiop_bg_pause $DIR1/$tfile or20_c || return 1
-        # with SOM and opencache enabled, we need to close a file and cancel
-        # open lock to get atime propogated to MDS
-        kill -USR1 $! || return 2
-        cancel_lru_locks mdc
+	# with SOM and opencache enabled, we need to close a file and cancel
+	# open lock to get atime propogated to MDS
+	kill -USR1 $! || return 2
+	cancel_lru_locks mdc
 
 	time2=$(stat -c "%X" $DIR/$tfile)
 	echo "new atime is $time2"
@@ -1073,16 +1073,16 @@ test_26a() {
 run_test 26a "allow mtime to get older"
 
 test_26b() {
-        touch $DIR1/$tfile
-        sleep 1
-        echo "aaa" >> $DIR1/$tfile
-        sleep 1
-        chmod a+x $DIR2/$tfile
-        mt1=`stat -c %Y $DIR1/$tfile`
-        mt2=`stat -c %Y $DIR2/$tfile`
+	touch $DIR1/$tfile
+	sleep 1
+	echo "aaa" >> $DIR1/$tfile
+	sleep 1
+	chmod a+x $DIR2/$tfile
+	mt1=$(stat -c %Y $DIR1/$tfile)
+	mt2=$(stat -c %Y $DIR2/$tfile)
 
-        if [ x"$mt1" != x"$mt2" ]; then
-                error "not equal mtime, client1: \"$mt1\", client2: \"$mt2\"."
+        if [[ "$mt1" != "$mt2" ]]; then
+                error "not equal mtime, client1: '$mt1', client2: '$mt2'."
         fi
 }
 run_test 26b "sync mtime between ost and mds"
@@ -1263,9 +1263,10 @@ test_32b() { # bug 11270
 	save_lustre_params $facets \
 		"ldlm.namespaces.filter-*.contention_seconds" >> $p
 	clear_stats $OSC.*.${OSC}_stats
+	local osts=$(osts_nodes)
 
 	# agressive lockless i/o settings
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		"lctl set_param -n ldlm.namespaces.*.max_nolock_bytes=2000000 \
 			ldlm.namespaces.filter-*.contended_locks=0 \
 			ldlm.namespaces.filter-*.contention_seconds=60"
@@ -1280,7 +1281,7 @@ test_32b() { # bug 11270
 	# disable lockless i/o (it is disabled by default)
 	# set contention_seconds to 0 at client too, otherwise Lustre still
 	# remembers lock contention
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		"lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes=0 \
 			ldlm.namespaces.filter-*.contended_locks=32 \
 			ldlm.namespaces.filter-*.contention_seconds=0"
@@ -1301,13 +1302,13 @@ test_32b() { # bug 11270
 #run_test 32b "lockless i/o"
 
 print_jbd_stat () {
-	local mdts=$(get_facets MDS)
+	local mds_facets=$(get_facets MDS)
 	local stat=0
 	local varsvc
 	local dev
 	local mds
 
-	for mds in ${mdts//,/ }; do
+	for mds in ${mds_facets//,/ }; do
 		varsvc=${mds}_svc
 
 		dev=$(basename $(do_facet $mds "lctl get_param -n \
@@ -1434,16 +1435,16 @@ run_test 33b "COS: cross create/delete, 2 clients, benchmark under remote dir"
 op_trigger_solc() {
 	local sync_count
 	local total=0
-	local nodes=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	sync_all_data
 
 	# trigger CoS twice in case transaction commit before unlock
 	for i in 1 2; do
 		bash -c "$2"
-		do_nodes $nodes "$LCTL set_param -n mdt.*.sync_count=0"
+		do_nodes $mdts "$LCTL set_param -n mdt.*.sync_count=0"
 		bash -c "$3"
-		sync_count=$(do_nodes $nodes \
+		sync_count=$(do_nodes $mdts \
 			"lctl get_param -n mdt.*MDT*.sync_count" | calc_sum)
 		total=$((total + sync_count));
 		rm -rf $DIR/$tdir/*
@@ -1520,7 +1521,7 @@ run_test 33c "Cancel cross-MDT lock should trigger Sync-on-Lock-Cancel"
 op_trigger_cos() {
 	local commit_nr
 	local total=0
-	local nodes=$(comma_list $(mdts_nodes))
+	local nodes=$(mdts_nodes)
 
 	sync_all_data
 
@@ -1592,8 +1593,8 @@ test_33e() {
 	$LFS mkdir -i 0 $DIR/$tdir/d1
 	$LFS mkdir -i 1 $DIR/$tdir/d2
 
-	local nodes=$(comma_list $(mdts_nodes))
-	do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
+	local mdts=$(mdts_nodes)
+	do_nodes $mdts "lctl set_param -n mdt.*.async_commit_count=0"
 
 	test_33_run "plain dir creation" "mkdir $DIR2/$tdir/plain"
 	test_33_run "open file and write" "echo abc > $DIR2/$tdir/$tfile"
@@ -1627,7 +1628,7 @@ test_33e() {
 
 	test_33_run "directory unlink" "rm -rf $DIR2/$tdir"
 
-	local async_commit_count=$(do_nodes $nodes \
+	local async_commit_count=$(do_nodes $mdts \
 		"lctl get_param -n mdt.*.async_commit_count" | calc_sum)
 	echo "CoS count $async_commit_count"
 	(( async_commit_count == 0 )) || error "CoS triggerred"
@@ -1637,9 +1638,9 @@ run_test 33e "independent transactions shouldn't trigger COS"
 # End commit on sharing tests
 
 get_ost_lock_timeouts() {
-    local nodes=${1:-$(comma_list $(osts_nodes))}
+    local osts=${1:-$(osts_nodes)}
 
-    local locks=$(do_nodes $nodes \
+    local locks=$(do_nodes $osts \
         "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
 
     echo $locks
@@ -1648,30 +1649,32 @@ get_ost_lock_timeouts() {
 cleanup_34() {
 	local i
 	trap 0
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $(osts_nodes) \
 		"lctl set_param -n fail_loc=0 2>/dev/null || true"
-	for i in $(seq $OSTCOUNT); do
+	for ((i=1; i <= $OSTCOUNT; i++)); do
 		wait_osc_import_ready client ost$i
 	done
 }
 
 test_34() { #16129
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
-        local OPER
-        local lock_in
-        local lock_out
+	local OPER
+	local lock_in
+	local lock_out
+	local osts=$(osts_nodes)
+
 	trap cleanup_34 EXIT RETURN
         for OPER in notimeout timeout ; do
                 rm $DIR1/$tfile 2>/dev/null
-                lock_in=$(get_ost_lock_timeouts)
+                lock_in=$(get_ost_lock_timeouts $osts)
                 if [ $OPER == "timeout" ] ; then
-                        for j in `seq $OSTCOUNT`; do
+                        for ((j = 1; j <= $OSTCOUNT; j++)); do
                                 #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
                                 do_facet ost$j lctl set_param fail_loc=0x511
                         done
                         echo lock should expire
                 else
-                        for j in `seq $OSTCOUNT`; do
+                        for ((j = 1; j <= $OSTCOUNT; j++)); do
                                 #define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x512
                                 do_facet ost$j lctl set_param fail_loc=0x512
                         done
@@ -1958,9 +1961,11 @@ pdo_sched() {
 # avoid unexpected delays due to previous tests
 pdo_lru_clear() {
 	cancel_lru_locks mdc
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	do_nodes $mdts \
 		$LCTL set_param -n ldlm.namespaces.*mdt*.lru_size=clear
-	do_nodes $(comma_list $(mdts_nodes)) \
+	do_nodes $mdts \
 		$LCTL get_param ldlm.namespaces.*mdt*.lock_unused_count \
 			ldlm.namespaces.*mdt*.lock_count | grep -v '=0'
 }
@@ -1988,8 +1993,10 @@ test_40a() {
 
 	mkdir_on_mdt0 $DIR2/$tdir
 	pdo_lru_clear
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	mkdir $DIR1/$tdir/$tfile &
 	PID1=$!; pdo_sched
@@ -2009,8 +2016,7 @@ test_40a() {
 
 	#  all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	rm -rf $DIR/$tdir
 	return 0
@@ -2022,8 +2028,10 @@ test_40b() {
 
 	mkdir_on_mdt0 $DIR2/$tdir
 	pdo_lru_clear
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	touch $DIR1/$tdir/$tfile &
 	PID1=$!; pdo_sched
@@ -2043,9 +2051,8 @@ test_40b() {
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 	# all operations above shouldn't wait the first one
 
-        check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	check_pdo_conflict $PID1 || error "parallel operation is blocked"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	rm -rf $DIR/$tdir
 	return 0
@@ -2058,8 +2065,10 @@ test_40c() {
 	mkdir_on_mdt0 $DIR2/$tdir
 	pdo_lru_clear
 	touch $DIR1/$tdir/$tfile
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	link $DIR1/$tdir/$tfile $DIR1/$tdir/$tfile-0 &
 	PID1=$!; pdo_sched
@@ -2078,10 +2087,9 @@ test_40c() {
 	rmdir $DIR2/$tdir/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 
-        # all operations above shouldn't wait the first one
+	# all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	rm -rf $DIR/$tdir
 	return 0
@@ -2095,7 +2103,9 @@ test_40d() {
 	pdo_lru_clear
 	touch $DIR1/$tdir/$tfile
 #define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tdir/$tfile &
 	PID1=$!; pdo_sched
@@ -2116,8 +2126,7 @@ test_40d() {
 
 	# all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	wait $PID1
 	return 0
 }
