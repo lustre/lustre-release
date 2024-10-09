@@ -1662,8 +1662,7 @@ nodemap_test_setup() {
 
 	[ "$1" == "0" ] && active_nodemap=0
 
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_upcall=NONE
+	do_nodes $(all_mdts_nodes) "$LCTL set_param mdt.*.identity_upcall=NONE"
 
 	rc=0
 	create_fops_nodemaps
@@ -2054,7 +2053,7 @@ test_24() {
 	nodemap_test_setup
 
 	trap nodemap_test_cleanup EXIT
-	do_nodes $(comma_list $(all_server_nodes)) $LCTL get_param -R nodemap
+	do_nodes $(all_server_nodes) $LCTL get_param -R nodemap
 
 	nodemap_test_cleanup
 }
@@ -3861,7 +3860,7 @@ test_31() {
 	local addr1=${mdsnid%@*}
 	local nid2=${addr}@$net2
 	local addr2 failover_mds1
-	local all=$(comma_list $(all_nodes))
+	local all=$(all_nodes)
 
 	export LNETCTL=$(which lnetctl 2> /dev/null)
 
@@ -4171,10 +4170,9 @@ test_32() {
 		error "could not modify keyfile on client (1)"
 
 	# set perms for per-nodemap keys else permission denied
-	do_nodes $(comma_list $(all_nodes)) \
-		 "keyctl show | grep lustre | cut -c1-11 |
-				sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+	do_nodes $(all_nodes) \
+		"keyctl show | grep lustre | cut -c1-11 |
+		sed -e 's/ //g;' | xargs -IX keyctl setperm X 0x3f3f3f3f"
 
 	# re-mount client with mgssec=skn
 	save_opts=$MOUNT_OPTS
@@ -4302,7 +4300,7 @@ test_33() {
 
 	# add mgs key type and MGS NIDs in key on MGS
 	do_nodes $mgs_HOST "$LGSS_SK -t mgs,server -g $MGSNID -m \
-				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+			    $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
 		error "could not modify keyfile on MGS"
 
 	# load modified key file on MGS
@@ -4311,14 +4309,13 @@ test_33() {
 
 	# add MGS NIDs in key on client
 	do_nodes ${clients_arr[0]} "$LGSS_SK -g $MGSNID -m \
-				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+				    $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
 		error "could not modify keyfile on MGS"
 
 	# set perms for per-nodemap keys else permission denied
-	do_nodes $(comma_list $(all_nodes)) \
-		 "keyctl show | grep lustre | cut -c1-11 |
-				sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+	do_nodes $(all_nodes) \
+		"keyctl show | grep lustre | cut -c1-11 |
+		sed -e 's/ //g;' | xargs -IX keyctl setperm X 0x3f3f3f3f"
 
 	# re-mount client with mgssec=skn
 	save_opts=$MOUNT_OPTS
@@ -5778,7 +5775,7 @@ test_51() {
 		skip "Need MDS version at least 2.13.55.38"
 
 	mkdir $DIR/$tdir || error "mkdir $tdir"
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local cap_param=mdt.*.enable_cap_mask
 	local nm_param=nodemap.default.enable_cap_mask
 	local val
@@ -6464,7 +6461,7 @@ cleanup_local_client_nodemap_with_mounts() {
 }
 
 test_55() {
-	(( $MDS1_VERSION > $(version_code 2.12.6.2) )) ||
+	(( $MDS1_VERSION > $(version_code v2_12_6-3-g02b04c64a8) )) ||
 		skip "Need MDS version at least 2.12.6.3"
 
 	local client_ip
@@ -6484,8 +6481,7 @@ test_55() {
 		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
 	fi
 
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_upcall=NONE
+	do_nodes $(all_mdts_nodes) "$LCTL set_param mdt.*.identity_upcall=NONE"
 
 	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
 
@@ -7234,31 +7230,31 @@ test_64b() {
 	local dir_restripe
 	local srv_uc=""
 	local rbac
+	local mdts=$(all_mdts_nodes)
 
-	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
-		skip "Need MDS >= 2.15.54 for role-based controls"
+	(( MDS1_VERSION >= $(version_code v2_15_54-112-g22bef9b6c6) )) ||
+		skip "Need MDS >= 2.15.54.112 for role-based controls"
 
 	(( MDSCOUNT >= 2 )) || skip "mdt count $MDSCOUNT, skipping dne_ops role"
 
-	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+	(( MDS1_VERSION >= $(version_code v2_16_50-98-g3b04d6ac1d) )) &&
 		srv_uc="server_upcall"
 
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	setup_local_client_nodemap "c0" 1 1
 
-        dir_restripe=$(do_node $mds1_HOST \
-		"$LCTL get_param -n mdt.*MDT0000.enable_dir_restripe")
+	dir_restripe=$(do_node $mds1_HOST \
+		       "$LCTL get_param -n mdt.*MDT0000.enable_dir_restripe")
 	[ -n "$dir_restripe" ] || dir_restripe=0
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.enable_dir_restripe=1 ||
-			error "enabling dir_restripe failed"
-	stack_trap "do_nodes $(comma_list $(all_mdts_nodes)) \
-	      $LCTL set_param mdt.*.enable_dir_restripe=$dir_restripe" EXIT
+	do_nodes $mdts "$LCTL set_param mdt.*.enable_dir_restripe=1" ||
+		error "enabling dir_restripe failed"
+	stack_trap "do_nodes $mdts \
+	      $LCTL set_param mdt.*.enable_dir_restripe=$dir_restripe"
 	rbac="dne_ops"
-	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
-		 --value $rbac ||
+	[[ -z "$srv_uc" ]] || rbac="$rbac,$srv_uc"
+	do_facet mgs \
+		"$LCTL nodemap_modify --name c0 --property rbac --value $rbac"||
 		error "setting rbac $rbac failed (1)"
 	wait_nm_sync c0 rbac
 	$LFS mkdir -i 0 ${testdir}_for_migr ||
@@ -7292,13 +7288,13 @@ test_64b() {
 		error "$LFS mkdir ${testdir}_mdt1 failed (2)"
 
 	rbac="none"
-	if [ -z "$srv_uc" ]; then
+	if [[ -z "$srv_uc" ]]; then
 		rbac="none"
 	else
 		rbac="$srv_uc"
 	fi
-	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
-		--value $rbac ||
+	do_facet mgs \
+		"$LCTL nodemap_modify --name c0 --property rbac --value $rbac"||
 		error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 	set -vx
@@ -7539,15 +7535,15 @@ test_64f() {
 	local srv_uc=""
 	local rbac
 
-	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
-		skip "Need MDS >= 2.15.54 for role-based controls"
+	(( MDS1_VERSION >= $(version_code v2_15_54-112-g22bef9b6c6) )) ||
+		skip "Need MDS >= 2.15.54.112 for role-based controls"
 
-	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+	(( MDS1_VERSION >= $(version_code v2_16_50-98-g3b04d6ac1d) )) &&
 		srv_uc="server_upcall"
 
 	cli_enc=$($LCTL get_param mdc.*.import | grep client_encryption)
 	[ -n "$cli_enc" ] || skip "Need enc support, skip fscrypt_admin role"
-        which fscrypt || skip "Need fscrypt, skip fscrypt_admin role"
+	which fscrypt || skip "Need fscrypt, skip fscrypt_admin role"
 
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -7630,9 +7626,10 @@ run_test 64f "Nodemap enforces fscrypt_admin RBAC roles"
 
 test_64g() {
 	local testfile=$DIR/$tdir/$tfile
+	local mdts=$(all_mdts_nodes)
 
-	(( MDS1_VERSION >= $(version_code 2.16.50) )) ||
-		skip "Need MDS >= 2.16.50 for role-based controls"
+	(( MDS1_VERSION >= $(version_code v2_16_50-98-g3b04d6ac1d) )) ||
+		skip "Need MDS >= 2.16.50.98 for role-based controls"
 
 	# Add groups, and client to new group, on client only.
 	# Server is not aware.
@@ -7665,19 +7662,15 @@ test_64g() {
 
 	$RUNAS touch $DIR/$tdir/fileB &&
 		error "touch $DIR/$tdir/fileB should fail"
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID
+	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
 	$RUNAS -G 5001 touch $DIR/$tdir/fileB ||
 		error "touch $DIR/$tdir/fileB failed"
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID
+	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
 	$RUNAS -G 5000,5001 touch $DIR/$tdir/fileC ||
 		error "touch $DIR/$tdir/fileC failed"
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID
+	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
 	$RUNAS cat $DIR/$tdir/fileA && error "cat $DIR/$tdir/fileA should fail"
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID
+	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
 	$RUNAS -G 5000,5001 cat $DIR/$tdir/fileA ||
 		error "cat $DIR/$tdir/fileA failed"
 }
@@ -7692,14 +7685,13 @@ test_64h() {
 	local rbac
 	local fid
 
-	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
-		skip "Need MDS >= 2.15.54 for role-based controls"
+	(( MDS1_VERSION >= $(version_code v2_15_54-112-g22bef9b6c6) )) ||
+		skip "Need MDS >= 2.15.54.112 for role-based controls"
 
-	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+	(( MDS1_VERSION >= $(version_code v2_16_50-98-g3b04d6ac1d) )) &&
 		srv_uc="server_upcall"
 
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_upcall=NONE
+	do_nodes $(all_mdts_nodes) "$LCTL set_param mdt.*.identity_upcall=NONE"
 
 	stack_trap \
 	    "$LFS setquota -p $((projid+offset_start)) --delete $DIR/$tdir" EXIT
