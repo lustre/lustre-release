@@ -17891,12 +17891,15 @@ function roc_hit() {
 }
 
 function set_cache() {
+	local osts=$1
+	local type=$2
+	local param=$3
 	local on=1
 
-	if [ "$2" == "off" ]; then
+	if [ "$param" == "off" ]; then
 		on=0;
 	fi
-	set_osd_param $(osts_nodes) '' ${1}_cache_enable $on
+	set_osd_param $osts '' ${type}_cache_enable $on
 
 	cancel_lru_locks osc
 }
@@ -18549,11 +18552,12 @@ test_155a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
 
-	set_cache read on
-	set_cache writethrough on
+	set_cache $osts read on
+	set_cache $osts writethrough on
 	test_155_small_load
 	restore_lustre_params < $p
 	rm -f $p
@@ -18564,11 +18568,12 @@ test_155b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
 
-	set_cache read on
-	set_cache writethrough off
+	set_cache $osts read on
+	set_cache $osts writethrough off
 	test_155_small_load
 	restore_lustre_params < $p
 	rm -f $p
@@ -18579,11 +18584,12 @@ test_155c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
 
-	set_cache read off
-	set_cache writethrough on
+	set_cache $osts read off
+	set_cache $osts writethrough on
 	test_155_small_load
 	restore_lustre_params < $p
 	rm -f $p
@@ -18594,11 +18600,12 @@ test_155d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
 
-	set_cache read off
-	set_cache writethrough off
+	set_cache $osts read off
+	set_cache $osts writethrough off
 	test_155_small_load
 	restore_lustre_params < $p
 	rm -f $p
@@ -18609,11 +18616,12 @@ test_155e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
 
-	set_cache read on
-	set_cache writethrough on
+	set_cache $osts read on
+	set_cache $osts writethrough on
 	test_155_big_load
 	restore_lustre_params < $p
 	rm -f $p
@@ -18624,11 +18632,12 @@ test_155f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
 
-	set_cache read on
-	set_cache writethrough off
+	set_cache $osts read on
+	set_cache $osts writethrough off
 	test_155_big_load
 	restore_lustre_params < $p
 	rm -f $p
@@ -18639,11 +18648,12 @@ test_155g() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
 
-	set_cache read off
-	set_cache writethrough on
+	set_cache $osts read off
+	set_cache $osts writethrough on
 	test_155_big_load
 	restore_lustre_params < $p
 	rm -f $p
@@ -18654,11 +18664,12 @@ test_155h() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
 
-	set_cache read off
-	set_cache writethrough off
+	set_cache $osts read off
+	set_cache $osts writethrough off
 	test_155_big_load
 	restore_lustre_params < $p
 	rm -f $p
@@ -18680,21 +18691,22 @@ test_156() {
 	local AFTER
 	local file="$DIR/$tfile"
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
 
 	save_writethrough $p
-	roc_hit_init
+	roc_hit_init $osts
 
 	log "Turn on read and write cache"
-	set_cache read on
-	set_cache writethrough on
+	set_cache $osts read on
+	set_cache $osts writethrough on
 
 	log "Write data and read it back."
 	log "Read should be satisfied from the cache."
 	dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
-	BEFORE=$(roc_hit)
+	BEFORE=$(roc_hit $osts)
 	cancel_lru_locks osc
 	cat $file >/dev/null
-	AFTER=$(roc_hit)
+	AFTER=$(roc_hit $osts)
 	if ! let "AFTER - BEFORE == CPAGES"; then
 		error "NOT IN CACHE (2): before: $BEFORE, after: $AFTER"
 	else
@@ -18705,7 +18717,7 @@ test_156() {
 	BEFORE=$AFTER
 	cancel_lru_locks osc
 	cat $file >/dev/null
-	AFTER=$(roc_hit)
+	AFTER=$(roc_hit $osts)
 	if ! let "AFTER - BEFORE == CPAGES"; then
 		error "NOT IN CACHE (3): before: $BEFORE, after: $AFTER"
 	else
@@ -18713,14 +18725,14 @@ test_156() {
 	fi
 
 	log "Turn off the read cache and turn on the write cache"
-	set_cache read off
-	set_cache writethrough on
+	set_cache $osts read off
+	set_cache $osts writethrough on
 
 	log "Read again; it should be satisfied from the cache."
-	BEFORE=$(roc_hit)
+	BEFORE=$(roc_hit $osts)
 	cancel_lru_locks osc
 	cat $file >/dev/null
-	AFTER=$(roc_hit)
+	AFTER=$(roc_hit $osts)
 	if ! let "AFTER - BEFORE == CPAGES"; then
 		error "NOT IN CACHE (4): before: $BEFORE, after: $AFTER"
 	else
@@ -18733,7 +18745,7 @@ test_156() {
 		BEFORE=$AFTER
 		cancel_lru_locks osc
 		cat $file >/dev/null
-		AFTER=$(roc_hit)
+		AFTER=$(roc_hit $osts)
 		if ! let "AFTER - BEFORE == 0"; then
 			error "IN CACHE (5): before: $BEFORE, after: $AFTER"
 		else
@@ -18744,10 +18756,10 @@ test_156() {
 	log "Write data and read it back."
 	log "Read should be satisfied from the cache."
 	dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
-	BEFORE=$(roc_hit)
+	BEFORE=$(roc_hit $osts)
 	cancel_lru_locks osc
 	cat $file >/dev/null
-	AFTER=$(roc_hit)
+	AFTER=$(roc_hit $osts)
 	if ! let "AFTER - BEFORE == CPAGES"; then
 		error "NOT IN CACHE (6): before: $BEFORE, after: $AFTER"
 	else
@@ -18760,7 +18772,7 @@ test_156() {
 		BEFORE=$AFTER
 		cancel_lru_locks osc
 		cat $file >/dev/null
-		AFTER=$(roc_hit)
+		AFTER=$(roc_hit $osts)
 		if ! let "AFTER - BEFORE == 0"; then
 			error "IN CACHE (7): before: $BEFORE, after: $AFTER"
 		else
@@ -18769,17 +18781,17 @@ test_156() {
 	fi
 
 	log "Turn off read and write cache"
-	set_cache read off
-	set_cache writethrough off
+	set_cache $osts read off
+	set_cache $osts writethrough off
 
 	log "Write data and read it back"
 	log "It should not be satisfied from the cache."
 	rm -f $file
 	dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
 	cancel_lru_locks osc
-	BEFORE=$(roc_hit)
+	BEFORE=$(roc_hit $osts)
 	cat $file >/dev/null
-	AFTER=$(roc_hit)
+	AFTER=$(roc_hit $osts)
 	if ! let "AFTER - BEFORE == 0"; then
 		error_ignore bz20762 "IN CACHE (8):before:$BEFORE,after:$AFTER"
 	else
@@ -18787,17 +18799,17 @@ test_156() {
 	fi
 
 	log "Turn on the read cache and turn off the write cache"
-	set_cache read on
-	set_cache writethrough off
+	set_cache $osts read on
+	set_cache $osts writethrough off
 
 	log "Write data and read it back"
 	log "It should not be satisfied from the cache."
 	rm -f $file
 	dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
-	BEFORE=$(roc_hit)
+	BEFORE=$(roc_hit $osts)
 	cancel_lru_locks osc
 	cat $file >/dev/null
-	AFTER=$(roc_hit)
+	AFTER=$(roc_hit $osts)
 	if ! let "AFTER - BEFORE == 0"; then
 		error_ignore bz20762 "IN CACHE (9):before:$BEFORE,after:$AFTER"
 	else
@@ -18805,10 +18817,10 @@ test_156() {
 	fi
 
 	log "Read again; it should be satisfied from the cache."
-	BEFORE=$(roc_hit)
+	BEFORE=$(roc_hit $osts)
 	cancel_lru_locks osc
 	cat $file >/dev/null
-	AFTER=$(roc_hit)
+	AFTER=$(roc_hit $osts)
 	if ! let "AFTER - BEFORE == CPAGES"; then
 		error "NOT IN CACHE (1): before: $BEFORE, after: $AFTER"
 	else
@@ -22474,9 +22486,10 @@ test_216() { # bug 20317
 	save_lustre_params $facets \
 		"ldlm.namespaces.filter-*.contention_seconds" >> $p
 	clear_stats osc.*.osc_stats
+	local osts=$(osts_nodes)
 
 	# agressive lockless i/o settings
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		"lctl set_param -n ldlm.namespaces.*.max_nolock_bytes=2000000 \
 			ldlm.namespaces.filter-*.contended_locks=0 \
 			ldlm.namespaces.filter-*.contention_seconds=60"
@@ -22486,7 +22499,7 @@ test_216() { # bug 20317
 	$CHECKSTAT -s 40960 $DIR/$tfile
 
 	# disable lockless i/o
-	do_nodes $(comma_list $(osts_nodes)) \
+	do_nodes $osts \
 		"lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes=0 \
 			ldlm.namespaces.filter-*.contended_locks=32 \
 			ldlm.namespaces.filter-*.contention_seconds=0"
@@ -22746,8 +22759,10 @@ test_224c() { # LU-6441
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local osts=$(osts_nodes)
+
 	save_writethrough $p
-	set_cache writethrough on
+	set_cache $osts writethrough on
 
 	local pages_per_rpc=$($LCTL get_param osc.*.max_pages_per_rpc)
 	local at_max=$($LCTL get_param -n at_max)
@@ -25415,6 +25430,7 @@ ladvise_willread_performance()
 	local average_origin=0
 	local average_cache=0
 	local average_ladvise=0
+	local osts=$(osts_nodes)
 
 	# Hybrid IO switches to DIO, which invalidates much of the caching
 	# So disable it for this test
@@ -25425,7 +25441,7 @@ ladvise_willread_performance()
 	for ((i = 1; i <= $repeat; i++)); do
 		echo "Iter $i/$repeat: reading without willread hint"
 		cancel_lru_locks osc
-		drop_file_oss_cache $DIR/$tfile $(comma_list $(osts_nodes))
+		drop_file_oss_cache $DIR/$tfile $osts
 		local speed_origin=$(random_read_iops $DIR/$tfile $size)
 		echo "Iter $i/$repeat: uncached speed: $speed_origin"
 		average_origin=$(bc <<<"$average_origin + $speed_origin")
@@ -25436,7 +25452,7 @@ ladvise_willread_performance()
 		average_cache=$(bc <<<"$average_cache + $speed_cache")
 
 		cancel_lru_locks osc
-		drop_file_oss_cache $DIR/$tfile $(comma_list $(osts_nodes))
+		drop_file_oss_cache $DIR/$tfile $osts
 		$LFS ladvise -a willread $DIR/$tfile || error "ladvise failed"
 		local speed_ladvise=$(random_read_iops $DIR/$tfile $size)
 		echo "Iter $i/$repeat: ladvise speed: $speed_ladvise"
@@ -25526,11 +25542,11 @@ test_255a() {
 
 	echo "Synchronous ladvise should wait"
 	local delay=8
-#define OBD_FAIL_OST_LADVISE_PAUSE	 0x237
-	do_nodes $(comma_list $(osts_nodes)) \
-		$LCTL set_param fail_val=$delay fail_loc=0x237
-	stack_trap "do_nodes $(comma_list $(osts_nodes)) \
-		$LCTL set_param fail_loc=0"
+	local osts=$(osts_nodes)
+
+	#define OBD_FAIL_OST_LADVISE_PAUSE	 0x237
+	do_nodes $osts $LCTL set_param fail_val=$delay fail_loc=0x237
+	stack_trap "do_nodes $osts $LCTL set_param fail_loc=0"
 
 	local start_ts=$SECONDS
 	lfs ladvise -a willread $DIR/$tfile ||
@@ -26892,9 +26908,7 @@ test_275() {
 		skip "Need OST version >= 2.10.57"
 
 	local file=$DIR/$tfile
-	local oss
-
-	oss=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
 	dd if=/dev/urandom of=$file bs=1M count=2 ||
 		error "failed to create a file"
@@ -26912,7 +26926,7 @@ test_275() {
 	sleep 1
 
 #define OBD_FAIL_LDLM_PROLONG_PAUSE      0x32b
-	do_nodes $oss $LCTL set_param fail_loc=0x8000032b
+	do_nodes $osts $LCTL set_param fail_loc=0x8000032b
 	#IO takes another lock, but matches the PENDING one
 	#and places it to the IO RPC
 	dd if=$file of=/dev/null bs=1M count=1 iflag=direct ||
