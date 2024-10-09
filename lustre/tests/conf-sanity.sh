@@ -10661,7 +10661,7 @@ cleanup_123ai() {
 	do_facet mgs "$LCTL set_param -P -d timeout"
 
 	# restore timeout value
-	do_nodes $(comma_list $(all_nodes)) "$LCTL set_param timeout=$timeout"
+	do_nodes $(all_nodes) "$LCTL set_param timeout=$timeout"
 }
 
 test_123ai() { #LU-16167
@@ -10671,13 +10671,13 @@ test_123ai() { #LU-16167
 	local old_timeout
 
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
-	(( MDS1_VERSION >= $(version_code 2.15.51) )) ||
-		skip "Need MDS version at least 2.15.51"
+	(( MDS1_VERSION >= $(version_code v2_15_52-130-gc6da54aa75) )) ||
+		skip "Need MDS >= 2.15.52.130 for llog skipped record fix"
 
-	[ -d $MOUNT/.lustre ] || setup
+	[[ -d $MOUNT/.lustre ]] || setup
 
 	old_count=$(do_facet mgs "$LCTL --device MGS llog_print -r params" |
-		grep -c "parameter: timeout")
+		    grep -c "parameter: timeout")
 
 	old_timeout=$($LCTL get_param -n timeout)
 	stack_trap "cleanup_123ai $old_timeout" EXIT
@@ -10692,11 +10692,11 @@ test_123ai() { #LU-16167
 		grep -c "parameter: timeout")
 
 	((count - old_count == 129)) ||
-		error "number timeout record missmatch ($count - $old_count != 129)"
+		error "timeout record mismatch ($count - $old_count != 129)"
 
 	do_facet mgs "$LCTL --device MGS llog_print params" |
 		tail -1 | grep  "timeout, value: 129" ||
-		error "llog_print could not display the last record (timeout=129)"
+		error "llog_print could not display last record (timeout=129)"
 
 }
 run_test 123ai "llog_print display all non skipped records"
@@ -11435,8 +11435,8 @@ __test_135_reader() {
 }
 
 test_135() {
-	(( MDS1_VERSION >= $(version_code 2.15.52) )) ||
-		skip "need MDS version at least 2.15.52"
+	(( MDS1_VERSION >= $(version_code v2_15_54-21-g76cf742714) )) ||
+		skip "need MDS >= 2.15.54.21 for llog catalog wrap fix"
 
 	local service=$(facet_svc mds1)
 	local rc=0
@@ -11458,12 +11458,12 @@ test_135() {
 
 	# change the changelog_catalog size to 5 entries for everybody
 #define OBD_FAIL_CAT_RECORDS                        0x1312
-	do_node $(comma_list $(all_nodes)) $LCTL set_param fail_loc=0x1312 fail_val=5
+	do_nodes $(all_nodes) "$LCTL set_param fail_loc=0x1312 fail_val=5"
 
 	# disable console ratelimit
 	local rl=$(cat /sys/module/libcfs/parameters/libcfs_console_ratelimit)
 	echo 0 > /sys/module/libcfs/parameters/libcfs_console_ratelimit
-	stack_trap "echo $rl > /sys/module/libcfs/parameters/libcfs_console_ratelimit" EXIT
+	stack_trap "echo $rl > /sys/module/libcfs/parameters/libcfs_console_ratelimit"
 
 	test_mkdir -c 1 -i 0 $DIR/$tdir || error "Failed to create directory"
 	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
@@ -11480,13 +11480,13 @@ test_135() {
 	coproc $LFS changelog --follow $service
 	reader_pid=$!
 	fd=${COPROC[0]}
-	stack_trap "echo kill changelog reader; kill $reader_pid" EXIT
+	stack_trap "echo kill changelog reader; kill $reader_pid"
 
 	echo -e "\nWrap arround changelog catalog"
 
 	# Start file writer thread
 	__test_135_file_thread "$service" & files_pid=$!
-	stack_trap "(pkill -P$files_pid; kill $files_pid) &> /dev/null || true" EXIT
+	stack_trap "(pkill -P$files_pid; kill $files_pid) &> /dev/null || true"
 
 	# Check changelog entries
 	lastread=$(__test_135_reader $fd $cl_user) || exit $?
@@ -11496,7 +11496,7 @@ test_135() {
 
 	lastidx=$(changelog_users mds1 | awk '/current_index/ {print $NF}' )
 	[[ "$lastread" -eq "$lastidx" ]] ||
-		error "invalid changelog lastidx (read: $lastread, mds: $lastidx)"
+		error "bad changelog lastidx (read: $lastread, mds: $lastidx)"
 }
 run_test 135 "check the behavior when changelog is wrapped around"
 

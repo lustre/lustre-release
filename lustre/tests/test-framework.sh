@@ -6,7 +6,7 @@ fi
 FRAMEWORK_NEEDS_INIT=false
 
 trap 'print_summary && print_stack_trace | tee $TF_FAIL && \
-    echo "$TESTSUITE: FAIL: test-framework exiting on error"' ERR
+	echo "$TESTSUITE: FAIL: test-framework exiting on error"' ERR
 set -e
 
 export LANG=en_US
@@ -70,11 +70,11 @@ fi
 
 # check config files for options in decreasing order of preference
 [ -z "$MODPROBECONF" -a -f /etc/modprobe.d/lustre.conf ] &&
-    MODPROBECONF=/etc/modprobe.d/lustre.conf
+	MODPROBECONF=/etc/modprobe.d/lustre.conf
 [ -z "$MODPROBECONF" -a -f /etc/modprobe.d/Lustre ] &&
-    MODPROBECONF=/etc/modprobe.d/Lustre
+	MODPROBECONF=/etc/modprobe.d/Lustre
 [ -z "$MODPROBECONF" -a -f /etc/modprobe.conf ] &&
-    MODPROBECONF=/etc/modprobe.conf
+	MODPROBECONF=/etc/modprobe.conf
 
 sanitize_parameters() {
 	for i in DIR DIR1 DIR2 MOUNT MOUNT1 MOUNT2
@@ -1374,8 +1374,8 @@ for proc in \\\$(pgrep $dname); do
 [ \\\$(ps -o ppid= -p \\\$proc) -ne 1 ] || ((num++))
 done;
 if [ \\\"\\\$num\\\" -ne 1 ]; then
-    echo \\\$num instance of $dname;
-    exit 1;
+	echo \\\$num instance of $dname;
+	exit 1;
 fi; "
 	ret=$?
 	(( $ret == 0 )) || return $ret
@@ -1502,6 +1502,8 @@ from_build_tree() {
 }
 
 init_gss() {
+	local servers=$(all_server_nodes)
+
 	if $SHARED_KEY; then
 		GSS=true
 		GSS_SK=true
@@ -1523,17 +1525,17 @@ init_gss() {
 
 	if $GSS_SK && ! $SK_NO_KEY; then
 		echo "Loading basic SSK keys on all servers"
-		do_nodes $(comma_list $(all_server_nodes)) \
+		do_nodes $servers \
 			"$LGSS_SK -t server -l $SK_PATH/$FSNAME.key || true"
-		do_nodes $(comma_list $(all_server_nodes)) \
-				"keyctl show | grep lustre | cut -c1-11 |
-				sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+		do_nodes $servers "keyctl show | grep lustre | cut -c1-11 |
+				   sed -e 's/ //g;' |
+				   xargs -IX keyctl setperm X 0x3f3f3f3f"
 	fi
 
 	if $GSS_SK && $SK_NO_KEY; then
 		local numclients=${1:-$CLIENTCOUNT}
 		local clients=${CLIENTS:-$HOSTNAME}
+		local nodes=$(all_nodes)
 
 		# security ctx config for keyring
 		SK_NO_KEY=false
@@ -1553,24 +1555,21 @@ init_gss() {
 		fi
 
 		[ -e $lgssc_conf_file ] ||
-			error_exit "Could not find key options in $lgssc_conf_file"
+			error_exit "Could not find key opt in $lgssc_conf_file"
 		echo "$lgssc_conf_file content is:"
 		cat $lgssc_conf_file
 
 		if ! local_mode; then
 			if from_build_tree; then
-				do_nodes $(comma_list $(all_nodes)) "mkdir -p \
-					$SK_OM_PATH"
-				do_nodes $(comma_list $(all_nodes)) "mount \
-					-o bind $SK_OM_PATH \
-					/etc/request-key.d/"
-				do_nodes $(comma_list $(all_nodes)) "rsync \
-					-aqv $HOSTNAME:$lgssc_conf_file \
-					$lgssc_conf_file >/dev/null 2>&1"
+				do_nodes $nodes "mkdir -p $SK_OM_PATH"
+				do_nodes $nodes "mount -o bind $SK_OM_PATH \
+						 /etc/request-key.d/"
+				do_nodes $nodes \
+					"rsync -aqv $HOSTNAME:$lgssc_conf_file \
+					 $lgssc_conf_file >/dev/null 2>&1"
 			else
-				do_nodes $(comma_list $(all_nodes)) \
-					"echo $lgssc_conf_file: ; \
-					cat $lgssc_conf_file"
+				do_nodes $nodes "echo $lgssc_conf_file: ; \
+						 cat $lgssc_conf_file"
 			fi
 		fi
 
@@ -1593,20 +1592,20 @@ init_gss() {
 		$LGSS_SK -t server -f$FSNAME -w $SK_PATH/$FSNAME.key \
 			-d /dev/urandom >/dev/null 2>&1
 		# per-nodemap keys
-		for i in $(seq 0 $((numclients - 1))); do
+		for ((i=0; i < $numclients; i++)); do
 			$LGSS_SK -t server -f$FSNAME -n c$i \
 				-w $SK_PATH/nodemap/c$i.key -d /dev/urandom \
 				>/dev/null 2>&1
 		done
 		# Distribute keys
 		if ! local_mode; then
-			for lnode in $(all_nodes); do
+			for lnode in ${nodes//,/ }; do
 				scp -r $SK_PATH ${lnode}:$(dirname $SK_PATH)/
 			done
 		fi
 		# Set client keys to client type to generate prime P
 		if local_mode; then
-			do_nodes $(all_nodes) "$LGSS_SK -t client,server -m \
+			do_nodes $nodes "$LGSS_SK -t client,server -m \
 				$SK_PATH/$FSNAME.key >/dev/null 2>&1"
 		else
 			do_nodes $clients "$LGSS_SK -t client -m \
@@ -1616,7 +1615,7 @@ init_gss() {
 				-m X >/dev/null 2>&1"
 			# also have a client key available on server side,
 			# for local client mount
-			do_nodes $(comma_list $(all_server_nodes)) \
+			do_nodes $servers \
 			"cp $SK_PATH/$FSNAME.key $SK_PATH/${FSNAME}_cli.key && \
 			 $LGSS_SK -t client -m \
 				$SK_PATH/${FSNAME}_cli.key >/dev/null 2>&1"
@@ -1645,18 +1644,16 @@ init_gss() {
 		fi
 	fi
 
-	if [ -n "$LGSS_KEYRING_DEBUG" ] && \
+	if [[ -n "$LGSS_KEYRING_DEBUG" ]] &&
 	       ( local_mode || from_build_tree ); then
-		lctl set_param -n \
+		$LCTL set_param -n \
 		     sptlrpc.gss.lgss_keyring.debug_level=$LGSS_KEYRING_DEBUG
-	elif [ -n "$LGSS_KEYRING_DEBUG" ]; then
-		do_nodes $(comma_list $(all_nodes)) "modprobe ptlrpc_gss && \
-		lctl set_param -n \
+	elif [[ -n "$LGSS_KEYRING_DEBUG" ]]; then
+		do_nodes $nodes "modprobe ptlrpc_gss && $LCTL set_param -n \
 		   sptlrpc.gss.lgss_keyring.debug_level=$LGSS_KEYRING_DEBUG"
 	fi
 
-	do_nodesv $(comma_list $(all_server_nodes)) \
-		"$LCTL set_param sptlrpc.gss.rsi_upcall=$L_GETAUTH"
+	do_nodesv $servers "$LCTL set_param sptlrpc.gss.rsi_upcall=$L_GETAUTH"
 }
 
 cleanup_gss() {
@@ -3003,8 +3000,8 @@ sanity_mount_check_nodes () {
 		do_nodes $nodes "running=\\\$(grep -c $mnt' ' /proc/mounts);
 mpts=\\\$(mount | grep -c $mnt' ');
 if [ \\\$running -ne \\\$mpts ]; then
-    echo \\\$(hostname) env are INSANE!;
-    exit 1;
+	echo \\\$(hostname) env are INSANE!;
+	exit 1;
 fi"
 		[ $? -eq 0 ] || rc=1
 	done
@@ -3184,13 +3181,13 @@ if [ \\\$running -ne 0 ] ; then
 echo Stopping client \\\$(hostname) $mnt opts:$force;
 lsof $mnt || need_kill=no;
 if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
-    pids=\\\$(lsof -t $mnt | sort -u);
-    if [ -n \\\"\\\$pids\\\" ]; then
-             kill -9 \\\$pids;
-    fi
+	pids=\\\$(lsof -t $mnt | sort -u);
+	if [ -n \\\"\\\$pids\\\" ]; then
+		kill -9 \\\$pids;
+	fi
 fi;
 while umount $force $mnt 2>&1 | grep -q "busy"; do
-    echo "$mnt is still busy, wait one second" && sleep 1;
+	echo "$mnt is still busy, wait one second" && sleep 1;
 done;
 fi"
 }
@@ -3359,7 +3356,7 @@ check_progs_installed () {
 
 # recovery-scale functions
 node_var_name() {
-    echo __$(echo $1 | tr '-' '_' | tr '.' '_')
+	echo __$(echo $1 | tr '-' '_' | tr '.' '_')
 }
 
 start_client_load() {
@@ -3523,8 +3520,8 @@ start_vmstat() {
 	[ -z "$nodes" -o -z "$pid_file" ] && return 0
 
 	do_nodes $nodes \
-        "vmstat 1 > $TESTLOG_PREFIX.$TESTNAME.vmstat.\\\$(hostname -s).log \
-        2>/dev/null </dev/null & echo \\\$! > $pid_file"
+	    "vmstat 1 > $TESTLOG_PREFIX.$TESTNAME.vmstat.\\\$(hostname -s).log \
+	     2>/dev/null </dev/null & echo \\\$! > $pid_file"
 }
 
 # Display the nodes on which client loads failed.
@@ -5401,9 +5398,10 @@ cleanup_echo_devs () {
 kptr_enable_and_save() {
 	# do not overwrite whatever was initially saved:
 	[[ -f $TMP/kptr-$PPID-env ]] && return
+	local nodes=$(all_nodes)
 
 	declare -A kptr
-	for node in $(all_nodes); do
+	for node in ${nodes//,/ }; do
 		kptr[$node]=$(do_node $node "sysctl --values kernel/kptr_restrict")
 		do_node $node "sysctl -wq kernel/kptr_restrict=1"
 	done
@@ -5413,11 +5411,12 @@ kptr_enable_and_save() {
 # Restore the initial %pK settings
 kptr_restore() {
 	[[ ! -f $TMP/kptr-$PPID-env ]] && return
+	local nodes=$(all_nodes)
 
 	source $TMP/kptr-$PPID-env
 
 	local param
-	for node in $(all_nodes); do
+	for node in ${nodes//,/ }; do
 		[[ -z ${kptr[$node]} ]] && continue
 		param="kernel/kptr_restrict=${kptr[$node]}"
 		do_node $node "sysctl -wq ${param} || true"
@@ -5506,9 +5505,8 @@ mkfs_opts() {
 	local var
 	local varbs=${facet}_BLOCKSIZE
 
-	if [ $type == MGS ] || ( [ $type == MDS ] &&
-                                 [ "$dev" == $(mgsdevname) ] &&
-				 [ "$host" == "$(facet_host mgs)" ] ); then
+	if [[ ("$type" == "MDS"  && "$dev" == $(mgsdevname) &&
+	       "$host" == "$(facet_host mgs)" ) || "$type" == "MGS"  ]]; then
 		opts="--mgs"
 	else
 		opts="--mgsnode=$MGSNID"
@@ -5984,7 +5982,7 @@ setupall() {
 }
 
 mounted_lustre_filesystems() {
-        awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
+	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
 
 init_facet_vars () {
@@ -6425,8 +6423,7 @@ set_pools_quota () {
 			fi
 			for pool in $p; do
 				$LFS setquota -u $u -B $o --pool $pool $DIR ||
-                                        error "setquota -u $u -B $o \
-						--pool $pool failed"
+					error "setquota -u $u -B $o --pool $pool failed"
 			done
 		done
 		$LFS quota -uv $u --pool  $DIR
@@ -6911,10 +6908,10 @@ testslist_filter () {
 	[ x"${!var}" != x ] && stop_at=${!var}
 
 	sed -n 's/^test_\([^ (]*\).*/\1/p' $script |
-        awk ' BEGIN { if ("'${start_at:-0}'" != 0) flag = 1 }
-            /^'${start_at}'$/ {flag = 0}
-            {if (flag == 1) print $0}
-            /^'${stop_at}'$/ { flag = 1 }'
+	awk ' BEGIN { if ("'${start_at:-0}'" != 0) flag = 1 }
+	    /^'${start_at}'$/ {flag = 0}
+	    {if (flag == 1) print $0}
+	    /^'${stop_at}'$/ { flag = 1 }'
 }
 
 absolute_path() {
@@ -7680,13 +7677,12 @@ pass() {
 }
 
 check_mds() {
-	local FFREE=$(do_node $SINGLEMDS \
-        lctl get_param -n osd*.*MDT*.filesfree | calc_sum)
-	local FTOTAL=$(do_node $SINGLEMDS \
-        lctl get_param -n osd*.*MDT*.filestotal | calc_sum)
+	local ffree=$(do_node $SINGLEMDS \
+		      $LCTL get_param -n osd*.*MDT*.filesfree | calc_sum)
+	local ftotaL=$(do_node $SINGLEMDS \
+		       $LCTL get_param -n osd*.*MDT*.filestotal | calc_sum)
 
-	[ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" ||
-		true
+	(( $ffree < $ftotal )) || error "files free $ffree >= total $ftotal"
 }
 
 reset_fail_loc () {
@@ -8244,32 +8240,26 @@ all_osts_nodes() {
 }
 
 # Get all of the server nodes, including active and passive nodes.
-all_server_nodes () {
+all_server_nodes() {
 	local nodes
-	local nodes_sort
-	local i
 
 	nodes="$mgs_HOST $mgsfailover_HOST $(all_mdts_nodes) $(all_osts_nodes)"
 
-	nodes_sort=$(for i in ${nodes//,/ }; do echo $i; done | sort -u)
-	echo -n $nodes_sort
+	comma_list $nodes
 }
 
 # Get all of the client and server nodes, including active and passive nodes.
-all_nodes () {
+all_nodes() {
 	local nodes=$HOSTNAME
-	local nodes_sort
-	local i
 
 	# CLIENTS (if specified) contains the local client
-	[ -n "$CLIENTS" ] && nodes=${CLIENTS//,/ }
+	[[ -z "$CLIENTS" ]] || nodes=$CLIENTS
 
-	if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
-		nodes="$nodes $(all_server_nodes)"
+	if [[ "$PDSH" && "$PDSH" != "no_dsh" ]]; then
+		nodes="$nodes,$(all_server_nodes)"
 	fi
 
-	nodes_sort=$(for i in ${nodes//,/ }; do echo $i; done | sort -u)
-	echo -n $nodes_sort
+	comma_list $nodes
 }
 
 init_clients_lists () {
@@ -8497,8 +8487,8 @@ refresh_krb5_tgt() {
 	CLIENTS=${CLIENTS:-$HOSTNAME}
 	do_nodes $CLIENTS "set -x
 if ! $myRUNAS krb5_login.sh; then
-    echo "Failed to refresh Krb5 TGT for UID/GID $myRUNAS_UID/$myRUNAS_GID."
-    exit 1
+	echo "Failed to refresh Krb5 TGT for UID/GID $myRUNAS_UID/$myRUNAS_GID."
+	exit 1
 fi"
 }
 
@@ -9112,14 +9102,6 @@ wait_dne_interconnect() {
 	fi
 }
 
-get_clientmdc_proc_path() {
-    echo "${1}-mdc-*"
-}
-
-get_clientmgc_proc_path() {
-    echo "*"
-}
-
 do_rpc_nodes () {
 	local quiet
 
@@ -9154,13 +9136,12 @@ wait_clients_import_state () {
 	for facet in ${facets//,/ }; do
 		local label=$(convert_facet2label $facet)
 		local proc_path
+
 		case $facet in
 		ost* ) proc_path="osc.$(get_clientosc_proc_path \
 					$label).ost_server_uuid" ;;
-		mds* ) proc_path="mdc.$(get_clientmdc_proc_path \
-					$label).mds_server_uuid" ;;
-		mgs* ) proc_path="mgc.$(get_clientmgc_proc_path \
-					$label).mgs_server_uuid" ;;
+		mds* ) proc_path="mdc.$label-mdc-*.mds_server_uuid" ;;
+		mgs* ) proc_path="mgc.$label.mgs_server_uuid" ;;
 		*) error "unknown facet!" ;;
 		esac
 
@@ -11110,8 +11091,7 @@ lfsck_verify_pfid()
 	local f
 	local rc=0
 
-	# Cancel locks before setting lfsck_verify_pfid so that errors are more
-        # controllable
+	# Cancel locks before setting lfsck_verify_pfid so errors are controlled
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
 
@@ -12509,9 +12489,11 @@ wait_nm_sync() {
 		return
 	fi
 
+	local nodes=$(all_server_nodes)
+
 	# wait up to 10 seconds for other servers to sync with mgs
-	for i in $(seq 1 10); do
-		for node in $(all_server_nodes); do
+	for i in {1..10}; do
+		for node in ${nodes//,/ }; do
 			local node_ip=$(host_nids_address $node $NETTYPE |
 					cut -d' ' -f1)
 

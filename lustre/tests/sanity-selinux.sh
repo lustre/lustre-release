@@ -563,8 +563,8 @@ remove_nodemap() {
 }
 
 test_21a() {
-	[ "$MDS1_VERSION" -lt $(version_code 2.11.56) ] &&
-		skip "Need MDS >= 2.11.56"
+	(( $MDS1_VERSION >= $(version_code v2_12_52-42-gdd200e5530) )) ||
+		skip "Need MDS >= 2.12.52.42 for selinux connect checks"
 
 	local sepol
 
@@ -583,16 +583,16 @@ test_21a() {
 		# update mount option with skpath
 		MOUNT_OPTS=$(add_sk_mntflag $MOUNT_OPTS)
 		export SK_UNIQUE_NM=true
+		export servers=$(all_server_nodes)
 
 		# load specific key on servers
-		do_nodes $(comma_list $(all_server_nodes)) "$LGSS_SK -t server \
-						    -l $SK_PATH/nodemap/c0.key"
+		do_nodes $servers \
+			"$LGSS_SK -t server -l $SK_PATH/nodemap/c0.key"
 
 		# set perms for per-nodemap keys else permission denied
-		do_nodes $(comma_list $(all_server_nodes)) \
-		 "keyctl show | grep lustre | cut -c1-11 |
-				sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+		do_nodes $servers \
+		    "keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
+		     xargs -IX keyctl setperm X 0x3f3f3f3f"
 
 	fi
 
@@ -631,8 +631,8 @@ test_21a() {
 run_test 21a "Send sepol at connect"
 
 test_21b() {
-	[ "$MDS1_VERSION" -lt $(version_code 2.11.56) ] &&
-		skip "Need MDS >= 2.11.56"
+	(( $MDS1_VERSION >= $(version_code v2_12_52-43-g0a773f04b2) )) ||
+		skip "Need MDS >= 2.12.52.43 for selinux metadata checks"
 
 	stack_trap "restore_opencache" EXIT
 	disable_opencache
@@ -671,16 +671,16 @@ test_21b() {
 
 	if $GSS_SK; then
 		export SK_UNIQUE_NM=true
+		local servers=$(all_server_nodes)
 
 		# load specific key on servers
-		do_nodes $(comma_list $(all_server_nodes)) "$LGSS_SK -t server \
-						    -l $SK_PATH/nodemap/c0.key"
+		do_nodes $servers \
+			"$LGSS_SK -t server -l $SK_PATH/nodemap/c0.key"
 
 		# set perms for per-nodemap keys else permission denied
-		do_nodes $(comma_list $(all_server_nodes)) \
-		 "keyctl show | grep lustre | cut -c1-11 |
-				sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+		do_nodes $servers \
+		    "keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
+		     xargs -IX keyctl setperm X 0x3f3f3f3f"
 
 	fi
 

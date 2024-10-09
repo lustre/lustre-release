@@ -6277,8 +6277,8 @@ cleanup_for_enc_tests() {
 test_42() {
 	[[ $(facet_fstype ost1) == zfs ]] && skip "skip ZFS backend"
 
-	(( $MDS1_VERSION > $(version_code 2.15.51) )) ||
-		skip "Need MDS version at least 2.15.51"
+	(( $MDS1_VERSION > $(version_code v2_15_53-41-g348446d637) )) ||
+		skip "Need MDS >= 2.15.53.41 for encrypted OST object flag"
 
 	echo "#####"
 	echo "If the MDT-object has the encryption flag but the OST-object"
@@ -6302,11 +6302,11 @@ test_42() {
 		error "dd ${tfile}_2 failed"
 
 	#define OBD_FAIL_LFSCK_NO_ENCFLAG	0x1632
-	do_nodes $(comma_list $(all_nodes)) "$LCTL set_param fail_loc=0x1632"
+	do_nodes $(all_nodes) "$LCTL set_param fail_loc=0x1632"
 	touch $DIR/$tdir/${tfile}_3 || error "touch ${tfile}_3 failed"
 	dd if=/dev/zero of=$DIR/$tdir/${tfile}_4 bs=1 count=1 conv=fsync ||
 		error "dd ${tfile}_4 failed"
-	do_nodes $(comma_list $(all_nodes)) "$LCTL set_param fail_loc=0x0"
+	do_nodes $(all_nodes) "$LCTL set_param fail_loc=0x0"
 	cancel_lru_locks osc
 
 	echo "Trigger layout LFSCK to find out inconsistent OST-object enc flag"
@@ -6322,10 +6322,10 @@ test_42() {
 
 	local repaired=$($SHOW_LAYOUT |
 			 awk '/^repaired_others/ { print $2 }')
-	[ $repaired -eq 2 ] ||
+	(( $repaired == 2 )) ||
 		error "Fail to repair inconsistent enc flag: $repaired"
 }
-run_test 42 "LFSCK can repair inconsistent MDT-object/OST-object encryption flags"
+run_test 42 "LFSCK repairs inconsistent MDT-object/OST-object encryption flags"
 
 test_43()
 {
