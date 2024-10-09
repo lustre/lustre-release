@@ -97,7 +97,7 @@ scrub_prep() {
 	check_mount_and_prep
 
 	echo "preparing... $(date)"
-	for n in $(seq $MDSCOUNT); do
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
 		echo "creating $nfiles files on mds$n"
 		test_mkdir -i $((n - 1)) -c1 $DIR/$tdir/mds$n ||
 			error "Failed to create directory mds$n"
@@ -115,55 +115,52 @@ scrub_prep() {
 		fi
 	done
 	echo "prepared $(date)."
+	local mdts=$(mdts_nodes)
 
 	[ ! -z $inject ] && [ $inject -eq 2 ] && {
 		#define OBD_FAIL_OSD_NO_OI_ENTRY	0x198
-		do_nodes $(comma_list $(mdts_nodes)) \
-				$LCTL set_param fail_loc=0x198
+		do_nodes $mdts "$LCTL set_param fail_loc=0x198"
 
-		for n in $(seq $MDSCOUNT); do
+		for ((n = 1; n <= $MDSCOUNT; n++)); do
 			cp $LUSTRE/tests/runas $DIR/$tdir/mds$n ||
 				error "Fail to copy runas to MDS$n"
 		done
 
-		do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0
+		do_nodes $mdts "$LCTL set_param fail_loc=0"
 	}
 
 	[ ! -z $inject ] && [ $inject -eq 1 ] &&
 		[ "$mds1_FSTYPE" = "zfs" ] && {
 		#define OBD_FAIL_OSD_FID_MAPPING	0x193
-		do_nodes $(comma_list $(mdts_nodes)) \
-			$LCTL set_param fail_loc=0x193
+		do_nodes $mdts "$LCTL set_param fail_loc=0x193"
 
-		for n in $(seq $MDSCOUNT); do
+		for ((n = 1; n <= $MDSCOUNT; n++)); do
 			chmod 0400 $DIR/$tdir/mds$n/test-framework.sh
 			chmod 0400 $DIR/$tdir/mds$n/sanity-scrub.sh
 		done
 
-		do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0
+		do_nodes $mdts "$LCTL set_param fail_loc=0"
 	}
 
 	cleanup_mount $MOUNT > /dev/null || error "Fail to stop client!"
 
 	# sync local transactions on every MDT
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n osd*.*MDT*.force_sync=1"
+	do_nodes $mdts "$LCTL set_param -n osd*.*MDT*.force_sync=1"
 
 	# wait for a while to cancel update logs after transactions committed.
 	sleep 3
 
 	# sync again to guarantee all things done.
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n osd*.*MDT*.force_sync=1"
+	do_nodes $mdts "$LCTL set_param -n osd*.*MDT*.force_sync=1"
 
-	for n in $(seq $MDSCOUNT); do
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
 		echo "stop mds$n"
 		stop mds$n > /dev/null || error "Fail to stop MDS$n!"
 	done
 
 	[ ! -z $inject ] && [ "$mds1_FSTYPE" = "ldiskfs" ] && {
 		if [ $inject -eq 1 ]; then
-			for n in $(seq $MDSCOUNT); do
+			for ((n = 1; n <= $MDSCOUNT; n++)); do
 				mds_backup_restore mds$n ||
 					error "Backup/restore on mds$n failed"
 			done
@@ -309,8 +306,7 @@ scrub_remove_ois() {
 }
 
 scrub_enable_auto() {
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
-		osd-*.*.auto_scrub=1
+	do_nodes $(mdts_nodes) "$LCTL set_param -n osd-*.*.auto_scrub=1"
 }
 
 full_scrub_ratio() {
@@ -318,8 +314,8 @@ full_scrub_ratio() {
 
 	local ratio=$1
 
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
-		osd-*.*.full_scrub_ratio=$ratio
+	do_nodes $(mdts_nodes) \
+		"$LCTL set_param -n osd-*.*.full_scrub_ratio=$ratio"
 }
 
 full_scrub_threshold_rate() {
@@ -327,18 +323,18 @@ full_scrub_threshold_rate() {
 
 	local rate=$1
 
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
-		osd-*.*.full_scrub_threshold_rate=$rate
+	do_nodes $(mdts_nodes) \
+		$LCTL set_param -n osd-*.*.full_scrub_threshold_rate=$rate
 }
 
 scrub_enable_index_backup() {
-	do_nodes $(comma_list $(all_server_nodes)) $LCTL set_param -n \
-		osd-*.*.index_backup=1
+	do_nodes $(comma_list $(all_server_nodes)) \
+		$LCTL set_param -n osd-*.*.index_backup=1
 }
 
 scrub_disable_index_backup() {
-	do_nodes $(comma_list $(all_server_nodes)) $LCTL set_param -n \
-		osd-*.*.index_backup=0
+	do_nodes $(comma_list $(all_server_nodes)) \
+		$LCTL set_param -n osd-*.*.index_backup=0
 }
 
 test_0() {
@@ -708,6 +704,7 @@ run_test 4e "FID reuse can be fixed"
 test_5() {
 	formatall > /dev/null
 	setupall > /dev/null
+	local mdts=$(mdts_nodes)
 
 	scrub_prep 100 1
 	echo "starting MDTs with OI scrub disabled (1)"
@@ -720,21 +717,19 @@ test_5() {
 	full_scrub_ratio 0
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=3 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=3 fail_loc=0x190"
 
 	scrub_check_data 6
 	umount_client $MOUNT || error "(7) Fail to stop client!"
 	scrub_check_status 8 scanning
 
 	#define OBD_FAIL_OSD_SCRUB_CRASH	 0x191
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x191
+	do_nodes $mdts "$LCTL set_param fail_loc=0x191"
 
 	sleep 4
 	scrub_stop_mds 9
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_loc=0 fail_val=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0 fail_val=0"
 
 	echo "starting MDTs with OI scrub disabled (2)"
 	scrub_start_mds 10 "$MOUNT_OPTS_NOSCRUB"
@@ -742,32 +737,30 @@ test_5() {
 	scrub_stop_mds 12
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=3 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=3 fail_loc=0x190"
 
 	echo "starting MDTs without disabling OI scrub"
 	scrub_start_mds 13 "$MOUNT_OPTS_SCRUB"
 	scrub_check_status 14 scanning
 
 	#define OBD_FAIL_OSD_SCRUB_FATAL	 0x192
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x192
+	do_nodes $mdts "$LCTL set_param fail_loc=0x192"
 
 	scrub_check_status 15 failed
 	mount_client $MOUNT || error "(16) Fail to start client!"
 
 	full_scrub_ratio 0
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_loc=0 fail_val=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0 fail_val=0"
 
 	local n
 	declare -a pids
 
-	for n in $(seq $MDSCOUNT); do
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
 		stat $DIR/$tdir/mds$n/sanity-scrub.sh &
 		pids[$n]=$!
 	done
 
-	for n in $(seq $MDSCOUNT); do
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
 		wait ${pids[$n]} ||
 			error "(18) Fail to stat mds$n/sanity-scrub.sh"
 	done
@@ -786,10 +779,10 @@ test_6() {
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
 	full_scrub_ratio 0
+	local mdts=$(mdts_nodes)
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=2 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=2 fail_loc=0x190"
 
 	scrub_check_data 6
 
@@ -797,16 +790,15 @@ test_6() {
 	sleep 5
 	# Fail the OI scrub to guarantee there is at least one checkpoint
 	#define OBD_FAIL_OSD_SCRUB_FATAL	 0x192
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x192
+	do_nodes $mdts "$LCTL set_param fail_loc=0x192"
 
 	scrub_check_status 7 failed
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=3 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=3 fail_loc=0x190"
 
 	local n
-	for n in $(seq $MDSCOUNT); do
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
 		# stat will re-trigger OI scrub
 		stat $DIR/$tdir/mds$n/sanity-scrub.sh ||
 			error "(8) Failed to stat mds$n/sanity-scrub.sh"
@@ -816,11 +808,11 @@ test_6() {
 	scrub_check_status 10 scanning
 
 	#define OBD_FAIL_OSD_SCRUB_CRASH	 0x191
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x191
+	do_nodes $mdts "$LCTL set_param fail_loc=0x191"
 
 	sleep 4
 	local -a position0
-	for n in $(seq $MDSCOUNT); do
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
 		position0[$n]=$(scrub_status $n |
 			awk '/^last_checkpoint_position/ {print $2}')
 		position0[$n]=$((${position0[$n]} + 1))
@@ -829,8 +821,7 @@ test_6() {
 	scrub_stop_mds 11
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=3 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=3 fail_loc=0x190"
 
 	echo "starting MDTs without disabling OI scrub"
 	scrub_start_mds 12 "$MOUNT_OPTS_SCRUB"
@@ -838,7 +829,7 @@ test_6() {
 	scrub_check_status 13 scanning
 
 	local -a position1
-	for n in $(seq $MDSCOUNT); do
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
 		position1[$n]=$(scrub_status $n |
 			awk '/^latest_start_position/ {print $2}')
 		if [ ${position0[$n]} -ne ${position1[$n]} ]; then
@@ -847,8 +838,7 @@ test_6() {
 		fi
 	done
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_loc=0 fail_val=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0 fail_val=0"
 
 	scrub_check_status 15 completed
 	scrub_check_flags 16 ""
@@ -864,15 +854,15 @@ test_7() {
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
 	full_scrub_ratio 0
+	local mdts=$(mdts_nodes)
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=3 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=3 fail_loc=0x190"
 
 	scrub_check_data 6
 
 	local n
-	for n in $(seq $MDSCOUNT); do
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
 		stat $DIR/$tdir/mds$n/${tfile}300 ||
 			error "(7) Failed to stat mds$n/${tfile}300!"
 	done
@@ -884,8 +874,7 @@ test_7() {
 		scrub_check_flags 9 recreated,inconsistent,auto
 	fi
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_loc=0 fail_val=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0 fail_val=0"
 
 	scrub_check_status 10 completed
 	scrub_check_flags ""
@@ -898,10 +887,10 @@ test_8() {
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
+	local mdts=$(mdts_nodes)
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=1 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=1 fail_loc=0x190"
 
 	scrub_start 5
 	scrub_check_status 6 scanning
@@ -910,8 +899,7 @@ test_8() {
 	scrub_start 9
 	scrub_check_status 10 scanning
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_loc=0 fail_val=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0 fail_val=0"
 
 	scrub_check_status 11 completed
 	scrub_check_flags 12 ""
@@ -1011,10 +999,10 @@ test_10a() {
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
 	full_scrub_ratio 0
+	local mdts=$(mdts_nodes)
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=1 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=1 fail_loc=0x190"
 
 	scrub_check_data 6
 	scrub_check_status 7 scanning
@@ -1028,8 +1016,7 @@ test_10a() {
 	scrub_start_mds 13 "$MOUNT_OPTS_SCRUB"
 	scrub_check_status 14 scanning
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_loc=0 fail_val=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0 fail_val=0"
 
 	scrub_check_status 15 completed
 	scrub_check_flags 16 ""
@@ -1043,10 +1030,10 @@ test_10b() {
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
+	local mdts=$(mdts_nodes)
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=3 fail_loc=0x190
+	do_nodes $mdts "$LCTL set_param fail_val=3 fail_loc=0x190"
 
 	scrub_start 5
 	scrub_check_status 6 scanning
@@ -1059,8 +1046,7 @@ test_10b() {
 	scrub_start_mds 11 "$MOUNT_OPTS_SCRUB"
 	scrub_check_status 12 scanning
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_loc=0 fail_val=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0 fail_val=0"
 
 	scrub_check_status 13 completed
 	scrub_check_flags 14 ""
@@ -1290,11 +1276,12 @@ run_test 15 "Dryrun mode OI scrub"
 test_16() {
 	check_mount_and_prep
 	scrub_enable_index_backup
+	local mdts=$(mdts_nodes)
 
 	#define OBD_FAIL_OSD_INDEX_CRASH	0x199
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x199
+	do_nodes $mdts "$LCTL set_param fail_loc=0x199"
 	scrub_prep 0
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0"
 
 	echo "starting MDTs without disabling OI scrub"
 	scrub_start_mds 1 "$MOUNT_OPTS_SCRUB"
