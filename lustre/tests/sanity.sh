@@ -25699,14 +25699,14 @@ test_239A() { # was test_239
 	[ $MDS1_VERSION -lt $(version_code 2.5.60) ] &&
 		skip "Need MDS version at least 2.5.60"
 
-	local list=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/f- 5000
 	unlinkmany $DIR/$tdir/f- 5000
 	[ $MDS1_VERSION -gt $(version_code 2.10.4) ] &&
-		do_nodes $list "lctl set_param -n osp.*.force_sync=1"
-	changes=$(do_nodes $list "lctl get_param -n osp.*MDT*.sync_changes \
+		do_nodes $mdts "lctl set_param -n osp.*.force_sync=1"
+	changes=$(do_nodes $mdts "lctl get_param -n osp.*MDT*.sync_changes \
 			osp.*MDT*.sync_in_flight" | calc_sum)
 	[ "$changes" -eq 0 ] || error "$changes not synced"
 }
@@ -26042,7 +26042,7 @@ test_247f() {
 
 	local dir
 	local fileset=$FILESET
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	do_nodes $mdts "$LCTL set_param mdt.*.enable_remote_subdir_mount=1"
 	for dir in $tdir/remote $tdir/remote/subdir $tdir/striped \
@@ -26068,7 +26068,7 @@ test_subdir_mount_lock()
 		error "mount $FILESET failed"
 	stack_trap "umount $submount"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	local nrpcs
 
@@ -28788,10 +28788,10 @@ test_300m() {
 run_test 300m "setstriped directory on single MDT FS"
 
 cleanup_300n() {
-	local list=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	trap 0
-	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
+	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
 }
 
 test_300n() {
@@ -28802,7 +28802,7 @@ test_300n() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local stripe_index
-	local list=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	trap cleanup_300n RETURN EXIT
 	mkdir -p $DIR/$tdir
@@ -28811,22 +28811,22 @@ test_300n() {
 				$DIR/$tdir/striped_dir > /dev/null 2>&1 &&
 		error "create striped dir succeeds with gid=0"
 
-	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=-1
+	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=-1
 	$RUNAS $LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
 		error "create striped dir fails with gid=-1"
 
-	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
+	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
 	$RUNAS $LFS setdirstripe -i 1 -c$MDSCOUNT -D \
 				$DIR/$tdir/striped_dir > /dev/null 2>&1 &&
 		error "set default striped dir succeeds with gid=0"
 
 
-	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=-1
+	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=-1
 	$RUNAS $LFS setdirstripe -i 1 -c$MDSCOUNT -D $DIR/$tdir/striped_dir ||
 		error "set default striped dir fails with gid=-1"
 
 
-	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
+	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
 	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir ||
 					error "create test_dir fails"
 	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir1 ||
@@ -29004,7 +29004,7 @@ test_300t() {
 	(( $stripe_count == $MDSCOUNT )) || error "wrong stripe count"
 
 	local max_count=$((MDSCOUNT - 1))
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	do_nodes $mdts $LCTL set_param lod.*.max_mdt_stripecount=$max_count
 	stack_trap "do_nodes $mdts $LCTL set_param lod.*.max_mdt_stripecount=0"
@@ -29504,7 +29504,7 @@ test_311() {
 
 	local old_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
 	echo "old_iused=$old_iused"
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -i 0 -c 1 $DIR/$tdir
@@ -31461,6 +31461,7 @@ set_maxage() {
 	local lmv_qos_maxage
 	local lod_qos_maxage
 	local new_maxage=$1
+	local mdts=$(mdts_nodes)
 
 	lmv_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
 	$LCTL set_param lmv.*.qos_maxage=$new_maxage
@@ -31468,10 +31469,8 @@ set_maxage() {
 		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null"
 	lod_qos_maxage=$(do_facet mds1 $LCTL get_param -n \
 		lod.$FSNAME-MDT0000-mdtlov.qos_maxage | awk '{ print $1 }')
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param \
-		lod.*.mdt_qos_maxage=$new_maxage
-	stack_trap "do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param \
-		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null"
+	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_maxage=$new_maxage
+	stack_trap "do_nodes $mdts $LCTL set_param lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null"
 }
 
 generate_uneven_mdts() {
@@ -31570,7 +31569,7 @@ generate_uneven_mdts() {
 test_qos_mkdir() {
 	local mkdir_cmd=$1
 	local stripe_count=$2
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	local testdir
 	local lmv_qos_prio_free
@@ -32347,13 +32346,12 @@ test_416() {
 run_test 416 "transaction start failure won't cause system hung"
 
 cleanup_417() {
+	local mdts=$(mdts_nodes)
+
 	trap 0
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n mdt.*MDT*.enable_dir_migration=1"
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n mdt.*MDT*.enable_remote_dir=1"
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n mdt.*MDT*.enable_striped_dir=1"
+	do_nodes $mdts "$LCTL set_param -n mdt.*MDT*.enable_dir_migration=1"
+	do_nodes $mdts "$LCTL set_param -n mdt.*MDT*.enable_remote_dir=1"
+	do_nodes $mdts "$LCTL set_param -n mdt.*MDT*.enable_striped_dir=1"
 }
 
 test_417() {
@@ -32362,20 +32360,18 @@ test_417() {
 		skip "Need MDS version at least 2.11.56"
 
 	trap cleanup_417 RETURN EXIT
+	local mdts=$(mdts_nodes)
 
 	$LFS mkdir -i 1 $DIR/$tdir.1 || error "create remote dir $tdir.1 failed"
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n mdt.*MDT*.enable_dir_migration=0"
+	do_nodes $mdts "$LCTL set_param -n mdt.*MDT*.enable_dir_migration=0"
 	$LFS migrate -m 0 $DIR/$tdir.1 &&
 		error "migrate dir $tdir.1 should fail"
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n mdt.*MDT*.enable_remote_dir=0"
+	do_nodes $mdts "$LCTL set_param -n mdt.*MDT*.enable_remote_dir=0"
 	$LFS mkdir -i 1 $DIR/$tdir.2 &&
 		error "create remote dir $tdir.2 should fail"
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n mdt.*MDT*.enable_striped_dir=0"
+	do_nodes $mdts "$LCTL set_param -n mdt.*MDT*.enable_striped_dir=0"
 	$LFS mkdir -c 2 $DIR/$tdir.3 &&
 		error "create striped dir $tdir.3 should fail"
 	true
@@ -32943,7 +32939,7 @@ test_427() {
 	setfattr -n user.attr0 -v "some text" $DIR/$tdir/1/dir
 
 #define OBD_FAIL_OUT_OBJECT_MISS        0x1708
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x80001708
+	do_nodes $(mdts_nodes) "$LCTL set_param fail_loc=0x80001708"
 	setfattr -n user.attr1 -v "some text" $DIR/$tdir/1/dir &
 	setfattr -n user.attr2 -v "another attr"  $DIR/$tdir/2/dir2 &
 
@@ -35311,7 +35307,7 @@ test_904() {
 	local testfile="$DIR/$tdir/$tfile"
 	local xattr="trusted.projid"
 	local projid
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local saved=$(do_facet mds1 $LCTL get_param -n \
 		osd-ldiskfs.*MDT0000.enable_projid_xattr)
 
