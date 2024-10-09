@@ -302,6 +302,7 @@ test_5() {
 	local file2=$DIR/$tdir/$tfile-2
 	local file3=$DIR/$tdir/$tfile-3
 	local wait_time=$((TIMEOUT + TIMEOUT / 2))
+	local mdts=$(mdts_nodes)
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
@@ -314,9 +315,9 @@ test_5() {
 	$RUNAS $LFS flushctx $MOUNT || error "can't flush context (1)"
 
 	# stop lsvcgssd
-	send_sigint $(comma_list $(mdts_nodes)) $LSVCGSSD
+	send_sigint $mdts $LSVCGSSD
 	sleep 5
-	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) $LSVCGSSD &&
+	check_gss_daemon_nodes $mdts $LSVCGSSD &&
 		error "$LSVCGSSD still running (1)"
 
 	# daemon should restart automatically, at least on newer servers
@@ -335,16 +336,16 @@ test_5() {
 	fi
 
 	# stop lsvcgssd
-	send_sigint $(comma_list $(mdts_nodes)) $LSVCGSSD
+	send_sigint $mdts $LSVCGSSD
 	sleep 5
-	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) $LSVCGSSD &&
+	check_gss_daemon_nodes $mdts $LSVCGSSD &&
 		error "$LSVCGSSD still running (2)"
 
 	# restart lsvcgssd, expect touch succeed
 	echo "restart $LSVCGSSD and recovering"
-	start_gss_daemons $(comma_list $(mdts_nodes)) $LSVCGSSD "-vvv"
+	start_gss_daemons $mdts $LSVCGSSD "-vvv"
 	sleep 5
-	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) $LSVCGSSD
+	check_gss_daemon_nodes $mdts $LSVCGSSD
 	$RUNAS touch $file3 || error "should not fail now"
 	[ -f $file3 ] || error "$file3 not found"
 }

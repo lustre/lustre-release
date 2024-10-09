@@ -28,7 +28,7 @@ require_dsh_ost || exit 0
 check_and_setup_lustre
 
 do_facet mgs $LCTL set_param debug=+snapshot
-do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param debug=+snapshot
+do_nodes $(mdts_nodes) "$LCTL set_param debug=+snapshot"
 
 lss_gen_conf
 lss_cleanup
@@ -374,7 +374,7 @@ run_test 4 "create/delete snapshot after MGS remount"
 
 lss_cleanup
 do_facet mgs $LCTL set_param debug=-snapshot
-do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param debug=-snapshot
+do_nodes $(mdts_nodes) "$LCTL set_param debug=-snapshot"
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -1236,7 +1236,7 @@ init_router_test_vars() {
 	local rnodes_required
 	((rnodes_required=routers_required+rpeers_required))
 	# all remote nodes, including some that may not be used
-	local rnodes_all=( $(remote_nodes_list) )
+	local rnodes_all=( $(remote_nodes_list | tr ',' ' ') )
 	[[ -z $rnodes_all || "${#rnodes_all[@]}" -lt $rnodes_required ]] &&
 		skip "Need at least $rnodes_required remote nodes" \
 			"found \"${rnodes_all[@]}\""
@@ -2033,7 +2033,7 @@ setup_health_test() {
 
 	LNIDS=( $($LCTL list_nids | xargs echo) )
 
-	RNODE=$(awk '{print $1}' <<<$rnodes)
+	RNODE=(${rnodes//,/ })
 	RNIDS=( $(do_node $RNODE $LCTL list_nids | xargs echo) )
 
 	if [[ -z ${RNIDS[@]} ]]; then
@@ -2691,7 +2691,7 @@ test_212() {
 	[[ -z $my_nid ]] &&
 		error "Failed to get primary NID for local host $HOSTNAME"
 
-	local rnode=$(awk '{print $1}' <<<$rnodes)
+	local rnode=(${rnodes//,/ })
 	local rnodenids=$(do_node $rnode $LCTL list_nids | xargs echo)
 	local rloaded=false
 
