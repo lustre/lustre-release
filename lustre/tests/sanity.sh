@@ -1462,7 +1462,7 @@ test_24z() {
 	index=$($LFS getstripe -m $DIR/$tdir.1/$tfile.0)
 	[ $index -eq 0 ] || error "$tfile.0 is on MDT$index"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	do_nodes $mdts $LCTL set_param mdt.*.enable_remote_rename=0
 	stack_trap "do_nodes $mdts $LCTL \
@@ -1864,16 +1864,29 @@ test_27cg() {
 		osts+=",$((i % OSTCOUNT))"
 	done
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local before=$(do_nodes $mdts \
 		"$LCTL get_param -n osd-ldiskfs.*MDT*.stats" |
 		awk '/many credits/{print $3}' |
 		calc_sum)
 
-	$LFS setstripe -o $osts $DIR/$tfile || error "setstripe failed"
+	$LFS setstripe -o $osts $DIR/$tfile || {
+		$LFS df
+		$LFS df -i
+		error "setstripe failed"
+	}
 	$LFS getstripe $DIR/$tfile | grep stripe
 
 	rm -f $DIR/$tfile || error "can't unlink"
+
+	# if running in a loop, don't run out of inodes on these OSTs
+	(( $ONLY_REPEAT_ITER % 20 < 19 )) || {
+		$LFS df
+		$LFS df -i
+		wait_delete_completed
+		sleep 10
+	}
+	(( $ONLY_REPEAT_ITER < 100 )) || skip "too many iterations"
 
 	after=$(do_nodes $mdts \
 		"$LCTL get_param -n osd-ldiskfs.*MDT*.stats" |
@@ -2082,9 +2095,9 @@ function create_and_checktime() {
 }
 
 test_27oo() {
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
-	[ $MDS1_VERSION -lt $(version_code 2.13.57) ] &&
+	(( $MDS1_VERSION >= $(version_code 2.13.57) )) ||
 		skip "Need MDS version at least 2.13.57"
 
 	local f0=$DIR/${tfile}-0
@@ -2208,14 +2221,14 @@ test_27u() { # bug 4900
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local index
-	local list=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
-#define OBD_FAIL_MDS_OSC_PRECREATE      0x139
-	do_nodes $list $LCTL set_param fail_loc=0x139
+	#define OBD_FAIL_MDS_OSC_PRECREATE      0x139
+	do_nodes $mdts "$LCTL set_param fail_loc=0x139"
 	test_mkdir -p $DIR/$tdir
 	stack_trap "simple_cleanup_common 1000"
 	createmany -o $DIR/$tdir/$tfile 1000
-	do_nodes $list $LCTL set_param fail_loc=0
+	do_nodes $mdts "$LCTL set_param fail_loc=0"
 
 	TLOG=$TMP/$tfile.getstripe
 	$LFS getstripe $DIR/$tdir > $TLOG
@@ -3139,7 +3152,7 @@ test_27M() {
 	# Set default striping on directory
 	local setcount=4
 	local stripe_opt
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	# if we run against a 2.12 server which lacks overstring support
 	# then the connect_flag will not report overstriping, even if client
@@ -3557,8 +3570,9 @@ test_27R() {
 	(( $? == 34 )) || error "setting max_stripecount to -1 should fail and return ERANGE"
 
 	local maxcount=$(($OSTCOUNT - 1))
-	local mdts=$(comma_list $(mdts_nodes))
-	do_nodes $mdts $LCTL set_param lod.*.max_stripecount=$maxcount
+	local mdts=$(mdts_nodes)
+
+	do_nodes $mdts "$LCTL set_param lod.*.max_stripecount=$maxcount"
 	stack_trap "do_nodes $mdts $LCTL set_param lod.*.max_stripecount=0"
 
 	local f2="$testdir/f2"
@@ -3610,7 +3624,7 @@ test_27U() {
 	local pool
 	local stripe_count
 	local stripe_count2
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	(( $MDS1_VERSION >= $(version_code 2.15.51) )) ||
 		skip "Need MDS version at least 2.15.51 for append pool feature"
@@ -6510,6 +6524,14 @@ test_51d_sub() {
 	done
 	unlinkmany $DIR/$tdir/t- $nfiles
 	rm  -f $TMP/$tfile
+
+	# if running in a loop, don't run out of inodes on these OSTs
+	(( $ONLY_REPEAT_ITER % 5 < 4 )) || {
+		$LFS df
+		$LFS df -i
+		wait_delete_completed
+		sleep 10
+	}
 
 	local nlast
 	local min=4
@@ -10992,7 +11014,7 @@ test_64g() {
 	(( $MDS1_VERSION >= $(version_code 2.14.56) )) ||
 		skip "Need MDS version at least 2.14.56"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	local old=$($LCTL get_param mdc.$FSNAME-*.grant_shrink_interval |
 			tr '\n' ' ')
@@ -12371,8 +12393,7 @@ test_77o() {
 
 	# print MDT checksum_type
 	echo "$mdt.$FSNAME-*.checksum_type:"
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL get_param -n $mdt.$FSNAME-*.checksum_type
+	do_nodes $(mdts_nodes) "$LCTL get_param -n $mdt.$FSNAME-*.checksum_type"
 
 	local o_count=$(do_nodes $(osts_nodes) \
 		   $LCTL get_param -n $ofd.$FSNAME-*.checksum_type | wc -l)
@@ -12380,7 +12401,7 @@ test_77o() {
 	(( $o_count == $OSTCOUNT )) ||
 		error "found $o_count checksums, not \$OSTCOUNT=$OSTCOUNT"
 
-	local m_count=$(do_nodes $(comma_list $(mdts_nodes)) \
+	local m_count=$(do_nodes $(mdts_nodes) \
 		   $LCTL get_param -n $mdt.$FSNAME-*.checksum_type | wc -l)
 
 	(( $m_count == $MDSCOUNT )) ||
@@ -13734,7 +13755,7 @@ test_103a() {
 	which setfacl || skip_env "could not find setfacl"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
 
 	[[ -z "$saved" ]] || do_nodes $mdts $LCTL set_param mdt.*.job_xattr=NONE
@@ -17599,7 +17620,7 @@ check_stats() {
 
 		if (( $count != $want )); then
 			if [[ $facet =~ "mds" ]]; then
-				do_nodes $(comma_list $(mdts_nodes)) \
+				do_nodes $(mdts_nodes) \
 					$LCTL get_param mdt.*.md_stats
 			else
 				do_nodes $(osts_nodes) \
@@ -19988,7 +20009,7 @@ run_test 160e "changelog negative testing (should return errors)"
 
 test_160f() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[[ $MDS1_VERSION -ge $(version_code 2.10.56) ]] ||
+	(( $MDS1_VERSION >= $(version_code 2.10.56) )) ||
 		skip "Need MDS version at least 2.10.56"
 
 	local mdts=$(mdts_nodes)
@@ -20118,7 +20139,7 @@ run_test 160f "changelog garbage collect (timestamped users)"
 
 test_160g() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $MDS1_VERSION -ge $(version_code 2.14.55) ]] ||
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
 		skip "Need MDS version at least 2.14.55"
 
 	local mdts=$(mdts_nodes)
