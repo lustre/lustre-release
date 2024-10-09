@@ -5628,11 +5628,8 @@ run_test 409b "getattr released file with CDT stopped after remount"
 
 test_410()
 {
-	[ "$MDS1_VERSION" -lt $(version_code 2.15.3.2) ] &&
-		skip "need MDS version at least 2.15.3.2"
-
-	[ "$CLIENT_VERSION" -lt $(version_code 2.15.3.2) ] &&
-		skip "need client version at least 2.15.3.2"
+	(( MDS1_VERSION >= $(version_code 2.15.90.10) )) ||
+		skip "need MDS >= v2_15_90-10-g80a961261a23 for HSM fix"
 
 	mkdir_on_mdt0 $DIR/$tdir
 
