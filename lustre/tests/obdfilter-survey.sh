@@ -102,7 +102,7 @@ run_test 1a "Object Storage Targets survey"
 
 test_1b () {
 	local param_file=$TMP/$tfile-params
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 
 	do_nodesv $osts $LCTL get_param obdfilter.${FSNAME}-*.sync_journal
 	save_lustre_params $(get_facets OST) \

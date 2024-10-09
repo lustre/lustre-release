@@ -1319,7 +1319,7 @@ create_fops_nodemaps() {
 			export SK_UNIQUE_NM=true
 
 			# Load per-NM keys on servers
-			do_nodes $(comma_list $(all_server_nodes)) \
+			do_nodes $(all_server_nodes) \
 				"$LGSS_SK -t server -l $SK_PATH/nodemap/c$i.key"
 
 			# Load per-NM keys on corresponding clients
@@ -1817,7 +1817,7 @@ setup_local_client_nodemap() {
 		fi
 
 		# Load per-NM key on servers
-		do_nodes $(comma_list $(all_server_nodes)) \
+		do_nodes $(all_server_nodes) \
 			"$LGSS_SK -t server -l $SK_PATH/nodemap/${nm_name}.key"
 	fi
 
@@ -3279,7 +3279,7 @@ test_27ad() { #LU-20087
 	(( MDS1_VERSION >= $(version_code v2_16_50-191-ge3051ad0f1) )) ||
 		skip "need MDS >= 2.16.50 for nodemap range offset"
 
-	do_nodes $(comma_list $(all_mdts_nodes)) \
+	do_nodes $(all_mdts_nodes) \
 		"$LCTL set_param mdt.*.identity_upcall=NONE" ||
 		error "disable identity_upcall failed"
 
@@ -11721,8 +11721,7 @@ test_76() {
 	(( $MDS1_VERSION >= $(version_code 2.16.53) )) ||
 		skip "need MDS >= 2.16.53 for suppgroup mapping"
 
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_upcall=NONE
+	do_nodes $(all_mdts_nodes) $LCTL set_param mdt.*.identity_upcall=NONE
 
 	# create a specific group and add it as a supplementary group for $USER0
 	groupadd -g $grpid $grp
@@ -11775,8 +11774,7 @@ test_77() {
 	(( $MDS1_VERSION >= $(version_code 2.16.54) )) ||
 		skip "Need MDS version >= 2.16.54 for proper root offsetting"
 
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_upcall=NONE
+	do_nodes $(all_mdts_nodes) $LCTL set_param mdt.*.identity_upcall=NONE
 
 	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
 
@@ -12063,7 +12061,7 @@ test_79() {
 	(( MDS1_VERSION >= $(version_code 2.17.50) )) ||
 		skip "Need MDS version >= 2.17.50 for gss identification"
 
-	do_nodes $(comma_list $(all_mdts_nodes)) \
+	do_nodes $(all_mdts_nodes) \
 		$LCTL set_param mdt.*.identity_upcall=NONE
 
 	stack_trap cleanup_79 EXIT
@@ -12631,8 +12629,7 @@ test_83() {
 
 	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
 
-	do_nodes $(comma_list $(all_mdts_nodes)) \
-		$LCTL set_param mdt.*.identity_upcall=NONE
+	do_nodes $(all_mdts_nodes) $LCTL set_param mdt.*.identity_upcall=NONE
 
 	$LFS mkdir -i1 -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i0 -c1 $DIR/$tdir/$subd ||
@@ -13343,6 +13340,7 @@ run_test 101 "lgss_sk -a and -l support for ascii-encoded SSK keys"
 
 cleanup_102() {
 	local test_key=$1
+	local all=$(all_nodes)
 
 	# Unmount client
 	if is_mounted $MOUNT; then
@@ -13350,18 +13348,16 @@ cleanup_102() {
 	fi
 
 	# Clear test key from keyring on all nodes
-	do_nodes $(comma_list $(all_nodes)) "keyctl show |
+	do_nodes $all "keyctl show |
 		awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X" \
 		2>/dev/null || true
 
 	# Remove test key file from all nodes
-	do_nodes $(comma_list $(all_nodes)) \
-		"rm -f $test_key" 2>/dev/null || true
+	do_nodes $all "rm -f $test_key" 2>/dev/null || true
 	rm -f $MOUNT/.lgss 2>/dev/null || true
 
 	# Reload original key on servers
-	do_nodes $(comma_list $(all_server_nodes)) \
-		"$LGSS_SK -l $SK_PATH/$FSNAME.key" || true
+	do_nodes $(all_server_nodes) "$LGSS_SK -l $SK_PATH/$FSNAME.key" || true
 
 	# Remount client
 	zconf_mount $HOSTNAME $MOUNT || error "re-mount $MOUNT failed"
@@ -13375,6 +13371,7 @@ cleanup_102() {
 test_102() {
 	local test_key=$SK_PATH/$FSNAME-$TESTNAME.key
 	local mount_key=$MOUNT/.lgss
+	local all_servers=$(all_server_nodes)
 	local nodes=$(all_nodes)
 
 	$SHARED_KEY || skip "Need shared key feature for this test"
@@ -13407,11 +13404,11 @@ test_102() {
 	done
 
 	# Load key on servers, this overrides the key from test-framework
-	do_nodes $(comma_list $(all_server_nodes)) "$LGSS_SK -l $test_key" ||
+	do_nodes $all_servers "$LGSS_SK -l $test_key" ||
 		error "failed to load test key on servers"
 
 	# Verify server key presence in keyring
-	do_nodes $(comma_list $(all_server_nodes)) \
+	do_nodes $all_servers \
 		"keyctl show | grep lustre" || error "no lustre keys loaded"
 
 	# Clear any existing keys from keyring on client
@@ -13457,7 +13454,7 @@ cleanup_103() {
 	umount_client $MOUNT || true
 
 	# clear test key from keyring on all server nodes
-	do_nodes $(comma_list $(all_server_nodes)) "keyctl show |
+	do_nodes $(all_server_nodes) "keyctl show |
 		grep lustre:$FSNAME:default: | cut -c1-11 | sed -e 's/ //g;' |
 		xargs -IX keyctl unlink X" || true
 
@@ -13465,12 +13462,10 @@ cleanup_103() {
 	clear_client_keyring
 
 	# Remove test key file from all nodes
-	do_nodes $(comma_list $(all_nodes)) "rm -f $test_key" ||
-		true
+	do_nodes $(all_nodes) "rm -f $test_key" || true
 
 	# reload test-framework key on servers
-	do_nodes $(comma_list $(all_server_nodes)) \
-		"$LGSS_SK -l $SK_PATH/$FSNAME.key -vvv" ||
+	do_nodes $(all_server_nodes) "$LGSS_SK -l $SK_PATH/$FSNAME.key -vvv" ||
 		error "failed to reload key on servers"
 
 	# check old exports have been gc'ed
@@ -13516,7 +13511,7 @@ test_103() {
 	done
 
 	# load new key on servers with -s to not overwrite already existing key
-	do_nodes $(comma_list $(all_server_nodes)) \
+	do_nodes $(all_server_nodes) \
 		"$LGSS_SK -l $test_key -s -vvv -x $timeout" ||
 		error "failed to load key on servers"
 
@@ -13813,7 +13808,7 @@ cleanup_106() {
 	clear_client_keyring
 
 	# clear key from keyring on all server nodes
-	do_nodes $(comma_list $(all_server_nodes)) "keyctl show |
+	do_nodes $(all_server_nodes) "keyctl show |
 		grep lustre:$FSNAME:$nm | cut -c1-11 | sed -e 's/ //g;' |
 		xargs -IX keyctl unlink X" || true
 
@@ -13853,8 +13848,7 @@ test_106() {
 	wait_nm_sync $nm trusted_nodemap
 
 	# Load c0 key on all nodes
-	do_nodes $(comma_list $(all_nodes)) \
-		"$LGSS_SK -l $ssk >/dev/null 2>&1" ||
+	do_nodes $(all_nodes) "$LGSS_SK -l $ssk >/dev/null 2>&1" ||
 		error "failed to load $ssk key"
 
 	# mount client now that c0 key is loaded, should be in c0 nodemap

@@ -1319,24 +1319,25 @@ load_modules () {
 	local facets
 	local facet
 	local failover
+
 	load_modules_local
 	# bug 19124
 	# load modules on remote nodes optionally
 	# lustre-tests have to be installed on these nodes
 	if $LOAD_MODULES_REMOTE; then
-		local list=$(remote_nodes_list)
+		local nodes=$(remote_nodes_list)
 
 		# include failover nodes in case they are not in the list yet
 		facets=$(get_facets)
 		for facet in ${facets//,/ }; do
 			failover=$(facet_failover_host $facet)
-			[ -n "$list" ] && [[ ! "$list" =~ "$failover" ]] &&
-				list="$list,$failover"
+			[[ -n "$nodes" ]] && [[ ! "$nodes" =~ "$failover" ]] &&
+				nodes="$nodes,$failover"
 		done
 
-		if [ -n "$list" ]; then
-			echo "loading modules on: '$list'"
-			do_rpc_nodes "$list" load_modules_local
+		if [[ -n "$nodes" ]]; then
+			echo "loading modules on: '$nodes'"
+			do_rpc_nodes "$nodes" load_modules_local
 		fi
 	fi
 }
@@ -1388,29 +1389,29 @@ unload_modules_local() {
 
 unload_modules() {
 	local rc=0
+	local nodes
+	local udev_rules=/etc/udev/rules.d/99-lustre-test.rules
 
 	wait_exit_ST client # bug 12845
 
 	unload_modules_local || rc=$?
 
 	if $LOAD_MODULES_REMOTE; then
-		local list=$(remote_nodes_list)
+		nodes=$(remote_nodes_list)
+	fi
 
+	if [[ -n "$nodes" ]]; then
 		if (( MDS1_VERSION >= $(version_code 2.15.51) )); then
 			# unload_module_local is only available after 2.15.51
-			if [ -n "$list" ]; then
-				echo "unloading modules via unload_modules_local on: '$list'"
-				do_rpc_nodes "$list" unload_modules_local
-			fi
+			echo "unload_modules_local on: '$nodes'"
+			do_rpc_nodes "$nodes" unload_modules_local
 		else
-			if [ -n "$list" ]; then
-				echo "unloading modules on: '$list'"
-				do_rpc_nodes "$list" $LUSTRE_RMMOD ldiskfs
-				do_rpc_nodes "$list" check_mem_leak
-				do_rpc_nodes "$list" "rm -f /etc/udev/rules.d/99-lustre-test.rules"
-				do_rpc_nodes "$list" "udevadm control --reload-rules"
-				do_rpc_nodes "$list" "udevadm trigger"
-			fi
+			echo "unloading modules on: '$nodes'"
+			do_rpc_nodes "$nodes" $LUSTRE_RMMOD ldiskfs
+			do_rpc_nodes "$nodes" check_mem_leak
+			do_rpc_nodes "$nodes" "rm -f $udev_rules"
+			do_rpc_nodes "$nodes" "udevadm control --reload-rules"
+			do_rpc_nodes "$nodes" "udevadm trigger"
 		fi
 	fi
 
@@ -1789,17 +1790,17 @@ generate_load_ssk() {
 
 	# Set client key to client type to generate prime P
 	if local_mode; then
-		do_nodes $(comma_list $(all_nodes)) "$LGSS_SK -t client,server \
+		do_nodes $(all_nodes) "$LGSS_SK -t client,server \
 			-m $SK_PATH/nodemap/$nm.key >/dev/null 2>&1"
 	else
 	        $LGSS_SK -t client -m $SK_PATH/nodemap/$nm.key >/dev/null 2>&1
 	fi
 
 	# Load key
-	do_nodes $(comma_list $(all_server_nodes)) \
+	do_nodes $(all_server_nodes) \
 		"$LGSS_SK -t server -l $SK_PATH/nodemap/$nm.key"
 	$LGSS_SK -l $SK_PATH/nodemap/$nm.key
-	do_nodes $(comma_list $(all_nodes)) \
+	do_nodes $(all_nodes) \
 		"keyctl show | grep lustre | cut -c1-11 |
 		sed -e 's/ //g;' |
 		xargs -IX keyctl setperm X 0x3f3f3f3f"
@@ -1810,14 +1811,14 @@ cleanup_unload_ssk() {
 
 	$GSS_SK || return 0
 
-	do_nodes $(comma_list $(all_server_nodes)) \
+	do_nodes $(all_server_nodes) \
 		"keyctl show | grep lustre:$FSNAME:$nm | cut -c1-11 |
 		sed -e 's/ //g;' |
 		xargs -IX keyctl revoke X"
 	keyctl show | grep lustre:$FSNAME | cut -c1-11 | sed -e 's/ //g;' |
 		xargs -IX keyctl revoke X
-	do_nodes $(comma_list $(all_nodes)) "keyctl reap"
-	do_nodes $(comma_list $(all_nodes)) "rm -f $SK_PATH/nodemap/$nm.key"
+	do_nodes $(all_nodes) "keyctl reap"
+	do_nodes $(all_nodes) "rm -f $SK_PATH/nodemap/$nm.key"
 }
 
 cleanup_gss() {
@@ -1829,6 +1830,8 @@ cleanup_gss() {
 
 cleanup_sk() {
 	if $GSS_SK; then
+		local all=$(all_nodes)
+
 		if $SK_S2S; then
 			do_node $(mgs_node) "$LCTL nodemap_del $SK_S2SNM"
 			do_node $(mgs_node) "$LCTL nodemap_del $SK_S2SNMCLI"
@@ -1837,19 +1840,18 @@ cleanup_sk() {
 		fi
 		stop_gss_daemons
 		$RPC_MODE || echo "Cleaning up Shared Key.."
-		do_nodes $(comma_list $(all_nodes)) "rm -f \
+		do_nodes $all "rm -f \
 			$SK_PATH/$FSNAME*.key $SK_PATH/nodemap/$FSNAME*.key"
-		do_nodes $(comma_list $(all_nodes)) "keyctl show | \
+		do_nodes $all "keyctl show | \
 		  awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
 		if from_build_tree; then
 			# Remove the mount and clean up the files we added to
 			# SK_PATH
-			do_nodes $(comma_list $(all_nodes)) "while grep -q \
+			do_nodes $all "while grep -q \
 				request-key.d /proc/mounts; do umount \
 				/etc/request-key.d/; done"
-			do_nodes $(comma_list $(all_nodes)) "rm -f \
-				$SK_OM_PATH/lgssc.conf"
-			do_nodes $(comma_list $(all_nodes)) "rmdir $SK_OM_PATH"
+			do_nodes $all "rm -f $SK_OM_PATH/lgssc.conf"
+			do_nodes $all "rmdir $SK_OM_PATH"
 		fi
 		SK_NO_KEY=true
 	fi
@@ -3260,6 +3262,7 @@ zconf_mount_clients() {
 	opts=${opts:+-o $opts}
 	local flags=${4:-$MOUNT_FLAGS}
 	local device=$MGSNID:/$FSNAME$FILESET
+	local all_servers=$(all_server_nodes)
 	local i=0
 
 	if [ -z "$mnt" -o -z "$FSNAME" ]; then
@@ -3284,16 +3287,15 @@ zconf_mount_clients() {
 	for nmclient in ${clients//,/ }; do
 		if $GSS_SK && ($SK_UNIQUE_NM || $SK_S2S); then
 			# Load per-NM keys on servers
-			do_nodes $(comma_list $(all_server_nodes)) \
+			do_nodes $all_servers \
 				"$LGSS_SK -t server -l $SK_PATH/nodemap/c$i.key"
 
 			# Set perms for per-nodemap keys else permission denied
-			do_nodes $(comma_list $(all_server_nodes)) \
+			do_nodes $all_servers \
 				"keyctl show | grep lustre | cut -c1-11 |
 				sed -e 's/ //g;' |
 				xargs -IX keyctl setperm X 0x3f3f3f3f"
-			do_nodes $(comma_list $(all_server_nodes)) \
-				"keyctl show"
+			do_nodes $all_servers "keyctl show"
 
 			local mountkey=$SK_PATH/$FSNAME-nmclient.key
 			if $SK_UNIQUE_NM; then
@@ -4614,7 +4616,7 @@ facet_failover() {
 		fi
 
 		if $GSS_SK; then
-			do_nodes $(comma_list $(all_nodes)) \
+			do_nodes $(all_nodes) \
 				"keyctl show | grep lustre | cut -c1-11 |
 				sed -e 's/ //g;' |
 				xargs -IX keyctl setperm X 0x3f3f3f3f"
@@ -6035,7 +6037,7 @@ formatall() {
 	# (Assumes MDS version is also OSS version)
 	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.8.54) ];
 	then
-		do_rpc_nodes "$(comma_list $(all_server_nodes))" set_hostid
+		do_rpc_nodes "$(all_server_nodes)" set_hostid
 	fi
 
 	# We need ldiskfs here, may as well load them all
@@ -6338,7 +6340,7 @@ setupall() {
 		fi
 		if $GSS_SK; then
 			echo "GSS_SK: setting kernel keyring perms"
-			do_nodes $(comma_list $(all_nodes)) \
+			do_nodes $(all_nodes) \
 				"keyctl show | grep lustre | cut -c1-11 |
 				sed -e 's/ //g;' |
 				xargs -IX keyctl setperm X 0x3f3f3f3f"
@@ -6346,8 +6348,7 @@ setupall() {
 			if $SK_S2S; then
 				# Need to start one nodemap for servers,
 				# and one for clients.
-				sk_nodemap_setup $SK_S2SNM \
-					$(comma_list $(all_server_nodes))
+				sk_nodemap_setup $SK_S2SNM $(all_server_nodes)
 				mountcli
 				sk_nodemap_setup $SK_S2SNMCLI \
 					${CLIENTS:-$HOSTNAME}
@@ -7674,7 +7675,7 @@ debugrestore() {
 	DEBUGSAVE=""
 
 	[ -n "$DEBUGSAVE_SERVER" ] &&
-		do_nodes $(comma_list $(all_server_nodes)) \
+		do_nodes $(all_server_nodes) \
 			 $LCTL set_param -n debug=${DEBUGSAVE_SERVER// /+} ||
 			 true
 	DEBUGSAVE_SERVER=""
@@ -12908,7 +12909,7 @@ function createmany() {
 
 	if (( count > 100 )); then
 		debugsave
-		do_nodes $(comma_list $(all_nodes)) $LCTL set_param -n debug=ha
+		do_nodes $(all_nodes) $LCTL set_param -n debug=ha
 	fi
 	$LUSTRE/tests/createmany $*
 	rc=$?
@@ -12923,7 +12924,7 @@ function unlinkmany() {
 
 	if (( count > 100 )); then
 		debugsave
-		do_nodes $(comma_list $(all_nodes)) $LCTL set_param -n debug=0
+		do_nodes $(all_nodes) $LCTL set_param -n debug=0
 	fi
 	$LUSTRE/tests/unlinkmany $*
 	rc=$?
