@@ -33579,6 +33579,9 @@ test_833() {
 run_test 833 "Mixed buffered/direct read and write should not return -EIO"
 
 test_842() {
+	(( $MDS1_VERSION >= $(version_code 2.15.62) )) ||
+		skip "Need MDS version at least 2.15.62 for ldlm_extent module"
+
 	local oss1=$(facet_host ost1)
 
 	# Try to insert the module.  This will leave results in dmesg
