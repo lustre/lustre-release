@@ -19735,7 +19735,7 @@ run_test 160g "changelog garbage collect on idle records"
 
 test_160h() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[[ $MDS1_VERSION -ge $(version_code 2.10.56) ]] ||
+	(( $MDS1_VERSION >= $(version_code 2.10.56) )) ||
 		skip "Need MDS version at least 2.10.56"
 
 	local mdts=$(mdts_nodes)
@@ -20389,7 +20389,7 @@ test_160s() {
 
 	do_nodes $mdts $LCTL set_param fail_loc=0
 
-	for (( i = 1; i <= MDSCOUNT; i++ )); do
+	for ((i = 1; i <= MDSCOUNT; i++)); do
 		# check cl_user1 is purged
 		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" &&
 			error "mds$i: User ${cl_user1[mds$i]} is registered"
@@ -22527,7 +22527,7 @@ test_205h() {
 	local subdir=$DIR/dir
 	local val
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local mds_saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
 	local client_saved=$($LCTL get_param -n jobid_var)
 
@@ -22573,7 +22573,7 @@ test_205i() {
 	(( $MDS1_VERSION >= $(version_code 2.15.57.7) )) ||
 		skip "Need MDS >= v2_15_57-7-g23a2db28dc for jobid xattr"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local mds_saved=$(do_facet mds1 $LCTL get_param -n mdt.$FSNAME-MDT0000.job_xattr)
 
 	stack_trap "do_nodes $mdts $LCTL set_param mdt.*.job_xattr=$mds_saved" EXIT
@@ -23038,9 +23038,10 @@ run_test 216 "check lockless direct write updates file size and kms correctly"
 test_217() { # bug 22430
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
+	local nodes=$(nodes_list)
 	local node
 
-	for node in $(nodes_list); do
+	for node in ${nodes//,/ }; do
 		local nid=$(host_nids_address $node $NETTYPE)
 		local node_ip=$(do_node $node getent ahostsv4 $node |
 				awk '{ print $1; exit; }')
@@ -24467,7 +24468,7 @@ test_230o() {
 	[ $MDS1_VERSION -ge $(version_code 2.13.52) ] ||
 		skip "Need MDS version at least 2.13.52"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local timeout=100
 	local restripe_status
 	local delta
@@ -24512,7 +24513,7 @@ test_230p() {
 	(( MDS1_VERSION >= $(version_code 2.13.52) )) ||
 		skip "Need MDS version at least 2.13.52"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local timeout=100
 	local restripe_status
 	local delta
@@ -24573,7 +24574,7 @@ test_230q() {
 	(( MDS1_VERSION >= $(version_code 2.13.52) )) ||
 		skip "Need MDS version at least 2.13.52"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local saved_threshold=$(do_facet mds1 \
 			$LCTL get_param -n mdt.*-MDT0000.dir_split_count)
 	local saved_delta=$(do_facet mds1 \
@@ -24681,7 +24682,7 @@ test_230s() {
 	(( $MDS1_VERSION >= $(version_code 2.14.52) )) ||
 		skip "Need MDS version at least 2.14.52"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local restripe_status=$(do_facet mds1 $LCTL get_param -n \
 				mdt.*MDT0000.enable_dir_restripe)
 
