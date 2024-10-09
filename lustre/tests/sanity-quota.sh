@@ -6586,6 +6586,21 @@ test_91()
 }
 run_test 91 "new quota index files in quota_master"
 
+test_92()
+{
+	local qpool="qpool1"
+	pool_add $qpool || error "pool_add failed"
+
+	# with the fix it returns EINVAL instead of ENOENT
+	$LFS setquota -u $TSTUSR -B 100M -I 0 --pool $qpool $MOUNT
+	(( $? == 22 )) || error "inode hard limit should be prohibited with PQ"
+	$LFS setquota -u $TSTUSR -B 100M -i 0 --pool $qpool $MOUNT
+	(( $? == 22 )) || error "inode soft limit should be prohibited with PQ"
+	$LFS setquota -u $TSTUSR -B 100M -I 0 -i 10M --pool $qpool $MOUNT
+	(( $? == 22 )) || error "inode limits should be prohibited with PQ"
+}
+run_test 92 "Cannot set inode limit with Quota Pools"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

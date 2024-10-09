@@ -8891,6 +8891,15 @@ quota_type_def:
 		}
 	}
 
+	if (LUSTRE_Q_CMD_IS_POOL(qctl->qc_cmd) &&
+	    limit_mask & (IHLIMIT | ISLIMIT)) {
+		fprintf(stderr,
+			"%s setquota: inode limits are not supported with Pool Quotas\n",
+			progname);
+		rc = -EINVAL;
+		goto out;
+	}
+
 	if (qctl->qc_type == ALLQUOTA) {
 		fprintf(stderr,
 			"%s setquota: either -u or -g must be specified\n",
