@@ -1598,8 +1598,6 @@ test_66()
 	[[ "$MDS1_VERSION" -ge $(version_code 2.7.51) ]] ||
 		skip "Need MDS version at least 2.7.51"
 
-	local list=$(osts_nodes)
-
 	# modify dir so that next revalidate would not obtain UPDATE lock
 	touch $DIR
 
@@ -1610,7 +1608,7 @@ test_66()
 
 	# make the re-sent lock to sleep
 #define OBD_FAIL_MDS_RESEND              0x136
-	do_nodes $list $LCTL set_param fail_loc=0x80000136
+	do_nodes $(osts_nodes) $LCTL set_param fail_loc=0x80000136
 
 	#initiate the re-connect & re-send
 	local mdtname="MDT0000"
@@ -2635,6 +2633,7 @@ run_test 113 "ldlm enqueue dropped reply should not cause deadlocks"
 T130_PID=0
 test_130_base() {
 	test_mkdir -p -c1 $DIR/$tdir
+	local mdts=$(mdts_nodes)
 
 	# Prevent interference from layout intent RPCs due to
 	# asynchronous writeback. These will be tested in 130c below.
@@ -2651,7 +2650,7 @@ test_130_base() {
 	# complete; but later than getattr starts so that getattr found
 	# the object
 #define OBD_FAIL_MDS_INTENT_DELAY		0x160
-	set_nodes_failloc "$(mdts_nodes)" 0x80000160
+	set_nodes_failloc $mdts 0x80000160
 	stat $DIR/$tdir &
 	T130_PID=$!
 	sleep 2
@@ -2660,7 +2659,7 @@ test_130_base() {
 
 	# drop the reply so that resend happens on an unlinked file.
 #define OBD_FAIL_MDS_LDLM_REPLY_NET	 0x157
-	set_nodes_failloc "$(mdts_nodes)" 0x80000157
+	set_nodes_failloc $mdts 0x80000157
 }
 
 test_130a() {
@@ -2694,6 +2693,7 @@ run_test 130b "enqueue resend on a stale inode"
 
 test_130c() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	local mdts=$(mdts_nodes)
 
 	do_nodes ${CLIENTS:-$HOSTNAME} sync
 	echo XXX > $DIR/$tfile
@@ -2707,7 +2707,7 @@ test_130c() {
 	# complete; but later than intent starts so that intent found
 	# the object
 #define OBD_FAIL_MDS_INTENT_DELAY		0x160
-	set_nodes_failloc "$(mdts_nodes)" 0x80000160
+	set_nodes_failloc $mdts 0x80000160
 	sync &
 	T130_PID=$!
 	sleep 2
@@ -2716,13 +2716,13 @@ test_130c() {
 
 	# drop the reply so that resend happens on an unlinked file.
 #define OBD_FAIL_MDS_LDLM_REPLY_NET	 0x157
-	set_nodes_failloc "$(mdts_nodes)" 0x80000157
+	set_nodes_failloc $mdts 0x80000157
 
 	# let the reply to be dropped
 	sleep 10
 
 #define OBD_FAIL_SRV_ENOENT              0x217
-	set_nodes_failloc "$(mdts_nodes)" 0x80000217
+	set_nodes_failloc $mdts 0x80000217
 
 	wait $T130_PID
 
@@ -2792,8 +2792,6 @@ test_131() {
 run_test 131 "IO vs evict results to IO under staled lock"
 
 test_133() {
-	local list=$(comma_list $(mdts_nodes))
-
 	local t=$((TIMEOUT * 2))
 	touch $DIR/$tfile
 
@@ -2803,7 +2801,7 @@ test_133() {
 	PID=$!
 
 	#define OBD_FAIL_MDS_LDLM_REPLY_NET 0x157
-	do_nodes $list $LCTL set_param fail_loc=0x80000157
+	do_nodes $(mdts_nodes) $LCTL set_param fail_loc=0x80000157
 	kill -USR1 $PID
 	echo "waiting for multiop $PID"
 	wait $PID || return 2
@@ -2852,7 +2850,7 @@ test_135() {
 	# to have parent dir write lock before open/resend
 	touch $DIR/$tdir/$tfile
 	#define OBD_FAIL_MDS_LDLM_REPLY_NET 0x157
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x80000157
+	do_nodes $(mdts_nodes) "$LCTL set_param fail_loc=0x80000157"
 	openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tdir/$tfile ||
 		error "Failed to open DOM file"
 }
@@ -3127,14 +3125,15 @@ test_144a() {
 	local before
 	local after
 	local diff
+	local mdts=$(mdts_nodes)
 
 	large_xattr_enabled || skip_env "ea_inode feature disabled"
 	test_mkdir -i 0 -c 1 -p $DIR/$tdir
 	stack_trap "rm -rf $DIR/$tdir" EXIT
 
 	mds_timeout=$(do_facet mds1 $LCTL get_param -n timeout)
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param timeout=300
-	stack_trap "do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param timeout=$mds_timeout" EXIT
+	do_nodes $mdts "$LCTL set_param timeout=300"
+	stack_trap "do_nodes $mdts $LCTL set_param timeout=$mds_timeout"
 
 	$LFS setstripe -i 0 -C $setcount $DIR/$tdir || error "setstripe failed"
 
@@ -3175,14 +3174,15 @@ test_144b() {
 	local rc=0
 	local setcount=1000
 	local mds_timeout
+	local mdts=$(mdts_nodes)
 
 	large_xattr_enabled || skip_env "ea_inode feature disabled"
 	test_mkdir -i 0 -c 1 -p $DIR/$tdir
 	stack_trap "rm -rf $DIR/$tdir" EXIT
 
 	mds_timeout=$(do_facet mds1 $LCTL get_param -n timeout)
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param timeout=300
-	stack_trap "do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param timeout=$mds_timeout" EXIT
+	do_nodes $mdts "$LCTL set_param timeout=300"
+	stack_trap "do_nodes $mdts $LCTL set_param timeout=$mds_timeout"
 
 	$LFS setstripe -i 0 -C $setcount $DIR/$tdir || error "setstripe failed"
 

@@ -868,8 +868,7 @@ test_23d () {
 
 	# let previous transactions to complete
 	# (distributed llog cancels, etc)
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"$LCTL set_param -n osd*.*MDT*.force_sync=1"
+	do_nodes $(mdts_nodes) "$LCTL set_param -n osd*.*MDT*.force_sync=1"
 	sleep 2
 
 	# OBD_FAIL_UPDATE_OBJ_NET    0x1701
@@ -906,8 +905,7 @@ test_24 () {
 	sleep 1
 	do_facet $SINGLEMDS lctl set_param fail_loc=0
 	# sync to release rep-ack lock quickly
-	do_nodes $(comma_list $(mdts_nodes)) \
-	    "lctl set_param -n osd*.*MDT*.force_sync 1"
+	do_nodes $(mdts_nodes) "lctl set_param -n osd*.*MDT*.force_sync 1"
 	rm $MOUNT2/$tfile
 	wait
 }

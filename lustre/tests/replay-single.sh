@@ -5064,7 +5064,7 @@ test_136() {
 	sync;sync;sync
 
 #define OBD_FAIL_OUT_DROP_DESTROY      0x170b
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	do_nodes $mdts $LCTL set_param fail_loc=0x170b
 	rmdir $DIR/$tdir &
 	sleep 0.5

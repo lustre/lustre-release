@@ -1650,7 +1650,7 @@ function fill_ost_pool() {
 test_29() {
 	local pool1=${TESTNAME}-1
 	local pool2=${TESTNAME}-2
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local threshold=20
 	local prefix="lod.$FSNAME-MDT0000-mdtlov.pool.$pool1"
 	local cmd="$LCTL get_param -n $prefix"
@@ -1770,7 +1770,7 @@ run_test 29 "check OST pool spilling"
 
 test_30() {
 	local MDT_DEV=$(mdsdevname 1)
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local pool1=${TESTNAME}-1
 	local pool2=${TESTNAME}-2
 	local threshold=10
@@ -1829,7 +1829,7 @@ run_test 30 "persistent OST pool spilling"
 test_31() {
 	local prefix="lod.$FSNAME-*.pool."
 	local MDT_DEV=$(mdsdevname mds1)
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	local do_mdts="do_nodes $mdts $LCTL"
 	local pool1=${TESTNAME}-1
 	local pool2=${TESTNAME}-2
