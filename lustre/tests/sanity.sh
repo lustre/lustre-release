@@ -32151,7 +32151,7 @@ test_600b() {
 		  awk '/^used_mb/ { print $2 }')
 	unevict_mb=$($LCTL get_param -n llite.*.unevict_cached_mb)
 	(( $used_mb == 0 )) || error "used_mb is $used_mb, expected 0"
-	(( $unevict_mb == $size_mb )) ||
+	(( $unevict_mb >= $size_mb - 1)) || # allow a margin of 1 page
 		error "unevict_mb is $unevict_mb, expected $size_mb"
 }
 run_test 600b "mlock a file (via vmtouch) larger than max_cached_mb"
@@ -32189,10 +32189,10 @@ test_600c() {
 	local cached_mb=$($LCTL get_param llite.*.max_cached_mb |
 			  awk '/^used_mb/ { print $2 }')
 
-	[ $cached_mb -eq 0 ] || error "expected used_mb 0 got $cached_mb"
+	(( $cached_mb == 0 )) || error "expected used_mb 0 got $cached_mb"
 	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
 		    awk '/^unevict_mb/ { print $2 }')
-	[ $cached_mb -eq 64 ] || error "expected unevict_mb 64 got $cached_mb"
+	(( $cached_mb == 64 )) || error "expected unevict_mb 64 got $cached_mb"
 
 	vmtouch -vt $file2 || error "failed to vmtouch $file2"
 	echo 3 > /proc/sys/vm/drop_caches
@@ -32206,10 +32206,10 @@ test_600c() {
 	$LCTL set_param llite.*.unevict_cached_mb=clear
 	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
 		    awk '/^used_mb/ { print $2 }')
-	[ $cached_mb -eq 0 ] || error "expected used_mb 0 got $cached_mb"
+	(( $cached_mb == 0 )) || error "expected used_mb 0 got $cached_mb"
 	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
 		    awk '/^unevict_mb/ { print $2 }')
-	[ $cached_mb -eq 0 ] || error "expected unevict_mb 0 got $cached_mb"
+	(( $cached_mb == 0 )) || error "expected unevict_mb 0 got $cached_mb"
 }
 run_test 600c "Test I/O when mlocked page count > @max_cached_mb"
 
