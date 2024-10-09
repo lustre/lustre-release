@@ -2543,15 +2543,16 @@ run_test 43a "rmdir,mkdir doesn't return -EEXIST =============="
 test_43b() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "create isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "create must succeed"
 	rm -rf $DIR/$tfile*
@@ -2563,15 +2564,16 @@ test_43c() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-2
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "link must succeed"
 	rm -rf $DIR/$tfile*
@@ -2582,15 +2584,16 @@ run_test 43c "pdirops: unlink vs link =============="
 test_43d() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	rm $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "unlink must fail"
 	rm -rf $DIR/$tfile*
@@ -2602,15 +2605,16 @@ test_43e() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-2
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv -u $DIR2/$tfile-2 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2621,15 +2625,16 @@ run_test 43e "pdirops: unlink and rename (tgt) =============="
 test_43f() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-2 &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "rename must fail"
 	rm -rf $DIR/$tfile*
@@ -2640,15 +2645,16 @@ run_test 43f "pdirops: unlink and rename (src) =============="
 test_43g() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "stat must fail"
 	rm -rf $DIR/$tfile*
@@ -2659,15 +2665,16 @@ run_test 43g "pdirops: unlink vs getattr =============="
 test_43h() {
 	pdo_lru_clear
 	touch $DIR1/$tfile
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	ls -lia $DIR2/ > /dev/null &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
 	wait $PID2
 	rm -rf $DIR/$tfile*
@@ -2679,15 +2686,16 @@ test_43i() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	pdo_lru_clear
 	touch $DIR1/$tfile
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000145 2>/dev/null || true"
 	rm $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$LFS mkdir -i 1 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 &&
 		{ wait $PID1; error "remote mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "remote mkdir must succeed"
@@ -2699,11 +2707,12 @@ run_test 43i "pdirops: unlink vs remote mkdir"
 test_43j() {
 	[[ $MDS1_VERSION -lt $(version_code 2.13.52) ]] &&
 		skip "Need MDS version newer than 2.13.52"
+	local mdts=$(mdts_nodes)
 
 	mkdir_on_mdt0 $DIR1/$tdir
 	for i in {1..100}; do
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_CREATE_RACE         0x167
-		do_nodes $(comma_list $(mdts_nodes)) \
+		#define CFS_FAIL_ONCE|OBD_FAIL_MDS_CREATE_RACE 0x167
+		do_nodes $mdts \
 			"lctl set_param -n fail_loc=0x80000167 2>/dev/null ||
 				true"
 		OK=0
@@ -2729,8 +2738,9 @@ sub_test_43k() {
 	test_mkdir $DIR2/$tdir
 	touch $DIR2/$tdir/$tfile
 	pdo_lru_clear
+	local mdts=$(mdts_nodes)
 
-	do_nodes $(comma_list $(mdts_nodes)) \
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=${fail_loc} || true" &>/dev/null
 	echo content > $DIR1/$tdir/$tfile & PID1=$!
 	pdo_sched
@@ -2744,8 +2754,7 @@ sub_test_43k() {
 		echo -n "unlinking $tfile should succeed (err=$ret);"; }
 
 	#Clean
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0x0 || true" &>/dev/null
+	do_nodes $mdts "lctl set_param -n fail_loc=0x0 || true" &>/dev/null
 	rm -rf $DIR/$tdir
 
 	return $ret
@@ -2780,15 +2789,16 @@ run_test 43k "unlink vs create"
 test_44a() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mkdir $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; date;error "mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "mkdir must fail"
 	date
@@ -2800,15 +2810,16 @@ run_test 44a "pdirops: rename tgt vs mkdir =============="
 test_44b() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "create isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "create must fail"
 	rm -rf $DIR/$tfile*
@@ -2820,15 +2831,16 @@ test_44c() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	link $DIR2/$tfile-3 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "link must fail"
 	rm -rf $DIR/$tfile*
@@ -2839,15 +2851,16 @@ run_test 44c "pdirops: rename tgt vs link =============="
 test_44d() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	rm $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "unlink isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "unlink must succeed"
 	rm -rf $DIR/$tfile*
@@ -2860,15 +2873,16 @@ test_44e() {
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile-3 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2880,15 +2894,16 @@ test_44f() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	mv $DIR2/$tfile $DIR2/$tfile-3 &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "rename isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "rename must succeed"
 	rm -rf $DIR/$tfile*
@@ -2899,15 +2914,16 @@ run_test 44f "pdirops: rename tgt and rename (src) =============="
 test_44g() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	stat $DIR2/$tfile > /dev/null &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	wait $PID2 ; [ $? -eq 0 ] || error "stat must succeed"
 	rm -rf $DIR/$tfile*
@@ -2918,15 +2934,16 @@ run_test 44g "pdirops: rename tgt vs getattr =============="
 test_44h() {
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	ls -lia $DIR2/ > /dev/null &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
 	wait $PID2
 	rm -rf $DIR/$tfile*
@@ -2939,15 +2956,16 @@ test_44i() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	pdo_lru_clear
 	touch $DIR1/$tfile-2
-#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
-	do_nodes $(comma_list $(mdts_nodes)) \
+	local mdts=$(mdts_nodes)
+
+	#define CFS_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
+	do_nodes $mdts \
 		"lctl set_param -n fail_loc=0x80000146 2>/dev/null || true"
 	mv $DIR1/$tfile-2 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
 	$LFS mkdir -i 1 $DIR2/$tfile &
 	PID2=$! ; pdo_sched
-	do_nodes $(comma_list $(mdts_nodes)) \
-		"lctl set_param -n fail_loc=0 2>/dev/null || true"
+	do_nodes $mdts "lctl set_param -n fail_loc=0 2>/dev/null || true"
 	check_pdo_conflict $PID1 && { wait $PID1;
 				error "remote mkdir isn't blocked"; }
 	wait $PID2 ; [ $? -ne 0 ] || error "remote mkdir must fail"
