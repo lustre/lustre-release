@@ -803,6 +803,26 @@ test_17o() {
 }
 run_test 17o "stat file with incompat LMA feature"
 
+# LU-17660: "cannot overwrite directory" when creating symlink
+test_17p() {
+	touch $DIR/$tfile
+	test_mkdir $DIR/$tdir
+
+	# there is a kernel bug in el9.x series (9.0 - 9.4 as we know till now)
+	# kernel, we need to stat the target dir to cache it first
+	if [[ "$CLIENT_OS_ID_LIKE" =~ "rhel" ]]; then
+		if (( $CLIENT_OS_VERSION_CODE >= $(version_code 9.0) &&
+		      $CLIENT_OS_VERSION_CODE <= $(version_code 9.4) )); then
+			echo "stat $DIR/$tdir to cache it in el9.0-9.4"
+			stat $DIR/$tdir
+		fi
+	fi
+
+	strace ln -sf $DIR/$tfile $DIR/$tdir/ ||
+		error "Failed to create symlink $DIR/$tfile under $DIR/$tdir/"
+}
+run_test 17p "symlink overwrite directory error message"
+
 test_18() {
 	touch $DIR/$tfile || error "Failed to touch $DIR/$tfile: $?"
 	ls $DIR || error "Failed to ls $DIR: $?"
