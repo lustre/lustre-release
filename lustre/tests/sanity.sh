@@ -15036,10 +15036,8 @@ test_120a() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	[ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
-	[ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
-	lru_resize_enable mdc
-	lru_resize_enable osc
+	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
+	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120a "Early Lock Cancel: mkdir test"
 
@@ -15065,10 +15063,8 @@ test_120b() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	[ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
-	[ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
-	lru_resize_enable mdc
-	lru_resize_enable osc
+	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
+	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120b "Early Lock Cancel: create test"
 
@@ -15097,10 +15093,8 @@ test_120c() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	[ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
-	[ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
-	lru_resize_enable mdc
-	lru_resize_enable osc
+	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
+	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120c "Early Lock Cancel: link test"
 
@@ -15127,10 +15121,8 @@ test_120d() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	[ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
-	[ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
-	lru_resize_enable mdc
-	lru_resize_enable osc
+	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
+	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120d "Early Lock Cancel: setattr test"
 
@@ -15146,7 +15138,8 @@ test_120e() {
 	lru_resize_disable mdc
 	lru_resize_disable osc
 	! $LCTL get_param debug | grep -q dlmtrace &&
-		$LCTL set_param debug=+dlmtrace && dlmtrace_set=true
+		$LCTL set_param debug=+dlmtrace &&
+		stack_trap "$LCTL set_param debug=-dlmtrace"
 	dd if=/dev/zero of=$DIR/$tdir/f1 count=1
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
@@ -15168,13 +15161,8 @@ test_120e() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	[ $can1 -ne $can2 ] && error "$((can2 - can1)) cancel RPC occured" &&
-		$LCTL dk $TMP/cancel.debug.txt
-	[ $blk1 -ne $blk2 ] && error "$((blk2 - blk1)) blocking RPC occured" &&
-		$LCTL dk $TMP/blocking.debug.txt
-	$dlmtrace_set && $LCTL set_param debug=-dlmtrace
-	lru_resize_enable mdc
-	lru_resize_enable osc
+	(( $can1 == $can2 )) || error "$((can2 - can1)) cancel RPC occured"
+	(( $blk1 == $blk2 )) || error "$((blk2 - blk1)) blocking RPC occured"
 }
 run_test 120e "Early Lock Cancel: unlink test"
 
@@ -15212,10 +15200,8 @@ test_120f() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	[ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
-	[ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
-	lru_resize_enable mdc
-	lru_resize_enable osc
+	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
+	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120f "Early Lock Cancel: rename test"
 
@@ -15247,8 +15233,8 @@ test_120g() {
 	blk1=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
 	t1=$(date +%s)
-	echo total: $((can1-can0)) cancels, $((blk1-blk0)) blockings
-	echo rm $count files
+	echo "total: $((can1-can0)) cancels, $((blk1-blk0)) blockings"
+	echo "rm $count files"
 	rm -r $DIR/$tdir
 	sync
 	can2=$(do_facet $SINGLEMDS \
@@ -15257,12 +15243,9 @@ test_120g() {
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
 	t2=$(date +%s)
-	echo total: $count removes in $((t2-t1))
-	echo total: $((can2-can1)) cancels, $((blk2-blk1)) blockings
-	sleep 2
-	# wait for commitment of removal
-	lru_resize_enable mdc
-	lru_resize_enable osc
+	echo "total: $count removes in $((t2-t1))"
+	echo "total: $((can2-can1)) cancels, $((blk2-blk1)) blockings"
+	wait_delete_completed
 }
 run_test 120g "Early Lock Cancel: performance test"
 
@@ -15281,95 +15264,90 @@ test_121() { #bug #10589
 }
 run_test 121 "read cancel race ========="
 
-test_123a_base() { # was test 123, statahead(bug 11401)
+test_123a_base() { # was test 123, statahead(b=11401)
 	local lsx="$1"
 
 	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
 
-	SLOWOK=0
+	local slow_is=error
 	if ! grep -q "processor.*: 1" /proc/cpuinfo; then
 		log "testing UP system. Performance may be lower than expected."
-		SLOWOK=1
+		slow_is=log
 	fi
-	running_in_vm && SLOWOK=1
+	running_in_vm && slow_is=log
 
+	lru_resize_enable
 	$LCTL set_param mdc.*.batch_stats=0
 
 	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
-	NUMFREE=$(df -i -P $DIR | tail -n 1 | awk '{ print $4 }')
-	[[ $NUMFREE -gt 100000 ]] && NUMFREE=100000 || NUMFREE=$((NUMFREE-1000))
-	MULT=10
-	for ((i=100, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
+	local numfree=$(df -i -P $DIR | tail -n 1 | awk '{ print $4 }')
+	(( $numfree > 100000 )) && numfree=100000 || numfree=$((numfree-1000))
+	local mult=10
+	for ((i=100, j=0; i<=$numfree; j=$i, i=$((i * mult)) )); do
 		createmany -o $DIR/$tdir/$tfile $j $((i - j))
 
-		max=$(lctl get_param -n llite.*.statahead_max | head -n 1)
-		lctl set_param -n llite.*.statahead_max 0
-		lctl get_param llite.*.statahead_max
+		local max=($($LCTL get_param -n llite.*.statahead_max))
+		$LCTL set_param llite.*.statahead_max=0
 		cancel_lru_locks mdc
 		cancel_lru_locks osc
-		stime=$(date +%s)
+		local stime=$SECONDS
 		time $lsx $DIR/$tdir | wc -l
-		etime=$(date +%s)
-		delta=$((etime - stime))
+		local etime=$SECONDS
+		local delta=$((etime - stime))
 		log "$lsx $i files without statahead: $delta sec"
-		lctl set_param llite.*.statahead_max=$max
+		$LCTL set_param llite.*.statahead_max=$max
 
-		swrong=$(lctl get_param -n llite.*.statahead_stats |
-			 awk '/statahead.wrong:/ { print $NF }')
-		lctl get_param -n llite.*.statahead_max | grep '[0-9]'
+		local swrong=$($LCTL get_param -n llite.*.statahead_stats |
+			       awk '/statahead.wrong:/ { print $NF }')
+		$LCTL get_param -n llite.*.statahead_max | grep '[0-9]'
 		cancel_lru_locks mdc
 		cancel_lru_locks osc
-		stime=$(date +%s)
+		stime=$SECONDS
 		time $lsx $DIR/$tdir | wc -l
-		etime=$(date +%s)
-		delta_sa=$((etime - stime))
+		etime=$SECONDS
+		local delta_sa=$((etime - stime))
 		log "$lsx $i files with statahead: $delta_sa sec"
-		lctl get_param -n llite.*.statahead_stats
-		ewrong=$(lctl get_param -n llite.*.statahead_stats |
-			 awk '/statahead.wrong:/ { print $NF }')
+		$LCTL get_param -n llite.*.statahead_stats
+		local ewrong=$($LCTL get_param -n llite.*.statahead_stats |
+			       awk '/statahead.wrong:/ { print $NF }')
 
 		[[ $swrong -lt $ewrong ]] &&
 			log "statahead was stopped, maybe too many locks held!"
 		[[ $delta -eq 0 || $delta_sa -eq 0 ]] && continue
 
 		if (( $delta_sa*100 > $delta*105 && $delta_sa > $delta+2)); then
-			max=$(lctl get_param -n llite.*.statahead_max |
+			max=$($LCTL get_param -n llite.*.statahead_max |
 				head -n 1)
-			lctl set_param -n llite.*.statahead_max 0
-			lctl get_param llite.*.statahead_max
+			$LCTL set_param llite.*.statahead_max 0
 			cancel_lru_locks mdc
 			cancel_lru_locks osc
-			stime=$(date +%s)
+			stime=$SECONDS
 			time $lsx $DIR/$tdir | wc -l
-			etime=$(date +%s)
+			etime=$SECONDS
 			delta=$((etime - stime))
 			log "$lsx $i files again without statahead: $delta sec"
-			lctl set_param llite.*.statahead_max=$max
-			if (( $delta_sa*100 > delta*105 && delta_sa > delta+2 )); then
-				if [ $SLOWOK -eq 0 ]; then
-					error "$lsx $i files is slower with statahead!"
-				else
-					log "$lsx $i files is slower with statahead!"
-				fi
+			$LCTL set_param llite.*.statahead_max=$max
+			if (( $delta_sa * 100 > $delta * 105 &&
+			      $delta_sa > $delta + 2 )); then
+				$slow_is "$lsx $i files slower with statahead!"
 				break
 			fi
 		fi
 
-		[ $delta -gt 20 ] && break
-		[ $delta -gt 8 ] && MULT=$((50 / delta))
-		[ "$SLOW" = "no" -a $delta -gt 5 ] && break
+		(( $delta <= 20 )) || break
+		(( $delta <= 8 )) || mult=$((50 / delta))
+		[[ "$SLOW" == "no" ]] || (( $delta <= 5 )) || break
 	done
 	log "$lsx done"
 
-	stime=$(date +%s)
+	stime=$SECONDS
 	rm -r $DIR/$tdir
 	sync
-	etime=$(date +%s)
+	etime=$SECONDS
 	delta=$((etime - stime))
-	log "rm -r $DIR/$tdir/: $delta seconds"
-	log "rm done"
-	lctl get_param -n llite.*.statahead_stats
+	log "rm -r $DIR/$tdir: $delta seconds"
+	$LCTL get_param llite.*.statahead_stats
 	$LCTL get_param mdc.*.batch_stats
 }
 
@@ -15423,7 +15401,7 @@ test_batch_statahead() {
 	local unbatch_rpcs
 	local hit_total
 
-	echo -e "\nbatching: statahead_max=$max statahead_batch_max=$batch_max"
+	echo -e "\n\n\nbatch: statahead_max=$max statahead_batch_max=$batch_max"
 	$LCTL set_param mdc.*.batch_stats=0
 	$LCTL set_param llite.*.statahead_max=$max
 	$LCTL set_param llite.*.statahead_batch_max=$batch_max
@@ -15440,6 +15418,7 @@ test_batch_statahead() {
 	$LCTL set_param mdc.*.stats=clear
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
+	echo -n "ls -l files in $tdir: "
 	time ls -l $DIR/$tdir | wc -l
 	unbatch_rpcs=$(calc_stats mdc.*.stats ldlm_ibits_enqueue)
 	wait_update_facet client "pgrep ll_sa" "" 35 ||
@@ -15447,8 +15426,11 @@ test_batch_statahead() {
 	hit_total=$($LCTL get_param -n llite.*.statahead_stats |
 		    awk '/hit.total:/ { print $NF }')
 	# hit ratio should be larger than 75% (7500).
-	(( $hit_total > 7500 )) ||
-		error "unbatched statahead hit count ($hit_total) is too low"
+	echo "unbatched statahead RPC=$unbatch_rpcs hit count=$hit_total"
+	(( $hit_total > 7500 )) || {
+		$LCTL get_param llite.*.statahead_stats
+		error "unbatched statahead RPC=$unbatch_rpcs hit count=$hit_total too low"
+	}
 
 	# batched statahead
 	$LCTL set_param llite.*.statahead_batch_max=$batch_max
@@ -15457,6 +15439,7 @@ test_batch_statahead() {
 	$LCTL set_param mdc.*.stats=clear
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
+	echo -n "ls -l files in $tdir: "
 	time ls -l $DIR/$tdir | wc -l
 	batch_rpcs=$(calc_stats mdc.*.stats mds_batch)
 	# wait for statahead thread to quit and update statahead stats
@@ -15465,12 +15448,14 @@ test_batch_statahead() {
 	hit_total=$($LCTL get_param -n llite.*.statahead_stats |
 		    awk '/hit.total:/ { print $NF }')
 	# hit ratio should be larger than 75% (7500).
-	(( $hit_total > 7500 )) ||
-		error "batched statahead hit count ($hit_total) is too low"
+	echo "batched statahead RPC=$batch_rpc hit count=$hit_total"
+	(( $hit_total > 7500 )) || {
+		$LCTL get_param llite.*.statahead_stats
+		error "batched statahead RPC=$batch_rpc hit count=$hit_total too low"
+	}
 
-	echo "unbatched RPCs: $unbatch_rpcs, batched RPCs: $batch_rpcs"
 	(( $unbatch_rpcs > $batch_rpcs )) ||
-		error "batched statahead does not reduce RPC count"
+		error "batched statahead does not reduce RPCs ($unbatch_rpcs < $batch_rpcs)"
 	$LCTL get_param mdc.*.batch_stats
 }
 
@@ -16023,7 +16008,7 @@ test_124b() {
         createmany -o $DIR/$tdir/disable_lru_resize/f $NR
         log "doing ls -la $DIR/$tdir/disable_lru_resize 3 times"
         cancel_lru_locks mdc
-        stime=`date +%s`
+        stime=$SECONDS
         PID=""
         ls -la $DIR/$tdir/disable_lru_resize > /dev/null &
         PID="$PID $!"
@@ -16034,7 +16019,7 @@ test_124b() {
         ls -la $DIR/$tdir/disable_lru_resize > /dev/null &
         PID="$PID $!"
         wait $PID
-        etime=`date +%s`
+        etime=$SECONDS
         nolruresize_delta=$((etime-stime))
         log "ls -la time: $nolruresize_delta seconds"
         log "lru_size = $(lctl get_param -n ldlm.namespaces.*mdc*.lru_size)"
@@ -16043,10 +16028,11 @@ test_124b() {
 	lru_resize_enable mdc
 	test_mkdir -p $DIR/$tdir/enable_lru_resize
 
+        stack_trap "unlinkmany $DIR/$tdir/enable_lru_resize/f $NR"
         createmany -o $DIR/$tdir/enable_lru_resize/f $NR
         log "doing ls -la $DIR/$tdir/enable_lru_resize 3 times"
         cancel_lru_locks mdc
-        stime=`date +%s`
+        stime=$SECONDS
         PID=""
         ls -la $DIR/$tdir/enable_lru_resize > /dev/null &
         PID="$PID $!"
@@ -16057,7 +16043,7 @@ test_124b() {
         ls -la $DIR/$tdir/enable_lru_resize > /dev/null &
         PID="$PID $!"
         wait $PID
-        etime=`date +%s`
+        etime=$SECONDS
         lruresize_delta=$((etime-stime))
         log "ls -la time: $lruresize_delta seconds"
         log "lru_size = $(lctl get_param -n ldlm.namespaces.*mdc*.lru_size)"
@@ -16069,7 +16055,6 @@ test_124b() {
         else
                 log "lru resize performs the same with no lru resize"
         fi
-        unlinkmany $DIR/$tdir/enable_lru_resize/f $NR
 }
 run_test 124b "lru resize (performance test) ======================="
 
@@ -16114,7 +16099,6 @@ test_124d() {
 	local nr=100
 
 	lru_resize_disable mdc
-	stack_trap "lru_resize_enable mdc" EXIT
 
 	cancel_lru_locks mdc
 
@@ -31468,7 +31452,6 @@ test_425() {
 	$LFS setstripe -c -1 $DIR/$tdir
 
 	lru_resize_disable "" 100
-	stack_trap "lru_resize_enable" EXIT
 
 	sleep 5
 
@@ -31918,10 +31901,12 @@ test_433() {
 	stack_trap "$LCTL set_param llite.*.inode_cache=1"
 
 	local count=256
+	local first
 	local before
 	local after
 
 	cancel_lru_locks mdc
+	first=$(num_objects)
 	test_mkdir $DIR/$tdir || error "mkdir $tdir"
 	createmany -m $DIR/$tdir/f $count
 	createmany -d $DIR/$tdir/d $count
@@ -31932,18 +31917,18 @@ test_433() {
 	cancel_lru_locks mdc
 	after=$(num_objects)
 
-	# sometimes even @before is less than 2 * count
-	while (( before - after < count )); do
+	# sometimes even $before is less than 2 * count
+	while (( before > first + count && before - after < count )); do
 		sleep 1
 		after=$(num_objects)
 		wait=$((wait + 1))
 		(( wait % 5 == 0 )) && echo "wait $wait seconds objects: $after"
 		if (( wait > 60 )); then
-			error "inode slab grew from $before to $after"
+			error "inode slab grew from $first ^ $before v $after"
 		fi
 	done
 
-	echo "lustre_inode_cache $before objs before lock cancel, $after after"
+	echo "lustre_inode_cache grew from $first to $before, then $after after"
 }
 run_test 433 "ldlm lock cancel releases dentries and inodes"
 

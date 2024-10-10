@@ -7029,15 +7029,27 @@ default_lru_size()
 
 lru_resize_enable()
 {
-	lctl set_param ldlm.namespaces.*$1*.lru_size=0
+	$LCTL set_param -n ldlm.namespaces.*$1*.lru_size=0
 }
 
 lru_resize_disable()
 {
 	local dev=${1}
 	local lru_size=${2:-$(default_lru_size)}
+	local size_param="ldlm.namespaces.*$dev*.lru_size"
+	local age_param="ldlm.namespaces.*$dev*.lru_max_age"
+	local old_age=($($LCTL get_param -n $age_param))
+	# can't save/restore lru_size since it reports the *current* lru count
 
-	$LCTL set_param ldlm.namespaces.*$dev*.lru_size=$lru_size
+	echo "$size_param=0->$lru_size"
+	echo "$age_param=$old_age->3900s"
+
+	# increase lru_max_age also, to prevent lock cancel due to age
+	$LCTL set_param -n $size_param=$lru_size
+	$LCTL set_param -n $age_param=3900s
+	stack_trap "cancel_lru_locks $dev || true"
+	stack_trap "lru_resize_enable $dev || true"
+	stack_trap "$LCTL set_param -n $age_param=$old_age || true"
 }
 
 flock_is_enabled()
