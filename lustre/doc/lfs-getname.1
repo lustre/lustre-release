@@ -6,6 +6,7 @@ lfs-getname \- retrieve the filesystem name and instance ID
 .RB [ --help | -h ]
 .RB [ --instance | -i ]
 .RB [ --fsname | -n ]
+.RB [ --uuid | -u ]
 .RI [ PATHNAME ...]
 .YS
 .SH DESCRIPTION
@@ -19,6 +20,13 @@ and instance ID for these mount points.
 .BR -h ", " --help
 Print usage message.
 .TP
+.BR -i ", " --instance
+Only show the mount instance ID for each filesystem.  If
+.B -i
+is used with a single
+.I PATHNAME
+then the instance ID is printed without the mountpoint.
+.TP
 .BR -n ", " --fsname
 Print only the Lustre filesystem name for each filesystem.  If
 .B -n
@@ -26,12 +34,14 @@ is used with a single
 .I PATHNAME
 then the filesystem name is printed without the mountpoint.
 .TP
-.BR -i ", " --instance
-Only show the mount instance ID for each filesystem.  If
-.B -i
+.BR -u ", " --uuid
+Print only the UUID for this client filesystem mountpoint. Note that 
+this is not a common UUID suitable for mounting the filesystem with,
+but rather a unique identifier for this specific mount instance. If
+.B -u
 is used with a single
 .I PATHNAME
-then the instance ID is printed without the mountpoint.
+then the uuid is printed without the mountpoint.
 .SH EXAMPLES
 .EX
 .B # lfs getname
@@ -43,6 +53,9 @@ testfs
 .P
 .B # lfs getname -i /mnt/testfs
 ffff937009271000
+.P
+.B # lfs getname -u /mnt/testfs
+78adbfe8-1c12-4bd2-a485-69afa166677e
 .EE
 .SH AVAILABILITY
 .B lfs getname

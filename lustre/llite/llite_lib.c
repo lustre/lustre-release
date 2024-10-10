@@ -3488,6 +3488,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 	case OBD_IOC_GETDTNAME:
 	case OBD_IOC_GETMDNAME:
 		RETURN(ll_get_obd_name(inode, cmd, uarg));
+	case OBD_IOC_GETUUID:
+		RETURN(ll_get_sb_uuid(inode, uarg));
 	default:
 		RETURN(-ENOTTY);
 	}
@@ -4080,6 +4082,22 @@ int ll_get_obd_name(struct inode *inode, unsigned int cmd, void __user *uarg)
 		RETURN(-ENOENT);
 
 	if (copy_to_user(uarg, obd->obd_name, strlen(obd->obd_name) + 1))
+		RETURN(-EFAULT);
+
+	RETURN(0);
+}
+
+/*
+ * Get sb uuid and copy out to user space
+ */
+int ll_get_sb_uuid(struct inode *inode, void __user *uarg)
+{
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+
+	ENTRY;
+
+	if (copy_to_user(uarg, sbi->ll_sb_uuid.uuid,
+			 sizeof(sbi->ll_sb_uuid.uuid)))
 		RETURN(-EFAULT);
 
 	RETURN(0);

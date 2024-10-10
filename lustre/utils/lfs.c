@@ -439,20 +439,21 @@ command_t cmdlist[] = {
 	{"check", lfs_check, 0,
 	 "Display the status of MGTs, MDTs or OSTs (as specified in the command)\n"
 	 "or all the servers (MGTs, MDTs and OSTs) [for specified path only].\n"
-	 "usage: check {mgts|osts|mdts|all} [path]"},
+	 "usage: check {mgts|osts|mdts|all} [PATH]"},
 	{"osts", lfs_osts, 0, "list OSTs connected to client "
-	 "[for specified path only]\n" "usage: osts [path]"},
+	 "[for specified path only]\n" "usage: osts [PATH]"},
 	{"mdts", lfs_mdts, 0, "list MDTs connected to client "
-	 "[for specified path only]\n" "usage: mdts [path]"},
+	 "[for specified path only]\n" "usage: mdts [PATH]"},
 	{"df", lfs_df, 0,
 	 "report filesystem disk space usage or inodes usage "
 	 "of each MDS and all OSDs or a batch belonging to a specific pool.\n"
 	 "Usage: df [--inodes|-i] [--human-readable|-h] [--lazy|-l]\n"
 	 "[--mdt|-m] [--ost|-o]\n"
-	 "[--pool|-p <fsname>[.<pool>]] [path]"},
+	 "[--pool|-p FSNAME[.POOL]] [PATH]"},
 	{"getname", lfs_getname, 0,
 	 "list instances and specified mount points [for specified path only]\n"
-	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [path ...]"},
+	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [--uuid|-u]\n"
+	 "		 [PATH ...]"},
 #ifdef HAVE_SYS_QUOTA_H
 	{"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
 	 "usage: setquota [-t] {-u|-U|-g|-G|-p|-P ID} {-b|-B|-i|-I LIMIT}\n"
@@ -8162,11 +8163,17 @@ static int lfs_df(int argc, char **argv)
 }
 
 static int print_instance(const char *mntdir, char *buf, size_t buflen,
-			  bool opt_instance, bool opt_fsname, bool opt_mntdir)
+			  bool opt_instance, bool opt_fsname, bool opt_uuid,
+			  bool opt_mntdir)
 {
+	struct obd_uuid uuid;
+	char *tmp = buf;
 	int rc = 0;
 
-	if (opt_fsname == opt_instance) { /* both true or both false */
+	if (opt_uuid) {
+		rc = llapi_file_get_type_uuid(mntdir, CLI_TYPE, &uuid);
+		tmp = uuid.uuid;
+	} else if (opt_fsname == opt_instance) { /* both true or both false */
 		rc = llapi_getname(mntdir, buf, buflen);
 	} else if (opt_fsname) {
 		/*
@@ -8186,9 +8193,9 @@ static int print_instance(const char *mntdir, char *buf, size_t buflen,
 	}
 
 	if (opt_mntdir)
-		printf("%s %s\n", buf, mntdir);
+		printf("%s %s\n", tmp, mntdir);
 	else
-		printf("%s\n", buf);
+		printf("%s\n", tmp);
 
 	return 0;
 }
@@ -8199,18 +8206,22 @@ static int lfs_getname(int argc, char **argv)
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "instance",	.has_arg = no_argument },
 	{ .val = 'n',	.name = "fsname",	.has_arg = no_argument },
+	{ .val = 'u',	.name = "uuid",		.has_arg = no_argument },
 	{ .name = NULL} };
-	bool opt_instance = false, opt_fsname = false;
-	char fsname[PATH_MAX] = "";
+	bool opt_instance = false, opt_fsname = false, opt_uuid = false;
+	char fsname[PATH_MAX] = { 0 };
 	int rc = 0, rc2, c;
 
-	while ((c = getopt_long(argc, argv, "hin", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hinu", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
 			opt_instance = true;
 			break;
 		case 'n':
 			opt_fsname = true;
+			break;
+		case 'u':
+			opt_uuid = true;
 			break;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
@@ -8222,26 +8233,26 @@ static int lfs_getname(int argc, char **argv)
 	}
 
 	if (optind == argc) { /* no paths specified, get all paths. */
-		char mntdir[PATH_MAX] = "", path[PATH_MAX] = "";
+		char mntdir[PATH_MAX] = { 0 };
+		char path[PATH_MAX] = { 0 };
 		int index = 0;
 
 		while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
 			rc2 = print_instance(mntdir, fsname, sizeof(fsname),
-					     opt_instance, opt_fsname, true);
+					     opt_instance, opt_fsname, opt_uuid,
+					     true);
 			if (!rc)
 				rc = rc2;
 			path[0] = fsname[0] = mntdir[0] = '\0';
 		}
 	} else { /* paths specified, only attempt to search these. */
-		bool opt_mntdir;
+		bool opt_mntdir = ((argc - optind) != 1);
 
 		/* if only one path is given, print only requested info */
-		opt_mntdir = argc - optind > 1 || (opt_instance == opt_fsname);
-
 		for (; optind < argc; optind++) {
 			rc2 = print_instance(argv[optind], fsname,
 					     sizeof(fsname), opt_instance,
-					     opt_fsname, opt_mntdir);
+					     opt_fsname, opt_uuid, opt_mntdir);
 			if (!rc)
 				rc = rc2;
 			fsname[0] = '\0';

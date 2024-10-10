@@ -466,6 +466,15 @@ int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 int llapi_file_fget_lmv_uuid(int fd, struct obd_uuid *lov_uuid);
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count);
+enum tgt_type {
+       LOV_TYPE = 1,
+       LMV_TYPE = 2,
+       CLI_TYPE = 3,
+};
+int llapi_file_get_type_uuid(const char *path, enum tgt_type type,
+			struct obd_uuid *uuid);
+int llapi_file_fget_type_uuid(int fd, enum tgt_type type,
+			struct obd_uuid *uuid);
 int llapi_is_lustre_mnttype(const char *type);
 int llapi_search_tgt(const char *fsname, const char *poolname,
 		     const char *tgtname, bool is_mdt);

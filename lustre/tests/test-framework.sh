@@ -4321,10 +4321,7 @@ replay_barrier_nosync() {
 get_client_uuid() {
 	local mntpnt=${1:-$MOUNT}
 
-	local name=$($LFS getname $mntpnt | cut -d' ' -f1)
-	local uuid=$($LCTL get_param -n llite.$name.uuid)
-
-	echo -n $uuid
+	echo -n $($LFS getname -u $mntpnt)
 }
 
 mds_evict_client() {

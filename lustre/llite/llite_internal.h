@@ -1560,6 +1560,7 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      void *data);
 void ll_finish_md_op_data(struct md_op_data *op_data);
 int ll_get_obd_name(struct inode *inode, unsigned int cmd, void __user *arg);
+int ll_get_sb_uuid(struct inode *inode, void __user *arg);
 void ll_compute_rootsquash_state(struct ll_sb_info *sbi);
 ssize_t ll_copy_user_md(const struct lov_user_md __user *md,
 			struct lov_user_md **kbuf);

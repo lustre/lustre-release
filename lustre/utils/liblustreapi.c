@@ -490,37 +490,22 @@ int llapi_chomp_string(char *buf)
 }
 
 /*
- * Wrapper to grab parameter settings for lov.*-clilov-*.* values
+ * Wrapper to grab parameter settings for {lov,lmv}.*-clilov-*.* values
  */
-static int get_param_lov(const char *path, const char *param,
-			 char *buf, size_t buf_size)
+static int get_param_tgt(const char *path, enum tgt_type type,
+			 const char *param, char *buf, size_t buf_size)
 {
+	const char *typestr = type == LOV_TYPE ? "lov" : "lmv";
 	struct obd_uuid uuid;
 	int rc;
 
-	rc = llapi_file_get_lov_uuid(path, &uuid);
+	rc = llapi_file_get_type_uuid(path, type, &uuid);
 	if (rc != 0)
 		return rc;
 
-	return get_lustre_param_value("lov", uuid.uuid, FILTER_BY_EXACT, param,
-				      buf, buf_size);
-}
-
-/*
- * Wrapper to grab parameter settings for lmv.*-clilov-*.* values
- */
-static int get_param_lmv(const char *path, const char *param,
-			 char *buf, size_t buf_size)
-{
-	struct obd_uuid uuid;
-	int rc;
-
-	rc = llapi_file_get_lmv_uuid(path, &uuid);
-	if (rc != 0)
-		return rc;
-
-	return get_lustre_param_value("lmv", uuid.uuid, FILTER_BY_EXACT, param,
-			       buf, buf_size);
+	rc = get_lustre_param_value(typestr, uuid.uuid, FILTER_BY_EXACT, param,
+				    buf, buf_size);
+	return rc;
 }
 
 static int get_mds_md_size(const char *path)
@@ -544,7 +529,7 @@ static int get_mds_md_size(const char *path)
 
 int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize)
 {
-	return get_param_lmv(path, "uuid", buf, bufsize);
+	return get_param_tgt(path, LMV_TYPE, "uuid", buf, bufsize);
 }
 
 /**
@@ -2268,10 +2253,52 @@ int llapi_file_get_lmv_uuid(const char *path, struct obd_uuid *lov_uuid)
 	return rc;
 }
 
-enum tgt_type {
-	LOV_TYPE = 1,
-	LMV_TYPE
-};
+int llapi_file_fget_type_uuid(int fd, enum tgt_type type, struct obd_uuid *uuid)
+{
+	unsigned int cmd = 0;
+	int rc;
+
+	if (type == LOV_TYPE)
+		cmd = OBD_IOC_GETDTNAME;
+	else if (type == LMV_TYPE)
+		cmd = OBD_IOC_GETMDNAME;
+	else if (type == CLI_TYPE)
+		cmd = OBD_IOC_GETUUID;
+
+	rc = llapi_ioctl(fd, cmd, uuid);
+	if (rc) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get uuid");
+	}
+
+	return rc;
+}
+
+int llapi_file_get_type_uuid(const char *path, enum tgt_type type,
+			struct obd_uuid *uuid)
+{
+	int fd, rc;
+
+	/* do not follow faked symlinks */
+	fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+	if (fd < 0) {
+		/* real symlink should have failed with ELOOP so retry without
+		 * O_NOFOLLOW just in case
+		 */
+		fd = open(path, O_RDONLY | O_NONBLOCK);
+		if (fd < 0) {
+			rc = -errno;
+			llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'",
+				    path);
+			return rc;
+		}
+	}
+
+	rc = llapi_file_fget_type_uuid(fd, type, uuid);
+
+	close(fd);
+	return rc;
+}
 
 /*
  * If uuidp is NULL, return the number of available obd uuids.
@@ -2289,10 +2316,7 @@ static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp, int *indices,
 	FILE *fp;
 
 	/* Get the lov name */
-	if (type == LOV_TYPE)
-		rc = llapi_file_fget_lov_uuid(fd, &name);
-	else
-		rc = llapi_file_fget_lmv_uuid(fd, &name);
+	rc = llapi_file_fget_type_uuid(fd, type, &name);
 	if (rc != 0)
 		return rc;
 
@@ -2400,15 +2424,13 @@ static int setup_obd_uuid(int fd, char *dname, struct find_param *param)
 	char format[32];
 	int rc = 0;
 	FILE *fp;
+	enum tgt_type type = param->fp_get_lmv ? LMV_TYPE : LOV_TYPE;
 
 	if (param->fp_got_uuids)
 		return rc;
 
 	/* Get the lov/lmv name */
-	if (param->fp_get_lmv)
-		rc = llapi_file_fget_lmv_uuid(fd, &obd_uuid);
-	else
-		rc = llapi_file_fget_lov_uuid(fd, &obd_uuid);
+	rc = llapi_file_fget_type_uuid(fd, type, &obd_uuid);
 	if (rc) {
 		if (rc != -ENOTTY) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
@@ -2492,10 +2514,7 @@ static int setup_indexes(int d, char *path, struct obd_uuid *obduuids,
 	char buf[16];
 	long i;
 
-	if (type == LOV_TYPE)
-		ret = get_param_lov(path, "numobd", buf, sizeof(buf));
-	else
-		ret = get_param_lmv(path, "numobd", buf, sizeof(buf));
+	ret = get_param_tgt(path, type, "numobd", buf, sizeof(buf));
 	if (ret != 0)
 		return ret;
 
