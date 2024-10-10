@@ -11563,11 +11563,15 @@ test_77c() {
 	local osc_file_prefix
 	local osc_file
 	local check_ost=false
-	local ost_file_prefix
+	local ost_file_prefix="$TMP/lustre-log"
 	local ost_file
 	local orig_cksum
 	local dump_cksum
 	local fid
+	local old_ost_path=$(do_facet ost1 $LCTL get_param -n debug_path)
+
+	stack_trap "do_facet ost1 $LCTL set_param debug_path=$old_ost_path"
+	do_facet ost1 $LCTL set_param debug_path=${ost_file_prefix}
 
 	# ensure corruption will occur on first OSS/OST
 	$LFS setstripe -i 0 $DIR/$tfile
@@ -11580,7 +11584,6 @@ test_77c() {
 	if [ $OST1_VERSION -ge $(version_code 2.9.57) ]
 	then
 		check_ost=true
-		ost_file_prefix=$(do_facet ost1 $LCTL get_param -n debug_path)
 		ost_file_prefix=${ost_file_prefix}-checksum_dump-ost-\\${fid}
 	else
 		echo "OSS do not support bulk pages dump upon error"
