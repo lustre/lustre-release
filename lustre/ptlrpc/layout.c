@@ -2063,6 +2063,7 @@ int req_capsule_server_pack(struct req_capsule *pill)
 		if (used_len + msg_len > req->rq_replen) {
 			__u32 len;
 			__u32 max;
+			__u32 add;
 
 			if (!req_capsule_has_field(&req->rq_pill,
 						   &RMF_BUT_REPLY, RCL_SERVER))
@@ -2079,17 +2080,20 @@ int req_capsule_server_pack(struct req_capsule *pill)
 			len = req_capsule_get_size(&req->rq_pill,
 						   &RMF_BUT_REPLY, RCL_SERVER);
 			/*
-			 * Currently just increase the batch reply buffer
-			 * by 2.
+			 * Currently just increase the batch RPC reply buffer
+			 * (including @RMF_PTLRPC_BODY + @RMF_BUT_REPLY) by 2.
+			 * We must set the new length carefully as it will be
+			 * rounded up with 8.
 			 */
 			max = BUT_MAXREPSIZE - req->rq_replen;
+			add = len;
 			if (used_len + msg_len > len)
-				len = used_len + msg_len;
+				add = used_len + msg_len;
 
-			if (len > max)
+			if (add > max)
 				len += max;
 			else
-				len += len;
+				len += add;
 
 			rc = req_capsule_server_grow(&req->rq_pill,
 						     &RMF_BUT_REPLY, len);
