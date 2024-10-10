@@ -146,7 +146,7 @@ lmv_stripe_object_dump(int mask, const struct lmv_stripe_object *lsmo)
 	int i;
 
 	CDEBUG(mask,
-	       "dump LMV: refs %u magic=%#x count=%u index=%u hash=%s:%#x max_inherit=%hhu max_inherit_rr=%hhu version=%u migrate_offset=%u migrate_hash=%s:%x pool=%.*s\n",
+	       "dump LMV: magic=%#x refs=%u count=%u index=%u hash=%s:%#x max_inherit=%hhu max_inherit_rr=%hhu version=%u migrate_offset=%u migrate_hash=%s:%x pool=%.*s\n",
 	       lsm->lsm_md_magic, atomic_read(&lsmo->lso_refs),
 	       lsm->lsm_md_stripe_count, lsm->lsm_md_master_mdt_index,
 	       lmv_is_known_hash_type(lsm->lsm_md_hash_type) ?
