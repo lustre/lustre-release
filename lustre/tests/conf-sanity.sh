@@ -11337,10 +11337,13 @@ cleanup_136 () {
 
 test_136() {
 	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code v2_15_61-43-g55c143a66d) )) ||
+		skip "Need MDS >= 2.15.61.43 for obdecho on second MDT"
 
 	reformat
 	setup_noconfig
 
+	do_rpc_nodes $(facet_active_host mds2) "load_module obdecho/obdecho"
 	do_facet mds2 "$LCTL attach echo_client ec ec_uuid" ||
 	    error "echo attach fail"
 
