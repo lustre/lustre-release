@@ -2456,40 +2456,33 @@ const struct sysfs_ops lustre_sysfs_ops = {
 };
 EXPORT_SYMBOL_GPL(lustre_sysfs_ops);
 
-int lprocfs_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *data)
+ssize_t max_pages_per_rpc_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
+	int rc;
 
 	spin_lock(&cli->cl_loi_list_lock);
-	seq_printf(m, "%d\n", cli->cl_max_pages_per_rpc);
+	rc = scnprintf(buf, PAGE_SIZE, "%u\n", cli->cl_max_pages_per_rpc);
 	spin_unlock(&cli->cl_loi_list_lock);
-	return 0;
+	return rc;
 }
-EXPORT_SYMBOL(lprocfs_obd_max_pages_per_rpc_seq_show);
+EXPORT_SYMBOL(max_pages_per_rpc_show);
 
-ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
-						const char __user *buffer,
-						size_t count, loff_t *off)
+ssize_t max_pages_per_rpc_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
 	struct obd_import *imp;
 	struct obd_connect_data *ocd;
 	int chunk_mask, rc;
-	char kernbuf[22];
 	u64 val;
 
-	if (count > sizeof(kernbuf) - 1)
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-
-	kernbuf[count] = '\0';
-
-	rc = sysfs_memparse(kernbuf, count, &val, "B");
+	rc = sysfs_memparse(buffer, count, &val, "B");
 	if (rc)
 		return rc;
 
@@ -2515,7 +2508,7 @@ ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
 
 	return rc ?: count;
 }
-EXPORT_SYMBOL(lprocfs_obd_max_pages_per_rpc_seq_write);
+EXPORT_SYMBOL(max_pages_per_rpc_store);
 
 ssize_t short_io_bytes_show(struct kobject *kobj, struct attribute *attr,
 			    char *buf)

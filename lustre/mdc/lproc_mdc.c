@@ -133,6 +133,8 @@ static ssize_t max_mod_rpcs_in_flight_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(max_mod_rpcs_in_flight);
 
+LUSTRE_RW_ATTR(max_pages_per_rpc);
+
 static int mdc_max_dirty_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *obd = m->private;
@@ -630,7 +632,6 @@ LPROC_SEQ_FOPS_RO_TYPE(mdc, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, timeouts);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, state);
-LPROC_SEQ_FOPS_RW_TYPE(mdc, obd_max_pages_per_rpc);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, import);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, pinger_recov);
 
@@ -639,8 +640,6 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_connect_flags_fops	},
 	{ .name	=	"mds_server_uuid",
 	  .fops	=	&mdc_server_uuid_fops	},
-	{ .name =	"max_pages_per_rpc",
-	  .fops =	&mdc_obd_max_pages_per_rpc_fops },
 	{ .name =	"max_dirty_mb",
 	  .fops =	&mdc_max_dirty_mb_fops		},
 	{ .name	=	"mdc_cached_mb",
@@ -783,6 +782,7 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_checksum_dump.attr,
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
+	&lustre_attr_max_pages_per_rpc.attr,
 	&lustre_attr_mds_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
 	&lustre_attr_ping.attr,

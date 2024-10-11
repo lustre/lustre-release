@@ -586,8 +586,7 @@ static ssize_t destroys_in_flight_show(struct kobject *kobj,
 }
 LUSTRE_RO_ATTR(destroys_in_flight);
 
-LPROC_SEQ_FOPS_RW_TYPE(osc, obd_max_pages_per_rpc);
-
+LUSTRE_RW_ATTR(max_pages_per_rpc);
 LUSTRE_RW_ATTR(short_io_bytes);
 
 #ifdef CONFIG_PROC_FS
@@ -742,8 +741,6 @@ struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 	  .fops	=	&osc_connect_flags_fops		},
 	{ .name	=	"ost_server_uuid",
 	  .fops	=	&osc_server_uuid_fops		},
-	{ .name =	"max_pages_per_rpc",
-	  .fops =	&osc_obd_max_pages_per_rpc_fops	},
 	{ .name	=	"osc_cached_mb",
 	  .fops	=	&osc_cached_mb_fops		},
 	{ .name	=	"osc_unevict_cached_mb",
@@ -941,6 +938,7 @@ static struct attribute *osc_attrs[] = {
 	&lustre_attr_destroys_in_flight.attr,
 	&lustre_attr_grant_shrink_interval.attr,
 	&lustre_attr_max_dirty_mb.attr,
+	&lustre_attr_max_pages_per_rpc.attr,
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_short_io_bytes.attr,
 	&lustre_attr_resend_count.attr,

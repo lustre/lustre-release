@@ -922,10 +922,10 @@ ssize_t instance_show(struct kobject *kobj, struct attribute *attr,
 		      char *buf);
 #endif
 /* lproc_status.c */
-int lprocfs_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *data);
-ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
-						const char __user *buffer,
-						size_t count, loff_t *off);
+ssize_t max_pages_per_rpc_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf);
+ssize_t max_pages_per_rpc_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count);
 ssize_t short_io_bytes_show(struct kobject *kobj, struct attribute *attr,
 			    char *buf);
 ssize_t short_io_bytes_store(struct kobject *kobj, struct attribute *attr,
