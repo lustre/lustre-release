@@ -18,7 +18,7 @@ ALWAYS_EXCEPT="$SANITY_SEC_EXCEPT "
 
 [[ "$SLOW" == "no" ]] && EXCEPT_SLOW="26"
 
-NODEMAP_TESTS={7..26}
+NODEMAP_TESTS=$(seq 7 26)
 
 if ! check_versions; then
 	echo "It is NOT necessary to test nodemap under interoperation mode"
@@ -4488,7 +4488,11 @@ test_51() {
 	old_cap=($(do_nodes $mdts $LCTL get_param -n $cap_param 2>/dev/null))
 	if [[ -n "$old_cap" ]]; then
 		local new_cap="+cap_chown+cap_fowner+cap_dac_override+cap_dac_read_search"
-		(( $MDS1_VERSION > $(version_code 2.14.0.135) )) || new_cap=0xf
+
+		(( MDS1_VERSION >= $(version_code 2.15.63.14) )) ||
+		(( MDS1_VERSION < $(version_code 2.15.0) &&
+		   MDS1_VERSION > $(version_code 2.14.0.135) )) ||
+			new_cap=0xf
 		echo "old_cap: $old_cap new_cap: $new_cap"
 		do_nodes $mdts $LCTL set_param $cap_param=$new_cap
 		stack_trap "do_nodes $mdts $LCTL set_param $cap_param=$old_cap"
