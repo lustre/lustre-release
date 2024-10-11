@@ -164,6 +164,7 @@ LUSTRE_RW_ATTR(max_dirty_mb);
 LUSTRE_ATTR(ost_conn_uuid, 0444, conn_uuid_show, NULL);
 LUSTRE_RO_ATTR(conn_uuid);
 
+LUSTRE_RW_ATTR(pinger_recov);
 LUSTRE_RW_ATTR(ping);
 
 static int osc_cached_mb_seq_show(struct seq_file *m, void *v)
@@ -732,9 +733,7 @@ LPROC_SEQ_FOPS_RO_TYPE(osc, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(osc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osc, timeouts);
 LPROC_SEQ_FOPS_RO_TYPE(osc, state);
-
 LPROC_SEQ_FOPS_RW_TYPE(osc, import);
-LPROC_SEQ_FOPS_RW_TYPE(osc, pinger_recov);
 
 struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 	{ .name	=	"connect_flags",
@@ -755,8 +754,6 @@ struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 	  .fops	=	&osc_import_fops		},
 	{ .name	=	"state",
 	  .fops	=	&osc_state_fops			},
-	{ .name	=	"pinger_recov",
-	  .fops	=	&osc_pinger_recov_fops		},
 	{ .name	=	"unstable_stats",
 	  .fops	=	&osc_unstable_stats_fops	},
 	{ NULL }
@@ -944,6 +941,7 @@ static struct attribute *osc_attrs[] = {
 	&lustre_attr_resend_count.attr,
 	&lustre_attr_ost_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
+	&lustre_attr_pinger_recov.attr,
 	&lustre_attr_ping.attr,
 	&lustre_attr_idle_timeout.attr,
 	&lustre_attr_idle_connect.attr,

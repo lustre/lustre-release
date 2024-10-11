@@ -1442,30 +1442,32 @@ out:
 }
 EXPORT_SYMBOL(ldebugfs_import_seq_write);
 
-int lprocfs_pinger_recov_seq_show(struct seq_file *m, void *n)
+ssize_t pinger_recov_show(struct kobject *kobj, struct attribute *attr,
+			  char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct obd_import *imp;
 	int rc;
 
 	with_imp_locked(obd, imp, rc)
-		seq_printf(m, "%d\n", !imp->imp_no_pinger_recover);
+		rc = scnprintf(buf, PAGE_SIZE, "%d\n",
+			       !imp->imp_no_pinger_recover);
 
 	return rc;
 }
-EXPORT_SYMBOL(lprocfs_pinger_recov_seq_show);
+EXPORT_SYMBOL(pinger_recov_show);
 
-ssize_t
-lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *off)
+ssize_t pinger_recov_store(struct kobject *kobj, struct attribute *attr,
+			   const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct obd_import *imp;
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc < 0)
 		return rc;
 
@@ -1477,4 +1479,4 @@ lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 
 	return rc ?: count;
 }
-EXPORT_SYMBOL(lprocfs_pinger_recov_seq_write);
+EXPORT_SYMBOL(pinger_recov_store);

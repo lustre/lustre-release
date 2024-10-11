@@ -634,11 +634,10 @@ lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 {
 	return ldebugfs_import_seq_write(file, buffer, count, off);
 }
-
-extern int lprocfs_pinger_recov_seq_show(struct seq_file *m, void *data);
-extern ssize_t
-lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *off);
+ssize_t pinger_recov_show(struct kobject *kobj, struct attribute *attr,
+			  char *buf);
+ssize_t pinger_recov_store(struct kobject *kobj, struct attribute *attr,
+			   const char *buffer, size_t count);
 
 int string_to_size(u64 *size, const char *buffer, size_t count);
 int sysfs_memparse_total(const char *buffer, size_t count, u64 *val,
@@ -1169,19 +1168,6 @@ ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 static inline ssize_t
 lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
-{
-	return 0;
-}
-
-static inline int
-lprocfs_pinger_recov_seq_show(struct seq_file *m, void *data)
-{
-	return 0;
-}
-
-static inline ssize_t
-lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *off)
 {
 	return 0;
 }

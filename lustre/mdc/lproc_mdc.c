@@ -306,6 +306,7 @@ LUSTRE_RW_ATTR(checksum_dump);
 LUSTRE_ATTR(mds_conn_uuid, 0444, conn_uuid_show, NULL);
 LUSTRE_RO_ATTR(conn_uuid);
 
+LUSTRE_RW_ATTR(pinger_recov);
 LUSTRE_RW_ATTR(ping);
 
 static int mdc_cached_mb_seq_show(struct seq_file *m, void *v)
@@ -633,7 +634,6 @@ LPROC_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, timeouts);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, state);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, import);
-LPROC_SEQ_FOPS_RW_TYPE(mdc, pinger_recov);
 
 struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	{ .name	=	"connect_flags",
@@ -652,8 +652,6 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_import_fops		},
 	{ .name	=	"state",
 	  .fops	=	&mdc_state_fops			},
-	{ .name	=	"pinger_recov",
-	  .fops	=	&mdc_pinger_recov_fops		},
 	{ .name	=	"rpc_stats",
 	  .fops	=	&mdc_rpc_stats_fops		},
 	{ .name	=	"batch_stats",
@@ -785,6 +783,7 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_max_pages_per_rpc.attr,
 	&lustre_attr_mds_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
+	&lustre_attr_pinger_recov.attr,
 	&lustre_attr_ping.attr,
 	&lustre_attr_grant_shrink.attr,
 	&lustre_attr_grant_shrink_interval.attr,
