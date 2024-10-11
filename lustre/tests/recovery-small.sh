@@ -3549,6 +3549,8 @@ test_154a() {
 run_test 154a "corruption update llog can be skipped"
 
 test_154b() {
+	(( MDS1_VERSION >= $(version_code 2.15.60.2) )) ||
+		skip "need MDS >= v2_15_60-2-ge81805244476 for llog fix"
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
 	stop mds1
