@@ -1059,7 +1059,7 @@ static int qmt_reba_thread(void *_args)
 			 * so no need to send glimpse callbacks.
 			 */
 			if (!kthread_should_stop() &&
-			    atomic_read(&lqe->lqe_ref) > 1)
+			    kref_read(&lqe->lqe_ref) > 1)
 				qmt_id_lock_glimpse(env, qmt, lqe, NULL);
 
 			lqe_putref(lqe);

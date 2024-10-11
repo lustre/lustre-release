@@ -687,7 +687,7 @@ static int qmt_lgd_extend_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	int old_num = 0, rc;
 
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
-	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+	LASSERT(kref_read(&lqe->lqe_ref) > 0);
 	rc = 0;
 
 	CDEBUG(D_QUOTA, "lgd %px\n", lqe->lqe_glbl_data);
@@ -1177,7 +1177,7 @@ static int qmt_site_recalc_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	struct lu_env *env = data;
 
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
-	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+	LASSERT(kref_read(&lqe->lqe_ref) > 0);
 
 	lqe_write_lock(lqe);
 	if (lqe->lqe_granted != lqe->lqe_recalc_granted) {

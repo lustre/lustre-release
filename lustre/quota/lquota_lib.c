@@ -36,6 +36,14 @@ LU_KEY_INIT_FINI(lquota, struct lquota_thread_info);
 LU_CONTEXT_KEY_DEFINE(lquota, LCT_MD_THREAD | LCT_DT_THREAD | LCT_LOCAL);
 LU_KEY_INIT_GENERIC(lquota);
 
+void lqe_ref_free(struct kref *kref)
+{
+	struct lquota_entry *lqe = container_of(kref, struct lquota_entry,
+						lqe_ref);
+
+	OBD_SLAB_FREE_PTR(lqe, lqe_kmem);
+}
+
 static inline __u32 qtype2acct_oid(int qtype)
 {
 	switch (qtype) {

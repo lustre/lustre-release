@@ -77,7 +77,7 @@ static int qmt_entry_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	struct lquota_entry	*lqe;
 
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
-	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+	LASSERT(kref_read(&lqe->lqe_ref) > 0);
 
 	if (lqe->lqe_id.qid_uid == 0 || !lqe->lqe_is_default)
 		return 0;

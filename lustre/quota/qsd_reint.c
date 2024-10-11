@@ -548,7 +548,7 @@ static int qsd_entry_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	int			*pending = (int *)data;
 
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
-	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+	LASSERT(kref_read(&lqe->lqe_ref) > 0);
 
 	lqe_read_lock(lqe);
 	*pending += lqe->lqe_pending_req;

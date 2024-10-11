@@ -143,7 +143,7 @@ struct lquota_entry {
 	struct lquota_site	*lqe_site;
 
 	/* reference counter */
-	atomic_t		 lqe_ref;
+	struct kref		 lqe_ref;
 
 	/* linked to list of lqes which:
 	 * - need quota space adjustment on slave
@@ -250,19 +250,21 @@ struct lquota_site {
 
 extern struct kmem_cache *lqe_kmem;
 
+/* lquota_lib.c */
+void lqe_ref_free(struct kref *kref);
+
 /* helper routine to get/put reference on lquota_entry */
 static inline void lqe_getref(struct lquota_entry *lqe)
 {
 	LASSERT(lqe != NULL);
-	atomic_inc(&lqe->lqe_ref);
+	kref_get(&lqe->lqe_ref);
 }
 
 static inline void lqe_putref(struct lquota_entry *lqe)
 {
 	LASSERT(lqe != NULL);
-	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
-	if (atomic_dec_and_test(&lqe->lqe_ref))
-		OBD_SLAB_FREE_PTR(lqe, lqe_kmem);
+	LASSERT(kref_read(&lqe->lqe_ref) > 0);
+	kref_put(&lqe->lqe_ref, lqe_ref_free);
 }
 
 static inline int lqe_is_master(struct lquota_entry *lqe)

@@ -108,12 +108,12 @@ static int lqe_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	struct lquota_entry  *lqe;
 
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
-	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+	LASSERT(kref_read(&lqe->lqe_ref) > 0);
 
 	/* Only one reference held by hash table, and nobody else can
 	 * grab the entry at this moment, it's safe to remove it from
 	 * the hash and free it. */
-	if (atomic_read(&lqe->lqe_ref) == 1) {
+	if (kref_read(&lqe->lqe_ref) == 1) {
 		if (!lqe_is_master(lqe)) {
 			LASSERT(lqe->lqe_pending_write == 0);
 			LASSERT(lqe->lqe_pending_req == 0);
@@ -325,7 +325,7 @@ struct lquota_entry *lqe_locate_find(const struct lu_env *env,
 		RETURN(ERR_PTR(-ENOMEM));
 	}
 
-	atomic_set(&new->lqe_ref, 1); /* hold 1 for caller */
+	kref_init(&new->lqe_ref); /* hold 1 for caller */
 	new->lqe_id     = *qid;
 	new->lqe_site   = site;
 	INIT_LIST_HEAD(&new->lqe_link);
