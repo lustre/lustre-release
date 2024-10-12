@@ -1884,6 +1884,10 @@ test_31() {
 	}
 
 	# check for loops
+	(( MDS1_VERSION >= $(version_code 2.15.50.150) )) || {
+		echo "skip loop spilling testing for MDS < 2.15.50.150"
+		return 0
+	}
 
 	# reset all loop spilling
 	$do_mdts set_param lod.*.pool.*.spill_threshold_pct="0"
