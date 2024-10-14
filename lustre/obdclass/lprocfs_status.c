@@ -2559,6 +2559,66 @@ out:
 }
 EXPORT_SYMBOL(short_io_bytes_store);
 
+const char *const cksum_name[] = {
+	"crc32", "adler", "crc32c", "reserved", "t10ip512", "t10ip4K",
+	"t10crc512", "t10crc4K", NULL
+};
+EXPORT_SYMBOL(cksum_name);
+
+ssize_t checksum_type_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	ssize_t len = 0;
+	int i;
+
+	if (!obd)
+		return 0;
+
+	for (i = 0; cksum_name[i] != NULL; i++) {
+		if ((BIT(i) & obd->u.cli.cl_supp_cksum_types) == 0)
+			continue;
+		if (obd->u.cli.cl_cksum_type == BIT(i))
+			len += scnprintf(buf + len, PAGE_SIZE, "[%s] ",
+					 cksum_name[i]);
+		else
+			len += scnprintf(buf + len, PAGE_SIZE, "%s ",
+					 cksum_name[i]);
+	}
+	len += scnprintf(buf + len, PAGE_SIZE, "\n");
+
+	return len;
+}
+EXPORT_SYMBOL(checksum_type_show);
+
+ssize_t checksum_type_store(struct kobject *kobj, struct attribute *attr,
+			    const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	int rc = -EINVAL;
+	int i;
+
+	if (!obd)
+		return 0;
+
+	for (i = 0; cksum_name[i] != NULL; i++) {
+		if (strcasecmp(buffer, cksum_name[i]) == 0) {
+			obd->u.cli.cl_preferred_cksum_type = BIT(i);
+			if (obd->u.cli.cl_supp_cksum_types & BIT(i)) {
+				obd->u.cli.cl_cksum_type = BIT(i);
+				rc = count;
+			} else {
+				rc = -EOPNOTSUPP;
+			}
+			break;
+		}
+	}
+	return rc;
+}
+EXPORT_SYMBOL(checksum_type_store);
+
 int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
 			   struct root_squash_info *squash, char *name)
 {

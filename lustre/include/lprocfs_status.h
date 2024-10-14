@@ -685,6 +685,10 @@ int lprocfs_checksum_dump_seq_show(struct seq_file *m, void *data);
 ssize_t
 lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off);
+ssize_t checksum_type_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf);
+ssize_t checksum_type_store(struct kobject *kobj, struct attribute *attr,
+			    const char *buffer, size_t count);
 
 extern int lprocfs_single_release(struct inode *i, struct file *f);
 extern int lprocfs_seq_release(struct inode *i, struct file *f);

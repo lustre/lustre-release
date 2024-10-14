@@ -52,6 +52,7 @@
 #include <lustre_export.h>
 /* struct obd_device */
 #include <obd.h>
+#include <obd_cksum.h>
 #include <obd_class.h>
 #include <lustre_mds.h>
 #include <lprocfs_status.h>
@@ -1279,8 +1280,6 @@ LUSTRE_RW_ATTR(max_mod_rpcs_in_flight);
 /*
  * mdt_checksum_type(server) proc handling
  */
-DECLARE_CKSUM_NAME;
-
 static int mdt_checksum_type_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -1297,7 +1296,7 @@ static int mdt_checksum_type_seq_show(struct seq_file *m, void *data)
 				     lut->lut_cksum_types_supported,
 				     lut->lut_dt_conf.ddp_t10_cksum_type);
 
-	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
+	for (i = 0; cksum_name[i] != NULL; i++) {
 		if ((BIT(i) & lut->lut_cksum_types_supported) == 0)
 			continue;
 

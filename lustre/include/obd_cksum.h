@@ -116,9 +116,9 @@ enum cksum_types obd_cksum_type_select(const char *obd_name,
 }
 
 /* Checksum algorithm names. Must be defined in the same order as the
- * OBD_CKSUM_* flags. */
-#define DECLARE_CKSUM_NAME const char *const cksum_name[] = {"crc32", "adler", \
-	"crc32c", "reserved", "t10ip512", "t10ip4K", "t10crc512", "t10crc4K"}
+ * OBD_CKSUM_* flags.
+ */
+extern const char *const cksum_name[];
 
 typedef __be16 (obd_dif_csum_fn) (void *, unsigned int);
 

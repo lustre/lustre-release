@@ -183,8 +183,6 @@ obd_t10_cksum2type(enum cksum_types cksum_type)
 
 static const char *obd_t10_cksum_name(enum obd_t10_cksum_type index)
 {
-	DECLARE_CKSUM_NAME;
-
 	/* Need to skip "crc32", "adler", "crc32c", "reserved" */
 	return cksum_name[3 + index];
 }
