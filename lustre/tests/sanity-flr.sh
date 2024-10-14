@@ -2817,6 +2817,8 @@ test_50a() {
 		skip "OST does not support SEEK_HOLE"
 	[ "$FSTYPE" != "zfs" ] ||
 		skip "lseek for ZFS is not accurate if obj is not committed"
+	(( OST1_VERSION >= $(version_code 2.15.58) )) ||
+		skip "Need OST version at least 2.15.58 for unaligned DIO"
 
 	local file=$DIR/$tdir/$tfile
 	local offset
