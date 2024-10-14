@@ -2979,6 +2979,9 @@ test_35() {
 	local file=$DIR/$tfile
 	local -a lpcc_path
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
@@ -3014,6 +3017,9 @@ test_36_base() {
 	local state="readonly"
 	local rw="$1"
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+                skip "Server does not support PCC-RO"
+
 	[[ -z $rw ]] || state="readwrite"
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
@@ -3041,9 +3047,6 @@ test_36a() {
 run_test 36a "Stale RW-PCC copy should be deleted after remove the PCC backend"
 
 test_36b() {
-	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
-		skip "Server does not support PCC-RO"
-
 	test_36_base
 }
 run_test 36b "Stale RO-PCC copy should be deleted after remove the PCC backend"
