@@ -754,6 +754,7 @@ enum lvb_type {
 	LVB_T_OST	= 1,
 	LVB_T_LQUOTA	= 2,
 	LVB_T_LAYOUT	= 3,
+	LVB_T_END
 };
 
 /**
@@ -805,27 +806,29 @@ struct ldlm_lock {
 	 * Internal structures per lock type..
 	 */
 	union {
-		/* LDLM_EXTENT locks only */
-		struct {
+		struct { /* LDLM_EXTENT locks only */
 			/* Originally requested extent for the extent lock. */
 			struct ldlm_extent	l_req_extent;
 			struct rb_node		l_rb;
 			u64			l_subtree_last;
 			struct list_head	l_same_extent;
 		};
-		/* LDLM_PLAIN and LDLM_IBITS locks */
-		struct {
+		struct { /* LDLM_PLAIN and LDLM_IBITS locks */
 			/**
 			 * Protected by lr_lock, linkages to "skip lists".
-			 * For more explanations of skip lists see ldlm/ldlm_inodebits.c
+			 * For explanations of skip lists see
+			 * ldlm/ldlm_inodebits.c
 			 */
 			struct list_head	l_sl_mode;
 			struct list_head	l_sl_policy;
 
 			struct ldlm_ibits_node  *l_ibits_node;
+			/* separate ost_lvb used mostly by Data-on-MDT for now.
+			 * It is introduced to don't mix with layout lock data.
+			 */
+			struct ost_lvb		 l_ost_lvb;
 		};
-		/* LDLM_FLOCK locks */
-		struct {
+		struct { /* LDLM_FLOCK locks */
 			/**
 			 * Per export hash of flock locks.
 			 * Protected by per-bucket exp->exp_flock_hash locks.
@@ -842,15 +845,32 @@ struct ldlm_lock {
 	 * Protected by per-bucket exp->exp_lock_hash locks.
 	 */
 	struct hlist_node	l_exp_hash;
+
+	/* Requested mode. Protected by lr_lock. */
+	enum ldlm_mode		l_req_mode:9;
+	/* Granted mode, also protected by lr_lock.  */
+	enum ldlm_mode		l_granted_mode:9;
+
 	/**
-	 * Requested mode.
-	 * Protected by lr_lock.
+	 * Whether the blocking AST was sent for this lock.
+	 * This is for debugging. Valid values are 0 and 1, if there is an
+	 * attempt to send blocking AST more than once, an assertion would be
+	 * hit. \see ldlm_work_bl_ast_lock
 	 */
-	enum ldlm_mode		l_req_mode;
-	/**
-	 * Granted mode, also protected by lr_lock.
+	unsigned int		l_bl_ast_run:1;
+
+	/* content type for lock value block */
+	enum lvb_type		l_lvb_type:3;
+	/* unsigned int		l_unused_bits:10; */
+	u16			l_lvb_len;
+	/* u16			l_unused; */
+
+	/*
+	 * Temporary storage for a LVB received during an enqueue operation.
+	 * May be vmalloc'd, so needs to be freed with OBD_FREE_LARGE().
 	 */
-	enum ldlm_mode		l_granted_mode;
+	void			*l_lvb_data;
+
 	/** Lock completion handler pointer. Called when lock is granted. */
 	ldlm_completion_callback l_completion_ast;
 	/**
@@ -920,19 +940,6 @@ struct ldlm_lock {
 	 */
 	ktime_t			l_last_used;
 
-	/*
-	 * Client-side-only members.
-	 */
-
-	enum lvb_type	      l_lvb_type;
-
-	/**
-	 * Temporary storage for a LVB received during an enqueue operation.
-	 * May be vmalloc'd, so needs to be freed with OBD_FREE_LARGE().
-	 */
-	__u32			l_lvb_len;
-	void			*l_lvb_data;
-
 	/** Private storage for lock user. Opaque to LDLM. */
 	void			*l_ast_data;
 
@@ -946,10 +953,6 @@ struct ldlm_lock {
 		time64_t	l_blast_sent;
 	};
 
-	/* separate ost_lvb used mostly by Data-on-MDT for now.
-	 * It is introduced to don't mix with layout lock data.
-	 */
-	struct ost_lvb		 l_ost_lvb;
 	/*
 	 * Server-side-only members.
 	 */
@@ -981,14 +984,8 @@ struct ldlm_lock {
 
 	/** Local PID of process which created this lock. */
 	__u32			l_pid;
+	/* __u32		l_unused; */
 
-	/**
-	 * Number of times blocking AST was sent for this lock.
-	 * This is for debugging. Valid values are 0 and 1, if there is an
-	 * attempt to send blocking AST more than once, an assertion would be
-	 * hit. \see ldlm_work_bl_ast_lock
-	 */
-	int			l_bl_ast_run;
 	/** List item ldlm_add_ast_work_item() for case of blocking ASTs. */
 	struct list_head	l_bl_ast;
 	/** List item ldlm_add_ast_work_item() for case of completion ASTs. */
@@ -1140,18 +1137,19 @@ struct ldlm_resource {
 	};
 
 	/** Type of locks this resource can hold. Only one type per resource. */
-	enum ldlm_type		lr_type; /* LDLM_{PLAIN,EXTENT,FLOCK,IBITS} */
+	enum ldlm_type		lr_type:4; /* LDLM_{PLAIN,EXTENT,FLOCK,IBITS} */
+	/* unsigned int		lr_unused_bits:4; */
+	/* char			lr_unused[5]; */
 
 	/**
 	 * Server-side-only lock value block elements.
 	 * To serialize lvbo_init.
 	 */
-	int			lr_lvb_len;
+	bool			lr_lvb_initialized;
+	char			lr_lvb_len;
 	struct mutex		lr_lvb_mutex;
 	/** protected by lr_lock */
 	void			*lr_lvb_data;
-	/** is lvb initialized ? */
-	bool			lr_lvb_initialized;
 };
 
 static inline int ldlm_is_granted(struct ldlm_lock *lock)

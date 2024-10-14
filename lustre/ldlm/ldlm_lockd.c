@@ -2010,7 +2010,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
 			if (unlikely(lock->l_lvb_len < lvb_len)) {
 				LDLM_ERROR(lock,
-					   "Replied LVB is larger than expectation, expected = %d, replied = %d",
+					   "Replied LVB is larger than expectation, expected = %u, replied = %u",
 					   lock->l_lvb_len, lvb_len);
 				GOTO(out, rc = -EINVAL);
 			}
@@ -3497,6 +3497,10 @@ static int ldlm_cleanup(void)
 
 int ldlm_init(void)
 {
+	BUILD_BUG_ON(LDLM_MAX_TYPE > (1 << 4 /* lr_type bits */));
+	BUILD_BUG_ON(LVB_T_END      > (1 << 3 /* l_lvb_type bits */));
+	BUILD_BUG_ON(LCK_MAXMODE   > (1 << 9 /* l_req_mode/l_granted_mode */));
+
 	ldlm_resource_slab = kmem_cache_create("ldlm_resources",
 					       sizeof(struct ldlm_resource), 0,
 					       SLAB_HWCACHE_ALIGN, NULL);

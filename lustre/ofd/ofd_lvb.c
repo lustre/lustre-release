@@ -125,6 +125,7 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 
 	info = ofd_info(env);
 	res->lr_lvb_data = lvb;
+	BUILD_BUG_ON(sizeof(*lvb) >= 1 << (sizeof(res->lr_lvb_len) * 8 - 1));
 	res->lr_lvb_len = sizeof(*lvb);
 
 	ost_fid_from_resid(&info->fti_fid, &res->lr_name,

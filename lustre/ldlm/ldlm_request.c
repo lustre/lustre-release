@@ -622,7 +622,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct req_capsule *pill,
 	}
 
 	LASSERTF(ergo(lvb_len != 0, lvb_len == lock->l_lvb_len),
-		 "lvb_len = %d, l_lvb_len = %d\n", lvb_len, lock->l_lvb_len);
+		 "lvb_len = %u, l_lvb_len = %u\n", lvb_len, lock->l_lvb_len);
 
 	if (rc != ELDLM_OK) {
 		LASSERT(!is_replay);

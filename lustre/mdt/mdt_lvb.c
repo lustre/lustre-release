@@ -62,6 +62,7 @@ int mdt_dom_lvb_alloc(struct ldlm_resource *res)
 		}
 
 		res->lr_lvb_data = lvb;
+		BUILD_BUG_ON(sizeof(*lvb) >= 1<<(sizeof(res->lr_lvb_len)*8-1));
 		res->lr_lvb_len = sizeof(*lvb);
 
 		/* Store error in LVB to inidicate it has no data yet.

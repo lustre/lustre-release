@@ -1558,18 +1558,18 @@ EXPORT_SYMBOL(ldlm_revalidate_lock_handle);
 
 /** The caller must guarantee that the buffer is large enough. */
 int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
-		  enum req_location loc, void *data, int size)
+		  enum req_location loc, void *data, int lvb_len)
 {
 	void *lvb;
 
 	ENTRY;
 
 	LASSERT(data != NULL);
-	LASSERT(size >= 0);
+	LASSERT(lvb_len >= 0);
 
 	switch (lock->l_lvb_type) {
 	case LVB_T_OST:
-		if (size == sizeof(struct ost_lvb)) {
+		if (lvb_len == sizeof(struct ost_lvb)) {
 			if (loc == RCL_CLIENT)
 				lvb = req_capsule_client_swab_get(pill,
 						&RMF_DLM_LVB,
@@ -1583,8 +1583,8 @@ int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
 				RETURN(-EPROTO);
 			}
 
-			memcpy(data, lvb, size);
-		} else if (size == sizeof(struct ost_lvb_v1)) {
+			memcpy(data, lvb, lvb_len);
+		} else if (lvb_len == sizeof(struct ost_lvb_v1)) {
 			struct ost_lvb *olvb = data;
 
 			if (loc == RCL_CLIENT)
@@ -1593,25 +1593,25 @@ int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
 						lustre_swab_ost_lvb_v1);
 			else
 				lvb = req_capsule_server_sized_swab_get(pill,
-						&RMF_DLM_LVB, size,
+						&RMF_DLM_LVB, lvb_len,
 						lustre_swab_ost_lvb_v1);
 			if (unlikely(lvb == NULL)) {
 				LDLM_ERROR(lock, "no LVB");
 				RETURN(-EPROTO);
 			}
 
-			memcpy(data, lvb, size);
+			memcpy(data, lvb, lvb_len);
 			olvb->lvb_mtime_ns = 0;
 			olvb->lvb_atime_ns = 0;
 			olvb->lvb_ctime_ns = 0;
 		} else {
 			LDLM_ERROR(lock, "Replied unexpected ost LVB size %d",
-				   size);
+				   lvb_len);
 			RETURN(-EINVAL);
 		}
 		break;
 	case LVB_T_LQUOTA:
-		if (size == sizeof(struct lquota_lvb)) {
+		if (lvb_len == sizeof(struct lquota_lvb)) {
 			if (loc == RCL_CLIENT)
 				lvb = req_capsule_client_swab_get(pill,
 						&RMF_DLM_LVB,
@@ -1625,16 +1625,16 @@ int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
 				RETURN(-EPROTO);
 			}
 
-			memcpy(data, lvb, size);
+			memcpy(data, lvb, lvb_len);
 		} else {
 			LDLM_ERROR(lock,
 				   "Replied unexpected lquota LVB size %d",
-				   size);
+				   lvb_len);
 			RETURN(-EINVAL);
 		}
 		break;
 	case LVB_T_LAYOUT:
-		if (size == 0)
+		if (lvb_len == 0)
 			break;
 
 		if (loc == RCL_CLIENT)
@@ -1646,10 +1646,11 @@ int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
 			RETURN(-EPROTO);
 		}
 
-		memcpy(data, lvb, size);
+		memcpy(data, lvb, lvb_len);
 		break;
 	default:
-		LDLM_ERROR(lock, "Unknown LVB type: %d", lock->l_lvb_type);
+		LDLM_ERROR(lock, "Unknown LVB type=%d, size=%d",
+			   lock->l_lvb_type, lvb_len);
 		dump_stack();
 		RETURN(-EINVAL);
 	}
@@ -1702,6 +1703,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 	}
 
 	if (lvb_len) {
+		LASSERT(lvb_len < 1 << sizeof(lock->l_lvb_len) * 8);
 		lock->l_lvb_len = lvb_len;
 		OBD_ALLOC_LARGE(lock->l_lvb_data, lvb_len);
 		if (lock->l_lvb_data == NULL)
@@ -2154,7 +2156,7 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 
 	LASSERT(ldlm_is_ast_sent(lock));
 	LASSERT(lock->l_bl_ast_run == 0);
-	lock->l_bl_ast_run++;
+	lock->l_bl_ast_run = 1;
 	ldlm_clear_blocking_lock(lock);
 	unlock_res_and_lock(lock);
 

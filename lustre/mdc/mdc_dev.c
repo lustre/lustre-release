@@ -414,6 +414,8 @@ void mdc_lock_lvb_update(const struct lu_env *env, struct osc_object *osc,
 
 	if (lvb == NULL) {
 		LASSERT(dlmlock != NULL);
+		/* l_ost_lvb is only in the LDLM_IBITS union **/
+		LASSERT(dlmlock->l_resource->lr_type == LDLM_IBITS);
 		lvb = &dlmlock->l_ost_lvb;
 	}
 	cl_lvb2attr(attr, lvb);
@@ -605,9 +607,10 @@ static int mdc_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
 		/* At this point ols_lvb must be filled with correct LVB either
 		 * by mdc_fill_lvb() above or by ldlm_cli_enqueue_fini().
-		 * DoM uses l_ost_lvb to store LVB data, so copy it here from
-		 * just updated ols_lvb.
+		 * DoM uses l_ost_lvb to store LVB data (only available with
+		 * LDLM_IBITS locks), so copy it here from just updated ols_lvb.
 		 */
+		LASSERT(lock->l_resource->lr_type == LDLM_IBITS);
 		lock_res_and_lock(lock);
 		memcpy(&lock->l_ost_lvb, &ols->ols_lvb,
 		       sizeof(lock->l_ost_lvb));
@@ -1455,30 +1458,32 @@ static int mdc_object_ast_clear(struct ldlm_lock *lock, void *data)
 	struct lov_oinfo *oinfo;
 	ENTRY;
 
-	if (lock->l_ast_data == data) {
-		lock->l_ast_data = NULL;
+	if (lock->l_ast_data != data)
+		RETURN(LDLM_ITER_CONTINUE);
 
-		LASSERT(osc != NULL);
-		LASSERT(osc->oo_oinfo != NULL);
-		LASSERT(lvb != NULL);
+	lock->l_ast_data = NULL;
 
-		/* Updates lvb in lock by the cached oinfo */
-		oinfo = osc->oo_oinfo;
+	LASSERT(osc != NULL);
+	LASSERT(osc->oo_oinfo != NULL);
 
-		LDLM_DEBUG(lock, "update lock size %llu blocks %llu [cma]time: "
-			   "%llu %llu %llu by oinfo size %llu blocks %llu "
-			   "[cma]time %llu %llu %llu", lvb->lvb_size,
-			   lvb->lvb_blocks, lvb->lvb_ctime, lvb->lvb_mtime,
-			   lvb->lvb_atime, oinfo->loi_lvb.lvb_size,
-			   oinfo->loi_lvb.lvb_blocks, oinfo->loi_lvb.lvb_ctime,
-			   oinfo->loi_lvb.lvb_mtime, oinfo->loi_lvb.lvb_atime);
-		LASSERT(oinfo->loi_lvb.lvb_size >= oinfo->loi_kms);
+	/* Updates lvb in lock by the cached oinfo */
+	oinfo = osc->oo_oinfo;
 
-		cl_object_attr_lock(&osc->oo_cl);
-		memcpy(lvb, &oinfo->loi_lvb, sizeof(oinfo->loi_lvb));
-		cl_object_attr_unlock(&osc->oo_cl);
-		ldlm_clear_lvb_cached(lock);
-	}
+	LDLM_DEBUG(lock,
+		   "update lock size %llu blocks %llu [cma]time: %llu %llu %llu by oinfo size %llu blocks %llu [cma]time %llu %llu %llu",
+		   lvb->lvb_size, lvb->lvb_blocks, lvb->lvb_ctime,
+		   lvb->lvb_mtime, lvb->lvb_atime, oinfo->loi_lvb.lvb_size,
+		   oinfo->loi_lvb.lvb_blocks, oinfo->loi_lvb.lvb_ctime,
+		   oinfo->loi_lvb.lvb_mtime, oinfo->loi_lvb.lvb_atime);
+	LASSERT(oinfo->loi_lvb.lvb_size >= oinfo->loi_kms);
+
+	cl_object_attr_lock(&osc->oo_cl);
+	/* l_ost_lvb is only in the LDLM_IBITS union **/
+	LASSERT(lock->l_resource->lr_type == LDLM_IBITS);
+	memcpy(lvb, &oinfo->loi_lvb, sizeof(oinfo->loi_lvb));
+	cl_object_attr_unlock(&osc->oo_cl);
+	ldlm_clear_lvb_cached(lock);
+
 	RETURN(LDLM_ITER_CONTINUE);
 }
 
