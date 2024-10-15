@@ -1463,6 +1463,8 @@ create_file_36() {
 
 test_36() {
 	local tf=$DIR/$tfile
+	(( MDS1_VERSION < $(version_code 2.15.51) )) ||
+		skip "MDS >= 2.15.51 allows client to update layout version"
 
 	stack_trap "rm -f $tf $tf-2 $tf-3"
 
