@@ -60,7 +60,7 @@ if ((MDSCOUNT > 1)); then
 		RACER_MIGRATE_STRIPE_MAX=$MDSCOUNT
 fi
 
-[[ "$MDS1_VERSION" -lt $(version_code 2.9.54) || $mgs_FSTYPE != zfs ]] &&
+[[ "$MDS1_VERSION" -lt $(version_code 2.9.54) || $mds1_FSTYPE != zfs ]] &&
 	RACER_ENABLE_SNAPSHOT=false
 
 (( "$MDS1_VERSION" <= $(version_code 2.9.55) )) &&
