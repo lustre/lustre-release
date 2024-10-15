@@ -22061,6 +22061,9 @@ run_test 205i "check job_xattr parameter accepts and rejects values correctly"
 	# LU-17512
 	# test '?' operator
 test_205k(){
+	(( MDS1_VERSION >= $(version_code 2.15.64.85) )) ||
+		skip "need MDS >= v2_15_64-85-gecdcaa3986 for jobstats fix"
+
 	# copied from test_205a
 	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
