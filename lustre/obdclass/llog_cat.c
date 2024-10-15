@@ -141,6 +141,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 					    handle);
 		if (rc != 0)
 			GOTO(out, rc);
+		dt_declare_attr_set(env, cathandle->lgh_obj, NULL, handle);
 
 		rc = dt_trans_start_local(env, dt, handle);
 		if (rc != 0)
@@ -176,6 +177,10 @@ static int llog_cat_new_log(const struct lu_env *env,
 			    &loghandle->u.phd.phd_cookie, LLOG_NEXT_IDX, th);
 	if (rc < 0)
 		GOTO(out_destroy, rc);
+	/* update for catalog which doesn't happen very often */
+	lgi->lgi_attr.la_valid = LA_MTIME;
+	lgi->lgi_attr.la_mtime = ktime_get_real_seconds();
+	dt_attr_set(env, cathandle->lgh_obj, &lgi->lgi_attr, th);
 
 	CDEBUG(D_OTHER, "new plain log "DFID".%u of catalog "DFID"\n",
 	       PLOGID(&loghandle->lgh_id), rec->lid_hdr.lrh_index,
@@ -343,6 +348,7 @@ start:
 		lirec->lid_hdr.lrh_len = sizeof(*lirec);
 		rc = llog_declare_write_rec(env, cathandle, &lirec->lid_hdr, -1,
 					    th);
+		dt_declare_attr_set(env, cathandle->lgh_obj, NULL, th);
 	}
 
 out:
@@ -560,7 +566,8 @@ int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
 		     struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
 		     struct thandle *th)
 {
-        struct llog_handle *loghandle;
+	struct llog_handle *loghandle;
+	struct llog_thread_info *lgi = llog_info(env);
 	int rc, retried = 0;
 	ENTRY;
 
@@ -597,7 +604,13 @@ retry:
 		 * actual cause here */
 		if (rc == -ENOSPC && llog_is_full(loghandle))
 			rc = -ENOBUFS;
+	} else {
+		/* no overhead since inode size needs to be written anyway */
+		lgi->lgi_attr.la_valid = LA_MTIME;
+		lgi->lgi_attr.la_mtime = ktime_get_real_seconds();
+		dt_attr_set(env, loghandle->lgh_obj, &lgi->lgi_attr, th);
 	}
+
 	up_write(&loghandle->lgh_lock);
 
 	if (rc == -ENOBUFS) {
@@ -640,6 +653,8 @@ start:
 			RETURN(rc);
 		goto start;
 	}
+	dt_declare_attr_set(env, cathandle->u.chd.chd_current_log->lgh_obj,
+			    NULL, th);
 
 #if 0
 	/*

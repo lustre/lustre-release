@@ -104,8 +104,10 @@ static int llog_osd_create_new_object(const struct lu_env *env,
 {
 	struct llog_thread_info *lgi = llog_info(env);
 
-	lgi->lgi_attr.la_valid = LA_MODE;
+	lgi->lgi_attr.la_valid = LA_MODE | LA_CTIME | LA_MTIME | LA_ATIME;
 	lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+	lgi->lgi_attr.la_ctime = lgi->lgi_attr.la_mtime =
+		lgi->lgi_attr.la_atime = ktime_get_real_seconds();
 	lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 	return local_object_create(env, los, o, &lgi->lgi_attr,
@@ -1822,9 +1824,12 @@ static int llog_osd_create(const struct lu_env *env, struct llog_handle *res,
 	if (res->lgh_ctxt->loc_flags & LLOG_CTXT_FLAG_NORMAL_FID) {
 		struct llog_thread_info *lgi = llog_info(env);
 
-		lgi->lgi_attr.la_valid = LA_MODE | LA_SIZE | LA_TYPE;
+		lgi->lgi_attr.la_valid = LA_MODE | LA_SIZE | LA_TYPE |
+			LA_CTIME | LA_MTIME | LA_ATIME;
 		lgi->lgi_attr.la_size = 0;
 		lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+		lgi->lgi_attr.la_ctime = lgi->lgi_attr.la_mtime =
+			lgi->lgi_attr.la_atime = ktime_get_real_seconds();
 		lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 		dt_write_lock(env, o, 0);

@@ -34163,6 +34163,61 @@ test_907() {
 }
 run_test 907 "write rpc error during unlink"
 
+test_908a() {
+	(( MDS1_VERSION >= $(version_code 2.16.0) )) ||
+		skip "need MDS >= 2.16.0 for llog timestamps"
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	local dev=$(mdsdevname 1)
+	local cmd="debugfs -c -R \\\"stat CONFIGS/params\\\" $dev"
+
+	# ctime_mds value is in hex
+	local base_time=`date -d "24 hours ago" +%s`
+	local ctime_mds=$(do_facet mds1 "$cmd" |&
+			  awk -F'[: ]' '/ctime:/ { print $4 }')
+	ctime_mds=$((ctime_mds))
+	echo "ctime_mds=$ctime_mds, base_time=$base_time"
+	(( "$ctime_mds" > "$base_time" )) ||
+		error "invalid ctime $ctime_mds <= $base_time"
+}
+run_test 908a "llog created with valid ctime"
+
+test_908b() {
+	(( MDS1_VERSION >= $(version_code 2.16.0) )) ||
+		skip "need MDS >= 2.16.0 for llog timestamps"
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	local dev=$(mdsdevname 1)
+
+	changelog_register || error "cannot register changelog user"
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+	changelog_clear
+
+	for ((i=0; i<100; i++)); do
+		echo "$i" > $DIR/$tfile${i}
+		rm $DIR/$tfile${i}
+	done
+	sleep 5
+
+	changelog_deregister || error "changelog_deregister failed"
+
+	local cmd="debugfs -c -R \\\"stat changelog_catalog\\\" $dev"
+
+	# ctime_mdt value is in hex
+	local ctime_mds=$(do_facet mds1 "$cmd" |&
+			  awk -F'[: ]' '/ctime:/ { print $4 }')
+	ctime_mds=$((ctime_mds))
+	local mtime_mds=$(do_facet mds1 "$cmd" |&
+			  awk -F'[: ]' '/mtime:/ { print $4 }')
+	mtime_mds=$((mtime_mds))
+
+	echo "ctime_mds=$ctime_mds, mtime_mds=$mtime_mds"
+	(( "$mtime_mds" > "$ctime_mds" )) ||
+		error "invalid mtime $mtime_mds <= $ctime_mds"
+}
+run_test 908b "changelog stores valid mtime"
+
 complete_test $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre

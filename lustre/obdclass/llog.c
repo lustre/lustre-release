@@ -253,6 +253,8 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 		if (rc < 0)
 			GOTO(out_trans, rc);
 	}
+	if (llh->llh_flags & LLOG_F_IS_CAT)
+		dt_declare_attr_set(env, loghandle->lgh_obj, NULL, th);
 
 	th->th_wait_submit = 1;
 	rc = dt_trans_start_local(env, dt, th);
@@ -311,6 +313,13 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			GOTO(out_unlock, rc = 0);
 		}
 		rc = LLOG_DEL_PLAIN;
+	}
+
+	/* update for catalog which doesn't happen very often */
+	if (llh->llh_flags & LLOG_F_IS_CAT) {
+		lgi->lgi_attr.la_valid = LA_MTIME;
+		lgi->lgi_attr.la_mtime = ktime_get_real_seconds();
+		dt_attr_set(env, loghandle->lgh_obj, &lgi->lgi_attr, th);
 	}
 
 out_unlock:
@@ -1319,8 +1328,10 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 {
 	struct dt_device	*dt;
 	struct thandle		*th;
-	bool			need_cookie;
-	int			rc;
+	struct llog_thread_info *lgi = llog_info(env);
+	bool need_cookie;
+	bool update_attr;
+	int rc;
 
 	ENTRY;
 
@@ -1341,6 +1352,17 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 	if (rc)
 		GOTO(out_trans, rc);
 
+	/*
+	 * update mtime given 1) append mode, no overhead since inode
+	 * size/block needs to be written anyway; 2) update for catalog
+	 * since this doesn't happen very often
+	 */
+	update_attr = (idx == LLOG_NEXT_IDX ||
+			(loghandle->lgh_hdr &&
+			 loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT));
+	if (update_attr)
+		dt_declare_attr_set(env, loghandle->lgh_obj, NULL, th);
+
 	th->th_wait_submit = 1;
 	rc = dt_trans_start_local(env, dt, th);
 	if (rc)
@@ -1359,6 +1381,11 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 		rc = (rc == 1 ? 0 : rc);
 	} else {
 		rc = llog_write_rec(env, loghandle, rec, NULL, idx, th);
+	}
+	if (rc == 0 && update_attr) {
+		lgi->lgi_attr.la_valid = LA_MTIME;
+		lgi->lgi_attr.la_mtime = ktime_get_real_seconds();
+		dt_attr_set(env, loghandle->lgh_obj, &lgi->lgi_attr, th);
 	}
 
 	up_write(&loghandle->lgh_lock);
