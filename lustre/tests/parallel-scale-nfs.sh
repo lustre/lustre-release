@@ -107,6 +107,11 @@ test_1() {
 	local native_file=$MOUNT/${dst_file#$NFS_CLIMNTPT}
 	local mode=644
 	local got
+	local ver
+
+	ver=$(version_code $(lustre_build_version_node $LUSTRE_CLIENT_NFSSRV))
+	(( $ver >= $(version_code v2_15_90-11-g75f55f99a3) )) ||
+		skip "Need lustre client version of nfs server (MDS1 by default) >= 2.15.91 for NFS ACL handling fix"
 
 	touch $src_file
 	chmod $mode $src_file
