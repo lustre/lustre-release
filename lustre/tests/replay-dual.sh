@@ -1085,6 +1085,8 @@ test_26() {
 run_test 26 "dbench and tar with mds failover"
 
 test_28() {
+	wait_delete_completed
+
 	$LFS setstripe -i 0 -c 1 $DIR2/$tfile
 	dd if=/dev/zero of=$DIR2/$tfile bs=4096 count=1
 
