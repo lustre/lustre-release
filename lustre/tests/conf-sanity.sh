@@ -10926,9 +10926,15 @@ test_127() {
 	local osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
 	local avail1=($($LCTL get_param -n osc.${osc_tgt}.kbytesavail))
 
-	$LFS setstripe -i 0 $DIR/$tfile || error "failed creating $DIR/$tfile"
+	wait_delete_completed
+	$LFS setstripe -i 0 -c1 $DIR/$tfile || {
+		$LFS df $DIR
+		$LCTL get_param osc.*.*grant_bytes
+		error "failed creating $DIR/$tfile"
+	}
 	dd if=/dev/zero of=$DIR/$tfile bs=1M oflag=direct || true
 
+	sleep_maxage
 	local avail2=($($LCTL get_param -n osc.${osc_tgt}.kbytesavail))
 
 	if ((avail2 * 100 / avail1 > 1)); then
