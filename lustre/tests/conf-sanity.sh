@@ -11664,17 +11664,17 @@ test_153a() {
 
 	local nid=$($LCTL list_nids | grep ${NETTYPE} | head -n1)
 	local net=${nid#*@}
-	local mgs_nid=$(do_facet mgs $LCTL list_nids | head -1)
-	local ost1_nid=$(do_facet ost1 $LCTL list_nids | head -1)
-	local fake_pnid="192.168.252.112@${net}"
-	local fake_nids="${fake_pnid},${fake_pnid}2"
-	local fake_failover="10.252.252.113@${net},10.252.252.113@${net}2"
-	local nids_and_failover="$fake_nids:$fake_failover:$ost1_nid:$mgs_nid"
+	local MGS_NID=$(do_facet mgs $LCTL list_nids | head -1)
+	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -1)
+	local FAKE_PNID="192.168.252.112@${net}"
+	local FAKE_NIDS="${FAKE_PNID},${FAKE_PNID}2"
+	local FAKE_FAILOVER="10.252.252.113@${net},10.252.252.113@${net}2"
+	local NIDS_AND_FAILOVER="$FAKE_NIDS:$FAKE_FAILOVER:$OST1_NID:$MGS_NID"
 	local period=0
 	local pid
 	local rc
 
-	mount -t lustre $nids_and_failover:/lustre $MOUNT &
+	mount -t lustre $NIDS_AND_FAILOVER:/lustre $MOUNT &
 	pid=$!
 	while (( period < 30 )); do
 		[[ -n "$(ps -p $pid -o pid=)" ]] || break
@@ -11682,7 +11682,7 @@ test_153a() {
 		sleep 5
 		period=$((period + 5))
 	done
-	$LCTL get_param mgc.MGC${fake_pnid}.import | grep "uptodate:"
+	$LCTL get_param mgc.MGC${FAKE_PNID}.import | grep "uptodate:"
 	check_mount || error "check_mount failed"
 	umount $MOUNT
 	cleanup || error "cleanup failed with rc $?"
@@ -11765,41 +11765,6 @@ test_153b() {
 	umount $MOUNT
 }
 run_test 153b "added IPv6 NID support"
-
-test_153c() {
-	reformat_and_config
-
-	start_mds || error "MDS start failed"
-	start_ost || error "OST start failed"
-
-	local nid=$($LCTL list_nids | grep ${NETTYPE} | head -n1)
-	local net=${nid#*@}
-	local fake_pnid="192.168.252.112@${net}"
-	local fake_failover="192.168.252.113@${net}:192.168.252.115@${net}"
-	local nids_and_failover="$fake_pnid:$fake_failover"
-	local period=0
-	local pid
-	local rc
-
-	umount_client $MOUNT
-	mount -t lustre $nids_and_failover:/lustre $MOUNT &
-	pid=$!
-	while (( period < 30 )); do
-		[[ -n "$(ps -p $pid -o pid=)" ]] || break
-		echo "waiting for mount ..."
-		sleep 5
-		period=$((period + 5))
-	done
-	$LCTL get_param mgc.MGC${fake_pnid}.import | grep "sec_ago"
-	conn=$($LCTL get_param mgc.MGC${fake_pnid}.import |
-		awk '/connection_attempts:/ {print $2}')
-	echo "connection attempts: $conn"
-	(( conn > 2)) || error "too few connection attempts"
-	echo "Waiting for mount to fail"
-	wait $pid
-	cleanup || error "cleanup failed with rc $?"
-}
-run_test 153c "don't stuck on unreached NID"
 
 test_154() {
 	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"

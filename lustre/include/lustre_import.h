@@ -129,7 +129,7 @@ struct obd_import_conn {
 	time64_t		  oic_last_attempt;
 	unsigned int		  oic_attempts;
 	unsigned int		  oic_replied;
-	int			  oic_uptodate;
+	bool			  oic_uptodate;
 };
 
 /* state history */

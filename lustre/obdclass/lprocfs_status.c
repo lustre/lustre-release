@@ -789,19 +789,6 @@ obd_connect_data_seqprint(struct seq_file *m, struct obd_connect_data *ocd)
 			   ocd->ocd_maxmodrpcs);
 }
 
-static inline const char *conn_uptodate2str(int status)
-{
-	if (status > 0)
-		return "uptodate";
-	if (status == -EHOSTUNREACH)
-		return "unreachable";
-	if (status == -EALREADY)
-		return "discovering";
-	if (status == -EAGAIN)
-		return "rediscover";
-	return "unknown";
-}
-
 static void lprocfs_import_seq_show_locked(struct seq_file *m,
 					   struct obd_device *obd,
 					   struct obd_import *imp)
@@ -860,7 +847,7 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 		seq_printf(m, "\n          \"%s\": { connects: %u, replied: %u,"
 			   " uptodate: %s, sec_ago: ",
 			   nidstr, conn->oic_attempts, conn->oic_replied,
-			   conn_uptodate2str(conn->oic_uptodate));
+			   conn->oic_uptodate ? "true" : "false");
 		if (conn->oic_last_attempt)
 			seq_printf(m, "%lld }", ktime_get_seconds() -
 				   conn->oic_last_attempt);
