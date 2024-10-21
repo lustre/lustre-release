@@ -17,6 +17,8 @@ lfs-quota \- display quota limits and status for users, groups, or projects.
 .IR PROJID ]
 .RB [ --pool
 .IR OST_POOL_NAME ]
+.RB [ --delimiter
+.IR DELIMITER ]
 .EX
 .RB [ --blocks | --busage | --space ]
 .RB [ --block-softlimit | --bsoftlimit ]
@@ -58,6 +60,12 @@ options.  A user, group, or project ID can be specified.
 If user, group, and project are omitted, quotas for the
 current uid/gid/projid are shown.
 If no MOUNT_POINT is specified, quotas for all Lustre mountpoints will be shown.
+.TP
+.BR -d ", " --delimiter = \fIDELIMITER
+Use the string
+.I DELIMITER
+as the column delimiter. This allows for easier parsing of the output, and could
+be used to put the output into CVS format for a spreadsheet.
 .TP
 .BR -h | --human-readable
 This will change the formatting of
@@ -219,6 +227,15 @@ Disk quotas for grp root (gid 0):
       Filesystem   kbytes   files
      /mnt/lustre     5236     308
     /mnt/lustre2     5236     308
+.EE
+.EX
+.B $ lfs quota --delimiter="," /mnt/lustre
+Disk quotas for usr root (uid 0):
+      Filesystem, kbytes, bquota, blimit, bgrace,  files, iquota, ilimit, igrace
+     /mnt/lustre,   4360,      0,      0,      -,    265,      0,      0,      -
+Disk quotas for grp root (gid 0):
+      Filesystem, kbytes, bquota, blimit, bgrace,  files, iquota, ilimit, igrace
+     /mnt/lustre,   4360,      0,      0,      -,    265,      0,      0,      -
 .EE
 .SH SEE ALSO
 .BR lfs (1),
