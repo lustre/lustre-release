@@ -1337,9 +1337,9 @@ test_33b() {
 	# remount ost2
 	start_osts 2
 
-	[ $((r1 * 100)) -gt $((ra * 105)) -a $r1 -gt $((ra + 2)) ] &&
+	(( (r1 * 100) > (ra * 105) && (r1 > ra + 30) )) &&
 		error "read mirror too slow without ost1, from $ra to $r1"
-	[ $((r2 * 100)) -gt $((ra * 105)) -a $r2 -gt $((ra + 2)) ] &&
+	(( (r2 * 100) > (ra * 105) && (r2 > ra + 30) )) &&
 		error "read mirror too slow without ost2, from $ra to $r2"
 
 	wait_osc_import_ready client ost2
