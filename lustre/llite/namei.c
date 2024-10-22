@@ -286,8 +286,8 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock,
 	if (bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
 		    MDS_INODELOCK_LAYOUT | MDS_INODELOCK_PERM |
 		    MDS_INODELOCK_DOM))
-		ll_have_md_lock(lock->l_conn_export, inode, &bits, LCK_MINMODE,
-				0);
+		ll_have_md_lock(lock->l_conn_export, inode, &bits,
+				LCK_MODE_MIN, 0);
 
 	if (bits & MDS_INODELOCK_DOM) {
 		rc =  ll_dom_lock_cancel(inode, lock);
@@ -388,7 +388,7 @@ static int ll_md_need_convert(struct ldlm_lock *lock)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 	__u64 wanted = lock->l_policy_data.l_inodebits.cancel_bits;
-	enum ldlm_mode mode = LCK_MINMODE;
+	enum ldlm_mode mode = LCK_MODE_MIN;
 	enum mds_ibits_locks bits;
 	struct inode *inode;
 

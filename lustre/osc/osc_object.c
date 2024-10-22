@@ -240,7 +240,7 @@ static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	struct ldlm_res_id resid;
 	union ldlm_policy_data policy;
 	struct lustre_handle lockh;
-	enum ldlm_mode mode = LCK_MINMODE;
+	enum ldlm_mode mode = LCK_MODE_MIN;
 	struct ptlrpc_request *req;
 	struct fiemap *reply;
 	char *tmp;

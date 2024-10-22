@@ -84,18 +84,18 @@ MODULE_PARM_DESC(max_mod_rpcs_per_client,
 #endif
 
 mdl_mode_t mdt_mdl_lock_modes[] = {
-	[LCK_MINMODE] = MDL_MINMODE,
-	[LCK_EX]      = MDL_EX,
-	[LCK_PW]      = MDL_PW,
-	[LCK_PR]      = MDL_PR,
-	[LCK_CW]      = MDL_CW,
-	[LCK_CR]      = MDL_CR,
-	[LCK_NL]      = MDL_NL,
-	[LCK_GROUP]   = MDL_GROUP
+	[LCK_MODE_MIN]	= MDL_MINMODE,
+	[LCK_EX]	= MDL_EX,
+	[LCK_PW]	= MDL_PW,
+	[LCK_PR]	= MDL_PR,
+	[LCK_CW]	= MDL_CW,
+	[LCK_CR]	= MDL_CR,
+	[LCK_NL]	= MDL_NL,
+	[LCK_GROUP]	= MDL_GROUP
 };
 
 enum ldlm_mode mdt_dlm_lock_modes[] = {
-	[MDL_MINMODE]	= LCK_MINMODE,
+	[MDL_MINMODE]	= LCK_MODE_MIN,
 	[MDL_EX]	= LCK_EX,
 	[MDL_PW]	= LCK_PW,
 	[MDL_PR]	= LCK_PR,
@@ -197,7 +197,7 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, enum ldlm_mode lock_mode,
 {
 	mdt_lock_handle_assert(lh);
 	lh->mlh_reg_mode = lock_mode;
-	lh->mlh_pdo_mode = LCK_MINMODE;
+	lh->mlh_pdo_mode = LCK_MODE_MIN;
 	lh->mlh_rreg_mode = lock_mode;
 	lh->mlh_type = MDT_PDO_LOCK;
 
@@ -247,8 +247,8 @@ static void mdt_lock_pdo_mode(struct mdt_thread_info *info, struct mdt_object *o
 	 * (lookup/modify/split) - LCK_EX --bzzz
 	 */
 
-	LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
-	LASSERT(lh->mlh_pdo_mode == LCK_MINMODE);
+	LASSERT(lh->mlh_reg_mode != LCK_MODE_MIN);
+	LASSERT(lh->mlh_pdo_mode == LCK_MODE_MIN);
 
 	/*
 	 * Ask underlaying level its opinion about preferable PDO lock mode
@@ -290,7 +290,7 @@ static void mdt_lock_pdo_mode(struct mdt_thread_info *info, struct mdt_object *o
 		}
 	}
 
-	LASSERT(lh->mlh_pdo_mode != LCK_MINMODE);
+	LASSERT(lh->mlh_pdo_mode != LCK_MODE_MIN);
 	EXIT;
 }
 
@@ -4027,7 +4027,7 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
 	if (obj && mdt_object_remote(obj)) {
 		handle = &lh->mlh_rreg_lh;
 		LASSERT(!lustre_handle_is_used(handle));
-		LASSERT(lh->mlh_rreg_mode != LCK_MINMODE);
+		LASSERT(lh->mlh_rreg_mode != LCK_MODE_MIN);
 		LASSERT(lh->mlh_type != MDT_NUL_LOCK);
 		rc = mdt_remote_object_lock_try(info, obj, handle,
 						lh->mlh_rreg_mode, policy,
@@ -4045,7 +4045,7 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
 
 		handle = &lh->mlh_reg_lh;
 		LASSERT(!lustre_handle_is_used(handle));
-		LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
+		LASSERT(lh->mlh_reg_mode != LCK_MODE_MIN);
 		LASSERT(lh->mlh_type != MDT_NUL_LOCK);
 
 		/* Lease lock are granted with LDLM_FL_CANCEL_ON_BLOCK */

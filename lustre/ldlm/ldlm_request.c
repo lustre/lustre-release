@@ -2330,7 +2330,7 @@ ldlm_cli_hash_cancel_unused(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	struct ldlm_cli_cancel_arg     *lc = arg;
 
 	ldlm_cli_cancel_unused_resource(ldlm_res_to_ns(res), &res->lr_name,
-					NULL, LCK_MINMODE, lc->lc_flags,
+					NULL, LCK_MODE_MIN, lc->lc_flags,
 					lc->lc_opaque);
 	/* must return 0 for hash iteration */
 	return 0;
@@ -2359,7 +2359,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
 
 	if (res_id != NULL) {
 		RETURN(ldlm_cli_cancel_unused_resource(ns, res_id, NULL,
-						       LCK_MINMODE, flags,
+						       LCK_MODE_MIN, flags,
 						       opaque));
 	} else {
 		cfs_hash_for_each_nolock(ns->ns_rs_hash,

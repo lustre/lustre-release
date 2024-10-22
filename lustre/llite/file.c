@@ -5897,7 +5897,7 @@ int ll_have_md_lock(struct obd_export *exp, struct inode *inode,
 {
 	struct lustre_handle lockh;
 	union ldlm_policy_data policy;
-	enum ldlm_mode mode = (l_req_mode == LCK_MINMODE) ?
+	enum ldlm_mode mode = (l_req_mode == LCK_MODE_MIN) ?
 			      (LCK_CR | LCK_CW | LCK_PR | LCK_PW) : l_req_mode;
 	struct lu_fid *fid;
 	__u64 flags;

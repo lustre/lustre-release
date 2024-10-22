@@ -342,8 +342,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)LDLM_SET_INFO);
 	LASSERTF(LDLM_LAST_OPC == 108, "found %lld\n",
 		 (long long)LDLM_LAST_OPC);
-	LASSERTF(LCK_MINMODE == 0, "found %lld\n",
-		 (long long)LCK_MINMODE);
+	LASSERTF(LCK_MODE_MIN == 0, "found %lld\n",
+		 (long long)LCK_MODE_MIN);
 	LASSERTF(LCK_EX == 1, "found %lld\n",
 		 (long long)LCK_EX);
 	LASSERTF(LCK_PW == 2, "found %lld\n",
@@ -362,15 +362,15 @@ void lustre_assert_wire_constants(void)
 		 (long long)LCK_COS);
 	LASSERTF(LCK_TXN == 256, "found %lld\n",
 		 (long long)LCK_TXN);
-	LASSERTF(LCK_MAXMODE == 257, "found %lld\n",
-		 (long long)LCK_MAXMODE);
+	LASSERTF(LCK_MODE_END == 257, "found %lld\n",
+		 (long long)LCK_MODE_END);
 	LASSERTF(LCK_MODE_NUM == 9, "found %lld\n",
 		 (long long)LCK_MODE_NUM);
 	BUILD_BUG_ON(LDLM_PLAIN != 10);
 	BUILD_BUG_ON(LDLM_EXTENT != 11);
 	BUILD_BUG_ON(LDLM_FLOCK != 12);
 	BUILD_BUG_ON(LDLM_IBITS != 13);
-	BUILD_BUG_ON(LDLM_MAX_TYPE != 14);
+	BUILD_BUG_ON(LDLM_TYPE_END != 14);
 	BUILD_BUG_ON(LUSTRE_RES_ID_SEQ_OFF != 0);
 	BUILD_BUG_ON(LUSTRE_RES_ID_VER_OID_OFF != 1);
 	BUILD_BUG_ON(LUSTRE_RES_ID_QUOTA_SEQ_OFF != 2);

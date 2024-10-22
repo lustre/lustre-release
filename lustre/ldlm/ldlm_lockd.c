@@ -1327,15 +1327,15 @@ int ldlm_handle_enqueue(struct ldlm_namespace *ns,
 		lprocfs_counter_incr(req->rq_export->exp_nid_stats->nid_ldlm_stats,
 				     LDLM_ENQUEUE - LDLM_FIRST_OPC);
 
-	if (unlikely(dlm_req->lock_desc.l_resource.lr_type < LDLM_MIN_TYPE ||
-		     dlm_req->lock_desc.l_resource.lr_type >= LDLM_MAX_TYPE)) {
+	if (unlikely(dlm_req->lock_desc.l_resource.lr_type < LDLM_TYPE_MIN ||
+		     dlm_req->lock_desc.l_resource.lr_type >= LDLM_TYPE_END)) {
 		DEBUG_REQ(D_ERROR, req, "invalid lock request type %d",
 			  dlm_req->lock_desc.l_resource.lr_type);
 		GOTO(out, rc = -EFAULT);
 	}
 
-	if (unlikely(dlm_req->lock_desc.l_req_mode <= LCK_MINMODE ||
-		     dlm_req->lock_desc.l_req_mode >= LCK_MAXMODE ||
+	if (unlikely(dlm_req->lock_desc.l_req_mode <= LCK_MODE_MIN ||
+		     dlm_req->lock_desc.l_req_mode >= LCK_MODE_END ||
 		     dlm_req->lock_desc.l_req_mode &
 		     (dlm_req->lock_desc.l_req_mode-1))) {
 		DEBUG_REQ(D_ERROR, req, "invalid lock request mode %d",
@@ -3513,9 +3513,9 @@ static int ldlm_cleanup(void)
 
 int ldlm_init(void)
 {
-	BUILD_BUG_ON(LDLM_MAX_TYPE > (1 << 4 /* lr_type bits */));
+	BUILD_BUG_ON(LDLM_TYPE_END  > (1 << 4 /* lr_type bits */));
 	BUILD_BUG_ON(LVB_T_END      > (1 << 3 /* l_lvb_type bits */));
-	BUILD_BUG_ON(LCK_MAXMODE   > (1 << 9 /* l_req_mode/l_granted_mode */));
+	BUILD_BUG_ON(LCK_MODE_END   > (1 << 9 /* l_req_mode/l_granted_mode */));
 
 	ldlm_resource_slab = kmem_cache_create("ldlm_resources",
 					       sizeof(struct ldlm_resource), 0,

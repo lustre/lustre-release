@@ -3951,7 +3951,7 @@ lmv_lock_match(struct obd_export *exp, __u64 flags,
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lu_tgt_desc *tgt;
 	__u64 bits = policy->l_inodebits.bits;
-	enum ldlm_mode rc = LCK_MINMODE;
+	enum ldlm_mode rc = LCK_MODE_MIN;
 	int index;
 	int i;
 

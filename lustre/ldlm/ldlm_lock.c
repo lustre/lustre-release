@@ -49,17 +49,17 @@ char *ldlm_typename[] = {
 };
 
 static ldlm_policy_wire_to_local_t ldlm_policy_wire_to_local[] = {
-	[LDLM_PLAIN - LDLM_MIN_TYPE]  = ldlm_plain_policy_wire_to_local,
-	[LDLM_EXTENT - LDLM_MIN_TYPE] = ldlm_extent_policy_wire_to_local,
-	[LDLM_FLOCK - LDLM_MIN_TYPE]  = ldlm_flock_policy_wire_to_local,
-	[LDLM_IBITS - LDLM_MIN_TYPE]  = ldlm_ibits_policy_wire_to_local,
+	[LDLM_PLAIN - LDLM_TYPE_MIN]  = ldlm_plain_policy_wire_to_local,
+	[LDLM_EXTENT - LDLM_TYPE_MIN] = ldlm_extent_policy_wire_to_local,
+	[LDLM_FLOCK - LDLM_TYPE_MIN]  = ldlm_flock_policy_wire_to_local,
+	[LDLM_IBITS - LDLM_TYPE_MIN]  = ldlm_ibits_policy_wire_to_local,
 };
 
 static ldlm_policy_local_to_wire_t ldlm_policy_local_to_wire[] = {
-	[LDLM_PLAIN - LDLM_MIN_TYPE]  = ldlm_plain_policy_local_to_wire,
-	[LDLM_EXTENT - LDLM_MIN_TYPE] = ldlm_extent_policy_local_to_wire,
-	[LDLM_FLOCK - LDLM_MIN_TYPE]  = ldlm_flock_policy_local_to_wire,
-	[LDLM_IBITS - LDLM_MIN_TYPE]  = ldlm_ibits_policy_local_to_wire,
+	[LDLM_PLAIN - LDLM_TYPE_MIN]  = ldlm_plain_policy_local_to_wire,
+	[LDLM_EXTENT - LDLM_TYPE_MIN] = ldlm_extent_policy_local_to_wire,
+	[LDLM_FLOCK - LDLM_TYPE_MIN]  = ldlm_flock_policy_local_to_wire,
+	[LDLM_IBITS - LDLM_TYPE_MIN]  = ldlm_ibits_policy_local_to_wire,
 };
 
 /**
@@ -71,7 +71,7 @@ void ldlm_convert_policy_to_wire(enum ldlm_type type,
 {
 	ldlm_policy_local_to_wire_t convert;
 
-	convert = ldlm_policy_local_to_wire[type - LDLM_MIN_TYPE];
+	convert = ldlm_policy_local_to_wire[type - LDLM_TYPE_MIN];
 
 	convert(lpolicy, wpolicy);
 }
@@ -85,7 +85,7 @@ void ldlm_convert_policy_to_local(struct obd_export *exp, enum ldlm_type type,
 {
 	ldlm_policy_wire_to_local_t convert;
 
-	convert = ldlm_policy_wire_to_local[type - LDLM_MIN_TYPE];
+	convert = ldlm_policy_wire_to_local[type - LDLM_TYPE_MIN];
 
 	convert(wpolicy, lpolicy);
 }
@@ -461,7 +461,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 		RB_CLEAR_NODE(&lock->l_rb);
 		INIT_LIST_HEAD(&lock->l_same_extent);
 		break;
-	case LDLM_MAX_TYPE:
+	case LDLM_TYPE_END:
 		break;
 	}
 	INIT_HLIST_NODE(&lock->l_exp_hash);
@@ -1164,7 +1164,7 @@ static bool lock_matches(struct ldlm_lock *lock, void *vdata)
 {
 	struct ldlm_match_data *data = vdata;
 	union ldlm_policy_data *lpol = &lock->l_policy_data;
-	enum ldlm_mode match = LCK_MINMODE;
+	enum ldlm_mode match = LCK_MODE_MIN;
 
 	if (lock == data->lmd_old)
 		return true;
@@ -2530,7 +2530,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 		ldlm_pool_del(&ns->ns_pool, lock);
 
 	/* should not be called again for same lock(zero out l_granted_mode) */
-	lock->l_granted_mode = LCK_MINMODE;
+	lock->l_granted_mode = LCK_MODE_MIN;
 	unlock_res_and_lock(lock);
 
 	EXIT;
@@ -2720,7 +2720,7 @@ void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode)
 	if (!(lock->l_granted_mode & (LCK_PW | LCK_EX))) {
 		unlock_res_and_lock(lock);
 
-		LASSERT(lock->l_granted_mode == LCK_MINMODE);
+		LASSERT(lock->l_granted_mode == LCK_MODE_MIN);
 		LDLM_DEBUG(lock, "lock was canceled before downgrade");
 		RETURN_EXIT;
 	}

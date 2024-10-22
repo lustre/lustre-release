@@ -54,6 +54,8 @@ f_dentry||f_path.dentry
 [^_]get_seconds||ktime_get_real_seconds
 it_flags||it_open_flags
 kmem_cache_alloc.*GFP_ZERO||kmem_cache_zalloc
+LCK_MINMODE||LCK_MODE_MIN
+LCK_MAXMODE||LCK_MODE_END
 ldebugfs_remove||debugfs_remove_recursive
 ldlm_appetite_t||enum ldlm_appetite
 ldlm_cancel_flags_t||enum ldlm_cancel_flags
@@ -64,6 +66,7 @@ ldlm_ns_type_t||enum ldlm_ns_type
 ldlm_policy_data_t||enum ldlm_policy_data
 ldlm_policy_res_t||enum ldlm_policy_res
 ldlm_side_t||enum ldlm_side
+LDLM_TYPE_MAX||LDLM_TYPE_END
 ldlm_type_t||enum ldlm_type
 ldlm_wire_policy_data_t||union ldlm_wire_policy_data
 libcfs_debug_vmsg2||libcfs_debug_msg

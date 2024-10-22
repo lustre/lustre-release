@@ -2514,7 +2514,7 @@ struct ldlm_res_id {
 
 /* lock types */
 enum ldlm_mode {
-	LCK_MINMODE	= 0,
+	LCK_MODE_MIN	= 0,
 	LCK_EX		= 1,
 	LCK_PW		= 2,
 	LCK_PR		= 4,
@@ -2524,9 +2524,11 @@ enum ldlm_mode {
 	LCK_GROUP	= 64,
 	LCK_COS		= 128,
 	LCK_TXN		= 256,
-	LCK_MAXMODE
+	LCK_MODE_END
 };
 
+#define LCK_MINMODE	LCK_MODE_MIN /* deprecated since 2.16.0 */
+#define LCK_MAXMODE	LCK_MODE_MAX /* deprecated since 2.16.0 */
 #define LCK_MODE_NUM    9
 
 enum ldlm_type {
@@ -2534,10 +2536,12 @@ enum ldlm_type {
 	LDLM_EXTENT	= 11,
 	LDLM_FLOCK	= 12,
 	LDLM_IBITS	= 13,
-	LDLM_MAX_TYPE
+	LDLM_TYPE_END,
+	LDLM_TYPE_MIN   = LDLM_PLAIN
 };
 
-#define LDLM_MIN_TYPE LDLM_PLAIN
+#define LDLM_TYPE_MAX	LDLM_TYPE_END /* deprecated since 2.16.0 */
+
 
 struct ldlm_extent {
 	__u64 start;

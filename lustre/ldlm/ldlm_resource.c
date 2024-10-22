@@ -1546,7 +1546,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, const struct ldlm_res_id *name,
 	if (create == 0)
 		return ERR_PTR(-ENOENT);
 
-	LASSERTF(type >= LDLM_MIN_TYPE && type < LDLM_MAX_TYPE,
+	LASSERTF(type >= LDLM_TYPE_MIN && type < LDLM_TYPE_END,
 		 "type: %d\n", type);
 	res = ldlm_resource_new(type);
 	if (res == NULL)
