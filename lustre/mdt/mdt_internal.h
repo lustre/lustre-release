@@ -1275,23 +1275,6 @@ static inline bool mdt_slc_is_enabled(struct mdt_device *mdt)
 	return mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_BLOCKING;
 }
 
-extern mdl_mode_t mdt_mdl_lock_modes[];
-extern enum ldlm_mode mdt_dlm_lock_modes[];
-
-/* LCK_MODE_MIN which is zero returns false for is_power_of_2 */
-
-static inline mdl_mode_t mdt_dlm_mode2mdl_mode(enum ldlm_mode mode)
-{
-	LASSERT(mode == LCK_MODE_MIN || is_power_of_2(mode));
-	return mdt_mdl_lock_modes[mode];
-}
-
-static inline enum ldlm_mode mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
-{
-	LASSERT(mode == MDL_MINMODE || is_power_of_2(mode));
-	return mdt_dlm_lock_modes[mode];
-}
-
 /* mdt_som.c */
 int mdt_set_som(struct mdt_thread_info *info, struct mdt_object *obj,
 		enum lustre_som_flags flag, __u64 size, __u64 blocks);

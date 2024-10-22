@@ -56,18 +56,6 @@ enum ma_valid {
 };
 
 typedef enum {
-	MDL_MINMODE	= 0,
-	MDL_EX		= 1,
-	MDL_PW		= 2,
-	MDL_PR		= 4,
-	MDL_CW		= 8,
-	MDL_CR		= 16,
-	MDL_NL		= 32,
-	MDL_GROUP	= 64,
-	MDL_MAXMODE
-} mdl_mode_t;
-
-typedef enum {
 	MDT_NUL_LOCK = 0,
 	MDT_REG_LOCK = BIT(0),
 	MDT_PDO_LOCK = BIT(1),
@@ -309,9 +297,8 @@ struct md_dir_operations {
 			  const struct lu_name *lname, struct lu_fid *fid,
 			  struct md_op_spec *spec);
 
-	mdl_mode_t (*mdo_lock_mode)(const struct lu_env *env,
-				    struct md_object *obj,
-				    mdl_mode_t mode);
+	enum ldlm_mode (*mdo_lock_mode)(const struct lu_env *env,
+			  struct md_object *obj, enum ldlm_mode mode);
 
 	int (*mdo_create)(const struct lu_env *env, struct md_object *pobj,
 			  const struct lu_name *lname, struct md_object *child,
@@ -320,9 +307,8 @@ struct md_dir_operations {
 
 	/** This method is used for creating data object for this meta object*/
 	int (*mdo_create_data)(const struct lu_env *env, struct md_object *p,
-			       struct md_object *o,
-			       const struct md_op_spec *spec,
-			       struct md_attr *ma);
+			  struct md_object *o, const struct md_op_spec *spec,
+			  struct md_attr *ma);
 
 	int (*mdo_rename)(const struct lu_env *env, struct md_object *spobj,
 			  struct md_object *tpobj, const struct lu_fid *lf,
@@ -579,11 +565,12 @@ static inline int mdo_lookup(const struct lu_env *env, struct md_object *p,
 	return p->mo_dir_ops->mdo_lookup(env, p, lname, f, spec);
 }
 
-static inline mdl_mode_t mdo_lock_mode(const struct lu_env *env,
-				       struct md_object *mo, mdl_mode_t lm)
+static inline enum ldlm_mode mdo_lock_mode(const struct lu_env *env,
+					   struct md_object *mo,
+					   enum ldlm_mode lm)
 {
 	if (mo->mo_dir_ops->mdo_lock_mode == NULL)
-		return MDL_MINMODE;
+		return LCK_MODE_MIN;
 	return mo->mo_dir_ops->mdo_lock_mode(env, mo, lm);
 }
 

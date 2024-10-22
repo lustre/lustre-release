@@ -83,28 +83,6 @@ MODULE_PARM_DESC(max_mod_rpcs_per_client,
 	"maximum number of modify RPCs in flight allowed per client (Deprecated)");
 #endif
 
-mdl_mode_t mdt_mdl_lock_modes[] = {
-	[LCK_MODE_MIN]	= MDL_MINMODE,
-	[LCK_EX]	= MDL_EX,
-	[LCK_PW]	= MDL_PW,
-	[LCK_PR]	= MDL_PR,
-	[LCK_CW]	= MDL_CW,
-	[LCK_CR]	= MDL_CR,
-	[LCK_NL]	= MDL_NL,
-	[LCK_GROUP]	= MDL_GROUP
-};
-
-enum ldlm_mode mdt_dlm_lock_modes[] = {
-	[MDL_MINMODE]	= LCK_MODE_MIN,
-	[MDL_EX]	= LCK_EX,
-	[MDL_PW]	= LCK_PW,
-	[MDL_PR]	= LCK_PR,
-	[MDL_CW]	= LCK_CW,
-	[MDL_CR]	= LCK_CR,
-	[MDL_NL]	= LCK_NL,
-	[MDL_GROUP]	= LCK_GROUP
-};
-
 static struct mdt_device *mdt_dev(struct lu_device *d);
 
 static const struct lu_object_operations mdt_obj_ops;
@@ -221,7 +199,7 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, enum ldlm_mode lock_mode,
 static void mdt_lock_pdo_mode(struct mdt_thread_info *info, struct mdt_object *o,
 			      struct mdt_lock_handle *lh)
 {
-	mdl_mode_t mode;
+	enum ldlm_mode mode;
 
 	ENTRY;
 
@@ -254,18 +232,18 @@ static void mdt_lock_pdo_mode(struct mdt_thread_info *info, struct mdt_object *o
 	 * Ask underlaying level its opinion about preferable PDO lock mode
 	 * having access type passed as regular lock mode:
 	 *
-	 * - MDL_MINMODE means that lower layer does not want to specify lock
+	 * - LCK_MODE_MIN means that lower layer does not want to specify lock
 	 * mode;
 	 *
-	 * - MDL_NL means that no PDO lock should be taken. This is used in some
+	 * - LCK_NL means that no PDO lock should be taken. This is used in some
 	 * cases. Say, for non-splittable directories no need to use PDO locks
 	 * at all.
 	 */
 	mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
-			     mdt_dlm_mode2mdl_mode(lh->mlh_reg_mode));
+			     lh->mlh_reg_mode);
 
-	if (mode != MDL_MINMODE) {
-		lh->mlh_pdo_mode = mdt_mdl_mode2dlm_mode(mode);
+	if (mode != LCK_MODE_MIN) {
+		lh->mlh_pdo_mode = mode;
 	} else {
 		/*
 		 * Lower layer does not want to specify locking mode. We do it
