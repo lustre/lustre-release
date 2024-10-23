@@ -30136,7 +30136,7 @@ generate_uneven_mdts() {
 			error "setstripe $testdir failed"
 		start=$SECONDS
 		for (( f = 0; f < TEST413_COUNT; f++ )); do
-			$cmd$testdir/f.$f &> /dev/null || error "$cmd $f failed"
+			$cmd$testdir/f.$f || error "$cmd$testdir $f failed"
 		done
 		sync; sleep 1; sync
 

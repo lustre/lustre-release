@@ -1218,9 +1218,22 @@ unload_modules() {
 
 	if $LOAD_MODULES_REMOTE; then
 		local list=$(comma_list $(remote_nodes_list))
-		if [ -n "$list" ]; then
-			echo "unloading modules on: '$list'"
-			do_rpc_nodes "$list" unload_modules_local
+
+		if (( MDS1_VERSION >= $(version_code 2.15.51) )); then
+			# unload_module_local is only available after 2.15.51
+			if [ -n "$list" ]; then
+				echo "unloading modules via unload_modules_local on: '$list'"
+				do_rpc_nodes "$list" unload_modules_local
+			fi
+		else
+			if [ -n "$list" ]; then
+				echo "unloading modules on: '$list'"
+				do_rpc_nodes "$list" $LUSTRE_RMMOD ldiskfs
+				do_rpc_nodes "$list" check_mem_leak
+				do_rpc_nodes "$list" "rm -f /etc/udev/rules.d/99-lustre-test.rules"
+				do_rpc_nodes "$list" "udevadm control --reload-rules"
+				do_rpc_nodes "$list" "udevadm trigger"
+			fi
 		fi
 	fi
 
@@ -12036,6 +12049,9 @@ function check_fallocate_supported()
 	local fa_mode="osd-ldiskfs.$(facet_svc $facet).fallocate_zero_blocks"
 	local mode=$(do_facet $facet $LCTL get_param -n $fa_mode 2>/dev/null |
 		     head -n 1)
+	! [[ "$facet" =~ "mds" ]] || # older MDS doesn't support fallocate
+		(( MDS1_VERSION >= $(version_code v2_14_53-10-g163870abfb) )) ||
+			mode=""
 
 	if [[ -z "$mode" ]]; then
 		echo "fallocate not supported on $facet" 1>&2
