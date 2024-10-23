@@ -49,6 +49,9 @@
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-wait.h>
 #include <libcfs/linux/linux-misc.h>
+#ifndef HAVE_XARRAY_SUPPORT
+#include <libcfs/linux/xarray.h>
+#endif
 
 #ifndef HAVE_KTIME_GET_TS64
 void ktime_get_ts64(struct timespec64 *ts)
@@ -117,7 +120,15 @@ int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
 EXPORT_SYMBOL_GPL(cfs_apply_workqueue_attrs);
 
 #ifndef HAVE_XARRAY_SUPPORT
-struct kmem_cache (*radix_tree_node_cachep);
+struct kmem_cache *xarray_cachep;
+
+static void xarray_node_ctor(void *arg)
+{
+	struct xa_node *node = arg;
+
+	memset(node, 0, sizeof(*node));
+	INIT_LIST_HEAD(&node->private_list);
+}
 #endif
 
 void __init cfs_arch_init(void)
@@ -128,8 +139,10 @@ void __init cfs_arch_init(void)
 	cfs_apply_workqueue_attrs_t =
 		(void *)cfs_kallsyms_lookup_name("apply_workqueue_attrs");
 #ifndef HAVE_XARRAY_SUPPORT
-	radix_tree_node_cachep =
-		(void *)cfs_kallsyms_lookup_name("radix_tree_node_cachep");
+	xarray_cachep = kmem_cache_create("xarray_cache",
+					  sizeof(struct xa_node), 0,
+					  SLAB_PANIC | SLAB_RECLAIM_ACCOUNT,
+					  xarray_node_ctor);
 #endif
 }
 

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
-#ifndef _LINUX_XARRAY_H
-#define _LINUX_XARRAY_H
+#ifndef _LINUX_XARRAY_LUSTRE_H
+#define _LINUX_XARRAY_LUSTRE_H
 /*
  * eXtensible Arrays
  * Copyright (c) 2017 Microsoft Corporation
@@ -1763,4 +1763,4 @@ static inline void *xas_next(struct xa_state *xas)
 }
 #endif /* !HAVE_XARRAY_SUPPORT */
 
-#endif /* _LINUX_XARRAY_H */
+#endif /* _LINUX_XARRAY_LUSTRE_H */
