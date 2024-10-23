@@ -1345,8 +1345,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 			CDEBUG(D_INFO, "mgc %s: cannot find obdname %s\n",
 			       mgc->obd_name, obdname);
 			rc = 0;
-			/* this is a safe race, when the ost is starting up...*/
-			continue;
+			goto free_nids;
 		}
 
 		/* osc.import = "connection=<Conn UUID>::<target instance>" */
@@ -1430,6 +1429,10 @@ fail:;
 					       bufs.lcfg_buflen));
 		if (!lcfg) {
 			rc = -ENOMEM;
+			/* For old NID format case the nidlist was allocated. */
+			if (entry->mne_nid_type == 0)
+				OBD_FREE_PTR_ARRAY(nidlist,
+						   entry->mne_nid_count);
 			break;
 		}
 		lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
