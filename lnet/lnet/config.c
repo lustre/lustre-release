@@ -51,10 +51,6 @@ static int lnet_tbnob = 0;			/* track text buf allocation */
 #define SPACESTR " \t\v\r\n"
 #define DELIMITERS ":()[]"
 
-#ifndef HAVE_STRSCPY
-#define strscpy(s1, s2, sz)	strlcpy((s1), (s2), (sz))
-#endif
-
 static void
 lnet_syntax(const char *name, const char *str, int offset, int width)
 {
