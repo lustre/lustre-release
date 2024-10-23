@@ -136,6 +136,12 @@ static inline void mmap_read_unlock(struct mm_struct *mm)
 #define __ll_vmalloc(size, flags) __vmalloc(size, flags, PAGE_KERNEL)
 #endif
 
+void init_libcfs_vfree_atomic(void);
+void exit_libcfs_vfree_atomic(void);
+
+/* atomic-context safe vfree */
+void libcfs_vfree_atomic(const void *addr);
+
 #ifndef HAVE_KFREE_SENSITIVE
 #define kfree_sensitive(x)      kzfree(x)
 #endif

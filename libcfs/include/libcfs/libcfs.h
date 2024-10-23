@@ -117,25 +117,6 @@ do {									\
 		);							\
 } while (0)
 
-/* atomic-context safe vfree */
-void libcfs_vfree_atomic(const void *addr);
-
-/* interval tree */
-
-#ifdef HAVE_INTERVAL_TREE_CACHED
-#define interval_tree_root rb_root_cached
-#define interval_tree_first rb_first_cached
-#define INTERVAL_TREE_ROOT RB_ROOT_CACHED
-#else
-#define interval_tree_root rb_root
-#define interval_tree_first rb_first
-#define INTERVAL_TREE_ROOT RB_ROOT
-#endif /* HAVE_INTERVAL_TREE_CACHED */
-
-#ifndef unsafe_memcpy
-#define unsafe_memcpy(to, from, size, reason)	memcpy((to), (from), (size))
-#endif
-
 #define FLEXIBLE_OBJECT \
 	"Struct contains a flexible member, the size of object is checked" \
 	"and can be safely copied in a single memcpy()"

@@ -213,9 +213,6 @@ do {									    \
 #define LIBCFS_CPT_ALLOC(ptr, cptab, cpt, size)				    \
 	LIBCFS_CPT_ALLOC_GFP(ptr, cptab, cpt, size, GFP_NOFS)
 
-void init_libcfs_vfree_atomic(void);
-void exit_libcfs_vfree_atomic(void);
-
 #define LIBCFS_FREE(ptr, size)						\
 do {									\
 	int s = (size);							\
