@@ -529,23 +529,6 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	if (rw == READ && file_offset >= i_size_read(inode))
 		RETURN(0);
 
-	/* unaligned DIO support can be turned off, so is it on? */
-	if (unaligned && !ll_sbi_has_unaligned_dio(ll_i2sbi(inode)))
-		RETURN(-EINVAL);
-
-	/* the requirement to not return EIOCBQUEUED for pipes (see bottom of
-	 * this function) plays havoc with the unaligned I/O lifecycle, so
-	 * don't allow unaligned I/O on pipes
-	 */
-	if (unaligned && iov_iter_is_pipe(iter))
-		RETURN(0);
-
-	/* Unpatched older servers which cannot safely support unaligned DIO
-	 * should abort here
-	 */
-	if (unaligned && !cl_io_top(io)->ci_allow_unaligned_dio)
-		RETURN(-EINVAL);
-
 	/* if one part of an I/O is unaligned, just handle all of it that way -
 	 * otherwise we create significant complexities with managing the iovec
 	 * in different ways, etc, all for very marginal benefits
@@ -559,9 +542,30 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	LASSERT(ll_dio_aio);
 	LASSERT(ll_dio_aio->cda_iocb == iocb);
 
+	/* unaligned DIO support can be turned off, so is it on? */
+	if (unaligned && !ll_sbi_has_unaligned_dio(ll_i2sbi(inode)))
+		RETURN(-EINVAL);
+
 	/* unaligned AIO is not supported - see LU-18032 */
 	if (unaligned && ll_dio_aio->cda_is_aio)
 		RETURN(-EINVAL);
+
+	/* the requirement to not return EIOCBQUEUED for pipes (see bottom of
+	 * this function) plays havoc with the unaligned I/O lifecycle, so
+	 * don't allow unaligned I/O on pipes
+	 */
+	if (unaligned && iov_iter_is_pipe(iter))
+		RETURN(0);
+
+	/* returning 0 here forces the remaining I/O through buffered I/O
+	 * while returning -EINVAL stops the I/O from continuing
+	 */
+
+	/* Unpatched older servers which cannot safely support unaligned DIO
+	 * should abort here
+	 */
+	if (unaligned && !cl_io_top(io)->ci_allow_unaligned_dio)
+		RETURN(0);
 
 	/* We cannot do parallel submission of sub-I/Os - for AIO or regular
 	 * DIO - unless lockless because it causes us to release the lock
