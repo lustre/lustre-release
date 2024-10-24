@@ -539,6 +539,7 @@ sfw_test_rpc_fini(struct srpc_client_rpc *rpc)
 
 	/* Called with hold of tsi->tsi_lock */
 	LASSERT(list_empty(&rpc->crpc_list));
+	rpc->crpc_wi.swi_state = SWI_STATE_DONE;
 	list_add(&rpc->crpc_list, &tsi->tsi_free_rpcs);
 }
 
@@ -640,6 +641,7 @@ sfw_destroy_test_instance(struct sfw_test_instance *tsi)
 		rpc = list_entry(tsi->tsi_free_rpcs.next,
 				 struct srpc_client_rpc, crpc_list);
 		list_del(&rpc->crpc_list);
+		swi_cancel_workitem(&rpc->crpc_wi);
 		LIBCFS_FREE(rpc, srpc_client_rpc_size(rpc));
 	}
 
@@ -928,6 +930,7 @@ sfw_create_test_rpc(struct sfw_test_unit *tsu, struct lnet_process_id peer,
 					     blklen, sfw_test_rpc_done,
 					     sfw_test_rpc_fini, tsu);
 	} else {
+		swi_cancel_workitem(&rpc->crpc_wi);
 		srpc_init_client_rpc(rpc, peer, tsi->tsi_service, nblk,
 				     blklen, sfw_test_rpc_done,
 				     sfw_test_rpc_fini, tsu);
@@ -944,25 +947,29 @@ sfw_create_test_rpc(struct sfw_test_unit *tsu, struct lnet_process_id peer,
 	return 0;
 }
 
-static int
+static void
 sfw_run_test(struct swi_workitem *wi)
 {
 	struct sfw_test_unit *tsu = container_of(wi, struct sfw_test_unit, tsu_worker);
 	struct sfw_test_instance *tsi = tsu->tsu_instance;
 	struct srpc_client_rpc *rpc = NULL;
 
-        LASSERT (wi == &tsu->tsu_worker);
+	if (tsi->tsi_ops->tso_prep_rpc(tsu, tsu->tsu_dest, &rpc) != 0) {
+		LASSERT(rpc == NULL);
+		wi->swi_state = SWI_STATE_DONE;
+		goto test_done;
+	}
 
-        if (tsi->tsi_ops->tso_prep_rpc(tsu, tsu->tsu_dest, &rpc) != 0) {
-                LASSERT (rpc == NULL);
-                goto test_done;
-        }
-
-        LASSERT (rpc != NULL);
+	LASSERT(rpc != NULL);
 
 	spin_lock(&tsi->tsi_lock);
+	if (wi->swi_state == SWI_STATE_DONE) {
+		spin_unlock(&tsi->tsi_lock);
+		return;
+	}
 
 	if (tsi->tsi_stopping) {
+		wi->swi_state = SWI_STATE_DONE;
 		list_add(&rpc->crpc_list, &tsi->tsi_free_rpcs);
 		spin_unlock(&tsi->tsi_lock);
 		goto test_done;
@@ -972,25 +979,24 @@ sfw_run_test(struct swi_workitem *wi)
 		tsu->tsu_loop--;
 
 	list_add_tail(&rpc->crpc_list, &tsi->tsi_active_rpcs);
+	wi->swi_state = SWI_STATE_RUNNING;
 	spin_unlock(&tsi->tsi_lock);
 
 	spin_lock(&rpc->crpc_lock);
 	rpc->crpc_timeout = rpc_timeout;
 	srpc_post_rpc(rpc);
 	spin_unlock(&rpc->crpc_lock);
-	return 0;
+	return;
 
 test_done:
-        /*
-         * No one can schedule me now since:
-         * - previous RPC, if any, has done and
-         * - no new RPC is initiated.
-         * - my batch is still active; no one can run it again now.
-         * Cancel pending schedules and prevent future schedule attempts:
-         */
-	swi_exit_workitem(wi);
+	/*
+	 * No one can schedule me now since:
+	 * - previous RPC, if any, has done and
+	 * - no new RPC is initiated.
+	 * - my batch is still active; no one can run it again now.
+	 * Cancel pending schedules and prevent future schedule attempts:
+	 */
 	sfw_test_unit_done(tsu);
-	return 1;
 }
 
 static int
@@ -1020,7 +1026,9 @@ sfw_run_batch(struct sfw_batch *tsb)
 			tsu->tsu_loop = tsi->tsi_loop;
 			wi = &tsu->tsu_worker;
 			swi_init_workitem(wi, sfw_run_test,
-					  lst_sched_test[lnet_cpt_of_nid(tsu->tsu_dest.nid, NULL)]);
+					  lst_test_wq[lnet_cpt_of_nid(
+							      tsu->tsu_dest.nid,
+							      NULL)]);
 			swi_schedule_workitem(wi);
 		}
 	}
@@ -1398,14 +1406,15 @@ sfw_create_rpc(struct lnet_process_id peer, int service,
 		rpc = list_entry(sfw_data.fw_zombie_rpcs.next,
 				     struct srpc_client_rpc, crpc_list);
 		list_del(&rpc->crpc_list);
-
-                srpc_init_client_rpc(rpc, peer, service, 0, 0,
-                                     done, sfw_client_rpc_fini, priv);
-        }
-
+	}
 	spin_unlock(&sfw_data.fw_lock);
 
-	if (rpc == NULL) {
+	if (rpc) {
+		/* Ensure that rpc is done */
+		swi_cancel_workitem(&rpc->crpc_wi);
+		srpc_init_client_rpc(rpc, peer, service, 0, 0,
+				     done, sfw_client_rpc_fini, priv);
+	} else {
 		rpc = srpc_create_client_rpc(peer, service,
 					     nbulkiov, bulklen, done,
 					     nbulkiov != 0 ?  NULL :

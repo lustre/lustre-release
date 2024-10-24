@@ -45,8 +45,8 @@ enum {
 
 static int lst_init_step = LST_INIT_NONE;
 
-struct cfs_wi_sched *lst_sched_serial;
-struct cfs_wi_sched **lst_sched_test;
+struct workqueue_struct *lst_serial_wq;
+struct workqueue_struct **lst_test_wq;
 
 static void
 lnet_selftest_exit(void)
@@ -66,17 +66,17 @@ lnet_selftest_exit(void)
 	case LST_INIT_WI_TEST:
 		for (i = 0;
 		     i < cfs_cpt_number(lnet_cpt_table()); i++) {
-			if (lst_sched_test[i] == NULL)
+			if (!lst_test_wq[i])
 				continue;
-			cfs_wi_sched_destroy(lst_sched_test[i]);
+			destroy_workqueue(lst_test_wq[i]);
 		}
-		CFS_FREE_PTR_ARRAY(lst_sched_test,
+		CFS_FREE_PTR_ARRAY(lst_test_wq,
 				   cfs_cpt_number(lnet_cpt_table()));
-		lst_sched_test = NULL;
+		lst_test_wq = NULL;
 		fallthrough;
 	case LST_INIT_WI_SERIAL:
-		cfs_wi_sched_destroy(lst_sched_serial);
-		lst_sched_serial = NULL;
+		destroy_workqueue(lst_serial_wq);
+		lst_serial_wq = NULL;
 		fallthrough;
 	case LST_INIT_NONE:
 		break;
@@ -102,20 +102,19 @@ static int __init
 lnet_selftest_init(void)
 {
 	int nscheds;
-	int rc;
+	int rc = -ENOMEM;
 	int i;
 
-	rc = cfs_wi_sched_create("lst_s", lnet_cpt_table(), CFS_CPT_ANY,
-				 1, &lst_sched_serial);
-	if (rc != 0) {
+	lst_serial_wq = alloc_ordered_workqueue("lst_s", 0);
+	if (!lst_serial_wq) {
 		CERROR("Failed to create serial WI scheduler for LST\n");
 		return rc;
 	}
 	lst_init_step = LST_INIT_WI_SERIAL;
 
 	nscheds = cfs_cpt_number(lnet_cpt_table());
-	CFS_ALLOC_PTR_ARRAY(lst_sched_test, nscheds);
-	if (lst_sched_test == NULL) {
+	CFS_ALLOC_PTR_ARRAY(lst_test_wq, nscheds);
+	if (!lst_test_wq) {
 		rc = -ENOMEM;
 		goto error;
 	}
@@ -126,11 +125,14 @@ lnet_selftest_init(void)
 
 		/* reserve at least one CPU for LND */
 		nthrs = max(nthrs - 1, 1);
-		rc = cfs_wi_sched_create("lst_t", lnet_cpt_table(), i,
-					 nthrs, &lst_sched_test[i]);
-		if (rc != 0) {
-			CERROR("Failed to create CPU partition affinity WI scheduler %d for LST\n",
-			       i);
+		lst_test_wq[i] = cfs_cpt_bind_workqueue("lst_t",
+							lnet_cpt_table(), 0,
+							i, nthrs);
+		if (IS_ERR(lst_test_wq[i])) {
+			rc = PTR_ERR(lst_test_wq[i]);
+			CERROR("Failed to create CPU partition affinity WI scheduler %d for LST: rc = %d\n",
+			       i, rc);
+			lst_test_wq[i] = NULL;
 			goto error;
 		}
 	}
