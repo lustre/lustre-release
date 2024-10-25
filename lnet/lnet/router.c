@@ -1008,7 +1008,7 @@ lnet_update_ni_status_locked(void)
 	time64_t now;
 	time64_t timeout;
 
-	LASSERT(the_lnet.ln_routing);
+	LASSERT(lnet_routing_enabled());
 
 	timeout = router_ping_timeout + alive_router_check_interval;
 
@@ -1075,7 +1075,7 @@ bool lnet_router_checker_active(void)
 {
 	/* Router Checker thread needs to run when routing is enabled in
 	 * order to call lnet_update_ni_status_locked() */
-	if (the_lnet.ln_routing)
+	if (lnet_routing_enabled())
 		return true;
 
 	return !list_empty(&the_lnet.ln_routers) &&
@@ -1194,7 +1194,7 @@ rescan:
 		}
 	}
 
-	if (the_lnet.ln_routing)
+	if (lnet_routing_enabled())
 		push = lnet_update_ni_status_locked();
 
 	lnet_net_unlock(cpt);
@@ -1523,7 +1523,7 @@ lnet_rtrpools_alloc(int im_a_router)
 	}
 
 	lnet_net_lock(LNET_LOCK_EX);
-	the_lnet.ln_routing = 1;
+	the_lnet.ln_routing = LNET_ROUTING_ENABLED;
 	lnet_net_unlock(LNET_LOCK_EX);
 	complete(&the_lnet.ln_mt_wait_complete);
 	return 0;
@@ -1584,7 +1584,7 @@ lnet_rtrpools_adjust(int tiny, int small, int large)
 	 * failed.  It's up to the user space caller to revert the
 	 * changes. */
 
-	if (!the_lnet.ln_routing)
+	if (lnet_routing_disabled())
 		return 0;
 
 	return lnet_rtrpools_adjust_helper(tiny, small, large);
@@ -1595,7 +1595,7 @@ lnet_rtrpools_enable(void)
 {
 	int rc = 0;
 
-	if (the_lnet.ln_routing)
+	if (lnet_routing_enabled())
 		return 0;
 
 	if (the_lnet.ln_rtrpools == NULL)
@@ -1611,7 +1611,7 @@ lnet_rtrpools_enable(void)
 		return rc;
 
 	lnet_net_lock(LNET_LOCK_EX);
-	the_lnet.ln_routing = 1;
+	the_lnet.ln_routing = LNET_ROUTING_ENABLED;
 
 	the_lnet.ln_ping_target->pb_info.pi_features &=
 		~LNET_PING_FEAT_RTE_DISABLED;
@@ -1627,11 +1627,11 @@ lnet_rtrpools_enable(void)
 void
 lnet_rtrpools_disable(void)
 {
-	if (!the_lnet.ln_routing)
+	if (lnet_routing_disabled())
 		return;
 
 	lnet_net_lock(LNET_LOCK_EX);
-	the_lnet.ln_routing = 0;
+	the_lnet.ln_routing = LNET_ROUTING_DISABLED;
 	the_lnet.ln_ping_target->pb_info.pi_features |=
 		LNET_PING_FEAT_RTE_DISABLED;
 

@@ -254,7 +254,7 @@ lnet_peer_alloc(struct lnet_nid *nid)
 	 * all peers created on a router should have health on
 	 * if it's not already on.
 	 */
-	if (the_lnet.ln_routing && !lnet_health_sensitivity)
+	if (lnet_routing_enabled() && !lnet_health_sensitivity)
 		lp->lp_health_sensitivity = 1;
 
 	/*

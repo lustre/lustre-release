@@ -1687,9 +1687,10 @@ struct lnet_peer_table {
 /* peer aliveness is enabled only on routers for peers in a network where the
  * struct lnet_ni::ni_peertimeout has been set to a positive value
  */
-#define lnet_peer_aliveness_enabled(lp) (the_lnet.ln_routing != 0 && \
-					((lp)->lpni_net) && \
-					(lp)->lpni_net->net_tunables.lct_peer_timeout > 0)
+#define lnet_peer_aliveness_enabled(lp)				\
+	(lnet_routing_enabled() &&				\
+	((lp)->lpni_net) &&					\
+	(lp)->lpni_net->net_tunables.lct_peer_timeout > 0)
 
 struct lnet_route {
 	struct list_head	lr_list;	/* chain on net */
@@ -1920,6 +1921,13 @@ struct lnet_udsp {
 #define LNET_STATE_SHUTDOWN		0	/* not started */
 #define LNET_STATE_RUNNING		1	/* started up OK */
 #define LNET_STATE_STOPPING		2	/* telling thread to stop */
+
+/* LNet routing states */
+#define LNET_ROUTING_DISABLED		0	/* LNet routing disabled */
+#define LNET_ROUTING_ENABLED		1	/* LNet routing enabled */
+
+#define lnet_routing_disabled() (the_lnet.ln_routing == LNET_ROUTING_DISABLED)
+#define lnet_routing_enabled() (the_lnet.ln_routing != LNET_ROUTING_DISABLED)
 
 struct nid_update_info {
 	GENRADIX(struct lnet_nid) nui_rdx;

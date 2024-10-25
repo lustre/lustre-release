@@ -859,7 +859,7 @@ lnet_health_check(struct lnet_msg *msg)
 		    lpni->lpni_peer_net->lpn_peer &&
 		    lpni->lpni_peer_net->lpn_peer->lp_nnis <= 1) {
 			attempt_remote_resend = false;
-			if (!(lnet_isrouter(lpni) || the_lnet.ln_routing))
+			if (!(lnet_isrouter(lpni) || lnet_routing_enabled()))
 				handle_remote_health = false;
 		}
 		/* Do not put my interfaces into peer NI recovery. They should
@@ -898,7 +898,7 @@ lnet_health_check(struct lnet_msg *msg)
 			 * I'm a router, then set that lpni's health to
 			 * maximum so we can commence communication
 			 */
-			if (lnet_isrouter(lpni) || the_lnet.ln_routing) {
+			if (lnet_isrouter(lpni) || lnet_routing_enabled()) {
 				lnet_set_lpni_healthv_locked(lpni,
 					LNET_MAX_HEALTH_VALUE);
 			} else {

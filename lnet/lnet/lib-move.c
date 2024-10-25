@@ -1223,7 +1223,7 @@ lnet_return_rx_credits_locked(struct lnet_msg *msg)
 
 		/* If routing is now turned off, we just drop this buffer and
 		 * don't bother trying to return credits.  */
-		if (!the_lnet.ln_routing) {
+		if (lnet_routing_disabled()) {
 			lnet_destroy_rtrbuf(rb, rbp->rbp_npages);
 			goto routing_off;
 		}
@@ -1261,7 +1261,7 @@ routing_off:
 
 		/* drop all messages which are queued to be routed on that
 		 * peer. */
-		if (!the_lnet.ln_routing) {
+		if (lnet_routing_disabled()) {
 			LIST_HEAD(drop);
 			list_splice_init(&lp->lp_rtrq, &drop);
 			spin_unlock(&lp->lp_lock);
@@ -4678,7 +4678,7 @@ lnet_parse_ack(struct lnet_ni *ni, struct lnet_msg *msg)
 int
 lnet_parse_forward_locked(struct lnet_ni *ni, struct lnet_msg *msg)
 {
-	if (!the_lnet.ln_routing)
+	if (lnet_routing_disabled())
 		return -ECANCELED;
 
 	return lnet_post_routed_recv_locked(msg, 0);
@@ -4805,7 +4805,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 	 * This avoids situations where the router's own traffic results in NI
 	 * status changes
 	 */
-	if (the_lnet.ln_routing && type == LNET_MSG_GET &&
+	if (lnet_routing_enabled() && type == LNET_MSG_GET &&
 	    hdr->msg.get.ptl_index == LNET_RESERVED_PORTAL &&
 	    !lnet_islocalnid(&src_nid) &&
 	    ni->ni_net->net_last_alive != now) {
@@ -4855,7 +4855,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 			return -EPROTO;
 		}
 
-		if (!the_lnet.ln_routing) {
+		if (lnet_routing_disabled()) {
 			CERROR("%s, src %s: Dropping message for %s "
 			       "(routing not enabled)\n",
 				libcfs_nidstr(from_nid),

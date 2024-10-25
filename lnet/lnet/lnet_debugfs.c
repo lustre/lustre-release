@@ -191,6 +191,19 @@ out_no_ctrs:
 	return rc;
 }
 
+static char *
+ln_routing2str(void)
+{
+	switch (the_lnet.ln_routing) {
+	case LNET_ROUTING_DISABLED:
+		return "Routing disabled\n";
+	case LNET_ROUTING_ENABLED:
+		return "Routing enabled\n";
+	default:
+		return "Routing unknown\n";
+	}
+}
+
 static int
 proc_lnet_routes(const struct ctl_table *table, int write,
 		 void __user *buffer, size_t *lenp, loff_t *ppos)
@@ -220,8 +233,8 @@ proc_lnet_routes(const struct ctl_table *table, int write,
 	s = tmpstr; /* points to current position in tmpstr[] */
 
 	if (*ppos == 0) {
-		s += scnprintf(s, tmpstr + tmpsiz - s, "Routing %s\n",
-			       the_lnet.ln_routing ? "enabled" : "disabled");
+		s += scnprintf(s, tmpstr + tmpsiz - s, ln_routing2str());
+
 		LASSERT(tmpstr + tmpsiz - s > 0);
 
 		s += scnprintf(s, tmpstr + tmpsiz - s, "%-8s %4s %8s %7s %s\n",
@@ -738,7 +751,7 @@ proc_lnet_nis(const struct ctl_table *table, int write,
 			int i;
 			int j;
 
-			if (the_lnet.ln_routing)
+			if (lnet_routing_enabled())
 				last_alive = now - ni->ni_net->net_last_alive;
 
 			stat = (lnet_ni_get_status(ni) ==

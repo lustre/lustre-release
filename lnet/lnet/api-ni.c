@@ -1333,7 +1333,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 
 	LASSERT(the_lnet.ln_refcount == 0);
 
-	the_lnet.ln_routing = 0;
+	the_lnet.ln_routing = LNET_ROUTING_DISABLED;
 
 	LASSERT((requested_pid & LNET_PID_USERFLAG) == 0);
 	the_lnet.ln_pid = requested_pid;
@@ -2090,7 +2090,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 	/* switch the NIs to point to the new ping info created */
 	lnet_net_lock(LNET_LOCK_EX);
 
-	if (!the_lnet.ln_routing)
+	if (lnet_routing_disabled())
 		pbuf->pb_info.pi_features |= LNET_PING_FEAT_RTE_DISABLED;
 	if (!lnet_peer_discovery_disabled)
 		pbuf->pb_info.pi_features |= LNET_PING_FEAT_DISCOVERY;
@@ -4151,7 +4151,7 @@ out:
 
 void lnet_mark_ping_buffer_for_update(void)
 {
-	if (the_lnet.ln_routing)
+	if (lnet_routing_enabled())
 		return;
 
 	atomic_set(&the_lnet.ln_update_ping_buf, 1);

@@ -240,7 +240,7 @@ __must_hold(&ni->ni_lock)
 		return LNET_NI_STATUS_UP;
 	else if (atomic_read(&ni->ni_fatal_error_on))
 		return LNET_NI_STATUS_DOWN;
-	else if (the_lnet.ln_routing && ni->ni_status)
+	else if (lnet_routing_enabled() && ni->ni_status)
 		return *ni->ni_status;
 	else
 		return LNET_NI_STATUS_UP;
