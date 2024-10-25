@@ -8539,6 +8539,9 @@ run_mdtest () {
 
 	if (( num_dirs > 1 )); then
 		num_entries=$((num_files / num_dirs))
+		# md_validate_tests requires items must be a multiple of
+		# items per directory
+		num_files=$((num_entries * num_dirs))
 		log "split $num_files files to $num_dirs" \
 			"with $num_entries files each"
 		mdtest_options+=(-I=$num_entries)
