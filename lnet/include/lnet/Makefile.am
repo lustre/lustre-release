@@ -4,4 +4,5 @@ EXTRA_DIST = \
 	lib-types.h \
 	udsp.h \
 	lnet_rdma.h \
+	lock.h \
 	socklnd.h

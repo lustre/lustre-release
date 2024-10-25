@@ -13,25 +13,19 @@
  * General Public License version 2 for more details (a copy is included
  * in the LICENSE file that accompanied this code).
  *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; if not, write to the
- * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
- * Boston, MA 021110-1307, USA
- *
  * GPL HEADER END
  */
 /* Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2012, 2015, Intel Corporation.
  */
-/*
- * This file is part of Lustre, http://www.lustre.org/
+/* This file is part of Lustre, http://www.lustre.org/
  *
  * Author: liang@whamcloud.com
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <libcfs/libcfs.h>
+#include <lnet/lib-lnet.h>
 
 /** destroy cpu-partition lock, see libcfs_private.h for more detail */
 void
@@ -73,8 +67,7 @@ cfs_percpt_lock_create(struct cfs_cpt_table *cptab,
 	}
 
 	if (keys == NULL) {
-		CWARN("Cannot setup class key for percpt lock, you may see "
-		      "recursive locking warnings which are actually fake.\n");
+		CWARN("Cannot setup class key for percpt lock, you may see recursive locking warnings which are actually fake.\n");
 	}
 
 	cfs_percpt_for_each(lock, i, pcl->pcl_locks) {
@@ -123,7 +116,8 @@ __acquires(pcl->pcl_locks)
 		if (i == 0) {
 			LASSERT(!pcl->pcl_locked);
 			/* nobody should take private lock after this
-			 * so I wouldn't starve for too long time */
+			 * so I wouldn't starve for too long time
+			 */
 			pcl->pcl_locked = 1;
 		}
 	}

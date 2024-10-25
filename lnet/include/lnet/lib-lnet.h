@@ -50,6 +50,8 @@
 #include <uapi/linux/lnet/lnetctl.h>
 #include <uapi/linux/lnet/nidstr.h>
 
+#include "lock.h"
+
 extern struct lnet the_lnet;			/* THE network */
 
 #if (BITS_PER_LONG == 32)
@@ -1230,7 +1232,6 @@ __u32 lnet_sum_stats(struct lnet_element_stats *stats,
 
 void lnet_usr_translate_stats(struct lnet_ioctl_element_msg_stats *msg_stats,
 			      struct lnet_element_stats *stats);
-
 static inline void
 lnet_set_route_aliveness(struct lnet_route *route, bool alive)
 {
