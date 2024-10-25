@@ -151,6 +151,8 @@ llog_reader_LDADD := liblustreapi.la
 llog_reader_DEPENDENCIES := liblustreapi.la
 
 check_iam_SOURCES = check_iam.c
+check_iam_LDADD := liblustreapi.la
+check_iam_DEPENDENCIES := liblustreapi.la
 
 lr_reader_SOURCES = lr_reader.c
 

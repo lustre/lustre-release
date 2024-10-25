@@ -41,17 +41,13 @@ struct dx_countlimit {
 } __attribute__((packed));
 
 struct iam_lfix_root {
-	u_int64_t  ilr_magic;
-	u_int16_t  ilr_keysize;
-	u_int16_t  ilr_recsize;
-	u_int16_t  ilr_ptrsize;
-	u_int8_t   ilr_indirect_levels;
-	u_int8_t   ilr_padding;
-	struct dx_countlimit limit;
-	u_int32_t idle_blocks;
-	u_int8_t  ilr_paddingdd2[12];
-	unsigned char entries[];
-} __attribute__((packed));
+	__le64	ilr_magic;
+	__le16	ilr_keysize;
+	__le16	ilr_recsize;
+	__le16	ilr_ptrsize;
+	__u8	ilr_indirect_levels;
+	__u8	ilr_padding;
+};
 
 struct iam_leaf_head {
 	u_int16_t ill_magic;
@@ -78,6 +74,8 @@ struct iam_index_head {
 	u_int8_t  paddingdd[16];
 	unsigned char entries[];
 } __attribute__((packed));
+
+typedef __u32 lvar_hash_t;
 
 struct lvar_root {
 	u_int32_t vr_magic;

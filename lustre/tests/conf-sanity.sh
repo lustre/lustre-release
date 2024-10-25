@@ -11271,38 +11271,74 @@ run_test 133 "stripe QOS: free space balance in a pool"
 test_134() {
 	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"
 	local errors
-	local rc
+	local rc rc_corrupted
 	local mdt_dev=$(facet_device mds1)
 	local tmp_dir=$TMP/$tdir
+	local dir=$DIR/$tdir
 	local out=$tmp_dir/check_iam.txt
 	local CHECK_IAM=${CHECK_IAM:-$(do_facet mds1 "which check_iam 2> /dev/null || true")}
+	local iam_files=$(printf "oi.16.%d " {0..63})
 
 	[[ -n "$CHECK_IAM" ]] || skip "check_iam not found"
 
-	mkdir -p $tmp_dir
-	for ((i=0; i<64; i++)); do
-		local f=oi.16.$i
-		#cmd introduce a random corruption to IAM file
-		local cmd="dd if=/dev/urandom of=$tmp_dir/$f bs=2 conv=notrunc count=1 seek=$((RANDOM % 36))"
-		do_facet mds1 "mkdir -p $tmp_dir; \
-		   $DEBUGFS -c -R 'dump $f $tmp_dir/$f' $mdt_dev 2>&1; \
-		   $CHECK_IAM -v $tmp_dir/$f 2>&1; \
-		   echo $cmd; eval $cmd 2>/dev/null;
-		   $CHECK_IAM -v $tmp_dir/$f 2>&1; echo \\\$?" >> $out 2>&1
+	setupall
+
+	# Fill the iam files
+	test_mkdir -p $dir || error "failed to mkdir $DIR/$tdir"
+	stack_trap "rm -rf $dir"
+
+	touch $dir/$tfile.{0..1000} || error "failed to touch files"
+	stack_trap "find $dir -type f | xargs -P10 -n1 unlink"
+
+	local f
+	for f in $dir/$tfile.{0..10}; do
+		printf "%s\n" $f.ln.{0..500} | xargs -P10 -n1 ln $f ||
+			error "failed to create 500 hard links of $f"
 	done
 
-	tail -n50 $out
+	local nm_name=${TESTNAME:0:15}
+
+	do_facet mgs "$LCTL nodemap_add $nm_name"
+	stack_trap "do_facet mgs $LCTL nodemap_del $nm_name"
+	do_facet mgs "$LCTL nodemap_add_range --name $nm_name --range '121.23.2.[100-120]@tcp'"
+
+	do_facet mds1 "$LCTL lfsck_start -A && $LCTL lfsck_query -w > /dev/null"
+
+	if (( MDS1_VERSION >= $(version_code 2.16.0) )); then
+		# LU-18401
+		iam_files+=$(printf "LFSCK/lfsck_layout_%02u " {0..15})
+		iam_files+=$(printf "LFSCK/lfsck_namespace_%02u " {0..15})
+		iam_files+="CONFIGS/nodemap "
+	fi
+
+	mkdir -p $tmp_dir
+	for f in $iam_files; do
+		#cmd introduce a random corruption to IAM file
+		local tmp_file=$tmp_dir/$(basename $f)
+		local cmd="dd if=/dev/urandom of=$tmp_file bs=2 conv=notrunc count=1 seek=$((RANDOM % 36))"
+
+		local facet
+		[[ "$f" =~ nodemap ]] && facet=mgs || facet=mds1
+		do_facet $facet "mkdir -p $tmp_dir; \
+		   $DEBUGFS -c -R 'dump $f $tmp_file' $mdt_dev 2>&1; \
+		   $CHECK_IAM -rv $tmp_file 2>&1; \
+		   echo $cmd; eval $cmd 2>/dev/null;
+		   $CHECK_IAM -v $tmp_file 2>&1; \
+		   rc=\\\$?; echo \\\$rc; exit \\\$rc;" >> $out 2>&1 ||
+		   (( rc_corrupted += ($? == 255) )) || true
+	done
+
+	tail -n100 $out
 
 	stack_trap "rm -rf $tmp_dir && do_facet mds1 rm -rf $tmp_dir" EXIT
 
-	rc=$(grep -c "fault\|except" $out)
+	rc=$(grep -c "\<fault\>\|\<except" $out)
 	(( rc == 0 )) || { cat $out &&
 		error "check_iam failed with fault or exception $rc"; }
 
-	rc=$(grep -c "^255" $out)
 	errors=$(grep -c "FINISHED WITH ERRORS" $out)
 
-	(( rc == errors )) || { cat $out &&
+	(( rc_corrupted == errors )) || { cat $out &&
 		error "check_iam errcode does not fit with errors $rc $errors"; }
 }
 run_test 134 "check_iam works without faults"

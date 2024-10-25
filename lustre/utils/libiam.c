@@ -50,7 +50,6 @@
 #include <libcfs/util/string.h>
 #include <lustre/libiam.h>
 
-typedef __u32 lvar_hash_t;
 
 /**
  * Stores \a val at \a dst, where the latter is possibly unaligned. Uses
