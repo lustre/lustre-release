@@ -27,12 +27,8 @@
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
-/* This is really lnet_proc.c. You might need to update sanity test 215
- * if any file format is changed. */
-
 #define LNET_LOFFT_BITS		(sizeof(loff_t) * 8)
-/*
- * NB: max allowed LNET_CPT_BITS is 8 on 64-bit system and 2 on 32-bit system
+/* NB: max allowed LNET_CPT_BITS is 8 on 64-bit system and 2 on 32-bit system
  */
 #define LNET_PROC_CPT_BITS	(LNET_CPT_BITS + 1)
 /* change version, 16 bits or 8 bits */
@@ -40,8 +36,7 @@
 	clamp_t(int, LNET_LOFFT_BITS / 4, 8, 16)
 
 #define LNET_PROC_HASH_BITS	LNET_PEER_HASH_BITS
-/*
- * bits for peer hash offset
+/* bits for peer hash offset
  * NB: we don't use the highest bit of *ppos because it's signed
  */
 #define LNET_PROC_HOFF_BITS	(LNET_LOFFT_BITS -	 \
@@ -77,6 +72,88 @@
 	((off) & LNET_PROC_HOFF_MASK))
 
 #define LNET_PROC_VERSION(v)	((unsigned int)((v) & LNET_PROC_VER_MASK))
+
+static int proc_cpt_table(struct ctl_table *table, int write,
+			  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
+	char *buf = NULL;
+	int len = 4096;
+	int rc  = 0;
+
+	if (write)
+		return -EPERM;
+
+	while (1) {
+		LIBCFS_ALLOC(buf, len);
+		if (!buf)
+			return -ENOMEM;
+
+		rc = cfs_cpt_table_print(cfs_cpt_tab, buf, len);
+		if (rc >= 0)
+			break;
+
+		if (rc == -EFBIG) {
+			LIBCFS_FREE(buf, len);
+			len <<= 1;
+			continue;
+		}
+		goto out;
+	}
+
+	if (pos >= rc) {
+		rc = 0;
+		goto out;
+	}
+
+	rc = cfs_trace_copyout_string(buffer, nob, buf + pos, NULL);
+out:
+	if (buf)
+		LIBCFS_FREE(buf, len);
+	return rc;
+}
+
+static int proc_cpt_distance(struct ctl_table *table, int write,
+			     void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	size_t nob = *lenp;
+	loff_t pos = *ppos;
+	char *buf = NULL;
+	int len = 4096;
+	int rc  = 0;
+
+	if (write)
+		return -EPERM;
+
+	while (1) {
+		LIBCFS_ALLOC(buf, len);
+		if (!buf)
+			return -ENOMEM;
+
+		rc = cfs_cpt_distance_print(cfs_cpt_tab, buf, len);
+		if (rc >= 0)
+			break;
+
+		if (rc == -EFBIG) {
+			LIBCFS_FREE(buf, len);
+			len <<= 1;
+			continue;
+		}
+		goto out;
+	}
+
+	if (pos >= rc) {
+		rc = 0;
+		goto out;
+	}
+
+	rc = cfs_trace_copyout_string(buffer, nob, buf + pos, NULL);
+out:
+	if (buf)
+		LIBCFS_FREE(buf, len);
+	return rc;
+}
 
 static int proc_lnet_stats(struct ctl_table *table, int write,
 			   void __user *buffer, size_t *lenp, loff_t *ppos)
@@ -846,6 +923,18 @@ static struct ctl_table lnet_table[] = {
 	 * NB No .strategy entries have been provided since sysctl(8) prefers
 	 * to go via /proc for portability.
 	 */
+	{
+		.procname	= "cpu_partition_table",
+		.maxlen		= 128,
+		.mode		= 0444,
+		.proc_handler	= &proc_cpt_table,
+	},
+	{
+		.procname	= "cpu_partition_distance",
+		.maxlen		= 128,
+		.mode		= 0444,
+		.proc_handler	= &proc_cpt_distance,
+	},
 	{
 		.procname	= "stats",
 		.mode		= 0644,

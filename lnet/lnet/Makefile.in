@@ -1,9 +1,11 @@
 MODULES := lnet
 
+lnet-objs-$(CONFIG_SMP) = lib-cpt.o
 lnet-objs := api-ni.o config.o nidstrings.o lnet_rdma.o lock.o
 lnet-objs += lib-me.o lib-msg.o lib-md.o lib-ptl.o
 lnet-objs += lib-socket.o lib-move.o module.o lo.o
-lnet-objs += router.o router_proc.o acceptor.o peer.o net_fault.o udsp.o
+lnet-objs += router.o lnet_debugfs.o acceptor.o peer.o net_fault.o udsp.o
+lnet-objs += $(lnet-objs-y)
 
 default: all
 

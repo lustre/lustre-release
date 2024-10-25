@@ -234,9 +234,16 @@ static int __init lnet_init(void)
 	int rc;
 	ENTRY;
 
+	rc = cfs_cpu_init();
+	if (rc < 0) {
+		CERROR("cfs_cpu_init: rc = %d\n", rc);
+		RETURN(rc);
+	}
+
 	rc = lnet_lib_init();
 	if (rc != 0) {
 		CERROR("lnet_lib_init: error %d\n", rc);
+		cfs_cpu_fini();
 		RETURN(rc);
 	}
 
@@ -266,6 +273,7 @@ static void __exit lnet_exit(void)
 	LASSERT(rc == 0);
 
 	lnet_lib_exit();
+	cfs_cpu_fini();
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

@@ -50,9 +50,7 @@
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
 #include <libcfs/bitmap.h>
-#include <libcfs/libcfs_cpu.h>
 #include <libcfs/libcfs_string.h>
-#include <libcfs/libcfs_workitem.h>
 #include <libcfs/libcfs_hash.h>
 #include <libcfs/libcfs_fail.h>
 

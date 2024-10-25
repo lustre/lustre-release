@@ -56,6 +56,16 @@
 #include <lustre_crypto.h>
 #include "tracefile.h"
 
+int cpu_npartitions;
+EXPORT_SYMBOL(cpu_npartitions);
+module_param(cpu_npartitions, int, 0444);
+MODULE_PARM_DESC(cpu_npartitions, "# of CPU partitions");
+
+char *cpu_pattern = "N";
+EXPORT_SYMBOL(cpu_pattern);
+module_param(cpu_pattern, charp, 0444);
+MODULE_PARM_DESC(cpu_pattern, "CPU partitions pattern");
+
 struct lnet_debugfs_symlink_def {
 	const char *name;
 	const char *target;
@@ -500,88 +510,6 @@ static int debugfs_dostring(struct ctl_table *table, int write,
 	return len;
 }
 
-static int proc_cpt_table(struct ctl_table *table, int write,
-			  void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	size_t nob = *lenp;
-	loff_t pos = *ppos;
-	char *buf = NULL;
-	int   len = 4096;
-	int   rc  = 0;
-
-	if (write)
-		return -EPERM;
-
-	while (1) {
-		LIBCFS_ALLOC(buf, len);
-		if (buf == NULL)
-			return -ENOMEM;
-
-		rc = cfs_cpt_table_print(cfs_cpt_tab, buf, len);
-		if (rc >= 0)
-			break;
-
-		if (rc == -EFBIG) {
-			LIBCFS_FREE(buf, len);
-			len <<= 1;
-			continue;
-		}
-		goto out;
-	}
-
-	if (pos >= rc) {
-		rc = 0;
-		goto out;
-	}
-
-	rc = cfs_trace_copyout_string(buffer, nob, buf + pos, NULL);
-out:
-	if (buf != NULL)
-		LIBCFS_FREE(buf, len);
-	return rc;
-}
-
-static int proc_cpt_distance(struct ctl_table *table, int write,
-			     void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	size_t nob = *lenp;
-	loff_t pos = *ppos;
-	char *buf = NULL;
-	int   len = 4096;
-	int   rc  = 0;
-
-	if (write)
-		return -EPERM;
-
-	while (1) {
-		LIBCFS_ALLOC(buf, len);
-		if (buf == NULL)
-			return -ENOMEM;
-
-		rc = cfs_cpt_distance_print(cfs_cpt_tab, buf, len);
-		if (rc >= 0)
-			break;
-
-		if (rc == -EFBIG) {
-			LIBCFS_FREE(buf, len);
-			len <<= 1;
-			continue;
-		}
-		goto out;
-	}
-
-	if (pos >= rc) {
-		rc = 0;
-		goto out;
-	}
-
-	rc = cfs_trace_copyout_string(buffer, nob, buf + pos, NULL);
- out:
-	if (buf != NULL)
-		LIBCFS_FREE(buf, len);
-	return rc;
-}
-
 static struct ctl_table lnet_table[] = {
 	{
 		.procname	= "debug",
@@ -603,18 +531,6 @@ static struct ctl_table lnet_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= &proc_dobitmasks,
-	},
-	{
-		.procname	= "cpu_partition_table",
-		.maxlen		= 128,
-		.mode		= 0444,
-		.proc_handler	= &proc_cpt_table,
-	},
-	{
-		.procname	= "cpu_partition_distance",
-		.maxlen		= 128,
-		.mode		= 0444,
-		.proc_handler	= &proc_cpt_distance,
 	},
 	{
 		.procname	= "debug_log_upcall",
@@ -831,20 +747,10 @@ static int __init libcfs_init(void)
 		return (rc);
 	}
 
-	rc = cfs_cpu_init();
-	if (rc != 0)
-		goto cleanup_debug;
-
 	rc = misc_register(&libcfs_dev);
 	if (rc) {
 		CERROR("misc_register: error %d\n", rc);
-		goto cleanup_cpu;
-	}
-
-	rc = cfs_wi_startup();
-	if (rc) {
-		CERROR("initialize workitem: error %d\n", rc);
-		goto cleanup_deregister;
+		goto cleanup_debug;
 	}
 
 	cfs_rehash_wq = alloc_workqueue("cfs_rh", WQ_SYSFS, 4);
@@ -858,7 +764,7 @@ static int __init libcfs_init(void)
 	rc = cfs_crypto_register();
 	if (rc) {
 		CERROR("cfs_crypto_regster: error %d\n", rc);
-		goto cleanup_wi;
+		goto cleanup_deregister;
 	}
 
 	lnet_insert_debugfs(lnet_table);
@@ -875,12 +781,8 @@ static int __init libcfs_init(void)
 	return 0;
 cleanup_crypto:
 	cfs_crypto_unregister();
-cleanup_wi:
-	cfs_wi_shutdown();
 cleanup_deregister:
 	misc_deregister(&libcfs_dev);
-cleanup_cpu:
-	cfs_cpu_fini();
 cleanup_debug:
 	libcfs_debug_cleanup();
 	return rc;
@@ -905,11 +807,8 @@ static void __exit libcfs_exit(void)
 	}
 
 	cfs_crypto_unregister();
-	cfs_wi_shutdown();
 
 	misc_deregister(&libcfs_dev);
-
-	cfs_cpu_fini();
 
 	/* the below message is checked in test-framework.sh check_mem_leak() */
 	if (libcfs_kmem_read() != 0)

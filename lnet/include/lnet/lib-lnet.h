@@ -44,6 +44,7 @@
 
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
+#include <lnet/lib-cpt.h>
 #include <lnet/lib-types.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
 #include <uapi/linux/lnet/lnet-types.h>
