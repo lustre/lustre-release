@@ -11075,6 +11075,8 @@ test_65n() {
 	local lmv_count=$($LFS getdirstripe -c $MOUNT/$tdir-6)
 	[ $lmv_count -eq 2 ] || error "$tdir-6 stripe count $lmv_count"
 
+	(( $MDS1_VERSION >= $(version_code v2_14_57-22-g6e59408f1a) )) ||
+		skip "Need MDS >= 2.14.57.22 for proper pool inheritance"
 	# $dir4 layout includes pool
 	$LFS setstripe -S $((new_def_stripe_size * 2)) $dir4
 	[[ "$pool" = $($LFS getstripe -p -d $dir4) ]] ||
