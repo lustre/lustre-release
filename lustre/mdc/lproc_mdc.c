@@ -308,6 +308,64 @@ mdc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdc_cached_mb);
 
+static ssize_t dom_min_repsize_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 obd->u.cli.cl_dom_min_inline_repsize);
+}
+
+static ssize_t dom_min_repsize_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	if (val > MDC_DOM_MAX_INLINE_REPSIZE)
+		return -ERANGE;
+
+	obd->u.cli.cl_dom_min_inline_repsize = val;
+	return count;
+}
+LUSTRE_RW_ATTR(dom_min_repsize);
+
+static ssize_t lsom_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%s\n",
+			 obd->u.cli.cl_lsom_update ? "On" : "Off");
+}
+
+static ssize_t lsom_store(struct kobject *kobj, struct attribute *attr,
+			  const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc < 0)
+		return rc;
+
+	obd->u.cli.cl_lsom_update = val;
+	return count;
+}
+LUSTRE_RW_ATTR(lsom);
+
 static int mdc_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *obd = m->private;
@@ -510,64 +568,6 @@ static ssize_t mdc_stats_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdc_stats);
 
-static int mdc_dom_min_repsize_seq_show(struct seq_file *m, void *v)
-{
-	struct obd_device *obd = m->private;
-
-	seq_printf(m, "%u\n", obd->u.cli.cl_dom_min_inline_repsize);
-
-	return 0;
-}
-
-static ssize_t mdc_dom_min_repsize_seq_write(struct file *file,
-					     const char __user *buffer,
-					     size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
-	unsigned int val;
-	int rc;
-
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
-	if (rc)
-		return rc;
-
-	if (val > MDC_DOM_MAX_INLINE_REPSIZE)
-		return -ERANGE;
-
-	obd->u.cli.cl_dom_min_inline_repsize = val;
-	return count;
-}
-LPROC_SEQ_FOPS(mdc_dom_min_repsize);
-
-static int mdc_lsom_seq_show(struct seq_file *m, void *v)
-{
-	struct obd_device *dev = m->private;
-
-	seq_printf(m, "%s\n", dev->u.cli.cl_lsom_update ? "On" : "Off");
-
-	return 0;
-}
-
-static ssize_t mdc_lsom_seq_write(struct file *file,
-				  const char __user *buffer,
-				  size_t count, loff_t *off)
-{
-	struct obd_device *dev;
-	bool val;
-	int rc;
-
-	dev =  ((struct seq_file *)file->private_data)->private;
-	rc = kstrtobool_from_user(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	dev->u.cli.cl_lsom_update = val;
-	return count;
-}
-LPROC_SEQ_FOPS(mdc_lsom);
-
-
 LPROC_SEQ_FOPS_RO_TYPE(mdc, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, timeouts);
@@ -597,10 +597,6 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_unstable_stats_fops	},
 	{ .name	=	"mdc_stats",
 	  .fops	=	&mdc_stats_fops			},
-	{ .name	=	"mdc_dom_min_repsize",
-	  .fops	=	&mdc_dom_min_repsize_fops	},
-	{ .name =	"mdc_lsom",
-	  .fops =	&mdc_lsom_fops			},
 	{ NULL }
 };
 
@@ -727,6 +723,8 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_grant_shrink_interval.attr,
 	&lustre_attr_cur_lost_grant_bytes.attr,
 	&lustre_attr_cur_dirty_grant_bytes.attr,
+	&lustre_attr_dom_min_repsize.attr,
+	&lustre_attr_lsom.attr,
 	&lustre_attr_at_max.attr,
 	&lustre_attr_at_min.attr,
 	&lustre_attr_at_history.attr,
