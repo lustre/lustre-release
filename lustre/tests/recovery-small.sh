@@ -3574,6 +3574,9 @@ test_154b() {
 run_test 154b "restore update llog after failed recovery"
 
 test_155() {
+	(( MDS1_VERSION >= $(version_code 2.15.58.110) )) ||
+		skip "need MDS >= v2_15_58-110-g71f8e5d6506f for ptlrpc fix"
+
 	local lsoutput1
 	local lsoutput2
 
