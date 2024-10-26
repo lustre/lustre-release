@@ -1027,6 +1027,27 @@ AC_DEFUN([LN_CONFIG_SOCK_CREATE_KERN], [
 ]) # LN_CONFIG_SOCK_CREATE_KERN
 
 #
+# LN_CONFIG_SOCK_INUSE_ADD
+#
+# Linux v5.17-rc1-gd477eb900484 added helper function sock_inuse_add()
+# for socket statistics.
+#
+AC_DEFUN([LN_SRC_CONFIG_SOCK_INUSE_ADD], [
+	LB2_LINUX_TEST_SRC([sock_inuse_add], [
+		#include <net/sock.h>
+	],[
+		sock_inuse_add((struct net*)0, 0);
+	],[-Werror])
+])
+AC_DEFUN([LN_CONFIG_SOCK_INUSE_ADD], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'sock_inuse_add()' is available],
+	[sock_inuse_add], [
+		AC_DEFINE(HAVE_SOCK_INUSE_ADD, 1,
+			[sock_inuse_add() is available])
+	])
+]) # LN_CONFIG_SOCK_INUSE_ADD
+
+#
 # LN_CONFIG_SOCK_NOT_OWNED_BY_ME
 #
 # Linux upstream v6.11-rc3-g151c9c724d05d5b0d changes TCP socket orphan
@@ -1227,6 +1248,7 @@ AC_DEFUN([LN_PROG_LINUX_SRC], [
 	LN_SRC_CONFIG_SK_DATA_READY
 	# 4.x
 	LN_SRC_CONFIG_SOCK_CREATE_KERN
+	LN_SRC_CONFIG_SOCK_INUSE_ADD
 	LN_SRC_CONFIG_SOCK_NOT_OWNED_BY_ME
 	# 4.6
 	LN_SRC_ETHTOOL_LINK_SETTINGS
@@ -1247,6 +1269,7 @@ AC_DEFUN([LN_PROG_LINUX_RESULTS], [
 	LN_CONFIG_SK_DATA_READY
 	# 4.x
 	LN_CONFIG_SOCK_CREATE_KERN
+	LN_CONFIG_SOCK_INUSE_ADD
 	LN_CONFIG_SOCK_NOT_OWNED_BY_ME
 	# 4.6
 	LN_ETHTOOL_LINK_SETTINGS
