@@ -776,6 +776,73 @@ static int ll_och_fill(struct obd_export *md_exp, struct lookup_intent *it,
 	return md_set_open_replay_data(md_exp, och, it);
 }
 
+/**
+ * ll_kernel_to_mds_open_flags() - Convert kernel flags to MDS flags (Access
+ *				   mode)
+ *
+ * @kernel_open_flags: kernel input (struct file.f_flags)
+ *
+ * Returns:
+ * * mds_open_flags
+ */
+enum mds_open_flags ll_kernel_to_mds_open_flags(unsigned int kernel_open_flags)
+{
+	enum mds_open_flags mds_open_flags = MDS_FMODE_CLOSED;
+
+	if (kernel_open_flags & FMODE_READ)
+		mds_open_flags |= MDS_FMODE_READ;
+
+	if (kernel_open_flags & FMODE_WRITE)
+		mds_open_flags |= MDS_FMODE_WRITE;
+
+	if (kernel_open_flags & O_CREAT)
+		mds_open_flags |= MDS_OPEN_CREAT;
+
+	if (kernel_open_flags & O_EXCL)
+		mds_open_flags |= MDS_OPEN_EXCL;
+
+	if (kernel_open_flags & O_TRUNC)
+		mds_open_flags |= MDS_OPEN_TRUNC;
+
+	if (kernel_open_flags & O_APPEND)
+		mds_open_flags |= MDS_OPEN_APPEND;
+
+	if (kernel_open_flags & O_SYNC)
+		mds_open_flags |= MDS_OPEN_SYNC;
+
+	if (kernel_open_flags & O_DIRECTORY)
+		mds_open_flags |= MDS_OPEN_DIRECTORY;
+
+	/* FMODE_EXEC is only valid with fmode_t, use __FMODE_EXEC instead
+	 * which indicates file is opened for execution with sys_execve
+	 */
+	if (kernel_open_flags & __FMODE_EXEC)
+		mds_open_flags |= MDS_FMODE_EXECUTE;
+
+	if (ll_lov_delay_create_is_set(kernel_open_flags))
+		mds_open_flags |= O_LOV_DELAY_CREATE;
+
+	if (kernel_open_flags & O_LARGEFILE)
+		mds_open_flags |= MDS_OPEN_LARGEFILE;
+
+	if (kernel_open_flags & O_NONBLOCK)
+		mds_open_flags |= MDS_OPEN_NORESTORE;
+
+	if (kernel_open_flags & O_NOCTTY)
+		mds_open_flags |= MDS_OPEN_NOCTTY;
+
+	if (kernel_open_flags & O_NONBLOCK)
+		mds_open_flags |= MDS_OPEN_NONBLOCK;
+
+	if (kernel_open_flags & O_NOFOLLOW)
+		mds_open_flags |= MDS_OPEN_NOFOLLOW;
+
+	if (kernel_open_flags & FASYNC)
+		mds_open_flags |= MDS_OPEN_FASYNC;
+
+	return mds_open_flags;
+}
+
 static int ll_local_open(struct file *file, struct lookup_intent *it,
 			 struct ll_file_data *lfd,
 			 struct obd_client_handle *och)
@@ -893,11 +960,16 @@ int ll_file_open(struct inode *inode, struct file *file)
 	}
 
 	if (!it || !it->it_disposition) {
+		unsigned int kernel_flags = file->f_flags;
+
 		/* Convert f_flags into access mode. We cannot use file->f_mode,
 		 * because everything but O_ACCMODE mask was stripped from there
 		 */
-		if ((oit.it_open_flags + 1) & O_ACCMODE)
-			oit.it_open_flags++;
+		if ((oit.it_open_flags + MDS_FMODE_READ) & O_ACCMODE)
+			kernel_flags++;
+
+		oit.it_open_flags = ll_kernel_to_mds_open_flags(kernel_flags);
+
 		if (file->f_flags & O_TRUNC)
 			oit.it_open_flags |= MDS_FMODE_WRITE;
 
@@ -2660,6 +2732,7 @@ static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
 	RETURN(result);
 }
 
+/* Write to a file (through the page cache). AIO stuff */
 static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 				 unsigned long nr_segs, loff_t pos)
 {
@@ -3790,7 +3863,8 @@ out:
 	RETURN(rc);
 }
 
-static inline long ll_lease_type_from_fmode(enum mds_open_flags fd_open_mode)
+static inline long ll_lease_type_from_open_flags(enum mds_open_flags
+						 fd_open_mode)
 {
 	return ((fd_open_mode & MDS_FMODE_READ) ? LL_LEASE_RDLCK : 0) |
 	       ((fd_open_mode & MDS_FMODE_WRITE) ? LL_LEASE_WRLCK : 0);
@@ -4262,7 +4336,7 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 	struct split_param sp;
 	struct pcc_param param;
 	bool lease_broken = false;
-	enum mds_open_flags fmode = MDS_FMODE_CLOSED;
+	enum mds_open_flags open_flags = MDS_FMODE_CLOSED;
 	enum mds_op_bias bias = 0;
 	__u32 fdv;
 	struct file *layout_file = NULL;
@@ -4282,7 +4356,7 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 	if (och == NULL)
 		RETURN(-ENOLCK);
 
-	fmode = och->och_flags;
+	open_flags = och->och_flags;
 
 	switch (ioc->lil_flags) {
 	case LL_LEASE_RESYNC_DONE:
@@ -4386,7 +4460,7 @@ out_lease_close:
 		GOTO(out, rc);
 
 	if (lease_broken)
-		fmode = MDS_FMODE_CLOSED;
+		open_flags = MDS_FMODE_CLOSED;
 	EXIT;
 
 out:
@@ -4408,7 +4482,7 @@ out:
 	ll_layout_refresh(inode, &lfd->fd_layout_version);
 
 	if (!rc)
-		rc = ll_lease_type_from_fmode(fmode);
+		rc = ll_lease_type_from_open_flags(open_flags);
 	RETURN(rc);
 }
 
@@ -4770,7 +4844,7 @@ skip_copy:
 	case LL_IOC_GET_LEASE: {
 		struct ll_inode_info *lli = ll_i2info(inode);
 		struct ldlm_lock *lock = NULL;
-		enum mds_open_flags fmode = MDS_FMODE_CLOSED;
+		enum mds_open_flags open_flags = MDS_FMODE_CLOSED;
 
 		mutex_lock(&lli->lli_och_mutex);
 		if (lfd->fd_lease_och != NULL) {
@@ -4780,7 +4854,7 @@ skip_copy:
 			if (lock != NULL) {
 				lock_res_and_lock(lock);
 				if (!ldlm_is_cancel(lock))
-					fmode = och->och_flags;
+					open_flags = och->och_flags;
 
 				unlock_res_and_lock(lock);
 				ldlm_lock_put(lock);
@@ -4788,7 +4862,7 @@ skip_copy:
 		}
 		mutex_unlock(&lli->lli_och_mutex);
 
-		RETURN(ll_lease_type_from_fmode(fmode));
+		RETURN(ll_lease_type_from_open_flags(open_flags));
 	}
 	case LL_IOC_HSM_IMPORT: {
 		struct hsm_user_import *hui;

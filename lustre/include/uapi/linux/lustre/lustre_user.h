@@ -700,13 +700,13 @@ struct fsxattr {
 /* To be compatible with old statically linked binary we keep the check for
  * the older 0100000000 flag.  This is already removed upstream.  LU-812.
  */
-#define O_LOV_DELAY_CREATE_1_8	0100000000 /* FMODE_NONOTIFY masked in 2.6.36 */
 #ifndef FASYNC
 #define FASYNC			00020000   /* fcntl, for BSD compatibility */
 #endif
-#define O_LOV_DELAY_CREATE_MASK	(O_NOCTTY | FASYNC)
-#define O_LOV_DELAY_CREATE		(O_LOV_DELAY_CREATE_1_8 | \
-					 O_LOV_DELAY_CREATE_MASK)
+/* This is Lustre-specific flag that defines O_LOV_DELAY_CREATE. There is no
+ * clash anywhere with these value and can be used safely
+ */
+#define O_LOV_DELAY_CREATE		(O_NOCTTY | FASYNC)
 /* O_CIPHERTEXT principle is similar to O_LOV_DELAY_CREATE above,
  * for access to encrypted files without the encryption key.
  */
@@ -1681,15 +1681,25 @@ enum mds_open_flags {
 	MDS_FMODE_CLOSED	=	          00000000,
 	MDS_FMODE_READ		=	          00000001,
 	MDS_FMODE_WRITE		=	          00000002,
+	/* MAY_EXEC checks for permission eg inode_permission(). Different from
+	 * MDS_FMODE_EXECUTE which is permission check via execve
+	 */
 	MDS_FMODE_EXEC		=	          00000004,
 	MDS_OPEN_CREATED	=	          00000010,
 /*	MDS_OPEN_CROSS		=	          00000020, obsolete in 2.12, internal use only */
+	/* open for execution via execve */
+	MDS_FMODE_EXECUTE	=	          00000020,
 	MDS_OPEN_CREAT		=	          00000100,
 	MDS_OPEN_EXCL		=	          00000200,
+	MDS_OPEN_NOCTTY		=	          00000400,
 	MDS_OPEN_TRUNC		=	          00001000,
 	MDS_OPEN_APPEND		=	          00002000,
+	MDS_OPEN_NONBLOCK	=	          00004000,
 	MDS_OPEN_SYNC		=	          00010000,
+	MDS_OPEN_FASYNC		=	          00020000,
+	MDS_OPEN_LARGEFILE	=	          00100000,
 	MDS_OPEN_DIRECTORY	=	          00200000,
+	MDS_OPEN_NOFOLLOW	=	          00400000,
 /*	MDS_FMODE_EPOCH		=	          01000000, obsolete in 2.8.0 */
 /*	MDS_FMODE_TRUNC		=	          02000000, obsolete in 2.8.0 */
 /*	MDS_FMODE_SOM		=	          04000000, obsolete in 2.8.0 */

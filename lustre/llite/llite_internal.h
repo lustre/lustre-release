@@ -1331,6 +1331,21 @@ void ll_quota_iter_check_and_cleanup(struct ll_sb_info *sbi, bool check);
 /* llite/namei.c */
 extern const struct inode_operations ll_special_inode_operations;
 
+/* Return True if (file.f_flag) has O_LOV_DELAY_CREATE(volatile) flag set */
+static inline bool ll_lov_delay_create_is_set(unsigned int kernel_open_flags)
+{
+	return (kernel_open_flags & O_LOV_DELAY_CREATE) == O_LOV_DELAY_CREATE;
+}
+
+/* Clear (file.f_flag) O_LOV_DELAY_CREATE(volatile) flag */
+static inline void ll_lov_delay_create_clear(unsigned int *kernel_open_flags)
+{
+	if (ll_lov_delay_create_is_set(*kernel_open_flags))
+		*kernel_open_flags &= ~O_LOV_DELAY_CREATE;
+}
+
+enum mds_open_flags ll_kernel_to_mds_open_flags(unsigned int kernel_open_flags);
+
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
 		      struct lustre_md *lic);
 int ll_test_inode_by_fid(struct inode *inode, void *opaque);

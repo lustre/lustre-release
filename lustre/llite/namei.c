@@ -261,24 +261,24 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock,
 				lock->l_req_mode, 0);
 
 	if (bits & MDS_INODELOCK_OPEN) {
-		enum mds_open_flags fmode = MDS_FMODE_CLOSED;
+		enum mds_open_flags open_flags = MDS_FMODE_CLOSED;
 
 		switch (lock->l_req_mode) {
 		case LCK_CW:
-			fmode = MDS_FMODE_WRITE;
+			open_flags = MDS_FMODE_WRITE;
 			break;
 		case LCK_PR:
-			fmode = MDS_FMODE_EXEC;
+			open_flags = MDS_FMODE_EXEC;
 			break;
 		case LCK_CR:
-			fmode = MDS_FMODE_READ;
+			open_flags = MDS_FMODE_READ;
 			break;
 		default:
 			LDLM_ERROR(lock, "bad lock mode for OPEN lock");
 			LBUG();
 		}
 
-		ll_md_real_close(inode, fmode);
+		ll_md_real_close(inode, open_flags);
 
 		bits &= ~MDS_INODELOCK_OPEN;
 	}
