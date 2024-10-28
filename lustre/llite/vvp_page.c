@@ -116,9 +116,9 @@ static void vvp_vmpage_error(struct inode *inode, struct page *vmpage,
 	}
 }
 
-static void vvp_page_completion_read(const struct lu_env *env,
-				     const struct cl_page_slice *slice,
-				     int ioret)
+static void vvp_page_complete_read(const struct lu_env *env,
+				   const struct cl_page_slice *slice,
+				   int ioret)
 {
 	struct cl_page *cp = slice->cpl_page;
 	struct page *vmpage = cp->cp_vmpage;
@@ -157,9 +157,9 @@ static void vvp_page_completion_read(const struct lu_env *env,
 	EXIT;
 }
 
-static void vvp_page_completion_write(const struct lu_env *env,
-				      const struct cl_page_slice *slice,
-				      int ioret)
+static void vvp_page_complete_write(const struct lu_env *env,
+				    const struct cl_page_slice *slice,
+				    int ioret)
 {
 	struct cl_page *cp = slice->cpl_page;
 	struct page *vmpage = cp->cp_vmpage;
@@ -188,10 +188,10 @@ static const struct cl_page_operations vvp_page_ops = {
 	.cpo_discard       = vvp_page_discard,
 	.io = {
 		[CRT_READ] = {
-			.cpo_completion = vvp_page_completion_read,
+			.cpo_complete = vvp_page_complete_read,
 		},
 		[CRT_WRITE] = {
-			.cpo_completion = vvp_page_completion_write,
+			.cpo_complete = vvp_page_complete_write,
 		},
 	},
 };

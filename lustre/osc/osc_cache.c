@@ -1330,10 +1330,10 @@ static int osc_completion(const struct lu_env *env, struct osc_object *osc,
 	 * reference counter protects page from concurrent reclaim.
 	 */
 
-	/* for transient pages, the last reference is destroyed by the
-	 * cl_page_completion process, so do not referencce the page after this
+	/* for transient pages, the last reference can be destroyed by
+	 * cl_page_complete, so do not reference the page after this
 	 */
-	cl_page_completion(env, page, crt, rc);
+	cl_page_complete(env, page, crt, rc);
 	if (cptype != CPT_TRANSIENT)
 		cl_page_put(env, page);
 

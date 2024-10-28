@@ -914,10 +914,10 @@ struct cl_page_operations {
 		 * are pinned in memory (and, hence, calling cl_page_put() is
 		 * safe).
 		 *
-		 * \see cl_page_completion()
+		 * \see cl_page_complete()
 		 */
-		void (*cpo_completion)(const struct lu_env *env,
-				       const struct cl_page_slice *slice,
+		void (*cpo_complete)(const struct lu_env *env,
+				     const struct cl_page_slice *slice,
 				       int ioret);
 	} io[CRT_NR];
 	/**
@@ -2259,10 +2259,10 @@ int cl_page_is_owned(const struct cl_page *pg, const struct cl_io *io);
  */
 int cl_page_prep(const struct lu_env *env, struct cl_io *io,
 		 struct cl_page *pg, enum cl_req_type crt);
-void cl_dio_pages_completion(const struct lu_env *env, struct cl_dio_pages *pg,
-			     int count, int ioret);
-void cl_page_completion(const struct lu_env *env,
-			struct cl_page *pg, enum cl_req_type crt, int ioret);
+void cl_dio_pages_complete(const struct lu_env *env, struct cl_dio_pages *pg,
+			   int count, int ioret);
+void cl_page_complete(const struct lu_env *env, struct cl_page *pg,
+		      enum cl_req_type crt, int ioret);
 int cl_page_make_ready(const struct lu_env *env, struct cl_page *pg,
 		       enum cl_req_type crt);
 void cl_page_clip(const struct lu_env *env, struct cl_page *pg, int from,

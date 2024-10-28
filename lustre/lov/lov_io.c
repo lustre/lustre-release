@@ -1357,7 +1357,7 @@ static int lov_dio_submit(const struct lu_env *env,
 			 * the return code of cl_page_prep() at all.
 			 */
 			LASSERT(page->cp_type == CPT_TRANSIENT);
-			cl_page_completion(env, page, crt, 0);
+			cl_page_complete(env, page, crt, 0);
 			continue;
 		}
 
@@ -1447,7 +1447,7 @@ static int lov_io_submit(const struct lu_env *env,
 			 * the return code of cl_page_prep() at all.
 			 */
 			LASSERT(page->cp_type == CPT_TRANSIENT);
-			cl_page_completion(env, page, crt, 0);
+			cl_page_complete(env, page, crt, 0);
 			continue;
 		}
 

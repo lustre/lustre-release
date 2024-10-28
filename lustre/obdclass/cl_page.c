@@ -1032,11 +1032,11 @@ out:
 }
 EXPORT_SYMBOL(cl_page_prep);
 
-/* this is the equivalent of cl_page_completion for a dio pages struct, but is
+/* this is the equivalent of cl_page_complete for a dio pages struct, but is
  * much simpler - in fact, it only needs to note the completion in the sync io
  */
-void cl_dio_pages_completion(const struct lu_env *env,
-			     struct cl_dio_pages *cdp, int count, int ioret)
+void cl_dio_pages_complete(const struct lu_env *env, struct cl_dio_pages *cdp,
+			   int count, int ioret)
 {
 	struct cl_sub_dio *sdio = container_of(cdp, struct cl_sub_dio,
 					       csd_dio_pages);
@@ -1046,10 +1046,10 @@ void cl_dio_pages_completion(const struct lu_env *env,
 
 	EXIT;
 }
-EXPORT_SYMBOL(cl_dio_pages_completion);
+EXPORT_SYMBOL(cl_dio_pages_complete);
 
 /**
- * Notify layers about transfer completion.
+ * Notify layers about transfer complete.
  *
  * Invoked by transfer sub-system (which is a part of osc) to notify layers
  * that a transfer, of which this page is a part of has completed.
@@ -1061,11 +1061,10 @@ EXPORT_SYMBOL(cl_dio_pages_completion);
  * \pre  cl_page->cp_state == CPS_PAGEIN || cl_page->cp_state == CPS_PAGEOUT
  * \post cl_page->cl_page_state == CPS_CACHED
  *
- * \see cl_page_operations::cpo_completion()
+ * \see cl_page_operations::cpo_complete()
  */
-void cl_page_completion(const struct lu_env *env,
-			struct cl_page *cl_page, enum cl_req_type crt,
-			int ioret)
+void cl_page_complete(const struct lu_env *env, struct cl_page *cl_page,
+		      enum cl_req_type crt, int ioret)
 {
 	const struct cl_page_slice *slice;
 	struct cl_sync_io *anchor = cl_page->cp_sync_io;
@@ -1082,10 +1081,10 @@ void cl_page_completion(const struct lu_env *env,
 		cl_page_state_set(env, cl_page, CPS_CACHED);
 
 		cl_page_slice_for_each_reverse(cl_page, slice, i) {
-			if (slice->cpl_ops->io[crt].cpo_completion != NULL)
-				(*slice->cpl_ops->io[crt].cpo_completion)(env,
-									  slice,
-									 ioret);
+			if (slice->cpl_ops->io[crt].cpo_complete != NULL)
+				(*slice->cpl_ops->io[crt].cpo_complete)(env,
+									slice,
+									ioret);
 		}
 	}
 
@@ -1096,7 +1095,7 @@ void cl_page_completion(const struct lu_env *env,
 	}
 	EXIT;
 }
-EXPORT_SYMBOL(cl_page_completion);
+EXPORT_SYMBOL(cl_page_complete);
 
 /**
  * Notify layers that transfer formation engine decided to yank this page from
