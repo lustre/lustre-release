@@ -3263,7 +3263,7 @@ out:
 	return rc;
 }
 
-int lustre_lnet_enable_routing(int enable, int seq_no, struct cYAML **err_rc)
+int lustre_lnet_config_routing(int enable, int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_config_data data;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -5803,7 +5803,7 @@ static int handle_yaml_config_routing(struct cYAML *tree,
 	enable = cYAML_get_object_item(tree, "enable");
 
 	if (enable) {
-		rc = lustre_lnet_enable_routing(enable->cy_valueint,
+		rc = lustre_lnet_config_routing(enable->cy_valueint,
 						(seq_no) ?
 						    seq_no->cy_valueint : -1,
 						err_rc);
@@ -5836,7 +5836,7 @@ static int handle_yaml_del_routing(struct cYAML *tree, struct cYAML **show_rc,
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
-	return lustre_lnet_enable_routing(0, (seq_no) ?
+	return lustre_lnet_config_routing(0, (seq_no) ?
 						seq_no->cy_valueint : -1,
 					err_rc);
 }

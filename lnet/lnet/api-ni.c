@@ -3155,6 +3155,9 @@ LNetNIInit(lnet_pid_t requested_pid)
 		rc = lnet_rtrpools_alloc(im_a_router);
 		if (rc != 0)
 			goto err_destroy_routes;
+
+		if (the_lnet.ln_routing == LNET_ROUTING_ENABLED)
+			LCONSOLE_INFO("Message forwarding enabled\n");
 	}
 
 	rc = lnet_acceptor_start();

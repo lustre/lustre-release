@@ -23478,12 +23478,12 @@ test_215() { # for bugs 18102, 21079, 21517
 	remove_lnet_proc_files "stats"
 
 	# lnet.routes should look like this:
-	# Routing disabled/enabled
+	# Routing disabled/enabled/starting/stopping
 	# net hops priority state router
 	# where net is a string like tcp0, hops > 0, priority >= 0,
 	# state is up/down,
 	# router is a string like 192.168.1.1@tcp2
-	L1="^Routing (disabled|enabled)$"
+	L1="^Routing (disabled|enabled|starting|stopping)$"
 	L2="^net +hops +priority +state +router$"
 	BR="^$NET +$N +(0|1) +(up|down) +($NID|$NID6)$"
 	create_lnet_proc_files "routes"

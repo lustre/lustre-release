@@ -929,7 +929,7 @@ static int jt_set_routing(int argc, char **argv)
 		return -1;
 	}
 
-	rc = lustre_lnet_enable_routing(value, -1, &err_rc);
+	rc = lustre_lnet_config_routing(value, -1, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);

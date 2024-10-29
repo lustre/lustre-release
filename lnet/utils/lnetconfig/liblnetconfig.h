@@ -293,14 +293,14 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 			 bool backup);
 
 /*
- * lustre_lnet_enable_routing
+ * lustre_lnet_config_routing
  *   Send down an IOCTL to enable or diable routing
  *
  *   enable - 1 to enable routing, 0 to disable routing
  *   seq_no - sequence number of the request
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
  */
-int lustre_lnet_enable_routing(int enable, int seq_no,
+int lustre_lnet_config_routing(int enable, int seq_no,
 			       struct cYAML **err_rc);
 
 /*

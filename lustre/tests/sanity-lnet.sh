@@ -3314,43 +3314,61 @@ test_219() {
 }
 run_test 219 "Consolidate peer entries"
 
-# check that all routes are up
+# check that all routes have the 'expect' status
+# lctl, lnetctl and debugfs can all report route status, so we check all three
+# to ensure they are in agreement.
 check_route_aliveness() {
 	local node="$1"
-	local expected="$2"
+	local expect="$2"
 
-	local lctl_actual
-	local lnetctl_actual
+	local lctl_status
+	local lnetctl_status
+	local debugfs_status
 	local chk_intvl
-	local i
+	local timeout
 
 	chk_intvl=$(cat /sys/module/lnet/parameters/alive_router_check_interval)
+	timeout=$(cat /sys/module/lnet/parameters/router_ping_timeout)
 
-	lctl_actual=$(do_node $node $LCTL show_route |
-			awk '{print $7}' | sort -u | xargs)
-	lnetctl_actual=$(do_node $node $LNETCTL route show -v |
-			awk '/state/{print $NF}' | sort -u | xargs)
+	# Router may delay start for chk_intvl + timeout, so wait for 2x this
+	# amount of time
+	local max_wait=$((2 * (chk_intvl + timeout)))
+	local waited=0
+	local begin=$SECONDS
 
-	for ((i = 0; i < $chk_intvl; i++)); do
-		if [[ $lctl_actual == $expected ]] &&
-		   [[ $lnetctl_actual == $expected ]]; then
+	while ((waited <= max_wait)); do
+		lctl_status=$(do_node $node $LCTL show_route |
+			      awk '{print $7}' | sort -u | xargs)
+		lnetctl_status=$(do_node $node $LNETCTL route show -v |
+				 awk '/state/{print $NF}' | sort -u | xargs)
+		debugfs_status=$(do_node $node $LCTL get_param -n routes |
+				 awk '/'${NETTYPE}'/{print $4}' | sort -u |
+				 xargs)
+
+		if ${VERBOSE} || ((waited % 5 == 0)); then
+			echo "Waiting $((max_wait - waited))s for route '$expect'"
+		fi
+
+		if [[ $lctl_status == $expect ]] &&
+		   [[ $lnetctl_status == $expect ]] &&
+		   [[ $debugfs_status == $expect ]]; then
 			break
 		fi
 
-		echo "wait 1s for route state change"
 		sleep 1
-
-		lctl_actual=$(do_node $node $LCTL show_route |
-				awk '{print $7}' | sort -u | xargs)
-		lnetctl_actual=$(do_node $node $LNETCTL route show -v |
-				awk '/state/{print $NF}' | sort -u | xargs)
+		waited=$((SECONDS - begin))
 	done
 
-	[[ $lctl_actual != $expected ]] &&
-		error "Wanted \"$expected\" lctl found \"$lctl_actual\""
+	[[ $lctl_status == $expect ]] ||
+		error "Wanted \"$expect\" lctl found \"$lctl_status\""
 
-	[[ $lnetctl_actual != $expected ]] &&
-		error "Wanted \"$expected\" lnetctl found \"$lnetctl_actual\""
+	[[ $lnetctl_status == $expect ]] ||
+		error "Wanted \"$expect\" lnetctl found \"$lnetctl_status\""
+
+	[[ $debugfs_status == $expect ]] ||
+		error "Wanted \"$expect\" debugfs found \"$debugfs_status\""
+
+	echo "Got '$expect' after ${waited}s"
 
 	return 0
 }
@@ -4287,6 +4305,66 @@ test_256() {
 	cleanup_router_test
 }
 run_test 256 "Router should not drop messages that are past the deadline"
+
+test_257() {
+	setup_router_test -r 2 -p 1 || return $?
+
+	do_basic_rtr_test || return $?
+
+	do_rpc_nodes $HOSTNAME,${RPEERS[0]} load_module \
+		../lnet/selftest/lnet_selftest ||
+			error "Failed to load lnet-selftest module"
+
+	local param
+	local all_nodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]} $HOSTNAME)
+
+	for param in alive_router_check_interval router_ping_timeout; do
+		do_nodes $all_nodes "echo 5 > /sys/module/lnet/parameters/$param"
+	done
+
+	$LSTSH -H -t $HOSTNAME -f ${RPEERS[0]} -m rw &
+
+	log "Wait 5s for LST to start"
+	sleep 5
+
+	log "Disable routing on ${ROUTERS[0]}"
+	do_node ${ROUTERS[0]} "$LNETCTL set routing 0" ||
+		error "Failed to disable routing rc = $?"
+
+	log "Wait for lst to finish"
+	wait
+
+	local drops=$(do_node ${ROUTERS[0]} \
+		      "$LNETCTL net show -v; $LNETCTL peer show -v" |
+		      awk '/drop_count:/{print $NF}' | xargs echo |
+		      sed 's/ /\+/g' | bc)
+
+	((drops == 0)) ||
+		error "Detected $drops dropped messages - expect 0"
+
+	$LSTSH -H -t $HOSTNAME -f ${RPEERS[0]} -m rw &
+
+	log "Wait 5s for LST to start"
+	sleep 5
+
+	log "Enable routing on ${ROUTERS[0]}"
+	do_node ${ROUTERS[0]} "$LNETCTL set routing 1" ||
+		error "Failed to disable routing rc = $?"
+
+	log "Wait for lst to finish"
+	wait
+
+	drops=$(do_node ${ROUTERS[0]} \
+		"$LNETCTL net show -v; $LNETCTL peer show -v" |
+		awk '/drop_count:/{print $NF}' | xargs echo |
+		sed 's/ /\+/g' | bc)
+
+	((drops == 0)) ||
+		error "Detected $drops dropped messages - expect 0"
+
+	cleanup_router_test
+}
+run_test 257 "Test graceful router shutdown/startup"
 
 check_sysctl() {
 	while IFS= read -r line; do

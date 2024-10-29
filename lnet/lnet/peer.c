@@ -3290,7 +3290,7 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 
 	/*
 	 * Cache the routing feature for the peer; whether it is enabled
-	 * for disabled as reported by the remote peer.
+	 * or disabled as reported by the remote peer.
 	 */
 	spin_lock(&lp->lp_lock);
 	if (!(pbuf->pb_info.pi_features & LNET_PING_FEAT_RTE_DISABLED))

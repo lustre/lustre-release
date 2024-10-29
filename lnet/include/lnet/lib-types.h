@@ -1925,6 +1925,8 @@ struct lnet_udsp {
 /* LNet routing states */
 #define LNET_ROUTING_DISABLED		0	/* LNet routing disabled */
 #define LNET_ROUTING_ENABLED		1	/* LNet routing enabled */
+#define LNET_ROUTING_STOPPING		2	/* LNet routing stopping */
+#define LNET_ROUTING_STARTING		3	/* LNet routing starting */
 
 #define lnet_routing_disabled() (the_lnet.ln_routing == LNET_ROUTING_DISABLED)
 #define lnet_routing_enabled() (the_lnet.ln_routing != LNET_ROUTING_DISABLED)
