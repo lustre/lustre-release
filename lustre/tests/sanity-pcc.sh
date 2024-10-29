@@ -64,6 +64,13 @@ if [[ -r /etc/redhat-release ]]; then
 	fi
 fi
 
+if [[ "$CLIENT_OS_ID_LIKE" =~ "suse" ]]; then
+	if (( CLIENT_OS_VERSION_CODE >= $(version_code 15.3) &&
+	      CLIENT_OS_VERSION_CODE <= $(version_code 15.5) )); then
+		always_except LU-18298	1c 1d	   # passed on SLES15 SP6
+	fi
+fi
+
 build_test_filter
 
 # if there is no CLIENT1 defined, some tests can be ran on localhost
