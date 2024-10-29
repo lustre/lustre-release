@@ -369,7 +369,7 @@ do
 	# Extract IPv4 and IPv6 addresses and netmasks in CIDR format
 	addr_ipv4=($(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1))
 	cidrmask_ipv4=($(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f2))
-	addr_ipv6=($(/sbin/ip -o -6 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1))
+	addr_ipv6=($(/sbin/ip -o -6 addr list $i 2>&- | awk '$4 !~ /^fe80::/ {print $4}' | cut -d/ -f1))
 	cidrmask_ipv6=($(/sbin/ip -o -6 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f2))
 	# Configure routing and rules for IPv4 (if IPv4 address is configured)
 	if [ ! -z "${addr_ipv4}" ]; then
@@ -378,17 +378,21 @@ do
 		# Find a gateway on the same subnet for IPv4
 		gw_ipv4=$(selectgw "${addr_ipv4[0]}" "$dotmask_ipv4" "$i")
 		# Build and execute route commands for IPv4
+		net_ipv4=$(netcalc "${addr_ipv4[0]}" "$dotmask_ipv4")
 		if [[ $gw_ipv4 == "0.0.0.0" ]]; then
 			# Gateway not found, assume local destinations for IPv4
-			net_ipv4=$(netcalc "${addr_ipv4[0]}" "$dotmask_ipv4")
-			routecmd_ipv4=(/sbin/ip route add ${net_ipv4}/${cidrmask_ipv4[0]} dev ${i} proto kernel scope link src ${addr_ipv4[0]} table ${i})
+			routecmd_ipv4=("/sbin/ip route add ${net_ipv4}/${cidrmask_ipv4[0]} dev ${i} proto kernel scope link src ${addr_ipv4[0]} table ${i}")
 		else
-			routecmd_ipv4=(/sbin/ip route add default via ${gw_ipv4} dev ${i} table ${i})
+			routecmd_ipv4=("/sbin/ip route add default via ${gw_ipv4} dev ${i} table ${i}")
+			routecmd_ipv4+=("/sbin/ip route add ${net_ipv4}/${cidrmask_ipv4[0]} dev ${i} proto kernel scope link src ${addr_ipv4[0]} table ${i}")
 		fi
 		ruledelcmd_ipv4=(/sbin/ip rule del from ${addr_ipv4[0]} table ${i} '&>/dev/null')
 		ruleaddcmd_ipv4=(/sbin/ip rule add from ${addr_ipv4[0]} table ${i})
 
-		routeerr_ipv4=$(eval "${routecmd_ipv4[@]}" 2>&1 >/dev/null)
+		for cmd in "${routecmd_ipv4[@]}"; do
+			routeerr_ipv4+=$(eval "$cmd" 2>&1 >/dev/null)
+		done
+		#routeerr_ipv4=$(eval "${routecmd_ipv4[@]}" 2>&1 >/dev/null)
 		ruledelerr_ipv4=$(eval "${ruledelcmd_ipv4[@]}" 2>&1 >/dev/null)
 		ruleadderr_ipv4=$(eval "${ruleaddcmd_ipv4[@]}" 2>&1 >/dev/null)
 
@@ -408,17 +412,20 @@ do
 		# Find a gateway on the same subnet for IPv6
 		gw_ipv6=$(selectgw "${addr_ipv6[0]}" "$dotmask_ipv6" "$i")
 		# Build and execute route commands for IPv6
+		net_ipv6=$(netcalcipv6 "${addr_ipv6[0]}" "$dotmask_ipv6")
 		if [[ $gw_ipv6 == "0.0.0.0" ]]; then
 			# Gateway not found, assume local destinations for IPv6
-			net_ipv6=$(netcalcipv6 "${addr_ipv6[0]}" "$dotmask_ipv6")
-			routecmd_ipv6=(/sbin/ip -6 route add ${addr_ipv6[0]}/${cidrmask_ipv6[0]} dev ${i} proto kernel scope link src ${addr_ipv6[0]} table ${i})
+			routecmd_ipv6=("/sbin/ip -6 route add ${addr_ipv6[0]}/${cidrmask_ipv6[0]} dev ${i} proto kernel scope link src ${addr_ipv6[0]} table ${i}")
 		else
-			routecmd_ipv6=(/sbin/ip -6 route add default via ${gw_ipv6} dev ${i} table ${i})
+			routecmd_ipv6=("/sbin/ip -6 route add default via ${gw_ipv6} dev ${i} table ${i}")
+			routecmd_ipv6+=("/sbin/ip -6 route add ${addr_ipv6[0]}/${cidrmask_ipv6[0]} dev ${i} proto kernel scope link src ${addr_ipv6[0]} table ${i}")
 		fi
 		ruledelcmd_ipv6=(/sbin/ip -6 rule del from ${addr_ipv6[0]} table ${i} '&>/dev/null')
 		ruleaddcmd_ipv6=(/sbin/ip -6 rule add from ${addr_ipv6[0]} table ${i})
 
-		routeerr_ipv6=$(eval "${routecmd_ipv6[@]}" 2>&1 >/dev/null)
+                for cmd in "${routecmd_ipv6[@]}"; do
+                        routeerr_ipv6+=$(eval "$cmd" 2>&1 >/dev/null)
+                done
 		ruledelerr_ipv6=$(eval "${ruledelcmd_ipv6[@]}" 2>&1 >/dev/null)
 		ruleadderr_ipv6=$(eval "${ruleaddcmd_ipv6[@]}" 2>&1 >/dev/null)
 
@@ -438,4 +445,3 @@ do
 	flushcmd=(/sbin/ip neigh flush dev ${i})
 	eval ${flushcmd[@]}
 done
-
