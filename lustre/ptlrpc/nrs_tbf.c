@@ -3078,7 +3078,7 @@ static int nrs_tbf_res_get(struct ptlrpc_nrs_policy *policy,
 	nrs_tbf_cli_init(head, cli, req);
 	tmp = head->th_ops->o_cli_findadd(head, cli);
 	if (tmp != cli) {
-		refcount_dec(&cli->tc_ref);
+		WARN_ON(!refcount_dec_if_one(&cli->tc_ref));
 		nrs_tbf_cli_fini(cli);
 		cli = tmp;
 		if (IS_ERR(cli))
