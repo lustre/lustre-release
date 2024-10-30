@@ -5878,8 +5878,8 @@ ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
  * \param l_req_mode [IN] searched lock mode
  * \retval boolean, true iff all bits are found
  */
-int ll_have_md_lock(struct obd_export *exp, struct inode *inode, __u64 *bits,
-		    enum ldlm_mode l_req_mode)
+int ll_have_md_lock(struct obd_export *exp, struct inode *inode,
+		    enum mds_ibits_locks *bits, enum ldlm_mode l_req_mode)
 {
 	struct lustre_handle lockh;
 	union ldlm_policy_data policy;

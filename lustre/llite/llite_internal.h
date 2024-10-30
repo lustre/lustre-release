@@ -1383,7 +1383,8 @@ extern const struct address_space_operations ll_aops;
 extern const struct inode_operations ll_file_inode_operations;
 const struct file_operations *ll_select_file_operations(struct ll_sb_info *sbi);
 extern int ll_have_md_lock(struct obd_export *exp, struct inode *inode,
-			   __u64 *bits, enum ldlm_mode l_req_mode);
+			   enum mds_ibits_locks *bits,
+			   enum ldlm_mode l_req_mode);
 extern enum ldlm_mode ll_take_md_lock(struct inode *inode, __u64 bits,
 				      struct lustre_handle *lockh, __u64 flags,
 				      enum ldlm_mode mode);

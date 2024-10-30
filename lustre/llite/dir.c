@@ -358,7 +358,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 		/* Only needed for striped dir to fill ..see lmv_read_page() */
 		if (i_dir) {
 			struct obd_export *exp = ll_i2mdexp(i_dir);
-			__u64 ibits = MDS_INODELOCK_LOOKUP;
+			enum mds_ibits_locks ibits = MDS_INODELOCK_LOOKUP;
 
 			if (ll_have_md_lock(exp, i_dir, &ibits, LCK_MINMODE))
 				pfid = *ll_inode2fid(i_dir);
