@@ -25357,7 +25357,8 @@ ladvise_no_ioctl()
 }
 
 percent() {
-	bc <<<"scale=2; ($1 - $2) * 100 / $2"
+	# don't print any decimal places to avoid bash comparison issues
+	bc <<< "scale=0; ($1 - $2) * 100 / $2"
 }
 
 # run a random read IO workload
@@ -25420,15 +25421,15 @@ ladvise_willread_performance()
 	speedup_ladvise=$(percent $average_ladvise $average_origin)
 
 	echo "Average uncached read: $average_origin"
-	echo "Average speedup with OSS cached read:" \
+	echo "Average speedup with OSS cached read: " \
 		"$average_cache = +$speedup_cache%"
-	echo "Average speedup with ladvise willread:" \
+	echo "Average speedup with ladvise willread: " \
 		"$average_ladvise = +$speedup_ladvise%"
 
 	local lowest_speedup=20
-	if (( ${speedup_cache%.*} < $lowest_speedup )); then
+	if (( $speedup_cache < $lowest_speedup )); then
 		echo "Speedup with OSS cached read less than $lowest_speedup%,"\
-		     "got $speedup_cache%. Skipping ladvise willread check."
+		     " got $speedup_cache%. Skipping ladvise willread check."
 		return 0
 	fi
 
@@ -25439,8 +25440,8 @@ ladvise_willread_performance()
 		echo "osd-zfs does not support dontneed or drop_caches" &&
 		return 0
 
-	lowest_speedup=$(bc <<<"scale=2; $speedup_cache / 2")
-	(( ${speedup_ladvise%.*} > ${lowest_speedup%.*} )) ||
+	lowest_speedup=$(bc <<< "scale=0; $average_cache / 2")
+	(( $speedup_ladvise > $lowest_speedup )) ||
 		error_not_in_vm "Speedup with willread is less than " \
 			"$lowest_speedup%, got $speedup_ladvise%"
 }
