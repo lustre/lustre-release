@@ -225,8 +225,11 @@ static void pcc_cmd_fini(struct pcc_cmd *cmd)
 	if (cmd->pccc_cmd == PCC_ADD_DATASET) {
 		if (!list_empty(&cmd->u.pccc_add.pccc_conds))
 			pcc_rule_conds_free(&cmd->u.pccc_add.pccc_conds);
-		OBD_FREE(cmd->u.pccc_add.pccc_conds_str,
-			 strlen(cmd->u.pccc_add.pccc_conds_str) + 1);
+		if (cmd->u.pccc_add.pccc_conds_str) {
+			OBD_FREE(cmd->u.pccc_add.pccc_conds_str,
+				 strlen(cmd->u.pccc_add.pccc_conds_str) + 1);
+			cmd->u.pccc_add.pccc_conds_str = NULL;
+		}
 	}
 }
 
@@ -751,6 +754,7 @@ pcc_dataset_rule_init(struct pcc_match_rule *rule, struct pcc_cmd *cmd)
 	int rc = 0;
 
 	LASSERT(cmd->u.pccc_add.pccc_conds_str);
+	INIT_LIST_HEAD(&rule->pmr_conds);
 	OBD_ALLOC(rule->pmr_conds_str,
 		  strlen(cmd->u.pccc_add.pccc_conds_str) + 1);
 	if (rule->pmr_conds_str == NULL)
@@ -760,7 +764,6 @@ pcc_dataset_rule_init(struct pcc_match_rule *rule, struct pcc_cmd *cmd)
 	       cmd->u.pccc_add.pccc_conds_str,
 	       strlen(cmd->u.pccc_add.pccc_conds_str));
 
-	INIT_LIST_HEAD(&rule->pmr_conds);
 	if (!list_empty(&cmd->u.pccc_add.pccc_conds))
 		rc = pcc_conds_parse(rule->pmr_conds_str,
 				     &rule->pmr_conds);
@@ -1199,7 +1202,7 @@ static bool pathname_is_valid(const char *pathname)
 static struct pcc_cmd *
 pcc_cmd_parse(char *buffer, unsigned long count)
 {
-	static struct pcc_cmd *cmd;
+	struct pcc_cmd *cmd;
 	char *token;
 	char *val;
 	int rc = 0;
@@ -1220,12 +1223,14 @@ pcc_cmd_parse(char *buffer, unsigned long count)
 		GOTO(out_free_cmd, rc = -EINVAL);
 
 	/* Type of the command */
-	if (strcmp(token, "add") == 0)
+	if (strcmp(token, "add") == 0) {
 		cmd->pccc_cmd = PCC_ADD_DATASET;
-	else if (strcmp(token, "del") == 0)
+		INIT_LIST_HEAD(&cmd->u.pccc_add.pccc_conds);
+	} else if (strcmp(token, "del") == 0) {
 		cmd->pccc_cmd = PCC_DEL_DATASET;
-	else
+	} else {
 		GOTO(out_free_cmd, rc = -EINVAL);
+	}
 
 	/* Pathname of the dataset */
 	token = strsep(&val, " ");
