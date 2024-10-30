@@ -43,6 +43,7 @@
 #include <linux/blkdev.h>
 #include <linux/slab.h>
 #include <linux/security.h>
+#include <linux/workqueue.h>
 #include <libcfs/linux/linux-fs.h>
 #include <obd_support.h>
 
@@ -84,6 +85,16 @@ static inline int d_in_lookup(struct dentry *dentry)
 {
 	return false;
 }
+#endif
+
+#ifdef HAVE_DENTRY_D_CHILDREN
+#define d_no_children(dentry)	(hlist_empty(&(dentry)->d_children))
+#define d_for_each_child(child, dentry) \
+	hlist_for_each_entry((child), &(dentry)->d_children, d_sib)
+#else
+#define d_no_children(dentry)	(list_empty(&(dentry)->d_subdirs))
+#define d_for_each_child(child, dentry) \
+	list_for_each_entry((child), &(dentry)->d_subdirs, d_child)
 #endif
 
 #ifndef HAVE_VM_FAULT_T
@@ -621,5 +632,9 @@ static inline struct page *ll_read_cache_page(struct address_space *mapping,
 	return read_cache_page(mapping, index, filler, data);
 #endif /* HAVE_READ_CACHE_PAGE_WANTS_FILE */
 }
+
+#ifndef HAVE_FLUSH___WORKQUEUE
+#define __flush_workqueue(wq)	flush_scheduled_work()
+#endif
 
 #endif /* _LUSTRE_COMPAT_H */

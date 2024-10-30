@@ -130,7 +130,7 @@ static int ll_ddelete(const struct dentry *de)
 	       d_lustre_invalid(de) ? "deleting" : "keeping",
 	       de, de, de->d_parent, de->d_inode,
 	       d_unhashed((struct dentry *)de) ? "" : "hashed,",
-	       list_empty(&de->d_subdirs) ? "" : "subdirs");
+	       d_no_children(de) ? "" : "subdirs");
 
 	if (d_lustre_invalid(de))
 		RETURN(1);

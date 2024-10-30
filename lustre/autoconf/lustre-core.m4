@@ -3595,6 +3595,50 @@ AC_DEFUN([LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG], [
 ]) # LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
 
 #
+# LC_HAVE_FLUSH___WORKQUEUE
+#
+# linux kernel v6.5-rc1-7-g20bdedafd2f6
+#   workqueue: Warn attempt to flush system-wide workqueues.
+#
+AC_DEFUN([LC_SRC_HAVE_FLUSH___WORKQUEUE], [
+	LB2_LINUX_TEST_SRC([flush_scheduled_work_warning], [
+		#include <linux/workqueue.h>
+	],[
+		__flush_workqueue(system_wq);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FLUSH___WORKQUEUE], [
+	AC_MSG_CHECKING([if 'flush_scheduled_work()' throws warning])
+	LB2_LINUX_TEST_RESULT([flush_scheduled_work_warning], [
+		AC_DEFINE(HAVE_FLUSH___WORKQUEUE, 1,
+			['__flush_workqueue(system_wq)' is available])
+	])
+]) # LC_HAVE_FLUSH___WORKQUEUE
+
+#
+# LC_HAVE_DENTRY_D_CHILDREN
+#
+# Linux commit v6.7-rc1-3-gda549bdd15c2
+#   dentry: switch the lists of children to hlist
+#
+AC_DEFUN([LC_SRC_HAVE_DENTRY_D_CHILDREN], [
+	LB2_LINUX_TEST_SRC([dentry_d_children], [
+		#include <linux/dcache.h>
+	],[
+		struct dentry *dentry = NULL;
+
+		return hlist_empty(&dentry->d_children);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_DENTRY_D_CHILDREN], [
+	AC_MSG_CHECKING([if sruct dentry has d_children member])
+	LB2_LINUX_TEST_RESULT([dentry_d_children], [
+		AC_DEFINE(HAVE_DENTRY_D_CHILDREN, 1,
+			[sruct dentry has d_children member])
+	])
+]) # LC_HAVE_DENTRY_D_CHILDREN
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3827,6 +3871,12 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_GET_RANDOM_U32_AND_U64
 	LC_SRC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
 	LC_SRC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
+
+	# 6.6
+	LC_SRC_HAVE_FLUSH___WORKQUEUE
+
+	# 6.8
+	LC_SRC_HAVE_DENTRY_D_CHILDREN
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -4073,6 +4123,12 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_GET_RANDOM_U32_AND_U64
 	LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
 	LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
+
+	# 6.6
+	LC_HAVE_FLUSH___WORKQUEUE
+
+	# 6.8
+	LC_HAVE_DENTRY_D_CHILDREN
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
@@ -4498,6 +4554,7 @@ lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre/Makefile
 lustre/include/uapi/linux/lustre/Makefile
+lustre/kernel_patches/targets/5.14-rhel9.5.target
 lustre/kernel_patches/targets/5.14-rhel9.4.target
 lustre/kernel_patches/targets/5.14-rhel9.3.target
 lustre/kernel_patches/targets/5.14-rhel9.2.target

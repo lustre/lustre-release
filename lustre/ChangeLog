@@ -30,6 +30,7 @@
          vanilla linux 5.4.136  (ZFS + ldiskfs)
        * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
        * Client primary kernels built and tested during release cycle:
+         5.14.0-503.2.1.el9_5 (RHEL9.5)
          5.14.0-427.20.1.el9  (RHEL9.4)
          5.14.0-362.24.1.el9  (RHEL9.3)
          4.18.0-553.5.1.el8   (RHEL8.10)
