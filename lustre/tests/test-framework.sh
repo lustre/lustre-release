@@ -11528,39 +11528,29 @@ change_project() {
 #		  bhardlimit|bsoftlimit|bgrace|ihardlimit|isoftlimit|igrace \
 #		  <pool_name>
 getquota() {
-	local spec
+	local type=$1
+	local id=$2
 	local uuid
+	local spec=$4
+	local pool=$5
 	local pool_arg
 
 	sync_all_data > /dev/null 2>&1 || true
 
-	[ "$#" != 4 -a "$#" != 5 ] &&
+	[[ "$#" != 4 && "$#" != 5 ]] &&
 		error "getquota: wrong number of arguments: $#"
-	[ "$1" != "-u" -a "$1" != "-g" -a "$1" != "-p" ] &&
+	[[ "$type" != "-u" && "$type" != "-g" && "$type" != "-p" ]] &&
 		error "getquota: wrong u/g/p specifier $1 passed"
 
-	uuid="$3"
+	[[ "$spec" =~ "curspace" ]] && spec="space"
+	[[ "$spec" =~ "curinode" ]] && spec="inodes"
+	[[ ! -z "$pool" ]] && pool_arg="--pool $pool "
+	[[ "$3" =~ "OST" ]] && uuid="--ost $(echo "$3" | tail -c 4) "
+	[[ "$3" =~ "MDT" ]] && uuid="--mdt $(echo "$3" | tail -c 4) "
 
-	case "$4" in
-		curspace)   spec=1;;
-		bsoftlimit) spec=2;;
-		bhardlimit) spec=3;;
-		bgrace)     spec=4;;
-		curinodes)  spec=5;;
-		isoftlimit) spec=6;;
-		ihardlimit) spec=7;;
-		igrace)     spec=8;;
-		*)          error "unknown quota parameter $4";;
-	esac
-
-	[ ! -z "$5" ] && pool_arg="--pool $5 "
-	[ "$uuid" = "global" ] && uuid=$DIR
-
-	$LFS quota -v "$1" "$2" $pool_arg $DIR 1>&2
-	$LFS quota -v "$1" "$2" $pool_arg $DIR |
-		awk 'BEGIN { num='$spec' } { if ($1 ~ "'$uuid'") \
-		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
-		| tr -d "*"
+	echo -n "$type $id $uuid $spec:" 1>&2
+	$LFS quota -q $uuid --$spec "$type" "$id" $pool_arg$DIR | tr -d "*" 1>&2
+	$LFS quota -q $uuid --$spec "$type" "$id" $pool_arg$DIR | tr -d "*"
 }
 
 # set mdt quota type

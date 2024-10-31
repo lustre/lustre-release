@@ -3,40 +3,43 @@
 lfs-quota \- display quota limits and status for users, groups, or projects.
 .SH SYNOPSIS
 .SY "lfs quota"
-.RB [ -q ]
-.RB [ -v ]
-.RB [ -h ]
-.RB [ -o
+.RB [ -q | --quiet ]
+.RB [ -v | --verbose ]
+.RB [ -h | --human-readable ]
+.RB [ -o | --ost
 .IR OBD_UUID | OST_IDX
-.RB "| "  -m
+.RB "| " -m | --mdt
 .IR MDT_IDX ]
-.RB [ -u
+.RB [ -u | --user
 .IR USER " |"
-.BI "-g " GROUP
-.RB "| " -p
+.BI -g | --group GROUP
+.BR "| " -p | --projid
 .IR PROJID ]
 .RB [ --pool
 .IR OST_POOL_NAME ]
 .EX
-.RB [ --filesystem | --mount-point ]
 .RB [ --blocks | --busage | --space ]
 .RB [ --block-softlimit | --bsoftlimit ]
 .RB [ --block-hardlimit | --bhardlimit ]
 .RB [ --block-grace | --bgrace | --btime ]
+.RB [ --filesystem | --mount-point ]
 .RB [ --inodes | --iusage ]
 .RB [ --inode-softlimit | --isoftlimit ]
 .RB [ --inode-hardlimit | --ihardlimit ]
 .RB [ --inode-grace | --igrace | --itime ]
 .EE
 .RI [ MOUNT_POINT " ...]"
-.SY
-.BR "lfs quota " [ -hq "] {" -U | -G | -P }
+.SY "lfs quota"
+.BR [ -hq ]
+.RB { -U | --default-usr | -G | --default-grp | -P | --default-prj }
 .RI [ MOUNT_POINT " ...]"
-.SY
-.BR "lfs quota " -t " {" -u | -g | -p }
+.SY "lfs quota"
+.B -t | --times
+.RB { -u | -g | -p }
 .RI [ MOUNT_POINT " ...]"
-.SY
-.BR "lfs quota " -a " {" -u | -g | -p }
+.SY "lfs quota"
+.B -a | --all
+.RB { -u | -g | -p }
 .RI [ MOUNT_POINT " ...]"
 .YS
 .SH DESCRIPTION
@@ -66,10 +69,10 @@ which specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60 bytes,
 respectively.  Time values will use the "XXwXXdXXhXXmXXs" format, which
 specifies weeks, days, hours, minutes, seconds.
 .TP
-.BR --blocks | --busage | --space
+.BR --blocks | --busage | --space | --kbytes
 Print only the
-.B kbytes
-column representing the block usage space.
+.BR kbytes / usage
+column representing the block space usage.
 If other column options are specified, all specified columns will be printed.
 .TP
 .BR --block-softlimit | --bsoftlimit
@@ -96,10 +99,13 @@ Print only the
 column representing either the mount point or device name.
 If other column options are specified, all specified columns will be printed.
 .TP
-.BR --inodes | --iusage
+.BR -g | --group " {" \fIGROUP | \fIGID }
+Display quota information for group name \fIGROUP\fR or numeric \fIGID\fR.
+.TP
+.BR --inodes | --iusage | --files
 Print only the
 .B files
-column representing the inodes.
+column representing the number of inodes used.
 If other column options are specified, all specified columns will be printed.
 .TP
 .BR --inode-softlimit | --isoftlimit
