@@ -1951,7 +1951,8 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 {
 	int rc;
 	bool hp;
-	struct ptlrpc_request *orig;
+	struct ptlrpc_request *orig = NULL;
+	int opc;
 
 	ENTRY;
 
@@ -1962,6 +1963,8 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 	hp = rc > 0;
 	ptlrpc_nrs_req_initialize(svcpt, req, hp);
 
+	opc = lustre_msg_get_opc(req->rq_reqmsg);
+
 	while (req->rq_export != NULL) {
 		struct obd_export *exp = req->rq_export;
 
@@ -1970,16 +1973,25 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 		 * atomically
 		 */
 		spin_lock_bh(&exp->exp_rpc_lock);
-#ifdef HAVE_SERVER_SUPPORT
-		ptlrpc_server_mark_in_progress_obsolete(req);
-#endif
-		orig = ptlrpc_server_check_resend_in_progress(req);
-		if (orig && CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_RESEND_RACE)) {
-			spin_unlock_bh(&exp->exp_rpc_lock);
 
-			CFS_RACE(OBD_FAIL_PTLRPC_RESEND_RACE);
-			msleep(4 * MSEC_PER_SEC);
-			continue;
+		/* Cancels are unbounded unlimited requests, they are also
+		 * stateless, so we don't really want to search for duplicates
+		 * as that can take a really long time (under spinlock at that.
+		 * There might be other requests like this and we might want to
+		 * make this code a bit more generic, but this should plug
+		 * the most obious hole for now */
+		if (opc != LDLM_CANCEL) {
+#ifdef HAVE_SERVER_SUPPORT
+			ptlrpc_server_mark_in_progress_obsolete(req);
+#endif
+			orig = ptlrpc_server_check_resend_in_progress(req);
+			if (orig && CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_RESEND_RACE)) {
+				spin_unlock_bh(&exp->exp_rpc_lock);
+
+				CFS_RACE(OBD_FAIL_PTLRPC_RESEND_RACE);
+				msleep(4 * MSEC_PER_SEC);
+				continue;
+			}
 		}
 
 		if (orig && likely(atomic_inc_not_zero(&orig->rq_refcount))) {
