@@ -3440,6 +3440,10 @@ test_225() {
 run_test 225 "Check avoid_asym_router_failure=0 w/DD disabled"
 
 test_226() {
+
+	(( $MDS1_VERSION >= $(version_code v2_15_62-31-g2b210f3905) )) ||
+		skip "need MDS >= 2.15.62.31 for refcnt fix LU-17440"
+
 	setup_router_test -r 2 || return $?
 
 	do_basic_rtr_test || return $?
