@@ -742,10 +742,14 @@ static void *osd_key_init(const struct lu_context *ctx,
 	struct osd_thread_info *info;
 
 	OBD_ALLOC_PTR(info);
-	if (info != NULL)
-		info->oti_env = container_of(ctx, struct lu_env, le_ctx);
-	else
-		info = ERR_PTR(-ENOMEM);
+	if (!info)
+		return ERR_PTR(-ENOMEM);
+
+	info->oti_env = container_of(ctx, struct lu_env, le_ctx);
+#ifdef ZAP_MAXNAMELEN_NEW
+	info->oti_za.za_name_len = MAXNAMELEN;
+	info->oti_za2.za_name_len = MAXNAMELEN;
+#endif
 	return info;
 }
 

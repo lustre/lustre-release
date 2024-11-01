@@ -636,6 +636,12 @@ static int zfs_create_vdev(struct mkfs_opts *mop, char *vdev)
 
 	return ret;
 }
+/* interop will break if we change MAX_NAME from 255 */
+#ifdef ZAP_MAXNAMELEN_NEW
+#define ZFS_LONGNAME_FEATURE	" -o feature@longname=disabled"
+#else
+#define ZFS_LONGNAME_FEATURE	""
+#endif
 
 int zfs_make_lustre(struct mkfs_opts *mop)
 {
@@ -713,7 +719,8 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 
 		memset(mkfs_cmd, 0, PATH_MAX);
 		snprintf(mkfs_cmd, PATH_MAX,
-			"zpool create -f -O canmount=off %s", pool);
+			"zpool create%s -f -O canmount=off %s",
+			ZFS_LONGNAME_FEATURE, pool);
 
 		/* Append the vdev config and create file vdevs as required */
 		while (*mop->mo_pool_vdevs != NULL) {

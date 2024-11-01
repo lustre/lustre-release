@@ -141,6 +141,9 @@ static struct dt_it *osd_index_it_init(const struct lu_env *env,
 
 	it->ozi_obj   = obj;
 	it->ozi_reset = 1;
+#ifdef ZAP_MAXNAMELEN_NEW
+	it->ozi_za.za_name_len = MAXNAMELEN;
+#endif
 	lu_object_get(lo);
 
 	RETURN((struct dt_it *)it);
@@ -1323,7 +1326,11 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 
 	ENTRY;
 	/* temp. storage should be enough for any key supported by ZFS */
+#ifdef ZAP_MAXNAMELEN_NEW
+	LASSERT(za->za_name_len <= sizeof(it->ozi_name));
+#else
 	BUILD_BUG_ON(sizeof(za->za_name) > sizeof(it->ozi_name));
+#endif
 
 	/*
 	 * the first ->next() moves the cursor to .

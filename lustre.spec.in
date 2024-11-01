@@ -387,7 +387,7 @@ Provides: %{name}-osd-mount = %{version}
 Obsoletes: lustre-osd-mount < %{version}
 %if 0%{confzfsdobjpath} != 0
 %if 0%{?suse_version} >= 1500 || 0%{?rhel} >= 8 || 0%{?fedora} >= 34
-BuildRequires: (libzfs-devel or libzfs4-devel or libzfs5-devel)
+BuildRequires: (libzfs-devel or libzfs4-devel or libzfs5-devel or libzfs6-devel)
 %else
 # 'or' is not available, Use: --define 'zfs 5' or 'zfs 4'
 BuildRequires: libzfs%{?zfs}-devel

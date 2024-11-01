@@ -146,6 +146,10 @@ struct osd_zap_it {
 	enum osd_zap_pos	 ozi_pos;
 	struct luz_direntry	 ozi_zde;
 	zap_attribute_t		 ozi_za;
+#ifdef ZAP_MAXNAMELEN_NEW
+	/* flexible array: zap_attribute_t.za_name[], ensure space allocated */
+	char			 ozi_za_name_buffer[MAXNAMELEN];
+#endif
 	union {
 		char		 ozi_name[MAXNAMELEN]; /* file name for dir */
 		__u64		 ozi_key; /* binary key for index files */
@@ -238,7 +242,15 @@ struct osd_thread_info {
 	struct lu_attr		 oti_la;
 	struct osa_attr		 oti_osa;
 	zap_attribute_t		 oti_za;
+#ifdef ZAP_MAXNAMELEN_NEW
+	/* flexible array: zap_attribute_t.za_name[], ensure space allocated */
+	char			 oti_za_name_buffer[MAXNAMELEN];
+#endif
 	zap_attribute_t		 oti_za2;
+#ifdef ZAP_MAXNAMELEN_NEW
+	/* flexible array: zap_attribute_t.za_name[], ensure space allocated */
+	char			 oti_za2_name_buffer[MAXNAMELEN];
+#endif
 	dmu_object_info_t	 oti_doi;
 	struct luz_direntry	 oti_zde;
 
