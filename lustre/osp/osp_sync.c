@@ -556,9 +556,8 @@ static int osp_sync_interpret(const struct lu_env *env,
 	}
 	LASSERT(d);
 
-	CDEBUG(D_HA, "reply req %p/%d, rc %d, transno %u\n", req,
-	       atomic_read(&req->rq_refcount),
-	       rc, (unsigned) req->rq_transno);
+	CDEBUG(D_HA, "reply req %p/%d, rc %d, transno %llu\n", req,
+	       atomic_read(&req->rq_refcount), rc, req->rq_transno);
 
 	if (rc == -ENOENT) {
 		/*

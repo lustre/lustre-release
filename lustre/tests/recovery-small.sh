@@ -3726,8 +3726,8 @@ test_160() {
 
 	for ((i = 1; i <= threads; i++)); do
 		local file=$DIR/$tdir/file_$i
-		#open/group lock/write/unlink/pause 20s/group unlock/close
-		$MULTIOP $file OG1234w10240u_20g1234c &
+		#open/group lock/write/unlink/pause/group unlock/close
+		$MULTIOP $file OG1234w10240u_g1234c &
 		pids[$i]=$!
 	done
 	sleep 2
@@ -3745,10 +3745,19 @@ test_160() {
 	do_facet mds1 $LCTL get_param osp.$FSNAME-OST0000-osc-MDT0000.error_list
 	echo inflight $rc
 	for ((i = 1; i <= threads; i++)); do
-		wait ${pids[$i]}
+		kill -USR1 ${pids[$i]} && wait ${pids[$i]}
 	done
 
 	(( $rc <= 2 )) || error "destroying OST objects are blocked $rc"
+
+	#without group lock, wait and check if all objects are destroyed
+	sleep $((timeout * 3))
+	do_facet mds1 $LCTL get_param osp.$FSNAME-OST0000-osc-MDT0000.error_list
+	local errs=$(do_facet mds1 $LCTL get_param -n osp.$FSNAME-OST0000-osc-MDT0000.error_list | wc -l)
+	rc=$(do_facet mds1 $LCTL get_param -n osp.$FSNAME-OST0000-osc-MDT0000.destroys_in_flight)
+
+	(( $errs == 0 )) || error "error_list not empty"
+	(( $rc == 0 )) || error "$rc destroys in flight"
 }
 run_test 160 "MDT destroys are blocked by grouplocks"
 
