@@ -3502,6 +3502,9 @@ test_152() {
 run_test 152 "QoS object allocation could be awakened in case of OST failover"
 
 test_153() {
+	(( MDS1_VERSION >= $(version_code 2.15.54.113) )) ||
+		skip "need MDS >= v2_15_54-113-g654d5f3fa4df for reconnect fix"
+
 #define OBD_FAIL_MDS_CONNECT_VS_EVICT   0x174
 	do_facet mds1 "$LCTL set_param fail_loc=0x174"
 	# first drop ping reply from MDS and then
@@ -3517,6 +3520,8 @@ test_153() {
 run_test 153 "evict vs reconnect race"
 
 test_154a() {
+	(( MDS1_VERSION >= $(version_code 2.15.60.2) )) ||
+		skip "need MDS >= v2_15_60-2-ge81805244476 for llog fix"
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
 	stop mds2
