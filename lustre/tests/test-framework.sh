@@ -1188,9 +1188,13 @@ check_mem_leak () {
 	if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
 		echo "$LEAK_LUSTRE" 1>&2
 		echo "$LEAK_PORTALS" 1>&2
-		mv $TMP/debug $TMP/debug-leak.`date +%s` || true
 		echo "Memory leaks detected"
-		[ -n "$IGNORE_LEAK" ] &&
+		if [ $DEBUG -a -z $DEBUG_RMMOD ]; then
+			debug_file=$TMP/debug-leak.$(date +%s)
+			mv $TMP/debug $debug_file &&
+			echo "Save $TMP/debug to $debug_file"
+		fi
+		[[ -n "$IGNORE_LEAK" ]] &&
 			{ echo "ignoring leaks" && return 0; } || true
 		return 1
 	fi

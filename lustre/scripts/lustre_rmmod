@@ -7,8 +7,13 @@
 
 SCRIPT_NAME="$(basename "$0")"
 LCTL=${LCTL:-lctl}
-DEBUG='false'
-[[ -n $DEBUG_RMMOD ]] && DEBUG='true'
+if [[ -z "$DEBUG" ]]; then
+	if [[ -n "$DEBUG_RMMOD" ]]; then
+		DEBUG=true
+	else
+		DEBUG=false
+	fi
+fi
 
 # Print help message
 print_usage() {
@@ -28,11 +33,14 @@ print_debug() {
 	$LCTL mark "$SCRIPT_NAME : Stop debug"
 	if [[ $DEBUG_RMMOD == "-" ]]; then
 		debug_file="" # dump to stdout
+	elif [[ "${DEBUG_RMMOD:0:1}" == "/" ]]; then
+		debug_file="$DEBUG_RMMOD"
 	else
-		debug_file=$DEBUG_RMMOD
+		debug_file=$TMP/${DEBUG_RMMOD:-debug}
 	fi
+	echo "Dump memory leak logs to $debug_file"
 	$LCTL debug_kernel $debug_file
-	DEBUG='false'
+	DEBUG=false
 }
 
 # Unload all modules dependent on $1 (exclude removal of $1)
