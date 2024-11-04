@@ -134,7 +134,7 @@ static int hsm_find_compatible(const struct lu_env *env, struct mdt_device *mdt,
 
 	if (check)
 		rc = cdt_llog_process(env, mdt, hsm_find_compatible_cb, hal, 0,
-					      0, READ);
+					      0);
 
 	RETURN(rc);
 }
@@ -531,7 +531,7 @@ int mdt_hsm_get_action(struct mdt_thread_info *mti,
 	ENTRY;
 
 	/* 1st we search in recorded requests */
-	rc = cdt_llog_process(env, mdt, hsm_get_action_cb, &hgad, 0, 0, READ);
+	rc = cdt_llog_process(env, mdt, hsm_get_action_cb, &hgad, 0, 0);
 	if (rc < 0)
 		RETURN(rc);
 

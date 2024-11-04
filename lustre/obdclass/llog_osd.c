@@ -518,12 +518,16 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		lgi->lgi_off += sizeof(struct llog_rec_hdr);
 		lgi->lgi_buf.lb_len = REC_DATA_LEN(rec);
 		lgi->lgi_buf.lb_buf = REC_DATA(rec);
+
+		dt_write_lock(env, o, 0);
 		rc = dt_record_write(env, o, &lgi->lgi_buf, &lgi->lgi_off, th);
 		if (rc == 0 && reccookie) {
 			reccookie->lgc_lgl = loghandle->lgh_id;
 			reccookie->lgc_index = idx;
 			rc = 1;
 		}
+		dt_write_unlock(env, o);
+
 		RETURN(rc);
 	}
 

@@ -120,7 +120,6 @@ static inline char *cdt_mdt_state2str(int state)
 }
 
 /* when multiple lock are needed, the lock order is
- * cdt_llog_lock
  * cdt_agent_lock
  * cdt_counter_lock
  * cdt_request_lock
@@ -128,6 +127,7 @@ static inline char *cdt_mdt_state2str(int state)
 struct coordinator {
 	refcount_t		 cdt_ref;	     /**< cdt refcount */
 	wait_queue_head_t	 cdt_waitq;	     /**< cdt wait queue */
+	wait_queue_head_t	 cdt_cancel_all;     /**< cancel_all wait */
 	bool			 cdt_event;	     /**< coordinator event */
 	struct task_struct	*cdt_task;	     /**< cdt thread handle */
 	struct lu_env		 cdt_env;	     /**< coordinator lustre
@@ -139,10 +139,8 @@ struct coordinator {
 	__u64			 cdt_policy;	     /**< policy flags */
 	enum cdt_states		 cdt_state;	      /**< state */
 	struct mutex		 cdt_state_lock;      /**< cdt_state lock */
-	__u64			 cdt_last_cookie;     /**< last cookie
+	atomic64_t		 cdt_last_cookie;     /**< last cookie
 						       * allocated */
-	struct rw_semaphore	 cdt_llog_lock;       /**< protect llog
-						       * access */
 	struct rw_semaphore	 cdt_agent_lock;      /**< protect agent list */
 	struct rw_semaphore	 cdt_request_lock;    /**< protect request
 						       * list */
@@ -187,6 +185,7 @@ struct coordinator {
 	bool			 cdt_remove_archive_on_last_unlink;
 
 	bool			 cdt_wakeup_coordinator;
+	bool			 cdt_idle;
 };
 
 /* mdt state flag bits */
@@ -1082,7 +1081,7 @@ void dump_llog_agent_req_rec(const char *prefix,
 			     const struct llog_agent_req_rec *larr);
 int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 		     llog_cb_t cb, void *data, u32 start_cat_idx,
-		     u32 start_rec_idx, int rw);
+		     u32 start_rec_idx);
 int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 			 __u32 archive_id, __u64 flags,
 			 struct hsm_action_item *hai);
