@@ -7652,17 +7652,17 @@ run_one_logged() {
 	export ONLY_REPEAT_ITER=1
 	while true; do
 		local before_sub=$SECONDS
+		local iter
 
 		log_sub_test_begin $TESTNAME
 		# remove temp files between repetitions to avoid test failures
 		if [[ -n "$append" ]]; then
 			[[ -n "$tdir" ]] && rm -rvf $DIR/$tdir*
 			[[ -n "$tfile" ]] && rm -vf $DIR/$tfile*
-			echo "subtest iteration $ONLY_REPEAT_ITER/$repeat " \
-				"($(((SECONDS-before)/60))/$ONLY_MINUTES min)"
+			iter=" (repeat $ONLY_REPEAT_ITER/$repeat iter, $(((SECONDS-before)/60))/$ONLY_MINUTES min)"
 		fi
 		# loop around subshell so stack_trap EXIT triggers each time
-		(run_one $testnum "$testmsg") 2>&1 | tee -i $append $test_log
+		(run_one $testnum "$testmsg$iter") 2>&1 | tee -i $append $test_log
 		rc=${PIPESTATUS[0]}
 		local append=-a
 		local duration_sub=$((SECONDS - before_sub))
