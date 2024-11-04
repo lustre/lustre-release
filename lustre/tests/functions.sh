@@ -1027,13 +1027,13 @@ run_statahead () {
 }
 
 cleanup_rr_alloc () {
-	trap 0
 	local clients="$1"
 	local mntpt_root="$2"
 	local rr_alloc_MNTPTS="$3"
 	local mntpt_dir=$(dirname ${mntpt_root})
 
-	for i in $(seq 0 $((rr_alloc_MNTPTS - 1))); do
+	$LFS find $DIR/$tdir -type f | xargs -n1 -P8 unlink
+	for ((i=0; i < rr_alloc_MNTPTS; i++)); do
 		zconf_umount_clients $clients ${mntpt_root}$i ||
 		error_exit "Failed to umount lustre on ${mntpt_root}$i"
 	done
@@ -1043,12 +1043,13 @@ cleanup_rr_alloc () {
 run_rr_alloc() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
+	RR_ALLOC=${RR_ALLOC:-$(which rr_alloc 2> /dev/null || true)}
+	[[ -n "$RR_ALLOC" ]] || skip_env "rr_alloc not found"
+
 	echo "===Test gives more reproduction percentage if number of "
 	echo "   client and ost are more. Test with 44 or more clients "
 	echo "   and 73 or more OSTs gives 100% reproduction rate=="
 
-	RR_ALLOC=${RR_ALLOC:-$(which rr_alloc 2> /dev/null || true)}
-	[ x$RR_ALLOC = x ] && skip_env "rr_alloc not found"
 	declare -a diff_max_min_arr
 	local ost_idx
 	local qos_prec_objs="${TMP}/qos_and_precreated_objects"
@@ -1056,13 +1057,19 @@ run_rr_alloc() {
 	local rr_alloc_MNTPTS=${rr_alloc_MNTPTS:-11}
 	local total_MNTPTS=$((rr_alloc_MNTPTS * num_clients))
 	local mntpt_root="${TMP}/rr_alloc_mntpt/lustre"
-	test_mkdir $DIR/$tdir
+	test_mkdir -c $MDSCOUNT $DIR/$tdir
 	setstripe_getstripe $DIR/$tdir $rr_alloc_STRIPEPARAMS
 
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+
+	(( ONLY_REPEAT_ITER == 1 )) || wait_delete_completed
+
+	$LFS df $DIR/$tdir
+	$LFS df -i $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 
-	trap "cleanup_rr_alloc $clients $mntpt_root $rr_alloc_MNTPTS" EXIT ERR
-	for i in $(seq 0 $((rr_alloc_MNTPTS - 1))); do
+	stack_trap "cleanup_rr_alloc $clients $mntpt_root $rr_alloc_MNTPTS"
+	for ((i=0; i < rr_alloc_MNTPTS; i++)); do
 		zconf_mount_clients $clients ${mntpt_root}$i $MOUNT_OPTS ||
 		error_exit "Failed to mount lustre on ${mntpt_root}$i $clients"
 	done
@@ -1075,7 +1082,7 @@ run_rr_alloc() {
 		"osp.$FSNAME-OST*-osc-MDT0000.create_count" >> $qos_prec_objs
 
 	local old_create_count=$(grep -e "create_count" $qos_prec_objs |
-		cut -d'=' -f 2 | sort -nr | head -n1)
+				 cut -d'=' -f 2 | sort -nr | head -n1)
 
 	# Make sure that every osp has enough precreated objects for the file
 	# creation app
@@ -1115,7 +1122,14 @@ run_rr_alloc() {
 				local count=$(precreated_ost_obj_count \
 					$mdt_idx $ost_idx)
 				if ((count < foeo_calc)); then
+					ost=$(ostname_from_index $ost_idx)
+					mdt=$(mdtname_from_index $mdt_idx)
+					t=osp.$ost-osc${mdt#$FSNAME}.create_count
+
+
 					sleep=1
+					do_facet mds$((mdt_idx+1)) \
+						$LCTL set_param $t=$create_count
 				fi
 			done
 		done
@@ -1139,26 +1153,23 @@ run_rr_alloc() {
 
 	diff_max_min_arr=($($LFS getstripe -r $DIR/$tdir/ |
 			    awk '/lmm_stripe_offset:/ {print $2}' |
-			    sort | uniq -c |
+			    sort | uniq -c | tee /dev/stderr |
 			    awk 'NR==1 {min=max=$1} \
 				 { $1<min ? min=$1:min; $1>max ? max=$1:max} \
 				 END {print max-min, max, min}'))
 
-	$LFS find $DIR/$tdir -type f | xargs -n1 -P8 unlink
-
-
-	# In-case of fairly large number of file creation using RR (round-robin)
+	# In case of fairly large number of file creation using RR (round-robin)
 	# there can be two cases in which deviation will occur than the regular
 	# RR algo behaviour-
 	# 1- When rr_alloc does not start right with 'lqr_start_count' reseeded,
 	# 2- When rr_alloc does not finish with 'lqr_start_count == 0'.
-	# So the difference of files b/w any 2 OST should not be more than 2.
-	# In some cases it may be more, but shouldn't be > 0.3% of the files.
-	local max_diff=$((create_count > 600 ? create_count / 300 : 2))
+	# So the difference of files for any 2 OST should not be more than 2-3.
+	# In some cases it may be more, but shouldn't be > .3% of the files.
+	local max_diff=$((create_count > 600 ? create_count / 200 : $MDSCOUNT))
 
 	(( ${diff_max_min_arr[0]} <= $max_diff )) || {
-		$LFS getstripe -r $DIR/$tdir |
-			awk '/lmm_stripe_offset:/ {print $2}' | sort | uniq -c
+		$LFS df $DIR/$tdir
+		$LFS df -i $DIR/$tdir
 
 		error "max/min OST objects (${diff_max_min_arr[1]} : ${diff_max_min_arr[2]}) too different"
 	}

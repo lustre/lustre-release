@@ -18,6 +18,8 @@ LUSTRE=${LUSTRE:-$(dirname $0)/..}
 init_test_env "$@"
 init_logging
 
+ALWAYS_EXCEPT="$RACER_EXCEPT "
+
 build_test_filter
 
 racer=$LUSTRE/tests/racer/racer.sh
