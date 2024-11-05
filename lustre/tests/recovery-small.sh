@@ -3651,6 +3651,9 @@ run_test 156 "tot_granted miscount after client eviction"
 
 test_157()
 {
+	(( MDS1_VERSION >= $(version_code 2.15.58.110) )) ||
+		skip "need MDS >= v2_15_58-110-g71f8e5d6506f to avoid eviction"
+
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
 	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
 	cancel_lru_locks osc
@@ -3662,7 +3665,9 @@ test_157()
 	sleep 1
 	ost_evict_client
 	wait $MULTIPID
-	[[ $? == 135 ]] || error "multiop failed with not SIGBUS"
+	local rc=$?
+	(( rc == 0 || rc == 135 )) ||
+		error "multiop failed with $rc, not SIGBUS (135)"
 }
 run_test 157 "eviction during mmaped i/o"
 
