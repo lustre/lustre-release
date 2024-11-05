@@ -24,6 +24,10 @@
 #include "osd_internal.h"
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
+static int symlink_brw_stats;
+module_param(symlink_brw_stats, int, 0644);
+MODULE_PARM_DESC(symlink_brw_stats, "create /proc brw_stats symlink");
+
 static void osd_symlink_brw_stats(struct osd_device *osd)
 {
 	size_t len_root;
@@ -32,6 +36,9 @@ static void osd_symlink_brw_stats(struct osd_device *osd)
 	char *s;
 	char *p;
 	char *path;
+
+	if (!symlink_brw_stats)
+		return;
 
 	OBD_ALLOC(path, PATH_MAX);
 	if (path == NULL)
