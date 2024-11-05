@@ -1176,6 +1176,7 @@ test_24t() {
 run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
 
 test_24u() { # bug12192
+	stack_trap "rm -f $DIR/$tfile"
 	$MULTIOP $DIR/$tfile C2w$((2048 * 1024))c || error "multiop failed"
 	$CHECKSTAT -s $((2048 * 1024)) $DIR/$tfile || error "wrong file size"
 }
@@ -1255,6 +1256,7 @@ run_test 24v "list large directory (test hash collision, b=17560)"
 
 test_24w() { # bug21506
         SZ1=234852
+	stack_trap "rm -f $DIR/$tfile"
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=4096 || return 1
         dd if=/dev/zero bs=$SZ1 count=1 >> $DIR/$tfile || return 2
         dd if=$DIR/$tfile of=$DIR/${tfile}_left bs=1M skip=4097 || return 3
@@ -5144,6 +5146,7 @@ test_39j() {
 	start_full_debug_logging
 	touch $DIR1/$tfile
 	sleep 1
+	stack_trap "rm -f $DIR1/$tfile"
 
 	#define OBD_FAIL_OSC_DELAY_SETTIME	 0x412
 	lctl set_param fail_loc=0x80000412
@@ -5176,6 +5179,7 @@ test_39k() {
 
 	touch $DIR1/$tfile
 	sleep 1
+	stack_trap "rm -f $DIR1/$tfile"
 
 	multiop_bg_pause $DIR1/$tfile oO_RDWR:w2097152_c || error "multiop failed"
 	local multipid=$!
@@ -5474,6 +5478,7 @@ run_test 39s "relatime is supported"
 
 test_39u() {
 	touch $DIR/$tfile
+	stack_trap "rm -f $DIR/$tfile"
 	sleep 2
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 conv=notrunc ||
 		error "dd failed"
@@ -5955,6 +5960,7 @@ test_44f() {
 	[ "$FSTYPE" != "zfs" ] ||
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
 
+	stack_trap "rm -f $DIR/$tfile-*"
 	local i
 	# required space: NUMFILES_44f * 20Mb
 	local NUMFILES_44f=${NUMFILES_44f:-50}
@@ -7661,7 +7667,7 @@ test_56rb() {
 	mdt_idx=$($LFS getdirstripe -i $dir)
 	dd if=/dev/zero of=$dir/$tfile bs=1M count=1
 
-	stack_trap "rm -f $tmp" EXIT
+	stack_trap "rm -f $tmp $dir/$tfile" EXIT
 	$LFS find --size +100K --ost 0 $dir |& tee $tmp
 	! grep -q obd_uuid $tmp ||
 		error "failed to find --size +100K --ost 0 $dir"
@@ -10648,6 +10654,7 @@ test_64f() {
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "lfs setstripe failed"
 	dd if=/dev/zero of=$DIR/$tfile bs=$write_bytes count=1 oflag=direct ||
 		error "error writing to $DIR/$tfile"
+	stack_trap "rm -f $DIR/$tfile"
 
 	check_grants $osc_tgt $((init_grants - grants + chunk)) \
 		"direct io with grant allocation"
@@ -15779,6 +15786,7 @@ test_123d() {
 	$LFS setdirstripe -D -c $MDSCOUNT $DIR/$tdir ||
 		error "setdirstripe $DIR/$tdir failed"
 	createmany -d $DIR/$tdir/$tfile $num || error "createmany $num failed"
+	stack_trap "unlinkmany -d $DIR/$tdir/$tfile $num"
 	remount_client $MOUNT
 	$LCTL get_param llite.*.statahead_max
 	$LCTL set_param llite.*.statahead_stats=0 ||
@@ -16416,7 +16424,7 @@ test_127a() { # bug 15521
 
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
 	echo "stats before reset"
-	stack_trap "rm -f $tmpfile"
+	stack_trap "rm -f $DIR/$tfile $tmpfile"
 	local now=$(date +%s)
 
 	$LCTL get_param osc.*.stats | tee $tmpfile
@@ -17010,6 +17018,7 @@ test_130h() {
 	$LFS setstripe -o 0,1 -S 1M $DIR/$tfile
 	$LFS getstripe $DIR/$tfile
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=2
+	stack_trap "rm -f $DIR/$tfile"
 	$LCTL set_param ldlm.namespaces.*-OST0000-osc-*.lru_size=clear
 	sleep 1
 	local before=$(date +%s)
@@ -20280,6 +20289,7 @@ test_160t() {
 	# create default overstripe to maximize changelog size
 	$LFS setstripe  -C 8 $DIR/$tdir || error "setstripe failed"
 	createmany -o $DIR/$tdir/u1_ 2000 || error "createmany for user1 failed"
+	stack_trap "unlinkmany $DIR/$tdir/u1_ 2000"
 	llog_size1=$(do_facet mds1 $LCTL get_param -n mdd.$MDT0.changelog_size)
 
 	# user2 consumes less records so less space
@@ -20681,6 +20691,7 @@ test_162c() {
 
 	test_mkdir $DIR/$lpath
 	test_mkdir $DIR/$rpath
+	stack_trap "rm -rf $DIR/$lpath $DIR/$rpath"
 
 	for ((i = 0; i <= 101; i++)); do
 		lpath="$lpath/$i"
@@ -23095,6 +23106,7 @@ test_224a() { # LU-1039, MRP-303
 	#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
 	$LCTL set_param fail_loc=0x508
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 conv=fsync
+	stack_trap "rm -f $DIR/$tfile"
 	$LCTL set_param fail_loc=0
 	df $DIR
 }
@@ -23110,6 +23122,7 @@ test_224bd_sub() { # LU-1039, MRP-303
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 
 	dd if=$TMP/$tfile of=$DIR/$tfile bs=1M count=1
+	stack_trap "rm -f $DIR/$tfile"
 	cancel_lru_locks osc
 	set_checksums 0
 	stack_trap "set_checksums $ORIG_CSUM" EXIT
@@ -26723,6 +26736,7 @@ test_270j() {
 	mkdir -p $DIR/$tdir
 
 	$LFS setstripe -E 1M -L mdt -E -1 -c1 $dom
+	stack_trap "rm -f $dom"
 
 	odv=$($LFS data_version $dom)
 	chmod 666 $dom
@@ -27149,6 +27163,7 @@ test_272d() {
 	local dom=$DIR/$tdir/$tfile
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -E 1M -L mdt -E -1 -c1 $dom
+	stack_trap "rm -f $dom"
 
 	local mdtidx=$($LFS getstripe -m $dom)
 	local mdtname=MDT$(printf %04x $mdtidx)
@@ -27194,6 +27209,7 @@ test_272e() {
 	local dom=$DIR/$tdir/$tfile
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c 2 $dom
+	stack_trap "rm -f $dom"
 
 	dd if=/dev/urandom of=$dom bs=2M count=1 oflag=direct ||
 		error "failed to write data into $dom"
@@ -27226,6 +27242,7 @@ test_272f() {
 	local dom=$DIR/$tdir/$tfile
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c 2 $dom
+	stack_trap "rm -f $dom"
 
 	dd if=/dev/urandom of=$dom bs=2M count=1 oflag=direct ||
 		error "failed to write data into $dom"
@@ -27354,6 +27371,7 @@ test_277() {
 	[ $cached_mb -eq 1 ] || error "expected mb 1 got $cached_mb"
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 \
 		oflag=direct conv=notrunc
+	stack_trap "rm -f $DIR/$tfile"
 	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
 		    awk '/^used_mb/ { print $2 }')
 	[ $cached_mb -eq 0 ] || error "expected mb 0 got $cached_mb"
@@ -34095,6 +34113,7 @@ test_818() {
 run_test 818 "unlink with failed llog"
 
 test_819a() {
+	stack_trap "rm -f $DIR/$tfile"
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_2BIG_NIOBUF		0x248
@@ -34105,6 +34124,7 @@ test_819a() {
 run_test 819a "too big niobuf in read"
 
 test_819b() {
+	stack_trap "rm -f $DIR/$tfile"
 	#define OBD_FAIL_OST_2BIG_NIOBUF		0x248
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000248
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
