@@ -7308,7 +7308,8 @@ skip_eopnotsupp() {
 # Add a list of tests to ALWAYS_EXCEPT due to an issue.
 # Usage: always_except LU-4815 23 42q ...
 #
-function always_except() {
+function \
+always_except() {
 	local issue="${1:-}" # single jira style issue ("LU-4815")
 	local test_num
 
@@ -7337,6 +7338,28 @@ build_test_filter() {
 			eval ONLY_${O}=true
 		fi
 	done
+
+	local nodes=$(comma_list $(facets_nodes mds1,ost1))
+	local exceptions="$LUSTRE/tests/except/$TESTSUITE.*ex"
+
+	do_nodes --verbose $nodes "ls $exceptions || true"
+	while read facet op need_ver jira subs; do
+		local have_ver_code=${facet^^*}_VERSION
+		local need_ver_code
+
+		[[ "$facet" =~ "#" ]] && continue
+		[[ "$need_ver" =~ _VERSION ]] && need_ver_code=$need_ver ||
+			need_ver_code=$(version_code $need_ver)
+
+		(( ${!have_ver_code} $op $need_ver_code )) &&
+			echo "- see $facet $op $need_ver for $jira, go $subs" ||
+		{
+			log "- need $facet $op $need_ver for $jira, skip $subs"
+			for E in $subs; do
+				eval EXCEPT_${E}=true
+			done
+		}
+	done < <(do_nodes $nodes "cat $exceptions 2>/dev/null ||true" | sort -u)
 
 	[[ -z "$EXCEPT$ALWAYS_EXCEPT" ]] ||
 		log "excepting tests: $(echo $EXCEPT $ALWAYS_EXCEPT)"
