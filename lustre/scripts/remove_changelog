@@ -12,20 +12,20 @@
 #
 # Steps to cleanup problematic llogs:
 #
-# 1. mount MDT filesystem locally on server as ldiskfs mount
+# 1. mount MDT filesystem locally on server as ldiskfs/ZFS mount
 # 2. run script first in dry-run mode to make sure it parses llogs as needed:
-#    # bash remove_changelog -n <ldiskfs_mount>
+#    # bash remove_changelog -n <local_mount>
 # 3. save all llogs for analysis:
-#    # bash remove_changelog -n -z /tmp/llogs_saved <ldiskfs_mount>
+#    # bash remove_changelog -n -z /tmp/llogs_saved <local_mount>
 # 4. check that /tmp/llogs_saved.tar.gz exists and has all llogs inside:
 #    # ls -ali /tmp/llogs_saved.tar.gz
 #    # tar -tf /tmp/llog_saved.tar.gz
 # 5. finally run script to delete all llogs:
-#    # bash remove_changelog <ldiskfs_mount>
+#    # bash remove_changelog <local_mount>
 #
 # For better llogs compression xz can be used as well, pass it to the script
 # via GZIP env variable:
-#    # GZIP=xz bash remove_changelog -n -z /tmp/llogs_saved <ldiskfs_mount>
+#    # GZIP=xz bash remove_changelog -n -z /tmp/llogs_saved <local_mount>
 # Archive name will ends with .xz in that case instead of .gz
 
 
@@ -48,7 +48,7 @@ usage: remove_changelog [--dry-run|-n] [--help|-h] [--quiet|-q]
 			name prefix using gzip by default. Other compression
 			tools can be used via GZIP env variable.
 
-The 'localmount' argument should be an ldiskfs mounted MDT device mountpoint.
+The 'localmount' argument should be an locally mounted MDT device mountpoint.
 
 Examples:
       remove_changelog /mnt/mdt0
@@ -81,11 +81,6 @@ remove_changelog() {
 	local catalog=${mntpoint}/changelog_catalog
 	local users=${mntpoint}/changelog_users
 	local arch=$OPT_ARCH
-
-	if [[ -z $(df -t ldiskfs $mntpoint 2>/dev/null) ]] ; then
-		echo "$PROG: '$mntpoint' is not ldiskfs mount."
-		exit 1
-	fi
 
 	if $OPT_DRYRUN; then
 		$ECHO "Dry run was requested, no changes will be applied"
