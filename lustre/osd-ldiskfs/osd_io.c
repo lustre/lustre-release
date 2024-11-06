@@ -2559,8 +2559,8 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(inode);
 	LASSERT(offset >= 0);
 
-	file = alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
-				 inode->i_fop);
+	file = osd_alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
+				     inode->i_fop);
 	if (IS_ERR(file))
 		RETURN(PTR_ERR(file));
 
@@ -2755,8 +2755,8 @@ static int osd_execute_punch(const struct lu_env *env, struct osd_object *obj,
 	struct file *file;
 	int rc;
 
-	file = alloc_file_pseudo(inode, d->od_mnt, "/", O_NOATIME,
-				 inode->i_fop);
+	file = osd_alloc_file_pseudo(inode, d->od_mnt, "/", O_NOATIME,
+				     inode->i_fop);
 	if (IS_ERR(file))
 		RETURN(PTR_ERR(file));
 

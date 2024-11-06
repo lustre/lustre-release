@@ -34,6 +34,7 @@
 #include <linux/fs.h>
 /* XATTR_{REPLACE,CREATE} */
 #include <linux/xattr.h>
+#include <linux/workqueue.h>
 
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/xattr.h>
@@ -73,6 +74,11 @@ MODULE_PARM_DESC(ldiskfs_pdo, "ldiskfs with parallel directory operations");
 int ldiskfs_track_declares_assert;
 module_param(ldiskfs_track_declares_assert, int, 0644);
 MODULE_PARM_DESC(ldiskfs_track_declares_assert, "LBUG during tracking of declares");
+
+struct work_struct flush_fput;
+atomic_t descriptors_cnt;
+unsigned int ldiskfs_flush_descriptors_cnt = 5000;
+unsigned int ldiskfs_flush_descriptors_seconds = 10;
 
 /* 1 GiB in 512-byte sectors */
 int ldiskfs_delayed_unlink_blocks = (1 << (30 - 9));
@@ -1024,8 +1030,8 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 	oti->oti_obj_dentry.d_inode = inode;
 	oti->oti_obj_dentry.d_sb = inode->i_sb;
 
-	filp = alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
-				 inode->i_fop);
+	filp = osd_alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
+				     inode->i_fop);
 	if (IS_ERR(filp))
 		RETURN(-ENOMEM);
 
@@ -5293,8 +5299,8 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 	int rc;
 
 	ENTRY;
-	file = alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
-				 inode->i_fop);
+	file = osd_alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
+				     inode->i_fop);
 	if (IS_ERR(file))
 		RETURN(PTR_ERR(file));
 
@@ -6985,8 +6991,8 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	struct file *file;
 
 	ENTRY;
-	file = alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
-				 inode->i_fop);
+	file = osd_alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
+				     inode->i_fop);
 	if (IS_ERR(file))
 		RETURN(ERR_CAST(file));
 
@@ -8985,6 +8991,39 @@ static ssize_t track_declares_assert_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(track_declares_assert);
 
+static ssize_t flush_descriptors_cnt_show(struct kobject *kobj,
+					 struct attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ldiskfs_flush_descriptors_cnt);
+}
+
+static ssize_t flush_descriptors_cnt_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer, size_t count)
+{
+	int rc;
+
+	rc = kstrtou32(buffer, 0, &ldiskfs_flush_descriptors_cnt);
+	if (rc)
+		return rc;
+	return count;
+}
+LUSTRE_RW_ATTR(flush_descriptors_cnt);
+
+static void osd_flush_fput(struct work_struct *work)
+{
+	/* flush file descriptors when too many files */
+	CDEBUG_LIMIT(D_HA, "Flushing file descriptors limit %d\n",
+		     ldiskfs_flush_descriptors_cnt);
+
+	/* descriptors_cnt triggers the threshold when a flush is started,
+	 * but all pending descriptors will be flushed each time, so it
+	 * doesn't need to exactly match the number of descriptors.
+	 */
+	atomic_set(&descriptors_cnt, 0);
+	cfs_flush_delayed_fput();
+}
+
 static int __init osd_init(void)
 {
 	struct kobject *kobj;
@@ -9001,6 +9040,7 @@ static int __init osd_init(void)
 	if (rc)
 		return rc;
 
+	atomic_set(&descriptors_cnt, 0);
 	osd_oi_mod_init();
 
 	rc = lu_kmem_init(ldiskfs_caches);
@@ -9032,6 +9072,14 @@ static int __init osd_init(void)
 			rc = 0;
 		}
 
+		rc = sysfs_create_file(kobj,
+				       &lustre_attr_flush_descriptors_cnt.attr);
+		if (rc) {
+			CWARN("%s: flush_descriptors_cnt registration failed: rc = %d\n",
+			      "osd-ldiskfs", rc);
+			rc = 0;
+		}
+
 		kobject_put(kobj);
 	}
 
@@ -9041,6 +9089,8 @@ static int __init osd_init(void)
 			cfs_kallsyms_lookup_name("flush_delayed_fput");
 #endif
 
+	INIT_WORK(&flush_fput, osd_flush_fput);
+
 	return rc;
 }
 
@@ -9048,10 +9098,13 @@ static void __exit osd_exit(void)
 {
 	struct kobject *kobj;
 
+	cancel_work_sync(&flush_fput);
 	kobj = kset_find_obj(lustre_kset, LUSTRE_OSD_LDISKFS_NAME);
 	if (kobj) {
 		sysfs_remove_file(kobj,
 				  &lustre_attr_track_declares_assert.attr);
+		sysfs_remove_file(kobj,
+				  &lustre_attr_flush_descriptors_cnt.attr);
 		kobject_put(kobj);
 	}
 	class_unregister_type(LUSTRE_OSD_LDISKFS_NAME);

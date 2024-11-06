@@ -2762,16 +2762,6 @@ ptlrpc_wait_event(struct ptlrpc_service_part *svcpt,
 	return 0;
 }
 
-#ifdef HAVE_SERVER_SUPPORT
-# ifdef HAVE_FLUSH_DELAYED_FPUT
-#  define cfs_flush_delayed_fput() flush_delayed_fput()
-# else
-void (*cfs_flush_delayed_fput)(void);
-# endif /* HAVE_FLUSH_DELAYED_FPUT */
-#else /* !HAVE_SERVER_SUPPORT */
-#define cfs_flush_delayed_fput() do {} while (0)
-#endif /* HAVE_SERVER_SUPPORT */
-
 /**
  * Main thread body for service threads.
  * Waits in a loop waiting for new requests to process to appear.
@@ -2878,16 +2868,8 @@ static int ptlrpc_main(void *arg)
 	CDEBUG(D_NET, "service thread %d (#%d) started\n", thread->t_id,
 	       svcpt->scp_nthrs_running);
 
-#ifdef HAVE_SERVER_SUPPORT
-#ifndef HAVE_FLUSH_DELAYED_FPUT
-	if (unlikely(cfs_flush_delayed_fput == NULL))
-		cfs_flush_delayed_fput =
-			cfs_kallsyms_lookup_name("flush_delayed_fput");
-#endif
-#endif
 	/* XXX maintain a list of all managed devices: insert here */
 	while (!ptlrpc_thread_stopping(thread)) {
-		bool idle = true;
 
 		if (ptlrpc_wait_event(svcpt, thread))
 			break;
@@ -2897,7 +2879,6 @@ static int ptlrpc_main(void *arg)
 		if (ptlrpc_threads_need_create(svcpt)) {
 			/* Ignore return code - we tried... */
 			ptlrpc_start_thread(svcpt, 0);
-			idle = false;
 		}
 
 		/* reset le_ses to initial state */
@@ -2915,7 +2896,6 @@ static int ptlrpc_main(void *arg)
 			if (counter++ < 100)
 				continue;
 			counter = 0;
-			idle = false;
 		}
 
 		if (ptlrpc_at_check(svcpt))
@@ -2925,7 +2905,6 @@ static int ptlrpc_main(void *arg)
 			lu_context_enter(&env->le_ctx);
 			ptlrpc_server_handle_request(svcpt, thread);
 			lu_context_exit(&env->le_ctx);
-			idle = false;
 		}
 
 		if (ptlrpc_rqbd_pending(svcpt) &&
@@ -2938,15 +2917,7 @@ static int ptlrpc_main(void *arg)
 			svcpt->scp_rqbd_timeout = cfs_time_seconds(1) / 10;
 			CDEBUG(D_RPCTRACE, "Posted buffers: %d\n",
 			       svcpt->scp_nrqbds_posted);
-			idle = false;
 		}
-
-		/* If nothing to do, flush old alloc_file_pseudo() descriptors.
-		 * This has internal atomicity so it is OK to call often.
-		 * We could also do other idle tasks at this time.
-		 */
-		if (idle)
-			cfs_flush_delayed_fput();
 
 		/*
 		 * If the number of threads has been tuned downward and this
