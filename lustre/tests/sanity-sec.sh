@@ -4683,6 +4683,9 @@ test_55() {
 run_test 55 "access with seteuid"
 
 test_56() {
+	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
+	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
+
 	local testfile=$DIR/$tdir/$tfile
 
 	[[ $(facet_fstype ost1) == zfs ]] && skip "skip ZFS backend"
