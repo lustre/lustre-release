@@ -1,0 +1,39 @@
+# The files in this directory contain lists of subtests that should
+# be excluded by older clients when running a particular test
+# script.  This allows older clients to skip tests that they would
+# otherwise run from their local test script, but that do not work due
+# to server changes.
+#
+# The files for each test script are read from the mds1 and ost1 facet
+# nodes.  The filename(s) under lustre/tests/except/ should start with
+# the base test script name (e.g. sanity), followed by '.', an optional
+# unique string to avoid conflicts between patches, and end with ".ex".
+# Lines are handled in build_test_filter() to check subtests to exclude.
+#
+# The files for each test script are read from the mds1 and ost1 facets.
+# The filename(s) under lustre/tests/except/ should start with the base
+# test script name (e.g. sanity), followed by '.', an optional unique
+# string to avoid conflicts between patches, and end with ".ex".
+# Lines are handled in build_test_filter() to check subtests to exclude.
+#
+# Lines starting with '#' are comments and ignored.  Otherwise, lines
+# should have whitespace-separated fields on each line, as shown in the
+# examples below.
+#
+#   facet  op need_version             jira     space_separated_subtests
+#   mds1    < v2_14_55-100-g8a84c7f9c7 LU-14927 0f
+#   linux   < 5.12.0                   LU-18102 27J
+#   ost1   == CLIENT_VERSION           LU-13081 151 156
+#
+# The facet may be "client", "mds1", "ost1", or "linux" (client), and
+# "need_version" can be any Lustre (or Linux) version number or another
+# version name like OST1_VERSION, MDS1_VERSION, or CLIENT_VERSION.
+#
+# The version comparison is something like the below pseudo-code:
+#
+#         (( ${FACET}_VERSION $op $need_version )) ||
+#                 always_except $ticket $subtests
+#
+# In other words, the version check must be true or subtest(s) will
+# not be run.  Checks within a single file should be ordered by subtest
+# number to make it easier to see whether some subtest is being skipped.

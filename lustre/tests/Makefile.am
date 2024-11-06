@@ -45,12 +45,9 @@ nobase_noinst_SCRIPTS += test-groups/regression test-groups/regression-mpi
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
 nobase_noinst_SCRIPTS += racer/*.sh
 nobase_noinst_SCRIPTS += posix/posix.cfg
-nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
-nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
-nobase_noinst_DATA += acl/permissions_xattr.test
-nobase_noinst_DATA += acl/974.test acl/974_remote.test
-nobase_noinst_DATA += acl/2561.test acl/2561_zfs.test acl/4924.test
+nobase_noinst_DATA = acl/*.test
 nobase_noinst_DATA += clientapi/simple_test.c
+nobase_noinst_DATA += except/*.ex
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
