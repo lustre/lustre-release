@@ -1080,9 +1080,7 @@ run_rr_alloc() {
 		"lod.$FSNAME-MDT0000*.qos_threshold_rr" > $qos_prec_objs
 	save_lustre_params mds1 \
 		"osp.$FSNAME-OST*-osc-MDT0000.create_count" >> $qos_prec_objs
-
-	local old_create_count=$(grep -e "create_count" $qos_prec_objs |
-				 cut -d'=' -f 2 | sort -nr | head -n1)
+	stack_trap "restore_lustre_params <$qos_prec_objs; rm -f $qos_prec_objs"
 
 	# Make sure that every osp has enough precreated objects for the file
 	# creation app
@@ -1113,6 +1111,8 @@ run_rr_alloc() {
 	# fail here because code(osp_precreate.c) also takes care of it.
 	# So we have good chances of passing test even if this check fails.
 	local stop=$((SECONDS + 60))
+	local forced
+	local waited
 
 	while ((SECONDS < stop)); do
 		local sleep=0
@@ -1120,16 +1120,25 @@ run_rr_alloc() {
 		for ((mdt_idx = 0; mdt_idx < $MDSCOUNT; mdt_idx++)); do
 			for ((ost_idx = 0; ost_idx < $OSTCOUNT; ost_idx++)); do
 				local count=$(precreated_ost_obj_count \
-					$mdt_idx $ost_idx)
-				if ((count < foeo_calc)); then
-					ost=$(ostname_from_index $ost_idx)
-					mdt=$(mdtname_from_index $mdt_idx)
-					t=osp.$ost-osc${mdt#$FSNAME}.create_count
-
+					      $mdt_idx $ost_idx)
+				if ((count < foeo_calc / 6)); then
+					local this_pair=mdt$mdt_idx.$ost_idx
 
 					sleep=1
-					do_facet mds$((mdt_idx+1)) \
-						$LCTL set_param $t=$create_count
+
+					# allow one iteration to precreate,
+					# then force create new sequence once
+					[[ "$forced" =~ "$this_pair" ]] &&
+						continue
+
+					if [[ "$waited" =~ "$this_pair" ]]; then
+						mkdir -p $DIR/$tdir.2
+						force_new_seq_ost $DIR/$tdir.2 \
+						    mds$((mdt_idx+1)) $ost_idx
+						forced="$forced $this_pair"
+					else
+						waited="$waited $this_pair"
+					fi
 				fi
 			done
 		done
@@ -1138,6 +1147,7 @@ run_rr_alloc() {
 
 		sleep $sleep
 	done
+	[[ -d $DIR/$tdir.2 ]] && stack_trap "rm -rf $DIR/$tdir.2"
 
 	local cmd="$RR_ALLOC $mntpt_root/$tdir/f $rr_alloc_NFILES $num_clients"
 
@@ -1147,9 +1157,6 @@ run_rr_alloc() {
 	else
 		error "No mount point"
 	fi
-
-	restore_lustre_params < $qos_prec_objs
-	rm -f $qos_prec_objs
 
 	diff_max_min_arr=($($LFS getstripe -r $DIR/$tdir/ |
 			    awk '/lmm_stripe_offset:/ {print $2}' |
