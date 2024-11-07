@@ -2710,7 +2710,6 @@ again:
 					   -ext->oe_nr_pages);
 		}
 		/* This extent could be on the full extents list, that's OK */
-		EASSERT(!ext->oe_hp && !ext->oe_urgent, ext);
 		if (!list_empty(&ext->oe_link))
 			list_move_tail(&ext->oe_link, &list);
 		else
