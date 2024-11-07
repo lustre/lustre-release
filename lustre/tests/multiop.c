@@ -83,6 +83,7 @@ char usage[] =
 "	 g gid put grouplock\n"
 "	 H[num] create HSM released file with num stripes\n"
 "	 I  fiemap\n"
+"	 i  random fadvise\n"
 "	 K  link path to filename\n"
 "	 L  link\n"
 "	 l  symlink filename to path\n"
@@ -514,6 +515,14 @@ int main(int argc, char **argv)
 			break;
 		case 'I':
 			do_fiemap(fd);
+			break;
+		case 'i':
+			rc = posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
+			if (rc) {
+				save_errno = errno;
+				perror("fadvise");
+				exit(save_errno);
+			}
 			break;
 		case 'j':
 			if (flock(fd, LOCK_EX) == -1)

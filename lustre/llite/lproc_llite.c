@@ -2602,7 +2602,8 @@ static const char *const ra_stat_string[] = {
 	[RA_STAT_ASYNC]			= "async_readahead",
 	[RA_STAT_FAILED_FAST_READ]	= "failed_to_fast_read",
 	[RA_STAT_MMAP_RANGE_READ]	= "mmap_range_read",
-	[RA_STAT_READAHEAD_PAGES]	= "readahead_pages"
+	[RA_STAT_READAHEAD_PAGES]	= "readahead_pages",
+	[RA_STAT_FORCEREAD_PAGES]	= "forceread_pages"
 };
 
 int ll_debugfs_register_super(struct super_block *sb, const char *name)
@@ -2668,7 +2669,8 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 		GOTO(out_stats, err = -ENOMEM);
 
 	for (id = 0; id < ARRAY_SIZE(ra_stat_string); id++) {
-		if (id == RA_STAT_READAHEAD_PAGES)
+		if (id == RA_STAT_READAHEAD_PAGES ||
+		    id == RA_STAT_FORCEREAD_PAGES)
 			lprocfs_counter_init(sbi->ll_ra_stats, id,
 					     LPROCFS_TYPE_PAGES |
 					     LPROCFS_CNTR_AVGMINMAX,

@@ -33820,6 +33820,35 @@ test_852() {
 }
 run_test 852 "mkdir using intent lock for striped directory"
 
+test_853() {
+	local file=$DIR/$tfile
+	local size=$((PAGE_SIZE * 2))
+
+	dd if=/dev/zero of=$file bs=1M count=100 ||
+		error "failed to write $file"
+	cancel_lru_locks $OSC
+	$LCTL set_param llite.*.read_ahead_stats=clear
+	$MULTIOP $file or1048576c || error "failed to read $file"
+	$LCTL get_param llite.*.read_ahead_stats
+
+	cancel_lru_locks $OSC
+	$LCTL set_param llite.*.read_ahead_stats=clear
+	$MULTIOP $file oir1048576z1048576r${size}c ||
+		error "failed to read $file"
+	$LCTL get_param llite.*.read_ahead_stats
+
+	local ranum=$($LCTL get_param -n llite.*.read_ahead_stats |
+		      get_named_value 'readahead.pages' | calc_sum)
+
+	(( ranum == 0 )) || error "should not trigger readahead"
+
+	local rndnum=$($LCTL get_param -n llite.*.read_ahead_stats |
+		       get_named_value 'forceread.pages' | calc_sum)
+
+	(( rndnum == 2 )) || error "force random read: $rndnum, expected 2"
+}
+run_test 853 "Verify that random fadvise works as expected"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

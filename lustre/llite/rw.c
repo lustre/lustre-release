@@ -951,6 +951,10 @@ static int ll_readpages(const struct lu_env *env, struct cl_io *io,
 			count++;
 	}
 
+	if (count)
+		ll_ra_stats_add(vvp_object_inode(io->ci_obj),
+				RA_STAT_FORCEREAD_PAGES, count);
+
 	RETURN(count > 0 ? count : ret);
 }
 
@@ -1721,6 +1725,9 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	if (file) {
 		lfd = file->private_data;
 		ras = &lfd->fd_ras;
+
+		if (file->f_mode & FMODE_RANDOM)
+			io->ci_rand_read = 1;
 	}
 
 	/* PagePrivate2 is set in ll_io_zero_page() to tell us the vmpage
