@@ -3043,7 +3043,7 @@ test_140b() {
 run_test 140b "local mount is excluded from recovery"
 
 test_141() {
-	local oldc
+	local oldc=0
 	local newc
 	local oldgen
 
@@ -3056,18 +3056,28 @@ test_141() {
 	oldgen=$(do_facet ost1 $LCTL get_param -n mgc.*.import |
 		 awk '/generation:/{print $NF}')
 	do_rpc_nodes $(facet_active_host ost1) cancel_lru_locks MGC
-	oldc=$(do_facet ost1 $LCTL get_param -n \
-		'ldlm.namespaces.MGC*.lock_count')
+	local end=$((SECONDS + 30))
+	local tmpc=1
+
+	while (( oldc == 0 || tmpc != oldc )) && (( SECONDS < end )); do
+		tmpc=$oldc
+		sleep 1
+		oldc=$(do_facet ost1 \
+		       $LCTL "get_param -n 'ldlm.namespaces.MGC*.lock_count'")
+	done
+
 	fail $SINGLEMDS
 	wait_mgc_import_state ost1 FULL
 	wait_update_facet_cond ost1 "$LCTL get_param -n mgc.*.import |
-		awk '/generation:/{print}' | cut -d':' -f2" != " $oldgen"
+		awk '/generation:/{print}' | cut -d':' -f2" "!=" " $oldgen"
 	do_rpc_nodes $(facet_active_host ost1) cancel_lru_locks MGC
-	newc=$(do_facet ost1 $LCTL get_param -n \
-		'ldlm.namespaces.MGC*.lock_count')
-
-	[ $oldc -eq $newc ] || error "mgc lost locks ($oldc != $newc)"
-	return 0
+	wait_update_facet ost1 \
+		"$LCTL get_param -n 'ldlm.namespaces.MGC*.lock_count'" $oldc ||
+	{
+		newc=$(do_facet ost1 \
+		       $LCTL get_param -n 'ldlm.namespaces.MGC*.lock_count')
+		error "mgc lost locks ($oldc != $newc)"
+	}
 }
 run_test 141 "do not lose locks on MGS restart"
 
