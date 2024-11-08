@@ -165,7 +165,8 @@ static inline bool llapi_pool_name_is_valid(const char **pool_name)
 
 static inline bool llapi_dir_stripe_count_is_valid(int64_t count)
 {
-	return count >= -1 && count <= LMV_MAX_STRIPE_COUNT;
+	return count >= LMV_OVERSTRIPE_COUNT_MAX &&
+	       count <= LMV_MAX_STRIPE_COUNT;
 }
 
 static inline bool llapi_dir_stripe_index_is_valid(int64_t index)

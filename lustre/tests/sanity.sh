@@ -27979,7 +27979,13 @@ test_300t() {
 	mkdir $dir2
 	stripe_count=$($LFS getdirstripe -c $dir2)
 
-	(( $stripe_count == $max_count )) || error "wrong stripe count"
+	if (( $MDSCOUNT == 2 &&
+	      $MDS1_VERSION >= $(version_code 2.16.0) )); then
+		(( $stripe_count == 0 )) || error "(0) wrong stripe count"
+	else
+		(( $stripe_count == $max_count )) ||
+			error "(1) wrong stripe count"
+	fi
 }
 run_test 300t "test max_mdt_stripecount"
 
@@ -28347,6 +28353,30 @@ test_300ui() {
 		true
 }
 run_test 300ui "overstripe is not supported on one MDT system"
+
+test_300uj() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.16.0) )) ||
+		skip "need MDS >= 2.16.0 for llog timestamps"
+
+	local setcount=-2
+	local expected_count=$((MDSCOUNT * 2))
+
+	mkdir $DIR/$tdir
+	$LFS mkdir -C $setcount $DIR/$tdir/${tdir}.0 ||
+		error "(0) failed overstriped dir creation with -C -N test"
+	local getstripe_count=$($LFS getdirstripe -c $DIR/$tdir/${tdir}.0)
+	(( getstripe_count == expected_count )) ||
+		error "(1) incorrect stripe count for -C -N overstriped dir"
+	rm -f $DIR/$tdir/${tdir}.0
+
+	# limit testing
+	setcount=-6
+	$LFS setdirstripe -C $setcount $DIR/$tdir/${tdir}.1 2>&1 |
+		grep "invalid stripe count" ||
+		error "(0) failed overstriped dir creation limit test"
+}
+run_test 300uj "overstriped dir with -C -N sanity test"
 
 (( max_stripes_per_mdt == 0 )) ||
 	do_nodes $mdts $LCTL set_param -n \

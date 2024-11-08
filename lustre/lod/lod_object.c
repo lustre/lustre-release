@@ -5805,7 +5805,8 @@ static void lod_ah_init(const struct lu_env *env,
 
 	if (S_ISDIR(child_mode)) {
 		const struct lmv_user_md_v1 *lum1 = ah->dah_eadata;
-		int max_stripe_count;
+		int max_stripe_count = 0;
+		int mdt_count = d->lod_remote_mdt_count + 1;
 
 		/* other default values are 0 */
 		lc->ldo_dir_stripe_offset = LMV_OFFSET_DEFAULT;
@@ -5907,17 +5908,25 @@ static void lod_ah_init(const struct lu_env *env,
 			}
 		}
 
-		/* shrink the stripe count to max_mdt_stripecount if it is -1
-		 * and max_mdt_stripecount is not 0
+		/*
+		 * 1. overstriped case(< 0), adjust stripe count given
+		 * overstriped factor by mdt_countmdt_count;
+		 *   1.1 use lod_max_mdt_stripecount as max_stripe_count;
+		 * 2. overstriped case(> 0), multiply max_stripe_count by
+		 * max_stripes_per_mdt;
 		 */
-		if (lc->ldo_dir_stripe_count == (__u16)(-1) &&
-		    d->lod_max_mdt_stripecount)
-			lc->ldo_dir_stripe_count = d->lod_max_mdt_stripecount;
-
-		max_stripe_count = d->lod_remote_mdt_count + 1;
-		if (lc->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED)
+		max_stripe_count = mdt_count;
+		if ((__s16)lc->ldo_dir_stripe_count >=
+				LMV_OVERSTRIPE_COUNT_MAX &&
+		    (__s16)lc->ldo_dir_stripe_count <=
+				LMV_OVERSTRIPE_COUNT_MIN) {
+			lc->ldo_dir_stripe_count = mdt_count *
+				-(__s16)lc->ldo_dir_stripe_count;
+			max_stripe_count = d->lod_max_mdt_stripecount ?:
+				mdt_count * d->lod_max_stripes_per_mdt;
+		} else if (lc->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED) {
 			max_stripe_count *= d->lod_max_stripes_per_mdt;
-
+		}
 		/* shrink the stripe_count to max stripe count */
 		if (lc->ldo_dir_stripe_count > max_stripe_count &&
 		    !CFS_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE)) {

@@ -7505,9 +7505,12 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'T':
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
+			/* only allow count -1..-5 for overstriped dirs */
 			if (errno != 0 || *end != '\0' ||
-			    lsa.lsa_stripe_count < LLAPI_OVERSTRIPE_COUNT_MAX ||
-			    lsa.lsa_stripe_count > LOV_MAX_STRIPE_COUNT) {
+			    lsa.lsa_stripe_count <
+				(overstriped ? LMV_OVERSTRIPE_COUNT_MAX :
+					       LLAPI_OVERSTRIPE_COUNT_MIN) ||
+			    lsa.lsa_stripe_count > LMV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"%s: invalid stripe count '%s'\n",
 					progname, optarg);
@@ -7777,9 +7780,14 @@ static int lfs_setdirstripe(int argc, char **argv)
 	 * initialize stripe parameters, in case param is converted to specific,
 	 * i.e, 'lfs mkdir -i -1 -c N', always allocate space for lsp_tgts.
 	 */
-	param = calloc(1, offsetof(typeof(*param),
-		       lsp_tgts[lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT ?
-				lsa.lsa_stripe_count : lsa.lsa_nr_tgts]));
+	if (lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT ||
+		lsa.lsa_stripe_count <= LLAPI_OVERSTRIPE_COUNT_MIN) {
+		param = calloc(1, offsetof(typeof(*param),
+			       lsp_tgts[lsa.lsa_nr_tgts]));
+	} else {
+		param = calloc(1, offsetof(typeof(*param),
+			       lsp_tgts[lsa.lsa_stripe_count]));
+	}
 	if (!param) {
 		fprintf(stderr,
 			"%s %s: cannot allocate memory for parameters: %s\n",
@@ -7821,7 +7829,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 	}
 	param->lsp_max_inherit = max_inherit;
 	if (default_stripe) {
-
 		if (max_inherit_rr == LAYOUT_INHERIT_UNSET)
 			max_inherit_rr = LMV_INHERIT_RR_DEFAULT;
 		param->lsp_max_inherit_rr = max_inherit_rr;

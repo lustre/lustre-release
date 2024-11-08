@@ -1220,6 +1220,13 @@ enum lustre_foreign_types {
 
 extern struct lustre_foreign_type lu_foreign_types[];
 
+/**
+ * When specified or returned as the value for stripe count, all
+ * available MDTs will be used.
+ */
+#define LMV_OVERSTRIPE_COUNT_MIN    ((__s16)0xffff) /* -1 */
+#define LMV_OVERSTRIPE_COUNT_MAX    ((__s16)0xfffb) /* -5 */
+
 /* Got this according to how get LOV_MAX_STRIPE_COUNT, see above,
  * (max buffer size - lmv+rpc header) / sizeof(struct lmv_user_mds_data)
  */
