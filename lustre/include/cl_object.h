@@ -1917,13 +1917,6 @@ struct cl_io {
 	 */
 			     ci_unaligned_dio:1,
 	/**
-	 * there is a compat issue with unupgraded ZFS targets which means we
-	 * must refuse to do unaligned DIO to these targets, so this is used
-	 * to annotate that in the IO (since we learn if there is a problematic
-	 * OST/MDT target as we build the IO)
-	 */
-			     ci_target_is_zfs:1,
-	/**
 	 * there is an interop issue with unpatched clients/servers that
 	 * exceed 4k read/write offsets with I/O exceeding LNET_MTU.
 	 * This flag cleared if a target is not patched.

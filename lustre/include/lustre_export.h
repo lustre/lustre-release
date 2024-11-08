@@ -514,18 +514,6 @@ static inline bool exp_connect_batch_rpc(struct obd_export *exp)
 	return (exp_connect_flags2(exp) & OBD_CONNECT2_BATCH_RPC);
 }
 
-static inline bool exp_connect_target_is_zfs(struct obd_export *exp)
-{
-	struct obd_connect_data *ocd = &exp->exp_connect_data;
-	bool is_zfs = false;
-
-	/* > 2ULL << 59 implies ZFS, so this is ldiskfs */
-	if (exp_connect_flags(exp) & OBD_CONNECT_MAXBYTES)
-		is_zfs = !(ocd->ocd_maxbytes < (2ULL << 59));
-
-	return is_zfs;
-}
-
 enum {
 	/* archive_ids in array format */
 	KKUC_CT_DATA_ARRAY_MAGIC	= 0x092013cea,
