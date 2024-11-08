@@ -23947,14 +23947,11 @@ test_300p() {
 	mkdir_on_mdt0 $DIR/$tdir
 
 	#define OBD_FAIL_OUT_ENOSPC	0x1704
-	do_facet mds2 lctl set_param fail_loc=0x80001704
-	$LFS setdirstripe -i 0 -c2 $DIR/$tdir/bad_striped_dir > /dev/null 2>&1 \
-		 && error "create striped directory should fail"
+	do_facet mds2 lctl set_param fail_loc=0x1704
+	$LFS setdirstripe -i 0,1 $DIR/$tdir/bad_striped_dir &&
+		error "create striped directory should fail"
 
-	[ -e $DIR/$tdir/bad_striped_dir ] && error "striped dir exists"
-
-	$LFS setdirstripe -c2 $DIR/$tdir/bad_striped_dir
-	true
+	! [ -e $DIR/$tdir/bad_striped_dir ] || error "striped dir exists"
 }
 run_test 300p "create striped directory without space"
 
