@@ -866,6 +866,7 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 	case OBD_IOC_QUOTACTL: {
 		struct if_quotactl *qctl = karg;
 		struct obd_quotactl *oqctl;
+		struct obd_import *imp;
 
 		if (qctl->qc_valid == QC_MDTIDX) {
 			tgt = lmv_tgt(lmv, qctl->qc_idx);
@@ -884,8 +885,18 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 			RETURN(-EINVAL);
 		}
 
-		if (!tgt || !tgt->ltd_exp)
+		if (!tgt)
+			RETURN(-ENODEV);
+
+		if (!tgt->ltd_exp)
 			RETURN(-EINVAL);
+
+		imp = class_exp2cliimp(tgt->ltd_exp);
+		if (!tgt->ltd_active && imp->imp_state != LUSTRE_IMP_IDLE) {
+			qctl->qc_valid = QC_MDTIDX;
+			qctl->obd_uuid = tgt->ltd_uuid;
+			RETURN(-ENODATA);
+		}
 
 		OBD_ALLOC_PTR(oqctl);
 		if (!oqctl)
@@ -3174,7 +3185,7 @@ static int lmv_get_info(const struct lu_env *env, struct obd_export *exp,
 			exp->exp_connect_data = *(struct obd_connect_data *)val;
 		RETURN(rc);
 	} else if (KEY_IS(KEY_TGT_COUNT)) {
-		*((int *)val) = lmv->lmv_mdt_descs.ltd_lmv_desc.ld_tgt_count;
+		*((int *)val) = lmv->lmv_mdt_descs.ltd_tgts_size;
 		RETURN(0);
 	}
 

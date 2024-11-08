@@ -996,54 +996,65 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 				       sizeof(struct obd_statfs))))
 			RETURN(-EFAULT);
 		break;
-        }
-        case OBD_IOC_QUOTACTL: {
-                struct if_quotactl *qctl = karg;
-                struct lov_tgt_desc *tgt = NULL;
-                struct obd_quotactl *oqctl;
+	}
+	case OBD_IOC_QUOTACTL: {
+		struct if_quotactl *qctl = karg;
+		struct lov_tgt_desc *tgt = NULL;
+		struct obd_quotactl *oqctl;
+		struct obd_import *imp;
 
 		if (qctl->qc_valid == QC_OSTIDX) {
 			if (count <= qctl->qc_idx)
 				RETURN(-EINVAL);
 
 			tgt = lov->lov_tgts[qctl->qc_idx];
-			if (!tgt || !tgt->ltd_exp)
+			if (!tgt)
+				RETURN(-ENODEV);
+
+			if (!tgt->ltd_exp)
 				RETURN(-EINVAL);
-                } else if (qctl->qc_valid == QC_UUID) {
-                        for (i = 0; i < count; i++) {
-                                tgt = lov->lov_tgts[i];
-                                if (!tgt ||
-                                    !obd_uuid_equals(&tgt->ltd_uuid,
-                                                     &qctl->obd_uuid))
-                                        continue;
+		} else if (qctl->qc_valid == QC_UUID) {
+			for (i = 0; i < count; i++) {
+				tgt = lov->lov_tgts[i];
+				if (!tgt ||
+				    !obd_uuid_equals(&tgt->ltd_uuid,
+						     &qctl->obd_uuid))
+					continue;
 
-                                if (tgt->ltd_exp == NULL)
-                                        RETURN(-EINVAL);
+				if (tgt->ltd_exp == NULL)
+					RETURN(-EINVAL);
 
-                                break;
-                        }
-                } else {
-                        RETURN(-EINVAL);
-                }
+				break;
+			}
+		} else {
+			RETURN(-EINVAL);
+		}
 
-                if (i >= count)
-                        RETURN(-EAGAIN);
+		if (i >= count)
+			RETURN(-EAGAIN);
 
-                LASSERT(tgt && tgt->ltd_exp);
-                OBD_ALLOC_PTR(oqctl);
-                if (!oqctl)
-                        RETURN(-ENOMEM);
+		LASSERT(tgt && tgt->ltd_exp);
+		imp = class_exp2cliimp(tgt->ltd_exp);
+		if (!tgt->ltd_active && imp->imp_state != LUSTRE_IMP_IDLE) {
+			qctl->qc_valid = QC_OSTIDX;
+			qctl->obd_uuid = tgt->ltd_uuid;
+			RETURN(-ENODATA);
+		}
 
-                QCTL_COPY(oqctl, qctl);
-                rc = obd_quotactl(tgt->ltd_exp, oqctl);
-                if (rc == 0) {
-                        QCTL_COPY(qctl, oqctl);
-                        qctl->qc_valid = QC_OSTIDX;
-                        qctl->obd_uuid = tgt->ltd_uuid;
-                }
-                OBD_FREE_PTR(oqctl);
-                break;
-        }
+		OBD_ALLOC_PTR(oqctl);
+		if (!oqctl)
+			RETURN(-ENOMEM);
+
+		QCTL_COPY(oqctl, qctl);
+		rc = obd_quotactl(tgt->ltd_exp, oqctl);
+		if (rc == 0) {
+			QCTL_COPY(qctl, oqctl);
+			qctl->qc_valid = QC_OSTIDX;
+			qctl->obd_uuid = tgt->ltd_uuid;
+		}
+		OBD_FREE_PTR(oqctl);
+		break;
+	}
 	default: {
 		int set = 0;
 

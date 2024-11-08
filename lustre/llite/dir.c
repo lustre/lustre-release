@@ -1234,34 +1234,33 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 		else
 			RETURN(-EINVAL);
 
-                switch (valid) {
-                case QC_MDTIDX:
-                        rc = obd_iocontrol(OBD_IOC_QUOTACTL, sbi->ll_md_exp,
-                                           sizeof(*qctl), qctl, NULL);
-                        break;
-                case QC_OSTIDX:
-                        rc = obd_iocontrol(OBD_IOC_QUOTACTL, sbi->ll_dt_exp,
-                                           sizeof(*qctl), qctl, NULL);
-                        break;
-                case QC_UUID:
-                        rc = obd_iocontrol(OBD_IOC_QUOTACTL, sbi->ll_md_exp,
-                                           sizeof(*qctl), qctl, NULL);
-                        if (rc == -EAGAIN)
-                                rc = obd_iocontrol(OBD_IOC_QUOTACTL,
-                                                   sbi->ll_dt_exp,
-                                                   sizeof(*qctl), qctl, NULL);
-                        break;
-                default:
-                        rc = -EINVAL;
-                        break;
-                }
+		switch (valid) {
+		case QC_MDTIDX:
+			rc = obd_iocontrol(OBD_IOC_QUOTACTL, sbi->ll_md_exp,
+					   sizeof(*qctl), qctl, NULL);
+			break;
+		case QC_OSTIDX:
+			rc = obd_iocontrol(OBD_IOC_QUOTACTL, sbi->ll_dt_exp,
+					   sizeof(*qctl), qctl, NULL);
+			break;
+		case QC_UUID:
+			rc = obd_iocontrol(OBD_IOC_QUOTACTL, sbi->ll_md_exp,
+					   sizeof(*qctl), qctl, NULL);
+			if (rc == -EAGAIN)
+				rc = obd_iocontrol(OBD_IOC_QUOTACTL,
+						   sbi->ll_dt_exp,
+						   sizeof(*qctl), qctl, NULL);
+			break;
+		default:
+			rc = -EINVAL;
+			break;
+		}
 
-                if (rc)
-                        RETURN(rc);
-
-                qctl->qc_cmd = cmd;
-        } else {
-                struct obd_quotactl *oqctl;
+		qctl->qc_cmd = cmd;
+		if (rc)
+			RETURN(rc);
+	} else {
+		struct obd_quotactl *oqctl;
 		int oqctl_len = sizeof(*oqctl);
 
 		if (LUSTRE_Q_CMD_IS_POOL(cmd))
@@ -2010,7 +2009,7 @@ out_req:
 		}
 
 		rc = quotactl_ioctl(inode->i_sb, qctl);
-		if (rc == 0 &&
+		if ((rc == 0 || rc == -ENODATA) &&
 		    copy_to_user((void __user *)arg, qctl, sizeof(*qctl)))
                         rc = -EFAULT;
 

@@ -2593,6 +2593,108 @@ test_15(){
 }
 run_test 15 "Set over 4T block quota"
 
+test_16a()
+{
+	(( $CLIENT_VERSION < $(version_code 2.14.55) )) &&
+		skip "Not supported Lustre client before 2.14.55"
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	$LFS setquota -u $TSTUSR -B 500M -I 10K $MOUNT ||
+		error "failed to set quota for user $TSTUSR"
+	$LFS setquota -g $TSTUSR -B 500M -I 10K $MOUNT ||
+		error "failed to set quota for group $TSTUSR"
+
+	$RUNAS $DD of=$DIR/$tdir/$tfile bs=1M count=50 ||
+		quota_error u $TSTUSR "write failure"
+
+	$LFS quota -u $TSTUSR $MOUNT ||
+		quota_error u $TSTUSR "failed to get quota"
+
+	local OSC=$($LCTL dl | grep OST0000-osc-[^M] | awk '{print $4}')
+
+	$LCTL --device %$OSC deactivate
+	stack_trap "$LCTL --device %$OSC activate"
+
+	$LFS quota -v -u $TSTUSR $MOUNT ||
+		quota_error u $TSTUSR "failed to get quota after deactivate OSC"
+	$LFS quota -v -g $TSTUSR $MOUNT ||
+		quota_error g $TSTUSR "failed to get quota after deactivate OSC"
+
+	(( $MDSCOUNT > 1 )) || return 0
+
+	local MDC=$($LCTL dl | grep MDT0001-mdc-[^M] | awk '{print $4}')
+
+	$LCTL --device %$MDC deactivate
+	stack_trap "$LCTL --device %$MDC activate"
+
+	$LFS quota -v -u $TSTUSR $MOUNT ||
+		quota_error u $TSTUSR "failed to get quota after deactivate MDC"
+	$LFS quota -v -g $TSTUSR $MOUNT ||
+		quota_error g $TSTUSR "failed to get quota after deactivate OSC"
+}
+run_test 16a "lfs quota should skip the inactive MDT/OST"
+
+cleanup_16b()
+{
+	stopall
+	formatall
+	setupall
+}
+
+test_16b()
+{
+	(( $CLIENT_VERSION < $(version_code 2.14.55) )) &&
+		skip "Not supported Lustre client before 2.14.55"
+
+	(( $MDSCOUNT >= 3 )) || skip "needs >= 3 MDTs"
+
+	stopall
+	if ! combined_mgs_mds ; then
+		format_mgs
+		start_mgs
+	fi
+
+	add mds1 $(mkfs_opts mds1 $(mdsdevname 1)) --index=0 --reformat \
+		$(mdsdevname 1) $(mdsvdevname 1)
+	add mds2 $(mkfs_opts mds2 $(mdsdevname 2)) --index=1 --reformat \
+		$(mdsdevname 2) $(mdsvdevname 2)
+	add mds3 $(mkfs_opts mds3 $(mdsdevname 3)) --index=100 --reformat \
+		$(mdsdevname 3) $(mdsvdevname 3)
+
+	add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --index=0 --reformat \
+		$(ostdevname 1) $(ostvdevname 1)
+	add ost2 $(mkfs_opts ost2 $(ostdevname 2)) --index=100 --reformat \
+		$(ostdevname 2) $(ostvdevname 2)
+
+	stack_trap cleanup_16b
+
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "MDT1 start failed"
+	start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS || error "MDT2 start failed"
+	start mds3 $(mdsdevname 3) $MDS_MOUNT_OPTS || error "MDT3 start failed"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "OST1 start failed"
+	start ost2 $(ostdevname 2) $OST_MOUNT_OPTS || error "OST2 start failed"
+
+	mount_client $MOUNT || error "Unable to mount client"
+
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	$LFS setquota -u $TSTUSR -B 100M -I 10K $MOUNT ||
+		error "failed to set quota for user $TSTUSR"
+	$LFS setquota -g $TSTUSR -B 100M -I 10K $MOUNT ||
+		error "failed to set quota for group $TSTUSR"
+
+	$RUNAS $DD of=$DIR/$tdir/$tfile bs=1M count=10 ||
+		quota_error u $TSTUSR "write failure"
+
+	cnt=$($LFS quota -v -u $TSTUSR $MOUNT | grep -ce "^$FSNAME-[MD|OS]T*")
+	[ $cnt -le 5 ] || quota_error u $TSTUSR "failed to get user quota"
+	cnt=$($LFS quota -v -g $TSTUSR $MOUNT | grep -ce "^$FSNAME-[MD|OS]T*")
+	[ $cnt -le 5 ] || quota_error g $TSTUSR "failed to get group quota"
+}
+run_test 16b "lfs quota should skip the nonexistent MDT/OST"
+
 test_17sub() {
 	local err_code=$1
 	local BLKS=1    # 1M less than limit

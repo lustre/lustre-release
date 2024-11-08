@@ -8320,6 +8320,28 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 				goto out;
 			}
 
+			/* no target for this index yet */
+			if (rc == -ENODEV) {
+				rc = 0;
+				continue;
+			}
+
+			/* inactive target */
+			if (rc == -ENODATA) {
+				char name[UUID_MAX+8];
+
+				snprintf(name, sizeof(name), "%s[inact]",
+					obd_uuid2str(&qctl->obd_uuid));
+				memset(&qctl->qc_dqinfo, 0,
+				       sizeof(qctl->qc_dqinfo));
+				memset(&qctl->qc_dqblk, 0,
+				       sizeof(qctl->qc_dqblk));
+				print_quota(name, qctl, qctl->qc_valid, 0, h,
+					    false);
+				rc = 0;
+				continue;
+			}
+
 			if (!rc1)
 				rc1 = rc;
 			fprintf(stderr, "quotactl %s%d failed.\n",
