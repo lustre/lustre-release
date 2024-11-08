@@ -1710,6 +1710,7 @@ test_4a() {
 	local TESTFILE=$DIR/$tdir/$tfile-0
 	local GRACE=12
 
+	[ "$mds1_FSTYPE" = zfs ] && GRACE=20
 	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 
 	echo "User quota (soft limit:$LIMIT files  grace:$GRACE seconds)"
@@ -1721,8 +1722,6 @@ test_4a() {
 		$GRACE $DIR || error "set user grace time failed"
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR ||
 		error "set user quota failed"
-
-	[ "$mds1_FSTYPE" = zfs ] && GRACE=20
 
 	test_file_soft $TESTFILE $LIMIT $GRACE "u"
 
