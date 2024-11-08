@@ -2029,13 +2029,20 @@ out:
 	}
 
 	if (iot == CIT_READ) {
-		if (result > 0)
+		if (result > 0) {
 			ll_stats_ops_tally(ll_i2sbi(inode),
 					   LPROC_LL_READ_BYTES, result);
+			if (args->via_hybrid_switched)
+				ll_stats_ops_tally(ll_i2sbi(inode),
+						   LPROC_LL_HIO_READ, result);
+		}
 	} else if (iot == CIT_WRITE) {
 		if (result > 0) {
 			ll_stats_ops_tally(ll_i2sbi(inode),
 					   LPROC_LL_WRITE_BYTES, result);
+			if (args->via_hybrid_switched)
+				ll_stats_ops_tally(ll_i2sbi(inode),
+						   LPROC_LL_HIO_WRITE, result);
 			lfd->fd_write_failed = false;
 		} else if (result == 0 && rc == 0) {
 			rc = io->ci_result;
