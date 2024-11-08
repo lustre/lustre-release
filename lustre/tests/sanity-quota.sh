@@ -707,6 +707,12 @@ test_1b() {
 	pool_add_targets $qpool 0 $(($OSTCOUNT - 1)) ||
 		error "pool_add_targets failed"
 
+	# check qmt_pool_add dmesg error
+	local msg_rgx="QMT0000: can't add to $FSNAME-OST0000.*pool.*$qpool"
+	local dmesg_err
+	dmesg_err=$(do_facet mds1 dmesg | grep "$msg_rgx" | tail -1)
+	[[ -z "$dmesg_err" ]] || error "found qmt_pool_add error: $dmesg_err"
+
 	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
 		error "set user quota failed"
 

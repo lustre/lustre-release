@@ -2219,11 +2219,22 @@ static struct obd_device *obd_find_qmt0(char *obd_name)
 	return qmt;
 }
 
+/* Run QMT0000 pool operations only for MDT0000 */
+static inline bool lod_pool_need_qmt0(const char *obd_name)
+{
+	__u32 idx;
+	int type;
+
+	type = server_name2index(obd_name, &idx, NULL);
+
+	return type == LDD_F_SV_TYPE_MDT && idx == 0;
+}
+
 static int lod_pool_new_q(struct obd_device *obd, char *poolname)
 {
 	int err = lod_pool_new(obd, poolname);
 
-	if (!err) {
+	if (!err && lod_pool_need_qmt0(obd->obd_name)) {
 		obd = obd_find_qmt0(obd->obd_name);
 		if (obd)
 			obd_pool_new(obd, poolname);
@@ -2237,7 +2248,7 @@ static int lod_pool_remove_q(struct obd_device *obd, char *poolname,
 {
 	int err = lod_pool_remove(obd, poolname, ostname);
 
-	if (!err) {
+	if (!err && lod_pool_need_qmt0(obd->obd_name)) {
 		obd = obd_find_qmt0(obd->obd_name);
 		if (obd)
 			obd_pool_rem(obd, poolname, ostname);
@@ -2250,7 +2261,7 @@ static int lod_pool_add_q(struct obd_device *obd, char *poolname, char *ostname)
 {
 	int err = lod_pool_add(obd, poolname, ostname);
 
-	if (!err) {
+	if (!err && lod_pool_need_qmt0(obd->obd_name)) {
 		obd = obd_find_qmt0(obd->obd_name);
 		if (obd)
 			obd_pool_add(obd, poolname, ostname);
@@ -2263,7 +2274,7 @@ static int lod_pool_del_q(struct obd_device *obd, char *poolname)
 {
 	int err = lod_pool_del(obd, poolname);
 
-	if (!err) {
+	if (!err && lod_pool_need_qmt0(obd->obd_name)) {
 		obd = obd_find_qmt0(obd->obd_name);
 		if (obd)
 			obd_pool_del(obd, poolname);
