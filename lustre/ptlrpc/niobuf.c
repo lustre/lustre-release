@@ -707,8 +707,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 	LNetInvalidateMDHandle(&bulk_cookie);
 
-	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC)) {
+		request->rq_sent = ktime_get_real_seconds();
 		RETURN(0);
+	}
 
 	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_DELAY_RECOV) &&
 		     lustre_msg_get_opc(request->rq_reqmsg) == MDS_CONNECT &&

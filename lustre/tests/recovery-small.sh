@@ -1081,6 +1081,12 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 
 	# make sure all imports are connected and not IDLE
 	do_facet client lfs df > /dev/null
+	# make sure client will not be discarded by server due to LU-14708
+	$LFS setstripe -c -1 -S 64K $MOUNT/$tfile
+	dd if=/dev/zero of=$MOUNT/$tfile bs=64K count=$OSTCOUNT oflag=sync ||
+		error "dd failed"
+	sync; sleep 5; sync
+
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
 	do_facet client lctl set_param fail_loc=0x505
 	local before=$(date +%s)
