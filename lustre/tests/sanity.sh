@@ -28422,6 +28422,7 @@ test_311() {
 
 	unlinkmany $DIR/$tdir/$tfile. 1000
 	wait_delete_completed
+	wait_zfs_commit $SINGLEMDS 10
 
 	do_nodes $mdts "$LCTL set_param -n \
 			osp.*OST0000*.max_create_count=$max_count"
@@ -28443,7 +28444,7 @@ test_311() {
 
 	echo -e "\nwaited $i sec, old Iused $old_iused, new Iused $new_iused"
 	((old_iused - new_iused > 400)) ||
-		error "objs not destroyed after unlink $new_iused > $old_iused"
+		error "objs not destroyed after unlink"
 }
 run_test 311 "disable OSP precreate, and unlink should destroy objs"
 

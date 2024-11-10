@@ -3606,7 +3606,7 @@ wait_zfs_commit() {
 	# the occupied disk space will be released
 	# only after TXGs are committed
 	if [[ $(facet_fstype $1) == zfs ]]; then
-		echo "sleep $zfs_wait for ZFS $(facet_fstype $1)"
+		echo "sleep $zfs_wait for ZFS $(facet_type $1)"
 		sleep $zfs_wait
 	fi
 }
