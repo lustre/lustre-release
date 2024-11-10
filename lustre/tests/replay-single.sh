@@ -5342,6 +5342,28 @@ test_201() {
 }
 run_test 201 "MDT umount cascading disconnects timeouts"
 
+test_202() {
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+
+	(( $MDS1_VERSION >= $(version_code 2.16.0) )) ||
+	   (( $MDS1_VERSION < $(version_code v2_15_55-64-g13557aa869) &&
+	   $MDS1_VERSION >= $(version_code 2.14.0-ddn178) )) ||
+	   (( $MDS1_VERSION < $(version_code 2.14.0-ddn87-14-gf1bd967799) )) ||
+		skip "need MDS with LU-18416 fix for layout version"
+
+	mkdir_on_mdt0 $td || error "can't mkdir"
+	$LFS setstripe -E128M -c1 -Eeof -c2 $td || error "can't setstripe"
+	replay_barrier mds1
+	touch $tf
+	local before=$($LFS getstripe -v $tf|awk '/lcm_layout_gen:/{print $2}')
+	fail mds1
+	cancel_lru_locks mdc
+	local after=$($LFS getstripe -v $tf|awk '/lcm_layout_gen:/{print $2}')
+	(( $before == $after )) || error "layout gen changed: $before -> $after"
+}
+run_test 202 "pfl replay should recovery layout generation"
+
 
 complete_test $SECONDS
 check_and_cleanup_lustre
