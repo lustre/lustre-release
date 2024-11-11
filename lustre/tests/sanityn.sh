@@ -881,40 +881,7 @@ test_27() {
 run_test 27 "align non-overlapping extent locks from request ==="
 
 test_28() { # bug 9977
-	ECHO_UUID="ECHO_osc1_UUID"
-	tOST=$($LCTL dl | awk '/-osc-|OSC.*MNT/ { print $4 }' | head -n1)
-
-	$LFS setstripe $DIR1/$tfile -S 1048576 -i 0 -c 2
-	tOBJID=`$LFS getstripe $DIR1/$tfile | awk '$1 == 1 {print $2}'`
-	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2
-
-	$LCTL <<-EOF
-		newdev
-		attach echo_client ECHO_osc1 $ECHO_UUID
-		setup $tOST
-	EOF
-
-	tECHOID=`$LCTL dl | grep $ECHO_UUID | awk '{ print $1 }'`
-	$LCTL --device $tECHOID destroy "${tOBJID}:0"
-
-    	$LCTL <<-EOF
-		cfg_device ECHO_osc1
-		cleanup
-		detach
-	EOF
-
-	# reading of 1st stripe should pass
-	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error "dd failed"
-	# reading of 2nd stripe should fail (this stripe was destroyed)
-	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 && error
-
-	# now, recreating test file
-	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2 || error "dd failed"
-	# reading of 1st stripe should pass
-	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error "dd failed"
-	# reading of 2nd stripe should pass
-	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 ||
-		error "dd failed"
+	skip "echo_client on osc is no longer supported"
 }
 run_test 28 "read/write/truncate file with lost stripes"
 

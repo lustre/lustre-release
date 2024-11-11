@@ -10,10 +10,10 @@
 # ... use 'host:name' for obd instances on other nodes.
 # allow these to be passed in via string...
 # OR
-# one can specify only case=disk or case=network or case=netdisk through
+# one can specify only case=disk or case=network through
 # command line.
 
-# Prerequisite: For "disk" case and "netdisk" case you need to have lustre setup
+# Prerequisite: For "disk" case you need to have lustre setup
 #             with one or more ost's. For "network" case  you need to have all
 #             modules (those llmount.sh loades) loaded in kernel. And the
 #             'lctl dl' output must be blank.
@@ -27,10 +27,6 @@
 #   $ nobjhi=2 thrhi=2 size=1024 targets="<name/ip_of_server>" case=network sh obdfilter-survey
 #   where, targets is name or ip address of system, which you want to
 #   set as server.
-# case 3 (network and disk):
-#   $ nobjhi=2 thrhi=2 size=1024 case=netdisk sh obdfilter-survey
-#   one can also run test with user defined targets as follows,
-#   $ nobjhi=2 thrhi=2 size=1024 targets="<osc_name> ..." sh obdfilter-survey
 #[ NOTE: It is advised to have automated login (passwordless entry) between server and
 #  client systems on which this test runs.]
 
@@ -360,52 +356,6 @@ if [ $case == "disk" ]; then
 		ost_names[$i]=${client_names[$i]}
 	done
 fi
-if [ $case == "netdisk" ]; then
-	if [ "$targets" ]; then
-		for ((i = 0; i < $ndevs; i++)); do
-			setup_osc_for_remote_ost ${host_names[$i]} \
-						 ${client_names[$i]} $i
-			osc_name=${client_names[$i]}_osc
-			ec_using_osc $osc_name
-			cleanup_oscs="$cleanup_oscs $osc_name"
-		done
-	else
-		client_names_str=$($lctl dl | grep -v mdt |
-			awk '{if ($2 == "UP" && $3 == "osc") {print $4} }')
-		count=0;
-		for name in $client_names_str; do
-			client_names[$count]=$(echo $name | sed 's/-osc-.*$//')
-			count=$((count + 1))
-		done
-
-		host_names_str=$($lctl dl -t | grep -v mdt |
-			awk '{if ($2 == "UP" && $3 == "osc") {print $7} }')
-		count=0;
-		for name in $host_names_str; do
-			host_names[$count]=$(echo $name | sed 's/@.*$//')
-			count=$((count + 1))
-		done
-
-		for (( i = 0; i < $count; i++ )) do
-			setup_osc_for_remote_ost ${host_names[$i]} \
-						 ${client_names[$i]} $i
-			osc_name=${client_names[$i]}_osc
-			ec_using_osc $osc_name
-			cleanup_oscs="$cleanup_oscs $osc_name"
-		done
-	fi
-
-	echo_clients=$($lctl dl | grep echo_client |
-		       awk "{if (\$2 == \"UP\" && \$3 == \"echo_client\") { \
-		       		print \$4} }")
-	cnt=0;
-	for name in $echo_clients; do
-		client_names[$cnt]=$name
-		host_names[$cnt]=localhost
-		cnt=$((cnt + 1))
-	done
-	ndevs=${#client_names[@]}
-fi
 if [ $case == "network" ]; then
 	server_nid=$targets
 	if [ -z "$server_nid" ]; then
@@ -478,7 +428,7 @@ for ((i=0; i < $ndevs; i++)); do
 done
 if (($ndevs <= 0 || ${#host_names[@]} <= 0)); then
 	echo "no devices or hosts specified"
-	cleanup 0 $clean_srv_OSS $cleanup_oscs
+	cleanup 0 $clean_srv_OSS
 fi
 
 print_summary "$(date) Obdfilter-survey for case=$case from $(hostname)"
@@ -637,5 +587,5 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 		done # $thr
 	done # $nobj
 done # $rsz
-cleanup 0 $clean_srv_OSS $cleanup_oscs
+cleanup 0 $clean_srv_OSS
 exit 0

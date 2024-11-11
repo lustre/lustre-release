@@ -60,7 +60,6 @@ obdflter_survey_targets () {
 
 	case $case in
 		disk)    targets=$(get_targets $case);;
-		netdisk) targets=$(get_targets $case);;
 		network) targets=$(host_nids_address $(comma_list $(osts_nodes)) $NETTYPE);;
 		*) error "unknown obdflter-survey case!" ;;
 	esac
@@ -117,29 +116,12 @@ test_1c () {
 run_test 1c "Object Storage Targets survey, big batch"
 
 test_2a () {
-	obdflter_survey_run netdisk
+	skip "netdisk was removed"
 }
 run_test 2a "Stripe F/S over the Network"
 
 test_2b () {
-	local param_file=$TMP/$tfile-params
-
-	do_nodesv $(comma_list $(osts_nodes)) \
-		$LCTL get_param obdfilter.${FSNAME}-*.sync_journal
-	save_lustre_params $(get_facets OST) \
-		"obdfilter.${FSNAME}-*.sync_journal" > $param_file
-	do_nodesv $(comma_list $(osts_nodes)) \
-		$LCTL set_param obdfilter.${FSNAME}-*.sync_journal=0
-
-	local stime=$(date +%s)
-	thrlo=4 nobjhi=1 thrhi=4 obdflter_survey_run netdisk
-	local etime=$(date +%s)
-	local rtime=$((etime - stime))
-
-	echo "obd survey finished in $rtime seconds"
-	restore_lustre_params < $param_file
-
-	rm -f $param_file
+	skip "netdisk was removed"
 }
 run_test 2b "Stripe F/S over the Network, async journal"
 

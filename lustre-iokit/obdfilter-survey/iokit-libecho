@@ -174,17 +174,6 @@ get_devnos () {
     return 0
 }
 
-# do cleanup for netdisk case.
-cleanup_netdisk () {
-	for osc in $@; do
-		$lctl <<-EOF
-			cfg_device $osc
-			cleanup
-			detach
-		EOF
-	done
-}
-
 # do cleanup for network case.
 cleanup_network () {
 	local clean_srv_OSS=$1
@@ -238,10 +227,6 @@ cleanup () {
 	if [ $case == "network" ]; then
 		cleanup_network $1
 	fi
-	if [ $case == "netdisk" ]; then
-		shift
-		cleanup_netdisk $@
-	fi
 	if [ $exit_status ]; then
 		if [ $exit_status -ne 0 ]; then
 		echo "program exited with error "
@@ -253,7 +238,7 @@ cleanup () {
 	fi
 	exit $exit_status
 }
-trap 'cleanup 0 $clean_srv_OSS $cleanup_oscs' EXIT SIGHUP SIGINT SIGTERM
+trap 'cleanup 0 $clean_srv_OSS' EXIT SIGHUP SIGINT SIGTERM
 
 # gets echoclient device number and attach it to the client UUID
 # Results are  returned by an echo followed by an exit
@@ -307,19 +292,6 @@ get_ec_devno () {
 	exit 0
 }
 
-# Create echo-clients using osc_names and osc_uuid
-# It creates echoclients for all osc listed using #lctl device_list command
-ec_using_osc () {
-	local osc_name=$1
-
-	$lctl <<-EOF
-		attach echo_client ${osc_name}_ecc ${osc_name}_ecc_UUID
-		cfg_device ${osc_name}_ecc
-		setup $osc_name
-	EOF
-
-}
-
 # create echo client using server nid.
 ec_using_srv_nid () {
 	local server_nid=$1
@@ -334,19 +306,6 @@ ec_using_srv_nid () {
 	$lctl <<-EOF
 		attach echo_client ${oscname}_ecc $oscuuid
 		--device ${oscname}_ecc setup $oscname
-	EOF
-}
-
-setup_osc_for_remote_ost () {
-	local ost_nid=$1
-	local obdfilter_name=$2
-	local host_name=host_$3
-
-	$lctl add_uuid ${host_name}_UUID $ost_nid@$NETTYPE >/dev/null 2>&1
-	$lctl <<-EOF
-		attach osc ${obdfilter_name}_osc ${obdfilter_name}_osc_UUID
-		cfg_device ${obdfilter_name}_osc
-		setup ${obdfilter_name}_UUID ${host_name}_UUID
 	EOF
 }
 

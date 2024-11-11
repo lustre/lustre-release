@@ -17986,33 +17986,7 @@ obdecho_test() {
 }
 
 test_180a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-
-	if ! [ -d /sys/fs/lustre/echo_client ] &&
-	   ! module_loaded obdecho; then
-		load_module obdecho/obdecho &&
-			stack_trap "rmmod obdecho" EXIT ||
-			error "unable to load obdecho on client"
-	fi
-
-	local osc=$($LCTL dl | grep -v mdt | awk '$3 == "osc" {print $4; exit}')
-	local host=$($LCTL get_param -n osc.$osc.import |
-		     awk '/current_connection:/ { print $2 }' )
-	local target=$($LCTL get_param -n osc.$osc.import |
-		       awk '/target:/ { print $2 }' )
-	target=${target%_UUID}
-
-	if [ -n "$target" ]; then
-		setup_obdecho_osc $host $target &&
-			stack_trap "cleanup_obdecho_osc $target" EXIT ||
-			{ error "obdecho setup failed with $?"; return; }
-
-		obdecho_test ${target}_osc client ||
-			error "obdecho_test failed on ${target}_osc"
-	else
-		$LCTL get_param osc.$osc.import
-		error "there is no osc.$osc.import target"
-	fi
+	skip "obdecho on osc is no longer supported"
 }
 run_test 180a "test obdecho on osc"
 
