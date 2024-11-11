@@ -1589,7 +1589,7 @@ int mdt_brw_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 	mdt_intent_fixup_resent(mti, *lockp, lhc, flags);
 	/* resent case */
 	if (!lustre_handle_is_used(&lhc->mlh_reg_lh)) {
-		__u64 ibits = MDS_INODELOCK_DOM;
+		enum mds_ibits_locks ibits = MDS_INODELOCK_DOM;
 
 		mdt_lh_reg_init(lhc, *lockp);
 
@@ -2031,7 +2031,7 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 		RETURN_EXIT;
 
 	policy.l_inodebits.bits = MDS_INODELOCK_DOM;
-	policy.l_inodebits.try_bits = 0;
+	policy.l_inodebits.try_bits = MDS_INODELOCK_NONE;
 	policy.l_inodebits.li_initiator_id = mdt_node_id(mdt);
 	fid_build_reg_res_name(mdt_object_fid(mo), &res_id);
 

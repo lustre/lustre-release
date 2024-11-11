@@ -344,8 +344,8 @@ int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
 static int __lfsck_ibits_lock(const struct lu_env *env,
 			      struct lfsck_instance *lfsck,
 			      struct dt_object *obj, struct ldlm_res_id *resid,
-			      struct lustre_handle *lh, __u64 bits,
-			      enum ldlm_mode mode)
+			      struct lustre_handle *lh,
+			      enum mds_ibits_locks bits, enum ldlm_mode mode)
 {
 	struct lfsck_thread_info *info = lfsck_env_info(env);
 	union ldlm_policy_data *policy = &info->lti_policy;
@@ -412,7 +412,7 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
  */
 int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 		     struct dt_object *obj, struct lustre_handle *lh,
-		     __u64 bits, enum ldlm_mode mode)
+		     enum mds_ibits_locks bits, enum ldlm_mode mode)
 {
 	struct ldlm_res_id *resid = &lfsck_env_info(env)->lti_resid;
 
@@ -495,7 +495,8 @@ void lfsck_ibits_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
  */
 int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 	       struct dt_object *obj, const char *name,
-	       struct lfsck_lock_handle *llh, __u64 bits, enum ldlm_mode mode)
+	       struct lfsck_lock_handle *llh, enum mds_ibits_locks bits,
+	       enum ldlm_mode mode)
 {
 	struct ldlm_res_id *resid = &lfsck_env_info(env)->lti_resid;
 	int rc;

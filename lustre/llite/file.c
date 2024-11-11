@@ -785,7 +785,7 @@ retry:
 	rc = ll_prep_inode(&de->d_inode, &req->rq_pill, NULL, itp);
 
 	if (!rc && itp->it_lock_mode) {
-		__u64 bits = 0;
+		enum mds_ibits_locks bits = MDS_INODELOCK_NONE;
 
 		/* if DoM bit returned along with LAYOUT bit then there
 		 * can be read-on-open data returned.
@@ -1439,7 +1439,7 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 	    !(it.it_lock_bits & MDS_INODELOCK_OPEN)) {
 		/* open lock must return for lease */
 		rc = -EPROTO;
-		CERROR("%s: "DFID" lease granted but no open lock, %d/%llu: rc = %d\n",
+		CERROR("%s: "DFID" lease granted but no open lock, %d/%lu: rc = %d\n",
 		       sbi->ll_fsname, PFID(ll_inode2fid(inode)),
 		       it.it_lock_mode, it.it_lock_bits, rc);
 		GOTO(out_close, rc);
@@ -6075,7 +6075,7 @@ int ll_have_md_lock(struct obd_export *exp, struct inode *inode,
 	flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
 	for (i = 0; i < MDS_INODELOCK_NUMBITS && *bits != 0; i++) {
 		policy.l_inodebits.bits = *bits & BIT(i);
-		if (policy.l_inodebits.bits == 0)
+		if (policy.l_inodebits.bits == MDS_INODELOCK_NONE)
 			continue;
 
 		if (md_lock_match(exp, flags, fid, LDLM_IBITS, &policy, mode,

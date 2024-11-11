@@ -48,7 +48,7 @@ int ldlm_reprocess_inodebits_queue(struct ldlm_resource *res,
 				   struct list_head *queue,
 				   struct list_head *work_list,
 				   enum ldlm_process_intention intention,
-				   __u64 mask)
+				   enum mds_ibits_locks mask)
 {
 	__u64 flags;
 	int rc = LDLM_ITER_CONTINUE;
@@ -73,7 +73,7 @@ restart:
 	CDEBUG(D_DLMTRACE, "--- Reprocess resource "DLDLMRES" (%p)\n",
 	       PLDLMRES(res), res);
 	if (mask)
-		CDEBUG(D_DLMTRACE, "Hint %llx\n", mask);
+		CDEBUG(D_DLMTRACE, "Hint %lx\n", mask);
 	else
 		mask = MDS_INODELOCK_FULL;
 
@@ -112,7 +112,7 @@ restart:
 
 		lock_res(res);
 		if (rc == -ERESTART) {
-			mask = 0;
+			mask = MDS_INODELOCK_NONE;
 			GOTO(restart, rc);
 		}
 	}
@@ -162,8 +162,9 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 	enum ldlm_mode req_mode = req->l_req_mode;
 	struct list_head *tmp;
 	struct ldlm_lock *lock;
-	__u64 req_bits = req->l_policy_data.l_inodebits.bits;
-	__u64 *try_bits = &req->l_policy_data.l_inodebits.try_bits;
+	enum mds_ibits_locks req_bits = req->l_policy_data.l_inodebits.bits;
+	enum mds_ibits_locks *try_bits =
+				&req->l_policy_data.l_inodebits.try_bits;
 	int compat = 1;
 
 	ENTRY;
@@ -175,7 +176,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 	 * Meanwhile that can be true if there were just try_bits and all
 	 * are failed, so just exit gracefully and let the caller to care.
 	 */
-	if ((req_bits | *try_bits) == 0)
+	if ((req_bits | *try_bits) == MDS_INODELOCK_NONE)
 		RETURN(0);
 
 	/* Group lock could be only DOM */
@@ -260,7 +261,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			*try_bits &= ~(lock->l_policy_data.l_inodebits.bits |
 				lock->l_policy_data.l_inodebits.try_bits);
 
-			if ((req_bits | *try_bits) == 0)
+			if ((req_bits | *try_bits) == MDS_INODELOCK_NONE)
 				RETURN(0);
 
 			/* The new lock ibits is more preferable than try_bits
@@ -381,10 +382,12 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *ldlm_flags,
 			RETURN(LDLM_ITER_STOP);
 
 		/* grant also try_bits if any */
-		if (lock->l_policy_data.l_inodebits.try_bits != 0) {
+		if (lock->l_policy_data.l_inodebits.try_bits !=
+						    MDS_INODELOCK_NONE) {
 			lock->l_policy_data.l_inodebits.bits |=
 				lock->l_policy_data.l_inodebits.try_bits;
-			lock->l_policy_data.l_inodebits.try_bits = 0;
+			lock->l_policy_data.l_inodebits.try_bits =
+				MDS_INODELOCK_NONE;
 			*ldlm_flags |= LDLM_FL_LOCK_CHANGED;
 		}
 		ldlm_resource_unlink_lock(lock);
@@ -419,10 +422,12 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *ldlm_flags,
 		}
 	} else {
 		/* grant also all remaining try_bits */
-		if (lock->l_policy_data.l_inodebits.try_bits != 0) {
+		if (lock->l_policy_data.l_inodebits.try_bits !=
+						    MDS_INODELOCK_NONE) {
 			lock->l_policy_data.l_inodebits.bits |=
 				lock->l_policy_data.l_inodebits.try_bits;
-			lock->l_policy_data.l_inodebits.try_bits = 0;
+			lock->l_policy_data.l_inodebits.try_bits =
+				MDS_INODELOCK_NONE;
 			*ldlm_flags |= LDLM_FL_LOCK_CHANGED;
 		}
 		LASSERT(lock->l_policy_data.l_inodebits.bits);
@@ -467,15 +472,16 @@ void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
  * Such lock conversion is used to keep lock with non-blocking bits instead of
  * cancelling it, introduced for better support of DoM files.
  */
-int ldlm_inodebits_drop(struct ldlm_lock *lock, __u64 to_drop)
+int ldlm_inodebits_drop(struct ldlm_lock *lock, enum mds_ibits_locks to_drop)
 {
 	ENTRY;
 
 	check_res_locked(lock->l_resource);
 
 	/* Just return if there are no conflicting bits */
-	if ((lock->l_policy_data.l_inodebits.bits & to_drop) == 0) {
-		LDLM_WARN(lock, "try to drop unset bits %#llx/%#llx",
+	if ((lock->l_policy_data.l_inodebits.bits & to_drop) ==
+			MDS_INODELOCK_NONE) {
+		LDLM_WARN(lock, "try to drop unset bits %#lx/%#lx",
 			  lock->l_policy_data.l_inodebits.bits, to_drop);
 		/* nothing to do */
 		RETURN(0);
@@ -497,7 +503,7 @@ int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 	struct ldlm_lock_desc ld = { { 0 } };
-	__u64 drop_bits, new_bits;
+	enum mds_ibits_locks drop_bits, new_bits;
 	__u32 flags = 0;
 	int rc;
 
@@ -528,7 +534,7 @@ int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
 
 	drop_bits = lock->l_policy_data.l_inodebits.cancel_bits;
 	/* no cancel bits - means that caller needs full cancel */
-	if (drop_bits == 0)
+	if (drop_bits == MDS_INODELOCK_NONE)
 		RETURN(-EINVAL);
 
 	new_bits = lock->l_policy_data.l_inodebits.bits & ~drop_bits;
@@ -590,7 +596,7 @@ int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
 	 * it will result in another cycle of ldlm_cli_inodebits_convert().
 	 */
 full_cancel:
-	lock->l_policy_data.l_inodebits.cancel_bits = 0;
+	lock->l_policy_data.l_inodebits.cancel_bits = MDS_INODELOCK_NONE;
 clear_converting:
 	ldlm_clear_converting(lock);
 	RETURN(rc);

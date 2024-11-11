@@ -331,7 +331,8 @@ static int tgt_request_preprocess(struct tgt_session_info *tsi,
 			if (unlikely(dlm_req->lock_desc.l_resource.lr_type ==
 				     LDLM_IBITS &&
 				     (policy->l_inodebits.bits |
-				      policy->l_inodebits.try_bits) == 0)) {
+				      policy->l_inodebits.try_bits) ==
+						MDS_INODELOCK_NONE)) {
 				/*
 				 * Lock without inodebits makes no sense and
 				 * will oops later in ldlm. If client miss to

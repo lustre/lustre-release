@@ -792,11 +792,11 @@ out:
 static int mdt_object_open_lock(struct mdt_thread_info *info,
 				struct mdt_object *obj,
 				struct mdt_lock_handle *lhc,
-				__u64 *ibits)
+				enum mds_ibits_locks *ibits)
 {
 	struct md_attr *ma = &info->mti_attr;
 	enum mds_open_flags open_flags = info->mti_spec.sp_cr_flags;
-	__u64 trybits = 0;
+	enum mds_ibits_locks trybits = MDS_INODELOCK_NONE;
 	enum ldlm_mode lm = LCK_PR;
 	bool acq_lease = !!(open_flags & MDS_OPEN_LEASE);
 	bool try_layout = false;
@@ -808,7 +808,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	struct ptlrpc_request *req = mdt_info_req(info);
 
 	ENTRY;
-	*ibits = 0;
+	*ibits = MDS_INODELOCK_NONE;
 	if (req_is_replay(mdt_info_req(info)))
 		RETURN(0);
 
@@ -852,8 +852,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 
 		/* Lease must be with open lock */
 		if (!(open_flags & MDS_OPEN_LOCK)) {
-			CERROR("%s: Request lease for file:"DFID ", but open lock "
-			       "is missed, open_flags = %#lo : rc = %d\n",
+			CERROR("%s: Request lease for file:"DFID ", but open lock is missed, open_flags = %#lo : rc = %d\n",
 			       mdt_obd_name(info->mti_mdt),
 			       PFID(mdt_object_fid(obj)), open_flags, -EPROTO);
 			GOTO(out, rc = -EPROTO);
@@ -940,8 +939,8 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	if (*ibits | trybits)
 		rc = mdt_object_lock_try(info, obj, lhc, ibits, trybits, lm);
 
-	CDEBUG(D_INODE, "%s: Requested bits lock:"DFID ", ibits = %#llx/%#llx"
-	       ", open_flags = %#lo, try_layout = %d : rc = %d\n",
+	CDEBUG(D_INODE,
+	       "%s: Requested bits lock:"DFID ", ibits = %#lx/%#lx, open_flags = %#lo, try_layout = %d : rc = %d\n",
 	       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(obj)),
 	       *ibits, trybits, open_flags, try_layout, rc);
 
@@ -1016,7 +1015,7 @@ out:
 static void mdt_object_open_unlock(struct mdt_thread_info *info,
 				   struct mdt_object *obj,
 				   struct mdt_lock_handle *lhc,
-				   __u64 ibits, int rc)
+				   enum mds_ibits_locks ibits, int rc)
 {
 	enum mds_open_flags open_flags = info->mti_spec.sp_cr_flags;
 	struct mdt_lock_handle *ll = &info->mti_lh[MDT_LH_LOCAL];
@@ -1043,7 +1042,7 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 		up_read(&obj->mot_open_sem);
 
 	/* Cross-ref case, the lock should be returned to the client */
-	if (ibits == 0 || rc == -MDT_EREMOTE_OPEN)
+	if (ibits == MDS_INODELOCK_NONE || rc == -MDT_EREMOTE_OPEN)
 		RETURN_EXIT;
 
 	if (!(open_flags & MDS_OPEN_LOCK) &&
@@ -1084,7 +1083,7 @@ static bool mdt_hsm_release_allow(const struct md_attr *ma)
 
 static int mdt_refetch_lovea(struct mdt_thread_info *info,
 			     struct mdt_object *o, struct md_attr *ma,
-			     u64 ibits)
+			     enum mds_ibits_locks ibits)
 {
 	struct mdt_body *repbody;
 	int rc;
@@ -1123,7 +1122,7 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 	struct mdt_object *parent = NULL;
 	struct mdt_object *o;
 	bool object_locked = false;
-	u64 ibits = 0;
+	enum mds_ibits_locks ibits = MDS_INODELOCK_NONE;
 	int rc;
 
 	ENTRY;
@@ -1319,7 +1318,7 @@ static int mdt_lock_root_xattr(struct mdt_thread_info *info,
 {
 	struct mdt_object *md_root = mdt->mdt_md_root;
 	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LOCAL];
-	__u64 ibits = MDS_INODELOCK_XATTR;
+	enum mds_ibits_locks ibits = MDS_INODELOCK_XATTR;
 	int rc;
 
 	if (md_root == NULL) {
@@ -1429,7 +1428,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	struct lu_ucred *uc = mdt_ucred(info);
 	struct md_attr *ma = &info->mti_attr;
 	enum mds_open_flags open_flags = info->mti_spec.sp_cr_flags;
-	u64 ibits = 0;
+	enum mds_ibits_locks ibits = MDS_INODELOCK_NONE;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	int result, rc;
 	int created = 0;

@@ -2417,7 +2417,8 @@ retry:
 
 static int lmv_early_cancel(struct obd_export *exp, struct lmv_tgt_desc *tgt,
 			    struct md_op_data *op_data, __u32 op_tgt,
-			    enum ldlm_mode mode, int bits, int flag)
+			    enum ldlm_mode mode, enum mds_ibits_locks bits,
+			    int flag)
 {
 	struct lu_fid *fid = md_op_data_fid(op_data, flag);
 	struct lmv_obd *lmv = &exp->exp_obd->u.lmv;
@@ -3932,7 +3933,7 @@ static int lmv_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
 
 static int lmv_set_lock_data(struct obd_export *exp,
 			     const struct lustre_handle *lockh,
-			     void *data, __u64 *bits)
+			     void *data, enum mds_ibits_locks *bits)
 {
 	struct lmv_obd *lmv = &exp->exp_obd->u.lmv;
 	struct lmv_tgt_desc *tgt = lmv_tgt(lmv, 0);
@@ -4105,7 +4106,7 @@ static int lmv_intent_getattr_async(struct obd_export *exp,
 }
 
 static int lmv_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
-			       struct lu_fid *fid, __u64 *bits)
+			       struct lu_fid *fid, enum mds_ibits_locks *bits)
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;

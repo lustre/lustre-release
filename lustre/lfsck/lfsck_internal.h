@@ -914,7 +914,7 @@ int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
 		    struct lu_fid *fid, bool locked);
 int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 		     struct dt_object *obj, struct lustre_handle *lh,
-		     __u64 bits, enum ldlm_mode mode);
+		     enum mds_ibits_locks bits, enum ldlm_mode mode);
 void lfsck_ibits_unlock(struct lustre_handle *lh, enum ldlm_mode mode);
 int lfsck_remote_lookup_lock(const struct lu_env *env,
 			     struct lfsck_instance *lfsck,
@@ -922,7 +922,8 @@ int lfsck_remote_lookup_lock(const struct lu_env *env,
 			     struct lustre_handle *lh, enum ldlm_mode mode);
 int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 	       struct dt_object *obj, const char *name,
-	       struct lfsck_lock_handle *llh, __u64 bits, enum ldlm_mode mode);
+	       struct lfsck_lock_handle *llh, enum mds_ibits_locks bits,
+	       enum ldlm_mode mode);
 void lfsck_unlock(struct lfsck_lock_handle *llh);
 int lfsck_find_mdt_idx_by_fid(const struct lu_env *env,
 			      struct lfsck_instance *lfsck,

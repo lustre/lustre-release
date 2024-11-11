@@ -1546,7 +1546,7 @@ out_fail_match:
 EXPORT_SYMBOL(ldlm_lock_match_with_skip);
 
 enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
-					   __u64 *bits)
+					   enum mds_ibits_locks *bits)
 {
 	struct ldlm_lock *lock;
 	enum ldlm_mode mode = 0;
@@ -1958,7 +1958,8 @@ out:
  */
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 			 struct list_head *work_list,
-			 enum ldlm_process_intention intention, __u64 hint)
+			 enum ldlm_process_intention intention,
+			 enum mds_ibits_locks hint)
 {
 	struct list_head *tmp, *pos;
 	ldlm_processing_policy policy;
@@ -2382,7 +2383,7 @@ out:
  */
 static void __ldlm_reprocess_all(struct ldlm_resource *res,
 				 enum ldlm_process_intention intention,
-				 __u64 hint)
+				 enum mds_ibits_locks hint)
 {
 	LIST_HEAD(rpc_list);
 #ifdef HAVE_SERVER_SUPPORT
@@ -2427,7 +2428,7 @@ restart:
 	EXIT;
 }
 
-void ldlm_reprocess_all(struct ldlm_resource *res, __u64 hint)
+void ldlm_reprocess_all(struct ldlm_resource *res, enum mds_ibits_locks hint)
 {
 	__ldlm_reprocess_all(res, LDLM_PROCESS_RESCAN, hint);
 }
@@ -2873,7 +2874,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 	case LDLM_IBITS:
 		if (!lock->l_remote_handle.cookie)
 			libcfs_debug_msg(msgdata,
-				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#llx/%#llx rrc: %d type: %s flags: %#llx pid: %u initiator: MDT%d\n",
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#lx/%#lx rrc: %d type: %s flags: %#llx pid: %u initiator: MDT%d\n",
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,
@@ -2890,7 +2891,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_policy_data.l_inodebits.li_initiator_id);
 		else
 			libcfs_debug_msg(msgdata,
-				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#llx/%#llx rrc: %d type: %s gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d\n",
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#lx/%#lx rrc: %d type: %s gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d\n",
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,

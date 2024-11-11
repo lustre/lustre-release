@@ -1291,7 +1291,7 @@ struct ldlm_enqueue_info {
 	ldlm_created_callback ei_cb_created;	/** lock created callback */
 	void		*ei_cbdata;	/** Data to be passed into callbacks. */
 	void		*ei_namespace;	/** lock namespace **/
-	u64		ei_inodebits;	/** lock inode bits **/
+	enum mds_ibits_locks ei_inodebits;	/** lock inode bits **/
 	unsigned int	ei_enq_slave:1;	/** whether enqueue slave stripes */
 	unsigned int	ei_req_slot:1;	/** whether acquire rpc slot */
 	unsigned int	ei_mod_slot:1;	/** whether acquire mod rpc slot */
@@ -1369,7 +1369,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 /** Non-rate-limited lock printing function for debugging purposes. */
 #define LDLM_DEBUG(lock, fmt, a...)   do {                                  \
 	if (likely(lock != NULL)) {					    \
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_DLMTRACE, NULL);      \
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_DLMTRACE, NULL);	    \
 		ldlm_lock_debug(&msgdata, D_DLMTRACE, NULL, lock,	    \
 				"### " fmt, ##a);			    \
 	} else {							    \
@@ -1423,7 +1423,7 @@ typedef int (*ldlm_reprocessing_policy)(struct ldlm_resource *res,
 					struct list_head *queue,
 					struct list_head *work_list,
 					enum ldlm_process_intention intention,
-					__u64 hint);
+					enum mds_ibits_locks hint);
 
 /**
  * Return values for lock iterators.
@@ -1648,10 +1648,10 @@ static inline enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns,
 struct ldlm_lock *search_itree(struct ldlm_resource *res,
 			       struct ldlm_match_data *data);
 enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
-					   __u64 *bits);
+					   enum mds_ibits_locks *bits);
 void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
-void ldlm_reprocess_all(struct ldlm_resource *res, __u64 hint);
+void ldlm_reprocess_all(struct ldlm_resource *res, enum mds_ibits_locks hint);
 void ldlm_reprocess_recovery_done(struct ldlm_namespace *ns);
 void ldlm_lock_dump_handle(int level, const struct lustre_handle *lockh);
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);
@@ -1813,7 +1813,7 @@ int ldlm_cli_cancel_list(struct list_head *head, int count,
 			 struct ptlrpc_request *req,
 			 enum ldlm_cancel_flags flags);
 
-int ldlm_inodebits_drop(struct ldlm_lock *lock, __u64 to_drop);
+int ldlm_inodebits_drop(struct ldlm_lock *lock, enum mds_ibits_locks to_drop);
 int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
 			       enum ldlm_cancel_flags cancel_flags);
 
@@ -1899,8 +1899,6 @@ static inline int ldlm_extent_contain(const struct ldlm_extent *ex1,
 {
 	return ex1->start <= ex2->start && ex1->end >= ex2->end;
 }
-
-int ldlm_inodebits_drop(struct ldlm_lock *lock,  __u64 to_drop);
 
 #endif
 /** @} LDLM */

@@ -1241,7 +1241,8 @@ int ldlm_cli_convert_req(struct ldlm_lock *lock, __u32 *flags, __u64 new_bits)
 	body->lock_desc.l_granted_mode = lock->l_granted_mode;
 
 	body->lock_desc.l_policy_data.l_inodebits.bits = new_bits;
-	body->lock_desc.l_policy_data.l_inodebits.cancel_bits = 0;
+	body->lock_desc.l_policy_data.l_inodebits.cancel_bits =
+		MDS_INODELOCK_NONE;
 
 	body->lock_flags = ldlm_flags_to_wire(*flags);
 	body->lock_count = 1;

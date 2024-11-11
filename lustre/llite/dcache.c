@@ -257,7 +257,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 			    struct dentry *de)
 {
 	struct inode *inode = de->d_inode;
-	__u64 bits = 0;
+	enum mds_ibits_locks bits = MDS_INODELOCK_NONE;
 	int rc = 0;
 
 	ENTRY;

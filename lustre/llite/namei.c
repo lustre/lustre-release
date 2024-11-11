@@ -394,7 +394,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock,
 static int ll_md_need_convert(struct ldlm_lock *lock)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
-	__u64 wanted = lock->l_policy_data.l_inodebits.cancel_bits;
+	enum mds_ibits_locks want = lock->l_policy_data.l_inodebits.cancel_bits;
 	enum ldlm_mode mode = LCK_MODE_MIN;
 	enum mds_ibits_locks bits;
 	struct inode *inode;
@@ -403,12 +403,12 @@ static int ll_md_need_convert(struct ldlm_lock *lock)
 	    !exp_connect_lock_convert(lock->l_conn_export))
 		return 0;
 
-	bits = lock->l_policy_data.l_inodebits.bits & ~wanted;
-	if (!wanted || !bits || ldlm_is_cancel(lock))
+	bits = lock->l_policy_data.l_inodebits.bits & ~want;
+	if (!want || !bits || ldlm_is_cancel(lock))
 		return 0;
 
 	/* do not convert locks other than DOM for now */
-	if (!((bits | wanted) & MDS_INODELOCK_DOM))
+	if (!((bits | want) & MDS_INODELOCK_DOM))
 		return 0;
 
 	/* We may have already remaining bits in some other lock so
@@ -649,10 +649,10 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 			       struct md_op_data *op_data,
 			       ktime_t kstart, bool encrypt)
 {
-	struct inode		 *inode = NULL;
-	__u64			  bits = 0;
-	int			  rc;
+	enum mds_ibits_locks bits = MDS_INODELOCK_NONE;
+	struct inode *inode = NULL;
 	struct dentry *alias;
+	int rc;
 
 	ENTRY;
 
@@ -1548,7 +1548,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 			bool encrypt, unsigned int open_flags)
 {
 	struct inode *inode;
-	__u64 bits = 0;
+	enum mds_ibits_locks bits = MDS_INODELOCK_NONE;
 	int rc = 0;
 
 	ENTRY;
@@ -2217,7 +2217,7 @@ static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
 		GOTO(out_fini, rc);
 
 	if (mkdir_it.it_lock_mode) {
-		__u64 bits = 0;
+		enum mds_ibits_locks bits = MDS_INODELOCK_NONE;
 
 		LASSERT(it_disposition(&mkdir_it, DISP_LOOKUP_NEG));
 		ll_set_lock_data(sbi->ll_md_exp, inode, &mkdir_it, &bits);

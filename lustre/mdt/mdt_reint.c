@@ -232,7 +232,7 @@ static int mdt_stripes_unlock(struct mdt_thread_info *mti,
  * will be stored in einfo->ei_cbdata.
  **/
 static int mdt_stripes_lock(struct mdt_thread_info *mti, struct mdt_object *obj,
-			    enum ldlm_mode mode, __u64 ibits,
+			    enum ldlm_mode mode, enum mds_ibits_locks ibits,
 			    struct ldlm_enqueue_info *einfo)
 {
 	union ldlm_policy_data *policy = &mti->mti_policy;
@@ -274,7 +274,8 @@ int mdt_object_stripes_lock(struct mdt_thread_info *info,
 			    struct mdt_object *parent,
 			    struct mdt_object *child,
 			    struct mdt_lock_handle *lh,
-			    struct ldlm_enqueue_info *einfo, __u64 ibits,
+			    struct ldlm_enqueue_info *einfo,
+			    enum mds_ibits_locks ibits,
 			    enum ldlm_mode mode)
 {
 	int rc;
@@ -802,7 +803,7 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	struct mdt_lock_handle  *lh;
 	int do_vbr = ma->ma_attr.la_valid &
 			(LA_MODE | LA_UID | LA_GID | LA_PROJID | LA_FLAGS);
-	__u64 lockpart = MDS_INODELOCK_UPDATE;
+	enum mds_ibits_locks lockpart = MDS_INODELOCK_UPDATE;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	int rc;
 
@@ -1537,9 +1538,9 @@ put_parent:
 static int mdt_rename_lock(struct mdt_thread_info *info,
 			   struct mdt_lock_handle *lh)
 {
+	enum mds_ibits_locks ibits = MDS_INODELOCK_UPDATE;
 	struct lu_fid *fid = &info->mti_tmp_fid1;
 	struct mdt_object *obj;
-	__u64 ibits = MDS_INODELOCK_UPDATE;
 	int rc;
 
 	ENTRY;
@@ -1607,7 +1608,7 @@ static int mdt_rename_source_lock(struct mdt_thread_info *info,
 				  struct mdt_object *child,
 				  struct mdt_lock_handle *lh,
 				  struct mdt_lock_handle *lh_lookup,
-				  __u64 ibits)
+				  enum mds_ibits_locks ibits)
 {
 	int rc;
 
@@ -1706,7 +1707,7 @@ static int mdt_migrate_link_parent_lock(struct mdt_thread_info *info,
 	const struct lu_fid *fid = mdt_object_fid(lnkp);
 	struct mdt_lock_handle *lhl = &info->mti_lh[MDT_LH_LOCAL];
 	struct mdt_link_lock *entry;
-	__u64 ibits = 0;
+	enum mds_ibits_locks ibits = MDS_INODELOCK_NONE;
 	int rc;
 
 	ENTRY;

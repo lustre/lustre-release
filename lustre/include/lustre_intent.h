@@ -23,7 +23,7 @@ struct lookup_intent {
 	int			 it_disposition;
 	int			 it_status;
 	__u64			 it_lock_handle;
-	__u64			 it_lock_bits;
+	enum mds_ibits_locks	 it_lock_bits;
 	int			 it_lock_mode;
 	int			 it_remote_lock_mode;
 	__u64			 it_remote_lock_handle;

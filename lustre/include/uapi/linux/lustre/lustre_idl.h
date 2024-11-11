@@ -965,6 +965,43 @@ struct ptlrpc_body_v2 {
 				 OBD_CONNECT_ATTRFID |	\
 				 OBD_CONNECT_FULL20)
 
+/* INODE LOCK PARTS */
+enum mds_ibits_locks {
+	MDS_INODELOCK_NONE	= 0x000000000, /* no lock bits are used */
+	MDS_INODELOCK_LOOKUP	= 0x000000001, /* For namespace, dentry etc Was
+						* used to protect permission
+						* (mode, owner, group, etc)
+						* before 2.4.
+						*/
+	MDS_INODELOCK_UPDATE	= 0x000000002, /* size, links, timestamps */
+	MDS_INODELOCK_OPEN	= 0x000000004, /* For opened files */
+	MDS_INODELOCK_LAYOUT	= 0x000000008, /* for layout */
+
+	/* The PERM bit is added in 2.4, and is used to protect permission
+	 * (mode, owner, group, ACL, etc.) separate from LOOKUP lock.
+	 * For remote directories (in DNE) these locks will be granted by
+	 * different MDTs (different LDLM namespace).
+	 *
+	 * For local directory, the MDT always grants UPDATE|PERM together.
+	 * For remote directory, master MDT (where remote directory is) grants
+	 * UPDATE|PERM, and remote MDT (where name entry is) grants LOOKUP_LOCK.
+	 */
+	MDS_INODELOCK_PERM	= 0x000000010,
+	MDS_INODELOCK_XATTR	= 0x000000020, /* non-permission extended attrs */
+	MDS_INODELOCK_DOM	= 0x000000040, /* Data for Data-on-MDT files */
+	/* Do not forget to increase MDS_INODELOCK_NUMBITS when adding bits */
+
+	/* Reserve to make 64bit, not used anywhere, therefore
+	 * MDS_INODELOCK_NUMBITS is not increased for this member
+	 */
+	MDS_INODELOCK_64BIT	= 0x100000000,
+};
+#define MDS_INODELOCK_NUMBITS 7
+/* This FULL lock is useful to take on unlink sort of operations */
+#define MDS_INODELOCK_FULL ((1 << MDS_INODELOCK_NUMBITS) - 1)
+/* DOM lock shouldn't be canceled early, use this macro for ELC */
+#define MDS_INODELOCK_ELC (MDS_INODELOCK_FULL & ~MDS_INODELOCK_DOM)
+
 /* This structure is used for both request and reply.
  *
  * If we eventually have separate connect data for different types, which we
@@ -976,7 +1013,7 @@ struct obd_connect_data {
 	__u32 ocd_grant;	 /* initial cache grant amount (bytes) */
 	__u32 ocd_index;	 /* LOV index to connect to */
 	__u32 ocd_brw_size;	 /* Maximum BRW size in bytes */
-	__u64 ocd_ibits_known;	 /* inode bits this client understands */
+	enum mds_ibits_locks ocd_ibits_known; /* inode bits this client understands */
 	__u8  ocd_grant_blkbits; /* log2 of the backend filesystem blocksize */
 	__u8  ocd_grant_inobits; /* log2 of the per-inode space consumption */
 	__u16 ocd_grant_tax_kb;	 /* extent insertion overhead, in 1K blocks */
@@ -1801,36 +1838,6 @@ enum mds_reint_op {
 #define DISP_OPEN_STRIPE     0x08000000
 #define DISP_OPEN_DENY	     0x10000000
 
-/* INODE LOCK PARTS */
-enum mds_ibits_locks {
-	MDS_INODELOCK_LOOKUP	= 0x000001, /* For namespace, dentry etc.  Was
-					     * used to protect permission (mode,
-					     * owner, group, etc) before 2.4.
-					     */
-	MDS_INODELOCK_UPDATE	= 0x000002, /* size, links, timestamps */
-	MDS_INODELOCK_OPEN	= 0x000004, /* For opened files */
-	MDS_INODELOCK_LAYOUT	= 0x000008, /* for layout */
-
-	/* The PERM bit is added in 2.4, and is used to protect permission
-	 * (mode, owner, group, ACL, etc.) separate from LOOKUP lock.
-	 * For remote directories (in DNE) these locks will be granted by
-	 * different MDTs (different LDLM namespace).
-	 *
-	 * For local directory, the MDT always grants UPDATE|PERM together.
-	 * For remote directory, master MDT (where remote directory is) grants
-	 * UPDATE|PERM, and remote MDT (where name entry is) grants LOOKUP_LOCK.
-	 */
-	MDS_INODELOCK_PERM	= 0x000010,
-	MDS_INODELOCK_XATTR	= 0x000020, /* non-permission extended attrs */
-	MDS_INODELOCK_DOM	= 0x000040, /* Data for Data-on-MDT files */
-	/* Do not forget to increase MDS_INODELOCK_NUMBITS when adding bits */
-};
-#define MDS_INODELOCK_NUMBITS 7
-/* This FULL lock is useful to take on unlink sort of operations */
-#define MDS_INODELOCK_FULL ((1 << MDS_INODELOCK_NUMBITS) - 1)
-/* DOM lock shouldn't be canceled early, use this macro for ELC */
-#define MDS_INODELOCK_ELC (MDS_INODELOCK_FULL & ~MDS_INODELOCK_DOM)
-
 /* NOTE: until Lustre 1.8.7/2.1.1 the fid_ver() was packed into name[2],
  * but was moved into name[1] along with the OID to avoid consuming the
  * name[2,3] fields that need to be used for the quota id (also a FID).
@@ -2558,10 +2565,10 @@ static inline bool ldlm_extent_equal(const struct ldlm_extent *ex1,
 }
 
 struct ldlm_inodebits {
-	__u64 bits;
+	enum mds_ibits_locks bits;
 	union {
-		__u64 try_bits; /* optional bits to try */
-		__u64 cancel_bits; /* for lock convert */
+		enum mds_ibits_locks try_bits; /* optional bits to try */
+		enum mds_ibits_locks cancel_bits; /* for lock convert */
 	};
 	__u64 li_gid;
 	__u32 li_padding;

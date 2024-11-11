@@ -1499,7 +1499,7 @@ existing_lock:
 			struct ldlm_lock_desc *rep_desc = &dlm_rep->lock_desc;
 
 			LDLM_DEBUG(lock,
-				   "save blocking bits %llx in granted lock",
+				   "save blocking bits %lx in granted lock",
 				   bl_lock->l_policy_data.l_inodebits.bits);
 			/*
 			 * If lock is blocked then save blocking ibits
@@ -1666,8 +1666,8 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 	struct obd_export *exp = req->rq_export;
 	struct ldlm_reply *dlm_rep;
 	struct ldlm_lock *lock;
-	__u64 bits;
-	__u64 new_bits;
+	enum mds_ibits_locks bits;
+	enum mds_ibits_locks new_bits;
 	int rc;
 
 	ENTRY;
@@ -1720,7 +1720,8 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 			ldlm_del_waiting_lock(lock);
 
 		ldlm_clear_cbpending(lock);
-		lock->l_policy_data.l_inodebits.cancel_bits = 0;
+		lock->l_policy_data.l_inodebits.cancel_bits =
+			MDS_INODELOCK_NONE;
 		ldlm_inodebits_drop(lock, bits & ~new_bits);
 
 		ldlm_clear_blocking_data(lock);
@@ -1912,7 +1913,8 @@ void ldlm_bl_desc2lock(const struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
 		    ldlm_res_eq(&ld->l_resource.lr_name,
 				&lock->l_resource->lr_name) &&
 		    !(ldlm_is_cbpending(lock) &&
-		      lock->l_policy_data.l_inodebits.cancel_bits == 0)) {
+		      lock->l_policy_data.l_inodebits.cancel_bits ==
+						MDS_INODELOCK_NONE)) {
 			/* always combine conflicting ibits */
 			lock->l_policy_data.l_inodebits.cancel_bits |=
 				ld->l_policy_data.l_inodebits.cancel_bits;
@@ -1922,7 +1924,8 @@ void ldlm_bl_desc2lock(const struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
 			 * has no cancel_bits set
 			 * - the full lock is to be cancelled
 			 */
-			lock->l_policy_data.l_inodebits.cancel_bits = 0;
+			lock->l_policy_data.l_inodebits.cancel_bits =
+						   MDS_INODELOCK_NONE;
 		}
 	}
 }

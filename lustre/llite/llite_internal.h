@@ -2007,7 +2007,8 @@ static inline int ll_file_nolock(const struct file *file)
 }
 
 static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,
-				    struct lookup_intent *it, __u64 *bits)
+				    struct lookup_intent *it,
+				    enum mds_ibits_locks *bits)
 {
 	if (!it->it_lock_set) {
 		struct lustre_handle handle;

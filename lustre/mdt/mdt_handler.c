@@ -2078,7 +2078,7 @@ out_match:
  */
 static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 				 struct mdt_lock_handle *lhc,
-				 __u64 child_bits,
+				 enum mds_ibits_locks child_bits,
 				 struct ldlm_reply *ldlm_rep)
 {
 	struct ptlrpc_request *req = mdt_info_req(info);
@@ -2091,7 +2091,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	struct ldlm_lock *lock;
 	struct req_capsule *pill = info->mti_pill;
 	bool fscrypt_md = false;
-	__u64 try_bits = 0;
+	enum mds_ibits_locks try_bits = MDS_INODELOCK_NONE;
 	bool is_resent;
 	int ma_need = 0;
 	int rc;
@@ -2430,7 +2430,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			child_bits = 0;
 		}
 
-		if (try_bits != 0) {
+		if (try_bits != MDS_INODELOCK_NONE) {
 			/* try layout lock, it may fail to be granted due to
 			 * contention at LOOKUP or UPDATE
 			 */
@@ -4074,7 +4074,7 @@ int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 		return -ENOTDIR;
 
 	policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
-	policy->l_inodebits.try_bits = 0;
+	policy->l_inodebits.try_bits = MDS_INODELOCK_NONE;
 	policy->l_inodebits.li_gid = 0;
 	policy->l_inodebits.li_initiator_id = mdt_node_id(info->mti_mdt);
 	fid_build_reg_res_name(mdt_object_fid(obj), res_id);
@@ -4121,8 +4121,10 @@ int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 
 int mdt_object_lock_internal(struct mdt_thread_info *info,
 			     struct mdt_object *obj, const struct lu_fid *fid,
-			     struct mdt_lock_handle *lh, __u64 *ibits,
-			     __u64 trybits, bool cache)
+			     struct mdt_lock_handle *lh,
+			     enum mds_ibits_locks *ibits,
+			     enum mds_ibits_locks trybits,
+			     bool cache)
 {
 	union ldlm_policy_data *policy = &info->mti_policy;
 	struct ldlm_res_id *res_id = &info->mti_res_id;
@@ -4228,7 +4230,7 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
  * \retval		0 on success, -ev on error.
  */
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *obj,
-		    struct mdt_lock_handle *lh, __u64 ibits,
+		    struct mdt_lock_handle *lh,  enum mds_ibits_locks ibits,
 		    enum ldlm_mode mode)
 {
 	int rc;
@@ -4260,8 +4262,8 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *obj,
  */
 int mdt_object_check_lock(struct mdt_thread_info *info,
 			  struct mdt_object *parent, struct mdt_object *child,
-			  struct mdt_lock_handle *lh, __u64 ibits,
-			  enum ldlm_mode mode)
+			  struct mdt_lock_handle *lh,
+			  enum mds_ibits_locks ibits, enum ldlm_mode mode)
 {
 	int rc;
 
@@ -4276,7 +4278,7 @@ int mdt_object_check_lock(struct mdt_thread_info *info,
 
 	mdt_lock_reg_init(lh, mode);
 	if (mdt_object_remote(parent) ^ mdt_object_remote(child)) {
-		__u64 lookup_ibits = MDS_INODELOCK_LOOKUP;
+		enum mds_ibits_locks lookup_ibits = MDS_INODELOCK_LOOKUP;
 
 		rc = mdt_object_lock_internal(info, parent,
 					      mdt_object_fid(child), lh,
@@ -4319,7 +4321,7 @@ int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 	LASSERT(obj && lname);
 	LASSERT(mode == LCK_PW || mode == LCK_PR);
 	if (mdt_object_remote(obj) && mode == LCK_PR) {
-		__u64 ibits = MDS_INODELOCK_UPDATE;
+		enum mds_ibits_locks ibits = MDS_INODELOCK_UPDATE;
 
 		mdt_lock_reg_init(lh, mode);
 		rc = mdt_object_lock_internal(info, obj, mdt_object_fid(obj),
@@ -4348,8 +4350,8 @@ int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *obj,
  * \retval		0 on success, -ev on error.
  */
 int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *obj,
-			struct mdt_lock_handle *lh, __u64 *ibits,
-			__u64 trybits, enum ldlm_mode mode)
+			struct mdt_lock_handle *lh, enum mds_ibits_locks *ibits,
+			enum mds_ibits_locks trybits, enum ldlm_mode mode)
 {
 	bool trylock_only = *ibits == 0;
 	int rc;
@@ -4375,7 +4377,7 @@ int mdt_object_lookup_lock(struct mdt_thread_info *info,
 			   struct mdt_object *pobj, struct mdt_object *obj,
 			   struct mdt_lock_handle *lh, enum ldlm_mode mode)
 {
-	__u64 ibits = MDS_INODELOCK_LOOKUP;
+	enum mds_ibits_locks ibits = MDS_INODELOCK_LOOKUP;
 	int rc;
 
 	ENTRY;
@@ -4538,7 +4540,8 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
 					const struct lu_fid *f,
 					struct mdt_lock_handle *lh,
-					__u64 ibits, enum ldlm_mode mode)
+					enum mds_ibits_locks ibits,
+					enum ldlm_mode mode)
 {
 	struct mdt_object *o;
 

@@ -821,7 +821,7 @@ obd_connect_data_seqprint(struct seq_file *m, struct obd_connect_data *ocd)
 	if (flags & OBD_CONNECT_BRW_SIZE)
 		seq_printf(m, "       max_brw_size: %d\n", ocd->ocd_brw_size);
 	if (flags & OBD_CONNECT_IBITS)
-		seq_printf(m, "       ibits_known: %#llx\n",
+		seq_printf(m, "       ibits_known: %#lx\n",
 			   ocd->ocd_ibits_known);
 	if (flags & OBD_CONNECT_GRANT_PARAM)
 		seq_printf(m, "       grant_block_size: %d\n"

@@ -86,7 +86,7 @@ EXPORT_SYMBOL(it_open_error);
 
 /* this must be called on a lockh that is known to have a referenced lock */
 int mdc_set_lock_data(struct obd_export *exp, const struct lustre_handle *lockh,
-		      void *data, __u64 *bits)
+		      void *data, enum mds_ibits_locks *bits)
 {
 	struct ldlm_lock *lock;
 	struct inode *new_inode = data;
@@ -1389,7 +1389,7 @@ out:
 }
 
 int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
-			struct lu_fid *fid, __u64 *bits)
+			struct lu_fid *fid, enum mds_ibits_locks *bits)
 {
 	/* We could just return 1 immediately, but as we should only be called
 	 * in revalidate_it if we already have a lock, let's verify that.

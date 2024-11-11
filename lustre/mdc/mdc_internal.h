@@ -57,7 +57,7 @@ void mdc_close_pack(struct req_capsule *pill, struct md_op_data *op_data);
 /* mdc/mdc_locks.c */
 int mdc_set_lock_data(struct obd_export *exp,
 		      const struct lustre_handle *lockh,
-		      void *data, __u64 *bits);
+		      void *data, enum mds_ibits_locks *bits);
 
 int mdc_null_inode(struct obd_export *exp, const struct lu_fid *fid);
 
@@ -119,7 +119,7 @@ int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
 		      enum ldlm_cancel_flags flags, void *opaque);
 
 int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
-                        struct lu_fid *fid, __u64 *bits);
+			struct lu_fid *fid, enum mds_ibits_locks *bits);
 
 int mdc_intent_getattr_async(struct obd_export *exp, struct md_op_item *item);
 

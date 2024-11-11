@@ -127,7 +127,8 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 #ifdef HAVE_SERVER_SUPPORT
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 			 struct list_head *work_list,
-			 enum ldlm_process_intention intention, __u64 hint);
+			 enum ldlm_process_intention intention,
+			 enum mds_ibits_locks hint);
 int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 			      struct list_head *rpc_list);
 void ldlm_discard_bl_list(struct list_head *bl_list);
@@ -178,7 +179,7 @@ int ldlm_reprocess_inodebits_queue(struct ldlm_resource *res,
 				   struct list_head *queue,
 				   struct list_head *work_list,
 				   enum ldlm_process_intention intention,
-				   __u64 hint);
+				   enum mds_ibits_locks hint);
 /* ldlm_extent.c */
 int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 			     enum ldlm_process_intention intention,
@@ -349,7 +350,8 @@ static inline bool is_lock_converted(struct ldlm_lock *lock)
 	bool ret = 0;
 
 	lock_res_and_lock(lock);
-	ret = (lock->l_policy_data.l_inodebits.cancel_bits == 0);
+	ret = (lock->l_policy_data.l_inodebits.cancel_bits ==
+	       MDS_INODELOCK_NONE);
 	unlock_res_and_lock(lock);
 
 	return ret;

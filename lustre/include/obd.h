@@ -1315,7 +1315,7 @@ struct md_ops {
 
 	int (*m_revalidate_lock)(struct obd_export *exp,
 				 struct lookup_intent *it, struct lu_fid *fid,
-				 __u64 *bits);
+				 enum mds_ibits_locks *bits);
 
 	int (*m_file_resync)(struct obd_export *exp,
 			     struct md_op_data *op_data);
@@ -1351,7 +1351,7 @@ struct md_ops {
 
 	int (*m_set_lock_data)(struct obd_export *exp,
 			       const struct lustre_handle *lockh, void *data,
-			       __u64 *bits);
+			       enum mds_ibits_locks *bits);
 
 	enum ldlm_mode (*m_lock_match)(struct obd_export *exp, __u64 flags,
 				       const struct lu_fid *fid,

@@ -817,7 +817,7 @@ int mdt_check_resent_lock(struct mdt_thread_info *info, struct mdt_object *mo,
 			  struct mdt_lock_handle *lhc);
 
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *obj,
-		    struct mdt_lock_handle *lh, __u64 ibits,
+		    struct mdt_lock_handle *lh, enum mds_ibits_locks ibits,
 		    enum ldlm_mode mode);
 int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *o,
 		    struct mdt_lock_handle *lh, const struct lu_name *lname,
@@ -825,21 +825,25 @@ int mdt_parent_lock(struct mdt_thread_info *info, struct mdt_object *o,
 int mdt_object_stripes_lock(struct mdt_thread_info *info,
 			    struct mdt_object *pobj, struct mdt_object *o,
 			    struct mdt_lock_handle *lh,
-			    struct ldlm_enqueue_info *einfo, __u64 ibits,
+			    struct ldlm_enqueue_info *einfo,
+			    enum mds_ibits_locks ibits,
 			    enum ldlm_mode mode);
 int mdt_object_check_lock(struct mdt_thread_info *info,
 			  struct mdt_object *parent, struct mdt_object *child,
-			  struct mdt_lock_handle *lh, __u64 ibits,
-			  enum ldlm_mode mode);
+			  struct mdt_lock_handle *lh,
+			  enum mds_ibits_locks ibits, enum ldlm_mode mode);
 int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
-			struct mdt_lock_handle *lh, __u64 *ibits,
-			__u64 trybits, enum ldlm_mode mode);
+			struct mdt_lock_handle *lh,
+			enum mds_ibits_locks *ibits,
+			enum mds_ibits_locks trybits, enum ldlm_mode mode);
 
 /* below three lock functions are used internally */
 int mdt_object_lock_internal(struct mdt_thread_info *info,
 			     struct mdt_object *obj, const struct lu_fid *fid,
-			     struct mdt_lock_handle *lh, __u64 *ibits,
-			     __u64 trybits, bool cache);
+			     struct mdt_lock_handle *lh,
+			     enum mds_ibits_locks *ibits,
+			     enum mds_ibits_locks trybits,
+			     bool cache);
 int mdt_object_pdo_lock(struct mdt_thread_info *info, struct mdt_object *obj,
 			struct mdt_lock_handle *lh, const struct lu_name *name,
 			enum ldlm_mode mode, bool pdo_lock);
@@ -862,7 +866,8 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
 					const struct lu_fid *f,
 					struct mdt_lock_handle *lh,
-					__u64 ibits, enum ldlm_mode mode);
+					enum mds_ibits_locks ibits,
+					enum ldlm_mode mode);
 void mdt_object_unlock_put(struct mdt_thread_info *info,
 			   struct mdt_object *o,
 			   struct mdt_lock_handle *lh,

@@ -1792,7 +1792,7 @@ static inline int md_clear_open_replay_data(struct obd_export *exp,
 
 static inline int md_set_lock_data(struct obd_export *exp,
 				   const struct lustre_handle *lockh,
-				   void *data, __u64 *bits)
+				   void *data, enum mds_ibits_locks *bits)
 {
 	int rc;
 
@@ -1875,7 +1875,8 @@ static inline int md_intent_getattr_async(struct obd_export *exp,
 
 static inline int md_revalidate_lock(struct obd_export *exp,
 				     struct lookup_intent *it,
-				     struct lu_fid *fid, __u64 *bits)
+				     struct lu_fid *fid,
+				     enum mds_ibits_locks *bits)
 {
 	int rc;
 

@@ -517,7 +517,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	__u64			 valid = attr->la_valid;
 	const char		*xattr_name = rr->rr_name.ln_name;
 	int			 xattr_len = rr->rr_eadatalen;
-	__u64			 lockpart = MDS_INODELOCK_UPDATE;
+	enum mds_ibits_locks	 lockpart = MDS_INODELOCK_UPDATE;
 	ktime_t			 kstart = ktime_get();
 	int			 rc;
 	ENTRY;

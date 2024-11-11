@@ -2071,7 +2071,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 		struct lookup_intent it = { .it_op = IT_GETATTR,
 					    .it_lock_handle =
 						entry->se_handle };
-		__u64 bits;
+		enum mds_ibits_locks bits;
 
 		rc = md_revalidate_lock(ll_i2mdexp(dir), &it,
 					ll_inode2fid(inode), &bits);
