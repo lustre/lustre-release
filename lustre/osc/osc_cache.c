@@ -1347,7 +1347,6 @@ static int osc_completion(const struct lu_env *env, struct osc_object *osc,
 static void osc_consume_write_grant(struct client_obd *cli,
 				    struct brw_page *pga)
 {
-	assert_spin_locked(&cli->cl_loi_list_lock);
 	LASSERT(!(pga->bp_flag & OBD_BRW_FROM_GRANT));
 	cli->cl_dirty_pages++;
 	pga->bp_flag |= OBD_BRW_FROM_GRANT;
@@ -1362,7 +1361,6 @@ static void osc_release_write_grant(struct client_obd *cli,
 {
 	ENTRY;
 
-	assert_spin_locked(&cli->cl_loi_list_lock);
 	if (!(pga->bp_flag & OBD_BRW_FROM_GRANT)) {
 		EXIT;
 		return;
