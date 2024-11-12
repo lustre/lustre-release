@@ -252,6 +252,10 @@ static void vvp_vmpage_error(struct inode *inode, struct page *vmpage,
 		obj->vob_discard_page_warned = 0;
 	} else {
 		SetPageError(vmpage);
+		if (ioret != -ENOSPC &&
+		    OBD_FAIL_CHECK(OBD_FAIL_LLITE_PANIC_ON_ESTALE))
+			LBUG();
+
 		mapping_set_error(inode->i_mapping, ioret);
 
 		if ((ioret == -ESHUTDOWN || ioret == -EINTR ||

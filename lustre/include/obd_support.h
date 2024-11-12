@@ -255,6 +255,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDS_NO_LL_OPEN		 0x171
 #define OBD_FAIL_MDS_LL_BLOCK		 0x172
 #define OBD_FAIL_MDS_LOD_CREATE_PAUSE	 0x173
+#define OBD_FAIL_MDS_DELAY_OPEN		 0x175
 
 /* CMD */
 #define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180
@@ -611,6 +612,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_LLITE_PAGE_ALLOC		    0x1418
 #define OBD_FAIL_LLITE_OPEN_DELAY		    0x1419
 #define OBD_FAIL_LLITE_XATTR_PAUSE		    0x1420
+#define OBD_FAIL_LLITE_PANIC_ON_ESTALE		    0x1423
 #define OBD_FAIL_LLITE_READPAGE_PAUSE2		    0x1424
 
 #define OBD_FAIL_FID_INDIR	0x1501

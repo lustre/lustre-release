@@ -1034,6 +1034,35 @@ static bool mdt_hsm_release_allow(const struct md_attr *ma)
 	return true;
 }
 
+static int mdt_refetch_lovea(struct mdt_thread_info *info,
+			     struct mdt_object *o, struct md_attr *ma,
+			     u64 ibits)
+{
+	struct mdt_body *repbody;
+	int rc;
+
+	if ((ibits & MDS_INODELOCK_LAYOUT) == 0)
+		return 0;
+	if (!S_ISREG(lu_object_attr(&o->mot_obj)))
+		return 0;
+
+	if ((ma->ma_valid & MA_LOV) == 0)
+		return 0;
+
+	ma->ma_valid &= ~MA_LOV;
+	info->mti_big_lmm_used = 0;
+	ma->ma_lmm = req_capsule_server_get(info->mti_pill, &RMF_MDT_MD);
+	ma->ma_lmm_size = req_capsule_get_size(info->mti_pill, &RMF_MDT_MD,
+					       RCL_SERVER);
+	rc = __mdt_stripe_get(info, o, ma, XATTR_NAME_LOV);
+	if (rc)
+		return rc;
+
+	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+	repbody->mbo_eadatasize = ma->ma_lmm_size;
+	return 0;
+}
+
 static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 				struct ldlm_reply *rep,
 				struct mdt_lock_handle *lhc)
@@ -1131,13 +1160,21 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 
 	tgt_open_obj_set(info->mti_env, mdt_obj2dt(o));
 	rc = mdt_finish_open(info, parent, o, open_flags, rep);
-	if (!rc) {
-		mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
-		if (open_flags & MDS_OPEN_LOCK)
-			mdt_set_disposition(info, rep, DISP_OPEN_LOCK);
-		if (open_flags & MDS_OPEN_LEASE)
-			mdt_set_disposition(info, rep, DISP_OPEN_LEASE);
-	}
+	if (rc)
+		GOTO(out_unlock, rc);
+
+	mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
+	if (open_flags & MDS_OPEN_LOCK)
+		mdt_set_disposition(info, rep, DISP_OPEN_LOCK);
+	if (open_flags & MDS_OPEN_LEASE)
+		mdt_set_disposition(info, rep, DISP_OPEN_LEASE);
+
+	/*
+	 * if layout lock is granted, then we should re-fetch LOVEA
+	 * which was originally taken w/o the lock
+	 */
+	rc = mdt_refetch_lovea(info, o, ma, ibits);
+
 	GOTO(out_unlock, rc);
 
 out_unlock:
@@ -1595,6 +1632,7 @@ again_pw:
 	} else {
 		/* get openlock if this isn't replay and client requested it */
 		if (!req_is_replay(req)) {
+			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_DELAY_OPEN, cfs_fail_val);
 			rc = mdt_object_open_lock(info, child, lhc, &ibits);
 			object_locked = 1;
 			if (rc != 0)
@@ -1633,12 +1671,20 @@ again_pw:
 				       PFID(mdt_object_fid(child)), rc);
 			mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
 		}
+		GOTO(out_child_unlock, result);
 	}
+
+	/*
+	 * if layout lock is granted, then we should re-fetch LOVEA
+	 * which was originally taken w/o the lock.
+	 */
+	result = mdt_refetch_lovea(info, child, ma, ibits);
 
 	mdt_counter_incr(req, LPROC_MDT_OPEN,
 			 ktime_us_delta(ktime_get(), kstart));
 
-	EXIT;
+	GOTO(out_child_unlock, result);
+
 out_child_unlock:
 	if (object_locked)
 		mdt_object_open_unlock(info, child, lhc, ibits, result);

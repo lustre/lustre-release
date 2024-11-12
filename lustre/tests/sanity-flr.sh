@@ -3060,9 +3060,6 @@ test_70() {
 }
 run_test 70 "mirror create and split race"
 
-ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
-lock_file=$(mktemp /var/lock/FLR.XXXXXX)
-
 write_file_200() {
 	local tf=$1
 
@@ -3117,7 +3114,7 @@ resync_file_200() {
 		echo -n "resync file $tf with '$cmd' .."
 
 		if [[ $lock_taken = "true" ]]; then
-			flock -x 200
+			flock -x 200 &&
 			$cmd $tf &> /dev/null && echo "done" || echo "failed"
 			flock -u 200
 		else
@@ -3128,10 +3125,15 @@ resync_file_200() {
 	done
 }
 
-test_200() {
+# this was test_200 before adding "b" and "c" subtests
+test_200a() {
 	local tf=$DIR/$tfile
 	local tf2=$DIR2/$tfile
 	local tf3=$DIR3/$tfile
+
+	ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
+	lock_file=$(mktemp /var/lock/FLR.XXXXXX)
+	stack_trap "rm -f $ctrl_file $lock_file $tf $tf-2 $tf-3"
 
 	$LFS setstripe -E 1M -S 1M -E 2M -c 2 -E 4M -E 16M -E eof $tf
 	$LFS setstripe -E 2M -S 1M -E 6M -c 2 -E 8M -E 32M -E eof $tf-2
@@ -3186,8 +3188,6 @@ test_200() {
 	umount_client $MOUNT2
 	umount_client $MOUNT3
 
-	rm -f $lock_file
-
 	# resync and verify mirrors
 	$LFS mirror resync $tf || error "final resync failed"
 	get_mirror_ids $tf
@@ -3201,7 +3201,133 @@ test_200() {
 
 	true
 }
-run_test 200 "stress test"
+run_test 200a "stress test"
+
+test_200b() {
+	local tf=$DIR/$tfile
+	local tf2=$DIR2/$tfile
+	local tf3=$DIR3/$tfile
+
+	ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
+	lock_file=$(mktemp /var/lock/FLR.XXXXXX)
+	stack_trap "rm -f $ctrl_file $lock_file $tf $tf-2 $tf-3"
+
+	$LFS setstripe -E 1M -S 1M -E 2M -c 2 -E 4M -E 16M -E eof $tf
+	$LFS setstripe -E 2M -S 1M -E 6M -c 2 -E 8M -E 32M -E eof $tf-2
+	$LFS setstripe -E 4M -c 2 -E 8M -E 64M -E eof $tf-3
+
+	$LFS mirror extend -N -f $tf-2 $tf ||
+		error "merging $tf-2 into $tf failed"
+	$LFS mirror extend -N -f $tf-3 $tf ||
+		error "merging $tf-3 into $tf failed"
+
+	mkdir -p $MOUNT2 && mount_client $MOUNT2
+
+	mkdir -p $MOUNT3 && mount_client $MOUNT3
+
+	verify_flr_state $tf3 "ro"
+
+#define OBD_FAIL_LLITE_PANIC_ON_ESTALE		    0x1423
+	$LCTL set_param fail_loc=0x1423
+
+	local -a pids
+
+	write_file_200 $tf &
+	pids+=($!)
+
+	read_file_200 $tf &
+	pids+=($!)
+
+	write_file_200 $tf2 &
+	pids+=($!)
+
+	read_file_200 $tf2 &
+	pids+=($!)
+
+	resync_file_200 $tf3 &
+	pids+=($!)
+
+	local sleep_time=60
+	[ "$SLOW" = "yes" ] && sleep_time=400
+	sleep $sleep_time
+	rm -f $ctrl_file
+
+	echo "Waiting ${pids[@]}"
+	wait ${pids[@]}
+
+	umount_client $MOUNT2
+	umount_client $MOUNT3
+
+	# resync and verify mirrors
+	$LFS mirror resync $tf || {
+		ps ax
+		error "final resync failed"
+	}
+	get_mirror_ids $tf
+
+	local csum=$($LFS mirror read -N ${mirror_array[0]} $tf | md5sum)
+	for id in ${mirror_array[@]:1}; do
+		[ "$($LFS mirror read -N $id $tf | md5sum)" = "$csum" ] ||
+			error "checksum error for mirror $id"
+	done
+
+	true
+}
+run_test 200b "racing IO, mirror extend and resync"
+
+test_200c() {
+	local tf=$DIR/$tfile
+	local tf2=$DIR2/$tfile
+
+	mkdir -p $MOUNT2 && mount_client $MOUNT2
+	stack_trap "umount_client $MOUNT2"
+	stack_trap "rm -f $tf"
+
+	$LFS df
+
+	dd if=/dev/urandom of=$tf bs=1M count=2 || error "can't write"
+	local mdt_idx
+	mdt_idx=$($LFS getstripe -m $tf)
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	# start a process modifying file, block it just
+	# before layout lock acquisition
+#define OBD_FAIL_MDS_DELAY_OPEN		 0x175
+	do_facet mds$((mdt_idx+1)) $LCTL set_param fail_loc=0x80000175 fail_val=10
+	#log "dd to stale replica"
+	dd if=/dev/urandom of=$tf bs=1M count=2 oflag=direct conv=notrunc &
+	local PID=$!
+	sleep 0.5
+
+	# make a replica
+	log "mirror extend"
+	$LFS mirror extend -N -c -1 $tf2 || {
+		ps ax
+		error "can't mirror"
+	}
+	log "mirror extend done"
+	do_facet mds$((mdt_idx+1)) $LCTL set_param fail_loc=0 fail_val=0
+
+	# wait for blocking dd to complete and modify file
+	wait $PID || error "2nd dd failed"
+	log "dd completed"
+
+	verify_mirror_count $tf 2
+
+	$LFS getstripe $tf | grep -q lcme_flags.*stale || {
+		$LFS getstripe $tf
+		$LFS getstripe $tf2
+		error "both replicas are still in sync"
+	}
+
+	$LFS mirror verify -vvv $tf || {
+		$LFS getstripe $tf
+		error "corrupted in-sync file"
+	}
+}
+run_test 200c "layout change racing with open: LOVEA changes"
 
 cleanup_test_201() {
 	trap 0
