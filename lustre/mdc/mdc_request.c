@@ -1507,8 +1507,6 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 		       rp_param.rp_off, -5);
 		goto fail;
 	}
-	if (!PageChecked(page))
-		SetPageChecked(page);
 	if (PageError(page)) {
 		CERROR("%s: page error: "DFID" at %llu: rc %d\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
