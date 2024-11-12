@@ -317,6 +317,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 		struct cl_object_conf conf = {
 			.coc_opc = OBJECT_CONF_INVALIDATE,
 			.coc_inode = inode,
+			.coc_try = false,
 		};
 
 		rc = ll_layout_conf(inode, &conf);

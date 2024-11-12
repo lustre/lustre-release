@@ -5944,7 +5944,7 @@ out:
  * in this function.
  */
 static int ll_layout_lock_set(struct lustre_handle *lockh, enum ldlm_mode mode,
-			      struct inode *inode)
+			      struct inode *inode, bool try)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_sb_info    *sbi = ll_i2sbi(inode);
@@ -5992,6 +5992,7 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, enum ldlm_mode mode,
 	conf.coc_opc = OBJECT_CONF_SET;
 	conf.coc_inode = inode;
 	conf.coc_lock = lock;
+	conf.coc_try = try;
 	conf.u.coc_layout.lb_buf = lock->l_lvb_data;
 	conf.u.coc_layout.lb_len = lock->l_lvb_len;
 	rc = ll_layout_conf(inode, &conf);
@@ -6013,11 +6014,32 @@ out:
 		conf.coc_inode = inode;
 		rc = ll_layout_conf(inode, &conf);
 		if (rc == 0)
-			rc = -EAGAIN;
+			rc = -ERESTARTSYS;
 
 		CDEBUG(D_INODE, "%s file="DFID" waiting layout return: %d\n",
 		       sbi->ll_fsname, PFID(&lli->lli_fid), rc);
 	}
+
+	if (rc == -ERESTARTSYS) {
+		__u16 refcheck;
+		struct lu_env *env;
+		struct cl_object * obj = lli->lli_clob;
+
+		env = cl_env_get(&refcheck);
+		if (IS_ERR(env))
+			RETURN(PTR_ERR(env));
+
+		CDEBUG(D_INODE, "prune without lock "DFID"\n",
+				PFID(lu_object_fid(&obj->co_lu)));
+
+		trunc_sem_down_write(&lli->lli_trunc_sem);
+		cl_object_prune(env, obj);
+		trunc_sem_up_write(&lli->lli_trunc_sem);
+		cl_env_put(env, &refcheck);
+
+		rc = -EAGAIN;
+	}
+
 	RETURN(rc);
 }
 
@@ -6096,6 +6118,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	};
 	enum ldlm_mode mode;
 	int rc;
+	bool try = true;
 	ENTRY;
 
 	*gen = ll_layout_version_get(lli);
@@ -6117,7 +6140,8 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 				       LCK_CR | LCK_CW | LCK_PR |
 				       LCK_PW | LCK_EX);
 		if (mode != 0) { /* hit cached lock */
-			rc = ll_layout_lock_set(&lockh, mode, inode);
+			rc = ll_layout_lock_set(&lockh, mode, inode, try);
+			try = false;
 			if (rc == -EAGAIN)
 				continue;
 			break;
