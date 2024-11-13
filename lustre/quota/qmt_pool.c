@@ -871,11 +871,21 @@ void qmt_lqes_sort(const struct lu_env *env)
 	}
 }
 
+/*
+ * Find lqes with a given qid through the all pools. Add found lqes
+ * into qti lqes array. Call qti_lqes_fini after this function to
+ * cleanup qmt_thread_info despite of the retval.
+ *
+ * \retval		0 found at least one global lqe
+ * \retval		-ENOENT no global lqe is found or no lqes at all
+ */
+
 int qmt_pool_lqes_lookup_spec(const struct lu_env *env, struct qmt_device *qmt,
 			      int rtype, int qtype, union lquota_id *qid)
 {
-	struct qmt_pool_info	*pos;
-	struct lquota_entry	*lqe;
+	struct qmt_pool_info *pos;
+	struct lquota_entry *lqe;
+	bool glbl_found = false;
 
 	qti_lqes_init(env);
 	down_read(&qmt->qmt_pool_lock);
@@ -901,12 +911,14 @@ int qmt_pool_lqes_lookup_spec(const struct lu_env *env, struct qmt_device *qmt,
 			lqe_putref(lqe);
 			continue;
 		}
+		if (lqe->lqe_is_global)
+			glbl_found = true;
 		qti_lqes_add(env, lqe);
 		CDEBUG(D_QUOTA, "adding lqe %p from pool %s\n",
 				 lqe, pos->qpi_name);
 	}
 	up_read(&qmt->qmt_pool_lock);
-	RETURN(qti_lqes_cnt(env) ? 0 : -ENOENT);
+	RETURN(qti_lqes_cnt(env) && glbl_found ? 0 : -ENOENT);
 }
 
 /**
