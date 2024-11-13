@@ -1304,27 +1304,26 @@ int cfs_cpu_init(void)
 	if (*cpu_pattern) {
 		cfs_cpt_tab = cfs_cpt_table_create_pattern(cpu_pattern);
 		if (IS_ERR(cfs_cpt_tab)) {
-			CERROR("Failed to create cptab from pattern '%s'\n",
-			       cpu_pattern);
 			ret = PTR_ERR(cfs_cpt_tab);
+			pr_err("libcfs: failed to create cptab from pattern '%s': rc = %d\n",
+			       cpu_pattern, ret);
 			goto failed_alloc_table;
 		}
-
 	} else {
 		cfs_cpt_tab = cfs_cpt_table_create(cpu_npartitions);
 		if (IS_ERR(cfs_cpt_tab)) {
-			CERROR("Failed to create cptab with npartitions %d\n",
-			       cpu_npartitions);
 			ret = PTR_ERR(cfs_cpt_tab);
+			pr_err("libcfs: failed to create cptab with npartitions=%d: rc = %d\n",
+			       cpu_npartitions, ret);
 			goto failed_alloc_table;
 		}
 	}
 
 	cpus_read_unlock();
 
-	LCONSOLE(0, "HW NUMA nodes: %d, HW CPU cores: %d, npartitions: %d\n",
-		 num_online_nodes(), num_online_cpus(),
-		 cfs_cpt_number(cfs_cpt_tab));
+	pr_notice("libcfs: HW NUMA nodes: %d, HW CPU cores: %d, npartitions: %d\n",
+		  num_online_nodes(), num_online_cpus(),
+		  cfs_cpt_number(cfs_cpt_tab));
 	return 0;
 
 failed_alloc_table:
