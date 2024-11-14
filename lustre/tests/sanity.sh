@@ -17552,18 +17552,21 @@ test_136() {
 
 	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
 
-	#fill already existed 2 plain llogs each 64767
-	#wrapping whole catalog
-	createmany -o -u $DIR/$tdir/$tfile- $((64767 * 1))
-	createmany -o -u $DIR/$tdir/$tfile- $((64767 * 3 / 2))
-	wait_delete_completed
+	# fill already existed 2 plain llogs each 64767 wrapping whole catalog,
+	# drop server memory periodically to avoid OOM during testing
+	local items=1000
+	for ((created = 0; created < 64767 * 5 / 2; created += items)); do
+		echo "$(date +%s): create $created-$((created + items - 1))"
+		createmany -o -u $DIR/$tdir/$tfile- $items
+		wait_delete_completed
+		do_facet mds1 "echo 1 > /proc/sys/vm/drop_caches"
+	done
 
 	createmany -o $DIR/$tdir/$tfile_ 10
 	sleep 25
 
 	do_facet $SINGLEMDS $LCTL set_param fail_val=3
-	for (( i = 0; i < 10; i = i + 3 ))
-	do
+	for (( i = 0; i < 10; i = i + 3 )); do
 		rm $DIR/$tdir/$tfile_$i &
 		rm $DIR/$tdir/$tfile_$((i + 1)) &
 		local pid=$!
