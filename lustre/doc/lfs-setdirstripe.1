@@ -28,8 +28,10 @@ MDTs.
 .B -C\fR, \fB--overstripe-count \fISTRIPE_COUNT\fR
 The number of stripes to create, creating > 1 stripe MDT if \fISTRIPE_COUNT\fR
 exceeds the number of MDTs in the file system. \fB0 \fRmeans to use the
-filesystem-wide default stripe count (default 1), and \fB-1 \fRmeans to stripe
-over all available MDTs.  Max of 5 stripes/MDT.
+filesystem-wide default stripe count (default 1). While negative value \fB-N \fR
+means \fBN \fRstripes per available MDT. \fB-1 \fRallocates one stripe per MDT,
+values of -2, -3, -4, and -5 allocate 2, 3, 4, and 5 stripes per MDT,
+respectively. The maximum allowable multiplier is currently \fB-5\fR.
 .TP
 .BR \-h ", " \-\-help
 Print usage message.
