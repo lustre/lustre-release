@@ -546,7 +546,6 @@ lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 
 	dump_stack();
 	if (libcfs_panic_on_lbug) {
-		msleep(cfs_time_seconds(6));
 		panic("LBUG");
 	} else
 		libcfs_debug_dumplog();
