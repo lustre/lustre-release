@@ -1491,6 +1491,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 				       bool unplug)
 {
 	struct sa_entry *entry = NULL;
+	struct ll_dentry_data *lld;
 	struct ll_inode_info *lli = ll_i2info(dir);
 	int rc = 0;
 
@@ -1607,8 +1608,12 @@ out:
 	 * stat this file again, we know we've done statahead before, see
 	 * dentry_may_statahead().
 	 */
-	if (lld_is_init(*dentryp))
-		ll_d2d(*dentryp)->lld_sa_generation = lli->lli_sa_generation;
+	rcu_read_lock();
+	lld = ll_d2d(*dentryp);
+	if (lld)
+		lld->lld_sa_generation = lli->lli_sa_generation;
+	rcu_read_unlock();
+
 	sa_put(sai, entry);
 	spin_lock(&lli->lli_sa_lock);
 	if (sai->sai_task)

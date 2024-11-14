@@ -183,8 +183,7 @@ restart:
 				continue;
 
 			spin_lock_nested(&child->d_lock, DENTRY_D_LOCK_NESTED);
-			if (lld_is_init(child))
-				ll_d2d(child)->lld_invalid = 1;
+			set_lld_invalid(child, 1);
 			if (!ll_d_count(child)) {
 				dget_dlock(child);
 				__d_drop(child);
