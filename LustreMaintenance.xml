@@ -862,34 +862,47 @@ Changing the Address of a Failover Node</title>
         <listitem>
           <para>Stop the MDS.</para>
           <para>Unmount the MDT</para>
-	      <screen>umount -f <replaceable>/dev/mdt_device</replaceable> </screen>
+            <screen>
+mds# umount -f <replaceable>/dev/mdt_device</replaceable>
+            </screen>
         </listitem>
         <listitem>
-          <para>Create the MGS.</para>
-	      <screen>mds# mkfs.lustre --mgs --device-size=<replaceable>size</replaceable> <replaceable>/dev/mgs_device</replaceable></screen>
+          <para>Create the MGT filesystem.</para>
+            <screen>
+mds# mkfs.lustre --mgs <replaceable>/dev/mgt_device</replaceable>
+            </screen>
         </listitem>
         <listitem>
-          <para>Copy the configuration data from MDT disk to the new MGS disk.</para>
-	      <screen>mds# mount -t ldiskfs -o ro <replaceable>/dev/mdt_device</replaceable> <replaceable>/mdt_mount_point</replaceable></screen>
-	      <screen>mds# mount -t ldiskfs -o rw <replaceable>/dev/mgs_device</replaceable> <replaceable>/mgs_mount_point</replaceable> </screen>
-	      <screen>mds# cp -r <replaceable>/mdt_mount_point</replaceable>/CONFIGS/<replaceable>filesystem_name</replaceable>-* <replaceable>/mgs_mount_point</replaceable>/CONFIGS/. </screen>
-	      <screen>mds# umount <replaceable>/mgs_mount_point</replaceable></screen>
-	      <screen>mds# umount <replaceable>/mdt_mount_point</replaceable></screen>
+          <para>Copy the configuration data from MDT disk to the new MGT disk.</para>
+	      <screen>
+mds# mount -t ldiskfs -o ro <replaceable>/dev/mdt_device</replaceable> <replaceable>/mdt_mount_point</replaceable>
+mds# mount -t ldiskfs -o rw <replaceable>/dev/mgt_device</replaceable> <replaceable>/mgt_mount_point</replaceable>
+mds# cp -av <replaceable>/mdt_mount_point</replaceable>/CONFIGS/<replaceable>filesystem_name</replaceable>-* <replaceable>/mgt_mount_point</replaceable>/CONFIGS/
+mds# cp -av <replaceable>/mdt_mount_point</replaceable>/CONFIGS/{params,nodemap,sptlrpc}* <replaceable>/mgt_mount_point</replaceable>/CONFIGS/
+mds# umount <replaceable>/mgt_mount_point</replaceable>
+mds# umount <replaceable>/mdt_mount_point</replaceable>
+              </screen>
           <para>See <xref linkend="lustremaint.regenerateConfigLogs"/> for alternative method.</para>
         </listitem>
         <listitem>
           <para>Start the MGS.</para>
-	      <screen>mgs# mount -t lustre <replaceable>/dev/mgs_device</replaceable> <replaceable>/mgs_mount_point</replaceable></screen>
+            <screen>
+mgs# mount -t lustre <replaceable>/dev/mgt_device</replaceable> <replaceable>/mgt_mount_point</replaceable>
+            </screen>
           <para>Check to make sure it knows about all your file system</para>
 	      <screen>mgs:/root# lctl get_param mgs.MGS.filesystems</screen>
         </listitem>
         <listitem>
           <para>Remove the MGS option from the MDT, and set the new MGS nid.</para>
-	      <screen>mds# tunefs.lustre --nomgs --mgsnode=<replaceable>new_mgs_nid</replaceable> <replaceable>/dev/mdt-device</replaceable></screen>
+            <screen>
+mds# tunefs.lustre --nomgs --mgsnode=<replaceable>new_mgs_nid</replaceable> <replaceable>/dev/mdt-device</replaceable>
+            </screen>
         </listitem>
         <listitem>
           <para>Start the MDT.</para>
-	      <screen>mds# mount -t lustre <replaceable>/dev/mdt_device /mdt_mount_point</replaceable></screen>
+	      <screen>
+mds# mount -t lustre <replaceable>/dev/mdt_device /mdt_mount_point</replaceable>
+              </screen>
           <para>Check to make sure the MGS configuration looks right:</para>
 	      <screen>mgs# lctl get_param mgs.MGS.live.<replaceable>filesystem_name</replaceable></screen>
         </listitem>
