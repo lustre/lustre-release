@@ -503,6 +503,7 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
+EXPORT_SYMBOL(lprocfs_stats_collect);
 
 static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 {

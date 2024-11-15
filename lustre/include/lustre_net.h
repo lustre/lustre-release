@@ -29,6 +29,7 @@
 #include <linux/kobject.h>
 #include <linux/rhashtable.h>
 #include <linux/uio.h>
+#include <linux/pm_qos.h>
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
 #include <lnet/lib-types.h>
@@ -526,6 +527,39 @@ struct ptlrpc_replay_async_args {
 	int		praa_old_state;
 	int		praa_old_status;
 };
+
+/* max latency being allowed when connection is busy */
+#define CPU_MAX_RESUME_LATENCY_US 20
+/* default time during which low latency will be set */
+#define DEFAULT_CPU_LATENCY_TIMEOUT_US 3000
+
+/**
+ * Structure for PM QoS management.
+ */
+struct cpu_latency_qos {
+	struct dev_pm_qos_request *pm_qos_req;
+	struct delayed_work delayed_work;
+	/* current/last time being active, in jiffies */
+	u64 deadline;
+	/* max timeout value already used, in usecs */
+	u64 max_time;
+	struct mutex lock;
+};
+
+/* per-cpu PM QoS management */
+extern struct cpu_latency_qos *cpus_latency_qos;
+
+/* whether we should use PM-QoS to lower CPUs resume latency during I/O */
+extern bool ptlrpc_enable_pmqos;
+
+/* max CPUs power resume latency to be used during I/O */
+extern int ptlrpc_pmqos_latency_max_usec;
+
+/* default timeout to end CPUs resume latency constraint */
+extern u64 ptlrpc_pmqos_default_duration_usec;
+
+/* whether we should use PM-QoS to lower CPUs resume latency during I/O */
+extern bool ptlrpc_pmqos_use_stats_for_duration;
 
 /**
  * Structure to single define portal connection.

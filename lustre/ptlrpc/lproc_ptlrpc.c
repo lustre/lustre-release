@@ -1463,3 +1463,146 @@ ssize_t pinger_recov_store(struct kobject *kobj, struct attribute *attr,
 	return rc ?: count;
 }
 EXPORT_SYMBOL(pinger_recov_store);
+
+static struct kobject *ptlrpc_kobj;
+
+static ssize_t
+enable_pmqos_show(struct kobject *kobj, struct attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", ptlrpc_enable_pmqos);
+}
+
+static ssize_t
+enable_pmqos_store(struct kobject *kobj, struct attribute *attr,
+		   const char *buf, size_t count)
+{
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buf, &val);
+	if (rc < 0)
+		return rc;
+
+	CDEBUG(D_INFO, "Setting 'enable_pmqos' to %s\n", val ? "true" : "false");
+	ptlrpc_enable_pmqos = val;
+
+	return count;
+}
+
+LUSTRE_RW_ATTR(enable_pmqos);
+
+static ssize_t
+pmqos_latency_max_usec_show(struct kobject *kobj, struct attribute *attr,
+			    char *buf)
+{
+	return sprintf(buf, "%d\n", ptlrpc_pmqos_latency_max_usec);
+}
+
+static ssize_t
+pmqos_latency_max_usec_store(struct kobject *kobj, struct attribute *attr,
+			     const char *buf, size_t count)
+{
+	int val;
+	int rc;
+
+	rc = kstrtoint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	CDEBUG(D_INFO, "Setting 'pmqos_latency_max_usec' to %d", val);
+	ptlrpc_pmqos_latency_max_usec = val;
+
+	return count;
+}
+
+LUSTRE_RW_ATTR(pmqos_latency_max_usec);
+
+static ssize_t
+pmqos_default_duration_usec_show(struct kobject *kobj,
+				 struct attribute *attr, char *buf)
+{
+	return sprintf(buf, "%llu\n", ptlrpc_pmqos_default_duration_usec);
+}
+
+static ssize_t
+pmqos_default_duration_usec_store(struct kobject *kobj,
+				  struct attribute *attr, const char *buf,
+				  size_t count)
+{
+	u64 val;
+	int rc;
+
+	rc = kstrtoull(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	CDEBUG(D_INFO, "Setting 'pmqos_default_duration_usec' to %llu", val);
+	ptlrpc_pmqos_default_duration_usec = val;
+
+	return count;
+}
+
+LUSTRE_RW_ATTR(pmqos_default_duration_usec);
+
+static ssize_t
+pmqos_use_stats_for_duration_show(struct kobject *kobj,
+				  struct attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", ptlrpc_pmqos_use_stats_for_duration);
+}
+
+static ssize_t
+pmqos_use_stats_for_duration_store(struct kobject *kobj,
+				   struct attribute *attr, const char *buf,
+				   size_t count)
+{
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buf, &val);
+	if (rc < 0)
+		return rc;
+
+	CDEBUG(D_INFO, "Setting 'pmqos_use_stats_for_duration' to %s\n",
+	       val ? "true" : "false");
+	ptlrpc_pmqos_use_stats_for_duration = val;
+
+	return count;
+}
+
+LUSTRE_RW_ATTR(pmqos_use_stats_for_duration);
+
+static struct attribute *ptlrpc_attrs[] = {
+	&lustre_attr_enable_pmqos.attr,
+	&lustre_attr_pmqos_latency_max_usec.attr,
+	&lustre_attr_pmqos_default_duration_usec.attr,
+	&lustre_attr_pmqos_use_stats_for_duration.attr,
+	NULL,
+};
+
+static struct attribute_group ptlrpc_attr_group = {
+	.attrs = ptlrpc_attrs,
+};
+
+int ptlrpc_lproc_init(void)
+{
+	int rc = 0;
+
+	ptlrpc_kobj = kobject_create_and_add("ptlrpc", &lustre_kset->kobj);
+	if (!ptlrpc_kobj)
+		RETURN(-ENOMEM);
+
+	rc = sysfs_create_group(ptlrpc_kobj, &ptlrpc_attr_group);
+	if (rc)
+		ptlrpc_lproc_fini();
+
+	return rc;
+}
+
+void ptlrpc_lproc_fini(void)
+{
+	if (ptlrpc_kobj) {
+		sysfs_remove_group(ptlrpc_kobj, &ptlrpc_attr_group);
+		kobject_put(ptlrpc_kobj);
+	}
+}

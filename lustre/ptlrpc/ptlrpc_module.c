@@ -57,9 +57,13 @@ static __init int ptlrpc_init(void)
 	if (rc)
 		GOTO(err_cache, rc);
 
-	rc = ptlrpc_connection_init();
+	rc = ptlrpc_lproc_init();
 	if (rc)
 		GOTO(err_portals, rc);
+
+	rc = ptlrpc_connection_init();
+	if (rc)
+		GOTO(err_lproc, rc);
 
 	rc = ptlrpc_start_pinger();
 	if (rc)
@@ -101,6 +105,8 @@ err_pinger:
 	ptlrpc_stop_pinger();
 err_conn:
 	ptlrpc_connection_fini();
+err_lproc:
+	ptlrpc_lproc_fini();
 err_portals:
 	ptlrpc_exit_portals();
 err_cache:
@@ -126,6 +132,7 @@ static void __exit ptlrpc_exit(void)
 	ptlrpc_request_cache_fini();
 	ptlrpc_hr_fini();
 	ptlrpc_connection_fini();
+	ptlrpc_lproc_fini();
 	req_layout_fini();
 }
 

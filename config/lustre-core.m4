@@ -980,6 +980,33 @@ AC_DEFUN([LC_VFS_RENAME_6ARGS], [
 ]) # LC_VFS_RENAME_6ARGS
 
 #
+# LC_PMQOS_RESUME_LATENCY
+#
+# DEV_PM_QOS_LATENCY is used until v3.14 included
+# DEV_PM_QOS_RESUME_LATENCY is used since v3.15
+#
+AC_DEFUN([LC_SRC_PMQOS_RESUME_LATENCY], [
+        LB2_LINUX_TEST_SRC([pmqos_resume_latency], [
+		#include <linux/pm_qos.h>
+	], [
+			struct dev_pm_qos_request req;
+			struct device dev;
+
+			dev_pm_qos_add_request(&dev, &req, DEV_PM_QOS_LATENCY, 0);
+	])
+])
+
+AC_DEFUN([LC_PMQOS_RESUME_LATENCY], [
+saved_flags="$CFLAGS"
+CFLAGS="-Werror"
+LB2_MSG_LINUX_TEST_RESULT([if 'DEV_PM_QOS_LATENCY' vs 'DEV_PM_QOS_RESUME_LATENCY'],
+	[pmqos_resume_latency], [
+		AC_DEFINE(DEV_PM_QOS_RESUME_LATENCY, DEV_PM_QOS_LATENCY, [using 'DEV_PM_QOS_LATENCY'])
+	], [])
+CFLAGS="$saved_flags"
+])
+
+#
 # LC_DIRECTIO_USE_ITER
 #
 # 3.16 kernel changes direct IO to use iov_iter
@@ -4809,6 +4836,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 3.15
 	LC_SRC_VFS_RENAME_6ARGS
+	LC_SRC_PMQOS_RESUME_LATENCY
 
 	# 3.16
 	LC_SRC_DIRECTIO_USE_ITER
@@ -5116,6 +5144,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 3.15
 	LC_VFS_RENAME_6ARGS
+	LC_PMQOS_RESUME_LATENCY
 
 	# 3.16
 	LC_DIRECTIO_USE_ITER

@@ -272,6 +272,10 @@ void sptlrpc_null_fini(void);
 int  sptlrpc_plain_init(void);
 void sptlrpc_plain_fini(void);
 
+/* lproc_ptlrpc.c */
+int  ptlrpc_lproc_init(void);
+void ptlrpc_lproc_fini(void);
+
 /* sec_lproc.c */
 int  sptlrpc_lproc_init(void);
 void sptlrpc_lproc_fini(void);

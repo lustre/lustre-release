@@ -23,6 +23,9 @@
 
 static struct rhashtable conn_hash;
 
+/* per-cpu PM QoS management */
+struct cpu_latency_qos *cpus_latency_qos;
+
 /*
  * struct lnet_process_id may contain unassigned bytes which might not
  * be zero, so we cannot just hash and compare bytes.
@@ -56,6 +59,41 @@ static const struct rhashtable_params conn_hash_params = {
 	.hashfn		= lnet_process_id_hash,
 	.obj_cmpfn	= lnet_process_id_cmp,
 };
+
+static void cpu_latency_work(struct work_struct *work)
+{
+	struct cpu_latency_qos *latency_qos;
+	struct dev_pm_qos_request *pm_qos_req_done = NULL;
+	int cpu;
+
+	latency_qos = container_of(work, struct cpu_latency_qos,
+				   delayed_work.work);
+	cpu = (latency_qos - cpus_latency_qos) / sizeof(struct cpu_latency_qos);
+	mutex_lock(&latency_qos->lock);
+	if (time_after64(jiffies_64, latency_qos->deadline)) {
+		CDEBUG(D_INFO, "work item of %p (cpu %d) has reached its deadline %llu, at %llu\n",
+		       latency_qos, cpu, latency_qos->deadline, jiffies_64);
+		pm_qos_req_done = latency_qos->pm_qos_req;
+		latency_qos->pm_qos_req = NULL;
+	} else {
+		/* XXX Is this expected to happen?
+		 * anyway, reschedule for the remaining time
+		 */
+		cancel_delayed_work(&latency_qos->delayed_work);
+		schedule_delayed_work(&latency_qos->delayed_work,
+				      (unsigned long)(latency_qos->deadline -
+				       jiffies_64));
+		CDEBUG(D_INFO, "work item of %p (cpu %d) has not reached its deadline %llu, at %llu\n",
+		       latency_qos, cpu, latency_qos->deadline, jiffies_64);
+	}
+	mutex_unlock(&latency_qos->lock);
+
+	/* must be done outside atomic section */
+	if (pm_qos_req_done != NULL) {
+		dev_pm_qos_remove_request(pm_qos_req_done);
+		OBD_FREE_PTR(pm_qos_req_done);
+	}
+}
 
 struct ptlrpc_connection *
 ptlrpc_connection_get(struct lnet_processid *peer_orig, struct lnet_nid *self,
@@ -146,10 +184,49 @@ conn_exit(void *vconn, void *data)
 
 int ptlrpc_connection_init(void)
 {
+	int cpu;
+
+	OBD_ALLOC_PTR_ARRAY(cpus_latency_qos, nr_cpu_ids);
+	if (!cpus_latency_qos) {
+		CWARN("Failed to allocate PM-QoS management structs\n");
+	} else {
+		for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+			struct cpu_latency_qos *cpu_latency_qos =
+				&cpus_latency_qos[cpu];
+
+			INIT_DELAYED_WORK(&cpu_latency_qos->delayed_work,
+					  cpu_latency_work);
+			mutex_init(&cpu_latency_qos->lock);
+			cpu_latency_qos->max_time =
+				DEFAULT_CPU_LATENCY_TIMEOUT_US;
+		}
+	}
+
 	return rhashtable_init(&conn_hash, &conn_hash_params);
 }
 
 void ptlrpc_connection_fini(void)
 {
+	int cpu;
+
+	if (cpus_latency_qos != NULL) {
+		for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+			struct cpu_latency_qos *cpu_latency_qos =
+				&cpus_latency_qos[cpu];
+
+			mutex_lock(&cpu_latency_qos->lock);
+			if (cpu_latency_qos->pm_qos_req != NULL &&
+			    dev_pm_qos_request_active(cpu_latency_qos->pm_qos_req)) {
+				dev_pm_qos_remove_request(cpu_latency_qos->pm_qos_req);
+				cancel_delayed_work(&cpu_latency_qos->delayed_work);
+				CDEBUG(D_INFO, "remove PM QoS request %p and associated work item, still active for this cpu %d\n",
+				       cpu_latency_qos, cpu);
+				OBD_FREE_PTR(cpu_latency_qos->pm_qos_req);
+			}
+			mutex_unlock(&cpu_latency_qos->lock);
+		}
+		OBD_FREE_PTR_ARRAY(cpus_latency_qos, nr_cpu_ids);
+	}
+
 	rhashtable_free_and_destroy(&conn_hash, conn_exit, NULL);
 }
