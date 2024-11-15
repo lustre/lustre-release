@@ -35338,6 +35338,32 @@ test_833() {
 }
 run_test 833 "Mixed buffered/direct read and write should not return -EIO"
 
+test_834() {
+	local file=$DIR/$tfile
+
+	dd if=/dev/zero of=$file bs=1M count=100 ||
+		error "failed to write $file"
+	cancel_lru_locks $OSC
+	$LCTL set_param llite.*.read_ahead_stats=clear
+	# Unfortunately we can not reproduce the panic with the following mmap
+	# read with madvise(MADV_HUGEPAGE)...
+	$MULTIOP $file OSMJRUc || "failed to $MULTIOP $file"
+	$LCTL get_param llite.*.read_ahead_stats
+
+	which fio || skip_env "no fio installed"
+	fio --enghelp=mmap | grep 'thp' ||
+		skip_env "fio mmap I/O engine does not support THP"
+
+	$TRUNCATE $file $((5 * 1024 * 1024 * 1024)) ||
+		error "failed to truncate $file"
+	# "--thp=1" indicates to use MADV_HUGEPAGE madvise for fio testing
+	# with mmap I/O engine.
+	# However, this fio test still can not reproduce the panic also...
+	fio --name=read_test --ioengine=mmap --filename=$file --rw=read \
+		--bs=1m --thp=1 || error "failed to run fio on $file"
+}
+run_test 834 "mmap readahead for madvise with MADV_HUGEPAGE"
+
 test_842() {
 	(( $MDS1_VERSION >= $(version_code 2.15.62) )) ||
 		skip "Need MDS version at least 2.15.62 for ldlm_extent module"

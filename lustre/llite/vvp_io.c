@@ -1693,9 +1693,9 @@ static void vvp_io_fsync_end(const struct lu_env *env,
 		ll_merge_attr_try(env, inode);
 }
 
-static int vvp_io_read_ahead(const struct lu_env *env,
-			     const struct cl_io_slice *ios,
-			     pgoff_t start, struct cl_read_ahead *ra)
+static int vvp_io_read_ahead_prep(const struct lu_env *env,
+				  const struct cl_io_slice *ios,
+				  pgoff_t start, struct cl_read_ahead *ra)
 {
 	int result = 0;
 
@@ -1814,7 +1814,7 @@ static const struct cl_io_operations vvp_io_ops = {
 			.cio_end       = vvp_io_lseek_end,
 		},
 	},
-	.cio_read_ahead = vvp_io_read_ahead
+	.cio_read_ahead_prep	= vvp_io_read_ahead_prep,
 };
 
 int vvp_io_init(const struct lu_env *env, struct cl_object *obj,

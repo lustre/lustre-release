@@ -1187,9 +1187,9 @@ static void lov_io_unlock(const struct lu_env *env,
 	EXIT;
 }
 
-static int lov_io_read_ahead(const struct lu_env *env,
-			     const struct cl_io_slice *ios,
-			     pgoff_t start, struct cl_read_ahead *ra)
+static int lov_io_read_ahead_prep(const struct lu_env *env,
+				  const struct cl_io_slice *ios,
+				  pgoff_t start, struct cl_read_ahead *ra)
 {
 	struct lov_io		*lio = cl2lov_io(env, ios);
 	struct lov_object	*loo = lio->lis_object;
@@ -1225,8 +1225,8 @@ static int lov_io_read_ahead(const struct lu_env *env,
 		RETURN(PTR_ERR(sub));
 
 	lov_stripe_offset(loo->lo_lsm, index, offset, stripe, &suboff);
-	rc = cl_io_read_ahead(sub->sub_env, &sub->sub_io,
-			      suboff >> PAGE_SHIFT, ra);
+	rc = cl_io_read_ahead_prep(sub->sub_env, &sub->sub_io,
+				   suboff >> PAGE_SHIFT, ra);
 
 	CDEBUG(D_READA, DFID " cra_end = %lu, stripes = %d, rc = %d\n",
 	       PFID(lu_object_fid(lov2lu(loo))), ra->cra_end_idx,
@@ -1806,11 +1806,11 @@ static const struct cl_io_operations lov_io_ops = {
 			.cio_fini      = lov_io_fini
 		}
 	},
-	.cio_read_ahead                = lov_io_read_ahead,
-	.cio_lru_reserve	       = lov_io_lru_reserve,
-	.cio_submit                    = lov_io_submit,
-	.cio_dio_submit                = lov_dio_submit,
-	.cio_commit_async              = lov_io_commit_async,
+	.cio_read_ahead_prep		= lov_io_read_ahead_prep,
+	.cio_lru_reserve		= lov_io_lru_reserve,
+	.cio_submit			= lov_io_submit,
+	.cio_dio_submit			= lov_dio_submit,
+	.cio_commit_async		= lov_io_commit_async,
 };
 
 /**

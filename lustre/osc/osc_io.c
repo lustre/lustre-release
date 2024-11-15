@@ -53,9 +53,9 @@ void osc_read_ahead_release(const struct lu_env *env, struct cl_read_ahead *ra)
 }
 EXPORT_SYMBOL(osc_read_ahead_release);
 
-static int osc_io_read_ahead(const struct lu_env *env,
-			     const struct cl_io_slice *ios,
-			     pgoff_t start, struct cl_read_ahead *ra)
+static int osc_io_read_ahead_prep(const struct lu_env *env,
+				  const struct cl_io_slice *ios,
+				  pgoff_t start, struct cl_read_ahead *ra)
 {
 	struct osc_object *osc = cl2osc(ios->cis_obj);
 	struct osc_io *oio = cl2osc_io(env, ios);
@@ -1446,12 +1446,12 @@ static const struct cl_io_operations osc_io_ops = {
 			.cio_fini   = osc_io_fini
 		}
 	},
-	.cio_read_ahead		    = osc_io_read_ahead,
-	.cio_lru_reserve	    = osc_io_lru_reserve,
-	.cio_submit                 = osc_io_submit,
-	.cio_dio_submit		    = osc_dio_submit,
-	.cio_commit_async           = osc_io_commit_async,
-	.cio_extent_release         = osc_io_extent_release
+	.cio_read_ahead_prep	= osc_io_read_ahead_prep,
+	.cio_lru_reserve	= osc_io_lru_reserve,
+	.cio_submit		= osc_io_submit,
+	.cio_dio_submit		= osc_dio_submit,
+	.cio_commit_async	= osc_io_commit_async,
+	.cio_extent_release	= osc_io_extent_release
 };
 
 /*****************************************************************************

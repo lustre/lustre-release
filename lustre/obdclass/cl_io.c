@@ -567,10 +567,10 @@ EXPORT_SYMBOL(cl_io_end);
 /*
  * Called by read IO, to decide the readahead extent
  *
- * see cl_io_operations::cio_read_ahead()
+ * see cl_io_operations::cio_read_ahead_prep()
  */
-int cl_io_read_ahead(const struct lu_env *env, struct cl_io *io,
-		     pgoff_t start, struct cl_read_ahead *ra)
+int cl_io_read_ahead_prep(const struct lu_env *env, struct cl_io *io,
+			  pgoff_t start, struct cl_read_ahead *ra)
 {
 	const struct cl_io_slice *scan;
 	int result = 0;
@@ -583,16 +583,17 @@ int cl_io_read_ahead(const struct lu_env *env, struct cl_io *io,
 	ENTRY;
 
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
-		if (scan->cis_iop->cio_read_ahead == NULL)
+		if (scan->cis_iop->cio_read_ahead_prep == NULL)
 			continue;
 
-		result = scan->cis_iop->cio_read_ahead(env, scan, start, ra);
+		result = scan->cis_iop->cio_read_ahead_prep(env, scan,
+							    start, ra);
 		if (result != 0)
 			break;
 	}
 	RETURN(result > 0 ? 0 : result);
 }
-EXPORT_SYMBOL(cl_io_read_ahead);
+EXPORT_SYMBOL(cl_io_read_ahead_prep);
 
 /*
  * Called before IO start, to reserve enough LRU slots to avoid

@@ -1586,9 +1586,9 @@ struct cl_io_operations {
 	 *
 	 * \pre io->ci_type == CIT_READ
 	 */
-	int (*cio_read_ahead)(const struct lu_env *env,
-			      const struct cl_io_slice *slice,
-			      pgoff_t start, struct cl_read_ahead *ra);
+	int (*cio_read_ahead_prep)(const struct lu_env *env,
+				   const struct cl_io_slice *slice,
+				   pgoff_t start, struct cl_read_ahead *ra);
 	/**
 	 *
 	 * Reserve LRU slots before IO.
@@ -2424,10 +2424,10 @@ void  cl_io_extent_release(const struct lu_env *env, struct cl_io *io,
 			   enum cl_io_priority prio);
 int cl_io_lru_reserve(const struct lu_env *env, struct cl_io *io,
 		      loff_t pos, size_t bytes);
-int   cl_io_read_ahead(const struct lu_env *env, struct cl_io *io,
-		       pgoff_t start, struct cl_read_ahead *ra);
-void  cl_io_rw_advance(const struct lu_env *env, struct cl_io *io,
-		       size_t bytes);
+int cl_io_read_ahead_prep(const struct lu_env *env, struct cl_io *io,
+			  pgoff_t start, struct cl_read_ahead *ra);
+void cl_io_rw_advance(const struct lu_env *env, struct cl_io *io,
+		      size_t bytes);
 
 /**
  * True, iff \a io is an O_APPEND write(2).
