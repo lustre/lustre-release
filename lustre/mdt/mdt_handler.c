@@ -3051,6 +3051,142 @@ static void mdt_preset_secctx_size(struct mdt_thread_info *info)
 	}
 }
 
+int mdt_object_striped(struct mdt_thread_info *mti, struct mdt_object *obj)
+{
+	struct lu_device *bottom_dev;
+	struct lu_object *bottom_obj;
+	int rc;
+
+	if (!S_ISDIR(obj->mot_header.loh_attr))
+		return 0;
+
+	/* getxattr from bottom obj to avoid reading in shard FIDs */
+	bottom_dev = dt2lu_dev(mti->mti_mdt->mdt_bottom);
+	bottom_obj = lu_object_find_slice(mti->mti_env, bottom_dev,
+					  mdt_object_fid(obj), NULL);
+	if (IS_ERR(bottom_obj))
+		return PTR_ERR(bottom_obj);
+
+	rc = dt_xattr_get(mti->mti_env, lu2dt(bottom_obj), &LU_BUF_NULL,
+			  XATTR_NAME_LMV);
+	lu_object_put(mti->mti_env, bottom_obj);
+
+	return (rc > 0) ? 1 : (rc == -ENODATA) ? 0 : rc;
+}
+
+#define DIR_READ_ON_OPEN_PAGES 1
+
+static int mdt_dir_read_on_open(struct mdt_thread_info	*info,
+				struct lustre_handle *lhc)
+{
+	const struct lu_env *env = info->mti_env;
+	struct lu_rdpg		*rdpg = &info->mti_u.rdpg.mti_rdpg;
+	struct req_capsule	*pill = info->mti_pill;
+	int			 rc;
+	struct mdt_body         *mbo;
+	struct mdt_device	*mdt = info->mti_mdt;
+	struct mdt_object	*o;
+	struct ptlrpc_request	*req = pill->rc_req;
+	bool have_lock = false;
+	struct lu_fid *fid; // dir fid
+
+	ENTRY;
+
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
+		GOTO(out_err, rc = -ENOMEM);
+
+	/* client don't want a reply */
+	if (!req->rq_reqmsg->lm_repsize)
+		RETURN(0);
+
+	if (lustre_handle_is_used(lhc)) {
+		struct ldlm_lock *lock;
+
+		lock = ldlm_handle2lock(lhc);
+		if (lock) {
+			have_lock = ldlm_has_update(lock);
+			ldlm_lock_put(lock);
+		}
+	}
+	if (!have_lock)
+		GOTO(out_err, rc = 0);
+
+	rdpg->rp_hash = 0;
+	rdpg->rp_attrs = LUDA_FID | LUDA_TYPE;
+	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_64BITHASH)
+		rdpg->rp_attrs |= LUDA_64BITHASH;
+	rdpg->rp_count  = min_t(unsigned int, req->rq_reqmsg->lm_repsize,
+			    DIR_READ_ON_OPEN_PAGES << PAGE_SHIFT);
+	rdpg->rp_npages = 0;
+
+	rc = req_capsule_server_grow(pill, &RMF_NIOBUF_INLINE, rdpg->rp_count);
+	if (rc != 0) {
+		/* failed to grow data buffer, just exit */
+		GOTO(out_err, rc = -E2BIG);
+	}
+
+	/* re-take MDT_BODY and NIOBUF_INLINE buffers after the buffer grow */
+	mbo = req_capsule_server_get(pill, &RMF_MDT_BODY);
+	fid = &mbo->mbo_fid1;
+	if (!fid_is_sane(fid))
+		GOTO(out_rnb, rc = -EINVAL);
+
+	rdpg->rp_data = req_capsule_server_get(pill, &RMF_NIOBUF_INLINE);
+	if (rdpg->rp_data == NULL)
+		GOTO(out_rnb, rc = -EPROTO);
+
+	o = mdt_object_find(info->mti_env, mdt, fid);
+	if (IS_ERR(o))
+		GOTO(out_rnb, rc = PTR_ERR(o));
+
+	if (!mdt_object_exists(o) ||
+	     mdt_object_remote(o) ||
+	     mdt_object_striped(info, o))
+		GOTO(out_put, rc = -ENOENT);
+
+	/* call lower layers to fill allocated pages with directory data */
+	rc = mo_readpage(env, mdt_object_child(o), rdpg);
+out_put:
+	mdt_object_put(env, o);
+
+out_rnb:
+	if (rc < 0)
+		req_capsule_shrink(pill, &RMF_NIOBUF_INLINE, 0, RCL_SERVER);
+out_err:
+	if (rc)
+		CDEBUG(D_INFO, "read dir on open failed with rc = %d\n", rc);
+	RETURN(0);
+}
+
+static int mdt_read_inline(struct mdt_thread_info *info,
+			   struct mdt_lock_handle *lhc)
+{
+	struct req_capsule	*pill = info->mti_pill;
+	struct md_attr		*ma  = &info->mti_attr;
+	struct lu_attr		*la  = &ma->ma_attr;
+	struct ptlrpc_request	*req = pill->rc_req;
+	int rc = 0;
+
+	ENTRY;
+	if (!req_capsule_field_present(pill, &RMF_NIOBUF_INLINE, RCL_SERVER)) {
+		/* There is no reply buffers for this field, this means that
+		 * client has no support for data in reply.
+		 */
+		RETURN(0);
+	}
+	/* client don't want a reply */
+	if (!req->rq_reqmsg->lm_repsize)
+		RETURN(0);
+
+	if (S_ISREG(la->la_mode))
+		rc = mdt_dom_read_on_open(info, info->mti_mdt,
+					  &lhc->mlh_reg_lh);
+	else if (S_ISDIR(la->la_mode))
+		rc = mdt_dir_read_on_open(info, &lhc->mlh_reg_lh);
+
+	return rc;
+}
+
 static int mdt_reint_internal(struct mdt_thread_info *info,
 			      struct mdt_lock_handle *lhc,
 			      __u32 op)
@@ -3146,8 +3282,7 @@ out_shrink:
 	 * in reply when possible.
 	 */
 	if (rc == 0 && op == REINT_OPEN && !req_is_replay(pill->rc_req))
-		rc = mdt_dom_read_on_open(info, info->mti_mdt,
-					  &lhc->mlh_reg_lh);
+		rc = mdt_read_inline(info, lhc);
 
 	return rc;
 }

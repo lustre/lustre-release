@@ -805,6 +805,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	__u32 dom_stripe = 0;
 	unsigned int dom_only = 0;
 	unsigned int dom_lock = 0;
+	struct ptlrpc_request *req = mdt_info_req(info);
 
 	ENTRY;
 	*ibits = 0;
@@ -891,6 +892,19 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		} else if (dom_lock) {
 			lm = (open_flags & MDS_FMODE_WRITE) ? LCK_PW : LCK_PR;
 			trybits |= MDS_INODELOCK_DOM | MDS_INODELOCK_LAYOUT;
+		}
+
+		/*
+		 * dir read on open - needs a update lock to protect an page
+		 * cache contents lets take UPD
+		 */
+		if (S_ISDIR(lu_object_attr(&obj->mot_obj)) &&
+		    likely(req->rq_reqmsg->lm_repsize) &&
+		    exp_connect_open_readdir(info->mti_exp) &&
+		    likely(!(mdt_object_remote(obj) ||
+		    mdt_object_striped(info, obj))) ){
+			*ibits |= MDS_INODELOCK_UPDATE;
+			lm = LCK_PR;
 		}
 
 		CDEBUG(D_INODE, "normal open:"DFID" lease count: %d, lm: %d\n",
@@ -1032,8 +1046,9 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 	if (ibits == 0 || rc == -MDT_EREMOTE_OPEN)
 		RETURN_EXIT;
 
-	if (!(open_flags & MDS_OPEN_LOCK) && !(ibits & MDS_INODELOCK_LAYOUT) &&
-	    !(ibits & MDS_INODELOCK_DOM)) {
+	if (!(open_flags & MDS_OPEN_LOCK) &&
+	    !(ibits & (MDS_INODELOCK_LAYOUT | MDS_INODELOCK_DOM)) &&
+	    !S_ISDIR(lu_object_attr(&obj->mot_obj))) {
 		/* for the open request, the lock will only return to client
 		 * if open or layout lock is granted. */
 		rc = 1;

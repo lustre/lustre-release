@@ -706,9 +706,14 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 
 		ll_set_lock_data(ll_i2sbi(parent)->ll_md_exp, inode, it, &bits);
 		/* OPEN can return data if lock has DoM+LAYOUT bits set */
-		if (it->it_op & IT_OPEN &&
-		    bits & MDS_INODELOCK_DOM && bits & MDS_INODELOCK_LAYOUT)
-			ll_dom_finish_open(inode, request);
+		if (it->it_op & IT_OPEN) {
+			if (bits & MDS_INODELOCK_DOM &&
+			    bits & MDS_INODELOCK_LAYOUT)
+				ll_dom_finish_open(inode, request);
+			if (bits & MDS_INODELOCK_UPDATE &&
+			    S_ISDIR(inode->i_mode))
+				ll_dir_finish_open(inode, request);
+		}
 
 		/* We used to query real size from OSTs here, but actually
 		 * this is not needed. For stat() calls size would be updated
@@ -1036,6 +1041,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 		if (it->it_op & IT_OPEN)
 			it->it_open_flags |= MDS_OPEN_BY_FID;
 	}
+
+	if (!sbi->ll_dir_open_read && it->it_op & IT_OPEN &&
+	    it->it_open_flags & O_DIRECTORY)
+		op_data->op_cli_flags &= ~CLI_READ_ON_OPEN;
 
 	/* enforce umask if acl disabled or MDS doesn't support umask */
 	if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))

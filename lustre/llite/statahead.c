@@ -1192,6 +1192,7 @@ static int ll_statahead_by_list(struct ll_statahead_info *sai,
 	struct ll_sb_info *sbi = ll_i2sbi(dir);
 	struct md_op_data *op_data;
 	struct page *page = NULL;
+	bool is_hash64 = test_bit(LL_SBI_64BIT_HASH, sbi->ll_flags);
 	__u64 pos = 0;
 	int first = 0;
 	int rc = 0;
@@ -1220,7 +1221,7 @@ static int ll_statahead_by_list(struct ll_statahead_info *sai,
 			break;
 		}
 
-		page = ll_get_dir_page(dir, op_data, pos, NULL);
+		page = ll_get_dir_page(dir, op_data, pos, is_hash64, NULL);
 		ll_unlock_md_op_lsm(op_data);
 		if (IS_ERR(page)) {
 			rc = PTR_ERR(page);
@@ -1761,6 +1762,8 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	struct page *page = NULL;
 	int rc = LS_NOT_FIRST_DE;
 	__u64 pos = 0;
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
+	bool is_hash64 = test_bit(LL_SBI_64BIT_HASH, sbi->ll_flags);
 	struct llcrypt_str lltr = LLTR_INIT(NULL, 0);
 
 	ENTRY;
@@ -1781,7 +1784,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	 *FIXME choose the start offset of the readdir
 	 */
 
-	page = ll_get_dir_page(dir, op_data, 0, NULL);
+	page = ll_get_dir_page(dir, op_data, 0, is_hash64, NULL);
 
 	while (1) {
 		struct lu_dirpage *dp;
@@ -1883,7 +1886,8 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 			 */
 			ll_release_page(dir, page, le32_to_cpu(dp->ldp_flags) &
 					      LDF_COLLIDE);
-			page = ll_get_dir_page(dir, op_data, pos, NULL);
+			page = ll_get_dir_page(dir, op_data, pos, is_hash64,
+						NULL);
 		}
 	}
 	EXIT;

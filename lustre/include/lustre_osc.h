@@ -377,7 +377,7 @@ enum osc_lock_state {
  *
  * - When reply is received from the server (osc_enqueue_interpret())
  *      - ldlm_cli_enqueue_fini()
- *          - LDLM_LOCK_PUT(): releases caller reference acquired by
+ *          - ldlm_lock_put(): releases caller reference acquired by
  *            ldlm_lock_new().
  *          - if (rc != 0)
  *                ldlm_lock_decref(): error case: matches ldlm_cli_enqueue().
@@ -385,7 +385,7 @@ enum osc_lock_state {
  *
  * - When lock is being cancelled (ldlm_lock_cancel())
  *      - ldlm_lock_destroy()
- *          - LDLM_LOCK_PUT(): releases hash-table reference acquired by
+ *          - ldlm_lock_put(): releases hash-table reference acquired by
  *            ldlm_lock_new().
  *
  * osc_lock is detached from ldlm_lock by osc_lock_detach() that is called

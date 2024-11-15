@@ -15140,6 +15140,12 @@ test_120a() {
 	# asynchronous object destroy at MDT could cause bl ast to client
 	cancel_lru_locks osc
 
+	local old=$($LCTL get_param -n llite.*.dir_read_on_open)
+
+	# statahead_agl may cause extra glimpse which confuses results. LU-13017
+	$LCTL set_param -n llite.*.dir_read_on_open=0
+	stack_trap "$LCTL set_param -n llite.*.dir_read_on_open=$old" EXIT
+
 	stat $DIR/$tdir > /dev/null
 	can1=$(do_facet mds1 \
 	       "$LCTL get_param -n ldlm.services.ldlm_canceld.stats" |
@@ -16119,6 +16125,7 @@ test_124b() {
 	fi
 
 	lru_resize_disable mdc
+	stack_trap "lru_resize_enable mdc" EXIT
 	test_mkdir -p $DIR/$tdir/disable_lru_resize
 
         createmany -o $DIR/$tdir/disable_lru_resize/f $NR

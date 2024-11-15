@@ -640,6 +640,67 @@ out_io:
 
 	EXIT;
 }
+void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
+{
+	struct obd_export *exp = ll_i2mdexp(inode);
+	void *data;
+	struct page *page;
+	struct lu_dirpage *dp;
+	int is_hash64;
+	int rc;
+	unsigned long	offset;
+	__u64		hash;
+	unsigned int i;
+	unsigned int npages;
+
+	ENTRY;
+
+	if (!exp_connect_open_readdir(exp))
+		RETURN_EXIT;
+
+	if (!req_capsule_field_present(&req->rq_pill, &RMF_NIOBUF_INLINE,
+				       RCL_SERVER))
+		RETURN_EXIT;
+
+	data = req_capsule_server_get(&req->rq_pill, &RMF_NIOBUF_INLINE);
+	if (data == NULL)
+		RETURN_EXIT;
+
+	npages = req_capsule_get_size(&req->rq_pill, &RMF_NIOBUF_INLINE,
+				      RCL_SERVER);
+	if (npages < sizeof(*dp))
+		RETURN_EXIT;
+
+	/* div rou*/
+	npages = DIV_ROUND_UP(npages, PAGE_SIZE);
+	is_hash64 = test_bit(LL_SBI_64BIT_HASH, ll_i2sbi(inode)->ll_flags);
+
+	for (i = 0; i < npages; i++) {
+		page = page_cache_alloc(inode->i_mapping);
+		if (!page)
+			continue;
+
+		lock_page(page);
+		SetPageUptodate(page);
+
+		dp = kmap_atomic(page);
+		memcpy(dp, data, PAGE_SIZE);
+		hash = le64_to_cpu(dp->ldp_hash_start);
+		kunmap_atomic(dp);
+
+		offset = hash_x_index(hash, is_hash64);
+
+		prefetchw(&page->flags);
+		rc = add_to_page_cache_lru(page, inode->i_mapping, offset,
+				   GFP_KERNEL);
+		if (rc == 0)
+			unlock_page(page);
+
+		put_page(page);
+	}
+	EXIT;
+}
+
 
 static int ll_intent_file_open(struct dentry *de, void *lmm, ssize_t lmmsize,
 				struct lookup_intent *itp)
@@ -693,6 +754,9 @@ retry:
 	op_data->op_data = lmm;
 	op_data->op_data_size = lmmsize;
 
+	if (!sbi->ll_dir_open_read && S_ISDIR(de->d_inode->i_mode))
+		op_data->op_cli_flags &= ~CLI_READ_ON_OPEN;
+
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_OPEN_DELAY, cfs_fail_val);
 
 	rc = ll_intent_lock(sbi->ll_md_exp, op_data, itp, &req,
@@ -730,6 +794,8 @@ retry:
 		ll_set_lock_data(sbi->ll_md_exp, de->d_inode, itp, &bits);
 		if (bits & MDS_INODELOCK_DOM && bits & MDS_INODELOCK_LAYOUT)
 			ll_dom_finish_open(de->d_inode, req);
+		if (bits & MDS_INODELOCK_UPDATE && S_ISDIR(de->d_inode->i_mode))
+			ll_dir_finish_open(de->d_inode, req);
 	}
 	/* open may not fetch LOOKUP lock, update dir depth and default LMV
 	 * anyway.

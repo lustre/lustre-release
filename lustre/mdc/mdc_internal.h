@@ -172,14 +172,6 @@ static inline void mdc_body2lvb(struct mdt_body *body, struct ost_lvb *lvb)
 	lvb->lvb_size = body->mbo_dom_size;
 }
 
-static inline unsigned long hash_x_index(__u64 hash, int hash64)
-{
-	if (BITS_PER_LONG == 32 && hash64)
-		hash >>= 32;
-	/* save hash 0 with hash 1 */
-	return ~0UL - (hash + !hash);
-}
-
 /* mdc_dev.c */
 extern struct lu_device_type mdc_device_type;
 int mdc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,

@@ -630,6 +630,7 @@ static const char *const obd_connect_names[] = {
 	"sparse_read",		       /* 0x1000000000 */
 	"mirror_id_fix",	       /* 0x2000000000 */
 	"update_layout",	       /* 0x4000000000 */
+	"readdir_open",		       /* 0x8000000000 */
 	NULL
 };
 

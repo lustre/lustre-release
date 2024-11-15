@@ -794,6 +794,26 @@ out:
 }
 
 
+/* for dt_index*/
+void *rdpg_page_get(const struct lu_rdpg *rdpg, unsigned int index)
+{
+	if (rdpg->rp_npages) {
+		LASSERT(index < rdpg->rp_npages);
+		return kmap(rdpg->rp_pages[index]);
+	}
+	LASSERT(index * PAGE_SIZE  < rdpg->rp_count);
+
+	return rdpg->rp_data + index * PAGE_SIZE;
+}
+EXPORT_SYMBOL(rdpg_page_get);
+
+void rdpg_page_put(const struct lu_rdpg *rdpg, unsigned int index)
+{
+	if (rdpg->rp_npages)
+		kunmap(rdpg->rp_pages[index]);
+}
+EXPORT_SYMBOL(rdpg_page_put);
+
 /*
  * Walk index and fill lu_page containers with key/record pairs
  *
@@ -869,9 +889,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 		union lu_page	*lp;
 		int		 i;
 
-		LASSERT(pageidx < rdpg->rp_npages);
-		lp = kmap(rdpg->rp_pages[pageidx]);
-
+		lp = rdpg_page_get(rdpg, pageidx);
 		/* fill lu pages */
 		for (i = 0; i < LU_PAGE_COUNT; i++, lp++, bytes-=LU_PAGE_SIZE) {
 			rc = filler(env, obj, lp,
@@ -885,7 +903,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 				/* end of index */
 				break;
 		}
-		kunmap(rdpg->rp_pages[pageidx]);
+		rdpg_page_put(rdpg, pageidx);
 	}
 
 out:

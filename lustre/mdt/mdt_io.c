@@ -1789,13 +1789,6 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 
 	ENTRY;
 
-	if (!req_capsule_field_present(pill, &RMF_NIOBUF_INLINE, RCL_SERVER)) {
-		/* There is no reply buffers for this field, this means that
-		 * client has no support for data in reply.
-		 */
-		RETURN(0);
-	}
-
 	mbo = req_capsule_server_get(pill, &RMF_MDT_BODY);
 	if (!(mbo->mbo_valid & OBD_MD_DOM_SIZE))
 		RETURN(0);

@@ -2118,6 +2118,41 @@ static ssize_t hybrid_io_read_threshold_bytes_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(hybrid_io_read_threshold_bytes);
 
+static ssize_t dir_read_on_open_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_dir_open_read);
+}
+
+
+static ssize_t dir_read_on_open_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	if (val)
+		sbi->ll_dir_open_read = 1;
+	else
+		sbi->ll_dir_open_read = 0;
+
+	return count;
+}
+
+LUSTRE_RW_ATTR(dir_read_on_open);
+
 static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block	*sb    = m->private;
@@ -2467,6 +2502,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_pcc_async_threshold.attr,
 	&lustre_attr_pcc_mode.attr,
 	&lustre_attr_pcc_async_affinity.attr,
+	&lustre_attr_dir_read_on_open.attr,
 	NULL,
 };
 

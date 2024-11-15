@@ -1172,6 +1172,12 @@ static inline bool ldlm_has_dom(struct ldlm_lock *lock)
 		!!(lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_DOM);
 }
 
+static inline bool ldlm_has_update(struct ldlm_lock *lock)
+{
+	return lock->l_resource->lr_type == LDLM_IBITS &&
+		lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_UPDATE;
+}
+
 static inline char *
 ldlm_ns_name(struct ldlm_namespace *ns)
 {

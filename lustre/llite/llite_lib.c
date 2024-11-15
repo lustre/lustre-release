@@ -366,7 +366,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				   OBD_CONNECT2_DMV_IMP_INHERIT |
 				   OBD_CONNECT2_UNALIGNED_DIO |
 				   OBD_CONNECT2_PCCRO |
-				   OBD_CONNECT2_MIRROR_ID_FIX;
+				   OBD_CONNECT2_MIRROR_ID_FIX |
+				   OBD_CONNECT2_READDIR_OPEN;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
 	if (test_bit(LL_SBI_LRU_RESIZE, sbi->ll_flags))
@@ -3966,6 +3967,7 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 		op_data->op_bias |= MDS_CREATE_VOLATILE;
 	}
 	op_data->op_data = data;
+	op_data->op_cli_flags |= CLI_READ_ON_OPEN;
 
 	return op_data;
 }

@@ -814,8 +814,15 @@ struct lu_rdpg {
 	/** requested attr */
 	__u32                   rp_attrs;
 	/** pointers to pages */
-	struct page           **rp_pages;
+	union {
+		struct page	**rp_pages;
+		void		*rp_data;
+	};
 };
+
+/* for dt_index_walk / mdd_readpage */
+void *rdpg_page_get(const struct lu_rdpg *rdpg, unsigned int index);
+void rdpg_page_put(const struct lu_rdpg *rdpg, unsigned int index);
 
 enum lu_xattr_flags {
 	LU_XATTR_REPLACE = BIT(0),

@@ -133,12 +133,22 @@
  * * %Failure - Error pointer (pointed by rc)
  */
 struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
-			     __u64 offset, int *partial_readdir_rc)
+			     __u64 offset, bool hash64, int *partial_readdir_rc)
 {
 	struct md_readdir_info mrinfo = {
 					.mr_blocking_ast = ll_md_blocking_ast };
 	struct page *page;
+	unsigned long idx = hash_x_index(offset, hash64);
 	int rc;
+
+	/* check page first */
+	page = find_get_page(dir->i_mapping, idx);
+	if (page) {
+		wait_on_page_locked(page);
+		if (PageUptodate(page))
+			RETURN(page);
+		put_page(page);
+	}
 
 	rc = md_read_page(ll_i2mdexp(dir), op_data, &mrinfo, offset, &page);
 	if (rc != 0)
@@ -198,7 +208,8 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 			RETURN(rc);
 	}
 
-	page = ll_get_dir_page(inode, op_data, pos, partial_readdir_rc);
+	page = ll_get_dir_page(inode, op_data, pos, is_hash64,
+				partial_readdir_rc);
 
 	while (rc == 0 && !done) {
 		struct lu_dirpage *dp;
@@ -291,7 +302,7 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 					LDF_COLLIDE);
 			next = pos;
 			page = ll_get_dir_page(inode, op_data, pos,
-					       partial_readdir_rc);
+					       is_hash64, partial_readdir_rc);
 		}
 	}
 #ifdef HAVE_DIR_CONTEXT

@@ -915,6 +915,8 @@ enum md_cli_flags {
 	CLI_MIGRATE	= BIT(4),
 	CLI_DIRTY_DATA	= BIT(5),
 	CLI_NO_SLOT     = BIT(6),
+	/**< read on open (used for directory for now) */
+	CLI_READ_ON_OPEN = BIT(7),
 };
 
 enum md_op_code {

@@ -422,7 +422,10 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	 * Such estimation is safe. Though the final allocated buffer might
 	 * be even larger, it is not possible to know that at this point.
 	 */
-	req->rq_reqmsg->lm_repsize = repsize;
+	if ((op_data->op_cli_flags & CLI_READ_ON_OPEN) != 0)
+		req->rq_reqmsg->lm_repsize = repsize;
+	else
+		req->rq_reqmsg->lm_repsize = 0;
 	RETURN(req);
 
 err_put_sepol:

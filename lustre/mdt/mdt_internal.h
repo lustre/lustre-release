@@ -691,6 +691,8 @@ static inline int mdt_object_remote(const struct mdt_object *o)
 	return lu_object_remote(&o->mot_obj);
 }
 
+int mdt_object_striped(struct mdt_thread_info *mti, struct mdt_object *obj);
+
 static inline const struct lu_fid *mdt_object_fid(const struct mdt_object *o)
 {
 	return lu_object_fid(&o->mot_obj);
