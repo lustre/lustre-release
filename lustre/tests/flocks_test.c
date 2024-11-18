@@ -779,16 +779,16 @@ const char * fmode2str(int mode)
  */
 static int t6(int argc, char *argv[])
 {
+	int rc = 0;
+	FILE *fp;
+	double stime;
+	char buf[T6BUF_SIZE+1];
 	struct flock lock = {
 		.l_whence = SEEK_SET,
 	};
 
-	int rc = 0;
-	char buf[T6BUF_SIZE+1];
-	double stime;
-
 	if (argc < 3) {
-		fprintf(stderr, "usage: flocks_test 6 file\n");
+		fprintf(stderr, "usage: flocks_test 6 file [cmdfile]\n");
 		return EXIT_FAILURE;
 	}
 
@@ -796,9 +796,20 @@ static int t6(int argc, char *argv[])
 	if (get_cfd() < 0)
 		return EXIT_FAILURE;
 
+	fp = stdin;
+	if (argc >= 4 && strcmp(argv[3], "-")) {
+		fp = fopen(argv[3], "r");
+		if (!fp) {
+			fprintf(stderr, "Open file %s error(%s)\n",
+				argv[3], strerror(errno));
+			put_fds();
+			return EXIT_FAILURE;
+		}
+	}
+
 	memset(buf, '\0', T6BUF_SIZE + 1);
 	stime = now();
-	while (fgets(buf, T6BUF_SIZE, stdin)) {
+	while (fgets(buf, T6BUF_SIZE, fp)) {
 		lock.l_whence = SEEK_SET,
 		rc = set_lock(&lock, buf);
 		if (rc == 0)

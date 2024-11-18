@@ -4,6 +4,7 @@ set -e
 
 TESTNAME=$(basename $0 .sh)
 LOG=${LOG:-"$TMP/${TESTNAME}.log"}
+MOUNT_2=${MOUNT_2:-"yes"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
@@ -14,6 +15,8 @@ ALWAYS_EXCEPT="$PERFORMANCE_SANITY_EXCEPT "
 build_test_filter
 
 check_and_setup_lustre
+
+CLIENTS=${CLIENTS:-$HOSTNAME}
 
 env_verify()
 {
@@ -61,52 +64,64 @@ test_4() {
 run_test 4 "lookup rate 200k files in 100 directories"
 
 test_5a() {
-	touch $DIR/$tfile
+	local tmpfile=$DIR/$tfile
+
 	for((i=0; i < 20001; i++)) {
-		echo "W$((i * 10)), 5"
-		[ $i -eq 20000 ] && echo "T5" && continue
-	} | flocks_test 6 $DIR/$tfile
-	rm -r $DIR/$tfile
+		echo "R$((i * 10)), 5"
+	} > $tmpfile
+	stack_trap "rm $tmpfile || true" EXIT
+
+	do_nodes $CLIENTS flocks_test 6 $DIR/$tfile $tmpfile &
+	do_nodes $CLIENTS flocks_test 6 $DIR2/$tfile $tmpfile &
+	wait || error "flocks_test failed"
 }
 run_test 5a "enqueue 20k no overlap flocks on same file"
 
 test_5b() {
-	touch $DIR/$tfile
+	local tmpfile=$DIR/$tfile
+
+	echo "W0,99999999" > $tmpfile
 	for((i=0; i < 20001; i++)) {
-		[ $i -eq 0 ] && echo "W0,99999999" && continue
 		echo "R$((i * 10)), 5"
-		[ $i -eq 20000 ] && echo "T5" && continue
-	} | flocks_test 6 $DIR/$tfile
-	rm -r $DIR/$tfile
+	} >> $tmpfile
+	stack_trap "rm $tmpfile || true" EXIT
+
+	do_nodes $CLIENTS flocks_test 6 $DIR/$tfile $tmpfile &
+	do_nodes $CLIENTS flocks_test 6 $DIR2/$tfile $tmpfile &
+	wait || error "flocks_test failed"
 }
 run_test 5b "split a flock 20k times"
 
 test_5c() {
-	touch $DIR/$tfile
+	local tmpfile=$DIR/$tfile
+
 	for((i=0; i < 20001; i++)) {
 		echo "R$((i * 10)), 5"
-		[ $i -eq 20000 ] && echo "W0,99999999" && echo "T0" && continue
-	} | flocks_test 6 $DIR/$tfile
-	rm -r $DIR/$tfile
+	} > $tmpfile
+	echo -e "R0,99999999\nT0" >> $tmpfile
+	stack_trap "rm $tmpfile || true" EXIT
+
+	do_nodes $CLIENTS flocks_test 6 $DIR/$tfile $tmpfile &
+	do_nodes $CLIENTS flocks_test 6 $DIR2/$tfile $tmpfile &
+	wait || error "flocks_test failed"
 }
 run_test 5c "merge 20k flocks"
 
 test_5d() {
-	local v=0
+	local tmpfile=$DIR/$tfile
 
-	touch $DIR/$tfile
-	for((i=0; i < 20001; i++)) {
-		echo "F$i"
-		echo "R400, $((100 + v))"
-		[ $i -eq 0 -a $v -eq 0 ] && echo "S20100"
-		[ $i -eq 20000 ] && {
-			echo "T5"
-			[ $v -eq 1 ] && break
-			v=$((v + 1))
-			i=0
-		}
-	} | flocks_test 6 $DIR/$tfile
-	rm -r $DIR/$tfile
+	echo "S20100" > $tmpfile
+	for((i=0; i < 20000; i++)) {
+		echo -e "F$i\nR400, 100"
+	} >> $tmpfile
+	for((i=0; i < 20000; i++)) {
+		echo -e "F$i\nR400, 101"
+	} >> $tmpfile
+	stack_trap "rm $tmpfile || true" EXIT
+
+	do_nodes $CLIENTS flocks_test 6 $DIR/$tfile $tmpfile &
+	do_nodes $CLIENTS flocks_test 6 $DIR2/$tfile $tmpfile &
+	wait || error "flocks_test failed"
 }
 run_test 5d "Enqueue 20k same range flocks, then expand them"
 
