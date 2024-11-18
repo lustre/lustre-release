@@ -28,7 +28,7 @@ rhel9/ext4-dquot-commit-speedup.patch
 rhel9.4/ext4-introduce-EXT4_BG_TRIMMED-to-optimize-fstrim.patch
 linux-5.14/ext4-ialloc-uid-gid-and-pass-owner-down.patch
 linux-5.14/ext4-projid-xattrs.patch
-rhel9.1/ext4-delayed-iput.patch
+rhel9.4/ext4-delayed-iput.patch
 rhel8/ext4-ext-merge.patch
 linux-5.14/ext4-xattr-disable-credits-check.patch
 rhel9.2/ext4-fiemap-kernel-data.patch
