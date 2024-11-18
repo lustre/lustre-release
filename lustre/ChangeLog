@@ -50,7 +50,7 @@ TBD Whamcloud
          4.18.0-477.27.1.el8  (RHEL8.8)
          5.15.0-88            (Ubuntu 22.04)
          6.8.0-35             (Ubuntu 24.04)
-         6.4.0-150600.23.17   (SLES15 SP6)
+         6.4.0-150600.23.25   (SLES15 SP6)
          5.14.21-150500.55.73 (SLES15 SP5)
        * Other clients known to build on these kernels at some point (others may also work):
          3.10.0-862.14.4.el7  (RHEL7.5)
