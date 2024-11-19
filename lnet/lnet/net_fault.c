@@ -200,7 +200,15 @@ int lnet_drop_rule_add(struct lnet_fault_large_attr *attr)
 		rule->dr_drop_time = ktime_get_seconds() +
 				     get_random_u32_below(attr->u.drop.da_interval);
 	} else {
-		rule->dr_drop_at = get_random_u32_below(attr->u.drop.da_rate);
+		/* Special case for da_rate == 2 so that the first matched
+		 * message is always dropped. This behavior is required by some
+		 * sanity-lnet test cases.
+		 */
+		if (attr->u.drop.da_rate == 2)
+			rule->dr_drop_at = 0;
+		else
+			rule->dr_drop_at =
+				get_random_u32_below(attr->u.drop.da_rate);
 	}
 
 	lnet_net_lock(LNET_LOCK_EX);

@@ -521,11 +521,11 @@ lnet_handle_remote_failure(struct lnet_peer_ni *lpni)
 
 static void
 lnet_incr_hstats(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
-		 enum lnet_msg_hstatus hstatus)
+		 enum lnet_msg_hstatus hstatus, int retry_count, int cpt)
 {
 	struct lnet_counters_health *health;
 
-	health = &the_lnet.ln_counters[0]->lct_health;
+	health = &the_lnet.ln_counters[cpt]->lct_health;
 
 	switch (hstatus) {
 	case LNET_MSG_STATUS_LOCAL_INTERRUPT:
@@ -573,6 +573,8 @@ lnet_incr_hstats(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 		health->lch_network_timeout_count++;
 		break;
 	case LNET_MSG_STATUS_OK:
+		if (retry_count)
+			health->lch_successful_resends++;
 		break;
 	default:
 		LBUG();
@@ -683,17 +685,20 @@ lnet_attempt_msg_resend(struct lnet_msg *msg)
 		return -ENOTRECOVERABLE;
 	}
 
+	cpt = msg->msg_tx_cpt;
+	lnet_net_lock(cpt);
+
 	/* check if the message has exceeded the number of retries */
 	if (msg->msg_retry_count >= lnet_retry_count) {
-		CNETERR("msg %s->%s exceeded retry count %d\n",
+		CDEBUG(D_NET, "%s->%s exceeded retry count %d\n",
 			libcfs_nidstr(&msg->msg_from),
 			libcfs_nidstr(&msg->msg_target.nid),
 			msg->msg_retry_count);
+		if (lnet_retry_count)
+			the_lnet.ln_counters[cpt]->lct_health.lch_failed_resends++;
+		lnet_net_unlock(cpt);
 		return -ENOTRECOVERABLE;
 	}
-
-	cpt = msg->msg_tx_cpt;
-	lnet_net_lock(cpt);
 
 	/* check again under lock */
 	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
@@ -766,10 +771,7 @@ lnet_health_check(struct lnet_msg *msg)
 	bool handle_local_health;
 	bool handle_remote_health;
 	ktime_t now;
-
-	/* if we're shutting down no point in handling health. */
-	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING)
-		return -1;
+	int cpt;
 
 	LASSERT(msg->msg_tx_committed || msg->msg_rx_committed);
 
@@ -820,11 +822,19 @@ lnet_health_check(struct lnet_msg *msg)
 	       lnet_msgtyp2str(msg->msg_type),
 	       lnet_health_error2str(hstatus));
 
-	/*
-	 * stats are only incremented for errors so avoid wasting time
-	 * incrementing statistics if there is no error. Similarly, whether to
-	 * update health values or perform resends is only applicable for
-	 * messages with a health status != OK.
+	cpt = msg->msg_tx_committed ? msg->msg_tx_cpt : msg->msg_rx_cpt;
+	lnet_net_lock(cpt);
+
+	/* if we're shutting down no point in handling health. */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
+		lnet_net_unlock(cpt);
+		return -1;
+	}
+
+	lnet_incr_hstats(ni, lpni, hstatus, msg->msg_retry_count, cpt);
+
+	/* Whether to update health values or perform resends is only applicable
+	 * for messages with a health status != OK.
 	 */
 	if (hstatus != LNET_MSG_STATUS_OK) {
 		struct lnet_ping_info *pi;
@@ -846,8 +856,6 @@ lnet_health_check(struct lnet_msg *msg)
 			attempt_local_resend = false;
 		}
 
-		lnet_net_lock(0);
-		lnet_incr_hstats(ni, lpni, hstatus);
 		/* For remote failures, health/recovery/resends are not needed
 		 * if the peer only has a single interface. Special case for
 		 * routers where we rely on health feature to manage route and
@@ -866,10 +874,11 @@ lnet_health_check(struct lnet_msg *msg)
 		 * be handled with local NI recovery.
 		 */
 		if (handle_remote_health && lpni &&
-		    lnet_nid_to_ni_locked(&lpni->lpni_nid, 0))
+		    lnet_nid_to_ni_locked(&lpni->lpni_nid, cpt))
 			handle_remote_health = false;
-		lnet_net_unlock(0);
 	}
+
+	lnet_net_unlock(cpt);
 
 	switch (hstatus) {
 	case LNET_MSG_STATUS_OK:

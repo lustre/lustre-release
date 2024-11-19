@@ -2112,6 +2112,10 @@ function lnet_health_pre() {
 
 	RETRY_PARAM=$($LNETCTL global show | awk '/retry_count/{print $NF}')
 	RSND_PRE=$($LNETCTL stats show | awk '/resend_count/{print $NF}')
+	FAILED_RSND_PRE=$($LNETCTL stats show |
+			  awk '/failed_resends/{print $NF}')
+	SUCCESS_RSND_PRE=$($LNETCTL stats show |
+			   awk '/successful_resends/{print $NF}')
 	LO_HVAL_PRE=$($LNETCTL net show -v 2 | awk '/health value/{print $NF}' |
 		      xargs echo | sed 's/ /+/g' | bc -l)
 
@@ -2127,6 +2131,10 @@ function lnet_health_pre() {
 
 function lnet_health_post() {
 	RSND_POST=$($LNETCTL stats show | awk '/resend_count/{print $NF}')
+	FAILED_RSND_POST=$($LNETCTL stats show |
+			   awk '/failed_resends/{print $NF}')
+	SUCCESS_RSND_POST=$($LNETCTL stats show |
+			    awk '/successful_resends/{print $NF}')
 	LO_HVAL_POST=$($LNETCTL net show -v 2 |
 		       awk '/health value/{print $NF}' |
 		       xargs echo | sed 's/ /+/g' | bc -l)
@@ -2142,6 +2150,10 @@ function lnet_health_post() {
 	echo "Pre resends: $RSND_PRE" &&
 	echo "Post resends: $RSND_POST" &&
 	echo "Resends delta: $((RSND_POST - RSND_PRE))" &&
+	echo "Pre failed resends: $FAILED_RSND_PRE" &&
+	echo "Post failed resends: $FAILED_RSND_POST" &&
+	echo "Pre successful resends: $SUCCESS_RSND_PRE" &&
+	echo "Post successful resends: $SUCCESS_RSND_POST" &&
 	echo "Pre local health: $LO_HVAL_PRE" &&
 	echo "Post local health: $LO_HVAL_POST" &&
 	echo "Pre remote health: $RMT_HVAL_PRE" &&
@@ -2159,8 +2171,12 @@ function lnet_health_post() {
 
 function check_no_resends() {
 	echo "Check that no resends took place"
-	[[ $RSND_POST -ne $RSND_PRE ]] &&
+	(( RSND_POST == RSND_PRE )) ||
 		error "Found resends: $RSND_POST != $RSND_PRE"
+	(( FAILED_RSND_POST == FAILED_RSND_PRE )) ||
+		error "Found resends: $FAILED_RSND_POST != $FAILED_RSND_PRE"
+	(( SUCCESS_RSND_POST == SUCCESS_RSND_PRE )) ||
+		error "Found resends: $SUCCESS_RSND_POST != $SUCCESS_RSND_PRE"
 
 	return 0
 }
@@ -2169,10 +2185,25 @@ function check_resends() {
 	local delta=$((RSND_POST - RSND_PRE))
 
 	echo "Check that $RETRY_PARAM resends took place"
-	[[ $delta -ne $RETRY_PARAM ]] &&
+	(( delta == RETRY_PARAM )) ||
 		error "Expected $RETRY_PARAM resends found $delta"
 
+	echo "Check for 1 failed resend"
+	delta=$((FAILED_RSND_POST - FAILED_RSND_PRE))
+	(( delta == 1 )) || error "Found $delta failed resends"
+
+	echo "Check for 0 successful resends"
+	delta=$((SUCCESS_RSND_POST - SUCCESS_RSND_PRE))
+	(( delta == 0 )) || error "Found $delta successful resends"
+
 	return 0
+}
+
+function check_successful_resends() {
+	local delta=$((SUCCESS_RSND_POST - SUCCESS_RSND_PRE))
+
+	echo "Check for 1 successful resend"
+	(( delta == 1 )) || error "Found $delta successful resends"
 }
 
 function check_no_local_health() {
@@ -2325,7 +2356,7 @@ cleanup_health_test() {
 		NET_DEL_ARGS=""
 	fi
 
-	unload_modules || rc=$?
+	unload_modules || rc=$((rc + $?))
 
 	if $RLOADED; then
 		do_rpc_nodes $RNODE unload_modules_local ||
@@ -2333,8 +2364,7 @@ cleanup_health_test() {
 		RLOADED=false
 	fi
 
-	[[ $rc -ne 0 ]] &&
-		error "Failed cleanup"
+	((rc == 0)) || error "Failed cleanup"
 
 	return $rc
 }
@@ -2380,7 +2410,9 @@ del_delay_rule() {
 }
 
 add_health_test_drop_rules() {
-	local args="-m GET -r 1 -e ${1}"
+	local hstatus="-e $1"
+	local rate="-r ${2:-1}"
+	local args="-m GET $hstatus $rate"
 	local src dst
 
 	for src in "${LNIDS[@]}"; do
@@ -3891,6 +3923,43 @@ test_232() {
 		error "lnetctl should reject invalid ToS value (>255)"
 }
 run_test 232 "Test setting ToS value"
+
+test_233() {
+	setup_health_test true || return $?
+
+	local retries=$($LNETCTL global show | awk '/retry_count:/{print $NF}')
+	(( retries > 0 )) || skip "Need retry_count > 0, found $retries"
+
+	local hstatus
+	for hstatus in ${LNET_LOCAL_RESEND_STATUSES}; do
+		echo "Simulate intermittent $hstatus"
+
+		lnet_health_pre || return $?
+		add_health_test_drop_rules ${hstatus} 2
+		do_lnetctl ping --source ${LNIDS[0]} ${RNIDS[0]} ||
+			error "ping failed with rc = $?"
+		$LCTL net_drop_del -a
+		lnet_health_post
+
+		check_successful_resends || return $?
+	done
+
+	for hstatus in ${LNET_REMOTE_RESEND_STATUSES}; do
+		echo "Simulate intermittent $hstatus"
+
+		lnet_health_pre || return $?
+		add_health_test_drop_rules ${hstatus} 2
+		do_lnetctl ping --source ${LNIDS[0]} ${RNIDS[0]} ||
+			error "ping failed with rc = $?"
+		lnet_health_post
+		$LCTL net_drop_del -a
+
+		check_successful_resends || return $?
+	done
+
+	cleanup_health_test
+}
+run_test 233 "Check for successful resends"
 
 check_parameter() {
 	local para=$1

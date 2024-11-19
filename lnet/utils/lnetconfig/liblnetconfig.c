@@ -5109,6 +5109,14 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 				 cntrs->lct_health.lch_network_timeout_count))
 		goto out;
 
+	if (!cYAML_create_number(stats, "failed_resends",
+				 cntrs->lct_health.lch_failed_resends))
+		goto out;
+
+	if (!cYAML_create_number(stats, "successful_resends",
+				 cntrs->lct_health.lch_successful_resends))
+		goto out;
+
 	if (!cYAML_create_number(stats, "recv_count",
 				 cntrs->lct_common.lcc_recv_count))
 		goto out;

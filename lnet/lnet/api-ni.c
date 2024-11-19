@@ -1111,6 +1111,10 @@ lnet_counters_get(struct lnet_counters *counters)
 				ctr->lct_health.lch_remote_timeout_count;
 		health->lch_network_timeout_count +=
 				ctr->lct_health.lch_network_timeout_count;
+		health->lch_failed_resends +=
+				ctr->lct_health.lch_failed_resends;
+		health->lch_successful_resends +=
+				ctr->lct_health.lch_successful_resends;
 	}
 out_unlock:
 	lnet_net_unlock(LNET_LOCK_EX);
