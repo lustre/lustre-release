@@ -1069,7 +1069,7 @@ static int lod_process_config(const struct lu_env *env,
 			*ptr = '.';
 			tmp = strstr(param, "=");
 			tmp++;
-			if (*tmp == '1') {
+			if (*tmp == '1' && sub_tgt->ltd_active == 0) {
 				struct llog_ctxt *ctxt;
 
 				obd = sub_tgt->ltd_tgt->dd_lu_dev.ld_obd;
@@ -1088,7 +1088,7 @@ static int lod_process_config(const struct lu_env *env,
 						       sub_tgt->ltd_tgt,
 						       sub_tgt->ltd_index);
 				sub_tgt->ltd_active = !rc;
-			} else {
+			} else if (*tmp == '0' && sub_tgt->ltd_active != 0) {
 				lod_sub_fini_llog(env, sub_tgt->ltd_tgt,
 						  NULL);
 				sub_tgt->ltd_active = 0;
