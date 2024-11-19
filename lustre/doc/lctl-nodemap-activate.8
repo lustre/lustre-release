@@ -3,7 +3,7 @@
 lctl-nodemap_activate \- activate or deactivate the nodemap feature
 .SH SYNOPSIS
 .SY "lctl nodemap_activate"
-.RB { 0 | 1 }
+.RB { <0,off,false,f,no,n> | <1,on,true,t,yes,y> }
 .YS
 .SH DESCRIPTION
 .B nodemap_activate
@@ -11,7 +11,31 @@ is used to globally activate or deactivate the nodemap feature. When nodemap is
 active, all client IDs are mapped based on rules specified by the administrator,
 and filesystem operations may be restricted or prevented.
 .SH OPTIONS
-Passing 0 disables the nodemap feature, while 1 activates the feature.
+Passing
+.BI 0
+,
+.BI off
+,
+.BI false
+,
+.BI f
+,
+.BI no
+, or
+.BI n
+disables the nodemap feature, while
+.BI 1
+,
+.BI on
+,
+.BI true
+,
+.BI t
+,
+.BI yes
+, or
+.BI y
+activates the feature.
 .SH EXAMPLES
 .EX
 .B # lctl nodemap_activate 1

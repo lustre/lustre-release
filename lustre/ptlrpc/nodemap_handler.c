@@ -2683,10 +2683,22 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 		if (lcfg->lcfg_bufcount != 2)
 			GOTO(out_lcfg, rc = -EINVAL);
 		param = lustre_cfg_string(lcfg, 1);
-		if (strcmp(param, "1") == 0)
+		if (strcmp(param, "1") == 0 ||
+		    strcasecmp(param, "on") == 0 ||
+		    strcasecmp(param, "yes") == 0 ||
+		    strcasecmp(param, "y") == 0 ||
+		    strcasecmp(param, "true") == 0 ||
+		    strcasecmp(param, "t") == 0)
 			nodemap_activate(1);
-		else
+		else if (strcmp(param, "0") == 0 ||
+			 strcasecmp(param, "off") == 0 ||
+			 strcasecmp(param, "no") == 0 ||
+			 strcasecmp(param, "n") == 0 ||
+			 strcasecmp(param, "false") == 0 ||
+			 strcasecmp(param, "f") == 0)
 			nodemap_activate(0);
+		else
+			rc = -EINVAL;
 		break;
 	case LCFG_NODEMAP_ADD:
 	case LCFG_NODEMAP_DEL:
