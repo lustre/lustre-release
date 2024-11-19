@@ -3342,6 +3342,7 @@ static int lod_layout_convert(struct lod_thread_info *info)
 	lcm->lcm_entry_count = cpu_to_le16(1);
 
 	lcme = &lcm->lcm_entries[0];
+	lcme->lcme_id = cpu_to_le32(1);
 	lcme->lcme_flags = cpu_to_le32(LCME_FL_INIT);
 	lcme->lcme_extent.e_start = 0;
 	lcme->lcme_extent.e_end = cpu_to_le64(OBD_OBJECT_EOF);
