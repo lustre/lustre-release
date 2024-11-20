@@ -405,9 +405,9 @@ static inline int lod_qos_tgt_in_use_clear(const struct lu_env *env,
 {
 	struct lod_thread_info *info = lod_env_info(env);
 
-	if (info->lti_ea_store_size < sizeof(int) * stripes)
+	if (info->lti_ea_buf.lb_len < sizeof(int) * stripes)
 		lod_ea_store_resize(info, stripes * sizeof(int));
-	if (info->lti_ea_store_size < sizeof(int) * stripes) {
+	if (info->lti_ea_buf.lb_len < sizeof(int) * stripes) {
 		CERROR("can't allocate memory for tgt-in-use array\n");
 		return -ENOMEM;
 	}
@@ -428,9 +428,9 @@ static inline void lod_qos_tgt_in_use(const struct lu_env *env,
 				      int idx, int tgt_idx)
 {
 	struct lod_thread_info *info = lod_env_info(env);
-	int *tgts = info->lti_ea_store;
+	int *tgts = info->lti_ea_buf.lb_buf;
 
-	LASSERT(info->lti_ea_store_size >= idx * sizeof(int));
+	LASSERT(info->lti_ea_buf.lb_len >= idx * sizeof(int));
 	tgts[idx] = tgt_idx;
 }
 
@@ -451,7 +451,7 @@ static int lod_qos_is_tgt_used(const struct lu_env *env, int tgt_idx,
 			       __u32 stripes)
 {
 	struct lod_thread_info *info = lod_env_info(env);
-	int *tgts = info->lti_ea_store;
+	int *tgts = info->lti_ea_buf.lb_buf;
 	__u32 j;
 
 	for (j = 0; j < stripes; j++) {

@@ -1306,8 +1306,7 @@ static int lod_declare_attr_set(const struct lu_env *env,
 		struct lod_thread_info *info = lod_env_info(env);
 		struct lu_buf *buf = &info->lti_buf;
 
-		buf->lb_buf = info->lti_ea_store;
-		buf->lb_len = info->lti_ea_store_size;
+		*buf = info->lti_ea_buf;
 		rc = lod_sub_declare_xattr_set(env, next, buf, XATTR_NAME_LOV,
 					       LU_XATTR_REPLACE, th);
 	}
@@ -1414,9 +1413,8 @@ static int lod_attr_set(const struct lu_env *env,
 		if (rc <= 0)
 			RETURN(rc);
 
-		buf->lb_buf = info->lti_ea_store;
-		buf->lb_len = info->lti_ea_store_size;
-		lmm = info->lti_ea_store;
+		*buf = info->lti_ea_buf;
+		lmm = buf->lb_buf;
 		magic = le32_to_cpu(lmm->lmm_magic);
 		if (magic == LOV_MAGIC_COMP_V1 || magic == LOV_MAGIC_SEL) {
 			struct lov_comp_md_v1 *lcm = buf->lb_buf;
@@ -1449,8 +1447,7 @@ static int lod_attr_set(const struct lu_env *env,
 		if (rc <= 0)
 			RETURN(rc);
 
-		buf->lb_buf = info->lti_ea_store;
-		buf->lb_len = info->lti_ea_store_size;
+		*buf = info->lti_ea_buf;
 		lcm = buf->lb_buf;
 		if (le32_to_cpu(lcm->lcm_magic) != LOV_MAGIC_COMP_V1 &&
 		    le32_to_cpu(lcm->lcm_magic) != LOV_MAGIC_SEL)
@@ -1669,7 +1666,7 @@ static int lod_prep_lmv_md(const struct lu_env *env, struct dt_object *dt,
 		memset(info->lti_ea_store, 0, sizeof(*lmm1));
 	}
 
-	lmm1 = (struct lmv_mds_md_v1 *)info->lti_ea_store;
+	lmm1 = (struct lmv_mds_md_v1 *)info->lti_ea_buf.lb_buf;
 	memset(lmm1, 0, sizeof(*lmm1));
 	lmm1->lmv_magic = cpu_to_le32(LMV_MAGIC);
 	lmm1->lmv_stripe_count = cpu_to_le32(stripe_count);
@@ -1686,7 +1683,7 @@ static int lod_prep_lmv_md(const struct lu_env *env, struct dt_object *dt,
 		RETURN(rc);
 
 	lmm1->lmv_master_mdt_index = cpu_to_le32(mdtidx);
-	lmv_buf->lb_buf = info->lti_ea_store;
+	lmv_buf->lb_buf = info->lti_ea_buf.lb_buf;
 	lmv_buf->lb_len = sizeof(*lmm1);
 
 	RETURN(rc);
@@ -3306,7 +3303,7 @@ unlock:
  */
 static int lod_layout_convert(struct lod_thread_info *info)
 {
-	struct lov_mds_md *lmm = info->lti_ea_store;
+	struct lov_mds_md *lmm = info->lti_ea_buf.lb_buf;
 	struct lov_mds_md *lmm_save;
 	struct lov_comp_md_v1 *lcm;
 	struct lov_comp_md_entry_v1 *lcme;
@@ -3332,7 +3329,7 @@ static int lod_layout_convert(struct lod_thread_info *info)
 			GOTO(out, rc);
 	}
 
-	lcm = info->lti_ea_store;
+	lcm = info->lti_ea_buf.lb_buf;
 	memset(lcm, 0, sizeof(*lcm) + sizeof(*lcme));
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_size = cpu_to_le32(size);
@@ -3405,7 +3402,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	if (rc <= 0)
 		RETURN(rc ? : -ENODATA);
 
-	cur_lcm = info->lti_ea_store;
+	cur_lcm = info->lti_ea_buf.lb_buf;
 	switch (le32_to_cpu(cur_lcm->lcm_magic)) {
 	case LOV_MAGIC_V1:
 	case LOV_MAGIC_V3:
@@ -3422,7 +3419,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 		RETURN(rc);
 
 	/* info->lti_ea_store could be reallocated in lod_layout_convert() */
-	cur_lcm = info->lti_ea_store;
+	cur_lcm = info->lti_ea_buf.lb_buf;
 	cur_entry_count = le16_to_cpu(cur_lcm->lcm_entry_count);
 
 	/* 'lcm_mirror_count + 1' is the current # of mirrors the file has */
@@ -4122,7 +4119,7 @@ static int lod_xattr_set_default_lov_on_dir(const struct lu_env *env,
 	if (v1->lmm_magic == LOV_USER_MAGIC_V1 && pool[0] != '\0' &&
 	    !is_del) {
 		struct lod_thread_info *info = lod_env_info(env);
-		struct lov_user_md_v3 *v3  = info->lti_ea_store;
+		struct lov_user_md_v3 *v3  = info->lti_ea_buf.lb_buf;
 
 		memset(v3, 0, sizeof(*v3));
 		v3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
@@ -4180,7 +4177,7 @@ static int lod_xattr_set_default_lov_on_dir(const struct lu_env *env,
 				rc = lod_ea_store_resize(info, size);
 
 			if (rc == 0) {
-				comp_v1p = info->lti_ea_store;
+				comp_v1p = info->lti_ea_buf.lb_buf;
 				*comp_v1p = *comp_v1;
 				comp_v1p->lcm_size = cpu_to_le32(size);
 				embed_pool_to_comp_v1(comp_v1, pool, comp_v1p);
@@ -4517,14 +4514,14 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 				 lo->ldo_dir_stripe_offset)) {
 		if (!lmu->lb_buf) {
 			/* mkdir by default LMV */
-			struct lmv_user_md_v1 *v1 = info->lti_ea_store;
+			struct lmv_user_md_v1 *v1 = info->lti_ea_buf.lb_buf;
 			int stripe_count = lo->ldo_dir_stripe_count;
 
 			if (info->lti_ea_store_size < sizeof(*v1)) {
 				rc = lod_ea_store_resize(info, sizeof(*v1));
 				if (rc != 0)
 					RETURN(rc);
-				v1 = info->lti_ea_store;
+				v1 = info->lti_ea_buf.lb_buf;
 			}
 
 			memset(v1, 0, sizeof(*v1));
@@ -4573,13 +4570,13 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 				 lds->lds_dir_def_stripe_offset) &&
 	      le32_to_cpu(lds->lds_dir_def_hash_type) !=
 	      LMV_HASH_TYPE_UNKNOWN)) {
-		struct lmv_user_md_v1 *v1 = info->lti_ea_store;
+		struct lmv_user_md_v1 *v1 = info->lti_ea_buf.lb_buf;
 
 		if (info->lti_ea_store_size < sizeof(*v1)) {
 			rc = lod_ea_store_resize(info, sizeof(*v1));
 			if (rc != 0)
 				RETURN(rc);
-			v1 = info->lti_ea_store;
+			v1 = info->lti_ea_buf.lb_buf;
 		}
 
 		memset(v1, 0, sizeof(*v1));
@@ -4621,7 +4618,7 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 			if (rc != 0)
 				RETURN(rc);
 		}
-		lmm = info->lti_ea_store;
+		lmm = info->lti_ea_buf.lb_buf;
 
 		rc = lod_generate_lovea(env, lo, lmm, &lmm_size, true);
 		if (rc != 0)
@@ -4711,7 +4708,7 @@ static int lod_generate_and_set_lovea(const struct lu_env *env,
 		if (rc)
 			RETURN(rc);
 	}
-	lmm = info->lti_ea_store;
+	lmm = info->lti_ea_buf.lb_buf;
 
 	rc = lod_generate_lovea(env, lo, lmm, &lmm_size, false);
 	if (rc)
@@ -5366,7 +5363,7 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 	if (rc < (typeof(rc))sizeof(struct lov_user_md))
 		RETURN(0);
 
-	magic = *(__u32 *)info->lti_ea_store;
+	magic = *(__u32 *)info->lti_ea_buf.lb_buf;
 	if (magic == __swab32(LOV_USER_MAGIC_V1)) {
 		lustre_swab_lov_user_md_v1(info->lti_ea_store);
 	} else if (magic == __swab32(LOV_USER_MAGIC_V3)) {
@@ -5378,18 +5375,18 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 						v3->lmm_stripe_count);
 	} else if (magic == __swab32(LOV_USER_MAGIC_COMP_V1) ||
 		   magic == __swab32(LOV_USER_MAGIC_SEL)) {
-		lustre_swab_lov_comp_md_v1(info->lti_ea_store);
+		lustre_swab_lov_comp_md_v1(info->lti_ea_buf.lb_buf);
 	}
 
 	switch (magic) {
 	case LOV_MAGIC_V1:
 	case LOV_MAGIC_V3:
 	case LOV_USER_MAGIC_SPECIFIC:
-		v1 = info->lti_ea_store;
+		v1 = info->lti_ea_buf.lb_buf;
 		break;
 	case LOV_MAGIC_COMP_V1:
 	case LOV_MAGIC_SEL:
-		lcm = info->lti_ea_store;
+		lcm = info->lti_ea_buf.lb_buf;
 		entry_count = lcm->lcm_entry_count;
 		if (entry_count == 0)
 			RETURN(-EINVAL);
@@ -5533,7 +5530,7 @@ static int lod_get_default_lmv_striping(const struct lu_env *env,
 	if (rc >= (int)sizeof(*lmu)) {
 		struct lod_thread_info *info = lod_env_info(env);
 
-		lmu = info->lti_ea_store;
+		lmu = info->lti_ea_buf.lb_buf;
 		lod_lum2lds(lds, lmu);
 	}
 

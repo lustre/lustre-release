@@ -392,8 +392,7 @@ struct lod_it {
 #define LOD_OBJS_INTRANS 4
 struct lod_thread_info {
 	/* per-thread buffer for LOV EA, may be vmalloc'd */
-	void			       *lti_ea_store;
-	__u32				lti_ea_store_size;
+	struct lu_buf                   lti_ea_buf;
 	/* per-thread buffer for LMV EA */
 	struct lu_buf			lti_buf;
 	struct ost_id			lti_ostid;
@@ -427,6 +426,9 @@ struct lod_thread_info {
 	struct lod_object *lti_obj[LOD_OBJS_INTRANS];
 	__u32 lti_gen[LOD_OBJS_INTRANS];
 };
+
+#define lti_ea_store		lti_ea_buf.lb_buf
+#define lti_ea_store_size	lti_ea_buf.lb_len
 
 /**
  * \retval	0 object's layout hasn't changed in the transaction

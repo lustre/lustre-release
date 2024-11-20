@@ -431,19 +431,9 @@ int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 {
 	__u32 round = size_roundup_power2(size);
 
-	if (info->lti_ea_store) {
-		LASSERT(info->lti_ea_store_size);
-		CDEBUG(D_INFO, "EA store size %d is not enough, need %d\n",
-		       info->lti_ea_store_size, round);
-		OBD_FREE_LARGE(info->lti_ea_store, info->lti_ea_store_size);
-		info->lti_ea_store = NULL;
-		info->lti_ea_store_size = 0;
-	}
-
-	OBD_ALLOC_LARGE(info->lti_ea_store, round);
-	if (info->lti_ea_store == NULL)
+	lu_buf_check_and_alloc(&info->lti_ea_buf, round);
+	if (info->lti_ea_buf.lb_buf == NULL)
 		RETURN(-ENOMEM);
-	info->lti_ea_store_size = round;
 
 	RETURN(0);
 }
@@ -1018,7 +1008,7 @@ out:
  * @lo: LOD object
  * @name: name of the EA
  *
- * Fill lti_ea_store buffer in the environment with a value for the given
+ * Fill lti_ea_buf buffer in the environment with a value for the given
  * EA. The buffer is reallocated if the value doesn't fit.
  *
  * Return:
@@ -1036,13 +1026,12 @@ int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
 
 	LASSERT(info);
 
-	if (unlikely(info->lti_ea_store == NULL)) {
+	if (unlikely(info->lti_ea_buf.lb_buf == NULL)) {
 		/* just to enter in allocation block below */
 		rc = -ERANGE;
 	} else {
 repeat:
-		info->lti_buf.lb_buf = info->lti_ea_store;
-		info->lti_buf.lb_len = info->lti_ea_store_size;
+		info->lti_buf = info->lti_ea_buf;
 		rc = dt_xattr_get(env, next, &info->lti_buf, name);
 	}
 
@@ -1616,8 +1605,7 @@ int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 		 * there is LOV EA (striping information) in this object
 		 * let's parse it and create in-core objects for the stripes
 		 */
-		buf->lb_buf = info->lti_ea_store;
-		buf->lb_len = info->lti_ea_store_size;
+		*buf = info->lti_ea_buf;
 		rc = lod_parse_striping(env, lo, buf, 0);
 		if (rc == 0)
 			lo->ldo_comp_cached = 1;
@@ -1625,14 +1613,13 @@ int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 		rc = lod_get_lmv_ea(env, lo);
 
 		if (rc > (int)sizeof(struct lmv_foreign_md)) {
-			struct lmv_foreign_md *lfm = info->lti_ea_store;
+			struct lmv_foreign_md *lfm = info->lti_ea_buf.lb_buf;
 
 			if (le32_to_cpu(lfm->lfm_magic) == LMV_MAGIC_FOREIGN) {
-				lo->ldo_foreign_lmv = info->lti_ea_store;
+				lo->ldo_foreign_lmv = info->lti_ea_buf.lb_buf;
 				lo->ldo_foreign_lmv_size =
-					info->lti_ea_store_size;
-				info->lti_ea_store = NULL;
-				info->lti_ea_store_size = 0;
+					info->lti_ea_buf.lb_len;
+				info->lti_ea_buf = LU_BUF_NULL;
 
 				lo->ldo_dir_stripe_loaded = 1;
 				lo->ldo_is_foreign = 1;
@@ -1649,15 +1636,12 @@ int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 				lo->ldo_dir_stripe_loaded = 1;
 			GOTO(unlock, rc = rc > 0 ? -EINVAL : rc);
 		}
-		buf->lb_buf = info->lti_ea_store;
-		buf->lb_len = info->lti_ea_store_size;
+		*buf = info->lti_ea_buf;
 		if (rc == sizeof(struct lmv_mds_md_v1)) {
 			rc = lod_load_lmv_shards(env, lo, buf, true);
-			if (buf->lb_buf != info->lti_ea_store) {
-				OBD_FREE_LARGE(info->lti_ea_store,
-					       info->lti_ea_store_size);
-				info->lti_ea_store = buf->lb_buf;
-				info->lti_ea_store_size = buf->lb_len;
+			if (buf->lb_buf != info->lti_ea_buf.lb_buf) {
+				lu_buf_free(&info->lti_ea_buf);
+				info->lti_ea_buf = *buf;
 			}
 
 			if (rc < 0)
