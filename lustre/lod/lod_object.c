@@ -3301,9 +3301,9 @@ unlock:
  *
  * Returns 0 on success, <0 on failure
  */
-static int lod_layout_convert(struct lod_thread_info *info)
+static int lod_layout_convert(struct lu_buf *buf)
 {
-	struct lov_mds_md *lmm = info->lti_ea_buf.lb_buf;
+	struct lov_mds_md *lmm = buf->lb_buf;
 	struct lov_mds_md *lmm_save;
 	struct lov_comp_md_v1 *lcm;
 	struct lov_comp_md_entry_v1 *lcme;
@@ -3323,13 +3323,11 @@ static int lod_layout_convert(struct lod_thread_info *info)
 
 	memcpy(lmm_save, lmm, blob_size);
 
-	if (info->lti_ea_store_size < size) {
-		rc = lod_ea_store_resize(info, size);
-		if (rc)
-			GOTO(out, rc);
-	}
+	lu_buf_check_and_alloc(buf, size_roundup_power2(size));
+	if (buf->lb_buf == NULL)
+		GOTO(out, rc = -ENOMEM);
 
-	lcm = info->lti_ea_buf.lb_buf;
+	lcm = buf->lb_buf;
 	memset(lcm, 0, sizeof(*lcm) + sizeof(*lcme));
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_size = cpu_to_le32(size);
@@ -3406,7 +3404,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	switch (le32_to_cpu(cur_lcm->lcm_magic)) {
 	case LOV_MAGIC_V1:
 	case LOV_MAGIC_V3:
-		rc = lod_layout_convert(info);
+		rc = lod_layout_convert(&info->lti_ea_buf);
 		break;
 	case LOV_MAGIC_COMP_V1:
 	case LOV_MAGIC_SEL:
@@ -3418,7 +3416,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	/* info->lti_ea_store could be reallocated in lod_layout_convert() */
+	/* info->lti_ea_buf could be reallocated in lod_layout_convert() */
 	cur_lcm = info->lti_ea_buf.lb_buf;
 	cur_entry_count = le16_to_cpu(cur_lcm->lcm_entry_count);
 
