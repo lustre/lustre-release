@@ -1063,7 +1063,7 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 
 	if (oa->o_valid & (OBD_MD_FLFID | OBD_MD_FLOSTLAYOUT |
 			   OBD_MD_LAYOUT_VERSION)) {
-		rc = dt_declare_xattr_set(env, dt_obj, &info->fti_buf,
+		rc = dt_declare_xattr_set(env, dt_obj, NULL, &info->fti_buf,
 					  XATTR_NAME_FID, 0, th);
 		if (rc)
 			GOTO(out_tx, rc);

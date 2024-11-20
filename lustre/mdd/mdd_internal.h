@@ -627,7 +627,7 @@ static inline int mdo_declare_xattr_set(const struct lu_env *env,
 	struct dt_object *next = mdd_object_child(obj);
 	int rc;
 
-	rc = dt_declare_xattr_set(env, next, buf, name, fl, handle);
+	rc = dt_declare_xattr_set(env, next, NULL, buf, name, fl, handle);
 	if (rc >= 0 &&
 	    (strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT) == 0 ||
 	     strcmp(name, LL_XATTR_NAME_ENCRYPTION_CONTEXT_OLD) == 0)) {

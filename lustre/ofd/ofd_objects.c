@@ -713,8 +713,8 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 
 	info->fti_buf.lb_buf = ff;
 	info->fti_buf.lb_len = sizeof(*ff);
-	rc = dt_declare_xattr_set(env, ofd_object_child(fo), &info->fti_buf,
-				  XATTR_NAME_FID, 0, th);
+	rc = dt_declare_xattr_set(env, ofd_object_child(fo), NULL,
+				  &info->fti_buf, XATTR_NAME_FID, 0, th);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -853,7 +853,7 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 			info->fti_buf.lb_buf = ff;
 			info->fti_buf.lb_len = sizeof(*ff);
 			rc = dt_declare_xattr_set(env, ofd_object_child(fo),
-					&info->fti_buf, XATTR_NAME_FID, 0,
+					NULL, &info->fti_buf, XATTR_NAME_FID, 0,
 					th);
 			if (rc)
 				GOTO(stop, rc);
@@ -977,8 +977,8 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 
 	info->fti_buf.lb_buf = ff;
 	info->fti_buf.lb_len = sizeof(*ff);
-	rc = dt_declare_xattr_set(env, ofd_object_child(fo), &info->fti_buf,
-				  XATTR_NAME_FID, 0, th);
+	rc = dt_declare_xattr_set(env, ofd_object_child(fo), NULL,
+				  &info->fti_buf, XATTR_NAME_FID, 0, th);
 	if (rc)
 		GOTO(stop, rc);
 

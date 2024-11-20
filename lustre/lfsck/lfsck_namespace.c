@@ -390,14 +390,14 @@ static int lfsck_namespace_store(const struct lu_env *env,
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
 
-	rc = dt_declare_xattr_set(env, obj,
+	rc = dt_declare_xattr_set(env, obj, NULL,
 				  lfsck_buf_get(env, com->lc_file_disk, len),
 				  XATTR_NAME_LFSCK_NAMESPACE, 0, handle);
 	if (rc != 0)
 		GOTO(out, rc);
 
 	if (bitmap != NULL) {
-		rc = dt_declare_xattr_set(env, obj,
+		rc = dt_declare_xattr_set(env, obj, NULL,
 				lfsck_buf_get(env, bitmap, nbits >> 3),
 				XATTR_NAME_LFSCK_BITMAP, 0, handle);
 		if (rc != 0)
@@ -613,7 +613,7 @@ static int lfsck_declare_namespace_exec_dir(const struct lu_env *env,
 	rc = dt_declare_xattr_del(env, obj, XATTR_NAME_LINK, handle);
 	if (rc == 0)
 		/* For insert new linkEA entry. */
-		rc = dt_declare_xattr_set(env, obj,
+		rc = dt_declare_xattr_set(env, obj, NULL,
 			lfsck_buf_get_const(env, NULL, MAX_LINKEA_SIZE),
 			XATTR_NAME_LINK, 0, handle);
 	return rc;
@@ -998,7 +998,7 @@ again:
 			GOTO(stop, rc);
 	}
 
-	rc = dt_declare_xattr_set(env, orphan, &linkea_buf,
+	rc = dt_declare_xattr_set(env, orphan, NULL, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -1116,7 +1116,7 @@ static int lfsck_lmv_set(const struct lu_env *env,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = dt_declare_xattr_set(env, obj, &buf, XATTR_NAME_LMV, 0, th);
+	rc = dt_declare_xattr_set(env, obj, NULL, &buf, XATTR_NAME_LMV, 0, th);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -1328,8 +1328,8 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	}
 
 	if (parent_lmv_lost) {
-		rc = dt_declare_xattr_set(env, parent, &buf, XATTR_NAME_LMV,
-					  0, th);
+		rc = dt_declare_xattr_set(env, parent, NULL, &buf,
+					  XATTR_NAME_LMV, 0, th);
 		if (rc)
 			GOTO(stop, rc);
 	}
@@ -1570,15 +1570,15 @@ again:
 		lmv->lmv_master_mdt_index = lfsck_dev_idx(lfsck);
 		lfsck_lmv_header_cpu_to_le(lmv2, lmv);
 		lfsck_buf_init(&lmv_buf, lmv2, sizeof(*lmv2));
-		rc = dt_declare_xattr_set(env, orphan, &lmv_buf, XATTR_NAME_LMV,
-					  0, th);
+		rc = dt_declare_xattr_set(env, orphan, NULL, &lmv_buf,
+					  XATTR_NAME_LMV, 0, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 	}
 
 	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 		       ldata.ld_leh->leh_len);
-	rc = dt_declare_xattr_set(env, orphan, &linkea_buf,
+	rc = dt_declare_xattr_set(env, orphan, NULL, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -1732,7 +1732,7 @@ again:
 		GOTO(unlock1, rc = PTR_ERR(th));
 
 	if (buflen != 0)
-		rc = dt_declare_xattr_set(env, obj, &linkea_buf,
+		rc = dt_declare_xattr_set(env, obj, NULL, &linkea_buf,
 					  XATTR_NAME_LINK, 0, th);
 	else
 		rc = dt_declare_xattr_del(env, obj, XATTR_NAME_LINK, th);
@@ -2139,7 +2139,7 @@ int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 
 	lfsck_buf_init(&linkea_buf, ldata->ld_buf->lb_buf,
 		       ldata->ld_leh->leh_len);
-	rc = dt_declare_xattr_set(env, obj, &linkea_buf,
+	rc = dt_declare_xattr_set(env, obj, NULL, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -2401,7 +2401,7 @@ static int lfsck_namespace_repair_unmatched_pairs(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_declare_xattr_set(env, obj, &linkea_buf,
+	rc = dt_declare_xattr_set(env, obj, NULL, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -3499,7 +3499,7 @@ static int lfsck_namespace_linkea_clear_overflow(const struct lu_env *env,
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
 
-	rc = dt_declare_xattr_set(env, obj,
+	rc = dt_declare_xattr_set(env, obj, NULL,
 			lfsck_buf_get_const(env, NULL, MAX_LINKEA_SIZE),
 			XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
@@ -3634,7 +3634,7 @@ static int lfsck_namespace_check_agent_entry(const struct lu_env *env,
 
 		lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 			       ldata.ld_leh->leh_len);
-		rc = dt_declare_xattr_set(env, obj, &linkea_buf,
+		rc = dt_declare_xattr_set(env, obj, NULL, &linkea_buf,
 				XATTR_NAME_LINK, LU_XATTR_REPLACE, handle);
 		if (rc)
 			GOTO(stop, rc);
@@ -5478,7 +5478,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 
 			lfsck_lmv_header_cpu_to_le(lmv2, lmv2);
 			lfsck_buf_init(&lmv_buf, lmv2, sizeof(*lmv2));
-			rc = dt_declare_xattr_set(env, child, &lmv_buf,
+			rc = dt_declare_xattr_set(env, child, NULL, &lmv_buf,
 						  XATTR_NAME_LMV, 0, th);
 			if (rc != 0)
 				GOTO(stop, rc);
@@ -5488,7 +5488,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	/* 6a. insert linkEA for child */
 	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 		       ldata.ld_leh->leh_len);
-	rc = dt_declare_xattr_set(env, child, &linkea_buf,
+	rc = dt_declare_xattr_set(env, child, NULL, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -6986,7 +6986,7 @@ int lfsck_verify_linkea(const struct lu_env *env, struct lfsck_instance *lfsck,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = dt_declare_xattr_set(env, obj, &linkea_buf,
+	rc = dt_declare_xattr_set(env, obj, NULL, &linkea_buf,
 				  XATTR_NAME_LINK, fl, th);
 	if (rc != 0)
 		GOTO(stop, rc);

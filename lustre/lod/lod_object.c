@@ -3745,13 +3745,13 @@ static int lod_layout_purge(const struct lu_env *env, struct dt_object *dt,
  */
 static int lod_declare_xattr_set(const struct lu_env *env,
 				 struct dt_object *dt,
+				 const struct lu_attr *attr,
 				 const struct lu_buf *buf,
 				 const char *name, int fl,
 				 struct thandle *th)
 {
 	struct lod_thread_info *info = lod_env_info(env);
 	struct dt_object *next = dt_object_child(dt);
-	struct lu_attr	 *attr = &info->lti_attr;
 	struct lod_object *lo = lod_dt_obj(dt);
 	__u32		  mode;
 	int		  rc;
@@ -3763,6 +3763,8 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 		    LU_XATTR_PURGE)) &&
 	    (strcmp(name, XATTR_NAME_LOV) == 0 ||
 	     strcmp(name, XATTR_LUSTRE_LOV) == 0)) {
+		struct lu_attr	 *lattr = &lod_env_info(env)->lti_attr;
+
 		/*
 		 * this is a request to create object's striping.
 		 *
@@ -3773,15 +3775,15 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 		 * LU_XATTR_REPLACE is set to indicate a layout swap
 		 */
 		if (dt_object_exists(dt)) {
-			rc = dt_attr_get(env, next, attr);
+			rc = dt_attr_get(env, next, lattr);
 			if (rc)
 				RETURN(rc);
 		} else {
-			memset(attr, 0, sizeof(*attr));
-			attr->la_valid = LA_TYPE | LA_MODE;
-			attr->la_mode = S_IFREG;
+			memset(lattr, 0, sizeof(*lattr));
+			lattr->la_valid = LA_TYPE | LA_MODE;
+			lattr->la_mode = S_IFREG;
 		}
-		rc = lod_declare_striped_create(env, dt, attr, buf, th);
+		rc = lod_declare_striped_create(env, dt, lattr, buf, th);
 	} else if (fl & LU_XATTR_MERGE) {
 		LASSERT(strcmp(name, XATTR_NAME_LOV) == 0 ||
 			strcmp(name, XATTR_LUSTRE_LOV) == 0);

@@ -884,7 +884,8 @@ static int lustre_index_update_lma(const struct lu_env *env,
 	if (IS_ERR(th))
 		RETURN(rc);
 
-	rc = dt_declare_xattr_set(env, obj, &lbuf, XATTR_NAME_LMA, fl, th);
+	rc = dt_declare_xattr_set(env, obj, NULL, &lbuf, XATTR_NAME_LMA, fl,
+				  th);
 	if (rc)
 		GOTO(stop, rc);
 

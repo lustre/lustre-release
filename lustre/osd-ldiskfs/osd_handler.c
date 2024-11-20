@@ -4714,6 +4714,7 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 static int osd_declare_xattr_set(const struct lu_env *env,
 				 struct dt_object *dt,
+				 const struct lu_attr *attr,
 				 const struct lu_buf *buf, const char *name,
 				 int fl, struct thandle *handle)
 {

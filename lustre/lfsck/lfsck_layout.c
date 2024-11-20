@@ -2248,7 +2248,8 @@ static int __lfsck_layout_update_pfid(const struct lu_env *env,
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
-	rc = dt_declare_xattr_set(env, child, &buf, XATTR_NAME_FID, 0, handle);
+	rc = dt_declare_xattr_set(env, child, NULL, &buf, XATTR_NAME_FID, 0,
+				  handle);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -2493,7 +2494,7 @@ again:
 		GOTO(stop, rc);
 
 	lfsck_buf_init(&lov_buf, ea_buf->lb_buf, size);
-	rc = dt_declare_xattr_set(env, pobj, &lov_buf, XATTR_NAME_LOV,
+	rc = dt_declare_xattr_set(env, pobj, NULL, &lov_buf, XATTR_NAME_LOV,
 				  LU_XATTR_CREATE, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -2508,7 +2509,7 @@ again:
 
 	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 		       ldata.ld_leh->leh_len);
-	rc = dt_declare_xattr_set(env, pobj, &linkea_buf,
+	rc = dt_declare_xattr_set(env, pobj, NULL, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -2818,7 +2819,7 @@ static int lfsck_layout_conflict_create(const struct lu_env *env,
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
-	rc = dt_declare_xattr_set(env, parent, ea_buf, XATTR_NAME_LOV,
+	rc = dt_declare_xattr_set(env, parent, NULL, ea_buf, XATTR_NAME_LOV,
 				  LU_XATTR_REPLACE, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -2936,8 +2937,8 @@ again:
 		if (IS_ERR(handle))
 			GOTO(unlock_layout, rc = PTR_ERR(handle));
 
-		rc = dt_declare_xattr_set(env, parent, buf, XATTR_NAME_LOV,
-					  fl, handle);
+		rc = dt_declare_xattr_set(env, parent, NULL, buf,
+					  XATTR_NAME_LOV, fl, handle);
 		if (rc != 0)
 			GOTO(stop, rc);
 
@@ -3561,7 +3562,7 @@ static int __lfsck_layout_repair_dangling(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_declare_xattr_set(env, child, buf, XATTR_NAME_FID,
+	rc = dt_declare_xattr_set(env, child, NULL, buf, XATTR_NAME_FID,
 				  LU_XATTR_CREATE, handle);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -3800,7 +3801,8 @@ static int lfsck_layout_repair_unmatched_pair(const struct lu_env *env,
 	if (IS_ERR(handle))
 		GOTO(unlock1, rc = PTR_ERR(handle));
 
-	rc = dt_declare_xattr_set(env, child, buf, XATTR_NAME_FID, 0, handle);
+	rc = dt_declare_xattr_set(env, child, NULL, buf, XATTR_NAME_FID, 0,
+				  handle);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -3972,7 +3974,7 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
 
-	rc = dt_declare_xattr_set(env, parent, buf, XATTR_NAME_LOV,
+	rc = dt_declare_xattr_set(env, parent, NULL, buf, XATTR_NAME_LOV,
 				  LU_XATTR_REPLACE, handle);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -5879,8 +5881,9 @@ fix:
 			GOTO(out, rc = PTR_ERR(handle));
 
 		lfsck_buf_init(&ea_buf, buf->lb_buf, size);
-		rc = dt_declare_xattr_set(env, obj, &ea_buf, XATTR_NAME_LOV,
-					  LU_XATTR_REPLACE, handle);
+		rc = dt_declare_xattr_set(env, obj, NULL, &ea_buf,
+					  XATTR_NAME_LOV, LU_XATTR_REPLACE,
+					  handle);
 		if (rc != 0)
 			GOTO(out, rc);
 

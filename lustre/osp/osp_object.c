@@ -1202,6 +1202,7 @@ out_req:
  * \retval		negative error number on failure
  */
 int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
+			  const struct lu_attr *attr,
 			  const struct lu_buf *buf, const char *name,
 			  int flag, struct thandle *th)
 {

@@ -224,7 +224,8 @@ int local_object_declare_create(const struct lu_env *env,
 
 	dti->dti_lb.lb_buf = NULL;
 	dti->dti_lb.lb_len = sizeof(dti->dti_lma);
-	rc = dt_declare_xattr_set(env, o, &dti->dti_lb, XATTR_NAME_LMA, 0, th);
+	rc = dt_declare_xattr_set(env, o, NULL, &dti->dti_lb, XATTR_NAME_LMA, 0,
+				  th);
 
 	RETURN(rc);
 }

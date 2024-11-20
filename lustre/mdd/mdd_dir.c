@@ -2381,7 +2381,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 		buf = &LU_BUF_NULL;
 	}
 
-	rc = dt_declare_xattr_set(env, mdd_object_child(son), buf,
+	rc = dt_declare_xattr_set(env, mdd_object_child(son), NULL, buf,
 				  XATTR_NAME_LOV, 0, handle);
 	if (rc)
 		GOTO(stop, rc);

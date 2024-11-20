@@ -401,7 +401,7 @@ int dt_declare_version_set(const struct lu_env *env, struct dt_object *o,
 	LASSERT(o);
 	vbuf.lb_buf = NULL;
 	vbuf.lb_len = sizeof(dt_obj_version_t);
-	return dt_declare_xattr_set(env, o, &vbuf, xname, 0, th);
+	return dt_declare_xattr_set(env, o, NULL, &vbuf, xname, 0, th);
 }
 EXPORT_SYMBOL(dt_declare_version_set);
 
@@ -449,7 +449,8 @@ int dt_declare_data_version_set(const struct lu_env *env, struct dt_object *o,
 	vbuf.lb_buf = NULL;
 	vbuf.lb_len = sizeof(dt_obj_version_t);
 
-	return dt_declare_xattr_set(env, o, &vbuf, XATTR_NAME_DATAVER, 0, th);
+	return dt_declare_xattr_set(env, o, NULL, &vbuf, XATTR_NAME_DATAVER, 0,
+	       th);
 }
 EXPORT_SYMBOL(dt_declare_data_version_set);
 

@@ -750,6 +750,7 @@ int osd_xattr_get_lma(const struct lu_env *env, struct osd_object *obj,
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_buf *buf, const char *name);
 int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
+			  const struct lu_attr *attr,
 			  const struct lu_buf *buf, const char *name,
 			  int fl, struct thandle *handle);
 int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,

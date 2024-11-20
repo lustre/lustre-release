@@ -1086,7 +1086,7 @@ int lfsck_namespace_update_lmv(const struct lu_env *env,
 	if (dt_object_remote(obj))
 		th->th_sync = 1;
 
-	rc = dt_declare_xattr_set(env, obj, buf, XATTR_NAME_LMV, 0, th);
+	rc = dt_declare_xattr_set(env, obj, NULL, buf, XATTR_NAME_LMV, 0, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 

@@ -549,7 +549,7 @@ int lod_sub_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 				   lu_object_fid(&dt->do_lu),
 				   buf, name, fl);
 
-	rc = dt_declare_xattr_set(env, dt, buf, name, fl, sub_th);
+	rc = dt_declare_xattr_set(env, dt, NULL, buf, name, fl, sub_th);
 
 	RETURN(rc);
 }

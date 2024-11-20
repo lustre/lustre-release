@@ -1333,7 +1333,7 @@ static int mdd_prepare(const struct lu_env *env,
 
 			buf.lb_buf = &lmv_default;
 			buf.lb_len = sizeof(lmv_default);
-			rc = dt_declare_xattr_set(env, root, &buf,
+			rc = dt_declare_xattr_set(env, root, NULL, &buf,
 						  XATTR_NAME_DEFAULT_LMV, 0,
 						  th);
 			if (rc)

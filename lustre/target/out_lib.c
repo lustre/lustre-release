@@ -840,7 +840,7 @@ int out_xattr_set_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
 	struct tx_arg	*arg;
 	int		rc;
 
-	rc = dt_declare_xattr_set(env, dt_obj, buf, name, flags, th);
+	rc = dt_declare_xattr_set(env, dt_obj, NULL, buf, name, flags, th);
 	if (rc != 0)
 		return rc;
 

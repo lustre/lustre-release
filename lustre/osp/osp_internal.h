@@ -747,6 +747,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_buf *buf, const char *name);
 int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
+			  const struct lu_attr *attr,
 			  const struct lu_buf *buf, const char *name,
 			  int flag, struct thandle *th);
 int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,

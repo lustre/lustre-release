@@ -426,6 +426,7 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 }
 
 int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
+			  const struct lu_attr *attr,
 			  const struct lu_buf *buf, const char *name,
 			  int fl, struct thandle *handle)
 {
