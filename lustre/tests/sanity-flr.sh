@@ -4535,6 +4535,33 @@ test_210b() {
 }
 run_test 210b "handle broken mirrored lovea (unlink)"
 
+# LU-18468
+test_211() {
+	local tf=$DIR/$tfile
+
+	dd if=/dev/zero of=$tf bs=4k count=10 oflag=direct ||
+		error "error writing initial data to '$tf'"
+
+	$LFS mirror extend -N $tf || error "error extending mirror for '$tf'"
+
+	dd if=/dev/zero of=$tf bs=4k count=1 oflag=direct ||
+		error "error writing 4k to '$tf'"
+	echo "size after second write"
+	ls -la $tf
+	md5_1=$(md5sum $tf) || error "error getting first md5sum of '$tf'"
+
+	$LFS mirror resync $tf || error "error resync-ing '$tf'"
+
+	$LFS mirror delete --mirror-id=1 $tf ||
+		error "error deleting mirror 1 of '$tf'"
+	echo "size after mirror delete"
+	ls -la $tf
+	md5_2=$(md5sum $tf) || error "error getting second md5sum of '$tf'"
+	[[ "${md5_1%% *}" = "${md5_2%% *}" ]] ||
+		error "md5sums don't match after mirror ops on '$tf'"
+}
+run_test 211 "mirror delete should not cause bad size"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

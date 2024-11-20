@@ -3254,15 +3254,13 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 	size_t total_bytes_read = 0;
 	size_t total_bytes_written = 0;
 	off_t write_estimation_bytes = 0;
+	struct stat st;
 
-	if (bandwidth_bytes_sec > 0 || stats_interval_sec) {
-		struct stat st;
-
-		rc = fstat(fd, &st);
-		if (rc < 0)
-			return -errno;
+	rc = fstat(fd, &st);
+	if (rc < 0)
+		return -errno;
+	if (bandwidth_bytes_sec > 0 || stats_interval_sec)
 		write_estimation_bytes = st.st_size * comp_size;
-	}
 
 	/* limit transfer size to what can be sent in one second */
 	if (bandwidth_bytes_sec && bandwidth_bytes_sec < buflen)
@@ -3522,17 +3520,28 @@ do_read:
 	 * reflect its true meaning.
 	 */
 	for (i = 0; i < comp_size; i++) {
-		comp_array[i].lrc_synced = !comp_array[i].lrc_synced;
-		if (comp_array[i].lrc_synced && pos & (page_size - 1)) {
-			rc = llapi_mirror_truncate(fd,
-					comp_array[i].lrc_mirror_id, pos);
-			/* Ignore truncate error on encrypted file without the
-			 * key if tried on LUSTRE_ENCRYPTION_UNIT_SIZE boundary.
-			 */
-			if (rc < 0 && (rc != -ENOKEY ||
-				       pos & ~LUSTRE_ENCRYPTION_MASK))
-				comp_array[i].lrc_synced = false;
+		struct llapi_resync_comp *comp = comp_array + i;
+
+		comp->lrc_synced = !comp->lrc_synced;
+
+		if (!comp->lrc_synced)
+			continue;
+		if (pos < comp->lrc_start || pos >= comp->lrc_end)
+			continue;
+
+		if (pos < st.st_size) {
+			llapi_mirror_punch(fd, comp->lrc_mirror_id, pos,
+					   comp_array[i].lrc_end - pos);
+			continue;
 		}
+
+		rc = llapi_mirror_truncate(fd, comp->lrc_mirror_id, pos);
+		/* Ignore truncate error on encrypted file without the
+		 * key if tried on LUSTRE_ENCRYPTION_UNIT_SIZE boundary.
+		 */
+		if (rc < 0 && (rc != -ENOKEY ||
+			       pos & ~LUSTRE_ENCRYPTION_MASK))
+			comp->lrc_synced = false;
 	}
 
 	/**
