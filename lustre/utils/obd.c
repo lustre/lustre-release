@@ -3996,13 +3996,17 @@ out:
  */
 int jt_nodemap_activate(int argc, char **argv)
 {
-	int rc;
+	int rc = EXIT_SUCCESS;
 
-	rc = nodemap_cmd(LCFG_NODEMAP_ACTIVATE, false, NULL, 0,
-			 argv[0], argv[1], NULL);
+	if (argc != 2)
+		return CMD_HELP;
 
-	if (rc != 0)
+	errno = -nodemap_cmd(LCFG_NODEMAP_ACTIVATE, false, NULL, 0,
+			     argv[0], argv[1], NULL);
+	if (errno) {
+		rc = EXIT_FAILURE;
 		perror(argv[0]);
+	}
 
 	return rc;
 }
@@ -4019,56 +4023,60 @@ int jt_nodemap_activate(int argc, char **argv)
  */
 int jt_nodemap_add(int argc, char **argv)
 {
+	char *nodemap_name = NULL;
 	bool dynamic = false;
-	char *nm_name = NULL;
-	int c, rc;
+	int c, rc = EXIT_SUCCESS;
 
 	static struct option long_opts[] = {
 		{ .val = 'd', .name = "dynamic", .has_arg = no_argument },
 		{ .val = 'h', .name = "help",	 .has_arg = no_argument },
+		{ .val = 'n', .name = "name",	 .has_arg = required_argument },
 		{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "dh",
+	while ((c = getopt_long(argc, argv, "dhn:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'd':
 			dynamic = true;
 			break;
+		case 'n':
+			nodemap_name = optarg;
+			break;
 		case 'h':
 		default:
-			goto add_usage;
+			return CMD_HELP;
 		}
 	}
 
-	if (optind < argc)
-		nm_name = argv[optind];
-
-	if (!nm_name) {
-		fprintf(stderr, "nodemap_add: missing nodemap name\n");
-add_usage:
-		fprintf(stderr,
-			"usage: nodemap_add [-d|--dynamic] NODEMAP_NAME\n");
-		return -EINVAL;
+	if (!nodemap_name) {
+		if (optind >= argc) {
+			fprintf(stderr, "nodemap_add: missing nodemap name\n");
+			return CMD_HELP;
+		}
+		nodemap_name = argv[optind];
 	}
 
 	if (!dynamic && !is_mgs()) {
 		fprintf(stderr,
 			"nodemap_add: non-dynamic nodemap only allowed on MGS node\n");
-		goto add_usage;
+		return CMD_HELP;
 	}
 
-	rc = llapi_nodemap_exists(nm_name);
-	if (rc == 0) {
-		fprintf(stderr, "error: %s existing nodemap name\n", nm_name);
-		return 1;
+	if (llapi_nodemap_exists(nodemap_name) == 0) {
+		fprintf(stderr, "error: nodemap '%s' already exists\n",
+			nodemap_name);
+		errno = EINVAL;
+		goto out;
 	}
 
-	rc = nodemap_cmd(LCFG_NODEMAP_ADD, dynamic, NULL, 0, argv[0],
-			 nm_name, NULL);
+	errno = -nodemap_cmd(LCFG_NODEMAP_ADD, dynamic, NULL, 0, argv[0],
+			     nodemap_name, NULL);
 
-	if (rc != 0)
+out:
+	if (errno) {
+		rc = EXIT_FAILURE;
 		perror(argv[0]);
-
+	}
 	return rc;
 }
 
@@ -4084,45 +4092,47 @@ add_usage:
  */
 int jt_nodemap_del(int argc, char **argv)
 {
-	char *nm_name = NULL;
-	int c, rc;
+	char *nodemap_name = NULL;
+	int c, rc = EXIT_SUCCESS;
 
 	static struct option long_opts[] = {
-		{ .val = 'h', .name = "help",	 .has_arg = no_argument },
+		{ .val = 'h', .name = "help", .has_arg = no_argument },
+		{ .val = 'n', .name = "name", .has_arg = required_argument },
 		{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "h",
-				long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hn:", long_opts, NULL)) != -1) {
 		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
 		case 'h':
 		default:
-			goto del_usage;
+			return CMD_HELP;
 		}
 	}
 
-	if (optind < argc)
-		nm_name = argv[optind];
-
-	if (!nm_name) {
-		fprintf(stderr, "nodemap_del: missing nodemap name\n");
-del_usage:
-		fprintf(stderr,
-			"usage: nodemap_del NODEMAP_NAME\n");
-		return -EINVAL;
+	if (!nodemap_name) {
+		if (argc != 2) {
+			fprintf(stderr, "nodemap_del: missing nodemap name\n");
+			return CMD_HELP;
+		}
+		nodemap_name = argv[1];
 	}
 
-	rc = llapi_nodemap_exists(nm_name);
-	if (rc != 0) {
-		fprintf(stderr, "error: %s not existing nodemap name\n",
-			nm_name);
-		return rc;
+	if (llapi_nodemap_exists(nodemap_name) != 0) {
+		fprintf(stderr, "error: nodemap '%s' does not exist\n",
+			nodemap_name);
+		errno = EINVAL;
+		goto out;
 	}
-	rc = nodemap_cmd(LCFG_NODEMAP_DEL, false, NULL, 0, argv[0],
-			 nm_name, NULL);
+	errno = -nodemap_cmd(LCFG_NODEMAP_DEL, false, NULL, 0, argv[0],
+			     nodemap_name, NULL);
 
-	if (rc != 0)
+out:
+	if (errno) {
+		rc = EXIT_FAILURE;
 		perror(argv[0]);
-
+	}
 	return rc;
 }
 
@@ -4140,36 +4150,38 @@ int jt_nodemap_test_nid(int argc, char **argv)
 {
 	char rawbuf[MAX_IOC_BUFLEN];
 	char *nid = NULL;
-	int c, rc;
+	int c, rc = EXIT_SUCCESS;
 
 	static struct option long_opts[] = {
-		{ .val = 'h', .name = "help",	 .has_arg = no_argument },
+		{ .val = 'h', .name = "help", .has_arg = no_argument },
+		{ .val = 'n', .name = "nid",  .has_arg = required_argument },
 		{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "dh",
-				long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hn:", long_opts, NULL)) != -1) {
 		switch (c) {
+		case 'n':
+			nid = optarg;
+			break;
 		case 'h':
 		default:
-			goto test_nid_usage;
+			return CMD_HELP;
 		}
 	}
 
-	if (optind < argc)
-		nid = argv[optind];
-
 	if (!nid) {
-		fprintf(stderr, "nodemap_test_nid: missing NID\n");
-test_nid_usage:
-		fprintf(stderr,
-			"usage: nodemap_test_nid NID\n");
-		return -EINVAL;
+		if (argc != 2)
+			return CMD_HELP;
+		nid = argv[1];
 	}
 
-	rc = nodemap_cmd(LCFG_NODEMAP_TEST_NID, false, &rawbuf,
-			 sizeof(rawbuf), argv[0], nid, NULL);
-	if (rc == 0)
+	errno = -nodemap_cmd(LCFG_NODEMAP_TEST_NID, false, &rawbuf,
+			     sizeof(rawbuf), argv[0], nid, NULL);
+	if (errno) {
+		rc = EXIT_FAILURE;
+		perror(argv[0]);
+	} else {
 		printf("%s\n", (char *)rawbuf);
+	}
 
 	return rc;
 }
@@ -4216,26 +4228,12 @@ int jt_nodemap_test_id(int argc, char **argv)
 			break;
 		case 'h':
 		default:
-			goto test_id_usage;
+			return CMD_HELP;
 		}
 	}
 
-	if (!nidstr) {
-		fprintf(stderr, "nodemap_test_id: missing NID\n");
-test_id_usage:
-		fprintf(stderr,
-			"usage: nodemap_test_id --nid NID --idtype IDTYPE --id ID\n");
-		return -EINVAL;
-	}
-	if (!typestr) {
-		fprintf(stderr,
-			"nodemap_test_id: missing idtype, must be one of uid, gid, projid\n");
-		goto test_id_usage;
-	}
-	if (!idstr) {
-		fprintf(stderr, "nodemap_test_id: missing id\n");
-		goto test_id_usage;
-	}
+	if (!nidstr || !typestr || !idstr)
+		return CMD_HELP;
 
 	rc = nodemap_cmd(LCFG_NODEMAP_TEST_ID, false, &rawbuf, sizeof(rawbuf),
 			 argv[0], nidstr, typestr, idstr, NULL);

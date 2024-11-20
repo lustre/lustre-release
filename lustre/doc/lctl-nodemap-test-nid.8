@@ -1,0 +1,38 @@
+.TH LCTL-NODEMAP_TEST_NID 8 2024-11-22 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_test_nid \- test a nid for nodemap membership
+.SH SYNOPSIS
+.SY "lctl nodemap_test_nid"
+.BI --nid " NID"
+.YS
+.SH DESCRIPTION
+.B nodemap_test_nid
+tests
+.I NID
+for nodemap membership,
+and returns the name of the nodemap it belongs to.
+.SH OPTIONS
+.TP
+.BI --nid " NID"
+The nid to test membership of.
+.SH EXAMPLES
+.EX
+.B # lctl nodemap_test_nid --nid 192.168.10.101@tcp0
+.B # lctl nodemap_test_nid --nid 10.10.0.55@o2ib3
+.EE
+.SH AVAILABILITY
+.B lctl nodemap_test_nid
+is part of the
+.BR lustre (7)
+filesystem package since release 2.6.0
+.\" Added in commit v2_5_56_0-13-g4642f30970
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-modify (8)

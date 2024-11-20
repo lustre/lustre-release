@@ -166,10 +166,10 @@ command_t nodemap_cmdlist[] = {
 	 "usage: nodemap activate {0|1}"},
 	{.pc_name = "add", .pc_func = jt_nodemap_add,
 	 .pc_help = "add a new nodemap\n"
-	 "usage: nodemap add [-d|--dynamic] NODEMAP_NAME"},
+	 "usage: nodemap add [-d|--dynamic] --name NODEMAP_NAME"},
 	{.pc_name = "del", .pc_func = jt_nodemap_del,
 	 .pc_help = "remove a nodemap\n"
-	 "usage: nodemap del NODEMAP_NAME"},
+	 "usage: nodemap del --name NODEMAP_NAME"},
 	{.pc_name = "add_range", .pc_func = jt_nodemap_add_range,
 	 .pc_help = "add a nid range to a nodemap\n"
 	 "usage: nodemap add_range --name NODEMAP_NAME --range NID_RANGE"},
@@ -203,7 +203,7 @@ command_t nodemap_cmdlist[] = {
 	 "usage: nodemap set_sepol --name NODEMAP_NAME --sepol SEPOL"},
 	{.pc_name = "test_nid", .pc_func = jt_nodemap_test_nid,
 	 .pc_help = "test a nid for nodemap membership\n"
-	 "usage: nodemap test_nid NID"},
+	 "usage: nodemap test_nid --nid NID"},
 	{.pc_name = "test_id", .pc_func = jt_nodemap_test_id,
 	 .pc_help = "test a nodemap id pair for mapping\n"
 	 "usage: nodemap test_id --nid NID --idtype {uid|gid|projid} --id ID"},
@@ -591,10 +591,10 @@ command_t cmdlist[] = {
 	 "usage: nodemap_activate {0|1}"},
 	{"nodemap_add", jt_nodemap_add, 0,
 	 "add a new nodemap\n"
-	 "usage: nodemap_add [-d|--dynamic] NODEMAP_NAME"},
+	 "usage: nodemap_add [-d|--dynamic] --name NODEMAP_NAME"},
 	{"nodemap_del", jt_nodemap_del, 0,
 	 "remove a nodemap\n"
-	 "usage: nodemap_del NODEMAP_NAME"},
+	 "usage: nodemap_del --name NODEMAP_NAME"},
 	{"nodemap_add_range", jt_nodemap_add_range, 0,
 	 "add a nid range to a nodemap\n"
 	 "usage: nodemap_add_range --name NODEMAP_NAME --range NID_RANGE"},
@@ -624,7 +624,7 @@ command_t cmdlist[] = {
 	 "usage: nodemap_set_sepol --name NODEMAP_NAME --sepol SEPOL"},
 	{"nodemap_test_nid", jt_nodemap_test_nid, 0,
 	 "test a nid for nodemap membership\n"
-	 "usage: nodemap_test_nid NID"},
+	 "usage: nodemap_test_nid --nid NID"},
 	{"nodemap_test_id", jt_nodemap_test_id, 0,
 	 "test a nodemap id pair for mapping\n"
 	 "Usage: nodemap_test_id --nid NID --idtype ID_TYPE --id ID"},

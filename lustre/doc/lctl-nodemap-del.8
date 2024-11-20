@@ -5,7 +5,7 @@ lctl-nodemap_del \- delete an existing nodemap
 .SY "lctl nodemap_del"
 or
 .SY "lctl nodemap del"
-.I NODEMAP_NAME
+.BI --name " NODEMAP_NAME"
 .YS
 .SH DESCRIPTION
 .B nodemap_del
@@ -14,12 +14,12 @@ NID ranges will be removed as well, and existing clients will be moved to the
 default nodemap.
 .SH OPTIONS
 .TP
-.I NODEMAP_NAME
+.BI --name " NODEMAP_NAME"
 The name of the nodemap to delete. The default nodemap cannot be deleted.
 .SH EXAMPLES
 .EX
-.B # lctl nodemap_del remotesite
-.B # lctl nodemap_del othersite
+.B # lctl nodemap_del --name remotesite
+.B # lctl nodemap_del --name othersite
 .EE
 .SH AVAILABILITY
 .B lctl nodemap_del

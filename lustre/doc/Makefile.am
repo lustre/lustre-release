@@ -253,6 +253,8 @@ SERVER_MANFILES =				\
 	lctl-nodemap_set_fileset.8		\
 	lctl-nodemap-set-sepol.8		\
 	lctl-nodemap_set_sepol.8		\
+	lctl-nodemap-test-nid.8			\
+	lctl-nodemap_test_nid.8			\
 	lctl-nodemap-add-offset.8		\
 	lctl-nodemap_add_offset.8		\
 	lctl-nodemap-del-offset.8		\
