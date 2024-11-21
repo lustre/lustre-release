@@ -1,6 +1,15 @@
 removes static definition of dx_root struct. so that "." and ".." dirent can
 have extra data. This patch does not change any functionality but is required for
 ext4_data_in_dirent patch.
+
+Signed-off-by: Bob Glossman <bob.glossman@intel.com>
+Signed-off-by: Yang Sheng <yang.sheng@intel.com>
+Change-Id: Ifbc294a53bd21eb35d373637d3326fc3c611c9f0
+Reviewed-on: http://review.whamcloud.com/10249
+Tested-by: Jenkins
+Tested-by: Maloo <hpdd-maloo@intel.com>
+Reviewed-by: Andreas Dilger <andreas.dilger@intel.com>
+Reviewed-by: Oleg Drokin <oleg.drokin@intel.com>
  
 Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
 ===================================================================
@@ -216,7 +225,7 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
 -			((struct dx_root *) frames[0].bh->b_data)->info.indirect_levels = 1;
 +			info = dx_get_dx_info((struct ext4_dir_entry_2 *)
 +					      frames[0].bh->b_data);
-+			info->indirect_levels = 1;
++			info->indirect_levels += 1;
  
  			/* Add new access path frame */
  			frame = frames + 1;

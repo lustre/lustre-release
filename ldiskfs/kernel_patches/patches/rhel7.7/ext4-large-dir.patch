@@ -279,12 +279,10 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  			       icount * sizeof(struct dx_entry));
  			dx_set_limit(entries2, dx_node_limit(dir));
  
-@@ -2224,22 +2267,17 @@ static int ext4_dx_add_entry(handle_t *h
- 			dx_set_block(entries + 0, newblock);
- 			info = dx_get_dx_info((struct ext4_dir_entry_2*)
+@@ -2348,20 +2391,16 @@ static int ext4_dx_add_entry(handle_t *handle, struct dentry *dentry,
  					      frames[0].bh->b_data);
--			info->indirect_levels = 1;
--
+ 			info->indirect_levels += 1;
+ 
 -			/* Add new access path frame */
 -			frame = frames + 1;
 -			frame->at = at = at - entries + entries2;
@@ -292,7 +290,6 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
 -			frame->bh = bh2;
 -			err = ext4_journal_get_write_access(handle,
 -							     frame->bh);
-+			info->indirect_levels += 1;
 +			dxtrace(printk(KERN_DEBUG
 +				       "Creating %d level index...\n",
 +				       info->indirect_levels));
