@@ -643,6 +643,8 @@ again:
 
 		goto again;
 	}
+	if (unlikely(count == 0))
+		qmt_free_lock_array(array);
 	RETURN(0);
 }
 
