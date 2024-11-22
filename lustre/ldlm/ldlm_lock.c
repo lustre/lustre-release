@@ -548,23 +548,30 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
 	 * To flip the lock from the old to the new resource, oldres
 	 * and newres have to be locked. Resource spin-locks are taken
 	 * in the memory address order to avoid dead-locks.
-	 * As this is the only circumstance where ->l_resource
-	 * can change, and this cannot race with itself, it is safe
-	 * to access lock->l_resource without being careful about locking.
 	 */
-	oldres = lock->l_resource;
-	if (oldres < newres) {
-		lock_res(oldres);
-		lock_res_nested(newres, LRT_NEW);
-	} else {
-		lock_res(newres);
-		lock_res_nested(oldres, LRT_NEW);
+	rcu_read_lock();
+	while (1) {
+		oldres = rcu_dereference(lock->l_resource);
+		if (oldres == newres)
+			break;
+
+		if (oldres < newres) {
+			lock_res(oldres);
+			lock_res_nested(newres, LRT_NEW);
+		} else {
+			lock_res(newres);
+			lock_res_nested(oldres, LRT_NEW);
+		}
+		if (lock->l_resource == oldres) {
+			rcu_assign_pointer(lock->l_resource, newres);
+			unlock_res(oldres);
+			unlock_res(newres);
+			break;
+		}
+		unlock_res(oldres);
+		unlock_res(newres);
 	}
-	LASSERT(memcmp(new_resid, &oldres->lr_name,
-		       sizeof(oldres->lr_name)) != 0);
-	rcu_assign_pointer(lock->l_resource, newres);
-	unlock_res(oldres);
-	unlock_res(newres);
+	rcu_read_unlock();
 
 	/* ...and the flowers are still standing! */
 	ldlm_resource_putref(oldres);
