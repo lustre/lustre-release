@@ -6,7 +6,7 @@ lfs-migrate \- migrate files or directories between MDTs or OSTs.
 .RB [ -h ]
 .RB [ -v ]
 .RI [ SETSTRIPE_OPTIONS " ... ]"
-.IR FILE " ..."
+.IR FILES_FROM
 .SY "lfs migrate"
 .B -m
 .I START_MDT_INDEX
@@ -14,13 +14,32 @@ lfs-migrate \- migrate files or directories between MDTs or OSTs.
 .I DIRECTORY
 .YS
 .SH DESCRIPTION
-Migrate OST objects between OSTs for the specified
-.IR FILE ,
+Migrate OST objects between OSTs for the file(s) specified by \fIFILES_FROM\fR,
 or recursively migrate
 .I DIRECTORY
 and all inodes/directories therein between MDTs.
+
 .SH OPTIONS
 .SS OST MIGRATE OPTIONS
+.P
+.IR FILES_FROM
+may be:
+.TP
+.IR FILENAME " [...]"
+File names are listed on command line.
+Multiple file names are separated by space char.
+.TP
+.BR -0 ", " --null
+Read file names from stdin by default. Each file name is followed by a NUL char.
+Usually is used after a pipeline from \fBlfs find --print0\fR command.
+.TP
+.BR --files-from = \fILIST_FILE
+Read file names from file \fILIST_FILE\fR. One line for each file name.
+If \fILIST_FILE\fR is \fB-\fR, read from stdin.
+If \fB--null\fR is specified at the same time,
+file names are separated by a NUL char.
+
+.SH OST MIGRATE OPTIONS
 .P
 The
 .B lfs migrate
@@ -253,7 +272,7 @@ component to copy the default layout from the specified
 .BR topdir :
 .RS
 .EX
-.B # lfs find dir -type f -L mdt -0 | xargs -0 lfs migrate --copy topdir
+.B # lfs find dir -type f -L mdt -0 | lfs migrate -0 --copy topdir
 .EE
 .RE
 and finally migrate the directory

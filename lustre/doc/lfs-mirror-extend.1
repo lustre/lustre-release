@@ -3,27 +3,36 @@
 lfs-mirror-extend \- add mirror(s) to an existing file
 .SH SYNOPSIS
 .SY "lfs mirror extend"
-.RB [ --no-verify ]
-.RB [ --mirror-count | -N\c
-.RI [ MIRROR_COUNT ]]
-.RB [ --bandwidth-limit | -W
-.IR BANDWIDTH ]
-.RB [ --stats | --stats-interval\c
-.RI = STATS_INTERVAL ]
-.RI [ SETSTRIPE_OPTIONS |\c
-.B -f
-.IR VICTIM_FILE ]
-.IR FILENAME " ..."
+ [\fB--bandwidth-limit\fR|\fB-W\fR \fIMB_PER_SEC\fR]
+ [\fB--mirror-count\fR|\fB-N\fR[\fIMIRROR_COUNT\fR]]
+ [\fB--no-verify\fR]
+ [\fB--stats\fR|\fB--stats-interval\fR=\fISECONDS\fR]
+ [\fISETSTRIPE_OPTIONS\fR|\fB-f\fR \fIVICTIM_FILE\fR]
+ \fIFILES_FROM\fR
 .YS
 .SH DESCRIPTION
-This command adds mirror(s) to an existing file specified by the path name
-.IR FILENAME .
+This command adds mirror(s) to existing file(s) specified by \fIFILES_FROM\fR.
 .P
-The file
-.I FILENAME
-can already be a mirrored file, or just a regular non-mirrored file.
-If it's a non-mirrored file,
-then the command will convert it to a mirrored file.
+The file to be extended can already be a mirrored file, or just a regular
+non-mirrored file. If it's a non-mirrored file, the command will convert it
+to a mirrored file.
+.P
+.I FILES_FROM
+may be:
+.TP
+.IR FILENAME " [...]"
+File names are listed on command line.
+Multiple file names are separated by space char.
+.TP
+.BR -0 ", " --null
+Read file names from stdin by default. Each file name is followed by a NUL char.
+Usually is used after a pipeline from \fBlfs find --print0\fR command.
+.TP
+.BR --files-from = \fILIST_FILE
+Read file names from file \fILIST_FILE\fR. One line for each file name.
+If \fILIST_FILE\fR is \fB-\fR, read from stdin.
+If \fB--null\fR is specified at the same time,
+file names are separated by a NUL char.
 .P
 The
 .BR --mirror-count | -N

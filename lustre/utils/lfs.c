@@ -243,6 +243,8 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	SSM_CMD_COMMON("migrate  ")					\
 	"\t\t[--block|-b] [--non-block|-n]\n"				\
 	"\t\t[--non-direct|-D] [--verbose|-v] FILENAME\n"		\
+	"\t\t[--non-direct|-D] [--verbose|-v]\n"			\
+	"\t\t-0|--null|--files-from=LIST_FILE|FILENAME ...\n"
 
 #define SETDIRSTRIPE_USAGE						\
 	"		[--mdt-count|-c stripe_count>\n"		\
@@ -302,8 +304,8 @@ command_t mirror_cmdlist[] = {
 		"\t\t[--no-verify] [--stats|--stats-interval=STATS_INTERVAL]\n"
 		"\t\t[--bandwidth-limit|--W BANDWIDTH]\n"
 		"\t\t[-f VICTIM_FILE]\n"
-		"\t\t" SSM_SETSTRIPE_OPT "]"
-		" FILENAME ...\n" },
+		"\t\t" SSM_SETSTRIPE_OPT "]\n"
+		"\t\t-0|--null|--files-from=LIST_FILE|FILENAME ...\n" },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
 	"usage: lfs mirror split {--mirror-id MIRROR_ID |\n"
@@ -3725,6 +3727,7 @@ enum {
 	LFS_QUOTA_ISOFTLIMIT_OPT,
 	LFS_QUOTA_IHARDLIMIT_OPT,
 	LFS_QUOTA_IGRACE_OPT,
+	LFS_FILES_FROM,
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -3784,13 +3787,14 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	unsigned long long bandwidth_bytes_sec = 0;
 	unsigned long long bandwidth_unit = ONE_MB;
 	long stats_interval_sec = 0;
+	bool null_mode = false;
+	const char *files_from = NULL;
+	FILE *files_from_fp = NULL;
+	int delim = '\n';
+	char *buf = NULL;
+	size_t bufsize = 0;
 
 	struct option long_opts[] = {
-/* find { .val = '0',	.name = "null",		.has_arg = no_argument }, */
-/* find	{ .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
-	/* --block is only valid in migrate mode */
-	{ .val = 'b',	.name = "block",	.has_arg = no_argument },
-/* find	{ .val = 'B',	.name = "btime",	.has_arg = required_argument }*/
 	{ .val = LFS_COMP_ADD_OPT,
 			.name = "comp-add",	.has_arg = no_argument },
 	{ .val = LFS_COMP_ADD_OPT,
@@ -3826,6 +3830,13 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = LFS_STATS_INTERVAL_OPT,
 			.name = "stats-interval",
 						.has_arg = required_argument},
+	{ .val = LFS_FILES_FROM,
+		.name = "files-from",		.has_arg = required_argument},
+	{ .val = '0',	.name = "null",		.has_arg = no_argument },
+	/* find { .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
+		/* --block is only valid in migrate mode */
+	{ .val = 'b',	.name = "block",	.has_arg = no_argument },
+	/* find { .val = 'B',	.name = "btime",	.has_arg = required_argument }*/
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument},
@@ -3899,7 +3910,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
 	while ((c = getopt_long(argc, argv,
-				"bc:C:dDE:f:hH:i:I:m:N::no:p:L:s:S:vx:W:y:z:",
+				"0bc:C:dDE:f:hH:i:I:m:N::no:p:L:s:S:vx:W:y:z:",
 				long_opts, NULL)) >= 0) {
 		size_units = 1;
 		switch (c) {
@@ -4057,6 +4068,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 			clear_hash_fixed = true;
+			break;
+		case LFS_FILES_FROM:
+			files_from = optarg;
+			break;
+		case '0':
+			null_mode = true;
 			break;
 		case 'b':
 			if (!migrate_mode) {
@@ -4471,7 +4488,41 @@ create_mirror:
 
 	fname = argv[optind];
 
-	if (optind == argc) {
+	/* for 'lfs migrate' and 'lfs mirror extend' command,
+	 * at least one of FILE/--null/--files-from=LIST_FILE must be specified.
+	 * If both --null and --files-from=LIST_FILE are specified, read
+	 * filenames from LIST_FILE and use '\0' as delimiter.
+	 */
+	if (opc == SO_MIGRATE || opc == SO_MIRROR_EXTEND) {
+		int num = 0;
+
+		if (optind < argc)
+			num++;
+		if (null_mode) {
+			if (files_from_fp == NULL)
+				files_from_fp = stdin;
+			delim = 0;
+			num++;
+		}
+		if (files_from != NULL) {
+			if (strcmp("-", files_from) == 0)
+				files_from_fp = stdin;
+			else
+				files_from_fp = fopen(files_from, "r");
+			if (files_from_fp == NULL) {
+				result = -errno;
+				fprintf(stderr, "%s %s: failed to open filelist file '%s'\n",
+					progname, argv[0], files_from);
+				goto error;
+			}
+			num++;
+		}
+		if (num < 1) {
+			fprintf(stderr, "%s %s: at least one of FILE/--null/--files-from=LIST_FILE must be specified\n",
+				progname, argv[0]);
+			goto usage_error;
+		}
+	} else if (optind == argc) {
 		fprintf(stderr, "%s %s: FILE must be specified\n",
 			progname, argv[0]);
 		goto usage_error;
@@ -4774,8 +4825,34 @@ create_mirror:
 		}
 	}
 
-	for (fname = argv[optind]; (optind < argc) && (fname != NULL);
-	     fname = argv[++optind]) {
+	while (true) {
+		if (files_from_fp == NULL) {
+			/* file names from arguments */
+			fname = argv[optind++];
+			if (optind > argc || fname == NULL)
+				break;
+		} else {
+			/* file names from file/stdin */
+			ssize_t len;
+
+			errno = 0;
+			len = getdelim(&buf, &bufsize, delim, files_from_fp);
+			if (len == -1) {
+				if (errno != 0) { /* error */
+					result = -errno;
+					fprintf(stderr, "%s %s: failed to read from list file\n",
+						progname, argv[0]);
+					goto error;
+				} else { /* EOF */
+					break;
+				}
+			}
+			/* remove possible trailing '\n' */
+			if (buf[len - 1] == '\n')
+				buf[len - 1] = '\0';
+			fname = buf;
+		}
+
 		if (from_copy) {
 			layout = layout_get_by_name_or_fid(template ?: fname,
 							   fname, 0, O_RDONLY);
@@ -4920,6 +4997,9 @@ usage_error:
 error:
 	llapi_layout_free(layout);
 	lfs_mirror_list_free(mirror_list);
+	if (files_from_fp != NULL && files_from_fp != stdin)
+		fclose(files_from_fp);
+	free(buf);
 	return result;
 }
 

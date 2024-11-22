@@ -8333,6 +8333,36 @@ test_56x() {
 }
 run_test 56x "lfs migration support"
 
+test_56xB() {
+	local td=$DIR/$tdir
+	local tf1=$td/${tfile}_1
+	local tf2=$td/${tfile}_2
+	local tf3=$td/${tfile}_3
+	local flist=/tmp/flist.$$
+
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	test_mkdir $td
+	dd if=/dev/urandom of=$tf1 bs=1K count=1 || error "failed to create $tf1"
+	dd if=/dev/urandom of=$tf2 bs=1K count=1 || error "failed to create $tf2"
+	dd if=/dev/urandom of=$tf3 bs=1K count=1 || error "failed to create $tf3"
+
+	stack_trap "rm -f $flist"
+
+	$LFS find $td -type f > $flist || error "failed to generate list file"
+	$LFS migrate -o 0 --files-from=$flist ||
+		error "failed to run lfs migrate with --files-from"
+
+	$LFS find $td -type f -print0 | $LFS migrate -o 1 --null ||
+		error "failed to run lfs migrate from pipe"
+
+	$LFS find $td -type f -print0 > $flist ||
+		error "failed to generate 0-ending list file"
+	$LFS migrate -o 0 -0 --files-from=$flist ||
+		error "failed to run lfs migrate with -0 --files-from"
+}
+run_test 56xB "lfs migrate with -0, --null, --files-from arguments"
+
 test_56xa() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 	check_swap_layouts_support
