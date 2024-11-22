@@ -554,7 +554,8 @@ reprocess:
 			continue;
 		}
 		if (LAST(new) >= LAST(lock)) {
-			ldlm_flock_range_update(lock, START(lock), LAST(new) - 1);
+			ldlm_flock_range_update(lock, START(lock),
+						START(new) - 1);
 			continue;
 		}
 

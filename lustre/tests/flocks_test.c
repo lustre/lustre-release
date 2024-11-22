@@ -845,8 +845,8 @@ static int t6(int argc, char *argv[])
 		}
 		rc = t_fcntl(get_cfd(), F_OFD_SETLKW, &lock);
 		if (rc != 0) {
-			fprintf(stderr, "%d: cannot set lock: %s\n",
-				getpid(), strerror(errno));
+			fprintf(stderr, "%s: cannot set lock(%d): %s\n",
+				argv[0], errno, strerror(errno));
 			rc = EXIT_FAILURE;
 			break;
 		}

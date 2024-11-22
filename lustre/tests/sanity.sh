@@ -13713,6 +13713,50 @@ test_105g() {
 }
 run_test 105g "ldlm_lock_debug stack test"
 
+test_105h() {
+	local info
+	touch $DIR/$tfile
+
+	stack_trap "rm $DIR/$tfile" EXIT
+	# enqueue 2 non-overlap locks
+	info=$(echo -e "W20,40\nR100,200\nT0" | flocks_test 6 $DIR/$tfile)
+	[ x$info == 'xW20,40;R100,200.' ] || error "flock error1-$info"
+	# enqueue overlap locks
+	info=$(echo -e "W20,400\nR100,2000\nR10,1000\nW500,1000\nT0" | flocks_test 6 $DIR/$tfile)
+	[ x$info == 'xR10,490;W500,1000;R1500,600.' ] || error "flock error2-$info"
+	# split a lock
+	info=$(echo -e "W2000,1000\nR2200, 200\nT0" |flocks_test 6 $DIR/$tfile)
+	[ x$info == 'xW2000,200;R2200,200;W2400,600.' ] || error "flock error3-$info"
+	# merge 2 locks
+	info=$(echo -e "R200,1000\nR9000,200\nW100,10000\nT0" | flocks_test 6 $DIR/$tfile)
+	[ x$info == 'xW100,10000.' ] || error "flock error4-$info"
+	# adjoining locks
+	info=$(echo -e "R200,100\nR300, 200\nR500,100\nT0" | flocks_test 6 $DIR/$tfile)
+	[ x$info == 'xR200,400.' ] || error "flock error5-$info"
+	# adjoining locks with diff mode
+	info=$(echo -e "R200,100\nW300, 200\nR500,100\nT0" | flocks_test 6 $DIR/$tfile)
+	[ x$info == 'xR200,100;W300,200;R500,100.' ] || error "flock error6-$info"
+	# split & merge
+	info=$(echo -e "R200,1000\nW300, 200\nR100,200\nR300,200\nT0" | flocks_test 6 $DIR/$tfile)
+	[ x$info == 'xR100,1100.' ] || error "flock error7-$info"
+}
+run_test 105h "Flock functional verify"
+
+test_105i() {
+	local tmpfile=$TMP/tmpf.$$
+	touch $DIR/$tfile
+
+	stack_trap "rm $tmpfile $DIR/$tfile" EXIT
+	# enqueue 2 non-overlap locks
+	>$tmpfile
+	echo -e "R20,200\nP5\nW10,1000" | flocks_test 6 $DIR/$tfile 2>>$tmpfile &
+	echo -e "R20,200\nP5\nW10,1000" | flocks_test 6 $DIR/$tfile 2>>$tmpfile &
+	wait
+	# Check for EDEADLK
+	grep 'cannot set lock(35)' $tmpfile
+}
+run_test 105i "Flock deadlock verify"
+
 test_106() { #bug 10921
 	test_mkdir $DIR/$tdir
 	$DIR/$tdir && error "exec $DIR/$tdir succeeded"
