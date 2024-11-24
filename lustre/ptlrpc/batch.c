@@ -459,6 +459,9 @@ static int batch_send_update_req(const struct lu_env *env,
 	if (!(flags & BATCH_FL_RDONLY))
 		ptlrpc_get_mod_rpc_slot(req);
 
+	lprocfs_oh_tally_log2(&obd->u.cli.cl_batch_rpc_hist,
+			      head->buh_update_count);
+
 	if (flags & BATCH_FL_SYNC) {
 		rc = ptlrpc_queue_wait(req);
 	} else {
@@ -474,8 +477,6 @@ static int batch_send_update_req(const struct lu_env *env,
 	if (req != NULL)
 		ptlrpc_req_put(req);
 
-	lprocfs_oh_tally_log2(&obd->u.cli.cl_batch_rpc_hist,
-			      head->buh_update_count);
 	RETURN(rc);
 }
 
