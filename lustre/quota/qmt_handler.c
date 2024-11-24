@@ -541,6 +541,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 	struct obd_dqblk *dqb = &oqctl->qc_dqblk;
 	struct qmt_pool_info *pool;
 	char *poolname;
+	int qtype = oqctl->qc_type;
 	int rc = 0;
 	bool is_default = false;
 	bool is_first_iter = false;
@@ -614,9 +615,10 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 			if (IS_ERR(pool))
 				RETURN(PTR_ERR(pool));
 
-			glb_obj = pool->qpi_glb_obj[oqctl->qc_type];
+			glb_obj = pool->qpi_glb_obj[qtype];
 			rc = lquota_obj_iter(env, lu2dt_dev(ld), glb_obj,
-					 oqctl, buffer, size / 2, true, true);
+					     pool->qpi_grace_lqe[qtype], oqctl,
+					     buffer, size / 2, true, true);
 
 			qpi_putref(env, pool);
 
@@ -634,10 +636,11 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 			if (IS_ERR(pool))
 				RETURN(PTR_ERR(pool));
 
-			glb_obj = pool->qpi_glb_obj[oqctl->qc_type];
+			glb_obj = pool->qpi_glb_obj[qtype];
 			rc = lquota_obj_iter(env, lu2dt_dev(ld), glb_obj,
-					 oqctl, buffer + size / 2, size / 2,
-					 true, false);
+					     pool->qpi_grace_lqe[qtype], oqctl,
+					     buffer + size / 2, size / 2,
+					     true, false);
 			qpi_putref(env, pool);
 
 			if (rc < 0 && rc != -ENOENT)

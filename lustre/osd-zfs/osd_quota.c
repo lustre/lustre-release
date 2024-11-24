@@ -289,6 +289,7 @@ static int osd_zap_cursor_retrieve_value(const struct lu_env *env,
 	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
 	zap_cursor_t *zc = it->oiq_zc;
 	struct osd_device *osd = osd_obj2dev(it->oiq_obj);
+	uint64_t acct_obj;
 	int rc, actual_size;
 
 	rc = -zap_cursor_retrieve(zc, za);
@@ -308,9 +309,15 @@ static int osd_zap_cursor_retrieve_value(const struct lu_env *env,
 	}
 
 	/* use correct special ID to request bytes used */
-	rc = osd_zap_lookup(osd, fid_oid(fid) == ACCT_GROUP_OID ?
-			    DMU_GROUPUSED_OBJECT : DMU_USERUSED_OBJECT, NULL,
-			    za->za_name, za->za_integer_length, buf_size, buf);
+	if (fid_oid(fid) == ACCT_USER_OID)
+		acct_obj = DMU_USERUSED_OBJECT;
+	else if (fid_oid(fid) == ACCT_GROUP_OID)
+		acct_obj = DMU_GROUPUSED_OBJECT;
+	else
+		acct_obj = DMU_PROJECTUSED_OBJECT;
+
+	rc = osd_zap_lookup(osd, acct_obj, NULL, za->za_name,
+			    za->za_integer_length, buf_size, buf);
 	if (likely(rc == 0))
 		*bytes_read = actual_size;
 

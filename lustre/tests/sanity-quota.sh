@@ -6428,6 +6428,129 @@ test_86()
 }
 run_test 86 "Pre-acquired quota should be released if quota is over limit"
 
+test_87()
+{
+	(( $MDS1_VERSION >= $(version_code 2.16.50) )) ||
+		skip "need MDS >= 2.16.50 to add default value in lfs quota -a"
+
+	local blimit=102400
+	local ilimit=10240
+	local d_blimit=409600
+	local d_ilimit=40960
+	local u_blimits
+	local u_ilimits
+	local g_blimits
+	local g_ilimits
+	local p_blimits
+	local p_ilimits
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	echo "test user quota for 'lfs quota -a' to print default quota"
+	$LFS setquota -U -b $d_blimit -B $d_blimit $MOUNT ||
+		error "failed to set USR default block quota setting"
+	$LFS setquota -U -i $d_ilimit -I $d_ilimit $MOUNT ||
+		error "failed to set USR default file quota setting"
+	$LFS setquota -G -b $d_blimit -B $d_blimit $MOUNT ||
+		error "failed to set GRP default block quota setting"
+	$LFS setquota -G -i $d_ilimit -I $d_ilimit $MOUNT ||
+		error "failed to set GRP default file quota setting"
+
+	is_project_quota_supported && {
+		$LFS setquota -P -b $d_blimit -B $d_blimit $MOUNT ||
+			error "failed to set PRJ default block quota setting"
+		$LFS setquota -P -i $d_ilimit -I $d_ilimit $MOUNT ||
+			error "failed to set PRJ default file quota setting"
+	}
+
+	#define OBD_FAIL_QUOTA_NOSYNC		0xA09
+	do_facet mds1 $LCTL set_param fail_loc=0xa09
+
+	for ((i = 100; i < 150; i++)); do
+		$LFS setquota -u $i -b $blimit -B $blimit $MOUNT ||
+			error "failed to set USR $i block quota setting"
+		$LFS setquota -u $i -i $ilimit -I $ilimit $MOUNT ||
+			error "failed to set USR $i file quota setting"
+
+		$LFS setquota -g $i -b $blimit -B $blimit $MOUNT ||
+			error "failed to set GRP $i block quota setting"
+		$LFS setquota -g $i -i $ilimit -I $ilimit $MOUNT ||
+			error "failed to set GRP $i file quota setting"
+
+		is_project_quota_supported && {
+			$LFS setquota -p $i -b $blimit -B $blimit $MOUNT ||
+				error "failed to set PRJ $i block quota setting"
+			$LFS setquota -p $i -i $ilimit -I $ilimit $MOUNT ||
+				error "failed to set PRJ $i file quota setting"
+		}
+	done
+
+	for ((i = 150; i < 200; i++)); do
+		$LFS setquota -u $i -D $MOUNT ||
+			error "failed to set USR $i to use default quota"
+		$LFS setquota -g $i -D $MOUNT ||
+			error "failed to set GRP $i to use default quota"
+		is_project_quota_supported && {
+			$LFS setquota -p $i -D $MOUNT ||
+			error "failed to set PRJ $i to use default quota"
+		}
+	done
+
+	do_facet mds1 $LCTL set_param fail_loc=0
+	sync; sync_all_data || true
+	sleep 5
+
+	eval $($LFS quota -q -a -s 100 -e 199 -u $MOUNT |
+	    awk '{printf("u_blimits[%d]=%d;u_ilimits[%d]=%d;", \
+		NR, $5, NR, $9)}')
+	eval $($LFS quota -q -a -s 100 -e 199 -g $MOUNT |
+	    awk '{printf("g_blimits[%d]=%d;g_ilimits[%d]=%d;", \
+		 NR, $5, NR, $9)}')
+	is_project_quota_supported &&
+		eval $($LFS quota -q -a -s 100 -e 199 -p $MOUNT |
+		    awk '{printf("p_blimits[%d]=%d;p_ilimits[%d]=%d;", \
+		 		NR, $5, NR, $9)}')
+
+	for i in $(seq 50); do
+		[ ${u_ilimits[$i]} -eq $ilimit ] ||
+		error "file limit for USR ID $((100 + i - 1)) is wrong"
+		[ ${u_blimits[$i]} -eq $blimit ] ||
+		error "block limit for USR ID $((100 + i - 1)) is wrong"
+
+		[ ${g_ilimits[$i]} -eq $ilimit ] ||
+		error "file limit for GRP ID $((100 + i - 1)) is wrong"
+		[ ${g_blimits[$i]} -eq $blimit ] ||
+		error "block limit for GRP ID $((100 + i - 1)) is wrong"
+
+		is_project_quota_supported && {
+			[ ${p_ilimits[$i]} -eq $ilimit ] ||
+			error "file limit for PRJ ID $((100 + i - 1)) is wrong"
+			[ ${p_blimits[$i]} -eq $blimit ] ||
+			error "block limit for PRJ ID $((100 + i - 1)) is wrong"
+		}
+	done
+
+	for i in $(seq 50); do
+		[ ${u_ilimits[$((i + 50))]} -eq $d_ilimit ] ||
+		error "file limit for USR ID $((150 + i - 1)) is wrong"
+		[ ${u_blimits[$((i + 50))]} -eq $d_blimit ] ||
+		error "block limit for USR ID $((150 + i - 1)) is wrong"
+
+		[ ${g_ilimits[$((i + 50))]} -eq $d_ilimit ] ||
+		error "file limit for GRP ID $((150 + i - 1)) is wrong"
+		[ ${g_blimits[$((i + 50))]} -eq $d_blimit ] ||
+		error "block limit for GRP ID $((150 + i - 1)) is wrong"
+
+		is_project_quota_supported && {
+			[ ${p_ilimits[$((i + 50))]} -eq $d_ilimit ] ||
+			error "file limit for PRJ ID $((150 + i - 1)) is wrong"
+			[ ${p_blimits[$((i + 50))]} -eq $d_blimit ] ||
+			error "block limit for PRJ ID $((150 + i - 1)) is wrong"
+		}
+	done
+}
+run_test 87 "lfs quota -a should print default quota setting"
+
 check_quota_no_mount()
 {
 	local opts="$1"

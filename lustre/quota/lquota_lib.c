@@ -162,8 +162,9 @@ static struct dt_object *quota_obj_lookup(const struct lu_env *env,
  * \param is_md	  - true to iterate LQUOTA_MD quota settings
  */
 int lquota_obj_iter(const struct lu_env *env, struct dt_device *dev,
-		    struct dt_object *obj, struct obd_quotactl *oqctl,
-		    char *buf, int size, bool is_glb, bool is_md)
+		    struct dt_object *obj, struct lquota_entry *lqe_def,
+		    struct obd_quotactl *oqctl, char *buf, int size,
+		    bool is_glb, bool is_md)
 {
 	struct lquota_thread_info *qti = lquota_info(env);
 	const struct dt_it_ops *iops;
@@ -262,6 +263,20 @@ get_setting:
 		memcpy(buf + cur, key, sizeof(__u64));
 		cur += sizeof(__u64);
 
+		if (is_glb && lqe_def != NULL) {
+			struct lquota_glb_rec *glb_rec;
+
+			glb_rec = (struct lquota_glb_rec *)rec;
+
+			if (glb_rec->qbr_hardlimit == 0 &&
+			    glb_rec->qbr_softlimit == 0 &&
+			    (LQUOTA_FLAG(glb_rec->qbr_time) &
+						LQUOTA_FLAG_DEFAULT)) {
+				glb_rec->qbr_softlimit = lqe_def->lqe_softlimit;
+				glb_rec->qbr_hardlimit = lqe_def->lqe_hardlimit;
+			}
+		}
+
 		memcpy(buf + cur, rec, rec_size);
 		cur += rec_size;
 
@@ -350,11 +365,11 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 
 	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
 		if (lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev))
-			rc = lquota_obj_iter(env, dev, obj, oqctl, buffer, size,
-					 false, true);
+			rc = lquota_obj_iter(env, dev, obj, NULL, oqctl, buffer,
+					     size, false, true);
 		else
-			rc = lquota_obj_iter(env, dev, obj, oqctl, buffer, size,
-					 false, false);
+			rc = lquota_obj_iter(env, dev, obj, NULL, oqctl, buffer,
+					     size, false, false);
 
 		GOTO(out, rc);
 	}
