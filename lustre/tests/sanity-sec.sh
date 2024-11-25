@@ -5339,29 +5339,74 @@ test_54() {
 }
 run_test 54 "Encryption policies with fscrypt"
 
-cleanup_55() {
-	# unmount client
-	if is_mounted $MOUNT; then
-		umount_client $MOUNT || error "umount $MOUNT failed"
+setup_local_client_nodemap() {
+	local nm_name=${1:-"c0"}
+	local nm_admin_val=${2:-0}
+	local nm_trusted_val=${3:-0}
+	local rc
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+		export FILESET="/"
 	fi
 
-	do_facet mgs $LCTL nodemap_del c0
+	do_facet mgs $LCTL nodemap_del $nm_name || true
+	wait_nm_sync $nm_name id ''
+
 	do_facet mgs $LCTL nodemap_modify --name default \
-		 --property admin --value 0
+		--property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name default \
-		 --property trusted --value 0
-	wait_nm_sync default admin_nodemap
+		--property trusted --value 1
+	wait_nm_sync default trusted_nodemap
+
+	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	client_nid=$(h2nettype $client_ip)
+	do_facet mgs $LCTL nodemap_add $nm_name
+	do_facet mgs $LCTL nodemap_add_range \
+		--name $nm_name --range $client_nid ||
+		error "Add range $client_nid to $nm_name failed rc = $?"
+	do_facet mgs $LCTL nodemap_modify --name $nm_name \
+		--property admin --value $nm_admin_val
+	do_facet mgs $LCTL nodemap_modify --name $nm_name \
+		--property trusted --value $nm_trusted_val
+
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+}
+
+cleanup_local_client_nodemap() {
+	local nm_name=${1:-"c0"}
+
+	do_facet mgs $LCTL nodemap_del $nm_name
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 0
 	wait_nm_sync default trusted_nodemap
 
 	do_facet mgs $LCTL nodemap_activate 0
 	wait_nm_sync active 0
 
 	if $SHARED_KEY; then
+		unset FILESET
 		export SK_UNIQUE_NM=false
 	fi
+	if ! is_mounted $MOUNT; then
+		mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount failed"
+		wait_ssk
+	fi
+}
 
-	# remount client
-	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed"
+cleanup_55() {
+	# unmount client
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	# reset and deactivate nodemaps, remount client
+	cleanup_local_client_nodemap
+
+	# remount client on $MOUNT_2
 	if [ "$MOUNT_2" ]; then
 		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
 	fi
@@ -5394,37 +5439,7 @@ test_55() {
 
 	stack_trap cleanup_55 EXIT
 
-	do_facet mgs $LCTL nodemap_activate 1
-	wait_nm_sync active
-
-	do_facet mgs $LCTL nodemap_del c0 || true
-	wait_nm_sync c0 id ''
-
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value 1
-	wait_nm_sync default admin_nodemap
-	wait_nm_sync default trusted_nodemap
-
-	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
-	client_nid=$(h2nettype $client_ip)
-	do_facet mgs $LCTL nodemap_add c0
-	do_facet mgs $LCTL nodemap_add_range \
-		 --name c0 --range $client_nid ||
-		error "Add range $client_nid to c0 failed rc = $?"
-	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property admin --value 0
-	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property trusted --value 1
-	wait_nm_sync c0 admin_nodemap
-	wait_nm_sync c0 trusted_nodemap
-
-	if $SHARED_KEY; then
-		export SK_UNIQUE_NM=true
-		# set some generic fileset to trigger SSK code
-		export FILESET=/
-	fi
+	setup_local_client_nodemap "c0" 0 1
 
 	# remount client to take nodemap into account
 	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
@@ -5834,62 +5849,6 @@ test_60() {
 }
 run_test 60 "Subdirmount of encrypted dir"
 
-setup_61() {
-	if $SHARED_KEY; then
-		export SK_UNIQUE_NM=true
-		export FILESET="/"
-	fi
-
-	do_facet mgs $LCTL nodemap_activate 1
-	wait_nm_sync active
-
-	do_facet mgs $LCTL nodemap_del c0 || true
-	wait_nm_sync c0 id ''
-
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value 1
-	wait_nm_sync default admin_nodemap
-	wait_nm_sync default trusted_nodemap
-
-	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
-	client_nid=$(h2nettype $client_ip)
-	do_facet mgs $LCTL nodemap_add c0
-	do_facet mgs $LCTL nodemap_add_range \
-		 --name c0 --range $client_nid || {
-		do_facet mgs $LCTL nodemap_del c0
-		return 1
-	}
-	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property trusted --value 1
-	wait_nm_sync c0 admin_nodemap
-	wait_nm_sync c0 trusted_nodemap
-}
-
-cleanup_61() {
-	do_facet mgs $LCTL nodemap_del c0
-	do_facet mgs $LCTL nodemap_modify --name default \
-		 --property admin --value 0
-	do_facet mgs $LCTL nodemap_modify --name default \
-		 --property trusted --value 0
-	wait_nm_sync default admin_nodemap
-	wait_nm_sync default trusted_nodemap
-
-	do_facet mgs $LCTL nodemap_activate 0
-	wait_nm_sync active 0
-
-	if $SHARED_KEY; then
-		unset FILESET
-		export SK_UNIQUE_NM=false
-	fi
-
-	mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount failed"
-	wait_ssk
-}
-
 test_61() {
 	local testfile=$DIR/$tdir/$tfile
 	local readonly
@@ -5899,7 +5858,7 @@ test_61() {
 	[ -n "$readonly" ] ||
 		skip "Server does not have readonly_mount nodemap flag"
 
-	stack_trap cleanup_61 EXIT
+	stack_trap cleanup_local_client_nodemap EXIT
 	for idx in $(seq 1 $MDSCOUNT); do
 		wait_recovery_complete mds$idx
 	done
@@ -5907,7 +5866,7 @@ test_61() {
 
 	# Activate nodemap, and mount rw.
 	# Should succeed as rw mount is not forbidden by default.
-	setup_61
+	setup_local_client_nodemap "c0" 1 1
 	readonly=$(do_facet mgs \
 			lctl get_param -n nodemap.default.readonly_mount)
 	[ $readonly -eq 0 ] ||
@@ -6150,47 +6109,6 @@ test_63() {
 }
 run_test 63 "fid2path with encrypted files"
 
-setup_64() {
-	do_facet mgs $LCTL nodemap_activate 1
-	wait_nm_sync active
-
-	do_facet mgs $LCTL nodemap_del c0 || true
-	wait_nm_sync c0 id ''
-
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value 1
-	wait_nm_sync default admin_nodemap
-	wait_nm_sync default trusted_nodemap
-
-	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
-	client_nid=$(h2nettype $client_ip)
-	do_facet mgs $LCTL nodemap_add c0
-	do_facet mgs $LCTL nodemap_add_range \
-		 --name c0 --range $client_nid ||
-		error "Add range $client_nid to c0 failed rc = $?"
-	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name c0 \
-		 --property trusted --value 1
-	wait_nm_sync c0 admin_nodemap
-	wait_nm_sync c0 trusted_nodemap
-}
-
-cleanup_64() {
-	do_facet mgs $LCTL nodemap_del c0
-	do_facet mgs $LCTL nodemap_modify --name default \
-		 --property admin --value 0
-	do_facet mgs $LCTL nodemap_modify --name default \
-		 --property trusted --value 0
-	wait_nm_sync default admin_nodemap
-	wait_nm_sync default trusted_nodemap
-
-	do_facet mgs $LCTL nodemap_activate 0
-	wait_nm_sync active 0
-}
-
 test_64a() {
 	local testfile=$DIR/$tdir/$tfile
 	local srv_uc=""
@@ -6202,9 +6120,9 @@ test_64a() {
 	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
 		srv_uc="server_upcall"
 
-	stack_trap cleanup_64 EXIT
+	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	setup_64
+	setup_local_client_nodemap "c0" 1 1
 
 	# check default value for rbac is all
 	rbac=$(do_facet mds $LCTL get_param -n nodemap.c0.rbac)
@@ -6270,9 +6188,9 @@ test_64b() {
 	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
 		srv_uc="server_upcall"
 
-	stack_trap cleanup_64 EXIT
+	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	setup_64
+	setup_local_client_nodemap "c0" 1 1
 
         dir_restripe=$(do_node $mds1_HOST \
 		"$LCTL get_param -n mdt.*MDT0000.enable_dir_restripe")
@@ -6352,9 +6270,9 @@ test_64c() {
 	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
 		srv_uc="server_upcall"
 
-	stack_trap cleanup_64 EXIT
+	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	setup_64
+	setup_local_client_nodemap "c0" 1 1
 
 	rbac="quota_ops"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
@@ -6446,9 +6364,9 @@ test_64d() {
 	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
 		srv_uc="server_upcall"
 
-	stack_trap cleanup_64 EXIT
+	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	setup_64
+	setup_local_client_nodemap "c0" 1 1
 
 	rbac="byfid_ops"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
@@ -6499,9 +6417,9 @@ test_64e() {
 	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
 		srv_uc="server_upcall"
 
-	stack_trap cleanup_64 EXIT
+	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	setup_64
+	setup_local_client_nodemap "c0" 1 1
 
 	# activate changelogs
 	changelog_register || error "changelog_register failed"
@@ -6576,9 +6494,9 @@ test_64f() {
 	[ -n "$cli_enc" ] || skip "Need enc support, skip fscrypt_admin role"
         which fscrypt || skip "Need fscrypt, skip fscrypt_admin role"
 
-	stack_trap cleanup_64 EXIT
+	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	setup_64
+	setup_local_client_nodemap "c0" 1 1
 
 	yes | fscrypt setup --force --verbose ||
 		echo "fscrypt global setup already done"
@@ -6676,8 +6594,8 @@ test_64g() {
 	setfacl -m g:grptest64g2:rwx $DIR/$tdir
 	ls -lR $DIR/$tdir
 
-	setup_64
-	stack_trap cleanup_64 EXIT
+	setup_local_client_nodemap "c0" 1 1
+	stack_trap cleanup_local_client_nodemap EXIT
 
 	# remove server_upcall from rbac roles,
 	# to make this client use INTERNAL upcall
@@ -7349,6 +7267,70 @@ test_73() {
 		error "name $diglong2 in RENME is not $diglong1"
 }
 run_test 73 "encrypted names in changelogs"
+
+test_74() {
+	local testfile="${DIR}/${tdir}/$tfile"
+	local deny_mount
+
+	# check that deny_mount flag exists
+	deny_mount=$(do_facet mgs \
+			$LCTL get_param -n nodemap.default.deny_mount)
+	[[ -n "$deny_mount" ]] ||
+		skip "Server does not have the deny_mount nodemap flag"
+
+	stack_trap cleanup_local_client_nodemap EXIT
+
+	umount_client $MOUNT || error "umount $MOUNT failed (1)"
+
+	# setup privileged nodemap for c0
+	setup_local_client_nodemap "c0" 1 1
+
+	# check default deny_mount flags
+	(( $deny_mount == 0 )) ||
+		error "wrong default for deny_mount flag on default nodemap"
+	deny_mount=$(do_facet mgs \
+			$LCTL get_param -n nodemap.c0.deny_mount)
+	(( $deny_mount == 0 )) ||
+		error "wrong default value for deny_mount on nodemap c0"
+
+	# mount client with active nodemap
+	zconf_mount_clients $HOSTNAME $MOUNT ${MOUNT_OPTS} ||
+		error "re-mount failed (1)"
+	wait_ssk
+
+	# simple access test
+	$LFS mkdir -c 1 "${DIR}/$tdir" || error "mkdir ${DIR}/$tdir failed"
+	$LFS setstripe -c 1 $testfile || error "setstripe $testfile failed"
+	echo -n "a" > $testfile || error "(1) write $testfile failed"
+
+	# set deny_mount flag. Access should still work for existing clients
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		--property deny_mount --value 1
+	wait_nm_sync c0 deny_mount
+	echo -n "b" >> $testfile || error "(2) write $testfile failed"
+	cat $testfile > /dev/null || error "read $testfile failed"
+	# unmount client
+	umount_client $MOUNT || error "umount $MOUNT failed (2)"
+
+	# mount client should fail (nodemap is deny_mount)
+	zconf_mount_clients $HOSTNAME $MOUNT ${MOUNT_OPTS} &&
+		error "mount should have failed. deny_mount flag is not honored"
+
+	# set active flag for c0. Access should work again
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		--property deny_mount --value 0
+	wait_nm_sync c0 deny_mount
+
+	zconf_mount_clients $HOSTNAME $MOUNT ${MOUNT_OPTS} ||
+		error "re-mount failed (2)"
+	wait_ssk
+
+	# check access
+	echo -n "c" >> $testfile || error "(3) write $testfile failed"
+	[[ $(cat $testfile) == "abc" ]] ||
+		error "read access test for $testfile failed"
+}
+run_test 74 "Set nodemap deny_mount flag"
 
 log "cleanup: ======================================================"
 

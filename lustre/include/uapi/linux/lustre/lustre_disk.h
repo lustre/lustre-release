@@ -258,6 +258,7 @@ enum nm_flag_bits {
 
 enum nm_flag2_bits {
 	NM_FL2_READONLY_MOUNT = 0x1,
+	NM_FL2_DENY_MOUNT = 0x2,
 };
 
 /* Nodemap records, uses 32 byte record length.

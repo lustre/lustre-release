@@ -87,6 +87,11 @@ Set to 1 to prevent clients from using encryption.
 Defaults to 0, which lets clients mount in read-write mode. If set to 1,
 clients are forced to a read-only mount if not specified explicitly.
 .TP
+.B deny_mount
+Defaults to 0, accepting client mounts from nodes assigned to the nodemap. If
+set to 1, nodes assigned to the nodemap can no longer mount new Lustre clients.
+Existing clients remain operational until a remount is attempted.
+.TP
 .B rbac
 Defaults to all, which means all roles are allowed. Other possible values
 (multiple can be specified, comma separated) are:

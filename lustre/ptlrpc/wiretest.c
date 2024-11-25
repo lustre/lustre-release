@@ -6487,6 +6487,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)NM_FL_MAP_PROJID);
 	LASSERTF(NM_FL2_READONLY_MOUNT == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)NM_FL2_READONLY_MOUNT);
+	LASSERTF(NM_FL2_DENY_MOUNT == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned int)NM_FL2_DENY_MOUNT);
 	LASSERTF(NODEMAP_UID == 0, "found %lld\n",
 		 (long long)NODEMAP_UID);
 	LASSERTF(NODEMAP_GID == 1, "found %lld\n",
@@ -7103,6 +7105,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LCFG_NODEMAP_READONLY_MOUNT);
 	LASSERTF(LCFG_NODEMAP_RBAC == 0x000ce05fUL, "found 0x%.8xUL\n",
 		(unsigned)LCFG_NODEMAP_RBAC);
+	LASSERTF(LCFG_NODEMAP_DENY_MOUNT == 0x000ce060UL, "found 0x%.8xUL\n",
+		(unsigned int)LCFG_NODEMAP_DENY_MOUNT);
 #endif /* HAVE_SERVER_SUPPORT */
 	LASSERTF(PORTALS_CFG_TYPE == 1, "found %lld\n",
 		 (long long)PORTALS_CFG_TYPE);

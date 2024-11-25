@@ -965,6 +965,7 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_forbid_encryption = 0;
 		dst->nmf_readonly_mount = 0;
 		dst->nmf_rbac = NODEMAP_RBAC_ALL;
+		dst->nmf_deny_mount = 0;
 
 		dst->nm_squash_uid = NODEMAP_NOBODY_UID;
 		dst->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -986,6 +987,7 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_forbid_encryption = src->nmf_forbid_encryption;
 		dst->nmf_readonly_mount = src->nmf_readonly_mount;
 		dst->nmf_rbac = src->nmf_rbac;
+		dst->nmf_deny_mount = src->nmf_deny_mount;
 		dst->nm_squash_uid = src->nm_squash_uid;
 		dst->nm_squash_gid = src->nm_squash_gid;
 		dst->nm_squash_projid = src->nm_squash_projid;
@@ -1830,6 +1832,34 @@ out:
 EXPORT_SYMBOL(nodemap_set_readonly_mount);
 
 /**
+ * Set the nmf_deny_mount flag to true or false.
+ * \param	name			nodemap name
+ * \param	deny_mount		if true, rejects mount attempt
+ * \retval	0 on success
+ *
+ */
+int nodemap_set_deny_mount(const char *name, bool deny_mount)
+{
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	nodemap->nmf_deny_mount = deny_mount;
+	rc = nodemap_idx_nodemap_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+	nodemap_putref(nodemap);
+
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_deny_mount);
+
+/**
  * Add a nodemap
  *
  * \param	name		name of nodemap
@@ -2505,6 +2535,11 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 			rc = nodemap_set_readonly_mount(nodemap_name,
 							bool_switch);
 		break;
+	case LCFG_NODEMAP_DENY_MOUNT:
+		rc = kstrtobool(param, &bool_switch);
+		if (rc == 0)
+			rc = nodemap_set_deny_mount(nodemap_name, bool_switch);
+		break;
 	case LCFG_NODEMAP_MAP_MODE:
 	{
 		char *p;
@@ -2805,6 +2840,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 	case LCFG_NODEMAP_AUDIT_MODE:
 	case LCFG_NODEMAP_FORBID_ENCRYPT:
 	case LCFG_NODEMAP_READONLY_MOUNT:
+	case LCFG_NODEMAP_DENY_MOUNT:
 	case LCFG_NODEMAP_RBAC:
 		if (lcfg->lcfg_bufcount != 4)
 			GOTO(out_lcfg, rc = -EINVAL);

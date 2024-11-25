@@ -376,13 +376,14 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 
 static int mdt_get_root(struct tgt_session_info *tsi)
 {
-	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
-	struct mdt_device	*mdt = info->mti_mdt;
-	struct mdt_body		*repbody;
-	char			*fileset = NULL, *buffer = NULL;
-	int			 rc;
-	struct obd_export	*exp = info->mti_exp;
-	char			*nodemap_fileset;
+	struct mdt_thread_info *info = tsi2mdt_info(tsi);
+	struct obd_export *exp = info->mti_exp;
+	struct mdt_body	*repbody;
+	struct lu_nodemap *nodemap = NULL;
+	struct mdt_device *mdt = info->mti_mdt;
+	char *fileset = NULL, *buffer = NULL;
+	char *nodemap_fileset = NULL;
+	int rc;
 
 	ENTRY;
 
@@ -400,8 +401,15 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 			GOTO(out, rc = err_serious(-EFAULT));
 	}
 
-	nodemap_fileset = nodemap_get_fileset(exp->exp_target_data.ted_nodemap);
-	if (nodemap_fileset && nodemap_fileset[0]) {
+	/* refuse access if this nodemap is set to deny mounts */
+	nodemap = nodemap_get_from_exp(exp);
+	if (!IS_ERR_OR_NULL(nodemap)) {
+		if (nodemap->nmf_deny_mount)
+			GOTO(out, rc = err_serious(-EPERM));
+		nodemap_fileset = nodemap_get_fileset(nodemap);
+	}
+
+	if (nodemap_fileset != NULL && nodemap_fileset[0]) {
 		CDEBUG(D_INFO, "nodemap fileset is %s\n", nodemap_fileset);
 		if (fileset) {
 			/* consider fileset from client as a sub-fileset
@@ -435,6 +443,10 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 out:
 	mdt_thread_info_fini(info);
 	OBD_FREE(buffer, PATH_MAX+1);
+
+	if (!IS_ERR_OR_NULL(nodemap))
+		nodemap_putref(nodemap);
+
 	return rc;
 }
 

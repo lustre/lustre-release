@@ -4620,7 +4620,7 @@ modify_usage:
 			"usage: %s --name NODEMAP_NAME --property PROPERTY_NAME --value VALUE\n",
 			argv[0]);
 		fprintf(stderr,
-			"valid properties: admin trusted map_mode squash_uid squash_gid squash_projid deny_unknown audit_mode forbid_encryption readonly_mount rbac\n");
+			"valid properties: admin trusted map_mode squash_uid squash_gid squash_projid deny_unknown audit_mode forbid_encryption readonly_mount rbac deny_mount\n");
 		return -EINVAL;
 	}
 	if (!param) {
@@ -4654,6 +4654,8 @@ modify_usage:
 		cmd = LCFG_NODEMAP_READONLY_MOUNT;
 	} else if (strcmp("rbac", param) == 0) {
 		cmd = LCFG_NODEMAP_RBAC;
+	} else if (strcmp("deny_mount", param) == 0) {
+		cmd = LCFG_NODEMAP_DENY_MOUNT;
 	} else {
 		fprintf(stderr,
 			"error: %s: nodemap_modify invalid property: %s\n",

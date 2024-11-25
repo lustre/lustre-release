@@ -126,6 +126,7 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_SQUASH_PROJID	= 0x00ce05d, /**< default map projid */
 	LCFG_NODEMAP_READONLY_MOUNT	= 0x00ce05e, /**< read-only mount */
 	LCFG_NODEMAP_RBAC	  = 0x00ce05f, /**< rbac */
+	LCFG_NODEMAP_DENY_MOUNT	  = 0x00ce060, /**< deny mount */
 };
 
 struct lustre_cfg_bufs {

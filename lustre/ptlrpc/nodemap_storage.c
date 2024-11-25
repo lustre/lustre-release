@@ -87,8 +87,8 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 		(nodemap->nmf_forbid_encryption ?
 			NM_FL_FORBID_ENCRYPT : 0);
 	nr->ncr.ncr_flags2 =
-		(nodemap->nmf_readonly_mount ?
-			NM_FL2_READONLY_MOUNT : 0);
+		(nodemap->nmf_readonly_mount ? NM_FL2_READONLY_MOUNT : 0) |
+		(nodemap->nmf_deny_mount ? NM_FL2_DENY_MOUNT : 0);
 	nr->ncr.ncr_padding1 = 0;
 	nr->ncr.ncr_squash_projid = cpu_to_le32(nodemap->nm_squash_projid);
 	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
@@ -864,6 +864,7 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	nodemap->nmf_forbid_encryption = flags & NM_FL_FORBID_ENCRYPT;
 	flags2 = rec->ncr.ncr_flags2;
 	nodemap->nmf_readonly_mount = flags2 & NM_FL2_READONLY_MOUNT;
+	nodemap->nmf_deny_mount = flags2 & NM_FL2_DENY_MOUNT;
 	/* by default, and in the absence of cluster_roles, grant all roles */
 	nodemap->nmf_rbac = NODEMAP_RBAC_ALL;
 

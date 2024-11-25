@@ -57,7 +57,8 @@ struct lu_nodemap {
 				 nmf_allow_root_access:1,
 				 nmf_enable_audit:1,
 				 nmf_forbid_encryption:1,
-				 nmf_readonly_mount:1;
+				 nmf_readonly_mount:1,
+				 nmf_deny_mount:1;
 	/* bitmap for mapping type */
 	enum nodemap_mapping_modes nmf_map_mode;
 	/* bitmap for rbac, enum nodemap_rbac_roles */
@@ -154,6 +155,7 @@ int nodemap_set_squash_projid(const char *name, projid_t projid);
 int nodemap_set_audit_mode(const char *name, bool enable_audit);
 int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption);
 int nodemap_set_readonly_mount(const char *name, bool readonly_mount);
+int nodemap_set_deny_mount(const char *name, bool deny_mount);
 bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id);
 int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
