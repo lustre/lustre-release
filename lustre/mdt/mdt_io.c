@@ -1096,8 +1096,8 @@ static int dom_has_zero_regions(struct fiemap *fiemap)
 	return begin < (fiemap->fm_start + fiemap->fm_length);
 }
 
-int mdt_dom_fiemap(const struct lu_env *env, struct mdt_device *mdt,
-		   const struct lu_fid *fid, struct fiemap *fiemap)
+static int mdt_dom_fiemap(const struct lu_env *env, struct mdt_device *mdt,
+			  const struct lu_fid *fid, struct fiemap *fiemap)
 {
 	struct mdt_object *mo;
 	int rc;

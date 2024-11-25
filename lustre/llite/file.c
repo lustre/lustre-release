@@ -5290,15 +5290,14 @@ static int ll_file_flock_lock(struct file *file, struct file_lock *file_lock)
 	 *    on the server.
 	 * 2. unlock - never conflicts with anything.
 	 */
-	file_lock->fl_flags &= ~FL_SLEEP;
+	file_lock->C_FLC_FLAGS &= ~FL_SLEEP;
 #ifdef HAVE_LOCKS_LOCK_FILE_WAIT
 	rc = locks_lock_file_wait(file, file_lock);
 #else
-	if (file_lock->fl_flags & FL_FLOCK) {
+	if (file_lock->C_FLC_FLAGS & FL_FLOCK)
 		rc = flock_lock_file_wait(file, file_lock);
-	} else if (file_lock->fl_flags & FL_POSIX) {
+	else if (file_lock->C_FLC_FLAGS & FL_POSIX)
 		rc = posix_lock_file(file, file_lock, NULL);
-	}
 #endif /* HAVE_LOCKS_LOCK_FILE_WAIT */
 	if (rc)
 		CDEBUG_LIMIT(rc == -ENOENT ? D_DLMTRACE : D_ERROR,
@@ -5571,7 +5570,7 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 	    flags == LDLM_FL_BLOCK_NOWAIT /* F_SETLK/F_SETLK64 */) {
 
 		cb_data->fa_notify = file_lock->fl_lmops->lm_grant;
-		flags = (file_lock->fl_flags & FL_SLEEP) ?
+		flags = (file_lock->C_FLC_FLAGS & FL_SLEEP) ?
 			0 : LDLM_FL_BLOCK_NOWAIT;
 		einfo.ei_cb_cp = ll_flock_completion_ast_async;
 		get_file(file);
@@ -5592,7 +5591,7 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 			 * with reordering of unlock & lock responses from
 			 * server.
 			 */
-			cb_data->fa_flc.fl_flags |= FL_EXISTS;
+			cb_data->fa_flc.C_FLC_FLAGS |= FL_EXISTS;
 			rc = ll_file_flock_lock(file, &cb_data->fa_flc);
 			if (rc) {
 				if (rc == -ENOENT) {
