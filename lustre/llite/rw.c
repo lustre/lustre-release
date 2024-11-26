@@ -290,7 +290,7 @@ static inline int stride_io_mode(struct ll_readahead_state *ras)
 	return ras->ras_consecutive_stride_requests > 1;
 }
 
-/* stride_byte_count() - The function calculates how many bytes will be read in
+/* stride_page_count() - The function calculates how many pages will be read in
  *
  * [off, off + length], in such stride IO area,
  * stride_offset = st_off, stride_lengh = st_len,
@@ -309,50 +309,54 @@ static inline int stride_io_mode(struct ll_readahead_state *ras)
  *          =   |<----->|  +  |-------------------------------------| +   |---|
  *             start_left                 st_bytes * i                 end_left
  */
-static loff_t stride_byte_count(loff_t st_off, loff_t st_len, loff_t st_bytes,
-				loff_t off, loff_t length)
+static unsigned long stride_page_count(loff_t st_off, loff_t st_len,
+				       loff_t st_bytes, unsigned long off,
+				       unsigned long length)
 {
-	u64 start = off > st_off ? off - st_off : 0;
-	u64 end = off + length > st_off ? off + length - st_off : 0;
-	u64 start_left;
-	u64 end_left;
-	u64 bytes_count;
+	unsigned long start, end;
+	unsigned long start_left, end_left;
+	unsigned long pages;
+	unsigned long st_off_pgs, st_len_pgs, st_bytes_pgs;
+
+	st_off_pgs = st_off >> PAGE_SHIFT;
+	st_len_pgs = DIV_ROUND_UP(st_off + st_len, PAGE_SIZE) - st_off_pgs;
+	st_bytes_pgs = DIV_ROUND_UP(st_off + st_bytes, PAGE_SIZE) - st_off_pgs;
+
+	start = off > st_off_pgs ? off - st_off_pgs : 0;
+	end = off + length > st_off_pgs ? off + length - st_off_pgs : 0;
 
 	if (st_len == 0 || length == 0 || end == 0)
 		return length;
 
-	start = div64_u64_rem(start, st_len, &start_left);
-	if (start_left < st_bytes)
-		start_left = st_bytes - start_left;
+	start_left = do_div(start, st_len_pgs);
+	if (start_left < st_bytes_pgs)
+		start_left = st_bytes_pgs - start_left;
 	else
 		start_left = 0;
 
-	end = div64_u64_rem(end, st_len, &end_left);
-	if (end_left > st_bytes)
-		end_left = st_bytes;
+	end_left = do_div(end, st_len_pgs);
+	if (end_left > st_bytes_pgs)
+		end_left = st_bytes_pgs;
 
-	CDEBUG(D_READA, "start %llu, end %llu start_left %llu end_left %llu\n",
+	CDEBUG(D_READA, "start %lu, end %lu start_left %lu end_left %lu\n",
 	       start, end, start_left, end_left);
 
 	if (start == end)
-		bytes_count = end_left - (st_bytes - start_left);
+		pages = end_left - (st_bytes_pgs - start_left);
 	else
-		bytes_count = start_left +
-			st_bytes * (end - start - 1) + end_left;
+		pages = start_left + st_bytes_pgs * (end - start) + end_left;
 
 	CDEBUG(D_READA,
-	       "st_off %llu, st_len %llu st_bytes %llu off %llu length %llu bytescount %llu\n",
-	       st_off, st_len, st_bytes, off, length, bytes_count);
+	       "st_off %llu, st_len %llu st_bytes %llu off %lu length %lu pages %lu\n",
+	       st_off, st_len, st_bytes, off, length, pages);
 
-	return bytes_count;
+	return pages;
 }
 
 static unsigned long ria_page_count(struct ra_io_arg *ria)
 {
-	loff_t length_bytes = ria->ria_end_idx >= ria->ria_start_idx ?
-		(loff_t)(ria->ria_end_idx -
-			 ria->ria_start_idx + 1) << PAGE_SHIFT : 0;
-	loff_t bytes_count;
+	unsigned long length = ria->ria_end_idx >= ria->ria_start_idx ?
+			ria->ria_end_idx - ria->ria_start_idx + 1 : 0;
 
 	if (ria->ria_length > ria->ria_bytes && ria->ria_bytes &&
 	    (ria->ria_length & ~PAGE_MASK || ria->ria_bytes & ~PAGE_MASK ||
@@ -360,15 +364,13 @@ static unsigned long ria_page_count(struct ra_io_arg *ria)
 		/* Over-estimate un-aligned page stride read */
 		unsigned long pg_count = ((ria->ria_bytes +
 					   PAGE_SIZE - 1) >> PAGE_SHIFT) + 1;
-		pg_count *= length_bytes / ria->ria_length + 1;
+		pg_count *= (loff_t)(length << PAGE_SHIFT) /
+				ria->ria_length + 1;
 
 		return pg_count;
 	}
-	bytes_count = stride_byte_count(ria->ria_stoff, ria->ria_length,
-					ria->ria_bytes,
-					(loff_t)ria->ria_start_idx<<PAGE_SHIFT,
-					length_bytes);
-	return (bytes_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	return stride_page_count(ria->ria_stoff, ria->ria_length,
+				 ria->ria_bytes, ria->ria_start_idx, length);
 }
 
 static pgoff_t ras_align(struct ll_readahead_state *ras, pgoff_t index)
@@ -1015,68 +1017,66 @@ static void ras_init_stride_detector(struct ll_readahead_state *ras,
 	RAS_CDEBUG(ras);
 }
 
-static unsigned long
-stride_page_count(struct ll_readahead_state *ras, loff_t len)
-{
-	loff_t bytes_count =
-		stride_byte_count(ras->ras_stride_offset,
-				  ras->ras_stride_length, ras->ras_stride_bytes,
-				  ras->ras_window_start_idx << PAGE_SHIFT, len);
-
-	return (bytes_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
-}
-
-/* Stride Read-ahead window will be increased inc_len according to
+/* Stride Read-ahead window will be increased inc_pages according to
  * stride I/O pattern
  */
 static void ras_stride_increase_window(struct ll_readahead_state *ras,
-				       struct ll_ra_info *ra, loff_t inc_bytes)
+				       struct ll_ra_info *ra,
+				       unsigned long inc_pages)
 {
-	loff_t window_bytes, stride_bytes;
-	u64 left_bytes;
-	u64 step;
-	loff_t end;
+	unsigned long window_pages, stride_pgs;
+	unsigned long left, end;
+	unsigned long stride_offset_pgs, stride_length_pgs, stride_bytes_pgs;
+
+	stride_offset_pgs = ras->ras_stride_offset >> PAGE_SHIFT;
+	stride_length_pgs = DIV_ROUND_UP(ras->ras_stride_offset +
+					 ras->ras_stride_length, PAGE_SIZE) -
+			    stride_offset_pgs;
+	stride_bytes_pgs = DIV_ROUND_UP(ras->ras_stride_offset +
+					ras->ras_stride_bytes, PAGE_SIZE) -
+			   stride_offset_pgs;
 
 	/* temporarily store in page units to reduce LASSERT() cost below */
 	end = ras->ras_window_start_idx + ras->ras_window_pages;
 
 	LASSERT(ras->ras_stride_length > 0);
-	LASSERTF(end >= (ras->ras_stride_offset >> PAGE_SHIFT),
+	LASSERTF(end >= stride_offset_pgs,
 		 "window_start_idx %lu, window_pages %lu stride_offset %llu\n",
 		 ras->ras_window_start_idx, ras->ras_window_pages,
 		 ras->ras_stride_offset);
 
-	end <<= PAGE_SHIFT;
-	if (end <= ras->ras_stride_offset)
-		stride_bytes = 0;
+	if (end <= stride_offset_pgs)
+		stride_pgs = 0;
 	else
-		stride_bytes = end - ras->ras_stride_offset;
+		stride_pgs = end - stride_offset_pgs;
 
-	div64_u64_rem(stride_bytes, ras->ras_stride_length, &left_bytes);
-	window_bytes = (ras->ras_window_pages << PAGE_SHIFT);
-	if (left_bytes < ras->ras_stride_bytes) {
-		if (ras->ras_stride_bytes - left_bytes >= inc_bytes) {
-			window_bytes += inc_bytes;
+	left = do_div(stride_pgs, stride_length_pgs);
+	window_pages = ras->ras_window_pages;
+	if (left < stride_bytes_pgs) {
+		if (stride_bytes_pgs - left >= inc_pages) {
+			window_pages += inc_pages;
 			goto out;
 		} else {
-			window_bytes += (ras->ras_stride_bytes - left_bytes);
-			inc_bytes -= (ras->ras_stride_bytes - left_bytes);
+			window_pages += (stride_bytes_pgs - left);
+			inc_pages -= (stride_bytes_pgs - left);
 		}
 	} else {
-		window_bytes += (ras->ras_stride_length - left_bytes);
+		window_pages += (stride_length_pgs - left);
 	}
 
 	LASSERT(ras->ras_stride_bytes != 0);
 
-	step = div64_u64_rem(inc_bytes, ras->ras_stride_bytes, &left_bytes);
+	left = do_div(inc_pages, stride_bytes_pgs);
 
-	window_bytes += step * ras->ras_stride_length + left_bytes;
-	LASSERT(window_bytes > 0);
+	window_pages += inc_pages * stride_length_pgs + left;
+	LASSERT(window_pages > 0);
 
 out:
-	if (stride_page_count(ras, window_bytes) <=
+	if (stride_page_count(ras->ras_stride_offset, ras->ras_stride_length,
+			      ras->ras_stride_bytes, ras->ras_window_start_idx,
+			      window_pages) <=
 	    ra->ra_max_pages_per_file || ras->ras_window_pages == 0)
-		ras->ras_window_pages = (window_bytes >> PAGE_SHIFT);
+		ras->ras_window_pages = window_pages;
 
 	LASSERT(ras->ras_window_pages > 0);
 
@@ -1092,8 +1092,7 @@ static void ras_increase_window(struct inode *inode,
 	 * information from lower layer. FIXME later
 	 */
 	if (stride_io_mode(ras)) {
-		ras_stride_increase_window(ras, ra,
-				      (loff_t)ras->ras_rpc_pages << PAGE_SHIFT);
+		ras_stride_increase_window(ras, ra, ras->ras_rpc_pages);
 	} else {
 		pgoff_t window_pages;
 
