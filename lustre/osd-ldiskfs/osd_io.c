@@ -2231,11 +2231,12 @@ int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
 
 		bh = __ldiskfs_bread(handle, inode, block, 0);
 
-		if (unlikely(IS_ERR_OR_NULL(bh) && !sync))
-			CWARN(
-			      "%s: adding bh without locking off %llu (block %lu, size %d, offs %llu)\n",
-			      osd_ino2name(inode),
-			      offset, block, bufsize, *offs);
+		if (unlikely(IS_ERR_OR_NULL(bh) && !sync)) {
+			/* the block is not allocated yet, so we need
+			 * to serialize allocation and memset(0) */
+			down(&ei->i_append_sem);
+			sync = true;
+		}
 
 		if (IS_ERR_OR_NULL(bh)) {
 			int flags = LDISKFS_GET_BLOCKS_CREATE;
@@ -2282,12 +2283,11 @@ int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
 		LASSERTF(boffs + size <= bh->b_size,
 			 "boffs %d size %d bh->b_size %lu\n",
 			 boffs, size, (unsigned long)bh->b_size);
-		if (create) {
+		if (create)
 			memset(bh->b_data, 0, bh->b_size);
-			if (sync) {
-				up(&ei->i_append_sem);
-				sync = false;
-			}
+		if (sync) {
+			up(&ei->i_append_sem);
+			sync = false;
 		}
 		memcpy(bh->b_data + boffs, buf, size);
 		err = ldiskfs_handle_dirty_metadata(handle, NULL, bh);
