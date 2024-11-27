@@ -769,6 +769,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	    imp->imp_state == LUSTRE_IMP_CONNECTING) {
 		spin_unlock(&imp->imp_lock);
 		request->rq_sent = ktime_get_real_seconds();
+		request->rq_timeout = 1;
+		request->rq_deadline = request->rq_sent + 1;
 		RETURN(0);
 	}
 	spin_unlock(&imp->imp_lock);

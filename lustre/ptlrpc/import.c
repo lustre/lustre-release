@@ -517,12 +517,23 @@ static int import_select_connection(struct obd_import *imp)
 	}
 
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
+		int old_status = conn->oic_uptodate;
+
 		CDEBUG(D_HA, "%s: connect to NID %s last attempt %lld\n",
 		       imp->imp_obd->obd_name,
 		       libcfs_nidstr(&conn->oic_conn->c_peer.nid),
 		       conn->oic_last_attempt);
 		conn->oic_uptodate =
 			LNetPeerDiscovered(&conn->oic_conn->c_peer.nid);
+		/* connection status is changed to good state, try it like
+		 * this is first attempt
+		 */
+		if (old_status <= 0 && conn->oic_uptodate > 0) {
+			lru_conn = imp_conn = conn;
+			tried_all = false;
+			break;
+		}
+
 		/* LNET ping failed, skip peer completely */
 		if (conn->oic_uptodate == -EHOSTUNREACH) {
 			CDEBUG(D_HA, "%s: skip NID %s as unreachable\n",
@@ -530,7 +541,6 @@ static int import_select_connection(struct obd_import *imp)
 			       libcfs_nidstr(&conn->oic_conn->c_peer.nid));
 			continue;
 		}
-
 		/* track least recently used conn for fallback */
 		if (!lru_conn ||
 		    lru_conn->oic_last_attempt > conn->oic_last_attempt)
