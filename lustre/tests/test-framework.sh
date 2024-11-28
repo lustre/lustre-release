@@ -8320,11 +8320,19 @@ check_runas_id() {
 get_mpiuser_id() {
 	local mpi_user=$1
 
-	MPI_USER_UID=$(do_facet client "getent passwd $mpi_user | cut -d: -f3;
-exit \\\${PIPESTATUS[0]}") || error_exit "failed to get the UID for $mpi_user"
+	if [[ -z "$MPI_USER_UID" ]]; then
+		MPI_USER_UID=$(do_facet client "getent passwd $mpi_user |
+			       cut -d: -f3; exit \\\${PIPESTATUS[0]}") ||
+			skip_env "failed to get the UID for $mpi_user"
+		echo "mpi_user=$1 MPI_USER_UID=$MPI_USER_UID"
+	fi
 
-	MPI_USER_GID=$(do_facet client "getent passwd $mpi_user | cut -d: -f4;
-exit \\\${PIPESTATUS[0]}") || error_exit "failed to get the GID for $mpi_user"
+	if [[ -z "$MPI_USER_GID" ]]; then
+		MPI_USER_GID=$(do_facet client "getent passwd $mpi_user |
+			       cut -d: -f4; exit \\\${PIPESTATUS[0]}") ||
+			skip_env "failed to get the GID for $mpi_user"
+		echo "mpi_user=$1 MPI_USER_GID=$MPI_USER_GID"
+	fi
 }
 
 # Run multiop in the background, but wait for it to print
@@ -12434,6 +12442,8 @@ force_new_seq_all() {
 ost_set_temp_seq_width_all() {
 	local osts=$(comma_list $(osts_nodes))
 	local width=$(do_facet ost1 $LCTL get_param -n seq.*OST0000-super.width)
+
+	(( $width != $1 )) || return 0
 
 	do_nodes $osts $LCTL set_param seq.*OST*-super.width=$1
 	stack_trap "do_nodes $osts $LCTL set_param seq.*OST*-super.width=$width"

@@ -71,94 +71,108 @@ fi
 
 check_and_setup_lustre
 
-get_mpiuser_id $MPI_USER
+ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+
 MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
 $GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 
 test_compilebench() {
-    run_compilebench
+	run_compilebench
 }
 run_test compilebench "compilebench"
 
 test_metabench() {
-    run_metabench
+	run_metabench
 }
 run_test metabench "metabench"
 
 test_simul() {
-    run_simul
+	get_mpiuser_id $MPI_USER
+	run_simul
 }
 run_test simul "simul"
 
 test_mdtestssf() {
-    run_mdtest "ssf"
+	get_mpiuser_id $MPI_USER
+	run_mdtest "ssf"
 }
 run_test mdtestssf "mdtestssf"
 
 test_mdtestfpp() {
-    run_mdtest "fpp"
+	get_mpiuser_id $MPI_USER
+	run_mdtest "fpp"
 }
 run_test mdtestfpp "mdtestfpp"
 
 test_connectathon() {
-    run_connectathon
+	run_connectathon
 }
 run_test connectathon "connectathon"
 
 test_iorssf() {
-    run_ior "ssf"
+	get_mpiuser_id $MPI_USER
+	run_ior "ssf"
 }
 run_test iorssf "iorssf"
 
 test_iorfpp() {
-    run_ior "fpp"
+	get_mpiuser_id $MPI_USER
+	run_ior "fpp"
 }
 run_test iorfpp "iorfpp"
 
 test_ior_mdtest_parallel_ssf() {
+	get_mpiuser_id $MPI_USER
 	ior_mdtest_parallel "ssf"
 }
 run_test ior_mdtest_parallel_ssf "iormdtestssf"
 
 test_ior_mdtest_parallel_fpp() {
+	get_mpiuser_id $MPI_USER
 	ior_mdtest_parallel "fpp"
 }
 run_test ior_mdtest_parallel_fpp "iormdtestfpp"
 
 test_mib() {
-    run_mib
+	get_mpiuser_id $MPI_USER
+	run_mib
 }
 run_test mib "mib"
 
 test_cascading_rw() {
-    run_cascading_rw
+	get_mpiuser_id $MPI_USER
+	run_cascading_rw
 }
 run_test cascading_rw "cascading_rw"
 
 test_write_append_truncate() {
-    run_write_append_truncate
+	get_mpiuser_id $MPI_USER
+	run_write_append_truncate
 }
 run_test write_append_truncate "write_append_truncate"
 
 # Argument is chunk size limit, the upper bound on write size
 test_write_disjoint() {
-    run_write_disjoint 123456
+	get_mpiuser_id $MPI_USER
+	run_write_disjoint 123456
 }
 run_test write_disjoint "write_disjoint"
 
 # Make sure to exercise the tiny write code
 test_write_disjoint_tiny() {
+	get_mpiuser_id $MPI_USER
 	run_write_disjoint 16384
 }
 run_test write_disjoint_tiny "write_disjoint_tiny"
 
 test_parallel_grouplock() {
-    run_parallel_grouplock
+	get_mpiuser_id $MPI_USER
+	run_parallel_grouplock
 }
 run_test parallel_grouplock "parallel_grouplock"
 
 test_statahead () {
-    run_statahead
+	run_statahead
 }
 run_test statahead "statahead test, multiple clients"
 
@@ -168,6 +182,7 @@ test_rr_alloc () {
 run_test rr_alloc "Checking even file distribution over OSTs in RR policy"
 
 test_fs_test () {
+	get_mpiuser_id $MPI_USER
 	run_fs_test
 }
 run_test fs_test "fs_test"
@@ -178,13 +193,13 @@ test_fio () {
 run_test fio "fio"
 
 test_xdd () {
+	get_mpiuser_id $MPI_USER
 	run_xdd
 }
 run_test xdd "xdd"
 
 # If necessary, return SLOW to its original value
-[ "$mds1_FSTYPE" = zfs -o "$ost1_FSTYPE" = zfs ] &&
-	SLOW=$ZFSSLOW
+[[ "$mds1_FSTYPE" == zfs || "$ost1_FSTYPE" == zfs ]] && SLOW=$ZFSSLOW
 
 complete_test $SECONDS
 check_and_cleanup_lustre
