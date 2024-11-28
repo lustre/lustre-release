@@ -176,13 +176,18 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
 loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
 			  int stripeno)
 {
-	unsigned long ssize = lsm->lsm_entries[index]->lsme_stripe_size;
+	struct lov_stripe_md_entry *lse = lsm->lsm_entries[index];
+	unsigned long ssize = lse->lsme_stripe_size;
+	u64 comp_start = lse->lsme_extent.e_start;
 	u64 stripe_off;
 	u64 this_stripe;
 	u64 swidth;
 
 	if (file_size == OBD_OBJECT_EOF)
 		return OBD_OBJECT_EOF;
+
+	if (file_size < comp_start)
+		return 0;
 
 	swidth = stripe_width(lsm, index);
 
