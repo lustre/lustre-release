@@ -19116,7 +19116,7 @@ test_160f() {
 	[[ $MDS1_VERSION -ge $(version_code 2.10.56) ]] ||
 		skip "Need MDS version at least 2.10.56"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	# Create a user
 	changelog_register || error "first changelog_register failed"
@@ -19132,17 +19132,18 @@ test_160f() {
 	# use all_char because created files should be evenly distributed
 	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
 		error "test_mkdir $tdir failed"
-	log "$(date +%s): creating first files"
-	for ((i = 0; i < MDSCOUNT * 2; i++)); do
-		$LFS mkdir -i $((i%MDSCOUNT)) $DIR/$tdir/d$i.$((i/MDSCOUNT)) ||
-			error "create $DIR/$tdir/d$i.$((i/MDSCOUNT)) failed"
+	log "$(date +%s): creating first dirs"
+	for ((idx = 0; idx < MDSCOUNT * 2; idx++)); do
+		local d=$DIR/$tdir/d$idx.$((idx/MDSCOUNT))
+		$LFS mkdir -i $((idx%MDSCOUNT)) $d ||
+			error "create $d on MDT$idx failed"
 	done
 
 	# check changelogs have been generated
 	local start=$SECONDS
 	local idle_time=$((MDSCOUNT * 5 + 5))
 	local nbcl=$(changelog_dump | wc -l)
-	[[ $nbcl -eq 0 ]] && error "no changelogs found"
+	(( $nbcl != 0 )) || error "no changelogs found"
 
 	for param in "changelog_max_idle_time=$idle_time" \
 		     "changelog_gc=1" \
@@ -19166,7 +19167,7 @@ test_160f() {
 	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
 	do_nodes $mdts "$LCTL set_param fail_loc=0x1313 fail_val=3"
 
-	for i in $(seq $MDSCOUNT); do
+	for ((i = 1; i <= $MDSCOUNT; i++)); do
 		cl_users=(${CL_USERS[mds$i]})
 		cl_user1[mds$i]="${cl_users[0]}"
 		cl_user2[mds$i]="${cl_users[1]}"
@@ -19203,16 +19204,18 @@ test_160f() {
 
 	# Generate one more changelog to trigger GC at fail_loc for cl_user2.
 	# cl_user1 should be OK because it recently processed records.
-	echo "$(date +%s): creating $((MDSCOUNT * 2)) files"
-	for ((i = 0; i < MDSCOUNT * 2; i++)); do
-		$LFS mkdir -i $((i%MDSCOUNT)) $DIR/$tdir/d$i.$((i/MDSCOUNT+2))||
-			error "create $DIR/$tdir/d$i.$((i/MDSCOUNT+2)) failed"
+	echo "$(date +%s): creating $((MDSCOUNT * 2)) dirs"
+	for ((idx = 0; idx < MDSCOUNT * 2; idx++)); do
+		local d=$DIR/$tdir/d$idx.$((idx/MDSCOUNT+2))
+
+		$LFS mkdir -i $((idx%MDSCOUNT)) $d ||
+			error "create dir $d on MDT$idx failed"
 	done
 
 	# ensure gc thread is done
-	for i in $(mdts_nodes); do
-		wait_update $i "ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
-			error "$i: GC-thread not done"
+	for mds in ${mdts//,/ }; do
+		wait_update $mds "ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
+			error "$mds: GC-thread not done"
 	done
 
 	local first_rec
@@ -19243,7 +19246,7 @@ test_160g() {
 	[[ $MDS1_VERSION -ge $(version_code 2.14.55) ]] ||
 		skip "Need MDS version at least 2.14.55"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	# Create a user
 	changelog_register || error "first changelog_register failed"
@@ -19259,9 +19262,9 @@ test_160g() {
 	# use all_char because created files should be evenly distributed
 	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
 		error "test_mkdir $tdir failed"
-	for ((i = 0; i < MDSCOUNT; i++)); do
-		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
-			error "create $DIR/$tdir/d$i.1 failed"
+	for ((idx = 0; idx < MDSCOUNT; idx++)); do
+		$LFS mkdir -i $idx $DIR/$tdir/d$idx.1 $DIR/$tdir/d$idx.2 ||
+			error "create $DIR/$tdir/d$idx.1 failed"
 	done
 
 	# check changelogs have been generated
@@ -19282,7 +19285,7 @@ test_160g() {
 	done
 
 	local start=$SECONDS
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		cl_users=(${CL_USERS[mds$i]})
 		cl_user1[mds$i]="${cl_users[0]}"
 		cl_user2[mds$i]="${cl_users[1]}"
@@ -19317,15 +19320,15 @@ test_160g() {
 	(( sleep2 > 0 )) && echo "sleep $sleep2 for interval" && sleep $sleep2
 	# Generate one more changelog to trigger GC at fail_loc for cl_user2.
 	# cl_user1 should be OK because it recently processed records.
-	for ((i = 0; i < MDSCOUNT; i++)); do
-		$LFS mkdir -i $i $DIR/$tdir/d$i.3 ||
-			error "create $DIR/$tdir/d$i.3 failed"
+	for ((idx = 0; idx < MDSCOUNT; idx++)); do
+		$LFS mkdir -i $idx $DIR/$tdir/d$idx.3 ||
+			error "create $DIR/$tdir/d$idx.3 failed"
 	done
 
 	# ensure gc thread is done
-	for i in $(mdts_nodes); do
-		wait_update $i "ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
-			error "$i: GC-thread not done"
+	for mds in ${mdts//,/ }; do
+		wait_update $mds "ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
+			error "$mds: GC-thread not done"
 	done
 
 	local first_rec
@@ -19356,7 +19359,7 @@ test_160h() {
 	[[ $MDS1_VERSION -ge $(version_code 2.10.56) ]] ||
 		skip "Need MDS version at least 2.10.56"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	# Create a user
 	changelog_register || error "first changelog_register failed"
@@ -19372,9 +19375,9 @@ test_160h() {
 	# use all_char because created files should be evenly distributed
 	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
 		error "test_mkdir $tdir failed"
-	for ((i = 0; i < MDSCOUNT; i++)); do
-		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
-			error "create $DIR/$tdir/d$i.1 failed"
+	for ((idx = 0; idx < MDSCOUNT; idx++)); do
+		$LFS mkdir -i $idx $DIR/$tdir/d$idx.1 $DIR/$tdir/d$idx.2 ||
+			error "create $DIR/$tdir/d$idx.1 failed"
 	done
 
 	# check changelogs have been generated
@@ -19395,7 +19398,7 @@ test_160h() {
 	# force cl_user2 to be idle (1st part)
 	sleep 9
 
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		cl_users=(${CL_USERS[mds$i]})
 		cl_user1[mds$i]="${cl_users[0]}"
 		cl_user2[mds$i]="${cl_users[1]}"
@@ -19441,15 +19444,15 @@ test_160h() {
 	# stop MDT to stop GC-thread, should be done in back-ground as it will
 	# block waiting for the thread to be released and exit
 	declare -A stop_pids
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		stop mds$i &
 		stop_pids[mds$i]=$!
 	done
 
-	for i in $(mdts_nodes); do
+	for mds in ${mdts//,/ }; do
 		local facet
 		local nb=0
-		local facets=$(facets_up_on_host $i)
+		local facets=$(facets_up_on_host $mds)
 
 		for facet in ${facets//,/ }; do
 			if [[ $facet == mds* ]]; then
@@ -19458,25 +19461,25 @@ test_160h() {
 		done
 		# ensure each MDS's gc threads are still present and all in "R"
 		# state (OBD_FAIL_FORCE_GC_THREAD effect!)
-		[[ $(do_node $i pgrep chlg_gc_thread | wc -l) -eq $nb ]] ||
-			error "$i: expected $nb GC-thread"
-		wait_update $i \
+		[[ $(do_node $mds pgrep chlg_gc_thread | wc -l) -eq $nb ]] ||
+			error "$mds: expected $nb GC-thread"
+		wait_update $mds \
 			"ps -C chlg_gc_thread -o state --no-headers | uniq" \
 			"R" 20 ||
-			error "$i: GC-thread not found in R-state"
+			error "$mds: GC-thread not found in R-state"
 		# check umounts of each MDT on MDS have reached kthread_stop()
-		[[ $(do_node $i pgrep umount | wc -l) -eq $nb ]] ||
-			error "$i: expected $nb umount"
-		wait_update $i \
+		[[ $(do_node $mds pgrep umount | wc -l) -eq $nb ]] ||
+			error "$mds: expected $nb umount"
+		wait_update $mds \
 			"ps -C umount -o state --no-headers | uniq" "D" 20 ||
-			error "$i: umount not found in D-state"
+			error "$mds: umount not found in D-state"
 	done
 
 	# release all GC-threads
 	do_nodes $mdts $LCTL set_param fail_loc=0
 
 	# wait for MDT stop to complete
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		wait ${stop_pids[mds$i]} || error "mds$i: stop failed"
 	done
 
@@ -19485,13 +19488,13 @@ test_160h() {
 	# via ldiskfs/zfs and llog_reader...
 
 	# re-start/mount MDTs
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		start mds$i $(mdsdevname $i) $MDS_MOUNT_OPTS ||
 			error "Fail to start mds$i"
 	done
 
 	local first_rec
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		# check cl_user1 still registered
 		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" ||
 			error "mds$i: User ${cl_user1[mds$i]} not registered"
@@ -19516,8 +19519,7 @@ run_test 160h "changelog gc thread stop upon umount, orphan records delete " \
 	      "during mount"
 
 test_160i() {
-
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	changelog_register || error "first changelog_register failed"
 
@@ -19555,7 +19557,7 @@ test_160i() {
 	local i
 	local last_rec
 	declare -A LAST_REC
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		if changelog_users mds$i | grep "^cl"; then
 			# make sure new records are added with one user present
 			LAST_REC[mds$i]=$(changelog_users $SINGLEMDS |
@@ -19569,7 +19571,7 @@ test_160i() {
 	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
 		error "create $DIR/$tdir/${tfile}bis failed"
 
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		last_rec=$(changelog_users $SINGLEMDS |
 			   awk '/^current.index:/ { print $NF }')
 		echo "verify changelogs are on: $last_rec != ${LAST_REC[mds$i]}"
@@ -19939,7 +19941,7 @@ test_160s() {
 	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
 		skip "Need MDS version at least 2.14.55"
 
-	local mdts=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
 	#define OBD_FAIL_TIME_IN_CHLOG_USER     0x1314
 	do_nodes $mdts $LCTL set_param fail_loc=0x1314 \
@@ -19955,9 +19957,9 @@ test_160s() {
 	# use all_char because created files should be evenly distributed
 	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
 		error "test_mkdir $tdir failed"
-	for ((i = 0; i < MDSCOUNT; i++)); do
-		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
-			error "create $DIR/$tdir/d$i.1 failed"
+	for ((idx = 0; idx < MDSCOUNT; idx++)); do
+		$LFS mkdir -i $idx $DIR/$tdir/d$idx.1 $DIR/$tdir/d$idx.2 ||
+			error "create $DIR/$tdir/d$idx.1 on MDT$idx failed"
 	done
 
 	# check changelogs have been generated
@@ -19979,7 +19981,7 @@ test_160s() {
 	done
 
 	local start=$SECONDS
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		cl_users=(${CL_USERS[mds$i]})
 		cl_user1[mds$i]="${cl_users[0]}"
 
@@ -20001,9 +20003,9 @@ test_160s() {
 	done
 
 	# ensure gc thread is done
-	for node in $(mdts_nodes); do
-		wait_update $node "pgrep chlg_gc_thread" "" 20 ||
-			error "$node: GC-thread not done"
+	for mds in ${mdts//,/ }; do
+		wait_update $mds "pgrep chlg_gc_thread" "" 20 ||
+			error "$mds: GC-thread not done"
 	done
 
 	do_nodes $mdts $LCTL set_param fail_loc=0

@@ -80,9 +80,10 @@ get_target() {
 get_targets() {
 	local targets
 	local node
+	local mdts=$(mdts_nodes)
 
-	for node in $(mdts_nodes); do
-		targets+="${targets:+ }$(get_target $node)"
+	for mds in ${mdts//,/ }; do
+		targets+="${targets:+ }$(get_target $mds)"
 	done
 
 	echo -n $targets

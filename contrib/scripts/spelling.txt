@@ -34,6 +34,8 @@ cfs_time_current_64||ktime_get
 cfs_time_current_sec||ktime_get_real_seconds
 ci_nob||ci_bytes
 CLASSERT||BUILD_BUG_ON()
+comma_list.*osts_nodes||osts_nodes
+comma_list.*mdts_nodes||mdts_nodes
 crw_count||crw_bytes
 msecs_to_jiffies||cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
@@ -130,7 +132,6 @@ OS_STATE_ENOINO||OS_STATFS_ENOINO
 OS_STATE_SUM||OS_STATFS_SUM
 OS_STATE_NONROT||OS_STATFS_NONROT
 OS_STATFS_NOPRECREATE||OS_STATFS_NOCREATE
-comma_list.*osts_nodes||osts_nodes
 page_cache_get||get_page
 PAGE_CACHE_MASK||PAGE_MASK
 page_cache_release||put_page

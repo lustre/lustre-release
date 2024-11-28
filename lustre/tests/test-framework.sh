@@ -1370,7 +1370,7 @@ start_gss_daemons() {
 		return 0
 	fi
 
-	nodes=$(comma_list $(mdts_nodes))
+	nodes=$(mdts_nodes)
 	echo "Starting gss daemon on mds: $nodes"
 	if $GSS_SK; then
 		# Start all versions, in case of switching
@@ -1400,7 +1400,7 @@ start_gss_daemons() {
 }
 
 stop_gss_daemons() {
-	local nodes=$(comma_list $(mdts_nodes))
+	local nodes=$(mdts_nodes)
 
 	send_sigint $nodes lsvcgssd lgssd
 
@@ -2061,7 +2061,7 @@ set_params_clients() {
 }
 
 set_params_mdts() {
-	local mdts=${1:-$(comma_list $(mdts_nodes))}
+	local mdts=${1:-$(mdts_nodes)}
 	shift || true
 	local params="${@:-$MDS_LCTL_SETPARAM_PARAM}"
 
@@ -3589,8 +3589,7 @@ wait_update_facet() {
 }
 
 sync_all_data_mdts() {
-	do_nodes $(comma_list $(mdts_nodes)) \
-	    "lctl set_param -n os[cd]*.*MDT*.force_sync=1"
+	do_nodes $(mdts_nodes) "lctl set_param -n os[cd]*.*MDT*.force_sync=1"
 }
 
 sync_all_data_osts() {
@@ -3669,7 +3668,7 @@ ost_watermarks_set() {
 	local ost_name=$(ostname_from_index $ost_idx)
 	local facets=$(get_facets MDS)
 
-	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
+	do_nodes $(mdts_nodes) $LCTL set_param -n \
 		osp.*$ost_name*.reserved_mb_low=$lwm \
 		osp.*$ost_name*.reserved_mb_high=$hwm > /dev/null
 
@@ -3757,9 +3756,10 @@ wait_delete_completed_mds() {
 	local etime
 	local node
 	local changes
+	local mdts=$(mdts_nodes)
 
 	# find MDS with pending deletions
-	for node in $(mdts_nodes); do
+	for node in ${mdts//,/ }; do
 		changes=$(do_node $node "$LCTL get_param -n osc.*MDT*.sync_*" \
 			2>/dev/null | calc_sum)
 		if [[ $changes -eq 0 ]]; then
@@ -3879,7 +3879,7 @@ wait_mds_ost_sync () {
 	local WAIT_TIMEOUT=${1:-$MAX}
 	local WAIT=0
 	local new_wait=true
-	local list=$(comma_list $(mdts_nodes))
+	local list=$(mdts_nodes)
 	local cmd="$LCTL get_param -n osp.*osc*.old_sync_processed"
 	if ! do_facet $SINGLEMDS \
 		"$LCTL list_param osp.*osc*.old_sync_processed 2> /dev/null"
@@ -3938,9 +3938,9 @@ wait_destroy_complete () {
 	# why it takes so long time
 	local MAX=${1:-5}
 	local WAIT=0
-	local list=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 	while [ $WAIT -lt $MAX ]; do
-		local -a RPCs=($(do_nodes $list $LCTL get_param -n osp.*.destroys_in_flight))
+		local -a RPCs=($(do_nodes $mdts $LCTL get_param -n osp.*.destroys_in_flight))
 		local con=1
 		local i
 
@@ -4072,10 +4072,11 @@ all_mds_up() {
 
 	[ -n "$delay" ] || error "fail to get maxage"
 	sleep $delay
-	local nodes=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
+
 	# initiate statfs RPC, all to all MDTs
-	do_nodes $nodes $LCTL get_param -N osp.*MDT*MDT*.filesfree >&/dev/null
-	do_nodes $nodes $LCTL get_param -N osp.*MDT*MDT*.filesfree >&/dev/null
+	do_nodes $mdts $LCTL get_param -N osp.*MDT*MDT*.filesfree >&/dev/null
+	do_nodes $mdts $LCTL get_param -N osp.*MDT*MDT*.filesfree >&/dev/null
 }
 
 client_up() {
@@ -6537,14 +6538,10 @@ run_lfsck() {
 			awk '/^status/ { print \\\$2 }'" "completed" 60 ||
 			error "MDS${k} namespace isn't the expected 'completed'"
 	done
-	local rep_mdt=$(do_nodes $(comma_list $(mdts_nodes)) \
-			$LCTL get_param -n mdd.$FSNAME-*.lfsck_* |
-			awk '/repaired/ { print $2 }' | calc_sum)
-	local rep_ost=$(do_nodes $(osts_nodes) \
-			$LCTL get_param -n obdfilter.$FSNAME-*.lfsck_* |
-			awk '/repaired/ { print $2 }' | calc_sum)
-	local repaired=$((rep_mdt + rep_ost))
-	[ $repaired -eq 0 ] ||
+	local repaired=$(do_nodes $(tgts_nodes) \
+			 "$LCTL get_param -n *.$FSNAME-*.lfsck_*" |
+			 awk '/repaired/ { print $2 }' | calc_sum)
+	(( repaired == 0 )) ||
 		error "lfsck repaired $rep_mdt MDT and $rep_ost OST errors"
 }
 
@@ -6969,32 +6966,33 @@ drop_bl_callback() {
 drop_mdt_ldlm_reply() {
 #define OBD_FAIL_MDS_LDLM_REPLY_NET	0x157
 	RC=0
-	local list=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
-	do_nodes $list lctl set_param fail_loc=0x157
+	do_nodes $mdts lctl set_param fail_loc=0x157
 
 	do_facet client "$@" || RC=$?
 
-	do_nodes $list lctl set_param fail_loc=0
+	do_nodes $mdts lctl set_param fail_loc=0
 	return $RC
 }
 
 drop_mdt_ldlm_reply_once() {
 #define OBD_FAIL_MDS_LDLM_REPLY_NET	0x157
 	RC=0
-	local list=$(comma_list $(mdts_nodes))
+	local mdts=$(mdts_nodes)
 
-	do_nodes $list lctl set_param fail_loc=0x80000157
+	do_nodes $mdts lctl set_param fail_loc=0x80000157
 
 	do_facet client "$@" || RC=$?
 
-	do_nodes $list lctl set_param fail_loc=0
+	do_nodes $mdts lctl set_param fail_loc=0
 	return $RC
 }
 
 clear_failloc() {
-	facet=$1
-	pause=$2
+	local facet=$1
+	local pause=$2
+
 	sleep $pause
 	echo "clearing fail_loc on $facet"
 	do_facet $facet "lctl set_param fail_loc=0 2>/dev/null || true"
@@ -7928,21 +7926,26 @@ local_node() {
 	${!is_local}
 }
 
-remote_node () {
+remote_node() {
 	local node=$1
 
 	! local_node $node
 }
 
-remote_mds ()
+# return true if any MDT is on a remote node
+remote_mds()
 {
+	local mdts=$(mdts_nodes)
 	local node
-	for node in $(mdts_nodes); do
+
+	for node in ${mdts//,/ }; do
 		remote_node $node && return 0
 	done
+
 	return 1
 }
 
+# return true if any MDT is on a remote node and no remote shell is configured
 remote_mds_nodsh()
 {
 	[ -n "$CLIENTONLY" ] && return 0 || true
@@ -8019,12 +8022,12 @@ facets_nodes () {
 
 # Get name of the active MGS node.
 mgs_node () {
-		echo -n $(facets_nodes $(get_facets MGS))
-	}
+	echo -n $(facets_nodes $(get_facets MGS))
+}
 
 # Get all of the active MDS nodes.
-mdts_nodes () {
-	echo -n $(facets_nodes $(get_facets MDS))
+mdts_nodes() {
+	comma_list $(facets_nodes $(get_facets MDS))
 }
 
 # Get all of the active OSS nodes in a comma-separated list.
@@ -8064,18 +8067,15 @@ all_mdts_nodes () {
 	local host
 	local failover_host
 	local nodes
-	local nodes_sort
 	local i
 
-	for i in $(seq $MDSCOUNT); do
+	for ((i=1; i <= $MDSCOUNT; i++)); do
 		host=mds${i}_HOST
 		failover_host=mds${i}failover_HOST
 		nodes="$nodes ${!host} ${!failover_host}"
 	done
 
-	[ -n "$nodes" ] || nodes="${mds_HOST} ${mdsfailover_HOST}"
-	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
-	echo -n $nodes_sort
+	comma_list $nodes
 }
 
 # Get all of the OSS nodes, including active and passive nodes.
@@ -8637,8 +8637,7 @@ run_mdtest () {
 	save_lustre_params $(get_facets MDS) \
 		mdt.*.enable_remote_dir_gid > $params_file
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param mdt.*.enable_remote_dir_gid=-1
+	do_nodes $(mdts_nodes) $LCTL set_param mdt.*.enable_remote_dir_gid=-1
 
 	stack_trap "restore_lustre_params < $params_file" EXIT
 
@@ -11109,8 +11108,7 @@ changelog_user_rec() {
 changelog_chmask() {
 	local mask=$1
 
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param mdd.*.changelog_mask="$mask"
+	do_nodes $(mdts_nodes) $LCTL set_param mdd.*.changelog_mask="$mask"
 }
 
 # usage: __changelog_clear FACET CL_USER [+]INDEX
