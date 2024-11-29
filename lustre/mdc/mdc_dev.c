@@ -759,9 +759,9 @@ static int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 
 	/* For WRITE lock cancel other locks on resource early if any */
 	if (einfo->ei_mode & LCK_PW)
-		count = mdc_resource_get_unused_res(exp, res_id, &cancels,
-						    einfo->ei_mode,
-						    MDS_INODELOCK_DOM);
+		count = mdc_resource_cancel_unused_res(exp, res_id, &cancels,
+						       einfo->ei_mode,
+						       MDS_INODELOCK_DOM);
 	else
 		count = 0;
 

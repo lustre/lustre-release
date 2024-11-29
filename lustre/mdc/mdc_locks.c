@@ -276,9 +276,9 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 			else
 				mode = LCK_CR;
 		}
-		count = mdc_resource_get_unused(exp, &op_data->op_fid2,
-						&cancels, mode,
-						MDS_INODELOCK_OPEN);
+		count = mdc_resource_cancel_unused(exp, &op_data->op_fid2,
+						   &cancels, mode,
+						   MDS_INODELOCK_OPEN);
 	}
 
 	/* If CREATE, cancel parent's UPDATE lock. */
@@ -286,9 +286,9 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 		mode = LCK_EX;
 	else
 		mode = LCK_CR;
-	count += mdc_resource_get_unused(exp, &op_data->op_fid1,
-					 &cancels, mode,
-					 MDS_INODELOCK_UPDATE);
+	count += mdc_resource_cancel_unused(exp, &op_data->op_fid1,
+					    &cancels, mode,
+					    MDS_INODELOCK_UPDATE);
 
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
 				   &RQF_LDLM_INTENT_OPEN);
@@ -447,9 +447,9 @@ mdc_intent_create_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	if (fid_is_sane(&op_data->op_fid1))
 		/* cancel parent's UPDATE lock. */
-		count = mdc_resource_get_unused(exp, &op_data->op_fid1,
-						&cancels, LCK_EX,
-						MDS_INODELOCK_UPDATE);
+		count = mdc_resource_cancel_unused(exp, &op_data->op_fid1,
+						   &cancels, LCK_EX,
+						   MDS_INODELOCK_UPDATE);
 
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
 				   &RQF_LDLM_INTENT_CREATE);
@@ -708,9 +708,9 @@ static struct ptlrpc_request *mdc_intent_layout_pack(struct obd_export *exp,
 
 	if (fid_is_sane(&op_data->op_fid2) && (it->it_op & IT_LAYOUT) &&
 	    (it->it_open_flags & FMODE_WRITE)) {
-		count = mdc_resource_get_unused(exp, &op_data->op_fid2,
-						&cancels, LCK_EX,
-						MDS_INODELOCK_LAYOUT);
+		count = mdc_resource_cancel_unused(exp, &op_data->op_fid2,
+						   &cancels, LCK_EX,
+						   MDS_INODELOCK_LAYOUT);
 	}
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT, 0);

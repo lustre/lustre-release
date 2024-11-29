@@ -376,9 +376,9 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 			req_capsule_set_size(&req->rq_pill, &RMF_EADATA,
 					     RCL_CLIENT, 0);
 
-		count = mdc_resource_get_unused(exp, fid,
-						&cancels, LCK_EX,
-						MDS_INODELOCK_XATTR);
+		count = mdc_resource_cancel_unused(exp, fid,
+						   &cancels, LCK_EX,
+						   MDS_INODELOCK_XATTR);
 
 		rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
 		if (rc)
@@ -1976,8 +1976,8 @@ static inline int mdc_hsm_request_lock_to_cancel(struct obd_export *exp,
 	for (i = 0; i < req_hr->hr_itemcount; i++, hui++) {
 		if (!fid_is_sane(&hui->hui_fid))
 			continue;
-		count += mdc_resource_get_unused(exp, &hui->hui_fid, cancels,
-						 LCK_EX, MDS_INODELOCK_LAYOUT);
+		count += mdc_resource_cancel_unused(exp, &hui->hui_fid, cancels,
+						    LCK_EX, MDS_INODELOCK_LAYOUT);
 	}
 
 	return count;
@@ -2202,12 +2202,12 @@ static int mdc_ioc_swap_layouts(struct obd_export *exp,
 	 * So the client must cancel its layout locks on the 2 fids
 	 * with the request RPC to avoid extra RPC round trips.
 	 */
-	count = mdc_resource_get_unused(exp, &op_data->op_fid1, &cancels,
-					LCK_EX, MDS_INODELOCK_LAYOUT |
-					MDS_INODELOCK_XATTR);
-	count += mdc_resource_get_unused(exp, &op_data->op_fid2, &cancels,
-					 LCK_EX, MDS_INODELOCK_LAYOUT |
-					 MDS_INODELOCK_XATTR);
+	count = mdc_resource_cancel_unused(exp, &op_data->op_fid1, &cancels,
+					   LCK_EX, MDS_INODELOCK_LAYOUT |
+					   MDS_INODELOCK_XATTR);
+	count += mdc_resource_cancel_unused(exp, &op_data->op_fid2, &cancels,
+					    LCK_EX, MDS_INODELOCK_LAYOUT |
+					    MDS_INODELOCK_XATTR);
 
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
 				   &RQF_MDS_SWAP_LAYOUTS);
