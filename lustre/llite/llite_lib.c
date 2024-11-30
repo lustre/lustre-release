@@ -3854,6 +3854,7 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      void *data)
 {
 	struct llcrypt_name fname = { 0 };
+	bool op_data_alloc_inside = true;
 	int rc;
 
 	LASSERT(i1 != NULL);
@@ -3876,6 +3877,8 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 
 	if (op_data == NULL)
 		OBD_ALLOC_PTR(op_data);
+	else
+		op_data_alloc_inside = false;
 
 	if (op_data == NULL)
 		return ERR_PTR(-ENOMEM);
@@ -3948,7 +3951,8 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 		if (rc) {
 			CERROR("%s: failed to setup filename: rc = %d\n",
 			       ll_i2sbi(i1)->ll_fsname, rc);
-			ll_finish_md_op_data(op_data);
+			if (op_data_alloc_inside)
+				ll_finish_md_op_data(op_data);
 			return ERR_PTR(rc);
 		}
 		if (pfid && !fid_is_zero(pfid)) {
