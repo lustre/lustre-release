@@ -7349,12 +7349,21 @@ test_56oe() {
 	for ((val = 1; val <= 10; val++)); do
 		touch $dir/$tfile-a.$val $dir/$tfile-m.$val
 		touch $dir/$tfile-c.$val
+		echo -n "$tfile-c.$val	@ctime (Epoch):"
+		stat -c "%Z" $dir/$tfile-c.$val
 		touch --date="$val $unit ago" -a $dir/$tfile-a.$val
 		touch --date="$val $unit ago" -m $dir/$tfile-m.$val
 		(( val % 5 != 2 )) || sleep 10
 	done
 
-	cmd="$LFS find $dir -ctime -19s -ctime +9s"
+	local now=$(date +%s)
+	local lower_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.8) + 2 ))
+	local upper_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.2) - 2 ))
+
+	(( now == $(date +%s))) ||
+		skip "System is too slow for accurate results"
+
+	cmd="$LFS find $dir -ctime -${upper_bound}s -ctime +${lower_bound}s"
 	nums=$($cmd | grep -c c.*)
 
 	(( nums == expected )) ||
