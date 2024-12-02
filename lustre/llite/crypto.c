@@ -128,11 +128,6 @@ int ll_file_open_encrypt(struct inode *inode, struct file *filp)
 	return rc;
 }
 
-void llcrypt_free_ctx(void *encctx, __u32 size)
-{
-	OBD_FREE(encctx, size);
-}
-
 #ifdef HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED
 bool ll_sb_has_test_dummy_encryption(struct super_block *sb)
 {

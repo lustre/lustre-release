@@ -173,7 +173,6 @@ static inline bool llcrypt_is_nokey_name(const struct dentry *dentry)
 struct ll_sb_info;
 int ll_set_encflags(struct inode *inode, void *encctx, __u32 encctxlen,
 		    bool preload);
-void llcrypt_free_ctx(void *encctx, __u32 size);
 bool ll_sb_has_test_dummy_encryption(struct super_block *sb);
 bool ll_sbi_has_encrypt(struct ll_sb_info *sbi);
 void ll_sbi_set_encrypt(struct ll_sb_info *sbi, bool set);

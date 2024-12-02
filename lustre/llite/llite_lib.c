@@ -3993,15 +3993,27 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 void ll_finish_md_op_data(struct md_op_data *op_data)
 {
 	ll_unlock_md_op_lsm(op_data);
-	ll_security_release_secctx(op_data->op_file_secctx,
-				   op_data->op_file_secctx_size,
-				   op_data->op_file_secctx_slot);
+	/* free selinux context */
+	if (!(op_data->op_flags & MF_SERVER_SECCTX))
+		ll_security_release_secctx(op_data->op_file_secctx,
+					   op_data->op_file_secctx_size,
+					   op_data->op_file_secctx_slot);
+	op_data->op_file_secctx_size = 0;
+	op_data->op_file_secctx_slot = 0;
+	op_data->op_file_secctx = NULL;
+
 	if (op_data->op_flags & MF_OPNAME_KMALLOCED)
 		/* allocated via ll_setup_filename called
 		 * from ll_prep_md_op_data
 		 */
 		kfree(op_data->op_name);
-	llcrypt_free_ctx(op_data->op_file_encctx, op_data->op_file_encctx_size);
+
+	/* free fscrypt context */
+	if (!(op_data->op_flags & MF_SERVER_ENCCTX))
+		OBD_FREE(op_data->op_file_encctx, op_data->op_file_encctx_size);
+	op_data->op_file_encctx_size = 0;
+	op_data->op_file_encctx = NULL;
+
 	OBD_FREE_PTR(op_data);
 }
 

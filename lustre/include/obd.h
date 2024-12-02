@@ -901,6 +901,8 @@ enum md_op_flags {
 	MF_QOS_MKDIR		= BIT(6),
 	MF_RR_MKDIR		= BIT(7),
 	MF_OPNAME_KMALLOCED	= BIT(8),
+	MF_SERVER_ENCCTX	= BIT(9),
+	MF_SERVER_SECCTX	= BIT(10),
 };
 
 enum md_cli_flags {
