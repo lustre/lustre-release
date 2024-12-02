@@ -92,6 +92,8 @@ proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
 
 cleanup() {
 	echo -n "cln.."
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa thread is still running"
 	pgrep ll_sa > /dev/null && { echo "There are ll_sa thread not exit!"; exit 20; }
 	cleanupall ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
 }
