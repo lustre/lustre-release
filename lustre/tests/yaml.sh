@@ -9,7 +9,7 @@ split_output() {
     while read line; do
         host=${line%%:*};
         echo "$line" | sed "s/^${host}: //" | sed "s/^${host}://" \
-            >> $logdir/node.$host.yml;
+            >> "$logdir/node.$host.yml";
     done
 }
 

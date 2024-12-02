@@ -20893,6 +20893,38 @@ test_165f() {
 }
 run_test 165f "ofd_access_log_reader --exit-on-close works"
 
+test_165g() {
+	local count
+	local trace=$TMP/${tfile}.trace
+	local ofd_keepalive=$(do_facet ost1 ofd_access_log_reader --help |
+				grep keepalive)
+
+	[[ -n "$ofd_keepalive" ]] || skip "ALR keepalive message unsupported"
+
+	setup_165
+	do_facet ost1 timeout 60 ofd_access_log_reader \
+		--keepalive=3 --batch-interval=4 --debug=- > "${trace}" &
+	sleep 40
+	stop ost1
+
+	do_facet ost1 killall -TERM ofd_access_log_reader
+	wait
+	rc=$?
+
+	if ((rc != 0)); then
+		error "ofd_access_log_reader exited with rc = '${rc}'"
+	fi
+
+	count=$(grep -c "send keepalive" ${trace})
+
+	# Normal duration 40 seconds / 4 secs interval = 10 times or so.
+	# But sometimes the duration may be unpredictably long
+	(( count >= 7 )) || error "keepalive msg received $count. Expected >= 7"
+
+	echo "keepalive msg received $count"
+}
+run_test 165g "ofd_access_log_reader --keepalive works"
+
 test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"

@@ -45,6 +45,7 @@
 #include "lstddef.h"
 #include "ofd_access_batch.h"
 
+static time_t when_last_printed;
 struct fid_hash_node {
 	struct list_head fhn_node;
 	struct lu_fid fhn_fid;
@@ -74,7 +75,7 @@ static void fhn_del_init(struct fid_hash_node *fhn)
 }
 
 static inline void fhn_replace_init(struct fid_hash_node *old_fhn,
-				struct fid_hash_node *new_fhn)
+				    struct fid_hash_node *new_fhn)
 {
 	list_add(&new_fhn->fhn_node, &old_fhn->fhn_node);
 	list_del_init(&old_fhn->fhn_node);
@@ -267,6 +268,7 @@ static void alre_printf(FILE *f, struct alr_entry *alre, enum alr_rw d)
 		(unsigned long long)alre->alre_segment_count[d],
 		(unsigned long long)alre->alre_count[d],
 		(d == ALR_READ) ? 'r' : 'w');
+	when_last_printed = time(NULL);
 }
 
 struct alr_thread_arg {
@@ -275,6 +277,35 @@ struct alr_thread_arg {
 	FILE *file;
 	pthread_mutex_t *file_mutex;
 };
+
+static void alre_print_keepalive(struct alr_thread_arg *aa)
+{
+	/* Do not print keepalive if disabled */
+	if (keepalive_interval == 0)
+		return;
+
+	/* If nothing printed during keepalive_interval - send keepalive */
+	if (time(NULL) < (when_last_printed + keepalive_interval))
+		return;
+
+	fprintf(aa->file, "# keepalive\n");
+	when_last_printed = time(NULL);
+	DEBUG("send keepalive\n");
+}
+
+static void alre_print_keepalive_locked(struct alr_thread_arg *aa)
+{
+	int rc = pthread_mutex_lock(aa->file_mutex);
+
+	if (rc != 0)
+		FATAL("cannot lock batch file: %s\n", strerror(rc));
+
+	alre_print_keepalive(aa);
+
+	rc = pthread_mutex_unlock(aa->file_mutex);
+	if (rc != 0)
+		FATAL("cannot unlock batch file: %s\n", strerror(rc));
+}
 
 /* Fraction < 100 */
 static void *alr_sort_and_print_thread(void *arg)
@@ -298,10 +329,8 @@ static void *alr_sort_and_print_thread(void *arg)
 		goto out;
 
 	sa = calloc(nr, sizeof(*sa));
-	if (!sa) {
-		fprintf(stderr, "cannot allocate memory for sorting\n");
-		exit(1);
-	}
+	if (!sa)
+		FATAL("cannot allocate memory for sorting\n");
 
 	i = 0;
 	list_for_each_entry(alre, tmp, alre_fid_hash_node.fhn_node) {
@@ -322,11 +351,8 @@ static void *alr_sort_and_print_thread(void *arg)
 	/* Prevent jumbled output from multiple concurrent sort and
 	 * print threads. */
 	rc = pthread_mutex_lock(aa->file_mutex);
-	if (rc != 0) {
-		fprintf(stderr, "cannot lock batch file: %s\n",
-			strerror(rc));
-		exit(1);
-	}
+	if (rc != 0)
+		FATAL("cannot lock batch file: %s\n", strerror(rc));
 
 	/* there might be lots of items at @cut, but we want to limit total
 	 * output. so the first loop dumps all items > @cut and the second
@@ -352,13 +378,13 @@ static void *alr_sort_and_print_thread(void *arg)
 	}
 
 	rc = pthread_mutex_unlock(aa->file_mutex);
-	if (rc != 0) {
-		fprintf(stderr, "cannot unlock batch file: %s\n",
-			strerror(rc));
-		exit(1);
-	}
+	if (rc != 0)
+		FATAL("cannot unlock batch file: %s\n", strerror(rc));
 
 out:
+	/* send keepalive */
+	alre_print_keepalive_locked(aa);
+
 	fflush(aa->file);
 
 	list_for_each_entry_safe(alre, next, tmp, alre_fid_hash_node.fhn_node) {
@@ -381,10 +407,8 @@ static void *alr_print_thread_fraction_100(void *arg)
 	/* Prevent jumbled output from multiple concurrent sort and
 	 * print threads. */
 	rc = pthread_mutex_lock(aa->file_mutex);
-	if (rc != 0) {
-		fprintf(stderr, "cannot lock batch file: %s\n",	strerror(rc));
-		exit(1);
-	}
+	if (rc != 0)
+		FATAL("cannot lock batch file: %s\n", strerror(rc));
 
 	list_for_each_entry(alre, &aa->list, alre_fid_hash_node.fhn_node) {
 		enum alr_rw d;
@@ -395,11 +419,12 @@ static void *alr_print_thread_fraction_100(void *arg)
 		}
 	}
 
+	/* send keepalive */
+	alre_print_keepalive(aa);
+
 	rc = pthread_mutex_unlock(aa->file_mutex);
-	if (rc != 0) {
-		fprintf(stderr, "cannot unlock batch file: %s\n", strerror(rc));
-		exit(1);
-	}
+	if (rc != 0)
+		FATAL("cannot unlock batch file: %s\n", strerror(rc));
 
 	fflush(aa->file);
 
