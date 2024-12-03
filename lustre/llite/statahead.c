@@ -314,13 +314,12 @@ static inline int sa_kill_try(struct ll_statahead_info *sai,
 }
 
 /* called by scanner after use, sa_entry will be killed */
-static void
-sa_put(struct inode *dir, struct ll_statahead_info *sai, struct sa_entry *entry)
+static void sa_put(struct inode *dir, struct ll_statahead_info *sai,
+		   struct sa_entry *entry, bool inuse)
 {
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct sa_entry *tmp;
 	bool wakeup = false;
-	bool inuse = false;
 
 	if (entry && entry->se_state == SA_ENTRY_SUCC) {
 		struct ll_sb_info *sbi = ll_i2sbi(sai->sai_dentry->d_inode);
@@ -1958,6 +1957,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 	struct ll_dentry_data *lld;
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct ll_statahead_info *info = NULL;
+	bool inuse = false;
 	int rc = 0;
 
 	ENTRY;
@@ -2027,6 +2027,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 	LASSERTF(sai != NULL, "pattern %#X entry %p se_sai %p %pd lli %p\n",
 		 lli->lli_sa_pattern, entry, entry->se_sai, *dentryp, lli);
 
+	inuse = true;
 	if (!sa_ready(entry)) {
 		spin_lock(&lli->lli_sa_lock);
 		sai->sai_index_wait = entry->se_index;
@@ -2105,7 +2106,7 @@ out:
 	if (lld)
 		lld->lld_sa_generation = lli->lli_sa_generation;
 	rcu_read_unlock();
-	sa_put(dir, sai, entry);
+	sa_put(dir, sai, entry, inuse);
 
 	RETURN(rc);
 }
