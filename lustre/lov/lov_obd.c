@@ -1134,6 +1134,34 @@ static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
 		*((u32 *)val) = lov_mds_md_size(def_stripe_count, LOV_MAGIC_V3);
 	} else if (KEY_IS(KEY_TGT_COUNT)) {
 		*((int *)val) = lov->desc.ld_tgt_count;
+	} else if (KEY_IS(KEY_MAX_PAGES_PER_RPC)) {
+		struct lov_tgt_desc *tgt;
+		struct client_obd *cli;
+		struct obd_import *imp;
+		u32 result = 0;
+		u32 i;
+
+		for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+			tgt = lov->lov_tgts[i];
+
+			/* OST was disconnected */
+			if (tgt == NULL || tgt->ltd_exp == NULL)
+				continue;
+
+			cli = &tgt->ltd_obd->u.cli;
+			imp = cli->cl_import;
+
+			if (imp == NULL || imp->imp_state != LUSTRE_IMP_FULL)
+				continue;
+
+			if (result == 0)
+				result = cli->cl_max_pages_per_rpc;
+			else
+				result = min_t(u32, cli->cl_max_pages_per_rpc,
+					       result);
+		}
+
+		*((u32 *)val) = result;
 	} else {
 		rc = -EINVAL;
 	}

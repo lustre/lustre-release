@@ -678,17 +678,6 @@ retry_connect:
 
 	sbi->ll_dt_exp->exp_connect_data = *data;
 
-	/* Don't change value if it was specified in the config log */
-	if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages == -1) {
-		sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
-			max_t(unsigned long, SBI_DEFAULT_READ_AHEAD_WHOLE_MAX,
-			      (data->ocd_brw_size >> PAGE_SHIFT));
-		if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages >
-		    sbi->ll_ra_info.ra_max_pages_per_file)
-			sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
-				sbi->ll_ra_info.ra_max_pages_per_file;
-	}
-
 	err = client_fid_init(sbi->ll_dt_exp->exp_obd, sbi->ll_dt_exp,
 			      LUSTRE_SEQ_METADATA);
 	if (err) {
@@ -832,6 +821,26 @@ retry_connect:
 
 	OBD_FREE_PTR(data);
 	OBD_FREE_PTR(osfs);
+
+	/* Don't change value if it was specified in the config log */
+	if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages == -1) {
+		u32 max_pages_per_rpc;
+
+		size = sizeof(max_pages_per_rpc);
+		err = obd_get_info(NULL, sbi->ll_dt_exp,
+				   sizeof(KEY_MAX_PAGES_PER_RPC),
+				   KEY_MAX_PAGES_PER_RPC, &size,
+				   &max_pages_per_rpc);
+		if (err)
+			max_pages_per_rpc = 0;
+		sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
+			max_t(u32, SBI_DEFAULT_READ_AHEAD_WHOLE_MAX,
+			      max_pages_per_rpc);
+		if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages >
+		    sbi->ll_ra_info.ra_max_pages_per_file)
+			sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
+				sbi->ll_ra_info.ra_max_pages_per_file;
+	}
 
 	if (sbi->ll_dt_obd) {
 		err = sysfs_create_link(&sbi->ll_kset.kobj,

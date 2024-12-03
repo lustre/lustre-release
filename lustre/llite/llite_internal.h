@@ -736,7 +736,7 @@ static inline void ll_inode_unlock(struct inode *inode)
 #define SBI_DEFAULT_READ_AHEAD_PER_FILE_MAX	MiB_TO_PAGES(256UL)
 
 /* default read-ahead full files smaller than limit on the second read */
-#define SBI_DEFAULT_READ_AHEAD_WHOLE_MAX	MiB_TO_PAGES(2UL)
+#define SBI_DEFAULT_READ_AHEAD_WHOLE_MAX	MiB_TO_PAGES(4UL)
 
 /* default range pages */
 #define SBI_DEFAULT_RA_RANGE_PAGES		MiB_TO_PAGES(1ULL)
