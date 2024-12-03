@@ -41,15 +41,17 @@ enum nrs_tbf_flag {
 	NRS_TBF_FLAG_OPCODE	= 0x0000004,
 	NRS_TBF_FLAG_UID	= 0x0000008,
 	NRS_TBF_FLAG_GID	= 0x0000010,
+	NRS_TBF_FLAG_PROJID	= 0x0000020,
 	NRS_TBF_FLAG_ALL	= NRS_TBF_FLAG_NID | NRS_TBF_FLAG_JOBID |
 				  NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID |
-				  NRS_TBF_FLAG_OPCODE,
+				  NRS_TBF_FLAG_PROJID | NRS_TBF_FLAG_OPCODE,
 };
 
 struct tbf_id {
 	enum nrs_tbf_flag	ti_type;
 	u32			ti_uid;
 	u32			ti_gid;
+	u32			ti_projid;
 };
 
 struct nrs_tbf_id {
@@ -202,6 +204,7 @@ struct nrs_tbf_ops {
 #define NRS_TBF_TYPE_GENERIC	"generic"
 #define NRS_TBF_TYPE_UID	"uid"
 #define NRS_TBF_TYPE_GID	"gid"
+#define NRS_TBF_TYPE_PROJID	"projid"
 #define NRS_TBF_TYPE_MAX_LEN	20
 
 struct nrs_tbf_type {
@@ -322,6 +325,7 @@ enum nrs_tbf_field {
 	NRS_TBF_FIELD_OPCODE,
 	NRS_TBF_FIELD_UID,
 	NRS_TBF_FIELD_GID,
+	NRS_TBF_FIELD_PROJID,
 	NRS_TBF_FIELD_MAX
 };
 

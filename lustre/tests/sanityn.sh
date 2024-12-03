@@ -4329,7 +4329,7 @@ nrs_write_read() {
 	local myRUNAS="$1"
 	local create_as="$2"
 
-	mkdir $dir || error "mkdir $dir failed"
+	mkdir -p $dir || error "mkdir $dir failed"
 	$LFS setstripe -c $OSTCOUNT $dir || error "setstripe to $dir failed"
 	chmod 777 $dir
 
@@ -4513,7 +4513,7 @@ tbf_verify() {
 	[ $np -gt 0 ] || error "CPU partitions should not be $np."
 	echo "cpu_npartitions on ost1 is $np"
 
-	mkdir $dir || error "mkdir $dir failed"
+	mkdir -p $dir || error "mkdir $dir failed"
 	$LFS setstripe -c 1 -i 0 $dir || error "setstripe to $dir failed"
 	chmod 777 $dir
 
@@ -5108,6 +5108,80 @@ test_77kg() {
 	tbf_verify 20 10 "runas -u $RUNAS_ID"
 }
 run_test 77kg "check different granular TBF type combination: uid+opcode"
+
+test_77kh() {
+	(( "$OST1_VERSION" >= $(version_code 2.16.58) )) ||
+		skip "Need OST version at least 2.16.58 for NRS PROJID rules"
+
+	is_project_quota_supported || skip "Project quota is not supported"
+
+	enable_project_quota
+
+	local dir=$DIR/$tdir
+	local projid=100
+	local osts=$(osts_nodes)
+
+	stack_trap "cleanup_77k \"ext_w ext_r\" \"fifo\"" EXIT
+
+	do_nodes $osts \
+		$LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ projid" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_proj_rw\ projid={$projid}\ rate=20"
+
+	mkdir $dir || error "failed to mkdir $dir"
+	$LFS project -sp $projid $dir ||
+		error "failed to set porject ID ($projid) on $dir"
+	nrs_write_read
+
+	mkdir $dir || error "failed to mkdir $dir"
+	$LFS project -sp $projid $dir ||
+		error "failed to set porject ID ($projid) on $dir"
+	tbf_verify 20 20
+
+	cleanup_77k "ext_proj_rw" "fifo"
+
+	do_nodes $osts \
+		$LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ projid+opcode" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ projid={$projid}\&opcode={ost_write}\ rate=20" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ projid={$projid}\&opcode={ost_read}\ rate=10"
+
+	mkdir $dir || error "failed to mkdir $dir"
+	$LFS project -sp $projid $dir ||
+		error "failed to set porject ID ($projid) on $dir"
+	nrs_write_read
+
+	mkdir $dir || error "failed to mkdir $dir"
+	$LFS project -sp $projid $dir ||
+		error "failed to set porject ID ($projid) on $dir"
+	tbf_verify 20 10
+
+	cleanup_77k "ext_w ext_r" "fifo"
+}
+run_test 77kh "Verify that Project ID support for NRS TBF rule"
+
+test_77ki() {
+	(( "$OST1_VERSION" >= $(version_code 2.16.58) )) ||
+		skip "Need OST version at least 2.16.58 for NRS PROJID rules"
+
+	local osts=$(osts_nodes)
+
+	stack_trap "cleanup_77k \"ext_w ext_r\" \"fifo\"" EXIT
+
+	do_nodes $osts \
+		$LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ jobid+opcode" ||
+		error "failed to set NRS policies with 'jobid+opcode'"
+	do_nodes $osts \
+		$LCTL set_param ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ jobid={dd.$RUNAS_ID}\&opcode={ost_write}\ rate=20" ||
+		error "failed to set NRS TBF rules with jobid and write opcode"
+	do_nodes $osts \
+		$LCTL set_param ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ jobid={dd.$RUNAS_ID}\&opcode={ost_read}\ rate=10" ||
+		error "failed to set NRS TBF rules with jobid and read opcode"
+
+	do_nodes $osts \
+		$LCTL set_param ost.OSS.ost_io.nrs_tbf_rule="start\ ext_fail\ projid={100}\&opcode={ost_write}\ rate=20" &&
+		error "Adding unsupported projid rule (projid) should fail"
+	cleanup_77k "ext_w ext_r" "fifo"
+}
+run_test 77ki "Add rule with unsupported TBF type should fail for generic TBF"
 
 test_77l() {
 	[[ "$OST1_VERSION" -ge $(version_code 2.10.56) ]] ||
