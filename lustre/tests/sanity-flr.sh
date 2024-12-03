@@ -2213,17 +2213,7 @@ test_44a() {
 	# write data in [0, 3M)
 	dd if=/dev/urandom of=$tf bs=1M count=3 conv=notrunc ||
 		error "writing $tf failed"
-
 	verify_flr_state $tf "wp"
-
-	# disallow destroying the last non-stale mirror
-	! $LFS mirror delete --mirror-id 1 $tf > /dev/null 2>&1 ||
-		error "destroying mirror 1 should fail"
-
-	# synchronize all mirrors of the file
-	$LFS mirror resync $tf || error "mirror resync $tf failed"
-
-	verify_flr_state $tf "ro"
 
 	# split mirror 1
 	$LFS mirror split --mirror-id 1 -f $tf1 $tf ||
@@ -2248,14 +2238,9 @@ test_44a() {
 	$LFS setstripe --comp-set -I 0x30008 --comp-flags=stale $tf ||
 		error "setting stale flag on component 0x30008 failed"
 
-	# disallow destroying the last non-stale mirror
-	! $LFS mirror split --mirror-id 4 -d $tf > /dev/null 2>&1 ||
-		error "destroying mirror 4 should fail"
-
-	$LFS mirror resync $tf || error "resynchronizing $tf failed"
-
-	$LFS mirror split --mirror-id 3 -d $tf ||
-		error "destroying mirror 3 failed"
+	# allow destroying the last non-stale mirror
+	$LFS mirror split --mirror-id 4 -d $tf > /dev/null 2>&1 ||
+		error "destroying mirror 4 failed"
 	verify_mirror_count $tf 1
 
 	# verify splitted file contains the same content as the orig file does
@@ -2301,16 +2286,17 @@ test_44b() {
 
 	$LFS getstripe $tf
 
-	# split the updated mirror, should fail
-	echo "split mirror_id ${mirror_ids[$i]} id ${ids[$i]}, should fail"
-	$LFS mirror split --mirror-id=${mirror_ids[$i]} $tf &> /dev/null &&
-		error "split --mirror-id=${mirror_ids[$i]} $tf should fail"
+	# split the updated mirror
+	echo "split mirror_id ${mirror_ids[$i]} id ${ids[$i]}"
+	$LFS mirror split --mirror-id=${mirror_ids[$i]} $tf &> /dev/null ||
+		error "split --mirror-id=${mirror_ids[$i]} $tf should succeed"
 
 	i=$(( 1 - i ))
 	# split the stale mirror
+	$LFS getstripe $tf
 	echo "split mirror_id ${mirror_ids[$i]} id ${ids[$i]}"
-	$LFS mirror split --mirror-id=${mirror_ids[$i]} -d $tf ||
-		error "mirror split --mirror-id=${mirror_ids[$i]} $tf failed"
+	$LFS mirror split --mirror-id=${mirror_ids[$i]} -d $tf &&
+		error "Should fail due to only one mirror now"
 
 	echo "make sure there's no stale comp in the file"
 	# make sure there's no stale comp in the file
@@ -4592,8 +4578,6 @@ test_211() {
 	echo "size after second write"
 	ls -la $tf
 	md5_1=$(md5sum $tf) || error "error getting first md5sum of '$tf'"
-
-	$LFS mirror resync $tf || error "error resync-ing '$tf'"
 
 	$LFS mirror delete --mirror-id=1 $tf ||
 		error "error deleting mirror 1 of '$tf'"

@@ -2444,14 +2444,6 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 		}
 	}
 
-	if (last_non_stale_mirror(mirror_id, layout)) {
-		rc = -EUCLEAN;
-		fprintf(stderr,
-			"%s: cannot destroy the last non-stale mirror of file '%s'\n",
-			progname, fname);
-		goto free_layout;
-	}
-
 	if (!victim_file && mflags & MF_DESTROY)
 		/* Allow mirror split even without the key on encrypted files,
 		 * and in this case of a 'split -d', open file with O_DIRECT
@@ -2512,14 +2504,6 @@ again:
 			char file_path[PATH_MAX];
 			unsigned int rnumber;
 			int open_flags;
-
-			if (last_non_stale_mirror(mirror_id, layout)) {
-				rc = -EUCLEAN;
-				fprintf(stderr,
-					"%s: cannot destroy the last non-stale mirror of file '%s'\n",
-					progname, fname);
-				goto close_fd;
-			}
 
 			if (purge) {
 				/* don't use volatile file for mirror destroy */
@@ -4762,10 +4746,35 @@ create_mirror:
 					progname, fname);
 				goto usage_error;
 			}
-			result = mirror_split(fname, comp_id, lsa.lsa_pool_name,
-					      mirror_flags,
-					      has_m_file ? mirror_list->m_file :
-					      NULL);
+
+			/* If the mirror is the only non-stale mirror,
+			 * do resync before mirror_split().
+			 */
+			result = 0;
+			if (!layout)
+				layout = layout_get_by_name_or_fid(template ?:
+						fname, fname, 0, O_RDONLY);
+			if (last_non_stale_mirror(mirror_id, layout)) {
+				struct ll_ioc_lease *ioc = NULL;
+
+				ioc = calloc(1, sizeof(*ioc) +
+						sizeof(__u32) * IOC_IDS_MAX);
+				if (ioc) {
+					result = lfs_mirror_resync_file(fname,
+							ioc, NULL, 0,
+							stats_interval_sec,
+							bandwidth_bytes_sec);
+					if (result)
+						fprintf(stderr,
+							"Cannot resync file\n");
+					free(ioc);
+				}
+			}
+			if (!result)
+				result = mirror_split(fname, comp_id,
+						lsa.lsa_pool_name, mirror_flags,
+						has_m_file ?
+						mirror_list->m_file : NULL);
 		} else if (layout) {
 			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
 						      mode, layout);
@@ -12407,7 +12416,7 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	}
 
 	/* set the lease on the file */
-	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
+	ioc = calloc(1, sizeof(*ioc) + sizeof(__u32) * IOC_IDS_MAX);
 	if (!ioc) {
 		fprintf(stderr, "%s: cannot alloc id array for ioc: %s.\n",
 			argv[0], strerror(errno));
@@ -12423,7 +12432,7 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 		/* ignore previous file's error, continue with next file */
 
 		/* reset ioc */
-		memset(ioc, 0, sizeof(*ioc) + sizeof(__u32) * 4096);
+		memset(ioc, 0, sizeof(*ioc) + sizeof(__u32) * IOC_IDS_MAX);
 	}
 
 	free(ioc);
@@ -13195,7 +13204,7 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 		}
 	}
 
-	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
+	ioc = calloc(1, sizeof(*ioc) + sizeof(__u32) * IOC_IDS_MAX);
 	if (!ioc) {
 		fprintf(stderr,
 			"%s %s: cannot alloc comp id array for ioc: %s\n",
