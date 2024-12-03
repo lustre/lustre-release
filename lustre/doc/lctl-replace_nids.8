@@ -1,0 +1,79 @@
+.TH LCTL-REPLACE_NIDS 8 2025-02-06 "Lustre"
+.SH NAME
+lctl-replace_nids \- Replace LNet NIDs for an MDT or OST
+.SH SYNOPSIS
+.SY "lctl replace_nids"
+.IR "DEVICE_NAME NODEA_NID1" [, NODEA_NID2 [: NODEB_NID1 , NODEB_NID2 ...]]
+.YS
+.SH DESCRIPTION
+The
+.B lctl replace_nids
+command is used to replace Network Identifiers (NIDs) in a Lustre file system.
+.PP
+This is useful when a server's network address changes and you need to update
+the file system configuration to reflect the new address.
+.PP
+This command must be run on the MGS node. Only MGS server should be started
+(command execution returns error in another case).
+.PP
+To start the MGS service only:
+.BI "mount -t lustre " MGT_DEVICE " -o nosvc " MOUNT_POINT
+.PP
+Note the
+.B replace_nids
+command removes any invalidated records in the configuration log. The previous
+log is backed up with the suffix
+.RB '.bak'.
+.PP
+Failover nids must be passed after
+.RB ':'
+symbol. More then one failover
+can be set (every failover nids after
+.RB ':'
+symbol).
+.PP
+The
+.B replace_nids
+command differs from
+.B tunefs.lustre --writeconf
+in that it does not erase the entire configuration log, precluding the need to
+"writeconf" all servers and re-specify all permanent parameter settings.
+.SH OPTIONS
+.TP
+.I DEVICE_NAME
+Device name there changes applied to.
+.TP
+.I NODEA_NID1
+Primary node first NID
+.TP
+.I NODEA_NID2
+Primary node second NID
+.TP
+.I NODEB_NID1
+Failover node first NID
+.TP
+.I NODEB_NID2
+Failover node second NID
+.SH EXAMPLES
+To replace an old NIDs for device lustre-MDT0000 with new one use the following
+command:
+.EX
+.B # lctl replace_nids lustre-MDT0000 192.168.1.112@tcp1,\
+			169.254.161.205@tcp2:192.168.1.113@tcp1,\
+			169.254.161.206@tcp2:192.168.1.114@tcp1,\
+			169.254.161.207@tcp2
+.P
+192.168.1.112@tcp1,169.254.161.205@tcp2 - primary NIDs
+192.168.1.113@tcp1,169.254.161.206@tcp2 - NIDs of first failover node
+192.168.1.114@tcp1,169.254.161.207@tcp2 - NIDs of second failover node
+.EE
+.SH AVAILABILITY
+.B lctl replace_nids
+is part of the
+.BR lustre (7)
+filesystem package since release 2.4.0
+.\" Added in commit v2_3_59_0-6aa30ff835
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl (8),
+.BR tunefs.lustre (8)

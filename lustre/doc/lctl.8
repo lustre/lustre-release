@@ -62,19 +62,10 @@ Print all Network Identifiers on the local node. LNET must be running.
 From a list of nids for a remote node, show which interface communication
 will take place on.
 .TP
-.BI replace_nids " DEVICENAME NID1"\fR[, NID2 \fR, NID3 : NID4 \fR, NID5 : NID6 \fR...]
-Replace the LNET Network Identifiers for a given device,
-as when the server's IP address has changed.
-This command must be run on the MGS node.
-Only MGS server should be started
-(command execution returns error in another cases).
-To start the MGS service only:
-mount -t lustre <MDT partition> -o nosvc <mount point>
-Note the replace_nids command skips
-any invalidated records in the configuration log.
-The previous log is backed up with the suffix '.bak'.
-Failover nids must be passed after ':' symbol.
-More than one failover can be set (every failover NID after ':' symbol).
+.BI replace_nids " DEVICE_NAME NIDS_LIST"
+Replace the LNet NIDs. See
+.BR lctl-replace_nids (8)
+for details.
 .TP
 .BI ping " NID TIMEOUT"
 Check LNET connectivity via an LNET ping. This will use the fabric
@@ -444,6 +435,7 @@ filesystem package since release 0.5.0
 .BR lctl-nodemap-add-offset (8),
 .BR lctl-nodemap-del-offset (8),
 .BR lctl-pcc (8),
+.BR lctl-replace-nids (8),
 .BR lctl-set_param (8),
 .BR lctl-snapshot-create (8),
 .BR lctl-snapshot-destroy (8),
