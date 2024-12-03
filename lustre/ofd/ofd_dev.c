@@ -2060,7 +2060,7 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 
 	mode = oa->o_falloc_mode;
 	/*
-	 * mode == 0 (which is standard prealloc) and PUNCH is supported
+	 * mode == 0 (which is standard prealloc) and PUNCH/ZERO are supported
 	 * Rest of mode options are not supported yet.
 	 */
 	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE |
@@ -2072,7 +2072,7 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	 * warning.
 	 */
 	if (mode & FALLOC_FL_PUNCH_HOLE && !(mode & FALLOC_FL_KEEP_SIZE)) {
-		CWARN("%s: PUNCH mode misses KEEP_SIZE flag, setting it\n",
+		CDEBUG(D_INFO, "%s: PUNCH mode misses KEEP_SIZE flag, setting it\n",
 		      tsi->tsi_tgt->lut_obd->obd_name);
 		mode |= FALLOC_FL_KEEP_SIZE;
 	}

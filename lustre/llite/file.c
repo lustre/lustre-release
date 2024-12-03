@@ -6594,7 +6594,7 @@ static long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 		RETURN(-EOPNOTSUPP);
 
 	/*
-	 * mode == 0 (which is standard prealloc) and PUNCH is supported
+	 * mode == 0 (which is standard prealloc) and PUNCH/ZERO are supported
 	 * Rest of mode options are not supported yet.
 	 */
 	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE |

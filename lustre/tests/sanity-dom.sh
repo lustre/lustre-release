@@ -204,7 +204,7 @@ test_sanity()
 
 	# Fallocate tests
 	(( $MDS1_VERSION >= $(version_code 2.14.52) )) &&
-		testlist+=" 150b 150bb 150c 150d 150f 150g"
+		testlist+=" 150b 150bb 150c 150d 150f 150g 150ia 150ib 150ic"
 
 	SANITY_ONLY=${SANITY_ONLY:-$testlist}
 	SANITY_REPEAT=${SANITY_REPEAT:-1}

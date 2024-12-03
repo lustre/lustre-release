@@ -18331,9 +18331,12 @@ test_150ia() {
 	check_set_fallocate_or_skip
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 
+	[[ "$DOM" == "yes" ]] &&
+		$LFS setstripe -E1M -L mdt -E eof $DIR/$tfile
+
 	echo "Verify fallocate(zero): range within the file"
 	yes 'A' | dd of=$DIR/$tfile bs=$PAGE_SIZE count=8 ||
-		error "dd failed for bs 4096 and count 8"
+		error "dd failed for bs $PAGE_SIZE and count 8"
 
 	# zero range page aligned
 	local offset=$((2 * PAGE_SIZE))
@@ -18371,15 +18374,19 @@ test_150ib() {
 	check_set_fallocate_or_skip
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 
+	[[ "$DOM" == "yes" ]] &&
+		$LFS setstripe -E1M -L mdt -E eof $DIR/$tfile
+
 	local blocks_after_punch=$((4 * PAGE_SIZE / 512))
 	local blocks_after_zero_fill=$((8 * PAGE_SIZE / 512))
-	local blocks_after_extend=$((16 * PAGE_SIZE / 512))
+	local blocks_after_extend_ext=$((16 * PAGE_SIZE / 512))
+	local blocks_after_extend_ind=$((16 * PAGE_SIZE / 512 + 8))
 	local expect_len=$((8 * PAGE_SIZE))
 
 	# file size [0, 32K)
 	echo "Verify fallocate(zero): range within the file"
 	yes 'A' | dd of=$DIR/$tfile bs=$PAGE_SIZE count=8 ||
-		error "dd failed for bs 4096 and count 8"
+		error "dd failed for bs $PAGE_SIZE and count 8"
 
 	# punch across [8K,24K)
 	local offset=$((2 * PAGE_SIZE))
@@ -18406,17 +18413,71 @@ test_150ib() {
 	length=$((8 * PAGE_SIZE))
 	out=$(fallocate -z -n --offset $offset -l $length $DIR/$tfile 2>&1) ||
 		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
-
 	# block allocate, size remains
 	blocks=$(stat -c '%b' $DIR/$tfile)
-	(( blocks == blocks_after_extend )) ||
-		error "extend failed:$blocks!=$blocks_after_extend"
-
+	if [[ "$DOM" == "yes" ]]; then
+		(( blocks == blocks_after_extend_ind )) ||
+			error "extend failed:$blocks!=$blocks_after_extend_ind"
+	else
+		(( blocks == blocks_after_extend_ext )) ||
+			error "extend failed:$blocks!=$blocks_after_extend_ext"
+	fi
 	lsz=$(stat -c '%s' $DIR/$tfile)
 	(( lsz == expect_len)) ||
 		error "zero extend failed(len):$lsz!=$expect_len"
 }
 run_test 150ib "Verify fallocate zero-range PREALLOC functionality"
+
+test_150ic() {
+	(( $MDS1_VERSION >= $(version_code 2.16.54) )) ||
+		skip "need MDS1 version >= 2.16.54 for falloc zero-range"
+
+	if [[ "$ost1_FSTYPE" = "zfs" || "$mds1_FSTYPE" = "zfs" ]]; then
+		skip "zero-range mode is not implemented on OSD ZFS"
+	fi
+
+	[[ "$DOM" == "yes" ]] ||
+		skip "only check on DoM component"
+	check_set_fallocate_or_skip
+
+	# set a larger dom-size for test
+	local MB1=1048576
+	local mdtname=${FSNAME}-MDT0000-mdtlov
+	local dom_limit_saved=$(do_facet mds1 $LCTL get_param -n \
+						lod.$mdtname.dom_stripesize)
+	local dom_limit=$((256 * MB1))
+	do_facet mds1 $LCTL set_param -n \
+		lod.$mdtname.dom_stripesize=$dom_limit
+	stack_trap "do_facet mds1 $LCTL set_param -n \
+		lod.$mdtname.dom_stripesize=$dom_limit_saved"
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
+
+	echo "Verify fallocate zero-range: range extending the file"
+	$LFS setstripe -E 256M -L mdt -E eof $DIR/$tfile ||
+		error "$LFS setstripe DoM failed"
+	# now let's extend the range to [0, 128M), to trigger BRWs
+	local offset=0
+	local length=$((128 * MB1))
+	# Given per block 4KB size, per index block could hold
+	# 1024 block index. 128MB needs data block 32768,
+	# index block 1(L2) + 32(L1)
+	local want_blocks=$((128 * MB1 / 512 + 33 * 8))
+
+	touch $DIR/$tfile
+	out=$(fallocate -z --offset $offset -l $length $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|fallocate: offset $offset and len $length"
+
+	# Verify zero prealloc worked.
+	local blocks=$(stat -c '%b' $DIR/$tfile)
+	(( blocks == want_blocks )) ||
+		error "zero prealloc failed:$blocks!=$want_blocks"
+
+	local expect="fde9e0818281836e4fc0edfede2b8762"
+	local cksum=($(md5sum $DIR/$tfile))
+	[[ "${cksum[0]}" == "$expect" ]] ||
+		error "unexpected MD5SUM after fallo(large-zero): ${cksum[0]}"
+}
+run_test 150ic "Verify fallocate LARGE zero PREALLOC functionality"
 
 #LU-2902 roc_hit was not able to read all values from lproc
 function roc_hit_init() {

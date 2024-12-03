@@ -2089,7 +2089,8 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
 static int osd_declare_fallocate(const struct lu_env *env,
 				 struct dt_object *dt, __u64 start, __u64 end,
-				 int mode, struct thandle *th)
+				 int mode, struct thandle *th,
+				 enum dt_fallocate_error_t *error_code)
 {
 	struct osd_thandle *oh = container_of(th, struct osd_thandle, ot_super);
 	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
@@ -2102,21 +2103,24 @@ static int osd_declare_fallocate(const struct lu_env *env,
 	ENTRY;
 
 	/*
-	 * mode == 0 (which is standard prealloc) and PUNCH/ZERO is supported
+	 * mode == 0 (which is standard prealloc) and PUNCH/ZERO are supported
 	 * Rest of mode options is not supported yet.
 	 */
 	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE |
 		     FALLOC_FL_ZERO_RANGE))
 		RETURN(-EOPNOTSUPP);
 
-	/* TODO: should fix this for DoM/Indirect in another patch */
-	if ((mode & FALLOC_FL_ZERO_RANGE) &&
-	    !ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS))
-		RETURN(-EOPNOTSUPP);
-
 	/* disable fallocate completely */
 	if (osd_dev(dt->do_lu.lo_dev)->od_fallocate_zero_blocks < 0)
 		RETURN(-EOPNOTSUPP);
+
+	/* 'Enabled' in another code paths, try that again */
+	if ((mode & FALLOC_FL_ZERO_RANGE) &&
+	    !ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS)) {
+		LASSERT(error_code);
+		*error_code = DT_FALLOC_ERR_NEED_ZERO;
+		RETURN(-EOPNOTSUPP);
+	}
 
 	LASSERT(th);
 	LASSERT(inode);

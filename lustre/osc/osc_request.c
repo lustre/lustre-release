@@ -435,6 +435,9 @@ int osc_fallocate_base(struct obd_export *exp, struct obdo *oa,
 		RETURN(rc);
 	}
 
+	osc_set_io_portal(req);
+	ptlrpc_at_set_req_timeout(req);
+
 	osc_pack_req_body(req, oa);
 	ptlrpc_request_set_replen(req);
 

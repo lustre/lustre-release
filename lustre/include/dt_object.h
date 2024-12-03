@@ -1109,6 +1109,12 @@ enum dt_bufs_type {
 	DT_BUFS_TYPE_LOCAL	= 0x0004,
 };
 
+/* supplementary error hint */
+enum dt_fallocate_error_t {
+	DT_FALLOC_ERR_NONE       = 0x0000,
+	DT_FALLOC_ERR_NEED_ZERO  = 0x0001, /* need to fill zero by brw */
+};
+
 /*
  * Per-dt-object operations on "file body" - unstructure raw data.
  */
@@ -1452,7 +1458,8 @@ struct dt_body_operations {
 	 */
 	int (*dbo_declare_fallocate)(const struct lu_env *env,
 				    struct dt_object *dt, __u64 start,
-				    __u64 end, int mode, struct thandle *th);
+				    __u64 end, int mode, struct thandle *th,
+				    enum dt_fallocate_error_t *error_code);
 
 	/**
 	 * dbo_fallocate() - Allocate specified region for an object
@@ -2722,7 +2729,8 @@ static inline int dt_ladvise(const struct lu_env *env, struct dt_object *dt,
 
 static inline int dt_declare_fallocate(const struct lu_env *env,
 				       struct dt_object *dt, __u64 start,
-				       __u64 end, int mode, struct thandle *th)
+				       __u64 end, int mode, struct thandle *th,
+				       enum dt_fallocate_error_t *error_code)
 {
 	LASSERT(dt);
 
@@ -2733,7 +2741,7 @@ static inline int dt_declare_fallocate(const struct lu_env *env,
 		return -EOPNOTSUPP;
 
 	return dt->do_body_ops->dbo_declare_fallocate(env, dt, start, end,
-						      mode, th);
+						      mode, th, error_code);
 }
 
 static inline int dt_falloc(const struct lu_env *env, struct dt_object *dt,

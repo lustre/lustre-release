@@ -847,7 +847,7 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 				GOTO(stop, rc);
 		}
 
-		rc = dt_declare_fallocate(env, dob, start, end, mode, th);
+		rc = dt_declare_fallocate(env, dob, start, end, mode, th, NULL);
 		if (rc)
 			GOTO(stop, rc);
 

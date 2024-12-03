@@ -537,11 +537,17 @@ static int mdt_commitrw_read(const struct lu_env *env, struct mdt_device *mdt,
 	RETURN(rc);
 }
 
+/*
+ * @do_up_read: write() might be invoked through other code paths where the
+ * state of mo->mot_dom_sem differs from the state assumed by down_read().
+ * Take care here to avoid potential inconsistencies or deadlocks.
+ */
 static int mdt_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 			      struct mdt_device *mdt, struct mdt_object *mo,
 			      struct lu_attr *la, struct obdo *oa, int objcount,
 			      int niocount, struct niobuf_local *lnb,
-			      unsigned long granted, int old_rc)
+			      unsigned long granted, int old_rc,
+			      bool do_up_read)
 {
 	struct dt_device *dt = mdt->mdt_bottom;
 	struct dt_object *dob;
@@ -657,7 +663,8 @@ out_stop:
 
 out:
 	dt_bufs_put(env, dob, lnb, niocount);
-	up_read(&mo->mot_dom_sem);
+	if (do_up_read)
+		up_read(&mo->mot_dom_sem);
 	if (granted > 0)
 		tgt_grant_commit(exp, granted, old_rc);
 	if (rc)
@@ -771,7 +778,8 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 				 ktime_us_delta(ktime_get(), kstart));
 
 		rc = mdt_commitrw_write(env, exp, mdt, mo, la, oa, objcount,
-					npages, lnb, oa->o_grant_used, old_rc);
+					npages, lnb, oa->o_grant_used, old_rc,
+					true);
 		if (rc == 0)
 			obdo_from_la(oa, la, VALID_FLAGS | LA_GID | LA_UID);
 		else
@@ -842,7 +850,8 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 static int mdt_object_fallocate(const struct lu_env *env, struct dt_device *dt,
 				struct dt_object *dob, __u64 start, __u64 end,
-				int mode, struct lu_attr *la)
+				int mode, struct lu_attr *la,
+				enum dt_fallocate_error_t *error_code)
 {
 	int rc;
 	bool restart;
@@ -865,7 +874,8 @@ static int mdt_object_fallocate(const struct lu_env *env, struct dt_device *dt,
 		if (rc)
 			GOTO(stop, rc);
 
-		rc = dt_declare_fallocate(env, dob, start, end, mode, th);
+		rc = dt_declare_fallocate(env, dob, start, end, mode, th,
+					  error_code);
 		if (rc)
 			GOTO(stop, rc);
 
@@ -889,6 +899,78 @@ stop:
 		th->th_result = rc;
 		dt_trans_stop(env, dt, th);
 	} while (restart);
+	RETURN(rc);
+}
+
+/**
+ * mdt_object_fallocate_zero(): brw(ZERO) over specified region
+ * @mo: object to be applied on
+ * @start: region start position
+ * @end: region end position
+ *
+ * There maybe cases when we need to use BRW to mimic fallocate ops,
+ * e.g. when fallocate(zero) is invoked on indirect-mapping inode.
+ */
+static int
+mdt_object_fallocate_zero(const struct lu_env *env, struct obd_export *exp,
+			  struct mdt_device *mdt, struct mdt_object *mo,
+			  __u64 start, __u64 end, struct lu_attr *la)
+{
+	struct tgt_thread_big_cache *tbc = NULL;
+	struct dt_object *dob = mdt_obj2dt(mo);
+	struct niobuf_local *lnbs = NULL;
+	struct obdo oa;
+	int npages = 0;
+	int rc = 0;
+
+	LASSERT(env->le_ses->lc_thread->t_data);
+	tbc = env->le_ses->lc_thread->t_data;
+	while (start < end) {
+		struct niobuf_remote rnb;
+		/* limit memory usage each round to ~64KB */
+		int mem_threshold = 65536;
+		__u64 next_end = 0;
+		int i = 0;
+
+		oa.o_size = 0;
+		lnbs = NULL;
+		npages = 0;
+
+		next_end = (start + mem_threshold + PAGE_SIZE - 1) & PAGE_MASK;
+		next_end = min(end, next_end);
+		rnb.rnb_offset = start;
+		rnb.rnb_len = next_end - start;
+		rc = dt_bufs_get(env, dob, &rnb, tbc->local,
+				 PTLRPC_MAX_BRW_PAGES, DT_BUFS_TYPE_WRITE);
+		if (unlikely(rc < 0))
+			GOTO(out, rc);
+
+		npages = rc;
+		lnbs = tbc->local;
+		/* read in partial pages, then zero out rest part */
+		rc = dt_write_prep(env, dob, lnbs, npages);
+		if (rc)
+			GOTO(out, rc);
+
+		for (i = 0; i < npages; i++) {
+			memset(kmap(lnbs[i].lnb_page) + lnbs[i].lnb_page_offset,
+			       0, lnbs[i].lnb_len);
+			kunmap(lnbs[i].lnb_page);
+		}
+
+		/* mdt_write will handle write, resource put, etc. */
+		rc = mdt_commitrw_write(env, exp, mdt, mo, la, &oa, 0, npages,
+					lnbs, 0, 0, false);
+		if (rc)
+			GOTO(out, rc);
+
+		start = next_end;
+	}
+	npages = 0;
+	lnbs = NULL;
+out:
+	if (npages && lnbs)
+		dt_bufs_put(env, dob, lnbs, npages);
 	RETURN(rc);
 }
 
@@ -917,6 +999,7 @@ int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 	struct lu_attr *la;
 	__u64 flags = 0;
 	struct lustre_handle lh = { 0, };
+	enum dt_fallocate_error_t error_code = DT_FALLOC_ERR_NONE;
 	int rc, mode;
 	__u64 start, end;
 	bool srvlock;
@@ -974,7 +1057,7 @@ int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 	       PFID(&tsi->tsi_fid), mode, start, end);
 
 	/*
-	 * mode == 0 (which is standard prealloc) and PUNCH is supported
+	 * mode == 0 (which is standard prealloc) and PUNCH/ZERO is supported
 	 * Rest of mode options are not supported yet.
 	 */
 	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE |
@@ -1027,8 +1110,13 @@ int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 		tgt_fmd_update(tsi->tsi_exp, &tsi->tsi_fid,
 			       tgt_ses_req(tsi)->rq_xid);
 
-	rc = mdt_object_fallocate(tsi->tsi_env, mdt->mdt_bottom, dob, start,
-				  end, mode, la);
+	rc = mdt_object_fallocate(tsi->tsi_env, mdt->mdt_bottom, dob,
+				  start, end, mode, la, &error_code);
+	/* in case file is indirect-mapping, mimic brw */
+	if (rc == -EOPNOTSUPP && error_code == DT_FALLOC_ERR_NEED_ZERO)
+		rc = mdt_object_fallocate_zero(tsi->tsi_env, exp, mdt,
+					       mo, start, end, la);
+
 	up_write(&mo->mot_dom_sem);
 	if (rc)
 		GOTO(out_put, rc);
