@@ -85,9 +85,9 @@ int class_dentry_readdir(const struct lu_env *env, struct mgs_device *mgs,
 				goto next;
 		}
 
-		/* filter out backup files */
-		if (lu_name_is_backup_file(key, key_sz, NULL)) {
-			CDEBUG(D_MGS, "Skipping backup file %.*s\n",
+		/* filter out files */
+		if (!lu_name_in_white_list(key, key_sz)) {
+			CDEBUG(D_MGS, "Not in white list, skipping %.*s\n",
 			       key_sz, key);
 			goto next;
 		}

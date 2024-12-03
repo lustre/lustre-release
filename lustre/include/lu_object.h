@@ -1315,6 +1315,33 @@ static inline bool lu_name_is_backup_file(const char *name, int namelen,
 	return false;
 }
 
+static inline bool lu_name_in_white_list(const char *name, int nlen)
+{
+	/* Check for specific filenames */
+	if (strncmp(name, "mountdata", nlen) == 0 ||
+	    strncmp(name, "nodemap", nlen) == 0 ||
+	    strncmp(name, "params", nlen) == 0 ||
+	    strncmp(name, "sptlrpc", nlen) == 0)
+		return 1;
+
+	/* names like lustre-client */
+	if (nlen > 7 && strncmp(name + nlen - 7, "-client", 7) == 0)
+		return 1;
+
+	/* Check if the string is long enough to match the pattern */
+	if (nlen < 9)
+		return 0;
+
+	/* Check if the string ends with "-OSTxxxx" or "-MDTxxxx" */
+	if ((strncmp(name + nlen - 8, "-OST", 4) == 0 ||
+	     strncmp(name + nlen - 8, "-MDT", 4) == 0) &&
+	     isxdigit(name[nlen - 4]) && isxdigit(name[nlen - 3]) &&
+	     isxdigit(name[nlen - 2]) && isxdigit(name[nlen - 1])) {
+		return 1;
+	}
+	return 0;
+}
+
 static inline bool lu_name_is_valid_len(const char *name, size_t name_len)
 {
 	return name != NULL &&
