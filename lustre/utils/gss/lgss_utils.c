@@ -543,13 +543,15 @@ int switch_identity(uid_t uid)
 	struct passwd *pw;
 	int rc;
 
-	/* drop list of supp groups */
-	rc = setgroups(0, NULL);
-	if (rc == -1) {
-		logmsg(LL_ERR, "cannot drop list of supp groups: %s\n",
-		       strerror(errno));
-		rc = -errno;
-		goto end_switch;
+	/* drop list of supp groups for regular user */
+	if (uid) {
+		rc = setgroups(0, NULL);
+		if (rc == -1) {
+			logmsg(LL_ERR, "cannot drop list of supp groups: %s\n",
+			       strerror(errno));
+			rc = -errno;
+			goto end_switch;
+		}
 	}
 
 	pw = getpwuid(uid);
@@ -560,7 +562,7 @@ int switch_identity(uid_t uid)
 		goto end_switch;
 	}
 
-	rc = setresgid(pw->pw_gid, pw->pw_gid, pw->pw_gid);
+	rc = setresgid(pw->pw_gid, pw->pw_gid, 0);
 	if (rc == -1) {
 		logmsg(LL_ERR, "cannot set real gid to %u: %s\n",
 		       pw->pw_gid, strerror(errno));
@@ -568,7 +570,7 @@ int switch_identity(uid_t uid)
 		goto end_switch;
 	}
 
-	rc = setresuid(uid, uid, uid);
+	rc = setresuid(uid, uid, 0);
 	if (rc == -1) {
 		logmsg(LL_ERR, "cannot set real uid to %u: %s\n",
 		       uid, strerror(errno));

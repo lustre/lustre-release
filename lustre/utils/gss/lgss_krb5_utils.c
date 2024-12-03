@@ -487,83 +487,6 @@ end_find:
 }
 
 /**
- * Compose the TGT cc name for user, needs to fork process and switch identity.
- * For that reason, ccname buffer passed in must be mmapped with MAP_SHARED.
- */
-static int get_user_tgt_ccname(struct lgss_cred *cred, krb5_context ctx,
-			       char *ccname, int size)
-{
-	pid_t child;
-	int status, rc = 0;
-
-	/* fork to not change identity in main process, it needs to stay root
-	 * in order to proceed to ioctls
-	 */
-	child = fork();
-	if (child == -1) {
-		logmsg(LL_ERR, "cannot fork child for user %u: %s\n",
-		       cred->lc_uid, strerror(errno));
-		rc = -errno;
-	} else if (child == 0) {
-		/* switch identity */
-		rc = switch_identity(cred->lc_uid);
-		if (rc)
-			exit(1);
-
-		/* getting default ccname requires impersonating user */
-		rc = lgss_krb5_get_default_ccache_name(ctx, ccname, size);
-		if (rc) {
-			logmsg(LL_ERR,
-			       "cannot get default ccname for user %u\n",
-			       cred->lc_uid);
-			exit(1);
-		}
-
-		/* job done for child */
-		exit(0);
-	} else {
-		logmsg(LL_TRACE, "forked child %d\n", child);
-		if (wait(&status) < 0) {
-			logmsg(LL_ERR, "wait child %d failed: %s\n",
-			       child, strerror(errno));
-			return -errno;
-		}
-		if (!WIFEXITED(status)) {
-			logmsg(LL_ERR, "child %d terminated with %d\n",
-			       child, status);
-			return status;
-		}
-	}
-
-	/* try ccname as fetched by child */
-	rc = acquire_user_cred_and_check(ccname);
-	if (!rc)
-		/* user's creds found in default ccache */
-		goto end_ccache;
-
-	/* fallback: look at every file matching
-	 * - /tmp/ *krb5cc*
-	 * - /run/user/<uid>/ *krb5cc*
-	 */
-	rc = find_existing_krb5_ccache(cred->lc_uid, LGSS_DEFAULT_CRED_DIR,
-				       ccname, size);
-	if (!rc)
-		/* user's creds found in LGSS_DEFAULT_CRED_DIR */
-		goto end_ccache;
-
-	rc = find_existing_krb5_ccache(cred->lc_uid, LGSS_USER_CRED_DIR,
-				       ccname, size);
-	if (!rc)
-		/* user's creds found in LGSS_USER_CRED_DIR */
-		goto end_ccache;
-
-	rc = -ENODATA;
-
-end_ccache:
-	return rc;
-}
-
-/**
  * find out whether current TGT cache is valid or not
  */
 static int lkrb5_check_root_tgt_cc(krb5_context ctx, unsigned int flag,
@@ -886,7 +809,7 @@ static int lkrb5_prepare_user_cred(struct lgss_cred *cred)
 {
 	krb5_context ctx;
 	krb5_error_code code;
-	int size = PATH_MAX;
+	int size = PATH_MAX + 1;
 	void *ccname;
 	int rc;
 
@@ -899,30 +822,49 @@ static int lkrb5_prepare_user_cred(struct lgss_cred *cred)
 		return -1;
 	}
 
-	/* buffer passed to get_user_tgt_ccname() must be mmapped with
-	 * MAP_SHARED because it is accessed read/write from a child process
-	 */
-	ccname = mmap(NULL, size, PROT_READ | PROT_WRITE,
-		      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	if (ccname == MAP_FAILED) {
-		logmsg(LL_ERR, "cannot mmap memory for user %u: %s\n",
-		       cred->lc_uid, strerror(errno));
+	ccname = calloc(1, size);
+	if (!ccname) {
 		rc = -errno;
 		goto free;
 	}
 
-	rc = get_user_tgt_ccname(cred, ctx, ccname, size);
+	/* getting default ccname requires impersonating user */
+	rc = lgss_krb5_get_default_ccache_name(ctx, ccname, size);
+	if (rc)
+		goto end_ccache;
+
+	/* try ccname as returned by gss */
+	rc = acquire_user_cred_and_check(ccname);
+	if (!rc)
+		/* user's creds found in default ccache */
+		goto end_ccache;
+
+	/* fallback: look at every file matching
+	 * - /tmp/ *krb5cc*
+	 * - /run/user/<uid>/ *krb5cc*
+	 */
+	rc = find_existing_krb5_ccache(cred->lc_uid, LGSS_DEFAULT_CRED_DIR,
+				       ccname, size);
+	if (!rc)
+		/* user's creds found in LGSS_DEFAULT_CRED_DIR */
+		goto end_ccache;
+
+	rc = find_existing_krb5_ccache(cred->lc_uid, LGSS_USER_CRED_DIR,
+				       ccname, size);
+	if (!rc)
+		/* user's creds found in LGSS_USER_CRED_DIR */
+		goto end_ccache;
+
+	rc = -ENODATA;
+
+end_ccache:
 	if (rc)
 		logmsg(LL_ERR, "cannot get user %u ccname: %s\n",
 		       cred->lc_uid, strerror(-rc));
 	else
 		logmsg(LL_INFO, "using krb5 cache name: %s\n", (char *)ccname);
 
-	if (munmap(ccname, size) == -1) {
-		logmsg(LL_ERR, "cannot munmap memory for user %u: %s\n",
-		       cred->lc_uid, strerror(errno));
-		rc = rc ? rc : -errno;
-	}
+	free(ccname);
 
 free:
 	krb5_free_context(ctx);

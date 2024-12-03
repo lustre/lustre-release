@@ -993,8 +993,7 @@ static int prepare_and_instantiate(struct lgss_cred *cred, key_serial_t keyid,
 {
 	key_serial_t inst_keyring;
 	bool prepared = true;
-	pid_t child = 1;
-	int rc = 0;
+	int rc;
 
 	if (lgss_prepare_cred(cred)) {
 		logmsg(LL_ERR, "key %08x: failed to prepare credentials "
@@ -1018,19 +1017,13 @@ static int prepare_and_instantiate(struct lgss_cred *cred, key_serial_t keyid,
 	if (cred->lc_root_flags) {
 		inst_keyring = 0;
 	} else {
-		inst_keyring = KEY_SPEC_USER_KEYRING;
-		/* fork to not change identity in main process */
-		rc = fork_and_switch_id(uid, &child);
-		if (rc || child)
-			goto out;
-	}
-
-	/* if dealing with a user key, grant user write permission,
-	 * it will be required for key update
-	 */
-	if (child == 0) {
 		key_perm_t perm;
 
+		inst_keyring = KEY_SPEC_USER_KEYRING;
+
+		/* when dealing with a user key, grant user write permission,
+		 * it will be required for key update
+		 */
 		perm = KEY_POS_VIEW | KEY_POS_WRITE | KEY_POS_SEARCH |
 			KEY_POS_LINK | KEY_POS_SETATTR |
 			KEY_USR_VIEW | KEY_USR_WRITE;
@@ -1050,10 +1043,6 @@ static int prepare_and_instantiate(struct lgss_cred *cred, key_serial_t keyid,
 		       keyid, inst_keyring);
 	}
 
-out:
-	if (child == 0)
-		/* job done for child */
-		exit(rc);
 	return prepared ? rc : 1;
 }
 
@@ -1376,11 +1365,29 @@ out_pipe:
 		else
 			logmsg(LL_TRACE, "stick with current namespace\n");
 
+		if (!cred->lc_root_flags) {
+			/* switch to user id for creds prepare */
+			rc = switch_identity(uparam.kup_uid);
+			if (rc)
+				goto out_reg;
+		}
+
 		/* In case of prepare error, a key will be instantiated
 		 * all the same. But then we will have to error this key
 		 * instead of doing normal gss negotiation.
 		 */
 		rc = prepare_and_instantiate(cred, keyid, uparam.kup_uid);
+
+		if (!cred->lc_root_flags) {
+			int rc2;
+
+			/* switch back to root in order to proceed to ioctls */
+			rc2 = switch_identity(0);
+			if (rc2) {
+				rc = rc2;
+				goto out_reg;
+			}
+		}
 
 		/*
 		 * fork a child to do the real gss negotiation
