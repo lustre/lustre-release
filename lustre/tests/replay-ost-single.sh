@@ -183,7 +183,7 @@ test_6() {
 	# wait till space is returned, following
 	# (( $before > $after_dd)) test counting on that
 	wait_mds_ost_sync || error "first wait_mds_ost_sync failed"
-	wait_destroy_complete || error "first wait_destroy_complete failed"
+	wait_destroy_complete 10 || error "first wait_destroy_complete failed"
 	sync_all_data
 
 	local before=$(calc_osc_kbytes kbytesfree)
