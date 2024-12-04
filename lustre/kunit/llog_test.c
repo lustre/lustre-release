@@ -1513,9 +1513,9 @@ static int llog_test_process_thread(void *arg)
 	rc = llog_cat_process_or_fork(NULL, lpi->lpi_loghandle, lpi->lpi_cb,
 				      NULL, lpi->lpi_cbdata, 1, 0, true);
 
+	lpi->lpi_rc = rc;
 	complete(&lpi->lpi_completion);
 	msleep(MSEC_PER_SEC / 2);
-	lpi->lpi_rc = rc;
 	if (rc)
 		CWARN("10h: Error during catalog processing %d\n", rc);
 	return rc;
