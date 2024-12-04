@@ -251,13 +251,6 @@ lnet_peer_alloc(struct lnet_nid *nid)
 		lp->lp_alive = true;
 
 	/*
-	 * all peers created on a router should have health on
-	 * if it's not already on.
-	 */
-	if (lnet_routing_enabled() && !lnet_health_sensitivity)
-		lp->lp_health_sensitivity = 1;
-
-	/*
 	 * Turn off discovery for loopback peer. If you're creating a peer
 	 * for the loopback interface then that was initiated when we
 	 * attempted to send a message over the loopback. There is no need
@@ -3546,7 +3539,6 @@ __must_hold(&lp->lp_lock)
 {
 	struct list_head rlist;
 	struct lnet_route *route, *tmp;
-	int sensitivity = lp->lp_health_sensitivity;
 	int rc = 0;
 
 	INIT_LIST_HEAD(&rlist);
@@ -3590,8 +3582,7 @@ __must_hold(&lp->lp_lock)
 		lnet_add_route(route->lr_net,
 			       route->lr_hops,
 			       &route->lr_nid,
-			       route->lr_priority,
-			       sensitivity);
+			       route->lr_priority);
 		LIBCFS_FREE(route, sizeof(*route));
 	}
 

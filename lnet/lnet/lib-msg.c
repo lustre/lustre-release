@@ -478,7 +478,7 @@ lnet_handle_local_failure(struct lnet_ni *local_ni)
 		return;
 	}
 
-	lnet_dec_healthv_locked(&local_ni->ni_healthv, lnet_health_sensitivity);
+	lnet_dec_healthv_locked(&local_ni->ni_healthv);
 	lnet_ni_add_to_recoveryq_locked(local_ni, &the_lnet.ln_mt_localNIRecovq,
 					ktime_get_seconds());
 	lnet_net_unlock(0);
@@ -889,7 +889,7 @@ lnet_health_check(struct lnet_msg *msg)
 		 * Ping counts are reset to 0 as appropriate to allow for
 		 * faster recovery.
 		 */
-		lnet_inc_healthv(&ni->ni_healthv, lnet_health_sensitivity);
+		lnet_inc_healthv(&ni->ni_healthv);
 		/*
 		 * It's possible msg_txpeer is NULL in the LOLND
 		 * case. Only increment the peer's health if we're

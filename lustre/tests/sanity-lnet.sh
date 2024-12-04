@@ -1582,7 +1582,6 @@ route:
       gateway: ${router_nids[0]}
       hop: -1
       priority: 0
-      health_sensitivity: 1
 peer:
     - primary nid: ${router_nids[0]}
       Multi-Rail: False
@@ -1636,7 +1635,6 @@ EOF
       gateway: ${IF0_NET}.${i}@${NETTYPE}
       hop: -1
       priority: 0
-      health_sensitivity: 1
 EOF
 	done
 
@@ -4255,7 +4253,6 @@ EOF
       gateway: ${IF0_NET}.${i}@${NETTYPE}
       hop: -1
       priority: 0
-      health_sensitivity: 1
 EOF
 	done
 

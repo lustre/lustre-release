@@ -595,8 +595,7 @@ lnet_add_route_to_rnet(struct lnet_remotenet *rnet, struct lnet_route *route)
 }
 
 int
-lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway,
-	       __u32 priority, __u32 sensitivity)
+lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway, __u32 priority)
 __must_hold(&the_lnet.ln_api_mutex)
 {
 	struct list_head *route_entry;
@@ -713,7 +712,6 @@ __must_hold(&the_lnet.ln_api_mutex)
 	 * consolidated peer lp_routes list
 	 */
 	if (add_route) {
-		gw->lp_health_sensitivity = sensitivity;
 		lnet_add_route_to_rnet(rnet2, route);
 		if (lnet_peer_discovery_disabled)
 			CWARN("Consider turning discovery on to enable full Multi-Rail routing functionality\n");
@@ -911,7 +909,7 @@ int lnet_get_rtr_pool_cfg(int cpt, struct lnet_ioctl_pool_cfg *pool_cfg)
 
 int
 lnet_get_route(int idx, __u32 *net, __u32 *hops, lnet_nid_t *gateway,
-	       __u32 *flags, __u32 *priority, __u32 *sensitivity)
+	       __u32 *flags, __u32 *priority)
 {
 	struct lnet_remotenet *rnet;
 	struct list_head *rn_list;
@@ -930,8 +928,6 @@ lnet_get_route(int idx, __u32 *net, __u32 *hops, lnet_nid_t *gateway,
 					*gateway  = lnet_nid_to_nid4(&route->lr_nid);
 					*hops	  = route->lr_hops;
 					*priority = route->lr_priority;
-					*sensitivity = route->lr_gateway->
-						lp_health_sensitivity;
 					if (lnet_is_route_alive(route))
 						*flags |= LNET_RT_ALIVE;
 					else

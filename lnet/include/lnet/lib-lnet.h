@@ -627,14 +627,13 @@ int lnet_notify(struct lnet_ni *ni, struct lnet_nid *peer, bool alive,
 void lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 			time64_t when);
 int lnet_add_route(__u32 net, __u32 hops, struct lnet_nid *gateway,
-		   __u32 priority, __u32 sensitivity);
+		   __u32 priority);
 int lnet_del_route(__u32 net, struct lnet_nid *gw_nid);
 void lnet_move_route(struct lnet_route *route, struct lnet_peer *lp,
 		     struct list_head *rt_list);
 void lnet_destroy_routes(void);
 int lnet_get_route(int idx, __u32 *net, __u32 *hops,
-		   lnet_nid_t *gateway, __u32 *alive, __u32 *priority,
-		   __u32 *sensitivity);
+		   lnet_nid_t *gateway, __u32 *alive, __u32 *priority);
 int lnet_get_rtr_pool_cfg(int idx, struct lnet_ioctl_pool_cfg *pool_cfg);
 struct lnet_ni *lnet_get_next_ni_locked(struct lnet_net *mynet,
 					struct lnet_ni *prev);
@@ -1238,17 +1237,17 @@ lnet_atomic_add_unless_max(atomic_t *v, int a, int u)
 }
 
 static bool
-lnet_dec_healthv_locked(atomic_t *healthv, int sensitivity)
+lnet_dec_healthv_locked(atomic_t *healthv)
 {
 	int h = atomic_read(healthv);
 
 	if (h == 0)
 		return false;
 
-	if (h < sensitivity)
+	if (h < lnet_health_sensitivity)
 		h = 0;
 	else
-		h -= sensitivity;
+		h -= lnet_health_sensitivity;
 
 	return (atomic_xchg(healthv, h) != h);
 }
@@ -1256,36 +1255,24 @@ lnet_dec_healthv_locked(atomic_t *healthv, int sensitivity)
 static inline void
 lnet_dec_lpni_healthv_locked(struct lnet_peer_ni *lpni)
 {
-	/* If there is a health sensitivity in the peer then use that
-	 * instead of the globally set one.
-	 * only adjust the net health if the lpni health value changed
-	 */
-	if (lnet_dec_healthv_locked(&lpni->lpni_healthv,
-			lpni->lpni_peer_net->lpn_peer->lp_health_sensitivity ? :
-			lnet_health_sensitivity)) {
+	 /* only adjust the net health if the lpni health value changed */
+	if (lnet_dec_healthv_locked(&lpni->lpni_healthv))
 		lnet_update_peer_net_healthv(lpni);
-	}
+}
+
+static inline bool
+lnet_inc_healthv(atomic_t *healthv)
+{
+	return lnet_atomic_add_unless_max(healthv, lnet_health_sensitivity,
+					  LNET_MAX_HEALTH_VALUE);
 }
 
 static inline void
 lnet_inc_lpni_healthv_locked(struct lnet_peer_ni *lpni)
 {
-	/* If there is a health sensitivity in the peer then use that
-	 * instead of the globally set one.
-	 * only adjust the net health if the lpni health value changed
-	 */
-	if (lnet_atomic_add_unless_max(&lpni->lpni_healthv,
-			lpni->lpni_peer_net->lpn_peer->lp_health_sensitivity ? :
-			lnet_health_sensitivity,
-				       LNET_MAX_HEALTH_VALUE)) {
+	 /* only adjust the net health if the lpni health value changed */
+	if (lnet_inc_healthv(&lpni->lpni_healthv))
 		lnet_update_peer_net_healthv(lpni);
-	}
-}
-
-static inline void
-lnet_inc_healthv(atomic_t *healthv, int value)
-{
-	lnet_atomic_add_unless_max(healthv, value, LNET_MAX_HEALTH_VALUE);
 }
 
 static inline int

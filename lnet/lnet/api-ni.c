@@ -4365,25 +4365,19 @@ LNetCtl(unsigned int cmd, void *arg)
 		return lnet_fail_nid(&nid, data->ioc_count);
 
 	case IOC_LIBCFS_ADD_ROUTE: {
-		/* default router sensitivity to 1 */
-		unsigned int sensitivity = 1;
+		__u32 hops, priority;
+
 		config = arg;
 
 		if (config->cfg_hdr.ioc_len < sizeof(*config))
 			return -EINVAL;
 
-		if (config->cfg_config_u.cfg_route.rtr_sensitivity) {
-			sensitivity =
-			  config->cfg_config_u.cfg_route.rtr_sensitivity;
-		}
+		hops = config->cfg_config_u.cfg_route.rtr_hop;
+		priority = config->cfg_config_u.cfg_route.rtr_priority;
 
 		lnet_nid4_to_nid(config->cfg_nid, &nid);
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_add_route(config->cfg_net,
-				    config->cfg_config_u.cfg_route.rtr_hop,
-				    &nid,
-				    config->cfg_config_u.cfg_route.
-					rtr_priority, sensitivity);
+		rc = lnet_add_route(config->cfg_net, hops, &nid, priority);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 	}
@@ -4413,9 +4407,7 @@ LNetCtl(unsigned int cmd, void *arg)
 				    &config->cfg_nid,
 				    &config->cfg_config_u.cfg_route.rtr_flags,
 				    &config->cfg_config_u.cfg_route.
-					rtr_priority,
-				    &config->cfg_config_u.cfg_route.
-					rtr_sensitivity);
+					rtr_priority);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 
@@ -6936,7 +6928,6 @@ struct lnet_route_properties {
 	s32			lrp_hop;
 	u32			lrp_flags;
 	u32			lrp_priority;
-	u32			lrp_sensitivity;
 };
 
 struct lnet_genl_route_list {
@@ -6999,11 +6990,6 @@ static int lnet_scan_route(struct lnet_genl_route_list *rlist,
 				    settings->lrp_priority != route->lr_priority)
 					continue;
 
-				if (settings->lrp_sensitivity != -1 &&
-				    settings->lrp_sensitivity !=
-				    route->lr_gateway->lp_health_sensitivity)
-					continue;
-
 				prop = genradix_ptr_alloc(&rlist->lgrl_list,
 							  rlist->lgrl_count++,
 							  GFP_ATOMIC);
@@ -7014,8 +7000,6 @@ static int lnet_scan_route(struct lnet_genl_route_list *rlist,
 				prop->lrp_gateway = route->lr_nid;
 				prop->lrp_hop = route->lr_hops;
 				prop->lrp_priority = route->lr_priority;
-				prop->lrp_sensitivity =
-					route->lr_gateway->lp_health_sensitivity;
 				if (lnet_is_route_alive(route))
 					prop->lrp_flags |= LNET_RT_ALIVE;
 				else
@@ -7087,7 +7071,6 @@ static int lnet_route_show_start(struct netlink_callback *cb)
 			.lrp_net		= LNET_NET_ANY,
 			.lrp_hop		= -1,
 			.lrp_priority		= -1,
-			.lrp_sensitivity	= -1,
 		};
 
 		rc = lnet_scan_route(rlist, &tmp);
@@ -7107,7 +7090,6 @@ static int lnet_route_show_start(struct netlink_callback *cb)
 				.lrp_net		= LNET_NET_ANY,
 				.lrp_hop		= -1,
 				.lrp_priority		= -1,
-				.lrp_sensitivity	= -1,
 			};
 			struct nlattr *route;
 			int rem2;
@@ -7314,8 +7296,6 @@ static int lnet_route_show_dump(struct sk_buff *msg,
 		if (gnlh->version) {
 			nla_put_s32(msg, LNET_ROUTE_ATTR_HOP, prop->lrp_hop);
 			nla_put_u32(msg, LNET_ROUTE_ATTR_PRIORITY, prop->lrp_priority);
-			nla_put_u32(msg, LNET_ROUTE_ATTR_HEALTH_SENSITIVITY,
-				    prop->lrp_sensitivity);
 
 			if (!(cb->nlh->nlmsg_flags & NLM_F_DUMP_FILTERED)) {
 				nla_put_string(msg, LNET_ROUTE_ATTR_STATE,
@@ -8006,7 +7986,7 @@ static int lnet_route_cmd(struct sk_buff *skb, struct genl_info *info)
 
 	nla_for_each_nested(attr, params, rem) {
 		u32 net_id = LNET_NET_ANY, hops = LNET_UNDEFINED_HOPS;
-		u32 priority = 0, sensitivity = 1;
+		u32 priority = 0;
 		struct lnet_nid gw_nid = LNET_ANY_NID;
 		struct nlattr *route_prop;
 		bool alive = true;
@@ -8144,23 +8124,6 @@ static int lnet_route_cmd(struct sk_buff *skb, struct genl_info *info)
 					GOTO(report_err, rc = -EINVAL);
 				}
 				priority = num;
-			} else if (nla_strcmp(route_prop,
-					      "health_sensitivity") == 0) {
-				route_prop = nla_next(route_prop, &rem2);
-				if (nla_type(route_prop) !=
-				    LN_SCALAR_ATTR_INT_VALUE) {
-					GENL_SET_ERR_MSG(info,
-							 "sensitivity has invalid key");
-					GOTO(report_err, rc = -EINVAL);
-				}
-
-				num = nla_get_s64(route_prop);
-				if (num < 1) {
-					GENL_SET_ERR_MSG(info,
-							 "invalid health sensitivity, must be 1 or greater");
-					GOTO(report_err, rc = -EINVAL);
-				}
-				sensitivity = num;
 			}
 		}
 
@@ -8191,8 +8154,7 @@ static int lnet_route_cmd(struct sk_buff *skb, struct genl_info *info)
 			else if (the_lnet.ln_state != LNET_STATE_RUNNING)
 				GOTO(report_err, rc = -ENETDOWN);
 		} else if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
-			rc = lnet_add_route(net_id, hops, &gw_nid, priority,
-					    sensitivity);
+			rc = lnet_add_route(net_id, hops, &gw_nid, priority);
 			if (rc < 0) {
 				switch (rc) {
 				case -EINVAL:

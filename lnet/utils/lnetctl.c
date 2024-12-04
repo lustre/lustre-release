@@ -1409,8 +1409,7 @@ static int jt_unconfig_lnet(int argc, char **argv)
 }
 
 static int yaml_lnet_router_gateways(yaml_emitter_t *output, const char *nw,
-				     const char *gw, int hops, int prio,
-				     int sen)
+				     const char *gw, int hops, int prio)
 {
 	char num[INT_STRING_LEN];
 	yaml_event_t event;
@@ -1505,35 +1504,13 @@ static int yaml_lnet_router_gateways(yaml_emitter_t *output, const char *nw,
 			goto emitter_error;
 	}
 
-	if (sen != -1) {
-		yaml_scalar_event_initialize(&event, NULL,
-					     (yaml_char_t *)YAML_STR_TAG,
-					     (yaml_char_t *)"health_sensitivity",
-					     strlen("health_sensitivity"),
-					     1, 0,
-					     YAML_PLAIN_SCALAR_STYLE);
-		rc = yaml_emitter_emit(output, &event);
-		if (rc == 0)
-			goto emitter_error;
-
-		snprintf(num, sizeof(num), "%d", sen);
-		yaml_scalar_event_initialize(&event, NULL,
-					     (yaml_char_t *)YAML_INT_TAG,
-					     (yaml_char_t *)num,
-					     strlen(num), 1, 0,
-					     YAML_PLAIN_SCALAR_STYLE);
-		rc = yaml_emitter_emit(output, &event);
-		if (rc == 0)
-			goto emitter_error;
-	}
-
 	yaml_mapping_end_event_initialize(&event);
 	rc = yaml_emitter_emit(output, &event);
 emitter_error:
 	return rc;
 }
 
-static int yaml_lnet_route(char *nw, char *gw, int hops, int prio, int sen,
+static int yaml_lnet_route(char *nw, char *gw, int hops, int prio,
 			   int version, int flags, FILE *fp)
 {
 	struct nid_node head, *entry;
@@ -1631,13 +1608,13 @@ static int yaml_lnet_route(char *nw, char *gw, int hops, int prio, int sen,
 				const char *nid = entry->nidstr;
 
 				rc = yaml_lnet_router_gateways(&output, nw, nid,
-							       hops, prio, sen);
+							       hops, prio);
 				if (rc == 0)
 					goto emitter_error;
 			}
 		} else {
 			rc = yaml_lnet_router_gateways(&output, nw, NULL, hops,
-						       prio, sen);
+						       prio);
 			if (rc == 0)
 				goto emitter_error;
 		}
@@ -1710,7 +1687,7 @@ free_reply:
 static int jt_add_route(int argc, char **argv)
 {
 	char *network = NULL, *gateway = NULL;
-	long int hop = -1, prio = -1, sen = -1;
+	long hop = -1, prio = -1;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
 
@@ -1721,7 +1698,6 @@ static int jt_add_route(int argc, char **argv)
 		{ .name = "hop",       .has_arg = required_argument, .val = 'c' },
 		{ .name = "hop-count", .has_arg = required_argument, .val = 'c' },
 		{ .name = "priority",  .has_arg = required_argument, .val = 'p' },
-		{ .name = "health_sensitivity",  .has_arg = required_argument, .val = 's' },
 		{ .name = NULL }
 	};
 
@@ -1754,15 +1730,6 @@ static int jt_add_route(int argc, char **argv)
 				continue;
 			}
 			break;
-		case 's':
-			rc = parse_long(optarg, &sen);
-			if (rc != 0) {
-				/* ingore option */
-				sen = -1;
-				continue;
-			}
-			break;
-
 		case '?':
 			print_help(route_cmds, "route", "add");
 		default:
@@ -1770,7 +1737,7 @@ static int jt_add_route(int argc, char **argv)
 		}
 	}
 
-	rc = yaml_lnet_route(network, gateway, hop, prio, sen,
+	rc = yaml_lnet_route(network, gateway, hop, prio,
 			     LNET_GENL_VERSION, NLM_F_CREATE, stdout);
 	if (rc <= 0) {
 		if (rc == -EOPNOTSUPP)
@@ -1778,8 +1745,7 @@ static int jt_add_route(int argc, char **argv)
 		return rc;
 	}
 old_api:
-	rc = lustre_lnet_config_route(network, gateway, hop, prio, sen, -1,
-				      &err_rc);
+	rc = lustre_lnet_config_route(network, gateway, hop, prio, -1, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -2714,7 +2680,7 @@ static int jt_del_route(int argc, char **argv)
 		}
 	}
 
-	rc = yaml_lnet_route(network, gateway, -1, -1, -1, LNET_GENL_VERSION,
+	rc = yaml_lnet_route(network, gateway, -1, -1, LNET_GENL_VERSION,
 			     0, stdout);
 	if (rc <= 0) {
 		if (rc == -EOPNOTSUPP)
@@ -2866,7 +2832,7 @@ static int jt_show_route(int argc, char **argv)
 		}
 	}
 
-	rc = yaml_lnet_route(network, gateway, hop, prio, -1,
+	rc = yaml_lnet_route(network, gateway, hop, prio,
 			     detail, NLM_F_DUMP, stdout);
 	if (rc <= 0) {
 		if (rc == -EOPNOTSUPP)
@@ -5430,7 +5396,7 @@ static int jt_export(int argc, char **argv)
 			goto old_api;
 	}
 
-	rc = yaml_lnet_route(NULL, NULL, -1, -1, -1, LNET_GENL_VERSION,
+	rc = yaml_lnet_route(NULL, NULL, -1, -1, LNET_GENL_VERSION,
 			     flags, f);
 	if (rc < 0) {
 		if (rc == -EOPNOTSUPP)

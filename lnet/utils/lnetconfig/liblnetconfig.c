@@ -1241,7 +1241,7 @@ out:
 }
 
 static int lustre_lnet_route_common(char *nw, char *nidstr, int hops, int prio,
-				    int sen, int seq_no, struct cYAML **err_rc,
+				    int seq_no, struct cYAML **err_rc,
 				    int cmd)
 {
 	int rc, num_nids, idx;
@@ -1281,7 +1281,10 @@ static int lustre_lnet_route_common(char *nw, char *nidstr, int hops, int prio,
 		if (cmd == LNETCTL_ADD_CMD) {
 			data.cfg_config_u.cfg_route.rtr_hop = hops;
 			data.cfg_config_u.cfg_route.rtr_priority = prio;
-			data.cfg_config_u.cfg_route.rtr_sensitivity = sen;
+			/* Set to 1 for compatability with older kernel that
+			 * still uses per-peer sensitivity
+			 */
+			data.cfg_config_u.cfg_route.rtr_sensitivity = 1;
 		}
 
 		data.cfg_nid = lnet_nidlist[idx];
@@ -1318,7 +1321,7 @@ out:
 }
 
 int lustre_lnet_config_route(char *nw, char *nidstr, int hops, int prio,
-			     int sen, int seq_no, struct cYAML **err_rc)
+			     int seq_no, struct cYAML **err_rc)
 {
 	int rc;
 	char err_str[LNET_MAX_STR_LEN] = "generic error";
@@ -1343,18 +1346,8 @@ int lustre_lnet_config_route(char *nw, char *nidstr, int hops, int prio,
 		goto out;
 	}
 
-	if (sen == -1) {
-		sen = 1;
-	} else if (sen < 1) {
-		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "invalid health sensitivity %d, must be 1 or greater",
-			 sen);
-		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
-		goto out;
-	}
-
-	rc = lustre_lnet_route_common(nw, nidstr, hops, prio, sen, seq_no,
-				      err_rc, LNETCTL_ADD_CMD);
+	rc = lustre_lnet_route_common(nw, nidstr, hops, prio, seq_no, err_rc,
+				      LNETCTL_ADD_CMD);
 	return rc;
 out:
 	cYAML_build_error(rc, seq_no, ADD_CMD, "route", err_str, err_rc);
@@ -1365,7 +1358,7 @@ out:
 int lustre_lnet_del_route(char *nw, char *nidstr, int seq_no,
 			  struct cYAML **err_rc)
 {
-	return lustre_lnet_route_common(nw, nidstr, 0, 0, 0, seq_no, err_rc,
+	return lustre_lnet_route_common(nw, nidstr, 0, 0, seq_no, err_rc,
 					LNETCTL_DEL_CMD);
 }
 
@@ -1489,11 +1482,6 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 			if (cYAML_create_number(item, "priority",
 						data.cfg_config_u.
 						cfg_route.rtr_priority) == NULL)
-				goto out;
-
-			if (cYAML_create_number(item, "health_sensitivity",
-						data.cfg_config_u.
-						cfg_route.rtr_sensitivity) == NULL)
 				goto out;
 
 			rt_alive = data.cfg_config_u.cfg_route.rtr_flags &
@@ -5199,20 +5187,18 @@ typedef int (*cmd_handler_t)(struct cYAML *tree,
 static int handle_yaml_config_route(struct cYAML *tree, struct cYAML **show_rc,
 				    struct cYAML **err_rc)
 {
-	struct cYAML *net, *gw, *hop, *prio, *sen, *seq_no;
+	struct cYAML *net, *gw, *hop, *prio, *seq_no;
 
 	net = cYAML_get_object_item(tree, "net");
 	gw = cYAML_get_object_item(tree, "gateway");
 	hop = cYAML_get_object_item(tree, "hop");
 	prio = cYAML_get_object_item(tree, "priority");
-	sen = cYAML_get_object_item(tree, "health_sensitivity");
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
 	return lustre_lnet_config_route((net) ? net->cy_valuestring : NULL,
 					(gw) ? gw->cy_valuestring : NULL,
 					(hop) ? hop->cy_valueint : -1,
 					(prio) ? prio->cy_valueint : -1,
-					(sen) ? sen->cy_valueint : -1,
 					(seq_no) ? seq_no->cy_valueint : -1,
 					err_rc);
 }

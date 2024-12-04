@@ -1480,12 +1480,6 @@ struct lnet_peer {
 	/* # refs from lnet_route::lr_gateway */
 	int			lp_rtr_refcount;
 
-	/*
-	 * peer specific health sensitivity value to decrement peer nis in
-	 * this peer with if set to something other than 0
-	 */
-	__u32			lp_health_sensitivity;
-
 	/* messages blocking for router credits */
 	struct list_head	lp_rtrq;
 
