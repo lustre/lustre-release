@@ -4215,6 +4215,7 @@ static int lmv_merge_attr(struct obd_export *exp,
 	const struct lmv_stripe_md *lsm = &lso->lso_lsm;
 	int rc;
 	int i;
+	int nlink_overflow = 0;
 
 	if (!lmv_dir_striped(lso))
 		return 0;
@@ -4237,11 +4238,12 @@ static int lmv_merge_attr(struct obd_export *exp,
 		       (s64)inode_get_ctime_sec(inode),
 		       (s64)inode_get_mtime_sec(inode));
 
-		/* for slave stripe, it needs to subtract nlink for . and .. */
-		if (i != 0)
-			attr->cat_nlink += inode->i_nlink - 2;
-		else
-			attr->cat_nlink = inode->i_nlink;
+		/* nlink==1 is a special value meaning nlink overflow
+		 * for directories on Ldiskfs.
+		 */
+		nlink_overflow |= (inode->i_nlink == 1);
+		/* not counting . and .. for each stripe */
+		attr->cat_nlink += inode->i_nlink - 2;
 
 		attr->cat_size += i_size_read(inode);
 		attr->cat_blocks += inode->i_blocks;
@@ -4255,6 +4257,14 @@ static int lmv_merge_attr(struct obd_export *exp,
 		if (attr->cat_mtime < inode_get_mtime_sec(inode))
 			attr->cat_mtime = inode_get_mtime_sec(inode);
 	}
+	if (nlink_overflow)
+		/* Indicate that nlink is not correct for a striped dir the
+		 * same way it is done in Ldiskfs by setting nlink = 1.
+		 */
+		attr->cat_nlink = 1;
+	else
+		/* add 2 for . and .. */
+		attr->cat_nlink += 2;
 	return 0;
 }
 

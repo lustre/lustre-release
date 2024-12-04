@@ -6247,7 +6247,7 @@ test_51b() {
 
 	# create files
 	createmany -d $dir/d $nrdirs || {
-		unlinkmany $dir/d $nrdirs
+		unlinkmany -d $dir/d $nrdirs
 		error "failed to create $nrdirs subdirs in MDT$mdtidx:$dir"
 	}
 
@@ -6283,6 +6283,39 @@ test_51b() {
 	cleanup_print_lfs_df
 }
 run_test 51b "exceed 64k subdirectory nlink limit on create, verify unlink"
+
+test_51c() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	local dir=$DIR/$tdir-c2
+	local nrdirs=$((65536 * 2 + 2000))
+	local mdtidx
+
+	trap cleanup_print_lfs_df EXIT
+
+	$LFS mkdir -c 2 -H fnv_1a_64 $dir
+	while read mtdidx rest; do
+		local mdtname=$FSNAME-MDT$(printf "%04x" $mdtidx)
+		local numfree=$(lctl get_param -n mdc.$mdtname*.filesfree)
+		local blkfree=$(lctl get_param -n mdc.$mdtname*.kbytesavail)
+
+		(( numfree < nrdirs / 2 || blkfree / $(fs_inode_ksize) < nrdirs / 2 )) &&
+			skip "not enough inodes or blocks for mdt$mdtidx"
+	done < <( $LFS getdirstripe $dir | awk '{ if ($2 ~ /\[0x.*:0x.*:0x.*\]/) {  print $1; } }' )
+
+	createmany -d $dir/d $nrdirs ||
+		error "failed to create $nrdirs subdirs in $dir"
+	# nlink for the striped dir should be either 1
+	# (ldiskfs, nlink is overflowed at least in one stripe)
+	# or $ndirs + 2
+	local nlinks=$(stat -c %h $dir)
+	(( nlinks == 1 || nlinks == nrdirs + 2 )) ||
+		error "Wrong nlink count of $nlinks"
+
+	unlinkmany -d $dir/d $nrdirs || error "Removal of the subdirs failed"
+	rmdir $dir || error "rmdir failed"
+	cleanup_print_lfs_df
+}
+run_test 51c "exceed 64k subdirectory count per dir stripe, verify nlink count"
 
 test_51d_sub() {
 	local stripecount=$1
