@@ -98,8 +98,6 @@ static void usage(FILE *out)
 		"\t\tnomgs: only start target MDS/OSS, using existing MGS\n"
 		"\t\tnoscrub: do NOT auto start OI scrub unless requested\n"
 		"\t\tskip_lfsck: do NOT auto resume paused/crashed LFSCK\n"
-		"\t\tmax_sectors_kb=<size>: set device max_sectors_kb to size or leaves it untouched if size=0\n"
-		"\t\t\tIf not specified, device max_sectors_kb will be set to max_hw_sectors_kb\n"
 		"\t\tmd_stripe_cache_size=<num>: set MD RAID device stripe cache size\n"
 		"\t<cliopt>: one or more comma separated client options:\n"
 		"\t\texclude=<ostname>[:<ostname>]: list of inactive OSTs (e.g. lustre-OST0001)\n"
@@ -280,7 +278,9 @@ static int parse_options(struct mount_opts *mop, char *orig_options,
 		 * remove those mount options, see bug 22097.
 		 */
 		if (val && strncmp(arg, "max_sectors_kb", 14) == 0) {
-			mop->mo_max_sectors_kb = atoi(val + 1);
+			fprintf(stderr,
+				"%s: max_sectors_kb is ignored\n",
+				progname);
 		} else if (val &&
 			   strncmp(arg, "md_stripe_cache_size", 20) == 0) {
 			mop->mo_md_stripe_cache_size = atoi(val + 1);
@@ -659,7 +659,6 @@ static void set_defaults(struct mount_opts *mop)
 	mop->mo_md_stripe_cache_size = 16384;
 	mop->mo_orig_options = "";
 	mop->mo_nosvc = 0;
-	mop->mo_max_sectors_kb = -1;
 }
 
 static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)

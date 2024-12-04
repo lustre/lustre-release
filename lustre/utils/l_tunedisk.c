@@ -41,9 +41,7 @@ char	*progname;
 
 int main(int argc, char *const argv[])
 {
-	struct mount_opts mop = {
-		.mo_max_sectors_kb = -1
-	};
+	struct mount_opts mop;
 	struct lustre_disk_data *ldd = &mop.mo_ldd;
 
 	char real_path[PATH_MAX] = {'\0'};
@@ -62,6 +60,7 @@ int main(int argc, char *const argv[])
 	}
 
 	/* device is last arg */
+	memset(&mop, 0, sizeof(mop));
 	mop.mo_usource = argv[argc - 1];
 
 	mop.mo_source = realpath(mop.mo_usource, real_path);

@@ -120,7 +120,6 @@ struct mount_opts {
 	int	 mo_have_mgsnid;
 	int	 mo_md_stripe_cache_size;
 	int	 mo_nosvc;
-	int	 mo_max_sectors_kb;
 };
 
 #ifdef HAVE_SERVER_SUPPORT

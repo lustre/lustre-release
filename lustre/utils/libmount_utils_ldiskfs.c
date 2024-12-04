@@ -78,7 +78,6 @@
 #include "mount_utils.h"
 
 #define MAX_HW_SECTORS_KB_PATH	"queue/max_hw_sectors_kb"
-#define MAX_SECTORS_KB_PATH	"queue/max_sectors_kb"
 #define SCHEDULER_PATH		"queue/scheduler"
 #define STRIPE_CACHE_SIZE	"md/stripe_cache_size"
 
@@ -1060,77 +1059,6 @@ static int tune_md_stripe_cache_size(const char *sys_path,
 	return 0;
 }
 
-static int tune_max_sectors_kb(const char *sys_path, struct mount_opts *mop)
-{
-	char path[PATH_MAX];
-	unsigned long max_hw_sectors_kb;
-	unsigned long old_max_sectors_kb;
-	unsigned long new_max_sectors_kb;
-	char buf[3 * sizeof(old_max_sectors_kb) + 2];
-	int rc;
-
-	if (mop->mo_max_sectors_kb >= 0) {
-		new_max_sectors_kb = mop->mo_max_sectors_kb;
-		goto have_new_max_sectors_kb;
-	}
-
-	snprintf(path, sizeof(path), "%s/%s", sys_path, MAX_HW_SECTORS_KB_PATH);
-	rc = read_file(path, buf, sizeof(buf));
-	if (rc != 0) {
-		/* No MAX_HW_SECTORS_KB_PATH isn't necessary an
-		 * error for some devices. */
-		return 0;
-	}
-
-	max_hw_sectors_kb = strtoul(buf, NULL, 0);
-	if (max_hw_sectors_kb == 0 || max_hw_sectors_kb == ULLONG_MAX) {
-		/* No digits at all or something weird. */
-		return 0;
-	}
-
-	new_max_sectors_kb = max_hw_sectors_kb;
-
-	/* Don't increase IO request size limit past 16MB.  It is
-	 * about PTLRPC_MAX_BRW_SIZE, but that isn't in a public
-	 * header.  Note that even though the block layer allows
-	 * larger values, setting max_sectors_kb = 32768 causes
-	 * crashes (LU-6974). */
-	if (new_max_sectors_kb > 16 * 1024)
-		new_max_sectors_kb = 16 * 1024;
-
-have_new_max_sectors_kb:
-	snprintf(path, sizeof(path), "%s/%s", sys_path, MAX_SECTORS_KB_PATH);
-	rc = read_file(path, buf, sizeof(buf));
-	if (rc != 0) {
-		/* No MAX_SECTORS_KB_PATH isn't necessary an error for
-		 * some devices. */
-		return 0;
-	}
-
-	old_max_sectors_kb = strtoul(buf, NULL, 0);
-	if (old_max_sectors_kb == 0 || old_max_sectors_kb == ULLONG_MAX) {
-		/* No digits at all or something weird. */
-		return 0;
-	}
-
-	if (new_max_sectors_kb <= old_max_sectors_kb)
-		return 0;
-
-	snprintf(buf, sizeof(buf), "%lu", new_max_sectors_kb);
-	rc = write_file(path, buf);
-	if (rc != 0) {
-		if (verbose)
-			fprintf(stderr, "warning: cannot write '%s': %s\n",
-				path, strerror(errno));
-		return rc;
-	}
-
-	fprintf(stderr, "%s: increased '%s' from %lu to %lu\n",
-		progname, path, old_max_sectors_kb, new_max_sectors_kb);
-
-	return 0;
-}
-
 static int tune_block_dev_scheduler(const char *sys_path, const char *new_sched)
 {
 	char path[PATH_MAX];
@@ -1229,9 +1157,7 @@ static int tune_block_dev_slaves(const char *sys_path, struct mount_opts *mop)
 	return rc;
 }
 
-/* This is to tune the kernel for good SCSI performance.
- * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
- * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
+/* This is to tune the kernel for good SCSI performance. */
 static int tune_block_dev(const char *src, struct mount_opts *mop)
 {
 	struct stat st;
@@ -1301,10 +1227,9 @@ have_whole_dev:
 	if (major(st.st_rdev) == MD_MAJOR) {
 		rc = tune_md_stripe_cache_size(real_sys_path, mop);
 	} else {
-		/* Ignore errors from tune_max_sectors_kb() and
-		 * tune_scheduler(). The worst that will happen is a block
-		 * device with an "incorrect" scheduler. */
-		tune_max_sectors_kb(real_sys_path, mop);
+		/* Ignore errors from tune_scheduler(). The worst that will
+		 * happen is a block device with an "incorrect" scheduler.
+		 */
 		tune_block_dev_scheduler(real_sys_path, DEFAULT_SCHEDULER);
 
 		/* If device is multipath device then tune its slave
