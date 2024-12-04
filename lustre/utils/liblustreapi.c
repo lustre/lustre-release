@@ -1521,9 +1521,6 @@ err:
 	return rc;
 }
 
-typedef int (semantic_func_t)(char *path, int p, int *d,
-			      void *data, struct dirent64 *de);
-
 #define OBD_NOT_FOUND           (-1)
 
 static bool lmv_is_foreign(__u32 magic)
@@ -1596,8 +1593,8 @@ static int common_param_init(struct find_param *param, char *path)
 	return 0;
 }
 
-static int cb_common_fini(char *path, int p, int *dp, void *data,
-			  struct dirent64 *de)
+int cb_common_fini(char *path, int p, int *dp, void *data,
+		   struct dirent64 *de)
 {
 	struct find_param *param = data;
 
@@ -2153,8 +2150,8 @@ err:
 	return ret;
 }
 
-static int param_callback(char *path, semantic_func_t sem_init,
-			  semantic_func_t sem_fini, struct find_param *param)
+int param_callback(char *path, semantic_func_t sem_init,
+		   semantic_func_t sem_fini, struct find_param *param)
 {
 	int ret, len = strlen(path);
 	char *buf;
@@ -5925,8 +5922,8 @@ static int check_file_permissions(const struct find_param *param,
 		return 1;
 }
 
-static int cb_find_init(char *path, int p, int *dp,
-			void *data, struct dirent64 *de)
+int cb_find_init(char *path, int p, int *dp,
+		 void *data, struct dirent64 *de)
 {
 	struct find_param *param = (struct find_param *)data;
 	struct lov_user_mds_data *lmd = param->fp_lmd;
@@ -6781,7 +6778,7 @@ check_single:
  * @param[in]	param	Structure containing info about invocation of lfs find
  * @return		None
  */
-static void validate_printf_str(struct find_param *param)
+void validate_printf_str(struct find_param *param)
 {
 	char *c = param->fp_format_printf_str;
 	int ret = 0;
@@ -6807,7 +6804,12 @@ int llapi_find(char *path, struct find_param *param)
 {
 	if (param->fp_format_printf_str)
 		validate_printf_str(param);
-	return param_callback(path, cb_find_init, cb_common_fini, param);
+	if (param->fp_thread_count) {
+		return parallel_find(path, param);
+	} else {
+		return param_callback(path, cb_find_init, cb_common_fini,
+				      param);
+	}
 }
 
 /*

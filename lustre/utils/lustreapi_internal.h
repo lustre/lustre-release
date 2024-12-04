@@ -212,4 +212,16 @@ int get_lmd_info_fd(const char *path, int parentfd, int dirfd,
 int lov_comp_md_size(struct lov_comp_md_v1 *lcm);
 
 int open_parent(const char *path);
+
+typedef int (semantic_func_t)(char *path, int p, int *d,
+			      void *data, struct dirent64 *de);
+
+void validate_printf_str(struct find_param *param);
+int param_callback(char *path, semantic_func_t sem_init,
+		   semantic_func_t sem_fini, struct find_param *param);
+int cb_find_init(char *path, int p, int *dp,
+		 void *data, struct dirent64 *de);
+int cb_common_fini(char *path, int p, int *dp, void *data,
+		   struct dirent64 *de);
+int parallel_find(char *path, struct find_param *param);
 #endif /* _LUSTREAPI_INTERNAL_H_ */

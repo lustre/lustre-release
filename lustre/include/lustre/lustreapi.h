@@ -432,6 +432,26 @@ struct find_param {
 	unsigned long int	 fp_skip_percent;
 	unsigned long long	 fp_skip_total;
 	unsigned long long	 fp_skip_count;
+	struct find_work_queue	*fp_queue;
+};
+
+/* Work unit for parallel directory processing */
+struct find_work_unit {
+	struct find_work_unit *fwu_next;
+	struct find_param *fwu_param;
+	struct dirent64 *fwu_de;
+	char *fwu_path;
+};
+
+/* Work queue for managing parallel processing */
+struct find_work_queue {
+	struct find_work_unit *fwq_head; /* Take work from head */
+	struct find_work_unit *fwq_tail; /* ... add to tail */
+	pthread_mutex_t fwq_lock;
+	pthread_cond_t fwq_sleep_cond;
+	int fwq_active_units;		/* Atomic counter, active work units */
+	bool fwq_shutdown;		/* Flag to signal shutdown */
+	int fwq_error;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);
