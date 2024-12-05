@@ -8,12 +8,6 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test:
-ALWAYS_EXCEPT="$SANITY_LNET_EXCEPT 253 254"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 
 . $LUSTRE/tests/test-framework.sh
@@ -22,6 +16,12 @@ SETUP=${SETUP:-:}
 init_test_env "$@"
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$SANITY_LNET_EXCEPT "
+always_except LU-18129 230
+always_except LU-10391 253 254
+
+[[ "$SLOW" = "no" ]] && EXCEPT_SLOW=""
 
 [[ -z $LNETCTL ]] && skip "Need lnetctl"
 
