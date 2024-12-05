@@ -1952,10 +1952,10 @@ out_close:
 	return rc;
 }
 
-static int llapi_semantic_traverse(char *path, int size, int parent,
-				   semantic_func_t sem_init,
-				   semantic_func_t sem_fini, void *data,
-				   struct dirent64 *de)
+int llapi_semantic_traverse(char *path, int size, int parent,
+			    semantic_func_t sem_init,
+			    semantic_func_t sem_fini, void *data,
+			    struct dirent64 *de)
 {
 	struct find_param *param = (struct find_param *)data;
 	struct dirent64 *dent;
@@ -2049,7 +2049,7 @@ static int llapi_semantic_traverse(char *path, int size, int parent,
 	}
 
 	while ((dent = readdir64(dir)) != NULL) {
-		int rc;
+		int rc = 0;
 
 		if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
 			continue;
@@ -2086,8 +2086,14 @@ static int llapi_semantic_traverse(char *path, int size, int parent,
 			break;
 		case DT_DIR:
 			/* recursion down into a new subdirectory here */
-			rc = llapi_semantic_traverse(path, size, d, sem_init,
-						     sem_fini, data, dent);
+			if (param->fp_thread_count) {
+				rc = work_unit_create_and_add(path, param,
+							      dent);
+			} else {
+				rc = llapi_semantic_traverse(path, size, d,
+							     sem_init, sem_fini,
+							     data, dent);
+			}
 			if (rc != 0 && ret == 0)
 				ret = rc;
 			if (rc < 0 && rc != -EALREADY &&

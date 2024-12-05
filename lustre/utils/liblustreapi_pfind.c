@@ -24,7 +24,6 @@ static void *find_worker(void *arg)
 	struct find_work_queue *queue = (struct find_work_queue *) arg;
 	struct find_work_unit *unit;
 
-	/* TODO: Implement actual work processing */
 	while (!queue->fwq_shutdown) {
 		/* Get work unit from queue */
 		pthread_mutex_lock(&queue->fwq_lock);
@@ -46,9 +45,11 @@ static void *find_worker(void *arg)
 			queue->fwq_tail = NULL;
 		pthread_mutex_unlock(&queue->fwq_lock);
 
-		/* TODO: processing goes here */
-		sleep(0.1);
 
+		// TODO: Error propagation, interesting...
+		llapi_semantic_traverse(unit->fwu_path, 2 * PATH_MAX, -1,
+					cb_find_init, cb_common_fini,
+					unit->fwu_param, NULL);
 		work_unit_free(unit);
 		__sync_fetch_and_sub(&queue->fwq_active_units, 1);
 	}
@@ -269,8 +270,8 @@ error:
 	return NULL;
 }
 
-static int work_unit_create_and_add(const char *path, struct find_param *param,
-				    struct dirent64 *dent)
+int work_unit_create_and_add(const char *path, struct find_param *param,
+			     struct dirent64 *dent)
 {
 	struct find_work_queue *queue = param->fp_queue;
 	struct find_work_unit *unit;

@@ -225,4 +225,10 @@ int cb_common_fini(char *path, int p, int *dp, void *data,
 int common_param_init(struct find_param *param, char *path);
 void find_param_fini(struct find_param *param);
 int parallel_find(char *path, struct find_param *param);
+int work_unit_create_and_add(const char *path, struct find_param *param,
+			     struct dirent64 *dent);
+int llapi_semantic_traverse(char *path, int size, int parent,
+			    semantic_func_t sem_init,
+			    semantic_func_t sem_fini, void *data,
+			    struct dirent64 *de);
 #endif /* _LUSTREAPI_INTERNAL_H_ */
