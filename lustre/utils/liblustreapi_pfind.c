@@ -91,6 +91,132 @@ static int find_threads_init(pthread_t *threads, struct find_work_queue *queue,
 	return 0;
 }
 
+void free_find_param(struct find_param *fp)
+{
+	if (!fp)
+		return;
+
+	free(fp->fp_pattern);
+	free(fp->fp_obd_uuid);
+	free(fp->fp_obd_indexes);
+	free(fp->fp_mdt_uuid);
+	free(fp->fp_mdt_indexes);
+	free(fp->fp_lmd);
+	free(fp->fp_lmv_md);
+	free(fp->fp_xattr_match_info);
+	free(fp->fp_format_printf_str);
+	free(fp);
+}
+
+struct find_param *copy_find_param(const struct find_param *src)
+{
+	struct find_param *dst = calloc(1, sizeof(struct find_param));
+
+	if (!dst)
+		return NULL;
+
+	/* Copy all scalar fields */
+	memcpy(dst, src, sizeof(struct find_param));
+
+	/* Clear all pointer fields to avoid double-free in error path */
+	dst->fp_pattern = NULL;
+	dst->fp_obd_uuid = NULL;
+	dst->fp_obd_indexes = NULL;
+	dst->fp_mdt_uuid = NULL;
+	dst->fp_mdt_indexes = NULL;
+	dst->fp_lmd = NULL;
+	dst->fp_lmv_md = NULL;
+	dst->fp_xattr_match_info = NULL;
+	dst->fp_format_printf_str = NULL;
+
+	/* Deep copy dynamically allocated fields */
+	if (src->fp_pattern) {
+		dst->fp_pattern = strdup(src->fp_pattern);
+		if (!dst->fp_pattern)
+			goto error;
+	}
+
+	/* OBD UUIDs */
+	if (src->fp_obd_uuid && src->fp_num_alloc_obds > 0) {
+		dst->fp_obd_uuid = calloc(src->fp_num_alloc_obds,
+					  sizeof(struct obd_uuid));
+		if (!dst->fp_obd_uuid)
+			goto error;
+		memcpy(dst->fp_obd_uuid, src->fp_obd_uuid,
+			src->fp_num_alloc_obds * sizeof(struct obd_uuid));
+	}
+
+	if (src->fp_obd_indexes && src->fp_num_obds > 0) {
+		dst->fp_obd_indexes = calloc(src->fp_num_obds,
+					     sizeof(int));
+		if (!dst->fp_obd_indexes)
+			goto error;
+		memcpy(dst->fp_obd_indexes, src->fp_obd_indexes,
+			src->fp_num_obds * sizeof(int));
+	}
+
+	/* MDT UUIDs */
+	if (src->fp_mdt_uuid && src->fp_num_alloc_mdts > 0) {
+		dst->fp_mdt_uuid = calloc(src->fp_num_alloc_mdts,
+					  sizeof(struct obd_uuid));
+		if (!dst->fp_mdt_uuid)
+			goto error;
+		memcpy(dst->fp_mdt_uuid, src->fp_mdt_uuid,
+		       src->fp_num_alloc_mdts * sizeof(struct obd_uuid));
+	}
+
+	if (src->fp_mdt_indexes && src->fp_num_obds > 0) {
+		dst->fp_mdt_indexes = calloc(src->fp_num_obds,
+					     sizeof(int));
+		if (!dst->fp_mdt_indexes)
+			goto error;
+		memcpy(dst->fp_mdt_indexes, src->fp_mdt_indexes,
+		       src->fp_num_obds * sizeof(int));
+	}
+
+	/* LMD and LMV data */
+	if (src->fp_lmd && src->fp_lum_size > 0) {
+		dst->fp_lmd = malloc(src->fp_lum_size);
+		if (!dst->fp_lmd)
+			goto error;
+		memcpy(dst->fp_lmd, src->fp_lmd, src->fp_lum_size);
+	}
+
+	if (src->fp_lmv_md) {
+		size_t lmv_size = sizeof(struct lmv_user_md) +
+			src->fp_lmv_stripe_count * sizeof(struct lmv_user_mds_data);
+		dst->fp_lmv_md = malloc(lmv_size);
+		if (!dst->fp_lmv_md)
+			goto error;
+		memcpy(dst->fp_lmv_md, src->fp_lmv_md, lmv_size);
+	}
+
+	/* xattr match info */
+	if (src->fp_xattr_match_info) {
+		dst->fp_xattr_match_info =
+			malloc(sizeof(struct xattr_match_info));
+		if (!dst->fp_xattr_match_info)
+			goto error;
+		memcpy(dst->fp_xattr_match_info, src->fp_xattr_match_info,
+			sizeof(struct xattr_match_info));
+	}
+
+	/* Format string */
+	if (src->fp_format_printf_str) {
+		dst->fp_format_printf_str = strdup(src->fp_format_printf_str);
+		if (!dst->fp_format_printf_str)
+			goto error;
+	}
+
+	return dst;
+
+error:
+	/* Cleanup on error */
+	if (dst)
+		free_find_param(dst);
+	return NULL;
+}
+
 /* Free a work unit */
 static void work_unit_free(struct find_work_unit *unit)
 {
@@ -99,6 +225,7 @@ static void work_unit_free(struct find_work_unit *unit)
 
 	free(unit->fwu_path);
 	free(unit->fwu_de);
+	free_find_param(unit->fwu_param);
 	free(unit);
 }
 
@@ -130,8 +257,10 @@ static struct find_work_unit *work_unit_create(const char *path,
 		memcpy(unit->fwu_de, de, sizeof(*de));
 	}
 
-	/* TODO: deep copy of param
-	unit->fwu_param = param; */
+
+	unit->fwu_param = copy_find_param(param);
+	if (!unit->fwu_param)
+		goto error;
 
 	return unit;
 
