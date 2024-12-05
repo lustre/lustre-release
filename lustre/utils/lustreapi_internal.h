@@ -223,5 +223,7 @@ int cb_find_init(char *path, int p, int *dp,
 		 void *data, struct dirent64 *de);
 int cb_common_fini(char *path, int p, int *dp, void *data,
 		   struct dirent64 *de);
+int common_param_init(struct find_param *param, char *path);
+void find_param_fini(struct find_param *param);
 int parallel_find(char *path, struct find_param *param);
 #endif /* _LUSTREAPI_INTERNAL_H_ */

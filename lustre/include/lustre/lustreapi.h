@@ -443,13 +443,35 @@ struct find_work_unit {
 	char *fwu_path;
 };
 
+/* Check if we have C11 atomics available */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
+    #include <stdatomic.h>
+    #define HAS_STDATOMIC 1
+#else
+    #define HAS_STDATOMIC 0
+#endif
+
+/* Define atomic fetch and add operation */
+#if HAS_STDATOMIC
+    #define ll_atomic_fetch_add(ptr, val) atomic_fetch_add(ptr, val)
+    #define ll_atomic_fetch_sub(ptr, val) atomic_fetch_sub(ptr, val)
+#else
+    #define ll_atomic_fetch_add(ptr, val) __sync_fetch_and_add(ptr, val)
+    #define ll_atomic_fetch_sub(ptr, val) __sync_fetch_and_sub(ptr, val)
+#endif
+
 /* Work queue for managing parallel processing */
 struct find_work_queue {
 	struct find_work_unit *fwq_head; /* Take work from head */
 	struct find_work_unit *fwq_tail; /* ... add to tail */
 	pthread_mutex_t fwq_lock;
 	pthread_cond_t fwq_sleep_cond;
-	int fwq_active_units;		/* Atomic counter, active work units */
+	/* Atomic counter, active work units */
+#if HAS_STDATOMIC
+	atomic_int fwq_active_units;
+#else
+	int fwq_active_units;
+#endif
 	bool fwq_shutdown;		/* Flag to signal shutdown */
 	int fwq_error;
 };

@@ -1528,7 +1528,7 @@ static bool lmv_is_foreign(__u32 magic)
 	return magic == LMV_MAGIC_FOREIGN;
 }
 
-static void find_param_fini(struct find_param *param)
+void find_param_fini(struct find_param *param)
 {
 	if (param->fp_migrate)
 		return;
@@ -1549,7 +1549,7 @@ static void find_param_fini(struct find_param *param)
 	}
 }
 
-static int common_param_init(struct find_param *param, char *path)
+int common_param_init(struct find_param *param, char *path)
 {
 	int lum_size = get_mds_md_size(path);
 
@@ -2167,14 +2167,18 @@ int param_callback(char *path, semantic_func_t sem_init,
 	if (!buf)
 		return -ENOMEM;
 
-	snprintf(buf, PATH_MAX + 1, "%s", path);
+	ret = snprintf(buf, PATH_MAX + 1, "%s", path);
+	if (ret < 0 || ret >= PATH_MAX + 1) {
+		ret = -ENAMETOOLONG;
+		goto out;
+	}
 	ret = common_param_init(param, buf);
 	if (ret)
 		goto out;
 
 	param->fp_depth = 0;
 
-	ret = llapi_semantic_traverse(buf, 2 * PATH_MAX, -1, sem_init,
+	ret = llapi_semantic_traverse(buf, 2 * PATH_MAX + 1, -1, sem_init,
 				      sem_fini, param, NULL);
 out:
 	find_param_fini(param);
