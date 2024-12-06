@@ -1246,7 +1246,10 @@ AC_DEFUN([LC_SRC_HAVE_DQUOT_QC_DQBLK], [
 		#include <linux/fs.h>
 		#include <linux/quota.h>
 	],[
-		((struct quotactl_ops *)0)->set_dqblk(NULL, *((struct kqid*)0), (struct qc_dqblk*)0);
+			struct quotactl_ops *ops = NULL;
+			struct kqid kqid = { .type = USRQUOTA };
+			struct qc_dqblk *qc = NULL;
+			ops->set_dqblk(NULL, kqid, qc);
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_DQUOT_QC_DQBLK], [
