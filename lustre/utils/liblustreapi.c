@@ -5526,6 +5526,56 @@ static int snprintf_access_mode(char *buffer, size_t size, __u16 mode)
 	return snprintf(buffer, size, "%s", access_string);
 }
 
+static int parse_format_width(char **seq, size_t buf_size, int *width,
+			      char *padding)
+{
+	bool negative_width = false;
+	char *end = NULL;
+	int parsed = 0;
+
+	*padding = ' ';
+	*width = 0;
+
+	/* GNU find supports formats such as "%----10s" */
+	while (**seq == '-') {
+		(*seq)++;
+		parsed++;
+		negative_width = true;
+	}
+
+	/* GNU find and printf only do 0 padding on the left (width > 0)
+	 * %-010m <=> %-10m.
+	 */
+	if (**seq == '0' && !negative_width)
+		*padding = '0';
+
+	errno = 0;
+	*width = strtol(*seq, &end, 10);
+	if (errno != 0)
+		return -errno;
+	if (*width >= buf_size)
+		*width = buf_size - 1;
+
+	/* increase the number of processed characters */
+	parsed += end - *seq;
+	*seq = end;
+	if (negative_width)
+		*width = -*width;
+
+	/* GNU find only does 0 padding for %S, %d and %m. */
+	switch (**seq) {
+	case 'S':
+	case 'd':
+	case 'm':
+		break;
+	default:
+		*padding = ' ';
+		break;
+	}
+
+	return parsed;
+}
+
 /*
  * Interpret format specifiers beginning with '%'.
  *
@@ -5546,11 +5596,18 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 				   int *wrote, struct find_param *param,
 				   char *path, __u32 projid, int d)
 {
-	__u16 mode = param->fp_lmd->lmd_stx.stx_mode;
 	uint64_t blocks = param->fp_lmd->lmd_stx.stx_blocks;
+	__u16 mode = param->fp_lmd->lmd_stx.stx_mode;
+	char padding;
+	int width_rc;
 	int rc = 1;  /* most specifiers are single character */
+	int width;
 
 	*wrote = 0;
+
+	width_rc = parse_format_width(&seq, size, &width, &padding);
+	if (width_rc < 0)
+		return 0;
 
 	switch (*seq) {
 	case 'a': case 'A':
@@ -5584,7 +5641,7 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 	}
 	case 'G':	/* GID of owner */
 		*wrote = snprintf(buffer, size, "%u",
-				   param->fp_lmd->lmd_stx.stx_gid);
+				  param->fp_lmd->lmd_stx.stx_gid);
 		break;
 	case 'i':	/* inode number */
 		*wrote = snprintf(buffer, size, "%llu",
@@ -5598,7 +5655,7 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 					  path, projid, d);
 		break;
 	case 'm':	/* file mode in octal */
-		*wrote = snprintf(buffer, size, "%#o", (mode & (~S_IFMT)));
+		*wrote = snprintf(buffer, size, "%o", (mode & (~S_IFMT)));
 		break;
 	case 'M':	/* file access mode */
 		*wrote = snprintf_access_mode(buffer, size, mode);
@@ -5666,11 +5723,31 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 		break;
 	}
 
+	if (rc == 0)
+		/* if parsing failed, return 0 to avoid skipping width_rc */
+		return 0;
+
+	if (width > 0 && width > *wrote) {
+		/* left padding */
+		int shift = width - *wrote;
+
+		/* '\0' is added by caller if necessary */
+		memmove(buffer + shift, buffer, *wrote);
+		memset(buffer, padding, shift);
+		*wrote += shift;
+	} else if (width < 0 && -width > *wrote) {
+		/* right padding */
+		int shift = -width - *wrote;
+
+		memset(buffer + *wrote, padding, shift);
+		*wrote += shift;
+	}
+
 	if (*wrote >= size)
 		/* output of snprintf was truncated */
 		*wrote = size - 1;
 
-	return rc;
+	return width_rc + rc;
 }
 
 /*
@@ -5706,9 +5783,10 @@ static void printf_format_string(struct find_param *param, char *path,
 			rc = printf_format_directive(fmt_char + 1, buff,
 						  buff_size, &written, param,
 						  path, projid, d);
-		} else if (*fmt_char == '\\')
+		} else if (*fmt_char == '\\') {
 			rc = printf_format_escape(fmt_char + 1, buff,
 						  buff_size, &written);
+		}
 
 		if (rc > 0) {
 			/* Either a '\' escape or '%' format was processed.
@@ -5717,6 +5795,8 @@ static void printf_format_string(struct find_param *param, char *path,
 			fmt_char += (rc + 1);
 			buff += written;
 			buff_size -= written;
+		} else if (rc < 0) {
+			return;
 		} else {
 			/* Regular char or invalid escape/format.
 			 * Either way, copy current character.
@@ -6644,7 +6724,19 @@ static int validate_printf_fmt(char *c)
 		return 0;
 	}
 
+	/* GNU find supports formats such as "%----10s" */
+	while (curr == '-')
+		curr = *(++c);
+
+	if (isdigit(curr)) {
+		/* skip width format specifier */
+		while (isdigit(*c))
+			c++;
+	}
+
+	curr = *c;
 	next = *(c + 1);
+
 	if ((next == '\0') || (next == '%') || (next == '\\'))
 		/* Treat as single char format directive */
 		goto check_single;

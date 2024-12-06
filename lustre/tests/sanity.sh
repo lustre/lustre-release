@@ -7639,6 +7639,91 @@ test_56rd() {
 }
 run_test 56rd "check lfs find --printf special files"
 
+test_56re()
+{
+	local dir=$DIR/$tdir
+	local file=$dir/a
+	local test_cases=(
+		"|%5s|" "|%05s|" "|%0s|" "|%-5s|" "|%-0s|"
+		"|%5G|" "|%05G|" "|%0G|" "|%-5G|" "|%-0G|"
+		"|%25i|" "|%025i|" "|%0i|" "|%-25i|" "|%-0i|"
+		"|%5k|" "|%05k|" "|%0k|" "|%-5k|" "|%-0k|"
+		"|%5y|" "|%05y|" "|%0y|" "|%-5y|" "|%-0y|"
+		"|%5m|" "|%05m|" "|%0m|" "|%-5m|" "|%-0m|" "|%-05m|"
+		"|%----5s|" "|%----00005s|" "|%00005s|"
+		"|%020|" "|%20|" "|%-20|" "|%-020|" "|%---020|" "|%---20|"
+	)
+
+	test_mkdir "$dir"
+	touch "$file"
+	truncate -s 37 "$file"
+
+	for format in ${test_cases[@]}; do
+		local expected=$(find "$dir" -type f -printf "$format\n")
+		local output=$($LFS find "$dir" -type f -printf "$format\n")
+
+		[[ $output == $expected ]] ||
+			error "Unexpected output to \"$format\", expected '$expected' got '$output'"
+	done
+}
+run_test 56re "check lfs find -printf width format specifiers are consistant with regular find"
+
+test_56rf()
+{
+	local dir=$DIR/$tdir
+	local file=$dir/a
+	local test_cases
+	local poolname=testpool56rf
+	local stripe_count
+	local fid
+
+	test_mkdir "$dir"
+	pool_add $poolname || error "Could not create pool '$poolname'"
+
+	lfs setstripe -c 2 -S 4M -p $poolname "$file"
+	stripe_count=$(lfs getstripe -c "$file")
+	fid=$($LFS path2fid "$file" | sed 's/\[\(.*\)\]/\1/')
+	len=$((${#fid} + 5))
+
+	test_cases=(
+		"|%${len}LF|" "|     $fid|"
+		"|%0${len}LF|" "|     $fid|"
+		"|%0LF|" "|$fid|"
+		"|%-${len}LF|" "|$fid     |"
+		"|%-0LF|" "|$fid|"
+
+		"|%14Lp|" "|  $poolname|"
+		"|%014Lp|" "|  $poolname|"
+		"|%0Lp|" "|$poolname|"
+		"|%-14Lp|" "|$poolname  |"
+		"|%-0Lp|" "|$poolname|"
+		"|%07Lp|" "|$poolname|"
+		"|%-7Lp|" "|$poolname|"
+
+		"|%4Lc|" "|   $stripe_count|"
+		"|%04Lc|" "|   $stripe_count|"
+		"|%0Lc|" "|$stripe_count|"
+		"|%-4Lc|" "|$stripe_count   |"
+		"|%-0Lc|" "|$stripe_count|"
+
+		"|%10LS|" "|   4194304|"
+		"|%010LS|" "|   4194304|"
+		"|%0LS|" "|4194304|"
+		"|%-10LS|" "|4194304   |"
+		"|%-0LS|" "|4194304|"
+	)
+
+	for (( i = 0; i < ${#test_cases[@]}; i += 2 )); do
+		local format=${test_cases[i]}
+		local expected=${test_cases[i + 1]}
+		local output=$($LFS find "$dir" -type f -printf "$format\n")
+
+		[[ $output == $expected ]] ||
+			error "Unexpected output to \"$format\", expected '$expected' got '$output'"
+	done
+}
+run_test 56rf "check lfs find -printf width format specifiers for lustre specific formats"
+
 test_56s() { # LU-611 #LU-9369
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "need at least 2 OSTs"
 
