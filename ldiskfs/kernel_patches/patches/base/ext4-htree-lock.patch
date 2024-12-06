@@ -152,7 +152,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/include/linux/htree_lock.h
 +	/* private data */
 +	void			*lh_private;
 +	/* array of children locks */
-+	struct htree_lock_child	lh_children[0];
++	struct htree_lock_child	lh_children[];
 +};
 +
 +/* htree_lock_node_t is child-lock for a specific key (ln_value) */
@@ -180,7 +180,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/include/linux/htree_lock.h
 +	unsigned		lk_depth;
 +	htree_lock_mode_t	lk_mode;
 +	struct list_head	lk_blocked_list;
-+	struct htree_lock_node	lk_nodes[0];
++	struct htree_lock_node	lk_nodes[];
 +};
 +
 +/* create a lock head, which stands for a resource */
