@@ -13814,10 +13814,13 @@ test_103a() {
 		fi
 	fi
 
-	gpasswd -a $ACLDMN $ACLBIN ||
+	id -nGz "$ACLDMN" | grep -qzxF "$ACLBIN" || gpasswd -a $ACLDMN $ACLBIN ||
 		error "setting client group failed"		# LU-5641
-	do_facet mds1 gpasswd -a $ACLDMN $ACLBIN ||
-		error "setting MDS group failed"		# LU-5641
+	if ! local_mode; then
+		do_facet mds1 "id -nGz $ACLDMN | grep -qzxF $ACLBIN ||
+				gpasswd -a $ACLDMN $ACLBIN" ||
+			error "setting MDS group failed"	# LU-5641
+	fi
 
 	declare -a identity_old
 
