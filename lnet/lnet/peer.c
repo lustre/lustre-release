@@ -1680,7 +1680,7 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 /*
  * Create a new peer, with nid as its primary nid.
  *
- * Call with the lnet_api_mutex held.
+ * Call with the ln_api_mutex held.
  */
 static int
 lnet_peer_add(lnet_nid_t nid4, unsigned int flags)
@@ -1691,13 +1691,15 @@ lnet_peer_add(lnet_nid_t nid4, unsigned int flags)
 	struct lnet_peer_ni *lpni;
 	int rc = 0;
 
-	LASSERT(nid4 != LNET_NID_ANY);
+	lnet_nid4_to_nid(nid4, &nid);
+
+	LASSERT(!LNET_NID_IS_ANY(&nid));
 
 	/*
 	 * No need for the lnet_net_lock here, because the
 	 * lnet_api_mutex is held.
 	 */
-	lpni = lnet_find_peer_ni_locked(nid4);
+	lpni = lnet_peer_ni_find_locked(&nid);
 	if (lpni) {
 		/* A peer with this NID already exists. */
 		lp = lpni->lpni_peer_net->lpn_peer;
@@ -1709,7 +1711,7 @@ lnet_peer_add(lnet_nid_t nid4, unsigned int flags)
 		 * that an existing peer is being modified.
 		 */
 		if (lp->lp_state & LNET_PEER_CONFIGURED) {
-			if (lnet_nid_to_nid4(&lp->lp_primary_nid) != nid4)
+			if (!nid_same(&lp->lp_primary_nid, &nid))
 				rc = -EEXIST;
 			else if ((lp->lp_state ^ flags) & LNET_PEER_MULTI_RAIL)
 				rc = -EPERM;
@@ -1752,7 +1754,6 @@ lnet_peer_add(lnet_nid_t nid4, unsigned int flags)
 
 	/* Create peer, peer_net, and peer_ni. */
 	rc = -ENOMEM;
-	lnet_nid4_to_nid(nid4, &nid);
 	lp = lnet_peer_alloc(&nid);
 	if (!lp)
 		goto out;
@@ -1771,7 +1772,7 @@ out_free_lp:
 	LIBCFS_FREE(lp, sizeof(*lp));
 out:
 	CDEBUG(D_NET, "peer %s NID flags %#x: %d\n",
-	       libcfs_nid2str(nid4), flags, rc);
+	       libcfs_nidstr(&nid), flags, rc);
 	return rc;
 }
 
