@@ -14224,11 +14224,17 @@ test_104d() {
 	[ "$($RUNAS $LCTL dl | wc -l)" -ge 3 ] ||
 		error "lctl dl doesn't work for non root"
 
-	ost_count="$($RUNAS $LCTL dl | grep $FSNAME-OST* | wc -l)"
+	echo "=="
+	$RUNAS $LCTL dl | grep "$FSNAME-OST*"
+	echo "=="
+	$RUNAS $LCTL dl | grep "obdfilter $FSNAME-OST*"
+	echo "=="
+	ost_count="$($RUNAS $LCTL dl | grep "osc $FSNAME-OST*" | wc -l)"
 	[ "$ost_count" -eq $OSTCOUNT ]  ||
 		error "lctl dl reports wrong number of OST devices"
 
-	mdt_count="$($RUNAS $LCTL dl | grep $FSNAME-MDT* | wc -l)"
+	$RUNAS $LCTL dl | grep "mdt $FSNAME-MDT*"
+	mdt_count="$($RUNAS $LCTL dl | grep "mdc $FSNAME-MDT*" | wc -l)"
 	[ "$mdt_count" -eq $MDSCOUNT ]  ||
 		error "lctl dl reports wrong number of MDT devices"
 }
