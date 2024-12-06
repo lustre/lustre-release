@@ -422,18 +422,31 @@ struct obd_device;
 #define JOBSTATS_NODELOCAL		"nodelocal"
 #define JOBSTATS_SESSION		"session"
 
+enum ojb_info_flags {
+	OJS_CLEANING,		/* job cleaning is in operation */
+	OJS_HEADER,		/* seq_show() header */
+	OJS_ACTIVE_JOBS,	/* set while ojs_jobs > 0 */
+	OJS_FINI,		/* set at _fini */
+};
+
 typedef void (*cntr_init_callback)(struct lprocfs_stats *stats,
 				   unsigned int offset,
 				   enum lprocfs_counter_config cntr_umask);
 struct obd_job_stats {
-	struct cfs_hash	       *ojs_hash;	/* hash of jobids */
-	struct list_head	ojs_list;	/* list of job_stat structs */
-	spinlock_t		ojs_lock;	/* protect ojs_list/js_list */
+	struct rb_root		ojs_idtree;	/* root sorted on js_jobid */
+	struct rb_root		ojs_postree;	/* unique id (temporal) root */
+	atomic64_t		ojs_next_pos;	/* generate next unique id */
+	struct rw_semaphore	ojs_rwsem;	/* rbtree locking */
+	struct list_head	ojs_lru;	/* least recently used */
+	struct llist_head	ojs_deleted;	/* zero-ref to be purged */
+	unsigned long		ojs_flags;	/* see: ojb_info_flags */
+	atomic_t		ojs_readers;	/* active readers */
+	spinlock_t		ojs_lock;	/* protect ojs_lru/js_lru */
 	ktime_t			ojs_cleanup_interval;/* 1/2 expiry seconds */
 	ktime_t			ojs_cleanup_last;/* previous cleanup time */
 	cntr_init_callback	ojs_cntr_init_fn;/* lprocfs_stats initializer */
 	unsigned short		ojs_cntr_num;	/* number of stats in struct */
-	bool			ojs_cleaning;	/* currently expiring stats */
+	atomic64_t		ojs_jobs;	/* number of jobs */
 };
 
 #ifdef CONFIG_PROC_FS

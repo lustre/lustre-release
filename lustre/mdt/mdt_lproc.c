@@ -1580,7 +1580,7 @@ void mdt_counter_incr(struct ptlrpc_request *req, int opcode, long amount)
 	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
 		lprocfs_counter_add(exp->exp_nid_stats->nid_stats, opcode,
 				    amount);
-	if (exp->exp_obd && obd2obt(exp->exp_obd)->obt_jobstats.ojs_hash &&
+	if (exp->exp_obd && obd2obt(exp->exp_obd)->obt_jobstats.ojs_cntr_num &&
 	    (exp_connect_flags(exp) & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd,
 				      lustre_msg_get_jobid(req->rq_reqmsg),

@@ -22215,6 +22215,59 @@ test_205k(){
 }
 run_test 205k "Verify '?' operator on job stats"
 
+test_205l() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ "$($LCTL get_param -n mdc.*.connect_flags)" =~ jobstats ]] ||
+		skip "Server doesn't support jobstats"
+	[[ "$JOBID_VAR" != "disable" ]] || skip_env "jobstats is disabled"
+
+	local jobid_save=$($LCTL get_param jobid_var jobid_name)
+	stack_trap "$LCTL set_param $jobid_save"
+	local tmpdir=$(mktemp -d /tmp/jobstat-XXXXXX)
+	local jobs=$tmpdir/jobs.txt
+	local mv_save=${tmpdir}/local_mv
+	local mv_job
+	local n=1
+	local limit=500
+	[[ $SLOW == "no" ]] || limit=500000
+
+	do_facet mds1 $LCTL set_param jobid_var=procname_uid jobid_name='%e.%u'
+	cp -a /etc/hosts $DIR/hosts
+	cp $(which mv) ${mv_save}
+	do_facet mds1 $LCTL set_param mdt.*.job_cleanup_interval=5
+	sleep 5
+	do_facet mds1 $LCTL set_param mdt.*.job_stats=clear
+	do_facet mds1 $LCTL set_param mdt.*.job_cleanup_interval=0
+	sleep 5
+	# Add a series of easily identifyable jobs
+	for ((n = 0; n < limit; n++)); do
+		mv_job=${tmpdir}/mv.$(printf %08d $n)
+		mv ${mv_save} ${mv_job}
+		${mv_job} $DIR/hosts $DIR/hosts.$(printf %08d $n)
+		${mv_job} $DIR/hosts.$(printf %08d $n) $DIR/hosts
+		mv ${mv_job} ${mv_save}
+	done
+	# Duplicates indicate restart issues
+	do_facet mds1 \
+		"$LCTL get_param mdt.*.job_stats | grep job_id: | cut -d. -f2" \
+		> ${jobs}
+	local dupes=$(grep -v -e "^${RUNAS_ID}\$" -e '^0$' ${jobs} | sort |
+		      uniq -d | wc -l)
+	(( ${dupes} == 0 )) ||
+		error "seq_write wrote ${dupes} duplicate entries."
+	# Unexpected jobs indicate cleanup issues
+	local njobs=$(grep -v -e "^${RUNAS_ID}\$" -e '^0$' ${jobs} | wc -l)
+	(( ${njobs} == ${limit} )) ||
+		error "seq_write wrote ${njobs} jobs expected ${limit}."
+	do_facet mds1 $LCTL set_param mdt.*.job_cleanup_interval=5
+	sleep 5
+	do_facet mds1 $LCTL set_param mdt.*.job_stats=clear
+	# On success the scrach files are not interesting
+	rm -fr ${tmpdir}
+}
+run_test 205l "Verify job stats can scale"
+
 # LU-1480, LU-1773 and LU-1657
 test_206() {
 	mkdir -p $DIR/$tdir

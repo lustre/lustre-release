@@ -476,6 +476,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	lut->lut_reply_data = NULL;
 	lut->lut_reply_bitmap = NULL;
 	obt = obd_obt_init(obd);
+	obt->obt_jobstats.ojs_cntr_num = 0;
 	obt->obt_lut = lut;
 
 	/* set request handler slice and parameters */

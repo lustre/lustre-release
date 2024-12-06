@@ -84,7 +84,7 @@ static inline void ofd_counter_incr(struct obd_export *exp, int opcode,
 	if (exp->exp_obd && exp->exp_obd->obd_stats)
 		lprocfs_counter_add(exp->exp_obd->obd_stats, opcode, amount);
 
-	if (exp->exp_obd && obd2obt(exp->exp_obd)->obt_jobstats.ojs_hash &&
+	if (exp->exp_obd && obd2obt(exp->exp_obd)->obt_jobstats.ojs_cntr_num &&
 	    (exp_connect_flags(exp) & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd, jobid, opcode, amount);
 

@@ -2223,6 +2223,33 @@ AC_DEFUN([LIBCFS_NLA_STRLCPY], [
 ]) # LIBCFS_NLA_STRLCPY
 
 #
+# LIBCFS_RB_FIND
+#
+# Kernel v5.11-20-g2d24dd5798d0
+#   rbtree: Add generic add and find helpers
+#
+AC_DEFUN([LIBCFS_SRC_RB_FIND], [
+	LB2_LINUX_TEST_SRC([rb_find], [
+		#include <linux/rbtree.h>
+		static int cmp(const void *key, const struct rb_node *node)
+		{
+			return 0;
+		}
+	],[
+		void *key = NULL;
+		struct rb_root *tree = NULL;
+		struct rb_node *node __maybe_unused = rb_find(key, tree, cmp);
+	])
+])
+AC_DEFUN([LIBCFS_RB_FIND], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'rb_find()' is available],
+	[rb_find], [
+		AC_DEFINE(HAVE_RB_FIND, 1,
+			['rb_find()' is available])
+	])
+]) # LIBCFS_RB_FIND
+
+#
 # LIBCFS_LINUX_FORTIFY_STRING_HEADER
 #
 # Linux v5.11-11104-ga28a6e860c6c
@@ -2642,6 +2669,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_HAVE_LIST_CMP_FUNC_T
 	LIBCFS_SRC_NLA_STRLCPY
 	# 5.12
+	LIBCFS_SRC_RB_FIND
 	LIBCFS_SRC_LINUX_FORTIFY_STRING_HEADER
 	LIBCFS_SRC_HAVE_CIPHER_HEADER
 	# 5.13
@@ -2798,6 +2826,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_HAVE_LIST_CMP_FUNC_T
 	LIBCFS_NLA_STRLCPY
 	# 5.12
+	LIBCFS_RB_FIND
 	LIBCFS_LINUX_FORTIFY_STRING_HEADER
 	LIBCFS_HAVE_CIPHER_HEADER
 	# 5.13
