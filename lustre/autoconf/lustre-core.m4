@@ -1170,13 +1170,15 @@ lm_grant, [
 AC_DEFUN([LC_SRC_NFS_FILLDIR_USE_CTX], [
 	LB2_LINUX_TEST_SRC([filldir_ctx], [
 		#include <linux/fs.h>
-	],[
+
+		int filldir(struct dir_context *ctx, const char* name,
+			    int i, loff_t off, u64 tmp, unsigned temp);
 		int filldir(struct dir_context *ctx, const char* name,
 			    int i, loff_t off, u64 tmp, unsigned temp)
 		{
 			return 0;
 		}
-
+	],[
 		struct dir_context ctx = {
 			.actor = filldir,
 		};
@@ -4041,13 +4043,15 @@ AC_DEFUN([LC_HAVE_GET_RANDOM_U32_AND_U64], [
 AC_DEFUN([LC_SRC_NFS_FILLDIR_USE_CTX_RETURN_BOOL], [
 	LB2_LINUX_TEST_SRC([filldir_ctx_return_bool], [
 		#include <linux/fs.h>
-	],[
+
+		bool filldir(struct dir_context *ctx, const char* name,
+			     int i, loff_t off, u64 tmp, unsigned temp);
 		bool filldir(struct dir_context *ctx, const char* name,
 			     int i, loff_t off, u64 tmp, unsigned temp)
 		{
 			return 0;
 		}
-
+	],[
 		struct dir_context ctx = {
 			.actor = filldir,
 		};
