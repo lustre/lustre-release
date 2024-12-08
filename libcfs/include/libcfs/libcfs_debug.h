@@ -25,6 +25,7 @@
  */
 extern unsigned int libcfs_subsystem_debug;
 extern unsigned int libcfs_debug;
+extern unsigned int libcfs_subsystem_printk;
 extern unsigned int libcfs_printk;
 extern unsigned int libcfs_watchdog_ratelimit;
 extern unsigned int libcfs_console_ratelimit;

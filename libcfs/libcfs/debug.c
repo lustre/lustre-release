@@ -103,6 +103,10 @@ module_param_call(libcfs_debug_mb, libcfs_param_debug_mb_set, param_get_uint,
 #endif
 MODULE_PARM_DESC(libcfs_debug_mb, "Total debug buffer size.");
 
+unsigned int libcfs_subsystem_printk;
+module_param(libcfs_subsystem_printk, uint, 0644);
+MODULE_PARM_DESC(libcfs_subsystem_printk, "Lustre kernel debug subsystem console mask");
+
 unsigned int libcfs_printk = D_CANTMASK;
 module_param(libcfs_printk, uint, 0644);
 MODULE_PARM_DESC(libcfs_printk, "Lustre kernel debug console mask");

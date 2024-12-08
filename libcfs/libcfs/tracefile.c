@@ -329,10 +329,11 @@ static void cfs_vprint_to_console(struct ptldebug_header *hdr,
 				  struct va_format *vaf, const char *file,
 				  const char *fn)
 {
-	char *prefix = "Lustre";
+	int subsys = hdr->ph_subsys;
 	int mask = hdr->ph_mask;
+	char *prefix = "Lustre";
 
-	if (hdr->ph_subsys == S_LND || hdr->ph_subsys == S_LNET)
+	if (subsys == S_LND || subsys == S_LNET)
 		prefix = "LNet";
 
 	if (mask & D_CONSOLE) {
@@ -342,7 +343,8 @@ static void cfs_vprint_to_console(struct ptldebug_header *hdr,
 			pr_err("%sError: %pV", prefix, vaf);
 		else if (mask & D_WARNING)
 			pr_warn("%s: %pV", prefix, vaf);
-		else if (mask & libcfs_printk)
+		else if (mask & libcfs_printk ||
+			 subsys & libcfs_subsystem_printk)
 			pr_info("%s: %pV", prefix, vaf);
 	} else {
 		if (mask & D_EMERG)
@@ -357,8 +359,11 @@ static void cfs_vprint_to_console(struct ptldebug_header *hdr,
 			pr_warn("%s: %d:%d:(%s:%d:%s()) %pV", prefix,
 				hdr->ph_pid, hdr->ph_extern_pid, file,
 				hdr->ph_line_num, fn, vaf);
-		else if (mask & (D_CONSOLE | libcfs_printk))
-			pr_info("%s: %pV", prefix, vaf);
+		else if (mask & libcfs_printk ||
+			 subsys & libcfs_subsystem_printk)
+			pr_info("%s: %d:%d:(%s:%d:%s()) %pV", prefix,
+				hdr->ph_pid, hdr->ph_extern_pid, file,
+				hdr->ph_line_num, fn, vaf);
 	}
 }
 
@@ -676,7 +681,8 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	__LASSERT(tage->used <= PAGE_SIZE);
 
 console:
-	if ((header.ph_mask & libcfs_printk) == 0) {
+	if ((header.ph_mask & libcfs_printk) == 0 &&
+	    (header.ph_subsys & libcfs_subsystem_printk) == 0) {
 		/* no console output requested */
 		if (tcd != NULL)
 			cfs_trace_put_tcd(tcd);

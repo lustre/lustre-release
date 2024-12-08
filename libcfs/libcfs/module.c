@@ -104,14 +104,15 @@ static int proc_dobitmasks(const struct ctl_table *table,
 			   int write, void __user *buffer, size_t *lenp,
 			   loff_t *ppos)
 {
-	const int     tmpstrlen = 512;
-	char         *tmpstr = NULL;
-	int           rc;
+	unsigned int *mask = table->data;
+	int is_subsys = (mask == &libcfs_subsystem_debug ||
+			 mask == &libcfs_subsystem_printk) ? 1 : 0;
+	int is_printk = (mask == &libcfs_printk) ? 1 : 0;
+	const int tmpstrlen = 512;
+	char *tmpstr = NULL;
 	size_t nob = *lenp;
 	loff_t pos = *ppos;
-	unsigned int *mask = table->data;
-	int           is_subsys = (mask == &libcfs_subsystem_debug) ? 1 : 0;
-	int           is_printk = (mask == &libcfs_printk) ? 1 : 0;
+	int rc;
 
 	if (!write) {
 		tmpstr = kmalloc(tmpstrlen, GFP_KERNEL | __GFP_ZERO);
@@ -386,6 +387,13 @@ static struct ctl_table lnet_table[] = {
 	{
 		.procname	= "printk",
 		.data		= &libcfs_printk,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= cfs_proc_handler(&proc_dobitmasks),
+	},
+	{
+		.procname	= "subsystem_printk",
+		.data		= &libcfs_subsystem_printk,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= cfs_proc_handler(&proc_dobitmasks),
