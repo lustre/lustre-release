@@ -184,7 +184,7 @@ libmount_utils_zfs_a_CPPFLAGS := -DHAVE_IOCTL_IN_UNISTD_H $(ZFS_LIBZFS_INCLUDE)
 if PLUGINS
 lib_LTLIBRARIES += libmount_utils_zfs.la
 libmount_utils_zfs.la : libmount_utils_zfs.a
-	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -export-dynamic -pthread \
+	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -Wl,--export-dynamic -pthread \
 			 $(ZFS_LIBZFS_LDFLAGS) -o mount_osd_zfs.so \
 			 `$(AR) -t libmount_utils_zfs.a` \
 			 $(MNTMODLIBS) $(ZFS_LIBZFS_LIBS)
@@ -204,7 +204,7 @@ libmount_utils_ldiskfs_a_CPPFLAGS :=
 if PLUGINS
 lib_LTLIBRARIES += libmount_utils_ldiskfs.la
 libmount_utils_ldiskfs.la : libmount_utils_ldiskfs.a
-	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -export-dynamic \
+	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -Wl,--export-dynamic \
 			 -o mount_osd_ldiskfs.so \
 			 `$(AR) -t libmount_utils_ldiskfs.a` \
 			 $(MNTMODLIBS) -lext2fs
