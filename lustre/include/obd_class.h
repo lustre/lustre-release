@@ -194,7 +194,7 @@ char *lustre_cfg_string(struct lustre_cfg *lcfg, u32 index);
 struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 				     const char *new_name);
 void print_lustre_cfg(struct lustre_cfg *lcfg);
-int class_process_config(struct lustre_cfg *lcfg);
+int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj);
 ssize_t class_set_global(const char *param);
 ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 			    struct kobject *kobj);
@@ -232,6 +232,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg);
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
 	unsigned long		 cfg_instance;
+	struct kobject		*cfg_kobj;
 	struct super_block	*cfg_sb;
 	struct obd_uuid		 cfg_uuid;
 	llog_cb_t		 cfg_callback;

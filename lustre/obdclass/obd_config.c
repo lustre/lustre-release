@@ -1373,7 +1373,7 @@ EXPORT_SYMBOL(lustre_register_quota_process_config);
  * These may come from direct calls (e.g. class_manual_cleanup)
  * or processing the config llog, or ioctl from lctl.
  */
-int class_process_config(struct lustre_cfg *lcfg)
+int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj)
 {
 	struct obd_device *obd;
 	struct lnet_nid nid;
@@ -1477,27 +1477,10 @@ int class_process_config(struct lustre_cfg *lcfg)
 		/* llite has no OBD */
 		if (class_match_param(lustre_cfg_string(lcfg, 1),
 				      PARAM_LLITE, NULL) == 0) {
-			struct lustre_sb_info *lsi;
-			unsigned long addr;
 			ssize_t count;
 
-			/*
-			 * The instance name contains the sb:
-			 * lustre-client-aacfe000
-			 */
-			tmp = strrchr(lustre_cfg_string(lcfg, 0), '-');
-			if (!tmp || !*(++tmp))
-				GOTO(out, err = -EINVAL);
-
-			if (sscanf(tmp, "%lx", &addr) != 1)
-				GOTO(out, err = -EINVAL);
-
-			lsi = s2lsi((struct super_block *)addr);
-			/* This better be a real Lustre superblock! */
-			LASSERT(lsi->lsi_lmd->lmd_magic == LMD_MAGIC);
-
-			count = class_modify_config(lcfg, PARAM_LLITE,
-						    lsi->lsi_kobj);
+			LASSERT(kobj);
+			count = class_modify_config(lcfg, PARAM_LLITE, kobj);
 			err = count < 0 ? count : 0;
 			GOTO(out, err);
 		} else if ((class_match_param(lustre_cfg_string(lcfg, 1),
@@ -1992,7 +1975,7 @@ int class_config_llog_handler(const struct lu_env *env,
 
 		lcfg_new->lcfg_nal = 0; /* illegal value for obsolete field */
 
-		rc = class_process_config(lcfg_new);
+		rc = class_process_config(lcfg_new, cfg->cfg_kobj);
 		OBD_FREE(lcfg_new, lustre_cfg_len(lcfg_new->lcfg_bufcount,
 						  lcfg_new->lcfg_buflens));
 out_inst:
@@ -2341,7 +2324,7 @@ int class_manual_cleanup(struct obd_device *obd)
 		RETURN(-ENOMEM);
 	lustre_cfg_init(lcfg, LCFG_CLEANUP, &bufs);
 
-	rc = class_process_config(lcfg);
+	rc = class_process_config(lcfg, NULL);
 	if (rc) {
 		CERROR("cleanup failed %d: %s\n", rc, obd->obd_name);
 		GOTO(out, rc);
@@ -2349,7 +2332,7 @@ int class_manual_cleanup(struct obd_device *obd)
 
 	/* the lcfg is almost the same for both ops */
 	lcfg->lcfg_command = LCFG_DETACH;
-	rc = class_process_config(lcfg);
+	rc = class_process_config(lcfg, NULL);
 	if (rc)
 		CERROR("detach failed %d: %s\n", rc, obd->obd_name);
 out:

@@ -343,7 +343,7 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 		if (!rc)
 			rc = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
 		if (!rc)
-			rc = class_process_config(lcfg);
+			rc = class_process_config(lcfg, NULL);
 
 		OBD_FREE(lcfg, data->ioc_plen1);
 		GOTO(out, rc);

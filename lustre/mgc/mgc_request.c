@@ -1445,7 +1445,7 @@ fail:;
 		CDEBUG(D_INFO, "ir apply logs %lld/%lld for %s -> %s\n",
 		       prev_version, max_version, obdname, params);
 
-		rc = class_process_config(lcfg);
+		rc = class_process_config(lcfg, &obd->obd_kset.kobj);
 		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
 					      lcfg->lcfg_buflens));
 		if (rc)

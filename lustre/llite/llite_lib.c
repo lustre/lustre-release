@@ -1468,6 +1468,7 @@ int ll_fill_super(struct super_block *sb)
 	 * joker tries to mount the same fs at two mount points.
 	 */
 	cfg->cfg_instance = cfg_instance;
+	cfg->cfg_kobj = &sbi->ll_kset.kobj;
 	cfg->cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
 	cfg->cfg_callback = class_config_llog_handler;
 	cfg->cfg_sub_clds = CONFIG_SUB_CLIENT;

@@ -2608,7 +2608,6 @@ static const char *const ra_stat_string[] = {
 
 int ll_debugfs_register_super(struct super_block *sb, const char *name)
 {
-	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	int err, id;
 
@@ -2626,8 +2625,6 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 	err = kset_register(&sbi->ll_kset);
 	if (err)
 		RETURN(err);
-
-	lsi->lsi_kobj = kobject_get(&sbi->ll_kset.kobj);
 
 	if (IS_ERR_OR_NULL(llite_root))
 		RETURN(0);
@@ -2695,7 +2692,6 @@ out_debugfs:
 
 void ll_debugfs_unregister_super(struct super_block *sb)
 {
-	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 
 	debugfs_remove_recursive(sbi->ll_debugfs_entry);
@@ -2707,8 +2703,6 @@ void ll_debugfs_unregister_super(struct super_block *sb)
 	if (sbi->ll_md_obd)
 		sysfs_remove_link(&sbi->ll_kset.kobj,
 				  sbi->ll_md_obd->obd_type->typ_name);
-
-	kobject_put(lsi->lsi_kobj);
 
 	kset_unregister(&sbi->ll_kset);
 	wait_for_completion(&sbi->ll_kobj_unregister);

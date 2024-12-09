@@ -153,7 +153,7 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 		return -ENOMEM;
 	lustre_cfg_init(lcfg, cmd, &bufs);
 	lcfg->lcfg_nid = nid;
-	rc = class_process_config(lcfg);
+	rc = class_process_config(lcfg, NULL);
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 	return rc;
 }

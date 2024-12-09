@@ -3818,11 +3818,11 @@ static int mgs_write_log_sys(const struct lu_env *env,
 		switch (cmd) {
 		case LCFG_SET_TIMEOUT:
 			if (!obd_timeout_set || lcfg->lcfg_num > obd_timeout)
-				class_process_config(lcfg);
+				class_process_config(lcfg, &lustre_kset->kobj);
 			break;
 		case LCFG_SET_LDLM_TIMEOUT:
 			if (!ldlm_timeout_set || lcfg->lcfg_num > ldlm_timeout)
-				class_process_config(lcfg);
+				class_process_config(lcfg, &lustre_kset->kobj);
 			break;
 		default:
 			break;
