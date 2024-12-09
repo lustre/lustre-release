@@ -6461,6 +6461,23 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct nodemap_offset_rec *)0)->nor_padding2) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_offset_rec *)0)->nor_padding2));
 
+	/* Checks for struct nodemap_fileset_rec */
+	LASSERTF((int)sizeof(struct nodemap_fileset_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_fileset_rec));
+	BUILD_BUG_ON(LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE != 28);
+	LASSERTF((int)offsetof(struct nodemap_fileset_rec, nfr_path_fragment[28]) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_rec, nfr_path_fragment[28]));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_rec *)0)->nfr_path_fragment[28]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_rec *)0)->nfr_path_fragment[28]));
+	LASSERTF((int)offsetof(struct nodemap_fileset_rec, nfr_fragment_id) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_rec, nfr_fragment_id));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_rec *)0)->nfr_fragment_id) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_rec *)0)->nfr_fragment_id));
+	LASSERTF((int)offsetof(struct nodemap_fileset_rec, nfr_padding1) == 30, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_rec, nfr_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_rec *)0)->nfr_padding1) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_rec *)0)->nfr_padding1));
+
 	/* Checks for union nodemap_rec */
 	LASSERTF((int)sizeof(union nodemap_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(union nodemap_rec));
@@ -6532,6 +6549,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)NM_FL2_READONLY_MOUNT);
 	LASSERTF(NM_FL2_DENY_MOUNT == 0x00000002UL, "found 0x%.8xUL\n",
 		(unsigned int)NM_FL2_DENY_MOUNT);
+	LASSERTF(NM_FL2_FILESET_USE_IAM == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FL2_FILESET_USE_IAM);
 	LASSERTF(NODEMAP_UID == 0, "found %lld\n",
 		 (long long)NODEMAP_UID);
 	LASSERTF(NODEMAP_GID == 1, "found %lld\n",

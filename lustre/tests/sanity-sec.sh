@@ -2137,22 +2137,36 @@ test_26() {
 }
 run_test 26 "test transferring very large nodemap"
 
+nodemap_exercise_fileset_cleanup() {
+	# Already mounted clients are skipped in zconf_mount_clients()
+	for client in "${clients_arr[@]}"; do
+		zconf_mount_clients $client $MOUNT $MOUNT_OPTS ||
+			error "unable to mount client $client"
+	done
+}
+
 nodemap_exercise_fileset() {
-	local nm="$1"
-	local loop=0
+	local have_persistent_fset_cmd
 	local check_proj=true
+	local loop=0
+	local nm="$1"
 
 	(( $MDS1_VERSION >= $(version_code 2.14.52) )) || check_proj=false
 
+	# when "have_persistent_fset_cmd" is true, "lctl nodemap_set_fileset"
+	# is persistent, otherwise "lctl set_param -P" must be used
+	have_persistent_fset_cmd=false
+	(( $MGS_VERSION >= $(version_code 2.16.51) )) &&
+		have_persistent_fset_cmd=true
+
 	# setup
-	if [ "$nm" == "default" ]; then
+	if [[ "$nm" == "default" ]]; then
 		do_facet mgs $LCTL nodemap_activate 1
 		wait_nm_sync active
 		do_facet mgs $LCTL nodemap_modify --name default \
 			--property admin --value 1
 		do_facet mgs $LCTL nodemap_modify --name default \
 			--property trusted --value 1
-		wait_nm_sync default admin_nodemap
 		wait_nm_sync default trusted_nodemap
 		check_proj=false
 	else
@@ -2167,13 +2181,27 @@ nodemap_exercise_fileset() {
 	fileset_test_setup "$nm"
 
 	# add fileset info to $nm nodemap
-	if ! combined_mgs_mds; then
-	    do_facet mgs $LCTL set_param nodemap.${nm}.fileset=/$subdir ||
-		error "unable to add fileset info to $nm nodemap on MGS"
+	if $have_persistent_fset_cmd; then
+		do_facet mgs $LCTL nodemap_set_fileset --name $nm \
+			--fileset "/${subdir}" ||
+			error "can't set fileset to $nm nodemap on MGS"
+		# check fileset is set on local mgs node
+		wait_update_facet mgs "$LCTL get_param nodemap.${nm}.fileset" \
+				"nodemap.${nm}.fileset=/${subdir}" ||
+			error "fileset /${subdir} not set on $nm nodemap"
+	else
+		if ! combined_mgs_mds; then
+			do_facet mgs $LCTL set_param \
+				nodemap.${nm}.fileset=/${subdir} ||
+				error "can't set fileset /${subdir} to $nm nodemap on MGS"
+		fi
+		do_facet mgs $LCTL set_param -P \
+			nodemap.${nm}.fileset=/${subdir} ||
+			error "can't set fileset /${subdir} to $nm nodemap on servers"
 	fi
-	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=/$subdir ||
-	       error "unable to add fileset info to $nm nodemap for servers"
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=/$subdir"
+
+	# check fileset is set on remote nodes
+	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=/${subdir}"
 
 	if $check_proj; then
 		do_facet mgs $LCTL nodemap_modify --name $nm \
@@ -2192,9 +2220,21 @@ nodemap_exercise_fileset() {
 		wait_nm_sync $nm deny_unknown
 	fi
 
-	# re-mount client
-	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
-		error "unable to umount client ${clients_arr[0]}"
+	# re-start all components to verify persistence of fileset after restart
+	stopall || error "unable to stop"
+	# Unload modules to fully reload nodemap IAM
+	LOAD_MODULES_REMOTE=true unload_modules ||
+		error "unable to unload modules"
+	LOAD_MODULES_REMOTE=true load_modules ||
+		error "unable to load modules"
+	mountmgs || error "unable to start mgs"
+	mountmds || error "unable to start mds"
+	mountoss || error "unable to start oss"
+
+	stack_trap nodemap_exercise_fileset_cleanup EXIT
+
+	# mount a single client for fileset testing and remount
+	# the remaining clients later.
 	# set some generic fileset to trigger SSK code
 	export FILESET=/
 	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
@@ -2227,11 +2267,16 @@ nodemap_exercise_fileset() {
 	# remove fileset info from nodemap
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm --fileset clear ||
 		error "unable to delete fileset info on $nm nodemap"
+	# check whether fileset was removed on mgs
 	wait_update_facet mgs "$LCTL get_param nodemap.${nm}.fileset" \
 			  "nodemap.${nm}.fileset=" ||
 		error "fileset info still not cleared on $nm nodemap"
-	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=clear ||
+	if ! $have_persistent_fset_cmd; then
+		do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=clear ||
 		error "unable to reset fileset info on $nm nodemap"
+	fi
+
+	# check whether fileset was removed on remote nodes
 	wait_nm_sync $nm fileset "nodemap.${nm}.fileset="
 	do_facet mgs $LCTL set_param -P -d nodemap.${nm}.fileset ||
 		error "unable to remove fileset rule on $nm nodemap"
@@ -2255,12 +2300,11 @@ nodemap_exercise_fileset() {
 			error "unable to umount client ${clients_arr[0]}"
 	fi
 	fileset_test_cleanup "$nm"
-	if [ "$nm" == "default" ]; then
+	if [[ "$nm" == "default" ]]; then
 		do_facet mgs $LCTL nodemap_modify --name default \
 			 --property admin --value 0
 		do_facet mgs $LCTL nodemap_modify --name default \
 			 --property trusted --value 0
-		wait_nm_sync default admin_nodemap
 		wait_nm_sync default trusted_nodemap
 		do_facet mgs $LCTL nodemap_activate 0
 		wait_nm_sync active 0
@@ -2269,30 +2313,29 @@ nodemap_exercise_fileset() {
 	else
 		nodemap_test_cleanup
 	fi
-	if $SHARED_KEY; then
-		zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
-			error "unable to remount client ${clients_arr[0]}"
-	fi
+	# The fileset cleanup trap is reset during nodemap clean up.
+	# Call fileset cleanup to restart all shut down clients
+	nodemap_exercise_fileset_cleanup
 }
 
 test_27a() {
-	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
+	(( $MDS1_VERSION < $(version_code 2.11.50) )) &&
 		skip "Need MDS >= 2.11.50"
 
 	# if servers run on the same node, it is impossible to tell if they get
 	# synced with the mgs, so this test needs to be skipped
-	if [ $(facet_active_host mgs) == $(facet_active_host mds) ] &&
-	   [ $(facet_active_host mgs) == $(facet_active_host ost1) ]; then
+	if [[ $(facet_active_host mgs) == $(facet_active_host mds) ]] &&
+	   [[ $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
 		skip "local mode not supported"
 	fi
 
 	for nm in "default" "c0"; do
-		local subdir="subdir_${nm}"
+		local subdir="thisisaverylongsubdirtotestlongfilesetsandtotestmultiplefilesetfragmentsonthenodemapiam_${nm}"
 		local subsubdir="subsubdir_${nm}"
 
-		if [ "$nm" == "default" ] && [ "$SHARED_KEY" == "true" ]; then
-			echo "Skipping nodemap $nm with SHARED_KEY";
-			continue;
+		if [[ "$nm" == "default" && "$SHARED_KEY" == "true" ]]; then
+			echo "Skipping nodemap $nm with SHARED_KEY"
+			continue
 		fi
 
 		echo "Exercising fileset for nodemap $nm"

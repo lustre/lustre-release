@@ -250,7 +250,7 @@ nodemap_fileset_seq_write(struct file *file,
 	if (copy_from_user(nm_fileset, buffer, count))
 		GOTO(out, rc = -EFAULT);
 
-	rc = nodemap_set_fileset(m->private, nm_fileset, false);
+	rc = nodemap_set_fileset(m->private, nm_fileset, false, false);
 	if (rc != 0)
 		GOTO(out, rc = -EINVAL);
 

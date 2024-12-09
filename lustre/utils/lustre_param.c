@@ -61,6 +61,7 @@
 
 #include "lctl_thread.h"
 #include "lustreapi_internal.h"
+#include "lstddef.h"
 
 #include <sys/un.h>
 #include <time.h>
@@ -868,6 +869,46 @@ int jt_lcfg_getparam(int argc, char **argv)
 }
 
 /**
+ * Parses a cleaned set_param path and checks whether it is deprecated. If yes,
+ * the user is notified with a warning. This function does not exit the program.
+ *
+ * \param[in] path	The set_param key to be checked for deprecation.
+ *
+ */
+static void setparam_check_deprecated(const char *path)
+{
+	regex_t regex;
+	int err, i;
+
+	struct deprecated_param {
+		const char *regex;
+		const char *message;
+	};
+
+	static const struct deprecated_param deprecated_params[] = {
+		{ .regex = "^nodemap/[^/]+/fileset$",
+		  .message =
+			  "Warning: The parameter '%s' is deprecated. Please use \"lctl nodemap_set_fileset\" instead.\n" },
+		/* Add more deprecated parameters here in the future */
+	};
+
+	for (i = 0; i < ARRAY_SIZE(deprecated_params); i++) {
+		err = regcomp(&regex, deprecated_params[i].regex, REG_EXTENDED);
+		if (err) {
+			fprintf(stderr, "Error compiling regex: %s\n",
+				deprecated_params[i].regex);
+			continue;
+		}
+
+		err = regexec(&regex, path, 0, NULL, 0);
+		if (!err)
+			fprintf(stdout, deprecated_params[i].message, path);
+
+		regfree(&regex);
+	}
+}
+
+/**
  * Parses the commandline options to set_param.
  *
  * \param[in] argc	count of arguments given to set_param
@@ -1015,6 +1056,8 @@ int jt_lcfg_setparam(int argc, char **argv)
 		rc = clean_path(&popt, path);
 		if (rc < 0)
 			break;
+
+		setparam_check_deprecated(path);
 
 		rc = do_param_op(&popt, path, value, SET_PARAM, wq_ptr);
 		if (rc < 0) {

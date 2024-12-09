@@ -966,6 +966,7 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_readonly_mount = 0;
 		dst->nmf_rbac = NODEMAP_RBAC_ALL;
 		dst->nmf_deny_mount = 0;
+		dst->nmf_fileset_use_iam = 0;
 
 		dst->nm_squash_uid = NODEMAP_NOBODY_UID;
 		dst->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -988,6 +989,8 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_readonly_mount = src->nmf_readonly_mount;
 		dst->nmf_rbac = src->nmf_rbac;
 		dst->nmf_deny_mount = src->nmf_deny_mount;
+		dst->nmf_fileset_use_iam = 0;
+
 		dst->nm_squash_uid = src->nm_squash_uid;
 		dst->nm_squash_gid = src->nm_squash_gid;
 		dst->nm_squash_projid = src->nm_squash_projid;
@@ -1151,16 +1154,73 @@ out:
 EXPORT_SYMBOL(nodemap_del_range);
 
 /**
- * set fileset on nodemap
- * \param	name		nodemap to set fileset on
+ * Set a fileset on a nodemap in memory and the nodemap IAM records.
+ * If the nodemap is dynamic, the nodemap IAM update is transparently skipped in
+ * the nodemap_idx_fileset_* functions to update only the in-memory nodemap.
+ *
+ * \param	nodemap		the nodemap to set fileset on
  * \param	fileset		string containing fileset
  * \retval	0 on success
- *
- * set a fileset on the named nodemap
+ * \retval	-EINVAL		invalid fileset: Does not start with '/'
+ * \retval	-ENAMETOOLONG	fileset is too long
+ * \retval	-EIO		undo operation failed during IAM update
  */
-static int nodemap_set_fileset_helper(struct nodemap_config *config,
-				      struct lu_nodemap *nodemap,
-				      const char *fileset)
+static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
+				   const char *fileset)
+{
+	int rc = 0;
+
+	if (strlen(fileset) > PATH_MAX)
+		RETURN(-ENAMETOOLONG);
+
+	if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0) {
+		rc = nodemap_idx_fileset_clear(nodemap);
+		if (rc == 0)
+			nodemap->nm_fileset[0] = '\0';
+	} else if (fileset[0] != '/') {
+		rc = -EINVAL;
+	} else {
+		/*
+		 * Only update the index if the fileset is already set.
+		 * If it was set by the params llog, it is not set in the IAM.
+		 */
+		if (nodemap->nm_fileset[0] != '\0' &&
+		    nodemap->nmf_fileset_use_iam) {
+			rc = nodemap_idx_fileset_update(
+				nodemap, nodemap->nm_fileset, fileset);
+		} else {
+			rc = nodemap_idx_fileset_add(nodemap, fileset);
+		}
+		if (rc < 0)
+			GOTO(out, rc);
+
+		memcpy(nodemap->nm_fileset, fileset, strlen(fileset) + 1);
+	}
+
+	if (!nodemap->nm_dyn && !nodemap->nmf_fileset_use_iam) {
+		nodemap->nmf_fileset_use_iam = 1;
+		rc = nodemap_idx_nodemap_update(nodemap);
+	}
+
+out:
+	return rc;
+}
+
+/**
+ * Set a fileset on a nodemap. This is a local operation and not persistent.
+ *
+ * This function is a remnant from when fileset updates were made through
+ * the params llog, which caused "lctl set_param" to be called on
+ * each server locally. For backward compatibility this functionality is kept.
+ *
+ * \param	nodemap		the nodemap to set fileset on
+ * \param	fileset		string containing fileset
+ * \retval	0 on success
+ * \retval	-EINVAL		invalid fileset: Does not start with '/'
+ * \retval	-ENAMETOOLONG	fileset is too long
+ */
+static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
+				     const char *fileset)
 {
 	int rc = 0;
 
@@ -1173,40 +1233,73 @@ static int nodemap_set_fileset_helper(struct nodemap_config *config,
 	 * won't clear fileset.
 	 * 'fileset=""' is still kept for compatibility reason.
 	 */
-	if (fileset == NULL)
-		rc = -EINVAL;
-	else if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0)
+	if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0) {
 		nodemap->nm_fileset[0] = '\0';
-	else if (fileset[0] != '/')
+	} else if (fileset[0] != '/') {
 		rc = -EINVAL;
-	else if (strscpy(nodemap->nm_fileset, fileset,
-			 sizeof(nodemap->nm_fileset)) < 0)
+
+	} else if (strscpy(nodemap->nm_fileset, fileset,
+			   sizeof(nodemap->nm_fileset)) < 0) {
 		rc = -ENAMETOOLONG;
+		/* function may be called from llog thread, so we CERROR here */
+		CERROR("%s: fileset '%s' is too long: rc = %d\n",
+		       nodemap->nm_name, fileset, rc);
+	}
 
 	return rc;
 }
 
-int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm)
+/**
+ * Set fileset on a named nodemap
+ *
+ * \param	name		name of the nodemap to set fileset on
+ * \param	fileset		string containing fileset
+ * \param	checkperm	true if permission check is required
+ * \param	ioctl_op	true if called from ioctl nodemap functions
+ * \retval	0 on success
+ */
+int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
+			bool ioctl_op)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			 rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+
+	ENTRY;
+
+	if (name == NULL || name[0] == '\0' || fileset == NULL)
+		RETURN(-EINVAL);
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(name);
 	if (IS_ERR(nodemap)) {
 		mutex_unlock(&active_config_lock);
-		GOTO(out, rc = PTR_ERR(nodemap));
+		RETURN(PTR_ERR(nodemap));
 	}
 
 	if (checkperm && !allow_op_on_nm(nodemap))
 		GOTO(out_unlock, rc = -EPERM);
 
-	rc = nodemap_set_fileset_helper(active_config, nodemap, fileset);
+	/*
+	 * Previously filesets were made persistent through the params llog,
+	 * which caused local fileset updates on the server nodes. Now, filesets
+	 * are made persistent through the nodemap IAM records. Since we need to
+	 * be backward-compatible, this function serves as a mechanism to
+	 * support filesets saved in the llog as long as no IAM records were
+	 * set. "nodemap->nmf_fileset_use_iam" controls the transition between
+	 * both backends. Local updates are disabled once IAM records are used.
+	 */
+	if (ioctl_op)
+		rc = nodemap_set_fileset_iam(nodemap, fileset);
+	else if (!ioctl_op && !nodemap->nmf_fileset_use_iam)
+		rc = nodemap_set_fileset_local(nodemap, fileset);
+	else
+		rc = -EINVAL;
 
 out_unlock:
 	mutex_unlock(&active_config_lock);
 	nodemap_putref(nodemap);
-out:
+
+	EXIT;
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_set_fileset);
@@ -1943,6 +2036,14 @@ int nodemap_del(const char *nodemap_name)
 		range_delete(active_config, range);
 	}
 	up_write(&active_config->nmc_range_tree_lock);
+
+	if (nodemap->nm_fileset[0] != '\0') {
+		rc2 = nodemap_idx_fileset_clear(nodemap);
+		if (rc2 < 0)
+			rc = rc2;
+
+		nodemap->nm_fileset[0] = '\0';
+	}
 
 	if (!nodemap->nm_dyn) {
 		rc2 = nodemap_idx_nodemap_del(nodemap);
@@ -2687,7 +2788,7 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 			rc = -EINVAL;
 		break;
 	case LCFG_NODEMAP_SET_FILESET:
-		rc = nodemap_set_fileset(nodemap_name, param, true);
+		rc = nodemap_set_fileset(nodemap_name, param, true, true);
 		break;
 	case LCFG_NODEMAP_SET_SEPOL:
 		rc = nodemap_set_sepol(nodemap_name, param, true);

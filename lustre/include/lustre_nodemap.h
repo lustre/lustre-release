@@ -58,7 +58,8 @@ struct lu_nodemap {
 				 nmf_enable_audit:1,
 				 nmf_forbid_encryption:1,
 				 nmf_readonly_mount:1,
-				 nmf_deny_mount:1;
+				 nmf_deny_mount:1,
+				 nmf_fileset_use_iam:1;
 	/* bitmap for mapping type */
 	enum nodemap_mapping_modes nmf_map_mode;
 	/* bitmap for rbac, enum nodemap_rbac_roles */
@@ -96,7 +97,7 @@ struct lu_nodemap {
 	struct hlist_node	 nm_hash;
 	struct nodemap_pde	*nm_pde_data;
 	/* fileset the nodes of this nodemap are restricted to */
-	char			 nm_fileset[PATH_MAX+1];
+	char			 nm_fileset[PATH_MAX + 1];
 	/* information about the expected SELinux policy on the nodes */
 	char			 nm_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
 
@@ -161,7 +162,8 @@ int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
-int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm);
+int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
+			bool ioctl_op);
 char *nodemap_get_fileset(const struct lu_nodemap *nodemap);
 int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm);
 const char *nodemap_get_sepol(const struct lu_nodemap *nodemap);

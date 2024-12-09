@@ -3021,6 +3021,16 @@ static void check_nodemap_cluster_roles_rec(void)
 	CHECK_MEMBER(nodemap_cluster_roles_rec, ncrr_padding3);
 }
 
+static void check_nodemap_fileset_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_fileset_rec);
+	CHECK_CDEFINE(LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE);
+	CHECK_MEMBER(nodemap_fileset_rec, nfr_path_fragment[LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE]);
+	CHECK_MEMBER(nodemap_fileset_rec, nfr_fragment_id);
+	CHECK_MEMBER(nodemap_fileset_rec, nfr_padding1);
+}
+
 static void check_nodemap_rec(void)
 {
 	BLANK_LINE();
@@ -3062,6 +3072,7 @@ static void check_nodemap_key(void)
 	CHECK_VALUE_X(NM_FL_MAP_PROJID);
 	CHECK_VALUE_X(NM_FL2_READONLY_MOUNT);
 	CHECK_VALUE_X(NM_FL2_DENY_MOUNT);
+	CHECK_VALUE_X(NM_FL2_FILESET_USE_IAM);
 
 	CHECK_VALUE(NODEMAP_UID);
 	CHECK_VALUE(NODEMAP_GID);
@@ -3803,6 +3814,7 @@ main(int argc, char **argv)
 	check_nodemap_offset_rec();
 	check_nodemap_global_rec();
 	check_nodemap_cluster_roles_rec();
+	check_nodemap_fileset_rec();
 	check_nodemap_rec();
 	check_nodemap_key();
 

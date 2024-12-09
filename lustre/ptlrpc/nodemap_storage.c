@@ -88,7 +88,8 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 			NM_FL_FORBID_ENCRYPT : 0);
 	nr->ncr.ncr_flags2 =
 		(nodemap->nmf_readonly_mount ? NM_FL2_READONLY_MOUNT : 0) |
-		(nodemap->nmf_deny_mount ? NM_FL2_DENY_MOUNT : 0);
+		(nodemap->nmf_deny_mount ? NM_FL2_DENY_MOUNT : 0) |
+		(nodemap->nmf_fileset_use_iam ? NM_FL2_FILESET_USE_IAM : 0);
 	nr->ncr.ncr_padding1 = 0;
 	nr->ncr.ncr_squash_projid = cpu_to_le32(nodemap->nm_squash_projid);
 	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
@@ -118,6 +119,30 @@ static void nodemap_offset_rec_init(union nodemap_rec *nr,
 	nor->nor_limit_gid = cpu_to_le32(nodemap->nm_offset_limit_gid);
 	nor->nor_start_projid = cpu_to_le32(nodemap->nm_offset_start_projid);
 	nor->nor_limit_projid = cpu_to_le32(nodemap->nm_offset_limit_projid);
+}
+
+static int nodemap_cluster_fileset_rec_init(union nodemap_rec *nr,
+					    const char *fileset,
+					    unsigned int fragment_id,
+					    unsigned int fragment_size)
+{
+	struct nodemap_fileset_rec *nfr = &nr->nfr;
+	unsigned int fset_offset;
+	int rc = 0;
+
+	if (fragment_size > LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE ||
+	    fragment_size > strlen(fileset) + 1) {
+		rc = -ENAMETOOLONG;
+		CERROR("%s: Invalid fileset fragment size: rc = %d\n", fileset,
+		       rc);
+		RETURN(rc);
+	}
+
+	nfr->nfr_fragment_id = cpu_to_le16(fragment_id);
+	fset_offset = fragment_id * LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
+	memcpy(nfr->nfr_path_fragment, fileset + fset_offset, fragment_size);
+
+	return rc;
 }
 
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
@@ -306,14 +331,29 @@ out:
 	return nm_obj;
 }
 
-static int nodemap_idx_insert(const struct lu_env *env,
-			      struct dt_object *idx,
-			      const struct nodemap_key *nk,
-			      const union nodemap_rec *nr)
+/**
+ * Batch inserts a number of keys and records into the nodemap IAM.
+ *
+ * \param	env		execution environment
+ * \param	idx		index object to insert into
+ * \param	nks		array of keys to insert
+ * \param	nrs		array of records to insert
+ * \param	count		number of keys and records to insert
+ * \param	inserted_out	pointer to the number of records inserted.
+ *				May be set to NULL if not needed.
+ *
+ * \retval			negative errno if the insertion fails
+ */
+static int nodemap_idx_insert_batch(const struct lu_env *env,
+				    struct dt_object *idx,
+				    const struct nodemap_key *nks,
+				    const union nodemap_rec *nrs, int count,
+				    int *inserted_out)
 {
 	struct thandle *th;
 	struct dt_device *dev = lu2dt_dev(idx->do_lu.lo_dev);
-	int rc;
+	int inserted = 0;
+	int rc, i;
 
 	BUILD_BUG_ON(sizeof(union nodemap_rec) != 32);
 
@@ -321,11 +361,12 @@ static int nodemap_idx_insert(const struct lu_env *env,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = dt_declare_insert(env, idx,
-			       (const struct dt_rec *)nr,
-			       (const struct dt_key *)nk, th);
-	if (rc != 0)
-		GOTO(out, rc);
+	for (i = 0; i < count; i++) {
+		rc = dt_declare_insert(env, idx, (const struct dt_rec *)&nrs[i],
+				       (const struct dt_key *)&nks[i], th);
+		if (rc != 0)
+			GOTO(out, rc);
+	}
 
 	rc = dt_declare_version_set(env, idx, th);
 	if (rc != 0)
@@ -337,15 +378,31 @@ static int nodemap_idx_insert(const struct lu_env *env,
 
 	dt_write_lock(env, idx, 0);
 
-	rc = dt_insert(env, idx, (const struct dt_rec *)nr,
-		       (const struct dt_key *)nk, th);
+	for (i = 0; i < count; i++) {
+		rc = dt_insert(env, idx, (const struct dt_rec *)&nrs[i],
+			       (const struct dt_key *)&nks[i], th);
+		if (rc != 0)
+			break;
+		inserted++;
+	}
 
 	nodemap_inc_version(env, idx, th);
 	dt_write_unlock(env, idx);
 out:
 	dt_trans_stop(env, dev, th);
 
+	if (inserted_out != NULL)
+		*inserted_out = inserted;
+
 	return rc;
+}
+
+static int nodemap_idx_insert(const struct lu_env *env,
+			      struct dt_object *idx,
+			      const struct nodemap_key *nk,
+			      const union nodemap_rec *nr)
+{
+	return nodemap_idx_insert_batch(env, idx, nk, nr, 1, NULL);
 }
 
 static int nodemap_idx_update(const struct lu_env *env,
@@ -353,9 +410,9 @@ static int nodemap_idx_update(const struct lu_env *env,
 			      const struct nodemap_key *nk,
 			      const union nodemap_rec *nr)
 {
-	struct thandle		*th;
-	struct dt_device	*dev = lu2dt_dev(idx->do_lu.lo_dev);
-	int			 rc = 0;
+	struct thandle *th;
+	struct dt_device *dev = lu2dt_dev(idx->do_lu.lo_dev);
+	int rc = 0;
 
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
@@ -398,22 +455,40 @@ out:
 	return rc;
 }
 
-static int nodemap_idx_delete(const struct lu_env *env,
-			      struct dt_object *idx,
-			      const struct nodemap_key *nk,
-			      const union nodemap_rec *unused)
+/**
+ * Batch deletes a number of keys and records from the nodemap IAM.
+ *
+ * \param	env		execution environment
+ * \param	idx		index object to delete
+ * \param	nks		array of keys to delete
+ * \param	nrs		array of records to delete
+ * \param	count		number of keys to delete
+ * \param	deleted_out	pointer to the number of records deleted.
+ *				May be set to NULL if not needed.
+ *
+ * \retval			negative errno if the insertion fails.
+ *				ENOENT if the key does not exist is ignored.
+ */
+static int nodemap_idx_delete_batch(const struct lu_env *env,
+				    struct dt_object *idx,
+				    const struct nodemap_key *nks, int count,
+				    int *deleted_out)
 {
-	struct thandle		*th;
-	struct dt_device	*dev = lu2dt_dev(idx->do_lu.lo_dev);
-	int			 rc = 0;
+	struct thandle *th;
+	struct dt_device *dev = lu2dt_dev(idx->do_lu.lo_dev);
+	int deleted = 0;
+	int rc, i;
 
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = dt_declare_delete(env, idx, (const struct dt_key *)nk, th);
-	if (rc != 0)
-		GOTO(out, rc);
+	for (i = 0; i < count; i++) {
+		rc = dt_declare_delete(env, idx, (const struct dt_key *)&nks[i],
+				       th);
+		if (rc != 0)
+			GOTO(out, rc);
+	}
 
 	rc = dt_declare_version_set(env, idx, th);
 	if (rc != 0)
@@ -425,15 +500,33 @@ static int nodemap_idx_delete(const struct lu_env *env,
 
 	dt_write_lock(env, idx, 0);
 
-	rc = dt_delete(env, idx, (const struct dt_key *)nk, th);
+	for (i = 0; i < count; i++) {
+		rc = dt_delete(env, idx, (const struct dt_key *)&nks[i], th);
+		if (rc == -ENOENT)
+			continue;
+		if (rc != 0)
+			break;
+
+		deleted++;
+	}
 
 	nodemap_inc_version(env, idx, th);
-
 	dt_write_unlock(env, idx);
 out:
 	dt_trans_stop(env, dev, th);
 
+	if (deleted_out != NULL)
+		*deleted_out = deleted;
+
 	return rc;
+}
+
+static int nodemap_idx_delete(const struct lu_env *env,
+			      struct dt_object *idx,
+			      const struct nodemap_key *nk,
+			      const union nodemap_rec *unused)
+{
+	return nodemap_idx_delete_batch(env, idx, nk, 1, NULL);
 }
 
 enum nm_add_update {
@@ -656,6 +749,418 @@ int nodemap_idx_offset_del(const struct lu_nodemap *nodemap)
 	RETURN(rc);
 }
 
+/**
+ * Inserts fileset fragments (identified by struct lu_nodemap_fileset_info) into
+ * the nodemap IAM.
+ *
+ * \param	fset_info	fileset info to be inserted into the nodemap IAM
+ * \param	env		execution environment
+ * \param	idx		index object to insert into
+ * \param	inserted_out	pointer to the number of records inserted.
+ *				May be set to NULL if not needed.
+ *
+ * \retval	0		on success
+ * \retval	-EINVAL		invalid input parameters
+ * \retval	-ENOMEM		memory allocation failure
+ */
+static int nodemap_idx_fileset_fragments_add(
+	const struct lu_nodemap_fileset_info *fset_info,
+	const struct lu_env *env, struct dt_object *idx, int *inserted_out)
+{
+	struct nodemap_key *nk_array;
+	union nodemap_rec *nr_array;
+	unsigned int size_remaining, fragment_size;
+	int i;
+	int rc = 0;
+
+	if (fset_info == NULL || fset_info->nfi_fileset == NULL ||
+	    fset_info->nfi_fragment_cnt == 0 ||
+	    fset_info->nfi_fragment_cnt >
+		    LUSTRE_NODEMAP_FILESET_SUBID_RANGE - 1)
+		RETURN(-EINVAL);
+
+	OBD_ALLOC_PTR_ARRAY(nk_array, fset_info->nfi_fragment_cnt);
+	if (nk_array == NULL)
+		RETURN(-ENOMEM);
+
+	OBD_ALLOC_PTR_ARRAY(nr_array, fset_info->nfi_fragment_cnt);
+	if (nr_array == NULL)
+		GOTO(out_cleanup, rc = -ENOMEM);
+
+	/* setup fileset fragment keys and records to be inserted */
+	size_remaining = (unsigned int) strlen(fset_info->nfi_fileset) + 1;
+	fragment_size = LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
+	for (i = 0; i < fset_info->nfi_fragment_cnt; i++) {
+		if (size_remaining < LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE)
+			fragment_size = size_remaining;
+
+		rc = nodemap_cluster_fileset_rec_init(
+			&nr_array[i], fset_info->nfi_fileset, i, fragment_size);
+		if (rc != 0)
+			GOTO(out_cleanup, rc);
+
+		nodemap_cluster_key_init(&nk_array[i], fset_info->nfi_nm_id,
+					 fset_info->nfi_subid + i);
+		size_remaining -= fragment_size;
+	}
+	rc = nodemap_idx_insert_batch(env, idx, nk_array, nr_array,
+				      fset_info->nfi_fragment_cnt,
+				      inserted_out);
+
+out_cleanup:
+	OBD_FREE_PTR_ARRAY(nr_array, fset_info->nfi_fragment_cnt);
+	OBD_FREE_PTR_ARRAY(nk_array, fset_info->nfi_fragment_cnt);
+
+	return rc;
+}
+
+/**
+ * Deletes fileset fragments (identified by struct lu_nodemap_fileset_info) from
+ * the nodemap IAM.
+ *
+ * \param	fset_info	fileset info to be deleted from the nodemap IAM
+ * \param	env		execution environment
+ * \param	idx		index object to delete from
+ * \param	deleted_out	pointer to the number of records deleted.
+ *				May be set to NULL if not needed.
+ *
+ * \retval	0		on success
+ * \retval	-EINVAL		invalid input parameters
+ * \retval	-ENOMEM		memory allocation failure
+ */
+static int nodemap_idx_fileset_fragments_del(
+	const struct lu_nodemap_fileset_info *fset_info,
+	const struct lu_env *env, struct dt_object *idx, int *deleted_out)
+{
+	struct nodemap_key *nk_array;
+	unsigned int i;
+	int rc = 0;
+
+	if (fset_info == NULL || fset_info->nfi_fragment_cnt == 0 ||
+	    fset_info->nfi_fragment_cnt >
+		    LUSTRE_NODEMAP_FILESET_SUBID_RANGE - 1)
+		RETURN(-EINVAL);
+
+	OBD_ALLOC_PTR_ARRAY(nk_array, fset_info->nfi_fragment_cnt);
+	if (nk_array == NULL)
+		RETURN(-ENOMEM);
+
+	/* setup fileset fragment keys to be deleted */
+	for (i = 0; i < fset_info->nfi_fragment_cnt; i++) {
+		nodemap_cluster_key_init(&nk_array[i], fset_info->nfi_nm_id,
+					 fset_info->nfi_subid + i);
+	}
+
+	rc = nodemap_idx_delete_batch(env, idx, nk_array,
+				      fset_info->nfi_fragment_cnt, deleted_out);
+
+	OBD_FREE_PTR_ARRAY(nk_array, fset_info->nfi_fragment_cnt);
+
+	return rc;
+}
+
+/**
+ * Clears the full fileset sub id range from the nodemap IAM.
+ *
+ * \param	nodemap		nodemap where the fileset is set
+ * \param	env		execution environment
+ * \param	idx		index object to delete from
+ *
+ * \retval	0		on success (ENOENT during idx_delete is ignored)
+ * \retval	-ENOMEM		memory allocation failure
+ */
+static int nodemap_idx_fileset_fragments_clear(const struct lu_nodemap *nodemap,
+					       const struct lu_env *env,
+					       struct dt_object *idx)
+{
+	struct nodemap_key *nk_array;
+	unsigned int count, subid, i;
+	int rc = 0;
+
+	count = LUSTRE_NODEMAP_FILESET_SUBID_RANGE;
+
+	OBD_ALLOC_PTR_ARRAY(nk_array, count);
+	if (nk_array == NULL)
+		RETURN(-ENOMEM);
+
+	/* setup fileset fragment keys to be deleted */
+	for (i = 0; i < count; i++) {
+		subid = NODEMAP_FILESET + i;
+		nodemap_cluster_key_init(&nk_array[i], nodemap->nm_id, subid);
+	}
+
+	rc = nodemap_idx_delete_batch(env, idx, nk_array, count, NULL);
+	if (rc == -ENOENT)
+		rc = 0;
+
+	OBD_FREE_PTR_ARRAY(nk_array, count);
+
+	return rc;
+}
+
+/**
+ * Initializes the fileset info structure based on nodemap and fileset info.
+ *
+ * \param	fset_info	fileset info structure to be initialized
+ * \param	fileset		fileset name
+ * \param	nodemap		nodemap where the fileset is set
+ * \param	subid		starting subid of the fileset in the IAM
+ */
+static void nodemap_fileset_info_init(struct lu_nodemap_fileset_info *fset_info,
+				      const char *fileset,
+				      const struct lu_nodemap *nodemap,
+				      enum nodemap_cluster_rec_subid subid)
+{
+	unsigned int fset_size;
+
+	fset_info->nfi_nm_id = nodemap->nm_id;
+	fset_info->nfi_subid = subid;
+	fset_info->nfi_fileset = fileset;
+
+	fset_size = (unsigned int)strlen(fset_info->nfi_fileset) + 1;
+	fset_info->nfi_fragment_cnt =
+		fset_size / LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
+
+	if (fset_size % LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE > 0)
+		fset_info->nfi_fragment_cnt++;
+}
+
+/**
+ * Adds a fileset to the nodemap IAM.
+ *
+ * If an error occurs during the IAM insert operation, the already inserted
+ * fragments are deleted. In case the latter undo operation fails, the fileset
+ * is subid range is cleared and -EIO is returned.
+ *
+ * \param	nodemap		the nodemap to insert the fileset
+ * \param	fileset		fileset name to insert
+ *
+ * \retval	0		on success
+ * \retval	-EINVAL		invalid input parameters
+ * \retval	-EIO		undo operation failed
+ */
+int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
+			    const char *fileset)
+{
+	struct lu_nodemap_fileset_info fset_info;
+	struct lu_env env;
+	struct dt_object *idx;
+	int inserted, deleted, rc2;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!nodemap_mgs()) {
+		if (nodemap->nm_dyn)
+			return 0;
+
+		rc = -EINVAL;
+		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
+		       nodemap->nm_name, rc);
+		RETURN(rc);
+	}
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		RETURN(rc);
+
+	idx = nodemap_mgs_ncf->ncf_obj;
+
+	/*
+	 * NODEMAP_FILESET + 1 is static for a single fileset.
+	 * For multiple filesets, this will be dynamically computed
+	 * based on an incoming fileset ID.
+	 */
+	nodemap_fileset_info_init(&fset_info, fileset, nodemap,
+				  NODEMAP_FILESET + 1);
+
+	inserted = 0;
+	rc = nodemap_idx_fileset_fragments_add(&fset_info, &env, idx,
+					       &inserted);
+
+	if (rc < 0 && inserted != fset_info.nfi_fragment_cnt) {
+		if (inserted == 0)
+			GOTO(out, rc);
+		/* Only some fileset fragments were added, attempt undo */
+		fset_info.nfi_fragment_cnt = inserted;
+		deleted = 0;
+
+		rc2 = nodemap_idx_fileset_fragments_del(&fset_info, &env, idx,
+							&deleted);
+		if (rc2 < 0 && deleted != fset_info.nfi_fragment_cnt) {
+			CERROR("%s: Undo adding fileset failed. rc = %d : rc2 = %d\n",
+			       fset_info.nfi_fileset, rc, rc2);
+			/* undo failed. wipe the fileset and set error code */
+			rc2 = nodemap_idx_fileset_fragments_clear(nodemap, &env,
+								  idx);
+			rc = -EIO;
+		}
+	}
+
+out:
+	lu_env_fini(&env);
+	return rc;
+}
+
+/**
+ * Updates an existing fileset on the nodemap IAM.
+ *
+ * If an error occurs during the IAM operation, an undo operation is performed.
+ * In case the undo operation fails, the fileset is subid range is cleared
+ * and -EIO is returned.
+ *
+ * \param	nodemap		the nodemap to update the fileset
+ * \param	fileset_old	fileset name to be deleted
+ * \param	fileset_new	fileset name to be inserted
+ *
+ * \retval	0		on success
+ * \retval	-EINVAL		invalid input parameters
+ * \retval	-EIO		undo operation failed
+ */
+int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
+			       const char *fileset_old, const char *fileset_new)
+{
+	struct lu_env env;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!nodemap_mgs()) {
+		if (nodemap->nm_dyn)
+			return 0;
+
+		rc = -EINVAL;
+		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
+		       nodemap->nm_name, rc);
+		RETURN(rc);
+	}
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = nodemap_idx_fileset_del(nodemap, fileset_old);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	rc = nodemap_idx_fileset_add(nodemap, fileset_new);
+
+out:
+	lu_env_fini(&env);
+	return rc;
+}
+
+/**
+ * Deletes a fileset from the nodemap IAM.
+ *
+ * If an error occurs during the IAM deleted operation, the already deleted
+ * fragments are re-inserted. In case the latter undo operation fails,
+ * the fileset is subid range is cleared and -EIO is returned.
+ *
+ * \param	nodemap		the nodemap to delete from
+ * \param	fileset		fileset name to be deleted
+ *
+ * \retval	0		on success
+ * \retval	-EINVAL		invalid input parameters
+ * \retval	-EIO		undo operation failed
+ */
+int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
+			    const char *fileset)
+{
+	struct lu_env env;
+	struct dt_object *idx;
+	struct lu_nodemap_fileset_info fset_info;
+	int deleted, inserted, rc2;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!nodemap_mgs()) {
+		if (nodemap->nm_dyn)
+			return 0;
+
+		rc = -EINVAL;
+		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
+		       nodemap->nm_name, rc);
+		RETURN(rc);
+	}
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc != 0)
+		RETURN(rc);
+
+	idx = nodemap_mgs_ncf->ncf_obj;
+
+	nodemap_fileset_info_init(&fset_info, fileset, nodemap,
+				  NODEMAP_FILESET + 1);
+
+	deleted = 0;
+	rc = nodemap_idx_fileset_fragments_del(
+		&fset_info, &env, nodemap_mgs_ncf->ncf_obj, &deleted);
+	if (rc < 0 && deleted != fset_info.nfi_fragment_cnt) {
+		if (deleted == 0)
+			GOTO(out, rc);
+		/*
+		 * Only some fileset fragments were deleted,
+		 * attempt undo based on the initial fileset, set in fset_info
+		 */
+		fset_info.nfi_fragment_cnt = deleted;
+		rc2 = nodemap_idx_fileset_fragments_add(&fset_info, &env, idx,
+							&inserted);
+		if (rc2 < 0 && inserted != fset_info.nfi_fragment_cnt) {
+			CERROR("%s: Undo deleting fileset failed. rc = %d : rc2 = %d\n",
+			       fset_info.nfi_fileset, rc, rc2);
+			/* undo failed. wipe the fileset and set error code */
+			rc2 = nodemap_idx_fileset_fragments_clear(nodemap, &env,
+								  idx);
+			rc = -EIO;
+		}
+	}
+
+out:
+	lu_env_fini(&env);
+	return rc;
+}
+
+/**
+ * Clears a fileset subid range from the nodemap IAM.
+ *
+ *
+ * \param	nodemap		nodemap where the fileset is set to be cleared
+ *
+ * \retval	0		on success (ENOENT during idx_delete is ignored)
+ * \retval	-EINVAL		invalid input parameters
+ */
+int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap)
+{
+	struct lu_env env;
+	struct dt_object *idx;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!nodemap_mgs()) {
+		if (nodemap->nm_dyn)
+			return 0;
+
+		rc = -EINVAL;
+		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
+		       nodemap->nm_name, rc);
+		RETURN(rc);
+	}
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc != 0)
+		RETURN(rc);
+
+	idx = nodemap_mgs_ncf->ncf_obj;
+
+	rc = nodemap_idx_fileset_fragments_clear(nodemap, &env, idx);
+
+	lu_env_fini(&env);
+	return rc;
+}
+
 int nodemap_idx_range_add(const struct lu_nid_range *range)
 {
 	struct nodemap_key nk;
@@ -865,20 +1370,27 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	flags2 = rec->ncr.ncr_flags2;
 	nodemap->nmf_readonly_mount = flags2 & NM_FL2_READONLY_MOUNT;
 	nodemap->nmf_deny_mount = flags2 & NM_FL2_DENY_MOUNT;
+	nodemap->nmf_fileset_use_iam = flags2 & NM_FL2_FILESET_USE_IAM;
+
 	/* by default, and in the absence of cluster_roles, grant all roles */
 	nodemap->nmf_rbac = NODEMAP_RBAC_ALL;
 
-	/* The fileset should be saved otherwise it will be empty
-	 * every time in case of "NODEMAP_CLUSTER_IDX".
+	/*
+	 * If the use IAM flag has not been set on the nodemap, a llog-based
+	 * fileset may be in use on the old nodemap. It needs to be separately
+	 * copied to the new nodemap as it is otherwise lost when the IAM
+	 * is read for type "NODEMAP_CLUSTER_IDX".
 	 */
-	mutex_lock(&active_config_lock);
-	old_nm = nodemap_lookup(rec->ncr.ncr_name);
-	if (!IS_ERR(old_nm) && old_nm->nm_fileset[0] != '\0')
-		strscpy(nodemap->nm_fileset, old_nm->nm_fileset,
-			sizeof(nodemap->nm_fileset));
-	mutex_unlock(&active_config_lock);
-	if (!IS_ERR(old_nm))
-		nodemap_putref(old_nm);
+	if (!nodemap->nmf_fileset_use_iam) {
+		mutex_lock(&active_config_lock);
+		old_nm = nodemap_lookup(rec->ncr.ncr_name);
+		if (!IS_ERR(old_nm) && old_nm->nm_fileset[0] != '\0')
+			strscpy(nodemap->nm_fileset, old_nm->nm_fileset,
+				sizeof(nodemap->nm_fileset));
+		mutex_unlock(&active_config_lock);
+		if (!IS_ERR(old_nm))
+			nodemap_putref(old_nm);
+	}
 
 	if (*recent_nodemap == NULL) {
 		*recent_nodemap = nodemap;
@@ -895,6 +1407,37 @@ static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
 					const union nodemap_rec *rec)
 {
 	nodemap->nmf_rbac = le64_to_cpu(rec->ncrr.ncrr_roles);
+
+	return 0;
+}
+
+/**
+ * Process a fileset fragment and apply it to the current nodemap. The incoming
+ * path fragment is copied to the nodemap fileset based on the fragment ID
+ * which is used to compute the char* offset.
+ *
+ * Fragments processed by this function do not need to be in order.
+ *
+ * \param	nodemap		nodemap to update with this fileset fragment
+ * \param	rec		fileset fragment record
+ */
+static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
+					  const union nodemap_rec *rec)
+{
+	unsigned int fragment_id, fragment_len, fset_offset, fset_len_remain;
+
+	fragment_id = le16_to_cpu(rec->nfr.nfr_fragment_id);
+	fragment_len = LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
+
+	/* compute nodemap fileset position */
+	fset_offset = fragment_id * LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
+	fset_len_remain = sizeof(nodemap->nm_fileset) - fset_offset;
+
+	if (fragment_len > fset_len_remain)
+		fragment_len = fset_len_remain;
+
+	memcpy(nodemap->nm_fileset + fset_offset, rec->nfr.nfr_path_fragment,
+	       fragment_len);
 
 	return 0;
 }
@@ -921,10 +1464,10 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	enum nodemap_idx_type type;
 	enum nodemap_id_type id_type;
 	struct lnet_nid nid[2];
-	int subtype;
+	int subtype, cluster_idx_key;
 	u32 nodemap_id;
 	u32 map[2];
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 
@@ -961,7 +1504,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 				GOTO(out, rc = -ENOENT);
 		}
 
-		/* update most recently used nodemap if necessay */
+		/* update most recently used nodemap if necessary */
 		if (nodemap != *recent_nodemap)
 			*recent_nodemap = nodemap;
 	}
@@ -973,33 +1516,32 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			      nodemap->nm_name, nodemap_id);
 		break;
 	case NODEMAP_CLUSTER_IDX:
-		switch (nodemap_get_key_subtype(key)) {
-		case NODEMAP_CLUSTER_REC:
+	{
+		cluster_idx_key = nodemap_get_key_subtype(key);
+		if (cluster_idx_key == NODEMAP_CLUSTER_REC) {
 			rc = nodemap_cluster_rec_helper(config, nodemap_id, rec,
 							recent_nodemap);
-			if (rc != 0)
-				GOTO(out, rc);
-			break;
-		case NODEMAP_CLUSTER_ROLES:
+		} else if (cluster_idx_key == NODEMAP_CLUSTER_ROLES) {
 			rc = nodemap_cluster_roles_helper(nodemap, rec);
-			if (rc != 0)
-				GOTO(out, rc);
-			break;
-		case NODEMAP_CLUSTER_OFFSET:
+		} else if (cluster_idx_key == NODEMAP_CLUSTER_OFFSET) {
 			/* only works for offset UID = GID = PROJID */
-			rc = nodemap_add_offset_helper(nodemap,
-					   le32_to_cpu(rec->nor.nor_start_uid),
-					   le32_to_cpu(rec->nor.nor_limit_uid));
-			if (rc != 0)
-				GOTO(out, rc);
-			break;
-		default:
+			rc = nodemap_add_offset_helper(
+				nodemap, le32_to_cpu(rec->nor.nor_start_uid),
+				le32_to_cpu(rec->nor.nor_limit_uid));
+		} else if (cluster_idx_key >= NODEMAP_FILESET &&
+			   cluster_idx_key <
+				   NODEMAP_FILESET +
+					   LUSTRE_NODEMAP_FILESET_SUBID_RANGE) {
+			rc = nodemap_cluster_fileset_helper(nodemap, rec);
+		} else {
 			CWARN("%s: ignoring keyrec of type %d with subtype %u\n",
 			      nodemap->nm_name, NODEMAP_CLUSTER_IDX,
 			      nodemap_get_key_subtype(key));
-			break;
 		}
+		if (rc != 0)
+			GOTO(out, rc);
 		break;
+	}
 	case NODEMAP_RANGE_IDX:
 		lnet_nid4_to_nid(le64_to_cpu(rec->nrr.nrr_start_nid), &nid[0]);
 		lnet_nid4_to_nid(le64_to_cpu(rec->nrr.nrr_end_nid), &nid[1]);

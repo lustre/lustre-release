@@ -65,6 +65,17 @@ struct lu_idmap {
 	struct rb_node	id_fs_to_client;
 };
 
+struct lu_nodemap_fileset_info {
+	/* nodemap id */
+	__u32 nfi_nm_id;
+	/* starting subid of the fileset in the IAM */
+	__u32 nfi_subid;
+	/* number of fileset fragments */
+	__u32 nfi_fragment_cnt;
+	/* the fileset */
+	const char *nfi_fileset;
+};
+
 static inline enum nodemap_idx_type nm_idx_get_type(unsigned int id)
 {
 	return id >> NM_TYPE_SHIFT;
@@ -149,6 +160,14 @@ int nodemap_idx_cluster_roles_update(const struct lu_nodemap *nodemap);
 int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap);
 int nodemap_idx_offset_add(const struct lu_nodemap *nodemap);
 int nodemap_idx_offset_del(const struct lu_nodemap *nodemap);
+int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
+			    const char *fileset);
+int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
+			       const char *old_fileset,
+			       const char *new_fileset);
+int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
+			    const char *fileset);
+int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap);
 int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const __u32 map[2]);
