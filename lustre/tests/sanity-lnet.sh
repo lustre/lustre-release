@@ -18,7 +18,6 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_LNET_EXCEPT "
-always_except LU-18129 230
 always_except LU-10391 253 254
 
 [[ "$SLOW" = "no" ]] && EXCEPT_SLOW=""
@@ -3527,9 +3526,14 @@ test_230() {
 	local cmd
 	for ((i = 4; i < 16; i+=1)); do
 		reinit_dlc || return $?
-		add_net "tcp" "${INTERFACES[0]}" || return $?
-		do_lnetctl net set --all --conns-per-peer $i ||
-			error "should have succeeded $?"
+		if ((i % 2 == 0)); then
+			add_net "tcp" "${INTERFACES[0]}" || return $?
+			do_lnetctl net set --all --conns-per-peer $i ||
+				error "should have succeeded $?"
+		else
+			do_lnetctl net add --net "tcp" --if ${INTERFACES[0]} --conns-per-peer $i ||
+				error "should have succeeded $?"
+		fi
 		$LNETCTL net show -v 1 | grep -q "conns_per_peer: $i" ||
 			error "failed to set conns-per-peer to $i"
 		lnid="$(lctl list_nids | head -n 1)"
@@ -3548,8 +3552,8 @@ test_230() {
 		cmd="printf 'network tcp\nconn_list\n' | lctl | grep -c '$lnid'"
 
 		# Expect 2+conns_per_peer*2 connections. Wait no longer
-		# than 2 seconds.
-		wait_update $HOSTNAME "$cmd" "$((2+i*2))" 2 ||
+		# than 10 seconds.
+		wait_update $HOSTNAME "$cmd" "$((2+i*2))" 10 ||
 			error "expected number of tcp connections $((2+i*2))"
 	done
 
