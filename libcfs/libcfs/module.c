@@ -51,7 +51,7 @@
 
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
-#include <lustre_crypto.h>
+#include <uapi/linux/lustre/lustre_ver.h>
 #include "tracefile.h"
 
 int cpu_npartitions;

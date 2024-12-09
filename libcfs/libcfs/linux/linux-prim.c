@@ -47,7 +47,6 @@
 #endif
 
 #include <lustre_compat.h>
-#include <libcfs/crypto/llcrypt.h>
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-wait.h>
 #include <libcfs/linux/linux-misc.h>
@@ -55,6 +54,7 @@
 #ifndef HAVE_XARRAY_SUPPORT
 #include <libcfs/linux/xarray.h>
 #endif
+#include <lustre_crypto.h>
 
 #ifndef HAVE_KTIME_GET_TS64
 void ktime_get_ts64(struct timespec64 *ts)

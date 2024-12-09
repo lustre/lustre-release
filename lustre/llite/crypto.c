@@ -481,7 +481,7 @@ const char *ll_get_symlink(struct inode *inode, const void *caddr,
 	struct lu_fid fid;
 	int rc;
 
-	rc = llcrypt_get_encryption_info(inode);
+	rc = llcrypt_prepare_readdir(inode);
 	if (rc)
 		return ERR_PTR(rc);
 
