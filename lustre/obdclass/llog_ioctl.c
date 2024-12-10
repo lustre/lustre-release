@@ -106,9 +106,9 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 	if (ioc_data && ioc_data->ioc_inllen1 > 0) {
 		l = 0;
 		remains = ioc_data->ioc_inllen4 +
-			  round_up(ioc_data->ioc_inllen1, 8) +
-			  round_up(ioc_data->ioc_inllen2, 8) +
-			  round_up(ioc_data->ioc_inllen3, 8);
+			  ALIGN(ioc_data->ioc_inllen1, 8) +
+			  ALIGN(ioc_data->ioc_inllen2, 8) +
+			  ALIGN(ioc_data->ioc_inllen3, 8);
 
 		rc = kstrtol(ioc_data->ioc_inlbuf2, 0, &from);
 		if (rc)
@@ -340,7 +340,7 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt,
 	case OBD_IOC_LLOG_INFO: {
 		int l;
 		int remains = data->ioc_inllen2 +
-			      round_up(data->ioc_inllen1, 8);
+			      ALIGN(data->ioc_inllen1, 8);
 		char *out = data->ioc_bulk;
 
 		l = snprintf(out, remains,
@@ -383,9 +383,9 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt,
 			GOTO(out_close, rc = -EINVAL);
 
 		bufs = data->ioc_inllen4 +
-			round_up(data->ioc_inllen1, 8) +
-			round_up(data->ioc_inllen2, 8) +
-			round_up(data->ioc_inllen3, 8);
+			ALIGN(data->ioc_inllen1, 8) +
+			ALIGN(data->ioc_inllen2, 8) +
+			ALIGN(data->ioc_inllen3, 8);
 
 		rc = kstrtol(data->ioc_inlbuf2, 0, &lprd.lprd_from);
 		if (rc)

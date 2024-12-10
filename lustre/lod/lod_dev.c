@@ -2646,9 +2646,9 @@ static int lod_llog_print(const struct lu_env *env, struct lod_device *lod,
 	}
 
 	bufs = ioc_data->ioc_inllen4 +
-		round_up(ioc_data->ioc_inllen1, 8) +
-		round_up(ioc_data->ioc_inllen2, 8) +
-		round_up(ioc_data->ioc_inllen3, 8);
+		ALIGN(ioc_data->ioc_inllen1, 8) +
+		ALIGN(ioc_data->ioc_inllen2, 8) +
+		ALIGN(ioc_data->ioc_inllen3, 8);
 
 	ioc_data->ioc_inllen1 = 0;
 	ioc_data->ioc_inllen2 = 0;

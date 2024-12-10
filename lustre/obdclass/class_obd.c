@@ -283,17 +283,17 @@ int obd_ioctl_getdata(struct obd_ioctl_data **datap, int *len, void __user *arg)
 
 	if (data->ioc_inllen1) {
 		data->ioc_inlbuf1 = &data->ioc_bulk[0];
-		offset += round_up(data->ioc_inllen1, 8);
+		offset += ALIGN(data->ioc_inllen1, 8);
 	}
 
 	if (data->ioc_inllen2) {
 		data->ioc_inlbuf2 = &data->ioc_bulk[0] + offset;
-		offset += round_up(data->ioc_inllen2, 8);
+		offset += ALIGN(data->ioc_inllen2, 8);
 	}
 
 	if (data->ioc_inllen3) {
 		data->ioc_inlbuf3 = &data->ioc_bulk[0] + offset;
-		offset += round_up(data->ioc_inllen3, 8);
+		offset += ALIGN(data->ioc_inllen3, 8);
 	}
 
 	if (data->ioc_inllen4)
