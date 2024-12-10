@@ -1,0 +1,56 @@
+From 45c922115d9e44c0d62fd2012ccb4d020bbe8edc Mon Sep 17 00:00:00 2001
+From: "Vitaliy Kuznetsov" <vk.en.mail@gmail.com>
+Date: Thu, 15 Jun 2023 11:17:14 +0300
+Subject: [PATCH] ext4: Add periodic superblock update check
+
+This patch introduces a mechanism to periodically check and update
+the superblock within the ext4 file system. The main purpose of this
+patch is to keep the disk superblock up to date. The update will be
+performed if more than one hour has passed since the last update, and
+if more than 16MB of data have been written to disk.
+
+This check and update is performed within the ext4_journal_commit_callback
+function, ensuring that the superblock is written while the disk is
+active, rather than based on a timer that may trigger during disk idle
+periods.
+
+Signed-off-by: Vitaliy Kuznetsov <vk.en.mail@gmail.com>
+---
+ fs/ext4/super.c | 50 +++++++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext4/sysfs.c |  4 ++--
+ 2 files changed, 52 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index dfa09a277b56..0d2bf85cee34 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -766,7 +817,8 @@ static void update_super_work(struct wor
+ 	 * We use directly jbd2 functions here to avoid recursing back into
+ 	 * ext4 error handling code during handling of previous errors.
+ 	 */
+-	if (!sb_rdonly(sbi->s_sb) && journal) {
++	if (!sb_rdonly(sbi->s_sb) && journal &&
++	    !(journal->j_flags & JBD2_UNMOUNT)) {
+ 		struct buffer_head *sbh = sbi->s_sbh;
+ 		bool call_notify_err = false;
+
+diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
+index 2314f7446592..a7219cc2fdc5 100644
+--- a/fs/ext4/sysfs.c
++++ b/fs/ext4/sysfs.c
+@@ -508,7 +508,8 @@ static struct kobj_type ext4_feat_ktype = {
+
+ void ext4_notify_error_sysfs(struct ext4_sb_info *sbi)
+ {
+-	sysfs_notify(&sbi->s_kobj, NULL, "errors_count");
++	if (sbi->s_add_error_count > 0)
++		sysfs_notify(&sbi->s_kobj, NULL, "errors_count");
+ }
+
+ static struct kobject *ext4_root;
+@@ -598,4 +599,3 @@ void ext4_exit_sysfs(void)
+ 	remove_proc_entry(proc_dirname, NULL);
+ 	ext4_proc_root = NULL;
+ }
+-
+--

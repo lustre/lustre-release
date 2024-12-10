@@ -801,8 +801,8 @@ test_17p() {
 	# kernel, we need to stat the target dir to cache it first
 	if [[ "$CLIENT_OS_ID_LIKE" =~ "rhel" ]]; then
 		if (( $CLIENT_OS_VERSION_CODE >= $(version_code 9.0) &&
-		      $CLIENT_OS_VERSION_CODE <= $(version_code 9.4) )); then
-			echo "stat $DIR/$tdir to cache it in el9.0-9.4"
+		      $CLIENT_OS_VERSION_CODE <= $(version_code 9.5) )); then
+			echo "stat $DIR/$tdir to cache it in el9.0-9.5"
 			stat $DIR/$tdir
 		fi
 	fi
