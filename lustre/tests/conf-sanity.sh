@@ -10552,6 +10552,13 @@ run_test 123ac "llog_print with --start and --end"
 
 test_123ad() { # LU-11566
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	if (( $MDS1_VERSION >= $(version_code 2.16.50) )); then
+		llog_info="llog info"
+		llog_print="llog print"
+	else
+		llog_info="llog_info"
+		llog_print="llog_print"
+	fi
 	# older versions of lctl may not print all records properly
 	(( MGS_VERSION >= $(version_code 2.15.90) )) ||
 		skip "Need MGS version at least 2.15.90"
@@ -10567,17 +10574,17 @@ test_123ad() { # LU-11566
 	# flags:            4 (plain)
 	# records_count:    72
 	# last_index:       72
-	local num=$(do_facet mgs $LCTL --device MGS llog_info $FSNAME-client |
+	local num=$(do_facet mgs $LCTL --device MGS $llog_info $FSNAME-client |
 		    awk '/last_index:/ { print $2 }')
 
-	do_facet mgs $LCTL --device MGS llog_print $FSNAME-client |
+	do_facet mgs $LCTL --device MGS $llog_print $FSNAME-client |
 		grep -q "$FSNAME-OST0000.*osc\.max_dirty_mb=$old" ||
 		error "ocs.max_dirty_mb=$old not found in $FSNAME-client"
 
 	# - { index: 72, event: marker, flags: 0x06, ... }
-	local last=$(do_facet mgs $LCTL --device MGS llog_print -r $FSNAME-client |
+	local last=$(do_facet mgs $LCTL --device MGS $llog_print -r $FSNAME-client |
 		     tail -1 | awk '{ print $4 }' | tr -d , )
-	(( last == num )) || error "llog_print only showed $last/$num records"
+	(( last == num )) || error "$llog_print only showed $last/$num records"
 }
 run_test 123ad "llog_print shows all records"
 

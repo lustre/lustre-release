@@ -280,6 +280,34 @@ command_t snapshot_cmdlist[] = {
 JT_SUBCMD(snapshot);
 
 /**
+ * command_t llog_cmdlist - lctl llog commands.
+ */
+command_t llog_cmdlist[] = {
+	{ .pc_name = "catlist", .pc_func = jt_llog_catlist,
+	  .pc_help = "list Lustre configuration log files\n"
+	 "usage: llog catlist"},
+	{ .pc_name = "info", .pc_func = jt_llog_info,
+	  .pc_help = "print log header information\n"
+	 "usage: llog info {LOGNAME|FID}"},
+	{ .pc_name = "print", .pc_func = jt_llog_print,
+	  .pc_help = "print the content of a configuration log\n"
+	 "usage: llog print {LOGNAME|FID} [--start INDEX] [--end INDEX]\n"
+	 "		    [--raw]"},
+	{ .pc_name = "cancel", .pc_func = jt_llog_cancel,
+	  .pc_help = "cancel one record in specified log.\n"
+	 "usage:llog cancel {LOGNAME|FID} --log_idx INDEX"},
+	{ .pc_name = "check", .pc_func = jt_llog_check,
+	  .pc_help = "verify that log content is valid.\n"
+	 "usage: llog_check {LOGNAME|FID} [--start INDEX] [--end INDEX]\n"
+	 "       check all records from index 1 by default."},
+	{ .pc_name = "remove", .pc_func = jt_llog_check,
+	  .pc_help = "remove one log and erase it from disk.\n"
+	 "usage: llog remove {LOGNAME|FID} [--log_id ID]"},
+	{ .pc_help = NULL }
+};
+JT_SUBCMD(llog);
+
+/**
  * command_t lfsck_cmdlist - lctl lfsck commands.
  */
 command_t lfsck_cmdlist[] = {
@@ -674,15 +702,15 @@ command_t cmdlist[] = {
 	 "usage: llog_catlist"},
 	{"llog_info", jt_llog_info, 0,
 	 "print log header information.\n"
-	 "usage: llog_info {LOGNAME|FID}\n"},
+	 "usage: llog_info {LOGNAME|FID}"},
 	{"llog_print", jt_llog_print, 0,
 	 "print all effective log records by default, or within given range.\n"
 	 "With --raw option skipped records are printed as well.\n"
 	 "usage: llog_print {LOGNAME|FID} [--start INDEX] [--end INDEX]\n"
-	 "		    [--raw]\n"},
+	 "		    [--raw]"},
 	{"llog_cancel", jt_llog_cancel, 0,
 	 "cancel one record in specified log.\n"
-	 "usage:llog_cancel {LOGNAME|FID} --log_idx INDEX\n"},
+	 "usage:llog_cancel {LOGNAME|FID} --log_idx INDEX"},
 	{"llog_check", jt_llog_check, 0,
 	 "verify that log content is valid.\n"
 	 "usage: llog_check {LOGNAME|FID} [--start INDEX] [--end INDEX]\n"
@@ -690,6 +718,8 @@ command_t cmdlist[] = {
 	{"llog_remove", jt_llog_remove, 0,
 	 "remove one log from catalog or plain log, erase it from disk.\n"
 	 "usage: llog_remove {LOGNAME|FID} [--log_id ID]"},
+	{"llog", jt_llog, llog_cmdlist, ""},
+
 	{"lcfg_clear", jt_lcfg_clear, 0,
 	 "drop unused config llog records for a device or filesystem.\n"
 	 "clients and servers must be unmounted during this operation.\n"
