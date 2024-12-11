@@ -1080,7 +1080,8 @@ int obd_pool_init(void)
 		 */
 		if (!pool->opp_max_ptr_pages) {
 			CWARN("Cannot allocate pool %i, not enough memory. Max available compression chunk is %lu.\n",
-			      pool_order, PAGE_SIZE << (pool_order - 1));
+			      pool_order,
+			      pool_order ? PAGE_SIZE << (pool_order - 1) : 0);
 			pools_count = pool_order;
 			OBD_FREE(pool, sizeof(**page_pools));
 			break;
