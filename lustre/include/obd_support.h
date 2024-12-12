@@ -1015,6 +1015,21 @@ do {									      \
 #define KEY_IS(str) \
         (keylen >= (sizeof(str)-1) && memcmp(key, str, (sizeof(str)-1)) == 0)
 
+#define OBD_STRNDUP(str, orig, len)		\
+do {						\
+	OBD_ALLOC(str, len + 1);		\
+	if (likely(str))			\
+		memcpy(str, orig, len + 1);	\
+} while(0)
+
+#define OBD_FREE_STR(str)			\
+do {						\
+	if (str) {				\
+		int len = strlen(str) + 1;	\
+		OBD_FREE(str, len);		\
+	}					\
+} while (0)
+
 #ifdef HAVE_SERVER_SUPPORT
 /* LUSTRE_LMA_FL_MASKS defines which flags will be stored in LMA */
 

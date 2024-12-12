@@ -772,7 +772,7 @@ nrs_tbf_jobid_list_free(struct list_head *jobid_list)
 	struct nrs_tbf_jobid *jobid, *n;
 
 	list_for_each_entry_safe(jobid, n, jobid_list, tj_linkage) {
-		OBD_FREE(jobid->tj_id, strlen(jobid->tj_id) + 1);
+		OBD_FREE_STR(jobid->tj_id);
 		list_del(&jobid->tj_linkage);
 		OBD_FREE_PTR(jobid);
 	}
@@ -788,13 +788,12 @@ nrs_tbf_jobid_list_add(char *id, struct list_head *jobid_list)
 	if (jobid == NULL)
 		return -ENOMEM;
 
-	OBD_ALLOC(jobid->tj_id, strlen(id) + 1);
+	OBD_STRNDUP(jobid->tj_id, id, strlen(id));
 	if (jobid->tj_id == NULL) {
 		OBD_FREE_PTR(jobid);
 		return -ENOMEM;
 	}
 
-	strcpy(jobid->tj_id, id);
 	ptr = strchr(id, '*');
 	if (ptr == NULL)
 		jobid->tj_match_flag = NRS_TBF_MATCH_FULL;
@@ -886,8 +885,7 @@ static void nrs_tbf_jobid_cmd_fini(struct nrs_tbf_cmd *cmd)
 {
 	if (!list_empty(&cmd->u.tc_start.ts_jobids))
 		nrs_tbf_jobid_list_free(&cmd->u.tc_start.ts_jobids);
-	OBD_FREE(cmd->u.tc_start.ts_jobids_str,
-		 strlen(cmd->u.tc_start.ts_jobids_str) + 1);
+	OBD_FREE_STR(cmd->u.tc_start.ts_jobids_str);
 }
 
 static int nrs_tbf_check_id_value(char **strp, char *key)
@@ -922,11 +920,9 @@ static int nrs_tbf_jobid_parse(struct nrs_tbf_cmd *cmd, char *id)
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_jobids_str, strlen(id) + 1);
+	OBD_STRNDUP(cmd->u.tc_start.ts_jobids_str, id, strlen(id));
 	if (cmd->u.tc_start.ts_jobids_str == NULL)
 		return -ENOMEM;
-
-	strcpy(cmd->u.tc_start.ts_jobids_str, id);
 
 	/* parse jobid list */
 	rc = nrs_tbf_jobid_list_parse(cmd->u.tc_start.ts_jobids_str,
@@ -944,14 +940,11 @@ static int nrs_tbf_jobid_rule_init(struct ptlrpc_nrs_policy *policy,
 	int rc = 0;
 
 	LASSERT(start->u.tc_start.ts_jobids_str);
-	OBD_ALLOC(rule->tr_jobids_str,
-		  strlen(start->u.tc_start.ts_jobids_str) + 1);
+	OBD_STRNDUP(rule->tr_jobids_str,
+		    start->u.tc_start.ts_jobids_str,
+		    strlen(start->u.tc_start.ts_jobids_str));
 	if (rule->tr_jobids_str == NULL)
 		return -ENOMEM;
-
-	memcpy(rule->tr_jobids_str,
-	       start->u.tc_start.ts_jobids_str,
-	       strlen(start->u.tc_start.ts_jobids_str));
 
 	INIT_LIST_HEAD(&rule->tr_jobids);
 	if (!list_empty(&start->u.tc_start.ts_jobids)) {
@@ -961,8 +954,7 @@ static int nrs_tbf_jobid_rule_init(struct ptlrpc_nrs_policy *policy,
 			CERROR("jobids {%s} illegal\n", rule->tr_jobids_str);
 	}
 	if (rc)
-		OBD_FREE(rule->tr_jobids_str,
-			 strlen(start->u.tc_start.ts_jobids_str) + 1);
+		OBD_FREE_STR(rule->tr_jobids_str);
 	return rc;
 }
 
@@ -987,7 +979,7 @@ static void nrs_tbf_jobid_rule_fini(struct nrs_tbf_rule *rule)
 	if (!list_empty(&rule->tr_jobids))
 		nrs_tbf_jobid_list_free(&rule->tr_jobids);
 	LASSERT(rule->tr_jobids_str != NULL);
-	OBD_FREE(rule->tr_jobids_str, strlen(rule->tr_jobids_str) + 1);
+	OBD_FREE_STR(rule->tr_jobids_str);
 }
 
 static struct nrs_tbf_ops nrs_tbf_jobid_ops = {
@@ -1159,8 +1151,7 @@ static int nrs_tbf_nid_rule_init(struct ptlrpc_nrs_policy *policy,
 
 	LASSERT(start->u.tc_start.ts_nids_str);
 
-	rule->tr_nids_str = kstrndup(start->u.tc_start.ts_nids_str,
-				     len, GFP_KERNEL);
+	OBD_STRNDUP(rule->tr_nids_str, start->u.tc_start.ts_nids_str, len);
 	if (!rule->tr_nids_str)
 		return -ENOMEM;
 
@@ -1169,7 +1160,7 @@ static int nrs_tbf_nid_rule_init(struct ptlrpc_nrs_policy *policy,
 		if (cfs_parse_nidlist(rule->tr_nids_str, len, &rule->tr_nids)) {
 			CERROR("nids {%s} illegal\n",
 			       rule->tr_nids_str);
-			kfree(rule->tr_nids_str);
+			OBD_FREE_STR(rule->tr_nids_str);
 			return -EINVAL;
 		}
 	}
@@ -1197,15 +1188,14 @@ static void nrs_tbf_nid_rule_fini(struct nrs_tbf_rule *rule)
 	if (!list_empty(&rule->tr_nids))
 		cfs_free_nidlist(&rule->tr_nids);
 	LASSERT(rule->tr_nids_str != NULL);
-	OBD_FREE(rule->tr_nids_str, strlen(rule->tr_nids_str) + 1);
+	OBD_FREE_STR(rule->tr_nids_str);
 }
 
 static void nrs_tbf_nid_cmd_fini(struct nrs_tbf_cmd *cmd)
 {
 	if (!list_empty(&cmd->u.tc_start.ts_nids))
 		cfs_free_nidlist(&cmd->u.tc_start.ts_nids);
-	OBD_FREE(cmd->u.tc_start.ts_nids_str,
-		 strlen(cmd->u.tc_start.ts_nids_str) + 1);
+	OBD_FREE_STR(cmd->u.tc_start.ts_nids_str);
 }
 
 static int nrs_tbf_nid_parse(struct nrs_tbf_cmd *cmd, char *id)
@@ -1219,7 +1209,7 @@ static int nrs_tbf_nid_parse(struct nrs_tbf_cmd *cmd, char *id)
 
 	len = strlen(id);
 
-	cmd->u.tc_start.ts_nids_str = kstrndup(id, len, GFP_KERNEL);
+	OBD_STRNDUP(cmd->u.tc_start.ts_nids_str, id, len);
 	if (!cmd->u.tc_start.ts_nids_str)
 		return -ENOMEM;
 
@@ -1776,8 +1766,7 @@ nrs_tbf_generic_cmd_fini(struct nrs_tbf_cmd *cmd)
 {
 	if (!list_empty(&cmd->u.tc_start.ts_conds))
 		nrs_tbf_conds_free(&cmd->u.tc_start.ts_conds);
-	OBD_FREE(cmd->u.tc_start.ts_conds_str,
-		 strlen(cmd->u.tc_start.ts_conds_str) + 1);
+	OBD_FREE_STR(cmd->u.tc_start.ts_conds_str);
 }
 
 #define NRS_TBF_DISJUNCTION_DELIM	(",")
@@ -1899,11 +1888,9 @@ nrs_tbf_generic_parse(struct nrs_tbf_cmd *cmd, const char *id)
 {
 	int rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_conds_str, strlen(id) + 1);
+	OBD_STRNDUP(cmd->u.tc_start.ts_conds_str, id, strlen(id));
 	if (cmd->u.tc_start.ts_conds_str == NULL)
 		return -ENOMEM;
-
-	memcpy(cmd->u.tc_start.ts_conds_str, id, strlen(id));
 
 	/* Parse hybird NID and JOBID conditions */
 	rc = nrs_tbf_conds_parse(cmd->u.tc_start.ts_conds_str,
@@ -1975,7 +1962,7 @@ nrs_tbf_generic_rule_fini(struct nrs_tbf_rule *rule)
 	if (!list_empty(&rule->tr_conds))
 		nrs_tbf_conds_free(&rule->tr_conds);
 	LASSERT(rule->tr_conds_str != NULL);
-	OBD_FREE(rule->tr_conds_str, strlen(rule->tr_conds_str) + 1);
+	OBD_FREE_STR(rule->tr_conds_str);
 }
 
 static int
@@ -1985,14 +1972,11 @@ nrs_tbf_rule_init(struct ptlrpc_nrs_policy *policy,
 	int rc = 0;
 
 	LASSERT(start->u.tc_start.ts_conds_str);
-	OBD_ALLOC(rule->tr_conds_str,
-		  strlen(start->u.tc_start.ts_conds_str) + 1);
+	OBD_STRNDUP(rule->tr_conds_str,
+		    start->u.tc_start.ts_conds_str,
+		    strlen(start->u.tc_start.ts_conds_str));
 	if (rule->tr_conds_str == NULL)
 		return -ENOMEM;
-
-	memcpy(rule->tr_conds_str,
-	       start->u.tc_start.ts_conds_str,
-	       strlen(start->u.tc_start.ts_conds_str));
 
 	INIT_LIST_HEAD(&rule->tr_conds);
 	if (!list_empty(&start->u.tc_start.ts_conds)) {
@@ -2040,7 +2024,7 @@ static void nrs_tbf_opcode_rule_fini(struct nrs_tbf_rule *rule)
 		bitmap_free(rule->tr_opcodes);
 
 	LASSERT(rule->tr_opcodes_str != NULL);
-	OBD_FREE(rule->tr_opcodes_str, strlen(rule->tr_opcodes_str) + 1);
+	OBD_FREE_STR(rule->tr_opcodes_str);
 }
 
 static unsigned int
@@ -2228,9 +2212,7 @@ nrs_tbf_opcode_list_parse(char *orig, unsigned long **bitmaptr)
 
 static void nrs_tbf_opcode_cmd_fini(struct nrs_tbf_cmd *cmd)
 {
-	OBD_FREE(cmd->u.tc_start.ts_opcodes_str,
-		 strlen(cmd->u.tc_start.ts_opcodes_str) + 1);
-
+	OBD_FREE_STR(cmd->u.tc_start.ts_opcodes_str);
 }
 
 static int nrs_tbf_opcode_parse(struct nrs_tbf_cmd *cmd, char *id)
@@ -2241,11 +2223,9 @@ static int nrs_tbf_opcode_parse(struct nrs_tbf_cmd *cmd, char *id)
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_opcodes_str, strlen(id) + 1);
+	OBD_STRNDUP(cmd->u.tc_start.ts_opcodes_str, id, strlen(id));
 	if (cmd->u.tc_start.ts_opcodes_str == NULL)
 		return -ENOMEM;
-
-	strcpy(cmd->u.tc_start.ts_opcodes_str, id);
 
 	/* parse opcode list */
 	rc = nrs_tbf_opcode_list_parse(cmd->u.tc_start.ts_opcodes_str, NULL);
@@ -2272,13 +2252,11 @@ static int nrs_tbf_opcode_rule_init(struct ptlrpc_nrs_policy *policy,
 	int rc = 0;
 
 	LASSERT(start->u.tc_start.ts_opcodes_str != NULL);
-	OBD_ALLOC(rule->tr_opcodes_str,
-		  strlen(start->u.tc_start.ts_opcodes_str) + 1);
+	OBD_STRNDUP(rule->tr_opcodes_str,
+		  start->u.tc_start.ts_opcodes_str,
+		  strlen(start->u.tc_start.ts_opcodes_str));
 	if (rule->tr_opcodes_str == NULL)
 		return -ENOMEM;
-
-	strncpy(rule->tr_opcodes_str, start->u.tc_start.ts_opcodes_str,
-		strlen(start->u.tc_start.ts_opcodes_str) + 1);
 
 	/* Default rule '*' */
 	if (strcmp(start->u.tc_start.ts_opcodes_str, "*") == 0)
@@ -2287,8 +2265,7 @@ static int nrs_tbf_opcode_rule_init(struct ptlrpc_nrs_policy *policy,
 	rc = nrs_tbf_opcode_list_parse(rule->tr_opcodes_str,
 				       &rule->tr_opcodes);
 	if (rc)
-		OBD_FREE(rule->tr_opcodes_str,
-			 strlen(start->u.tc_start.ts_opcodes_str) + 1);
+		OBD_FREE_STR(rule->tr_opcodes_str);
 
 	return rc;
 }
@@ -2490,8 +2467,7 @@ static void nrs_tbf_id_cmd_fini(struct nrs_tbf_cmd *cmd)
 {
 	nrs_tbf_id_list_free(&cmd->u.tc_start.ts_ids);
 
-	OBD_FREE(cmd->u.tc_start.ts_ids_str,
-		 strlen(cmd->u.tc_start.ts_ids_str) + 1);
+	OBD_FREE_STR(cmd->u.tc_start.ts_ids_str);
 }
 
 static int
@@ -2561,11 +2537,9 @@ static int nrs_tbf_ug_id_parse(struct nrs_tbf_cmd *cmd, char *id)
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(cmd->u.tc_start.ts_ids_str, strlen(id) + 1);
+	OBD_STRNDUP(cmd->u.tc_start.ts_ids_str, id, strlen(id));
 	if (cmd->u.tc_start.ts_ids_str == NULL)
 		return -ENOMEM;
-
-	strcpy(cmd->u.tc_start.ts_ids_str, id);
 
 	rc = nrs_tbf_id_list_parse(cmd->u.tc_start.ts_ids_str,
 				   &cmd->u.tc_start.ts_ids, tif);
@@ -2583,17 +2557,14 @@ nrs_tbf_id_rule_init(struct ptlrpc_nrs_policy *policy,
 	struct nrs_tbf_head *head = rule->tr_head;
 	int rc = 0;
 	enum nrs_tbf_flag tif = head->th_type_flag;
-	int ids_len = strlen(start->u.tc_start.ts_ids_str) + 1;
+	int ids_len = strlen(start->u.tc_start.ts_ids_str);
 
 	LASSERT(start->u.tc_start.ts_ids_str);
 	INIT_LIST_HEAD(&rule->tr_ids);
 
-	OBD_ALLOC(rule->tr_ids_str, ids_len);
+	OBD_STRNDUP(rule->tr_ids_str, start->u.tc_start.ts_ids_str, ids_len);
 	if (rule->tr_ids_str == NULL)
 		return -ENOMEM;
-
-	strscpy(rule->tr_ids_str, start->u.tc_start.ts_ids_str,
-		ids_len);
 
 	if (!list_empty(&start->u.tc_start.ts_ids)) {
 		rc = nrs_tbf_id_list_parse(rule->tr_ids_str,
@@ -2603,10 +2574,8 @@ nrs_tbf_id_rule_init(struct ptlrpc_nrs_policy *policy,
 			       tif == NRS_TBF_FLAG_UID ? "uid" : "gid",
 			       rule->tr_ids_str);
 	}
-	if (rc) {
-		OBD_FREE(rule->tr_ids_str, ids_len);
-		rule->tr_ids_str = NULL;
-	}
+	if (rc)
+		OBD_FREE_STR(rule->tr_ids_str);
 	return rc;
 }
 
@@ -2622,7 +2591,7 @@ nrs_tbf_id_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 static void nrs_tbf_id_rule_fini(struct nrs_tbf_rule *rule)
 {
 	nrs_tbf_id_list_free(&rule->tr_ids);
-	OBD_FREE(rule->tr_ids_str, strlen(rule->tr_ids_str) + 1);
+	OBD_FREE_STR(rule->tr_ids_str);
 }
 
 struct nrs_tbf_ops nrs_tbf_uid_ops = {
