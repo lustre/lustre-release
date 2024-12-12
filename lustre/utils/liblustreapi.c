@@ -1963,7 +1963,7 @@ retry_getfileinfo:
  */
 int llapi_get_lmm_from_path(const char *path, struct lov_user_md_v1 **lmmbuf)
 {
-	size_t lmmlen;
+	ssize_t lmmlen;
 	int p = -1;
 	int rc = 0;
 
@@ -1972,14 +1972,23 @@ int llapi_get_lmm_from_path(const char *path, struct lov_user_md_v1 **lmmbuf)
 		return -EINVAL;
 
 	p = open_parent(path);
-
-	*lmmbuf = calloc(1, lmmlen);
-	if (*lmmbuf == NULL)
+	if (p < 0)
 		return -errno;
 
+	*lmmbuf = calloc(1, lmmlen);
+	if (*lmmbuf == NULL) {
+		rc = -errno;
+		goto out_close;
+	}
+
 	rc = get_lmd_info_fd(path, p, 0, *lmmbuf, lmmlen, GET_LMD_STRIPE);
-	if (p != -1)
-		close(p);
+	if (rc < 0) {
+		free(*lmmbuf);
+		*lmmbuf = NULL;
+	}
+out_close:
+	close(p);
+
 	return rc;
 }
 

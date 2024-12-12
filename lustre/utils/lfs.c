@@ -4206,27 +4206,30 @@ create_mirror:
 			}
 
 			if (mirror_total_mode) {
-				char *path = argv[argc-1];
+				char *path = argv[argc - 1];
 				struct lov_comp_md_v1 *comp_v1;
+				int have_mirrors;
 
-				result = llapi_get_lmm_from_path(path, (struct lov_user_md_v1 **)&comp_v1);
+				result = llapi_get_lmm_from_path(path,
+					(struct lov_user_md_v1 **)&comp_v1);
 				if (result) {
 					fprintf(stderr,
 						"error: %s: cannot get layout from %s: %s\n",
 						progname, path, strerror(-result));
 					goto error;
 				}
+				have_mirrors = comp_v1->lcm_mirror_count;
+				free(comp_v1);
 
-				if (comp_v1->lcm_mirror_count >= mirror_count)
+				if (have_mirrors >= mirror_count)
 					mirror_count = 0;
 				else
-					mirror_count -= comp_v1->lcm_mirror_count;
+					mirror_count -= have_mirrors;
 
-				if (!mirror_count) {
+				if (mirror_count == 0) {
 					fprintf(stderr,
-						"warning: the file '%s' already has %d mirrors. No new mirrors will be created\n",
-						path,
-						comp_v1->lcm_mirror_count);
+						"warning: '%s' already has %d mirrors, no new mirrors will be created\n",
+						path, have_mirrors);
 					break;
 				}
 			}
