@@ -955,11 +955,11 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		 * see lru_size_store().
 		 */
 		if (ns_connect_lru_resize(ns) &&
-		    ns->ns_lru_size_set_before_connection &&
+		    test_bit(LDLM_NS_LRU_SIZE_SET_BEFORE_CONN, ns->ns_flags) &&
 		    ns->ns_max_unused != 0)
 			ns->ns_connect_flags &= ~OBD_CONNECT_LRU_RESIZE;
 
-		ns->ns_lru_size_set_before_connection = 0;
+		clear_bit(LDLM_NS_LRU_SIZE_SET_BEFORE_CONN, ns->ns_flags);
 		spin_unlock(&ns->ns_lock);
 	}
 

@@ -365,14 +365,25 @@ enum ldlm_ns_type {
 };
 
 enum ldlm_namespace_flags {
-	/**
+	/*
 	 * Flag to indicate the LRU cancel is in progress.
 	 * Used to limit the process by 1 thread only.
 	 */
-	LDLM_LRU_CANCEL = 0
+	LDLM_NS_LRU_CANCEL,
+	LDLM_NS_STOPPING,
+	/* Controls the stack trace log in ldlm_lock_debug */
+	LDLM_NS_DUMP_STACK,
+	/*
+	 * Flag to indicate the LRU recalc on RPC reply is in progress.
+	 * Used to limit the process by 1 thread only.
+	 */
+	LDLM_NS_RPC_RECALC,
+	 /* lru_size is set even before connection */
+	LDLM_NS_LRU_SIZE_SET_BEFORE_CONN,
+	LDLM_NS_NUM_FLAGS
 };
 
-/**
+/*
  * LDLM Namespace.
  *
  * Namespace serves to contain locks related to a particular service.
@@ -558,27 +569,6 @@ struct ldlm_namespace {
 	struct lprocfs_stats	*ns_stats;
 
 	/**
-	 * Flag to indicate namespace is being freed. Used to determine if
-	 * recalculation of LDLM pool statistics should be skipped.
-	 */
-	unsigned int		ns_stopping:1,
-
-
-	/**
-	 * This namespace will control the stack trace log in ldlm_lock_debug
-	 */
-				ns_dump_stack_on_error:1,
-
-	/**
-	 * Flag to indicate the LRU recalc on RPC reply is in progress.
-	 * Used to limit the process by 1 thread only.
-	 */
-				ns_rpc_recalc:1,
-
-	 /* lru_size is set even before connection */
-				ns_lru_size_set_before_connection:1;
-
-	/**
 	 * Which bucket should we start with the lock reclaim.
 	 */
 	int			ns_reclaim_start;
@@ -586,10 +576,8 @@ struct ldlm_namespace {
 	struct kobject		ns_kobj; /* sysfs object */
 	struct completion	ns_kobj_unregister;
 
-	/**
-	 * To avoid another ns_lock usage, a separate bitops field.
-	 */
-	unsigned long		ns_flags;
+	/* See enum ldlm_namespace_flags */
+	DECLARE_BITMAP(ns_flags, LDLM_NS_NUM_FLAGS);
 };
 
 /**
@@ -1348,9 +1336,9 @@ extern const char *ldlm_it2str(enum ldlm_intent_flags it);
 	    ((libcfs_debug & (mask)) != 0 &&                            \
 	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0)) {        \
 		_ldlm_lock_debug(lock, msgdata, fmt, ##a);              \
-		if (unlikely(ldlm_lock_to_ns(lock)->                    \
-				ns_dump_stack_on_error) &&              \
-						!!((mask) & D_ERROR))   \
+		if (unlikely(test_bit(LDLM_NS_DUMP_STACK,		\
+				      ldlm_lock_to_ns(lock)->ns_flags)) && \
+		    !!((mask) & D_ERROR))				\
 			dump_stack();				        \
 	}								\
 } while (0)

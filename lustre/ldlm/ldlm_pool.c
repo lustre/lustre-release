@@ -1314,7 +1314,7 @@ static time64_t ldlm_pools_recalc_delay(enum ldlm_side side)
 		 * skip ns which is being freed, and we don't want to increase
 		 * its refcount again, not even temporarily. bz21519 & LU-499.
 		 */
-		if (ns->ns_stopping) {
+		if (test_bit(LDLM_NS_STOPPING, ns->ns_flags)) {
 			skip = 1;
 		} else {
 			skip = 0;

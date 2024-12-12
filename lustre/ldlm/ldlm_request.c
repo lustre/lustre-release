@@ -1571,14 +1571,16 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
 
 	ratio = 100 * new_slv / ldlm_pool_get_slv(&ns->ns_pool);
 	if (100 - ratio >= ns->ns_recalc_pct &&
-	    !ns->ns_stopping && !ns->ns_rpc_recalc) {
+	    !test_bit(LDLM_NS_STOPPING, ns->ns_flags) &&
+	    !test_bit(LDLM_NS_RPC_RECALC, ns->ns_flags)) {
 		bool recalc = false;
 
 		spin_lock(&ns->ns_lock);
-		if (!ns->ns_stopping && !ns->ns_rpc_recalc) {
+		if (!test_bit(LDLM_NS_STOPPING, ns->ns_flags) &&
+		    !test_bit(LDLM_NS_RPC_RECALC, ns->ns_flags)) {
 			ldlm_namespace_get(ns);
 			recalc = true;
-			ns->ns_rpc_recalc = 1;
+			set_bit(LDLM_NS_RPC_RECALC, ns->ns_flags);
 		}
 		spin_unlock(&ns->ns_lock);
 		if (recalc)
@@ -1933,9 +1935,9 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 	 * @max limit given (ELC), as LRU may be left not cleaned up in full.
 	 */
 	if (max == 0) {
-		if (test_and_set_bit(LDLM_LRU_CANCEL, &ns->ns_flags))
+		if (test_and_set_bit(LDLM_NS_LRU_CANCEL, ns->ns_flags))
 			RETURN(0);
-	} else if (test_bit(LDLM_LRU_CANCEL, &ns->ns_flags))
+	} else if (test_bit(LDLM_NS_LRU_CANCEL, ns->ns_flags))
 		RETURN(0);
 
 	LASSERT(ergo(max, min <= max));
@@ -2082,7 +2084,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 	}
 
 	if (max == 0)
-		clear_bit(LDLM_LRU_CANCEL, &ns->ns_flags);
+		clear_bit(LDLM_NS_LRU_CANCEL, ns->ns_flags);
 
 	RETURN(added);
 }
