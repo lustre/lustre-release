@@ -591,7 +591,6 @@ extern void lprocfs_stats_header(struct seq_file *seq, ktime_t now,
 extern unsigned int obd_enable_stats_header;
 
 /* Generic callbacks */
-extern int lprocfs_uuid_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data);
 ssize_t conn_uuid_show(struct kobject *kobj, struct attribute *attr, char *buf);
 extern int lprocfs_import_seq_show(struct seq_file *m, void *data);
@@ -1094,11 +1093,6 @@ static inline int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 }
 
 static inline int lprocfs_obd_cleanup(struct obd_device *obd)
-{
-	return 0;
-}
-
-static inline int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
 {
 	return 0;
 }

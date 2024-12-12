@@ -207,16 +207,6 @@ lprocfs_register(const char *name, struct proc_dir_entry *parent,
 EXPORT_SYMBOL(lprocfs_register);
 
 /* Generic callbacks */
-int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = data;
-
-	LASSERT(obd != NULL);
-	seq_printf(m, "%s\n", obd->obd_uuid.uuid);
-	return 0;
-}
-EXPORT_SYMBOL(lprocfs_uuid_seq_show);
-
 static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf)
 {

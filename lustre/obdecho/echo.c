@@ -460,13 +460,6 @@ commitrw_cleanup:
 	return rc;
 }
 
-LPROC_SEQ_FOPS_RO_TYPE(echo, uuid);
-static struct lprocfs_vars lprocfs_echo_obd_vars[] = {
-	{ .name =       "uuid",
-	  .fops =       &echo_uuid_fops         },
-	{ NULL }
-};
-
 const struct obd_ops echo_obd_ops = {
 	.o_owner           = THIS_MODULE,
 	.o_connect         = echo_connect,
@@ -776,7 +769,6 @@ static int echo_srv_init0(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	obd->obd_vars = lprocfs_echo_obd_vars;
 	if (!lprocfs_obd_setup(obd, true) &&
 	    ldebugfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
 		lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
