@@ -1399,13 +1399,16 @@ write RPCs in flight: 0
             <para><literal>statahead_max</literal> -
             Controls the maximum number of file attributes that will be
             prefetched by the statahead thread. By default, statahead is
-            enabled and <literal>statahead_max</literal> is 32 files.</para>
+            enabled and <literal>statahead_max</literal> is 128 files
+            (32 prior to Lustre 2.16.0).</para>
             <para>To disable statahead, set <literal>statahead_max</literal>
             to zero via the following command on the client:</para>
             <screen>lctl set_param llite.*.statahead_max=0</screen>
             <para>To change the maximum statahead window size on a client:</para>
             <screen>lctl set_param llite.*.statahead_max=<replaceable>n</replaceable></screen>
-            <para>The maximum <literal>statahead_max</literal> is 8192 files.
+            <para>The maximum <literal>statahead_max</literal> is 2048.
+            Prior to Lustre 2.16.0, the maximum was 512, and
+            prior to 2.12.0 and 2.10.5, it was 8192.
             </para>
             <para>The directory statahead thread will also prefetch the file
             size/block attributes from the OSTs, so that all file attributes
