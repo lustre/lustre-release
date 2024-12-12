@@ -139,15 +139,14 @@ static ssize_t max_dirty_mb_store(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
-	unsigned long pages_number, max_dirty_mb;
+	u64 pages_number;
 	int rc;
 
-	rc = kstrtoul(buffer, 10, &max_dirty_mb);
-	if (rc)
+	rc = sysfs_memparse(buffer, count, &pages_number, "MiB");
+	if (rc < 0)
 		return rc;
 
-	pages_number = MiB_TO_PAGES(max_dirty_mb);
-
+	pages_number = round_up(pages_number, 1024 * 1024) >> PAGE_SHIFT;
 	if (pages_number >= MiB_TO_PAGES(OSC_MAX_DIRTY_MB_MAX) ||
 	    pages_number > cfs_totalram_pages() / 4) /* 1/4 of RAM */
 		return -ERANGE;

@@ -135,41 +135,35 @@ LUSTRE_RW_ATTR(max_mod_rpcs_in_flight);
 
 LUSTRE_RW_ATTR(max_pages_per_rpc);
 
-static int mdc_max_dirty_mb_seq_show(struct seq_file *m, void *v)
+static ssize_t max_dirty_mb_show(struct kobject *kobj,
+				 struct attribute *attr,
+				 char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
 
-	seq_printf(m, "%lu\n", PAGES_TO_MiB(cli->cl_dirty_max_pages));
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%lu\n",
+			 PAGES_TO_MiB(cli->cl_dirty_max_pages));
 }
 
-static ssize_t mdc_max_dirty_mb_seq_write(struct file *file,
-					  const char __user *buffer,
-					  size_t count, loff_t *off)
+static ssize_t max_dirty_mb_store(struct kobject *kobj,
+				  struct attribute *attr,
+				  const char *buffer,
+				  size_t count)
 {
-	struct seq_file *sfl = file->private_data;
-	struct obd_device *obd = sfl->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
-	char kernbuf[22] = "";
 	u64 pages_number;
 	int rc;
 
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &pages_number, "MiB");
-	if (rc < 0)
+	rc = sysfs_memparse(buffer, count, &pages_number, "MiB");
+	if (rc)
 		return rc;
 
-	/* MB -> pages */
 	pages_number = round_up(pages_number, 1024 * 1024) >> PAGE_SHIFT;
-	if (pages_number <= 0 ||
-	    pages_number >= MiB_TO_PAGES(OSC_MAX_DIRTY_MB_MAX) ||
+	if (pages_number >= MiB_TO_PAGES(OSC_MAX_DIRTY_MB_MAX) ||
 	    pages_number > cfs_totalram_pages() / 4) /* 1/4 of RAM */
 		return -ERANGE;
 
@@ -180,7 +174,7 @@ static ssize_t mdc_max_dirty_mb_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdc_max_dirty_mb);
+LUSTRE_RW_ATTR(max_dirty_mb);
 
 static ssize_t checksums_show(struct kobject *kobj,
 			      struct attribute *attr, char *buf)
@@ -579,8 +573,6 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_connect_flags_fops	},
 	{ .name	=	"mds_server_uuid",
 	  .fops	=	&mdc_server_uuid_fops	},
-	{ .name =	"max_dirty_mb",
-	  .fops =	&mdc_max_dirty_mb_fops		},
 	{ .name	=	"mdc_cached_mb",
 	  .fops	=	&mdc_cached_mb_fops		},
 	{ .name	=	"timeouts",
@@ -715,6 +707,7 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
 	&lustre_attr_max_pages_per_rpc.attr,
+	&lustre_attr_max_dirty_mb.attr,
 	&lustre_attr_mds_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
 	&lustre_attr_pinger_recov.attr,
