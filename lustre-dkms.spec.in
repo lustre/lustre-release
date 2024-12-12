@@ -12,6 +12,10 @@
 %bcond_without zfs
 %bcond_with ldiskfs
 
+%if ! 0%{?rhel}%{?fedora}%{?suse_version}%{?openEuler}
+%define not_rpm 1
+%endif
+
 # LUTF Turn off brp-python-precompile script as we don't want the python files
 # to be compiled on installation
 %global __os_install_post %(echo '%{__os_install_post}' | sed -e 's!/usr/lib[^[:space:]]*/brp-python-bytecompile[[:space:]].*$!!g')
@@ -164,24 +168,17 @@ fi
 /usr/src/%{module}-%{version}
 
 %post
-for POSTINST in /usr/lib/dkms/common.postinst; do
-    if [ -f $POSTINST ]; then
-	$POSTINST %{module} %{version}
-	exit $?
-    fi
-    echo "WARNING: $POSTINST does not exist."
-done
-echo -e "ERROR: DKMS version is too old and %{module} was not"
-echo -e "built with legacy DKMS support."
-echo -e "You must either rebuild %{module} with legacy postinst"
-echo -e "support or upgrade DKMS to a more current version."
-exit 1
+dkms add -m %{module} -v %{version} %{!?not_rpm:--rpm_safe_upgrade} ||:
+dkms build -m %{module} -v %{version} || :
+dkms install --force -m %{module} -v %{version} ||:
 
 %preun
-dkms remove -m %{module} -v %{version} --all --rpm_safe_upgrade
+dkms remove -m %{module} -v %{version} --all %{!?not_rpm:--rpm_safe_upgrade}
 exit 0
 
 %changelog
+* Wed Dec 11 2024 Jian Yu <yujian@whamcloud.com>
+- Fix the /usr/lib/dkms/common.postinst does not exist warning.
 * Wed May 16 2018 Joe Grund <joe.grund@intel.com>
 - Add patch requirement
 * Mon Aug  1 2016 Nathaniel Clark <nathaniel.l.clark@intel.com>
