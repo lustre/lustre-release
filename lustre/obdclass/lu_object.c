@@ -1306,8 +1306,7 @@ EXPORT_SYMBOL(lu_object_header_fini);
 void lu_object_header_free(struct lu_object_header *h)
 {
 	lu_object_header_fini(h);
-	OBD_FREE_PRE(h, sizeof(*h), "kfreed");
-	kfree_rcu(h, loh_rcu);
+	OBD_FREE_RCU(h, sizeof(*h), loh_rcu);
 }
 EXPORT_SYMBOL(lu_object_header_free);
 
@@ -1941,8 +1940,7 @@ void lu_env_remove(struct lu_env *env)
 				     lu_env_rhash_params);
 	if (lei && rhashtable_remove_fast(&lu_env_rhash, &lei->lei_linkage,
 					  lu_env_rhash_params) == 0) {
-		OBD_FREE_PRE(lei, sizeof(*lei), "kfreed");
-		kfree_rcu(lei, lei_rcu_head);
+		OBD_FREE_RCU(lei, sizeof(*lei), lei_rcu_head);
 	}
 }
 EXPORT_SYMBOL(lu_env_remove);

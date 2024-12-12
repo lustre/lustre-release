@@ -933,6 +933,15 @@ do {									      \
 	}								      \
 } while (0)
 
+#define OBD_FREE_RCU(ptr, size, list)					\
+do {									\
+	if (likely(ptr)) {						\
+		OBD_FREE_PRE(ptr, size, "kfreed_rcu");			\
+		kfree_rcu(ptr, list);					\
+		POISON_PTR(ptr);					\
+	}								\
+} while (0)
+
 #define OBD_FREE_LARGE(ptr, size)					      \
 do {									      \
 	if (is_vmalloc_addr(ptr)) {					      \

@@ -96,7 +96,7 @@ static void lov_pool_putref_free(struct kref *kref)
 	LASSERT(list_empty(&pool->pool_list));
 	LASSERT(pool->pool_proc_entry == NULL);
 	lu_tgt_pool_free(&(pool->pool_obds));
-	kfree_rcu(pool, pool_rcu);
+	OBD_FREE_RCU(pool, sizeof(*pool), pool_rcu);
 	EXIT;
 }
 
@@ -365,8 +365,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	if (strlen(poolname) > LOV_MAXPOOLNAME)
 		RETURN(-ENAMETOOLONG);
 
-	/* OBD_ALLOC doesn't work with direct use of kfree_rcu */
-	new_pool = kmalloc(sizeof(*new_pool), GFP_KERNEL);
+	OBD_ALLOC_PTR(new_pool);
 	if (new_pool == NULL)
 		RETURN(-ENOMEM);
 

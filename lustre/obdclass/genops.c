@@ -875,8 +875,7 @@ static void class_export_destroy(struct obd_export *exp)
 	if (exp != obd->obd_self_export)
 		class_decref(obd, "export", exp);
 
-	OBD_FREE_PRE(exp, sizeof(*exp), "kfree_rcu");
-	kfree_rcu(exp, exp_handle.h_rcu);
+	OBD_FREE_RCU(exp, sizeof(*exp), exp_handle.h_rcu);
 	EXIT;
 }
 

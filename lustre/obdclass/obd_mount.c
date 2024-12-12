@@ -1182,17 +1182,19 @@ static int lmd_parse_network(struct lustre_mount_data *lmd, char *ptr)
 
 static int lmd_parse_string(char **handle, char *ptr)
 {
+	int len;
+
 	if (!handle || !ptr)
 		return -EINVAL;
 
 	OBD_FREE(*handle, strlen(*handle) + 1);
 	*handle = NULL;
 
-	*handle = kstrdup(ptr, GFP_NOFS);
+	len = strlen(ptr);
+	OBD_ALLOC(*handle, len + 1);
 	if (!*handle)
 		return -ENOMEM;
-
-	OBD_ALLOC_POST(*handle, strlen(ptr) + 1, "kmalloced");
+	memcpy(*handle, ptr, len + 1);
 
 	return 0;
 }
