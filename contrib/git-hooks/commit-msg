@@ -17,15 +17,16 @@ init() {
 	readonly ORIGINAL="$1"
 	readonly REVISED="$(mktemp "$ORIGINAL.XXXXXX")"
 	readonly SAVE="$(basename $ORIGINAL).$(date +%Y%m%d.%H%M%S)"
-	readonly SIGNOFF="Signed-off-by:"
-	readonly CHANGEID="Change-Id:"
-	readonly FIXES="Fixes:"
 	readonly BUILD_PARAMS="Build-Parameters:"
-	readonly TEST_PARAMS="Test-Parameters:"
-	readonly TEST_PARAMS2="Test-parameters:"
+	readonly CHANGEID="Change-Id:"
+	readonly COVERITY="CoverityID:"
+	readonly FIXES="Fixes:"
+	readonly LINUX_COMMIT="Linux-commit:"
 	readonly LUSTRE_CHANGE="Lustre-change:"
 	readonly LUSTRE_COMMIT="Lustre-commit:"
-	readonly LINUX_COMMIT="Linux-commit:"
+	readonly SIGNOFF="Signed-off-by:"
+	readonly TEST_PARAMS="Test-Parameters:"
+	readonly TEST_PARAMS2="Test-parameters:"
 	readonly EMAILS=$(echo \
 			Acked-by \
 			Tested-by \
@@ -126,6 +127,15 @@ function do_buildparams() {
 		error "only {client,server}{distro,arch}= supported"
 }
 
+function do_coverity() {
+	local cid=$(awk '{ print $2 }' <<<$LINE)
+
+	[[ x${cid}x =~ x[0-9]{6,7}x ]] ||
+		error "invalid $COVERITY CID, want 'nncidnn (\"issue type\")'"
+	[[ "$LINE" =~ \ \(\".*\"\) ]] ||
+		error "invalid $COVERITY type, want 'nncidnn (\"issue type\")'"
+}
+
 function do_testparams() {
 	ck_wrapup
 
@@ -137,8 +147,11 @@ function do_fixes() {
 	ck_wrapup
 
 	local commit=$(awk '{ print $2 }' <<<$LINE)
+
 	git describe --tags $commit 2>&1 | grep "[Nn]ot a valid" &&
-		error "invalid $FIXES hash, want '<12hex> (\"summary line\")'"
+		error "invalid $FIXES hash, want '<10hex> (\"summary line\")'"
+	[[ "$LINE" =~ \ \(\".*\"\) ]] ||
+		error "invalid $FIXES summary, want '<10hex> (\"summary line\")'"
 }
 
 # All "emails" lines specify a person and email address
@@ -151,7 +164,7 @@ function do_emails() {
 
 # All "change" lines specify a Gerrit URL
 #
-function do_change() {
+function do_lustre_change() {
 	local url="${LINE#*change: }"
 
 	ck_is_ascii
@@ -162,7 +175,7 @@ function do_change() {
 # All "commit" lines specify a commit hash, but the commit may be in
 # another repo, so the hash can't be directly verified
 #
-function do_commit() {
+function do_lustre_commit() {
 	local val=${LINE#*commit: }
 
 	ck_is_ascii
@@ -301,15 +314,16 @@ exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
 while IFS= read -u3 LINE; do
 	((NUM += 1))
 	case "$LINE" in
-	$SIGNOFF* )		do_signoff ;;
-	$CHANGEID* )		do_changeid ;;
-	$FIXES* )		do_fixes ;;
 	$BUILD_PARAMS* )	do_buildparams ;;
+	$CHANGEID* )		do_changeid ;;
+	$COVERITY* )		do_coverity ;;
+	$FIXES* )		do_fixes ;;
+	$LINUX_COMMIT* )	do_lustre_commit ;;
+	$LUSTRE_CHANGE* )	do_lustre_change ;;
+	$LUSTRE_COMMIT* )	do_lustre_commit ;;
+	$SIGNOFF* )		do_signoff ;;
 	$TEST_PARAMS* )		do_testparams ;;
 	$TEST_PARAMS2* )	do_testparams ;;
-	$LUSTRE_CHANGE* )	do_change ;;
-	$LUSTRE_COMMIT* )	do_commit ;;
-	$LINUX_COMMIT* )	do_commit ;;
 
 	"")
 		HAS_LAST_BLANK=true

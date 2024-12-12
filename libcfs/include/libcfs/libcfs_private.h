@@ -137,7 +137,7 @@ do {						\
 do {									    \
 	LASSERT(!in_interrupt() ||					    \
 		(((size) <= LIBCFS_VMALLOC_SIZE) &&			    \
-		 ((mask) & GFP_ATOMIC)) != 0);				    \
+		 ((mask) & GFP_ATOMIC) != 0));				    \
 } while (0)
 
 /* message format here needs to match regexp in lustre/tests/leak_finder.pl */

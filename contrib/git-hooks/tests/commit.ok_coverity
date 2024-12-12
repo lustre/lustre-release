@@ -1,0 +1,11 @@
+LU-17000 utils: Fix check after return from fopen()
+
+Return from fopen() for option 't' (trace) was checked
+with a different variable. This patch fixes this.
+
+Test-Parameters: trivial
+CoverityID: 397651 ("Copy-paste error")
+Signed-off-by: Arshad Hussain <arshad.hussain@aeoncomputing.com>
+Change-Id: I04bd207582d421cc3744e7b0f4298e738502edbe
+Reviewed-by: Timothy Day <timday@amazon.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
