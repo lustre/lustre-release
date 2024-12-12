@@ -3982,25 +3982,36 @@ test_256() {
 		done
 	done
 
-	local i
+	local idx
+	declare -a pids
 
-	for i in $(seq 1 ${rtr_pc}); do
+	for idx in $(seq 1 ${rtr_pc}); do
+		echo "$LNETCTL ping --timeout $((delay+2)) $rpnid"
 		$LNETCTL ping --timeout $((delay+2)) $rpnid 1>/dev/null &
+		pids[$idx]=$!
 	done
+
+	((idx++))
 
 	echo "Issued ${rtr_pc} pings to $rpnid"
 
-	local pid
-
 	# This ping should be queued on the router's peer NI tx credit queue
 	$LNETCTL ping --timeout $((delay+2)) $rpnid &
+	pids[$idx]=$!
 
 	echo "Issued last ping - sleep $delay"
 	sleep ${delay}
 
 	do_node $router $LCTL net_delay_del -a
 
-	wait
+	local rc=0 rcsum=0
+	for idx in $(seq 1 $((rtr_pc + 1))); do
+		wait ${pids[$idx]} || rc=$?
+		((rc != 0)) && echo "ping pid ${pids[$idx]} returned rc=$rc"
+		((rcsum += rc))
+	done
+
+	((rcsum == 0)) || error "Detected ping failures"
 
 	do_node $router $LNETCTL set transaction_timeout ${old_tto}
 	do_node $router $LNETCTL set retry_count ${old_retry}

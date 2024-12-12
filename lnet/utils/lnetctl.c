@@ -5190,7 +5190,7 @@ static int yaml_lnet_ping(char *group, int timeout, struct lnet_nid *src_nid,
 		goto emitter_error;
 
 	if (timeout != 1000 || (src_nid && nid_addr_is_set(src_nid))) {
-		if (src_nid) {
+		if (src_nid && nid_addr_is_set(src_nid)) {
 			char *src_nidstr = libcfs_nidstr(src_nid);
 
 			yaml_scalar_event_initialize(&event, NULL,
