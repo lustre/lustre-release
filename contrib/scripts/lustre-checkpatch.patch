@@ -1,24 +1,25 @@
-From 0a8f65a1f12b211cfb88c048a120daca7a2c2337 Mon Sep 17 00:00:00 2001
+From 9b8a6c6384cc6863cdda7f22deddad56ac20b451 Mon Sep 17 00:00:00 2001
 From: Timothy Day <timday@amazon.com>
 Date: Wed, 21 Feb 2024 18:35:37 +0000
 Subject: [PATCH] LU-6142 contrib: Lustre checkpatch.pl
 
-v6.10-rc2-g061d1af7b0
+v6.13-rc3-g231825b2e1ff
 
 Signed-off-by: Timothy Day <timday@amazon.com>
+Change-Id: I4df9cff42d7ce377bdd221f99e5e66f4ee4524ee
 ---
- contrib/scripts/checkpatch.pl | 140 +++++++++++++++++++++++++++-------
- 1 file changed, 112 insertions(+), 28 deletions(-)
+ contrib/scripts/checkpatch.pl | 151 ++++++++++++++++++++++++++++------
+ 1 file changed, 124 insertions(+), 27 deletions(-)
 
 diff --git a/contrib/scripts/checkpatch.pl b/contrib/scripts/checkpatch.pl
-index 2b812210b4..a6c52d361c 100755
+index 9eed3683ad..139061fdbd 100755
 --- a/contrib/scripts/checkpatch.pl
 +++ b/contrib/scripts/checkpatch.pl
 @@ -7,6 +7,9 @@
  # (c) 2008-2010 Andy Whitcroft <apw@canonical.com>
  # (c) 2010-2018 Joe Perches <joe@perches.com>
  
-+# Based on linux/scripts/checkpatch.pl v6.10-rc2-g061d1af7b0 with
++# Based on linux/scripts/checkpatch.pl v6.13-rc3-g231825b2e1ff with
 +# some additional Lustre-specific checks.
 +
  use strict;
@@ -32,10 +33,10 @@ index 2b812210b4..a6c52d361c 100755
 -my $chk_signoff = 1;
 +my $tree = 0;
 +my $chk_signoff = 0;
+ my $chk_fixes_tag = 1;
  my $chk_patch = 1;
  my $tst_only;
- my $emacs = 0;
-@@ -56,11 +59,12 @@ my %ignore_type = ();
+@@ -57,11 +60,12 @@ my %ignore_type = ();
  my @ignore = ();
  my $help = 0;
  my $configuration_file = ".checkpatch.conf";
@@ -49,7 +50,7 @@ index 2b812210b4..a6c52d361c 100755
  my $codespell = 0;
  my $codespellfile = "/usr/share/codespell/dictionary.txt";
  my $user_codespellfile = "";
-@@ -68,7 +72,7 @@ my $conststructsfile = "$D/const_structs.checkpatch";
+@@ -69,7 +73,7 @@ my $conststructsfile = "$D/const_structs.checkpatch";
  my $docsfile = "$D/../Documentation/dev-tools/checkpatch.rst";
  my $typedefsfile;
  my $color = "auto";
@@ -58,7 +59,7 @@ index 2b812210b4..a6c52d361c 100755
  # git output parsing needs US English output, so first set backtick child process LANGUAGE
  my $git_command ='export LANGUAGE=en_US.UTF-8; git';
  my $tabsize = 8;
-@@ -596,9 +600,11 @@ our $logFunctions = qr{(?x:
+@@ -599,9 +603,12 @@ our $logFunctions = qr{(?x:
  	(?:[a-z0-9]+_){1,2}(?:printk|emerg|alert|crit|err|warning|warn|notice|info|debug|dbg|vdbg|devel|cont|WARN)(?:_ratelimited|_once|)|
  	TP_printk|
  	WARN(?:_RATELIMIT|_ONCE|)|
@@ -72,7 +73,7 @@ index 2b812210b4..a6c52d361c 100755
  )};
  
  our $allocFunctions = qr{(?x:
-@@ -977,6 +983,31 @@ if ($codespell) {
+@@ -980,6 +987,31 @@ if ($codespell) {
  
  $misspellings = join("|", sort keys %spelling_fix) if keys %spelling_fix;
  
@@ -104,7 +105,7 @@ index 2b812210b4..a6c52d361c 100755
  sub read_words {
  	my ($wordsRef, $file) = @_;
  
-@@ -1974,6 +2005,7 @@ sub ctx_locate_comment {
+@@ -1978,6 +2010,7 @@ sub ctx_locate_comment {
  	for (my $linenr = $first_line; $linenr < $end_line; $linenr++) {
  		my $line = $rawlines[$linenr - 1];
  		#warn "           $line\n";
@@ -112,18 +113,18 @@ index 2b812210b4..a6c52d361c 100755
  		if ($linenr == $first_line and $line =~ m@^.\s*\*@) {
  			$in_comment = 1;
  		}
-@@ -2705,6 +2705,7 @@ sub process {
+@@ -2680,6 +2713,7 @@ sub process {
  	my $comment_edge = 0;
  	my $first_line = 0;
  	my $p1_prefix = '';
 +	my $manfile = '';
-
+ 
  	my $prev_values = 'E';
-
-@@ -2905,6 +2906,17 @@ sub process {
+ 
+@@ -2880,6 +2914,17 @@ sub process {
  			$found_file = 1;
  		}
-
+ 
 +#handle man pages
 +		if ($line =~ /^diff --git.*?(\S+\.[1-8])$/ ||
 +			$line =~ /^\+\+\+\s+(\S+\.[1-8])$/) {
@@ -138,14 +139,14 @@ index 2b812210b4..a6c52d361c 100755
  #make up the handle for any error we report on this line
  		if ($showfile) {
  			$prefix = "$realfile:$realline: "
-@@ -3241,15 +3273,6 @@ sub process {
+@@ -3254,15 +3299,6 @@ sub process {
  			     "A patch subject line should describe the change not the tool that found it\n" . $herecurr);
  		}
  
 -# Check for Gerrit Change-Ids not in any patch context
 -		if ($realfile eq '' && !$has_patch_separator && $line =~ /^\s*change-id:/i) {
 -			if (ERROR("GERRIT_CHANGE_ID",
--				  "Remove Gerrit Change-Id's before submitting upstream\n" . $herecurr) &&
+-			          "Remove Gerrit Change-Id's before submitting upstream\n" . $herecurr) &&
 -			    $fix) {
 -				fix_delete_line($fixlinenr, $rawline);
 -			}
@@ -154,7 +155,7 @@ index 2b812210b4..a6c52d361c 100755
  # Check if the commit log is in a possible stack dump
  		if ($in_commit_log && !$commit_log_possible_stack_dump &&
  		    ($line =~ /^\s*(?:WARNING:|BUG:)/ ||
-@@ -3476,16 +3499,35 @@ sub process {
+@@ -3489,16 +3525,35 @@ sub process {
  		}
  
  # Check for various typo / spelling mistakes
@@ -164,13 +165,10 @@ index 2b812210b4..a6c52d361c 100755
 +		if (($realfile =~ m@^(lustre/utils/|lustre/tests/|lnet/utils/|libcfs/libcfs/util/)@) &&
 +		    defined($misspellings_user) && ($in_commit_log || $line =~ /^(?:\+|Subject:)/i)) {
 +			while ($rawline =~ /(?:^|[^\w\-'`])($misspellings_user)(?:[^\w\-'`]|$)/g) {
- 				my $typo = $1;
- 				my $blank = copy_spacing($rawline);
- 				my $ptr = substr($blank, 0, $-[1]) . "^" x length($typo);
- 				my $hereptr = "$hereline$ptr\n";
--				my $typo_fix = $spelling_fix{lc($typo)};
--				$typo_fix = ucfirst($typo_fix) if ($typo =~ /^[A-Z]/);
--				$typo_fix = uc($typo_fix) if ($typo =~ /^[A-Z]+$/);
++				my $typo = $1;
++				my $blank = copy_spacing($rawline);
++				my $ptr = substr($blank, 0, $-[1]) . "^" x length($typo);
++				my $hereptr = "$hereline$ptr\n";
 +				my $typo_fix = $spelling_fix_user{$typo};
 +				if (!defined($typo_fix)) {
 +					$typo_fix = "CHECKPATCH ERROR";
@@ -185,10 +183,13 @@ index 2b812210b4..a6c52d361c 100755
 +			}
 +		} elsif (defined($misspellings) && ($in_commit_log || $line =~ /^(?:\+|Subject:)/i)) {
 +			while ($rawline =~ /(?:^|[^\w\-'`])($misspellings)(?:[^\w\-'`]|$)/g) {
-+				my $typo = $1;
-+				my $blank = copy_spacing($rawline);
-+				my $ptr = substr($blank, 0, $-[1]) . "^" x length($typo);
-+				my $hereptr = "$hereline$ptr\n";
+ 				my $typo = $1;
+ 				my $blank = copy_spacing($rawline);
+ 				my $ptr = substr($blank, 0, $-[1]) . "^" x length($typo);
+ 				my $hereptr = "$hereline$ptr\n";
+-				my $typo_fix = $spelling_fix{lc($typo)};
+-				$typo_fix = ucfirst($typo_fix) if ($typo =~ /^[A-Z]/);
+-				$typo_fix = uc($typo_fix) if ($typo =~ /^[A-Z]+$/);
 +				my $typo_fix = $spelling_fix{$typo};
 +				if (!defined($typo_fix)) {
 +					$typo_fix = "CHECKPATCH ERROR";
@@ -196,7 +197,7 @@ index 2b812210b4..a6c52d361c 100755
  				my $msg_level = \&WARN;
  				$msg_level = \&CHK if ($file);
  				if (&{$msg_level}("TYPO_SPELLING",
-@@ -3829,6 +3871,11 @@ sub process {
+@@ -3842,6 +3897,11 @@ sub process {
  			    length(expand_tabs(substr($line, 1, length($line) - length($1) - 1))) <= $max_line_length) {
  				$msg_type = "";
  
@@ -208,16 +209,7 @@ index 2b812210b4..a6c52d361c 100755
  			# lines with only strings (w/ possible termination)
  			# #defines with only strings
  			} elsif ($line =~ /^\+\s*$String\s*(?:\s*|,|\)\s*;)\s*$/ ||
-@@ -3999,7 +4046,7 @@ sub process {
- 
- # Block comment styles
- # Networking with an initial /*
--		if ($realfile =~ m@^(drivers/net/|net/)@ &&
-+		if ($realfile =~ m@^(drivers/net/|net/|lnet/)@ &&
- 		    $prevrawline =~ /^\+[ \t]*\/\*[ \t]*$/ &&
- 		    $rawline =~ /^\+[ \t]*\*/ &&
- 		    $realline > 3) { # Do not warn about the initial copyright comment block after SPDX-License-Identifier
-@@ -5609,6 +5656,8 @@ sub process {
+@@ -5612,6 +5672,8 @@ sub process {
  #	avoid cases like "foo + BAR < baz"
  #	only fix matches surrounded by parentheses to avoid incorrect
  #	conversions like "FOO < baz() + 5" being "misfixed" to "baz() > FOO + 5"
@@ -226,7 +218,7 @@ index 2b812210b4..a6c52d361c 100755
  		if ($perl_version_ok &&
  		    $line =~ /^\+(.*)\b($Constant|[A-Z_][A-Z0-9_]*)\s*($Compare)\s*($LvalOrFunc)/) {
  			my $lead = $1;
-@@ -5618,6 +5667,7 @@ sub process {
+@@ -5621,6 +5683,7 @@ sub process {
  			my $newcomp = $comp;
  			if ($lead !~ /(?:$Operators|\.)\s*$/ &&
  			    $to !~ /^(?:Constant|[A-Z_][A-Z0-9_]*)$/ &&
@@ -234,7 +226,7 @@ index 2b812210b4..a6c52d361c 100755
  			    WARN("CONSTANT_COMPARISON",
  				 "Comparisons should place the constant on the right side of the test\n" . $herecurr) &&
  			    $fix) {
-@@ -6231,6 +6281,47 @@ sub process {
+@@ -6234,6 +6297,47 @@ sub process {
  			}
  		}
  
@@ -282,7 +274,7 @@ index 2b812210b4..a6c52d361c 100755
  # check for single line unbalanced braces
  		if ($sline =~ /^.\s*\}\s*else\s*$/ ||
  		    $sline =~ /^.\s*else\s*\{\s*$/) {
-@@ -6913,13 +7004,6 @@ sub process {
+@@ -6916,13 +7020,6 @@ sub process {
  						$bad_specifier = $specifier;
  						last;
  					}
@@ -297,5 +289,5 @@ index 2b812210b4..a6c52d361c 100755
  				if ($bad_specifier ne "") {
  					my $stat_real = get_stat_real($linenr, $lc);
 -- 
-2.27.0
+2.39.5
 
