@@ -133,7 +133,7 @@ static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)
 	return vti;
 }
 
-static inline struct cl_lock *vvp_env_lock(const struct lu_env *env)
+static inline struct cl_lock *vvp_env_new_lock(const struct lu_env *env)
 {
 	struct cl_lock *lock = &vvp_env_info(env)->vti_lock;
 
@@ -142,7 +142,7 @@ static inline struct cl_lock *vvp_env_lock(const struct lu_env *env)
 	return lock;
 }
 
-static inline struct cl_attr *vvp_env_thread_attr(const struct lu_env *env)
+static inline struct cl_attr *vvp_env_new_attr(const struct lu_env *env)
 {
 	struct cl_attr *attr = &vvp_env_info(env)->vti_attr;
 
@@ -151,7 +151,7 @@ static inline struct cl_attr *vvp_env_thread_attr(const struct lu_env *env)
 	return attr;
 }
 
-static inline struct cl_io *vvp_env_thread_io(const struct lu_env *env)
+static inline struct cl_io *vvp_env_new_io(const struct lu_env *env)
 {
 	struct cl_io *io = &vvp_env_info(env)->vti_io;
 

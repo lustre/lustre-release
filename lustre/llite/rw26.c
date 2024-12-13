@@ -734,7 +734,7 @@ ll_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,
 static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 				   struct cl_page *pg, struct file *file)
 {
-	struct cl_attr *attr   = vvp_env_thread_attr(env);
+	struct cl_attr *attr   = vvp_env_new_attr(env);
 	struct cl_object *obj  = io->ci_obj;
 	loff_t offset = cl_page_index(pg) << PAGE_SHIFT;
 	int result;

@@ -2104,13 +2104,13 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = clob;
 	rc = cl_io_rw_init(env, io, CIT_WRITE, from, PAGE_SIZE);
 	if (rc)
 		GOTO(putenv, rc);
 
-	lock = vvp_env_lock(env);
+	lock = vvp_env_new_lock(env);
 	descr = &lock->cll_descr;
 	descr->cld_obj   = io->ci_obj;
 	descr->cld_start = from >> PAGE_SHIFT;

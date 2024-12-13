@@ -83,7 +83,7 @@ int osc_tunables_init(struct obd_device *obd);
 
 extern struct lu_device_type osc_device_type;
 
-static inline struct cl_io *osc_env_thread_io(const struct lu_env *env)
+static inline struct cl_io *osc_env_new_io(const struct lu_env *env)
 {
 	struct cl_io *io = &osc_env_info(env)->oti_io;
 

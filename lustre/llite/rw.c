@@ -592,7 +592,7 @@ static int ll_readahead_file_kms(const struct lu_env *env,
 {
 	struct cl_object *clob;
 	struct inode *inode;
-	struct cl_attr *attr = vvp_env_thread_attr(env);
+	struct cl_attr *attr = vvp_env_new_attr(env);
 	int ret;
 
 	clob = io->ci_obj;
@@ -647,7 +647,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	if (IS_ERR(env))
 		GOTO(out_free_work, rc = PTR_ERR(env));
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	ll_io_init(io, file, CIT_READ, NULL);
 
 	rc = ll_readahead_file_kms(env, io, &kms);
@@ -1510,7 +1510,7 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 	clob  = ll_i2info(inode)->lli_clob;
 	LASSERT(clob != NULL);
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = clob;
 	io->ci_ignore_layout = 1;
 	result = cl_io_init(env, io, CIT_MISC, clob);

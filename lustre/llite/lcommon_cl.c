@@ -80,7 +80,7 @@ int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = obj;
 	io->ci_verify_layout = 1;
 

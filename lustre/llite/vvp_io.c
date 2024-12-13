@@ -122,7 +122,7 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 			 struct cl_io *io, loff_t start, size_t bytes,
 			 int *exceed)
 {
-	struct cl_attr *attr  = vvp_env_thread_attr(env);
+	struct cl_attr *attr  = vvp_env_new_attr(env);
 	struct inode *inode = vvp_object_inode(obj);
 	loff_t pos = start + bytes - 1;
 	loff_t kms;
@@ -703,7 +703,7 @@ static int vvp_io_setattr_time(const struct lu_env *env,
 {
 	struct cl_io *io    = ios->cis_io;
 	struct cl_object *obj   = io->ci_obj;
-	struct cl_attr *attr  = vvp_env_thread_attr(env);
+	struct cl_attr *attr  = vvp_env_new_attr(env);
 	int result;
 	unsigned int valid = CAT_CTIME;
 

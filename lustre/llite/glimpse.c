@@ -80,7 +80,7 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 		    struct inode *inode, struct cl_object *clob, int agl)
 {
 	const struct lu_fid *fid = lu_object_fid(&clob->co_lu);
-	struct cl_lock *lock = vvp_env_lock(env);
+	struct cl_lock *lock = vvp_env_new_lock(env);
 	struct cl_lock_descr *descr = &lock->cll_descr;
 	int result;
 
@@ -160,7 +160,7 @@ int cl_io_get(struct inode *inode, struct lu_env **envout,
 	if (S_ISREG(inode->i_mode)) {
 		env = cl_env_get(refcheck);
 		if (!IS_ERR(env)) {
-			io = vvp_env_thread_io(env);
+			io = vvp_env_new_io(env);
 			io->ci_obj = clob;
 			*envout = env;
 			*ioout  = io;

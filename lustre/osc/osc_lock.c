@@ -646,7 +646,7 @@ static unsigned long osc_lock_weight(const struct lu_env *env,
 				     struct osc_object *oscobj,
 				     loff_t start, loff_t end)
 {
-	struct cl_io *io = osc_env_thread_io(env);
+	struct cl_io *io = osc_env_new_io(env);
 	struct cl_object *obj = cl_object_top(&oscobj->oo_cl);
 	pgoff_t page_index;
 	int result;

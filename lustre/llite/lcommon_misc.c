@@ -137,7 +137,7 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 	if (IS_ERR(env))
 		return PTR_ERR(env);
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = obj;
 
 	rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
@@ -150,7 +150,7 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 		return rc;
 	}
 
-	lock = vvp_env_lock(env);
+	lock = vvp_env_new_lock(env);
 	descr = &lock->cll_descr;
 	descr->cld_obj = obj;
 	descr->cld_start = 0;

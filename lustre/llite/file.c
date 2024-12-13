@@ -588,7 +588,7 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
 		RETURN_EXIT;
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = obj;
 	rc = cl_io_init(env, io, CIT_MISC, obj);
 	if (rc)
@@ -1476,7 +1476,7 @@ static int ll_merge_attr_nolock(const struct lu_env *env, struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
-	struct cl_attr *attr = vvp_env_thread_attr(env);
+	struct cl_attr *attr = vvp_env_new_attr(env);
 	s64 atime;
 	s64 mtime;
 	s64 ctime;
@@ -1833,7 +1833,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	max_io_bytes = min_t(size_t, PTLRPC_MAX_BRW_PAGES * OBD_MAX_RIF_DEFAULT,
 			     sbi->ll_cache->ccc_lru_max >> 2) << PAGE_SHIFT;
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	if (iocb_ki_flags_check(flags, DIRECT)) {
 		if (iocb_ki_flags_check(flags, APPEND))
 			dio_lock = true;
@@ -1871,7 +1871,7 @@ restart:
 		per_bytes = max_io_bytes;
 		partial_io = true;
 	}
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	ll_io_init(io, file, iot, args);
 	io->ci_dio_aio = ci_dio_aio;
 	io->ci_dio_lock = dio_lock;
@@ -2143,7 +2143,7 @@ static int file_read_confine_iter(struct lu_env *env, struct kiocb *iocb,
 				  struct iov_iter *to)
 {
 	struct cl_io *io;
-	struct cl_attr *attr = vvp_env_thread_attr(env);
+	struct cl_attr *attr = vvp_env_new_attr(env);
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file_inode(file);
 	struct ll_inode_info *lli = ll_i2info(inode);
@@ -2157,7 +2157,7 @@ static int file_read_confine_iter(struct lu_env *env, struct kiocb *iocb,
 	if (!obj)
 		RETURN(rc);
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = obj;
 	rc = cl_io_init(env, io, CIT_MISC, obj);
 	if (rc < 0)
@@ -3429,7 +3429,7 @@ ll_ioc_data_version(struct inode *inode, struct ioc_data_version *ioc)
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = obj;
 	io->u.ci_data_version.dv_data_version = 0;
 	io->u.ci_data_version.dv_layout_version = UINT_MAX;
@@ -3877,7 +3877,7 @@ int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise)
 		 */
 		result = io->ci_result;
 	} else if (result == 0) {
-		lock = vvp_env_lock(env);
+		lock = vvp_env_new_lock(env);
 		descr = &lock->cll_descr;
 
 		descr->cld_obj   = io->ci_obj;
@@ -4021,7 +4021,7 @@ static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 
 	/* initialize parameters for ladvise */
@@ -5009,7 +5009,7 @@ static loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 	ll_io_set_mirror(io, file);
 
@@ -5153,7 +5153,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 	cl_object_get(io->ci_obj);
 	io->ci_ignore_layout = ignore_layout;
@@ -6317,7 +6317,7 @@ static int cl_falloc(struct file *file, struct inode *inode, int mode,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = vvp_env_thread_io(env);
+	io = vvp_env_new_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 	ll_io_set_mirror(io, file);
 
