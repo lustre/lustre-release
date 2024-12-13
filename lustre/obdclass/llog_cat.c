@@ -1272,4 +1272,36 @@ int llog_cat_retain_cb(const struct lu_env *env, struct llog_handle *cat,
 }
 EXPORT_SYMBOL(llog_cat_retain_cb);
 
+/* Modify a llog record base on llog_logid and record cookie,
+ * with valid offset.
+ */
+int llog_cat_modify_rec(const struct lu_env *env, struct llog_handle *cathandle,
+			struct llog_logid *lid, struct llog_rec_hdr *rec,
+			struct llog_cookie *cookie)
+{
+	struct llog_handle *llh;
+	int rc;
 
+	ENTRY;
+
+	rc = llog_cat_id2handle(env, cathandle, &llh, lid);
+	if (rc) {
+		CDEBUG(D_OTHER, "%s: failed to find log file "DFID": rc = %d\n",
+		       loghandle2name(llh), PLOGID(lid), rc);
+
+		RETURN(rc);
+	}
+
+	rc = llog_write_cookie(env, llh, rec, cookie, rec->lrh_index);
+	if (rc < 0) {
+		CDEBUG(D_OTHER,
+		       "%s: failed to modify record "DFID".%d: rc = %d\n",
+		       loghandle2name(llh), PLOGID(lid), rec->lrh_index, rc);
+	} else {
+		rc = 0;
+	}
+	llog_handle_put(env, llh);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_cat_modify_rec);

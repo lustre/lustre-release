@@ -1152,9 +1152,7 @@ static int mgs_modify_param_hdl(const struct lu_env *env,
 				GOTO(free_mdp, rc = -EBADMSG);
 
 			/* save the start marker to skip */
-			rc = llog_get_cookie(env, &mpm->mpm_start_cookie);
-			if (rc)
-				RETURN(rc);
+			llog_get_cookie(env, &mpm->mpm_start_cookie);
 
 			OBD_ALLOC(mpm->mpm_start, rec->lrh_len);
 			if (!mpm->mpm_start)

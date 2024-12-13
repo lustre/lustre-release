@@ -21,6 +21,7 @@
 #include <lustre_export.h>
 #include <lprocfs_status.h>
 #include <lustre_kernelcomm.h>
+#include <lustre_log.h>
 #include "mdt_internal.h"
 
 /*
@@ -339,35 +340,109 @@ static int mdt_hsm_send_action_to_each_archive(struct mdt_thread_info *mti,
 	RETURN(rc);
 }
 
+int mdt_hsm_agent_modify_record(const struct lu_env *env,
+				struct mdt_device *mdt,
+				struct hsm_mem_req_rec *hmm)
+{
+	struct obd_device *obd = mdt2obd_dev(mdt);
+	struct llog_ctxt *lctxt;
+	struct llog_cookie cookie;
+	int rc;
+
+	lctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
+	if (lctxt == NULL || lctxt->loc_handle == NULL)
+		RETURN(-ENOENT);
+
+	cookie.lgc_offset = hmm->mr_offset;
+	cookie.lgc_index = hmm->mr_rec.arr_hdr.lrh_index;
+	hmm->mr_rec.arr_req_change = ktime_get_real_seconds();
+	rc = llog_cat_modify_rec(env, lctxt->loc_handle, &hmm->mr_lid,
+				 (struct llog_rec_hdr *)&hmm->mr_rec,
+				 &cookie);
+
+	llog_ctxt_put(lctxt);
+	return rc;
+}
+
+static size_t hsr_hal_size(struct hsm_scan_request *rq)
+{
+	struct cdt_agent_req *car;
+	struct hsm_action_item *hai;
+	size_t sz;
+
+	sz = sizeof(struct hsm_action_list) +
+	     __ALIGN_KERNEL(strlen(rq->hsr_fsname) + 1, 8);
+	list_for_each_entry(car, &rq->hsr_cars, car_scan_list) {
+		hai = &car->car_hai;
+		sz += __ALIGN_KERNEL(hai->hai_len, 8);
+	}
+	return sz;
+}
+
+static int hsr_hal_copy(struct hsm_scan_request *rq, void *buf, size_t buf_size)
+{
+	struct hsm_action_list *hal = buf;
+	struct cdt_agent_req *car;
+	struct hsm_action_item *hai;
+	struct hsm_action_item *shai;
+
+	hal->hal_version = rq->hsr_version;
+	strscpy(hal->hal_fsname, rq->hsr_fsname, MTI_NAME_MAXLEN + 1);
+	hal->hal_archive_id = hsr_get_archive_id(rq);
+	hal->hal_count = 0;
+
+	hai = hai_first(hal);
+	/* Copy only valid hai base on a record status */
+	list_for_each_entry(car, &rq->hsr_cars, car_scan_list) {
+		shai = &car->car_hai;
+		hal->hal_flags = car->car_flags;
+		if (car->car_hmm->mr_rec.arr_status == ARS_FAILED)
+			continue;
+		if ((buf_size - ((char *)hai - (char *)buf)) < shai->hai_len) {
+			CDEBUG(D_HA, "buffer overflow for hsm_action_item\n");
+			return -EOVERFLOW;
+		}
+		memcpy(hai, shai, shai->hai_len);
+		hal->hal_count++;
+		hai = hai_next(hai);
+	}
+
+	return 0;
+}
+
 /**
- * send a HAL to the agent
+ * Checks agent records, creates a hal and sends it to the agent. Updates llog
+ * records at the end.
  * \param mti [IN] context
- * \param hal [IN] request (can be a kuc payload)
- * \param purge [IN] purge mode (no record)
+ * \param rq [IN] request
+ * \param purge [IN] purge mode (not register a record)
  * \retval 0 success
  * \retval -ve failure
  * This function supposes:
  *  - all actions are for the same archive number
  *  - in case of cancel, all cancel are for the same agent
  * This implies that request split has to be done
- *  before when building the hal
+ *  before when building the rq
  */
-int mdt_hsm_agent_send(struct mdt_thread_info *mti,
-		       struct hsm_action_list *hal, bool purge)
+int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_scan_request *rq,
+		       bool purge)
 {
-	struct obd_export	*exp;
-	struct mdt_device	*mdt = mti->mti_mdt;
-	struct coordinator	*cdt = &mti->mti_mdt->mdt_coordinator;
-	struct hsm_action_list	*buf = NULL;
-	struct hsm_action_item	*hai;
-	struct obd_uuid		 uuid;
-	int			 len, i, rc = 0;
-	bool			 fail_request;
-	bool			 is_registered = false;
+	struct obd_export *exp;
+	struct mdt_device *mdt = mti->mti_mdt;
+	struct coordinator *cdt = &mti->mti_mdt->mdt_coordinator;
+	struct hsm_action_list *buf = NULL;
+	struct hsm_action_item *hai;
+	struct cdt_agent_req *car;
+	struct obd_uuid uuid;
+	int len, rc = 0;
+	int fail_request = 0;
+	bool is_registered = false;
+	u32 archive_id = hsr_get_archive_id(rq);
+
 	ENTRY;
 
-	rc = mdt_hsm_find_best_agent(cdt, hal->hal_archive_id, &uuid);
-	if (rc && hal->hal_archive_id == 0) {
+	rc = mdt_hsm_find_best_agent(cdt, archive_id, &uuid);
+	if (rc && archive_id == 0) {
 		uint notrmcount = 0;
 		int rc2 = 0;
 
@@ -380,11 +455,8 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 		 *     _ create a new LLOG record for each archive_id
 		 *       presently being served by any CT
 		 */
-		hai = hai_first(hal);
-		for (i = 0; i < hal->hal_count; i++,
-		     hai = hai_next(hai)) {
-			struct hsm_record_update update;
-
+		list_for_each_entry(car, &rq->hsr_cars, car_scan_list) {
+			hai = &car->car_hai;
 			/* only removes are concerned */
 			if (hai->hai_action != HSMA_REMOVE) {
 				/* count if other actions than HSMA_REMOVE,
@@ -405,102 +477,51 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 			 * unless a method to record already successfully
 			 * reached archive_ids is implemented */
 
-			update.cookie = hai->hai_cookie;
-			update.status = ARS_SUCCEED;
-			rc2 = mdt_agent_record_update(mti, &update, 1);
-			if (rc2) {
-				CERROR("%s: mdt_agent_record_update() "
-				      "failed, cannot update "
-				      "status to %s for cookie "
-				      "%#llx: rc = %d\n",
-				      mdt_obd_name(mdt),
-				      agent_req_status2name(ARS_SUCCEED),
-				      hai->hai_cookie, rc2);
-				break;
-			}
+			car->car_hmm->mr_rec.arr_status = ARS_SUCCEED;
 		}
 		/* only remove requests with archive_id=0 */
 		if (notrmcount == 0)
-			RETURN(rc2);
+			GOTO(update_records, rc = rc2);
 
 	}
 
 	if (rc) {
 		CERROR("%s: Cannot find agent for archive %d: rc = %d\n",
-		       mdt_obd_name(mdt), hal->hal_archive_id, rc);
-		RETURN(rc);
+		       mdt_obd_name(mdt), archive_id, rc);
+		GOTO(update_records, rc);
 	}
 
-	CDEBUG(D_HSM, "Agent %s selected for archive %d\n", obd_uuid2str(&uuid),
-	       hal->hal_archive_id);
-
-	len = hal_size(hal);
-	buf = kuc_alloc(len, KUC_TRANSPORT_HSM, HMT_ACTION_LIST);
-	if (IS_ERR(buf))
-		RETURN(PTR_ERR(buf));
-	memcpy(buf, hal, len);
+	CDEBUG(D_HSM, "Agent %s selected for archive %d request %px items %d\n",
+	       obd_uuid2str(&uuid), archive_id, rq, rq->hsr_count);
 
 	/* Check if request is still valid (cf file hsm flags) */
-	fail_request = false;
-	hai = hai_first(hal);
-	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
+	list_for_each_entry(car, &rq->hsr_cars, car_scan_list) {
 		struct mdt_object *obj;
 		struct md_hsm hsm;
 
+		hai = &car->car_hai;
 		if (hai->hai_action == HSMA_CANCEL)
 			continue;
 
 		obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &hsm);
 		if (!IS_ERR(obj)) {
 			mdt_object_put(mti->mti_env, obj);
-		} else if (PTR_ERR(obj) == -ENOENT) {
-			struct hsm_record_update update = {
-				.cookie = hai->hai_cookie,
-				.status = ARS_FAILED,
-			};
-
-			if (hai->hai_action == HSMA_REMOVE)
+		} else {
+			if (PTR_ERR(obj) == -ENOENT &&
+			    hai->hai_action == HSMA_REMOVE)
 				continue;
 
-			fail_request = true;
-			rc = mdt_agent_record_update(mti, &update, 1);
-			if (rc < 0) {
-				CERROR("%s: mdt_agent_record_update() failed, "
-				       "cannot update status to %s for cookie "
-				       "%#llx: rc = %d\n",
-				       mdt_obd_name(mdt),
-				       agent_req_status2name(ARS_FAILED),
-				       hai->hai_cookie, rc);
-				GOTO(out_buf, rc);
-			}
-
+			fail_request++;
+			car->car_hmm->mr_rec.arr_status = ARS_FAILED;
 			continue;
-		} else {
-			GOTO(out_buf, rc = PTR_ERR(obj));
 		}
 
-		if (!mdt_hsm_is_action_compat(hai, hal->hal_archive_id,
-					      hal->hal_flags, &hsm)) {
-			struct hsm_record_update update = {
-				.cookie = hai->hai_cookie,
-				.status = ARS_FAILED,
-			};
+		if (!mdt_hsm_is_action_compat(hai, archive_id, car->car_flags,
+					      &hsm)) {
 
 			/* incompatible request, we abort the request */
-			/* next time coordinator will wake up, it will
-			 * make the same HAL with valid only
-			 * records */
-			fail_request = true;
-			rc = mdt_agent_record_update(mti, &update, 1);
-			if (rc) {
-				CERROR("%s: mdt_agent_record_update() failed, "
-				       "cannot update status to %s for cookie "
-				       "%#llx: rc = %d\n",
-				       mdt_obd_name(mdt),
-				       agent_req_status2name(ARS_FAILED),
-				       hai->hai_cookie, rc);
-				GOTO(out_buf, rc);
-			}
+			fail_request++;
+			car->car_hmm->mr_rec.arr_status = ARS_FAILED;
 
 			/* if restore and record status updated, give
 			 * back granted layout lock */
@@ -509,13 +530,24 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 		}
 	}
 
-	/* we found incompatible requests, so the HAL cannot be sent
-	 * as is. Bad records have been invalidated in llog.
-	 * Valid one will be reschedule next time coordinator will wake up
-	 * So no need the rebuild a full valid HAL now
+	/* we found incompatible requests, so the HAL will be built only
+	 * with a vaild one. Bad records have been invalidated in llog.
 	 */
 	if (fail_request)
-		GOTO(out_buf, rc = -EAGAIN);
+		CDEBUG(D_HSM, "Some HSM actions are invalid, skipping it\n");
+
+	/* nothing to send to agent */
+	if (fail_request == rq->hsr_count)
+		GOTO(update_records, rc = 0);
+
+	len = hsr_hal_size(rq);
+	buf = kuc_alloc(len, KUC_TRANSPORT_HSM, HMT_ACTION_LIST);
+	if (IS_ERR(buf))
+		GOTO(update_records, rc = PTR_ERR(buf));
+
+	rc = hsr_hal_copy(rq, buf, len);
+	if (rc)
+		GOTO(update_records, rc);
 
 	/* Cancel memory registration is useless for purge
 	 * non registration avoid a deadlock :
@@ -524,12 +556,10 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 	 * by purge
 	 */
 	if (!purge) {
-		/* set is_registered even if failure because we may have
-		 * partial work done */
 		is_registered = true;
-		rc = mdt_hsm_add_hal(mti, hal, &uuid);
+		rc = mdt_hsm_add_hsr(mti, rq, &uuid);
 		if (rc)
-			GOTO(out_buf, rc);
+			GOTO(update_records, rc);
 	}
 
 	/* Uses the ldlm reverse import; this rpc will be seen by
@@ -546,7 +576,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 		       " rc = %d\n",
 		       mdt_obd_name(mdt), obd_uuid2str(&uuid), rc);
 		mdt_hsm_agent_unregister(mti, &uuid);
-		GOTO(out, rc);
+		GOTO(update_records, rc);
 	}
 
 	/* send request to agent */
@@ -568,19 +598,38 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 		mdt_hsm_agent_unregister(mti, &uuid);
 	}
 
-out:
-	if (rc != 0 && is_registered) {
-		/* in case of error, we have to unregister requests */
-		hai = hai_first(hal);
-		for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
-			if (hai->hai_action == HSMA_CANCEL)
-				continue;
-			mdt_cdt_remove_request(cdt, hai->hai_cookie);
-		}
-	}
+update_records:
+	/* for purge record updates do hsm_cancel_all_actions() */
+	if (purge)
+		GOTO(out_free, rc);
 
-out_buf:
-	kuc_free(buf, len);
+	/* in case of error, we have to unregister requests
+	 * also update request status here
+	 */
+	list_for_each_entry(car, &rq->hsr_cars, car_scan_list) {
+		int rc2;
+
+		hai = &car->car_hai;
+		if (rc != 0 && hai->hai_action != HSMA_CANCEL)
+			mdt_cdt_remove_request(cdt, hai->hai_cookie);
+
+		if (car->car_hmm->mr_rec.arr_status == ARS_WAITING && !rc)
+			car->car_hmm->mr_rec.arr_status = ARS_STARTED;
+
+		/* update llog record with ARS_ status */
+		rc2 = mdt_hsm_agent_modify_record(mti->mti_env, mdt,
+						  car->car_hmm);
+		if (!rc2)
+			continue;
+
+		CERROR("%s: modify record failed, cannot update status to %s for cookie %#llx: rc = %d\n",
+		       mdt_obd_name(mdt),
+		       agent_req_status2name(car->car_hmm->mr_rec.arr_status),
+		       hai->hai_cookie, rc2);
+	}
+out_free:
+	if (!IS_ERR_OR_NULL(buf))
+		kuc_free(buf, len);
 
 	RETURN(rc);
 }

@@ -2920,6 +2920,12 @@ struct llog_rec_tail {
 	__u32	lrt_index;
 } __attribute__((packed));
 
+static inline struct llog_rec_tail *llog_get_rec_tail(struct llog_rec_hdr *rec)
+{
+	return (struct llog_rec_tail *)((char *)rec + rec->lrh_len -
+					sizeof(struct llog_rec_tail));
+}
+
 /* Where data follow just after header */
 #define REC_DATA(ptr)						\
 	((void *)((char *)ptr + sizeof(struct llog_rec_hdr)))

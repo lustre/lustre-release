@@ -164,6 +164,9 @@ int llog_cat_reverse_process(const struct lu_env *env,
 			     void *data);
 int llog_cat_retain_cb(const struct lu_env *env, struct llog_handle *cat,
 		       struct llog_rec_hdr *rec, void *data);
+int llog_cat_modify_rec(const struct lu_env *env, struct llog_handle *cathandle,
+			struct llog_logid *lid, struct llog_rec_hdr *hdr,
+			struct llog_cookie *cookie);
 /* llog_obd.c */
 int llog_setup(const struct lu_env *env, struct obd_device *obd,
 	       struct obd_llog_group *olg, int index,
@@ -600,7 +603,7 @@ int llog_open_create(const struct lu_env *env, struct llog_ctxt *ctxt,
 		     char *name);
 int llog_erase(const struct lu_env *env, struct llog_ctxt *ctxt,
 	       struct llog_logid *logid, char *name);
-int llog_get_cookie(const struct lu_env *env, struct llog_cookie *out);
+void llog_get_cookie(const struct lu_env *env, struct llog_cookie *out);
 int llog_write_cookie(const struct lu_env *env, struct llog_handle *loghandle,
 		      struct llog_rec_hdr *rec, struct llog_cookie *cookie,
 		      int idx);

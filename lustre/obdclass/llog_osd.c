@@ -109,12 +109,6 @@ static int llog_osd_exist(struct llog_handle *handle)
 	return dt_object_exists(handle->lgh_obj) && !handle->lgh_destroyed;
 }
 
-static void *rec_tail(struct llog_rec_hdr *rec)
-{
-	return (void *)((char *)rec + rec->lrh_len -
-			sizeof(struct llog_rec_tail));
-}
-
 /**
  * Write a padding record to the llog
  *
@@ -159,7 +153,7 @@ static int llog_osd_pad(const struct lu_env *env, struct dt_object *o,
 	rec->lrh_index = index;
 	rec->lrh_type = LLOG_PAD_MAGIC;
 
-	tail = rec_tail(rec);
+	tail = llog_get_rec_tail(rec);
 	tail->lrt_len = len;
 	tail->lrt_index = index;
 
@@ -600,7 +594,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	 */
 	LASSERT(index < LLOG_HDR_BITMAP_SIZE(llh));
 	rec->lrh_index = index;
-	lrt = rec_tail(rec);
+	lrt = llog_get_rec_tail(rec);
 	lrt->lrt_len = rec->lrh_len;
 	lrt->lrt_index = rec->lrh_index;
 

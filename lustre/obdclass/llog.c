@@ -1325,17 +1325,19 @@ int llog_erase(const struct lu_env *env, struct llog_ctxt *ctxt,
 }
 EXPORT_SYMBOL(llog_erase);
 
-/* Get current llog cookie from llog_process_thread session */
-int llog_get_cookie(const struct lu_env *env, struct llog_cookie *out)
+/*
+ * Get record cookie, with record file offset, should be called only by
+ * llog_process_thread() callbacks.
+ */
+void llog_get_cookie(const struct lu_env *env, struct llog_cookie *out)
 {
 	struct llog_thread_info *lti = llog_info(env);
 
-	if (!out || !lti)
-		return -EINVAL;
+	LASSERT(out && env && lti);
 
 	memcpy(out, &lti->lgi_cookie, sizeof(lti->lgi_cookie));
 
-	return 0;
+	return;
 }
 EXPORT_SYMBOL(llog_get_cookie);
 

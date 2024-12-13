@@ -151,11 +151,6 @@ struct coordinator {
 						       * restore requests
 						       */
 
-	/* Hash of cookies to locations of record locations in agent
-	 * request log.
-	 */
-	struct cfs_hash		*cdt_agent_record_hash;
-
 	/* Bitmasks indexed by the HSMA_XXX constants. */
 	__u64			 cdt_user_request_mask;
 	__u64			 cdt_group_request_mask;
@@ -604,17 +599,19 @@ struct cdt_req_progress {
 struct cdt_agent_req {
 	struct hlist_node	 car_cookie_hash;  /**< find req by cookie */
 	struct list_head	 car_request_list; /**< to chain all the req. */
+	struct list_head	 car_scan_list;    /**< list for scan process */
 	struct kref		 car_refcount;     /**< reference counter */
-	__u64			 car_flags;        /**< request original flags */
 	struct obd_uuid		 car_uuid;         /**< agent doing the req. */
-	__u32			 car_archive_id;   /**< archive id */
-	int			 car_canceled;     /**< request was canceled */
-	time64_t		 car_req_start;    /**< start time */
-	time64_t		 car_req_update;   /**< last update time */
-	struct hsm_action_item	*car_hai;          /**< req. to the agent */
+	struct hsm_mem_req_rec	*car_hmm;	   /**< llog rec with cookies */
 	struct cdt_req_progress	 car_progress;     /**< track data mvt
 						    *   progress */
+	struct cdt_agent_req *car_cancel;	   /**< corresponding cancel */
 };
+#define car_flags	car_hmm->mr_rec.arr_flags /**< request original flags */
+#define car_archive_id	car_hmm->mr_rec.arr_archive_id /**< archive id */
+#define car_req_update	car_hmm->mr_rec.arr_req_change /**< last update time */
+#define car_hai		car_hmm->mr_rec.arr_hai /**< req. to the agent */
+
 extern struct kmem_cache *mdt_hsm_car_kmem;
 
 struct hsm_agent {
@@ -642,6 +639,37 @@ struct hsm_record_update {
 	__u64 cookie;
 	enum agent_req_status status;
 };
+
+struct hsm_mem_req_rec {
+	struct llog_logid mr_lid;
+	u64 mr_offset;
+	struct llog_agent_req_rec mr_rec;
+};
+
+/**
+ * data passed to llog_cat_process() callback
+ * to scan requests and take actions
+ */
+struct hsm_scan_request {
+	struct list_head hsr_cars;
+	char *hsr_fsname;
+	int hsr_used_sz;
+	u32 hsr_version;
+	u32 hsr_count;
+};
+
+static inline u32 hsr_get_archive_id(struct hsm_scan_request *rq)
+{
+	struct cdt_agent_req *car;
+
+	if (rq->hsr_count > 0) {
+		car = list_first_entry(&rq->hsr_cars, struct cdt_agent_req,
+				       car_scan_list);
+
+		return car->car_archive_id;
+	}
+	return 0;
+}
 
 static inline
 const struct md_device_operations *mdt_child_ops(struct mdt_device *m)
@@ -1071,15 +1099,9 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 			 __u32 archive_id, __u64 flags,
 			 struct hsm_action_item *hai);
-int mdt_agent_record_update(struct mdt_thread_info *mti,
-			    struct hsm_record_update *updates,
-			    unsigned int updates_count);
-void cdt_agent_record_hash_add(struct coordinator *cdt, u64 cookie, u32 cat_idt,
-			       u32 rec_idx);
-void cdt_agent_record_hash_lookup(struct coordinator *cdt, u64 cookie,
-				  u32 *cat_idt, u32 *rec_idx);
-void cdt_agent_record_hash_del(struct coordinator *cdt, u64 cookie);
-
+int mdt_hsm_agent_modify_record(const struct lu_env *env,
+				struct mdt_device *mdt,
+				struct hsm_mem_req_rec *hmm);
 /* mdt/mdt_hsm_cdt_agent.c */
 extern const struct file_operations mdt_hsm_agent_fops;
 int mdt_hsm_agent_register(struct mdt_thread_info *info,
@@ -1095,7 +1117,7 @@ int mdt_hsm_agent_update_statistics(struct coordinator *cdt,
 				    const struct obd_uuid *uuid);
 int mdt_hsm_find_best_agent(struct coordinator *cdt, __u32 archive,
 			    struct obd_uuid *uuid);
-int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_action_list *hal,
+int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_scan_request *rq,
 		       bool purge);
 /* mdt/mdt_hsm_cdt_client.c */
 int mdt_hsm_add_actions(struct mdt_thread_info *info,
@@ -1109,12 +1131,10 @@ bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 				const struct lu_fid *fid);
 /* mdt/mdt_hsm_cdt_requests.c */
 extern struct cfs_hash_ops cdt_request_cookie_hash_ops;
-extern struct cfs_hash_ops cdt_agent_record_hash_ops;
 extern const struct file_operations mdt_hsm_active_requests_fops;
 void dump_requests(char *prefix, struct coordinator *cdt);
-struct cdt_agent_req *mdt_cdt_alloc_request(__u32 archive_id, __u64 flags,
-					    struct obd_uuid *uuid,
-					    struct hsm_action_item *hai);
+struct cdt_agent_req *mdt_cdt_alloc_request(struct obd_uuid *uuid,
+					    struct llog_agent_req_rec *rec);
 void mdt_cdt_free_request(struct cdt_agent_req *car);
 int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *new_car);
 struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt, u64 cookie);
@@ -1161,8 +1181,8 @@ struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 				      const struct lu_fid *fid,
 				      struct md_hsm *hsm);
 /* actions/request helpers */
-int mdt_hsm_add_hal(struct mdt_thread_info *mti,
-		    struct hsm_action_list *hal, struct obd_uuid *uuid);
+int mdt_hsm_add_hsr(struct mdt_thread_info *mti, struct hsm_scan_request *hsr,
+		    struct obd_uuid *uuid);
 bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
 			      u32 archive_id, u64 rq_flags,
 			      const struct md_hsm *hsm);

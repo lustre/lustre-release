@@ -38,7 +38,7 @@ static void *cdt_request_cookie_key(struct hlist_node *hnode)
 {
 	struct cdt_agent_req *car = cdt_request_cookie_object(hnode);
 
-	return &car->car_hai->hai_cookie;
+	return &car->car_hai.hai_cookie;
 }
 
 static int cdt_request_cookie_keycmp(const void *key, struct hlist_node *hnode)
@@ -88,16 +88,16 @@ void dump_requests(char *prefix, struct coordinator *cdt)
 		       " action=%s archive#=%d flags=%#llx"
 		       " extent=%#llx-%#llx"
 		       " gid=%#llx refcount=%d canceled=%d\n",
-		       prefix, PFID(&car->car_hai->hai_fid),
-		       PFID(&car->car_hai->hai_dfid),
-		       car->car_hai->hai_cookie,
-		       hsm_copytool_action2name(car->car_hai->hai_action),
+		       prefix, PFID(&car->car_hai.hai_fid),
+		       PFID(&car->car_hai.hai_dfid),
+		       car->car_hai.hai_cookie,
+		       hsm_copytool_action2name(car->car_hai.hai_action),
 		       car->car_archive_id, car->car_flags,
-		       car->car_hai->hai_extent.offset,
-		       car->car_hai->hai_extent.length,
-		       car->car_hai->hai_gid,
+		       car->car_hai.hai_extent.offset,
+		       car->car_hai.hai_extent.length,
+		       car->car_hai.hai_gid,
 		       kref_read(&car->car_refcount),
-		       car->car_canceled);
+		       car->car_cancel ? 1 : 0);
 	}
 	up_read(&cdt->cdt_request_lock);
 }
@@ -199,18 +199,21 @@ static void mdt_cdt_init_request_tree(struct cdt_req_progress *crp)
 		progress_iter_next(NULL, 0, 0);
 }
 
+static inline int hmmr_size(int rec_size)
+{
+	return __ALIGN_KERNEL(offsetof(struct hsm_mem_req_rec, mr_rec) +
+			      rec_size, 8);
+}
+
 /** Allocate/init an agent request and its sub-structures.
  *
- * \param archive_id [IN]
- * \param flags [IN]
  * \param uuid [IN]
- * \param hai [IN]
+ * \param rec [IN]
  * \retval car [OUT] success valid structure
- * \retval car [OUT]
+ * \retval -ve failure
  */
-struct cdt_agent_req *mdt_cdt_alloc_request(__u32 archive_id, __u64 flags,
-					    struct obd_uuid *uuid,
-					    struct hsm_action_item *hai)
+struct cdt_agent_req *mdt_cdt_alloc_request(struct obd_uuid *uuid,
+					    struct llog_agent_req_rec *rec)
 {
 	struct cdt_agent_req *car;
 	ENTRY;
@@ -220,20 +223,15 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u32 archive_id, __u64 flags,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	kref_init(&car->car_refcount);
-	car->car_archive_id = archive_id;
-	car->car_flags = flags;
-	car->car_canceled = 0;
-	car->car_req_start = ktime_get_real_seconds();
-	car->car_req_update = car->car_req_start;
 	car->car_uuid = *uuid;
-	OBD_ALLOC(car->car_hai, hai->hai_len);
-	if (car->car_hai == NULL) {
+	OBD_ALLOC(car->car_hmm, hmmr_size(rec->arr_hdr.lrh_len));
+	if (car->car_hmm == NULL) {
 		OBD_SLAB_FREE_PTR(car, mdt_hsm_car_kmem);
 		RETURN(ERR_PTR(-ENOMEM));
 	}
-	memcpy(car->car_hai, hai, hai->hai_len);
+	memcpy(&car->car_hmm->mr_rec, rec, rec->arr_hdr.lrh_len);
 	mdt_cdt_init_request_tree(&car->car_progress);
-
+	car->car_cancel = NULL;
 	RETURN(car);
 }
 
@@ -245,7 +243,7 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u32 archive_id, __u64 flags,
 void mdt_cdt_free_request(struct cdt_agent_req *car)
 {
 	mdt_cdt_free_request_tree(&car->car_progress);
-	OBD_FREE(car->car_hai, car->car_hai->hai_len);
+	OBD_FREE(car->car_hmm, hmmr_size(car->car_hmm->mr_rec.arr_hdr.lrh_len));
 	OBD_SLAB_FREE_PTR(car, mdt_hsm_car_kmem);
 }
 
@@ -289,12 +287,12 @@ int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *car)
 	ENTRY;
 
 	/* cancel requests are not kept in memory */
-	LASSERT(car->car_hai->hai_action != HSMA_CANCEL);
+	LASSERT(car->car_hai.hai_action != HSMA_CANCEL);
 
 	down_write(&cdt->cdt_request_lock);
 
 	rc = cfs_hash_add_unique(cdt->cdt_request_cookie_hash,
-				 &car->car_hai->hai_cookie,
+				 &car->car_hai.hai_cookie,
 				 &car->car_cookie_hash);
 	if (rc < 0) {
 		up_write(&cdt->cdt_request_lock);
@@ -303,11 +301,13 @@ int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *car)
 
 	list_add_tail(&car->car_request_list, &cdt->cdt_request_list);
 
+	mdt_cdt_get_request(car);
+
 	up_write(&cdt->cdt_request_lock);
 
 	mdt_hsm_agent_update_statistics(cdt, 0, 0, 1, &car->car_uuid);
 
-	switch (car->car_hai->hai_action) {
+	switch (car->car_hai.hai_action) {
 	case HSMA_ARCHIVE:
 		atomic_inc(&cdt->cdt_archive_count);
 		break;
@@ -363,7 +363,7 @@ int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie)
 	list_del(&car->car_request_list);
 	up_write(&cdt->cdt_request_lock);
 
-	switch (car->car_hai->hai_action) {
+	switch (car->car_hai.hai_action) {
 	case HSMA_ARCHIVE:
 		atomic_dec(&cdt->cdt_archive_count);
 		break;
@@ -373,6 +373,13 @@ int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie)
 	case HSMA_REMOVE:
 		atomic_dec(&cdt->cdt_remove_count);
 		break;
+	}
+
+	if (car->car_cancel) {
+		mdt_cdt_put_request(car->car_cancel);
+		/* ref from mdt_hsm_add_hsr()->mdt_cdt_find_request() */
+		mdt_cdt_put_request(car);
+		car->car_cancel = NULL;
 	}
 
 	/* Drop reference from cdt_request_list. */
@@ -410,7 +417,7 @@ struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
 	car->car_req_update = ktime_get_real_seconds();
 
 	/* update data move progress done by copy tool */
-	if (car->car_hai->hai_action != HSMA_REMOVE && pgs->hpk_errval == 0 &&
+	if (car->car_hai.hai_action != HSMA_REMOVE && pgs->hpk_errval == 0 &&
 	    pgs->hpk_extent.length != 0) {
 		rc = hsm_update_work(&car->car_progress, &pgs->hpk_extent);
 		if (rc) {
@@ -502,16 +509,16 @@ static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
 		   " action=%s archive#=%d flags=%#llx"
 		   " extent=%#llx-%#llx gid=%#llx"
 		   " data=[%s] canceled=%d uuid=%s done=%llu\n",
-		   PFID(&car->car_hai->hai_fid),
-		   PFID(&car->car_hai->hai_dfid),
-		   0ULL /* compound_id */, car->car_hai->hai_cookie,
-		   hsm_copytool_action2name(car->car_hai->hai_action),
+		   PFID(&car->car_hai.hai_fid),
+		   PFID(&car->car_hai.hai_dfid),
+		   0ULL /* compound_id */, car->car_hai.hai_cookie,
+		   hsm_copytool_action2name(car->car_hai.hai_action),
 		   car->car_archive_id, car->car_flags,
-		   car->car_hai->hai_extent.offset,
-		   car->car_hai->hai_extent.length,
-		   car->car_hai->hai_gid,
-		   hai_dump_data_field(car->car_hai, buf, sizeof(buf)),
-		   car->car_canceled, obd_uuid2str(&car->car_uuid),
+		   car->car_hai.hai_extent.offset,
+		   car->car_hai.hai_extent.length,
+		   car->car_hai.hai_gid,
+		   hai_dump_data_field(&car->car_hai, buf, sizeof(buf)),
+		   car->car_cancel ? 1 : 0, obd_uuid2str(&car->car_uuid),
 		   car->car_progress.crp_total);
 	RETURN(0);
 }
