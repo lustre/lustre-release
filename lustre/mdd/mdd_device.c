@@ -172,6 +172,7 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	/* special default striping for files created with O_APPEND */
 	mdd->mdd_append_stripe_count = 0;
 	mdd->mdd_append_pool[0] = '\0';
+	mutex_init(&mdd->mdd_changelog_mutex);
 
 	dt_conf_get(env, mdd->mdd_child, &mdd->mdd_dt_conf);
 
@@ -656,6 +657,7 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 	struct obd_device	*obd = mdd2obd_dev(mdd);
 	int			 rc;
 
+	mutex_lock(&mdd->mdd_changelog_mutex);
 	mdd->mdd_cl.mc_index = 0;
 	mdd->mdd_cl.mc_starttime = ktime_get();
 	mdd->mdd_cl.mc_lastuser = 0;
@@ -672,6 +674,7 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 		       obd->obd_name, rc);
 		mdd->mdd_cl.mc_flags |= CLM_ERR;
 	}
+	mutex_unlock(&mdd->mdd_changelog_mutex);
 
 	return rc;
 }
@@ -684,6 +687,8 @@ static void mdd_changelog_fini(const struct lu_env *env,
 
 	if (mdd->mdd_cl.mc_flags & CLM_CLEANUP_DONE)
 		return;
+
+	mutex_lock(&mdd->mdd_changelog_mutex);
 	mdd->mdd_cl.mc_flags = CLM_CLEANUP_DONE;
 
 again:
@@ -729,6 +734,7 @@ again:
 		llog_cat_close(env, ctxt->loc_handle);
 		llog_cleanup(env, ctxt);
 	}
+	mutex_unlock(&mdd->mdd_changelog_mutex);
 }
 
 /* Remove entries with indicies up to and including @endrec from changelog
@@ -1899,10 +1905,11 @@ int mdd_changelog_recalc_mask(const struct lu_env *env, struct mdd_device *mdd)
 
 	ENTRY;
 
+	mutex_lock(&mdd->mdd_changelog_mutex);
 	ctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
 	if (!ctxt)
-		RETURN(-ENXIO);
+		GOTO(out_unlock, rc = -ENXIO);
 
 	if (!(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
 		GOTO(out, rc = -ENXIO);
@@ -1923,6 +1930,8 @@ int mdd_changelog_recalc_mask(const struct lu_env *env, struct mdd_device *mdd)
 	EXIT;
 out:
 	llog_ctxt_put(ctxt);
+out_unlock:
+	mutex_unlock(&mdd->mdd_changelog_mutex);
 
 	return rc;
 }

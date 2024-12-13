@@ -149,6 +149,8 @@ struct mdd_device {
 	struct kobject			 mdd_kobj;
 	struct kobj_type		 mdd_ktype;
 	struct completion		 mdd_kobj_unregister;
+					 /* to serialize init/fini vs access */
+	struct mutex			 mdd_changelog_mutex;
 };
 
 enum mod_flags {
