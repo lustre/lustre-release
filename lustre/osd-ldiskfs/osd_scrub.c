@@ -3122,9 +3122,13 @@ static int osd_scan_ml_file(const struct lu_env *env, struct osd_device *dev,
 	    ((strlen(name) != oie->oie_dirent->oied_namelen) ||
 	     strncmp(oie->oie_dirent->oied_name, name,
 		     oie->oie_dirent->oied_namelen) != 0)) {
-		CDEBUG(D_LFSCK, "%s: the file O/%s/%s/%s is corrupted\n",
-		       osd_name(dev), info->oti_seq_dirent->oied_name,
+		CDEBUG(D_LFSCK, "%s: the file O/%.*s/%.*s/%.*s is corrupted\n",
+		       osd_name(dev),
+		       info->oti_seq_dirent->oied_namelen,
+		       info->oti_seq_dirent->oied_name,
+		       info->oti_dir_dirent->oied_namelen,
 		       info->oti_dir_dirent->oied_name,
+		       oie->oie_dirent->oied_namelen,
 		       oie->oie_dirent->oied_name);
 
 		rc = osd_remove_ml_file(info, dev, dir, inode, oie);
@@ -3296,8 +3300,11 @@ static int osd_scan_lastid_dir(const struct lu_env *env, struct osd_device *dev,
 	if (strlen(LASTID) != oie->oie_dirent->oied_namelen ||
 	    strncmp(oie->oie_dirent->oied_name, LASTID,
 		    oie->oie_dirent->oied_namelen) != 0) {
-		CDEBUG(D_LFSCK, "%s: the file O/%s/%s is unexpected\n",
-		       osd_name(dev), info->oti_seq_dirent->oied_name,
+		CDEBUG(D_LFSCK, "%s: the file O/%.*s/%.*s is unexpected\n",
+		       osd_name(dev),
+		       info->oti_seq_dirent->oied_namelen,
+		       info->oti_seq_dirent->oied_name,
+		       oie->oie_dirent->oied_namelen,
 		       oie->oie_dirent->oied_name);
 		GOTO(out, rc = 0);
 	}
@@ -3335,12 +3342,19 @@ static int osd_scan_lastid_seq(const struct lu_env *env, struct osd_device *dev,
 	if (!S_ISDIR(inode->i_mode))
 		GOTO(out, rc = 0);
 
-	rc = kstrtoull(oie->oie_dirent->oied_name, 16, &seq);
+	if (oie->oie_dirent->oied_namelen + 1 > sizeof(info->oti_name))
+		GOTO(out, rc = -ENAMETOOLONG);
+
+	memcpy(info->oti_name, oie->oie_dirent->oied_name,
+	       oie->oie_dirent->oied_namelen);
+	info->oti_name[oie->oie_dirent->oied_namelen] = '\0';
+
+	rc = kstrtoull(info->oti_name, 16, &seq);
 	if (rc)
 		GOTO(out, rc);
 
 	if (seq < 0x1F) {
-		rc = kstrtoull(oie->oie_dirent->oied_name, 10, &seq);
+		rc = kstrtoull(info->oti_name, 10, &seq);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -3380,8 +3394,7 @@ static int osd_scan_lastid_seq(const struct lu_env *env, struct osd_device *dev,
 			 lma);
 	if (rc && rc != -ENODATA) {
 		CDEBUG(D_LFSCK, "%s: failed to get the xattr %s for O/%s/%s\n",
-		       osd_name(dev), XATTR_NAME_LMA,
-		       oie->oie_dirent->oied_name, LASTID);
+		       osd_name(dev), XATTR_NAME_LMA, info->oti_name, LASTID);
 		GOTO(out, rc);
 	}
 
@@ -3460,12 +3473,19 @@ static int osd_scan_O_seq(const struct lu_env *env, struct osd_device *dev,
 	if (!S_ISDIR(inode->i_mode))
 		GOTO(out, rc = 0);
 
-	rc = kstrtoull(oie->oie_dirent->oied_name, 16, &seq);
+	if (oie->oie_dirent->oied_namelen + 1 > sizeof(info->oti_name))
+		GOTO(out, rc = -ENAMETOOLONG);
+
+	memcpy(info->oti_name, oie->oie_dirent->oied_name,
+	       oie->oie_dirent->oied_namelen);
+	info->oti_name[oie->oie_dirent->oied_namelen] = '\0';
+
+	rc = kstrtoull(info->oti_name, 16, &seq);
 	if (rc)
 		GOTO(out, rc);
 
 	if (seq < 0x1F) {
-		rc = kstrtoull(oie->oie_dirent->oied_name, 10, &seq);
+		rc = kstrtoull(info->oti_name, 10, &seq);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -3510,7 +3530,6 @@ static int osd_seq_dir_helper(const struct lu_env *env,
 	struct lu_fid *fid = &info->oti_fid;
 	struct inode *inode;
 	struct osd_inode_id id;
-	char *name = NULL;
 	__u64 seq;
 	int rc = 0;
 
@@ -3524,18 +3543,17 @@ static int osd_seq_dir_helper(const struct lu_env *env,
 	if (!S_ISDIR(inode->i_mode))
 		GOTO(out, rc);
 
-	OBD_ALLOC(name, oie->oie_dirent->oied_namelen + 1);
-	if (name == NULL)
-		GOTO(out, rc = -ENOMEM);
-	memcpy(name, oie->oie_dirent->oied_name,
-	       oie->oie_dirent->oied_namelen);
-	name[oie->oie_dirent->oied_namelen] = '\0';
+	if (oie->oie_dirent->oied_namelen + 1 > sizeof(info->oti_name))
+		GOTO(out, rc = -ENAMETOOLONG);
 
-	rc = kstrtoull(name, 16, &seq);
+	memcpy(info->oti_name, oie->oie_dirent->oied_name,
+	       oie->oie_dirent->oied_namelen);
+	info->oti_name[oie->oie_dirent->oied_namelen] = '\0';
+
+	rc = kstrtoull(info->oti_name, 16, &seq);
 	if (!rc && seq >= FID_SEQ_NORMAL && seq > fid_seq(fid))
 		fid->f_seq = seq;
 
-	OBD_FREE(name, oie->oie_dirent->oied_namelen + 1);
 out:
 	iput(inode);
 	RETURN(rc);
