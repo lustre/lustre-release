@@ -1640,6 +1640,13 @@ struct inode *ll_inode_from_resource_lock(struct ldlm_lock *lock)
 		lli = ll_i2info(lock->l_resource->lr_lvb_inode);
 		if (lli->lli_inode_magic == LLI_INODE_MAGIC) {
 			inode = igrab(lock->l_resource->lr_lvb_inode);
+			if (inode && !fid_res_name_eq(ll_inode2fid(inode),
+					     &lock->l_resource->lr_name)) {
+				LDLM_ERROR(lock,
+					   "data mismatch with object "DFID"(%p)",
+					   PFID(ll_inode2fid(inode)), inode);
+				LBUG();
+			}
 		} else {
 			inode = lock->l_resource->lr_lvb_inode;
 			LDLM_DEBUG_LIMIT(inode->i_state & I_FREEING ?  D_INFO :

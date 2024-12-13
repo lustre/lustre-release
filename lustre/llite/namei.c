@@ -267,13 +267,6 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock,
 		RETURN_EXIT;
 	}
 
-	if (!fid_res_name_eq(ll_inode2fid(inode),
-			     &lock->l_resource->lr_name)) {
-		LDLM_ERROR(lock, "data mismatch with object "DFID"(%p)",
-			   PFID(ll_inode2fid(inode)), inode);
-		LBUG();
-	}
-
 	if (bits & MDS_INODELOCK_XATTR) {
 		ll_xattr_cache_empty(inode);
 		bits &= ~MDS_INODELOCK_XATTR;
