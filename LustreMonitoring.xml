@@ -285,13 +285,28 @@ Working with Changelogs</title>
         </title>
         <para>Because changelog records take up space on the MDT, the system
         administration must register changelog users. As soon as a changelog
-        user is registered, the Changelogs feature is enabled. The registrants
-        specify which records they are &quot;done with&quot;, and the system
-        purges up to the greatest common record.</para>
-        <para>To register a new changelog user, run:</para>
+        user is registered, the Changelogs feature is enabled. Users specify
+        which records they have <emphasis>finished processing</emphasis>,
+        and the system purges up to the greatest common processed record.
+        </para>
+        <para>To register a new changelog user, for each MDT run:</para>
 <screen>
-mds# lctl --device <replaceable>fsname</replaceable>-<replaceable>MDTnumber</replaceable> changelog_register
+mds# lctl --device <replaceable>FSNAME</replaceable>-<replaceable>MDTxxxx</replaceable> changelog_register \
+    --user <replaceable>USERNAME</replaceable> --mask <replaceable>RECORD_TYPES</replaceable>
 </screen>
+        <para>The <replaceable>USERNAME</replaceable> is a descriptive ASCII
+        string up to 16 characters that allows identifying registered
+        changelog users more easily, and is combined with a unique identifier.
+        </para>
+        <para>The <replaceable>RECORD_TYPES</replaceable> is a comma-separated
+        list of the above record types that this user is interested in.  The
+        per-user mask is combined with other user masks to form the global
+        <literal>changelog_mask</literal> of all record types that are saved.
+        By registering a per-user mask instead of modifying the global
+        <literal>changelog_mask</literal> the changelog will record only the
+        minimal set of record types that are needed by the currently-registered
+        users.
+        </para>
         <para>Changelog entries are not purged beyond a registered user&apos;s
         set point (see <literal>lfs changelog_clear</literal>).</para>
       </section>
@@ -340,14 +355,23 @@ client# lfs changelog_clear <replaceable>mdt_name</replaceable> <replaceable>use
       </section>
       <section remap="h5">
         <title>
-          <literal>lctl changelog_deregister</literal>
+          <literal>lctl changelog_deregister [<replaceable>USERID</replaceable>|--user <replaceable>USERNAME</replaceable>]</literal>
         </title>
         <para>To deregister (unregister) a changelog user, run:</para>
 <screen>
-mds# lctl --device <replaceable>mdt_device</replaceable> changelog_deregister <replaceable>userid</replaceable>
+mds# lctl --device <replaceable>mdt_device</replaceable> changelog_deregister <replaceable>USERID</replaceable>
 </screen>
-        <para> <literal>changelog_deregister cl1</literal> effectively does a
-        <literal>lfs changelog_clear cl1 0</literal> as it deregisters.</para>
+        <para>If <replaceable>USERID</replaceable> is specified, this matches
+        only the exact user ID string that was returned when
+        <literal>changelog_register</literal> was called.
+        If <replaceable>USERNAME</replaceable> is specified, then it will match
+        a changelog username beginning with <replaceable>USERNAME</replaceable>,
+        to simplify automatic deregistering a service user registered by name
+        from a script, rather than having to know the exact username.
+        </para>
+        <para>Running <literal>changelog_deregister cl1</literal> effectively
+        does a <literal>lfs changelog_clear cl1 0</literal> as it deregisters.
+        </para>
       </section>
     </section>
     <section remap="h3">
@@ -356,11 +380,12 @@ mds# lctl --device <replaceable>mdt_device</replaceable> changelog_deregister <r
       commands.</para>
       <section remap="h5">
         <title>Registering a Changelog User</title>
-        <para>To register a new changelog user for a device
+        <para>To register a new &quot;monitor&quot; user for a device
         (<literal>lustre-MDT0000</literal>):</para>
 <screen>
-mds# lctl --device lustre-MDT0000 changelog_register
-lustre-MDT0000: Registered changelog userid &apos;cl1&apos;
+mds# lctl --device lustre-MDT0000 changelog_register --user monitor \
+   --mask UNLNK,CLOSE
+lustre-MDT0000: Registered changelog userid &apos;monitor-cl1&apos;
 </screen>
       </section>
       <section remap="h5">
@@ -396,10 +421,10 @@ u=500:500 nid=10.128.11.159@tcp p=[0x200000402:0x1:0x0] chloe.jpg
       </section>
       <section remap="h5">
         <title>Clearing Changelog Records</title>
-        <para>To notify a device that a specific user (<literal>cl1</literal>)
+        <para>To notify a device that a specific user (<literal>monitor-cl1</literal>)
         no longer needs records (up to and including 3):</para>
 <screen>
-# lfs changelog_clear  lustre-MDT0000 cl1 3
+# lfs changelog_clear lustre-MDT0000 monitor-cl1 3
 </screen>
         <para>To confirm that the <literal>changelog_clear</literal> operation
         was successful, run <literal>lfs changelog</literal>; only records after
@@ -412,14 +437,14 @@ u=500:500 nid=10.128.11.159@tcp p=[0x200000007:0x1:0x0] pics
       </section>
       <section remap="h5">
         <title>Deregistering a Changelog User</title>
-        <para>To deregister a changelog user (<literal>cl1</literal>) for a
-        specific device (<literal>lustre-MDT0000</literal>):</para>
+        <para>To deregister a changelog user (<literal>monitor-cl1</literal>)
+        for a specific device (<literal>lustre-MDT0000</literal>):</para>
 <screen>
-mds# lctl --device lustre-MDT0000 changelog_deregister cl1
-lustre-MDT0000: Deregistered changelog user &apos;cl1&apos;
+mds# lctl --device lustre-MDT0000 changelog_deregister --user monitor
+lustre-MDT0000: Deregistered changelog user &apos;monitor-cl1&apos;
 </screen>
         <para>The deregistration operation clears all changelog records for the
-        specified user (<literal>cl1</literal>).</para>
+        specified user (<literal>monitor-cl1</literal>).</para>
 <screen>
 client# lfs changelog lustre-MDT0000
 5 00MARK  15:56:39.603643887 2018.01.09 0x0 t=[0x20001:0x0:0x0] ef=0xf \
@@ -436,10 +461,10 @@ u=500:500 nid=0@&lt;0:0&gt; p=[0:0x50:0xb] mdd_obd-lustre-MDT0000-0
         changelog users for a specific device
         (<literal>lustre-MDT0000</literal>):</para>
 <screen>
-mds# lctl get_param  mdd.lustre-MDT0000.changelog_users
+mds# lctl get_param mdd.lustre-MDT0000.changelog_users
 mdd.lustre-MDT0000.changelog_users=current index: 8
 ID    index (idle seconds)
-cl2   8 (180)
+audit-cl2   8 (180)
 </screen>
       </section>
       <section remap="h5">
@@ -447,11 +472,8 @@ cl2   8 (180)
         <para>To show the current changelog mask on a specific device
         (<literal>lustre-MDT0000</literal>):</para>
 <screen>
-mds# lctl get_param  mdd.lustre-MDT0000.changelog_mask
-
-mdd.lustre-MDT0000.changelog_mask= 
-MARK CREAT MKDIR HLINK SLINK MKNOD UNLNK RMDIR RENME RNMTO CLOSE LYOUT \
-TRUNC SATTR XATTR HSM MTIME CTIME MIGRT
+mds# lctl get_param mdd.lustre-MDT0000.changelog_mask
+mdd.lustre-MDT0000.changelog_mask=MARK UNLNK CLOSE 
 </screen>
       </section>
       <section xml:id="modifyChangelogMask" remap="h5">
@@ -466,14 +488,18 @@ $ mkdir /mnt/lustre/mydir/foo
 $ cp /etc/hosts /mnt/lustre/mydir/foo/file
 $ ln /mnt/lustre/mydir/foo/file /mnt/lustre/mydir/myhardlink
 </screen>
-        <para>Only item types that are in the mask show up in the
-        changelog.</para>
+        <note><para>Note that setting <literal>changelog_mask</literal>
+        explicitly is deprecated and using the <literal>--mask</literal>
+        argument when registering a new user is preferred.
+        </para></note>
+        <para>
+        Only item types that are in the mask appear in the changelog.
+        </para>
 <screen>
 # lfs changelog lustre-MDT0000
 9 03HLINK 16:06:35.291636498 2018.01.09 0x0 t=[0x200000402:0x4:0x0] ef=0xf \
 u=500:500 nid=10.128.11.159@tcp p=[0x200000007:0x3:0x0] myhardlink
 </screen>
-        <para></para>
       </section>
     </section>
     <section remap="h3" condition='l2B'>
