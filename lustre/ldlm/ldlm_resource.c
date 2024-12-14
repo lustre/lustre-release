@@ -1605,6 +1605,7 @@ static void __ldlm_resource_putref_final(struct cfs_hash_bd *bd,
 /* Returns 1 if the resource was freed, 0 if it remains. */
 int ldlm_resource_putref(struct ldlm_resource *res)
 {
+	struct ldlm_valblock_ops *ns_lvbo;
 	struct ldlm_namespace *ns;
 	struct cfs_hash_bd bd;
 	int refcount;
@@ -1612,6 +1613,9 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 	if (refcount_dec_not_one(&res->lr_refcount))
 		return 0;
 	ns = ldlm_res_to_ns(res);
+	/* save ops as __ldlm_resource_putref_final() may
+	 * initiate namespace release in a separate thread */
+	ns_lvbo = ns->ns_lvbo;
 	refcount = refcount_read(&res->lr_refcount);
 	LASSERT(refcount < LI_POISON);
 
@@ -1622,8 +1626,8 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 	if (cfs_hash_bd_dec_and_lock(ns->ns_rs_hash, &bd, &res->lr_refcount)) {
 		__ldlm_resource_putref_final(&bd, res);
 		cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 1);
-		if (ns->ns_lvbo && ns->ns_lvbo->lvbo_free)
-			ns->ns_lvbo->lvbo_free(res);
+		if (ns_lvbo && ns_lvbo->lvbo_free)
+			ns_lvbo->lvbo_free(res);
 		ldlm_resource_free(res);
 		return 1;
 	}
