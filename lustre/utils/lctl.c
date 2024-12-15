@@ -602,8 +602,9 @@ command_t cmdlist[] = {
 	 "delete a nid range from a nodemap\n"
 	 "usage: nodemap_del_range --name NODEMAP_NAME --range NID_RANGE"},
 	{"nodemap_modify", jt_nodemap_modify, 0,
-	 "modify a nodemap parameter\n"
-	 "usage: nodemap_modify --name NODEMAP_NAME --property PROPERTY_NAME --value VALUE"},
+	 "modify a nodemap property\n"
+	 "usage: nodemap_modify --name NODEMAP_NAME --property PROPERTY_NAME{=VALUE| --value VALUE}\n"
+	 "valid properties: admin trusted map_mode squash_uid squash_gid squash_projid deny_unknown audit_mode forbid_encryption readonly_mount rbac deny_mount"},
 	{"nodemap_add_offset", jt_nodemap_add_offset, 0,
 	 "add an offset for UID/GID/PROJID mappings\n"
 	 "usage: nodemap_add_offset --name NODEMAP_NAME --offset OFFSET --limit LIMIT\n"},

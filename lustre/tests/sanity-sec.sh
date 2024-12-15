@@ -1318,8 +1318,13 @@ fops_test_setup() {
 # fileset test directory needs to be initialized on a privileged client
 fileset_test_setup() {
 	local nm=$1
+	local modify_val=""
 
-	if [ -n "$FILESET" -a -z "$SKIP_FILESET" ]; then
+	# exercise new nodemap_modify syntax if available
+	(( $MGS_VERSION >= $(version_code 2.16.51) )) ||
+		modify_val=" --value"
+
+	if [[ -n $FILESET && -z $SKIP_FILESET ]]; then
 		cleanup_mount $MOUNT
 		FILESET="" zconf_mount_clients $CLIENTS $MOUNT
 	fi
@@ -1329,11 +1334,11 @@ fileset_test_setup() {
 	local trust=$(do_facet mgs $LCTL get_param -n \
 		nodemap.${nm}.trusted_nodemap)
 
-	do_facet mgs $LCTL nodemap_modify --name $nm --property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name $nm --property trusted \
-		--value 1
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property admin${modify_val}=1
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property trusted${modify_val}=1
 
-	wait_nm_sync $nm admin_nodemap
 	wait_nm_sync $nm trusted_nodemap
 
 	# create directory and populate it for subdir mount
@@ -1349,15 +1354,14 @@ fileset_test_setup() {
 			$MOUNT/$subdir/$subsubdir/this_is_$subsubdir"
 
 	do_facet mgs $LCTL nodemap_modify --name $nm \
-		--property admin --value $admin
+		--property admin${modify_val}=$admin
 	do_facet mgs $LCTL nodemap_modify --name $nm \
-		--property trusted --value $trust
+		--property trusted${modify_val}=$trust
 
 	# flush MDT locks to make sure they are reacquired before test
 	do_node ${clients_arr[0]} $LCTL set_param \
 		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
 
-	wait_nm_sync $nm admin_nodemap
 	wait_nm_sync $nm trusted_nodemap
 }
 

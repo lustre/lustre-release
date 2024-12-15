@@ -4573,7 +4573,8 @@ set_sepol_usage:
  *
  * --name			nodemap name
  * --property			nodemap property to change
- *				admin, trusted, squash_uid, squash_gid)
+ *				admin, trusted, squash_uid, squash_gid.
+ *				Can also be in the form of property=value
  * --value			value to set property
  *
  * \retval			0 on success
@@ -4584,6 +4585,8 @@ int jt_nodemap_modify(int argc, char **argv)
 	char *nodemap_name = NULL;
 	char *param = NULL;
 	char *value = NULL;
+	char *delimiter = NULL;
+	bool double_value = false;
 	int c, rc = 0;
 
 	static struct option long_opts[] = {
@@ -4601,33 +4604,48 @@ int jt_nodemap_modify(int argc, char **argv)
 			break;
 		case 'p':
 			param = optarg;
+			/* check for property=value format */
+			delimiter = strchr(param, '=');
+			if (!value && delimiter) {
+				*delimiter = '\0';
+				value = delimiter + 1;
+				/* reset if empty value */
+				if (*value == '\0')
+					value = NULL;
+			} else if (value && delimiter) {
+				double_value = true;
+			}
 			break;
 		case 'v':
-			value = optarg;
+			if (value && delimiter)
+				double_value = true;
+			else
+				value = optarg;
 			break;
 		case 'h':
+		case '?':
 		default:
-			goto modify_usage;
+			return CMD_HELP;
 		}
 	}
 
+	if (double_value) {
+		fprintf(stderr,
+			"error: %s: use of both '--property=<value>' and '--value <value>' is invalid\n",
+			jt_cmdname(argv[0]));
+		return CMD_HELP;
+	}
 	if (!nodemap_name) {
 		fprintf(stderr, "nodemap_modify: missing nodemap name\n");
-modify_usage:
-		fprintf(stderr,
-			"usage: %s --name NODEMAP_NAME --property PROPERTY_NAME --value VALUE\n",
-			argv[0]);
-		fprintf(stderr,
-			"valid properties: admin trusted map_mode squash_uid squash_gid squash_projid deny_unknown audit_mode forbid_encryption readonly_mount rbac deny_mount\n");
-		return -EINVAL;
+		return CMD_HELP;
 	}
 	if (!param) {
 		fprintf(stderr, "nodemap_modify: missing property name\n");
-		goto modify_usage;
+		return CMD_HELP;
 	}
 	if (!value) {
 		fprintf(stderr, "nodemap_modify: missing value for property\n");
-		goto modify_usage;
+		return CMD_HELP;
 	}
 
 	if (strcmp("admin", param) == 0) {
@@ -4658,7 +4676,7 @@ modify_usage:
 		fprintf(stderr,
 			"error: %s: nodemap_modify invalid property: %s\n",
 			jt_cmdname(argv[0]), param);
-		goto modify_usage;
+		return CMD_HELP;
 	}
 
 	rc = nodemap_cmd(cmd, false, NULL, 0, argv[0], nodemap_name, param,

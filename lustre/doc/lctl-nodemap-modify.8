@@ -6,8 +6,8 @@ lctl-nodemap_modify \- modify a nodemap property
 or
 .SY "lctl nodemap modify"
 .BI --name " NODEMAP_NAME"
-.BI --property " PROPERTY_NAME"
-.BI --value " VALUE"
+.B --property
+.IR PROPERTY_NAME {\fB= VALUE |\fB--value " VALUE" }
 .YS
 .SH DESCRIPTION
 .B nodemap_modify
@@ -17,7 +17,9 @@ modifies a property of the given nodemap.
 .BI --name " NODEMAP_NAME"
 The name of the nodemap to modify
 .TP
-.BI --property " PROPERTY_NAME"
+.B --property
+.IR PROPERTY_NAME {\fB= VALUE |\fB--value " VALUE" }
+.TP
 One of the following properties:
 .RS 8
 .TP 4
@@ -125,11 +127,17 @@ And to forbid all roles, use 'none' value.
 .TP
 .BI --value " VALUE"
 The value to set for the property. Should be 0 or 1 for admin and trusted.
+The use of both
+.BI --property " PROPERTY_NAME" = VALUE
+and
+.BI --value " VALUE"
+is invalid.
 .SH EXAMPLES
 .EX
 .B # lctl nodemap_modify --name remotesite --property trusted --value 1
 .B # lctl nodemap_modify --name remotesite --property admin --value 1
 .B # lctl nodemap_modify --name remotesite --property map_mode --value uid
+.B # lctl nodemap_modify --name remotesite --property rbac=all
 .B # lctl nodemap_modify --name othersite --property squash_uid --value 101
 .EE
 .SH AVAILABILITY
