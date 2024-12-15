@@ -142,10 +142,10 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 	char mntpt[] = "/tmp/mntXXXXXX";
 	char filepnm[192];
 	char *dev;
-	int ret = 0;
+	size_t total_written, remaining;
+	ssize_t write_cnt;
 	int fd;
-	size_t total_written;
-	size_t write_cnt;
+	int ret = 0;
 
 	/* Mount this device temporarily in order to write these files */
 	if (!mkdtemp(mntpt)) {
@@ -223,10 +223,13 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 		ret = errno;
 		goto out_umnt;
 	}
+
 	total_written = 0;
-	while (total_written < sizeof(mop->mo_ldd)) {
-		write_cnt = write(fd, &mop->mo_ldd + total_written,
-				  sizeof(mop->mo_ldd) - total_written);
+	remaining = sizeof(mop->mo_ldd);
+	while (remaining > 0) {
+		write_cnt = write(fd,
+				  (const char *)&mop->mo_ldd + total_written,
+				  remaining);
 		if (write_cnt < 0) {
 			fprintf(stderr,
 				"%s: Unable to write to file (%s): %s\n",
@@ -235,7 +238,9 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 			goto close_fd;
 		}
 		total_written += write_cnt;
+		remaining -= write_cnt;
 	}
+
 	if (fsync(fd) < 0) {
 		fprintf(stderr, "%s: Unable to fsync file (%s): %s\n", progname,
 			filepnm, strerror(errno));
