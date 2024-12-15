@@ -1279,17 +1279,7 @@ post:
 	       osd_scrub2name(scrub), scrub->os_pos_current, rc,
 	       scrub->os_file.sf_param & SP_DRYRUN ? " dryrun mode" : "");
 
-
 out:
-	if (scrub->os_ls_fids) {
-		OBD_FREE(scrub->os_ls_fids,
-			 scrub->os_ls_size * sizeof(struct lu_fid));
-
-		scrub->os_ls_size = 0;
-		scrub->os_ls_count = 0;
-		scrub->os_ls_fids = NULL;
-	}
-
 	osd_scrub_ois_fini(scrub, &scrub->os_inconsistent_items);
 	lu_env_fini(&env);
 
@@ -1301,6 +1291,18 @@ noenv:
 		/* scrub_stop() is waiting, we need to synchronize */
 		wait_var_event(scrub, kthread_should_stop());
 	wake_up_var(scrub);
+
+	/* a running iterator can be using os_ls_fids, so let's release
+	 * only when we're asked to stop by that iterator */
+	if (scrub->os_ls_fids) {
+		OBD_FREE(scrub->os_ls_fids,
+			 scrub->os_ls_size * sizeof(struct lu_fid));
+
+		scrub->os_ls_size = 0;
+		scrub->os_ls_count = 0;
+		scrub->os_ls_fids = NULL;
+	}
+
 	return rc;
 }
 
