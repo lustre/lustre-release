@@ -25,6 +25,7 @@
 #include <linux/mm.h>
 #include <linux/swap.h>
 #include <linux/pagevec.h>
+#include <linux/blk_types.h>
 
 /*
  * struct OBD_{ALLOC,FREE}*()
@@ -1792,6 +1793,47 @@ int osd_calc_bkmap_credits(struct super_block *sb, struct inode *inode,
 	return credits;
 }
 
+static struct osd_block_ready_map *osd_brm_init(struct osd_object *o)
+{
+	struct ldiskfs_inode_info *ei = LDISKFS_I(o->oo_inode);
+	struct osd_block_ready_map *brm = o->oo_brm;
+	int i;
+
+	if (brm)
+		return brm;
+
+	down(&ei->i_append_sem);
+
+	if (o->oo_brm)
+		GOTO(out, brm = o->oo_brm);
+	OBD_ALLOC_PTR_ARRAY(brm, OSD_BRM_MAX);
+	if (brm == NULL)
+		GOTO(out, brm);
+	o->oo_brm = brm;
+	for (i = 0; i < OSD_BRM_MAX; i++) {
+		brm[i].start = 1UL << 31;
+		brm[i].end = 1UL << 31;
+	}
+
+out:
+	up(&ei->i_append_sem);
+	return brm;
+}
+
+static inline bool osd_brm_lookup(struct osd_block_ready_map *brm,
+				  unsigned long block)
+{
+	int i;
+
+	for (i = 0; i < OSD_BRM_MAX; i++) {
+		if (block >= brm[i].start && block <= brm[i].end) {
+			brm[i].time = jiffies;
+			return true;
+		}
+	}
+	return false;
+}
+
 static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 				 const struct lu_buf *buf, loff_t _pos,
 				 struct thandle *handle)
@@ -1824,6 +1866,13 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		 * should expect cross-block record
 		 */
 		pos = 0;
+		/*
+		 * likely this is a llog file, use multiblock alloc
+		 * to improve concurrent writes.
+		 * XXX: locking?
+		 */
+		if (obj->oo_prealloc_writes == 0)
+			obj->oo_prealloc_writes = 1;
 	} else {
 		pos = _pos;
 	}
@@ -1863,6 +1912,8 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 			credits += depth;
 		/* blocks to store data: bitmap,gd,itself */
 		credits += blocks * 3;
+		if (obj->oo_prealloc_writes)
+			credits += OSD_BRM_ALLOC_SIZE - 1;
 	} else {
 		credits = osd_calc_bkmap_credits(sb, inode, size, _pos, blocks);
 	}
@@ -1873,7 +1924,6 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		credits++;
 
 out:
-
 	osd_trans_declare_op(env, oh, OSD_OT_WRITE, credits);
 
 	/* dt_declare_write() is usually called for system objects, such
@@ -1906,6 +1956,227 @@ static int osd_ldiskfs_writelink(struct inode *inode, char *buffer, int buflen)
 	osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 
 	return 0;
+}
+
+struct buffer_head *osd_getnblk(handle_t *handle, struct osd_object *o,
+				ldiskfs_lblk_t block, int nr)
+{
+	struct osd_block_ready_map *brm = o->oo_brm;
+	struct buffer_head *bh, *ret = NULL;
+	struct inode *inode = o->oo_inode;
+	struct ldiskfs_map_blocks map;
+	unsigned long start, end, old;
+	ldiskfs_fsblk_t pblk;
+	int lru, i, err;
+
+	/* first of all, we map/allocate few blocks */
+	map.m_lblk = block;
+	map.m_len = nr;
+	err = ldiskfs_map_blocks(handle, inode, &map,
+				 LDISKFS_GET_BLOCKS_CREATE);
+	if (err < 0)
+		return ERR_PTR(err);
+	LASSERT(map.m_lblk == block);
+
+	/* XXX: save bh's in obj so many subsequent getblk() can be saved */
+
+	/* initialize bh's */
+	if (map.m_flags & LDISKFS_MAP_NEW) {
+		/*
+		 * new blocks should be filled with zeros under the semaphore
+		 * and before brm refill, so any concurrent access can't find
+		 * them allocated but not-initialized yet.
+		 */
+		if (!o->oo_on_orphan_list) {
+			inode_lock(inode);
+			ldiskfs_orphan_add(handle, inode);
+			inode_unlock(inode);
+			o->oo_on_orphan_list = 1;
+		}
+		for (pblk = map.m_pblk; pblk < map.m_pblk + map.m_len; pblk++) {
+			bh = sb_getblk(inode->i_sb, pblk);
+			if (unlikely(!bh))
+				return ERR_PTR(-ENOMEM);
+			if (ret == NULL) {
+				get_bh(bh);
+				ret = bh;
+			}
+
+			lock_buffer(bh);
+			err = osd_ldiskfs_journal_get_create_access(handle,
+								    inode->i_sb,
+								    bh);
+			if (err) {
+				unlock_buffer(bh);
+				brelse(bh);
+				return ERR_PTR(err);
+			}
+			/*
+			 * always reset data, the block can
+			 * be uptodate but reallocated.
+			 */
+			memset(bh->b_data, 0, inode->i_sb->s_blocksize);
+			set_buffer_uptodate(bh);
+			unlock_buffer(bh);
+			err = ldiskfs_handle_dirty_metadata(handle, inode, bh);
+			brelse(bh);
+			if (err)
+				return ERR_PTR(err);
+
+		}
+	} else {
+		/*
+		 * the block have been already allocated and
+		 * initialized, just read from the disk if needed.
+		 */
+		ret = sb_bread(inode->i_sb, map.m_pblk);
+		if (unlikely(!ret))
+			ret = ERR_PTR(-ENOMEM);
+		if (!buffer_uptodate(ret)) {
+			brelse(ret);
+			ret = ERR_PTR(-EIO);
+		}
+	}
+
+	/* fill brm so next lookups for the block don't need the semaphore */
+	start = block;
+	end = block + map.m_len - 1;
+	old = jiffies + 1;
+	lru = -1;
+
+	for (i = 0; i < OSD_BRM_MAX; i++) {
+		/* find the least used slot */
+		if (brm[i].time < old) {
+			old = brm[i].time;
+			lru = i;
+		}
+		if (start >= brm[i].start && start <= brm[i].end + 1 &&
+		    end > brm[i].end) {
+			brm[i].end = end;
+			brm[i].time = jiffies;
+			goto out;
+		}
+		if (end >= brm[i].start - 1 && end <= brm[i].end &&
+		    start < brm[i].start) {
+			brm[i].start = start;
+			brm[i].time = jiffies;
+			goto out;
+		}
+	}
+
+	/* reuse the least used slot */
+	LASSERT(lru >= 0);
+	brm[lru].start = start;
+	brm[lru].end = end;
+	brm[lru].time = jiffies;
+
+out:
+	return ret;
+}
+
+static struct buffer_head *osd_brm_getblk(handle_t *handle,
+					  struct osd_object *o, int block)
+{
+	struct inode *inode = o->oo_inode;
+	struct buffer_head *bh;
+
+	if (osd_brm_lookup(o->oo_brm, block)) {
+		/* supposed to be allocated and initialized */
+		bh = __ldiskfs_bread(handle, inode, block, 0);
+		return bh;
+	}
+
+	down(&LDISKFS_I(o->oo_inode)->i_append_sem);
+	if (osd_brm_lookup(o->oo_brm, block)) {
+		up(&LDISKFS_I(o->oo_inode)->i_append_sem);
+		bh = __ldiskfs_bread(handle, inode, block, 0);
+	} else {
+		bh = osd_getnblk(handle, o, block, OSD_BRM_ALLOC_SIZE);
+		up(&LDISKFS_I(o->oo_inode)->i_append_sem);
+	}
+
+	return bh;
+}
+
+int osd_ldiskfs_write_fast(struct osd_object *o,  void *buf,
+		      int bufsize, loff_t *offs, handle_t *handle)
+{
+	struct inode *inode = o->oo_inode;
+	int blocksize = 1 << inode->i_blkbits;
+	loff_t new_size  = i_size_read(inode);
+	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+	struct osd_block_ready_map *brm;
+	struct buffer_head *bh;
+	loff_t offset = *offs;
+	int rc, dirty_inode;
+
+	/* only the first flag-set matters */
+	dirty_inode = !test_and_set_bit(LDISKFS_INODE_JOURNAL_DATA,
+					&ei->i_flags);
+
+	rc = osd_attach_jinode(inode);
+	if (rc)
+		return rc;
+
+	brm = osd_brm_init(o);
+	if (unlikely(!brm))
+		return -ENOMEM;
+
+	while (bufsize > 0) {
+		unsigned long block;
+		int size, boffs;
+
+		block = offset >> inode->i_blkbits;
+		boffs = offset & (blocksize - 1);
+		size = min(blocksize - boffs, bufsize);
+
+		bh = osd_brm_getblk(handle, o, block);
+		if (IS_ERR_OR_NULL(bh)) {
+			rc = -EIO;
+			break;
+		}
+
+		rc = osd_ldiskfs_journal_get_write_access(handle, inode->i_sb,
+							   bh,
+							   LDISKFS_JTR_NONE);
+		if (rc) {
+			CERROR("journal_get_write_access() error %d\n", rc);
+			break;
+		}
+		LASSERTF(boffs + size <= bh->b_size,
+			 "boffs %d size %d bh->b_size %lu\n",
+			 boffs, size, (unsigned long)bh->b_size);
+		memcpy(bh->b_data + boffs, buf, size);
+		rc = ldiskfs_handle_dirty_metadata(handle, NULL, bh);
+		if (rc)
+			break;
+
+		if (offset + size > new_size)
+			new_size = offset + size;
+		offset += size;
+		bufsize -= size;
+		buf += size;
+
+		brelse(bh);
+	}
+
+	/* correct in-core and on-disk sizes */
+	if (new_size > i_size_read(inode)) {
+		spin_lock(&inode->i_lock);
+		if (new_size > i_size_read(inode))
+			i_size_write(inode, new_size);
+		if (i_size_read(inode) > ei->i_disksize) {
+			ei->i_disksize = i_size_read(inode);
+			dirty_inode = 1;
+		}
+		spin_unlock(&inode->i_lock);
+	}
+	if (dirty_inode)
+		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
+
+	if (rc == 0)
+		*offs = offset;
+	return rc;
 }
 
 int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
@@ -2056,22 +2327,12 @@ int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
 	return err;
 }
 
-static int osd_ldiskfs_write_record(struct dt_object *dt, void *buf,
-				    int bufsize, int write_NUL, loff_t *offs,
-				    handle_t *handle)
-{
-	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
-	struct inode *inode = osd_dt_obj(dt)->oo_inode;
-
-	return osd_ldiskfs_write(osd, inode, buf, bufsize, write_NUL, offs,
-				 handle);
-}
-
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 			 const struct lu_buf *buf, loff_t *pos,
 			 struct thandle *handle)
 {
-	struct inode		*inode = osd_dt_obj(dt)->oo_inode;
+	struct osd_object	*obj = osd_dt_obj(dt);
+	struct inode		*inode = obj->oo_inode;
 	struct osd_thandle	*oh;
 	ssize_t			result;
 	int			is_link;
@@ -2097,9 +2358,13 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	is_link = S_ISLNK(dt->do_lu.lo_header->loh_attr);
 	if (is_link && (buf->lb_len < sizeof(LDISKFS_I(inode)->i_data)))
 		result = osd_ldiskfs_writelink(inode, buf->lb_buf, buf->lb_len);
+	else if (obj->oo_prealloc_writes)
+		result = osd_ldiskfs_write_fast(obj, buf->lb_buf, buf->lb_len,
+						pos, oh->ot_handle);
 	else
-		result = osd_ldiskfs_write_record(dt, buf->lb_buf, buf->lb_len,
-						  is_link, pos, oh->ot_handle);
+		result = osd_ldiskfs_write(osd_obj2dev(obj), inode, buf->lb_buf,
+					   buf->lb_len, is_link, pos,
+					   oh->ot_handle);
 	if (result == 0)
 		result = buf->lb_len;
 

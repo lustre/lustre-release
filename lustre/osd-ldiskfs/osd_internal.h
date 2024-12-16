@@ -102,6 +102,24 @@ struct osd_oi {
 
 extern const int osd_dto_credits_noquota[];
 
+/*
+ * the structure describes what logical blocks have been allocated
+ * and initialized in a file already. having this one we can do
+ * parallel lookup for blocks already allocated and improve concurrent
+ * writes to a file.
+ */
+struct osd_block_ready_map {
+	unsigned long start;
+	unsigned long end;
+	unsigned long time; /* last time used */
+};
+
+/* how many blocks to allocate at once */
+#define OSD_BRM_ALLOC_SIZE	4
+
+/* how many areas of allocated blocks to save */
+#define OSD_BRM_MAX		4
+
 struct osd_object {
 	struct dt_object        oo_dt;
 	/**
@@ -115,6 +133,9 @@ struct osd_object {
 	/**
 	 * to protect index ops.
 	 */
+
+	/* XXX: union with directory stuff */
+	struct osd_block_ready_map *oo_brm;
 	struct htree_lock_head *oo_hl_head;
 	struct rw_semaphore	oo_ext_idx_sem;
 	struct osd_directory	*oo_dir;
@@ -129,7 +150,9 @@ struct osd_object {
 	__u32			oo_destroyed:1,
 				oo_pfid_in_lma:1,
 				oo_compat_dot_created:1,
-				oo_compat_dotdot_created:1;
+				oo_compat_dotdot_created:1,
+				oo_prealloc_writes:1,
+				oo_on_orphan_list:1;
 
 	/* the i_flags in LMA */
 	__u32                   oo_lma_flags;
@@ -1507,6 +1530,15 @@ static inline struct buffer_head *__ldiskfs_bread(handle_t *handle,
 	 ldiskfs_journal_get_write_access((handle), (bh))
 #endif /* HAVE_EXT4_JOURNAL_GET_WRITE_ACCESS_4ARGS */
 
+#ifdef HAVE_EXT4_JOURNAL_GET_CREATE_ACCESS_4ARGS
+# define osd_ldiskfs_journal_get_create_access(handle, sb, bh)  \
+	ldiskfs_journal_get_create_access((handle), (sb), (bh), \
+					  LDISKFS_JTR_NONE)
+#else
+# define osd_ldiskfs_journal_get_create_access(handle, sb, bh) \
+	ldiskfs_journal_get_create_access((handle), (bh))
+#endif /* HAVE_EXT4_JOURNAL_GET_CREATE_ACCESS_4ARGS */
+
 #ifdef HAVE_EXT4_INC_DEC_COUNT_2ARGS
 #define osd_ldiskfs_inc_count(h, inode)		ldiskfs_inc_count((h), (inode))
 #define osd_ldiskfs_dec_count(h, inode)		ldiskfs_dec_count((h), (inode))
@@ -1773,5 +1805,14 @@ static int fill_fn(struct dir_context *buf, const char *name, int namelen,  \
 #endif
 
 #define LDISKFS_OSD_USER_MODIFIABLE	LUSTRE_FL_USER_MODIFIABLE
+
+
+#ifdef HAVE_INVALIDATE_FOLIO
+#define osd_jbd_invalidate_page(journal, page, offset, len) \
+	jbd2_journal_invalidate_folio(journal, page_folio(page), offset, len)
+#else
+#define osd_jbd_invalidate_page(journal, page, offset, len) \
+	jbd2_journal_invalidatepage(journal, page_folio(page), offset, len)
+#endif
 
 #endif /* _OSD_INTERNAL_H */

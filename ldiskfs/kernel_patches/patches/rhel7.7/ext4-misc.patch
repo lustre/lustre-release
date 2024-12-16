@@ -108,7 +108,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
 ===================================================================
 --- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/inode.c
 +++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
-@@ -5281,3 +5281,19 @@ out:
+@@ -5281,3 +5281,20 @@ out:
  	sb_end_pagefault(inode->i_sb);
  	return ret;
  }
@@ -120,6 +120,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
 +EXPORT_SYMBOL(ext4_force_commit);
 +EXPORT_SYMBOL(ext4_mark_inode_dirty);
 +EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_create_access);
 +EXPORT_SYMBOL(__ext4_journal_get_write_access);
 +EXPORT_SYMBOL(__ext4_journal_start_sb);
 +EXPORT_SYMBOL(__ext4_journal_stop);

@@ -73,7 +73,7 @@ Index: linux-4.18.0-240.1.1.el8/fs/ext4/inode.c
 ===================================================================
 --- linux-4.18.0-240.1.1.el8.orig/fs/ext4/inode.c
 +++ linux-4.18.0-240.1.1.el8/fs/ext4/inode.c
-@@ -6343,3 +6343,19 @@ vm_fault_t ext4_filemap_fault(struct vm_
+@@ -6343,3 +6343,20 @@ vm_fault_t ext4_filemap_fault(struct vm_
  
  	return ret;
  }
@@ -85,6 +85,7 @@ Index: linux-4.18.0-240.1.1.el8/fs/ext4/inode.c
 +EXPORT_SYMBOL(ext4_force_commit);
 +EXPORT_SYMBOL(ext4_mark_inode_dirty);
 +EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_create_access);
 +EXPORT_SYMBOL(__ext4_journal_get_write_access);
 +EXPORT_SYMBOL(__ext4_journal_start_sb);
 +EXPORT_SYMBOL(__ext4_journal_stop);

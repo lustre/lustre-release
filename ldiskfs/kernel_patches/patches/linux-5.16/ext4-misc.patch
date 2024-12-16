@@ -78,7 +78,7 @@ diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
 index 98f0dc0e..a59c0c8a 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6313,3 +6313,20 @@ out_error:
+@@ -6313,3 +6313,21 @@ out_error:
  	ext4_journal_stop(handle);
  	goto out;
  }
@@ -90,6 +90,7 @@ index 98f0dc0e..a59c0c8a 100644
 +EXPORT_SYMBOL(ext4_force_commit);
 +EXPORT_SYMBOL(__ext4_mark_inode_dirty);
 +EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_create_access);
 +EXPORT_SYMBOL(__ext4_journal_get_write_access);
 +EXPORT_SYMBOL(__ext4_journal_start_sb);
 +EXPORT_SYMBOL(__ext4_journal_stop);

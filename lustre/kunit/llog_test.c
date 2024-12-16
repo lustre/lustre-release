@@ -2166,6 +2166,122 @@ ctxt_release:
 	RETURN(rc);
 }
 
+/* Test named-log reopen; returns opened log on success */
+static int llog_test_11(const struct lu_env *env, struct obd_device *obd)
+{
+	struct llog_process_data data = { .lpd_data = "test 7" };
+	struct llog_handle *llh;
+	int rc = 0, i, process_count;
+	struct llog_ctxt *ctxt;
+	struct llog_mini_rec lmr;
+	int num_recs = 0;
+	struct lu_attr la;
+	struct llog_logid  logid;
+	unsigned long old_size;
+
+	ENTRY;
+
+	ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	CWARN("11: create a plain nameless log\n");
+
+	rc = llog_open_create(env, ctxt, &llh, NULL, NULL);
+	if (rc) {
+		CERROR("11: create log failed\n");
+		RETURN(rc);
+	}
+
+	rc = llog_init_handle(env, llh,
+			      LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY,
+			      &uuid);
+	if (rc) {
+		CERROR("11: can't init llog handle: %d\n", rc);
+		GOTO(out_close, rc);
+	}
+
+	logid = llh->lgh_id;
+	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
+
+	rc = llog_write(env, llh, &lmr.lmr_hdr, LLOG_NEXT_IDX);
+
+	rc = dt_attr_get(env, llh->lgh_obj, &la);
+	LASSERT(rc == 0);
+	CWARN("11: size %llu in %llu blocks after 1 rec\n",
+	      la.la_size, la.la_blocks);
+
+	CWARN("11: add few records\n");
+
+	for (i = 0; i < 100; i++) {
+		rc = llog_write(env, llh, &lmr.lmr_hdr, LLOG_NEXT_IDX);
+		if (rc == -ENOSPC) {
+			break;
+		} else if (rc < 0) {
+			CERROR("11: write recs failed at #%d: %d\n",
+			       i + 1, rc);
+			GOTO(out_close, rc);
+		}
+		num_recs++;
+	}
+
+	rc = dt_attr_get(env, llh->lgh_obj, &la);
+	LASSERT(rc == 0);
+	CWARN("11: size %llu in %llu blocks with few recs\n",
+	      la.la_size, la.la_blocks);
+	old_size = la.la_size;
+
+	plain_counter = 0;
+	rc = llog_process(env, llh, test_7_print_cb, &data, NULL);
+	if (rc) {
+		CERROR("11: llog process failed: %d\n", rc);
+		GOTO(out_close, rc);
+	}
+	process_count = plain_counter;
+
+	set_bit(LU_OBJECT_HEARD_BANSHEE, &llh->lgh_obj->do_lu.lo_header->loh_flags);
+	llog_close(env, llh);
+
+	{
+		struct file *filp;
+		char buf[16];
+		filp = filp_open("/proc/sys/vm/drop_caches", O_WRONLY, 0);
+		LASSERT(!IS_ERR(filp));
+		snprintf(buf, sizeof(buf), "3\n");
+		rc = kernel_write(filp, buf, 2, &filp->f_pos);
+		LASSERT(rc == 2);
+		filp_close(filp, NULL);
+	}
+
+	CWARN("11: re-open the log by LOGID and verify llh_count\n");
+	rc = llog_open(env, ctxt, &llh, &logid, NULL, LLOG_OPEN_EXISTS);
+	if (rc < 0) {
+		CERROR("11: re-open log by LOGID failed\n");
+		GOTO(out_close, rc);
+	}
+
+	rc = llog_init_handle(env, llh, LLOG_F_IS_PLAIN, &uuid);
+	if (rc < 0) {
+		CERROR("11: can't init llog handle: %d\n", rc);
+		GOTO(out_close, rc);
+	}
+	rc = dt_attr_get(env, llh->lgh_obj, &la);
+	LASSERT(rc == 0);
+	CWARN("11: size %llu in %llu blocks after re-open\n",
+	      la.la_size, la.la_blocks);
+	if (old_size != la.la_size) {
+		CERROR("11: size changed after reload - %lu != %llu\n",
+			old_size, la.la_size);
+		GOTO(out_close, rc = -EIO);
+	}
+
+out_close:
+	llog_close(env, llh);
+
+	llog_ctxt_put(ctxt);
+	RETURN(rc);
+}
+
 /*
  * -------------------------------------------------------------------------
  * Tests above, boring obd functions below
@@ -2221,6 +2337,10 @@ static int llog_run_tests(const struct lu_env *env, struct obd_device *obd)
 		GOTO(cleanup, rc);
 
 	rc = llog_test_10(env, obd);
+	if (rc)
+		GOTO(cleanup, rc);
+
+	rc = llog_test_11(env, obd);
 	if (rc)
 		GOTO(cleanup, rc);
 

@@ -1688,6 +1688,7 @@ static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 	dt_object_fini(&obj->oo_dt);
 	if (obj->oo_hl_head != NULL)
 		ldiskfs_htree_lock_head_free(obj->oo_hl_head);
+	OBD_FREE_PTR_ARRAY(obj->oo_brm, OSD_BRM_MAX);
 	/* obj doesn't contain an lu_object_header, so we don't need call_rcu */
 	OBD_FREE_PTR(obj);
 	if (unlikely(h))
@@ -2432,6 +2433,55 @@ noinline static void osd_delayed_iput(struct inode *inode,
 	}
 }
 
+void osd_drop_preallocated_space(struct osd_object *o)
+{
+	struct inode *inode = o->oo_inode;
+	struct address_space *mapping = inode->i_mapping;
+	struct page *page;
+	int rc;
+
+	/*
+	 * we have to deallocate the space preallocated in
+	 * osd_ldiskfs_write_fast() because e2fsck can not
+	 * handle the orphan list (where we put inodes with
+	 * preallocated space) properly and e2fsck is used
+	 * in testing to verify filesystem's consitency.
+	 * ext4 on its own can handle the orphan list doing
+	 * deallocation at mount.
+	 */
+	inode_lock(inode);
+	rc = ldiskfs_truncate(inode);
+	inode_unlock(inode);
+	if (rc) {
+		CERROR("%s: can't truncate: rc=%d\n",
+		       osd_obj2dev(o)->od_svname, rc);
+		return;
+	}
+	LASSERT(list_empty(&LDISKFS_I(inode)->i_orphan));
+
+	if ((i_size_read(inode) & PAGE_MASK) == 0)
+		return;
+
+	/*
+	 * we need to drop jbd buffers on the last partial page,
+	 * otherwise ext4_invalidatepage() makes a warning with
+	 * a backtrace.
+	 * XXX: support for sub-page buffers
+	 */
+	page = find_or_create_page(mapping, i_size_read(inode) >> PAGE_SHIFT,
+				   mapping_gfp_constraint(mapping, ~__GFP_FS));
+	if (!page)
+		return;
+
+	rc = osd_jbd_invalidate_page(LDISKFS_SB(inode->i_sb)->s_journal,
+				     page, 0, PAGE_SIZE);
+	LASSERTF(rc == 0, "  last page %lu %s%s rc=%d\n", page->index,
+		 PageChecked(page) ? "C" : "", PageDirty(page) ? "D" : "", rc);
+
+	unlock_page(page);
+	put_page(page);
+}
+
 /*
  * Called just before object is freed. Releases all resources except for
  * object itself (that is released by osd_object_free()).
@@ -2459,6 +2509,11 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 
 	if (!inode)
 		return;
+
+	if (obj->oo_on_orphan_list) {
+		osd_drop_preallocated_space(obj);
+		obj->oo_on_orphan_list = 0;
+	}
 
 	if (inode->i_blocks > ldiskfs_delayed_unlink_blocks)
 		OBD_ALLOC(diwork, sizeof(*diwork));
@@ -3533,7 +3588,8 @@ static struct dentry *osd_child_dentry_get(const struct lu_env *env,
 
 static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 		      umode_t mode, struct dt_allocation_hint *hint,
-		      struct thandle *th, struct lu_attr *attr)
+		      struct thandle *th, struct lu_attr *attr,
+		      struct dt_object_format *dof)
 {
 	int result;
 	struct osd_device *osd = osd_obj2dev(obj);
@@ -3597,6 +3653,18 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 		ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NOSCRUB);
 
 		obj->oo_inode = inode;
+
+		if ((dof->dof_type == DFT_DIR || dof->dof_type == DFT_INDEX) &&
+		     ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS) &&
+		     !ldiskfs_has_feature_64bit(inode->i_sb)) {
+			/* rollback to blockmap for dirs */
+			ldiskfs_clear_inode_flag(inode,
+						 LDISKFS_INODE_EXTENTS);
+			memset(LDISKFS_I(inode)->i_data, 0,
+					 sizeof(struct ldiskfs_extent_header));
+			/* will get dirtied in the next calls */
+		}
+
 		result = 0;
 	} else {
 		if (obj->oo_hl_head != NULL) {
@@ -3629,7 +3697,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 	LASSERT(oth->ot_handle->h_transaction != NULL);
 	if (fid_is_namespace_visible(lu_object_fid(&obj->oo_dt.do_lu)))
 		atomic_set(&obj->oo_dirent_count, 0);
-	result = osd_mkfile(info, obj, mode, hint, th, attr);
+	result = osd_mkfile(info, obj, mode, hint, th, attr, dof);
 
 	return result;
 }
@@ -3651,9 +3719,8 @@ static int osd_mk_index(struct osd_thread_info *info, struct osd_object *obj,
 	oth = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oth->ot_handle->h_transaction != NULL);
 
-	result = osd_mkfile(info, obj, mode, hint, th, attr);
+	result = osd_mkfile(info, obj, mode, hint, th, attr, dof);
 	if (result == 0) {
-		LASSERT(obj->oo_inode != NULL);
 		if (feat->dif_flags & DT_IND_VARKEY)
 			result = iam_lvar_create(obj->oo_inode,
 						 feat->dif_keysize_max,
@@ -3678,8 +3745,7 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
 {
 	LASSERT(S_ISREG(attr->la_mode));
 	return osd_mkfile(info, obj, (attr->la_mode &
-			 (S_IFMT | S_IALLUGO | S_ISVTX)), hint, th,
-			  attr);
+			  (S_IFMT | S_IALLUGO | S_ISVTX)), hint, th, attr, dof);
 }
 
 static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
@@ -3691,7 +3757,7 @@ static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
 	LASSERT(S_ISLNK(attr->la_mode));
 	return osd_mkfile(info, obj, (attr->la_mode &
 			 (S_IFMT | S_IALLUGO | S_ISVTX)), hint, th,
-			  attr);
+			  attr, dof);
 }
 
 static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
@@ -3708,7 +3774,7 @@ static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
 	LASSERT(S_ISCHR(mode) || S_ISBLK(mode) ||
 		S_ISFIFO(mode) || S_ISSOCK(mode));
 
-	result = osd_mkfile(info, obj, mode, hint, th, attr);
+	result = osd_mkfile(info, obj, mode, hint, th, attr, dof);
 	if (result == 0) {
 		LASSERT(obj->oo_inode != NULL);
 		/*
@@ -4110,6 +4176,11 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 		clear_nlink(inode);
 		spin_unlock(&obj->oo_guard);
 		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
+	} else if (obj->oo_on_orphan_list) {
+		inode_lock(inode);
+		ldiskfs_orphan_del(oh->ot_handle, inode);
+		inode_unlock(inode);
+		obj->oo_on_orphan_list = 0;
 	}
 
 	osd_trans_exec_op(env, th, OSD_OT_DESTROY);

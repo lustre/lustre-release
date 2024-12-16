@@ -478,15 +478,9 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 
 	append_unique(anchor, user_spec ? "," : " -O ",
 		      "uninit_bg", NULL, maxbuflen);
-	if (IS_OST(&mop->mo_ldd)) {
-		append_unique(anchor, ",", "extents", NULL, maxbuflen);
-	} else if (IS_MDT(&mop->mo_ldd)) {
-		if (enable_64bit)
-			append_unique(anchor, ",", "extents", NULL, maxbuflen);
-		else
-			append_unique(anchor, ",", "^extents", NULL, maxbuflen);
+	append_unique(anchor, ",", "extents", NULL, maxbuflen);
+	if (IS_MDT(&mop->mo_ldd))
 		append_unique(anchor, ",", "dirdata", NULL, maxbuflen);
-	}
 
 	/* Multiple mount protection enabled only if failover node specified */
 	if (mop->mo_flags & MO_FAILOVER) {

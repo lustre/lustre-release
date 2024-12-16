@@ -604,6 +604,44 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
 
 #
+# LB_EXT4_JOURNAL_GET_CREATE_ACCESS_4A
+#
+# Linux v5.14-rc2-19-g188c299e2a26
+#    ext4: Support for checksumming from journal triggers
+#
+AC_DEFUN([LB_EXT4_JOURNAL_GET_CREATE_ACCESS_4A], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if jbd2_journal_get_max_txn_bufs is available],
+ext4_journal_get_create_access, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+	#include "$EXT4_SRC_DIR/ext4_jbd2.h"
+
+	int __ext4_journal_get_create_access(const char *where, unsigned int line,
+				    handle_t *handle,
+				    struct super_block *sb,
+				    struct buffer_head *bh,
+				    enum ext4_journal_trigger_type trigger_type)
+	{
+		return 0;
+	}
+],[
+	handle_t *handle = NULL;
+	struct super_block *sb = NULL;
+	struct buffer_head *bh = NULL;
+	enum ext4_journal_trigger_type trigger_type = EXT4_JTR_NONE;
+	int err = ext4_journal_get_create_access(handle, sb, bh, trigger_type);
+
+	(void)err;
+],[
+	AC_DEFINE(HAVE_EXT4_JOURNAL_GET_CREATE_ACCESS_4ARGS, 1,
+		[ext4_journal_get_create_access() has 4 arguments])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_EXT4_JOURNAL_GET_CREATE_ACCESS_4A
+
+#
 # LB_HAVE_INODE_LOCK_SHARED
 #
 AC_DEFUN([LB_HAVE_INODE_LOCK_SHARED], [
@@ -665,6 +703,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LDISKFS_AC_PATCH_PROGRAM
 	LB_EXT4_INC_DEC_COUNT_2ARGS
 	LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
+	LB_EXT4_JOURNAL_GET_CREATE_ACCESS_4A
 	LB_HAVE_INODE_LOCK_SHARED
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])

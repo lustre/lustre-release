@@ -82,7 +82,7 @@ Index: linux-4.15.0/fs/ext4/inode.c
 ===================================================================
 --- linux-4.15.0.orig/fs/ext4/inode.c
 +++ linux-4.15.0/fs/ext4/inode.c
-@@ -6179,3 +6179,19 @@ int ext4_filemap_fault(struct vm_fault *
+@@ -6179,3 +6179,20 @@ int ext4_filemap_fault(struct vm_fault *
  
  	return err;
  }
@@ -94,6 +94,7 @@ Index: linux-4.15.0/fs/ext4/inode.c
 +EXPORT_SYMBOL(ext4_force_commit);
 +EXPORT_SYMBOL(ext4_mark_inode_dirty);
 +EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_create_access);
 +EXPORT_SYMBOL(__ext4_journal_get_write_access);
 +EXPORT_SYMBOL(__ext4_journal_start_sb);
 +EXPORT_SYMBOL(__ext4_journal_stop);

@@ -75,7 +75,7 @@ ext4 ldiskfs patches for rhel5
   * NOTE! When we get the inode, we're the only people
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6253,3 +6253,19 @@ int ext4_get_next_extent(struct inode *i
+@@ -6253,3 +6253,20 @@ int ext4_get_next_extent(struct inode *i
  	result->es_len = 0;
  	return 0;
  }
@@ -87,6 +87,7 @@ ext4 ldiskfs patches for rhel5
 +EXPORT_SYMBOL(ext4_force_commit);
 +EXPORT_SYMBOL(ext4_mark_inode_dirty);
 +EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_create_access);
 +EXPORT_SYMBOL(__ext4_journal_get_write_access);
 +EXPORT_SYMBOL(__ext4_journal_start_sb);
 +EXPORT_SYMBOL(__ext4_journal_stop);

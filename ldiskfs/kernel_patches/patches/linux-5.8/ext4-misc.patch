@@ -90,7 +90,7 @@ diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
 diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
 --- a/fs/ext4/inode.c	2021-06-28 08:45:39.069955021 -0600
 +++ b/fs/ext4/inode.c	2021-06-28 08:46:06.921523449 -0600
-@@ -6088,3 +6088,19 @@
+@@ -6088,3 +6088,20 @@
  
  	return ret;
  }
@@ -102,6 +102,7 @@ diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
 +EXPORT_SYMBOL(ext4_force_commit);
 +EXPORT_SYMBOL(__ext4_mark_inode_dirty);
 +EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_create_access);
 +EXPORT_SYMBOL(__ext4_journal_get_write_access);
 +EXPORT_SYMBOL(__ext4_journal_start_sb);
 +EXPORT_SYMBOL(__ext4_journal_stop);

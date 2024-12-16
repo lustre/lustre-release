@@ -27302,7 +27302,7 @@ test_270a() {
 				lctl get_param -n osd*.*$mdtname.kbytesfree)
 		# decrease in usage from $size_tmp to new $size_dom
 		[ $(($mdtfree1 - $mdtfree2)) -ge \
-		  $(((size_tmp - size_dom) / 1024)) ] ||
+		  $(((size_tmp - size_dom) / 4096 * 4)) ] ||
 			error "MDT free space is wrong after truncate: " \
 			      "$mdtfree1 >= $mdtfree2 + ($size_tmp - $size_dom) / 1024"
 	fi
