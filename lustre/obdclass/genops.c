@@ -90,7 +90,8 @@ SERVER_ONLY struct obd_type *class_get_type(const char *name)
 		const char *modname = name;
 
 #ifdef HAVE_SERVER_SUPPORT
-		if (strcmp(modname, "obdfilter") == 0)
+		if (strcmp(modname, "obdfilter") == 0 ||
+		    strcmp(modname, LUSTRE_OSS_NAME) == 0)
 			modname = "ofd";
 
 		if (strcmp(modname, LUSTRE_LWP_NAME) == 0)

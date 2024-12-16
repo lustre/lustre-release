@@ -404,7 +404,6 @@ Lustre Object Storage Target - OST
 R:	Alex Zhuravlev <bzzz@whamcloud.com>
 S:	Supported
 F:	lustre/ofd/
-F:	lustre/ost/
 
 Lustre OSD API
 R:	Alex Zhuravlev <bzzz@whamcloud.com>

@@ -5819,8 +5819,6 @@ lustre/ofd/Makefile
 lustre/ofd/autoMakefile
 lustre/osc/Makefile
 lustre/osc/autoMakefile
-lustre/ost/Makefile
-lustre/ost/autoMakefile
 lustre/osd-ldiskfs/Makefile
 lustre/osd-ldiskfs/autoMakefile
 lustre/osd-zfs/Makefile

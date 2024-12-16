@@ -3285,9 +3285,13 @@ static int __init ofd_init(void)
 	if (rc)
 		return rc;
 
-	rc = ofd_access_log_module_init();
+	rc = oss_mod_init();
 	if (rc)
 		goto out_caches;
+
+	rc = ofd_access_log_module_init();
+	if (rc)
+		goto out_oss_fini;
 
 	rc = class_register_type(&ofd_obd_ops, NULL, true,
 				 LUSTRE_OST_NAME, &ofd_device_type);
@@ -3298,6 +3302,8 @@ static int __init ofd_init(void)
 
 out_ofd_access_log:
 	ofd_access_log_module_exit();
+out_oss_fini:
+	oss_mod_exit();
 out_caches:
 	lu_kmem_fini(ofd_caches);
 
@@ -3314,6 +3320,7 @@ static void __exit ofd_exit(void)
 {
 	class_unregister_type(LUSTRE_OST_NAME);
 	ofd_access_log_module_exit();
+	oss_mod_exit();
 	lu_kmem_fini(ofd_caches);
 }
 

@@ -306,6 +306,10 @@ void ofd_access(const struct lu_env *env, struct ofd_device *m,
 		const struct lu_fid *parent_fid, __u64 begin, __u64 end,
 		unsigned int size, unsigned int segment_count, int rw);
 
+/* ofd_oss.c */
+int oss_mod_init(void);
+void oss_mod_exit(void);
+
 /* ofd_dev.c */
 extern struct lu_context_key ofd_thread_key;
 int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd);

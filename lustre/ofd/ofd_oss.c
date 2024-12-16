@@ -28,7 +28,7 @@
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
- * lustre/ost/ost_handler.c
+ * lustre/ofd/ofd_oss.c
  *
  * Author: Peter J. Braam <braam@clusterfs.com>
  * Author: Phil Schwan <phil@clusterfs.com>
@@ -41,7 +41,8 @@
 #include <lprocfs_status.h>
 #include <lustre_nodemap.h>
 #include <obd_class.h>
-#include "ost_internal.h"
+
+#define OSS_SERVICE_WATCHDOG_FACTOR 2
 
 int oss_max_threads = 512;
 module_param(oss_max_threads, int, 0444);
@@ -79,7 +80,7 @@ MODULE_PARM_DESC(oss_io_cpts, "CPU partitions OSS IO threads should run on");
 static struct cfs_cpt_table *ost_io_cptable;
 
 /* Sigh - really, this is an OSS, the _server_, not the _target_ */
-static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int oss_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	static struct ptlrpc_service_conf svc_conf;
 	struct ost_obd *ost = obd2ost(obd);
@@ -130,7 +131,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 						   obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_service)) {
 		rc = PTR_ERR(ost->ost_service);
-		CERROR("failed to start service: %d\n", rc);
+		CERROR("oss: failed to start service: %d\n", rc);
 		GOTO(out_lprocfs, rc);
 	}
 
@@ -171,7 +172,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 							  );
 	if (IS_ERR(ost->ost_create_service)) {
 		rc = PTR_ERR(ost->ost_create_service);
-		CERROR("failed to start OST create service: %d\n", rc);
+		CERROR("oss: failed to start OST create service: %d\n", rc);
 		GOTO(out_service, rc);
 	}
 
@@ -186,13 +187,13 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		ost_io_cptable = cfs_cpt_table_alloc(nodes_weight(*mask));
 		for_each_node_mask(i, *mask) {
 			if (!ost_io_cptable) {
-				CWARN("OSS failed to create CPT table\n");
+				CWARN("oss: failed to create CPT table\n");
 				break;
 			}
 
 			rc = cfs_cpt_set_node(ost_io_cptable, cpt++, i);
 			if (!rc) {
-				CWARN("OSS Failed to set node %d for IO CPT table\n",
+				CWARN("oss: Failed to set node %d for IO CPT table\n",
 				      i);
 				cfs_cpt_table_free(ost_io_cptable);
 				ost_io_cptable = NULL;
@@ -242,7 +243,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 						      obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_io_service)) {
 		rc = PTR_ERR(ost->ost_io_service);
-		CERROR("failed to start OST I/O service: %d\n", rc);
+		CERROR("oss: failed to start OST I/O service: rc = %d\n", rc);
 		ost->ost_io_service = NULL;
 		GOTO(out_create, rc);
 	}
@@ -285,7 +286,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 						       obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_seq_service)) {
 		rc = PTR_ERR(ost->ost_seq_service);
-		CERROR("failed to start OST seq service: %d\n", rc);
+		CERROR("oss: failed to start OST seq service: %d\n", rc);
 		ost->ost_seq_service = NULL;
 		GOTO(out_io, rc);
 	}
@@ -333,7 +334,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 						       obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_out_service)) {
 		rc = PTR_ERR(ost->ost_out_service);
-		CERROR("failed to start out service: %d\n", rc);
+		CERROR("oss: failed to start out service: %d\n", rc);
 		ost->ost_out_service = NULL;
 		GOTO(out_seq, rc);
 	}
@@ -359,7 +360,7 @@ out_lprocfs:
 	RETURN(rc);
 }
 
-static int ost_cleanup(struct obd_device *obd)
+static int oss_cleanup(struct obd_device *obd)
 {
 	struct ost_obd *ost = obd2ost(obd);
 	int err = 0;
@@ -397,7 +398,7 @@ static int ost_cleanup(struct obd_device *obd)
 	RETURN(err);
 }
 
-static int ost_health_check(const struct lu_env *env, struct obd_device *obd)
+static int oss_health_check(const struct lu_env *env, struct obd_device *obd)
 {
 	struct ost_obd *ost = obd2ost(obd);
 	int rc = 0;
@@ -438,15 +439,15 @@ out:
 }
 
 /* use obd ops to offer management infrastructure */
-static const struct obd_ops ost_obd_ops = {
+static const struct obd_ops oss_obd_ops = {
 	.o_owner        = THIS_MODULE,
-	.o_setup        = ost_setup,
-	.o_cleanup      = ost_cleanup,
-	.o_health_check = ost_health_check,
+	.o_setup        = oss_setup,
+	.o_cleanup      = oss_cleanup,
+	.o_health_check = oss_health_check,
 	.o_iocontrol    = oss_iocontrol,
 };
 
-static int __init ost_init(void)
+int oss_mod_init(void)
 {
 	int rc;
 
@@ -455,21 +456,13 @@ static int __init ost_init(void)
 	if (rc)
 		RETURN(rc);
 
-	rc = class_register_type(&ost_obd_ops, NULL, false,
+	rc = class_register_type(&oss_obd_ops, NULL, false,
 				 LUSTRE_OSS_NAME, NULL);
 
 	RETURN(rc);
 }
 
-static void __exit ost_exit(void)
+void oss_mod_exit(void)
 {
 	class_unregister_type(LUSTRE_OSS_NAME);
 }
-
-MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Object Storage Target (OST)");
-MODULE_VERSION(LUSTRE_VERSION_STRING);
-MODULE_LICENSE("GPL");
-
-module_init(ost_init);
-module_exit(ost_exit);
