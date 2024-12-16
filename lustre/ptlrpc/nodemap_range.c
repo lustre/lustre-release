@@ -93,7 +93,7 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 		char *c;
 		int rc;
 
-		if (netmask > 999) {
+		if (netmask > 128) {
 			/* If the netmask is somehow more than three characters
 			 * then the logic below could truncate it which could
 			 * result in creating a valid netmask value from bad
@@ -110,6 +110,11 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 			 libcfs_nidstr(start_nid));
 
 		c = strchr(nidstr, '@');
+		if (!c) {
+			CERROR("Invalid nid %s for netmask\n",
+			       libcfs_nidstr(start_nid));
+			return NULL;
+		}
 
 		/* net = @<net> */
 		strscpy(net, c, sizeof(net));
