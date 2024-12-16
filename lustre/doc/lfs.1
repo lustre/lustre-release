@@ -24,13 +24,16 @@ as listed in the
 .B SEE ALSO
 section at the end.
 .TP
-.BR check { mgts | mdts | osts | all "} [" \fIPATH ]
+.BR check " {" mgts | mdts | osts | all "} [" \fIPATH ]
 Display the status of the MGTs, MDTs or OSTs (as specified in the command)
 or all the servers (MGTs, MDTs and OSTs). If
 .I PATH
 is provided, display the status of the lustre file system mounted at specified
 .I PATH
-only.
+only. This command will make an RPC to all the servers in scope to discover
+the server status. NOTE:
+.B lfs osts
+may be preferable for some use cases.
 .TP
 .BR data_version " [" -nrw "] " \fIFILENAME
 Display the current version of file data and optionally set the data version
@@ -59,7 +62,13 @@ See lfs-flushctx(1).
 List all the OSTs for all mounted filesystems. If a
 .I PATH
 is provided that is located on a lustre mounted file system
-then only the OSTs belonging to that filesystem are displayed.
+then only the OSTs belonging to that filesystem are displayed. This command will
+use a cached value for the OST status and will not make a RPC to discover
+status. The cached value will be updated by the client during the
+course of normal operations and would typically be less than 30 seconds old.
+NOTE:
+.B lfs check osts
+may be preferable for some use cases.
 .TP
 .BR pool_list " {" \fIFILESYSTEM }[ .\fIPOOLNAME "] | {" \fIPATHNAME }
 List the pools in
