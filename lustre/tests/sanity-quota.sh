@@ -316,7 +316,7 @@ cleanup_quota_test() {
 	rm -rf $DIR/$tdir
 	[ -d $DIR/${tdir}_dom ] && rm -rf $DIR/${tdir}_dom
 	echo "Wait for unlink objects finished..."
-	wait_delete_completed
+	wait_delete_completed || error "wait_delete_completed failed"
 	sync_all_data || true
 	reset_quota_settings
 }
@@ -2124,6 +2124,7 @@ test_6() {
 	if at_is_enabled; then
 		at_max_saved=$(at_max_get ost1)
 		at_max_set $TIMEOUT ost1
+		stack_trap "at_max_set $at_max_saved ost1"
 
 		# write to enforced ID ($TSTUSR) to exceed limit to make sure
 		# DQACQ is sent, which makes at_max to take effect
@@ -2131,6 +2132,10 @@ test_6() {
 								conv=notrunc
 		rm -f $TESTFILE
 		wait_delete_completed
+		$LFS setstripe $TESTFILE -c 1 -i 0 ||
+			error "setstripe $TESTFILE failed"
+		chown $TSTUSR.$TSTUSR $TESTFILE ||
+			error "chown $TESTFILE failed"
 	fi
 
 	sync; sync
@@ -2140,8 +2145,13 @@ test_6() {
 	#define OBD_FAIL_PTLRPC_DROP_REQ_OPC 0x513
 	lustre_fail mds 0x513 601
 
+	local qs_timeout=$(do_facet ost1 $LCTL get_param -n \
+			   osd-*.$FSNAME-OST0000.quota_slave.timeout)
+	echo "old quota_slave timeout "$qs_timeout
 	do_facet ost1 $LCTL set_param \
 			osd-*.$FSNAME-OST*.quota_slave.timeout=$((TIMEOUT / 2))
+	stack_trap "do_facet ost1 $LCTL set_param \
+			osd-*.$FSNAME-OST*.quota_slave.timeout=$qs_timeout"
 
 	# write to un-enforced ID ($TSTUSR2) should succeed
 	$RUNAS2 $DD of=$TESTFILE2 count=$LIMIT seek=1 oflag=sync conv=notrunc ||
