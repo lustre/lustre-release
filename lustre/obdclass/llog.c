@@ -1321,6 +1321,7 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 	struct llog_thread_info *lgi = llog_info(env);
 	bool need_cookie;
 	bool update_attr;
+	unsigned long timestamp;
 	int rc;
 
 	ENTRY;
@@ -1347,9 +1348,12 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 	 * size/block needs to be written anyway; 2) update for catalog
 	 * since this doesn't happen very often
 	 */
-	update_attr = (idx == LLOG_NEXT_IDX ||
-			(loghandle->lgh_hdr &&
-			 loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT));
+	timestamp = ktime_get_real_seconds();
+
+	update_attr = (timestamp != loghandle->lgh_timestamp) &&
+		       (idx == LLOG_NEXT_IDX ||
+		       (loghandle->lgh_hdr &&
+			loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT));
 	if (update_attr)
 		dt_declare_attr_set(env, loghandle->lgh_obj, NULL, th);
 
@@ -1373,8 +1377,9 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 		rc = llog_write_rec(env, loghandle, rec, NULL, idx, th);
 	}
 	if (rc == 0 && update_attr) {
+		loghandle->lgh_timestamp = timestamp;
 		lgi->lgi_attr.la_valid = LA_MTIME;
-		lgi->lgi_attr.la_mtime = ktime_get_real_seconds();
+		lgi->lgi_attr.la_mtime = timestamp;
 		dt_attr_set(env, loghandle->lgh_obj, &lgi->lgi_attr, th);
 	}
 

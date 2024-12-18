@@ -294,6 +294,7 @@ struct llog_handle {
 
 	int			lgh_max_size;
 	bool			lgh_destroyed;
+	unsigned long		lgh_timestamp;
 };
 
 /* llog_osd.c */

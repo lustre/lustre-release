@@ -604,10 +604,13 @@ retry:
 		if (rc == -ENOSPC && llog_is_full(loghandle))
 			rc = -ENOBUFS;
 	} else {
-		/* no overhead since inode size needs to be written anyway */
-		lgi->lgi_attr.la_valid = LA_MTIME;
-		lgi->lgi_attr.la_mtime = ktime_get_real_seconds();
-		dt_attr_set(env, loghandle->lgh_obj, &lgi->lgi_attr, th);
+		unsigned long timestamp = ktime_get_real_seconds();
+		if (timestamp != loghandle->lgh_timestamp) {
+			loghandle->lgh_timestamp = timestamp;
+			lgi->lgi_attr.la_valid = LA_MTIME;
+			lgi->lgi_attr.la_mtime = timestamp;
+			dt_attr_set(env, loghandle->lgh_obj, &lgi->lgi_attr, th);
+		}
 	}
 
 	up_write(&loghandle->lgh_lock);
