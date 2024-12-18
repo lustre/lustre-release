@@ -229,36 +229,31 @@ static ssize_t osc_cached_mb_seq_write(struct file *file,
 
 LPROC_SEQ_FOPS(osc_cached_mb);
 
-static int osc_unevict_cached_mb_seq_show(struct seq_file *m, void *v)
+static ssize_t osc_unevict_cached_mb_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
 	int shift = 20 - PAGE_SHIFT;
 
-	seq_printf(m, "%ld\n",
-		   atomic_long_read(&cli->cl_unevict_lru_in_list) >> shift);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%ld\n",
+			 atomic_long_read(&cli->cl_unevict_lru_in_list) >> shift);
 }
 
-static ssize_t osc_unevict_cached_mb_seq_write(struct file *file,
-					       const char __user *buffer,
-					       size_t count, loff_t *off)
+static ssize_t osc_unevict_cached_mb_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer,
+					   size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
-	char kernbuf[128];
 
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-
-	kernbuf[count] = 0;
-	if (count == 5 && strncmp(kernbuf, "clear", 5) == 0) {
+	if (count == 5 && strncmp(buffer, "clear", 5) == 0) {
 		struct lu_env *env;
-		__u16 refcheck;
+		u16 refcheck;
 
 		env = cl_env_get(&refcheck);
 		if (!IS_ERR(env)) {
@@ -277,7 +272,7 @@ static ssize_t osc_unevict_cached_mb_seq_write(struct file *file,
 
 	return -EINVAL;
 }
-LPROC_SEQ_FOPS(osc_unevict_cached_mb);
+LUSTRE_RW_ATTR(osc_unevict_cached_mb);
 
 static ssize_t cur_dirty_bytes_show(struct kobject *kobj,
 				    struct attribute *attr,
@@ -292,38 +287,30 @@ static ssize_t cur_dirty_bytes_show(struct kobject *kobj,
 }
 LUSTRE_RO_ATTR(cur_dirty_bytes);
 
-static int osc_cur_grant_bytes_seq_show(struct seq_file *m, void *v)
+static ssize_t cur_grant_bytes_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
 
-	seq_printf(m, "%lu\n", cli->cl_avail_grant);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", cli->cl_avail_grant);
 }
 
-static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
-					     const char __user *buffer,
-					     size_t count, loff_t *off)
+static ssize_t cur_grant_bytes_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer,
+				     size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
 	struct obd_import *imp;
-	char kernbuf[22] = "";
 	u64 val;
 	int rc;
 
-	if (obd == NULL)
-		return 0;
-
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	rc = sysfs_memparse(buffer, count, &val, "MiB");
 	if (rc < 0)
 		return rc;
 
@@ -337,7 +324,7 @@ static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
 
 	return rc ? rc : count;
 }
-LPROC_SEQ_FOPS(osc_cur_grant_bytes);
+LUSTRE_RW_ATTR(cur_grant_bytes);
 
 static ssize_t cur_lost_grant_bytes_show(struct kobject *kobj,
 					 struct attribute *attr,
@@ -681,10 +668,6 @@ struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 	  .fops	=	&osc_server_uuid_fops		},
 	{ .name	=	"osc_cached_mb",
 	  .fops	=	&osc_cached_mb_fops		},
-	{ .name	=	"osc_unevict_cached_mb",
-	  .fops	=	&osc_unevict_cached_mb_fops	},
-	{ .name =	"cur_grant_bytes",
-	  .fops =	&osc_cur_grant_bytes_fops	},
 	{ .name	=	"timeouts",
 	  .fops	=	&osc_timeouts_fops		},
 	{ .name	=	"import",
@@ -868,6 +851,7 @@ static struct attribute *osc_attrs[] = {
 	&lustre_attr_checksum_type.attr,
 	&lustre_attr_checksum_dump.attr,
 	&lustre_attr_cur_dirty_bytes.attr,
+	&lustre_attr_cur_grant_bytes.attr,
 	&lustre_attr_cur_lost_grant_bytes.attr,
 	&lustre_attr_cur_dirty_grant_bytes.attr,
 	&lustre_attr_destroys_in_flight.attr,
@@ -875,6 +859,7 @@ static struct attribute *osc_attrs[] = {
 	&lustre_attr_max_dirty_mb.attr,
 	&lustre_attr_max_pages_per_rpc.attr,
 	&lustre_attr_max_rpcs_in_flight.attr,
+	&lustre_attr_osc_unevict_cached_mb.attr,
 	&lustre_attr_short_io_bytes.attr,
 	&lustre_attr_resend_count.attr,
 	&lustre_attr_ost_conn_uuid.attr,
