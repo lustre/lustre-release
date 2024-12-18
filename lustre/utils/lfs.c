@@ -2914,7 +2914,10 @@ static inline void setstripe_args_init_inherit(struct lfs_setstripe_args *lsa)
 	long long stripe_count;
 	char *pool_name = NULL;
 
-	stripe_size = lsa->lsa_stripe_size;
+	if (lsa->lsa_pattern == LLAPI_LAYOUT_MDT)
+		stripe_size = LLAPI_LAYOUT_DEFAULT;
+	else
+		stripe_size = lsa->lsa_stripe_size;
 	stripe_count = lsa->lsa_stripe_count;
 	pool_name = lsa->lsa_pool_name;
 

@@ -168,6 +168,24 @@ test_7() {
 }
 run_test 7 "Stale pages after read-on-open"
 
+test_8() {
+        local file=$DIR/$tdir/$tfile
+	local def_stripe_size
+	local stripe_size
+
+        test_mkdir $DIR/$tdir
+        $LFS setstripe -E 128k -L mdt -E 8M -c 1 $file \
+	|| error "setstripe failed"
+        def_stripe_size=$($LFS getstripe -S $MOUNT)
+        stripe_size=$($LFS getstripe -S --component-start=131072 \
+		--component-end=8388608 $file)
+	(($stripe_size == $def_stripe_size)) ||
+                        error "$f stripe size $stripe_size != $def_stripe_size"
+        rm -fr $DIR/$tdir
+}
+run_test 8 "verify the default size of component"
+
+
 test_fsx() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile

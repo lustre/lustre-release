@@ -1940,8 +1940,8 @@ test_21b() {
 	test_mkdir -p $DIR/$tdir
 
 	# DoM, extendable component, further extendable component
-	$LFS setstripe -E 1M -L mdt -E 256M -i 0 -z 64M -E -1 -z 128M \
-		$comp_file || error "Create $comp_file failed"
+	$LFS setstripe -E 1M -L mdt -S 1M -E 256M -i 0 -z 64M -S 1M -E -1 \
+		-z 128M $comp_file || error "Create $comp_file failed"
 
 	found=$($LFS find --comp-start 1M -E 1M $flg_opts $comp_file | wc -l)
 	[ $found -eq 1 ] || error "Write: Zero length component not found"
