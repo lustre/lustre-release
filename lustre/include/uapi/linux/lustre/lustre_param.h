@@ -49,7 +49,7 @@
 #define PARAM_FAILMODE             "failover.mode="    /* initial mount only */
 #define PARAM_ACTIVE               "active="           /* activate/deactivate */
 #define PARAM_NETWORK              "network="          /* bind on nid */
-#define PARAM_ID_UPCALL		"identity_upcall="  /* identity upcall */
+#define PARAM_ID_UPCALL		   "identity_upcall="  /* identity upcall */
 #define PARAM_ROOTSQUASH	   "root_squash="      /* root squash */
 #define PARAM_NOSQUASHNIDS	   "nosquash_nids="    /* no squash nids */
 #define PARAM_AUTODEGRADE	   "autodegrade="      /* autodegrade OST's */
@@ -72,6 +72,8 @@
 #define PARAM_SRPC_UDESC	"srpc.udesc.cli2mdt"
 #define PARAM_SEC		"security."
 #define PARAM_QUOTA		"quota."	/* global */
+
+#define LDD_PARAM_LEN		4096
 
 /** @} param */
 

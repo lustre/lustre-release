@@ -6635,20 +6635,56 @@ test_72() { #LU-2634
 }
 run_test 72 "test fast symlink with extents flag enabled"
 
-test_73() { #LU-3006
-	[ "$ost1_FSTYPE" == zfs ] && import_zpool ost1
-	do_facet ost1 "$TUNEFS --failnode=1.2.3.4@$NETTYPE $(ostdevname 1)" ||
+test_73a() { #LU-3006
+	[[ "$ost1_FSTYPE" == zfs ]] && import_zpool ost1
+	local ostdev=$(ostdevname 1)
+
+	do_facet ost1 "$TUNEFS --failnode=1.2.3.4@$NETTYPE $ostdev" ||
 		error "1st tunefs failed"
 	start_mgsmds || error "start mds failed"
 	start_ost || error "start ost failed"
 	mount_client $MOUNT || error "mount client failed"
-	$LCTL get_param -n osc.*OST0000-osc-[^M]*.import | grep failover_nids |
-		grep 1.2.3.4@$NETTYPE || error "failover nids haven't changed"
+	$LCTL get_param -n osc.*OST0000-osc-[^M]*.import |
+		grep "failover_nids.*1.2.3.4@$NETTYPE" ||
+		error "failover nids haven't changed"
 	umount_client $MOUNT || error "umount client failed"
 	stop_ost
+	do_facet ost1 "$TUNEFS --erase-param failover.node $ostdev"
 	stop_mds
 }
-run_test 73 "failnode to update from mountdata properly"
+run_test 73a "failnode to update from mountdata properly"
+
+test_73b() {
+	(( $OST1_VERSION >= $(version_code 2.16.50) )) ||
+		skip "need OST >= 2.16.50 for many NID support"
+	[[ "$ost1_FSTYPE" == zfs ]] && import_zpool ost1
+
+	local ostdev=$(ostdevname 1)
+	local nids="111.222.173._@$NETTYPE,111.222.142._@$NETTYPE"
+	local min=160
+	local iter=$((min * 14 / 20))
+
+	do_facet ost1 "$TUNEFS --comment='just a comment for tail' $ostdev" ||
+		error "1st tunefs failed"
+
+	# 4K can fit ~180 IPv4 NIDs, try more for checking failure case too
+	# add in pairs just to reduce test time
+	for ((i = 1; i <= $iter; i++)); do
+		do_facet ost1 "$TUNEFS --failnode=${nids//_/$i} $ostdev" >/dev/null ||
+			break
+	done
+	echo "added $i/$iter NID failover pairs"
+	# count the actual number of failover NIDs configured in failover.node
+	# there may be some previously configured, so they should also count
+	local count=$(do_facet ost1 $TUNEFS --dryrun $ostdev | grep "^Param" |
+		      sed -e "s/.*failover.node=//" -e "s/[:,]/\n/g" |
+		      grep -c $NETTYPE)
+	do_facet ost1 "$TUNEFS --erase-param failover.node $ostdev"
+
+	# expect to fit more that 160 NIDs at least
+	((count >= min)) || error "Only $count NIDs configured, need >= $min"
+}
+run_test 73b "Large failnode NID list in mountdata"
 
 # LU-15246
 test_74() {

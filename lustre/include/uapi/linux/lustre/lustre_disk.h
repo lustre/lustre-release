@@ -25,6 +25,7 @@
 #include <linux/types.h>
 #include <linux/uuid.h>
 #include <linux/lnet/lnet-types.h> /* for lnet_nid_t */
+#include <linux/lustre/lustre_param.h>   /* for LDD_PARAM_LEN */
 
 /****************** on-disk files ********************/
 
@@ -76,7 +77,7 @@ struct lustre_disk_data {
 	char  ldd_userdata[1024 - 200];	/* arbitrary user string '200' */
 	__u8  ldd_padding[4096 - 1024];	/* 1024 */
 	char  ldd_mount_opts[4096];	/* target fs mount opts '4096' */
-	char  ldd_params[4096];		/* key=value pairs '8192' */
+	char  ldd_params[LDD_PARAM_LEN];/* key=value pairs '8192' */
 };
 
 /****************** persistent mount data *********************/

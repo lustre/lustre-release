@@ -120,10 +120,12 @@ int run_command(char *cmd, int cmdsz)
 	return rc;
 }
 
+#define MAXNIDSTR LDD_PARAM_LEN
+
 #ifdef HAVE_SERVER_SUPPORT
 int add_param(char *buf, char *key, char *val)
 {
-	int end = sizeof(((struct lustre_disk_data *)0)->ldd_params);
+	int end = MAXNIDSTR;
 	int start = strlen(buf);
 	int keylen = 0;
 
@@ -139,32 +141,11 @@ int add_param(char *buf, char *key, char *val)
 	return 0;
 }
 
-int get_param(char *buf, char *key, char **val)
-{
-	int i, key_len = strlen(key);
-	char *ptr;
-
-	ptr = strstr(buf, key);
-	if (ptr) {
-		*val = strdup(ptr + key_len);
-		if (!(*val))
-			return ENOMEM;
-
-		for (i = 0; i < strlen(*val); i++)
-			if (((*val)[i] == ' ') || ((*val)[i] == '\0'))
-				break;
-
-		(*val)[i] = '\0';
-		return 0;
-	}
-
-	return ENOENT;
-}
-
 int append_param(char *buf, char *key, char *val, char sep)
 {
-	int key_len, i, offset, old_val_len;
-	char *ptr = NULL, str[1024];
+	char *ptr = NULL, *next, *cur;
+	int bufsize = MAXNIDSTR;
+	int buflen = strlen(buf), vallen = strlen(val);
 
 	if (key)
 		ptr = strstr(buf, key);
@@ -173,30 +154,24 @@ int append_param(char *buf, char *key, char *val, char sep)
 	if (!ptr)
 		return add_param(buf, key, val);
 
-	key_len = strlen(key);
-
-	/* Copy previous values to str */
-	for (i = 0; i < sizeof(str); ++i) {
-		if ((ptr[i + key_len] == ' ') || (ptr[i + key_len] == '\0'))
-			break;
-		str[i] = ptr[i + key_len];
-	}
-	if (i == sizeof(str))
+	/* check extra new val + sep can fit */
+	if (bufsize <= buflen + vallen + 1) {
+		fprintf(stderr, "%s: params are too long:\n%s +%s=%s\n",
+			progname, buf, key, val);
 		return E2BIG;
-	old_val_len = i;
+	}
 
-	offset = old_val_len + key_len;
+	next = strchrnul(ptr, ' ');
+	cur = buf + buflen;
+	/* shift tail further at vallen + sep */
+	while (cur-- > next)
+		*(cur + vallen + 1) = *cur;
 
-	/* Move rest of buf to overwrite previous key and value */
-	for (i = 0; ptr[i + offset] != '\0'; ++i)
-		ptr[i] = ptr[i + offset];
+	/* fill gap with sep + new values */
+	*next = sep;
+	memcpy(next + 1, val, vallen);
 
-	ptr[i] = '\0';
-
-	snprintf(str + old_val_len, sizeof(str) - old_val_len,
-		 "%c%s", sep, val);
-
-	return add_param(buf, key, str);
+	return 0;
 }
 #endif
 
@@ -946,13 +921,12 @@ int file_create(char *path, __u64 size)
 }
 
 /* Get rid of symbolic hostnames for tcp, since kernel can't do lookups */
-#define MAXNIDSTR 1024
-
 char *convert_hostnames(char *buf, bool mount)
 {
 	char *converted, *c, *end, sep;
 	char *delimiter = buf;
-	int left = MAXNIDSTR;
+	int bufsize = MAXNIDSTR;
+	int left = bufsize;
 	struct lnet_nid nid;
 
 	converted = malloc(left);
@@ -1008,7 +982,7 @@ char *convert_hostnames(char *buf, bool mount)
 		else
 			c += scnprintf(c, left, "%s", libcfs_nidstr(&nid));
 
-		left = converted + MAXNIDSTR - c;
+		left = converted + bufsize - c;
 		buf = delimiter + 1;
 	}
 
