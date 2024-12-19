@@ -187,6 +187,7 @@ static void ucred_set_rbac_roles(struct mdt_thread_info *info,
 	uc->uc_rbac_server_upcall = !!(rbac & NODEMAP_RBAC_SERVER_UPCALL);
 	uc->uc_rbac_ignore_root_prjquota =
 		!!(rbac & NODEMAP_RBAC_IGN_ROOT_PRJQUOTA);
+	uc->uc_rbac_hsm_ops = !!(rbac & NODEMAP_RBAC_HSM_OPS);
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,

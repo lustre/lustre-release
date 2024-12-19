@@ -7126,6 +7126,7 @@ static int mdt_ctxt_add_dirty_flag(struct lu_env *env,
 	mdt_ucred(info)->uc_rbac_fscrypt_admin = 1;
 	mdt_ucred(info)->uc_rbac_server_upcall = 1;
 	mdt_ucred(info)->uc_rbac_ignore_root_prjquota = 1;
+	mdt_ucred(info)->uc_rbac_hsm_ops = 1;
 	rc = mdt_add_dirty_flag(info, mfd->mfd_object, &info->mti_attr);
 
 	lu_context_exit(&ses);

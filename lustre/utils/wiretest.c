@@ -6568,7 +6568,9 @@ void lustre_assert_wire_constants(void)
 		 (unsigned)NODEMAP_RBAC_SERVER_UPCALL);
 	LASSERTF(NODEMAP_RBAC_IGN_ROOT_PRJQUOTA == 0x00000080UL, "found 0x%.8xUL\n",
 		 (unsigned)NODEMAP_RBAC_IGN_ROOT_PRJQUOTA);
-	LASSERTF(NODEMAP_RBAC_NONE == 0xffffff00UL, "found 0x%.8xUL\n",
+	LASSERTF(NODEMAP_RBAC_HSM_OPS == 0x00000100UL, "found 0x%.8xUL\n",
+		 (unsigned)NODEMAP_RBAC_HSM_OPS);
+	LASSERTF(NODEMAP_RBAC_NONE == 0xfffffe00UL, "found 0x%.8xUL\n",
 		 (unsigned)NODEMAP_RBAC_NONE);
 	LASSERTF(NODEMAP_RBAC_ALL == 0xffffffffUL, "found 0x%.8xUL\n",
 		(unsigned)NODEMAP_RBAC_ALL);

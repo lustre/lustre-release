@@ -72,6 +72,8 @@ static inline bool mdt_hsm_is_admin(struct mdt_thread_info *info)
 		return false;
 
 	is_admin = cap_raised(mdt_ucred(info)->uc_cap, CAP_SYS_ADMIN);
+	if (!mdt_ucred(info)->uc_rbac_hsm_ops)
+		is_admin = false;
 
 	mdt_exit_ucred(info);
 
@@ -278,6 +280,8 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc < 0)
 		GOTO(out, rc = err_serious(rc));
+	if (!mdt_ucred(info)->uc_rbac_hsm_ops)
+		GOTO(out_ucred, rc = -EACCES);
 
 	lh = &info->mti_lh[MDT_LH_CHILD];
 	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP |
@@ -580,6 +584,9 @@ int mdt_hsm_request(struct tgt_session_info *tsi)
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc)
 		GOTO(out, rc);
+
+	if (!mdt_ucred(info)->uc_rbac_hsm_ops)
+		GOTO(out_ucred, rc = -EACCES);
 
 	switch (hr->hr_action) {
 	/* code to be removed in hsm1_merge and final patch */

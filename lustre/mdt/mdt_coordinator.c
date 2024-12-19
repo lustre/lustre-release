@@ -1083,6 +1083,7 @@ int hsm_init_ucred(struct lu_ucred *uc)
 	uc->uc_rbac_fscrypt_admin = 1;
 	uc->uc_rbac_server_upcall = 1;
 	uc->uc_rbac_ignore_root_prjquota = 1;
+	uc->uc_rbac_hsm_ops = 1;
 
 	RETURN(0);
 }

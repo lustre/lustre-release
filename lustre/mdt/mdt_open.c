@@ -1925,6 +1925,9 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	if (mdt_rdonly(info->mti_exp))
 		RETURN(-EROFS);
 
+	if (!uc->uc_rbac_hsm_ops)
+		RETURN(-EACCES);
+
 	data = req_capsule_client_get(info->mti_pill, &RMF_CLOSE_DATA);
 	if (data == NULL)
 		RETURN(-EPROTO);

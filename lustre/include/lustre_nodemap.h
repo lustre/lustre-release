@@ -34,6 +34,7 @@ static const struct nodemap_rbac_name {
 	{ NODEMAP_RBAC_FSCRYPT_ADMIN,   "fscrypt_admin"	},
 	{ NODEMAP_RBAC_SERVER_UPCALL,	"server_upcall"	},
 	{ NODEMAP_RBAC_IGN_ROOT_PRJQUOTA,	"ignore_root_prjquota"	},
+	{ NODEMAP_RBAC_HSM_OPS,		"hsm_ops"	},
 };
 
 struct nodemap_pde {
