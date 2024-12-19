@@ -210,8 +210,11 @@ static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 			(char *)m->private, rc);
 		return rc;
 	}
+	if (nodemap->nm_prim_fileset && nodemap->nm_prim_fileset[0] != '\0')
+		seq_printf(m, "%s\n", nodemap->nm_prim_fileset);
+	else
+		seq_puts(m, "\n");
 
-	seq_printf(m, "%s\n", nodemap->nm_fileset);
 	nodemap_putref(nodemap);
 	return rc;
 }

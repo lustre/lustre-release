@@ -1331,6 +1331,7 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	struct lu_nodemap *nodemap, *old_nm;
 	enum nm_flag_bits flags;
 	enum nm_flag2_bits flags2;
+	int rc = 0;
 
 	nodemap = cfs_hash_lookup(config->nmc_nodemap_hash, rec->ncr.ncr_name);
 	if (nodemap == NULL) {
@@ -1346,10 +1347,8 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 		if (nodemap_id > config->nmc_nodemap_highest_id)
 			config->nmc_nodemap_highest_id = nodemap_id;
 
-	} else if (nodemap->nm_id != nodemap_id) {
-		nodemap_putref(nodemap);
-		return -EINVAL;
-	}
+	} else if (nodemap->nm_id != nodemap_id)
+		GOTO(out_nodemap, rc = -EINVAL);
 
 	nodemap->nm_squash_uid = le32_to_cpu(rec->ncr.ncr_squash_uid);
 	nodemap->nm_squash_gid = le32_to_cpu(rec->ncr.ncr_squash_gid);
@@ -1384,9 +1383,21 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	if (!nodemap->nmf_fileset_use_iam) {
 		mutex_lock(&active_config_lock);
 		old_nm = nodemap_lookup(rec->ncr.ncr_name);
-		if (!IS_ERR(old_nm) && old_nm->nm_fileset[0] != '\0')
-			strscpy(nodemap->nm_fileset, old_nm->nm_fileset,
-				sizeof(nodemap->nm_fileset));
+		if (!IS_ERR(old_nm) && old_nm->nm_prim_fileset &&
+		    old_nm->nm_prim_fileset[0] != '\0') {
+			OBD_ALLOC(nodemap->nm_prim_fileset,
+				  old_nm->nm_prim_fileset_size);
+			if (!nodemap->nm_prim_fileset) {
+				mutex_unlock(&active_config_lock);
+				nodemap_putref(old_nm);
+				GOTO(out_nodemap, rc = -ENOMEM);
+			}
+			nodemap->nm_prim_fileset_size =
+				old_nm->nm_prim_fileset_size;
+			memcpy(nodemap->nm_prim_fileset,
+			       old_nm->nm_prim_fileset,
+			       old_nm->nm_prim_fileset_size);
+		}
 		mutex_unlock(&active_config_lock);
 		if (!IS_ERR(old_nm))
 			nodemap_putref(old_nm);
@@ -1398,9 +1409,11 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	} else {
 		list_add(&nodemap->nm_list, &(*recent_nodemap)->nm_list);
 	}
+
+out_nodemap:
 	nodemap_putref(nodemap);
 
-	return 0;
+	return rc;
 }
 
 static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
@@ -1424,20 +1437,30 @@ static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
 static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
 					  const union nodemap_rec *rec)
 {
-	unsigned int fragment_id, fragment_len, fset_offset, fset_len_remain;
+	unsigned int fragment_id, fragment_len, fset_offset, fset_len_remain,
+		fset_prealloc_size;
 
 	fragment_id = le16_to_cpu(rec->nfr.nfr_fragment_id);
 	fragment_len = LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
+	fset_prealloc_size = PATH_MAX + 1;
+
+	/* preallocate fileset for first occurring fragment with PATH_MAX + 1 */
+	if (!nodemap->nm_prim_fileset) {
+		OBD_ALLOC(nodemap->nm_prim_fileset, fset_prealloc_size);
+		if (!nodemap->nm_prim_fileset)
+			return -ENOMEM;
+		nodemap->nm_prim_fileset_size = fset_prealloc_size;
+	}
 
 	/* compute nodemap fileset position */
 	fset_offset = fragment_id * LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
-	fset_len_remain = sizeof(nodemap->nm_fileset) - fset_offset;
+	fset_len_remain = nodemap->nm_prim_fileset_size - fset_offset;
 
 	if (fragment_len > fset_len_remain)
 		fragment_len = fset_len_remain;
 
-	memcpy(nodemap->nm_fileset + fset_offset, rec->nfr.nfr_path_fragment,
-	       fragment_len);
+	memcpy(nodemap->nm_prim_fileset + fset_offset,
+	       rec->nfr.nfr_path_fragment, fragment_len);
 
 	return 0;
 }
@@ -1953,6 +1976,51 @@ void nodemap_config_set_loading_mgc(bool loading)
 EXPORT_SYMBOL(nodemap_config_set_loading_mgc);
 
 /**
+ * After all index pages are read, filesets may use more memory than necessary.
+ * So each nodemap's fileset is resized to its actual size.
+ *
+ * \param config	current active nodemap config
+ */
+static void nodemap_fileset_resize(struct nodemap_config *config)
+{
+	struct lu_nodemap *nodemap;
+	unsigned int fset_size_actual, fset_size_prealloc;
+	char *fset_tmp;
+	LIST_HEAD(nodemap_list_head);
+
+	mutex_lock(&active_config_lock);
+
+	cfs_hash_for_each_safe(config->nmc_nodemap_hash, nm_hash_list_cb,
+			       &nodemap_list_head);
+	list_for_each_entry(nodemap, &nodemap_list_head, nm_list) {
+		if (!nodemap->nm_prim_fileset)
+			continue;
+
+		fset_size_prealloc = nodemap->nm_prim_fileset_size;
+		fset_size_actual = strlen(nodemap->nm_prim_fileset) + 1;
+		if (fset_size_actual == fset_size_prealloc)
+			continue;
+
+		/* Shrink fileset size to actual */
+		OBD_ALLOC(fset_tmp, fset_size_actual);
+		if (!fset_tmp) {
+			CERROR("%s: Nodemaps's fileset cannot be resized: rc = %d\n",
+			       nodemap->nm_name, -ENOMEM);
+			continue;
+		}
+
+		memcpy(fset_tmp, nodemap->nm_prim_fileset, fset_size_actual);
+
+		OBD_FREE(nodemap->nm_prim_fileset, fset_size_prealloc);
+
+		nodemap->nm_prim_fileset_size = fset_size_actual;
+		nodemap->nm_prim_fileset = fset_tmp;
+	}
+
+	mutex_unlock(&active_config_lock);
+}
+
+/**
  * Ensures that configs loaded over the wire are prioritized over those loaded
  * from disk.
  *
@@ -1962,6 +2030,7 @@ void nodemap_config_set_active_mgc(struct nodemap_config *config)
 {
 	mutex_lock(&nodemap_config_loaded_lock);
 	nodemap_config_set_active(config);
+	nodemap_fileset_resize(config);
 	nodemap_config_loaded = 1;
 	nodemap_save_all_caches();
 	mutex_unlock(&nodemap_config_loaded_lock);

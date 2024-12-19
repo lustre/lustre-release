@@ -49,6 +49,8 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 	if (nodemap->nm_pde_data != NULL)
 		lprocfs_nodemap_remove(nodemap->nm_pde_data);
 
+	OBD_FREE(nodemap->nm_prim_fileset, nodemap->nm_prim_fileset_size);
+
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
 	nm_member_reclassify_nodemap(nodemap);
@@ -971,7 +973,6 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nm_squash_uid = NODEMAP_NOBODY_UID;
 		dst->nm_squash_gid = NODEMAP_NOBODY_GID;
 		dst->nm_squash_projid = NODEMAP_NOBODY_PROJID;
-		dst->nm_fileset[0] = '\0';
 		dst->nm_sepol[0] = '\0';
 		dst->nm_offset_start_uid = 0;
 		dst->nm_offset_limit_uid = 0;
@@ -979,6 +980,8 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nm_offset_limit_gid = 0;
 		dst->nm_offset_start_projid = 0;
 		dst->nm_offset_limit_projid = 0;
+		dst->nm_prim_fileset = NULL;
+		dst->nm_prim_fileset_size = 0;
 	} else {
 		dst->nmf_trust_client_ids = src->nmf_trust_client_ids;
 		dst->nmf_allow_root_access = src->nmf_allow_root_access;
@@ -995,7 +998,6 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nm_squash_gid = src->nm_squash_gid;
 		dst->nm_squash_projid = src->nm_squash_projid;
 		if (is_new) {
-			dst->nm_fileset[0] = '\0';
 			dst->nm_sepol[0] = '\0';
 		}
 		dst->nm_offset_start_uid = src->nm_offset_start_uid;
@@ -1004,7 +1006,9 @@ static void nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nm_offset_limit_gid = src->nm_offset_limit_gid;
 		dst->nm_offset_start_projid = src->nm_offset_start_projid;
 		dst->nm_offset_limit_projid = src->nm_offset_limit_projid;
-
+		/* filesets cannot yet be inherited */
+		dst->nm_prim_fileset = NULL;
+		dst->nm_prim_fileset_size = 0;
 	}
 }
 
@@ -1153,6 +1157,13 @@ out:
 }
 EXPORT_SYMBOL(nodemap_del_range);
 
+static void nodemap_fileset_reset(struct lu_nodemap *nodemap)
+{
+	OBD_FREE(nodemap->nm_prim_fileset, nodemap->nm_prim_fileset_size);
+	nodemap->nm_prim_fileset = NULL;
+	nodemap->nm_prim_fileset_size = 0;
+}
+
 /**
  * Set a fileset on a nodemap in memory and the nodemap IAM records.
  * If the nodemap is dynamic, the nodemap IAM update is transparently skipped in
@@ -1162,47 +1173,61 @@ EXPORT_SYMBOL(nodemap_del_range);
  * \param	fileset		string containing fileset
  * \retval	0 on success
  * \retval	-EINVAL		invalid fileset: Does not start with '/'
- * \retval	-ENAMETOOLONG	fileset is too long
  * \retval	-EIO		undo operation failed during IAM update
  */
 static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
 				   const char *fileset)
 {
+	size_t fileset_size_new;
+	char *fileset_new;
 	int rc = 0;
-
-	if (strlen(fileset) > PATH_MAX)
-		RETURN(-ENAMETOOLONG);
 
 	if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0) {
 		rc = nodemap_idx_fileset_clear(nodemap);
-		if (rc == 0)
-			nodemap->nm_fileset[0] = '\0';
-	} else if (fileset[0] != '/') {
-		rc = -EINVAL;
-	} else {
-		/*
-		 * Only update the index if the fileset is already set.
-		 * If it was set by the params llog, it is not set in the IAM.
-		 */
-		if (nodemap->nm_fileset[0] != '\0' &&
-		    nodemap->nmf_fileset_use_iam) {
-			rc = nodemap_idx_fileset_update(
-				nodemap, nodemap->nm_fileset, fileset);
-		} else {
-			rc = nodemap_idx_fileset_add(nodemap, fileset);
-		}
-		if (rc < 0)
-			GOTO(out, rc);
-
-		memcpy(nodemap->nm_fileset, fileset, strlen(fileset) + 1);
+		if (!rc)
+			nodemap_fileset_reset(nodemap);
+		GOTO(out, rc);
 	}
 
-	if (!nodemap->nm_dyn && !nodemap->nmf_fileset_use_iam) {
+	if (fileset[0] != '/')
+		RETURN(-EINVAL);
+
+	fileset_size_new = strlen(fileset) + 1;
+
+	OBD_ALLOC(fileset_new, fileset_size_new);
+	if (!fileset_new)
+		GOTO(out, rc = -ENOMEM);
+
+	memcpy(fileset_new, fileset, fileset_size_new);
+
+	/*
+	 * Only update the index if the fileset is already set.
+	 * If it was set by the params llog, it is not set in the IAM.
+	 */
+	if (nodemap->nm_prim_fileset) {
+		if (nodemap->nmf_fileset_use_iam) {
+			rc = nodemap_idx_fileset_update(
+				nodemap, nodemap->nm_prim_fileset, fileset_new);
+		}
+		if (!rc)
+			nodemap_fileset_reset(nodemap);
+	} else {
+		rc = nodemap_idx_fileset_add(nodemap, fileset_new);
+	}
+
+	if (!rc) {
+		nodemap->nm_prim_fileset = fileset_new;
+		nodemap->nm_prim_fileset_size = fileset_size_new;
+	} else {
+		OBD_FREE(fileset_new, fileset_size_new);
+	}
+
+out:
+	if (!nodemap->nm_dyn && !nodemap->nmf_fileset_use_iam && !rc) {
 		nodemap->nmf_fileset_use_iam = 1;
 		rc = nodemap_idx_nodemap_update(nodemap);
 	}
 
-out:
 	return rc;
 }
 
@@ -1217,12 +1242,12 @@ out:
  * \param	fileset		string containing fileset
  * \retval	0 on success
  * \retval	-EINVAL		invalid fileset: Does not start with '/'
- * \retval	-ENAMETOOLONG	fileset is too long
  */
 static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
 				     const char *fileset)
 {
-	int rc = 0;
+	size_t fileset_size_new;
+	char *fileset_new;
 
 	/* Allow 'fileset=clear' in addition to 'fileset=""' to clear fileset
 	 * because either command 'lctl set_param -P *.*.fileset=""' or
@@ -1234,19 +1259,29 @@ static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
 	 * 'fileset=""' is still kept for compatibility reason.
 	 */
 	if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0) {
-		nodemap->nm_fileset[0] = '\0';
-	} else if (fileset[0] != '/') {
-		rc = -EINVAL;
-
-	} else if (strscpy(nodemap->nm_fileset, fileset,
-			   sizeof(nodemap->nm_fileset)) < 0) {
-		rc = -ENAMETOOLONG;
-		/* function may be called from llog thread, so we CERROR here */
-		CERROR("%s: fileset '%s' is too long: rc = %d\n",
-		       nodemap->nm_name, fileset, rc);
+		nodemap_fileset_reset(nodemap);
+		RETURN(0);
 	}
 
-	return rc;
+	if (fileset[0] != '/')
+		RETURN(-EINVAL);
+
+	fileset_size_new = strlen(fileset) + 1;
+
+	OBD_ALLOC(fileset_new, fileset_size_new);
+	if (!fileset_new)
+		RETURN(-ENOMEM);
+
+	memcpy(fileset_new, fileset, fileset_size_new);
+
+	/* free existing fileset first on update */
+	if (nodemap->nm_prim_fileset)
+		nodemap_fileset_reset(nodemap);
+
+	nodemap->nm_prim_fileset = fileset_new;
+	nodemap->nm_prim_fileset_size = fileset_size_new;
+
+	return 0;
 }
 
 /**
@@ -1257,6 +1292,8 @@ static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
  * \param	checkperm	true if permission check is required
  * \param	ioctl_op	true if called from ioctl nodemap functions
  * \retval	0 on success
+ * \retval	-ENAMETOOLONG	fileset is too long
+ * \retval	-EINVAL		name or fileset is empty or NULL
  */
 int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
 			bool ioctl_op)
@@ -1268,6 +1305,9 @@ int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
 
 	if (name == NULL || name[0] == '\0' || fileset == NULL)
 		RETURN(-EINVAL);
+
+	if (strlen(fileset) > PATH_MAX)
+		RETURN(-ENAMETOOLONG);
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(name);
@@ -1316,7 +1356,7 @@ char *nodemap_get_fileset(const struct lu_nodemap *nodemap)
 	if (!nodemap_active)
 		return NULL;
 
-	return (char *)nodemap->nm_fileset;
+	return (char *)nodemap->nm_prim_fileset;
 }
 EXPORT_SYMBOL(nodemap_get_fileset);
 
@@ -2037,12 +2077,12 @@ int nodemap_del(const char *nodemap_name)
 	}
 	up_write(&active_config->nmc_range_tree_lock);
 
-	if (nodemap->nm_fileset[0] != '\0') {
+	if (nodemap->nm_prim_fileset) {
 		rc2 = nodemap_idx_fileset_clear(nodemap);
 		if (rc2 < 0)
 			rc = rc2;
 
-		nodemap->nm_fileset[0] = '\0';
+		nodemap_fileset_reset(nodemap);
 	}
 
 	if (!nodemap->nm_dyn) {

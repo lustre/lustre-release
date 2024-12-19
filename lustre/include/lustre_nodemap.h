@@ -97,7 +97,8 @@ struct lu_nodemap {
 	struct hlist_node	 nm_hash;
 	struct nodemap_pde	*nm_pde_data;
 	/* fileset the nodes of this nodemap are restricted to */
-	char			 nm_fileset[PATH_MAX + 1];
+	char			 *nm_prim_fileset;
+	unsigned int		 nm_prim_fileset_size;
 	/* information about the expected SELinux policy on the nodes */
 	char			 nm_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
 
