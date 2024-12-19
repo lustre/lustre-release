@@ -338,7 +338,7 @@ static void osc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	oa = attr->cra_oa;
 	opg = osc_cl_page_osc(attr->cra_page, cl2osc(obj));
 
-	if ((flags & OBD_MD_FLMTIME) != 0) {
+	if ((flags & OBD_MD_FLMTIME) != 0 && lvb->lvb_mtime > oa->o_mtime) {
 		oa->o_mtime = lvb->lvb_mtime;
 		oa->o_valid |= OBD_MD_FLMTIME;
 	}
