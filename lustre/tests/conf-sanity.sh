@@ -7296,6 +7296,27 @@ test_81() { # LU-4665
 }
 run_test 81 "sparse OST indexing"
 
+random_ost_indices() {
+	local num=$1
+	local LOV_V1_INSANE_STRIPE_COUNT=65532
+	local index
+	local skip
+	local i=0
+
+	while ((i < num)); do
+		skip=false
+
+		index=$(((RANDOM * 2) % LOV_V1_INSANE_STRIPE_COUNT))
+		for k in $ost_indices; do
+			((index == k)) && skip=true
+		done
+		$skip && continue
+		ost_indices+=" $index"
+		i=$((i+1))
+	done
+	echo $ost_indices
+}
+
 # Here we exercise the stripe placement functionality on a file system that
 # has formatted the OST with a random index. With the file system the following
 # functionality is tested:
@@ -7321,14 +7342,9 @@ test_82a() { # LU-4665
 
 	# Format OSTs with random sparse indices.
 	local i
-	local index
 	local ost_indices
-	local LOV_V1_INSANE_STRIPE_COUNT=65532
-	for i in $(seq $OSTCOUNT); do
-		index=$(((RANDOM * 2) % LOV_V1_INSANE_STRIPE_COUNT))
-		ost_indices+=" $index"
-	done
-	ost_indices=$(comma_list $ost_indices)
+
+	ost_indices=$(comma_list $(random_ost_indices 3))
 
 	stack_trap "restore_ostindex" EXIT
 	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
@@ -7430,14 +7446,9 @@ test_82b() { # LU-4665
 
 	# Format OSTs with random sparse indices.
 	local i
-	local index
 	local ost_indices
-	local LOV_V1_INSANE_STRIPE_COUNT=65532
-	for i in $(seq $OSTCOUNT); do
-		index=$(((RANDOM * 2) % LOV_V1_INSANE_STRIPE_COUNT))
-		ost_indices+=" $index"
-	done
-	ost_indices=$(comma_list $ost_indices)
+
+	ost_indices=$(comma_list $(random_ost_indices 4))
 
 	stack_trap "restore_ostindex" EXIT
 	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
