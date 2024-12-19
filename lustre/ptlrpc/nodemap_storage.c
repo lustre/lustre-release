@@ -925,6 +925,12 @@ static void nodemap_fileset_info_init(struct lu_nodemap_fileset_info *fset_info,
 		fset_info->nfi_fragment_cnt++;
 }
 
+static int nodemap_fileset_get_subid(unsigned int fileset_id)
+{
+	return NODEMAP_FILESET +
+	       (fileset_id * LUSTRE_NODEMAP_FILESET_SUBID_RANGE);
+}
+
 /**
  * Adds a fileset to the nodemap IAM.
  *
@@ -940,11 +946,12 @@ static void nodemap_fileset_info_init(struct lu_nodemap_fileset_info *fset_info,
  * \retval	-EIO		undo operation failed
  */
 int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
-			    const char *fileset)
+			    const char *fileset, unsigned int fileset_id)
 {
 	struct lu_nodemap_fileset_info fset_info;
 	struct lu_env env;
 	struct dt_object *idx;
+	unsigned int fset_subid;
 	int inserted, deleted, rc2;
 	int rc = 0;
 
@@ -965,14 +972,10 @@ int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
 		RETURN(rc);
 
 	idx = nodemap_mgs_ncf->ncf_obj;
+	fset_subid = nodemap_fileset_get_subid(fileset_id);
 
-	/*
-	 * NODEMAP_FILESET + 1 is static for a single fileset.
-	 * For multiple filesets, this will be dynamically computed
-	 * based on an incoming fileset ID.
-	 */
 	nodemap_fileset_info_init(&fset_info, fileset, nodemap,
-				  NODEMAP_FILESET + 1);
+				  fset_subid + 1);
 
 	inserted = 0;
 	rc = nodemap_idx_fileset_fragments_add(&fset_info, &env, idx,
@@ -1018,7 +1021,8 @@ out:
  * \retval	-EIO		undo operation failed
  */
 int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
-			       const char *fileset_old, const char *fileset_new)
+			       const char *fileset_old, const char *fileset_new,
+			       unsigned int fileset_id)
 {
 	struct lu_env env;
 	int rc = 0;
@@ -1039,11 +1043,11 @@ int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
 	if (rc != 0)
 		RETURN(rc);
 
-	rc = nodemap_idx_fileset_del(nodemap, fileset_old);
+	rc = nodemap_idx_fileset_del(nodemap, fileset_old, fileset_id);
 	if (rc < 0)
 		GOTO(out, rc);
 
-	rc = nodemap_idx_fileset_add(nodemap, fileset_new);
+	rc = nodemap_idx_fileset_add(nodemap, fileset_new, fileset_id);
 
 out:
 	lu_env_fini(&env);
@@ -1065,11 +1069,12 @@ out:
  * \retval	-EIO		undo operation failed
  */
 int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
-			    const char *fileset)
+			    const char *fileset, unsigned int fileset_id)
 {
 	struct lu_env env;
 	struct dt_object *idx;
 	struct lu_nodemap_fileset_info fset_info;
+	unsigned int fset_subid;
 	int deleted, inserted, rc2;
 	int rc = 0;
 
@@ -1090,9 +1095,10 @@ int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
 		RETURN(rc);
 
 	idx = nodemap_mgs_ncf->ncf_obj;
+	fset_subid = nodemap_fileset_get_subid(fileset_id);
 
 	nodemap_fileset_info_init(&fset_info, fileset, nodemap,
-				  NODEMAP_FILESET + 1);
+				  fset_subid + 1);
 
 	deleted = 0;
 	rc = nodemap_idx_fileset_fragments_del(
@@ -1425,17 +1431,23 @@ static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
 }
 
 /**
- * Process a fileset fragment and apply it to the current nodemap. The incoming
- * path fragment is copied to the nodemap fileset based on the fragment ID
- * which is used to compute the char* offset.
+ * Process a fileset fragment and apply it to the passed fileset which
+ * corresponds to a nodemap. The incoming path fragment is copied
+ * to the nodemap fileset based on the fragment ID which is used to
+ * compute the char* offset.
  *
  * Fragments processed by this function do not need to be in order.
  *
- * \param	nodemap		nodemap to update with this fileset fragment
  * \param	rec		fileset fragment record
+ * \param	fileset		fileset to update with this fragment
+ * \param	fileset_size	size of the fileset
+ *
+ * \retval	0		on success
+ * \retval	-ENOMEM		memory allocation failure
  */
-static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
-					  const union nodemap_rec *rec)
+static int nodemap_cluster_rec_fileset_fragment(const union nodemap_rec *rec,
+						char **fileset,
+						unsigned int *fileset_size)
 {
 	unsigned int fragment_id, fragment_len, fset_offset, fset_len_remain,
 		fset_prealloc_size;
@@ -1445,24 +1457,61 @@ static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
 	fset_prealloc_size = PATH_MAX + 1;
 
 	/* preallocate fileset for first occurring fragment with PATH_MAX + 1 */
-	if (!nodemap->nm_prim_fileset) {
-		OBD_ALLOC(nodemap->nm_prim_fileset, fset_prealloc_size);
-		if (!nodemap->nm_prim_fileset)
+	if (!*fileset) {
+		OBD_ALLOC(*fileset, fset_prealloc_size);
+		if (!*fileset)
 			return -ENOMEM;
-		nodemap->nm_prim_fileset_size = fset_prealloc_size;
+		*fileset_size = fset_prealloc_size;
 	}
 
 	/* compute nodemap fileset position */
 	fset_offset = fragment_id * LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
-	fset_len_remain = nodemap->nm_prim_fileset_size - fset_offset;
+	fset_len_remain = *fileset_size - fset_offset;
 
 	if (fragment_len > fset_len_remain)
 		fragment_len = fset_len_remain;
 
-	memcpy(nodemap->nm_prim_fileset + fset_offset,
-	       rec->nfr.nfr_path_fragment, fragment_len);
+	memcpy(*fileset + fset_offset, rec->nfr.nfr_path_fragment,
+	       fragment_len);
 
 	return 0;
+}
+
+static int nodemap_fileset_get_id(int subid)
+{
+	if (subid < NODEMAP_FILESET)
+		return -EINVAL;
+
+	return (subid - NODEMAP_FILESET) / LUSTRE_NODEMAP_FILESET_SUBID_RANGE;
+}
+
+/**
+ * Process a fileset fragment and apply it to the current nodemap.
+ *
+ * \param	nodemap		nodemap to update with this fileset fragment
+ * \param	rec		fileset fragment record
+ * \param	subid		subid of the fileset fragment
+ *
+ * \retval	0		on success
+ * \retval	-EINVAL		invalid input parameters (invalid fset_id)
+ */
+static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
+					  const union nodemap_rec *rec,
+					  int subid)
+{
+	int fset_id;
+
+	fset_id = nodemap_fileset_get_id(subid);
+	if (fset_id < 0)
+		return fset_id;
+
+	if (fset_id == 0) {
+		return nodemap_cluster_rec_fileset_fragment(
+			rec, &nodemap->nm_prim_fileset,
+			&nodemap->nm_prim_fileset_size);
+	}
+	/* TODO get correct alternate fileset and process it */
+	return -EINVAL;
 }
 
 /**
@@ -1555,7 +1604,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			   cluster_idx_key <
 				   NODEMAP_FILESET +
 					   LUSTRE_NODEMAP_FILESET_SUBID_RANGE) {
-			rc = nodemap_cluster_fileset_helper(nodemap, rec);
+			rc = nodemap_cluster_fileset_helper(nodemap, rec,
+							    cluster_idx_key);
 		} else {
 			CWARN("%s: ignoring keyrec of type %d with subtype %u\n",
 			      nodemap->nm_name, NODEMAP_CLUSTER_IDX,

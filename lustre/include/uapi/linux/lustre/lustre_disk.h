@@ -343,7 +343,7 @@ struct nodemap_fileset_rec {
 	/* 28 bytes for fileset path fragment */
 	char	nfr_path_fragment[LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE];
 	__u16	nfr_fragment_id;	/* fileset fragment id */
-	__u16	nfr_padding1;		/* zeroed, reserved for multi fset id */
+	__u16	nfr_padding1;		/* zeroed since 2.16 (always) */
 };
 
 union nodemap_rec {

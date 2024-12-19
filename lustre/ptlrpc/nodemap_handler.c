@@ -1207,12 +1207,13 @@ static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
 	if (nodemap->nm_prim_fileset) {
 		if (nodemap->nmf_fileset_use_iam) {
 			rc = nodemap_idx_fileset_update(
-				nodemap, nodemap->nm_prim_fileset, fileset_new);
+				nodemap, nodemap->nm_prim_fileset, fileset_new,
+				0);
 		}
 		if (!rc)
 			nodemap_fileset_reset(nodemap);
 	} else {
-		rc = nodemap_idx_fileset_add(nodemap, fileset_new);
+		rc = nodemap_idx_fileset_add(nodemap, fileset_new, 0);
 	}
 
 	if (!rc) {

@@ -161,12 +161,12 @@ int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap);
 int nodemap_idx_offset_add(const struct lu_nodemap *nodemap);
 int nodemap_idx_offset_del(const struct lu_nodemap *nodemap);
 int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
-			    const char *fileset);
+			    const char *fileset, unsigned int fileset_id);
 int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
-			       const char *old_fileset,
-			       const char *new_fileset);
+			       const char *old_fileset, const char *new_fileset,
+			       unsigned int fileset_id);
 int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
-			    const char *fileset);
+			    const char *fileset, unsigned int fileset_id);
 int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap);
 int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
