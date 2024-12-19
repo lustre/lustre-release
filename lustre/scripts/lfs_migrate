@@ -398,23 +398,35 @@ lfs_migrate() {
 			#      lmm_stripe_count:  1
 			#      lmm_stripe_size:   1048576
 			#      lmm_pool:          pool_abc
-			local l_mirror_count
-			local l_comp_count
-			local l_stripe_count
-			local l_stripe_size
-			local l_stripe_pool
-			local layout_info
+			local old_stripe_count
+			local old_stripe_size
+			local old_layout
 
-			layout_info=($($LFS getstripe $getstripe_opts $OLDNAME \
-				       2>/dev/null | awk '{ print }'))
+			old_layout=($($LFS getstripe $getstripe_opts $OLDNAME \
+				      2>/dev/null | awk '{ print }'))
 
-			for ((i = 0; i < ${#layout_info[*]}; i++)); do
-				case "${layout_info[$i]}" in
-				*mirror_count*) l_mirror_count=$((i + 1));;
-				*entry_count*) l_comp_count=$((i + 1));;
-				*stripe_count*) l_stripe_count=$((i + 1));;
-				*stripe_size*) l_stripe_size=$((i + 1));;
-				*stripe_pool*) l_stripe_pool=$((i + 1));;
+			for ((i = 0; i < ${#old_layout[*]}; i++)); do
+				local info_this=${old_layout[$i]}
+				local info_next=${old_layout[$i+1]}
+				local idx=$((i + 1))
+
+				$OPT_DEBUG && echo "$i: $info_this"
+				case "${old_layout[$i]}" in
+				*mirror_count:)
+					mirror_count=${old_layout[$idx]}
+					$OPT_DEBUG && echo "mirror=$info_next";;
+				*entry_count:)
+					comp_count=${old_layout[$idx]}
+					$OPT_DEBUG && echo "comp=$info_next";;
+				*stripe_count:)
+					old_stripe_count=${old_layout[$idx]}
+					$OPT_DEBUG && echo "count=$info_next";;
+				*stripe_size:)
+					old_stripe_size=${old_layout[$idx]}
+					$OPT_DEBUG && echo "size=$info_next";;
+				*lmm_pool:)
+					stripe_pool=${stripe_pool:-${old_layout[$idx]}}
+					$OPT_DEBUG && echo "pool=$info_next";;
 				esac
 			done
 
@@ -423,26 +435,20 @@ lfs_migrate() {
 			# striping) then we don't need this getstripe stuff.
 			UNLINK="-u"
 
-			[ -n "$OPT_POOL" ] ||
-				stripe_pool=${layout_info[$l_stripe_pool]}
-			mirror_count=${layout_info[$l_mirror_count]}
-
 			if $OPT_AUTOSTRIPE; then
 				local filekb=$((${nlink_type[$nlink_idx_size]} /
 						1024))
 
 				read stripe_count OBJ_MAX_KB < <(calc_stripe \
 					"$OLDNAME" "$filekb" "$OBJ_MAX_KB")
-				[ -z "$stripe_count" ] && exit 1
-				[ $stripe_count -lt 1 ] && stripe_count=1
+				[[ -n "$stripe_count" ]] || exit 1
+				(( $stripe_count >= 1 )) || stripe_count=1
 			else
-				[ -n "$stripe_count" ] ||
-					stripe_count=${layout_info[$l_stripe_count]}
+				stripe_count=${stripe_count:-$old_stripe_count}
 			fi
-			[ -n "$stripe_size" ] ||
-				stripe_size=${layout_info[$l_stripe_size]}
+			stripe_size=${stripe_size:-$old_stripe_size}
 
-			[ -z "$stripe_count" -o -z "$stripe_size" ] && UNLINK=""
+			[[ -n "$stripe_count" && -n "$stripe_size" ]] || UNLINK=
 		fi
 
 		if $OPT_DEBUG; then
@@ -452,18 +458,28 @@ lfs_migrate() {
 
 			if $OPT_RESTRIPE; then
 				parent_layout=($($LFS getstripe $getstripe_opts\
-						-d "$olddir" 2>/dev/null |
-						awk '{print $2 }'))
-				parent_count=${parent_layout[$l_stripe_count]}
-				parent_size=${parent_layout[$l_stripe_size]}
-				stripe_pool=${parent_layout[$l_stripe_pool]}
-				mirror_count=${parent_layout[$l_mirror_count]}
+						 -d "$olddir" 2>/dev/null |
+						 awk '{ print }'))
+				for ((i = 0; i < ${#parent_layout[*]}; i++)); do
+					local idx=$((i + 1))
+
+					case "${parent_layout[$i]}" in
+					*stripe_count:)
+					   parent_count=${parent_layout[$idx]};;
+					*stripe_size:)
+					   parent_size=${parent_layout[$idx]};;
+					*pool:)
+					   stripe_pool=${parent_layout[$idx]};;
+					*mirror_count:)
+					   mirror_count=${parent_layout[$idx]};;
+					esac
+				done
 			fi
 
 			$ECHO -n "stripe_count=${stripe_count:-$parent_count},stripe_size=${stripe_size:-$parent_size}"
-			[ -n "$stripe_pool" ] &&
+			[[ -z "$stripe_pool" ]] ||
 				$ECHO -n ",pool=${stripe_pool}"
-			[[ $mirror_count -gt 1 ]] &&
+			(( $mirror_count <= 1 )) ||
 				$ECHO -n ",mirror_count=${mirror_count}"
 			$ECHO -n " "
 		fi
@@ -474,16 +490,15 @@ lfs_migrate() {
 		fi
 
 		if ! $OPT_COPY && ! $OPT_COMP && ! $OPT_RSYNC &&
-		   (( ${layout_info[$l_comp_count]} > 0 )); then
+		   (( $comp_count > 0 )); then
 			layout+="--copy $OLDNAME"
 			OPT_COPY=true
 		fi
 		if ! $OPT_COPY && ! $OPT_COMP; then
-			[ -n "$stripe_count" ] && layout+="-c $stripe_count "
-			[ -n "$stripe_size" ] && layout+="-S $stripe_size "
-			[ -n "$OPT_POOL" -a -n "$stripe_pool" ] &&
-						layout+="-p $stripe_pool "
-			[[ $mirror_count -gt 1 ]] && layout+="-N $mirror_count "
+			[[ -z "$stripe_count" ]] || layout+="-c $stripe_count "
+			[[ -z "$stripe_size" ]] || layout+="-S $stripe_size "
+			[[ -z "$stripe_pool" ]] || layout+="-p $stripe_pool "
+			(( $mirror_count <= 1 )) || layout+="-N $mirror_count "
 		fi
 		layout+="$OPT_LAYOUT"
 

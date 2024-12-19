@@ -7972,7 +7972,7 @@ test_56wa() {
 	(( OSTCOUNT <= 1 )) || expected=$((OSTCOUNT - 1))
 
 	# lfs_migrate file
-	local cmd="$LFS_MIGRATE -y -c $expected $dir/file1"
+	local cmd="$LFS_MIGRATE -y -v -c $expected $dir/file1"
 
 	echo "$cmd"
 	eval $cmd || error "$cmd failed"
@@ -8005,7 +8005,7 @@ test_56wa() {
 	fi
 
 	# lfs_migrate dir
-	cmd="$LFS_MIGRATE -y -c $expected $dir/dir1"
+	cmd="$LFS_MIGRATE -y -v -c $expected $dir/dir1"
 	echo "$cmd"
 	eval $cmd || error "$cmd failed"
 
@@ -8015,7 +8015,7 @@ test_56wa() {
 
 	# lfs_migrate works with lfs find
 	cmd="$LFS find -stripe_count $OSTCOUNT -type f $dir |
-	     $LFS_MIGRATE -y -c $expected"
+	     $LFS_MIGRATE -y -v -c $expected"
 	echo "$cmd"
 	eval $cmd || error "$cmd failed"
 
