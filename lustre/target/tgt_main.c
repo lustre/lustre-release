@@ -360,7 +360,7 @@ void tgt_save_slc_lock(struct lu_target *lut, struct ldlm_lock *lock,
 {
 	spin_lock(&lut->lut_slc_locks_guard);
 	lock_res_and_lock(lock);
-	if (ldlm_is_cbpending(lock)) {
+	if ((lock->l_flags & LDLM_FL_CBPENDING)) {
 		/* if it was canceld by server, don't save, because remote MDT
 		 * will do Sync-on-Cancel. */
 		ldlm_lock_put(lock);
@@ -395,7 +395,7 @@ void tgt_discard_slc_lock(struct lu_target *lut, struct ldlm_lock *lock)
 	/* may race with tgt_cancel_slc_locks() */
 	if (lock->l_transno != 0) {
 		LASSERT(!list_empty(&lock->l_slc_link));
-		LASSERT(ldlm_is_cbpending(lock));
+		LASSERT((lock->l_flags & LDLM_FL_CBPENDING));
 		list_del_init(&lock->l_slc_link);
 		lock->l_transno = 0;
 		ldlm_lock_put(lock);
@@ -434,7 +434,7 @@ void tgt_cancel_slc_locks(struct lu_target *lut, __u64 transno)
 			continue;
 		}
 		/* set CBPENDING so that this lock won't be used again */
-		ldlm_set_cbpending(lock);
+		(lock->l_flags |= LDLM_FL_CBPENDING);
 		lock->l_transno = 0;
 		list_move(&lock->l_slc_link, &list);
 		unlock_res_and_lock(lock);

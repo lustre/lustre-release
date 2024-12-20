@@ -1364,7 +1364,7 @@ int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	    (lock->l_granted_mode & (LCK_EX | LCK_PW | LCK_GROUP)) &&
 	    (tgt->lut_sync_lock_cancel == SYNC_LOCK_CANCEL_ALWAYS ||
 	     (tgt->lut_sync_lock_cancel == SYNC_LOCK_CANCEL_BLOCKING &&
-	      ldlm_is_cbpending(lock))) &&
+	      (lock->l_flags & LDLM_FL_CBPENDING))) &&
 	    ((exp_connect_flags(lock->l_export) & OBD_CONNECT_MDS_MDS) ||
 	     lock->l_resource->lr_type == LDLM_EXTENT)) {
 		__u64 start = 0;
