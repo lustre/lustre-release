@@ -3298,10 +3298,10 @@ int osc_match_base(const struct lu_env *env, struct obd_export *exp,
 		LASSERT(lock != NULL);
 		if (osc_set_lock_data(lock, obj)) {
 			lock_res_and_lock(lock);
-			if (!ldlm_is_lvb_cached(lock)) {
+			if (!(lock->l_flags & LDLM_FL_LVB_CACHED)) {
 				LASSERT(lock->l_ast_data == obj);
 				osc_lock_lvb_update(env, obj, lock, NULL);
-				ldlm_set_lvb_cached(lock);
+				(lock->l_flags |= LDLM_FL_LVB_CACHED);
 			}
 			unlock_res_and_lock(lock);
 		} else {
@@ -3736,7 +3736,7 @@ int osc_ldlm_resource_invalidate(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 		 * by the 2nd round of ldlm_namespace_clean() call in
 		 * osc_import_event().
 		 */
-		ldlm_clear_cleaned(lock);
+		(lock->l_flags &= ~LDLM_FL_CLEANED);
 	}
 	unlock_res(res);
 

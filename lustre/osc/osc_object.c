@@ -213,7 +213,7 @@ static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 		cl_object_attr_lock(&osc->oo_cl);
 		memcpy(lvb, &oinfo->loi_lvb, sizeof(oinfo->loi_lvb));
 		cl_object_attr_unlock(&osc->oo_cl);
-		ldlm_clear_lvb_cached(lock);
+		(lock->l_flags &= ~LDLM_FL_LVB_CACHED);
 	}
 	RETURN(LDLM_ITER_CONTINUE);
 }

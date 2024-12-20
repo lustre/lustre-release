@@ -82,7 +82,7 @@ static inline int osc_lock_invariant(struct osc_lock *ols)
 	 * ast.
 	 */
 	if (! ergo(olock != NULL && ols->ols_state < OLS_CANCELLED,
-		   !ldlm_is_destroyed(olock)))
+		   !(olock->l_flags & LDLM_FL_DESTROYED)))
 		return 0;
 
 	if (! ergo(ols->ols_state == OLS_GRANTED,
@@ -224,11 +224,11 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
 		descr->cld_gid   = ext->gid;
 
 		/* no lvb update for matched lock */
-		if (!ldlm_is_lvb_cached(dlmlock)) {
+		if (!(dlmlock->l_flags & LDLM_FL_LVB_CACHED)) {
 			LASSERT(oscl->ols_flags & LDLM_FL_LVB_READY);
 			LASSERT(osc == dlmlock->l_ast_data);
 			osc_lock_lvb_update(env, osc, dlmlock, NULL);
-			ldlm_set_lvb_cached(dlmlock);
+			(dlmlock->l_flags |= LDLM_FL_LVB_CACHED);
 		}
 		LINVRNT(osc_lock_invariant(oscl));
 	}
@@ -392,7 +392,7 @@ static int osc_dlm_blocking_ast0(const struct lu_env *env,
 		RETURN(0);
 	}
 
-	discard = ldlm_is_discard_data(dlmlock);
+	discard = (dlmlock->l_flags & LDLM_FL_DISCARD_DATA);
 	if (dlmlock->l_granted_mode & (LCK_PW | LCK_GROUP))
 		mode = CLM_WRITE;
 
