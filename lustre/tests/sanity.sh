@@ -2555,7 +2555,6 @@ run_test 27Cj "overstriping with -C for max values in multiple of targets"
 
 test_27D() {
 	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local POOL=${POOL:-testpool}
@@ -2664,9 +2663,8 @@ test_27F() { # LU-5346/LU-7975
 run_test 27F "Client resend delayed layout creation with non-zero size"
 
 test_27G() { #LU-10629
-	[ $MDS1_VERSION -lt $(version_code 2.11.51) ] &&
+	(( $MDS1_VERSION < $(version_code 2.11.51) )) &&
 		skip "Need MDS version at least 2.11.51"
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	local POOL=${POOL:-testpool}
 	local ostrange="0 0 1"
@@ -3103,6 +3101,9 @@ test_27M() {
 
 	# Clean up DOM layout
 	$LFS setstripe -d $DIR/$tdir
+
+	# rest of tests don't work with FILESET
+	[ -n "$FILESET" ] && exit
 
 	save_layout_restore_at_exit $MOUNT
 	# Now test that append striping works when layout is from root
@@ -18344,8 +18345,6 @@ test_154ea()
 run_test 154ea ".lustre is not returned by readdir (2)"
 
 test_154f() {
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
-
 	# create parent directory on a single MDT to avoid cross-MDT hardlinks
 	mkdir_on_mdt0 $DIR/$tdir
 	# test dirs inherit from its stripe
@@ -18388,8 +18387,11 @@ test_154f() {
 		error "$FID3/f not returned in parent list"
 
 	# 5) test it on root directory
-	[ -z "$($LFS path2fid --parents $MOUNT 2>/dev/null)" ] ||
-		error "$MOUNT should not have parents"
+	[ -z "$FILESET" ] && {
+		# LU_ROOT_FID is wrong for fileset
+		[ -z "$($LFS path2fid --parents $MOUNT 2>/dev/null)" ] ||
+			error "$MOUNT should not have parents"
+	}
 
 	# enable xattr caching and check that linkea is correctly updated
 	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
@@ -20252,7 +20254,6 @@ run_test 161c "check CL_RENME[UNLINK] changelog record flags"
 
 test_161d() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	local pid
 	local fid
@@ -20282,7 +20283,7 @@ test_161d() {
 	local tempfile="$(mktemp --tmpdir $tfile.XXXXXX)"
 	stack_trap "rm -f $tempfile"
 	fid=$(changelog_extract_field "CREAT" "$tfile" "t=")
-	cat $MOUNT/.lustre/fid/$fid 2>/dev/null >$tempfile || error "cat failed"
+	$MULTIOP $MOUNT/.lustre/fid/$fid orp16384c >$tempfile || error "read failed"
 	# some delay may occur during ChangeLog publishing and file read just
 	# above, that could allow file write to happen finally
 	[[ -s $tempfile ]] && echo "file should be empty"
@@ -21345,7 +21346,6 @@ test_185() { # LU-2441
 	local mtime1=$(stat -c "%Y" $DIR/$tdir)
 	local fid=$($MULTIOP $DIR/$tdir VFw4096c) ||
 		error "cannot create/write a volatile file"
-	[ "$FILESET" == "" ] &&
 	$CHECKSTAT -t file $MOUNT/.lustre/fid/$fid 2>/dev/null &&
 		error "FID is still valid after close"
 
@@ -21360,10 +21360,8 @@ test_185() { # LU-2441
 	# is unfortunately eaten by multiop_bg_pause
 	local n=$((${fidv[1]} + 1))
 	local next_fid="${fidv[0]}:$(printf "0x%x" $n):${fidv[2]}"
-	if [ "$FILESET" == "" ]; then
-		$CHECKSTAT -t file $MOUNT/.lustre/fid/$next_fid ||
-			error "FID is missing before close"
-	fi
+	$CHECKSTAT -t file $MOUNT/.lustre/fid/$next_fid ||
+		error "FID is missing before close"
 	kill -USR1 $multi_pid
 	# 1 second delay, so if mtime change we will see it
 	sleep 1
@@ -21394,8 +21392,9 @@ function create_check_volatile() {
 
 test_185a(){
 	# LU-12516 - volatile creation via .lustre
-	[[ $MDS1_VERSION -ge $(version_code 2.12.55) ]] ||
-		skip "Need MDS version at least 2.3.55"
+	(( $MDS1_VERSION >= $(version_code 2.12.55) )) ||
+		skip "Need MDS version at least 2.12.55"
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 
 	create_check_volatile 0
 	[ $MDSCOUNT -lt 2 ] && return 0
@@ -21447,7 +21446,6 @@ run_test 187b "Test data version change on volatile file"
 test_200() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 
 	local POOL=${POOL:-cea1}
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
@@ -22940,9 +22938,9 @@ test_226c () {
 	$LFS setdirstripe -c -1 -i 1 $DIR/$tdir ||
 		error "create remote directory failed"
 	mkdir -p $submnt || error "create $submnt failed"
-	$MOUNT_CMD $MGSNID:/$FSNAME/$tdir $submnt ||
+	FILESET="$FILESET/$tdir" mount_client $submnt ||
 		error "mount $submnt failed"
-	stack_trap "umount $submnt" EXIT
+	stack_trap "umount $submnt;rm -rf $submit" EXIT
 
 	cp $srcfile $dstfile
 	fid=$($LFS path2fid $dstfile)
@@ -24912,7 +24910,7 @@ test_subdir_mount_lock()
 	mkdir -p $submount || error "mkdir $submount failed"
 	stack_trap "rmdir $submount"
 
-	FILESET="$fileset/$testdir" mount_client $submount ||
+	FILESET="$FILESET/$testdir" mount_client $submount ||
 		error "mount $FILESET failed"
 	stack_trap "umount $submount"
 
@@ -30579,6 +30577,8 @@ test_413d() {
 	(( MDS1_VERSION >= $(version_code 2.14.51) )) ||
 		skip "Need server version at least 2.14.51"
 
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 	local lmv_qos_threshold_rr
 
 	lmv_qos_threshold_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr |
@@ -30695,6 +30695,12 @@ run_test 413f "lfs getdirstripe -D list ROOT default LMV if it's not set on dir"
 test_413g() {
 	(( MDSCOUNT >= 2 )) || skip "We need at least 2 MDTs for this test"
 
+	local FILESET_orig=$FILESET
+	if [ -n "$FILESET" ];then
+		cleanup_mount $MOUNT
+		FILESET="" mount_client $MOUNT
+	fi
+
 	mkdir -p $DIR/$tdir/l2/l3/l4 || error "mkdir $tdir/l1/l2/l3 failed"
 	getfattr -d -m trusted.dmv --absolute-names $DIR > $TMP/dmv.ea ||
 		error "dump $DIR default LMV failed"
@@ -30703,15 +30709,15 @@ test_413g() {
 	$LFS setdirstripe -D -i -1 -c 1 -X 3 --max-inherit-rr 3 $DIR ||
 		error "set $DIR default LMV failed"
 
-	FILESET="$FILESET/$tdir/l2/l3/l4" mount_client $MOUNT2 ||
-		error "mount $MOUNT2 failed"
-	stack_trap "umount_client $MOUNT2"
-
 	local saved_DIR=$DIR
-
 	export DIR=$MOUNT2
-
-	stack_trap "export DIR=$saved_DIR"
+	FILESET="/$tdir/l2/l3/l4" mount_client $MOUNT2 ||
+		error "mount $MOUNT2 failed"
+	if [ -n "$FILESET_orig" ]; then
+		stack_trap "umount_client $MOUNT2; export DIR=$saved_DIR;export FILESET=$FILESET_orig; mount_client $MOUNT"
+	else
+		stack_trap "umount_client $MOUNT2; export DIR=$saved_DIR"
+	fi
 
 	# first check filesystem-wide default LMV inheritance
 	test_fs_dmv_inherit || error "incorrect fs default LMV inheritance"
@@ -30722,6 +30728,12 @@ test_413g() {
 	local count=$($LFS getstripe -m $DIR/s* | sort -u | wc -l)
 
 	(( $count == $MDSCOUNT )) || error "dirs are spread to $count MDTs"
+
+	if [ -n "$FILESET_orig" ];then
+		cleanup_mount $MOUNT
+		FILESET=$FILESET_orig
+		mount_client $MOUNT
+	fi
 }
 run_test 413g "enforce ROOT default LMV on subdir mount"
 
@@ -31437,11 +31449,10 @@ test_421h() {
 	echo File $DIR/$tdir/fileD FID $fidD
 
 	# mount another client mount point with subdirectory mount
-	export FILESET=/$tdir/subdir
 	mount_other=${MOUNT}_other
-	mount_client $mount_other ${MOUNT_OPTS}
+	FILESET="$FILESET/$tdir/subdir" mount_client $mount_other ${MOUNT_OPTS}
 	mount_ret=$?
-	export FILESET=""
+	FILESET=""
 	(( mount_ret == 0 )) || error "mount $mount_other failed"
 
 	echo Removing FIDs:
@@ -31450,6 +31461,7 @@ test_421h() {
 	rmfid_ret=$?
 
 	umount_client $mount_other || error "umount $mount_other failed"
+	rm -rf $mount_other
 
 	(( rmfid_ret != 0 )) || error "rmfid should have failed"
 
