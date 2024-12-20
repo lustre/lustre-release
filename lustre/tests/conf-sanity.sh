@@ -9118,7 +9118,7 @@ test_106() {
 	local creates=64768	# one full plain llog
 
 	# ensure there are enough inodes in the filesystem
-	(( OSTSIZE < (creates + 1024) * 8)) && OSTSIZE=$(((creates + 1024) * 8))
+	(( OSTSIZE < (creates + 1024) * 16)) && OSTSIZE=$(((creates + 1024) * 16))
 	reformat
 	setup_noconfig
 	lfs df -i
