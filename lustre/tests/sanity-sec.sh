@@ -2336,6 +2336,9 @@ test_27ab() { #LU-18109
 	local id=500
 	local offset
 
+	(( MDS1_VERSION > $(version_code 2.16.50.170) )) ||
+		skip "need MDS > 2.16.50.170 for nodemap range offset"
+
 	do_facet mgs $LCTL nodemap_add Test18109 ||
 		error "unable to add Test18109 as nodemap"
 	stack_trap "do_facet mgs $LCTL nodemap_del Test18109 || true"
