@@ -1282,7 +1282,7 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 			RETURN(-ENOLCK);
 		}
 
-		if (ldlm_is_ast_sent(lock)) {
+		if ((lock->l_flags & LDLM_FL_AST_SENT)) {
 			struct ptlrpc_service_part *svc;
 			timeout_t timeout;
 

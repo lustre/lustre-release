@@ -203,7 +203,7 @@ static int qsd_glb_blocking_ast(struct ldlm_lock *lock,
 		 * it's just local cancel (for stack clean up or eviction),
 		 * don't re-trigger the reintegration.
 		 */
-		if (!ldlm_is_local_only(lock))
+		if (!(lock->l_flags & LDLM_FL_LOCAL_ONLY))
 			qsd_start_reint_thread(qqi);
 
 		qqi_putref(qqi);
@@ -380,7 +380,7 @@ static int qsd_id_blocking_ast(struct ldlm_lock *lock,
 		 * don't release quota space for local cancel (stack clean
 		 * up or eviction)
 		 */
-		if (!ldlm_is_local_only(lock)) {
+		if (!(lock->l_flags & LDLM_FL_LOCAL_ONLY)) {
 			/* allocate environment */
 			OBD_ALLOC_PTR(env);
 			if (!env) {
