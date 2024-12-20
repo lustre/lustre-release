@@ -416,7 +416,7 @@ static int ll_md_need_convert(struct ldlm_lock *lock)
 		return 0;
 
 	bits = lock->l_policy_data.l_inodebits.bits & ~want;
-	if (!want || !bits || ldlm_is_cancel(lock))
+	if (!want || !bits || (lock->l_flags & LDLM_FL_CANCEL))
 		return 0;
 
 	/* do not convert locks other than DOM for now */
@@ -518,7 +518,7 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *ld,
 		 */
 		if (ld) {
 			/* partial bits cancel allowed only during convert */
-			LASSERT(ldlm_is_converting(lock));
+			LASSERT(lock->l_flags & LDLM_FL_CONVERTING);
 			/* mask cancel bits by lock bits so only no any unused
 			 * bits are passed to ll_lock_cancel_bits()
 			 */

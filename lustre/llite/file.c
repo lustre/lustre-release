@@ -1666,7 +1666,7 @@ static int ll_lease_close_intent(struct obd_client_handle *och,
 	lock = ldlm_handle2lock(&och->och_lease_handle);
 	if (lock != NULL) {
 		lock_res_and_lock(lock);
-		cancelled = ldlm_is_cancel(lock);
+		cancelled = lock->l_flags & LDLM_FL_CANCEL;
 		unlock_res_and_lock(lock);
 		ldlm_lock_put(lock);
 	}
@@ -5011,7 +5011,7 @@ skip_copy:
 			lock = ldlm_handle2lock(&och->och_lease_handle);
 			if (lock != NULL) {
 				lock_res_and_lock(lock);
-				if (!ldlm_is_cancel(lock))
+				if (!(lock->l_flags & LDLM_FL_CANCEL))
 					open_flags = och->och_flags;
 
 				unlock_res_and_lock(lock);
@@ -6984,14 +6984,16 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req;
+	bool lvb_ready;
 	void *lvbdata;
 	void *lmm;
 	int lmmsize;
 	int rc;
 
 	ENTRY;
+	lvb_ready = lock->l_flags & LDLM_FL_LVB_READY;
 	CDEBUG(D_INODE, DFID" LVB_READY=%d l_lvb_data=%p l_lvb_len=%u\n",
-	       PFID(ll_inode2fid(inode)), ldlm_is_lvb_ready(lock),
+	       PFID(ll_inode2fid(inode)), lvb_ready,
 	       lock->l_lvb_data, lock->l_lvb_len);
 
 	if (lock->l_lvb_data != NULL)
@@ -7080,7 +7082,7 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, enum ldlm_mode mode,
 	md_set_lock_data(sbi->ll_md_exp, lockh, inode, NULL);
 
 	lock_res_and_lock(lock);
-	lvb_ready = ldlm_is_lvb_ready(lock);
+	lvb_ready = lock->l_flags & LDLM_FL_LVB_READY;
 	unlock_res_and_lock(lock);
 
 	/* checking lvb_ready is racy but this is okay. The worst case is
