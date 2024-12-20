@@ -767,9 +767,14 @@ struct cl_page {
 	enum cl_page_type	cp_type:CP_TYPE_BITS;
 	unsigned		cp_defer_uptodate:1,
 				cp_ra_updated:1,
-				cp_ra_used:1;
-	/* which slab kmem index this memory allocated from */
-	short int		cp_kmem_index;
+				cp_ra_used:1,
+				cp_in_kmem_array:1;
+	union {
+		/* which slab kmem index this memory allocated from */
+		short int	cp_kmem_index;
+		/* or the page size if it's not in the slab kmem array */
+		short int	cp_kmem_size;
+	};
 
 	/**
 	 * Owning IO in cl_page_state::CPS_OWNED state. Sub-page can be owned
