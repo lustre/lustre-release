@@ -100,10 +100,10 @@ static int mdc_dom_lock_match(const struct lu_env *env, struct obd_export *exp,
 		LASSERT(lock != NULL);
 		if (mdc_set_dom_lock_data(lock, obj)) {
 			lock_res_and_lock(lock);
-			if (!ldlm_is_lvb_cached(lock)) {
+			if (!(lock->l_flags & LDLM_FL_LVB_CACHED)) {
 				LASSERT(lock->l_ast_data == obj);
 				mdc_lock_lvb_update(env, obj, lock, NULL);
-				ldlm_set_lvb_cached(lock);
+				(lock->l_flags |= LDLM_FL_LVB_CACHED);
 			}
 			unlock_res_and_lock(lock);
 		} else {
@@ -312,7 +312,7 @@ static int mdc_dlm_canceling(const struct lu_env *env,
 		RETURN(0);
 	}
 
-	discard = ldlm_is_discard_data(dlmlock);
+	discard = (dlmlock->l_flags & LDLM_FL_DISCARD_DATA);
 	if (dlmlock->l_granted_mode & (LCK_PW | LCK_GROUP))
 		mode = CLM_WRITE;
 
@@ -493,11 +493,11 @@ static void mdc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
 		descr->cld_end = CL_PAGE_EOF;
 
 		/* no lvb update for matched lock */
-		if (!ldlm_is_lvb_cached(dlmlock)) {
+		if (!(dlmlock->l_flags & LDLM_FL_LVB_CACHED)) {
 			LASSERT(oscl->ols_flags & LDLM_FL_LVB_READY);
 			LASSERT(osc == dlmlock->l_ast_data);
 			mdc_lock_lvb_update(env, osc, dlmlock, NULL);
-			ldlm_set_lvb_cached(dlmlock);
+			(dlmlock->l_flags |= LDLM_FL_LVB_CACHED);
 		}
 	}
 	unlock_res_and_lock(dlmlock);
@@ -734,7 +734,7 @@ static int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 		matched = ldlm_handle2lock(&lockh);
 
 		if (CFS_FAIL_CHECK(OBD_FAIL_MDC_GLIMPSE_DDOS))
-			ldlm_set_kms_ignore(matched);
+			(matched->l_flags |= LDLM_FL_KMS_IGNORE);
 
 		if (mdc_set_dom_lock_data(matched, einfo->ei_cbdata)) {
 			*flags |= LDLM_FL_LVB_READY;
@@ -1484,7 +1484,7 @@ static int mdc_object_ast_clear(struct ldlm_lock *lock, void *data)
 	LASSERT(lock->l_resource->lr_type == LDLM_IBITS);
 	memcpy(lvb, &oinfo->loi_lvb, sizeof(oinfo->loi_lvb));
 	cl_object_attr_unlock(&osc->oo_cl);
-	ldlm_clear_lvb_cached(lock);
+	(lock->l_flags &= ~LDLM_FL_LVB_CACHED);
 
 	RETURN(LDLM_ITER_CONTINUE);
 }
