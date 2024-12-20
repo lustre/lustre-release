@@ -1736,7 +1736,7 @@ static int mdt_migrate_link_parent_lock(struct mdt_thread_info *info,
 			lock = ldlm_handle2lock(&lhl->mlh_rreg_lh);
 			LASSERT(lock != NULL);
 			lock_res_and_lock(lock);
-			ldlm_set_atomic_cb(lock);
+			(lock->l_flags |= LDLM_FL_ATOMIC_CB);
 			unlock_res_and_lock(lock);
 			ldlm_lock_put(lock);
 		}
@@ -2128,7 +2128,7 @@ static int mdd_migrate_close(struct mdt_thread_info *info,
 
 	/* check if the lease was already canceled */
 	lock_res_and_lock(lease);
-	rc = ldlm_is_cancel(lease);
+	rc = (lease->l_flags & LDLM_FL_CANCEL);
 	unlock_res_and_lock(lease);
 
 	if (rc) {
@@ -3100,7 +3100,7 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 		GOTO(out_put_lease, rc = -EBUSY);
 
 	lock_res_and_lock(lease);
-	lease_broken = ldlm_is_cancel(lease);
+	lease_broken = (lease->l_flags & LDLM_FL_CANCEL);
 	unlock_res_and_lock(lease);
 	if (lease_broken)
 		GOTO(out_unlock, rc = -EBUSY);

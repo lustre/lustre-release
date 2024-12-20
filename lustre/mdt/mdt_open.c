@@ -1947,7 +1947,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 
 	/* Check if the lease open lease has already canceled */
 	lock_res_and_lock(lease);
-	lease_broken = ldlm_is_cancel(lease);
+	lease_broken = (lease->l_flags & LDLM_FL_CANCEL);
 	unlock_res_and_lock(lease);
 
 	LDLM_DEBUG(lease, DFID " lease broken? %d",
@@ -2264,7 +2264,7 @@ static int mdt_close_handle_layouts(struct mdt_thread_info *info,
 
 	/* Check if the lease open lease has already canceled */
 	lock_res_and_lock(lease);
-	lease_broken = ldlm_is_cancel(lease);
+	lease_broken = (lease->l_flags & LDLM_FL_CANCEL);
 	unlock_res_and_lock(lease);
 
 	LDLM_DEBUG(lease, DFID " lease broken? %d",
@@ -2450,7 +2450,7 @@ static int mdt_close_resync_done(struct mdt_thread_info *info,
 
 	/* Check if the lease open lease has already canceled */
 	lock_res_and_lock(lease);
-	lease_broken = ldlm_is_cancel(lease);
+	lease_broken = (lease->l_flags & LDLM_FL_CANCEL);
 	unlock_res_and_lock(lease);
 
 	LDLM_DEBUG(lease, DFID " lease broken? %d",
