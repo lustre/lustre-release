@@ -4642,6 +4642,29 @@ AC_DEFUN([LC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG], [
 ]) # LC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG
 
 #
+# LC_HAVE_GROUP_INFO_USAGE_AS_REFCOUNT
+#
+# Linux commit v6.6-rc2-11-gd77008421afd
+#  groups: Convert group_info.usage to refcount_t
+#
+AC_DEFUN([LC_SRC_HAVE_GROUP_INFO_USAGE_AS_REFCOUNT], [
+	LB2_LINUX_TEST_SRC([struct_group_info_usage_is_refcount_t], [
+		#include <linux/cred.h>
+	],[
+		struct group_info *group = NULL;
+
+		refcount_dec(&group->usage);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_GROUP_INFO_USAGE_AS_REFCOUNT], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'struct group_info.usage' is refcount_t],
+	[struct_group_info_usage_is_refcount_t], [
+		AC_DEFINE(HAVE_GROUP_INFO_USAGE_AS_REFCOUNT, 1,
+			['struct group_info.usage' is refcount_t])
+	])
+]) # LC_HAVE_GROUP_INFO_USAGE_AS_REFCOUNT
+
+#
 # LC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
 #
 # Linux commit v6.5-rc2-20-g2ddd3cac1fa9
@@ -4784,6 +4807,172 @@ AC_DEFUN([LC_HAVE_STRUCT_FILE_LOCK_CORE], [
 			[struct file_lock_core exists])
 	])
 ]) # LC_HAVE_STRUCT_FILE_LOCK_CORE
+
+#
+# LC_HAVE_LINUX_UNALIGNED_HEADER
+#
+# Linux v6.12-rc1-3-g5f60d5f6bbc1
+#  move asm/unaligned.h to linux/unaligned.h
+#
+AC_DEFUN([LC_SRC_HAVE_LINUX_UNALIGNED_HEADER],[
+	LB2_LINUX_TEST_SRC([linux_unaligned_header], [
+		#include <linux/unaligned.h>
+	],[
+	],[])
+])
+AC_DEFUN([LC_HAVE_LINUX_UNALIGNED_HEADER],[
+	LB2_MSG_LINUX_TEST_RESULT([if linux/unaligned.h header is available],
+	[linux_unaligned_header], [
+		AC_DEFINE(HAVE_LINUX_UNALIGNED_HEADER, 1,
+			[linux/unaligned.h header is available])
+	])
+]) # LC_HAVE_LINUX_UNALIGNED_HEADER
+
+#
+# LC_HAVE_WRITE_BEGIN_FOLIO
+#
+# Linux v6.11-rc1-51-ga225800f322a
+#  fs: Convert aops->write_end to take a folio
+# Linux v6.11-rc1-52-g1da86618bdce
+#  fs: Convert aops->write_begin to take a folio
+#
+AC_DEFUN([LC_SRC_HAVE_WRITE_BEGIN_FOLIO],[
+	LB2_LINUX_TEST_SRC([write_begin_with_folio], [
+		#include <linux/fs.h>
+
+		static
+		int ll_write_begin(struct file *f, struct address_space *m,
+				   loff_t pos, unsigned len,
+				   struct folio **foliop, void **fsdata)
+		{
+			*foliop = NULL;
+			*fsdata = NULL;
+			return 0;
+		}
+
+		static
+		int ll_write_end(struct file *f, struct address_space *m,
+				 loff_t pos, unsigned len, unsigned copied,
+				 struct folio *folio, void *fsdata)
+		{
+			return 0;
+		}
+
+		const struct address_space_operations ll_aops = {
+			.write_begin	= ll_write_begin,
+			.write_end	= ll_write_end,
+		};
+	],[
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_WRITE_BEGIN_FOLIO],[
+	LB2_MSG_LINUX_TEST_RESULT([if write_begin() takes folio],
+	[write_begin_with_folio], [
+		AC_DEFINE(HAVE_WRITE_BEGIN_FOLIO, 1,
+			[write_begin() takes folio])
+	])
+]) # LC_HAVE_WRITE_BEGIN_FOLIO
+
+#
+# LC_HAVE_STRUCT_FILE_F_VERSION
+#
+# Linux v6.11-rc4-27-g11068e0b64cb
+#   fs: remove f_version
+#
+AC_DEFUN([LC_SRC_HAVE_STRUCT_FILE_F_VERSION], [
+	LB2_LINUX_TEST_SRC([struct_file_f_version], [
+		#include <linux/pagemap.h>
+	],[
+		struct file *file __attribute__ ((unused)) = NULL;
+
+		file->f_version = 0;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_STRUCT_FILE_F_VERSION], [
+	LB2_MSG_LINUX_TEST_RESULT([if struct file has f_version],
+	[struct_file_f_version], [
+		AC_DEFINE(HAVE_STRUCT_FILE_F_VERSION, 1,
+			[struct file has f_version])
+	])
+]) # LC_HAVE_STRUCT_FILE_F_VERSION
+
+#
+# LC_HAVE_PAGEERROR
+#
+# Linux v6.11-rc6-86-g09022bc196d2
+#   mm: remove PG_error
+#
+AC_DEFUN([LC_SRC_HAVE_PG_ERROR], [
+	LB2_LINUX_TEST_SRC([pg_error], [
+		#include <linux/pagemap.h>
+	],[
+		bool x __attribute__ ((unused)) = PageError(NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_PG_ERROR], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'PageError()' is available],
+	[pg_error], [
+		AC_DEFINE(HAVE_PG_ERROR, 1,
+			['PageError()()' is available])
+	],[
+		AC_DEFINE(PageError(pg), (0),
+			  ['PageError()' replacement])
+		AC_DEFINE(SetPageError(pg), ,
+			  ['SetPageError()' replacement])
+		AC_DEFINE(ClearPageError(pg), ,
+			  ['ClearPageError()' replacement])
+	])
+]) # LC_HAVE_PG_ERROR
+
+#
+# LC_HAVE_FOLIO_TEST_MLOCKED
+#
+# Linux v6.11-rc6-233-g99f86bbda317
+#   mm: remove PageMlocked
+#
+AC_DEFUN([LC_SRC_HAVE_FOLIO_TEST_MLOCKED], [
+	LB2_LINUX_TEST_SRC([folio_test_mlocked], [
+		#include <linux/pagemap.h>
+	],[
+		bool x __attribute__ ((unused)) = folio_test_mlocked(NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FOLIO_TEST_MLOCKED], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'folio_test_mlocked()' is available],
+	[folio_test_mlocked], [
+		AC_DEFINE([folio_test_mlocked_page(pg)],
+			  [folio_test_mlocked(page_folio((pg)))],
+			  ['folio_test_mlocked()' is available])
+	],[
+		AC_DEFINE([folio_test_mlocked_page(pg)], [PageMlocked((pg))],
+			  ['folio_test_mlocked()' replacement])
+	])
+]) # LC_HAVE_FOLIO_TEST_MLOCKED
+
+#
+# LC_HAVE_PAGE_MAPCOUNT_IS_TYPE
+#
+# Linux v6.11-rc6-225-ge880034cf718
+#   mm: introduce page_mapcount_is_type()
+#
+AC_DEFUN([LC_SRC_HAVE_PAGE_MAPCOUNT_IS_TYPE], [
+	LB2_LINUX_TEST_SRC([page_mapcount_is_type], [
+		#include <linux/pagemap.h>
+	],[
+		bool x __attribute__ ((unused)) = page_mapcount_is_type(0);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_PAGE_MAPCOUNT_IS_TYPE], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'page_mapcount_is_type()' is available],
+	[page_mapcount_is_type], [
+		AC_DEFINE(HAVE_PAGE_MAPCOUNT_IS_TYPE, 1,
+			['page_mapcount_is_type()' is available])
+	],[
+		AC_DEFINE(page_mapcount_is_type(count),
+			  (count < PAGE_MAPCOUNT_RESERVE + 1),
+			  [need 'page_mapcount_is_type()' replacement])
+	])
+]) # LC_HAVE_PAGE_MAPCOUNT_IS_TYPE
 
 #
 # LC_PROG_LINUX
@@ -5071,9 +5260,10 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_INODE_GET_CTIME
 	LC_SRC_HAVE_MMAP_WRITE_TRYLOCK
 	LC_SRC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG
-	LC_SRC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
 
 	# 6.7
+	LC_SRC_HAVE_GROUP_INFO_USAGE_AS_REFCOUNT
+	LC_SRC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
 	LC_SRC_HAVE_INODE_GET_MTIME_SEC
 	LC_SRC_HAVE_SHRINKER_ALLOC
 
@@ -5084,6 +5274,14 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 6.9
 	LC_SRC_HAVE_STRUCT_FILE_LOCK_CORE
+
+	# 6.12
+	LC_SRC_HAVE_LINUX_UNALIGNED_HEADER
+	LC_SRC_HAVE_WRITE_BEGIN_FOLIO
+	LC_SRC_HAVE_STRUCT_FILE_F_VERSION
+	LC_SRC_HAVE_PG_ERROR
+	LC_SRC_HAVE_FOLIO_TEST_MLOCKED
+	LC_SRC_HAVE_PAGE_MAPCOUNT_IS_TYPE
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -5392,9 +5590,10 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_INODE_GET_CTIME
 	LC_HAVE_MMAP_WRITE_TRYLOCK
 	LC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG
-	LC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
 
 	# 6.7
+	LC_HAVE_GROUP_INFO_USAGE_AS_REFCOUNT
+	LC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
 	LC_HAVE_INODE_GET_MTIME_SEC
 	LC_HAVE_SHRINKER_ALLOC
 
@@ -5405,6 +5604,14 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 6.9
 	LC_HAVE_STRUCT_FILE_LOCK_CORE
+
+	# 6.12
+	LC_HAVE_LINUX_UNALIGNED_HEADER
+	LC_HAVE_WRITE_BEGIN_FOLIO
+	LC_HAVE_STRUCT_FILE_F_VERSION
+	LC_HAVE_PG_ERROR
+	LC_HAVE_FOLIO_TEST_MLOCKED
+	LC_HAVE_PAGE_MAPCOUNT_IS_TYPE
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

@@ -969,6 +969,22 @@ static inline struct timespec64 inode_set_mtime(struct inode *inode,
 }
 #endif  /* !HAVE_INODE_GET_MTIME_SEC */
 
+#ifdef HAVE_WRITE_BEGIN_FOLIO
+/* .write_begin is passed **folio which is put with .write_end *folio */
+#define wbe_folio			folio
+#define wbe_page_folio(page)		page_folio((page))
+static inline struct page *wbe_folio_page(struct folio *folio)
+{
+	LASSERT(folio_nr_pages(folio) == 1);
+	return folio_page(folio, 0);
+}
+#else
+/* .write_begin is passed **page which is put with .write_end *page */
+#define wbe_folio			page
+#define wbe_page_folio(page)		(page)
+#define wbe_folio_page(page)		(page)
+#endif
+
 #ifdef HAVE_FOLIO_MAPCOUNT
 /* clone of fs/proc/internal.h:
  *   folio_precise_page_mapcount(struct folio *folio, struct page *page)
@@ -978,7 +994,7 @@ static inline int folio_mapcount_page(struct page *page)
 	struct folio *folio = page_folio(page);
 	int mapcount = atomic_read(&page->_mapcount) + 1;
 
-	if (mapcount < PAGE_MAPCOUNT_RESERVE + 1)
+	if (page_mapcount_is_type(mapcount))
 		mapcount = 0;
 	if (folio_test_large(folio))
 		mapcount += folio_entire_mapcount(folio);

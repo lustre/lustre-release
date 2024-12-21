@@ -475,7 +475,9 @@ static void vvp_pgcache_page_show(const struct lu_env *env,
 		   page_count(vmpage));
 	has_flags = 0;
 	seq_page_flag(seq, vmpage, locked, has_flags);
+#ifdef HAVE_PG_ERROR
 	seq_page_flag(seq, vmpage, error, has_flags);
+#endif
 	seq_page_flag(seq, vmpage, referenced, has_flags);
 	seq_page_flag(seq, vmpage, uptodate, has_flags);
 	seq_page_flag(seq, vmpage, dirty, has_flags);

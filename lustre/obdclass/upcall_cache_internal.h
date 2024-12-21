@@ -63,4 +63,22 @@ static inline int upcall_cache_get_entry_internal(struct upcall_cache *cache,
 }
 #endif
 
+static inline void upcall_group_usage_inc(struct group_info *group)
+{
+#ifdef HAVE_GROUP_INFO_USAGE_AS_REFCOUNT
+	refcount_inc(&group->usage);
+#else
+	atomic_inc(&group->usage);
+#endif
+}
+
+static inline void upcall_group_usage_dec(struct group_info *group)
+{
+#ifdef HAVE_GROUP_INFO_USAGE_AS_REFCOUNT
+	return refcount_dec(&group->usage);
+#else
+	return atomic_dec(&group->usage);
+#endif
+}
+
 #endif /* _UPCALL_CACHE_INTERNAL_H */

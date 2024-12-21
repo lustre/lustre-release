@@ -77,11 +77,11 @@ restart:
 			/* Do not place user's group ID in group list */
 			supp_in_ginfo[i] = true;
 		} else if (ginfo_ngroups) {
-			atomic_inc(&identity->mi_ginfo->usage);
+			upcall_group_usage_inc(identity->mi_ginfo);
 			supp_in_ginfo[i] =
 				lustre_groups_search(identity->mi_ginfo,
 						     uc->uc_suppgids[i]);
-			atomic_dec(&identity->mi_ginfo->usage);
+			upcall_group_usage_dec(identity->mi_ginfo);
 		}
 	}
 
@@ -119,9 +119,9 @@ restart:
 		 * just start over.
 		 */
 		if (ginfo_ngroups) {
-			atomic_inc(&identity->mi_ginfo->usage);
+			upcall_group_usage_inc(identity->mi_ginfo);
 			lustre_list_from_groups(glist_p, identity->mi_ginfo);
-			atomic_dec(&identity->mi_ginfo->usage);
+			upcall_group_usage_dec(identity->mi_ginfo);
 		} else if (identity->mi_ginfo && identity->mi_ginfo->ngroups) {
 			CFS_FREE_PTR_ARRAY(groups, groups_num + ginfo_ngroups);
 			groups = NULL;

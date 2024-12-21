@@ -535,7 +535,7 @@ static inline bool lru_page_busy(struct client_obd *cli, struct cl_page *page)
  */
 static inline bool lru_page_unevictable(struct cl_page *clpage)
 {
-	return PageMlocked(cl_page_vmpage(clpage));
+	return folio_test_mlocked_page(cl_page_vmpage(clpage));
 }
 
 enum shrink_action {

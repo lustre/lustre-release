@@ -2955,7 +2955,9 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
 			else
 				lfd->lfd_pos = offset;
 			file->f_pos = offset;
+#ifdef HAVE_STRUCT_FILE_F_VERSION
 			file->f_version = 0;
+#endif
 		}
 		ret = offset;
 	}

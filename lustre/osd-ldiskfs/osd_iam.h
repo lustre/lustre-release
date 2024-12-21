@@ -20,7 +20,11 @@
 #define __LINUX_LUSTRE_IAM_H__
 
 #include <linux/module.h>
+#ifdef HAVE_LINUX_UNALIGNED_HEADER
+#include <linux/unaligned.h>
+#else
 #include <asm/unaligned.h>
+#endif
 
 #include "osd_dynlocks.h"
 

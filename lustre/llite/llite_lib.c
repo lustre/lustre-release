@@ -3086,8 +3086,8 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 
 	LASSERTF((inode->i_state & I_FREEING) || inode_is_locked(inode),
 		 DFID ":inode %px state %#lx, lli_flags %#lx\n",
-		 PFID(ll_inode2fid(inode)), inode, inode->i_state,
-		 ll_i2info(inode)->lli_flags);
+		 PFID(ll_inode2fid(inode)), inode,
+		 (unsigned long)inode->i_state, ll_i2info(inode)->lli_flags);
 
 	truncate_inode_pages_final(mapping);
 
@@ -3114,7 +3114,7 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 #endif
 		CWARN("%s: inode="DFID"(%p) nrpages=%lu state %#lx, lli_flags %#lx, see https://jira.whamcloud.com/browse/LU-118\n",
 		      ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)),
-		      inode, nrpages, inode->i_state,
+		      inode, nrpages, (unsigned long)inode->i_state,
 		      ll_i2info(inode)->lli_flags);
 #ifdef HAVE_XARRAY_SUPPORT
 		rcu_read_lock();

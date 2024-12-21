@@ -777,12 +777,17 @@ static int ll_tiny_write_begin(struct page *vmpage, struct address_space *mappin
 	return 0;
 }
 
+/*
+ * write_begin is responsible for allocating page cache pages to be used
+ * to hold data for buffered i/o on the 'write' path.
+ * Called by generic_perform_write() to allocate one page [or one folio]
+ */
 static int ll_write_begin(struct file *file, struct address_space *mapping,
 			  loff_t pos, unsigned int len,
 #ifdef HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
 			  unsigned int flags,
 #endif
-			  struct page **pagep, void **fsdata)
+			  struct wbe_folio **foliop, void **fsdata)
 {
 	struct ll_cl_context *lcc = NULL;
 	const struct lu_env  *env = NULL;
@@ -923,7 +928,7 @@ out:
 		if (io)
 			io->ci_result = result;
 	} else {
-		*pagep = vmpage;
+		*foliop = wbe_page_folio(vmpage);
 		*fsdata = lcc;
 	}
 	RETURN(result);
@@ -967,13 +972,14 @@ out:
 
 static int ll_write_end(struct file *file, struct address_space *mapping,
 			loff_t pos, unsigned len, unsigned copied,
-			struct page *vmpage, void *fsdata)
+			struct wbe_folio *vmfolio, void *fsdata)
 {
 	struct ll_cl_context *lcc = fsdata;
 	const struct lu_env *env;
 	struct cl_io *io;
 	struct vvp_io *vio;
 	struct cl_page *page;
+	struct page *vmpage = wbe_folio_page(vmfolio);
 	unsigned from = pos & (PAGE_SIZE - 1);
 	bool unplug = false;
 	int result = 0;
