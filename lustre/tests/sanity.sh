@@ -21450,7 +21450,7 @@ test_200() {
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 
 	local POOL=${POOL:-cea1}
-	local POOL_ROOT=${POOL_ROOT:-$DIR/d200.pools}
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	local POOL_DIR_NAME=${POOL_DIR_NAME:-dir_tst}
 	# Pool OST targets
 	local first_ost=0
