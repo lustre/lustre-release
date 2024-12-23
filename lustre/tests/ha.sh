@@ -159,11 +159,76 @@ ha_touch()
 		true
 }
 
+ha_recovery_status ()
+{
+	local log
+	local -a nodes=(${ha_victims[*]} ${ha_victims_pair[*]})
+	local node
+
+	while [ ! -e "$ha_stop_file" ]; do
+		for ((i=0; i<${#nodes[@]}; i++)) {
+			node=${nodes[i]}
+			log=$ha_tmp_dir/${node}.recovery.status
+			local lock=${log}.lock
+			if [ ! -e $lock ]; then
+				ha_on $node \
+					"date; \
+					lctl get_param *.*.recovery_status" >>\
+					"$log" 2>&1 || true
+			fi
+		}
+		ha_sleep $ha_recovery_status_delay \
+			"recovery status each $ha_recovery_status_delay sec"
+	done
+}
+
 ha_log()
 {
 	local nodes=${1// /,}
 	shift
 	ha_on $nodes "lctl mark $*"
+}
+
+declare -A ha_node_vmstat_pids
+
+ha_start_vmstat_node()
+{
+	local node=$1
+	local delay=$2
+	local log=$ha_vmstat_dir/${node}.vmstat
+
+	rm -f $ha_tmp_dir/${node}.vmstat.lock
+
+	local pid=$(ha_on $node "mkdir -p $ha_vmstat_dir; vmstat -t $delay >> \
+		$log 2>/dev/null </dev/null & echo \$!" | awk '{print $2}')
+	echo "VMSTAT started on $node PID: $pid, log: ${node}:$log"
+
+	ha_on $node ps aux | grep vmstat
+	ha_node_vmstat_pids[$node]=$pid
+}
+
+ha_start_vmstat()
+{
+	local -a nodes=(${ha_victims[*]} ${ha_victims_pair[*]})
+	for ((i=0; i<${#nodes[@]}; i++)) {
+		ha_start_vmstat_node ${nodes[i]} $ha_vmstat_delay
+	}
+}
+
+ha_stop_vmstat()
+{
+	local -a nodes=(${ha_victims[*]} ${ha_victims_pair[*]})
+
+	for ((i=0; i<${#nodes[@]}; i++)) {
+		node=${nodes[i]}
+		ha_info "Stopping vmstat on $node ... "
+		ha_on $node "ps aux | grep vmstat" || continue
+		local pid=${ha_node_vmstat_pids[$node]}
+		ha_on $node "kill -s TERM $pid; \
+				tail --pid=$pid -f /dev/null" || true
+		ha_info "Check is vmstat still running on $node ..."
+		ha_on $node "ps aux | grep vmstat" || true
+	}
 }
 
 ha_error()
@@ -186,8 +251,23 @@ ha_trap_err()
 trap ha_trap_err ERR
 set -eE
 
+declare TMP=${TMP:-/tmp}
+
+# Set equal to value if want to gather recovery_status info
+# each "value" secs.
+# 0 means "do not collect vmstat and recovery status info"
+declare     ha_recovery_status_delay=${RECOVERY_STATUS_DELAY:-0}
+declare     ha_recovery_status_pid
+
+declare     ha_vmstat_delay=${VMSTAT_DELAY:-0}
 declare     ha_power_down_pids
-declare     ha_tmp_dir=/tmp/$(basename $0)-$$
+declare     ha_test_subdir=$(basename $0)-$$
+declare     ha_tmp_dir=$TMP/$ha_test_subdir
+
+# Useless to store vmstat results in /tmp because
+# of no guarantee that files not disapeared when node crashed
+declare     ha_vmstat_dir=${VMSTATDIR:-$TMP}/$ha_test_subdir
+
 declare     ha_stop_file=$ha_tmp_dir/stop
 declare     ha_fail_file=$ha_tmp_dir/fail
 declare     ha_pm_states=$ha_tmp_dir/ha_pm_states
@@ -391,6 +471,14 @@ ha_trap_exit()
 {
 	ha_touch stop
 	trap 0
+	if (( ha_vmstat_delay != 0 )); then
+		ha_stop_vmstat
+	fi
+	if (( ha_recovery_status_delay != 0 )); then
+		# the process $ha_recovery_status_pid
+		# could be completed by ha_stop_loads()->wait
+		wait $ha_recovery_status_pid || true
+	fi
 	if [ -e "$ha_fail_file" ]; then
 		ha_info "Test directories ${ha_testdirs[@]} not removed"
 		ha_info "Temporary directory $ha_tmp_dir not removed"
@@ -410,9 +498,13 @@ ha_trap_stop_signals()
 
 ha_sleep()
 {
-    local n=$1
+	local n=$1
+	local reason=$2
 
-    ha_info "Sleeping for ${n}s"
+	[[ -n $reason ]] &&
+		reason=", Reason: $reason"
+
+    ha_info "Sleeping for ${n}s$reason"
     #
     # sleep(1) could interrupted.
     #
@@ -447,7 +539,7 @@ ha_unlock()
 ha_dump_logs()
 {
 	local nodes=${1// /,}
-	local file=/tmp/$(basename $0)-$$-$(date +%s).dk
+	local file=${ha_tmp_dir}-$(date +%s).dk
 	local lock=$ha_tmp_dir/lock-dump-logs
 	local rc=0
 
@@ -483,6 +575,7 @@ ha_repeat_mpi_load()
 	local log=$ha_tmp_dir/$client-$tag
 	local rc=0
 	local rccheck=0
+	local rcprepostcmd=0
 	local nr_loops=0
 	local avg_loop_time=0
 	local start_time=$(date +%s)
@@ -512,9 +605,18 @@ ha_repeat_mpi_load()
 		else
 			dir_stripe_count=$ha_dir_stripe_count
 		fi
-		[[ -n "$ha_precmd" ]] && ha_info "$ha_precmd" &&
+		if [[ -n "$ha_precmd" ]]; then
+			ha_info "$ha_precmd"
 			ha_on $client "$ha_precmd" >>"$log" 2>&1
-		ha_info "$client Creates $dir with -i$mdt_index -c$dir_stripe_count "
+			rcprepostcmd=$?
+			if (( rcprepostcmd != 0 )); then
+				ha_touch stop,fail $client-$tag
+				ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
+				continue
+			fi
+		fi
+
+		ha_info "$client Creates $dir with -i$mdt_index -c$dir_stripe_count ; stripeparams: $stripeparams "
 		ha_on $client $LFS mkdir -i$mdt_index -c$dir_stripe_count "$dir" &&
 		ha_on $client $LFS getdirstripe "$dir" &&
 		ha_on $client $LFS setstripe $stripeparams $dir &&
@@ -526,8 +628,15 @@ ha_repeat_mpi_load()
 		ha_on ${ha_clients[0]} "$check_attrs &&                    \
 			$LFS df $dir &&                                    \
 			$check_attrs " && rccheck=1
-		[[ -n "$ha_postcmd" ]] && ha_info "$ha_postcmd" &&
+		if [[ -n "$ha_postcmd" ]]; then
+			ha_info "$ha_postcmd"
 			ha_on $client "$ha_postcmd" >>"$log" 2>&1
+			rcprepostcmd=$?
+			if (( rcprepostcmd != 0 )); then
+				ha_touch stop,fail $client-$tag
+				ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
+			fi
+		fi
 		if (( ((rc == 0)) && ((rccheck == 0)) && \
 			(( mustpass != 0 )) )) ||
 			(( ((rc != 0)) && ((rccheck == 0)) && \
@@ -821,7 +930,7 @@ ha_start_lfsck()
 		if [ -e $ha_lfsck_lock ]; then
 			rc=0
 			ha_wait_unlock $ha_lfsck_lock
-			ha_sleep 120
+			ha_sleep 120 "before lfsck restarting"
 			ha_on $ha_lfsck_node "lctl lfsck_start $params" || rc=1
 		fi
 	fi
@@ -948,6 +1057,22 @@ ha_power_down_cmd_fn()
 	# format is: POWER_DOWN=sysrqcrash
 	sysrqcrash)
 		cmd="pdsh -S -w $nodes -u 120 \"echo c > /proc/sysrq-trigger\" &"
+		# stop grab recovery status on crashed nodes
+		if (( ha_recovery_status_delay != 0 )); then
+			for n in ${nodes//,/ }; do
+				touch $ha_tmp_dir/${n}.recovery.status.lock
+				echo $(date) \
+					"recovery status collection is paused: \
+					$n is going to power down" >> \
+					$ha_tmp_dir/${n}.recovery.status
+			done
+		fi
+		# restart vmstat after node back
+		if (( ha_vmstat_delay != 0 )); then
+			for n in ${nodes//,/ }; do
+				touch $ha_tmp_dir/${n}.vmstat.lock
+			done
+		fi
 		eval $cmd
 		pid=$!
 		ha_power_down_pids=$(echo $ha_power_down_pids $pid)
@@ -989,7 +1114,7 @@ ha_power_down()
 	for (( i=0; i<10; i++ )) {
 		ha_info "attempt: $i"
 		ha_power_down_cmd_fn $nodes || rc=1
-		ha_sleep $ha_power_delay
+		ha_sleep $ha_power_delay "delay node status check after powerdown ..."
 		ha_powermanage $nodes $state && rc=0 && break
 	}
 	if [[ -n "$ha_power_down_pids" ]]; then
@@ -1025,7 +1150,7 @@ ha_power_up_delay()
 	local rc
 
 	if [[ ${#ha_victims_pair[@]} -eq 0 ]]; then
-		ha_sleep $ha_node_up_delay
+		ha_sleep $ha_node_up_delay "before node power up"
 		return 0
 	fi
 
@@ -1177,7 +1302,7 @@ ha_failback()
 			$ha_failback_delay sec, attempt: $i ($attempts); \
 			cmd: $ha_failback_cmd $nodes"
 
-		ha_sleep $ha_failback_delay
+		ha_sleep $ha_failback_delay "delay before failback"
 		[ "$ha_failback_cmd" ] ||
 		{
 			ha_info "No failback command set, skiping"
@@ -1186,6 +1311,21 @@ ha_failback()
 		if $ha_failback_cmd $nodes ; then
 			rc=0
 			ha_info "Failback succesfully started: attempt: $i"
+			for n in ${nodes//,/ }; do
+				if (( ha_recovery_status_delay != 0 )); then
+					local lock=$ha_tmp_dir/${n}.recovery.status.lock
+					ls -al $lock
+					rm -f $lock
+					echo $(date) \
+						"recovery status collection is \
+						resumed" >> \
+						$ha_tmp_dir/${n}.recovery.status
+				fi
+				lock=$ha_tmp_dir/${n}.vmstat.lock
+				if (( ha_vmstat_delay != 0 )) && [[ -e $lock ]]; then
+					ha_start_vmstat_node $n $ha_vmstat_delay
+				fi
+			done
 			break
 		fi
 	done
@@ -1216,7 +1356,8 @@ ha_killer()
 		ha_info "Failing $nodes"
 		$ha_workloads_only && ha_info "    is skipped: workload only..."
 
-		ha_sleep $(ha_rand $ha_max_failover_period)
+		ha_sleep $(ha_rand $ha_max_failover_period) \
+			"random of max failover set ($ha_max_failover_period)"
 		$ha_workloads_only || ha_power_down $nodes
 		ha_sleep 10
 		ha_wait_loads || return
@@ -1277,6 +1418,18 @@ ha_main()
 		ha_on ${ha_clients[0]} " \
 			$LFS setstripe $ha_stripe_params $test_dir"
 	done
+
+	if (( ha_recovery_status_delay != 0 )); then
+		ha_info "Dumping recovery status info \
+			each $ha_recovery_status_delay sec"
+		ha_recovery_status &
+		ha_recovery_status_pid=$!
+	fi
+
+	if (( ha_vmstat_delay != 0 )); then
+		ha_info "Starting vmstat with delay $ha_vmstat_delay"
+		ha_start_vmstat
+	fi
 
 	ha_start_loads
 	ha_wait_loads
