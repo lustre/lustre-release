@@ -580,8 +580,11 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 			RETURN(rc);
 		}
 
-		if (qi->lqi_id.qid_uid == 0) {
-			/* root ID should be always present in the quota file */
+		if (qi->lqi_id.qid_uid == 0 && qi->lqi_space > 0) {
+			/* root ID should be always present in the quota file,
+			 * also only "target" uid (where we add space) is
+			 * guaranteed, the source one can change after the
+			 * declaration */
 			crd = 1;
 		} else {
 			/* can't rely on the current state as it can change
