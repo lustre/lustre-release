@@ -1,0 +1,44 @@
+Special module to allow the crash utility to extract only the lustre
+debug information from a dump.
+
+Before building we need to setup the environment. For RHEL systems you
+need to install crash-devel so mk.sh will work. Also install the
+debuginfo kernel rpms as well as the lustre debuginfo rpms.
+
+Build as follows:
+
+  contrib/debug_tools/crash-mod/mk.sh
+
+  ...or if you prefer...
+
+  gcc -nostartfiles -shared -rdynamic -I/usr/include/crash -o lustre-ext.so lustre-ext.c -fPIC -D<arch>
+
+  Then copy lustre-ext.so to /usr/lib64/crash/extensions/
+
+Example usage:
+
+  # Launch crash against a crash dump or live kernel to extract
+  # and re-assemble the binary lustre debug log.
+  > crash <your kernel crash dump> <your vmlinux>
+    ...
+    crash> mod -S
+      ...
+    crash> extend lustre.so
+      lustre.so: shared object loaded
+    crash> lustre -l /tmp/foo.dl
+      lustre: Dumped 2560 debug pages from CPU 0
+      lustre: Dumped 2560 debug pages from CPU 1
+      lustre: Dumped 2560 debug pages from CPU 2
+      lustre: Dumped 2560 debug pages from CPU 3
+      lustre: Dumped 2560 debug pages from CPU 4
+      lustre: Dumped 2560 debug pages from CPU 5
+      lustre: Dumped 2560 debug pages from CPU 6
+      lustre: Dumped 2560 debug pages from CPU 7
+      lustre: Dumped 20480 total debug pages from 8 CPUs to /tmp/foo.dl
+    crash> quit
+
+  # Convert the binary debug log to a text debug log
+  > /usr/sbin/lctl df /tmp/foo.dl >/tmp/foo.dk
+
+  # View your debug log
+  > vim /tmp/foo.dk
