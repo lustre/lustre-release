@@ -6989,27 +6989,20 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct osd_it_ea *oie;
 	struct file *file;
+	struct dentry *obj_dentry;
 
 	ENTRY;
-	file = osd_alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
-				     inode->i_fop);
-	if (IS_ERR(file))
-		RETURN(ERR_CAST(file));
+	OBD_SLAB_ALLOC_PTR_GFP(oie, osd_itea_cachep, GFP_NOFS);
+	if (oie == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+	obj_dentry = &oie->oie_dentry;
+	obj_dentry->d_inode = inode;
+	obj_dentry->d_sb = inode->i_sb;
+	obj_dentry->d_name.hash = 0;
 
-	/* Only FMODE_64BITHASH or FMODE_32BITHASH should be set, NOT both. */
-	if (attr & LUDA_64BITHASH)
-		file->f_mode |= FMODE_64BITHASH;
-	else
-		file->f_mode |= FMODE_32BITHASH;
-	ihold(inode);
-
-	OBD_SLAB_ALLOC_PTR(oie, osd_itea_cachep);
-	if (!oie)
-		goto out_fput;
-
-	oie->oie_rd_dirent       = 0;
-	oie->oie_it_dirent       = 0;
-	oie->oie_dirent          = NULL;
+	oie->oie_rd_dirent = 0;
+	oie->oie_it_dirent = 0;
+	oie->oie_dirent = NULL;
 	if (unlikely(!info->oti_it_ea_buf_used)) {
 		oie->oie_buf = info->oti_it_ea_buf;
 		info->oti_it_ea_buf_used = 1;
@@ -7019,14 +7012,22 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 			goto out_free;
 	}
 	oie->oie_obj = NULL;
-	oie->oie_file = file;
+	file = &oie->oie_file;
+	/* Only FMODE_64BITHASH or FMODE_32BITHASH should be set, NOT both. */
+	if (attr & LUDA_64BITHASH)
+		file->f_mode |= FMODE_64BITHASH;
+	else
+		file->f_mode |= FMODE_32BITHASH;
+	file->f_path.dentry = obj_dentry;
+	file->f_flags = O_NOATIME | __FMODE_NONOTIFY;
+	file->f_mapping = inode->i_mapping;
+	file->f_op = inode->i_fop;
+	file->f_inode = inode;
 
 	RETURN(oie);
 
 out_free:
 	OBD_SLAB_FREE_PTR(oie, osd_itea_cachep);
-out_fput:
-	fput(file);
 
 	return ERR_PTR(-ENOMEM);
 }
@@ -7066,11 +7067,12 @@ void osd_it_dir_fini(const struct lu_env *env, struct osd_it_ea *oie,
 	struct osd_thread_info *info = osd_oti_get(env);
 
 	ENTRY;
-	fput(oie->oie_file);
+	oie->oie_file.f_op->release(inode, &oie->oie_file);
 	if (unlikely(oie->oie_buf != info->oti_it_ea_buf))
 		OBD_FREE(oie->oie_buf, OSD_IT_EA_BUFSIZE);
 	else
 		info->oti_it_ea_buf_used = 0;
+
 	OBD_SLAB_FREE_PTR(oie, osd_itea_cachep);
 	EXIT;
 }
@@ -7109,7 +7111,7 @@ static int osd_it_ea_get(const struct lu_env *env,
 
 	ENTRY;
 	LASSERT(((const char *)key)[0] == '\0');
-	it->oie_file->f_pos = 0;
+	it->oie_file.f_pos = 0;
 	it->oie_rd_dirent = 0;
 	it->oie_it_dirent = 0;
 	it->oie_dirent = NULL;
@@ -7229,7 +7231,8 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 	struct osd_it_ea *it = (struct osd_it_ea *)di;
 	struct osd_object *obj = it->oie_obj;
 	struct htree_lock *hlock = NULL;
-	struct file *filp = it->oie_file;
+	struct file *filp = &it->oie_file;
+	struct inode *ino = file_inode(filp);
 	int rc = 0;
 	struct osd_filldir_cbs buf = {
 		.ctx.actor = osd_ldiskfs_filldir,
@@ -7251,7 +7254,30 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 		}
 	}
 
-	rc = iterate_dir(filp, &buf.ctx);
+#ifdef HAVE_FOP_ITERATE_SHARED
+	inode_lock_shared(ino);
+#else
+	inode_lock(ino);
+#endif
+	if (!IS_DEADDIR(ino)) {
+		if (filp->f_op->iterate_shared) {
+			buf.ctx.pos = filp->f_pos;
+			rc = filp->f_op->iterate_shared(filp, &buf.ctx);
+			filp->f_pos = buf.ctx.pos;
+		} else {
+#ifdef HAVE_FOP_READDIR
+			rc = filp->f_op->readdir(filp, &buf.ctx, buf.ctx.actor);
+                        buf.ctx.pos = filp->f_pos;
+#else
+			rc = -ENOTDIR;
+#endif
+		}
+	}
+#ifdef HAVE_FOP_ITERATE_SHARED
+	inode_unlock_shared(ino);
+#else
+	inode_unlock(ino);
+#endif
 	if (rc)
 		GOTO(unlock, rc);
 
@@ -7260,7 +7286,7 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 		 * If it does not get any dirent, it means it has been reached
 		 * to the end of the dir
 		 */
-		it->oie_file->f_pos = ldiskfs_get_htree_eof(it->oie_file);
+		it->oie_file.f_pos = ldiskfs_get_htree_eof(&it->oie_file);
 		if (rc == 0)
 			rc = 1;
 	} else {
@@ -7304,7 +7330,7 @@ static int osd_it_ea_next(const struct lu_env *env, struct dt_it *di)
 		it->oie_it_dirent++;
 		rc = 0;
 	} else {
-		if (it->oie_file->f_pos == ldiskfs_get_htree_eof(it->oie_file))
+		if (it->oie_file.f_pos == ldiskfs_get_htree_eof(&it->oie_file))
 			rc = 1;
 		else
 			rc = osd_ldiskfs_it_fill(env, di);
@@ -7918,7 +7944,7 @@ static int osd_it_ea_load(const struct lu_env *env,
 	int rc;
 
 	ENTRY;
-	it->oie_file->f_pos = hash;
+	it->oie_file.f_pos = hash;
 
 	rc =  osd_ldiskfs_it_fill(env, di);
 	if (rc > 0)

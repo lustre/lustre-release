@@ -520,7 +520,7 @@ struct osd_it_ea_dirent {
 struct osd_it_ea {
 	struct osd_object	*oie_obj;
 	/** used in ldiskfs iterator, to stored file pointer */
-	struct file		*oie_file;
+	struct file		oie_file;
 	/** how many entries have been read-cached from storage */
 	int			oie_rd_dirent;
 	/** current entry is being iterated by caller */
@@ -529,6 +529,7 @@ struct osd_it_ea {
 	struct osd_it_ea_dirent *oie_dirent;
 	/** buffer to hold entries, size == OSD_IT_EA_BUFSIZE */
 	void			*oie_buf;
+	struct dentry		oie_dentry;
 };
 
 /**

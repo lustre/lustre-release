@@ -3032,7 +3032,7 @@ static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
 	if (IS_ERR(oie))
 		RETURN(PTR_ERR(oie));
 
-	oie->oie_file->f_pos = 0;
+	oie->oie_file.f_pos = 0;
 	rc = osd_ldiskfs_it_fill(env, (struct dt_it *)oie);
 	if (rc > 0)
 		rc = -ENODATA;
@@ -3052,8 +3052,8 @@ static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
 		if (oie->oie_it_dirent <= oie->oie_rd_dirent)
 			continue;
 
-		if (oie->oie_file->f_pos ==
-		    ldiskfs_get_htree_eof(oie->oie_file))
+		if (oie->oie_file.f_pos ==
+		    ldiskfs_get_htree_eof(&oie->oie_file))
 			break;
 
 		rc = osd_ldiskfs_it_fill(env, (struct dt_it *)oie);
