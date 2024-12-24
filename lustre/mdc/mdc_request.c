@@ -898,23 +898,6 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 	else
 		req = ptlrpc_request_alloc(class_exp2cliimp(exp), req_fmt);
 
-	/* Ensure that this close's handle is fixed up during replay. */
-	if (likely(mod != NULL)) {
-		LASSERTF(mod->mod_open_req != NULL &&
-			 mod->mod_open_req->rq_type != LI_POISON,
-			 "POISONED open %px!\n", mod->mod_open_req);
-
-		mod->mod_close_req = req;
-
-		DEBUG_REQ(D_RPCTRACE, mod->mod_open_req, "matched open");
-		/* We no longer want to preserve this open for replay even
-		 * though the open was committed. b=3632, b=3633 */
-		spin_lock(&mod->mod_open_req->rq_lock);
-		mod->mod_open_req->rq_replay = 0;
-		spin_unlock(&mod->mod_open_req->rq_lock);
-	} else {
-		CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
-	}
 	if (req == NULL) {
 		/**
 		 * TODO: repeat close after errors
@@ -953,6 +936,26 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 			     obd->u.cli.cl_default_mds_easize);
 
         ptlrpc_request_set_replen(req);
+
+	/* Ensure that this close's handle is fixed up during replay. */
+	if (likely(mod != NULL)) {
+		LASSERTF(mod->mod_open_req != NULL &&
+			 mod->mod_open_req->rq_type != LI_POISON,
+			 "POISONED open %px!\n", mod->mod_open_req);
+
+		/* Set only when the close RPC has been filled, otherwise
+		 * mdc_replay_open() can access RPC with no rq_reqmsg */
+		mod->mod_close_req = req;
+
+		DEBUG_REQ(D_RPCTRACE, mod->mod_open_req, "matched open");
+		/* We no longer want to preserve this open for replay even
+		 * though the open was committed. b=3632, b=3633 */
+		spin_lock(&mod->mod_open_req->rq_lock);
+		mod->mod_open_req->rq_replay = 0;
+		spin_unlock(&mod->mod_open_req->rq_lock);
+	} else {
+		CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
+	}
 
 	ptlrpc_get_mod_rpc_slot(req);
 	rc = ptlrpc_queue_wait(req);
