@@ -318,9 +318,8 @@ static int nodemap_idx_insert(const struct lu_env *env,
 	BUILD_BUG_ON(sizeof(union nodemap_rec) != 32);
 
 	th = dt_trans_create(env, dev);
-
 	if (IS_ERR(th))
-		GOTO(out, rc = PTR_ERR(th));
+		RETURN(PTR_ERR(th));
 
 	rc = dt_declare_insert(env, idx,
 			       (const struct dt_rec *)nr,
@@ -359,9 +358,8 @@ static int nodemap_idx_update(const struct lu_env *env,
 	int			 rc = 0;
 
 	th = dt_trans_create(env, dev);
-
 	if (IS_ERR(th))
-		GOTO(out, rc = PTR_ERR(th));
+		RETURN(PTR_ERR(th));
 
 	rc = dt_declare_delete(env, idx, (const struct dt_key *)nk, th);
 	if (rc != 0)
@@ -410,9 +408,8 @@ static int nodemap_idx_delete(const struct lu_env *env,
 	int			 rc = 0;
 
 	th = dt_trans_create(env, dev);
-
 	if (IS_ERR(th))
-		GOTO(out, rc = PTR_ERR(th));
+		RETURN(PTR_ERR(th));
 
 	rc = dt_declare_delete(env, idx, (const struct dt_key *)nk, th);
 	if (rc != 0)
