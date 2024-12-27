@@ -96,9 +96,13 @@ struct lu_nodemap {
 	/* access by nodemap name */
 	struct hlist_node	 nm_hash;
 	struct nodemap_pde	*nm_pde_data;
-	/* fileset the nodes of this nodemap are restricted to */
+	/* primary fileset this nodemap is restricted to */
 	char			 *nm_prim_fileset;
 	unsigned int		 nm_prim_fileset_size;
+	/* lock for fileset red/black tree */
+	struct rw_semaphore	 nm_fileset_alt_lock;
+	/* alternate fileset map */
+	struct rb_root		 nm_fileset_alt;
 	/* information about the expected SELinux policy on the nodes */
 	char			 nm_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
 

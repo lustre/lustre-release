@@ -67,13 +67,24 @@ struct lu_idmap {
 
 struct lu_nodemap_fileset_info {
 	/* nodemap id */
-	__u32 nfi_nm_id;
+	__u32		nfi_nm_id;
 	/* starting subid of the fileset in the IAM */
-	__u32 nfi_subid;
+	__u32		nfi_subid;
 	/* number of fileset fragments */
-	__u32 nfi_fragment_cnt;
+	__u32		nfi_fragment_cnt;
 	/* the fileset */
-	const char *nfi_fileset;
+	const char	*nfi_fileset;
+};
+
+struct lu_fileset_alt {
+	/* alt fileset id */
+	__u32		nfa_id;
+	/* fileset path */
+	char		*nfa_path;
+	/* fileset path size */
+	__u32		nfa_path_size;
+	/* rb tree node */
+	struct rb_node	nfa_rb;
 };
 
 static inline enum nodemap_idx_type nm_idx_get_type(unsigned int id)
@@ -124,6 +135,18 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			      enum nodemap_tree_type,
 			      enum nodemap_id_type id_type,
 			      __u32 id);
+struct lu_fileset_alt *fileset_alt_init(unsigned int fileset_size);
+struct lu_fileset_alt *fileset_alt_create(const char *fileset_path);
+void fileset_alt_destroy(struct lu_fileset_alt *fileset);
+void fileset_alt_destroy_tree(struct rb_root *root);
+int fileset_alt_add(struct rb_root *root, struct lu_fileset_alt *fileset);
+int fileset_alt_delete(struct rb_root *root, struct lu_fileset_alt *fileset);
+struct lu_fileset_alt *fileset_alt_search_id(struct rb_root *root,
+					 unsigned int fileset_id);
+struct lu_fileset_alt *fileset_alt_search_path(struct rb_root *root,
+					   const char *fileset_path);
+bool fileset_alt_path_exists(struct rb_root *root, const char *path);
+void fileset_alt_resize(struct rb_root *root);
 int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp);
 void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp);
 void nm_member_delete_list(struct lu_nodemap *nodemap);

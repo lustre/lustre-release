@@ -1603,7 +1603,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 		} else if (cluster_idx_key >= NODEMAP_FILESET &&
 			   cluster_idx_key <
 				   NODEMAP_FILESET +
-					   LUSTRE_NODEMAP_FILESET_SUBID_RANGE) {
+					   (LUSTRE_NODEMAP_FILESET_SUBID_RANGE *
+					    LUSTRE_NODEMAP_FILESET_NUM_MAX)) {
 			rc = nodemap_cluster_fileset_helper(nodemap, rec,
 							    cluster_idx_key);
 		} else {

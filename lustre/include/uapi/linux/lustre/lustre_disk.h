@@ -338,6 +338,8 @@ struct nodemap_offset_rec {
 	(sizeof(struct nodemap_cluster_rec) - (2 * sizeof(__u16)))
 /* fileset subid range to support a PATH_MAX characters fileset and header */
 #define LUSTRE_NODEMAP_FILESET_SUBID_RANGE 256
+/* max number of filesets per nodemap */
+#define LUSTRE_NODEMAP_FILESET_NUM_MAX 256
 
 struct nodemap_fileset_rec {
 	/* 28 bytes for fileset path fragment */
@@ -370,7 +372,7 @@ enum nodemap_cluster_rec_subid {
 	NODEMAP_FILESET = 512,
 	/*
 	 * Depending on its length, its fragments may use several subids
-	 * in the range 512-767.
+	 * in the range of 512 to 66,047 (assuming max 256 filesets).
 	 */
 };
 

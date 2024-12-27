@@ -21,6 +21,7 @@ nrs_server_objs := nrs_crr.o nrs_orr.o nrs_tbf.o
 
 nodemap_objs := nodemap_handler.o nodemap_lproc.o nodemap_range.o
 nodemap_objs += nodemap_idmap.o nodemap_member.o nodemap_storage.o
+nodemap_objs += nodemap_fileset_alt.o
 
 -include $(ptlrpc_dir)/../ldlm/Makefile
 @SERVER_TRUE@-include $(ptlrpc_dir)/../target/Makefile
