@@ -901,7 +901,8 @@ static int nodemap_idx_fileset_fragments_del(
  */
 static int nodemap_idx_fileset_fragments_clear(const struct lu_nodemap *nodemap,
 					       const struct lu_env *env,
-					       struct dt_object *idx)
+					       struct dt_object *idx,
+					       unsigned int fset_subid)
 {
 	struct nodemap_key *nk_array;
 	unsigned int count, subid, i;
@@ -915,7 +916,7 @@ static int nodemap_idx_fileset_fragments_clear(const struct lu_nodemap *nodemap,
 
 	/* setup fileset fragment keys to be deleted */
 	for (i = 0; i < count; i++) {
-		subid = NODEMAP_FILESET + i;
+		subid = fset_subid + i;
 		nodemap_cluster_key_init(&nk_array[i], nodemap->nm_id, subid);
 	}
 
@@ -1025,8 +1026,8 @@ int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
 			CERROR("%s: Undo adding fileset failed. rc = %d : rc2 = %d\n",
 			       fset_info.nfi_fileset, rc, rc2);
 			/* undo failed. wipe the fileset and set error code */
-			rc2 = nodemap_idx_fileset_fragments_clear(nodemap, &env,
-								  idx);
+			rc2 = nodemap_idx_fileset_fragments_clear(
+				nodemap, &env, idx, fset_subid);
 			rc = -EIO;
 		}
 	}
@@ -1150,8 +1151,8 @@ int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
 			CERROR("%s: Undo deleting fileset failed. rc = %d : rc2 = %d\n",
 			       fset_info.nfi_fileset, rc, rc2);
 			/* undo failed. wipe the fileset and set error code */
-			rc2 = nodemap_idx_fileset_fragments_clear(nodemap, &env,
-								  idx);
+			rc2 = nodemap_idx_fileset_fragments_clear(
+				nodemap, &env, idx, fset_subid);
 			rc = -EIO;
 		}
 	}
@@ -1164,15 +1165,18 @@ out:
 /**
  * nodemap_idx_fileset_clear() - Clears fileset subid range from the nodemap IAM
  * @nodemap: nodemap where the fileset is set to be cleared
+ * @fileset_id: fileset id to be cleared
  *
  * Return:
  * * %0 on success (ENOENT during idx_delete is ignored)
  * * %-EINVAL invalid input parameters
  */
-int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap)
+int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap,
+			      unsigned int fileset_id)
 {
 	struct lu_env env;
 	struct dt_object *idx;
+	unsigned int fset_subid;
 	int rc = 0;
 
 	ENTRY;
@@ -1192,8 +1196,10 @@ int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap)
 		RETURN(rc);
 
 	idx = nodemap_mgs_ncf->ncf_obj;
+	fset_subid = nodemap_fileset_get_subid(fileset_id);
 
-	rc = nodemap_idx_fileset_fragments_clear(nodemap, &env, idx);
+	rc = nodemap_idx_fileset_fragments_clear(nodemap, &env, idx,
+						 fset_subid);
 
 	lu_env_fini(&env);
 	return rc;
@@ -1485,20 +1491,20 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	if (!nodemap->nmf_fileset_use_iam) {
 		mutex_lock(&active_config_lock);
 		old_nm = nodemap_lookup(rec->ncr.ncr_name);
-		if (!IS_ERR(old_nm) && old_nm->nm_prim_fileset &&
-		    old_nm->nm_prim_fileset[0] != '\0') {
-			OBD_ALLOC(nodemap->nm_prim_fileset,
-				  old_nm->nm_prim_fileset_size);
-			if (!nodemap->nm_prim_fileset) {
+		if (!IS_ERR(old_nm) && old_nm->nm_fileset_prim &&
+		    old_nm->nm_fileset_prim[0] != '\0') {
+			OBD_ALLOC(nodemap->nm_fileset_prim,
+				  old_nm->nm_fileset_prim_size);
+			if (!nodemap->nm_fileset_prim) {
 				mutex_unlock(&active_config_lock);
 				nodemap_putref(old_nm);
 				GOTO(out_nodemap, rc = -ENOMEM);
 			}
-			nodemap->nm_prim_fileset_size =
-				old_nm->nm_prim_fileset_size;
-			memcpy(nodemap->nm_prim_fileset,
-			       old_nm->nm_prim_fileset,
-			       old_nm->nm_prim_fileset_size);
+			nodemap->nm_fileset_prim_size =
+				old_nm->nm_fileset_prim_size;
+			memcpy(nodemap->nm_fileset_prim,
+			       old_nm->nm_fileset_prim,
+			       old_nm->nm_fileset_prim_size);
 		}
 		mutex_unlock(&active_config_lock);
 		if (!IS_ERR(old_nm))
@@ -1546,8 +1552,8 @@ static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
  * * %-ENOMEM memory allocation failure
  */
 static int nodemap_cluster_rec_fileset_fragment(const union nodemap_rec *rec,
-						char **fileset,
-						unsigned int *fileset_size)
+						char *fileset,
+						unsigned int fileset_size)
 {
 	unsigned int fragment_id, fragment_len, fset_offset, fset_len_remain,
 		fset_prealloc_size;
@@ -1556,31 +1562,30 @@ static int nodemap_cluster_rec_fileset_fragment(const union nodemap_rec *rec,
 	fragment_len = LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
 	fset_prealloc_size = PATH_MAX + 1;
 
-	/* preallocate fileset for first occurring fragment with PATH_MAX + 1 */
-	if (!*fileset) {
-		OBD_ALLOC(*fileset, fset_prealloc_size);
-		if (!*fileset)
-			return -ENOMEM;
-		*fileset_size = fset_prealloc_size;
-	}
-
 	/* compute nodemap fileset position */
 	fset_offset = fragment_id * LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE;
-	fset_len_remain = *fileset_size - fset_offset;
+	fset_len_remain = fileset_size - fset_offset;
 
 	if (fragment_len > fset_len_remain)
 		fragment_len = fset_len_remain;
 
-	memcpy(*fileset + fset_offset, rec->nfr.nfr_path_fragment,
-	       fragment_len);
+	memcpy(fileset + fset_offset, rec->nfr.nfr_path_fragment, fragment_len);
 
 	return 0;
 }
 
+/**
+ * Get the fileset id from the subid.
+ *
+ * \param	subid		subid of the fileset fragment
+ *
+ * \retval	>=0		on success, representing fileset id
+ * \retval	-EINVAL		invalid subid: subid < NODEMAP_FILESET
+ */
 static int nodemap_fileset_get_id(int subid)
 {
 	if (subid < NODEMAP_FILESET)
-		return -EINVAL;
+		RETURN(-EINVAL);
 
 	return (subid - NODEMAP_FILESET) / LUSTRE_NODEMAP_FILESET_SUBID_RANGE;
 }
@@ -1590,29 +1595,68 @@ static int nodemap_fileset_get_id(int subid)
  * the current nodemap.
  * @nodemap: nodemap to update with this fileset fragment
  * @rec: fileset fragment record
- * @subid: subid of the fileset fragment
+ * @subid: cluster idx subid of the fileset fragment
  *
  * Return:
  * * %0 on success
- * * %-EINVAL invalid input parameters (invalid fset_id)
+ * * %-EINVAL invalid input parameters (invalid subid)
  */
 static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
 					  const union nodemap_rec *rec,
 					  int subid)
 {
+	struct lu_fileset_alt *fset_alt;
+	unsigned int fset_prealloc_size;
 	int fset_id;
+	int rc = 0;
 
 	fset_id = nodemap_fileset_get_id(subid);
 	if (fset_id < 0)
 		return fset_id;
 
+	fset_prealloc_size = PATH_MAX + 1;
+	/* primary fileset */
 	if (fset_id == 0) {
-		return nodemap_cluster_rec_fileset_fragment(
-			rec, &nodemap->nm_prim_fileset,
-			&nodemap->nm_prim_fileset_size);
+		/* preallocate fileset for first occurring fragment */
+		if (!nodemap->nm_fileset_prim) {
+			OBD_ALLOC(nodemap->nm_fileset_prim, fset_prealloc_size);
+			if (!nodemap->nm_fileset_prim)
+				GOTO(out, rc = -ENOMEM);
+			nodemap->nm_fileset_prim_size = fset_prealloc_size;
+		}
+		rc = nodemap_cluster_rec_fileset_fragment(
+			rec, nodemap->nm_fileset_prim,
+			nodemap->nm_fileset_prim_size);
+		GOTO(out, rc);
 	}
-	/* TODO get correct alternate fileset and process it */
-	return -EINVAL;
+
+	/* alternate fileset */
+	down_write(&nodemap->nm_fileset_alt_lock);
+
+	fset_alt = fileset_alt_search_id(&nodemap->nm_fileset_alt, fset_id);
+	if (!fset_alt) {
+		/* The fragment is encountered for the first time. It must be
+		 * allocated and linked into the rb tree with the correct id.
+		 */
+		fset_alt = fileset_alt_init(fset_prealloc_size);
+		if (!fset_alt) {
+			rc = -ENOMEM;
+			GOTO(alt_unlock, rc);
+		}
+
+		fset_alt->nfa_id = fset_id;
+		rc = fileset_alt_add(&nodemap->nm_fileset_alt, fset_alt);
+		if (rc)
+			GOTO(alt_unlock, rc);
+	}
+
+	rc = nodemap_cluster_rec_fileset_fragment(rec, fset_alt->nfa_path,
+						  fset_alt->nfa_path_size);
+
+alt_unlock:
+	up_write(&nodemap->nm_fileset_alt_lock);
+out:
+	return rc;
 }
 
 static int nodemap_capabilities_helper(struct lu_nodemap *nodemap,
@@ -2167,11 +2211,15 @@ static void nodemap_fileset_resize(struct nodemap_config *config)
 	cfs_hash_for_each_safe(config->nmc_nodemap_hash, nm_hash_list_cb,
 			       &nodemap_list_head);
 	list_for_each_entry(nodemap, &nodemap_list_head, nm_list) {
-		if (!nodemap->nm_prim_fileset)
+		down_write(&nodemap->nm_fileset_alt_lock);
+		fileset_alt_resize(&nodemap->nm_fileset_alt);
+		up_write(&nodemap->nm_fileset_alt_lock);
+
+		if (!nodemap->nm_fileset_prim)
 			continue;
 
-		fset_size_prealloc = nodemap->nm_prim_fileset_size;
-		fset_size_actual = strlen(nodemap->nm_prim_fileset) + 1;
+		fset_size_prealloc = nodemap->nm_fileset_prim_size;
+		fset_size_actual = strlen(nodemap->nm_fileset_prim) + 1;
 		if (fset_size_actual == fset_size_prealloc)
 			continue;
 
@@ -2183,12 +2231,13 @@ static void nodemap_fileset_resize(struct nodemap_config *config)
 			continue;
 		}
 
-		memcpy(fset_tmp, nodemap->nm_prim_fileset, fset_size_actual);
+		memcpy(fset_tmp, nodemap->nm_fileset_prim, fset_size_actual);
 
-		OBD_FREE(nodemap->nm_prim_fileset, fset_size_prealloc);
+		OBD_FREE(nodemap->nm_fileset_prim, fset_size_prealloc);
 
-		nodemap->nm_prim_fileset_size = fset_size_actual;
-		nodemap->nm_prim_fileset = fset_tmp;
+		nodemap->nm_fileset_prim_size = fset_size_actual;
+		nodemap->nm_fileset_prim = fset_tmp;
+
 	}
 
 	mutex_unlock(&active_config_lock);

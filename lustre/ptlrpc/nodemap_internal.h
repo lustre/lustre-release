@@ -23,6 +23,9 @@
 #define NODEMAP_NOBODY_GID 65534
 #define NODEMAP_NOBODY_PROJID 65534
 
+/* fileset id of primary fileset */
+#define NODEMAP_FILESET_PRIM_ID 0
+
 struct lprocfs_static_vars;
 
 /* nodemap root proc directory under fs/lustre */
@@ -138,8 +141,7 @@ void idmap_delete_tree(struct lu_nodemap *nodemap);
 int idmap_copy_tree(struct lu_nodemap *dst, struct lu_nodemap *src);
 struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			      enum nodemap_tree_type,
-			      enum nodemap_id_type id_type,
-			      __u32 id);
+			      enum nodemap_id_type id_type, __u32 id);
 struct lu_fileset_alt *fileset_alt_init(unsigned int fileset_size);
 struct lu_fileset_alt *fileset_alt_create(const char *fileset_path);
 void fileset_alt_destroy(struct lu_fileset_alt *fileset);
@@ -195,7 +197,8 @@ int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
 			       unsigned int fileset_id);
 int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
 			    const char *fileset, unsigned int fileset_id);
-int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap);
+int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap,
+			      unsigned int fileset_id);
 int nodemap_idx_capabilities_add(const struct lu_nodemap *nodemap);
 int nodemap_idx_capabilities_update(const struct lu_nodemap *nodemap);
 int nodemap_idx_capabilities_del(const struct lu_nodemap *nodemap);

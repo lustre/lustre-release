@@ -135,7 +135,9 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_RBAC	  = 0x00ce05f, /**< rbac */
 	LCFG_NODEMAP_DENY_MOUNT	  = 0x00ce060, /**< deny mount */
 	LCFG_NODEMAP_RAISE_PRIVS	= 0x00ce061, /**< sub-nm raise privs */
+	LCFG_NODEMAP_FILESET_ADD  = 0x00ce062, /**< add fileset */
 	LCFG_NODEMAP_SET_CAPS	  = 0x00ce063, /**< user capabilities */
+	LCFG_NODEMAP_FILESET_DEL  = 0x00ce064, /**< del fileset */
 	LCFG_NODEMAP_GSS_IDENTIFY	= 0x00ce065, /**< gss identification */
 	LCFG_NODEMAP_LOOKUP_SHA		= 0x00ce066, /**< lookup nm sha */
 };

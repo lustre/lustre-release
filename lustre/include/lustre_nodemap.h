@@ -127,15 +127,14 @@ struct lu_nodemap {
 	struct hlist_node	 nm_hash;
 	struct nodemap_pde	*nm_pde_data;
 	/* primary fileset this nodemap is restricted to */
-	char			 *nm_prim_fileset;
-	unsigned int		 nm_prim_fileset_size;
+	char			 *nm_fileset_prim;
+	unsigned int		 nm_fileset_prim_size;
 	/* lock for fileset red/black tree */
 	struct rw_semaphore	 nm_fileset_alt_lock;
 	/* alternate fileset map */
 	struct rb_root		 nm_fileset_alt;
 	/* information about the expected SELinux policy on the nodes */
 	char			 nm_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
-
 	/* used when loading/unloading nodemaps */
 	struct list_head	 nm_list;
 	/* is a dynamic nodemap */
@@ -207,9 +206,9 @@ int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
-int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
-			bool ioctl_op, bool *out_clean_llog_fileset);
-char *nodemap_get_fileset(const struct lu_nodemap *nodemap);
+int nodemap_set_fileset_prim_lproc(const char *nodemap_name,
+				   const char *fileset_path, bool checkperm);
+char *nodemap_get_fileset_prim(const struct lu_nodemap *nodemap);
 int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm);
 const char *nodemap_get_sepol(const struct lu_nodemap *nodemap);
 int nodemap_set_capabilities(const char *nodemap_name, char *caps);

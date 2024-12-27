@@ -156,6 +156,12 @@ command_t nodemap_cmdlist[] = {
 	{.pc_name = "del_range", .pc_func = jt_nodemap_del_range,
 	 .pc_help = "delete a nid range from a nodemap\n"
 	 "usage: nodemap del_range --name NODEMAP_NAME --range NID_RANGE"},
+	{.pc_name = "fileset_add", .pc_func = jt_nodemap_fileset_add,
+	 .pc_help = "add a fileset to a nodemap\n"
+	 "usage: nodemap fileset_add [--alt] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
+	{.pc_name = "fileset_del", .pc_func = jt_nodemap_fileset_del,
+	 .pc_help = "delete a fileset from a nodemap\n"
+	 "usage: nodemap fileset_del --name NODEMAP_NAME --fileset SUBDIRECTORY"},
 	{.pc_name = "modify", .pc_func = jt_nodemap_modify,
 	 .pc_help = "modify a nodemap parameters\n"
 	 "usage: nodemap modify --name NODEMAP_NAME --property PROPERTY\n"
@@ -180,7 +186,8 @@ command_t nodemap_cmdlist[] = {
 	 "usage: nodemap set_cap --name NODEMAP_NAME --caps CAPABILITIES --type {mask|set|off}"},
 	{.pc_name = "set_fileset", .pc_func = jt_nodemap_set_fileset,
 	 .pc_help = "set a fileset on a nodemap\n"
-	 "usage: nodemap set_fileset --name NODEMAP_NAME --fileset FILESET"},
+	 "** deprecated ** set a fileset on a nodemap -- please use nodemap fileset_{add/del} instead\n"
+	 "usage: nodemap set_fileset --name NODEMAP_NAME --fileset SUBDIRECTORY"},
 	{.pc_name = "set_sepol", .pc_func = jt_nodemap_set_sepol,
 	 .pc_help = "set SELinux policy info on a nodemap\n"
 	 "usage: nodemap set_sepol --name NODEMAP_NAME --sepol SEPOL"},
@@ -587,6 +594,12 @@ command_t cmdlist[] = {
 	{"nodemap_del_range", jt_nodemap_del_range, 0,
 	 "delete a nid range from a nodemap\n"
 	 "usage: nodemap_del_range --name NODEMAP_NAME --range NID_RANGE"},
+	{"nodemap_fileset_add", jt_nodemap_fileset_add, 0,
+	 "add a fileset to a nodemap\n"
+	 "usage: nodemap_fileset_add [--alt] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
+	{"nodemap_fileset_del", jt_nodemap_fileset_del, 0,
+	 "delete a fileset from a nodemap\n"
+	 "usage: nodemap_fileset_del --name NODEMAP_NAME --fileset SUBDIRECTORY"},
 	{"nodemap_modify", jt_nodemap_modify, 0,
 	 "modify a nodemap property\n"
 	 "usage: nodemap_modify --name NODEMAP_NAME --property PROPERTY_NAME{=VALUE| --value VALUE}\n"
@@ -604,8 +617,8 @@ command_t cmdlist[] = {
 	 "delete a UID or GID mapping from a nodemap\n"
 	 "usage: nodemap_del_idmap --name NODEMAP_NAME --idtype {uid|gid|projid} --idmap CLIENTID:FSID"},
 	{"nodemap_set_fileset", jt_nodemap_set_fileset, 0,
-	 "set a fileset on a nodemap\n"
-	 "usage: nodemap_set_fileset --name NODEMAP_NAME --fileset FILESET"},
+	 "** deprecated ** set a fileset on a nodemap -- please use nodemap_fileset_{add/del} instead\n"
+	 "usage: nodemap_set_fileset --name NODEMAP_NAME --fileset SUBDIRECTORY"},
 	{"nodemap_set_sepol", jt_nodemap_set_sepol, 0,
 	 "set SELinux policy info on a nodemap\n"
 	 "usage: nodemap_set_sepol --name NODEMAP_NAME --sepol SEPOL"},

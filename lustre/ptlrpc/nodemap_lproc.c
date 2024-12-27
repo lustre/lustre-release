@@ -283,6 +283,9 @@ static int nodemap_ranges_open(struct inode *inode, struct file *file)
 static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
+	struct lu_fileset_alt *fileset_alt;
+	struct rb_node *node;
+	bool cont = false;
 	int rc = 0;
 
 	mutex_lock(&active_config_lock);
@@ -291,13 +294,28 @@ static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
-			(char *)m->private, rc);
+		       (char *)m->private, rc);
 		return rc;
 	}
-	if (nodemap->nm_prim_fileset && nodemap->nm_prim_fileset[0] != '\0')
-		seq_printf(m, "%s\n", nodemap->nm_prim_fileset);
-	else
-		seq_puts(m, "\n");
+
+	seq_puts(m, "[");
+	if (nodemap->nm_fileset_prim && nodemap->nm_fileset_prim[0] != '\0') {
+		seq_printf(m, "\n { primary:\t%s }", nodemap->nm_fileset_prim);
+		cont = true;
+	}
+
+	down_read(&nodemap->nm_fileset_alt_lock);
+	for (node = rb_first(&nodemap->nm_fileset_alt); node;
+	     node = rb_next(node)) {
+		if (cont)
+			seq_puts(m, ",");
+		cont = true;
+		fileset_alt = rb_entry(node, struct lu_fileset_alt, nfa_rb);
+		seq_printf(m, "\n { alternate:\t%s }", fileset_alt->nfa_path);
+	}
+	up_read(&nodemap->nm_fileset_alt_lock);
+
+	seq_puts(m, "\n]\n");
 
 	nodemap_putref(nodemap);
 	return rc;
@@ -338,7 +356,7 @@ nodemap_fileset_seq_write(struct file *file,
 	if (copy_from_user(nm_fileset, buffer, count))
 		GOTO(out, rc = -EFAULT);
 
-	rc = nodemap_set_fileset(m->private, nm_fileset, false, false, NULL);
+	rc = nodemap_set_fileset_prim_lproc(m->private, nm_fileset, false);
 	if (rc != 0)
 		GOTO(out, rc = -EINVAL);
 

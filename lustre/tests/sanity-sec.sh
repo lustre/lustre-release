@@ -2206,12 +2206,62 @@ test_26() {
 }
 run_test 26 "test transferring very large nodemap"
 
+do_facet_check_fileset() {
+	local facet=$1
+	local nm=$2
+	local fset_check=$3
+	local fset_type=${4:-"primary"}
+
+	if [[ $fset_type != "primary" && $fset_type != "alternate" ]]; then
+		error "unknown fileset type $fset_type"
+	fi
+
+	do_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
+		awk '/${fset_type}/ { if (\\\$3 == \\\"$fset_check\\\") print \\\$3 }'"
+}
+
+wait_update_facet_fileset() {
+	local facet=$1
+	local nm=$2
+	local fset_check=$3
+	local fset_expected=$4
+	local fset_type=${5:-"primary"}
+	local error_msg="fileset not cleared on $nm nodemap"
+
+	if [[ -n $fset_expected ]]; then
+		error_msg="fileset $fset_check not set on $nm nodemap"
+	fi
+
+	if [[ $fset_type != "primary" && $fset_type != "alternate" ]]; then
+		error "unknown fileset type $fset_type"
+	fi
+
+	wait_update_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
+		awk '/${fset_type}/ { if (\\\$3 == \\\"$fset_check\\\") print \\\$3 }'" \
+		"$fset_expected" || error $error_msg
+}
+
+wait_nm_sync_fileset() {
+	local nm=$1
+	local fset_check=$2
+	local fset_expected=$3
+	local fset_type=${4:-"primary"}
+
+	if [[ $fset_type != "primary" && $fset_type != "alternate" ]]; then
+		error "unknown fileset type $fset_type"
+	fi
+
+	wait_nm_sync $nm fileset "$fset_expected" "" \
+		"awk '/$fset_type/ { if (\$3 == \"$fset_check\") print \$3 }'"
+}
+
 nodemap_exercise_fileset_cleanup() {
 	# Already mounted clients are skipped in zconf_mount_clients()
 	for client in "${clients_arr[@]}"; do
 		zconf_mount_clients $client $MOUNT $MOUNT_OPTS ||
 			error "unable to mount client $client"
 	done
+	wait_ssk
 }
 
 stopall_restart_servers() {
@@ -2270,9 +2320,8 @@ nodemap_exercise_fileset() {
 			--fileset "/${subdir}" ||
 			error "can't set fileset to $nm nodemap on MGS"
 		# check fileset is set on local mgs node
-		wait_update_facet mgs "$LCTL get_param nodemap.${nm}.fileset" \
-				"nodemap.${nm}.fileset=/${subdir}" ||
-			error "fileset /${subdir} not set on $nm nodemap"
+		wait_update_facet_fileset mgs $nm "/$subdir" "/$subdir" \
+			"primary"
 	else
 		if ! combined_mgs_mds; then
 			do_facet mgs $LCTL set_param \
@@ -2285,7 +2334,7 @@ nodemap_exercise_fileset() {
 	fi
 
 	# check fileset is set on remote nodes
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=/${subdir}"
+	wait_nm_sync_fileset $nm "/$subdir" "/$subdir" "primary"
 
 	if $check_proj; then
 		do_facet mgs $LCTL nodemap_modify --name $nm \
@@ -2316,6 +2365,7 @@ nodemap_exercise_fileset() {
 	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
 		error "unable to remount client ${clients_arr[0]}"
 	unset FILESET
+	wait_ssk
 
 	# test mount point content
 	do_node ${clients_arr[0]} test -f $MOUNT/this_is_$subdir ||
@@ -2335,6 +2385,7 @@ nodemap_exercise_fileset() {
 	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
 		error "unable to remount client ${clients_arr[0]}"
 	unset FILESET
+	wait_ssk
 
 	# test mount point content
 	do_node ${clients_arr[0]} test -f $MOUNT/this_is_$subsubdir ||
@@ -2344,16 +2395,14 @@ nodemap_exercise_fileset() {
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm --fileset clear ||
 		error "unable to delete fileset info on $nm nodemap"
 	# check whether fileset was removed on mgs
-	wait_update_facet mgs "$LCTL get_param nodemap.${nm}.fileset" \
-			  "nodemap.${nm}.fileset=" ||
-		error "fileset info still not cleared on $nm nodemap"
+	wait_update_facet_fileset mgs $nm "/$subdir" "" "primary"
 	if ! $have_persistent_fset_cmd; then
 		do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=clear ||
 		error "unable to reset fileset info on $nm nodemap"
 	fi
 
 	# check whether fileset was removed on remote nodes
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset="
+	wait_nm_sync_fileset $nm "/$subdir" "" "primary"
 	if ! $have_persistent_fset_cmd; then
 		do_facet mgs $LCTL set_param -P -d nodemap.${nm}.fileset ||
 			error "unable to remove fileset rule on $nm nodemap"
@@ -2364,6 +2413,7 @@ nodemap_exercise_fileset() {
 		error "unable to umount client ${clients_arr[0]}"
 	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
 		error "unable to remount client ${clients_arr[0]}"
+	wait_ssk
 
 	# test mount point content
 	if ! $(do_node ${clients_arr[0]} test -d $MOUNT/$subdir); then
@@ -2748,7 +2798,6 @@ cleanup_27ac() {
 	wait_nm_sync $nm id ''
 	# restart clients
 	nodemap_exercise_fileset_cleanup
-	wait_ssk
 }
 
 test_27ac() {
@@ -2772,14 +2821,14 @@ test_27ac() {
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm \
 		--fileset $fileset_iam ||
 		error "unable to set fileset $fileset_iam on $nm"
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=$iam_fileset" ||
+	wait_nm_sync_fileset $nm "$iam_fileset" "$iam_fileset" "primary" ||
 		error "fileset $iam_fileset not synced"
 
 	# quickly delete and re-add nodemap in one synchronization step
 	do_facet mgs "$LCTL nodemap_del $nm ; $LCTL nodemap_add $nm" ||
 		error "unable to del and add $nm nodemap"
 	# 1. IAM fileset should be removed
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=" ||
+	wait_nm_sync_fileset $nm "$iam_fileset" "" "primary" ||
 		error "fileset not cleared"
 
 	# set llog fileset
@@ -2787,23 +2836,23 @@ test_27ac() {
 		error "unable to set fileset $fileset_llog on $nm locally"
 	do_facet mgs $LCTL set_param -P nodemap.$nm.fileset=$fileset_llog ||
 		error "unable to set fileset $fileset_llog on $nm persistently"
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=$fileset_llog" ||
-		error "fileset $fileset_llog not synced"
+	wait_nm_sync_fileset $nm "$llog_fileset" "$llog_fileset" "primary" ||
+		error "fileset $llog_fileset not synced"
 
 	# re-start all components to verify persistence of fileset after restart
 	stopall_restart_servers
 
 	# 2. Verify llog fileset is still set
-	wait_update_facet mds "$LCTL get_param nodemap.${nm}.fileset" \
-		"nodemap.${nm}.fileset=$fileset_llog" ||
+	wait_update_facet_fileset mds1 $nm "$fileset_llog" \
+		"$fileset_llog" "primary" ||
 		error "fileset $fileset_llog shouldn't be removed after restart"
 
 	# overwrite llog fileset with iam fileset
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm \
 		--fileset $fileset_iam ||
 		error "unable to set fileset $fileset_iam on $nm"
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=$fileset_iam" ||
-		error "fileset $fileset_iam not synced"
+	wait_nm_sync_fileset $nm "$iam_fileset" "$iam_fileset" "primary" ||
+		error "fileset $iam_fileset not synced"
 
 	# 3. setting llog fileset should be denied. We omit set_param -P since
 	# it follows the same logic but can't be verified as the error is
@@ -2814,12 +2863,12 @@ test_27ac() {
 	# reset fileset (allows setting an llog fileset)
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm --fileset clear ||
 		error "unable to clear fileset on $nm"
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=" ||
+	wait_nm_sync_fileset $nm "$iam_fileset" "" "primary" ||
 		error "fileset not cleared"
 
 	# 4. Restart and verify fileset is still cleared
 	stopall_restart_servers
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=" ||
+	wait_nm_sync_fileset $nm "$iam_fileset" "" "primary" ||
 		error "fileset not cleared"
 
 	# 5. Verify fileset can be set
@@ -2827,28 +2876,34 @@ test_27ac() {
 		error "unable to set fileset $fileset_llog on $nm locally"
 	do_facet mgs $LCTL set_param -P nodemap.$nm.fileset=$fileset_llog ||
 		error "unable to set fileset $fileset_llog on $nm persistently"
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=$fileset_llog" ||
-		error "fileset $fileset_llog not synced"
+	wait_nm_sync_fileset $nm "$llog_fileset" "$llog_fileset" "primary" ||
+		error "fileset $llog_fileset not synced"
 
 	# delete and re-add nodemap
 	do_facet mgs "$LCTL nodemap_del $nm ; $LCTL nodemap_add $nm" ||
 		error "unable to del and add $nm nodemap"
 	# 6. llog fileset should be removed
-	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=" ||
+	wait_nm_sync_fileset $nm "$llog_fileset" "" "primary" ||
 		error "fileset not cleared"
-
 }
 run_test 27ac "test nodemap llog and IAM fileset compatibility"
 
 test_27b() { #LU-10703
-	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
+	local i
+	local have_multi_filesets
+
+	(( MDS1_VERSION < $(version_code 2.11.50) )) &&
 		skip "Need MDS >= 2.11.50"
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs"
+
+	(( MDSCOUNT < 2 )) && skip "needs >= 2 MDTs"
+
+	(( MDS1_VERSION >= $(version_code 2.16.56) )) &&
+		have_multi_filesets=true
 
 	# if servers run on the same node, it is impossible to tell if they get
 	# synced with the mgs, so this test needs to be skipped
-	if [ $(facet_active_host mgs) == $(facet_active_host mds) ] &&
-	   [ $(facet_active_host mgs) == $(facet_active_host ost1) ]; then
+	if [[ $(facet_active_host mgs) == $(facet_active_host mds) ]] &&
+	   [[ $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
 		skip "local mode not supported"
 	fi
 
@@ -2856,7 +2911,7 @@ test_27b() { #LU-10703
 	trap nodemap_test_cleanup EXIT
 
 	# Add the nodemaps and set their filesets
-	for i in $(seq 1 $MDSCOUNT); do
+	for ((i = 1; i <= MDSCOUNT; i++)); do
 		do_facet mgs $LCTL nodemap_del nm$i 2>/dev/null
 		do_facet mgs $LCTL nodemap_add nm$i ||
 			error "add nodemap nm$i failed"
@@ -2867,7 +2922,11 @@ test_27b() { #LU-10703
 			error "set nm$i.fileset=/dir$i failed on MGS"
 		do_facet mgs $LCTL set_param -P nodemap.nm$i.fileset=/dir$i ||
 			error "set nm$i.fileset=/dir$i failed on servers"
-		wait_nm_sync nm$i fileset "nodemap.nm$i.fileset=/dir$i"
+		if $have_multi_filesets; then
+			wait_nm_sync_fileset "nm$i" "/dir$i" "/dir$i" "primary"
+		else
+			wait_nm_sync nm$i fileset "nodemap.nm$i.fileset=/dir$i"
+		fi
 		# set a property to check that the nodemap have been synced
 		# as the sync disables the set_iam flag for llog filesets
 		do_facet mgs $LCTL nodemap_modify --name nm$i \
@@ -2876,11 +2935,10 @@ test_27b() { #LU-10703
 	done
 
 	# Check if all the filesets are correct
-	for i in $(seq 1 $MDSCOUNT); do
-		fileset=$(do_facet mds$i \
-			  $LCTL get_param -n nodemap.nm$i.fileset)
-		[ "$fileset" = "/dir$i" ] ||
-			error "nm$i.fileset $fileset != /dir$i on mds$i"
+	for ((i = 1; i <= MDSCOUNT; i++)); do
+		fset=$(do_facet mds$i $LCTL get_param -n nodemap.nm$i.fileset)
+		[[ $(awk '/primary/ { print $3 }' <<< $fset) == "/dir$i" ]] ||
+			error "nm$i.fileset $fset != /dir$i on mds$i"
 		do_facet mgs $LCTL set_param -P -d nodemap.nm$i.fileset ||
 			error "unable to remove fileset rule for nm$i nodemap"
 		do_facet mgs $LCTL nodemap_del nm$i ||
@@ -2890,6 +2948,110 @@ test_27b() { #LU-10703
 	nodemap_test_cleanup
 }
 run_test 27b "The new nodemap won't clear the old nodemap's fileset"
+
+test_27c() {
+	local nm
+	local nm_tmp
+	local i
+	local fset
+	local prim_fileset
+	local alt_fileset
+
+	(( $MGS_VERSION >= $(version_code 2.16.56) )) ||
+		skip "Need MGS >= 2.16.56 for multiple filesets"
+
+	# if servers run on the same node, it is impossible to tell if they get
+	# synced with the mgs, so this test needs to be skipped
+	if [[ $(facet_active_host mgs) == $(facet_active_host mds) ]] &&
+	   [[ $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
+		skip "local mode not supported"
+	fi
+
+	# clients are re-mounted later when all filesets are removed
+	stack_trap nodemap_exercise_fileset_cleanup EXIT
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+	else
+		# will conflict with SK's nodemaps
+		stack_trap nodemap_test_cleanup EXIT
+	fi
+
+	nm="c0"
+	nm_tmp="c0_tmp"
+	prim_fileset="/this_is_a_primary_fileset"
+	alt_fileset="/this_is_an_alternate_fileset"
+
+	nodemap_test_setup
+
+	do_facet mgs $LCTL nodemap_fileset_add --name $nm \
+		--fileset "$prim_fileset" ||
+		error "cannot add prim fileset $prim_fileset"
+
+	# add 255 alternate filesets
+	# each longer than the previous one, up to 941 characters
+	for ((i = 1; i < 256; i++)); do
+		alt_fileset="${alt_fileset}${i}_"
+		do_facet mgs $LCTL nodemap_fileset_add --alt --name $nm \
+			--fileset "$alt_fileset" ||
+			error "cannot add alt fileset $alt_fileset"
+	done
+
+	wait_nm_sync_fileset $nm "$alt_fileset" "$alt_fileset" "alternate"
+
+	alt_fileset="${alt_fileset}OVERFLOW_"
+	do_facet mgs $LCTL nodemap_fileset_add --alt --name $nm \
+		--fileset "$alt_fileset" &&
+		error "shouldn't be able to add alt fileset $alt_fileset"
+
+	# re-start all components to verify persistence of fileset after restart
+	stopall_restart_servers
+
+	alt_fileset="/this_is_an_alternate_fileset"
+	for ((i = 1; i < 256; i++)); do
+		alt_fileset="${alt_fileset}${i}_"
+		do_facet mgs $LCTL nodemap_fileset_del --name $nm \
+			--fileset "$alt_fileset" ||
+			error "cannot del alt fileset $alt_fileset"
+	done
+
+	wait_nm_sync_fileset $nm "$alt_fileset" "" "alternate"
+	# primary fileset should still be present
+	wait_nm_sync_fileset $nm "$prim_fileset" "$prim_fileset" "primary"
+
+	do_facet mgs $LCTL nodemap_fileset_del --name $nm \
+		--fileset "$prim_fileset" ||
+		error "cannot del prim fileset $prim_fileset"
+
+	wait_nm_sync_fileset $nm "$prim_fileset" "" "primary"
+
+	fset=$(do_facet mds1 $LCTL get_param nodemap.${nm}.fileset)
+	grep -E 'primary|alternate' <<< $fset &&
+		error "filesets '$fset' not empty"
+
+	# test that filesets are implicitly removed on nodemap_del
+	do_facet mgs $LCTL nodemap_add $nm_tmp ||
+		error "cannot add nodemap $nm_tmp"
+	do_facet mgs $LCTL nodemap_fileset_add --name $nm_tmp \
+		--fileset "$prim_fileset" ||
+		error "cannot add prim fileset $prim_fileset to nodemap $nm_tmp"
+	do_facet mgs $LCTL nodemap_fileset_add --alt --name $nm_tmp \
+		--fileset "$alt_fileset" ||
+		error "cannot add alt fileset $alt_fileset to nodemap $nm_tmp"
+	wait_nm_sync_fileset $nm_tmp "$alt_fileset" "$alt_fileset" "alternate"
+	do_facet mgs $LCTL nodemap_del $nm_tmp ||
+		error "cannot del nodemap $nm_tmp"
+	wait_nm_sync $nm_tmp id ''
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=false
+	fi
+
+	# nodemap cleanup implicitly disables previous stack_traps
+	nodemap_test_cleanup
+	nodemap_exercise_fileset_cleanup
+}
+run_test 27c "test alternate fileset varying length and limits"
 
 test_28() {
 	if ! $SHARED_KEY; then
@@ -7358,6 +7520,7 @@ run_test 71 "encryption does not remove project flag"
 
 dyn_nm_helper() {
 	local facet=$1
+	local have_multi_filesets=$2
 	local mgsnm=mgsnm
 	local mgsnids=1.1.0.[1-100]@tcp
 	local mgsnids2=1.0.0.[1-100]@tcp
@@ -7507,10 +7670,31 @@ dyn_nm_helper() {
 	(( val == 77 )) || error "incorrect $prop $val"
 	prop=fileset
 	do_facet $facet $LCTL nodemap_set_fileset --name $nm \
-		--fileset "/tmp" &&
-			error "dynamic modify of $prop should fail"
-	val=$(do_facet $facet $LCTL get_param -n nodemap.$nm.$prop)
-	[[ "$val" == "/deffset" ]] || error "incorrect $prop $val"
+		--fileset "/tmp" ||
+			error "dynamic modify of primary $prop failed"
+	if $have_multi_filesets; then
+		val=$(do_facet_check_fileset $facet $nm "/tmp" "primary")
+		[[ "$val" == "/tmp" ]] || error "incorrect primary $prop $val"
+		do_facet $facet $LCTL nodemap_set_fileset --name $nm \
+			--fileset "clear" ||
+			error "dynamic clear primary $prop failed"
+		val=$(do_facet_check_fileset $facet $nm "" "primary")
+		[[ -z $val ]] || error "primary $prop should be empty"
+		do_facet $facet $LCTL nodemap_fileset_add --name $nm \
+			--fileset "/alttmp" --alt ||
+			error "dynamic modify of alt $prop failed"
+		val=$(do_facet_check_fileset $facet $nm "/alttmp" "alternate")
+		[[ "$val" == "/alttmp" ]] || error "incorrect alt $prop $val"
+		do_facet $facet $LCTL nodemap_fileset_del --name $nm \
+			--fileset "/alttmp" ||
+			error "dynamic clear alt $prop failed"
+		val=$(do_facet_check_fileset $facet $nm "" "alternate")
+		[[ -z $val ]] || error "alternate $prop should be empty"
+	else
+		val=$(do_facet $facet $LCTL get_param -n nodemap.$nm.$prop)
+		[[ "$val" == "/deffset" ]] || error "incorrect $prop $val"
+	fi
+
 	prop=sepol
 	do_facet $facet $LCTL nodemap_set_sepol --name $nm \
 		--sepol $sepol ||
@@ -7627,21 +7811,31 @@ dyn_nm_helper() {
 }
 
 test_72a() {
+	local have_multi_filesets=false
+
 	(( OST1_VERSION >= $(version_code 2.15.64) )) ||
 		skip "Need MDS >= 2.15.64 dynamic nodemaps"
+
+	(( OST1_VERSION >= $(version_code 2.16.56) )) &&
+		have_multi_filesets=true
 
 	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
 		skip "Need servers on different hosts"
 
-	dyn_nm_helper ost1
+	dyn_nm_helper ost1 $have_multi_filesets
 }
 run_test 72a "dynamic nodemap properties on OSS"
 
 test_72b() {
+	local have_multi_filesets=false
+
 	(( MDS1_VERSION >= $(version_code 2.15.64) )) ||
 		skip "Need MDS >= 2.15.64 dynamic nodemaps"
 
-	dyn_nm_helper mds1
+	(( MDS1_VERSION >= $(version_code 2.16.56) )) &&
+		have_multi_filesets=true
+
+	dyn_nm_helper mds1 $have_multi_filesets
 }
 run_test 72b "dynamic nodemap properties on MDS"
 

@@ -1,14 +1,21 @@
-.TH LCTL-NODEMAP_SET_FILESET 8 2024-08-14 Lustre "Lustre Configuration Utilities"
+.TH LCTL-NODEMAP_SET_FILESET 8 2024-12-24 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-nodemap_set_fileset \- add a fileset to a nodemap
 .SH SYNOPSIS
-.SY "lctl nodemap_set_fileset"
+.SY "[[deprecated]] lctl nodemap_set_fileset"
 or
-.SY "lctl nodemap set_fileset"
+.SY "[[deprecated]] lctl nodemap set_fileset"
 .BI --name " NODEMAP"
 .BI --fileset " SUBDIRECTORY"
 .YS
 .SH DESCRIPTION
+.I Note:
+Since Lustre 2.16.56, this command is deprecated and only affects the primary
+fileset. It is likely to disappear altogether in a future Lustre release.
+Adding and deleting filesets should now be handled by
+.B lctl nodemap_fileset_{add/del}
+, respectively.
+.PP
 .B nodemap_set_fileset
 adds
 .I FILESET
@@ -33,6 +40,7 @@ The name of the nodemap that this fileset should be associated with.
 .BI --fileset " SUBDIRECTORY"
 The fileset to restrict the clients to. The fileset must begin with '/'.
 .SH EXAMPLES
+Set and remove a fileset to nodemaps:
 .EX
 .B # lctl nodemap_set_fileset --name tenant1 --fileset '/dir1'
 .B # lctl nodemap_set_fileset --name admins --fileset ''
@@ -52,4 +60,6 @@ filesystem package since release 2.9.0
 .BR lctl-nodemap-del (8),
 .BR lctl-nodemap-del-idmap (8),
 .BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-fileset-add (8),
+.BR lctl-nodemap-fileset-del (8),
 .BR lctl-nodemap-modify (8)

@@ -1,0 +1,84 @@
+.TH LCTL-NODEMAP_FILESET_ADD 8 2025-06-23 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_fileset_add \- add a fileset to a nodemap
+.SH SYNOPSIS
+.SY "lctl nodemap_fileset_add"
+or
+.SY "lctl nodemap fileset_add"
+.B --alt
+.BI --name " NODEMAP_NAME"
+.BI --fileset " SUBDIRECTORY"
+.YS
+.SH DESCRIPTION
+.B nodemap_fileset_add
+adds a fileset with a
+.I SUBDIRECTORY
+path to a nodemap, specified by its
+.IR NODEMAP_NAME .
+The
+.I SUBDIRECTORY
+must begin with a slash
+.RB (' / ')
+and represents a relative path from the root
+of the Lustre file system.
+.PP
+Filesets can be used to provide namespace isolation within the Lustre
+file system by explicitly restricting clients of a nodemap to a specific
+.BI SUBDIRECTORY
+when mounting the client. The restriction depends on whether the fileset is
+designated as primary or alternate (using the
+.B --alt
+option). On mounting the Lustre client the following rules apply:
+.IP 1.
+If the nodemap is inactive or no filesets are defined, no subdirectory
+restrictions are applied.
+.IP 2.
+If the primary fileset is set and no subdirectory is presented when mounting
+the Lustre client, the primary fileset's
+.BI SUBDIRECTORY
+is used as the file system root.
+.IP 3.
+If any defined fileset (primary or alternate) matches the presented
+mounted subdirectory exactly or as a prefix, the subdirectory mount is used
+as the file system root.
+.IP 4.
+If fileset matches in 3, the presented mounting subdirectory is appended to
+the primary fileset.
+.PP
+If no primary fileset is set, only 3 applies.
+.SH OPTIONS
+.TP
+.BI --name " NODEMAP_NAME"
+The name of the nodemap that this fileset should be associated with.
+.TP
+.BI --fileset " SUBDIRECTORY"
+The fileset to restrict the clients to. The fileset must begin with '/'.
+.TP
+.B --alt
+Indicates that this fileset should be added as an alternate fileset. Without
+this option, the fileset is added as the primary fileset. A nodemap is
+restricted to a single primary fileset while up to 255 alternate filesets
+can be added per nodemap. Duplicate fileset definitions across fileset types
+are not allowed.
+.SH EXAMPLES
+Add a primary fileset to nodemap 'tenant1':
+.EX
+.B # lctl nodemap_fileset_add --name tenant1 --fileset '/dir1'
+.EE
+.PP
+Add alternate filesets to different nodemaps:
+.EX
+.B # lctl nodemap_fileset_add --name tenant1 --fileset '/dir2' --alt
+.B # lctl nodemap_fileset_add --name tenant1 --fileset '/dir3' --alt
+.B # lctl nodemap_fileset_add --name tenant2 --fileset '/dir10' --alt
+.EE
+.SH AVAILABILITY
+.B lctl nodemap_fileset_add
+is part of the
+.BR lustre (7)
+filesystem package since release 2.17.0.
+.\" Added in commit TODO
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-fileset-del (8),

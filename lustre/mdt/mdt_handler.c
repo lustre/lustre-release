@@ -406,7 +406,7 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	if (!IS_ERR_OR_NULL(nodemap)) {
 		if (nodemap->nmf_deny_mount)
 			GOTO(out, rc = err_serious(-EPERM));
-		nodemap_fileset = nodemap_get_fileset(nodemap);
+		nodemap_fileset = nodemap_get_fileset_prim(nodemap);
 	}
 
 	if (nodemap_fileset != NULL && nodemap_fileset[0]) {

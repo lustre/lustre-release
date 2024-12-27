@@ -12438,6 +12438,7 @@ wait_nm_sync() {
 	local key=$2
 	local value=$3
 	local opt=$4
+	local pipe=${5:-""}
 	local proc_param
 	local is_active=$(do_facet mgs $LCTL get_param -n nodemap.active)
 	local max_retries=20
@@ -12447,23 +12448,28 @@ wait_nm_sync() {
 	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
 	local i
 
-	if [ "$nodemap_name" == "active" ]; then
+	if [[ "$nodemap_name" == "active" ]]; then
 		proc_param="active"
-	elif [ -z "$key" ]; then
+	elif [[ -z "$key" ]]; then
 		proc_param=${nodemap_name}
 	else
 		proc_param="${nodemap_name}.${key}"
 	fi
-	if [ "$opt" == "inactive" ]; then
+	if [[ "$opt" == "inactive" ]]; then
 		# check nm sync even if nodemap is not activated
 		is_active=1
 		opt=""
 	fi
-	(( is_active == 0 )) && [ "$proc_param" != "active" ] && return
+	(( is_active == 0 )) && [[ "$proc_param" != "active" ]] && return
 
-	if [ -z "$value" ]; then
-		out1=$(do_facet mgs $LCTL get_param $opt \
-			nodemap.${proc_param} 2>/dev/null)
+	if [[ -z "$value" ]]; then
+		do_node_cmd="do_facet mgs $LCTL get_param $opt \
+			       nodemap.$proc_param 2>/dev/null"
+		if [[ -n "$pipe" ]]; then
+			do_node_cmd="$do_node_cmd | $pipe"
+		fi
+
+		out1=$(eval $do_node_cmd)
 		echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
 	else
 		out1=$value;
@@ -12471,8 +12477,8 @@ wait_nm_sync() {
 
 	# if servers run on the same node, it is impossible to tell if they get
 	# synced with the mgs, so just wait an arbitrary 10 seconds
-	if [ $(facet_active_host mgs) == $(facet_active_host mds) ] &&
-	   [ $(facet_active_host mgs) == $(facet_active_host ost1) ]; then
+	if [[ $(facet_active_host mgs) == $(facet_active_host mds) &&
+	      $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
 		echo "waiting 10 secs for sync"
 		sleep 10
 		return
@@ -12485,14 +12491,18 @@ wait_nm_sync() {
 					cut -d' ' -f1)
 
 			is_sync=true
-			if [ -z "$value" ]; then
-				[ $node_ip == $mgs_ip ] && continue
+			[[ -n "$value" || $node_ip != $mgs_ip ]] ||
+				continue
+
+			do_node_cmd="do_node $node $LCTL get_param $opt \
+			       nodemap.$proc_param 2>/dev/null"
+			if [[ -n "$pipe" ]]; then
+				do_node_cmd="$do_node_cmd | $pipe"
 			fi
 
-			out2=$(do_node $node $LCTL get_param $opt \
-			       nodemap.$proc_param 2>/dev/null)
+			out2=$(eval $do_node_cmd)
 			echo "On $node ${node_ip}, ${proc_param} = $out2"
-			[ "$out1" != "$out2" ] && is_sync=false && break
+			[[ "$out1" != "$out2" ]] && is_sync=false && break
 		done
 		$is_sync && break
 		sleep 1

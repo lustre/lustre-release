@@ -36,6 +36,7 @@ bool nodemap_active;
 DEFINE_MUTEX(active_config_lock);
 struct nodemap_config *active_config;
 
+static void nodemap_fileset_init(struct lu_nodemap *nodemap);
 static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src);
 
 /**
@@ -49,7 +50,7 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 	if (nodemap->nm_pde_data != NULL)
 		lprocfs_nodemap_remove(nodemap->nm_pde_data);
 
-	OBD_FREE(nodemap->nm_prim_fileset, nodemap->nm_prim_fileset_size);
+	OBD_FREE(nodemap->nm_fileset_prim, nodemap->nm_fileset_prim_size);
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
@@ -59,6 +60,10 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 	down_write(&nodemap->nm_idmap_lock);
 	idmap_delete_tree(nodemap);
 	up_write(&nodemap->nm_idmap_lock);
+
+	down_write(&nodemap->nm_fileset_alt_lock);
+	fileset_alt_destroy_tree(&nodemap->nm_fileset_alt);
+	up_write(&nodemap->nm_fileset_alt_lock);
 
 	mutex_unlock(&active_config_lock);
 
@@ -1163,10 +1168,9 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nm_offset_limit_gid = 0;
 		dst->nm_offset_start_projid = 0;
 		dst->nm_offset_limit_projid = 0;
-		dst->nm_prim_fileset = NULL;
-		dst->nm_prim_fileset_size = 0;
 		dst->nm_capabilities = CAP_EMPTY_SET;
 		dst->nmf_caps_type = NODEMAP_CAP_OFF;
+		nodemap_fileset_init(dst);
 	} else {
 		dst->nmf_trust_client_ids = src->nmf_trust_client_ids;
 		dst->nmf_allow_root_access = src->nmf_allow_root_access;
@@ -1206,8 +1210,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 			if (rc)
 				goto out;
 		} else {
-			dst->nm_prim_fileset = NULL;
-			dst->nm_prim_fileset_size = 0;
+			nodemap_fileset_init(dst);
 		}
 		dst->nm_capabilities = src->nm_capabilities;
 		dst->nmf_caps_type = src->nmf_caps_type;
@@ -1393,11 +1396,19 @@ out:
 }
 EXPORT_SYMBOL(nodemap_del_range);
 
-static void nodemap_fileset_reset(struct lu_nodemap *nodemap)
+static void nodemap_fileset_init(struct lu_nodemap *nodemap)
 {
-	OBD_FREE(nodemap->nm_prim_fileset, nodemap->nm_prim_fileset_size);
-	nodemap->nm_prim_fileset = NULL;
-	nodemap->nm_prim_fileset_size = 0;
+	nodemap->nm_fileset_prim = NULL;
+	nodemap->nm_fileset_prim_size = 0;
+	init_rwsem(&nodemap->nm_fileset_alt_lock);
+	nodemap->nm_fileset_alt = RB_ROOT;
+}
+
+static void nodemap_fileset_prim_reset(struct lu_nodemap *nodemap)
+{
+	OBD_FREE(nodemap->nm_fileset_prim, nodemap->nm_fileset_prim_size);
+	nodemap->nm_fileset_prim = NULL;
+	nodemap->nm_fileset_prim_size = 0;
 }
 
 /**
@@ -1426,82 +1437,334 @@ static int nodemap_update_fileset_iam_flag(struct lu_nodemap *nodemap,
 	return rc;
 }
 
+static int nodemap_fileset_del_primary(struct lu_nodemap *nodemap)
+{
+	int rc;
+
+	if (!nodemap)
+		RETURN(-EINVAL);
+
+	rc = nodemap_idx_fileset_clear(nodemap, NODEMAP_FILESET_PRIM_ID);
+	if (!rc)
+		nodemap_fileset_prim_reset(nodemap);
+
+	return rc;
+}
+
+static int nodemap_fileset_del_alternate(struct lu_nodemap *nodemap,
+					 const char *fileset_path)
+{
+	struct lu_fileset_alt *fset;
+	int rc;
+
+	if (!nodemap || !fileset_path || fileset_path[0] != '/')
+		RETURN(-EINVAL);
+
+	down_write(&nodemap->nm_fileset_alt_lock);
+
+	fset = fileset_alt_search_path(&nodemap->nm_fileset_alt, fileset_path);
+	if (!fset) {
+		rc = -ENOENT;
+		GOTO(out, rc);
+	}
+
+	/* delete fileset from IAM nodemap records */
+	rc = nodemap_idx_fileset_clear(nodemap, fset->nfa_id);
+	if (rc)
+		GOTO(out, rc);
+
+	/* delete fileset from rb tree and free memory */
+	rc = fileset_alt_delete(&nodemap->nm_fileset_alt, fset);
+	if (rc > 0)
+		rc = 0;
+
+out:
+	up_write(&nodemap->nm_fileset_alt_lock);
+	return rc;
+}
+
 /**
- * nodemap_set_fileset_iam() - Set a fileset on a nodemap
+ * nodemap_fileset_del() - deletes one fileset from the nodemap's
+ * defined filesets
+ *
+ * @nodemap: the nodemap to delete the fileset from
+ * @fileset_path: the fileset to delete
+ *
+ * Return:
+ * * %0 on success
+ * * %-EINVAL	nodemap or filesets is NULL or the fileset is invalid.
+ *		It cannot be empty and must begin with '/'.
+ * * %-ENOENT	fileset does not exist in nodemap
+ */
+static int nodemap_fileset_del(struct lu_nodemap *nodemap,
+			       const char *fileset_path)
+{
+	if (!nodemap || !fileset_path || fileset_path[0] != '/')
+		RETURN(-EINVAL);
+
+	/* attempt to delete from primary fileset first */
+	if (nodemap->nm_fileset_prim &&
+	    strcmp(nodemap->nm_fileset_prim, fileset_path) == 0)
+		return nodemap_fileset_del_primary(nodemap);
+
+	return nodemap_fileset_del_alternate(nodemap, fileset_path);
+}
+
+/**
+ * nodemap_fileset_clear() - Deletes all types of filesets from the nodemap
+ *
+ * @nodemap: nodemap to clear filesets from
+ *
+ * Return:
+ * * %0 on success
+ * * %-EINVAL	nodemap is NULL
+ */
+static int nodemap_fileset_clear(struct lu_nodemap *nodemap)
+{
+	struct lu_fileset_alt *fileset;
+	struct rb_node *node;
+	int rc;
+
+	if (!nodemap)
+		RETURN(-EINVAL);
+
+	rc = nodemap_fileset_del_primary(nodemap);
+	if (rc) {
+		CERROR("%s: failed to clear prim fileset: rc = %d\n",
+		       nodemap->nm_name, rc);
+		RETURN(rc);
+	}
+
+	down_write(&nodemap->nm_fileset_alt_lock);
+	for (node = rb_first(&nodemap->nm_fileset_alt); node;
+	     node = rb_next(node)) {
+		fileset = rb_entry(node, struct lu_fileset_alt, nfa_rb);
+		rc = nodemap_idx_fileset_clear(nodemap, fileset->nfa_id);
+		/* report errors but don't abort deletion process */
+		if (rc) {
+			CERROR("%s: failed to clear alt fileset %s: rc = %d\n",
+			       nodemap->nm_name, fileset->nfa_path, rc);
+		}
+	}
+	fileset_alt_destroy_tree(&nodemap->nm_fileset_alt);
+	up_write(&nodemap->nm_fileset_alt_lock);
+
+	return 0;
+}
+
+static int nodemap_fileset_add_primary(struct lu_nodemap *nodemap,
+				       const char *fileset_path)
+{
+	bool fset_alt_exists;
+	size_t fileset_size;
+	char *fileset;
+	int rc = 0;
+
+	if (!nodemap || !fileset_path || fileset_path[0] != '/')
+		RETURN(-EINVAL);
+
+	/* Check if a primary fileset already exists */
+	if (nodemap->nm_fileset_prim) {
+		/* Silently ignore duplicate primary fileset */
+		if (strcmp(nodemap->nm_fileset_prim, fileset_path) == 0)
+			RETURN(0);
+		else
+			RETURN(-EEXIST);
+	}
+
+	/* Check for duplicate alternate fileset */
+	down_read(&nodemap->nm_fileset_alt_lock);
+	fset_alt_exists = fileset_alt_path_exists(&nodemap->nm_fileset_alt,
+					      fileset_path);
+	up_read(&nodemap->nm_fileset_alt_lock);
+	if (fset_alt_exists)
+		RETURN(-EEXIST);
+
+	fileset_size = strlen(fileset_path) + 1;
+
+	OBD_ALLOC(fileset, fileset_size);
+	if (!fileset)
+		RETURN(-ENOMEM);
+
+	memcpy(fileset, fileset_path, fileset_size);
+
+	rc = nodemap_idx_fileset_add(nodemap, fileset, NODEMAP_FILESET_PRIM_ID);
+
+	if (!rc) {
+		nodemap->nm_fileset_prim = fileset;
+		nodemap->nm_fileset_prim_size = fileset_size;
+	} else {
+		OBD_FREE(fileset, fileset_size);
+	}
+
+	return rc;
+}
+
+static int nodemap_fileset_add_alternate(struct lu_nodemap *nodemap,
+					 const char *fileset_path)
+{
+	struct lu_fileset_alt *fset;
+	int rc, rc2;
+
+	if (!nodemap || !fileset_path || fileset_path[0] != '/')
+		RETURN(-EINVAL);
+
+	/* check if fileset already exists as primary */
+	if (nodemap->nm_fileset_prim &&
+	    strcmp(nodemap->nm_fileset_prim, fileset_path) == 0)
+		RETURN(-EEXIST);
+
+	down_write(&nodemap->nm_fileset_alt_lock);
+	/* Silently ignore duplicate alternate fileset as its already set */
+	if (fileset_alt_path_exists(&nodemap->nm_fileset_alt, fileset_path))
+		GOTO(out, rc = 0);
+
+	fset = fileset_alt_create(fileset_path);
+	if (!fset)
+		GOTO(out, rc = -ENOMEM);
+
+	/* add fileset to in-memory rb tree */
+	rc = fileset_alt_add(&nodemap->nm_fileset_alt, fset);
+	if (rc) {
+		fileset_alt_destroy(fset);
+		GOTO(out, rc);
+	}
+
+	/* add fileset to IAM nodemap records */
+	rc = nodemap_idx_fileset_add(nodemap, fset->nfa_path, fset->nfa_id);
+	if (rc) {
+		/* remove added fileset from rb tree on IAM error */
+		rc2 = fileset_alt_delete(&nodemap->nm_fileset_alt, fset);
+		if (rc2 < 0)
+			CERROR("%s: Undo adding fileset '%s' failed. rc = %d : rc2 = %d\n",
+			       nodemap->nm_name, fset->nfa_path, rc, rc2);
+	}
+
+out:
+	up_write(&nodemap->nm_fileset_alt_lock);
+
+	return rc;
+}
+
+/**
+ * nodemap_fileset_add() - Adds a fileset to a given nodemap
+ *
+ * @nodemap: the nodemap to the fileset to
+ * @fileset_path: the fileset to be added
+ * @alt: true if operation refers to an alt fileset
+ *
+ * Return:
+ * * %0 on success
+ * * %-EINVAL	nodemap is NULL or fileset is NULL, empty, or
+ *		fileset does not begin with a "/" character
+ * * %-EEXIST	fileset exists as another type of fileset
+ * * %-ENOSPC	too many alternate filesets are defined
+ * * %-EIO	undo operation failed during IAM update
+ * * %-ENOMEM	could not allocate memory for fileset
+ */
+static int nodemap_fileset_add(struct lu_nodemap *nodemap,
+			       const char *fileset_path, bool alt)
+{
+	int rc;
+
+	if (!nodemap || !fileset_path || fileset_path[0] != '/')
+		RETURN(-EINVAL);
+
+	if (alt)
+		rc = nodemap_fileset_add_alternate(nodemap, fileset_path);
+	else
+		rc = nodemap_fileset_add_primary(nodemap, fileset_path);
+
+	return rc;
+}
+
+/**
+ * nodemap_set_fileset_prim_iam() - Set a primary fileset on a nodemap in memory
+ * and the nodemap IAM records
+ *
  * @nodemap: the nodemap to set fileset on
- * @fileset: string containing fileset
+ * @fileset_path: string containing fileset
  * @out_clean_llog_fileset: set to true if the llog fileset entry needs to be
  * cleaned up. This is only set to true if a fileset exists, but
  * "nmf_fileset_use_iam" is 0 meaning that the fileset might have been set
  * through the params llog.
  *
- * Set a fileset on a nodemap in memory and the nodemap IAM records.
  * If the nodemap is dynamic, the nodemap IAM update is transparently skipped in
  * the nodemap_idx_fileset_* functions to update only the in-memory nodemap.
+ * Further, the fileset can be cleared.
+ *
+ * << This is a deprecated function. nodemap_fileset_add should be used. >>
  *
  * Return:
  * * %0 on success
- * * %-EINVAL		invalid fileset: Does not start with '/'
- * * %-EIO		undo operation failed during IAM update
+ * * %-EINVAL	invalid fileset: Does not start with '/'
+ * * %-EIO	undo operation failed during IAM update
  */
-static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
-				   const char *fileset,
-				   bool *out_clean_llog_fileset)
+static int nodemap_set_fileset_prim_iam(struct lu_nodemap *nodemap,
+					const char *fileset_path,
+					bool *out_clean_llog_fileset)
 {
-	size_t fileset_size_new;
-	char *fileset_new;
+	size_t fileset_size;
+	char *fileset;
 	int rc = 0;
 
-	if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0) {
-		rc = nodemap_idx_fileset_clear(nodemap);
-		if (!rc) {
-			nodemap_fileset_reset(nodemap);
-			if (!nodemap->nm_dyn && out_clean_llog_fileset)
-				*out_clean_llog_fileset = true;
-		}
+	if (!nodemap || !fileset_path)
+		RETURN(-EINVAL);
+
+	if (fileset_path[0] == '\0' || strcmp(fileset_path, "clear") == 0) {
+		rc = nodemap_fileset_del_primary(nodemap);
+		if (!rc && !nodemap->nm_dyn && out_clean_llog_fileset)
+			*out_clean_llog_fileset = true;
 		GOTO(out, rc);
 	}
 
-	if (fileset[0] != '/')
+	if (fileset_path[0] != '/')
 		RETURN(-EINVAL);
 
-	fileset_size_new = strlen(fileset) + 1;
-
-	OBD_ALLOC(fileset_new, fileset_size_new);
-	if (!fileset_new)
-		GOTO(out, rc = -ENOMEM);
-
-	memcpy(fileset_new, fileset, fileset_size_new);
-
-	/*
-	 * Only update the index if the fileset is already set.
-	 * If it was set by the params llog, it is not set in the IAM.
-	 */
-	if (nodemap->nm_prim_fileset) {
-		if (nodemap->nmf_fileset_use_iam) {
-			rc = nodemap_idx_fileset_update(
-				nodemap, nodemap->nm_prim_fileset, fileset_new,
-				0);
-		} else {
-			rc = nodemap_idx_fileset_add(nodemap, fileset_new, 0);
-			if (!rc && !nodemap->nm_dyn && out_clean_llog_fileset)
-				*out_clean_llog_fileset = true;
-		}
-
-		if (!rc)
-			nodemap_fileset_reset(nodemap);
-	} else {
-		rc = nodemap_idx_fileset_add(nodemap, fileset_new, 0);
+	/* if fileset is not set, add it instead */
+	if (!nodemap->nm_fileset_prim) {
+		rc = nodemap_fileset_add_primary(nodemap, fileset_path);
+		GOTO(out, rc);
 	}
 
-	if (!rc) {
-		nodemap->nm_prim_fileset = fileset_new;
-		nodemap->nm_prim_fileset_size = fileset_size_new;
+	fileset_size = strlen(fileset_path) + 1;
+
+	OBD_ALLOC(fileset, fileset_size);
+	if (!fileset)
+		RETURN(-ENOMEM);
+
+	memcpy(fileset, fileset_path, fileset_size);
+
+	/*
+	 * If a fileset was set by the params llog, it is not set in the IAM
+	 * records yet. In this case, the fileset must be cleaned from the llog.
+	 * Otherwise, we can update the existing IAM fileset.
+	 */
+	if (nodemap->nmf_fileset_use_iam) {
+		rc = nodemap_idx_fileset_update(nodemap,
+						nodemap->nm_fileset_prim,
+						fileset,
+						NODEMAP_FILESET_PRIM_ID);
 	} else {
-		OBD_FREE(fileset_new, fileset_size_new);
+		rc = nodemap_idx_fileset_add(nodemap, fileset,
+					     NODEMAP_FILESET_PRIM_ID);
+		if (!rc && !nodemap->nm_dyn && out_clean_llog_fileset)
+			*out_clean_llog_fileset = true;
+	}
+
+	/* Update in-memory nodemap with new fileset */
+	if (!rc) {
+		nodemap_fileset_prim_reset(nodemap);
+		nodemap->nm_fileset_prim = fileset;
+		nodemap->nm_fileset_prim_size = fileset_size;
+	} else {
+		OBD_FREE(fileset, fileset_size);
 	}
 
 out:
+	/* Transition to IAM backend as soon as IAM records are used if a
+	 * non-dynamic nodemap is used.
+	 */
 	if (!nodemap->nm_dyn && !nodemap->nmf_fileset_use_iam && !rc)
 		rc = nodemap_update_fileset_iam_flag(nodemap, true);
 
@@ -1509,12 +1772,13 @@ out:
 }
 
 /**
- * nodemap_set_fileset_llog() - Set a fileset on a nodemap. This is a local
- * operation, not persistent, and only called when running
- * "lctl set_param nodemap.NAME.fileset=...".
+ * nodemap_set_fileset_prim_llog() - Set a primary fileset on a nodemap
  *
  * @nodemap: the nodemap to set fileset on
- * @fileset: string containing fileset
+ * @fileset_path: string containing fileset
+ *
+ * This is a local operation, not persistent, and only called when running
+ * "lctl set_param nodemap.NAME.fileset=...".
  *
  * This function is a remnant from when fileset updates were made through
  * the params llog, which caused "lctl set_param" to be called on
@@ -1524,17 +1788,17 @@ out:
  *
  * Return:
  * * %0 on success
- * * %-EINVAL		invalid fileset: Does not start with '/'
+ * * %-EINVAL	invalid fileset: Does not start with '/'
  */
-static int nodemap_set_fileset_llog(struct lu_nodemap *nodemap,
-				     const char *fileset)
+static int nodemap_set_fileset_prim_llog(struct lu_nodemap *nodemap,
+					  const char *fileset_path)
 {
 	size_t fileset_size_new;
 	char *fileset_new;
 	int rc;
 
 	/* Abort if the IAM is already in use and a fileset is set */
-	if (nodemap->nm_prim_fileset && nodemap->nmf_fileset_use_iam)
+	if (nodemap->nm_fileset_prim && nodemap->nmf_fileset_use_iam)
 		RETURN(-EINVAL);
 
 	/* Allow 'fileset=clear' in addition to 'fileset=""' to clear fileset
@@ -1546,30 +1810,30 @@ static int nodemap_set_fileset_llog(struct lu_nodemap *nodemap,
 	 * won't clear fileset.
 	 * 'fileset=""' is still kept for compatibility reason.
 	 */
-	if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0) {
-		nodemap_fileset_reset(nodemap);
+	if (fileset_path[0] == '\0' || strcmp(fileset_path, "clear") == 0) {
+		nodemap_fileset_prim_reset(nodemap);
 		/* back to default value for use_iam flag */
 		rc = nodemap_update_fileset_iam_flag(nodemap, true);
 		RETURN(rc);
 	}
 
-	if (fileset[0] != '/')
+	if (fileset_path[0] != '/')
 		RETURN(-EINVAL);
 
-	fileset_size_new = strlen(fileset) + 1;
+	fileset_size_new = strlen(fileset_path) + 1;
 
 	OBD_ALLOC(fileset_new, fileset_size_new);
 	if (!fileset_new)
 		RETURN(-ENOMEM);
 
-	memcpy(fileset_new, fileset, fileset_size_new);
+	memcpy(fileset_new, fileset_path, fileset_size_new);
 
 	/* free existing fileset first on update */
-	if (nodemap->nm_prim_fileset)
-		nodemap_fileset_reset(nodemap);
+	if (nodemap->nm_fileset_prim)
+		nodemap_fileset_prim_reset(nodemap);
 
-	nodemap->nm_prim_fileset = fileset_new;
-	nodemap->nm_prim_fileset_size = fileset_size_new;
+	nodemap->nm_fileset_prim = fileset_new;
+	nodemap->nm_fileset_prim_size = fileset_size_new;
 
 	/* Set fileset as llog fileset and update nodemap record */
 	rc = nodemap_update_fileset_iam_flag(nodemap, false);
@@ -1578,65 +1842,92 @@ static int nodemap_set_fileset_llog(struct lu_nodemap *nodemap,
 }
 
 /**
- * nodemap_copy_fileset() - Copy a fileset from a source to destination nodemap.
- * @dst: the nodemap to set fileset on
- * @src: the nodemap to fetch fileset from
+ * nodemap_copy_fileset() - Copy all filesets (prim and alt) from a source to
+ * destination nodemap.
  *
- * This is a local, non-persistent operation made for dynamic nodemaps.
+ * @dst: the nodemap to set filesets on
+ * @src: the nodemap to fetch filesets from
+ *
+ * This function can also handle dynamic nodemaps for dst transparently
+ * in which local and non-persistent operation are made.
  *
  * Return:
  * * %0 on success
- * * %< 0 on error
+ * * %< 0 on error; all filesets on dst are cleared
  */
 static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
 {
+	struct rb_node *node;
 	char *fileset;
 	int rc = 0;
 
-	fileset = nodemap_get_fileset(src);
-	if (!fileset) {
-		dst->nm_prim_fileset = NULL;
-		dst->nm_prim_fileset_size = 0;
-	} else {
-		/* nodemap_set_fileset_iam() knows how to
-		 * handle a dynamic nodemap
-		 */
-		rc = nodemap_set_fileset_iam(dst, fileset, NULL);
+	nodemap_fileset_init(dst);
+
+	fileset = nodemap_get_fileset_prim(src);
+	if (fileset) {
+		rc = nodemap_fileset_add(dst, fileset, false);
+		if (rc)
+			GOTO(out, rc);
 	}
 
+	/* iterate over all alternate filesets and add them to dst */
+	down_read(&src->nm_fileset_alt_lock);
+	for (node = rb_first(&src->nm_fileset_alt); node;
+	     node = rb_next(node)) {
+		struct lu_fileset_alt *src_fset;
+
+		src_fset = rb_entry(node, struct lu_fileset_alt, nfa_rb);
+
+		rc = nodemap_fileset_add(dst, src_fset->nfa_path, true);
+		if (rc)
+			GOTO(out_unlock, rc);
+	}
+
+out_unlock:
+	up_read(&src->nm_fileset_alt_lock);
+	if (rc)
+		nodemap_fileset_clear(dst);
+
+out:
 	return rc;
 }
 
 /**
- * nodemap_set_fileset() - Set fileset on a named nodemap
- * @name: name of the nodemap to set fileset on
- * @fileset: string containing fileset
+ * nodemap_set_fileset_prim_lproc() - Set a primary fileset on given nodemap
+ * through lprocfs via "lctl set_param"
+ *
+ * @nodemap_name: name of the nodemap to set fileset on
+ * @fileset_path: string containing fileset
  * @checkperm: true if permission check is required
- * @ioctl_op: true if called from ioctl nodemap functions
- * @out_clean_llog_fileset: set to true if the llog fileset entry needs to be
- * cleaned up on the MGS side
+ *
+ * For backward compatibility this functionality is kept. This function should
+ * not be used for any other purpose.
+ *
+ * << This is a deprecated function. nodemap_fileset_cmd should be used. >>
  *
  * Return:
  * * %0 on success
- * * %-ENAMETOOLONG	fileset is too long
- * * %-EINVAL		name or fileset is empty or NULL
+ * * %-EINVAL - name or fileset is empty or NULL
+ * * %-ENAMETOOLONG - fileset path is too long
+ * * %-EPERM - no permission to modify the nodemap
  */
-int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
-			bool ioctl_op, bool *out_clean_llog_fileset)
+int nodemap_set_fileset_prim_lproc(const char *nodemap_name,
+				   const char *fileset_path, bool checkperm)
 {
 	struct lu_nodemap *nodemap = NULL;
 	int rc = 0;
 
 	ENTRY;
 
-	if (name == NULL || name[0] == '\0' || fileset == NULL)
+	if (nodemap_name == NULL || nodemap_name[0] == '\0' ||
+	    fileset_path == NULL)
 		RETURN(-EINVAL);
 
-	if (strlen(fileset) > PATH_MAX)
+	if (strlen(fileset_path) > PATH_MAX)
 		RETURN(-ENAMETOOLONG);
 
 	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(name);
+	nodemap = nodemap_lookup(nodemap_name);
 	if (IS_ERR(nodemap)) {
 		mutex_unlock(&active_config_lock);
 		RETURN(PTR_ERR(nodemap));
@@ -1658,13 +1949,9 @@ int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
 	 * be backward-compatible, this function serves as a mechanism to
 	 * support filesets saved in the llog as long as no IAM records were
 	 * set. "nodemap->nmf_fileset_use_iam" controls the transition between
-	 * both backends. Local updates are disabled once IAM records are used.
+	 * both backends.
 	 */
-	if (ioctl_op)
-		rc = nodemap_set_fileset_iam(nodemap, fileset,
-					     out_clean_llog_fileset);
-	else
-		rc = nodemap_set_fileset_llog(nodemap, fileset);
+	rc = nodemap_set_fileset_prim_llog(nodemap, fileset_path);
 
 out_unlock:
 	mutex_unlock(&active_config_lock);
@@ -1673,22 +1960,24 @@ out_unlock:
 	EXIT;
 	return rc;
 }
-EXPORT_SYMBOL(nodemap_set_fileset);
+EXPORT_SYMBOL(nodemap_set_fileset_prim_lproc);
 
 /**
- * nodemap_get_fileset() - get fileset defined on nodemap
+ * nodemap_get_fileset_prim() - get the primary fileset defined on nodemap
+ *
  * @nodemap: nodemap to get fileset from
  *
- * Returns %fileset name, or NULL if not defined or not activated
+ * Return:
+ * * fileset name, or NULL if not defined or not activated
  */
-char *nodemap_get_fileset(const struct lu_nodemap *nodemap)
+char *nodemap_get_fileset_prim(const struct lu_nodemap *nodemap)
 {
 	if (!nodemap_active)
 		return NULL;
 
-	return (char *)nodemap->nm_prim_fileset;
+	return (char *)nodemap->nm_fileset_prim;
 }
-EXPORT_SYMBOL(nodemap_get_fileset);
+EXPORT_SYMBOL(nodemap_get_fileset_prim);
 
 static int nodemap_validate_sepol(const char *sepol)
 {
@@ -2627,11 +2916,12 @@ EXPORT_SYMBOL(nodemap_add);
  */
 int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 {
-	struct lu_nodemap	*nodemap;
-	struct lu_nid_range	*range;
-	struct lu_nid_range	*range_temp;
-	int			 rc = 0;
-	int			 rc2 = 0;
+	struct lu_nodemap *nodemap;
+	struct lu_nid_range *range;
+	struct lu_nid_range *range_temp;
+	bool fileset_prim_exists = false;
+	int rc = 0;
+	int rc2 = 0;
 
 	if (strcmp(nodemap_name, DEFAULT_NODEMAP) == 0)
 		RETURN(-EINVAL);
@@ -2684,16 +2974,17 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 	}
 	up_write(&active_config->nmc_range_tree_lock);
 
-	if (nodemap->nm_prim_fileset) {
-		rc2 = nodemap_idx_fileset_clear(nodemap);
-		if (rc2 < 0)
-			rc = rc2;
+	/* remove all filesets from the nodemap */
+	if (nodemap->nm_fileset_prim)
+		fileset_prim_exists = true;
 
-		nodemap_fileset_reset(nodemap);
+	rc2 = nodemap_fileset_clear(nodemap);
+	if (rc2)
+		rc = rc2;
 
-		if (!nodemap->nm_dyn && !nodemap->nmf_fileset_use_iam)
-			*out_clean_llog_fileset = true;
-	}
+	if (fileset_prim_exists && !rc && !nodemap->nmf_fileset_use_iam &&
+	    !nodemap->nm_dyn)
+		*out_clean_llog_fileset = true;
 
 	rc2 = nodemap_idx_nodemap_del(nodemap);
 	if (rc2 < 0)
@@ -3251,6 +3542,70 @@ int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 }
 EXPORT_SYMBOL(nodemap_test_id);
 
+/**
+ * cfg_nodemap_fileset_cmd() - Fileset command handler and entry point for
+ * all "lctl nodemap_fileset*" ops
+ *
+ * @cmd: command type
+ * @nodemap_name: name of the nodemap to set fileset on
+ * @fileset: string containing fileset
+ * @alt: true if operation refers to an alt fileset
+ * @checkperm: true if permission check is required
+ *
+ * Return:
+ * * %0 on success
+ * * %-EINVAL		name or fileset is empty or NULL
+ * * %-ENAMETOOLONG	fileset is too long
+ * * %-EIO		undo operation failed during IAM update
+ */
+static int cfg_nodemap_fileset_cmd(enum lcfg_command_type cmd,
+				   const char *nodemap_name,
+				   const char *fileset, bool alt,
+				   bool checkperm, bool *out_clean_llog_fileset)
+{
+	struct lu_nodemap *nodemap = NULL;
+	int rc;
+
+	ENTRY;
+
+	if (!nodemap_name || nodemap_name[0] == '\0' || !fileset)
+		RETURN(-EINVAL);
+
+	if (strlen(fileset) > PATH_MAX)
+		RETURN(-ENAMETOOLONG);
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(nodemap_name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		RETURN(PTR_ERR(nodemap));
+	}
+
+	if (checkperm && !allow_op_on_nm(nodemap))
+		GOTO(out_unlock, rc = -ENXIO);
+
+	switch (cmd) {
+	case LCFG_NODEMAP_SET_FILESET:
+		rc = nodemap_set_fileset_prim_iam(nodemap, fileset, out_clean_llog_fileset);
+		break;
+	case LCFG_NODEMAP_FILESET_ADD:
+		rc = nodemap_fileset_add(nodemap, fileset, alt);
+		break;
+	case LCFG_NODEMAP_FILESET_DEL:
+		rc = nodemap_fileset_del(nodemap, fileset);
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+
+out_unlock:
+	mutex_unlock(&active_config_lock);
+	nodemap_putref(nodemap);
+
+	RETURN(rc);
+}
+
 static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 			   char *param, bool dynamic,
 			   bool *out_clean_llog_fileset)
@@ -3515,10 +3870,6 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 		else
 			rc = -EINVAL;
 		break;
-	case LCFG_NODEMAP_SET_FILESET:
-		rc = nodemap_set_fileset(nodemap_name, param, true, true,
-					 out_clean_llog_fileset);
-		break;
 	case LCFG_NODEMAP_SET_SEPOL:
 		rc = nodemap_set_sepol(nodemap_name, param, true);
 		break;
@@ -3554,6 +3905,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 	const char *nidstr = NULL;
 	unsigned long client_id;
 	struct lnet_nid	nid;
+	bool fset_alt = false;
 	char *param = NULL;
 	char fs_idstr[16];
 	__u32 fs_id, cmd;
@@ -3668,7 +4020,6 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 	case LCFG_NODEMAP_DEL_GIDMAP:
 	case LCFG_NODEMAP_ADD_PROJIDMAP:
 	case LCFG_NODEMAP_DEL_PROJIDMAP:
-	case LCFG_NODEMAP_SET_FILESET:
 	case LCFG_NODEMAP_SET_SEPOL:
 	case LCFG_NODEMAP_SET_CAPS:
 		if (lcfg->lcfg_bufcount != 3)
@@ -3697,6 +4048,23 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 		param = lustre_cfg_string(lcfg, 3);
 		rc = cfg_nodemap_cmd(cmd, nodemap_name, param, dynamic, NULL);
 		break;
+	case LCFG_NODEMAP_SET_FILESET:
+	case LCFG_NODEMAP_FILESET_ADD:
+	case LCFG_NODEMAP_FILESET_DEL:
+		if (lcfg->lcfg_bufcount < 3 || lcfg->lcfg_bufcount > 4)
+			GOTO(out_lcfg, rc = -EINVAL);
+		if (lcfg->lcfg_bufcount == 4) {
+			param = lustre_cfg_string(lcfg, 3);
+			rc = kstrtobool(param, &fset_alt);
+			if (rc)
+				break;
+		}
+		nodemap_name = lustre_cfg_string(lcfg, 1);
+		param = lustre_cfg_string(lcfg, 2);
+		rc = cfg_nodemap_fileset_cmd(cmd, nodemap_name, param, fset_alt,
+					     true, out_clean_llog_fileset);
+		break;
+
 	default:
 		rc = -ENOTTY;
 	}

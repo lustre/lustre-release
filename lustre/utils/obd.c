@@ -4497,28 +4497,150 @@ int jt_nodemap_set_fileset(int argc, char **argv)
 			nodemap_name = optarg;
 			break;
 		case 'h':
+		case '?':
 		default:
-			goto set_fileset_usage;
+			return CMD_HELP;
 		}
 	}
 
 	if (!nodemap_name) {
-		fprintf(stderr, "nodemap_set_fileset: missing nodemap name\n");
-set_fileset_usage:
-		fprintf(stderr,
-			"usage: nodemap_set_fileset --name NODEMAP_NAME --fileset FILESET\n");
-		return -EINVAL;
+		fprintf(stderr, "nodemap_set_fileset: missing NODEMAP_NAME\n");
+		return CMD_HELP;
 	}
 	if (!fileset_name) {
-		fprintf(stderr, "nodemap_set_fileset: missing NID range\n");
-		goto set_fileset_usage;
+		fprintf(stderr, "nodemap_set_fileset: missing fileset SUBDIRECTORY\n");
+		return CMD_HELP;
 	}
+
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 17, 52, 0)
+	fprintf(stdout,
+		"This command is deprecated, please use nodemap_fileset_{add/del} instead.\n");
+#endif
 
 	rc = nodemap_cmd(LCFG_NODEMAP_SET_FILESET, false, NULL, 0, argv[0],
 			 nodemap_name, fileset_name, NULL);
 	if (rc != 0) {
 		fprintf(stderr,
-			"error: %s: cannot set fileset '%s' on nodemap '%s': %s\n",
+			"error: cannot '%s' with fileset '%s' on nodemap '%s': %s\n",
+			jt_cmdname(argv[0]), fileset_name, nodemap_name,
+			strerror(errno));
+	}
+
+	return rc;
+}
+
+/**
+ * add a fileset to a nodemap
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ * --fileset			fileset name
+ * --alt			refer to an alternate fileset
+ *
+ * \retval			0 on success
+ */
+int jt_nodemap_fileset_add(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	char *fileset_name = NULL;
+	bool alt = false;
+	int c;
+	int rc = 0;
+
+	static struct option long_opts[] = {
+		{ .val = 'a', .name = "alt", .has_arg = no_argument },
+		{ .val = 'f', .name = "fileset", .has_arg = required_argument },
+		{ .val = 'h', .name = "help", .has_arg = no_argument },
+		{ .val = 'n', .name = "name", .has_arg = required_argument },
+		{ .name = NULL }
+	};
+
+	while ((c = getopt_long(argc, argv, "af:hn:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+
+		case 'a':
+			alt = true;
+			break;
+		case 'f':
+			fileset_name = optarg;
+			break;
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'h':
+		case '?':
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (!nodemap_name || !fileset_name)
+		return CMD_HELP;
+
+	rc = nodemap_cmd(LCFG_NODEMAP_FILESET_ADD, false, NULL, 0, argv[0],
+			 nodemap_name, fileset_name, alt ? "1" : "0", NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"error: cannot '%s' with fileset '%s' on nodemap '%s': %s\n",
+			jt_cmdname(argv[0]), fileset_name, nodemap_name,
+			strerror(errno));
+	}
+
+	return rc;
+}
+
+/**
+ * delete a fileset from a nodemap
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ * --fileset			fileset name
+ *
+ * \retval			0 on success
+ */
+int jt_nodemap_fileset_del(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	char *fileset_name = NULL;
+	int rc = 0;
+	int c;
+
+	static struct option long_opts[] = {
+		{ .val = 'f', .name = "fileset", .has_arg = required_argument },
+		{ .val = 'h', .name = "help", .has_arg = no_argument },
+		{ .val = 'n', .name = "name", .has_arg = required_argument },
+		{ .name = NULL }
+	};
+
+	while ((c = getopt_long(argc, argv, "f:hn:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'f':
+			fileset_name = optarg;
+			break;
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'h':
+		case '?':
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (!nodemap_name || !fileset_name)
+		return CMD_HELP;
+
+	rc = nodemap_cmd(LCFG_NODEMAP_FILESET_DEL, false, NULL, 0, argv[0],
+			 nodemap_name, fileset_name, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"error: cannot '%s' with fileset '%s' on nodemap '%s': %s\n",
 			jt_cmdname(argv[0]), fileset_name, nodemap_name,
 			strerror(errno));
 	}
@@ -5439,6 +5561,18 @@ int jt_nodemap_set_fileset(int argc, char **argv)
 {
 	fprintf(stderr, "error: %s: invalid ioctl\n",
 		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_fileset_add(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_fileset_del(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
 	return -EOPNOTSUPP;
 }
 
