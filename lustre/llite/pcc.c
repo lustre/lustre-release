@@ -2520,7 +2520,7 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 
 	/* Fake I/O error on PCC-RO */
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PCC_FAKE_ERROR))
-		GOTO(out, result = -EIO);
+		GOTO(out, rc = -EIO);
 
 	iocb->ki_filp = pccf->pccf_file;
 	if (!IS_ENCRYPTED(inode)) {
@@ -2529,7 +2529,7 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 		 * to add support for ext4-dax.
 		 */
 		result = __pcc_file_read_iter(iocb, iter);
-		GOTO(out, result);
+		GOTO(out_filp, result);
 	}
 
 	/* from this point, we are dealing with an encrypted inode */
@@ -2619,10 +2619,13 @@ out_pageprivate2:
 	if (iocb->ki_pos > i_size_read(inode) && result > 0)
 		result -= iocb->ki_pos - i_size_read(inode);
 
-out:
+out_filp:
 	iocb->ki_filp = file;
-	pcc_io_fini(inode, PIT_READ, result, cached);
-	RETURN(result);
+	if (result < 0)
+		rc = result;
+out:
+	pcc_io_fini(inode, PIT_READ, rc, cached);
+	RETURN(result > 0 ? result : rc);
 }
 
 static ssize_t
