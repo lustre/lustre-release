@@ -125,12 +125,16 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 				$LINUX_OBJ/include/$VERSION_HDIR/version.h)$(awk \
 				'/ RHEL_MINOR / { print [$]3 }' \
 				$LINUX_OBJ/include/$VERSION_HDIR/version.h)
+			lb_cv_rhel_kernel_release=$(awk \
+				'/ RHEL_RELEASE / { print [$]3 }' \
+				$LINUX_OBJ/include/$VERSION_HDIR/version.h | tr -d '"')
 		])
 	])
 	AS_IF([test -n "$lb_cv_rhel_kernel_version"], [
 		RHEL_KERNEL="yes"
 		KERNEL_FOUND="yes"
 		RHEL_RELEASE_NO=$lb_cv_rhel_kernel_version
+		RHEL_RELEASE_STR=$lb_cv_rhel_kernel_release
 	])
 
 	# Check for SuSE
