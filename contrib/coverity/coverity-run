@@ -6,7 +6,7 @@
 #
 # contrib/coverity/coverity-run
 #
-# Setup a simple VM for running Coverity builds
+# Script for running Coverity builds (and setup VMs)
 # to upload to https://scan.coverity.com/projects/lustre
 #
 # Author: Timothy Day <timday@amazon.com>
@@ -19,24 +19,25 @@ function cr_list() {
 	less -F <<EOF
 Usage: ${0##*/} [options]
 Helper for running Coverity builds for Lustre
-	setup         Create Vagrant VM.
+	setup         Test that ssh is working and setup needed VMs.
+	install       Install packages needed for build.
 	build         Build Lustre and dependencies. The users should
 		      validate the everything builds correctly.
 	run           Run Coverity scan. You must provide the path
 		      to the Coverity tool tarball using the COV_PATH
 		      env variable. This can be downloaded from the
 		      Coverity website.
-	clean         Remove Vagrant artifacts.
+	clean         Remove build/VM artifacts.
 	all           Run all of the above steps in order.
 	list          List all possible commands.
 
 The commands should be run in the following order:
 
-	setup -> build -> run -> clean
+	setup -> install -> build -> run -> clean
 
-The tool currently has a dependency on Vagrant and the 'libvirt'
-provider. After the scan is run, there will be a tar file in the
-'contrib/coverity' directory. This should be uploaded to Coverity
+To run this locally, both Vagrant and the 'libvirt' provider must be
+used. Otherwise, any remote host can be used. After the scan is run,
+there will be a tar file generated. This should be uploaded to Coverity
 via the web portal using the Lustre version output during the
 'run' step as the software version.
 EOF
@@ -47,14 +48,47 @@ EOF
 # Create VM using Vagrant.
 #
 function cr_setup() {
-	vagrant up
+	if [[ "$COV_SSH" =~ "vagrant" ]]; then
+		vagrant up
+		vagrant reload
+		vagrant ssh-config > vagrant-ssh.config
+	fi
 
-	# Save/test ssh config
-	vagrant ssh-config > vagrant-ssh.config
-	ssh -F vagrant-ssh.config default "uname -r"
+	ssh "$COV_SSH" "$COV_HOST" "uname -r"
+}
 
-	# Restart VM
-	vagrant reload
+#
+# Setup node to build Lustre and run Coverity
+#
+function cr_install() {
+	# Setup host
+	ssh "$COV_SSH" "$COV_HOST" <<EOF
+# Repo setup (for CentOS)
+sudo sed -i -e "s|mirrorlist=|#mirrorlist=|g" /etc/yum.repos.d/CentOS-*
+sudo sed -i -e "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-*
+
+# Add repos
+sudo dnf update -y
+sudo dnf config-manager --set-enabled powertools
+sudo dnf config-manager --add-repo=https://downloads.whamcloud.com/public/e2fsprogs/latest/el8
+sudo dnf install -d1 -y --enablerepo=*rhel-*rhui-*rpms libyaml-devel || true
+sudo dnf install -d1 -y --enablerepo=?ower?ools libyaml-devel || true
+sudo dnf install -y --enablerepo=*rhel-*rhui-*rpms libnl3-devel libmount-devel || true
+
+# General kernel tools
+sudo dnf groupinstall -y 'Development Tools'
+
+# Debug info (needed for ldiskfs)
+sudo dnf install -y --enablerepo=*debug* kernel-debuginfo
+
+# Install Lustre/ZFS dependencies and tools
+sudo dnf install -y --nogpgcheck git libyaml-devel libnl3-devel libmount-devel \
+          wget ncurses-devel bc kernel kernel-devel openssl-devel \
+          binutils-devel lsof crash kexec-tools perf psmisc e2fsprogs-devel \
+          elfutils-libelf-devel libudev-devel libattr-devel libaio-devel libuuid-devel \
+          libblkid-devel libtirpc-devel libffi-devel ncompress python3-cffi python3-devel
+sudo dnf install -y dwarves python3-packaging || true
+EOF
 }
 
 #
@@ -63,7 +97,7 @@ function cr_setup() {
 #
 function cr_build() {
 	# Build ZFS
-	ssh -F vagrant-ssh.config default <<EOF
+	ssh "$COV_SSH" "$COV_HOST" <<EOF
 # Grab repo
 rm -rf ~/zfs
 git clone https://github.com/openzfs/zfs.git
@@ -80,13 +114,14 @@ sudo make install
 EOF
 
 	# Build Lustre
-	ssh -F vagrant-ssh.config default <<EOF
+	ssh "$COV_SSH" "$COV_HOST" <<EOF
 # Grab repo
 rm -rf ~/lustre-release
 git clone git://git.whamcloud.com/fs/lustre-release.git
 
 # Build
 cd ~/lustre-release
+git checkout origin/master-next
 ./autogen.sh
 ./configure
 make -s -j\$(nproc)
@@ -107,17 +142,11 @@ EOF
 # cov-build.
 #
 function cr_run() {
-	# Check if COV_PATH is defined
-	if [[ -z ${COV_PATH+x} ]]; then
-		echo "Provide the path to the Coverity tool tarball using COV_PATH."
-		exit
-	fi
-
 	# Copy build tool to VM
-	scp -F vagrant-ssh.config "$COV_PATH" default:~
+	scp "$COV_SSH" "$COV_PATH" "$COV_HOST":~
 
 	# Run scan
-	ssh -F vagrant-ssh.config default <<EOF
+	ssh "$COV_SSH" "$COV_HOST" <<EOF
 # Get coverity tool
 cd ~
 tar xf *.tar.gz
@@ -136,28 +165,25 @@ cat LUSTRE-VERSION-FILE
 EOF
 
 	# Grab scan results
-	scp -F vagrant-ssh.config default:~/lustre-release/*.tgz .
+	scp "$COV_SSH" "$COV_HOST":~/lustre-release/*.tgz .
 }
 
 #
 # Destroy Vagrant VM.
 #
 function cr_clean() {
-	vagrant destroy
-	rm -f vagrant-ssh.config
+	if [[ "$COV_SSH" =~ "vagrant" ]]; then
+		vagrant destroy
+		rm -f vagrant-ssh.config
+	fi
 }
 
 #
 # Run all steps in the correct order.
 #
 function cr_all() {
-	# Check if COV_PATH is defined
-	if [[ -z ${COV_PATH+x} ]]; then
-		echo "Provide the path to the Coverity tool tarball using COV_PATH."
-		exit
-	fi
-
 	cr_setup
+	cr_install
 	cr_build
 	cr_run
 	cr_clean
@@ -169,11 +195,31 @@ if [[ "$EUID" -ne 0 ]]; then
 	exit
 fi
 
+# Check if COV_PATH is defined
+if [[ -z ${COV_PATH+x} ]]; then
+	echo "Provide the path to the Coverity tool tarball using COV_PATH."
+	exit
+fi
+
+# Check if COV_SSH is defined
+if [[ -z ${COV_SSH+x} || -z ${COV_HOST+x} ]]; then
+	export COV_SSH="-F vagrant-ssh.config"
+	export COV_HOST="default"
+	echo "Defaulting to Vagrant."
+
+	# Check if vagrant is actually installed
+	if ! command -v vagrant 2>&1 >/dev/null; then
+		echo "Vagrant could not be found."
+		exit 1
+	fi
+fi
+
 # Process options
 for arg in "$@"; do
 	shift
 	case "$arg" in
 		setup) cr_setup;;
+		install) cr_install;;
 		build) cr_build;;
 		run) cr_run;;
 		clean) cr_clean;;

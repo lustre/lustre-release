@@ -42,23 +42,5 @@ Vagrant.configure("2") do |config|
       sed -i "s/$(hostname) //g" /etc/hosts
       echo "$GIVEN_IP $(hostname)" >> /etc/hosts
       grep $(hostname) /etc/hosts
-
-      # Add repos
-      dnf config-manager --set-enabled powertools
-      dnf config-manager --add-repo=https://downloads.whamcloud.com/public/e2fsprogs/latest/el8
-
-      # General kernel tools
-      dnf groupinstall -y 'Development Tools'
-
-      # Debug info (needed for ldiskfs)
-      sudo dnf install -y --enablerepo=*debug* kernel-debuginfo
-
-      # Install Lustre/ZFS dependencies and tools
-      dnf install -y --nogpgcheck git libyaml-devel libnl3-devel libmount-devel \
-          wget ncurses-devel bc dwarves kernel kernel-devel openssl-devel \
-          binutils-devel lsof crash kexec-tools perf psmisc e2fsprogs-devel \
-          elfutils-libelf-devel libudev-devel libattr-devel libaio-devel libuuid-devel \
-          libblkid-devel libtirpc-devel libffi-devel ncompress python3-cffi python3-devel \
-          python3-packaging
   SHELL
 end
