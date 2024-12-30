@@ -151,7 +151,8 @@ int fileset_alt_delete(struct rb_root *root, struct lu_fileset_alt *fileset);
 struct lu_fileset_alt *fileset_alt_search_id(struct rb_root *root,
 					 unsigned int fileset_id);
 struct lu_fileset_alt *fileset_alt_search_path(struct rb_root *root,
-					   const char *fileset_path);
+					   const char *fileset_path,
+					   bool prefix_search);
 bool fileset_alt_path_exists(struct rb_root *root, const char *path);
 void fileset_alt_resize(struct rb_root *root);
 int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp);

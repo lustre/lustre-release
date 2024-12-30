@@ -1462,7 +1462,8 @@ static int nodemap_fileset_del_alternate(struct lu_nodemap *nodemap,
 
 	down_write(&nodemap->nm_fileset_alt_lock);
 
-	fset = fileset_alt_search_path(&nodemap->nm_fileset_alt, fileset_path);
+	fset = fileset_alt_search_path(&nodemap->nm_fileset_alt, fileset_path,
+				   false);
 	if (!fset) {
 		rc = -ENOENT;
 		GOTO(out, rc);
@@ -1978,6 +1979,160 @@ char *nodemap_get_fileset_prim(const struct lu_nodemap *nodemap)
 	return (char *)nodemap->nm_fileset_prim;
 }
 EXPORT_SYMBOL(nodemap_get_fileset_prim);
+
+/**
+ * nodemap_has_fileset() - Check if nodemap has any filesets(prim or alt)
+ * defined
+ *
+ * @nodemap: nodemap to check
+ *
+ * The caller must hold the nodemap->nm_fileset_alt_lock.
+ *
+ * Return:
+ * * true	if nodemap has any filesets defined
+ */
+static bool nodemap_has_any_fileset(const struct lu_nodemap *nodemap)
+{
+	bool found = false;
+
+	if (nodemap->nm_fileset_prim && nodemap->nm_fileset_prim[0] != '\0')
+		RETURN(true);
+
+	found = !RB_EMPTY_ROOT(&nodemap->nm_fileset_alt);
+
+	return found;
+}
+
+/**
+ * nodemap_get_fileset() - Gets root for client mount directory based
+ * on nodemap's filesets
+ *
+ * @nodemap: nodemap to get the active filesets from
+ * @fileset_src: the input fileset, e.g., requested from the client's mount
+ *		 path. NULL is treated as empty and returns the primary fileset
+ * @fileset_out: the output fileset based on the nodemap's fileset information.
+ *		 It is the caller's responsibility to OBD_FREE() the output
+ *		 buffer. It is only allocated on success (retval == 0).
+ * @fileset_out_size: a pointer to the output buffer size
+ *
+ * This function does not verify whether the fileset returned as fileset_dest
+ * exists in the Lustre namespace nor does it check any permissions.
+ *
+ * Return:
+ * * %0 on success	fileset_dest is always filled even if the nodemap
+ *			is disabled
+ * * %-EINVAL		nodemap, fileset_out, or fileset_out_size is NULL
+ * * %-EOVERFLOW	allocated fileset size too small
+ * * %-ENOMEM		not enough memory to allocate buffer
+ */
+int nodemap_fileset_get_root(struct lu_nodemap *nodemap,
+			     const char *fileset_src, char **fileset_out,
+			     int *fileset_out_size)
+{
+	size_t combined_path_len;
+	char *fset = NULL;
+	int fset_size, rc;
+
+	if (!nodemap || !fileset_out || !fileset_out_size)
+		RETURN(-EINVAL);
+
+	fset_size = PATH_MAX + 1;
+	OBD_ALLOC(fset, fset_size);
+	if (!fset)
+		RETURN(-ENOMEM);
+
+	down_read(&nodemap->nm_fileset_alt_lock);
+
+	/* 1. If nodemap is inactive or no filesets, return fileset_src as is */
+	if (!nodemap_active || !nodemap_has_any_fileset(nodemap)) {
+		if (fileset_src) {
+			rc = strscpy(fset, fileset_src, fset_size);
+			if (rc < 0)
+				GOTO(out, rc = -ENAMETOOLONG);
+
+			GOTO(out, rc = 0);
+		}
+		/* fileset_src is NULL, return empty fileset */
+		fset[0] = '\0';
+		GOTO(out, rc = 0);
+	}
+
+	/* 2. if fileset_src is empty, return the primary fileset */
+	if (!fileset_src || fileset_src[0] == '\0') {
+		if (!nodemap->nm_fileset_prim ||
+		    nodemap->nm_fileset_prim[0] == '\0') {
+			/* No primary fileset defined but alt filesets are
+			 * available. An empty fileset_src cannot match any alt
+			 * fileset -> permission denied
+			 */
+			GOTO(out, rc = -EACCES);
+		}
+
+		rc = strscpy(fset, nodemap->nm_fileset_prim, fset_size);
+		if (rc < 0)
+			GOTO(out, rc = -ENAMETOOLONG);
+
+		GOTO(out, rc = 0);
+	}
+
+	/* 3. check if any fileset exists that matches fileset_src */
+	if (nodemap->nm_fileset_prim && nodemap->nm_fileset_prim[0] != '\0') {
+		rc = strncmp(nodemap->nm_fileset_prim, fileset_src,
+			     strlen(nodemap->nm_fileset_prim));
+		if (!rc) {
+			rc = strscpy(fset, fileset_src, fset_size);
+			if (rc < 0)
+				GOTO(out, rc = -ENAMETOOLONG);
+			GOTO(out, rc = 0);
+		}
+	}
+
+	if (fileset_alt_search_path(&nodemap->nm_fileset_alt, fileset_src,
+				    true)) {
+		/* if fileset_src matches any fileset either exactly or as
+		 * a prefix, set fileset_out to fileset_src
+		 */
+		rc = strscpy(fset, fileset_src, fset_size);
+		if (rc < 0)
+			GOTO(out, rc = -ENAMETOOLONG);
+
+		GOTO(out, rc = 0);
+	}
+
+	/* 4. if fileset is not found, append fileset_src to the primary
+	 * fileset, and set to fileset_out (prim fileset must've been set)
+	 */
+	if (nodemap->nm_fileset_prim && nodemap->nm_fileset_prim[0] != '\0') {
+		combined_path_len = strlen(nodemap->nm_fileset_prim) +
+				    strlen(fileset_src) + 1;
+		if (fset_size < combined_path_len)
+			GOTO(out, rc = -ENAMETOOLONG);
+
+		rc = snprintf(fset, combined_path_len, "%s%s",
+			      nodemap->nm_fileset_prim, fileset_src);
+		if (rc < 0 || rc >= fset_size)
+			GOTO(out, rc = -ENAMETOOLONG);
+
+		GOTO(out, rc = 0);
+	}
+
+	/* if we get here, this means that a fileset_src was given
+	 * that is not represented by any fileset -> permission denied
+	 */
+	rc = -EACCES;
+
+out:
+	if (rc == 0) {
+		*fileset_out = fset;
+		*fileset_out_size = fset_size;
+	} else {
+		OBD_FREE(fset, fset_size);
+	}
+
+	up_read(&nodemap->nm_fileset_alt_lock);
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_fileset_get_root);
 
 static int nodemap_validate_sepol(const char *sepol)
 {

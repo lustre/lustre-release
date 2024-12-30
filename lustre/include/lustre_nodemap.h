@@ -209,6 +209,9 @@ int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 int nodemap_set_fileset_prim_lproc(const char *nodemap_name,
 				   const char *fileset_path, bool checkperm);
 char *nodemap_get_fileset_prim(const struct lu_nodemap *nodemap);
+int nodemap_fileset_get_root(struct lu_nodemap *nodemap,
+			     const char *fileset_src, char **fileset_out,
+			     int *fileset_out_size);
 int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm);
 const char *nodemap_get_sepol(const struct lu_nodemap *nodemap);
 int nodemap_set_capabilities(const char *nodemap_name, char *caps);

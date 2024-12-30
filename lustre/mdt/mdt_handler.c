@@ -377,12 +377,13 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 static int mdt_get_root(struct tgt_session_info *tsi)
 {
 	struct mdt_thread_info *info = tsi2mdt_info(tsi);
-	struct obd_export *exp = info->mti_exp;
-	struct mdt_body	*repbody;
-	struct lu_nodemap *nodemap = NULL;
 	struct mdt_device *mdt = info->mti_mdt;
-	char *fileset = NULL, *buffer = NULL;
-	char *nodemap_fileset = NULL;
+	struct obd_export *exp = info->mti_exp;
+	struct lu_nodemap *nodemap = NULL;
+	struct mdt_body *repbody;
+	char *fileset_mount = NULL;
+	char *fileset_buffer = NULL;
+	int fileset_buffer_size = 0;
 	int rc;
 
 	ENTRY;
@@ -396,8 +397,9 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 	if (req_capsule_get_size(info->mti_pill, &RMF_NAME, RCL_CLIENT) > 0) {
-		fileset = req_capsule_client_get(info->mti_pill, &RMF_NAME);
-		if (fileset == NULL)
+		fileset_mount =
+			req_capsule_client_get(info->mti_pill, &RMF_NAME);
+		if (fileset_mount == NULL)
 			GOTO(out, rc = err_serious(-EFAULT));
 	}
 
@@ -406,31 +408,21 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	if (!IS_ERR_OR_NULL(nodemap)) {
 		if (nodemap->nmf_deny_mount)
 			GOTO(out, rc = err_serious(-EPERM));
-		nodemap_fileset = nodemap_get_fileset_prim(nodemap);
+		/* get new root from nodemap if filesets are available */
+		rc = nodemap_fileset_get_root(exp->exp_target_data.ted_nodemap,
+					      fileset_mount, &fileset_buffer,
+					      &fileset_buffer_size);
+		if (rc != 0)
+			GOTO(out, rc = err_serious(rc));
+
+		fileset_mount = fileset_buffer;
 	}
 
-	if (nodemap_fileset != NULL && nodemap_fileset[0]) {
-		CDEBUG(D_INFO, "nodemap fileset is %s\n", nodemap_fileset);
-		if (fileset) {
-			/* consider fileset from client as a sub-fileset
-			 * of the nodemap one
-			 */
-			OBD_ALLOC(buffer, PATH_MAX + 1);
-			if (buffer == NULL)
-				GOTO(out, rc = err_serious(-ENOMEM));
-			if (snprintf(buffer, PATH_MAX + 1, "%s/%s",
-				     nodemap_fileset, fileset) >= PATH_MAX + 1)
-				GOTO(out, rc = err_serious(-EINVAL));
-			fileset = buffer;
-		} else {
-			/* enforce fileset as specified in the nodemap */
-			fileset = nodemap_fileset;
-		}
-	}
-
-	if (fileset) {
-		CDEBUG(D_INFO, "Getting fileset %s\n", fileset);
-		rc = mdt_lookup_fileset(info, fileset, &repbody->mbo_fid1);
+	/* check that root exists */
+	if (fileset_mount && fileset_mount[0] != '\0') {
+		CDEBUG(D_INFO, "Getting fileset %s\n", fileset_mount);
+		rc = mdt_lookup_fileset(info, fileset_mount,
+					&repbody->mbo_fid1);
 		if (rc < 0)
 			GOTO(out, rc = err_serious(rc));
 	} else {
@@ -442,7 +434,7 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	EXIT;
 out:
 	mdt_thread_info_fini(info);
-	OBD_FREE(buffer, PATH_MAX+1);
+	OBD_FREE(fileset_buffer, fileset_buffer_size);
 
 	if (!IS_ERR_OR_NULL(nodemap))
 		nodemap_putref(nodemap);

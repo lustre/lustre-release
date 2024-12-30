@@ -108,9 +108,8 @@ static unsigned int get_first_free_id(struct rb_root *root)
  * @root: pointer to the root of the rb tree
  * @fileset: fileset to insert
  *
- * Insert a fileset into the rb tree. If fileset->nfa_id is 0, the first free
- * id is assigned and used. The caller is free to set its own fileset->nfa_id
- * as long as it is not 0.
+ * If fileset->nfa_id is 0, the first free id is assigned and used. The caller
+ * is free to set its own fileset->nfa_id as long as it is not 0.
  *
  * Return:
  * * %0 on success
@@ -217,11 +216,14 @@ EXPORT_SYMBOL(fileset_alt_search_id);
  * fileset_alt_search_path() - Search for a fileset by its fileset path.
  * @root: pointer to the root of the rb tree
  * @fileset_path: path of the fileset to search
+ * @prefix_search: search for a fileset that is a prefix to
+ *		   fileset_path rather than an exact match
  *
  * Return lu_fileset_alt structure on success, NULL otherwise
  */
 struct lu_fileset_alt *fileset_alt_search_path(struct rb_root *root,
-					   const char *fileset_path)
+					   const char *fileset_path,
+					   bool prefix_search)
 {
 	struct rb_node *node;
 	struct lu_fileset_alt *fileset;
@@ -231,7 +233,12 @@ struct lu_fileset_alt *fileset_alt_search_path(struct rb_root *root,
 	/* search the full tree for a fileset with the given path */
 	for (node = rb_first(root); node; node = rb_next(node)) {
 		fileset = rb_entry(node, struct lu_fileset_alt, nfa_rb);
-		rc = strcmp(fileset_path, fileset->nfa_path);
+		if (prefix_search) {
+			rc = strncmp(fileset_path, fileset->nfa_path,
+				     strlen(fileset->nfa_path));
+		} else {
+			rc = strcmp(fileset_path, fileset->nfa_path);
+		}
 		if (!rc) {
 			found = true;
 			break;
@@ -243,7 +250,7 @@ EXPORT_SYMBOL(fileset_alt_search_path);
 
 bool fileset_alt_path_exists(struct rb_root *root, const char *path)
 {
-	return fileset_alt_search_path(root, path) != NULL;
+	return fileset_alt_search_path(root, path, false) != NULL;
 }
 EXPORT_SYMBOL(fileset_alt_path_exists);
 
