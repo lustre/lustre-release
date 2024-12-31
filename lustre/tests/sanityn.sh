@@ -1216,6 +1216,7 @@ test_31s() {
 	mkdir_on_mdt0 $DIR/$tdir
 	touch $DIR/$tdir/$tfile || error "touch $tdir/$tfile failed"
 	( cd $DIR/$tdir; tail -f $tfile || $MULTIOP . Dc) & pid=$!
+	sleep 0.5
 
 	stack_trap "pkill -P $pid 2> /dev/null" ERR
 
