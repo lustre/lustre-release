@@ -1176,13 +1176,13 @@ static inline int ldlm_is_granted(struct ldlm_lock *lock)
 static inline bool ldlm_has_layout(struct ldlm_lock *lock)
 {
 	return lock->l_resource->lr_type == LDLM_IBITS &&
-		lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_LAYOUT;
+		!!(lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_LAYOUT);
 }
 
 static inline bool ldlm_has_dom(struct ldlm_lock *lock)
 {
 	return lock->l_resource->lr_type == LDLM_IBITS &&
-		lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_DOM;
+		!!(lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_DOM);
 }
 
 static inline char *
@@ -1351,7 +1351,7 @@ extern const char *ldlm_it2str(enum ldlm_intent_flags it);
 		_ldlm_lock_debug(lock, msgdata, fmt, ##a);              \
 		if (unlikely(ldlm_lock_to_ns(lock)->                    \
 				ns_dump_stack_on_error) &&              \
-						(mask) & D_ERROR)       \
+						!!((mask) & D_ERROR))   \
 			dump_stack();				        \
 	}								\
 } while (0)
