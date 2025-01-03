@@ -121,6 +121,7 @@ static int lfs_fid2path(int argc, char **argv);
 static int lfs_path2fid(int argc, char **argv);
 static int lfs_rmfid(int argc, char **argv);
 static int lfs_data_version(int argc, char **argv);
+static int lfs_hsm(int argc, char **argv);
 static int lfs_hsm_state(int argc, char **argv);
 static int lfs_hsm_set(int argc, char **argv);
 static int lfs_hsm_clear(int argc, char **argv);
@@ -253,6 +254,32 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"		[--mode|-o MODE] [--flags HEX] DIRECTORY\n"
 
 /**
+ * LFS_SUBCMD() - Parse and execute lfs subcommands.
+ * @argc: The count of lfs subcommand line arguments.
+ * @argv: Array of strings for lfs subcommand line arguments.
+ *
+ * This function parses lfs subcommands and performs the
+ * corresponding functions specified in name##_cmdlist[].
+ *
+ * Return: 0 on success or an error code on failure.
+ */
+#define LFS_SUBCMD(name)					\
+static int lfs_##name(int argc, char **argv)			\
+{								\
+	char cmd[PATH_MAX];					\
+	int rc = 0;						\
+								\
+	setlinebuf(stdout);					\
+								\
+	snprintf(cmd, sizeof(cmd), "%s %s",			\
+		 program_invocation_short_name, argv[0]);	\
+	program_invocation_short_name = cmd;			\
+	rc = cfs_parser(argc, argv, name##_cmdlist);		\
+								\
+	return rc < 0 ? -rc : rc;				\
+}
+
+/**
  * command_t mirror_cmdlist - lfs mirror commands.
  */
 command_t mirror_cmdlist[] = {
@@ -303,6 +330,7 @@ command_t mirror_cmdlist[] = {
 		"\t\t[--verbose|-v] MIRRORED_FILE [MIRRORED_FILE2 ...]\n" },
 	{ .pc_help = NULL }
 };
+LFS_SUBCMD(mirror);
 
 /**
  * command_t pcc_cmdlist - lfs pcc commands.
@@ -345,6 +373,49 @@ command_t pcc_cmdlist[] = {
 		"usage: lfs pcc unpin [--id|-i ID] FILE ...\n"},
 	{ .pc_help = NULL }
 };
+LFS_SUBCMD(pcc);
+
+/**
+ * command_t hsm_cmdlist - lfs hsm commands.
+ */
+command_t hsm_cmdlist[] = {
+	{.pc_name = "state", .pc_func = lfs_hsm_state,
+	 .pc_help = "Display the HSM information for given files.\n"
+	 "usage: hsm state FILE"},
+	{.pc_name = "set", .pc_func = lfs_hsm_set,
+	 .pc_help = "Set HSM user flag on specified files.\n"
+	 "usage: hsm set [--norelease] [--noarchive] [--dirty] [--exists] "
+	 "[--archived] [--lost] [--archive-id NUM] FILE"},
+	{.pc_name = "clear", .pc_func = lfs_hsm_clear,
+	 .pc_help = "Clear HSM user flag on specified files.\n"
+	 "usage: hsm clear [--norelease] [--noarchive] [--dirty] [--exists] "
+	 "[--archived] [--lost] FILE"},
+	{.pc_name = "action", .pc_func = lfs_hsm_action,
+	 .pc_help = "Display current HSM request for given files.\n"
+	 "usage: hsm action FILE"},
+	{.pc_name = "archive", .pc_func = lfs_hsm_archive,
+	 .pc_help = "Archive file to external storage.\n"
+	 "usage: hsm archive [--filelist FILELIST] [--data DATA]\n"
+	 "		     [--archive NUM] FILE"},
+	{.pc_name = "restore", .pc_func = lfs_hsm_restore,
+	 .pc_help = "Restore file from external storage.\n"
+	 "usage: hsm restore [--filelist FILELIST] [--data DATA] FILE"},
+	{.pc_name = "release", .pc_func = lfs_hsm_release,
+	 .pc_help = "Release files from Lustre.\n"
+	 "usage: hsm release [--filelist FILELIST] [--data DATA] FILE"},
+	{.pc_name = "remove", .pc_func = lfs_hsm_remove,
+	 .pc_help = "Remove file copy from external storage.\n"
+	 "usage: hsm remove [--filelist FILELIST] [--data DATA]\n"
+	 "		    [--archive NUM]\n"
+	 "                  {FILE | --mntpath MOUNTPATH FID}\n\n"
+	 "Note: To remove an archived copy of a file already deleted from a\n"
+	 "Lustre FS, --mntpath option and a list of FIDs must be specified."},
+	{.pc_name = "cancel", .pc_func = lfs_hsm_cancel,
+	 .pc_help = "Cancel requests related to specified files.\n"
+	 "usage: hsm cancel [--filelist FILELIST] [--data DATA] FILE"},
+	{.pc_help = NULL}
+};
+LFS_SUBCMD(hsm);
 
 /* all available commands */
 command_t cmdlist[] = {
@@ -501,41 +572,43 @@ command_t cmdlist[] = {
 	{"data_version", lfs_data_version, 0, "Display file data version or "
 	 "set the data version in the HSM xattr for a given path.\n"
 	"usage: data_version [-n|-r|-w|-s] <path>"},
-	{"hsm_state", lfs_hsm_state, 0, "Display the HSM information (states, "
-	 "undergoing actions) for given files.\n usage: hsm_state <file> ..."},
-	{"hsm_set", lfs_hsm_set, 0, "Set HSM user flag on specified files.\n"
-	 "usage: hsm_set [--norelease] [--noarchive] [--dirty] [--exists] "
-	 "[--archived] [--lost] [--archive-id NUM] <file> ..."},
-	{"hsm_clear", lfs_hsm_clear, 0, "Clear HSM user flag on specified "
-	 "files.\n"
-	 "usage: hsm_clear [--norelease] [--noarchive] [--dirty] [--exists] "
-	 "[--archived] [--lost] <file> ..."},
-	{"hsm_action", lfs_hsm_action, 0, "Display current HSM request for "
-	 "given files.\n" "usage: hsm_action <file> ..."},
+
+	{"hsm_state", lfs_hsm_state, 0,
+	 "Display the HSM information for given files.\n"
+	 "usage: hsm_state FILE"},
+	{"hsm_set", lfs_hsm_set, 0,
+	 "Set HSM user flag on specified files.\n"
+	 "usage: hsm_set [--norelease] [--noarchive] [--dirty] [--exists]\n"
+	 "		 [--archived] [--lost] [--archive-id NUM] FILE"},
+	{"hsm_clear", lfs_hsm_clear, 0,
+	 "Clear HSM user flag on specified files.\n"
+	 "usage: hsm_clear [--norelease] [--noarchive] [--dirty] [--exists]\n"
+	 "		   [--archived] [--lost] FILE"},
+	{"hsm_action", lfs_hsm_action, 0,
+	 "Display current HSM request for given files.\n"
+	 "usage: hsm_action FILE"},
 	{"hsm_archive", lfs_hsm_archive, 0,
 	 "Archive file to external storage.\n"
-	 "usage: hsm_archive [--filelist FILELIST] [--data DATA] [--archive NUM] "
-	 "<file> ..."},
+	 "usage: hsm_archive [--filelist FILELIST] [--data DATA]\n"
+	 "		     [--archive NUM] FILE"},
 	{"hsm_restore", lfs_hsm_restore, 0,
 	 "Restore file from external storage.\n"
-	 "usage: hsm_restore [--filelist FILELIST] [--data DATA] <file> ..."},
+	 "usage: hsm_restore [--filelist FILELIST] [--data DATA] FILE"},
 	{"hsm_release", lfs_hsm_release, 0,
 	 "Release files from Lustre.\n"
-	 "usage: hsm_release [--filelist FILELIST] [--data DATA] <file> ..."},
+	 "usage: hsm_release [--filelist FILELIST] [--data DATA] FILE"},
 	{"hsm_remove", lfs_hsm_remove, 0,
 	 "Remove file copy from external storage.\n"
-	 "usage: hsm_remove [--filelist FILELIST] [--data DATA] "
-	 "[--archive NUM]\n"
-	 "                  (FILE [FILE ...] | "
-	 "--mntpath MOUNTPATH FID [FID ...])\n"
-	 "\n"
+	 "usage: hsm_remove [--filelist FILELIST] [--data DATA]\n"
+	 "		    [--archive NUM]\n"
+	 "                  {FILE | --mntpath MOUNTPATH FID}\n\n"
 	 "Note: To remove an archived copy of a file already deleted from a "
-	 "Lustre FS, the\n"
-	 "--mntpath option and a list of FIDs must be specified"
-	},
+	 "Lustre FS, --mntpath option and a list of FIDs must be specified"},
 	{"hsm_cancel", lfs_hsm_cancel, 0,
 	 "Cancel requests related to specified files.\n"
-	 "usage: hsm_cancel [--filelist FILELIST] [--data DATA] <file> ..."},
+	 "usage: hsm_cancel [--filelist FILELIST] [--data DATA] FILE"},
+	{"hsm", lfs_hsm, hsm_cmdlist, ""},
+
 	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe_migrate, 0,
@@ -13959,31 +14032,6 @@ error:
 	return rc;
 }
 
-/**
- * lfs_mirror() - Parse and execute lfs mirror commands.
- * @argc: The count of lfs mirror command line arguments.
- * @argv: Array of strings for lfs mirror command line arguments.
- *
- * This function parses lfs mirror commands and performs the
- * corresponding functions specified in mirror_cmdlist[].
- *
- * Return: 0 on success or an error code on failure.
- */
-static int lfs_mirror(int argc, char **argv)
-{
-	char cmd[PATH_MAX];
-	int rc = 0;
-
-	setlinebuf(stdout);
-
-	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
-	progname = cmd;
-	program_invocation_short_name = cmd;
-	rc = cfs_parser(argc, argv, mirror_cmdlist);
-
-	return rc < 0 ? -rc : rc;
-}
-
 static void lustre_som_swab(struct lustre_som_attrs *attrs)
 {
 #if __BYTE_ORDER == __BIG_ENDIAN
@@ -14617,31 +14665,6 @@ static int lfs_pcc_unpin(int argc, char **argv)
 	return rc;
 }
 
-
-/**
- * lfs_pcc() - Parse and execute lfs pcc commands.
- * @argc: The count of lfs pcc command line arguments.
- * @argv: Array of strings for lfs pcc command line arguments.
- *
- * This function parses lfs pcc commands and performs the
- * corresponding functions specified in pcc_cmdlist[].
- *
- * Return: 0 on success or an error code on failure.
- */
-static int lfs_pcc(int argc, char **argv)
-{
-	char cmd[PATH_MAX];
-	int rc = 0;
-
-	setlinebuf(stdout);
-
-	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
-	progname = cmd;
-	program_invocation_short_name = cmd;
-	rc = cfs_parser(argc, argv, pcc_cmdlist);
-
-	return rc < 0 ? -rc : rc;
-}
 
 int main(int argc, char **argv)
 {

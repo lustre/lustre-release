@@ -4370,16 +4370,16 @@ test_223b() {
 	copytool setup -b 1
 	changelog_register
 
-	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	$LFS hsm archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
-	$LFS hsm_release $f
+	$LFS hsm release $f
 
 	# Prevent restore from completing
 	copytool_suspend
-	$LFS hsm_restore $f
+	$LFS hsm restore $f
 	wait_request_state $fid RESTORE STARTED
 
-	$LFS hsm_cancel $f
+	$LFS hsm cancel $f
 	wait_request_state $fid RESTORE CANCELED
 
 	copytool_continue
