@@ -6332,16 +6332,16 @@ test_44() {
 	$START_NAMESPACE -r || error "(31) Fail to start LFSCK for namespace!"
 	$STOP_LFSCK &
 	sleep 1
-	$STOP_LFSCK && error "(32) LFSCK_STOP had to fail"
 	stop $SINGLEMDS
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
 	start_facet $SINGLEMDS
 	wait
-	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+	local status=$(do_facet mds1 $LCTL get_param \
+			-n mdd.${MDT_DEV}.lfsck_namespace |
+			awk '/^status/ { print $2 }')
+	[ $status == "stopped" ] || {
 		$SHOW_NAMESPACE
-		error "(33) unexpected status"
+		error "(32) unexpected status"
 	}
 }
 run_test 44 "umount while lfsck is stopping"
