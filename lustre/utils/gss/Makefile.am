@@ -4,7 +4,7 @@ AM_CFLAGS := -fPIC \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
 	     -D_GNU_SOURCE
 
-sbin_PROGRAMS = l_idmap
+sbin_PROGRAMS =
 
 if GSS_KEYRING
 sbin_PROGRAMS += lsvcgssd lgss_keyring l_getauth
@@ -49,15 +49,6 @@ lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
 if GSS_SSK
 lsvcgssd_LDADD += -lcrypto -lssl
 endif
-
-l_idmap_SOURCES = \
-	l_idmap.c \
-	lsupport.c \
-	err_util.c \
-	\
-	lsupport.h
-
-l_idmap_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(KRBLIBS)
 
 l_getauth_SOURCES = \
 	l_getauth.c \

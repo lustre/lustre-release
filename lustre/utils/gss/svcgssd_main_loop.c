@@ -98,9 +98,6 @@ void svcgssd_run(void)
 		printerr(LL_WARN,
 			 "will use default number of rounds for prime testing\n");
 #endif
-	} else {
-		/* For krb, preload mapping table if any */
-		load_mapping();
 	}
 
 again:

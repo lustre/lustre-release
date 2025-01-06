@@ -171,8 +171,6 @@ release_parent()
 static void
 sig_die(int signal)
 {
-	/* destroy krb5 machine creds */
-	cleanup_mapping();
 	/* cleanup allocated strings for realms */
 	gssd_cleanup_realms();
 	/* remove socket */
@@ -351,7 +349,6 @@ err_krb:
 	gssd_init_unique(GSSD_SVC);
 
 	svcgssd_run();
-	cleanup_mapping();
 	gssd_cleanup_realms();
 	printerr(LL_ERR, "svcgssd_run returned!\n");
 	abort();

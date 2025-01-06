@@ -102,15 +102,10 @@ struct lgssd_upcall_data {
 #define GSSD_INTERFACE_VERSION_V1       (1)
 
 #define GSSD_DEFAULT_GETHOSTNAME_EX     "/etc/lustre/nid2hostname"
-#define MAPPING_DATABASE_FILE           "/etc/lustre/idmap.conf"
 
 int getcanonname(const char *host, char *buf, int buflen);
 int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen);
-void cleanup_mapping(void);
 uid_t parse_uid(char *uidstr);
-void load_mapping(void);
-int mapping_empty(void);
-int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid);
 int gss_get_realm(char *realm);
 
 /*

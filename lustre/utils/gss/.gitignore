@@ -1,6 +1,5 @@
 /Makefile.in
 /lsvcgssd
-/l_idmap
 /lgss_keyring
 /lgss_sk
 /l_getauth

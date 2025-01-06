@@ -309,9 +309,6 @@ free:
 static int lookup_id(gss_name_t client_name, char *princ, lnet_nid_t nid,
 		     uid_t *uid)
 {
-	if (!mapping_empty())
-		return lookup_mapping(princ, nid, uid);
-
 	return lookup_localname(client_name, princ, nid, uid);
 }
 
