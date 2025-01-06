@@ -1,0 +1,57 @@
+.TH LLAPI_PROJECT_GET 3 2025-07-01 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_project_get \- read project information to a buffer
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_project_get(struct ll_project_handle *" hdl ", ll_project *" lprj );
+.fi
+.SH DESCRIPTION
+The
+.B llapi_project_get()
+function reads the contents of the file specified by
+.BR hdl->lph_file ,
+until an entry matches the information provided in
+.B lprj
+and fills is the remaining space with the information provided in the file.
+The buffer should be preallocated.
+.SH RETURN VALUES
+.TP
+.B 0
+on success
+.TP
+-ve
+error code on failure and sets errno appropriately.
+.SH ERRORS
+.TP 15
+.B -EINVAL
+if both
+.I lprj->lprj_projname
+and
+.I lprj->lprj_projid
+are NULL, which is checked through
+.IR lprj->lprj_valid .
+.TP
+.B -ENOENT
+if no entry was found in
+.I hdl->lph_file
+matching the information specified in
+.IR lprj .
+.SH AVAILABILITY
+.B llapi_project_get()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.17.0
+.\" Added in commit v2_16_55-17-g75c6d5636d
+.SH SEE ALSO
+.BR lfs_project (1),
+.BR llapi_project_close (3),
+.BR llapi_project_fgetnam (3),
+.BR llapi_project_fgetprjid (3),
+.BR llapi_project_getnam (3),
+.BR llapi_project_getprjid (3),
+.BR llapi_project_open (3),
+.BR llapi_project_put (3),
+.BR projid (5),
+.BR lustreapi (7)

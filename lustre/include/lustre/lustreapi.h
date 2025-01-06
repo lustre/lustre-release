@@ -1467,6 +1467,45 @@ int llapi_param_get_paths(const char *pattern, glob_t *paths);
 int llapi_param_get_value(const char *path, char **buf, size_t *buflen);
 void llapi_param_paths_free(glob_t *paths);
 
+#define MAXPROJNAME	32
+
+enum ll_project_valid {
+	LPRJ_VALID_SIZE		= 0x0001,
+	LPRJ_VALID_ID		= 0x0002,
+	LPRJ_VALID_NAME		= 0x0004,
+	LPRJ_VALID_SUPPORTED	= LPRJ_VALID_SIZE|LPRJ_VALID_NAME|LPRJ_VALID_ID,
+};
+
+struct ll_project {
+	__u16			lprj_valid;
+	__u16			lprj_size;
+	__u32			lprj_projid;
+	char			lprj_projname[MAXPROJNAME];
+	__u64			lprj_padding[27];
+};
+
+struct ll_project_handle;
+
+/* open project mapping file and maintain state across calls in @hdl */
+int llapi_project_open(const char *name, struct ll_project_handle **hdl,
+		       char *mode);
+/* close project mapping file and release state in @hdl */
+int llapi_project_close(struct ll_project_handle *hdl);
+/* populate remaining fields in @lprj from open @hdl based on valid fields */
+int llapi_project_get(struct ll_project_handle *hdl, struct ll_project *lprj);
+/* free any allocated memory in @lprj */
+int llapi_project_put(struct ll_project_handle *hdl, struct ll_project *lprj,
+		      int flags);
+/* populate fields in @lprj based on requested @name from open @hdl */
+int llapi_project_fgetnam(struct ll_project_handle *hdl, struct ll_project *prj,
+			  const char *name);
+/* populate fields in @lprj based on requested @name */
+int llapi_project_getnam(struct ll_project *prj, const char *name);
+/* populate fields in @lprj based on requested @name from open @hdl */
+int llapi_project_fgetprjid(struct ll_project_handle *hdl,
+			    struct ll_project *prj, const unsigned int prjid);
+/* populate fields in @lprj based on requested @prjid */
+int llapi_project_getprjid(struct ll_project *prj, __u32 prjid);
 /** @} llapi */
 
 #if defined(__cplusplus)

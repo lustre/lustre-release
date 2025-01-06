@@ -130,7 +130,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .IR FORMAT ]
 .RB [[ ! ]
 .B --projid
-.IR PROJID ]
+.IR PROJID | PROJNAME ]
 .br
 .RB [[ ! ]
 .BR --size | -s
@@ -658,7 +658,15 @@ File's stripe size. For a composite file, this is the stripe size of the last
 instantiated component.
 .TP
 .BR --projid
-File has specified numeric project ID.
+File belongs to the project specified by
+.I PROJID
+or
+.IR PROJNAME .
+A username or group name can be used in place of a project name by specifying
+.BI u: USERNAME
+or
+.BI g: GROUPNAME
+respectively.
 .TP
 .BR -s ", " --size
 File size is
@@ -910,5 +918,6 @@ filesystem package since release 0.10.0
 .BR lfs-getstripe (1),
 .BR lfs-migrate (1),
 .BR xargs (1),
+.BR projid (5),
 .BR lustre (7),
 .BR regex (7)

@@ -22353,6 +22353,124 @@ test_187b() {
 }
 run_test 187b "Test data version change on volatile file"
 
+test_190a() {
+	local test_dir="$DIR/$tdir"
+	local test_file="$test_dir/$tfile"
+
+	local prj=($(get_test_project))
+	echo "proj - ${prj[0]} ${prj[1]}"
+	[[ -n "$LIBLUSTREAPI_PROJID_FILE" ]] ||
+		error "\$LIBLUSTREAPI_PROJID_FILE unset"
+	[[ -f "$LIBLUSTREAPI_PROJID_FILE" ]] ||
+		error "$LIBLUSTREAPI_PROJID_FILE does not exist"
+
+	mkdir -p $test_dir || error "Failed to create test directory"
+	touch $test_file || error "Failed to create test file"
+	stack_trap "rm -rf $test_dir"
+
+	# Set project using project name
+	$LFS project -p ${prj[0]} $test_file || {
+		cat $LIBLUSTREAPI_PROJID_FILE
+		error "Failed to set project using name ${prj[0]}"
+	}
+
+	local set_id=$($LFS project -d $test_file | awk '{print $1}')
+	[[ "$set_id" == "${prj[1]}" ]] ||
+		error "Project ID mismatch: expected ${prj[1]}, got $set_id"
+}
+run_test 190a "check lfs project -p works with project name"
+
+test_190b() {
+	local test_dir="$DIR/$tdir"
+	local MAX_FILES=50000
+	local fc
+
+	local prj=($(get_test_project))
+	echo "proj - ${prj[0]} ${prj[1]}"
+
+	mkdir -p $test_dir || error "Failed to create test directory"
+	stack_trap "rm -rf $test_dir"
+
+	local start=$SECONDS
+	local end=$((start + 300))
+	for ((fc = 1; fc <= MAX_FILES; fc++)); do
+		echo "projid$fc:$fc:$tfile.$fc" >> $LIBLUSTREAPI_PROJID_FILE
+		touch $test_dir/$tfile.$fc
+		$LFS project -p projid$fc $test_dir/$tfile.$fc || {
+			head -n 10 $LIBLUSTREAPI_PROJID_FILE
+			error "Failed to set project 'projid$fc' on $tfile.$fc"
+		}
+		(( SECONDS < end )) || break
+		(( fc % (MAX_FILES/10) == 0 )) &&
+			echo "created $fc/$MAX_FILES files/projid in $((SECONDS-start))/$((end-start))s"
+	done
+	(( fc == MAX_FILES + 1 )) && fc=$MAX_FILES
+	echo "created $fc/$MAX_FILES files/projid in $((SECONDS-start))/$((end-start))s"
+
+	for i in {1..5}; do
+		touch $test_dir/noproject_$i
+	done
+
+	# lfs find ! --projid files
+	local count_usr=$($LFS find ! --projid 0 $test_dir | wc -l)
+	(( count_usr == fc )) ||
+		error "lfs find ! --projid 0 found $count_usr files != $fc"
+
+	# lfs find --projid files
+	count_usr=$($LFS find --projid 0 $test_dir | wc -l)
+	(( count_usr == 6 )) ||
+		error "lfs find --projid 0 found $count_usr files != 6"
+
+	echo "lookup projid$fc timing:"
+        time $LFS project -p projid$fc $MOUNT
+
+	# lfs find --projid ID
+	start=$SECONDS
+	[[ "$SLOW" == "yes" ]] && end=600 || end=120
+	(( end += start ))
+	for ((i = 1; i < fc; i += fc / 5)); do
+		echo "start scan for projid$i/$fc at $((end - SECONDS))"
+
+		[[ -n $($LFS find --projid "projid$i" $test_dir) ]] ||
+			error "lfs find --projid projid$i did not find result"
+
+		((SECONDS < end)) || echo "timeout $((end - SECONDS))s" && break
+	done
+}
+run_test 190b "check lfs find --project works with project name"
+
+test_190c() {
+	local test_dir="$DIR/$tdir"
+	local test_file="$test_dir/$tfile"
+	local TSTID=${TSTID:-"$(id -u $TSTUSR)"}
+
+	mkdir -p $test_dir || error "Failed to create test directory"
+	touch $test_file || error "Failed to create test file"
+
+	# Set project using user name
+	$LFS project -p u:$TSTUSR $test_file ||
+		error "Failed to set project using username $TSTUSR"
+
+	local set_id=$($LFS project -d $test_file | awk '{print $1}')
+	(( set_id == TSTID )) ||
+		error "Project ID mismatch: expect $TSTID, got $set_id"
+
+	$LFS project -p 0 $test_file ||
+		error "Failed to reset project"
+	local set_id=$($LFS project -d $test_file | awk '{print $1}')
+	(( set_id == 0 )) ||
+		error "Project ID mismatch: expected 0, got $set_id"
+
+	# Set project using uid
+	$LFS project -p u:$TSTID $test_file ||
+		error "Failed to set project using username $TSTUSR"
+
+	set_id=$($LFS project -d $test_file | awk '{print $1}')
+	(( set_id == TSTID )) ||
+		error "Project ID mismatch: expect $TSTID, got $set_id"
+}
+run_test 190c "check lfs project -p works with u:USERNAME"
+
 test_200() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mgs_nodsh && skip "remote MGS with nodsh"

@@ -95,22 +95,30 @@ endif
 
 llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
 
-liblustreapi_la_SOURCES = liblustreapi.c liblustreapi_hsm.c \
-			  liblustreapi_nodemap.c lustreapi_internal.h \
-			  liblustreapi_json.c liblustreapi_layout.c \
-			  liblustreapi_lease.c liblustreapi_util.c \
-			  liblustreapi_kernelconn.c liblustreapi_param.c \
-			  liblustreapi_mirror.c liblustreapi_fid.c \
-			  liblustreapi_ladvise.c liblustreapi_chlg.c \
+liblustreapi_la_SOURCES = libhsm_scanner.c \
+			  libhsm_scanner.h \
+			  liblustreapi.c \
+			  liblustreapi_chlg.c \
+			  liblustreapi_fid.c \
 			  liblustreapi_heat.c \
+			  liblustreapi_hsm.c \
 			  liblustreapi_ioctl.c \
+			  liblustreapi_json.c \
+			  liblustreapi_kernelconn.c \
+			  liblustreapi_ladvise.c \
+			  liblustreapi_layout.c \
+			  liblustreapi_lease.c \
 			  liblustreapi_lseek.c \
+			  liblustreapi_mirror.c \
+			  liblustreapi_nodemap.c \
+			  liblustreapi_param.c \
 			  liblustreapi_pcc.c \
 			  liblustreapi_pfind.c \
+			  liblustreapi_project.c \
 			  liblustreapi_root.c \
-			  libhsm_scanner.h \
-			  libhsm_scanner.c \
-			  liblustreapi_swap.c
+			  liblustreapi_swap.c \
+			  liblustreapi_util.c \
+			  lustreapi_internal.h
 liblustreapi_la_CFLAGS = -fPIC -D_GNU_SOURCE $(LIBNL3_CFLAGS) \
 			 -I $(top_builddir)/lnet/utils \
 			 -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 \

@@ -5158,21 +5158,21 @@ static int set_time(struct find_param *param, time_t *time, time_t *set_t,
 
 static int str2quotaid(__u32 *id, const char *arg)
 {
-	unsigned long int projid_tmp = 0;
+	unsigned long id_tmp = 0;
 	char *endptr = NULL;
 
-	projid_tmp = strtoul(arg, &endptr, 10);
+	id_tmp = strtoul(arg, &endptr, 10);
 	if (*endptr != '\0')
 		return -EINVAL;
 	/* UINT32_MAX is not allowed - see projid_valid()/INVALID_PROJID */
-	if (projid_tmp >= MDT_INVALID_PROJID)
+	if (id_tmp >= MDT_INVALID_PROJID)
 		return -ERANGE;
 
-	*id = projid_tmp;
+	*id = id_tmp;
 	return 0;
 }
 
-static int name2uid(unsigned int *id, const char *name)
+static int name2uid(__u32 *id, const char *name)
 {
 	struct passwd *passwd;
 
@@ -5184,7 +5184,7 @@ static int name2uid(unsigned int *id, const char *name)
 	return 0;
 }
 
-static int name2gid(unsigned int *id, const char *name)
+static int name2gid(__u32 *id, const char *name)
 {
 	struct group *group;
 
@@ -5196,33 +5196,95 @@ static int name2gid(unsigned int *id, const char *name)
 	return 0;
 }
 
-static inline int name2projid(unsigned int *id, const char *name)
+static inline int name2projid(__u32 *id, const char *name)
 {
-	return -ENOTSUP;
+	struct ll_project prj = { .lprj_valid = LPRJ_VALID_SIZE,
+				  .lprj_size = sizeof(prj) };
+	int rc;
+	char *name2;
+
+	name2 = strchr(name, ':');
+	if (name2) {
+		name2++;
+		rc = str2quotaid(id, name2);
+		if (!rc)
+			return 0;
+		if (strncmp(name, "u:", 2) == 0 ||
+		    strncmp(name, "user:", 5) == 0)
+			return name2uid(id, name2);
+		if (strncmp(name, "g:", 2) == 0 ||
+		    strncmp(name, "group:", 5) == 0)
+			return name2gid(id, name2);
+		return -EINVAL;
+	}
+
+	rc = llapi_project_getnam(&prj, name);
+	if (rc)
+		return rc;
+
+	if (prj.lprj_valid & LPRJ_VALID_ID)
+		*id = prj.lprj_projid;
+	else
+		rc = -ENOENT;
+
+	return rc;
 }
 
-static int uid2name(char **name, unsigned int id)
+
+#define DEF_PW_SIZE_MAX 4096	/* minimum size to avoid malloc() handling */
+static size_t getpw_size_max(void)
 {
+	static size_t pw_size_max;
+
+	if (!pw_size_max) {
+		pw_size_max = sysconf(_SC_GETPW_R_SIZE_MAX);
+		if (pw_size_max <= 0)
+			pw_size_max = DEF_PW_SIZE_MAX;
+	}
+	return pw_size_max;
+}
+
+static int uid2name(char *name, size_t name_max, __u32 id)
+{
+	struct passwd pwdbuf;
 	struct passwd *passwd;
+	int rc;
 
-	passwd = getpwuid(id);
-	if (!passwd)
+	rc = getpwuid_r(id, &pwdbuf, name, name_max, &passwd);
+	if (passwd == NULL || rc)
 		return -ENOENT;
-	*name = passwd->pw_name;
 
 	return 0;
 }
 
-static inline int gid2name(char **name, unsigned int id)
+static inline int gid2name(char *name, size_t name_max, __u32 id)
 {
+	struct group grpbuf;
 	struct group *group;
+	int rc;
 
-	group = getgrgid(id);
-	if (!group)
+	rc = getgrgid_r(id, &grpbuf, name, name_max, &group);
+	if (group == NULL || rc)
 		return -ENOENT;
-	*name = group->gr_name;
 
 	return 0;
+}
+
+static inline int prjid2name(char *name, size_t name_max, __u32 id)
+{
+	struct ll_project prj = { .lprj_valid = LPRJ_VALID_SIZE,
+				  .lprj_size = sizeof(prj) };
+	int rc;
+
+	rc = llapi_project_getprjid(&prj, id);
+	if (rc)
+		return rc;
+	if (prj.lprj_valid & LPRJ_VALID_ID)
+		strncpy(name, prj.lprj_projname, name_max);
+	else
+		rc = -ENOENT;
+
+	return rc;
 }
 
 static int name2attrs(char *name, __u64 *attrs, __u64 *neg_attrs)
@@ -6306,14 +6368,11 @@ static int lfs_find(int argc, char **argv)
 		case 'g':
 		case 'G':
 			rc = name2gid(&param.fp_gid, optarg);
-			if (rc) {
-				if (str2quotaid(&param.fp_gid, optarg)) {
-					fprintf(stderr,
-						"Group/GID: %s cannot be found.\n",
-						optarg);
-					ret = -1;
-					goto err;
-				}
+			if (rc && str2quotaid(&param.fp_gid, optarg)) {
+				fprintf(stderr, "invalid group/GID '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
 			}
 			param.fp_exclude_gid = !!neg_opt;
 			param.fp_check_gid = 1;
@@ -6375,14 +6434,11 @@ static int lfs_find(int argc, char **argv)
 		case 'u':
 		case 'U':
 			rc = name2uid(&param.fp_uid, optarg);
-			if (rc) {
-				if (str2quotaid(&param.fp_uid, optarg)) {
-					fprintf(stderr,
-						"User/UID: %s cannot be found.\n",
-						optarg);
-					ret = -1;
-					goto err;
-				}
+			if (rc && str2quotaid(&param.fp_uid, optarg)) {
+				fprintf(stderr, "invalid username/UID '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
 			}
 			param.fp_exclude_uid = !!neg_opt;
 			param.fp_check_uid = 1;
@@ -6544,14 +6600,11 @@ static int lfs_find(int argc, char **argv)
 			break;
 		case LFS_PROJID_OPT:
 			rc = name2projid(&param.fp_projid, optarg);
-			if (rc) {
-				if (str2quotaid(&param.fp_projid, optarg)) {
-					fprintf(stderr,
-						"Invalid project ID: %s\n",
-						optarg);
-					ret = -1;
-					goto err;
-				}
+			if (rc && str2quotaid(&param.fp_projid, optarg)) {
+				fprintf(stderr, "invalid project id: '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
 			}
 			param.fp_exclude_projid = !!neg_opt;
 			param.fp_check_projid = 1;
@@ -9036,14 +9089,12 @@ int lfs_setquota(int argc, char **argv)
 			qtype = PRJQUOTA;
 			rc = name2projid(&qctl->qc_id, optarg);
 quota_type:
-			if (rc) {
-				if (str2quotaid(&qctl->qc_id, optarg)) {
-					fprintf(stderr,
-						"%s setquota: invalid id '%s'\n",
-						progname, optarg);
-					rc = -1;
-					goto out;
-				}
+			if (rc && str2quotaid(&qctl->qc_id, optarg)) {
+				fprintf(stderr,
+					"%s setquota: invalid project id '%s'\n",
+					progname, optarg);
+				rc = -1;
+				goto out;
 			}
 
 			if (qctl->qc_id == 0) {
@@ -9450,7 +9501,6 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			int rc, struct quota_param *param)
 {
-	char *name, *tmp;
 	time_t now;
 
 	time(&now);
@@ -9464,6 +9514,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		char numbuf[3][STRBUF_LEN + 2]; /* 2 for brackets or wildcard */
 		char timebuf[40];
 		char strbuf[STRBUF_LEN];
+		char *tmp;
 
 		dqb->dqb_btime &= LQUOTA_GRACE_MASK;
 		dqb->dqb_itime &= LQUOTA_GRACE_MASK;
@@ -9496,19 +9547,33 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			print_quota_val(mnt, 16, false, param);
 
 		if (param->qp_show_qid) {
-			name = NULL;
-			char id_buf[STRBUF_LEN];
+			char namebuf[DEF_PW_SIZE_MAX];
+			char *name = NULL;
+			size_t name_max;
+			int rc2 = 0;
+
+			name_max = getpw_size_max();
+			if (name_max > sizeof(namebuf))
+				name = malloc(name_max);
+			if (!name) {
+				name = namebuf;
+				name_max = sizeof(namebuf);
+			}
 
 			if (qctl->qc_type == USRQUOTA) {
-				uid2name(&name, qctl->qc_id);
+				rc2 = uid2name(name, name_max, qctl->qc_id);
 			} else if (qctl->qc_type == GRPQUOTA) {
-				gid2name(&name, qctl->qc_id);
+				rc2 = gid2name(name, name_max, qctl->qc_id);
+			} else if (qctl->qc_type == PRJQUOTA) {
+				rc2 = prjid2name(name, name_max, qctl->qc_id);
 			}
-			if (!name || name[0] == '\0'){
-				snprintf(id_buf, STRBUF_LEN, "%u", qctl->qc_id);
-				name = id_buf;
-			}
+			if (rc2 || name[0] == '\0')
+				snprintf(name, sizeof(namebuf), "%u",
+					 qctl->qc_id);
+
 			print_quota_val(name, 10, false, param);
+			if (name != namebuf)
+				free(name);
 		}
 
 		if (param->qp_show_default)
@@ -9930,9 +9995,9 @@ static int lfs_project(int argc, char **argv)
 			phc.keep_projid = true;
 			break;
 		case 'p':
-			if (str2quotaid(&phc.projid, optarg)) {
-				fprintf(stderr,
-					"Invalid project ID: %s\n",
+			if (name2projid(&phc.projid, optarg) &&
+			    str2quotaid(&phc.projid, optarg)) {
+				fprintf(stderr, "invalid project id '%s'\n",
 					optarg);
 				return CMD_HELP;
 			}
@@ -10099,11 +10164,13 @@ out:
 static int lfs_quota(int argc, char **argv)
 {
 	struct quota_param param = {
-	.qp_valid = QC_GENERAL,
-	.qp_delim = "",
+		.qp_valid = QC_GENERAL,
+		.qp_delim = "",
 	};
 	struct if_quotactl *qctl;
 	char *obd_uuid, *endp, *name = NULL;
+	char namebuf[DEF_PW_SIZE_MAX];
+	size_t name_max;
 	__u32 start_qid = 0, end_qid = 0;
 	int c, qtype, rc = 0;
 	long idx = 0;
@@ -10188,6 +10255,14 @@ static int lfs_quota(int argc, char **argv)
 	qctl = calloc(1, sizeof(*qctl) + LOV_MAXPOOLNAME + 1);
 	if (!qctl)
 		return -ENOMEM;
+
+	name_max = getpw_size_max();
+	if (name_max > sizeof(namebuf))
+		name = malloc(name_max);
+	if (!name) {
+		name = namebuf;
+		name_max = sizeof(namebuf);
+	}
 
 	qctl->qc_cmd = LUSTRE_Q_GETQUOTA;
 	qctl->qc_type = ALLQUOTA;
@@ -10401,25 +10476,27 @@ quota_type:
 	} else if (qctl->qc_type != ALLQUOTA &&
 		   (qctl->qc_cmd == LUSTRE_Q_GETQUOTA ||
 		    qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL)) {
+		char *argname = "<unknown>";
+
 		if (!param.qp_show_default) {
-			if (optind + 1 > argc) {
+			if (optind >= argc) {
 				fprintf(stderr,
-					"%s quota: u/g-name is required\n",
+					"%s quota: u/g/p-name is required\n",
 					progname);
 				rc = CMD_HELP;
-				return rc;
+				goto out;
 			}
 
-			name = argv[optind++];
+			argname = argv[optind++];
 			switch (qctl->qc_type) {
 			case USRQUOTA:
-				rc = name2uid(&qctl->qc_id, name);
+				rc = name2uid(&qctl->qc_id, argname);
 				break;
 			case GRPQUOTA:
-				rc = name2gid(&qctl->qc_id, name);
+				rc = name2gid(&qctl->qc_id, argname);
 				break;
 			case PRJQUOTA:
-				rc = name2projid(&qctl->qc_id, name);
+				rc = name2projid(&qctl->qc_id, argname);
 				break;
 			default:
 				rc = -ENOTSUP;
@@ -10434,9 +10511,9 @@ quota_type:
 		}
 
 		if (rc) {
-			if (str2quotaid(&qctl->qc_id, name)) {
+			if (str2quotaid(&qctl->qc_id, argname)) {
 				fprintf(stderr, "%s quota: invalid id '%s'\n",
-					progname, name);
+					progname, argname);
 				rc = CMD_HELP;
 				goto out;
 			}
@@ -10447,20 +10524,32 @@ quota_type:
 	}
 
 	do {
-		if (all) {
-			qctl->qc_valid = param.qp_valid;
-			if (qctl->qc_type == USRQUOTA) {
+		qctl->qc_valid = param.qp_valid;
+		switch (qctl->qc_type) {
+		case USRQUOTA:
+			if (all)
 				qctl->qc_id = geteuid();
-				rc = uid2name(&name, qctl->qc_id);
-			} else {
+			rc = uid2name(name, name_max, qctl->qc_id);
+			break;
+		case GRPQUOTA:
+			if (all)
 				qctl->qc_id = getegid();
-				rc = gid2name(&name, qctl->qc_id);
-				memset(&qctl->qc_dqblk, 0,
-				       sizeof(qctl->qc_dqblk));
-			}
-			if (rc)
-				name = "<unknown>";
+			rc = gid2name(name, name_max, qctl->qc_id);
+			break;
+		case PRJQUOTA:
+			if (all)
+				qctl->qc_id = geteuid();
+			rc = prjid2name(name, name_max, qctl->qc_id);
+			break;
+		default:
+			sprintf(name, "<unknown>");
+			/* will print root quota */
+			memset(&qctl->qc_dqblk, 0,
+			       sizeof(qctl->qc_dqblk));
+			break;
 		}
+		if (rc)
+			sprintf(name, "<unknown>");
 
 		print_quota_title(name, qctl, &param);
 
@@ -10489,7 +10578,10 @@ quota_type:
 		}
 	} while (all && ++qctl->qc_type <= GRPQUOTA);
 out:
+	if (name != namebuf)
+		free(name);
 	free(qctl);
+
 	return rc;
 }
 #endif /* HAVE_SYS_QUOTA_H! */

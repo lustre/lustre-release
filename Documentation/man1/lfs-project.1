@@ -70,9 +70,23 @@ Set project ID and inherit flag on the
 Set project ID with given value for the specified
 .IR FILE " or " DIRECTORY .
 .TP
-.B -r ", " --recursive
+.BR -r ", " --recursive
 Recursively apply lfs project on all descendants of the
 .IR DIRECTORY .
+.TP
+.BI -p ", " --proj-inherit \fI" ID"
+Set project
+.I ID
+with given value for the specified file or directory.
+The project ID is a 32-bit integer (excluding 4294967295) or a project
+name as listed in the
+.BR /etc/projid (5)
+file.
+A username or group name can be used in place of a project name by specifying
+.BI u: USERNAME
+or
+.BI g: GROUPNAME
+respectively.
 .TP
 .BR -s ", " --set-inherit
 Set the
@@ -103,8 +117,9 @@ if any are found:
 .B lfs project
 is part of the
 .BR lustre (7)
-filesystem package since release 1.4.0
-.\" Added in commit 1.3.4-465-g761ab6a5cd
+filesystem package since release 2.11.0.
+.\" Added in commit v2_10_56_0-77-g022c5a9a77
 .SH SEE ALSO
 .BR lfs (1),
-.BR xargs (1)
+.BR xargs (1),
+.BR projid (5)

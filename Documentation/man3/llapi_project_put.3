@@ -1,0 +1,56 @@
+.TH LLAPI_PROJECT_PUT 3 2025-07-01 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_project_put \- write a project information to a file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_project_put(struct ll_project_handle *" hdl ", ll_project *" lprj ",
+.BI "                      int " flags );
+.fi
+.SH DESCRIPTION
+The
+.B llapi_project_put()
+function writes the information provided in
+.I lprj
+to the file specified by
+.BR hdl->lph_file.
+This functions behaves differently depending on the value of
+.IR flags .
+If
+.B LLAPI_PROJECT_OVERWRITE
+is specified then the existing value will be overwritten,
+otherwise, the project will be appended to the end of the file.
+.SH RETURN VALUES
+.TP
+.B 0
+on success
+.TP
+-ve
+error code on failure and sets errno appropriately.
+.SH ERRORS
+.TP 15
+.B -EINVAL
+if either
+.I lprj->lprj_projname
+or
+.I lprj->lprj_projid
+are NULL, which is checked through
+.IR lprj->lprj_valid .
+.SH AVAILABILITY
+.B llapi_project_put()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.17.0
+.\" Added in commit v2_16_55-17-g75c6d5636d
+.SH SEE ALSO
+.BR lfs_project (1),
+.BR llapi_project_close (3),
+.BR llapi_project_fgetnam (3),
+.BR llapi_project_fgetprjid (3),
+.BR llapi_project_get (3),
+.BR llapi_project_getnam (3),
+.BR llapi_project_getprjid (3),
+.BR llapi_project_open (3),
+.BR projid (5),
+.BR lustreapi (7)

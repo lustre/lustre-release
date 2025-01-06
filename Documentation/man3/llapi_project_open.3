@@ -1,0 +1,56 @@
+.TH LLAPI_PROJECT_OPEN 3 2025-07-01 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_project_open \- open project mapping file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_project_open(const char *" name ", struct ll_project_handle *" hdl ",
+.BI "                       char *" mode );
+.fi
+.SH DESCRIPTION
+The
+.B llapi_project_open()
+function opens the file specified by
+.BR name .
+if
+.I name
+is NULL then it will use the path in
+.BR LIBLUSTREAPI_PROJECT ,
+if available, and will default back to
+.B /etc/projid
+otherwise.
+.SH RETURN VALUES
+.TP
+.B 0
+on success
+.TP
+-ve
+error code on failure and sets errno appropriately.
+.SH ERRORS
+.TP 15
+.B -EINVAL
+if
+.I name
+is not NULL, but begins with '\0'.
+.TP
+.B -ENOMEM
+if it fails to allocate enough space for the new
+.BR ll_project_handle .
+.SH AVAILABILITY
+.B llapi_project_open()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.17.0
+.\" Added in commit v2_16_55-17-g75c6d5636d
+.SH SEE ALSO
+.BR lfs_project (1),
+.BR llapi_project_close (3),
+.BR llapi_project_fgetnam (3),
+.BR llapi_project_fgetprjid (3),
+.BR llapi_project_get (3),
+.BR llapi_project_getnam (3),
+.BR llapi_project_getprjid (3),
+.BR llapi_project_put (3),
+.BR projid (5),
+.BR lustreapi (7)

@@ -3805,20 +3805,20 @@ test_39() {
 	setup_quota_test || error "setup quota failed with $?"
 
 	touch $TESTFILE
-	projectid=$(lfs project $TESTFILE | awk '{print $1}')
-	[ $projectid -ne 0 ] &&
-		error "Project id should be 0 not $projectid"
+	projectid=($(lfs project $TESTFILE))
+	(( projectid == 0 )) ||
+		error "Project id should be 0, not $projectid"
 	change_project -p 1024 $TESTFILE
-	projectid=$(lfs project $TESTFILE | awk '{print $1}')
-	[ $projectid -ne 1024 ] &&
-		error "Project id should be 1024 not $projectid"
+	projectid=($(lfs project $TESTFILE))
+	(( projectid == 1024 )) ||
+		error "Project id should be 1024, not $projectid"
 
 	stopall || error "failed to stopall (1)"
 	mount
 	setupall
-	projectid=$(lfs project $TESTFILE | awk '{print $1}')
-	[ $projectid -eq 1024 ] ||
-		error "Project id should be 1024 not $projectid"
+	projectid=($(lfs project $TESTFILE))
+	(( projectid == 1024 )) ||
+		error "Project id should be 1024, not $projectid"
 }
 run_test 39 "Project ID interface works correctly"
 
@@ -5070,9 +5070,23 @@ test_65() {
 	local quota_all=$($RUNAS $LFS quota $DIR)
 
 	[ "$(echo "$quota_all" | head -n3)" == "$quota_u" ] ||
+	{
+		echo "quota_u:"
+		echo "$quota_u"
+		echo "quota_all (only first 3 lines compared):"
+		echo "$quota_all"
+
 		error "usr quota not match"
+	}
 	[ "$(echo "$quota_all" | tail -n3)" == "$quota_g" ] ||
+	{
+		echo "quota_g:"
+		echo "$quota_g"
+		echo "quota_all (only last 3 lines compared):"
+		echo "$quota_all"
+
 		error "grp quota not match"
+	}
 }
 run_test 65 "Check lfs quota result"
 

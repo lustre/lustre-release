@@ -143,6 +143,17 @@ Display quota information for OST \fIOST_IDX\fR.
 .BR --pool " " \fIPOOL_NAME
 Display quota information for OST pool \fIPOOL_NAME\fR.
 .TP
+.BR -p | --projid " {" \fIPROJID | \fIPROJNAME }
+Display quota information for project
+.IR PROJID | PROJNAME .
+A username or group name can be used in place of
+.I PROJNAME
+by specifying
+.BI u: USERNAME
+or
+.BI g: GROUPNAME
+respectively.
+.TP
 .BR -q | --quiet
 Display only the line containing the data.
 The line saying what the data is, and the column headers will not be printed.
@@ -174,13 +185,24 @@ Display default quota values for users, groups, or projects.
 This command requires super user permissions.
 .TP
 .BR -G | --default-grp " {" \fIGROUP | \fIGID }
-Display default quota limits for group name \fIGROUP\fR or numeric \fIGID\fR.
+Display default quota limits for group name
+.I GROUP
+or numeric
+.IR GID .
 .TP
-.BR -P \fIPROJID
-Display default quota limits for project \fIPROJID\fR.
+.BI -P " PROJID"
+Display default quota limits for project
+.I PROJID
+or
+.I PROJNAME
+as listed in
+.BR /etc/projid (5).
 .TP
 .BR -U | --default-usr " {" \fIUSER | UID }
-Display default quota limits for username \fIUSER\fR or numeric \fIUID\fR.
+Display default quota limits for username
+.I USER
+or numeric
+.IR UID .
 .TP
 .BR "lfs quota -a" " {" -u | -g | -p "} " \fIMOUNT_POINT
 .TP
@@ -239,4 +261,5 @@ Disk quotas for grp root (gid 0):
 .EE
 .SH SEE ALSO
 .BR lfs (1),
-.BR lfs-setquota(1)
+.BR lfs-setquota(1),
+.BR projid (5)

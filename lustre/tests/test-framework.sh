@@ -700,6 +700,16 @@ init_test_env() {
 	fi
 	DD="dd if=$DD_DEV bs=1M"
 
+	if [[ -z "$LIBLUSTREAPI_PROJID_FILE" ]]; then
+		local projid_file="$TMP/projid-$TESTSUITE"
+
+		stack_trap "unset LIBLUSTREAPI_PROJID_FILE"
+		[[ -f "$projid_file" ]] ||
+			stack_trap "rm -f $projid_file"
+		touch "$projid_file"
+		export LIBLUSTREAPI_PROJID_FILE="$projid_file"
+	fi
+
 	# use localrecov to enable recovery for local clients, LU-12722
 	[[ $MDS1_VERSION -lt $(version_code 2.13.52) ]] || {
 		export MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o localrecov"}
@@ -12788,4 +12798,15 @@ check_seq_oid()
 				error "FF stripe count $lmm_count != $ff_scnt"
 		fi
 	done
+}
+
+get_test_project() {
+	local projid_file="$LIBLUSTREAPI_PROJID_FILE"
+	local tstid=$(id -u $TSTUSR)
+
+	grep -qw $TSTUSR "$projid_file" ||
+		echo "${TSTUSR}:$tstid" >> "$projid_file" ||
+		error "cannot add user $TSTUSR:$tstid to $projid_file"
+
+	echo "$TSTUSR" "$tstid"
 }

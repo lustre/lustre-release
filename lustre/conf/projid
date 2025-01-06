@@ -1,0 +1,19 @@
+# /etc/projid format:
+
+# comment text until the end of the line
+# projname:projid[:description]
+
+# The fields are defined as follows:
+
+# projname - The name of the project up to 32 characters. The name must be
+# a string that consists of alphanumeric characters, underline (_)
+# characters, hyphens (-), and periods (.). The period, which is reserved
+# for projects with special meaning to the operating system, can only be
+# used in the names of default projects for users. projname cannot contain
+# colons (:) whitespace, or other special characters.  Present in XFS.
+
+# projid - The project's unique numerical ID (PROJID) within the system.
+# The maximum value of the projid field is 4294967294.
+
+# description - A very brief description of the project.
+# May not contain colon ':' or '#' or control characters. Not in XFS.
