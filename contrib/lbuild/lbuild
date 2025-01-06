@@ -398,9 +398,8 @@ check_options() {
     fi
 
     RPMBUILD=$(which rpmbuild 2>/dev/null | head -n 1)
-    RPMBUILD=${RPMBUILD:-$(which rpm 2>/dev/null | head -n 1)}
-    if [ -z "$RPMBUILD" ]; then
-        usage 1 "Could not find binary for making rpms (tried rpmbuild and rpm)."
+    if [[ -z "$RPMBUILD" ]]; then
+        usage 1 "Could not find rpmbuild for making rpms."
     fi
 
     local BINDIR="$TOPDIR/bin"
