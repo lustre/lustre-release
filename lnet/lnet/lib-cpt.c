@@ -1111,14 +1111,16 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 			bracket++;
 			ncpt++;
 		}
-		if ((!ncpt && !exclude) ||
-		    (node && ncpt > num_online_nodes()) ||
-		    (!node && ncpt > num_online_cpus())) {
-			CERROR("Invalid pattern '%s', or too many partitions %d\n",
-			pattern_dup, ncpt);
-			rc = -EINVAL;
-			goto err_free_str;
-		}
+	}
+
+	if ((!ncpt && !exclude) ||
+	    (node && ncpt > num_online_nodes()) ||
+	    (!node && ncpt > num_online_cpus())) {
+		CERROR("Invalid pattern '%s', or too many partitions %d\n",
+
+		       pattern_dup, ncpt);
+		rc = -EINVAL;
+		goto err_free_str;
 	}
 
 	cptab = cfs_cpt_table_alloc(ncpt);
