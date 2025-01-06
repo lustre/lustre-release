@@ -39,7 +39,9 @@
 
 #include "llite_internal.h"
 
-/*
+/**
+ * ll_get_dir_page() - Get directory page for a given directory inode
+ *
  * (new) readdir implementation overview.
  *
  * Original lustre readdir implementation cached exact copy of raw directory
@@ -120,6 +122,15 @@
  * lu_dirpage for this integrated page will be adjusted. See
  * mdc_adjust_dirpages().
  *
+ *
+ * @dir: pointer to the directory(inode) for which page is being fetched
+ * @op_data: pointer to the md operation structure
+ * @offset: Offset witchin page
+ * @partial_readdir_rc: Used only on partial reads
+ *
+ * Return:
+ * * %Success - pointer to the page structure
+ * * %Failure - Error pointer (pointed by rc)
  */
 struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
 			     __u64 offset, int *partial_readdir_rc)
@@ -402,16 +413,19 @@ out:
 	RETURN(rc);
 }
 
-/*
- * Create striped directory with specified stripe(@lump)
+/**
+ * ll_dir_setdirstripe() - Create striped directory with specified stripe(@lump)
  *
- * \param[in] dparent	the parent of the directory.
- * \param[in] lump	the specified stripes.
- * \param[in] dirname	the name of the directory.
- * \param[in] mode	the specified mode of the directory.
+ * @dparent: the parent of the directory.
+ * @lump: the specified stripes.
+ * @len: length of @lump
+ * @dirname: the name of the directory.
+ * @mode: the specified mode of the directory.
+ * @createonly: if true, setstripe create only, don't restripe if target exists
  *
- * \retval		=0 if striped directory is being created successfully.
- *                      <0 if the creation is failed.
+ * Return:
+ * * %0 if striped directory is being created successfully or <0 if the
+ * creation is failed
  */
 static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 			       size_t len, const char *dirname, umode_t mode,
@@ -814,7 +828,10 @@ out:
 	return rc;
 }
 
-/*
+/**
+ * ll_dir_getstripe_default() - Get default layout (striping information) for
+ * directory
+ *
  * This function will be used to get default LOV/LMV/Default LMV
  * @valid will be used to indicate which stripe it will retrieve.
  * If the directory does not have its own default layout, then the
@@ -823,7 +840,19 @@ out:
  *	OBD_MD_DEFAULT_MEA	Default LMV stripe EA
  *	otherwise		Default LOV EA.
  * Each time, it can only retrieve 1 stripe EA
- **/
+ *
+ * @inode: inode for which layout is to be get
+ * @plmm: Returns address of valid layout metadata (struct lov_mds_md)
+ * @plmm_size: Returns size of the layout metadata
+ * @request: Returns ptlrpc_request struct which gets the layout
+ * @root_request: Returns ptlrpc_request struct which get the layout (for root
+ * access)
+ * @valid: indicate which stripe it will retrieve
+ *
+ * Return:
+ * * %0: Success
+ * * %-ERRNO: Failure
+ */
 int ll_dir_getstripe_default(struct inode *inode, void **plmm, int *plmm_size,
 			     struct ptlrpc_request **request,
 			     struct ptlrpc_request **root_request,
@@ -856,14 +885,26 @@ int ll_dir_getstripe_default(struct inode *inode, void **plmm, int *plmm_size,
 	RETURN(rc);
 }
 
-/*
+/**
+ * ll_dir_getstripe() - Wrapper function to ll_dir_get_default_layout
+ *
  * This function will be used to get default LOV/LMV/Default LMV
  * @valid will be used to indicate which stripe it will retrieve
  *	OBD_MD_MEA		LMV stripe EA
  *	OBD_MD_DEFAULT_MEA	Default LMV stripe EA
  *	otherwise		Default LOV EA.
  * Each time, it can only retrieve 1 stripe EA
- **/
+ *
+ * @inode: inode for which layout is to be get
+ * @plmm: Returns address of valid layout metadata (struct lov_mds_md)
+ * @plmm_size: Returns size of the layout metadata
+ * @request: Returns ptlrpc_request struct which gets the layout
+ * @valid: indicate which stripe it will retrieve
+ *
+ * Return:
+ * * %0: Success
+ * * %-ERRNO: Failure
+ */
 int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 		     struct ptlrpc_request **request, u64 valid)
 {
@@ -914,7 +955,7 @@ int ll_get_mdt_idx(struct inode *inode)
 }
 
 /*
- * Generic handler to do any pre-copy work.
+ * ll_ioc_copy_start() - Generic handler to do any pre-copy work.
  *
  * It sends a first hsm_progress (with extent length == 0) to coordinator as a
  * first information for it that real work has started.
@@ -922,7 +963,8 @@ int ll_get_mdt_idx(struct inode *inode)
  * Moreover, for a ARCHIVE request, it will sample the file data version and
  * store it in \a copy.
  *
- * \return 0 on success.
+ * Return:
+ * * %0 On success or <0 on failure
  */
 static int ll_ioc_copy_start(struct super_block *sb, struct hsm_copy *copy)
 {
@@ -990,7 +1032,7 @@ progress:
 }
 
 /*
- * Generic handler to do any post-copy work.
+ * ll_ioc_copy_end() - Generic handler to do any post-copy work.
  *
  * It will send the last hsm_progress update to coordinator to inform it
  * that copy is finished and whether it was successful or not.
@@ -1002,7 +1044,8 @@ progress:
  * - for RESTORE request, it will sample the file data version and send it to
  *   coordinator which is useful if the file was imported as 'released'.
  *
- * \return 0 on success.
+ * Return:
+ * * %0 On success or <0 on failure
  */
 static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 {
@@ -1407,7 +1450,7 @@ static int quotactl_iter_glb(struct list_head *quota_list, void *buffer,
 
 /* iterate the quota setting from QMT and all QSDs to get the quota information
  * for all users or groups
- **/
+ */
 static int quotactl_iter(struct ll_sb_info *sbi, struct if_quotactl *qctl)
 {
 	struct list_head iter_quota_glb_list;

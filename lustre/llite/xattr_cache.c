@@ -50,10 +50,15 @@ void ll_xattr_fini(void)
 	lu_kmem_fini(xattr_caches);
 }
 
-/*
- * Initializes xattr cache for an inode.
+/**
+ * ll_xattr_cache_init() - Initializes xattr cache for an inode.
  *
  * This initializes the xattr list and marks cache presence.
+ *
+ * @lli:  lustre ll_inode_info struct (list of xattrs)
+ *
+ * Returns:
+ * * %void
  */
 static void ll_xattr_cache_init(struct ll_inode_info *lli)
 {
@@ -66,13 +71,18 @@ static void ll_xattr_cache_init(struct ll_inode_info *lli)
 }
 
 /**
- *  This looks for a specific extended attribute.
+ *  ll_xattr_cache_find() - This looks for a specific extended attribute.
+ *
+ *  @cache: Find in this list @xattr_name
+ *  @xattr_name: xattr name to find
+ *  @xattr: Return matched xattr attribute on success
  *
  *  Find in @cache and return @xattr_name attribute in @xattr,
  *  for the NULL @xattr_name return the first cached @xattr.
  *
- *  \retval 0        success
- *  \retval -ENODATA if not found
+ *  Returns:
+ *  * %0        success
+ *  * %-ENODATA if not found
  */
 static int ll_xattr_cache_find(struct list_head *cache,
 			       const char *xattr_name,
@@ -98,13 +108,19 @@ static int ll_xattr_cache_find(struct list_head *cache,
 }
 
 /**
- * This adds an xattr.
+ * ll_xattr_cache_add() - This adds an xattr.
+ *
+ * @cache: list of xattr for an inode (struct ll_xattr_entry)
+ * @xattr_name: name of xattr to be added to the cache list
+ * @xattr_val: value of xattr to be added to the cache list
+ * @xattr_val_len: length of xattr value
  *
  * Add @xattr_name attr with @xattr_val value and @xattr_val_len length,
  *
- * \retval 0       success
- * \retval -ENOMEM if no memory could be allocated for the cached attr
- * \retval -EPROTO if duplicate xattr is being added
+ * Returns:
+ * * %0       success
+ * * %-ENOMEM if no memory could be allocated for the cached attr
+ * * %-EPROTO if duplicate xattr is being added
  */
 static int ll_xattr_cache_add(struct list_head *cache,
 			      const char *xattr_name,
@@ -166,12 +182,16 @@ err_name:
 }
 
 /**
- * This removes an extended attribute from cache.
+ * ll_xattr_cache_del() - This removes an extended attribute from cache.
+ *
+ * @cache: list of xattr for an inode (struct ll_xattr_entry)
+ * @xattr_name: name of xattr to be deleted to the cache list
  *
  * Remove @xattr_name attribute from @cache.
  *
- * \retval 0        success
- * \retval -ENODATA if @xattr_name is not cached
+ * Returns:
+ * * %0        success
+ * * %-ENODATA if @xattr_name is not cached
  */
 static int ll_xattr_cache_del(struct list_head *cache,
 			      const char *xattr_name)
@@ -195,14 +215,18 @@ static int ll_xattr_cache_del(struct list_head *cache,
 }
 
 /**
- * This iterates cached extended attributes.
+ * ll_xattr_cache_list() - This iterates cached extended attributes.
  *
- * Walk over cached attributes in @cache and
- * fill in @xld_buffer or only calculate buffer
- * size if @xld_buffer is NULL.
+ * @cache: list of xattr for an inode (struct ll_xattr_entry)
+ * @xld_buffer: buffer(space) to store xattrs
+ * @xld_size: size of @xld_buffer
  *
- * \retval >= 0     buffer list size
- * \retval -ENODATA if the list cannot fit @xld_size buffer
+ * Walk over cached attributes in @cache and fill in @xld_buffer or only
+ * calculate buffer size if @xld_buffer is NULL.
+ *
+ * Returns:
+ * * >= 0     buffer list size
+ * * %-ENODATA if the list cannot fit @xld_size buffer
  */
 static int ll_xattr_cache_list(struct list_head *cache,
 			       char *xld_buffer,
@@ -234,10 +258,13 @@ static int ll_xattr_cache_list(struct list_head *cache,
 }
 
 /**
- * Check if the xattr cache is initialized.
+ * ll_xattr_cache_valid() - Check if the xattr cache is initialized.
  *
- * \retval 0 @cache is not initialized
- * \retval 1 @cache is initialized
+ * @lli:  lustre ll_inode_info struct (list of xattrs)
+ *
+ * Returns:
+ * * %0 @cache is not initialized
+ * * %1 @cache is initialized
  */
 static int ll_xattr_cache_valid(struct ll_inode_info *lli)
 {
@@ -245,10 +272,13 @@ static int ll_xattr_cache_valid(struct ll_inode_info *lli)
 }
 
 /**
- * Check if the xattr cache is filled.
+ * ll_xattr_cache_filled() - Check if the xattr cache is filled.
  *
- * \retval 0 @cache is not filled
- * \retval 1 @cache is filled
+ * @lli:  lustre ll_inode_info struct (list of xattrs)
+ *
+ * Returns:
+ * * %0 @cache is not filled
+ * * %1 @cache is filled
  */
 static int ll_xattr_cache_filled(struct ll_inode_info *lli)
 {
@@ -256,11 +286,14 @@ static int ll_xattr_cache_filled(struct ll_inode_info *lli)
 }
 
 /**
- * This finalizes the xattr cache.
+ * ll_xattr_cache_destroy_locked() - This finalizes the xattr cache.
+ *
+ * @lli:  lustre ll_inode_info struct (list of xattrs)
  *
  * Free all xattr memory. @lli is the inode info pointer.
  *
- * \retval 0 no error occured
+ * Returns:
+ * * %0 no error occured
  */
 static int ll_xattr_cache_destroy_locked(struct ll_inode_info *lli)
 {
@@ -328,7 +361,11 @@ out_empty:
 }
 
 /**
- * Match or enqueue a PR lock.
+ * ll_xattr_find_get_lock() - Match or enqueue a PR lock.
+ *
+ * @inode: Whose xattr is being accessed
+ * @oit: lookup_intent struct (info of lock request)
+ * @req: ptlrpc_request struct
  *
  * Find or request an LDLM lock with xattr data.
  * Since LDLM does not provide API for atomic match_or_enqueue,
@@ -336,8 +373,9 @@ out_empty:
  * If successful, the function exits with a write lock held
  * on lli_xattrs_list_rwsem.
  *
- * \retval 0       no error occured
- * \retval -ENOMEM not enough memory
+ * Returns:
+ * * %0       no error occured
+ * * %-ENOMEM not enough memory
  */
 static int ll_xattr_find_get_lock(struct inode *inode,
 				  struct lookup_intent *oit,
@@ -400,15 +438,18 @@ out:
 }
 
 /**
- * Refill the xattr cache.
+ * ll_xattr_cache_refill() - Refill the xattr cache.
+ *
+ * @inode: Whose xattr is being accessed
  *
  * Fetch and cache the whole of xattrs for @inode, thanks to the write lock
  * on lli_xattrs_list_rwsem obtained from ll_xattr_find_get_lock().
  * If successful, this write lock is kept.
  *
- * \retval 0       no error occured
- * \retval -EPROTO network protocol error
- * \retval -ENOMEM not enough memory for the cache
+ * Returns:
+ * * %0       no error occured
+ * * %-EPROTO network protocol error
+ * * %-ENOMEM not enough memory for the cache
  */
 static int ll_xattr_cache_refill(struct inode *inode)
 {
@@ -532,18 +573,26 @@ err_req:
 }
 
 /**
- * Get an xattr value or list xattrs using the write-through cache.
+ * ll_xattr_cache_get() - Get an xattr value or list xattrs using the
+ * write-through cache.
+ *
+ * @inode: Whose xattr is being accessed
+ * @name: name of xattr to be get
+ * @buffer: buffer(space) to store xattrs
+ * @size: size of the @buffer
+ * @valid: Operations to be performed
  *
  * Get the xattr value (@valid has OBD_MD_FLXATTR set) of @name or
  * list xattr names (@valid has OBD_MD_FLXATTRLS set) for @inode.
  * The resulting value/list is stored in @buffer if the former
  * is not larger than @size.
  *
- * \retval 0        no error occured
- * \retval -EPROTO  network protocol error
- * \retval -ENOMEM  not enough memory for the cache
- * \retval -ERANGE  the buffer is not large enough
- * \retval -ENODATA no such attr or the list is empty
+ * Returns:
+ * * %0        no error occured
+ * * %-EPROTO  network protocol error
+ * * %-ENOMEM  not enough memory for the cache
+ * * %-ERANGE  the buffer is not large enough
+ * * %-ENODATA no such attr or the list is empty
  */
 int ll_xattr_cache_get(struct inode *inode,
 			const char *name,
@@ -623,13 +672,19 @@ out:
 }
 
 /**
- * Insert an xattr value into the cache.
+ * ll_xattr_cache_insert() - Insert an xattr value into the cache.
+ *
+ * @inode: Whose xattr is being accessed
+ * @name: xattr name to be inserted
+ * @buffer: value to be inserted
+ * @size: size of the @buffer
  *
  * Add @name xattr with @buffer value and @size length for @inode.
  * Init cache for @inode if necessary.
  *
- * \retval 0       success
- * \retval < 0	   from ll_xattr_cache_add(), except -EPROTO is ignored for
+ * Returns:
+ * * %0       success
+ * * <0      from ll_xattr_cache_add(), except -EPROTO is ignored for
  *		   LL_XATTR_NAME_ENCRYPTION_CONTEXT xattr
  */
 int ll_xattr_cache_insert(struct inode *inode,

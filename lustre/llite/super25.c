@@ -93,11 +93,21 @@ const struct super_operations lustre_super_operations = {
 };
 
 /**
+ * lustre_fill_super() - set up the superblock with lustre info
+ *
+ * @sb: setup superblock struct with lustre info
+ * @lmd2_data: data Mount options provided during mount
+ * (e.g. -o flock,abort_recov)
+ * @silent:
+ *
  * This is the entry point for the mount call into Lustre.
  * This is called when a client is mounted, and this is
  * where we start setting things up.
  *
- * @lmd2data data Mount options (e.g. -o flock,abort_recov)
+ * Returns:
+ * * %0  Success
+ * * <0 Error
+ *
  */
 static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
 			     int silent)
@@ -194,8 +204,7 @@ static void lustre_kill_super(struct super_block *sb)
 	kill_anon_super(sb);
 }
 
-/** Register the "lustre" fs type
- */
+/* Register the "lustre" fs type */
 static struct file_system_type lustre_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "lustre",

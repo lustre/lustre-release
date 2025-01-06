@@ -48,8 +48,15 @@ static void ll_release(struct dentry *de)
 	EXIT;
 }
 
-/* Compare if two dentries are the same.  Don't match if the existing dentry
- * is marked invalid.  Returns 1 if different, 0 if the same.
+/**
+ * ll_dcompare() - Compare if two dentries are the same. Don't match if the
+ * existing dentry is marked invalid.
+ *
+ * @parent: parent directory
+ * @dentry: directory which is being compared
+ * @len: length
+ * @str: name of directory being compared
+ * @name: name and length (struct qstr) of directory being compared
  *
  * This avoids a race where ll_lookup_it() instantiates a dentry, but we get
  * an AST before calling d_revalidate_it().  The dentry still exists (marked
@@ -61,6 +68,10 @@ static void ll_release(struct dentry *de)
  * in ll_lookup_nd() at a time.  So allow invalid dentries to match
  * while d_in_lookup().  We will be called again when the lookup
  * completes, and can give a different answer then.
+ *
+ * Return:
+ * * %0 - if the same
+ * * %1 - if different
  */
 #if defined(HAVE_D_COMPARE_5ARGS)
 static int ll_dcompare(const struct dentry *parent, const struct dentry *dentry,
@@ -98,11 +109,19 @@ static int ll_dcompare(const struct dentry *dentry, unsigned int len,
 }
 
 /**
+ * ll_ddelete() - Called when last reference to a dentry is dropped
+ *
+ * @de: directory which is being deleted
+ *
  * Called when last reference to a dentry is dropped and dcache wants to know
  * whether or not it should cache it:
  * - return 1 to delete the dentry immediately
  * - return 0 to cache the dentry
  * Should NOT be called with the dcache lock, see fs/dcache.c
+ *
+ * Return:
+ * * %0 - to cache the dentry
+ * * %1 - to delete the dentry immediately
  */
 static int ll_ddelete(const struct dentry *de)
 {

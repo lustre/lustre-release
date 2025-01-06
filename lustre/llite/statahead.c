@@ -157,10 +157,18 @@ static inline int agl_list_empty(struct ll_statahead_info *sai)
 }
 
 /**
+ * sa_low_hit() - Return if hit ratio is low
+ *
+ * @sai: (ll_statahead_info struct) holds info about the SA process for a
+ * directory
+ *
+ * Low hit ratio is defined as:
  * (1) hit ratio less than 80%
  * or
- * (2) consecutive miss more than 32
- * then means low hit.
+ * (2) consecutive miss more than 32, this means low hit.
+ *
+ * Returns:
+ * * %0  Hit ratio is not low, else if !0 then hit ratio is low
  */
 static inline int sa_low_hit(struct ll_statahead_info *sai)
 {
@@ -983,11 +991,17 @@ static int sa_lookup(struct inode *dir, struct sa_entry *entry)
 }
 
 /**
- * async stat for file found in dcache, similar to .revalidate
+ * sa_revalidate() - async stat for file found in dcache (directory cache),
+ * similar to .revalidate
  *
- * \retval	1 dentry valid, no RPC sent
- * \retval	0 dentry invalid, will send async stat RPC
- * \retval	negative number upon error
+ * @dir: inode struct for the @dir that contains file to be revalidated
+ * @entry: sa_entry structure (SA file state)
+ * @dentry: dentry struct for the @dentry that contains file to be revalidated
+ *
+ * Returns:
+ * * %1  dentry valid, no RPC sent
+ * * %0  dentry invalid, will send async stat RPC
+ * * %-ERRNO negative number upon error
  */
 static int sa_revalidate(struct inode *dir, struct sa_entry *entry,
 			 struct dentry *dentry)
@@ -1936,16 +1950,18 @@ out_unlock:
 }
 
 /**
- * revalidate @dentryp from statahead cache
+ * revalidate_statahead_dentry() - revalidate @dentryp from statahead cache
  *
- * \param[in] dir	parent directory
- * \param[in] sai	sai structure
- * \param[out] dentryp	pointer to dentry which will be revalidated
- * \param[in] unplug	unplug statahead window only (normally for negative
- *			dentry)
- * \retval		1 on success, dentry is saved in @dentryp
- * \retval		0 if revalidation failed (no proper lock on client)
- * \retval		negative number upon error
+ * @dir: parent directory
+ * @sai: sai structure
+ * @ctx: statahead context structure (cache info)
+ * @dentryp: pointer to dentry which will be revalidated
+ * @unplug: unplug statahead window only (normally for negative dentry)
+ *
+ * Returns:
+ * * %1  on success, dentry is saved in @dentryp
+ * * %0  if revalidation failed (no proper lock on client)
+ * * %-ERRNO upon error
  */
 static int revalidate_statahead_dentry(struct inode *dir,
 				       struct ll_statahead_info *sai,
@@ -2263,17 +2279,17 @@ static inline bool sa_pattern_shared_fname(struct ll_inode_info *lli)
 }
 
 /**
- * start statahead thread
+ * start_statahead_thread() - start statahead thread
  *
- * \param[in] dir	parent directory
- * \param[in] dentry	dentry that triggers statahead, normally the first
- *			dirent under @dir
- * \param[in] agl	indicate whether AGL is needed
- * \retval		-EAGAIN on success, because when this function is
- *			called, it's already in lookup call, so client should
- *			do it itself instead of waiting for statahead thread
- *			to do it asynchronously.
- * \retval		negative number upon error
+ * @dir: parent directory
+ * @dentry: dentry that triggers statahead, normally the first dirent under @dir
+ * @agl: indicate whether AGL(Asynchronous Glimpse Lock) is needed
+ *
+ * Returns:
+ * * %-EAGAIN success, because when this function is called, it's already
+ * in lookup call, so client should do it itself instead of waiting for
+ * statahead thread to do it asynchronously.
+ * * %-ERRNO  (other than -EAGAIN) on error
  */
 static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 				  bool agl)
@@ -2524,19 +2540,20 @@ static inline bool ll_statahead_started(struct inode *dir, bool agl)
 }
 
 /**
- * statahead entry function, this is called when client getattr on a file, it
- * will start statahead thread if this is the first dir entry, else revalidate
- * dentry from statahead cache.
+ * ll_start_statahead() - statahead entry function, this is called when client
  *
- * \param[in]  dir	parent directory
- * \param[out] dentryp	dentry to getattr
- * \param[in]  agl	whether start the agl thread
+ * @dir: parent directory
+ * @dentry: dentry to getattr
+ * @agl: whether start the agl thread
  *
- * \retval		1 on success
- * \retval		0 revalidation from statahead cache failed, caller needs
- *			to getattr from server directly
- * \retval		negative number on error, caller often ignores this and
- *			then getattr from server
+ * this is called when client getattr on a file, it will start statahead thread
+ * if this is the first dir entry, else revalidate dentry from statahead cache.
+ *
+ * Returns:
+ * * %1   success
+ * * %0   revalidation from statahead cache failed, caller needs to getattr
+ * from server directly
+ * * <0   on error, caller often ignores this and then getattrfrom server
  */
 int ll_start_statahead(struct inode *dir, struct dentry *dentry, bool agl)
 {
@@ -2546,17 +2563,18 @@ int ll_start_statahead(struct inode *dir, struct dentry *dentry, bool agl)
 }
 
 /**
- * revalidate dentry from statahead cache.
+ * ll_revalidate_statahead() - revalidate dentry from statahead cache.
  *
- * \param[in]  dir	parent directory
- * \param[out] dentryp	dentry to getattr
- * \param[in]  unplug	unplug statahead window only (normally for negative
- *			dentry)
- * \retval		1 on success
- * \retval		0 revalidation from statahead cache failed, caller needs
- *			to getattr from server directly
- * \retval		negative number on error, caller often ignores this and
- *			then getattr from server
+ * @dir: parent directory
+ * @dentryp: dentry to getattr
+ * @unplug: unplug statahead window only (normally for negative dentry)
+ *
+ * Returns:
+ * * %1  success
+ * * %0  revalidation from statahead cache failed, caller needs to getattr
+ *       from server directly
+ * * <0  negative number on error, caller often ignores this and then getattr
+ *       from server
  */
 int ll_revalidate_statahead(struct inode *dir, struct dentry **dentryp,
 			    bool unplug)

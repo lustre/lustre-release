@@ -29,11 +29,8 @@
 #include "llite_internal.h"
 #include "vvp_internal.h"
 
-/*****************************************************************************
- *
- * Page operations.
- *
- */
+/* Page operations */
+
 static void vvp_page_discard(const struct lu_env *env,
 			     const struct cl_page_slice *slice,
 			     struct cl_io *unused)
@@ -83,7 +80,11 @@ static void vvp_page_delete(const struct lu_env *env,
 }
 
 /**
- * Handles page transfer errors at VM level.
+ * vvp_vmpage_error() - Handles page transfer errors at VM level.
+ *
+ * @inode: inode linked with vmpage(struct page)
+ * @vmpage: struct page that has error
+ * @ioret: type of error
  *
  * This takes inode as a separate argument, because inode on which error is to
  * be set can be different from \a vmpage inode in case of direct-io.

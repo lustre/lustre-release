@@ -255,8 +255,14 @@ void (*vvp_folio_memcg_unlock)(struct folio *folio);
 #endif
 
 /**
+ * vvp_global_init() - init global resources required by the VVP layer
+ *
  * A mutex serializing calls to vvp_inode_fini() under extreme memory
  * pressure, when environments cannot be allocated.
+ *
+ * Returns:
+ * * %0  Success
+ * * <0 Failure
  */
 int vvp_global_init(void)
 {

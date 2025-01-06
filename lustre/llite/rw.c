@@ -173,13 +173,19 @@ enum ll_ra_page_hint {
 	WILLNEED /* this page is gurateed to be needed */
 };
 
-/*
- * Initiates read-ahead of a page with given index.
+/**
+ * ll_read_ahead_page() - Initiates read-ahead of a page with given index.
  *
- * \retval +ve: page was already uptodate so it will be skipped
- *              from being added;
- * \retval -ve: page wasn't added to \a queue for error;
- * \retval   0: page was added into \a queue for read ahead.
+ * @env: execution environment for this thread
+ * @io: struct (cl_io) responsible for IO operation
+ * @queue: struct cl_page_list (list of pages (memory) used for read ahead IO)
+ * @index: offset withing page to read ahead
+ * @hint: see ll_ra_page_hint
+ *
+ * Returns:
+ * * %0 if page was added into @queue for read ahead or <0 if page was not
+ * added to @queue for read ahead or >0 if page was already uptodate so it will
+ * be skipped from being added
  */
 static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 			      struct cl_page_list *queue, pgoff_t index,
@@ -283,7 +289,8 @@ static inline int stride_io_mode(struct ll_readahead_state *ras)
 	return ras->ras_consecutive_stride_requests > 1;
 }
 
-/* The function calculates how many bytes will be read in
+/* stride_byte_count() - The function calculates how many bytes will be read in
+ *
  * [off, off + length], in such stride IO area,
  * stride_offset = st_off, stride_lengh = st_len,
  * stride_bytes = st_bytes
@@ -1250,6 +1257,16 @@ static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 	RAS_CDEBUG(ras);
 }
 
+/**
+ * ll_ras_enter() - used to detect read pattern according to pos and count
+ *
+ * @f: pointer to open file (struct file)
+ * @pos: position where read is starting
+ * @bytes: length to be read
+ *
+ * Returns:
+ * * %void
+ */
 void ll_ras_enter(struct file *f, loff_t pos, size_t bytes)
 {
 	struct ll_file_data *lfd = f->private_data;
@@ -1319,11 +1336,8 @@ static bool index_in_stride_window(struct ll_readahead_state *ras,
 	return false;
 }
 
-/*
- * ll_ras_enter() is used to detect read pattern according to pos and count.
- *
- * ras_update() is used to detect cache miss and
- * reset window or increase window accordingly
+/* ras_update() is used to detect cache miss and reset window or increase
+ * window accordingly
  */
 static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 		       struct ll_readahead_state *ras, pgoff_t index,
@@ -1818,12 +1832,17 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	RETURN(rc);
 }
 
-/*
- * Possible return value:
- * 0 no async readahead triggered and fast read could not be used.
- * 1 no async readahead, but fast read could be used.
- * 2 async readahead triggered and fast read could be used too.
- * < 0 on error.
+/**
+ * kickoff_async_readahead() - start asynchronous readahead
+ *
+ * @file: readahead for this open file
+ * @pages: size of read ahead (in pages)
+ *
+ * Returns:
+ * * %0 no async readahead triggered and fast read could not be used.
+ * * %1 no async readahead, but fast read could be used.
+ * * %2 async readahead triggered and fast read could be used too.
+ * * %-ENOMEM on error.
  */
 static int kickoff_async_readahead(struct file *file, unsigned long pages)
 {
