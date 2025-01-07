@@ -35,12 +35,14 @@ AUTOMAKE_OPTIONS = foreign
 
 # also update lustre/autoconf/lustre-core.m4 AC_CONFIG_FILES
 ALWAYS_SUBDIRS = include obdclass ldlm ptlrpc obdecho ec \
-	mgc fid fld doc utils tests scripts autoconf conf kunit
+	mgc fid fld doc utils tests scripts autoconf conf
 
 SERVER_SUBDIRS = mgs mdt mdd ofd osd-zfs osd-ldiskfs \
 	quota osp lod target lfsck
 
 CLIENT_SUBDIRS = mdc lmv llite lov osc
+
+TESTS_SUBDIRS = kunit
 
 SUBDIRS := $(ALWAYS_SUBDIRS)
 
@@ -52,6 +54,10 @@ if CLIENT
 SUBDIRS += $(CLIENT_SUBDIRS)
 endif
 
-DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)
+if TESTS
+SUBDIRS += $(TESTS_SUBDIRS)
+endif
+
+DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS) $(TESTS_SUBDIRS)
 
 EXTRA_DIST = kernel_patches

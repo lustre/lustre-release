@@ -8,9 +8,13 @@
 # Makefile template for kunit
 #
 
-MODULES := llog_test obd_test kinode
-@SERVER_TRUE@MODULES += ldlm_extent
+MODULES := kinode obd_test
+@TESTS_TRUE@@SERVER_TRUE@MODULES += ldlm_extent
+@TESTS_TRUE@@SERVER_TRUE@MODULES += llog_test
 
-EXTRA_DIST = llog_test.c obd_test.c kinode.c ldlm_extent.c
+EXTRA_DIST = kinode.c
+EXTRA_DIST += ldlm_extent.c
+EXTRA_DIST += llog_test.c
+EXTRA_DIST += obd_test.c
 
 @INCLUDE_RULES@
