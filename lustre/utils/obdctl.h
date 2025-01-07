@@ -128,6 +128,7 @@ int jt_lcfg_getparam(int argc, char **argv);
 int jt_lcfg_setparam(int argc, char **argv);
 int jt_lcfg_listparam(int argc, char **argv);
 int jt_lcfg_setparam_client(int argc, char **argv, struct param_opts *popt);
+int jt_lctl_findparam(int argc, char **argv);
 
 /* lustre_cfg.c */
 int lcfg_set_devname(char *name);

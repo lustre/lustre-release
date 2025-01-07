@@ -18,6 +18,7 @@
 #define STRINGIFY(a) #a
 #endif
 #include <sys/stat.h>
+#include <regex.h>
 
 struct lctl_param_file {
 	char			 *lpf_val;
@@ -60,6 +61,7 @@ struct param_opts {
 	unsigned int po_permissions;
 	char *po_fsname;
 	struct lctl_param_dir *po_root_dir;
+	regex_t	    *po_find_pattern;
 };
 
 #ifdef HAVE_LIBPTHREAD

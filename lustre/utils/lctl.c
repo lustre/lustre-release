@@ -476,6 +476,13 @@ command_t cmdlist[] = {
 	 "		    [--only-tunable|-t] [--writable|-w]\n"
 	 "		    PARAM1 [PARAM2 ...]\n"
 	 "List the name of Lustre or LNet parameter from the specified path.\n"},
+	 {"find_param", jt_lctl_findparam, 0,
+	 "find the Lustre or LNet parameter names matching a pattern\n"
+	 "usage: find_param [--color|-c auto|always|never] [--links|-l]\n"
+	 "		    [--no-links|-L] [--no-name|-n] [--only-name|-N]\n"
+	 "		    [--merge|-m] [--no-merge|-M] [--path|-p]\n"
+	 "		    PATTERN1 [PATTERN2 ...]\n"
+	 "Search recursively for parameters matching the given pattern(s).\n"},
 	{"del_ost", jt_del_ost, 0, "permanently delete OST records\n"
 	 "usage: del_ost [--dryrun] --target FSNAME-OSTxxxx\n"
 	 "Cancel the config records for a specific OST to forget about it.\n"},

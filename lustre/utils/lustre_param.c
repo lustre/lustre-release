@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <limits.h>
+#include <regex.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -370,6 +371,10 @@ void print_param(struct lctl_param_file *lpf, struct param_opts *popt)
 	if (popt->po_tunable && !S_ISREG(lpf->lpf_mode))
 		return;
 
+	if (popt->po_find_pattern &&
+	    (regexec(popt->po_find_pattern, lpf->lpf_name, 0, NULL, 0) != 0))
+		return;
+
 	if (lpf->lpf_is_symlink)
 		color = COLOR_LINK;
 	else if (S_ISDIR(lpf->lpf_mode))
@@ -408,14 +413,14 @@ void print_param_dir(struct lctl_param_dir *dir, struct param_opts *popt)
  * \retval 0 on success.
  * \retval -errno on error.
  */
-static int read_param(const char *path, char **buf)
+static int read_param(const char *path, char **buf, bool quiet)
 {
 	size_t buflen;
 	int rc;
 
 	*buf = NULL;
 	rc = llapi_param_get_value(path, buf, &buflen);
-	if (rc)
+	if (rc && !quiet)
 		fprintf(stderr,
 			"error: %s: '%s': %s\n",
 			"read_param", path, strerror(-rc));
@@ -602,7 +607,7 @@ new_val:
 }
 
 int add_param_to_dir(struct lctl_param_dir *dir, struct lctl_param_file *lpf,
-		      struct param_opts *popt)
+		      struct param_opts *popt, enum parameter_operation oper)
 {
 	int i, rc = 0;
 
@@ -613,6 +618,8 @@ int add_param_to_dir(struct lctl_param_dir *dir, struct lctl_param_file *lpf,
 	}
 
 	if (i < dir->lpd_param_c) {
+		if (oper == LIST_PARAM && popt->po_merge)
+			return rc;
 		rc = add_val_to_param(dir->lpd_param_list[i],
 				      lpf->lpf_val, popt);
 		*lpf = *dir->lpd_param_list[i];
@@ -773,6 +780,7 @@ paths_loop:
 		struct stat st;
 		struct stat lst; /* for finding symlinks */
 		int rc2;
+		int param_count;
 
 		if (lstat(paths.gl_pathv[i], &lst) == -1) {
 			fprintf(stderr, "error: %s: lstat '%s': %s\n",
@@ -863,21 +871,27 @@ op_switch:
 			}
 			break;
 		case GET_PARAM:
-			if (S_ISREG(st.st_mode)) {
-				rc = read_param(paths.gl_pathv[i],
-						&lpf->lpf_val);
-				if (rc) {
-					free(param_name);
-					param_name = NULL;
-					continue;
-				}
-			} else {
+			if (!S_ISREG(st.st_mode))
 				break;
-			}
-			fallthrough;
-		case LIST_PARAM:
-			rc = add_param_to_dir(pdir, lpf, popt);
+			rc = read_param(paths.gl_pathv[i],
+					&lpf->lpf_val,
+					popt->po_find_pattern != NULL);
 			if (rc) {
+				free(param_name);
+				param_name = NULL;
+				continue;
+			}
+			rc = add_param_to_dir(pdir, lpf, popt, oper);
+			if (rc) {
+				free(param_name);
+				param_name = NULL;
+				continue;
+			}
+			break;
+		case LIST_PARAM:
+			param_count = pdir->lpd_param_c;
+			rc = add_param_to_dir(pdir, lpf, popt, oper);
+			if (rc || (popt->po_merge && param_count == pdir->lpd_param_c)) {
 				free(param_name);
 				param_name = NULL;
 				continue;
@@ -959,7 +973,8 @@ out_param:
 	return rc;
 }
 
-static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
+static int param_out_cmdline(int argc, char **argv, struct param_opts *popt,
+			    char *opt_list)
 {
 	struct option long_opts[] = {
 	{ .val = 'b',	.name = "dshbak",	.has_arg = no_argument},
@@ -967,48 +982,34 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'D',	.name = "dir-only",	.has_arg = no_argument},
 	{ .val = 'D',	.name = "directory-only", .has_arg = no_argument},
 	{ .val = 'F',	.name = "classify",	.has_arg = no_argument},
+	{ .val = 'H',	.name = "header",	.has_arg = no_argument},
 	{ .val = 'l',	.name = "links",	.has_arg = no_argument},
 	{ .val = 'L',	.name = "no-links",	.has_arg = no_argument},
-	{ .val = 'p',	.name = "path",		.has_arg = no_argument},
 	{ .val = 'm',	.name = "merge",	.has_arg = no_argument},
 	{ .val = 'M',	.name = "no-merge",	.has_arg = no_argument},
+	{ .val = 'n',	.name = "no-name",	.has_arg = no_argument},
+	{ .val = 'N',	.name = "only-name",	.has_arg = no_argument},
+	{ .val = 'N',	.name = "name-only",	.has_arg = no_argument},
+	{ .val = 'p',	.name = "path",		.has_arg = no_argument},
 	{ .val = 'r',	.name = "readable",	.has_arg = no_argument},
 	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
 	{ .val = 't',	.name = "tunable",	.has_arg = no_argument},
 	{ .val = 'w',	.name = "writable",	.has_arg = no_argument},
+	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument},
 	{ .name = NULL },
 	};
 
 	int ch;
 	char *no_color;
 
-	popt->po_show_name = 1;
-	popt->po_only_name = 1;
-	popt->po_follow_symlinks = 1;
 	popt->po_color = isatty(fileno(stdout)) &&
 			 ((no_color = getenv("NO_COLOR")) == NULL ||
 			  no_color[0] == '\0' || strcmp(no_color, "0") == 0);
 
-	/**
-	 * For the upstream client the parameter files locations
-	 * are split between under both /sys/kernel/debug/lustre
-	 * and /sys/fs/lustre. The parameter files containing
-	 * small amounts of data, less than a page in size, are
-	 * located under /sys/fs/lustre and in the case of large
-	 * parameter data files, think stats for example, are
-	 * located in the debugfs tree. Since the files are
-	 * split across two trees the directories are often
-	 * duplicated which means these directories are listed
-	 * twice which leads to duplicate output to the user.
-	 * To avoid scanning a directory twice, the merge option
-	 * is set by default.
-	 */
-	popt->po_merge = 1;
-
 	/* reset optind for each getopt_long() in case of multiple calls */
 	optind = 0;
-	while ((ch = getopt_long(argc, argv, "bc::DFlLmMprRtw",
-				      long_opts, NULL)) != -1) {
+	while ((ch = getopt_long(argc, argv, opt_list,
+				 long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'b':
 			popt->po_dshbak = 1;
@@ -1033,6 +1034,9 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 		case 'F':
 			popt->po_show_type = 1;
 			break;
+		case 'H':
+			popt->po_header = 1;
+			break;
 		case 'l':
 			popt->po_follow_symlinks = 1;
 			break;
@@ -1044,6 +1048,12 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 			break;
 		case 'M':
 			popt->po_merge = 0;
+			break;
+		case 'n':
+			popt->po_show_name = 0;
+			break;
+		case 'N':
+			popt->po_only_name = 1;
 			break;
 		case 'p':
 			popt->po_only_pathname = 1;
@@ -1060,12 +1070,40 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 		case 'w':
 			popt->po_permissions |= S_IWRITE;
 			break;
+		case 'y':
+			popt->po_yaml = 1;
+			break;
 		default:
 			return -1;
 		}
 	}
 
 	return optind;
+}
+
+static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
+{
+	popt->po_show_name = 1;
+	popt->po_only_name = 1;
+	popt->po_follow_symlinks = 1;
+
+	/**
+	 * The parameter files locations
+	 * are split between under both /sys/kernel/debug/lustre
+	 * and /sys/fs/lustre. The parameter files containing
+	 * small amounts of data, less than a page in size, are
+	 * located under /sys/fs/lustre and in the case of large
+	 * parameter data files, think stats for example, are
+	 * located in the debugfs tree. Since the files are
+	 * split across two trees the directories are often
+	 * duplicated which means these directories are listed
+	 * twice which leads to duplicate output to the user.
+	 * To avoid scanning a directory twice, the merge option
+	 * is set by default.
+	 */
+	popt->po_merge = 1;
+
+	return param_out_cmdline(argc, argv, popt, "bc::DFlLmMprRtw");
 }
 
 int jt_lcfg_listparam(int argc, char **argv)
@@ -1115,114 +1153,79 @@ int jt_lcfg_listparam(int argc, char **argv)
 	return rc;
 }
 
-static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
+static int findparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
-	struct option long_opts[] = {
-	{ .val = 'b',	.name = "dshbak",	.has_arg = no_argument},
-	{ .val = 'c',	.name = "color",	.has_arg = required_argument},
-	{ .val = 'F',	.name = "classify",	.has_arg = no_argument},
-	{ .val = 'H',	.name = "header",	.has_arg = no_argument},
-	{ .val = 'l',	.name = "links",	.has_arg = no_argument},
-	{ .val = 'L',	.name = "no-links",	.has_arg = no_argument},
-	{ .val = 'n',	.name = "no-name",	.has_arg = no_argument},
-	{ .val = 'N',	.name = "only-name",	.has_arg = no_argument},
-	{ .val = 'N',	.name = "name-only",	.has_arg = no_argument},
-	{ .val = 'm',	.name = "merge",	.has_arg = no_argument},
-	{ .val = 'M',	.name = "no-merge",	.has_arg = no_argument},
-	{ .val = 'p',	.name = "path",		.has_arg = no_argument},
-	{ .val = 'r',	.name = "readable",	.has_arg = no_argument},
-	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
-	{ .val = 't',	.name = "tunable",	.has_arg = no_argument},
-	{ .val = 'w',	.name = "writable",	.has_arg = no_argument},
-	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument},
-	{ .name = NULL },
-	};
-
-	int ch;
-	char *no_color;
-
 	popt->po_show_name = 1;
 	popt->po_follow_symlinks = 1;
-	popt->po_color = isatty(fileno(stdout)) &&
-			 ((no_color = getenv("NO_COLOR")) == NULL ||
-			  no_color[0] == '\0' || strcmp(no_color, "0") == 0);
+	popt->po_merge = 1;
+	popt->po_recursive = 1;
 
-	/* reset optind for each getopt_long() in case of multiple calls */
-	optind = 0;
-	while ((ch = getopt_long(argc, argv, "bc:FHlLnNmMprRtwy",
-				      long_opts, NULL)) != -1) {
-		switch (ch) {
-		case 'b':
-			popt->po_dshbak = 1;
-			popt->po_merge = 1;
-			break;
-		case 'c':
-			if (!optarg ||
-			    strcmp(optarg, "always") == 0 ||
-			    strcmp(optarg, "yes"))
-				popt->po_color = 1;
-			else if (strcmp(optarg, "never") == 0 ||
-				 strcmp(optarg, "no") == 0)
-				popt->po_color = 0;
-			else if (strcmp(optarg, "auto") == 0)
-				popt->po_color = isatty(fileno(stdout));
-			else
-				return -1;
-			break;
-		case 'F':
-			popt->po_show_type = 1;
-			break;
-		case 'H':
-			popt->po_header = 1;
-			break;
-		case 'l':
-			popt->po_follow_symlinks = 1;
-			break;
-		case 'L':
-			popt->po_follow_symlinks = 0;
-			break;
-		case 'n':
-			popt->po_show_name = 0;
-			break;
-		case 'N':
-			popt->po_only_name = 1;
-			break;
-		case 'm':
-			popt->po_merge = 1;
-			break;
-		case 'M':
-			popt->po_merge = 0;
-			break;
-		case 'p':
-			popt->po_only_pathname = 1;
-			break;
-		case 'r':
-			popt->po_permissions |= S_IREAD;
-			break;
-		case 'R':
-			popt->po_recursive = 1;
-			break;
-		case 't':
-			popt->po_tunable = 1;
-			break;
-		case 'w':
-			popt->po_permissions |= S_IWRITE;
-			break;
-		case 'y':
-			popt->po_yaml = 1;
-			break;
-		default:
-			return -1;
+	return param_out_cmdline(argc, argv, popt, "bc:lLnNmMp");
+}
+
+int jt_lctl_findparam(int argc, char **argv)
+{
+	int rc = 0, index, i;
+	struct param_opts popt;
+	regex_t regex;
+
+	memset(&popt, 0, sizeof(popt));
+	index = findparam_cmdline(argc, argv, &popt);
+	if (index < 0 || index >= argc)
+		return CMD_HELP;
+
+	for (i = index; i < argc; i++) {
+		char pattern[] = "*";
+		int rc2;
+
+		rc2 = regcomp(&regex, argv[i], REG_EXTENDED);
+		if (rc2) {
+			char error_message[PATH_MAX];
+
+			regerror(rc2, &regex, error_message, PATH_MAX);
+			fprintf(stderr,
+				"error: %s: Regex error compiling '%s': %s\n",
+				jt_cmdname(argv[0]), argv[i], error_message);
+			rc = rc2;
+			continue;
+		}
+		popt.po_find_pattern = &regex;
+
+		rc2 = do_param_op(&popt, pattern, NULL,
+				  popt.po_only_name ? LIST_PARAM : GET_PARAM,
+				  NULL);
+		if (rc2 < 0) {
+			if (rc == 0)
+				rc = rc2;
+
+			if (rc2 == -ENOENT && getuid() != 0)
+				rc2 = llapi_param_display_value("*", 0,
+							PARAM_FLAGS_SHOW_SOURCE,
+							stdout);
+			if (rc2 < 0) {
+				fprintf(stderr, "error: %s: listing '%s': %s\n",
+					jt_cmdname(argv[0]), "*",
+					strerror(-rc2));
+			}
+			continue;
 		}
 	}
+	regfree(&regex);
 
-	return optind;
+	return rc;
+}
+
+static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
+{
+	popt->po_show_name = 1;
+	popt->po_follow_symlinks = 1;
+
+	return param_out_cmdline(argc, argv, popt, "bc:FHlLnNmMprRtwy");
 }
 
 int jt_lcfg_getparam(int argc, char **argv)
 {
 	int version = LUSTRE_GENL_VERSION;
-	enum parameter_operation mode;
 	int rc = 0, index, i;
 	struct param_opts popt;
 	int flags = 0;
@@ -1233,8 +1236,7 @@ int jt_lcfg_getparam(int argc, char **argv)
 	if (index < 0 || index >= argc)
 		return CMD_HELP;
 
-	mode = popt.po_only_name ? LIST_PARAM : GET_PARAM;
-	if (mode == LIST_PARAM)
+	if (popt.po_only_name)
 		version = 0;
 
 	if (popt.po_yaml)

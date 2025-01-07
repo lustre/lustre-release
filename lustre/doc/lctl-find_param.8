@@ -1,0 +1,125 @@
+.TH LCTL-FIND_PARAM 8 "2025-01-07" Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-find_param \- search for parameters matching patterns
+.SH SYNOPSIS
+.SY "lctl find_param"
+.RB [ --color | "-c auto" | always | never ]
+.RB [ --links | -l ]
+.RB [ --no-links | -L ]
+.RB [ --merge | -m ]
+.RB [ --no-merge | -M ]
+.RB [ --path | -p ]
+.IR PATTERN1 " [" PATTERN2 " ...]"
+.YS
+.SH DESCRIPTION
+Search recursively for parameter names matching the given
+.IR PATTERN (s).
+The patterns use extended regular expressions.
+This command is equivalent to
+.BI "'lctl list_param -R \(dq*\(dq | grep -E " PATTERN " | xargs lctl get_param'"
+.SH OPTIONS
+The various options supported by
+.B lctl find_param
+are listed and explained below:
+.TP
+.BR -c ", " --color=auto|always|never
+Use one of auto|always|never as the rule of when to apply color. The default is
+auto which will display color only when the output is to a terminal.
+.TP
+.B -l ", " --links
+Follow symlinks while searching for parameters. (enabled by default)
+.TP
+.B -L ", " --no-links
+Do not follow symlinks while searching for parameters.
+.TP
+.B -m ", " --merge
+Merge all parameters that have the same name such that only one will be shown.
+Enabled by default.
+.TP
+.B -M ", " --no-merge
+Do not merge parameters. All parameters will be shown, regardless if they are
+duplicates or not. Duplicate parameters will be printed in yellow.
+.TP
+.B -n ", " --no-name
+Print only the parameter value of the matched parameter name. This may be
+confusing as the parameters will not be identified as to which ones matched the
+given pattern and can appear in any order.
+.TP
+.B -N ", " --only-name
+Print only matched parameter names and not the values.
+This option is equivalent to
+.BI "'lctl list_param -R \(dq*\(dq | grep -E " PATTERN '
+which is useful to avoid printing copies of the same parameter when their values
+are different like many of the '.stats' parameters.
+.TP
+.B -p ", " --path
+Print the parameter path instead of the parameter name.
+.SH EXAMPLES
+Find parameters without needing the full path:
+.EX
+.RS
+.B # lctl find_param -N brw
+obdfilter.testfs-OST0000.brw_size
+obdfilter.testfs-OST0001.brw_size
+osd-ldiskfs.testfs-MDT0000.brw_stats
+osd-ldiskfs.testfs-OST0000.brw_stats
+osd-ldiskfs.testfs-OST0001.brw_stats
+.RE
+.EE
+.PP
+Use regular expressions to find parameters:
+.EX
+.RS
+.B # lctl find_param -N "[a-zA-Z0-9]{16}.*stats"
+ldlm.namespaces.testfs-MDT0000-mdc-ffff8bc577dce000.pool.stats
+ldlm.namespaces.testfs-OST0000-osc-ffff8bc577dce000.pool.stats
+ldlm.namespaces.testfs-OST0001-osc-ffff8bc577dce000.pool.stats
+llite.testfs-ffff8bc577dce000.stats_track_gid
+llite.testfs-ffff8bc577dce000.stats_track_pid
+llite.testfs-ffff8bc577dce000.stats_track_ppid
+llite.testfs-ffff8bc577dce000.extents_stats
+llite.testfs-ffff8bc577dce000.extents_stats_per_process
+llite.testfs-ffff8bc577dce000.offset_stats
+llite.testfs-ffff8bc577dce000.read_ahead_stats
+llite.testfs-ffff8bc577dce000.statahead_stats
+llite.testfs-ffff8bc577dce000.stats
+llite.testfs-ffff8bc577dce000.unstable_stats
+lmv.testfs-clilmv-ffff8bc577dce000.md_stats
+mdc.testfs-MDT0000-mdc-ffff8bc577dce000.stats
+mdc.testfs-MDT0000-mdc-ffff8bc577dce000.batch_stats
+mdc.testfs-MDT0000-mdc-ffff8bc577dce000.md_stats
+mdc.testfs-MDT0000-mdc-ffff8bc577dce000.mdc_stats
+mdc.testfs-MDT0000-mdc-ffff8bc577dce000.rpc_stats
+mdc.testfs-MDT0000-mdc-ffff8bc577dce000.unstable_stats
+osc.testfs-OST0000-osc-ffff8bc577dce000.stats
+osc.testfs-OST0000-osc-ffff8bc577dce000.osc_stats
+osc.testfs-OST0000-osc-ffff8bc577dce000.rpc_stats
+osc.testfs-OST0000-osc-ffff8bc577dce000.unstable_stats
+osc.testfs-OST0001-osc-ffff8bc577dce000.stats
+osc.testfs-OST0001-osc-ffff8bc577dce000.osc_stats
+osc.testfs-OST0001-osc-ffff8bc577dce000.rpc_stats
+osc.testfs-OST0001-osc-ffff8bc577dce000.unstable_stats
+.RE
+.EE
+.PP
+lctl find_param will only search the parameter name, not the value:
+.EX
+.RS
+.B # lctl get_param debug_path
+debug_path=/tmp/lustre-log
+.P
+.B # lctl find_param lustre | grep debug_path
+.RE
+.EE
+.SH AVAILABILITY
+.B lctl find_param
+is part of the
+.BR lustre (7)
+filesystem package since release 2.17.0
+.\" Added in commit v2_16_XX
+.SH SEE ALSO
+.BR lfs (1),
+.BR lustre (7),
+.BR lctl-get_param (8),
+.BR lctl-list_param (8),
+.BR lctl-set_param (8)

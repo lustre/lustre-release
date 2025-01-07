@@ -31002,6 +31002,19 @@ test_401gb() {
 }
 run_test 401gb "check 'set_param -d -C' removes client params"
 
+test_401gc() {
+	local expected=$($LCTL list_param -R "*" | grep -c brw_stats)
+	local actual=$($LCTL find_param -N brw_stats | wc -l)
+	(( expected == actual )) ||
+		error "expected $expected, but found $actual"
+
+	expected="$($LCTL get_param checksum_speed)"
+	actual="$($LCTL find_param check.*speed)"
+	[[ "$expected" =~ "$actual" ]] ||
+		error "expected '$expected', but found '$actual'"
+}
+run_test 401gc "check 'lctl find_param' can find params using regex"
+
 test_402() {
 	[[ $MDS1_VERSION -ge $(version_code 2.7.66) ]] ||
 	[[ $MDS1_VERSION -ge $(version_code 2.7.18.4) &&
