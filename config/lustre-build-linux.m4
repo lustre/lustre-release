@@ -11,30 +11,30 @@ makerule="$PWD/build"
 AC_CACHE_CHECK([for external module build target], lb_cv_module_target,
 [
 	lb_cv_module_target=""
-	rm -f build/conftest.i
+	rm -f kconftest.dir/conftest.i
 	MODULE_TARGET="M"
-	makerule="$PWD/build"
+	makerule="$PWD/kconftest.dir"
 	LB_LINUX_TRY_MAKE([], [],
 		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -s build/conftest.i],
+		[test -s kconftest.dir/conftest.i],
 		[lb_cv_module_target="M54"], [
 	MODULE_TARGET="M"
-	makerule="_module_$PWD/build"
+	makerule="_module_$PWDkconftest.dir"
 	LB_LINUX_TRY_MAKE([], [],
 		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -s build/conftest.i],
+		[test -skconftest.dir/conftest.i],
 		[lb_cv_module_target="M"], [
 	MODULE_TARGET="M"
 	makerule=""
 	LB_LINUX_TRY_MAKE([], [],
 		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -s build/conftest.i],
+		[test -s kconftest.dir/conftest.i],
 		[lb_cv_module_target="M58"], [
 	makerule=""
 	lb_cv_dequote_CC_VERSION_TEXT=yes
 	LB_LINUX_TRY_MAKE([], [],
 		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -s build/conftest.i],
+		[test -s kconftest.dir/conftest.i],
 		[lb_cv_module_target="M517"], [
 			AC_MSG_ERROR([kernel module make failed; check config.log for details])
 	])])])])
@@ -53,7 +53,7 @@ AC_CACHE_CHECK([for compiler version text], lb_cv_dequote_CC_VERSION_TEXT, [
 AS_IF([test -z "$lb_cv_module_target"],
 	[AC_MSG_ERROR([unknown external module build target])],
 [test "x$lb_cv_module_target" = "xM54"],
-	[makerule="$PWD/build"
+	[makerule="$PWD/kconftest.dir"
 	lb_cv_module_target="M"],
 [test "x$lb_cv_module_target" = "xM58"],
 	[makerule=""
@@ -62,7 +62,7 @@ AS_IF([test -z "$lb_cv_module_target"],
 	[makerule=""
 	lb_cv_module_target="M"],
 [test "x$lb_cv_module_target" = "xM"],
-	[makerule="_module_$PWD/build"])
+	[makerule="_module_$PWD/kconftest.dir"])
 MODULE_TARGET=$lb_cv_module_target
 AC_SUBST(MODULE_TARGET)
 ])
@@ -477,8 +477,8 @@ LB_LINUX_TRY_MAKE([
 ], [
 	$makerule LUSTRE_KERNEL_TEST=conftest.i
 ], [dnl
-	grep request_module build/conftest.i |dnl
-		grep -v `grep "int myretval=" build/conftest.i |dnl
+	grep request_module kconftest.dir/conftest.i |dnl
+		grep -v `grep "int myretval=" kconftest.dir/conftest.i |dnl
 			cut -d= -f2 | cut -d" "  -f1`dnl
 		>/dev/null dnl
 ], [lb_cv_module_loading="yes"], [lb_cv_module_loading="no"])
@@ -664,12 +664,17 @@ MODULE_LICENSE("GPL");])
 #
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([AC_LANG_SOURCE([$1])])])dnl
-rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] DEQUOTE_CC_VERSION_TEXT=$lb_cv_dequote_CC_VERSION_TEXT LDFLAGS= ${LD:+LD="$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_CHECK_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include -I$ZFS/include/os/linux/kernel -I$ZFS/include/os/linux/spl -I$ZFS/include/os/linux/zfs -I${SPL:-$ZFS/include/spl}} -include $CONFIG_INCLUDE" KBUILD_EXTRA_SYMBOLS="${ZFS_OBJ:+$ZFS_OBJ/Module.symvers} $KBUILD_EXTRA_SYMBOLS" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+mkdir -p kconftest.dir/
+rm -f kconftest.dir/conftest.o kconftest.dir/conftest.mod.c kconftest.dir/conftest.ko
+cp config/Kbuild kconftest.dir/
+AS_IF([AC_TRY_COMMAND(cp conftest.c kconftest.dir && make -d [$2] DEQUOTE_CC_VERSION_TEXT=$lb_cv_dequote_CC_VERSION_TEXT LDFLAGS= ${LD:+LD="$LD"} CC="$CC" -f $PWD/kconftest.dir/Kbuild LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_CHECK_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include -I$ZFS/include/os/linux/kernel -I$ZFS/include/os/linux/spl -I$ZFS/include/os/linux/zfs -I${SPL:-$ZFS/include/spl}} -include $CONFIG_INCLUDE" KBUILD_EXTRA_SYMBOLS="${ZFS_OBJ:+$ZFS_OBJ/Module.symvers} $KBUILD_EXTRA_SYMBOLS" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $MODULE_TARGET=$PWD/kconftest.dir) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])
-rm -f build/conftest.o build/conftest.mod.c build/conftest.mod.o build/conftest.ko m4_ifval([$1], [build/conftest.c conftest.c])[]dnl
+export RES_DIR=$RANDOM
+mkdir -p kconftest.results/$RES_DIR
+cp -r kconftest.dir/* kconftest.results/$RES_DIR
+rm -f kconftest.dir/conftest.o kconftest.dir/conftest.mod.c kconftest.dir/conftest.mod.o kconftest.dir/conftest.ko m4_ifval([$1], [kconftest.dir/conftest.c conftest.c])[]dnl
 ])
 
 #
@@ -680,7 +685,7 @@ rm -f build/conftest.o build/conftest.mod.c build/conftest.mod.o build/conftest.
 AC_DEFUN([LB_LINUX_TRY_COMPILE], [
 LB_LINUX_COMPILE_IFELSE(
 	[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
-	[modules], [test -s build/conftest.o],
+	[modules], [test -s kconftest.dir/conftest.o],
 	[$3], [$4])
 ])
 
@@ -724,7 +729,7 @@ AC_DEFUN([LB_CHECK_LINUX_HEADER], [
 	AS_VAR_PUSHDEF([lb_header], [lb_cv_header_$1])
 	AC_CACHE_CHECK([for $1], lb_header, [
 		LB_LINUX_COMPILE_IFELSE([LB_LANG_PROGRAM([@%:@include <$1>])],
-			[modules], [test -s build/conftest.o],
+			[modules], [test -s conftest/conftest.o],
 			[AS_VAR_SET([lb_header], [yes])],
 			[AS_VAR_SET([lb_header], [no])])
 	])

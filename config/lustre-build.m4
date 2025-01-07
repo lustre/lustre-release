@@ -414,7 +414,7 @@ AC_DEFUN([LB_CONFIG_FILES], [
 		Makefile
 		autoMakefile]
 		config/Makefile
-		[Rules:build/Rules.in]
+		[Rules:config/Rules.in]
 		AC_PACKAGE_TARNAME[.spec]
 		AC_PACKAGE_TARNAME[-dkms.spec]
 		ldiskfs/Makefile

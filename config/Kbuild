@@ -3,8 +3,6 @@
 #
 # This file is part of Lustre, http://www.lustre.org/
 #
-# build/Makefile
-#
 # There are four ways this Makefile can be called:
 #
 # 1.  As a subdirectory from the toplevel, for automake

@@ -97,6 +97,7 @@ TAGS
 /series
 /stamp-h1
 /LUSTRE-VERSION-FILE
+/kconftest.*
 
 # common python venv names
 /.venv
