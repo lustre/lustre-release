@@ -387,7 +387,7 @@ int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 	if (fo->ofo_pfid_checking)
 		RETURN(-EINPROGRESS);
 
-	rc = ofd_object_ff_load(env, fo);
+	rc = ofd_object_ff_load(env, fo, false);
 	if (rc == -ENODATA)
 		RETURN(0);
 
@@ -420,12 +420,15 @@ int ofd_verify_layout_version(const struct lu_env *env,
 			      struct ofd_object *fo, const struct obdo *oa)
 {
 	int rc;
+	bool force = false;
+
 	ENTRY;
 
 	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_OST_SKIP_LV_CHECK)))
 		GOTO(out, rc = 0);
 
-	rc = ofd_object_ff_load(env, fo);
+again:
+	rc = ofd_object_ff_load(env, fo, force);
 	if (rc < 0) {
 		if (rc == -ENODATA)
 			rc = 0;
@@ -437,14 +440,24 @@ int ofd_verify_layout_version(const struct lu_env *env,
 	 * that on the disk.
 	 */
 	if (ofd_layout_version_less(oa->o_layout_version,
-				    fo->ofo_ff.ff_layout_version))
+				    fo->ofo_ff.ff_layout_version)) {
+		/* the object's filter_fid could be changed via
+		 * out_xattr_set(),  and the ofd_object::ofo_ff is out of date.
+		 */
+		if (!force) {
+			force = true;
+			GOTO(again, rc);
+		}
 		GOTO(out, rc = -ESTALE);
+	}
 
 out:
-	CDEBUG(D_INODE, DFID " verify layout version: %u vs. %u/%u: rc = %d\n",
+	CDEBUG(D_INODE,
+	       "%s:"DFID" verify layout version: %#x/%#x -> %#x, rc: %d\n",
+	       ofd_name(ofd_obj2dev(fo)),
 	       PFID(lu_object_fid(&fo->ofo_obj.do_lu)),
-	       oa->o_layout_version, fo->ofo_ff.ff_layout_version,
-	       fo->ofo_ff.ff_range, rc);
+	       fo->ofo_ff.ff_layout_version, fo->ofo_ff.ff_range,
+	       oa->o_layout_version, rc);
 	RETURN(rc);
 
 }
@@ -1061,8 +1074,6 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	    (OBD_MD_FLFID | OBD_MD_FLOSTLAYOUT | OBD_MD_LAYOUT_VERSION)))
 		/* no attributes to set */
 		GOTO(out_unlock, rc = 0);
-
-
 
 	/* set uid/gid/projid */
 	if (la->la_valid) {
