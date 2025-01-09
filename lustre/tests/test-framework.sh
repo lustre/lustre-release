@@ -3184,7 +3184,7 @@ remount_facet() {
 	local facet=$1
 
 	stop $facet
-	mount_facet $facet
+	mount_facet $@
 }
 
 reboot_facet() {
@@ -8936,6 +8936,18 @@ wait_mgc_import_state() {
 		_wait_mgc_import_state "$facet" "$expected" \
 				       $error_on_failure || return
 	fi
+}
+
+wait_osp_import() {
+	local facet=$1
+	local remtgt=$(facet_svc $2)
+	local expected=$3
+	local loctgt=$(facet_svc $facet)
+	local param="osp.$remtgt-os[pc]-${loctgt#*-}.*_server_uuid"
+
+	do_rpc_nodes "$(facet_active_host $facet)" \
+			wait_import_state $expected $param ||
+		error "$param: import is not in expected state"
 }
 
 wait_dne_interconnect() {

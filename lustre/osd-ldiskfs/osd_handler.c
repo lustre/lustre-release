@@ -904,11 +904,12 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 
 struct osd_check_lmv_buf {
 	/* please keep it as first member */
-	struct dir_context ctx;
+	struct dir_context	oclb_ctx;
 	struct osd_thread_info *oclb_info;
-	struct osd_device *oclb_dev;
-	int oclb_items;
-	bool oclb_found;
+	struct osd_device      *oclb_dev;
+	int			oclb_items;
+	bool			oclb_found;
+	int			oclb_rc;
 };
 
 /**
@@ -950,10 +951,18 @@ static int osd_stripe_dir_filldir(void *buf,
 
 	osd_id_gen(id, ino, OSD_OII_NOGEN);
 	inode = osd_iget(oti, dev, id, 0);
-	if (IS_ERR(inode))
+	if (IS_ERR(inode)) {
+		oclb->oclb_rc = PTR_ERR(inode);
 		return PTR_ERR(inode);
+	}
 
 	iput(inode);
+
+	if (CFS_FAIL_CHECK(OBD_FAIL_OFD_IGET_FAIL)) {
+		oclb->oclb_rc = -ESTALE;
+		RETURN(-ESTALE);
+	}
+
 	osd_add_oi_cache(oti, dev, id, fid);
 	/* Check shard by scrub only if it has a problem with OI */
 	if (osd_oi_lookup(oti, dev, fid, &id2, 0) || !osd_id_eq(id, &id2))
@@ -1008,7 +1017,7 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 	struct file *filp;
 	struct lmv_mds_md_v1 *lmv1;
 	struct osd_check_lmv_buf oclb = {
-		.ctx.actor = osd_stripe_dir_filldir,
+		.oclb_ctx.actor = osd_stripe_dir_filldir,
 		.oclb_info = oti,
 		.oclb_dev = dev,
 		.oclb_found = false,
@@ -1061,11 +1070,18 @@ again:
 	if (le32_to_cpu(lmv1->lmv_magic) != LMV_MAGIC_V1)
 		GOTO(out, rc = 0);
 
+	CFS_FAIL_CHECK_RESET(OBD_FAIL_OFD_IGET_FAIL_TO_START,
+			     OBD_FAIL_OFD_IGET_FAIL);
 	do {
 		oclb.oclb_items = 0;
-		rc = iterate_dir(filp, &oclb.ctx);
+		oclb.oclb_rc = 0;
+		rc = iterate_dir(filp, &oclb.oclb_ctx);
+		if (rc == 0)
+			rc = oclb.oclb_rc;
 	} while (rc >= 0 && oclb.oclb_items > 0 && !oclb.oclb_found &&
 		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
+	CFS_FAIL_CHECK_RESET(OBD_FAIL_OFD_IGET_FAIL, 0);
+
 out:
 	fput(filp);
 	if (rc < 0)

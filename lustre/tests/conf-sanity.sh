@@ -11530,18 +11530,6 @@ test_136() {
 }
 run_test 136 "don't panic with bad obdecho setup"
 
-wait_osp_import() {
-	local facet=$1
-	local remtgt=$(facet_svc $2)
-	local expected=$3
-	local loctgt=$(facet_svc $facet)
-	local param="osp.$remtgt-os[pc]-${loctgt#*-}.*_server_uuid"
-
-	do_rpc_nodes "$(facet_active_host $facet)" \
-			wait_import_state $expected $param ||
-		error "$param: import is not in expected state"
-}
-
 test_137() {
 	(( MDS1_VERSION >= $(version_code 2.15.61) )) ||
 		skip "need MDS version at least 2.15.61"

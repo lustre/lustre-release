@@ -6302,6 +6302,28 @@ test_42() {
 }
 run_test 42 "LFSCK can repair inconsistent MDT-object/OST-object encryption flags"
 
+test_43()
+{
+	[[ $mds1_FSTYPE == ldiskfs ]] || skip "only ldiskfs uses iterate_dir"
+	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs"
+
+	$LFS mkdir -i 1 -c 2 $DIR/$tdir-{1..10} || error "(1) Fail to mkdir"
+
+	remount_facet mds2 "-o abort_recov"
+
+	#define OBD_FAIL_OFD_IGET_FAIL_TO_START                        0x1e2
+	do_facet mds2 $LCTL set_param fail_loc=0x1e2
+	do_facet mds2 $LCTL lfsck_start -M ${FSNAME}-MDT0001 -t namespace
+
+	wait_update_facet mds2 \
+		"$LCTL get_param -n mdd.$(facet_svc mds2).lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		error "(5) mds2 is not the expected 'completed'"
+	}
+	wait_osp_import mds1 mds2 FULL
+}
+run_test 43 "LFSCK does not loop endlessly on iget failure in scanning-phase1"
+
 test_44() {
 	lfsck_prep 3 3
 

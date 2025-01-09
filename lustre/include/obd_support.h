@@ -283,6 +283,8 @@ extern bool obd_enable_health_write;
 
 #define OBD_FAIL_OFD_SET_OID				0x1e0
 #define OBD_FAIL_OFD_COMMITRW_DELAY			0x1e1
+#define OBD_FAIL_OFD_IGET_FAIL_TO_START			0x1e2
+#define OBD_FAIL_OFD_IGET_FAIL				0x1e3
 
 #define OBD_FAIL_OST				0x200
 #define OBD_FAIL_OST_CONNECT_NET		0x201
