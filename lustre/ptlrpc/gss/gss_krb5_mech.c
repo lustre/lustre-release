@@ -967,22 +967,26 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
 			int msg_buflen,
 			rawobj_t *token)
 {
-	struct krb5_ctx     *kctx = gctx->internal_ctx_id;
+	struct krb5_ctx *kctx = gctx->internal_ctx_id;
 	struct krb5_enctype *ke = &enctypes[kctx->kc_enctype];
-	struct krb5_header  *khdr;
-	int                  blocksize;
-	rawobj_t             cksum = RAWOBJ_EMPTY;
-	rawobj_t             data_desc[3], cipher;
-	__u8                 conf[GSS_MAX_CIPHER_BLOCK];
-	__u8                 local_iv[16] = {0};
+	struct krb5_header *khdr;
+	int blocksize;
+	rawobj_t cksum = RAWOBJ_EMPTY;
+	rawobj_t data_desc[3], cipher;
+	__u8 local_iv[16] = {0};
+	__u8 *conf = NULL;
 	u32 major;
-	int                  rc = 0;
+	int rc = 0;
 
 	LASSERT(ke);
 	LASSERT(ke->ke_conf_size <= GSS_MAX_CIPHER_BLOCK);
 	LASSERT(kctx->kc_keye.kb_tfm == NULL ||
 		ke->ke_conf_size >=
 		crypto_sync_skcipher_blocksize(kctx->kc_keye.kb_tfm));
+
+	OBD_ALLOC(conf, GSS_MAX_CIPHER_BLOCK);
+	if (!conf)
+		return GSS_S_FAILURE;
 
 	/*
 	 * final token format:
@@ -1008,7 +1012,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
 
 	/* padding the message */
 	if (gss_add_padding(msg, msg_buflen, blocksize))
-		return GSS_S_FAILURE;
+		GOTO(out_free_conf, major = GSS_S_FAILURE);
 
 	/*
 	 * clear text layout for checksum:
@@ -1064,6 +1068,8 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
 	major = GSS_S_COMPLETE;
 out_free_cksum:
 	rawobj_free(&cksum);
+out_free_conf:
+	OBD_FREE(conf, GSS_MAX_CIPHER_BLOCK);
 	return major;
 }
 
