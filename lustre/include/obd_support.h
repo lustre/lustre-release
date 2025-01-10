@@ -34,10 +34,11 @@ extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
 extern unsigned int obd_lbug_on_eviction;
 /* obd_timeout should only be used for recovery, not for
- * networking / disk / timings affected by load (use Adaptive Timeouts) */
+ * networking / disk / timings affected by load (use Adaptive Timeouts)
+ */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
-extern unsigned int ping_interval;	  /* seconds */
+extern unsigned int ping_interval;        /* seconds */
 extern unsigned int ping_evict_timeout_multiplier;
 extern unsigned int obd_timeout_set;
 extern unsigned int ldlm_timeout_set;
@@ -84,22 +85,25 @@ extern bool obd_enable_health_write;
  * failover targets the client only pings one server at a time, and pings
  * can be lost on a loaded network. Since eviction has serious consequences,
  * and there's no urgent need to evict a client just because it's idle, we
- * should be very conservative here. */
+ * should be very conservative here.
+ */
 #define PING_EVICT_TIMEOUT (PING_INTERVAL * ping_evict_timeout_multiplier)
 #define DISK_TIMEOUT 50          /* Beyond this we warn about disk speed */
 #define CONNECTION_SWITCH_MIN 5U /* Connection switching rate limiter */
  /* Max connect interval for nonresponsive servers; ~50s to avoid building up
-    connect requests in the LND queues, but within obd_timeout so we don't
-    miss the recovery window */
-#define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
+  * connect requests in the LND queues, but within obd_timeout so we don't
+  * miss the recovery window
+  */
+#define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN, obd_timeout))
 #define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
 /* In general this should be low to have quick detection of a system
-   running on a backup server. (If it's too low, import_select_connection
-   will increase the timeout anyhow.)  */
-#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
+ * running on a backup server. (If it's too low, import_select_connection
+ * will increase the timeout anyhow.)
+ */
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN, obd_timeout/20)
 /* The max delay between connects is SWITCH_MAX + SWITCH_INC + INITIAL */
 #define RECONNECT_DELAY_MAX (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC + \
-                             INITIAL_CONNECT_TIMEOUT)
+			     INITIAL_CONNECT_TIMEOUT)
 /* The min time a target should wait for clients to reconnect in recovery */
 #define OBD_RECOVERY_TIME_MIN	(2*RECONNECT_DELAY_MAX)
 #define OBD_IR_FACTOR_MIN	1
@@ -116,81 +120,81 @@ extern bool obd_enable_health_write;
  */
 #define GRANT_SHRINK_INTERVAL            1200/*20 minutes*/
 
-#define OBD_FAIL_MDS                     0x100
-#define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
-#define OBD_FAIL_MDS_GETATTR_NET         0x102
-#define OBD_FAIL_MDS_GETATTR_PACK        0x103
-#define OBD_FAIL_MDS_READPAGE_NET        0x104
-#define OBD_FAIL_MDS_READPAGE_PACK       0x105
-#define OBD_FAIL_MDS_SENDPAGE            0x106
-#define OBD_FAIL_MDS_REINT_NET           0x107
-#define OBD_FAIL_MDS_REINT_UNPACK        0x108
-#define OBD_FAIL_MDS_REINT_SETATTR       0x109
-#define OBD_FAIL_MDS_REINT_SETATTR_WRITE 0x10a
-#define OBD_FAIL_MDS_REINT_CREATE        0x10b
-#define OBD_FAIL_MDS_REINT_CREATE_WRITE  0x10c
-#define OBD_FAIL_MDS_REINT_UNLINK        0x10d
-#define OBD_FAIL_MDS_REINT_UNLINK_WRITE  0x10e
-#define OBD_FAIL_MDS_REINT_LINK          0x10f
-#define OBD_FAIL_MDS_REINT_LINK_WRITE    0x110
-#define OBD_FAIL_MDS_REINT_RENAME        0x111
-#define OBD_FAIL_MDS_REINT_RENAME_WRITE  0x112
-#define OBD_FAIL_MDS_OPEN_NET            0x113
-#define OBD_FAIL_MDS_OPEN_PACK           0x114
-#define OBD_FAIL_MDS_CLOSE_NET           0x115
-#define OBD_FAIL_MDS_CLOSE_PACK          0x116
-#define OBD_FAIL_MDS_CONNECT_NET         0x117
-#define OBD_FAIL_MDS_CONNECT_PACK        0x118
-#define OBD_FAIL_MDS_REINT_NET_REP       0x119
-#define OBD_FAIL_MDS_DISCONNECT_NET      0x11a
-#define OBD_FAIL_MDS_GET_ROOT_NET	 0x11b
-#define OBD_FAIL_MDS_GET_ROOT_PACK	 0x11c
-#define OBD_FAIL_MDS_STATFS_PACK         0x11d
-#define OBD_FAIL_MDS_STATFS_SUM_PACK     0x11d
-#define OBD_FAIL_MDS_STATFS_NET          0x11e
-#define OBD_FAIL_MDS_STATFS_SUM_NET      0x11e
-#define OBD_FAIL_MDS_GETATTR_NAME_NET    0x11f
-#define OBD_FAIL_MDS_PIN_NET             0x120
-#define OBD_FAIL_MDS_UNPIN_NET           0x121
-#define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
-#define OBD_FAIL_MDS_ALL_REQUEST_NET     0x123
-#define OBD_FAIL_MDS_SYNC_NET            0x124
-#define OBD_FAIL_MDS_SYNC_PACK           0x125
+#define OBD_FAIL_MDS				0x100
+#define OBD_FAIL_MDS_HANDLE_UNPACK		0x101
+#define OBD_FAIL_MDS_GETATTR_NET		0x102
+#define OBD_FAIL_MDS_GETATTR_PACK		0x103
+#define OBD_FAIL_MDS_READPAGE_NET		0x104
+#define OBD_FAIL_MDS_READPAGE_PACK		0x105
+#define OBD_FAIL_MDS_SENDPAGE			0x106
+#define OBD_FAIL_MDS_REINT_NET			0x107
+#define OBD_FAIL_MDS_REINT_UNPACK		0x108
+#define OBD_FAIL_MDS_REINT_SETATTR		0x109
+#define OBD_FAIL_MDS_REINT_SETATTR_WRITE	0x10a
+#define OBD_FAIL_MDS_REINT_CREATE		0x10b
+#define OBD_FAIL_MDS_REINT_CREATE_WRITE		0x10c
+#define OBD_FAIL_MDS_REINT_UNLINK		0x10d
+#define OBD_FAIL_MDS_REINT_UNLINK_WRITE		0x10e
+#define OBD_FAIL_MDS_REINT_LINK			0x10f
+#define OBD_FAIL_MDS_REINT_LINK_WRITE		0x110
+#define OBD_FAIL_MDS_REINT_RENAME		0x111
+#define OBD_FAIL_MDS_REINT_RENAME_WRITE		0x112
+#define OBD_FAIL_MDS_OPEN_NET			0x113
+#define OBD_FAIL_MDS_OPEN_PACK			0x114
+#define OBD_FAIL_MDS_CLOSE_NET			0x115
+#define OBD_FAIL_MDS_CLOSE_PACK			0x116
+#define OBD_FAIL_MDS_CONNECT_NET		0x117
+#define OBD_FAIL_MDS_CONNECT_PACK		0x118
+#define OBD_FAIL_MDS_REINT_NET_REP		0x119
+#define OBD_FAIL_MDS_DISCONNECT_NET		0x11a
+#define OBD_FAIL_MDS_GET_ROOT_NET		0x11b
+#define OBD_FAIL_MDS_GET_ROOT_PACK		0x11c
+#define OBD_FAIL_MDS_STATFS_PACK		0x11d
+#define OBD_FAIL_MDS_STATFS_SUM_PACK		0x11d
+#define OBD_FAIL_MDS_STATFS_NET			0x11e
+#define OBD_FAIL_MDS_STATFS_SUM_NET		0x11e
+#define OBD_FAIL_MDS_GETATTR_NAME_NET		0x11f
+#define OBD_FAIL_MDS_PIN_NET			0x120
+#define OBD_FAIL_MDS_UNPIN_NET			0x121
+#define OBD_FAIL_MDS_ALL_REPLY_NET		0x122
+#define OBD_FAIL_MDS_ALL_REQUEST_NET		0x123
+#define OBD_FAIL_MDS_SYNC_NET			0x124
+#define OBD_FAIL_MDS_SYNC_PACK			0x125
 /*	OBD_FAIL_MDS_DONE_WRITING_NET    0x126 obsolete since 2.8.0 */
 /*	OBD_FAIL_MDS_DONE_WRITING_PACK   0x127 obsolete since 2.8.0 */
-#define OBD_FAIL_MDS_ALLOC_OBDO          0x128
-#define OBD_FAIL_MDS_PAUSE_OPEN          0x129
-#define OBD_FAIL_MDS_STATFS_LCW_SLEEP    0x12a
-#define OBD_FAIL_MDS_OPEN_CREATE         0x12b
-#define OBD_FAIL_MDS_OST_SETATTR         0x12c
+#define OBD_FAIL_MDS_ALLOC_OBDO			0x128
+#define OBD_FAIL_MDS_PAUSE_OPEN			0x129
+#define OBD_FAIL_MDS_STATFS_LCW_SLEEP		0x12a
+#define OBD_FAIL_MDS_OPEN_CREATE		0x12b
+#define OBD_FAIL_MDS_OST_SETATTR		0x12c
 /*	OBD_FAIL_MDS_QUOTACHECK_NET      0x12d obsolete since 2.4 */
-#define OBD_FAIL_MDS_QUOTACTL_NET        0x12e
-#define OBD_FAIL_MDS_CLIENT_ADD          0x12f
-#define OBD_FAIL_MDS_GETXATTR_NET        0x130
-#define OBD_FAIL_MDS_GETXATTR_PACK       0x131
-#define OBD_FAIL_MDS_SETXATTR_NET        0x132
-#define OBD_FAIL_MDS_SETXATTR            0x133
-#define OBD_FAIL_MDS_SETXATTR_WRITE      0x134
-#define OBD_FAIL_MDS_FS_SETUP            0x135
-#define OBD_FAIL_MDS_RESEND              0x136
-#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
-#define OBD_FAIL_MDS_LOV_SYNC_RACE       0x138
-#define OBD_FAIL_MDS_OSC_PRECREATE       0x139
-#define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x13a
-#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
-#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
-#define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
-#define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
-#define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING   0x13f
-#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD    0x140
-#define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
-#define OBD_FAIL_MDS_REINT_DELAY         0x142
-#define OBD_FAIL_MDS_READLINK_EPROTO     0x143
-#define OBD_FAIL_MDS_OPEN_WAIT_CREATE    0x144
-#define OBD_FAIL_MDS_PDO_LOCK            0x145
-#define OBD_FAIL_MDS_PDO_LOCK2           0x146
-#define OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147
-#define OBD_FAIL_MDS_NEGATIVE_POSITIVE	 0x148
+#define OBD_FAIL_MDS_QUOTACTL_NET		0x12e
+#define OBD_FAIL_MDS_CLIENT_ADD			0x12f
+#define OBD_FAIL_MDS_GETXATTR_NET		0x130
+#define OBD_FAIL_MDS_GETXATTR_PACK		0x131
+#define OBD_FAIL_MDS_SETXATTR_NET		0x132
+#define OBD_FAIL_MDS_SETXATTR			0x133
+#define OBD_FAIL_MDS_SETXATTR_WRITE		0x134
+#define OBD_FAIL_MDS_FS_SETUP			0x135
+#define OBD_FAIL_MDS_RESEND			0x136
+#define OBD_FAIL_MDS_LLOG_CREATE_FAILED		0x137
+#define OBD_FAIL_MDS_LOV_SYNC_RACE		0x138
+#define OBD_FAIL_MDS_OSC_PRECREATE		0x139
+#define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT		0x13a
+#define OBD_FAIL_MDS_CLOSE_NET_REP		0x13b
+#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ		0x13c
+#define OBD_FAIL_MDS_DROP_QUOTA_REQ		0x13d
+#define OBD_FAIL_MDS_REMOVE_COMMON_EA		0x13e
+#define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING	0x13f
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD		0x140
+#define OBD_FAIL_MDS_LOV_PREP_CREATE		0x141
+#define OBD_FAIL_MDS_REINT_DELAY		0x142
+#define OBD_FAIL_MDS_READLINK_EPROTO		0x143
+#define OBD_FAIL_MDS_OPEN_WAIT_CREATE		0x144
+#define OBD_FAIL_MDS_PDO_LOCK			0x145
+#define OBD_FAIL_MDS_PDO_LOCK2			0x146
+#define OBD_FAIL_MDS_OSC_CREATE_FAIL		0x147
+#define OBD_FAIL_MDS_NEGATIVE_POSITIVE		0x148
 #define OBD_FAIL_MDS_HSM_STATE_GET_NET		0x149
 #define OBD_FAIL_MDS_HSM_STATE_SET_NET		0x14a
 #define OBD_FAIL_MDS_HSM_PROGRESS_NET		0x14b
