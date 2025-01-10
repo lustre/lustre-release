@@ -376,6 +376,21 @@ test_6h() { # bug 7331
 }
 run_test 6h "$RUNAS chown RUNAS_ID.0 .../$tfile (should return error)"
 
+test_6i() {
+        (( MDS1_VERSION >= $(version_code 2.16.51) )) ||
+		skip "Need MDS version at least 2.16.51"
+	(( $RUNAS_ID != $UID )) || skip_env "RUNAS_ID = UID = $UID"
+
+        touch $DIR/$tfile
+        chmod 444 $DIR/$tfile
+        chown $RUNAS_ID $DIR/$tfile || error "initial chown failed"
+        $RUNAS -u $RUNAS_ID -g $RUNAS_ID chgrp $RUNAS_ID $DIR/$tfile ||
+		error "chgrp $RUNAS_ID $file failed"
+        $CHECKSTAT -t file -u \#$RUNAS_ID -g \#$RUNAS_ID $DIR/$tfile ||
+                error "$tfile should be owned by GID $RUNAS_ID"
+}
+run_test 6i "touch+chmod+chgrp $tfile; chgrp read-only file should succeed"
+
 test_7a() {
 	test_mkdir $DIR/$tdir
 	$MCREATE $DIR/$tdir/$tfile

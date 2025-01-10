@@ -889,8 +889,16 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		if (!((flags & MDS_OWNEROVERRIDE) &&
 		      (uc->uc_fsuid == oattr->la_uid)) &&
 		    !(flags & MDS_PERM_BYPASS)) {
+			int mask = MAY_WRITE;
+
+			/* for chgrp, allow the update with
+			 * read-only permissions
+			 */
+			if (S_ISREG(oattr->la_mode) && la->la_valid & LA_GID &&
+			    la->la_gid != oattr->la_gid)
+				mask = MAY_READ;
 			rc = mdd_permission_internal(env, obj, oattr,
-						     MAY_WRITE);
+						     mask);
 			if (rc != 0)
 				RETURN(rc);
 		}
