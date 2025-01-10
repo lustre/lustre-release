@@ -3757,7 +3757,7 @@ ost_watermarks_clear_enospc() {
 }
 
 wait_delete_completed_mds() {
-	local max_wait=${1:-20}
+	local max_wait=${1:-60}
 	local mds2sync=""
 	local stime=$(date +%s)
 	local etime
