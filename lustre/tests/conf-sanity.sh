@@ -7011,27 +7011,33 @@ run_test 76c "verify changelog_mask is applied with lctl set_param -P"
 test_76d() { #LU-9399
 	setupall
 
-	local xattr_cache="llite.*.xattr_cache"
-	local cmd="$LCTL get_param -n $xattr_cache | head -1"
+	local xattr_cache='llite.$inst.xattr_cache'
+	local inst=($(lfs getname $MOUNT))
+	local cmd="$LCTL get_param -n $xattr_cache"
 	local new=$((($(eval $cmd) + 1) % 2))
 
 	echo "lctl set_param -P llite.*.xattr_cache=$new"
-	do_facet mgs $LCTL set_param -P $xattr_cache=$new ||
+	do_facet mgs $LCTL set_param -P llite.*.xattr_cache=$new ||
 		error "Can't change xattr_cache"
-	wait_update $HOSTNAME "$cmd" "$new"
+	stack_trap "do_facet mgs $LCTL set_param -P -d llite.*.xattr_cache || true"
+	wait_update $HOSTNAME "$cmd" "$new" ||
+		error "$xattr_cache != $new on original client $MOUNT"
 
 	echo "Check $xattr_cache on client $MOUNT"
 	umount_client $MOUNT || error "umount $MOUNT failed"
 	mount_client $MOUNT || error "mount $MOUNT failed"
-	[ $(eval $cmd) -eq $new ] ||
-		error "$xattr_cache != $new on client $MOUNT"
+	inst=($(lfs getname $MOUNT))
+	wait_update $HOSTNAME "$cmd" "$new" ||
+		error "$xattr_cache != $new on remount client $MOUNT"
 
 	echo "Check $xattr_cache on the new client $MOUNT2"
 	mount_client $MOUNT2 || error "mount $MOUNT2 failed"
-	[ $(eval $cmd) -eq $new ] ||
-		error "$xattr_cache != $new on client $MOUNT2"
+	inst=($(lfs getname $MOUNT2))
+	wait_update $HOSTNAME "$cmd" "$new" ||
+		error "$xattr_cache != $new on second client $MOUNT2"
 	umount_client $MOUNT2 || error "umount $MOUNT2 failed"
 
+	do_facet mgs $LCTL set_param -P -d llite.*.xattr_cache
 	stopall
 }
 run_test 76d "verify llite.*.xattr_cache can be set by 'lctl set_param -P' correctly"
