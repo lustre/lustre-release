@@ -229,6 +229,8 @@ static int mdc_lock_discard_pages(const struct lu_env *env,
 
 	io->ci_obj = cl_object_top(osc2cl(osc));
 	io->ci_ignore_layout = 1;
+	io->u.ci_misc.lm_next_rpc_time = 0;
+
 	result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
 	if (result != 0)
 		GOTO(out, result);
