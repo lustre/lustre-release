@@ -5653,12 +5653,14 @@ out:
 
 	if (rc == 0 && (flags & LDLM_FL_TEST_LOCK) &&
 	    file_lock->C_FLC_TYPE != F_UNLCK) {
-		struct file_lock flbuf;
+		struct file_lock flbuf = { .fl_ops = NULL, };
+		/* The parallel-scale-nfs test_2 checks this line */
+		char __maybe_unused *str = "Invoke locks_copy_lock for NFSv3";
 
 		/* Take a extra reference for lockowner while
 		 * working with lockd.
 		 */
-		locks_copy_conflock(&flbuf, file_lock);
+		locks_copy_lock(&flbuf, file_lock);
 	}
 
 	if (!rc)

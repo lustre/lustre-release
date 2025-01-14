@@ -143,10 +143,35 @@ test_1() {
 }
 run_test 1 "test copy with attributes"
 
+mod_strings()
+{
+	local node=$1
+	local mod=$2
+
+	local args=($(do_node $node "cat /sys/module/$mod/sections/__ksymtab /sys/module/$mod/coresize"))
+
+	[[ $((args[1])) > 0 ]] || return
+
+	local min=$((0x7fffffffffffffff))
+	while read line; do
+		local as=($line)
+
+		val=$((${args[0]}-${as[2]}))
+		(($val > 0 && $min > $val)) && ofs=${as[1]} && min=$val
+	done <<< $(do_node $node "readelf -l /proc/kcore" | grep LOAD)
+
+	do_node $node "od --strings -A none -j $((ofs+min)) -N ${args[1]} /proc/kcore"
+}
+
 test_2() {
 	local mp1file=$TESTDIR/file1
 	local tmpdir=$(mktemp -d /tmp/nfs-XXXXXX)
 	local mp2file=$tmpdir/${mp1file#$NFS_CLIMNTPT}
+
+	# Skip without fixing patch
+	mod_strings $LUSTRE_CLIENT_NFSSRV lustre |
+		grep 'Invoke locks_copy_lock for NFSv3' ||
+		skip "NFSv3 server missing locks_copy_lock()"
 
 	mount -v -t nfs -o nfsvers=$NFSVERSION,async \
 		$LUSTRE_CLIENT_NFSSRV:$NFS_SRVMNTPT $tmpdir ||\
