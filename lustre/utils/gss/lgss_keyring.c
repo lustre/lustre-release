@@ -167,6 +167,12 @@ static int gss_do_ioctl(struct lgssd_ioctl_param *param)
 	glob_t path;
 	int rc;
 
+	/* switch to root in order to proceed to ioctls */
+	if (param->uid && switch_identity(0)) {
+		rc = -EACCES;
+		goto out_params;
+	}
+
 	rc = cfs_get_param_paths(&path, "sptlrpc/gss/init_channel");
 	if (rc != 0)
 		return rc;
@@ -191,6 +197,11 @@ static int gss_do_ioctl(struct lgssd_ioctl_param *param)
 
 out_params:
 	cfs_free_param_data(&path);
+
+	/* switch back to user */
+	if (param->uid && switch_identity(param->uid))
+		rc = -EACCES;
+
 	return rc;
 }
 
@@ -554,35 +565,6 @@ static void lgssc_fini_nego_data(struct lgss_nego_data *lnd)
         }
 }
 
-static int fork_and_switch_id(int uid, pid_t *child)
-{
-	int status, rc = 0;
-
-	*child = fork();
-	if (*child == -1) {
-		logmsg(LL_ERR, "cannot fork child for user %u: %s\n",
-		       uid, strerror(errno));
-		rc = errno;
-	} else if (*child == 0) {
-		/* switch identity */
-		rc = switch_identity(uid);
-		if (rc)
-			rc = errno;
-	} else {
-		if (wait(&status) < 0) {
-			rc = errno;
-			logmsg(LL_ERR, "child %d failed: %s\n",
-			       *child, strerror(rc));
-		} else {
-			rc = WEXITSTATUS(status);
-			if (rc)
-				logmsg(LL_ERR, "child %d terminated with %d\n",
-				       *child, rc);
-		}
-	}
-	return rc;
-}
-
 static int do_keyctl_update(char *reason, key_serial_t keyid,
 			    const void *payload, size_t plen)
 {
@@ -605,8 +587,7 @@ static int do_keyctl_update(char *reason, key_serial_t keyid,
 static int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error,
 			    uid_t uid)
 {
-	key_serial_t inst_keyring = KEY_SPEC_SESSION_KEYRING;
-	pid_t child = 1;
+	key_serial_t inst_keyring;
 	int seqwin = 0;
 	char *p, *end;
 	char buf[32];
@@ -614,16 +595,10 @@ static int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error,
 
 	logmsg(LL_TRACE, "revoking kernel key %08x\n", keyid);
 
-	/* Only possessor and uid can update the key. So for a user key that is
-	 * linked to the user keyring, switch uid/gid in a subprocess to not
-	 * change identity in main process.
-	 */
-	if (uid) {
-		rc = fork_and_switch_id(uid, &child);
-		if (rc || child)
-			goto out;
+	if (uid)
 		inst_keyring = KEY_SPEC_USER_KEYRING;
-	}
+	else
+		inst_keyring = KEY_SPEC_SESSION_KEYRING;
 
 	p = buf;
 	end = buf + sizeof(buf);
@@ -645,10 +620,6 @@ static int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error,
 		       keyid, inst_keyring);
 	}
 
-out:
-	if (child == 0)
-		/* job done for child */
-		exit(rc);
 	return rc;
 }
 
@@ -658,21 +629,9 @@ static int update_kernel_key(key_serial_t keyid,
 {
 	char *buf = NULL, *p = NULL, *end = NULL;
 	unsigned int buf_size = 0;
-	pid_t child = 1;
-	int uid, rc = 0;
+	int rc = 0;
 
 	logmsg(LL_TRACE, "updating kernel key %08x\n", keyid);
-
-	/* Only possessor and uid can update the key. So for a user key that is
-	 * linked to the user keyring, switch uid/gid in a subprocess to not
-	 * change identity in main process.
-	 */
-	uid = lnd->lnd_uid;
-	if (uid) {
-		rc = fork_and_switch_id(uid, &child);
-		if (rc || child)
-			goto out;
-	}
 
 	buf_size = sizeof(lnd->lnd_seq_win) +
 		sizeof(lnd->lnd_rmt_ctx.length) + lnd->lnd_rmt_ctx.length +
@@ -700,9 +659,6 @@ static int update_kernel_key(key_serial_t keyid,
 
 out:
 	free(buf);
-	if (child == 0)
-		/* job done for child */
-		exit(rc);
 	return rc;
 }
 
@@ -716,8 +672,8 @@ static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
 	bool redo = true;
 
 	if (lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid)) {
-		logmsg(LL_ERR, "key %08x: failed to construct service "
-		       "string\n", keyid);
+		logmsg(LL_ERR, "key %08x: failed to construct service string\n",
+		       keyid);
 		error_kernel_key(keyid, -EACCES, 0, cred->lc_uid);
 		goto out_cred;
 	}
@@ -731,8 +687,9 @@ static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
 retry_nego:
 	memset(&lnd, 0, sizeof(lnd));
 	if (lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n)) {
-		logmsg(LL_ERR, "key %08x: failed to initialize "
-		       "negotiation data\n", keyid);
+		logmsg(LL_ERR,
+		       "key %08x: failed to initialize negotiation data\n",
+		       keyid);
 		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err,
 				 cred->lc_uid);
 		goto out_cred;
@@ -787,8 +744,8 @@ static int lgssc_kr_negotiate_manual(key_serial_t keyid, struct lgss_cred *cred,
 
 	rc = lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid);
 	if (rc) {
-		logmsg(LL_ERR, "key %08x: failed to construct service "
-		       "string\n", keyid);
+		logmsg(LL_ERR, "key %08x: failed to construct service string\n",
+		       keyid);
 		error_kernel_key(keyid, -EACCES, 0, 0);
 		goto out_cred;
 	}
@@ -804,8 +761,9 @@ retry:
 	memset(&lnd, 0, sizeof(lnd));
 	rc = lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n);
 	if (rc) {
-		logmsg(LL_ERR, "key %08x: failed to initialize "
-		       "negotiation data\n", keyid);
+		logmsg(LL_ERR,
+		       "key %08x: failed to initialize negotiation data\n",
+		       keyid);
 		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err, 0);
 		goto out_cred;
 	}
@@ -1208,6 +1166,13 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (!cred->lc_root_flags) {
+		/* switch to user id for creds handling */
+		rc = switch_identity(uparam.kup_uid);
+		if (rc)
+			return rc;
+	}
+
 	/*
 	 * if caller's namespace is different, fork a child and associate it
 	 * with caller's namespace to do credentials preparation
@@ -1365,29 +1330,11 @@ out_pipe:
 		else
 			logmsg(LL_TRACE, "stick with current namespace\n");
 
-		if (!cred->lc_root_flags) {
-			/* switch to user id for creds prepare */
-			rc = switch_identity(uparam.kup_uid);
-			if (rc)
-				goto out_reg;
-		}
-
 		/* In case of prepare error, a key will be instantiated
 		 * all the same. But then we will have to error this key
 		 * instead of doing normal gss negotiation.
 		 */
 		rc = prepare_and_instantiate(cred, keyid, uparam.kup_uid);
-
-		if (!cred->lc_root_flags) {
-			int rc2;
-
-			/* switch back to root in order to proceed to ioctls */
-			rc2 = switch_identity(0);
-			if (rc2) {
-				rc = rc2;
-				goto out_reg;
-			}
-		}
 
 		/*
 		 * fork a child to do the real gss negotiation

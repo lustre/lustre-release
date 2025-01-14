@@ -529,6 +529,61 @@ test_10() {
 }
 run_test 10 "Support revoked session keyring"
 
+exit_11() {
+	zconf_umount $HOSTNAME $MOUNT
+
+	zconf_mount $HOSTNAME $MOUNT
+	if [ "$MOUNT_2" ]; then
+		zconf_mount $HOSTNAME $MOUNT2
+	fi
+
+	restore_krb5_cred
+}
+
+test_11() {
+	local count
+
+	$LFS mkdir -i 0 -c $MDSCOUNT $DIR/$tdir ||
+		error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+	$RUNAS ls -ld $DIR/$tdir || error "ls -ld $DIR/$tdir failed"
+	$RUNAS grep lgssc /proc/keys
+	$RUNAS klist
+
+	# get rid of gss context and credentials for user
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context (1)"
+	$RUNAS grep lgssc /proc/keys
+	$RUNAS klist
+
+	stack_trap exit_11 EXIT
+	zconf_umount $HOSTNAME $MOUNT || error "umount $MOUNT failed"
+	if [ "$MOUNT_2" ]; then
+		zconf_umount $HOSTNAME $MOUNT2 ||
+			error "umount $MOUNT2 failed"
+	fi
+	kdestroy
+	klist
+
+	# we want KCM ccache
+	cp /etc/krb5.conf /etc/krb5.conf.bkp
+	stack_trap "/bin/mv /etc/krb5.conf.bkp /etc/krb5.conf" EXIT
+	sed -i '1i default_ccache_name = KCM:' /etc/krb5.conf
+	sed -i '1i [libdefaults]' /etc/krb5.conf
+	zconf_mount $HOSTNAME $MOUNT || error "remount $MOUNT failed"
+	klist
+
+	$RUNAS touch $DIR/$tdir/$tfile && error "write $tfile should fail"
+	restore_krb5_cred
+	$RUNAS klist
+	$RUNAS touch $DIR/$tdir/$tfile || error "write $tfile failed"
+	$RUNAS klist
+	$RUNAS klist | grep -q lustre_mds || error "mds ticket not present"
+
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context (2)"
+	kdestroy
+}
+run_test 11 "KCM ccache"
+
 #
 # following tests will manipulate flavors and may end with any flavor set,
 # so each test should not assume any start flavor.
