@@ -278,6 +278,12 @@ static inline int fid_seq_in_fldb(u64 seq)
 	       fid_seq_is_root(seq) || fid_seq_is_dot(seq);
 }
 
+static inline int fid_is_fs_root(const struct lu_fid *fid)
+{
+	return (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
+			 fid_oid(fid) == OSD_FS_ROOT_OID));
+}
+
 #ifdef HAVE_SERVER_SUPPORT
 static inline int fid_is_namespace_visible(const struct lu_fid *fid)
 {

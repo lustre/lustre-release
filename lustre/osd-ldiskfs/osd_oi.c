@@ -506,13 +506,6 @@ void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd)
 	osd->od_oi_table = NULL;
 }
 
-static inline int fid_is_fs_root(const struct lu_fid *fid)
-{
-	/* Map root inode to special local object FID */
-	return (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
-			 fid_oid(fid) == OSD_FS_ROOT_OID));
-}
-
 static int osd_oi_iam_lookup(struct osd_thread_info *oti,
 			     struct osd_oi *oi, struct dt_rec *rec,
 			     const struct dt_key *key)

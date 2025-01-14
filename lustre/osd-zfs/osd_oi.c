@@ -632,13 +632,6 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 	return zapid;
 }
 
-static inline int fid_is_fs_root(const struct lu_fid *fid)
-{
-	/* Map root inode to special local object FID */
-	return fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
-		fid_oid(fid) == OSD_FS_ROOT_OID;
-}
-
 int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 		   const struct lu_fid *fid, uint64_t *oid)
 {
