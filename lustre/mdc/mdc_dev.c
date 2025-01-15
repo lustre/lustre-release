@@ -1050,21 +1050,20 @@ static int mdc_io_setattr_start(const struct lu_env *env,
 	__u64 size = io->u.ci_setattr.sa_attr.lvb_size;
 	unsigned int ia_avalid = io->u.ci_setattr.sa_avalid;
 	enum op_xvalid ia_xvalid = io->u.ci_setattr.sa_xvalid;
-	int rc;
+	int rc = 0;
 
 	/* silently ignore non-truncate setattr for Data-on-MDT object */
 	if (cl_io_is_trunc(io)) {
 		/* truncate cache dirty pages first */
 		rc = osc_cache_truncate_start(env, cl2osc(obj), size,
 					      &oio->oi_trunc);
-		if (rc < 0)
-			return rc;
 	} else if (cl_io_is_fallocate(io) &&
-		   io->u.ci_setattr.sa_falloc_mode & FALLOC_FL_PUNCH_HOLE) {
+		   (io->u.ci_setattr.sa_falloc_mode &
+		    (FALLOC_FL_PUNCH_HOLE | FALLOC_FL_ZERO_RANGE))) {
 		rc = osc_punch_start(env, io, obj);
-		if (rc < 0)
-			return rc;
 	}
+	if (rc < 0)
+		return rc;
 
 	if (oio->oi_lockless == 0) {
 		cl_object_attr_lock(obj);

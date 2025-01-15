@@ -398,7 +398,7 @@ struct osd_access_lock {
 	int			 tl_mode;
 	bool			 tl_shared;
 	bool			 tl_truncate;
-	bool			 tl_punch;
+	bool			 tl_fallocate;
 };
 
 struct osd_thandle {

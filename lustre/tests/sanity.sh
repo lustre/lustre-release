@@ -18168,6 +18168,104 @@ test_150h() {
 }
 run_test 150h "Verify extend fallocate updates the file size"
 
+test_150ia() {
+	(( $MDS1_VERSION >= $(version_code 2.16.50) )) ||
+		skip "need MDS1 version >= 2.16.50 for falloc zero-range"
+
+	if [[ "$ost1_FSTYPE" = "zfs" || "$mds1_FSTYPE" = "zfs" ]]; then
+		skip "zero-range mode is not implemented on OSD ZFS"
+	fi
+
+	check_set_fallocate_or_skip
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
+
+	echo "Verify fallocate(zero): range within the file"
+	yes 'A' | dd of=$DIR/$tfile bs=$PAGE_SIZE count=8 ||
+		error "dd failed for bs 4096 and count 8"
+
+	# zero range page aligned
+	local offset=$((2 * PAGE_SIZE))
+	local length=$((4 * PAGE_SIZE))
+	out=$(fallocate -z --offset $offset -l $length $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
+
+	# precomputed md5sum
+	local expect="f6b2adb9a352ee2b9d1f54a629e7998c"
+	cksum=($(md5sum $DIR/$tfile))
+	[[ "${cksum[0]}" == "$expect" ]] ||
+		error "unexpected MD5SUM after zero: ${cksum[0]}"
+
+	# zero range partial page
+	local offset=2000
+	local length=1000
+	out=$(fallocate -z --offset $offset -l $length $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
+
+	expect="19912462c2a304a225df656b80844ba5"
+	cksum=($(md5sum $DIR/$tfile))
+	[[ "${cksum[0]}" == "$expect" ]] ||
+		error "unexpected MD5SUM after zero(partial): ${cksum[0]}"
+}
+run_test 150ia "Verify fallocate zero-range ZERO functionality"
+
+test_150ib() {
+	(( $MDS1_VERSION >= $(version_code 2.16.50) )) ||
+		skip "need MDS1 version >= 2.16.50 for falloc zero-range"
+
+	if [[ "$ost1_FSTYPE" = "zfs" || "$mds1_FSTYPE" = "zfs" ]]; then
+		skip "zero-range mode is not implemented on OSD ZFS"
+	fi
+
+	check_set_fallocate_or_skip
+	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
+
+	local blocks_after_punch=$((4 * PAGE_SIZE / 512))
+	local blocks_after_zero_fill=$((8 * PAGE_SIZE / 512))
+	local blocks_after_extend=$((16 * PAGE_SIZE / 512))
+	local expect_len=$((8 * PAGE_SIZE))
+
+	# file size [0, 32K)
+	echo "Verify fallocate(zero): range within the file"
+	yes 'A' | dd of=$DIR/$tfile bs=$PAGE_SIZE count=8 ||
+		error "dd failed for bs 4096 and count 8"
+
+	# punch across [8K,24K)
+	local offset=$((2 * PAGE_SIZE))
+	local length=$((4 * PAGE_SIZE))
+	out=$(fallocate -p --offset $offset -l $length $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
+
+	# Verify punch worked as expected
+	blocks=$(stat -c '%b' $DIR/$tfile)
+	(( blocks == blocks_after_punch )) ||
+		error "punch failed:$blocks!=$blocks_after_punch"
+
+	# zero prealloc fill the hole just punched
+	out=$(fallocate -z --offset $offset -l $length $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
+
+	# Verify zero prealloc worked.
+	blocks=$(stat -c '%b' $DIR/$tfile)
+	(( blocks == blocks_after_zero_fill )) ||
+		error "zero prealloc failed:$blocks!=$blocks_after_zero_fill"
+
+	# zero prealloc with KEEP_SIZE on
+	offset=$((8 * PAGE_SIZE))
+	length=$((8 * PAGE_SIZE))
+	out=$(fallocate -z -n --offset $offset -l $length $DIR/$tfile 2>&1) ||
+		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
+
+	# block allocate, size remains
+	blocks=$(stat -c '%b' $DIR/$tfile)
+	(( blocks == blocks_after_extend )) ||
+		error "extend failed:$blocks!=$blocks_after_extend"
+
+	lsz=$(stat -c '%s' $DIR/$tfile)
+	(( lsz == expect_len)) ||
+		error "zero extend failed(len):$lsz!=$expect_len"
+}
+run_test 150ib "Verify fallocate zero-range PREALLOC functionality"
+
 #LU-2902 roc_hit was not able to read all values from lproc
 function roc_hit_init() {
 	local osts=${1:-$(osts_nodes)}

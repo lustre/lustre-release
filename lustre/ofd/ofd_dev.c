@@ -1955,7 +1955,8 @@ static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
 	 * mode == 0 (which is standard prealloc) and PUNCH is supported
 	 * Rest of mode options are not supported yet.
 	 */
-	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE))
+	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE |
+		     FALLOC_FL_ZERO_RANGE))
 		RETURN(-EOPNOTSUPP);
 
 	/* PUNCH_HOLE mode should always be accompanied with KEEP_SIZE flag

@@ -580,9 +580,10 @@ static int osc_io_setattr_start(const struct lu_env *env,
 	if (cl_io_is_trunc(io))
 		result = osc_cache_truncate_start(env, cl2osc(obj), size,
 						  &oio->oi_trunc);
-	/* flush local pages prior punching them on server */
+	/* flush local pages prior punching/zero-range them on server */
 	if (io_is_falloc &&
-	    io->u.ci_setattr.sa_falloc_mode & FALLOC_FL_PUNCH_HOLE)
+	    (io->u.ci_setattr.sa_falloc_mode &
+	     (FALLOC_FL_PUNCH_HOLE | FALLOC_FL_ZERO_RANGE)))
 		result = osc_punch_start(env, io, obj);
 
 	if (result == 0 && oio->oi_lockless == 0) {
