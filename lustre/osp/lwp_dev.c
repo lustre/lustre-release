@@ -58,16 +58,21 @@ static inline struct lu_device *lwp2lu_dev(struct lwp_device *d)
 static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 		     char *nidstring)
 {
-	struct lustre_cfg_bufs	*bufs = NULL;
-	struct lustre_cfg	*lcfg = NULL;
-	char			*lwp_name = lwp->lpd_obd->obd_name;
-	char			*server_uuid = NULL;
-	char			*ptr;
-	int			 uuid_len = -1;
-	struct obd_import	*imp;
-	int			 len = strlen(lwp_name) + 1;
-	int			 rc;
-	const char		*lwp_marker = "-" LUSTRE_LWP_NAME "-";
+	const char *lwp_marker = "-" LUSTRE_LWP_NAME "-";
+	char *lwp_name = lwp->lpd_obd->obd_name;
+	struct lustre_mount_info *lmi = NULL;
+	struct lustre_cfg_bufs *bufs = NULL;
+	struct lustre_cfg *lcfg = NULL;
+	int len = strlen(lwp_name) + 1;
+	struct lustre_sb_info *lsi;
+	char *server_uuid = NULL;
+	struct obd_import *imp;
+	char *target = NULL;
+	char *nidnet = NULL;
+	int uuid_len = -1;
+	char *ptr;
+	int rc;
+
 	ENTRY;
 
 	lwp->lpd_notify_task = NULL;
@@ -95,6 +100,28 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 	lustre_cfg_bufs_reset(bufs, lwp_name);
 	lustre_cfg_bufs_set_string(bufs, 1, server_uuid);
 	lustre_cfg_bufs_set_string(bufs, 2, nidstring);
+
+	OBD_ALLOC(target, len);
+	if (!target)
+		GOTO(out, rc = -ENOMEM);
+	ptr = strchr(lwp_name, '-');
+	memcpy(target, lwp_name, ptr - lwp_name);
+	target[ptr - lwp_name] = '\0';
+	strlcat(target, strrchr(lwp_name, '-'), len);
+	lmi = server_get_mount(target);
+	if (lmi) {
+		lsi = s2lsi(lmi->lmi_sb);
+		if (lsi && lsi->lsi_lmd)
+			nidnet = lsi->lsi_lmd->lmd_nidnet;
+		if (nidnet) {
+			CDEBUG(D_CONFIG,
+			       "Adding net %s info to setup command for %s\n",
+			       nidnet, lwp->lpd_obd->obd_name);
+			lustre_cfg_bufs_set_string(bufs, 4, nidnet);
+		}
+		server_put_mount(target, false);
+	}
+
 	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
 	if (!lcfg)
 		GOTO(out, rc = -ENOMEM);
@@ -111,6 +138,7 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 	rc = ptlrpc_init_import(imp);
 out:
 	OBD_FREE_PTR(bufs);
+	OBD_FREE(target, len);
 	OBD_FREE(server_uuid, len);
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
 				      lcfg->lcfg_buflens));

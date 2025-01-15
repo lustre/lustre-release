@@ -60,9 +60,10 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
 		       libcfs_net2str(refnet));
 
 	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, refnet);
-	if (!ptlrpc_conn) {
-		CDEBUG(D_HA, "can't find connection %s\n", uuid->uuid);
-		RETURN(-ENOENT);
+	if (IS_ERR(ptlrpc_conn)) {
+		CDEBUG(D_HA, "can't find connection %s: rc=%ld\n",
+		       uuid->uuid, PTR_ERR(ptlrpc_conn));
+		RETURN(PTR_ERR(ptlrpc_conn));
 	}
 
 	if (create) {
@@ -132,7 +133,7 @@ int client_import_dyn_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
 	int rc;
 
 	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, LNET_NID_NET(prim_nid));
-	if (!ptlrpc_conn) {
+	if (IS_ERR(ptlrpc_conn)) {
 		const char *str_uuid = obd_uuid2str(uuid);
 
 		rc = class_add_uuid(str_uuid, prim_nid);

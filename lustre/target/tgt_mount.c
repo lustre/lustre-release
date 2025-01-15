@@ -621,9 +621,12 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
 	char *lwpname = NULL;
 	char *lwpuuid = NULL;
 	struct lnet_nid nid;
+	char *nidnet;
+	__u32 refnet;
 	int rc;
 
 	ENTRY;
+
 	if (lcfg->lcfg_nid)
 		lnet_nid4_to_nid(lcfg->lcfg_nid, &nid);
 	else {
@@ -631,6 +634,12 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
 		if (rc)
 			RETURN(rc);
 	}
+
+	nidnet = lsi->lsi_lmd->lmd_nidnet;
+	refnet = nidnet ? libcfs_str2net(nidnet) : LNET_NET_ANY;
+	if (refnet != LNET_NET_ANY && LNET_NID_NET(&nid) != refnet)
+		RETURN(-ENETUNREACH);
+
 	rc = class_add_uuid(lustre_cfg_string(lcfg, 1), &nid);
 	if (rc != 0) {
 		CERROR("%s: Can't add uuid: rc =%d\n", lsi->lsi_svname, rc);
@@ -678,7 +687,7 @@ out:
 	OBD_FREE(lwpname, MTI_NAME_MAXLEN);
 	OBD_FREE(lwpuuid, MTI_NAME_MAXLEN);
 
-	return rc;
+	RETURN(rc);
 }
 
 /* the caller is responsible for memory free */
@@ -748,8 +757,14 @@ static int lustre_lwp_add_conn(struct lustre_cfg *cfg,
 	lustre_cfg_init(lcfg, LCFG_ADD_CONN, bufs);
 
 	rc = class_add_conn(lwp, lcfg);
-	if (rc < 0)
+	if (rc == -ENETUNREACH) {
+		CDEBUG(D_CONFIG,
+		       "%s: ignore conn not on net %s: rc = %d\n",
+		       lwpname, lsi->lsi_lmd->lmd_nidnet, rc);
+		rc = 0;
+	} else if (rc < 0) {
 		CERROR("%s: can't add conn: rc = %d\n", lwpname, rc);
+	}
 
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
 				      lcfg->lcfg_buflens));
@@ -846,10 +861,13 @@ static int client_lwp_config_process(const struct lu_env *env,
 	case LCFG_ADD_UUID: {
 		if (cfg->cfg_flags == CFG_F_MARKER) {
 			rc = lustre_lwp_setup(lcfg, lsi, cfg->cfg_lwp_idx);
-			/* XXX: process only the first nid as
+			/* XXX: process only the first nid if on restricted net,
 			 * we don't need another instance of lwp
 			 */
-			cfg->cfg_flags |= CFG_F_SKIP;
+			if (rc == -ENETUNREACH)
+				rc = 0;
+			else
+				cfg->cfg_flags |= CFG_F_SKIP;
 		} else if (cfg->cfg_flags == (CFG_F_MARKER | CFG_F_SKIP)) {
 			struct lnet_nid nid;
 
@@ -1065,6 +1083,7 @@ static int lustre_start_lwp(struct super_block *sb)
 	cfg->cfg_callback = client_lwp_config_process;
 	cfg->cfg_instance = ll_get_cfg_instance(sb);
 	rc = lustre_process_log(sb, logname, cfg);
+
 	/* need to remove config llog from mgc */
 	lsi->lsi_lwp_started = 1;
 

@@ -456,7 +456,7 @@ int lustre_start_mgc(struct super_block *sb)
 	/* Start the MGC */
 	rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME,
 				 (char *)uuid->uuid, LUSTRE_MGS_OBDNAME,
-				 niduuid, NULL, NULL);
+				 niduuid, NULL, lsi->lsi_lmd->lmd_nidnet);
 	if (rc)
 		GOTO(out_free, rc);
 
@@ -1743,17 +1743,6 @@ bad_string:
 			if (!lmd->lmd_fileset)
 				GOTO(invalid, rc = -ENOMEM);
 			strncat(lmd->lmd_fileset, s1, s2 - s1 + 1);
-		}
-	} else {
-		/* server mount */
-		if (lmd->lmd_nidnet != NULL) {
-			/* 'network=' mount option forbidden for server */
-			OBD_FREE(lmd->lmd_nidnet, strlen(lmd->lmd_nidnet) + 1);
-			lmd->lmd_nidnet = NULL;
-			rc = -EINVAL;
-			CERROR("%s: option 'network=' not allowed for Lustre servers: rc = %d\n",
-			       devname, rc);
-			GOTO(invalid, rc);
 		}
 	}
 

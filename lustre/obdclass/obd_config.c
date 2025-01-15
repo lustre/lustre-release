@@ -1933,16 +1933,15 @@ int class_config_llog_handler(const struct lu_env *env,
 		 * [3]: inactive-on-startup
 		 * [4]: restrictive net
 		 */
-		if (cfg && cfg->cfg_sb && s2lsi(cfg->cfg_sb) &&
-		    !IS_SERVER(s2lsi(cfg->cfg_sb))) {
+		if (cfg && cfg->cfg_sb && s2lsi(cfg->cfg_sb)) {
 			struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
 			char *nidnet = lsi->lsi_lmd->lmd_nidnet;
 
 			if (lcfg->lcfg_command == LCFG_SETUP &&
 			    lcfg->lcfg_bufcount != 2 && nidnet) {
-				CDEBUG(D_CONFIG, "Adding net %s info to setup "
-				       "command for client %s\n", nidnet,
-				       lustre_cfg_string(lcfg, 0));
+				CDEBUG(D_CONFIG,
+				       "Adding net %s info to setup command for client %s\n",
+				       nidnet, lustre_cfg_string(lcfg, 0));
 				lustre_cfg_bufs_set_string(&bufs, 4, nidnet);
 			}
 		}

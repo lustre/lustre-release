@@ -121,7 +121,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,
 	err = ptlrpc_uuid_to_peer(uuid, &peer, &self, refnet);
 	if (err != 0) {
 		CNETERR("cannot find peer %s!\n", uuid->uuid);
-		return NULL;
+		return ERR_PTR(err);
 	}
 
 	c = ptlrpc_connection_get(&peer, &self, uuid);
@@ -132,7 +132,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,
 
 	CDEBUG(D_INFO, "%s -> %p\n", uuid->uuid, c);
 
-	return c;
+	return c ? c : ERR_PTR(-ENOENT);
 }
 
 /**

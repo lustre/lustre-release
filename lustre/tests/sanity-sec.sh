@@ -2699,6 +2699,18 @@ cleanup_31() {
 	LOAD_MODULES_REMOTE=true unload_modules
 	LOAD_MODULES_REMOTE=true load_modules
 
+	# restore mgsnid on targets
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
+		do_facet mds$num $TUNEFS --erase-param mgsnode \
+			$(mdsdevname $num)
+		do_facet mds$num $TUNEFS --mgsnode=$MGSNID $(mdsdevname $num)
+	done
+	for ((num = 1; num <= $OSTCOUNT; num++)); do
+		do_facet ost$num $TUNEFS --erase-param mgsnode \
+			$(ostdevname $num)
+		do_facet ost$num $TUNEFS --mgsnode=$MGSNID $(ostdevname $num)
+	done
+
 	do_facet mds1 $TUNEFS --erase-param failover.node $(mdsdevname 1)
 	if [ -n "$failover_mds1" ]; then
 		do_facet mds1 $TUNEFS \
@@ -2794,7 +2806,7 @@ test_31() {
 		cut -d'.' -f4-" '!=' $nid
 	for node in ${tgts//,/ }; do
 		wait_update_cond $node \
-			"$LCTL get_param -N *.${FSNAME}*.exports | grep $nid |
+			"$LCTL get_param -N *.${FSNAME}*.exports.* | grep $nid |
 			cut -d'.' -f4-" '!=' $nid
 	done
 	do_facet mgs "$LCTL get_param *.MGS*.exports.*.export"
@@ -2813,6 +2825,8 @@ test_31() {
 	# add network $net2 on all nodes
 	do_rpc_nodes $all load_modules || error "unable to load modules on $all"
 	for node in ${all//,/ }; do
+		do_node $node "$LNETCTL set discovery 0" ||
+			error "Failed to disable discovery on $node"
 		do_node $node "$LNETCTL lnet configure" ||
 			error "unable to configure lnet on node $node"
 		infname=inf_$(echo $node | cut -d'.' -f1 | sed s+-+_+g)
@@ -2821,6 +2835,22 @@ test_31() {
 	done
 
 	LOAD_MODULES_REMOTE=true load_modules || error "failed to load modules"
+
+	# update MGSNID
+	MGSNID=$mgsnid_orig,$mgsnid_new
+	stack_trap "MGSNID=$mgsnid_orig" EXIT
+
+	# add mgsnid on @$net2 to targets
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
+		do_facet mds$num $TUNEFS --erase-param mgsnode \
+			$(mdsdevname $num)
+		do_facet mds$num $TUNEFS --mgsnode=$MGSNID $(mdsdevname $num)
+	done
+	for ((num = 1; num <= $OSTCOUNT; num++)); do
+		do_facet ost$num $TUNEFS --erase-param mgsnode \
+			$(ostdevname $num)
+		do_facet ost$num $TUNEFS --mgsnode=$MGSNID $(ostdevname $num)
+	done
 
 	# necessary to do writeconf in order to register
 	# new @$net2 nid for targets
@@ -2833,10 +2863,6 @@ test_31() {
 
 	setupall server_only || error "setupall failed"
 	export KEEP_ZPOOL="$KZPOOL"
-
-	# update MGSNID
-	MGSNID=$mgsnid_new
-	stack_trap "MGSNID=$mgsnid_orig" EXIT
 
 	# on client, reconfigure LNet and turn LNet Dynamic Discovery off
 	$LUSTRE_RMMOD || error "$LUSTRE_RMMOD failed (1)"
@@ -2890,7 +2916,7 @@ test_31() {
 		cut -d'.' -f4-" '!=' $nid2
 	for node in ${tgts//,/ }; do
 		wait_update_cond $node \
-			"$LCTL get_param -N *.${FSNAME}*.exports | grep $nid2 |
+			"$LCTL get_param -N *.${FSNAME}*.exports.* | grep $nid2|
 			cut -d'.' -f4-" '!=' $nid2
 	done
 	do_facet mgs "$LCTL get_param *.MGS*.exports.*.export"
@@ -2907,6 +2933,34 @@ test_31() {
 	# should fail because of LNet Dynamic Discovery
 	mount_client $MOUNT ${MOUNT_OPTS},network=$net2 &&
 		error "client mount with '-o network' option should be refused"
+
+	# remount with '-o network' server side option
+	(( $MDS1_VERSION >= $(version_code 2.16.51) )) || return 0
+
+	KZPOOL=$KEEP_ZPOOL
+	export KEEP_ZPOOL="true"
+	stopall || error "stopall failed"
+	mountmgs
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
+		start mds$num $(mdsdevname $num) $MDS_MOUNT_OPTS,network=$net2
+	done
+	for ((num = 1; num <= $OSTCOUNT; num++)); do
+		start ost$num $(ostdevname $num) $OST_MOUNT_OPTS,network=$net2
+	done
+	export KEEP_ZPOOL="$KZPOOL"
+	sleep 5
+
+	# check exports on servers are empty for $net
+	do_facet mgs "$LCTL get_param mgs.MGS.exports.*.export"
+	wait_update_facet_cond mgs \
+		"$LCTL get_param -N mgs.MGS.exports.*.export | \
+		 grep ${net}.export | cut -d'@' -f2-" '!=' ${net}.export
+	do_nodes $tgts "$LCTL get_param *.${FSNAME}*.exports.*.export"
+	for node in ${tgts//,/ }; do
+		wait_update_cond $node \
+			"$LCTL get_param -N *.${FSNAME}*.exports.*.export | \
+			grep ${net}.export | cut -d'@' -f2-" '!=' ${net}.export
+	done
 
 	return 0
 }
