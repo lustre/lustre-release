@@ -2812,7 +2812,6 @@ zconf_mount() {
 		do_nodes $client lctl get_param -n \
 			mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
 				device=$MGSNID:/$FSNAME
-		do_node $client mkdir -p $mnt/$FILESET
 		do_node $client "! grep -q $mnt' ' /proc/mounts ||
 			umount $mnt"
 	fi
@@ -2999,7 +2998,6 @@ zconf_mount_clients() {
 		do_nodes $clients lctl get_param -n \
 			mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
 				device=$MGSNID:/$FSNAME
-		do_nodes $clients mkdir -p $mnt/$FILESET
 		do_nodes $clients "! grep -q $mnt' ' /proc/mounts ||
 			umount $mnt"
 	fi
