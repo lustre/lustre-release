@@ -69,12 +69,12 @@
       <xref xmlns:xlink="http://www.w3.org/1999/xlink"
        linkend="preparing_installation" />.</para>
       <para>A Lustre installation can be scaled up or down with respect to the
-      number of client nodes, disk storage and bandwidth. Scalability and
-      performance are dependent on available disk and network bandwidth and the
-      processing power of the servers in the system. A Lustre file system can
-      be deployed in a wide variety of configurations that can be scaled well
-      beyond the size and performance observed in production systems to
-      date.</para>
+      number of client nodes, storage capacity and bandwidth.
+      Scalability and performance are dependent on available storage and
+      network bandwidth and the processing power of the servers in the system.
+      A Lustre filesystem can be deployed in a wide variety of configurations
+      that can be scaled well beyond the size and performance observed in
+      production systems to date.</para>
       <para>
       <xref linkend="understandinglustre.tab1" /> shows some of the
       scalability and performance characteristics of a Lustre file system.
@@ -113,10 +113,10 @@
                 </para>
               </entry>
               <entry>
-                <para>100-100000</para>
+                <para>10-100000</para>
               </entry>
               <entry>
-                <para>50000+ clients, many in the 10000 to 20000 range</para>
+                <para>50000+ clients, several in the 10000 to 20000 range</para>
               </entry>
             </row>
             <row>
@@ -133,17 +133,17 @@
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>50 TB/sec I/O, 50M IOPS</para>
+                <para>50 TB/sec I/O, 225M IOPS</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single client:</emphasis>
                 </para>
-                <para>15 GB/sec I/O (HDR IB), 50000 IOPS</para>
+                <para>80 GB/sec I/O (8x 100Gbps IB), 100k IOPS</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>10 TB/sec I/O, 10M IOPS</para>
+                <para>20 TB/sec I/O, 40M IOPS</para>
               </entry>
             </row>
             <row>
@@ -160,7 +160,7 @@
                 <para>
                   <emphasis>Single OST:</emphasis>
                 </para>
-                <para>500M objects, 1024TiB per OST</para>
+                <para>1000M objects, 4096TiB per OST</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
@@ -170,16 +170,16 @@
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>4 OSTs per OSS</para>
+                <para>8 OSTs per OSS</para>
                 <para>
                   <emphasis>Single OST:</emphasis>
                 </para>
-                <para>1024TiB OSTs</para>
+                <para>2048TiB OSTs</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
                 <para>450 OSSs with 900 750TiB HDD OSTs + 450 25TiB NVMe OSTs</para>
-                <para>1024 OSSs with 1024 72TiB OSTs</para>
+                <para>576 OSSs with 576 69TiB NVMe OSTs</para>
               </entry>
             </row>
             <row>
@@ -192,21 +192,21 @@
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>15 GB/sec, 1.5M IOPS</para>
+                <para>50 GB/sec, 1M IOPS</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>50 TB/sec, 50M IOPS</para>
+                <para>50 TB/sec, 225M IOPS</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>10 GB/sec, 1.5M IOPS</para>
+                <para>15/25 GB/sec write/read, 750k IOPS</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>20 TB/sec, 20M IOPS</para>
+                <para>20 TB/sec, 40M IOPS</para>
               </entry>
             </row>
             <row>
@@ -238,8 +238,8 @@
                 <para>
                   <emphasis>MDS count:</emphasis>
                 </para>
-                <para>40 MDS with 40 4TiB MDTs in production</para>
-                <para>256 MDS with 256 64GiB MDTs in testing</para>
+                <para>56 MDS with 56 4TiB MDTs</para>
+                <para>90 billion files</para>
               </entry>
             </row>
             <row>
@@ -272,7 +272,7 @@
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>512 PiB space, 1 trillion files</para>
+                <para>2048 PiB space, 1 trillion files</para>
               </entry>
               <entry>
                 <para>
@@ -282,7 +282,7 @@
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>700 PiB space, 25 billion files</para>
+                <para>700 PiB space, 90 billion files</para>
               </entry>
             </row>
           </tbody>
