@@ -16,28 +16,6 @@
 
 #include "mdt_internal.h"
 
-/* functions below are stubs for now, they will be implemented with
- * grant support on MDT */
-static inline void mdt_dom_read_lock(struct mdt_object *mo)
-{
-	down_read(&mo->mot_dom_sem);
-}
-
-static inline void mdt_dom_read_unlock(struct mdt_object *mo)
-{
-	up_read(&mo->mot_dom_sem);
-}
-
-static inline void mdt_dom_write_lock(struct mdt_object *mo)
-{
-	down_write(&mo->mot_dom_sem);
-}
-
-static inline void mdt_dom_write_unlock(struct mdt_object *mo)
-{
-	up_write(&mo->mot_dom_sem);
-}
-
 static void mdt_dom_resource_prolong(struct ldlm_prolong_args *arg)
 {
 	struct ldlm_resource *res;
@@ -351,7 +329,7 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 
 	ENTRY;
 
-	mdt_dom_read_lock(mo);
+	down_read(&mo->mot_dom_sem);
 	*nr_local = 0;
 	/* the only valid case when READ can find object is missing or stale
 	 * when export is just evicted and open files are closed forcefully
@@ -405,7 +383,7 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	RETURN(0);
 buf_put:
 	dt_bufs_put(env, dob, lnb, *nr_local);
-	mdt_dom_read_unlock(mo);
+	up_read(&mo->mot_dom_sem);
 	return rc;
 }
 
@@ -426,7 +404,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	 * space back if possible */
 	tgt_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
 
-	mdt_dom_read_lock(mo);
+	down_read(&mo->mot_dom_sem);
 	*nr_local = 0;
 	/* don't report error in cases with failed export */
 	if (!mdt_object_exists(mo)) {
@@ -479,7 +457,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 err:
 	dt_bufs_put(env, dob, lnb, *nr_local);
 unlock:
-	mdt_dom_read_unlock(mo);
+	up_read(&mo->mot_dom_sem);
 	/* tgt_grant_prepare_write() was called, so we must commit */
 	tgt_grant_commit(exp, oa->o_grant_used, rc);
 	/* let's still process incoming grant information packed in the oa,
@@ -555,7 +533,7 @@ static int mdt_commitrw_read(const struct lu_env *env, struct mdt_device *mdt,
 	if (niocount)
 		dt_bufs_put(env, dob, lnb, niocount);
 
-	mdt_dom_read_unlock(mo);
+	up_read(&mo->mot_dom_sem);
 	RETURN(rc);
 }
 
@@ -679,7 +657,7 @@ out_stop:
 
 out:
 	dt_bufs_put(env, dob, lnb, niocount);
-	mdt_dom_read_unlock(mo);
+	up_read(&mo->mot_dom_sem);
 	if (granted > 0)
 		tgt_grant_commit(exp, granted, old_rc);
 	RETURN(rc);
@@ -1030,7 +1008,7 @@ int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 
 	la_from_obdo(la, oa, OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
 
-	mdt_dom_write_lock(mo);
+	down_write(&mo->mot_dom_sem);
 	dob = mdt_obj2dt(mo);
 
 	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
@@ -1039,7 +1017,7 @@ int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 
 	rc = mdt_object_fallocate(tsi->tsi_env, mdt->mdt_bottom, dob, start,
 				  end, mode, la);
-	mdt_dom_write_unlock(mo);
+	up_write(&mo->mot_dom_sem);
 	if (rc)
 		GOTO(out_put, rc);
 
@@ -1088,7 +1066,7 @@ static int mdt_dom_fiemap(const struct lu_env *env, struct mdt_device *mdt,
 	if (IS_ERR(mo))
 		RETURN(PTR_ERR(mo));
 
-	mdt_dom_read_lock(mo);
+	down_read(&mo->mot_dom_sem);
 	if (!mdt_object_exists(mo))
 		GOTO(out, rc = -ENOENT);
 	if (mdt_object_remote(mo))
@@ -1098,7 +1076,7 @@ static int mdt_dom_fiemap(const struct lu_env *env, struct mdt_device *mdt,
 
 	rc = dt_fiemap_get(env, mdt_obj2dt(mo), fiemap);
 out:
-	mdt_dom_read_unlock(mo);
+	up_read(&mo->mot_dom_sem);
 	lu_object_put(env, &mo->mot_obj);
 	RETURN(rc);
 }
@@ -1296,7 +1274,7 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 		GOTO(out_put, rc);
 	}
 
-	mdt_dom_write_lock(mo);
+	down_write(&mo->mot_dom_sem);
 	dob = mdt_obj2dt(mo);
 
 	la_from_obdo(la, oa, OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
@@ -1310,7 +1288,7 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 
 	rc = mdt_object_punch(tsi->tsi_env, mdt->mdt_bottom, dob,
 			      start, end, la);
-	mdt_dom_write_unlock(mo);
+	up_write(&mo->mot_dom_sem);
 	if (rc)
 		GOTO(out_put, rc);
 
