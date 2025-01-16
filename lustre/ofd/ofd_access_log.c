@@ -1,20 +1,9 @@
-#include <linux/cdev.h>
-#include <linux/circ_buf.h>
-#include <linux/device.h>
-#include <linux/fs.h>
-#include <linux/idr.h>
-#include <linux/kernel.h>
-#include <linux/miscdevice.h>
-#include <linux/module.h>
-#include <linux/poll.h>
-#include <linux/slab.h>
-#include <linux/types.h>
-#include <linux/uaccess.h>
-#include <uapi/linux/lustre/lustre_idl.h>
-#include <uapi/linux/lustre/lustre_access_log.h>
-#include "ofd_internal.h"
+// SPDX-License-Identifier: GPL-2.0
 
-/* OFD access logs: OST (OFD) RPC handlers log accesses by FID and
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ *
+ * OFD access logs: OST (OFD) RPC handlers log accesses by FID and
  * PFID which are read from userspace through character device files
  * (/dev/lustre-access-log/scratch-OST0000). Accesses are described by
  * struct ofd_access_entry_v1. The char device implements read()
@@ -35,6 +24,22 @@
  * it allows the OST to be unmounted while the oal still has open file
  * descriptors.
  */
+
+#include <linux/cdev.h>
+#include <linux/circ_buf.h>
+#include <linux/device.h>
+#include <linux/fs.h>
+#include <linux/idr.h>
+#include <linux/kernel.h>
+#include <linux/miscdevice.h>
+#include <linux/module.h>
+#include <linux/poll.h>
+#include <linux/slab.h>
+#include <linux/types.h>
+#include <linux/uaccess.h>
+#include <uapi/linux/lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_access_log.h>
+#include "ofd_internal.h"
 
 enum {
 	OAL_DEV_COUNT = 1 << MINORBITS,
