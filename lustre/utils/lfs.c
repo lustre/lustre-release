@@ -633,6 +633,7 @@ command_t cmdlist[] = {
 	 "               [--mdt-overcount|-C OVERSTRIPE_COUNT\n"
 	 "               [--directory|-d] [--mdt-hash|-H HASH_TYPE]\n"
 	 "               [--mdt-index|-m START_MDT_INDEX] [--verbose|-v]\n"
+	 "               [--clear-fixed]\n"
 	 "		 DIRECTORY\n"
 	 "\n"
 	 "migrate file objects from one OST layout to another\n"
