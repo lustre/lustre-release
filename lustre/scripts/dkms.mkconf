@@ -166,12 +166,12 @@ module ofd       lustre/ofd      lustre
 module ost       lustre/ost      lustre
 module lfsck     lustre/lfsck    lustre
 module mgs       lustre/mgs      lustre
-module lquota    lustre/lquota   lustre
+module lquota    lustre/quota    lustre
 module mdt       lustre/mdt      lustre
 module osp       lustre/osp      lustre
 module mdd       lustre/mdd      lustre
-module llog_test lustre/obdclass lustre
-module obd_test  lustre/obdclass lustre
+module llog_test lustre/kunit    lustre
+module obd_test  lustre/kunit    lustre
 module lod       lustre/lod      lustre
 EOF
 fi
