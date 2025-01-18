@@ -3799,6 +3799,100 @@ test_55d()
 }
 run_test 55d "rename file vs link"
 
+test_55e()
+{
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+
+	# set children remote to parent, to trigger bfl
+	$LFS mkdir -i0 -c2 $DIR/$tdir || error "fail to create striped dir"
+	$LFS mkdir -i1 $DIR/$tdir/A || error "fail to create subdir A"
+	$LFS mkdir -i1 $DIR/$tdir/B || error "fail to create subdir B"
+
+	#define OBD_FAIL_MDS_RENAME3	0x155
+	# before any lock GOT, racing for parent locks
+	do_facet mds1 $LCTL set_param fail_loc=0x155
+	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0x0"
+
+	mv -T $DIR/$tdir/A $DIR/$tdir/B &
+	PID1=$!
+	mv -T $DIR2/$tdir/B $DIR2/$tdir/A &
+	PID2=$!
+
+	sleep 10
+	wait $PID1; STATUS1=$?
+	wait $PID2; STATUS2=$?
+
+	SUCCESS=$(( !$STATUS1 + !$STATUS2 ))
+	(( SUCCESS >= 1 )) ||
+		error "expect at least one succ, actual: $SUCCESS"
+	rm -rf $DIR/$tdir
+	echo "We survived after AB/BA race test"
+}
+run_test 55e "rename race AB/BA under the same parent dir"
+
+test_55f()
+{
+	mkdir_on_mdt0 $DIR/$tdir
+	mkdir -p $DIR/$tdir/P1/A $DIR/$tdir/P2/B
+
+	#define OBD_FAIL_MDS_RENAME3	0x155
+	# before any lock GOT, racing for parent locks
+	do_facet mds1 $LCTL set_param fail_loc=0x155
+	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0x0"
+
+	mv -T $DIR/$tdir/P1/A $DIR/$tdir/P2/B &
+	PID1=$!
+	mv -T $DIR2/$tdir/P2/B $DIR2/$tdir/P1/A &
+	PID2=$!
+
+	sleep 10
+	wait $PID1; STATUS1=$?
+	wait $PID2; STATUS2=$?
+
+	SUCCESS=$(( !$STATUS1 + !$STATUS2 ))
+	(( SUCCESS >= 1 )) ||
+		error "expect at least one succ, actual: $SUCCESS"
+	rm -rf $DIR/$tdir
+	echo "We survived after P1A_P2B/P2B_P1A race test"
+}
+run_test 55f "rename: (P1/A -> P2/B) race with (P2/B -> P1/A)"
+
+test_55g()
+{
+	mkdir_on_mdt0 $DIR/$tdir
+	mkdir -p $DIR/$tdir/a1/a2/a3/a4
+	mkdir -p $DIR/$tdir/b1/b2/b3/b4
+
+	local param_file=$TMP/$tfile-params
+	save_lustre_params mds1 \
+		"mdt.*.enable_rename_trylock" > $param_file
+	do_facet mds1 $LCTL set_param mdt.*.enable_rename_trylock=1
+	#define OBD_FAIL_MDS_RENAME3	0x155
+	do_facet mds1 $LCTL set_param fail_loc=0x155
+	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0x0"
+
+	mv $DIR/$tdir/a1/a2 $DIR/$tdir/b1/b2/b3/b4/ &
+	PID1=$!
+	mv $DIR2/$tdir/b1/b2 $DIR2/$tdir/a1/a2/a3/a4/ &
+	PID2=$!
+
+	sleep 10
+	wait $PID1; STATUS1=$?
+	wait $PID2; STATUS2=$?
+
+	SUCCESS=$(( !$STATUS1 + !$STATUS2 ))
+	(( SUCCESS >= 1 )) ||
+		error "expect at least one succ, actual: $SUCCESS"
+	[[ -e $DIR/$tdir/b1/b2/b3/b4/a2 ]] ||
+		[[ -e $DIR2/$tdir/a1/a2/a3/a4/b2 ]] ||
+			error "expect at least one valid dir"
+
+	restore_lustre_params <$param_file
+	rm -rf $DIR/$tdir
+	echo "We survived race with trylock test"
+}
+run_test 55g "rename: race with trylock"
+
 test_56a() {
 	$LFS setstripe -c 1 $MOUNT/$tfile || error "creating $MOUNT/$tfile"
 	stack_trap "rm -f $MOUNT/$tfile"

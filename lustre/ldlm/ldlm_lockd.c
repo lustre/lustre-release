@@ -1560,7 +1560,8 @@ retry:
 			}
 		}
 
-		if (rc != 0 && !(flags & LDLM_FL_RESENT)) {
+		if ((rc != 0 || err == ELDLM_LOCK_ABORTED) &&
+		    !(flags & LDLM_FL_RESENT)) {
 			if (lock->l_export) {
 				ldlm_lock_cancel(lock);
 			} else {

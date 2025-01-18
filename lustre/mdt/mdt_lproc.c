@@ -846,6 +846,7 @@ MDT_BOOL_RW_ATTR(migrate_hsm_allowed);
 MDT_BOOL_RW_ATTR(enable_strict_som);
 MDT_BOOL_RW_ATTR(enable_dmv_implicit_inherit);
 MDT_BOOL_RW_ATTR(enable_dmv_xattr);
+MDT_BOOL_RW_ATTR(enable_rename_trylock);
 
 static ssize_t enable_pin_gid_show(struct kobject *kobj,
 				   struct attribute *attr, char *buf)
@@ -1497,6 +1498,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_dir_restripe_nsonly.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
+	&lustre_attr_enable_rename_trylock.attr,
 	NULL,
 };
 
@@ -1619,6 +1621,7 @@ static const char * const mdt_stats[] = {
 	[LPROC_MDT_RENAME_PAR_FILE]	= "parallel_rename_file",
 	[LPROC_MDT_RENAME_PAR_DIR]	= "parallel_rename_dir",
 	[LPROC_MDT_RENAME_CROSSDIR]	= "crossdir_rename",
+	[LPROC_MDT_RENAME_TRYLOCK]	= "rename_trylocks",
 	[LPROC_MDT_IO_READ_BYTES]	= "read_bytes",
 	[LPROC_MDT_IO_WRITE_BYTES]	= "write_bytes",
 	[LPROC_MDT_IO_READ]		= "read",
