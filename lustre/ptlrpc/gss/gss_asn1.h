@@ -7,15 +7,17 @@
  */
 
 /*
- *  minimal asn1 for generic encoding/decoding of gss tokens
+ * linux/include/linux/sunrpc/gss_asn1.h
  *
- *  Adapted from MIT Kerberos 5-1.2.1 lib/include/krb5.h,
- *  lib/gssapi/krb5/gssapiP_krb5.h, and others
+ * minimal asn1 for generic encoding/decoding of gss tokens
  *
- *  Copyright (c) 2000 The Regents of the University of Michigan.
- *  All rights reserved.
+ * Adapted from MIT Kerberos 5-1.2.1 lib/include/krb5.h,
+ * lib/gssapi/krb5/gssapiP_krb5.h, and others
  *
- *  Andy Adamson   <andros@umich.edu>
+ * Copyright (c) 2000 The Regents of the University of Michigan.
+ * All rights reserved.
+ *
+ * Andy Adamson   <andros@umich.edu>
  */
 
 /*

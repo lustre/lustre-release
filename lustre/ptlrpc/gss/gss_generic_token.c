@@ -9,14 +9,14 @@
  */
 
 /*
- *  linux/net/sunrpc/gss_generic_token.c
+ * net/sunrpc/auth_gss/gss_generic_token.c
  *
- *  Adapted from MIT Kerberos 5-1.2.1 lib/gssapi/generic/util_token.c
+ * Adapted from MIT Kerberos 5-1.2.1 lib/gssapi/generic/util_token.c
  *
- *  Copyright (c) 2000 The Regents of the University of Michigan.
- *  All rights reserved.
+ * Copyright (c) 2000 The Regents of the University of Michigan.
+ * All rights reserved.
  *
- *  Andy Adamson   <andros@umich.edu>
+ * Andy Adamson   <andros@umich.edu>
  */
 
 /*

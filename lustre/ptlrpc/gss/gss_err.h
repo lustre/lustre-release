@@ -7,12 +7,14 @@
  */
 
 /*
- *  Adapted from MIT Kerberos 5-1.2.1 include/gssapi/gssapi.h
+ * linux/include/sunrpc/gss_err.h
  *
- *  Copyright (c) 2002 The Regents of the University of Michigan.
- *  All rights reserved.
+ * Adapted from MIT Kerberos 5-1.2.1 include/gssapi/gssapi.h
  *
- *  Andy Adamson   <andros@umich.edu>
+ * Copyright (c) 2002 The Regents of the University of Michigan.
+ * All rights reserved.
+ *
+ * Andy Adamson   <andros@umich.edu>
  */
 
 /*

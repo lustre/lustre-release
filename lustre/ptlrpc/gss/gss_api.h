@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+
 /*
  * Modifications for Lustre
  *
@@ -7,13 +9,14 @@
  */
 
 /*
+ * linux/include/linux/sunrpc/gss_api.h
+ *
  * Somewhat simplified version of the gss api.
  *
  * Dug Song <dugsong@monkey.org>
  * Andy Adamson <andros@umich.edu>
  * Bruce Fields <bfields@umich.edu>
  * Copyright (c) 2000 The Regents of the University of Michigan
- *
  */
 
 #ifndef __PTLRPC_GSS_GSS_API_H_

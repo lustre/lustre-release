@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0
+
 /*
  * Modifications for Lustre
  *
@@ -44,7 +46,6 @@
  *   uid/gidlist - for determining access rights
  *   mechanism type
  *   mechanism specific information, such as a key
- *
  */
 
 #define DEBUG_SUBSYSTEM S_SEC

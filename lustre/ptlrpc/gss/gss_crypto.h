@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+
 #ifndef PTLRPC_GSS_CRYPTO_H
 #define PTLRPC_GSS_CRYPTO_H
 

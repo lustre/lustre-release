@@ -7,16 +7,16 @@
  */
 
 /*
- *  linux/include/linux/sunrpc/gss_krb5_types.h
+ * include/linux/sunrpc/gss_krb5.h
  *
- *  Adapted from MIT Kerberos 5-1.2.1 lib/include/krb5.h,
- *  lib/gssapi/krb5/gssapiP_krb5.h, and others
+ * Adapted from MIT Kerberos 5-1.2.1 lib/include/krb5.h,
+ * lib/gssapi/krb5/gssapiP_krb5.h, and others
  *
- *  Copyright (c) 2000 The Regents of the University of Michigan.
- *  All rights reserved.
+ * Copyright (c) 2000 The Regents of the University of Michigan.
+ * All rights reserved.
  *
- *  Andy Adamson   <andros@umich.edu>
- *  Bruce Fields   <bfields@umich.edu>
+ * Andy Adamson   <andros@umich.edu>
+ * Bruce Fields   <bfields@umich.edu>
  */
 
 /*
@@ -41,7 +41,6 @@
  * M.I.T. makes no representations about the suitability of
  * this software for any purpose.  It is provided "as is" without express
  * or implied warranty.
- *
  */
 
 #ifndef PTLRPC_GSS_KRB5_H

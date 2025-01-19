@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
 MODULES := ptlrpc_gss
 
 ptlrpc_gss-objs := sec_gss.o gss_bulk.o gss_cli_upcall.o gss_svc_upcall.o      \
