@@ -2147,15 +2147,10 @@ cleanup_health_test() {
 add_health_test_drop_rules() {
 	local args="-m GET -r 1 -e ${1}"
 	local src dst
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
-		net_drop_add="net_drop add"
-	else
-		net_drop_add="net_drop_add"
-	fi
 
 	for src in "${LNIDS[@]}"; do
 		for dst in "${RNIDS[@]}" "${LNIDS[@]}"; do
-			$LCTL $net_drop_add -s $src -d $dst ${args} ||
+			$LCTL net_drop add -s $src -d $dst ${args} ||
 				error "Failed to add drop rule $src $dst $args"
 		done
 	done
@@ -2163,11 +2158,6 @@ add_health_test_drop_rules() {
 
 do_lnet_health_ping_test() {
 	local hstatus="$1"
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
-		net_drop_del="net_drop del"
-	else
-		net_drop_del="net_drop_del"
-	fi
 
 	echo "Simulate $hstatus"
 
@@ -2179,7 +2169,7 @@ do_lnet_health_ping_test() {
 
 	lnet_health_post
 
-	$LCTL $net_drop_del -a
+	$LCTL net_drop del -a
 
 	return 0
 }
@@ -3761,17 +3751,9 @@ do_expired_message_drop_test() {
 
 	delay=$((tto + 1))
 
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
-		net_delay_add="net_delay add"
-		net_delay_del="net_delay del"
-	else
-		net_delay_add="net_delay_add"
-		net_delay_del="net_delay_del"
-	fi
-
 	for lnid in "${LNIDS[@]}"; do
 		for rnid in "${RNIDS[@]}"; do
-			$LCTL $net_delay_add -s "${lnid}" -d "${rnid}" \
+			$LCTL net_delay add -s "${lnid}" -d "${rnid}" \
 				-l "${delay}" -r 1 -m GET ||
 				error "Failed to add delay rule"
 		done
@@ -3812,7 +3794,7 @@ do_expired_message_drop_test() {
 
 	sleep ${delay}
 
-	$LCTL $net_delay_del -a
+	$LCTL net_delay del -a
 
 	wait
 

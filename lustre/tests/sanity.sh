@@ -32603,7 +32603,7 @@ post_801() {
 }
 
 barrier_stat() {
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+	if (( $MDS1_VERSION >= $(version_code 2.16.50) )); then
 		barrier_stat="barrier stat"
 	else
 		barrier_stat="barrier_stat"
@@ -32770,7 +32770,7 @@ run_test 801b "modification will be blocked by write barrier"
 
 test_801c() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+	if (( $MDS1_VERSION >= $(version_code 2.16.50) )); then
 		barrier_freeze="barrier freeze"
 		barrier_thaw="barrier thaw"
 		barrier_rescan="barrier rescan"

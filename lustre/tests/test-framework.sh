@@ -10721,7 +10721,7 @@ lsnapshot () {
 	local cmd=$1
 	shift
 
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+	if (( $MDS1_VERSION >= $(version_code 2.16.50) )); then
 		do_facet mgs "$LCTL snapshot $cmd -F $FSNAME $*"
 	else
 		do_facet mgs "$LCTL snapshot_$cmd -F $FSNAME $*"
@@ -11031,7 +11031,7 @@ __changelog_deregister() {
 	local cl_user=$2
 	local rc=0
 
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+	if (( $MDS1_VERSION >= $(version_code 2.16.50) )); then
 		changelog_deregister="changelog deregister"
 	else
 		changelog_deregister="changelog_deregister"
@@ -11051,7 +11051,7 @@ __changelog_deregister() {
 
 declare -Ax CL_USERS
 changelog_register() {
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+	if (( $MDS1_VERSION >= $(version_code 2.16.50) )); then
 		changelog_register="changelog register"
 	else
 		changelog_register="changelog_register"

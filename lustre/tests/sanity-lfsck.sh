@@ -1483,7 +1483,7 @@ test_12a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
 		skip "MDS older than 2.5.55, LU-3950"
-	if (( $MDS1_VERSION >= $(version_code 2.15.65) )); then
+	if (( $MDS1_VERSION >= $(version_code 2.15.90) )); then
 		lfsck_start="lfsck start"
 		lfsck_stop="lfsck stop"
 	else
