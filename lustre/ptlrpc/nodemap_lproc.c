@@ -31,7 +31,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 	struct lu_nodemap	*nodemap;
 	struct lu_idmap		*idmap;
 	struct rb_node		*node;
-	bool			cont = 0;
+	bool cont = false;
 	int rc;
 
 	mutex_lock(&active_config_lock);
@@ -44,42 +44,47 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 		return rc;
 	}
 
-	seq_printf(m, "[\n");
+	seq_puts(m, "[");
 	down_read(&nodemap->nm_idmap_lock);
 	for (node = rb_first(&nodemap->nm_client_to_fs_uidmap); node;
 				node = rb_next(node)) {
-		if (cont)
-			seq_printf(m, ",\n");
-		cont = 1;
 		idmap = rb_entry(node, struct lu_idmap, id_client_to_fs);
-		if (idmap != NULL)
-			seq_printf(m, " { idtype: uid, client_id: %u, "
-				   "fs_id: %u }", idmap->id_client,
-				   idmap->id_fs);
+		if (idmap == NULL)
+			continue;
+
+		if (cont)
+			seq_puts(m, ",");
+		cont = true;
+		seq_printf(m, "\n { idtype: uid, client_id: %u, fs_id: %u }",
+			   idmap->id_client, idmap->id_fs);
 	}
 	for (node = rb_first(&nodemap->nm_client_to_fs_gidmap);
 				node; node = rb_next(node)) {
-		if (cont)
-			seq_printf(m, ",\n");
 		idmap = rb_entry(node, struct lu_idmap, id_client_to_fs);
-		if (idmap != NULL)
-			seq_printf(m, " { idtype: gid, client_id: %u, "
-				   "fs_id: %u }", idmap->id_client,
-				   idmap->id_fs);
+		if (idmap == NULL)
+			continue;
+
+		if (cont)
+			seq_puts(m, ",");
+		cont = true;
+		seq_printf(m, "\n { idtype: gid, client_id: %u, fs_id: %u }",
+			   idmap->id_client, idmap->id_fs);
 	}
 	for (node = rb_first(&nodemap->nm_client_to_fs_projidmap);
 	     node; node = rb_next(node)) {
-		if (cont)
-			seq_printf(m, ",\n");
 		idmap = rb_entry(node, struct lu_idmap, id_client_to_fs);
-		if (idmap != NULL)
-			seq_printf(m,
-				   " { idtype: projid, client_id: %u, fs_id: %u }",
-				   idmap->id_client,
-				   idmap->id_fs);
+		if (idmap == NULL)
+			continue;
+
+		if (cont)
+			seq_puts(m, ",");
+		cont = true;
+		seq_printf(m, "\n { idtype: projid, client_id: %u, fs_id: %u }",
+			   idmap->id_client, idmap->id_fs);
 	}
 	up_read(&nodemap->nm_idmap_lock);
-	seq_printf(m, "\n");
+	if (cont)
+		seq_puts(m, "\n");
 	seq_printf(m, "]\n");
 
 	nodemap_putref(nodemap);
@@ -157,20 +162,21 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 		return rc;
 	}
 
-	seq_printf(m, "[\n");
+	seq_puts(m, "[");
 	down_read(&active_config->nmc_range_tree_lock);
 	list_for_each_entry(range, &nodemap->nm_ranges, rn_list) {
 		if (cont)
-			seq_printf(m, ",\n");
-		cont = 1;
+			seq_puts(m, ",");
+		cont = true;
 		libcfs_nidstr_r(&range->rn_start, start_nidstr, sizeof(start_nidstr));
 		libcfs_nidstr_r(&range->rn_end, end_nidstr, sizeof(end_nidstr));
-		seq_printf(m, " { id: %u, start_nid: %s, end_nid: %s }",
+		seq_printf(m, "\n { id: %u, start_nid: %s, end_nid: %s }",
 			   range->rn_id, start_nidstr, end_nidstr);
 	}
 	up_read(&active_config->nmc_range_tree_lock);
 	mutex_unlock(&active_config_lock);
-	seq_printf(m, "\n");
+	if (cont)
+		seq_puts(m, "\n");
 	seq_printf(m, "]\n");
 
 	nodemap_putref(nodemap);
@@ -346,6 +352,7 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	struct obd_export *exp;
 	char nidstr[LNET_NIDSTR_SIZE] = "<unknown>";
+	bool cont = false;
 	int rc;
 
 	mutex_lock(&active_config_lock);
@@ -358,7 +365,7 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
 		return rc;
 	}
 
-	seq_printf(m, "[\n");
+	seq_puts(m, "[");
 
 	mutex_lock(&nodemap->nm_member_list_lock);
 	list_for_each_entry(exp, &nodemap->nm_member_list,
@@ -366,13 +373,16 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
 		if (exp->exp_connection != NULL)
 			libcfs_nidstr_r(&exp->exp_connection->c_peer.nid,
 					  nidstr, sizeof(nidstr));
-
-		seq_printf(m, " { nid: %s, uuid: %s },",
+		if (cont)
+			seq_puts(m, ",");
+		cont = true;
+		seq_printf(m, "\n { nid: %s, uuid: %s }",
 			   nidstr, exp->exp_client_uuid.uuid);
 	}
 	mutex_unlock(&nodemap->nm_member_list_lock);
 
-	seq_printf(m, "\n");
+	if (cont)
+		seq_puts(m, "\n");
 	seq_printf(m, "]\n");
 
 	nodemap_putref(nodemap);
