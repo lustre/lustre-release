@@ -160,8 +160,8 @@ command_t nodemap_cmdlist[] = {
 	 .pc_help = "add a fileset to a nodemap\n"
 	 "usage: nodemap fileset_add [--alt] [--ro] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
 	{.pc_name = "fileset_del", .pc_func = jt_nodemap_fileset_del,
-	 .pc_help = "delete a fileset from a nodemap\n"
-	 "usage: nodemap fileset_del --name NODEMAP_NAME --fileset SUBDIRECTORY"},
+	 .pc_help = "delete filesets from a nodemap\n"
+	 "usage: nodemap fileset_del --name NODEMAP_NAME [--all] [--fileset SUBDIRECTORY]"},
 	{.pc_name = "modify", .pc_func = jt_nodemap_modify,
 	 .pc_help = "modify a nodemap parameters\n"
 	 "usage: nodemap modify --name NODEMAP_NAME --property PROPERTY\n"
@@ -598,8 +598,8 @@ command_t cmdlist[] = {
 	 "add a fileset to a nodemap\n"
 	 "usage: nodemap_fileset_add [--alt] [--ro] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
 	{"nodemap_fileset_del", jt_nodemap_fileset_del, 0,
-	 "delete a fileset from a nodemap\n"
-	 "usage: nodemap_fileset_del --name NODEMAP_NAME --fileset SUBDIRECTORY"},
+	 "delete filesets from a nodemap\n"
+	 "usage: nodemap_fileset_del --name NODEMAP_NAME [--all] [--fileset SUBDIRECTORY]"},
 	{"nodemap_modify", jt_nodemap_modify, 0,
 	 "modify a nodemap property\n"
 	 "usage: nodemap_modify --name NODEMAP_NAME --property PROPERTY_NAME{=VALUE| --value VALUE}\n"

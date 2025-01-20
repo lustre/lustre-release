@@ -1456,7 +1456,7 @@ static int nodemap_fileset_del_primary(struct lu_nodemap *nodemap)
 static int nodemap_fileset_del_alternate(struct lu_nodemap *nodemap,
 					 const char *fileset_path)
 {
-	struct lu_fileset_alt *fset;
+	struct lu_fileset_alt *fset = NULL;
 	int rc;
 
 	if (!nodemap || !fileset_path || fileset_path[0] != '/')
@@ -3752,25 +3752,30 @@ EXPORT_SYMBOL(nodemap_test_id);
 static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 				   bool *out_clean_llog_fileset)
 {
-	char *param, *nodemap_name, *fset;
+	char *nodemap_name = NULL;
+	char *fset = NULL;
+	char *param;
 	bool fset_ro = false, fset_alt = false;
 	struct lu_nodemap *nodemap = NULL;
 	int rc;
 
 	ENTRY;
 
-	if (lcfg->lcfg_bufcount < 3 || lcfg->lcfg_bufcount > 5)
+	if (lcfg->lcfg_bufcount < 2 || lcfg->lcfg_bufcount > 5)
 		RETURN(-EINVAL);
 
 	nodemap_name = lustre_cfg_string(lcfg, 1);
-	fset = lustre_cfg_string(lcfg, 2);
-
-	/* fileset can be \0 in some operations like nodemap_set_fileset */
-	if (!nodemap_name || nodemap_name[0] == '\0' || !fset)
+	if (!nodemap_name || nodemap_name[0] == '\0')
 		RETURN(-EINVAL);
 
-	if (strlen(fset) > PATH_MAX)
-		RETURN(-ENAMETOOLONG);
+	if (lcfg->lcfg_bufcount > 2) {
+		fset = lustre_cfg_string(lcfg, 2);
+		/* fset can be \0 in some operations like nodemap_set_fileset */
+		if (!fset)
+			RETURN(-EINVAL);
+		if (strlen(fset) > PATH_MAX)
+			RETURN(-ENAMETOOLONG);
+	}
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(nodemap_name);
@@ -3805,7 +3810,10 @@ static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 		rc = nodemap_fileset_add(nodemap, fset, fset_alt, fset_ro);
 		break;
 	case LCFG_NODEMAP_FILESET_DEL:
-		rc = nodemap_fileset_del(nodemap, fset);
+		if (fset[0] == '*')
+			rc = nodemap_fileset_clear(nodemap);
+		else
+			rc = nodemap_fileset_del(nodemap, fset);
 		break;
 	default:
 		rc = -EINVAL;

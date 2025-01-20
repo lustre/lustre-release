@@ -2268,6 +2268,25 @@ wait_nm_sync_fileset() {
 	wait_nm_sync $nm fileset "$fset_expected" "" "$awk_expr"
 }
 
+wait_nm_sync_fileset_cleared() {
+	local nm=$1
+	local fset_type=${2:-"primary"}
+
+	wait_nm_sync_fileset $nm "" "" $fset_type
+}
+
+nodemap_clear_filesets_and_wait() {
+	local nm=$1
+
+	echo "Currently set filesets on nodemap '$nm':"
+	do_facet mgs $LCTL get_param nodemap.$nm.fileset
+
+	if (( $MGS_VERSION >= $(version_code 2.16.56) )); then
+		do_facet mgs $LCTL nodemap_fileset_del --name $nm --all
+		wait_nm_sync_fileset_cleared $nm
+	fi
+}
+
 nodemap_exercise_fileset_cleanup() {
 	# Already mounted clients are skipped in zconf_mount_clients()
 	for client in "${clients_arr[@]}"; do
@@ -3001,6 +3020,8 @@ test_27c() {
 		--fileset "$prim_fileset" ||
 		error "cannot add prim fileset $prim_fileset"
 
+	stack_trap "nodemap_clear_filesets_and_wait $nm" EXIT
+
 	# add 255 alternate filesets
 	# each longer than the previous one, up to 941 characters
 	for ((i = 1; i < 256; i++)); do
@@ -3055,6 +3076,21 @@ test_27c() {
 	do_facet mgs $LCTL nodemap_del $nm_tmp ||
 		error "cannot del nodemap $nm_tmp"
 	wait_nm_sync $nm_tmp id ''
+
+	# test clear fileset functionality
+	do_facet mgs $LCTL nodemap_fileset_add --name $nm \
+		--fileset "$prim_fileset" ||
+		error "cannot add prim fileset $prim_fileset"
+	alt_fileset="/this_is_an_alternate_fileset"
+	for ((i = 1; i < 16; i++)); do
+		alt_fileset="${alt_fileset}${i}_"
+		do_facet mgs $LCTL nodemap_fileset_add --alt --name $nm \
+			--fileset "$alt_fileset" ||
+			error "cannot add alt fileset $alt_fileset"
+	done
+	wait_nm_sync_fileset $nm "$alt_fileset" "$alt_fileset" "alternate"
+
+	nodemap_clear_filesets_and_wait $nm
 
 	if $SHARED_KEY; then
 		export SK_UNIQUE_NM=false
@@ -3147,7 +3183,8 @@ multi_fileset_test_cleanup() {
 		--value 1
 
 	wait_nm_sync $nm trusted_nodemap
-
+	# make sure any filesets are cleared before mounting the client
+	nodemap_clear_filesets_and_wait $nm
 	# ensure client 0 is running for cleanup
 	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
 		error "unable to mount client ${clients_arr[0]}"

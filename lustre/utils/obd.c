@@ -4613,19 +4613,24 @@ int jt_nodemap_fileset_del(int argc, char **argv)
 {
 	char *nodemap_name = NULL;
 	char *fileset_name = NULL;
+	bool all = false;
 	int rc = 0;
 	int c;
 
 	static struct option long_opts[] = {
+		{ .val = 'A', .name = "all", .has_arg = no_argument },
 		{ .val = 'f', .name = "fileset", .has_arg = required_argument },
 		{ .val = 'h', .name = "help", .has_arg = no_argument },
 		{ .val = 'n', .name = "name", .has_arg = required_argument },
 		{ .name = NULL }
 	};
 
-	while ((c = getopt_long(argc, argv, "f:hn:",
+	while ((c = getopt_long(argc, argv, "Af:hn:",
 				long_opts, NULL)) != -1) {
 		switch (c) {
+		case 'A':
+			all = true;
+			break;
 		case 'f':
 			fileset_name = optarg;
 			break;
@@ -4639,11 +4644,17 @@ int jt_nodemap_fileset_del(int argc, char **argv)
 		}
 	}
 
-	if (!nodemap_name || !fileset_name)
+	if (!nodemap_name || (!fileset_name && !all))
 		return CMD_HELP;
 
+	if (all && fileset_name) {
+		fprintf(stderr,
+			"error: cannot specify both --fileset and --all options\n");
+		return CMD_HELP;
+	}
+
 	rc = nodemap_cmd(LCFG_NODEMAP_FILESET_DEL, false, NULL, 0, argv[0],
-			 nodemap_name, fileset_name, NULL);
+			 nodemap_name, all ? "*" : fileset_name, NULL);
 	if (rc != 0) {
 		fprintf(stderr,
 			"error: cannot '%s' with fileset '%s' on nodemap '%s': %s\n",

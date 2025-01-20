@@ -1,16 +1,18 @@
 .TH LCTL-NODEMAP_FILESET_DEL 8 2025-06-23 Lustre "Lustre Configuration Utilities"
 .SH NAME
-lctl-nodemap_fileset_del \- delete a fileset from a nodemap
+lctl-nodemap_fileset_del \- delete filesets from a nodemap
 .SH SYNOPSIS
 .SY "lctl nodemap_fileset_del"
 or
 .SY "lctl nodemap fileset_del"
 .BI --name " NODEMAP_NAME"
-.BI --fileset " SUBDIRECTORY"
+.RB [ --all ]
+.RB [ --fileset
+.IR "SUBDIRECTORY" ]
 .YS
 .SH DESCRIPTION
 .B nodemap_fileset_del
-deletes a fileset by its
+deletes all filesets or a specific fileset by its
 .I SUBDIRECTORY
 path from a nodemap, specified by its
 .IR NODEMAP_NAME .
@@ -20,16 +22,29 @@ represents a relative path from the root of the Lustre file system. This
 operation can delete both primary and alternate filesets.
 .SH OPTIONS
 .TP
-.BI --name " NODEMAP_NAME"
-The name of the nodemap that this fileset should be deleted from.
+.BR -n ", " --name " NODEMAP_NAME"
+The name of the nodemap that one or all fileset should be deleted from.
 .TP
-.BI --fileset " SUBDIRECTORY"
-The fileset to delete specified by its path.
+.BR -f ", " --fileset " SUBDIRECTORY"
+The fileset to be deleted specified by its path.
+.TP
+.BR --all
+Indicates that all filesets should be deleted for a given nodemap.
+Alternatively,
+.B --fileset '*'
+can be used instead for the same effect. This option is mutually exclusive with
+.BR --fileset .
 .SH EXAMPLES
 Delete two different filesets from two different nodemaps:
 .EX
 .B # lctl nodemap_fileset_del --name tenant1 --fileset '/dir1'
 .B # lctl nodemap_fileset_del --name tenant2 --fileset '/dir2'
+.EE
+.PP
+Delete all filesets from a given nodemap:
+.EX
+.B # lctl nodemap_fileset_del --name tenant1 --all
+.B # lctl nodemap_fileset_del --name tenant2 --fileset '*'
 .EE
 .SH AVAILABILITY
 .B lctl nodemap_fileset_del
