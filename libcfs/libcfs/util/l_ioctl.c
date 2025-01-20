@@ -1,23 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0
+
 /*
  * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
  * Copyright (c) 2014, 2017, Intel Corporation.
- *
- *   This file is part of Lustre, https://wiki.whamcloud.com/
- *
- *   Portals is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Portals is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Portals; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
+ */
+
+/*
+ * This file is part of Lustre, http://www.lustre.org/
  */
 
 #define __USE_FILE_OFFSET64
