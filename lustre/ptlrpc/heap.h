@@ -1,28 +1,12 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
+/* SPDX-License-Identifier: GPL-2.0 */
 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License version 2 for more details.  A copy is
- * included in the COPYING file that accompanied this code.
-
- * GPL HEADER END
- */
 /*
  * Copyright (c) 2011 Intel Corporation
  */
+
 /*
- * libcfs/include/libcfs/heap.h
- *
- * Author: Eric Barton	<eeb@whamcloud.com>
- *	   Liang Zhen	<liang@whamcloud.com>
+ * Author: Eric Barton <eeb@whamcloud.com>
+ * Author: Liang Zhen <liang@whamcloud.com>
  */
 
 #ifndef __LIBCFS_HEAP_H__

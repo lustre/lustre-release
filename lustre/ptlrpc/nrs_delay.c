@@ -1,41 +1,18 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License version 2 for more details.
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
- */
+// SPDX-License-Identifier: GPL-2.0
+
 /*
  * Copyright (c) 2017, Cray Inc. All Rights Reserved.
  *
  * Copyright (c) 2017, Intel Corporation.
  */
+
 /*
- * lustre/ptlrpc/nrs_delay.c
- *
  * Network Request Scheduler (NRS) Delay policy
  *
  * This policy will delay request handling for some configurable amount of
  * time.
  *
  * Author: Chris Horn <hornc@cray.com>
- */
-/**
- * \addtogoup nrs
- * @{
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
