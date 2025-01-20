@@ -4,7 +4,7 @@
 #
 # Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
 #
-# Copyright (c) 2023-2024, Amazon and/or its affiliates. All rights reserved.
+# Copyright (c) 2023-2025, Amazon and/or its affiliates. All rights reserved.
 # Use is subject to license terms.
 #
 
@@ -18,8 +18,22 @@
 #
 
 export files="${1:-$(pwd)}"
+export file_paths=$(git ls-files "$files" | grep -v -f <(cat <<EOF
+Documentation
+LICENSES
+gitignore
+COPYING
+mailmap
+MAINTAINERS
+README
+requirements
+SECURITY
+kernel_patches
+crypto_patches
+EOF
+))
 
-for file in $(git ls-files "$files"); do
+for file in $file_paths; do
 	if head -20 "$file" | grep -Ee 'SPDX' > /dev/null; then
 		license="$(grep SPDX "$file" | awk '{ print $3; exit; }')"
 		printf "%-10s %-15s %-s\n" "SPDX" "$license" "$file"
