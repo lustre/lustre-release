@@ -4297,8 +4297,8 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 	struct dt_insert_rec *rec = &info->lti_dt_rec;
 	int i;
 	int rc;
-
 	ENTRY;
+
 	/* lum is used to know whether it's replay */
 	LASSERT(lum);
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr))
@@ -4451,6 +4451,12 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		rc = lod_sub_insert(env, dt_object_child(dt),
 				    (const struct dt_rec *)rec,
 				    (const struct dt_key *)stripe_name, th);
+		if (rc == -EEXIST) {
+			CDEBUG(D_INFO, DFID": can't insert stripe %i "DFID"\n",
+			     PFID(lod_object_fid(lo)), i,
+			     PFID(lu_object_fid(&dt->do_lu)));
+			continue;
+		}
 		if (rc != 0)
 			GOTO(out, rc);
 
@@ -6866,7 +6872,7 @@ static int lod_object_lock(const struct lu_env *env,
 		RETURN(rc);
 
 	/* No stripes */
-	if (lo->ldo_dir_stripe_count <= 1)
+	if (lo->ldo_dir_stripe_count == 0)
 		RETURN(0);
 
 	slave_locks_size = offsetof(typeof(*slave_locks),
@@ -8969,7 +8975,7 @@ static int lod_dir_declare_layout_split(const struct lu_env *env,
 	LASSERT(le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC);
 	LASSERT(le32_to_cpu(lum->lum_stripe_offset) == LMV_OFFSET_DEFAULT);
 
-	saved_count = lo->ldo_dir_stripes_allocated;
+	saved_count = lo->ldo_dir_stripe_count;
 	stripe_count = le32_to_cpu(lum->lum_stripe_count);
 
 	/* if the split target is overstriped, we need to put that flag in the
@@ -8999,7 +9005,7 @@ static int lod_dir_declare_layout_split(const struct lu_env *env,
 	if (!stripes)
 		RETURN(-ENOMEM);
 
-	for (i = 0; i < lo->ldo_dir_stripes_allocated; i++)
+	for (i = 0; i < saved_count; i++)
 		stripes[i] = lo->ldo_stripe[i];
 
 	lod_qos_statfs_update(env, lod, &lod->lod_mdt_descs);

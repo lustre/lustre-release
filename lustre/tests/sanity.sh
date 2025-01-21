@@ -24153,7 +24153,7 @@ test_230p() {
 	createmany -d $DIR/$tdir/d 100 ||
 		error "create dirs under remote dir failed"
 
-	for c in $(seq $((MDSCOUNT - 1)) -1 1); do
+	for ((c = $MDSCOUNT - 1; c >= 1; c--)); do
 		local mdt_hash="crush"
 
 		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
@@ -24174,6 +24174,16 @@ test_230p() {
 		(( delta < 200 / c + 4 )) ||
 			error "$delta files migrated >= $((200 / c + 4))"
 	done
+
+	# and restripe to -c 2
+	echo Splitting the dir back to 2 stripes.
+        $LFS setdirstripe -c 2 $DIR/$tdir || {
+		$LFS getdirstripe $DIR/$tdir
+                error "split $tdir to 2 stripes failed"
+	}
+        wait_update $HOSTNAME \
+                "$LFS getdirstripe -H $DIR/$tdir" "crush" $timeout ||
+                error "dir split not finished"
 }
 run_test 230p "dir merge"
 
