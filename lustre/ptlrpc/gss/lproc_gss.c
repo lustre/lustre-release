@@ -51,7 +51,6 @@
 
 static struct dentry *gss_debugfs_dir_lk;
 static struct dentry *gss_debugfs_dir;
-static struct proc_dir_entry *gss_lprocfs_dir;
 
 /*
  * statistic of "out-of-sequence-window"
@@ -155,7 +154,7 @@ sptlrpc_krb5_allow_old_client_csum_seq_write(struct file *file,
 	krb5_allow_old_client_csum = val;
 	return count;
 }
-LPROC_SEQ_FOPS(sptlrpc_krb5_allow_old_client_csum);
+LDEBUGFS_SEQ_FOPS(sptlrpc_krb5_allow_old_client_csum);
 
 #ifdef HAVE_GSS_KEYRING
 static int sptlrpc_gss_check_upcall_ns_seq_show(struct seq_file *m, void *data)
@@ -178,7 +177,7 @@ static ssize_t sptlrpc_gss_check_upcall_ns_seq_write(struct file *file,
 	gss_check_upcall_ns = val;
 	return count;
 }
-LPROC_SEQ_FOPS(sptlrpc_gss_check_upcall_ns);
+LDEBUGFS_SEQ_FOPS(sptlrpc_gss_check_upcall_ns);
 #endif /* HAVE_GSS_KEYRING */
 
 static int rsi_upcall_seq_show(struct seq_file *m,
@@ -222,11 +221,11 @@ out:
 	OBD_FREE(kbuf, count + 1);
 	return rc;
 }
-LPROC_SEQ_FOPS(rsi_upcall);
+LDEBUGFS_SEQ_FOPS(rsi_upcall);
 
-static ssize_t lprocfs_rsi_info_seq_write(struct file *file,
-					  const char __user *buffer,
-					  size_t count, void *data)
+static ssize_t ldebugfs_rsi_info_seq_write(struct file *file,
+					   const char __user *buffer,
+					   size_t count, void *data)
 {
 	struct rsi_downcall_data *param;
 	int size = sizeof(*param), rc, checked = 0;
@@ -277,7 +276,7 @@ out:
 
 	return rc ? rc : count;
 }
-LPROC_SEQ_FOPS_WR_ONLY(gss, rsi_info);
+LDEBUGFS_FOPS_WR_ONLY(gss, rsi_info);
 
 static int rsi_entry_expire_seq_show(struct seq_file *m,
 				     void *data)
@@ -304,7 +303,7 @@ static ssize_t rsi_entry_expire_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(rsi_entry_expire);
+LDEBUGFS_SEQ_FOPS(rsi_entry_expire);
 
 static int rsi_acquire_expire_seq_show(struct seq_file *m,
 				       void *data)
@@ -331,11 +330,11 @@ static ssize_t rsi_acquire_expire_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(rsi_acquire_expire);
+LDEBUGFS_SEQ_FOPS(rsi_acquire_expire);
 
-static ssize_t lprocfs_rsc_info_seq_write(struct file *file,
-					  const char __user *buffer,
-					  size_t count, void *data)
+static ssize_t ldebugfs_rsc_info_seq_write(struct file *file,
+					   const char __user *buffer,
+					   size_t count, void *data)
 {
 	struct rsc_downcall_data *param;
 	int size = sizeof(*param), rc, checked = 0;
@@ -426,7 +425,7 @@ out:
 
 	return rc ? rc : count;
 }
-LPROC_SEQ_FOPS_WR_ONLY(gss, rsc_info);
+LDEBUGFS_FOPS_WR_ONLY(gss, rsc_info);
 
 static struct ldebugfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"replays",
@@ -434,10 +433,6 @@ static struct ldebugfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"init_channel",
 	  .fops	=	&gss_proc_secinit,
 	  .proc_mode =	0200			},
-	{ NULL }
-};
-
-static struct lprocfs_vars gss_lprocfs_vars[] = {
 	{ .name	=	"krb5_allow_old_client_csum",
 	  .fops	=	&sptlrpc_krb5_allow_old_client_csum_fops },
 #ifdef HAVE_GSS_KEYRING
@@ -503,15 +498,10 @@ void gss_exit_tunables(void)
 
 	debugfs_remove_recursive(gss_debugfs_dir);
 	gss_debugfs_dir = NULL;
-
-	if (!IS_ERR_OR_NULL(gss_lprocfs_dir))
-		lprocfs_remove(&gss_lprocfs_dir);
 }
 
 int gss_init_tunables(void)
 {
-	int	rc;
-
 	spin_lock_init(&gss_stat_oos.oos_lock);
 
 	gss_debugfs_dir = debugfs_create_dir("gss", sptlrpc_debugfs_dir);
@@ -521,18 +511,5 @@ int gss_init_tunables(void)
 						gss_debugfs_dir);
 	ldebugfs_add_vars(gss_debugfs_dir_lk, gss_lk_debugfs_vars, NULL);
 
-	gss_lprocfs_dir = lprocfs_register("gss", sptlrpc_lprocfs_dir,
-					   gss_lprocfs_vars, NULL);
-	if (IS_ERR_OR_NULL(gss_lprocfs_dir)) {
-		rc = gss_lprocfs_dir ? PTR_ERR(gss_lprocfs_dir) : -ENOMEM;
-		gss_lprocfs_dir = NULL;
-		GOTO(out, rc);
-	}
-
 	return 0;
-
-out:
-	CERROR("failed to initialize gss lproc entries: %d\n", rc);
-	gss_exit_tunables();
-	return rc;
 }

@@ -390,30 +390,17 @@ EXPORT_SYMBOL(sptlrpc_lprocfs_dir);
 
 int sptlrpc_lproc_init(void)
 {
-	int rc = 0;
-
-	LASSERT(sptlrpc_debugfs_dir == NULL);
+	LASSERT(!sptlrpc_debugfs_dir);
 
 	sptlrpc_debugfs_dir = debugfs_create_dir("sptlrpc",
 						 debugfs_lustre_root);
 	ldebugfs_add_vars(sptlrpc_debugfs_dir, sptlrpc_lprocfs_vars, NULL);
 
-	sptlrpc_lprocfs_dir = lprocfs_register("sptlrpc", proc_lustre_root,
-					       NULL, NULL);
-	if (IS_ERR_OR_NULL(sptlrpc_lprocfs_dir)) {
-		rc = PTR_ERR(sptlrpc_lprocfs_dir);
-		rc = sptlrpc_lprocfs_dir ? PTR_ERR(sptlrpc_lprocfs_dir)
-			: -ENOMEM;
-		sptlrpc_lprocfs_dir = NULL;
-	}
-	return rc;
+	return 0;
 }
 
 void sptlrpc_lproc_fini(void)
 {
 	debugfs_remove_recursive(sptlrpc_debugfs_dir);
 	sptlrpc_debugfs_dir = NULL;
-
-	if (!IS_ERR_OR_NULL(sptlrpc_lprocfs_dir))
-		lprocfs_remove(&sptlrpc_lprocfs_dir);
 }
