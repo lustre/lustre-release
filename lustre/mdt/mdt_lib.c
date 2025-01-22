@@ -258,7 +258,10 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		GOTO(out_nodemap, rc = -EACCES);
 	}
 
-	if (nodemap && ucred->uc_o_uid == nodemap->nm_squash_uid &&
+	if (nodemap &&
+	    ucred->uc_o_uid == nodemap_map_id(nodemap, NODEMAP_UID,
+					      NODEMAP_CLIENT_TO_FS,
+					      nodemap->nm_squash_uid) &&
 	    nodemap->nmf_deny_unknown)
 		/* deny access before we get identity ref */
 		GOTO(out, rc = -EACCES);
@@ -528,8 +531,11 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	struct mdt_device *mdt = info->mti_mdt;
 	struct md_identity *identity = NULL;
 
-	if (nodemap && uc->uc_o_uid == nodemap->nm_squash_uid
-	    && nodemap->nmf_deny_unknown)
+	if (nodemap &&
+	    uc->uc_o_uid == nodemap_map_id(nodemap, NODEMAP_UID,
+					   NODEMAP_CLIENT_TO_FS,
+					   nodemap->nm_squash_uid) &&
+	    nodemap->nmf_deny_unknown)
 		/* deny access before we get identity ref */
 		RETURN(-EACCES);
 

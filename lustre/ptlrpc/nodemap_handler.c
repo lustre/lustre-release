@@ -780,9 +780,12 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	if (unlikely(nodemap == NULL))
 		goto out;
 
-	if (id == 0) {
+	if (id_type != NODEMAP_PROJID && id == 0) {
+		/* root id is mapped and offset just as the other ids. This
+		 * means root cannot remain root as soon as offset is defined.
+		 */
 		if (nodemap->nmf_allow_root_access)
-			goto out;
+			goto offset;
 		goto map;
 	}
 
@@ -847,13 +850,30 @@ offset:
 		GOTO(out, found_id);
 
 	if (tree_type == NODEMAP_FS_TO_CLIENT) {
+		if (found_id < offset_start) {
+			/* If we are outside boundaries, try to squash before
+			 * offsetting, and return unmapped otherwise.
+			 */
+			if (!attempted_squash)
+				GOTO(squash, found_id);
+
+			CDEBUG(D_SEC,
+			       "%s: squash_id for type %u is below nodemap start %u, use unmapped value %u\n",
+			       nodemap->nm_name, id_type, offset_start,
+			       found_id);
+			GOTO(out, found_id);
+		}
 		found_id -= offset_start;
 	} else {
-		if (found_id >= offset_limit && !attempted_squash)
-			GOTO(squash, found_id);
+		if (found_id >= offset_limit) {
+			/* If we are outside boundaries, try to squash before
+			 * offsetting, and return unmapped otherwise.
+			 */
+			if (!attempted_squash)
+				GOTO(squash, found_id);
 
-		if (attempted_squash) {
-			CERROR("%s: squash_id for type %u is outside nodemap limit %u, use unmapped value %u\n",
+			CDEBUG(D_SEC,
+			       "%s: squash_id for type %u is outside nodemap limit %u, use unmapped value %u\n",
 			       nodemap->nm_name, id_type, offset_limit,
 			       found_id);
 			GOTO(out, found_id);
@@ -1681,7 +1701,8 @@ EXPORT_SYMBOL(nodemap_set_squash_projid);
  * Check if nodemap allows setting quota.
  *
  * If nodemap is not active, always allow.
- * For user and group quota, allow if the nodemap allows root access.
+ * For user and group quota, allow if the nodemap allows root access, unless
+ * root is mapped.
  * For project quota, allow if project id is not squashed or deny_unknown
  * is not set.
  *
@@ -1697,6 +1718,9 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id)
 
 	if (!nodemap || !nodemap->nmf_allow_root_access ||
 	    !(nodemap->nmf_rbac & NODEMAP_RBAC_QUOTA_OPS))
+		return false;
+
+	if (nodemap_map_id(nodemap, NODEMAP_UID, NODEMAP_CLIENT_TO_FS, 0) != 0)
 		return false;
 
 	if (qc_type == PRJQUOTA) {
@@ -2011,6 +2035,8 @@ int nodemap_add_offset(const char *nodemap_name, char *offset)
 
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -EPERM);
 
 	if (nodemap->nm_offset_start_uid) {
 		/* nodemap has already offset  */
@@ -2099,6 +2125,8 @@ int nodemap_del_offset(const char *nodemap_name)
 
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -EPERM);
 
 	rc = nodemap_del_offset_helper(nodemap);
 	if (rc == 0)
