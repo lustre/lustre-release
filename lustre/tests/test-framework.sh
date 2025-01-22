@@ -2606,6 +2606,17 @@ start() {
 	mount_facet ${facet}
 	RC=$?
 
+	if [[ $RC == 0 && $facet == *ost* && $OSTDEVBASE == */tmp/* ]]; then
+		varname="${facet}_FSTRIM"
+		if [[ -z ${!varname} ]]; then
+			if do_facet ${facet} "fstrim -v $mntpt"; then
+				eval export $varname="yes"
+			else
+				eval export $varname="no"
+			fi
+		fi
+	fi
+
 	return $RC
 }
 
@@ -3966,14 +3977,19 @@ wait_destroy_complete () {
 
 fstrim_inram_devs() {
 	local i
+	local v
+	local pids
 
 	[[ "$(facet_fstype ost1)" = "ldiskfs" ]] || return 0
 	[[ $OSTDEVBASE == */tmp/* ]] || return 0
 
 	for (( i=1; i <= $OSTCOUNT; i++)); do
-		do_facet ost$i "fstrim -v $(facet_mntpt ost$i)" &
+		v="ost${i}_FSTRIM"
+		[[ ${!v} != "yes" ]] && continue
+		do_facet ost$i "fstrim $(facet_mntpt ost$i)" &
+		pids+=" $!"
 	done
-	wait
+	[[ -n $pids ]] && wait $pids
 
 	return 0
 }
