@@ -303,7 +303,7 @@ test_1n() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	create_dir $POOL_ROOT ${POOL}1234567
 	stack_trap "rm -f $POOL_ROOT/file"
-	dd if=/dev/zero of=$POOL_ROOT/file bs=1M count=100
+	$DD of=$POOL_ROOT/file count=100
 	RC=$?; [[ $RC -eq 0 ]] ||
 		error "failed to write to $POOL_ROOT/file: $RC"
 	do_facet mgs lctl pool_remove $FSNAME.${POOL}1234567 OST0000
@@ -924,10 +924,8 @@ test_14() {
 	OST0_SIZE=$($LFS df $POOL_ROOT/dir2 | awk '/\[OST:0\]/ { print $4 }')
 	FILE_SIZE=$((OST0_SIZE/1024/10))
 	echo "Filling OST0 with 9 files of ${FILE_SIZE}MB in $POOL_ROOT/dir2"
-	i=1
-	while [[ $i -lt 10 ]]; do
-		dd if=/dev/zero of=$POOL_ROOT/dir2/f${i} bs=1M count=$FILE_SIZE
-		i=$((i + 1))
+	for ((i = 1; $i < 10; i++)); do
+		$DD of=$POOL_ROOT/dir2/f${i} count=$FILE_SIZE
 	done
 	sleep 1 # get new statfs info
 	$LFS df $POOL_ROOT/dir2
@@ -1302,20 +1300,19 @@ test_23a() {
 	# This does two "dd" runs to ensure that the quota failure is returned
 	# to userspace when we check.  The first "dd" might otherwise complete
 	# without error if it is only writing into cache.
-	stat=$(LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BUNIT_SZ \
-		count=$((BUNIT_SZ*2)) 2>&1)
+	stat=$(LOCALE=C $RUNAS $DD of=$file bs=$BUNIT_SZ count=$((BUNIT_SZ*2)) 2>&1)
 	echo $stat | grep "Disk quota exceeded" > /dev/null
 	if [ $? -eq 0 ]; then
 		$LFS quota -v -u $RUNAS_ID $dir
 		cancel_lru_locks osc
 		stack_trap "rm -f $file"
-		stat=$(LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BUNIT_SZ \
-			count=$BUNIT_SZ seek=$((BUNIT_SZ*2)) 2>&1)
+		stat=$(LOCALE=C $RUNAS $DD of=$file bs=$BUNIT_SZ \
+		       count=$BUNIT_SZ seek=$((BUNIT_SZ*2)) 2>&1)
 		RC=$?
 		echo $stat
-		[[ $RC -eq 0 ]] && error "second dd did not fail."
+		(( $RC != 0 )) || error "second dd did not fail."
 		echo $stat | grep "Disk quota exceeded" > /dev/null
-		[[ $? -eq 1 ]] && error "second dd did not fail with EDQUOT."
+		(( $? != 1 )) || error "second dd did not fail with EDQUOT."
 	else
 		log "first dd failed with EDQUOT."
 	fi
@@ -1333,81 +1330,76 @@ test_23b() {
 	}
 
 	local i=0
-	local TGT
 	local dir=$POOL_ROOT/dir
 	local file="$dir/$tfile-quota"
 
 	create_pool_nofail $POOL
 
-	local TGT=$(for i in $(seq 0x$TGT_FIRST 3 0x$TGT_MAX); do \
+	local tgt=$(for ((i = 0x$TGT_FIRST; i <= 0x$TGT_MAX; i += 3)); do
 		printf "$FSNAME-OST%04x_UUID " $i; done)
-	add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
+	add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$tgt"
 	create_dir $dir $POOL
+	stack_trap "rm -rf $POOL_ROOT; wait_delete_completed"
 
+	$LFS df -p $POOL $dir
 	local maxfree=$((1024 * 1024 * 30)) # 30G
-	local AVAIL=$(lfs_df -p $POOL $dir | awk '/summary/ { print $4 }')
-	[ $AVAIL -gt $maxfree ] &&
-		skip_env "Filesystem space $AVAIL is larger than " \
-			"$maxfree limit"
+	local avail=$(lfs_df -p $POOL $dir | awk '/summary/ { print $4 }')
+	(( $avail <= $maxfree )) ||
+		skip_env "Filesystem space $avail > $maxfree limit"
 
-	echo "OSTCOUNT=$OSTCOUNT, OSTSIZE=$OSTSIZE, AVAIL=$AVAIL"
-	echo "MAXFREE=$maxfree, SLOW=$SLOW"
+	echo "OSTCOUNT=$OSTCOUNT, OSTSIZE=$OSTSIZE, SLOW=$SLOW, POOL=$POOL"
+	echo "pool_avail=$avail, maxfree=$maxfree"
 
-	# XXX remove the interoperability code once we drop the old server
-	#     ( < 2.3.50) support.
-	if [ "$MDS1_VERSION" -lt $(version_code 2.3.50) ]; then
-		$LFS quotaoff -ug $MOUNT
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
+		do_facet mgs $PERM_CMD \
+			osd-*.$FSNAME-OST*.quota_slave.enabled=none
 	else
-		if [[ $PERM_CMD == *"set_param -P"* ]]; then
-			do_facet mgs $PERM_CMD \
-				osd-*.$FSNAME-OST*.quota_slave.enabled=none
-		else
-			do_facet mgs $PERM_CMD $FSNAME.quota.ost=none
-		fi
-		sleep 5
+		do_facet mgs $PERM_CMD $FSNAME.quota.ost=none
 	fi
+	sleep 5
 
 	chown $RUNAS_ID.$RUNAS_ID $dir
 	i=0
-	local RC=0
-	local TOTAL=0 # KB
-	local stime=$(date +%s)
-	local stat
-	local etime
-	local elapsed
+	local rc=0
+	local total=0 # KB
+	local wr_mb=$((5 * 1024))
+	local stime=$SECONDS
 	local maxtime=300 # minimum speed: 5GB / 300sec ~= 17MB/s
-	while [ $RC -eq 0 ]; do
+
+	while (( $rc == 0 )); do
+		local stat
+		local etime
+		local elapsed
+
 		i=$((i + 1))
-		stat=$(LOCALE=C $RUNAS2 dd if=/dev/zero of=${file}$i bs=1M \
-			count=$((5 * 1024)) 2>&1)
-		RC=$?
-		TOTAL=$((TOTAL + 1024 * 1024 * 5))
-		echo "[$i iteration] $stat"
-		echo "total written: $TOTAL"
+		# use urandom to avoid data compression
+		stat=$(LOCALE=C $RUNAS2 $DD of=$file.$i count=$wr_mb 2>&1)
+		rc=$?
+		((total += wr_mb * 1024))
+		echo "iteration $i: $stat"
+		ls -ls $file.*
+		echo "total written: $total"
 
-		etime=$(date +%s)
+		etime=$SECONDS
 		elapsed=$((etime - stime))
-		echo "stime=$stime, etime=$etime, elapsed=$elapsed"
+		echo "start=$stime, end=$etime, elapsed=$elapsed"
 
-		if [ $RC -eq 1 ]; then
+		if (( $rc == 1 )); then
 			echo $stat | grep -q "Disk quota exceeded"
-			[[ $? -eq 0 ]] &&
+			(( $? != 0 )) ||
 				error "dd failed with EDQUOT with quota off"
 
 			echo $stat | grep -q "No space left on device"
-			[[ $? -ne 0 ]] &&
-				error "dd did not fail with ENOSPC"
-		elif [ $TOTAL -gt $AVAIL ]; then
-			error "dd didn't fail with ENOSPC ($TOTAL > $AVAIL)"
-		elif [ $i -eq 1 -a $elapsed -gt $maxtime ]; then
-			log "The first 5G write used $elapsed (> $maxtime) " \
-				"seconds, terminated"
-			RC=1
+			(( $? == 0 )) || error "dd did not fail with ENOSPC"
+		elif (( $total > $avail )); then
+			error "dd didn't fail with ENOSPC ($total > $avail)"
+		elif (( $i == 1 && $elapsed > $maxtime )); then
+			skip "5G write used $elapsed > $maxtime sec, give up"
+			rc=1
 		fi
 	done
 
 	df -h
-	rm -rf $POOL_ROOT
 }
 run_test 23b "OST pools and OOS"
 
@@ -1605,7 +1597,7 @@ test_28() {
 	start_full_debug_logging
 	#$LFS setstripe -E 4M -c 1 -p $POOL -E 16M -c 2 $DIR/$tfile
 	$LFS setstripe -c 1 -p $POOL $DIR/$tfile
-	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=1 seek=16
+	$DD of=$DIR/$tfile count=1 seek=16
 	local csum=$(cksum $DIR/$tfile)
 	$LFS getstripe $DIR/$tfile
 	local pool="$($LFS getstripe -p $DIR/$tfile)"

@@ -17,6 +17,10 @@ ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT "
 ALWAYS_EXCEPT+=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+if [[ "$ost1_FSTYPE" == "zfs" ]]; then
+	always_except LU-18676 49
+fi
+
 # Test duration:                   30 min
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="61"
 
@@ -95,7 +99,6 @@ lustre_fail() {
 
 RUNAS="runas -u $TSTID -g $TSTID"
 RUNAS2="runas -u $TSTID2 -g $TSTID2"
-DD="dd if=/dev/zero bs=1M"
 
 FAIL_ON_ERROR=false
 
@@ -1483,7 +1486,7 @@ test_block_soft() {
 	cancel_lru_locks osc
 
 	echo "Write to exceed soft limit"
-	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET ||
+	$RUNAS $DD of=$testfile bs=1K count=10 seek=$OFFSET ||
 		quota_error a $TSTUSR "write failure, but expect success"
 	OFFSET=$((OFFSET + 1024)) # make sure we don't write to same block
 	cancel_lru_locks osc
@@ -1501,7 +1504,7 @@ test_block_soft() {
 	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Write before timer goes off"
-	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET ||
+	$RUNAS $DD of=$testfile bs=1K count=10 seek=$OFFSET ||
 		quota_error a $TSTUSR "write failure, but expect success"
 	OFFSET=$((OFFSET + 1024))
 	cancel_lru_locks osc
@@ -1519,12 +1522,11 @@ test_block_soft() {
 	# maybe cache write, ignore.
 	# write up to soft least quint to consume all
 	# possible slave granted space.
-	$RUNAS dd if=/dev/zero of=$testfile bs=1K \
-		count=$soft_limit seek=$OFFSET || true
+	$RUNAS $DD of=$testfile bs=1K count=$soft_limit seek=$OFFSET || true
 	OFFSET=$((OFFSET + soft_limit))
 	cancel_lru_locks osc
 	log "Write after cancel lru locks"
-	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET &&
+	$RUNAS $DD of=$testfile bs=1K count=10 seek=$OFFSET &&
 		quota_error a $TSTUSR "write success, but expect EDQUOT"
 
 	$SHOW_QUOTA_USER
@@ -4460,8 +4462,8 @@ test_55() {
 	usermod -G $TSTUSR,$TSTUSR2 $TSTUSR
 
 	#prepare test file
-	$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1024 count=100000 ||
-	error "failed to dd"
+	$RUNAS $DD of=$DIR/$tdir/$tfile bs=1024 count=100000 ||
+		error "failed to dd"
 
 	cancel_lru_locks osc
 	sync; sync_all_data || true
@@ -5335,11 +5337,11 @@ test_69()
 	$LFS setquota -u $TSTUSR -B ${limit}M --pool $qpool $DIR ||
 		error "set user quota failed"
 
-	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 oflag=sync ||
+	$RUNAS $DD of="$dom0/f1" bs=1K count=512 oflag=sync ||
 		quota_error u $TSTUSR "write failed"
 
-	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 seek=512 \
-		oflag=sync || quota_error u $TSTUSR "write failed"
+	$RUNAS $DD of="$dom0/f1" bs=1K count=512 seek=512 oflag=sync ||
+		quota_error u $TSTUSR "write failed"
 
 	$RUNAS $DD of=$testfile count=$limit || true
 
@@ -5354,11 +5356,11 @@ test_69()
 
 	# Now all members of qpool1 should get EDQUOT. Expect success
 	# when write to DOM on MDT0, as it belongs to global pool.
-	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 \
-		oflag=sync || quota_error u $TSTUSR "write failed"
+	$RUNAS $DD of="$dom0/f1" bs=1K count=512 oflag=sync ||
+		quota_error u $TSTUSR "write failed"
 
-	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 seek=512 \
-		oflag=sync || quota_error u $TSTUSR "write failed"
+	$RUNAS $DD of="$dom0/f1" bs=1K count=512 seek=512 oflag=sync ||
+		quota_error u $TSTUSR "write failed"
 }
 run_test 69 "EDQUOT at one of pools shouldn't affect DOM"
 
@@ -5867,7 +5869,7 @@ test_75()
 	cancel_lru_locks osc
 
 	echo "Write to exceed soft limit"
-	dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET ||
+	$DD of=$testfile bs=1K count=10 seek=$OFFSET ||
 	      quota_error a $TSTUSR "root write failure, but expect success (2)"
 	OFFSET=$((OFFSET + 1024)) # make sure we don't write to same block
 	cancel_lru_locks osc

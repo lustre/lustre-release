@@ -687,6 +687,13 @@ init_test_env() {
 	export BLCKSIZE=${BLCKSIZE:-4096}
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 	get_lustre_env
+	# use /dev/urandom when consuming space on ZFS to avoid compression
+	if [[ "$ost1_FSTYPE" == "zfs" ]]; then
+		DD_DEV="/dev/urandom"
+	else
+		DD_DEV="/dev/zero"
+	fi
+	DD="dd if=$DD_DEV bs=1M"
 
 	# use localrecov to enable recovery for local clients, LU-12722
 	[[ $MDS1_VERSION -lt $(version_code 2.13.52) ]] || {
@@ -3636,7 +3643,7 @@ fill_ost() {
 	if (( lwm <= $free_kb / 1024 )) ||
 	   [ ! -f $DIR/${filename}.fill_ost$ost_idx ]; then
 		$LFS setstripe -i $ost_idx -c1 $DIR/${filename}.fill_ost$ost_idx
-		dd if=/dev/zero of=$DIR/${filename}.fill_ost$ost_idx bs=1M \
+		$DD of=$DIR/${filename}.fill_ost$ost_idx \
 			count=$size_mb oflag=append conv=notrunc
 	fi
 
