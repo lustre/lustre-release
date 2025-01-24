@@ -938,7 +938,8 @@ static ssize_t osp_conn_uuid_show(struct kobject *kobj, struct attribute *attr,
 	with_imp_locked(obd, imp, count) {
 		conn = imp->imp_connection;
 		if (conn)
-			count = sprintf(buf, "%s\n", conn->c_remote_uuid.uuid);
+			count = sprintf(buf, "%s\n",
+					libcfs_nidstr(&conn->c_peer.nid));
 		else
 			count = sprintf(buf, "%s\n", "<none>");
 	}

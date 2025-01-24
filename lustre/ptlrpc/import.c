@@ -187,7 +187,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp,
 				CDEBUG(D_HA,
 				       "import %s@%s for %s not replayable, auto-deactivating\n",
 				       obd2cli_tgt(imp->imp_obd),
-				       imp->imp_connection->c_remote_uuid.uuid,
+				       libcfs_nidstr(&imp->imp_connection->c_peer.nid),
 				       imp->imp_obd->obd_name);
 				ptlrpc_deactivate_import_nolock(imp);
 				inact = true;
@@ -1168,7 +1168,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 				      LUSTRE_MINOR, LUSTRE_PATCH, LUSTRE_FIX,
 				      major, minor, patch,
 				      OBD_OCD_VERSION_FIX(ocd->ocd_version),
-				      imp->imp_connection->c_remote_uuid.uuid);
+				      libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 
 			GOTO(out, rc = -EPROTO);
 		}
@@ -1239,7 +1239,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 			    sizeof(old_hdl))) {
 			LCONSOLE_WARN("Reconnect to %s (at @%s) failed due bad handle %#llx\n",
 				      obd2cli_tgt(imp->imp_obd),
-				      imp->imp_connection->c_remote_uuid.uuid,
+				      libcfs_nidstr(&imp->imp_connection->c_peer.nid),
 				      imp->imp_dlm_handle.cookie);
 			GOTO(out, rc = -ENOTCONN);
 		}
@@ -1262,14 +1262,14 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 				CDEBUG_LIMIT(level,
 				       "%s@%s changed server handle from %#llx to %#llx but is still in recovery\n",
 				       obd2cli_tgt(imp->imp_obd),
-				       imp->imp_connection->c_remote_uuid.uuid,
+				       libcfs_nidstr(&imp->imp_connection->c_peer.nid),
 				       imp->imp_remote_handle.cookie,
 				       lustre_msg_get_handle(
 					       request->rq_repmsg)->cookie);
 			} else {
 				LCONSOLE_WARN("Evicted from %s (at %s) after server handle changed from %#llx to %#llx\n",
 					      obd2cli_tgt(imp->imp_obd),
-					      imp->imp_connection->c_remote_uuid.uuid,
+					      libcfs_nidstr(&imp->imp_connection->c_peer.nid),
 					      imp->imp_remote_handle.cookie,
 					      lustre_msg_get_handle(
 						   request->rq_repmsg)->cookie);
@@ -1285,7 +1285,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 		} else {
 			CDEBUG(D_HA, "reconnected to %s@%s after partition\n",
 			       obd2cli_tgt(imp->imp_obd),
-			       imp->imp_connection->c_remote_uuid.uuid);
+			       libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 		}
 
 		if (imp->imp_invalid) {
@@ -1361,7 +1361,7 @@ finish:
 		CDEBUG(D_HA,
 		       "evicted/aborted by %s@%s during recovery; invalidating and reconnecting\n",
 		       obd2cli_tgt(imp->imp_obd),
-		       imp->imp_connection->c_remote_uuid.uuid);
+		       libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 		ptlrpc_connect_import(imp);
 		spin_lock(&imp->imp_lock);
 		imp->imp_connected = 0;
@@ -1496,7 +1496,7 @@ out:
 
 		CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",
 		       obd2cli_tgt(imp->imp_obd),
-		       (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
+		       libcfs_nidstr(&imp->imp_connection->c_peer.nid), rc);
 	} else {
 		spin_unlock(&imp->imp_lock);
 	}
@@ -1581,7 +1581,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 	unshare_fs_struct();
 	CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
 	       imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
-	       imp->imp_connection->c_remote_uuid.uuid);
+	       libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 
 	if (do_dump_on_eviction(imp->imp_obd)) {
 		CERROR("dump the log upon eviction\n");
@@ -1649,7 +1649,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		}
 		CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
 		       obd2cli_tgt(imp->imp_obd),
-		       imp->imp_connection->c_remote_uuid.uuid);
+		       libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 		/* reset vbr_failed flag upon eviction */
 		spin_lock(&imp->imp_lock);
 		imp->imp_vbr_failed = 0;
@@ -1718,7 +1718,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 					imp->imp_idle_debug : D_CONSOLE,
 				     "%s: Connection restored to %s (at %s)\n",
 				     imp->imp_obd->obd_name,
-				     obd_uuid2str(&conn->c_remote_uuid),
+				     libcfs_nidstr(&conn->c_peer.nid),
 				     obd_import_nid2str(imp));
 		spin_lock(&imp->imp_lock);
 		imp->imp_was_idle = 0;

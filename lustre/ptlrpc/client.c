@@ -134,10 +134,6 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,
 	}
 
 	c = ptlrpc_connection_get(&peer, &self, uuid);
-	if (c) {
-		memcpy(c->c_remote_uuid.uuid,
-		       uuid->uuid, sizeof(c->c_remote_uuid.uuid));
-	}
 
 	CDEBUG(D_INFO, "%s -> %p\n", uuid->uuid, c);
 
@@ -471,7 +467,7 @@ void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
 		CDEBUG(D_ADAPTTO,
 		       "The network latency for %s (nid %s) has changed from %d to %d\n",
 		       req->rq_import->imp_obd->obd_name,
-		       obd_uuid2str(&req->rq_import->imp_connection->c_remote_uuid),
+		       libcfs_nidstr(&req->rq_import->imp_connection->c_peer.nid),
 		       oldnl, timeout);
 	}
 }

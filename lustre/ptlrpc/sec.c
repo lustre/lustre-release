@@ -1609,14 +1609,14 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
 
 		CDEBUG(D_SEC, "import %s->%s: changing flavor %s -> %s\n",
 		       imp->imp_obd->obd_name,
-		       obd_uuid2str(&conn->c_remote_uuid),
+		       libcfs_nidstr(&conn->c_peer.nid),
 		       sptlrpc_flavor2name(&sec->ps_flvr, str, sizeof(str)),
 		       sptlrpc_flavor2name(&sf, str2, sizeof(str2)));
 	} else if (SPTLRPC_FLVR_BASE(sf.sf_rpc) !=
 		   SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_NULL)) {
 		CDEBUG(D_SEC, "import %s->%s netid %x: select flavor %s\n",
 		       imp->imp_obd->obd_name,
-		       obd_uuid2str(&conn->c_remote_uuid),
+		       libcfs_nidstr(&conn->c_peer.nid),
 		       LNET_NID_NET(&conn->c_peer.nid),
 		       sptlrpc_flavor2name(&sf, str, sizeof(str)));
 	}
@@ -1627,7 +1627,7 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
 	} else {
 		CERROR("import %s->%s: failed to create new sec\n",
 		       imp->imp_obd->obd_name,
-		       obd_uuid2str(&conn->c_remote_uuid));
+		       libcfs_nidstr(&conn->c_peer.nid));
 		rc = -EPERM;
 	}
 

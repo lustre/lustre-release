@@ -120,7 +120,8 @@ static void ldlm_expired_completion_wait(struct lock_wait_data *lwd)
 		   "lock timed out (enqueued at %lld, %llds ago), entering recovery for %s@%s",
 		   lock->l_activity,
 		   ktime_get_real_seconds() - lock->l_activity,
-		   obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
+		   obd2cli_tgt(obd),
+		   libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 
 	EXIT;
 }
@@ -2710,7 +2711,7 @@ static int ldlm_lock_replay_thread(void *data)
 	unshare_fs_struct();
 	CDEBUG(D_HA, "lock replay thread %s to %s@%s\n",
 	       imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
-	       imp->imp_connection->c_remote_uuid.uuid);
+	       libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 
 	__ldlm_replay_locks(imp, true);
 	atomic_dec(&imp->imp_replay_inflight);

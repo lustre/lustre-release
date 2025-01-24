@@ -76,6 +76,7 @@ int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *tgt)
 	struct lu_svr_qos *svr = NULL;
 	struct lu_svr_qos *tempsvr;
 	struct obd_export *exp = tgt->ltd_exp;
+	struct obd_uuid tmp;
 	int found = 0;
 	__u32 id = 0;
 	int rc = 0;
@@ -89,8 +90,9 @@ int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *tgt)
 	 * with OSD API.
 	 */
 	list_for_each_entry(svr, &qos->lq_svr_list, lsq_svr_list) {
-		if (obd_uuid_equals(&svr->lsq_uuid,
-				    &exp->exp_connection->c_remote_uuid)) {
+		obd_str2uuid(&tmp,
+			     libcfs_nidstr(&exp->exp_connection->c_peer.nid));
+		if (obd_uuid_equals(&svr->lsq_uuid, &tmp)) {
 			found++;
 			break;
 		}
@@ -102,7 +104,9 @@ int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *tgt)
 		OBD_ALLOC_PTR(svr);
 		if (!svr)
 			GOTO(out, rc = -ENOMEM);
-		memcpy(&svr->lsq_uuid, &exp->exp_connection->c_remote_uuid,
+
+		memcpy(&svr->lsq_uuid,
+		       libcfs_nidstr(&exp->exp_connection->c_peer.nid),
 		       sizeof(svr->lsq_uuid));
 		++id;
 		svr->lsq_id = id;

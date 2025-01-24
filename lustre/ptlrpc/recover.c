@@ -199,7 +199,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 	ENTRY;
 	CDEBUG(D_HA, "import %s of %s@%s abruptly disconnected: reconnecting\n",
 		imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
-		imp->imp_connection->c_remote_uuid.uuid);
+		libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 
 	if (ptlrpc_set_import_discon(imp, conn, true)) {
 		/* to control recovery via lctl {disable|enable}_recovery */

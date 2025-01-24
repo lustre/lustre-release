@@ -569,8 +569,6 @@ struct ptlrpc_connection {
 	struct rhash_head	c_hash;
 	/** Remote side nid for this connection */
 	struct lnet_processid	c_peer;
-	/** UUID of the other side */
-	struct obd_uuid		c_remote_uuid;
 	/** reference counter for this connection */
 	atomic_t		c_refcount;
 };

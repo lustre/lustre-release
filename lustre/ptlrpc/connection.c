@@ -116,8 +116,6 @@ ptlrpc_connection_get(struct lnet_processid *peer_orig, struct lnet_nid *self,
 
 	conn->c_peer = peer;
 	atomic_set(&conn->c_refcount, 1);
-	if (uuid)
-		obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
 
 	/*
 	 * Add the newly created conn to the hash, on key collision we
