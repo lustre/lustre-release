@@ -555,13 +555,17 @@ command_t cmdlist[] = {
 	 "       quota -a {-u|-g|-p} [-s START_QID] [-e END_QID] [MOUNT_POINT ...]\n"},
 	{"project", lfs_project, 0,
 	 "Change or list project attribute for specified file or directory.\n"
-	 "usage: project [-d|-r] <file|directory...>\n"
+	 "usage: project [-d|--directory] [-r|--recursive] FILE|DIRECTORY...\n"
 	 "         list project ID and flags on file(s) or directories\n"
-	 "       project [-p id] [-s] [-r] <file|directory...>\n"
+	 "       project [-p|--proj-inherit|--inherit ID] [-s|--set-inherit]\n"
+ "                       [-d|--directory] [-r|--recursive] FILE|DIRECTORY...\n"
 	 "         set project ID and/or inherit flag for specified file(s) or directories\n"
-	 "       project -c [-d|-r [-p id] [-0]] <file|directory...>\n"
+	 "       project -c|--check [-p|--proj-inherit|--inherit ID]\n"
+	 "               [-0|--print0] [-d|--directory] [-r|--recursive]\n"
+	 "               FILE|DIRECTORY...\n"
 	 "         check project ID and flags on file(s) or directories, print outliers\n"
-	 "       project -C [-d|-r] [-k] <file|directory...>\n"
+	 "       project -C|--clear [-k|--keep] [-d|--directory]\n"
+	 "               [-r|--recursive] FILE|DIRECTORY...\n"
 	 "         clear the project inherit flag and ID on the file or directory\n"
 	},
 #endif
@@ -9807,14 +9811,29 @@ static int lfs_project(int argc, char **argv)
 	int ret = 0, err = 0, c, i;
 	struct project_handle_control phc = { 0 };
 	enum lfs_project_ops_t op;
+	struct option long_opts[] = {
+	{ .val = '0',	.name = "print0",	.has_arg = no_argument },
+	{ .val = 'c',	.name = "check",	.has_arg = no_argument },
+	{ .val = 'C',	.name = "clear",	.has_arg = no_argument },
+	{ .val = 'd',	.name = "directory",	.has_arg = no_argument },
+	{ .val = 'k',	.name = "keep",		.has_arg = no_argument },
+	{ .val = 'p',	.name = "proj-inherit",	.has_arg = required_argument },
+	{ .val = 'r',	.name = "recursive",	.has_arg = no_argument },
+	{ .val = 's',	.name = "set-inherit",	.has_arg = no_argument },
+	{ .val = 's',	.name = "inherit",	.has_arg = no_argument },
+	};
 
 	phc.newline = true;
 	phc.assign_projid = false;
 	/* default action */
 	op = LFS_PROJECT_LIST;
 
-	while ((c = getopt(argc, argv, "p:cCsdkr0")) != -1) {
+	while ((c = getopt_long(argc, argv, "0cCdkp:rs",
+				long_opts, NULL)) != -1) {
 		switch (c) {
+		case '0':
+			phc.newline = false;
+			break;
 		case 'c':
 			if (op != LFS_PROJECT_LIST) {
 				fprintf(stderr,
@@ -9835,25 +9854,11 @@ static int lfs_project(int argc, char **argv)
 
 			op = LFS_PROJECT_CLEAR;
 			break;
-		case 's':
-			if (op != LFS_PROJECT_LIST) {
-				fprintf(stderr,
-					"%s: cannot specify '-c' '-C' '-s' together\n",
-					progname);
-				return CMD_HELP;
-			}
-
-			phc.set_inherit = true;
-			op = LFS_PROJECT_SET;
-			break;
 		case 'd':
 			phc.dironly = true;
 			break;
 		case 'k':
 			phc.keep_projid = true;
-			break;
-		case 'r':
-			phc.recursive = true;
 			break;
 		case 'p':
 			if (str2quotaid(&phc.projid, optarg)) {
@@ -9866,8 +9871,19 @@ static int lfs_project(int argc, char **argv)
 			phc.assign_projid = true;
 
 			break;
-		case '0':
-			phc.newline = false;
+		case 'r':
+			phc.recursive = true;
+			break;
+		case 's':
+			if (op != LFS_PROJECT_LIST) {
+				fprintf(stderr,
+					"%s: cannot specify '-c' '-C' '-s' together\n",
+					progname);
+				return CMD_HELP;
+			}
+
+			phc.set_inherit = true;
+			op = LFS_PROJECT_SET;
 			break;
 		default:
 			fprintf(stderr, "%s: invalid option '%c'\n",

@@ -1,119 +1,84 @@
-.TH LFS-PROJECT 1 2025-01-24 "Lustre" "Lustre User Utilities"
+.TH LFS-PROJECT 1 2025-04-23 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-project \- Change or list project attribute for specified file or directory.
 .SH SYNOPSIS
 .SY "lfs project"
-.RB [ -d | -r ]
-.IR FILE | DIRECTORY ...
-.SY "lfs project"
-.RB { -p
-.I ID
-.RB | -s }
-.RB [ -r ]
-.IR FILE | DIRECTORY ...
-.SY "lfs project"
-.B -c
-.RB [ -d | -r
-.RB [ -p
+.RB [ -p | --proj-inherit | --inherit
 .IR ID ]
-.RB [ -0 ]]
+.RB [ -d | --directory ]
+.RB [ -r | --recursive ]
+.RB [ -s | --set-inherit ]
 .IR FILE | DIRECTORY ...
 .SY "lfs project"
-.B -C
-.RB [ -d | -r ]
-.RB [ -k ]
+.BR -c | --check
+.RB [ -0 | --print0 ]]
+.RB [ -d | --directory ]
+.RB [ -p | --proj-inherit | --inherit
+.IR ID ]
+.RB [ -r | --recursive ]
+.IR FILE | DIRECTORY ...
+.SY "lfs project"
+.BR -C | --clear
+.RB [ -d | --directory ]
+.RB [ -k | --keep ]
+.RB [ -r | --recursive ]
 .IR FILE | DIRECTORY ...
 .YS
 .SH DESCRIPTION
-.BR "lfs project"
-.RB [ -d | -r ]
-.IR FILE | DIRECTORY ...
+.B lfs project
+lists the project ID and flags on
+.IR FILE "(s) or " DIRECTORIES .
+.SH OPTIONS
 .TP
-List project ID and flags on file(s) or directories.
+.BR -0 ", " --print0
+Print pathnames returned by -c with a trailing NUL, suitable for use by
+.B 'xargs -0 lfs project -p'.
 .TP
-.B -d
+.BR -c ", " --check
+Check project ID and inherit flag on specified
+.IR FILE "(s) or " DIRECTORY .
+If
+.BR -p | --proj-inherit | --inherit
+is not given, then use the project ID on the top-level directory,
+otherwise use the specified
+.IR ID .
+If checking a directory and/or recursively, print only files that do not match
+.IR ID .
+.TP
+.BR -C ", " --clear
+Clear inherit attribute and reset project
+.I ID
+to 0 for
+.IR FILE " or " DIRECTORY .
+If the
+.BR -d | --directory
+option is set, then clear only the directory itself.
+.TP
+.BR -d ", " --directory
 Show the directory's own project ID and flags, override
-.B -r
+.BR -r | --recursive
 option.
 .TP
-.B -r
-Recursively list all descendants'(of the directory) project attribute.
-.PP
-.BR "lfs project"
-.BR { -p
-.I ID
-.RB | -s }
-.RB [ -r ]
-.IR FILE | DIRECTORY ...
+.BR -k ", " --keep
+Keep the project ID unchanged.
+Can only be specified with
+.BR -C | --clear .
 .TP
-Set project ID and/or inherit flag for specified file(s) or directories.
+.BR -p ", " --proj-inherit | --inherit
+Set project ID and inherit flag on the
+.IR FILE "(s) or " DIRECTORIES.
+Set project ID with given value for the specified
+.IR FILE " or " DIRECTORY .
 .TP
-.BI -p \ ID
-Set project
-.I ID
-with given value for the specified file or directory
+.B -r ", " --recursive
+Recursively apply lfs project on all descendants of the
+.IR DIRECTORY .
 .TP
-.B -s
+.BR -s ", " --set-inherit
 Set the
 .B PROJID_INHERIT
 attribute on directories, so that new files and subdirectories created
 therein will inherit the project ID and attribute from the parent.
-.TP
-.B -r
-Set project
-.I ID
-with the directory's project ID for all its descendants (with
-.B -p
-specified). For descendant directories, also set
-inherit flag (if
-.B -s
-specified).
-.PP
-.BR "lfs project"
-.B -c
-.RB [ -d | -r [ -p
-.IR ID ]
-.RB [ -0 ]]
-.IR FILE | DIRECTORY ...
-.PP
-Check project ID and flags on file(s) or directories, print outliers.
-.TP
-.B -c
-Check project ID and inherit flag on specified file(s) or directory. If
-.B -p
-is not given, then use the project ID on the top-level directory,
-otherwise use the ID specified with
-.BR -p .
-if checking a directory and or recursively, print only files that do not match.
-.TP
-.B -0
-Print pathnames returned by -c with a trailing NUL, suitable for use by
-.B 'xargs -0 lfs project -p'.
-.PP
-.BR "lfs project"
-.B -C
-.RB [ -d | -r ]
-.RB [ -k ]
-.IR FILE | DIRECTORY ...
-.PP
-Clear the project inherit flag and ID on the file(s) or directories
-.TP
-.B -C
-Clear inherit attribute and reset project ID to 0 for file or directory.
-.TP
-.B -d
-Clear only the directory itself.
-.TP
-.B -r
-Clear the directory and all its descendants recursively. If neither
-.B -d
-nor
-.B -r
-is specified, clear the directory and its
-immediate children.
-.TP
-.B -k
-Keep the project ID unchanged.
 .SH EXAMPLES
 set directory quota on
 .BR /mnt/lustre/dir1,
