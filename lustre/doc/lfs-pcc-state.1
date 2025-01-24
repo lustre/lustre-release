@@ -1,8 +1,10 @@
-.TH LFS-PCC-STATE 1 2021-10-07 "Lustre" "Lustre Utilities"
+.TH LFS-PCC-STATE 1 2025-01-24 "Lustre" "Lustre User Utilities"
 .SH NAME
-lfs pcc state \- display current PCC state of file
+lfs-pcc-state \- display current PCC state of file
 .SH SYNOPSIS
-.BI "lfs pcc state " FILE \fR[...]
+.SY "lfs pcc state"
+.IR FILE \ [...]
+.YS
 .SH DESCRIPTION
 Display the current PCC cache state of
 .I FILE
@@ -25,15 +27,23 @@ shows additional file states, including
 .B attaching
 for files that are not fully copied into cache,
 .SH EXAMPLES
-.TP
-.B $ lfs pcc state /mnt/lustre/file
 Show the PCC cache state of
-.BR file .
-.TP
+.BR file :
+.EX
+.RS
+.B $ lfs pcc state /mnt/lustre/file
+.RE
+.EE
+.SH AVAILABILITY
+.B lfs pcc state
+is part of the
+.BR lustre (7)
+filesystem package since release 2.13.0
+.\" Added in commit v2_12_53-113-gf172b11688
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-pcc (1),
 .BR lfs-pcc-detach (1),
 .BR lfs-pcc-state (1),
-.BR lctl-pcc (8),
-.BR llapi_pcc_attach (3)
+.BR llapi_pcc_attach (3),
+.BR lctl-pcc (8)

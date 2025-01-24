@@ -1,14 +1,22 @@
-.TH LFS-PCC-DELETE 1 2019-04-15 "Lustre" "Lustre Utilities"
+.TH LFS-PCC-DELETE 1 2025-01-24 "Lustre" "Lustre User Utilities"
 .SH NAME
-lfs pcc delete \- delete PCC component from file
+lfs-pcc-delete \- delete PCC component from file
 .SH SYNOPSIS
-.BR "lfs pcc delete" \fIFILE [...]
+.SY "lfs pcc delete"
+.IR FILE \ [...]
+.YS
 .SH DESCRIPTION
 Delete PCC component from specified
 .IR FILE (s).
 This will remove the cached file from all connected clients, and
 allow the file to be accessed by older clients that do not have
 PCC support.
+.SH AVAILABILITY
+.B lfs pcc delete
+is part of the
+.BR lustre (7)
+filesystem package since release 2.17.0
+.\" Added in commit v2_16_50-46-g01b82baffe
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-pcc (1),
