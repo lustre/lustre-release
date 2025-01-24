@@ -1,0 +1,107 @@
+.TH LCTL-NODEMAP_FILESET_MODIFY 8 2025-06-18 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_fileset_modify \- modifies an existing fileset of a nodemap
+.SH SYNOPSIS
+.SY "lctl nodemap_fileset_modify"
+.BI --name " NODEMAP_NAME"
+.BI --fileset " SUBDIRECTORY"
+.RB [ --rename | -r
+.IR "NEW_SUBDIRECTORY" ]
+.RB [ --primary | -p ]
+.RB [ --alt | -a ]
+.RB [ --rw ]
+.RB [ --ro ]
+.YS
+.SH DESCRIPTION
+.B nodemap_fileset_modify
+modifies the properties of an existing fileset within a nodemap. The fileset
+is identified by its
+.IR SUBDIRECTORY
+path within the nodemap specified by its
+.IR NODEMAP_NAME .
+Modifying a fileset can target the fileset's path, its type (primary or
+alternate), and its access permissions (read-write or read-only). This command
+cannot move filesets between nodemaps. The
+.B --name
+and
+.B --fileset
+options are
+mandatory.
+.SH OPTIONS
+.TP
+.BR -n ", " --name " NODEMAP_NAME"
+Specifies the nodemap containing the fileset to modify.
+.TP
+.BR -f ", " --fileset " SUBDIRECTORY"
+Specifies the path of the fileset to modify.
+.TP
+.BR -r ", " --rename " NEW_SUBDIRECTORY"
+Changes the fileset's path to the specified new subdirectory. The new path
+must begin with a slash
+.RB (' / ')
+and cannot yet exist as a fileset of that type on the same nodemap.
+.TP
+.BR -p ", " --primary
+Converts the fileset to a primary fileset. The flag has no effect if the fileset
+is already primary. Note that
+.B --primary
+can only convert an alternate fileset to primary if there is currently no
+primary fileset set on the nodemap. This flag is mutually exclusive with
+.B --alt
+option.
+.TP
+.BR -a ", " --alt
+Converts the fileset to an alternate fileset. The flag has no effect if the
+fileset is already alternate. This flag is mutually exclusive with
+.B --primary
+option.
+.TP
+.B --rw
+Sets the fileset to read-write access mode. The flag has no effect if the
+fileset is already set to read-write. This flag is mutually exclusive with
+.B --ro
+option.
+.TP
+.B --ro
+Sets the fileset to read-only access mode which is enforced when the fileset
+applies for a given
+.IR SUBDIRECTORY
+at mount time. The flag has no effect if the fileset is already set to
+read-only. This flag is mutually exclusive with
+.B --rw
+option.
+.SH EXAMPLES
+Rename a fileset. A fileset is unique, therefore the name suffices:
+.EX
+.B # lctl nodemap_fileset_modify --name tenant1 --fileset '/dir1' --rename '/dir2'
+.EE
+.PP
+Convert a primary fileset into an alternate fileset and vice versa:
+.EX
+.B # lctl nodemap_fileset_modify --name tenant1 --fileset '/dir1' --alt
+.B # lctl nodemap_fileset_modify --name tenant1 --fileset '/dir1' --primary
+.EE
+.PP
+Change the access mode of a fileset to read-only and back to read-write:
+.EX
+.B # lctl nodemap_fileset_modify --name tenant1 --fileset '/dir1' --ro
+.B # lctl nodemap_fileset_modify --name tenant1 --fileset '/dir1' --rw
+.EE
+.PP
+Combine all options to change a fileset's path, type, and access mode. Rename
+a primary fileset '/dir1' to '/dir2', convert it to an alternate fileset, and
+set it to read-only:
+.EX
+.B # lctl nodemap_fileset_modify --name tenant1 --fileset '/dir1' --rename '/dir2' --alt --ro
+.EE
+.SH AVAILABILITY
+.B lctl nodemap_fileset_modify
+is part of the
+.BR lustre (7)
+filesystem package since release 2.17.0.
+.\" Added in commit XXX
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-fileset-add (8),
+.BR lctl-nodemap-fileset-del (8)

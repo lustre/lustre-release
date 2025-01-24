@@ -12,7 +12,9 @@ SERVER_MANFILES =				\
 	lctl-nodemap-fileset-add.8		\
 	lctl-nodemap_fileset_add.8		\
 	lctl-nodemap-fileset-del.8		\
-	lctl-nodemap_fileset_del.8
+	lctl-nodemap_fileset_del.8		\
+	lctl-nodemap-fileset-modify.8		\
+	lctl-nodemap_fileset_modify.8
 
 if MANPAGES
 man_MANS =

@@ -3454,6 +3454,172 @@ test_27e() {
 }
 run_test 27e "test multiple filesets mounting rules (ro)"
 
+test_27f() {
+	local nm="c0"
+	local prim_fset="/prim_fset"
+	local prim_fset_new="/prim_fset_new"
+	local alt_fset1="/alt_fset1"
+	local alt_fset1_new="/alt_fset1_new"
+	local alt_fset2="/alt_fset2"
+	local invalid_fset="/invalid"
+	local dup_fset="/duplicate"
+
+	(( $MGS_VERSION >= $(version_code 2.16.56) )) ||
+		skip "Need MGS >= 2.16.56 for multiple filesets"
+
+	# if servers run on the same node, it is impossible to tell if they get
+	# synced with the mgs, so this test needs to be skipped
+	if [[ $(facet_active_host mgs) == $(facet_active_host mds) &&
+	      $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
+		skip "local mode not supported"
+	fi
+
+	stack_trap nodemap_test_cleanup EXIT
+
+	nodemap_test_setup
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+	fi
+
+	stack_trap "nodemap_clear_filesets_and_wait $nm" EXIT
+
+	do_facet mgs $LCTL nodemap_fileset_add --name $nm \
+		--fileset $prim_fset ||
+		error "unable to add fileset $prim_fset info to nodemap $nm"
+	do_facet mgs $LCTL nodemap_fileset_add --name $nm --fileset $alt_fset1 \
+		--alt ||
+		error "unable to add fileset $alt_fset1 info to nodemap $nm"
+	do_facet mgs $LCTL nodemap_fileset_add --name $nm --fileset $alt_fset2 \
+		--alt --ro ||
+		error "unable to add fileset $alt_fset2 info to nodemap $nm"
+
+	wait_nm_sync_fileset $nm $alt_fset2 $alt_fset2 "alternate" true
+
+	# Test 1: Rename primary fileset
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $prim_fset --rename $prim_fset_new ||
+		error "failed to rename primary fileset"
+	wait_nm_sync_fileset $nm $prim_fset_new $prim_fset_new "primary"
+
+	# Test 2: Rename alternate fileset
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset1 --rename $alt_fset1_new ||
+		error "failed to rename alternate fileset"
+	wait_nm_sync_fileset $nm $alt_fset1_new $alt_fset1_new "alternate"
+
+	# Test 3: Convert primary to alternate
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $prim_fset_new --alt ||
+		error "failed to convert primary fileset to alt fileset"
+	wait_nm_sync_fileset $nm $prim_fset_new $prim_fset_new "alternate"
+
+	# Test 4: Convert alternate to primary
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset1_new --prim ||
+		error "failed to convert alt fileset to primary"
+	wait_nm_sync_fileset $nm $alt_fset1_new $alt_fset1_new "primary"
+
+	# Test 5: Change access mode RW->RO for primary
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset1_new --ro ||
+		error "failed to change primary fileset to read-only"
+	wait_nm_sync_fileset $nm $alt_fset1_new $alt_fset1_new "primary" true
+
+	# Test 6: Change access mode RO->RW for primary
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset1_new --rw ||
+		error "failed to change primary fileset to read-write"
+	wait_nm_sync_fileset $nm $alt_fset1_new $alt_fset1_new "primary"
+
+	# Test 7: Change access mode RO->RW for alternate
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset2 --rw ||
+		error "failed to change alternate fileset to read-write"
+	wait_nm_sync_fileset $nm $alt_fset2 $alt_fset2 "alternate"
+
+	# Test 8: Change access mode RW->RO for alternate
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset2 --ro ||
+		error "failed to change alternate fileset to read-only"
+	wait_nm_sync_fileset $nm $alt_fset2 $alt_fset2 "alternate" true
+
+	# Test 9: Modify non-existent fileset (should fail)
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset "/nonexistent" --ro &&
+		error "modifying non-existent fileset /nonexistent should fail"
+
+	# Test 10: Modify with invalid fileset path (should fail)
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset2 --rename "invalid_no_slash" &&
+		error "modifying fileset with 'invalid_no_slash' should fail"
+
+	# Test 11: Modify with duplicate fileset path (should fail)
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset2 --rename $alt_fset1_new &&
+		error "modifying fileset to duplicate path should fail"
+
+	# Combined parameter changes
+	# Test 12: Change path and access mode RW->RO for primary
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset1_new --rename $prim_fset --ro ||
+		error "failed to change path and access for primary fileset"
+	wait_nm_sync_fileset $nm $prim_fset $prim_fset "primary" true
+
+	# Test 13: Change path and convert primary to alternate
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $prim_fset --rename $alt_fset1 --alt ||
+		error "failed to change path and convert primary fileset to alt"
+	wait_nm_sync_fileset $nm $prim_fset "" "primary"
+	wait_nm_sync_fileset $nm $alt_fset1 $alt_fset1 "alternate" true
+
+	# Test 14: Change path and access mode RO->RW for alternate
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset2 --rename $alt_fset1_new --rw ||
+		error "failed to change path and access mode for alternate fileset $alt_fset2"
+	wait_nm_sync_fileset $nm $alt_fset1_new $alt_fset1_new "alternate"
+
+	# Test 15: Change path and convert alternate to primary
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset1_new --rename $prim_fset --prim ||
+		error "failed to change path and convert alt fileset to primary"
+	wait_nm_sync_fileset $nm $prim_fset $prim_fset "primary"
+
+	# Test 16: Change path, access mode, and prim -> alt
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $prim_fset --rename $alt_fset2 --ro --alt ||
+		error "failed to change multiple parameters for prim fileset"
+	wait_nm_sync_fileset $nm $prim_fset "" "primary"
+	wait_nm_sync_fileset $nm $alt_fset2 $alt_fset2 "alternate" true
+
+	# Test 17: Change path, access mode, and alt -> prim
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $alt_fset1 --rename $prim_fset --rw --prim ||
+		error "failed to change multiple parameters for alt fileset"
+	wait_nm_sync_fileset $nm $alt_fset1 "" "alternate"
+	wait_nm_sync_fileset $nm $prim_fset $prim_fset "primary"
+
+	# Test 18: Attempt overwrite. prim exists (should fail)
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $prim_fset_new --rename $prim_fset --rw --prim &&
+		error "should not be able to overwrite prim fileset"
+
+	# Test 19: Attempt overwrite. alt exists (should fail)
+	do_facet mgs $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $prim_fset --rename $alt_fset2 --ro --alt &&
+		error "should not be able to overwrite alt fileset"
+
+	nodemap_clear_filesets_and_wait $nm
+
+	# back to non-nodemap setup
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=false
+	fi
+
+	# nodemap cleanup implicitly disables previous stack_traps
+	nodemap_test_cleanup
+}
+run_test 27f "test nodemap_fileset_modify"
+
 test_28() {
 	if ! $SHARED_KEY; then
 		skip "need shared key feature for this test" && return

@@ -7252,6 +7252,8 @@ void lustre_assert_wire_constants(void)
 		 (unsigned)LCFG_NODEMAP_GSS_IDENTIFY);
 	LASSERTF(LCFG_NODEMAP_LOOKUP_SHA == 0x000ce066UL, "found 0x%.8xUL\n",
 		 (unsigned)LCFG_NODEMAP_LOOKUP_SHA);
+	LASSERTF(LCFG_NODEMAP_FILESET_MODIFY == 0x000ce067UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_FILESET_MODIFY);
 #endif /* HAVE_SERVER_SUPPORT */
 	LASSERTF(PORTALS_CFG_TYPE == 1, "found %lld\n",
 		 (long long)PORTALS_CFG_TYPE);

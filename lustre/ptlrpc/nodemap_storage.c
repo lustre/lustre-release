@@ -934,7 +934,7 @@ static int nodemap_idx_fileset_fragments_del(
  * @subid: subid of the fileset fragment
  *
  * Return:
- * * true	if subid is a fileset header
+ * * true if subid is a fileset header
  */
 static bool nodemap_fileset_is_header(int subid)
 {
@@ -996,8 +996,8 @@ static int nodemap_fileset_get_subid_header(unsigned int fileset_id)
 }
 
 /**
- * nodemap_fileset_info_init() - Initializes the fileset info structure based
- * on nodemap and fileset info.
+ * nodemap_idx_fileset_info_init() - Initializes the fileset info structure
+ * based on nodemap and fileset info
  * @fset_info: fileset info structure to be initialized
  * @nm_id: nodemap id the fileset belongs to
  * @fileset: fileset name
@@ -1154,7 +1154,77 @@ out:
 }
 
 /**
- * nodemap_idx_fileset_del() - Deletes a fileset from the nodemap IAM.
+ * nodemap_idx_fileset_update_header() - updates only the header of an
+ * existing fileset on the nodemap IAM
+ * @nodemap: the nodemap to update the fileset
+ * @fset_info_old: fileset info of the fileset to be updated from
+ * @fset_info_new: fileset info of the fileset to be updated to
+ *
+ * If an error occurs during the IAM operation, an undo operation is performed.
+ * In case the undo operation fails the fileset subid range is cleared and -EIO
+ * is returned.
+ *
+ * Return:
+ * * %0 on success
+ * * %-EINVAL if invalid input parameters
+ * * %-EIO if undo operation failed, fileset is deleted
+ */
+int nodemap_idx_fileset_update_header(
+	const struct lu_nodemap *nodemap,
+	struct lu_nodemap_fileset_info *fset_info_old,
+	struct lu_nodemap_fileset_info *fset_info_new)
+{
+	struct lu_env env;
+	struct dt_object *idx;
+	int rc = 0, rc2 = 0;
+
+	ENTRY;
+
+	if (!nodemap || !fset_info_old || !fset_info_new)
+		RETURN(-EINVAL);
+
+	if (!nodemap_mgs()) {
+		if (nodemap->nm_dyn)
+			return 0;
+
+		rc = -EINVAL;
+		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
+		       nodemap->nm_name, rc);
+		RETURN(rc);
+	}
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc != 0)
+		RETURN(rc);
+
+	idx = nodemap_mgs_ncf->ncf_obj;
+
+	rc = nodemap_idx_fileset_header_del(fset_info_old, &env, idx);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = nodemap_idx_fileset_header_add(fset_info_new, &env, idx);
+	/* attempt undo */
+	if (rc) {
+		rc2 = nodemap_idx_fileset_header_add(fset_info_old, &env, idx);
+		if (rc2) {
+			CERROR("%s: Undo updating fileset header failed. Corrupt fileset is deleted. rc = %d : rc2 = %d\n",
+			       fset_info_new->nfi_fileset, rc, rc2);
+			/* undo failed. wipe the fileset and set error code */
+			rc2 = nodemap_idx_fileset_fragments_clear(
+				nodemap, &env, idx,
+				fset_info_old->nfi_subid_header);
+			rc = -EIO;
+		}
+	}
+
+out:
+	lu_env_fini(&env);
+	return rc;
+}
+
+/**
+ * nodemap_idx_fileset_del() - Deletes a fileset from the nodemap IAM
  * @nodemap: the nodemap to delete from
  * @fset_info: fileset info of the fileset to be deleted
  *
@@ -1683,15 +1753,14 @@ out:
 /**
  * nodemap_cluster_rec_fileset_alt() - Processes an alternate fileset header
  * or fragment and applies it to the nodemap
- *
  * @nodemap: nodemap to update with this fileset fragment
  * @rec: fileset fragment record
  * @fset_id: fileset id
  * @is_header: whether the record is a header
  *
  * Return:
- * * %0	on success
- * * %-ENOMEM	memory allocation failure
+ * * %0 on success
+ * * %-ENOMEM memory allocation failure
  */
 static int nodemap_cluster_rec_fileset_alt(struct lu_nodemap *nodemap,
 					   const union nodemap_rec *rec,
@@ -1744,13 +1813,12 @@ static int nodemap_capabilities_helper(struct lu_nodemap *nodemap,
 }
 
 /**
- * nodemap_fileset_subid_to_id() - Get the fileset id from the subid
- *
+ * nodemap_fileset_get_id() - Get the fileset id from the subid
  * @subid: subid of the fileset fragment
  *
  * Return:
- * * >=0	on success, representing fileset id
- * * %-EINVAL	invalid subid: subid < NODEMAP_FILESET
+ * * >=0 on success, representing fileset id
+ * * %-EINVAL invalid subid: subid < NODEMAP_FILESET
  */
 static int nodemap_fileset_get_id(int subid)
 {
@@ -1761,16 +1829,15 @@ static int nodemap_fileset_get_id(int subid)
 }
 
 /**
- * nodemap_cluster_rec_fileset() - Process a fileset fragment and apply
+ * nodemap_cluster_fileset_helper() - Process a fileset fragment and apply
  * it to the current nodemap
- *
  * @nodemap: nodemap to update with this fileset fragment
  * @rec: fileset fragment record
  * @subid: cluster idx subid of the fileset fragment
  *
  * Return:
- * * %0	on success
- * * %-EINVAL	invalid subid
+ * * %0 on success
+ * * %-EINVAL invalid subid
  */
 static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
 					  const union nodemap_rec *rec,

@@ -209,6 +209,10 @@ int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
 int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
 			       struct lu_nodemap_fileset_info *fset_info_old,
 			       struct lu_nodemap_fileset_info *fset_info_new);
+int nodemap_idx_fileset_update_header(
+	const struct lu_nodemap *nodemap,
+	struct lu_nodemap_fileset_info *fset_info_old,
+	struct lu_nodemap_fileset_info *fset_info_new);
 int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
 			    struct lu_nodemap_fileset_info *fset_info);
 int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap,

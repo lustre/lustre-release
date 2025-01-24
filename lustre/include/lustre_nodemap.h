@@ -67,6 +67,25 @@ static const struct nodemap_priv_name {
 	{ NODEMAP_RAISE_PRIV_CAPS,		"caps"	},
 };
 
+enum fileset_modify_type {
+	FSM_TYPE_NONE		= 0,
+	FSM_TYPE_PRIMARY	= 1,
+	FSM_TYPE_ALTERNATE	= 2,
+};
+
+enum fileset_modify_access {
+	FSM_ACCESS_NONE		= 0,
+	FSM_ACCESS_RO		= 1,
+	FSM_ACCESS_RW		= 2,
+};
+
+struct lu_nodemap_fileset_modify {
+	/* the renamed fileset path */
+	char				*nfm_fileset;
+	enum fileset_modify_type	nfm_type;
+	enum fileset_modify_access	nfm_access;
+};
+
 /** The nodemap id 0 will be the default nodemap. It will have a configuration
  * set by the MGS, but no ranges will be allowed as all NIDs that do not map
  * will be added to the default nodemap

@@ -4666,6 +4666,135 @@ int jt_nodemap_fileset_del(int argc, char **argv)
 }
 
 /**
+ * Modifies an existing fileset
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ * --fileset			the existing fileset name
+ * --rename			new fileset name
+ * --ro/--rw			whether fileset should be rw or ro
+ * --alt/--primary		whether the fileset should be alt or primary
+ *
+ * \retval			0 on success
+ */
+int jt_nodemap_fileset_modify(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	char *fileset_name = NULL;
+	char *fileset_name_new = NULL;
+	char *type_new = "";
+	char *access_new = "";
+	bool type_conflict = false;
+	bool access_conflict = false;
+	char flags[16];
+	int c;
+	int rc = 0;
+
+	static struct option long_opts[] = {
+		{ .val = 'a', .name = "alt", .has_arg = no_argument },
+		{ .val = 'f', .name = "fileset", .has_arg = required_argument },
+		{ .val = 'h', .name = "help", .has_arg = no_argument },
+		{ .val = 'n', .name = "name", .has_arg = required_argument },
+		{ .val = 'o', .name = "ro", .has_arg = no_argument },
+		{ .val = 'p', .name = "primary", .has_arg = no_argument },
+		{ .val = 'r', .name = "rename", .has_arg = required_argument },
+		{ .val = 'w', .name = "rw", .has_arg = no_argument },
+		{ .name = NULL }
+	};
+
+	while ((c = getopt_long(argc, argv, "af:hn:pr",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'a':
+			if (strlen(type_new) > 0)
+				type_conflict = true;
+			type_new = "alt";
+			break;
+		case 'f':
+			fileset_name = optarg;
+			break;
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'o':
+			if (strlen(access_new) > 0)
+				access_conflict = true;
+			access_new = "ro";
+			break;
+		case 'p':
+			if (strlen(type_new) > 0)
+				type_conflict = true;
+			type_new = "prim";
+			break;
+		case 'r':
+			fileset_name_new = optarg;
+			if (!fileset_name_new || fileset_name_new[0] == '\0') {
+				fprintf(stderr,
+					"--rename parameter cannot be empty\n");
+				return CMD_HELP;
+			}
+			break;
+		case 'w':
+			if (strlen(access_new) > 0)
+				access_conflict = true;
+			access_new = "rw";
+			break;
+		case 'h':
+		case '?':
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (!nodemap_name || !fileset_name)
+		return CMD_HELP;
+
+	/* Check for conflicting options and abort */
+	if (type_conflict) {
+		fprintf(stderr, "cannot specify both --alt and --primary\n");
+		return CMD_HELP;
+	}
+	if (access_conflict) {
+		fprintf(stderr, "cannot specify both --ro and --rw\n");
+		return CMD_HELP;
+	}
+
+	if (!fileset_name_new && strlen(type_new) == 0 &&
+	    strlen(access_new) == 0) {
+		fprintf(stderr,
+			"must specify at least one of --rename, --alt, --primary, --ro, or --rw\n");
+		return CMD_HELP;
+	}
+
+	if (!is_mgs()) {
+		fprintf(stderr, "%s: This command must be run on the MGS.\n",
+			jt_cmdname(argv[0]));
+		return -1;
+	}
+
+	/* Format flags as <type>:<access> */
+	rc = snprintf(flags, sizeof(flags), "%s:%s", type_new, access_new);
+	if (rc < 0 || rc >= sizeof(flags)) {
+		fprintf(stderr, "cannot format fileset flags\n");
+		return CMD_HELP;
+	}
+
+	rc = nodemap_cmd(LCFG_NODEMAP_FILESET_MODIFY, false, NULL, 0, argv[0],
+			 nodemap_name, fileset_name,
+			 fileset_name_new ? fileset_name_new : "", flags, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"error: cannot '%s' with fileset '%s' on nodemap '%s': %s\n",
+			jt_cmdname(argv[0]), fileset_name, nodemap_name,
+			strerror(errno));
+	}
+
+	return rc;
+}
+
+/**
  * set SELinux policy info on a nodemap
  *
  * \param	argc		number of args
@@ -5576,8 +5705,7 @@ int jt_nodemap_test_id(int argc, char **argv)
 
 int jt_nodemap_set_fileset(int argc, char **argv)
 {
-	fprintf(stderr, "error: %s: invalid ioctl\n",
-		jt_cmdname(argv[0]));
+	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
 	return -EOPNOTSUPP;
 }
 
@@ -5588,6 +5716,12 @@ int jt_nodemap_fileset_add(int argc, char **argv)
 }
 
 int jt_nodemap_fileset_del(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_fileset_modify(int argc, char **argv)
 {
 	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
 	return -EOPNOTSUPP;
