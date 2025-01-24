@@ -1556,7 +1556,8 @@ int lmv_statfs_check_update(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 	};
 	int rc;
 
-	if (ktime_get_seconds() - tgt->ltd_statfs_age <
+	if (tgt->ltd_statfs_age &&
+	    ktime_get_seconds() - tgt->ltd_statfs_age <
 	    obd->u.lmv.lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage)
 		return 0;
 
@@ -1734,10 +1735,13 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv,
 			tgt->ltd_qos.ltq_usable = 0;
 			continue;
 		}
-		/* update one hour overdue statfs */
-		if (now - tgt->ltd_statfs_age >
+
+		/* update one hour overdue statfs or if not initialized */
+		if (!tgt->ltd_statfs_age ||
+		    now - tgt->ltd_statfs_age >
 		    60 * lmv->lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage)
 			lmv_statfs_check_update(lmv2obd_dev(lmv), tgt);
+
 		tgt->ltd_qos.ltq_usable = 1;
 		lu_tgt_qos_weight_calc(tgt, true);
 		if (tgt->ltd_index == op_data->op_mds)
