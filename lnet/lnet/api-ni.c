@@ -5746,15 +5746,7 @@ skip_udsp:
 				if (gnlh->version < 2)
 					goto skip_msg_stats;
 
-				msg_stats.im_idx = idx - 1;
-				rc = lnet_get_ni_stats(&msg_stats);
-				if (rc < 0) {
-					NL_SET_ERR_MSG(extack,
-						       "failed to get msg stats");
-					genlmsg_cancel(msg, hdr);
-					GOTO(net_unlock, rc = -ENOMEM);
-				}
-
+				lnet_usr_translate_stats(&msg_stats, &ni->ni_stats);
 				send_stats = nla_nest_start(msg, LNET_NET_LOCAL_NI_ATTR_SEND_STATS);
 				send_attr = nla_nest_start(msg, 0);
 				nla_put_u32(msg, LNET_NET_LOCAL_NI_MSG_STATS_ATTR_GET_COUNT,
