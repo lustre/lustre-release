@@ -110,6 +110,9 @@ as these operations only need read access to fscrypt metadata.
 .br
 - ignore_root_prjquota, so that project quota is not enforced for the root user.
 .br
+- local_admin, to allow mapped root to perform admin operations on files, unless
+it is squashed.
+.br
 - quota_ops, to allow quota modifications.
 .br
 - server_upcall, to define which identity upcall to use. If set, identity upcall

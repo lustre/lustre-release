@@ -188,6 +188,7 @@ static void ucred_set_rbac_roles(struct mdt_thread_info *info,
 	uc->uc_rbac_ignore_root_prjquota =
 		!!(rbac & NODEMAP_RBAC_IGN_ROOT_PRJQUOTA);
 	uc->uc_rbac_hsm_ops = !!(rbac & NODEMAP_RBAC_HSM_OPS);
+	uc->uc_rbac_local_admin = !!(rbac & NODEMAP_RBAC_LOCAL_ADMIN);
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
@@ -352,7 +353,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
 	mdt_root_squash(info, &peernid);
 
-	if (ucred->uc_fsuid) {
+	if (!is_local_root(ucred->uc_fsuid, nodemap)) {
 		if (!cap_issubset(ucred->uc_cap, mdt->mdt_enable_cap_mask))
 			CDEBUG(D_SEC, "%s: drop capabilities %llx for NID %s\n",
 			       mdt_obd_name(mdt),
@@ -571,7 +572,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	mdt_root_squash(info,
 			&mdt_info_req(info)->rq_peer.nid);
 
-	if (uc->uc_fsuid) {
+	if (!is_local_root(uc->uc_fsuid, nodemap)) {
 		if (!cap_issubset(uc->uc_cap, mdt->mdt_enable_cap_mask))
 			CDEBUG(D_SEC, "%s: drop capabilities %llx for NID %s\n",
 			       mdt_obd_name(mdt),

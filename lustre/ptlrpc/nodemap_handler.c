@@ -1836,7 +1836,7 @@ EXPORT_SYMBOL(nodemap_set_squash_projid);
  *
  * If nodemap is not active, always allow.
  * For user and group quota, allow if the nodemap allows root access, unless
- * root is mapped.
+ * root does not have local admin role.
  * For project quota, allow if project id is not squashed or deny_unknown
  * is not set.
  *
@@ -1854,7 +1854,10 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id)
 	    !(nodemap->nmf_rbac & NODEMAP_RBAC_QUOTA_OPS))
 		return false;
 
-	if (nodemap_map_id(nodemap, NODEMAP_UID, NODEMAP_CLIENT_TO_FS, 0) != 0)
+	/* deny if local root has not local admin role */
+	if (!is_local_root(nodemap_map_id(nodemap, NODEMAP_UID,
+					  NODEMAP_CLIENT_TO_FS, 0),
+			   nodemap))
 		return false;
 
 	if (qc_type == PRJQUOTA) {

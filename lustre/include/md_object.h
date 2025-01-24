@@ -690,6 +690,7 @@ struct lu_ucred {
 	int			 uc_rbac_server_upcall:1;
 	int			 uc_rbac_ignore_root_prjquota:1;
 	int			 uc_rbac_hsm_ops:1;
+	int			 uc_rbac_local_admin:1;
 };
 
 struct lu_ucred *lu_ucred(const struct lu_env *env);

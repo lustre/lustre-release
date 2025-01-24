@@ -6159,6 +6159,7 @@ run_test 63 "fid2path with encrypted files"
 test_64a() {
 	local testfile=$DIR/$tdir/$tfile
 	local srv_uc=""
+	local local_admin=""
 	local rbac
 
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
@@ -6166,6 +6167,9 @@ test_64a() {
 
 	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
 		srv_uc="server_upcall"
+
+	(( MDS1_VERSION >= $(version_code 2.16.52) )) &&
+		local_admin="local_admin"
 
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -6180,6 +6184,7 @@ test_64a() {
 		    chlg_ops \
 		    fscrypt_admin \
 		    $srv_uc \
+		    $local_admin \
 		    ;
 	do
 		[[ "$rbac" =~ "$role" ]] ||
@@ -6670,6 +6675,114 @@ test_64g() {
 		error "cat $DIR/$tdir/fileA failed"
 }
 run_test 64g "Nodemap enforces server_upcall RBAC role"
+
+test_64h() {
+	local testfile=$DIR/$tdir/$tfile
+	local offset_start=100000
+	local offset_limit=200000
+	local projid=1001
+	local srv_uc=""
+	local rbac
+	local fid
+
+	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
+		skip "Need MDS >= 2.15.54 for role-based controls"
+
+	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
+		srv_uc="server_upcall"
+
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_upcall=NONE
+
+	stack_trap \
+	    "$LFS setquota -p $((projid+offset_start)) --delete $DIR/$tdir" EXIT
+	stack_trap cleanup_local_client_nodemap EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 777 $DIR/$tdir
+	$LFS project -p $((projid+offset_start)) -s $DIR/$tdir
+	$LFS setquota -p $((projid+offset_start)) -b 1G -B 1G $DIR/$tdir
+	$LFS project -d $DIR/$tdir
+	$LFS quota -aph $DIR/$tdir
+	setup_local_client_nodemap "c0" 1 1
+
+	# skip test if server does not support local_admin rbac role
+	rbac=$(do_facet mds $LCTL get_param -n nodemap.c0.rbac)
+	[[ "$rbac" =~ "local_admin" ]] ||
+		skip "server does not support 'local_admin' rbac role"
+
+	# Let's offset ids. Even root is offset.
+	do_facet mgs $LCTL nodemap_add_offset --name c0 \
+		--offset $offset_start --limit $offset_limit ||
+			error "cannot set offset for c0"
+
+	rbac="file_perms,quota_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac ||
+		error "setting rbac $rbac failed (1)"
+	wait_nm_sync c0 rbac
+
+	$RUNAS touch $testfile
+
+	# Without local_admin, root capabilities are dropped
+	chmod o+x $testfile && error "root chmod should fail (1)"
+	# and setquota/lfs project is not permitted
+	$LFS setquota -p $projid -b 4G -B 4G $DIR/$tdir &&
+		error "setquota should fail (1)"
+	$LFS project -p $((projid+1)) -s $DIR/$tdir &&
+		error "setting projid should fail (1)"
+
+	rbac="file_perms,quota_ops,local_admin"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property rbac --value $rbac ||
+		error "setting rbac $rbac failed (2)"
+	wait_nm_sync c0 rbac
+	# squash root by setting admin=0
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property admin --value 0
+	wait_nm_sync c0 admin_nodemap
+
+	# Even with local_admin, capabilities are dropped if root is squashed
+	chmod o+x $testfile && error "root chmod should fail (2)"
+	# and setquota/lfs project is not permitted
+	$LFS setquota -p $projid -b 4G -B 4G $DIR/$tdir &&
+		error "setquota should fail (2)"
+	$LFS project -p $((projid+1)) -s $DIR/$tdir &&
+		error "setting projid should fail (2)"
+
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		 --property admin --value 1
+	wait_nm_sync c0 admin_nodemap
+
+	#  with local_admin and admin=1, capabilities are kept
+	chmod o+x $testfile || error "root chmod failed (1)"
+	# and setquota/lfs project is permitted
+	$LFS setquota -p $projid -b 4G -B 4G $DIR/$tdir ||
+		error "setquota failed (1)"
+	$LFS project -p $((projid+1)) -s $DIR/$tdir ||
+		error "setting projid failed (1)"
+
+	# remove offset and local_admin but keep admin, so that root
+	# on client is root on file system side
+	do_facet mgs $LCTL nodemap_del_offset --name c0 ||
+		error "cannot del offset for c0"
+	rbac="file_perms,quota_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac ||
+		error "setting rbac $rbac failed (3)"
+	wait_nm_sync c0 rbac
+
+	#  as root, capabilities are kept even without local_admin
+	chmod g+x $testfile || error "root chmod failed (2)"
+	# and setquota/lfs project is permitted
+	$LFS setquota -p $((projid+offset_start)) -b 3G -B 3G $DIR/$tdir ||
+		error "setquota failed (2)"
+	$LFS project -p $((projid+offset_start)) -s $DIR/$tdir ||
+		error "setting projid failed (2)"
+}
+run_test 64h "Nodemap enforces local_admin RBAC roles"
 
 look_for_files() {
 	local pattern=$1

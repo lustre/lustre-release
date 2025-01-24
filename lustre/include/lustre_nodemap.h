@@ -35,6 +35,7 @@ static const struct nodemap_rbac_name {
 	{ NODEMAP_RBAC_SERVER_UPCALL,	"server_upcall"	},
 	{ NODEMAP_RBAC_IGN_ROOT_PRJQUOTA,	"ignore_root_prjquota"	},
 	{ NODEMAP_RBAC_HSM_OPS,		"hsm_ops"	},
+	{ NODEMAP_RBAC_LOCAL_ADMIN,	"local_admin"	},
 };
 
 struct nodemap_pde {
@@ -253,4 +254,32 @@ static inline int nodemap_process_idx_pages(void *config,
 
 int nodemap_get_config_req(struct obd_device *mgs_obd,
 			   struct ptlrpc_request *req);
+
+/* Return true if id corresponds to local root */
+static inline bool is_local_root(__u32 id, struct lu_nodemap *nodemap)
+{
+	/* Plain root is also local root */
+	if (id == 0)
+		return true;
+
+	/* id is not mapped root (0):
+	 * just a regular mapped user
+	 */
+	if (id != nodemap_map_id(nodemap, NODEMAP_UID,
+				 NODEMAP_CLIENT_TO_FS, 0))
+		return false;
+
+	/* id is mapped root, but root is squashed:
+	 * not considered a local admin
+	 */
+	if (id == nodemap_map_id(nodemap, NODEMAP_UID, NODEMAP_CLIENT_TO_FS,
+				 nodemap->nm_squash_uid))
+		return false;
+
+	/* id is mapped root and not squashed:
+	 * rely on the local_admin rbac role
+	 */
+	return nodemap->nmf_rbac & NODEMAP_RBAC_LOCAL_ADMIN;
+}
+
 #endif	/* _LUSTRE_NODEMAP_H */
