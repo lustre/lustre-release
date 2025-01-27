@@ -76,9 +76,11 @@ can_o2ib_mofed=no
 can_o2ib_in_kernel=no
 ext_mofed=no
 int_mofed=no
-[[ -f \${kernel_source_dir}/include/rdma/rdma_cm.h ]] &&
-[[ -f \${kernel_source_dir}/include/rdma/ib_cm.h ]] &&
-[[ -f \${kernel_source_dir}/include/rdma/ib_verbs.h ]] &&
+ksrc=\$(dirname \${kernel_source_dir})/source
+[[ -d \$ksrc/include/linux ]] || ksrc=\${kernel_source_dir}
+[[ -f \${ksrc}/include/rdma/rdma_cm.h ]] &&
+[[ -f \${ksrc}/include/rdma/ib_cm.h ]] &&
+[[ -f \${ksrc}/include/rdma/ib_verbs.h ]] &&
    can_o2ib_in_kernel=yes
 # Now check if ext_o2ib is explicit, or will be auto-detected:
 o2ib=\$(echo \${OPTS} | tr ' ' '\\n' | grep -- '--with-o2ib=' | cut -c 13-)
