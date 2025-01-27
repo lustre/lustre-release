@@ -15,6 +15,7 @@
 #include <lustre_net.h>
 #include <lustre_export.h>
 #include <obd_class.h>
+#include <libcfs/libcfs_caps.h>
 #include "nodemap_internal.h"
 
 static LIST_HEAD(nodemap_pde_list);
@@ -141,6 +142,63 @@ static int nodemap_offset_seq_show(struct seq_file *m, void *data)
 
 	nodemap_putref(nodemap);
 	return 0;
+}
+
+/**
+ * nodemap_capabilities_seq_show() - Reads and prints capabilities definitions.
+ * @m: seq file in proc fs
+ * @unused: unused
+ *
+ * Return:
+ * * %0 on success
+ */
+static int nodemap_capabilities_seq_show(struct seq_file *m, void *unused)
+{
+	struct lu_nodemap *nodemap;
+	const char *type;
+	char *caps;
+	u64 val;
+	int i, rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("%s: nodemap not found: rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	type = nodemap_captype_names[0].ncn_name;
+	for (i = 0; i < ARRAY_SIZE(nodemap_captype_names); i++) {
+		if (nodemap_captype_names[i].ncn_type ==
+		    nodemap->nmf_caps_type) {
+			type = nodemap_captype_names[i].ncn_name;
+			break;
+		}
+	}
+	/* if not applicable, stop here */
+	if (nodemap->nmf_caps_type == NODEMAP_CAP_OFF) {
+		seq_printf(m, "%s\n", type);
+		goto out;
+	}
+
+	val = libcfs_cap2num(nodemap->nm_capabilities);
+	i = cfs_mask2str(NULL, 0, val, libcfs_cap2str, ',');
+	OBD_ALLOC(caps, i + 2);
+	if (!caps)
+		GOTO(out, rc = -ENOMEM);
+	cfs_mask2str(caps, i + 2, val, libcfs_cap2str, ',');
+
+	seq_printf(m, "type: %s\n", type);
+	seq_printf(m, "caps: %s", caps);
+
+	OBD_FREE(caps, i + 2);
+
+out:
+	nodemap_putref(nodemap);
+	return rc;
 }
 
 /**
@@ -974,6 +1032,7 @@ LDEBUGFS_SEQ_FOPS_RO(nodemap_squash_projid);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_deny_unknown);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_map_mode);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_offset);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_capabilities);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_rbac);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_audit_mode);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_forbid_encryption);
@@ -1016,6 +1075,10 @@ static struct ldebugfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "deny_unknown",
 		.fops		= &nodemap_deny_unknown_fops,
+	},
+	{
+		.name		= "enable_cap_mask",
+		.fops		= &nodemap_capabilities_fops,
 	},
 	{
 		.name		= "exports",
@@ -1107,6 +1170,10 @@ static struct ldebugfs_vars lprocfs_default_nodemap_vars[] = {
 	{
 		.name		= "deny_unknown",
 		.fops		= &nodemap_deny_unknown_fops,
+	},
+	{
+		.name		= "enable_cap_mask",
+		.fops		= &nodemap_capabilities_fops,
 	},
 	{
 		.name		= "exports",

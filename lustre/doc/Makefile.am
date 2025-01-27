@@ -143,6 +143,8 @@ SERVER_MANFILES =				\
 	lctl-nodemap_info.8			\
 	lctl-nodemap-modify.8			\
 	lctl-nodemap_modify.8			\
+	lctl-nodemap-set-cap.8			\
+	lctl-nodemap_set_cap.8			\
 	lctl-nodemap-set-fileset.8		\
 	lctl-nodemap_set_fileset.8		\
 	lctl-nodemap-set-sepol.8		\

@@ -1,4 +1,4 @@
-.TH LCTL 8 2024-08-29 Lustre "Lustre Configuration Utilities"
+.TH LCTL 8 2025-01-31 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl \- Lustre filesystem administrator configuration tool
 .SH SYNOPSIS
@@ -235,6 +235,9 @@ Remove a UID/GID/PROJID offset from a nodemap.
 .TP
 .BR lctl-nodemap-set-sepol (8)
 Set SELinux policy info on a nodemap.
+.TP
+.BR lctl-nodemap-set-capabilities (8)
+Set user capabilities on a nodemap.
 .SS Configuration logs
 .TP
 .BI clear_conf " DEVICE" \fR| FSNAME
@@ -427,13 +430,14 @@ filesystem package since release 0.5.0
 .BR lctl-nodemap-activate (8),
 .BR lctl-nodemap-add (8),
 .BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-offset (8),
 .BR lctl-nodemap-add-range (8),
 .BR lctl-nodemap-del (8),
 .BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-offset (8),
 .BR lctl-nodemap-del-range (8),
 .BR lctl-nodemap-modify (8),
-.BR lctl-nodemap-add-offset (8),
-.BR lctl-nodemap-del-offset (8),
+.BR lctl-nodemap-set-capabilities (8),
 .BR lctl-pcc (8),
 .BR lctl-replace-nids (8),
 .BR lctl-set_param (8),

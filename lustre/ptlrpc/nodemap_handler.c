@@ -15,6 +15,7 @@
 #include <lustre_net.h>
 #include <lustre_acl.h>
 #include <obd_class.h>
+#include <libcfs/libcfs_caps.h>
 
 #include "nodemap_internal.h"
 #include "ptlrpc_internal.h"
@@ -227,6 +228,7 @@ static bool allow_op_on_nm(struct lu_nodemap *nodemap)
  * - nmf_rbac
  * - nmf_rbac_raise
  * - nmf_forbid_encryption
+ * - nm_capabilities
  * If nmf_raise_privs grants corresponding privilege, any change on these
  * properties is permitted. Otherwise, only lowering privileges is possible,
  * which means:
@@ -237,6 +239,7 @@ static bool allow_op_on_nm(struct lu_nodemap *nodemap)
  * - nmf_rbac to fewer roles
  * - nmf_rbac_raise to fewer roles
  * - nmf_forbid_encryption from 1 (parent) to 0
+ * - nm_capabilities of child is a subset of parent's
  *
  * Return:
  * * %true		if the modification is allowed
@@ -247,6 +250,7 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
 	u32 prop_val = (u32)(0xffffffff & val);
 	/* only relevant with priv == NODEMAP_RAISE_PRIV_RAISE */
 	u32 rbac_raise = (u32)(val >> 32);
+	kernel_cap_t *newcaps;
 
 	if (!allow_op_on_nm(nodemap))
 		return false;
@@ -279,6 +283,10 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
 	case NODEMAP_RAISE_PRIV_FORBID_ENC:
 		return (nodemap->nm_parent_nm->nmf_forbid_encryption ||
 			!prop_val);
+	case NODEMAP_RAISE_PRIV_CAPS:
+		newcaps = (kernel_cap_t *)&val;
+		return cap_issubset(*newcaps,
+				    nodemap->nm_parent_nm->nm_capabilities);
 	default:
 		return true;
 	}
@@ -1096,6 +1104,8 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nm_offset_limit_projid = 0;
 		dst->nm_prim_fileset = NULL;
 		dst->nm_prim_fileset_size = 0;
+		dst->nm_capabilities = CAP_EMPTY_SET;
+		dst->nmf_caps_type = NODEMAP_CAP_OFF;
 	} else {
 		dst->nmf_trust_client_ids = src->nmf_trust_client_ids;
 		dst->nmf_allow_root_access = src->nmf_allow_root_access;
@@ -1138,6 +1148,8 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 			dst->nm_prim_fileset = NULL;
 			dst->nm_prim_fileset_size = 0;
 		}
+		dst->nm_capabilities = src->nm_capabilities;
+		dst->nmf_caps_type = src->nmf_caps_type;
 	}
 
 out:
@@ -1672,6 +1684,102 @@ const char *nodemap_get_sepol(const struct lu_nodemap *nodemap)
 		return (char *)nodemap->nm_sepol;
 }
 EXPORT_SYMBOL(nodemap_get_sepol);
+
+/**
+ * nodemap_set_capabilities() - Define user capabilities on nodemap
+ * @name: name of nodemap
+ * @buffer: capabilities to set
+ *
+ * It is possible to specify capabilities in hex or with symbolic names, with
+ * '+' and '-' prefixes to respectively add or remove corresponding
+ * capabilities. If buffer starts with "set:", the capabilities are set to the
+ * specified ones, making it possible to add capabilities. If buffer starts with
+ * "mask:", the capabilities are filtered through the specified mask. If buffer
+ * is "off", the enable_cap_mask property is cleared.
+ *
+ * Return:
+ * * %0 on success
+ */
+int nodemap_set_capabilities(const char *name, char *buffer)
+{
+	static kernel_cap_t allowed_cap = CAP_EMPTY_SET;
+	struct lu_nodemap *nodemap = NULL;
+	enum nodemap_cap_type type;
+	unsigned long long caps;
+	kernel_cap_t newcaps;
+	bool cap_was_clear;
+	u64 *p_newcaps;
+	u64 cap_tmp;
+	char *caps_str;
+	int i, rc;
+
+	caps_str = strchr(buffer, ':');
+	if (!caps_str)
+		GOTO(out, rc = -EINVAL);
+	*caps_str = '\0';
+	caps_str++;
+
+	for (i = 0; i < ARRAY_SIZE(nodemap_captype_names); i++) {
+		if (strcmp(buffer, nodemap_captype_names[i].ncn_name) == 0) {
+			type = nodemap_captype_names[i].ncn_type;
+			break;
+		}
+	}
+	if (i == ARRAY_SIZE(nodemap_captype_names))
+		GOTO(out, rc = -EINVAL);
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = PTR_ERR(nodemap));
+	}
+
+	rc = kstrtoull(caps_str, 0, &caps);
+	if (rc == -EINVAL) {
+		cap_tmp = libcfs_cap2num(nodemap->nm_capabilities);
+		/* if type is different, capabilities are going to be reset */
+		if (type != nodemap->nmf_caps_type)
+			cap_tmp = libcfs_cap2num(CAP_EMPTY_SET);
+
+		/* the "allmask" is filtered by allowed_cap below */
+		rc = cfs_str2mask(caps_str, libcfs_cap2str, &cap_tmp, 0,
+				  ~0ULL, 0);
+		caps = cap_tmp;
+	}
+	if (rc)
+		GOTO(out_putref, rc);
+
+	/* All of the capabilities that we currently allow/check */
+	if (unlikely(cap_isclear(allowed_cap))) {
+		allowed_cap = CAP_FS_SET;
+		cap_raise(allowed_cap, CAP_SYS_RESOURCE);
+	}
+
+	newcaps = cap_intersect(libcfs_num2cap(caps), allowed_cap);
+	p_newcaps = (u64 *)&newcaps;
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_CAPS, *p_newcaps))
+		GOTO(out_putref, rc = -EPERM);
+
+	cap_was_clear = cap_isclear(nodemap->nm_capabilities);
+	nodemap->nm_capabilities = newcaps;
+	nodemap->nmf_caps_type = type;
+
+	if (cap_isclear(nodemap->nm_capabilities))
+		rc = nodemap_idx_capabilities_del(nodemap);
+	else if (cap_was_clear)
+		rc = nodemap_idx_capabilities_add(nodemap);
+	else
+		rc = nodemap_idx_capabilities_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+
+out_putref:
+	mutex_unlock(&active_config_lock);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
 
 /**
  * nodemap_create() - Nodemap constructor
@@ -3277,6 +3385,9 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 	case LCFG_NODEMAP_SET_SEPOL:
 		rc = nodemap_set_sepol(nodemap_name, param, true);
 		break;
+	case LCFG_NODEMAP_SET_CAPS:
+		rc = nodemap_set_capabilities(nodemap_name, param);
+		break;
 	default:
 		rc = -EINVAL;
 	}
@@ -3420,6 +3531,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 	case LCFG_NODEMAP_DEL_PROJIDMAP:
 	case LCFG_NODEMAP_SET_FILESET:
 	case LCFG_NODEMAP_SET_SEPOL:
+	case LCFG_NODEMAP_SET_CAPS:
 		if (lcfg->lcfg_bufcount != 3)
 			GOTO(out_lcfg, rc = -EINVAL);
 		nodemap_name = lustre_cfg_string(lcfg, 1);

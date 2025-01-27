@@ -358,7 +358,15 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	mdt_root_squash(info, &peernid);
 
 	if (!is_local_root(ucred->uc_fsuid, nodemap)) {
-		if (!cap_issubset(ucred->uc_cap, mdt->mdt_enable_cap_mask))
+		kernel_cap_t caps;
+		bool from_nodemap;
+
+		from_nodemap = nodemap &&
+			nodemap->nmf_caps_type != NODEMAP_CAP_OFF;
+		caps = from_nodemap ? nodemap->nm_capabilities :
+			mdt->mdt_enable_cap_mask;
+
+		if (!cap_issubset(ucred->uc_cap, caps))
 			CDEBUG(D_SEC, "%s: drop capabilities %llx for NID %s\n",
 			       mdt_obd_name(mdt),
 #ifdef CAP_FOR_EACH_U32
@@ -368,8 +376,10 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 			       ucred->uc_cap.val,
 #endif
 			       libcfs_nidstr(&mdt_info_req(info)->rq_peer.nid));
-		ucred->uc_cap = cap_intersect(ucred->uc_cap,
-					      mdt->mdt_enable_cap_mask);
+		if (!from_nodemap || nodemap->nmf_caps_type == NODEMAP_CAP_MASK)
+			ucred->uc_cap = cap_intersect(ucred->uc_cap, caps);
+		else
+			ucred->uc_cap = caps;
 	}
 
 	/* Thanks to Kerberos, Lustre does not have to trust clients anymore,
@@ -577,7 +587,15 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 			&mdt_info_req(info)->rq_peer.nid);
 
 	if (!is_local_root(uc->uc_fsuid, nodemap)) {
-		if (!cap_issubset(uc->uc_cap, mdt->mdt_enable_cap_mask))
+		kernel_cap_t caps;
+		bool from_nodemap;
+
+		from_nodemap = nodemap &&
+			nodemap->nmf_caps_type != NODEMAP_CAP_OFF;
+		caps = from_nodemap ? nodemap->nm_capabilities :
+				      mdt->mdt_enable_cap_mask;
+
+		if (!cap_issubset(uc->uc_cap, caps))
 			CDEBUG(D_SEC, "%s: drop capabilities %llx for NID %s\n",
 			       mdt_obd_name(mdt),
 #ifdef CAP_FOR_EACH_U32
@@ -586,8 +604,10 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 			       uc->uc_cap.val,
 #endif
 			       libcfs_nidstr(&mdt_info_req(info)->rq_peer.nid));
-		uc->uc_cap = cap_intersect(uc->uc_cap,
-					   mdt->mdt_enable_cap_mask);
+		if (!from_nodemap || nodemap->nmf_caps_type == NODEMAP_CAP_MASK)
+			uc->uc_cap = cap_intersect(uc->uc_cap, caps);
+		else
+			uc->uc_cap = caps;
 	}
 
 	/* Thanks to Kerberos, Lustre does not have to trust clients anymore,

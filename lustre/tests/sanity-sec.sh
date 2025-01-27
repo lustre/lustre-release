@@ -4931,6 +4931,8 @@ test_51() {
 	mkdir $DIR/$tdir || error "mkdir $tdir"
 	local mdts=$(comma_list $(mdts_nodes))
 	local cap_param=mdt.*.enable_cap_mask
+	local nm_param=nodemap.default.enable_cap_mask
+	local val
 
 	old_cap=($(do_nodes $mdts $LCTL get_param -n $cap_param 2>/dev/null))
 	if [[ -n "$old_cap" ]]; then
@@ -4945,27 +4947,27 @@ test_51() {
 		stack_trap "do_nodes $mdts $LCTL set_param $cap_param=$old_cap"
 	fi
 
-	touch $DIR/$tdir/$tfile || error "touch $tfile"
+	touch $DIR/$tdir/$tfile || error "touch $tfile as root (1)"
 	cp $(which chown) $DIR/$tdir || error "cp chown"
 	$RUNAS_CMD -u $ID0 $DIR/$tdir/chown $ID0 $DIR/$tdir/$tfile &&
-		error "chown $tfile should fail"
+		error "chown $tfile should fail (1)"
 	setcap 'CAP_CHOWN=ep' $DIR/$tdir/chown || error "setcap CAP_CHOWN"
 	$RUNAS_CMD -u $ID0 $DIR/$tdir/chown $ID0 $DIR/$tdir/$tfile ||
-		error "chown $tfile"
-	rm $DIR/$tdir/$tfile || error "rm $tfile"
+		error "chown $tfile as $ID0 (1)"
+	rm $DIR/$tdir/$tfile || error "rm $tfile (1)"
 
-	touch $DIR/$tdir/$tfile || error "touch $tfile"
+	touch $DIR/$tdir/$tfile || error "touch $tfile as root (2)"
 	cp $(which touch) $DIR/$tdir || error "cp touch"
 	$RUNAS_CMD -u $ID0 $DIR/$tdir/touch $DIR/$tdir/$tfile &&
 		error "touch should fail"
 	setcap 'CAP_FOWNER=ep' $DIR/$tdir/touch || error "setcap CAP_FOWNER"
 	$RUNAS_CMD -u $ID0 $DIR/$tdir/touch $DIR/$tdir/$tfile ||
 		error "touch $tfile"
-	rm $DIR/$tdir/$tfile || error "rm $tfile"
+	rm $DIR/$tdir/$tfile || error "rm $tfile (2)"
 
 	local cap
 	for cap in "CAP_DAC_OVERRIDE" "CAP_DAC_READ_SEARCH"; do
-		touch $DIR/$tdir/$tfile || error "touch $tfile"
+		touch $DIR/$tdir/$tfile || error "touch $tfile as root (3)"
 		chmod 600 $DIR/$tdir/$tfile || error "chmod $tfile"
 		cp $(which cat) $DIR/$tdir || error "cp cat"
 		$RUNAS_CMD -u $ID0 $DIR/$tdir/cat $DIR/$tdir/$tfile &&
@@ -4973,8 +4975,88 @@ test_51() {
 		setcap $cap=ep $DIR/$tdir/cat || error "setcap $cap"
 		$RUNAS_CMD -u $ID0 $DIR/$tdir/cat $DIR/$tdir/$tfile ||
 			error "cat $tfile"
-		rm $DIR/$tdir/$tfile || error "rm $tfile"
+		rm $DIR/$tdir/$tfile || error "rm $tfile (3)"
 	done
+
+	if (( "$MDS1_VERSION" >= $(version_code 2.16.55) )); then
+		val=$(do_facet mgs $LCTL get_param -n $nm_param)
+		[[ "$val" == "off" ]] ||
+			error "wrong default value $val for $nm_param"
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property admin --value 1
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property trusted --value 1
+		wait_nm_sync default trusted_nodemap
+
+		do_facet mgs $LCTL nodemap_activate 1
+		wait_nm_sync active 1
+		stack_trap cleanup_active EXIT
+		stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+			--property admin --value 0" EXIT
+		stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+			--property trusted --value 0" EXIT
+		stack_trap "do_facet mgs $LCTL nodemap_set_cap \
+			--name default --type off" EXIT
+
+		# $DIR/$tdir/chown has CAP_CHOWN, so it should succeed with
+		# enable_cap_mask=off on nodemap
+		touch $DIR/$tdir/$tfile || error "touch $tfile as root (4)"
+		$RUNAS_CMD -u $ID0 $DIR/$tdir/chown $ID0 $DIR/$tdir/$tfile ||
+			error "chown $tfile as $ID0 (2)"
+		rm $DIR/$tdir/$tfile || error "rm $tfile (4)"
+
+		do_facet mgs $LCTL nodemap_set_cap --name default \
+		   --type mask --caps cap_dac_read_search ||
+			error "nodemap_set_cap failed (1)"
+		wait_nm_sync default enable_cap_mask
+
+		# $DIR/$tdir/chown should fail with
+		# enable_cap_mask=mask:cap_dac_read_search on nodemap
+		touch $DIR/$tdir/$tfile || error "touch $tfile as root (5)"
+		$RUNAS_CMD -u $ID0 $DIR/$tdir/chown $ID0 $DIR/$tdir/$tfile &&
+			error "chown $tfile should fail (2)"
+		do_facet mgs $LCTL nodemap_set_cap --name default \
+		   --type mask --caps +cap_chown ||
+			error "nodemap_set_cap failed (2)"
+		wait_nm_sync default enable_cap_mask
+		# $DIR/$tdir/chown should succeed with
+		# enable_cap_mask=mask:cap_chown,cap_dac_read_search
+		$RUNAS_CMD -u $ID0 $DIR/$tdir/chown $ID0 $DIR/$tdir/$tfile ||
+			error "chown $tfile as $ID0 (3)"
+		rm $DIR/$tdir/$tfile || error "rm $tfile (5)"
+
+		# Test ability to raise caps on child nodemap
+		do_facet mgs $LCTL nodemap_modify --name default \
+		   --property child_raise_privileges --value none ||
+			error "setting child_raise_privileges=none failed"
+		wait_nm_sync default child_raise_privileges
+		stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+			    --property child_raise_privileges --value none" EXIT
+		do_facet mds1 $LCTL nodemap_add -d -p default nm_51 ||
+			error "cannot create nodemap nm_51 (1)"
+		stack_trap "do_facet mds1 $LCTL nodemap_del nm_51" EXIT
+		do_facet mds1 $LCTL nodemap_set_cap --name nm_51 \
+		   --type mask --caps +cap_fowner &&
+			error "nodemap_set_cap +cap_fowner should fail"
+		do_facet mds1 $LCTL nodemap_set_cap --name nm_51 \
+		   --type mask --caps -cap_chown ||
+			error "nodemap_set_cap -cap_chown failed"
+		do_facet mds1 $LCTL nodemap_set_cap --name nm_51 \
+		   --type mask --caps +cap_chown ||
+			error "nodemap_set_cap +cap_chown failed"
+		do_facet mds1 $LCTL nodemap_del nm_51 ||
+			error "cannot delete nodemap nm_51"
+		do_facet mgs $LCTL nodemap_modify --name default \
+		   --property child_raise_privileges --value caps ||
+			error "setting child_raise_privileges=caps failed"
+		wait_nm_sync default child_raise_privileges
+		do_facet mds1 $LCTL nodemap_add -d -p default nm_51 ||
+			error "cannot create nodemap nm_51 (2)"
+		do_facet mds1 $LCTL nodemap_set_cap --name nm_51 \
+		   --type mask --caps +cap_fowner ||
+			error "nodemap_set_cap +cap_fowner failed"
+	fi
 }
 run_test 51 "FS capabilities ==============="
 

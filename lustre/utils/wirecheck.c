@@ -2999,6 +2999,19 @@ static void check_nodemap_offset_rec(void)
 	CHECK_MEMBER(nodemap_offset_rec, nor_padding2);
 }
 
+static void check_nodemap_capabilities_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_user_capabilities_rec);
+	CHECK_MEMBER(nodemap_user_capabilities_rec, nucr_caps);
+	CHECK_MEMBER(nodemap_user_capabilities_rec, nucr_type);
+	CHECK_MEMBER(nodemap_user_capabilities_rec, nucr_padding1);
+	CHECK_MEMBER(nodemap_user_capabilities_rec, nucr_padding2);
+	CHECK_MEMBER(nodemap_user_capabilities_rec, nucr_padding3);
+	CHECK_MEMBER(nodemap_user_capabilities_rec, nucr_padding4);
+	CHECK_MEMBER(nodemap_user_capabilities_rec, nucr_padding5);
+}
+
 static void check_nodemap_global_rec(void)
 {
 	BLANK_LINE();
@@ -3059,6 +3072,7 @@ static void check_nodemap_key(void)
 	CHECK_VALUE(NODEMAP_CLUSTER_REC);
 	CHECK_VALUE(NODEMAP_CLUSTER_ROLES);
 	CHECK_VALUE(NODEMAP_CLUSTER_OFFSET);
+	CHECK_VALUE(NODEMAP_CLUSTER_CAPS);
 
 	CHECK_VALUE_X(NM_TYPE_MASK);
 	CHECK_VALUE(NM_TYPE_SHIFT);
@@ -3109,6 +3123,7 @@ static void check_nodemap_key(void)
 	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_RO);
 	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_RBAC);
 	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_FORBID_ENC);
+	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_CAPS);
 	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_NONE);
 	CHECK_VALUE_X(NODEMAP_RAISE_PRIV_ALL);
 }
@@ -3373,6 +3388,7 @@ check_lustre_cfg(void)
 	CHECK_VALUE_X(LCFG_NODEMAP_RBAC);
 	CHECK_VALUE_X(LCFG_NODEMAP_DENY_MOUNT);
 	CHECK_VALUE_X(LCFG_NODEMAP_RAISE_PRIVS);
+	CHECK_VALUE_X(LCFG_NODEMAP_SET_CAPS);
 	printf("#endif /* HAVE_SERVER_SUPPORT */\n");
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	CHECK_VALUE(PORTALS_CFG_TYPE);
@@ -3825,6 +3841,7 @@ main(int argc, char **argv)
 	check_nodemap_range2_rec();
 	check_nodemap_id_rec();
 	check_nodemap_offset_rec();
+	check_nodemap_capabilities_rec();
 	check_nodemap_global_rec();
 	check_nodemap_cluster_roles_rec();
 	check_nodemap_fileset_rec();

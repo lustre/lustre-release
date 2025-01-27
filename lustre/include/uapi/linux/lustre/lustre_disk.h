@@ -349,6 +349,16 @@ struct nodemap_fileset_rec {
 	__u16	nfr_padding1;		/* zeroed since 2.16 (always) */
 };
 
+struct nodemap_user_capabilities_rec {
+	__u64	nucr_caps;
+	__u8	nucr_type;		/* enum nodemap_cap_type */
+	__u8	nucr_padding1;		/* zeroed since 2.16.51 (always) */
+	__u16	nucr_padding2;		/* zeroed since 2.16.51 (always) */
+	__u32	nucr_padding3;		/* zeroed since 2.16.51 (always) */
+	__u64	nucr_padding4;		/* zeroed since 2.16.51 (always) */
+	__u64	nucr_padding5;		/* zeroed since 2.16.51 (always) */
+};
+
 union nodemap_rec {
 	struct nodemap_cluster_rec ncr;
 	struct nodemap_range_rec nrr;
@@ -358,6 +368,7 @@ union nodemap_rec {
 	struct nodemap_cluster_roles_rec ncrr;
 	struct nodemap_offset_rec nor;
 	struct nodemap_fileset_rec nfr;
+	struct nodemap_user_capabilities_rec nucr;
 };
 
 /* sub-keys for records of type NODEMAP_CLUSTER_IDX */
@@ -365,6 +376,7 @@ enum nodemap_cluster_rec_subid {
 	NODEMAP_CLUSTER_REC = 0,   /* nodemap_cluster_rec */
 	NODEMAP_CLUSTER_ROLES = 1, /* nodemap_cluster_roles_rec */
 	NODEMAP_CLUSTER_OFFSET = 2, /* UID/GID/PROJID offset for a nm cluster */
+	NODEMAP_CLUSTER_CAPS = 3, /* User caps, nodemap_capabilities_rec */
 	/*
 	 * A fileset may not fit in a single nodemap_fileset_rec and uses at max
 	 * 256 fragments. The first subid (512) is currently unused and reserved

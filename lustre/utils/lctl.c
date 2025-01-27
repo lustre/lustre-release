@@ -195,6 +195,9 @@ command_t nodemap_cmdlist[] = {
 	 .pc_help = "delete a UID or GID mapping from a nodemap\n"
 	 "usage: nodemap del_idmap --name NAME --idtype {uid|gid|projid}\n"
 	 "			   --idmap CLIENTID:FSID"},
+	{.pc_name = "set_cap", .pc_func = jt_nodemap_set_cap,
+	 .pc_help = "define capabilities for regular users on a nodemap\n"
+	 "usage: nodemap set_cap --name NODEMAP_NAME --caps CAPABILITIES --type {mask|set|off}"},
 	{.pc_name = "set_fileset", .pc_func = jt_nodemap_set_fileset,
 	 .pc_help = "set a fileset on a nodemap\n"
 	 "usage: nodemap set_fileset --name NODEMAP_NAME --fileset FILESET"},
@@ -626,6 +629,9 @@ command_t cmdlist[] = {
 	{"nodemap_set_sepol", jt_nodemap_set_sepol, 0,
 	 "set SELinux policy info on a nodemap\n"
 	 "usage: nodemap_set_sepol --name NODEMAP_NAME --sepol SEPOL"},
+	{"nodemap_set_cap", jt_nodemap_set_cap, NULL,
+	 "defines capabilities for regular users on a nodemap\n"
+	 "usage: nodemap_set_cap --name NODEMAP_NAME --caps CAPABILITIES --type {mask|set|off}"},
 	{"nodemap_test_nid", jt_nodemap_test_nid, 0,
 	 "test a nid for nodemap membership\n"
 	 "usage: nodemap_test_nid --nid NID"},

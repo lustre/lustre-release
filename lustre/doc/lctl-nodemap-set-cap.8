@@ -1,0 +1,89 @@
+.TH LCTL-NODEMAP_SET_CAP 8 2025-05-27 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_set_cap \- set user capabilities
+.SH SYNOPSIS
+.SY "lctl nodemap_set_cap"
+.BI --name " NODEMAP"
+.BI --caps " CAPABILITIES"
+.BI --type " {mask|set|off}"
+.YS
+.SH DESCRIPTION
+.B nodemap_set_cap
+defines capabilities for regular users on the specified
+.IR NODEMAP ,
+as described by
+.IR CAPABILITIES .
+The
+.I CAPABILITIES
+are a mask if the type is
+.B mask
+or a 'set' if type is
+.BR set .
+.SH OPTIONS
+.TP
+.BI --name " NODEMAP"
+The name of the nodemap to define capabilities for.
+.TP
+.BI --caps " CAPABILITIES"
+is the capabilities to apply.
+.TP
+.BI --type " {mask|set|off}"
+is the desired type for capabilities:
+.B mask
+for a capability mask,
+.B set
+to set user capabilities to the specified value,
+.B off
+to disable capabilities filtering.
+.SH EXAMPLES
+Define a capability mask as "cap_chown,cap_dac_read_search" on nodemap 'nm1':
+.EX
+.B # lctl nodemap_set_cap --name nm1 \
+--caps cap_chown,cap_dac_read_search --type mask
+.EE
+.PP
+Add "cap_fowner" to the capability mask on nodemap 'nm1':
+.EX
+.B # lctl nodemap_set_cap --name nm1 \
+--caps +cap_fowner --type mask
+.EE
+.PP
+Remove all capabilities users might have on nodemap 'nm1':
+.EX
+.B # lctl nodemap_set_cap --name nm1 \
+--caps 0 --type mask
+.EE
+.PP
+Set capabilities to "cap_linux_immutable,cap_sys_resource" for regular users on
+nodemap 'nm2':
+.EX
+.B # lctl nodemap_set_cap --name nm2 \
+--caps cap_linux_immutable,cap_sys_resource --type set
+.EE
+.PP
+Add "cap_fsetid" to the capabilities for regular users on nodemap 'nm2':
+.EX
+.B # lctl nodemap_set_cap --name nm2 \
+--caps +cap_fsetid --type set
+.EE
+.PP
+Disable capabilities filtering for regular users on nodemap 'nm2':
+.EX
+.B # lctl nodemap_set_cap --name nm2 --type off
+.EE
+.SH AVAILABILITY
+.B lctl nodemap_set_cap
+is part of the
+.BR lustre (7)
+filesystem package since release 2.17.0
+.\" Added in commit v2.16.99~
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-modify (8)

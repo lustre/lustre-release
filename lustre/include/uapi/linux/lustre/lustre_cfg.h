@@ -128,6 +128,7 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_RBAC	  = 0x00ce05f, /**< rbac */
 	LCFG_NODEMAP_DENY_MOUNT	  = 0x00ce060, /**< deny mount */
 	LCFG_NODEMAP_RAISE_PRIVS	= 0x00ce061, /**< sub-nm raise privs */
+	LCFG_NODEMAP_SET_CAPS	  = 0x00ce063, /**< user capabilities */
 };
 
 struct lustre_cfg_bufs {

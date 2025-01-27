@@ -38,6 +38,15 @@ static const struct nodemap_rbac_name {
 	{ NODEMAP_RBAC_LOCAL_ADMIN,	"local_admin"	},
 };
 
+static const struct nodemap_captype_name {
+	enum nodemap_cap_type ncn_type;
+	const char	     *ncn_name;
+} nodemap_captype_names[] = {
+	{ NODEMAP_CAP_OFF,	"off"	},
+	{ NODEMAP_CAP_MASK,	"mask"	},
+	{ NODEMAP_CAP_SET,	"set"	},
+};
+
 struct nodemap_pde {
 	char			 npe_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	struct dentry		*npe_debugfs_entry;
@@ -55,6 +64,7 @@ static const struct nodemap_priv_name {
 	{ NODEMAP_RAISE_PRIV_RO,		"readonly_mount"	},
 	/* NODEMAP_RAISE_PRIV_RBAC uses the rbac roles directly */
 	{ NODEMAP_RAISE_PRIV_FORBID_ENC,	"forbid_encryption"	},
+	{ NODEMAP_RAISE_PRIV_CAPS,		"caps"	},
 };
 
 /** The nodemap id 0 will be the default nodemap. It will have a configuration
@@ -82,6 +92,8 @@ struct lu_nodemap {
 	enum nodemap_raise_privs nmf_raise_privs;
 	/* bitmap for rbac raise, enum nodemap_rbac_roles */
 	enum nodemap_rbac_roles nmf_rbac_raise;
+	/* bitmap for capabilities type */
+	enum nodemap_cap_type	 nmf_caps_type;
 	/* unique ID set by MGS */
 	unsigned int		 nm_id;
 	/* nodemap ref counter */
@@ -146,6 +158,8 @@ struct lu_nodemap {
 	struct list_head	 nm_parent_entry;
 	/* link to parent nodemap */
 	struct lu_nodemap	*nm_parent_nm;
+	/* user capabilities */
+	kernel_cap_t		 nm_capabilities;
 };
 
 /* Store handles to local MGC storage to save config locally. In future
@@ -198,6 +212,7 @@ int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
 char *nodemap_get_fileset(const struct lu_nodemap *nodemap);
 int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm);
 const char *nodemap_get_sepol(const struct lu_nodemap *nodemap);
+int nodemap_set_capabilities(const char *nodemap_name, char *caps);
 __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_id_type id_type,
 		     enum nodemap_tree_type tree_type, __u32 id);

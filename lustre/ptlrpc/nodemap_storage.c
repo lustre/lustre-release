@@ -41,6 +41,7 @@
 #include <lustre_nodemap.h>
 #include <obd_class.h>
 #include <obd_support.h>
+#include <libcfs/libcfs_caps.h>
 #include "nodemap_internal.h"
 
 /* list of registered nodemap index files, except MGS */
@@ -143,6 +144,16 @@ static int nodemap_cluster_fileset_rec_init(union nodemap_rec *nr,
 	memcpy(nfr->nfr_path_fragment, fileset + fset_offset, fragment_size);
 
 	return rc;
+}
+
+static void nodemap_capabilities_rec_init(union nodemap_rec *nr,
+					  const struct lu_nodemap *nodemap)
+{
+	struct nodemap_user_capabilities_rec *nucr = &nr->nucr;
+
+	memset(nucr, 0, sizeof(struct nodemap_user_capabilities_rec));
+	nucr->nucr_caps = cpu_to_le64(libcfs_cap2num(nodemap->nm_capabilities));
+	nucr->nucr_type = nodemap->nmf_caps_type;
 }
 
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
@@ -567,6 +578,9 @@ static int nodemap_idx_cluster_add_update(const struct lu_nodemap *nodemap,
 	case NODEMAP_CLUSTER_OFFSET:
 		nodemap_offset_rec_init(&nr, nodemap);
 		break;
+	case NODEMAP_CLUSTER_CAPS:
+		nodemap_capabilities_rec_init(&nr, nodemap);
+		break;
 	default:
 		CWARN("%s: unknown subtype %u\n", nodemap->nm_name, subid);
 		GOTO(fini, rc = -EINVAL);
@@ -626,6 +640,11 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 		rc = rc2;
 
 	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_OFFSET);
+	rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
+	if (rc2 < 0 && rc2 != -ENOENT)
+		rc = rc2;
+
+	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_CAPS);
 	rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
 	if (rc2 < 0 && rc2 != -ENOENT)
 		rc = rc2;
@@ -1176,6 +1195,45 @@ int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap)
 	return rc;
 }
 
+int nodemap_idx_capabilities_add(const struct lu_nodemap *nodemap)
+{
+	return nodemap_idx_cluster_add_update(nodemap, NULL, NM_ADD,
+					      NODEMAP_CLUSTER_CAPS);
+}
+
+int nodemap_idx_capabilities_update(const struct lu_nodemap *nodemap)
+{
+	return nodemap_idx_cluster_add_update(nodemap, NULL, NM_UPDATE,
+					      NODEMAP_CLUSTER_CAPS);
+}
+
+int nodemap_idx_capabilities_del(const struct lu_nodemap *nodemap)
+{
+	struct nodemap_key nk;
+	struct lu_env env;
+	int rc = 0;
+
+	ENTRY;
+
+	if (nodemap->nm_dyn)
+		return 0;
+
+	if (!nodemap_mgs()) {
+		CERROR("cannot add nodemap config to non-existing MGS.\n");
+		return -EINVAL;
+	}
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc != 0)
+		RETURN(rc);
+
+	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_CAPS);
+	rc = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
+
+	lu_env_fini(&env);
+	RETURN(rc);
+}
+
 int nodemap_idx_range_add(struct lu_nodemap *nodemap,
 			  const struct lu_nid_range *range)
 {
@@ -1550,6 +1608,16 @@ static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
 	return -EINVAL;
 }
 
+static int nodemap_capabilities_helper(struct lu_nodemap *nodemap,
+				       const union nodemap_rec *rec)
+{
+	nodemap->nm_capabilities =
+		libcfs_num2cap(le64_to_cpu(rec->nucr.nucr_caps));
+	nodemap->nmf_caps_type = rec->nucr.nucr_type;
+
+	return 0;
+}
+
 /**
  * Process a key/rec pair and modify the new configuration.
  *
@@ -1636,6 +1704,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			rc = nodemap_add_offset_helper(
 				nodemap, le32_to_cpu(rec->nor.nor_start_uid),
 				le32_to_cpu(rec->nor.nor_limit_uid));
+		} else if (cluster_idx_key == NODEMAP_CLUSTER_CAPS) {
+			rc = nodemap_capabilities_helper(nodemap, rec);
 		} else if (cluster_idx_key >= NODEMAP_FILESET &&
 			   cluster_idx_key <
 				   NODEMAP_FILESET +
@@ -1931,6 +2001,13 @@ nodemap_save_config_cache(const struct lu_env *env,
 		nodemap_cluster_key_init(&nk, nodemap->nm_id,
 					 NODEMAP_CLUSTER_OFFSET);
 		nodemap_offset_rec_init(&nr, nodemap);
+		rc2 = nodemap_idx_insert(env, o, &nk, &nr);
+		if (rc2 < 0)
+			rc = rc2;
+
+		nodemap_cluster_key_init(&nk, nodemap->nm_id,
+					 NODEMAP_CLUSTER_CAPS);
+		nodemap_capabilities_rec_init(&nr, nodemap);
 		rc2 = nodemap_idx_insert(env, o, &nk, &nr);
 		if (rc2 < 0)
 			rc = rc2;

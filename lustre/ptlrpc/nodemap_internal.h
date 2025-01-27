@@ -196,6 +196,9 @@ int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
 int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
 			    const char *fileset, unsigned int fileset_id);
 int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap);
+int nodemap_idx_capabilities_add(const struct lu_nodemap *nodemap);
+int nodemap_idx_capabilities_update(const struct lu_nodemap *nodemap);
+int nodemap_idx_capabilities_del(const struct lu_nodemap *nodemap);
 int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const __u32 map[2]);

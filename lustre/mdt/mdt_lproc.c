@@ -38,6 +38,7 @@
 #include <lprocfs_status.h>
 #include "mdt_internal.h"
 #include <obd_cksum.h>
+#include <libcfs/libcfs_caps.h>
 
 /**
  * The rename stats output would be YAML formats, like
@@ -650,64 +651,15 @@ mdt_nosquash_nids_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_nosquash_nids);
 
-static const char *mdt_cap2str(int cap)
-{
-	/* We don't allow using all capabilities, but the fields must exist.
-	 * The supported capabilities are CAP_FS_SET and CAP_NFSD_SET, plus
-	 * CAP_SYS_ADMIN for a bunch of HSM operations (that should be fixed).
-	 */
-	static const char *const capability_names[] = {
-		"cap_chown",			/*  0 */
-		"cap_dac_override",		/*  1 */
-		"cap_dac_read_search",		/*  2 */
-		"cap_fowner",			/*  3 */
-		"cap_fsetid",			/*  4 */
-		NULL,				/*  5 */
-		NULL,				/*  6 */
-		NULL,				/*  7 */
-		NULL,				/*  8 */
-		"cap_linux_immutable",		/*  9 */
-		NULL,				/* 10 */
-		NULL,				/* 11 */
-		NULL,				/* 12 */
-		NULL,				/* 13 */
-		NULL,				/* 14 */
-		NULL,				/* 15 */
-		NULL,				/* 16 */
-		NULL,				/* 17 */
-		NULL,				/* 18 */
-		NULL,				/* 19 */
-		NULL,				/* 20 */
-		/* we should use more precise capabilities than this */
-		"cap_sys_admin",		/* 21 */
-		NULL,				/* 22 */
-		NULL,				/* 23 */
-		"cap_sys_resource",		/* 24 */
-		NULL,				/* 25 */
-		NULL,				/* 26 */
-		"cap_mknod",			/* 27 */
-		NULL,				/* 28 */
-		NULL,				/* 29 */
-		NULL,				/* 30 */
-		NULL,				/* 31 */
-		"cap_mac_override",		/* 32 */
-	};
-
-	if (cap >= ARRAY_SIZE(capability_names))
-		return NULL;
-
-	return capability_names[cap];
-}
-
 static ssize_t enable_cap_mask_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	u64 mask = mdt_cap2num(mdt->mdt_enable_cap_mask);
+	u64 mask = libcfs_cap2num(mdt->mdt_enable_cap_mask);
 
-	return cfs_mask2str(buf, PAGE_SIZE, mask, mdt_cap2str, ',');
+	return cfs_mask2str(buf, PAGE_SIZE, mask, libcfs_cap2str, ',');
 }
 
 static ssize_t enable_cap_mask_store(struct kobject *kobj,
@@ -723,10 +675,10 @@ static ssize_t enable_cap_mask_store(struct kobject *kobj,
 
 	rc = kstrtoull(buffer, 0, &val);
 	if (rc == -EINVAL) {
-		u64 cap = mdt_cap2num(mdt->mdt_enable_cap_mask);
+		u64 cap = libcfs_cap2num(mdt->mdt_enable_cap_mask);
 
 		/* the "allmask" is filtered by allowed_mask below */
-		rc = cfs_str2mask(buffer, mdt_cap2str, &cap, 0, ~0ULL, 0);
+		rc = cfs_str2mask(buffer, libcfs_cap2str, &cap, 0, ~0ULL, 0);
 		val = cap;
 	}
 	if (rc)
@@ -738,7 +690,8 @@ static ssize_t enable_cap_mask_store(struct kobject *kobj,
 		cap_raise(allowed_cap, CAP_SYS_RESOURCE);
 	}
 
-	mdt->mdt_enable_cap_mask = cap_intersect(mdt_num2cap(val), allowed_cap);
+	mdt->mdt_enable_cap_mask = cap_intersect(libcfs_num2cap(val),
+						 allowed_cap);
 
 	return count;
 }

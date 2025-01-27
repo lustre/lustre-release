@@ -6482,6 +6482,38 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct nodemap_fileset_rec *)0)->nfr_padding1) == 2, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_fileset_rec *)0)->nfr_padding1));
 
+	/* Checks for struct nodemap_user_capabilities_rec */
+	LASSERTF((int)sizeof(struct nodemap_user_capabilities_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_user_capabilities_rec));
+	LASSERTF((int)offsetof(struct nodemap_user_capabilities_rec, nucr_caps) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_user_capabilities_rec, nucr_caps));
+	LASSERTF((int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_caps) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_caps));
+	LASSERTF((int)offsetof(struct nodemap_user_capabilities_rec, nucr_type) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_user_capabilities_rec, nucr_type));
+	LASSERTF((int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_type) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_type));
+	LASSERTF((int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding1) == 9, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding1) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding1));
+	LASSERTF((int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding2) == 10, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding2));
+	LASSERTF((int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding2) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding2));
+	LASSERTF((int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding3) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding3));
+	LASSERTF((int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding3) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding3));
+	LASSERTF((int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding4) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding4));
+	LASSERTF((int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding4) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding4));
+	LASSERTF((int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding5) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_user_capabilities_rec, nucr_padding5));
+	LASSERTF((int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding5) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_user_capabilities_rec *)0)->nucr_padding5));
+
 	/* Checks for union nodemap_rec */
 	LASSERTF((int)sizeof(union nodemap_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(union nodemap_rec));
@@ -6529,6 +6561,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)NODEMAP_CLUSTER_ROLES);
 	LASSERTF(NODEMAP_CLUSTER_OFFSET == 2, "found %lld\n",
 		 (long long)NODEMAP_CLUSTER_OFFSET);
+	LASSERTF(NODEMAP_CLUSTER_CAPS == 3, "found %lld\n",
+		 (long long)NODEMAP_CLUSTER_CAPS);
 	LASSERTF(NM_TYPE_MASK == 0x0fffffffUL, "found 0x%.8xUL\n",
 		(unsigned)NM_TYPE_MASK);
 	LASSERTF(NM_TYPE_SHIFT == 28, "found %lld\n",
@@ -6615,7 +6649,9 @@ void lustre_assert_wire_constants(void)
 		 (unsigned)NODEMAP_RAISE_PRIV_RBAC);
 	LASSERTF(NODEMAP_RAISE_PRIV_FORBID_ENC == 0x00000040UL, "found 0x%.8xUL\n",
 		 (unsigned)NODEMAP_RAISE_PRIV_FORBID_ENC);
-	LASSERTF(NODEMAP_RAISE_PRIV_NONE == 0xffffff80UL, "found 0x%.8xUL\n",
+	LASSERTF(NODEMAP_RAISE_PRIV_CAPS == 0x00000080UL, "found 0x%.8xUL\n",
+		 (unsigned)NODEMAP_RAISE_PRIV_CAPS);
+	LASSERTF(NODEMAP_RAISE_PRIV_NONE == 0xffffff00UL, "found 0x%.8xUL\n",
 		 (unsigned)NODEMAP_RAISE_PRIV_NONE);
 	LASSERTF(NODEMAP_RAISE_PRIV_ALL == 0xffffffffUL, "found 0x%.8xUL\n",
 		 (unsigned)NODEMAP_RAISE_PRIV_ALL);
@@ -7195,6 +7231,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned int)LCFG_NODEMAP_DENY_MOUNT);
 	LASSERTF(LCFG_NODEMAP_RAISE_PRIVS == 0x000ce061UL, "found 0x%.8xUL\n",
 		 (unsigned)LCFG_NODEMAP_RAISE_PRIVS);
+	LASSERTF(LCFG_NODEMAP_SET_CAPS == 0x00ce063UL, "found 0x%.8xUL\n",
+		 (unsigned)LCFG_NODEMAP_SET_CAPS);
 #endif /* HAVE_SERVER_SUPPORT */
 	LASSERTF(PORTALS_CFG_TYPE == 1, "found %lld\n",
 		 (long long)PORTALS_CFG_TYPE);

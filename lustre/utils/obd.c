@@ -4632,6 +4632,89 @@ set_sepol_usage:
 }
 
 /**
+ * jt_nodemap_set_cap() - Define capabilities for regular users
+ *			  on the specified nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
+ *
+ * --name nodemap name
+ * --caps user capabilities
+ * --type mask or set or off
+ *
+ * Return:
+ * * %0 on success
+ */
+int jt_nodemap_set_cap(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	char *param = NULL;
+	char *caps = NULL;
+	char *type = NULL;
+	int c, len, rc = 0;
+
+	struct option long_options[] = {
+	   { .val = 'c', .name = "caps",	 .has_arg = required_argument },
+	   { .val = 'c', .name = "capabilities", .has_arg = required_argument },
+	   { .val = 'h', .name = "help",	 .has_arg = no_argument },
+	   { .val = 'n', .name = "name",	 .has_arg = required_argument },
+	   { .val = 't', .name = "type",	 .has_arg = required_argument },
+	   { .name = NULL },
+	};
+
+	while ((c = getopt_long(argc, argv, "c:hn:t:",
+				long_options, NULL)) != -1) {
+		switch (c) {
+		case 'c':
+			caps = optarg;
+			break;
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 't':
+			type = optarg;
+			break;
+		case 'h':
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_set_cap: missing nodemap name\n");
+		return CMD_HELP;
+	}
+	if (!type) {
+		fprintf(stderr, "nodemap_set_cap: missing caps type\n");
+		return CMD_HELP;
+	}
+	if (!caps && strcmp(type, "off") != 0) {
+		fprintf(stderr, "nodemap_set_cap: missing capabilities\n");
+		return CMD_HELP;
+	}
+
+	len = strlen(type) + 2;
+	if (caps)
+		len += strlen(caps);
+	param = malloc(len);
+	if (!param) {
+		fprintf(stderr, "nodemap_set_cap: cannot allocate param\n");
+		return -ENOMEM;
+	}
+	snprintf(param, len, "%s:%s", type, caps);
+	rc = nodemap_cmd(LCFG_NODEMAP_SET_CAPS, false, NULL, 0, argv[0],
+			 nodemap_name, param, NULL);
+	free(param);
+	if (rc != 0) {
+		fprintf(stderr,
+			"error: %s: cannot set capabilities '%s' on nodemap '%s': %s\n",
+			jt_cmdname(argv[0]), caps, nodemap_name,
+			strerror(errno));
+	}
+
+	return rc;
+}
+
+/**
  * modify a nodemap's behavior
  *
  * \param	argc		number of args
@@ -5409,6 +5492,12 @@ int jt_nodemap_set_sepol(int argc, char **argv)
 {
 	fprintf(stderr, "error: %s: invalid ioctl\n",
 		jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_set_cap(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
 	return -EOPNOTSUPP;
 }
 
