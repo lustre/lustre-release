@@ -191,7 +191,6 @@ static int llog_cat_new_log(const struct lu_env *env,
 		loghandle->lgh_max_size = loghandle->lgh_hdr_size +
 		       cfs_fail_val * 64;
 	}
-
 	rc = 0;
 
 out:
@@ -250,16 +249,25 @@ static inline int llog_cat_declare_create(const struct lu_env *env,
 	struct llog_logid_rec *lirec = &lgi->lgi_logid;
 	int rc;
 
-	rc = llog_declare_create(env, loghandle, th);
-	if (rc)
-		return rc;
+	if (dt_object_remote(cathandle->lgh_obj)) {
+		down_write(&loghandle->lgh_lock);
+		if (!llog_exist(loghandle))
+			rc = llog_cat_new_log(env, cathandle, loghandle, NULL);
+		else
+			rc = 0;
+		up_write(&loghandle->lgh_lock);
+	} else {
 
-	lirec->lid_hdr.lrh_len = sizeof(*lirec);
-	rc = llog_declare_write_rec(env, cathandle, &lirec->lid_hdr, -1,
-				    th);
-	if (!rc)
-		dt_declare_attr_set(env, cathandle->lgh_obj, NULL, th);
+		rc = llog_declare_create(env, loghandle, th);
+		if (rc)
+			return rc;
 
+		lirec->lid_hdr.lrh_len = sizeof(*lirec);
+		rc = llog_declare_write_rec(env, cathandle, &lirec->lid_hdr, -1,
+					    th);
+		if (!rc)
+			dt_declare_attr_set(env, cathandle->lgh_obj, NULL, th);
+	}
 	return rc;
 }
 /*
@@ -280,21 +288,30 @@ static int llog_cat_prep_log(const struct lu_env *env,
 	struct llog_handle *loghandle;
 	int rc;
 
-start:
 	rc = 0;
-	if (!IS_ERR_OR_NULL(*ploghandle)) {
-		if (llog_exist(*ploghandle) == 0)
-			return llog_cat_declare_create(env, cathandle,
-						       *ploghandle, th);
+	loghandle = *ploghandle;
+	if (!IS_ERR_OR_NULL(loghandle)) {
+		loghandle = llog_handle_get(loghandle);
+		if (loghandle) {
+			if (llog_exist(loghandle) == 0)
+				rc = llog_cat_declare_create(env, cathandle,
+							     loghandle, th);
+			llog_handle_put(env, loghandle);
+		}
 		return rc;
 	}
 
 	down_write(&cathandle->lgh_lock);
 	if (!IS_ERR_OR_NULL(*ploghandle)) {
+		loghandle = *ploghandle;
 		up_write(&cathandle->lgh_lock);
-		if (llog_exist(*ploghandle) == 0)
-			return llog_cat_declare_create(env, cathandle,
-						       *ploghandle, th);
+		loghandle = llog_handle_get(loghandle);
+		if (loghandle) {
+			if (llog_exist(loghandle) == 0)
+				rc = llog_cat_declare_create(env, cathandle,
+							     loghandle, th);
+			llog_handle_put(env, loghandle);
+		}
 		return rc;
 	}
 
@@ -311,37 +328,13 @@ start:
 		return rc;
 	}
 
-	if (dt_object_remote(cathandle->lgh_obj)) {
-		/* For remote operation, if we put the llog object
-		 * creation in the current transaction, then the
-		 * llog object will not be created on the remote
-		 * target until the transaction stop, if other
-		 * operations start before the transaction stop,
-		 * and use the same llog object, will be dependent
-		 * on the success of this transaction. So let's
-		 * create the llog object synchronously here to
-		 * remove the dependency.
-		 */
-		rc = llog_cat_new_log(env, cathandle, loghandle, NULL);
-		if (rc == -ESTALE) {
-			rc = llog_cat_refresh(env, cathandle);
-			if (rc)
-				GOTO(out, rc);
-			up_write(&cathandle->lgh_lock);
-			llog_close(env, loghandle);
-			goto start;
-		} else if (rc)
-			GOTO(out, rc);
-	} else {
-		rc = llog_cat_declare_create(env, cathandle, loghandle, th);
-		if (rc)
-			GOTO(out, rc);
+	rc = llog_cat_declare_create(env, cathandle, loghandle, th);
+	if (!rc) {
+		list_add(&loghandle->u.phd.phd_entry,
+			 &cathandle->u.chd.chd_head);
+		*ploghandle = loghandle;
 	}
 
-	list_add(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
-	*ploghandle = loghandle;
-
-out:
 	up_write(&cathandle->lgh_lock);
 	CDEBUG(D_OTHER, "%s: open log "DFID" for catalog "DFID" rc=%d\n",
 	       loghandle2name(cathandle), PLOGID(&loghandle->lgh_id),
@@ -630,6 +623,8 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 			     struct llog_handle *cathandle,
 			     struct llog_rec_hdr *rec, struct thandle *th)
 {
+	struct llog_handle *loghandle = NULL;
+	int retries = 5;
 	int rc;
 
 	ENTRY;
@@ -643,26 +638,40 @@ start:
 	rc = llog_cat_prep_log(env, cathandle,
 			       &cathandle->u.chd.chd_current_log, th);
 	if (rc)
-		RETURN(rc);
+		GOTO(estale, rc);
+
+	loghandle = cathandle->u.chd.chd_current_log;
+	if (IS_ERR_OR_NULL(loghandle)) { /* low chance race, repeat */
+		GOTO(estale, rc = -ESTALE);
+	} else {
+		loghandle = llog_handle_get(loghandle);
+		if (!loghandle)
+			GOTO(estale, rc = -ESTALE);
+	}
 
 	/* For local llog this would always reserves credits for creation */
 	rc = llog_cat_prep_log(env, cathandle, &cathandle->u.chd.chd_next_log,
 			       th);
-	if (rc)
-		RETURN(rc);
-
-	rc = llog_declare_write_rec(env, cathandle->u.chd.chd_current_log,
-				    rec, -1, th);
-	if (rc == -ESTALE && dt_object_remote(cathandle->lgh_obj)) {
-		down_write(&cathandle->lgh_lock);
-		rc = llog_cat_refresh(env, cathandle);
-		up_write(&cathandle->lgh_lock);
-		if (rc)
-			RETURN(rc);
-		goto start;
+	if (!rc) {
+		rc = llog_declare_write_rec(env, loghandle, rec, -1, th);
+		if (!rc)
+			dt_declare_attr_set(env, loghandle->lgh_obj, NULL, th);
 	}
-	dt_declare_attr_set(env, cathandle->u.chd.chd_current_log->lgh_obj,
-			    NULL, th);
+
+	llog_handle_put(env, loghandle);
+estale:
+	if (rc == -ESTALE) {
+		if (dt_object_remote(cathandle->lgh_obj)) {
+			down_write(&cathandle->lgh_lock);
+			rc = llog_cat_refresh(env, cathandle);
+			up_write(&cathandle->lgh_lock);
+			if (rc)
+				RETURN(rc);
+		}
+		retries--;
+		if (retries > 0)
+			goto start;
+	}
 
 #if 0
 	/*
@@ -673,6 +682,11 @@ start:
 	rc = llog_declare_write_rec(env, cathandle->u.chd.chd_next_log, rec, -1,
 				    th);
 #endif
+	if (rc)
+		CWARN("%s: declaration failed, catalog "DFID": rc = %d\n",
+		      loghandle2name(cathandle),
+		      PLOGID(&cathandle->lgh_id), rc);
+
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_declare_add_rec);
