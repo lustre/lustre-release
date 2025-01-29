@@ -1400,6 +1400,8 @@ test_23b() {
 	done
 
 	df -h
+	rm -rf $POOL_ROOT
+	wait_delete_completed
 }
 run_test 23b "OST pools and OOS"
 
