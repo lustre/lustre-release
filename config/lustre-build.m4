@@ -466,7 +466,7 @@ LB_CONFIG_MODULES
 AS_IF([test x$enable_modules = xno], [enable_server=no])
 LB_CONFIG_LDISKFS
 LB_CONFIG_ZFS
-AS_IF([test "x$enable_dist" = xno], [
+AS_IF([test "x$enable_modules" = xyes], [
 	LB_KABI_LDISKFS
 	LZ_KABI_ZFS
 	LB_KABI_CHECKS
