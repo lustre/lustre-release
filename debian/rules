@@ -222,13 +222,13 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-mpitests" ; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "notests"; then \
-		export EXTRAFLAGS="--disable-tests"; \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-tests"; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "noutils"; then \
-		export EXTRAFLAGS="--disable-utils"; \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-utils"; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "noiokit"; then \
-		export EXTRAFLAGS="--disable-iokit"; \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-iokit"; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "zfs"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-zfs=$${ZFS_SRC} --with-spl=$${SPL_SRC}"; \
@@ -553,13 +553,13 @@ kdist_config: prep-deb-files patch-stamp
 		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-mpitests" ; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "notests"; then \
-		export EXTRAFLAGS="--disable-tests"; \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-tests"; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "noutils"; then \
-		export EXTRAFLAGS="--disable-utils"; \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-utils"; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "noiokit"; then \
-		export EXTRAFLAGS="--disable-iokit"; \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-iokit"; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "zfs"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-zfs=$${ZFS_SRC} --with-spl=$${SPL_SRC}"; \
