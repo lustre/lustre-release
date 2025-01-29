@@ -429,14 +429,6 @@ retry_connect:
 
 	sbi->ll_md_exp->exp_connect_data = *data;
 
-	err = client_fid_init(sbi->ll_md_exp->exp_obd, sbi->ll_md_exp,
-			      LUSTRE_SEQ_METADATA);
-	if (err) {
-		CERROR("%s: Can't init metadata layer FID infrastructure: rc = %d\n",
-		       sbi->ll_md_exp->exp_obd->obd_name, err);
-		GOTO(out_md, err);
-	}
-
 	/* For mount, we only need fs info from MDT0, and also in DNE, it
 	 * can make sure the client can be mounted as long as MDT0 is avaible
 	 */
@@ -451,11 +443,10 @@ retry_connect:
 		CERROR("%s: mount failed with %d, forcing read-only mount.\n",
 		       sbi->ll_md_exp->exp_obd->obd_name, err);
 		sb->s_flags |= SB_RDONLY;
-		client_fid_fini(sbi->ll_md_exp->exp_obd);
 		obd_disconnect(sbi->ll_md_exp);
 		GOTO(retry_connect, err);
 	} else if (err) {
-		GOTO(out_md_fid, err);
+		GOTO(out_md, err);
 	}
 
 	/* This needs to be after statfs to ensure connect has finished.
@@ -477,7 +468,7 @@ retry_connect:
 		LCONSOLE_ERROR("Server %s does not support feature(s) needed for correct operation of this client (%s). Please upgrade server or downgrade client.\n",
 			       sbi->ll_md_exp->exp_obd->obd_name, buf);
 		OBD_FREE(buf, PAGE_SIZE);
-		GOTO(out_md_fid, err = -EPROTO);
+		GOTO(out_md, err = -EPROTO);
 	}
 
 	size = sizeof(*data);
@@ -486,7 +477,7 @@ retry_connect:
 	if (err) {
 		CERROR("%s: Get connect data failed: rc = %d\n",
 		       sbi->ll_md_exp->exp_obd->obd_name, err);
-		GOTO(out_md_fid, err);
+		GOTO(out_md, err);
 	}
 
 	LASSERT(osfs->os_bsize);
@@ -565,7 +556,7 @@ retry_connect:
 	sbi->ll_dt_obd = class_name2obd(dt);
 	if (!sbi->ll_dt_obd) {
 		CERROR("DT %s: not setup or attached\n", dt);
-		GOTO(out_md_fid, err = -ENODEV);
+		GOTO(out_md, err = -ENODEV);
 	}
 
 	/* pass client page size via ocd_grant_blkbits, the server should report
@@ -657,14 +648,6 @@ retry_connect:
 		clear_bit(LL_SBI_HYBRID_IO, sbi->ll_flags);
 
 	sbi->ll_dt_exp->exp_connect_data = *data;
-
-	err = client_fid_init(sbi->ll_dt_exp->exp_obd, sbi->ll_dt_exp,
-			      LUSTRE_SEQ_METADATA);
-	if (err) {
-		CERROR("%s: Can't init data layer FID infrastructure: rc = %d\n",
-		       sbi->ll_dt_exp->exp_obd->obd_name, err);
-		GOTO(out_dt, err);
-	}
 
 	mutex_lock(&sbi->ll_lco.lco_lock);
 	sbi->ll_lco.lco_flags = data->ocd_connect_flags;
@@ -848,13 +831,9 @@ retry_connect:
 out_root:
 	iput(root);
 out_lock_cn_cb:
-	client_fid_fini(sbi->ll_dt_exp->exp_obd);
-out_dt:
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
 	sbi->ll_dt_obd = NULL;
-out_md_fid:
-	client_fid_fini(sbi->ll_md_exp->exp_obd);
 out_md:
 	obd_disconnect(sbi->ll_md_exp);
 	sbi->ll_md_exp = NULL;
@@ -948,13 +927,11 @@ static void client_common_put_super(struct super_block *sb)
 
 	cl_sb_fini(sb);
 
-	client_fid_fini(sbi->ll_dt_exp->exp_obd);
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
 
 	ll_debugfs_unregister_super(sb);
 
-	client_fid_fini(sbi->ll_md_exp->exp_obd);
 	obd_disconnect(sbi->ll_md_exp);
 	sbi->ll_md_exp = NULL;
 
