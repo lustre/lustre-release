@@ -2625,14 +2625,17 @@ test_12b() {
 		error "set quota failed"
 
 	echo "Create $ilimit files on mdt0..."
-	$RUNAS createmany -m $TESTFILE0 $ilimit || true
+	local mdt0_created=$($RUNAS createmany -m $TESTFILE0 $ilimit |
+		awk '/total:/ {print $2}')
+	echo "mdt0 created $mdt0_created"
 
 	echo "Create files on mdt1..."
 	$RUNAS createmany -m $TESTFILE1 1 &&
 		quota_error a $TSTUSR "create succeeded, expect EDQUOT"
 
 	echo "Free space from mdt0..."
-	$RUNAS unlinkmany $TESTFILE0 $ilimit || error "unlink mdt0 files failed"
+	$RUNAS unlinkmany $TESTFILE0 $mdt0_created ||
+		error "unlink mdt0 files failed"
 	wait_delete_completed
 	sync_all_data || true
 
