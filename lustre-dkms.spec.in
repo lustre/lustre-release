@@ -99,6 +99,7 @@ Obsoletes:	%{lustre_name}-dkms
 %endif
 %if %{with ldiskfs}
 Requires:	patch
+Requires:	ldiskfsprogs-devel
 Requires:	%{ext4_source_rpm}
 Conflicts:	%{lustre_name}-zfs-dkms
 Conflicts:	%{lustre_name}-client-dkms
