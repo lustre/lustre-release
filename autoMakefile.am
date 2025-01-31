@@ -22,7 +22,6 @@ DIST_SUBDIRS := ldiskfs \
 	libcfs \
 	lnet \
 	lustre \
-	cc-plugins \
 	config
 
 AUTOMAKE_OPTIONS = foreign
@@ -167,7 +166,7 @@ all: plugins
 # system
 plugins: undef.h
 if CC_PLUGINS
-	$(MAKE) all -C cc-plugins
+	$(MAKE) all -C contrib/cc-plugins
 endif # CC_PLUGINS
 
 undef.h: config.h.in

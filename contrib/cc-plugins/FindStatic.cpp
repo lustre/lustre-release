@@ -1,9 +1,7 @@
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// SPDX-License-Identifier: GPL-2.0 OR Apache-2.0 WITH LLVM-exception
 
 //
 // This file is part of Lustre, http://www.lustre.org/
-//
-// cc-plugins/FindStatic.cpp
 //
 // Clang plugin to find functions which could be made
 // static.
