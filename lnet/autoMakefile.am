@@ -11,8 +11,6 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-SUBDIRS = lnet klnds selftest doc utils include	\
-	autoconf
+SUBDIRS = lnet klnds selftest doc utils include
 
-DIST_SUBDIRS = lnet klnds selftest doc utils include \
-	autoconf
+DIST_SUBDIRS = lnet klnds selftest doc utils include

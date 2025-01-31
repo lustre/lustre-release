@@ -5773,7 +5773,6 @@ AC_DEFUN([LC_CONFIG_FILES],
 [AC_CONFIG_FILES([
 lustre/Makefile
 lustre/autoMakefile
-lustre/autoconf/Makefile
 lustre/conf/Makefile
 lustre/conf/resource/Makefile
 lustre/doc/Makefile
