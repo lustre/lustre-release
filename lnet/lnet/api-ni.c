@@ -2700,7 +2700,11 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		    !lnet_ni_unique_net(&net_l->net_ni_list,
 					ni->ni_interface)) {
 			rc = -EEXIST;
-			goto failed1;
+			/* In case of not unique net. Simply return with
+			 * errno code and the cleanup will happen under
+			 * lnet_dyn_add_ni()
+			 */
+			return rc;
 		}
 
 		/* adjust the pointer the parent network, just in case it
@@ -3777,8 +3781,10 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net_id,
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	/* If NI already exist delete this new unused copy */
-	if (rc == -EEXIST)
+	if (rc == -EEXIST) {
 		lnet_ni_free(ni);
+		lnet_net_free(net);
+	}
 
 	return rc;
 }
