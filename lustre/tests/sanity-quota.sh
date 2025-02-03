@@ -6042,6 +6042,7 @@ test_79()
 	pool_add $qpool || error "pool_add failed"
 	do_facet mds1 "rm $stopf"
 	wait $pid
+	return 0
 }
 run_test 79 "access to non-existed dt-pool/info doesn't cause a panic"
 
