@@ -16,6 +16,7 @@
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 
+#include <cfs_hash.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_nodemap.h>

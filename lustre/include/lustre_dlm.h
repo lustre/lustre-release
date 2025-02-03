@@ -25,6 +25,7 @@
 #ifndef _LUSTRE_DLM_H__
 #define _LUSTRE_DLM_H__
 
+#include <cfs_hash.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_import.h>

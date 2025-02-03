@@ -18,6 +18,9 @@
 #include <linux/kobject.h>
 #include <linux/string.h>
 
+#ifdef HAVE_SERVER_SUPPORT
+#include <cfs_hash.h>
+#endif
 #include <llog_swab.h>
 #include <lprocfs_status.h>
 #include <lustre_disk.h>

@@ -22,6 +22,7 @@
 #include <linux/sched/signal.h>
 #endif
 
+#include <libcfs/linux/linux-hash.h>
 #include <libcfs/linux/linux-misc.h>
 #include <libcfs/linux/linux-mem.h>
 #include <libcfs/linux/linux-time.h>
@@ -31,7 +32,6 @@
 #include <uapi/linux/lnet/libcfs_ioctl.h>
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
-#include <libcfs/libcfs_hash.h>
 #include <libcfs/libcfs_fail.h>
 
 #define LIBCFS_VERSION	"0.7.1"
@@ -49,8 +49,6 @@ typedef s32 timeout_t;
 
 int libcfs_setup(void);
 int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data);
-
-extern struct workqueue_struct *cfs_rehash_wq;
 
 #ifdef HAVE_CONST_CTR_TABLE
 #define DEFINE_CTL_TABLE_INIT(__name, init)\

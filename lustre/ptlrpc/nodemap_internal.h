@@ -11,6 +11,7 @@
 #ifndef _NODEMAP_INTERNAL_H
 #define _NODEMAP_INTERNAL_H
 
+#include <cfs_hash.h>
 #include <lustre_nodemap.h>
 #include <lustre_disk.h>
 #include <linux/rbtree.h>

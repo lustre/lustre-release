@@ -26,6 +26,7 @@
 
 #include <libcfs/libcfs.h>
 #include <obd.h>
+#include <cfs_hash.h>
 #include <cl_object.h>
 #include <lustre_crypto.h>
 

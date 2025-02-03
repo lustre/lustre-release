@@ -17,7 +17,6 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <libcfs/libcfs.h>
-#include <libcfs/libcfs_hash.h>
 #include <obd_support.h>
 #include <lprocfs_status.h>
 #include <linux/interval_tree_generic.h>

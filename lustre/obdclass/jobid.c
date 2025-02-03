@@ -23,6 +23,7 @@
 #include <linux/utsname.h>
 
 #include <libcfs/libcfs.h>
+#include <cfs_hash.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>

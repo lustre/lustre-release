@@ -24,7 +24,7 @@
 #define _MDT_INTERNAL_H
 
 #include <libcfs/libcfs.h>
-#include <libcfs/libcfs_hash.h>
+#include <cfs_hash.h>
 #include <upcall_cache.h>
 #include <obd_class.h>
 #include <lustre_disk.h>

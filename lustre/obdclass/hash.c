@@ -85,8 +85,9 @@
 #include <linux/seq_file.h>
 #include <linux/log2.h>
 
-#include <libcfs/linux/linux-list.h>
 #include <libcfs/libcfs.h>
+#include <cfs_hash.h>
+#include <obd_class.h>
 
 #if CFS_HASH_DEBUG_LEVEL >= CFS_HASH_DEBUG_1
 static unsigned int warn_on_depth = 8;
@@ -95,6 +96,25 @@ MODULE_PARM_DESC(warn_on_depth, "warning when hash depth is high.");
 #endif
 
 struct workqueue_struct *cfs_rehash_wq;
+
+int cfs_hash_init(void)
+{
+	int rc = 0;
+
+	cfs_rehash_wq = alloc_workqueue("cfs_rh", WQ_SYSFS, 4);
+	if (!cfs_rehash_wq) {
+		rc = -ENOMEM;
+		CERROR("obdclass: failed to start rehash workqueue: rc = %d\n",
+		       rc);
+	}
+	return rc;
+}
+
+void cfs_hash_fini(void)
+{
+	if (cfs_rehash_wq)
+		destroy_workqueue(cfs_rehash_wq);
+}
 
 static inline void
 cfs_hash_nl_lock(union cfs_hash_lock *lock, int exclusive) {}

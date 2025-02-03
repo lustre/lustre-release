@@ -164,6 +164,10 @@ void obd_pool_put_objects(void *buf, unsigned int order);
 int obd_pool_get_free_objects(unsigned int order);
 int pool_is_at_full_capacity(int order);
 
+/* cfs_hash.c */
+int cfs_hash_init(void);
+void cfs_hash_fini(void);
+
 int encrypt_page_pools_seq_show(struct seq_file *m, void *v);
 int page_pools_seq_show(struct seq_file *m, void *v);
 

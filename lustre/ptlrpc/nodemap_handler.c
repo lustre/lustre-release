@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/sort.h>
 #include <uapi/linux/lnet/nidstr.h>
+#include <cfs_hash.h>
 #include <lustre_net.h>
 #include <lustre_acl.h>
 #include <obd_class.h>

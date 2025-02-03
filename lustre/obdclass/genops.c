@@ -19,6 +19,7 @@
 #include <linux/pid_namespace.h>
 #include <linux/workqueue.h>
 #include <lustre_compat.h>
+#include <cfs_hash.h>
 #include <obd_class.h>
 #include <lustre_log.h>
 #include <lprocfs_status.h>

@@ -850,10 +850,13 @@ static int __init obdclass_init(void)
 	if (err)
 		goto cleanup_llog_info;
 
+	err = cfs_hash_init();
+	if (err)
+		goto cleanup_obd_pool;
 #ifdef HAVE_SERVER_SUPPORT
 	err = dt_global_init();
 	if (err != 0)
-		goto cleanup_obd_pool;
+		goto cleanup_cfs_hash;
 
 	err = lu_ucred_global_init();
 	if (err != 0)
@@ -877,8 +880,10 @@ cleanup_all:
 cleanup_dt_global:
 	dt_global_fini();
 
-cleanup_obd_pool:
+cleanup_cfs_hash:
 #endif /* HAVE_SERVER_SUPPORT */
+	cfs_hash_fini();
+cleanup_obd_pool:
 	obd_pool_fini();
 
 cleanup_llog_info:
@@ -952,6 +957,7 @@ static void __exit obdclass_exit(void)
 	lu_ucred_global_fini();
 	dt_global_fini();
 #endif /* HAVE_SERVER_SUPPORT */
+	cfs_hash_fini();
 	obd_pool_fini();
 	llog_info_fini();
 	cl_global_fini();

@@ -639,15 +639,6 @@ int libcfs_setup(void)
 		goto cleanup_lock;
 	}
 
-	cfs_rehash_wq = alloc_workqueue("cfs_rh", WQ_SYSFS, 4);
-	if (!cfs_rehash_wq) {
-		rc = -ENOMEM;
-		CERROR("libcfs: failed to start rehash workqueue: rc = %d\n",
-		       rc);
-		libcfs_debug_cleanup();
-		goto cleanup_lock;
-	}
-
 	CDEBUG(D_OTHER, "libcfs setup OK\n");
 	libcfs_active = 1;
 cleanup_lock:
@@ -694,9 +685,6 @@ static void __exit libcfs_exit(void)
 
 	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %lld\n",
 	       libcfs_kmem_read());
-
-	if (cfs_rehash_wq)
-		destroy_workqueue(cfs_rehash_wq);
 
 	/* the below message is checked in test-framework.sh check_mem_leak() */
 	if (libcfs_kmem_read() != 0)
