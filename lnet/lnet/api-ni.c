@@ -2606,21 +2606,22 @@ static const struct lnet_lnd *lnet_load_lnd(u32 lnd_type)
 	mutex_lock(&the_lnet.ln_lnd_mutex);
 	lnd = lnet_find_lnd_by_type(lnd_type);
 	if (!lnd) {
+#ifdef HAVE_MODULE_LOADING_SUPPORT
 		mutex_unlock(&the_lnet.ln_lnd_mutex);
 		rc = request_module("%s", libcfs_lnd2modname(lnd_type));
 		mutex_lock(&the_lnet.ln_lnd_mutex);
 
 		lnd = lnet_find_lnd_by_type(lnd_type);
 		if (!lnd) {
-			mutex_unlock(&the_lnet.ln_lnd_mutex);
 			CERROR("Can't load LND %s, module %s, rc=%d\n",
 			libcfs_lnd2str(lnd_type),
 			libcfs_lnd2modname(lnd_type), rc);
-#ifndef HAVE_MODULE_LOADING_SUPPORT
-			LCONSOLE_ERROR("Your kernel must be compiled with kernel module loading support.");
-#endif
-			return ERR_PTR(-EINVAL);
+			lnd = ERR_PTR(rc);
 		}
+#else
+		LCONSOLE_ERROR("Your kernel must be compiled with kernel module loading support.");
+		lnd = ERR_PTR(-EINVAL);
+#endif
 	}
 	mutex_unlock(&the_lnet.ln_lnd_mutex);
 
