@@ -19,7 +19,7 @@ done
 # avoid the "modules.order: No such file or directory" failure
 touch modules.order
 
-libtoolize -q
+libtoolize -q -f
 aclocal -I $pw/config $ACLOCAL_FLAGS
 autoheader
 automake -a -c
