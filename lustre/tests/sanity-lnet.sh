@@ -3153,6 +3153,56 @@ EOF
 }
 run_test 304 "Check locked primary peer nid consolidation"
 
+test_350() {
+	reinit_dlc || return $?
+
+	do_lnetctl net add --net ${NETTYPE} --if ${INTERFACES[0]} ||
+		error "Failed to add net rc=$?"
+	do_lnetctl net add --net ${NETTYPE}2 --if ${INTERFACES[0]} ||
+		error "Failed to add net rc=$?"
+
+	local nid1=$($LCTL list_nids | head -n 1)
+	local nid2=$($LCTL list_nids | tail -n 1)
+
+	[[ -n $nid1 && -n $nid2 ]] || error "Failed to get nids"
+
+	local pnid=${nid1}3
+
+	do_lnetctl peer add --prim ${pnid} --lock_prim --nid $nid1,$nid2 ||
+		error "Failed to add peer rc=$?"
+
+#define LNET_PEER_MULTI_RAIL            BIT(0)
+#define LNET_PEER_LOCK_PRIMARY          BIT(20)
+	local state=1048577
+
+	do_lnetctl peer set --state $state --nid $pnid ||
+		error "Failed to set peer state rc=$?"
+
+	local actual=$($LNETCTL peer show -v 3 --nid $pnid |
+		       awk '/peer state/{print $NF}')
+
+	((actual == state)) ||
+		error "Expect peer state $state but found $actual"
+
+	do_lnetctl discover $pnid || error "Discovery failed rc=$?"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: ${pnid}
+      Multi-Rail: True
+      peer ni:
+        - nid: ${nid1}
+          state: NA
+        - nid: ${pnid}
+          state: NA
+        - nid: ${nid2}
+          state: NA
+EOF
+	$LNETCTL peer show > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files || error "Unexpected peer config"
+	$LUSTRE_RMMOD
+}
+run_test 350 "Check refcount loss when locked primary NID doesn't exist"
 complete $SECONDS
 
 cleanup_testsuite
