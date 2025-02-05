@@ -21,7 +21,6 @@
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lprocfs_status.h>
-#include <libcfs/libcfs_string.h>
 #include "mdd_internal.h"
 
 static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,

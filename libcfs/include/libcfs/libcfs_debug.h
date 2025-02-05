@@ -37,6 +37,12 @@ extern char *libcfs_debug_file_path;
 
 struct task_struct;
 
+/* Convert a text string to a bitmask */
+int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
+		 u64 *oldmask, u64 minmask, u64 allmask, u64 defmask);
+int cfs_mask2str(char *str, int size, u64 mask, const char *(*bit2str)(int),
+		 char sep);
+
 int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys);
 int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys);
 void libcfs_debug_dumpstack(struct task_struct *tsk);

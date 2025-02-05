@@ -31,7 +31,6 @@
 #include <uapi/linux/lnet/libcfs_ioctl.h>
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
-#include <libcfs/libcfs_string.h>
 #include <libcfs/libcfs_hash.h>
 #include <libcfs/libcfs_fail.h>
 

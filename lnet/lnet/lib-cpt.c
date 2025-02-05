@@ -18,8 +18,8 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 
-#include <libcfs/libcfs_string.h>
 #include <libcfs/libcfs.h>
+#include <lnet/lib-types.h>
 #include <lnet/lib-cpt.h>
 
 /** virtual processing unit */

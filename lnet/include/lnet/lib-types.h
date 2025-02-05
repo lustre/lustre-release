@@ -37,6 +37,29 @@ int cfs_match_nid_net(struct lnet_nid *nid, u32 net,
 		      struct list_head *net_num_list,
 		      struct list_head *addr);
 
+/* Structure to represent \<range_expr\> token of the syntax. */
+struct cfs_range_expr {
+	/* Link to cfs_expr_list::el_exprs. */
+	struct list_head        re_link;
+	u32                     re_lo;
+	u32                     re_hi;
+	u32                     re_stride;
+};
+
+struct cfs_expr_list {
+	struct list_head        el_link;
+	struct list_head        el_exprs;
+};
+
+int cfs_expr_list_match(u32 value, struct cfs_expr_list *expr_list);
+int cfs_expr_list_values(struct cfs_expr_list *expr_list,
+			 int max, u32 **values);
+void cfs_expr_list_free(struct cfs_expr_list *expr_list);
+int cfs_expr_list_parse(char *str, int len, unsigned int min, unsigned int max,
+			struct cfs_expr_list **elpp);
+void cfs_expr_list_free_list(struct list_head *list);
+#define cfs_expr_list_values_free(values, num)  CFS_FREE_PTR_ARRAY(values, num)
+
 /* Max payload size */
 #define LNET_MAX_PAYLOAD	LNET_MTU
 
