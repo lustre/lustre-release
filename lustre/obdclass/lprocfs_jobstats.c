@@ -18,6 +18,10 @@
 
 #ifdef CONFIG_PROC_FS
 
+enum js_info_flags {
+	JS_EXPIRED,		/* job is timed out and schedule for removal */
+};
+
 #define JOB_CLEANUP_BATCH 1024
 /*
  * JobID formats & JobID environment variable names for supported
@@ -49,6 +53,7 @@ struct job_stat {
 	struct rb_node		js_idnode;	/* js_jobid sorted node */
 	struct rb_node		js_posnode;	/* pos sorted node */
 	struct list_head	js_lru;		/* on ojs_lru, with ojs_lock */
+	unsigned long		js_flags;	/* JS_* flags */
 	struct llist_node	js_deleted;	/* on ojs_deleted w/ojs_lock */
 	u64			js_pos_id;	/* pos for job stats seq file */
 	struct kref		js_refcount;	/* num users of this struct */
@@ -180,6 +185,9 @@ static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool clear)
 	list_for_each_entry_rcu(job, &stats->ojs_lru, js_lru) {
 		if (!ktime_before(job->js_time_latest, oldest))
 			break;
+		/* only put jobs that have not expired */
+		if (test_and_set_bit(JS_EXPIRED, &job->js_flags))
+			continue;
 		job_putref(job); /* drop ref to initiate removal */
 	}
 	rcu_read_unlock();
@@ -213,6 +221,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 	job->js_jobstats = jobs;
 	RB_CLEAR_NODE(&job->js_idnode);
 	INIT_LIST_HEAD(&job->js_lru);
+	clear_bit(JS_EXPIRED, &job->js_flags);
 	/* open code init_llist_node */
 	job->js_deleted.next = &job->js_deleted;
 	kref_init(&job->js_refcount);
@@ -319,6 +328,8 @@ static struct job_stat *job_insert(struct obd_job_stats *stats,
 		struct job_stat *existing_job;
 
 		existing_job = container_of(node, struct job_stat, js_idnode);
+		if (test_bit(JS_EXPIRED, &existing_job->js_flags))
+			return ERR_PTR(-EAGAIN);
 		if (kref_get_unless_zero(&existing_job->js_refcount))
 			return existing_job;
 		/* entry is being deleted */
