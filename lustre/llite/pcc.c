@@ -2282,7 +2282,7 @@ pcc_file_mapping_reset(struct inode *inode, struct file *file, bool cached)
 			pcc_file_fallback_set(ll_i2info(inode), pccf);
 	}
 
-	if (pcc_file) {
+	if (pcc_file && cached) {
 		struct inode *pcc_inode = file_inode(pcc_file);
 
 		if (pcc_inode->i_mapping == &pcc_inode->i_data)
