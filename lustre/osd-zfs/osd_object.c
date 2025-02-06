@@ -122,7 +122,8 @@ void osd_object_sa_dirty_rele(const struct lu_env *env, struct osd_thandle *oh)
 			}
 			up_write(&obj->oo_guard);
 		}
-		sa_spill_rele(obj->oo_sa_hdl);
+		if (obj->oo_sa_hdl)
+			sa_spill_rele(obj->oo_sa_hdl);
 	}
 }
 
