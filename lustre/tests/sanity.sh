@@ -11244,7 +11244,7 @@ test_66() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local COUNT=${COUNT:-8}
-	dd if=/dev/zero of=$DIR/f66 bs=1k count=$COUNT
+	dd if=/dev/urandom of=$DIR/f66 bs=1k count=$COUNT
 	sync; sync_all_data; sync; sync_all_data
 	cancel_lru_locks osc
 	local BLOCKS=$(ls -s --block-size=1k $DIR/f66 | awk '{ print $1 }')
