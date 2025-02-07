@@ -1553,19 +1553,15 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	bool enable_checksum = true;
 	struct cl_page *clpage;
 	u64 foffset = 0;
+	u32 iop_pages = 0;
 
 	ENTRY;
 	if (pga[0]->bp_page) {
 		clpage = oap2cl_page(brw_page2oap(pga[0]));
 		inode = clpage->cp_inode;
-		if (clpage->cp_type == CPT_TRANSIENT) {
+		foffset = pga[0]->bp_off;
+		if (clpage->cp_type == CPT_TRANSIENT)
 			directio = true;
-			/* When page size interop logic is not supported by the
-			 * remote server use the old logic.
-			 */
-			if (imp_connect_unaligned_dio(cli->cl_import))
-				foffset = pga[0]->bp_off;
-		}
 	}
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
 		RETURN(-ENOMEM); /* Recoverable */
@@ -1789,6 +1785,12 @@ retry_encrypt:
 		goto no_bulk;
 	}
 
+	if (foffset)
+		iop_pages = interop_pages(foffset, page_count, pga);
+	/* need interop but server does not support, return failure */
+	if (iop_pages && !imp_connect_unaligned_dio(cli->cl_import))
+			GOTO(out, rc = -EINVAL); /* -EDQUOT? */
+
 	desc = ptlrpc_prep_bulk_imp(req, page_count,
 		cli->cl_import->imp_connect_data.ocd_brw_size >> LNET_MTU_BITS,
 		(opc == OST_WRITE ? PTLRPC_BULK_GET_SOURCE :
@@ -1800,8 +1802,8 @@ retry_encrypt:
 		GOTO(out, rc = -ENOMEM);
 	/* NB request now owns desc and will free it when it gets freed */
 	desc->bd_is_rdma = gpu;
-	if (directio && foffset)
-		desc->bd_md_offset = interop_pages(foffset, page_count, pga);
+	if (iop_pages)
+		desc->bd_md_offset = iop_pages;
 
 no_bulk:
 	body = req_capsule_client_get(pill, &RMF_OST_BODY);
