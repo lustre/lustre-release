@@ -17,10 +17,6 @@ ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT "
 ALWAYS_EXCEPT+=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-if [[ "$ost1_FSTYPE" == "zfs" ]]; then
-	always_except LU-18676 49
-fi
-
 # Test duration:                   30 min
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="61"
 
@@ -4158,14 +4154,14 @@ test_get_allquota() {
 	sleep 5
 
 	start=$SECONDS
-	$LFS quota -a -s $start_qid -e $end_qid -u $MOUNT | tail -n 50
+	$LFS quota -a -s $start_qid -e $end_qid -u $MOUNT | head -n 50
 	total=$((SECONDS - start))
 	(( end - start > 0 )) &&
 		echo "time=$total, rate=$((qid_cnt / total))/s" ||
 		echo "time=0, rate=$qid_cnt/0"
 
 	start=$SECONDS
-	$LFS quota -a -s $start_qid -e $end_qid -g $MOUNT | tail -n 50
+	$LFS quota -a -s $start_qid -e $end_qid -g $MOUNT | head -n 50
 	total=$((SECONDS - start))
 	(( end - start > 0 )) &&
 		echo "time=$total, rate=$((qid_cnt / total))/s" ||
