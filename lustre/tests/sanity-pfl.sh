@@ -1792,7 +1792,7 @@ test_20c() {
 	stack_trap "ost_watermarks_clear_enospc $tfile $ost_idx1 $wms" EXIT
 	stack_trap "ost_watermarks_clear_enospc $tfile $ost_idx2 $wms2" EXIT
 
-	dd if=/dev/zero of=$comp_file bs=1M count=1 seek=120 &&
+	dd if=/dev/urandom of=$comp_file bs=1M count=1 seek=120 &&
 		error "dd should fail with ENOSPC"
 
 	flg_opts="--comp-flags init"
