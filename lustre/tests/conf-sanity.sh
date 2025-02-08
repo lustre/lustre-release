@@ -29,6 +29,13 @@ fi
 #                                     8  22  40 165  (min)
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="45 69 106 111 114"
 
+if [[ "$mds1_FSTYPE" == "zfs" ]]; then
+	always_except LU-18652 32b 32c 32e 32h
+	always_except LU-18652 108a 112a 112b 113 117 119 121 122a
+	always_except LU-18652 123aa 123ab 123ac 123ad 123ae 123af 123ag 123ah 123ahi
+	always_except LU-18652 123F 123G 123H 126 129 132 133 135 136 137 150 152 153a 153b 153c 155 802a
+fi
+
 build_test_filter
 
 # use small MDS + OST size to speed formatting time

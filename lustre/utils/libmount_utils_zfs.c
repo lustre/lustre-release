@@ -786,6 +786,7 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	 * zfs 0.6.1 - system attribute based xattrs
 	 * zfs 0.6.5 - large block support
 	 * zfs 0.7.0 - large dnode support
+	 * zfs 2.2.6 - compression handling
 	 *
 	 * Check if zhp is NULL as a defensive measure. Any dataset
 	 * validation errors that would cause zfs_open() to fail
@@ -793,6 +794,8 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	 */
 	zhp = zfs_open(g_zfs, ds, ZFS_TYPE_FILESYSTEM);
 	if (zhp) {
+		char *opt;
+
 		/* zfs 0.6.1 - system attribute based xattrs */
 		if (!strstr(mop->mo_mkfsopts, "xattr="))
 			zfs_set_prop_str(zhp, "xattr", "sa");
@@ -807,6 +810,24 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 			if (!strstr(mop->mo_mkfsopts, "recordsize=") &&
 			    !strstr(mop->mo_mkfsopts, "recsize="))
 				zfs_set_prop_str(zhp, "recordsize", "1M");
+		}
+
+		/* zfs 2.2.6 - compression handling */
+		opt = strstr(mop->mo_mkfsopts, "compression=");
+		if (opt) {
+			char *end = index(opt, ',');
+			size_t len = strlen(opt);
+
+			if (end) {
+				len = end - opt;
+				end = strndup(opt, len);
+			}
+			zfs_set_prop_str(zhp, "compression", end ? end : opt);
+			if (end)
+				free(end);
+		} else {
+			/* By default turn off compression */
+			zfs_set_prop_str(zhp, "compression", "off");
 		}
 
 		zfs_close(zhp);
