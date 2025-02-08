@@ -234,17 +234,29 @@ SERVER_MANFILES =				\
 	lctl-llog_remove.8			\
 	lctl-del_ost.8				\
 	lctl-nodemap-activate.8			\
+	lctl-nodemap_activate.8			\
 	lctl-nodemap-add-idmap.8		\
+	lctl-nodemap_add_idmap.8		\
 	lctl-nodemap-add-range.8		\
+	lctl-nodemap_add_range.8		\
 	lctl-nodemap-add.8			\
+	lctl-nodemap_add.8			\
 	lctl-nodemap-del-idmap.8		\
+	lctl-nodemap_del_idmap.8		\
 	lctl-nodemap-del-range.8		\
+	lctl-nodemap_del_range.8		\
 	lctl-nodemap-del.8			\
+	lctl-nodemap_del.8			\
 	lctl-nodemap-modify.8			\
+	lctl-nodemap_modify.8			\
 	lctl-nodemap-set-fileset.8		\
+	lctl-nodemap_set_fileset.8		\
 	lctl-nodemap-set-sepol.8		\
+	lctl-nodemap_set_sepol.8		\
 	lctl-nodemap-add-offset.8		\
+	lctl-nodemap_add_offset.8		\
 	lctl-nodemap-del-offset.8		\
+	lctl-nodemap_del_offset.8		\
 	lctl-snapshot-create.8			\
 	lctl-snapshot-destroy.8			\
 	lctl-snapshot-list.8			\

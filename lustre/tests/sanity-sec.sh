@@ -100,6 +100,34 @@ IDENTITY_FLUSH=mdt.$MDT.identity_flush
 
 SAVE_PWD=$PWD
 
+if (( $MDS1_VERSION >= $(version_code 2.16.51) )); then
+	nodemap_activate="nodemap activate"
+	nodemap_add="nodemap add"
+	nodemap_del="nodemap del"
+	nodemap_modify="nodemap modify"
+	nodemap_add_range="nodemap add_range"
+	nodemap_del_range="nodemap del_range"
+	nodemap_add_idmap="nodemap add_idmap"
+	nodemap_del_idmap="nodemap del_idmap"
+	nodemap_test_nid="nodemap test_nid"
+	nodemap_test_id="nodemap test_id"
+	nodemap_set_fileset="nodemap set_fileset"
+	nodemap_set_sepol="nodemap set_sepol"
+else
+	nodemap_activate="nodemap_activate"
+	nodemap_add="nodemap_add"
+	nodemap_del="nodemap_del"
+	nodemap_modify="nodemap_modify"
+	nodemap_add_range="nodemap_add_range"
+	nodemap_del_range="nodemap_del_range"
+	nodemap_add_idmap="nodemap_add_idmap"
+	nodemap_del_idmap="nodemap_del_idmap"
+	nodemap_test_nid="nodemap_test_nid"
+	nodemap_test_id="nodemap_test_id"
+	nodemap_set_fileset="nodemap_set_fileset"
+	nodemap_set_sepol="nodemap_set_sepol"
+fi
+
 sec_login() {
 	local user=$1
 	local group=$2
@@ -271,10 +299,10 @@ create_nodemaps() {
 	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
 
-		do_facet mgs $LCTL nodemap_add $csum
+		do_facet mgs $LCTL $nodemap_add $csum
 		rc=$?
 		if [ $rc -ne 0 ]; then
-			echo "nodemap_add $csum failed with $rc"
+			echo "$nodemap_add $csum failed with $rc"
 			return $rc
 		fi
 
@@ -297,8 +325,8 @@ delete_nodemaps() {
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
 
-		if ! do_facet mgs $LCTL nodemap_del $csum; then
-			error "nodemap_del $csum failed with $?"
+		if ! do_facet mgs $LCTL $nodemap_del $csum; then
+			error "$nodemap_del $csum failed with $?"
 			return 3
 		fi
 
@@ -317,7 +345,7 @@ delete_nodemaps() {
 
 add_range() {
 	local j
-	local cmd="$LCTL nodemap_add_range"
+	local cmd="$LCTL $nodemap_add_range"
 	local range
 	local rc=0
 
@@ -332,7 +360,7 @@ add_range() {
 
 delete_range() {
 	local j
-	local cmd="$LCTL nodemap_del_range"
+	local cmd="$LCTL $nodemap_del_range"
 	local range
 	local rc=0
 
@@ -348,7 +376,7 @@ delete_range() {
 
 add_idmaps() {
 	local i
-	local cmd="$LCTL nodemap_add_idmap"
+	local cmd="$LCTL $nodemap_add_idmap"
 	local do_proj=true
 	local rc=0
 
@@ -386,7 +414,7 @@ add_idmaps() {
 
 add_root_idmaps() {
 	local i
-	local cmd="$LCTL nodemap_add_idmap"
+	local cmd="$LCTL $nodemap_add_idmap"
 	local rc=0
 
 	echo "Start to add root idmaps ..."
@@ -421,7 +449,7 @@ update_idmaps() { #LU-10040
 	echo "Start to update idmaps ..."
 
 	#Inserting an existed idmap should return error
-	cmd="$LCTL nodemap_add_idmap --name $csum --idtype uid"
+	cmd="$LCTL $nodemap_add_idmap --name $csum --idtype uid"
 	if do_facet mgs \
 		$cmd --idmap $old_id_client:$old_id_fs 2>/dev/null; then
 		error "insert idmap {$old_id_client:$old_id_fs} " \
@@ -454,7 +482,7 @@ update_idmaps() { #LU-10040
 		rc=$((rc + 1)); return $rc; }
 
 	#Delete above updated idmap
-	cmd="$LCTL nodemap_del_idmap --name $csum --idtype uid"
+	cmd="$LCTL $nodemap_del_idmap --name $csum --idtype uid"
 	if ! do_facet mgs $cmd --idmap $new_id:$new_id; then
 		error "$cmd --idmap $new_id:$new_id failed"
 		rc=$((rc + 1))
@@ -462,7 +490,7 @@ update_idmaps() { #LU-10040
 	fi
 
 	#restore the idmaps to make delete_idmaps work well
-	cmd="$LCTL nodemap_add_idmap --name $csum --idtype uid"
+	cmd="$LCTL $nodemap_add_idmap --name $csum --idtype uid"
 	if ! do_facet mgs $cmd --idmap $old_id_client:$old_id_fs; then
 		error "$cmd --idmap $old_id_client:$old_id_fs failed"
 		rc=$((rc + 1))
@@ -474,7 +502,7 @@ update_idmaps() { #LU-10040
 
 delete_idmaps() {
 	local i
-	local cmd="$LCTL nodemap_del_idmap"
+	local cmd="$LCTL $nodemap_del_idmap"
 	local do_proj=true
 	local rc=0
 
@@ -512,7 +540,7 @@ delete_idmaps() {
 
 delete_root_idmaps() {
 	local i
-	local cmd="$LCTL nodemap_del_idmap"
+	local cmd="$LCTL $nodemap_del_idmap"
 	local rc=0
 
 	echo "Start to delete root idmaps ..."
@@ -536,7 +564,7 @@ modify_flags() {
 	local i
 	local proc
 	local option
-	local cmd="$LCTL nodemap_modify"
+	local cmd="$LCTL $nodemap_modify"
 	local rc=0
 
 	proc[0]="admin_nodemap"
@@ -565,9 +593,9 @@ squash_id() {
 
 	local cmd
 
-	cmd[0]="$LCTL nodemap_modify --property squash_uid"
-	cmd[1]="$LCTL nodemap_modify --property squash_gid"
-	cmd[2]="$LCTL nodemap_modify --property squash_projid"
+	cmd[0]="$LCTL $nodemap_modify --property squash_uid"
+	cmd[1]="$LCTL $nodemap_modify --property squash_gid"
+	cmd[2]="$LCTL $nodemap_modify --property squash_projid"
 
 	if ! do_facet mgs ${cmd[$3]} --name $1 --value $2; then
 		return 1
@@ -587,7 +615,7 @@ fi
 test_nid() {
 	local cmd
 
-	cmd="$LCTL nodemap_test_nid"
+	cmd="$LCTL $nodemap_test_nid"
 
 	nid=$(do_facet mgs $cmd $1)
 
@@ -600,13 +628,13 @@ test_nid() {
 
 cleanup_active() {
 	# restore activation state
-	do_facet mgs $LCTL nodemap_activate 0
+	do_facet mgs $LCTL $nodemap_activate 0
 	wait_nm_sync active
 }
 
 test_idmap() {
 	local i
-	local cmd="$LCTL nodemap_test_id"
+	local cmd="$LCTL $nodemap_test_id"
 	local do_root_idmap=true
 	local rc=0
 
@@ -614,7 +642,7 @@ test_idmap() {
 
 	echo "Start to test idmaps ..."
 	## nodemap deactivated
-	if ! do_facet mgs $LCTL nodemap_activate 0; then
+	if ! do_facet mgs $LCTL $nodemap_activate 0; then
 		return 1
 	fi
 	for ((id = $ID0; id < NODEMAP_MAX_ID; id++)); do
@@ -632,7 +660,7 @@ test_idmap() {
 	done
 
 	## nodemap activated
-	if ! do_facet mgs $LCTL nodemap_activate 1; then
+	if ! do_facet mgs $LCTL $nodemap_activate 1; then
 		return 2
 	fi
 
@@ -653,9 +681,9 @@ test_idmap() {
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
 
-		if ! do_facet mgs $LCTL nodemap_modify --name $csum \
+		if ! do_facet mgs $LCTL $nodemap_modify --name $csum \
 		     --property trusted --value 1; then
-			error "nodemap_modify $csum failed with $?"
+			error "$nodemap_modify $csum failed with $?"
 			return 3
 		fi
 	done
@@ -676,9 +704,9 @@ test_idmap() {
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
 
-		if ! do_facet mgs $LCTL nodemap_modify --name $csum	\
+		if ! do_facet mgs $LCTL $nodemap_modify --name $csum	\
 		     --property admin --value 1; then
-			error "nodemap_modify $csum failed with $?"
+			error "$nodemap_modify $csum failed with $?"
 			return 3
 		fi
 	done
@@ -716,9 +744,9 @@ test_idmap() {
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
 
-		if ! do_facet mgs $LCTL nodemap_modify --name $csum	\
+		if ! do_facet mgs $LCTL $nodemap_modify --name $csum	\
 				--property admin --value 0; then
-			error "nodemap_modify ${HOSTNAME_CHECKSUM}_${i} "
+			error "$nodemap_modify ${HOSTNAME_CHECKSUM}_${i} "
 				"failed with $rc"
 			return 3
 		fi
@@ -756,10 +784,10 @@ test_idmap() {
 
 	## reset client trust to 0
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
-		if ! do_facet mgs $LCTL nodemap_modify		\
+		if ! do_facet mgs $LCTL $nodemap_modify		\
 			--name ${HOSTNAME_CHECKSUM}_${i}	\
 			--property trusted --value 0; then
-			error "nodemap_modify ${HOSTNAME_CHECKSUM}_${i} "
+			error "$nodemap_modify ${HOSTNAME_CHECKSUM}_${i} "
 				"failed with $rc"
 			return 3
 		fi

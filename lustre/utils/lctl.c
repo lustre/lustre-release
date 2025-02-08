@@ -157,6 +157,63 @@ command_t net_delay_cmdlist[] = {
 };
 JT_SUBCMD(net_delay);
 
+/**
+ * command_t nodemap_cmdlist - lctl nodemap commands.
+ */
+command_t nodemap_cmdlist[] = {
+	{.pc_name = "activate", .pc_func = jt_nodemap_activate,
+	 .pc_help = "activate nodemap idmapping functions\n"
+	 "usage: nodemap activate {0|1}"},
+	{.pc_name = "add", .pc_func = jt_nodemap_add,
+	 .pc_help = "add a new nodemap\n"
+	 "usage: nodemap add [-d|--dynamic] NODEMAP_NAME"},
+	{.pc_name = "del", .pc_func = jt_nodemap_del,
+	 .pc_help = "remove a nodemap\n"
+	 "usage: nodemap del NODEMAP_NAME"},
+	{.pc_name = "add_range", .pc_func = jt_nodemap_add_range,
+	 .pc_help = "add a nid range to a nodemap\n"
+	 "usage: nodemap add_range --name NODEMAP_NAME --range NID_RANGE"},
+	{.pc_name = "del_range", .pc_func = jt_nodemap_del_range,
+	 .pc_help = "delete a nid range from a nodemap\n"
+	 "usage: nodemap del_range --name NODEMAP_NAME --range NID_RANGE"},
+	{.pc_name = "modify", .pc_func = jt_nodemap_modify,
+	 .pc_help = "modify a nodemap parameters\n"
+	 "usage: nodemap modify --name NODEMAP_NAME --property PROPERTY\n"
+	 "			--value VALUE"},
+	{.pc_name = "add_offset", .pc_func = jt_nodemap_add_offset,
+	 .pc_help = "add an offset for UID/GID/PROJID mappings\n"
+	 "usage: nodemap_add_offset --name NODEMAP_NAME --offset OFFSET\n"
+	 "			    --limit LIMIT"},
+	{.pc_name = "del_offset", .pc_func = jt_nodemap_del_offset,
+	 .pc_help = "delete an offset for UID/GID/PROJID mappings\n"
+	 "usage: nodemap_del_offset --name NODEMAP_NAME"},
+	{.pc_name = "add_idmap", .pc_func = jt_nodemap_add_idmap,
+	 .pc_help = "add a UID or GID mapping to a nodemap\n"
+	 "usage: nodemap add_idmap --name NAME --idtype {uid|gid|projid}\n"
+	 "			   --idmap CLIENTID:FSID"},
+	{.pc_name = "del_idmap", .pc_func = jt_nodemap_del_idmap,
+	 .pc_help = "delete a UID or GID mapping from a nodemap\n"
+	 "usage: nodemap del_idmap --name NAME --idtype {uid|gid|projid}\n"
+	 "			   --idmap CLIENTID:FSID"},
+	{.pc_name = "set_fileset", .pc_func = jt_nodemap_set_fileset,
+	 .pc_help = "set a fileset on a nodemap\n"
+	 "usage: nodemap set_fileset --name NODEMAP_NAME --fileset FILESET"},
+	{.pc_name = "set_sepol", .pc_func = jt_nodemap_set_sepol,
+	 .pc_help = "set SELinux policy info on a nodemap\n"
+	 "usage: nodemap set_sepol --name NODEMAP_NAME --sepol SEPOL"},
+	{.pc_name = "test_nid", .pc_func = jt_nodemap_test_nid,
+	 .pc_help = "test a nid for nodemap membership\n"
+	 "usage: nodemap test_nid NID"},
+	{.pc_name = "test_id", .pc_func = jt_nodemap_test_id,
+	 .pc_help = "test a nodemap id pair for mapping\n"
+	 "usage: nodemap test_id --nid NID --idtype {uid|gid|projid} --id ID"},
+	{.pc_name = "info", .pc_func = jt_nodemap_info,
+	 .pc_help = "print nodemap information\n"
+	 "usage: nodemap info {list|nodemap_name|all}"},
+	{.pc_help = NULL }
+};
+JT_SUBCMD(nodemap);
+
 #ifdef HAVE_SERVER_SUPPORT
 /**
  * command_t barrier_cmdlist - lctl barrier commands.
@@ -511,10 +568,10 @@ command_t cmdlist[] = {
 	 "remove a nodemap\n"
 	 "usage: nodemap_del NODEMAP_NAME"},
 	{"nodemap_add_range", jt_nodemap_add_range, 0,
-	 "add a range to a nodemap\n"
+	 "add a nid range to a nodemap\n"
 	 "usage: nodemap_add_range --name NODEMAP_NAME --range NID_RANGE"},
 	{"nodemap_del_range", jt_nodemap_del_range, 0,
-	 "delete a range from a nodemap\n"
+	 "delete a nid range from a nodemap\n"
 	 "usage: nodemap_del_range --name NODEMAP_NAME --range NID_RANGE"},
 	{"nodemap_modify", jt_nodemap_modify, 0,
 	 "modify a nodemap parameter\n"
@@ -524,13 +581,13 @@ command_t cmdlist[] = {
 	 "usage: nodemap_add_offset --name NODEMAP_NAME --offset OFFSET --limit LIMIT\n"},
 	{"nodemap_del_offset", jt_nodemap_del_offset, 0,
 	 "delete an offset for UID/GID/PROJID mappings\n"
-	 "usage: nodemap_del_offset --name NODEMAP_NAME --offset OFFSET\n"},
+	 "usage: nodemap_del_offset --name NODEMAP_NAME\n"},
 	{"nodemap_add_idmap", jt_nodemap_add_idmap, 0,
 	 "add a UID or GID mapping to a nodemap\n"
-	 "usage: nodemap_add_idmap --name NODEMAP_NAME --idtype ID_TYPE --idmap CLIENTID:FSID"},
+	 "usage: nodemap_add_idmap --name NODEMAP_NAME --idtype {uid|gid|projid} --idmap CLIENTID:FSID"},
 	{"nodemap_del_idmap", jt_nodemap_del_idmap, 0,
 	 "delete a UID or GID mapping from a nodemap\n"
-	 "usage: nodemap_del_idmap --name NODEMAP_NAME --idtype ID_TYPE --idmap CLIENTID:FSID"},
+	 "usage: nodemap_del_idmap --name NODEMAP_NAME --idtype {uid|gid|projid} --idmap CLIENTID:FSID"},
 	{"nodemap_set_fileset", jt_nodemap_set_fileset, 0,
 	 "set a fileset on a nodemap\n"
 	 "usage: nodemap_set_fileset --name NODEMAP_NAME --fileset FILESET"},
@@ -538,11 +595,15 @@ command_t cmdlist[] = {
 	 "set SELinux policy info on a nodemap\n"
 	 "usage: nodemap_set_sepol --name NODEMAP_NAME --sepol SEPOL"},
 	{"nodemap_test_nid", jt_nodemap_test_nid, 0,
+	 "test a nid for nodemap membership\n"
 	 "usage: nodemap_test_nid NID"},
 	{"nodemap_test_id", jt_nodemap_test_id, 0,
+	 "test a nodemap id pair for mapping\n"
 	 "Usage: nodemap_test_id --nid NID --idtype ID_TYPE --id ID"},
 	{"nodemap_info", jt_nodemap_info, 0,
+	 "print nodemap information\n"
 	 "Usage: nodemap_info [list|nodemap_name|all]"},
+	{"nodemap", jt_nodemap, nodemap_cmdlist, ""},
 
 	/* Changelog commands */
 	{"===  Changelogs ==", NULL, 0, "changelog user management"},
