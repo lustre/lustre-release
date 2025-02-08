@@ -1305,9 +1305,11 @@ static int server_register_target(struct lustre_sb_info *lsi)
 	struct obd_device *mgc = lsi->lsi_mgc;
 	struct mgs_target_info *mti = NULL;
 	size_t mti_len = sizeof(*mti);
+	struct lnet_nid nid;
 	bool must_succeed;
-	int rc;
 	int tried = 0;
+	char *nidstr;
+	int rc;
 
 	ENTRY;
 	LASSERT(mgc);
@@ -1315,9 +1317,18 @@ static int server_register_target(struct lustre_sb_info *lsi)
 	if (IS_ERR(mti))
 		GOTO(out, rc = PTR_ERR(mti));
 
-	CDEBUG(D_MOUNT, "Registration %s, fs=%s, %s, index=%04x, flags=%#x\n",
-	       mti->mti_svname, mti->mti_fsname, mti->mti_nidlist[0],
-	       mti->mti_stripe_index, mti->mti_flags);
+	if (exp_connect_flags2(lsi->lsi_mgc->u.cli.cl_mgc_mgsexp) &
+	    OBD_CONNECT2_LARGE_NID) {
+		nidstr = mti->mti_nidlist[0]; /* large_nid */
+	} else {
+		lnet_nid4_to_nid(mti->mti_nids[0], &nid);
+		nidstr = libcfs_nidstr(&nid);
+	}
+
+	CDEBUG(D_MOUNT,
+	       "Registration %s, fs=%s, %s, index=%04x, flags=%#x\n",
+	       mti->mti_svname, mti->mti_fsname, nidstr, mti->mti_stripe_index,
+	       mti->mti_flags);
 
 	/* we cannot ignore registration failure if MGS logs must be updated. */
 	must_succeed = !!(lsi->lsi_flags &
