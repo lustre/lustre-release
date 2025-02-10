@@ -1208,14 +1208,12 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 		GOTO(out_ref, rc);
 	}
 
-	osp_tunables_init(osp);
-
 	rc = client_fid_init(osp->opd_obd, NULL, osp->opd_connect_mdt ?
 			     LUSTRE_SEQ_METADATA : LUSTRE_SEQ_DATA);
 	if (rc) {
 		CERROR("%s: fid init error: rc = %d\n",
 		       osp->opd_obd->obd_name, rc);
-		GOTO(out_proc, rc);
+		GOTO(out_obd, rc);
 	}
 
 	if (!osp->opd_connect_mdt) {
@@ -1262,6 +1260,9 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 	rc = ptlrpc_init_import(imp);
 	if (rc)
 		GOTO(out, rc);
+
+	osp_tunables_init(osp);
+
 	OBD_FREE(osdname, MAX_OBD_NAME);
 	init_waitqueue_head(&osp->opd_out_waitq);
 	RETURN(0);
@@ -1281,8 +1282,7 @@ out_last_used:
 		osp_last_used_fini(env, osp);
 out_fid:
 	client_fid_fini(osp->opd_obd);
-out_proc:
-	osp_tunables_fini(osp);
+out_obd:
 	client_obd_cleanup(obd);
 out_ref:
 	ptlrpcd_decref();
@@ -1388,17 +1388,14 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 
 	LASSERT(osp->opd_obd);
 
-	rc = client_obd_cleanup(osp->opd_obd);
-	if (rc != 0) {
-		ptlrpcd_decref();
-		RETURN(ERR_PTR(rc));
-	}
-
+	/* We must remove the tunables first so nobody accessed them when
+	 * the obd devices are already gone.
+	 */
 	osp_tunables_fini(osp);
-
+	rc = client_obd_cleanup(osp->opd_obd);
 	ptlrpcd_decref();
 
-	RETURN(NULL);
+	RETURN(rc != 0 ? ERR_PTR(rc) : NULL);
 }
 
 /**
