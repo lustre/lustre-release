@@ -90,12 +90,20 @@ ksocknal_lib_send_hdr(struct ksock_conn *conn, struct ksock_tx *tx,
 }
 
 static int
-ksocknal_lib_sendpage(struct socket *sock, struct bio_vec *kiov, int msgflg)
+ksocknal_lib_sendpage(struct socket *sock, struct bio_vec *kiov,
+		      int nkiov, int msgflg)
 {
 #ifdef MSG_SPLICE_PAGES
 	struct msghdr msg = {.msg_flags = msgflg | MSG_SPLICE_PAGES};
+	int i;
 
 	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, kiov, 1, kiov->bv_len);
+	for (i = 0; i < nkiov; i++) {
+		if (!sendpage_ok(kiov[i].bv_page)) {
+			msg.msg_flags &= ~MSG_SPLICE_PAGES;
+			break;
+		}
+	}
 
 	return sock_sendmsg(sock, &msg);
 #else
@@ -132,7 +140,7 @@ ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 		    kiov->bv_len < tx->tx_resid)
 			msgflg |= MSG_MORE;
 
-		rc = ksocknal_lib_sendpage(sock, kiov, msgflg);
+		rc = ksocknal_lib_sendpage(sock, kiov, tx->tx_nkiov, msgflg);
 	} else {
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
 		struct kvec scratch;
