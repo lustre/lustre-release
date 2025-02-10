@@ -110,6 +110,10 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
  * are doing, by using the specific flag O_CIPHERTEXT.
  * This flag is only compatible with O_DIRECT IOs, to make sure ciphertext
  * data is wiped from page cache once IOs are finished.
+ *
+ * Return:
+ * * %0 - On success
+ * * %-ERRNO: On Failure
  */
 int ll_file_open_encrypt(struct inode *inode, struct file *filp)
 {
@@ -274,6 +278,10 @@ out_free:
  * llcrypt_match_name(), but Lustre server side is not aware of encryption.
  * FID and name hash can then easily be extracted and put into the
  * requests sent to servers.
+ *
+ *  Return:
+ * * %0: Success (filename prepared correctly for the lookup operation)
+ * * %-ERRNO: Failure
  */
 int ll_prepare_lookup(struct inode *dir, struct dentry *de,
 		      struct llcrypt_name *fname, struct lu_fid *fid)
@@ -372,6 +380,10 @@ int ll_prepare_lookup(struct inode *dir, struct dentry *de,
  * present to users the encoded struct ll_digest_filename, instead of a digested
  * name. FID and name hash can then easily be extracted and put into the
  * requests sent to servers.
+ *
+ *  Return:
+ * * %0: Success
+ * * %-ERRNO: On Failure
  */
 int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 		      int lookup, struct llcrypt_name *fname,
@@ -448,6 +460,10 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
  * symlink target when the encryption key is not available, in a way that is
  * compatible with the overlay function ll_setup_filename(), so that further
  * readlink without the encryption key works properly.
+ *
+ *  Return:
+ * * %Valid pointer: Success
+ * * %error pointer: On Failure
  */
 const char *ll_get_symlink(struct inode *inode, const void *caddr,
 			   unsigned int max_size,
@@ -508,6 +524,10 @@ const char *ll_get_symlink(struct inode *inode, const void *caddr,
  * present to users the encoded struct ll_digest_filename, instead of a digested
  * name. FID and name hash can then easily be extracted and put into the
  * requests sent to servers.
+ *
+ *  Return:
+ * * %0: Success
+ * * %-ERRNO: On Failure
  */
 int ll_fname_disk_to_usr(struct inode *inode,
 			 u32 hash, u32 minor_hash,

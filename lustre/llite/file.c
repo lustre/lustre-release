@@ -827,7 +827,12 @@ void ll_track_file_opens(struct inode *inode)
 			   lli->lli_open_fd_count);
 }
 
-/* Open a file, and (for the very first open) create objects on the OSTs at
+/**
+ * ll_file_open() - setup and handle file open
+ * @inode: inode of the file being opened
+ * @file: Open file pointer in the kernel
+ *
+ * Open a file, and (for the very first open) create objects on the OSTs at
  * this time.  If opened with O_LOV_DELAY_CREATE, then we don't do the object
  * creation or open until ll_lov_setstripe() ioctl is called.
  *
@@ -839,6 +844,10 @@ void ll_track_file_opens(struct inode *inode)
  * used.  We might be able to avoid races of that sort by getting lli_open_sem
  * before returning in the O_LOV_DELAY_CREATE case and dropping it here
  * or in ll_file_release(), but I'm not sure that is desirable/necessary.
+ *
+ *  Return:
+ * * %0: Success
+ * * %-ERRNO: Failure
  */
 int ll_file_open(struct inode *inode, struct file *file)
 {
@@ -1323,14 +1332,15 @@ out:
 	RETURN(ERR_PTR(rc));
 }
 
-/*
- * Check whether a layout swap can be done between two inodes.
+/**
+ * ll_check_swap_layouts_validity() - Check whether a layout swap can be done
+ * between two inodes.
+ * @inode1:  First inode to check
+ * @inode2:  Second inode to check
  *
- * \param[in] inode1  First inode to check
- * \param[in] inode2  Second inode to check
- *
- * \retval 0 on success, layout swap can be performed between both inodes
- * \retval negative error code if requirements are not met
+ * Return:
+ * * %0 on success, layout swap can be performed between both inodes
+ * * %negative error code if requirements are not met
  */
 static int ll_check_swap_layouts_validity(struct inode *inode1,
 					  struct inode *inode2)
@@ -2062,7 +2072,11 @@ out:
 	RETURN(result > 0 ? result : rc);
 }
 
-/*
+/**
+ * ll_do_fast_read() - read data directly from the page cache
+ * @iocb: kiocb from kernel
+ * @iter: user space buffers where the data will be copied
+ *
  * The purpose of fast read is to overcome per I/O overhead and improve IOPS
  * especially for small I/O.
  *
@@ -2091,11 +2105,7 @@ out:
  * doesn't make the situation worse on single node but it may interleave write
  * results from multiple nodes due to short read handling in ll_file_aio_read().
  *
- * \param env - lu_env
- * \param iocb - kiocb from kernel
- * \param iter - user space buffers where the data will be copied
- *
- * \retval - number of bytes have been read, or error code if error occurred.
+ * Returns number of bytes have been read, or error code if error occurred.
  */
 static ssize_t
 ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
@@ -2138,15 +2148,16 @@ ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
 	return result;
 }
 
-/*
- * Confine read iter lest read beyond the EOF
+/**
+ * file_read_confine_iter() - Confine read iter lest read beyond the EOF
+ * @env: execution environment for this thread
+ * @iocb: kernel iocb
+ * @to: reader iov_iter
  *
- * \param iocb [in]	kernel iocb
- * \param to [in]	reader iov_iter
- *
- * \retval <0	failure
- * \retval 0	success
- * \retval >0	@iocb->ki_pos has passed the EOF
+ * Returns:
+ * * %0 success
+ * * <0 failure
+ * * >0 @iocb->ki_pos has passed the EOF
  */
 static int file_read_confine_iter(struct lu_env *env, struct kiocb *iocb,
 				  struct iov_iter *to)
@@ -3104,13 +3115,13 @@ out:
 }
 
 /**
- * Close inode open handle
+ * ll_release_openhandle() - Close inode open handle
+ * @dentry: dentry which contains the inode
+ * @it: [in,out] intent which contains open info and result
  *
- * \param dentry [in]     dentry which contains the inode
- * \param it     [in,out] intent which contains open info and result
- *
- * \retval 0     success
- * \retval <0    failure
+ * Return:
+ * * %0: Success
+ * * <0: Failure
  */
 int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
 {
@@ -3461,14 +3472,21 @@ restart:
 	RETURN(result);
 }
 
-/*
- * This value is computed using stripe object version on OST.
- * Version is computed using server side locking.
- *
- * @param flags if do sync on the OST side;
+/**
+ * ll_data_version() - retrieve the data version of a file
+ * @inode: inode of the file for which the data version is being queried
+ * @data_version: store the retrieved data version
+ * @flags:  if do sync on the OST side;
  *		0: no sync
  *		LL_DV_RD_FLUSH: flush dirty pages, LCK_PR on OSTs
  *		LL_DV_WR_FLUSH: drop all caching pages, LCK_PW on OSTs
+ *
+ * This value is computed using stripe object version on OST.
+ * Version is computed using server side locking.
+ *
+ * Return:
+ * * %0: Success
+ * * %<0: Failure
  */
 int ll_data_version(struct inode *inode, __u64 *data_version, int flags)
 {
@@ -3830,20 +3848,23 @@ static enum cl_lock_mode cl_mode_user_to_kernel(enum lock_mode_user mode)
 
 static const char *const user_lockname[] = LOCK_MODE_NAMES;
 
-/* Used to allow the upper layers of the client to request an LDLM lock
+/**
+ * ll_file_lock_ahead() -
+ * @file: file this ladvise lock request is on
+ * @ladvise: ladvise struct describing this lock request
+ *
+ * Used to allow the upper layers of the client to request an LDLM lock
  * without doing an actual read or write.
  *
  * Used for ladvise lockahead to manually request specific locks.
  *
- * \param[in] file	file this ladvise lock request is on
- * \param[in] ladvise	ladvise struct describing this lock request
- *
- * \retval 0		success, no detailed result available (sync requests
- *			and requests sent to the server [not handled locally]
- *			cannot return detailed results)
- * \retval LLA_RESULT_{SAME,DIFFERENT} - detailed result of the lock request,
+ * Return:
+ * * %0: success, no detailed result available (sync requests
+ *       and requests sent to the server [not handled locally]
+ *       cannot return detailed results)
+ * * %<0: negative errno on error
+ * * LLA_RESULT_{SAME,DIFFERENT} - detailed result of the lock request,
  *					 see definitions for details.
- * \retval negative	negative errno on error
  */
 int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise)
 {
@@ -6885,12 +6906,13 @@ out:
 }
 
 /**
- * Issue layout intent RPC to MDS.
- * \param inode [in]	file inode
- * \param intent [in]	layout intent
+ * ll_layout_intent() - Issue layout intent RPC to MDS.
+ * @inode: file inode
+ * @intent: layout intent
  *
- * \retval 0	on success
- * \retval < 0	error code
+ * Return:
+ * * %0  on success
+ * * %<0 error code
  */
 static int ll_layout_intent(struct inode *inode, struct layout_intent *intent)
 {
@@ -7003,15 +7025,16 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 }
 
 /**
- * Issue layout intent RPC indicating where in a file an IO is about to write.
+ * ll_layout_write_intent() - Issue layout intent RPC indicating where in a file
+ * an IO is about to write.
+ * @inode: file inode.
+ * @opc: type of layout operation being requested
+ * @ext: write range with start offset of fille in bytes where an IO is
+ * about to write, and exclusive end offset in bytes.
  *
- * \param[in] inode	file inode.
- * \param[in] ext	write range with start offset of fille in bytes where
- *			an IO is about to write, and exclusive end offset in
- *			bytes.
- *
- * \retval 0	on success
- * \retval < 0	error code
+ * Return:
+ * * %0 on success
+ * * <0 error code
  */
 int ll_layout_write_intent(struct inode *inode, enum layout_intent_opc opc,
 			   struct lu_extent *ext)
