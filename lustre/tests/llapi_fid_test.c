@@ -567,6 +567,7 @@ static void test40(void)
 	fd = creat(mainpath, 0);
 	ASSERTF(fd >= 0, "creat failed for '%s': %s",
 		mainpath, strerror(errno));
+	help_test40();
 	close(fd);
 }
 
