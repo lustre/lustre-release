@@ -15,7 +15,7 @@
 #include <linux/export.h>
 #include <linux/list.h>
 #include <linux/slab.h>
-#include <libcfs/linux/xarray.h>
+#include <lustre_compat/linux/xarray.h>
 
 /*
  * Coding conventions in this file:

@@ -33,9 +33,7 @@
 #include <libcfs/linux/linux-wait.h>
 #include <libcfs/linux/linux-misc.h>
 #include <libcfs/linux/linux-mem.h>
-#ifndef HAVE_XARRAY_SUPPORT
-#include <libcfs/linux/xarray.h>
-#endif
+#include <lustre_compat/linux/xarray.h>
 #include <lustre_crypto.h>
 
 #ifndef HAVE_KTIME_GET_TS64

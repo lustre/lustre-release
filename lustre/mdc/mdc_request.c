@@ -22,7 +22,7 @@
 #include <linux/delay.h>
 #include <linux/uidgid.h>
 #include <linux/device.h>
-#include <linux/xarray.h>
+#include <lustre_compat/linux/xarray.h>
 
 #include <lustre_errno.h>
 

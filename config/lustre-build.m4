@@ -433,6 +433,23 @@ AC_DEFUN([LB_CONFIG_FILES], [
 ])
 
 #
+# LB_COMPAT_CONFIG_FILES
+#
+# build-specific config files (lustre_compat)
+#
+AC_DEFUN([LB_COMPAT_CONFIG_FILES], [
+	AC_CONFIG_FILES(
+		lustre_compat/Makefile
+		lustre_compat/lib/Makefile
+		lustre_compat/autoMakefile
+		lustre_compat/lib/autoMakefile
+		lustre_compat/include/Makefile
+		lustre_compat/include/lustre_compat/Makefile
+		lustre_compat/include/lustre_compat/linux/Makefile
+	)
+])
+
+#
 # LB_CONFIG_SERVERS
 #
 AC_DEFUN([LB_CONFIG_SERVERS], [
@@ -692,6 +709,7 @@ LB_CONFIG_HEADERS
 LPLUG_CONFIGURE
 LIBCFS_CONFIG_FILES
 LB_CONFIG_FILES
+LB_COMPAT_CONFIG_FILES
 LN_CONFIG_FILES
 LC_CONFIG_FILES
 LPLUG_CONFIG_FILES

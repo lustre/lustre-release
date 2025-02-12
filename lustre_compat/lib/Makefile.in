@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
+compat_objs := xarray.o
+
+EXTRA_DIST = $(compat_objs:.o=.c)
+
+ifneq "$(MODULES)" "libcfs"
+@INCLUDE_RULES@
+endif

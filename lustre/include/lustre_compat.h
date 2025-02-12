@@ -29,11 +29,7 @@
 #include <linux/pagevec.h>
 #include <linux/workqueue.h>
 #include <libcfs/linux/linux-fs.h>
-#ifdef HAVE_XARRAY_SUPPORT
-#include <linux/xarray.h>
-#else
-#include <libcfs/linux/xarray.h>
-#endif
+#include <lustre_compat/linux/xarray.h>
 #include <obd_support.h>
 
 #ifdef HAVE_4ARGS_VFS_SYMLINK

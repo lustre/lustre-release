@@ -19,7 +19,7 @@
 #include <linux/kobject.h>
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
-#include <libcfs/linux/xarray.h>
+#include <lustre_compat/linux/xarray.h>
 
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>

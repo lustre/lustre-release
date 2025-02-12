@@ -6,12 +6,18 @@
 
 MODULES = libcfs
 
+COMPAT := @top_srcdir@/lustre_compat/lib/
+
+libcfs_dir := $(dir $(lastword $(MAKEFILE_LIST)))
+-include $(libcfs_dir)/../../lustre_compat/lib/Makefile
+
 libcfs-linux-objs := linux-prim.o
 libcfs-linux-objs += linux-hash.o
 libcfs-linux-objs += linux-wait.o
 libcfs-linux-objs += generic-radix-tree.o
 libcfs-linux-objs += glob.o
-libcfs-linux-objs += xarray.o
+
+libcfs-compat-objs += $(patsubst %,$(COMPAT)%,$(compat_objs))
 
 libcfs-crypto-objs := crypto.o fname.o hkdf.o hooks.o keyring.o
 libcfs-crypto-objs += keysetup.o keysetup_v1.o policy.o
@@ -23,7 +29,7 @@ libcfs-crypto-objs := $(addprefix crypto/,$(libcfs-crypto-objs))
 
 libcfs-all-objs := debug.o fail.o module.o tracefile.o
 
-libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
+libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs) $(libcfs-compat-objs)
 @LLCRYPT_TRUE@libcfs-objs += $(libcfs-crypto-objs)
 
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/../libcfs/libcfs
