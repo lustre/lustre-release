@@ -145,6 +145,8 @@ SERVER_MANFILES =				\
 	lctl-nodemap_del_range.8		\
 	lctl-nodemap-del.8			\
 	lctl-nodemap_del.8			\
+	lctl-nodemap-info.8			\
+	lctl-nodemap_info.8			\
 	lctl-nodemap-modify.8			\
 	lctl-nodemap_modify.8			\
 	lctl-nodemap-set-fileset.8		\

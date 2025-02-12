@@ -58,6 +58,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include "obdctl.h"
+#include "lstddef.h"
 #include "lustreapi_internal.h"
 #include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
@@ -4771,6 +4772,244 @@ int jt_nodemap_modify(int argc, char **argv)
 			jt_cmdname(argv[0]), nodemap_name, param, value,
 			strerror(errno));
 	}
+
+	return rc;
+}
+
+/**
+ * Output information about nodemaps.
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ *
+ * --name			nodemap to present info about
+ * --property			nodemap property to present
+ * --list			list nodemap state, all nodemaps, and properties
+ *
+ * deprecated positional parameters:
+ * [list|nodemap_name|all]	\a list will list all nodemaps (default).
+ *				Specifying a \a nodemap_name will
+ *				display info about that specific nodemap.
+ *				\a all will display info for all nodemaps.
+ * \retval			0 on success
+ */
+int jt_nodemap_info(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	char *property = NULL;
+	bool list = false;
+	char pattern[PATH_MAX];
+	bool is_active = false;
+	char *active_str = NULL;
+	size_t buflen;
+	glob_t param;
+	int c, i;
+	int rc = 0;
+
+	struct nodemap_info_param_desc {
+		const char *param;
+		const char *desc;
+	};
+
+	static const struct nodemap_info_param_desc param_desc[] = {
+		{ "admin_nodemap", "root is not squashed on policy group" },
+		{ "audit_mode",
+		  "client can record FS access events to the Changelogs" },
+		{ "deny_mount", "disable client mounts" },
+		{ "deny_unknown", "deny access for unknown (squashed) users" },
+		{ "exports",
+		  "list of client connections (NIDs) for this nodemap" },
+		{ "fileset", "fileset restrictions for this nodemap" },
+		{ "forbid_encryption",
+		  "prevent clients from using encryption" },
+		{ "id", "unique identifier for this nodemap" },
+		{ "idmap", "identity mapping rules for UID/GID/PROJID translation" },
+		{ "map_mode", "identity mapping mode" },
+		{ "offset", "idmap range offset for identity translation" },
+		{ "ranges", "NID ranges assigned to this nodemap" },
+		{ "rbac", "role-based admin control settings" },
+		{ "readonly_mount", "force clients to mount read-only" },
+		{ "sepol", "SELinux policy for this nodemap" },
+		{ "squash_gid", "GID for unmapped users" },
+		{ "squash_projid", "project ID for unmapped projects" },
+		{ "squash_uid", "UID for unmapped users" },
+		{ "trusted_nodemap",
+		  "accept client identities without mapping" },
+	};
+
+	static struct option long_opts[] = {
+		{ .val = 'l',	.name = "list",		.has_arg = no_argument },
+		{ .val = 'p',	.name = "property",	.has_arg = required_argument },
+		{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+		{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+		{ .name = NULL }
+	};
+
+	while ((c = getopt_long(argc, argv, "hln:p:", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'p':
+			property = optarg;
+			break;
+		case 'l':
+			list = true;
+			break;
+		case 'h':
+		case '?':
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if ((nodemap_name || property || list) && optind < argc) {
+		fprintf(stderr,
+			"error: using both positional and named arguments is not allowed\n");
+		return CMD_HELP;
+	}
+
+	if ((nodemap_name || property) && list) {
+		fprintf(stderr,
+			"error: using both --list and --name or --property is not allowed\n");
+		return CMD_HELP;
+	}
+
+	/* Legacy positional arguments are handled here */
+	if (optind < argc) {
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 17, 53, 0)
+		fprintf(stdout,
+			"Positional parameters are deprecated. Please use --name and --property instead.\n");
+#endif
+		if ((argc - optind) > 1) {
+			fprintf(stderr,
+				"error: only one positional parameter allowed\n");
+			return CMD_HELP;
+		}
+
+		if (strcmp("list", argv[optind]) == 0) {
+			rc = snprintf(pattern, sizeof(pattern), "nodemap.*");
+			if (rc < 0 || rc >= sizeof(pattern)) {
+				fprintf(stderr,
+					"error: setting list pattern failed\n");
+				return -EINVAL;
+			}
+
+			rc = jt_lcfg_listparam(3, (char * [3]) { "list_param",
+								 "-D",
+								 pattern });
+			return rc;
+		}
+
+		if (strcmp("all", argv[optind]) == 0) {
+			rc = snprintf(pattern, sizeof(pattern), "nodemap.*.*");
+		} else {
+			rc = snprintf(pattern, sizeof(pattern), "nodemap.%s.*",
+				      argv[optind]);
+		}
+
+		if (rc < 0 || rc >= sizeof(pattern)) {
+			fprintf(stderr,
+				"error: get_param pattern too long.\n");
+			return -EINVAL;
+		}
+
+		rc = jt_lcfg_getparam(3, (char * [3]) { "get_param", "-N",
+							pattern });
+		if (rc == -ENOENT) {
+			fprintf(stderr,
+				"error: nodemap_info: cannot find nodemap or property %s\n",
+				argv[optind]);
+		}
+		return rc;
+	}
+
+	/* Handle -l argument here */
+	if (list) {
+		/* Get nodemap active state */
+		rc = cfs_get_param_paths(&param, "nodemap/active");
+		if (rc) {
+			fprintf(stderr,
+				"error: cannot get nodemap active param: %s\n",
+				strerror(errno));
+			return rc;
+		}
+
+		rc = llapi_param_get_value(param.gl_pathv[0], &active_str,
+					   &buflen);
+		if (rc || !active_str) {
+			fprintf(stderr,
+				"error: cannot get nodemap active state\n");
+			cfs_free_param_data(&param);
+			return rc;
+		}
+
+		is_active = (active_str[0] == '1');
+		printf("Global nodemap state:\n\t%s\n",
+		       is_active ? "active" : "inactive");
+		free(active_str);
+		cfs_free_param_data(&param);
+
+		/* list all nodemaps */
+		printf("\nDefined nodemaps:\n");
+		rc = cfs_get_param_paths(&param, "nodemap/*");
+		if (rc) {
+			fprintf(stderr, "error: cannot get nodemap list: %s\n",
+				strerror(errno));
+			return rc;
+		}
+
+		for (i = 0; i < param.gl_pathc; i++) {
+			/* move to last '/' to skip nodemap prefix */
+			nodemap_name = strrchr(param.gl_pathv[i], '/');
+			/* skip '/' and check nodemap isn't empty or "active" */
+			if (nodemap_name && *(++nodemap_name) &&
+			    strcmp(nodemap_name, "active") != 0)
+				printf("\t%s\n", nodemap_name);
+		}
+		cfs_free_param_data(&param);
+
+		/* list all nodemap parameters */
+		printf("\nAvailable nodemap parameters:\n");
+		for (i = 0; i < ARRAY_SIZE(param_desc); i++) {
+			printf("\t%-20s %s\n", param_desc[i].param,
+			       param_desc[i].desc);
+		}
+		return rc;
+	}
+
+	/* Handle -n and -p arguments and default case here */
+	if (nodemap_name && property) {
+		rc = snprintf(pattern, sizeof(pattern), "nodemap.%s.%s",
+			      nodemap_name, property);
+	} else if (nodemap_name) {
+		rc = snprintf(pattern, sizeof(pattern), "nodemap.%s.*",
+			      nodemap_name);
+	} else if (property) {
+		rc = snprintf(pattern, sizeof(pattern), "nodemap.*.%s",
+			      property);
+	} else {
+		rc = snprintf(pattern, sizeof(pattern), "nodemap.active");
+		if (rc < 0 || rc >= sizeof(pattern)) {
+			fprintf(stderr,
+				"error: setting active pattern failed\n");
+			return -EINVAL;
+		}
+
+		rc = jt_lcfg_getparam(2, (char * [2]) { "get_param",
+							pattern });
+		if (rc)
+			return rc;
+
+		rc = snprintf(pattern, sizeof(pattern), "nodemap.*.*");
+	}
+
+	if (rc < 0 || rc >= sizeof(pattern)) {
+		fprintf(stderr, "error: nodemap name or property too long\n");
+		return -EINVAL;
+	}
+
+	rc = jt_lcfg_getparam(2, (char * [2]) { "get_param", pattern });
 
 	return rc;
 }

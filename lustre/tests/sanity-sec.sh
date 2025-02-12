@@ -104,6 +104,7 @@ if (( $MDS1_VERSION >= $(version_code 2.16.51) )); then
 	nodemap_activate="nodemap activate"
 	nodemap_add="nodemap add"
 	nodemap_del="nodemap del"
+	nodemap_info="nodemap info"
 	nodemap_modify="nodemap modify"
 	nodemap_add_range="nodemap add_range"
 	nodemap_del_range="nodemap del_range"
@@ -117,6 +118,7 @@ else
 	nodemap_activate="nodemap_activate"
 	nodemap_add="nodemap_add"
 	nodemap_del="nodemap_del"
+	nodemap_info="nodemap_info"
 	nodemap_modify="nodemap_modify"
 	nodemap_add_range="nodemap_add_range"
 	nodemap_del_range="nodemap_del_range"
@@ -2096,8 +2098,8 @@ test_25() {
 
 	wait_nm_sync test25 id
 
-	do_facet mgs $LCTL nodemap_info > $tmpfile
-	do_facet mds $LCTL nodemap_info > $tmpfile2
+	do_facet mgs $LCTL $nodemap_info > $tmpfile
+	do_facet mds $LCTL $nodemap_info > $tmpfile2
 
 	if ! $SHARED_KEY; then
 		# will conflict with SK's nodemaps
@@ -2107,13 +2109,13 @@ test_25() {
 	zconf_umount_clients $CLIENTS $MOUNT ||
 	    error "unable to umount clients $CLIENTS"
 
-	do_facet mgs $LCTL nodemap_info > $tmpfile3
+	do_facet mgs $LCTL $nodemap_info > $tmpfile3
 	diff -q $tmpfile3 $tmpfile >& /dev/null ||
-		error "nodemap_info diff on MGS after remount"
+		error "$nodemap_info diff on MGS after remount"
 
-	do_facet mds $LCTL nodemap_info > $tmpfile4
+	do_facet mds $LCTL $nodemap_info > $tmpfile4
 	diff -q $tmpfile4 $tmpfile2 >& /dev/null ||
-		error "nodemap_info diff on MDS after remount"
+		error "$nodemap_info diff on MDS after remount"
 
 	# cleanup nodemap
 	do_facet mgs $LCTL nodemap_del test25 ||
@@ -2127,6 +2129,69 @@ test_25() {
 	export SK_UNIQUE_NM=false
 }
 run_test 25 "test save and reload nodemap config"
+
+test_25a() {
+	local nm="c0"
+	local info_dump=$(mktemp)
+	local param_dump=$(mktemp)
+
+	(( $MGS_VERSION >= $(version_code 2.16.52) )) ||
+		skip "Need MGS >= 2.16.52 for updated nodemap_info"
+
+	nodemap_test_setup
+	stack_trap nodemap_test_cleanup EXIT
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+	fi
+
+	# fill some more values on nodemap
+	# We test only local here, so no wait_nm_sync required
+	do_facet mgs $LCTL nodemap_add_offset --name $nm \
+		--offset 1000000 --limit 100000 ||
+		error "cannot set offset $nm"
+	do_facet mgs $LCTL nodemap_set_fileset --name $nm \
+		--fileset "/somedir" ||
+		error "unable to add fileset info"
+
+	# full nodemap dump
+	do_facet mgs $LCTL $nodemap_info > $info_dump ||
+		error "$nodemap_info failed"
+	stack_trap "rm -f $info_dump" EXIT
+	do_facet mgs $LCTL get_param -R nodemap > $param_dump
+	stack_trap "rm -f $param_dump" EXIT
+
+	diff -q $info_dump $param_dump >& /dev/null ||
+		error "$nodemap_info differs from get_param output"
+
+	# nodemap dump for $nm
+	do_facet mgs $LCTL $nodemap_info --name $nm > $info_dump ||
+		error "$nodemap_info failed"
+	do_facet mgs $LCTL get_param -R nodemap.$nm > $param_dump
+
+	diff -q $info_dump $param_dump >& /dev/null ||
+		error "$nodemap_info differs from get_param output"
+
+	# nodemap dump for $nm and property fileset
+	do_facet mgs $LCTL $nodemap_info --name $nm \
+		--property fileset > $info_dump ||
+		error "$nodemap_info failed"
+	do_facet mgs $LCTL get_param nodemap.$nm.fileset > $param_dump
+
+	diff -q $info_dump $param_dump >& /dev/null ||
+		error "$nodemap_info differs from get_param output"
+
+	# cross nodemap dump for property ranges
+	do_facet mgs $LCTL $nodemap_info --property ranges > $info_dump ||
+		error "$nodemap_info failed"
+	do_facet mgs $LCTL get_param -R nodemap.*.ranges > $param_dump
+
+	# back to non-nodemap setup
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=false
+	fi
+}
+run_test 25a "test nodemap info values"
 
 test_26() {
 	nodemap_version_check || return 0

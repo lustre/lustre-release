@@ -989,54 +989,6 @@ enum paramtype {
 	PT_CONFPARAM
 };
 
-#ifdef HAVE_SERVER_SUPPORT
-/**
- * Output information about nodemaps.
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
- *
- * [list|nodemap_name|all]	\a list will list all nodemaps (default).
- *				Specifying a \a nodemap_name will
- *				display info about that specific nodemap.
- *				\a all will display info for all nodemaps.
- * \retval			0 on success
- */
-int jt_nodemap_info(int argc, char **argv)
-{
-	const char usage_str[] = "usage: nodemap_info [list|nodemap_name|all]\n";
-	struct param_opts popt;
-	int rc = 0;
-
-	memset(&popt, 0, sizeof(popt));
-	popt.po_show_name = 1;
-
-	if (argc > 2) {
-		fprintf(stderr, usage_str);
-		return -1;
-	}
-
-	if (argc == 1 || strcmp("list", argv[1]) == 0) {
-		popt.po_only_dir = 1;
-		rc = jt_lcfg_listparam(3, (char*[3])
-				       { "list_param", "-D", "nodemap/*" });
-	} else if (strcmp("all", argv[1]) == 0) {
-		rc = jt_lcfg_getparam(3, (char*[3])
-				      { "get_param", "-N", "nodemap/*/*" });
-	} else {
-		char	pattern[PATH_MAX];
-
-		snprintf(pattern, sizeof(pattern), "nodemap/%s/*", argv[1]);
-		rc = jt_lcfg_getparam(3, (char*[3])
-				      { "get_param", "-N", pattern });
-		if (rc == -ESRCH)
-			fprintf(stderr,
-				"error: nodemap_info: cannot find nodemap %s\n",
-				argv[1]);
-	}
-	return rc;
-}
-#endif
-
 #define PS_NONE 0
 #define PS_PARAM_FOUND 1
 #define PS_PARAM_SET 2

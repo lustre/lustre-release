@@ -1,0 +1,77 @@
+.TH LCTL-NODEMAP_INFO 8 2025-03-10 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_info \- present information about nodemaps
+.SH SYNOPSIS
+.SY "lctl nodemap_info"
+or
+.SY "lctl nodemap info"
+.BI --name " NODEMAP_NAME"
+.BI --property " PROPERTY_NAME"
+.B --list
+.YS
+.SH DESCRIPTION
+.B nodemap_info
+presents information about the defined nodemaps. This includes whether nodemaps
+are active, a list of the defined nodemaps, and the values of specific nodemap
+parameters. If no options are specified, all nodemaps and their properties
+are presented.
+.SH OPTIONS
+.TP
+.BI --name " NODEMAP_NAME"
+Specifies the name of the nodemap to present information about. If not
+specified, all nodemaps are presented. This option can be used in conjunction
+with the
+.B --property
+option to present the value of a specific property for a specific nodemap.
+.TP
+.BI --property " PROPERTY_NAME"
+Specifies the name of the property to present the value of. If not specified,
+all properties are presented. This option can be used in conjunction with the
+.B --name
+option to present the value of a specific property for a specific nodemap.
+.TP
+.B --list
+Presents the global nodemap state and Lists all defined nodemaps and available
+nodemap properties.
+.SH EXAMPLES
+List general nodemap information:
+.EX
+.B # lctl nodemap_info --list
+.EE
+.PP
+List the values of all properties for all nodemaps:
+.EX
+.B # lctl nodemap_info
+.EE
+.PP
+List the values for all properties for the "remote" nodemap:
+.EX
+.B # lctl nodemap_info --name remote
+.EE
+.PP
+List the value of the specific "ranges" property for the "remote" nodemap:
+.EX
+.B # lctl nodemap_info --name remote --property ranges
+.EE
+.PP
+List the value of the specific "ranges" property for all nodemaps:
+.EX
+.B # lctl nodemap_info --property ranges
+.EE
+.SH AVAILABILITY
+.B lctl nodemap_info
+is part of the
+.BR lustre (7)
+filesystem package since release 2.16.52
+.\" Added in commit v2.16.52_105_g03b41c3
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-modify (8),
+.BR lctl-nodemap-set-fileset (8)
