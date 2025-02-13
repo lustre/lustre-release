@@ -896,7 +896,7 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	    (qsd->qsd_type_array[qi->lqi_type])->qqi_acct_failed)
 		RETURN(0);
 
-	if (local_flags && qi->lqi_id.qid_projid &&
+	if (qi->lqi_type == PRJQUOTA && local_flags && qi->lqi_id.qid_projid &&
 	    (qsd->qsd_root_prj_enable || !qi->lqi_ignore_root_proj_quota))
 		*local_flags |= QUOTA_FL_ROOT_PRJQUOTA;
 
