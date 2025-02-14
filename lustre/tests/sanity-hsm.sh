@@ -5705,7 +5705,7 @@ run_test 410 "lfs data_version -s allows release of force-archived file"
 cleanup_411() {
 	local nm=$1
 
-	do_facet mgs $LCTL nodemap_del $nm
+	do_facet mgs $LCTL nodemap_del $nm || true
 	do_facet mgs $LCTL nodemap_activate 0
 	wait_nm_sync active
 }
@@ -5762,6 +5762,16 @@ test_411()
 	check_hsm_flags $tf1 "0x00000001"
 	$LFS hsm_clear --exists $tf1 || error "hsm_clear $tf1 failed"
 	check_hsm_flags $tf1 "0x00000000"
+
+	# check copytool cleanup works with the hsm_ops rbac role present
+	# and nodemap activated
+	kill_copytools
+	wait_copytools || error "copytool failed to stop"
+
+	copytool setup
+	# Re-add cleanup_411 to the stack to make sure it is always called
+	# before the copytool is cleaned up.
+	stack_trap "cleanup_411 $nm" EXIT
 
 	# remove hsm_ops from rbac roles
 	roles=$(echo "$roles" | sed 's/hsm_ops,//;s/,hsm_ops//;s/^hsm_ops,//')
