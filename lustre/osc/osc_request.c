@@ -4172,7 +4172,7 @@ static int __init osc_init(void)
 	if (rc != 0)
 		GOTO(out_req_pool, rc);
 
-	rc = class_register_type(&osc_obd_ops, NULL, true,
+	rc = class_register_type(&osc_obd_ops, NULL, false,
 				 LUSTRE_OSC_NAME, &osc_device_type);
 	if (rc < 0)
 		GOTO(out_stop_grant, rc);
