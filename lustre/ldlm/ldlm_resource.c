@@ -44,7 +44,7 @@ static struct dentry *ldlm_ns_debugfs_dir;
 struct dentry *ldlm_svc_debugfs_dir;
 
 /* For debug dump, amount of granted locks for one resource to avoid DDOS. */
-static unsigned int ldlm_dump_granted_max = 256;
+unsigned int ldlm_dump_granted_max = 256;
 
 static ssize_t ldebugfs_dump_ns_seq_write(struct file *file,
 					  const char __user *buffer,
@@ -57,152 +57,10 @@ static ssize_t ldebugfs_dump_ns_seq_write(struct file *file,
 
 LDEBUGFS_FOPS_WR_ONLY(ldlm, dump_ns);
 
-static int ldlm_rw_uint_seq_show(struct seq_file *m, void *v)
-{
-	seq_printf(m, "%u\n", *(unsigned int *)m->private);
-	return 0;
-}
-
-static ssize_t
-ldlm_rw_uint_seq_write(struct file *file, const char __user *buffer,
-		       size_t count, loff_t *off)
-{
-	struct seq_file *seq = file->private_data;
-
-	if (!count)
-		return 0;
-
-	return kstrtouint_from_user(buffer, count, 0,
-				    (unsigned int *)seq->private);
-}
-
-LDEBUGFS_SEQ_FOPS(ldlm_rw_uint);
-
-#ifdef HAVE_SERVER_SUPPORT
-
-static int seq_watermark_show(struct seq_file *m, void *data)
-{
-	seq_printf(m, "%llu\n", *(__u64 *)m->private);
-	return 0;
-}
-
-static ssize_t seq_watermark_write(struct file *file,
-				   const char __user *buffer, size_t count,
-				   loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	u64 value;
-	__u64 watermark;
-	__u64 *data = m->private;
-	bool wm_low = (data == &ldlm_reclaim_threshold_mb) ? true : false;
-	char kernbuf[22] = "";
-	int rc;
-
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &value, "MiB");
-	if (rc < 0) {
-		CERROR("Failed to set %s, rc = %d.\n",
-		       wm_low ? "lock_reclaim_threshold_mb" : "lock_limit_mb",
-		       rc);
-		return rc;
-	} else if (value != 0 && value < (1 << 20)) {
-		CERROR("%s should be greater than 1MB.\n",
-		       wm_low ? "lock_reclaim_threshold_mb" : "lock_limit_mb");
-		return -EINVAL;
-	}
-	watermark = value >> 20;
-
-	if (wm_low) {
-		if (ldlm_lock_limit_mb != 0 && watermark > ldlm_lock_limit_mb) {
-			CERROR("lock_reclaim_threshold_mb must be smaller than lock_limit_mb.\n");
-			return -EINVAL;
-		}
-
-		*data = watermark;
-		if (watermark != 0) {
-			watermark <<= 20;
-			do_div(watermark, sizeof(struct ldlm_lock));
-		}
-		ldlm_reclaim_threshold = watermark;
-	} else {
-		if (ldlm_reclaim_threshold_mb != 0 &&
-		    watermark < ldlm_reclaim_threshold_mb) {
-			CERROR("lock_limit_mb must be greater than "
-			       "lock_reclaim_threshold_mb.\n");
-			return -EINVAL;
-		}
-
-		*data = watermark;
-		if (watermark != 0) {
-			watermark <<= 20;
-			do_div(watermark, sizeof(struct ldlm_lock));
-		}
-		ldlm_lock_limit = watermark;
-	}
-
-	return count;
-}
-
-static int seq_watermark_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, seq_watermark_show, inode->i_private);
-}
-
-static const struct file_operations ldlm_watermark_fops = {
-	.owner		= THIS_MODULE,
-	.open		= seq_watermark_open,
-	.read		= seq_read,
-	.write		= seq_watermark_write,
-	.llseek		= seq_lseek,
-	.release	= lprocfs_single_release,
-};
-
-static int seq_granted_show(struct seq_file *m, void *data)
-{
-	seq_printf(m, "%llu\n", percpu_counter_sum_positive(
-		   (struct percpu_counter *)m->private));
-	return 0;
-}
-
-static int seq_granted_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, seq_granted_show, inode->i_private);
-}
-
-static const struct file_operations ldlm_granted_fops = {
-	.owner	= THIS_MODULE,
-	.open	= seq_granted_open,
-	.read	= seq_read,
-	.llseek	= seq_lseek,
-	.release = single_release,
-};
-
-#endif /* HAVE_SERVER_SUPPORT */
-
 static struct ldebugfs_vars ldlm_debugfs_list[] = {
 	{ .name	=	"dump_namespaces",
 	  .fops	=	&ldlm_dump_ns_fops,
 	  .proc_mode =	0222 },
-	{ .name	=	"dump_granted_max",
-	  .fops	=	&ldlm_rw_uint_fops,
-	  .data	=	&ldlm_dump_granted_max },
-#ifdef HAVE_SERVER_SUPPORT
-	{ .name =	"lock_reclaim_threshold_mb",
-	  .fops =	&ldlm_watermark_fops,
-	  .data =	&ldlm_reclaim_threshold_mb },
-	{ .name =	"lock_limit_mb",
-	  .fops =	&ldlm_watermark_fops,
-	  .data =	&ldlm_lock_limit_mb },
-	{ .name =	"lock_granted_count",
-	  .fops =	&ldlm_granted_fops,
-	  .data =	&ldlm_granted_total },
-#endif
 	{ NULL }
 };
 

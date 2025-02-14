@@ -378,12 +378,13 @@ void ldlm_flock_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 
 /* ldlm_reclaim.c */
 #ifdef HAVE_SERVER_SUPPORT
-extern __u64 ldlm_reclaim_threshold;
-extern __u64 ldlm_lock_limit;
-extern __u64 ldlm_reclaim_threshold_mb;
-extern __u64 ldlm_lock_limit_mb;
+extern u64 ldlm_reclaim_threshold;
+extern u64 ldlm_lock_limit;
+extern u64 ldlm_reclaim_threshold_mb;
+extern u64 ldlm_lock_limit_mb;
 extern struct percpu_counter ldlm_granted_total;
 #endif
+extern unsigned int ldlm_dump_granted_max;
 int ldlm_reclaim_setup(void);
 void ldlm_reclaim_cleanup(void);
 void ldlm_reclaim_add(struct ldlm_lock *lock);

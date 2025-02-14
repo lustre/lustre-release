@@ -3226,11 +3226,38 @@ void ldlm_destroy_export(struct obd_export *exp)
 }
 EXPORT_SYMBOL(ldlm_destroy_export);
 
+static ssize_t dump_granted_max_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 ldlm_dump_granted_max);
+}
+
+static ssize_t dump_granted_max_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count)
+{
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	ldlm_dump_granted_max = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(dump_granted_max);
+
 static ssize_t cancel_unused_locks_before_replay_show(struct kobject *kobj,
 						      struct attribute *attr,
 						      char *buf)
 {
-	return sprintf(buf, "%d\n", ldlm_cancel_unused_locks_before_replay);
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 ldlm_cancel_unused_locks_before_replay);
 }
 
 static ssize_t cancel_unused_locks_before_replay_store(struct kobject *kobj,
@@ -3251,8 +3278,110 @@ static ssize_t cancel_unused_locks_before_replay_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(cancel_unused_locks_before_replay);
 
+#ifdef HAVE_SERVER_SUPPORT
+static ssize_t lock_reclaim_threshold_mb_show(struct kobject *kobj,
+					      struct attribute *attr,
+					      char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", ldlm_reclaim_threshold_mb);
+}
+
+static ssize_t lock_reclaim_threshold_mb_store(struct kobject *kobj,
+					       struct attribute *attr,
+					       const char *buffer,
+					       size_t count)
+{
+	u64 watermark, value;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &value, "MiB");
+	if (rc < 0) {
+		CERROR("Failed to set lock_reclaim_threshold_mb, rc = %d.\n",
+		       rc);
+		return rc;
+	} else if (value != 0 && value < (1 << 20)) {
+		CERROR("lock_reclaim_threshold_mb should be greater than 1MB.\n");
+		return -EINVAL;
+	}
+	watermark = value >> 20;
+
+	ldlm_reclaim_threshold_mb = watermark;
+	if (watermark != 0) {
+		watermark <<= 20;
+		do_div(watermark, sizeof(struct ldlm_lock));
+	}
+	ldlm_reclaim_threshold = watermark;
+
+	return count;
+}
+LUSTRE_RW_ATTR(lock_reclaim_threshold_mb);
+
+static ssize_t lock_limit_mb_show(struct kobject *kobj,
+				  struct attribute *attr,
+				  char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", ldlm_lock_limit_mb);
+}
+
+static ssize_t lock_limit_mb_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer,
+				   size_t count)
+{
+	u64 watermark, value;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &value, "MiB");
+	if (rc < 0) {
+		CERROR("Failed to set lock_limit_mb, rc = %d.\n", rc);
+		return rc;
+	} else if (value != 0 && value < (1 << 20)) {
+		CERROR("lock_limit_mb should be greater than 1MB.\n");
+		return -EINVAL;
+	}
+	watermark = value >> 20;
+
+	if (ldlm_lock_limit_mb != 0 && watermark > ldlm_lock_limit_mb) {
+		CERROR("lock_reclaim_threshold_mb must be smaller than lock_limit_mb.\n");
+		return -EINVAL;
+	}
+
+	if (ldlm_reclaim_threshold_mb != 0 &&
+	    watermark < ldlm_reclaim_threshold_mb) {
+		CERROR("lock_limit_mb must be greater than lock_reclaim_threshold_mb.\n");
+		return -EINVAL;
+	}
+
+	ldlm_lock_limit_mb = watermark;
+	if (watermark != 0) {
+		watermark <<= 20;
+		do_div(watermark, sizeof(struct ldlm_lock));
+	}
+	ldlm_lock_limit = watermark;
+
+	return count;
+}
+LUSTRE_RW_ATTR(lock_limit_mb);
+
+static ssize_t lock_granted_count_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
+{
+	u64 sum = percpu_counter_sum_positive(&ldlm_granted_total);
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", sum);
+}
+LUSTRE_RO_ATTR(lock_granted_count);
+#endif
+
 static struct attribute *ldlm_attrs[] = {
+	&lustre_attr_dump_granted_max.attr,
 	&lustre_attr_cancel_unused_locks_before_replay.attr,
+#ifdef HAVE_SERVER_SUPPORT
+	&lustre_attr_lock_reclaim_threshold_mb.attr,
+	&lustre_attr_lock_limit_mb.attr,
+	&lustre_attr_lock_granted_count.attr,
+#endif
 	NULL,
 };
 
