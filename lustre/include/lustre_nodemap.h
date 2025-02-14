@@ -135,7 +135,7 @@ struct nm_config_file {
 	struct list_head		 ncf_list;
 };
 
-void nodemap_activate(const bool value);
+int nodemap_activate(const bool value);
 int nodemap_add(const char *nodemap_name, bool dynamic);
 int nodemap_del(const char *nodemap_name);
 int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp);

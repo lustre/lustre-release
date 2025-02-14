@@ -435,9 +435,9 @@ static ssize_t
 nodemap_active_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
-	char			active_string[NODEMAP_LDEBUGFS_FLAG_LEN + 1];
-	long unsigned int	active;
-	int			rc;
+	char active_string[NODEMAP_LDEBUGFS_FLAG_LEN + 1];
+	unsigned long active;
+	int rc;
 
 	if (count == 0)
 		return 0;
@@ -453,9 +453,9 @@ nodemap_active_seq_write(struct file *file, const char __user *buffer,
 	if (rc != 0)
 		return -EINVAL;
 
-	nodemap_activate(active);
+	rc = nodemap_activate(active);
 
-	return count;
+	return rc ? rc : count;
 }
 LDEBUGFS_SEQ_FOPS(nodemap_active);
 

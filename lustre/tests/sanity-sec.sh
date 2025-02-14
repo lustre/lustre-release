@@ -7114,6 +7114,7 @@ test_72() {
 	local properties="audit_mode deny_unknown forbid_encryption \
 			  readonly_mount"
 	local sepol="1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f"
+	local rbac_val
 	local val
 
 	(( OST1_VERSION >= $(version_code 2.15.64) )) ||
@@ -7138,6 +7139,8 @@ test_72() {
 		--idmap $mgsclid:$mgsfsid ||
 		error "add_idmap for $mgsnm on MGS failed"
 	wait_nm_sync $mgsnm idmap
+
+	rbac_val=$(do_facet mgs $LCTL get_param -n nodemap.$mgsnm.rbac)
 
 	stack_trap "do_facet ost1 $LCTL nodemap_del $nm || true" EXIT
 	do_facet ost1 $LCTL nodemap_add $nm &&
@@ -7207,6 +7210,11 @@ test_72() {
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
 	[[ "x$val" == "xfile_perms" ]] || error "incorrect $prop $val"
+	do_facet ost1 $LCTL nodemap_modify --name $nm \
+		--property $prop --value all ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
+	[[ "x$val" == "x$rbac_val" ]] || error "incorrect $prop $val"
 	prop=squash_uid
 	do_facet ost1 $LCTL nodemap_modify --name $nm \
 		--property $prop --value 77 ||
@@ -7237,6 +7245,24 @@ test_72() {
 			error "dynamic modify of $prop failed"
 	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop)
 	[[ "x$val" == "x$sepol" ]] || error "incorrect $prop $val"
+	prop=offset
+	do_facet ost1 $LCTL nodemap_add_offset --name $nm \
+		--offset 100000 --limit 200000 ||
+			error "dynamic modify of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop |
+		awk '$1 == "start_uid:" {print $2}' | sed s+,++)
+	[[ "x$val" == "x100000" ]] || error "incorrect $prop start_uid $val"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop |
+		awk '$1 == "limit_uid:" {print $2}' | sed s+,++)
+	[[ "x$val" == "x200000" ]] || error "incorrect $prop limit_uid $val"
+	do_facet ost1 $LCTL nodemap_del_offset --name $nm ||
+			error "dynamic del of $prop failed"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop |
+		awk '$1 == "start_uid:" {print $2}' | sed s+,++)
+	[[ "x$val" == "x0" ]] || error "incorrect $prop start_uid $val"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.$prop |
+		awk '$1 == "limit_uid:" {print $2}' | sed s+,++)
+	[[ "x$val" == "x0" ]] || error "incorrect $prop limit_uid $val"
 
 	val=$(do_facet ost1 $LCTL nodemap_test_id --nid $startnid \
 		--idtype uid --id $clid)

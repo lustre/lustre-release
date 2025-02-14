@@ -596,17 +596,20 @@ int nodemap_idx_nodemap_update(const struct lu_nodemap *nodemap)
 
 int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 {
-	struct rb_root		 root;
-	struct lu_idmap		*idmap;
-	struct lu_idmap		*temp;
-	struct lu_nid_range	*range;
-	struct lu_nid_range	*range_temp;
-	struct nodemap_key	 nk;
-	struct lu_env		 env;
-	int			 rc = 0;
-	int			 rc2 = 0;
+	struct rb_root root;
+	struct lu_idmap *idmap;
+	struct lu_idmap *temp;
+	struct lu_nid_range *range;
+	struct lu_nid_range *range_temp;
+	struct nodemap_key nk;
+	struct lu_env env;
+	int rc = 0;
+	int rc2 = 0;
 
 	ENTRY;
+
+	if (nodemap->nm_dyn)
+		return 0;
 
 	if (!nodemap_mgs()) {
 		CERROR("cannot del nodemap config from non-existing MGS.\n");
@@ -703,6 +706,9 @@ int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap)
 
 	ENTRY;
 
+	if (nodemap->nm_dyn)
+		return 0;
+
 	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
@@ -732,6 +738,9 @@ int nodemap_idx_offset_del(const struct lu_nodemap *nodemap)
 	int rc = 0;
 
 	ENTRY;
+
+	if (nodemap->nm_dyn)
+		return 0;
 
 	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
@@ -1167,7 +1176,8 @@ int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap)
 	return rc;
 }
 
-int nodemap_idx_range_add(const struct lu_nid_range *range)
+int nodemap_idx_range_add(struct lu_nodemap *nodemap,
+			  const struct lu_nid_range *range)
 {
 	struct nodemap_key nk;
 	union nodemap_rec nr;
@@ -1175,6 +1185,10 @@ int nodemap_idx_range_add(const struct lu_nid_range *range)
 	int rc = 0;
 
 	ENTRY;
+
+	if (nodemap->nm_dyn)
+		return 0;
+
 	if (!nodemap_mgs()) {
 		CERROR("cannot add nodemap config to non-existing MGS.\n");
 		return -EINVAL;
@@ -1198,12 +1212,17 @@ free_env:
 	RETURN(rc);
 }
 
-int nodemap_idx_range_del(const struct lu_nid_range *range)
+int nodemap_idx_range_del(struct lu_nodemap *nodemap,
+			  const struct lu_nid_range *range)
 {
-	struct nodemap_key	 nk;
-	struct lu_env		 env;
-	int			 rc = 0;
+	struct nodemap_key nk;
+	struct lu_env env;
+	int rc = 0;
+
 	ENTRY;
+
+	if (nodemap->nm_dyn)
+		return 0;
 
 	if (!nodemap_mgs()) {
 		CERROR("cannot del nodemap config from non-existing MGS.\n");
@@ -1227,11 +1246,15 @@ int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const u32 map[2])
 {
-	struct nodemap_key	 nk;
-	union nodemap_rec	 nr;
-	struct lu_env		 env;
-	int			 rc = 0;
+	struct nodemap_key nk;
+	union nodemap_rec nr;
+	struct lu_env env;
+	int rc = 0;
+
 	ENTRY;
+
+	if (nodemap->nm_dyn)
+		return 0;
 
 	if (!nodemap_mgs()) {
 		CERROR("cannot add idmap to non-existing MGS.\n");
@@ -1255,10 +1278,14 @@ int nodemap_idx_idmap_del(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const u32 map[2])
 {
-	struct nodemap_key	 nk;
-	struct lu_env		 env;
-	int			 rc = 0;
+	struct nodemap_key nk;
+	struct lu_env env;
+	int rc = 0;
+
 	ENTRY;
+
+	if (nodemap->nm_dyn)
+		return 0;
 
 	if (!nodemap_mgs()) {
 		CERROR("cannot del idmap from non-existing MGS.\n");
@@ -1279,14 +1306,15 @@ int nodemap_idx_idmap_del(const struct lu_nodemap *nodemap,
 
 static int nodemap_idx_global_add_update(bool value, enum nm_add_update update)
 {
-	struct nodemap_key	 nk;
-	union nodemap_rec	 nr;
-	struct lu_env		 env;
-	int			 rc = 0;
+	struct nodemap_key nk;
+	union nodemap_rec nr;
+	struct lu_env env;
+	int rc = 0;
+
 	ENTRY;
 
 	if (!nodemap_mgs()) {
-		CERROR("cannot add nodemap config to non-existing MGS.\n");
+		CERROR("cannot do global for non-existing MGS.\n");
 		return -EINVAL;
 	}
 

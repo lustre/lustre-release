@@ -550,8 +550,7 @@ int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,
 
 		del_map[0] = temp->id_client;
 		idmap_delete(id_type, temp, nodemap);
-		if (!nodemap->nm_dyn)
-			rc = nodemap_idx_idmap_del(nodemap, id_type, del_map);
+		rc = nodemap_idx_idmap_del(nodemap, id_type, del_map);
 		/* In case there is any corrupted idmap */
 		if (!rc || unlikely(rc == -ENOENT)) {
 			temp = idmap_insert(id_type, idmap, nodemap);
@@ -610,7 +609,7 @@ int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		GOTO(out_unlock, rc = -EPERM);
 
 	rc = nodemap_add_idmap_helper(nodemap, id_type, map);
-	if (!rc && !nodemap->nm_dyn)
+	if (!rc)
 		rc = nodemap_idx_idmap_add(nodemap, id_type, map);
 
 out_unlock:
@@ -661,8 +660,7 @@ int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		rc = -EINVAL;
 	} else {
 		idmap_delete(id_type, idmap, nodemap);
-		if (!nodemap->nm_dyn)
-			rc = nodemap_idx_idmap_del(nodemap, id_type, map);
+		rc = nodemap_idx_idmap_del(nodemap, id_type, map);
 	}
 	up_write(&nodemap->nm_idmap_lock);
 
@@ -1057,8 +1055,8 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 	up_write(&config->nmc_range_tree_lock);
 
 	/* if range_id is non-zero, we are loading from disk */
-	if (range_id == 0 && !nodemap->nm_dyn)
-		rc = nodemap_idx_range_add(range);
+	if (range_id == 0)
+		rc = nodemap_idx_range_add(nodemap, range);
 
 	if (config == active_config) {
 		nm_member_revoke_locks(config->nmc_default_nodemap);
@@ -1111,9 +1109,9 @@ EXPORT_SYMBOL(nodemap_add_range);
 int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 		      u8 netmask)
 {
-	struct lu_nodemap	*nodemap;
-	struct lu_nid_range	*range;
-	int			rc = 0;
+	struct lu_nodemap *nodemap;
+	struct lu_nid_range *range;
+	int rc = 0;
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(name);
@@ -1138,8 +1136,7 @@ int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 		up_write(&active_config->nmc_range_tree_lock);
 		GOTO(out_putref, rc = -EINVAL);
 	}
-	if (!nodemap->nm_dyn)
-		rc = nodemap_idx_range_del(range);
+	rc = nodemap_idx_range_del(nodemap, range);
 	range_delete(active_config, range);
 	nm_member_reclassify_nodemap(nodemap);
 	up_write(&active_config->nmc_range_tree_lock);
@@ -2070,8 +2067,7 @@ int nodemap_del(const char *nodemap_name)
 	down_write(&active_config->nmc_range_tree_lock);
 	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
 				 rn_list) {
-		if (!nodemap->nm_dyn)
-			rc2 = nodemap_idx_range_del(range);
+		rc2 = nodemap_idx_range_del(nodemap, range);
 		if (rc2 < 0)
 			rc = rc2;
 
@@ -2087,11 +2083,9 @@ int nodemap_del(const char *nodemap_name)
 		nodemap_fileset_reset(nodemap);
 	}
 
-	if (!nodemap->nm_dyn) {
-		rc2 = nodemap_idx_nodemap_del(nodemap);
-		if (rc2 < 0)
-			rc = rc2;
-	}
+	rc2 = nodemap_idx_nodemap_del(nodemap);
+	if (rc2 < 0)
+		rc = rc2;
 
 	/*
 	 * remove procfs here in case nodemap_create called with same name
@@ -2319,16 +2313,25 @@ out:
  *
  * \param	value		1 for on, 0 for off
  */
-void nodemap_activate(const bool value)
+int nodemap_activate(const bool value)
 {
+	int rc = 0;
+
+	if (!nodemap_mgs()) {
+		CERROR("cannot activate for non-existing MGS.\n");
+		return -EINVAL;
+	}
+
 	mutex_lock(&active_config_lock);
 	active_config->nmc_nodemap_is_active = value;
 
 	/* copy active value to global to avoid locking in map functions */
 	nodemap_active = value;
-	nodemap_idx_nodemap_activate(value);
+	rc = nodemap_idx_nodemap_activate(value);
 	mutex_unlock(&active_config_lock);
 	nm_member_revoke_all();
+
+	return rc;
 }
 EXPORT_SYMBOL(nodemap_activate);
 
@@ -2887,14 +2890,14 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 		    strcasecmp(param, "y") == 0 ||
 		    strcasecmp(param, "true") == 0 ||
 		    strcasecmp(param, "t") == 0)
-			nodemap_activate(1);
+			rc = nodemap_activate(1);
 		else if (strcmp(param, "0") == 0 ||
 			 strcasecmp(param, "off") == 0 ||
 			 strcasecmp(param, "no") == 0 ||
 			 strcasecmp(param, "n") == 0 ||
 			 strcasecmp(param, "false") == 0 ||
 			 strcasecmp(param, "f") == 0)
-			nodemap_activate(0);
+			rc = nodemap_activate(0);
 		else
 			rc = -EINVAL;
 		break;

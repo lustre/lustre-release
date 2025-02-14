@@ -198,8 +198,10 @@ int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
 int nodemap_idx_idmap_del(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const __u32 map[2]);
-int nodemap_idx_range_add(const struct lu_nid_range *range);
-int nodemap_idx_range_del(const struct lu_nid_range *range);
+int nodemap_idx_range_add(struct lu_nodemap *nodemap,
+			  const struct lu_nid_range *range);
+int nodemap_idx_range_del(struct lu_nodemap *nodemap,
+			  const struct lu_nid_range *range);
 int nodemap_idx_nodemap_activate(bool value);
 int nodemap_index_read(struct lu_env *env, struct nm_config_file *ncf,
 		       struct idx_info *ii, const struct lu_rdpg *rdpg);
