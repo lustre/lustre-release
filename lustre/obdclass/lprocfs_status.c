@@ -1080,7 +1080,6 @@ static void obd_sysfs_release(struct kobject *kobj)
 
 int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 {
-	struct ldebugfs_vars *debugfs_vars = NULL;
 	int rc;
 
 	if (!obd || obd->obd_magic != OBD_DEVICE_MAGIC)
@@ -1111,11 +1110,9 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 		return rc;
 	}
 
-	if (!obd->obd_type->typ_procroot)
-		debugfs_vars = obd->obd_debugfs_vars;
-	obd->obd_debugfs_entry = debugfs_create_dir(
-		obd->obd_name, obd->obd_type->typ_debugfs_entry);
-	ldebugfs_add_vars(obd->obd_debugfs_entry, debugfs_vars, obd);
+	obd->obd_debugfs_entry = debugfs_create_dir(obd->obd_name,
+						    obd->obd_type->typ_debugfs_entry);
+	ldebugfs_add_vars(obd->obd_debugfs_entry, obd->obd_debugfs_vars, obd);
 
 	if (obd->obd_proc_entry || !obd->obd_type->typ_procroot)
 		GOTO(already_registered, rc);

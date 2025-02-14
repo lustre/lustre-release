@@ -19,6 +19,7 @@
 #include <lprocfs_status.h>
 #include <lustre_osc.h>
 #include <cl_object.h>
+
 #include "mdc_internal.h"
 
 static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
@@ -300,7 +301,7 @@ mdc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdc_cached_mb);
+LDEBUGFS_SEQ_FOPS(mdc_cached_mb);
 
 static ssize_t dom_min_repsize_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
@@ -374,7 +375,7 @@ static int mdc_unstable_stats_seq_show(struct seq_file *m, void *v)
 		   "unstable_mb:              %10d\n", pages, mb);
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(mdc_unstable_stats);
+LDEBUGFS_SEQ_FOPS_RO(mdc_unstable_stats);
 
 static ssize_t mdc_rpc_stats_seq_write(struct file *file,
 				       const char __user *buf,
@@ -489,7 +490,7 @@ static int mdc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
 	return 0;
 }
-LPROC_SEQ_FOPS(mdc_rpc_stats);
+LDEBUGFS_SEQ_FOPS(mdc_rpc_stats);
 
 static ssize_t mdc_batch_stats_seq_write(struct file *file,
 					 const char __user *buf,
@@ -531,7 +532,7 @@ static int mdc_batch_stats_seq_show(struct seq_file *seq, void *v)
 
 	return 0;
 }
-LPROC_SEQ_FOPS(mdc_batch_stats);
+LDEBUGFS_SEQ_FOPS(mdc_batch_stats);
 
 static int mdc_stats_seq_show(struct seq_file *seq, void *v)
 {
@@ -560,15 +561,15 @@ static ssize_t mdc_stats_seq_write(struct file *file,
 
 	return len;
 }
-LPROC_SEQ_FOPS(mdc_stats);
+LDEBUGFS_SEQ_FOPS(mdc_stats);
 
-LPROC_SEQ_FOPS_RO_TYPE(mdc, connect_flags);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, timeouts);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, state);
-LPROC_SEQ_FOPS_RW_TYPE(mdc, import);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mdc, connect_flags);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mdc, timeouts);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mdc, state);
+LDEBUGFS_SEQ_FOPS_RW_TYPE(mdc, import);
 
-struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
+struct ldebugfs_vars ldebugfs_mdc_obd_vars[] = {
 	{ .name	=	"connect_flags",
 	  .fops	=	&mdc_connect_flags_fops	},
 	{ .name	=	"mds_server_uuid",
@@ -732,7 +733,7 @@ int mdc_tunables_init(struct obd_device *obd)
 	int rc;
 
 	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(mdc);
-	obd->obd_vars = lprocfs_mdc_obd_vars;
+	obd->obd_debugfs_vars = ldebugfs_mdc_obd_vars;
 
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc)
