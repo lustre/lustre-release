@@ -125,12 +125,16 @@ static int nodemap_offset_seq_show(struct seq_file *m, void *data)
 		return rc;
 	}
 
-	seq_printf(m, "start_uid: %u\n", nodemap->nm_offset_start_uid);
-	seq_printf(m, "limit_uid: %u\n", nodemap->nm_offset_limit_uid);
-	seq_printf(m, "start_gid: %u\n", nodemap->nm_offset_start_gid);
-	seq_printf(m, "limit_gid: %u\n", nodemap->nm_offset_limit_gid);
-	seq_printf(m, "start_projid: %u\n", nodemap->nm_offset_start_projid);
-	seq_printf(m, "limit_projid: %u\n", nodemap->nm_offset_limit_projid);
+	seq_puts(m, "{\n");
+
+	seq_printf(m, " start_uid: %u,\n", nodemap->nm_offset_start_uid);
+	seq_printf(m, " limit_uid: %u,\n", nodemap->nm_offset_limit_uid);
+	seq_printf(m, " start_gid: %u,\n", nodemap->nm_offset_start_gid);
+	seq_printf(m, " limit_gid: %u,\n", nodemap->nm_offset_limit_gid);
+	seq_printf(m, " start_projid: %u,\n", nodemap->nm_offset_start_projid);
+	seq_printf(m, " limit_projid: %u\n", nodemap->nm_offset_limit_projid);
+
+	seq_puts(m, "}\n");
 
 	nodemap_putref(nodemap);
 	return 0;
