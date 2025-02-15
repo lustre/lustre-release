@@ -842,18 +842,18 @@ retry_connect:
 
 	/* Don't change value if it was specified in the config log */
 	if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages == -1) {
-		u32 max_pages_per_rpc;
+		u32 max_pages_per_rpc_read = 0;
 
-		size = sizeof(max_pages_per_rpc);
+		size = sizeof(max_pages_per_rpc_read);
 		err = obd_get_info(NULL, sbi->ll_dt_exp,
-				   sizeof(KEY_MAX_PAGES_PER_RPC),
-				   KEY_MAX_PAGES_PER_RPC, &size,
-				   &max_pages_per_rpc);
+				   sizeof(KEY_MAX_PAGES_PER_RPC_READ),
+				   KEY_MAX_PAGES_PER_RPC_READ, &size,
+				   &max_pages_per_rpc_read);
 		if (err)
-			max_pages_per_rpc = 0;
+			max_pages_per_rpc_read = 0;
 		sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
 			max_t(u32, SBI_DEFAULT_READ_AHEAD_WHOLE_MAX,
-			      max_pages_per_rpc);
+			      max_pages_per_rpc_read);
 		if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages >
 		    sbi->ll_ra_info.ra_max_pages_per_file)
 			sbi->ll_ra_info.ra_max_read_ahead_whole_pages =

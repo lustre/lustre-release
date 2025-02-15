@@ -329,7 +329,7 @@ static DECLARE_WAIT_QUEUE_HEAD(osc_lru_waitq);
  */
 static inline int lru_shrink_min(struct client_obd *cli)
 {
-	return cli->cl_max_pages_per_rpc * 2;
+	return cli->cl_max_pages_per_rpc_write * 2;
 }
 
 /**
@@ -337,7 +337,7 @@ static inline int lru_shrink_min(struct client_obd *cli)
  */
 static inline int lru_shrink_max(struct client_obd *cli)
 {
-	return cli->cl_max_pages_per_rpc * cli->cl_max_rpcs_in_flight;
+	return cli->cl_max_rpcs_in_flight * cli->cl_max_pages_per_rpc_write;
 }
 
 /**
@@ -950,7 +950,7 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 	if (IS_ERR(env))
 		RETURN(rc);
 
-	npages = max_t(int, npages, cli->cl_max_pages_per_rpc);
+	npages = max_t(int, npages, cli->cl_max_pages_per_rpc_write);
 	CDEBUG(D_CACHE, "%s: start to reclaim %ld pages from LRU\n",
 	       cli_name(cli), npages);
 	rc = osc_lru_shrink(env, cli, npages, true, NULL);
@@ -1122,7 +1122,8 @@ again:
 		goto again;
 	}
 
-	max_pages = cli->cl_max_pages_per_rpc * cli->cl_max_rpcs_in_flight;
+	max_pages = cli->cl_max_pages_per_rpc_write *
+		    cli->cl_max_rpcs_in_flight;
 	if (atomic_long_read(cli->cl_lru_left) < max_pages) {
 		/* If there aren't enough pages in the per-OSC LRU then
 		 * wake up the LRU thread to try and clear out space, so
@@ -1376,7 +1377,7 @@ bool osc_over_unstable_soft_limit(struct client_obd *cli)
 	 * SOFT_SYNC request so active OSCs will have more chance to carry
 	 * the flag, this is reasonable. */
 	return unstable_nr > cli->cl_cache->ccc_lru_max >> 2 &&
-	       osc_unstable_count > cli->cl_max_pages_per_rpc *
+	       osc_unstable_count > cli->cl_max_pages_per_rpc_write *
 				    cli->cl_max_rpcs_in_flight;
 }
 
@@ -1467,12 +1468,12 @@ unsigned long osc_cache_shrink_scan(struct shrinker *sk,
 			goto out;
 		}
 
-		/* shrink no more than max_pages_per_rpc for an OSC;
+		/* shrink no more than max_pages_per_rpc_write for an OSC;
 		 * bound by remaining scan budget
 		 */
 		target_for_this_osc = (sc->nr_to_scan - total_scanned) >
-				      cli->cl_max_pages_per_rpc ?
-				      cli->cl_max_pages_per_rpc :
+				      cli->cl_max_pages_per_rpc_write ?
+				      cli->cl_max_pages_per_rpc_write :
 				      sc->nr_to_scan - total_scanned;
 		rc = osc_lru_shrink(env, cli, target_for_this_osc, true,
 				    /* It's essential we set nr_scanned or the

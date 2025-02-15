@@ -279,7 +279,8 @@ struct client_obd {
 	/* just a sum of the loi/lop pending numbers to be exported by /proc */
 	atomic_t		cl_pending_w_pages;
 	atomic_t		cl_pending_r_pages;
-	u32			cl_max_pages_per_rpc;
+	u32			cl_max_pages_per_rpc_read;
+	u32			cl_max_pages_per_rpc_write;
 	u32			cl_max_rpcs_in_flight;
 	u32			cl_max_short_io_bytes;
 	ktime_t			cl_stats_init;
@@ -887,7 +888,9 @@ static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 #define KEY_CACHE_LRU_SHRINK	"cache_lru_shrink"
 #define KEY_OSP_CONNECTED	"osp_connected"
 #define KEY_FID2IDX		"fid2idx"
-#define KEY_MAX_PAGES_PER_RPC	"max_pages_per_rpc"
+
+#define KEY_MAX_PAGES_PER_RPC_READ      "max_pages_per_rpc_read"
+#define KEY_MAX_PAGES_PER_RPC_WRITE     "max_pages_per_rpc_write"
 
 #define KEY_UNEVICT_CACHE_SHRINK	"unevict_cache_shrink"
 
@@ -1511,10 +1514,17 @@ bad_format:
 	return false;
 }
 
-static inline int cli_brw_size(struct obd_device *obd)
+static inline __u32 cli_brw_size(struct obd_device *obd)
 {
+	struct client_obd *cli;
+	__u32 max_ppr;
+
 	LASSERT(obd != NULL);
-	return obd->u.cli.cl_max_pages_per_rpc << PAGE_SHIFT;
+	cli = &(obd->u.cli);
+	max_ppr = max(cli->cl_max_pages_per_rpc_read,
+		     cli->cl_max_pages_per_rpc_write);
+
+	return max_ppr << PAGE_SHIFT;
 }
 
 /*
@@ -1531,7 +1541,7 @@ static inline void client_adjust_max_dirty(struct client_obd *cli)
 			(OSC_MAX_DIRTY_DEFAULT * 1024 * 1024) >> PAGE_SHIFT;
 	} else {
 		unsigned long dirty_max = cli->cl_max_rpcs_in_flight *
-					  cli->cl_max_pages_per_rpc;
+					  cli->cl_max_pages_per_rpc_write;
 
 		if (dirty_max > cli->cl_dirty_max_pages)
 			cli->cl_dirty_max_pages = dirty_max;

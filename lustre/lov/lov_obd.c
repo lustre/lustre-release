@@ -1154,10 +1154,12 @@ static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
 		*((u32 *)val) = lov_mds_md_size(def_stripe_count, LOV_MAGIC_V3);
 	} else if (KEY_IS(KEY_TGT_COUNT)) {
 		*((int *)val) = ld->ld_tgt_count;
-	} else if (KEY_IS(KEY_MAX_PAGES_PER_RPC)) {
+	} else if (KEY_IS(KEY_MAX_PAGES_PER_RPC_READ) ||
+		   KEY_IS(KEY_MAX_PAGES_PER_RPC_WRITE)) {
 		struct lov_tgt_desc *tgt;
 		struct client_obd *cli;
 		struct obd_import *imp;
+		u32 max_ppr;
 		u32 result = 0;
 
 		lov_foreach_tgt(&obd->u.lov, tgt) {
@@ -1171,11 +1173,14 @@ static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
 			if (imp == NULL || imp->imp_state != LUSTRE_IMP_FULL)
 				continue;
 
+			max_ppr = KEY_IS(KEY_MAX_PAGES_PER_RPC_READ) ?
+					cli->cl_max_pages_per_rpc_read :
+					cli->cl_max_pages_per_rpc_write;
+
 			if (result == 0)
-				result = cli->cl_max_pages_per_rpc;
+				result = max_ppr;
 			else
-				result = min_t(u32, cli->cl_max_pages_per_rpc,
-					       result);
+				result = min_t(u32, result, max_ppr);
 		}
 
 		*((u32 *)val) = result;

@@ -6347,16 +6347,15 @@ test_48f() {
 }
 run_test 48f "non-zero nlink dir unlink won't LBUG()"
 
-test_49() { # LU-1030
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+test_49a() { # LU-1030 - was test_49
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	# get ost1 size - $FSNAME-OST0000
-	ost1_size=$(do_facet ost1 $LFS df | grep ${ost1_svc} |
-		awk '{ print $4 }')
+	ost1_size=$($LFS df --ost=0 --output btotal)
 	# write 800M at maximum
-	[[ $ost1_size -lt 2 ]] && ost1_size=2
-	[[ $ost1_size -gt 819200 ]] && ost1_size=819200
+	(( $ost1_size < 2 )) && ost1_size=2
+	(( $ost1_size > 819200 )) && ost1_size=819200
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=$((ost1_size >> 2)) &
@@ -6374,7 +6373,107 @@ test_49() { # LU-1030
 	$LCTL set_param $osc1_mppc=$orig_mppc
 	rm $DIR/$tfile || error "rm $DIR/$tfile failed"
 }
-run_test 49 "Change max_pages_per_rpc won't break osc extent"
+run_test 49a "Change max_pages_per_rpc won't break osc extent"
+
+test_49b() {
+	local tgt="$FSNAME-OST0000-osc-*"
+	local max_pages_per_rpc="osc.$tgt.max_pages_per_rpc"
+	local max_mb_per_rpc_read="osc.$tgt.max_mb_per_rpc_read"
+	local max_mb_per_rpc_write="osc.$tgt.max_mb_per_rpc_write"
+
+	local old_brw=$(import_param "$tgt" max_brw_size)
+	local old_pages=$($LCTL get_param -n "$max_mb_per_rpc_read")
+	stack_trap "$LCTL set_param $max_mb_per_rpc_read=$old_pages"
+	local old_pages=$($LCTL get_param -n "$max_mb_per_rpc_write")
+	stack_trap "$LCTL set_param $max_mb_per_rpc_write=$old_pages"
+
+	local expect="1"
+	$LCTL set_param "$max_pages_per_rpc=1M"
+	local actual=$($LCTL get_param -n "$max_mb_per_rpc_read")
+	[[ "$expect" == "$actual" ]] ||
+		error "wrong max_mb_per_rpc_read: $expect != $actual"
+	local actual=$($LCTL get_param -n "$max_mb_per_rpc_write")
+	[[ "$expect" == "$actual" ]] ||
+		error "wrong max_mb_per_rpc_write: $expect != $actual"
+
+	if [ "$ost1_FSTYPE" == ldiskfs ]; then
+		expect="0.500"
+		$LCTL set_param "$max_pages_per_rpc=512K"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_read")
+		[[ "$expect" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_read: $expect != $actual"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_write")
+		[[ "$expect" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_write: $expect != $actual"
+
+		expect="3.500"
+		$LCTL set_param "$max_pages_per_rpc=3.5M"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_read")
+		[[ "$expect" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_read: $expect != $actual"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_write")
+		[[ "$expect" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_write: $expect != $actual"
+
+		expect="4"
+		$LCTL set_param "$max_pages_per_rpc=0.00390625G"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_read")
+		[[ "$expect" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_read: $expect != $actual"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_write")
+		[[ "$expect" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_write: $expect != $actual"
+	fi
+}
+run_test 49b "verify max_mb_per_rpc_read/write after setting max_pages_per_rpc"
+
+test_49c() {
+	local tgt="$FSNAME-OST0000-osc-*"
+	local max_pages_per_rpc="osc.$tgt.max_pages_per_rpc"
+	local max_mb_per_rpc_read="osc.$tgt.max_mb_per_rpc_read"
+	local max_mb_per_rpc_write="osc.$tgt.max_mb_per_rpc_write"
+
+	local old_brw=$(import_param "$tgt" max_brw_size)
+	local old_pages=$($LCTL get_param -n "$max_mb_per_rpc_read")
+	stack_trap "$LCTL set_param $max_mb_per_rpc_read=$old_pages"
+	local old_pages=$($LCTL get_param -n "$max_mb_per_rpc_write")
+	stack_trap "$LCTL set_param $max_mb_per_rpc_write=$old_pages"
+
+	local expect="1"
+	$LCTL set_param "$max_mb_per_rpc_read=1"
+	local actual=$($LCTL get_param -n "$max_mb_per_rpc_read")
+	[[ "$expect" == "$actual" ]] ||
+		error "wrong max_mb_per_rpc_read: $expect != $actual"
+	$LCTL set_param "$max_mb_per_rpc_write=1"
+	local actual=$($LCTL get_param -n "$max_mb_per_rpc_write")
+	[[ "$expect" == "$actual" ]] ||
+		error "wrong max_mb_per_rpc_write: $expect != $actual"
+
+	if [ "$ost1_FSTYPE" == ldiskfs ]; then
+		local expect_r="2.500"
+		local expect_w="0.500"
+		$LCTL set_param "$max_mb_per_rpc_read=2560K"
+		$LCTL set_param "$max_mb_per_rpc_write=0.5M"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_read")
+		[[ "$expect_r" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_read: $expect_r != $actual"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_write")
+		[[ "$expect_w" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_write: $expect_w != $actual"
+
+		local expect_r="0.500"
+		local expect_w="2.500"
+		$LCTL set_param "$max_mb_per_rpc_read=0.5M"
+		$LCTL set_param "$max_mb_per_rpc_write=2560K"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_read")
+		[[ "$expect_r" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_read: $expect_r != $actual"
+		actual=$($LCTL get_param -n "$max_mb_per_rpc_write")
+		[[ "$expect_w" == "$actual" ]] ||
+			error "wrong max_mb_per_rpc_write: $expect_w != $actual"
+	fi
+}
+run_test 49c "verify max_mb_per_rpc_read/write"
 
 test_50() {
 	# bug 1485

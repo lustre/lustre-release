@@ -699,7 +699,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		unsigned long nrpages;
 		unsigned long undirty;
 
-		nrpages = cli->cl_max_pages_per_rpc;
+		nrpages = cli->cl_max_pages_per_rpc_write;
 		nrpages *= cli->cl_max_rpcs_in_flight + 1;
 		nrpages = max(nrpages, cli->cl_dirty_max_pages);
 		undirty = nrpages << PAGE_SHIFT;
@@ -815,21 +815,21 @@ static void osc_shrink_grant_local(struct client_obd *cli, struct obdo *oa)
  */
 static int osc_shrink_grant(struct client_obd *cli)
 {
-	__u64 target_bytes = (cli->cl_max_rpcs_in_flight + 1) *
-			     (cli->cl_max_pages_per_rpc << PAGE_SHIFT);
+	u64 tgt_bytes = (cli->cl_max_rpcs_in_flight + 1) *
+			((u64)cli->cl_max_pages_per_rpc_write << PAGE_SHIFT);
 
 	spin_lock(&cli->cl_loi_list_lock);
-	if (cli->cl_avail_grant <= target_bytes)
-		target_bytes = cli->cl_max_pages_per_rpc << PAGE_SHIFT;
+	if (cli->cl_avail_grant <= tgt_bytes)
+		tgt_bytes = (u64)cli->cl_max_pages_per_rpc_write << PAGE_SHIFT;
 	spin_unlock(&cli->cl_loi_list_lock);
 
-	return osc_shrink_grant_to_target(cli, target_bytes);
+	return osc_shrink_grant_to_target(cli, tgt_bytes);
 }
 
-int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes)
+int osc_shrink_grant_to_target(struct client_obd *cli, __u64 tgt_bytes)
 {
-	int rc = 0;
 	struct ost_body *body;
+	int rc = 0;
 
 	ENTRY;
 	spin_lock(&cli->cl_loi_list_lock);
@@ -837,10 +837,10 @@ int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes)
 	 * We don't want to shrink below a single RPC, as that will negatively
 	 * impact block allocation and long-term performance.
 	 */
-	if (target_bytes < cli->cl_max_pages_per_rpc << PAGE_SHIFT)
-		target_bytes = cli->cl_max_pages_per_rpc << PAGE_SHIFT;
+	if (tgt_bytes < cli->cl_max_pages_per_rpc_write << PAGE_SHIFT)
+		tgt_bytes = (u64)cli->cl_max_pages_per_rpc_write << PAGE_SHIFT;
 
-	if (target_bytes >= cli->cl_avail_grant) {
+	if (tgt_bytes >= cli->cl_avail_grant) {
 		spin_unlock(&cli->cl_loi_list_lock);
 		RETURN(0);
 	}
@@ -853,13 +853,13 @@ int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes)
 	osc_announce_cached(cli, &body->oa, 0);
 
 	spin_lock(&cli->cl_loi_list_lock);
-	if (target_bytes >= cli->cl_avail_grant) {
+	if (tgt_bytes >= cli->cl_avail_grant) {
 		/* available grant has changed since target calculation */
 		spin_unlock(&cli->cl_loi_list_lock);
 		GOTO(out_free, rc = 0);
 	}
-	body->oa.o_grant = cli->cl_avail_grant - target_bytes;
-	cli->cl_avail_grant = target_bytes;
+	body->oa.o_grant = cli->cl_avail_grant - tgt_bytes;
+	cli->cl_avail_grant = tgt_bytes;
 	spin_unlock(&cli->cl_loi_list_lock);
 	if (!(body->oa.o_valid & OBD_MD_FLFLAGS)) {
 		body->oa.o_valid |= OBD_MD_FLFLAGS;
@@ -871,7 +871,7 @@ int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes)
 	rc = osc_set_info_async(NULL, cli->cl_import->imp_obd->obd_self_export,
 				sizeof(KEY_GRANT_SHRINK), KEY_GRANT_SHRINK,
 				sizeof(*body), body, NULL);
-	if (rc != 0)
+	if (rc)
 		__osc_update_grant(cli, body->oa.o_grant);
 out_free:
 	OBD_FREE_PTR(body);
@@ -881,6 +881,10 @@ out_free:
 static int osc_should_shrink_grant(struct client_obd *client)
 {
 	time64_t next_shrink = client->cl_next_shrink_grant;
+	u32 max_ppr;
+
+	max_ppr = max(client->cl_max_pages_per_rpc_read,
+		      client->cl_max_pages_per_rpc_write);
 
 	if (client->cl_import == NULL)
 		return 0;
@@ -896,7 +900,7 @@ static int osc_should_shrink_grant(struct client_obd *client)
 		 * cli_brw_size(obd->u.cli.cl_import->imp_obd->obd_self_export)
 		 * Keep comment here so that it can be found by searching.
 		 */
-		int brw_size = client->cl_max_pages_per_rpc << PAGE_SHIFT;
+		int brw_size = max_ppr << PAGE_SHIFT;
 
 		if (client->cl_import->imp_state == LUSTRE_IMP_FULL &&
 		    client->cl_avail_grant > brw_size)
@@ -1035,8 +1039,10 @@ void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 					  ocd->ocd_grant_blkbits);
 		/* max_pages_per_rpc must be chunk aligned */
 		chunk_mask = ~((1 << (cli->cl_chunkbits - PAGE_SHIFT)) - 1);
-		cli->cl_max_pages_per_rpc = (cli->cl_max_pages_per_rpc +
-					     ~chunk_mask) & chunk_mask;
+		cli->cl_max_pages_per_rpc_write = chunk_mask &
+			(cli->cl_max_pages_per_rpc_write + ~chunk_mask);
+		cli->cl_max_pages_per_rpc_read = chunk_mask &
+			(cli->cl_max_pages_per_rpc_read + ~chunk_mask);
 		/* determine maximum extent size, in #pages */
 		size = (u64)ocd->ocd_grant_max_blks << ocd->ocd_grant_blkbits;
 		cli->cl_max_extent_pages = (size >> PAGE_SHIFT) ?: 1;

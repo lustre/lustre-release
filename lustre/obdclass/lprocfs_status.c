@@ -2655,59 +2655,162 @@ const struct sysfs_ops lustre_sysfs_ops = {
 };
 EXPORT_SYMBOL_GPL(lustre_sysfs_ops);
 
+static ssize_t max_mb_per_rpc_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf, u32 (*get_mppr)(struct client_obd *cli))
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct client_obd *cli = &obd->u.cli;
+	u32 mppr;
+	unsigned int mb_int;
+	unsigned int pg_frac;
+	unsigned int mb_frac;
+	int rc;
+
+	spin_lock(&cli->cl_loi_list_lock);
+	mppr = get_mppr(cli);
+	spin_unlock(&cli->cl_loi_list_lock);
+
+	mb_int = PAGES_TO_MiB(mppr);
+	pg_frac = mppr - MiB_TO_PAGES(mb_int);
+	mb_frac = PAGES_TO_MiB(pg_frac * 1000);
+
+	if (mb_frac)
+		rc = scnprintf(buf, PAGE_SIZE, "%u.%03u\n", mb_int, mb_frac);
+	else
+		rc = scnprintf(buf, PAGE_SIZE, "%u\n", mb_int);
+	return rc;
+}
+
+static ssize_t max_rpc_store(struct kobject *kobj, struct attribute *attr,
+			     const char *buffer, size_t count,
+			     void (*store_val)(u64 val, struct client_obd *cli),
+			     bool store_pages)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct client_obd *cli = &obd->u.cli;
+	struct obd_import *imp;
+	u64 val;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &val, store_pages ? "B" : "M");
+	if (rc)
+		return rc;
+
+	/* if pages specified without units then convert to bytes */
+	if (store_pages && val <= PTLRPC_MAX_BRW_PAGES)
+		val <<= PAGE_SHIFT;
+
+	if (val < LOV_MIN_STRIPE_SIZE || val > PTLRPC_MAX_BRW_SIZE)
+		return -ERANGE;
+
+	/* convert bytes to pages */
+	val >>= PAGE_SHIFT;
+
+	with_imp_locked(obd, imp, rc) {
+		struct obd_connect_data *ocd = &imp->imp_connect_data;
+		int chunk_mask;
+
+		spin_lock(&cli->cl_loi_list_lock);
+		chunk_mask = ~((1 << (cli->cl_chunkbits - PAGE_SHIFT)) - 1);
+		/* max_pages_per_rpc must be chunk aligned */
+		val = (val + ~chunk_mask) & chunk_mask;
+		if (val == 0 || (ocd->ocd_brw_size != 0 &&
+				 val > ocd->ocd_brw_size >> PAGE_SHIFT))
+			rc = -ERANGE;
+		else
+			store_val(val, cli);
+		spin_unlock(&cli->cl_loi_list_lock);
+	}
+
+	return rc ?: count;
+}
+
 ssize_t max_pages_per_rpc_show(struct kobject *kobj, struct attribute *attr,
 			       char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct client_obd *cli = &obd->u.cli;
-	int rc;
+	u32 min_ppr;
 
 	spin_lock(&cli->cl_loi_list_lock);
-	rc = scnprintf(buf, PAGE_SIZE, "%u\n", cli->cl_max_pages_per_rpc);
+	min_ppr = min(cli->cl_max_pages_per_rpc_read,
+		     cli->cl_max_pages_per_rpc_write);
 	spin_unlock(&cli->cl_loi_list_lock);
-	return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", min_ppr);
 }
 EXPORT_SYMBOL(max_pages_per_rpc_show);
+
+static void max_pages_per_rpc_store_callback(u64 val, struct client_obd *cli)
+{
+	cli->cl_max_pages_per_rpc_read = val;
+	cli->cl_max_pages_per_rpc_write = val;
+	client_adjust_max_dirty(cli);
+}
 
 ssize_t max_pages_per_rpc_store(struct kobject *kobj, struct attribute *attr,
 				const char *buffer, size_t count)
 {
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct client_obd *cli = &obd->u.cli;
-	struct obd_import *imp;
-	struct obd_connect_data *ocd;
-	int chunk_mask, rc;
-	u64 val;
-
-	rc = sysfs_memparse(buffer, count, &val, "B");
-	if (rc)
-		return rc;
-
-	/* if the max_pages is specified in bytes, convert to pages */
-	if (val >= ONE_MB_BRW_SIZE)
-		val >>= PAGE_SHIFT;
-
-	with_imp_locked(obd, imp, rc) {
-		ocd = &imp->imp_connect_data;
-		chunk_mask = ~((1 << (cli->cl_chunkbits - PAGE_SHIFT)) - 1);
-		/* max_pages_per_rpc must be chunk aligned */
-		val = (val + ~chunk_mask) & chunk_mask;
-		if (val == 0 || (ocd->ocd_brw_size != 0 &&
-				 val > ocd->ocd_brw_size >> PAGE_SHIFT)) {
-			rc = -ERANGE;
-		} else {
-			spin_lock(&cli->cl_loi_list_lock);
-			cli->cl_max_pages_per_rpc = val;
-			client_adjust_max_dirty(cli);
-			spin_unlock(&cli->cl_loi_list_lock);
-		}
-	}
-
-	return rc ?: count;
+	return max_rpc_store(kobj, attr, buffer, count,
+			     &max_pages_per_rpc_store_callback, true);
 }
 EXPORT_SYMBOL(max_pages_per_rpc_store);
+
+static u32 max_mb_per_rpc_read_show_callback(struct client_obd *cli)
+{
+	return cli->cl_max_pages_per_rpc_read;
+}
+
+ssize_t max_mb_per_rpc_read_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	return max_mb_per_rpc_show(kobj, attr, buf,
+				   &max_mb_per_rpc_read_show_callback);
+}
+EXPORT_SYMBOL(max_mb_per_rpc_read_show);
+
+static void max_mb_per_rpc_read_store_callback(u64 val, struct client_obd *cli)
+{
+	cli->cl_max_pages_per_rpc_read = val;
+}
+
+ssize_t max_mb_per_rpc_read_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
+{
+	return max_rpc_store(kobj, attr, buffer, count,
+			     &max_mb_per_rpc_read_store_callback, false);
+}
+EXPORT_SYMBOL(max_mb_per_rpc_read_store);
+
+static u32 max_mb_per_rpc_write_show_callback(struct client_obd *cli)
+{
+	return cli->cl_max_pages_per_rpc_write;
+}
+
+ssize_t max_mb_per_rpc_write_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
+{
+	return max_mb_per_rpc_show(kobj, attr, buf,
+				   &max_mb_per_rpc_write_show_callback);
+}
+EXPORT_SYMBOL(max_mb_per_rpc_write_show);
+
+static void max_mb_per_rpc_write_store_callback(u64 val, struct client_obd *cli)
+{
+	cli->cl_max_pages_per_rpc_write = val;
+	client_adjust_max_dirty(cli);
+}
+
+ssize_t max_mb_per_rpc_write_store(struct kobject *kobj, struct attribute *attr,
+				   const char *buffer, size_t count)
+{
+	return max_rpc_store(kobj, attr, buffer, count,
+			     &max_mb_per_rpc_write_store_callback, false);
+}
+EXPORT_SYMBOL(max_mb_per_rpc_write_store);
 
 ssize_t short_io_bytes_show(struct kobject *kobj, struct attribute *attr,
 			    char *buf)

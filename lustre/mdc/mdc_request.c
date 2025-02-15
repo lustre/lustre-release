@@ -1387,7 +1387,7 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	gfp_t gfp;
 
 	ENTRY;
-	max_pages = rp->rp_exp->exp_obd->u.cli.cl_max_pages_per_rpc;
+	max_pages = rp->rp_exp->exp_obd->u.cli.cl_max_pages_per_rpc_read;
 	inode = op_data->op_data;
 	fid = &op_data->op_fid1;
 	LASSERT(inode != NULL);

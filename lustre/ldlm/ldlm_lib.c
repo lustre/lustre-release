@@ -480,7 +480,8 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	 * Set it to possible maximum size. It may be reduced by ocd_brw_size
 	 * from OFD after connecting.
 	 */
-	cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
+	cli->cl_max_pages_per_rpc_read = PTLRPC_MAX_BRW_PAGES;
+	cli->cl_max_pages_per_rpc_write = PTLRPC_MAX_BRW_PAGES;
 
 	cli->cl_max_short_io_bytes = OBD_DEF_SHORT_IO_BYTES;
 

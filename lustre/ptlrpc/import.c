@@ -913,16 +913,23 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 						  cli->cl_supp_cksum_types,
 						  cli->cl_preferred_cksum_type);
 
-	if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
-		cli->cl_max_pages_per_rpc =
+	if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
+		cli->cl_max_pages_per_rpc_write =
 			min(ocd->ocd_brw_size >> PAGE_SHIFT,
-			    cli->cl_max_pages_per_rpc);
-	else if (imp->imp_connect_op == MDS_CONNECT ||
-		 imp->imp_connect_op == MGS_CONNECT)
-		cli->cl_max_pages_per_rpc = 1;
+			    cli->cl_max_pages_per_rpc_write);
+		cli->cl_max_pages_per_rpc_read =
+			min(ocd->ocd_brw_size >> PAGE_SHIFT,
+			    cli->cl_max_pages_per_rpc_read);
+	} else if (imp->imp_connect_op == MDS_CONNECT ||
+		   imp->imp_connect_op == MGS_CONNECT) {
+		cli->cl_max_pages_per_rpc_write = 1;
+		cli->cl_max_pages_per_rpc_read = 1;
+	}
 
-	LASSERT((cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES) &&
-		(cli->cl_max_pages_per_rpc > 0));
+	LASSERT((cli->cl_max_pages_per_rpc_write <= PTLRPC_MAX_BRW_PAGES) &&
+		(cli->cl_max_pages_per_rpc_write > 0));
+	LASSERT((cli->cl_max_pages_per_rpc_read <= PTLRPC_MAX_BRW_PAGES) &&
+		(cli->cl_max_pages_per_rpc_read > 0));
 
 	client_adjust_max_dirty(cli);
 

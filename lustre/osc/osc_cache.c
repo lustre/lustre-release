@@ -724,7 +724,7 @@ static struct osc_extent *osc_extent_find(const struct lu_env *env,
 	chunk      = index >> ppc_bits;
 
 	/* align end to RPC edge. */
-	max_pages = cli->cl_max_pages_per_rpc;
+	max_pages = cli->cl_max_pages_per_rpc_write;
 	if ((max_pages & ~chunk_mask) != 0) {
 		CERROR("max_pages: %#x chunkbits: %u chunk_mask: %#lx\n",
 		       max_pages, cli->cl_chunkbits, chunk_mask);
@@ -1299,7 +1299,7 @@ static void __osc_extent_tree_dump(int mask, struct osc_object *obj,
 		return;
 
 	CDEBUG(mask, "Dump object %p extents at %s:%d, mppr: %u.\n",
-	       obj, func, line, osc_cli(obj)->cl_max_pages_per_rpc);
+	       obj, func, line, osc_cli(obj)->cl_max_pages_per_rpc_write);
 
 	/* osc_object_lock(obj); */
 	cnt = 1;
@@ -1930,7 +1930,7 @@ struct extent_rpc_data {
 {							\
 	.erd_rpc_list	= (rpclist),			\
 	.erd_page_count	= 0,				\
-	.erd_max_pages	= (cli)->cl_max_pages_per_rpc,	\
+	.erd_max_pages	= (cli)->cl_max_pages_per_rpc_write,	\
 	.erd_max_chunks	= osc_max_write_chunks(cli),	\
 	.erd_max_extents = 256,				\
 	.erd_io_slots	= 0,				\
@@ -1942,7 +1942,7 @@ struct extent_rpc_data {
 {							\
 	.erd_rpc_list	= (rpclist),			\
 	.erd_page_count	= 0,				\
-	.erd_max_pages	= (cli)->cl_max_pages_per_rpc,	\
+	.erd_max_pages	= (cli)->cl_max_pages_per_rpc_read,	\
 	.erd_max_chunks	= UINT_MAX,			\
 	.erd_max_extents = UINT_MAX,			\
 	.erd_io_slots	= 0,				\
@@ -2705,7 +2705,8 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 	struct osc_page *opg;
 	pgoff_t cdp_index = cdp->cdp_osc_off >> PAGE_SHIFT;
 	int page_count = to_page - from_page + 1;
-	int mppr = cli->cl_max_pages_per_rpc;
+	int mppr = brw_flags & OBD_BRW_READ ? cli->cl_max_pages_per_rpc_read :
+					      cli->cl_max_pages_per_rpc_write;
 	pgoff_t start = CL_PAGE_EOF;
 	bool can_merge = true;
 	enum cl_req_type crt;
@@ -2832,15 +2833,17 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 			 int brw_flags)
 {
 	struct osc_io *oio = osc_env_io(env);
-	struct client_obd     *cli = osc_cli(obj);
-	struct osc_extent     *ext;
+	struct client_obd *cli = osc_cli(obj);
+	struct osc_extent *ext;
 	struct osc_async_page *oap;
-	int     page_count = 0;
-	int     mppr       = cli->cl_max_pages_per_rpc;
-	bool	can_merge   = true;
-	pgoff_t start      = CL_PAGE_EOF;
-	pgoff_t end        = 0;
+	int page_count = 0;
+	int mppr = brw_flags & OBD_BRW_READ ? cli->cl_max_pages_per_rpc_read :
+					      cli->cl_max_pages_per_rpc_write;
+	bool can_merge = true;
+	pgoff_t start = CL_PAGE_EOF;
+	pgoff_t end = 0;
 	enum cl_req_type crt;
+
 	ENTRY;
 
 	if (brw_flags & OBD_BRW_READ)

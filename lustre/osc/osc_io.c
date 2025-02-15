@@ -79,7 +79,7 @@ static int osc_io_read_ahead_prep(const struct lu_env *env,
 			ldlm_lock_decref(&lockh, dlmlock->l_req_mode);
 		}
 
-		ra->cra_rpc_pages = osc_cli(osc)->cl_max_pages_per_rpc;
+		ra->cra_rpc_pages = osc_cli(osc)->cl_max_pages_per_rpc_read;
 		lock_end_idx = dlmlock->l_policy_data.l_extent.end >> PAGE_SHIFT;
 		/* restrict RA to lock end or EOF */
 		ra->cra_end_idx = min_t(pgoff_t, lock_end_idx,
@@ -129,7 +129,8 @@ int osc_io_submit(const struct lu_env *env, struct cl_io *io,
 
 	osc = cl2osc(ios->cis_obj);
 	cli = osc_cli(osc);
-	max_pages = cli->cl_max_pages_per_rpc;
+	max_pages = crt == CRT_READ ? cli->cl_max_pages_per_rpc_read :
+				      cli->cl_max_pages_per_rpc_write;
 	ppc_bits = cli->cl_chunkbits - PAGE_SHIFT;
 	ppc = 1 << ppc_bits;
 
@@ -251,7 +252,9 @@ int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	LIST_HEAD(list);
 	/* pages per chunk bits */
 	unsigned int ppc_bits = cli->cl_chunkbits - PAGE_SHIFT;
-	unsigned int max_pages = cli->cl_max_pages_per_rpc;
+	unsigned int max_pages = crt == CRT_READ ?
+				 cli->cl_max_pages_per_rpc_read :
+				 cli->cl_max_pages_per_rpc_write;
 	unsigned int ppc = 1 << ppc_bits;
 	unsigned int total_queued = 0;
 	unsigned int queued = 0;

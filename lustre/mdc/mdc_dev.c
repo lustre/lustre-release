@@ -1173,7 +1173,7 @@ static int mdc_io_read_ahead_prep(const struct lu_env *env,
 		ldlm_lock_decref(&lockh, dlmlock->l_req_mode);
 	}
 
-	ra->cra_rpc_pages = osc_cli(osc)->cl_max_pages_per_rpc;
+	ra->cra_rpc_pages = osc_cli(osc)->cl_max_pages_per_rpc_read;
 	ra->cra_end_idx = CL_PAGE_EOF;
 	ra->cra_release = osc_read_ahead_release;
 	ra->cra_dlmlock = dlmlock;
