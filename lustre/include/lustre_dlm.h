@@ -344,7 +344,7 @@ struct ldlm_ns_bucket {
 	 */
 	int			    nsb_reclaim_start;
 	/* counter of entries in this bucket */
-	atomic_t		nsb_count;
+	atomic_t		    nsb_count;
 };
 
 enum {
@@ -404,8 +404,6 @@ struct ldlm_namespace {
 
 	/** Resource hash table for namespace. */
 	struct cfs_hash		*ns_rs_hash;
-	struct ldlm_ns_bucket	*ns_rs_buckets;
-	unsigned int		ns_bucket_bits;
 
 	/** serialize */
 	spinlock_t		ns_lock;

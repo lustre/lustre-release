@@ -235,12 +235,17 @@ static ssize_t resource_count_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
-	__u64			res = 0;
-	int			i;
+	u64 res = 0;
+	int pos;
+	struct ldlm_ns_bucket *nsb;
+	struct cfs_hash_bd bd;
 
 	/* result is not strictly consistant */
-	for (i = 0; i < (1 << ns->ns_bucket_bits); i++)
-		res += atomic_read(&ns->ns_rs_buckets[i].nsb_count);
+	cfs_hash_for_each_bucket(ns->ns_rs_hash, &bd, pos) {
+		nsb = cfs_hash_bd_extra_get(ns->ns_rs_hash, &bd);
+		res += atomic_read(&nsb->nsb_count);
+	}
+
 	return sprintf(buf, "%lld\n", res);
 }
 LUSTRE_RO_ATTR(resource_count);
@@ -799,29 +804,6 @@ static unsigned int ldlm_res_hop_hash(struct cfs_hash *hs,
 	return val & ((1UL << bits) - 1);
 }
 
-static unsigned int ldlm_res_hop_fid_hash(const struct ldlm_res_id *id,
-					  const unsigned int bits)
-{
-	struct lu_fid       fid;
-	__u32               hash;
-	__u32               val;
-
-	fid.f_seq = id->name[LUSTRE_RES_ID_SEQ_OFF];
-	fid.f_oid = (__u32)id->name[LUSTRE_RES_ID_VER_OID_OFF];
-	fid.f_ver = (__u32)(id->name[LUSTRE_RES_ID_VER_OID_OFF] >> 32);
-
-	hash = fid_flatten32(&fid);
-	hash += (hash >> 4) + (hash << 12); /* mixing oid and seq */
-
-	if (id->name[LUSTRE_RES_ID_HSH_OFF] != 0)
-		val = id->name[LUSTRE_RES_ID_HSH_OFF];
-	else
-		val = fid_oid(&fid);
-
-	hash += (val >> 5) + (val << 11);
-	return cfs_hash_32(hash, bits);
-}
-
 static void *ldlm_res_hop_key(struct hlist_node *hnode)
 {
 	struct ldlm_resource   *res;
@@ -912,8 +894,11 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 					  enum ldlm_ns_type ns_type)
 {
 	struct ldlm_namespace *ns = NULL;
+	struct ldlm_ns_bucket *nsb;
 	int idx;
 	int rc;
+	struct cfs_hash_bd bd;
+	int pos;
 
 	ENTRY;
 	LASSERT(obd != NULL);
@@ -940,7 +925,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 					 ldlm_ns_hash_defs[ns_type].nsd_all_bits,
 					 ldlm_ns_hash_defs[ns_type].nsd_all_bits,
 					 ldlm_ns_hash_defs[ns_type].nsd_bkt_bits,
-					 0,
+					 sizeof(*nsb),
 					 CFS_HASH_MIN_THETA,
 					 CFS_HASH_MAX_THETA,
 					 &ldlm_ns_hash_ops,
@@ -951,16 +936,8 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	if (!ns->ns_rs_hash)
 		GOTO(out_ns, rc = -ENOMEM);
 
-	ns->ns_bucket_bits = ldlm_ns_hash_defs[ns_type].nsd_all_bits -
-			     ldlm_ns_hash_defs[ns_type].nsd_bkt_bits;
-
-	OBD_ALLOC_PTR_ARRAY_LARGE(ns->ns_rs_buckets, 1 << ns->ns_bucket_bits);
-	if (!ns->ns_rs_buckets)
-		GOTO(out_hash, rc = -ENOMEM);
-
-	for (idx = 0; idx < (1 << ns->ns_bucket_bits); idx++) {
-		struct ldlm_ns_bucket *nsb = &ns->ns_rs_buckets[idx];
-
+	cfs_hash_for_each_bucket(ns->ns_rs_hash, &bd, pos) {
+		nsb = cfs_hash_bd_extra_get(ns->ns_rs_hash, &bd);
 		at_init(&nsb->nsb_at_estimate, obd_get_ldlm_enqueue_min(obd), 0);
 		nsb->nsb_namespace = ns;
 		nsb->nsb_reclaim_start = 0;
@@ -1028,7 +1005,6 @@ out_sysfs:
 	ldlm_namespace_sysfs_unregister(ns);
 	ldlm_namespace_cleanup(ns, 0);
 out_hash:
-	OBD_FREE_PTR_ARRAY_LARGE(ns->ns_rs_buckets, 1 << ns->ns_bucket_bits);
 	kfree(ns->ns_name);
 	cfs_hash_putref(ns->ns_rs_hash);
 out_ns:
@@ -1297,7 +1273,6 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 	ldlm_namespace_debugfs_unregister(ns);
 	ldlm_namespace_sysfs_unregister(ns);
 	cfs_hash_putref(ns->ns_rs_hash);
-	OBD_FREE_PTR_ARRAY_LARGE(ns->ns_rs_buckets, 1 << ns->ns_bucket_bits);
 	kfree(ns->ns_name);
 	/* Namespace \a ns should be not on list at this time, otherwise
 	 * this will cause issues related to using freed \a ns in poold
@@ -1527,7 +1502,6 @@ ldlm_resource_get(struct ldlm_namespace *ns, const struct ldlm_res_id *name,
 	struct cfs_hash_bd		bd;
 	__u64			version;
 	int			ns_refcount = 0;
-	int hash;
 
 	LASSERT(ns != NULL);
 	LASSERT(ns->ns_rs_hash != NULL);
@@ -1552,12 +1526,11 @@ ldlm_resource_get(struct ldlm_namespace *ns, const struct ldlm_res_id *name,
 	if (res == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	hash = ldlm_res_hop_fid_hash(name, ns->ns_bucket_bits);
-	res->lr_ns_bucket = &ns->ns_rs_buckets[hash];
 	res->lr_name = *name;
 	res->lr_type = type;
 
 	cfs_hash_bd_lock(ns->ns_rs_hash, &bd, 1);
+	res->lr_ns_bucket = cfs_hash_bd_extra_get(ns->ns_rs_hash, &bd);
 	hnode = (version == cfs_hash_bd_version_get(&bd)) ? NULL :
 		cfs_hash_bd_lookup_locked(ns->ns_rs_hash, &bd, (void *)name);
 

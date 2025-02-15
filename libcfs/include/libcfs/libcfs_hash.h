@@ -550,6 +550,7 @@ cfs_hash_bd_index_set(struct cfs_hash *hs, unsigned int index,
 static inline void *
 cfs_hash_bd_extra_get(struct cfs_hash *hs, struct cfs_hash_bd *bd)
 {
+	LASSERT(hs->hs_extra_bytes);
 	return (void *)bd->bd_bucket +
 		cfs_hash_bkt_size(hs) - hs->hs_extra_bytes;
 }
