@@ -885,6 +885,8 @@ static int proc_lnet_portal_rotor(const struct ctl_table *table,
 		return rc;
 	}
 
+	if (nob > USHRT_MAX)
+		return -E2BIG;
 	buf = memdup_user_nul(buffer, nob);
 	if (IS_ERR(buf))
 		return PTR_ERR(buf);

@@ -111,6 +111,8 @@ static int proc_dobitmasks(const struct ctl_table *table,
 						      tmpstr + pos, NULL);
 		}
 	} else {
+		if (nob > USHRT_MAX)
+			return -E2BIG;
 		tmpstr = memdup_user_nul(buffer, nob);
 		if (IS_ERR(tmpstr))
 			return PTR_ERR(tmpstr);
@@ -182,12 +184,13 @@ static int proc_fail_loc(const struct ctl_table *table,
 	}
 
 	if (write) {
-		char *kbuf = memdup_user_nul(buffer, *lenp);
+		char kbuf[sizeof(cfs_fail_loc) * 4] = { '\0' };
 
-		if (IS_ERR(kbuf))
-			return PTR_ERR(kbuf);
+		if (*lenp > sizeof(kbuf))
+			return -E2BIG;
+		if (copy_from_user(kbuf, buffer, *lenp))
+			return -EFAULT;
 		rc = kstrtoul(kbuf, 0, &cfs_fail_loc);
-		kfree(kbuf);
 		*ppos += *lenp;
 	} else {
 		char kbuf[64/3+3];
@@ -249,14 +252,16 @@ int debugfs_doint(const struct ctl_table *table, int write,
 	}
 
 	if (write) {
-		char *kbuf = memdup_user_nul(buffer, *lenp);
 		int val;
+		char kbuf[sizeof(val) * 4] = { '\0' };
 
-		if (IS_ERR(kbuf))
-			return PTR_ERR(kbuf);
+		if (*lenp > sizeof(kbuf))
+			return -E2BIG;
+
+		if (copy_from_user(kbuf, buffer, *lenp))
+			return -EFAULT;
 
 		rc = kstrtoint(kbuf, 0, &val);
-		kfree(kbuf);
 		if (!rc) {
 			if (table->extra1 && val < *(int *)table->extra1)
 				val = *(int *)table->extra1;
@@ -292,14 +297,16 @@ static int debugfs_dou64(const struct ctl_table *table, int write,
 	}
 
 	if (write) {
-		char *kbuf = memdup_user_nul(buffer, *lenp);
 		unsigned long long val;
+		char kbuf[sizeof(val) * 4] = { '\0' };
 
-		if (IS_ERR(kbuf))
-			return PTR_ERR(kbuf);
+		if (*lenp > sizeof(kbuf))
+			return -E2BIG;
+
+		if (copy_from_user(kbuf, buffer, *lenp))
+			return -EFAULT;
 
 		rc = kstrtoull(kbuf, 0, &val);
-		kfree(kbuf);
 		if (!rc)
 			*(u64 *)table->data = val;
 		*ppos += *lenp;

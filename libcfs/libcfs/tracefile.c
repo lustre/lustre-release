@@ -1019,6 +1019,8 @@ int cfs_trace_dump_debug_buffer_usrstr(void __user *usr_str, int usr_str_nob)
 	char *path;
 	int rc;
 
+	if (usr_str_nob > PATH_MAX)
+		return -E2BIG;
 	str = memdup_user_nul(usr_str, usr_str_nob);
 	if (IS_ERR(str))
 		return PTR_ERR(str);
@@ -1077,6 +1079,8 @@ int cfs_trace_daemon_command_usrstr(void __user *usr_str, int usr_str_nob)
 	char *str;
 	int   rc;
 
+	if (usr_str_nob > USHRT_MAX)
+		return -E2BIG;
 	str = memdup_user_nul(usr_str, usr_str_nob);
 	if (IS_ERR(str))
 		return PTR_ERR(str);
