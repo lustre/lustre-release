@@ -60,9 +60,19 @@ static int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
 }
 
 /**
+ * cl_ocd_update() - upcall callback hook for llite clients
+ * @host: obd observer
+ * @watched: obd being observed
+ * @ev: Events that can come through obd_notify()
+ * @owner: Private data if any
+ *
  * This function is used as an upcall-callback hooked llite clients
  * into obd_notify() listeners chain to handle notifications about
- * change of import connect_flags. See lustre_common_fill_super().
+ * change of import connect_flags (OBD_CONNECT_* under lustre_idl.h).
+ *
+ * Return:
+ * * %0: Success
+ * * %-ERRNO: Failure
  */
 int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
 		  enum obd_notify_event ev, void *owner)

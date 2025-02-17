@@ -34,16 +34,14 @@
 #include "llite_internal.h"
 #include "vvp_internal.h"
 
-/**
- * An `emergency' environment used by cl_inode_fini() when cl_env_get()
+/* An 'emergency' environment used by cl_inode_fini() when cl_env_get()
  * fails. Access to this environment is serialized by cl_inode_fini_guard
  * mutex.
  */
 struct lu_env *cl_inode_fini_env;
 __u16 cl_inode_fini_refcheck;
 
-/**
- * A mutex serializing calls to slp_inode_fini() under extreme memory
+/* A mutex serializing calls to slp_inode_fini() under extreme memory
  * pressure, when environments cannot be allocated.
  */
 static DEFINE_MUTEX(cl_inode_fini_guard);
@@ -103,13 +101,17 @@ again:
 }
 
 /**
- * Initialize or update CLIO structures for regular files when new
- * meta-data arrives from the server.
+ * cl_file_inode_init() - Initialize or update CLIO structures for regular
+ * files when new meta-data arrives from the server.
+ * @inode: regular file inode
+ * @md: new file metadata from MDS
  *
- * \param inode regular file inode
- * \param md    new file metadata from MDS
  * - allocates cl_object if necessary,
  * - updated layout, if object was already here.
+ *
+ * Return:
+ * * %0: Success
+ * * %-ERRNO: Failure
  */
 int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 {
@@ -182,7 +184,7 @@ out:
 	return result;
 }
 
-/**
+/*
  * Wait for others drop their references of the object at first, then we drop
  * the last one, which will lead to the object be destroyed immediately.
  * Must be called after cl_object_kill() against this object.
@@ -245,11 +247,17 @@ void cl_inode_fini(struct inode *inode)
 }
 
 /**
- * build inode number from passed @fid.
+ * cl_fid_build_ino() - build inode number from passed @fid.
+ * @fid: FID(Unique File Identifier)
+ * @api32: 1 for 32bit otherwise it is 64bit
  *
  * For 32-bit systems or syscalls limit the inode number to a 32-bit value
  * to avoid EOVERFLOW errors.  This will inevitably result in inode number
  * collisions, but fid_flatten32() tries hard to avoid this if possible.
+ *
+ * Return:
+ * * map FID(Unique File Identifier) to 32bit for inode on 32bit systems or
+ * map FID to 64bit for inode on 32bit systems
  */
 __u64 cl_fid_build_ino(const struct lu_fid *fid, int api32)
 {
@@ -260,8 +268,15 @@ __u64 cl_fid_build_ino(const struct lu_fid *fid, int api32)
 }
 
 /**
+ * cl_fid_build_gen() - build inode generation from passed @fid.
+ * @fid: Unique File Identifier
+ *
  * build inode generation from passed @fid.  If our FID overflows the 32-bit
  * inode number then return a non-zero generation to distinguish them.
+ *
+ * Return:
+ * * >0 generation number which will get incremented/changed on @fid reuse
+ *
  */
 __u32 cl_fid_build_gen(const struct lu_fid *fid)
 {
