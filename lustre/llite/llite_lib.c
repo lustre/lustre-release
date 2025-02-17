@@ -60,7 +60,7 @@ struct kmem_cache *ll_file_data_slab;
 #define log2(n) ffz(~(n))
 #endif
 
-/**
+/*
  * If there is only one number of core visible to Lustre,
  * async readahead will be disabled, to avoid massive over
  * subscription, we use 1/2 of active cores as default max
@@ -870,15 +870,15 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 	RETURN(rc);
 }
 
-/* Get the value of the default_easize parameter.
+/**
+ * ll_get_default_mdsize() - Get the value of the default_easize parameter.
+ * see client_obd::cl_default_mds_easize
+ * @sbi: superblock info for this filesystem
+ * @lmmsize: pointer to storage location for value
  *
- * \see client_obd::cl_default_mds_easize
- *
- * \param[in] sbi	superblock info for this filesystem
- * \param[out] lmmsize	pointer to storage location for value
- *
- * \retval 0		on success
- * \retval negative	negated errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative negated errno on failure
  */
 int ll_get_default_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 {
@@ -893,16 +893,15 @@ int ll_get_default_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 	RETURN(rc);
 }
 
-/*
- * Set the default_easize parameter to the given value.
+/**
+ * ll_set_default_mdsize() - Set the default_easize parameter to the given
+ * value. see client_obd::cl_default_mds_easize
+ * @sbi: superblock info for this filesystem
+ * @lmmsize: the size to set
  *
- * \see client_obd::cl_default_mds_easize
- *
- * \param[in] sbi	superblock info for this filesystem
- * \param[in] lmmsize	the size to set
- *
- * \retval 0		on success
- * \retval negative	negated errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative negated errno on failure
  */
 int ll_set_default_mdsize(struct ll_sb_info *sbi, int lmmsize)
 {
@@ -2025,7 +2024,13 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 	RETURN(rc);
 }
 
-/* Zero portion of page that is part of @inode.
+/**
+ * ll_io_zero_page() - Zero portion of page that is part of @inode.
+ * @inode: inode in operation
+ * @index: page index
+ * @offset: offset in page to start zero from
+ * @len: len to zero
+ *
  * This implies, if necessary:
  * - taking cl_lock on range corresponding to concerned page
  * - grabbing vm page
@@ -2035,13 +2040,9 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
  * - proceeding to cl_page flush
  * - releasing cl_lock
  *
- * \param[in] inode	inode
- * \param[in] index	page index
- * \param[in] offset	offset in page to start zero from
- * \param[in] len	len to zero
- *
- * \retval 0		on success
- * \retval negative	errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
  */
 static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 			   unsigned int len)
@@ -2187,17 +2188,19 @@ putenv:
 	RETURN(rc);
 }
 
-/* Get reference file from volatile file name.
+/**
+ * volatile_ref_file() - Get reference file from volatile file name.
+ * @volatile_name: volatile file name
+ * @volatile_len: volatile file name length
+ * @ref_file: pointer to struct file of reference file
+ *
  * Volatile file name may look like:
  * <parent>/LUSTRE_VOLATILE_HDR:<mdt_index>:<random>:fd=<fd>
  * where fd is opened descriptor of reference file.
  *
- * \param[in] volatile_name	volatile file name
- * \param[in] volatile_len	volatile file name length
- * \param[out] ref_file		pointer to struct file of reference file
- *
- * \retval 0		on success
- * \retval negative	errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
  */
 int volatile_ref_file(const char *volatile_name, int volatile_len,
 		      struct file **ref_file)
@@ -3026,15 +3029,15 @@ enum lsm_sem_class {
 	LSM_SEM_CHILD,
 };
 
-/* Update directory depth and default LMV
+/**
+ * ll_update_dir_depth_dmv() - Update directory depth and default LMV
+ * @dir: parent directory inode
+ * @de: dentry
  *
  * Update directory depth to ROOT and inherit default LMV from parent if
  * parent's default LMV is inheritable. The default LMV set with command
  * "lfs setdirstripe -D ..." is stored on MDT, while the inherited default LMV
  * is generated at runtime on client side.
- *
- * \param[in]	dir	parent directory inode
- * \param[in]	de	dentry
  */
 void ll_update_dir_depth_dmv(struct inode *dir, struct dentry *de)
 {
@@ -3570,7 +3573,10 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
 	return 0;
 }
 
-/* Cleanup the open handle that is cached on MDT-side.
+/**
+ * ll_open_cleanup() - Cleanup the open handle that is cached on MDT-side.
+ * @sb: super block for this file-system
+ * @pill: pointer to the original open request message
  *
  * For open case, the client side open handling thread may hit error
  * after the MDT grant the open. Under such case, the client should
@@ -3581,8 +3587,6 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
  * holds the reference on such file/object, then it will block the
  * subsequent threads that want to locate such object via FID.
  *
- * \param[in] sb	super block for this file-system
- * \param[in] open_req	pointer to the original open request
  */
 void ll_open_cleanup(struct super_block *sb, struct req_capsule *pill)
 {
@@ -4038,9 +4042,7 @@ int ll_show_options(struct seq_file *seq, struct dentry *dentry)
 	RETURN(0);
 }
 
-/*
- * Get obd name by cmd, and copy out to user space
- */
+/* Get obd name by cmd, and copy out to user space */
 int ll_get_obd_name(struct inode *inode, unsigned int cmd, void __user *uarg)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -4223,15 +4225,16 @@ void ll_compute_rootsquash_state(struct ll_sb_info *sbi)
 }
 
 /*
- * Parse linkea content to extract information about a given hardlink
+ * ll_linkea_decode() - Parse linkea content to extract information about a
+ * given hardlink
+ * @ldata: Initialized linkea data
+ * @linkno: Link identifier
+ * @parent_fid: The entry's parent FID
+ * @ln: Entry name destination buffer
  *
- * \param[in]   ldata      - Initialized linkea data
- * \param[in]   linkno     - Link identifier
- * \param[out]  parent_fid - The entry's parent FID
- * \param[out]  ln         - Entry name destination buffer
- *
- * \retval 0 on success
- * \retval Appropriate negative error code on failure
+ * Return:
+ * * %0 on success
+ * * Appropriate negative error code on failure
  */
 static int ll_linkea_decode(struct linkea_data *ldata, unsigned int linkno,
 			    struct lu_fid *parent_fid, struct lu_name *ln)
@@ -4265,18 +4268,18 @@ static int ll_linkea_decode(struct linkea_data *ldata, unsigned int linkno,
 	RETURN(0);
 }
 
-/*
- * Get parent FID and name of an identified link. Operation is performed for
- * a given link number, letting the caller iterate over linkno to list one or
- * all links of an entry.
+/**
+ * ll_getparent() - Get parent FID and name of an identified link.
+ * Operation is performed for a given link number, letting the caller
+ * iterate over linkno to list one or all links of an entry.
+ * @file: File descriptor against which to perform the operation
+ * @arg: User-filled structure containing the linkno to operate on and
+ * the available size. It is eventually filled with the requested information
+ * or left untouched on error
  *
- * \param[in]     file - File descriptor against which to perform the operation
- * \param[in,out] arg  - User-filled structure containing the linkno to operate
- *                       on and the available size. It is eventually filled with
- *                       the requested information or left untouched on error
- *
- * \retval - 0 on success
- * \retval - Appropriate negative error code on failure
+ * Return:
+ * * %0 on success
+ * * Appropriate negative error code on failure
  */
 int ll_getparent(struct file *file, struct getparent __user *arg)
 {

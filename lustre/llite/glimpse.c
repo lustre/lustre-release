@@ -36,11 +36,13 @@ static const struct cl_lock_descr whole_file = {
 	.cld_mode  = CLM_READ
 };
 
-/*
- * Check whether file has possible unwritten pages.
+/**
+ * dirty_cnt() - Check whether file has possible unwritten pages.
+ * @inode: inode being checked for dirtyness
  *
- * \retval 1    file is mmap-ed or has dirty pages
- *         0    otherwise
+ * Return:
+ * * %1 file is mmap-ed or has dirty pages
+ * * %0 otherwise
  */
 blkcnt_t dirty_cnt(struct inode *inode)
 {
@@ -118,17 +120,17 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 }
 
 /**
- * Get an IO environment for special operations such as glimpse locks and
- * manually requested locks (ladvise lockahead)
+ * cl_io_get() - Get an IO environment for special operations such as glimpse
+ * locks and manually requested locks (ladvise lockahead)
+ * @inode: inode the operation is being performed on
+ * @envout: thread specific execution environment
+ * @ioout: client io description
+ * @refcheck: reference check
  *
- * \param[in]  inode	inode the operation is being performed on
- * \param[out] envout	thread specific execution environment
- * \param[out] ioout	client io description
- * \param[out] refcheck	reference check
- *
- * \retval 1		on success
- * \retval 0		not a regular file, cannot get environment
- * \retval negative	negative errno on error
+ * Return:
+ * * %1 on success
+ * * %0 not a regular file, cannot get environment
+ * * %negative negative errno on error
  */
 int cl_io_get(struct inode *inode, struct lu_env **envout,
 	      struct cl_io **ioout, u16 *refcheck)
