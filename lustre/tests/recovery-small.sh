@@ -3752,19 +3752,16 @@ test_160() {
 	mds_evict_client
 	client_reconnect
 
-	local step=3
-	for ((i = 1; i <= $((timeout / step + 1)); i++)); do
-		do_facet mds1 $LCTL get_param osp.$FSNAME-OST0000-osc-MDT0000.destroys_in_flight
-		sleep $step
-	done
-	local rc=$(do_facet mds1 $LCTL get_param -n osp.$FSNAME-OST0000-osc-MDT0000.destroys_in_flight)
+	wait_update_facet_cond --verbose mds1 \
+		"$LCTL get_param -n osp.$FSNAME-OST0000-osc-MDT0000.destroys_in_flight" \
+		"-le" "2" $((timeout * 3))
+	local rc=$?
 	do_facet mds1 $LCTL get_param osp.$FSNAME-OST0000-osc-MDT0000.error_list
-	echo inflight $rc
 	for ((i = 1; i <= threads; i++)); do
 		kill -USR1 ${pids[$i]} && wait ${pids[$i]}
 	done
 
-	(( $rc <= 2 )) || error "destroying OST objects are blocked $rc"
+	(( rc == 0 )) || error "destroying OST objects are blocked"
 
 	#without group lock, wait and check if all objects are destroyed
 	sleep $((timeout * 3))
