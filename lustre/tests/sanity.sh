@@ -30569,7 +30569,7 @@ generate_uneven_mdts() {
 	if check_fallocate_supported mds$((min_index + 1)); then
 		cmd="fallocate -l 128K "
 	else
-		cmd="dd if=/dev/zero bs=128K count=1 of="
+		cmd="$DD bs=128K count=1 of="
 	fi
 
 	echo "using cmd $cmd"

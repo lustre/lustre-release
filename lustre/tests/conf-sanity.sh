@@ -30,7 +30,6 @@ fi
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="45 69 106 111 114"
 
 if [[ "$mds1_FSTYPE" == "zfs" ]]; then
-	always_except LU-18652 32b 32c 32e 32h
 	always_except LU-18652 108a 112a 112b 113 117 119 121 122a
 	always_except LU-18652 123aa 123ab 123ac 123ad 123ae 123af 123ag 123ah 123ahi
 	always_except LU-18652 123F 123G 123H 126 129 132 133 135 136 137 150 152 153a 153b 153c 155 802a
@@ -2113,8 +2112,8 @@ t32_verify_quota() {
 		"$fsname.quota.ost" ug
 
 	chmod 0777 $mnt
-	runas -u $T32_QID -g $T32_QID dd if=/dev/zero of=$mnt/t32_qf_new \
-		bs=1M count=$((img_blimit / 1024)) oflag=sync && {
+	runas -u $T32_QID -g $T32_QID $DD of=$mnt/t32_qf_new \
+		count=$((img_blimit / 1024)) oflag=sync && {
 		echo "Write succeed, but expect -EDQUOT"
 		return 1
 	}
@@ -2165,9 +2164,8 @@ t32_verify_quota() {
 			return 1
 		}
 
-		runas -u $T32_QID -g $T32_QID \
-			dd if=/dev/zero of=$pool_file_new \
-			bs=1M count=$((img_blimit_pool / 1024)) oflag=sync && {
+		runas -u $T32_QID -g $T32_QID $DD of=$pool_file_new \
+			count=$((img_blimit_pool / 1024)) oflag=sync && {
 			echo "Write $pool_file_new succeed, but expect -EDQUOT"
 			return 1
 		}
