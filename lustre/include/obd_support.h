@@ -708,6 +708,7 @@ extern bool obd_enable_fname_encoding;
 #define OBD_FAIL_OUT_EIO		0x1709
 #define OBD_FAIL_BUT_UPDATE_NET_REP	0x170a
 #define OBD_FAIL_OUT_DROP_DESTROY	0x170b
+#define OBD_FAIL_OUT_DROP_PROJID_SET	0x170c
 
 /* MIGRATE */
 #define OBD_FAIL_MIGRATE_ENTRIES		0x1801

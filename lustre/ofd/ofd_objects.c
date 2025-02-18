@@ -527,7 +527,10 @@ int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 			la->la_valid &= ~LA_UID;
 		if (!(ln->la_mode & S_ISGID))
 			la->la_valid &= ~LA_GID;
-		if (!(ln->la_mode & S_ISVTX))
+		/* LU-16265: also update the PROJID if it's 0 and
+		 * the PROJID of the incoming request isn't 0 */
+		if (!(ln->la_mode & S_ISVTX) &&
+		    (ln->la_projid != 0 || la->la_projid == 0))
 			la->la_valid &= ~LA_PROJID;
 	}
 
@@ -679,6 +682,11 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 
 	if (!ofd_object_exists(fo))
 		GOTO(out, rc = -ENOENT);
+
+
+	if (la->la_valid & LA_PROJID &&
+	    CFS_FAIL_CHECK(OBD_FAIL_OUT_DROP_PROJID_SET))
+		la->la_valid &= ~LA_PROJID;
 
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);

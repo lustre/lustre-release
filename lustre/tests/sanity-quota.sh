@@ -6791,6 +6791,51 @@ test_92()
 }
 run_test 92 "Cannot set inode limit with Quota Pools"
 
+test_93()
+{
+	(( OST1_VERSION >= $(version_code 2.16.52) )) ||
+		skip "Need OST version at least 2.16.52"
+
+	local testfile="$DIR/$tdir/$tfile"
+	local cnt=30
+	local usage
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
+	$DD of=$testfile count=$cnt || error "failed to write $testfile"
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 5
+
+	usage=$(getquota -p $TSTPRJID ${FSNAME}-OST0000 curspace)
+	(( usage == 0 )) || error "usage for $TSTPRJID should be 0"
+
+	#define OBD_FAIL_OUT_DROP_PROJID_SET	0x170c
+	do_facet ost1 $LCTL set_param fail_loc=0x8000170C
+	change_project -p $TSTPRJID $testfile
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 5
+
+	usage=$(getquota -p $TSTPRJID ${FSNAME}-OST0000 curspace)
+	(( usage == 0 )) || error "usage for $TSTPRJID should still be 0"
+
+	$DD of=$testfile conv=notrunc oflag=append count=5 ||
+		error "failed to append $testfile"
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 5
+
+	usage=$(getquota -p $TSTPRJID global curspace)
+	(( usage > (cnt * 1024 * 9 / 10) )) ||
+		error "usage for $TSTPRJID is incorrect: $usage"
+}
+run_test 93 "update projid while client write to OST"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \
