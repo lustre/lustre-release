@@ -670,6 +670,9 @@ void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new)
 	LASSERT(dt != NULL);
 	tdtd = dt2lu_dev(dt)->ld_site->ls_tgt->lut_tdtd;
 
+	/* have a reference so the competing commit thread can't release it*/
+	top_multiple_thandle_get(new);
+
 	spin_lock(&tdtd->tdtd_batchid_lock);
 	list_for_each_entry_reverse(tmt, &tdtd->tdtd_list, tmt_commit_list) {
 		if (new->tmt_batchid > tmt->tmt_batchid) {
@@ -688,7 +691,6 @@ void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new)
 			sub_thandle_register_commit_cb(st, new);
 	}
 
-	top_multiple_thandle_get(new);
 	top_multiple_thandle_dump(new, D_INFO);
 	if (new->tmt_committed && at_head && tdtd->tdtd_commit_task)
 		wake_up_process(tdtd->tdtd_commit_task);
