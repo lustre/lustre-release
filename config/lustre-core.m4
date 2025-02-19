@@ -3045,6 +3045,22 @@ AC_DEFUN([LC_FSCRYPT_DUMMY_CONTEXT_ENABLED], [
 ]) # LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
 
 #
+# LC_HAVE_PRANDOM_HEADER
+#
+# Linux v5.8-2483-gc0842fbc1b18
+#   random32: move the pseudo-random 32-bit definitions to prandom.h
+#
+AC_DEFUN([LC_SRC_HAVE_PRANDOM_HEADER], [
+	LB2_CHECK_LINUX_HEADER_SRC([linux/prandom.h], [-Werror])
+])
+AC_DEFUN([LC_HAVE_PRANDOM_HEADER], [
+	LB2_CHECK_LINUX_HEADER_RESULT([linux/prandom.h], [
+		AC_DEFINE(HAVE_PRANDOM_H, 1,
+			[prandom.h is present])
+	])
+]) # LC_HAVE_PRANDOM_HEADER
+
+#
 # LC_HAVE_KTHREAD_USE_MM
 #
 # kernel 5.8 commit f5678e7f2ac31c270334b936352f0ef2fe7dd2b3
@@ -4975,6 +4991,58 @@ AC_DEFUN([LC_HAVE_PAGE_MAPCOUNT_IS_TYPE], [
 ]) # LC_HAVE_PAGE_MAPCOUNT_IS_TYPE
 
 #
+# LC_HAVE_MODULE_IMPORT_STRING_LITERAL
+#
+# Linux v6.13-rc1-2-gcdd30ebb1b9f
+#   module: Convert symbol namespace to string literal
+#
+AC_DEFUN([LC_SRC_HAVE_MODULE_IMPORT_STRING_LITERAL], [
+	LB2_LINUX_TEST_SRC([module_import_ns_uses_export_symbols], [
+		#include <linux/module.h>
+		#include <crypto/internal/cipher.h>
+
+		MODULE_IMPORT_NS(CRYPTO_INTERNAL);
+		u8 salt[16];
+	],[
+		(void)crypto_cipher_setkey(NULL, salt, sizeof(salt));
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_MODULE_IMPORT_STRING_LITERAL], [
+	LB2_MSG_LINUX_TEST_RESULT([if MODULE_IMPORT_NS() uses export symbols],
+	[module_import_ns_uses_export_symbols], [
+		AC_DEFINE(HAVE_MODULE_IMPORT_USES_EXPORT_SYMBOLS, 1,
+			[MODULE_IMPORT_NS() needs string literal])
+	], [
+		# convert CRYPTO_INTERNAL to a string literal for import
+		AC_DEFINE(CRYPTO_INTERNAL, __stringify(CRYPTO_INTERNAL),
+			[MODULE_IMPORT_NS() needs string literal])
+	])
+]) # LC_HAVE_MODULE_IMPORT_STRING_LITERAL
+
+#
+# LC_NEED_PAGEPRIVATE2
+#
+# Linux v6.12-rc1-5-gfd15ba4cb00a
+#   ceph: Remove call to PagePrivate2()
+#
+AC_DEFUN([LC_SRC_HAVE_PAGEPRIVATE2], [
+	LB2_LINUX_TEST_SRC([folio_test_private_2], [
+		#include <linux/mm.h>
+	],[
+		struct page *page = NULL;
+
+		ClearPagePrivate2(page);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_PAGEPRIVATE2], [
+	LB2_MSG_LINUX_TEST_RESULT([if PagePrivate2() is available],
+	[folio_test_private_2], [
+		AC_DEFINE(HAVE_PAGE_PRIVATE_2, 1,
+			[PagePrivate2() is available])
+	])
+]) # LC_HAVE_PAGEPRIVATE2
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -5167,6 +5235,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_FSCRYPT_DUMMY_CONTEXT_ENABLED
 
 	# 5.8
+	LC_SRC_HAVE_PRANDOM_HEADER
 	LC_SRC_HAVE_KTHREAD_USE_MM
 
 	# 5.9
@@ -5282,6 +5351,10 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_PG_ERROR
 	LC_SRC_HAVE_FOLIO_TEST_MLOCKED
 	LC_SRC_HAVE_PAGE_MAPCOUNT_IS_TYPE
+
+	# 6.13
+	LC_SRC_HAVE_MODULE_IMPORT_STRING_LITERAL
+	LC_SRC_HAVE_PAGEPRIVATE2
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -5489,6 +5562,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
 
 	# 5.8
+	LC_HAVE_PRANDOM_HEADER
 	LC_HAVE_KTHREAD_USE_MM
 
 	# 5.9
@@ -5612,6 +5686,10 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_PG_ERROR
 	LC_HAVE_FOLIO_TEST_MLOCKED
 	LC_HAVE_PAGE_MAPCOUNT_IS_TYPE
+
+	# 6.13
+	LC_HAVE_MODULE_IMPORT_STRING_LITERAL
+	LC_HAVE_PAGEPRIVATE2
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

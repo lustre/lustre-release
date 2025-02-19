@@ -981,6 +981,12 @@ static inline struct page *wbe_folio_page(struct folio *folio)
 #define wbe_folio_page(page)		(page)
 #endif
 
+#ifndef HAVE_PAGE_PRIVATE_2
+#define PagePrivate2(page)	test_bit(PG_private_2, &((page)->flags))
+#define SetPagePrivate2(page)	set_bit(PG_private_2, &((page)->flags))
+#define ClearPagePrivate2(page)	clear_bit(PG_private_2, &((page)->flags))
+#endif
+
 #ifdef HAVE_FOLIO_MAPCOUNT
 /* clone of fs/proc/internal.h:
  *   folio_precise_page_mapcount(struct folio *folio, struct page *page)

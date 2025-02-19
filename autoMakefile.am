@@ -145,7 +145,7 @@ modules: undef.h ldiskfs-sources
 	KBUILD_EXTRA_SYMBOLS="@INT_O2IB_SYMBOLS@ @EXTRA_SYMBOLS@ $(KBUILD_EXTRA_SYMBOLS)" \
 	LDFLAGS= CC="$(CC)" -C $(LINUX_OBJ) \
 	-f $(PWD)/config/Kbuild LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
-	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC)$$(building_out_of_srctree),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
+	LINUXINCLUDE='-I$$(srctree)/include -I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC)$$(building_out_of_srctree),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -I$$(srctree)/arch/$$(SRCARCH)/include/generated -I$$(srctree)/arch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/generated -I$$(srctree)/include/generated/uapi -include $(CONFIG_INCLUDE)' \
 	$(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o \
 	include/config/MARKER $@
 if EXTERNAL_KO2IBLND
@@ -153,7 +153,7 @@ if EXTERNAL_KO2IBLND
 	KBUILD_EXTRA_SYMBOLS="$(PWD)/Module.symvers @EXT_O2IB_SYMBOLS@ @EXTRA_SYMBOLS@" \
 	LDFLAGS= CC="$(CC)" -C $(LINUX_OBJ) \
 	-f $(PWD)/config/Kbuild LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
-	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC)$$(building_out_of_srctree),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
+	LINUXINCLUDE='-I$$(srctree)/include -I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC)$$(building_out_of_srctree),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -I$$(srctree)/arch/$$(SRCARCH)/include/generated -I$$(srctree)/arch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/generated -I$$(srctree)/include/generated/uapi -include $(CONFIG_INCLUDE)' \
 	$(MODULE_TARGET)=$(PWD)/lnet/klnds/o2iblnd -o tmp_include_depends -o scripts -o \
 	include/config/MARKER $@
 endif # EXTERNAL_KO2IBLND
