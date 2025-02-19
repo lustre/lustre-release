@@ -4566,13 +4566,13 @@ run_test 210b "handle broken mirrored lovea (unlink)"
 test_211() {
 	local tf=$DIR/$tfile
 
-	dd if=/dev/zero of=$tf bs=4k count=10 oflag=direct ||
+	dd if=/dev/zero of=$tf bs=$PAGE_SIZE count=10 oflag=direct ||
 		error "error writing initial data to '$tf'"
 
 	$LFS mirror extend -N $tf || error "error extending mirror for '$tf'"
 
-	dd if=/dev/zero of=$tf bs=4k count=1 oflag=direct ||
-		error "error writing 4k to '$tf'"
+	dd if=/dev/zero of=$tf bs=$PAGE_SIZE count=1 oflag=direct ||
+		error "error writing $((PAGE_SIZE/1024))k to '$tf'"
 	echo "size after second write"
 	ls -la $tf
 	md5_1=$(md5sum $tf) || error "error getting first md5sum of '$tf'"
