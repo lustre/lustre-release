@@ -42,7 +42,6 @@ always_except LU-6493  42b
 always_except LU-16515 118c 118d
 always_except LU-8411  407
 always_except LU-18032 119i
-always_except LU-17679 851
 
 if $SHARED_KEY; then
 	always_except LU-14181 64e 64f
@@ -34693,23 +34692,31 @@ test_851() {
 	local report=/tmp/report_test_851_$$
 	local fanotify_prog=monitor_lustrefs
 	local pid
+	local i
 
 	test_mkdir $dir || error "failed to create dir $dir"
 
-	stdbuf -o0 $fanotify_prog $DIR > $report &
-	pid=$!
-
-	sleep 1
-	if ! kill -0 $pid; then
-		error "failed to start $fanoify_prog"
-	fi
-
+	nice -n -10 $fanotify_prog $DIR > $report & pid=$!
+	kill -0 $pid || error "failed to run $fanotify_prog"
+	ps -q $pid -eo pid,ni,comm
 	stack_trap "kill $pid"
 	stack_trap "rm -f $report"
 
+	for i in {1..30}; do
+		if grep Started $report; then
+			break
+		else
+			echo "$fanotify_prog did not start working, wait 1 second for $i times..."
+			sleep 1
+		fi
+	done
+	((i == 30)) && error "$fanotify_prog did not start working in 30 seconds"
+
+	> $report
+
 	echo "1234567890" > $file
-	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 60 ||
-		error "fanotify did not report anything after 60 seconds"
+	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 30 ||
+		error "fanotify did not report anything after 30 seconds when file is created"
 	grep -a -E "open.*:$file:" $report ||
 		error "no open event for writing $file"
 	grep -a -E "write.*:$file:" $report ||
@@ -34719,8 +34726,8 @@ test_851() {
 
 	> $report
 	cat $file
-	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 60 ||
-		error "fanotify did not report anything after 60 seconds"
+	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 30 ||
+		error "fanotify did not report anything after 30 seconds when file is read"
 	grep -a -E "open.*:$file:" $report ||
 		error "no open event for reading $file"
 	grep -a -E "read.*:$file:" $report ||

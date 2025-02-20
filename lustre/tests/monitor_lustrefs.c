@@ -138,12 +138,14 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
+	printf("Started...\n");
+	fflush(stdout);
+
 	while (1) {
 		len = read(fd, (void *)&buf[0], sizeof(buf));
 		if (len < 0 && errno != EAGAIN) {
 			fprintf(stderr,
-				"failed to read from fanotify file descriptor."
-				" %d:%s",
+				"failed to read from fanotify file descriptor. %d:%s\n",
 				errno, strerror(errno));
 			exit(EXIT_FAILURE);
 		}
@@ -154,8 +156,7 @@ int main(int argc, char *argv[])
 		while (FAN_EVENT_OK(metadata, len)) {
 			/* Check run-time and compile-time structures match */
 			if (metadata->vers != FANOTIFY_METADATA_VERSION) {
-				fprintf(stderr, "Mismatch of fanotify "
-					"metadata version.\n");
+				fprintf(stderr, "Mismatch of fanotify metadata version.\n");
 				exit(EXIT_FAILURE);
 			}
 
