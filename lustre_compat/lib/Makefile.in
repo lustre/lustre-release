@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-compat_objs := xarray.o
+compat_objs := xarray.o glob.o
 
 EXTRA_DIST = $(compat_objs:.o=.c)
 

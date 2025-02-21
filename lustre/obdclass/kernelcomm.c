@@ -19,7 +19,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/file.h>
-#include <linux/glob.h>
+#include <lustre_compat/linux/glob.h>
 #include <linux/types.h>
 
 #include <libcfs/linux/linux-net.h>

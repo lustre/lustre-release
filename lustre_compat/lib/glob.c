@@ -1,6 +1,6 @@
 #ifndef HAVE_GLOB
 #include <linux/module.h>
-#include "libcfs/linux/glob.h"
+#include <lustre_compat/linux/glob.h>
 
 /**
  * glob_match - Shell-style pattern matching, like !fnmatch(pat, str, 0)

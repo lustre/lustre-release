@@ -15,7 +15,6 @@ libcfs-linux-objs := linux-prim.o
 libcfs-linux-objs += linux-hash.o
 libcfs-linux-objs += linux-wait.o
 libcfs-linux-objs += generic-radix-tree.o
-libcfs-linux-objs += glob.o
 
 libcfs-compat-objs += $(patsubst %,$(COMPAT)%,$(compat_objs))
 
