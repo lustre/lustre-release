@@ -4987,7 +4987,7 @@ struct mgs_lcfg_fork_data {
 };
 
 static bool contain_valid_fsname(char *buf, const char *fsname,
-				 int buflen, int namelen)
+				 size_t buflen, size_t namelen)
 {
 	if (buflen < namelen)
 		return false;
