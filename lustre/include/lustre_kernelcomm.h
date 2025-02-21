@@ -19,7 +19,7 @@
 #ifndef __LUSTRE_KERNELCOMM_H__
 #define __LUSTRE_KERNELCOMM_H__
 
-#include <linux/generic-radix-tree.h>
+#include <lustre_compat/linux/generic-radix-tree.h>
 #include <net/genetlink.h>
 #include <net/sock.h>
 /* For declarations shared with userspace */

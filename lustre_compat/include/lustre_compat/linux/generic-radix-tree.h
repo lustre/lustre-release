@@ -1,5 +1,5 @@
-#ifndef _LINUX_GENERIC_RADIX_TREE_H
-#define _LINUX_GENERIC_RADIX_TREE_H
+#ifndef _LINUX_GENERIC_RADIX_TREE_LUSTRE_H
+#define _LINUX_GENERIC_RADIX_TREE_LUSTRE_H
 
 /**
  * DOC: Generic radix trees/sparse arrays
@@ -231,5 +231,7 @@ int __genradix_prealloc(struct __genradix *, size_t, gfp_t);
 			_gfp)
 
 
-#endif /* _LINUX_GENERIC_RADIX_TREE_H */
+#else
+#include <linux/generic-radix-tree.h>
 #endif /* ! HAVE_GENRADIX_SUPPORT */
+#endif /* _LINUX_GENERIC_RADIX_TREE_LUSTRE_H */

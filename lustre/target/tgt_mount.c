@@ -19,7 +19,7 @@
 #define D_MOUNT (D_SUPER | D_CONFIG /* | D_WARNING */)
 
 #include <linux/types.h>
-#include <linux/generic-radix-tree.h>
+#include <lustre_compat/linux/generic-radix-tree.h>
 #ifdef HAVE_LINUX_SELINUX_IS_ENABLED
 #include <linux/selinux.h>
 #endif

@@ -4,4 +4,4 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-EXTRA_DIST = xarray.h glob.h
+EXTRA_DIST = xarray.h glob.h generic-radix-tree.h

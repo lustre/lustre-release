@@ -14,7 +14,6 @@ libcfs_dir := $(dir $(lastword $(MAKEFILE_LIST)))
 libcfs-linux-objs := linux-prim.o
 libcfs-linux-objs += linux-hash.o
 libcfs-linux-objs += linux-wait.o
-libcfs-linux-objs += generic-radix-tree.o
 
 libcfs-compat-objs += $(patsubst %,$(COMPAT)%,$(compat_objs))
 

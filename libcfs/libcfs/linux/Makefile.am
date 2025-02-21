@@ -6,5 +6,4 @@
 
 EXTRA_DIST = linux-prim.c \
 	     linux-hash.c \
-	     linux-wait.c \
-	     generic-radix-tree.c
+	     linux-wait.c

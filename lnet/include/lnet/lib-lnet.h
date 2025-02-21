@@ -19,7 +19,7 @@
 #define CFS_FAIL_MATCH_MD_NID		0xe001
 #define CFS_FAIL_DELAY_MSG_FORWARD	0xe002
 
-#include <linux/generic-radix-tree.h>
+#include <lustre_compat/linux/generic-radix-tree.h>
 #include <linux/netdevice.h>
 
 #include <libcfs/libcfs.h>

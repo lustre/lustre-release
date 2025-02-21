@@ -3,7 +3,7 @@
 /* Taken from 5.15 kernel */
 
 #include <linux/export.h>
-#include <linux/generic-radix-tree.h>
+#include <lustre_compat/linux/generic-radix-tree.h>
 #include <linux/gfp.h>
 #include <linux/slab.h>
 #include <linux/kmemleak.h>

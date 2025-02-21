@@ -15,7 +15,7 @@
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
-#include <linux/generic-radix-tree.h>
+#include <lustre_compat/linux/generic-radix-tree.h>
 #include <libcfs/linux/linux-net.h>
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>

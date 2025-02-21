@@ -11,7 +11,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/ctype.h>
-#include <linux/generic-radix-tree.h>
+#include <lustre_compat/linux/generic-radix-tree.h>
 #include <linux/log2.h>
 #include <linux/ktime.h>
 #include <linux/moduleparam.h>
