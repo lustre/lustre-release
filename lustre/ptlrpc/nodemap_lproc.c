@@ -300,7 +300,8 @@ static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 
 	seq_puts(m, "[");
 	if (nodemap->nm_fileset_prim && nodemap->nm_fileset_prim[0] != '\0') {
-		seq_printf(m, "\n { primary:\t%s }", nodemap->nm_fileset_prim);
+		seq_printf(m, "\n { primary:\t%s%s }", nodemap->nm_fileset_prim,
+			   nodemap->nm_fileset_prim_ro ? ", mode: ro" : "");
 		cont = true;
 	}
 
@@ -311,7 +312,8 @@ static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 			seq_puts(m, ",");
 		cont = true;
 		fileset_alt = rb_entry(node, struct lu_fileset_alt, nfa_rb);
-		seq_printf(m, "\n { alternate:\t%s }", fileset_alt->nfa_path);
+		seq_printf(m, "\n { alternate:\t%s%s }", fileset_alt->nfa_path,
+			   fileset_alt->nfa_ro ? ", mode: ro" : "");
 	}
 	up_read(&nodemap->nm_fileset_alt_lock);
 

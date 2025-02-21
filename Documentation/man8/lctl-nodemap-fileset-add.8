@@ -5,7 +5,8 @@ lctl-nodemap_fileset_add \- add a fileset to a nodemap
 .SY "lctl nodemap_fileset_add"
 or
 .SY "lctl nodemap fileset_add"
-.B --alt
+.RB [ --alt ]
+.RB [ --ro ]
 .BI --name " NODEMAP_NAME"
 .BI --fileset " SUBDIRECTORY"
 .YS
@@ -28,7 +29,15 @@ file system by explicitly restricting clients of a nodemap to a specific
 when mounting the client. The restriction depends on whether the fileset is
 designated as primary or alternate (using the
 .B --alt
-option). On mounting the Lustre client the following rules apply:
+option). Further, the fileset can be restricted to be mounted as read-only
+using the
+.B --ro
+option.
+Note that the nodemap
+.RB ' readonly_mount '
+property takes precedence if a fileset is set to read-write which is the
+fileset default.
+On mounting the Lustre client the following rules apply:
 .IP 1.
 If the nodemap is inactive or no filesets are defined, no subdirectory
 restrictions are applied.
@@ -48,22 +57,27 @@ the primary fileset.
 If no primary fileset is set, only 3 applies.
 .SH OPTIONS
 .TP
-.BI --name " NODEMAP_NAME"
+.BR -n ", " --name " NODEMAP_NAME"
 The name of the nodemap that this fileset should be associated with.
 .TP
-.BI --fileset " SUBDIRECTORY"
+.BR -f ", " --fileset " SUBDIRECTORY"
 The fileset to restrict the clients to. The fileset must begin with '/'.
 .TP
-.B --alt
+.BR -a ", " --alt
 Indicates that this fileset should be added as an alternate fileset. Without
 this option, the fileset is added as the primary fileset. A nodemap is
 restricted to a single primary fileset while up to 255 alternate filesets
 can be added per nodemap. Duplicate fileset definitions across fileset types
 are not allowed.
+.TP
+.BR -r ", " --ro
+Indicates that the fileset should be mounted as read-only (defaults to
+read-write if not set).
 .SH EXAMPLES
 Add a primary fileset to nodemap 'tenant1':
 .EX
-.B # lctl nodemap_fileset_add --name tenant1 --fileset '/dir1'
+.B # lctl nodemap_fileset_add --name tenant1 --fileset '/dir0'
+.B # lctl nodemap_fileset_add --name tenant1 --fileset '/dir1' --ro
 .EE
 .PP
 Add alternate filesets to different nodemaps:
@@ -71,6 +85,7 @@ Add alternate filesets to different nodemaps:
 .B # lctl nodemap_fileset_add --name tenant1 --fileset '/dir2' --alt
 .B # lctl nodemap_fileset_add --name tenant1 --fileset '/dir3' --alt
 .B # lctl nodemap_fileset_add --name tenant2 --fileset '/dir10' --alt
+.B # lctl nodemap_fileset_add --name tenant2 --fileset '/dir11' --alt --ro
 .EE
 .SH AVAILABILITY
 .B lctl nodemap_fileset_add

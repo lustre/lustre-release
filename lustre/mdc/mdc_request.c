@@ -87,8 +87,6 @@ static int mdc_get_root(struct obd_export *exp, const char *fileset,
 	int			 rc;
 
 	ENTRY;
-	if (fileset && !(exp_connect_flags(exp) & OBD_CONNECT_SUBTREE))
-		RETURN(-EOPNOTSUPP);
 
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
 				&RQF_MDS_GET_ROOT);
@@ -121,6 +119,15 @@ static int mdc_get_root(struct obd_export *exp, const char *fileset,
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 	if (body == NULL)
 		GOTO(out, rc = -EPROTO);
+
+	/* The connect flags of the target may not be set yet.
+	 * ptlrpc_queue_wait() sets them implicitly, so this check is done after
+	 * the RPC was sent to guarantee they are set. If the mdt version does
+	 * not support a subdirectory mount, return -EOPNOTSUPP and don't set
+	 * the rootfid.
+	 */
+	if (fileset && !(exp_connect_flags(exp) & OBD_CONNECT_SUBTREE))
+		GOTO(out, rc = -EOPNOTSUPP);
 
 	*rootfid = body->mbo_fid1;
 	CDEBUG(D_NET, "root fid="DFID", last_committed=%llu\n",

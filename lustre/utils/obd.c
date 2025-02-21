@@ -4546,6 +4546,7 @@ int jt_nodemap_fileset_add(int argc, char **argv)
 	char *nodemap_name = NULL;
 	char *fileset_name = NULL;
 	bool alt = false;
+	bool ro = false;
 	int c;
 	int rc = 0;
 
@@ -4554,10 +4555,11 @@ int jt_nodemap_fileset_add(int argc, char **argv)
 		{ .val = 'f', .name = "fileset", .has_arg = required_argument },
 		{ .val = 'h', .name = "help", .has_arg = no_argument },
 		{ .val = 'n', .name = "name", .has_arg = required_argument },
+		{ .val = 'r', .name = "ro", .has_arg = no_argument },
 		{ .name = NULL }
 	};
 
-	while ((c = getopt_long(argc, argv, "af:hn:",
+	while ((c = getopt_long(argc, argv, "af:hn:r",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 
@@ -4570,6 +4572,9 @@ int jt_nodemap_fileset_add(int argc, char **argv)
 		case 'n':
 			nodemap_name = optarg;
 			break;
+		case 'r':
+			ro = true;
+			break;
 		case 'h':
 		case '?':
 		default:
@@ -4581,7 +4586,8 @@ int jt_nodemap_fileset_add(int argc, char **argv)
 		return CMD_HELP;
 
 	rc = nodemap_cmd(LCFG_NODEMAP_FILESET_ADD, false, NULL, 0, argv[0],
-			 nodemap_name, fileset_name, alt ? "1" : "0", NULL);
+			 nodemap_name, fileset_name, alt ? "1" : "0",
+			 ro ? "1" : "0", NULL);
 	if (rc != 0) {
 		fprintf(stderr,
 			"error: cannot '%s' with fileset '%s' on nodemap '%s': %s\n",

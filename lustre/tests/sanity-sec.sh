@@ -2246,13 +2246,26 @@ wait_nm_sync_fileset() {
 	local fset_check=$2
 	local fset_expected=$3
 	local fset_type=${4:-"primary"}
+	local fset_ro=${5:-false}
+	local fset_access="rw"
+	local awk_expr
 
 	if [[ $fset_type != "primary" && $fset_type != "alternate" ]]; then
 		error "unknown fileset type $fset_type"
 	fi
 
-	wait_nm_sync $nm fileset "$fset_expected" "" \
-		"awk '/$fset_type/ { if (\$3 == \"$fset_check\") print \$3 }'"
+	# check if ro flag is set for given fileset and print the fileset if yes
+	if $fset_ro; then
+		awk_expr="awk -F '[[:blank:]]|,' '/$fset_type/ { \
+			if (\$4 == \"$fset_check\" && \$7 == \"ro\") \
+			print \$4 }'"
+	else
+		awk_expr="awk -F '[[:blank:]]|,' '/$fset_type/ { \
+			if (\$4 == \"$fset_check\" && \$7 != \"ro\") \
+			print \$4 }'"
+	fi
+
+	wait_nm_sync $nm fileset "$fset_expected" "" "$awk_expr"
 }
 
 nodemap_exercise_fileset_cleanup() {
@@ -3056,17 +3069,13 @@ run_test 27c "test alternate fileset varying length and limits"
 multi_fileset_test_setup() {
 	local nm=$1
 	local base_dir
+	local teststring="teststring"
 
 	if [[ -n "$FILESET" && -z "$SKIP_FILESET" ]]; then
 		cleanup_mount $MOUNT
 		FILESET="" zconf_mount_clients $CLIENTS $MOUNT
 		wait_ssk
 	fi
-
-	local admin=$(do_facet mgs $LCTL get_param -n \
-		nodemap.${nm}.admin_nodemap)
-	local trust=$(do_facet mgs $LCTL get_param -n \
-		nodemap.${nm}.trusted_nodemap)
 
 	do_facet mgs $LCTL nodemap_modify --name $nm --property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name $nm --property trusted \
@@ -3076,14 +3085,14 @@ multi_fileset_test_setup() {
 
 	base_dir=$MOUNT
 	do_node ${clients_arr[0]} \
-		touch "${base_dir}/${fs_root}" ||
+		"echo $teststring > ${base_dir}/${fs_root}" ||
 		error "unable to create file in $base_dir"
 
 	base_dir="${MOUNT}/${mult_fset_root}/${subd_no_fset}"
 	do_node ${clients_arr[0]} mkdir -p $base_dir ||
 		error "unable to create dir $base_dir"
 	do_node ${clients_arr[0]} \
-		touch "${base_dir}/${prefix}${subd_no_fset}" ||
+		"echo $teststring > ${base_dir}/${prefix}${subd_no_fset}" ||
 		error "unable to create file in $base_dir"
 
 	# setup primary fileset directories
@@ -3092,13 +3101,13 @@ multi_fileset_test_setup() {
 		mkdir -p "${base_dir}/{${subsubd_p0},${subsubd_p1}}" ||
 		error "unable to create subdirs in $base_dir"
 	do_node ${clients_arr[0]} \
-		touch "${base_dir}/${prefix}${subd_p}" ||
+		"echo $teststring > ${base_dir}/${prefix}${subd_p}" ||
 		error "unable to create file in $base_dir"
 	do_node ${clients_arr[0]} \
-		touch "${base_dir}/${subsubd_p0}/${prefix}${subsubd_p0}" ||
+		"echo $teststring > ${base_dir}/${subsubd_p0}/${prefix}${subsubd_p0}" ||
 		error "unable to create file in ${base_dir}/${subsubd_p0}"
 	do_node ${clients_arr[0]} \
-		touch "${base_dir}/${subsubd_p1}/${prefix}${subsubd_p1}" ||
+		"echo $teststring > ${base_dir}/${subsubd_p1}/${prefix}${subsubd_p1}" ||
 		error "unable to create file in ${base_dir}/${subsubd_p1}"
 
 	# setup alternate fileset directory
@@ -3106,7 +3115,7 @@ multi_fileset_test_setup() {
 	do_node ${clients_arr[0]} mkdir -p $base_dir ||
 		error "unable to create dir $base_dir"
 	do_node ${clients_arr[0]} \
-		touch "${base_dir}/${prefix}${subd_alt_foo}" ||
+		"echo $teststring > ${base_dir}/${prefix}${subd_alt_foo}" ||
 		error "unable to create file in $base_dir"
 
 	# setup alternate fileset subdirectories
@@ -3115,31 +3124,23 @@ multi_fileset_test_setup() {
 		mkdir -p "${base_dir}/${subsubd_h0}" ||
 		error "unable to create subdirs in  $base_dir"
 	do_node ${clients_arr[0]} \
-		touch "${base_dir}/${prefix}${subd_alt_home}" ||
+		"echo $teststring > ${base_dir}/${prefix}${subd_alt_home}" ||
 		error "unable to create file in $base_dir"
 	do_node ${clients_arr[0]} \
-		touch "${base_dir}/${subsubd_h0}/${prefix}${subsubd_h0}" ||
+		"echo $teststring > ${base_dir}/${subsubd_h0}/${prefix}${subsubd_h0}" ||
 		error "unable to create file in $base_dir"
-
-	do_facet mgs $LCTL nodemap_modify --name $nm \
-		--property admin --value $admin
-	do_facet mgs $LCTL nodemap_modify --name $nm \
-		--property trusted --value $trust
 
 	# flush MDT locks to make sure they are reacquired before test
 	do_node ${clients_arr[0]} $LCTL set_param \
 		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
-
-	wait_nm_sync $nm trusted_nodemap
 }
 
 multi_fileset_test_cleanup() {
 	local nm=$1
 
-	local admin=$(do_facet mgs $LCTL get_param -n \
-		nodemap.${nm}.admin_nodemap)
-	local trust=$(do_facet mgs $LCTL get_param -n \
-		nodemap.${nm}.trusted_nodemap)
+	# stop all clients as they may be mounted as read-only
+	zconf_umount_clients $CLIENTS $MOUNT ||
+	    error "unable to umount clients $CLIENTS"
 
 	do_facet mgs $LCTL nodemap_modify --name $nm --property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name $nm --property trusted \
@@ -3157,17 +3158,6 @@ multi_fileset_test_cleanup() {
 	do_node ${clients_arr[0]} rm -rf "${DIR}/$tdir" ||
 		error "unable to remove dir ${DIR}/$tdir"
 
-	do_facet mgs $LCTL nodemap_modify --name $nm \
-		--property admin --value $admin
-	do_facet mgs $LCTL nodemap_modify --name $nm \
-		--property trusted --value $trust
-
-	# flush MDT locks to make sure they are reacquired before test
-	do_node ${clients_arr[0]} $LCTL set_param \
-		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
-
-	wait_nm_sync $nm trusted_nodemap
-
 	if [[ -n "$FILESET" && -z "$SKIP_FILESET" ]]; then
 		cleanup_mount $MOUNT
 		zconf_mount_clients $CLIENTS $MOUNT
@@ -3178,6 +3168,10 @@ multi_fileset_test_cleanup() {
 multi_fileset_test_success() {
 	local mount_subdir=$1
 	local testfile=$2
+	local readonly=${3:-false}
+	local tmpfile="${testfile}_tmp_test"
+	local teststring="teststring"
+	local tmp
 
 	FILESET=$mount_subdir \
 		zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
@@ -3189,6 +3183,33 @@ multi_fileset_test_success() {
 
 	do_node ${clients_arr[0]} test -f $testfile ||
 		error "cannot access $testfile in mount subdir $mount_subdir"
+
+	if ! $readonly; then
+		do_node ${clients_arr[0]} "findmnt $MOUNT --output=options -n -f" \
+			| grep -q "rw," ||
+			error "should be rw mount"
+
+		do_node ${clients_arr[0]} "$LFS setstripe -c 1 $tmpfile" ||
+			error "unable to create $tmpfile on rw mount"
+		do_node ${clients_arr[0]} "echo $teststring >> $tmpfile" ||
+			error "unable to write to $tmpfile on rw mount"
+		tmp=$(do_node ${clients_arr[0]} cat $tmpfile)
+		[[ $tmp != $teststring ]] &&
+			error "unable to read $tmpfile from rw mount"
+		do_node ${clients_arr[0]} "rm $tmpfile" ||
+			error "unable to remove $tmpfile on rw mount"
+	else
+		do_node ${clients_arr[0]} "findmnt $MOUNT --output=options -n -f" \
+			| grep -q "ro," ||
+			error "should be ro mount"
+
+		do_node ${clients_arr[0]} "$LFS setstripe -c 1 $tmpfile" &&
+			error "should not be able to create $tmpfile on ro mount"
+		# $testfile is created in multi_fileset_test_setup()
+		tmp=$(do_node ${clients_arr[0]} cat $testfile)
+		[[ $tmp == $teststring ]] ||
+			error "unable to read $tmpfile from ro mount"
+	fi
 
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
 		error "unable to umount client ${clients_arr[0]}"
@@ -3202,7 +3223,10 @@ multi_fileset_test_failure() {
 		error "shouldn't be able to mount $mount_subdir"
 }
 
-test_27d() {
+multi_fileset_test_run() {
+	local nm=$1
+	local ro=${2:-false}
+	local ro_fileset=""
 
 	(( $MGS_VERSION >= $(version_code 2.16.56) )) ||
 		skip "Need MGS >= 2.16.56 for multiple filesets"
@@ -3213,8 +3237,6 @@ test_27d() {
 	   [[ $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
 		skip "local mode not supported"
 	fi
-
-	local nm="c0"
 
 	local mult_fset_root=$tdir
 	local fs_root=$tfile
@@ -3230,6 +3252,10 @@ test_27d() {
 	local subd_alt_foo="alt_foo"
 	local subd_alt_home="alt_home"
 	local subsubd_h0="subsubdir_user0"
+
+	if $ro; then
+		ro_fileset="--ro"
+	fi
 
 	stack_trap nodemap_test_cleanup EXIT
 
@@ -3258,15 +3284,15 @@ test_27d() {
 		"${MOUNT}/${prefix}${subd_no_fset}"
 
 	# setup filesets
-	do_facet mgs $LCTL nodemap_fileset_add --name $nm \
+	do_facet mgs $LCTL nodemap_fileset_add $ro_fileset --name $nm \
 		--fileset "/${mult_fset_root}/${subd_p}"
-	do_facet mgs $LCTL nodemap_fileset_add --alt --name $nm \
+	do_facet mgs $LCTL nodemap_fileset_add --alt $ro_fileset --name $nm \
 		--fileset "/${mult_fset_root}/${subd_alt_foo}"
-	do_facet mgs $LCTL nodemap_fileset_add --alt --name $nm \
+	do_facet mgs $LCTL nodemap_fileset_add --alt $ro_fileset --name $nm \
 		--fileset "/${mult_fset_root}/${subd_alt_home}"
 
 	wait_nm_sync_fileset $nm "/${mult_fset_root}/${subd_alt_home}" \
-		"/${mult_fset_root}/${subd_alt_home}" "alternate"
+		"/${mult_fset_root}/${subd_alt_home}" "alternate" $ro
 
 	# print for future reference
 	do_facet mds1 $LCTL get_param nodemap.${nm}.fileset
@@ -3281,41 +3307,41 @@ test_27d() {
 
 	# case 5 (test for success): no mount path set on client
 	# mount should be in the primary fileset => $subd_p
-	multi_fileset_test_success "/" "${MOUNT}/${prefix}${subd_p}"
+	multi_fileset_test_success "/" "${MOUNT}/${prefix}${subd_p}" $ro
 
 	# case 6 (test for success): exact primary mount path set on client
 	# mount should be in the primary fileset => $subd_p
 	multi_fileset_test_success "/${mult_fset_root}/${subd_p}" \
-		"${MOUNT}/${prefix}${subd_p}"
+		"${MOUNT}/${prefix}${subd_p}" $ro
 
 	# case 7 (test for success): prefix primary mount path set on client
 	# mount should be in the primary fileset => $subd_p/$subsubd_p0
 	multi_fileset_test_success \
 		"/${mult_fset_root}/${subd_p}/${subsubd_p0}" \
-		"${MOUNT}/${prefix}${subsubd_p0}"
+		"${MOUNT}/${prefix}${subsubd_p0}" $ro
 
 	# case 8 (test for success): primary fileset appending.
 	# mount should be in the primary fileset => $subd_p/$subsubd_p1
 	multi_fileset_test_success "/${subsubd_p1}" \
-		"${MOUNT}/${prefix}${subsubd_p1}"
+		"${MOUNT}/${prefix}${subsubd_p1}" $ro
 
 	# case 9 (test for success): alt fileset with exact client mount
 	# mount should be in the alt fileset => $subd_alt_foo
 	multi_fileset_test_success "/${mult_fset_root}/${subd_alt_foo}" \
-		"${MOUNT}/${prefix}${subd_alt_foo}"
+		"${MOUNT}/${prefix}${subd_alt_foo}" $ro
 
 	# case 10 (test for success): alt fileset with prefix client mount
 	# mount should be in the alt fileset => $subd_alt_home/$subsubd_h0
 	multi_fileset_test_success \
 		"/${mult_fset_root}/${subd_alt_home}/${subsubd_h0}" \
-		"${MOUNT}/${prefix}${subsubd_h0}"
+		"${MOUNT}/${prefix}${subsubd_h0}" $ro
 
 	# remove primary fileset and retest primary fileset cases for failure
 	do_facet mgs $LCTL nodemap_fileset_del --name $nm \
 		--fileset "/${mult_fset_root}/${subd_p}"
 
 	wait_nm_sync_fileset $nm "/${mult_fset_root}/${subd_p}" \
-		"" "primary"
+		"" "primary" $ro
 
 	# case 11 (test for failure): no mountpoint set on client
 	multi_fileset_test_failure "/"
@@ -3335,7 +3361,7 @@ test_27d() {
 		--fileset "/${mult_fset_root}/${subd_alt_foo}"
 
 	wait_nm_sync_fileset $nm "/${mult_fset_root}/${subd_alt_foo}" \
-		"" "alternate"
+		"" "alternate" $ro
 
 	# case 15 (test for failure): prev. alt fileset with exact client mount
 	multi_fileset_test_failure "/${mult_fset_root}/${subd_alt_foo}"
@@ -3344,7 +3370,7 @@ test_27d() {
 		--fileset "/${mult_fset_root}/${subd_alt_home}"
 
 	wait_nm_sync_fileset $nm "/${mult_fset_root}/${subd_alt_home}" \
-		"" "alternate"
+		"" "alternate" $ro
 
 	# print for future reference
 	do_facet mds1 $LCTL get_param nodemap.${nm}.fileset
@@ -3378,7 +3404,18 @@ test_27d() {
 	nodemap_test_cleanup
 	nodemap_exercise_fileset_cleanup
 }
-run_test 27d "test multiple filesets mounting rules"
+
+test_27d() {
+	local nm="c0"
+	multi_fileset_test_run $nm false
+}
+run_test 27d "test multiple filesets mounting rules (rw)"
+
+test_27e() {
+	local nm="c0"
+	multi_fileset_test_run $nm true
+}
+run_test 27e "test multiple filesets mounting rules (ro)"
 
 test_28() {
 	if ! $SHARED_KEY; then

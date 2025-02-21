@@ -74,12 +74,16 @@ struct lu_idmap {
 struct lu_nodemap_fileset_info {
 	/* nodemap id */
 	__u32		nfi_nm_id;
-	/* starting subid of the fileset in the IAM */
-	__u32		nfi_subid;
+	/* subid of the fileset header in the IAM */
+	__u32		nfi_subid_header;
+	/* starting subid of the fileset fragments in the IAM */
+	__u32		nfi_subid_fragments;
 	/* number of fileset fragments */
 	__u32		nfi_fragment_cnt;
 	/* the fileset */
 	const char	*nfi_fileset;
+	/* fileset read-only flag */
+	bool		nfi_ro;
 };
 
 struct lu_fileset_alt {
@@ -89,6 +93,8 @@ struct lu_fileset_alt {
 	char		*nfa_path;
 	/* fileset path size */
 	__u32		nfa_path_size;
+	/* fileset read-only */
+	bool		nfa_ro;
 	/* rb tree node */
 	struct rb_node	nfa_rb;
 };
@@ -143,7 +149,8 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			      enum nodemap_tree_type,
 			      enum nodemap_id_type id_type, __u32 id);
 struct lu_fileset_alt *fileset_alt_init(unsigned int fileset_size);
-struct lu_fileset_alt *fileset_alt_create(const char *fileset_path);
+struct lu_fileset_alt *fileset_alt_create(const char *fileset_path,
+					  bool read_only);
 void fileset_alt_destroy(struct lu_fileset_alt *fileset);
 void fileset_alt_destroy_tree(struct rb_root *root);
 int fileset_alt_add(struct rb_root *root, struct lu_fileset_alt *fileset);
@@ -191,13 +198,16 @@ int nodemap_idx_cluster_roles_update(const struct lu_nodemap *nodemap);
 int nodemap_idx_cluster_roles_del(const struct lu_nodemap *nodemap);
 int nodemap_idx_offset_add(const struct lu_nodemap *nodemap);
 int nodemap_idx_offset_del(const struct lu_nodemap *nodemap);
+void nodemap_idx_fileset_info_init(struct lu_nodemap_fileset_info *fset_info,
+				   unsigned int nm_id, const char *fileset,
+				   bool read_only, unsigned int fileset_id);
 int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
-			    const char *fileset, unsigned int fileset_id);
+			    struct lu_nodemap_fileset_info *fset_info);
 int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
-			       const char *old_fileset, const char *new_fileset,
-			       unsigned int fileset_id);
+			       struct lu_nodemap_fileset_info *fset_info_old,
+			       struct lu_nodemap_fileset_info *fset_info_new);
 int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
-			    const char *fileset, unsigned int fileset_id);
+			    struct lu_nodemap_fileset_info *fset_info);
 int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap,
 			      unsigned int fileset_id);
 int nodemap_idx_capabilities_add(const struct lu_nodemap *nodemap);

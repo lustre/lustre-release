@@ -383,6 +383,7 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	struct mdt_body *repbody;
 	char *fileset_mount = NULL;
 	char *fileset_buffer = NULL;
+	bool fileset_ro = false;
 	int fileset_buffer_size = 0;
 	int rc;
 
@@ -411,9 +412,16 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 		/* get new root from nodemap if filesets are available */
 		rc = nodemap_fileset_get_root(exp->exp_target_data.ted_nodemap,
 					      fileset_mount, &fileset_buffer,
-					      &fileset_buffer_size);
+					      &fileset_buffer_size,
+					      &fileset_ro);
 		if (rc != 0)
 			GOTO(out, rc = err_serious(rc));
+		/* if fileset is read-only, the connection must be read-only.
+		 * rw filesets are still allowed to be mounted as read-only.
+		 */
+		if (fileset_ro && !(exp->exp_connect_data.ocd_connect_flags &
+				    OBD_CONNECT_RDONLY))
+			GOTO(out, rc = err_serious(-EROFS));
 
 		fileset_mount = fileset_buffer;
 	}

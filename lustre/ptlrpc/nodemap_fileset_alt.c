@@ -26,6 +26,7 @@ struct lu_fileset_alt *fileset_alt_init(unsigned int fileset_size)
 
 	fileset->nfa_path_size = fileset_size;
 	fileset->nfa_id = 0; /* is set later on tree insertion */
+	fileset->nfa_ro = false;
 
 	OBD_ALLOC(fileset->nfa_path, fileset->nfa_path_size);
 	if (fileset->nfa_path == NULL) {
@@ -40,18 +41,21 @@ EXPORT_SYMBOL(fileset_alt_init);
 /**
  * fileset_alt_create() - Create lu_fileset_alt struct with given fileset path.
  * @fileset_path: fileset path
+ * @read_only: true if the fileset is read-only
  *
  * Returns allocated lu_fileset_alt structure on success, NULL otherwise
  */
-struct lu_fileset_alt *fileset_alt_create(const char *fileset_path)
+struct lu_fileset_alt *fileset_alt_create(const char *fileset_path,
+					  bool read_only)
 {
 	struct lu_fileset_alt *fileset;
 
 	fileset = fileset_alt_init(strlen(fileset_path) + 1);
-	if (fileset == NULL)
+	if (!fileset)
 		RETURN(NULL);
 
 	memcpy(fileset->nfa_path, fileset_path, fileset->nfa_path_size);
+	fileset->nfa_ro = read_only;
 
 	return fileset;
 }

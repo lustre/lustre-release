@@ -311,6 +311,16 @@ static void ll_free_sbi(struct super_block *sb)
 	EXIT;
 }
 
+static void ll_force_readonly(struct super_block *sb, struct obd_export *exp,
+			      char *reason)
+{
+	cfs_tty_write_msg("Forcing read-only mount.\n\r");
+	CERROR("%s: mount failed due to %s, forcing read-only mount: rc = %d\n",
+	       exp->exp_obd->obd_name, reason, -EROFS);
+	sb->s_flags |= SB_RDONLY;
+	obd_disconnect(exp);
+}
+
 static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 {
 	struct inode *root = NULL;
@@ -467,15 +477,36 @@ retry_connect:
 		/* We got -EROFS from the server, maybe it is imposing
 		 * read-only mount. So just retry like this.
 		 */
-		cfs_tty_write_msg("Forcing read-only mount.\n\r");
-		CERROR("%s: mount failed with %d, forcing read-only mount.\n",
-		       sbi->ll_md_exp->exp_obd->obd_name, err);
-		sb->s_flags |= SB_RDONLY;
-		obd_disconnect(sbi->ll_md_exp);
+		ll_force_readonly(sb, sbi->ll_md_exp, "read-only MDT");
 		GOTO(retry_connect, err);
 	} else if (err) {
 		GOTO(out_md, err);
 	}
+
+	fid_zero(&sbi->ll_root_fid);
+	/* get root fid */
+	err = md_get_root(sbi->ll_md_exp, get_mount_fileset(sb),
+			  &sbi->ll_root_fid);
+	if (err == -EROFS && !(sb->s_flags & SB_RDONLY)) {
+		/* -EROFS is returned from the server, this means a fileset
+		 * is imposing a read-only mount.
+		 * Disconnect and retry connection as read-only.
+		 */
+		ll_force_readonly(sb, sbi->ll_md_exp, "read-only fileset");
+		GOTO(retry_connect, err);
+	}
+	if (err) {
+		CERROR("%s: cannot mds_connect: rc = %d\n",
+		       sbi->ll_md_exp->exp_obd->obd_name, err);
+		GOTO(out_md, err);
+	}
+	if (!fid_is_sane(&sbi->ll_root_fid)) {
+		CERROR("%s: invalid root fid " DFID " during mount: rc = %d\n",
+		       sbi->ll_md_exp->exp_obd->obd_name,
+		       PFID(&sbi->ll_root_fid), err);
+		GOTO(out_md, err = -EINVAL);
+	}
+	CDEBUG(D_SUPER, "rootfid " DFID "\n", PFID(&sbi->ll_root_fid));
 
 	/* This needs to be after statfs to ensure connect has finished.
 	 * Note that "data" does NOT contain the valid connect reply.
@@ -682,21 +713,6 @@ retry_connect:
 	sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
 	sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;
 	mutex_unlock(&sbi->ll_lco.lco_lock);
-
-	fid_zero(&sbi->ll_root_fid);
-	err = md_get_root(sbi->ll_md_exp, get_mount_fileset(sb),
-			   &sbi->ll_root_fid);
-	if (err) {
-		CERROR("cannot mds_connect: rc = %d\n", err);
-		GOTO(out_lock_cn_cb, err);
-	}
-	if (!fid_is_sane(&sbi->ll_root_fid)) {
-		CERROR("%s: Invalid root fid "DFID" during mount\n",
-		       sbi->ll_md_exp->exp_obd->obd_name,
-		       PFID(&sbi->ll_root_fid));
-		GOTO(out_lock_cn_cb, err = -EINVAL);
-	}
-	CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
 	sb->s_op = &lustre_super_operations;
 	sb->s_xattr = ll_xattr_handlers;

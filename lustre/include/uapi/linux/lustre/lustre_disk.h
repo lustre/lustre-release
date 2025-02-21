@@ -343,6 +343,20 @@ struct nodemap_offset_rec {
 /* max number of filesets per nodemap */
 #define LUSTRE_NODEMAP_FILESET_NUM_MAX 256
 
+enum nm_fileset_flag_bits {
+	NM_FS_FL_READONLY = 0x1,
+};
+
+struct nodemap_fileset_header_rec {
+	enum nm_fileset_flag_bits	nfhr_flags:8;
+	__u8	nfr_padding1;		/* zeroed since 2.16 (always) */
+	__u16	nfr_padding2;		/* zeroed since 2.16 (always) */
+	__u32	nfr_padding3;		/* zeroed since 2.16 (always) */
+	__u64	nfr_padding4;		/* zeroed since 2.16 (always) */
+	__u64	nfr_padding5;		/* zeroed since 2.16 (always) */
+	__u64	nfr_padding6;		/* zeroed since 2.16 (always) */
+};
+
 struct nodemap_fileset_rec {
 	/* 28 bytes for fileset path fragment */
 	char	nfr_path_fragment[LUSTRE_NODEMAP_FILESET_FRAGMENT_SIZE];
@@ -368,6 +382,7 @@ union nodemap_rec {
 	struct nodemap_global_rec ngr;
 	struct nodemap_cluster_roles_rec ncrr;
 	struct nodemap_offset_rec nor;
+	struct nodemap_fileset_header_rec nfhr;
 	struct nodemap_fileset_rec nfr;
 	struct nodemap_user_capabilities_rec nucr;
 };
@@ -379,14 +394,15 @@ enum nodemap_cluster_rec_subid {
 	NODEMAP_CLUSTER_OFFSET = 2, /* UID/GID/PROJID offset for a nm cluster */
 	NODEMAP_CLUSTER_CAPS = 3, /* User caps, nodemap_capabilities_rec */
 	/*
-	 * A fileset may not fit in a single nodemap_fileset_rec and uses at max
-	 * 256 fragments. The first subid (512) is currently unused and reserved
-	 * for a future fileset header.
+	 * A fileset may consist of up to 256 consecutive subids. Each consists
+	 * of a header (nodemap_fileset_header_rec) and up to 255 fragments
+	 * (nodemap_fileset_rec).
 	 */
 	NODEMAP_FILESET = 512,
 	/*
 	 * Depending on its length, its fragments may use several subids
-	 * in the range of 512 to 66,047 (assuming max 256 filesets).
+	 * in the range of 512 to 66,047 (assuming max 256 filesets). The first
+	 * subid of each fileset range is its header.
 	 */
 };
 

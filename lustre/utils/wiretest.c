@@ -6466,6 +6466,35 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct nodemap_offset_rec *)0)->nor_padding2) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct nodemap_offset_rec *)0)->nor_padding2));
 
+	/* Checks for struct nodemap_fileset_header_rec */
+	LASSERTF((int)sizeof(struct nodemap_fileset_header_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_fileset_header_rec));
+	/* nodemap_cluster_rec.ncr_flags2 is a bitfield and cannot be checked */
+	LASSERTF((int)offsetof(struct nodemap_fileset_header_rec, nfr_padding1) == 1, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_header_rec, nfr_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding1) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding1));
+	LASSERTF((int)offsetof(struct nodemap_fileset_header_rec, nfr_padding2) == 2, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_header_rec, nfr_padding2));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding2) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding2));
+	LASSERTF((int)offsetof(struct nodemap_fileset_header_rec, nfr_padding3) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_header_rec, nfr_padding3));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding3) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding3));
+	LASSERTF((int)offsetof(struct nodemap_fileset_header_rec, nfr_padding4) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_header_rec, nfr_padding4));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding4) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding4));
+	LASSERTF((int)offsetof(struct nodemap_fileset_header_rec, nfr_padding5) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_header_rec, nfr_padding5));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding5) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding5));
+	LASSERTF((int)offsetof(struct nodemap_fileset_header_rec, nfr_padding6) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_fileset_header_rec, nfr_padding6));
+	LASSERTF((int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding6) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_fileset_header_rec *)0)->nfr_padding6));
+
 	/* Checks for struct nodemap_fileset_rec */
 	LASSERTF((int)sizeof(struct nodemap_fileset_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(struct nodemap_fileset_rec));
@@ -6592,6 +6621,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)NM_FL2_FILESET_USE_IAM);
 	LASSERTF(NM_FL2_GSS_IDENTIFY == 0x00000008UL, "found 0x%.8xUL\n",
 		 (unsigned int)NM_FL2_GSS_IDENTIFY);
+	LASSERTF(NM_FS_FL_READONLY == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)NM_FS_FL_READONLY);
 	LASSERTF(NODEMAP_UID == 0, "found %lld\n",
 		 (long long)NODEMAP_UID);
 	LASSERTF(NODEMAP_GID == 1, "found %lld\n",

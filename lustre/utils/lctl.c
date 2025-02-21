@@ -158,7 +158,7 @@ command_t nodemap_cmdlist[] = {
 	 "usage: nodemap del_range --name NODEMAP_NAME --range NID_RANGE"},
 	{.pc_name = "fileset_add", .pc_func = jt_nodemap_fileset_add,
 	 .pc_help = "add a fileset to a nodemap\n"
-	 "usage: nodemap fileset_add [--alt] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
+	 "usage: nodemap fileset_add [--alt] [--ro] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
 	{.pc_name = "fileset_del", .pc_func = jt_nodemap_fileset_del,
 	 .pc_help = "delete a fileset from a nodemap\n"
 	 "usage: nodemap fileset_del --name NODEMAP_NAME --fileset SUBDIRECTORY"},
@@ -596,7 +596,7 @@ command_t cmdlist[] = {
 	 "usage: nodemap_del_range --name NODEMAP_NAME --range NID_RANGE"},
 	{"nodemap_fileset_add", jt_nodemap_fileset_add, 0,
 	 "add a fileset to a nodemap\n"
-	 "usage: nodemap_fileset_add [--alt] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
+	 "usage: nodemap_fileset_add [--alt] [--ro] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
 	{"nodemap_fileset_del", jt_nodemap_fileset_del, 0,
 	 "delete a fileset from a nodemap\n"
 	 "usage: nodemap_fileset_del --name NODEMAP_NAME --fileset SUBDIRECTORY"},
