@@ -3659,7 +3659,7 @@ static int pcc_filp_write(struct file *filp, const void *buf, ssize_t count,
 	while (count > 0) {
 		ssize_t size;
 
-		size = cfs_kernel_write(filp, buf, count, offset);
+		size = kernel_write(filp, buf, count, offset);
 		if (size < 0)
 			return size;
 		count -= size;

@@ -1187,7 +1187,7 @@ int libcfs_kkuc_msg_put(struct file *filp, void *payload)
 	}
 
 	while (count > 0) {
-		rc = cfs_kernel_write(filp, payload, count, &offset);
+		rc = kernel_write(filp, payload, count, &offset);
 		if (rc < 0)
 			break;
 		count -= rc;

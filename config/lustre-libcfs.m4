@@ -1263,30 +1263,6 @@ AC_DEFUN([LIBCFS_WAIT_QUEUE_ENTRY], [
 ]) # LIBCFS_WAIT_QUEUE_ENTRY
 
 #
-# LIBCFS_NEW_KERNEL_WRITE
-#
-# Kernel version 4.14 e13ec939e96b13e664bb6cee361cc976a0ee621a
-# changed kernel_write prototype to make is plug compatible
-# with the unexported vfs_write()
-#
-AC_DEFUN([LIBCFS_SRC_NEW_KERNEL_WRITE], [
-	LB2_LINUX_TEST_SRC([kernel_write_match], [
-		#include <linux/fs.h>
-	],[
-		const void *buf = NULL;
-		loff_t pos = 0;
-		return kernel_write(NULL, buf, 0, &pos);
-	],[-Werror])
-])
-AC_DEFUN([LIBCFS_NEW_KERNEL_WRITE], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'kernel_write' matches other read/write helpers],
-	[kernel_write_match], [
-		AC_DEFINE(HAVE_NEW_KERNEL_WRITE, 1,
-			['kernel_write' aligns with read/write helpers])
-	])
-]) # LIBCFS_NEW_KERNEL_WRITE
-
-#
 # LIBCFS_MM_TOTALRAM_PAGES_FUNC
 #
 # kernel 5.0 commit ca79b0c211af63fa3276f0e3fd7dd9ada2439839
@@ -2526,7 +2502,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_WAIT_QUEUE_ENTRY
 	# 4.14
 	LIBCFS_SRC_DEFINE_TIMER
-	LIBCFS_SRC_NEW_KERNEL_WRITE
 	LIBCFS_SRC_NEW_KERNEL_READ
 	# 4.15
 	LIBCFS_SRC_BITMAP_TO_ARR32
@@ -2680,7 +2655,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_WAIT_QUEUE_ENTRY
 	# 4.14
 	LIBCFS_DEFINE_TIMER
-	LIBCFS_NEW_KERNEL_WRITE
 	LIBCFS_NEW_KERNEL_READ
 	# 4.15
 	LIBCFS_BITMAP_TO_ARR32

@@ -107,8 +107,6 @@ static inline bool iov_iter_is_aligned(const struct iov_iter *i,
 }
 #endif /* HAVE_IOV_ITER_IS_ALIGNED */
 
-int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
-		     loff_t *pos);
 ssize_t cfs_kernel_read(struct file *file, void *buf, size_t count,
 			loff_t *pos);
 

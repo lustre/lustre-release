@@ -2053,7 +2053,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 		len = pga[i]->bp_count;
 		buf = kmap(pga[i]->bp_page);
 		while (len != 0) {
-			rc = cfs_kernel_write(filp, buf, len, &filp->f_pos);
+			rc = kernel_write(filp, buf, len, &filp->f_pos);
 			if (rc < 0) {
 				CERROR("%s: wanted to write %u but got error: rc = %d\n",
 				       dbgcksum_file_name, len, rc);

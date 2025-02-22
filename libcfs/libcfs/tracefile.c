@@ -925,7 +925,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
 		__LASSERT_TAGE_INVARIANT(tage);
 
 		buf = kmap(tage->page);
-		rc = cfs_kernel_write(filp, buf, tage->used, &filp->f_pos);
+		rc = kernel_write(filp, buf, tage->used, &filp->f_pos);
 		kunmap(tage->page);
 		if (rc != (int)tage->used) {
 			pr_warn("Lustre: wanted to write %u but wrote %d\n",
@@ -940,7 +940,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
 	while ((page = list_first_entry_or_null(&daemon_pages,
 						struct page, lru)) != NULL) {
 		buf = page_address(page);
-		rc = cfs_kernel_write(filp, buf, page->private, &filp->f_pos);
+		rc = kernel_write(filp, buf, page->private, &filp->f_pos);
 		if (rc != (int)page->private) {
 			pr_warn("Lustre: wanted to write %u but wrote %d\n",
 				(int)page->private, rc);
@@ -1192,7 +1192,7 @@ static int tracefiled(void *arg)
 					f_pos = i_size_read(de->d_inode);
 
 				buf = kmap(tage->page);
-				rc = cfs_kernel_write(filp, buf, tage->used,
+				rc = kernel_write(filp, buf, tage->used,
 						      &f_pos);
 				kunmap(tage->page);
 				if (rc != (int)tage->used) {

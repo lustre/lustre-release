@@ -252,7 +252,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(file))
 		RETURN(PTR_ERR(file));
 
-	result = cfs_kernel_write(file, buf->lb_buf, buf->lb_len, pos);
+	result = kernel_write(file, buf->lb_buf, buf->lb_len, pos);
 	ihold(inode);
 	fput(file);
 	RETURN(result);
