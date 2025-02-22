@@ -22,7 +22,6 @@
 #include <linux/sched/signal.h>
 #endif
 
-#include <libcfs/linux/linux-hash.h>
 #include <libcfs/linux/linux-misc.h>
 #include <libcfs/linux/linux-mem.h>
 #include <libcfs/linux/linux-time.h>

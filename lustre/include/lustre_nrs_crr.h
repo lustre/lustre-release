@@ -21,7 +21,6 @@
  * CRR-N, Client Round Robin over NIDs
  * @{
  */
-#include <libcfs/linux/linux-hash.h>
 
 /**
  * private data structure for CRR-N NRS

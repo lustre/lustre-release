@@ -127,6 +127,7 @@
  *  Even so, the MDT and OST resources are also in different LDLM namespaces.
  */
 
+#include <lustre_compat/linux/hash.h>
 #include <libcfs/libcfs.h>
 #include <lu_object.h>
 #include <uapi/linux/lustre/lustre_fid.h>

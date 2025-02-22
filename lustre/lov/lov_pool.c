@@ -19,11 +19,13 @@
 
 #define DEBUG_SUBSYSTEM S_LOV
 
-#include <libcfs/libcfs.h>
-#include <libcfs/linux/linux-hash.h>
-#include <libcfs/linux/linux-fs.h>
+#include <lustre_compat/linux/stringhash.h>
+#include <lustre_compat/linux/rhashtable.h>
 
+#include <libcfs/libcfs.h>
+#include <libcfs/linux/linux-fs.h>
 #include <obd.h>
+
 #include "lov_internal.h"
 
 #define pool_tgt(_p, _i) \
@@ -42,8 +44,8 @@ static u32 pool_hashfh(const void *data, u32 len, u32 seed)
 {
 	const char *pool_name = data;
 
-	return hashlen_hash(cfs_hashlen_string((void *)(unsigned long)seed,
-					       pool_name));
+	return hashlen_hash(hashlen_string((void *)(unsigned long)seed,
+					   pool_name));
 }
 
 /**

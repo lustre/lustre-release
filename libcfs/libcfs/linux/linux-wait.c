@@ -4,7 +4,6 @@
  * The implementation of the wait_bit*() and related waiting APIs:
  */
 
-#include <libcfs/linux/linux-hash.h>
 #include <linux/sched.h>
 #ifdef HAVE_SCHED_HEADERS
 #include <linux/sched/signal.h>

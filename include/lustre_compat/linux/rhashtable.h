@@ -1,60 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
-#ifndef __LIBCFS_LINUX_HASH_H__
-#define __LIBCFS_LINUX_HASH_H__
+#ifndef _LINUX_RHASHTABLE_LUSTRE_H
+#define _LINUX_RHASHTABLE_LUSTRE_H
 
-#include <linux/dcache.h>
 #include <linux/rhashtable.h>
-
-u64 cfs_hashlen_string(const void *salt, const char *name);
-
-#ifndef hashlen_hash
-#define hashlen_hash(hashlen) ((u32)(hashlen))
-#endif
-
-#ifndef HAVE_STRINGHASH
-#ifndef hashlen_create
-#define hashlen_create(hash, len) ((u64)(len)<<32 | (u32)(hash))
-#endif
-#endif /* !HAVE_STRINGHASH */
-
-#ifdef HAVE_BROKEN_HASH_64
-
-#define GOLDEN_RATIO_32 0x61C88647
-#define GOLDEN_RATIO_64 0x61C8864680B583EBull
-
-static inline u32 cfs_hash_32(u32 val, unsigned int bits)
-{
-	/* High bits are more random, so use them. */
-	return (val * GOLDEN_RATIO_32) >> (32 - bits);
-}
-
-static __always_inline u32 cfs_hash_64(u64 val, unsigned int bits)
-{
-#if BITS_PER_LONG == 64
-	/* 64x64-bit multiply is efficient on all 64-bit processors */
-	return val * GOLDEN_RATIO_64 >> (64 - bits);
-#else
-	/* Hash 64 bits using only 32x32-bit multiply. */
-	return cfs_hash_32(((u32)val ^ ((val >> 32) * GOLDEN_RATIO_32)), bits);
-#endif
-}
-
-#if BITS_PER_LONG == 32
-#define cfs_hash_long(val, bits) cfs_hash_32(val, bits)
-#elif BITS_PER_LONG == 64
-#define cfs_hash_long(val, bits) cfs_hash_64(val, bits)
-#else
-#error Wordsize not 32 or 64
-#endif
-
-#else
-
-#define cfs_hash_32 hash_32
-#define cfs_hash_64 hash_64
-#define cfs_hash_long hash_long
-
-#endif /* HAVE_BROKEN_HASH_64 */
 
 #ifndef HAVE_RHASHTABLE_WALK_ENTER
 static int rhashtable_walk_enter(struct rhashtable *ht,
@@ -332,4 +281,4 @@ static inline int rhashtable_replace_fast(
 }
 #endif /* HAVE_RHASHTABLE_REPLACE */
 
-#endif /* __LIBCFS_LINUX_HASH_H__ */
+#endif /* _LINUX_RHASHTABLE_LUSTRE_H */

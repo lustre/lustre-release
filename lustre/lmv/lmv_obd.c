@@ -25,6 +25,8 @@
 #include <linux/seq_file.h>
 #include <linux/namei.h>
 
+#include <lustre_compat/linux/stringhash.h>
+
 #include <obd_support.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
@@ -36,6 +38,7 @@
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_ioctl_old.h>
 #include <lustre_kernelcomm.h>
+
 #include "lmv_internal.h"
 
 static int lmv_check_connect(struct obd_device *obd);
@@ -1200,8 +1203,8 @@ static u32 qos_exclude_hashfh(const void *data, u32 len, u32 seed)
 {
 	const char *name = data;
 
-	return hashlen_hash(cfs_hashlen_string((void *)(unsigned long)seed,
-					       name));
+	return hashlen_hash(hashlen_string((void *)(unsigned long)seed,
+					   name));
 }
 
 static int qos_exclude_cmpfn(struct rhashtable_compare_arg *arg,

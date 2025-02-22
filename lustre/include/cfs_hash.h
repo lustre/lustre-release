@@ -20,7 +20,6 @@
 #include <linux/workqueue.h>
 #include <linux/refcount.h>
 #include <libcfs/libcfs.h>
-#include <libcfs/linux/linux-hash.h>
 
 /* disable debug */
 #define CFS_HASH_DEBUG_NONE	0

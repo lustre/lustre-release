@@ -59,6 +59,8 @@
 #include <net/sock.h>
 #include <linux/un.h>
 
+#include <lustre_compat/linux/hash.h>
+
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -66,7 +68,6 @@
 #include <lustre_net.h>
 #include <lustre_nodemap.h>
 #include <lustre_sec.h>
-#include <libcfs/linux/linux-hash.h>
 
 #include "gss_err.h"
 #include "gss_internal.h"

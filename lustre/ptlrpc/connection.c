@@ -14,7 +14,7 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/delay.h>
-#include <libcfs/linux/linux-hash.h>
+#include <lustre_compat/linux/rhashtable.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>

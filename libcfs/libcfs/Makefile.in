@@ -12,7 +12,6 @@ libcfs_dir := $(dir $(lastword $(MAKEFILE_LIST)))
 include $(libcfs_dir)/../../lustre_compat/lib/Makefile
 
 libcfs-linux-objs := linux-prim.o
-libcfs-linux-objs += linux-hash.o
 libcfs-linux-objs += linux-wait.o
 
 libcfs-compat-objs += $(patsubst %,$(COMPAT)%,$(compat_objs))

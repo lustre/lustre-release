@@ -25,9 +25,10 @@
 #include <linux/processor.h>
 #include <linux/random.h>
 
+#include <lustre_compat/linux/rhashtable.h>
+
 #include <libcfs/libcfs.h>
 #include <libcfs/linux/linux-mem.h>
-#include <libcfs/linux/linux-hash.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_disk.h>

@@ -20,6 +20,7 @@
 #define CFS_FAIL_DELAY_MSG_FORWARD	0xe002
 
 #include <lustre_compat/linux/generic-radix-tree.h>
+#include <lustre_compat/linux/hash.h>
 #include <linux/netdevice.h>
 
 #include <libcfs/libcfs.h>
