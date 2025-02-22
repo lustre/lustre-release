@@ -891,29 +891,6 @@ int server_name2svname(const char *label, char *svname, const char **endptr,
 EXPORT_SYMBOL(server_name2svname);
 #endif /* HAVE_SERVER_SUPPORT */
 
-#ifdef HAVE_SERVER_SUPPORT
-/**
- * check server name is OST.
- **/
-int server_name_is_ost(const char *svname)
-{
-	const char *dash;
-	int rc;
-
-	/* We use server_name2fsname() just for parsing */
-	rc = server_name2fsname(svname, NULL, &dash);
-	if (rc != 0)
-		return rc;
-
-	dash++;
-
-	if (strncmp(dash, "OST", 3) == 0)
-		return 1;
-	return 0;
-}
-EXPORT_SYMBOL(server_name_is_ost);
-#endif /* HAVE_SERVER_SUPPORT */
-
 /**
  * Get the index from the target name MDTXXXX/OSTXXXX
  * rc = server type, or rc < 0  on error
