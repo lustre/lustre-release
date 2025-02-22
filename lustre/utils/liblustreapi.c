@@ -73,6 +73,7 @@
 #include <inttypes.h>
 #include <pthread.h>
 
+#include <assert.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
@@ -1351,6 +1352,11 @@ static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
 
 		fsnamelen = ptr_end - ptr;
 
+		/* avoid stat/statx call if path does not match mountpoint */
+		if (path && (strlen(path) >= mntlen) &&
+		    (strncmp(mnt.mnt_dir, path, mntlen) != 0))
+			continue;
+
 		/* ignore unaccessible filesystem */
 		if (get_file_dev(mnt.mnt_dir, &devmnt))
 			continue;
@@ -1374,10 +1380,11 @@ static int get_root_path_slow(int want, char *fsname, int *outfd, char *path,
 			break;
 		}
 
-		/* Otherwise find the longest matching path */
-		if (path && strlen(path) >= mntlen &&
-		    (strncmp(mnt.mnt_dir, path, mntlen) == 0) &&
-		    (strlen(path) == mntlen || path[mntlen] == '/')) {
+		/*
+		 * Otherwise find the longest matching path beginning of path
+		 * and mnt_dir already verified to be the same.
+		 */
+		if (path && (strlen(path) == mntlen || path[mntlen] == '/')) {
 			rc = 0;
 			break;
 		}
@@ -1435,6 +1442,8 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index,
 		  dev_t *dev, char *nid)
 {
 	int rc = -ENODEV;
+
+	assert(fsname || path);
 
 	if (!(want & WANT_INDEX))
 		rc = get_root_path_fast(want, fsname, outfd, path, dev, nid);
