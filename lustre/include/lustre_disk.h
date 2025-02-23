@@ -376,7 +376,6 @@ int lustre_start_simple(char *obdname, char *type, char *uuid,
 int lustre_stop_mgc(struct super_block *sb);
 #endif /* HAVE_SERVER_SUPPORT */
 int server_name2fsname(const char *svname, char *fsname, const char **endptr);
-void obdname2fsname(const char *tgt, char *fsname, size_t fslen);
 
 int lustre_start_mgc(struct super_block *sb);
 int lustre_common_put_super(struct super_block *sb);
