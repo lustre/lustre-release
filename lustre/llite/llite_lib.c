@@ -1043,7 +1043,7 @@ int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 static int ll_options(char *options, struct super_block *sb)
 {
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	char *s2, *s1, *opts, *orig_opts;
+	char *s1, *opts, *orig_opts;
 	int err = 0;
 
 	ENTRY;
@@ -1055,7 +1055,6 @@ static int ll_options(char *options, struct super_block *sb)
 	if (!opts)
 		RETURN(-ENOMEM);
 	s1 = opts;
-	s2 = opts;
 
 	CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
 

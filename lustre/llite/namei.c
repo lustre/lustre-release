@@ -1299,7 +1299,6 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 {
 	struct lookup_intent *it;
 	struct dentry *de;
-	long long lookup_flags = LOOKUP_OPEN;
 	struct ll_sb_info *sbi = NULL;
 	struct pcc_create_attach pca = { NULL, NULL };
 	int open_threshold;
@@ -1343,7 +1342,6 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	it->it_op = IT_OPEN;
 	if (open_flags & O_CREAT) {
 		it->it_op |= IT_CREAT;
-		lookup_flags |= LOOKUP_CREATE;
 		sbi = ll_i2sbi(dir);
 		/* Volatile file is used for HSM restore, so do not use PCC */
 		if (!filename_is_volatile(dentry->d_name.name,

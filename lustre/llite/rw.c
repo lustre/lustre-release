@@ -578,12 +578,10 @@ static int ll_readahead_file_kms(const struct lu_env *env,
 				struct cl_io *io, __u64 *kms)
 {
 	struct cl_object *clob;
-	struct inode *inode;
 	struct cl_attr *attr = vvp_env_new_attr(env);
 	int ret;
 
 	clob = io->ci_obj;
-	inode = vvp_object_inode(clob);
 
 	cl_object_attr_lock(clob);
 	ret = cl_object_attr_get(env, clob, attr);

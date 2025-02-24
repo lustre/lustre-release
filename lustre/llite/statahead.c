@@ -881,7 +881,6 @@ static int ll_statahead_interpret(struct md_op_item *item, int rc)
 	struct ll_statahead_info *sai;
 	struct mdt_body *body;
 	struct inode *child;
-	__u64 handle = 0;
 
 	ENTRY;
 
@@ -935,7 +934,6 @@ static int ll_statahead_interpret(struct md_op_item *item, int rc)
 	 * process enqueues lock on child with parent lock held, eg.
 	 * unlink.
 	 */
-	handle = it->it_lock_handle;
 	ll_intent_drop_lock(it);
 	ll_unlock_md_op_lsm(&item->mop_data);
 
@@ -1161,7 +1159,6 @@ static void ll_stop_agl(struct ll_statahead_info *sai)
 static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 {
 	int node = cfs_cpt_spread_node(cfs_cpt_tab, CFS_CPT_ANY);
-	struct ll_inode_info *plli;
 	struct task_struct *task;
 
 	ENTRY;
@@ -1169,7 +1166,6 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 	CDEBUG(D_READA, "start agl thread: sai %p, parent %pd\n",
 	       sai, parent);
 
-	plli = ll_i2info(parent->d_inode);
 	task = kthread_create_on_node(ll_agl_thread, sai, node, "ll_agl_%d",
 				      sai->sai_pid);
 	if (IS_ERR(task)) {
