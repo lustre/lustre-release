@@ -2807,11 +2807,11 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 int mdt_io_set_info(struct tgt_session_info *tsi)
 {
-	struct ptlrpc_request	*req = tgt_ses_req(tsi);
-	struct ost_body		*body = NULL, *repbody;
-	void			*key, *val = NULL;
-	int			 keylen, vallen, rc = 0;
-	bool			 is_grant_shrink;
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct ost_body	*body = NULL, *repbody;
+	bool is_grant_shrink;
+	int keylen, rc = 0;
+	void *key;
 
 	ENTRY;
 
@@ -2821,14 +2821,6 @@ int mdt_io_set_info(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EFAULT));
 	}
 	keylen = req_capsule_get_size(tsi->tsi_pill, &RMF_SETINFO_KEY,
-				      RCL_CLIENT);
-
-	val = req_capsule_client_get(tsi->tsi_pill, &RMF_SETINFO_VAL);
-	if (val == NULL) {
-		DEBUG_REQ(D_HA, req, "no set_info val");
-		RETURN(err_serious(-EFAULT));
-	}
-	vallen = req_capsule_get_size(tsi->tsi_pill, &RMF_SETINFO_VAL,
 				      RCL_CLIENT);
 
 	is_grant_shrink = KEY_IS(KEY_GRANT_SHRINK);

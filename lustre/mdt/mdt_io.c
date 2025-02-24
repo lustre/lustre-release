@@ -323,7 +323,7 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			   struct niobuf_local *lnb)
 {
 	struct dt_object *dob;
-	int i, j, rc, tot_bytes = 0;
+	int i, j, rc;
 	int maxlnb = *nr_local;
 	int level;
 
@@ -369,7 +369,6 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 		j += rc;
 		maxlnb -= rc;
 		*nr_local += rc;
-		tot_bytes += rnb[i].rnb_len;
 	}
 
 	rc = dt_attr_get(env, dob, la);
@@ -395,7 +394,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			    struct niobuf_local *lnb)
 {
 	struct dt_object *dob;
-	int i, j, k, rc = 0, tot_bytes = 0;
+	int i, j, k, rc = 0;
 	int maxlnb = *nr_local;
 
 	ENTRY;
@@ -446,7 +445,6 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		j += rc;
 		maxlnb -= rc;
 		*nr_local += rc;
-		tot_bytes += rnb[i].rnb_len;
 	}
 
 	rc = dt_write_prep(env, dob, lnb, *nr_local);
