@@ -792,7 +792,6 @@ int
 ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 {
 	struct ldlm_flock_info *args;
-	struct obd_device *obd;
 	enum ldlm_error err;
 	int rc = 0;
 
@@ -826,7 +825,6 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 	LDLM_DEBUG(lock,
 		   "client-side enqueue returned a blocked lock, sleeping");
-	obd = class_exp2obd(lock->l_conn_export);
 
 	/* Go to sleep until the lock is granted. */
 	rc = l_wait_event_abortable(lock->l_waitq,
