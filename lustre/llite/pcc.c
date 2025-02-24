@@ -3190,7 +3190,6 @@ void pcc_vm_open(struct vm_area_struct *vma)
 {
 	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
 	struct vvp_object *vob;
-	struct pcc_file *pccf;
 	struct inode *inode;
 
 	ENTRY;
@@ -3202,7 +3201,6 @@ void pcc_vm_open(struct vm_area_struct *vma)
 	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
 	atomic_inc(&vob->vob_mmap_cnt);
 
-	pccf = ll_file2pccf(pccv->pccv_file);
 	atomic_inc(&pccv->pccv_refcnt);
 	if (pccv->pccv_vm_ops->open)
 		pccv->pccv_vm_ops->open(vma);
@@ -3216,7 +3214,6 @@ void pcc_vm_close(struct vm_area_struct *vma)
 {
 	struct pcc_vma *pccv = (struct pcc_vma *)vma->vm_private_data;
 	struct vvp_object *vob;
-	struct pcc_file *pccf;
 	struct inode *inode;
 
 	ENTRY;
@@ -3232,7 +3229,6 @@ void pcc_vm_close(struct vm_area_struct *vma)
 	if (pccv->pccv_vm_ops && pccv->pccv_vm_ops->close)
 		pccv->pccv_vm_ops->close(vma);
 
-	pccf = ll_file2pccf(pccv->pccv_file);
 	pcc_inode_mmap_put(inode);
 	if (atomic_dec_and_test(&pccv->pccv_refcnt)) {
 		fput(pccv->pccv_file);
