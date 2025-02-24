@@ -17581,14 +17581,17 @@ test_136() {
 	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
 
 	# fill already existed 2 plain llogs each 64767 wrapping whole catalog,
-	# drop server memory periodically to avoid OOM during testing
+	# drop server memory periodically only on ZFS to avoid OOM during test
 	local items=1000
 	for ((created = 0; created < 64767 * 5 / 2; created += items)); do
 		echo "$(date +%s): create $created-$((created + items - 1))"
-		createmany -o -u $DIR/$tdir/$tfile- $items
-		wait_delete_completed
-		do_facet mds1 "echo 1 > /proc/sys/vm/drop_caches"
+		createmany -o -u $DIR/$tdir/$tfile- $created $items
+		if [[ "$mds1_FSTYPE" == "zfs" ]]; then
+			wait_delete_completed
+			do_facet mds1 "echo 1 > /proc/sys/vm/drop_caches"
+		fi
 	done
+	[[ "$FSTYPE" == "zfs" ]] || wait_delete_completed
 
 	createmany -o $DIR/$tdir/$tfile_ 10
 	sleep 25
