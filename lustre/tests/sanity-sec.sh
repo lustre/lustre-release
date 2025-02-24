@@ -2467,6 +2467,10 @@ test_27ab() { #LU-18109
 
 	activedefault=$(do_facet mgs $LCTL get_param -n nodemap.active)
 	if ((activedefault != 1)); then
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property trusted --value 1
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property admin --value 1
 		do_facet mgs $LCTL nodemap_activate 1
 		wait_nm_sync active
 		stack_trap cleanup_active EXIT
@@ -2542,7 +2546,7 @@ test_27ab() { #LU-18109
 			error "cannot delete idmap range 500-509:0"
 
 	#expected error, invalid secondary range supplied
-	do_facet mgs $LCTL nodemap_add --name $nm1 \
+	do_facet mgs $LCTL nodemap_add_idmap --name $nm1 \
 		 --idtype uid --idmap 500-509:200000-200010 &&
 		 error "Invalid range 200000-200010 was supplied"
 
