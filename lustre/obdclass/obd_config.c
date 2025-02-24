@@ -2085,14 +2085,11 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 	char *end = buf + size;
 	int rc = 0, i;
 	struct lcfg_type_data *ldata;
-	int swab = 0;
 
 	LASSERT(rec->lrh_type == OBD_CFG_REC);
 
-	if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
+	if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION))
 		lustre_swab_lustre_cfg(lcfg);
-		swab = 1;
-	}
 
 	rc = lustre_cfg_sanity_check(lcfg, rec->lrh_len);
 	if (rc < 0)
