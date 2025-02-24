@@ -32207,20 +32207,14 @@ test_404() { # LU-6601
 	for osp in $mosps; do
 		echo "Deactivate: " $osp
 		do_facet $SINGLEMDS $LCTL --device %$osp deactivate
-		local stat=$(do_facet $SINGLEMDS $LCTL dl |
-			awk -vp=$osp '$4 == p { print $2 }')
-		[ $stat = IN ] || {
-			do_facet $SINGLEMDS $LCTL dl | grep -w $osp
-			error "deactivate error"
-		}
+		wait_update_facet $SINGLEMDS \
+			"$LCTL dl | awk -vp=$osp '\\\$4 == p { print \\\$2 }'" \
+			"IN" 10 || error "deactivate error"
 		echo "Activate: " $osp
 		do_facet $SINGLEMDS $LCTL --device %$osp activate
-		local stat=$(do_facet $SINGLEMDS $LCTL dl |
-			awk -vp=$osp '$4 == p { print $2 }')
-		[ $stat = UP ] || {
-			do_facet $SINGLEMDS $LCTL dl | grep -w $osp
-			error "activate error"
-		}
+		wait_update_facet $SINGLEMDS \
+			"$LCTL dl | awk -vp=$osp '\\\$4 == p { print \\\$2 }'" \
+			"UP" 10 || error "activate error"
 	done
 }
 run_test 404 "validate manual {de}activated works properly for OSPs"
