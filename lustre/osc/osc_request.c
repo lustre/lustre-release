@@ -1287,8 +1287,15 @@ out:
 #else /* !CONFIG_CRC_T10DIF */
 #define obd_dif_ip_fn NULL
 #define obd_dif_crc_fn NULL
-#define osc_checksum_bulk_t10pi(name, nob, pgc, pga, opc, fn, ssize, csum, re) \
-	-EOPNOTSUPP
+
+static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
+				   size_t pg_count, struct brw_page **pga,
+				   int opc, obd_dif_csum_fn *fn,
+				   int sector_size,
+				   u32 *check_sum, bool resend)
+{
+	return -EOPNOTSUPP;
+}
 #endif /* CONFIG_CRC_T10DIF */
 
 static int osc_checksum_bulk(int nob, size_t pg_count,
