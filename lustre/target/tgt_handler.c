@@ -1823,10 +1823,10 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 				 int opc, enum cksum_types cksum_type,
 				 __u32 *cksum)
 {
-	struct ahash_request	       *req;
-	unsigned int			bufsize;
-	int				i, err;
-	unsigned char			cfs_alg = cksum_obd2cfs(cksum_type);
+	unsigned char cfs_alg = cksum_obd2cfs(cksum_type);
+	struct ahash_request *req;
+	unsigned int bufsize;
+	int i;
 
 	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
 	if (IS_ERR(req)) {
@@ -1900,7 +1900,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 	}
 
 	bufsize = sizeof(*cksum);
-	err = cfs_crypto_hash_final(req, (unsigned char *)cksum, &bufsize);
+	cfs_crypto_hash_final(req, (unsigned char *)cksum, &bufsize);
 
 	return 0;
 }
