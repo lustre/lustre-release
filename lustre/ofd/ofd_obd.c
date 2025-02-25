@@ -47,12 +47,12 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 				 struct obd_export *exp,
 				 struct lnet_nid *client_nid)
 {
-	struct obd_device	*obd = ofd_obd(ofd);
-	struct nid_stat		*stats;
-	int			 rc;
+	struct obd_device *obd = ofd_obd(ofd);
+	char param[MAX_OBD_NAME * 4];
+	struct nid_stat	*stats;
+	int rc;
 
 	ENTRY;
-
 	if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
 		/* Self-export gets no proc entry */
 		RETURN(0);
@@ -63,24 +63,17 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 		RETURN(rc == -EALREADY ? 0 : rc);
 
 	stats = exp->exp_nid_stats;
-	stats->nid_stats = lprocfs_stats_alloc(LPROC_OFD_STATS_LAST,
-					       LPROCFS_STATS_FLAG_NOPERCPU);
+	scnprintf(param, sizeof(param), "obdfilter.%s.exports.%s.stats",
+		  obd->obd_name, libcfs_nidstr(client_nid));
+	stats->nid_stats = ldebugfs_stats_alloc(LPROC_OFD_STATS_LAST, param,
+						stats->nid_debugfs,
+						LPROCFS_STATS_FLAG_NOPERCPU);
 	if (!stats->nid_stats)
 		RETURN(-ENOMEM);
 
 	ofd_stats_counter_init(stats->nid_stats, 0, LPROCFS_CNTR_HISTOGRAM);
 
-	rc = lprocfs_stats_register(stats->nid_proc, "stats", stats->nid_stats);
-	if (rc != 0) {
-		lprocfs_stats_free(&stats->nid_stats);
-		GOTO(out, rc);
-	}
-
 	rc = lprocfs_nid_ldlm_stats_init(stats);
-	if (rc != 0)
-		GOTO(out, rc);
-
-out:
 	RETURN(rc);
 }
 

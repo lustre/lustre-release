@@ -38,35 +38,28 @@ int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 			  void *localdata)
 {
 	struct lnet_nid *client_nid = localdata;
+	char param[MAX_OBD_NAME * 4];
 	struct nid_stat *stats;
 	int rc;
 
 	ENTRY;
-
 	rc = lprocfs_exp_setup(exp, client_nid);
 	if (rc != 0)
-		/* Mask error for already created /proc entries */
+		/* Mask error for already created /sysfs entries */
 		RETURN(rc == -EALREADY ? 0 : rc);
 
 	stats = exp->exp_nid_stats;
-	stats->nid_stats = lprocfs_stats_alloc(LPROC_MGS_LAST,
-					       LPROCFS_STATS_FLAG_NOPERCPU);
-	if (stats->nid_stats == NULL)
+	scnprintf(param, sizeof(param), "mgs.MGS.exports.%s.stats",
+		  libcfs_nidstr(client_nid));
+	stats->nid_stats = ldebugfs_stats_alloc(LPROC_MGS_LAST, param,
+						stats->nid_debugfs,
+						LPROCFS_STATS_FLAG_NOPERCPU);
+	if (!stats->nid_stats)
 		RETURN(-ENOMEM);
 
 	mgs_stats_counter_init(stats->nid_stats);
 
-	rc = lprocfs_stats_register(stats->nid_proc, "stats", stats->nid_stats);
-	if (rc != 0) {
-		lprocfs_stats_free(&stats->nid_stats);
-		GOTO(out, rc);
-	}
-
 	rc = lprocfs_nid_ldlm_stats_init(stats);
-	if (rc != 0)
-		GOTO(out, rc);
-
-out:
 	RETURN(rc);
 }
 

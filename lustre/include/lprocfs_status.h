@@ -550,8 +550,8 @@ lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
 extern ssize_t
-lprocfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
-					size_t count, loff_t *off);
+ldebugfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
+				   size_t count, loff_t *off);
 extern int lprocfs_nid_stats_clear_seq_show(struct seq_file *file, void *data);
 #endif
 extern int lprocfs_stats_register(struct proc_dir_entry *root, const char *name,
@@ -1025,20 +1025,6 @@ static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
 }
 
 #ifdef HAVE_SERVER_SUPPORT
-static inline
-ssize_t lprocfs_nid_stats_seq_write(struct file *file,
-				    const char __user *buffer,
-				    size_t count, loff_t *off)
-{
-	return 0;
-}
-
-static inline int lprocfs_nid_stats_clear_seq_show(struct seq_file *m,
-						   void *data)
-{
-	return 0;
-}
-
 static inline int lprocfs_exp_setup(struct obd_export *exp,
 				    struct lnet_nid *peer_nid)
 {

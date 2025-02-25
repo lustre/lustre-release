@@ -1411,12 +1411,14 @@ LPROC_SEQ_FOPS_RO(mdt_checksum_type);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mdt, mds_evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, checksum_dump);
+LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
+/* belongs to export directory */
+LDEBUGFS_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);
+
 LUSTRE_RW_ATTR(job_cleanup_interval);
 LUSTRE_RW_ATTR(job_xattr);
-LPROC_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);
 LUSTRE_RW_ATTR(hsm_control);
 
-LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LUSTRE_RW_ATTR(recovery_time_hard);
 LUSTRE_RW_ATTR(recovery_time_soft);
 LUSTRE_RW_ATTR(ir_factor);
@@ -1539,7 +1541,7 @@ static struct ldebugfs_vars ldebugfs_mdt_gss_vars[] = {
 };
 
 static int
-lprocfs_mdt_print_open_files(struct obd_export *exp, void *v)
+ldebugfs_mdt_print_open_files(struct obd_export *exp, void *v)
 {
 	struct seq_file		*seq = v;
 
@@ -1558,25 +1560,25 @@ lprocfs_mdt_print_open_files(struct obd_export *exp, void *v)
 	return 0;
 }
 
-static int lprocfs_mdt_open_files_seq_show(struct seq_file *seq, void *v)
+static int ldebugfs_mdt_open_files_seq_show(struct seq_file *seq, void *v)
 {
 	struct nid_stat *stats = seq->private;
 
 	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
-				       lprocfs_mdt_print_open_files, seq);
+				       ldebugfs_mdt_print_open_files, seq);
 }
 
-int lprocfs_mdt_open_files_seq_open(struct inode *inode, struct file *file)
+int ldebugfs_mdt_open_files_seq_open(struct inode *inode, struct file *file)
 {
 	struct seq_file		*seq;
 	int			rc;
 
-	rc = single_open(file, &lprocfs_mdt_open_files_seq_show, NULL);
+	rc = single_open(file, &ldebugfs_mdt_open_files_seq_show, NULL);
 	if (rc != 0)
 		return rc;
 
 	seq = file->private_data;
-	seq->private = pde_data(inode);
+	seq->private = inode->i_private;
 
 	return 0;
 }
@@ -1685,15 +1687,19 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 
 	obd->obd_debugfs_gss_dir = debugfs_create_dir("gss",
 						      obd->obd_debugfs_entry);
-	if (obd->obd_debugfs_gss_dir)
-		ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
-				  ldebugfs_mdt_gss_vars, obd);
+	if (IS_ERR(obd->obd_debugfs_gss_dir))
+		obd->obd_debugfs_gss_dir = NULL;
 
-	obd->obd_proc_exports_entry = proc_mkdir("exports",
-						 obd->obd_proc_entry);
-	if (obd->obd_proc_exports_entry)
-		lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
-				   obd, &mdt_nid_stats_clear_fops);
+	ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
+			  ldebugfs_mdt_gss_vars, obd);
+
+	obd->obd_debugfs_exports = debugfs_create_dir("exports",
+						      obd->obd_debugfs_entry);
+	if (IS_ERR(obd->obd_debugfs_exports))
+		obd->obd_debugfs_exports = NULL;
+
+	debugfs_create_file("clear", 0644, obd->obd_debugfs_exports,
+			    obd, &mdt_nid_stats_clear_fops);
 
 	rc = lprocfs_alloc_md_stats(obd, ARRAY_SIZE(mdt_stats));
 	if (rc)
@@ -1716,11 +1722,6 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 void mdt_tunables_fini(struct mdt_device *mdt)
 {
 	struct obd_device *obd = mdt2obd_dev(mdt);
-
-	if (obd->obd_proc_exports_entry != NULL) {
-		lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
-		obd->obd_proc_exports_entry = NULL;
-	}
 
 	lprocfs_free_per_client_stats(obd);
 	/* hsm_cdt_tunables is disabled earlier than this to avoid

@@ -1029,7 +1029,8 @@ void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset,
 			     LPROCFS_TYPE_LATENCY & (~cntr_umask), "prealloc");
 }
 
-LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);
+/* belongs to export directory */
+LDEBUGFS_SEQ_FOPS_RW_TYPE(ofd, nid_stats_clear);
 
 LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
@@ -1087,7 +1088,6 @@ KOBJ_ATTRIBUTE_GROUPS(ofd); /* creates ofd_groups from ofd_attrs */
 int ofd_tunables_init(struct ofd_device *ofd)
 {
 	struct obd_device *obd = ofd_obd(ofd);
-	struct proc_dir_entry *entry;
 	int rc = 0;
 
 	ENTRY;
@@ -1120,27 +1120,19 @@ int ofd_tunables_init(struct ofd_device *ofd)
 
 	obd->obd_debugfs_gss_dir = debugfs_create_dir("gss",
 						      obd->obd_debugfs_entry);
-	if (obd->obd_debugfs_gss_dir)
-		ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
-				  ldebugfs_ofd_gss_vars, obd);
+	if (IS_ERR(obd->obd_debugfs_gss_dir))
+		obd->obd_debugfs_gss_dir = NULL;
 
-	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
-	if (IS_ERR(entry)) {
-		rc = PTR_ERR(entry);
-		CERROR("%s: error %d setting up lprocfs for %s\n",
-		       obd->obd_name, rc, "exports");
-		GOTO(obd_free_stats, rc);
-	}
-	obd->obd_proc_exports_entry = entry;
+	ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
+			  ldebugfs_ofd_gss_vars, obd);
 
-	entry = lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
-				   obd, &lprocfs_nid_stats_clear_fops);
-	if (IS_ERR(entry)) {
-		rc = PTR_ERR(entry);
-		CERROR("%s: add proc entry 'clear' failed: %d.\n",
-		       obd->obd_name, rc);
-		GOTO(obd_free_stats, rc);
-	}
+	obd->obd_debugfs_exports = debugfs_create_dir("exports",
+						      obd->obd_debugfs_entry);
+	if (IS_ERR(obd->obd_debugfs_exports))
+		obd->obd_debugfs_exports = NULL;
+
+	debugfs_create_file("clear", 0644, obd->obd_debugfs_exports,
+			    obd, &ofd_nid_stats_clear_fops);
 
 	ofd_stats_counter_init(obd->obd_stats, 0, LPROCFS_CNTR_HISTOGRAM);
 

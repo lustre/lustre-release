@@ -736,9 +736,9 @@ struct obd_device {
 	struct dentry			*obd_debugfs_entry;
 	struct dentry			*obd_debugfs_gss_dir;
 	struct proc_dir_entry	*obd_proc_entry;
-	struct proc_dir_entry	*obd_proc_exports_entry;
+	struct dentry			*obd_debugfs_exports;
 	struct dentry			*obd_svc_debugfs_entry;
-	struct lprocfs_stats	*obd_svc_stats;
+	struct lprocfs_stats		*obd_svc_stats;
 	const struct attribute	       **obd_attrs;
 	struct lprocfs_vars	*obd_vars;
 	struct ldebugfs_vars	*obd_debugfs_vars;

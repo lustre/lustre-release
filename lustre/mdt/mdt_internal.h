@@ -1329,8 +1329,8 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name);
 void mdt_tunables_fini(struct mdt_device *mdt);
 
 /* lustre/mdt_mdt_lproc.c */
-int lprocfs_mdt_open_files_seq_open(struct inode *inode,
-				    struct file *file);
+int ldebugfs_mdt_open_files_seq_open(struct inode *inode,
+				     struct file *file);
 void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,

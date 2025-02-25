@@ -19,12 +19,12 @@
 #include <libcfs/linux/linux-fs.h>
 #include "mdt_internal.h"
 
-static const struct proc_ops mdt_open_files_seq_fops = {
-	PROC_OWNER(THIS_MODULE)
-	.proc_open		= lprocfs_mdt_open_files_seq_open,
-	.proc_read		= seq_read,
-	.proc_lseek		= seq_lseek,
-	.proc_release		= single_release,
+static const struct file_operations mdt_open_files_seq_fops = {
+	.owner		= THIS_MODULE,
+	.open		= ldebugfs_mdt_open_files_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
 };
 
 /**
@@ -44,10 +44,11 @@ int mdt_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 			  void *localdata)
 {
 	struct lnet_nid *client_nid = localdata;
+	char param[MAX_OBD_NAME * 4];
 	struct nid_stat *stats;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	rc = lprocfs_exp_setup(exp, client_nid);
 
 	if (rc != 0)
@@ -55,30 +56,22 @@ int mdt_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 		RETURN(rc == -EALREADY ? 0 : rc);
 
 	stats = exp->exp_nid_stats;
-	stats->nid_stats = lprocfs_stats_alloc(LPROC_MDT_LAST,
+	scnprintf(param, sizeof(param), "mdt.%s.exports.%s.stats",
+		  obd->obd_name, libcfs_nidstr(client_nid));
+	stats->nid_stats = ldebugfs_stats_alloc(LPROC_MDT_LAST, param,
+						stats->nid_debugfs,
 						LPROCFS_STATS_FLAG_NOPERCPU);
-	if (stats->nid_stats == NULL)
+	if (!stats->nid_stats)
 		RETURN(-ENOMEM);
 
 	mdt_stats_counter_init(stats->nid_stats, 0, LPROCFS_CNTR_HISTOGRAM);
-
-	rc = lprocfs_stats_register(stats->nid_proc, "stats", stats->nid_stats);
-	if (rc != 0) {
-		lprocfs_stats_free(&stats->nid_stats);
-		GOTO(out, rc);
-	}
 
 	rc = lprocfs_nid_ldlm_stats_init(stats);
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = lprocfs_seq_create(stats->nid_proc, "open_files",
-				0444, &mdt_open_files_seq_fops, stats);
-	if (rc != 0) {
-		CWARN("%s: error adding the open_files file: rc = %d\n",
-			obd->obd_name, rc);
-		GOTO(out, rc);
-	}
+	debugfs_create_file("open_files", 0444, stats->nid_debugfs, stats,
+			    &mdt_open_files_seq_fops);
 out:
 	RETURN(rc);
 }

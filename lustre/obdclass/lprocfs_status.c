@@ -1147,13 +1147,11 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
 
 	debugfs_remove_recursive(obd->obd_debugfs_gss_dir);
 	obd->obd_debugfs_gss_dir = NULL;
-
-	if (obd->obd_proc_exports_entry) {
-		/* Should be no exports left */
-		lprocfs_remove(&obd->obd_proc_exports_entry);
-		obd->obd_proc_exports_entry = NULL;
-	}
-
+#ifdef HAVE_SERVER_SUPPORT
+	/* Should be no exports left */
+	debugfs_remove_recursive(obd->obd_debugfs_exports);
+	obd->obd_debugfs_exports = NULL;
+#endif
 	if (obd->obd_proc_entry) {
 		lprocfs_remove(&obd->obd_proc_entry);
 		obd->obd_proc_entry = NULL;
@@ -1804,23 +1802,6 @@ void lprocfs_free_md_stats(struct obd_device *obd)
 	}
 }
 EXPORT_SYMBOL(lprocfs_free_md_stats);
-
-void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
-{
-	lprocfs_counter_init(ldlm_stats, LDLM_ENQUEUE - LDLM_FIRST_OPC,
-			     LPROCFS_TYPE_REQS, "ldlm_enqueue");
-	lprocfs_counter_init(ldlm_stats, LDLM_CONVERT - LDLM_FIRST_OPC,
-			     LPROCFS_TYPE_REQS, "ldlm_convert");
-	lprocfs_counter_init(ldlm_stats, LDLM_CANCEL - LDLM_FIRST_OPC,
-			     LPROCFS_TYPE_REQS, "ldlm_cancel");
-	lprocfs_counter_init(ldlm_stats, LDLM_BL_CALLBACK - LDLM_FIRST_OPC,
-			     LPROCFS_TYPE_REQS, "ldlm_bl_callback");
-	lprocfs_counter_init(ldlm_stats, LDLM_CP_CALLBACK - LDLM_FIRST_OPC,
-			     LPROCFS_TYPE_REQS, "ldlm_cp_callback");
-	lprocfs_counter_init(ldlm_stats, LDLM_GL_CALLBACK - LDLM_FIRST_OPC,
-			     LPROCFS_TYPE_REQS, "ldlm_gl_callback");
-}
-EXPORT_SYMBOL(lprocfs_init_ldlm_stats);
 
 __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 			  struct lprocfs_counter_header *header,

@@ -187,7 +187,8 @@ int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 LPROC_SEQ_FOPS_RO_TYPE(mgs, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mgs, evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mgs, ir_timeout);
-LPROC_SEQ_FOPS_RW_TYPE(mgs, nid_stats_clear);
+/* belongs to export directory */
+LDEBUGFS_SEQ_FOPS_RW_TYPE(mgs, nid_stats_clear);
 
 static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
 	{ .name	=	"hash_stats",
@@ -292,21 +293,19 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 
 	obd->obd_debugfs_gss_dir = debugfs_create_dir("gss",
 						      obd->obd_debugfs_entry);
-	if (obd->obd_debugfs_gss_dir)
-		ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
-				  ldebugfs_ofd_gss_vars, obd);
+	if (IS_ERR(obd->obd_debugfs_gss_dir))
+		obd->obd_debugfs_gss_dir = NULL;
 
-	obd->obd_proc_exports_entry = lprocfs_register("exports",
-						       obd->obd_proc_entry,
-						       NULL, NULL);
-        if (IS_ERR(obd->obd_proc_exports_entry)) {
-                rc = PTR_ERR(obd->obd_proc_exports_entry);
-                obd->obd_proc_exports_entry = NULL;
-		GOTO(out, rc);
-        }
-	if (obd->obd_proc_exports_entry)
-		lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
-				   obd, &mgs_nid_stats_clear_fops);
+	ldebugfs_add_vars(obd->obd_debugfs_gss_dir,
+			  ldebugfs_ofd_gss_vars, obd);
+
+	obd->obd_debugfs_exports = debugfs_create_dir("exports",
+						      obd->obd_debugfs_entry);
+	if (IS_ERR(obd->obd_debugfs_exports))
+		obd->obd_debugfs_exports = NULL;
+
+	debugfs_create_file("clear", 0644, obd->obd_debugfs_exports,
+			    obd, &mgs_nid_stats_clear_fops);
 
 	rc = sysfs_create_link(&obd->obd_kset.kobj, &mgs->mgs_bottom->dd_kobj,
 			       "osd");
