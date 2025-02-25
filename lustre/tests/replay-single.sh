@@ -5345,8 +5345,9 @@ test_201() {
 			error "mount mds2 failed"
 	echo "Umount took $duration seconds"
 
-	#Valid timeout is 8 for MDTs + 8 for OSTs + 4 some for other umount
-	(( duration < 20 )) || error "Cascading timeouts on disconnect"
+	# Valid timeout is 8s for MDT0000-lwp-MDT0001
+	# + 8s for osp devices MDTs/OSTs + (4s + OSTCOUNTs) for other umount
+	(( duration <= (20 + OSTCOUNT) )) || error "Cascading timeouts on disconnect"
 }
 run_test 201 "MDT umount cascading disconnects timeouts"
 
