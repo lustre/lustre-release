@@ -218,6 +218,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	SSM_CMD_COMMON("migrate  ")					\
 	"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"			\
 	"\t\t[--block|-b] [--non-block|-n]\n"				\
+	"\t\t[--lustre-dir=LUSTRE_MOUNT_POINT --fid]\n"			\
 	"\t\t[--non-direct|-D] [--verbose|-v] FILENAME\n"		\
 	"\t\t[--stats-interval SECONDS]\n"				\
 	"\t\t-0|--null|--files-from=LIST_FILE|FILENAME ...\n"
@@ -279,8 +280,9 @@ command_t mirror_cmdlist[] = {
 "Usage: lfs mirror extend [--mirror-count|-N[MIRROR_COUNT]]\n"
 		"\t\t[--no-verify] [--stats|--stats-interval=STATS_INTERVAL]\n"
 		"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"
-		"\t\t[-f VICTIM_FILE]\n"
+		"\t\t[--file|-f VICTIM_FILE]\n"
 		"\t\t" SSM_SETSTRIPE_OPT "]\n"
+		"\t\t[--fid [--lustre-dir=LUSTRE_MOUNT_POINT]]\n"
 		"\t\t-0|--null|--files-from=LIST_FILE|FILENAME ...\n" },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
@@ -1907,6 +1909,12 @@ open_by_fid_str(const char *fid_str, const char *path, int *fdp, int flags)
 	return rc;
 }
 
+/*
+ * if @param name_or_fid matches the pattern of fid, @param path is any path in
+ * the lustre fs.
+ * if @param name_or_fid does not match the pattern of fid, it should be the
+ * path to file, @param path and @param flags are ignored.
+ */
 static struct llapi_layout*
 layout_get_by_name_or_fid(const char *name_or_fid, const char *path,
 			  enum llapi_layout_get_flags layout_flags, int flags)
@@ -3639,6 +3647,7 @@ enum {
 	LFS_QUOTA_IGRACE_OPT,
 	LFS_FILES_FROM,
 	LFS_THREAD_OPT,
+	LFS_LUSTRE_DIR,
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -3647,6 +3656,30 @@ enum {
 #endif
 
 /* functions */
+
+static int guess_only_lustre_mount_root(char *mntdir)
+{
+	int rc;
+	char buf[PATH_MAX] = {0};
+
+	mntdir[0] = '\0';
+	rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
+	if (rc != 0) {
+		llapi_error(LLAPI_MSG_DEBUG, rc,
+			    "no lustre mount point");
+		return rc;
+	}
+
+	rc = llapi_search_mounts(NULL, 1, buf, NULL);
+	if (rc == 0) {
+		llapi_error(LLAPI_MSG_DEBUG, EEXIST,
+			    "multiple lustre mount points: %s %s", mntdir, buf);
+		return -EEXIST;
+	}
+
+	return 0;
+}
+
 static int lfs_setstripe_internal(int argc, char **argv,
 				  enum setstripe_origin opc)
 {
@@ -3704,6 +3737,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	int delim = '\n';
 	char *buf = NULL;
 	size_t bufsize = 0;
+	char *lustre_dir = NULL;
+	char mntdir[PATH_MAX];
+	int lustre_dir_fd = -1;
+	bool fid_mode = false;
+	struct lu_fid fid;
 
 	struct option long_opts[] = {
 	{ .val = LFS_COMP_ADD_OPT,
@@ -3743,6 +3781,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 						.has_arg = required_argument},
 	{ .val = LFS_FILES_FROM,
 		.name = "files-from",		.has_arg = required_argument},
+	{ .val = LFS_LUSTRE_DIR,
+		.name = "lustre-dir",		.has_arg = required_argument},
 	{ .val = '0',	.name = "null",		.has_arg = no_argument },
 	/* find { .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
 		/* --block is only valid in migrate mode */
@@ -3765,7 +3805,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument},
 	{ .val = 'f',	.name = "file",		.has_arg = required_argument },
-/* find	{ .val = 'F',	.name = "fid",		.has_arg = no_argument }, */
+	{ .val = 'F',	.name = "fid",		.has_arg = no_argument },
 /* find	{ .val = 'g',	.name = "gid",		.has_arg = no_argument }, */
 /* find	{ .val = 'G',	.name = "group",	.has_arg = required_argument }*/
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
@@ -3820,8 +3860,19 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
+
+	/* pre-allocate buf */
+	bufsize = PATH_MAX;
+	buf = malloc(bufsize);
+	if (buf == NULL) {
+		result = -errno;
+		fprintf(stderr, "%s %s: failed to allocate memory\n",
+			progname, argv[0]);
+		goto error;
+	}
+
 	while ((c = getopt_long(argc, argv,
-				"0bc:C:dDE:f:hH:i:I:m:N::no:p:L:s:S:vx:W:y:z:",
+				"0bc:C:dDE:f:FhH:i:I:m:N::no:p:L:s:S:vx:W:y:z:",
 				long_opts, NULL)) >= 0) {
 		size_units = 1;
 		switch (c) {
@@ -3983,6 +4034,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case LFS_FILES_FROM:
 			files_from = optarg;
 			break;
+		case LFS_LUSTRE_DIR:
+			lustre_dir = optarg;
+			break;
 		case '0':
 			null_mode = true;
 			break;
@@ -4083,6 +4137,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					goto usage_error;
 				}
 			}
+			break;
+		case 'F':
+			fid_mode = true;
 			break;
 		case 'H':
 			if (!migrate_mode) {
@@ -4399,9 +4456,13 @@ create_mirror:
 	fname = argv[optind];
 
 	/* for 'lfs migrate' and 'lfs mirror extend' command,
+	 *
 	 * at least one of FILE/--null/--files-from=LIST_FILE must be specified.
 	 * If both --null and --files-from=LIST_FILE are specified, read
 	 * filenames from LIST_FILE and use '\0' as delimiter.
+	 *
+	 * --lustre-dir= and --fid may be specified at the same time, so that
+	 * FID is provided on command line or file/stdin instead of file path.
 	 */
 	if (opc == SO_MIGRATE || opc == SO_MIRROR_EXTEND) {
 		int num = 0;
@@ -4431,6 +4492,41 @@ create_mirror:
 			fprintf(stderr, "%s %s: at least one of FILE/--null/--files-from=LIST_FILE must be specified\n",
 				progname, argv[0]);
 			goto usage_error;
+		}
+
+		/* check fid mode is set correctly */
+		if (fid_mode) {
+			int rc;
+			struct lu_fid fid;
+
+			if (lustre_dir == NULL) {
+				rc = guess_only_lustre_mount_root(mntdir);
+				if (rc != 0) {
+					fprintf(stderr,
+						"%s %s: not able to guess lustre mount point, please specify --lustre-dir option\n",
+						progname, argv[0]);
+					goto usage_error;
+				}
+				lustre_dir = mntdir;
+			}
+
+			lustre_dir_fd = open(lustre_dir, O_RDONLY);
+			if (lustre_dir_fd < 0) {
+				result = -errno;
+				fprintf(stderr,
+					"%s %s: failed to open lustre dir: %s\n",
+					progname, argv[0], lustre_dir);
+				goto error;
+			}
+
+			rc = llapi_fd2fid(lustre_dir_fd, &fid);
+			if (rc < 0) {
+				result = rc;
+				fprintf(stderr,
+					"%s %s: path is not in a lustre file system: %s\n",
+					progname, argv[0], lustre_dir);
+				goto error;
+			}
 		}
 	} else if (optind == argc) {
 		fprintf(stderr, "%s %s: FILE must be specified\n",
@@ -4760,6 +4856,55 @@ create_mirror:
 			/* remove possible trailing '\n' */
 			if (buf[len - 1] == '\n')
 				buf[len - 1] = '\0';
+			/* skip empty line or comment line starting with # */
+			if (strlen(buf) == 0 || buf[0] == '#')
+				continue;
+			fname = buf;
+		}
+
+		/* if fid_mode is true, fname is actually fid string,
+		 * parse the fid and fill real fname
+		 */
+		if (fid_mode) {
+			int len;
+			char *endptr = NULL;
+
+			result = llapi_fid_parse(fname, &fid, &endptr);
+			if (result) {
+				fprintf(stderr,
+					"%s %s: invalid FID: %s\n",
+					progname, argv[0], fname);
+				if (result2 == 0)
+					result2 = result;
+				continue;
+			}
+
+			strncpy(buf, lustre_dir, PATH_MAX);
+			buf[PATH_MAX - 2] = '\0';
+			len = strlen(buf);
+			if (lustre_dir[len - 1] != '/') {
+				buf[len] = '/';
+				buf[len + 1] = '\0';
+				len++;
+			}
+			result = llapi_fid2path_at(lustre_dir_fd, &fid,
+						   buf + len, bufsize - len,
+						   NULL, NULL);
+			if (result < 0) {
+				fprintf(stderr,
+					"%s %s: failed to lookup path for FID:" DFID_NOBRACE "\n",
+					progname, argv[0], PFID(&fid));
+				/* record the errno and continue for next FID */
+				if (result2 == 0)
+					result2 = result;
+				continue;
+			}
+
+			llapi_printf(migration_flags & LLAPI_MIGRATION_VERBOSE ?
+				     LLAPI_MSG_NORMAL : LLAPI_MSG_DEBUG,
+				     DFID_NOBRACE " => %s\n",
+				     PFID(&fid), buf);
+
 			fname = buf;
 		}
 
@@ -4909,6 +5054,8 @@ error:
 	lfs_mirror_list_free(mirror_list);
 	if (files_from_fp != NULL && files_from_fp != stdin)
 		fclose(files_from_fp);
+	if (lustre_dir_fd >= 0)
+		close(lustre_dir_fd);
 	free(buf);
 	return result;
 }
@@ -8144,7 +8291,7 @@ static int lfs_df(int argc, char **argv)
 			if (optarg) {
 				char *end;
 				errno = 0;
-				
+
 				mdt_idx = strtol(optarg, &end, 0);
 				if (errno != 0 || *end != '\0' || mdt_idx < 0 ||
 				    mdt_idx > LOV_V1_INSANE_STRIPE_INDEX) {

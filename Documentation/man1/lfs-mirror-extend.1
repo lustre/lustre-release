@@ -3,7 +3,8 @@
 lfs-mirror-extend \- add mirror(s) to an existing file
 .SH SYNOPSIS
 .SY "lfs mirror extend"
-.RB [ --bandwidth | "-W \fIBANDWIDTH_MB" [ MG ]
+.RB [ --bandwidth | --bandwidth-limit | "-W \fIBANDWIDTH_MB" [ MG ]]
+.RB [ --fid | -F " [" --lustre-dir = \fILUSTRE_MOUNT_POINT ]]
 .RB [ --mirror-count | -N [[ = ] \fIMIRROR_COUNT ]]
 .RB [ --no-verify ]
 .RB [ --stats | --stats-interval=\fISECONDS ]
@@ -26,12 +27,22 @@ Multiple file names are separated by space char.
 .TP
 .BR -0 ", " --null
 Read file names from stdin by default. Each file name is followed by a NUL char.
-Usually is used after a pipeline from \fBlfs find --print0\fR command.
+Usually is used after a pipeline from
+.B lfs find --print0
+command.
 .TP
 .BR --files-from = \fILIST_FILE
-Read file names from file \fILIST_FILE\fR. One line for each file name.
-If \fILIST_FILE\fR is \fB-\fR, read from stdin.
-If \fB--null\fR is specified at the same time,
+Read file names from file
+.IR LIST_FILE .
+One line for each file name.
+If
+.I LIST_FILE
+is
+.RB ' - ',
+read from stdin.
+If
+.B--null
+is specified at the same time,
 file names are separated by a NUL char.
 .P
 The
@@ -97,6 +108,22 @@ but use it only when the file contents are known to be the same.
 If no option is specified, then the command will return an error.
 .SH OPTIONS
 .TP
+.BR \-\-chunk\-size = \fISIZE_MB
+The buffer chunk size in MB used to transfer data. It is 1 (MB) by default.
+But if \fB--aio-tasks\fR=0, the default value is 64 (MB).
+.TP
+.BR --fid ", " -F
+FID(s) are provided from command line/stdin/\fILIST_FILE\fR instead of file path(s).
+Option
+.BR --lustre-dir = \fILUSTRE_MOUNT_POINT\fR
+may be specified at the same time.
+.TP
+.BR --lustre-dir = \fILUSTRE_MOUNT_POINT\fR
+The mount point of Lustre file system on which FIDs are.
+If there is only one mounted Lustre file system, this option is not necessary.
+This option must be specified together with
+.BR --fid .
+.TP
 .BR -N ", " --mirror-count [\fIMIRROR_COUNT ]
 The number of mirrors that have the same layout to be added. The option can be
 repeated multiple times to separate mirrors that have different layouts. The
@@ -116,7 +143,7 @@ from the previous component will be used. This option cannot be specified with
 .I VICTIM_FILE
 option.
 .TP
-.BI -f " VICTIM_FILE"
+.BR -f ", " --file " " \fIVICTIM_FILE
 The layout of
 .I VICTIM_FILE
 will be merged as a mirror added to the mirrored file.

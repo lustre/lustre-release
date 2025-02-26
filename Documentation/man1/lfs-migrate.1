@@ -74,15 +74,6 @@ being lost. This should be used if an OST needs to be completely emptied
 prior to its removal, to ensure all requested files are migrated off the
 OST.
 .TP
-.BR -h ", " --help
-Print usage message.
-.TP
-.BR -n ", " --non-block
-Abort migration if concurrent file access is detected. This can be
-used with OST space balancing migration to avoid interfering with file
-access by applications if there is not a requirement to migrate any
-particular file to the new layout.
-.TP
 .BR -D ", " --non-direct
 Do
 .B not
@@ -101,7 +92,41 @@ This option cannot be used on encrypted files when the encryption key is not
 available. It will result in
 .BR -ENOKEY .
 .TP
-.BR -W ", " --bandwidth " \fIBANDWIDTH_MB\fR[" MG ]
+.BR -F ", " --fid
+FID(s) are provided from command line/stdin/
+.I LIST_FILE
+instead of file path(s).
+Option
+.BR --lustre-dir = \fILUSTRE_MOUNT_POINT
+may be specified at the same time.
+.TP
+.BR -h ", " --help
+Print usage message.
+.TP
+.BR --lustre-dir = \fILUSTRE_MOUNT_POINT
+The mount point of Lustre file system on which FIDs are.
+If there is only one mounted Lustre file system, this option is not necessary.
+This option must be specified together with
+.BR --fid .
+.TP
+.BR -n ", " --non-block
+Abort migration if concurrent file access is detected. This can be
+used with OST space balancing migration to avoid interfering with file
+access by applications if there is not a requirement to migrate any
+particular file to the new layout.
+.TP
+.BR --stats
+This option enables progress updates every 5 seconds, in YAML format.
+.TP
+.BR --stats-interval =\fISTATS_INTERVAL
+This option enables progress updates every
+.I STATS_INTERVAL
+seconds, in YAML format.
+.TP
+.BR -v ", " --verbose
+Print each filename as it is migrated.
+.TP
+.BR -W ", " --bandwidth-limit ", " --bandwidth " \fIBANDWIDTH_MB\fR[" MG ]
 Limit the read and write bandwidth a migrate job consumes to no more than
 .I BANDWIDTH_MB
 MiB/s. An optional suffix can be used to specify units in
@@ -109,15 +134,6 @@ MiB/s. An optional suffix can be used to specify units in
 or
 .BR G ibibytes
 per second.
-.TP
-.BR --stats
-Output verbose stats about migrate job progress in YAML format.
-.TP
-.BI --stats-interval " SECONDS"
-Controls how often the stats are output; this defaults to 5 seconds.
-.TP
-.BR -v ", " --verbose
-Print each filename as it is migrated.
 .SS NOTES
 .B lfs migrate
 has a complementary
