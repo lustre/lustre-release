@@ -4598,6 +4598,16 @@ test_402() {
 }
 run_test 402 "Destination net rule should not panic"
 
+test_410() {
+	reinit_dlc || return $?
+
+	do_lnetctl fault reset \0 ||
+		return 0
+
+	error "Command should fail"
+}
+run_test 410 "No segfault in lnetctl fault command"
+
 test_500() {
 	reinit_dlc || return $?
 

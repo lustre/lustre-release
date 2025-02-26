@@ -676,13 +676,9 @@ int yaml_lnet_fault_rule(yaml_document_t *results, __u32 opc, char *src,
 	if (rc < 0)
 		return rc;
 
-	if (local_nid) {
-		rc = fault_attr_parse_nid(local_nid, &fa_local_nid);
-		if (rc < 0)
-			return rc;
-	} else {
-		fa_local_nid = LNET_ANY_NID;
-	}
+	rc = fault_attr_parse_nid(local_nid, &fa_local_nid);
+	if (rc < 0)
+		return rc;
 
 skip_options:
 	/* Create Netlink emitter to send request to kernel */
@@ -749,6 +745,9 @@ skip_options:
 				   libcfs_nidstr(&fa_local_nid));
 	if (rc == 0)
 		goto emitter_error;
+
+	if (attr == NULL)
+		goto yaml_mapping_end_event;
 
 	rc = lnet_yaml_uint_mapping(&event, &output, "fa_ptl_mask",
 				    &attr->fa_ptl_mask,
