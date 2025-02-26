@@ -67,47 +67,38 @@ lfs setquota -t -u|-g|-p [-b <replaceable>block_grace</replaceable>] [-i <replac
 lfs help
 </screen>
       <note>
-        <para>In the above example, the 
+        <para>In the above example, the
         <literal>
           <replaceable>/mount_point</replaceable>
         </literal> parameter refers to the mount point of the Lustre file
         system.</para>
       </note>
       <note>
-        <para>The old lfs quota output was very detailed and contained
-        cluster-wide quota statistics (including cluster-wide limits for a
-        user/group and cluster-wide usage for a user/group), as well as
-        statistics for each MDS/OST. Now, 
-        <literal>lfs quota</literal> has been updated to provide only
-        cluster-wide statistics, by default. To obtain the full report of
-        cluster-wide limits, usage and statistics, use the 
-        <literal>-v</literal> option with 
-        <literal>lfs quota</literal>.</para>
+        <para>By default the <literal>lfs quota</literal> command provides
+        aggregated cluster-wide statistics.
+        To obtain the detailed report of cluster-wide limits,
+        usage and statistics, use the <literal>lfs quota -v</literal> command.
+        To see the detailed report of per-user limits and usage,
+        use the <literal>lfs quota -a</literal> command.</para>
       </note>
-      <para condition="l28">
-       The <literal>quotacheck</literal>, <literal>quotaon</literal> and
-       <literal>quotaoff</literal> sub-commands were deprecated in the
-       Lustre 2.4 release, and removed completely in the Lustre 2.8 release.
-       See <xref linkend="enabling_disk_quotas"/> for details on
-       configuring and checking quotas.
-      </para>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The 
-      <literal>lfs</literal> utility is used to create a new file with a
-      specific striping pattern, determine the default striping pattern, gather
-      the extended attributes (object numbers and location) for a specific
-      file, find files with specific attributes, list OST information or set
-      quota limits. It can be invoked interactively without any arguments or in
-      a non-interactive mode with one of the supported arguments.</para>
+      <para>The <literal>lfs</literal> utility is used to create a new file
+        with a specific striping pattern,
+        determine the default striping pattern,
+        gather the layout (object numbers and location) for a specific file,
+        find files with specific attributes, list OST information,
+        or set quota limits.
+        It can be invoked interactively without any arguments,
+        or in a non-interactive mode with one of the supported arguments.
+      </para>
     </section>
     <section remap="h5">
       <title>Options</title>
-      <para>The various 
-      <literal>lfs</literal> options are listed and described below. For a
-      complete list of available options, type help at the 
-      <literal>lfs</literal> prompt.</para>
+      <para>The various <literal>lfs</literal> options are described below.
+      For a complete list of available options,
+      type help at the <literal>lfs</literal> prompt.</para>
       <informaltable frame="all">
         <tgroup cols="3">
           <colspec colname="c1" colwidth="20*" />

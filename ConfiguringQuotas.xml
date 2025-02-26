@@ -58,12 +58,8 @@
         <literal>usrquota</literal> or
         <literal>grpquota</literal> options to mount. Space accounting is
         enabled by default and quota enforcement can be enabled/disabled on
-        a per-filesystem basis with <literal>lctl set_param -P</literal>.</para>
-        <para condition="l28">It is worth noting that the
-        <literal>lfs quotaon</literal>, <literal>lfs quotaoff</literal>,
-        <literal>lfs quotacheck</literal> and <literal>quota_type</literal>
-        sub-commands are deprecated as of Lustre 2.4.0, and removed completely
-        in Lustre 2.8.0.</para>
+        a per-filesystem basis with <literal>lctl set_param -P</literal>.
+        </para>
       </listitem>
     </itemizedlist>
     <caution>
