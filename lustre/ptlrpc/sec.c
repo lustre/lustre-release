@@ -1516,12 +1516,6 @@ int flavor_equal(struct sptlrpc_flavor *sf1, struct sptlrpc_flavor *sf2)
 	return (memcmp(sf1, sf2, sizeof(*sf1)) == 0);
 }
 
-static inline
-void flavor_copy(struct sptlrpc_flavor *dst, struct sptlrpc_flavor *src)
-{
-	*dst = *src;
-}
-
 /**
  * To get an appropriate ptlrpc_sec for the \a imp, according to the current
  * configuration. Upon called, imp->imp_sec may or may not be NULL.

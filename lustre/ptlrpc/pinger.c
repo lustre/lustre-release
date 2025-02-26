@@ -142,11 +142,6 @@ static int ptlrpc_ping(struct obd_import *imp)
 	RETURN(0);
 }
 
-void ptlrpc_ping_import_soon(struct obd_import *imp)
-{
-	imp->imp_next_ping = ktime_get_seconds();
-}
-
 static inline int imp_is_deactive(struct obd_import *imp)
 {
 	return imp->imp_deactive ||

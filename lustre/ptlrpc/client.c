@@ -3038,12 +3038,6 @@ out:
 	EXIT;
 }
 
-void ptlrpc_cleanup_client(struct obd_import *imp)
-{
-	ENTRY;
-	EXIT;
-}
-
 /**
  * Schedule previously sent request for resend.
  * For bulk requests we assign new xid (to avoid problems with
