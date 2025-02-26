@@ -4601,7 +4601,7 @@ run_test 402 "Destination net rule should not panic"
 test_410() {
 	reinit_dlc || return $?
 
-	do_lnetctl fault reset \0 ||
+	do_lnetctl fault reset "" ||
 		return 0
 
 	error "Command should fail"
