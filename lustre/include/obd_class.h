@@ -466,33 +466,26 @@ static inline int obd_check_dev(struct obd_device *obd)
 		CERROR("NULL device\n");
 		return -ENODEV;
 	}
+
+	if (!test_bit(OBDF_SET_UP, (obd)->obd_flags) ||
+	    (obd)->obd_stopping) {
+		CERROR("Device %d not setup\n",
+		       (obd)->obd_minor);
+		return -ENODEV;
+	}
+
 	return 0;
 }
 
-/* ensure obd_setup and !obd_stopping */
-#define OBD_CHECK_DEV_ACTIVE(obd)				\
-do {								\
-	rc = obd_check_dev(obd);				\
-	if (rc)							\
-		return rc;					\
-								\
-	if (!test_bit(OBDF_SET_UP, (obd)->obd_flags) ||	       	\
-	    (obd)->obd_stopping) {				\
-		CERROR("Device %d not setup\n",			\
-		       (obd)->obd_minor);			\
-		RETURN(-ENODEV);				\
-	}							\
-} while (0)
-
 static inline int exp_check_ops(struct obd_export *exp)
 {
-	if (exp == NULL) {
-		RETURN(-ENODEV);
-	}
-	if (exp->exp_obd == NULL || !exp->exp_obd->obd_type) {
-		RETURN(-EOPNOTSUPP);
-	}
-	RETURN(0);
+	if (!exp)
+		return -ENODEV;
+
+	if (!exp->exp_obd || !exp->exp_obd->obd_type)
+		return -EOPNOTSUPP;
+
+	return 0;
 }
 
 static inline int obd_get_info(const struct lu_env *env, struct obd_export *exp,
@@ -817,7 +810,10 @@ static inline int obd_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
 
 	ENTRY;
 
-	OBD_CHECK_DEV_ACTIVE(obd);
+	rc = obd_check_dev(obd);
+	if (rc)
+		RETURN(rc);
+
 	if (!obd->obd_type || !obd->obd_type->typ_dt_ops->o_add_conn) {
 		CERROR("%s: no %s operation\n", obd->obd_name, __func__);
 		RETURN(-EOPNOTSUPP);
@@ -834,7 +830,10 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
 
 	ENTRY;
 
-	OBD_CHECK_DEV_ACTIVE(obd);
+	rc = obd_check_dev(obd);
+	if (rc)
+		RETURN(rc);
+
 	if (!obd->obd_type || !obd->obd_type->typ_dt_ops->o_del_conn) {
 		CERROR("%s: no %s operation\n", obd->obd_name, __func__);
 		RETURN(-EOPNOTSUPP);
@@ -874,7 +873,10 @@ static inline int obd_connect(const struct lu_env *env,
 
 	ENTRY;
 
-	OBD_CHECK_DEV_ACTIVE(obd);
+	rc = obd_check_dev(obd);
+	if (rc)
+		RETURN(rc);
+
 	if (!obd->obd_type || !obd->obd_type->typ_dt_ops->o_connect) {
 		CERROR("%s: no %s operation\n", obd->obd_name, __func__);
 		RETURN(-EOPNOTSUPP);
@@ -900,7 +902,10 @@ static inline int obd_reconnect(const struct lu_env *env,
 
 	ENTRY;
 
-	OBD_CHECK_DEV_ACTIVE(obd);
+	rc = obd_check_dev(obd);
+	if (rc)
+		RETURN(rc);
+
 	if (!obd->obd_type || !obd->obd_type->typ_dt_ops->o_reconnect)
 		RETURN(0);
 
@@ -1086,7 +1091,10 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 		RETURN(-EINVAL);
 
 	obd = exp->exp_obd;
-	OBD_CHECK_DEV_ACTIVE(obd);
+
+	rc = obd_check_dev(obd);
+	if (rc)
+		RETURN(rc);
 
 	if (unlikely(!obd->obd_type || !obd->obd_type->typ_dt_ops->o_statfs)) {
 		CERROR("%s: no %s operation\n", obd->obd_name, __func__);
@@ -1226,15 +1234,15 @@ static inline void obd_import_event(struct obd_device *obd,
 				    struct obd_import *imp,
 				    enum obd_import_event event)
 {
-	ENTRY;
-	if (!obd) {
-		CERROR("NULL device\n");
-		EXIT;
-		return;
-	}
+	int rc;
 
-	if (test_bit(OBDF_SET_UP, obd->obd_flags) &&
-	    obd->obd_type->typ_dt_ops->o_import_event)
+	ENTRY;
+
+	rc = obd_check_dev(obd);
+	if (rc)
+		RETURN_EXIT;
+
+	if (obd->obd_type->typ_dt_ops->o_import_event)
 		obd->obd_type->typ_dt_ops->o_import_event(obd, imp, event);
 
 	EXIT;
@@ -1252,14 +1260,9 @@ static inline int obd_notify(struct obd_device *obd,
 	if (rc)
 		return rc;
 
-	if (!test_bit(OBDF_SET_UP, obd->obd_flags)) {
-		CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
-		RETURN(-EINVAL);
-	}
-
 	if (!obd->obd_type->typ_dt_ops->o_notify) {
 		CDEBUG(D_HA, "obd %s has no notify handler\n", obd->obd_name);
-		RETURN(-ENOSYS);
+		RETURN(-EOPNOTSUPP);
 	}
 
 	rc = obd->obd_type->typ_dt_ops->o_notify(obd, watched, ev);
@@ -1367,7 +1370,7 @@ static inline int obd_register_observer(struct obd_device *obd,
 
 	rc = obd_check_dev(obd);
 	if (rc)
-		return rc;
+		RETURN(rc);
 
 	down_write(&obd->obd_observer_link_sem);
 	if (obd->obd_observer && observer) {
