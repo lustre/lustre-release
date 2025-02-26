@@ -20,32 +20,6 @@
 
 #include "mdt_internal.h"
 
-struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len)
-{
-	struct lu_buf *buf;
-	struct mdt_thread_info *mti;
-
-	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-	buf = &mti->mti_buf;
-	buf->lb_buf = area;
-	buf->lb_len = len;
-	return buf;
-}
-
-const struct lu_buf *mdt_buf_const(const struct lu_env *env,
-				   const void *area, ssize_t len)
-{
-	struct lu_buf *buf;
-	struct mdt_thread_info *mti;
-
-	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-	buf = &mti->mti_buf;
-
-	buf->lb_buf = (void *)area;
-	buf->lb_len = len;
-	return buf;
-}
-
 /* reconstruction code */
 static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 {

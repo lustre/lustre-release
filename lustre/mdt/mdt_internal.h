@@ -944,10 +944,6 @@ int find_name_matching_hash(struct mdt_thread_info *info, struct lu_name *lname,
 			   struct mdt_object *parent, struct mdt_object *child);
 int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt);
 
-struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len);
-const struct lu_buf *mdt_buf_const(const struct lu_env *env,
-				   const void *area, ssize_t len);
-
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid);
 void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv);
 
