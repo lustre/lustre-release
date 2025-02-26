@@ -1095,6 +1095,7 @@ int ofd_tunables_init(struct ofd_device *ofd)
 	 * to /proc incrementally as the ofd is setup
 	 */
 	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(ofd);
+	obd->obd_debugfs_vars = ldebugfs_ofd_obd_vars;
 	obd->obd_vars = lprocfs_ofd_obd_vars;
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc) {
@@ -1102,7 +1103,6 @@ int ofd_tunables_init(struct ofd_device *ofd)
 		       obd->obd_name, rc);
 		RETURN(rc);
 	}
-	ldebugfs_add_vars(obd->obd_debugfs_entry, ldebugfs_ofd_obd_vars, obd);
 
 	rc = tgt_tunables_init(&ofd->ofd_lut);
 	if (rc) {

@@ -690,7 +690,8 @@ struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	struct ptlrpc_service *service;
 	struct ptlrpc_service_part *svcpt;
 	struct cfs_cpt_table *cptable;
-	__u32 *cpts = NULL;
+	char param[MAX_OBD_NAME * 4];
+	u32 *cpts = NULL;
 	int ncpts;
 	int cpt;
 	int rc;
@@ -818,13 +819,24 @@ struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	mutex_unlock(&ptlrpc_all_services_mutex);
 
 	if (parent) {
+		char *path, *tmp;
+
 		rc = ptlrpc_sysfs_register_service(parent, service);
 		if (rc)
 			GOTO(failed, rc);
+
+		path = kobject_get_path(&parent->kobj, GFP_KERNEL);
+		if (path) {
+			tmp = path + strlen("/fs/lustre/");
+			scnprintf(param, sizeof(param), "%s.%s.stats",
+				  tmp, service->srv_name);
+			tmp = param;
+			while ((tmp = strchr(tmp, '/')) != NULL)
+				*tmp = '.';
+		}
 	}
 
-	if (debugfs_entry != NULL)
-		ptlrpc_ldebugfs_register_service(debugfs_entry, service);
+	ptlrpc_ldebugfs_register_service(debugfs_entry, param, service);
 
 	rc = ptlrpc_service_nrs_setup(service);
 	if (rc != 0)

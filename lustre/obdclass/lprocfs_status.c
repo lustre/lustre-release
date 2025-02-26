@@ -1234,7 +1234,6 @@ struct lprocfs_stats *lprocfs_stats_alloc(unsigned int num,
 	stats->ls_init = ktime_get_real();
 	spin_lock_init(&stats->ls_lock);
 	kref_init(&stats->ls_refcount);
-	stats->ls_source = NULL;
 	stats->ls_index = -1;
 
 	/* alloc num of counter headers */
@@ -1268,10 +1267,10 @@ static DEFINE_XARRAY_ALLOC(lstats_list);
 
 struct lprocfs_stats *ldebugfs_stats_alloc(int num, char *name,
 					   struct dentry *debugfs_entry,
-					   struct kobject *kobj,
 					   enum lprocfs_stats_flags flags)
 {
 	struct lprocfs_stats *stats = lprocfs_stats_alloc(num, flags);
+	size_t len = strlen(name);
 	char *param;
 	int rc;
 
@@ -1290,17 +1289,16 @@ struct lprocfs_stats *ldebugfs_stats_alloc(int num, char *name,
 	atomic_inc(&lstats_count);
 	xa_unlock(&lstats_list);
 
-	stats->ls_source = kobject_get_path(kobj, GFP_KERNEL);
-	if (!stats->ls_source) {
-		lprocfs_stats_free(&stats);
-		return NULL;
+	param = strrchr(name, '.');
+	if (param) {
+		len -= strlen(param);
+		param++;
+	} else {
+		param = name;
 	}
 
-	param = stats->ls_source;
-	while ((param = strchr(param, '/')) != NULL)
-		*param = '.';
-
-	debugfs_create_file(name, 0644, debugfs_entry, stats,
+	strscpy(stats->ls_source, name, len + 1);
+	debugfs_create_file(param, 0644, debugfs_entry, stats,
 			    &ldebugfs_stats_seq_fops);
 	return stats;
 }
@@ -1341,8 +1339,6 @@ static void stats_free(struct kref *kref)
 		xa_unlock(&lstats_list);
 	}
 
-	kfree(stats->ls_source); /* allocated by kobject_get_path */
-
 	LIBCFS_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_entry]));
 }
 
@@ -1361,12 +1357,15 @@ EXPORT_SYMBOL(lprocfs_stats_free);
 unsigned int lustre_stats_scan(struct lustre_stats_list *slist, const char *source)
 {
 	struct lprocfs_stats *item, **stats;
-	unsigned int cnt = 0, snum;
-	const char *tmp = source;
+	unsigned int cnt = 0, snum = 0, i;
 	unsigned long idx = 0;
 
-	if (source)
-		for (snum = 0; tmp[snum]; tmp[snum] == '.' ? snum++ : *tmp++);
+	if (source) {
+		for (i = 0; source[i]; i++) {
+			if (source[i] == '.')
+				snum++;
+		}
+	}
 
 	xa_for_each(&lstats_list, idx, item) {
 		if (!kref_get_unless_zero(&item->ls_refcount))
@@ -1378,19 +1377,19 @@ unsigned int lustre_stats_scan(struct lustre_stats_list *slist, const char *sour
 		}
 
 		if (source) {
-			char filter[PATH_MAX / 8], *src = item->ls_source;
-			unsigned int num;
-
-			if (strstarts(src, ".fs.lustre."))
-				src += strlen(".fs.lustre.");
+			char filter[MAX_OBD_NAME * 4], *src = item->ls_source;
+			unsigned int num = 0;
 
 			/* glob_match() has a hard time telling *.* from *.*.*
 			 * from *.*.* so we need to compare the number of '.'
 			 * and filter on that as well. This actually avoids
 			 * the overhead of calling glob_match() every time.
 			 */
-			tmp = src;
-			for (num = 0; tmp[num]; tmp[num] == '.' ? num++ : *tmp++);
+			for (i = 0; src[i]; i++) {
+				if (src[i] == '.')
+					num++;
+			}
+
 			if (snum != num) {
 				lprocfs_stats_free(&item);
 				continue;
@@ -1421,6 +1420,7 @@ unsigned int lustre_stats_scan(struct lustre_stats_list *slist, const char *sour
 			} else {
 				strscpy(filter, source, strlen(source) + 1);
 			}
+
 			if (!glob_match(filter, src)) {
 				lprocfs_stats_free(&item);
 				continue;

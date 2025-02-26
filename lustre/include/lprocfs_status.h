@@ -180,7 +180,7 @@ enum lprocfs_fields_flags {
 
 struct lprocfs_stats {
 	/* source for the stats */
-	char				*ls_source;
+	char				ls_source[MAX_OBD_NAME * 4];
 	/* index in Xarray */
 	unsigned int			ls_index;
 	/* # of counters */
@@ -515,7 +515,6 @@ extern void lprocfs_stats_free(struct lprocfs_stats **stats);
 extern void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats);
 struct lprocfs_stats *ldebugfs_stats_alloc(int num, char *name,
 					   struct dentry *entry,
-					   struct kobject *kobj,
 					   enum lprocfs_stats_flags flags);
 extern int ldebugfs_alloc_obd_stats(struct obd_device *obd,
 				    unsigned int num_stats);

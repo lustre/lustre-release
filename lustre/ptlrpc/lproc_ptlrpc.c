@@ -188,7 +188,6 @@ static const char *ll_eopcode2str(__u32 opcode)
 static void
 ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 			 struct dentry **debugfs_root_ret,
-			 struct kobject *kobj,
 			 struct lprocfs_stats **stats_ret)
 {
 	struct dentry *svc_debugfs_entry;
@@ -197,16 +196,14 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 					     LPROCFS_CNTR_STDDEV;
 	int i;
 
-	LASSERT(!*debugfs_root_ret);
 	LASSERT(!*stats_ret);
-
 	if (dir)
 		svc_debugfs_entry = debugfs_create_dir(dir, root);
 	else
 		svc_debugfs_entry = root;
 
 	svc_stats = ldebugfs_stats_alloc(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES,
-					 name, svc_debugfs_entry, kobj, 0);
+					 name, svc_debugfs_entry, 0);
 	if (!svc_stats)
 		return;
 
@@ -1194,7 +1191,7 @@ int ptlrpc_sysfs_register_service(struct kset *parent,
 				    &parent->kobj, "%s", svc->srv_name);
 }
 
-void ptlrpc_ldebugfs_register_service(struct dentry *entry,
+void ptlrpc_ldebugfs_register_service(struct dentry *entry, char *param,
 				      struct ptlrpc_service *svc)
 {
 	struct ldebugfs_vars ldebugfs_vars[] = {
@@ -1223,9 +1220,8 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 		.release	= lprocfs_seq_release,
 	};
 
-	ptlrpc_ldebugfs_register(entry, svc->srv_name, "stats",
-				 &svc->srv_debugfs_entry,
-				 &svc->srv_kobj, &svc->srv_stats);
+	ptlrpc_ldebugfs_register(entry, svc->srv_name, param,
+				 &svc->srv_debugfs_entry, &svc->srv_stats);
 	if (!svc->srv_debugfs_entry)
 		return;
 
@@ -1237,9 +1233,12 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 
 void ptlrpc_lprocfs_register_obd(struct obd_device *obd)
 {
-	ptlrpc_ldebugfs_register(obd->obd_debugfs_entry, NULL, "stats",
+	char param[MAX_OBD_NAME * 4];
+
+	scnprintf(param, sizeof(param), "%s.%s.stats",
+		  kobject_name(&obd->obd_type->typ_kobj), obd->obd_name);
+	ptlrpc_ldebugfs_register(obd->obd_debugfs_entry, NULL, param,
 				 &obd->obd_svc_debugfs_entry,
-				 &obd->obd_kset.kobj,
 				 &obd->obd_svc_stats);
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);

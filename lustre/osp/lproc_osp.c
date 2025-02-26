@@ -1288,8 +1288,8 @@ void osp_tunables_init(struct osp_device *osp)
 	/* Since we register the obd device with ptlrpc / sptlrpc we
 	 * have to register debugfs with obd_device
 	 */
-	obd->obd_debugfs_entry = debugfs_create_dir(
-		obd->obd_name, obd->obd_type->typ_debugfs_entry);
+	obd->obd_debugfs_entry = debugfs_create_dir(obd->obd_name,
+						    obd->obd_type->typ_debugfs_entry);
 	ldebugfs_add_vars(obd->obd_debugfs_entry, obd->obd_debugfs_vars, obd);
 
 	sptlrpc_lprocfs_cliobd_attach(obd);

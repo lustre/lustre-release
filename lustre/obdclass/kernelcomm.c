@@ -374,16 +374,20 @@ int lustre_stats_done(struct netlink_callback *cb)
 }
 EXPORT_SYMBOL(lustre_stats_done);
 
-/* Min size for key table and its matching values:
+/* Min size for key table and its matching values. Key value
+ * measurements are collected from lnet_genl_parse_list:
+ *
  *	header		strlen("stats")
- *	source		strlen("source") + MAX_OBD_NAME * 2
+ *	source		strlen("source") + MAX_OBD_NAME * 4
  *	timestamp	strlen("snapshot_time") + s64
  *	start time	strlen("start time") + s64
  *	elapsed_time	strlen("elapse time") + s64
  */
-#define STATS_MSG_MIN_SIZE	(267 + 58)
+#define STATS_MSG_MIN_SIZE	(44 + 28 + 36 + 32 + 36 + 536)
 
-/* key table + values for each dataset entry:
+/* key table + values for each dataset entry. Key value
+ * measurements are collected from lnet_genl_parse_list:
+ *
  *	dataset name	25
  *	dataset count	strlen("samples") + u64
  *	dataset units	strlen("units") + 5
@@ -392,7 +396,7 @@ EXPORT_SYMBOL(lustre_stats_done);
  *	dataset sum	strlen("sum") + u64
  *	dataset stdev	strlen("stddev") + u64
  */
-#define STATS_MSG_DATASET_SIZE	(97)
+#define STATS_MSG_DATASET_SIZE	(236 + 25 + 5 + 8 * 5)
 
 static int lustre_stats_start(struct netlink_callback *cb)
 {
@@ -436,14 +440,15 @@ static int lustre_stats_start(struct netlink_callback *cb)
 			int rem2;
 
 			nla_for_each_nested(item, dev, rem2) {
-				char filter[MAX_OBD_NAME * 2];
+				char filter[MAX_OBD_NAME * 4];
 
 				if (nla_type(item) != LN_SCALAR_ATTR_VALUE ||
 				    nla_strcmp(item, "source") != 0)
 					continue;
 
 				item = nla_next(item, &rem2);
-				if (nla_type(item) != LN_SCALAR_ATTR_VALUE) {
+				if (!nla_ok(item, rem2) ||
+				    nla_type(item) != LN_SCALAR_ATTR_VALUE) {
 					NL_SET_ERR_MSG(extack,
 						       "source has invalid value");
 					GOTO(report_err, rc = -EINVAL);
@@ -453,7 +458,7 @@ static int lustre_stats_start(struct netlink_callback *cb)
 				rc = nla_strscpy(filter, item, sizeof(filter));
 				if (rc < 0) {
 					NL_SET_ERR_MSG(extack,
-						       "source key string is invalud");
+						       "source key string is invalid");
 					GOTO(report_err, rc);
 				}
 
@@ -755,14 +760,15 @@ static int lustre_stats_cmd(struct sk_buff *skb, struct genl_info *info)
 			continue;
 
 		nla_for_each_nested(prop, attr, rem2) {
-			char source[MAX_OBD_NAME * 2];
+			char source[MAX_OBD_NAME * 4];
 
 			if (nla_type(prop) != LN_SCALAR_ATTR_VALUE ||
 			    nla_strcmp(prop, "source") != 0)
 				continue;
 
 			prop = nla_next(prop, &rem2);
-			if (nla_type(prop) != LN_SCALAR_ATTR_VALUE)
+			if (!nla_ok(prop, rem2) ||
+			    nla_type(prop) != LN_SCALAR_ATTR_VALUE)
 				GOTO(report_err, rc = -EINVAL);
 
 			memset(source, 0, sizeof(source));

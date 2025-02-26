@@ -73,12 +73,14 @@ out:
 
 static int osd_stats_init(struct osd_device *osd)
 {
+	char param[MAX_OBD_NAME * 4];
 	int result = -ENOMEM;
 
 	ENTRY;
-	osd->od_stats = ldebugfs_stats_alloc(LPROC_OSD_LAST, "stats",
+	scnprintf(param, sizeof(param), "osd-zfs.%s.stats", osd_name(osd));
+	osd->od_stats = ldebugfs_stats_alloc(LPROC_OSD_LAST, param,
 					     osd->od_dt_dev.dd_debugfs_entry,
-					     &osd->od_dt_dev.dd_kobj, 0);
+					     0);
 	if (osd->od_stats) {
 		lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
 				LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV |

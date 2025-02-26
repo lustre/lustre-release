@@ -687,10 +687,13 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
 
 int ldebugfs_alloc_obd_stats(struct obd_device *obd, unsigned int num_stats)
 {
+	char param[MAX_OBD_NAME * 4];
+
 	LASSERT(!obd->obd_stats);
-	obd->obd_stats = ldebugfs_stats_alloc(num_stats, "stats",
-					      obd->obd_debugfs_entry,
-					      &obd->obd_type->typ_kobj, 0);
+	scnprintf(param, sizeof(param), "%s.%s.stats", obd->obd_type->typ_name,
+		  obd->obd_name);
+	obd->obd_stats = ldebugfs_stats_alloc(num_stats, param,
+					      obd->obd_debugfs_entry, 0);
 	return obd->obd_stats ? 0 : -ENOMEM;
 }
 EXPORT_SYMBOL(ldebugfs_alloc_obd_stats);

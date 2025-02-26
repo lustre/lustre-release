@@ -2627,6 +2627,7 @@ static const char *const ra_stat_string[] = {
 int ll_debugfs_register_super(struct super_block *sb, const char *name)
 {
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	char param[MAX_OBD_NAME * 4];
 	int err, id;
 
 	ENTRY;
@@ -2664,9 +2665,9 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 			    &ll_rw_offset_stats_fops);
 
 	/* File operations stats */
-	sbi->ll_stats = ldebugfs_stats_alloc(LPROC_LL_FILE_OPCODES, "stats",
+	scnprintf(param, sizeof(param), "llite.%s.stats", name);
+	sbi->ll_stats = ldebugfs_stats_alloc(LPROC_LL_FILE_OPCODES, param,
 					     sbi->ll_debugfs_entry,
-					     &sbi->ll_kset.kobj,
 					     LPROCFS_STATS_FLAG_NONE);
 	if (!sbi->ll_stats)
 		GOTO(out_debugfs, err = -ENOMEM);

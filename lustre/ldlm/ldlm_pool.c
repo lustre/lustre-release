@@ -803,10 +803,10 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 	struct ldlm_namespace *ns = ldlm_pl2ns(pl);
 	struct dentry *debugfs_ns_parent;
 	struct ldebugfs_vars pool_vars[2];
+	char param[MAX_OBD_NAME * 4];
 	int rc = 0;
 
 	ENTRY;
-
 	debugfs_ns_parent = ns->ns_debugfs_entry;
 	if (IS_ERR_OR_NULL(debugfs_ns_parent)) {
 		CERROR("%s: debugfs entry is not initialized\n",
@@ -820,10 +820,11 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 	ldlm_add_var(&pool_vars[0], pl->pl_debugfs_entry, "state", pl,
 		     &lprocfs_pool_state_fops);
 
+	scnprintf(param, sizeof(param), "ldlm.namespaces.%s.pool.stats",
+		  ldlm_ns_name(ns));
 	pl->pl_stats = ldebugfs_stats_alloc(LDLM_POOL_LAST_STAT -
-					    LDLM_POOL_FIRST_STAT, "stats",
-					    pl->pl_debugfs_entry,
-					    &pl->pl_kobj, 0);
+					    LDLM_POOL_FIRST_STAT, param,
+					    pl->pl_debugfs_entry, 0);
 	if (!pl->pl_stats)
 		GOTO(out, rc = -ENOMEM);
 

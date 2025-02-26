@@ -2843,6 +2843,7 @@ static int lnet_genl_parse_list(struct sk_buff *msg,
 
 	for (count = 1; count <= list->lkl_maxattr; count++) {
 		struct nlattr *key = nla_nest_start(msg, count);
+		int end, start = msg->len;
 
 		if (!key)
 			return -EMSGSIZE;
@@ -2869,7 +2870,8 @@ static int lnet_genl_parse_list(struct sk_buff *msg,
 			idx = rc;
 		}
 
-		nla_nest_end(msg, key);
+		end = nla_nest_end(msg, key);
+		CDEBUG(D_INFO, "nest attr[%d] length = %d\n", count, end - start);
 	}
 
 	nla_nest_end(msg, node);
