@@ -37,6 +37,7 @@
 #include <openssl/engine.h>
 #include <openssl/err.h>
 #include <openssl/hmac.h>
+#include <openssl/rand.h>
 #ifdef HAVE_OPENSSL_EVP_PKEY
 #include <openssl/param_build.h>
 #endif
