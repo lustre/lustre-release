@@ -2069,28 +2069,6 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
 
 int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj, bool check);
 
-/*
- * Callback function used for parsing path.
- * see llo_store_resolve
- */
-typedef int (*dt_entry_func_t)(const struct lu_env *env,
-			    const char *name,
-			    void *pvt);
-
-int dt_path_parser(const struct lu_env *env,
-		   char *local, dt_entry_func_t entry_func,
-		   void *data);
-
-struct dt_object *
-dt_store_resolve(const struct lu_env *env, struct dt_device *dt,
-		 const char *path, struct lu_fid *fid);
-
-struct dt_object *dt_store_open(const struct lu_env *env,
-				struct dt_device *dt,
-				const char *dirname,
-				const char *filename,
-				struct lu_fid *fid);
-
 struct dt_object *dt_find_or_create(const struct lu_env *env,
 				    struct dt_device *dt,
 				    const struct lu_fid *fid,
