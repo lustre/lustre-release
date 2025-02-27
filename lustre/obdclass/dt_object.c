@@ -1057,102 +1057,6 @@ void dt_index_page_adjust(struct page **pages, const u32 npages,
 #endif
 EXPORT_SYMBOL(dt_index_page_adjust);
 
-#ifdef CONFIG_PROC_FS
-int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v)
-{
-	struct dt_device *dt = m->private;
-	struct obd_statfs osfs;
-
-	int rc = dt_statfs(NULL, dt, &osfs);
-	if (rc == 0)
-		seq_printf(m, "%u\n", (unsigned) osfs.os_bsize);
-	return rc;
-}
-EXPORT_SYMBOL(lprocfs_dt_blksize_seq_show);
-
-int lprocfs_dt_kbytestotal_seq_show(struct seq_file *m, void *v)
-{
-	struct dt_device *dt = m->private;
-	struct obd_statfs osfs;
-
-	int rc = dt_statfs(NULL, dt, &osfs);
-	if (rc == 0) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_blocks;
-
-		while (blk_size >>= 1)
-			result <<= 1;
-
-		seq_printf(m, "%llu\n", result);
-	}
-	return rc;
-}
-EXPORT_SYMBOL(lprocfs_dt_kbytestotal_seq_show);
-
-int lprocfs_dt_kbytesfree_seq_show(struct seq_file *m, void *v)
-{
-	struct dt_device *dt = m->private;
-	struct obd_statfs osfs;
-
-	int rc = dt_statfs(NULL, dt, &osfs);
-	if (rc == 0) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_bfree;
-
-		while (blk_size >>= 1)
-			result <<= 1;
-
-		seq_printf(m, "%llu\n", result);
-	}
-	return rc;
-}
-EXPORT_SYMBOL(lprocfs_dt_kbytesfree_seq_show);
-
-int lprocfs_dt_kbytesavail_seq_show(struct seq_file *m, void *v)
-{
-	struct dt_device *dt = m->private;
-	struct obd_statfs osfs;
-
-	int rc = dt_statfs(NULL, dt, &osfs);
-	if (rc == 0) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_bavail;
-
-		while (blk_size >>= 1)
-			result <<= 1;
-
-		seq_printf(m, "%llu\n", result);
-	}
-	return rc;
-}
-EXPORT_SYMBOL(lprocfs_dt_kbytesavail_seq_show);
-
-int lprocfs_dt_filestotal_seq_show(struct seq_file *m, void *v)
-{
-	struct dt_device *dt = m->private;
-	struct obd_statfs osfs;
-
-	int rc = dt_statfs(NULL, dt, &osfs);
-	if (rc == 0)
-		seq_printf(m, "%llu\n", osfs.os_files);
-	return rc;
-}
-EXPORT_SYMBOL(lprocfs_dt_filestotal_seq_show);
-
-int lprocfs_dt_filesfree_seq_show(struct seq_file *m, void *v)
-{
-	struct dt_device *dt = m->private;
-	struct obd_statfs osfs;
-
-	int rc = dt_statfs(NULL, dt, &osfs);
-	if (rc == 0)
-		seq_printf(m, "%llu\n", osfs.os_ffree);
-	return rc;
-}
-EXPORT_SYMBOL(lprocfs_dt_filesfree_seq_show);
-
-#endif /* CONFIG_PROC_FS */
-
 static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf)
 {
@@ -1287,14 +1191,31 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(filesfree);
 
+static ssize_t statfs_state_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	return lprocfs_statfs_state(buf, PAGE_SIZE, osfs.os_state);
+}
+LUSTRE_RO_ATTR(statfs_state);
+
 static const struct attribute *dt_def_attrs[] = {
-	&lustre_attr_uuid.attr,
 	&lustre_attr_blocksize.attr,
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
 	&lustre_attr_kbytesavail.attr,
 	&lustre_attr_filestotal.attr,
 	&lustre_attr_filesfree.attr,
+	&lustre_attr_statfs_state.attr,
+	&lustre_attr_uuid.attr,
 	NULL,
 };
 

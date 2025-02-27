@@ -274,6 +274,49 @@ enum obd_statfs_state {
 	OS_STATFS_SUM		= 0x00000100, /**< aggregated for all tagrets */
 	OS_STATFS_NONROT	= 0x00000200, /**< non-rotational device */
 };
+
+struct obd_statfs_state_name {
+	enum obd_statfs_state	osn_state;
+	const char		osn_name;
+	bool			osn_err;
+};
+
+/*
+ * Return the obd_statfs state info that matches the first set bit in @state.
+ *
+ * This is to identify various states returned by the OST_STATFS RPC.
+ *
+ * If .osn_err = true, then this is an error state indicating the target
+ * is degraded, read-only, full, or should otherwise not be used.
+ * If .osn_err = false, then this is an informational state and uses a
+ * lower-case name to distinguish it from error conditions.
+ *
+ * The UNUSED[12] bits were part of os_state=EROFS=30=0x1e until Lustre 1.6.
+ */
+static inline const
+struct obd_statfs_state_name *obd_statfs_state_name_find(__u32 state)
+{
+	static struct obd_statfs_state_name oss_names[] = {
+	  { .osn_state = OS_STATFS_DEGRADED, .osn_name = 'D', .osn_err = true },
+	  { .osn_state = OS_STATFS_READONLY, .osn_name = 'R', .osn_err = true },
+	  { .osn_state = OS_STATFS_NOCREATE, .osn_name = 'N', .osn_err = true },
+	  { .osn_state = OS_STATFS_UNUSED1,  .osn_name = '?', .osn_err = true },
+	  { .osn_state = OS_STATFS_UNUSED2,  .osn_name = '?', .osn_err = true },
+	  { .osn_state = OS_STATFS_ENOSPC,   .osn_name = 'S', .osn_err = true },
+	  { .osn_state = OS_STATFS_ENOINO,   .osn_name = 'I', .osn_err = true },
+	  { .osn_state = OS_STATFS_SUM,      .osn_name = 'a', /* aggregate */ },
+	  { .osn_state = OS_STATFS_NONROT,   .osn_name = 'f', /* flash */     },
+	  { .osn_state = 0, }
+	};
+	int i;
+
+	for (i = 0; oss_names[i].osn_state; i++) {
+		if (state & oss_names[i].osn_state)
+			return &oss_names[i];
+	}
+
+	return NULL;
+};
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 20, 53, 0)
 #define OS_STATFS_NOPRECREATE OS_STATFS_NOCREATE
 #endif

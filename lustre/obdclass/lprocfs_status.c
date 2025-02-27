@@ -344,6 +344,54 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(filesfree);
 
+ssize_t lprocfs_statfs_state(char *buf, size_t buflen, __u32 state)
+{
+	size_t off = 0;
+
+	while (state != 0) {
+		const struct obd_statfs_state_name *osn;
+
+		osn = obd_statfs_state_name_find(state);
+		if (!osn) {
+			int len;
+
+			/* Only unknown (future) OS_STATFS flags left.
+			 *
+			 * Print in octal to avoid confusion with existing
+			 * 'a' and 'f' flags if it was printed in hex.
+			 */
+			len = scnprintf(buf + off, buflen, "(%#o)", state);
+			off += len;
+			buflen -= len;
+			break;
+		}
+		buf[off++] = osn->osn_name;
+		buflen--;
+		state ^= osn->osn_state;
+	}
+
+	return off + scnprintf(buf + off, buflen, "\n");
+}
+EXPORT_SYMBOL(lprocfs_statfs_state);
+
+static ssize_t statfs_state_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
+			ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
+			OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
+
+	return lprocfs_statfs_state(buf, PAGE_SIZE, osfs.os_state);
+}
+LUSTRE_RO_ATTR(statfs_state);
+
 ssize_t conn_uuid_show(struct kobject *kobj, struct attribute *attr, char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
@@ -1063,11 +1111,12 @@ static const struct attribute *obd_def_uuid_attrs[] = {
 
 static const struct attribute *obd_def_attrs[] = {
 	&lustre_attr_blocksize.attr,
+	&lustre_attr_filestotal.attr,
+	&lustre_attr_filesfree.attr,
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
 	&lustre_attr_kbytesavail.attr,
-	&lustre_attr_filestotal.attr,
-	&lustre_attr_filesfree.attr,
+	&lustre_attr_statfs_state.attr,
 	&lustre_attr_uuid.attr,
 	NULL,
 };

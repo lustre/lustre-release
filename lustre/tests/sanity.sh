@@ -6846,46 +6846,75 @@ test_56c() {
 	local ost_idx=0
 	local ost_name=$(ostname_from_index $ost_idx)
 	local old_status=$(ost_dev_status $ost_idx)
+	local inst=$(lfs getname -i $DIR)
+	local state="osc.$ost_name-osc-$inst.statfs_state"
+	local old_state=$($LCTL get_param -n $state)
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 
-	[[ -z "$old_status" ]] ||
+	[[ "$old_status" == "$old_state" ]] ||
+		error "old status '$old_status' != state '$old_state'"
+
+	[[ -z "$old_status" || "$old_status" == "f" ]] ||
 		skip_env "OST $ost_name is in $old_status status"
 
-	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name.degraded=1
-	[[ $OST1_VERSION -lt $(version_code 2.12.55) ]] || do_facet ost1 \
-		$LCTL set_param -n obdfilter.$ost_name.no_precreate=1
-	if [[ $OST1_VERSION -ge $(version_code 2.12.57) ]]; then
-		save_lustre_params ost1 osd-*.$ost_name.nonrotational > $p
-		do_facet ost1 $LCTL set_param -n osd-*.$ost_name.nonrotational=1
+	local degraded="obdfilter.$ost_name.degraded"
+	save_lustre_params ost1 $degraded > $p
+	do_facet ost1 $LCTL set_param -n $degraded=1
+	stack_trap "restore_lustre_params < $p; rm -f $p"
+
+	if (( $OST1_VERSION >= $(version_code 2.12.55) )); then
+		local no_precreate="obdfilter.$ost_name.no_precreate"
+
+		save_lustre_params ost1 $no_precreate >> $p
+		do_facet ost1 $LCTL set_param -n $no_precreate=1
+	fi
+	if (( $OST1_VERSION >= $(version_code 2.12.57) )) &&
+	   [[ ! "$old_status" =~ "f" ]]; then
+	   	local nonrotational="osd-*.$ost_name.nonrotational"
+
+		save_lustre_params ost1 $nonrotational >> $p
+		do_facet ost1 $LCTL set_param -n $nonrotational=1
 	fi
 
-	[[ $($LFS df -v $MOUNT |& grep -c "inactive device") -eq 0 ]] ||
+	[[ ! $($LFS df -v $MOUNT 2>&1) =~ "inactive device" ]] ||
 		error "$LFS df -v showing inactive devices"
 	sleep_maxage
+
+	$LFS df -v $MOUNT
+	$LCTL get_param *.*.statfs_state
 
 	local new_status=$(ost_dev_status $ost_idx $MOUNT -v)
 
 	[[ "$new_status" =~ "D" ]] ||
 		error "$ost_name status is '$new_status', missing 'D'"
-	if [[ $OST1_VERSION -ge $(version_code 2.12.55) ]]; then
-		[[ "$new_status" =~ "N" ]] ||
-			error "$ost_name status is '$new_status', missing 'N'"
+	if (( $OST1_VERSION >= $(version_code 2.12.55) )) &&
+	   [[ ! "$new_status" =~ "N" ]]; then
+		error "$ost_name status is '$new_status', missing 'N'"
 	fi
-	if [[ $OST1_VERSION -ge $(version_code 2.12.57) ]]; then
-		[[ "$new_status" =~ "f" ]] ||
-			error "$ost_name status is '$new_status', missing 'f'"
+	if (( $OST1_VERSION >= $(version_code 2.12.57) )) &&
+	   [[ ! "$new_status" =~ "f" ]]; then
+		error "$ost_name status is '$new_status', missing 'f'"
 	fi
 
-	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name.degraded=0
-	[[ $OST1_VERSION -lt $(version_code 2.12.55) ]] || do_facet ost1 \
-		$LCTL set_param -n obdfilter.$ost_name.no_precreate=0
-	[[ -z "$p" ]] && restore_lustre_params < $p || true
-	sleep_maxage
+	wait_update_facet client "$LCTL get_param -n $state" "$new_status" ||
+		error "new state != new_status '$new_status'"
 
-	new_status=$(ost_dev_status $ost_idx)
-	[[ ! "$new_status" =~ "D" && ! "$new_status" =~ "N" ]] ||
-		error "$ost_name status is '$new_status', has 'D' and/or 'N'"
-	# can't check 'f' as devices may actually be on flash
+	restore_lustre_params < $p
+
+	wait_update_facet client \
+		"$LFS df -v | awk '/$ost_name/ { print \\\$7 }'" "$old_status" ||
+	{
+		new_status=$(ost_dev_status $ost_idx)
+
+		error "new_status '$new_status' != old_status '$old_status'"
+	}
+
+	wait_update_facet client "$LCTL get_param -n $state" "$old_state" ||
+	{
+		local new_state=$($LCTL get_param -n $state)
+
+		error "restored state '$new_state' != old_state '$old_state'"
+	}
 }
 run_test 56c "check 'lfs df' showing device status"
 
@@ -12042,36 +12071,28 @@ test_78() { # bug 10901
 run_test 78 "handle large O_DIRECT writes correctly ============"
 
 test_79() { # bug 12743
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	wait_delete_completed
 
-	BKTOTAL=$(calc_osc_kbytes kbytestotal)
-	BKFREE=$(calc_osc_kbytes kbytesfree)
-	BKAVAIL=$(calc_osc_kbytes kbytesavail)
+	local bktotal=$(calc_osc_kbytes kbytestotal)
+	local bkfree=$(calc_osc_kbytes kbytesfree)
+	local bkavail=$(calc_osc_kbytes kbytesavail)
+	local string=($(df -P $MOUNT | tail -n 1))
+	local dftotal=${string[1]}
+	local dfused=${string[2]}
+	local dfavail=${string[3]}
+	local dffree=$(($dftotal - $dfused))
+	local allowance=$((64 * $OSTCOUNT))
 
-        STRING=`df -P $MOUNT | tail -n 1 | awk '{print $2","$3","$4}'`
-        DFTOTAL=`echo $STRING | cut -d, -f1`
-        DFUSED=`echo $STRING  | cut -d, -f2`
-        DFAVAIL=`echo $STRING | cut -d, -f3`
-        DFFREE=$(($DFTOTAL - $DFUSED))
-
-        ALLOWANCE=$((64 * $OSTCOUNT))
-
-        if [ $DFTOTAL -lt $(($BKTOTAL - $ALLOWANCE)) ] ||
-           [ $DFTOTAL -gt $(($BKTOTAL + $ALLOWANCE)) ] ; then
-                error "df total($DFTOTAL) mismatch OST total($BKTOTAL)"
-        fi
-        if [ $DFFREE -lt $(($BKFREE - $ALLOWANCE)) ] ||
-           [ $DFFREE -gt $(($BKFREE + $ALLOWANCE)) ] ; then
-                error "df free($DFFREE) mismatch OST free($BKFREE)"
-        fi
-        if [ $DFAVAIL -lt $(($BKAVAIL - $ALLOWANCE)) ] ||
-           [ $DFAVAIL -gt $(($BKAVAIL + $ALLOWANCE)) ] ; then
-                error "df avail($DFAVAIL) mismatch OST avail($BKAVAIL)"
-        fi
+	(( dftotal >= bktotal - allowance && dftotal <= bktotal + allowance)) ||
+		error "df total($dftotal) mismatch OST total($bktotal)"
+	(( dffree >= bkfree - allowance && dffree <= bkfree + allowance )) ||
+		error "df free($dffree) mismatch OST free($bkfree)"
+	(( dfavail >= bkavail - allowance && dfavail <= bkavail + allowance)) ||
+		error "df avail($dfavail) mismatch OST avail($bkavail)"
 }
-run_test 79 "df report consistency check ======================="
+run_test 79 "df report consistency check"
 
 test_80() { # bug 10718
 	remote_ost_nodsh && skip "remote OST with nodsh"
@@ -26701,14 +26722,15 @@ get_mdc_stats() {
 }
 
 test_271c() {
-	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55"
+	(( $MDS1_VERSION >= $(version_code v2_10_55_0-74-g2f09984f3f) )) ||
+		skip "Need MDS >= 2.10.55.74 for combined DoM lock bits"
 
 	local dom=$DIR/$tdir/dom
 
 	mkdir -p $DIR/$tdir
 
-	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
+	$LFS setstripe -E 1024K -L mdt $DIR/$tdir ||
+		error "unable to set DoM layout on $DIR/$tdir"
 
 	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
 	local facet=mds$((mdtidx + 1))

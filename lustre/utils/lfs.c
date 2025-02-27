@@ -1462,10 +1462,10 @@ static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
 
 	fd = llapi_layout_file_open(fname, open_flags, open_mode, layout);
 	if (fd < 0)
-		fprintf(stderr, "%s: cannot %s '%s': %s\n", progname,
+		fprintf(stderr, "%s: %s '%s': %s\n", progname,
 			S_ISDIR(st.st_mode) ?
-				"set default composite layout for" :
-				"create composite file",
+				"cannot set default composite layout for" :
+				"cannot create composite file",
 			fname, strerror(errno));
 	return fd;
 }
@@ -7335,28 +7335,6 @@ static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 	return (ratio - (int)ratio) > 0 ? (int)(ratio + 1) : (int)ratio;
 }
 
-/*
- * This is to identify various problem states for "lfs df" if .osn_err = true,
- * so only show flags reflecting those states by default. Informational states
- * are only shown with "-v" and use lower-case names to distinguish them.
- * UNUSED[12] were for "EROFS = 30" until 1.6 but are now available for use.
- */
-static struct obd_statfs_state_names {
-	enum obd_statfs_state	osn_state;
-	const char		osn_name;
-	bool			osn_err;
-} oss_names[] = {
-	{ .osn_state = OS_STATFS_DEGRADED,   .osn_name = 'D', .osn_err = true },
-	{ .osn_state = OS_STATFS_READONLY,   .osn_name = 'R', .osn_err = true },
-	{ .osn_state = OS_STATFS_NOCREATE,   .osn_name = 'N', .osn_err = true },
-	{ .osn_state = OS_STATFS_UNUSED1,    .osn_name = '?', .osn_err = true },
-	{ .osn_state = OS_STATFS_UNUSED2,    .osn_name = '?', .osn_err = true },
-	{ .osn_state = OS_STATFS_ENOSPC,     .osn_name = 'S', .osn_err = true },
-	{ .osn_state = OS_STATFS_ENOINO,     .osn_name = 'I', .osn_err = true },
-	{ .osn_state = OS_STATFS_SUM,	     .osn_name = 'a', /* aggregate */ },
-	{ .osn_state = OS_STATFS_NONROT,     .osn_name = 'f', /* flash */     },
-};
-
 static int showdf(char *mntdir, struct obd_statfs *stat,
 		  char *uuid, enum mntdf_flags flags,
 		  char *type, int index, int rc)
@@ -7431,14 +7409,25 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			printf("[%s:%d]", type, index);
 
 		if (stat->os_state) {
-			uint32_t i;
+			__u32 state = stat->os_state;
 
 			printf(" ");
-			for (i = 0; i < ARRAY_SIZE(oss_names); i++) {
-				if (oss_names[i].osn_state & stat->os_state &&
-				    (oss_names[i].osn_err ||
-				     flags & MNTDF_VERBOSE))
-					printf("%c", oss_names[i].osn_name);
+			while (state != 0) {
+				const struct obd_statfs_state_name *osn;
+
+				osn = obd_statfs_state_name_find(state);
+				if (!osn) {
+					/* Unknown flag(s) for remainder.
+					 * Print in octal to avoid confusion
+					 * with existing 'a' and 'f' flags
+					 * if printed in hex.
+					 */
+					printf("(%#o)", state);
+					break;
+				}
+				if (osn->osn_err || flags & MNTDF_VERBOSE)
+					printf("%c", osn->osn_name);
+				state ^= osn->osn_state;
 			}
 		}
 

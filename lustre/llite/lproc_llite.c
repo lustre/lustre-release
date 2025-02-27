@@ -127,7 +127,7 @@ static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	return sprintf(buf, "%u\n", osfs.os_bsize);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", osfs.os_bsize);
 }
 LUSTRE_RO_ATTR(blocksize);
 
@@ -137,7 +137,7 @@ static ssize_t stat_blocksize_show(struct kobject *kobj, struct attribute *attr,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return sprintf(buf, "%u\n", sbi->ll_stat_blksize);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_stat_blksize);
 }
 
 static ssize_t stat_blocksize_store(struct kobject *kobj,
@@ -183,7 +183,7 @@ static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
 	while (blk_size >>= 1)
 		result <<= 1;
 
-	return sprintf(buf, "%llu\n", result);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", result);
 }
 LUSTRE_RO_ATTR(kbytestotal);
 
@@ -207,7 +207,7 @@ static ssize_t kbytesfree_show(struct kobject *kobj, struct attribute *attr,
 	while (blk_size >>= 1)
 		result <<= 1;
 
-	return sprintf(buf, "%llu\n", result);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", result);
 }
 LUSTRE_RO_ATTR(kbytesfree);
 
@@ -231,7 +231,7 @@ static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
 	while (blk_size >>= 1)
 		result <<= 1;
 
-	return sprintf(buf, "%llu\n", result);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", result);
 }
 LUSTRE_RO_ATTR(kbytesavail);
 
@@ -247,7 +247,7 @@ static ssize_t filestotal_show(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	return sprintf(buf, "%llu\n", osfs.os_files);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_files);
 }
 LUSTRE_RO_ATTR(filestotal);
 
@@ -263,9 +263,25 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	return sprintf(buf, "%llu\n", osfs.os_ffree);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_ffree);
 }
 LUSTRE_RO_ATTR(filesfree);
+
+static ssize_t statfs_state_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
+
+	return lprocfs_statfs_state(buf, PAGE_SIZE, osfs.os_state);
+}
+LUSTRE_RO_ATTR(statfs_state);
 
 static ssize_t client_type_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -2438,12 +2454,11 @@ struct ldebugfs_vars lprocfs_llite_obd_vars[] = {
 
 static struct attribute *llite_attrs[] = {
 	&lustre_attr_blocksize.attr,
-	&lustre_attr_stat_blocksize.attr,
+	&lustre_attr_filestotal.attr,
+	&lustre_attr_filesfree.attr,
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
 	&lustre_attr_kbytesavail.attr,
-	&lustre_attr_filestotal.attr,
-	&lustre_attr_filesfree.attr,
 	&lustre_attr_client_type.attr,
 	&lustre_attr_foreign_symlink_enable.attr,
 	&lustre_attr_foreign_symlink_prefix.attr,
@@ -2459,6 +2474,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_max_read_ahead_async_active.attr,
 	&lustre_attr_read_ahead_async_file_threshold_mb.attr,
 	&lustre_attr_read_ahead_range_kb.attr,
+	&lustre_attr_stat_blocksize.attr,
 	&lustre_attr_stats_track_pid.attr,
 	&lustre_attr_stats_track_ppid.attr,
 	&lustre_attr_stats_track_gid.attr,
@@ -2474,6 +2490,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_lazystatfs.attr,
 	&lustre_attr_statfs_max_age.attr,
 	&lustre_attr_statfs_project.attr,
+	&lustre_attr_statfs_state.attr,
 	&lustre_attr_max_easize.attr,
 	&lustre_attr_default_easize.attr,
 	&lustre_attr_xattr_cache.attr,

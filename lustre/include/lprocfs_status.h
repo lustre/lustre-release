@@ -937,6 +937,7 @@ int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
 			   struct root_squash_info *squash, char *name);
 int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 			     struct root_squash_info *squash, char *name);
+ssize_t lprocfs_statfs_state(char *buf, size_t buflen, __u32 state);
 
 #else /* !CONFIG_PROC_FS */
 
@@ -1151,43 +1152,6 @@ ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 static inline ssize_t
 lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
-{
-	return 0;
-}
-
-/* Statfs helpers */
-static inline
-int lprocfs_blksize_seq_show(struct seq_file *m, void *data)
-{
-	return 0;
-}
-
-static inline
-int lprocfs_kbytestotal_seq_show(struct seq_file *m, void *data)
-{
-	return 0;
-}
-
-static inline
-int lprocfs_kbytesfree_seq_show(struct seq_file *m, void *data)
-{
-	return 0;
-}
-
-static inline
-int lprocfs_kbytesavail_seq_show(struct seq_file *m, void *data)
-{
-	return 0;
-}
-
-static inline
-int lprocfs_filestotal_seq_show(struct seq_file *m, void *data)
-{
-	return 0;
-}
-
-static inline
-int lprocfs_filesfree_seq_show(struct seq_file *m, void *data)
 {
 	return 0;
 }

@@ -3087,13 +3087,4 @@ int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
 		     const char *name, struct ldebugfs_vars *list);
 int dt_tunables_fini(struct dt_device *dt);
 
-#ifdef CONFIG_PROC_FS
-int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v);
-int lprocfs_dt_kbytestotal_seq_show(struct seq_file *m, void *v);
-int lprocfs_dt_kbytesfree_seq_show(struct seq_file *m, void *v);
-int lprocfs_dt_kbytesavail_seq_show(struct seq_file *m, void *v);
-int lprocfs_dt_filestotal_seq_show(struct seq_file *m, void *v);
-int lprocfs_dt_filesfree_seq_show(struct seq_file *m, void *v);
-#endif /* CONFIG_PROC_FS */
-
 #endif /* __LUSTRE_DT_OBJECT_H */
