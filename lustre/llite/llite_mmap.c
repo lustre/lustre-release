@@ -69,13 +69,14 @@ struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
 }
 
 /**
- * API independent part for page fault initialization.
- * \param env - corespondent lu_env to processing
- * \param vma - virtual memory area addressed to page fault
- * \param index - page index corespondent to fault.
- * \param mkwrite - whether it is mmap write.
+ * ll_fault_io_init() - API independent part for page fault initialization.
+ * @env: corespondent lu_env to processing
+ * @vma: virtual memory area addressed to page fault
+ * @index: page index corespondent to fault.
+ * @mkwrite: whether it is mmap write.
  *
- * \return error codes from cl_io_init.
+ * Return:
+ * * pointer to a struct cl_io on success error otherwise
  */
 static struct cl_io *
 ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma,
@@ -262,15 +263,15 @@ int ll_filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 }
 
 /**
- * Lustre implementation of a vm_operations_struct::fault() method, called by
- * VM to server page fault (both in kernel and user space).
+ * ll_fault0() - Lustre implementation of a vm_operations_struct::fault()
+ * method, called by VM to server page fault (both in kernel and user space).
+ * @vma: is virtiual area struct related to page fault
+ * @vmf: structure which describe type and address where hit fault
  *
- * \param vma - is virtiual area struct related to page fault
- * \param vmf - structure which describe type and address where hit fault
- *
- * \return allocated and filled _locked_ page for address
- * \retval VM_FAULT_ERROR on general error
- * \retval NOPAGE_OOM not have memory for allocate new page
+ * Return:
+ * * allocated and filled _locked_ page for address
+ * * VM_FAULT_ERROR on general error
+ * * NOPAGE_OOM not have memory for allocate new page
  */
 static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
@@ -532,8 +533,11 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 }
 
 /**
- *  To avoid cancel the locks covering mmapped region for lock cache pressure,
- *  we track the mapped vma count in vvp_object::vob_mmap_cnt.
+ * ll_vm_open() - Called when VMA is being opened
+ * @vma: virtual memory area (VMA) structure that is being opened
+ *
+ * To avoid cancel the locks covering mmapped region for lock cache pressure,
+ * we track the mapped vma count in vvp_object::vob_mmap_cnt.
  */
 static void ll_vm_open(struct vm_area_struct *vma)
 {
@@ -553,7 +557,8 @@ static void ll_vm_open(struct vm_area_struct *vma)
 }
 
 /**
- * Dual to ll_vm_open().
+ * ll_vm_close() - Called when VMA is being closed(Dual to ll_vm_open())
+ * @vma: virtual memory area (VMA) structure that is being closed
  */
 static void ll_vm_close(struct vm_area_struct *vma)
 {

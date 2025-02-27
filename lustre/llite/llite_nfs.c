@@ -230,13 +230,17 @@ free_dot:
 #endif
 
 /**
- * \a connectable - is nfsd will connect himself or this should be done
- *                  at lustre
+ * ll_encode_fh() - Encode file handle (NFS)
+ * @inode: inode of file which is being encoded
+ * @fh: file handle buffer
+ * @plen: length of file handle (fh) buffer
+ * @parent: inode of parent directory
  *
+ * Return:
  * The return value is file handle type:
- * 1 -- contains child file handle;
- * 2 -- contains child file handle and parent file handle;
- * 255 -- error.
+ * * %1 -- contains child file handle;
+ * * %2 -- contains child file handle and parent file handle;
+ * * %255 -- error.
  */
 static int ll_encode_fh(struct inode *inode, u32 *fh, int *plen,
 			struct inode *parent)
