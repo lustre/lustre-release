@@ -17,7 +17,7 @@ lfs-mirror-extend \- add mirror(s) to an existing file
 .IR MIRROR_COUNT ]]
 .RB [ --mirror-id
 .IR MIRROR_ID ]
-.RB [ --no-verify "] [" --non-direct | -D ]
+.RB [ --no-resync "] [" --no-verify "] [" --non-direct | -D ]
 .RB [ --stats | --stats-interval =\c
 .IR SECONDS ]
 .RI [ SETSTRIPE_OPTIONS
@@ -264,6 +264,28 @@ entirely and rely on
 .B --ec
 auto mode to attach parity to the lone mirror.
 .TP
+.BR --no-resync
+This option indicates that the added mirror does not contain the updated
+data from the original file, and all newly-added mirrors will be marked
+.RB ' stale '
+and will be unusable until they are resynced by the
+.B lfs mirror resync
+command (see
+.BR lfs-mirror-resync (1)).
+This can allow an interactive command to configure the new mirrors on a
+file, while deferring the work of data resync to another node.
+This option cannot be used with
+.B -f
+or
+.BR --ec .
+It needs the FLR EC connect flag, which is negotiated when the client
+mounts: set the module parameters
+.B llite_enable_flr_ec=1
+on the client and
+.B mdt_enable_flr_ec=1
+on the MDS before mounting, otherwise the extend fails with
+.BR EOPNOTSUPP .
+.TP
 .BR --no-verify
 This option indicates not to verify the mirror(s) from victim file(s) in case
 the victim file(s) contains the same data as the original mirrored file. This
@@ -387,6 +409,15 @@ having a single PFL component striped across 4 OSTs and protected by a
 .RS
 .EX
 .B # lfs mirror extend -N2 -E -1 -c 4 --ec 4+2 /mnt/lustre/file1
+.EE
+.RE
+.PP
+Add 2 stale mirrors to /mnt/lustre/file1 without copying any data, and
+resync them later, possibly from another node:
+.RS
+.EX
+.B # lfs mirror extend -N2 --no-resync -c -1 /mnt/lustre/file1
+.B # lfs mirror resync /mnt/lustre/file1
 .EE
 .RE
 .SH AVAILABILITY

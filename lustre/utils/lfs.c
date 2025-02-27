@@ -295,7 +295,8 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Extend a mirrored file.\n"
 "Usage: lfs mirror extend [--mirror-count|-N[MIRROR_COUNT]]\n"
 		"\t\t[--ec DATA+PARITY] [--mirror-id MIRROR_ID]\n"
-		"\t\t[--no-verify] [--stats|--stats-interval=STATS_INTERVAL]\n"
+		"\t\t[--no-resync] [--no-verify]\n"
+		"\t\t[--stats|--stats-interval=STATS_INTERVAL]\n"
 		"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"
 		"\t\t[--file|-f VICTIM_FILE]\n"
 		"\t\t" SSM_SETSTRIPE_OPT "]\n"
@@ -1712,6 +1713,7 @@ struct mirror_args {
  * @MF_FOREIGN:   specified foreign component instead of mirror id
  * @MF_NO_WARN:   do not warn when the operation removes the last
  *	          redundant copy of the file
+ * @MF_NO_RESYNC: add the new mirror(s) as stale without copying data
  *
  * Flags for extending a mirrored file.
  */
@@ -1722,6 +1724,7 @@ enum mirror_flags {
 	MF_COMP_POOL	= 0x08,
 	MF_FOREIGN	= 0x10,
 	MF_NO_WARN	= 0x20,
+	MF_NO_RESYNC	= 0x40,
 };
 
 /**
@@ -2234,6 +2237,10 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 	data->lil_ids[0] = fd_dst;
 	rc = llapi_lease_set(fd_src, data);
 	if (rc < 0) {
+		if (rc == -EOPNOTSUPP && !resync)
+			fprintf(stderr,
+				"error: %s: %s: merging a stale mirror needs llite_enable_flr_ec=1 on the client and mdt_enable_flr_ec=1 on the MDS before mounting the client\n",
+				progname, name);
 		err_str = "cannot merge layout";
 		goto out;
 	} else if (rc == 0) {
@@ -2891,7 +2898,11 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 	int new_ec_count = 0;
 	uint32_t new_ec_id = 0;
 	bool parity_merged;
+	bool sync_mirror = !(mirror_flags & MF_NO_RESYNC);
 	int rc = 0;
+
+	if (!sync_mirror)
+		stats_interval_sec = 0;
 
 	for (m = mirror_list; m; m = m->m_next) {
 		if (m->m_target_set || m->m_target_auto || m->m_file ||
@@ -2935,12 +2946,13 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 
 			while (mirror_count > 0) {
 				uint32_t max_before = 0;
+				uint32_t max_after = 0;
 				uint32_t new_data_id = 0;
 
 				/* The id of the data mirror added below is
 				 * derived from the highest id before it.
 				 */
-				if (need_parity) {
+				if (need_parity || !sync_mirror) {
 					rc = max_mirror_id(fname, &max_before);
 					if (rc)
 						break;
@@ -2949,13 +2961,28 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 				rc = mirror_extend_layout(fname,
 							mirror_list->m_layout,
 							mirror_list->m_inherit,
-							true,
+							sync_mirror,
 							mirror_list->m_flags,
 							migration_flags,
 							bandwidth_bytes_sec,
 							stats_interval_sec);
 				if (rc)
 					break;
+
+				/* Modules without stale merge support close
+				 * the lease without merging and report success.
+				 */
+				if (!sync_mirror) {
+					rc = max_mirror_id(fname, &max_after);
+					if (!rc && max_after <= max_before) {
+						fprintf(stderr,
+							"error: %s: %s: no stale mirror was merged, the loaded client modules do not support --no-resync\n",
+							progname, fname);
+						rc = -EOPNOTSUPP;
+					}
+					if (rc)
+						break;
+				}
 
 				if (need_parity) {
 					/* The parity mirror is a second merge:
@@ -5385,6 +5412,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			.name = "foreign",	.has_arg = optional_argument},
 	{ .val = LFS_MIRROR_ID_OPT,
 			.name = "mirror-id",	.has_arg = required_argument},
+	{ .val = LFS_MIRROR_NORESYNC_OPT,
+			.name = "no-resync",	.has_arg = no_argument },
 	{ .val = LFS_MODE_OPT,
 			.name = "mode",		.has_arg = required_argument},
 	{ .val = LFS_LAYOUT_COPY,
@@ -5585,6 +5614,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			break;
 		}
+		case LFS_MIRROR_NORESYNC_OPT:
+			mirror_flags |= MF_NO_RESYNC;
+			break;
 		case LFS_LAYOUT_FLAGS_OPT: {
 			uint32_t neg_flags;
 
@@ -6596,6 +6628,35 @@ create_mirror:
 		} else if (!has_m_file) {
 			fprintf(stderr,
 				"error: %s: --no-verify must be specified with -f <victim_file> option\n",
+				progname);
+			result = -EINVAL;
+			goto error;
+		}
+	}
+
+	if (mirror_flags & MF_NO_RESYNC) {
+		struct mirror_args *m;
+
+		if (opc != SO_MIRROR_EXTEND) {
+			fprintf(stderr,
+				"error: %s: --no-resync is valid only for lfs mirror extend command\n",
+				progname);
+			result = -EINVAL;
+			goto error;
+		} else if (has_m_file) {
+			fprintf(stderr,
+				"error: %s: --no-resync cannot be specified with -f <victim_file> option\n",
+				progname);
+			result = -EINVAL;
+			goto error;
+		}
+
+		for (m = mirror_list; m; m = m->m_next)
+			if (m->m_has_ec)
+				break;
+		if (lsa.lsa_has_ec || m) {
+			fprintf(stderr,
+				"error: %s: --no-resync cannot be specified with --ec option\n",
 				progname);
 			result = -EINVAL;
 			goto error;

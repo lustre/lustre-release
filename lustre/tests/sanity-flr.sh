@@ -916,6 +916,98 @@ test_0m() {
 }
 run_test 0m "mirror extend with -N= option"
 
+test_0n() {
+	(( $MDS1_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MDS >= 2.17.60 for stale mirror merge"
+	$LCTL get_param mdc.*.connect_flags | grep -qw flr_ec ||
+		skip_env "need flr_ec connection for stale mirror merge"
+
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local cksum
+	local cksum2
+	local mirror_cmd="$LFS mirror extend"
+	local ec_opts
+
+	test_mkdir $td || error "mkdir $td failed"
+	stack_trap "rm -rf $td"
+
+	dd if=/dev/urandom of=$tf bs=1M count=$((RANDOM % 10 + 2)) ||
+		error "write to $tf failed"
+	cksum=$(cat $tf | md5sum)
+	echo " - original checksum: $cksum"
+
+	log "extend 1 mirror"
+	$mirror_cmd -N -c-1 $tf || error "extend a resync'd mirror failed"
+	log "check the 2nd mirror"
+	verify_comp_attr lcme_flags $tf 0x20001 ^stale
+	cksum2=$($LFS mirror read -N 2 $tf | md5sum; exit ${PIPESTATUS[0]}) ||
+		error "(0) mirror read failed"
+	log " - mirror 2 checksum: $cksum2"
+	[[ "$cksum2" == "$cksum" ]] || {
+		$LFS getstripe -v $tf
+		error "mirror 2 checksum not sync with original one"
+	}
+
+	log "check --no-resync is rejected where it does not apply"
+	$LFS mirror create -N $td/victim || error "create victim failed"
+	$mirror_cmd -N -f $td/victim --no-resync $tf &&
+		error "--no-resync with -f succeeded"
+	$LFS setstripe --no-resync -c 1 $td/$tfile.2 &&
+		error "setstripe --no-resync succeeded"
+	$LFS migrate --no-resync -c 1 $tf &&
+		error "migrate --no-resync succeeded"
+	for ec_opts in "-N --ec 1+1" "--ec 1+1" "--mirror-id 1 --ec 1+1"; do
+		LFS_EC_OK=yes $mirror_cmd $ec_opts --no-resync $tf 2>&1 |
+			grep "cannot be specified with --ec" ||
+			error "--no-resync with '$ec_opts' not rejected"
+	done
+
+	log "extend 2 more mirrors"
+	$mirror_cmd -N2 --no-resync -c-1 $tf ||
+		error "extend a no-resync'd mirror failed"
+	log "check the stale 3rd mirror"
+	verify_comp_attr lcme_flags $tf 0x30001 stale
+	cksum2=$($LFS mirror read -N 3 $tf | md5sum; exit ${PIPESTATUS[0]}) ||
+		error "(1) mirror read failed"
+	log " - mirror 3 checksum: $cksum2"
+	[[ "$cksum2" != "$cksum" ]] || {
+		$LFS getstripe -v $tf
+		error "mirror 3 checksum sync with original one"
+	}
+	log "check the stale 4th mirror"
+	verify_comp_attr lcme_flags $tf 0x40001 stale
+	cksum2=$($LFS mirror read -N 4 $tf | md5sum; exit ${PIPESTATUS[0]}) ||
+		error "(2) mirror read failed"
+	log " - mirror 4 checksum: $cksum2"
+	[[ "$cksum2" != "$cksum" ]] || {
+		$LFS getstripe -v $tf
+		error "mirror 4 checksum sync with original one"
+	}
+
+	log "resync the file"
+	$LFS mirror resync $tf || error "mirror resync failed"
+	log "check the 3rd mirror after resync"
+	verify_comp_attr lcme_flags $tf 0x30001 ^stale
+	cksum2=$($LFS mirror read -N 3 $tf | md5sum; exit ${PIPESTATUS[0]}) ||
+		error "(3) mirror read failed"
+	log " - mirror 3 checksum after resync: $cksum2"
+	[[ "$cksum2" == "$cksum" ]] || {
+		$LFS getstripe -v $tf
+		error "mirror 3 checksum not sync with original one"
+	}
+	log "check the 4th mirror after resync"
+	verify_comp_attr lcme_flags $tf 0x40001 ^stale
+	cksum2=$($LFS mirror read -N 4 $tf | md5sum; exit ${PIPESTATUS[0]}) ||
+		error "(4) mirror read failed"
+	log " - mirror 4 checksum after resync: $cksum2"
+	[[ "$cksum2" == "$cksum" ]] || {
+		$LFS getstripe -v $tf
+		error "mirror 4 checksum not sync with original one"
+	}
+}
+run_test 0n "lfs mirror extend with --no-resync option"
+
 test_1() {
 	local tf=$DIR/$tfile
 	local mirror_count=16 # LUSTRE_MIRROR_COUNT_DEF
