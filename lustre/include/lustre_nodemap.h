@@ -39,7 +39,7 @@ static const struct nodemap_rbac_name {
 
 struct nodemap_pde {
 	char			 npe_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
-	struct proc_dir_entry	*npe_proc_entry;
+	struct dentry		*npe_debugfs_entry;
 	struct list_head	 npe_list_member;
 };
 

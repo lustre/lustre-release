@@ -8,8 +8,8 @@
  * Author: Joshua Walgenbach <jjw@iu.edu>
  */
 
-#define NODEMAP_LPROC_ID_LEN 16
-#define NODEMAP_LPROC_FLAG_LEN 2
+#define NODEMAP_LDEBUGFS_ID_LEN 16
+#define NODEMAP_LDEBUGFS_FLAG_LEN 2
 
 #include <lprocfs_status.h>
 #include <lustre_net.h>
@@ -18,6 +18,9 @@
 #include "nodemap_internal.h"
 
 static LIST_HEAD(nodemap_pde_list);
+
+/* nodemap debugfs root directory under lustre */
+struct dentry *nodemap_root;
 
 /**
  * Reads and prints the idmap for the given nodemap.
@@ -100,7 +103,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
  */
 static int nodemap_idmap_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, nodemap_idmap_show, pde_data(inode));
+	return single_open(file, nodemap_idmap_show, inode->i_private);
 }
 
 /**
@@ -196,7 +199,7 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
  */
 static int nodemap_ranges_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, nodemap_ranges_show, pde_data(inode));
+	return single_open(file, nodemap_ranges_show, inode->i_private);
 }
 
 /**
@@ -241,8 +244,8 @@ static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
  */
 static ssize_t
 nodemap_fileset_seq_write(struct file *file,
-				      const char __user *buffer,
-				      size_t count, loff_t *off)
+			  const char __user *buffer,
+			  size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
 	char *nm_fileset;
@@ -273,7 +276,7 @@ out:
 
 	return rc;
 }
-LPROC_SEQ_FOPS(nodemap_fileset);
+LDEBUGFS_SEQ_FOPS(nodemap_fileset);
 
 /**
  * Reads and prints the SELinux policy info for the given nodemap.
@@ -342,7 +345,7 @@ out:
 
 	return count;
 }
-LPROC_SEQ_FOPS(nodemap_sepol);
+LDEBUGFS_SEQ_FOPS(nodemap_sepol);
 
 /**
  * Reads and prints the exports attached to the given nodemap.
@@ -402,7 +405,7 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
  */
 static int nodemap_exports_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, nodemap_exports_show, pde_data(inode));
+	return single_open(file, nodemap_exports_show, inode->i_private);
 }
 
 /**
@@ -432,7 +435,7 @@ static ssize_t
 nodemap_active_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
-	char			active_string[NODEMAP_LPROC_FLAG_LEN + 1];
+	char			active_string[NODEMAP_LDEBUGFS_FLAG_LEN + 1];
 	long unsigned int	active;
 	int			rc;
 
@@ -454,7 +457,7 @@ nodemap_active_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(nodemap_active);
+LDEBUGFS_SEQ_FOPS(nodemap_active);
 
 /**
  * Reads and prints the nodemap ID for the given nodemap.
@@ -481,7 +484,7 @@ static int nodemap_id_seq_show(struct seq_file *m, void *data)
 	nodemap_putref(nodemap);
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(nodemap_id);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_id);
 
 /**
  * Reads and prints the root squash UID for the given nodemap.
@@ -841,7 +844,7 @@ static int nodemap_deny_mount_seq_show(struct seq_file *m, void *data)
 	return 0;
 }
 
-static struct lprocfs_vars lprocfs_nm_module_vars[] = {
+static struct ldebugfs_vars lprocfs_nm_module_vars[] = {
 	{
 		.name		= "active",
 		.fops		= &nodemap_active_fops,
@@ -851,43 +854,43 @@ static struct lprocfs_vars lprocfs_nm_module_vars[] = {
 	}
 };
 
-LPROC_SEQ_FOPS_RO(nodemap_trusted);
-LPROC_SEQ_FOPS_RO(nodemap_admin);
-LPROC_SEQ_FOPS_RO(nodemap_squash_uid);
-LPROC_SEQ_FOPS_RO(nodemap_squash_gid);
-LPROC_SEQ_FOPS_RO(nodemap_squash_projid);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_trusted);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_admin);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_squash_uid);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_squash_gid);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_squash_projid);
 
-LPROC_SEQ_FOPS_RO(nodemap_deny_unknown);
-LPROC_SEQ_FOPS_RO(nodemap_map_mode);
-LPROC_SEQ_FOPS_RO(nodemap_offset);
-LPROC_SEQ_FOPS_RO(nodemap_rbac);
-LPROC_SEQ_FOPS_RO(nodemap_audit_mode);
-LPROC_SEQ_FOPS_RO(nodemap_forbid_encryption);
-LPROC_SEQ_FOPS_RO(nodemap_readonly_mount);
-LPROC_SEQ_FOPS_RO(nodemap_deny_mount);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_deny_unknown);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_map_mode);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_offset);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_rbac);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_audit_mode);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_forbid_encryption);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_readonly_mount);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_deny_mount);
 
-static const struct proc_ops nodemap_ranges_fops = {
-	.proc_open		= nodemap_ranges_open,
-	.proc_read		= seq_read,
-	.proc_lseek		= seq_lseek,
-	.proc_release		= single_release
+static const struct file_operations nodemap_ranges_fops = {
+	.open		= nodemap_ranges_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release
 };
 
-static const struct proc_ops nodemap_idmap_fops = {
-	.proc_open		= nodemap_idmap_open,
-	.proc_read		= seq_read,
-	.proc_lseek		= seq_lseek,
-	.proc_release		= single_release
+static const struct file_operations nodemap_idmap_fops = {
+	.open		= nodemap_idmap_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release
 };
 
-static const struct proc_ops nodemap_exports_fops = {
-	.proc_open		= nodemap_exports_open,
-	.proc_read		= seq_read,
-	.proc_lseek		= seq_lseek,
-	.proc_release		= single_release
+static const struct file_operations nodemap_exports_fops = {
+	.open		= nodemap_exports_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release
 };
 
-static struct lprocfs_vars lprocfs_nodemap_vars[] = {
+static struct ldebugfs_vars lprocfs_nodemap_vars[] = {
 	/* in alphabetical order */
 	{
 		.name		= "admin_nodemap",
@@ -970,7 +973,7 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 	}
 };
 
-static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
+static struct ldebugfs_vars lprocfs_default_nodemap_vars[] = {
 	/* in alphabetical order */
 	{
 		.name		= "admin_nodemap",
@@ -1042,15 +1045,14 @@ int nodemap_procfs_init(void)
 {
 	int rc = 0;
 
-	proc_lustre_nodemap_root = lprocfs_register(LUSTRE_NODEMAP_NAME,
-						    proc_lustre_root,
-						    lprocfs_nm_module_vars,
-						    NULL);
-	if (IS_ERR(proc_lustre_nodemap_root)) {
-		rc = PTR_ERR(proc_lustre_nodemap_root);
+	nodemap_root = debugfs_create_dir(LUSTRE_NODEMAP_NAME,
+					  debugfs_lustre_root);
+	if (!nodemap_root) {
+		int rc = -EINVAL;
 		CERROR("cannot create 'nodemap' directory: rc = %d\n",
 		       rc);
-		proc_lustre_nodemap_root = NULL;
+	} else {
+		ldebugfs_add_vars(nodemap_root, lprocfs_nm_module_vars, NULL);
 	}
 	return rc;
 }
@@ -1063,7 +1065,7 @@ void nodemap_procfs_exit(void)
 	struct nodemap_pde *nm_pde;
 	struct nodemap_pde *tmp;
 
-	lprocfs_remove(&proc_lustre_nodemap_root);
+	debugfs_remove_recursive(nodemap_root);
 	list_for_each_entry_safe(nm_pde, tmp, &nodemap_pde_list,
 				 npe_list_member) {
 		list_del(&nm_pde->npe_list_member);
@@ -1076,7 +1078,7 @@ void nodemap_procfs_exit(void)
  */
 void lprocfs_nodemap_remove(struct nodemap_pde *nm_pde)
 {
-	lprocfs_remove(&nm_pde->npe_proc_entry);
+	debugfs_remove_recursive(nm_pde->npe_debugfs_entry);
 	list_del(&nm_pde->npe_list_member);
 	OBD_FREE_PTR(nm_pde);
 }
@@ -1090,17 +1092,17 @@ void lprocfs_nodemap_remove(struct nodemap_pde *nm_pde)
  */
 int lprocfs_nodemap_register(struct lu_nodemap *nodemap, bool is_default)
 {
-	struct nodemap_pde	*nm_entry;
-	int			 rc = 0;
+	struct nodemap_pde *nm_entry;
+	int rc = 0;
 
 	OBD_ALLOC_PTR(nm_entry);
-	if (nm_entry == NULL)
+	if (!nm_entry)
 		GOTO(out, rc = -ENOMEM);
 
-	nm_entry->npe_proc_entry = proc_mkdir(nodemap->nm_name,
-					      proc_lustre_nodemap_root);
-	if (IS_ERR(nm_entry->npe_proc_entry))
-		GOTO(out, rc = PTR_ERR(nm_entry->npe_proc_entry));
+	nm_entry->npe_debugfs_entry = debugfs_create_dir(nodemap->nm_name,
+							 nodemap_root);
+	if (!nm_entry->npe_debugfs_entry)
+		GOTO(out, rc = -ENOENT);
 
 	snprintf(nm_entry->npe_name, sizeof(nm_entry->npe_name), "%s",
 		 nodemap->nm_name);
@@ -1109,15 +1111,11 @@ int lprocfs_nodemap_register(struct lu_nodemap *nodemap, bool is_default)
 	 * is so a nodemap struct can be replaced without updating the proc
 	 * entries.
 	 */
-	rc = lprocfs_add_vars(nm_entry->npe_proc_entry,
-			      (is_default ? lprocfs_default_nodemap_vars :
-					    lprocfs_nodemap_vars),
-			      nm_entry->npe_name);
-	if (rc != 0)
-		lprocfs_remove(&nm_entry->npe_proc_entry);
-	else
-		list_add(&nm_entry->npe_list_member, &nodemap_pde_list);
-
+	ldebugfs_add_vars(nm_entry->npe_debugfs_entry,
+			  (is_default ? lprocfs_default_nodemap_vars :
+					lprocfs_nodemap_vars),
+			  nm_entry->npe_name);
+	list_add(&nm_entry->npe_list_member, &nodemap_pde_list);
 out:
 	if (rc != 0) {
 		CERROR("cannot create 'nodemap/%s': rc = %d\n",

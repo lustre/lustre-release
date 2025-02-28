@@ -25,9 +25,6 @@
 
 #define DEFAULT_NODEMAP "default"
 
-/* nodemap proc root proc directory under fs/lustre */
-struct proc_dir_entry *proc_lustre_nodemap_root;
-
 /* Copy of config active flag to avoid locking in mapping functions */
 bool nodemap_active;
 
