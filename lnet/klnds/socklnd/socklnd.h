@@ -616,8 +616,6 @@ int ksocknal_add_peer(struct lnet_ni *ni, struct lnet_processid *id,
 		      struct sockaddr *addr);
 struct ksock_peer_ni *ksocknal_find_peer_locked(struct lnet_ni *ni,
 					   struct lnet_processid *id);
-struct ksock_peer_ni *ksocknal_find_peer(struct lnet_ni *ni,
-					 struct lnet_processid *id);
 extern void ksocknal_peer_failed(struct ksock_peer_ni *peer_ni);
 extern int ksocknal_create_conn(struct lnet_ni *ni,
 				struct ksock_conn_cb *conn_cb,

@@ -228,20 +228,6 @@ ksocknal_find_peer_locked(struct lnet_ni *ni, struct lnet_processid *id)
 	return NULL;
 }
 
-struct ksock_peer_ni *
-ksocknal_find_peer(struct lnet_ni *ni, struct lnet_processid *id)
-{
-	struct ksock_peer_ni *peer_ni;
-
-	read_lock(&ksocknal_data.ksnd_global_lock);
-	peer_ni = ksocknal_find_peer_locked(ni, id);
-	if (peer_ni != NULL)			/* +1 ref for caller? */
-		ksocknal_peer_addref(peer_ni);
-	read_unlock(&ksocknal_data.ksnd_global_lock);
-
-	return peer_ni;
-}
-
 static void
 ksocknal_unlink_peer_locked(struct ksock_peer_ni *peer_ni)
 {
