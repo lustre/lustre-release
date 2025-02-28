@@ -34,6 +34,8 @@
 #include <linux/lnet/nidstr.h>
 #include "lnetconfig/liblnetconfig.h"
 
+static void lst_print_usage(char *cmd);
+
 static int lst_info_batch_ioctl(char *batch, int test, int server,
 		       struct lstcon_test_batch_ent *entp, int *idxp,
 		       int *ndentp, struct lstcon_node_ent *dentsp);
@@ -326,14 +328,6 @@ lst_test_name2type(char *name)
 		return LST_TEST_BULK;
 
 	return -1;
-}
-
-static void
-lst_print_usage(char *cmd)
-{
-	char *argv[] = { "help", cmd };
-
-	cfs_parser(2, argv, NULL);
 }
 
 static void
@@ -3928,6 +3922,14 @@ lst_initialize(void)
 	session_key = atoi(key);
 
 	return 0;
+}
+
+static void
+lst_print_usage(char *cmd)
+{
+	char *argv[] = { "help", cmd };
+
+	cfs_parser(2, argv, lst_cmdlist);
 }
 
 int main(int argc, char **argv)

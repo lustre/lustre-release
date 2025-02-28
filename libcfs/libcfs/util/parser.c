@@ -147,6 +147,9 @@ int cfs_parser(int argc, char **argv, command_t cmds[])
 
 	done = 0;
 
+	if (cmds == NULL)
+		return -ENOENT;
+
 	for (cmd = override_cmdlist; cmd->pc_name && i < MAXCMDS; cmd++)
 		top_level[i++] = *cmd;
 
