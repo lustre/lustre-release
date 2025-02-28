@@ -1347,13 +1347,6 @@ void ldlm_lock_fail_match_locked(struct ldlm_lock *lock)
 }
 EXPORT_SYMBOL(ldlm_lock_fail_match_locked);
 
-void ldlm_lock_fail_match(struct ldlm_lock *lock)
-{
-	lock_res_and_lock(lock);
-	ldlm_lock_fail_match_locked(lock);
-	unlock_res_and_lock(lock);
-}
-
 /**
  * Mark lock as "matchable" by OST.
  *

@@ -1591,8 +1591,7 @@ static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
 int is_granted_or_cancelled_nolock(struct ldlm_lock *lock);
 
 int ldlm_error2errno(enum ldlm_error error);
-/* don't call it `errno': this confuses user-space. */
-enum ldlm_error ldlm_errno2error(int err_no);
+
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 void ldlm_dump_export_locks(struct obd_export *exp);
 #endif
@@ -1621,7 +1620,6 @@ void ldlm_lock_decref(const struct lustre_handle *lockh, enum ldlm_mode mode);
 void ldlm_lock_decref_and_cancel(const struct lustre_handle *lockh,
 				 enum ldlm_mode mode);
 void ldlm_lock_fail_match_locked(struct ldlm_lock *lock);
-void ldlm_lock_fail_match(struct ldlm_lock *lock);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
 void ldlm_lock_allow_match_locked(struct ldlm_lock *lock);
 
@@ -1878,9 +1876,7 @@ int ldlm_pool_setup(struct ldlm_pool *pl, int limit);
 time64_t ldlm_pool_recalc(struct ldlm_pool *pl, bool force);
 __u32 ldlm_pool_get_lvf(struct ldlm_pool *pl);
 __u64 ldlm_pool_get_slv(struct ldlm_pool *pl);
-__u64 ldlm_pool_get_clv(struct ldlm_pool *pl);
 __u32 ldlm_pool_get_limit(struct ldlm_pool *pl);
-void ldlm_pool_set_slv(struct ldlm_pool *pl, __u64 slv);
 void ldlm_pool_set_clv(struct ldlm_pool *pl, __u64 clv);
 void ldlm_pool_set_limit(struct ldlm_pool *pl, __u32 limit);
 void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock);

@@ -1015,33 +1015,6 @@ __u64 ldlm_pool_get_slv(struct ldlm_pool *pl)
 }
 
 /**
- * Sets passed \a slv to \a pl.
- *
- * \pre ->pl_lock is not locked.
- */
-void ldlm_pool_set_slv(struct ldlm_pool *pl, __u64 slv)
-{
-	spin_lock(&pl->pl_lock);
-	pl->pl_server_lock_volume = slv;
-	spin_unlock(&pl->pl_lock);
-}
-
-/**
- * Returns current \a pl CLV.
- *
- * \pre ->pl_lock is not locked.
- */
-__u64 ldlm_pool_get_clv(struct ldlm_pool *pl)
-{
-	__u64 slv;
-
-	spin_lock(&pl->pl_lock);
-	slv = pl->pl_client_lock_volume;
-	spin_unlock(&pl->pl_lock);
-	return slv;
-}
-
-/**
  * Sets passed \a clv to \a pl.
  *
  * \pre ->pl_lock is not locked.
@@ -1514,15 +1487,6 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
 }
 
 __u64 ldlm_pool_get_slv(struct ldlm_pool *pl)
-{
-	return 1;
-}
-
-void ldlm_pool_set_slv(struct ldlm_pool *pl, __u64 slv)
-{
-}
-
-__u64 ldlm_pool_get_clv(struct ldlm_pool *pl)
 {
 	return 1;
 }
