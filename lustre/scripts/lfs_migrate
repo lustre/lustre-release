@@ -47,12 +47,13 @@ usage() {
     cat -- <<USAGE 1>&2
 usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync|--cp]
 		   [--auto-stripe|-A [-C <cap>]
+		   [--fid|-F [--lustre-dir <lustre_dir>]]
 		   [--min-free|-M <min_free>] [--max-free|-X <max_free>]]
 		   [--pool|-p <pool>] [--stripe-count|-c <stripe_count>]
 		   [--stripe-size|-S <stripe_size>] [--quiet|-q]
 		   [-D] [-h] [-n] [-S]
 		   [--restripe|-R] [--skip|-s] [--verbose|-v] [--yes|-y] [-0]
-		   [FILE|DIR...]
+		   [FILE|FID|DIR...]
 	-A         restripe file using an automatically selected stripe count,
 		   uses stripe_count = sqrt(size_in_GB) + 1
 	-c <stripe_count>
@@ -61,7 +62,12 @@ usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync|--cp]
 		   at most 1/<cap> of the available space of the smallest OST
 	--cp       force the use of 'cp' instead of migrate or rsync
 	-D         do not use direct I/O to copy file contents
+	--fid, -F  FID(s) are specified instead of file path(s)
 	-h         show this usage message
+	--lustre-dir <lustre_dir>
+		   the Lustre mount point where FID(s) are when --fid is specified.
+		   If there is exactly one mounted Lustre file system, this option
+		   is not necessary
 	-M <min_free>
 		   when -A is set, an OST must contain more available space than
 		   <min_free> KB in order for it to be considered available for
@@ -103,6 +109,7 @@ Examples:
       lfs_migrate /mnt/lustre/dir
       lfs_migrate -p newpool /mnt/lustre/dir
       lfs find /test -O test-OST0004 -size +4G | lfs_migrate
+      lfs_migrate -o 0 --lustre-dir /mnt/lustre --fid 0x200000401:0x1ae6:0x0
 USAGE
     exit 1
 }
@@ -115,13 +122,18 @@ cleanup() {
 trap cleanup EXIT
 
 OPT_AUTOSTRIPE=false
+OPT_CAP=100
 OPT_CHECK=true
-OPT_DEBUG=false
-OPT_DRYRUN=false
-OPT_FILE=()
-OPT_LAYOUT=()
 OPT_COMP=false
 OPT_COPY=false
+OPT_DEBUG=false
+OPT_DRYRUN=false
+OPT_FID=false
+OPT_FILE=()
+OPT_LAYOUT=()
+OPT_LUSTRE_DIR=""
+OPT_MAXFREE=""
+OPT_MINFREE=262144
 OPT_NO_DIRECT=false
 OPT_NO_RSYNC=true
 OPT_NULL=false
@@ -132,9 +144,6 @@ OPT_RSYNC=false
 OPT_STRIPE_COUNT=""
 OPT_STRIPE_SIZE=""
 OPT_YES=false
-OPT_MINFREE=262144
-OPT_MAXFREE=""
-OPT_CAP=100
 
 # Examine any long options and arguments.  getopts does not support long
 # options, so they must be stripped out and classified as either options
@@ -158,8 +167,10 @@ while [ -n "$*" ]; do
 	-C) OPT_CAP="$2"; shift;;
 	-D) LFS_OPT_DIRECTIO="-D";;
 	-E|--comp-end|--component-end) OPT_COMP=true; OPT_LAYOUT+="$arg ";;
+	-F|--fid) OPT_FID=true;;
 	-h|--help) usage;;
 	-l|--link) ;; # maintained backward compatibility for now
+	--lustre-dir) OPT_LUSTRE_DIR="$2"; shift;;
 	-M|--min-free) OPT_MINFREE="$2"; shift;;
 	-n) OPT_DRYRUN=true; OPT_YES=true
 	   echo "$PROG: -n deprecated, use --dry-run or --non-block" 1>&2;;
@@ -179,8 +190,17 @@ while [ -n "$*" ]; do
 	-X|--max-free) OPT_MAXFREE="$2"; shift;;
 	-y|--yes) OPT_YES=true;;
 	-0) OPT_NULL=true;;
-	*) # Pass other non-file layout options to 'lfs migrate'
-	   [[ -e "$arg" ]] && OPT_FILE+="$arg " && break || OPT_LAYOUT+="$arg "
+	*)
+		if [[ -e "$arg" ||
+		      "$arg" =~ ^\[?0x[0-9a-f]+:0x[0-9a-f]+:0x[0-9a-f]+\]?$ ]]; then
+			# hit file path or fid, end of options
+			OPT_FILE+="$arg "
+			break
+		else
+			# Pass other non-file layout options to 'lfs migrate'
+			OPT_LAYOUT+="$arg "
+		fi
+		;;
 	esac
 	shift
 done
@@ -211,6 +231,29 @@ if $OPT_RSYNC && ! $OPT_YES; then
 	echo -n "Continue? (y/n) "
 	read CHECK
 	[ "$CHECK" != "y" -a "$CHECK" != "yes" ] && exit 1
+fi
+
+if $OPT_FID; then
+	if [[ -z "$OPT_LUSTRE_DIR" ]]; then
+		# guess the only mounted lustre filesystem
+		lustre_mounts=($(mount -t lustre | awk '/:\// { print $3 }'))
+		if (( ${#lustre_mounts[*]} > 1 )); then
+			echo "$PROG: --fid requires --lustre-dir if there are multiple lustre mountpoints" 1>&2
+			exit 1
+		elif (( ${#lustre_mounts[*]} == 0 )); then
+			echo "$PROG: there is no lustre mountpoint" 1>&2
+			exit 1
+		fi
+		OPT_LUSTRE_DIR=${lustre_mounts[0]}
+	elif [[ ${OPT_LUSTRE_DIR:0:1} == "-" ]]; then
+		# the next argument name is save as OPT_LUSTRE_DIR by mistake
+		echo "$PROG: Option --lustre-dir must have value" 1>&2
+		exit 1
+	fi
+	if ! $LFS path2fid "$OPT_LUSTRE_DIR" > /dev/null 2>&1; then
+		echo "$PROG: invalid --lustre-dir '$OPT_LUSTRE_DIR'" 1>&2
+		exit 1
+	fi
 fi
 
 # if rsync has --xattr support, then try to copy the xattrs.
@@ -302,6 +345,15 @@ lfs_migrate() {
 		local layout
 		local fid
 
+		if $OPT_FID; then
+			fid=$OLDNAME
+			OLDNAME=$($LFS fid2path "$OPT_LUSTRE_DIR" "$fid")
+			if (( $? != 0 )); then
+				echo "$PROG: invalid FID $fid." 1>&2
+				exit 1
+			fi
+		fi
+
 		$ECHO -n "$OLDNAME: "
 
 		# avoid duplicate stat call by fetching all attrs at once
@@ -343,7 +395,7 @@ lfs_migrate() {
 
 		if [[ ${nlink_type[$nlink_idx_link]} -gt 1 ]] ||
 		   $RSYNC_WITH_HLINKS; then
-			fid=$($LFS path2fid "$OLDNAME" 2> /dev/null)
+			$OPT_FID || fid=$($LFS path2fid "$OLDNAME" 2> /dev/null)
 			if [ $? -ne 0 ]; then
 				echo -e "\r$OLDNAME: cannot get FID, skipping; is this a Lustre file system?" 1>&2
 				continue

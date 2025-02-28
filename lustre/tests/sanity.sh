@@ -8683,6 +8683,47 @@ test_56xC() {
 }
 run_test 56xC "lfs migration can accept FID list file"
 
+test_56xD() {
+	local td=$DIR/$tdir
+	local tf1=$td/${tfile}_1
+	local tf2=$td/${tfile}_2
+	local tf3=$td/${tfile}_3
+	local fids
+	local stripe_count
+	local stripe_size
+
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	test_mkdir $td
+	dd if=/dev/urandom of=$tf1 bs=1K count=1 || error "failed to create $tf1"
+	dd if=/dev/urandom of=$tf2 bs=1K count=1 || error "failed to create $tf2"
+	dd if=/dev/urandom of=$tf3 bs=1K count=1 || error "failed to create $tf3"
+
+	stack_trap "rm -f $fidlist"
+	fids=$($LFS path2fid $tf1 $tf2 $tf3 | awk '{printf "%s ", $2}' |
+		tr -d '[]') ||
+		error "failed to get fids of $tf1 $tf2 $tf3"
+
+	echo "FIDs: $fids"
+	echo "with --lustre-dir option"
+	$LFS_MIGRATE -y -o 0 --lustre-dir $DIR --fid $fids||
+		error "failed to run lfs_migrate with --fid and --lustre-dir argument"
+
+	echo "without --lustre-dir option"
+	$LFS_MIGRATE -y -o 1 -S 2M --fid $fids||
+		error "failed to run lfs_migrate with --fid argument"
+
+	$LFS getstripe $tf3
+	stripe_count=$($LFS getstripe --stripe-count $tf3)
+	stripe_size=$($LFS getstripe --stripe-size $tf3)
+
+	(( $stripe_count == 1 )) ||
+		error "unexpected stripe count $stripe_count"
+	(( $stripe_size == 2 * 1024 * 1024 )) ||
+		error "unexpected stripe size $stripe_size"
+}
+run_test 56xD "lfs_migration can accept FIDs"
+
 test_56xa() {
 	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
 	check_swap_layouts_support
