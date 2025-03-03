@@ -6798,6 +6798,8 @@ run_test 90b "lfs quota should work with multiple mount points"
 
 test_91()
 {
+	(( $MDS1_VERSION >= $(version_code 2.16.50.52) )) ||
+		skip "need MDS >= 2.16.50.52 to handle the absence OST in qmt_map_lge_idx"
 	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
 	local mds_dev=$(mdsdevname 1)
 	local ost1_dev=$(ostdevname 1)
