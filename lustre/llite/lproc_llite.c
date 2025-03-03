@@ -1351,15 +1351,14 @@ static ssize_t max_easize_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(max_easize);
 
 /**
- * Get default_easize.
+ * default_easize_show() - Show default_easize (EA size)
+ * @kobj: seq_file handle
+ * @attr: unused for single entry (attribute structure pointer)
+ * @buf: xattr(EA) size returned to userspace
  *
- * \see client_obd::cl_default_mds_easize
- *
- * \param[in] m		seq_file handle
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	negated errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative negated errno on failure
  */
 static ssize_t default_easize_show(struct kobject *kobj,
 				   struct attribute *attr,
@@ -1380,20 +1379,18 @@ static ssize_t default_easize_show(struct kobject *kobj,
 }
 
 /**
- * Set default_easize.
+ * default_easize_store() - Set default_easize.
+ * @kobj: pointer to a kobject structure
+ * @attr: unused for single entry (attribute structure pointer)
+ * @buffer: string passed from user space
+ * @count: buffer length
  *
  * Range checking on the passed value is handled by
  * ll_set_default_mdsize().
  *
- * \see client_obd::cl_default_mds_easize
- *
- * \param[in] file	proc file
- * \param[in] buffer	string passed from user space
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval positive	\a count on success
- * \retval negative	negated errno on failure
+ * Return:
+ * * %positive count on success
+ * * %negative negated errno on failure
  */
 static ssize_t default_easize_store(struct kobject *kobj,
 				    struct attribute *attr,

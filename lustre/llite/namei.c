@@ -98,8 +98,15 @@ out:
 
 
 /**
- * Get an inode by inode number(@hash), which is already instantiated by
- * the intent lookup).
+ * ll_iget() - Get an inode by inode number(@hash), which is already
+ * instantiated by the intent lookup).
+ * @sb: Pointer to struct super_block
+ * @hash: inode number (to be retrived)
+ * @md: Inode metadata info.
+ *
+ * Return:
+ * * Valid inode struct on Success
+ * * ERRNO converted by ERR_PTR on Failure
  */
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
 		      struct lustre_md *md)
@@ -1292,6 +1299,15 @@ do {									\
  * ll_atomic_open() - For cached negative dentry and new dentry, handle
  *		      lookup/create/open together. This method is only called
  *		      if the last component is negative(needs lookup)
+ * @dir: struct inode pointng to directory in which the file is opened/created
+ * @dentry: struct dentry pointing to the file which is opened/created
+ * @file: file structure that is associated with the opened file
+ * @open_flags: Open flags passed from userspace
+ * @ll_last_arg: depending on kernel version. Is not used or indicates if the
+ * file was open or created
+ *
+ * Return:
+ * * %0 File successfully opened ERRNO on failure
  */
 static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			  struct file *file, unsigned int open_flags,
@@ -2277,9 +2293,9 @@ out:
 	RETURN(rc);
 }
 
-/**
+/*
  * Remove dir entry
- **/
+ */
 int ll_rmdir_entry(struct inode *dir, char *name, int namelen)
 {
 	struct ptlrpc_request *request = NULL;
