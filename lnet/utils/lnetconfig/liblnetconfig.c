@@ -208,10 +208,19 @@ static int lustre_lnet_add_intf_descr(struct list_head *list, char *intf,
 			free(intf_descr);
 			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
+		if ((open_sq_bracket - intf_name) >=
+			sizeof(intf_descr->intf_name)) {
+			free(intf_descr);
+			return LUSTRE_CFG_RC_BAD_PARAM;
+		}
 		strncpy(intf_descr->intf_name, intf_name,
 			open_sq_bracket - intf_name);
 		intf_descr->intf_name[open_sq_bracket - intf_name] = '\0';
 	} else {
+		if (strlen(intf_name) >= sizeof(intf_descr->intf_name)) {
+			free(intf_descr);
+			return LUSTRE_CFG_RC_BAD_PARAM;
+		}
 		strcpy(intf_descr->intf_name, intf_name);
 		intf_descr->cpt_expr = NULL;
 	}
