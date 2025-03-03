@@ -243,6 +243,13 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
 /**
  * ll_getattr_link() - link-specific getattr to set the correct st_size
  *		       for encrypted symlinks
+ * @map: (if HAVE_USER_NAMESPACE_ARG is defined) pointer to struct mnt_idmap
+ * @path: pointer to struct path (path to symlink)
+ * @stat: pointer to struct kstat (holds STATX_SIZE, STATX_BLOCKS and
+ * STATX_MTIME of symlink)
+ * @request_mask: attributes mask request (STATX_SIZE, BLOCKS, MTIME) see
+ * ll_getattr_dentry()
+ * @flags: attribute to get
  *
  * Override st_size of encrypted symlinks to be the length of the decrypted
  * symlink target (or the no-key encoded symlink target, if the key is

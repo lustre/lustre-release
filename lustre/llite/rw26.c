@@ -32,10 +32,14 @@
 
 #ifdef HAVE_INVALIDATE_FOLIO
 /**
- * Implements Linux VM address_space::invalidate_folio() method. This method is
- * called when the folio is truncated from a file, either as a result of
- * explicit truncate, or when inode is removed from memory (as a result of
- * final iput(), umount, or memory pressure induced icache shrinking).
+ * ll_invalidate_folio() - Implements Linux VM address_space::invalidate_folio()
+ * method. This method is called when the folio is truncated from a file, either
+ * as a result of explicit truncate, or when inode is removed from memory
+ * (as a result of final iput(), umount, or memory pressure induced icache
+ * shrinking).
+ * @folio: Pointer to folio struct (collection of pages)
+ * @offset: Starting offset in bytes
+ * @len: length of folio to be invalidated
  *
  * [0, off] bytes of the folio remain valid (this is for a case of non-page
  * aligned truncate). Lustre leaves partially truncated folios in the cache,
@@ -84,10 +88,14 @@ static void ll_invalidate_folio(struct folio *folio, size_t offset, size_t len)
 #else
 
 /**
- * Implements Linux VM address_space::invalidatepage() method. This method is
- * called when the page is truncate from a file, either as a result of
- * explicit truncate, or when inode is removed from memory (as a result of
- * final iput(), umount, or memory pressure induced icache shrinking).
+ * ll_invalidatepage() - Implements Linux VM address_space::invalidatepage()
+ * method. This method is called when the page is truncate from a file, either
+ * as a result of explicit truncate, or when inode is removed from memory
+ * (as a result of final iput(), umount, or memory pressure induced icache
+ * shrinking).
+ *
+ * @vmpage: pointer to struct page (single page)
+ * @offset: Starting offset in bytes
  *
  * [0, offset] bytes of the page remain valid (this is for a case of not-page
  * aligned truncate). Lustre leaves partially truncated page in the cache,
@@ -707,9 +715,16 @@ ll_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,
 #endif /* !defined(HAVE_DIO_ITER) */
 
 /**
- * Prepare partially written-to page for a write.
- * @pg is owned when passed in and disowned when it returns non-zero result to
- * the caller.
+ * ll_prepare_partial_page() - Prepare partially written-to page for a write.
+ * @env: execution environment for this thread
+ * @io: pointer to the client I/O structure
+ * @pg: owned when passed in and disowned when it returns non-zero result to
+ * the caller
+ * @file: file structure associated with the page
+ *
+ * Return:
+ * * %0: Success (Ready for read/write)
+ * * %-ERRNO: Failure
  */
 static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 				   struct cl_page *pg, struct file *file)
