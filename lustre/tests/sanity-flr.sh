@@ -880,6 +880,34 @@ test_0k() {
 }
 run_test 0k "mirroring a file in directory with default FLR layout"
 
+test_0m() {
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+
+	mkdir $td
+
+	touch $tf || error "failed to create $tf"
+	$LFS mirror extend -N=2 $tf || {
+		$LFS getstripe -v $tf
+		error "failed to extend $tf"
+	}
+	verify_mirror_count $tf 2
+
+	# will not return error even no mirror will be extended
+	$LFS mirror extend -N=2 $tf || {
+		$LFS getstripe -v $tf
+		error "failed to call extend $tf"
+	}
+	verify_mirror_count $tf 2
+
+	$LFS mirror extend -N=4 -E1M -Eeof $tf || {
+		$LFS getstripe -v $tf
+		error "failed to extend $tf"
+	}
+	verify_mirror_count $tf 4
+}
+run_test 0m "mirror extend with -N= option"
+
 test_1() {
 	local tf=$DIR/$tfile
 	local mirror_count=16 # LUSTRE_MIRROR_COUNT_MAX

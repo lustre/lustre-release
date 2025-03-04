@@ -4558,19 +4558,21 @@ create_mirror:
 
 			if (mirror_total_mode) {
 				char *path = argv[argc - 1];
-				struct lov_comp_md_v1 *comp_v1;
-				int have_mirrors;
+				struct llapi_layout *f_layout;
+				uint16_t have_mirrors;
 
-				result = llapi_get_lmm_from_path(path,
-					(struct lov_user_md_v1 **)&comp_v1);
-				if (result) {
+				f_layout = llapi_layout_get_by_path(path, 0);
+				if (!f_layout) {
+					result = -errno;
 					fprintf(stderr,
 						"error: %s: cannot get layout from %s: %s\n",
-						progname, path, strerror(-result));
+						progname, path,
+						strerror(errno));
 					goto error;
 				}
-				have_mirrors = comp_v1->lcm_mirror_count;
-				free(comp_v1);
+				llapi_layout_mirror_count_get(f_layout,
+							      &have_mirrors);
+				llapi_layout_free(f_layout);
 
 				if (have_mirrors >= mirror_count)
 					mirror_count = 0;
