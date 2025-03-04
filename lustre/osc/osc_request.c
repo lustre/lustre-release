@@ -1608,7 +1608,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 			u32 nunits =
 				(brwpg->bp_off & ~PAGE_MASK) + brwpg->bp_count;
 			struct address_space *map_orig = NULL;
-			pgoff_t index_orig;
+			pgoff_t index_orig = 0;
 
 retry_encrypt:
 			nunits = round_up(nunits, LUSTRE_ENCRYPTION_UNIT_SIZE);
