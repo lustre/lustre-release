@@ -1569,11 +1569,11 @@ nla_put_failure:
 	return rc;
 }
 
-/* YAML allows ' and " in its documents but those characters really
- * confuse libc string handling. The workaround is to replace
- * ' and " with another reserved character for YAML '%' which is
- * for tags which shouldn't matter if we send in a Netlink packet.
- * The kernel side will need to handle % in a special way.
+/* YAML supports plain, single-quoted, and double-quoted scalar styles. Plain
+ * scalars cannot contain all special characters, so libyaml quotes strings
+ * containing them and adds the non-specific "!" tag. To avoid complicating
+ * the kernel parser, replace the quotes and tag with spaces before sending
+ * the string in a Netlink packet.
  */
 static void yaml_quotation_handling(char *buf)
 {
@@ -1586,13 +1586,20 @@ static void yaml_quotation_handling(char *buf)
 	while ((line = strchr(tmp, '\"')) != NULL) {
 		line[0] = ' ';
 		tmp = strchr(line, '\"');
-		tmp[0] = ' ';
+		if (tmp)
+			tmp[0] = ' ';
+		else
+			break;
 	}
 
+	tmp = buf;
 	while ((line = strchr(tmp, '\'')) != NULL) {
 		line[0] = ' ';
 		tmp = strchr(line, '\'');
-		tmp[0] = ' ';
+		if (tmp)
+			tmp[0] = ' ';
+		else
+			break;
 	}
 }
 
