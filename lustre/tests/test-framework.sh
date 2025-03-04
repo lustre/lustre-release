@@ -11734,8 +11734,10 @@ save_layout() {
 save_layout_restore_at_exit() {
 	local dir=$1
 	local layout=$(save_layout $dir)
+	local pool_name=$($LFS getstripe -p $dir)
 
-	stack_trap "restore_layout $dir $layout" EXIT
+	stack_trap "restore_layout $dir $layout"
+	stack_trap "$LFS setstripe -p '$pool_name' $dir"
 }
 
 init_stripe_dir_params() {
