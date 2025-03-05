@@ -7345,6 +7345,16 @@ restore_ostindex() {
 	fi
 }
 
+max_lov_stripe_index() {
+	locale facet=$1
+
+	if [[ $(lustre_version_code $facet) -lt $(version_code 2.15.64) ]]; then
+		echo "65532"
+	else
+		echo "65503"
+	fi
+}
+
 # The main purpose of this test is to ensure the OST_INDEX_LIST functions as
 # expected. This test uses OST_INDEX_LIST to format OSTs with a randomly
 # assigned index and ensures we can mount such a formatted file system
@@ -7359,7 +7369,10 @@ test_81() { # LU-4665
 	# is generated.
 	local i
 	local saved_ostindex1=$OSTINDEX1
-	for i in 65535 $((RANDOM + 65536)); do
+	local LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index ost1)
+	local invalid_index=$((LOV_V1_INSANE_STRIPE_INDEX+4))
+
+	for i in $((LOV_V1_INSANE_STRIPE_INDEX + 3)) $((RANDOM + invalid_index)); do
 		echo -e "\nFormat ost1 with --index=$i, should fail"
 		OSTINDEX1=$i
 		if add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --reformat \
@@ -7374,9 +7387,11 @@ test_81() { # LU-4665
 	stack_trap restore_ostindex
 
 	# Format OSTs with random sparse indices.
-	local rand_ost=$(((RANDOM * 2 % 65533) + 1))
-	echo  "Format $OSTCOUNT OSTs with OST_INDEX_LIST=[0,$rand_ost,65534]"
-	OST_INDEX_LIST=[0,$rand_ost,65534] formatall ||
+	LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index ost2)
+	local rand_ost=$((RANDOM * 2 % (LOV_V1_INSANE_STRIPE_INDEX - 1) + 1))
+	LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index ost3)
+	echo  "Format $OSTCOUNT OSTs with OST_INDEX_LIST=[0,$rand_ost,$LOV_V1_INSANE_STRIPE_INDEX]"
+	OST_INDEX_LIST=[0,$rand_ost,$LOV_V1_INSANE_STRIPE_INDEX] formatall ||
 		error "formatall failed with $?"
 
 	# Setup and check Lustre filesystem.
@@ -7436,7 +7451,7 @@ run_test 81 "sparse OST indexing"
 
 random_ost_indices() {
 	local num=$1
-	local LOV_V1_INSANE_STRIPE_COUNT=65532
+	local LOV_V1_INSANE_STRIPE_INDEX
 	local index
 	local skip
 	local i=0
@@ -7444,7 +7459,8 @@ random_ost_indices() {
 	while ((i < num)); do
 		skip=false
 
-		index=$(((RANDOM * 2) % LOV_V1_INSANE_STRIPE_COUNT))
+		LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index ost$((i+1)))
+		index=$(((RANDOM * 2) % LOV_V1_INSANE_STRIPE_INDEX))
 		for k in $ost_indices; do
 			((index == k)) && skip=true
 		done
@@ -9753,6 +9769,7 @@ test_110()
 		fi
 	fi
 
+	# Use INDEX_UNASSIGNED for index for --mkfsoptions
 	if [[ $opts != *mkfsoptions* ]]; then
 		opts+=" --mkfsoptions=\\\"-b 1024 -i 65536\\\""
 	else

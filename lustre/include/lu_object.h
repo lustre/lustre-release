@@ -1603,7 +1603,7 @@ struct lu_tgt_descs {
 	/* TGTs scheduled to be deleted */
 	__u32			ltd_death_row;
 	/* Table refcount used for delayed deletion */
-	int			ltd_refcount;
+	atomic_t		ltd_refcount;
 	/* mutex to serialize concurrent updates to the tgt table */
 	struct mutex		ltd_mutex;
 	/* read/write semaphore used for array relocation */

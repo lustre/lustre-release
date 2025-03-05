@@ -241,8 +241,17 @@ extern struct kmem_cache *lov_oinfo_slab;
 
 extern struct lu_kmem_descr lov_caches[];
 
+static inline struct lu_tgt_desc *lov_tgt(struct lov_obd *lov, u32 index)
+{
+	return index < lov->lov_ost_descs.ltd_tgts_size ?
+		LTD_TGT(&lov->lov_ost_descs, index) : NULL;
+}
+
 #define lov_uuid2str(lv, index) \
-        (char *)((lv)->lov_tgts[index]->ltd_uuid.uuid)
+	(char *)(lov_tgt(lv, index)->ltd_uuid.uuid)
+
+#define lov_foreach_tgt(lov, tgt) \
+	ltd_foreach_tgt(&(lov)->lov_ost_descs, tgt)
 
 /* lov_merge.c */
 int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,

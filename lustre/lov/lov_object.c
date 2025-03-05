@@ -218,7 +218,7 @@ static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
 			GOTO(out, result = -EIO);
 		}
 
-		exp = dev->ld_lov->lov_tgts[ost_idx]->ltd_exp;
+		exp = lov_tgt(dev->ld_lov, ost_idx)->ltd_exp;
 		if (likely(exp)) {
 			/* the more fast OSTs the better */
 			if (exp->exp_obd->obd_osfs.os_state & OS_STATFS_NONROT)
@@ -1840,20 +1840,24 @@ static int fiemap_for_stripe(const struct lu_env *env, struct cl_object *obj,
 	switch (lle->lle_type) {
 	case LOV_PATTERN_RAID0:
 	{
-		struct lov_device *lov = lov_object_dev(lo);
+		struct lov_obd *lov = lu2lov_dev(obj->co_lu.lo_dev)->ld_lov;
+		struct lu_tgt_descs *ltd = &lov->lov_ost_descs;
 		const struct lov_layout_raid0 *r0 = &lle->lle_raid0;
 		struct lov_oinfo *oinfo;
+		struct lu_tgt_desc *tgt;
 
 		if (stripeno >= r0->lo_nr)
 			RETURN(-EINVAL);
+
 		subobj = lovsub2cl(r0->lo_sub[stripeno]);
 		oinfo = lsme->lsme_oinfo[stripeno];
 		if (lov_oinfo_is_dummy(oinfo))
 			RETURN(-EIO);
 		devnr = oinfo->loi_ost_idx;
-		if (devnr < 0 || devnr >= lov_targets_nr(lov))
+		if (devnr < 0 || devnr >= ltd->ltd_tgts_size)
 			RETURN(-EINVAL);
-		if (!lov->ld_lov->lov_tgts[devnr]->ltd_active) {
+		tgt = lov_tgt(lov, devnr);
+		if (!tgt || !tgt->ltd_active) {
 			ext_count = fiemap_unknown(fs, obd_start, obd_end);
 			GOTO(out_unknown, rc = -ENODEV);
 		}

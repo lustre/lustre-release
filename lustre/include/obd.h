@@ -393,15 +393,8 @@ struct lov_md_tgt_desc {
 };
 
 struct lov_obd {
-	struct lov_desc		desc;
-	struct lov_tgt_desc   **lov_tgts;		/* sparse array */
-	struct lu_tgt_pool	lov_packed;		/* all OSTs in a packed
-							 * array */
-	struct mutex		lov_lock;
+	struct lu_tgt_descs	lov_ost_descs;
 	struct obd_connect_data	lov_ocd;
-	atomic_t		lov_refcount;
-	__u32			lov_death_row;	/* tgts scheduled to be deleted */
-	__u32			lov_tgt_size;	/* size of tgts array */
 	int			lov_connects;
 	int			lov_pool_count;
 	struct rhashtable       lov_pools_hash_body; /* used for key access */

@@ -63,16 +63,19 @@ lov_set_add_req(struct lov_request *req, struct lov_request_set *set)
 
 static int lov_check_set(struct lov_obd *lov, int idx)
 {
+	struct lu_tgt_descs *ltd = &lov->lov_ost_descs;
+	struct lu_tgt_desc *tgt;
 	int rc = 0;
 
-	mutex_lock(&lov->lov_lock);
+	mutex_lock(&ltd->ltd_mutex);
 
-	if (!lov->lov_tgts[idx] || lov->lov_tgts[idx]->ltd_active ||
-	    (lov->lov_tgts[idx]->ltd_exp &&
-	     class_exp2cliimp(lov->lov_tgts[idx]->ltd_exp)->imp_connect_tried))
+	tgt = lov_tgt(lov, idx);
+	if (!tgt || tgt->ltd_active ||
+	    (tgt->ltd_exp &&
+	     class_exp2cliimp(tgt->ltd_exp)->imp_connect_tried))
 		rc = 1;
 
-	mutex_unlock(&lov->lov_lock);
+	mutex_unlock(&ltd->ltd_mutex);
 	return rc;
 }
 
@@ -83,15 +86,15 @@ static int lov_check_set(struct lov_obd *lov, int idx)
  */
 static int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
 {
+	struct lu_tgt_descs *ltd = &lov->lov_ost_descs;
 	struct lov_tgt_desc *tgt;
 	struct obd_import *imp = NULL;
 	int rc = 0;
 	int cnt;
 
-	mutex_lock(&lov->lov_lock);
+	mutex_lock(&ltd->ltd_mutex);
 
-	tgt = lov->lov_tgts[ost_idx];
-
+	tgt = lov_tgt(lov, ost_idx);
 	if (unlikely(!tgt))
 		GOTO(out, rc = 0);
 
@@ -105,7 +108,7 @@ static int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
 	if (imp && imp->imp_state == LUSTRE_IMP_IDLE)
 		GOTO(out, rc = 0);
 
-	mutex_unlock(&lov->lov_lock);
+	mutex_unlock(&ltd->ltd_mutex);
 
 	cnt = obd_timeout;
 	while (cnt > 0 &&
@@ -119,7 +122,7 @@ static int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
 	return 0;
 
 out:
-	mutex_unlock(&lov->lov_lock);
+	mutex_unlock(&ltd->ltd_mutex);
 	return rc;
 }
 
@@ -270,7 +273,7 @@ static int cb_statfs_update(void *cookie, int rc)
 		GOTO(out, rc);
 
 	lov_tgts_getref(lovobd);
-	tgt = lov->lov_tgts[lovreq->rq_idx];
+	tgt = lov_tgt(lov, lovreq->rq_idx);
 	if (!tgt || !tgt->ltd_active)
 		GOTO(out_update, rc);
 
@@ -293,10 +296,10 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
 {
 	struct lov_request_set *set;
 	struct lov_obd *lov = &obd->u.lov;
-	int rc = 0, i;
+	struct lu_tgt_desc *tgt;
+	int rc = 0;
 
 	ENTRY;
-
 	OBD_ALLOC(set, sizeof(*set));
 	if (!set)
 		RETURN(-ENOMEM);
@@ -306,34 +309,28 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
 	set->set_oi = oinfo;
 
 	/* We only get block data from the OBD */
-	for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-		struct lov_tgt_desc *ltd = lov->lov_tgts[i];
+	lov_foreach_tgt(lov, tgt) {
 		struct lov_request *req;
-
-		if (!ltd) {
-			CDEBUG(D_HA, "lov idx %d inactive\n", i);
-			continue;
-		}
 
 		/*
 		 * skip targets that have been explicitely disabled by the
 		 * administrator
 		 */
-		if (!ltd->ltd_exp) {
+		if (!tgt->ltd_exp) {
 			CDEBUG(D_HA, "lov idx %d administratively disabled\n",
-			       i);
+			       tgt->ltd_index);
 			continue;
 		}
 
 		if (oinfo->oi_flags & OBD_STATFS_NODELAY &&
-		    class_exp2cliimp(ltd->ltd_exp)->imp_state !=
-		    LUSTRE_IMP_IDLE && !ltd->ltd_active) {
-			CDEBUG(D_HA, "lov idx %d inactive\n", i);
+		    class_exp2cliimp(tgt->ltd_exp)->imp_state !=
+		    LUSTRE_IMP_IDLE && !tgt->ltd_active) {
+			CDEBUG(D_HA, "lov idx %d inactive\n", tgt->ltd_index);
 			continue;
 		}
 
-		if (!ltd->ltd_active)
-			lov_check_and_wait_active(lov, i);
+		if (!tgt->ltd_active)
+			lov_check_and_wait_active(lov, tgt->ltd_index);
 
 		OBD_ALLOC(req, sizeof(*req));
 		if (!req)
@@ -345,7 +342,7 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
 			GOTO(out_set, rc = -ENOMEM);
 		}
 
-		req->rq_idx = i;
+		req->rq_idx = tgt->ltd_index;
 		req->rq_oi.oi_cb_up = cb_statfs_update;
 		req->rq_oi.oi_flags = oinfo->oi_flags;
 

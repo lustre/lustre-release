@@ -449,11 +449,11 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 					progname, optarg);
 				return 1;
 			}
-			if (ldd->ldd_svindex >= INDEX_UNASSIGNED) {
+			if (ldd->ldd_svindex > LOV_V1_INSANE_STRIPE_INDEX) {
 				fprintf(stderr,
 					"%s: wrong index %u. Target index must be less than %u.\n",
 					progname, ldd->ldd_svindex,
-					INDEX_UNASSIGNED);
+					LOV_V1_INSANE_STRIPE_INDEX + 1);
 				return 1;
 			}
 

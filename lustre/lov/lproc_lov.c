@@ -25,7 +25,7 @@ static ssize_t stripesize_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", desc->ld_default_stripe_size);
 }
@@ -35,7 +35,7 @@ static ssize_t stripesize_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 	u64 val;
 	int rc;
 
@@ -55,7 +55,7 @@ static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 
 	return sprintf(buf, "%lld\n", desc->ld_default_stripe_offset);
 }
@@ -65,7 +65,7 @@ static ssize_t stripeoffset_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 	long val;
 	int rc;
 
@@ -86,7 +86,7 @@ static ssize_t stripetype_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 
 	return sprintf(buf, "%u\n", desc->ld_pattern);
 }
@@ -96,7 +96,7 @@ static ssize_t stripetype_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 	u32 pattern;
 	int rc;
 
@@ -116,7 +116,7 @@ static ssize_t stripecount_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 
 	return sprintf(buf, "%d\n",
 		       (__s16)(desc->ld_default_stripe_count + 1) - 1);
@@ -127,7 +127,7 @@ static ssize_t stripecount_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 	int stripe_count;
 	int rc;
 
@@ -150,7 +150,7 @@ static ssize_t numobd_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 
 	return sprintf(buf, "%u\n", desc->ld_tgt_count);
 }
@@ -161,7 +161,7 @@ static ssize_t activeobd_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 
 	return sprintf(buf, "%u\n", desc->ld_active_tgt_count);
 }
@@ -172,7 +172,7 @@ static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lov_desc *desc = &obd->u.lov.desc;
+	struct lov_desc *desc = &obd->u.lov.lov_ost_descs.ltd_lov_desc;
 
 	return sprintf(buf, "%s\n", desc->ld_uuid.uuid);
 }
@@ -182,30 +182,42 @@ LUSTRE_RO_ATTR(desc_uuid);
 static void *lov_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
 	struct obd_device *obd = p->private;
-	struct lov_obd *lov = &obd->u.lov;
+	struct lu_tgt_descs *ltd = &obd->u.lov.lov_ost_descs;
 
-	while (*pos < lov->desc.ld_tgt_count) {
-		if (lov->lov_tgts[*pos])
-			return lov->lov_tgts[*pos];
-		++*pos;
-	}
-	return NULL;
+	lov_tgts_getref(obd);
+	if (*pos >= ltd->ltd_tgts_size)
+		return NULL;
+
+	*pos = find_next_bit(ltd->ltd_tgt_bitmap,
+			     ltd->ltd_tgts_size, *pos);
+	if (*pos < ltd->ltd_tgts_size)
+		return LTD_TGT(ltd, *pos);
+	else
+		return NULL;
 }
 
 static void lov_tgt_seq_stop(struct seq_file *p, void *v)
 {
+	struct obd_device *obd = p->private;
+
+	lov_tgts_putref(obd);
 }
 
 static void *lov_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
 	struct obd_device *obd = p->private;
-	struct lov_obd *lov = &obd->u.lov;
+	struct lu_tgt_descs *ltd = &obd->u.lov.lov_ost_descs;
 
-	while (++*pos < lov->desc.ld_tgt_count) {
-		if (lov->lov_tgts[*pos])
-			return lov->lov_tgts[*pos];
-	}
-	return NULL;
+	(*pos)++;
+	if (*pos > ltd->ltd_tgts_size - 1)
+		return NULL;
+
+	*pos = find_next_bit(ltd->ltd_tgt_bitmap,
+			     ltd->ltd_tgts_size, *pos);
+	if (*pos < ltd->ltd_tgts_size)
+		return LTD_TGT(ltd, *pos);
+	else
+		return NULL;
 }
 
 static int lov_tgt_seq_show(struct seq_file *p, void *v)

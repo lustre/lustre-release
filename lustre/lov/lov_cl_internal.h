@@ -578,9 +578,6 @@ struct lu_object *lovsub_object_alloc(const struct lu_env *env,
 int lov_io_layout_at(struct lov_io *lio, __u64 offset);
 bool lov_io_layout_at_confirm(struct lov_io *lio, int entry, __u64 offset);
 
-#define lov_foreach_target(lov, var)                    \
-	for (var = 0; var < lov_targets_nr(lov); ++var)
-
 static inline struct lu_extent *lov_io_extent(struct lov_io *io, int i)
 {
 	return &lov_lse(io->lis_object, i)->lsme_extent;
@@ -713,11 +710,6 @@ static inline struct lov_io *cl2lov_io(const struct lu_env *env,
 	lio = container_of(ios, struct lov_io, lis_cl);
 	LASSERT(lio == lov_env_io(env));
 	return lio;
-}
-
-static inline int lov_targets_nr(const struct lov_device *lov)
-{
-	return lov->ld_lov->desc.ld_tgt_count;
 }
 
 static inline struct lov_thread_info *lov_env_info(const struct lu_env *env)

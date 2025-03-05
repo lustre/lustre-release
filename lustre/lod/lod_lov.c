@@ -36,7 +36,7 @@ void lod_getref(struct lod_tgt_descs *ltd)
 {
 	down_read(&ltd->ltd_rw_sem);
 	mutex_lock(&ltd->ltd_mutex);
-	ltd->ltd_refcount++;
+	atomic_inc(&ltd->ltd_refcount);
 	mutex_unlock(&ltd->ltd_mutex);
 }
 
@@ -53,8 +53,7 @@ void lod_getref(struct lod_tgt_descs *ltd)
 void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 {
 	mutex_lock(&ltd->ltd_mutex);
-	ltd->ltd_refcount--;
-	if (ltd->ltd_refcount == 0 && ltd->ltd_death_row) {
+	if (atomic_dec_and_test(&ltd->ltd_refcount) && ltd->ltd_death_row) {
 		struct lod_tgt_desc *tgt_desc, *tmp;
 		LIST_HEAD(kill);
 

@@ -2507,7 +2507,7 @@ static int setup_indexes(int d, char *path, struct obd_uuid *obduuids,
 			 int num_obds, int **obdindexes, int *obdindex,
 			 enum tgt_type type)
 {
-	int ret, obdcount, maxidx, obd_valid = 0, obdnum;
+	int ret, obdcount, obd_valid = 0, obdnum;
 	int *indices = NULL;
 	struct obd_uuid *uuids = NULL;
 	int *indexes;
@@ -2527,7 +2527,6 @@ static int setup_indexes(int d, char *path, struct obd_uuid *obduuids,
 		ret = -ENOMEM;
 		goto out_uuids;
 	}
-	maxidx = obdcount;
 
 retry_get_uuids:
 	ret = llapi_get_target_uuids(d, uuids, indices, &obdcount, type);
@@ -2560,14 +2559,16 @@ retry_get_uuids:
 	}
 
 	for (obdnum = 0; obdnum < num_obds; obdnum++) {
+		int maxidx = LOV_V1_INSANE_STRIPE_COUNT;
 		char *end = NULL;
 
 		/* The user may have specified a simple index */
 		i = strtol(obduuids[obdnum].uuid, &end, 0);
-		if (end && *end == '\0' && i < maxidx) {
+		if (end && *end == '\0' && i < LOV_V1_INSANE_STRIPE_COUNT) {
 			indexes[obdnum] = i;
 			obd_valid++;
 		} else {
+			maxidx = obdcount;
 			for (i = 0; i < obdcount; i++) {
 				if (llapi_uuid_match(uuids[i].uuid,
 						     obduuids[obdnum].uuid)) {

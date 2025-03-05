@@ -242,7 +242,7 @@ int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt)
 
 	ltd->ltd_tgts_size  = BITS_PER_LONG;
 	ltd->ltd_death_row = 0;
-	ltd->ltd_refcount  = 0;
+	atomic_set(&ltd->ltd_refcount, 0);
 
 	/* Set up allocation policy (QoS and RR) */
 	INIT_LIST_HEAD(&ltd->ltd_qos.lq_svr_list);
@@ -283,6 +283,7 @@ void lu_tgt_descs_fini(struct lu_tgt_descs *ltd)
 	bitmap_free(ltd->ltd_tgt_bitmap);
 	for (i = 0; i < ARRAY_SIZE(ltd->ltd_tgt_idx); i++) {
 		OBD_FREE_PTR(ltd->ltd_tgt_idx[i]);
+		ltd->ltd_tgt_idx[i] = NULL;
 	}
 	ltd->ltd_tgts_size = 0;
 }

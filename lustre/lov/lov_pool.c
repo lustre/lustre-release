@@ -27,7 +27,7 @@
 #include "lov_internal.h"
 
 #define pool_tgt(_p, _i) \
-		_p->pool_lobd->u.lov.lov_tgts[_p->pool_obds.op_array[_i]]
+		lov_tgt(&_p->pool_lobd->u.lov, _p->pool_obds.op_array[_i])
 
 /**
  * Hash the pool name for use by the hashtable handlers.
@@ -507,15 +507,13 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
  */
 int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 {
+	struct lov_obd *lov = &(obd->u.lov);
 	struct obd_uuid ost_uuid;
-	struct lov_obd *lov;
 	struct lov_pool_desc *pool;
-	unsigned int lov_idx;
-	int rc;
+	struct lu_tgt_desc *tgt;
+	int rc = -EINVAL;
+
 	ENTRY;
-
-	lov = &(obd->u.lov);
-
 	rcu_read_lock();
 	pool = rhashtable_lookup(&lov->lov_pools_hash_body, poolname,
 				 pools_hash_params);
@@ -529,18 +527,17 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
 	/* search ost in lov array */
 	lov_tgts_getref(obd);
-	for (lov_idx = 0; lov_idx < lov->desc.ld_tgt_count; lov_idx++) {
-		if (!lov->lov_tgts[lov_idx])
-			continue;
-		if (obd_uuid_equals(&ost_uuid,
-				    &(lov->lov_tgts[lov_idx]->ltd_uuid)))
+	lov_foreach_tgt(lov, tgt) {
+		if (obd_uuid_equals(&ost_uuid, &tgt->ltd_uuid)) {
+			rc = 0;
 			break;
+		}
 	}
-	/* test if ost found in lov */
-	if (lov_idx == lov->desc.ld_tgt_count)
-		GOTO(out, rc = -EINVAL);
+	if (rc < 0)
+		GOTO(out, rc);
 
-	rc = lu_tgt_pool_add(&pool->pool_obds, lov_idx, lov->lov_tgt_size);
+	rc = lu_tgt_pool_add(&pool->pool_obds, tgt->ltd_index,
+			     lov->lov_ost_descs.ltd_tgts_size);
 	if (rc)
 		GOTO(out, rc);
 
@@ -571,15 +568,13 @@ out:
  */
 int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 {
+	struct lov_obd *lov = &(obd->u.lov);
 	struct obd_uuid ost_uuid;
-	struct lov_obd *lov;
 	struct lov_pool_desc *pool;
-	unsigned int lov_idx;
-	int rc = 0;
+	struct lu_tgt_desc *tgt;
+	int rc = -EINVAL;
+
 	ENTRY;
-
-	lov = &(obd->u.lov);
-
 	/* lookup and kill hash reference */
 	rcu_read_lock();
 	pool = rhashtable_lookup(&lov->lov_pools_hash_body, poolname,
@@ -594,20 +589,16 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 
 	lov_tgts_getref(obd);
 	/* search ost in lov array, to get index */
-	for (lov_idx = 0; lov_idx < lov->desc.ld_tgt_count; lov_idx++) {
-		if (!lov->lov_tgts[lov_idx])
-			continue;
-
-		if (obd_uuid_equals(&ost_uuid,
-				    &(lov->lov_tgts[lov_idx]->ltd_uuid)))
+	lov_foreach_tgt(lov, tgt) {
+		if (obd_uuid_equals(&ost_uuid, &tgt->ltd_uuid)) {
+			rc = 0;
 			break;
+		}
 	}
+	if (rc < 0)
+		GOTO(out, rc);
 
-	/* test if ost found in lov */
-	if (lov_idx == lov->desc.ld_tgt_count)
-		GOTO(out, rc = -EINVAL);
-
-	lu_tgt_pool_remove(&pool->pool_obds, lov_idx);
+	lu_tgt_pool_remove(&pool->pool_obds, tgt->ltd_index);
 
 	CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,
 	       poolname);

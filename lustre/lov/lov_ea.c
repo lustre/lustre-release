@@ -172,6 +172,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 	    const char *pool_name, bool inited, struct lov_ost_data_v1 *objects,
 	    loff_t *maxbytes)
 {
+	struct lu_tgt_descs *ltd = &lov->lov_ost_descs;
 	struct lov_stripe_md_entry *lsme;
 	size_t lsme_size;
 	loff_t min_stripe_maxbytes = 0;
@@ -241,7 +242,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 
 	for (i = 0; i < stripe_count; i++) {
 		struct lov_oinfo *loi;
-		struct lov_tgt_desc *ltd = NULL;
+		struct lov_tgt_desc *tgt = NULL;
 		static time64_t next_print;
 		unsigned int level;
 
@@ -258,8 +259,8 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 			continue;
 
 retry_new_ost:
-		if (unlikely((u32)loi->loi_ost_idx >= lov->desc.ld_tgt_count ||
-			     !(ltd = lov->lov_tgts[loi->loi_ost_idx]))) {
+		if (unlikely((u32)loi->loi_ost_idx >= ltd->ltd_tgts_size ||
+			     !(tgt = lov_tgt(lov, loi->loi_ost_idx)))) {
 			time64_t now = ktime_get_seconds();
 
 			/* print message on the first hit, error if giving up */
@@ -274,18 +275,19 @@ retry_new_ost:
 
 			/* log debug every loop, just to see it is trying */
 			CDEBUG_LIMIT(level,
-				(u32)loi->loi_ost_idx < lov->desc.ld_tgt_count ?
-				"%s: FID "DOSTID" OST index %d/%u missing\n" :
-				"%s: FID "DOSTID" OST index %d more than OST count %u\n",
-				lov->desc.ld_uuid.uuid, POSTID(&loi->loi_oi),
-				loi->loi_ost_idx, lov->desc.ld_tgt_count);
+				     (u32)loi->loi_ost_idx < ltd->ltd_tgts_size ?
+				     "%s: FID "DOSTID" OST index %d/%u missing\n" :
+				     "%s: FID "DOSTID" OST index %d more than OST count %u\n",
+				     ltd->ltd_lov_desc.ld_uuid.uuid,
+				     POSTID(&loi->loi_oi), loi->loi_ost_idx,
+				     ltd->ltd_tgts_size);
 
 			if ((u32)loi->loi_ost_idx >= LOV_V1_INSANE_STRIPE_INDEX)
 				GOTO(out_lsme, rc = -EINVAL);
 
 			if (now > next_print) {
 				LCONSOLE_INFO("%s: wait %ds while client connects to new OST\n",
-					      lov->desc.ld_uuid.uuid,
+					      ltd->ltd_lov_desc.ld_uuid.uuid,
 					      (int)(retry_limit - now));
 				next_print = retry_limit + 600;
 			}
@@ -298,7 +300,7 @@ retry_new_ost:
 			GOTO(out_lsme, rc = -EINVAL);
 		}
 
-		lov_bytes = lov_tgt_maxbytes(ltd);
+		lov_bytes = lov_tgt_maxbytes(tgt);
 		if (min_stripe_maxbytes == 0 || lov_bytes < min_stripe_maxbytes)
 			min_stripe_maxbytes = lov_bytes;
 	}
@@ -309,7 +311,7 @@ retry_new_ost:
 
 		if (stripe_count == 0)
 			stripe_count = lsme->lsme_stripe_count <= 0 ?
-					    lov->desc.ld_tgt_count :
+					    ltd->ltd_lov_desc.ld_tgt_count :
 					    lsme->lsme_stripe_count;
 
 		if (min_stripe_maxbytes <= LLONG_MAX / stripe_count) {

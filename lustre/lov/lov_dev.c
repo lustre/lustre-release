@@ -190,16 +190,16 @@ static struct lu_device *lov_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct lov_device *ld = lu2lov_dev(d);
-	int i;
 
-	LASSERT(ld->ld_lov != NULL);
-
+	LASSERT(ld->ld_lov);
 	if (ld->ld_lmv) {
 		class_decref(ld->ld_lmv, "lov", d);
 		ld->ld_lmv = NULL;
 	}
 
 	if (ld->ld_md_tgts) {
+		int i;
+
 		for (i = 0; i < ld->ld_md_tgts_nr; i++) {
 			if (!ld->ld_md_tgts[i].ldm_mdc)
 				continue;
@@ -211,13 +211,15 @@ static struct lu_device *lov_device_fini(const struct lu_env *env,
 	}
 
 	if (ld->ld_target) {
-		lov_foreach_target(ld, i) {
+		struct lov_tgt_desc *desc;
+
+		lov_foreach_tgt(ld->ld_lov, desc) {
 			struct lovsub_device *lsd;
 
-			lsd = ld->ld_target[i];
+			lsd = ld->ld_target[desc->ltd_index];
 			if (lsd) {
 				cl_stack_fini(env, lovsub2cl_dev(lsd));
-				ld->ld_target[i] = NULL;
+				ld->ld_target[desc->ltd_index] = NULL;
 			}
 		}
 	}
@@ -239,8 +241,8 @@ static int lov_device_init(const struct lu_env *env, struct lu_device *d,
 			   const char *name, struct lu_device *next)
 {
 	struct lov_device *ld = lu2lov_dev(d);
-	int i;
-	int rc = 0;
+	struct lov_tgt_desc *desc;
+	int rc = 0, i;
 
 	/* check all added already MDC subdevices and initialize them */
 	for (i = 0; i < ld->ld_md_tgts_nr; i++) {
@@ -265,14 +267,9 @@ static int lov_device_init(const struct lu_env *env, struct lu_device *d,
 	if (!ld->ld_target)
 		RETURN(0);
 
-	lov_foreach_target(ld, i) {
+	lov_foreach_tgt(ld->ld_lov, desc) {
 		struct lovsub_device *lsd;
 		struct cl_device *cl;
-		struct lov_tgt_desc *desc;
-
-		desc = ld->ld_lov->lov_tgts[i];
-		if (!desc)
-			continue;
 
 		cl = cl_type_setup(env, &ld->ld_site, &lovsub_device_type,
 				   desc->ltd_obd->obd_lu_dev);
@@ -280,7 +277,7 @@ static int lov_device_init(const struct lu_env *env, struct lu_device *d,
 			GOTO(out_err, rc = PTR_ERR(cl));
 
 		lsd = cl2lovsub_dev(cl);
-		ld->ld_target[i] = lsd;
+		ld->ld_target[desc->ltd_index] = lsd;
 	}
 	ld->ld_flags |= LOV_DEV_INITIALIZED;
 	RETURN(0);
@@ -355,7 +352,7 @@ static int lov_expand_targets(const struct lu_env *env, struct lov_device *dev)
 
 	ENTRY;
 	result = 0;
-	tgt_size = dev->ld_lov->lov_tgt_size;
+	tgt_size = dev->ld_lov->lov_ost_descs.ltd_tgts_size;
 	sub_size = dev->ld_target_nr;
 	if (sub_size < tgt_size) {
 		struct lovsub_device **newd;
@@ -399,12 +396,10 @@ static int lov_cl_add_target(const struct lu_env *env, struct lu_device *dev,
 	int rc;
 
 	ENTRY;
-
 	lov_tgts_getref(obd);
-
-	tgt = obd->u.lov.lov_tgts[index];
-	LASSERT(tgt != NULL);
-	LASSERT(tgt->ltd_obd != NULL);
+	tgt = lov_tgt(&obd->u.lov, index);
+	LASSERT(tgt);
+	LASSERT(tgt->ltd_obd);
 
 	if (!test_bit(OBDF_SET_UP, tgt->ltd_obd->obd_flags)) {
 		CERROR("Target %s not set up\n", obd_uuid2str(&tgt->ltd_uuid));
