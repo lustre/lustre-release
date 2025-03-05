@@ -6755,28 +6755,40 @@ test_73b() {
 
 	local ostdev=$(ostdevname 1)
 	local nids="111.222.173._@$NETTYPE,111.222.142._@$NETTYPE"
-	local min=160
-	local iter=$((min * 14 / 20))
+	local iter=60
+	local cmd
 
 	do_facet ost1 "$TUNEFS --comment='just a comment for tail' $ostdev" ||
 		error "1st tunefs failed"
 
-	# 4K can fit ~180 IPv4 NIDs, try more for checking failure case too
-	# add in pairs just to reduce test time
+	# 4K can fit ~200 IPv4 NIDs, try more for checking failure case too
+	# add in pairs in both mgsnode and failnode to reduce test time
 	for ((i = 1; i <= $iter; i++)); do
-		do_facet ost1 "$TUNEFS --failnode=${nids//_/$i} $ostdev" >/dev/null ||
+		local cmd="--failnode=${nids//_/$i} --mgsnode=${nids//_/$i}"
+		do_facet ost1 "$TUNEFS $cmd $ostdev" >/dev/null ||
 			break
 	done
-	echo "added $i/$iter NID failover pairs"
+
+	start_mgsmds || error "Fail to start mds"
+	start_ost || error "Fail to mount ost"
+
+	local zkeeper=${KEEP_ZPOOL}
+	stack_trap "KEEP_ZPOOL=$zkeeper" EXIT
+	KEEP_ZPOOL="true"
+	stop_ost
+	stop_mds
+
 	# count the actual number of failover NIDs configured in failover.node
 	# there may be some previously configured, so they should also count
-	local count=$(do_facet ost1 $TUNEFS --dryrun $ostdev | grep "^Param" |
-		      sed -e "s/.*failover.node=//" -e "s/[:,]/\n/g" |
-		      grep -c $NETTYPE)
-	do_facet ost1 "$TUNEFS --erase-param failover.node $ostdev"
+	local count=$(do_facet ost1 "$TUNEFS --erase-params $ostdev" |
+		      grep "^Param" | grep -Fo '@' | wc -l)
+	echo "Found total $count NIDs in parameters"
 
-	# expect to fit more that 160 NIDs at least
-	((count >= min)) || error "Only $count NIDs configured, need >= $min"
+	KEEP_ZPOOL="${zkeeper}"
+	reformat
+
+	# expect to fit more that 32 mgsnode and 4*32 failover NIDs at least
+	((count >= 160)) || error "Only $count NIDs found, need >= (128+32)"
 }
 run_test 73b "Large failnode NID list in mountdata"
 

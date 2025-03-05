@@ -120,7 +120,7 @@ int run_command(char *cmd, int cmdsz)
 	return rc;
 }
 
-#define MAXNIDSTR LDD_PARAM_LEN
+#define MAXNIDSTR (LDD_PARAM_LEN - 256)
 
 #ifdef HAVE_SERVER_SUPPORT
 int add_param(char *buf, char *key, char *val)

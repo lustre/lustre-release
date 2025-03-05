@@ -500,6 +500,7 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char *cur, *start;
 	char *temp_options;
+	bool skip_mgsnode_param = false;
 	int rc = 0;
 
 	rc = osd_is_lustre(source, &ldd->ldd_mount_type);
@@ -584,6 +585,7 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 			if (add_mgsnids(mop, options, ldd->ldd_params,
 					options_len))
 				return E2BIG;
+			skip_mgsnode_param = true;
 		}
 	}
 	/* Better have an mgsnid by now */
@@ -635,6 +637,10 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 			*start = '\0';
 			start++;
 		}
+
+		if (skip_mgsnode_param && !strncmp(cur, "mgsnode", 7))
+			continue;
+
 		rc = append_option(options, options_len, "param=", cur);
 		if (rc != 0)
 			return rc;
