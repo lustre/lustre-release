@@ -889,7 +889,8 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 		if (ldlm_is_fail_loc(lock))
 			CFS_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
-		if (ldlm_is_atomic_cb(lock) || ldlm_is_local(lock) ||
+		if (ldlm_is_atomic_cb(lock) ||
+		    (ldlm_is_local(lock) && !ldlm_is_ast_discard_data(lock)) ||
 		    ldlm_bl_to_thread_lock(ns, NULL, lock) != 0)
 			ldlm_handle_bl_callback(ns, NULL, lock);
 	} else if (ns_is_client(ns) &&

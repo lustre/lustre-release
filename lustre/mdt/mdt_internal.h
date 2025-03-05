@@ -360,7 +360,8 @@ struct mdt_object {
 				mot_restriping:1,   /* dir restriping */
 				/* dir auto-split disabled */
 				mot_auto_split_disabled:1,
-				mot_lsom_inited:1; /* lsom was inited */
+				mot_lsom_inited:1, /* lsom was inited */
+				mot_discard_done:1; /* discard lock was sent */
 	int			mot_write_count;
 	spinlock_t		mot_write_lock;
 	/* Lock to protect create_data */
@@ -1396,7 +1397,8 @@ static inline bool mdt_dom_check_for_discard(struct mdt_thread_info *mti,
 					     struct mdt_object *mo)
 {
 	return lu_object_is_dying(&mo->mot_header) &&
-	       S_ISREG(lu_object_attr(&mo->mot_obj));
+	       S_ISREG(lu_object_attr(&mo->mot_obj)) &&
+	       !mo->mot_discard_done;
 }
 
 int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,

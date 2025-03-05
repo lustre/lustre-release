@@ -2055,6 +2055,8 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 		RETURN_EXIT;
 	}
 
+	mo->mot_discard_done = true;
+
 	lock = ldlm_handle2lock(&dom_lh);
 	lock_res_and_lock(lock);
 	/* if lock is not granted then there are BL ASTs in progress and

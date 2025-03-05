@@ -6894,6 +6894,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 		mo->mot_lsom_size = 0;
 		mo->mot_lsom_blocks = 0;
 		mo->mot_lsom_inited = false;
+		mo->mot_discard_done = false;
 		RETURN(o);
 	}
 	RETURN(NULL);
