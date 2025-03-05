@@ -8393,7 +8393,7 @@ test_56xB() {
 run_test 56xB "lfs migrate with -0, --null, --files-from arguments"
 
 test_56xa() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
 	check_swap_layouts_support
 
 	local dir=$DIR/$tdir/$testnum
@@ -8416,6 +8416,30 @@ test_56xa() {
 	rm -f $file1
 }
 run_test 56xa "lfs migration --block support"
+
+test_56xab() {
+	local pid
+	local dir=$DIR/$tdir/$testnum
+	local file1=$dir/$tfile
+
+	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+	check_swap_layouts_support
+
+	test_mkdir -p $dir
+	$LFS setstripe -c 2 $file1
+
+	dd if=/dev/urandom of=$file1 bs=1 oflag=sync & pid=$!
+	kill -0 $pid ||
+		error "failed to start dd to write to $file1 continously"
+	stack_trap "kill $pid"
+	sleep 1
+
+	$LFS migrate --block -c 1 $file1 || error "migrate failed rc = $?"
+
+	ls -l $file1
+	$LFS getstripe $file1
+}
+run_test 56xab "lfs migration --block on changing file"
 
 check_migrate_links() {
 	[[ "$1" == "--rsync" ]] && local opts="--rsync -y" && shift
