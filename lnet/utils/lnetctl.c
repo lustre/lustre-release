@@ -3794,13 +3794,11 @@ static int jt_show_net(int argc, char **argv)
 			network = optarg;
 			break;
 		case 'v':
-			if ((!optarg) && (argv[optind] != NULL) &&
-			    (argv[optind][0] != '-')) {
-				if (parse_long(argv[optind++], &detail) != 0)
-					detail = 1;
-			} else {
+			/* '-v' has an optional argument. Default is 1. */
+			if (optarg || optind >= argc ||
+			    argv[optind] == NULL || argv[optind][0] == '-' ||
+			    parse_long(argv[optind++], &detail))
 				detail = 1;
-			}
 			break;
 		case '?':
 			print_help(net_cmds, "net", "show");
@@ -5011,13 +5009,11 @@ static int jt_show_peer(int argc, char **argv)
 			nid = optarg;
 			break;
 		case 'v':
-			if ((!optarg) && (argv[optind] != NULL) &&
-			    (argv[optind][0] != '-')) {
-				if (parse_long(argv[optind++], &detail) != 0)
-					detail = 1;
-			} else {
+			/* '-v' has an optional argument. Default is 1. */
+			if (optarg || optind >= argc ||
+			    argv[optind] == NULL || argv[optind][0] == '-' ||
+			    parse_long(argv[optind++], &detail))
 				detail = 1;
-			}
 			break;
 		case '?':
 			print_help(peer_cmds, "peer", "show");
