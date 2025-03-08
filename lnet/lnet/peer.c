@@ -3251,7 +3251,6 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	struct lnet_ping_iter pi;
 	struct lnet_nid nid;
 	u32 *stp;
-	bool want_large_primary;
 	unsigned int flags;
 	int ncurnis;
 	int naddnis;
@@ -3300,8 +3299,6 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	 */
 	ping_iter_first(&pi, pbuf, NULL);
 	stp = ping_iter_next(&pi, &nid);
-	want_large_primary = (pbuf->pb_info.pi_features &
-			      LNET_PING_FEAT_PRIMARY_LARGE);
 	for (; stp; stp = ping_iter_next(&pi, &nid)) {
 		for (j = 0; j < ncurnis; j++)
 			if (nid_same(&nid, &curnis[j]))
@@ -3311,8 +3308,6 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 			addnis[naddnis].ns_status = *stp;
 			naddnis += 1;
 		}
-		if (want_large_primary && nid.nid_size)
-			want_large_primary = false;
 	}
 	/*
 	 * Check for NIDs in curnis[] not present in pbuf.
