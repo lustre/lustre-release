@@ -460,8 +460,6 @@ LUSTRE_RW_ATTR(threads_max);
 static const char *nrs_state2str(enum ptlrpc_nrs_pol_state state)
 {
 	switch (state) {
-	default:
-		LBUG();
 	case NRS_POL_STATE_INVALID:
 		return "invalid";
 	case NRS_POL_STATE_STOPPED:
@@ -472,6 +470,9 @@ static const char *nrs_state2str(enum ptlrpc_nrs_pol_state state)
 		return "starting";
 	case NRS_POL_STATE_STARTED:
 		return "started";
+	default:
+		LBUG();
+		return NULL;
 	}
 }
 

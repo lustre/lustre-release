@@ -467,14 +467,14 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh,
 	tmp = *endp;
 	*endp = '\0';
 	switch (opc) {
-	default:
-		LBUG();
 	case CLASS_PARSE_NID:
 		rc = parse_nid(buf, value, quiet);
 		break;
 	case CLASS_PARSE_NET:
 		rc = parse_net(buf, value);
 		break;
+	default:
+		LBUG();
 	}
 	*endp = tmp;
 	if (rc != 0)

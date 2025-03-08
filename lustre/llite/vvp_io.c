@@ -64,8 +64,10 @@ static bool can_populate_pages(const struct lu_env *env, struct cl_io *io,
 			io->ci_continue = 0;
 			rc = false;
 		}
+		fallthrough;
 	case CIT_FAULT:
 		/* fault is okay because we've already had a page. */
+		fallthrough;
 	default:
 		break;
 	}

@@ -3528,6 +3528,7 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 		if (intent->lai_opc == LAYOUT_INTENT_PCCRO_SET ||
 		    intent->lai_opc == LAYOUT_INTENT_PCCRO_CLEAR)
 			RETURN(mdd_layout_update_pccro(env, o, mlc));
+		break;
 	}
 	case MD_LAYOUT_RESYNC:
 	case MD_LAYOUT_RESYNC_DONE:

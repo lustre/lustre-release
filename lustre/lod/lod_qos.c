@@ -2468,7 +2468,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	case __swab32(LOV_USER_MAGIC_COMP_V1):
 		lustre_swab_lov_comp_md_v1(comp_v1);
 		magic = comp_v1->lcm_magic;
-		/* fall trhough */
+		fallthrough;
 	case LOV_USER_MAGIC_COMP_V1:
 		break;
 	case __swab32(LOV_USER_MAGIC_FOREIGN):

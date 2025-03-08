@@ -1890,8 +1890,6 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 
 	lio->lis_object = lov;
 	switch (io->ci_type) {
-	default:
-		LBUG();
 	case CIT_MISC:
 	case CIT_GLIMPSE:
 	case CIT_READ:
@@ -1912,6 +1910,8 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 		CERROR("Page fault on a file without stripes: "DFID"\n",
 		       PFID(lu_object_fid(&obj->co_lu)));
 		break;
+	default:
+		LBUG();
 	}
 	if (result == 0) {
 		cl_io_slice_add(io, &lio->lis_cl, obj, &lov_empty_io_ops);

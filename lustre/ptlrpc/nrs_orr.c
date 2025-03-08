@@ -1668,14 +1668,14 @@ LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_orr_offset_type);
 static const char *nrs_orr_supp2str(enum nrs_orr_supp supp)
 {
 	switch(supp) {
-	default:
-		LBUG();
 	case NOS_OST_READ:
 		return LPROCFS_NRS_SUPP_NAME_READS;
 	case NOS_OST_WRITE:
 		return LPROCFS_NRS_SUPP_NAME_WRITES;
 	case NOS_OST_RW:
 		return LPROCFS_NRS_SUPP_NAME_READWRITES;
+	default:
+		LBUG();
 	}
 }
 

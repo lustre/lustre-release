@@ -578,6 +578,7 @@ int mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,
 		break;
 	case IR_DISABLED:
 		notify = false;
+		fallthrough;
 	case IR_STARTUP:
 	case IR_PARTIAL:
 		break;

@@ -1104,6 +1104,7 @@ static int do_cli_unwrap_reply(struct ptlrpc_request *req)
 	case 1:
 		req_capsule_set_rep_swabbed(&req->rq_pill,
 					    MSG_PTLRPC_HEADER_OFF);
+		break;
 	case 0:
 		break;
 	default:
@@ -2385,6 +2386,7 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
 	case 1:
 		req_capsule_set_req_swabbed(&req->rq_pill,
 					    MSG_PTLRPC_HEADER_OFF);
+		break;
 	case 0:
 		break;
 	default:
