@@ -282,6 +282,8 @@ do {									\
 	return;								\
 } while (0)
 
+#define ENUM2STR(x) case x: return #x
+
 static inline void cfs_tty_write_msg(const char *msg)
 {
 	struct tty_struct *tty;
