@@ -281,9 +281,6 @@ ksocknal_match_tx(struct ksock_conn *conn, struct ksock_tx *tx, int nonblk)
 
 	/* default checking for typed connection */
 	switch (conn->ksnc_type) {
-	default:
-		CERROR("ksnc_type bad: %u\n", conn->ksnc_type);
-		LBUG();
 	case SOCKLND_CONN_ANY:
 		return SOCKNAL_MATCH_YES;
 
@@ -301,6 +298,11 @@ ksocknal_match_tx(struct ksock_conn *conn, struct ksock_tx *tx, int nonblk)
 			return SOCKNAL_MATCH_MAY;
 		else
 			return SOCKNAL_MATCH_YES;
+
+	default:
+		CERROR("ksnc_type bad: %u\n", conn->ksnc_type);
+		LBUG();
+		return SOCKNAL_MATCH_NO;
 	}
 }
 
@@ -317,9 +319,6 @@ ksocknal_match_tx_v3(struct ksock_conn *conn, struct ksock_tx *tx, int nonblk)
 			tx->tx_lnetmsg->msg_len;
 
 	switch (conn->ksnc_type) {
-	default:
-		CERROR("ksnc_type bad: %u\n", conn->ksnc_type);
-		LBUG();
 	case SOCKLND_CONN_ANY:
 		return SOCKNAL_MATCH_NO;
 
@@ -346,6 +345,11 @@ ksocknal_match_tx_v3(struct ksock_conn *conn, struct ksock_tx *tx, int nonblk)
 			return SOCKNAL_MATCH_MAY;
 		else
 			return SOCKNAL_MATCH_YES;
+
+	default:
+		CERROR("ksnc_type bad: %u\n", conn->ksnc_type);
+		LBUG();
+		return SOCKNAL_MATCH_NO;
 	}
 }
 
@@ -362,9 +366,6 @@ ksocknal_match_tx_v4(struct ksock_conn *conn, struct ksock_tx *tx, int nonblk)
 			tx->tx_lnetmsg->msg_len;
 
 	switch (conn->ksnc_type) {
-	default:
-		CERROR("ksnc_type bad: %u\n", conn->ksnc_type);
-		LBUG();
 	case SOCKLND_CONN_ANY:
 		return SOCKNAL_MATCH_NO;
 
@@ -391,6 +392,11 @@ ksocknal_match_tx_v4(struct ksock_conn *conn, struct ksock_tx *tx, int nonblk)
 			return SOCKNAL_MATCH_MAY;
 		else
 			return SOCKNAL_MATCH_YES;
+
+	default:
+		CERROR("ksnc_type bad: %u\n", conn->ksnc_type);
+		LBUG();
+		return SOCKNAL_MATCH_NO;
 	}
 }
 

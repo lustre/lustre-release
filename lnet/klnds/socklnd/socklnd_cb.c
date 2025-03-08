@@ -684,8 +684,6 @@ ksocknal_find_conn_locked(struct ksock_peer_ni *peer_ni, struct ksock_tx *tx, in
 		rc = c->ksnc_proto->pro_match_tx(c, tx, nonblk);
 
 		switch (rc) {
-		default:
-			LBUG();
 		case SOCKNAL_MATCH_NO: /* protocol rejected the tx */
 			continue;
 
@@ -706,6 +704,8 @@ ksocknal_find_conn_locked(struct ksock_peer_ni *peer_ni, struct ksock_tx *tx, in
 				fnob     = nob;
 			}
 			break;
+		default:
+			LBUG();
 		}
 	}
 

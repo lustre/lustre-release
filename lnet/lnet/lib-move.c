@@ -4440,9 +4440,6 @@ lnet_parse_put(struct lnet_ni *ni, struct lnet_msg *msg)
  again:
 	rc = lnet_ptl_match_md(&info, msg);
 	switch (rc) {
-	default:
-		LBUG();
-
 	case LNET_MATCHMD_OK:
 		lnet_recv_put(ni, msg);
 		return 0;
@@ -4467,6 +4464,10 @@ lnet_parse_put(struct lnet_ni *ni, struct lnet_msg *msg)
 			info.mi_mbits, info.mi_roffset, info.mi_rlength, rc);
 
 		return -ENOENT;	/* -ve: OK but no match */
+
+	default:
+		LBUG();
+		return -ENOENT;
 	}
 }
 

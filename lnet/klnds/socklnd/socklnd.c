@@ -1077,8 +1077,6 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	}
 
 	switch (rc) {
-	default:
-		LBUG();
 	case 0:
 		break;
 	case EALREADY:
@@ -1087,6 +1085,8 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	case EPROTO:
 		warn = "retry with different protocol version";
 		goto failed_2;
+	default:
+		LBUG();
 	}
 
 	/* Refuse to duplicate an existing connection, unless this is a

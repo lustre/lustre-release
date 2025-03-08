@@ -70,9 +70,6 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 	}
 
 	switch (ev_type) {
-	default:
-		LBUG();
-
 	case LNET_EVENT_PUT: /* passive PUT */
 		ev->pt_index   = hdr->msg.put.ptl_index;
 		ev->match_bits = hdr->msg.put.match_bits;
@@ -112,6 +109,9 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 			ev->hdr_data   = 0;
 		}
 		return;
+
+	default:
+		LBUG();
 	}
 }
 

@@ -1139,14 +1139,15 @@ static char *
 lnet_res_type2str(int type)
 {
 	switch (type) {
-	default:
-		LBUG();
 	case LNET_COOKIE_TYPE_MD:
 		return "MD";
 	case LNET_COOKIE_TYPE_ME:
 		return "ME";
 	case LNET_COOKIE_TYPE_EQ:
 		return "EQ";
+	default:
+		LBUG();
+		return NULL;
 	}
 }
 
@@ -6305,11 +6306,11 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 			GENL_SET_ERR_MSG(info,
 					 "invalid CPT set");
 			break;
+		case 0:
+			break;
 		default:
 			GENL_SET_ERR_MSG(info,
 					 "cannot add LNet NI");
-		case 0:
-			break;
 		}
 	} else if (info->nlhdr->nlmsg_flags & NLM_F_REPLACE && healthv != -1) {
 		lnet_ni_set_healthv(&nid, healthv);
