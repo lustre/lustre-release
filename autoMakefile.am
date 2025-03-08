@@ -589,6 +589,10 @@ dkms-debs: undef.h debs_common
 	export DEB_BUILD_PROFILES="client"; \
 	export KERNEL_OBJ="$(LINUX_OBJ)"; \
 	export KERNEL_SRC="$(LINUX)"; \
+	if test "x@systemdsystemunitdir@" != "x"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} systemd"; \
+		export SYSTEMD_OPTIONS="--with-systemdsystemunitdir=@systemdsystemunitdir@"; \
+	fi; \
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \
 	tmpprofiles=`tr ' ' ',' <<< $$DEB_BUILD_PROFILES`; \
 	echo "Kernel Source: $${KERNEL_SRC}"; \
