@@ -114,12 +114,12 @@ static int sfw_stop_batch(struct sfw_batch *tsb, int force);
 static void sfw_destroy_session(struct sfw_session *sn);
 
 static inline struct sfw_test_case *
-sfw_find_test_case(int id)
+sfw_find_test_case(enum srpc_service_type id)
 {
 	struct sfw_test_case *tsc;
 
-	LASSERT(id <= SRPC_SERVICE_MAX_ID);
-	LASSERT(id > SRPC_FRAMEWORK_SERVICE_MAX_ID);
+	LASSERTF(id < SRPC_SERVICE_MAX_ID, "id = %i\n", id);
+	LASSERTF(id > SRPC_FRAMEWORK_SERVICE_MAX_ID, "id = %i\n", id);
 
 	list_for_each_entry(tsc, &sfw_data.fw_tests, tsc_list) {
 		if (tsc->tsc_srv_service->sv_id == id)
@@ -1145,7 +1145,7 @@ sfw_add_test(struct srpc_server_rpc *rpc)
 	    request->tsr_ndest > SFW_MAX_NDESTS ||
 	    (request->tsr_is_client && request->tsr_ndest == 0) ||
 	    request->tsr_concur > SFW_MAX_CONCUR ||
-	    request->tsr_service > SRPC_SERVICE_MAX_ID ||
+	    request->tsr_service >= SRPC_SERVICE_MAX_ID ||
 	    request->tsr_service <= SRPC_FRAMEWORK_SERVICE_MAX_ID) {
 		reply->tsr_status = EINVAL;
 		return 0;

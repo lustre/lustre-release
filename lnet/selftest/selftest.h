@@ -128,22 +128,6 @@ struct srpc_service_cd;
 struct sfw_test_unit;
 struct sfw_test_instance;
 
-/* services below SRPC_FRAMEWORK_SERVICE_MAX_ID are framework
- * services, e.g. create/modify session.
- */
-#define SRPC_SERVICE_DEBUG              0
-#define SRPC_SERVICE_MAKE_SESSION       1
-#define SRPC_SERVICE_REMOVE_SESSION     2
-#define SRPC_SERVICE_BATCH              3
-#define SRPC_SERVICE_TEST               4
-#define SRPC_SERVICE_QUERY_STAT         5
-#define SRPC_SERVICE_JOIN               6
-#define SRPC_FRAMEWORK_SERVICE_MAX_ID   10
-/* other services start from SRPC_FRAMEWORK_SERVICE_MAX_ID+1 */
-#define SRPC_SERVICE_BRW                11
-#define SRPC_SERVICE_PING               12
-#define SRPC_SERVICE_MAX_ID             12
-
 #define SRPC_REQUEST_PORTAL             50
 /* a lazy portal for framework RPC requests */
 #define SRPC_FRAMEWORK_REQUEST_PORTAL   51
@@ -151,11 +135,9 @@ struct sfw_test_instance;
 #define SRPC_RDMA_PORTAL                52
 
 static inline enum srpc_msg_type
-srpc_service2request(int service)
+srpc_service2request(enum srpc_service_type service)
 {
 	switch (service) {
-	default:
-		LBUG();
 	case SRPC_SERVICE_DEBUG:
 		return SRPC_MSG_DEBUG_REQST;
 
@@ -174,19 +156,28 @@ srpc_service2request(int service)
 	case SRPC_SERVICE_QUERY_STAT:
 		return SRPC_MSG_STAT_REQST;
 
+	case SRPC_SERVICE_JOIN:
+		return SRPC_MSG_JOIN_REQST;
+
+	case SRPC_FRAMEWORK_SERVICE_MAX_ID:
+		break;
+
 	case SRPC_SERVICE_BRW:
 		return SRPC_MSG_BRW_REQST;
 
 	case SRPC_SERVICE_PING:
 		return SRPC_MSG_PING_REQST;
 
-	case SRPC_SERVICE_JOIN:
-		return SRPC_MSG_JOIN_REQST;
+	case SRPC_SERVICE_MAX_ID:
+		break;
 	}
+
+	LASSERTF(0, "service = %i\n", service);
+	return SRPC_MSG_INVALID;
 }
 
 static inline enum srpc_msg_type
-srpc_service2reply(int service)
+srpc_service2reply(enum srpc_service_type service)
 {
 	return srpc_service2request(service) + 1;
 }
@@ -363,7 +354,7 @@ struct srpc_service_cd {
 #define SFW_FRWK_WI_MAX		256
 
 struct srpc_service {
-	int			sv_id;		/* service id */
+	enum srpc_service_type	sv_id;		/* service id */
 	const char		*sv_name;	/* human readable name */
 	int			sv_wi_total;	/* total server workitems */
 	int			sv_shuttingdown;

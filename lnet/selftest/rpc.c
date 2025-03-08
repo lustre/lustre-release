@@ -46,7 +46,7 @@ enum rpc_counter_64 {
 
 static struct smoketest_rpc {
 	spinlock_t	 rpc_glock;	/* global lock */
-	struct srpc_service	*rpc_services[SRPC_SERVICE_MAX_ID + 1];
+	struct srpc_service	*rpc_services[SRPC_SERVICE_MAX_ID];
 	lnet_handler_t		 rpc_lnet_handler;/* _the_ LNet event handler */
 	enum srpc_state		 rpc_state;
 	atomic_t		 rpc_counters32[SRPC_COUNTER32_MAX];
@@ -332,9 +332,9 @@ srpc_service_init(struct srpc_service *svc)
 int
 srpc_add_service(struct srpc_service *sv)
 {
-	int id = sv->sv_id;
+	enum srpc_service_type id = sv->sv_id;
 
-	LASSERT(0 <= id && id <= SRPC_SERVICE_MAX_ID);
+	LASSERTF(0 <= id && id < SRPC_SERVICE_MAX_ID, "id = %i\n", id);
 
 	if (srpc_service_init(sv) != 0)
 		return -ENOMEM;
@@ -1675,7 +1675,7 @@ srpc_shutdown (void)
 	case SRPC_STATE_RUNNING:
 		spin_lock(&srpc_data.rpc_glock);
 
-		for (i = 0; i <= SRPC_SERVICE_MAX_ID; i++) {
+		for (i = 0; i < SRPC_SERVICE_MAX_ID; i++) {
 			struct srpc_service *sv = srpc_data.rpc_services[i];
 
 			LASSERTF(sv == NULL,

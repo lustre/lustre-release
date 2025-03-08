@@ -16,6 +16,24 @@
 
 #include <uapi/linux/lnet/lnetst.h>
 
+/* services below SRPC_FRAMEWORK_SERVICE_MAX_ID are framework
+ * services, e.g. create/modify session.
+ */
+enum srpc_service_type {
+	SRPC_SERVICE_DEBUG             = 0,
+	SRPC_SERVICE_MAKE_SESSION      = 1,
+	SRPC_SERVICE_REMOVE_SESSION    = 2,
+	SRPC_SERVICE_BATCH             = 3,
+	SRPC_SERVICE_TEST              = 4,
+	SRPC_SERVICE_QUERY_STAT        = 5,
+	SRPC_SERVICE_JOIN              = 6,
+	SRPC_FRAMEWORK_SERVICE_MAX_ID  = 10,
+	/* other services start from SRPC_FRAMEWORK_SERVICE_MAX_ID+1 */
+	SRPC_SERVICE_BRW               = 11,
+	SRPC_SERVICE_PING              = 12,
+	SRPC_SERVICE_MAX_ID
+};
+
 /* LST wired structures
  *
  * XXX: *REPLY == *REQST + 1
@@ -39,6 +57,7 @@ enum srpc_msg_type {
 	SRPC_MSG_PING_REPLY     = 15,
 	SRPC_MSG_JOIN_REQST     = 16,
 	SRPC_MSG_JOIN_REPLY     = 17,
+	SRPC_MSG_INVALID
 };
 
 /* CAVEAT EMPTOR:
@@ -171,7 +190,7 @@ struct srpc_test_reqst {
 	__u64			tsr_bulkid;     /* bulk buffer matchbits */
 	struct lst_sid		tsr_sid;        /* session id */
 	struct lst_bid		tsr_bid;        /* batch id */
-	__u32			tsr_service;    /* test type: bulk|ping|... */
+	enum srpc_service_type	tsr_service;    /* test type: bulk|ping|... */
 	/* test client loop count or # server buffers needed */
 	__u32			tsr_loop;
 	__u32			tsr_concur;     /* concurrency of test */
