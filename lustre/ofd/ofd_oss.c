@@ -21,6 +21,7 @@
 #include <lprocfs_status.h>
 #include <lustre_nodemap.h>
 #include <obd_class.h>
+#include "ofd_internal.h"
 
 #define OSS_SERVICE_WATCHDOG_FACTOR 2
 

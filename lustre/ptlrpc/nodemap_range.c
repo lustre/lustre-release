@@ -268,8 +268,8 @@ int range_insert(struct nodemap_config *config, struct lu_nid_range *range)
  *
  * \param	range		range to remove
  */
-void __range_delete(struct nodemap_range_tree *nm_range_tree,
-		    struct lu_nid_range *range)
+static void __range_delete(struct nodemap_range_tree *nm_range_tree,
+			   struct lu_nid_range *range)
 {
 	nm_range_remove(range,
 			&nm_range_tree->nmrt_range_interval_root);
