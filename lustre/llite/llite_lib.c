@@ -2910,30 +2910,6 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	return 0;
 }
 
-/* child default LMV is inherited from parent */
-static inline bool ll_default_lmv_inherited(struct lmv_stripe_md *pdmv,
-					    struct lmv_stripe_md *cdmv)
-{
-	if (!pdmv || !cdmv)
-		return false;
-
-	if (pdmv->lsm_md_magic != cdmv->lsm_md_magic ||
-	    pdmv->lsm_md_stripe_count != cdmv->lsm_md_stripe_count ||
-	    pdmv->lsm_md_master_mdt_index != cdmv->lsm_md_master_mdt_index ||
-	    pdmv->lsm_md_hash_type != cdmv->lsm_md_hash_type)
-		return false;
-
-	if (cdmv->lsm_md_max_inherit !=
-	    lmv_inherit_next(pdmv->lsm_md_max_inherit))
-		return false;
-
-	if (cdmv->lsm_md_max_inherit_rr !=
-	    lmv_inherit_rr_next(pdmv->lsm_md_max_inherit_rr))
-		return false;
-
-	return true;
-}
-
 /* if default LMV is implicitly inherited, subdir default LMV is maintained on
  * client side.
  */
