@@ -1219,8 +1219,6 @@ srpc_send_rpc(struct swi_workitem *wi)
 	spin_unlock(&rpc->crpc_lock);
 
 	switch (wi->swi_state) {
-	default:
-		LBUG();
 	case SWI_STATE_NEWBORN:
 		LASSERT(!srpc_event_pending(rpc));
 
@@ -1304,6 +1302,8 @@ srpc_send_rpc(struct swi_workitem *wi)
 		wi->swi_state = SWI_STATE_DONE;
 		srpc_client_rpc_done(rpc, rc);
 		return;
+	default:
+		LASSERTF(0, "swi_state bad %u\n", wi->swi_state);
 	}
 
 	if (rc != 0) {

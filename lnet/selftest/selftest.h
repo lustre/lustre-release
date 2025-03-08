@@ -632,8 +632,6 @@ swi_state2str(int state)
 {
 #define STATE2STR(x) case x: return #x
 	switch (state) {
-	default:
-		LBUG();
 	STATE2STR(SWI_STATE_NEWBORN);
 	STATE2STR(SWI_STATE_REPLY_SUBMITTED);
 	STATE2STR(SWI_STATE_REPLY_SENT);
@@ -642,6 +640,9 @@ swi_state2str(int state)
 	STATE2STR(SWI_STATE_REPLY_RECEIVED);
 	STATE2STR(SWI_STATE_BULK_STARTED);
 	STATE2STR(SWI_STATE_DONE);
+	default:
+		LASSERTF(0, "state bad %u\n", state);
+		return NULL;
 	}
 #undef STATE2STR
 }

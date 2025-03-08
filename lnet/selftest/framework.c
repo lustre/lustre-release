@@ -1293,8 +1293,6 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 	}
 
 	switch (sv->sv_id) {
-	default:
-		LBUG();
 	case SRPC_SERVICE_TEST:
 		rc = sfw_add_test(rpc);
 		break;
@@ -1323,6 +1321,8 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 		rc = sfw_remove_session(&request->msg_body.rmsn_reqst,
 					&reply->msg_body.rmsn_reply);
 		break;
+	default:
+		LASSERTF(0, "sv_id bad %u\n", sv->sv_id);
 	}
 
 	if (sfw_data.fw_session != NULL)
