@@ -288,7 +288,6 @@ int mgc_process_nodemap_log(struct obd_device *obd,
 	u8 nodemap_cur_pass = 0;
 	int nrpages = 0;
 	bool eof = true;
-	bool mne_swab = false;
 	int i;
 	int ealen;
 	int rc;
@@ -392,8 +391,6 @@ again:
 			rc = -EINVAL;
 		GOTO(out, rc);
 	}
-
-	mne_swab = req_capsule_rep_need_swab(&req->rq_pill);
 
 	/* When a nodemap config is received, we build a new nodemap config,
 	 * with new nodemap structs. We keep track of the most recently added
