@@ -6166,48 +6166,6 @@ out:
 	RETURN(rc);
 }
 
-/*
- * Whether subdirectories under \a dt should be created on MDTs by space QoS
- *
- * If LMV_HASH_FLAG_SPACE is set on directory default layout, its subdirectories
- * should be created on MDT by space QoS.
- *
- * \param[in] env	execution environment
- * \param[in] dev	lu device
- * \param[in] dt	object
- *
- * \retval		1 if directory should create subdir by space usage
- * \retval		0 if not
- * \retval		-ev if failed
- */
-static inline int dt_object_qos_mkdir(const struct lu_env *env,
-				      struct lu_device *dev,
-				      struct dt_object *dt)
-{
-	struct lod_thread_info *info = lod_env_info(env);
-	struct lu_object *obj;
-	struct lod_object *lo;
-	struct lmv_user_md *lmu;
-	int rc;
-
-	obj = lu_object_find_slice(env, dev, lu_object_fid(&dt->do_lu), NULL);
-	if (IS_ERR(obj))
-		return PTR_ERR(obj);
-
-	lo = lu2lod_obj(obj);
-
-	rc = lod_get_default_lmv_ea(env, lo);
-	dt_object_put(env, dt);
-	if (rc <= 0)
-		return rc;
-
-	if (rc < (int)sizeof(*lmu))
-		return -EINVAL;
-
-	lmu = info->lti_ea_store;
-	return le32_to_cpu(lmu->lum_stripe_offset) == LMV_OFFSET_DEFAULT;
-}
-
 /**
  * Implementation of dt_object_operations::do_declare_create.
  *
