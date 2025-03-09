@@ -205,26 +205,27 @@ int ptlrpc_connection_init(void)
 	return rhashtable_init(&conn_hash, &conn_hash_params);
 }
 
+static void ptlrpc_latency_req_fini(struct cpu_latency_qos *lq, int cpu)
+{
+	mutex_lock(&lq->lock);
+	if (lq->pm_qos_req != NULL) {
+		if (dev_pm_qos_request_active(lq->pm_qos_req))
+			dev_pm_qos_remove_request(lq->pm_qos_req);
+		cancel_delayed_work(&lq->delayed_work);
+		CDEBUG(D_INFO, "remove PM QoS request %p and associated work" \
+		       " item, still active for this cpu %d\n", lq, cpu);
+		OBD_FREE_PTR(lq->pm_qos_req);
+	}
+	mutex_unlock(&lq->lock);
+}
+
 void ptlrpc_connection_fini(void)
 {
 	int cpu;
 
 	if (cpus_latency_qos != NULL) {
-		for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
-			struct cpu_latency_qos *cpu_latency_qos =
-				&cpus_latency_qos[cpu];
-
-			mutex_lock(&cpu_latency_qos->lock);
-			if (cpu_latency_qos->pm_qos_req != NULL &&
-			    dev_pm_qos_request_active(cpu_latency_qos->pm_qos_req)) {
-				dev_pm_qos_remove_request(cpu_latency_qos->pm_qos_req);
-				cancel_delayed_work(&cpu_latency_qos->delayed_work);
-				CDEBUG(D_INFO, "remove PM QoS request %p and associated work item, still active for this cpu %d\n",
-				       cpu_latency_qos, cpu);
-				OBD_FREE_PTR(cpu_latency_qos->pm_qos_req);
-			}
-			mutex_unlock(&cpu_latency_qos->lock);
-		}
+		for (cpu = 0; cpu < nr_cpu_ids; cpu++)
+			ptlrpc_latency_req_fini(&cpus_latency_qos[cpu], cpu);
 		OBD_FREE_PTR_ARRAY(cpus_latency_qos, nr_cpu_ids);
 	}
 
