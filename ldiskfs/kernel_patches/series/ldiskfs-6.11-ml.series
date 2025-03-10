@@ -32,7 +32,7 @@ rhel8/ext4-ext-merge.patch
 linux-5.14/ext4-xattr-disable-credits-check.patch
 rhel9.2/ext4-fiemap-kernel-data.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
-linux-6.10/ext4-filename-encode.patch
+linux-6.11/ext4-filename-encode.patch
 rhel9.1/ext4-enc-flag.patch
 linux-6.6/ext4-encdata.patch
 rhel9.4/ext4-add-IGET_NO_CHECKS-flag.patch
