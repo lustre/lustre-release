@@ -440,16 +440,20 @@ void reply_out_callback(struct lnet_event *ev)
  */
 void server_bulk_callback(struct lnet_event *ev)
 {
-	struct ptlrpc_cb_id     *cbid = ev->md_user_ptr;
+	struct ptlrpc_cb_id *cbid = ev->md_user_ptr;
 	struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
 	ENTRY;
 
-	LASSERT(ev->type == LNET_EVENT_SEND ||
-		ev->type == LNET_EVENT_UNLINK ||
-		(ptlrpc_is_bulk_put_source(desc->bd_type) &&
-		 ev->type == LNET_EVENT_ACK) ||
-		(ptlrpc_is_bulk_get_sink(desc->bd_type) &&
-		 ev->type == LNET_EVENT_REPLY));
+	if (ev->type != LNET_EVENT_SEND &&
+	    ev->type != LNET_EVENT_UNLINK &&
+	    !(ptlrpc_is_bulk_put_source(desc->bd_type) &&
+	      ev->type == LNET_EVENT_ACK) &&
+	    !(ptlrpc_is_bulk_get_sink(desc->bd_type) &&
+	      ev->type == LNET_EVENT_REPLY)) {
+		ev->status = -EBADMSG;
+		CERROR("Unexpected event type: %d for %d\n",
+		       ev->type, desc->bd_type);
+	}
 
 	CDEBUG_LIMIT((ev->status == 0) ? D_NET : D_ERROR,
 		     "event type %d, status %d, desc %p\n",
