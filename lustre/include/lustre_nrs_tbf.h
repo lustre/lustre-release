@@ -145,19 +145,6 @@ struct nrs_tbf_rule {
 	struct list_head		 tr_nids;
 	/** Nid list string of the rule.*/
 	char				*tr_nids_str;
-	/** Jobid list of the rule. */
-	struct list_head		 tr_jobids;
-	/** Jobid list string of the rule.*/
-	char				*tr_jobids_str;
-	/** uid/gid list of the rule. */
-	struct list_head		tr_ids;
-	/** uid/gid list string of the rule. */
-	char				*tr_ids_str;
-	/** Opcode bitmap of the rule. */
-	unsigned long			*tr_opcodes;
-	u32				tr_opcodes_cnt;
-	/** Opcode list string of the rule.*/
-	char				*tr_opcodes_str;
 	/** Condition list of the rule.*/
 	struct list_head		tr_conds;
 	/** Generic condition string of the rule. */
