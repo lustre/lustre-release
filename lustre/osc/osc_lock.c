@@ -941,7 +941,8 @@ static int osc_lock_enqueue(const struct lu_env *env,
 	osc_enqueue_upcall_f		upcall   = osc_lock_upcall;
 	void				*cookie  = oscl;
 	bool				async    = false;
-	int				result;
+	__u32 projid;
+	int result;
 
         ENTRY;
 
@@ -1011,11 +1012,13 @@ enqueue_base:
 		upcall = osc_lock_upcall_speculative;
 		cookie = osc;
 	}
+
+	cl_req_projid_set(env, osc2cl(osc), &projid);
 	result = osc_enqueue_base(exp, resname, &oscl->ols_flags,
 				  policy, &oscl->ols_lvb,
 				  upcall, cookie,
 				  &oscl->ols_einfo, PTLRPCD_SET, async,
-				  oscl->ols_speculative);
+				  oscl->ols_speculative, projid);
 	if (result == 0) {
 		if (osc_lock_is_lockless(oscl)) {
 			oio->oi_lockless = 1;

@@ -28,6 +28,7 @@
 # define __USE_GNU      1
 # define __USE_XOPEN2K8  1
 # define FILEID_LUSTRE 0x97 /* for name_to_handle_at() (and llapi_fd2fid()) */
+# define U32_MAX	UINT32_MAX
 #endif /* !__KERNEL__ */
 
 #include <linux/fs.h>
@@ -722,6 +723,9 @@ struct fsxattr {
 #define FS_XFLAG_PROJINHERIT		0x00000200
 #endif
 
+#define MDT_INVALID_UID		U32_MAX
+#define MDT_INVALID_GID		U32_MAX
+#define MDT_INVALID_PROJID	U32_MAX
 
 #define LL_STATFS_LMV		1
 #define LL_STATFS_LOV		2

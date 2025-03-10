@@ -1304,11 +1304,11 @@ struct md_ops {
 	int (*m_setxattr)(struct obd_export *exp, const struct lu_fid *fid,
 			  u64 obd_md_valid, const char *name, const void *value,
 			  size_t value_size, unsigned int xattr_flags,
-			  u32 suppgid, struct ptlrpc_request **req);
+			  u32 suppgid, u32 projid, struct ptlrpc_request **req);
 
 	int (*m_getxattr)(struct obd_export *exp, const struct lu_fid *fid,
 			  u64 obd_md_valid, const char *name, size_t buf_size,
-			  struct ptlrpc_request **req);
+			  u32 projid, struct ptlrpc_request **req);
 
 	int (*m_intent_getattr_async)(struct obd_export *exp,
 				      struct md_op_item *item);

@@ -65,7 +65,6 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 			  void *fs_data)
 {
 	struct ptlrpc_request *req = NULL;
-	struct ll_sb_info *sbi;
 	int rc;
 
 	if (inode == NULL) {
@@ -86,13 +85,13 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 	if (is_root_inode(inode))
 		return -EPERM;
 
-	sbi = ll_i2sbi(inode);
 	/* Send setxattr request to lower layers directly instead of going
 	 * through the VFS, as there is no xattr handler for "encryption.".
 	 */
-	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode),
-			 OBD_MD_FLXATTR, xattr_for_enc(inode),
-			 ctx, len, XATTR_CREATE, ll_i2suppgid(inode), &req);
+	rc = md_setxattr(ll_i2mdexp(inode), ll_inode2fid(inode), OBD_MD_FLXATTR,
+			 xattr_for_enc(inode), ctx, len, XATTR_CREATE,
+			 ll_i2suppgid(inode), ll_i2projid(inode), &req);
+
 	if (rc)
 		return rc;
 	ptlrpc_req_put(req);

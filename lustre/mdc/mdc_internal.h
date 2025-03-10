@@ -19,7 +19,8 @@
 int mdc_tunables_init(struct obd_device *obd);
 
 void mdc_pack_body(struct req_capsule *pill, const struct lu_fid *fid,
-		   u64 valid, size_t ea_size, u32 suppgid, u32 flags);
+		   u64 valid, size_t ea_size, u32 suppgid, u32 flags,
+		   u32 projid);
 void mdc_swap_layouts_pack(struct req_capsule *pill,
 			   struct md_op_data *op_data);
 void mdc_readdir_pack(struct req_capsule *pill, __u64 pgoff, size_t size,

@@ -1731,7 +1731,7 @@ static inline int md_merge_attr(struct obd_export *exp,
 static inline int md_setxattr(struct obd_export *exp, const struct lu_fid *fid,
 			      u64 obd_md_valid, const char *name,
 			      const void *value, size_t value_size,
-			      unsigned int xattr_flags, u32 suppgid,
+			      unsigned int xattr_flags, u32 suppgid, u32 projid,
 			      struct ptlrpc_request **req)
 {
 	int rc;
@@ -1748,13 +1748,14 @@ static inline int md_setxattr(struct obd_export *exp, const struct lu_fid *fid,
 							      name, value,
 							      value_size,
 							      xattr_flags,
-							      suppgid,
+							      suppgid, projid,
 							      req);
 }
 
 static inline int md_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 			      u64 obd_md_valid, const char *name,
-			      size_t buf_size, struct ptlrpc_request **req)
+			      size_t buf_size, u32 projid,
+			      struct ptlrpc_request **req)
 {
 	int rc;
 
@@ -1768,7 +1769,7 @@ static inline int md_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 	return exp->exp_obd->obd_type->typ_md_ops->m_getxattr(exp, fid,
 							      obd_md_valid,
 							      name, buf_size,
-							      req);
+							      projid, req);
 }
 
 static inline int md_set_open_replay_data(struct obd_export *exp,

@@ -5107,7 +5107,7 @@ static int str2quotaid(__u32 *id, const char *arg)
 	if (*endptr != '\0')
 		return -EINVAL;
 	/* UINT32_MAX is not allowed - see projid_valid()/INVALID_PROJID */
-	if (projid_tmp >= UINT32_MAX)
+	if (projid_tmp >= MDT_INVALID_PROJID)
 		return -ERANGE;
 
 	*id = projid_tmp;

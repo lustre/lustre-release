@@ -60,9 +60,11 @@ void mdc_swap_layouts_pack(struct req_capsule *pill,
 }
 
 void mdc_pack_body(struct req_capsule *pill, const struct lu_fid *fid,
-		   u64 valid, size_t ea_size, u32 suppgid, u32 flags)
+		   u64 valid, size_t ea_size, u32 suppgid, u32 flags,
+		   u32 projid)
 {
 	struct mdt_body *b = req_capsule_client_get(pill, &RMF_MDT_BODY);
+
 	LASSERT(b);
 	b->mbo_valid = valid;
 	b->mbo_eadatasize = ea_size;
@@ -72,6 +74,9 @@ void mdc_pack_body(struct req_capsule *pill, const struct lu_fid *fid,
 		b->mbo_fid1 = *fid;
 		b->mbo_valid |= OBD_MD_FLID;
 	}
+
+	if (projid != MDT_INVALID_PROJID && req_capsule_ptlreq(pill))
+		lustre_msg_set_projid(pill->rc_reqmsg, projid);
 }
 
 /**

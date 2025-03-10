@@ -3807,6 +3807,28 @@ void ll_unlock_md_op_lsm(struct md_op_data *op_data)
 	lmv_stripe_object_put(&op_data->op_default_lso1);
 }
 
+
+/*
+ * This function determines projid value to pack in metadata requests. This
+ * value is used to "tag" the requests (for TBF purpose).
+ */
+static inline __u32 ll_get_inode_projid(struct inode *i1, struct inode *i2)
+{
+	struct ll_inode_info *lli = NULL;
+
+	if (i2) {
+		lli = ll_i2info(i2);
+	} else if (i1 && S_ISDIR(i1->i_mode)) {
+		/* lookup case, this is a guess (not always true) */
+		if (test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(i1)->lli_flags))
+			lli = ll_i2info(i1);
+	} else if (i1) {
+		lli = ll_i2info(i1);
+	}
+
+	return lli ? lli->lli_projid : 0;
+}
+
 /* this function prepares md_op_data hint for passing it down to MD stack. */
 struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      struct inode *i1, struct inode *i2,
@@ -3943,6 +3965,7 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 	op_data->op_fsgid = from_kgid(&init_user_ns, current_fsgid());
 	op_data->op_cap = current_cap();
 	op_data->op_mds = 0;
+	op_data->op_projid = ll_get_inode_projid(i1, i2);
 	if ((opc == LUSTRE_OPC_CREATE) && (name != NULL) &&
 	     filename_is_volatile(name, namelen, &op_data->op_mds)) {
 		op_data->op_bias |= MDS_CREATE_VOLATILE;

@@ -2365,6 +2365,7 @@ __u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg);
 __u32 lustre_msg_get_magic(struct lustre_msg *msg);
 timeout_t lustre_msg_get_timeout(struct lustre_msg *msg);
 timeout_t lustre_msg_get_service_timeout(struct lustre_msg *msg);
+int lustre_msg_get_projid(struct lustre_msg *msg, __u32 *projid);
 int lustre_msg_get_uid_gid(struct lustre_msg *msg, __u32 *uid, __u32 *gid);
 char *lustre_msg_get_jobid(struct lustre_msg *msg);
 __u32 lustre_msg_get_cksum(struct lustre_msg *msg);
@@ -2395,6 +2396,7 @@ struct job_info {
 };
 
 void lustre_msg_set_jobinfo(struct lustre_msg *msg, const struct job_info *ji);
+void lustre_msg_set_projid(struct lustre_msg *msg, __u32 projid);
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum);
 void lustre_msg_set_mbits(struct lustre_msg *msg, __u64 mbits);
 

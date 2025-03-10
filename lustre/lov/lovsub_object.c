@@ -141,10 +141,21 @@ static void lovsub_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	EXIT;
 }
 
+static void lovsub_req_projid_set(const struct lu_env *env,
+				  struct cl_object *obj, __u32 *projid)
+{
+	struct lovsub_object *subobj = cl2lovsub(obj);
+
+	ENTRY;
+	cl_req_projid_set(env, &subobj->lso_super->lo_cl, projid);
+	EXIT;
+}
+
 static const struct cl_object_operations lovsub_ops = {
-	.coo_attr_update  = lovsub_attr_update,
-	.coo_glimpse      = lovsub_object_glimpse,
-	.coo_req_attr_set = lovsub_req_attr_set
+	.coo_attr_update	= lovsub_attr_update,
+	.coo_glimpse		= lovsub_object_glimpse,
+	.coo_req_attr_set	= lovsub_req_attr_set,
+	.coo_req_projid_set	= lovsub_req_projid_set,
 };
 
 static const struct lu_object_operations lovsub_lu_obj_ops = {

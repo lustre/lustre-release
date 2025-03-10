@@ -559,6 +559,13 @@ int osc_punch_start(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(osc_punch_start);
 
+static inline void osc_set_projid_info(const struct lu_env *env,
+				       struct cl_object *obj, struct obdo *oa)
+{
+	if (!(oa->o_valid & OBD_MD_FLPROJID))
+		cl_req_projid_set(env, obj, &oa->o_projid);
+}
+
 static int osc_io_setattr_start(const struct lu_env *env,
                                 const struct cl_io_slice *slice)
 {
@@ -618,6 +625,7 @@ static int osc_io_setattr_start(const struct lu_env *env,
 	memset(oa, 0, sizeof(*oa));
 	if (result == 0) {
 		oa->o_oi = loi->loi_oi;
+		osc_set_projid_info(env, obj, oa);
 		obdo_set_parent_fid(oa, io->u.ci_setattr.sa_parent_fid);
 		oa->o_stripe_idx = io->u.ci_setattr.sa_stripe_index;
 		oa->o_layout = io->u.ci_setattr.sa_layout;
@@ -798,6 +806,7 @@ static int osc_io_data_version_start(const struct lu_env *env,
 	memset(oa, 0, sizeof(*oa));
 	oa->o_oi = loi->loi_oi;
 	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+	osc_set_projid_info(env, slice->cis_obj, oa);
 
 	if (dv->dv_flags & (LL_DV_RD_FLUSH | LL_DV_WR_FLUSH)) {
 		oa->o_valid |= OBD_MD_FLFLAGS;
@@ -928,6 +937,7 @@ int osc_fsync_ost(const struct lu_env *env, struct osc_object *obj,
 	memset(oa, 0, sizeof(*oa));
 	oa->o_oi = loi->loi_oi;
 	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+	osc_set_projid_info(env, osc2cl(obj), oa);
 
 	/* reload size abd blocks for start and end of sync range */
 	oa->o_size = fio->fi_start;
@@ -1069,6 +1079,7 @@ static int osc_io_ladvise_start(const struct lu_env *env,
 	memset(oa, 0, sizeof(*oa));
 	oa->o_oi = loi->loi_oi;
 	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+	osc_set_projid_info(env, obj, oa);
 	obdo_set_parent_fid(oa, lio->lio_fid);
 
 	ladvise = ladvise_hdr->lah_advise;
@@ -1193,6 +1204,7 @@ int osc_io_lseek_start(const struct lu_env *env,
 	memset(oa, 0, sizeof(*oa));
 	oa->o_oi = loi->loi_oi;
 	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+	osc_set_projid_info(env, obj, oa);
 	oa->o_size = lsio->ls_start;
 	oa->o_mode = lsio->ls_whence;
 	if (oio->oi_lockless) {

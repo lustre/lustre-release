@@ -162,7 +162,9 @@ int ll_set_acl(struct mnt_idmap *map,
 
 	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode),
 			 value ? OBD_MD_FLXATTR : OBD_MD_FLXATTRRM,
-			 name, value, value_size, 0, 0, &req);
+			 name, value, value_size, 0, 0, ll_i2projid(inode),
+			 &req);
+
 	if (!rc)
 		ll_i2info(inode)->lli_synced_to_mds = false;
 

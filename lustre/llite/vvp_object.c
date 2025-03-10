@@ -196,7 +196,7 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 
 	if (attr->cra_type == CRT_WRITE) {
 		valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
-		obdo_set_o_projid(oa, ll_i2info(inode)->lli_projid);
+		obdo_set_o_projid(oa, lli->lli_projid);
 	} else if (attr->cra_type == CRT_READ) {
 		valid_flags |= OBD_MD_FLATIME;
 	}
@@ -205,6 +205,8 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
 		oa->o_parent_oid++;
 
+	/* Store ProjID any way for server-side TBF schedule. */
+	oa->o_projid = lli->lli_projid;
 	lli_jobinfo_cpy(lli, &attr->cra_jobinfo);
 }
 
@@ -249,6 +251,14 @@ static int vvp_inode_ops(const struct lu_env *env, struct cl_object *obj,
 	RETURN(rc);
 }
 
+static void vvp_req_projid_set(const struct lu_env *env, struct cl_object *obj,
+			       __u32 *projid)
+{
+	struct inode *inode = vvp_object_inode(obj);
+
+	*projid = ll_i2projid(inode);
+}
+
 static const struct cl_object_operations vvp_ops = {
 	.coo_page_init    = vvp_page_init,
 	.coo_io_init      = vvp_io_init,
@@ -260,6 +270,7 @@ static const struct cl_object_operations vvp_ops = {
 	.coo_glimpse      = vvp_object_glimpse,
 	.coo_req_attr_set = vvp_req_attr_set,
 	.coo_inode_ops    = vvp_inode_ops,
+	.coo_req_projid_set = vvp_req_projid_set,
 };
 
 static int vvp_object_init0(const struct lu_env *env,

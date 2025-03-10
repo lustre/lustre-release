@@ -644,6 +644,7 @@ enum lustre_msg_version {
 #define MSG_CONNECT_NEXT_VER	0x00000080 /* use next version of lustre_msg */
 #define MSG_CONNECT_TRANSNO	0x00000100 /* client sent transno in replay */
 #define MSG_PACK_UID_GID	0x00000200 /* thread UID/GID in ptlrpc_body */
+#define MSG_PACK_PROJID		0x00000400 /* thread PROJID in ptlrpc_body */
 
 /* number of previous object versions in pb_pre_versions[] */
 #define PTLRPC_NUM_VERSIONS     4
@@ -657,7 +658,7 @@ struct ptlrpc_body_v3 {
 	__u64 pb_last_xid;	/* highest replied XID w/o lower unreplied XID*/
 	__u16 pb_tag;		/* multiple modifying RPCs virtual slot index */
 	__u16 pb_padding0;
-	__u32 pb_padding1;
+	__u32 pb_projid;	/* req: inode projid, use by tbf rules */
 	__u64 pb_last_committed;/* rep: highest pb_transno committed to disk */
 	__u64 pb_transno;	/* server-assigned transno for modifying RPCs */
 	__u32 pb_flags;		/* req: MSG_* flags */
@@ -688,7 +689,7 @@ struct ptlrpc_body_v2 {
 	__u64 pb_last_xid; /* highest replied XID without lower unreplied XID */
 	__u16 pb_tag;      /* virtual slot idx for multiple modifying RPCs */
 	__u16 pb_padding0;
-	__u32 pb_padding1;
+	__u32 pb_projid;   /* req: inode projid, use by tbf rules */
 	__u64 pb_last_committed;
 	__u64 pb_transno;
 	__u32 pb_flags;

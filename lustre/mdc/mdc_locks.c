@@ -576,7 +576,7 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	/* pack the intended request */
 	mdc_pack_body(&req->rq_pill, &op_data->op_fid1, op_data->op_valid,
-		      ea_vals_buf_size, -1, 0);
+		      ea_vals_buf_size, -1, 0, op_data->op_projid);
 
 	/* get SELinux policy info if any */
 	mdc_file_sepol_pack(&req->rq_pill, sepol);
@@ -1079,6 +1079,8 @@ resend:
 
 	if (IS_ERR(req))
 		RETURN(PTR_ERR(req));
+
+	lustre_msg_set_projid(req->rq_reqmsg, op_data->op_projid);
 
 	if (resends) {
 		req->rq_generation_set = 1;

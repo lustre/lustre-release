@@ -448,6 +448,21 @@ int cl_object_inode_ops(const struct lu_env *env, struct cl_object *top,
 }
 EXPORT_SYMBOL(cl_object_inode_ops);
 
+void cl_req_projid_set(const struct lu_env *env, struct cl_object *top,
+		       __u32 *projid)
+{
+	struct cl_object *obj;
+
+	ENTRY;
+
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_req_projid_set)
+			obj->co_ops->coo_req_projid_set(env, obj, projid);
+	}
+	EXIT;
+}
+EXPORT_SYMBOL(cl_req_projid_set);
+
 /**
  * Helper function removing all object locks, and marking object for
  * deletion. All object pages must have been deleted at this point.

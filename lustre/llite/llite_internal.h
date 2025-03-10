@@ -1186,6 +1186,11 @@ static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 	return &lli->lli_vfs_inode;
 }
 
+static inline __u32 ll_i2projid(struct inode *inode)
+{
+	return ll_i2info(inode)->lli_projid;
+}
+
 __u32 ll_i2suppgid(struct inode *i);
 void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2);
 

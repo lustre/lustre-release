@@ -891,10 +891,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_padding0));
 	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding0) == 2, "found %lld\n",
 		 (long long)(int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding0));
-	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_padding1) == 36, "found %lld\n",
-		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_padding1));
-	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding1) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding1));
+	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_projid) == 36, "found %lld\n",
+		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_projid));
+	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_projid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_projid));
 	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_last_committed) == 40, "found %lld\n",
 		 (long long)(int)offsetof(struct ptlrpc_body_v3, pb_last_committed));
 	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_last_committed) == 8, "found %lld\n",
@@ -993,10 +993,10 @@ void lustre_assert_wire_constants(void)
 		 (int)offsetof(struct ptlrpc_body_v3, pb_padding0), (int)offsetof(struct ptlrpc_body_v2, pb_padding0));
 	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding0) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding0), "%d != %d\n",
 		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding0), (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding0));
-	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_padding1) == (int)offsetof(struct ptlrpc_body_v2, pb_padding1), "%d != %d\n",
-		 (int)offsetof(struct ptlrpc_body_v3, pb_padding1), (int)offsetof(struct ptlrpc_body_v2, pb_padding1));
-	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding1) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding1), "%d != %d\n",
-		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_padding1), (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_padding1));
+	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_projid) == (int)offsetof(struct ptlrpc_body_v2, pb_projid), "%d != %d\n",
+		 (int)offsetof(struct ptlrpc_body_v3, pb_projid), (int)offsetof(struct ptlrpc_body_v2, pb_projid));
+	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_projid) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_projid), "%d != %d\n",
+		 (int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_projid), (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_projid));
 	LASSERTF((int)offsetof(struct ptlrpc_body_v3, pb_last_committed) == (int)offsetof(struct ptlrpc_body_v2, pb_last_committed), "%d != %d\n",
 		 (int)offsetof(struct ptlrpc_body_v3, pb_last_committed), (int)offsetof(struct ptlrpc_body_v2, pb_last_committed));
 	LASSERTF((int)sizeof(((struct ptlrpc_body_v3 *)0)->pb_last_committed) == (int)sizeof(((struct ptlrpc_body_v2 *)0)->pb_last_committed), "%d != %d\n",

@@ -431,6 +431,11 @@ struct cl_object_operations {
 	 */
 	int (*coo_inode_ops)(const struct lu_env *env, struct cl_object *obj,
 			     enum coo_inode_opc opc, void *data);
+	/**
+	 * Get ProjID for a request.
+	 */
+	void (*coo_req_projid_set)(const struct lu_env *env,
+				   struct cl_object *obj, __u32 *projid);
 };
 
 /**
@@ -1987,7 +1992,7 @@ struct cl_req_attr {
 	/** Generic attributes for the server consumption. */
 	struct obdo	*cra_oa;
 	/** process jobid/uid/gid performing the io */
-	struct job_info cra_jobinfo;
+	struct job_info	cra_jobinfo;
 };
 
 enum cache_stats_item {
@@ -2158,7 +2163,8 @@ int cl_object_flush(const struct lu_env *env, struct cl_object *obj,
 		    struct ldlm_lock *lock);
 int cl_object_inode_ops(const struct lu_env *env, struct cl_object *obj,
 			enum coo_inode_opc opc, void *data);
-
+void cl_req_projid_set(const struct lu_env *env, struct cl_object *obj,
+		       __u32 *projid);
 
 /**
  * Returns true, iff \a o0 and \a o1 are slices of the same object.
