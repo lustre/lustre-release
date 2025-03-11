@@ -469,8 +469,7 @@ __s32 krb5_make_checksum(__u32 enctype,
 	}
 
 out_free_hash:
-	if (req)
-		cfs_crypto_hash_final(req, cksum->data, &cksum->len);
+	cfs_crypto_hash_final(req, cksum->data, &cksum->len);
 out_no_hash:
 	return rc ? GSS_S_FAILURE : GSS_S_COMPLETE;
 }

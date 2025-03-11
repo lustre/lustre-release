@@ -2816,7 +2816,7 @@ out_ladvise:
 			RETURN(-ENOMEM);
 
 		if (copy_from_user(state, ustate, sizeof(*state)))
-			GOTO(out_free, rc = -EFAULT);
+			GOTO(out_state_free, rc = -EFAULT);
 
 		name = state->pccs_path;
 		namelen = strlen(name);
