@@ -98,7 +98,7 @@
         <literal>acl</literal>/<literal>noacl</literal> to enable or disable
         ACLs, respectively.  You do not need to change the client
         configuration, and the <literal>acl</literal> string will not appear
-        in the client mount options in <literal>/etc/mtab</literal>. 
+        in the client mount options in <literal>/etc/mtab</literal>.
       </para>
       <para>If ACLs are not enabled on the MDS, then any attempts to reference
         an ACL on a client return an <literal>Operation not supported</literal>
@@ -126,7 +126,7 @@ drwxr-x---  2 phil dev 4096 Feb 20 06:50 rain
 user::rwx
 group::r-x
 other::---
- 
+
 [phil@client lustre]$ setfacl -m user:chirag:rwx rain
 [phil@client lustre]$ ls -ld rain
 drwxrwx---+ 2 phil dev 4096 Feb 20 06:50 rain
@@ -221,19 +221,24 @@ other::---</screen>
       <para>To delete the fileset parameter, just set it to an empty string:
       </para>
       <screen>mgs# lctl nodemap_set_fileset --name tenant1 --fileset ''</screen>
-    </section>
-    <section xml:id="managingSecurity.isolation.permanent" remap="h3">
-      <title><indexterm><primary>Isolation</primary><secondary>
-        making permanent</secondary></indexterm>Making Isolation Permanent
-      </title>
-      <para>In order to make isolation permanent, the fileset parameter on the
-        nodemap has to be set with <literal>lctl set_param</literal> with the
-      <literal>-P</literal> option.</para>
-      <screen>mgs# lctl set_param nodemap.tenant1.fileset=/dir1
-mgs# lctl set_param -P nodemap.tenant1.fileset=/dir1</screen>
-      <para>This way the fileset parameter will be stored in the Lustre config
-      logs, letting the servers retrieve the information after a restart.
+      <para condition='l2H'> Using <literal>lctl nodemap_set_fileset</literal>
+      automatically distributes the fileset to all servers and makes isolation
+      permanent.
       </para>
+      <note>
+        <para>
+          <emphasis role="bold">Before Lustre 2.17</emphasis>, making isolation
+          permanent requires running <literal>lctl set_param -P</literal> on the
+          MGS node:
+          <literallayout><literal>mgs# lctl set_param nodemap.tenant1.fileset=/dir1</literal>
+<literal>mgs# lctl set_param -P nodemap.tenant1.fileset=/dir1</literal></literallayout>
+          This stores the fileset parameter in the Lustre config logs, allowing
+          the servers to retrieve this information after a restart.
+          <emphasis role="bold">As of Lustre 2.17</emphasis>, this command is
+          deprecated and discouraged and only <literal>lctl
+          nodemap_set_fileset</literal> should be used.
+        </para>
+      </note>
     </section>
   </section>
   <section xml:id="managingSecurity.sepol" condition='l2D'>
