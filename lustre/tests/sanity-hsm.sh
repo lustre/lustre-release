@@ -2381,6 +2381,9 @@ test_26d() {
 run_test 26d "RAoLU when Client eviction"
 
 test_26e() {
+	(( MDS1_VERSION >= $(version_code 2.16.51) )) ||
+		skip "need MDS version at least 2.16.51"
+
 	# test needs a running copytool
 	copytool setup
 	mkdir_on_mdt0 $DIR/$tdir
