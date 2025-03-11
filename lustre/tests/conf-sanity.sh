@@ -10930,8 +10930,8 @@ test_123H() { #LU-18170
 	local old
 	local i
 
-	(( MGS_VERSION >= $(version_code 2.15.90) )) ||
-		skip "Need MGS version at least 2.15.90"
+	(( MGS_VERSION >= $(version_code 2.16.51) )) ||
+		skip "Need MGS version at least 2.16.51"
 
 	[ -d $MOUNT/.lustre ] || setup
 
