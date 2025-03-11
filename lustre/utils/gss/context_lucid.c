@@ -405,14 +405,13 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 	static int constant_two = 2;
 	char *p, *end;
 	uint32_t v2_flags = 0;
-	gss_krb5_lucid_key_t enc_key;
 	gss_krb5_lucid_key_t derived_key;
 	gss_buffer_desc fakeoid;
 	uint32_t enctype;
 	uint32_t keysize;
 	uint32_t numkeys;
 
-	memset(&enc_key, 0, sizeof(enc_key));
+	memset(&derived_key, 0, sizeof(derived_key));
 	memset(&fakeoid, 0, sizeof(fakeoid));
 
 	if (!(buf->value = calloc(1, MAX_CTX_LEN)))
@@ -476,6 +475,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 		if (write_bytes(&p, end, derived_key.data, derived_key.length))
 			goto out_err;
 		free(derived_key.data);
+		derived_key.data = NULL;
 	} else {
 		gss_krb5_lucid_key_t *keyptr;
 		uint32_t sign_usage, seal_usage;
@@ -508,6 +508,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 				derived_key.length))
 			goto out_err;
 		free(derived_key.data);
+		derived_key.data = NULL;
 
 		/* Ki */
 		if (derive_key_lucid(keyptr, &derived_key,
@@ -517,6 +518,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 				derived_key.length))
 			goto out_err;
 		free(derived_key.data);
+		derived_key.data = NULL;
 
 		/* Kc */
 		if (derive_key_lucid(keyptr, &derived_key,
@@ -526,6 +528,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 				derived_key.length))
 			goto out_err;
 		free(derived_key.data);
+		derived_key.data = NULL;
 	}
 
 	buf->length = p - (char *)buf->value;
@@ -539,9 +542,9 @@ out_err:
 		buf->value = NULL;
 	}
 	buf->length = 0;
-	if (enc_key.data) {
-		free(enc_key.data);
-		enc_key.data = NULL;
+	if (derived_key.data) {
+		free(derived_key.data);
+		derived_key.data = NULL;
 	}
 	return -1;
 }
