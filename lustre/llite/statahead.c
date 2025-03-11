@@ -1212,12 +1212,13 @@ static int ll_statahead_by_list(struct ll_statahead_info *sai,
 	       smp_load_acquire(&sai->sai_task) &&
 	       lli->lli_sa_enabled) {
 		struct lu_dirpage *dp;
-		struct lu_dirent  *ent;
+		struct lu_dirent *ent;
+		struct md_op_data *ret;
 
-		op_data = ll_prep_md_op_data(op_data, dir, dir, NULL, 0, 0,
-					     LUSTRE_OPC_ANY, dir);
-		if (IS_ERR(op_data)) {
-			rc = PTR_ERR(op_data);
+		ret = ll_prep_md_op_data(op_data, dir, dir, NULL, 0, 0,
+					 LUSTRE_OPC_ANY, dir);
+		if (IS_ERR(ret)) {
+			rc = PTR_ERR(ret);
 			break;
 		}
 

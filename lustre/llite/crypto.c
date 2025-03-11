@@ -568,7 +568,7 @@ int ll_fname_disk_to_usr(struct inode *inode,
 			 * enable further lookup requests.
 			 */
 			if (!fid)
-				return -EINVAL;
+				GOTO(out_buf, rc = -EINVAL);
 			digest.ldf_fid = *fid;
 			memcpy(digest.ldf_excerpt,
 			       LLCRYPT_EXTRACT_DIGEST(lltr.name, lltr.len),
@@ -588,10 +588,11 @@ int ll_fname_disk_to_usr(struct inode *inode,
 
 	rc = llcrypt_fname_disk_to_usr(inode, hash, minor_hash, &lltr, oname);
 
-	kfree(buf);
 	oname->name = oname->name - digested;
 	oname->len = oname->len + digested;
 
+out_buf:
+	kfree(buf);
 	return rc;
 }
 

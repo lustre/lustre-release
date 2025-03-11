@@ -3831,13 +3831,13 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 			return ERR_PTR(-EINVAL);
 	}
 
-	if (op_data == NULL)
+	if (op_data == NULL) {
 		OBD_ALLOC_PTR(op_data);
-	else
+		if (op_data == NULL)
+			return ERR_PTR(-ENOMEM);
+	} else {
 		op_data_alloc_inside = false;
-
-	if (op_data == NULL)
-		return ERR_PTR(-ENOMEM);
+	}
 
 	ll_i2gids(op_data->op_suppgids, i1, i2);
 	/* If the client is using a subdir mount and looks at what it sees as

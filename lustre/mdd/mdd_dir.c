@@ -5023,7 +5023,7 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 
 	lmv = lmv_buf.lb_buf;
 	if (!lmv_is_sane(lmv))
-		RETURN(-EBADF);
+		GOTO(out_lmv, rc = -EBADF);
 
 	lmu = mlc->mlc_buf.lb_buf;
 
@@ -5137,6 +5137,7 @@ out:
 		mdd_object_put(env, stripe);
 		mdd_object_put(env, pobj);
 	}
+out_lmv:
 	lu_buf_free(&lmv_buf);
 	return rc;
 }
