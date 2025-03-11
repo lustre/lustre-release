@@ -193,7 +193,7 @@ mgs# lctl nodemap_modify --name <replaceable>TrustedSystems</replaceable> --prop
       </itemizedlist>
 
       <para>Assign a set of six idmaps to this policy group, with four for UIDs,
-      and two for GIDs. Pick a starting point, e.g. UID 11000, with room for 
+      and two for GIDs. Pick a starting point, e.g. UID 11000, with room for
       additional UIDs and GIDs to be added as the configuration grows.
       Use the <literal>lctl</literal> command to set up the idmaps:</para>
 
@@ -318,7 +318,7 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
       <title>Managing the Properties</title>
 
       <para>Several properties exist, off by default, which change
-      client behavior: <literal>admin</literal>, 
+      client behavior: <literal>admin</literal>,
       <literal>trusted</literal>, <literal>map_mode</literal>,
       <literal>squash_uid</literal>, <literal>squash_gid</literal>,
       <literal>squash_projid</literal>, <literal>deny_unknown</literal>,
@@ -440,6 +440,15 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
           explicitly specified is forbidden. And to forbid all roles, use
           <literal>none</literal> value.</para>
         </listitem>
+
+        <listitem>
+          <para condition='l2H'>The property <literal>deny_mount</literal>
+          controls whether nodes assigned to the nodemap are allowed to mount
+          new Lustre clients. By default this is allowed and the property is set
+          to 0. Set it to 1 to prevent nodes from establishing new client
+          mounts. Note that existing client mounts are not evicted and will
+          continue to work until a remount is attempted.</para>
+        </listitem>
       </itemizedlist>
 
       <para>Alter values to either true (1) or false (0) on the MGS:</para>
@@ -520,7 +529,7 @@ mgs# lctl nodemap_modify --name <replaceable>BirdAdminSite</replaceable> --prope
     offering the file system to be mounted by clients.</para>
 
     <para condition='l28'>So far, changes have been made on the MGS. Prior to
-    Lustre 2.9, changes must also be manually set on MDS systems as well. 
+    Lustre 2.9, changes must also be manually set on MDS systems as well.
     Also, changes must be manually deployed to OSS servers if quota
     is enforced, utilizing <literal>lctl set_param</literal>
     instead of <literal>lctl</literal>. Prior to 2.9,
