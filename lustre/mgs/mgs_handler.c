@@ -801,8 +801,12 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
 	if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
 		GOTO(out_lcfg, rc = -EFAULT);
 
+	rc = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
+	if (rc)
+		GOTO(out_lcfg, rc);
+
 	if (lcfg->lcfg_bufcount < 2)
-		GOTO(out_lcfg, rc = -EFAULT);
+		GOTO(out_lcfg, rc = -EINVAL);
 
 	/* first arg is always <fsname>.<poolname> */
 	rc = mgs_extract_fs_pool(lustre_cfg_string(lcfg, 1), mgi->mgi_fsname,
@@ -892,8 +896,12 @@ static int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
 			GOTO(out_free, rc = -EFAULT);
 
-		if (lcfg->lcfg_bufcount < 1)
+		rc = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
+		if (rc)
 			GOTO(out_free, rc);
+
+		if (lcfg->lcfg_bufcount < 1)
+			GOTO(out_free, rc = -EINVAL);
 
 		rc = mgs_set_param(&env, mgs, lcfg);
 		if (rc)

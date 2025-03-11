@@ -1752,28 +1752,27 @@ int class_config_llog_handler(const struct lu_env *env,
 			      struct llog_rec_hdr *rec, void *data)
 {
 	struct config_llog_instance *cfg = data;
-	int cfg_len = rec->lrh_len;
-	char *cfg_buf = (char *) (rec + 1);
 	int rc = 0;
+
 	ENTRY;
 
 	/* class_config_dump_handler(handle, rec, data); */
 
 	switch (rec->lrh_type) {
 	case OBD_CFG_REC: {
-		struct lustre_cfg *lcfg, *lcfg_new;
+		struct lustre_cfg *lcfg = REC_DATA(rec);
+		struct lustre_cfg *lcfg_new;
 		struct lustre_cfg_bufs bufs;
 		char *inst_name = NULL;
 		int inst_len = 0;
 		int swab = 0;
 
-		lcfg = (struct lustre_cfg *)cfg_buf;
 		if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
 			lustre_swab_lustre_cfg(lcfg);
 			swab = 1;
 		}
 
-		rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+		rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 		if (rc)
 			GOTO(out, rc);
 
@@ -2080,7 +2079,7 @@ void llog_get_marker_cfg_flags(struct llog_rec_hdr *rec,
 int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 			     unsigned int *cfg_flags, bool raw)
 {
-	struct lustre_cfg *lcfg = (struct lustre_cfg *)(rec + 1);
+	struct lustre_cfg *lcfg = REC_DATA(rec);
 	char *ptr = buf;
 	char *end = buf + size;
 	int rc = 0, i;
@@ -2091,7 +2090,7 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 	if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION))
 		lustre_swab_lustre_cfg(lcfg);
 
-	rc = lustre_cfg_sanity_check(lcfg, rec->lrh_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc < 0)
 		return rc;
 
@@ -2217,15 +2216,15 @@ out_overflow:
  */
 static int class_config_parse_rec(struct llog_rec_hdr *rec, char *buf, int size)
 {
-	struct lustre_cfg	*lcfg = (struct lustre_cfg *)(rec + 1);
-	char			*ptr = buf;
-	char			*end = buf + size;
-	int			 rc = 0;
+	struct lustre_cfg *lcfg = REC_DATA(rec);
+	char *ptr = buf;
+	char *end = buf + size;
+	int rc = 0;
 
 	ENTRY;
 
 	LASSERT(rec->lrh_type == OBD_CFG_REC);
-	rc = lustre_cfg_sanity_check(lcfg, rec->lrh_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc < 0)
 		RETURN(rc);
 

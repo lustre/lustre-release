@@ -2870,8 +2870,9 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 
 	if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
 		GOTO(out_lcfg, rc = -EFAULT);
-	if (lustre_cfg_sanity_check(lcfg, data->ioc_plen1))
-		GOTO(out_lcfg, rc = -EINVAL);
+	rc = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
+	if (rc)
+		GOTO(out_lcfg, rc);
 
 	cmd = lcfg->lcfg_command;
 

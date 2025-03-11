@@ -339,12 +339,14 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 		OBD_ALLOC(lcfg, data->ioc_plen1);
 		if (lcfg == NULL)
 			GOTO(out, rc = -ENOMEM);
-		rc = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-		if (!rc)
-			rc = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
-		if (!rc)
-			rc = class_process_config(lcfg, NULL);
+		if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
+			GOTO(out_lcfg, rc = -EFAULT);
+		rc = lustre_cfg_sanity_check(lcfg, data->ioc_plen1);
+		if (rc)
+			GOTO(out_lcfg, rc);
+		rc = class_process_config(lcfg, NULL);
 
+out_lcfg:
 		OBD_FREE(lcfg, data->ioc_plen1);
 		GOTO(out, rc);
 	}

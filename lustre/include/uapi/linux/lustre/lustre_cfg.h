@@ -321,11 +321,11 @@ static inline int lustre_cfg_sanity_check(void *buf, __kernel_size_t len)
 		return -EINVAL;
 
 	/* check that the buflens are valid */
-	if (len < LCFG_HDR_SIZE(lcfg->lcfg_bufcount))
+	if (LCFG_HDR_SIZE(lcfg->lcfg_bufcount) > len)
 		return -EINVAL;
 
 	/* make sure all the pointers point inside the data */
-	if (len < lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens))
+	if (lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens) > len)
 		return -EINVAL;
 
 	return 0;

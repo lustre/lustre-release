@@ -798,9 +798,7 @@ static int client_lwp_config_process(const struct lu_env *env,
 				     struct llog_rec_hdr *rec, void *data)
 {
 	struct config_llog_instance *cfg = data;
-	int cfg_len = rec->lrh_len;
-	char *cfg_buf = (char *) (rec + 1);
-	struct lustre_cfg *lcfg = NULL;
+	struct lustre_cfg *lcfg = REC_DATA(rec);
 	struct lustre_sb_info *lsi;
 	int rc = 0, swab = 0;
 
@@ -815,13 +813,12 @@ static int client_lwp_config_process(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	lsi = s2lsi(cfg->cfg_sb);
 
-	lcfg = (struct lustre_cfg *)cfg_buf;
 	if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
 		lustre_swab_lustre_cfg(lcfg);
 		swab = 1;
 	}
 
-	rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc < 0)
 		GOTO(out, rc);
 

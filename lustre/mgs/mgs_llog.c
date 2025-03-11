@@ -232,9 +232,7 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
 {
 	struct mgs_fsdb_handler_data *d = data;
 	struct fs_db *fsdb = d->fsdb;
-	int cfg_len = rec->lrh_len;
-	char *cfg_buf = (char *)(rec + 1);
-	struct lustre_cfg *lcfg;
+	struct lustre_cfg *lcfg = REC_DATA(rec);
 	u32 index;
 	int rc = 0;
 
@@ -244,13 +242,11 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
 		RETURN(-EINVAL);
 	}
 
-	rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc) {
 		CERROR("Insane cfg\n");
 		RETURN(rc);
 	}
-
-	lcfg = (struct lustre_cfg *)cfg_buf;
 
 	CDEBUG(D_INFO, "cmd %x %s %s\n", lcfg->lcfg_command,
 	       lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
@@ -811,7 +807,6 @@ static int mgs_search_pool_cb(const struct lu_env *env,
 {
 	struct mgs_search_pool_data *d = data;
 	struct lustre_cfg *lcfg = REC_DATA(rec);
-	int cfg_len = REC_DATA_LEN(rec);
 	char *fsname;
 	char *poolname;
 	char *ostname = NULL;
@@ -823,7 +818,7 @@ static int mgs_search_pool_cb(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	rc = lustre_cfg_sanity_check(lcfg, cfg_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc) {
 		CDEBUG(D_ERROR, "Insane cfg\n");
 		RETURN(rc);
@@ -956,7 +951,6 @@ static int mgs_modify_handler(const struct lu_env *env,
 	struct mgs_modify_lookup *mml = data;
 	struct cfg_marker *marker;
 	struct lustre_cfg *lcfg = REC_DATA(rec);
-	int cfg_len = REC_DATA_LEN(rec);
 	int rc;
 
 	ENTRY;
@@ -965,7 +959,7 @@ static int mgs_modify_handler(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	rc = lustre_cfg_sanity_check(lcfg, cfg_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc) {
 		CERROR("Insane cfg\n");
 		RETURN(rc);
@@ -1381,13 +1375,11 @@ static int mgs_replace_nids_handler(const struct lu_env *env,
 				    struct llog_rec_hdr *rec,
 				    void *data)
 {
-	struct mgs_replace_data *mrd;
+	struct mgs_replace_data *mrd = data;
 	struct lustre_cfg *lcfg = REC_DATA(rec);
-	int cfg_len = REC_DATA_LEN(rec);
 	int rc;
-	ENTRY;
 
-	mrd = (struct mgs_replace_data *)data;
+	ENTRY;
 
 	if (rec->lrh_type != OBD_CFG_REC) {
 		CERROR("unhandled lrh_type: %#x, cmd %x %s %s\n",
@@ -1397,11 +1389,9 @@ static int mgs_replace_nids_handler(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	rc = lustre_cfg_sanity_check(lcfg, cfg_len);
-	if (rc) {
-		/* Do not copy any invalidated records */
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
+	if (rc) /* Do not copy any invalidated records */
 		GOTO(skip_out, rc = 0);
-	}
 
 	rc = check_markers(lcfg, mrd);
 	if (rc || mrd->state == REPLACE_SKIP)
@@ -1780,14 +1770,11 @@ static int mgs_clear_config_handler(const struct lu_env *env,
 				    struct llog_handle *llh,
 				    struct llog_rec_hdr *rec, void *data)
 {
-	struct mgs_replace_data *mrd;
+	struct mgs_replace_data *mrd = data;
 	struct lustre_cfg *lcfg = REC_DATA(rec);
-	int cfg_len = REC_DATA_LEN(rec);
 	int rc;
 
 	ENTRY;
-
-	mrd = (struct mgs_replace_data *)data;
 
 	if (rec->lrh_type != OBD_CFG_REC) {
 		CDEBUG(D_MGS, "Config llog Name=%s, Record Index=%u, "
@@ -1796,7 +1783,7 @@ static int mgs_clear_config_handler(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	rc = lustre_cfg_sanity_check(lcfg, cfg_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc) {
 		CDEBUG(D_MGS, "Config llog Name=%s, Invalid config file.",
 		       llh->lgh_name);
@@ -2286,9 +2273,7 @@ static int mgs_copy_mdt_llog_handler(const struct lu_env *env,
 	struct mgs_target_info *mti = mcd->mcd_mti;
 	struct llog_handle *mdt_llh = mcd->mcd_llh;
 	struct fs_db *fsdb = mcd->mcd_fsdb;
-	int cfg_len = rec->lrh_len;
-	char *cfg_buf = (char *)(rec + 1);
-	struct lustre_cfg *lcfg;
+	struct lustre_cfg *lcfg = REC_DATA(rec);
 	char *mdtsrc = llh->lgh_name;
 	char *s[5] = { 0 };
 	int i;
@@ -2301,13 +2286,11 @@ static int mgs_copy_mdt_llog_handler(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc) {
 		CERROR("Insane cfg\n");
 		RETURN(rc);
 	}
-
-	lcfg = (struct lustre_cfg *)cfg_buf;
 
 	if (lcfg->lcfg_command == LCFG_MARKER) {
 		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
@@ -2532,9 +2515,7 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 {
 	struct mgs_steal_data *msd = data;
 	struct fs_db *fsdb = msd->msd_fsdb;
-	int cfg_len = rec->lrh_len;
-	char *cfg_buf = (char *)(rec + 1);
-	struct lustre_cfg *lcfg;
+	struct lustre_cfg *lcfg = REC_DATA(rec);
 	char *s[5] = { 0 };
 	int i;
 	int rc = 0;
@@ -2547,13 +2528,11 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc) {
 		CERROR("%s: insane cfg: rc = %d\n", llh->lgh_name, rc);
 		RETURN(rc);
 	}
-
-	lcfg = (struct lustre_cfg *)cfg_buf;
 
 	if (lcfg->lcfg_command == LCFG_MARKER) {
 		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
@@ -4133,10 +4112,10 @@ static int mgs_srpc_read_handler(const struct lu_env *env,
 				 struct llog_rec_hdr *rec, void *data)
 {
 	struct mgs_srpc_read_data *msrd = data;
-	struct cfg_marker	  *marker;
-	struct lustre_cfg	  *lcfg = REC_DATA(rec);
-	char			  *svname, *param;
-	int			   cfg_len, rc;
+	struct cfg_marker *marker;
+	struct lustre_cfg *lcfg = REC_DATA(rec);
+	char *svname, *param;
+	int rc;
 
 	ENTRY;
 	if (rec->lrh_type != OBD_CFG_REC) {
@@ -4144,9 +4123,7 @@ static int mgs_srpc_read_handler(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 
-	cfg_len = REC_DATA_LEN(rec);
-
-	rc = lustre_cfg_sanity_check(lcfg, cfg_len);
+	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc) {
 		CERROR("Insane cfg\n");
 		RETURN(rc);
