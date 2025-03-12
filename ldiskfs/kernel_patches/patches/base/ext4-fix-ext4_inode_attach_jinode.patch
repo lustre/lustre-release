@@ -1,0 +1,29 @@
+Index: linux/fs/ext4/inode.c
+===================================================================
+--- linux.orig/fs/ext4/inode.c
++++ linux/fs/ext4/inode.c
+@@ -4461,18 +4461,19 @@ int ext4_inode_attach_jinode(struct inod
+ 	struct ext4_inode_info *ei = EXT4_I(inode);
+ 	struct jbd2_inode *jinode;
+ 
+-	if (ei->jinode || !EXT4_SB(inode->i_sb)->s_journal)
++	if (READ_ONCE(ei->jinode) || !EXT4_SB(inode->i_sb)->s_journal)
+ 		return 0;
+ 
+-	jinode = jbd2_alloc_inode(GFP_KERNEL);
++	jinode = jbd2_alloc_inode(GFP_NOFS);
+ 	spin_lock(&inode->i_lock);
+-	if (!ei->jinode) {
++	if (!READ_ONCE(ei->jinode)) {
+ 		if (!jinode) {
+ 			spin_unlock(&inode->i_lock);
+ 			return -ENOMEM;
+ 		}
+-		ei->jinode = jinode;
+-		jbd2_journal_init_jbd_inode(ei->jinode, inode);
++		jbd2_journal_init_jbd_inode(jinode, inode);
++		smp_wmb();
++		WRITE_ONCE(ei->jinode, jinode);
+ 		jinode = NULL;
+ 	}
+ 	spin_unlock(&inode->i_lock);
