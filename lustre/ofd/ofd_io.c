@@ -764,9 +764,12 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	 * transactions to complete. */
 	tgt_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_OST_GRANT_PREPARE))
+		GOTO(err_commit, rc = -EIO);
+
 	fo = ofd_object_find(env, ofd, fid);
 	if (IS_ERR(fo))
-		GOTO(out, rc = PTR_ERR(fo));
+		GOTO(err_commit, rc = PTR_ERR(fo));
 	LASSERT(fo != NULL);
 
 	ofd_info(env)->fti_obj = fo;
@@ -774,8 +777,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	if (!ofd_object_exists(fo)) {
 		CERROR("%s: BRW to missing obj "DOSTID"\n",
 		       exp->exp_obd->obd_name, POSTID(&obj->ioo_oid));
-		ofd_object_put(env, fo);
-		GOTO(out, rc = -ENOENT);
+		GOTO(err_put, rc = -ENOENT);
 	}
 
 	if (ptlrpc_connection_is_local(exp->exp_connection))
@@ -854,9 +856,13 @@ err:
 	ofd_read_unlock(env, fo);
 err_nolock:
 	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
+err_put:
 	ofd_object_put(env, fo);
+err_commit:
 	/* tgt_grant_prepare_write() was called, so we must commit */
 	tgt_grant_commit(exp, oa->o_grant_used, rc);
+	/* dealloc grants, client won't receive them */
+	tgt_grant_dealloc(exp, oa);
 out:
 	/* let's still process incoming grant information packed in the oa,
 	 * but without enforcing grant since we won't proceed with the write.
@@ -1399,6 +1405,9 @@ out:
 	ofd_object_put(env, fo);
 	if (granted > 0)
 		tgt_grant_commit(exp, granted, old_rc);
+	if (rc)
+		/* dealloc grants, client won't receive them */
+		tgt_grant_dealloc(exp, oa);
 	RETURN(rc);
 }
 

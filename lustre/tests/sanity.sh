@@ -9,7 +9,7 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # Check Grants after these tests
-GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c 64d"
+GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c 64d 64j"
 
 OSC=${OSC:-"osc"}
 
@@ -10861,6 +10861,18 @@ test_64i() {
 		error "client has more grants then it owns" || true
 }
 run_test 64i "shrink on reconnect"
+
+test_64j() {
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile
+
+	# get rid of lost grants which could be formed on previous test
+	$MULTIOP $DIR/$tfile oO_RDWR:O_SYNC:w4096c
+#define OBD_FAIL_OST_GRANT_PREPARE      0x256
+	do_facet ost1 "$LCTL set_param fail_loc=0x80000256"
+
+	$MULTIOP $DIR/$tfile oO_RDWR:O_DIRECT:w4096c
+}
+run_test 64j "check grants on re-done rpc"
 
 # bug 1414 - set/get directories' stripe info
 test_65a() {

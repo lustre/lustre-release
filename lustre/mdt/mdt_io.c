@@ -458,6 +458,8 @@ unlock:
 	up_read(&mo->mot_dom_sem);
 	/* tgt_grant_prepare_write() was called, so we must commit */
 	tgt_grant_commit(exp, oa->o_grant_used, rc);
+	/* dealloc grants, client won't receive them */
+	tgt_grant_dealloc(exp, oa);
 	/* let's still process incoming grant information packed in the oa,
 	 * but without enforcing grant since we won't proceed with the write.
 	 * Just like a read request actually. */
@@ -658,6 +660,9 @@ out:
 	up_read(&mo->mot_dom_sem);
 	if (granted > 0)
 		tgt_grant_commit(exp, granted, old_rc);
+	if (rc)
+		/* dealloc grants, client won't receive them */
+		tgt_grant_dealloc(exp, oa);
 	RETURN(rc);
 }
 

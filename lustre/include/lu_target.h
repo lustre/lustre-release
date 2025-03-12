@@ -543,6 +543,7 @@ static inline int exp_grant_param_supp(struct obd_export *exp)
 #define COMPAT_BSIZE_SHIFT 12
 
 void tgt_grant_sanity_check(struct obd_device *obd, const char *func);
+void tgt_grant_dealloc(struct obd_export *exp, struct obdo *oa);
 void tgt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       struct obd_connect_data *data, bool new_conn);
 void tgt_grant_discard(struct obd_export *exp);
