@@ -380,6 +380,9 @@ debs: undef.h debs_common
 	if test "x@DPKG_INT_O2IB@" != "x"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} int_o2ib"; \
 	fi; \
+	if test "x@EFALND@" != "x"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} efalnd"; \
+	fi; \
 	if test "x@CONFIG_CACHE_FILE@" != "x"; then \
 		export CONFIG_CACHE_FILE="@CONFIG_CACHE_FILE@"; \
 	fi; \

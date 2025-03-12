@@ -114,6 +114,11 @@ struct lnet_ioctl_config_kfilnd_tunables {
 	__u32 lnd_timeout;
 };
 
+struct lnet_ioctl_config_efalnd_tunables {
+	__u32 lnd_version;
+	__u32 lnd_nqps;
+};
+
 struct lnet_ioctl_config_socklnd_tunables {
 	__u32 lnd_version;
 	__u16 lnd_conns_per_peer;
@@ -130,6 +135,7 @@ struct lnet_ioctl_config_gnilnd_tunables {
 struct lnet_lnd_tunables {
 	union {
 		struct lnet_ioctl_config_o2iblnd_tunables lnd_o2ib;
+		struct lnet_ioctl_config_efalnd_tunables lnd_efa;
 		struct lnet_ioctl_config_socklnd_tunables lnd_sock;
 		struct lnet_ioctl_config_kfilnd_tunables lnd_kfi;
 		struct lnet_ioctl_config_gnilnd_tunables lnd_gni;

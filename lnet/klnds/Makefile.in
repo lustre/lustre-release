@@ -10,6 +10,7 @@ ifneq ($(BUILD_EXT_O2IB),)
 @EXTERNAL_KO2IBLND_TRUE@obj-m += o2iblnd/
 endif
 @BUILD_KFILND_TRUE@obj-m += kfilnd/
+@BUILD_EFALND_TRUE@obj-m += efalnd/
 obj-m += socklnd/
 
 @INCLUDE_RULES@

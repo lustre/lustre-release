@@ -9,4 +9,4 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-SUBDIRS = socklnd gnilnd o2iblnd kfilnd in-kernel-o2iblnd
+SUBDIRS = socklnd gnilnd o2iblnd kfilnd in-kernel-o2iblnd efalnd

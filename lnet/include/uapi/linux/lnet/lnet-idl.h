@@ -185,6 +185,7 @@ struct lnet_magicversion {
 #define LNET_PROTO_KFI_MAGIC		0xdeadbeef
 #define LNET_PROTO_ACCEPTOR_MAGIC	0xacce7100
 #define LNET_PROTO_PING_MAGIC		0x70696E67 /* 'ping' */
+#define LNET_PROTO_EFA_MAGIC		0x2be092be /* 2B or 9 2B */
 
 /* Placeholder for a future "unified" protocol across all LNDs */
 /* Current LNDs that receive a request with this magic will respond

@@ -132,7 +132,8 @@ module_param_call(lnet_max_recovery_ping_interval, max_recovery_ping_interval,
 MODULE_PARM_DESC(lnet_max_recovery_ping_interval,
 		 "The max interval between LNet recovery pings, in seconds");
 
-static int lnet_interfaces_max = LNET_INTERFACES_MAX_DEFAULT;
+int lnet_interfaces_max = LNET_INTERFACES_MAX_DEFAULT;
+EXPORT_SYMBOL(lnet_interfaces_max);
 static int intf_max_set(const char *val, cfs_kernel_param_arg_t *kp);
 
 static struct kernel_param_ops param_ops_interfaces_max = {

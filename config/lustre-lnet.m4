@@ -866,6 +866,108 @@ AS_IF([test $ENABLEO2IB != "no"], [
 ]) # LN_CONFIG_O2IB
 
 #
+# LN_CONFIG_EFALND
+#
+# check whether to use the EFA Network Interface lnd
+#
+AC_DEFUN([LN_CONFIG_EFALND], [
+AC_MSG_CHECKING([whether to enable EFA LND])
+AC_ARG_ENABLE([efa],
+	AC_HELP_STRING([--enable-efa=[yes|no|<path>]],
+		       [enable EFA LND]),
+	[], [enable_efa="no"])
+
+AS_CASE([$enable_efa],
+	[yes],
+	[
+		AS_IF([test x$uses_dpkg = xyes], [
+			LS_PKG="dpkg --listfiles"
+		], [
+			LS_PKG="rpm -ql"
+		])
+
+		EFA_PKG="efa"
+		EFA_HEADER="efa_verbs.h"
+		EFA_HEADER_PATH=$(eval "$LS_PKG $EFA_PKG" | egrep "$EFA_HEADER" | head -n1)
+		AS_IF([test -n "$EFA_HEADER_PATH"], [
+			EFA_INCLUDE_PATH=$(dirname $EFA_HEADER_PATH)
+		])
+
+		KERNEL_RDMA_INCLUDE="$LINUX/include/rdma"
+		AS_IF([test -z "$EFA_INCLUDE_PATH" && test -f "$KERNEL_RDMA_INCLUDE/$EFA_HEADER"], [
+			EFA_INCLUDE_PATH=$KERNEL_RDMA_INCLUDE
+		])
+
+		AS_IF([test -z "$EFA_INCLUDE_PATH"], [
+			AC_MSG_ERROR([Could not find a supported EFA driver. For custom built driver, the path to header files can be supplied using --enable-efa=<path>.])
+		])
+
+		ENABLE_EFA="yes"
+	],
+	[no],
+	[
+		ENABLE_EFA="no"
+	],
+	[
+		EFA_INCLUDE_PATH=$enable_efa
+		ENABLE_EFA="yes"
+	])
+
+AS_IF([test $ENABLE_EFA = "no"], [
+	AC_MSG_RESULT([no])
+], [
+	AC_MSG_RESULT([yes])
+
+	# Check mandatory kernel definitions
+
+	LB_CHECK_COMPILE([if 'ib_device_get_by_name' exists],
+	ib_device_get_by_name, [
+		#include <rdma/ib_verbs.h>
+	],[
+		ib_device_get_by_name(NULL, 0);
+	],[],[
+		AC_MSG_ERROR([EFA LND is not supported with this Linux kerenel])
+	])
+
+	LB_CHECK_COMPILE([if 'RDMA_DRIVER_EFA' exists],
+	rdma_driver_efa, [
+		#include <rdma/ib_verbs.h>
+	],[
+		int x = RDMA_DRIVER_EFA;
+	],[],[
+		AC_MSG_ERROR([EFA LND is not supported with this Linux kerenel])
+	])
+
+	LB_CHECK_COMPILE([if ib_device 'kverbs_provider' flag exists],
+	rdma_driver_efa, [
+		#include <rdma/ib_verbs.h>
+	],[
+		struct ib_device dev = {
+			.kverbs_provider = 0,
+		};
+	],[],[
+		AC_MSG_ERROR([EFA LND is not supported with this Linux kerenel])
+	])
+
+	# Check optional kernel definitions
+
+	LB_CHECK_COMPILE([if 'ibdev_to_node' exists],
+	ibdev_to_node, [
+		#include <rdma/ib_verbs.h>
+	],[
+		ibdev_to_node(NULL);
+	],[
+		AC_DEFINE(HAVE_IBDEV_TO_NODE, 1,
+			[ibdev_to_node() is defined])
+	])
+
+	EFALND="efalnd"
+	AC_SUBST(EFALND)
+	AC_SUBST(EFA_INCLUDE_PATH)
+])
+]) # LN_CONFIG_EFALND
+
+#
 # LN_CONFIG_GNILND
 #
 # check whether to use the Gemini Network Interface lnd
@@ -1276,6 +1378,7 @@ AC_MSG_NOTICE([LNet kernel checks
 
 LN_CONFIG_BACKOFF
 LN_CONFIG_O2IB
+LN_CONFIG_EFALND
 LN_CONFIG_GNILND
 LN_CONFIG_KFILND
 ]) # LN_PROG_LINUX
@@ -1431,6 +1534,7 @@ LN_USR_NLMSGERR
 AC_DEFUN([LN_CONDITIONALS], [
 AM_CONDITIONAL(EXTERNAL_KO2IBLND,  test x$EXTERNAL_KO2IBLND = "xyes")
 AM_CONDITIONAL(BUILT_IN_KO2IBLND,  test x$BUILT_IN_KO2IBLND = "xyes")
+AM_CONDITIONAL(BUILD_EFALND,	   test x$EFALND = "xefalnd")
 AM_CONDITIONAL(BUILD_GNILND,       test x$GNILND  = "xgnilnd")
 AM_CONDITIONAL(BUILD_KFILND,       test x$KFILND  = "xkfilnd")
 ]) # LN_CONDITIONALS
@@ -1453,6 +1557,8 @@ lnet/klnds/o2iblnd/Makefile
 lnet/klnds/o2iblnd/autoMakefile
 lnet/klnds/in-kernel-o2iblnd/Makefile
 lnet/klnds/in-kernel-o2iblnd/autoMakefile
+lnet/klnds/efalnd/Makefile
+lnet/klnds/efalnd/autoMakefile
 lnet/klnds/gnilnd/Makefile
 lnet/klnds/gnilnd/autoMakefile
 lnet/klnds/socklnd/Makefile

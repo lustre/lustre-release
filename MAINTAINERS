@@ -392,6 +392,12 @@ R:	Chris Horn <chris.horn@hpe.com>
 S:	Supported
 F:	lnet/klnds/socklnd/
 
+Lustre Networking KEFALND
+R:	Yonatan Nachum <ynachum@amazon.com>
+R:	Michael Margolin <mrgolin@amazon.com>
+S:	Supported
+F:	lnet/klnds/efalnd/
+
 Lustre Nodemap
 R:	Sebastien Buisson <sbuisson@whamcloud.com>
 S:	Supported

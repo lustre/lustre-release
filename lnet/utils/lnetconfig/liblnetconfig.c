@@ -1703,7 +1703,10 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 
 	/* look at the other interfaces */
 	list_for_each_entry(intf, &nw->nw_intflist, intf_on_network) {
-		if (LNET_NETTYP(nw->nw_id) == PTL4LND) {
+		if (LNET_NETTYP(nw->nw_id) == EFALND) {
+			(*nids)[i] = LNET_MKNID(nw->nw_id, LNET_ADDR_ANY);
+			i++;
+		} else if (LNET_NETTYP(nw->nw_id) == PTL4LND) {
 			/* handle LNDs with numeric interface name */
 			num = strtoul(intf->intf_name, &endp, 0);
 			if (endp == intf->intf_name || *endp != '\0') {
@@ -2513,6 +2516,7 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 		       int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_config_ni data;
+	struct lnet_dlc_intf_descr *intf;
 	int rc = LUSTRE_CFG_RC_NO_ERR, i;
 	char err_str[LNET_MAX_STR_LEN * 2] = "\"success\"";
 	lnet_nid_t *nids = NULL;
@@ -2563,16 +2567,38 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 		nnids = 1;
 	}
 
-	for (i = 0; i < nnids; i++) {
-		LIBCFS_IOC_INIT_V2(data, lic_cfg_hdr);
-		data.lic_nid = nids[i];
+	if (LNET_NETTYP(nw_descr->nw_id) == EFALND) {
+		list_for_each_entry(intf, &nw_descr->nw_intflist, intf_on_network) {
+			LIBCFS_IOC_INIT_V2(data, lic_cfg_hdr);
+			data.lic_nid = LNET_MKNID(nw_descr->nw_id,
+						  LNET_ADDR_ANY);
+			strncpy(data.lic_ni_intf, intf->intf_name,
+				LNET_MAX_STR_LEN);
 
-		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_LOCAL_NI, &data);
-		if (rc < 0) {
-			rc = -errno;
-			snprintf(err_str,
-				sizeof(err_str),
-				"\"cannot del network: %s\"", strerror(errno));
+			rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_LOCAL_NI,
+				     &data);
+			if (rc < 0) {
+				rc = -errno;
+				snprintf(err_str,
+					 sizeof(err_str),
+					 "\"cannot del network: %s\"",
+					 strerror(errno));
+			}
+		}
+	} else {
+		for (i = 0; i < nnids; i++) {
+			LIBCFS_IOC_INIT_V2(data, lic_cfg_hdr);
+			data.lic_nid = nids[i];
+
+			rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_LOCAL_NI,
+				     &data);
+			if (rc < 0) {
+				rc = -errno;
+				snprintf(err_str,
+					 sizeof(err_str),
+					 "\"cannot del network: %s\"",
+					 strerror(errno));
+			}
 		}
 	}
 

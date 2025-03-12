@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# Copyright (c) 2022-2025 Amazon and/or its affiliates. All rights reserved.
+# Use is subject to license terms.
+#
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
+if MODULES
+if BUILD_EFALND
+modulenet_DATA = kefalnd.ko
+endif
+endif
+
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+EXTRA_DIST = $(kefalnd-objs:%.o=%.c) kcompat.h efalnd.h efalnd_proto.h

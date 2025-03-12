@@ -89,6 +89,8 @@ static inline lnet_nid_t LNET_MKNID(__u32 net, __u32 addr)
 
 #define LNET_NET_ANY LNET_NIDNET(LNET_NID_ANY)
 
+#define LNET_ADDR_ANY LNET_NIDADDR(LNET_NID_ANY)
+
 static inline bool nid_is_nid4(const struct lnet_nid *nid)
 {
 	return NID_ADDR_BYTES(nid) == 4;

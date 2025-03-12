@@ -67,6 +67,16 @@ lustre_o2iblnd_show_tun(struct cYAML *lndparams,
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
+static int
+lustre_efalnd_show_tun(struct cYAML *lndparams,
+		       struct lnet_ioctl_config_efalnd_tunables *lnd_cfg)
+{
+	if (cYAML_create_number(lndparams, "nqps",
+				lnd_cfg->lnd_nqps) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
 
 static int
 lustre_socklnd_show_tun(struct cYAML *lndparams,
@@ -177,6 +187,9 @@ lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 	if (net_type == O2IBLND)
 		rc = lustre_o2iblnd_show_tun(lnd_tunables,
 					     &lnd->lnd_tun_u.lnd_o2ib);
+	else if (net_type == EFALND)
+		rc = lustre_efalnd_show_tun(lnd_tunables,
+					    &lnd->lnd_tun_u.lnd_efa);
 	else if (net_type == SOCKLND)
 		rc = lustre_socklnd_show_tun(lnd_tunables,
 					     &lnd->lnd_tun_u.lnd_sock);
@@ -279,6 +292,21 @@ yaml_extract_kfi_tun(struct cYAML *tree,
 #endif
 
 static void
+yaml_extract_efa_tun(struct cYAML *tree,
+		     struct lnet_ioctl_config_efalnd_tunables *lnd_cfg)
+{
+	struct cYAML *lndparams = NULL;
+	struct cYAML *nqps = NULL;
+
+	lndparams = cYAML_get_object_item(tree, "lnd tunables");
+	if (!lndparams)
+		return;
+
+	nqps = cYAML_get_object_item(lndparams, "nqps");
+	lnd_cfg->lnd_nqps = (nqps) ? nqps->cy_valueint : 0;
+}
+
+static void
 yaml_extract_sock_tun(struct cYAML *tree,
 			 struct lnet_ioctl_config_socklnd_tunables *lnd_cfg)
 {
@@ -307,6 +335,9 @@ lustre_yaml_extract_lnd_tunables(struct cYAML *tree,
 	if (net_type == O2IBLND)
 		yaml_extract_o2ib_tun(tree,
 				      &tun->lnd_tun_u.lnd_o2ib);
+	else if (net_type == EFALND)
+		yaml_extract_efa_tun(tree,
+				      &tun->lnd_tun_u.lnd_efa);
 	else if (net_type == SOCKLND)
 		yaml_extract_sock_tun(tree,
 				      &tun->lnd_tun_u.lnd_sock);
