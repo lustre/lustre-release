@@ -23923,6 +23923,34 @@ test_230c() {
 			error "$file is not on MDT${MDTIDX}"
 	done
 
+	if (($MDS1_VERSION >= $(version_code 2.16.50) )); then
+		echo "Migrate a dir with an open file"
+		touch $migrate_dir/foo
+		local foo_fid=$($LFS path2fid $migrate_dir/foo)
+		$MULTIOP $migrate_dir/foo o_c &
+		local bg_pid=$!
+		sleep 1
+
+		$LFS migrate -m 0 $migrate_dir || {
+			kill -USR1 $bg_pid
+			error "migrate a dir with an open file fails"
+		}
+
+		kill -USR1 $bg_pid
+		wait $bg_pid || error "multiop fails"
+
+		local foo_fid_new=$($LFS path2fid $migrate_dir/foo)
+		[[ "$foo_fid" == "$foo_fid_new" ]] ||
+			error "migrate should skip an open file $foo_fid != $foo_fid_new"
+
+		for file in $(find $migrate_dir); do
+			[[ $file == "$migrate_dir/foo" ]] && continue
+			mdt_index=$($LFS getstripe -m $file)
+			[[ "$mdt_index" == "0" ]] ||
+				error "$file is not on MDT0"
+		done
+	fi
+
 	rm -rf $DIR/$tdir || error "rm dir failed after migration"
 }
 run_test 230c "check directory accessiblity if migration failed"

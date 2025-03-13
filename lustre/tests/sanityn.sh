@@ -5231,22 +5231,42 @@ test_80a() {
 
 	cp /etc/passwd $DIR1/$tdir/$tfile
 
-	#migrate open file should fails
+	# attempt to migrate an open file
 	multiop_bg_pause $DIR2/$tdir/$tfile O_c || error "open $file failed"
 	pid=$!
 	# give multiop a chance to open
 	sleep 1
 
-	$LFS migrate -m $MDTIDX $DIR1/$tdir &&
-		error "migrate open files should failed with open files"
+	local open_file_migrate=false
+	(($MDS1_VERSION >= $(version_code 2.16.50) )) && open_file_migrate=true
 
-	kill -USR1 $pid
+	if $open_file_migrate; then
+		local oldfid=$($LFS path2fid $DIR1/$tdir/$tfile)
 
-	$LFS migrate -m $MDTIDX $DIR1/$tdir ||
+		$LFS migrate -m $MDTIDX $DIR1/$tdir ||
+			error "migrate open files should not fail"
+
+		kill -USR1 $pid
+
+		local newfid=$($LFS path2fid $DIR1/$tdir/$tfile)
+
+		[[ "$oldfid" == "$newfid" ]] ||
+			error "FID of the open file changed from $oldfid to $newfid"
+
+	else
+		$LFS migrate -m $MDTIDX $DIR1/$tdir &&
+			error "migrate open files should failed with open files"
+
+		kill -USR1 $pid
+
+		$LFS migrate -m $MDTIDX $DIR1/$tdir ||
 			error "migrate remote dir error"
+	fi
 
 	echo "Finish migration, then checking.."
 	for file in $(find $DIR1/$tdir); do
+		$open_file_migrate && [[ "$file" == "$DIR1/$tdir/$tfile" ]] &&
+			continue
 		mdt_index=$($LFS getstripe -m $file)
 		[ $mdt_index == $MDTIDX ] ||
 			error "$file is not on MDT${MDTIDX}"

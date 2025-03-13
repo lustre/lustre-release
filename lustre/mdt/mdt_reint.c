@@ -2434,15 +2434,20 @@ lock_parent:
 	if (info->mti_spec.sp_migrate_close) {
 		/* try to hold open_sem so that nobody else can open the file */
 		if (!down_write_trylock(&sobj->mot_open_sem)) {
-			/* close anyway */
-			mdd_migrate_close(info, sobj);
-			GOTO(unlock_source, rc = -EBUSY);
+			/* migrate only dentry */
+			if (!info->mti_spec.sp_migrate_nsonly)
+				CWARN("%s: "DFID"/%s is open, migrate only dentry\n",
+				      mdt2obd_dev(mdt)->obd_name,
+				      PFID(mdt_object_fid(spobj)),
+				      rr->rr_name.ln_name);
+			info->mti_spec.sp_migrate_nsonly = 1;
+
 		} else {
 			open_sem_locked = true;
-			rc = mdd_migrate_close(info, sobj);
-			if (rc && rc != -ESTALE)
-				GOTO(unlock_open_sem, rc);
 		}
+		rc = mdd_migrate_close(info, sobj);
+		if (rc && rc != -ESTALE)
+			GOTO(unlock_open_sem, rc);
 	}
 
 	tobj = mdt_object_find(env, mdt, rr->rr_fid2);

@@ -3750,13 +3750,14 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 				    struct mdd_object *tobj,
 				    const struct lu_attr *spattr,
 				    const struct lu_attr *tpattr,
-				    const struct lu_attr *attr)
+				    const struct lu_attr *attr,
+				    bool nsonly)
 {
 	int rc;
 
 	ENTRY;
 
-	if (!mdd_object_remote(sobj)) {
+	if (!nsonly && !mdd_object_remote(sobj)) {
 		mdd_read_lock(env, sobj, DT_SRC_CHILD);
 		if (sobj->mod_count > 0) {
 			CDEBUG(D_INFO, "%s: "DFID" is opened, count %d\n",
@@ -4187,11 +4188,10 @@ static int mdd_migrate_linkea_prepare(const struct lu_env *env,
 	LASSERT(ldata->ld_leh != NULL);
 
 	/*
-	 * If linkEA is overflow, it means there are some unknown name entries
-	 * under unknown parents, which will prevent the migration.
+	 * If linkEA is overflow, switch to ns-only migrate
 	 */
 	if (unlikely(ldata->ld_leh->leh_overflow_time))
-		RETURN(-EOVERFLOW);
+		RETURN(+EOVERFLOW);
 
 	rc = mdd_fld_lookup(env, mdd, mdd_object_fid(sobj), &source_mdt_index);
 	if (rc)
@@ -4692,7 +4692,17 @@ retry:
 		RETURN(rc);
 
 	rc = mdd_migrate_sanity_check(env, mdd, spobj, tpobj, sobj, tobj,
-				      spattr, tpattr, attr);
+				      spattr, tpattr, attr,
+				      spec->sp_migrate_nsonly);
+	if (rc == -EBUSY && !spec->sp_migrate_nsonly) {
+		spec->sp_migrate_nsonly = 1;
+		CWARN("%s: "DFID"/%s is open, migrate only dentry\n",
+		      mdd2obd_dev(mdd)->obd_name, PFID(mdd_object_fid(spobj)),
+		      sname->ln_name);
+		rc = mdd_migrate_sanity_check(env, mdd, spobj, tpobj, sobj,
+					      tobj, spattr, tpattr, attr,
+					      spec->sp_migrate_nsonly);
+	}
 	if (rc)
 		RETURN(rc);
 

@@ -4813,7 +4813,21 @@ test_29c()
 		error "(2) Fail to hard link"
 
 	cancel_lru_locks mdc
-	if [ $MDSCOUNT -ge 2 ]; then
+
+	local linked_file_migrate=false
+	(( $MDS1_VERSION >= $(version_code 2.16.50) )) &&
+		linked_file_migrate=true
+
+	if (( $MDSCOUNT >= 2 )) && $linked_file_migrate; then
+		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null ||
+			error "(3.1) Migrate should succeed"
+
+		echo "The object with linkEA overflow should NOT be migrated"
+		local newfid=$($LFS path2fid $DIR/$tdir/guard/f0)
+		[ "$newfid" == "$oldfid" ] ||
+			error "(3.2) The file with overflowed LinkEA should not migrate: $newfid != $oldfid"
+	fi
+	if (( $MDSCOUNT >= 2 )) && ! $linked_file_migrate; then
 		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null &&
 			error "(3.1) Migrate should fail"
 
@@ -4828,7 +4842,18 @@ test_29c()
 	echo "Remove 100 hard links to save space for the missed linkEA entries"
 	unlinkmany $DIR/$tdir/foo/ttttttttttt 100 || error "(4) Fail to unlink"
 
-	if [ $MDSCOUNT -ge 2 ]; then
+	if (( $MDSCOUNT >= 2 )) && $linked_file_migrate; then
+		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null ||
+			error "(5.1) Migrate should succeed"
+
+		# The overflow timestamp is still there, so migration
+		# should not migrate the file with LinkEA overflow timestamp
+		# but migrate only name
+		local newfid=$($LFS path2fid $DIR/$tdir/guard/f0)
+		[ "$newfid" == "$oldfid" ] ||
+			error "(5.2) The file should not migrate: $newfid != $oldfid"
+	fi
+	if (( $MDSCOUNT >= 2 )) && ! $linked_file_migrate; then
 		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null &&
 			error "(5.1) Migrate should fail"
 
