@@ -196,7 +196,7 @@ int lov_fini_statfs_set(struct lov_request_set *set)
 }
 
 static void
-lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
+lov_statfs_update(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 		  int success)
 {
 	int shift = 0, quit = 0;
@@ -265,6 +265,9 @@ lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 		 */
 		LOV_SUM_MAX(osfs->os_files, lov_sfs->os_files);
 		LOV_SUM_MAX(osfs->os_ffree, lov_sfs->os_ffree);
+		osfs->os_namelen = min(osfs->os_namelen, lov_sfs->os_namelen);
+		osfs->os_maxbytes = min(osfs->os_maxbytes,
+					lov_sfs->os_maxbytes);
 	}
 }
 
@@ -313,7 +316,7 @@ static int cb_statfs_update(void *cookie, int rc)
 	spin_unlock(&tgtobd->obd_osfs_lock);
 
 out_update:
-	lov_update_statfs(osfs, lov_sfs, success);
+	lov_statfs_update(osfs, lov_sfs, success);
 	lov_tgts_putref(lovobd);
 out:
 	RETURN(0);

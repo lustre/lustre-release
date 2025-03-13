@@ -301,7 +301,7 @@ static ssize_t kbytesfree_show(struct kobject *kobj, struct attribute *attr,
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		return sprintf(buf, "%llu\n", result);
+		return scnprintf(buf, PAGE_SIZE, "%llu\n", result);
 	}
 
 	return rc;
@@ -326,7 +326,7 @@ static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		return sprintf(buf, "%llu\n", result);
+		return scnprintf(buf, PAGE_SIZE, "%llu\n", result);
 	}
 
 	return rc;
@@ -345,7 +345,7 @@ static ssize_t filestotal_show(struct kobject *kobj, struct attribute *attr,
 			ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 			OBD_STATFS_NODELAY);
 	if (!rc)
-		return sprintf(buf, "%llu\n", osfs.os_files);
+		return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_files);
 
 	return rc;
 }
@@ -363,11 +363,47 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 			ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 			OBD_STATFS_NODELAY);
 	if (!rc)
-		return sprintf(buf, "%llu\n", osfs.os_ffree);
+		return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_ffree);
 
 	return rc;
 }
 LUSTRE_RO_ATTR(filesfree);
+
+static ssize_t maxbytes_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
+			ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
+			OBD_STATFS_NODELAY);
+	if (!rc)
+		return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_maxbytes);
+
+	return rc;
+}
+LUSTRE_RO_ATTR(maxbytes);
+
+static ssize_t namelen_max_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
+			ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
+			OBD_STATFS_NODELAY);
+	if (!rc)
+		return scnprintf(buf, PAGE_SIZE, "%u\n", osfs.os_namelen);
+
+	return rc;
+}
+LUSTRE_RO_ATTR(namelen_max);
 
 ssize_t conn_uuid_show(struct kobject *kobj, struct attribute *attr, char *buf)
 {
@@ -1038,11 +1074,13 @@ static const struct attribute *obd_def_uuid_attrs[] = {
 
 static const struct attribute *obd_def_attrs[] = {
 	&lustre_attr_blocksize.attr,
+	&lustre_attr_filesfree.attr,
+	&lustre_attr_filestotal.attr,
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
 	&lustre_attr_kbytesavail.attr,
-	&lustre_attr_filestotal.attr,
-	&lustre_attr_filesfree.attr,
+	&lustre_attr_maxbytes.attr,
+	&lustre_attr_namelen_max.attr,
 	&lustre_attr_uuid.attr,
 	NULL,
 };

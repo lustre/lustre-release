@@ -1295,6 +1295,10 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 			osfs->os_ffree += temp->os_ffree;
 			osfs->os_files += temp->os_files;
 			osfs->os_granted += temp->os_granted;
+			osfs->os_namelen = min(osfs->os_namelen,
+					       temp->os_namelen);
+			osfs->os_maxbytes = min(osfs->os_maxbytes,
+						temp->os_maxbytes);
 		}
 	}
 
