@@ -1600,6 +1600,8 @@ static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
 		sfs->os_files += ost_sfs.os_files;
 		sfs->os_ffree += ost_sfs.os_ffree;
 		lod_statfs_sum(sfs, &ost_sfs, &bs);
+		/* only update MDT os_namelen, OSTs do not store filenames */
+		sfs->os_namelen = min(sfs->os_namelen, ost_sfs.os_namelen);
 	}
 	lod_putref(lod, &lod->lod_mdt_descs);
 
@@ -1628,8 +1630,10 @@ static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
 		ost_ffree += ost_sfs.os_ffree;
 		ost_sfs.os_bavail += ost_sfs.os_granted;
 		lod_statfs_sum(sfs, &ost_sfs, &bs);
-		LASSERTF(bs == ost_sfs.os_bsize, "%d != %d\n",
-			(int)sfs->os_bsize, (int)ost_sfs.os_bsize);
+		LASSERTF(bs == ost_sfs.os_bsize, "%u != %u\n",
+			 sfs->os_bsize, ost_sfs.os_bsize);
+		/* only update OST os_maxbytes, DoM files are small */
+		sfs->os_maxbytes = min(sfs->os_maxbytes, ost_sfs.os_maxbytes);
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
 	sfs->os_state |= OS_STATFS_SUM;

@@ -2563,7 +2563,7 @@ int ll_setattr(struct mnt_idmap *map, struct dentry *de, struct iattr *attr)
 int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 		       u32 flags)
 {
-	struct obd_statfs obd_osfs = { 0 };
+	struct obd_statfs ost_osfs = { 0 };
 	time64_t max_age;
 	int rc;
 
@@ -2585,28 +2585,31 @@ int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 	if (osfs->os_state & OS_STATFS_SUM)
 		GOTO(out, rc);
 
-	rc = obd_statfs(NULL, sbi->ll_dt_exp, &obd_osfs, max_age, flags);
+	rc = obd_statfs(NULL, sbi->ll_dt_exp, &ost_osfs, max_age, flags);
 	if (rc) /* Possibly a filesystem with no OSTs.  Report MDT totals. */
 		GOTO(out, rc = 0);
 
 	CDEBUG(D_SUPER, "OSC blocks %llu/%llu objects %llu/%llu\n",
-	       obd_osfs.os_bavail, obd_osfs.os_blocks, obd_osfs.os_ffree,
-	       obd_osfs.os_files);
+	       ost_osfs.os_bavail, ost_osfs.os_blocks, ost_osfs.os_ffree,
+	       ost_osfs.os_files);
 
-	osfs->os_bsize = obd_osfs.os_bsize;
-	osfs->os_blocks = obd_osfs.os_blocks;
-	osfs->os_bfree = obd_osfs.os_bfree;
-	osfs->os_bavail = obd_osfs.os_bavail;
+	osfs->os_bsize = ost_osfs.os_bsize;
+	osfs->os_blocks = ost_osfs.os_blocks;
+	osfs->os_bfree = ost_osfs.os_bfree;
+	osfs->os_bavail = ost_osfs.os_bavail;
+	/* do not update MDT os_namelen, OSTs do not store filenames */
+	/* only update from OST os_maxbytes, DoM files are small */
+	osfs->os_maxbytes = ost_osfs.os_maxbytes;
 
 	/* If we have _some_ OSTs, but don't have as many free objects on the
 	 * OSTs as inodes on the MDTs, reduce the reported number of inodes
 	 * to compensate, so that the "inodes in use" number is correct.
 	 * This should be kept in sync with lod_statfs() behaviour.
 	 */
-	if (obd_osfs.os_files && obd_osfs.os_ffree < osfs->os_ffree) {
+	if (ost_osfs.os_files && ost_osfs.os_ffree < osfs->os_ffree) {
 		osfs->os_files = (osfs->os_files - osfs->os_ffree) +
-				 obd_osfs.os_ffree;
-		osfs->os_ffree = obd_osfs.os_ffree;
+				 ost_osfs.os_ffree;
+		osfs->os_ffree = ost_osfs.os_ffree;
 	}
 
 out:

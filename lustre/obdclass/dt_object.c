@@ -1067,7 +1067,7 @@ static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
 	if (!lu->ld_obd)
 		return -ENODEV;
 
-	return sprintf(buf, "%s\n", lu->ld_obd->obd_uuid.uuid);
+	return scnprintf(buf, PAGE_SIZE, "%s\n", lu->ld_obd->obd_uuid.uuid);
 }
 LUSTRE_RO_ATTR(uuid);
 
@@ -1083,7 +1083,7 @@ static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	return sprintf(buf, "%u\n", (unsigned) osfs.os_bsize);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", osfs.os_bsize);
 }
 LUSTRE_RO_ATTR(blocksize);
 
@@ -1107,7 +1107,7 @@ static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
 	while (blk_size >>= 1)
 		result <<= 1;
 
-	return sprintf(buf, "%llu\n", result);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", result);
 }
 LUSTRE_RO_ATTR(kbytestotal);
 
@@ -1131,7 +1131,7 @@ static ssize_t kbytesfree_show(struct kobject *kobj, struct attribute *attr,
 	while (blk_size >>= 1)
 		result <<= 1;
 
-	return sprintf(buf, "%llu\n", result);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", result);
 }
 LUSTRE_RO_ATTR(kbytesfree);
 
@@ -1155,7 +1155,7 @@ static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
 	while (blk_size >>= 1)
 		result <<= 1;
 
-	return sprintf(buf, "%llu\n", result);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", result);
 }
 LUSTRE_RO_ATTR(kbytesavail);
 
@@ -1171,7 +1171,7 @@ static ssize_t filestotal_show(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	return sprintf(buf, "%llu\n", osfs.os_files);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_files);
 }
 LUSTRE_RO_ATTR(filestotal);
 
@@ -1187,9 +1187,41 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	return sprintf(buf, "%llu\n", osfs.os_ffree);
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_ffree);
 }
 LUSTRE_RO_ATTR(filesfree);
+
+static ssize_t maxbytes_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_maxbytes);
+}
+LUSTRE_RO_ATTR(maxbytes);
+
+static ssize_t namelen_max_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", osfs.os_namelen);
+}
+LUSTRE_RO_ATTR(namelen_max);
 
 static ssize_t statfs_state_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
@@ -1209,11 +1241,13 @@ LUSTRE_RO_ATTR(statfs_state);
 
 static const struct attribute *dt_def_attrs[] = {
 	&lustre_attr_blocksize.attr,
+	&lustre_attr_filestotal.attr,
+	&lustre_attr_filesfree.attr,
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
 	&lustre_attr_kbytesavail.attr,
-	&lustre_attr_filestotal.attr,
-	&lustre_attr_filesfree.attr,
+	&lustre_attr_maxbytes.attr,
+	&lustre_attr_namelen_max.attr,
 	&lustre_attr_statfs_state.attr,
 	&lustre_attr_uuid.attr,
 	NULL,

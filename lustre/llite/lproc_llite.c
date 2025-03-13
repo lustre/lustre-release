@@ -267,6 +267,38 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(filesfree);
 
+static ssize_t maxbytes_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", osfs.os_maxbytes);
+}
+LUSTRE_RO_ATTR(maxbytes);
+
+static ssize_t namelen_max_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", osfs.os_namelen);
+}
+LUSTRE_RO_ATTR(namelen_max);
+
 static ssize_t statfs_state_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
 {
@@ -2468,10 +2500,13 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_uuid.attr,
 	&lustre_attr_checksums.attr,
 	&lustre_attr_checksum_pages.attr,
+	&lustre_attr_max_easize.attr,
 	&lustre_attr_max_read_ahead_mb.attr,
 	&lustre_attr_max_read_ahead_per_file_mb.attr,
 	&lustre_attr_max_read_ahead_whole_mb.attr,
 	&lustre_attr_max_read_ahead_async_active.attr,
+	&lustre_attr_maxbytes.attr,
+	&lustre_attr_namelen_max.attr,
 	&lustre_attr_read_ahead_async_file_threshold_mb.attr,
 	&lustre_attr_read_ahead_range_kb.attr,
 	&lustre_attr_stat_blocksize.attr,
@@ -2491,7 +2526,6 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_statfs_max_age.attr,
 	&lustre_attr_statfs_project.attr,
 	&lustre_attr_statfs_state.attr,
-	&lustre_attr_max_easize.attr,
 	&lustre_attr_default_easize.attr,
 	&lustre_attr_xattr_cache.attr,
 	&lustre_attr_intent_mkdir.attr,

@@ -10752,7 +10752,7 @@ test_64h() {
 
 	save_lustre_params client "osc.*OST0000*.grant_shrink" > $p
 	save_lustre_params client "osc.*OST0000*.grant_shrink_interval" >> $p
-	stack_trap "restore_lustre_params < $p; rm -f $save" EXIT
+	stack_trap "restore_lustre_params < $p; rm -f $p" EXIT
 	$LCTL set_param osc.*OST0000*.grant_shrink=1
 	$LCTL set_param osc.*OST0000*.grant_shrink_interval=10
 
@@ -12142,12 +12142,28 @@ test_79() { # bug 12743
 	local dffree=$(($dftotal - $dfused))
 	local allowance=$((64 * $OSTCOUNT))
 
+	$LFS df $MOUNT
+	echo ${string[*]}
+
 	(( dftotal >= bktotal - allowance && dftotal <= bktotal + allowance)) ||
 		error "df total($dftotal) mismatch OST total($bktotal)"
 	(( dffree >= bkfree - allowance && dffree <= bkfree + allowance )) ||
 		error "df free($dffree) mismatch OST free($bkfree)"
 	(( dfavail >= bkavail - allowance && dfavail <= bkavail + allowance)) ||
 		error "df avail($dfavail) mismatch OST avail($bkavail)"
+
+	$LCTL get_param *.$FSNAME-*.{maxbytes,namelen_max}
+	(( $MDS1_VERSION < $(version_code 2.16.52-70) )) ||
+		do_nodes $(mdts_nodes) \
+			$LCTL get_param *.$FSNAME-*.{maxbytes,namelen_max}
+	(( $OST1_VERSION < $(version_code 2.16.52-70) )) ||
+		do_nodes $(osts_nodes) \
+			$LCTL get_param *.$FSNAME-*.{maxbytes,namelen_max}
+	local dfnamelen=$(stat -f -c %l $MOUNT)
+	local lnamelen=($($LCTL get_param -n llite.$FSNAME-*.namelen_max))
+
+	(( $dfnamelen == $lnamelen )) ||
+		error "df namelen($dfnamelen) != llite namelen($lnamelen)"
 }
 run_test 79 "df report consistency check"
 
