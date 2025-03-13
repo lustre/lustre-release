@@ -20,7 +20,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .IR N ]
 .br
 .RB [[ ! ]
-.BR --btime | -B
+.BR --btime | -B | --crtime
 .RB [ +- ]\c
 .IR N [ smhdwy ]]
 .br
@@ -229,7 +229,7 @@ or
 .BR E bi-bytes
 if that suffix is given.
 .TP
-.BR -B ", " --btime ", " --Btime
+.BR -B ", " --btime ", " --Btime ", " --crtime
 File was created
 .IR N *24
 hours ago, see

@@ -5691,6 +5691,7 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'b',	.name = "blocks",	.has_arg = required_argument },
 	{ .val = 'B',	.name = "btime",	.has_arg = required_argument },
 	{ .val = 'B',	.name = "Btime",	.has_arg = required_argument },
+	{ .val = 'B',	.name = "crtime",	.has_arg = required_argument },
 	{ .val = LFS_COMP_COUNT_OPT,
 			.name = "comp-count",	.has_arg = required_argument },
 	{ .val = LFS_COMP_COUNT_OPT,
