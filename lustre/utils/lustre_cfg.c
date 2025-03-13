@@ -713,11 +713,14 @@ static int yaml_get_device_index(char *source)
 	if (rc == 0)
 		goto error;
 
-	yaml_scalar_event_initialize(&event, NULL,
+	rc = yaml_scalar_event_initialize(&event, NULL,
 				     (yaml_char_t *)YAML_STR_TAG,
 				     (yaml_char_t *)source,
 				     strlen(source), 1, 0,
 				     YAML_PLAIN_SCALAR_STYLE);
+	if (rc == 0)
+		goto error;
+
 	rc = yaml_emitter_emit(&request, &event);
 	if (rc == 0)
 		goto error;

@@ -1551,7 +1551,7 @@ int jt_obd_setattr(int argc, char **argv)
 
 	memset(&data, 0, sizeof(data));
 	data.ioc_dev = cur_device;
-	if (argc != 2)
+	if (argc != 3)
 		return CMD_HELP;
 
 	objid = strtoull(argv[1], &end, 0);
