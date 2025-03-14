@@ -402,14 +402,19 @@ int lustre_start_mgc(struct super_block *sb)
 	/* Add the primary NIDs for the MGS */
 	i = 0;
 	if (IS_SERVER(lsi)) {
+		char *nidnet = lsi->lsi_lmd->lmd_nidnet;
+
 		/* All mgsnode are listed in lmd_mgs at this moment */
 		ptr = lsi->lsi_lmd->lmd_mgs;
 		CDEBUG(D_MOUNT, "mgs NIDs %s.\n", ptr);
 		if (IS_MGS(lsi)) {
-			/* Use local NIDs (including LO) */
 			struct lnet_processid id;
 
+			/* Use local NIDs (including LO) */
 			while ((rc = LNetGetId(i++, &id, true)) != -ENOENT) {
+				if (nidnet && libcfs_str2net(nidnet) !=
+					      LNET_NID_NET(&id.nid))
+					continue;
 				rc = do_lcfg_nid(mgcname, &id.nid,
 						LCFG_ADD_UUID, nidstr);
 			}
@@ -425,6 +430,10 @@ int lustre_start_mgc(struct super_block *sb)
 			 * by commas.
 			 */
 			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+				if (nidnet && libcfs_str2net(nidnet) !=
+					      LNET_NID_NET(&nid))
+					continue;
+
 				rc = do_lcfg_nid(mgcname, &nid,
 						 LCFG_ADD_UUID, nidstr);
 				if (rc == 0)

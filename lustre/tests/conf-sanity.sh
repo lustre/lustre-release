@@ -6575,6 +6575,36 @@ test_73b() {
 }
 run_test 73b "Large failnode NID list in mountdata"
 
+cleanup_73c() {
+	LOAD_MODULES_REMOTE=true cleanup
+}
+
+test_73c() {
+	(( $OST1_VERSION >= $(version_code 2.16.54) )) ||
+		skip "Need OST version at least 2.16.54 to don't LBUG"
+
+	cleanup
+	LOAD_MODULES_REMOTE=true load_modules
+
+	INTERFACES=( $(lnet_if_list) )
+	local inf=${INTERFACES[0]}
+
+	do_facet ost1 "$LNETCTL lnet configure" ||
+		error "unable to configure lnet on ost1"
+
+	stack_trap "cleanup_73c"
+
+	for ((n = 100; n <= 135; n++)); do
+		do_facet ost1 "$LNETCTL net add --net ${NETTYPE}$n --if $inf" ||
+			skip "unable to configure net #$n on ost1"
+	done
+
+	echo "restart with 35 nets"
+	start_mgsmds
+	start_ost || error "unable to start ost1"
+}
+run_test 73c "Server mount doesn't fail with > 32 nets"
+
 test_73d() { #LU-18896
 	(( $OST1_VERSION >= $(version_code 2.16.53) )) ||
 		skip "need OST >= 2.16.53 for LU-18896 fix"

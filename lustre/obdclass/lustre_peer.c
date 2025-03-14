@@ -61,7 +61,7 @@ int class_add_uuid(const char *uuid, struct lnet_nid *nid)
 {
 	struct uuid_nid_data *data, *entry;
 	int found = 0;
-	int rc;
+	int rc = 0;
 
 	LASSERT(nid->nid_type != 0);  /* valid newconfig NID is never zero */
 
@@ -87,7 +87,10 @@ int class_add_uuid(const char *uuid, struct lnet_nid *nid)
 					break;
 
 			if (i == entry->un_nid_count) {
-				LASSERT(entry->un_nid_count < MTI_NIDS_MAX);
+				if (i == MTI_NIDS_MAX) {
+					rc = -EOVERFLOW;
+					break;
+				}
 				entry->un_nids[entry->un_nid_count++] = *nid;
 			}
 			break;
@@ -96,6 +99,12 @@ int class_add_uuid(const char *uuid, struct lnet_nid *nid)
 	if (!found)
 		list_add(&data->un_list, &g_uuid_list);
 	spin_unlock(&g_uuid_lock);
+
+	if (rc) {
+		CWARN("%s: can't add NID %s: rc = %d\n", uuid,
+		       libcfs_nidstr(nid), rc);
+		/* continue with already added NIDs */
+	}
 
 	if (found) {
 		CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid,
