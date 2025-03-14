@@ -27,7 +27,7 @@
 
 #include "fid_internal.h"
 
-/**
+/*
  * A cluster-wide range from which fid-sequences are granted to servers and
  * then clients.
  *

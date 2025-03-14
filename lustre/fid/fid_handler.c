@@ -77,12 +77,21 @@ static inline void range_alloc(struct lu_seq_range *to,
 }
 
 /**
+ * __seq_server_alloc_super() - allocate new super sequence
+ * @seq: server sequence from which the super sequence will be derived
+ * @out: (Output Param) store the returned super seq range
+ * @env: execution environment
+ *
  * On controller node, allocate new super sequence for regular sequence server.
  * As this super sequence controller, this node suppose to maintain fld
- * and update index.
- * \a out range always has currect mds node number of requester.
+ * and update index. @out range always has correct mds node number of requester
+ * (Super sequence is pool of sequence number. Server sequence is a subset of
+ *  sequence number allocated from super sequence pool)
+ *
+ * Return:
+ * * %0: Success
+ * * %negative: Failure
  */
-
 static int __seq_server_alloc_super(struct lu_server_seq *seq,
 				    struct lu_seq_range *out,
 				    const struct lu_env *env)
@@ -233,17 +242,17 @@ static int range_alloc_set(const struct lu_env *env,
 }
 
 /**
- * Check if the sequence server has sequence avaible
+ * seq_server_check_and_alloc_super() - Check if the sequence server has
+ * sequence available
+ * @env: execution environment
+ * @seq: server sequence
  *
- * Check if the sequence server has sequence avaible, if not, then
+ * Check if the sequence server has sequence available, if not, then
  * allocating super sequence from sequence manager (MDT0).
  *
- * \param[in] env	execution environment
- * \param[in] seq	server sequence
- *
- * \retval		negative errno if allocating new sequence fails
- * \retval		0 if there is enough sequence or allocating
- *                      new sequence succeeds
+ * Return:
+ * * %0: if there is enough sequence or allocating new sequence succeeds
+ * * %-ERRNO: if allocating new sequence fails
  */
 int seq_server_check_and_alloc_super(const struct lu_env *env,
 				     struct lu_server_seq *seq)

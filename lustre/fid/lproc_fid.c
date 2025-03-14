@@ -28,7 +28,7 @@
 
 /* Format: [0x64BIT_INT - 0x64BIT_INT] + 32 bytes just in case */
 #define MAX_FID_RANGE_STRLEN (32 + 2 * 2 * sizeof(__u64))
-/**
+/*
  * Reduce the SEQ range allocated to a node to a strict subset of the range
  * currently-allocated SEQ range.  If the specified range is "clear", then
  * drop all allocated sequences and request a new one from the master.

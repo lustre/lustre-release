@@ -231,14 +231,14 @@ static int seq_client_alloc_seq(const struct lu_env *env,
 }
 
 /**
- * Allocate the whole non-used seq to the caller.
+ * seq_client_get_seq() - Allocate the whole non-used seq to the caller
+ * @env: pointer to the thread context
+ * @seq: pointer to the client sequence manager
+ * @seqnr: to hold the new allocated sequence
  *
- * \param[in] env	pointer to the thread context
- * \param[in,out] seq	pointer to the client sequence manager
- * \param[out] seqnr	to hold the new allocated sequence
- *
- * \retval		0 for new sequence allocated.
- * \retval		Negative error number on failure.
+ * Return:
+ * * %0: Success (for new sequence allocated)
+ * * %-ERRNO: On Failure
  */
 int seq_client_get_seq(const struct lu_env *env,
 		       struct lu_client_seq *seq, u64 *seqnr)
@@ -275,16 +275,17 @@ int seq_client_get_seq(const struct lu_env *env,
 EXPORT_SYMBOL(seq_client_get_seq);
 
 /**
- * Allocate new fid on passed client @seq and save it to @fid.
+ * seq_client_alloc_fid() - Allocate new FID on passed client @seq and save
+ * it to @fid.
+ * @env: pointer to the thread context
+ * @seq: pointer to the client sequence manager
+ * @fid: to hold the new allocated FID
  *
- * \param[in] env	pointer to the thread context
- * \param[in,out] seq	pointer to the client sequence manager
- * \param[out] fid	to hold the new allocated fid
- *
- * \retval		1 for notify the caller that sequence switch
- *			is performed to allow it to setup FLD for it.
- * \retval		0 for new FID allocated in current sequence.
- * \retval		Negative error number on failure.
+ * Return:
+ * * %1: notify the caller that sequence switch is performed to allow it to
+ * setup FLD for it.
+ * * %0: new FID allocated in current sequence.
+ * * %negative: On failure
  */
 int seq_client_alloc_fid(const struct lu_env *env,
 			 struct lu_client_seq *seq, struct lu_fid *fid)
