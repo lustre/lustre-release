@@ -131,6 +131,12 @@ ha_check_env()
 {
 	for ((load = 0; load < ${#ha_mpi_load_tags[@]}; load++)); do
 		local tag=${ha_mpi_load_tags[$load]}
+		if [[ x$tag == xextraprog ]]; then
+			if ! $(which "$EXTRAPROG"); then
+				ha_error $tag $EXTRAPROG not found
+				exit 1
+			fi
+		fi
 		local bin=$(echo $tag | tr '[:lower:]' '[:upper:]')
 		if [ x${!bin} = x ]; then
 			ha_error ha_mpi_loads: ${ha_mpi_loads}, $bin is not set
@@ -141,7 +147,9 @@ ha_check_env()
 
 ha_info()
 {
-	echo "$0: $(date +%H:%M:%S' '%s):" "$@"
+	local -a msg=("$@")
+
+	echo "$0: $(date +%H:%M:%S' '%s):" ${msg[@]}
 }
 
 ha_touch()
@@ -270,6 +278,9 @@ declare     ha_vmstat_dir=${VMSTATDIR:-$TMP}/$ha_test_subdir
 
 declare     ha_stop_file=$ha_tmp_dir/stop
 declare     ha_fail_file=$ha_tmp_dir/fail
+declare     ha_count_file=$ha_tmp_dir/count
+declare     ha_count_lock_file=$ha_tmp_dir/count.lock
+declare     ha_clients_free_file=$ha_tmp_dir/clients_free
 declare     ha_pm_states=$ha_tmp_dir/ha_pm_states
 declare     ha_status_file_prefix=$ha_tmp_dir/status
 declare -a  ha_status_files
@@ -309,12 +320,15 @@ declare -a  ha_victims_pair
 declare     ha_test_dir=/mnt/lustre/$(basename $0)-$$
 declare -a  ha_testdirs=(${ha_test_dirs="$ha_test_dir"})
 
+# Run NLOOPS if set != 0; if 0 (default) the tags are
+# executed defined duration for the test.
+declare     ha_nloops=${NLOOPS:=0}
+
 for ((i=0; i<${#ha_testdirs[@]}; i++)); do
-	echo I=$i ${ha_testdirs[i]}
 	ha_testdirs[i]="${ha_testdirs[i]}/$(basename $0)-$$"
-	echo i=$i ${ha_testdirs[i]}
 done
 
+declare     ha_dumplogs=${DUMPLOGS:-true}
 declare     ha_cleanup=${CLEANUP:-true}
 declare     ha_start_time=$(date +%s)
 declare     ha_expected_duration=$((60 * 60 * 24))
@@ -347,6 +361,7 @@ ha_users=(${!ha_mpiopts[@]})
 declare     ha_ior_params=${IORP:-'" -b $ior_blockSize -t 2m -w -W -T 1"'}
 declare     ha_simul_params=${SIMULP:-'" -n 10"'}
 declare     ha_mdtest_params=${MDTESTP:-'" -i 1 -n 1000"'}
+declare     ha_extraprog_params=${EXTRAPROGP:-'""'}
 declare     ha_mpirun_options=${MPIRUN_OPTIONS:-""}
 declare     ha_clients_stripe=${CLIENTSSTRIPE:-'"$STRIPEPARAMS"'}
 declare     ha_nclientsset=${NCLIENTSSET:-1}
@@ -357,17 +372,20 @@ declare     ha_racer_params=${RACERP:-"MDSCOUNT=1"}
 eval ha_params_ior=($ha_ior_params)
 eval ha_params_simul=($ha_simul_params)
 eval ha_params_mdtest=($ha_mdtest_params)
+eval ha_params_extraprog=($ha_extraprog_params)
 eval ha_stripe_clients=($ha_clients_stripe)
 
 declare ha_nparams_ior=${#ha_params_ior[@]}
 declare ha_nparams_simul=${#ha_params_simul[@]}
 declare ha_nparams_mdtest=${#ha_params_mdtest[@]}
+declare ha_nparams_extraprog=${#ha_params_extraprog[@]}
 declare ha_nstripe_clients=${#ha_stripe_clients[@]}
 
 declare -A  ha_mpi_load_cmds=(
 	[ior]="$IOR -o {}/f.ior {params}"
 	[simul]="$SIMUL {params} -d {}"
 	[mdtest]="$MDTEST {params} -d {}"
+	[extraprog]="$EXTRAPROG {params}"
 )
 
 declare racer=${RACER:-"$(dirname $0)/racer/racer.sh"}
@@ -543,6 +561,8 @@ ha_dump_logs()
 	local lock=$ha_tmp_dir/lock-dump-logs
 	local rc=0
 
+	$ha_dumplogs ||
+		{ echo "Requested to skip the logs dumping"; return 0; }
 	ha_lock "$lock"
 	ha_info "Dumping lctl log to $file"
 
@@ -570,9 +590,9 @@ ha_repeat_mpi_load()
 	local mpirunoptions=$9
 	local test_dir=${10}
 	local tag=${ha_mpi_load_tags[$load]}
-	local cmd=${ha_mpi_load_cmds[$tag]}
-	local dir=$test_dir/$client-$tag
-	local log=$ha_tmp_dir/$client-$tag
+	local cmdrun=${ha_mpi_load_cmds[$tag]}
+	local dir
+	local log
 	local rc=0
 	local rccheck=0
 	local rcprepostcmd=0
@@ -581,16 +601,20 @@ ha_repeat_mpi_load()
 	local start_time=$(date +%s)
 	local check_attrs=${ha_check_attrs//"{}"/$dir}
 
-	cmd=${cmd//"{}"/$dir}
-	cmd=${cmd//"{params}"/$parameter}
-
-	[[ -n "$ha_postcmd" ]] && ha_postcmd=${ha_postcmd//"{}"/$dir}
-	[[ -n "$ha_precmd" ]] && ha_precmd=${ha_precmd//"{}"/$dir}
-	ha_info "Starting $tag"
+	cmdrun=${cmdrun//"{params}"/$parameter}
 
 	machines="-machinefile $machines"
-	while [ ! -e "$ha_stop_file" ] && ((rc == 0)) && ((rccheck == 0)); do
-		ha_info "$client Starts: $mpiuser: $cmd" 2>&1 |  tee -a $log
+	while [ ! -e "$ha_stop_file" ] && ((rc == 0)) && ((rccheck == 0)) &&
+		( ((nr_loops < ${11})) || ((${11} == 0)) ); do
+		rcprepostcmd=0
+		local cur=$client-$tag-$nr_loops-$mpiuser
+		local log=$ha_tmp_dir/$cur
+		dir=$test_dir/$cur
+
+		cmd=${cmdrun//"{}"/$dir}
+		ha_info "$client Starts: $mpiuser: $cmd \
+			LOOP $nr_loops (from: ${11})" 2>&1 | \
+			tee -a $log
 		{
 		local mdt_index
 		if $ha_mdt_index_random && [ $ha_mdt_index -ne 0 ]; then
@@ -606,17 +630,21 @@ ha_repeat_mpi_load()
 			dir_stripe_count=$ha_dir_stripe_count
 		fi
 		if [[ -n "$ha_precmd" ]]; then
-			ha_info "$ha_precmd"
-			ha_on $client "$ha_precmd" >>"$log" 2>&1
-			rcprepostcmd=$?
+			local precmd=${ha_precmd//"{}"/$dir}
+			ha_info "precmd: $precmd"
+			ha_on $client "$precmd" >>"$log" 2>&1 ||
+				rcprepostcmd=$?
+			ha_info "rcprepostcmd: $rcprepostcmd"
 			if (( rcprepostcmd != 0 )); then
-				ha_touch stop,fail $client-$tag
+				ha_touch stop,fail $cur
 				ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
+				(( nr_loops+=1 ))
 				continue
 			fi
 		fi
 
-		ha_info "$client Creates $dir with -i$mdt_index -c$dir_stripe_count ; stripeparams: $stripeparams "
+		ha_info "$client Creates $dir with -i$mdt_index \
+			-c$dir_stripe_count ; stripeparams: $stripeparams "
 		ha_on $client $LFS mkdir -i$mdt_index -c$dir_stripe_count "$dir" &&
 		ha_on $client $LFS getdirstripe "$dir" &&
 		ha_on $client $LFS setstripe $stripeparams $dir &&
@@ -629,11 +657,12 @@ ha_repeat_mpi_load()
 			$LFS df $dir &&                                    \
 			$check_attrs " && rccheck=1
 		if [[ -n "$ha_postcmd" ]]; then
-			ha_info "$ha_postcmd"
-			ha_on $client "$ha_postcmd" >>"$log" 2>&1
-			rcprepostcmd=$?
+			local postcmd=${ha_postcmd//"{}"/$dir}
+			ha_info "$postcmd"
+			ha_on $client "$postcmd" >>"$log" 2>&1 ||
+				rcprepostcmd=$?
 			if (( rcprepostcmd != 0 )); then
-				ha_touch stop,fail $client-$tag
+				ha_touch stop,fail $cur
 				ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
 			fi
 		fi
@@ -641,40 +670,72 @@ ha_repeat_mpi_load()
 			(( mustpass != 0 )) )) ||
 			(( ((rc != 0)) && ((rccheck == 0)) && \
 			(( mustpass == 0 )) )); then
-			local suf=$(date +%s)
 			$ha_cleanup && ha_on $client rm -rf "$dir" ||
-				ha_on $client mv "$dir" "${dir}.${suf}"
+				ha_on $client mv "$dir" "${dir}.bak"
 		fi;
 		} >>"$log" 2>&1
 
-		ha_info $client: rc=$rc rccheck=$rccheck mustpass=$mustpass
+		ha_info $client: rccheck=$rccheck mustpass=$mustpass \
+			nr_loops=$nr_loops
 
 		# mustpass=0 means that failure is expected
 		if (( rccheck != 0 )); then
-			ha_touch stop,fail $client,$tag
+			ha_touch stop,fail $cur
 			ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
 		elif (( rc !=0 )); then
 			if (( mustpass != 0 )); then
-				ha_touch stop,fail $client,$tag
+				ha_touch stop,fail $cur
 				ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
 			else
 				# Ok to fail
 				rc=0
 			fi
 		elif (( mustpass == 0 )); then
-			ha_touch stop,fail $client,$tag
+			ha_touch stop,fail $cur
 			ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
 		fi
 		echo rc=$rc rccheck=$rccheck mustpass=$mustpass >"$status"
 
-		nr_loops=$((nr_loops + 1))
+		(( nr_loops+=1 ))
 	done
 
+	local stop_found="No stop file found"
+	[[ -e "$ha_stop_file" ]] &&
+		stop_found="$ha_stop_file found"
 	[ $nr_loops -ne 0 ] &&
 		avg_loop_time=$((($(date +%s) - start_time) / nr_loops))
-
-	ha_info "$tag stopped: rc=$rc mustpass=$mustpass \
+	ha_info "$client $tag ended: $stop_found: rc=$rc mustpass=$mustpass \
+		rcprepostcmd=$rcprepostcmd \
+		nr_loops=$nr_loops (from ${11}) \
 		avg loop time $avg_loop_time"
+
+	if (( ha_nloops != 0 )); then
+		flock $ha_count_lock_file sh -c \
+			"awk -i inplace -v inc=$nr_loops \
+			'{print \$1-inc'} $ha_count_file"
+		local count=$(cat $ha_count_file)
+		(( count <= 0 )) &&
+			ha_touch stop || true
+	fi
+	echo $client >> $ha_clients_free_file
+}
+
+remove_client_from_list()
+{
+	sed -i "/^$1$/d" $ha_clients_free_file 2>&1
+	ha_info "FREE clients: $(echo $(cat $ha_clients_free_file))"
+}
+
+wait_clients_free()
+{
+	local -a clients_free=($(cat $ha_clients_free_file))
+
+	ha_info "Waiting any clients free"
+	while [ ! -e "$ha_stop_file" ] &&
+		(( ${#clients_free[@]} == 0 )); do
+		sleep 60
+		clients_free=($(cat $ha_clients_free_file))
+	done
 }
 
 ha_start_mpi_loads()
@@ -690,19 +751,7 @@ ha_start_mpi_loads()
 	local -a mach
 	local mpiuser
 	local nmpi
-
-	# ha_mpi_instances defines the number of
-	# clients start mpi loads; should be <= ${#ha_clients[@]}
-	# do nothing if
-	#    ha_mpi_instances = 0
-	# or
-	#    ${#ha_mpi_load_tags[@]} =0
-	local inst=$ha_mpi_instances
-	(( inst == 0 )) || (( ${#ha_mpi_load_tags[@]} == 0 )) &&
-		ha_info "no mpi load to start" &&
-		return 0
-
-	(( inst <= ${#ha_clients[@]} )) || inst=${#ha_clients[@]}
+	local inst
 
 	# Define names for machinefiles for each client set
 	for (( n=0; n < $ha_nclientsset; n++ )); do
@@ -721,35 +770,81 @@ ha_start_mpi_loads()
 		scp $ha_machine_file* $client:$dirname
 	done
 
-	local ndir
-	for ((n = 0; n < $inst; n++)); do
-		client=${ha_clients[n]}
-		nmpi=$((n % ${#ha_users[@]}))
-		mpiuser=${ha_users[nmpi]}
-		ndir=$((n % ${#ha_testdirs[@]}))
-		test_dir=${ha_testdirs[ndir]}
-		for ((load = 0; load < ${#ha_mpi_load_tags[@]}; load++)); do
-			tag=${ha_mpi_load_tags[$load]}
-			status=$ha_status_file_prefix-$tag-$client
-			# ha_nparams_ior
-			# ha_nparams_simul
-			local num=ha_nparams_$tag
-			nparam=$((n % num))
-			local aref=ha_params_$tag[nparam]
-			local parameter=${!aref}
-			local nstripe=$((n % ha_nstripe_clients))
-			aref=ha_stripe_clients[nstripe]
-			local stripe=${!aref}
-			local m=$(( n % ha_nclientsset))
-			machines=${mach[m]}
-			local mustpass=1
-			[[ $ha_ninstmustfail == 0 ]] ||
-				mustpass=$(( n % ha_ninstmustfail ))
-			ha_repeat_mpi_load $client $load $status "$parameter" \
-				$machines "$stripe" "$mpiuser" "$mustpass" \
-				"${ha_mpiopts[$mpiuser]} $ha_mpirun_options" "$test_dir" &
-				ha_status_files+=("$status")
+	# ha_mpi_instances defines the number of
+	# clients start mpi loads; should be <= ${#ha_clients[@]} if
+	# NLOOPS not set. In case NLOOPS=value -- each instance executed
+	# "value" times and then the remaining not run yet instances started.
+	#
+	# do nothing if
+	#    ha_mpi_instances = 0
+	# or
+	#    ${#ha_mpi_load_tags[@]} =0
+	(( ha_mpi_instances == 0 )) || (( ${#ha_mpi_load_tags[@]} == 0 )) &&
+		ha_info "no mpi load to start" &&
+		return 0
+	# We do not start next instance on client already running the
+	# mpi intstance, we need to wait some started instances completed
+	# before start the remaining instances, i.e. we reuse the clients completed the
+	# instance.
+	# The list of free clients is stored in ha_clients_free_file.
+	local inststarted=0
+	while (( ha_mpi_instances > 0 )); do
+		wait_clients_free
+		local -a clients_free=($(cat $ha_clients_free_file))
+		inst=$ha_mpi_instances
+		(( inst <= ${#clients_free[@]} )) ||
+			inst=${#clients_free[@]}
+
+		local ndir
+		for ((n = 0; n < $inst; n++)); do
+			client=${clients_free[n]}
+			local k=$(( n + inststarted ))
+			nmpi=$(( k % ${#ha_users[@]}))
+			mpiuser=${ha_users[nmpi]}
+			# if clients_free has one client only
+			# the tests always will be run on ha_testdirs[0]
+			ndir=$((k % ${#ha_testdirs[@]}))
+			test_dir=${ha_testdirs[ndir]}
+			for ((load = 0; load < ${#ha_mpi_load_tags[@]}; load++)); do
+				tag=${ha_mpi_load_tags[$load]}
+				status=$ha_status_file_prefix-$tag-$client
+				# ha_nparams_ior
+				# ha_nparams_simul
+				local num=ha_nparams_$tag
+				# the loads could have no params
+				(( num == 0 )) && num=1
+				nparam=$((k % num))
+				local aref=ha_params_$tag[nparam]
+				local parameter=${!aref}
+				local nstripe=$((k % ha_nstripe_clients))
+				aref=ha_stripe_clients[nstripe]
+				local stripe=${!aref}
+				local m=$(( k % ha_nclientsset))
+				machines=${mach[m]}
+				local mustpass=1
+				[[ $ha_ninstmustfail == 0 ]] ||
+					mustpass=$(( k % ha_ninstmustfail ))
+				ha_info "$client going to start and repeat tag $tag \
+					$ha_nloops loops \
+					instance: $(( inststarted + n )) \
+					(remaining $(( ha_mpi_instances - n - 1 )))"
+				ha_repeat_mpi_load $client $load $status "$parameter" \
+					$machines "$stripe" "$mpiuser" "$mustpass" \
+					"${ha_mpiopts[$mpiuser]} $ha_mpirun_options" \
+					"$test_dir" $ha_nloops &
+					ha_status_files+=("$status")
+					# get rid of duplicated status files
+					ha_status_files=($(echo ${ha_status_files[@]} | \
+						tr ' ' '\n' | sort -u ))
+				# remove client from the free client list
+				remove_client_from_list $client
+				ha_sleep 2
+			done
 		done
+		(( inststarted+=inst ))
+		# true needs to avoid immediately exit in case
+		# ha_mpi_instances = 0
+		(( ha_mpi_instances-=inst )) || true
 	done
 }
 
@@ -961,6 +1056,10 @@ ha_start_loads()
 	ha_cmd_bg
 	$ha_lfsck_bg && ha_lfsck_bg
 	trap ha_trap_stop_signals $ha_stop_signals
+	(( ha_nloops != 0 )) &&
+		echo $(( ha_mpi_instances * ha_nloops )) > $ha_count_file ||
+			true
+	echo ${ha_clients[@]} | sed "s/ /\n/g" > $ha_clients_free_file
 	ha_start_nonmpi_loads
 	ha_start_mpi_loads
 }
@@ -1390,6 +1489,19 @@ ha_killer()
 	ha_summarize
 }
 
+ha_run_info() {
+	local -a vars=($@)
+	local i
+
+	echo "****** Run Information ****"
+	for ((i=0; i<${#vars[@]}; i++)); do
+		local v=${vars[i]}
+		local -n aref=$v
+		echo $v: "${aref[@]}"
+	done
+	echo "***************************"
+}
+
 ha_main()
 {
 	ha_process_arguments "$@"
@@ -1398,6 +1510,12 @@ ha_main()
 	ha_log "${ha_clients[*]} ${ha_servers[*]}" \
 		"START: $0: $(date +%H:%M:%S' '%s)"
 	trap ha_trap_exit EXIT
+
+	ha_run_info ha_expected_duration ha_precmd ha_postcmd \
+		ha_mpi_instances ha_nloops \
+		EXTRAPROG EXTRAPROGP \
+		ha_testdirs ha_clients
+
 	mkdir "$ha_tmp_dir"
 
 	local mdt_index
