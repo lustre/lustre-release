@@ -5248,15 +5248,16 @@ run_test 67 "quota pools recalculation"
 get_slave_nr() {
 	local pool=$1
 	local qtype=$2
-	local nr
+	local nr=$3
 
 	wait_update_facet "--quiet" mds1 \
 		"$LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$pool.info \
 			>/dev/null 2>&1 || echo foo" "">/dev/null ||
 		error "mds1: failed to create quota pool $pool"
 
-	do_facet mds1 $LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$pool.info |
-		awk '/usr/ {getline; print $2}'
+	wait_update_facet mds1 \
+		"$LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$pool.info | \
+			awk '/usr/ {getline; print \\\$2}'" "$nr" || return 1
 }
 
 test_68()
@@ -5270,40 +5271,32 @@ test_68()
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# check slave number for glbal pool
-	local nr=$(get_slave_nr "0x0" "usr")
-	echo "nr result $nr"
-	[[ $nr != $((OSTCOUNT + MDSCOUNT)) ]] &&
-		error "Slave_nr $nr for global pool != ($OSTCOUNT + $MDSCOUNT)"
+	get_slave_nr "0x0" "usr" $((OSTCOUNT + MDSCOUNT)) ||
+		error "Slave_nr for global pool != ($OSTCOUNT + $MDSCOUNT)"
 
 	# create qpool and add OST1
 	pool_add $qpool || error "pool_add failed"
-	nr=$(get_slave_nr $qpool "usr")
-	[[ $nr != 0 ]] && error "Slave number $nr for $qpool != 0"
+	get_slave_nr $qpool "usr" 0 || error "Slave number for $qpool != 0"
 
 	# add OST1 to qpool
 	pool_add_targets $qpool 1 1 || error "pool_add_targets failed"
-	nr=$(get_slave_nr $qpool "usr")
-	[[ $nr != 1 ]] && error "Slave number $nr for $qpool != 1"
+	get_slave_nr $qpool "usr" 1 || error "Slave number for $qpool != 1"
 
 	# add OST0 to qpool
 	pool_add_targets $qpool 0 1 || error "pool_add_targets failed"
-	nr=$(get_slave_nr $qpool "usr")
-	[[ $nr != 2 ]] && error "Slave number $nr for $qpool != 2"
+	get_slave_nr $qpool "usr" 2 || error "Slave number for $qpool != 2"
 
 	# remove OST0
 	pool_remove_target $qpool 0
-	nr=$(get_slave_nr $qpool "usr")
-	[[ $nr != 1 ]] && error "Slave number $nr for $qpool != 1"
+	get_slave_nr $qpool "usr" 1 || error "Slave number for $qpool != 1"
 
 	# remove OST1
 	pool_remove_target $qpool 1
-	nr=$(get_slave_nr $qpool "usr")
-	[[ $nr != 0 ]] && error "Slave number $nr for $qpool != 0"
+	get_slave_nr $qpool "usr" 0 || error "Slave number for $qpool != 0"
 
 	# Check again that all is fine with global pool
-	nr=$(get_slave_nr "0x0" "usr")
-	[[ $nr == $((OSTCOUNT + MDSCOUNT)) ]] ||
-		error "Slave_nr $nr for global pool != ($OSTCOUNT + $MDSCOUNT)"
+	get_slave_nr "0x0" "usr" $((OSTCOUNT + MDSCOUNT)) ||
+		error "Slave_nr for global pool != ($OSTCOUNT + $MDSCOUNT)"
 }
 run_test 68 "slave number in quota pool changed after each add/remove OST"
 
