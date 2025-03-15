@@ -1668,7 +1668,7 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 
 	reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
 	LASSERT(reqbody);
-	LASSERT(lu_object_assert_exists(&obj->mot_obj));
+	LASSERT(lu_object_exists(&obj->mot_obj));
 
 	/* Special case for Data-on-MDT files to get data version */
 	if (unlikely(reqbody->mbo_valid & OBD_MD_FLDATAVERSION)) {

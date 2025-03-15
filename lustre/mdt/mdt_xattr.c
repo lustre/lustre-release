@@ -230,7 +230,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	ENTRY;
 
 	LASSERT(info->mti_object != NULL);
-	LASSERT(lu_object_assert_exists(&info->mti_object->mot_obj));
+	LASSERT(lu_object_exists(&info->mti_object->mot_obj));
 
 	CDEBUG(D_INODE, "getxattr "DFID"\n", PFID(&info->mti_body->mbo_fid1));
 

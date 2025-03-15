@@ -704,13 +704,6 @@ static inline const struct lu_fid *lu_object_fid(const struct lu_object *o)
 	return &o->lo_header->loh_fid;
 }
 
-/* return device operations vector for this object */
-static inline const struct lu_device_operations *
-lu_object_ops(const struct lu_object *o)
-{
-	return o->lo_dev->ld_ops;
-}
-
 /*
  * Given a compound object, find its slice, corresponding to the device type
  */
@@ -781,16 +774,6 @@ static inline void lu_object_set_agent_entry(struct lu_object *o)
 static inline void lu_object_clear_agent_entry(struct lu_object *o)
 {
 	o->lo_header->loh_attr &= ~LOHA_HAS_AGENT_ENTRY;
-}
-
-static inline int lu_object_assert_exists(const struct lu_object *o)
-{
-	return lu_object_exists(o);
-}
-
-static inline int lu_object_assert_not_exists(const struct lu_object *o)
-{
-	return !lu_object_exists(o);
 }
 
 /*
