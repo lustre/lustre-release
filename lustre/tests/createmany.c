@@ -63,6 +63,7 @@ static void usage(const char *prog)
 	printf("\t-d\tuse directories instead of regular files\n"
 	       "\t-t\tstop creating files after <seconds> have elapsed\n");
 	printf("\t-S\tthe file size\n"
+	       "\t-W\tthe file will be written to the specified size\n"
 	       "\t-U\tthe start User ID of the file\n"
 	       "\t-G\tthe start Group ID of the file\n"
 	       "\t-P\tthe start Project ID of the file\n");
@@ -97,6 +98,7 @@ int main(int argc, char **argv)
 	bool do_open = false, do_keep = false, do_link = false;
 	bool do_unlink = false, do_mknod = false, do_mkdir = false;
 	bool do_setsize = false, do_chuid = false, do_chgid = false;
+	bool do_write = false;
 	bool do_chprj = false;
 	bool do_rmdir = false;
 	bool do_xattr = false;
@@ -112,6 +114,7 @@ int main(int argc, char **argv)
 	int has_fmt_spec = 0, unlink_has_fmt_spec = 0;
 	long i, total, last_i = 0;
 	int c, last_fd = -1, stderr_fd;
+	int fd_urandom;
 	unsigned int uid = 0, gid = 0, pid = 0;
 	int size = 0;
 	int rc = 0;
@@ -132,7 +135,7 @@ int main(int argc, char **argv)
 	else
 		progname = argv[0];
 
-	while ((c = getopt(argc, argv, "i:dG:l:kmor::S:t:u::U:x:")) != -1) {
+	while ((c = getopt(argc, argv, "i:dG:l:kmor::S:t:u::U:W:x:")) != -1) {
 		switch (c) {
 		case 'd':
 			do_mkdir = true;
@@ -184,6 +187,10 @@ int main(int argc, char **argv)
 			do_chuid = true;
 			uid = strtoul(optarg, NULL, 0);
 			break;
+		case 'W':
+			do_write = true;
+			size = atoi(optarg);
+			break;
 		case 'x':
 			do_xattr = true;
 			xattr_size = strtoul(optarg, &endp, 0);
@@ -199,8 +206,10 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (!do_open && (do_setsize || do_chuid || do_chgid || do_chprj)) {
-		fprintf(stderr, "error: -S, -U, -G, -P works only with -o\n");
+	if (!do_open && (do_setsize || do_write || do_chuid || do_chgid ||
+			 do_chprj)) {
+		fprintf(stderr,
+			"error: -S, -W, -U, -G, -P works only with -o\n");
 		usage(progname);
 	}
 
@@ -241,6 +250,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	fd_urandom = open("/dev/urandom", O_RDONLY);
 	for (i = 0, start = last_t = now(), end += start;
 	     i < count && now() < end; i++, begin++) {
 		double tmp;
@@ -256,6 +266,42 @@ int main(int argc, char **argv)
 				rc = errno;
 				break;
 			}
+
+			if (do_write) {
+				char tmp[4194304];
+				int sz, count;
+
+				if (fd_urandom < 0) {
+					printf("open /dev/urandom error: %s\n",
+					       strerror(errno));
+					break;
+				}
+
+				sz = size;
+				while (sz > 0) {
+					if (sz > sizeof(tmp))
+						count = sizeof(tmp);
+					else
+						count = sz;
+
+					rc = read(fd_urandom, tmp, count);
+					if (rc < 0) {
+						printf("read error: %s\n",
+						       strerror(errno));
+						break;
+					}
+					rc = write(fd, tmp, count);
+					if (rc < 0) {
+						printf("write(%s) error: %s\n",
+						       filename,
+						       strerror(errno));
+						break;
+					}
+
+					sz -= count;
+				}
+			}
+
 			if (do_setsize) {
 				rc = lseek(fd, (size - 6) < 0 ? 0 : size - 6,
 					   SEEK_SET);
@@ -393,6 +439,7 @@ int main(int argc, char **argv)
 			last_i = i;
 		}
 	}
+	close(fd_urandom);
 	last_t = now();
 	total = i;
 	printf("total: %ld %s%s in %.2f seconds: %.2f ops/second\n", total,

@@ -4150,7 +4150,7 @@ test_get_allquota() {
 	done
 
 	echo "Create $qid_cnt files..."
-	createmany -S 4k -U $start_qid -G $start_qid -o ${TFILE} $qid_cnt ||
+	createmany -W 4096 -U $start_qid -G $start_qid -o ${TFILE} $qid_cnt ||
 			error "failed to create many files"
 
 	cancel_lru_locks osc
