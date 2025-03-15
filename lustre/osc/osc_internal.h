@@ -91,16 +91,6 @@ static inline struct cl_io *osc_env_new_io(const struct lu_env *env)
 	return io;
 }
 
-static inline int osc_is_object(const struct lu_object *obj)
-{
-	return obj->lo_dev->ld_type == &osc_device_type;
-}
-
-static inline struct osc_lock *osc_lock_at(const struct cl_lock *lock)
-{
-	return cl2osc_lock(cl_lock_at(lock, &osc_device_type));
-}
-
 int osc_lock_init(const struct lu_env *env, struct cl_object *obj,
 		  struct cl_lock *lock, const struct cl_io *io);
 int osc_io_init(const struct lu_env *env, struct cl_object *obj,
