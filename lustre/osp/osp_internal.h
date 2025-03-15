@@ -437,20 +437,6 @@ static inline struct osp_thread_info *osp_env_info(const struct lu_env *env)
 	return lu_env_info(env, &osp_thread_key);
 }
 
-struct osp_txn_info {
-	__u64   oti_current_id;
-};
-
-extern struct lu_context_key osp_txn_key;
-
-static inline struct osp_txn_info *osp_txn_info(struct lu_context *ctx)
-{
-	struct osp_txn_info *info;
-
-	info = lu_context_key_get(ctx, &osp_txn_key);
-	return info;
-}
-
 extern const struct lu_device_operations osp_lu_ops;
 
 static inline int lu_device_is_osp(struct lu_device *d)

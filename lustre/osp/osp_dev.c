@@ -1807,6 +1807,7 @@ static int osp_obd_set_info_async(const struct lu_env *env,
 
 /* context key constructor/destructor: mdt_key_init, mdt_key_fini */
 LU_KEY_INIT_FINI(osp, struct osp_thread_info);
+
 static void osp_key_exit(const struct lu_context *ctx,
 			 struct lu_context_key *key, void *data)
 {
@@ -1822,15 +1823,7 @@ struct lu_context_key osp_thread_key = {
 	.lct_exit = osp_key_exit
 };
 
-/* context key constructor/destructor: mdt_txn_key_init, mdt_txn_key_fini */
-LU_KEY_INIT_FINI(osp_txn, struct osp_txn_info);
-
-struct lu_context_key osp_txn_key = {
-	.lct_tags = LCT_OSP_THREAD,
-	.lct_init = osp_txn_key_init,
-	.lct_fini = osp_txn_key_fini
-};
-LU_TYPE_INIT_FINI(osp, &osp_thread_key, &osp_txn_key);
+LU_TYPE_INIT_FINI(osp, &osp_thread_key);
 
 static const struct lu_device_type_operations osp_device_type_ops = {
 	.ldto_init           = osp_type_init,
