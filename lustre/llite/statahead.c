@@ -204,8 +204,8 @@ sa_alloc(struct dentry *parent, struct ll_statahead_info *sai, __u64 index,
 	if (unlikely(!entry))
 		RETURN(ERR_PTR(-ENOMEM));
 
-	CDEBUG(D_READA, "alloc sa entry %.*s(%p) index %llu\n",
-	       len, name, entry, index);
+	CDEBUG(D_READA, "alloc sa entry "DNAME"(%p) index %llu\n",
+	       encode_fn_dname(len, name), entry, index);
 
 	entry->se_index = index;
 	entry->se_sai = sai;
@@ -236,8 +236,8 @@ sa_alloc(struct dentry *parent, struct ll_statahead_info *sai, __u64 index,
 /* free sa_entry, which should have been unhashed and not in any list */
 static void sa_free(struct ll_statahead_context *ctx, struct sa_entry *entry)
 {
-	CDEBUG(D_READA, "free sa entry %.*s(%p) index %llu\n",
-	       entry->se_qstr.len, entry->se_qstr.name, entry,
+	CDEBUG(D_READA, "free sa entry "DNAME"(%p) index %llu\n",
+	       encode_fn_qstr(entry->se_qstr), entry,
 	       entry->se_index);
 
 	LASSERT(list_empty(&entry->se_list));
@@ -852,9 +852,9 @@ static void ll_statahead_interpret_work(struct work_struct *work)
 		}
 	}
 
-	CDEBUG(D_READA, "%s: setting %.*s"DFID" l_data to inode %p\n",
-	       ll_i2sbi(dir)->ll_fsname, entry->se_qstr.len,
-	       entry->se_qstr.name, PFID(ll_inode2fid(child)), child);
+	CDEBUG(D_READA, "%s: setting "DNAME""DFID" l_data to inode %p\n",
+	       ll_i2sbi(dir)->ll_fsname, encode_fn_qstr(entry->se_qstr),
+	       PFID(ll_inode2fid(child)), child);
 	ll_set_lock_data(ll_i2sbi(dir)->ll_md_exp, child, it, NULL);
 
 	entry->se_inode = child;
@@ -895,8 +895,8 @@ static int ll_statahead_interpret(struct md_op_item *item, int rc)
 	sai = entry->se_sai;
 	LASSERT(sai != NULL);
 
-	CDEBUG(D_READA, "sa_entry %.*s rc %d\n",
-	       entry->se_qstr.len, entry->se_qstr.name, rc);
+	CDEBUG(D_READA, "sa_entry "DNAME" rc %d\n",
+	       encode_fn_qstr(entry->se_qstr), rc);
 
 	if (rc != 0)
 		GOTO(out, rc);
@@ -1843,9 +1843,9 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 			}
 
 			if (dot_de && target->name[0] != '.') {
-				CDEBUG(D_READA, "%.*s skip hidden file %.*s\n",
-				       target->len, target->name,
-				       namelen, name);
+				CDEBUG(D_READA, DNAME" skip hidden file "DNAME"\n",
+				       encode_fn_dentry(dentry),
+				       encode_fn_dname(namelen, name));
 				continue;
 			}
 

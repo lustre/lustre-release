@@ -817,9 +817,8 @@ static int vvp_io_read_start(const struct lu_env *env,
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
-	CDEBUG(D_VFSTRACE, "%s: read [%llu, %llu)\n",
-		file_dentry(file)->d_name.name,
-		pos, pos + crw_bytes);
+	CDEBUG(D_VFSTRACE, DNAME": read [%llu, %llu)\n",
+	       encode_fn_file(file), pos, pos + crw_bytes);
 
 	trunc_sem_down_read(&lli->lli_trunc_sem);
 
@@ -1304,8 +1303,8 @@ static int vvp_io_write_start(const struct lu_env *env,
 			 pos, pos + crw_bytes);
 	}
 
-	CDEBUG(D_VFSTRACE, "%s: write [%llu, %llu)\n",
-	       file_dentry(file)->d_name.name, pos, pos + crw_bytes);
+	CDEBUG(D_VFSTRACE, DNAME": write [%llu, %llu)\n",
+	       encode_fn_file(file), pos, pos + crw_bytes);
 
 	/* The maximum Lustre file size is variable, based on the OST maximum
 	 * object size and number of stripes.  This needs another check in
@@ -1382,9 +1381,8 @@ static int vvp_io_write_start(const struct lu_env *env,
 		}
 		if (vio->u.readwrite.vui_written > 0) {
 			result = vio->u.readwrite.vui_written;
-			CDEBUG(D_VFSTRACE, "%s: write bytes %zd, result: %zd\n",
-				file_dentry(file)->d_name.name,
-				io->ci_bytes, result);
+			CDEBUG(D_VFSTRACE, DNAME": write bytes %zd, result: %zd\n",
+			       encode_fn_file(file), io->ci_bytes, result);
 			io->ci_bytes += result;
 		} else {
 			io->ci_continue = 0;
@@ -1392,10 +1390,10 @@ static int vvp_io_write_start(const struct lu_env *env,
 	}
 	if (vio->vui_iocb->ki_pos != (pos + io->ci_bytes - ci_bytes)) {
 		CDEBUG(D_VFSTRACE,
-		       "%s: write position mismatch: ki_pos %lld vs. pos %lld, written %zd, commit %ld: rc = %zd\n",
-		       file_dentry(file)->d_name.name,
-		       vio->vui_iocb->ki_pos, pos + io->ci_bytes - ci_bytes,
-		       written, io->ci_bytes - ci_bytes, result);
+		       DNAME": write position mismatch: ki_pos %lld vs. pos %lld, written %zd, commit %ld: rc = %zd\n",
+		       encode_fn_file(file), vio->vui_iocb->ki_pos,
+		       pos + io->ci_bytes - ci_bytes, written,
+		       io->ci_bytes - ci_bytes, result);
 		/*
 		 * Rewind ki_pos and vui_iter to where it has
 		 * successfully committed.

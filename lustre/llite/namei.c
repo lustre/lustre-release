@@ -185,8 +185,8 @@ restart:
 				spin_unlock(&dentry->d_lock);
 				spin_unlock(&dir->i_lock);
 
-				CDEBUG(D_DENTRY, "prune negative dentry %pd\n",
-				       child);
+				CDEBUG(D_DENTRY, "prune negative dentry "DNAME"\n",
+				       encode_fn_dentry(child));
 
 				dput(child);
 				goto restart;
@@ -1001,8 +1001,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	if (dentry->d_name.len > sbi->ll_namelen)
 		RETURN(ERR_PTR(-ENAMETOOLONG));
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p), intent=%s\n",
-	       dentry, PFID(ll_inode2fid(parent)), parent, LL_IT2STR(it));
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p), intent=%s\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(parent)),
+	       parent, LL_IT2STR(it));
 
 	if (d_mountpoint(dentry))
 		CERROR("Tell Peter, lookup on mtpt, it %s\n", LL_IT2STR(it));
@@ -1256,8 +1257,9 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 	/* VFS has locked the inode before calling this */
 	ll_set_inode_lock_owner(parent);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p), flags=%u\n",
-	       dentry, PFID(ll_inode2fid(parent)), parent, flags);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p), flags=%u\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(parent)),
+	       parent, flags);
 
 	/*
 	 * Optimize away (CREATE && !OPEN). Let .create handle the race.
@@ -1334,9 +1336,9 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	ll_set_inode_lock_owner(dir);
 
 	CDEBUG(D_VFSTRACE,
-	       "VFS Op:name=%pd, dir="DFID"(%p), file %p, open_flags %x, mode %x opened %d\n",
-	       dentry, PFID(ll_inode2fid(dir)), dir, file, open_flags, mode,
-	       ll_is_opened(opened, file));
+	       "VFS Op:name="DNAME", dir="DFID"(%p), file %p, open_flags %x, mode %x opened %d\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(dir)), dir, file,
+	       open_flags, mode, ll_is_opened(opened, file));
 
 	/* Only negative dentries enter here */
 	LASSERT(dentry->d_inode == NULL);
@@ -1551,8 +1553,9 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p), intent=%s\n",
-	       dentry, PFID(ll_inode2fid(dir)), dir, LL_IT2STR(it));
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p), intent=%s\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(dir)),
+	       dir, LL_IT2STR(it));
 
 	rc = it_open_error(DISP_OPEN_CREATE, it);
 	if (rc)
@@ -2004,8 +2007,9 @@ static int ll_mknod(struct mnt_idmap *map, struct inode *dir,
 	/* VFS has locked the inode before calling this */
 	ll_set_inode_lock_owner(dir);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p) mode %o dev %x\n",
-	       dchild, PFID(ll_inode2fid(dir)), dir, mode, rdev);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p) mode %o dev %x\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dir)),
+	       dir, mode, rdev);
 
 	if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
 		mode &= ~current_umask();
@@ -2052,16 +2056,17 @@ static int ll_create_nd(struct mnt_idmap *map, struct inode *dir,
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_FILE_PAUSE, cfs_fail_val);
 
 	CDEBUG(D_VFSTRACE,
-	       "VFS Op:name=%pd, dir="DFID"(%p), flags=%u, excl=%d\n",
-	       dentry, PFID(ll_inode2fid(dir)), dir, mode, want_excl);
+	       "VFS Op:name="DNAME", dir="DFID"(%p), flags=%u, excl=%d\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(dir)),
+	       dir, mode, want_excl);
 
 	/* Using mknod(2) to create a regular file is designed to not recognize
 	 * volatile file name, so we use ll_mknod() here.
 	 */
 	rc = ll_mknod(map, dir, dentry, mode, 0);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, unhashed %d\n",
-	       dentry, d_unhashed(dentry));
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", unhashed %d\n",
+	       encode_fn_dentry(dentry), d_unhashed(dentry));
 
 	if (!rc)
 		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_CREATE,
@@ -2085,8 +2090,9 @@ static int ll_symlink(struct mnt_idmap *map, struct inode *dir,
 	/* VFS has locked the inode before calling this */
 	ll_set_inode_lock_owner(dir);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p), target=%.*s\n",
-	       dchild, PFID(ll_inode2fid(dir)), dir, 3000, oldpath);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p), target="DNAME"\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dir)),
+	       dir, encode_fn_dname(3000, oldpath));
 
 	err = llcrypt_prepare_symlink(dir, oldpath, len, dir->i_sb->s_blocksize,
 				      &disk_link);
@@ -2126,9 +2132,9 @@ static int ll_link(struct dentry *old_dentry, struct inode *dir,
 	ll_set_inode_lock_owner(dir);
 
 	CDEBUG(D_VFSTRACE,
-	       "VFS Op: inode="DFID"(%p), dir="DFID"(%p), target=%pd\n",
+	       "VFS Op: inode="DFID"(%p), dir="DFID"(%p), target="DNAME"\n",
 	       PFID(ll_inode2fid(src)), src,
-	       PFID(ll_inode2fid(dir)), dir, new_dentry);
+	       PFID(ll_inode2fid(dir)), dir, encode_fn_dentry(new_dentry));
 
 	err = llcrypt_prepare_link(old_dentry, dir, new_dentry);
 	if (err)
@@ -2177,8 +2183,8 @@ static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
 	/* VFS has locked the inode before calling this */
 	ll_set_inode_lock_owner(dir);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p)\n",
-	       dchild, PFID(ll_inode2fid(dir)), dir);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p)\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dir)), dir);
 
 	if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
 		mode &= ~current_umask();
@@ -2252,8 +2258,8 @@ static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 	ll_set_inode_lock_owner(dir);
 	ll_set_inode_lock_owner(dchild->d_inode);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p)\n",
-	       dchild, PFID(ll_inode2fid(dir)), dir);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p)\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dir)), dir);
 
 	if (unlikely(d_mountpoint(dchild)))
 		GOTO(out, rc = -EBUSY);
@@ -2314,8 +2320,8 @@ int ll_rmdir_entry(struct inode *dir, char *name, int namelen)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s, dir="DFID"(%p)\n",
-	       namelen, name, PFID(ll_inode2fid(dir)), dir);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p)\n",
+	       encode_fn_dname(namelen, name), PFID(ll_inode2fid(dir)), dir);
 
 	op_data = ll_prep_md_op_data(NULL, dir, NULL, name, strlen(name),
 				     S_IFDIR, LUSTRE_OPC_ANY, NULL);
@@ -2349,8 +2355,8 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
 	ll_set_inode_lock_owner(dir);
 	ll_set_inode_lock_owner(dchild->d_inode);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p)\n",
-	       dchild, PFID(ll_inode2fid(dir)), dir);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p)\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dir)), dir);
 
 	/*
 	 * XXX: unlink bind mountpoint maybe call to here,
@@ -2435,8 +2441,8 @@ static int ll_rename(struct mnt_idmap *map,
 #endif
 
 	CDEBUG(D_VFSTRACE,
-	       "VFS Op:oldname=%pd, src_dir="DFID"(%p), newname=%pd, tgt_dir="DFID"(%p)\n",
-	       src_dchild, PFID(ll_inode2fid(src)), src,
+	       "VFS Op:oldname="DNAME", src_dir="DFID"(%p), newname=%pd, tgt_dir="DFID"(%p)\n",
+	       encode_fn_dentry(src_dchild), PFID(ll_inode2fid(src)), src,
 	       tgt_dchild, PFID(ll_inode2fid(tgt)), tgt);
 
 	if (unlikely(d_mountpoint(src_dchild) || d_mountpoint(tgt_dchild)))

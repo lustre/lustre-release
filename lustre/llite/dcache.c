@@ -90,8 +90,8 @@ static int ll_dcompare(const struct dentry *dentry, unsigned int len,
 	if (memcmp(str, name->name, len))
 		RETURN(1);
 
-	CDEBUG(D_DENTRY, "found name %.*s(%p) flags %#x refc %d\n",
-	       name->len, name->name, dentry, dentry->d_flags,
+	CDEBUG(D_DENTRY, "found name "DNAME"(%p) flags %#x refc %d\n",
+	       encode_fn_qstr(*name), dentry, dentry->d_flags,
 	       ll_d_count(dentry));
 
 	/* mountpoint is always valid */
@@ -128,9 +128,9 @@ static int ll_ddelete(const struct dentry *de)
 	ENTRY;
 	LASSERT(de);
 
-	CDEBUG(D_DENTRY, "%s dentry %pd (%p, parent %p, inode %p) %s%s\n",
+	CDEBUG(D_DENTRY, "%s dentry "DNAME" (%p, parent %p, inode %p) %s%s\n",
 	       d_lustre_invalid(de) ? "deleting" : "keeping",
-	       de, de, de->d_parent, de->d_inode,
+	       encode_fn_dentry(de), de, de->d_parent, de->d_inode,
 	       d_unhashed((struct dentry *)de) ? "" : "hashed,",
 	       d_no_children(de) ? "" : "subdirs");
 
@@ -311,8 +311,8 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	struct inode *dir;
 	int rc;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%s, flags=%u\n",
-	       dentry->d_name.name, lookup_flags);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", flags=%u\n",
+	       encode_fn_dentry(dentry), lookup_flags);
 
 	rc = llcrypt_d_revalidate(dentry, lookup_flags);
 	if (rc != 1)

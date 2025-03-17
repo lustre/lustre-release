@@ -417,9 +417,9 @@ int ll_file_release(struct inode *inode, struct file *file)
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "START file %s:"DFID"(%p), flags %o\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags);
+	       "START file "DNAME":"DFID"(%p), flags %o\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       inode, file->f_flags);
 
 	lfd = file->private_data;
 	LASSERT(lfd != NULL);
@@ -457,10 +457,9 @@ out:
 		ll_stats_ops_tally(sbi, LPROC_LL_RELEASE,
 				   ktime_us_delta(ktime_get(), kstart));
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED file %s:"DFID"(%p), flags %o, rc = %d\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags,
-	       rc);
+	       "COMPLETED file "DNAME":"DFID"(%p), flags %o, rc = %d\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       inode, file->f_flags, rc);
 
 	RETURN(rc);
 }
@@ -995,9 +994,9 @@ int ll_file_open(struct inode *inode, struct file *file)
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "START file %s:"DFID"(%p), flags %o\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags);
+	       "START file "DNAME":"DFID"(%p), flags %o\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       inode, file->f_flags);
 
 	it = file->private_data; /* XXX: compat macro */
 	file->private_data = NULL; /* prevent ll_local_open assertion */
@@ -1234,10 +1233,9 @@ out_nofiledata:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED file %s:"DFID"(%p), flags %o, rc = %d\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), inode, file->f_flags,
-	       rc);
+	       "COMPLETED file "DNAME":"DFID"(%p), flags %o, rc = %d\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       inode, file->f_flags, rc);
 
 	return rc;
 }
@@ -1755,8 +1753,8 @@ void ll_io_set_mirror(struct cl_io *io, const struct file *file)
 		io->ci_layout_version = lfd->fd_layout_version;
 	}
 
-	CDEBUG(D_VFSTRACE, "%s: desiginated mirror: %d\n",
-	       file->f_path.dentry->d_name.name, io->ci_designated_mirror);
+	CDEBUG(D_VFSTRACE, DNAME": desiginated mirror: %d\n",
+	       encode_fn_file(file), io->ci_designated_mirror);
 }
 
 /* This is relatime_need_update() from Linux 5.17, which is not exported */
@@ -1976,9 +1974,9 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	int rc = 0;
 
 	ENTRY;
-	CDEBUG(D_VFSTRACE, "%s: %s ppos: %llu, bytes: %zu\n",
-		file_dentry(file)->d_name.name,
-		iot == CIT_READ ? "read" : "write", *ppos, bytes);
+	CDEBUG(D_VFSTRACE, DNAME": %s ppos: %llu, bytes: %zu\n",
+	       encode_fn_file(file),
+	       iot == CIT_READ ? "read" : "write", *ppos, bytes);
 
 	max_io_bytes = min_t(size_t, PTLRPC_MAX_BRW_PAGES * OBD_MAX_RIF_DEFAULT,
 			     sbi->ll_cache->ccc_lru_max >> 2) << PAGE_SHIFT;
@@ -2114,16 +2112,14 @@ out:
 	cl_io_fini(env, io);
 
 	CDEBUG(D_VFSTRACE,
-	       "%s: %d io complete with rc: %d, result: %zd, restart: %d\n",
-	       file->f_path.dentry->d_name.name,
-	       iot, rc, result, io->ci_need_restart);
+	       DNAME": %d io complete with rc: %d, result: %zd, restart: %d\n",
+	       encode_fn_file(file), iot, rc, result, io->ci_need_restart);
 
 	if ((!rc || rc == -ENODATA || rc == -ENOLCK || rc == -EIOCBQUEUED) &&
 	    bytes > 0 && io->ci_need_restart && retries-- > 0) {
 		CDEBUG(D_VFSTRACE,
-		       "%s: restart %s from ppos=%lld bytes=%zu retries=%u ret=%zd: rc = %d\n",
-		       file_dentry(file)->d_name.name,
-		       iot == CIT_READ ? "read" : "write",
+		       DNAME": restart %s from ppos=%lld bytes=%zu retries=%u ret=%zd: rc = %d\n",
+		       encode_fn_file(file), iot == CIT_READ ? "read" : "write",
 		       *ppos, bytes, retries, result, rc);
 		/* preserve the tried count for FLR */
 		retried = io->ci_ndelay_tried;
@@ -2340,9 +2336,9 @@ fini_io:
 		size = i_size_read(inode);
 		if (iocb->ki_pos >= size || read_end > size) {
 			CDEBUG(D_VFSTRACE,
-			       "%s: read [%llu, %llu] over eof, kms %llu, file_size %llu.\n",
-			       file_dentry(file)->d_name.name,
-			       iocb->ki_pos, read_end, kms, size);
+			       DNAME": read [%llu, %llu] over eof, kms %llu, file_size %llu.\n",
+			       encode_fn_file(file), iocb->ki_pos, read_end,
+			       kms, size);
 
 			if (iocb->ki_pos >= size)
 				RETURN(1);
@@ -2447,10 +2443,9 @@ static ssize_t do_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "START file %s:"DFID", ppos: %lld, count: %zu\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
-	       iov_iter_count(to));
+	       "START file "DNAME":"DFID", ppos: %lld, count: %zu\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       iocb->ki_pos, iov_iter_count(to));
 
 	if (!iov_iter_count(to))
 		RETURN(0);
@@ -2531,10 +2526,9 @@ out:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED: file %s:"DFID", ppos: %lld, count: %zu, rc = %zu\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
-	       iov_iter_count(to), result);
+	       "COMPLETED: file "DNAME":"DFID", ppos: %lld, count: %zu, rc = %zu\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       iocb->ki_pos, iov_iter_count(to), result);
 
 	RETURN(result);
 }
@@ -2623,10 +2617,9 @@ static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "START file %s:"DFID", ppos: %lld, count: %zu\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
-	       iov_iter_count(from));
+	       "START file "DNAME":"DFID", ppos: %lld, count: %zu\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       iocb->ki_pos, iov_iter_count(from));
 
 	if (!iov_iter_count(from))
 		GOTO(out, rc_normal = 0);
@@ -2704,10 +2697,9 @@ out:
 	}
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED: file %s:"DFID", ppos: %lld, count: %zu, rc = %zu\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), iocb->ki_pos,
-	       iov_iter_count(from), rc_normal);
+	       "COMPLETED: file "DNAME":"DFID", ppos: %lld, count: %zu, rc = %zu\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       iocb->ki_pos, iov_iter_count(from), rc_normal);
 
 	RETURN(rc_normal);
 }
@@ -2887,15 +2879,16 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data;
 	int rc, lmmsize;
+	int namesize;
 
 	ENTRY;
 	rc = ll_get_default_mdsize(sbi, &lmmsize);
 	if (rc)
 		RETURN(rc);
 
-	op_data = ll_prep_md_op_data(NULL, inode, NULL, filename,
-				     strlen(filename), lmmsize,
-				     LUSTRE_OPC_ANY, NULL);
+	namesize = filename ? strlen(filename) : 0;
+	op_data = ll_prep_md_op_data(NULL, inode, NULL, filename, namesize,
+				     lmmsize, LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
@@ -2904,7 +2897,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 	ll_finish_md_op_data(op_data);
 	if (rc < 0) {
 		CDEBUG(D_INFO, "md_getattr_name failed on %s: rc %d\n",
-		       filename, rc);
+		       encode_fn_len(filename, namesize), rc);
 		GOTO(out, rc);
 	}
 
@@ -4022,8 +4015,8 @@ int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise)
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE,
-	       "Lock request: file=%pd, inode=%p, mode=%s start=%llu, end=%llu\n",
-	       dentry, dentry->d_inode,
+	       "Lock request: file="DNAME", inode=%p, mode=%s start=%llu, end=%llu\n",
+	       encode_fn_dentry(dentry), dentry->d_inode,
 	       user_lockname[ladvise->lla_lockahead_mode], (__u64) start,
 	       (__u64) end);
 
@@ -5227,10 +5220,9 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "START file %s:"DFID", offset: %lld, type: %s\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), offset,
-	       ll_seek_names[origin]);
+	       "START file "DNAME":"DFID", offset: %lld, type: %s\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       offset, ll_seek_names[origin]);
 
 	if (origin == SEEK_END) {
 		retval = ll_glimpse_size(inode);
@@ -5259,10 +5251,9 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK,
 				   ktime_us_delta(ktime_get(), kstart));
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "COMPLETED file %s:"DFID", offset: %lld, type: %s, rc = %lld\n",
-	       file_dentry(file)->d_name.name,
-	       PFID(ll_inode2fid(file_inode(file))), offset,
-	       ll_seek_names[origin], retval);
+	       "COMPLETED file "DNAME":"DFID", offset: %lld, type: %s, rc = %lld\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       offset, ll_seek_names[origin], retval);
 
 	RETURN(retval);
 }
@@ -5882,7 +5873,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE, "migrate "DFID"/%s to MDT%04x stripe count %d\n",
-	       PFID(ll_inode2fid(parent)), name,
+	       PFID(ll_inode2fid(parent)), encode_fn_len(name, namelen),
 	       lum->lum_stripe_offset, lum->lum_stripe_count);
 
 	if (lum->lum_magic != cpu_to_le32(LMV_USER_MAGIC) &&
@@ -6167,8 +6158,8 @@ static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 	int rc = 0;
 
 	ENTRY;
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p),name=%s\n",
-	       PFID(ll_inode2fid(inode)), inode, dentry->d_name.name);
+	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p),name="DNAME"\n",
+	       PFID(ll_inode2fid(inode)), inode, encode_fn_dentry(dentry));
 
 	/* Call getattr by fid */
 	if ((exp_connect_flags2(exp) & OBD_CONNECT2_GETATTR_PFID) &&
@@ -6271,8 +6262,8 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 	int rc;
 
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "START file %s:"DFID"(%p), request_mask %d, flags %u, foreign %d\n",
-	       de->d_name.name, PFID(ll_inode2fid(inode)), inode,
+	       "START file "DNAME":"DFID"(%p), request_mask %d, flags %u, foreign %d\n",
+	       encode_fn_dentry(de), PFID(ll_inode2fid(inode)), inode,
 	       request_mask, flags, foreign);
 
 	/* The OST object(s) determine the file size, blocks and mtime. */
@@ -6449,8 +6440,8 @@ fill_attr:
 			   ktime_us_delta(ktime_get(), kstart));
 
 	CDEBUG(D_IOTRACE,
-	       "COMPLETED file %s:"DFID"(%p), request_mask %d, flags %u, foreign %d\n",
-	       de->d_name.name, PFID(ll_inode2fid(inode)), inode,
+	       "COMPLETED file "DNAME":"DFID"(%p), request_mask %d, flags %u, foreign %d\n",
+	       encode_fn_dentry(de), PFID(ll_inode2fid(inode)), inode,
 	       request_mask, flags, foreign);
 
 	return 0;

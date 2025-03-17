@@ -624,8 +624,8 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	lli = ll_i2info(inode);
 
 	CDEBUG(D_READA|D_IOTRACE,
-	       "%s:"DFID": async ra from %lu to %lu triggered by user pid %d\n",
-	       file_dentry(file)->d_name.name, PFID(ll_inode2fid(inode)),
+	       DNAME":"DFID": async ra from %lu to %lu triggered by user pid %d\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(inode)),
 	       work->lrw_start_idx, work->lrw_end_idx, work->lrw_user_pid);
 
 	env = cl_env_alloc(&refcheck, LCT_NOREF);

@@ -4673,8 +4673,8 @@ static int mdd_migrate_object(const struct lu_env *env,
 
 	ENTRY;
 
-	CDEBUG(D_INFO, "migrate %s from "DFID"/"DFID" to "DFID"/"DFID"\n",
-	       sname->ln_name, PFID(mdd_object_fid(spobj)),
+	CDEBUG(D_INFO, "migrate "DNAME" from "DFID"/"DFID" to "DFID"/"DFID"\n",
+	       encode_fn_luname(sname), PFID(mdd_object_fid(spobj)),
 	       PFID(mdd_object_fid(sobj)), PFID(mdd_object_fid(tpobj)),
 	       PFID(mdd_object_fid(tobj)));
 

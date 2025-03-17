@@ -467,17 +467,18 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 
 	if (lump->lum_magic != LMV_MAGIC_FOREIGN) {
 		CDEBUG(D_VFSTRACE,
-		       "VFS Op:inode="DFID"(%p) name=%s stripe_offset=%d stripe_count=%u, hash_type=%x\n",
-		       PFID(ll_inode2fid(parent)), parent, dirname,
-		       (int)lump->lum_stripe_offset, lump->lum_stripe_count,
-		       lump->lum_hash_type);
+		       "VFS Op:inode="DFID"(%p) name="DNAME" stripe_offset=%d stripe_count=%u, hash_type=%x\n",
+		       PFID(ll_inode2fid(parent)), parent,
+		       encode_fn_dentry(&dentry), (int)lump->lum_stripe_offset,
+		       lump->lum_stripe_count, lump->lum_hash_type);
 	} else {
 		struct lmv_foreign_md *lfm = (struct lmv_foreign_md *)lump;
 
 		CDEBUG(D_VFSTRACE,
-		       "VFS Op:inode="DFID"(%p) name %s foreign, length %u, value '%.*s'\n",
-		       PFID(ll_inode2fid(parent)), parent, dirname,
-		       lfm->lfm_length, lfm->lfm_length, lfm->lfm_value);
+		       "VFS Op:inode="DFID"(%p) name "DNAME" foreign, length %u, value '"DNAME"'\n",
+		       PFID(ll_inode2fid(parent)), parent,
+		       encode_fn_dentry(&dentry), lfm->lfm_length,
+		       lfm->lfm_length, lfm->lfm_value);
 	}
 
 	if (lump->lum_stripe_count > 1 &&
@@ -2024,8 +2025,9 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 		rc = ll_get_fid_by_name(inode, filename, namelen, NULL, NULL);
 		if (rc < 0) {
-			CERROR("%s: lookup %.*s failed: rc = %d\n",
-			       sbi->ll_fsname, namelen, filename, rc);
+			CERROR("%s: lookup "DNAME" failed: rc = %d\n",
+			       sbi->ll_fsname,
+			       encode_fn_dname(namelen, filename), rc);
 			GOTO(out_free, rc);
 		}
 out_free:
@@ -2061,7 +2063,8 @@ out_free:
 		lumlen = data->ioc_inllen2;
 
 		if (!lmv_user_magic_supported(lum->lum_magic)) {
-			CERROR("%s: wrong lum magic %x : rc = %d\n", filename,
+			CERROR("%s: wrong lum magic %x : rc = %d\n",
+			       encode_fn_len(filename, namelen),
 			       lum->lum_magic, -EINVAL);
 			GOTO(lmv_out_free, rc = -EINVAL);
 		}
@@ -2070,14 +2073,16 @@ out_free:
 		     lum->lum_magic == LMV_USER_MAGIC_SPECIFIC) &&
 		    lumlen < sizeof(*lum)) {
 			CERROR("%s: wrong lum size %d for magic %x : rc = %d\n",
-			       filename, lumlen, lum->lum_magic, -EINVAL);
+			       encode_fn_len(filename, namelen), lumlen,
+			       lum->lum_magic, -EINVAL);
 			GOTO(lmv_out_free, rc = -EINVAL);
 		}
 
 		if (lum->lum_magic == LMV_MAGIC_FOREIGN &&
 		    lumlen < sizeof(struct lmv_foreign_md)) {
 			CERROR("%s: wrong lum magic %x or size %d: rc = %d\n",
-			       filename, lum->lum_magic, lumlen, -EFAULT);
+			       encode_fn_len(filename, namelen),
+			       lum->lum_magic, lumlen, -EFAULT);
 			GOTO(lmv_out_free, rc = -EINVAL);
 		}
 
@@ -2738,7 +2743,8 @@ out_hur:
 		    lum->lum_magic != LMV_USER_MAGIC_SPECIFIC) {
 			rc = -EINVAL;
 			CERROR("%s: wrong lum magic %x: rc = %d\n",
-			       filename, lum->lum_magic, rc);
+			       encode_fn_len(filename, namelen),
+			       lum->lum_magic, rc);
 			GOTO(migrate_free, rc);
 		}
 

@@ -2257,8 +2257,8 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	ll_set_inode_lock_owner(inode);
 
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "START file %s:"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld\n",
-	       dentry->d_name.name, PFID(ll_inode2fid(inode)), inode,
+	       "START file "DNAME":"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(inode)), inode,
 	       i_size_read(inode), attr->ia_valid, attr->ia_mode,
 	       attr->ia_uid.val, attr->ia_gid.val, attr->ia_size,
 	       (long long) attr->ia_atime.tv_sec, attr->ia_atime.tv_nsec,
@@ -2507,8 +2507,8 @@ out:
 				   ktime_us_delta(ktime_get(), kstart));
 clear:
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "COMPLETED file %s:"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld, rc %d\n",
-	       dentry->d_name.name, PFID(ll_inode2fid(inode)), inode,
+	       "COMPLETED file "DNAME":"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld, rc %d\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(inode)), inode,
 	       i_size_read(inode), attr->ia_valid, attr->ia_mode,
 	       attr->ia_uid.val, attr->ia_gid.val, attr->ia_size,
 	       (long long) attr->ia_atime.tv_sec, attr->ia_atime.tv_nsec,

@@ -52,9 +52,11 @@ static int ll_readlink_internal(struct inode *inode,
 		 * will print a warning to the console, avoid this by
 		 * printing just the last part of the symlink.
 		 */
-		CDEBUG(D_INODE, "using cached symlink %s%.*s, len = %d\n",
-		       print_limit < symlen ? "..." : "", print_limit,
-		       (*symname) + symlen - print_limit, symlen);
+		CDEBUG(D_INODE, "using cached symlink %s"DNAME", len = %d\n",
+		       print_limit < symlen ? "..." : "",
+		       encode_fn_dname(print_limit,
+				       (*symname) + symlen - print_limit),
+		       symlen);
 		RETURN(0);
 	}
 
@@ -192,8 +194,8 @@ static const char *ll_get_link(struct dentry *dentry,
 	int rc;
 
 	ENTRY;
-	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, inode="DFID"(%p)\n",
-	       dentry, PFID(ll_inode2fid(inode)), inode);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", inode="DFID"(%p)\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(inode)), inode);
 	if (!dentry)
 		RETURN(ERR_PTR(-ECHILD));
 	ll_inode_size_lock(inode);

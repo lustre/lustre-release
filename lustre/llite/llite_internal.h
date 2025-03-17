@@ -2070,9 +2070,10 @@ static inline int d_lustre_invalid(const struct dentry *dentry)
  */
 static inline void d_lustre_invalidate(struct dentry *dentry)
 {
-	CDEBUG(D_DENTRY, "invalidate dentry %pd (%p) parent %p inode %p refc %d\n",
-	       dentry, dentry,
-	       dentry->d_parent, dentry->d_inode, ll_d_count(dentry));
+	CDEBUG(D_DENTRY,
+	       "invalidate dentry "DNAME" (%p) parent %p inode %p refc %d\n",
+	       encode_fn_dentry(dentry), dentry, dentry->d_parent,
+	       dentry->d_inode, ll_d_count(dentry));
 
 	spin_lock(&dentry->d_lock);
 	set_lld_invalid(dentry, 1);
