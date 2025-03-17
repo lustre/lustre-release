@@ -128,6 +128,9 @@ endif
 if ZFS_ENABLED
 LIB_TARGETS += mount_osd_zfs.so
 endif
+if SERVER
+LIB_TARGETS += mount_osd_wbcfs.so
+endif
 endif
 
 install-exec-hook:
@@ -213,6 +216,24 @@ MNTMODLIBS += -lext2fs
 PLUGIN_LIB += libmount_utils_ldiskfs.a
 endif # PLUGINS
 endif # LDISKFS_ENABLED
+
+if SERVER
+noinst_LIBRARIES += libmount_utils_wbcfs.a
+
+libmount_utils_wbcfs_a_SOURCES = libmount_utils_wbcfs.c
+libmount_utils_wbcfs_a_CPPFLAGS :=
+
+if PLUGINS
+lib_LTLIBRARIES += libmount_utils_wbcfs.la
+libmount_utils_wbcfs.la : libmount_utils_wbcfs.a
+	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -Wl,--export-dynamic \
+			 -o mount_osd_wbcfs.so \
+			 `$(AR) -t libmount_utils_wbcfs.a` \
+			 $(MNTMODLIBS)
+else
+PLUGIN_LIB += libmount_utils_wbcfs.a
+endif # PLUGINS
+endif # SERVER
 
 mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h $(GSSSRC) \
 			lustre_param.c

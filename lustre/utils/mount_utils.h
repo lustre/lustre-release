@@ -139,6 +139,7 @@ static inline const char *mt_str(enum ldd_mount_type mt)
 		"reiserfs",
 		"ldiskfs2",
 		"zfs",
+		"wbcfs",
 	};
 
 	return mount_type_string[mt];
@@ -156,10 +157,13 @@ static inline const char *mt_type(enum ldd_mount_type mt)
 		"osd-reiserfs",
 		"osd-ldiskfs",
 		"osd-zfs",
+		"osd-wbcfs",
 	};
 
 	return mount_type_string[mt];
 }
+
+#define OSD_WBCFS_DEV "lustre-wbcfs"
 #endif /* HAVE_SERVER_SUPPORT */
 
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
@@ -241,6 +245,7 @@ struct module_backfs_ops {
 
 extern struct module_backfs_ops zfs_ops;
 extern struct module_backfs_ops ldiskfs_ops;
+extern struct module_backfs_ops wbcfs_ops;
 
 struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type);
 void unload_backfs_ops(struct module_backfs_ops *ops);

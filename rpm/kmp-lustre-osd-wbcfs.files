@@ -1,0 +1,4 @@
+%defattr(-,root,root)
+%dir %{modules_fs_path}/%{lustre_name}-osd-wbcfs
+%dir %{modules_fs_path}/%{lustre_name}-osd-wbcfs/fs
+%{modules_fs_path}/%{lustre_name}-osd-wbcfs/fs/osd_wbcfs.ko

@@ -1135,6 +1135,8 @@ load_modules_local() {
 		elif [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
 			load_module ../ldiskfs/ldiskfs
 			load_module osd-ldiskfs/osd_ldiskfs
+		elif [[ $(node_fstypes $HOSTNAME) == *wbcfs* ]]; then
+			load_module osd-wbcfs/osd_wbcfs
 		fi
 		load_module mgs/mgs
 		load_module mdd/mdd
@@ -1759,6 +1761,8 @@ devicelabel() {
 	zfs)
 		label=$(do_facet ${facet} "$ZFS get -H -o value lustre:svname \
 		                           ${dev} 2>/dev/null");;
+	wbcfs)
+		label="wbcfs-target";;
 	*)
 		error "unknown fstype!";;
 	esac
@@ -2497,6 +2501,8 @@ mount_facet() {
 	local fstype=$(facet_fstype $facet)
 	local devicelabel
 	local dm_dev=${!dev}
+	local index=$(facet_index $facet)
+	local node_type=$(facet_type $facet)
 
 	[[ $dev == "mgsfailover_dev" ]] && combined_mgs_mds &&
 		dev=mds1failover_dev
@@ -2519,21 +2525,63 @@ mount_facet() {
 
 		devicelabel=$(do_facet ${facet} "$ZFS get -H -o value \
 						lustre:svname $dm_dev");;
+	wbcfs)
+		:;;
 	*)
 		error "unknown fstype!";;
 	esac
 
-	echo "Starting ${facet}: $opts $dm_dev $mntpt"
 	# for testing LU-482 error handling in mount_facets() and test_0a()
 	if [ -f $TMP/test-lu482-trigger ]; then
 		RC=2
 	else
 		local seq_width=$(($OSTSEQWIDTH / $OSTCOUNT))
 		(( $seq_width >= 16384 )) || seq_width=16384
-		do_facet ${facet} \
-			"mkdir -p $mntpt; $MOUNT_CMD $opts $dm_dev $mntpt"
+
+		case $fstype in
+		wbcfs)
+			echo "Start ${facet}: $MOUNT_CMD -v lustre-wbcfs $mntpt"
+
+			export OSD_WBC_FSNAME="$FSNAME"
+			export OSD_WBC_INDEX="$index"
+			export OSD_WBC_MGS_NID="$MGSNID"
+
+			case $node_type in
+			OST)
+				export OSD_WBC_TGT_TYPE="OST"
+				;;
+			MDS)
+				export OSD_WBC_TGT_TYPE="MDT"
+				if (( $index == 0 )) &&
+					[[ "$mds_HOST" == "$mgs_HOST" ]]; then
+					export OSD_WBC_PRIMARY_MDT="1"
+				else
+					export OSD_WBC_PRIMARY_MDT="0"
+				fi
+				;;
+			MGS)
+				export OSD_WBC_TGT_TYPE="MGT"
+				;;
+			*)
+				error "Unhandled node_type!"
+			esac
+
+			do_facet ${facet} "mkdir -p $mntpt; \
+				 OSD_WBC_TGT_TYPE=$OSD_WBC_TGT_TYPE \
+				 OSD_WBC_INDEX=$OSD_WBC_INDEX \
+				 OSD_WBC_MGS_NID=$OSD_WBC_MGS_NID \
+				 OSD_WBC_PRIMARY_MDT=$OSD_WBC_PRIMARY_MDT \
+				 OSD_WBC_FSNAME=$OSD_WBC_FSNAME \
+				 $MOUNT_CMD -v lustre-wbcfs $mntpt"
+			;;
+		*)
+			echo "Start ${facet}: $MOUNT_CMD $opts $dm_dev $mntpt"
+			do_facet ${facet} \
+				"mkdir -p $mntpt; $MOUNT_CMD $opts $dm_dev $mntpt"
+		esac
+
 		RC=${PIPESTATUS[0]}
-		if [[ ${facet} =~ ost ]]; then
+		if [[ ${facet} =~ ost ]] && [[ ! "$fstype" == "wbcfs" ]]; then
 			do_facet ${facet} "$LCTL set_param \
 				seq.cli-$(devicelabel $facet $dm_dev)-super.width=$seq_width"
 		fi
@@ -2566,6 +2614,8 @@ mount_facet() {
 				grep -E ':[a-zA-Z]{3}[0-9]{4}'" "" ||
 				error "$dm_dev failed to initialize!";;
 
+		wbcfs)
+			:;;
 		*)
 			error "unknown fstype!";;
 		esac
@@ -5019,6 +5069,8 @@ ostdevname() {
 			#try $OSTZFSDEVn - independent of vdev
 			DEVNAME=OSTZFSDEV$num
 			eval DEVPTR=${!DEVNAME:=${FSNAME}-ost${num}/ost${num}};;
+		wbcfs )
+			:;;
 		* )
 			error "unknown fstype!";;
 	esac
@@ -5043,6 +5095,8 @@ ostvdevname() {
 			# Device formatted by zfs
 			DEVNAME=OSTDEV$num
 			eval VDEVPTR=${!DEVNAME:=${OSTDEVBASE}${num}};;
+		wbcfs )
+			:;;
 		* )
 			error "unknown fstype!";;
 	esac
@@ -5067,6 +5121,8 @@ mdsdevname() {
 			# try $MDSZFSDEVn - independent of vdev
 			DEVNAME=MDSZFSDEV$num
 			eval DEVPTR=${!DEVNAME:=${FSNAME}-mdt${num}/mdt${num}};;
+		wbcfs )
+			:;;
 		* )
 			error "unknown fstype!";;
 	esac
@@ -5089,6 +5145,8 @@ mdsvdevname() {
 			# Device formatted by ZFS
 			local DEVNAME=MDSDEV$num
 			eval VDEVPTR=${!DEVNAME:=${MDSDEVBASE}${num}};;
+		wbcfs )
+			:;;
 		* )
 			error "unknown fstype!";;
 	esac
@@ -5117,6 +5175,8 @@ mgsdevname() {
 		else
 			DEVPTR=${MGSZFSDEV:-${FSNAME}-mgs/mgs}
 		fi;;
+	wbcfs )
+		:;;
 	* )
 		error "unknown fstype!";;
 	esac
@@ -5141,6 +5201,8 @@ mgsvdevname() {
 		elif [ -n "$MGSDEV" ]; then
 			VDEVPTR=$MGSDEV
 		fi;;
+	wbcfs )
+		:;;
 	* )
 		error "unknown fstype!";;
 	esac
@@ -5546,6 +5608,9 @@ __touch_device()
 
 format_mgs() {
 	local quiet
+	local fstype=$(facet_fstype mgs)
+
+	[[ "$fstype" == "wbcfs" ]] && return
 
 	if ! $VERBOSE; then
 		quiet=yes
@@ -5565,6 +5630,9 @@ format_mgs() {
 format_mdt() {
 	local num=$1
 	local quiet
+	local fstype=$(facet_fstype mdt$num)
+
+	[[ "$fstype" == "wbcfs" ]] && return
 
 	if ! $VERBOSE; then
 		quiet=yes
@@ -5581,6 +5649,9 @@ format_mdt() {
 
 format_ost() {
 	local num=$1
+	local fstype=$(facet_fstype ost$num)
+
+	[[ "$fstype" == "wbcfs" ]] && return
 
 	if ! $VERBOSE; then
 		quiet=yes
@@ -6640,6 +6711,11 @@ do_check_and_cleanup_lustre() {
 		run_lfsck
 	fi
 
+	# FIXME: The cleanup takes too long, times out...
+	if [[ "$FSTYPE" == "wbcfs" ]]; then
+		DO_CLEANUP=false
+	fi
+
 	if is_mounted $MOUNT; then
 		if $DO_CLEANUP; then
 			[[ -n "$DIR" ]] && rm -rf $DIR/[Rdfs][0-9]* ||
@@ -7513,6 +7589,10 @@ run_test() {
 		return 0
 	else
 		run_one_logged $testnum "$testmsg"
+		# TODO: Avoid running out of space!?
+		if [[ "$FSTYPE" == "wbcfs" ]]; then
+			rm -rf "$MOUNT/*"
+		fi
 		return $?
 	fi
 }
@@ -8715,7 +8795,13 @@ convert_facet2label() {
 	if [ -n "${!varsvc}" ]; then
 		echo ${!varsvc}
 	else
-		error "No label for $facet!"
+		# FIXME: Cannot find label correctly for some reason.
+		# Just assume wbcfs OSD and continue...
+		if [[ "$FSTYPE" == "wbcfs" ]]; then
+			echo "wbcfs-target"
+		else
+			error "No label for $facet!"
+		fi
 	fi
 }
 

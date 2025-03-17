@@ -732,6 +732,22 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 	if (!mop->mo_usource)
 		usage(stderr);
 
+#ifdef HAVE_SERVER_SUPPORT
+	/* osd-wbcfs lustre_tgt */
+	if (strcmp(mop->mo_usource, OSD_WBCFS_DEV) == 0) {
+		mop->mo_ldd.ldd_mount_type = LDD_MT_WBCFS;
+		mop->mo_source = strdup(mop->mo_usource);
+		if (!realpath(argv[optind + 1], mop->mo_target)) {
+			rc = errno;
+			fprintf(stderr, "warning: %s: cannot resolve: %s\n",
+				argv[optind], strerror(errno));
+			return rc;
+		}
+
+		return 0;
+	}
+#endif
+
 	/**
 	 * Try to get the real path to the device, in case it is a
 	 * symbolic link for instance

@@ -477,7 +477,7 @@ AS_IF([test "x$enable_modules" = xyes], [
 AS_IF([test x$enable_ldiskfs = xno -a x$enable_zfs = xno], [
 	AS_CASE([$enable_server],
 		[maybe], [enable_server=no],
-		[yes], [AC_MSG_ERROR([cannot enable servers, no backends were configured])])
+		[yes], [AC_MSG_WARN([no backends were configured])])
 	], [
 		AS_IF([test x$enable_server = xmaybe], [enable_server=yes])
 	])

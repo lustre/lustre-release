@@ -86,6 +86,105 @@ if [[ "$CLIENT_OS_ID_LIKE" =~ "rhel" ]]; then
 	fi
 fi
 
+if [[ "$FSTYPE" = "wbcfs" ]]; then
+	# Lack of lprocfs support
+	always_except LU-18813 0f 27A 53 66 270a
+	# lack of lprocfs: osd.*.nonrotational
+	always_except LU-18813 119e 119f 119g 119h
+	# No stats (similar to openZFS)
+	always_except LU-18813 156
+	# MemFS-based OSD (wbcfs) cannot recovery from a server restart
+	always_except LU-18813 17o 27oo 27z 27F  60a 64i 232 257
+	always_except LU-18813 278 280  427 801c 818 820
+	# Symlink/CHR/SOCK/FIFO/BLK file types do not support
+	always_except LU-18813 17a 17b 17e 17g 17i 17p 21   25a
+	always_except LU-18813 25b 26a 26c 26d 26e 26f 27ga 27Q
+	always_except LU-18813 28  32e 32f 32g 32h 32m 32n  32o
+	always_except LU-18813 32p 48a 54a 54c 54d 56l 56m  56n  56rd
+	always_except LU-18813 56xb 56eb 56eg 56eh 56ei 133a 140 170b
+	always_except LU-18813 162a 226a
+	# Truncate operation is not supported yet.
+	always_except LU-18813 27p 27q 34a
+	# cross directory hardlink in DNE env
+	always_except LU-18813 31g 31l 31m
+	# FMD not expired: cannot reproduce on local testing
+	always_except LU-18813 36g
+	# Filemap is not supported yet.
+	always_except LU-18813 44f 130a 130b 130c 130d 130e 130i 430a
+	# inodes/blocks space usage accounting and statfs() is not supported
+	always_except LU-18813 51b 56ab 81b 220 413 418 806
+	# lsattr: append-only/immutable flags
+	always_except LU-18813 52a 52b
+	# xattr_list() is not implemented yet
+	always_except LU-18813 102a 102h 102i 102r 102t
+	# linkea and fid2path wrong...
+	always_except LU-18813 154B 154f 154g
+	# changelog related failures: wbcfs-target device label is not correct
+	always_except LU-18813 160 161c 161d 205a 65k 807 808 812
+	# DNE does not work well
+	always_except LU-18813 56 65e 65a 406
+	# user.job XATTR
+	always_except LU-18813 205h
+	# Exclusive open timeout
+	always_except LU-18813 208
+	# OFD access log failure
+	always_except LU-18813 165
+	# rename() operations: the source may not empty
+	# always_except LU-18813 214
+	# Data page cache has been updated during bulk write
+	always_except LU-18813 224d
+	# fid2path failure
+	always_except LU-18813 226d
+	# ladvise failure
+	always_except LU-18813 255
+	# sec related failure
+	always_except LU-18813 258
+	# DoM migration failure
+	always_except LU-18813 272
+	# Unkown reason timeout!
+	always_except LU-18813 275 277 311 410 414 419 831
+	# last_rcvd should fail
+	always_except LU-18813 313 314 315
+	# block accting is wrong...
+	always_except LU-18813 317
+	# Other timeouts
+	always_except LU-18813 200 350 398 399 403 404 408 432 433
+	# DIO locking issue?
+	always_except LU-18813 398a
+	# Layout swap is not working
+	always_except LU-18813 405
+	# Memory pressure under memcg control
+	always_except LU-18813 411
+	# rmfid in DNE and in large numbers
+	always_except LU-18813 421
+	# local testing passed but Maloo testing failed!
+	always_except LU-18813 27Cg 27U 422 424 425 426 428 429 434 442
+	# OOM failure
+	always_except LU-18813 430b 430c 431 814 833 850
+	# Expired barrier
+	always_except LU-18813 801a 801b
+	# ro is not implemented yet
+	always_except LU-18813 802b
+	# openZFS related partial page write
+	always_except LU-18813 810
+	# Quota is not supported yet...
+	always_except LU-18813 812b
+	# ldlm kunit test
+	always_except LU-18813 842
+	# fanotify does not work
+	always_except LU-18813 851
+	# MGC locks and client umount
+	always_except LU-18813 901
+	# destroy takes too much time
+	always_except LU-18813 903
+fi
+
+# Although every sanity.sh test has been run, we stop sooner for
+# stability reasons. As we get farther, increment the STOP_AT value.
+if [[ "$FSTYPE" = "wbcfs" ]]; then
+	export STOP_AT=${STOP_AT:-"440"}
+fi
+
 build_test_filter
 FAIL_ON_ERROR=false
 
@@ -15637,7 +15736,7 @@ test_123a_base() { # was test 123, statahead(b=11401)
 	log "$lsx done"
 
 	stime=$SECONDS
-	rm -r $DIR/$tdir
+	rm -r $DIR/$tdir || error "failed to rm $DIR/$tdir"
 	sync
 	etime=$SECONDS
 	delta=$((etime - stime))
@@ -25772,6 +25871,9 @@ run_test 249 "Write above 2T file size"
 test_250() {
 	[ "$(facet_fstype ost$(($($LFS getstripe -i $DIR/$tfile) + 1)))" = "zfs" ] \
 	 && skip "no 16TB file size limit on ZFS"
+
+	[ "$(facet_fstype ost$(($($LFS getstripe -i $DIR/$tfile) + 1)))" = "wbcfs" ] \
+	 && skip "no 16TB file size limit on wbcfs"
 
 	$LFS setstripe -c 1 $DIR/$tfile
 	# ldiskfs extent file size limit is (16TB - 4KB - 1) bytes

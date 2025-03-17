@@ -474,6 +474,7 @@ struct tgt_thread_big_cache {
 #define LUSTRE_MDD_NAME		"mdd"
 #define LUSTRE_OSD_LDISKFS_NAME	"osd-ldiskfs"
 #define LUSTRE_OSD_ZFS_NAME	"osd-zfs"
+#define LUSTRE_OSD_WBCFS_NAME	"osd-wbcfs"
 #define LUSTRE_VVP_NAME		"vvp"
 #define LUSTRE_LMV_NAME		"lmv"
 #define LUSTRE_SLP_NAME		"slp"
@@ -1525,6 +1526,11 @@ static inline struct inode *page2inode(struct page *page)
 	} else {
 		return NULL;
 	}
+}
+
+static inline bool obd_is_osd_wbcfs(const struct obd_device *obd)
+{
+	return !strstr(obd->obd_name, LUSTRE_OSD_WBCFS_NAME);
 }
 
 #endif /* __OBD_H */

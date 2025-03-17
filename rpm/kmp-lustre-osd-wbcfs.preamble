@@ -1,0 +1,8 @@
+License:        GPL-2.0-only
+%if 0%{?suse_version} > 1
+Requires:       kernel-%1
+%endif
+Requires:       %{name}-osd-wbcfs-mount = %{version}
+Provides:       %{name}-osd = %{version}
+Provides:       %{name}-osd-wbcfs = %{version}
+Obsoletes:      %{name}-osd-wbcfs < %{version}

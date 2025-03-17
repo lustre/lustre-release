@@ -432,6 +432,14 @@ R:	Olaf Faaland <faaland1@llnl.gov>
 S:	Maintained
 F:	lustre/osd-zfs/
 
+Lustre OSD wbcfs
+R:	Timothy Day <timday@amazon.com>
+R:	Yingjin Qian <qian@ddn.com>
+S:	Supported
+F:	Documentation/osd-api.txt
+F:	lustre/osd-wbcfs/
+F:	lustre/utils/libmount_utils_wbcfs.c
+
 Lustre Patch Commit Hooks
 R:	Andreas Dilger <adilger@whamcloud.com>
 S:	Odd Fixes

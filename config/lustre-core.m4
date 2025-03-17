@@ -2867,6 +2867,22 @@ AC_DEFUN([LC_GENL_FAMILY_HAS_RESV_START_OP], [
 ]) # LC_GENL_FAMILY_HAS_RESV_START_OP
 
 #
+# LC_HAVE_FS_CONTEXT_HEADER
+#
+# Kernel version 5.0-rc2 commit 9bc61ab18b1d41f26dc06b9e6d3c203e65f83fe6
+# vfs: Introduce fs_context, switch vfs_kern_mount() to it.
+#
+AC_DEFUN([LC_SRC_HAVE_FS_CONTEXT_HEADER], [
+	LB2_CHECK_LINUX_HEADER_SRC([linux/fs_context.h], [-Werror])
+])
+AC_DEFUN([LC_HAVE_FS_CONTEXT_HEADER], [
+	LB2_CHECK_LINUX_HEADER_RESULT([linux/fs_context.h], [
+		AC_DEFINE(HAVE_FS_CONTEXT_H, 1,
+			[fs_context.h is present])
+	])
+]) # LC_HAVE_FS_CONTEXT_HEADER
+
+#
 # LC_HAVE_BVEC_ITER_ALL
 #
 # kernel 5.1 commit 6dc4f100c175dd0511ae8674786e7c9006cdfbfa
@@ -5217,6 +5233,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 5.0
 	LC_SRC_GENL_FAMILY_HAS_RESV_START_OP
+	LC_SRC_HAVE_FS_CONTEXT_HEADER
 
 	# 5.1
 	LC_SRC_HAVE_BVEC_ITER_ALL
@@ -5543,6 +5560,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.0
 	LC_GENL_FAMILY_HAS_RESV_START_OP
+	LC_HAVE_FS_CONTEXT_HEADER
 
 	# 5.1
 	LC_HAVE_BVEC_ITER_ALL
@@ -6163,6 +6181,8 @@ lustre/osd-ldiskfs/Makefile
 lustre/osd-ldiskfs/autoMakefile
 lustre/osd-zfs/Makefile
 lustre/osd-zfs/autoMakefile
+lustre/osd-wbcfs/Makefile
+lustre/osd-wbcfs/autoMakefile
 lustre/mgc/Makefile
 lustre/mgc/autoMakefile
 lustre/mgs/Makefile

@@ -1,0 +1,32 @@
+BACKGROUND
+----------
+
+Implement an MemFS-based OSD device with writeback support for Lustre.
+It borrows lots of design from memory-based file systems such as tmpfs/ramfs.
+The data is frist written into the memory-based file system (called MemFS in
+short). And then, the data can be persisted to the permant storage in a delayed
+writeback manner.
+
+ +---------------------------------------------------------+
+ | This is experimental! Do NOT use for important data!    |
+ | Only bugs and data corruption lie ahead! Turn back now! |
+ +---------------------------------------------------------+
+
+For questions, please contact:
+- Yingjin Qian <qian@ddn.com>
+- Timothy Day <timday@amazon.com>
+
+TODO
+----
+- Inode and space usage accounting for statfs() system call.
+- Limiting for inodes and blocks.
+- Refine the mount command support for MemFS-based OSD.
+- lprocfs support. Track OSD stats and access them via lprocfs.
+- Use Maple Tree in new kernel to manage and access entries within a directory.
+- Implement the functionality needed by LFSCK.
+- Quota support.
+- Swap space support for large files.
+- Metadata on MemFS; Data on Persistent storage
+  (just like PCC naming with FID for data).
+- Writeback support with ldiskfs/ZFS or KV store as persistent backends.
+- Add transcation support.

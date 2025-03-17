@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# Copyright (c) 2025-2026, DDN/Whamcloud, Inc.
+#
+
+if MODULES
+modulefs_DATA = osd_wbcfs.ko
+endif
+
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+EXTRA_DIST := $(osd_wbcfs-objs:%.o=%.c) osd_internal.h wbcfs.h index.h
