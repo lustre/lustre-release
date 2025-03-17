@@ -68,7 +68,7 @@ struct lu_nodemap {
 	/* unique ID set by MGS */
 	unsigned int		 nm_id;
 	/* nodemap ref counter */
-	atomic_t		 nm_refcount;
+	refcount_t		 nm_refcount;
 	/* UID to squash unmapped UIDs */
 	uid_t			 nm_squash_uid;
 	/* GID to squash unmapped GIDs */

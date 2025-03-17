@@ -75,9 +75,9 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
  */
 void nodemap_getref(struct lu_nodemap *nodemap)
 {
-	atomic_inc(&nodemap->nm_refcount);
+	refcount_inc(&nodemap->nm_refcount);
 	CDEBUG(D_INFO, "GETting nodemap %s(p=%p) : new refcount %d\n",
-	       nodemap->nm_name, nodemap, atomic_read(&nodemap->nm_refcount));
+	       nodemap->nm_name, nodemap, refcount_read(&nodemap->nm_refcount));
 }
 
 /**
@@ -89,13 +89,13 @@ void nodemap_putref(struct lu_nodemap *nodemap)
 	if (!nodemap)
 		return;
 
-	LASSERT(atomic_read(&nodemap->nm_refcount) > 0);
+	LASSERT(refcount_read(&nodemap->nm_refcount) > 0);
 
 	CDEBUG(D_INFO, "PUTting nodemap %s(p=%p) : new refcount %d\n",
 	       nodemap->nm_name, nodemap,
-	       atomic_read(&nodemap->nm_refcount) - 1);
+	       refcount_read(&nodemap->nm_refcount) - 1);
 
-	if (atomic_dec_and_test(&nodemap->nm_refcount))
+	if (refcount_dec_and_test(&nodemap->nm_refcount))
 		nodemap_destroy(nodemap);
 }
 EXPORT_SYMBOL(nodemap_putref);
@@ -1516,7 +1516,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 	 * take an extra reference to prevent nodemap from being destroyed
 	 * while it's being created.
 	 */
-	atomic_set(&nodemap->nm_refcount, 2);
+	refcount_set(&nodemap->nm_refcount, 2);
 	snprintf(nodemap->nm_name, sizeof(nodemap->nm_name), "%s", name);
 	rc = cfs_hash_add_unique(hash, name, &nodemap->nm_hash);
 	if (rc != 0) {
