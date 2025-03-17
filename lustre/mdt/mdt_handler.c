@@ -2198,7 +2198,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
 		CDEBUG(D_INODE, "getattr with lock for "DFID"/"DNAME", ldlm_rep = %p\n",
 		       PFID(mdt_object_fid(parent)),
-		       PNAME(lname), ldlm_rep);
+		       encode_fn_luname(lname), ldlm_rep);
 
 		if (parent->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD ||
 		    (fid_is_root(mdt_object_fid(parent)) &&

@@ -485,7 +485,8 @@ static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	ENTRY;
 	DEBUG_REQ(D_INODE, mdt_info_req(info),
 		  "Create ("DNAME"->"DFID") in "DFID,
-		  PNAME(&rr->rr_name), PFID(rr->rr_fid2), PFID(rr->rr_fid1));
+		  encode_fn_luname(&rr->rr_name), PFID(rr->rr_fid2),
+		  PFID(rr->rr_fid1));
 
 	if (!fid_is_md_operative(rr->rr_fid1))
 		RETURN(-EPERM);
@@ -1188,7 +1189,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 	ENTRY;
 	DEBUG_REQ(D_INODE, req, "unlink "DFID"/"DNAME"", PFID(rr->rr_fid1),
-		  PNAME(&rr->rr_name));
+		  encode_fn_luname(&rr->rr_name));
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
@@ -1293,12 +1294,14 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		if (!fid_is_zero(rr->rr_fid2)) {
 			CDEBUG(D_INFO, "%s: name "DNAME" cannot find "DFID"\n",
 			       mdt_obd_name(info->mti_mdt),
-			       PNAME(&rr->rr_name), PFID(mdt_object_fid(mc)));
+			       encode_fn_luname(&rr->rr_name),
+			       PFID(mdt_object_fid(mc)));
 			GOTO(put_child, rc = -ENOENT);
 		}
 		CDEBUG(D_INFO, "%s: name "DNAME": "DFID" is on another MDT\n",
 		       mdt_obd_name(info->mti_mdt),
-		       PNAME(&rr->rr_name), PFID(mdt_object_fid(mc)));
+		       encode_fn_luname(&rr->rr_name),
+		       PFID(mdt_object_fid(mc)));
 
 		if (!mdt_is_dne_client(req->rq_export))
 			/* Return -ENOTSUPP for old client */
@@ -1419,7 +1422,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
 	ENTRY;
 	DEBUG_REQ(D_INODE, req, "link "DFID" to "DFID"/"DNAME,
-		  PFID(rr->rr_fid1), PFID(rr->rr_fid2), PNAME(&rr->rr_name));
+		  PFID(rr->rr_fid1), PFID(rr->rr_fid2),
+		  encode_fn_luname(&rr->rr_name));
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
 		RETURN(err_serious(-ENOENT));
@@ -1501,7 +1505,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 	if (!req_is_replay(mdt_info_req(info))) {
 		if (rc != -ENOENT) {
 			CDEBUG(D_INFO, "link target "DNAME" existed!\n",
-			       PNAME(&rr->rr_name));
+			       encode_fn_luname(&rr->rr_name));
 			GOTO(unlock_source, rc = -EEXIST);
 		}
 		info->mti_ver[2] = ENOENT_VERSION;
@@ -1887,7 +1891,7 @@ static int mdt_migrate_links_lock(struct mdt_thread_info *info,
 		if (lu_fid_eq(mdt_object_fid(spobj), &fid)) {
 			CDEBUG(D_INFO,
 			       "skip lock on source parent "DFID"/"DNAME"\n",
-			       PFID(&fid), PNAME(lname));
+			       PFID(&fid), encode_fn_luname(lname));
 			continue;
 		}
 
@@ -1895,7 +1899,7 @@ static int mdt_migrate_links_lock(struct mdt_thread_info *info,
 		if (tpobj != spobj && lu_fid_eq(mdt_object_fid(tpobj), &fid)) {
 			CDEBUG(D_INFO,
 			       "skip lock on target parent "DFID"/"DNAME"\n",
-			       PFID(&fid), PNAME(lname));
+			       PFID(&fid), encode_fn_luname(lname));
 			continue;
 		}
 
@@ -1908,7 +1912,7 @@ static int mdt_migrate_links_lock(struct mdt_thread_info *info,
 
 		if (!mdt_object_exists(lnkp)) {
 			CDEBUG(D_INFO, DFID" doesn't exist, skip "DNAME"\n",
-			       PFID(&fid), PNAME(lname));
+			       PFID(&fid), encode_fn_luname(lname));
 			mdt_object_put(info->mti_env, lnkp);
 			continue;
 		}
@@ -2207,7 +2211,7 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 
 	ENTRY;
 	CDEBUG(D_INODE, "migrate "DFID"/"DNAME" to "DFID"\n", PFID(rr->rr_fid1),
-	       PNAME(&rr->rr_name), PFID(rr->rr_fid2));
+	       encode_fn_luname(&rr->rr_name), PFID(rr->rr_fid2));
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
@@ -2510,7 +2514,7 @@ unlock_rename:
 	if (rc)
 		CERROR("%s: migrate "DFID"/"DNAME" failed: rc = %d\n",
 		       mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
-		       PNAME(&rr->rr_name), rc);
+		       encode_fn_luname(&rr->rr_name), rc);
 
 	return rc;
 }
@@ -2677,8 +2681,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
 	ENTRY;
 	DEBUG_REQ(D_INODE, req, "rename "DFID"/"DNAME" to "DFID"/"DNAME,
-		  PFID(rr->rr_fid1), PNAME(&rr->rr_name),
-		  PFID(rr->rr_fid2), PNAME(&rr->rr_tgt_name));
+		  PFID(rr->rr_fid1), encode_fn_luname(&rr->rr_name),
+		  PFID(rr->rr_fid2), encode_fn_luname(&rr->rr_tgt_name));
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
@@ -2760,7 +2764,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 			       mdt_obd_name(mdt),
 			       msrcdir == mtgtdir ? "samedir" : "crossdir",
 			       S_ISDIR(ma->ma_attr.la_mode) ? "dir" : "file",
-			       PFID(rr->rr_fid1), PNAME(&rr->rr_name));
+			       PFID(rr->rr_fid1),
+			       encode_fn_luname(&rr->rr_name));
 		}
 	}
 

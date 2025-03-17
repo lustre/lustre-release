@@ -158,3 +158,6 @@ xa_insert||ll_xa_insert
 LDLM_LOCK_PUT||ldlm_lock_put
 LDLM_LOCK_RELEASE||ldlm_lock_put
 LDLM_LOCK_GET||ldlm_lock_get
+%.*s||DNAME
+d_name.name||encode_fn_xxx
+PNAME||encode_fname_luname

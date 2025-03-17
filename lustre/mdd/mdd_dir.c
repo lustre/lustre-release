@@ -4017,7 +4017,7 @@ static int mdd_update_link(const struct lu_env *env,
 		RETURN(0);
 
 	CDEBUG(D_INFO, "update "DFID"/"DNAME":"DFID"\n",
-	       PFID(fid), PNAME(lname), PFID(mdd_object_fid(tobj)));
+	       PFID(fid), encode_fn_luname(lname), PFID(mdd_object_fid(tobj)));
 
 	pobj = mdd_object_find(env, mdd, fid);
 	if (IS_ERR(pobj)) {
@@ -4131,11 +4131,12 @@ static int mdd_iterate_linkea(const struct lu_env *env,
 				    &fid);
 
 		/* Note: lname might miss \0 at the end */
-		snprintf(filename, sizeof(info->mdi_name), "%.*s",
+		snprintf(filename, sizeof(info->mdi_name), DNAME,
 			 lname.ln_namelen, lname.ln_name);
 		lname.ln_name = filename;
 
-		CDEBUG(D_INFO, DFID"/"DNAME"\n", PFID(&fid), PNAME(&lname));
+		CDEBUG(D_INFO, DFID"/"DNAME"\n",
+		       PFID(&fid), encode_fn_luname(&lname));
 
 		rc = cb(env, sobj, tobj, tname, tpfid, &lname, &fid, opaque,
 			handle);
@@ -4416,9 +4417,10 @@ static int mdd_migrate_update(const struct lu_env *env,
 
 	ENTRY;
 
-	CDEBUG(D_INFO, "update "DFID" from "DFID"/%s to "DFID"/%s\n",
+	CDEBUG(D_INFO, "update "DFID" from "DFID"/"DNAME" to "DFID"/"DNAME"\n",
 	       PFID(mdd_object_fid(obj)), PFID(mdd_object_fid(spobj)),
-	       sname->ln_name, PFID(mdd_object_fid(tpobj)), tname->ln_name);
+	       encode_fn_luname(sname), PFID(mdd_object_fid(tpobj)),
+	       encode_fn_luname(tname));
 
 	rc = __mdd_index_delete(env, spobj, sname->ln_name,
 				S_ISDIR(attr->la_mode), handle);
@@ -4612,11 +4614,11 @@ static int mdd_migrate_cmd_check(struct mdd_device *mdd,
 	    lum->lum_stripe_offset != lmv->lmv_master_mdt_index ||
 	    (lum_hash_type && lum_hash_type != lmv_hash_type)) {
 		CERROR("%s: '"DNAME"' migration was interrupted, run 'lfs migrate -m %d -c %d -H %s "DNAME"' to finish migration: rc = %d\n",
-			mdd2obd_dev(mdd)->obd_name, PNAME(lname),
+			mdd2obd_dev(mdd)->obd_name, encode_fn_luname(lname),
 			le32_to_cpu(lmv->lmv_master_mdt_index),
 			le32_to_cpu(lmv->lmv_migrate_offset),
 			mdt_hash_name[le32_to_cpu(lmv_hash_type)],
-			PNAME(lname), -EPERM);
+			encode_fn_luname(lname), -EPERM);
 		return -EPERM;
 	}
 
@@ -5061,7 +5063,7 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 				    fid);
 
 		/* Note: lname might miss \0 at the end */
-		snprintf(filename, sizeof(info->mdi_name), "%.*s",
+		snprintf(filename, sizeof(info->mdi_name), DNAME,
 			 lname.ln_namelen, lname.ln_name);
 		lname.ln_name = filename;
 

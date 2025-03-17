@@ -1462,8 +1462,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
 	CDEBUG(D_INODE, "I am going to open "DFID"/("DNAME"->"DFID") "
 	       "cr_flag=%#lo mode=0%06o msg_flag=0x%x\n",
-	       PFID(rr->rr_fid1), PNAME(&rr->rr_name), PFID(rr->rr_fid2),
-	       open_flags, ma->ma_attr.la_mode, msg_flags);
+	       PFID(rr->rr_fid1), encode_fn_luname(&rr->rr_name),
+	       PFID(rr->rr_fid2), open_flags, ma->ma_attr.la_mode, msg_flags);
 
 	/* Prevent by-fid operation if parent fid is .lustre/fid.
 	 * Also, we want rbac roles to have precedence over any other
@@ -1554,7 +1554,7 @@ again_pw:
 
 	LASSERTF(ergo(result == 0, fid_is_sane(child_fid)),
 		 "looking for "DFID"/"DNAME", found FID = "DFID"\n",
-		 PFID(mdt_object_fid(parent)), PNAME(&rr->rr_name),
+		 PFID(mdt_object_fid(parent)), encode_fn_luname(&rr->rr_name),
 		 PFID(child_fid));
 
 	if (result != 0 && result != -ENOENT) {
@@ -1701,7 +1701,7 @@ again_pw:
 			/* Object does not exist. Likely FS corruption. */
 			CERROR("%s: name '"DNAME"' present, but FID "
 			       DFID" is invalid\n", mdt_obd_name(info->mti_mdt),
-			       PNAME(&rr->rr_name), PFID(child_fid));
+			       encode_fn_luname(&rr->rr_name), PFID(child_fid));
 			GOTO(out_child, result = -EIO);
 		}
 	}

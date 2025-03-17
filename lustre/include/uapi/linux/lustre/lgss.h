@@ -17,6 +17,7 @@
 # include <stdlib.h> /* abs() */
 # include <inttypes.h> /* PRIu64 */
 # include <ctype.h> /* isascii() */
+# include <errno.h>
 # define __USE_GNU      1
 # define __USE_XOPEN2K8  1
 #else
@@ -264,24 +265,27 @@ static const char base64url_table[] =
  * as it's unneeded and not required by the RFC.
  * Pad with a trailing space.
  */
-static inline void gss_base64url_encode(char **dst, int *dstlen,
-					const __u8 *src, int srclen)
+static inline int gss_base64url_encode(char **dst, int *dstlen,
+				       const __u8 *src, int srclen)
 {
 	char *cp = *dst;
 	int len = *dstlen;
 	__u32 ac = 0;
 	int bits = 0;
+	int rc = 0;
 	int i;
 
 	if (len < 0)
-		return;
+		return -EINVAL;
+	if (len == 0)
+		return 0;
 
-	if (!srclen)
-		return gss_string_write(dst, dstlen, "");
+	if (!srclen) {
+		gss_string_write(dst, dstlen, "");
+		return 0;
+	}
 
 	for (i = 0; i < srclen; i++) {
-		if (!len)
-			break;
 		ac = (ac << 8) | src[i];
 		bits += 8;
 		do {
@@ -289,6 +293,8 @@ static inline void gss_base64url_encode(char **dst, int *dstlen,
 			*cp++ = base64url_table[(ac >> bits) & 0x3f];
 			len--;
 		} while (bits >= 6 && len > 0);
+		if (!len)
+			break;
 	}
 	if (i < srclen) {
 		len = -1;
@@ -310,6 +316,9 @@ static inline void gss_base64url_encode(char **dst, int *dstlen,
 out:
 	*dst = cp;
 	*dstlen = len;
+	if (len == -1)
+		rc = -ENOBUFS;
+	return rc;
 }
 
 /*

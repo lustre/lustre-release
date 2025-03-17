@@ -356,7 +356,7 @@ static int mdt_auto_split(struct mdt_thread_info *info)
 	info->mti_filename[lname->ln_namelen] = '\0';
 	lname->ln_name = info->mti_filename;
 	CDEBUG(D_INFO, "split "DFID"/"DNAME" to count %u (MDT count %d)\n",
-	       PFID(fid), PNAME(lname), lum_stripe_count,
+	       PFID(fid), encode_fn_luname(lname), lum_stripe_count,
 	       atomic_read(&mdt->mdt_mds_mds_conns) + 1);
 
 	parent = mdt_object_find(env, mdt, fid);
@@ -397,7 +397,7 @@ out:
 	if (rc && rc != -EALREADY && rc != -EBUSY && rc != -EREMOTE)
 		CERROR("%s: split "DFID"/"DNAME" to count %u failed: rc = %d\n",
 		       mdt_obd_name(mdt), PFID(mdt_object_fid(child)),
-		       PNAME(lname), lum_stripe_count, rc);
+		       encode_fn_luname(lname), lum_stripe_count, rc);
 
 	if (!IS_ERR_OR_NULL(child))
 		mdt_object_put(env, child);
@@ -630,7 +630,7 @@ static int mdt_restripe_migrate(struct mdt_thread_info *info)
 	lname->ln_namelen = namelen;
 
 	CDEBUG(D_INFO, "migrate "DFID"/"DNAME" type %ho\n",
-	       PFID(&fid1), PNAME(lname), type);
+	       PFID(&fid1), encode_fn_luname(lname), type);
 
 	master = mdt_object_find(env, mdt, &fid1);
 	if (IS_ERR(master))
@@ -672,8 +672,8 @@ out:
 		/* -EBUSY: file is opened by others */
 		if (rc != -EBUSY)
 			CERROR("%s: migrate "DFID"/"DNAME" failed: rc = %d\n",
-			       mdt_obd_name(mdt), PFID(&fid1), PNAME(lname),
-			       rc);
+			       mdt_obd_name(mdt), PFID(&fid1),
+			       encode_fn_luname(lname), rc);
 
 		spin_lock(&mdt->mdt_lock);
 		stripe->mot_restriping = 0;

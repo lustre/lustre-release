@@ -1360,11 +1360,6 @@ static inline bool lu_name_is_valid(const struct lu_name *ln)
 	return lu_name_is_valid_2(ln->ln_name, ln->ln_namelen);
 }
 
-#define DNAME "%.*s"
-#define PNAME(ln)					\
-	(lu_name_is_valid(ln) ? (ln)->ln_namelen : 0),	\
-	(lu_name_is_valid(ln) ? (ln)->ln_name : "")
-
 /*
  * Common buffer structure to be passed around for various xattr_{s,g}et()
  * methods.

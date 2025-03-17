@@ -6439,8 +6439,8 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 						 osd_obj2dev(obj), id, fid);
 		}
 		CDEBUG(D_INODE, DFID"/"DNAME" => "DFID"\n",
-		       PFID(lu_object_fid(&obj->oo_dt.do_lu)), PNAME(ln),
-		       PFID(fid));
+		       PFID(lu_object_fid(&obj->oo_dt.do_lu)),
+		       encode_fn_luname(ln), PFID(fid));
 	} else {
 		rc = PTR_ERR(bh);
 	}
@@ -6553,6 +6553,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 	struct dt_insert_rec *rec1 = (struct dt_insert_rec *)rec;
 	const struct lu_fid *fid = rec1->rec_fid;
 	const char *name = (const char *)key;
+	int namelen = strlen(name);
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct inode *child_inode = NULL;
 	struct osd_idmap_cache *idc;
@@ -6595,7 +6596,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 
 	if (idc->oic_remote) {
 		/* Insert remote entry */
-		if (strcmp(name, dotdot) == 0 && strlen(name) == 2) {
+		if (strcmp(name, dotdot) == 0 && namelen == 2) {
 			child_inode =
 			igrab(osd->od_mdt_map->omm_remote_parent->d_inode);
 		} else {
@@ -6629,7 +6630,8 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 	rc = osd_ea_add_rec(env, obj, child_inode, name, fid, th);
 
 	CDEBUG(D_INODE, "parent %lu insert %s:%lu rc = %d\n",
-	       obj->oo_inode->i_ino, name, child_inode->i_ino, rc);
+	       obj->oo_inode->i_ino, encode_fn_len(name, namelen),
+	       child_inode->i_ino, rc);
 
 	if (child_inode && child_inode != oti->oti_inode)
 		iput(child_inode);
@@ -7395,9 +7397,9 @@ osd_dirent_reinsert(const struct lu_env *env, struct osd_device *dev,
 	 */
 	if (rc != 0)
 		CDEBUG(D_LFSCK,
-		       "%s: fail to reinsert the dirent, dir = %lu/%u, name = %.*s, "DFID": rc = %d\n",
+		       "%s: fail to reinsert the dirent, dir = %lu/%u, name = "DNAME", "DFID": rc = %d\n",
 		       osd_ino2name(inode), dir->i_ino, dir->i_generation,
-		       namelen, dentry->d_name.name, PFID(fid), rc);
+		       encode_fn_dentry(dentry), PFID(fid), rc);
 
 	RETURN(rc);
 }
@@ -7449,12 +7451,10 @@ osd_dirent_check_repair(const struct lu_env *env, struct osd_object *obj,
 			*attr |= LUDA_UNKNOWN;
 			rc = 0;
 		} else {
-			CDEBUG(D_LFSCK, "%s: fail to iget() for dirent "
-			       "check_repair, dir = %lu/%u, name = %.*s, "
-			       "ino = %llu, rc = %d\n",
+			CDEBUG(D_LFSCK,
+			       "%s: fail to iget() for dirent check_repair, dir = %lu/%u, name = "DNAME", ino = %llu: rc = %d\n",
 			       devname, dir->i_ino, dir->i_generation,
-			       ent->oied_namelen, ent->oied_name,
-			       ent->oied_ino, rc);
+			       encode_fn_oied(ent), ent->oied_ino, rc);
 		}
 
 		RETURN(rc);
@@ -7497,10 +7497,9 @@ again:
 			rc = PTR_ERR(jh);
 			CDEBUG(D_LFSCK, "%s: fail to start trans for dirent "
 			       "check_repair, dir = %lu/%u, credits = %d, "
-			       "name = %.*s, ino = %llu: rc = %d\n",
+			       "name = "DNAME", ino = %llu: rc = %d\n",
 			       devname, dir->i_ino, dir->i_generation, credits,
-			       ent->oied_namelen, ent->oied_name,
-			       ent->oied_ino, rc);
+			       encode_fn_oied(ent), ent->oied_ino, rc);
 
 			GOTO(out_inode, rc);
 		}
@@ -7565,10 +7564,9 @@ again:
 				*attr |= LUDA_IGNORE;
 			} else {
 				CDEBUG(D_LFSCK, "%s: expect remote agent "
-				       "parent directory, but got %.*s under "
+				       "parent directory, but got "DNAME" under "
 				       "dir = %lu/%u with the FID "DFID"\n",
-				       devname, ent->oied_namelen,
-				       ent->oied_name, dir->i_ino,
+				       devname, encode_fn_oied(ent), dir->i_ino,
 				       dir->i_generation, PFID(tfid));
 
 				*attr |= LUDA_UNKNOWN;
@@ -7591,10 +7589,10 @@ again:
 			 */
 			CDEBUG(D_LFSCK, "%s: the target inode does not "
 			       "recognize the dirent, dir = %lu/%u, "
-			       " name = %.*s, ino = %llu, "
+			       " name = "DNAME", ino = %llu, "
 			       DFID": rc = %d\n", devname, dir->i_ino,
-			       dir->i_generation, ent->oied_namelen,
-			       ent->oied_name, ent->oied_ino, PFID(fid), rc);
+			       dir->i_generation, encode_fn_oied(ent),
+			       ent->oied_ino, PFID(fid), rc);
 			*attr |= LUDA_UNKNOWN;
 
 			GOTO(out, rc = 0);
@@ -7602,10 +7600,10 @@ again:
 
 		if (rc && rc != -ENODATA) {
 			CDEBUG(D_LFSCK, "%s: fail to verify FID in the dirent, "
-			       "dir = %lu/%u, name = %.*s, ino = %llu, "
+			       "dir = %lu/%u, name = "DNAME", ino = %llu, "
 			       DFID": rc = %d\n", devname, dir->i_ino,
-			       dir->i_generation, ent->oied_namelen,
-			       ent->oied_name, ent->oied_ino, PFID(fid), rc);
+			       dir->i_generation, encode_fn_oied(ent),
+			       ent->oied_ino, PFID(fid), rc);
 			*attr |= LUDA_UNKNOWN;
 
 			GOTO(out, rc = 0);
@@ -7646,11 +7644,11 @@ again:
 			*attr |= LUDA_REPAIR;
 		else
 			CDEBUG(D_LFSCK, "%s: fail to re-insert FID after "
-			       "the dirent, dir = %lu/%u, name = %.*s, "
+			       "the dirent, dir = %lu/%u, name = "DNAME", "
 			       "ino = %llu, "DFID": rc = %d\n",
 			       devname, dir->i_ino, dir->i_generation,
-			       ent->oied_namelen, ent->oied_name,
-			       ent->oied_ino, PFID(fid), rc);
+			       encode_fn_oied(ent), ent->oied_ino,
+			       PFID(fid), rc);
 	} else {
 		/* lma is NULL, trust the FID-in-dirent if it is valid. */
 		if (*attr & LUDA_VERIFY_DRYRUN) {
@@ -7690,11 +7688,11 @@ again:
 			else
 				CDEBUG(D_LFSCK, "%s: fail to set LMA for "
 				       "update dirent, dir = %lu/%u, "
-				       "name = %.*s, ino = %llu, "
+				       "name = "DNAME", ino = %llu, "
 				       DFID": rc = %d\n",
 				       devname, dir->i_ino, dir->i_generation,
-				       ent->oied_namelen, ent->oied_name,
-				       ent->oied_ino, PFID(fid), rc);
+				       encode_fn_oied(ent), ent->oied_ino,
+				       PFID(fid), rc);
 		} else if (dev->od_index == 0) {
 			lu_igif_build(fid, inode->i_ino, inode->i_generation);
 			/*
@@ -7708,11 +7706,11 @@ again:
 			else
 				CDEBUG(D_LFSCK, "%s: fail to append IGIF "
 				       "after the dirent, dir = %lu/%u, "
-				       "name = %.*s, ino = %llu, "
+				       "name = "DNAME", ino = %llu, "
 				       DFID": rc = %d\n",
 				       devname, dir->i_ino, dir->i_generation,
-				       ent->oied_namelen, ent->oied_name,
-				       ent->oied_ino, PFID(fid), rc);
+				       encode_fn_oied(ent), ent->oied_ino,
+				       PFID(fid), rc);
 		}
 	}
 

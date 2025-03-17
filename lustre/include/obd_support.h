@@ -25,6 +25,8 @@
 #include <lnet/lib-cpt.h>
 #include <lprocfs_status.h>
 #include <lustre_handles.h>
+#include <uapi/linux/lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lgss.h>
 
 /* global variables */
 extern struct percpu_counter obd_memory;
@@ -53,6 +55,7 @@ extern unsigned long obd_max_dirty_pages;
 extern atomic_long_t obd_dirty_pages;
 extern char obd_jobid_var[];
 extern bool obd_enable_health_write;
+extern bool obd_enable_fname_encoding;
 
 /* Some hash init argument constants */
 #define HASH_NID_STATS_BKT_BITS 5
@@ -1087,5 +1090,25 @@ struct obd_heat_instance {
 #define LUSTRE_ENCRYPTION_BLOCKBITS   12
 #define LUSTRE_ENCRYPTION_UNIT_SIZE   ((size_t)1 << LUSTRE_ENCRYPTION_BLOCKBITS)
 #define LUSTRE_ENCRYPTION_MASK        (~(LUSTRE_ENCRYPTION_UNIT_SIZE - 1))
+
+/* filename encoding */
+extern const char *encode_fn_len(const char *fname, size_t namelen);
+static inline const char *encode_fn(const char *fname)
+{
+	return encode_fn_len(fname, fname ? strnlen(fname, PATH_MAX) : 0);
+}
+
+/* for format DNAME "%.*s" */
+#define DNAME "%.*s"
+#define encode_fn_dname(len, fname)	(int)(len), encode_fn_len(fname, len)
+#define encode_fn_luname(ln)	\
+		encode_fn_dname((ln)->ln_namelen,	\
+				lu_name_is_valid(ln) ? (ln)->ln_name : "")
+#define encode_fn_opdata(op)	encode_fn_dname((op)->op_namelen, (op)->op_name)
+#define encode_fn_oied(ent)	\
+		encode_fn_dname((ent)->oied_namelen, (ent)->oied_name)
+#define encode_fn_qstr(qs)	encode_fn_dname((qs).len, (qs).name)
+#define encode_fn_dentry(de)	encode_fn_qstr((de)->d_name)
+#define encode_fn_file(file)	encode_fn_dentry(file_dentry(file))
 
 #endif
