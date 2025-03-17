@@ -68,7 +68,7 @@ ksocknal_lib_send_hdr(struct ksock_conn *conn, struct ksock_tx *tx,
 	{
 #if SOCKNAL_SINGLE_FRAG_TX
 		struct kvec scratch;
-		struct kvec *scratchiov = &scratch;
+		scratchiov = &scratch;
 		unsigned int niov = 1;
 #else
 		unsigned int niov = tx->tx_niov;
@@ -144,7 +144,7 @@ ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 	} else {
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
 		struct kvec scratch;
-		struct kvec *scratchiov = &scratch;
+		scratchiov = &scratch;
 		unsigned int niov = 1;
 #else
 #ifdef CONFIG_HIGHMEM
@@ -190,7 +190,7 @@ ksocknal_lib_recv_iov(struct ksock_conn *conn, struct kvec *scratchiov)
 {
 #if SOCKNAL_SINGLE_FRAG_RX
 	struct kvec  scratch;
-	struct kvec *scratchiov = &scratch;
+	scratchiov = &scratch;
 	unsigned int niov = 1;
 #else
 	unsigned int niov = conn->ksnc_rx_niov;
@@ -297,8 +297,8 @@ ksocknal_lib_recv_kiov(struct ksock_conn *conn, struct page **pages,
 {
 #if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK
 	struct kvec   scratch;
-	struct kvec  *scratchiov = &scratch;
-	struct page  **pages      = NULL;
+	scratchiov = &scratch;
+	pages      = NULL;
 	unsigned int   niov       = 1;
 #else
 #ifdef CONFIG_HIGHMEM
