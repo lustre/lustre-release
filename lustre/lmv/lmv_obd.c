@@ -1473,6 +1473,9 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 					       temp->os_namelen);
 			osfs->os_maxbytes = min(osfs->os_maxbytes,
 						temp->os_maxbytes);
+			/* OR failure states, AND performance states */
+			osfs->os_state |= temp->os_state & ~OS_STATFS_DOWNGRADE;
+			osfs->os_state &= temp->os_state & OS_STATFS_UPGRADE;
 		}
 	}
 	/* There is no stats from some MDTs, data incomplete */

@@ -233,13 +233,18 @@ lov_statfs_update(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 		 *
 		 * Currently using the sum capped at U64_MAX.
 		 */
-		osfs->os_files = osfs->os_files + lov_sfs->os_files < osfs->os_files ?
+		osfs->os_files =
+			osfs->os_files + lov_sfs->os_files < osfs->os_files ?
 			U64_MAX : osfs->os_files + lov_sfs->os_files;
-		osfs->os_ffree = osfs->os_ffree + lov_sfs->os_ffree < osfs->os_ffree ?
+		osfs->os_ffree =
+			osfs->os_ffree + lov_sfs->os_ffree < osfs->os_ffree ?
 			U64_MAX : osfs->os_ffree + lov_sfs->os_ffree;
 		osfs->os_namelen = min(osfs->os_namelen, lov_sfs->os_namelen);
 		osfs->os_maxbytes = min(osfs->os_maxbytes,
 					lov_sfs->os_maxbytes);
+		/* OR failure states, AND performance states */
+		osfs->os_state |= lov_sfs->os_state & ~OS_STATFS_DOWNGRADE;
+		osfs->os_state &= lov_sfs->os_state & OS_STATFS_UPGRADE;
 	}
 }
 

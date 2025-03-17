@@ -288,6 +288,7 @@ static ssize_t namelen_max_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
+
 	struct obd_statfs osfs;
 	int rc;
 

@@ -435,7 +435,7 @@ int lmv_tunables_init(struct obd_device *obd)
 #ifdef CONFIG_PROC_FS
 	obd->obd_vars = lprocfs_lmv_obd_vars;
 #endif
-	rc = lprocfs_obd_setup(obd, true);
+	rc = lprocfs_obd_setup(obd, false);
 	if (rc)
 		goto out_failed;
 #ifdef CONFIG_PROC_FS

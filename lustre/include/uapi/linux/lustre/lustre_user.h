@@ -273,6 +273,10 @@ enum obd_statfs_state {
 	OS_STATFS_ENOINO	= 0x00000040, /**< not enough inodes */
 	OS_STATFS_SUM		= 0x00000100, /**< aggregated for all tagrets */
 	OS_STATFS_NONROT	= 0x00000200, /**< non-rotational device */
+	OS_STATFS_DOWNGRADE	= OS_STATFS_DEGRADED | OS_STATFS_READONLY |
+				  OS_STATFS_NOCREATE | OS_STATFS_ENOSPC |
+				  OS_STATFS_ENOINO,
+	OS_STATFS_UPGRADE	= OS_STATFS_NONROT,
 };
 
 struct obd_statfs_state_name {

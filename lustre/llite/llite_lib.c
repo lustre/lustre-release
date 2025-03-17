@@ -2600,6 +2600,9 @@ int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 	/* do not update MDT os_namelen, OSTs do not store filenames */
 	/* only update from OST os_maxbytes, DoM files are small */
 	osfs->os_maxbytes = ost_osfs.os_maxbytes;
+	/* OR failure states, AND performance states */
+	osfs->os_state |= ost_osfs.os_state & ~OS_STATFS_DOWNGRADE;
+	osfs->os_state &= ost_osfs.os_state & OS_STATFS_UPGRADE;
 
 	/* If we have _some_ OSTs, but don't have as many free objects on the
 	 * OSTs as inodes on the MDTs, reduce the reported number of inodes
