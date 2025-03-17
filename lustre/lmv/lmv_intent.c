@@ -353,8 +353,9 @@ retry:
 	}
 
 	CDEBUG(D_INODE, "OPEN_INTENT with fid1="DFID", fid2="DFID","
-	       " name='%s' -> mds #%u\n", PFID(&op_data->op_fid1),
-	       PFID(&op_data->op_fid2), op_data->op_name, tgt->ltd_index);
+	       " name='"DNAME"' -> mds #%u\n", PFID(&op_data->op_fid1),
+	       PFID(&op_data->op_fid2), encode_fn_opdata(op_data),
+	       tgt->ltd_index);
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, it, reqp, cb_blocking,
 			    extra_lock_flags);
@@ -468,8 +469,9 @@ retry:
 	CDEBUG(D_INODE, "LOOKUP_INTENT with fid1="DFID", fid2="DFID
 	       ", name='%s' -> mds #%u\n",
 	       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2),
-	       op_data->op_name ? op_data->op_name : "<NULL>",
-	       tgt->ltd_index);
+	       op_data->op_name ?
+	       encode_fn_len(op_data->op_name, op_data->op_namelen) :
+	       "<NULL>", tgt->ltd_index);
 
 	op_data->op_bias &= ~MDS_CROSS_REF;
 
@@ -538,10 +540,9 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 	LASSERT(it != NULL);
 	LASSERT(fid_is_sane(&op_data->op_fid1));
 
-	CDEBUG(D_INODE, "INTENT LOCK '%s' for "DFID" '%.*s' on "DFID"\n",
+	CDEBUG(D_INODE, "INTENT LOCK '%s' for "DFID" '"DNAME"' on "DFID"\n",
 		LL_IT2STR(it), PFID(&op_data->op_fid2),
-		(int)op_data->op_namelen, op_data->op_name,
-		PFID(&op_data->op_fid1));
+		encode_fn_opdata(op_data), PFID(&op_data->op_fid1));
 
 	if (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_LAYOUT | IT_GETXATTR))
 		rc = lmv_intent_lookup(exp, op_data, it, reqp, cb_blocking,

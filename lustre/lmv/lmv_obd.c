@@ -2262,10 +2262,9 @@ retry:
 	if (rc)
 		RETURN(rc);
 
-	CDEBUG(D_INODE, "CREATE name '%.*s' "DFID" on "DFID" -> mds #%x\n",
-		(int)op_data->op_namelen, op_data->op_name,
-		PFID(&op_data->op_fid2), PFID(&op_data->op_fid1),
-		op_data->op_mds);
+	CDEBUG(D_INODE, "CREATE name '"DNAME"' "DFID" on "DFID" -> mds #%x\n",
+		encode_fn_opdata(op_data), PFID(&op_data->op_fid2),
+		PFID(&op_data->op_fid1), op_data->op_mds);
 
 	op_data->op_flags |= MF_MDC_CANCEL_FID1;
 	rc = md_create(tgt->ltd_exp, op_data, data, datalen, mode, uid, gid,
@@ -2558,8 +2557,8 @@ static int lmv_migrate(struct obd_export *exp, struct md_op_data *op_data,
 
 	LASSERT(op_data->op_cli_flags & CLI_MIGRATE);
 
-	CDEBUG(D_INODE, "MIGRATE "DFID"/%.*s\n",
-	       PFID(&op_data->op_fid1), (int)namelen, name);
+	CDEBUG(D_INODE, "MIGRATE "DFID"/"DNAME"\n",
+	       PFID(&op_data->op_fid1), encode_fn_dname(namelen, name));
 
 	op_data->op_fsuid = from_kuid(&init_user_ns, current_fsuid());
 	op_data->op_fsgid = from_kgid(&init_user_ns, current_fsgid());
@@ -2841,9 +2840,9 @@ retry:
 	}
 
 rename:
-	CDEBUG(D_INODE, "RENAME "DFID"/%.*s to "DFID"/%.*s\n",
-		PFID(&op_data->op_fid1), (int)oldlen, old,
-		PFID(&op_data->op_fid2), (int)newlen, new);
+	CDEBUG(D_INODE, "RENAME "DFID"/"DNAME" to "DFID"/"DNAME"\n",
+		PFID(&op_data->op_fid1), encode_fn_dname(oldlen, old),
+		PFID(&op_data->op_fid2), encode_fn_dname(newlen, new));
 
 	rc = md_rename(tgt->ltd_exp, op_data, old, oldlen, new, newlen,
 			request);

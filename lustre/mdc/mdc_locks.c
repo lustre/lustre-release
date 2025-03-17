@@ -365,9 +365,8 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 				     RCL_SERVER,
 				     obd->u.cli.cl_max_mds_easize);
 
-		CDEBUG(D_SEC, "packed '%.*s' as security xattr name\n",
-		       op_data->op_file_secctx_name_size,
-		       op_data->op_file_secctx_name);
+		CDEBUG(D_SEC, "packed '"DNAME"' as security xattr name\n",
+		       encode_fn_opdata(op_data));
 
 	} else {
 		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
@@ -675,9 +674,8 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
 				     RCL_SERVER, easize);
 
-		CDEBUG(D_SEC, "packed '%.*s' as security xattr name\n",
-		       op_data->op_file_secctx_name_size,
-		       op_data->op_file_secctx_name);
+		CDEBUG(D_SEC, "packed '"DNAME"' as security xattr name\n",
+		       encode_fn_opdata(op_data));
 	} else {
 		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
 				     RCL_SERVER, 0);
@@ -1383,9 +1381,9 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 	EXIT;
 out:
 	CDEBUG(D_DENTRY,
-	       "D_IT dentry=%.*s intent=%s status=%d disp=%x: rc = %d\n",
-		(int)op_data->op_namelen, op_data->op_name,
-		ldlm_it2str(it->it_op), it->it_status, it->it_disposition, rc);
+	       "D_IT dentry="DNAME" intent=%s status=%d disp=%x: rc = %d\n",
+	       encode_fn_opdata(op_data), ldlm_it2str(it->it_op),
+	       it->it_status, it->it_disposition, rc);
 
 	return rc;
 }
@@ -1499,11 +1497,11 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
 	ENTRY;
 	LASSERT(it);
-	CDEBUG(D_DLMTRACE, "(name: %.*s,"DFID") in obj "DFID
-		", intent: %s flags %#lo\n", (int)op_data->op_namelen,
-		op_data->op_name, PFID(&op_data->op_fid2),
-		PFID(&op_data->op_fid1), ldlm_it2str(it->it_op),
-		it->it_open_flags);
+	CDEBUG(D_DLMTRACE,
+	       "(name: "DNAME","DFID") in obj "DFID", intent: %s flags %#lo\n",
+	       encode_fn_opdata(op_data), PFID(&op_data->op_fid2),
+	       PFID(&op_data->op_fid1), ldlm_it2str(it->it_op),
+	       it->it_open_flags);
 
 	lockh.cookie = 0;
 	/* MDS_FID_OP is not a revalidate case */
@@ -1605,10 +1603,9 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 
 	ENTRY;
 	CDEBUG(D_DLMTRACE,
-	       "name: %.*s in inode "DFID", intent: %s flags %#lo\n",
-	       (int)op_data->op_namelen, op_data->op_name,
-	       PFID(&op_data->op_fid1), ldlm_it2str(it->it_op),
-	       it->it_open_flags);
+	       "name: "DNAME" in inode "DFID", intent: %s flags %#lo\n",
+	       encode_fn_opdata(op_data), PFID(&op_data->op_fid1),
+	       ldlm_it2str(it->it_op), it->it_open_flags);
 
 	fid_build_reg_res_name(&op_data->op_fid1, &res_id);
 	/* If the MDT return -ERANGE because of large ACL, then the sponsor

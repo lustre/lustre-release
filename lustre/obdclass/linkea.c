@@ -148,8 +148,8 @@ int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 			leh->leh_overflow_time++;
 
 		CDEBUG(D_INODE, "No enough space to hold linkea entry '"
-		       DFID": %.*s' at %u\n", PFID(pfid), lname->ln_namelen,
-		       lname->ln_name, leh->leh_overflow_time);
+		       DFID": "DNAME"' at %u\n", PFID(pfid),
+		       encode_fn_luname(lname), leh->leh_overflow_time);
 		return err_on_overflow ? -EOVERFLOW : 0;
 	}
 
@@ -170,8 +170,8 @@ int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 		       "New link_ea name '"DFID":<encrypted (%d)>' is added\n",
 		       PFID(pfid), lname->ln_namelen);
 	else
-		CDEBUG(D_INODE, "New link_ea name '"DFID":%.*s' is added\n",
-		       PFID(pfid), lname->ln_namelen, lname->ln_name);
+		CDEBUG(D_INODE, "New link_ea name '"DFID":"DNAME"' is added\n",
+		       PFID(pfid), encode_fn_luname(lname));
 	return 0;
 }
 EXPORT_SYMBOL(linkea_add_buf);
@@ -193,8 +193,8 @@ void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname,
 		       "Old link_ea name '<encrypted (%d)>' is removed\n",
 		       lname->ln_namelen);
 	else
-		CDEBUG(D_INODE, "Old link_ea name '%.*s' is removed\n",
-		       lname->ln_namelen, lname->ln_name);
+		CDEBUG(D_INODE, "Old link_ea name '"DNAME"' is removed\n",
+		       encode_fn_luname(lname));
 
 	if ((char *)ldata->ld_lee >= ((char *)ldata->ld_leh +
 				      ldata->ld_leh->leh_len))
@@ -258,9 +258,9 @@ int linkea_overflow_shrink(struct linkea_data *ldata)
 
 	linkea_entry_unpack(ldata->ld_lee, &ldata->ld_reclen, &tname, &tfid);
 	CDEBUG(D_INODE, "No enough space to hold the last linkea entry '"
-	       DFID": %.*s', shrink it, left %d linkea entries, size %llu\n",
-	       PFID(&tfid), tname.ln_namelen, tname.ln_name,
-	       leh->leh_reccount, leh->leh_len);
+	       DFID": "DNAME"', shrink it, left %d linkea entries, size %llu\n",
+	       PFID(&tfid), encode_fn_luname(&tname), leh->leh_reccount,
+	       leh->leh_len);
 
 	return leh->leh_len;
 }
@@ -303,8 +303,8 @@ int linkea_links_find(struct linkea_data *ldata, const struct lu_name *lname,
 	}
 
 	if (count == ldata->ld_leh->leh_reccount) {
-		CDEBUG(D_INODE, "Old link_ea name '%.*s' not found\n",
-		       lname->ln_namelen, lname->ln_name);
+		CDEBUG(D_INODE, "Old link_ea name '"DNAME"' not found\n",
+		       encode_fn_luname(lname));
 		ldata->ld_lee = NULL;
 		ldata->ld_reclen = 0;
 		return -ENOENT;

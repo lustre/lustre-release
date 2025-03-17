@@ -21102,7 +21102,7 @@ test_169() {
 }
 run_test 169 "parallel read and truncate should not deadlock"
 
-test_170() {
+test_170a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	$LCTL clear	# bug 18514
@@ -21155,7 +21155,67 @@ test_170() {
         fi
         true
 }
-run_test 170 "test lctl df to handle corrupted log ====================="
+run_test 170a "test lctl df to handle corrupted log"
+
+test_170b() {
+	# enable filename encoding on one client, ost and mdt respectively
+	declare -a old_fl
+	local param="enable_fname_encoding"
+	local nodes_list=$HOSTNAME
+	local log=$TMP/sanity.$testnum
+	local i=0
+
+	(( $MDS1_VERSION >= $(version_code 2.16.52) )) &&
+		nodes_list="$nodes_list,$(facet_active_host mds1)"
+	(( $OST1_VERSION >= $(version_code 2.16.52) )) &&
+		nodes_list="$nodes_list,$(facet_active_host ost1)"
+
+	old_fl=($(do_nodes $nodes_list $LCTL get_param -n $param))
+
+	# Test with filename encoding on
+	set_params_nodes $nodes_list "$param=on"
+	for node in ${nodes_list//,/ }; do
+		stack_trap "set_params_nodes $node "$param=${old_fl[$i]}""
+		i=$((i+1))
+	done
+	do_nodes $nodes_list "$LCTL get_param -n $param" | grep 0 &&
+		error "Failed to enable filename encoding on all the nodes"
+
+	# Start full debug to collect the logs
+	start_full_debug_logging $nodes_list
+	do_nodes $nodes_list "$LCTL clear"
+
+	# Do some operations on $tfile
+	touch $DIR/$tfile || error "Failed to touch $tfile"
+	cp $DIR/$tfile $DIR/$testnum.cp || error "Failed to cp $tfile"
+	ln -s $DIR/$tfile $DIR/$testnum.ln || error "Failed to ln -s $tfile"
+	$LFS migrate -c $OSTCOUNT $DIR/$tfile ||
+		error "Failed to migrate $tfile"
+	$LFS mirror extend -N $DIR/$tfile ||
+		error "Failed to extend mirrored $tfile"
+	mv $DIR/$tfile $DIR/$testnum.mv || error "Failed to mv $tfile"
+	rm -f $DIR/$tfile $DIR/$testnum.* || error "Failed to rm $tfile"
+
+	# Do some operations on $tdir
+	mkdir -p $DIR/$tdir || error "Failed to mkdir $tdir"
+	cp -r $DIR/$tdir $DIR/$testnum.cp || error "Failed to cp $tdir"
+	ln -s $DIR/$tdir $DIR/$testnum.ln || error "Failed to ln -s $tdir"
+	$LFS migrate -d -m 0 -c $MDSCOUNT $DIR/$tdir ||
+		error "Failed to migrate $tdir"
+	mv $DIR/$tdir $DIR/$testnum.mv || error "Failed to mv $tdir"
+	rm -rf $DIR/$tdir $DIR/$testnum.* || error "Failed to rm $tdir"
+
+	# Stop the full debug
+	do_nodes $nodes_list "$LCTL dk > $log"
+	stack_trap "do_nodes $nodes_list rm -f $log"
+	stop_full_debug_logging
+
+	# Verify if $tfile and $tdir names are encoded in the logs
+	do_nodes $nodes_list "grep -E '$tfile|$tdir' $log" &&
+		error "Still found '$tfile' and '$tdir' in the logs"
+	return 0
+}
+run_test 170b "check filename encoding"
 
 test_171() { # bug20592
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
