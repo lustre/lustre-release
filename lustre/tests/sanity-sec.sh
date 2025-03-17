@@ -2154,14 +2154,18 @@ nodemap_exercise_fileset() {
 	local check_proj=true
 	local loop=0
 	local nm="$1"
+	local subdir="subdir_${nm}"
+	local subsubdir="subsubdir_${nm}"
 
 	(( $MDS1_VERSION >= $(version_code 2.14.52) )) || check_proj=false
 
 	# when "have_persistent_fset_cmd" is true, "lctl nodemap_set_fileset"
 	# is persistent, otherwise "lctl set_param -P" must be used
 	have_persistent_fset_cmd=false
-	(( $MGS_VERSION >= $(version_code 2.16.51) )) &&
+	if (( $MGS_VERSION >= $(version_code 2.16.51) )); then
 		have_persistent_fset_cmd=true
+		subdir="thisisaverylongsubdirtotestlongfilesetsandtotestmultiplefilesetfragmentsonthenodemapiam_${nm}"
+	fi
 
 	# setup
 	if [[ "$nm" == "default" ]]; then
@@ -2334,9 +2338,6 @@ test_27a() {
 	fi
 
 	for nm in "default" "c0"; do
-		local subdir="thisisaverylongsubdirtotestlongfilesetsandtotestmultiplefilesetfragmentsonthenodemapiam_${nm}"
-		local subsubdir="subsubdir_${nm}"
-
 		if [[ "$nm" == "default" && "$SHARED_KEY" == "true" ]]; then
 			echo "Skipping nodemap $nm with SHARED_KEY"
 			continue
