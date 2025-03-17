@@ -1320,7 +1320,7 @@ static inline int obd_quota_iter(struct obd_export *exp,
 	int rc = 0;
 
 	do {
-		oqctl->qc_iter_list = (__u64)list;
+		oqctl->qc_iter_list = (uintptr_t)list;
 		rc = obd_quotactl(exp, oqctl);
 		if (rc)
 			break;

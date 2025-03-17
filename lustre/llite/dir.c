@@ -1497,21 +1497,21 @@ static int quotactl_iter(struct ll_sb_info *sbi, struct if_quotactl *qctl)
 		GOTO(out, rc = -ENOMEM);
 
 	QCTL_COPY(oqctl, qctl);
-	oqctl->qc_iter_list = (__u64)&iter_quota_glb_list;
+	oqctl->qc_iter_list = (uintptr_t)&iter_quota_glb_list;
 	rc = obd_quotactl(sbi->ll_md_exp, oqctl);
 	if (rc)
 		GOTO(cleanup, rc);
 
 	QCTL_COPY(oqctl, qctl);
 	oqctl->qc_cmd = LUSTRE_Q_ITEROQUOTA;
-	oqctl->qc_iter_list = (__u64)&iter_obd_quota_md_list;
+	oqctl->qc_iter_list = (uintptr_t)&iter_obd_quota_md_list;
 	rc = obd_quotactl(sbi->ll_md_exp, oqctl);
 	if (rc)
 		GOTO(cleanup, rc);
 
 	QCTL_COPY(oqctl, qctl);
 	oqctl->qc_cmd = LUSTRE_Q_ITEROQUOTA;
-	oqctl->qc_iter_list = (__u64)&iter_obd_quota_dt_list;
+	oqctl->qc_iter_list = (uintptr_t)&iter_obd_quota_dt_list;
 	rc = obd_quotactl(sbi->ll_dt_exp, oqctl);
 	if (rc)
 		GOTO(cleanup, rc);

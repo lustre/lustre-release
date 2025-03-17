@@ -1260,7 +1260,7 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
 	}
 
 	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)
-		lst = (struct list_head *)oqctl->qc_iter_list;
+		lst = (struct list_head *)(uintptr_t)(oqctl->qc_iter_list);
 
 	/* for lov tgt */
 	lov_tgts_getref(obd);

@@ -4162,7 +4162,8 @@ static int lmv_quotactl(struct obd_device *unused, struct obd_export *exp,
 
 	if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA ||
 	    oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
-		struct list_head *lst = (struct list_head *)oqctl->qc_iter_list;
+		struct list_head *lst =
+			(struct list_head *)(uintptr_t)(oqctl->qc_iter_list);
 		int err;
 
 		if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA)

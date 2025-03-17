@@ -2148,7 +2148,8 @@ static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
 
 	if (req->rq_repmsg &&
 	    (oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL))) {
-		struct list_head *lst = (struct list_head *)oqctl->qc_iter_list;
+		struct list_head *lst =
+			(struct list_head *)(uintptr_t)(oqctl->qc_iter_list);
 
 		QCTL_COPY(oqctl, oqc);
 
