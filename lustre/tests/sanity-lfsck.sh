@@ -6371,6 +6371,115 @@ test_44() {
 }
 run_test 44 "umount while lfsck is stopping"
 
+test_45() {
+	(( $OST1_VERSION >= $(version_code 2.16.53) )) ||
+		skip "Need OST version at least 2.16.53"
+
+	local prjid=1000
+	local testfile="$DIR/$tdri/$tfile-0"
+	local cnt=30
+	local usage
+
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
+	chown $RUNAS_ID.$RUNAS_GID $testfile || error "chown $testfile failed"
+	is_project_quota_supported && change_project -p $prjid $testfile
+	$RUNAS $DD of=$testfile count=$cnt || error "write $testfile failed"
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	sleep 5
+
+	echo "check the quota usage after initial write"
+	usage=$(getquota -u $RUNAS_ID global curspace)
+	((usage > cnt * 1024 * 9 / 10)) ||
+		error "quota USR usage $usage for $RUNAS_ID is wrong"
+
+	usage=$(getquota -g $RUNAS_GID global curspace)
+	((usage > cnt * 1024 * 9 / 10)) ||
+		error "quota GRP usage $usage for $RUNAS_GID is wrong"
+
+	is_project_quota_supported && {
+		usage=$(getquota -p $prjid global curspace)
+		((usage > cnt * 1024 * 9 / 10)) ||
+			error "quota PRJ usage $usage for $prjid is wrong"
+	}
+
+	local fids=($($LFS getstripe $testfile | grep 0x))
+	local fid="${fids[3]}:${fids[2]}:0"
+	local objpath=$(ost_fid2_objpath ost1 $fid)
+
+	stop ost1 || error "failed to stop ost1"
+
+	echo "clear the UID/GID/PROJID of the test file"
+	mount_fstype ost1 || return 1
+	do_facet ost1  chown root:root $(facet_mntpt ost1)/$objpath
+	do_facet ost1 ls -l $(facet_mntpt ost1)/$objpath
+	is_project_quota_supported && {
+		do_facet ost1 chattr -p 0 $(facet_mntpt ost1)/$objpath
+		do_facet ost1 lsattr -p $(facet_mntpt ost1)/$objpath
+	}
+	unmount_fstype ost1
+
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
+		error "failed to start ost1"
+
+	echo "check the quota usage after UID/GID/PROJID is cleared"
+	usage=$(getquota -u $RUNAS_ID global curspace)
+	((usage < cnt * 1024 * 1 / 10)) ||
+		error "quota USR usage $usage for $RUNAS_ID is wrong"
+
+	usage=$(getquota -g $RUNAS_GID global curspace)
+	((usage < cnt * 1024 * 1 / 10)) ||
+		error "quota GRP usage $usage for $RUNAS_GID is wrong"
+
+	is_project_quota_supported && {
+		usage=$(getquota -p $prjid global curspace)
+		((usage < cnt * 1024 * 1 / 10)) ||
+			error "quota PRJ usage $usage for $prjid is wrong"
+	}
+
+	echo "the quota usage should be transferred to root"
+	usage=$(getquota -u root global curspace)
+	((usage > cnt * 1024 * 9 / 10)) ||
+		error "quota USR usage $usage for root is wrong"
+
+	usage=$(getquota -g root global curspace)
+	((usage > cnt * 1024 * 9 / 10)) ||
+		error "quota GRP usage $usage for root is wrong"
+
+	is_project_quota_supported && {
+		usage=$(getquota -p 0 global curspace)
+		((usage > cnt * 1024 * 9 / 10)) ||
+			error "quota PRJ usage $usage for 0 is wrong"
+	}
+
+	echo "fix the UID/GID/PROJID by LFSCK"
+	$START_LAYOUT -r -A || error "failed to start LFSCK"
+
+	wait_update_facet ost1 \
+		"$LCTL get_param -n obdfilter.$ost1_svc.lfsck_layout |
+		 awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_LAYOUT_ON_OST
+		error "unexpected status of LFSCK on OST1"
+	}
+
+	echo "the quota usage should be fixed"
+	usage=$(getquota -u $RUNAS_ID global curspace)
+	((usage > cnt * 1024 * 9 / 10)) ||
+		error "quota USR usage $usage for $RUNAS_ID is wrong"
+
+	usage=$(getquota -g $RUNAS_GID global curspace)
+	((usage > cnt * 1024 * 9 / 10)) ||
+		error "quota GRP usage $usage for $RUNAS_GID is wrong"
+
+	is_project_quota_supported && {
+		usage=$(getquota -p $prjid global curspace)
+		((usage > cnt * 1024 * 9 / 10)) ||
+			error "quota PRJ usage $usage for $prjid is wrong"
+	}
+}
+run_test 45 "LFSCK should fix UID/GID/PROJID of OST object"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

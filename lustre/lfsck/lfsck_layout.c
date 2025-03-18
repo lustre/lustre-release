@@ -4092,7 +4092,8 @@ static int lfsck_layout_repair_owner(const struct lu_env *env,
 
 	tla->la_uid = pla->la_uid;
 	tla->la_gid = pla->la_gid;
-	tla->la_valid = LA_UID | LA_GID;
+	tla->la_projid = pla->la_projid;
+	tla->la_valid = LA_UID | LA_GID | LA_PROJID;
 	handle = lfsck_trans_create(env, dev, com->lc_lfsck);
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
@@ -4539,7 +4540,8 @@ check_owner:
 	 * It can be handled later inside the lfsck_layout_repair_owner().
 	 */
 	if (unlikely(cla->la_uid != pla->la_uid ||
-		     cla->la_gid != pla->la_gid)) {
+		     cla->la_gid != pla->la_gid ||
+		     cla->la_projid != pla->la_projid)) {
 		type = LLIT_INCONSISTENT_OWNER;
 		goto repair;
 	}
