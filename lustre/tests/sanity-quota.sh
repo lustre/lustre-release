@@ -566,12 +566,13 @@ test_1_check_write() {
 	local short_qtype=${qtype:0:1}
 
 	log "Write..."
-	$RUNAS $DD of=$testfile count=$((limit/2)) ||
+	$RUNAS $DD of=$testfile count=$((limit/2)) oflag=direct ||
 		quota_error $short_qtype $TSTUSR \
 			"$qtype write failure, but expect success"
 	log "Write out of block quota ..."
 	# this time maybe cache write, ignore it's failure
-	$RUNAS $DD of=$testfile count=$((limit/2)) seek=$((limit/2)) || true
+	$RUNAS $DD of=$testfile count=$((limit/2)) seek=$((limit/2)) \
+						oflag=direct || true
 	# flush cache, ensure noquota flag is set on client
 	cancel_lru_locks osc
 	sync; sync_all_data || true
@@ -579,7 +580,7 @@ test_1_check_write() {
 	# guarantee that slave received new edquot through glimpse.
 	# so wait a little to be sure slave got it.
 	sleep 5
-	$RUNAS $DD of=$testfile count=1 seek=$limit &&
+	$RUNAS $DD of=$testfile count=1 seek=$limit oflag=direct &&
 		quota_error $short_qtype $TSTUSR \
 			"user write success, but expect EDQUOT"
 	return 0
