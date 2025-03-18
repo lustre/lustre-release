@@ -1296,10 +1296,19 @@ test_1j() {
 		error "disable root quotas for project failed"
 
 	if (( $OST1_VERSION >= $(version_code 2.16.50) )); then
+		local cmd="do_facet mgs $LCTL get_param -n "
+		local adm=$($cmd nodemap.default.admin_nodemap)
+		local trs=$($cmd nodemap.default.trusted_nodemap)
+		local act=$($cmd nodemap.active)
+
 		do_facet mgs $LCTL nodemap_modify --name default \
 			--property admin --value 1
+		stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+			--property admin --value $adm"
 		do_facet mgs $LCTL nodemap_modify --name default \
 			--property trusted --value 1
+		stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+			--property trusted --value $trs"
 		do_facet mgs $LCTL nodemap_add $nm
 		stack_trap "do_facet mgs $LCTL nodemap_del $nm || true"
 		do_facet mgs $LCTL nodemap_add_range 	\
@@ -1312,7 +1321,7 @@ test_1j() {
 		do_facet mgs $LCTL nodemap_modify --name $nm --property rbac \
 			--value file_perms,dne_ops,quota_ops,byfid_ops,chlg_ops
 		do_facet mgs $LCTL nodemap_activate 1
-		stack_trap "do_facet mgs $LCTL nodemap_activate 0"
+		stack_trap "do_facet mgs $LCTL nodemap_activate $act"
 		wait_nm_sync active
 		wait_nm_sync default admin_nodemap
 		wait_nm_sync default trusted_nodemap
@@ -5726,21 +5735,35 @@ run_test 74 "check quota pools per user"
 function cleanup_quota_test_75()
 {
 	do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value 1
+		--property admin --value $1
 	do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value 1
+		--property trusted --value $2
 	do_facet mgs $LCTL nodemap_modify --name default \
-		--property squash_uid --value 99
+		--property deny_unknown --value $3
 	do_facet mgs $LCTL nodemap_modify --name default \
-		--property squash_gid --value 99
+		--property squash_uid --value $4
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property squash_gid --value $5
 
 	wait_nm_sync default admin_nodemap
 	wait_nm_sync default trusted_nodemap
 
-	do_facet mgs $LCTL nodemap_activate 0
-	wait_nm_sync active
+	do_facet mgs $LCTL nodemap_activate $6
+	wait_nm_sync active $6
+	return 0
+}
 
-	resetquota -u $TSTUSR
+stack_trap_nodemap_cleanup_75()
+{
+	local cmd="do_facet mgs $LCTL get_param -n "
+	local adm=$($cmd nodemap.default.admin_nodemap)
+	local trs=$($cmd nodemap.default.trusted_nodemap)
+	local deny=$($cmd nodemap.default.deny_unknown)
+	local uid=$($cmd nodemap.default.squash_uid)
+	local gid=$($cmd nodemap.default.squash_gid)
+	local act=$($cmd nodemap.active)
+
+	stack_trap "cleanup_quota_test_75 $adm $trs $deny $uid $gid $act"
 }
 
 test_dom_75() {
@@ -5818,7 +5841,6 @@ test_75()
 	fi
 
 	setup_quota_test || error "setup quota failed with $?"
-	stack_trap cleanup_quota_test_75 EXIT
 
 	# enable ost quota
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
@@ -5837,6 +5859,7 @@ test_75()
 	$LFS setstripe -E 1M -L mdt $DIR/$tdir_dom ||
 		error "setstripe $tdir_dom failed"
 
+	stack_trap_nodemap_cleanup_75
 	do_facet mgs $LCTL nodemap_activate 1
 	wait_nm_sync active
 	do_facet mgs $LCTL nodemap_modify --name default \
@@ -6460,6 +6483,24 @@ test_86()
 }
 run_test 86 "Pre-acquired quota should be released if quota is over limit"
 
+cleanup_lqes()
+{
+	for ((i = $1; i < $2; i++)); do
+		$LFS setquota -B0 -b0 -I0 -i0 -u $i $MOUNT ||
+			error "Can't cleanup user $i"
+		$LFS setquota -B0 -b0 -I0 -i0 -g $i $MOUNT ||
+			error "Can't cleanup group $i"
+		is_project_quota_supported &&
+			$LFS setquota -B0 -b0 -I0 -i0 -p $i $MOUNT ||
+				error "Can't cleanup project $i"
+	done
+	# The only way to remove lqes from the hash table
+	stop mds1 -f || error "MDS umount failed"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
+	quota_init
+	clients_up || true
+}
+
 test_87()
 {
 	(( $MDS1_VERSION >= $(version_code 2.16.50) )) ||
@@ -6497,6 +6538,7 @@ test_87()
 
 	#define OBD_FAIL_QUOTA_NOSYNC		0xA09
 	do_facet mds1 $LCTL set_param fail_loc=0xa09
+	stack_trap "cleanup_lqes 100 200"
 
 	for ((i = 100; i < 150; i++)); do
 		$LFS setquota -u $i -b $blimit -B $blimit $MOUNT ||
@@ -6614,6 +6656,38 @@ test_88()
 	return 0
 }
 run_test 88 "Writing over quota should not hang"
+
+test_89()
+{
+	local cmd="do_facet mgs $LCTL get_param -n "
+
+	(( $MDS1_VERSION >= $(version_code 2.16.53) )) ||
+		skip "need MDS >= 2.16.53 to show default quota with squash_uid"
+
+	local act=$($cmd nodemap.active)
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+	stack_trap "do_facet mgs $LCTL nodemap_activate $act; \
+		    wait_nm_sync active"
+
+	local suid=$($cmd nodemap.default.squash_uid)
+	do_facet mgs "$LCTL nodemap_modify --name default \
+		--property squash_uid --value $TSTID"
+	wait_nm_sync default squash_uid
+	stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+		--property squash_uid --value $suid"
+
+	$LFS setquota -P -B100M $MOUNT &&
+		error "Set default quotas with squashed uid"
+	is_project_quota_supported &&
+		$LFS quota -P $MOUNT ||
+			error "Can't get default prj quota for squashed uid"
+	$LFS quota -U $MOUNT ||
+		error "Can't get default usr quota for squashed uid"
+	$LFS quota -G $MOUNT ||
+		error "Can't get default grp quota for squashed uid"
+}
+run_test 89 "Show default quota with squash_uid"
 
 check_quota_no_mount()
 {

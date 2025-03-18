@@ -3485,6 +3485,17 @@ put:
 	return rc;
 }
 
+/* To get default quotas ID needs to be 0, so
+ * no reasons to swap this according to nodemap.
+ */
+static inline bool qmt_need_swap(__u32 cmd)
+{
+	if (cmd == LUSTRE_Q_GETDEFAULT || cmd == LUSTRE_Q_GETDEFAULT_POOL)
+		return false;
+
+	return true;
+}
+
 /*
  * Handle quota control requests to consult current usage/limit, but also
  * to configure quota enforcement
@@ -3588,7 +3599,7 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	if (oqctl->qc_cmd == Q_SETINFO || oqctl->qc_cmd == Q_SETQUOTA)
 		barrier_exit(tsi->tsi_tgt->lut_bottom);
 
-	if (oqctl->qc_id != id)
+	if (oqctl->qc_id != id && qmt_need_swap(oqctl->qc_cmd))
 		swap(oqctl->qc_id, id);
 
 	if (oqctl->qc_cmd == Q_SETINFO || oqctl->qc_cmd == Q_SETQUOTA) {
@@ -3633,7 +3644,7 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 		GOTO(out_nodemap, rc = -EFAULT);
 	}
 
-	if (oqctl->qc_id != id)
+	if (oqctl->qc_id != id && qmt_need_swap(oqctl->qc_cmd))
 		swap(oqctl->qc_id, id);
 
 	QCTL_COPY_NO_PNAME(repoqc, oqctl);
