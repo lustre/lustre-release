@@ -57,6 +57,13 @@ int ctx_init_pack_request(struct obd_import *imp,
 	LASSERT(req->rq_cli_ctx);
 	LASSERT(req->rq_cli_ctx->cc_sec);
 
+	if (!imp->imp_sec) {
+		CDEBUG(D_SEC,
+		       "%s: no sec on import, ctx init request is too late or too soon: rc = %d\n",
+		       imp->imp_obd->obd_name, -EINVAL);
+		return -EINVAL;
+	}
+
 	/* gss hdr */
 	ghdr = lustre_msg_buf(msg, 0, sizeof(*ghdr));
 	ghdr->gh_version = PTLRPC_GSS_VERSION;
