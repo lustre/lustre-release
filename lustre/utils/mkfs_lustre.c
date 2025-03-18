@@ -120,6 +120,7 @@ static void usage(FILE *out)
 		"\t\t--nolocallogs: use logs from MGS, not local ones.\n"
 		"\t\t--quota: enable space accounting on old 2.x device.\n"
 		"\t\t--rename: rename the filesystem name\n"
+		"\t\t--mountdata-reset-from=<dev|file>: reset CONFIGS/mountdata file.\n"
 #endif
 		"\t\t--replace: replace an old target with the same index\n"
 		"\t\t--comment=<user comment>: arbitrary string (%d bytes)\n"
@@ -284,7 +285,7 @@ static int erase_param(const char *const buf, const char *const param,
 #endif
 
 static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
-		      char **mountopts, char *old_fsname)
+		      char **mountopts, char *old_fsname, char *mountdata_arg)
 {
 	static struct option long_opts[] = {
 	{ .val = 'B',	.name =  "backfs-mount-opts",
@@ -325,6 +326,8 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	{ .val = 'e',	.name =  "erase-params",
 						.has_arg = no_argument},
 	{ .val = 'l',	.name =  "nolocallogs", .has_arg = no_argument},
+	{ .val = 'M',	.name =  "mountdata-reset-from",
+						.has_arg = required_argument},
 	{ .val = 'Q',	.name =  "quota",	.has_arg = no_argument},
 	{ .val = 'r',	.name =  "rename",	.has_arg = optional_argument},
 	{ .val = 'w',	.name =  "writeconf",	.has_arg = no_argument},
@@ -334,7 +337,7 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 #ifndef TUNEFS
 			  "b:c:d:k:MOr";
 #else
-			  "E:elQr::w";
+			  "E:elM:Qr::w";
 #endif
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char new_fsname[16] = { 0 };
@@ -659,6 +662,14 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			}
 			break;
 		}
+		case 'M':
+			if (access(optarg, F_OK) != 0) {
+				fprintf(stderr, "%s: Given path does not exist (%s)",
+					progname, optarg);
+				return 1;
+			}
+			strscpy(mountdata_arg, optarg, PATH_MAX);
+			break;
 		case 'w':
 			ldd->ldd_flags |= LDD_F_WRITECONF;
 			break;
@@ -788,6 +799,7 @@ int main(int argc, char *const argv[])
 	char *mountopts = NULL;
 	char wanted_mountopts[512] = "";
 	char old_fsname[16] = "";
+	char mountdata_arg[PATH_MAX] = "";
 	unsigned int mount_type;
 	int ret = 0;
 	int ret2 = 0;
@@ -834,14 +846,7 @@ int main(int argc, char *const argv[])
 	}
 	ldd->ldd_mount_type = mount_type;
 
-	ret = osd_read_ldd(mop.mo_device, ldd);
-	if (ret != 0) {
-		fatal();
-		fprintf(stderr,
-			"Failed to read previous Lustre data from %s (%d)\n",
-			mop.mo_device, ret);
-		goto out;
-	}
+	ret2 = osd_read_ldd(mop.mo_device, ldd);
 
 	strscpy(old_fsname, ldd->ldd_fsname, sizeof(ldd->ldd_fsname));
 	ldd->ldd_flags &= ~(LDD_F_WRITECONF | LDD_F_VIRGIN |
@@ -867,9 +872,30 @@ int main(int argc, char *const argv[])
 		print_ldd("Read previous values", &mop);
 #endif /* TUNEFS */
 
-	ret = parse_opts(argc, argv, &mop, &mountopts, old_fsname);
+	ret = parse_opts(argc, argv, &mop, &mountopts, old_fsname,
+			 mountdata_arg);
 	if (ret != 0 || version)
 		goto out;
+
+#ifdef TUNEFS
+	/* Reset mountdata */
+	if (mountdata_arg[0] != '\0') {
+		ret = osd_mountdata_reset(&mop, mountdata_arg);
+		if (ret != 0)
+			goto out;
+		if (verbose >= 0)
+			print_ldd("Updated values", &mop);
+		goto write;
+	}
+
+	if (ret2 != 0) {
+		fatal();
+		fprintf(stderr,
+			"Failed to read previous Lustre data from %s (%s)\n",
+			mop.mo_device, strerror(ret2));
+		goto out;
+	}
+#endif
 
 	if (!IS_MDT(ldd) && !IS_OST(ldd) && !IS_MGS(ldd)) {
 		fatal();
@@ -1075,6 +1101,9 @@ int main(int argc, char *const argv[])
 		ret = osd_enable_quota(&mop);
 		goto out;
 	}
+
+write:
+
 #endif /* !TUNEFS */
 
 	/* Write our config files */

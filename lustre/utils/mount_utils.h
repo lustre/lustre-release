@@ -198,7 +198,9 @@ int osd_prepare_lustre(struct mkfs_opts *mop,
 int osd_fix_mountopts(struct mkfs_opts *mop, char *mountopts, size_t len);
 int osd_tune_lustre(char *dev, struct mount_opts *mop);
 int osd_label_lustre(struct mount_opts *mop);
+int osd_label_read(struct mkfs_opts *mop);
 int osd_rename_fsname(struct mkfs_opts *mop, const char *oldname);
+int osd_mountdata_reset(struct mkfs_opts *mop, char *mountdata_arg);
 int osd_enable_quota(struct mkfs_opts *mop);
 int osd_init(void);
 void osd_fini(void);
@@ -218,6 +220,7 @@ struct module_backfs_ops {
 				 char *mountopts, size_t len);
 	int	(*tune_lustre)(char *dev, struct mount_opts *mop);
 	int	(*label_lustre)(struct mount_opts *mop);
+	int	(*label_read)(struct mkfs_opts *mop);
 	int	(*enable_quota)(struct mkfs_opts *mop);
 	int	(*rename_fsname)(struct mkfs_opts *mop, const char *oldname);
 	void   *dl_handle;

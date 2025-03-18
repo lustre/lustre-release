@@ -1246,6 +1246,26 @@ int ldiskfs_label_lustre(struct mount_opts *mop)
 	return rc;
 }
 
+int ldiskfs_label_read(struct mkfs_opts *mop)
+{
+	int ret = 0;
+
+	if (!backfs) {
+		ret = ext2fs_open(mop->mo_device, open_flags, 0, 0,
+				  unix_io_manager, &backfs);
+		if (ret) {
+			fprintf(stderr, "Unable to open fs on %s\n",
+				mop->mo_device);
+			return ret;
+		}
+	}
+
+	memcpy(&(mop->mo_ldd.ldd_svname), &(backfs->super->s_volume_name),
+	       sizeof(backfs->super->s_volume_name));
+
+	return ret;
+}
+
 int ldiskfs_rename_fsname(struct mkfs_opts *mop, const char *oldname)
 {
 	struct mount_opts opts;
@@ -1365,6 +1385,7 @@ struct module_backfs_ops ldiskfs_ops = {
 	.fix_mountopts		= ldiskfs_fix_mountopts,
 	.tune_lustre		= ldiskfs_tune_lustre,
 	.label_lustre		= ldiskfs_label_lustre,
+	.label_read		= ldiskfs_label_read,
 	.enable_quota		= ldiskfs_enable_quota,
 	.rename_fsname		= ldiskfs_rename_fsname,
 };

@@ -119,6 +119,10 @@ Return errors instead of waiting for recovery
 Ignore unset hostid for ZFS import protection. To set hostid either set
 spl_hostid option for spl.ko or set /etc/hostid, see zgenhostid(8).
 .TP
+.B --mountdata-reset-from=\fIDEV\fR|\fIFILE\fR
+Reset the CONFIGS/mountdata file using the path to a similar local device or a
+backup CONFIG/mountdata file.
+.TP
 .B --quiet
 Print less information.
 .TP

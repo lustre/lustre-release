@@ -551,6 +551,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 	DLSYM(name, ops, prepare_lustre);
 	DLSYM(name, ops, tune_lustre);
 	DLSYM(name, ops, label_lustre);
+	DLSYM(name, ops, label_read);
 	DLSYM(name, ops, rename_fsname);
 	DLSYM(name, ops, enable_quota);
 
@@ -765,6 +766,19 @@ int osd_label_lustre(struct mount_opts *mop)
 	return ret;
 }
 
+int osd_label_read(struct mkfs_opts *mop)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	int ret;
+
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->label_read(mop);
+	else
+		ret = EINVAL;
+
+	return ret;
+}
+
 /* Rename filesystem fsname */
 int osd_rename_fsname(struct mkfs_opts *mop, const char *oldname)
 {
@@ -776,6 +790,59 @@ int osd_rename_fsname(struct mkfs_opts *mop, const char *oldname)
 								     oldname);
 	else
 		ret = EINVAL;
+
+	return ret;
+}
+
+/* Reset mountdata */
+int osd_mountdata_reset(struct mkfs_opts *mop, char *mountdata_arg)
+{
+	struct lustre_disk_data ldd;
+	struct stat file_stat;
+	int rc, ret = 0;
+	FILE *fp;
+
+	stat(mountdata_arg, &file_stat);
+	if (S_ISBLK(file_stat.st_mode)) {
+		osd_fini();
+		osd_init();
+		ldd.ldd_mount_type = mop->mo_ldd.ldd_mount_type;
+		rc = osd_read_ldd(mountdata_arg, &ldd);
+		osd_fini();
+		osd_init();
+		if (rc != 0) {
+			fprintf(stderr, "%s: Failed to read device (%s): %s\n",
+				progname, mountdata_arg, strerror(rc));
+			ret = rc;
+			return ret;
+		}
+	} else if (S_ISREG(file_stat.st_mode)) {
+		fp = fopen(mountdata_arg, "r");
+		rc = fread(&ldd, 1, sizeof(ldd), fp);
+		fclose(fp);
+		if (rc < 0) {
+			fprintf(stderr, "%s: Failed to read file (%s): %s\n",
+				progname, mountdata_arg, strerror(rc));
+			ret = rc;
+			return ret;
+		}
+	} else {
+		fprintf(stderr,
+			"%s: Given path is not a file or a block device (%s)\n",
+			progname, mountdata_arg);
+		return 1;
+	}
+
+	memcpy(&(mop->mo_ldd), &ldd, sizeof(ldd));
+
+	ret = osd_label_read(mop);
+	if (ret != 0) {
+		fprintf(stderr, "%s: Failed to read label data: %s\n",
+			progname, strerror(ret));
+		return ret;
+	}
+	mop->mo_ldd.ldd_svindex = strtol(&(mop->mo_ldd.ldd_svname[12]),
+					 NULL, 16);
 
 	return ret;
 }

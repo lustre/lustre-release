@@ -880,6 +880,24 @@ int zfs_label_lustre(struct mount_opts *mop)
 	return ret;
 }
 
+int zfs_label_read(struct mkfs_opts *mop)
+{
+	zfs_handle_t *zhp;
+	int ret;
+
+	if (osd_check_zfs_setup() == 0)
+		return EINVAL;
+
+	zhp = zfs_open(g_zfs, mop->mo_device, ZFS_TYPE_FILESYSTEM);
+	if (zhp == NULL)
+		return EINVAL;
+
+	ret = zfs_get_prop_str(zhp, LDD_SVNAME_PROP, mop->mo_ldd.ldd_svname);
+	zfs_close(zhp);
+
+	return ret;
+}
+
 int zfs_rename_fsname(struct mkfs_opts *mop, const char *oldname)
 {
 	struct mount_opts opts;
@@ -994,6 +1012,7 @@ struct module_backfs_ops zfs_ops = {
 	.prepare_lustre		= zfs_prepare_lustre,
 	.tune_lustre		= zfs_tune_lustre,
 	.label_lustre		= zfs_label_lustre,
+	.label_read		= zfs_label_read,
 	.enable_quota		= zfs_enable_quota,
 	.rename_fsname		= zfs_rename_fsname,
 };
