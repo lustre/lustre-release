@@ -1710,6 +1710,46 @@ static void test34(void)
 	ASSERTF(rc == 0, "errno %d", errno);
 }
 
+#define T35FILE		"f35"
+#define T35_STRIPE_COUNT num_osts
+#define T35_STRIPE_SIZE 1048576
+#define T35_DESC	"create a file with layout different from default"
+static void test35(void)
+{
+	char mypool[LOV_MAXPOOLNAME + 1] = { '\0'};
+	struct llapi_layout *layout;
+	char path[PATH_MAX];
+	uint64_t count;
+	uint64_t size;
+	int fd;
+	int rc;
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T35FILE);
+	fd = open(path, O_RDWR |  O_CREAT | O_LOV_DELAY_CREATE, 0640);
+	ASSERTF(fd >= 0, "failed to create " T35FILE);
+
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "failed to allocate layout structure");
+	llapi_layout_stripe_count_set(layout, T35_STRIPE_COUNT);
+	llapi_layout_stripe_size_set(layout, T35_STRIPE_SIZE);
+	llapi_layout_pool_name_set(layout, poolname);
+
+	rc = llapi_layout_set_by_fd(fd, layout);
+	ASSERTF(rc == 0, "llapi_layout_set_by_fd failed");
+
+	layout = llapi_layout_get_by_fd(fd, O_RDWR);
+
+	rc = llapi_layout_stripe_count_get(layout, &count);
+	ASSERTF(rc == 0 && count == T35_STRIPE_COUNT, "invalid stripe count");
+
+	rc = llapi_layout_stripe_size_get(layout, &size);
+	ASSERTF(rc == 0 && size == T35_STRIPE_SIZE, "invalid stripe size");
+
+	rc = llapi_layout_pool_name_get(layout, mypool, sizeof(mypool));
+	ASSERTF(rc == 0, "error reading pool name");
+	ASSERTF(strcmp(mypool, poolname) == 0, "invalid pool name");
+}
+
 static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(0),
 	TEST_REGISTER(1),
@@ -1746,6 +1786,7 @@ static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(32),
 	TEST_REGISTER(33),
 	TEST_REGISTER(34),
+	TEST_REGISTER(35),
 	TEST_REGISTER_END
 };
 

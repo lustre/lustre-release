@@ -730,6 +730,57 @@ out_layout:
 	goto out;
 }
 
+/**
+ * Get \p lum_size from a lov_user_md \p lum
+ * \param[in] lum	lov_user_md to get lum_size
+ *
+ * \retval -1 on error and lum_size on success
+ */
+static size_t get_lum_size(struct lov_user_md *lum)
+{
+	size_t lum_size;
+
+	if (lum == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (lum->lmm_magic == LOV_USER_MAGIC_COMP_V1)
+		lum_size = ((struct lov_comp_md_v1 *)lum)->lcm_size;
+	else if (lum->lmm_magic == LOV_USER_MAGIC_SPECIFIC)
+		lum_size = lov_user_md_size(lum->lmm_stripe_count,
+					    lum->lmm_magic);
+	else
+		lum_size = lov_user_md_size(0, lum->lmm_magic);
+
+	return lum_size;
+}
+
+
+/**
+ * Set \p lum on the file descriptor \p fd and write the lum on the file
+ * referenced by the file descriptor
+ *
+ * \param[in] fd	open file descriptor
+ * \param[in] lum	lov_user_md to write on the file
+ *
+ * \retval -1 on error and set errno
+ */
+int llapi_layout_set_by_xattr(int fd, struct lov_user_md *lum)
+{
+	int rc;
+	ssize_t lum_size;
+
+	lum_size = get_lum_size(lum);
+	if (lum_size < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	rc = fsetxattr(fd, XATTR_LUSTRE_LOV, lum, lum_size, 0);
+	return rc;
+}
+
 enum lov_pattern llapi_pattern_to_lov(uint64_t llapi_pattern)
 {
 	enum lov_pattern lov_pattern;
@@ -1084,6 +1135,47 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd,
 out:
 	free(lum);
 	return layout;
+}
+
+/**
+ * Set \p layout on the file descriptor \p fd and write the layout on the
+ * file referenced by the file descriptor
+ *
+ * \param[in] fd	open file descriptor
+ * \param[in] layout	layout to write on the file
+ *
+ * \retval -1 on error and set errno
+ */
+int llapi_layout_set_by_fd(int fd, struct llapi_layout *layout)
+{
+	struct lov_user_md *lum;
+	int rc;
+	int tmp_errno;
+
+	if (layout == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+	rc = llapi_layout_v2_sanity(layout, false, false, NULL);
+	if (rc) {
+		errno = EINVAL;
+		return -1;
+	}
+	lum = llapi_layout_to_lum(layout);
+	if (!lum) {
+		errno = EINVAL;
+		return -1;
+	}
+	rc = llapi_layout_set_by_xattr(fd, lum);
+	if (rc < 0) {
+		tmp_errno = errno;
+		free(lum);
+		errno = tmp_errno;
+		return rc;
+	}
+
+	free(lum);
+	return 0;
 }
 
 /**
@@ -1768,8 +1860,6 @@ int llapi_layout_pool_name_set(struct llapi_layout *layout,
 int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 			   const struct llapi_layout *layout)
 {
-	struct lov_user_md *lum = NULL;
-	size_t lum_size;
 	char fsname[MAX_OBD_NAME + 1] = { 0 };
 	struct llapi_layout_comp *comp;
 	int fd;
@@ -1803,52 +1893,39 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 		}
 	}
 
-	if (layout) {
-		lum = llapi_layout_to_lum(layout);
-		if (!lum) {
-			fd = -1;
-			goto out_errno;
-		}
-
-		/* Object creation must be postponed until after layout
-		 * attributes have been applied.
-		 */
-		if (open_flags & O_CREAT)
-			open_flags |= O_LOV_DELAY_CREATE;
-	}
+	/* Object creation must be postponed until after layout
+	 * attributes have been applied.
+	 */
+	if (open_flags & O_CREAT)
+		open_flags |= O_LOV_DELAY_CREATE;
 
 	fd = open(path, open_flags, mode);
 
 	if (layout == NULL || fd < 0)
-		goto out_free;
+		return fd;
 
-	if (lum->lmm_magic == LOV_USER_MAGIC_COMP_V1)
-		lum_size = ((struct lov_comp_md_v1 *)lum)->lcm_size;
-	else if (lum->lmm_magic == LOV_USER_MAGIC_SPECIFIC)
-		lum_size = lov_user_md_size(lum->lmm_stripe_count,
-					    lum->lmm_magic);
-	else
-		lum_size = lov_user_md_size(0, lum->lmm_magic);
-
-	rc = fsetxattr(fd, XATTR_LUSTRE_LOV, lum, lum_size, 0);
+	rc = llapi_layout_set_by_fd(fd, (struct llapi_layout *)layout);
 	if (rc < 0) {
+		struct lov_user_md *lum;
+		size_t lum_size;
 		int tmp = errno;
+
+		lum = llapi_layout_to_lum(layout);
+
+		lum_size = get_lum_size(lum);
 
 		/* caller usually prints error, but doesn't know xattr size */
 		if (errno == ENOSPC)
 			llapi_error(LLAPI_MSG_ERROR, errno,
 				    "error setting %zd-byte layout on '%s'\n",
 				    lum_size, path);
+		free(lum);
 		close(fd);
 		errno = tmp;
 		fd = -1;
 	}
 
-out_free:
-	free(lum);
-out_errno:
-	if (errno == EOPNOTSUPP)
-		errno = ENOTTY;
+	errno = errno == EOPNOTSUPP ? ENOTTY : errno;
 
 	return fd;
 }

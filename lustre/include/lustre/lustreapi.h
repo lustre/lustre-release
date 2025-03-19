@@ -907,6 +907,15 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd,
 					    enum llapi_layout_get_flags flags);
 
 /**
+ * Set \p layout on the file descriptor \p fd and write the layout on the
+ * file referenced by the file descriptor.
+ *
+ * Return -1 on error and set errno.
+ */
+int llapi_layout_set_by_fd(int fd, struct llapi_layout *layout);
+
+
+/**
  * Return a pointer to a newly-allocated opaque data type containing the
  * layout for the file associated with Lustre file identifier
  * \a fid.  The string \a path must name a path within the
@@ -940,6 +949,14 @@ struct llapi_layout *llapi_layout_get_by_fid(const char *path,
 struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 					     ssize_t lov_xattr_size,
 					     enum llapi_layout_get_flags flags);
+
+/**
+ * Set \p lum on the file descriptor \p fd and write the lum on the file
+ * referenced by the file descriptor
+ *
+ * \retval -1 on error and set errno
+ */
+int llapi_layout_set_by_xattr(int fd, struct lov_user_md *lum);
 
 /**
  * Allocate a new layout. Use this when creating a new file with

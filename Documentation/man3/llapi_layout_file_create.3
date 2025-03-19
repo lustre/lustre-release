@@ -1,6 +1,6 @@
-.TH LLAPI_LAYOUT_FILE_CREATE 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_LAYOUT_FILE_CREATE 3 2025-04-14 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_layout_file_open, llapi_layout_file_create \- open and apply a layout to a Lustre file
+llapi_layout_file_open, llapi_layout_file_create, llapi_layout_set_by_fd, llapi_layout_set_by_xattr \- open and apply a layout to a Lustre file
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -8,8 +8,14 @@ llapi_layout_file_open, llapi_layout_file_create \- open and apply a layout to a
 .BI "int llapi_layout_file_open(char *" path ", int " open_flags ", int " mode ,
 .BI "                           const struct llapi_layout *" layout );
 .PP
-.BI "int llapi_layout_file_create(char *" path ", int " open_flags ", int " mode ,
+.BI "int llapi_layout_file_create(char *" path ", int " open_flags ",
+.BI "                             int " mode,
 .BI "                             const struct llapi_layout *" layout );
+.PP
+.BI "int llapi_layout_set_by_fd(int "fd ,
+.BI "                           struct llapi_layout *"layout );
+.PP
+.BI "int llapi_layout_set_by_xattr(int " fd ", struct lov_user_md *" lum );
 .fi
 .SH DESCRIPTION
 The functions
@@ -41,6 +47,13 @@ is not on a Lustre filesystem this function will fail and set
 .B errno
 to
 .BR ENOTTY .
+.PP
+The function
+.B llapi_layout_set_by_fd
+set the
+.I layout
+on an open file or directory specified by
+.IR fd .
 .PP
 The function call
 .PP
@@ -77,6 +90,20 @@ to
 .BR EINVAL .
 See
 .BR llapi_layout_pool_name_set (3).
+.PP
+For
+.B llapi_layout_set_by_fd(),
+.I fd
+is a valid file descriptor for a file or directory in a Lustre filesystem and
+.I layout
+is a valid Lustre layout to set on the file.
+.PP
+For
+.B llapi_layout_set_by_xattr(),
+.I fd
+is a valid file descriptor for a file or a directory in a Lustre filesystem and
+.I lum
+is a valid raw xattr to set on the file.
 .SH RETURN VALUES
 .B llapi_layout_file_open()
 and
