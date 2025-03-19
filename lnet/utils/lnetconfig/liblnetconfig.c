@@ -940,15 +940,25 @@ static int infra_ping_nid(char *ping_nids, char *src_nidstr, char *oper,
 			first_seq = item;
 
 		/* check if '-' is a part of NID, token */
-		sep = strchr(token, '-');
+		if (token != NULL)
+			sep = strchr(token, '-');
+		else
+			sep = NULL;
+
 		if (sep == NULL) {
+			if (token == NULL)
+				id.nid = LNET_NID_ANY;
+			else
+				/* if no net is specified,
+				 * libcfs_str2nid() will assume tcp
+				 */
+				id.nid = libcfs_str2nid(token);
+
 			id.pid = LNET_PID_ANY;
-			/* if no net is specified, libcfs_str2nid() will assume tcp */
-			id.nid = libcfs_str2nid(token);
 			if (id.nid == LNET_NID_ANY) {
 				snprintf(err_str, sizeof(err_str),
 					 "\"cannot parse NID '%s'\"",
-					 token);
+					 token ? token : "NULL");
 				rc = LUSTRE_CFG_RC_BAD_PARAM;
 				cYAML_build_error(rc, seq_no, MANAGE_CMD,
 						  oper, err_str, err_rc);

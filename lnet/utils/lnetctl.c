@@ -5424,9 +5424,14 @@ static int jt_ping(int argc, char **argv)
 			return rc;
 	}
 
-	for (; optind < argc; optind++)
-		rc = lustre_lnet_ping_nid(argv[optind], src_nidstr, timeout, -1,
-					  &show_rc, &err_rc);
+	for (; optind < argc; optind++) {
+		int rc2;
+
+		rc2 = lustre_lnet_ping_nid(argv[optind], src_nidstr, timeout,
+					   -1, &show_rc, &err_rc);
+		if (rc2 != 0 && (rc > 0 || rc == -EOPNOTSUPP))
+			rc = rc2;
+	}
 
 	if (show_rc)
 		cYAML_print_tree(show_rc);
