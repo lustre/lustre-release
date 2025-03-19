@@ -359,12 +359,18 @@ static int execute_line(char *line)
 		fprintf(stderr, "No such command. Try --list-commands to see available commands.\n");
 		break;
 	case CMD_INCOMPLETE:
+		if (cmd == NULL || cmd->pc_sub_cmd == NULL) {
+			fprintf(stderr, "'%s' incomplete command.\n", line);
+			return rc;
+		}
+
 		fprintf(stderr,
-			"'%s' incomplete command.  Use '%s x' where x is one of:\n",
+			"'%s' incomplete command.  Use '%s x' where x is one of:\n\t",
 			line, line);
-		fprintf(stderr, "\t");
+
 		for (i = 0; cmd->pc_sub_cmd[i].pc_name; i++)
 			fprintf(stderr, "%s ", cmd->pc_sub_cmd[i].pc_name);
+
 		fprintf(stderr, "\n");
 		break;
 	case CMD_COMPLETE:
