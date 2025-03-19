@@ -652,6 +652,7 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
 	{ .val = 't',	.name = "tunable",	.has_arg = no_argument},
 	{ .val = 'w',	.name = "writable",	.has_arg = no_argument},
+	{ .name = NULL },
 	};
 
 	int ch;
@@ -761,6 +762,7 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 't',	.name = "tunable",	.has_arg = no_argument},
 	{ .val = 'w',	.name = "writable",	.has_arg = no_argument},
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument},
+	{ .name = NULL },
 	};
 
 	int ch;
@@ -927,6 +929,7 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'P',	.name = "perm",		.has_arg = no_argument},
 	{ .val = 'P',	.name = "permanent",	.has_arg = no_argument},
 	{ .val = 't',	.name = "thread",	.has_arg = optional_argument},
+	{ .name = NULL },
 	};
 
 	int ch;
