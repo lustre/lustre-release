@@ -73,6 +73,14 @@
       systems must all have a version of Lustre which supports nodemap.
       Clients operate transparently and do not require special
       configuration or knowledge of the nodemap setup.</para>
+
+      <note>
+        <para>
+           A nodemap name has a maximum length of 16 characters, and can
+           contain only alphanumeric characters and '_'.
+        </para>
+      </note>
+
     </section>
 
     <section remap="h3">
