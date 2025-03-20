@@ -60,7 +60,7 @@ static void __exit ec_exit(void)
 
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("M to N erasure code handling");
-MODULE_VERSION("1.0.0");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("Dual BSD/GPL");
 
 late_initcall_sync(ec_init);

@@ -3908,7 +3908,7 @@ static int __init ko2iblnd_init(void)
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("OpenIB gen2 LNet Network Driver");
-MODULE_VERSION("2.8.0" OFED_VERSION);
+MODULE_VERSION(LNET_VERSION OFED_VERSION);
 MODULE_LICENSE("GPL");
 
 late_initcall_sync(ko2iblnd_init);

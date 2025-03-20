@@ -18,18 +18,12 @@
 #include <stdbool.h>
 #endif
 
-/** \addtogroup lnet
- * @{ */
-
 #include <linux/lnet/lnet-idl.h>
 
-/** \addtogroup lnet_addr
- * @{ */
+#define LNET_VERSION LUSTRE_VERSION_STRING
 
-#define LNET_VERSION		"0.7.0"
-
-/** Portal reserved for LNet's own use.
- * \see lustre/include/lustre/lustre_idl.h for Lustre portal assignments.
+/* Portal reserved for LNet's own use.
+ * see lustre/include/lustre/lustre_idl.h for Lustre portal assignments.
  */
 #define LNET_RESERVED_PORTAL	  0
 

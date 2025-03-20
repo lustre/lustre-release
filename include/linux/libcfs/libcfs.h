@@ -25,7 +25,7 @@
 #include <linux/libcfs/libcfs_private.h>
 #include <linux/libcfs/libcfs_fail.h>
 
-#define LIBCFS_VERSION	"0.7.1"
+#define LIBCFS_VERSION LUSTRE_VERSION_STRING
 
 /* Sparse annotations */
 #if !defined(__must_hold)

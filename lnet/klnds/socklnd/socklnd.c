@@ -2764,7 +2764,7 @@ static int __init ksocklnd_init(void)
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("TCP Socket LNet Network Driver");
-MODULE_VERSION("2.8.0");
+MODULE_VERSION(LNET_VERSION);
 MODULE_LICENSE("GPL");
 
 late_initcall_sync(ksocklnd_init);
