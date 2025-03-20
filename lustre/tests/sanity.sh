@@ -12331,7 +12331,7 @@ function get_named_value()
 }
 
 test_101a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	local s
 	local discard
@@ -12362,8 +12362,8 @@ test_101a() {
 
 	# Discard is generally zero, but sometimes a few random reads line up
 	# and trigger larger readahead, which is wasted & leads to discards.
-	if [[ $(($discard)) -gt $nreads ]]; then
-		error "too many ($discard) discarded pages"
+	if (( $discard > $nreads )); then
+		error "too many discarded pages ($discard > $nreads)"
 	fi
 	rm -f $DIR/$tfile || true
 }
