@@ -280,6 +280,59 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
       <literal>projid</literal> type:</para>
       <screen>mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype projid --idmap <replaceable>33:1</replaceable></screen>
     </section>
+    <section remap="h3" condition='l2H'>
+      <title>Defining Mapping Offsets</title>
+      <para>Mapping offsets map all client ids to a new range specified by an
+      offset, such that fs_id = client_id + offset. The
+      <literal>nodemap_add_offset</literal> command defines a mapping offset for
+      a given nodemap and applies the offset to all UID, GID, and PROJID
+      types.</para>
+      <screen>lctl nodemap add_offset --name <replaceable>NAME</replaceable> --offset <replaceable>OFFSET</replaceable> --limit <replaceable>FSID_COUNT</replaceable></screen>
+      <para>This command allows admins to create offset ranges for client
+      systems to avoid overlapping assignments in multi-tenant systems. The
+      <literal>FSID_COUNT</literal> specifies the number of IDs mapped by the
+      range, starting with the <literal>root(0)</literal> user/group/project ID
+      and extending through <literal>FSID_COUNT-1</literal>.</para>
+      <para>An offset range cannot overlap with another offset range. A
+      nodemap can only have one offset defined. To modify the offset already
+      defined, just assign a new value, or set to 0 to deactivate.  Any existing
+      files will not automatically be remapped to the new
+      <literal>OFFSET</literal> range. IDs must be manually changed on all files
+      for that nodemap with <literal>chown(1)</literal> and
+      <literal>lfs-project(1)</literal> on a trusted client that has access to
+      the unmapped, canonical file system IDs. Therefore modifying a nodemap
+      offset should be avoided if possible.</para>
+      <para>For example, to map the client UID, GID, and PROJID values from the
+      range 0-199999 to the filesystem UID, GID, and PROJID values to the range
+      100000-299999:</para>
+      <screen>mgs# lctl nodemap_add_offset --name <replaceable>remotesite</replaceable> --offset 100000 --limit 200000</screen>
+      <para>Once an offset is set on a nodemap, please make sure the explicit
+      mappings are defined so that they do not escape the offset range. This
+      means an explicit mapping should not map a client id to a file system id
+      greater than <literal>FSID_COUNT-1</literal>. Similarly, the
+      <literal>squash_uid</literal>, <literal>squash_gid</literal> and
+      <literal>squash_projid</literal> values should not be set to a value
+      greater than <literal>FSID_COUNT-1</literal>. Otherwise this would
+      produce file system ids outside of the offset range.
+</para>
+      <para>If not zero, the mapping offset is always applied as the last stage
+      of the mapping process.
+      <xref linkend="settingamapping.fig.id_mapping_flow_chart"/> gives a
+      simplified view of the identity mapping process that happens when nodemap is
+      activated, to convert a client id to a file system canonical id.</para>
+      <figure  xml:id="settingamapping.fig.id_mapping_flow_chart">
+        <title>Flow chart: nodemap identity mapping</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" width="65%" align="center"
+            fileref="figures/id_mapping_flow_chart.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Flow chart: nodemap identity mapping</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+    </section>
   </section>
 
   <section xml:id="nodemapdel">
