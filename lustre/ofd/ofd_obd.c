@@ -745,6 +745,9 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	}
 
 	/* OS_STATFS_READONLY can be set by OSD already, only add flags */
+	if (ofd->ofd_readonly)
+		osfs->os_state |= OS_STATFS_READONLY;
+
 	if (ofd->ofd_raid_degraded)
 		osfs->os_state |= OS_STATFS_DEGRADED;
 

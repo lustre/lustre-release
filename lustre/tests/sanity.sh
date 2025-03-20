@@ -6957,6 +6957,29 @@ test_56c() {
 }
 run_test 56c "check 'lfs df' showing device status"
 
+test_56ca() {
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	(( $OST1_VERSION >= $(version_code 2.16.53) )) ||
+		skip "Need OST1 >= 2.16.53 for this test"
+
+	local o_idx=0 # Target OST which will be set to readonly
+	local ost_name=$(ostname_from_index $o_idx)
+
+	stack_trap "do_facet ost${o_idx} $LCTL set_param -n \
+		obdfilter.$ost_name.readonly=0"
+
+	# Force set OST0 as readonly
+	do_facet ost${o_idx} $LCTL set_param -n obdfilter.$ost_name.readonly=1
+
+	sleep_maxage # Give time for sync
+
+	local new_status=$(ost_dev_status $o_idx $MOUNT -v) # Get new stats
+
+	[[ "$new_status" =~ "R" ]] ||
+		error "$ost_name status is '$new_status', missing 'R'"
+}
+run_test 56ca "'lfs df -v' correctly reports 'R' flag when OST set as Readonly"
+
 test_56d() {
 	local mdts=$($LFS df -v $MOUNT | grep -c MDT)
 	local osts=$($LFS df -v $MOUNT | grep -c OST)
