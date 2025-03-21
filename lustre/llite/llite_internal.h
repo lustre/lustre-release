@@ -139,6 +139,8 @@ struct ll_inode_info {
 	__u32				lli_inode_magic;
 	rwlock_t			lli_lock;
 
+	__u32				lli_projid;   /* project id */
+
 	volatile unsigned long		lli_flags;
 	struct posix_acl		*lli_posix_acl;
 
@@ -255,10 +257,10 @@ struct ll_inode_info {
 			/* for writepage() only to communicate to fsync */
 			int			lli_async_rc;
 
+			__u32			lli_heat_flags;
 			/* protect the file heat fields */
-			spinlock_t			lli_heat_lock;
-			__u32				lli_heat_flags;
-			struct obd_heat_instance	lli_heat_instances[OBD_HEAT_COUNT];
+			spinlock_t		lli_heat_lock;
+			struct obd_heat_instance lli_heat_instances[OBD_HEAT_COUNT];
 
 			/*
 			 * Whenever a process try to read/write the file, the
@@ -272,9 +274,9 @@ struct ll_inode_info {
 			seqlock_t		lli_jobinfo_seqlock;
 			struct job_info		lli_jobinfo;
 
-			struct mutex		 lli_pcc_lock;
-			enum lu_pcc_state_flags	 lli_pcc_state;
-			atomic_t		 lli_pcc_mapcnt;
+			struct mutex		lli_pcc_lock;
+			enum lu_pcc_state_flags	lli_pcc_state;
+			atomic_t		lli_pcc_mapcnt;
 			/*
 			 * I/O for a file previously opened before attach into
 			 * PCC or once opened while in ATTACHING state will
@@ -286,6 +288,7 @@ struct ll_inode_info {
 			 * Lustre file when mmaped a file.
 			 */
 			atomic_t		 lli_pcc_mapneg;
+			enum pcc_dataset_flags	 lli_pcc_dsflags;
 			/*
 			 * @lli_pcc_generation saves the gobal PCC generation
 			 * when the file was successfully attached into PCC.
@@ -300,7 +303,6 @@ struct ll_inode_info {
 			 * safely.
 			 */
 			__u64			 lli_pcc_generation;
-			enum pcc_dataset_flags	 lli_pcc_dsflags;
 			struct pcc_inode	*lli_pcc_inode;
 
 			struct mutex		 lli_group_mutex;
@@ -331,8 +333,6 @@ struct ll_inode_info {
 	/* Layout version, protected by lli_layout_lock */
 	__u32				lli_layout_gen;
 	spinlock_t			lli_layout_lock;
-
-	__u32				lli_projid;   /* project id */
 
 	struct rw_semaphore		lli_xattrs_list_rwsem;
 	struct mutex			lli_xattrs_enq_lock;
@@ -834,38 +834,38 @@ enum stats_track_type {
 
 /* flags for sbi->ll_flags */
 enum ll_sbi_flags {
-	LL_SBI_NOLCK,			/* DLM locking disabled directio-only */
-	LL_SBI_CHECKSUM,		/* checksum each page as it's written */
-	LL_SBI_LOCALFLOCK,		/* local flocks instead of fs-wide */
-	LL_SBI_FLOCK,			/* flock enabled */
-	LL_SBI_USER_XATTR,		/* support user xattr */
-	LL_SBI_LRU_RESIZE,		/* lru resize support */
-	LL_SBI_LAZYSTATFS,		/* lazystatfs mount option */
 	LL_SBI_32BIT_API,		/* generate 32 bit inodes. */
-	LL_SBI_USER_FID2PATH,		/* fid2path by unprivileged users */
-	LL_SBI_VERBOSE,			/* verbose mount/umount */
 	LL_SBI_ALWAYS_PING,		/* ping even if server suppress_pings */
-	LL_SBI_TEST_DUMMY_ENCRYPTION,	/* test dummy encryption */
+	LL_SBI_CHECKSUM,		/* checksum each page as it's written */
 	LL_SBI_ENCRYPT,			/* client side encryption */
+	LL_SBI_FLOCK,			/* flock enabled */
+	LL_SBI_LOCALFLOCK,		/* local flocks instead of fs-wide */
 	LL_SBI_FOREIGN_SYMLINK,		/* foreign fake-symlink support */
 	LL_SBI_FOREIGN_SYMLINK_UPCALL,	/* foreign fake-symlink upcall set */
+	LL_SBI_LAZYSTATFS,		/* lazystatfs mount option */
+	LL_SBI_LRU_RESIZE,		/* lru resize support */
+	LL_SBI_NOLCK,			/* DLM locking disabled directio-only */
 	LL_SBI_STATFS_PROJECT,		/* statfs returns project quota */
+	LL_SBI_TEST_DUMMY_ENCRYPTION,	/* test dummy encryption */
+	LL_SBI_USER_FID2PATH,		/* fid2path by unprivileged users */
+	LL_SBI_USER_XATTR,		/* support user xattr */
+	LL_SBI_VERBOSE,			/* verbose mount/umount */
 	LL_SBI_NUM_MOUNT_OPT,
 
+	LL_SBI_64BIT_HASH,		/* support 64-bits dir hash/offset */
 	LL_SBI_ACL,			/* support ACL */
 	LL_SBI_AGL_ENABLED,		/* enable agl */
-	LL_SBI_64BIT_HASH,		/* support 64-bits dir hash/offset */
-	LL_SBI_LAYOUT_LOCK,		/* layout lock support */
-	LL_SBI_XATTR_CACHE,		/* support for xattr cache */
-	LL_SBI_NOROOTSQUASH,		/* do not apply root squash */
-	LL_SBI_FAST_READ,		/* fast read support */
-	LL_SBI_FILE_SECCTX,		/* file security context at create */
-	LL_SBI_TINY_WRITE,		/* tiny write support */
-	LL_SBI_FILE_HEAT,		/* file heat support */
-	LL_SBI_PARALLEL_DIO,		/* parallel (async) O_DIRECT RPCs */
 	LL_SBI_ENCRYPT_NAME,		/* name encryption */
-	LL_SBI_UNALIGNED_DIO,		/* unaligned DIO */
+	LL_SBI_FAST_READ,		/* fast read support */
+	LL_SBI_FILE_HEAT,		/* file heat support */
+	LL_SBI_FILE_SECCTX,		/* file security context at create */
 	LL_SBI_HYBRID_IO,		/* allow BIO as DIO */
+	LL_SBI_LAYOUT_LOCK,		/* layout lock support */
+	LL_SBI_NOROOTSQUASH,		/* do not apply root squash */
+	LL_SBI_PARALLEL_DIO,		/* parallel (async) O_DIRECT RPCs */
+	LL_SBI_TINY_WRITE,		/* tiny write support */
+	LL_SBI_UNALIGNED_DIO,		/* unaligned DIO */
+	LL_SBI_XATTR_CACHE,		/* support for xattr cache */
 	LL_SBI_NUM_FLAGS
 };
 
@@ -905,15 +905,15 @@ struct ll_sb_info {
 
 	DECLARE_BITMAP(ll_flags, LL_SBI_NUM_FLAGS); /* enum ll_sbi_flags */
 	gid_t			 ll_enable_setstripe_gid; /*  */
-	unsigned int		 ll_xattr_cache_enabled:1,
-				 ll_xattr_cache_set:1, /* already set to 0/1 */
+	unsigned int		 ll_checksum_set:1,
 				 ll_client_common_fill_super_succeeded:1,
-				 ll_checksum_set:1,
-				 ll_inode_cache_enabled:1,
+				 ll_dir_open_read:1,
 				 ll_enable_statahead_fname:1,
+				 ll_inode_cache_enabled:1,
 				 ll_intent_mkdir_enabled:1,
-				 ll_dir_open_read:1;
-
+				 ll_sync_on_close:1,
+				 ll_xattr_cache_enabled:1,
+				 ll_xattr_cache_set:1; /* already set to 0/1 */
 
 	struct lustre_client_ocd ll_lco;
 
@@ -1144,38 +1144,38 @@ struct ll_readahead_work {
 extern struct kmem_cache *ll_file_data_slab;
 struct lustre_handle;
 struct ll_file_data {
-	struct ll_readahead_state fd_ras;
-	struct ll_grouplock fd_grouplock;
-	__u64 lfd_pos;
-	__u32 fd_flags;
-	enum mds_open_flags fd_open_mode;
+	struct file			*fd_file;
+	__u64				lfd_pos;
 	/* openhandle if lease exists for this file.
 	 * Borrow lli->lli_och_mutex to protect assignment
 	 */
-	struct obd_client_handle *fd_lease_och;
-	struct obd_client_handle *fd_och;
-	struct file *fd_file;
+	struct obd_client_handle	*fd_lease_och;
+	struct obd_client_handle	*fd_och;
+	struct ll_readahead_state	fd_ras;
 	/* Indicate whether need to report failure when close.
 	 * true: failure is known, not report again.
 	 * false: unknown failure, should report.
 	 */
-	bool fd_write_failed;
-	bool ll_lock_no_expand;
-	/* Used by mirrored file to lead IOs to a specific mirror, usually
-	 * for mirror resync. 0 means default.
-	 */
-	__u32 fd_designated_mirror;
-	/* The layout version when resync starts. Resync I/O should carry this
-	 * layout version for verification to OST objects
-	 */
-	__u32 fd_layout_version;
-	struct pcc_file fd_pcc_file;
+	bool				fd_write_failed;
+	unsigned int			lfd_lock_no_expand:1;
+	__u32				fd_flags;
+	enum mds_open_flags		fd_open_mode;
 	/* striped directory may read partially if some stripe inaccessible,
 	 * -errno is saved here, and will return to user in close().
 	 */
-	int fd_partial_readdir_rc;
+	int				fd_partial_readdir_rc;
+	/* Used by mirrored file to lead IOs to a specific mirror, usually
+	 * for mirror resync. 0 means default.
+	 */
+	__u32				fd_designated_mirror;
+	/* The layout version when resync starts. Resync I/O should carry this
+	 * layout version for verification to OST objects
+	 */
+	__u32				fd_layout_version;
+	struct ll_grouplock		fd_grouplock;
+	struct pcc_file			fd_pcc_file;
 	/* mdtest unique/shared dir stat mode: per process statahead struct. */
-	struct ll_statahead_info *fd_sai;
+	struct ll_statahead_info	*fd_sai;
 };
 
 void llite_tunables_unregister(void);

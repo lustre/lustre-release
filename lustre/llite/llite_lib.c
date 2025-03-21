@@ -973,47 +973,47 @@ void ll_kill_super(struct super_block *sb)
  * for the sbi_flags.
  */
 static const match_table_t ll_sbi_flags_name = {
-	{LL_SBI_NOLCK,			"nolock"},
+	{LL_SBI_32BIT_API,		"32bitapi"},
 	{LL_SBI_CHECKSUM,		"checksum"},
 	{LL_SBI_CHECKSUM,		"nochecksum"},
-	{LL_SBI_LOCALFLOCK,		"localflock"},
+	{LL_SBI_ENCRYPT,		"encrypt"},
+	{LL_SBI_ENCRYPT,		"noencrypt"},
 	{LL_SBI_FLOCK,			"flock"},
 	{LL_SBI_FLOCK,			"noflock"},
-	{LL_SBI_USER_XATTR,		"user_xattr"},
-	{LL_SBI_USER_XATTR,		"nouser_xattr"},
-	{LL_SBI_LRU_RESIZE,		"lruresize"},
-	{LL_SBI_LRU_RESIZE,		"nolruresize"},
+	{LL_SBI_LOCALFLOCK,		"localflock"},
+	{LL_SBI_FOREIGN_SYMLINK,	"foreign_symlink=%s"},
 	{LL_SBI_LAZYSTATFS,		"lazystatfs"},
 	{LL_SBI_LAZYSTATFS,		"nolazystatfs"},
-	{LL_SBI_32BIT_API,		"32bitapi"},
+	{LL_SBI_LRU_RESIZE,		"lruresize"},
+	{LL_SBI_LRU_RESIZE,		"nolruresize"},
+	{LL_SBI_NOLCK,			"nolock"},
+	{LL_SBI_STATFS_PROJECT,		"statfs_project"},
+	{LL_SBI_STATFS_PROJECT,		"nostatfs_project"},
+	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption=%s"},
+	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption"},
 	{LL_SBI_USER_FID2PATH,		"user_fid2path"},
 	{LL_SBI_USER_FID2PATH,		"nouser_fid2path"},
+	{LL_SBI_USER_XATTR,		"user_xattr"},
+	{LL_SBI_USER_XATTR,		"nouser_xattr"},
 	{LL_SBI_VERBOSE,		"verbose"},
 	{LL_SBI_VERBOSE,		"noverbose"},
 	{LL_SBI_ALWAYS_PING,		"always_ping"},
-	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption=%s"},
-	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption"},
-	{LL_SBI_ENCRYPT,		"encrypt"},
-	{LL_SBI_ENCRYPT,		"noencrypt"},
-	{LL_SBI_FOREIGN_SYMLINK,	"foreign_symlink=%s"},
-	{LL_SBI_STATFS_PROJECT,		"statfs_project"},
-	{LL_SBI_STATFS_PROJECT,		"nostatfs_project"},
 	{LL_SBI_NUM_MOUNT_OPT,		NULL},
 
+	{LL_SBI_64BIT_HASH,		"64bit_hash"},
 	{LL_SBI_ACL,			"acl"},
 	{LL_SBI_AGL_ENABLED,		"agl"},
-	{LL_SBI_64BIT_HASH,		"64bit_hash"},
-	{LL_SBI_LAYOUT_LOCK,		"layout"},
-	{LL_SBI_XATTR_CACHE,		"xattr_cache"},
-	{LL_SBI_NOROOTSQUASH,		"norootsquash"},
-	{LL_SBI_FAST_READ,		"fast_read"},
-	{LL_SBI_FILE_SECCTX,		"file_secctx"},
-	{LL_SBI_TINY_WRITE,		"tiny_write"},
-	{LL_SBI_FILE_HEAT,		"file_heat"},
-	{LL_SBI_PARALLEL_DIO,		"parallel_dio"},
-	{LL_SBI_HYBRID_IO,		"hybrid_io"},
 	{LL_SBI_ENCRYPT_NAME,		"name_encrypt"},
+	{LL_SBI_FAST_READ,		"fast_read"},
+	{LL_SBI_FILE_HEAT,		"file_heat"},
+	{LL_SBI_FILE_SECCTX,		"file_secctx"},
+	{LL_SBI_HYBRID_IO,		"hybrid_io"},
+	{LL_SBI_LAYOUT_LOCK,		"layout"},
+	{LL_SBI_NOROOTSQUASH,		"norootsquash"},
+	{LL_SBI_PARALLEL_DIO,		"parallel_dio"},
+	{LL_SBI_TINY_WRITE,		"tiny_write"},
 	{LL_SBI_UNALIGNED_DIO,		"unaligned_dio"},
+	{LL_SBI_XATTR_CACHE,		"xattr_cache"},
 };
 
 int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
@@ -1092,10 +1092,10 @@ static int ll_options(char *options, struct super_block *sb)
 		}
 
 		switch (token) {
-		case LL_SBI_NOLCK:
 		case LL_SBI_32BIT_API:
 		case LL_SBI_64BIT_HASH:
 		case LL_SBI_ALWAYS_PING:
+		case LL_SBI_NOLCK:
 			set_bit(token, sbi->ll_flags);
 			break;
 
@@ -1207,7 +1207,7 @@ static int ll_options(char *options, struct super_block *sb)
 			} else {
 				LCONSOLE_ERROR("invalid %s option\n", s1);
 			}
-		fallthrough;
+			break;
 		default:
 			break;
 		}

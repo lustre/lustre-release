@@ -1824,7 +1824,7 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 	int flags = vvp_io_args_flags(file, args);
 
 	io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
-	io->ci_lock_no_expand = lfd->ll_lock_no_expand;
+	io->ci_lock_no_expand = lfd->lfd_lock_no_expand;
 
 	if (iot == CIT_WRITE) {
 		io->u.ci_wr.wr_append = iocb_ki_flags_check(flags, APPEND);
@@ -4206,7 +4206,7 @@ static int ll_lock_noexpand(struct file *file, int flags)
 {
 	struct ll_file_data *lfd = file->private_data;
 
-	lfd->ll_lock_no_expand = !(flags & LF_UNSET);
+	lfd->lfd_lock_no_expand = !(flags & LF_UNSET);
 
 	return 0;
 }
