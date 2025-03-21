@@ -8,7 +8,7 @@
 # Makefile template for kunit
 #
 
-MODULES := kinode obd_test
+MODULES := kinode obd_test obd_mod_rpcs_test
 @TESTS_TRUE@@SERVER_TRUE@MODULES += ldlm_extent
 @TESTS_TRUE@@SERVER_TRUE@MODULES += llog_test
 
@@ -16,5 +16,5 @@ EXTRA_DIST = kinode.c
 EXTRA_DIST += ldlm_extent.c
 EXTRA_DIST += llog_test.c
 EXTRA_DIST += obd_test.c
-
+EXTRA_DIST += obd_mod_rpcs_test.c
 @INCLUDE_RULES@

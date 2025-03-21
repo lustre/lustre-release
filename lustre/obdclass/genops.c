@@ -2384,27 +2384,44 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc)
 
 	init_wait(&wait.wqe);
 	wait.wqe.func = claim_mod_rpc_function;
-
 	spin_lock_irq(&cli->cl_mod_rpcs_waitq.lock);
-	__add_wait_queue_entry_tail(&cli->cl_mod_rpcs_waitq, &wait.wqe);
-	/* This wakeup will only succeed if the maximums haven't
-	 * been reached.  If that happens, wait.woken will be set
-	 * and there will be no need to wait.
-	 * If a close_req was enqueue, ensure we search all the way to the
-	 * end of the waitqueue for a close request.
-	 */
-	__wake_up_locked_key(&cli->cl_mod_rpcs_waitq, TASK_NORMAL,
-			     (void*)wait.close_req);
+	/* If it's kthread and don't have set_child_tid */
+	if ((current->flags & PF_KTHREAD) && (current->flags & PF_MEMALLOC) &&
+	    !current->set_child_tid) {
+		/* Skip wait_woken as it will cause kernel panic (LU-18826).
+		 * Also confirm it's on the mem alloc path by PF_MEMALLOC.
+		 * In this dedicated case, grant a slot.
+		 */
+		cli->cl_mod_rpcs_in_flight++;
+		if (wait.close_req)
+			cli->cl_close_rpcs_in_flight++;
+		LCONSOLE_INFO("%s: Force grant RPC slot (%u current) to proc with flag: %x.\n",
+			cli->cl_import->imp_obd->obd_name,
+			cli->cl_mod_rpcs_in_flight, current->flags);
+	} else {
+		__add_wait_queue_entry_tail(&cli->cl_mod_rpcs_waitq, &wait.wqe);
+		/* This wakeup will only succeed if the maximums haven't
+		 * been reached.  If that happens, wait.woken will be set
+		 * and there will be no need to wait.
+		 * If a close_req was enqueue, ensure we search all the way to
+		 * the end of the waitqueue for a close request.
+		 */
+		__wake_up_locked_key(&cli->cl_mod_rpcs_waitq, TASK_NORMAL,
+				     (void *)wait.close_req);
 
-	while (wait.woken == false) {
-		spin_unlock_irq(&cli->cl_mod_rpcs_waitq.lock);
-		wait_woken(&wait.wqe, TASK_UNINTERRUPTIBLE,
-			   MAX_SCHEDULE_TIMEOUT);
-		spin_lock_irq(&cli->cl_mod_rpcs_waitq.lock);
+		while (wait.woken == false) {
+			spin_unlock_irq(&cli->cl_mod_rpcs_waitq.lock);
+			wait_woken(&wait.wqe, TASK_UNINTERRUPTIBLE,
+				MAX_SCHEDULE_TIMEOUT);
+			spin_lock_irq(&cli->cl_mod_rpcs_waitq.lock);
+		}
+		__remove_wait_queue(&cli->cl_mod_rpcs_waitq, &wait.wqe);
 	}
-	__remove_wait_queue(&cli->cl_mod_rpcs_waitq, &wait.wqe);
-
-	max = cli->cl_max_mod_rpcs_in_flight;
+	/* In extreme situation like (LU-18826), cl_mod_rpcs_in_flight
+	 * can go above cl_max_mod_rpcs_in_flight, use greater value here
+	 * to make sure the slot can be found in cl_mod_tag_bitmap
+	 */
+	max = max(cli->cl_max_mod_rpcs_in_flight, cli->cl_mod_rpcs_in_flight);
 	lprocfs_oh_tally(&cli->cl_mod_rpcs_hist,
 			 cli->cl_mod_rpcs_in_flight);
 	/* find a free tag */

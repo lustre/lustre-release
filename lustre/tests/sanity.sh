@@ -6829,6 +6829,21 @@ test_55b() {
 }
 run_test 55b "Load and unload max OBD devices"
 
+test_55c()
+{
+	load_module kunit/obd_mod_rpcs_test ||
+		error "load_module obd_mod_rpcs_test failed"
+	dmesg | tail -n 25 | grep "obd_mod_rpcs_test"
+	if [ $(dmesg | tail -n 25 | grep "Force grant RPC"| wc -l) -gt 1 ]; then
+		error "Force granted more than once, failing."
+	else
+		echo "Force granted exactly once. Passed."
+	fi
+	rmmod -v obd_mod_rpcs_test ||
+		error "rmmod failed (may trigger a failure in a later test)"
+}
+run_test 55c "obd_mod_rpcs_test"
+
 test_56a() {
 	local numfiles=3
 	local numdirs=2
