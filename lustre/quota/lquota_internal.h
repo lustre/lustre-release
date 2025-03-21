@@ -453,6 +453,7 @@ struct lquota_entry *lqe_locate_find(const struct lu_env *,
 
 static inline void lqe_set_deleted(struct lquota_entry *lqe)
 {
+	lqe_write_lock(lqe);
 	lqe->lqe_enforced = 0;
 	lqe->lqe_edquot = 0;
 	lqe->lqe_is_default = 0;
@@ -461,6 +462,7 @@ static inline void lqe_set_deleted(struct lquota_entry *lqe)
 	lqe->lqe_gracetime = 0;
 
 	lqe->lqe_is_deleted = 1;
+	lqe_write_unlock(lqe);
 }
 
 /* lquota_disk.c */

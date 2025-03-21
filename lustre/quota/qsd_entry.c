@@ -223,10 +223,12 @@ int qsd_refresh_usage(const struct lu_env *env, struct lquota_entry *lqe)
 		rc = 0;
 		break;
 	case 0:
+		lqe_write_lock(lqe);
 		if (qqi->qqi_qsd->qsd_is_md)
 			lqe->lqe_usage = rec->ispace;
 		else
 			lqe->lqe_usage = toqb(rec->bspace);
+		lqe_write_unlock(lqe);
 		break;
 	default:
 		LQUOTA_ERROR(lqe, "failed to read disk usage, rc:%d", rc);

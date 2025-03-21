@@ -41,6 +41,7 @@ void lqe_ref_free(struct kref *kref)
 	struct lquota_entry *lqe = container_of(kref, struct lquota_entry,
 						lqe_ref);
 
+	LASSERT(!lqe->lqe_gl);
 	OBD_SLAB_FREE_PTR(lqe, lqe_kmem);
 }
 

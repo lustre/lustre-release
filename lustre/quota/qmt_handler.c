@@ -326,13 +326,12 @@ static int qmt_set(const struct lu_env *env, struct qmt_device *qmt,
 	if (IS_ERR(lqe))
 			RETURN(PTR_ERR(lqe));
 
+	lqe_write_lock(lqe);
 	lqe->lqe_is_deleted = 0;
 	lqe->lqe_is_reset = 0;
+	lqe_write_unlock(lqe);
 	rc = qmt_set_with_lqe(env, qmt, lqe, hard, soft, time, valid,
 			      is_default, is_updated);
-	if (rc == 0)
-		lqe->lqe_is_deleted = 0;
-
 	lqe_putref(lqe);
 	RETURN(rc);
 }
@@ -377,11 +376,8 @@ static int qmt_delete_qid(const struct lu_env *env, struct qmt_device *qmt,
 	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_NOSYNC))
 		th->th_sync = 0;
 
-	lqe_write_lock(lqe);
 	rc = lquota_disk_delete(env, th,
 				qpi->qpi_glb_obj[qtype], qid, &ver);
-
-	lqe_write_unlock(lqe);
 	dt_trans_stop(env, qmt->qmt_child, th);
 
 	if (rc == 0) {

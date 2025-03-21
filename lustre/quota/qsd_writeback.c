@@ -323,8 +323,10 @@ out_del:
 			GOTO(out, rc = PTR_ERR(lqe));
 	}
 
+	lqe_write_lock(lqe);
 	lqe->lqe_is_reset = false;
 	lqe->lqe_is_deleted = 0;
+	lqe_write_unlock(lqe);
 
 	/* The in-memory lqe update for slave index copy isn't deferred,
 	 * we shouldn't touch it here. */
@@ -340,12 +342,17 @@ out_del:
 		spin_unlock(&qsd->qsd_adjust_lock);
 
 		if (LQUOTA_FLAG(upd->qur_rec.lqr_glb_rec.qbr_time) &
-							LQUOTA_FLAG_REVOKE)
+							LQUOTA_FLAG_REVOKE) {
+			lqe_write_lock(lqe);
 			lqe->lqe_revoke = 1;
+			lqe_write_unlock(lqe);
+		}
 
 		/* Report usage asynchronously */
 		rc = qsd_adjust(env, lqe);
+		lqe_write_lock(lqe);
 		lqe->lqe_revoke = 0;
+		lqe_write_unlock(lqe);
 		if (rc)
 			LQUOTA_ERROR(lqe, "failed to report usage, rc:%d", rc);
 	}
@@ -358,12 +365,14 @@ out:
 	    upd->qur_rec.lqr_glb_rec.qbr_hardlimit == 0 &&
 	    (LQUOTA_FLAG(upd->qur_rec.lqr_glb_rec.qbr_time) &
 							LQUOTA_FLAG_DEFAULT)) {
+		lqe_write_lock(lqe);
 		lqe->lqe_is_default = true;
 		if (qqi->qqi_default_softlimit == 0 &&
 		    qqi->qqi_default_hardlimit == 0)
 			lqe->lqe_enforced = false;
 		else
 			lqe->lqe_enforced = true;
+		lqe_write_unlock(lqe);
 
 		LQUOTA_DEBUG(lqe, "update to use default quota");
 	}
@@ -372,11 +381,13 @@ out:
 							LQUOTA_FLAG_RESET)) {
 		struct lquota_slv_rec srec;
 
+		lqe_write_lock(lqe);
 		lqe->lqe_granted = 0;
 		lqe->lqe_softlimit = 0;
 		lqe->lqe_hardlimit = 0;
 		lqe->lqe_is_default = false;
 		lqe->lqe_is_reset = true;
+		lqe_write_unlock(lqe);
 
 		memset(&srec, 0, sizeof(srec));
 		rc = qsd_update_index(env, qqi, &upd->qur_qid, false, 0, &srec);
