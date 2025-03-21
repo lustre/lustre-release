@@ -793,6 +793,9 @@ static int iam_lookup_try(struct iam_path *path)
 	     ++frame, ++i) {
 		err = param->id_ops->id_node_read(c, (iam_ptr_t)ptr, NULL,
 						  &frame->bh);
+		if (err != 0)
+			break;
+
 		do_corr(schedule());
 
 		iam_lock_bh(frame->bh);
@@ -801,18 +804,19 @@ static int iam_lookup_try(struct iam_path *path)
 		 * creation procedure may change it and iam_lookup_try() will
 		 * see obsolete tree height. -bzzz
 		 */
-		if (err != 0)
-			break;
-
 		if (LDISKFS_INVARIANT_ON) {
 			err = param->id_ops->id_node_check(path, frame);
-			if (err != 0)
+			if (err != 0) {
+				iam_unlock_bh(frame->bh);
 				break;
+			}
 		}
 
 		err = param->id_ops->id_node_load(path, frame);
-		if (err != 0)
+		if (err != 0) {
+			iam_unlock_bh(frame->bh);
 			break;
+		}
 
 		assert_inv(dx_node_check(path, frame));
 		/*
@@ -823,8 +827,10 @@ static int iam_lookup_try(struct iam_path *path)
 		 */
 		if (i > 0) {
 			err = iam_check_path(path, frame - 1);
-			if (err != 0)
+			if (err != 0) {
+				iam_unlock_bh(frame->bh);
 				break;
+			}
 		}
 
 		frame->at = iam_find_position(path, frame);
@@ -834,8 +840,6 @@ static int iam_lookup_try(struct iam_path *path)
 		iam_unlock_bh(frame->bh);
 		do_corr(schedule());
 	}
-	if (err != 0)
-		iam_unlock_bh(frame->bh);
 	path->ip_frame = --frame;
 	return err;
 }
