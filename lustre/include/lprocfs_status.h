@@ -699,6 +699,36 @@ extern int lprocfs_seq_release(struct inode *i, struct file *f);
  * to get out of the statement.
  */
 
+/*
+ * The macro uses a for loop that executes a block of code maximum once.
+ * It allows for local variable declarations.
+ *
+ * Initialization: Lock Acquisition and Import Retrieval:
+ * --------------
+ *  for (down_read_nested(&(__obd)->u.cli.cl_sem, __nest),
+ *             __imp = (__obd)->u.cli.cl_import,
+ *             __rc = __imp ? 0 : -ENODEV;
+ * It acquires a read lock,
+ * retrieves the import pointer and stores it in __imp,
+ * sets the return code __rc
+ *	to 0 (success) if __imp is not NULL, or
+ *	to _ENODEV (failure) if __imp is NULL
+ *
+ * Condition: Conditional Lock Release:
+ * ---------
+ *  __imp ? 1 : (up_read(&(__obd)->u.cli.cl_sem), 0);
+ *
+ * If __imp is not NULL, it evaluates to 1, and nothing happens.
+ * This means the lock is kept as long as a valid import was obtained.
+ * If __imp is NULL, then it releases the read lock and evaluates to 0.
+ *
+ * Update: Nulling the Import Pointer
+ * ------
+ *  __imp = NULL)
+ *
+ * sets __imp to NULL. This will break out of the for loop, releasing the
+ * semaphore in the condition.
+ */
 #define with_imp_locked_nested(__obd, __imp, __rc, __nest)		\
 	for (down_read_nested(&(__obd)->u.cli.cl_sem, __nest),		\
 	     __imp = (__obd)->u.cli.cl_import,				\

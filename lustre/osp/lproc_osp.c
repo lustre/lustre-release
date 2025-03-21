@@ -37,6 +37,9 @@ static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_import *imp;
 	int rc;
 
+	if (!obd)
+		return -ENOENT;
+
 	with_imp_locked(obd, imp, rc)
 		rc = sprintf(buf, "%d\n", !imp->imp_deactive);
 	return rc;
