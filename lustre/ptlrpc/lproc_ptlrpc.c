@@ -242,10 +242,12 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
 	*stats_ret = svc_stats;
 }
 
-static int
-ptlrpc_lprocfs_req_buffer_history_len_seq_show(struct seq_file *m, void *v)
+static ssize_t req_buffer_history_len_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
 {
-	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
 	struct ptlrpc_service_part *svcpt;
 	int total = 0;
 	int i;
@@ -253,17 +255,16 @@ ptlrpc_lprocfs_req_buffer_history_len_seq_show(struct seq_file *m, void *v)
 	ptlrpc_service_for_each_part(svcpt, i, svc)
 		total += svcpt->scp_hist_nrqbds;
 
-	seq_printf(m, "%d\n", total);
-
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", total);
 }
+LUSTRE_RO_ATTR(req_buffer_history_len);
 
-LDEBUGFS_SEQ_FOPS_RO(ptlrpc_lprocfs_req_buffer_history_len);
-
-static int
-ptlrpc_lprocfs_req_buffer_history_max_seq_show(struct seq_file *m, void *n)
+static ssize_t req_buffer_history_max_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
 {
-	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
 	struct ptlrpc_service_part *svcpt;
 	int total = 0;
 	int i;
@@ -271,23 +272,22 @@ ptlrpc_lprocfs_req_buffer_history_max_seq_show(struct seq_file *m, void *n)
 	ptlrpc_service_for_each_part(svcpt, i, svc)
 		total += svc->srv_hist_nrqbds_cpt_max;
 
-	seq_printf(m, "%d\n", total);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", total);
 }
 
-static ssize_t
-ptlrpc_lprocfs_req_buffer_history_max_seq_write(struct file *file,
-						const char __user *buffer,
-						size_t count, loff_t *off)
+static ssize_t req_buffer_history_max_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer,
+					    size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
 	unsigned long long val;
 	unsigned long long limit;
 	int bufpages;
 	int rc;
 
-	rc = kstrtoull_from_user(buffer, count, 0, &val);
+	rc = kstrtoull(buffer, 10, &val);
 	if (rc < 0)
 		return rc;
 
@@ -319,29 +319,29 @@ ptlrpc_lprocfs_req_buffer_history_max_seq_write(struct file *file,
 
 	return count;
 }
+LUSTRE_RW_ATTR(req_buffer_history_max);
 
-LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_req_buffer_history_max);
-
-static int
-ptlrpc_lprocfs_req_buffers_max_seq_show(struct seq_file *m, void *n)
+static ssize_t req_buffers_max_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
 {
-	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
 
-	seq_printf(m, "%d\n", svc->srv_nrqbds_max);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", svc->srv_nrqbds_max);
 }
 
-static ssize_t
-ptlrpc_lprocfs_req_buffers_max_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
+static ssize_t req_buffers_max_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer,
+				     size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
 	int val;
 	int rc;
 
-	rc = kstrtoint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 10, &val);
 	if (rc < 0)
 		return rc;
 
@@ -356,8 +356,7 @@ ptlrpc_lprocfs_req_buffers_max_seq_write(struct file *file,
 
 	return count;
 }
-
-LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_req_buffers_max);
+LUSTRE_RW_ATTR(req_buffers_max);
 
 static ssize_t threads_min_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -1151,10 +1150,13 @@ static ssize_t high_priority_ratio_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(high_priority_ratio);
 
 static struct attribute *ptlrpc_svc_attrs[] = {
+	&lustre_attr_high_priority_ratio.attr,
+	&lustre_attr_req_buffer_history_len.attr,
+	&lustre_attr_req_buffer_history_max.attr,
+	&lustre_attr_req_buffers_max.attr,
 	&lustre_attr_threads_min.attr,
 	&lustre_attr_threads_started.attr,
 	&lustre_attr_threads_max.attr,
-	&lustre_attr_high_priority_ratio.attr,
 	NULL,
 };
 
@@ -1196,20 +1198,11 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry, char *param,
 				      struct ptlrpc_service *svc)
 {
 	struct ldebugfs_vars ldebugfs_vars[] = {
-		{ .name	= "req_buffer_history_len",
-		  .fops	= &ptlrpc_lprocfs_req_buffer_history_len_fops,
-		  .data	= svc },
-		{ .name = "req_buffer_history_max",
-		  .fops	= &ptlrpc_lprocfs_req_buffer_history_max_fops,
-		  .data	= svc },
 		{ .name = "timeouts",
 		  .fops = &ptlrpc_lprocfs_timeouts_fops,
 		  .data = svc },
 		{ .name = "nrs_policies",
 		  .fops = &ptlrpc_lprocfs_nrs_policies_fops,
-		  .data = svc },
-		{ .name = "req_buffers_max",
-		  .fops = &ptlrpc_lprocfs_req_buffers_max_fops,
 		  .data = svc },
 		{ NULL }
 	};
