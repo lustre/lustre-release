@@ -22971,6 +22971,44 @@ test_205l() {
 }
 run_test 205l "Verify job stats can scale"
 
+test_205m() {
+	local trunc_hostname=${HOSTNAME:0:2}
+	local dir=$DIR/205m/
+	local tests=(
+	    "%.3e.%u"       "cp /etc/hosts $dir" "cp.500"
+	    "%.3e.%u"       "touch $dir/1"       "tou.500"
+	    "%.3e.%u.%.2h"  "touch $dir/2"       "tou.500.${trunc_hostname}"
+	    "%.3e"          "touch $dir/3"       "tou"
+	    "%.1e.%u.%.2h"  "touch $dir/4"       "t.500.${trunc_hostname}"
+	    "%.2p"          "touch $dir/8"       '${pid:0:2}'
+	)
+
+	cli_params=( $($LCTL get_param jobid_name jobid_var) )
+	stack_trap "$LCTL set_param ${cli_params[*]}" EXIT
+	stack_trap "do_facet mds1 $LCTL set_param mdt.*.job_stats=clear" EXIT
+
+	mkdir $DIR/205m
+	chown $RUNAS_ID $DIR/205m
+	chgrp $RUNAS_ID $DIR/205m
+	for (( i = 0; i < ${#tests[@]} ; i += 3 )); do
+		local jobid_name=${tests[i]}
+		local cmd=${tests[i+1]}
+
+		do_facet mds1 $LCTL set_param mdt.*.job_stats=clear
+		$LCTL set_param jobid_var=nodelocal jobid_name=${jobid_name}
+
+		runas -u 500 $cmd & pid=$!
+		wait $pid
+		eval "expected=${tests[i+2]}"
+
+		do_facet mds1 $LCTL get_param mdt.*.job_stats |
+		awk '/job_id:/ {print} /job_id:/ && $3 == "'$expected'"
+		{found=1} END {exit(!found)}' ||
+			error "expected ${expected}, got ${job_id_name} instead"
+	done
+}
+run_test 205m "Test width parsing of job_stats"
+
 # LU-1480, LU-1773 and LU-1657
 test_206() {
 	mkdir -p $DIR/$tdir

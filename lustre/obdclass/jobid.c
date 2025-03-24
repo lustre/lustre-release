@@ -684,6 +684,9 @@ static int jobid_print_current_comm(char *jobid, ssize_t joblen)
  *   %p = pid
  *   %u = uid
  *
+ * Truncation can also be interpreted by writing .n between % and field, for
+ * example %.3h to print only the 3 first characaters.
+ *
  * Unknown escape strings are dropped.  Other characters are copied through,
  * excluding whitespace (to avoid making jobid parsing difficult).
  *
@@ -696,7 +699,8 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 	char c;
 
 	while ((c = *jobfmt++) && joblen > 1) {
-		char f, *p;
+		long width = joblen;
+		char *p;
 		int l;
 
 		if (isspace(c)) /* Don't allow embedded spaces */
@@ -710,29 +714,40 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 			continue;
 		}
 
-		switch ((f = *jobfmt++)) {
+		if (*jobfmt == '.') {
+			long w = 0;
+			int size = 0;
+
+			jobfmt++;
+			if (sscanf(jobfmt, "%ld%n", &w, &size) == 1)
+				jobfmt += size;
+			if (w > 0)
+				width = min(w+1, joblen);
+		}
+
+		switch (*jobfmt++) {
 		case 'e': /* executable name */
-			l = jobid_print_current_comm(jobid, joblen);
+			l = jobid_print_current_comm(jobid, width);
 			break;
 		case 'g': /* group ID */
-			l = snprintf(jobid, joblen, "%u",
+			l = snprintf(jobid, width, "%u",
 				     from_kgid(&init_user_ns, current_fsgid()));
 			break;
 		case 'h': /* hostname */
-			l = snprintf(jobid, joblen, "%s",
+			l = snprintf(jobid, width, "%s",
 				     init_utsname()->nodename);
 			break;
 		case 'H': /* short hostname. Cut at first dot */
-			l = snprintf(jobid, joblen, "%s",
+			l = snprintf(jobid, width, "%s",
 				     init_utsname()->nodename);
-			p = strnchr(jobid, joblen, '.');
+			p = strnchr(jobid, width, '.');
 			if (p) {
 				*p = '\0';
 				l = p - jobid;
 			}
 			break;
 		case 'j': /* jobid stored in process environment */
-			l = jobid_get_from_cache(jobid, joblen);
+			l = jobid_get_from_cache(jobid, width);
 			if (l < 0)
 				l = 0;
 			if (*jobfmt == '?') {
@@ -743,10 +758,10 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 			}
 			break;
 		case 'p': /* process ID */
-			l = snprintf(jobid, joblen, "%u", current->pid);
+			l = snprintf(jobid, width, "%u", current->pid);
 			break;
 		case 'u': /* user ID */
-			l = snprintf(jobid, joblen, "%u",
+			l = snprintf(jobid, width, "%u",
 				     from_kuid(&init_user_ns, current_fsuid()));
 			break;
 		case '\0': /* '%' at end of format string */
@@ -756,9 +771,9 @@ static int jobid_interpret_string(const char *jobfmt, char *jobid,
 			l = 0;
 			break;
 		}
-		/* truncate jobid if it is too long */
-		if (l > joblen)
-			l = joblen;
+		if (l >= width)
+			l = width-1;
+
 		jobid += l;
 		joblen -= l;
 	}
