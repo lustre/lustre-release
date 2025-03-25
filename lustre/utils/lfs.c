@@ -3727,6 +3727,7 @@ enum {
 	LFS_QUOTA_IHARDLIMIT_OPT,
 	LFS_QUOTA_IGRACE_OPT,
 	LFS_FILES_FROM,
+	LFS_THREAD_OPT,
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -5801,6 +5802,8 @@ static int lfs_find(int argc, char **argv)
 	{ .val = LFS_POOL_OPT,
 			.name = "pool",		.has_arg = required_argument },
 	{ .val = '0',	.name = "print0",	.has_arg = no_argument },
+	{ .val = LFS_THREAD_OPT,
+		.name = "thread",		.has_arg = required_argument },
 	{ .val = 'P',	.name = "print",	.has_arg = no_argument },
 	{ .val = LFS_PRINTF_OPT,
 			.name = "printf",       .has_arg = required_argument },
@@ -6492,6 +6495,9 @@ static int lfs_find(int argc, char **argv)
 			break;
 		case '0':
 			param.fp_zero_end = 1;
+			break;
+		case LFS_THREAD_OPT:
+			param.fp_thread_count = strtol(optarg, &endptr, 0);
 			break;
 		case 'P': /* we always print, this option is a no-op */
 			break;

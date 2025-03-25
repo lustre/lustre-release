@@ -422,6 +422,7 @@ struct find_param {
 	int			 fp_bsign;
 	unsigned int		 fp_hash_inflags;
 	unsigned int		 fp_hash_exflags;
+	__u8			 fp_thread_count;
 	/* Print all information (lfs find only) */
 	char			 *fp_format_printf_str;
 	nlink_t			 fp_nlink;
