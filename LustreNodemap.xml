@@ -295,13 +295,12 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
       and extending through <literal>FSID_COUNT-1</literal>.</para>
       <para>An offset range cannot overlap with another offset range. A
       nodemap can only have one offset defined. To modify the offset already
-      defined, just assign a new value, or set to 0 to deactivate.  Any existing
-      files will not automatically be remapped to the new
-      <literal>OFFSET</literal> range. IDs must be manually changed on all files
-      for that nodemap with <literal>chown(1)</literal> and
-      <literal>lfs-project(1)</literal> on a trusted client that has access to
-      the unmapped, canonical file system IDs. Therefore modifying a nodemap
-      offset should be avoided if possible.</para>
+      defined, just assign a new value. Any existing files will not
+      automatically be remapped to the new <literal>OFFSET</literal> range. IDs
+      must be manually changed on all files for that nodemap with
+      <literal>chown(1)</literal> and <literal>lfs-project(1)</literal> on a
+      trusted client that has access to the unmapped, canonical file system IDs.
+      Therefore modifying a nodemap offset should be avoided if possible.</para>
       <para>For example, to map the client UID, GID, and PROJID values from the
       range 0-199999 to the filesystem UID, GID, and PROJID values to the range
       100000-299999:</para>
@@ -314,7 +313,7 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
       <literal>squash_projid</literal> values should not be set to a value
       greater than <literal>FSID_COUNT-1</literal>. Otherwise this would
       produce file system ids outside of the offset range.
-</para>
+      </para>
       <para>If not zero, the mapping offset is always applied as the last stage
       of the mapping process.
       <xref linkend="settingamapping.fig.id_mapping_flow_chart"/> gives a
@@ -332,6 +331,15 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
           </textobject>
         </mediaobject>
       </figure>
+      <para>To deactivate id mapping offset, use the
+      <literal>nodemap_del_offset</literal> command.</para>
+      <screen>lctl nodemap del_offset --name <replaceable>NAME</replaceable></screen>
+      <note><para>As when changing the ID offset value, deleting the ID offset
+      <emphasis>will not remap files created with the offset IDs</emphasis>.
+      It is up to the storage administrator to delete or reset UID/GID/PROJID
+      for files that were created with the mapped IDs.  Generally, an ID offset
+      should remain unchanged for the entire nodemap lifetime and not be deleted
+      without a clear understanding of the operational impact.</para></note>
     </section>
   </section>
 
