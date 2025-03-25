@@ -195,6 +195,8 @@ ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
 			  struct cl_dio_pages *cdp, struct iov_iter *iter,
 			  int rw, size_t bytes, loff_t offset, bool unaligned)
 {
+	struct cl_object *head = obj;
+	pgoff_t index = offset >> PAGE_SHIFT;
 	ssize_t result = 0;
 
 	ENTRY;
@@ -233,6 +235,17 @@ ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
 	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_cl_pages, cdp->cdp_page_count);
 	if (!cdp->cdp_cl_pages)
 		GOTO(out, result = -ENOMEM);
+
+	cl_object_for_each(obj, head) {
+		if (obj->co_ops->coo_dio_pages_init != NULL) {
+			result = obj->co_ops->coo_dio_pages_init(env, obj,
+								 cdp, index);
+			if (result != 0) {
+				LASSERT(result < 0);
+				GOTO(out, result);
+			}
+		}
+	}
 
 out:
 	if (result >= 0)

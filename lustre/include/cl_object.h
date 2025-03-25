@@ -290,6 +290,8 @@ enum coo_inode_opc {
 	COIO_SIZE_UNLOCK,
 };
 
+struct cl_dio_pages;
+
 /**
  * Operations implemented for each cl object layer.
  *
@@ -313,7 +315,17 @@ struct cl_object_operations {
 	 */
 	int  (*coo_page_init)(const struct lu_env *env, struct cl_object *obj,
 			      struct cl_page *page, pgoff_t index);
-
+	/**
+	 * Initialize the dio pages structure with information from this layer
+	 *
+	 * Called top-to-bottom through every object layer to gather the
+	 * per-layer information required for the dio, does the same job as
+	 * coo_page_init but just once for each dio page array
+	 */
+	int  (*coo_dio_pages_init)(const struct lu_env *env,
+				   struct cl_object *obj,
+				   struct cl_dio_pages *cdp,
+				   pgoff_t index);
 	/**
 	 * Initialize lock slice for this layer. Called top-to-bottom through
 	 * every object layer when a new cl_lock is instantiated. Layer
@@ -1415,8 +1427,6 @@ static inline void cl_read_ahead_release(const struct lu_env *env,
 	if (ra->cra_release != NULL)
 		ra->cra_release(env, ra);
 }
-
-struct cl_dio_pages;
 
 /**
  * Per-layer io operations.
