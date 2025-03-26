@@ -6884,7 +6884,7 @@ test_56c() {
 
 	local ost_idx=0
 	local ost_name=$(ostname_from_index $ost_idx)
-	local old_status=$(ost_dev_status $ost_idx)
+	local old_status=$(ost_dev_status $ost_idx $MOUNT -v)
 	local inst=$(lfs getname -i $DIR)
 	local state="osc.$ost_name-osc-$inst.statfs_state"
 	local old_state=$($LCTL get_param -n $state)
