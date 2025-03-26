@@ -21343,6 +21343,7 @@ test_170b() {
 		nodes_list="$nodes_list,$(facet_active_host mds1)"
 	(( $OST1_VERSION >= $(version_code 2.16.52) )) &&
 		nodes_list="$nodes_list,$(facet_active_host ost1)"
+	local_mode && nodes_list=$HOSTNAME
 
 	old_fl=($(do_nodes $nodes_list $LCTL get_param -n $param))
 
