@@ -1,4 +1,4 @@
-.TH LCTL-SET_PARAM 8 2024-08-14 Lustre "Lustre Configuration Utilities"
+.TH LCTL-SET_PARAM 8 2025-03-26 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-set_param \- Lustre filesystem set parameter utility
 .SH SYNOPSIS
@@ -12,7 +12,7 @@ lctl-set_param \- Lustre filesystem set parameter utility
 .RB [ --thread | -t\c
 .RI [ THREAD_COUNT ]]
 .IR PARAMETER \= VALUE " ..."
-.SY lctl set_param -F
+.SY "lctl set_param -F"
 .I FILENAME
 .YS
 .SH DESCRIPTION
@@ -65,12 +65,12 @@ Set parameters from
 .I FILENAME
 instead of from the command-line. The contents of
 .I FILENAME
-is YAML format, created as an output from
-.RB ' "lctl --device MGS llog_print"
+is YAML format, created by the output from running
+.RB ' "lctl llog_print"
 .I FSNAME\c
-.BR -client '
-or any other valid llog configuration log as listed by
-.RB ' "lctl --device MGS llog_catlist" '
+.BR -client ',
+or from any other valid llog configuration log as listed by
+.RB ' "lctl llog_catlist" '.
 .TP
 .BR -n ", " --no-name
 Disable printing of the parameter name after setting it.
@@ -106,32 +106,65 @@ printed and parameters will be set serially. If
 .B -t
 is specified without any argument, it runs up to 8 threads by default.
 .SH EXAMPLES
+Set two parameters temporarily on the local node:
+.RS
 .EX
-.B # lctl set_param fail_loc=0 timeout=20
-fail_loc=0
-timeout=20
-.B # lctl set_param -n fail_loc=0 timeout=20
-0
-20
-.B # lctl set_param -t2 "ldlm.namespaces.*osc*.lru_size=clear"
+.B client# lctl set_param jobid_name=%H:%e:%u debug_mb=1024
+jobid_name=%H:%e:%u
+debug_mb=1024
+.EE
+.RE
+.PP
+Set two parameters, but don't print parameter names with the values:
+.RS
+.EX
+.B client# lctl set_param -n jobid_name=%H:%e:%u debug_mb=1024
+%H:%e:%u
+1024
+.EE
+.RE
+.PP
+Run two parallel threads to set parameters that may do a lot of work:
+.RS
+.EX
+.B client# lctl set_param -t2 "ldlm.namespaces.*osc*.lru_size=clear"
 ldlm.namespaces.fsname-OST0001-osc-MDT0000.lru_size=clear
 ldlm.namespaces.fsname-OST0000-osc-MDT0000.lru_size=clear
-.B # lctl set_param -P osc.testfs-OST*.max_dirty_mb=512
+.EE
+.RE
+.PP
+Permanently set a parameter with a wildcard in the MGS config llog:
+.RS
+.EX
+.B mgs# lctl set_param -P osc.testfs-OST*.max_dirty_mb=512
 osc.testfs-OST0000-osc-ffff8803c9c0f000.max_dirty_mb=512
 osc.testfs-OST0001-osc-ffff8803c9c0f000.max_dirty_mb=512
 osc.testfs-OST0002-osc-ffff8803c9c0f000.max_dirty_mb=512
 osc.testfs-OST0003-osc-ffff8803c9c0f000.max_dirty_mb=512
 osc.testfs-OST0004-osc-ffff8803c9c0f000.max_dirty_mb=512
+.EE
+.RE
 .PP
-Set
+Permanently set
 .B osc.testfs-*.max_dirty_mb=2000
 when mounting 'testfs' and
 .B osc.testfs-*.max_dirty_mb=1024
-for other Lustre mountpoints on this client node
-.EX
+for other Lustre mountpoints on this client node:
 .RS
-.B # lctl set_param -C=test_fs osc.testfs-*.max_dirty_mb=2000
-.B # lctl set_param -C osc.testfs-*.max_dirty_mb=1024
+.EX
+.B client# lctl set_param -C=test_fs osc.testfs-*.max_dirty_mb=2000
+.B client# lctl set_param -C osc.*.max_dirty_mb=1024
+.RE
+.EE
+.PP
+Backup the
+.RB ' params '
+configuration log, and then restore it (at some later time):
+.RS
+.EX
+.B mgs# lctl llog_print params > /tmp/params.yaml
+[ params log is erased, not shown here ]
+.B mgs# lctl set_param -F /tmp/params.yaml
 .RE
 .EE
 .SH AVAILABILITY

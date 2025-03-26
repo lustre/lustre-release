@@ -47,10 +47,12 @@ or
 .BR lustrefs-MDT0000 .
 .SH EXAMPLES
 To print the configuration records from the
-.BR testfs-client logfile:
+.BR testfs-client
+logfile, and save it to a file for later restoration by
+.BR lctl-set_param (8):
 .RS
 .EX
-.B # lctl llog_print testfs-client
+.B # lctl llog_print testfs-client | tee /root/testfs-client.yaml
 - { index: 3, event: attach, device: testfs-clilov, type: lov,
     UUID: testfs-clilov_UUID }
 - { index: 6, event: setup, device: testfs-clilov, UUID: }
@@ -86,4 +88,5 @@ filesystem package since release 0.10.0
 .BR lctl (8),
 .BR lctl-llog_cancel (8),
 .BR lctl-llog_catlist (8),
-.BR lctl-llog_info (8)
+.BR lctl-llog_info (8),
+.BR lctl-set_param (8)

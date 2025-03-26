@@ -818,7 +818,7 @@ int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt)
 	return 0;
 }
 
-char *jt_cmdname(char *func)
+const char *jt_cmdname(const char *func)
 {
 	return func;
 }

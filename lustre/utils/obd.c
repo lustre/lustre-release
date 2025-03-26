@@ -166,7 +166,7 @@ static int get_mgs_device(void)
 }
 
 /* Returns 0 on success, -errno on failure */
-int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
+int lcfg_mgs_ioctl(const char *func, int dev_id, struct lustre_cfg *lcfg)
 {
 	struct obd_ioctl_data data;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
@@ -215,7 +215,7 @@ char *obdo_print(struct obdo *obd)
 
 #define BAD_VERBOSE (-999999999)
 
-char *jt_cmdname(char *func)
+const char *jt_cmdname(const char *func)
 {
 	static char buf[512];
 

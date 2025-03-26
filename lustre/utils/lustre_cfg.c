@@ -75,6 +75,8 @@
 #include <stdio.h>
 #include <yaml.h>
 
+static int lcfg_apply_param_yaml(const char *func, const char *filename);
+
 static char *lcfg_devname;
 
 int lcfg_set_devname(char *name)
@@ -412,7 +414,7 @@ int jt_lcfg_param(int argc, char **argv)
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_PARAM);
 }
 
-static int lcfg_setparam_perm(char *func, char *buf)
+static int lcfg_setparam_perm(const char *func, char *buf)
 {
 	int rc = 0;
 	struct lustre_cfg_bufs bufs;
@@ -465,14 +467,15 @@ int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt)
 {
 	int rc;
 	int i;
-	int first_param;
 	char *buf = NULL;
 
-	first_param = optind;
-	if (first_param < 0 || first_param >= argc)
+	if (optind < 0 || optind >= argc)
 		return CMD_HELP;
 
-	for (i = first_param, rc = 0; i < argc; i++) {
+	if (popt->po_file)
+		return lcfg_apply_param_yaml(argv[0], argv[optind]);
+
+	for (i = optind, rc = 0; i < argc; i++) {
 		buf = argv[i];
 		if (popt->po_delete) {
 			char *end_pos;
@@ -501,7 +504,7 @@ int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt)
 	return rc;
 }
 
-static int lcfg_conf_param(char *func, char *buf)
+static int lcfg_conf_param(const char *func, char *buf)
 {
 	int rc;
 	struct lustre_cfg_bufs bufs;
@@ -1053,7 +1056,7 @@ static enum paramtype construct_param(enum paramtype confset, const char *param,
 	return PT_NONE;
 }
 
-static int lcfg_apply_param_yaml(char *func, char *filename)
+static int lcfg_apply_param_yaml(const char *func, const char *filename)
 {
 	FILE *file;
 	yaml_parser_t parser;
@@ -1068,7 +1071,7 @@ static int lcfg_apply_param_yaml(char *func, char *filename)
 	char device[PARAM_SZ + 1];
 	bool convert;
 
-	convert = !strncmp(func, "set_param", 9);
+	convert = strncmp(func, "set_param", 9) == 0;
 	file = fopen(filename, "rb");
 	if (!file) {
 		rc1 = -errno;

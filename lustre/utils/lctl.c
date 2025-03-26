@@ -452,30 +452,29 @@ command_t cmdlist[] = {
 	 "		   [--no-links|-L] [--no-name|-n] [--only-name|-N]\n"
 	 "		   [--readable|-r] [--recursive|-R]\n"
 	 "		   [--tunable|-t] [--writable|-w] [--yaml|-y]\n"
-	 "		   <param_path1 param_path2 ...>\n"
+	 "		   PARAM_PATH1 [PARAM_PATH2 ...]\n"
 	 "Get the value of Lustre or LNET parameter from the specified path.\n"
 	 "The path can contain shell-style filename patterns.\n"},
 	{"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-	 "usage: set_param [--client|-C[FSNAME]] [--delete|-d] [--file|-F]\n"
-	 "		   [--no-name|-n] [--permanent|-P]"
+	 "usage: set_param [--client|-C[FSNAME]] [--delete|-d] [--no-name|-n]\n"
+	 "		   [--file|-F YAML_PARAM FILE] [--permanent|-P]"
 #ifdef HAVE_LIBPTHREAD
 	 " [--thread|-t[THREAD_COUNT]]"
 #endif
 	 "\n"
 	 "		   PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"
 	 "Set the value of the Lustre or LNET parameter at the specified path.\n"},
-	{"apply_yaml", jt_lcfg_applyyaml, 0, "set/config the Lustre or LNET "
-	 "parameters using configuration from a YAML file.\n"
-	 "usage: apply_yaml file\n"},
+	{"apply_yaml", jt_lcfg_applyyaml, 0, "alias for 'set_param -F'\n"
+	 "usage: apply_yaml YAML_PARAM_FILE\n"},
 	{"list_param", jt_lcfg_listparam, 0,
 	 "list the Lustre or LNET parameter name\n"
 	 "usage: list_param [--dir-only|-D] [--classify|-F] [--links|-l]\n"
 	 "		    [--no-links|-L] [--path|-p] [--readable|-r]\n"
 	 "		    [--recursive|-R] [--tunable|-t] [--writable|-w]\n"
-	 "		    <param_path1 param_path2 ...>\n"
+	 "		    PARAM_PATH1 [PARAM_PATH2 ...]\n"
 	 "List the name of Lustre or LNet parameter from the specified path.\n"},
 	{"del_ost", jt_del_ost, 0, "permanently delete OST records\n"
-	 "usage: del_ost [--dryrun] --target <$fsname-OSTxxxx>\n"
+	 "usage: del_ost [--dryrun] --target FSNAME-OSTxxxx\n"
 	 "Cancel the config records for a specific OST to forget about it.\n"},
 
 	/* Debug commands */

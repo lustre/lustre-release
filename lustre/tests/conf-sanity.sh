@@ -10904,7 +10904,8 @@ test_123F() {
 
 	# Reapply the config from before
 	echo "Setting configuration parameters"
-	do_facet mgs "lctl set_param -F $yaml_file"
+	do_facet mgs "$LCTL set_param -F $yaml_file" ||
+		error "'set_param -F $yaml_file' failed"
 
 	test_123_restore
 }
@@ -10920,7 +10921,8 @@ test_123G() {
 
 	# Reapply the config from before
 	echo "Setting configuration parameters"
-	do_facet mgs "lctl apply_yaml $yaml_file"
+	do_facet mgs "$LCTL apply_yaml $yaml_file" ||
+		error "'apply_yaml $yaml_file' failed"
 
 	test_123_restore
 }

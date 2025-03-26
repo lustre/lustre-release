@@ -1006,12 +1006,8 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 			return -1;
 		}
 	}
-	if (popt->po_perm && popt->po_file) {
-		fprintf(stderr, "warning: ignoring -P option\n");
-		popt->po_perm = 0;
-	}
 	if (popt->po_delete && !popt->po_perm && !popt->po_client) {
-		fprintf(stderr, "warning: setting -P option\n");
+		fprintf(stderr, "warning: setting '-P' option with '-d'\n");
 		popt->po_perm = 1;
 	}
 	return optind;
@@ -1039,7 +1035,7 @@ int jt_lcfg_setparam(int argc, char **argv)
 	if (index < 0 || index >= argc)
 		return CMD_HELP;
 
-	if (popt.po_perm)
+	if (popt.po_perm || popt.po_file)
 		/*
 		 * We can't delete parameters that were
 		 * set with old conf_param interface
@@ -1048,12 +1044,6 @@ int jt_lcfg_setparam(int argc, char **argv)
 
 	if (popt.po_client)
 		return jt_lcfg_setparam_client(argc, argv, &popt);
-
-	if (popt.po_file) {
-		fprintf(stderr,
-			"warning: 'lctl set_param -F' is deprecated, use 'lctl apply_yaml' instead\n");
-		return -EINVAL;
-	}
 
 	if (popt_is_parallel(popt)) {
 		rc = spwq_init(&wq, &popt);
