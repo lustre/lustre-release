@@ -230,64 +230,6 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 }
 #endif /* HAVE_AOPS_RELEASE_FOLIO */
 
-static ssize_t ll_get_user_pages(int rw, struct iov_iter *iter,
-				struct cl_dio_pages *cdp,
-				size_t maxsize)
-{
-#if defined(HAVE_DIO_ITER)
-	size_t start;
-	size_t result;
-
-	result = iov_iter_get_pages_alloc2(iter, &cdp->cdp_pages, maxsize,
-					  &start);
-	if (result > 0) {
-		cdp->cdp_count = DIV_ROUND_UP(result + start, PAGE_SIZE);
-		if (user_backed_iter(iter))
-			iov_iter_revert(iter, result);
-	}
-	return result;
-#else
-	unsigned long addr;
-	size_t page_count;
-	size_t size;
-	long result;
-
-	if (!maxsize)
-		return 0;
-
-	if (!iter->nr_segs)
-		return 0;
-
-	addr = (unsigned long)iter->iov->iov_base + iter->iov_offset;
-	if (addr & ~PAGE_MASK)
-		return -EINVAL;
-
-	size = min_t(size_t, maxsize, iter->iov->iov_len);
-	page_count = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_pages, page_count);
-	if (cdp->cdp_pages == NULL)
-		return -ENOMEM;
-
-	mmap_read_lock(current->mm);
-	result = get_user_pages(current, current->mm, addr, page_count,
-				rw == READ, 0, cdp->cdp_pages, NULL);
-	mmap_read_unlock(current->mm);
-
-	if (unlikely(result != page_count)) {
-		ll_release_user_pages(cdp->cdp_pages, page_count);
-		cdp->cdp_pages = NULL;
-
-		if (result >= 0)
-			return -EFAULT;
-
-		return result;
-	}
-	cdp->cdp_count = page_count;
-
-	return size;
-#endif
-}
-
 /* iov_iter_alignment() is introduced in 3.16 similar to HAVE_DIO_ITER */
 #if defined(HAVE_DIO_ITER)
 static unsigned long iov_iter_alignment_vfs(const struct iov_iter *i)
@@ -368,21 +310,9 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	int iot = rw == READ ? CRT_READ : CRT_WRITE;
 	loff_t offset = cdp->cdp_file_offset;
 	ssize_t rc = 0;
-	int i = 0;
+	unsigned int i = 0;
 
 	ENTRY;
-
-	cdp->cdp_from = offset & ~PAGE_MASK;
-	cdp->cdp_to = (offset + size) & ~PAGE_MASK;
-
-	/* this is a special temporary allocation which lets us track the
-	 * cl_pages and convert them to a list
-	 *
-	 * this is used in 'pushing down' the conversion to a page queue
-	 */
-	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_cl_pages, cdp->cdp_count);
-	if (!cdp->cdp_cl_pages)
-		GOTO(out, rc = -ENOMEM);
 
 	while (size > 0) {
 		size_t from = offset & ~PAGE_MASK;
@@ -422,10 +352,10 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	/* on success, we should hit every page in the cdp and have no bytes
 	 * left in 'size'
 	 */
-	LASSERT(i == cdp->cdp_count);
+	LASSERT(i == cdp->cdp_page_count);
 	LASSERT(size == 0);
 
-	atomic_add(cdp->cdp_count, &anchor->csi_sync_nr);
+	atomic_add(cdp->cdp_page_count, &anchor->csi_sync_nr);
 	/*
 	 * Avoid out-of-order execution of adding inflight
 	 * modifications count and io submit.
@@ -433,9 +363,9 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	smp_mb();
 	rc = cl_dio_submit_rw(env, io, iot, cdp);
 	if (rc != 0) {
-		atomic_add(-cdp->cdp_count,
+		atomic_add(-cdp->cdp_page_count,
 			   &anchor->csi_sync_nr);
-		for (i = 0; i < cdp->cdp_count; i++) {
+		for (i = 0; i < cdp->cdp_page_count; i++) {
 			page = cdp->cdp_cl_pages[i];
 			page->cp_sync_io = NULL;
 		}
@@ -472,7 +402,7 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	struct inode *inode = file->f_mapping->host;
 	struct cl_dio_aio *ll_dio_aio;
 	struct cl_sub_dio *sdio;
-	size_t count = iov_iter_count(iter);
+	size_t bytes = iov_iter_count(iter);
 	ssize_t tot_bytes = 0, result = 0;
 	loff_t file_offset = iocb->ki_pos;
 	bool sync_submit = false;
@@ -499,9 +429,9 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 
 	CDEBUG(D_VFSTRACE,
 	       "VFS Op:inode="DFID"(%p), size=%zd (max %lu), offset=%lld=%#llx, pages %zd (max %lu)%s%s%s%s\n",
-	       PFID(ll_inode2fid(inode)), inode, count, MAX_DIO_SIZE,
+	       PFID(ll_inode2fid(inode)), inode, bytes, MAX_DIO_SIZE,
 	       file_offset, file_offset,
-	       (count >> PAGE_SHIFT) + !!(count & ~PAGE_MASK),
+	       (bytes >> PAGE_SHIFT) + !!(bytes & ~PAGE_MASK),
 	       MAX_DIO_SIZE >> PAGE_SHIFT,
 	       io->ci_dio_lock ? ", locked" : ", lockless",
 	       io->ci_parallel_dio ? ", parallel" : "",
@@ -566,13 +496,13 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	while (iov_iter_count(iter)) {
 		struct cl_dio_pages *cdp;
 
-		count = min_t(size_t, iov_iter_count(iter), MAX_DIO_SIZE);
+		bytes = min_t(size_t, iov_iter_count(iter), MAX_DIO_SIZE);
 		if (rw == READ) {
 			if (file_offset >= i_size_read(inode))
 				break;
 
-			if (file_offset + count > i_size_read(inode))
-				count = i_size_read(inode) - file_offset;
+			if (file_offset + bytes > i_size_read(inode))
+				bytes = i_size_read(inode) - file_offset;
 		}
 
 		/* if we are doing sync_submit, then we free this below,
@@ -586,27 +516,9 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 
 		cdp = &sdio->csd_dio_pages;
 		cdp->cdp_file_offset = file_offset;
-
-		if (!unaligned) {
-			result = ll_get_user_pages(rw, iter, cdp, count);
-			/* ll_get_user_pages returns bytes in the IO or error*/
-			count = result;
-		} else {
-			/* explictly handle the ubuf() case for el9.4 */
-			size_t len = iter_is_ubuf(iter) ? iov_iter_count(iter)
-				   : iter_iov(iter)->iov_len;
-
-			/* same calculation used in ll_get_user_pages */
-			count = min_t(size_t, count, len);
-			result = ll_allocate_dio_buffer(cdp, count);
-			/* allocate_dio_buffer returns number of pages or
-			 * error, so do not set count = result
-			 */
-		}
-
-		/* now we have the actual count, so store it in the sdio */
-		sdio->csd_bytes = count;
-
+		result = cl_dio_pages_init(env, ll_dio_aio->cda_obj, cdp,
+					   iter, rw, bytes, file_offset,
+					   unaligned);
 		if (unlikely(result <= 0)) {
 			cl_sync_io_note(env, &sdio->csd_sync, result);
 			if (sync_submit) {
@@ -615,8 +527,11 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 			}
 			GOTO(out, result);
 		}
+		/* now we have the actual bytes, so store it in the sdio */
+		bytes = result;
+		sdio->csd_bytes = bytes;
 
-		result = ll_direct_rw_pages(env, io, count, rw, inode, sdio);
+		result = ll_direct_rw_pages(env, io, bytes, rw, inode, sdio);
 		/* if the i/o was unsuccessful, we zero the number of bytes to
 		 * copy back.  Note that partial I/O completion isn't possible
 		 * here - I/O either completes or fails.  So there's no need to
@@ -646,13 +561,13 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 		if (unlikely(result < 0))
 			GOTO(out, result);
 
-		iov_iter_advance(iter, count);
+		iov_iter_advance(iter, bytes);
 
-		tot_bytes += count;
-		file_offset += count;
+		tot_bytes += bytes;
+		file_offset += bytes;
 		CDEBUG(D_VFSTRACE,
 		       "result %zd tot_bytes %zd count %zd file_offset %lld\n",
-		       result, tot_bytes, count, file_offset);
+		       result, tot_bytes, bytes, file_offset);
 	}
 
 out:

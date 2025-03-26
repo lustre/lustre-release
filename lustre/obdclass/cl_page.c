@@ -127,6 +127,120 @@ cl_page_slice_get(const struct cl_page *cl_page, int index)
 	     slice = cl_page_slice_get(cl_page, i); i >= 0;	\
 	     slice = cl_page_slice_get(cl_page, --i))
 
+/* does the work required to access the pages in the iov, be they userspace
+ * or kernel
+ *
+ * returns number of bytes
+ */
+static ssize_t ll_get_iov_memory(int rw, struct iov_iter *iter,
+				struct cl_dio_pages *cdp,
+				size_t maxsize)
+{
+#if defined(HAVE_DIO_ITER)
+	size_t start;
+	size_t bytes;
+
+	bytes = iov_iter_get_pages_alloc2(iter, &cdp->cdp_pages, maxsize,
+					  &start);
+	if (bytes > 0) {
+		cdp->cdp_page_count = DIV_ROUND_UP(bytes + start, PAGE_SIZE);
+		if (user_backed_iter(iter))
+			iov_iter_revert(iter, bytes);
+	}
+	return bytes;
+#else
+	unsigned int page_count;
+	unsigned long addr;
+	size_t size;
+	long result;
+
+	if (!maxsize)
+		return 0;
+
+	if (!iter->nr_segs)
+		return 0;
+
+	addr = (unsigned long)iter->iov->iov_base + iter->iov_offset;
+	if (addr & ~PAGE_MASK)
+		return -EINVAL;
+
+	size = min_t(size_t, maxsize, iter->iov->iov_len);
+	page_count = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_pages, page_count);
+	if (cdp->cdp_pages == NULL)
+		return -ENOMEM;
+
+	mmap_read_lock(current->mm);
+	result = get_user_pages(current, current->mm, addr, page_count,
+				rw == READ, 0, cdp->cdp_pages, NULL);
+	mmap_read_unlock(current->mm);
+
+	if (unlikely(result != page_count)) {
+		ll_release_user_pages(cdp->cdp_pages, page_count);
+		cdp->cdp_pages = NULL;
+
+		if (result >= 0)
+			return -EFAULT;
+
+		/* if result < 0, return the error */
+		return result;
+	}
+	cdp->cdp_page_count = page_count;
+
+	return size;
+#endif
+}
+
+ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
+			  struct cl_dio_pages *cdp, struct iov_iter *iter,
+			  int rw, size_t bytes, loff_t offset, bool unaligned)
+{
+	ssize_t result = 0;
+
+	ENTRY;
+
+	cdp->cdp_file_offset = offset;
+	cdp->cdp_from = offset & ~PAGE_MASK;
+	cdp->cdp_to = ((offset + bytes - 1) & ~PAGE_MASK);
+
+	/* these set cdp->page_count, which is used in coo_dio_pages_init */
+	if (!unaligned) {
+		result = ll_get_iov_memory(rw, iter, cdp, bytes);
+		/* ll_get_iov_memory returns bytes in the IO or error*/
+		bytes = result;
+	} else {
+		/* explictly handle the ubuf() case for el9.4 */
+		size_t len = iter_is_ubuf(iter) ? iov_iter_count(iter)
+			   : iter_iov(iter)->iov_len;
+
+		/* same calculation used in ll_get_user_pages */
+		bytes = min_t(size_t, bytes, len);
+		result = ll_allocate_dio_buffer(cdp, bytes);
+		/* allocate_dio_buffer returns number of pages or
+		 * error, so do not set bytes = result
+		 */
+		if (result > 0)
+			result = 0;
+	}
+	if (result < 0)
+		GOTO(out, result);
+	LASSERT(cdp->cdp_page_count);
+	/* this is special temporary allocation which lets us track the
+	 * cl_pages and convert them to a list
+	 *
+	 * this is used in 'pushing down' the conversion to a page queue
+	 */
+	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_cl_pages, cdp->cdp_page_count);
+	if (!cdp->cdp_cl_pages)
+		GOTO(out, result = -ENOMEM);
+
+out:
+	if (result >= 0)
+		result = bytes;
+	RETURN(result);
+}
+EXPORT_SYMBOL(cl_dio_pages_init);
+
 static void __cl_page_free(struct cl_page *cl_page, unsigned short bufsize)
 {
 	if (cl_page->cp_in_kmem_array) {

@@ -313,6 +313,7 @@ struct cl_object_operations {
 	 */
 	int  (*coo_page_init)(const struct lu_env *env, struct cl_object *obj,
 			      struct cl_page *page, pgoff_t index);
+
 	/**
 	 * Initialize lock slice for this layer. Called top-to-bottom through
 	 * every object layer when a new cl_lock is instantiated. Layer
@@ -1415,7 +1416,6 @@ static inline void cl_read_ahead_release(const struct lu_env *env,
 		ra->cra_release(env, ra);
 }
 
-
 struct cl_dio_pages;
 
 /**
@@ -2197,6 +2197,12 @@ static inline int cl_object_refc(struct cl_object *clob)
 	return atomic_read(&header->loh_ref);
 }
 
+
+ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
+			  struct cl_dio_pages *cdp, struct iov_iter *iter,
+			  int rw, size_t maxsize, loff_t offset,
+			  bool unaligned);
+
 /* cl_page */
 struct cl_page *cl_page_find(const struct lu_env *env,
 			     struct cl_object *obj,
@@ -2539,10 +2545,10 @@ struct cl_dio_pages {
 
 	struct cl_page		**cdp_cl_pages;
 	struct cl_2queue	cdp_queue;
-	/** # of pages in the array. */
-	size_t			cdp_count;
 	/* the file offset of the first page. */
 	loff_t                  cdp_file_offset;
+	/** # of pages in the array. */
+	unsigned int		cdp_page_count;
 	/* the first and last page can be incomplete, this records the
 	 * offsets
 	 */

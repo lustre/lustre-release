@@ -1261,7 +1261,7 @@ void cl_dio_pages_2queue(struct cl_dio_pages *cdp)
 
 	cl_2queue_init(&cdp->cdp_queue);
 
-	for (i = 0; i < cdp->cdp_count; i++) {
+	for (i = 0; i < cdp->cdp_page_count; i++) {
 		struct cl_page *page = cdp->cdp_cl_pages[i];
 
 		cl_page_list_add(&cdp->cdp_queue.c2_qin, page, false);
@@ -1301,7 +1301,7 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 	ENTRY;
 
 	if (cdp->cdp_cl_pages) {
-		for (i = 0; i < cdp->cdp_count; i++) {
+		for (i = 0; i < cdp->cdp_page_count; i++) {
 			struct cl_page *page = cdp->cdp_cl_pages[i];
 			/* if we failed allocating pages, the page array may be
 			 * incomplete, so check the pointers
@@ -1318,7 +1318,7 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 				array_incomplete = true;
 		}
 		OBD_FREE_PTR_ARRAY_LARGE(cdp->cdp_cl_pages,
-					 cdp->cdp_count);
+					 cdp->cdp_page_count);
 	}
 
 	if (sdio->csd_unaligned) {
@@ -1340,7 +1340,7 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		/* unaligned DIO does not get user pages, so it doesn't have to
 		 * release them, but aligned I/O must
 		 */
-		ll_release_user_pages(cdp->cdp_pages, cdp->cdp_count);
+		ll_release_user_pages(cdp->cdp_pages, cdp->cdp_page_count);
 	}
 	cl_sync_io_note(env, &sdio->csd_ll_aio->cda_sync, ret);
 
@@ -1486,23 +1486,23 @@ int ll_allocate_dio_buffer(struct cl_dio_pages *cdp, size_t io_size)
 	 * io_size, making the rest of the calculation aligned
 	 */
 	if (pg_offset) {
-		cdp->cdp_count++;
+		cdp->cdp_page_count++;
 		io_size -= min_t(size_t, PAGE_SIZE - pg_offset, io_size);
 	}
 
 	/* calculate pages for the rest of the buffer */
-	cdp->cdp_count += (io_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	cdp->cdp_page_count += (io_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
 #ifdef HAVE_DIO_ITER
-	cdp->cdp_pages = kvzalloc(cdp->cdp_count * sizeof(struct page *),
+	cdp->cdp_pages = kvzalloc(cdp->cdp_page_count * sizeof(struct page *),
 				  GFP_NOFS);
 #else
-	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_pages, cdp->cdp_count);
+	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_pages, cdp->cdp_page_count);
 #endif
 	if (cdp->cdp_pages == NULL)
 		GOTO(out, result = -ENOMEM);
 
-	result = obd_pool_get_pages_array(cdp->cdp_pages, cdp->cdp_count);
+	result = obd_pool_get_pages_array(cdp->cdp_pages, cdp->cdp_page_count);
 	if (result)
 		GOTO(out, result);
 
@@ -1513,7 +1513,7 @@ out:
 	}
 
 	if (result == 0)
-		result = cdp->cdp_count;
+		result = cdp->cdp_page_count;
 
 	RETURN(result);
 }
@@ -1521,12 +1521,12 @@ EXPORT_SYMBOL(ll_allocate_dio_buffer);
 
 void ll_free_dio_buffer(struct cl_dio_pages *cdp)
 {
-	obd_pool_put_pages_array(cdp->cdp_pages, cdp->cdp_count);
+	obd_pool_put_pages_array(cdp->cdp_pages, cdp->cdp_page_count);
 
 #ifdef HAVE_DIO_ITER
 	kvfree(cdp->cdp_pages);
 #else
-	OBD_FREE_PTR_ARRAY_LARGE(cdp->cdp_pages, cdp->cdp_count);
+	OBD_FREE_PTR_ARRAY_LARGE(cdp->cdp_pages, cdp->cdp_page_count);
 #endif
 }
 EXPORT_SYMBOL(ll_free_dio_buffer);
@@ -1583,8 +1583,8 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 	int short_copies = 0;
 	bool mm_used = false;
 	bool locked = false;
+	unsigned int i = 0;
 	int status = 0;
-	int i = 0;
 	int rw;
 
 	ENTRY;
@@ -1644,14 +1644,14 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 		size_t copied; /* bytes successfully copied */
 		size_t bytes; /* bytes to copy for this page */
 
-		LASSERT(i < cdp->cdp_count);
+		LASSERT(i < cdp->cdp_page_count);
 
 		offset = pos & ~PAGE_MASK;
 		bytes = min_t(unsigned long, PAGE_SIZE - offset, count);
 
 		CDEBUG(D_VFSTRACE,
-		       "count %zd, offset %lu, pos %lld, cdp_count %lu\n",
-		       count, offset, pos, cdp->cdp_count);
+		       "count %zd, offset %lu, pos %lld, cdp_page_count %u\n",
+		       count, offset, pos, cdp->cdp_page_count);
 
 		if (fatal_signal_pending(current)) {
 			status = -EINTR;
@@ -1720,9 +1720,9 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 		sdio->csd_write_copied = true;
 
 	/* if we complete successfully, we should reach all of the pages */
-	LASSERTF(ergo(status == 0, i == cdp->cdp_count - 1),
-		 "status: %d, i: %d, cdp->cdp_count %zu, count %zu\n",
-		  status, i, cdp->cdp_count, count);
+	LASSERTF(ergo(status == 0, i == cdp->cdp_page_count - 1),
+		 "status: %d, i: %d, cdp->cdp_page_count %u, count %zu\n",
+		  status, i, cdp->cdp_page_count, count);
 
 out:
 	if (mm_used)
