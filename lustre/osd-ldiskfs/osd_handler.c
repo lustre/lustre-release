@@ -6957,7 +6957,7 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	else
 		file->f_mode |= FMODE_32BITHASH;
 	file->f_path.dentry = obj_dentry;
-	file->f_flags = O_NOATIME | __FMODE_NONOTIFY;
+	file->f_flags = O_NOATIME | FMODE_NONOTIFY;
 	file->f_mapping = inode->i_mapping;
 	file->f_op = inode->i_fop;
 	file->f_inode = inode;

@@ -379,7 +379,11 @@ EXPORT_SYMBOL(llcrypt_decrypt_block);
  * Validate dentries in encrypted directories to make sure we aren't potentially
  * caching stale dentries after a key has been added.
  */
-static int llcrypt_d_revalidate(struct dentry *dentry, unsigned int flags)
+static int llcrypt_d_revalidate(
+#ifdef HAVE_D_REVALIDATE_WITH_INODE_NAME
+				struct inode *inode, const struct qstr *qstr,
+#endif
+				struct dentry *dentry, unsigned int flags)
 {
 	struct dentry *dir;
 	int err;

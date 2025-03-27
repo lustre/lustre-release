@@ -46,7 +46,7 @@ int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 	const char *secctx_name_lsm = NULL;
 #endif
 #ifdef HAVE_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
-	struct lsmcontext ctx = {};
+	struct lsm_context ctx = {};
 #endif
 	int rc;
 

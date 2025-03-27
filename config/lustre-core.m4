@@ -3813,7 +3813,7 @@ AC_DEFUN([LC_SRC_HAVE_LSMCONTEXT_INIT], [
 	LB2_LINUX_TEST_SRC([lsmcontext_init], [
 		#include <linux/security.h>
 	],[
-		struct lsmcontext ctx = {};
+		struct lsm_context ctx = {};
 
 		lsmcontext_init(&ctx, "", 0, 0);
 	],[])
@@ -3831,7 +3831,7 @@ AC_DEFUN([LC_HAVE_LSMCONTEXT_INIT], [
 #
 # repo: git://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/jammy
 # kernel linux-hwe-5.19 commit 57d0004bc811254916be30f94c86d9607867deb0
-# LSM: Use lsmcontext in security_dentry_init_security
+# LSM: Use lsm_context in security_dentry_init_security
 #
 AC_DEFUN([LC_SRC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX], [
 	LB2_LINUX_TEST_SRC([security_dentry_init_security_with_ctx], [
@@ -3839,7 +3839,7 @@ AC_DEFUN([LC_SRC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX], [
 	],[
 		struct dentry *dentry = NULL;
 		const struct qstr *name = NULL;
-		struct lsmcontext *ctx = NULL;
+		struct lsm_context *ctx = NULL;
 		const char *xattr_name = "";
 
 		(void)security_dentry_init_security(dentry, 0, name,
@@ -3847,10 +3847,10 @@ AC_DEFUN([LC_SRC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX], [
-	LB2_MSG_LINUX_TEST_RESULT([if security_dentry_init_security needs lsmcontext],
+	LB2_MSG_LINUX_TEST_RESULT([if security_dentry_init_security needs lsm_context],
 	[security_dentry_init_security_with_ctx], [
 		AC_DEFINE(HAVE_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX, 1,
-			[security_dentry_init_security needs lsmcontext])
+			[security_dentry_init_security needs lsm_context])
 	])
 ]) # LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
 
@@ -3862,17 +3862,17 @@ AC_DEFUN([LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX], [
 # LSM stacking v39: LSM: Ensure the correct LSM context releaser
 #
 AC_DEFUN([LC_SRC_LSMCONTEXT_HAS_ID], [
-	LB2_LINUX_TEST_SRC([lsmcontext_has_id], [
+	LB2_LINUX_TEST_SRC([lsm_context_has_id], [
 		#include <linux/security.h>
 	],[
-		((struct lsmcontext *)1)->id = 0;
+		((struct lsm_context *)1)->id = 0;
 	],[-Werror])
 ])
 AC_DEFUN([LC_LSMCONTEXT_HAS_ID], [
-	LB2_MSG_LINUX_TEST_RESULT([if lsmcontext has id],
-	[lsmcontext_has_id], [
+	LB2_MSG_LINUX_TEST_RESULT([if lsm_context has id],
+	[lsm_context_has_id], [
 		AC_DEFINE(HAVE_LSMCONTEXT_HAS_ID, 1,
-			[lsmcontext has id])
+			[lsm_context has id])
 	])
 ]) # LC_LSMCONTEXT_HAS_ID
 
@@ -5077,6 +5077,58 @@ AC_DEFUN([LC_HAVE_PAGEPRIVATE2], [
 ]) # LC_HAVE_PAGEPRIVATE2
 
 #
+# LC_STRUCT_LSM_CONTEXT
+#
+# Linux commit v6.13-rc1-1-g6fba89813ccf
+#   lsm: ensure the correct LSM context releaser
+#
+AC_DEFUN([LC_SRC_STRUCT_LSM_CONTEXT_EARLY], [
+	LB2_LINUX_TEST_SRC([struct_lsm_context], [
+		#include <linux/security.h>
+	],[
+		struct lsm_context ctx = {};
+
+		ctx.context = NULL;
+	],[-Werror])
+])
+AC_DEFUN([LC_STRUCT_LSM_CONTEXT_EARLY], [
+	LB2_MSG_LINUX_TEST_RESULT([if struct lsm_context is available],
+	[struct_lsm_context], [
+		AC_DEFINE(HAVE_STRUCT_LSM_CONTEXT, 1,
+			[struct lsm_context is available])
+	],[
+		AC_DEFINE(lsm_context, lsmcontext,
+			[struct lsm_context also known as struct lsmcontext in ubuntu kernels])
+	])
+]) # LC_STRUCT_LSM_CONTEXT_EARLY
+
+#
+# LC_HAVE_D_REVALIDATE_WITH_INODE_NAME
+#
+# Linux v6.13-rc1-7-g5be1fa8abd7b
+#   Pass parent directory inode and expected name to ->d_revalidate()
+#
+AC_DEFUN([LC_SRC_HAVE_D_REVALIDATE_WITH_INODE_NAME], [
+	LB2_LINUX_TEST_SRC([dentry_ops_d_revalidate_inode_name], [
+		#include <linux/dcache.h>
+	],[
+		struct dentry_operations *d_ops = NULL;
+		struct inode *inode = NULL;
+		struct qstr *qstr = NULL;
+		struct dentry *dentry = NULL;
+
+		(void)d_ops->d_revalidate(inode, qstr, dentry, 0);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_D_REVALIDATE_WITH_INODE_NAME], [
+	LB2_MSG_LINUX_TEST_RESULT([if PagePrivate2() is available],
+	[dentry_ops_d_revalidate_inode_name], [
+		AC_DEFINE(HAVE_D_REVALIDATE_WITH_INODE_NAME, 1,
+			[dentry operations d_revalidate() takes inode, name])
+	])
+]) # LC_HAVE_D_REVALIDATE_WITH_INODE_NAME
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -5390,6 +5442,9 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 6.13
 	LC_SRC_HAVE_MODULE_IMPORT_STRING_LITERAL
 	LC_SRC_HAVE_PAGEPRIVATE2
+
+	# 6.14
+	LC_SRC_HAVE_D_REVALIDATE_WITH_INODE_NAME
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -5726,6 +5781,9 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 6.13
 	LC_HAVE_MODULE_IMPORT_STRING_LITERAL
 	LC_HAVE_PAGEPRIVATE2
+
+	# 6.14
+	LC_HAVE_D_REVALIDATE_WITH_INODE_NAME
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

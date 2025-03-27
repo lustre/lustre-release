@@ -695,7 +695,7 @@ static inline const char *shrinker_debugfs_path(struct shrinker *shrinker)
 #ifdef HAVE_SEC_RELEASE_SECCTX_1ARG
 #ifndef HAVE_LSMCONTEXT_INIT
 /* Ubuntu 5.19 */
-static inline void lsmcontext_init(struct lsmcontext *cp, char *context,
+static inline void lsmcontext_init(struct lsm_context *cp, char *context,
 				   u32 size, int slot)
 {
 #ifdef HAVE_LSMCONTEXT_HAS_ID
@@ -713,7 +713,7 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 					      int slot)
 {
 #ifdef HAVE_SEC_RELEASE_SECCTX_1ARG
-	struct lsmcontext context = { };
+	struct lsm_context context = { };
 
 	lsmcontext_init(&context, secdata, seclen, slot);
 	return security_release_secctx(&context);

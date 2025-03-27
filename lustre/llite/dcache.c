@@ -304,7 +304,11 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 		ll_intent_drop_lock(it);
 }
 
-static int ll_revalidate_dentry(struct dentry *dentry,
+static int ll_revalidate_dentry(
+#ifdef HAVE_D_REVALIDATE_WITH_INODE_NAME
+				struct inode *inode, const struct qstr *qstr,
+#endif
+				struct dentry *dentry,
 				unsigned int lookup_flags)
 {
 	struct dentry *parent;

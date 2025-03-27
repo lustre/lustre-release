@@ -50,8 +50,10 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx);
 void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx);
 
 #if !defined(HAVE_ALLOC_FILE_PSEUDO) && defined(HAVE_SERVER_SUPPORT)
+#ifndef OPEN_FMODE
 #define OPEN_FMODE(flag) ((__force fmode_t)(((flag + 1) & O_ACCMODE) | \
-					    (flag & __FMODE_NONOTIFY)))
+					    (flag & FMODE_NONOTIFY)))
+#endif
 static inline
 struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
 			       const char *name, int flags,
