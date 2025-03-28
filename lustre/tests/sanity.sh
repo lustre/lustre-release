@@ -20675,6 +20675,23 @@ test_161c() {
 		error "flag $flags is not 0x0"
 	fi
 	echo "unlink a file having nlink > 1, changelog record flags '$flags'"
+
+	(( MDS1_VERSION >= $(version_code v2_16_53-39) )) ||
+		{ echo "CLF_UNLINK_LAST is not set with open file (LU-18860)";
+		return 0; }
+
+	# unlink a file open having nlink = 1 (changelog flag 0x1)
+	local pid
+	touch $DIR/$tdir/open_161c
+	tail -f $DIR/$tdir/open_161c & pid=$!
+	sleep 0.2
+	unlink $DIR/$tdir/open_161c
+	kill $pid
+	changelog_dump | grep UNLNK | tail -n 5
+	flags=$(changelog_dump | awk '/UNLNK/ {f=$5} END {print f}')
+	changelog_clear 0 || error "changelog_clear failed"
+	[[ "$flags" == "0x1" ]] || error "flag $flags is not 0x1"
+	echo "unlink a open file having nlink = 1, changelog record has flags of $flags"
 }
 run_test 161c "check CL_RENME[UNLINK] changelog record flags"
 

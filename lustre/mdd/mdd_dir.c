@@ -2210,7 +2210,7 @@ cleanup:
 		mdd_write_unlock(env, mdd_cobj);
 
 	if (rc == 0) {
-		if (cattr->la_nlink == 0)
+		if (mdd_is_dead_obj(mdd_cobj))
 			cl_flags |= CLF_UNLINK_LAST;
 		else
 			cl_flags &= ~CLF_UNLINK_HSM_EXISTS;
