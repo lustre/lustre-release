@@ -39,8 +39,13 @@ Defaults to
 if not specified, which is 65534 to match the standard Linux
 .B nobody
 user ID.
-The user ID that unknown users (if not trusted)
-and root (if not admin) should be mapped to.
+The user ID that unknown users (if not
+.BR trusted " ) and "
+.BR root " (if not " admin )
+should be mapped to.
+When offsets are defined on the nodemap, the squash value should be in the
+offset range [ 0, offset_limit-1 ], otherwise squashed UIDs would escape
+offsetting.
 .TP
 .B squash_gid
 Defaults to
@@ -50,6 +55,9 @@ if not specified, which is 65534 to match the standard Linux
 user ID.
 The group ID that unknown groups (if not trusted)
 and root (if not admin) should be mapped to.
+When offsets are defined on the nodemap, the squash value should be in the
+offset range [ 0, offset_limit-1 ], otherwise squashed GIDs would escape
+offsetting.
 .TP
 .B squash_projid
 Defaults to
@@ -58,6 +66,9 @@ if not specified, which is 65534 to match the standard Linux
 .B nobody
 user ID.
 The project ID that unknown projects (if not trusted) should be mapped to.
+When offsets are defined on the nodemap, the squash value should be in the
+offset range [ 0, offset_limit-1 ], otherwise squashed PROJIDs would escape
+offsetting.
 .TP
 .B deny_unknown
 Defaults to 0. If set to 1 then unknown (squashed) users will be denied
@@ -176,7 +187,9 @@ filesystem package since release 2.6.0
 .BR lctl-nodemap-activate (8),
 .BR lctl-nodemap-add (8),
 .BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-offset (8),
 .BR lctl-nodemap-add-range (8),
 .BR lctl-nodemap-del (8),
 .BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-offset (8),
 .BR lctl-nodemap-del-range (8)

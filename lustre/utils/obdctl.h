@@ -165,6 +165,7 @@ int jt_lcfg_param(int argc, char **argv);
 int jt_lcfg_confparam(int argc, char **argv);
 int jt_lcfg_applyyaml(int argc, char **argv);
 int jt_lcfg_setparam_perm(int argc, char **argv, struct param_opts *popt);
+int yaml_get_limit_uid(const char *config);
 
 int jt_pool_cmd(int argc, char **argv);
 int jt_del_ost(int argc, char **argv);

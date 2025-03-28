@@ -989,7 +989,33 @@ int jt_obd_abort_recovery_mdt(int argc, char **argv)
 
 	return obd_abort_recovery(argv[0], OBD_FLG_ABORT_RECOV_MDT);
 }
-#else /* ! HAVE_SERVER_SUPPROT */
+
+static int lcfg_get_nm_offset_limit(char *nodemap)
+{
+	/* buffer to contain nodemap/<nodemap name>/offset */
+	char param[LUSTRE_NODEMAP_NAME_LENGTH + 16 + 1];
+	char *buf = NULL;
+	size_t buflen;
+	glob_t paths;
+	int rc;
+
+	snprintf(param, sizeof(param), "nodemap/%s/offset", nodemap);
+	rc = llapi_param_get_paths(param, &paths);
+	if (rc)
+		return -errno;
+
+	rc = llapi_param_get_value(paths.gl_pathv[0], &buf, &buflen);
+	if (rc)
+		goto free_all;
+
+	rc = yaml_get_limit_uid(buf);
+
+free_all:
+	free(buf);
+	llapi_param_paths_free(&paths);
+	return rc;
+}
+#else /* ! HAVE_SERVER_SUPPORT */
 int jt_obd_no_transno(int argc, char **argv)
 {
 	if (argc != 1)
@@ -4720,6 +4746,23 @@ int jt_nodemap_modify(int argc, char **argv)
 		return CMD_HELP;
 	}
 
+	if (cmd == LCFG_NODEMAP_SQUASH_UID ||
+	    cmd == LCFG_NODEMAP_SQUASH_GID ||
+	    cmd == LCFG_NODEMAP_SQUASH_PROJID) {
+		int offset_limit;
+		int squash;
+
+		offset_limit = lcfg_get_nm_offset_limit(nodemap_name);
+		squash = strtol(value, NULL, 10);
+		if (errno == ERANGE)
+			squash = -1;
+
+		if (offset_limit && squash >= offset_limit)
+			fprintf(stderr,
+				"Warning: it is not recommended to have a squash value outside of the offset range [ 0, %d ] as it will not be mapped properly.\n",
+				offset_limit - 1);
+	}
+
 	rc = nodemap_cmd(cmd, false, NULL, 0, argv[0], nodemap_name, param,
 			 value, NULL);
 	if (rc != 0) {
@@ -4796,7 +4839,12 @@ int jt_nodemap_add_offset(int argc, char **argv)
 	/* user warnings for setting offset to 0 or less than 65536 */
 	if (offset < 65536)
 		fprintf(stderr,
-			"It is not recomended to have an offset before 65536 as the nobody/squash id's will not be mapped properly.\n");
+			"Warning: it is not recommended to have an offset before 65536 as the nobody/squash ids will not be mapped properly.\n");
+
+	/* user warning for setting limit to less than 65536 */
+	if (limit < 65536)
+		fprintf(stderr,
+			"Warning: it is not recommended to have a limit below 65536 as the nobody/squash ids will not be mapped properly.\n");
 
 	snprintf(param, sizeof(param), "%u+%u", offset, limit);
 
@@ -4869,6 +4917,8 @@ int jt_nodemap_add_idmap(int argc, char **argv)
 	char *nodemap_name = NULL;
 	char *idtype = NULL;
 	char *idmap = NULL;
+	char *fsid = NULL;
+	int fsid_val = -1;
 	int c, rc = 0;
 
 	static struct option long_opts[] = {
@@ -4923,6 +4973,22 @@ add_idmap_usage:
 		fprintf(stderr,
 			"nodemap_add_idmap: incorrect ID type, must be one of uid, gid, projid.\n");
 		goto add_idmap_usage;
+	}
+
+	fsid = strchr(idmap, ':');
+	if (fsid) {
+		fsid_val = strtol(fsid + 1, NULL, 10);
+		if (errno == ERANGE)
+			fsid_val = -1;
+	}
+	if (fsid_val != -1) {
+		int offset_limit;
+
+		offset_limit = lcfg_get_nm_offset_limit(nodemap_name);
+		if (offset_limit && fsid_val >= offset_limit)
+			fprintf(stderr,
+				"Warning: it is not recommended to map an id outside of the offset range [ 0, %d ] as it will not be mapped properly.\n",
+				offset_limit - 1);
 	}
 
 	rc = nodemap_cmd(cmd, false, NULL, 0,

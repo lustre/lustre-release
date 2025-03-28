@@ -794,6 +794,62 @@ free_reply:
 	return rc;
 }
 
+int yaml_get_limit_uid(const char *config)
+{
+	yaml_parser_t parser;
+	yaml_event_t event;
+	bool done = false;
+	int rc;
+
+	/* Initialize parser */
+	if (!yaml_parser_initialize(&parser))
+		return -EOPNOTSUPP;
+
+	/* Set input string */
+	yaml_parser_set_input_string(&parser, (const unsigned char *)config,
+				     strlen(config));
+
+	while (!done) {
+		if (!yaml_parser_parse(&parser, &event)) {
+			yaml_parser_log_error(&parser, stderr, "lctl: ");
+			rc = -EINVAL;
+			goto error;
+		}
+
+		if (event.type == YAML_SCALAR_EVENT) {
+			char *value = (char *)event.data.scalar.value;
+
+			if (strcmp(value, "limit_uid") == 0) {
+				yaml_event_delete(&event);
+				if (!yaml_parser_parse(&parser, &event)) {
+					rc = -EINVAL;
+					goto error;
+				}
+				value = (char *)event.data.scalar.value;
+				errno = 0;
+				rc = strtoul(value, NULL, 10);
+				if (errno)
+					rc = -errno;
+				yaml_event_delete(&event);
+				goto out;
+			}
+		}
+
+		done = (event.type == YAML_STREAM_END_EVENT);
+		yaml_event_delete(&event);
+	}
+
+	rc = -ENOENT; /* Key not found */
+
+out:
+	yaml_parser_delete(&parser);
+	return rc;
+
+error:
+	yaml_parser_delete(&parser);
+	return rc;
+}
+
 /* get device list by netlink or debugfs */
 int jt_device_list(int argc, char **argv)
 {

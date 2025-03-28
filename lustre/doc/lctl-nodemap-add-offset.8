@@ -18,12 +18,12 @@ overlapping assignments in multi-tenant systems. The
 is used to specify the number of IDs mapped by the range, starting with the
 .BR root (0)
 user/group/project ID and extending through
-.BR FSID_COUNT-1 .
+.IR FSID_COUNT-1 "."
 .PP
 An offset range cannot overlap into another's offset range.
 .PP
 A nodemap can only have one offset defined. To modify the offset already
-defined, remove it first and recreate it with new values.
+defined, just assign a new value.
 Any existing files will
 .B not
 automatically be remapped to the new
@@ -34,6 +34,21 @@ and
 .BR lfs-project (1)
 on a trusted client that has access to the unmapped, canonical file system IDs.
 So modifying a nodemap offset should be avoided if possible.
+.PP
+Once an offset is set on a nodemap, please make sure the explicit mappings are
+defined so that they do not escape the offset range. This means an explicit
+mapping should not map a client id to a file system id greater than
+.IR FSID_COUNT-1 "."
+Similarly, the
+.BR squash_uid ", " squash_gid " and " squash_projid
+values should not be set to a value greater than
+.IR FSID_COUNT-1 "."
+Otherwise this would produce file system IDs outside of the offset range.
+Finally, the offset limit
+.I FSID_COUNT
+should be defined so that the
+.B nobody
+user (65534) is included in the offset range.
 .SH OPTIONS
 .TP
 .BI --name " NAME"
