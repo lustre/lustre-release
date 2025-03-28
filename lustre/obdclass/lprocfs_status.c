@@ -550,6 +550,18 @@ void lprocfs_stats_unlock(struct lprocfs_stats *stats,
 	}
 }
 
+static __s64 sum_check(__s64 old, __s64 incr)
+{
+	__s64 new;
+
+	new = old + incr;
+	/* check overflow */
+	if (unlikely(new < old))
+		new = LLONG_MAX;
+
+	return new;
+}
+
 /** add up per-cpu counters */
 void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 			   struct lprocfs_counter *cnt)
@@ -577,12 +589,13 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 		percpu_cntr = lprocfs_stats_counter_get(stats, i, idx);
 
 		cnt->lc_count += percpu_cntr->lc_count;
-		cnt->lc_sum += percpu_cntr->lc_sum;
 		if (percpu_cntr->lc_min < cnt->lc_min)
 			cnt->lc_min = percpu_cntr->lc_min;
 		if (percpu_cntr->lc_max > cnt->lc_max)
 			cnt->lc_max = percpu_cntr->lc_max;
-		cnt->lc_sumsquare += percpu_cntr->lc_sumsquare;
+		cnt->lc_sum = sum_check(cnt->lc_sum, percpu_cntr->lc_sum);
+		cnt->lc_sumsquare = sum_check(cnt->lc_sumsquare,
+					      percpu_cntr->lc_sumsquare);
 	}
 
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
