@@ -92,7 +92,6 @@ MANFILES =					\
 	ll_decode_linkea.8			\
 	llsom_sync.8				\
 	llstat.8				\
-	lustre.7				\
 	lustre_routes_config.8			\
 	lustre_routes_conversion.8		\
 	lustre_rsync.8				\
@@ -100,11 +99,6 @@ MANFILES =					\
 	nids.5					\
 	plot-llstat.8				\
 	routerstat.8
-
-
-LIBMAN = 					\
-	lustreapi.7				\
-	llapi_layout.7
 
 
 SERVER_MANFILES =				\
@@ -176,7 +170,7 @@ SERVER_MANFILES =				\
 	tunefs.lustre.8
 
 if MANPAGES
-man_MANS = $(LIBMAN)
+man_MANS =
 if SERVER
 man_MANS += $(SERVER_MANFILES)
 endif
@@ -188,6 +182,6 @@ endif
 
 CLEANFILES = *.aux *.tex *.log *.pdf
 
-EXTRA_DIST = $(MANFILES) $(SERVER_MANFILES) $(LIBMAN)
+EXTRA_DIST = $(MANFILES) $(SERVER_MANFILES)
 
 all:
