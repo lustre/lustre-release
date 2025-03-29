@@ -43,7 +43,6 @@ MANFILES =					\
 	lctl-pool_new.8				\
 	lctl-set_param.8			\
 	ldev.8					\
-	ldev.conf.5				\
 	lfs-rm_entry.8				\
 	lfs-rmentry.8				\
 	lgss_sk.8				\
@@ -55,7 +54,6 @@ MANFILES =					\
 	lustre_routes_conversion.8		\
 	lustre_rsync.8				\
 	mount.lustre.8				\
-	nids.5					\
 	plot-llstat.8				\
 	routerstat.8
 

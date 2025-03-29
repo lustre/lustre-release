@@ -4,7 +4,9 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MANFILES =
+MANFILES =					\
+	ldev.conf.5				\
+	nids.5
 
 if MANPAGES
 if UTILS
