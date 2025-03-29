@@ -4,7 +4,9 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MANFILES =
+MANFILES = 					\
+	lnetctl.8				\
+	lst.8
 
 if MANPAGES
 if UTILS

@@ -1466,7 +1466,6 @@ AC_DEFUN([LN_CONFIG_FILES], [
 AC_CONFIG_FILES([
 lnet/Makefile
 lnet/autoMakefile
-lnet/doc/Makefile
 lnet/include/Makefile
 lnet/include/lnet/Makefile
 lnet/include/uapi/linux/lnet/Makefile
