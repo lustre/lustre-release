@@ -1,0 +1,15 @@
+/Makefile.in
+/OBD-HOWTO.html
+/OBD-HOWTO.txt
+/lustre-HOWTO.lyx
+/lustre-HOWTO.txt
+/lustre-pdf.bbl
+/lustre-pdf.blg
+/lustre-pdf.log
+/lustre-pdf.out
+/lustre-pdf.toc
+/*.eps
+/lustre.lyx
+/*.tex
+/*.pdf
+/*.aux

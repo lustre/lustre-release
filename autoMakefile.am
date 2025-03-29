@@ -13,6 +13,7 @@
 SUBDIRS := @LDISKFS_SUBDIR@ \
 	. \
 	@LUSTREIOKIT_SUBDIR@ \
+	Documentation \
 	lustre_compat \
 	libcfs \
 	lnet \
@@ -20,6 +21,7 @@ SUBDIRS := @LDISKFS_SUBDIR@ \
 
 DIST_SUBDIRS := ldiskfs \
 	lustre-iokit \
+	Documentation \
 	lustre_compat \
 	libcfs \
 	lnet \
