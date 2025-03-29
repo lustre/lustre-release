@@ -2517,7 +2517,7 @@ put_parent:
 unlock_rename:
 	mdt_rename_unlock(info, rename_lh);
 
-	if (rc)
+	if (rc && rc != -EALREADY)
 		CERROR("%s: migrate "DFID"/"DNAME" failed: rc = %d\n",
 		       mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
 		       encode_fn_luname(&rr->rr_name), rc);

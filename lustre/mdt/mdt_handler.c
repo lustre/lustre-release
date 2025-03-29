@@ -5073,8 +5073,8 @@ static int mdt_layout_change_pccro(struct mdt_thread_info *info,
 	if (rc)
 		RETURN(rc);
 
-	rc = mo_layout_pccro_check(info->mti_env,
-				   mdt_object_child(obj), layout);
+	rc = mo_layout_check(info->mti_env,
+			     mdt_object_child(obj), layout);
 	if (rc == -EALREADY)
 		RETURN(0);
 

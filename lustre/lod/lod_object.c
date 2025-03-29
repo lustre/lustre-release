@@ -5656,7 +5656,7 @@ static void lod_striping_from_default(struct lod_object *lo,
 		if (lo->ldo_dir_stripe_count == 0)
 			lo->ldo_dir_stripe_count =
 				lds->lds_dir_def_stripe_count;
-		if (lo->ldo_dir_stripe_offset == -1)
+		if (lo->ldo_dir_stripe_offset == LMV_OFFSET_DEFAULT)
 			lo->ldo_dir_stripe_offset =
 				lds->lds_dir_def_stripe_offset;
 		if (lo->ldo_dir_hash_type == LMV_HASH_TYPE_UNKNOWN)
@@ -7928,6 +7928,72 @@ static int lod_layout_pccro_check(const struct lu_env *env,
 	return lo->ldo_flr_state & LCM_FL_PCC_RDONLY ? -EALREADY : 0;
 }
 
+/* Check if the dir layout conforms the requested one */
+static int lod_dir_layout_check(const struct lu_env *env,
+				struct dt_object *dt,
+				struct md_layout_change *mlc)
+{
+	struct lmv_user_md_v1 *lum = mlc->mlc_buf.lb_buf;
+	size_t lum_len = mlc->mlc_buf.lb_len;
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lod_device *ld = lu2lod_dev(dt->do_lu.lo_dev);
+	int lum_stripe_count, lum_num_objs;
+	int rc;
+	int i;
+	ENTRY;
+
+	rc = lod_striping_load(env, lo);
+	if (rc)
+		RETURN(rc);
+
+	lum_stripe_count = le32_to_cpu(lum->lum_stripe_count);
+	lum_num_objs = lmv_foreign_to_md_stripes(lum_len);
+
+	if (lmv_hash_is_migrating(lo->ldo_dir_hash_type))
+		lum_stripe_count = lo->ldo_dir_migrate_offset;
+
+	if (lum_num_objs > lum_stripe_count)
+		RETURN(-EINVAL);
+
+	for (i = 0; i < lum_num_objs; i++) {
+		struct lmv_user_mds_data *stripe_desc = lum->lum_objects + i;
+		struct dt_object *stripe_obj = lo->ldo_stripe[i];
+		__u32 lum_mds_idx, dt_mds_idx;
+		int type;
+
+		lum_mds_idx = le32_to_cpu(stripe_desc->lum_mds);
+		rc = lod_fld_lookup(env, ld, lu_object_fid(&stripe_obj->do_lu),
+				    &dt_mds_idx, &type);
+		if (rc < 0)
+			RETURN(rc);
+
+		if (lum_mds_idx == LMV_OFFSET_DEFAULT)
+			continue;
+		if (lum_mds_idx != dt_mds_idx) {
+			if (!lmv_hash_is_migrating(lo->ldo_dir_hash_type))
+				RETURN(0);
+			CERROR("%s: attempt to resume migration, stripe #%d mismatch: %u != %u, rc = %d\n",
+			       dt->do_lu.lo_dev->ld_obd->obd_name, i,
+			       lum_mds_idx, dt_mds_idx, -EPERM);
+			RETURN(-EPERM);
+		}
+	}
+
+	/* all compatibility check passed */
+	RETURN(-EALREADY);
+}
+
+static int lod_layout_check(const struct lu_env *env,
+			    struct dt_object *dt,
+			    struct md_layout_change *mlc)
+{
+	if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
+		return lod_dir_layout_check(env, dt, mlc);
+
+	LASSERT(S_ISREG(dt->do_lu.lo_header->loh_attr));
+	return lod_layout_pccro_check(env, dt, mlc);
+}
+
 static struct lod_layout_component *
 lod_locate_comp_hsm(struct lod_object *lo, int *hsm_mirror_id)
 {
@@ -9330,7 +9396,7 @@ const struct dt_object_operations lod_obj_ops = {
 	.do_invalidate		= lod_invalidate,
 	.do_declare_layout_change = lod_declare_layout_change,
 	.do_layout_change	= lod_layout_change,
-	.do_layout_pccro_check	= lod_layout_pccro_check,
+	.do_layout_check	= lod_layout_check,
 };
 
 /**

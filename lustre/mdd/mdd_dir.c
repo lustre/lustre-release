@@ -4187,9 +4187,7 @@ static int mdd_migrate_linkea_prepare(const struct lu_env *env,
 	/* If there are still links locally, don't migrate this file */
 	LASSERT(ldata->ld_leh != NULL);
 
-	/*
-	 * If linkEA is overflow, switch to ns-only migrate
-	 */
+	/* If linkEA is overflow, switch to ns-only migrate */
 	if (unlikely(ldata->ld_leh->leh_overflow_time))
 		RETURN(+EOVERFLOW);
 
@@ -4591,38 +4589,80 @@ static int mdd_migrate_create(const struct lu_env *env,
  * here, because this command will decide target MDT in subdir migration in
  * LMV.
  */
-static int mdd_migrate_cmd_check(struct mdd_device *mdd,
+static int mdd_migrate_cmd_check(const struct lu_env *env, struct mdd_device *mdd,
+				 struct mdd_object *sobj,
 				 const struct lmv_mds_md_v1 *lmv,
 				 const struct lmv_user_md_v1 *lum,
-				 const struct lu_name *lname)
+				 size_t lum_len, const struct lu_name *lname)
 {
+	struct mdd_thread_info *info = mdd_env_info(env);
 	__u32 lum_stripe_count = lum->lum_stripe_count;
 	__u32 lum_hash_type = lum->lum_hash_type &
 			      cpu_to_le32(LMV_HASH_TYPE_MASK);
-	__u32 lmv_hash_type = lmv->lmv_hash_type &
-			      cpu_to_le32(LMV_HASH_TYPE_MASK);
+	struct md_layout_change *mlc = &info->mdi_mlc;
+	__u32 lmv_hash_type;
+	int rc = 0;
+	ENTRY;
 
-	if (!lmv_is_sane(lmv))
-		return -EBADF;
+	if (lmv && !lmv_is_sane(lmv))
+		RETURN(-EBADF);
 
-	/* if stripe_count unspecified, set to 1 */
+	/* If stripe_count unspecified, set to 1 */
 	if (!lum_stripe_count)
 		lum_stripe_count = cpu_to_le32(1);
 
-	/* TODO: check specific MDTs */
-	if (lum_stripe_count != lmv->lmv_migrate_offset ||
-	    lum->lum_stripe_offset != lmv->lmv_master_mdt_index ||
-	    (lum_hash_type && lum_hash_type != lmv_hash_type)) {
-		CERROR("%s: '"DNAME"' migration was interrupted, run 'lfs migrate -m %d -c %d -H %s "DNAME"' to finish migration: rc = %d\n",
-			mdd2obd_dev(mdd)->obd_name, encode_fn_luname(lname),
-			le32_to_cpu(lmv->lmv_master_mdt_index),
-			le32_to_cpu(lmv->lmv_migrate_offset),
-			mdt_hash_name[le32_to_cpu(lmv_hash_type)],
-			encode_fn_luname(lname), -EPERM);
-		return -EPERM;
+	/* Easy check for plain and single-striped dirs
+	 * if the object is on the target MDT already
+	 */
+	if (!lmv || lmv->lmv_stripe_count == cpu_to_le32(1)) {
+		struct seq_server_site  *ss = mdd_seq_site(mdd);
+		struct lu_seq_range range = { 0 };
+
+		fld_range_set_type(&range, LU_SEQ_RANGE_MDT);
+		rc = fld_server_lookup(env, ss->ss_server_fld,
+				fid_seq(mdd_object_fid(sobj)), &range);
+		if (rc)
+			RETURN(rc);
+
+		if (lum_stripe_count == cpu_to_le32(1) &&
+		    le32_to_cpu(lum->lum_stripe_offset) == range.lsr_index)
+			RETURN(-EALREADY);
+		RETURN(0);
 	}
 
-	return -EALREADY;
+	lmv_hash_type = lmv->lmv_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK);
+
+	if (lmv_is_migrating(lmv)) {
+		if (lum_stripe_count != lmv->lmv_migrate_offset ||
+		    lum->lum_stripe_offset != lmv->lmv_master_mdt_index ||
+		    (lum_hash_type && lum_hash_type != lmv_hash_type)) {
+			rc = -EPERM;
+		}
+	} else {
+		/* check at top level if the target layout already applied */
+		if ((lum_hash_type && lum_hash_type != lmv_hash_type) ||
+		    lum->lum_stripe_offset != lmv->lmv_master_mdt_index ||
+		    lum_stripe_count != lmv->lmv_stripe_count)
+			RETURN(0);
+	}
+
+	if (rc == 0) {
+		mlc->mlc_buf.lb_buf = (void*)lum;
+		mlc->mlc_buf.lb_len = lum_len;
+		rc = mo_layout_check(env, &sobj->mod_obj, mlc);
+	}
+
+	if (rc == -EPERM) {
+		CERROR("%s: '"DNAME"' migration was interrupted, run "
+		       "'lfs migrate -m %d -c %d -H %s "DNAME"' to finish migration: rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name, encode_fn_luname(lname),
+		       le32_to_cpu(lmv->lmv_master_mdt_index),
+		       le32_to_cpu(lmv->lmv_migrate_offset),
+		       mdt_hash_name[le32_to_cpu(lmv_hash_type)],
+		       encode_fn_luname(lname), rc);
+	}
+
+	RETURN(rc);
 }
 
 /**
@@ -4710,6 +4750,7 @@ retry:
 
 	if (S_ISDIR(attr->la_mode) && !spec->sp_migrate_nsonly) {
 		struct lmv_user_md_v1 *lum = spec->u.sp_ea.eadata;
+		size_t lum_len = spec->u.sp_ea.eadatalen;
 
 		LASSERT(lum);
 
@@ -4724,19 +4765,11 @@ retry:
 			GOTO(out, rc);
 
 		lmv = sbuf.lb_buf;
-		if (lmv) {
-			if (!lmv_is_sane(lmv))
-				GOTO(out, rc = -EBADF);
-			if (lmv_is_migrating(lmv)) {
-				rc = mdd_migrate_cmd_check(mdd, lmv, lum,
-							   sname);
-				GOTO(out, rc);
-			}
-		}
+		rc = mdd_migrate_cmd_check(env, mdd, sobj, lmv, lum,
+					   lum_len, sname);
+		if (rc)
+			GOTO(out, rc);
 	} else if (!S_ISDIR(attr->la_mode)) {
-		if (spobj == tpobj)
-			GOTO(out, rc = -EALREADY);
-
 		/* update namespace only if @sobj is on MDT where @tpobj is. */
 		if (!mdd_object_remote(tpobj) && !mdd_object_remote(sobj))
 			spec->sp_migrate_nsonly = true;

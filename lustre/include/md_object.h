@@ -279,11 +279,11 @@ struct md_object_operations {
 				 struct md_object *obj,
 				 struct md_layout_change *layout);
 	/**
-	 * Check whether the file is in PCC-RO state.
+	 * Additonal layout checks
 	 */
-	int (*moo_layout_pccro_check)(const struct lu_env *env,
-				     struct md_object *obj,
-				     struct md_layout_change *layout);
+	int (*moo_layout_check)(const struct lu_env *env,
+				struct md_object *obj,
+				struct md_layout_change *layout);
 };
 
 /**
@@ -492,12 +492,12 @@ static inline int mo_layout_change(const struct lu_env *env,
 	return m->mo_ops->moo_layout_change(env, m, layout);
 }
 
-static inline int mo_layout_pccro_check(const struct lu_env *env,
+static inline int mo_layout_check(const struct lu_env *env,
 					struct md_object *m,
 					struct md_layout_change *layout)
 {
-	LASSERT(m->mo_ops->moo_layout_pccro_check);
-	return m->mo_ops->moo_layout_pccro_check(env, m, layout);
+	LASSERT(m->mo_ops->moo_layout_check);
+	return m->mo_ops->moo_layout_check(env, m, layout);
 }
 
 static inline int mo_swap_layouts(const struct lu_env *env,

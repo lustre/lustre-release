@@ -1071,7 +1071,9 @@ struct dt_object_operations {
 				struct thandle *th);
 
 	/**
-	 * Check whether the file is in PCC-RO state.
+	 * Perform additional layout checks before
+	 * layout changing op. Currently used for PCC-RO and
+	 * dir migration.
 	 *
 	 * \param[in] env	execution environment
 	 * \param[in] dt	DT object
@@ -1079,12 +1081,11 @@ struct dt_object_operations {
 	 *			the DT object's layout
 	 *
 	 * \retval 0		success
-	 * \retval -ne		-EALREADY if the file is already PCC-RO cached;
+	 * \retval -ne		-EALREADY if the object conforms the layout
 	 *			Otherwise, return error code
 	 */
-	int (*do_layout_pccro_check)(const struct lu_env *env,
-				     struct dt_object *dt,
-				     struct md_layout_change *mlc);
+	int (*do_layout_check)(const struct lu_env *env, struct dt_object *dt,
+			       struct md_layout_change *mlc);
 };
 
 enum dt_bufs_type {
@@ -3071,14 +3072,14 @@ static inline int dt_layout_change(const struct lu_env *env,
 	return o->do_ops->do_layout_change(env, o, mlc, th);
 }
 
-static inline int dt_layout_pccro_check(const struct lu_env *env,
+static inline int dt_layout_check(const struct lu_env *env,
 					struct dt_object *o,
 					struct md_layout_change *mlc)
 {
 	LASSERT(o);
 	LASSERT(o->do_ops);
-	LASSERT(o->do_ops->do_layout_pccro_check);
-	return o->do_ops->do_layout_pccro_check(env, o, mlc);
+	LASSERT(o->do_ops->do_layout_check);
+	return o->do_ops->do_layout_check(env, o, mlc);
 }
 
 int dt_global_init(void);

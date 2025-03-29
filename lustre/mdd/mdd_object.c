@@ -3430,12 +3430,11 @@ out:
 	RETURN(rc);
 }
 
-/*  Update the layout for PCC-RO. */
 static int
-mdd_layout_pccro_check(const struct lu_env *env, struct md_object *o,
+mdd_layout_check(const struct lu_env *env, struct md_object *o,
 		       struct md_layout_change *mlc)
 {
-	return mdo_layout_pccro_check(env, md2mdd_obj(o), mlc);
+	return mdo_layout_check(env, md2mdd_obj(o), mlc);
 }
 
 /**
@@ -3487,8 +3486,8 @@ out:
 /**
  * Layout change callback for object.
  *
- * This is only used by FLR and PCC-RO for now. In the future, it can be
- * exteneded to handle all layout change.
+ * This is used by FLR and PCC-RO as well as dir migration
+ * and restriping.
  */
 static int
 mdd_layout_change(const struct lu_env *env, struct md_object *o,
@@ -4254,5 +4253,5 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_object_lock	= mdd_object_lock,
 	.moo_object_unlock	= mdd_object_unlock,
 	.moo_layout_change	= mdd_layout_change,
-	.moo_layout_pccro_check	= mdd_layout_pccro_check,
+	.moo_layout_check	= mdd_layout_check,
 };

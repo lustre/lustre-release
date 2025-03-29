@@ -19436,9 +19436,15 @@ test_160d() {
 	changelog_register || error "changelog_register failed"
 
 	mkdir -p $DIR/$tdir/migrate_dir
+
+	local src_mdt=$($LFS getdirstripe -m $DIR/$tdir/migrate_dir)
+	local tgt_mdt=1
+
+	[[ "$src_mdt" == "$tgt_mdt" ]] && tgt_mdt=0
+
 	changelog_clear 0 || error "changelog_clear failed"
 
-	$LFS migrate -m 1 $DIR/$tdir/migrate_dir || error "migrate fails"
+	$LFS migrate -m $tgt_mdt $DIR/$tdir/migrate_dir || error "migrate fails"
 	changelog_dump | tail -n 5
 	local migrates=$(changelog_dump | grep -c "MIGRT")
 	[ $migrates -eq 1 ] || error "MIGRATE changelog count $migrates != 1"
@@ -24070,6 +24076,25 @@ test_230c() {
 			[[ "$mdt_index" == "0" ]] ||
 				error "$file is not on MDT0"
 		done
+
+		# repeating the migrate should leave the dir's FID the same
+		# and update only the skipped file's FID
+		local old_dir_fid=$($LFS path2fid $migrate_dir)
+		local old_file_fid=$($LFS path2fid $migrate_dir/file)
+
+		$LFS migrate -m 0 $migrate_dir || error "Repeating migrate fails"
+
+		local new_dir_fid=$($LFS path2fid $migrate_dir)
+		local new_file_fid=$($LFS path2fid $migrate_dir/file)
+
+		foo_fid_new=$($LFS path2fid $migrate_dir/foo)
+
+		[[ "$foo_fid_old" != "$foo_fid_new" ]] ||
+			error "Expecting the skipped file to be migrated, but its FID is the same"
+		[[ "$old_dir_fid" != "$new_fid_dir" ]] ||
+			error "The top-level dir has been migrated after repeating the same migrate cmd"
+		[[ "$old_file_fid" == "$new_file_fid" ]] ||
+			error "The migrated file has been migrated again"
 	fi
 
 	rm -rf $DIR/$tdir || error "rm dir failed after migration"

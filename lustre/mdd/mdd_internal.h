@@ -744,10 +744,10 @@ mdo_layout_change(const struct lu_env *env, struct mdd_object *obj,
 }
 
 static inline int
-mdo_layout_pccro_check(const struct lu_env *env, struct mdd_object *obj,
+mdo_layout_check(const struct lu_env *env, struct mdd_object *obj,
 		       struct md_layout_change *mlc)
 {
-	return dt_layout_pccro_check(env, mdd_object_child(obj), mlc);
+	return dt_layout_check(env, mdd_object_child(obj), mlc);
 }
 
 static inline
