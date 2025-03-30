@@ -604,7 +604,7 @@ our $logFunctions = qr{(?x:
 	TP_printk|
 	WARN(?:_RATELIMIT|_ONCE|)|
 	CDEBUG|CERROR|CNETERR|CEMERG|CL_LOCK_DEBUG|CWARN|DEBUG_REQ|LCONSOLE_[A-Z]*|
-	CERROR_SLOW|CWARN_SLOW|
+	error|CERROR_SLOW|CWARN_SLOW|
 	panic|
 	MODULE_[A-Z_]+|
 	seq_vprintf|seq_printf|seq_puts|
@@ -954,6 +954,17 @@ if (open(my $spelling, '<', $spelling_file)) {
 
 		my ($suspect, $fix) = split(/\|\|/, $line);
 
+		if ($fix =~ m/^\s*$/ || $suspect =~ m/^\s*$/) {
+			warn "$spelling_file: missing suspect or fix on line '$line'\n";
+			next;
+		}
+		if (exists $spelling_fix{$suspect}) {
+			my $oldfix = $spelling_fix{$suspect};
+			if ($oldfix ne $fix) {
+				warn "$spelling_file: duplicate suspect '$suspect' defined to both '$oldfix' and '$fix'!\n";
+			}
+			next;
+		}
 		$spelling_fix{$suspect} = $fix;
 	}
 	close($spelling);
@@ -977,6 +988,17 @@ if ($codespell) {
 
 			my ($suspect, $fix) = split(/->/, $line);
 
+			if ($fix =~ m/^\s*$/ || $suspect =~ m/^\s*$/) {
+				warn "$codespellfile: missing suspect or fix on line '$line'\n";
+				next;
+			}
+			if (exists $spelling_fix{$suspect}) {
+				my $oldfix = $spelling_fix{$suspect};
+				if ($oldfix ne $fix) {
+					warn "$codespellfile: suspect '$suspect' defined to both '$oldfix' and '$fix'!\n";
+				}
+				next;
+			}
 			$spelling_fix{$suspect} = $fix;
 		}
 		close($spelling);
@@ -1003,6 +1025,17 @@ if (open(my $spelling, '<', $spelling_file_userspace)) {
 
 		my ($suspect, $fix) = split(/\|\|/, $line);
 
+		if ($fix =~ m/^\s*$/ || $suspect =~ m/^\s*$/) {
+			warn "$spelling_file_userspace: missing suspect or fix on line '$line'\n";
+			next;
+		}
+		if (exists $spelling_fix_user{$suspect}) {
+			my $oldfix = $spelling_fix_user{$suspect};
+			if ($oldfix ne $fix) {
+				warn "$spelling_file_userspace: suspect '$suspect' defined to both '$oldfix' and '$fix'!\n";
+			}
+			next;
+		}
 		$spelling_fix_user{$suspect} = $fix;
 	}
 	close($spelling);
@@ -3535,6 +3568,12 @@ sub process {
 				my $typo_fix = $spelling_fix_user{$typo};
 				if (!defined($typo_fix)) {
 					$typo_fix = "CHECKPATCH ERROR";
+					foreach my $suspect (keys %spelling_fix_user) {
+						if ($typo =~ /$suspect/) {
+							$typo_fix = $spelling_fix_user{$suspect};
+							last;
+						}
+					}
 				}
 				my $msg_level = \&WARN;
 				$msg_level = \&CHK if ($file);
@@ -3553,6 +3592,12 @@ sub process {
 				my $typo_fix = $spelling_fix{$typo};
 				if (!defined($typo_fix)) {
 					$typo_fix = "CHECKPATCH ERROR";
+					foreach my $suspect (keys %spelling_fix) {
+						if ($typo =~ /$suspect/) {
+							$typo_fix = $spelling_fix{$suspect};
+							last;
+						}
+					}
 				}
 				my $msg_level = \&WARN;
 				$msg_level = \&CHK if ($file);
@@ -3898,7 +3943,7 @@ sub process {
 				$msg_type = "";
 
 			# a Lustre message that contains embedded formatting
-			} elsif ($line =~ /^\+\s*(?:$logFunctions\s*\()?($String(?:DFID|DOSTID)$String\s*(?:|,|\)\s*;)?\s*)$/ &&
+			} elsif ($line =~ /^\+\s*(?:$logFunctions\s*\()?($String(?:DFID|DNAME|DOSTID)$String\s*(?:|,|\)\s*;)?\s*)$/ &&
 				 length(expand_tabs(substr($line, 1, length($line) - length($1) - 1))) <= $max_line_length) {
 				$msg_type = ""
 
