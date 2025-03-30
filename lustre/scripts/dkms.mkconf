@@ -92,7 +92,7 @@ elif [[ -f \$o2ib ]] ; then
    ext_mofed=yes
 else
    # could be either, ext_ofed will be preferred by default
-   if which ofed_info >/dev/null ; then
+   if command -v ofed_info >/dev/null ; then
       pkgs="mlnx-ofed-kernel-dkms|mlnx-ofed-kernel-modules|mlnx-ofa_kernel-devel"
       pkgs="\${pkgs}|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel"
       paths=\$(rpm -qa |
