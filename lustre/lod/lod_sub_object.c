@@ -99,19 +99,19 @@ struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 }
 
 /**
- * Declare sub-object creation.
+ * lod_sub_declare_create() - Declare sub-object creation.
+ * @env: execution environment
+ * @dt: the object being created
+ * @attr: the attributes of the object being created
+ * @hint: the hint of the creation
+ * @dof: the object format of the creation
+ * @th: the transaction handle
  *
  * Get transaction of next layer and declare the creation of the object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	the object being created
- * \param[in] attr	the attributes of the object being created
- * \param[in] hint	the hint of the creation
- * \param[in] dof	the object format of the creation
- * \param[th] th	the transaction handle
- *
- * \retval		0 if the declaration succeeds
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_create(const struct lu_env *env, struct dt_object *dt,
 			   struct lu_attr *attr,
@@ -133,20 +133,20 @@ int lod_sub_declare_create(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Create sub-object.
+ * lod_sub_create() - Create sub-object.
+ * @env: execution environment
+ * @dt: the object being created
+ * @attr: the attributes of the object being created
+ * @hint: the hint of the creation
+ * @dof: the object format of the creation
+ * @th: the transaction handle
  *
  * Get transaction of next layer, record updates if it belongs to cross-MDT
  * operation, and create the object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	the object being created
- * \param[in] attr	the attributes of the object being created
- * \param[in] hint	the hint of the creation
- * \param[in] dof	the object format of the creation
- * \param[th] th	the transaction handle
- *
- * \retval		0 if the creation succeeds
- * \retval		negative errno if the creation fails.
+ * Return:
+ * * %0 if the creation succeeds.
+ * * %negative errno if the creation fails.
  */
 int lod_sub_create(const struct lu_env *env, struct dt_object *dt,
 		   struct lu_attr *attr, struct dt_allocation_hint *hint,
@@ -175,16 +175,16 @@ int lod_sub_create(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare adding reference for the sub-object
+ * lod_sub_declare_ref_add() - Declare adding reference for the sub-object
+ * @env: execution environment
+ * @dt: dt object to add reference
+ * @th: transaction handle
  *
  * Get transaction of next layer and declare the reference adding.
  *
- * \param[in] env	execution environment
- * \param[in] dt	dt object to add reference
- * \param[in] th	transaction handle
- *
- * \retval		0 if the declaration succeeds.
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
 			    struct thandle *th)
@@ -207,17 +207,17 @@ int lod_sub_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Add reference for the sub-object
+ * lod_sub_ref_add() - Add reference for the sub-object
+ * @env: execution environment
+ * @dt: dt object to add reference
+ * @th: transaction handle
  *
  * Get transaction of next layer, record updates if it belongs to cross-MDT
  * operation and add reference of the object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	dt object to add reference
- * \param[in] th	transaction handle
- *
- * \retval		0 if it succeeds.
- * \retval		negative errno if it fails.
+ * Return:
+ * * %0 if it succeeds.
+ * * %negative errno if the addition fails.
  */
 int lod_sub_ref_add(const struct lu_env *env, struct dt_object *dt,
 		    struct thandle *th)
@@ -244,16 +244,16 @@ int lod_sub_ref_add(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare deleting reference for the sub-object
+ * lod_sub_declare_ref_del() - Declare deleting reference for the sub-object
+ * @env: execution environment
+ * @dt: dt object to delete reference
+ * @th: transaction handle
  *
  * Get transaction of next layer and declare the reference deleting.
  *
- * \param[in] env	execution environment
- * \param[in] dt	dt object to delete reference
- * \param[in] th	transaction handle
- *
- * \retval		0 if the declaration succeeds.
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_ref_del(const struct lu_env *env, struct dt_object *dt,
 			    struct thandle *th)
@@ -276,17 +276,17 @@ int lod_sub_declare_ref_del(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Delete reference for the sub-object
+ * lod_sub_ref_del() - Delete reference for the sub-object
+ * @env: execution environment
+ * @dt: dt object to delete reference
+ * @th: transaction handle
  *
  * Get transaction of next layer, record updates if it belongs to cross-MDT
  * operation and delete reference of the object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	dt object to delete reference
- * \param[in] th	transaction handle
- *
- * \retval		0 if it succeeds.
- * \retval		negative errno if it fails.
+ * Return:
+ * * %0 0 if it succeeds.
+ * * %negative errno if it fails.
  */
 int lod_sub_ref_del(const struct lu_env *env, struct dt_object *dt,
 		    struct thandle *th)
@@ -313,16 +313,16 @@ int lod_sub_ref_del(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare destroying sub-object
+ * lod_sub_declare_destroy() - Declare destroying sub-object
+ * @env: execution environment
+ * @dt: dt object to be destroyed
+ * @th: transaction handle
  *
  * Get transaction of next layer and declare the sub-object destroy.
  *
- * \param[in] env	execution environment
- * \param[in] dt	dt object to be destroyed
- * \param[in] th	transaction handle
- *
- * \retval		0 if the declaration succeeds.
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 			    struct thandle *th)
@@ -345,17 +345,17 @@ int lod_sub_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Destroy sub-object
+ * lod_sub_destroy() - Destroy sub-object
+ * @env: execution environment
+ * @dt: dt object to be destroyed
+ * @th: transaction handle
  *
  * Get transaction of next layer, record updates if it belongs to cross-MDT
  * operation and destroy the object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	dt object to be destroyed
- * \param[in] th	transaction handle
- *
- * \retval		0 if the destroy succeeds.
- * \retval		negative errno if the destroy fails.
+ * Return:
+ * * %0 if the destroy succeeds.
+ * * %negative errno if the destroy fails.
  */
 int lod_sub_destroy(const struct lu_env *env, struct dt_object *dt,
 		    struct thandle *th)
@@ -381,18 +381,18 @@ int lod_sub_destroy(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare sub-object index insert
+ * lod_sub_declare_insert() - Declare sub-object index insert
+ * @env: execution environment
+ * @dt: object for which to insert index
+ * @rec: record of the index which will be inserted
+ * @key: key of the index which will be inserted
+ * @th: the transaction handle
  *
  * Get transaction of next layer and declare index insert.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object for which to insert index
- * \param[in] rec	record of the index which will be inserted
- * \param[in] key	key of the index which will be inserted
- * \param[in] th	the transaction handle
- *
- * \retval		0 if the declaration succeeds.
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_insert(const struct lu_env *env, struct dt_object *dt,
 			   const struct dt_rec *rec,
@@ -413,19 +413,19 @@ int lod_sub_declare_insert(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Insert index of sub object
+ * lod_sub_insert() - Insert index of sub object
+ * @env: execution environment
+ * @dt: object for which to insert index
+ * @rec: record of the index to be inserted
+ * @key: key of the index to be inserted
+ * @th: the transaction handle
  *
  * Get transaction of next layer, record updates if it belongs to cross-MDT
  * operation, and insert the index.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object for which to insert index
- * \param[in] rec	record of the index to be inserted
- * \param[in] key	key of the index to be inserted
- * \param[in] th	the transaction handle
- *
- * \retval		0 if the insertion succeeds.
- * \retval		negative errno if the insertion fails.
+ * Return:
+ * * %0 if the insertion succeeds.
+ * * %negative errno if the insertion fails.
  */
 int lod_sub_insert(const struct lu_env *env, struct dt_object *dt,
 		   const struct dt_rec *rec, const struct dt_key *key,
@@ -450,17 +450,17 @@ int lod_sub_insert(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare sub-object index delete
+ * lod_sub_declare_delete() - Declare sub-object index delete
+ * @env: execution environment
+ * @dt: object for which to delete index
+ * @key: key of the index which will be deleted
+ * @th: the transaction handle
  *
  * Get transaction of next layer and declare index deletion.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object for which to delete index
- * \param[in] key	key of the index which will be deleted
- * \param[in] th	the transaction handle
- *
- * \retval		0 if the declaration succeeds.
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_delete(const struct lu_env *env, struct dt_object *dt,
 			   const struct dt_key *key, struct thandle *th)
@@ -480,18 +480,18 @@ int lod_sub_declare_delete(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Delete index of sub object
+ * lod_sub_delete() - Delete index of sub object
+ * @env: execution environment
+ * @dt: object for which to delete index
+ * @name: key name of the sub-object to be deleted
+ * @th: the transaction handle
  *
  * Get transaction of next layer, record updates if it belongs to cross-MDT
  * operation, and delete the index.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object for which to delete index
- * \param[in] key	key of the index to be deleted
- * \param[in] th	the transaction handle
- *
- * \retval		0 if the deletion succeeds.
- * \retval		negative errno if the deletion fails.
+ * Return:
+ * * %0 if the deletion succeeds.
+ * * %negative errno if the deletion fails.
  */
 int lod_sub_delete(const struct lu_env *env, struct dt_object *dt,
 		   const struct dt_key *name, struct thandle *th)
@@ -517,18 +517,19 @@ int lod_sub_delete(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare xattr_set
+ * lod_sub_declare_xattr_set() - Declare xattr_set
+ * @env: execution environment
+ * @dt: object on which to set xattr
+ * @buf: xattr to be set
+ * @name: name of the xattr
+ * @fl: flag for setting xattr
+ * @th: transaction handle
  *
  * Get transaction of next layer, and declare xattr set.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to set xattr
- * \param[in] buf	xattr to be set
- * \param[in] name	name of the xattr
- * \param[in] fl	flag for setting xattr
- *
- * \retval		0 if the declaration succeeds.
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			      const struct lu_buf *buf, const char *name,
@@ -554,20 +555,20 @@ int lod_sub_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Set xattr
+ * lod_sub_xattr_set() - Set xattr
+ * @env: execution environment
+ * @dt: object on which to set xattr
+ * @buf: xattr to be set
+ * @name: name of the xattr
+ * @fl: flag for setting xattr
+ * @th: transaction handle
  *
  * Get transaction of next layer, record updates if it belongs to cross-MDT
  * operation, and set xattr to the object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to set xattr
- * \param[in] buf	xattr to be set
- * \param[in] name	name of the xattr
- * \param[in] fl	flag for setting xattr
- * \param[in] th	transaction handle
- *
- * \retval		0 if the xattr setting succeeds.
- * \retval		negative errno if xattr setting fails.
+ * Return:
+ * * %0 if the xattr setting succeeds.
+ * * %negative errno if xattr setting fails.
  */
 int lod_sub_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		      const struct lu_buf *buf, const char *name, int fl,
@@ -596,17 +597,17 @@ int lod_sub_xattr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare attr_set
+ * lod_sub_declare_attr_set() - Declare attr_set
+ * @env: execution environment
+ * @dt: object on which to set attr
+ * @attr: attributes to be set
+ * @th: transaction handle
  *
  * Get transaction of next layer, and declare attr set.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to set attr
- * \param[in] attr	attributes to be set
- * \param[in] th	transaction handle
- *
- * \retval		0 if the declaration succeeds.
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 			     const struct lu_attr *attr, struct thandle *th)
@@ -630,18 +631,18 @@ int lod_sub_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * attributes set
+ * lod_sub_attr_set() - attributes set
+ * @env: execution environment
+ * @dt: object on which to set attr
+ * @attr: attrbutes to be set
+ * @th: transaction handle
  *
  * Get transaction of next layer, record updates if it belongs to cross-MDT
  * operation, and set attributes to the object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to set attr
- * \param[in] attr	attrbutes to be set
- * \param[in] th	transaction handle
- *
- * \retval		0 if attributes setting succeeds.
- * \retval		negative errno if the attributes setting fails.
+ * Return:
+ * * %0 if attributes setting succeeds.
+ * * %negative errno if the attributes setting fails.
  */
 int lod_sub_attr_set(const struct lu_env *env, struct dt_object *dt,
 		     const struct lu_attr *attr, struct thandle *th)
@@ -668,17 +669,17 @@ int lod_sub_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare xattr_del
+ * lod_sub_declare_xattr_del() - Declare xattr_del
+ * @env: execution environment
+ * @dt: object on which to delete xattr
+ * @name: name of the xattr to be deleted
+ * @th: transaction handle
  *
  * Get transaction of next layer, and declare xattr deletion.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to delete xattr
- * \param[in] name	name of the xattr to be deleted
- * \param[in] th	transaction handle
- *
- * \retval		0 if the declaration succeeds.
- * \retval		negative errno if the declaration fails.
+ * Return:
+ * * %0 if the declaration succeeds.
+ * * %negative errno if the declaration fails.
  */
 int lod_sub_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 			      const char *name, struct thandle *th)
@@ -703,18 +704,18 @@ int lod_sub_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * xattribute deletion
+ * lod_sub_xattr_del() - xattribute deletion
+ * @env: execution environment
+ * @dt: object on which to delete xattr
+ * @name: name of the xattr to be deleted
+ * @th: transaction handle
  *
  * Get transaction of next layer, record update if it belongs to cross-MDT
  * operation and delete xattr.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to delete xattr
- * \param[in] name	name of the xattr to be deleted
- * \param[in] th	transaction handle
- *
- * \retval		0 if the deletion succeeds.
- * \retval		negative errno if the deletion fails.
+ * Return:
+ * * %0 if the deletion succeeds.
+ * * %negative errno if the deletion fails.
  */
 int lod_sub_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		      const char *name, struct thandle *th)
@@ -741,18 +742,18 @@ int lod_sub_xattr_del(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare buffer write
+ * lod_sub_declare_write() - Declare buffer write
+ * @env: execution environment
+ * @dt: object to be written
+ * @buf: buffer to write which includes an embedded size field
+ * @pos: offet in the object to start writing at
+ * @th: transaction handle
  *
  * Get transaction of next layer and declare buffer write.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be written
- * \param[in] buf	buffer to write which includes an embedded size field
- * \param[in] pos	offet in the object to start writing at
- * \param[in] th	transaction handle
- *
- * \retval		0 if the insertion succeeds.
- * \retval		negative errno if the insertion fails.
+ * Return:
+ * * %0 if the insertion succeeds.
+ * * %negative errno if the insertion fails.
  */
 int lod_sub_declare_write(const struct lu_env *env, struct dt_object *dt,
 			  const struct lu_buf *buf, loff_t pos,
@@ -778,19 +779,19 @@ int lod_sub_declare_write(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Write buffer to sub object
+ * lod_sub_write() - Write buffer to sub object
+ * @env: execution environment
+ * @dt: object to be written
+ * @buf: buffer to write which includes an embedded size field
+ * @pos: offet in the object to start writing at
+ * @th: transaction handle
  *
  * Get transaction of next layer, records buffer write if it belongs to
  * Cross-MDT operation, and write buffer.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be written
- * \param[in] buf	buffer to write which includes an embedded size field
- * \param[in] pos	offet in the object to start writing at
- * \param[in] th	transaction handle
- *
- * \retval		the buffer size in bytes if it succeeds.
- * \retval		negative errno if it fails.
+ * Return:
+ * * %size in bytes(buffer) if it succeeds.
+ * * %negative errno if the insertion fails.
  */
 ssize_t lod_sub_write(const struct lu_env *env, struct dt_object *dt,
 		      const struct lu_buf *buf, loff_t *pos,
@@ -817,18 +818,18 @@ ssize_t lod_sub_write(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Declare punch
+ * lod_sub_declare_punch() - Declare punch
+ * @env: execution environment
+ * @dt: object to be written
+ * @start: start offset of punch
+ * @end: end offet of punch
+ * @th: transaction handle
  *
  * Get transaction of next layer and declare punch.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be written
- * \param[in] start	start offset of punch
- * \param[in] end	end offet of punch
- * \param[in] th	transaction handle
- *
- * \retval		0 if the insertion succeeds.
- * \retval		negative errno if the insertion fails.
+ * Return:
+ * * %0 if the insertion succeeds.
+ * * %negative errno if the insertion fails.
  */
 int lod_sub_declare_punch(const struct lu_env *env, struct dt_object *dt,
 			  __u64 start, __u64 end, struct thandle *th)
@@ -853,20 +854,19 @@ int lod_sub_declare_punch(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Punch to sub object
+ * lod_sub_punch() - Punch to sub object
+ * @env: execution environment
+ * @dt: object to be written
+ * @start: start offset of punch
+ * @end: end offset of punch
+ * @th: transaction handle
  *
  * Get transaction of next layer, records buffer write if it belongs to
  * Cross-MDT operation, and punch object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be written
- * \param[in] start	start offset of punch
- * \param[in] end	end offset of punch
- * \param[in] th	transaction handle
- * \param[in] capa	capability of the write
- *
- * \retval		the buffer size in bytes if it succeeds.
- * \retval		negative errno if it fails.
+ * Return:
+ * * %size in bytes(buffer) if it succeeds.
+ * * %negative errno if it fails.
  */
 int lod_sub_punch(const struct lu_env *env, struct dt_object *dt,
 		  __u64 start, __u64 end, struct thandle *th)
