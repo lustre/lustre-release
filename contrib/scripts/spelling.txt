@@ -3,7 +3,7 @@
 #
 ALWAYS_EXCEPT||always_except
 alloca||malloc
-cfs_get_random_bytes/get_random_bytes
+cfs_get_random_bytes||get_random_bytes
 cfs_hash_bd_t||struct cfs_hash_bd
 cfs_hash_bucket_t||struct cfs_hash_bucket
 cfs_hash_cond_arg_t||struct cfs_hash_cond_arg
@@ -36,24 +36,27 @@ ci_nob||ci_bytes
 CLASSERT||BUILD_BUG_ON()
 comma_list.*osts_nodes||osts_nodes
 comma_list.*mdts_nodes||mdts_nodes
+container_of0||container_of_safe
 crw_count||crw_bytes
 msecs_to_jiffies||cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
-define OBD_CONNECT||see "XXX README XXX" below and contact adilger@whamcloud.com
-__u[136][624] ocd_||see "XXX README XXX" below and contact adilger@whamcloud.com
+define OBD_CONNECT[A-Z0-9_]*||see 'XXX README XXX' below and contact adilger@whamcloud.com
+__u[136][624] ocd_[a-z0-9_]*||see 'XXX README XXX' below and contact adilger@whamcloud.com
 del_timer||timer_delete
 del_timer_sync||timer_delete_sync
 del_singleshot_timer_sync||timer_delete_sync
-EWOULDBLOCK||EAGAIN
-container_of0||container_of_safe
+\.\*s||DNAME
+d_name.name||encode_fn_xxx
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
 DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)
 ENOTSUPP||EOPNOTSUPP
 ERR_PTR.PTR_ERR||ERR_CAST
+EWOULDBLOCK||EAGAIN
 from_timer||cfs_from_timer
 ft_nob||ft_bytes
 f_dentry||f_path.dentry
 [^_]get_seconds||ktime_get_real_seconds
+HZ||cfs_time_seconds
 it_flags||it_open_flags
 kmem_cache_alloc.*GFP_ZERO||kmem_cache_zalloc
 LCK_MINMODE||LCK_MODE_MIN
@@ -203,6 +206,9 @@ ldlm_set_test_lock||deprecated, use LDLM_FL_TEST_LOCK directly
 ldlm_set_waited||deprecated, use LDLM_FL_WAITED directly
 ldlm_set_wait_noreproc||deprecated, use LDLM_FL_WAIT_NOREPROC directly
 ldlm_side_t||enum ldlm_side
+LDLM_LOCK_PUT||ldlm_lock_put
+LDLM_LOCK_RELEASE||ldlm_lock_put
+LDLM_LOCK_GET||ldlm_lock_get
 LDLM_TYPE_MAX||LDLM_TYPE_END
 ldlm_type_t||enum ldlm_type
 ldlm_wire_policy_data_t||union ldlm_wire_policy_data
@@ -222,7 +228,6 @@ lnet_ni_status_t||struct lnet_ni_status
 lnet_ping_info_t||struct lnet_ping_info
 lnet_process_id_packed_t||struct lnet_process_id_packed
 LOOKUP_CONTINUE||LOOKUP_PARENT
-HZ||cfs_time_seconds
 LPD64||%lld
 LPLD||%ld
 LPLU||%lu
@@ -232,18 +237,18 @@ LPPID||%d
 lprocfs_str_to_s64||kstrtoxxx_from_user
 lprocfs_str_with_units_to_u64||sysfs_memparse using sysfs/kernbuf
 lprocfs_str_with_units_to_s64||sysfs_memparse using sysfs/kernbuf
-lu_str_to_s64||sysfs_memparse
 LPROC_SEQ_FOPS||LUSTRE_RW_ATTR
 LPROC_SEQ_FOPS_RO_TYPE||LUSTRE_RO_ATTR
 LPROC_SEQ_FOPS_RO||LUSTRE_RO_ATTR
 LPROC_SEQ_FOPS_RW_TYPE||LUSTRE_RW_ATTR
 LPROC_SEQ_FOPS_WR_ONLY||LUSTRE_WO_ATTR
+lu_str_to_s64||sysfs_memparse
 l_wait_event||wait_event_idle
 l_wait_event_exclusive||l_wait_event_abortable_exclusive
 l_wait_event_exclusive_head||wait_event_idle_exclusive_lifo_timeout
 l_wait_condition||wait_event_idle
-\bMAX\(||max_t
-\bMIN\(||min_t
+MAX\(||max_t
+MIN\(||min_t
 mdo2fid||mdd_object_fid
 mktemp||mkstemp
 nla_strlcpy||nla_strscpy
@@ -272,6 +277,7 @@ PAGE_CACHE_MASK||PAGE_MASK
 page_cache_release||put_page
 PAGE_CACHE_SHIFT||PAGE_SHIFT
 PAGE_CACHE_SIZE||PAGE_SIZE
+PNAME||encode_fname_luname
 prandom_u32||get_random_u32
 prandom_u32_max||get_random_u32_below
 ptlrpc_req_finished||ptlrpc_req_put
@@ -290,9 +296,3 @@ version_code.*2.1[7-9]||version 2.16.x should be used
 vui_tot_count||vui_tot_bytes
 wait_queue_t||wait_queue_entry_t
 xa_insert||ll_xa_insert
-LDLM_LOCK_PUT||ldlm_lock_put
-LDLM_LOCK_RELEASE||ldlm_lock_put
-LDLM_LOCK_GET||ldlm_lock_get
-%.*s||DNAME
-d_name.name||encode_fn_xxx
-PNAME||encode_fname_luname
