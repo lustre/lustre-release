@@ -727,27 +727,30 @@ Lustre Jobstats</title>
       </para>
       <itemizedlist>
         <listitem>
-          <para><emphasis>%e</emphasis> print executable name</para>
+          <para><literal>%e</literal> Print executable name.</para>
         </listitem>
         <listitem>
-          <para><emphasis>%g</emphasis> print group ID number</para>
+          <para><literal>%g</literal> Print group ID number.</para>
         </listitem>
         <listitem>
-          <para><emphasis>%h</emphasis> print fully-qualified hostname</para>
+          <para><literal>%h</literal> Print fully-qualified hostname.</para>
         </listitem>
         <listitem>
-          <para><emphasis>%H</emphasis> print short hostname</para>
+          <para><literal>%H</literal> Print short hostname (preferred over <literal>%h</literal>).</para>
         </listitem>
         <listitem>
-          <para><emphasis>%j</emphasis> print JobID from the source named
-            by the <emphasis>jobid_var</emphasis> parameter
+          <para><literal>%j</literal> Print JobID from the environment
+            variable named by the <literal>jobid_var</literal> parameter.
+            If <literal>%j?</literal> is specified then conditionally
+            use the following format if <literal>jobid_var</literal>
+            is empty.
           </para>
         </listitem>
         <listitem>
-          <para><emphasis>%p</emphasis> print numeric process ID</para>
+          <para><literal>%p</literal> print numeric process ID</para>
         </listitem>
         <listitem>
-          <para><emphasis>%u</emphasis> print user ID number</para>
+          <para><literal>%u</literal> print user ID number</para>
         </listitem>
       </itemizedlist>
 
@@ -774,6 +777,19 @@ Lustre Jobstats</title>
       However, the actual JobID value is local to each process environment
       and it is possible for multiple jobs with different JobIDs to be
       active on a single client at one time.</para>
+
+      <para condition="l2G">In Lustre 2.16 and later, it is possible to
+      specify the <literal>%j?</literal> conditional format operator.
+      If <literal>jobid_var</literal> cannot be found in the environment
+      (e.g. process is run outside of the job scheduler), then the format
+      immediately following <literal>%j?</literal> is used
+      <emphasis>instead</emphasis> of <literal>%j</literal>.
+      This is useful on nodes that may have processes accessing the
+      filesystem outside of the batch-scheduled process group.
+      For example, <literal>%j?%H</literal> will resolve to only
+      <literal>jobid_var</literal> if it exists in the environment and
+      is not empty, otherwise it will resolve to the short hostname.
+      </para>
     </section>
 
     <section remap="h3">
