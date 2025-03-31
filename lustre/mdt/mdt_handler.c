@@ -7183,14 +7183,16 @@ static int mdt_connect_internal(const struct lu_env *env,
 		return -EBADE;
 	}
 
-	if (OCD_HAS_FLAG(data, PINGLESS)) {
-		if (ptlrpc_pinger_suppress_pings()) {
-			spin_lock(&exp->exp_lock);
-			exp->exp_not_timed = 1;
-			spin_unlock(&exp->exp_lock);
-		} else {
-			data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
-		}
+	if (OCD_HAS_FLAG(data, PINGLESS) && !ptlrpc_pinger_suppress_pings())
+		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
+
+	/* Because we do not want this export to be evicted by pinger,
+	 * let's not add this export to the timed chain list. */
+	if (!OCD_HAS_FLAG(data, PINGLESS) &&
+	    !(data->ocd_connect_flags & OBD_CONNECT_MDS_MDS)) {
+		spin_lock(&exp->exp_lock);
+		exp->exp_timed = 1;
+		spin_unlock(&exp->exp_lock);
 	}
 
 	data->ocd_max_easize = mdt->mdt_max_ea_size;
@@ -7476,14 +7478,6 @@ out:
 		*exp = NULL;
 	} else {
 		*exp = lexp;
-		/* Because we do not want this export to be evicted by pinger,
-		 * let's not add this export to the timed chain list.
-		 */
-		if (data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) {
-			spin_lock(&lexp->exp_lock);
-			lexp->exp_not_timed = 1;
-			spin_unlock(&lexp->exp_lock);
-		}
 	}
 
 	RETURN(rc);
@@ -7513,12 +7507,6 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 		mdt_export_stats_init(obd, exp, localdata);
 	else
 		nodemap_del_member(exp);
-
-	if (data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) {
-		spin_lock(&exp->exp_lock);
-		exp->exp_not_timed = 1;
-		spin_unlock(&exp->exp_lock);
-	}
 
 	RETURN(rc);
 }

@@ -683,7 +683,7 @@ struct obd_device {
 	struct obd_export       *obd_self_export;
 	struct obd_export	*obd_lwp_export;
 	/* list of exports in LRU order, for ping evictor, with obd_dev_lock */
-	struct list_head	obd_exports_timed;
+	struct rb_root		obd_exports_timed;
 	time64_t		obd_eviction_timer;	/* for ping evictor */
 
 	atomic_t                obd_max_recoverable_clients;

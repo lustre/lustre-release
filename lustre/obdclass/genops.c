@@ -378,7 +378,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 	newdev->obd_grant_check_threshold = 100;
 	INIT_LIST_HEAD(&newdev->obd_unlinked_exports);
 	INIT_LIST_HEAD(&newdev->obd_delayed_exports);
-	INIT_LIST_HEAD(&newdev->obd_exports_timed);
+	newdev->obd_exports_timed.rb_node = NULL;
 	INIT_LIST_HEAD(&newdev->obd_nid_stats);
 	spin_lock_init(&newdev->obd_nid_lock);
 	spin_lock_init(&newdev->obd_dev_lock);
@@ -982,7 +982,7 @@ static struct obd_export *__class_new_export(struct obd_device *obd,
 	spin_lock_init(&export->exp_bl_list_lock);
 	INIT_LIST_HEAD(&export->exp_bl_list);
 	INIT_LIST_HEAD(&export->exp_stale_list);
-	INIT_LIST_HEAD(&export->exp_obd_chain_timed);
+	INIT_LIST_HEAD(&export->exp_timed_chain);
 	INIT_WORK(&export->exp_zombie_work, obd_zombie_exp_cull);
 
 	export->exp_sp_peer = LUSTRE_SP_ANY;
@@ -1040,6 +1040,118 @@ struct obd_export *class_new_export_self(struct obd_device *obd,
 	return __class_new_export(obd, uuid, true);
 }
 
+struct rb_node_exp_deadline {
+	struct rb_node	  ned_node;
+	struct list_head  ned_head;
+	time64_t	  ned_deadline;
+};
+
+static inline bool ptlrpc_exp_deadline_less(struct rb_node *ln,
+					    const struct rb_node *rn)
+{
+	struct rb_node_exp_deadline *left, *right;
+
+	left = rb_entry(ln, struct rb_node_exp_deadline, ned_node);
+	right = rb_entry(rn, struct rb_node_exp_deadline, ned_node);
+
+	return left->ned_deadline < right->ned_deadline;
+}
+
+static inline int ptlrpc_exp_deadline_cmp(const void *key,
+					  const struct rb_node *node)
+{
+	struct rb_node_exp_deadline *ned;
+	time64_t *time = (time64_t *)key;
+
+	ned = rb_entry(node, struct rb_node_exp_deadline, ned_node);
+	return (*time < ned->ned_deadline ? -1 :
+		*time > ned->ned_deadline ?  1 : 0);
+}
+
+int obd_export_timed_init(struct obd_export *exp, void **data)
+
+{
+	OBD_ALLOC(*data, sizeof(struct rb_node_exp_deadline));
+	return data == NULL ? -ENOMEM : 0;
+}
+EXPORT_SYMBOL(obd_export_timed_init);
+
+void obd_export_timed_fini(struct obd_export *exp, void **data)
+{
+	if (*data) {
+		OBD_FREE(*data, sizeof(struct rb_node_exp_deadline));
+		*data = NULL;
+	}
+}
+EXPORT_SYMBOL(obd_export_timed_fini);
+
+void obd_export_timed_add(struct obd_export *exp, void **data)
+{
+	struct rb_node_exp_deadline *ned = *data;
+	struct rb_node *node;
+
+	node = rb_find(&exp->exp_deadline, &exp->exp_obd->obd_exports_timed,
+		       ptlrpc_exp_deadline_cmp);
+
+	if (node == NULL) {
+		LASSERT(ned != NULL);
+		INIT_LIST_HEAD(&ned->ned_head);
+		RB_CLEAR_NODE(&ned->ned_node);
+		ned->ned_deadline = exp->exp_deadline;
+		*data = NULL;
+
+		rb_add(&ned->ned_node, &exp->exp_obd->obd_exports_timed,
+		       ptlrpc_exp_deadline_less);
+	} else {
+		ned = rb_entry(node, struct rb_node_exp_deadline, ned_node);
+		LASSERT(!list_empty(&ned->ned_head));
+	}
+
+	list_add_tail(&exp->exp_timed_chain, &ned->ned_head);
+}
+EXPORT_SYMBOL(obd_export_timed_add);
+
+void obd_export_timed_del(struct obd_export *exp)
+{
+	struct rb_node_exp_deadline *ned;
+
+	if (list_empty(&exp->exp_timed_chain))
+		return;
+
+	ned = rb_entry(rb_find(&exp->exp_deadline,
+			       &exp->exp_obd->obd_exports_timed,
+			       ptlrpc_exp_deadline_cmp),
+		       struct rb_node_exp_deadline, ned_node);
+	LASSERT(!list_empty(&ned->ned_head));
+	LASSERT(ned->ned_deadline == exp->exp_deadline);
+	list_del_init(&exp->exp_timed_chain);
+
+	if (list_empty(&ned->ned_head)) {
+		rb_erase(&ned->ned_node, &exp->exp_obd->obd_exports_timed);
+		OBD_FREE_PTR(ned);
+	}
+}
+EXPORT_SYMBOL(obd_export_timed_del);
+
+struct obd_export *obd_export_timed_get(struct obd_device *obd, bool last)
+{
+	struct rb_node_exp_deadline *ned;
+	struct rb_node *node;
+
+	node = last ? rb_last(&obd->obd_exports_timed) :
+		rb_first(&obd->obd_exports_timed);
+
+	if (node == NULL)
+		return NULL;
+
+	ned = rb_entry(node, struct rb_node_exp_deadline, ned_node);
+	LASSERT(!list_empty(&ned->ned_head));
+
+	return list_first_entry(&ned->ned_head, struct obd_export,
+				exp_timed_chain);
+}
+EXPORT_SYMBOL(obd_export_timed_get);
+
 void class_unlink_export(struct obd_export *exp)
 {
 	class_handle_unhash(&exp->exp_handle);
@@ -1071,7 +1183,7 @@ void class_unlink_export(struct obd_export *exp)
 #endif /* HAVE_SERVER_SUPPORT */
 
 	list_move(&exp->exp_obd_chain, &exp->exp_obd->obd_unlinked_exports);
-	list_del_init(&exp->exp_obd_chain_timed);
+	obd_export_timed_del(exp);
 	exp->exp_obd->obd_num_exports--;
 	spin_unlock(&exp->exp_obd->obd_dev_lock);
 

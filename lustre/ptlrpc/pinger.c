@@ -445,7 +445,7 @@ static int ping_evictor_main(void *arg)
 {
 	struct obd_device *obd;
 	struct obd_export *exp;
-	time64_t expire_time;
+	time64_t current_time;
 	struct lu_env env;
 	int rc;
 
@@ -485,10 +485,9 @@ static int ping_evictor_main(void *arg)
 			CFS_FAIL_TIMEOUT(OBD_FAIL_OBD_PAUSE_EVICTOR,
 					 PING_INTERVAL + PING_EVICT_TIMEOUT);
 
-		expire_time = ktime_get_real_seconds() - PING_EVICT_TIMEOUT;
+		current_time = ktime_get_real_seconds();
 
-		CDEBUG(D_HA, "evicting all exports of obd %s older than %lld\n",
-		       obd->obd_name, expire_time);
+		CDEBUG(D_HA, "evicting all exports of obd %s\n", obd->obd_name);
 
 		/*
 		 * Exports can't be deleted out of the list while we hold
@@ -497,24 +496,21 @@ static int ping_evictor_main(void *arg)
 		 * removed from the list, we won't find them here.
 		 */
 		spin_lock(&obd->obd_dev_lock);
-		while (!list_empty(&obd->obd_exports_timed)) {
-			exp = list_first_entry(&obd->obd_exports_timed,
-					       struct obd_export,
-					       exp_obd_chain_timed);
-			if (expire_time > exp->exp_last_request_time) {
+		while((exp = obd_export_timed_get(obd, false))) {
+			if (current_time > exp->exp_deadline) {
 				struct obd_uuid *client_uuid;
 
 				class_export_get(exp);
 				client_uuid = &exp->exp_client_uuid;
 				spin_unlock(&obd->obd_dev_lock);
-				LCONSOLE_WARN("%s: haven't heard from client %s (at %s) in %lld seconds. I think it's dead, and I am evicting it. exp %p, cur %lld expire %lld last %lld\n",
+				LCONSOLE_WARN("%s: haven't heard from client %s (at %s) in %lld seconds. I think it's dead, and I am evicting it. exp %p, cur %lld deadline %lld last %lld\n",
 					      obd->obd_name,
 					      obd_uuid2str(client_uuid),
 					      obd_export_nid2str(exp),
 					      ktime_get_real_seconds() -
 					      exp->exp_last_request_time,
-					      exp, ktime_get_real_seconds(),
-					      expire_time,
+					      exp, current_time,
+					      exp->exp_deadline,
 					      exp->exp_last_request_time);
 				CDEBUG(D_HA, "Last request was at %lld\n",
 				       exp->exp_last_request_time);

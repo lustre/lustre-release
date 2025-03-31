@@ -1515,7 +1515,6 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 
 void ldlm_revoke_export_locks(struct obd_export *exp);
 timeout_t ldlm_bl_timeout(struct ldlm_lock *lock);
-timeout_t ldlm_bl_timeout_by_rpc(struct ptlrpc_request *req);
 #endif
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, timeout_t timeout);

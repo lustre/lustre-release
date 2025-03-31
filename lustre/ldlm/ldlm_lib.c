@@ -980,6 +980,7 @@ int rev_import_init(struct obd_export *export)
 {
 	struct obd_device *obd = export->exp_obd;
 	struct obd_import *revimp;
+	int rc = 0;
 
 	LASSERT(export->exp_imp_reverse == NULL);
 
@@ -997,13 +998,22 @@ int rev_import_init(struct obd_export *export)
 	spin_unlock(&export->exp_lock);
 	class_import_put(revimp);
 
-	if (!export->exp_not_timed) {
-		spin_lock(&obd->obd_dev_lock);
-		list_add_tail(&export->exp_obd_chain_timed,
-			      &obd->obd_exports_timed);
-		spin_unlock(&obd->obd_dev_lock);
+	if (export->exp_timed) {
+		void *data;
+
+		rc = obd_export_timed_init(export, &data);
+		if (rc == 0) {
+			spin_lock(&obd->obd_dev_lock);
+			/* At the beginning, there is no AT stats yet, use
+			 * previous approach for the ping evictor timeout */
+			export->exp_deadline =
+				PING_EVICT_TIMEOUT + ktime_get_real_seconds();
+			obd_export_timed_add(export, &data);
+			spin_unlock(&obd->obd_dev_lock);
+			obd_export_timed_fini(export, &data);
+		}
 	}
-	return 0;
+	return rc;
 }
 EXPORT_SYMBOL(rev_import_init);
 
@@ -1497,7 +1507,7 @@ dont_check_exports:
 			 * should be called to cleanup stuff
 			 */
 			spin_lock(&target->obd_dev_lock);
-			list_del_init(&export->exp_obd_chain_timed);
+			obd_export_timed_del(export);
 			spin_unlock(&target->obd_dev_lock);
 
 			class_export_get(export);
@@ -2430,29 +2440,8 @@ static void handle_recovery_req(struct ptlrpc_thread *thread,
 		 * Add request @timeout to the recovery time so next request from
 		 * this client may come in recovery time
 		 */
-		if (!obd_at_off(obd)) {
-			struct ptlrpc_service_part *svcpt;
-			timeout_t est_timeout;
-
-			svcpt = req->rq_rqbd->rqbd_svcpt;
-			/*
-			 * If the server sent early reply for this request,
-			 * the client will recalculate the timeout according to
-			 * current server estimate service time, so we will
-			 * use the maxium timeout here for waiting the client
-			 * sending the next req
-			 */
-			est_timeout = obd_at_get(obd, &svcpt->scp_at_estimate);
-			timeout = max_t(timeout_t, at_est2timeout(est_timeout),
-					lustre_msg_get_timeout(req->rq_reqmsg));
-			/*
-			 * Add 2 net_latency, one for balance rq_deadline
-			 * (see ptl_send_rpc), one for resend the req to server,
-			 * Note: client will pack net_latency in replay req
-			 * (see ptlrpc_replay_req)
-			 */
-			timeout += 2 * lustre_msg_get_service_timeout(req->rq_reqmsg);
-		}
+		if (!obd_at_off(obd))
+			timeout = ptlrpc_export_prolong_timeout(req, true);
 		extend_recovery_timer(class_exp2obd(req->rq_export), timeout,
 				      true);
 	}
@@ -2843,7 +2832,7 @@ static int target_recovery_thread(void *arg)
 		 * so we need refresh the last_request_time, to avoid the
 		 * export is being evicted
 		 */
-		ptlrpc_update_export_timer(req->rq_export, 0);
+		ptlrpc_update_export_timer(req);
 	}
 
 	/*

@@ -770,7 +770,7 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 	/* OK. this is a possible lock the user holds doing I/O
 	 * let's refresh eviction timer for it.
 	 */
-	timeout = ldlm_bl_timeout_by_rpc(arg->lpa_req);
+	timeout = ptlrpc_export_prolong_timeout(arg->lpa_req, false);
 	LDLM_DEBUG(lock, "refreshed to %ds. ", timeout);
 	ldlm_refresh_waiting_lock(lock, timeout);
 }

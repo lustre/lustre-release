@@ -235,14 +235,13 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 
 	data->ocd_version = LUSTRE_VERSION_CODE;
 
-	if (OCD_HAS_FLAG(data, PINGLESS)) {
-		if (ptlrpc_pinger_suppress_pings()) {
-			spin_lock(&exp->exp_lock);
-			exp->exp_not_timed = 1;
-			spin_unlock(&exp->exp_lock);
-		} else {
-			data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
-		}
+	if (OCD_HAS_FLAG(data, PINGLESS) && !ptlrpc_pinger_suppress_pings())
+		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
+
+	if (!OCD_HAS_FLAG(data, PINGLESS)) {
+		spin_lock(&exp->exp_lock);
+		exp->exp_timed = 1;
+		spin_unlock(&exp->exp_lock);
 	}
 
 	if (!ofd->ofd_lut.lut_dt_conf.ddp_has_lseek_data_hole)
