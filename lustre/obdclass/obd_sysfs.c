@@ -828,6 +828,8 @@ const char *encode_fn_len(const char *fname, size_t namelen)
 	CDEBUG(D_TRACE, "Process filename at %p\n", &fname);
 	if (!fname || !namelen || !obd_enable_fname_encoding)
 		return fname;
+	if (unlikely(namelen > NAME_MAX))
+		namelen = NAME_MAX;
 
 	hash = lustre_hash_fnv_1a_64(fname, namelen);
 	new_fn = fn_array[atomic_inc_return(&fn_index) & (FN_COUNT - 1)];
