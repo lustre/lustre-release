@@ -663,9 +663,9 @@ static int osc_io_setattr_start(const struct lu_env *env,
 
 			oa->o_size = io->u.ci_setattr.sa_falloc_offset;
 			oa->o_blocks = io->u.ci_setattr.sa_falloc_end;
-			oa->o_uid = io->u.ci_setattr.sa_falloc_uid;
-			oa->o_gid = io->u.ci_setattr.sa_falloc_gid;
-			oa->o_projid = io->u.ci_setattr.sa_falloc_projid;
+			oa->o_uid = io->u.ci_setattr.sa_attr_uid;
+			oa->o_gid = io->u.ci_setattr.sa_attr_gid;
+			oa->o_projid = io->u.ci_setattr.sa_attr_projid;
 			oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
 				OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID;
 
@@ -679,7 +679,12 @@ static int osc_io_setattr_start(const struct lu_env *env,
 		} else if (ia_avalid & ATTR_SIZE) {
 			oa->o_size = size;
 			oa->o_blocks = OBD_OBJECT_EOF;
-			oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+			oa->o_uid = io->u.ci_setattr.sa_attr_uid;
+			oa->o_gid = io->u.ci_setattr.sa_attr_gid;
+			oa->o_projid = io->u.ci_setattr.sa_attr_projid;
+			oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+				       OBD_MD_FLUID | OBD_MD_FLGID |
+				       OBD_MD_FLPROJID;
 			result = osc_punch_send(osc_export(cl2osc(obj)),
 						oa, osc_async_upcall, cbargs);
 		} else {

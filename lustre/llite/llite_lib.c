@@ -2448,7 +2448,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 					attr->ia_size = ref_attr.cat_size;
 				}
 			}
-			rc = cl_setattr_ost(lli->lli_clob, attr, xvalid, flags);
+			rc = cl_setattr_ost(inode, attr, xvalid, flags);
 		}
 	}
 
@@ -3256,7 +3256,6 @@ static int fileattr_set(struct inode *inode, int flags)
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data;
-	struct cl_object *obj;
 	struct fsxattr fa = { 0 };
 	struct iattr *attr;
 	int rc;
@@ -3286,15 +3285,14 @@ static int fileattr_set(struct inode *inode, int flags)
 
 	ll_update_inode_flags(inode, flags);
 
-	obj = ll_i2info(inode)->lli_clob;
-	if (obj == NULL)
+	if (!ll_i2info(inode)->lli_clob)
 		RETURN(0);
 
 	OBD_ALLOC_PTR(attr);
 	if (attr == NULL)
 		RETURN(-ENOMEM);
 
-	rc = cl_setattr_ost(obj, attr, OP_XVALID_FLAGS, flags);
+	rc = cl_setattr_ost(inode, attr, OP_XVALID_FLAGS, flags);
 
 	OBD_FREE_PTR(attr);
 	RETURN(rc);

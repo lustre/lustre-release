@@ -46,15 +46,18 @@ __u16 cl_inode_fini_refcheck;
  */
 static DEFINE_MUTEX(cl_inode_fini_guard);
 
-int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
+int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
 		   enum op_xvalid xvalid, unsigned int attr_flags)
 {
+	struct cl_object *obj;
 	struct lu_env *env;
-	struct cl_io  *io;
+	struct cl_io *io;
 	int result;
 	__u16 refcheck;
 
 	ENTRY;
+
+	obj = ll_i2info(inode)->lli_clob;
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
@@ -72,8 +75,14 @@ int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
 	io->u.ci_setattr.sa_avalid = attr->ia_valid;
 	io->u.ci_setattr.sa_xvalid = xvalid;
 	io->u.ci_setattr.sa_parent_fid = lu_object_fid(&obj->co_lu);
-	if (attr->ia_valid & ATTR_SIZE)
+	if (attr->ia_valid & ATTR_SIZE) {
 		io->u.ci_setattr.sa_subtype = CL_SETATTR_TRUNC;
+		io->u.ci_setattr.sa_attr_uid =
+			from_kuid(&init_user_ns, current_uid());
+		io->u.ci_setattr.sa_attr_gid =
+			from_kgid(&init_user_ns, current_gid());
+		io->u.ci_setattr.sa_attr_projid = ll_i2info(inode)->lli_projid;
+	}
 again:
 	if (attr->ia_valid & ATTR_FILE)
 		ll_io_set_mirror(io, attr->ia_file);

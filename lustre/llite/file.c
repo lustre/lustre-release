@@ -3096,8 +3096,8 @@ static ssize_t ll_lov_setstripe(struct inode *inode, struct file *file,
 		    ll_i2info(inode)->lli_clob) {
 			struct iattr attr = { 0 };
 
-			rc = cl_setattr_ost(ll_i2info(inode)->lli_clob, &attr,
-					    OP_XVALID_FLAGS, LUSTRE_ENCRYPT_FL);
+			rc = cl_setattr_ost(inode, &attr, OP_XVALID_FLAGS,
+					    LUSTRE_ENCRYPT_FL);
 		}
 	}
 	cl_lov_delay_create_clear(&file->f_flags);
@@ -4269,7 +4269,6 @@ int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 {
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data;
-	struct cl_object *obj;
 	int rc = 0;
 
 	CDEBUG(D_QUOTA, DFID" xflags=%x projid=%u\n",
@@ -4299,11 +4298,10 @@ int ll_set_project(struct inode *inode, __u32 xflags, __u32 projid)
 	if (xflags == 0 || xflags == FS_XFLAG_PROJINHERIT)
 		GOTO(out_fsxattr, rc);
 
-	obj = ll_i2info(inode)->lli_clob;
-	if (obj) {
+	if (ll_i2info(inode)->lli_clob) {
 		struct iattr attr = { 0 };
 
-		rc = cl_setattr_ost(obj, &attr, OP_XVALID_FLAGS, xflags);
+		rc = cl_setattr_ost(inode, &attr, OP_XVALID_FLAGS, xflags);
 	}
 
 out_fsxattr:
@@ -6492,9 +6490,9 @@ static int cl_falloc(struct file *file, struct inode *inode, int mode,
 	       from_kgid(&init_user_ns, inode->i_gid),
 	       ll_i2info(inode)->lli_projid);
 
-	io->u.ci_setattr.sa_falloc_uid = from_kuid(&init_user_ns, inode->i_uid);
-	io->u.ci_setattr.sa_falloc_gid = from_kgid(&init_user_ns, inode->i_gid);
-	io->u.ci_setattr.sa_falloc_projid = ll_i2info(inode)->lli_projid;
+	io->u.ci_setattr.sa_attr_uid = from_kuid(&init_user_ns, inode->i_uid);
+	io->u.ci_setattr.sa_attr_gid = from_kgid(&init_user_ns, inode->i_gid);
+	io->u.ci_setattr.sa_attr_projid = ll_i2info(inode)->lli_projid;
 
 	if (io->u.ci_setattr.sa_falloc_end > size) {
 		loff_t newsize = io->u.ci_setattr.sa_falloc_end;

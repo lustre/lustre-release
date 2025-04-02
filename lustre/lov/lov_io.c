@@ -715,12 +715,12 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 		if (cl_io_is_fallocate(io)) {
 			io->u.ci_setattr.sa_falloc_offset = start;
 			io->u.ci_setattr.sa_falloc_end = end;
-			io->u.ci_setattr.sa_falloc_uid =
-				parent->u.ci_setattr.sa_falloc_uid;
-			io->u.ci_setattr.sa_falloc_gid =
-				parent->u.ci_setattr.sa_falloc_gid;
-			io->u.ci_setattr.sa_falloc_projid =
-				parent->u.ci_setattr.sa_falloc_projid;
+			io->u.ci_setattr.sa_attr_uid =
+				parent->u.ci_setattr.sa_attr_uid;
+			io->u.ci_setattr.sa_attr_gid =
+				parent->u.ci_setattr.sa_attr_gid;
+			io->u.ci_setattr.sa_attr_projid =
+				parent->u.ci_setattr.sa_attr_projid;
 		}
 		if (cl_io_is_trunc(io)) {
 			loff_t new_size = parent->u.ci_setattr.sa_attr.lvb_size;
@@ -728,6 +728,12 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 			new_size = lov_size_to_stripe(lsm, index, new_size,
 						      stripe);
 			io->u.ci_setattr.sa_attr.lvb_size = new_size;
+			io->u.ci_setattr.sa_attr_uid =
+				parent->u.ci_setattr.sa_attr_uid;
+			io->u.ci_setattr.sa_attr_gid =
+				parent->u.ci_setattr.sa_attr_gid;
+			io->u.ci_setattr.sa_attr_projid =
+				parent->u.ci_setattr.sa_attr_projid;
 		}
 		lov_lsm2layout(lsm, lsm->lsm_entries[index],
 			       &io->u.ci_setattr.sa_layout);

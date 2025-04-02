@@ -2105,7 +2105,8 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 		GOTO(out, rc = PTR_ERR(fo));
 
 	la_from_obdo(&info->fti_attr, oa,
-		     OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
+		     OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME |
+			     OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID);
 	info->fti_attr.la_size = start;
 	info->fti_attr.la_valid |= LA_SIZE;
 

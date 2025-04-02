@@ -7705,6 +7705,72 @@ test_74() {
 }
 run_test 74 "Set nodemap deny_mount flag"
 
+check_ost_object_ids() {
+	local file=$1
+	local expected_uid=$2
+	local expected_gid=$3
+	local expected_projid=$4
+	local objdump=$DIR/$tdir/objdump
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	# Get the OST object path. We assume the file has one stripe on ost1
+	local fids=($($LFS getstripe $file | grep 0x))
+	local fid="${fids[3]}:${fids[2]}:0"
+	local objpath=$(ost_fid2_objpath ost1 $fid)
+
+	do_facet ost1 "$DEBUGFS -c -R 'stat $objpath' $(ostdevname 1)" | \
+		grep "Project" > $objdump
+	local obj_uid=$(awk '{print $2}' $objdump)
+	local obj_gid=$(awk '{print $4}' $objdump)
+	local obj_projid=$(awk '{print $6}' $objdump)
+	echo "OST object ids and size for file '$file': $(cat $objdump)"
+
+	[[ "$obj_uid" == "$expected_uid" ]] ||
+		error "uid is not set to expected value $expected_uid"
+	[[ "$obj_gid" == "$expected_gid" ]] ||
+		error "gid is not set to expected value $expected_gid"
+	[[ "$obj_projid" == "$expected_projid" ]] ||
+		error "projid is not set to expected value $expected_projid"
+}
+
+test_75() {
+	local tfile_write=$DIR/$tdir/${tfile}_write
+	local tfile_trunc=$DIR/$tdir/${tfile}_trunc
+	local testdir_projid=42
+
+	(( $OST1_VERSION >= $(version_code 2.16.53) &&
+		$CLIENT_VERSION >= $(version_code 2.16.53) )) ||
+		skip "Both client and OST need at least 2.16.53"
+
+	[[ "$ost1_FSTYPE" == ldiskfs ]] ||
+		skip "ldiskfs only test (using debugfs)"
+
+	# setup
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	$LFS project -s -p $testdir_projid $DIR/$tdir ||
+		error "lfs project failed"
+	chown $USER0 $DIR/$tdir || error "chown Failed"
+
+	# Sanity check IDs with OST_WRITE RPC
+	$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_write
+	$RUNAS_CMD -u $ID0 dd if=/dev/urandom of=$tfile_write bs=1M count=1 && \
+		sync
+
+	# OST_PUNCH RPC (via truncate) setting OST object IDs correctly
+	$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_trunc
+	$RUNAS_CMD -u $ID0 $TRUNCATE $tfile_trunc 1048576 && sync
+
+	# wait for asynchronous MDS-OST sync and force flush to OST
+	sync_all_data
+	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
+	do_facet ost1 "sync; sync"
+
+	check_ost_object_ids $tfile_write $ID0 $ID0 $testdir_projid
+	check_ost_object_ids $tfile_trunc $ID0 $ID0 $testdir_projid
+}
+run_test 75 "check uid/gid/projid are set on OST for OST_PUNCH RPC"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
