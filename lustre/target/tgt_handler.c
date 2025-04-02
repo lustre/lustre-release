@@ -1906,20 +1906,23 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 	return 0;
 }
 
-char dbgcksum_file_name[PATH_MAX];
-
 static void dump_all_bulk_pages(struct obdo *oa, int count,
 				struct niobuf_local *local_nb,
 				__u32 server_cksum, __u32 client_cksum)
 {
+	char *dbgcksum_file_name;
 	struct file *filp;
 	int rc, i;
 	unsigned int len;
 	char *buf;
 
+	OBD_ALLOC(dbgcksum_file_name, PATH_MAX);
+	if (!dbgcksum_file_name)
+		return;
+
 	/* will only keep dump of pages on first error for the same range in
 	 * file/fid, not during the resends/retries. */
-	snprintf(dbgcksum_file_name, sizeof(dbgcksum_file_name),
+	snprintf(dbgcksum_file_name, PATH_MAX,
 		 "%s-checksum_dump-ost-"DFID":[%llu-%llu]-%x-%x",
 		 (strncmp(libcfs_debug_file_path, "NONE", 4) != 0 ?
 		  libcfs_debug_file_path : LIBCFS_DEBUG_FILE_PATH_DEFAULT),
@@ -1941,6 +1944,7 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 		else
 			CERROR("%s: can't open to dump pages with checksum "
 			       "error: rc = %d\n", dbgcksum_file_name, rc);
+		OBD_FREE(dbgcksum_file_name, PATH_MAX);
 		return;
 	}
 
@@ -1966,6 +1970,7 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 	filp_close(filp, NULL);
 
 	libcfs_debug_dumplog();
+	OBD_FREE(dbgcksum_file_name, PATH_MAX);
 }
 
 static int check_read_checksum(struct niobuf_local *local_nb, int npages,

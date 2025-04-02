@@ -2019,21 +2019,24 @@ out:
 	RETURN(rc);
 }
 
-char dbgcksum_file_name[PATH_MAX];
-
 static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 				struct brw_page **pga, __u32 server_cksum,
 				__u32 client_cksum)
 {
+	char *dbgcksum_file_name;
 	struct file *filp;
 	unsigned int len;
 	int rc, i;
 	char *buf;
 
+	OBD_ALLOC(dbgcksum_file_name, PATH_MAX);
+	if (!dbgcksum_file_name)
+		return;
+
 	/* will only keep dump of pages on first error for the same range in
 	 * file/fid, not during the resends/retries.
 	 */
-	snprintf(dbgcksum_file_name, sizeof(dbgcksum_file_name),
+	snprintf(dbgcksum_file_name, PATH_MAX,
 		 "%s-checksum_dump-osc-"DFID":[%llu-%llu]-%x-%x",
 		 (strncmp(libcfs_debug_file_path, "NONE", 4) != 0 ?
 		  libcfs_debug_file_path : LIBCFS_DEBUG_FILE_PATH_DEFAULT),
@@ -2055,6 +2058,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 		else
 			CERROR("%s: can't open to dump pages with checksum error: rc = %d\n",
 			       dbgcksum_file_name, rc);
+		OBD_FREE(dbgcksum_file_name, PATH_MAX);
 		return;
 	}
 
@@ -2080,6 +2084,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 	filp_close(filp, NULL);
 
 	libcfs_debug_dumplog();
+	OBD_FREE(dbgcksum_file_name, PATH_MAX);
 }
 
 static int
