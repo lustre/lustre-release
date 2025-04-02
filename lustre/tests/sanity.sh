@@ -6965,15 +6965,16 @@ test_56ca() {
 	local o_idx=0 # Target OST which will be set to readonly
 	local ost_name=$(ostname_from_index $o_idx)
 
-	stack_trap "do_facet ost${o_idx} $LCTL set_param -n \
-		obdfilter.$ost_name.readonly=0"
-
 	# Force set OST0 as readonly
 	do_facet ost${o_idx} $LCTL set_param -n obdfilter.$ost_name.readonly=1
 
 	sleep_maxage # Give time for sync
 
 	local new_status=$(ost_dev_status $o_idx $MOUNT -v) # Get new stats
+
+	# revert to the normal state and wait for propagation
+	do_facet ost${o_idx} $LCTL set_param -n obdfilter.$ost_name.readonly=0
+	sleep_maxage
 
 	[[ "$new_status" =~ "R" ]] ||
 		error "$ost_name status is '$new_status', missing 'R'"
