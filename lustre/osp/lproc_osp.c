@@ -859,8 +859,8 @@ static ssize_t lfsck_max_rpcs_in_flight_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(lfsck_max_rpcs_in_flight);
 
-ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
-		  char *buffer)
+ssize_t osp_ping_show(struct kobject *kobj, struct attribute *attr,
+		      char *buffer)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
@@ -872,7 +872,7 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 
 	return rc;
 }
-LUSTRE_RO_ATTR(ping);
+LUSTRE_ATTR(ping, 0444, osp_ping_show, NULL);
 
 static ssize_t osp_conn_uuid_show(struct kobject *kobj, struct attribute *attr,
 				  char *buf)
