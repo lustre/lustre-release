@@ -4601,10 +4601,12 @@ run_test 402 "Destination net rule should not panic"
 test_410() {
 	reinit_dlc || return $?
 
-	do_lnetctl fault reset "" ||
-		return 0
+	$LCTL mark "$LNETCTL fault reset"
+	echo "$LNETCTL fault reset"
+	$LNETCTL fault reset '' &&
+		error "Command should fail"
 
-	error "Command should fail"
+	return 0
 }
 run_test 410 "No segfault in lnetctl fault command"
 
