@@ -13,4 +13,4 @@
 # ldlm is built into ptlrpc
 #
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+

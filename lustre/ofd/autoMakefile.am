@@ -15,4 +15,4 @@ if MODULES
 modulefs_DATA = ofd.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+

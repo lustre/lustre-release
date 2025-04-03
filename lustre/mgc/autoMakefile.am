@@ -15,4 +15,4 @@ if MODULES
 modulefs_DATA = mgc.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+

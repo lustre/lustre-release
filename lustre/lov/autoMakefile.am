@@ -15,4 +15,4 @@ if MODULES
 modulefs_DATA = lov.ko
 endif # MODULES
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+

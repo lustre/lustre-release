@@ -15,5 +15,4 @@ modulenet_DATA = kefalnd.ko
 endif
 endif
 
-MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
 EXTRA_DIST = $(kefalnd-objs:%.o=%.c) kcompat.h efalnd.h efalnd_proto.h

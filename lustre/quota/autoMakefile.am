@@ -17,4 +17,4 @@ modulefs_DATA = lquota.ko
 endif LINUX
 endif MODULES
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+

@@ -10,4 +10,4 @@ endif # MODULES
 
 EXTRA_DIST := $(ksocklnd-objs:%.o=%.c) socklnd.h
 
-MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+

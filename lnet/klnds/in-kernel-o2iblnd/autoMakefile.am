@@ -28,7 +28,7 @@ endif
 endif
 endif
 
-MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+
 EXTRA_DIST = $(in-kernel-ko2iblnd-objs:%.o=%.c) o2iblnd-idl.h o2iblnd.h
 
 if MODULES

@@ -14,4 +14,4 @@ modulefs_DATA = ptlrpc_gss.ko
 endif # MODULES
 
 EXTRA_DIST = *.c *.h
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+

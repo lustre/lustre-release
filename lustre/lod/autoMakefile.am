@@ -15,5 +15,5 @@ if MODULES
 modulefs_DATA = lod.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+
 EXTRA_DIST := $(lod-objs:%.o=%.c) lod_internal.h

@@ -735,9 +735,6 @@ LB_LUSTRE_LIBS_CONFIG_FILES
 
 AC_SUBST(ac_configure_args)
 
-MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.* Modules.symvers Module.symvers'
-AC_SUBST(MOSTLYCLEANFILES)
-
 LB_CONFIG_RPMBUILD_OPTIONS
 LB_CONFIG_CACHE_OPTIONS
 

@@ -13,4 +13,4 @@ if MODULES
 modulefs_DATA = mgs.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+

@@ -13,4 +13,4 @@ if MODULES
 modulefs_DATA = lustre.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+

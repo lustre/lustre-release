@@ -14,4 +14,4 @@ modulenet_DATA = kgnilnd.ko
 endif
 endif
 
-MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+

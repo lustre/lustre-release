@@ -8,5 +8,5 @@ if MODULES
 modulefs_DATA = lfsck.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+
 EXTRA_DIST := $(lfsck-objs:%.o=%.c) lfsck_internal.h

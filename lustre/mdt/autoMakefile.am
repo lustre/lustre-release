@@ -13,5 +13,5 @@ if MODULES
 modulefs_DATA = mdt.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+
 EXTRA_DIST := $(mdt-objs:%.o=%.c) mdt_internal.h

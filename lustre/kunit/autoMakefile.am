@@ -19,4 +19,4 @@ modulefs_DATA += llog_test.ko
 endif # SERVER
 endif # MODULES
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+

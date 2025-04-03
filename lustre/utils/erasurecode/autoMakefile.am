@@ -1,5 +1,3 @@
-MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
-
 lsrc         = ec_base.c ec_base_aliases.c
 
 libec_a_CPPFLAGS = -I . 

@@ -8,5 +8,4 @@ if MODULES
 modulefs_DATA = osd_wbcfs.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 EXTRA_DIST := $(osd_wbcfs-objs:%.o=%.c) osd_internal.h wbcfs.h index.h

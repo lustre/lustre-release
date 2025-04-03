@@ -17,5 +17,5 @@ modulefs_DATA = osd_zfs.ko
 endif
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+
 EXTRA_DIST := $(osd_zfs-objs:%.o=%.c) osd_internal.h

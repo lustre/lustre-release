@@ -15,5 +15,5 @@ modulenet_DATA = ko2iblnd.ko
 endif
 endif
 
-MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+
 EXTRA_DIST = $(ko2iblnd-objs:%.o=%.c) o2iblnd-idl.h o2iblnd.h

@@ -15,5 +15,5 @@ if MODULES
 modulefs_DATA = osp.ko
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+
 EXTRA_DIST := $(osp-objs:%.o=%.c) osp_internal.h

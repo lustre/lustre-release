@@ -14,4 +14,4 @@ modulefs_DATA = obdclass.ko
 endif # LINUX
 endif # MODULES
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+
