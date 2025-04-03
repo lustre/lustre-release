@@ -1695,7 +1695,6 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 	struct obd_export *doomed_exp;
 	int exports_evicted = 0;
 	struct lu_env *env = NULL, _env;
-	int rc;
 
 	libcfs_strnid(&nid_key, nid);
 
@@ -1705,19 +1704,21 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 	 */
 	if (obd->obd_stopping) {
 		spin_unlock(&obd->obd_dev_lock);
-		return exports_evicted;
+		return 0;
 	}
 	spin_unlock(&obd->obd_dev_lock);
 
 	/* can be called via procfs and from ptlrpc */
 	env = lu_env_find();
 	if (env == NULL) {
-		rc = lu_env_init(&_env, LCT_DT_THREAD | LCT_MD_THREAD);
+		int rc = lu_env_init(&_env, LCT_DT_THREAD | LCT_MD_THREAD);
+
 		if (rc)
 			return rc;
-		rc = lu_env_add(&_env);
-		LASSERT(rc == 0);
 		env = &_env;
+		rc = lu_env_add(env);
+		if (unlikely(rc))
+			GOTO(out_fini, exports_evicted = rc);
 	}
 
 	doomed_exp = NULL;
@@ -1738,15 +1739,17 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 		doomed_exp = NULL;
 	}
 
-	if (env == &_env) {
-		lu_env_remove(&_env);
-		lu_env_fini(&_env);
-	}
-
 	if (!exports_evicted)
 		CDEBUG(D_HA,
 		       "%s: can't disconnect NID '%s': no exports found\n",
 		       obd->obd_name, nid);
+
+	if (env == &_env) {
+		lu_env_remove(&_env);
+out_fini:
+		lu_env_fini(&_env);
+	}
+
 	return exports_evicted;
 }
 EXPORT_SYMBOL(obd_export_evict_by_nid);
@@ -1755,28 +1758,28 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 {
 	struct obd_export *doomed_exp = NULL;
 	struct obd_uuid doomed_uuid;
-	int exports_evicted = 0;
 	struct lu_env env;
-	int rc;
+	int rc = 0;
 
 	spin_lock(&obd->obd_dev_lock);
 	if (obd->obd_stopping) {
 		spin_unlock(&obd->obd_dev_lock);
-		return exports_evicted;
+		return 0;
 	}
 	spin_unlock(&obd->obd_dev_lock);
 
 	obd_str2uuid(&doomed_uuid, uuid);
 	if (obd_uuid_equals(&doomed_uuid, &obd->obd_uuid)) {
 		CERROR("%s: can't evict myself\n", obd->obd_name);
-		return exports_evicted;
+		return 0;
 	}
 
 	rc = lu_env_init(&env, LCT_DT_THREAD | LCT_MD_THREAD);
 	if (rc)
 		return rc;
 	rc = lu_env_add(&env);
-	LASSERT(rc == 0);
+	if (unlikely(rc))
+		goto out_fini;
 
 	doomed_exp = obd_uuid_lookup(obd, &doomed_uuid);
 
@@ -1789,13 +1792,14 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 		class_fail_export(doomed_exp);
 		class_export_put(doomed_exp);
 		obd_uuid_del(obd, doomed_exp);
-		exports_evicted++;
+		rc = 1;
 	}
 
 	lu_env_remove(&env);
+out_fini:
 	lu_env_fini(&env);
 
-	return exports_evicted;
+	return rc;
 }
 #endif /* HAVE_SERVER_SUPPORT */
 

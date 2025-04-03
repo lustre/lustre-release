@@ -160,6 +160,13 @@ static int expired_lock_main(void *arg)
 
 	ENTRY;
 
+	rc = lu_env_init(&env, LCT_DT_THREAD | LCT_MD_THREAD);
+	if (rc)
+		RETURN(rc);
+	rc = lu_env_add(&env);
+	if (unlikely(rc))
+		GOTO(out_fini, rc);
+
 	expired_lock_thread_state = ELT_READY;
 	wake_up(&expired_lock_wait_queue);
 
@@ -168,14 +175,12 @@ static int expired_lock_main(void *arg)
 				have_expired_locks() ||
 				expired_lock_thread_state == ELT_TERMINATE);
 
-		rc = lu_env_init(&env, LCT_DT_THREAD | LCT_MD_THREAD);
-		if (rc) {
-			CERROR("can't init env: rc=%d\n", rc);
+		rc = lu_env_refill(&env);
+		if (unlikely(rc)) {
+			CERROR("can't refill env context: rc=%d\n", rc);
 			schedule_timeout(HZ * 3);
 			continue;
 		}
-		rc = lu_env_add(&env);
-		LASSERT(rc == 0);
 
 		spin_lock_bh(&waiting_locks_spinlock);
 
@@ -266,9 +271,6 @@ static int expired_lock_main(void *arg)
 		}
 		spin_unlock_bh(&waiting_locks_spinlock);
 
-		lu_env_remove(&env);
-		lu_env_fini(&env);
-
 		if (do_dump) {
 			CERROR("dump the log upon eviction\n");
 			libcfs_debug_dumplog();
@@ -280,7 +282,13 @@ static int expired_lock_main(void *arg)
 
 	expired_lock_thread_state = ELT_STOPPED;
 	wake_up(&expired_lock_wait_queue);
-	RETURN(0);
+	rc = 0;
+
+	lu_env_remove(&env);
+out_fini:
+	lu_env_fini(&env);
+
+	RETURN(rc);
 }
 
 /**

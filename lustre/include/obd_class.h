@@ -614,9 +614,9 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
 static inline int obd_precleanup(struct obd_device *obd)
 {
-	int rc;
 	struct lu_device_type *ldt = obd->obd_type->typ_lu;
 	struct lu_device *d = obd->obd_lu_dev;
+	int rc = -ENOMEM;
 
 	ENTRY;
 
@@ -624,15 +624,14 @@ static inline int obd_precleanup(struct obd_device *obd)
 		struct lu_env *env = lu_env_find();
 		struct lu_env _env;
 
-		if (!env) {
+		if (!env && lu_env_init(&_env, ldt->ldt_ctx_tags) == 0) {
 			env = &_env;
-			rc = lu_env_init(env, ldt->ldt_ctx_tags);
-			LASSERT(rc == 0);
-			lu_env_add(env);
+			rc = lu_env_add(env);
 		}
 		ldt->ldt_ops->ldto_device_fini(env, d);
 		if (env == &_env) {
-			lu_env_remove(env);
+			if (rc == 0)
+				lu_env_remove(env);
 			lu_env_fini(env);
 		}
 	}

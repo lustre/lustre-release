@@ -877,7 +877,8 @@ static int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	if (rc)
 		RETURN(rc);
 	rc = lu_env_add(&env);
-	LASSERT(rc == 0);
+	if (unlikely(rc))
+		GOTO(out_fini, rc);
 
 	rc = -EINVAL;
 	switch (cmd) {
@@ -1018,6 +1019,7 @@ out_free:
 	}
 out:
 	lu_env_remove(&env);
+out_fini:
 	lu_env_fini(&env);
 	RETURN(rc);
 }

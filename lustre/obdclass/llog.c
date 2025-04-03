@@ -518,10 +518,10 @@ static int llog_process_thread(void *arg)
 		rc = lu_env_init(&_env, LCT_DT_THREAD | LCT_MD_THREAD);
 		if (rc)
 			RETURN(rc);
+		env = &_env;
 		rc = lu_env_add(&_env);
 		if (unlikely(rc))
-			RETURN(rc);
-		env = &_env;
+			GOTO(out_fini, rc);
 	}
 	lti = llog_info(env);
 
@@ -833,6 +833,7 @@ out:
 out_env:
 	if (env == &_env) {
 		lu_env_remove(&_env);
+out_fini:
 		lu_env_fini(&_env);
 	}
 

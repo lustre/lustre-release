@@ -450,6 +450,16 @@ static int ping_evictor_main(void *arg)
 	int rc;
 
 	ENTRY;
+
+	rc = lu_env_init(&env, LCT_DT_THREAD | LCT_MD_THREAD);
+	if (rc) {
+		CERROR("can't init env: rc=%d\n", rc);
+		RETURN(rc);
+	}
+	rc = lu_env_add(&env);
+	if (unlikely(rc))
+		GOTO(out_fini, rc);
+
 	unshare_fs_struct();
 	CDEBUG(D_HA, "Starting Ping Evictor\n");
 	pet_state = PET_READY;
@@ -462,14 +472,12 @@ static int ping_evictor_main(void *arg)
 		if ((pet_state == PET_TERMINATE) && list_empty(&pet_list))
 			break;
 
-		rc = lu_env_init(&env, LCT_DT_THREAD | LCT_MD_THREAD);
-		if (rc) {
-			CERROR("can't init env: rc=%d\n", rc);
+		rc = lu_env_refill(&env);
+		if (unlikely(rc)) {
+			CERROR("can't refill env context: rc=%d\n", rc);
 			schedule_timeout(HZ * 3);
 			continue;
 		}
-		rc = lu_env_add(&env);
-		LASSERT(rc == 0);
 
 		/*
 		 * we only get here if pet_exp != NULL, and the end of this
@@ -524,9 +532,6 @@ static int ping_evictor_main(void *arg)
 		}
 		spin_unlock(&obd->obd_dev_lock);
 
-		lu_env_remove(&env);
-		lu_env_fini(&env);
-
 		spin_lock(&pet_lock);
 		list_del_init(&obd->obd_evict_list);
 		spin_unlock(&pet_lock);
@@ -535,7 +540,11 @@ static int ping_evictor_main(void *arg)
 	}
 	CDEBUG(D_HA, "Exiting Ping Evictor\n");
 
-	RETURN(0);
+	lu_env_remove(&env);
+out_fini:
+	lu_env_fini(&env);
+
+	RETURN(rc);
 }
 
 void ping_evictor_start(void)
