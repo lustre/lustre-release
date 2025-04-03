@@ -2617,6 +2617,8 @@ static const struct lnet_lnd *lnet_load_lnd(u32 lnd_type)
 			CERROR("Can't load LND %s, module %s, rc=%d\n",
 			libcfs_lnd2str(lnd_type),
 			libcfs_lnd2modname(lnd_type), rc);
+			if (rc >= 0)
+				rc = -EINVAL;
 			lnd = ERR_PTR(rc);
 		}
 #else

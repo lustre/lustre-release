@@ -4211,6 +4211,34 @@ test_260() {
 }
 run_test 260 "test that linux sysctl parameter are set correctly"
 
+test_280() {
+	local rc=0
+
+	modinfo ksocklnd 2>/dev/null || rc=$?
+
+	((rc == 1)) || skip "Need request_module to fail"
+
+	local lnd=""
+
+	case $NETTYPE in
+		o2ib*) lnd=ko2iblnd;;
+		tcp*) lnd=ksocklnd;;
+		kfi*) lnd=kkfilnd;;
+		gni*) lnd=kgnilnd;;
+	esac
+
+	[[ -n $lnd ]] || skip "Unsupported NETTYPE $NETTYPE"
+
+	load_lnet || error "Failed to load lnet"
+
+	$LUSTRE_RMMOD $lnd || error "Failed to unload $lnd"
+
+	$LNETCTL lnet configure -a
+
+	$LUSTRE_RMMOD
+}
+run_test 280 "Don't panic when request_module fails"
+
 test_300() {
 	# LU-13274
 	local header
