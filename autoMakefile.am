@@ -201,6 +201,11 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	modules.order			\
 	config/lustre-version.m4
 
+# Find Lustre kernel modules
+modulefs_DATA = $(shell find lustre/ -name *.ko)
+modulefs_DATA += $(shell find ldiskfs/ -name *.ko)
+EXTRA_DIST += $(modulefs_DATA)
+
 # contrib is a directory.  Putting a directory in EXTRA_DIST
 # recursively includes the entire directory contents in the
 # distribution tarball (the tarball created with "make dist").
