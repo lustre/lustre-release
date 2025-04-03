@@ -1425,7 +1425,7 @@ kiblnd_resolve_addr(struct rdma_cm_id *cmid,
 	int rc;
 
 	if (!capable(CAP_NET_BIND_SERVICE)) {
-		new_creds = prepare_kernel_cred(NULL);
+		new_creds = prepare_kernel_cred(&init_task);
 		if (!new_creds)
 			return -ENOMEM;
 
