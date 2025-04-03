@@ -4096,8 +4096,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 			overstriped = true;
-			if (!migrate_mode)
-				lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
+			lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 			fallthrough;
 		case 'c':
 			errno = 0;

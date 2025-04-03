@@ -3731,6 +3731,35 @@ test_27W() {
 }
 run_test 27W "test enable_setstripe_gid"
 
+test_27X() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+
+	local file=$DIR/$tfile
+	local count
+	local overstripe_count=$((OSTCOUNT * 2))
+
+	# Create a small file
+	dd if=/dev/zero of=$file bs=1K count=1 || error "dd failed"
+
+	# Migrate with --overstripe-count=2*OSTCOUNT
+	$LFS migrate --overstripe-count=$overstripe_count $file ||
+		error "migrate failed"
+
+	# Check that the stripe count is 2*OSTCOUNT
+	count=$($LFS getstripe -c $file)
+	[ $count -eq $overstripe_count ] ||
+		error "stripe count is $count, expected $overstripe_count"
+
+	# Check that the file has the overstriping flag set
+	$LFS getstripe $file | grep -q "overstriped" ||
+		error "overstriping flag not set"
+
+	# Clean up
+	rm -f $file
+}
+run_test 27X "lfs migrate honors --overstripe-count option"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
