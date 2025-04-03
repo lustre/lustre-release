@@ -5,7 +5,7 @@
 #
 
 if MODULES
-modulefs_DATA = lfsck$(KMODEXT)
+modulefs_DATA = lfsck.ko
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

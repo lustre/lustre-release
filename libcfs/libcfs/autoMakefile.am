@@ -31,7 +31,7 @@ libcfs_la_CFLAGS := -fPIC
 if MODULES
 
 if LINUX
-modulenet_DATA := libcfs$(KMODEXT)
+modulenet_DATA := libcfs.ko
 endif # LINUX
 
 endif # MODULES

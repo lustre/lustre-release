@@ -4,9 +4,6 @@
 # Set things accordingly for a linux kernel
 #
 AC_DEFUN([LB_LINUX_VERSION], [
-KMODEXT=".ko"
-AC_SUBST(KMODEXT)
-
 makerule="$PWD/build"
 AC_CACHE_CHECK([for external module build target], lb_cv_module_target,
 [

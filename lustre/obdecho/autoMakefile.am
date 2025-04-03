@@ -14,7 +14,7 @@
 if MODULES
 
 if LINUX
-modulefs_DATA = obdecho$(KMODEXT)
+modulefs_DATA = obdecho.ko
 endif # LINUX
 
 endif # MODULES

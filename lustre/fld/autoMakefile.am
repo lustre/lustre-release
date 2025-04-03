@@ -10,7 +10,7 @@
 #
 
 if MODULES
-modulefs_DATA = fld$(KMODEXT)
+modulefs_DATA = fld.ko
 endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

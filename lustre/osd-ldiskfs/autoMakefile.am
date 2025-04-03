@@ -13,7 +13,7 @@
 
 if MODULES
 if LDISKFS_ENABLED
-modulefs_DATA = osd_ldiskfs$(KMODEXT)
+modulefs_DATA = osd_ldiskfs.ko
 endif
 endif
 

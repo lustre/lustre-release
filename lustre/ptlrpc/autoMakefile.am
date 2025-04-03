@@ -14,7 +14,7 @@
 if MODULES
 
 if LINUX
-modulefs_DATA = ptlrpc$(KMODEXT)
+modulefs_DATA = ptlrpc.ko
 endif # LINUX
 
 endif # MODULES

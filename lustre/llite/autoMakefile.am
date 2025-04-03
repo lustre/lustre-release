@@ -10,7 +10,7 @@
 #
 
 if MODULES
-modulefs_DATA = lustre$(KMODEXT)
+modulefs_DATA = lustre.ko
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

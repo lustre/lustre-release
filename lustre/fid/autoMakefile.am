@@ -12,7 +12,7 @@
 #
 
 if MODULES
-modulefs_DATA = fid$(KMODEXT)
+modulefs_DATA = fid.ko
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

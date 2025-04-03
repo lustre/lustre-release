@@ -4,9 +4,9 @@ if MODULES
 if LDISKFS_ENABLED
 all-local: sources
 
-modulefs_DATA = ldiskfs$(KMODEXT)
+modulefs_DATA = ldiskfs.ko
 
-ldiskfs$(KMODEXT): sources
+ldiskfs.ko: sources
 endif
 endif
 

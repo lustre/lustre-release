@@ -11,19 +11,19 @@
 
 if MODULES
 if BUILT_IN_KO2IBLND
-modulenet_DATA = in-kernel-ko2iblnd$(KMODEXT)
-ko2iblnd$(KMODEXT): sources
-in-kernel-ko2iblnd$(KMODEXT): ko2iblnd$(KMODEXT)
-	 cp -vf ko2iblnd$(KMODEXT) in-kernel-ko2iblnd$(KMODEXT)
+modulenet_DATA = in-kernel-ko2iblnd.ko
+ko2iblnd.ko: sources
+in-kernel-ko2iblnd.ko: ko2iblnd.ko
+	 cp -vf ko2iblnd.ko in-kernel-ko2iblnd.ko
 
 if EXTERNAL_KO2IBLND
 else
 install-exec-hook:
 	(cd "$(DESTDIR)$(modulenetdir)"; \
-	 $(LN_S) -f in-kernel-ko2iblnd$(KMODEXT) ko2iblnd$(KMODEXT))
+	 $(LN_S) -f in-kernel-ko2iblnd.ko ko2iblnd.ko)
 
 uninstall-hook:
-	(cd "$(DESTDIR)$(modulenetdir)"; rm -f ko2iblnd$(KMODEXT))
+	(cd "$(DESTDIR)$(modulenetdir)"; rm -f ko2iblnd.ko)
 endif
 endif
 endif
@@ -33,11 +33,11 @@ EXTRA_DIST = $(in-kernel-ko2iblnd-objs:%.o=%.c) o2iblnd-idl.h o2iblnd.h
 
 if MODULES
 if BUILT_IN_KO2IBLND
-all-local: $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources) in-kernel-ko2iblnd$(KMODEXT)
+all-local: $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources) in-kernel-ko2iblnd.ko
 endif
 endif
 
 CLEANFILES = $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)
 
 clean-local:
-	rm -rf $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources) ko2iblnd$(KMODEXT) in-kernel-ko2iblnd$(KMODEXT)
+	rm -rf $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources) ko2iblnd.ko in-kernel-ko2iblnd.ko

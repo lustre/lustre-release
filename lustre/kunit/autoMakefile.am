@@ -9,11 +9,11 @@
 #
 
 if MODULES
-modulefs_DATA = kinode$(KMODEXT)
-modulefs_DATA += obd_test$(KMODEXT)
+modulefs_DATA = kinode.ko
+modulefs_DATA += obd_test.ko
 if SERVER
-modulefs_DATA += ldlm_extent$(KMODEXT)
-modulefs_DATA += llog_test$(KMODEXT)
+modulefs_DATA += ldlm_extent.ko
+modulefs_DATA += llog_test.ko
 endif # SERVER
 endif # MODULES
 

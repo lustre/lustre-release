@@ -13,7 +13,7 @@
 
 if MODULES
 if ZFS_ENABLED
-modulefs_DATA = osd_zfs$(KMODEXT)
+modulefs_DATA = osd_zfs.ko
 endif
 endif
 

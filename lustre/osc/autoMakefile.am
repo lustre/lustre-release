@@ -14,7 +14,7 @@
 if MODULES
 
 if LINUX
-modulefs_DATA = osc$(KMODEXT)
+modulefs_DATA = osc.ko
 endif # LINUX
 
 endif # MODULES

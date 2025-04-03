@@ -10,7 +10,7 @@
 #
 
 if MODULES
-modulefs_DATA = mdc$(KMODEXT)
+modulefs_DATA = mdc.ko
 endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

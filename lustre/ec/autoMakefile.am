@@ -30,7 +30,7 @@
 #
 
 if MODULES
-modulefs_DATA = ec$(KMODEXT)
+modulefs_DATA = ec.ko
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

@@ -6,7 +6,7 @@
 
 if MODULES
 if BUILD_KFILND
-modulenet_DATA := kkfilnd$(KMODEXT)
+modulenet_DATA := kkfilnd.ko
 endif # BUILD_KFILND
 endif # MODULES
 

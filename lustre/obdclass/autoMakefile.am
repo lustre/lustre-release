@@ -10,7 +10,7 @@
 
 if MODULES
 if LINUX
-modulefs_DATA = obdclass$(KMODEXT)
+modulefs_DATA = obdclass.ko
 endif # LINUX
 endif # MODULES
 

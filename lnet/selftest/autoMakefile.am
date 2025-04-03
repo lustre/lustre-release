@@ -7,7 +7,7 @@
 if MODULES
 
 if LINUX
-modulenet_DATA = lnet_selftest$(KMODEXT)
+modulenet_DATA = lnet_selftest.ko
 endif # LINUX
 
 endif # MODULES

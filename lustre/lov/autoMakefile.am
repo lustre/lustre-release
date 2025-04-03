@@ -12,7 +12,7 @@
 #
 
 if MODULES
-modulefs_DATA = lov$(KMODEXT)
+modulefs_DATA = lov.ko
 endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

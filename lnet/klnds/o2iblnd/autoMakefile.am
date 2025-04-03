@@ -11,7 +11,7 @@
 
 if MODULES
 if EXTERNAL_KO2IBLND
-modulenet_DATA = ko2iblnd$(KMODEXT)
+modulenet_DATA = ko2iblnd.ko
 endif
 endif
 

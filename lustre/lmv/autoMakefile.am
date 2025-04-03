@@ -12,7 +12,7 @@
 #
 
 if MODULES
-modulefs_DATA = lmv$(KMODEXT)
+modulefs_DATA = lmv.ko
 endif # MODULES
 
 EXTRA_DIST = $(lmv-objs:.o=.c) lmv_internal.h

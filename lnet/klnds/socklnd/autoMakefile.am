@@ -5,7 +5,7 @@
 #
 
 if MODULES
-modulenet_DATA := ksocklnd$(KMODEXT)
+modulenet_DATA := ksocklnd.ko
 endif # MODULES
 
 EXTRA_DIST := $(ksocklnd-objs:%.o=%.c) socklnd.h

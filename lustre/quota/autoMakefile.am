@@ -12,7 +12,7 @@
 if MODULES
 if LINUX
 
-modulefs_DATA = lquota$(KMODEXT)
+modulefs_DATA = lquota.ko
 
 endif LINUX
 endif MODULES

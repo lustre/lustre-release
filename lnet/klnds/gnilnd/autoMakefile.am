@@ -10,7 +10,7 @@
 
 if MODULES
 if BUILD_GNILND
-modulenet_DATA = kgnilnd$(KMODEXT)
+modulenet_DATA = kgnilnd.ko
 endif
 endif
 
