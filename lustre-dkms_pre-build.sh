@@ -80,8 +80,10 @@ case $1 in
 	;;
 esac
 
-PACKAGE_CONFIG="/etc/sysconfig/lustre"
+PACKAGE_CONFIG="/etc/sysconfig/dkms-lustre"
+PACKAGE_CONFIG_FALLBACK="/etc/sysconfig/lustre"
 DKMS_CONFIG_OPTS=$(
+    [[ -r ${PACKAGE_CONFIG} ]] || PACKAGE_CONFIG=${PACKAGE_CONFIG_FALLBACK}
     [[ -r ${PACKAGE_CONFIG} ]] \
     && source ${PACKAGE_CONFIG} \
     && shopt -q -s extglob \

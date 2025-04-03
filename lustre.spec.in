@@ -898,6 +898,7 @@ echo '%{_unitdir}/lnet.service' >>lustre.files
 echo '%{_unitdir}/lsvcgss.service' >>lustre.files
 %endif
 
+# vendor is redhat
 %if "%{_vendor}" == "redhat" || 0%{?openEuler}
 # The following scripts are Red Hat specific
 %if %{with servers}
@@ -913,6 +914,8 @@ echo '%config(noreplace) %{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
 echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
 %endif
 %endif
+# End: vendor is redhat
+
 %if %{with gss_keyring}
 echo '%config(noreplace) %{_sysconfdir}/request-key.d/lgssc.conf' >>lustre.files
 %endif
@@ -1004,6 +1007,7 @@ echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 
 %files -f lustre.files
 %defattr(-,root,root)
+%exclude %{_sysconfdir}/sysconfig/dkms-lustre
 %{_sbindir}/*
 %if %{with lustre_tests}
 %exclude %{_sbindir}/wirecheck

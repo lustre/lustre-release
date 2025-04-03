@@ -17,20 +17,34 @@
 #
 
 PACKAGE_NAME="lustre-client-modules"
-PACKAGE_CONFIG="/etc/sysconfig/lustre"
+PACKAGE_CONFIG="/etc/sysconfig/dkms-lustre"
+PACKAGE_CONFIG_FALLBACK="/etc/sysconfig/lustre"
 PACKAGE_VERSION="@UPVERSION@"
 
+no_weak_modules=yes
+strip_default=no
 OPTS=""
 if [[ "x${PACKAGE_NAME}" = "xlustre-client-modules" ]] ; then
     OPTS="${OPTS} --disable-server --disable-quilt"
 fi
+[[ -f /usr/src/kfabric/default/Module.symvers ]] &&
+    OPTS="${OPTS} --with-kfi=/usr/src/kfabric/default"
+[[ -d /usr/src/ofa_kernel/default ]] &&
+    OPTS="${OPTS} --with-o2ib=/usr/src/ofa_kernel/default"
 OPTS="${OPTS} --disable-dependency-tracking --disable-doc"
 OPTS="${OPTS} --disable-utils --disable-iokit --disable-tests"
 OPTS="${OPTS} --enable-quota --with-kmp-moddir=updates"
 
+[[ -r ${PACKAGE_CONFIG} ]] || PACKAGE_CONFIG=${PACKAGE_CONFIG_FALLBACK}
 if [[ -r ${PACKAGE_CONFIG} ]] ; then
    source ${PACKAGE_CONFIG}
    shopt -q -s extglob
+   if [[ -n \${LUSTRE_DKMS_DISABLE_STRIP} ]] ; then
+        [[ \${LUSTRE_DKMS_DISABLE_STRIP,,} == @(y|yes) ]] && strip_default=no
+   fi
+   if [[ -n \${LUSTRE_DKMS_ENABLE_STRIP} ]] ; then
+        [[ \${LUSTRE_DKMS_ENABLE_STRIP,,} == @(y|yes) ]] && strip_default=yes
+   fi
    if [[ -n ${LUSTRE_DKMS_DISABLE_CDEBUG} ]] ; then
       [[ ${LUSTRE_DKMS_DISABLE_CDEBUG,,} == @(y|yes) ]] &&
          OPTS="${OPTS} --disable-libcfs-cdebug" ||
@@ -61,6 +75,10 @@ if [[ -r ${PACKAGE_CONFIG} ]] ; then
    fi
    [[ -n ${LUSTRE_DKMS_CONFIGURE_EXTRA} ]] &&
        OPTS="${OPTS} ${LUSTRE_DKMS_CONFIGURE_EXTRA}"
+   if [[ -n ${LUSTRE_DKMS_WEAK_MODULES} ]] ; then
+      [[ ${LUSTRE_DKMS_WEAK_MODULES,,} == @(y|yes) ]] &&
+         no_weak_modules="no"
+   fi
 fi
 echo "${OPTS} " | grep -E -q -- '--disable-gss[^-]|--enable-gss[^-]' ||
   dpkg -l | grep libkrb5-dev | grep -q ^ii &&
@@ -75,7 +93,7 @@ CONFIGURE="${CONFIGURE} --with-linux-obj=$kernel_source_dir ${OPTS}"
 MAKE="${AUTOGEN} && ${CONFIGURE} && make -j `nproc`"
 CLEAN="make distclean || true"
 
-NO_WEAK_MODULES="yes"
+NO_WEAK_MODULES="$no_weak_modules"
 AUTOINSTALL="yes"
 STRIP="no"
 
@@ -121,7 +139,7 @@ int_mofed=no
 o2ib=$(echo ${OPTS} | tr ' ' '\\n' | grep -- '--with-o2ib=' | cut -c 13-)
 if [[ "x$o2ib" = "xno" ]] ; then
    can_o2ib_in_kernel=no
-elif [[ -f $o2ib ]] ; then
+elif [[ -d $o2ib ]] ; then
    # User specified path, if the build completes it will be ext_ofed
    can_o2ib_mofed=yes
    ext_mofed=yes

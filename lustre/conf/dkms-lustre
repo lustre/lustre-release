@@ -1,0 +1,49 @@
+
+## DKMS ##
+
+# Options specific to DKMS configure and install:
+
+# Installation options
+
+#LUSTRE_DKMS_WEAK_MODULES=no
+# default is to not use weak-modules
+# specify yes here invoke weak-modules support
+
+#LUSTRE_DKMS_DISABLE_STRIP=y
+#LUSTRE_DKMS_ENABLE_STRIP=n
+# if kernel modules are to be stripped of debugging information
+# unset: default is not strip kernel objects
+
+# Configuration options
+
+#LUSTRE_DKMS_DISABLE_CDEBUG=yes
+# yes: configure with --disable-libcfs-cdebug
+# no: configure with --enable-libcfs-cdebug
+# unset: use configure default
+
+#LUSTRE_DKMS_DISABLE_TRACE=y
+# yes: configure with --disable-libcfs-trace
+# no: configure with --enable-libcfs-trace
+# unset: use configure default
+
+#LUSTRE_DKMS_DISABLE_ASSERT=y
+# yes: configure with --disable-libcfs-assert
+# no: configure with --enable-libcfs-assert
+# unset: use configure default
+
+#LUSTRE_DKMS_ENABLE_GSS=y
+# yes: configure with --enable-gss
+# unset:
+#   if krb5-devel or libkb5-dev package installed configure with --enable-gss
+#   otherwise use configure default
+
+#LUSTRE_DKMS_ENABLE_GSS_KEYRING=y
+# yes: configure with --enable-gss-keyring
+# unset: use configure default
+
+#LUSTRE_DKMS_ENABLE_CRYPTO=y
+# yes: configure with --enable-crypto
+# unset, or no: configure with --disable-crypto
+
+#LUSTRE_DKMS_CONFIGURE_EXTRA='--enable-cache'
+# adds any user specified arguments to configure

@@ -155,6 +155,8 @@ the repository with other debuginfo rpms.
 if [ "$RPM_BUILD_ROOT" != "/" ]; then
     rm -rf $RPM_BUILD_ROOT
 fi
+mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig
+cp lustre/conf/dkms-lustre $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig
 mkdir -p $RPM_BUILD_ROOT/usr/src/
 cp -rfp ${RPM_BUILD_DIR}/@PACKAGE@-%{version} $RPM_BUILD_ROOT/usr/src/
 mv $RPM_BUILD_ROOT/usr/src/@PACKAGE@-%{version} $RPM_BUILD_ROOT/usr/src/%{module}-%{version}
@@ -167,6 +169,7 @@ fi
 %files
 %defattr(-,root,root)
 /usr/src/%{module}-%{version}
+%config(noreplace) %{_sysconfdir}/sysconfig/dkms-lustre
 
 %post
 dkms add -m %{module} -v %{version} %{!?not_rpm:--rpm_safe_upgrade} ||:
