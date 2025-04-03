@@ -181,6 +181,8 @@ dist-hook: undef.h
 		-exec cp --parents {} $(distdir) \;
 	find lustre_compat/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
 		-exec cp --parents {} $(distdir) \;
+	find lustre/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
+		-exec cp --parents {} $(distdir) \;
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
 			-name .svn -o \

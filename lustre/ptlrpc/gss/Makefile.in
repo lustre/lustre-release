@@ -14,6 +14,8 @@ ptlrpc_gss-objs := sec_gss.o gss_bulk.o gss_cli_upcall.o gss_svc_upcall.o      \
 @GSS_SSK_TRUE@ptlrpc_gss-objs += gss_sk_mech.o
 @GSS_KEYRING_TRUE@ptlrpc_gss-objs += gss_keyring.o
 
+EXTRA_DIST = *.c *.h
+
 default: all
 
 @INCLUDE_RULES@

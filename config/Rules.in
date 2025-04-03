@@ -12,13 +12,6 @@ ifeq ($(PATCHLEVEL),)
 
 include autoMakefile
 
-fix-kext-ownership:
-	@if test -d $(DESTDIR)$(kextdir) ; then \
-		echo chown -R root:wheel $(DESTDIR)$(kextdir) ; \
-		chown -R root:wheel $(DESTDIR)$(kextdir) || \
-			echo >&2 "*** WARNING: Could not fix kext ownership for $(DESTDIR)$(kextdir)" ; \
-	fi
-
 else
 
 include @LINUX_CONFIG@

@@ -17,4 +17,6 @@ EXTRA_PRE_CFLAGS += -I@ZFS@/include/os/linux/spl -I@ZFS@/include/os/linux/zfs
 EXTRA_PRE_CFLAGS += -I@ZFS@ -I@ZFS@/include
 @SPL_ENABLED_FALSE@EXTRA_PRE_CFLAGS += -I@ZFS@/include/spl
 
+EXTRA_DIST := $(osd_zfs-objs:%.o=%.c) osd_internal.h
+
 @INCLUDE_RULES@

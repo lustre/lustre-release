@@ -12,4 +12,7 @@ osd_ldiskfs-objs = osd_handler.o osd_oi.o osd_lproc.o osd_iam.o \
 
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@abs_top_builddir@ -I@abs_top_builddir@/ldiskfs
 
+EXTRA_DIST := $(osd_ldiskfs-objs:%.o=%.c) osd_internal.h osd_oi.h \
+	      osd_iam.h osd_dynlocks.h osd_scrub.h osd_quota_fmt.h
+
 @INCLUDE_RULES@

@@ -26,6 +26,5 @@ AC_CONFIG_FILES([
 lustre/utils/erasurecode/Makefile
 lustre/utils/erasurecode/autoMakefile
 lustre/ec/Makefile
-lustre/ec/autoMakefile
 ])
 ]) # EC_CONFIG_FILES

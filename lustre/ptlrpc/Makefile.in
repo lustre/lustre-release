@@ -34,8 +34,6 @@ ptlrpc-objs += $(patsubst %,$(LDLM)%,$(ldlm_objs))
 
 @GSS_TRUE@obj-m += gss/
 
-default: all
-
 EXTRA_DIST := $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
 EXTRA_DIST += $(nodemap_objs:.o=.c) nodemap_internal.h heap.h
 EXTRA_DIST += $(nrs_server_objs:.o=.c)

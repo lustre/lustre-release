@@ -7,4 +7,6 @@
 MODULES := lmv
 lmv-objs := lmv_obd.o lmv_intent.o lmv_fld.o lproc_lmv.o
 
+EXTRA_DIST = $(lmv-objs:.o=.c) lmv_internal.h
+
 @INCLUDE_RULES@

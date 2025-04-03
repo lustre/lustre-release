@@ -16,4 +16,7 @@ mdd-objs := \
 	mdd_orphans.o \
 	mdd_permission.o \
 	mdd_trans.o
+
+EXTRA_DIST := $(mdd-objs:%.o=%.c) mdd_internal.h
+
 @INCLUDE_RULES@
