@@ -6792,6 +6792,25 @@ test_73b() {
 }
 run_test 73b "Large failnode NID list in mountdata"
 
+test_73d() { #LU-18896
+	(( $OST1_VERSION >= $(version_code 2.16.53) )) ||
+		skip "need OST >= 2.16.53 for LU-18896 fix"
+	[[ "$ost1_FSTYPE" == zfs ]] && import_zpool ost1
+
+	local ostdev=$(ostdevname 1)
+
+	# add bogus param to mountdata
+	do_facet ost1 "$TUNEFS --erase-params \
+		--param=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=1 $ostdev"
+	do_facet ost1 "$TUNEFS --erase-params --mgsnode=10.23.7.1@tcp \
+		--mgsnode=10.23.7.2@tcp $ostdev"
+	bad=$(do_facet ost1 "$TUNEFS --erase-params" $ostdev | grep -c "xx=1")
+	reformat
+
+	(( bad == 0 )) || error "garbage in params"
+}
+run_test 73d "erase + new parameter doesn't corrupt mountdata"
+
 # LU-15246
 test_74() {
 	(( $MDS1_VERSION >= $(version_code 2.15.57.16) )) ||

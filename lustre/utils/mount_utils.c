@@ -143,7 +143,7 @@ int add_param(char *buf, char *key, char *val)
 
 int append_param(char *buf, char *key, char *val, char sep)
 {
-	char *ptr = NULL, *next, *cur;
+	char *ptr = NULL, *next;
 	int bufsize = MAXNIDSTR;
 	int buflen = strlen(buf), vallen = strlen(val);
 
@@ -162,10 +162,8 @@ int append_param(char *buf, char *key, char *val, char sep)
 	}
 
 	next = strchrnul(ptr, ' ');
-	cur = buf + buflen;
-	/* shift tail further at vallen + sep */
-	while (cur-- > next)
-		*(cur + vallen + 1) = *cur;
+	/* shift all after 'next' further at vallen + sep */
+	memmove(next + vallen + 1, next, strlen(next) + 1);
 
 	/* fill gap with sep + new values */
 	*next = sep;
