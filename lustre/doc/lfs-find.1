@@ -69,6 +69,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .BR --layout | -L
 .BR mdt | raid0 | released ]
 .RB [ --lazy | -l ]
+.RB [ --ls ]
 .br
 .RB [[ ! ]
 .B --links
@@ -324,6 +325,9 @@ Files that have the first data component on an MDT.
 .TP
 .BR -l ", " --lazy
 Use file size and blocks from MDT, if available, to avoid extra RPCs.
+.TP
+.BR --ls
+Print files in a format similar to 'ls -l', showing the inode number, allocated blocks, permissions, link count, owner, group, size, file type, and path. This is equivalent to using --printf with the format string "%i\t%k\t%M\t%n\t%u\t%g\t%s\t%t\t%p\n".
 .TP
 .BR --links
 File has
@@ -867,6 +871,14 @@ but that do NOT have an SELinux extended attribute with a value containing
 .EX
 .B # lfs find -xattr security.selinux ! -xattr security.selinux=.*httpd.* \
 /var/www
+.EE
+.RE
+.PP
+Recursively list all files in a directory with detailed information in a format
+similar to 'ls -l':
+.RS
+.EX
+.B # lfs find /mnt/lustre --ls
 .EE
 .RE
 .SH AVAILABILITY
