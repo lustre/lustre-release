@@ -2473,7 +2473,6 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 	repoqc = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_QUOTACTL);
 	if (repoqc == NULL)
 		RETURN(err_serious(-ENOMEM));
-	*repoqc = *oqctl;
 
 	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
 		buffer = req_capsule_server_get(tsi->tsi_pill,
@@ -2486,33 +2485,36 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
 
-	id = repoqc->qc_id;
+	id = oqctl->qc_id;
 	if (oqctl->qc_type == USRQUOTA)
 		id = nodemap_map_id(nodemap, NODEMAP_UID,
-				    NODEMAP_CLIENT_TO_FS,
-				    repoqc->qc_id);
+				    NODEMAP_CLIENT_TO_FS, id);
 	else if (oqctl->qc_type == GRPQUOTA)
 		id = nodemap_map_id(nodemap, NODEMAP_GID,
-				    NODEMAP_CLIENT_TO_FS,
-				    repoqc->qc_id);
+				    NODEMAP_CLIENT_TO_FS, id);
 	else if (oqctl->qc_type == PRJQUOTA)
 		id = nodemap_map_id(nodemap, NODEMAP_PROJID,
-				    NODEMAP_CLIENT_TO_FS,
-				    repoqc->qc_id);
+				    NODEMAP_CLIENT_TO_FS, id);
 
+	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)
+		rc = lquota_iter_change_qid(nodemap, oqctl);
 	nodemap_putref(nodemap);
+	if (rc)
+		RETURN(rc);
 
-	if (repoqc->qc_id != id)
-		swap(repoqc->qc_id, id);
+	if (oqctl->qc_id != id)
+		swap(oqctl->qc_id, id);
 
-	rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, repoqc,
-			   buffer, buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN);
+	rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, nodemap,
+			   oqctl, buffer);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_QUOTACTL,
 			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
 
-	if (repoqc->qc_id != id)
-		swap(repoqc->qc_id, id);
+	if (oqctl->qc_id != id)
+		swap(oqctl->qc_id, id);
+
+	QCTL_COPY_NO_PNAME(repoqc, oqctl);
 
 	RETURN(rc);
 }

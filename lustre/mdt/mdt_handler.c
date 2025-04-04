@@ -3604,11 +3604,16 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 
 	if (oqctl->qc_cmd == Q_SETINFO || oqctl->qc_cmd == Q_SETQUOTA) {
 		if (unlikely(!barrier_entry(tsi->tsi_tgt->lut_bottom)))
-			RETURN(-EINPROGRESS);
+			GOTO(out_nodemap, -EINPROGRESS);
 	}
 
 	switch (oqctl->qc_cmd) {
 
+	case LUSTRE_Q_ITERQUOTA:
+		rc = lquota_iter_change_qid(nodemap, oqctl);
+		if (rc)
+			GOTO(out_nodemap, rc);
+		fallthrough;
 	case Q_GETINFO:
 	case Q_SETINFO:
 	case Q_SETQUOTA:
@@ -3623,20 +3628,21 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_GETDEFAULT_POOL:
 	case LUSTRE_Q_DELETEQID:
 	case LUSTRE_Q_RESETQID:
-	case LUSTRE_Q_ITERQUOTA:
 		/* forward quotactl request to QMT */
-		rc = qmt_hdls.qmth_quotactl(tsi->tsi_env, qmt, oqctl, buffer,
-					    buffer == NULL ? 0 :
-							LQUOTA_ITER_BUFLEN);
+		rc = qmt_hdls.qmth_quotactl(tsi->tsi_env, qmt, nodemap, oqctl,
+					    buffer);
 		break;
 
+	case LUSTRE_Q_ITEROQUOTA:
+		rc = lquota_iter_change_qid(nodemap, oqctl);
+		if (rc)
+			GOTO(out_nodemap, rc);
+		fallthrough;
 	case Q_GETOINFO:
 	case Q_GETOQUOTA:
-	case LUSTRE_Q_ITEROQUOTA:
 		/* slave quotactl */
 		rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom,
-				   oqctl, buffer,
-				   buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN);
+				   nodemap, oqctl, buffer);
 		break;
 
 	default:

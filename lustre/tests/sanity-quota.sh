@@ -6918,6 +6918,178 @@ test_93()
 }
 run_test 93 "update projid while client write to OST"
 
+test_94()
+{
+	local off=100000
+	local lim=70000
+	local squash=100
+	local idcount=5
+	local nm="tenant"
+	local ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local nid=$(h2nettype $ip)
+	local lineno=0
+	local act
+
+	(( $MDS1_VERSION >= $(version_code 2.16.55.1) )) ||
+		skip "need MDS >= v2_16_55-1-g9cd60bd to respect nodemap offset"
+
+	for ((i = off; i < off + idcount; i++)); do
+		$LFS setquota -u $i -B$i $MOUNT ||
+			error "Set quota for usr id $i failed"
+		$LFS setquota -g $i -B$i $MOUNT ||
+			error "Set quota for grp id $i failed"
+		is_project_quota_supported && $LFS setquota -p $i -B$i \
+			$MOUNT || error "Set quota for prj id $i failed"
+	done
+	stack_trap "cleanup_lqes $off $((off + idcount))"
+	for ((i = 2 * off; i < 2 * off + idcount; i++)); do
+		$LFS setquota -u $i -B$i $MOUNT ||
+			error "Set quota for usr id $i failed"
+		$LFS setquota -g $i -B$i $MOUNT ||
+			error "Set quota for grp id $i failed"
+		is_project_quota_supported && $LFS setquota -p $i -B$i \
+			$MOUNT || error "Set quota for prj id $i failed"
+	done
+	stack_trap "cleanup_lqes $((2 * off)) $((2 * off + idcount))"
+
+	$LFS setquota -u $((off + squash)) -B$off $MOUNT ||
+		error "Set quota for usr id $i failed"
+	stack_trap "$LFS setquota -u $((off + squash)) -B0 $MOUNT"
+	$LFS setquota -g $((off + squash)) -B$off $MOUNT ||
+		error "Set quota for usr id $i failed"
+	stack_trap "$LFS setquota -g $((off + squash)) -B0 $MOUNT"
+	$LFS setquota -p $((off + squash)) -B$off $MOUNT ||
+		error "Set quota for usr id $i failed"
+	stack_trap "$LFS setquota -p $((off + squash)) -B0 $MOUNT"
+
+        act=$(do_facet mgs $LCTL get_param -n nodemap.active)
+	do_facet mgs $LCTL nodemap_activate 1
+	stack_trap "do_facet mgs $LCTL nodemap_activate $act; \
+		    wait_nm_sync active"
+
+	do_facet mgs $LCTL nodemap_add $nm ||
+		error "unable to add $nm as nodemap"
+	stack_trap "do_facet mgs $LCTL nodemap_del $nm"
+
+	do_facet mgs $LCTL nodemap_add_range --name $nm --range $nid ||
+		error "Add range $nid to $nm failed"
+
+	do_facet mgs "$LCTL nodemap_modify --name $nm \
+		--property squash_uid --value $squash"
+	do_facet mgs "$LCTL nodemap_modify --name $nm \
+		--property squash_gid --value $squash"
+	do_facet mgs "$LCTL nodemap_modify --name $nm \
+		--property squash_projid --value $squash"
+	do_facet mgs $LCTL nodemap_add_offset --name $nm \
+		--offset $off --limit $lim ||
+			error "cannot set offset $off-$((lim + off - 1))"
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property trusted --value 1
+	wait_nm_sync $nm trusted_nodemap
+
+	$LFS quota -u -a $MOUNT | head -n 10
+	while IFS= read -r line; do
+		(( lineno++ >= 2 )) || continue
+		read -r qid qval <<< "$line"
+		numid=$(id -u "$qid" 2>/dev/null || echo "$qid")
+		((numid <= lim)) ||
+			error "Access to foreign quota uid range $qid"
+		# squash id is not sequential plus it might have QIDs set in
+		# prevous tests. So check limits only for the first idcount QIDs
+		# that have been set in a current test.
+		if ((lineno - 2 <= idcount)); then
+			local exp=$((off + lineno -3))
+			((qval == exp)) ||
+				error "Quota uid $qid is $qval expect $exp"
+		fi
+	done < <($LFS quota -u -a --bhardlimit $MOUNT)
+
+	$LFS quota -g -a $MOUNT | head -n 10
+	lineno=0
+	while IFS= read -r line; do
+		(( lineno++ >= 2 )) || continue
+		read -r qid qval <<< "$line"
+		numid=$(getent group $qid | cut -d: -f3)
+		((numid <= lim)) ||
+			error "Access to foreign quota gid range $qid"
+		if ((lineno - 2 <= idcount)); then
+			local exp=$((off + lineno -3))
+			((qval == exp)) ||
+				error "Quota gid $qid is $qval expect $exp"
+		fi
+	done < <($LFS quota -g -a --bhardlimit $MOUNT)
+
+	is_project_quota_supported && {
+		$LFS quota -p -a $MOUNT | head -n 10
+		lineno=0
+		while IFS= read -r line; do
+			(( lineno++ >= 2 )) || continue
+			read -r qid qval <<< "$line"
+			((qid <= lim)) ||
+				error "Access to foreign quota prjid range $qid"
+			if ((lineno - 2 <= idcount)); then
+				local exp=$((off + lineno -3))
+				((qval == exp)) ||
+					error "Quota prj $qid lim $qval != $exp"
+			fi
+		done < <($LFS quota -p -a --bhardlimit $MOUNT)
+	}
+
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property trusted --value 0
+	wait_nm_sync $nm trusted_nodemap
+
+	# When trusted=0 it could return only ROOT and squash id records for
+	# user and group. And only squash id for project.
+	$LFS quota -u -a $MOUNT | head -n 10
+	lineno=0
+	while IFS= read -r line; do
+		(( lineno++ >= 2 )) || continue
+		read -r qid qval <<< "$line"
+		numid=$(id -u "$qid" 2>/dev/null || echo "$qid")
+		((numid == 0 || numid == squash)) ||
+			error "Access to untrusted quota uid $qid"
+		((qval == off)) ||
+			error "Quota uid $qid is now $qval expect $((off))"
+		((lineno <= 4)) ||
+			error "Quota uid $qid val $qval not expected"
+	done < <($LFS quota -u -a --bhardlimit $MOUNT)
+
+	$LFS quota -g -a $MOUNT | head -n 10
+	lineno=0
+	while IFS= read -r line; do
+		(( lineno++ >= 2 )) || continue
+		read -r qid qval <<< "$line"
+		numid=$(getent group $qid | cut -d: -f3)
+		((numid == 0 || numid == squash)) ||
+			error "Access to untrusted quota gid $qid"
+		((qval == off)) ||
+			error "Quota gid $qid is now $qval expect $((off))"
+		((lineno <= 4)) ||
+			error "Quota gid $qid val $qval not expected"
+	done < <($LFS quota -g -a --bhardlimit $MOUNT)
+
+	is_project_quota_supported && {
+		$LFS quota -p -a $MOUNT | head -n 10
+		lineno=0
+		while IFS= read -r line; do
+			(( lineno++ >= 2 )) || continue
+			read -r qid qval <<< "$line"
+			((qid == squash)) ||
+				error "Quota prj $qid val $qval not expected"
+			((qval == off)) ||
+				error "Quota prj $qid lim is $qval expect $off"
+			((lineno <= 3)) ||
+				error "Quota prj $qid val $qval not expected"
+		done < <($LFS quota -p -a --bhardlimit $MOUNT)
+	}
+
+	return 0
+}
+run_test 94 "lfs quota all respects nodemap offset"
+
 test_95() {
 	local cmd="do_facet mgs $LCTL get_param -n "
 	local squash=100

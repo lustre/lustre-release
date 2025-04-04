@@ -528,7 +528,8 @@ out:
  * \param oqctl - is the quotactl request
  */
 static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
-			struct obd_quotactl *oqctl, char *buffer, int size)
+			struct lu_nodemap *nodemap, struct obd_quotactl *oqctl,
+			char *buffer)
 {
 	struct qmt_thread_info *qti = qmt_info(env);
 	union lquota_id	*id  = &qti->qti_id;
@@ -539,6 +540,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 	char *poolname;
 	int qtype = oqctl->qc_type;
 	int rc = 0;
+	int size = buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN;
 	bool is_default = false;
 	bool is_first_iter = false;
 	ENTRY;
@@ -613,6 +615,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 			glb_obj = pool->qpi_glb_obj[qtype];
 			rc = lquota_obj_iter(env, lu2dt_dev(ld), glb_obj,
+					     nodemap,
 					     pool->qpi_grace_lqe[qtype], oqctl,
 					     buffer, size / 2, true, true);
 
@@ -634,6 +637,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 			glb_obj = pool->qpi_glb_obj[qtype];
 			rc = lquota_obj_iter(env, lu2dt_dev(ld), glb_obj,
+					     nodemap,
 					     pool->qpi_grace_lqe[qtype], oqctl,
 					     buffer + size / 2, size / 2,
 					     true, false);

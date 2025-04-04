@@ -171,9 +171,9 @@ static struct dt_object *quota_obj_lookup(const struct lu_env *env,
  * \param is_md	  - true to iterate LQUOTA_MD quota settings
  */
 int lquota_obj_iter(const struct lu_env *env, struct dt_device *dev,
-		    struct dt_object *obj, struct lquota_entry *lqe_def,
-		    struct obd_quotactl *oqctl, char *buf, int size,
-		    bool is_glb, bool is_md)
+		    struct dt_object *obj, struct lu_nodemap *nodemap,
+		    struct lquota_entry *lqe_def, struct obd_quotactl *oqctl,
+		    char *buf, int size, bool is_glb, bool is_md)
 {
 	struct lquota_thread_info *qti = lquota_info(env);
 	const struct dt_it_ops *iops;
@@ -221,6 +221,8 @@ int lquota_obj_iter(const struct lu_env *env, struct dt_device *dev,
 		offset = oqctl->qc_iter_dt_offset;
 
 	while ((size - cur) > (sizeof(__u64) + rec_size)) {
+		__u32 orig_id, cli_id, fs_id;
+
 		if (!skip)
 			goto get_setting;
 
@@ -264,11 +266,28 @@ get_setting:
 			GOTO(out_fini, rc);
 		}
 
+		orig_id = *(__u64 *)key;
 		if (oqctl->qc_iter_qid_end != 0 &&
-		    (*((__u64 *)key) < oqctl->qc_iter_qid_start ||
-		     *((__u64 *)key) > oqctl->qc_iter_qid_end))
+		    (orig_id < oqctl->qc_iter_qid_start ||
+		     orig_id > oqctl->qc_iter_qid_end))
 			goto next;
 
+		/* This place could be optimised for a case when trusted=0.
+		 * In a such case we should return only two records for ROOT and
+		 * for the squashed id.
+		 */
+		cli_id = nodemap_map_id(nodemap, oqctl->qc_type,
+					NODEMAP_FS_TO_CLIENT,
+					orig_id);
+		fs_id = nodemap_map_id(nodemap, oqctl->qc_type,
+				       NODEMAP_CLIENT_TO_FS, cli_id);
+		/* If remapped fs id does not match original id, it means the id
+		 * is squashed and does correspond to the squashed value.
+		 */
+		if (fs_id != orig_id)
+			goto next;
+
+		*(__u64 *)key = cli_id;
 		memcpy(buf + cur, key, sizeof(__u64));
 		cur += sizeof(__u64);
 
@@ -340,13 +359,15 @@ out_fini:
  * \param oqctl - is the quotactl request
  */
 int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
-		  struct obd_quotactl *oqctl, char *buffer, int size)
+		  struct lu_nodemap *nodemap, struct obd_quotactl *oqctl,
+		  char *buffer)
 {
 	struct lquota_thread_info *qti = lquota_info(env);
-	__u64				 key;
-	struct dt_object		*obj, *obj_aux = NULL;
-	struct obd_dqblk		*dqblk = &oqctl->qc_dqblk;
-	int				 rc;
+	struct dt_object *obj, *obj_aux = NULL;
+	struct obd_dqblk *dqblk = &oqctl->qc_dqblk;
+	int size = buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN;
+	__u64 key;
+	int rc;
 	ENTRY;
 
 	if (oqctl->qc_cmd != Q_GETOQUOTA &&
@@ -374,11 +395,11 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 
 	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA) {
 		if (lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev))
-			rc = lquota_obj_iter(env, dev, obj, NULL, oqctl, buffer,
-					     size, false, true);
+			rc = lquota_obj_iter(env, dev, obj, nodemap, NULL,
+					     oqctl, buffer, size, false, true);
 		else
-			rc = lquota_obj_iter(env, dev, obj, NULL, oqctl, buffer,
-					     size, false, false);
+			rc = lquota_obj_iter(env, dev, obj, nodemap, NULL,
+					     oqctl, buffer, size, false, false);
 
 		GOTO(out, rc);
 	}
