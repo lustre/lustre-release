@@ -91,7 +91,7 @@ AS_IF([test $target_cpu = powerpc64], [
 # libcfs/include for util headers, lustre/include for liblustreapi and friends
 # UAPI headers from OpenSFS are included if modules support is enabled, otherwise
 # it will use the native kernel implementation.
-CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/utils/ -I$PWD/lustre/include $CPPFLAGS"
+CPPFLAGS="-I$PWD/libcfs/include -I$PWD/lnet/utils/ -I$PWD/lustre/include -I$PWD/include $CPPFLAGS"
 
 CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(CCASFLAGS)

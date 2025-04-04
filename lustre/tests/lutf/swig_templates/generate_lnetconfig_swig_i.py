@@ -55,7 +55,7 @@ def writeSwigI(block, ommit_list, swigI, function_ommit=[]):
 netconfig_path = sys.argv[1] + '/lnet/utils/lnetconfig/liblnetconfig.h'
 cyaml_path = sys.argv[1] + '/lnet/utils/lnetconfig/cyaml.h'
 lib_dlc_path = sys.argv[1] + '/lnet/include/uapi/linux/lnet/lnet-dlc.h'
-string_path = sys.argv[1] + '/libcfs/include/libcfs/util/string.h'
+string_path = sys.argv[1] + '/include/libcfs/util/string.h'
 nidstr_path = sys.argv[1] + '/lnet/include/uapi/linux/lnet/nidstr.h'
 limits_path = '/usr/include/limits.h'
 typemap_path = sys.argv[1] + '/lustre/tests/lutf/swig_templates/typemap.template'
@@ -97,8 +97,8 @@ generic_ommit_list = ['/*', ' *', '__printf(3, 4)']
 o_swig_intf.write('%module lnetconfig\n')
 o_swig_intf.write('%{\n')
 
-o_swig_intf.write("#include \"libcfs/util/ioctl.h\"\n")
-o_swig_intf.write("#include \"libcfs/util/string.h\"\n")
+o_swig_intf.write("#include <libcfs/util/ioctl.h>\n")
+o_swig_intf.write("#include <libcfs/util/string.h>\n")
 
 writeSwigI(l_lutf_missing_def, [], o_swig_intf)
 writeSwigI(l_cyaml, cyaml_ommit_list, o_swig_intf)

@@ -30,7 +30,7 @@
 #include <limits.h>
 #include <ctype.h>
 #include <lnetconfig/liblnetconfig.h>
-#include "libcfs/util/list.h"
+#include <libcfs/util/list.h>
 #include <cyaml.h>
 
 #define INDENT		4
