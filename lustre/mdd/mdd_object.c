@@ -1151,6 +1151,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 				const struct lu_attr *attr,
 				struct thandle *handle)
 {
+	unsigned long mask = 0;
 	int rc;
 
 	rc = mdo_declare_attr_set(env, obj, attr, handle);
@@ -1180,8 +1181,18 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 	}
 #endif
 
-	rc = mdd_declare_changelog_store(env, mdd, CL_SETXATTR, NULL, NULL,
-					 handle);
+	/*
+	 * any enabled operation can cause a new record to the changelog,
+	 * see mdd_attr_set_changelog() for the details above.
+	 */
+	if (mdd_changelog_enabled(env, mdd, mask = CL_TRUNC) ||
+	    mdd_changelog_enabled(env, mdd, mask = CL_SETATTR) ||
+	    mdd_changelog_enabled(env, mdd, mask = CL_MTIME) ||
+	    mdd_changelog_enabled(env, mdd, mask = CL_CTIME) ||
+	    mdd_changelog_enabled(env, mdd, mask = CL_ATIME))
+		rc = mdd_declare_changelog_store(env, mdd, mask, NULL,
+						 NULL, handle);
+
 	return rc;
 }
 

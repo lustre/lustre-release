@@ -205,6 +205,7 @@ struct mdd_thread_info {
 	struct dt_insert_rec	  mdi_dt_rec;
 	struct lu_seq_range	  mdi_range;
 	struct md_layout_change	  mdi_mlc;
+	int			  mdi_chlog_declared;
 };
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,

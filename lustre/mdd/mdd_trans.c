@@ -52,6 +52,7 @@ struct thandle *mdd_trans_create(const struct lu_env *env,
 		uc ? uc->uc_rbac_ignore_root_prjquota : 1;
 
 out:
+	mdd_env_info(env)->mdi_chlog_declared = 0;
 	return th;
 }
 

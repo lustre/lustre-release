@@ -741,6 +741,7 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 	if (IS_ERR(llog_th))
 		GOTO(out_put, rc = PTR_ERR(llog_th));
 
+	mdd_env_info(env)->mdi_chlog_declared = 1;
 	rc = llog_declare_add(env, ctxt->loc_handle, &rec_hdr, llog_th);
 
 out_put:
@@ -1350,7 +1351,11 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 
 	ENTRY;
 
-	if (!mdd_changelog_enabled(env, mdd, type))
+	/*
+	 * we can't use mdd_changelog_enabled() here as the changelog
+	 * can get enabled between declaration and execution.
+	 */
+	if (mdd_env_info(env)->mdi_chlog_declared == 0)
 		RETURN(0);
 
 	LASSERT(S_ISDIR(mdd_object_type(parent)));
