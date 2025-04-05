@@ -9,13 +9,15 @@ MODULES = libcfs
 COMPAT := @top_srcdir@/lustre_compat/lib/
 
 libcfs_dir := $(dir $(lastword $(MAKEFILE_LIST)))
--include $(libcfs_dir)/../../lustre_compat/lib/Makefile
+include $(libcfs_dir)/../../lustre_compat/lib/Makefile
 
 libcfs-linux-objs := linux-prim.o
 libcfs-linux-objs += linux-hash.o
 libcfs-linux-objs += linux-wait.o
 
 libcfs-compat-objs += $(patsubst %,$(COMPAT)%,$(compat_objs))
+
+EXTRA_DIST = $(libcfs-compat-objs:.o=.c)
 
 libcfs-crypto-objs := crypto.o fname.o hkdf.o hooks.o keyring.o
 libcfs-crypto-objs += keysetup.o keysetup_v1.o policy.o

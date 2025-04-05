@@ -97,7 +97,7 @@ CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(CCASFLAGS)
 
 # everyone builds against lnet and lustre kernel headers
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/libcfs/include -I$PWD/libcfs/include/libcfs -I$PWD/lnet/include/uapi -I$PWD/lnet/include -I$PWD/lustre/include/uapi -I$PWD/lustre/include -I$PWD/lustre_compat/include"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/libcfs/include -I$PWD/libcfs/include/libcfs -I$PWD/lnet/include/uapi -I$PWD/lnet/include -I$PWD/lustre/include/uapi -I$PWD/lustre/include -I$PWD/include"
 AC_SUBST(EXTRA_KCFLAGS)
 ]) # LTC_PROG_CC
 
