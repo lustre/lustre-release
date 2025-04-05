@@ -1763,4 +1763,6 @@ static int fill_fn(struct dir_context *buf, const char *name, int namelen,  \
 #define WRAP_FILLDIR_FN(prefix, fill_fn)
 #endif
 
+#define LDISKFS_OSD_USER_MODIFIABLE	LUSTRE_FL_USER_MODIFIABLE
+
 #endif /* _OSD_INTERNAL_H */

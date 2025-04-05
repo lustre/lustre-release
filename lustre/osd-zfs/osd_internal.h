@@ -829,6 +829,11 @@ static inline uint32_t attrs_zfs2fs(const uint64_t flags)
 
 #endif
 
+#define ZFS_OSD_USER_USER_MODIFIABLE	(LUSTRE_APPEND_FL | \
+					 LUSTRE_NODUMP_FL | \
+					 LUSTRE_PROJINHERIT_FL | \
+					 LUSTRE_IMMUTABLE_FL)
+
 static inline uint64_t
 osd_dmu_object_alloc(objset_t *os, dmu_object_type_t objtype, int blocksize,
 		     int dnodesize, dmu_tx_t *tx)

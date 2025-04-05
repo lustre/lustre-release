@@ -3276,7 +3276,10 @@ static int fileattr_set(struct inode *inode, int flags)
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
-	op_data->op_attr_flags = flags;
+	/* Since chattr will get attr first, so we have to filter
+	 * out encrypt flag added in the fileattr_get.
+	 */
+	op_data->op_attr_flags = flags & ~LUSTRE_ENCRYPT_FL;
 	op_data->op_xvalid |= OP_XVALID_FLAGS;
 	rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, &req);
 	ll_finish_md_op_data(op_data);

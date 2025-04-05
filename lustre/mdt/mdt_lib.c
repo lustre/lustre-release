@@ -1253,7 +1253,12 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	rr->rr_fid1 = &rec->sa_fid;
 	la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
 	la->la_mode  = rec->sa_mode;
-	la->la_flags = rec->sa_attr_flags;
+
+	if (rec->sa_attr_flags & ~LUSTRE_FL_USER_VISIBLE) {
+		CDEBUG(D_INODE, "Unsupported flags: %x\n", rec->sa_attr_flags);
+		RETURN(-EOPNOTSUPP);
+	}
+	la->la_flags = rec->sa_attr_flags & LUSTRE_FL_USER_MODIFIABLE;
 
 	nodemap = nodemap_get_from_exp(info->mti_exp);
 	if (IS_ERR(nodemap))

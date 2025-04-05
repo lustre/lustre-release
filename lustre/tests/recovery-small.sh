@@ -3795,6 +3795,42 @@ test_161() {
 }
 run_test 161 "evict osp by ping evictor"
 
+test_162() {
+	local mntpt=$(facet_mntpt $SINGLEMDS)
+
+	test_mkdir -i 0 -c 1 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	local wfile=$DIR/$tdir/$tfile
+	local rstr="aAdDiPST"
+
+	stack_trap "chattr -$rstr $wfile; rm -rf $DIR/$tdir" EXIT
+
+	touch $wfile
+	for ((i = 0; i < ${#rstr[0]}; i++)); do
+		local c=${rstr:i:1}
+
+		chattr +$c $wfile || error "Flag [$c] should succeed"
+	done
+
+	local attr1=($(lsattr $wfile))
+	echo $attr1
+
+	[[ -n ${attr1//-/} ]] || error "lsattr failed: $(lsattr $wfile)"
+
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "mds1 start fail"
+
+	wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
+
+	local attr2=($(lsattr $wfile))
+	echo $attr2
+	[[ "$attr1" == "$attr2" ]] ||
+		error "'$attr1' different with '$attr2'"
+
+}
+run_test 162 "File attributes should be persisted after MDS failover"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

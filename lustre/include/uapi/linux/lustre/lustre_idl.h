@@ -1859,16 +1859,24 @@ enum {
 	/* these should be identical to their EXT4_*_FL counterparts, they are
 	 * redefined here only to avoid dragging in fs/ext4/ext4.h
 	 */
+	LUSTRE_UNRM_FL		= 0x00000002, /* Undelete */
+	LUSTRE_COMPR_FL		= 0x00000004, /* Compress file */
 	LUSTRE_SYNC_FL		= 0x00000008, /* Synchronous updates */
 	LUSTRE_IMMUTABLE_FL	= 0x00000010, /* Immutable file */
 	LUSTRE_APPEND_FL	= 0x00000020, /* file writes may only append */
 	LUSTRE_NODUMP_FL	= 0x00000040, /* do not dump file */
 	LUSTRE_NOATIME_FL	= 0x00000080, /* do not update atime */
+	LUSTRE_NOCOMPR_FL	= 0x00000400, /* Don't compress */
+	COMPAT_ENCRYPT_FL	= 0x00000800, /* filter out FS_ENCRYPT_FL */
 	LUSTRE_INDEX_FL		= 0x00001000, /* hash-indexed directory */
+	LUSTRE_EXTENTS_FL	= 0x00080000, /* Inode uses extents */
+	LUSTRE_JOURNAL_DATA_FL	= 0x00004000, /* file should be journaled */
 	LUSTRE_DIRSYNC_FL	= 0x00010000, /* dirsync behaviour (dir only) */
 	LUSTRE_TOPDIR_FL	= 0x00020000, /* Top of directory hierarchies*/
+	LUSTRE_VERITY_FL	= 0x00100000, /* Verity protected inode */
 	LUSTRE_INLINE_DATA_FL	= 0x10000000, /* Inode has inline data. */
 	LUSTRE_PROJINHERIT_FL	= 0x20000000, /* Create with parents projid */
+	LUSTRE_CASEFOLD_FL	= 0x40000000, /* Casefolded directory */
 
 	/* These flags will not be identical to any EXT4_*_FL counterparts,
 	 * and only reserved for lustre purpose. Note: these flags might
@@ -1884,6 +1892,30 @@ enum {
 
 	LUSTRE_LMA_FL_MASKS	= LUSTRE_ENCRYPT_FL | LUSTRE_ORPHAN_FL,
 };
+
+#define LUSTRE_FL_USER_MODIFIABLE (LUSTRE_SYNC_FL	| \
+				   LUSTRE_IMMUTABLE_FL	| \
+				   LUSTRE_APPEND_FL	| \
+				   LUSTRE_NODUMP_FL	| \
+				   LUSTRE_NOATIME_FL	| \
+				   LUSTRE_NOCOMPR_FL	| \
+				   LUSTRE_NOATIME_FL	| \
+				   LUSTRE_DIRSYNC_FL	| \
+				   LUSTRE_TOPDIR_FL	| \
+				   LUSTRE_PROJINHERIT_FL)
+
+#define LUSTRE_FL_USER_VISIBLE (LUSTRE_FL_USER_MODIFIABLE | \
+				LUSTRE_UNRM_FL		  | \
+				COMPAT_ENCRYPT_FL	  | \
+				LUSTRE_COMPR_FL		  | \
+				LUSTRE_NOCOMPR_FL	  | \
+				LUSTRE_ENCRYPT_FL	  | \
+				LUSTRE_INDEX_FL		  | \
+				LUSTRE_JOURNAL_DATA_FL    | \
+				LUSTRE_EXTENTS_FL	  | \
+				LUSTRE_VERITY_FL	  | \
+				LUSTRE_INLINE_DATA_FL	  | \
+				LUSTRE_CASEFOLD_FL)
 
 #ifndef FS_XFLAG_SYNC
 #define FS_XFLAG_SYNC		0x00000020	/* all writes synchronous */

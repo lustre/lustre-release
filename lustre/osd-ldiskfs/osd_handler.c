@@ -2827,8 +2827,7 @@ static void osd_inode_getattr(const struct lu_env *env,
 	 * to inode flags, and ext4 internally test raw inode
 	 * @i_flags directly. Instead of patching ext4, we do it here.
 	 */
-	if (LDISKFS_I(inode)->i_flags & LUSTRE_PROJINHERIT_FL)
-		attr->la_flags |= LUSTRE_PROJINHERIT_FL;
+	attr->la_flags |= LDISKFS_I(inode)->i_flags & LUSTRE_FL_USER_VISIBLE;
 }
 
 static int osd_dirent_count(const struct lu_env *env, struct dt_object *dt,
@@ -3128,6 +3127,8 @@ static int osd_inode_setattr(const struct lu_env *env,
 		inode->i_rdev = attr->la_rdev;
 
 	if (bits & LA_FLAGS) {
+		struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+
 		/* always keep S_NOCMTIME */
 		inode->i_flags = ll_ext_to_inode_flags(attr->la_flags) |
 				 S_NOCMTIME;
@@ -3143,10 +3144,8 @@ static int osd_inode_setattr(const struct lu_env *env,
 		 * @inode->i_flags to raw inode i_flags when writing
 		 * flags, we do it explictly here.
 		 */
-		if (attr->la_flags & LUSTRE_PROJINHERIT_FL)
-			LDISKFS_I(inode)->i_flags |= LUSTRE_PROJINHERIT_FL;
-		else
-			LDISKFS_I(inode)->i_flags &= ~LUSTRE_PROJINHERIT_FL;
+		ei->i_flags = (ei->i_flags & ~LDISKFS_OSD_USER_MODIFIABLE) |
+			      (attr->la_flags & LDISKFS_OSD_USER_MODIFIABLE);
 	}
 	return 0;
 }
