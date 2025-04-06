@@ -351,25 +351,6 @@ AC_DEFUN([LIBCFS_HAVE_GLOB],[
 ]) # LIBCFS_HAVE_GLOB
 
 #
-# Kernel version 3.17 changed hlist_add_after to
-# hlist_add_behind
-#
-AC_DEFUN([LIBCFS_SRC_HLIST_ADD_AFTER],[
-	LB2_LINUX_TEST_SRC([hlist_add_after], [
-		#include <linux/list.h>
-	],[
-		hlist_add_after(NULL, NULL);
-	])
-])
-AC_DEFUN([LIBCFS_HLIST_ADD_AFTER],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'hlist_add_after' exist],
-	[hlist_add_after], [
-		AC_DEFINE(HAVE_HLIST_ADD_AFTER, 1,
-			[hlist_add_after is available])
-	])
-]) # LIBCFS_HLIST_ADD_AFTER
-
-#
 # Kernel version 3.17 introduced struct timespec64
 #
 AC_DEFUN([LIBCFS_SRC_TIMESPEC64],[
@@ -2563,7 +2544,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	# 3.16
 	LIBCFS_SRC_HAVE_GLOB
 	# 3.17
-	LIBCFS_SRC_HLIST_ADD_AFTER
 	LIBCFS_SRC_TIMESPEC64
 	LIBCFS_SRC_KTIME_GET_NS
 	LIBCFS_SRC_KTIME_GET_REAL_TS64

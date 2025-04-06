@@ -24,9 +24,9 @@
 #include <linux/keyctl.h>
 #include <linux/key-type.h>
 #include <linux/mutex.h>
+#include <linux/list.h>
 #include <asm/atomic.h>
 
-#include <libcfs/linux/linux-list.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
