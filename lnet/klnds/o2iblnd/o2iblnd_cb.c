@@ -3499,7 +3499,10 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 		conn = cmid->context;
 		switch (conn->ibc_state) {
 		default:
-			LBUG();
+			CERROR("%s: ESTABLISHED (ignored): %d cm_id %p conn %p ibc_state: %d\n",
+				libcfs_nidstr(&conn->ibc_peer->ibp_nid),
+				event->status, cmid, conn, conn->ibc_state);
+			return 0;
 
 		case IBLND_CONN_PASSIVE_WAIT:
 			CDEBUG(D_NET, "ESTABLISHED (passive): %s cm_id %p conn %p\n",
