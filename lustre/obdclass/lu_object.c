@@ -24,6 +24,7 @@
 #include <linux/list.h>
 #include <linux/processor.h>
 #include <linux/random.h>
+#include <lustre_compat/linux/shrinker.h>
 
 #include <lustre_compat/linux/rhashtable.h>
 
@@ -2167,7 +2168,7 @@ int lu_global_init(void)
 	return result;
 
 out_shrinker:
-	shrinker_free(lu_site_shrinker);
+	ll_shrinker_free(lu_site_shrinker);
 out_env:
 	/* ordering here is explained in lu_global_fini() */
 	lu_context_key_degister(&lu_global_key);
@@ -2181,7 +2182,7 @@ out:
 /* Dual to lu_global_init(). */
 void lu_global_fini(void)
 {
-	shrinker_free(lu_site_shrinker);
+	ll_shrinker_free(lu_site_shrinker);
 
 	lu_context_key_degister(&lu_global_key);
 

@@ -188,6 +188,8 @@ void __init init_libcfs_vfree_atomic(void)
 
 int __init cfs_arch_init(void)
 {
+	int rc = 0;
+
 	init_libcfs_vfree_atomic();
 
 #ifndef HAVE_WAIT_VAR_EVENT
@@ -205,7 +207,26 @@ int __init cfs_arch_init(void)
 					  SLAB_PANIC | SLAB_RECLAIM_ACCOUNT,
 					  xarray_node_ctor);
 #endif
-	return llcrypt_init();
+	rc = shrinker_debugfs_init();
+	if (rc < 0)
+		goto free_xcache;
+
+#ifdef CONFIG_LL_ENCRYPTION
+	rc = llcrypt_init();
+	if (rc < 0)
+		goto free_shrinker;
+#endif
+	return rc;
+
+#ifdef CONFIG_LL_ENCRYPTION
+free_shrinker:
+	shrinker_debugfs_fini();
+#endif
+free_xcache:
+#ifndef HAVE_XARRAY_SUPPORT
+	kmem_cache_destroy(xarray_cachep);
+#endif
+	return rc;
 }
 
 void __exit cfs_arch_exit(void)
@@ -213,7 +234,13 @@ void __exit cfs_arch_exit(void)
 	/* exit_libcfs_vfree_atomic */
 	__flush_workqueue(system_wq);
 
+#ifndef HAVE_XARRAY_SUPPORT
+	kmem_cache_destroy(xarray_cachep);
+#endif
+	shrinker_debugfs_fini();
+#ifdef CONFIG_LL_ENCRYPTION
 	llcrypt_exit();
+#endif
 }
 
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,

@@ -15,6 +15,7 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
+#include <lustre_compat/linux/shrinker.h>
 #include <libcfs/linux/linux-mem.h>
 
 #include <obd.h>
@@ -1145,7 +1146,7 @@ void obd_pool_fini(void)
 
 	for (pool_order = 0; pool_order < pools_count; pool_order++) {
 		pool = page_pools[pool_order];
-		shrinker_free(pool->pool_shrinker);
+		ll_shrinker_free(pool->pool_shrinker);
 		LASSERT(pool->opp_ptr_pages);
 		LASSERT(pool->opp_total_objects == pool->opp_free_objects);
 

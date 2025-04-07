@@ -346,4 +346,12 @@ void bitmap_to_arr32(u32 *buf, const unsigned long *bitmap, unsigned int nbits);
 #define KOBJ_ATTRIBUTE_GROUPS(_name)	ATTRIBUTE_GROUPS(_name)
 #endif
 
+#ifndef CONFIG_SHRINKER_DEBUG
+void shrinker_debugfs_fini(void);
+int shrinker_debugfs_init(void);
+#else
+static inline void shrinker_debugfs_fini(void) {};
+static inline int shrinker_debugfs_init(void) { return 0; };
+#endif
+
 #endif /* __LIBCFS_LINUX_MISC_H__ */

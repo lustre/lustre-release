@@ -74,6 +74,7 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/workqueue.h>
+#include <lustre_compat/linux/shrinker.h>
 #include <libcfs/linux/linux-mem.h>
 #include <lustre_dlm.h>
 #include <cl_object.h>
@@ -1434,7 +1435,7 @@ int ldlm_pools_init(void)
 	RETURN(0);
 
 out_shrinker:
-	shrinker_free(ldlm_pools_srv_shrinker);
+	ll_shrinker_free(ldlm_pools_srv_shrinker);
 out:
 	RETURN(rc);
 }
@@ -1444,8 +1445,8 @@ void ldlm_pools_fini(void)
 	if (ldlm_pools_init_done) {
 		cancel_delayed_work_sync(&ldlm_pools_recalc_work);
 
-		shrinker_free(ldlm_pools_srv_shrinker);
-		shrinker_free(ldlm_pools_cli_shrinker);
+		ll_shrinker_free(ldlm_pools_srv_shrinker);
+		ll_shrinker_free(ldlm_pools_cli_shrinker);
 	}
 
 	ldlm_pools_init_done = false;

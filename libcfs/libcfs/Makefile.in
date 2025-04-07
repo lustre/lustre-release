@@ -6,15 +6,21 @@
 
 MODULES = libcfs
 
-COMPAT := @top_srcdir@/lustre_compat/lib/
 
 libcfs_dir := $(dir $(lastword $(MAKEFILE_LIST)))
+
+libcfs-compat-objs :=
+
+COMPAT_MM := @top_srcdir@/lustre_compat/mm/
+include $(libcfs_dir)/../../lustre_compat/mm/Makefile
+libcfs-compat-objs += $(patsubst %,$(COMPAT_MM)%,$(mm_objs))
+
+COMPAT_LIB := @top_srcdir@/lustre_compat/lib/
 include $(libcfs_dir)/../../lustre_compat/lib/Makefile
+libcfs-compat-objs += $(patsubst %,$(COMPAT_LIB)%,$(lib_objs))
 
 libcfs-linux-objs := linux-prim.o
 libcfs-linux-objs += linux-wait.o
-
-libcfs-compat-objs += $(patsubst %,$(COMPAT)%,$(compat_objs))
 
 EXTRA_DIST = $(libcfs-compat-objs:.o=.c)
 

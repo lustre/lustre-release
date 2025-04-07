@@ -16,6 +16,7 @@
 #include <linux/workqueue.h>
 #include <libcfs/libcfs.h>
 #include <linux/falloc.h>
+#include <lustre_compat/linux/shrinker.h>
 #include <lprocfs_status.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
@@ -4181,7 +4182,7 @@ out_stop_grant:
 out_req_pool:
 	ptlrpc_free_rq_pool(osc_rq_pool);
 out_shrinker:
-	shrinker_free(osc_cache_shrinker);
+	ll_shrinker_free(osc_cache_shrinker);
 out_kmem:
 	lu_kmem_fini(osc_caches);
 
@@ -4193,7 +4194,7 @@ static void __exit osc_exit(void)
 	class_unregister_type(LUSTRE_OSC_NAME);
 	ptlrpc_free_rq_pool(osc_rq_pool);
 	osc_stop_grant_work();
-	shrinker_free(osc_cache_shrinker);
+	ll_shrinker_free(osc_cache_shrinker);
 	lu_kmem_fini(osc_caches);
 }
 
