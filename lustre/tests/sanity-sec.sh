@@ -7719,7 +7719,7 @@ check_ost_object_ids() {
 	local fid="${fids[3]}:${fids[2]}:0"
 	local objpath=$(ost_fid2_objpath ost1 $fid)
 
-	do_facet ost1 "$DEBUGFS -c -R 'stat $objpath' $(ostdevname 1)" | \
+	do_facet ost1 "$DEBUGFS -c -R 'stat $objpath' $(ostdevname 1)" |
 		grep "Project" > $objdump
 	local obj_uid=$(awk '{print $2}' $objdump)
 	local obj_gid=$(awk '{print $4}' $objdump)
@@ -7734,42 +7734,165 @@ check_ost_object_ids() {
 		error "projid is not set to expected value $expected_projid"
 }
 
-test_75() {
-	local tfile_write=$DIR/$tdir/${tfile}_write
-	local tfile_trunc=$DIR/$tdir/${tfile}_trunc
-	local testdir_projid=42
+check_mdt_inode_ids() {
+	local file=${1#${MOUNT}}
+	local expected_uid=$2
+	local expected_gid=$3
+	local expected_projid=$4
+	local objdump=$DIR/$tdir/objdump
 
+	if (( $MDSCOUNT != 1 )); then
+		echo "DNE not supported; checking IDs on MDT assumes a single MDT only"
+		return 0
+	fi
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	do_facet mds1 "$DEBUGFS -c -R 'stat ROOT${file}' $(mdsdevname 1)" |
+		grep "Project" > $objdump
+
+	local obj_uid=$(awk '{print $2}' $objdump)
+	local obj_gid=$(awk '{print $4}' $objdump)
+	local obj_projid=$(awk '{print $6}' $objdump)
+	echo "MDT inode ids and size for file '$file': $(cat $objdump)"
+
+	[[ "$obj_uid" == "$expected_uid" ]] ||
+		error "uid is not set to expected value $expected_uid"
+	[[ "$obj_gid" == "$expected_gid" ]] ||
+		error "gid is not set to expected value $expected_gid"
+	[[ "$obj_projid" == "$expected_projid" ]] ||
+		error "projid is not set to expected value $expected_projid"
+}
+
+check_ids_sync() {
+	sync
+	# wait for asynchronous MDS-OST sync and force flush to OST
+	sync_all_data
+	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
+	# drop_caches to flush inode cache so ID updates from chown or
+	# lfs project are visible through debugfs on the OST objects
+	do_facet ost1 "sync; sync; echo 3 > /proc/sys/vm/drop_caches"
+	# drop_caches to flush dentry cache so namespace updates from "mv"
+	# operations are visible through debugfs on the MDT
+	do_facet mds "sync; sync; echo 3 > /proc/sys/vm/drop_caches"
+}
+
+test_75() {
+	local testdir="${DIR}/${tdir}"
+	local projdir="${testdir}/projdir"
+	local tfile_write=${projdir}/${tfile}_write
+	local tfile_trunc=${projdir}/${tfile}_trunc
+	local tfile_creat=${projdir}/${tfile}_creat
+	local tfile_falloc=${projdir}/${tfile}_falloc
+	local tfile_write2=${testdir}/${tfile}_write2
+	local testdir_projid=42
+	local testfile_projid=43
+	local have_ost_punch_ids=false
+
+	# prior to 2.16.53 OST_PUNCH did not set OST IDs
 	(( $OST1_VERSION >= $(version_code 2.16.53) &&
-		$CLIENT_VERSION >= $(version_code 2.16.53) )) ||
-		skip "Both client and OST need at least 2.16.53"
+		$CLIENT_VERSION >= $(version_code 2.16.53) )) &&
+		have_ost_punch_ids=true
 
 	[[ "$ost1_FSTYPE" == ldiskfs ]] ||
 		skip "ldiskfs only test (using debugfs)"
 
 	# setup
-	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	$LFS project -s -p $testdir_projid $DIR/$tdir ||
+	mkdir -p $projdir || error "mkdir $projdir failed"
+	stack_trap "rm -rf $DIR/$tdir" EXIT
+
+	$LFS project -s -p $testdir_projid $projdir ||
 		error "lfs project failed"
-	chown $USER0 $DIR/$tdir || error "chown Failed"
+	chown -R $USER0 $DIR/$tdir || error "chown Failed"
 
-	# Sanity check IDs with OST_WRITE RPC
-	$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_write
-	$RUNAS_CMD -u $ID0 dd if=/dev/urandom of=$tfile_write bs=1M count=1 && \
-		sync
+	# setstripe is primarily used to force data being created on ost1
 
-	# OST_PUNCH RPC (via truncate) setting OST object IDs correctly
-	$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_trunc
-	$RUNAS_CMD -u $ID0 $TRUNCATE $tfile_trunc 1048576 && sync
+	# OST_WRITE RPC (dd) - in projdir
+	$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_write ||
+		error "setstripe for file $tfile_write failed"
+	$RUNAS_CMD -u $ID0 dd if=/dev/urandom of=$tfile_write bs=1M count=1 ||
+		error "dd for file $tfile_write failed"
 
-	# wait for asynchronous MDS-OST sync and force flush to OST
-	sync_all_data
-	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
-	do_facet ost1 "sync; sync"
+	# OST_WRITE RPC (dd) - not in projdir
+	$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_write2 ||
+		error "setstripe for file $tfile_write2 failed"
+	$RUNAS_CMD -u $ID0 \
+		dd if=/dev/urandom of=$tfile_write2 bs=1M count=1 ||
+		error "dd for file $tfile_write2 failed"
 
+	if $have_ost_punch_ids; then
+		# OST_PUNCH RPC (truncate)
+		$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_trunc ||
+			error "setstripe for file $tfile_trunc failed"
+		$RUNAS_CMD -u $ID0 $TRUNCATE $tfile_trunc 1048576 ||
+			error "truncate for file $tfile_trunc failed"
+	fi
+
+	# LDLM_ENQUEUE RPC (IT_CREAT intent) (setstripe)
+	$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_creat ||
+		error "setstripe for file $tfile_creat failed"
+
+	# OST_FALLOCATE RPC (fallocate)
+	$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_falloc ||
+		error "setstripe for file $tfile_falloc failed"
+	$RUNAS_CMD -u $ID0 fallocate -l 1M $tfile_falloc ||
+		error "fallocate for file $tfile_falloc failed"
+
+	check_ids_sync
+
+	# check IDs are set correctly
+	check_mdt_inode_ids $tfile_write $ID0 $ID0 $testdir_projid
 	check_ost_object_ids $tfile_write $ID0 $ID0 $testdir_projid
-	check_ost_object_ids $tfile_trunc $ID0 $ID0 $testdir_projid
+
+	check_mdt_inode_ids $tfile_write2 $ID0 $ID0 0
+	check_ost_object_ids $tfile_write2 $ID0 $ID0 0
+
+	if $have_ost_punch_ids; then
+		check_mdt_inode_ids $tfile_trunc $ID0 $ID0 $testdir_projid
+		check_ost_object_ids $tfile_trunc $ID0 $ID0 $testdir_projid
+	fi
+
+	check_mdt_inode_ids $tfile_falloc $ID0 $ID0 $testdir_projid
+	check_ost_object_ids $tfile_falloc $ID0 $ID0 $testdir_projid
+
+	check_mdt_inode_ids $tfile_creat $ID0 $ID0 $testdir_projid
+
+	# move file to projdir should set PROJID from directory
+	# MDS_REINT RPC Client->MDS; OST_SETATTR RPC MDS->OST
+	mv $tfile_write ${testdir}/ || error "mv $tfile_write failed"
+	tfile_write=$testdir/${tfile}_write
+
+	# set explicit PROJID outside of projdir
+	# MDS_REINT RPC Client->MDS; OST_SETATTR RPC MDS->OST
+	$LFS project -p $testfile_projid $tfile_write2 ||
+		error "lfs project failed"
+
+	check_ids_sync
+
+	check_mdt_inode_ids $tfile_write $ID0 $ID0 $testdir_projid
+	check_ost_object_ids $tfile_write $ID0 $ID0 $testdir_projid
+
+	check_mdt_inode_ids $tfile_write2 $ID0 $ID0 $testfile_projid
+	check_ost_object_ids $tfile_write2 $ID0 $ID0 $testfile_projid
+
+	# move file to projdir should set new PROJID from directory
+	# MDS_REINT RPC Client->MDS; OST_SETATTR RPC MDS->OST
+	mv $tfile_write2 $projdir || error "mv $tfile_write2 failed"
+	tfile_write2=$projdir/${tfile}_write2
+
+	# chown should set new UID/GID
+	# MDS_REINT RPC Client->MDS; OST_SETATTR RPC MDS->OST
+	chown $ID1:$ID1 $tfile_write || error "chown $tfile_write failed"
+
+	check_ids_sync
+
+	check_mdt_inode_ids $tfile_write2 $ID0 $ID0 $testdir_projid
+	check_ost_object_ids $tfile_write2 $ID0 $ID0 $testdir_projid
+
+	check_mdt_inode_ids $tfile_write $ID1 $ID1 $testdir_projid
+	check_ost_object_ids $tfile_write $ID1 $ID1 $testdir_projid
 }
-run_test 75 "check uid/gid/projid are set on OST for OST_PUNCH RPC"
+run_test 75 "check uid/gid/projid are set on OST and MDT for various RPCs"
 
 log "cleanup: ======================================================"
 
