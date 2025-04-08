@@ -24370,8 +24370,9 @@ run_test 230j "DoM file data not changed after dir migration"
 
 test_230k() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs"
-	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
-		skip "Need MDS version at least 2.11.56"
+
+	(( $MDS1_VERSION > $(version_code v2_12_9-38-g80e9ebc1b1e4) )) ||
+		skip "Need MDS > v2_12_9-38-g80e9ebc1b1e4"
 
 	local total=20
 	local files_on_starting_mdt=0
