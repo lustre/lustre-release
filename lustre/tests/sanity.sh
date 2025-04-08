@@ -1482,6 +1482,9 @@ run_test 24F "hash order vs readdir (LU-11330)"
 test_24G () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
+	(( $MDS1_VERSION >= $(version_code v2_13_56-59-g9adc02c016d2) )) ||
+		skip "Need MDS >= v2_13_56-59-g9adc02c016d2 for symlink migration"
+
 	local ino1
 	local ino2
 
