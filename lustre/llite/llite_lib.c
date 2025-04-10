@@ -461,7 +461,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	sb->s_blocksize_bits = log2(osfs->os_bsize);
 	sb->s_magic = LL_SUPER_MAGIC;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
-	sbi->ll_namelen = osfs->os_namelen;
+	sbi->ll_namelen = min_t(u32, osfs->os_namelen, NAME_MAX);
 	sbi->ll_mnt.mnt = current->fs->root.mnt;
 	sbi->ll_mnt_ns = current->nsproxy->mnt_ns;
 
@@ -2576,6 +2576,7 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 {
 	struct super_block *sb = de->d_sb;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct obd_statfs osfs;
 	__u64 fsid = huge_encode_dev(sb->s_dev);
 	ktime_t kstart = ktime_get();
@@ -2584,7 +2585,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	CDEBUG(D_VFSTRACE, "VFS Op:sb=%s (%p)\n", sb->s_id, sb);
 
 	/* Some amount of caching on the client is allowed */
-	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_SUM);
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_SUM);
 	if (rc)
 		return rc;
 
@@ -2609,10 +2610,11 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	sfs->f_bavail = osfs.os_bavail;
 	sfs->f_fsid.val[0] = (__u32)fsid;
 	sfs->f_fsid.val[1] = (__u32)(fsid >> 32);
+	sfs->f_namelen = sbi->ll_namelen;
 	if (ll_i2info(de->d_inode)->lli_projid)
 		return ll_statfs_project(de->d_inode, sfs);
 
-	ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STATFS,
+	ll_stats_ops_tally(sbi, LPROC_LL_STATFS,
 			   ktime_us_delta(ktime_get(), kstart));
 
 	return 0;

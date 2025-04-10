@@ -1101,7 +1101,11 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 				   unsigned int flags)
 {
 	struct lookup_intent *itp, it = { .it_op = IT_GETATTR };
-	struct dentry *de;
+	struct ll_sb_info *sbi = ll_i2sbi(parent);
+	struct dentry *de = NULL;
+
+	if (dentry->d_name.len > sbi->ll_namelen)
+		return ERR_PTR(-ENAMETOOLONG);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, dir="DFID"(%p), flags=%u\n",
 	       dentry, PFID(ll_inode2fid(parent)), parent, flags);
@@ -1164,11 +1168,14 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	__u32 secctxlen = 0;
 	void *encctx = NULL;
 	__u32 encctxlen = 0;
-	struct ll_sb_info *sbi = NULL;
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
 	struct pcc_create_attach pca = { NULL, NULL };
 	bool encrypt = false;
 	int rc = 0;
+
 	ENTRY;
+	if (dentry->d_name.len > sbi->ll_namelen)
+		return -ENAMETOOLONG;
 
 	CDEBUG(D_VFSTRACE,
 	       "VFS Op:name=%pd, dir="DFID"(%p), file %p, open_flags %x, mode %x opened %d\n",
