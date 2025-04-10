@@ -2407,7 +2407,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 				if (filename_is_volatile(dentry->d_name.name,
 							 dentry->d_name.len,
 							 NULL) &&
-				    ll_require_key(inode) == -ENOKEY) {
+				    !ll_has_encryption_key(inode)) {
 					struct file *ref_file;
 					struct inode *ref_inode;
 					struct ll_inode_info *ref_lli;
@@ -2883,7 +2883,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	 * we will need it in ll_prepare_close().
 	 */
 	if (lli->lli_attr_valid & OBD_MD_FLLAZYSIZE && lli->lli_lazysize &&
-	    ll_require_key(inode) == -ENOKEY)
+	    IS_ENCRYPTED(inode) && !ll_has_encryption_key(inode))
 		lli->lli_attr_valid = body->mbo_valid | OBD_MD_FLLAZYSIZE;
 	else
 		lli->lli_attr_valid = body->mbo_valid;

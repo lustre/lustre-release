@@ -670,10 +670,6 @@ int ll_file_open_encrypt(struct inode *inode, struct file *filp)
 	return llcrypt_file_open(inode, filp);
 }
 
-void llcrypt_free_ctx(void *encctx, __u32 size)
-{
-}
-
 bool ll_sb_has_test_dummy_encryption(struct super_block *sb)
 {
 	return false;

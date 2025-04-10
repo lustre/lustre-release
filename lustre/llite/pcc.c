@@ -1466,7 +1466,7 @@ static int pcc_encsize_xattr_set(struct pcc_inode *pcci)
 	if (!IS_ENCRYPTED(inode))
 		RETURN(0);
 
-	if (ll_require_key(inode) == -ENOKEY &&
+	if (!ll_has_encryption_key(inode) &&
 	    pcci->pcci_lli->lli_attr_valid & OBD_MD_FLLAZYSIZE)
 		size = pcci->pcci_lli->lli_lazysize;
 	else

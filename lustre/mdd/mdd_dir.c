@@ -1223,7 +1223,7 @@ static int changelog_name2digest(const char *name, int namelen,
 
 		digest->cdf_fid = *fid;
 		memcpy(digest->cdf_excerpt,
-		       LLCRYPT_FNAME_DIGEST(ln->ln_name, ln->ln_namelen),
+		       LLCRYPT_EXTRACT_DIGEST(ln->ln_name, ln->ln_namelen),
 		       LL_CRYPTO_BLOCK_SIZE);
 		p = (char *)digest;
 		len = sizeof(*digest);

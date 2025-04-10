@@ -96,7 +96,7 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 	 * stored into lli_lazysize in ll_merge_attr(), so set proper file size
 	 * now that we are closing.
 	 */
-	if (ll_require_key(inode) == -ENOKEY &&
+	if (IS_ENCRYPTED(inode) && !ll_has_encryption_key(inode) &&
 	    ll_i2info(inode)->lli_attr_valid & OBD_MD_FLLAZYSIZE) {
 		op_data->op_attr.ia_size = ll_i2info(inode)->lli_lazysize;
 		if (IS_PCCCOPY(inode)) {
@@ -1683,7 +1683,7 @@ static int ll_merge_attr_nolock(const struct lu_env *env, struct inode *inode)
 	CDEBUG(D_VFSTRACE, DFID" updating i_size %llu i_blocks %llu\n",
 	       PFID(&lli->lli_fid), attr->cat_size, attr->cat_blocks);
 
-	if (ll_require_key(inode) == -ENOKEY) {
+	if (IS_ENCRYPTED(inode) && !ll_has_encryption_key(inode)) {
 		/* Without the key, round up encrypted file size to next
 		 * LUSTRE_ENCRYPTION_UNIT_SIZE. Clear text size is put in
 		 * lli_lazysize for proper file size setting at close time.
@@ -5195,7 +5195,8 @@ static loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 	/* Without the key, SEEK_HOLE return value has to be
 	 * rounded up to next LUSTRE_ENCRYPTION_UNIT_SIZE.
 	 */
-	if (ll_require_key(inode) == -ENOKEY && whence == SEEK_HOLE)
+	if (IS_ENCRYPTED(inode) && !ll_has_encryption_key(inode) &&
+	    whence == SEEK_HOLE)
 		retval = round_up(retval, LUSTRE_ENCRYPTION_UNIT_SIZE);
 
 	RETURN(retval);

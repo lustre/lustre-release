@@ -6553,6 +6553,7 @@ test_64f() {
 
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	echo "setup local client nodmap c0"
 	setup_local_client_nodemap "c0" 1 1
 
 	yes | fscrypt setup --force --verbose ||
@@ -6561,6 +6562,7 @@ test_64f() {
 		/etc/fscrypt.conf
 	yes | fscrypt setup --verbose $MOUNT ||
 		echo "fscrypt setup $MOUNT already done"
+	echo "fscrypt for mount $MOUNT is ready for use"
 	stack_trap "rm -rf $MOUNT/.fscrypt"
 
 	# file_perms is required because fscrypt uses chmod/chown
@@ -6569,16 +6571,18 @@ test_64f() {
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
 		--value $rbac ||
 		error "setting rbac $rbac failed (1)"
+	echo "waiting for nodemap file_perms and fscrypt to be modified"
 	wait_nm_sync c0 rbac
 
 	mkdir -p $vaultdir
-	set -vx
 	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
 	     --source=custom_passphrase --name=protector_64 $vaultdir ||
 		error "fscrypt encrypt $vaultdir failed"
 	fscrypt lock $vaultdir || error "fscrypt lock $vaultdir failed (1)"
+	echo "$vaultdir is locked away with encryption"
 	policy=$(fscrypt status $vaultdir | awk '$1 == "Policy:"{print $2}')
 	[ -n "$policy" ] || error "could not get enc policy"
+	echo "fscrypt policy $policy is ready"
 	protector=$(fscrypt status $vaultdir |
 		  awk 'BEGIN {found=0} { if (found == 1) { print $1 }} \
 			$1 == "PROTECTOR" {found=1}')
