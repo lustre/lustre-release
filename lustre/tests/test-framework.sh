@@ -817,6 +817,18 @@ lustre_version_code() {
 	version_code $(lustre_build_version $1)
 }
 
+zfs_version_code() {
+	local facet=$1
+	local facet_version=${facet}_ZFS_VERSION
+
+	if [[ -z "${!facet_version}" ]]; then
+		local zfs_ver=$(do_facet $facet "modinfo --field version zfs")
+
+		export $facet_version=$(version_code ${zfs_ver%-*})
+	fi
+	echo ${!facet_version}
+}
+
 # Extract the server-side /etc/os-release information into local variables
 # usage: lustre_os_release <facet>
 # generates $facet_OS_ID, $facet_OS_ID_LIKE, $facet_VERSION_ID
