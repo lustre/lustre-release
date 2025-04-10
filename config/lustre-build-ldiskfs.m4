@@ -23,6 +23,7 @@ esac
 AS_IF([test -z "$LDISKFS_SERIES"], [
 AS_IF([test x$RHEL_KERNEL = xyes], [
 	case $RHEL_RELEASE_NO in
+	96)     LDISKFS_SERIES="5.14-rhel9.6.series"    ;;
 	95)     LDISKFS_SERIES="5.14-rhel9.5.series"    ;;
 	94)     LDISKFS_SERIES="5.14-rhel9.4.series"
 		AS_VERSION_COMPARE([$RHEL_RELEASE_STR],[427.42.1],
