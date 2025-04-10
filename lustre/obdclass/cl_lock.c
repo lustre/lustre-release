@@ -179,8 +179,11 @@ int cl_lock_request(const struct lu_env *env, struct cl_io *io,
 	ENTRY;
 
 	rc = cl_lock_init(env, lock, io);
-	if (rc < 0)
+	if (rc < 0) {
+		if (rc == -EAGAIN)
+			io->ci_need_restart = 1;
 		RETURN(rc);
+	}
 
 	if ((enq_flags & CEF_GLIMPSE) && !(enq_flags & CEF_SPECULATIVE)) {
 		anchor = &cl_env_info(env)->clt_anchor;

@@ -109,6 +109,15 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(ergo(is_trunc, lio->lis_trunc_stripe_index != NULL));
+	LASSERTF(cl_object_same(lock->cll_descr.cld_obj,
+				(struct cl_object *)obj),
+		"lock obj %p, parent obj %p\n", lock->cll_descr.cld_obj, obj);
+
+	/* If the lock's host(object) is different from the object for current
+	 * IO, we'd restart the IO.
+	 */
+	if (!cl_object_same(io->ci_obj, (struct cl_object *)obj))
+		RETURN(ERR_PTR(-EAGAIN));
 
 	ext.e_start = lock->cll_descr.cld_start << PAGE_SHIFT;
 	if (lock->cll_descr.cld_end == CL_PAGE_EOF)
