@@ -1252,7 +1252,11 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 				   unsigned int flags)
 {
 	struct lookup_intent *itp, it = { .it_op = IT_GETATTR };
+	struct ll_sb_info *sbi = ll_i2sbi(parent);
 	struct dentry *de = NULL;
+
+	if (dentry->d_name.len > sbi->ll_namelen)
+		return ERR_PTR(-ENAMETOOLONG);
 
 	/* VFS has locked the inode before calling this */
 	ll_set_inode_lock_owner(parent);
@@ -1326,12 +1330,15 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 {
 	struct lookup_intent *it;
 	struct dentry *de;
-	struct ll_sb_info *sbi = NULL;
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
 	struct pcc_create_attach pca = { NULL, NULL };
 	int open_threshold;
 	int rc = 0;
 
 	ENTRY;
+	if (dentry->d_name.len > sbi->ll_namelen)
+		return -ENAMETOOLONG;
+
 	/* VFS has locked the inode before calling this */
 	ll_set_inode_lock_owner(dir);
 

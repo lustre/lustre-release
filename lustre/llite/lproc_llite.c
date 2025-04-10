@@ -289,16 +289,52 @@ static ssize_t namelen_max_show(struct kobject *kobj, struct attribute *attr,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
+	return scnprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_namelen);
+}
+
+static ssize_t namelen_max_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	struct obd_statfs osfs;
+	int val;
 	int rc;
+
+	rc = kstrtoint(buffer, 10, &val);
+	if (rc)
+		return rc;
 
 	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
 	if (rc)
 		return rc;
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n", osfs.os_namelen);
+	if (val < 12) { /* arbitrary sanity check, but 8.3 was OK for DOS :-) */
+		CERROR("%s: cannot set max filename length %u below 12 chars\n",
+		       sbi->ll_fsname, val);
+		return -ERANGE;
+	}
+
+	/* NAME_MAX is not strictly a VFS limit, but more of a convention.
+	 * It would be possible to allow filenames over NAME_MAX, if the
+	 * code in the client and server was fixed to allow this as well.
+	 */
+	if (val > NAME_MAX) {
+		CERROR("%s: cannot set max filename length %u over VFS limit of %u chars\n",
+		       sbi->ll_fsname, val, NAME_MAX);
+		return -EOVERFLOW;
+	}
+	if (val > osfs.os_namelen) {
+		CERROR("%s: cannot set max filename length %u over MDT limit of %u chars\n",
+		       sbi->ll_fsname, val, osfs.os_namelen);
+		return -EOVERFLOW;
+	}
+
+	sbi->ll_namelen = val;
+
+	return count;
 }
-LUSTRE_RO_ATTR(namelen_max);
+LUSTRE_RW_ATTR(namelen_max);
 
 static ssize_t statfs_state_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
