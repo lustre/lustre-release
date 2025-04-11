@@ -1887,6 +1887,7 @@ out:
 }
 EXPORT_SYMBOL(nodemap_set_mapping_mode);
 
+static
 int nodemap_idx_cluster_roles_modify(struct lu_nodemap *nodemap,
 				     enum nodemap_rbac_roles old_rbac,
 				     enum nodemap_raise_privs old_privs,

@@ -1676,6 +1676,7 @@ static const char *nrs_orr_supp2str(enum nrs_orr_supp supp)
 		return LPROCFS_NRS_SUPP_NAME_READWRITES;
 	default:
 		LBUG();
+		return NULL;
 	}
 }
 
