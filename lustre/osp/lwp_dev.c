@@ -369,9 +369,9 @@ static struct lu_device *lwp_device_alloc(const struct lu_env *env,
 static struct lu_device *lwp_device_fini(const struct lu_env *env,
 					 struct lu_device *ludev)
 {
-	struct lwp_device	*m = lu2lwp_dev(ludev);
-	struct task_struct	*task = NULL;
-	int			 rc;
+	struct lwp_device *m = lu2lwp_dev(ludev);
+	struct task_struct *task = NULL;
+
 	ENTRY;
 
 	task = xchg(&m->lpd_notify_task, NULL);
@@ -384,13 +384,9 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 		class_disconnect(m->lpd_exp);
 
 	LASSERT(m->lpd_obd);
-	rc = client_obd_cleanup(m->lpd_obd);
-	LASSERTF(rc == 0, "error %d\n", rc);
-
+	client_obd_cleanup(m->lpd_obd);
 	ptlrpc_lprocfs_unregister_obd(m->lpd_obd);
-
 	ptlrpcd_decref();
-
 	RETURN(NULL);
 }
 

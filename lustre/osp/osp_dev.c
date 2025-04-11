@@ -1370,7 +1370,6 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 					 struct lu_device *ld)
 {
 	struct osp_device *osp = lu2osp_dev(ld);
-	int                rc;
 
 	ENTRY;
 
@@ -1392,10 +1391,9 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 	 * the obd devices are already gone.
 	 */
 	osp_tunables_fini(osp);
-	rc = client_obd_cleanup(osp->opd_obd);
+	client_obd_cleanup(osp->opd_obd);
 	ptlrpcd_decref();
-
-	RETURN(rc != 0 ? ERR_PTR(rc) : NULL);
+	RETURN(NULL);
 }
 
 /**

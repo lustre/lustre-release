@@ -4036,7 +4036,6 @@ static int osc_precleanup(struct obd_device *obd)
 int osc_cleanup_common(struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
-	int rc;
 
 	ENTRY;
 
@@ -4057,11 +4056,9 @@ int osc_cleanup_common(struct obd_device *obd)
 
 	/* free memory of osc quota cache */
 	osc_quota_cleanup(obd);
-
-	rc = client_obd_cleanup(obd);
-
+	client_obd_cleanup(obd);
 	ptlrpcd_decref();
-	RETURN(rc);
+	RETURN(0);
 }
 EXPORT_SYMBOL(osc_cleanup_common);
 

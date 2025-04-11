@@ -818,8 +818,6 @@ static int mgc_precleanup(struct obd_device *obd)
 
 static int mgc_cleanup(struct obd_device *obd)
 {
-	int rc;
-
 	ENTRY;
 
 	/* COMPAT_146 - old config logs may have added profiles secretly */
@@ -830,8 +828,8 @@ static int mgc_cleanup(struct obd_device *obd)
 	lprocfs_obd_cleanup(obd);
 	ptlrpcd_decref();
 
-	rc = client_obd_cleanup(obd);
-	RETURN(rc);
+	client_obd_cleanup(obd);
+	RETURN(0);
 }
 
 static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)

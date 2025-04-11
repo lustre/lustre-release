@@ -567,7 +567,7 @@ err:
 }
 EXPORT_SYMBOL(client_obd_setup);
 
-int client_obd_cleanup(struct obd_device *obd)
+void client_obd_cleanup(struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
 
@@ -585,7 +585,7 @@ int client_obd_cleanup(struct obd_device *obd)
 		 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
 	cli->cl_mod_tag_bitmap = NULL;
 
-	RETURN(0);
+	EXIT;
 }
 EXPORT_SYMBOL(client_obd_cleanup);
 

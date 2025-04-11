@@ -2589,7 +2589,7 @@ ptlrpc_req2svc(struct ptlrpc_request *req)
  * @{
  */
 int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
-int client_obd_cleanup(struct obd_device *obd);
+void client_obd_cleanup(struct obd_device *obd);
 int client_connect_import(const struct lu_env *env,
 			  struct obd_export **exp, struct obd_device *obd,
 			  struct obd_uuid *cluuid, struct obd_connect_data *ocd,
