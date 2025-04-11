@@ -429,6 +429,41 @@ static int ll_xattr_set(const struct xattr_handler *handler,
 	    (__swab32(((struct lov_user_md *)value)->lmm_magic) &
 	    le32_to_cpu(LOV_MAGIC_MASK)) == le32_to_cpu(LOV_MAGIC_MAGIC))
 		lustre_swab_lov_user_md((struct lov_user_md *)value, 0);
+	else if (strcmp(name, "lmv") == 0) {
+		struct lmv_user_md *lmu = (struct lmv_user_md *)value;
+
+		/* sanity 102n setxattr(lmv) with garbage, but it expects
+		 * server silently ignores such op if magic is not
+		 * LMV_USER_MAGIC.
+		 */
+		if (lmu->lum_magic != le32_to_cpu(LMV_USER_MAGIC) &&
+		    lmu->lum_magic != le32_to_cpu(LMV_USER_MAGIC_SPECIFIC) &&
+		    (lmu->lum_magic == LMV_USER_MAGIC ||
+		     lmu->lum_magic == LMV_USER_MAGIC_SPECIFIC)) {
+			rc = -EINVAL;
+			if (lmv_user_md_size(lmu->lum_stripe_count,
+					     lmu->lum_magic) != size)
+				goto out;
+			lustre_swab_lmv_user_md(lmu);
+		}
+
+		/* old client default hash is fnv_1a_64, and 2.12 server may
+		 * treat unknown hash as error. Use a hash type it can
+		 * understand.
+		 */
+		if (!(exp_connect_flags2(ll_i2sbi(inode)->ll_md_exp) &
+		      OBD_CONNECT2_CRUSH)) {
+			if ((lmu->lum_hash_type &
+			     cpu_to_le32(LMV_HASH_TYPE_MASK)) ==
+			    cpu_to_le32(LMV_HASH_TYPE_UNKNOWN)) {
+				lmu->lum_hash_type ^=
+					cpu_to_le32(LMV_HASH_TYPE_UNKNOWN);
+				lmu->lum_hash_type |=
+					cpu_to_le32(LMV_HASH_TYPE_FNV_1A_64);
+			}
+			lmu->lum_hash_type ^= cpu_to_le32(LMV_HASH_FLAG_FIXED);
+		}
+	}
 
 	rc = ll_xattr_set_common(handler, map, dentry, inode, name,
 				 value, size, flags);

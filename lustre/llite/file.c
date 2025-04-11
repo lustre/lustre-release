@@ -5804,6 +5804,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	struct md_op_data *op_data;
 	struct ptlrpc_request *request = NULL;
 	struct obd_client_handle *och = NULL;
+	__u64 flags2;
 	struct qstr qstr;
 	struct mdt_body *body;
 	__u64 data_version = 0;
@@ -5820,6 +5821,21 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	if (lum->lum_magic != cpu_to_le32(LMV_USER_MAGIC) &&
 	    lum->lum_magic != cpu_to_le32(LMV_USER_MAGIC_SPECIFIC))
 		lustre_swab_lmv_user_md(lum);
+
+	flags2 = exp_connect_flags2(ll_i2sbi(parent)->ll_md_exp);
+	/* old client default hash is fnv_1a_64, and 2.12 server may treat
+	 * unknown hash as error. Use a hash type it can understand.
+	 */
+	if (!(flags2 & OBD_CONNECT2_CRUSH)) {
+		if ((lum->lum_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK)) ==
+		    cpu_to_le32(LMV_HASH_TYPE_UNKNOWN)) {
+			lum->lum_hash_type ^=
+				cpu_to_le32(LMV_HASH_TYPE_UNKNOWN);
+			lum->lum_hash_type |=
+				cpu_to_le32(LMV_HASH_TYPE_FNV_1A_64);
+		}
+		lum->lum_hash_type ^= cpu_to_le32(LMV_HASH_FLAG_FIXED);
+	}
 
 	/* Get child FID first */
 	qstr.hash = ll_full_name_hash(file_dentry(file), name, namelen);
@@ -5842,8 +5858,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	if (!child_inode)
 		RETURN(-ENOENT);
 
-	if (!(exp_connect_flags2(ll_i2sbi(parent)->ll_md_exp) &
-	      OBD_CONNECT2_DIR_MIGRATE)) {
+	if (!(flags2 & OBD_CONNECT2_DIR_MIGRATE)) {
 		if (le32_to_cpu(lum->lum_stripe_count) > 1 ||
 		    ll_dir_striped(child_inode)) {
 			rc = -EOPNOTSUPP;
