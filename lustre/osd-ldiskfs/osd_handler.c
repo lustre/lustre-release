@@ -6927,6 +6927,7 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	struct osd_it_ea *oie;
 	struct file *file;
 	struct dentry *obj_dentry;
+	int rc = -ENOMEM;
 
 	ENTRY;
 	OBD_SLAB_ALLOC_PTR_GFP(oie, osd_itea_cachep, GFP_NOFS);
@@ -6946,7 +6947,7 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	} else {
 		OBD_ALLOC(oie->oie_buf, OSD_IT_EA_BUFSIZE);
 		if (!oie->oie_buf)
-			goto out_free;
+			GOTO(out_free, rc);
 	}
 	oie->oie_obj = NULL;
 	file = &oie->oie_file;
@@ -6961,12 +6962,21 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	file->f_op = inode->i_fop;
 	file->f_inode = inode;
 
+	/* Linux v6.11-rc4-18-g4f05ee2f82b4: if open handler is defined
+	 * and private_data is not yet provided the file open needs
+	 * to fill private_data before iterate_shared() is called.
+	 */
+	if (file->f_op->open && !file->private_data) {
+		rc = file->f_op->open(inode, file);
+		if (rc)
+			GOTO(out_free, rc);
+	}
 	RETURN(oie);
 
 out_free:
 	OBD_SLAB_FREE_PTR(oie, osd_itea_cachep);
 
-	return ERR_PTR(-ENOMEM);
+	return ERR_PTR(rc);
 }
 
 /**
