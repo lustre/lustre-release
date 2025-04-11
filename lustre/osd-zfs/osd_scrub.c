@@ -1873,6 +1873,11 @@ static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
 
 	za = &it->ozi_za;
 	zde = &it->ozi_zde;
+
+#ifdef ZAP_MAXNAMELEN_NEW
+	za->za_name_len = MAXNAMELEN;
+#endif
+
 	while (1) {
 		rc = -zap_cursor_retrieve(it->ozi_zc, za);
 		if (unlikely(rc)) {
