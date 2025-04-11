@@ -204,7 +204,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	__u32 perm = 0;
 	int setuid;
 	int setgid;
-	int rc = 0;
+	int i, rc = 0;
 
 	ENTRY;
 	LASSERT(req->rq_auth_gss);
@@ -226,6 +226,9 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 				       NODEMAP_CLIENT_TO_FS, pud->pud_fsuid);
 	pud->pud_fsgid = nodemap_map_id(nodemap, NODEMAP_GID,
 				       NODEMAP_CLIENT_TO_FS, pud->pud_fsgid);
+	for (i = 0; i < pud->pud_ngroups; i++)
+		pud->pud_groups[i] = nodemap_map_suppgid(nodemap,
+							 pud->pud_groups[i]);
 
 	ucred->uc_o_uid = pud->pud_uid;
 	ucred->uc_o_gid = pud->pud_gid;
@@ -244,7 +247,8 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	if (type == BODY_INIT) {
 		struct mdt_body *body = (struct mdt_body *)buf;
 
-		ucred->uc_suppgids[0] = body->mbo_suppgid;
+		ucred->uc_suppgids[0] = nodemap_map_suppgid(nodemap,
+							    body->mbo_suppgid);
 		ucred->uc_suppgids[1] = -1;
 	}
 
@@ -643,7 +647,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	uc->uc_o_gid = uc->uc_gid = body->mbo_gid;
 	uc->uc_o_fsuid = uc->uc_fsuid = body->mbo_fsuid;
 	uc->uc_o_fsgid = uc->uc_fsgid = body->mbo_fsgid;
-	uc->uc_suppgids[0] = body->mbo_suppgid;
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, body->mbo_suppgid);
 	uc->uc_suppgids[1] = -1;
 	uc->uc_ginfo = NULL;
 	uc->uc_cap = CAP_EMPTY_SET;
@@ -1245,8 +1249,6 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	uc->uc_fsgid = rec->sa_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->sa_cap);
-	uc->uc_suppgids[0] = rec->sa_suppgid;
-	uc->uc_suppgids[1] = -1;
 
 	rr->rr_fid1 = &rec->sa_fid;
 	la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
@@ -1263,6 +1265,8 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 				    NODEMAP_CLIENT_TO_FS, rec->sa_gid);
 	la->la_projid = nodemap_map_id(nodemap, NODEMAP_PROJID,
 				       NODEMAP_CLIENT_TO_FS, rec->sa_projid);
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, rec->sa_suppgid);
+	uc->uc_suppgids[1] = -1;
 	nodemap_putref(nodemap);
 
 	la->la_size  = rec->sa_size;
@@ -1397,6 +1401,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct req_capsule *pill = info->mti_pill;
 	struct md_op_spec *sp = &info->mti_spec;
+	struct lu_nodemap *nodemap;
 	int rc;
 
 	ENTRY;
@@ -1410,8 +1415,12 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	uc->uc_fsgid = rec->cr_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->cr_cap);
-	uc->uc_suppgids[0] = rec->cr_suppgid1;
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, rec->cr_suppgid1);
 	uc->uc_suppgids[1] = -1;
+	nodemap_putref(nodemap);
 	uc->uc_umask = rec->cr_umask;
 
 	rr->rr_fid1 = &rec->cr_fid1;
@@ -1502,6 +1511,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct req_capsule *pill = info->mti_pill;
+	struct lu_nodemap *nodemap;
 	int rc;
 
 	ENTRY;
@@ -1515,8 +1525,12 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 	uc->uc_fsgid = rec->lk_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->lk_cap);
-	uc->uc_suppgids[0] = rec->lk_suppgid1;
-	uc->uc_suppgids[1] = rec->lk_suppgid2;
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, rec->lk_suppgid1);
+	uc->uc_suppgids[1] = nodemap_map_suppgid(nodemap, rec->lk_suppgid2);
+	nodemap_putref(nodemap);
 
 	attr->la_uid = rec->lk_fsuid;
 	attr->la_gid = rec->lk_fsgid;
@@ -1546,6 +1560,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct req_capsule *pill = info->mti_pill;
+	struct lu_nodemap *nodemap;
 	int rc;
 
 	ENTRY;
@@ -1559,8 +1574,12 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 	uc->uc_fsgid = rec->ul_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->ul_cap);
-	uc->uc_suppgids[0] = rec->ul_suppgid1;
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, rec->ul_suppgid1);
 	uc->uc_suppgids[1] = -1;
+	nodemap_putref(nodemap);
 
 	attr->la_uid = rec->ul_fsuid;
 	attr->la_gid = rec->ul_fsgid;
@@ -1603,6 +1622,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct req_capsule *pill = info->mti_pill;
 	struct md_op_spec *spec = &info->mti_spec;
+	struct lu_nodemap *nodemap;
 	int rc;
 
 	ENTRY;
@@ -1616,8 +1636,12 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 	uc->uc_fsgid = rec->rn_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->rn_cap);
-	uc->uc_suppgids[0] = rec->rn_suppgid1;
-	uc->uc_suppgids[1] = rec->rn_suppgid2;
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, rec->rn_suppgid1);
+	uc->uc_suppgids[1] = nodemap_map_suppgid(nodemap, rec->rn_suppgid2);
+	nodemap_putref(nodemap);
 
 	attr->la_uid = rec->rn_fsuid;
 	attr->la_gid = rec->rn_fsgid;
@@ -1656,6 +1680,7 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct req_capsule *pill = info->mti_pill;
 	struct md_op_spec *spec = &info->mti_spec;
+	struct lu_nodemap *nodemap;
 	int rc;
 
 	ENTRY;
@@ -1669,8 +1694,12 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 	uc->uc_fsgid = rec->rn_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->rn_cap);
-	uc->uc_suppgids[0] = rec->rn_suppgid1;
-	uc->uc_suppgids[1] = rec->rn_suppgid2;
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, rec->rn_suppgid1);
+	uc->uc_suppgids[1] = nodemap_map_suppgid(nodemap, rec->rn_suppgid2);
+	nodemap_putref(nodemap);
 
 	attr->la_uid = rec->rn_fsuid;
 	attr->la_gid = rec->rn_fsgid;
@@ -1755,6 +1784,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct ptlrpc_request *req = mdt_info_req(info);
 	struct md_op_spec *sp = &info->mti_spec;
+	struct lu_nodemap *nodemap;
 	int rc;
 
 	ENTRY;
@@ -1769,8 +1799,12 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	uc->uc_fsgid = rec->cr_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->cr_cap);
-	uc->uc_suppgids[0] = rec->cr_suppgid1;
-	uc->uc_suppgids[1] = rec->cr_suppgid2;
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, rec->cr_suppgid1);
+	uc->uc_suppgids[1] = nodemap_map_suppgid(nodemap, rec->cr_suppgid2);
+	nodemap_putref(nodemap);
 	uc->uc_umask = rec->cr_umask;
 
 	rr->rr_fid1   = &rec->cr_fid1;
@@ -1844,6 +1878,7 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
 	struct req_capsule *pill = info->mti_pill;
 	struct mdt_rec_setxattr *rec;
+	struct lu_nodemap *nodemap;
 	int rc;
 
 	ENTRY;
@@ -1858,8 +1893,12 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 	uc->uc_fsgid  = rec->sx_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
 	ll_set_capability_u32(&uc->uc_cap, rec->sx_cap);
-	uc->uc_suppgids[0] = rec->sx_suppgid1;
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, rec->sx_suppgid1);
 	uc->uc_suppgids[1] = -1;
+	nodemap_putref(nodemap);
 
 	rr->rr_opcode = rec->sx_opcode;
 	rr->rr_fid1   = &rec->sx_fid;

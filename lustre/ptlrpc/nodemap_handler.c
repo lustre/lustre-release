@@ -1030,6 +1030,22 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 }
 EXPORT_SYMBOL(nodemap_map_acl);
 
+/**
+ * Map supplementary groups received from client.
+ *
+ * \param	lu_nodemap	nodemap
+ * \param	id		id to map
+ *
+ * \retval	mapped id or -1 for invalid suppgid
+ */
+int nodemap_map_suppgid(struct lu_nodemap *nodemap, int suppgid)
+{
+	return suppgid == -1 ? suppgid : nodemap_map_id(nodemap, NODEMAP_GID,
+							NODEMAP_CLIENT_TO_FS,
+							suppgid);
+}
+EXPORT_SYMBOL(nodemap_map_suppgid);
+
 static int nodemap_inherit_properties(struct lu_nodemap *dst,
 				      struct lu_nodemap *src)
 {

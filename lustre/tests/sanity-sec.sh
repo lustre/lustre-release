@@ -7898,6 +7898,78 @@ test_75() {
 }
 run_test 75 "check uid/gid/projid are set on OST and MDT for various RPCs"
 
+cleanup_76() {
+	# unmount client
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	# reset and deactivate nodemaps, remount client
+	cleanup_local_client_nodemap
+
+	# remount client on $MOUNT_2
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
+	fi
+	wait_ssk
+}
+
+test_76() {
+	local user=$(getent passwd $RUNAS_ID | cut -d: -f1)
+	local grp=grptest76
+	local grpid=5000
+	local nm=c0
+
+	(( $MDS1_VERSION >= $(version_code 2.16.53) )) ||
+		skip "need MDS >= 2.16.53 for suppgroup mapping"
+
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_upcall=NONE
+
+	# create a specific group and add it as a supplementary group for $USER0
+	groupadd -g $grpid $grp
+	stack_trap "groupdel $grp" EXIT
+	usermod -aG $grp $user
+	stack_trap "gpasswd -d $user $grp" EXIT
+
+	stack_trap cleanup_76 EXIT
+
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# setup nodemap with offset
+	setup_local_client_nodemap $nm 1 1
+	do_facet mgs $LCTL nodemap_add_offset --name $nm \
+		--offset 100000 --limit 200000 ||
+			error "nodemap_add_offset failed"
+	wait_nm_sync $nm offset
+
+	# remount client to take nodemap into account
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount failed"
+	wait_ssk
+
+	# Create directory from client part of the nodemap, as root,
+	# and set its group membership to $grpid.
+	# This is going to be mapped on server side.
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chgrp -v $grp $DIR/$tdir || error "chgrp $DIR/$tdir failed"
+	chmod -v 0770 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+	ls -ld $DIR/$tdir
+	cancel_lru_locks
+
+	# access as $USER0, should work because it has $grpid as a supp group
+	# and it is properly mapped on server side
+	$RUNAS -G$grpid ls -l $DIR/$tdir ||
+		error "ls -l $DIR/$tdir as $user failed"
+	$RUNAS -G$grpid touch $DIR/$tdir/fileA ||
+		error "touch $DIR/$tdir/fileA as $user failed"
+}
+run_test 76 "suppgroups and gid mapping"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
