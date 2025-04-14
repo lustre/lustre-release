@@ -1,26 +1,7 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
- */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2016, 2017, Intel Corporation.
+ * Copyright (c) 2025, DataDirect Networks, Inc. All rights reserved.
  */
 /*
  * These tests exercise the llapi_layout API which abstracts the layout
@@ -34,46 +15,24 @@
  *  sudo ./llapi_layout_test
  */
 
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <sys/signal.h>
-#include <sys/types.h>
 #include <errno.h>
-#include <lustre/lustreapi.h>
-#include <pwd.h>
-#include <limits.h>
-#include <sys/stat.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <limits.h>
+#include <pwd.h>
+#include <stdint.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 
-#define ERROR(fmt, ...)							\
-	fprintf(stderr, "%s: %s:%d: %s: " fmt "\n",			\
-		program_invocation_short_name, __FILE__, __LINE__,	\
-		__func__, ## __VA_ARGS__);
+#include <lustre/lustreapi.h>
+#include "llapi_test_utils.h"
 
-#define DIE(fmt, ...)			\
-do {					\
-	ERROR(fmt, ## __VA_ARGS__);	\
-	exit(EXIT_FAILURE);		\
-} while (0)
-
-#define ASSERTF(cond, fmt, ...)						\
-do {									\
-	if (!(cond))							\
-		DIE("assertion '%s' failed: "fmt, #cond, ## __VA_ARGS__);\
-} while (0)								\
+static char *poolname = "testpool";
+static int num_osts = 2;
+static char lustre_dir[PATH_MAX - 5];	/* Lustre test directory */
 
 #define IN_RANGE(value, low, high) ((value >= low) && (value <= high))
-
-static char *lustre_dir;
-static char *poolname;
-static bool run_list_provided;
-static int num_osts = -1;
 
 static void usage(char *prog)
 {
@@ -1751,154 +1710,44 @@ static void test34(void)
 	ASSERTF(rc == 0, "errno %d", errno);
 }
 
-#define TEST_DESC_LEN	80
-struct test_tbl_entry {
-	void (*tte_fn)(void);
-	char tte_desc[TEST_DESC_LEN];
-	bool tte_skip;
-};
-
 static struct test_tbl_entry test_tbl[] = {
-	{ .tte_fn = &test0, .tte_desc = T0_DESC, .tte_skip = false },
-	{ .tte_fn = &test1, .tte_desc = T1_DESC, .tte_skip = false },
-	{ .tte_fn = &test2, .tte_desc = T2_DESC, .tte_skip = false },
-	{ .tte_fn = &test3, .tte_desc = T3_DESC, .tte_skip = false },
-	{ .tte_fn = &test4, .tte_desc = T4_DESC, .tte_skip = false },
-	{ .tte_fn = &test5, .tte_desc = T5_DESC, .tte_skip = false },
-	{ .tte_fn = &test6, .tte_desc = T6_DESC, .tte_skip = false },
-	{ .tte_fn = &test7, .tte_desc = T7_DESC, .tte_skip = false },
-	{ .tte_fn = &test8, .tte_desc = T8_DESC, .tte_skip = false },
-	{ .tte_fn = &test9, .tte_desc = T9_DESC, .tte_skip = false },
-	{ .tte_fn = &test10, .tte_desc = T10_DESC, .tte_skip = false },
-	{ .tte_fn = &test11, .tte_desc = T11_DESC, .tte_skip = false },
-	{ .tte_fn = &test12, .tte_desc = T12_DESC, .tte_skip = false },
-	{ .tte_fn = &test13, .tte_desc = T13_DESC, .tte_skip = false },
-	{ .tte_fn = &test14, .tte_desc = T14_DESC, .tte_skip = false },
-	{ .tte_fn = &test15, .tte_desc = T15_DESC, .tte_skip = false },
-	{ .tte_fn = &test16, .tte_desc = T16_DESC, .tte_skip = false },
-	{ .tte_fn = &test17, .tte_desc = T17_DESC, .tte_skip = false },
-	{ .tte_fn = &test18, .tte_desc = T18_DESC, .tte_skip = false },
-	{ .tte_fn = &test19, .tte_desc = T19_DESC, .tte_skip = false },
-	{ .tte_fn = &test20, .tte_desc = T20_DESC, .tte_skip = false },
-	{ .tte_fn = &test21, .tte_desc = T21_DESC, .tte_skip = false },
-	{ .tte_fn = &test22, .tte_desc = T22_DESC, .tte_skip = false },
-	{ .tte_fn = &test23, .tte_desc = T23_DESC, .tte_skip = false },
-	{ .tte_fn = &test24, .tte_desc = T24_DESC, .tte_skip = false },
-	{ .tte_fn = &test25, .tte_desc = T25_DESC, .tte_skip = false },
-	{ .tte_fn = &test26, .tte_desc = T26_DESC, .tte_skip = false },
-	{ .tte_fn = &test27, .tte_desc = T27_DESC, .tte_skip = false },
-	{ .tte_fn = &test28, .tte_desc = T28_DESC, .tte_skip = false },
-	{ .tte_fn = &test29, .tte_desc = T29_DESC, .tte_skip = false },
-	{ .tte_fn = &test30, .tte_desc = T30_DESC, .tte_skip = false },
-	{ .tte_fn = &test31, .tte_desc = T31_DESC, .tte_skip = false },
-	{ .tte_fn = &test32, .tte_desc = T32_DESC, .tte_skip = false },
-	{ .tte_fn = &test33, .tte_desc = T33_DESC, .tte_skip = false },
-	{ .tte_fn = &test34, .tte_desc = T34_DESC, .tte_skip = false },
+	TEST_REGISTER(0),
+	TEST_REGISTER(1),
+	TEST_REGISTER(2),
+	TEST_REGISTER(3),
+	TEST_REGISTER(4),
+	TEST_REGISTER(5),
+	TEST_REGISTER(6),
+	TEST_REGISTER(7),
+	TEST_REGISTER(8),
+	TEST_REGISTER(9),
+	TEST_REGISTER(10),
+	TEST_REGISTER(11),
+	TEST_REGISTER(12),
+	TEST_REGISTER(13),
+	TEST_REGISTER(14),
+	TEST_REGISTER(15),
+	TEST_REGISTER(16),
+	TEST_REGISTER(17),
+	TEST_REGISTER(18),
+	TEST_REGISTER(19),
+	TEST_REGISTER(20),
+	TEST_REGISTER(21),
+	TEST_REGISTER(22),
+	TEST_REGISTER(23),
+	TEST_REGISTER(24),
+	TEST_REGISTER(25),
+	TEST_REGISTER(26),
+	TEST_REGISTER(27),
+	TEST_REGISTER(28),
+	TEST_REGISTER(29),
+	TEST_REGISTER(30),
+	TEST_REGISTER(31),
+	TEST_REGISTER(32),
+	TEST_REGISTER(33),
+	TEST_REGISTER(34),
+	TEST_REGISTER_END
 };
-
-#define NUM_TESTS	(sizeof(test_tbl) / sizeof(struct test_tbl_entry))
-
-static void print_test_desc(int test_num, const char *test_desc,
-			    const char *status)
-{
-	int i;
-
-	printf(" test %2d: %s ", test_num, test_desc);
-	for (i = 0; i < TEST_DESC_LEN - strlen(test_desc); i++)
-		printf(".");
-	printf(" %s\n", status);
-}
-
-/* This function runs a single test by forking the process.  This way,
- * if there is a segfault during a test, the test program won't crash.
- */
-static int test(void (*test_fn)(), const char *test_desc, bool test_skip,
-		int test_num)
-{
-	int rc = 0;
-	pid_t pid;
-	char status_buf[128];
-
-	if (test_skip) {
-		if (!run_list_provided)
-			print_test_desc(test_num, test_desc, "skip");
-		return 0;
-	}
-
-	pid = fork();
-	if (pid < 0) {
-		ERROR("cannot fork: %s", strerror(errno));
-	} else if (pid > 0) {
-		int status = 0;
-
-		/* Non-zero value indicates failure. */
-		wait(&status);
-		if (status == 0) {
-			strncpy(status_buf, "pass", sizeof(status_buf));
-		} else if WIFSIGNALED(status) {
-			snprintf(status_buf, sizeof(status_buf),
-				 "fail (exit status %d, killed by SIG%d)",
-				 WEXITSTATUS(status), WTERMSIG(status));
-			rc = -1;
-		} else {
-			snprintf(status_buf, sizeof(status_buf),
-				 "fail (exit status %d)", WEXITSTATUS(status));
-			rc = -1;
-		}
-		print_test_desc(test_num, test_desc, status_buf);
-	} else if (pid == 0) {
-		/* Run the test in the child process.  Exit with 0 for success,
-		 * non-zero for failure
-		 */
-		test_fn();
-		exit(0);
-	}
-
-	return rc;
-}
-
-/* 'str_tests' are the tests to be skipped, such as "1,3,4,.." */
-static void set_tests_skipped(char *str_tests)
-{
-	char *ptr = str_tests;
-	int tstno;
-
-	if (ptr == NULL || strlen(ptr) == 0)
-		return;
-
-	while (*ptr != '\0') {
-		tstno = strtoul(ptr, &ptr, 0);
-		if (tstno >= 0 && tstno < NUM_TESTS)
-			test_tbl[tstno].tte_skip = true;
-		if (*ptr == ',')
-			ptr++;
-		else
-			break;
-	}
-}
-
-static void set_tests_to_run(char *str_tests)
-{
-	char *ptr = str_tests;
-	int tstno;
-	int i = 0;
-
-	if (ptr == NULL || strlen(ptr) == 0)
-		return;
-
-	for (i = 0; i < NUM_TESTS ; i++)
-		test_tbl[i].tte_skip = true;
-
-	while (*ptr != '\0') {
-		tstno = strtoul(ptr, &ptr, 0);
-		if (tstno >= 0 && tstno < NUM_TESTS)
-			test_tbl[tstno].tte_skip = false;
-		if (*ptr == ',')
-			ptr++;
-		else
-			break;
-	}
-}
 
 static void process_args(int argc, char *argv[])
 {
@@ -1907,20 +1756,23 @@ static void process_args(int argc, char *argv[])
 	while ((c = getopt(argc, argv, "d:p:o:s:t:")) != -1) {
 		switch (c) {
 		case 'd':
-			lustre_dir = optarg;
+			if (snprintf(lustre_dir, sizeof(lustre_dir), "%s",
+				     optarg) >= sizeof(lustre_dir))
+				DIE("Error: test directory name too long\n");
 			break;
 		case 'p':
 			poolname = optarg;
 			break;
 		case 'o':
 			num_osts = atoi(optarg);
+			if (num_osts < 2)
+				DIE("Error: at least 2 OSTS are required\n");
 			break;
 		case 's':
-			set_tests_skipped(optarg);
+			set_tests_to_skip(optarg, test_tbl);
 			break;
 		case 't':
-			run_list_provided = true;
-			set_tests_to_run(optarg);
+			set_tests_to_run(optarg, test_tbl);
 			break;
 		case '?':
 			fprintf(stderr, "Unknown option '%c'\n", optopt);
@@ -1931,47 +1783,7 @@ static void process_args(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-	int rc = 0;
-	int i;
-	struct stat s;
-	char fsname[8 + 1];
-
-	llapi_msg_set_level(LLAPI_MSG_OFF);
-
 	process_args(argc, argv);
-	if (lustre_dir == NULL)
-		lustre_dir = "/mnt/lustre";
-	if (poolname == NULL)
-		poolname = "testpool";
-	if (num_osts == -1)
-		num_osts = 2;
 
-	if (num_osts < 2)
-		DIE("Error: at least 2 OSTS are required\n");
-
-	if (stat(lustre_dir, &s) < 0)
-		DIE("cannot stat %s: %s\n", lustre_dir, strerror(errno));
-	else if (!S_ISDIR(s.st_mode))
-		DIE("%s: not a directory\n", lustre_dir);
-
-	rc = llapi_search_fsname(lustre_dir, fsname);
-	if (rc != 0) {
-		fprintf(stderr, "Error: %s: not a Lustre filesystem\n",
-			lustre_dir);
-		exit(EXIT_FAILURE);
-	}
-
-	/* Play nice with Lustre test scripts. Non-line buffered output
-	 * stream under I/O redirection may appear incorrectly.
-	 */
-	setvbuf(stdout, NULL, _IOLBF, 0);
-
-	for (i = 0; i < NUM_TESTS; i++) {
-		struct test_tbl_entry *tst = &test_tbl[i];
-
-		if (test(tst->tte_fn, tst->tte_desc, tst->tte_skip, i) != 0)
-			rc++;
-	}
-
-	return rc;
+	return run_tests(lustre_dir, test_tbl);
 }

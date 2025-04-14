@@ -1,85 +1,33 @@
-/*
- * GPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 for more details (a copy is included
- * in the LICENSE file that accompanied this code).
- *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.gnu.org/licenses/gpl-2.0.html
- *
- * GPL HEADER END
- */
+// SPDX-License-Identifier: GPL-2.0
 
 /*
  * Copyright 2014, 2015 Cray Inc, all rights reserved.
- *
  * Copyright (c) 2015, Intel Corporation.
- */
-/* Some portions are extracted from llapi_layout_test.c */
-
-/* The purpose of this test is to check some HSM functions. HSM must
- * be enabled before running it:
- *   lctl set_param mdt.$FSNAME-MDT0000.hsm_control=enabled
+ * Copyright (c) 2025, DataDirect Networks, Inc. All rights reserved.
  */
 
-/* All tests return 0 on success and non zero on error. The program will
- * exit as soon a non zero error is returned.
- */
-#include <stdlib.h>
 #include <errno.h>
 #include <getopt.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <poll.h>
-#include <time.h>
+#include <signal.h>
+#include <string.h>
+#include <unistd.h>
 
 #include <lustre/lustreapi.h>
+#include "llapi_test_utils.h"
 
-static char fsmountdir[PATH_MAX];      /* Lustre mountpoint */
-static char *lustre_dir;               /* Test directory inside Lustre */
-static bool is_bitmap;
+static bool is_bitmap;		/* use old bitmap interface */
+static char lustre_dir[PATH_MAX - 5];	/* Lustre test directory */
 
-#define ERROR(fmt, ...)							\
-	fprintf(stderr, "%s: %s:%d: %s: " fmt "\n",			\
-		program_invocation_short_name, __FILE__, __LINE__,	\
-		__func__, ## __VA_ARGS__);
+static void usage(char *prog)
+{
+	printf("Usage: %s [-d LUSTRE_DIR] [-s SKIP[,SKIP...]] [-t ONLY[,ONLY...]\n",
+	       prog);
+	exit(0);
+}
 
-#define DIE(fmt, ...)				\
-	do {					\
-		ERROR(fmt, ## __VA_ARGS__);	\
-		exit(EXIT_FAILURE);		\
-	} while (0)
-
-#define ASSERTF(cond, fmt, ...)						\
-	do {								\
-		if (!(cond))						\
-			DIE("assertion '%s' failed: "fmt,		\
-			    #cond, ## __VA_ARGS__);			\
-	} while (0)							\
-
-#define PERFORM(testfn) \
-	do {								\
-		fprintf(stderr, "Starting test " #testfn " at %llu\n",	\
-			(unsigned long long)time(NULL));		\
-		testfn();						\
-		fprintf(stderr, "Finishing test " #testfn " at %llu\n",	\
-		       (unsigned long long)time(NULL));			\
-	} while (0)
-
-/* Register and unregister 2000 times. Ensures there is no fd leak
- * since there is usually 1024 fd per process.
- */
-static int test1(void)
+#define T1_DESC		"Register/unregister copytool 2000x to check for leaks"
+static void test1(void)
 {
 	int i;
 	int rc;
@@ -97,12 +45,10 @@ static int test1(void)
 			"llapi_hsm_copytool_unregister failed: %s, loop=%d",
 			strerror(-rc), i);
 	}
-
-	return 0;
 }
 
-/* Re-register */
-static int test2(void)
+#define T2_DESC		"Re/un-register copytool multiple times without error"
+static void test2(void)
 {
 	int rc;
 	struct hsm_copytool_private *ctdata1;
@@ -123,12 +69,10 @@ static int test2(void)
 	rc = llapi_hsm_copytool_unregister(&ctdata1);
 	ASSERTF(rc == 0, "llapi_hsm_copytool_unregister failed: %s",
 		strerror(-rc));
-
-	return 0;
 }
 
-/* Bad parameters to llapi_hsm_copytool_register(). */
-static int test3(void)
+#define T3_DESC		"Pass bad parameters to llapi_hsm_copytool_register()"
+static void test3(void)
 {
 	int rc;
 	struct hsm_copytool_private *ctdata;
@@ -169,24 +113,20 @@ static int test3(void)
 	rc = llapi_hsm_copytool_register(&ctdata, "/tmp", 0, NULL, 0);
 	ASSERTF(rc == -ENOENT, "llapi_hsm_copytool_register error: %s",
 		strerror(-rc));
-
-	return 0;
 }
 
-/* Bad parameters to llapi_hsm_copytool_unregister(). */
-static int test4(void)
+#define T4_DESC		"Bad parameters to llapi_hsm_copytool_unregister()"
+static void test4(void)
 {
 	int rc;
 
 	rc = llapi_hsm_copytool_unregister(NULL);
 	ASSERTF(rc == -EINVAL, "llapi_hsm_copytool_unregister error: %s",
 		strerror(-rc));
-
-	return 0;
 }
 
-/* Test llapi_hsm_copytool_recv in non blocking mode */
-static int test5(void)
+#define T5_DESC		"Test llapi_hsm_copytool_recv() in non-blocking mode"
+static void test5(void)
 {
 	int rc;
 	int i;
@@ -209,12 +149,10 @@ static int test5(void)
 	rc = llapi_hsm_copytool_unregister(&ctdata);
 	ASSERTF(rc == 0, "llapi_hsm_copytool_unregister failed: %s",
 		strerror(-rc));
-
-	return 0;
 }
 
-/* Test llapi_hsm_copytool_recv with bogus parameters */
-static int test6(void)
+#define T6_DESC		"Test llapi_hsm_copytool_recv() with bogus parameters"
+static void test6(void)
 {
 	struct hsm_copytool_private *ctdata;
 	struct hsm_action_list *hal;
@@ -244,12 +182,10 @@ static int test6(void)
 	rc = llapi_hsm_copytool_unregister(&ctdata);
 	ASSERTF(rc == 0, "llapi_hsm_copytool_unregister failed: %s",
 		strerror(-rc));
-
-	return 0;
 }
 
-/* Test polling (without actual traffic) */
-static int test7(void)
+#define T7_DESC		"Test event polling (without actual traffic)"
+static void test7(void)
 {
 	int rc;
 	struct hsm_copytool_private *ctdata;
@@ -285,8 +221,6 @@ static int test7(void)
 	rc = llapi_hsm_copytool_unregister(&ctdata);
 	ASSERTF(rc == 0, "llapi_hsm_copytool_unregister failed: %s",
 		strerror(-rc));
-
-	return 0;
 }
 
 /* Create the testfile of a given length. It returns a valid file descriptor. */
@@ -317,7 +251,7 @@ static int create_testfile(size_t length)
 	return fd;
 }
 
-/* Test llapi_hsm_state_get. */
+#define T50_DESC		"Test llapi_hsm_state_get()/get_fd()"
 static void test50(void)
 {
 	struct hsm_user_state hus;
@@ -358,7 +292,7 @@ static void test50(void)
 		hus.hus_in_progress_action);
 }
 
-/* Test llapi_hsm_state_set. */
+#define T51_DESC	"Test llapi_hsm_state_set_fd()"
 static void test51(void)
 {
 	int rc;
@@ -488,7 +422,7 @@ static void test51(void)
 	close(fd);
 }
 
-/* Test llapi_hsm_current_action */
+#define T52_DESC	"Test llapi_hsm_current_action()"
 static void test52(void)
 {
 	int rc;
@@ -589,7 +523,7 @@ static void helper_archiving(void (*progress)
 		"state=%u", hus.hus_states);
 }
 
-/* Simple archive. No progress. */
+#define T100_DESC	"Simple archive creation with no progress reported."
 static void test100(void)
 {
 	const size_t length = 100;
@@ -597,7 +531,7 @@ static void test100(void)
 	helper_archiving(NULL, length);
 }
 
-/* Archive, with a report every byte. */
+#define T101_DESC	"Simple archive creation with progress every byte."
 static void test101_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int i;
@@ -632,7 +566,7 @@ static void test101(void)
 	helper_archiving(test101_progress, length);
 }
 
-/* Archive, with a report every byte, backwards. */
+#define T102_DESC	"Archive creation with progress every byte, backwards"
 static void test102_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int i;
@@ -667,7 +601,7 @@ static void test102(void)
 	helper_archiving(test102_progress, length);
 }
 
-/* Archive, with a single report. */
+#define T103_DESC	"Archive creation with a single progress report"
 static void test103_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -698,7 +632,7 @@ static void test103(void)
 	helper_archiving(test103_progress, length);
 }
 
-/* Archive, with 2 reports. */
+#define T104_DESC	"Archive creation with two progress reports"
 static void test104_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -735,7 +669,7 @@ static void test104(void)
 	helper_archiving(test104_progress, length);
 }
 
-/* Archive, with 1 bogus report. */
+#define T105_DESC	"Archive creation with one bogus progress report"
 static void test105_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -768,7 +702,7 @@ static void test105(void)
 	helper_archiving(test105_progress, length);
 }
 
-/* Archive, with 1 empty report. */
+#define T106_DESC	"Archive creation with one empty progress report"
 static void test106_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -799,7 +733,7 @@ static void test106(void)
 	helper_archiving(test106_progress, length);
 }
 
-/* Archive, with 1 bogus report. */
+#define T107_DESC	"Archive creation with one bogus progress report"
 static void test107_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -830,7 +764,7 @@ static void test107(void)
 	helper_archiving(test107_progress, length);
 }
 
-/* Archive, with same report, many times. */
+#define T108_DESC	"Archive creation with same progress report each time"
 static void test108_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -864,7 +798,7 @@ static void test108(void)
 	helper_archiving(test108_progress, length);
 }
 
-/* Archive, 1 report, with large number. */
+#define T109_DESC	"Archive creation with one report, with large number"
 static void test109_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -895,7 +829,7 @@ static void test109(void)
 	helper_archiving(test109_progress, length);
 }
 
-/* Archive, with 10 reports, checking progress. */
+#define T110_DESC	"Archive with 10 progress reports, checking progress"
 static void test110_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -930,7 +864,7 @@ static void test110(void)
 	helper_archiving(test110_progress, length);
 }
 
-/* Archive, with 10 reports in reverse order, checking progress. */
+#define T111_DESC	"Archive with 10 reports in reverse, checking progress"
 static void test111_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -965,7 +899,7 @@ static void test111(void)
 	helper_archiving(test111_progress, length);
 }
 
-/* Archive, with 10 reports, and duplicating them, checking progress. */
+#define T112_DESC	"Archive with 10 reports, duplicated, check progress"
 static void test112_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -1019,7 +953,7 @@ static void test112(void)
 	helper_archiving(test112_progress, length);
 }
 
-/* Archive, with 9 reports, each covering 20%, so many overlap. */
+#define T113_DESC	"Archive with 9 reports, with 20% overlapping coverage"
 static void test113_progress(struct hsm_copyaction_private *hcp, size_t length)
 {
 	int rc;
@@ -1054,23 +988,52 @@ static void test113(void)
 	helper_archiving(test113_progress, length);
 }
 
-static void usage(char *prog)
-{
-	fprintf(stderr, "Usage: %s [-d lustre_dir]\n", prog);
-	exit(EXIT_FAILURE);
-}
+static struct test_tbl_entry test_tbl[] = {
+	TEST_REGISTER(1),
+	TEST_REGISTER(2),
+	TEST_REGISTER(3),
+	TEST_REGISTER(4),
+	TEST_REGISTER(5),
+	TEST_REGISTER(6),
+	TEST_REGISTER(7),
+	TEST_REGISTER(50),
+	TEST_REGISTER(51),
+	TEST_REGISTER(52),
+	TEST_REGISTER(100),
+	TEST_REGISTER(101),
+	TEST_REGISTER(102),
+	TEST_REGISTER(103),
+	TEST_REGISTER(104),
+	TEST_REGISTER(105),
+	TEST_REGISTER(106),
+	TEST_REGISTER(107),
+	TEST_REGISTER(108),
+	TEST_REGISTER(109),
+	TEST_REGISTER(110),
+	TEST_REGISTER(111),
+	TEST_REGISTER(112),
+	TEST_REGISTER(113),
+	TEST_REGISTER_END
+};
 
 static void process_args(int argc, char *argv[])
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "bd:")) != -1) {
+	while ((c = getopt(argc, argv, "bd:s:t:")) != -1) {
 		switch (c) {
-		case 'd':
-			lustre_dir = optarg;
-			break;
 		case 'b':
 			is_bitmap = true;
+		case 'd':
+			if (snprintf(lustre_dir, sizeof(lustre_dir), "%s",
+				     optarg) >= sizeof(lustre_dir))
+				DIE("Error: test directory name too long\n");
+			break;
+		case 's':
+			set_tests_to_skip(optarg, test_tbl);
+			break;
+		case 't':
+			set_tests_to_run(optarg, test_tbl);
 			break;
 		case '?':
 		default:
@@ -1083,49 +1046,7 @@ static void process_args(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-	char fsname[8 + 1];
-	int rc;
-
 	process_args(argc, argv);
-	if (lustre_dir == NULL)
-		lustre_dir = "/mnt/lustre";
 
-	rc = llapi_search_mounts(lustre_dir, 0, fsmountdir, fsname);
-	if (rc != 0) {
-		fprintf(stderr, "Error: %s: not a Lustre filesystem\n",
-			lustre_dir);
-		return EXIT_FAILURE;
-	}
-
-	/* Play nice with Lustre test scripts. Non-line buffered output
-	 * stream under I/O redirection may appear incorrectly.
-	 */
-	setvbuf(stdout, NULL, _IOLBF, 0);
-
-	PERFORM(test1);
-	PERFORM(test2);
-	PERFORM(test3);
-	PERFORM(test4);
-	PERFORM(test5);
-	PERFORM(test6);
-	PERFORM(test7);
-	PERFORM(test50);
-	PERFORM(test51);
-	PERFORM(test52);
-	PERFORM(test100);
-	PERFORM(test101);
-	PERFORM(test102);
-	PERFORM(test103);
-	PERFORM(test104);
-	PERFORM(test105);
-	PERFORM(test106);
-	PERFORM(test107);
-	PERFORM(test108);
-	PERFORM(test109);
-	PERFORM(test110);
-	PERFORM(test111);
-	PERFORM(test112);
-	PERFORM(test113);
-
-	return EXIT_SUCCESS;
+	return run_tests(lustre_dir, test_tbl);
 }

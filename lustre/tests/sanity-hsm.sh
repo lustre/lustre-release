@@ -5800,20 +5800,22 @@ run_test 411 "hsm_ops rbac role"
 
 test_500()
 {
-	[ "$MDS1_VERSION" -lt $(version_code 2.6.92) ] &&
-		skip "HSM migrate is not supported"
+	local bitmap_opt=""
+
+	(( $MDS1_VERSION >= $(version_code 2.6.92-47-g1fe3ae8dab) )) ||
+		skip "need MDS >= 2.6.92.47 for HSM migrate support"
 
 	test_mkdir -p $DIR/$tdir
 
-	if [ "$CLIENT_VERSION" -lt $(version_code 2.11.56) ] ||
-	     [ "$MDS1_VERSION" -lt $(version_code 2.11.56) ];
-	then
-		llapi_hsm_test -d $DIR/$tdir -b ||
-			error "One llapi HSM test failed"
-	else
-		llapi_hsm_test -d $DIR/$tdir ||
-			error "One llapi HSM test failed"
-	fi
+	(( $CLIENT_VERSION >= $(version_code 2.11.56-179-g3bfb6107ba) &&
+	   $MDS1_VERSION >= $(version_code 2.11.56-179-g3bfb6107ba) )) ||
+		bitmap_opt="-b"
+
+	(( $MDS1_VERSION >= $(version_code 2.14.50-142-gf684172237) )) ||
+		SKIP500+=" -s 113"
+
+	llapi_hsm_test -d $DIR/$tdir $bitmap_opt $SKIP500 ||
+		error "llapi HSM testing failed"
 }
 run_test 500 "various LLAPI HSM tests"
 

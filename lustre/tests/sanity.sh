@@ -2575,7 +2575,7 @@ test_27Cj() {
 run_test 27Cj "overstriping with -C for max values in multiple of targets"
 
 test_27D() {
-	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
+	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local POOL=${POOL:-testpool}
@@ -2589,18 +2589,17 @@ test_27D() {
 	pool_add $POOL || error "pool_add failed"
 	pool_add_targets $POOL $ost_range || error "pool_add_targets failed"
 
-	local skip27D
-	[ $MDS1_VERSION -lt $(version_code 2.8.55) ] &&
-		skip27D+="-s 29"
-	[ $MDS1_VERSION -lt $(version_code 2.9.55) ] ||
-		[ $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
-			skip27D+=" -s 30,31"
-	[[ ! $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ||
-	  $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
-		skip27D+=" -s 32,33"
-	[[ $MDS_VERSION -lt $(version_code $SEL_VER) ]] &&
-		skip27D+=" -s 34"
-	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
+	(( $MDS1_VERSION >= $(version_code 2.8.55) )) ||
+		SKIP27D+=" -s 29"
+	(( $MDS1_VERSION >= $(version_code 2.9.55) &&
+	   $CLIENT_VERSION >= $(version_code 2.9.55) )) ||
+		SKIP27D+=" -s 30,31"
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] &&
+	(( $OSTCOUNT < $LOV_MAX_STRIPE_COUNT / 2)) ||
+		SKIP27D+=" -s 32,33"
+	(( $MDS1_VERSION >= $(version_code $SEL_VER) )) ||
+		SKIP27D+=" -s 34"
+	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $SKIP27D ||
 		error "llapi_layout_test failed"
 
 	destroy_test_pools || error "destroy test pools failed"

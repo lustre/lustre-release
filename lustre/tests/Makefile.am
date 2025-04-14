@@ -108,7 +108,9 @@ endif # NO_STRINGOP_OVERFLOW
 
 mmap_sanity_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 multiop_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
+llapi_layout_test_SOURCES = llapi_layout_test.c llapi_test_utils.c llapi_test_utils.h
 llapi_layout_test_LDADD = $(LIBLUSTREAPI)
+llapi_hsm_test_SOURCES = llapi_hsm_test.c llapi_test_utils.c llapi_test_utils.h
 llapi_hsm_test_LDADD = $(LIBLUSTREAPI)
 group_lock_test_LDADD = $(LIBLUSTREAPI)
 llapi_fid_test_LDADD = $(LIBLUSTREAPI)
