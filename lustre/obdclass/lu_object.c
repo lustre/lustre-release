@@ -1339,18 +1339,15 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 
 	lu_site_purge(env, site, ~0);
 	for (scan = top; scan != NULL; scan = next) {
-		next = scan->ld_type->ldt_ops->ldto_device_fini(env, scan);
+		next = ldto_device_fini(env, scan);
 		lu_device_put(scan);
 	}
 
 	/* purge again. */
 	lu_site_purge(env, site, ~0);
 
-	for (scan = top; scan != NULL; scan = next) {
-		const struct lu_device_type *ldt = scan->ld_type;
-
-		next = ldt->ldt_ops->ldto_device_free(env, scan);
-	}
+	for (scan = top; scan != NULL; scan = next)
+		next = ldto_device_free(env, scan);
 }
 
 /**

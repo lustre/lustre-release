@@ -726,9 +726,8 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
 				GOTO(out, rc = -EBUSY);
 
 			next->ld_site = ed->ed_site;
-			rc = next->ld_type->ldt_ops->ldto_device_init(env, next,
-							next->ld_type->ldt_name,
-							NULL);
+			rc = ldto_device_init(env, next, next->ld_type->ldt_name,
+					      NULL);
 			if (rc)
 				GOTO(out, rc);
 		} else {
@@ -780,7 +779,7 @@ static struct lu_device *echo_device_fini(const struct lu_env *env,
 	struct lu_device *next = ed->ed_next;
 
 	while (next && !ed->ed_next_ismd)
-		next = next->ld_type->ldt_ops->ldto_device_fini(env, next);
+		next = ldto_device_fini(env, next);
 	return NULL;
 }
 
@@ -836,7 +835,7 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 	echo_ed_los_fini(env, ed);
 #endif
 	while (next && !ed->ed_next_ismd)
-		next = next->ld_type->ldt_ops->ldto_device_free(env, next);
+		next = ldto_device_free(env, next);
 
 	LASSERT(ed->ed_site == d->ld_site);
 	echo_site_fini(env, ed);

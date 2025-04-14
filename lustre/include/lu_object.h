@@ -20,6 +20,7 @@
 #include <stdarg.h>
 #endif
 #include <libcfs/libcfs.h>
+#include <obd_support.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <linux/percpu_counter.h>
 #include <linux/rhashtable.h>
@@ -386,6 +387,77 @@ struct lu_device_type_operations {
 	 */
 	void (*ldto_stop)(struct lu_device_type *t);
 };
+
+static inline struct lu_device *ldto_device_alloc(const struct lu_env *env,
+						  struct lu_device_type *ldt,
+						  struct lustre_cfg *lcfg)
+{
+	const struct lu_device_type_operations *ldto;
+	struct lu_device *lu;
+
+	LASSERT(ldt);
+	ldto = ldt->ldt_ops;
+	LASSERT(ldto);
+
+	if (ldto->ldto_device_alloc)
+		return ldto->ldto_device_alloc(env, ldt, lcfg);
+
+	OBD_ALLOC_PTR(lu);
+	if (!lu)
+		return ERR_PTR(-ENOMEM);
+
+	return lu;
+}
+
+static inline struct lu_device *ldto_device_free(const struct lu_env *env,
+						 struct lu_device *lu)
+{
+	const struct lu_device_type_operations *ldto;
+
+	LASSERT(lu);
+	LASSERT(lu->ld_type);
+	ldto = lu->ld_type->ldt_ops;
+	LASSERT(ldto);
+
+	if (ldto->ldto_device_free)
+		return ldto->ldto_device_free(env, lu);
+
+	OBD_FREE_PTR(lu);
+	return NULL;
+}
+
+static inline int ldto_device_init(const struct lu_env *env,
+				   struct lu_device *lu, const char *name,
+				   struct lu_device *lu2)
+{
+	const struct lu_device_type_operations *ldto;
+
+	LASSERT(lu);
+	LASSERT(lu->ld_type);
+	ldto = lu->ld_type->ldt_ops;
+	LASSERT(ldto);
+
+	if (ldto->ldto_device_init)
+		return ldto->ldto_device_init(env, lu, name, lu2);
+
+	return 0;
+}
+
+static inline struct lu_device *ldto_device_fini(const struct lu_env *env,
+						 struct lu_device *lu)
+{
+	const struct lu_device_type_operations *ldto;
+
+	LASSERT(lu);
+	LASSERT(lu->ld_type);
+	ldto = lu->ld_type->ldt_ops;
+	LASSERT(ldto);
+
+	if (ldto->ldto_device_fini)
+		return ldto->ldto_device_fini(env, lu);
+
+	return NULL;
+}
 
 static inline int lu_device_is_md(const struct lu_device *d)
 {

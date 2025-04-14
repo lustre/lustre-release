@@ -585,7 +585,7 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 		if (rc == 0) {
 			struct lu_device *dev;
 			env.le_ses = &session_ctx;
-			dev = ldt->ldt_ops->ldto_device_alloc(&env, ldt, cfg);
+			dev = ldto_device_alloc(&env, ldt, cfg);
 			lu_env_fini(&env);
 			if (!IS_ERR(dev)) {
 				obd->obd_lu_dev = dev;
@@ -628,7 +628,7 @@ static inline int obd_precleanup(struct obd_device *obd)
 			env = &_env;
 			rc = lu_env_add(env);
 		}
-		ldt->ldt_ops->ldto_device_fini(env, d);
+		ldto_device_fini(env, d);
 		if (env == &_env) {
 			if (rc == 0)
 				lu_env_remove(env);
@@ -655,7 +655,7 @@ static inline int obd_cleanup(struct obd_device *obd)
 
 		rc = lu_env_init(&env, ldt->ldt_ctx_tags);
 		if (rc == 0) {
-			ldt->ldt_ops->ldto_device_free(&env, d);
+			ldto_device_free(&env, d);
 			lu_env_fini(&env);
 			obd->obd_lu_dev = NULL;
 		}

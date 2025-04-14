@@ -1008,32 +1008,35 @@ EXPORT_SYMBOL(cl_env_percpu_get);
  */
 
 struct cl_device *cl_type_setup(const struct lu_env *env, struct lu_site *site,
-                                struct lu_device_type *ldt,
-                                struct lu_device *next)
+				struct lu_device_type *ldt,
+				struct lu_device *next)
 {
-        const char       *typename;
-        struct lu_device *d;
+	const char *typename;
+	struct lu_device *d;
 
-        LASSERT(ldt != NULL);
+	LASSERT(ldt);
 
-        typename = ldt->ldt_name;
-        d = ldt->ldt_ops->ldto_device_alloc(env, ldt, NULL);
-        if (!IS_ERR(d)) {
-                int rc;
+	typename = ldt->ldt_name;
+	d = ldto_device_alloc(env, ldt, NULL);
+	if (!IS_ERR(d)) {
+		int rc;
 
-                if (site != NULL)
-                        d->ld_site = site;
-                rc = ldt->ldt_ops->ldto_device_init(env, d, typename, next);
-                if (rc == 0) {
-                        lu_device_get(d);
-                } else {
-                        ldt->ldt_ops->ldto_device_free(env, d);
-                        CERROR("can't init device '%s', %d\n", typename, rc);
-                        d = ERR_PTR(rc);
-                }
-        } else
-                CERROR("Cannot allocate device: '%s'\n", typename);
-        return lu2cl_dev(d);
+		if (site)
+			d->ld_site = site;
+
+		rc = ldto_device_init(env, d, typename, next);
+		if (rc == 0) {
+			lu_device_get(d);
+		} else {
+			ldto_device_free(env, d);
+			CERROR("can't init device '%s', %d\n", typename, rc);
+			d = ERR_PTR(rc);
+		}
+	} else {
+		CERROR("Cannot allocate device: '%s'\n", typename);
+	}
+
+	return lu2cl_dev(d);
 }
 EXPORT_SYMBOL(cl_type_setup);
 

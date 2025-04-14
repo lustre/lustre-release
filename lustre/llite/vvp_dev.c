@@ -212,8 +212,7 @@ static int vvp_device_init(const struct lu_env *env, struct lu_device *d,
 
 	LASSERT(d->ld_site != NULL && next->ld_type != NULL);
 	next->ld_site = d->ld_site;
-	rc = next->ld_type->ldt_ops->ldto_device_init(
-		env, next, next->ld_type->ldt_name, NULL);
+	rc = ldto_device_init(env, next, next->ld_type->ldt_name, NULL);
 	if (rc == 0) {
 		lu_device_get(next);
 	}

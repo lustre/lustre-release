@@ -37,7 +37,7 @@ static int lovsub_device_init(const struct lu_env *env, struct lu_device *d,
 	next->ld_site = d->ld_site;
 	ldt = next->ld_type;
 	LASSERT(ldt != NULL);
-	rc = ldt->ldt_ops->ldto_device_init(env, next, ldt->ldt_name, NULL);
+	rc = ldto_device_init(env, next, ldt->ldt_name, NULL);
 	if (rc) {
 		next->ld_site = NULL;
 		RETURN(rc);
