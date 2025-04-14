@@ -24,13 +24,12 @@
 #include "lod_internal.h"
 
 /**
- * Increase reference count on the target table.
+ * lod_getref() - Increase reference count on the target table
+ * @ltd: target table (lod_ost_descs or lod_mdt_descs)
  *
  * Increase reference count on the target table usage to prevent racing with
  * addition/deletion. Any function that expects the table to remain
  * stationary must take a ref.
- *
- * \param[in] ltd	target table (lod_ost_descs or lod_mdt_descs)
  */
 void lod_getref(struct lod_tgt_descs *ltd)
 {
@@ -41,14 +40,13 @@ void lod_getref(struct lod_tgt_descs *ltd)
 }
 
 /**
- * Decrease reference count on the target table.
+ * lod_putref() - Decrease reference count on the target table.
+ * @lod: LOD device from which we release a reference
+ * @ltd: target table (lod_ost_descs or lod_mdt_descs)
  *
  * Companion of lod_getref() to release a reference on the target table.
  * If this is the last reference and the OST entry was scheduled for deletion,
  * the descriptor is removed from the table.
- *
- * \param[in] lod	LOD device from which we release a reference
- * \param[in] ltd	target table (lod_ost_descs or lod_mdt_descs)
  */
 void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 {
@@ -92,22 +90,22 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 }
 
 /**
- * Connect LOD to a new OSP and add it to the target table.
+ * lod_add_device() - Connect LOD to a new OSP and add it to the target table.
+ * @env: execution environment for this thread
+ * @lod: LOD device to be connected to the new OSP
+ * @osp: name of OSP device name to be added
+ * @index: index of the new target
+ * @gen: target's generation number
+ * @tgt_index: OSP's group
+ * @type: type of device (MDC or OSC)
+ * @active: state of OSP: 0 - inactive, 1 - active
  *
  * Connect to the OSP device passed, initialize all the internal
  * structures related to the device and add it to the target table.
  *
- * \param[in] env		execution environment for this thread
- * \param[in] lod		LOD device to be connected to the new OSP
- * \param[in] osp		name of OSP device name to be added
- * \param[in] index		index of the new target
- * \param[in] gen		target's generation number
- * \param[in] tgt_index		OSP's group
- * \param[in] type		type of device (mdc or osc)
- * \param[in] active		state of OSP: 0 - inactive, 1 - active
- *
- * \retval			0 if added successfully
- * \retval			negative error number on failure
+ * Return:
+ * * %0 if added successfully
+ * * %negative error number on failure
  */
 int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		   char *osp, unsigned index, unsigned gen, int tgt_index,
@@ -293,16 +291,15 @@ out_cleanup:
 }
 
 /**
- * Schedule target removal from the target table.
+ * __lod_del_device() - Schedule target removal from the target table.
+ * @env: execution environment for this thread
+ * @lod: LOD device the target table belongs to
+ * @ltd: target table
+ * @tgt: target
  *
  * Mark the device as dead. The device is not removed here because it may
  * still be in use. The device will be removed in lod_putref() when the
  * last reference is released.
- *
- * \param[in] env		execution environment for this thread
- * \param[in] lod		LOD device the target table belongs to
- * \param[in] ltd		target table
- * \param[in] tgt		target
  */
 static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
 			     struct lod_tgt_descs *ltd, struct lu_tgt_desc *tgt)
@@ -317,15 +314,13 @@ static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
 }
 
 /**
- * Schedule removal of all the targets from the given target table.
+ * lod_fini_tgt() - Schedule removal of all the targets from the given target
+ * table.See more details in the description for @__lod_del_device()
+ * @env: execution environment for this thread
+ * @lod: LOD device the target table belongs to
+ * @ltd: target table
  *
- * See more details in the description for __lod_del_device()
- *
- * \param[in] env		execution environment for this thread
- * \param[in] lod		LOD device the target table belongs to
- * \param[in] ltd		target table
- *
- * \retval			0 always
+ * Returns 0 always
  */
 int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 		 struct lod_tgt_descs *ltd)
@@ -348,20 +343,20 @@ int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 }
 
 /**
- * Remove device by name.
+ * lod_del_device() - Remove device by name.
+ * @env: execution environment for this thread
+ * @lod: LOD device to be connected to the new OSP
+ * @ltd: target table
+ * @osp: name of OSP device to be removed
+ * @idx: index of the target
+ * @gen: generation number, not used currently
  *
  * Remove a device identified by \a osp from the target table. Given
  * the device can be in use, the real deletion happens in lod_putref().
  *
- * \param[in] env		execution environment for this thread
- * \param[in] lod		LOD device to be connected to the new OSP
- * \param[in] ltd		target table
- * \param[in] osp		name of OSP device to be removed
- * \param[in] idx		index of the target
- * \param[in] gen		generation number, not used currently
- *
- * \retval			0 if the device was scheduled for removal
- * \retval			-EINVAL if no device was found
+ * Return:
+ * * %0 if the device was scheduled for removal
+ * * %-EINVAL if no device was found
  */
 int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 		   struct lod_tgt_descs *ltd, char *osp, unsigned int idx,
@@ -418,7 +413,9 @@ out:
 }
 
 /**
- * Resize per-thread storage to hold specified size.
+ * lod_ea_store_resize() - Resize per-thread storage to hold specified size.
+ * @info: LOD-specific storage in the environment
+ * @size: new size to grow the buffer to
  *
  * A helper function to resize per-thread temporary storage. This storage
  * is used to process LOV/LVM EAs and may be quite large. We do not want to
@@ -426,10 +423,9 @@ out:
  * reallocate on demand. The memory is released when the correspondent thread
  * is finished.
  *
- * \param[in] info		LOD-specific storage in the environment
- * \param[in] size		new size to grow the buffer to
-
- * \retval			0 on success, -ENOMEM if reallocation failed
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM if reallocation failed
  */
 int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 {
@@ -492,7 +488,10 @@ void lod_free_def_comp_entries(struct lod_default_striping *lds)
 }
 
 /**
- * Resize per-thread storage to hold default striping component entries
+ * lod_def_striping_comp_resize() - Resize per-thread storage to hold default
+ * striping component entries
+ * @lds: default striping [in, out]
+ * @count: new component count to grow the buffer to
  *
  * A helper function to resize per-thread temporary storage. This storage
  * is used to hold default LOV/LVM EAs and may be quite large. We do not want
@@ -500,10 +499,9 @@ void lod_free_def_comp_entries(struct lod_default_striping *lds)
  * reallocate it on demand. The memory is released when the correspondent
  * thread is finished.
  *
- * \param[in,out] lds		default striping
- * \param[in] count		new component count to grow the buffer to
-
- * \retval			0 on success, -ENOMEM if reallocation failed
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM if reallocation failed
  */
 int lod_def_striping_comp_resize(struct lod_default_striping *lds, __u16 count)
 {
@@ -692,22 +690,21 @@ int lod_fill_mirrors(struct lod_object *lo)
 }
 
 /**
- * Generate on-disk lov_mds_md structure for each layout component based on
- * the information in lod_object->ldo_comp_entries[i].
+ * lod_gen_component_ea() - Generate on-disk lov_mds_md structure for each
+ * layout component based on the information in lod_object->ldo_comp_entries[i].
+ * @env: execution environment for this thread
+ * @lo: LOD object
+ * @comp_idx: index of ldo_comp_entries
+ * @lmm: buffer to cotain the on-disk lov_mds_md
+ * @lmm_size: buffer size/lmm size [in|out]
+ * @is_dir: generate lov ea for dir or file? For dir case, the stripe info is
+ * from the default stripe template, which is collected in @lod_ah_init(),
+ * either from parent object or root object; for file case, it's from the @lo
+ * object
  *
- * \param[in] env		execution environment for this thread
- * \param[in] lo		LOD object
- * \param[in] comp_idx		index of ldo_comp_entries
- * \param[in] lmm		buffer to cotain the on-disk lov_mds_md
- * \param[in|out] lmm_size	buffer size/lmm size
- * \param[in] is_dir		generate lov ea for dir or file? For dir case,
- *				the stripe info is from the default stripe
- *				template, which is collected in lod_ah_init(),
- *				either from parent object or root object; for
- *				file case, it's from the @lo object
- *
- * \retval			0 if on disk structure is created successfully
- * \retval			negative error number on failure
+ * Return:
+ * * %0 if on disk structure is created successfully
+ * * %negative error number on failure
  */
 static int lod_gen_component_ea(const struct lu_env *env,
 				struct lod_object *lo, int comp_idx,
@@ -847,7 +844,7 @@ done:
 	RETURN(rc);
 }
 
-/**
+/*
  * Generate on-disk lov_hsm_md structure based on the information in
  * the lod_object->ldo_comp_entries.
  */
@@ -879,21 +876,20 @@ static int lod_gen_component_ea_foreign(const struct lu_env *env,
 }
 
 /**
- * Generate on-disk lov_mds_md structure based on the information in
- * the lod_object->ldo_comp_entries.
+ * lod_generate_lovea() - Generate on-disk lov_mds_md structure based on the
+ * information in the lod_object->ldo_comp_entries.
+ * @env: execution environment for this thread
+ * @lo: LOD object
+ * @lmm: buffer to cotain the on-disk lov_mds_md
+ * @lmm_size: buffer size/lmm size [in|out]
+ * @is_dir: generate lov ea for dir or file? For dir case, the stripe info is
+ * from the default stripe template, which is collected in @lod_ah_init(),
+ * either from parent object or root object; for file case, it's from the @lo
+ * object
  *
- * \param[in] env		execution environment for this thread
- * \param[in] lo		LOD object
- * \param[in] lmm		buffer to cotain the on-disk lov_mds_md
- * \param[in|out] lmm_size	buffer size/lmm size
- * \param[in] is_dir		generate lov ea for dir or file? For dir case,
- *				the stripe info is from the default stripe
- *				template, which is collected in lod_ah_init(),
- *				either from parent object or root object; for
- *				file case, it's from the @lo object
- *
- * \retval			0 if on disk structure is created successfully
- * \retval			negative error number on failure
+ * Return:
+ * * %0 if on disk structure is created successfully
+ * * %negative error number on failure
  */
 int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir)
@@ -1016,19 +1012,19 @@ out:
 }
 
 /**
- * Get LOV EA.
+ * lod_get_ea() - Get LOV EA.
+ * @env: execution environment for this thread (.lti_ea_store buffer is
+ * filled with EA's value) [in|out]
+ * @lo: LOD object
+ * @name: name of the EA
  *
  * Fill lti_ea_store buffer in the environment with a value for the given
  * EA. The buffer is reallocated if the value doesn't fit.
  *
- * \param[in,out] env		execution environment for this thread
- *				.lti_ea_store buffer is filled with EA's value
- * \param[in] lo		LOD object
- * \param[in] name		name of the EA
- *
- * \retval			> 0 if EA is fetched successfully
- * \retval			0 if EA is empty
- * \retval			negative error number on failure
+ * Return:
+ * * %0 if EA is fetched successfully
+ * * %0 if EA is empty
+ * * %negative error number on failure
  */
 int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
 	       const char *name)
@@ -1078,13 +1074,14 @@ repeat:
 }
 
 /**
- * Verify the target index is present in the current configuration.
+ * validate_lod_and_idx() - Verify the target index is present in the current
+ * configuration.
+ * @md: LOD device where the target table is stored
+ * @idx: target's index
  *
- * \param[in] md		LOD device where the target table is stored
- * \param[in] idx		target's index
- *
- * \retval			0 if the index is present
- * \retval			-EINVAL if not
+ * Return:
+ * * %0 if the index is present
+ * * %-EINVAL if not
  */
 int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 {
@@ -1111,7 +1108,11 @@ int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 }
 
 /**
- * Instantiate objects for stripes.
+ * lod_initialize_objects() - Instantiate objects for stripes.
+ * @env: execution environment for this thread
+ * @lo: LOD object
+ * @objs: an array of IDs to creates the objects from
+ * @comp_idx: index of ldo_comp_entries
  *
  * Allocate and initialize LU-objects representing the stripes. The number
  * of the stripes (llc_stripe_count) must be initialized already. The caller
@@ -1119,13 +1120,9 @@ int validate_lod_and_idx(struct lod_device *md, __u32 idx)
  * time. FLDB service must be running to be able to map a FID to the targets
  * and find appropriate device representing that target.
  *
- * \param[in] env		execution environment for this thread
- * \param[in,out] lo		LOD object
- * \param[in] objs		an array of IDs to creates the objects from
- * \param[in] comp_idx		index of ldo_comp_entries
- *
- * \retval			0 if the objects are instantiated successfully
- * \retval			negative error number on failure
+ * Return:
+ * * %0 if the objects are instantiated successfully
+ * * %negative error number on failure
  */
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 			   struct lov_ost_data_v1 *objs, int comp_idx)
@@ -1252,18 +1249,18 @@ int lod_init_comp_foreign(struct lod_layout_component *lod_comp, void *lmm)
 }
 
 /**
- * Instantiate objects for striping.
+ * lod_parse_striping() - Instantiate objects for striping.
+ * @env: execution environment for this thread
+ * @lo: LOD object
+ * @buf: buffer storing LOV EA to parse
+ * @lvf: verify flags when parsing the layout
  *
- * Parse striping information in \a buf and instantiate the objects
+ * Parse striping information in @buf and instantiate the objects
  * representing the stripes.
  *
- * \param[in] env		execution environment for this thread
- * \param[in] lo		LOD object
- * \param[in] buf		buffer storing LOV EA to parse
- * \param[in] lvf		verify flags when parsing the layout
- *
- * \retval			0 if parsing and objects creation succeed
- * \retval			negative error number on failure
+ * Return:
+ * * %0 if parsing and objects creation succeed
+ * * %negative error number on failure
  */
 int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		       const struct lu_buf *buf, enum layout_verify_flags lvf)
@@ -1551,13 +1548,11 @@ out:
 }
 
 /**
- * Check whether the striping (LOVEA for regular file, LMVEA for directory)
- * is already cached.
+ * lod_striping_loaded() - Check whether the striping (LOVEA for regular file,
+ * LMVEA for directory) is already cached.
+ * @lo: LOD object
  *
- * \param[in] lo	LOD object
- *
- * \retval		True if the striping is cached, otherwise
- *			return false.
+ * Returns True if the striping is cached, otherwise return false.
  */
 static bool lod_striping_loaded(struct lod_object *lo)
 {
@@ -1578,21 +1573,21 @@ static bool lod_striping_loaded(struct lod_object *lo)
 }
 
 /**
- * A generic function to initialize the stripe objects.
+ * lod_striping_load() - A generic function to initialize the stripe objects.
+ * @env: execution environment for this thread
+ * @lo: lo LOD object, where striping is stored and which gets an array of
+ * references
  *
  * A protected version of lod_striping_load_locked() - load the striping
  * information from storage, parse that and instantiate LU objects to
- * represent the stripes.  The LOD object \a lo supplies a pointer to the
- * next sub-object in the LU stack so we can lock it. Also use \a lo to
+ * represent the stripes.  The LOD object @lo supplies a pointer to the
+ * next sub-object in the LU stack so we can lock it. Also use @lo to
  * return an array of references to the newly instantiated objects.
  *
- * \param[in] env		execution environment for this thread
- * \param[in,out] lo		LOD object, where striping is stored and
- *				which gets an array of references
- *
- * \retval			0 if parsing and object creation succeed
- * \retval			negative error number on failure
- **/
+ * Return:
+ * * %0 if parsing and object creation succeed
+ * * %negative error number on failure
+ */
 int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 {
 	struct lod_thread_info *info = lod_env_info(env);
@@ -1699,21 +1694,21 @@ int lod_striping_reload(const struct lu_env *env, struct lod_object *lo,
 }
 
 /**
- * Verify lov_user_md_v1/v3 striping.
+ * lod_verify_v1v3() - Verify lov_user_md_v1/v3 striping.
+ * @d: LOD device
+ * @buf: buffer with LOV EA to verify
+ * @is_from_disk: 0 - from user, allow some fields to be 0
+ *                1 - from disk, do not allow
  *
  * Check the validity of all fields including the magic, stripe size,
  * stripe count, stripe offset and that the pool is present.  Also check
  * that each target index points to an existing target. The additional
- * \a is_from_disk turns additional checks. In some cases zero fields
+ * @is_from_disk turns additional checks. In some cases zero fields
  * are allowed (like pattern=0).
  *
- * \param[in] d			LOD device
- * \param[in] buf		buffer with LOV EA to verify
- * \param[in] is_from_disk	0 - from user, allow some fields to be 0
- *				1 - from disk, do not allow
- *
- * \retval			0 if the striping is valid
- * \retval			-EINVAL if striping is invalid
+ * Return:
+ * * %0 if the striping is valid
+ * * %-EINVAL if striping is invalid
  */
 static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
 			   bool is_from_disk)
@@ -2054,16 +2049,17 @@ static int lod_dom_stripesize_choose(const struct lu_env *env,
 }
 
 /**
- * Verify LOV striping.
+ * lod_verify_striping() - Verify LOV striping.
+ * @env: execution environment for this thread
+ * @d: LOD device
+ * @lo: LOD object
+ * @buf: buffer with LOV EA to verify
+ * @is_from_disk: 0 - from user, allow some fields to be 0
+ *                1 - from disk, do not allow
  *
- * \param[in] d			LOD device
- * \param[in] buf		buffer with LOV EA to verify
- * \param[in] is_from_disk	0 - from user, allow some fields to be 0
- *				1 - from disk, do not allow
- * \param[in] start		extent start for composite layout
- *
- * \retval			0 if the striping is valid
- * \retval			-EINVAL if striping is invalid
+ * Return:
+ * * %0 if the striping is valid
+ * * %-EINVAL if striping is invalid
  */
 int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
 			struct lod_object *lo, const struct lu_buf *buf,
@@ -2367,9 +2363,8 @@ recheck:
 }
 
 /**
- * set the default stripe size, if unset.
- *
- * \param[in,out] val	number of bytes per OST stripe
+ * lod_fix_desc_stripe_size() - set the default stripe size, if unset.
+ * @val: val number of bytes per OST stripe [in,out]
  *
  * The minimum stripe size is 64KB to ensure that a single stripe is an
  * even multiple of a client PAGE_SIZE (IA64, PPC, etc).  Otherwise, it
@@ -2392,9 +2387,9 @@ void lod_fix_desc_stripe_size(__u64 *val)
 }
 
 /**
- * set the filesystem default number of stripes, if unset.
- *
- * \param[in,out] val	number of stripes
+ * lod_fix_desc_stripe_count() - set the filesystem default number of stripes,
+ * if unset.
+ * @val: val number of stripes
  *
  * A value of "0" means "use the system-wide default stripe count", which
  * has either been inherited by now, or falls back to 1 stripe per file.
@@ -2408,9 +2403,8 @@ void lod_fix_desc_stripe_count(__u32 *val)
 }
 
 /**
- * set the filesystem default layout pattern
- *
- * \param[in,out] val	LOV_PATTERN_* layout
+ * lod_fix_desc_pattern() - set the filesystem default layout pattern
+ * @val: LOV_PATTERN_* layout [in, out]
  *
  * A value of "0" means "use the system-wide default layout type", which
  * has either been inherited by now, or falls back to plain RAID0 striping.
@@ -2440,9 +2434,8 @@ void lod_fix_desc_qos_maxage(__u32 *val)
 }
 
 /**
- * Used to fix insane default striping.
- *
- * \param[in] desc	striping description
+ * lod_fix_desc() - Is used to fix insane default striping.
+ * @desc: striping description
  */
 void lod_fix_desc(struct lov_desc *desc)
 {
@@ -2461,13 +2454,14 @@ static void lod_fix_lmv_desc(struct lmv_desc *desc)
 }
 
 /**
- * Initialize the structures used to store pools and default striping.
+ * lod_pools_init() - Initialize the structures used to store pools and default
+ * striping.
+ * @lod: LOD device
+ * @lcfg: configuration structure storing default striping.
  *
- * \param[in] lod	LOD device
- * \param[in] lcfg	configuration structure storing default striping.
- *
- * \retval		0 if initialization succeeds
- * \retval		negative error number on failure
+ * Return:
+ * * %0 if initialization succeeds
+ * * %negative error number on failure
  */
 int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 {
@@ -2554,11 +2548,10 @@ out_hash:
 }
 
 /**
- * Release the structures describing the pools.
+ * lod_pools_fini() - Release the structures describing the pools.
+ * @lod: LOD device from which we release the structures
  *
- * \param[in] lod	LOD device from which we release the structures
- *
- * \retval		0 always
+ * Return 0 always
  */
 int lod_pools_fini(struct lod_device *lod)
 {
