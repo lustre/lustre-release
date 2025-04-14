@@ -23,12 +23,17 @@
 
 #include <obd_class.h>
 
+#define LUSTRE_TEST_OBD_DEVICE "obd_test"
+
 static int verbose;
 module_param(verbose, int, 0644);
 MODULE_PARM_DESC(verbose, "Set the logging level for the module");
 
-static int obd_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int obd_test_device_init(const struct lu_env *env, struct lu_device *lu,
+				const char *name, struct lu_device *next)
 {
+	struct obd_device *obd = lu->ld_obd;
+
 	if (verbose >= 1)
 		pr_info("Lustre: OBD: %s", __func__);
 
@@ -62,24 +67,36 @@ static int obd_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	return 0;
 }
 
-static int obd_test_cleanup(struct obd_device *obd)
+static struct lu_device *obd_test_device_fini(const struct lu_env *env,
+					      struct lu_device *d)
 {
 	if (verbose >= 1)
 		pr_info("Lustre: OBD: %s", __func__);
 
-	return 0;
+	return NULL;
 }
 
+static const struct lu_device_type_operations obd_test_type_ops = {
+	.ldto_device_init	= obd_test_device_init,
+	.ldto_device_fini	= obd_test_device_fini
+};
+
+static struct lu_device_type obd_test_device_type = {
+	.ldt_tags     = LU_DEVICE_MISC,
+	.ldt_name     = LUSTRE_TEST_OBD_DEVICE,
+	.ldt_ops      = &obd_test_type_ops,
+	.ldt_ctx_tags = LCT_LOCAL
+};
+
 static const struct obd_ops obd_test_obd_ops = {
-	.o_owner       = THIS_MODULE,
-	.o_setup       = obd_test_setup,
-	.o_cleanup     = obd_test_cleanup,
+	.o_owner       = THIS_MODULE
 };
 
 static int __init obd_test_init(void)
 {
 	return class_register_type(&obd_test_obd_ops, NULL, false,
-				   "obd_test", NULL);
+				   LUSTRE_TEST_OBD_DEVICE,
+				   &obd_test_device_type);
 }
 
 static void __exit obd_test_exit(void)
