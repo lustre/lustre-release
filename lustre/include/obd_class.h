@@ -575,6 +575,7 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 	ldt = type->typ_lu;
 	if (ldt != NULL) {
 		struct lu_context session_ctx;
+		struct lu_device *dev;
 		struct lu_env env;
 
 		lu_context_init(&session_ctx, LCT_SESSION | LCT_SERVER_SESSION);
@@ -583,21 +584,22 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
 		rc = lu_env_init(&env, ldt->ldt_ctx_tags);
 		if (rc == 0) {
-			struct lu_device *dev;
 			env.le_ses = &session_ctx;
 			dev = ldto_device_alloc(&env, ldt, cfg);
-			lu_env_fini(&env);
 			if (!IS_ERR(dev)) {
 				obd->obd_lu_dev = dev;
 				dev->ld_obd = obd;
+				dev->ld_type = ldt;
 #ifdef HAVE_SERVER_SUPPORT
 				if (lu_device_is_dt(dev) &&
 				    lu2dt_dev(dev)->dd_rdonly)
 					obd->obd_read_only = 1;
 #endif
-				rc = 0;
-			} else
+				rc = ldto_device_init(&env, dev, ldt->ldt_name, NULL);
+			} else {
 				rc = PTR_ERR(dev);
+			}
+			lu_env_fini(&env);
 		}
 		lu_context_exit(&session_ctx);
 		lu_context_fini(&session_ctx);
