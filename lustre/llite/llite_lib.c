@@ -60,6 +60,20 @@ struct kmem_cache *ll_file_data_slab;
 #define log2(n) ffz(~(n))
 #endif
 
+struct proj_sfs_cache {
+	unsigned int		psc_id;
+	struct rhash_head	psc_linkage;
+	struct kstatfs		psc_sfs;
+	time64_t		psc_age;
+	struct mutex		psc_mutex;
+};
+
+static const struct rhashtable_params proj_sfs_cache_params = {
+	.key_len	= sizeof(unsigned int),
+	.key_offset	= offsetof(struct proj_sfs_cache, psc_id),
+	.head_offset	= offsetof(struct proj_sfs_cache, psc_linkage),
+};
+
 /*
  * If there is only one number of core visible to Lustre,
  * async readahead will be disabled, to avoid massive over
@@ -218,6 +232,10 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	sbi->ll_enable_setstripe_gid = -1;
 
 	INIT_LIST_HEAD(&sbi->ll_all_quota_list);
+
+	rc = rhashtable_init(&sbi->ll_proj_sfs_htable, &proj_sfs_cache_params);
+	LASSERT(rc == 0);
+
 	RETURN(sbi);
 out_destroy_ra:
 	OBD_FREE(sbi->ll_foreign_symlink_prefix, sizeof("/mnt/"));
@@ -233,6 +251,13 @@ out_sbi:
 	RETURN(ERR_PTR(rc));
 }
 
+static void proj_sfs_free(void *psa, void *arg)
+{
+	struct proj_sfs_cache *ps = psa;
+
+	OBD_FREE_PTR(ps);
+}
+
 static void ll_free_sbi(struct super_block *sb)
 {
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -240,6 +265,8 @@ static void ll_free_sbi(struct super_block *sb)
 	ENTRY;
 
 	if (sbi != NULL) {
+		rhashtable_free_and_destroy(&sbi->ll_proj_sfs_htable,
+					    proj_sfs_free, NULL);
 		if (!list_empty(&sbi->ll_squash.rsi_nosquash_nids))
 			cfs_free_nidlist(&sbi->ll_squash.rsi_nosquash_nids);
 		if (sbi->ll_ra_info.ll_readahead_wq)
@@ -2621,13 +2648,49 @@ out:
 
 static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 {
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct ll_sb_info *sbi = ll_s2sbi(inode->i_sb);
 	struct if_quotactl qctl = {
 		.qc_cmd = LUSTRE_Q_GETQUOTA,
 		.qc_type = PRJQUOTA,
 		.qc_valid = QC_GENERAL,
 	};
+	struct proj_sfs_cache *ps, *orig;
 	u64 limit, curblock;
 	int ret;
+
+	LASSERT(S_ISDIR(inode->i_mode));
+
+	ps = rhashtable_lookup_fast(&sbi->ll_proj_sfs_htable,
+				    &lli->lli_projid,
+				    proj_sfs_cache_params);
+	if (!ps) {
+		OBD_ALLOC_PTR(ps);
+		if (!ps)
+			return -ENOMEM;
+		ps->psc_id = lli->lli_projid;
+		mutex_init(&ps->psc_mutex);
+		orig = rhashtable_lookup_get_insert_fast(&sbi->ll_proj_sfs_htable,
+							&ps->psc_linkage,
+							proj_sfs_cache_params);
+		if (orig) {
+			OBD_FREE_PTR(ps);
+			if (IS_ERR(orig))
+				return PTR_ERR(orig);
+			ps = orig;
+		}
+	}
+
+	if (ktime_get_seconds() - ps->psc_age < sbi->ll_statfs_max_age) {
+		*sfs = ps->psc_sfs;
+		return 0;
+	}
+
+	mutex_lock(&ps->psc_mutex);
+	if (ktime_get_seconds() - ps->psc_age < sbi->ll_statfs_max_age) {
+		*sfs = ps->psc_sfs;
+		GOTO(out, ret = 0);
+	}
 
 	qctl.qc_id = ll_i2info(inode)->lli_projid;
 	ret = quotactl_ioctl(inode->i_sb, &qctl);
@@ -2637,7 +2700,7 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 		 */
 		if (ret == -ESRCH || ret == -EOPNOTSUPP)
 			ret = 0;
-		return ret;
+		GOTO(out, ret);
 	}
 
 	limit = ((qctl.qc_dqblk.dqb_bsoftlimit ?
@@ -2662,7 +2725,13 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 			(sfs->f_files - qctl.qc_dqblk.dqb_curinodes) : 0;
 	}
 
-	return 0;
+	ps->psc_sfs = *sfs;
+	ps->psc_age = ktime_get_seconds();
+
+out:
+	mutex_unlock(&ps->psc_mutex);
+
+	return ret;
 }
 
 int ll_statfs(struct dentry *de, struct kstatfs *sfs)

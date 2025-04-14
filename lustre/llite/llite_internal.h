@@ -1031,6 +1031,8 @@ struct ll_sb_info {
 
 	/* LU-14535: the list of "lfs quota -a" */
 	struct list_head	 ll_all_quota_list;
+
+	struct rhashtable	 ll_proj_sfs_htable;
 };
 
 #define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)
