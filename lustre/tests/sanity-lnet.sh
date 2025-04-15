@@ -2173,14 +2173,53 @@ cleanup_health_test() {
 	return $rc
 }
 
+add_drop_rule() {
+	if ((${RANDOM} % 2 == 0)); then
+		do_lctl net_drop add $@ ||
+			error "$LCTL net_drop add $@ failed rc = $?"
+	else
+		do_lnetctl fault drop add $@ ||
+			error "$LNETCTL fault drop add $@ failed rc = $?"
+	fi
+}
+
+del_drop_rule() {
+	if ((${RANDOM} % 2 == 0)); then
+		do_lctl net_drop del $@ ||
+			error "$LCTL net_drop del $@ failed rc = $?"
+	else
+		do_lnetctl fault drop del $@ ||
+			error "$LNETCTL fault drop del $@ failed rc = $?"
+	fi
+}
+
+add_delay_rule() {
+	if ((${RANDOM} % 2 == 0)); then
+		do_lctl net_delay add $@ ||
+			error "$LCTL net_delay add $@ failed rc = $?"
+	else
+		do_lnetctl fault delay add $@ ||
+			error "$LNETCTL fault delay add $@ failed rc = $?"
+	fi
+}
+
+del_delay_rule() {
+	if ((${RANDOM} % 2 == 0)); then
+		do_lctl net_delay del $@ ||
+			error "$LCTL net_delay del $@ failed rc = $?"
+	else
+		do_lnetctl fault delay del $@ ||
+			error "$LNETCTL fault delay del $@ failed rc = $?"
+	fi
+}
+
 add_health_test_drop_rules() {
 	local args="-m GET -r 1 -e ${1}"
 	local src dst
 
 	for src in "${LNIDS[@]}"; do
 		for dst in "${RNIDS[@]}" "${LNIDS[@]}"; do
-			$LCTL net_drop add -s $src -d $dst ${args} ||
-				error "Failed to add drop rule $src $dst $args"
+			add_drop_rule -s $src -d $dst ${args}
 		done
 	done
 }
@@ -2198,7 +2237,7 @@ do_lnet_health_ping_test() {
 
 	lnet_health_post
 
-	$LCTL net_drop del -a
+	del_drop_rule -a
 
 	return 0
 }
@@ -2524,16 +2563,11 @@ test_210() {
 		error "failed to set recovery_limit"
 
 	$LCTL set_param debug=+net
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
-		-e local_error ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
-		-e local_error ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1 ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
-		error "Failed to add drop rule"
+	add_drop_rule -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e local_error
+	add_drop_rule -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
+		-e local_error
+	add_drop_rule -s *@${NETTYPE} -d *@${NETTYPE} -r 1
+	add_drop_rule -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
 	do_lnetctl net set --health 0 --nid $prim_nid ||
 		error "Failed to set NI health to 0 rc $?"
 
@@ -2543,7 +2577,7 @@ test_210() {
 	check_ping_count "ni" "$prim_nid" "3" "10"
 	check_nid_in_recovq "-l" "$prim_nid" "1"
 
-	$LCTL net_drop_del -a
+	del_drop_rule -a
 
 	reinit_dlc || return $?
 	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
@@ -2563,16 +2597,11 @@ test_210() {
 		error "failed to set max_recovery_ping_interval"
 
 	$LCTL set_param debug=+net
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
-		-e local_error ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
-		-e local_error ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1 ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
-		error "Failed to add drop rule"
+	add_drop_rule -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 -e local_error
+	add_drop_rule -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
+		-e local_error
+	add_drop_rule -s *@${NETTYPE} -d *@${NETTYPE} -r 1
+	add_drop_rule -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
 	do_lnetctl net set --health 0 --nid $prim_nid ||
 		error "Failed to set NI health to 0 rc $?"
 
@@ -2582,7 +2611,7 @@ test_210() {
 	check_ping_count "ni" "$prim_nid" "4" "10"
 	check_nid_in_recovq "-l" "$prim_nid" "1"
 
-	$LCTL net_drop_del -a
+	del_drop_rule -a
 
 	do_lnetctl set max_recovery_ping_interval $default ||
 		error "failed to set max_recovery_ping_interval"
@@ -2609,16 +2638,12 @@ test_211() {
 	do_lnetctl set recovery_limit 10 ||
 		error "failed to set recovery_limit"
 
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
-		-e remote_error ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
-		-e remote_error ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1 ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
-		error "Failed to add drop rule"
+	add_drop_rule -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
+		-e remote_error
+	add_drop_rule -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
+		-e remote_error
+	add_drop_rule -s *@${NETTYPE} -d *@${NETTYPE} -r 1
+	add_drop_rule -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
 
 	# Set health to 0 on one interface. This forces it onto the recovery
 	# queue.
@@ -2631,7 +2656,7 @@ test_211() {
 	# Ping count should reset to 0 when peer ages out
 	check_ping_count "peer_ni" "$prim_nid" "0"
 
-	$LCTL net_drop_del -a
+	del_drop_rule -a
 
 	# Set health to force it back onto the recovery queue. Set to 500 means
 	# in ~5 seconds it should be back at maximum value.
@@ -2662,16 +2687,12 @@ test_211() {
 	do_lnetctl set max_recovery_ping_interval 4 ||
 		error "failed to set max_recovery_ping_interval"
 
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
-		-e remote_error ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
-		-e remote_error ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE} -d *@${NETTYPE} -r 1 ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1 ||
-		error "Failed to add drop rule"
+	add_drop_rule -s *@${NETTYPE} -d *@${NETTYPE} -m GET -r 1 \
+		-e remote_error
+	add_drop_rule -s *@${NETTYPE}1 -d *@${NETTYPE}1 -m GET -r 1 \
+		-e remote_error
+	add_drop_rule -s *@${NETTYPE} -d *@${NETTYPE} -r 1
+	add_drop_rule -s *@${NETTYPE}1 -d *@${NETTYPE}1 -r 1
 
 	# Set health to 0 on one interface. This forces it onto the recovery
 	# queue.
@@ -2685,7 +2706,7 @@ test_211() {
 	check_ping_count "peer_ni" "$prim_nid" "4" "14"
 	check_nid_in_recovq "-p" "$prim_nid" "1"
 
-	$LCTL net_drop_del -a
+	del_drop_rule -a
 
 	do_lnetctl set max_recovery_ping_interval $default ||
 		error "failed to set max_recovery_ping_interval"
@@ -2736,26 +2757,20 @@ test_212() {
 		error "$rnode failed to discover $my_nid"
 
 	log "Fail local discover ping to set LNET_PEER_REDISCOVER flag"
-	$LCTL net_drop_add -s "*@$NETTYPE" -d "*@$NETTYPE" -r 1 \
-		-e local_error ||
-		error "Failed to add drop rule"
+	add_drop_rule -s "*@$NETTYPE" -d "*@$NETTYPE" -r 1 -e local_error
 	do_lnetctl discover --force $rnodepnid &&
 		error "Discovery should have failed"
-	$LCTL net_drop_del -a
+	del_drop_rule -a
 
 	local nid
 	for nid in $rnodenids; do
 		# We need GET (PING) delay just long enough so we can trigger
 		# discovery on the remote peer
-		$LCTL net_delay_add -s "*@$NETTYPE" -d $nid -r 1 -m GET -l 3 ||
-			error "Failed to add delay rule"
-		$LCTL net_drop_add -s "*@$NETTYPE" -d $nid -r 1 -m GET \
-			-e local_error ||
-			error "Failed to add drop rule"
+		add_delay_rule -s "*@$NETTYPE" -d $nid -r 1 -m GET -l 3
+		add_drop_rule -s "*@$NETTYPE" -d $nid -r 1 -m GET -e local_error
 		# We need PUT (PUSH) delay just long enough so we can process
 		# the PING failure
-		$LCTL net_delay_add -s "*@$NETTYPE" -d $nid -r 1 -m PUT -l 6 ||
-			error "Failed to add delay rule"
+		add_delay_rule -s "*@$NETTYPE" -d $nid -r 1 -m PUT -l 6
 	done
 
 	log "Force $HOSTNAME to discover $rnodepnid (in background)"
@@ -2790,9 +2805,9 @@ test_212() {
 	# lnet_destroy_peer_locked()
 
 	# Delete the delay rules to send the PUSH
-	$LCTL net_delay_del -a
+	del_delay_rule -a
 	# Delete the drop rules
-	$LCTL net_drop_del -a
+	del_drop_rule -a
 
 	unload_modules ||
 		error "Failed to unload modules"
@@ -3026,15 +3041,13 @@ test_216() {
 	local src dst
 	for src in "${nids[@]}"; do
 		for dst in "${nids[@]}"; do
-			$LCTL net_drop_add -r 1 -s $src -d $dst \
-				-e network_timeout ||
-				error "Failed to add drop rule"
+			add_drop_rule -r 1 -s $src -d $dst -e network_timeout
 		done
 	done
 
 	do_lnetctl ping ${nids[0]} || rc=$?
 
-	$LCTL net_drop_del -a
+	del_drop_rule -a
 
 	[[ $rc -eq 0 ]] &&
 		error "expected ping to fail"
@@ -3081,8 +3094,7 @@ test_218() {
 	do_lnetctl ping $nid2 ||
 		error "ping failed"
 
-	$LCTL net_drop_add -s $nid1 -d $nid1 -e local_error -r 1 ||
-		error "Failed to add drop rule"
+	add_drop_rule -s $nid1 -d $nid1 -e local_error -r 1
 
 	do_lnetctl ping --source $nid1 $nid1 &&
 		error "ping should have failed"
@@ -3105,7 +3117,7 @@ test_218() {
 	health_recovered=$($LNETCTL net show -v 2 |
 			   grep -c 'health value: 1000')
 
-	$LCTL net_drop_del -a
+	del_drop_rule -a
 
 	[[ $health_recovered -ne 2 ]] &&
 		do_lnetctl net show -v 2 | egrep -e nid -e health &&
@@ -3839,9 +3851,8 @@ do_expired_message_drop_test() {
 
 	for lnid in "${LNIDS[@]}"; do
 		for rnid in "${RNIDS[@]}"; do
-			$LCTL net_delay add -s "${lnid}" -d "${rnid}" \
-				-l "${delay}" -r 1 -m GET ||
-				error "Failed to add delay rule"
+			add_delay_rule -s "${lnid}" -d "${rnid}" \
+				-l "${delay}" -r 1 -m GET
 		done
 	done
 
@@ -3880,7 +3891,7 @@ do_expired_message_drop_test() {
 
 	sleep ${delay}
 
-	$LCTL net_delay del -a
+	del_delay_rule -a
 
 	wait
 
@@ -4078,7 +4089,7 @@ test_256() {
 	echo "Issued last ping - sleep $delay"
 	sleep ${delay}
 
-	do_node $router $LCTL net_delay_del -a
+	do_node $router $LCTL net_delay del -a
 
 	local rc=0 rcsum=0
 	for idx in $(seq 1 $((rtr_pc + 1))); do
@@ -4650,15 +4661,12 @@ test_500() {
 	do_lnetctl discover $($LCTL list_nids | head -n 1) ||
 		error "Failed to discover self"
 
-	$LCTL net_delay_add -s *@tcp -d *@tcp -r 1 -l 1 -m PUT ||
-		error "Failed to add delay rule"
+	add_delay_rule -s *@tcp -d *@tcp -r 1 -l 1 -m PUT
 
-	$LCTL net_drop_add -s *@tcp -d $($LCTL list_nids | head -n 1) -m PUT \
-		-e local_timeout -r 1 ||
-		error "Failed to add drop rule"
-	$LCTL net_drop_add -s *@tcp -d $($LCTL list_nids | tail -n 1) -m PUT \
-		-e local_timeout -r 1 ||
-		error "Failed to add drop rule"
+	add_drop_rule -s *@tcp -d $($LCTL list_nids | head -n 1) -m PUT \
+		-e local_timeout -r 1
+	add_drop_rule -s *@tcp -d $($LCTL list_nids | tail -n 1) -m PUT \
+		-e local_timeout -r 1
 
 	ip link set $FAKE_IF down ||
 		error "Failed to set link down"
@@ -4723,8 +4731,7 @@ test_501() {
 
 	$LCTL set_param debug=-1
 
-	$LCTL net_drop_add -s *@tcp -d *@tcp -r 1 ||
-		error "Failed to add drop rule"
+	add_drop_rule -s *@tcp -d *@tcp -r 1
 
 	local test_val
 
@@ -4744,8 +4751,7 @@ test_502() {
 
 	$LCTL set_param debug=-1
 
-	$LCTL net_drop_add -s *@tcp -d *@tcp -r 1 ||
-		error "Failed to add drop rule"
+	add_drop_rule -s *@tcp -d *@tcp -r 1
 
 	local test_val
 

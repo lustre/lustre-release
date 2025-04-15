@@ -1005,6 +1005,12 @@ do_lnetctl() {
 	$LNETCTL "$@"
 }
 
+do_lctl() {
+	$LCTL mark "$LNETCTL $*"
+	echo "$LCTL $*"
+	$LCTL "$@"
+}
+
 load_lnet() {
 	# For kmemleak-enabled kernels we need clear all past state
 	# that obviously has nothing to do with this Lustre run

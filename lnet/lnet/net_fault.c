@@ -180,8 +180,7 @@ int lnet_drop_rule_add(struct lnet_fault_large_attr *attr)
 
 	if (!((attr->u.drop.da_rate == 0) ^ (attr->u.drop.da_interval == 0))) {
 		CDEBUG(D_NET,
-		       "please provide either drop rate or drop interval, "
-		       "but not both at the same time %d/%d\n",
+		       "Invalid drop rule specifies rate and interval %d/%d\n",
 		       attr->u.drop.da_rate, attr->u.drop.da_interval);
 		RETURN(-EINVAL);
 	}
