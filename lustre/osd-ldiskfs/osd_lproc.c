@@ -546,26 +546,29 @@ static int ldiskfs_osd_oi_scrub_seq_show(struct seq_file *m, void *data)
 
 LDEBUGFS_SEQ_FOPS_RO(ldiskfs_osd_oi_scrub);
 
-static int ldiskfs_osd_readcache_seq_show(struct seq_file *m, void *data)
+static ssize_t readcache_max_filesize_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
 {
-	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
 
 	LASSERT(osd != NULL);
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	seq_printf(m, "%llu\n", osd->od_readcache_max_filesize);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%llu\n",
+			 osd->od_readcache_max_filesize);
 }
 
-static ssize_t
-ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t readcache_max_filesize_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct dt_device *dt = m->private;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
 	struct osd_device *osd = osd_dt_dev(dt);
-	char kernbuf[22] = "";
 	u64 val;
 	int rc;
 
@@ -573,14 +576,7 @@ ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &val, "B");
+	rc = sysfs_memparse(buffer, count, &val, "B");
 	if (rc < 0)
 		return rc;
 
@@ -588,30 +584,31 @@ ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 					 OSD_MAX_CACHE_SIZE : val;
 	return count;
 }
+LUSTRE_RW_ATTR(readcache_max_filesize);
 
-LDEBUGFS_SEQ_FOPS(ldiskfs_osd_readcache);
-
-static int ldiskfs_osd_readcache_max_io_seq_show(struct seq_file *m, void *data)
+static ssize_t readcache_max_io_mb_show(struct kobject *kobj,
+					struct attribute *attr,
+					char *buf)
 {
-	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
 
 	LASSERT(osd != NULL);
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	seq_printf(m, "%lu\n", osd->od_readcache_max_iosize >> 20);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%lu\n",
+			 osd->od_readcache_max_iosize >> 20);
 }
 
-static ssize_t
-ldiskfs_osd_readcache_max_io_seq_write(struct file *file,
-				       const char __user *buffer,
-				       size_t count, loff_t *off)
+static ssize_t readcache_max_io_mb_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct dt_device *dt = m->private;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
 	struct osd_device *osd = osd_dt_dev(dt);
-	char kernbuf[22] = "";
 	u64 val;
 	int rc;
 
@@ -619,14 +616,7 @@ ldiskfs_osd_readcache_max_io_seq_write(struct file *file,
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	rc = sysfs_memparse(buffer, count, &val, "MiB");
 	if (rc < 0)
 		return rc;
 
@@ -635,31 +625,31 @@ ldiskfs_osd_readcache_max_io_seq_write(struct file *file,
 	osd->od_readcache_max_iosize = val;
 	return count;
 }
+LUSTRE_RW_ATTR(readcache_max_io_mb);
 
-LDEBUGFS_SEQ_FOPS(ldiskfs_osd_readcache_max_io);
-
-static int ldiskfs_osd_writethrough_max_io_seq_show(struct seq_file *m,
-						    void *data)
+static ssize_t writethrough_max_io_mb_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
 {
-	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
 
 	LASSERT(osd != NULL);
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	seq_printf(m, "%lu\n", osd->od_writethrough_max_iosize >> 20);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%lu\n",
+			 osd->od_writethrough_max_iosize >> 20);
 }
 
-static ssize_t
-ldiskfs_osd_writethrough_max_io_seq_write(struct file *file,
-				       const char __user *buffer,
-				       size_t count, loff_t *off)
+static ssize_t writethrough_max_io_mb_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct dt_device *dt = m->private;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
 	struct osd_device *osd = osd_dt_dev(dt);
-	char kernbuf[22] = "";
 	u64 val;
 	int rc;
 
@@ -667,14 +657,7 @@ ldiskfs_osd_writethrough_max_io_seq_write(struct file *file,
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	rc = sysfs_memparse(buffer, count, &val, "MiB");
 	if (rc < 0)
 		return rc;
 
@@ -683,8 +666,7 @@ ldiskfs_osd_writethrough_max_io_seq_write(struct file *file,
 	osd->od_writethrough_max_iosize = val;
 	return count;
 }
-
-LDEBUGFS_SEQ_FOPS(ldiskfs_osd_writethrough_max_io);
+LUSTRE_RW_ATTR(writethrough_max_io_mb);
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 52, 0)
 static ssize_t index_in_idif_show(struct kobject *kobj, struct attribute *attr,
@@ -828,12 +810,6 @@ LUSTRE_RW_ATTR(extents_dense);
 struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
 	{ .name =	"oi_scrub",
 	  .fops =	&ldiskfs_osd_oi_scrub_fops      },
-	{ .name =	"readcache_max_filesize",
-	  .fops =	&ldiskfs_osd_readcache_fops     },
-	{ .name =	"readcache_max_io_mb",
-	  .fops =	&ldiskfs_osd_readcache_max_io_fops      },
-	{ .name =	"writethrough_max_io_mb",
-	  .fops =	&ldiskfs_osd_writethrough_max_io_fops   },
 	{ NULL }
 };
 
@@ -855,6 +831,9 @@ static struct attribute *ldiskfs_attrs[] = {
 #ifdef LDISKFS_GET_BLOCKS_VERY_DENSE
 	&lustre_attr_extents_dense.attr,
 #endif
+	&lustre_attr_readcache_max_filesize.attr,
+	&lustre_attr_readcache_max_io_mb.attr,
+	&lustre_attr_writethrough_max_io_mb.attr,
 	NULL,
 };
 
