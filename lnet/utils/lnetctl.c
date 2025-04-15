@@ -392,6 +392,14 @@ static inline void print_help(const command_t cmds[], const char *cmd_type,
 	}
 }
 
+/*
+ * Perform some basic input validation.
+ * Returns:
+ *	LUSTRE_CFG_RC_BAD_PARAM: when minimum number of arguments has not been
+ *				 supplied
+ *	> 0: when '-h' or '--help' has been supplied
+ *	0: when the "check" passes and command can continue execution
+ */
 static int check_cmd(const command_t *cmd_list, const char *cmd,
 		     const char *sub_cmd, const int min_args,
 		     int argc, char **argv)
@@ -3533,7 +3541,7 @@ static int jt_set_ni_value(int argc, char **argv)
 {
 	int rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
 
-	if (rc < 0)
+	if (rc)
 		return rc;
 
 	return set_value_helper(argc, argv, LNET_CMD_NETS);
@@ -3543,7 +3551,7 @@ static int jt_set_peer_ni_value(int argc, char **argv)
 {
 	int rc = check_cmd(peer_cmds, "peer", "set", 0, argc, argv);
 
-	if (rc < 0)
+	if (rc)
 		return rc;
 
 	return set_value_helper(argc, argv, LNET_CMD_PEERS);
