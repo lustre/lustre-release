@@ -13,21 +13,23 @@
 #include <lustre_lib.h>
 #include "../../ldlm/ldlm_internal.h"
 
+#define LUSTRE_TEST_LDLM_DEVICE "ldlm_test"
+
 /*
  * Performance tests for ldlm_extent access
  */
-static int extent_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
-{
-	return 0;
-}
-static int extent_cleanup(struct obd_device *obd)
-{
-	return 0;
-}
+
+static const struct lu_device_type_operations ldlm_test_type_ops;
+
+static struct lu_device_type ldlm_test_device_type = {
+	.ldt_tags     = LU_DEVICE_MISC,
+	.ldt_name     = LUSTRE_TEST_LDLM_DEVICE,
+	.ldt_ops      = &ldlm_test_type_ops,
+	.ldt_ctx_tags = LCT_LOCAL
+};
+
 static const struct obd_ops extent_ops = {
 	.o_owner       = THIS_MODULE,
-	.o_setup       = extent_setup,
-	.o_cleanup     = extent_cleanup,
 };
 
 static struct ldlm_res_id RES_ID = {
@@ -103,7 +105,9 @@ static int ldlm_extent_init(void)
 
 	prandom_seed_state(&rstate, 42);
 
-	class_register_type(&extent_ops, NULL, false, "ldlm_test", NULL);
+	class_register_type(&extent_ops, NULL, false,
+			    LUSTRE_TEST_LDLM_DEVICE,
+			    &ldlm_test_device_type);
 
 	OBD_ALLOC(name, MAX_OBD_NAME);
 	OBD_ALLOC(uuid, MAX_OBD_NAME);
@@ -111,7 +115,8 @@ static int ldlm_extent_init(void)
 	lustre_cfg_bufs_reset(&bufs, name);
 	snprintf(uuid, MAX_OBD_NAME, "%s_UUID", name);
 
-	lustre_cfg_bufs_set_string(&bufs, 1, "ldlm_test"); /* typename */
+	lustre_cfg_bufs_set_string(&bufs, 1,
+				   LUSTRE_TEST_LDLM_DEVICE);
 	lustre_cfg_bufs_set_string(&bufs, 2, uuid);
 	OBD_ALLOC(cfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
 	lustre_cfg_init(cfg, LCFG_ATTACH, &bufs);
@@ -225,7 +230,7 @@ static int ldlm_extent_init(void)
 
 	ldlm_resource_putref(res);
 	ldlm_namespace_free_post(ns);
-	class_unregister_type("ldlm_test");
+	class_unregister_type(LUSTRE_TEST_LDLM_DEVICE);
 
 	return 0;
 }
