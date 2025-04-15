@@ -149,22 +149,20 @@ static const struct lu_device_operations osc_lu_ops = {
         .ldo_recovery_complete = NULL
 };
 
-int osc_device_init(const struct lu_env *env, struct lu_device *d,
-		    const char *name, struct lu_device *next)
+static int osc_device_init(const struct lu_env *env, struct lu_device *d,
+			   const char *name, struct lu_device *next)
 {
         RETURN(0);
 }
-EXPORT_SYMBOL(osc_device_init);
 
-struct lu_device *osc_device_fini(const struct lu_env *env,
-				  struct lu_device *d)
+static struct lu_device *osc_device_fini(const struct lu_env *env,
+					 struct lu_device *d)
 {
 	return NULL;
 }
-EXPORT_SYMBOL(osc_device_fini);
 
-struct lu_device *osc_device_free(const struct lu_env *env,
-				  struct lu_device *d)
+static struct lu_device *osc_device_free(const struct lu_env *env,
+					 struct lu_device *d)
 {
 	struct osc_device *oc = lu2osc_dev(d);
 
@@ -172,7 +170,6 @@ struct lu_device *osc_device_free(const struct lu_env *env,
 	OBD_FREE_PTR(oc);
 	return NULL;
 }
-EXPORT_SYMBOL(osc_device_free);
 
 static struct lu_device *osc_device_alloc(const struct lu_env *env,
 					  struct lu_device_type *t,

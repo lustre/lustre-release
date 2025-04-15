@@ -1676,21 +1676,36 @@ static const struct lu_device_operations mdc_lu_ops = {
 	.ldo_recovery_complete = NULL,
 };
 
+static struct lu_device *mdc_device_free(const struct lu_env *env,
+					 struct lu_device *lu)
+{
+	struct obd_device *obd = lu->ld_obd;
+	struct client_obd *cli = &obd->u.cli;
+	struct osc_device *osc = lu2osc_dev(lu);
+
+	LASSERT(cli->cl_mod_rpcs_in_flight == 0);
+	cl_device_fini(lu2cl_dev(lu));
+	osc_cleanup_common(obd);
+	OBD_FREE_PTR(osc);
+
+	return NULL;
+}
+
 static struct lu_device *mdc_device_alloc(const struct lu_env *env,
 					  struct lu_device_type *t,
 					  struct lustre_cfg *cfg)
 {
 	struct lu_device *d;
-	struct osc_device *oc;
+	struct osc_device *osc;
 	struct obd_device *obd;
 	int rc;
 
-	OBD_ALLOC_PTR(oc);
-	if (oc == NULL)
+	OBD_ALLOC_PTR(osc);
+	if (osc == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	cl_device_init(&oc->osc_cl, t);
-	d = osc2lu_dev(oc);
+	cl_device_init(&osc->osc_cl, t);
+	d = osc2lu_dev(osc);
 	d->ld_ops = &mdc_lu_ops;
 
 	/* Setup MDC OBD */
@@ -1700,19 +1715,41 @@ static struct lu_device *mdc_device_alloc(const struct lu_env *env,
 
 	rc = mdc_setup(obd, cfg);
 	if (rc < 0) {
-		osc_device_free(env, d);
+		mdc_device_free(env, d);
 		RETURN(ERR_PTR(rc));
 	}
-	oc->osc_exp = obd->obd_self_export;
-	oc->osc_stats.os_init = ktime_get_real();
+	osc->osc_exp = obd->obd_self_export;
+	osc->osc_stats.os_init = ktime_get_real();
 	RETURN(d);
+}
+
+static int mdc_device_init(const struct lu_env *env, struct lu_device *d,
+			   const char *name, struct lu_device *next)
+{
+	RETURN(0);
+}
+
+static struct lu_device *mdc_device_fini(const struct lu_env *env,
+					 struct lu_device *lu)
+{
+	struct obd_device *obd = lu->ld_obd;
+
+	ENTRY;
+
+	osc_precleanup_common(obd);
+	mdc_changelog_cdev_finish(obd);
+	mdc_llog_finish(obd);
+	lprocfs_free_md_stats(obd);
+	ptlrpc_lprocfs_unregister_obd(obd);
+
+	RETURN(NULL);
 }
 
 static const struct lu_device_type_operations mdc_device_type_ops = {
 	.ldto_device_alloc = mdc_device_alloc,
-	.ldto_device_free = osc_device_free,
-	.ldto_device_init = osc_device_init,
-	.ldto_device_fini = osc_device_fini
+	.ldto_device_free = mdc_device_free,
+	.ldto_device_init = mdc_device_init,
+	.ldto_device_fini = mdc_device_fini
 };
 
 struct lu_device_type mdc_device_type = {

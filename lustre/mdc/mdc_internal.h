@@ -89,6 +89,7 @@ int mdc_resource_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
 int mdc_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 		  struct lu_fid *fid, struct md_op_data *op_data);
 int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg);
+void mdc_llog_finish(struct obd_device *obd);
 
 struct obd_client_handle;
 

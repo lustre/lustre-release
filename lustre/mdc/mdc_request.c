@@ -46,8 +46,6 @@
 
 #define REQUEST_MINOR 244
 
-static int mdc_cleanup(struct obd_device *obd);
-
 static inline int mdc_queue_wait(struct ptlrpc_request *req)
 {
 	struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
@@ -2985,7 +2983,7 @@ static int mdc_llog_init(struct obd_device *obd)
 	RETURN(0);
 }
 
-static void mdc_llog_finish(struct obd_device *obd)
+void mdc_llog_finish(struct obd_device *obd)
 {
 	struct llog_ctxt *ctxt;
 
@@ -3067,32 +3065,8 @@ static int mdc_init_ea_size(struct obd_export *exp, __u32 easize,
 	RETURN(0);
 }
 
-static int mdc_precleanup(struct obd_device *obd)
-{
-	ENTRY;
-	osc_precleanup_common(obd);
-
-	mdc_changelog_cdev_finish(obd);
-	mdc_llog_finish(obd);
-	lprocfs_free_md_stats(obd);
-	ptlrpc_lprocfs_unregister_obd(obd);
-
-	RETURN(0);
-}
-
-static int mdc_cleanup(struct obd_device *obd)
-{
-	struct client_obd *cli = &obd->u.cli;
-
-	LASSERT(cli->cl_mod_rpcs_in_flight == 0);
-	return osc_cleanup_common(obd);
-}
-
 static const struct obd_ops mdc_obd_ops = {
 	.o_owner	    = THIS_MODULE,
-	.o_setup	    = mdc_setup,
-	.o_precleanup       = mdc_precleanup,
-	.o_cleanup	    = mdc_cleanup,
 	.o_add_conn	    = client_import_add_conn,
 	.o_del_conn	    = client_import_del_conn,
 	.o_connect	    = client_connect_import,

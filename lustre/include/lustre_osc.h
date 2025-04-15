@@ -595,14 +595,6 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 bool osc_discard_cb(const struct lu_env *env, struct cl_io *io,
 		    void **pvec, int count, void *cbdata);
 
-/* osc_dev.c */
-int osc_device_init(const struct lu_env *env, struct lu_device *d,
-		    const char *name, struct lu_device *next);
-struct lu_device *osc_device_fini(const struct lu_env *env,
-				  struct lu_device *d);
-struct lu_device *osc_device_free(const struct lu_env *env,
-				  struct lu_device *d);
-
 /* osc_object.c */
 int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 		    const struct lu_object_conf *conf);

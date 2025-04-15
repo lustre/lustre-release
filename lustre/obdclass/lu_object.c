@@ -1335,15 +1335,23 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 
 	lu_site_purge(env, site, ~0);
 	for (scan = top; scan != NULL; scan = next) {
-		next = ldto_device_fini(env, scan);
+		if (strcmp(scan->ld_type->ldt_name, LUSTRE_MDC_NAME) == 0)
+			next = NULL;
+		else
+			next = ldto_device_fini(env, scan);
+
 		lu_device_put(scan);
 	}
 
 	/* purge again. */
 	lu_site_purge(env, site, ~0);
 
-	for (scan = top; scan != NULL; scan = next)
+	for (scan = top; scan != NULL; scan = next) {
+		if (strcmp(scan->ld_type->ldt_name, LUSTRE_MDC_NAME) == 0)
+			break;
+
 		next = ldto_device_free(env, scan);
+	}
 }
 EXPORT_SYMBOL(lu_stack_fini);
 
