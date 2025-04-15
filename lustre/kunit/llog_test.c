@@ -30,6 +30,8 @@
 #include <lustre_fid.h>
 #include <lustre_log.h>
 
+#define LUSTRE_TEST_LLOG_DEVICE "llog_test"
+
 /* This is slightly more than the number of records that can fit into a
  * single llog file, because the llog_log_header takes up some of the
  * space in the first block that cannot be used for the bitmap. */
@@ -2238,66 +2240,107 @@ cleanup_ctxt:
 	return rc;
 }
 
-static int llog_test_cleanup(struct obd_device *obd)
+struct llog_test_device {
+	struct lu_device	llog_lu;
+	char			llog_target_name[MAX_OBD_NAME];
+};
+
+static struct llog_test_device *llog_dev(struct lu_device *lu)
 {
-	struct obd_device *tgt;
-	struct lu_env env;
-	int rc;
-
-	ENTRY;
-
-	rc = lu_env_init(&env, LCT_LOCAL | LCT_MG_THREAD);
-	if (rc)
-		RETURN(rc);
-
-	tgt = obd->obd_lvfs_ctxt.dt->dd_lu_dev.ld_obd;
-	rc = llog_cleanup(&env, llog_get_context(tgt, LLOG_TEST_ORIG_CTXT));
-	if (rc)
-		CERROR("failed to llog_test_llog_finish: %d\n", rc);
-	lu_env_fini(&env);
-	RETURN(rc);
+	return container_of(lu, struct llog_test_device, llog_lu);
 }
 
-static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static struct lu_device *llog_test_device_alloc(const struct lu_env *env,
+						struct lu_device_type *ldt,
+						struct lustre_cfg *lcfg)
 {
-	struct obd_device *tgt;
-	struct llog_ctxt *ctxt;
-	struct dt_object *o;
-	struct lu_env env;
-	int rc;
+	struct llog_test_device *lldev;
 
 	ENTRY;
 
 	if (lcfg->lcfg_bufcount < 2) {
 		CERROR("requires a TARGET OBD name\n");
-		RETURN(-EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
 	}
 
 	if (lcfg->lcfg_buflens[1] < 1) {
 		CERROR("requires a TARGET OBD name\n");
-		RETURN(-EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
 	}
 
+	OBD_ALLOC_PTR(lldev);
+	if (!lldev)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	strncpy(lldev->llog_target_name, lustre_cfg_string(lcfg, 1),
+		MAX_OBD_NAME);
+
+	RETURN(&lldev->llog_lu);
+}
+
+static struct lu_device *llog_test_device_free(const struct lu_env *env,
+					       struct lu_device *lu)
+{
+	struct llog_test_device *lldev = llog_dev(lu);
+
+	OBD_FREE_PTR(lldev);
+
+	return NULL;
+}
+
+static struct lu_device *llog_test_device_fini(const struct lu_env *env,
+					       struct lu_device *lu)
+{
+	struct obd_device *obd = lu->ld_obd;
+	struct obd_device *tgt;
+	struct lu_env _env;
+	int rc;
+
+	ENTRY;
+
+	rc = lu_env_init(&_env, LCT_LOCAL | LCT_MG_THREAD);
+	if (rc)
+		RETURN(NULL);
+
+	tgt = obd->obd_lvfs_ctxt.dt->dd_lu_dev.ld_obd;
+	rc = llog_cleanup(&_env, llog_get_context(tgt, LLOG_TEST_ORIG_CTXT));
+	if (rc)
+		CERROR("failed to llog_test_llog_finish: %d\n", rc);
+	lu_env_fini(&_env);
+	RETURN(NULL);
+}
+
+static int llog_test_device_init(const struct lu_env *env, struct lu_device *lu,
+				 const char *name, struct lu_device *next)
+{
+	struct llog_test_device *lldev = llog_dev(lu);
+	struct obd_device *obd = lu->ld_obd;
+	struct obd_device *tgt;
+	struct llog_ctxt *ctxt;
+	struct dt_object *o;
+	struct lu_env _env;
+	int rc;
+
 	/* disk obd */
-	tgt = class_name2obd(lustre_cfg_string(lcfg, 1));
+	tgt = class_name2obd(lldev->llog_target_name);
 	if (!tgt || !test_bit(OBDF_ATTACHED, tgt->obd_flags) ||
 	    !test_bit(OBDF_SET_UP, tgt->obd_flags)) {
 		CERROR("target device not attached or not set up (%s)\n",
-			lustre_cfg_string(lcfg, 1));
+		       lldev->llog_target_name);
 		RETURN(-EINVAL);
 	}
 
-	rc = lu_env_init(&env, LCT_LOCAL | LCT_MG_THREAD);
+	rc = lu_env_init(&_env, LCT_LOCAL | LCT_MG_THREAD);
 	if (rc)
 		RETURN(rc);
 
 	CWARN("Setup llog-test device over %s device\n",
-	      lustre_cfg_string(lcfg, 1));
+	      lldev->llog_target_name);
 
 	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
 	obd->obd_lvfs_ctxt.dt = lu2dt_dev(tgt->obd_lu_dev);
 
-	rc = llog_setup(&env, tgt, &tgt->obd_olg, LLOG_TEST_ORIG_CTXT, tgt,
+	rc = llog_setup(&_env, tgt, &tgt->obd_olg, LLOG_TEST_ORIG_CTXT, tgt,
 			&llog_osd_ops);
 	if (rc)
 		GOTO(cleanup_env, rc);
@@ -2315,30 +2358,45 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	llog_test_rand = get_random_u32();
 
-	rc = llog_run_tests(&env, tgt);
+	rc = llog_run_tests(&_env, tgt);
 	if (rc)
-		llog_test_cleanup(obd);
+		llog_test_device_fini(env, lu);
 
 cleanup_env:
-	lu_env_fini(&env);
+	lu_env_fini(&_env);
 	RETURN(rc);
 }
 
+
+static const struct lu_device_type_operations llog_test_type_ops = {
+	.ldto_device_alloc	= llog_test_device_alloc,
+	.ldto_device_free	= llog_test_device_free,
+
+	.ldto_device_init	= llog_test_device_init,
+	.ldto_device_fini	= llog_test_device_fini
+};
+
+static struct lu_device_type llog_test_device_type = {
+	.ldt_tags     = LU_DEVICE_MISC,
+	.ldt_name     = LUSTRE_TEST_LLOG_DEVICE,
+	.ldt_ops      = &llog_test_type_ops,
+	.ldt_ctx_tags = LCT_LOCAL
+};
+
 static const struct obd_ops llog_obd_ops = {
 	.o_owner       = THIS_MODULE,
-	.o_setup       = llog_test_setup,
-	.o_cleanup     = llog_test_cleanup,
 };
 
 static int __init llog_test_init(void)
 {
 	return class_register_type(&llog_obd_ops, NULL, false,
-				   "llog_test", NULL);
+				   LUSTRE_TEST_LLOG_DEVICE,
+				   &llog_test_device_type);
 }
 
 static void __exit llog_test_exit(void)
 {
-	class_unregister_type("llog_test");
+	class_unregister_type(LUSTRE_TEST_LLOG_DEVICE);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
