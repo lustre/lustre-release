@@ -17,9 +17,9 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$LRSYNC_EXCEPT "
-# bug number for skipped test: LU-4256
-ALWAYS_EXCEPT+="               2b"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+always_except LU-4256	2b
+[[ $(uname -r) = *"debug" ]] &&
+	always_except LU-16489	2c
 
 build_test_filter
 
