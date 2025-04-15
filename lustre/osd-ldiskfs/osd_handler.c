@@ -8156,12 +8156,7 @@ struct lu_context_key osd_key = {
 static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 			   const char *name, struct lu_device *next)
 {
-	struct osd_device *osd = osd_dev(d);
-	int cplen = strscpy(osd->od_svname, name, sizeof(osd->od_svname));
-
-	if (cplen < 0)
-		return cplen;
-	return osd_procfs_init(osd, name);
+	return 0;
 }
 
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
