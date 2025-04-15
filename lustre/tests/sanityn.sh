@@ -18,9 +18,9 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITYN_EXCEPT "
-# bug number for skipped test:  LU-7105
-ALWAYS_EXCEPT+="                28"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+always_except LU-7105	28
+[[ $(uname -r) = *"debug" ]] &&
+	always_except LU-10870	40a
 
 if [ $mds1_FSTYPE = "zfs" ]; then
 	# bug number:    LU-15757 (test_102() causes crash in umount later)
