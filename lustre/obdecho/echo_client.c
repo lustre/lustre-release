@@ -768,7 +768,6 @@ out:
 static int echo_device_init(const struct lu_env *env, struct lu_device *d,
 			    const char *name, struct lu_device *next)
 {
-	LBUG();
 	return 0;
 }
 
