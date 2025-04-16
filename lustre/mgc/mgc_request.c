@@ -782,10 +782,12 @@ static int mgc_llog_fini(const struct lu_env *env, struct obd_device *obd)
 
 
 static atomic_t mgc_count = ATOMIC_INIT(0);
-static int mgc_precleanup(struct obd_device *obd)
+static struct lu_device *mgc_device_fini(const struct lu_env *env,
+					 struct lu_device *lu)
 {
-	int	rc = 0;
-	int	temp;
+	struct obd_device *obd = lu->ld_obd;
+	int rc = 0;
+	int temp;
 
 	ENTRY;
 
@@ -811,11 +813,14 @@ static int mgc_precleanup(struct obd_device *obd)
 	if (rc != 0)
 		CERROR("failed to cleanup llogging subsystems\n");
 
-	RETURN(rc);
+	RETURN(NULL);
 }
 
-static int mgc_cleanup(struct obd_device *obd)
+static struct lu_device *mgc_device_free(const struct lu_env *env,
+					 struct lu_device *lu)
 {
+	struct obd_device *obd = lu->ld_obd;
+
 	ENTRY;
 
 	/* COMPAT_146 - old config logs may have added profiles secretly */
@@ -825,21 +830,36 @@ static int mgc_cleanup(struct obd_device *obd)
 
 	lprocfs_obd_cleanup(obd);
 	ptlrpcd_decref();
-
 	client_obd_cleanup(obd);
-	RETURN(0);
+	OBD_FREE_PTR(lu);
+
+	RETURN(NULL);
 }
 
-static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static const struct lu_device_operations mgc_lu_ops;
+
+static struct lu_device *mgc_device_alloc(const struct lu_env *env,
+					  struct lu_device_type *ldt,
+					  struct lustre_cfg *lcfg)
 {
-	struct task_struct	*task;
-	int			 rc;
+	struct task_struct *task;
+	struct obd_device *obd;
+	struct lu_device *lu;
+	int rc;
 
 	ENTRY;
 
+	OBD_ALLOC_PTR(lu);
+	if (!lu)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	lu->ld_ops = &mgc_lu_ops;
+	obd = class_name2obd(lustre_cfg_string(lcfg, 0));
+	LASSERT(obd);
+
 	rc = ptlrpcd_addref();
 	if (rc < 0)
-		RETURN(rc);
+		GOTO(err_free, rc);
 
 	rc = client_obd_setup(obd, lcfg);
 	if (rc)
@@ -873,7 +893,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		wait_for_completion(&rq_start);
 	}
 
-	RETURN(rc);
+	RETURN(lu);
 
 err_sysfs:
 	lprocfs_obd_cleanup(obd);
@@ -881,7 +901,9 @@ err_cleanup:
 	client_obd_cleanup(obd);
 err_decref:
 	ptlrpcd_decref();
-	RETURN(rc);
+err_free:
+	OBD_FREE_PTR(lu);
+	RETURN(ERR_PTR(rc));
 }
 
 /* based on ll_mdc_blocking_ast */
@@ -1864,16 +1886,17 @@ restart:
  * LCFG_LOG_START gets the config log from the MGS, processes it to start
  * any services, and adds it to the list logs to watch (follow).
  */
-static int mgc_process_config(struct obd_device *obd, size_t len, void *buf)
+static int mgc_process_config(const struct lu_env *env, struct lu_device *lu,
+			      struct lustre_cfg *lcfg)
 {
-	struct lustre_cfg *lcfg = buf;
 	struct config_llog_instance *cfg = NULL;
+	struct obd_device *obd = lu->ld_obd;
 	char *logname;
 	int rc;
 
 	ENTRY;
 #ifdef HAVE_SERVER_SUPPORT
-	rc = mgc_process_config_server(obd, len, buf);
+	rc = mgc_process_config_server(env, lu, lcfg);
 	if (rc != -ENOENT)
 		RETURN(rc);
 #endif
@@ -1968,11 +1991,25 @@ static int mgc_process_config(struct obd_device *obd, size_t len, void *buf)
 	RETURN(rc);
 }
 
+static const struct lu_device_operations mgc_lu_ops = {
+	.ldo_process_config    = mgc_process_config,
+};
+
+static const struct lu_device_type_operations mgc_type_ops = {
+	.ldto_device_alloc	= mgc_device_alloc,
+	.ldto_device_free	= mgc_device_free,
+	.ldto_device_fini	= mgc_device_fini,
+};
+
+static struct lu_device_type mgc_device_type = {
+	.ldt_tags     = LU_DEVICE_MISC,
+	.ldt_name     = LUSTRE_MGC_NAME,
+	.ldt_ops      = &mgc_type_ops,
+	.ldt_ctx_tags = LCT_LOCAL
+};
+
 static const struct obd_ops mgc_obd_ops = {
 	.o_owner        = THIS_MODULE,
-	.o_setup        = mgc_setup,
-	.o_precleanup   = mgc_precleanup,
-	.o_cleanup      = mgc_cleanup,
 	.o_add_conn     = client_import_add_conn,
 	.o_del_conn     = client_import_del_conn,
 	.o_connect      = client_connect_import,
@@ -1980,7 +2017,6 @@ static const struct obd_ops mgc_obd_ops = {
 	.o_set_info_async = mgc_set_info_async,
 	.o_get_info       = mgc_get_info,
 	.o_import_event = mgc_import_event,
-	.o_process_config = mgc_process_config,
 };
 
 static int mgc_param_requeue_timeout_min_set(const char *val,
@@ -2026,7 +2062,8 @@ static int __init mgc_init(void)
 		return rc;
 
 	return class_register_type(&mgc_obd_ops, NULL, false,
-				   LUSTRE_MGC_NAME, NULL);
+				   LUSTRE_MGC_NAME,
+				   &mgc_device_type);
 }
 
 static void __exit mgc_exit(void)

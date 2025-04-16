@@ -526,9 +526,10 @@ out:
 	return rc;
 }
 
-int mgc_process_config_server(struct obd_device *obd, size_t len, void *buf)
+int mgc_process_config_server(const struct lu_env *env, struct lu_device *lu,
+			      struct lustre_cfg *lcfg)
 {
-	struct lustre_cfg *lcfg = buf;
+	struct obd_device *obd = lu->ld_obd;
 	int rc = -ENOENT;
 
 	ENTRY;
