@@ -61,9 +61,11 @@ MODULE_PARM_DESC(oss_io_cpts, "CPU partitions OSS IO threads should run on");
 static struct cfs_cpt_table *ost_io_cptable;
 
 /* Sigh - really, this is an OSS, the _server_, not the _target_ */
-static int oss_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int oss_device_init(const struct lu_env *env, struct lu_device *lu,
+			   const char *name, struct lu_device *next)
 {
 	static struct ptlrpc_service_conf svc_conf;
+	struct obd_device *obd = lu->ld_obd;
 	struct ost_obd *ost = obd2ost(obd);
 	nodemask_t *mask;
 	int rc;
@@ -341,10 +343,11 @@ out_lprocfs:
 	RETURN(rc);
 }
 
-static int oss_cleanup(struct obd_device *obd)
+static struct lu_device *oss_device_free(const struct lu_env *env,
+					 struct lu_device *lu)
 {
+	struct obd_device *obd = lu->ld_obd;
 	struct ost_obd *ost = obd2ost(obd);
-	int err = 0;
 
 	ENTRY;
 
@@ -376,7 +379,9 @@ static int oss_cleanup(struct obd_device *obd)
 		ost_io_cptable = NULL;
 	}
 
-	RETURN(err);
+	OBD_FREE_PTR(lu);
+
+	RETURN(NULL);
 }
 
 static int oss_health_check(const struct lu_env *env, struct obd_device *obd)
@@ -419,11 +424,21 @@ out:
 	RETURN(rc);
 }
 
+static const struct lu_device_type_operations oss_type_ops = {
+	.ldto_device_free	= oss_device_free,
+	.ldto_device_init	= oss_device_init,
+};
+
+static struct lu_device_type oss_device_type = {
+	.ldt_tags     = LU_DEVICE_MISC,
+	.ldt_name     = LUSTRE_OSS_NAME,
+	.ldt_ops      = &oss_type_ops,
+	.ldt_ctx_tags = LCT_LOCAL
+};
+
 /* use obd ops to offer management infrastructure */
 static const struct obd_ops oss_obd_ops = {
 	.o_owner        = THIS_MODULE,
-	.o_setup        = oss_setup,
-	.o_cleanup      = oss_cleanup,
 	.o_health_check = oss_health_check,
 	.o_iocontrol    = oss_iocontrol,
 };
@@ -438,7 +453,8 @@ int oss_mod_init(void)
 		RETURN(rc);
 
 	rc = class_register_type(&oss_obd_ops, NULL, false,
-				 LUSTRE_OSS_NAME, NULL);
+				 LUSTRE_OSS_NAME,
+				 &oss_device_type);
 
 	RETURN(rc);
 }
