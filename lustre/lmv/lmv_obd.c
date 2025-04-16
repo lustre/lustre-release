@@ -1233,27 +1233,42 @@ void qos_exclude_prefix_free(void *vprefix, void *data)
 	kfree(prefix);
 }
 
-static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static const struct lu_device_operations lmv_lu_ops;
+
+static struct lu_device *lmv_device_alloc(const struct lu_env *env,
+					  struct lu_device_type *ldt,
+					  struct lustre_cfg *lcfg)
 {
-	struct lmv_obd *lmv = &obd->u.lmv;
-	struct lmv_desc *desc;
-	struct lnet_processid lnet_id;
 	struct qos_exclude_prefix *prefix;
+	struct lnet_processid lnet_id;
+	struct obd_device *obd;
+	struct lmv_desc *desc;
+	struct lu_device *lu;
+	struct lmv_obd *lmv;
 	int i = 0;
 	int rc;
 
 	ENTRY;
 
+	OBD_ALLOC_PTR(lu);
+	if (!lu)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	lu->ld_ops = &lmv_lu_ops;
+	obd = class_name2obd(lustre_cfg_string(lcfg, 0));
+	LASSERT(obd);
+	lmv = &obd->u.lmv;
+
 	if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
 		CERROR("LMV setup requires a descriptor\n");
-		RETURN(-EINVAL);
+		GOTO(out_free, rc = -EINVAL);
 	}
 
 	desc = (struct lmv_desc *)lustre_cfg_buf(lcfg, 1);
 	if (sizeof(*desc) > LUSTRE_CFG_BUFLEN(lcfg, 1)) {
 		CERROR("Lmv descriptor size wrong: %d > %d\n",
 		       (int)sizeof(*desc), LUSTRE_CFG_BUFLEN(lcfg, 1));
-		RETURN(-EINVAL);
+		GOTO(out_free, rc = -EINVAL);
 	}
 
 	obd_str2uuid(&lmv->lmv_mdt_descs.ltd_lmv_desc.ld_uuid,
@@ -1299,31 +1314,37 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (rc) {
 		CERROR("%s: qos exclude hash initalize failed: %d\n",
 		       obd->obd_name, rc);
-		RETURN(rc);
+		GOTO(out_free, rc);
 	}
 
 	prefix = kmalloc(sizeof(*prefix), __GFP_ZERO);
 	if (!prefix)
-		GOTO(out, rc = -ENOMEM);
+		GOTO(out_destroy, rc = -ENOMEM);
+
 	/* Apache Spark creates a _temporary directory for staging files */
 	strcpy(prefix->qep_name, "_temporary");
 	rc = rhashtable_insert_fast(&lmv->lmv_qos_exclude_hash,
 				    &prefix->qep_hash, qos_exclude_hash_params);
 	if (rc) {
 		kfree(prefix);
-		GOTO(out, rc);
+		GOTO(out_destroy, rc);
 	}
 
 	list_add_tail(&prefix->qep_list, &lmv->lmv_qos_exclude_list);
-	GOTO(out, rc);
-out:
-	if (rc)
-		rhashtable_destroy(&lmv->lmv_qos_exclude_hash);
-	return rc;
+
+	RETURN(lu);
+
+out_destroy:
+	rhashtable_destroy(&lmv->lmv_qos_exclude_hash);
+out_free:
+	OBD_FREE_PTR(lu);
+	RETURN(ERR_PTR(rc));
 }
 
-static int lmv_cleanup(struct obd_device *obd)
+static struct lu_device *lmv_device_free(const struct lu_env *env,
+					 struct lu_device *lu)
 {
+	struct obd_device *obd = lu->ld_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lu_tgt_desc *tgt;
 	struct lu_tgt_desc *tmp;
@@ -1341,17 +1362,19 @@ static int lmv_cleanup(struct obd_device *obd)
 	lmv_foreach_tgt_safe(lmv, tgt, tmp)
 		lmv_del_target(lmv, tgt);
 	lu_tgt_descs_fini(&lmv->lmv_mdt_descs);
+	OBD_FREE_PTR(lu);
 
-	RETURN(0);
+	RETURN(NULL);
 }
 
-static int lmv_process_config(struct obd_device *obd, size_t len, void *buf)
+static int lmv_process_config(const struct lu_env *env, struct lu_device *lu,
+			      struct lustre_cfg *lcfg)
 {
-	struct lustre_cfg	*lcfg = buf;
-	struct obd_uuid		obd_uuid;
-	int			gen;
-	__u32			index;
-	int			rc;
+	struct obd_device *obd = lu->ld_obd;
+	struct obd_uuid	obd_uuid;
+	__u32 index;
+	int gen;
+	int rc;
 
 	ENTRY;
 
@@ -3428,11 +3451,14 @@ retry:
 	goto retry;
 }
 
-static int lmv_precleanup(struct obd_device *obd)
+static struct lu_device *lmv_device_fini(const struct lu_env *env,
+					 struct lu_device *lu)
 {
-	ENTRY;
+	struct obd_device *obd = lu->ld_obd;
+
 	libcfs_kkuc_group_rem(&obd->obd_uuid, 0, KUC_GRP_HSM);
-	RETURN(0);
+
+	return NULL;
 }
 
 /**
@@ -4500,10 +4526,6 @@ static int lmv_batch_add(struct obd_export *exp, struct lu_batch *bh,
 
 static const struct obd_ops lmv_obd_ops = {
 	.o_owner                = THIS_MODULE,
-	.o_setup                = lmv_setup,
-	.o_cleanup              = lmv_cleanup,
-	.o_precleanup           = lmv_precleanup,
-	.o_process_config       = lmv_process_config,
 	.o_connect              = lmv_connect,
 	.o_disconnect           = lmv_disconnect,
 	.o_statfs               = lmv_statfs,
@@ -4555,6 +4577,23 @@ static const struct md_ops lmv_md_ops = {
 	.m_batch_flush		= lmv_batch_flush,
 };
 
+static const struct lu_device_operations lmv_lu_ops = {
+	.ldo_process_config    = lmv_process_config,
+};
+
+static const struct lu_device_type_operations lmv_type_ops = {
+	.ldto_device_alloc	= lmv_device_alloc,
+	.ldto_device_free	= lmv_device_free,
+	.ldto_device_fini	= lmv_device_fini,
+};
+
+static struct lu_device_type lmv_device_type = {
+	.ldt_tags     = LU_DEVICE_MISC,
+	.ldt_name     = LUSTRE_LMV_NAME,
+	.ldt_ops      = &lmv_type_ops,
+	.ldt_ctx_tags = LCT_LOCAL
+};
+
 static int __init lmv_init(void)
 {
 	int rc;
@@ -4564,7 +4603,7 @@ static int __init lmv_init(void)
 		return rc;
 
 	return class_register_type(&lmv_obd_ops, &lmv_md_ops, true,
-				   LUSTRE_LMV_NAME, NULL);
+				   LUSTRE_LMV_NAME, &lmv_device_type);
 }
 
 static void __exit lmv_exit(void)
