@@ -158,15 +158,24 @@ static int osc_device_init(const struct lu_env *env, struct lu_device *d,
 static struct lu_device *osc_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
-	return NULL;
+	struct obd_device *obd = d->ld_obd;
+
+	ENTRY;
+
+	osc_precleanup_common(obd);
+	ptlrpc_lprocfs_unregister_obd(obd);
+
+	RETURN(NULL);
 }
 
 static struct lu_device *osc_device_free(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct osc_device *oc = lu2osc_dev(d);
+	struct obd_device *obd = d->ld_obd;
 
 	cl_device_fini(lu2cl_dev(d));
+	osc_cleanup_common(obd);
 	OBD_FREE_PTR(oc);
 	return NULL;
 }

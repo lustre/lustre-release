@@ -777,7 +777,8 @@ static struct lu_device *echo_device_fini(const struct lu_env *env,
 	struct echo_device *ed = cl2echo_dev(lu2cl_dev(d));
 	struct lu_device *next = ed->ed_next;
 
-	while (next && !ed->ed_next_ismd)
+	while (next && !ed->ed_next_ismd &&
+	       strcmp(next->ld_type->ldt_name, LUSTRE_OSC_NAME) != 0)
 		next = ldto_device_fini(env, next);
 	return NULL;
 }
@@ -833,7 +834,8 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 	echo_fid_fini(d->ld_obd);
 	echo_ed_los_fini(env, ed);
 #endif
-	while (next && !ed->ed_next_ismd)
+	while (next && !ed->ed_next_ismd &&
+	       strcmp(next->ld_type->ldt_name, LUSTRE_OSC_NAME) != 0)
 		next = ldto_device_free(env, next);
 
 	LASSERT(ed->ed_site == d->ld_site);

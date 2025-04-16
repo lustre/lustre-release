@@ -4118,16 +4118,6 @@ int osc_precleanup_common(struct obd_device *obd)
 }
 EXPORT_SYMBOL(osc_precleanup_common);
 
-static int osc_precleanup(struct obd_device *obd)
-{
-	ENTRY;
-
-	osc_precleanup_common(obd);
-
-	ptlrpc_lprocfs_unregister_obd(obd);
-	RETURN(0);
-}
-
 int osc_cleanup_common(struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
@@ -4159,9 +4149,6 @@ EXPORT_SYMBOL(osc_cleanup_common);
 
 static const struct obd_ops osc_obd_ops = {
 	.o_owner                = THIS_MODULE,
-	.o_setup                = osc_setup,
-	.o_precleanup           = osc_precleanup,
-	.o_cleanup              = osc_cleanup_common,
 	.o_add_conn             = client_import_add_conn,
 	.o_del_conn             = client_import_del_conn,
 	.o_connect              = client_connect_import,
