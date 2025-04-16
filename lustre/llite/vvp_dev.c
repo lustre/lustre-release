@@ -352,7 +352,7 @@ int cl_sb_fini(struct super_block *sb)
 		cld = sbi->ll_cl;
 
 		if (cld != NULL) {
-			cl_stack_fini(env, cld);
+			lu_stack_fini(env, cl2lu_dev(cld));
 			sbi->ll_cl = NULL;
 			sbi->ll_site = NULL;
 		}

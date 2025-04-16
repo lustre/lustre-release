@@ -1351,6 +1351,7 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 	for (scan = top; scan != NULL; scan = next)
 		next = ldto_device_free(env, scan);
 }
+EXPORT_SYMBOL(lu_stack_fini);
 
 /**
  * Global counter incremented whenever key is registered, unregistered,

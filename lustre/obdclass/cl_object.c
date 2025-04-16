@@ -1040,15 +1040,6 @@ struct cl_device *cl_type_setup(const struct lu_env *env, struct lu_site *site,
 }
 EXPORT_SYMBOL(cl_type_setup);
 
-/**
- * Finalize device stack by calling lu_stack_fini().
- */
-void cl_stack_fini(const struct lu_env *env, struct cl_device *cl)
-{
-        lu_stack_fini(env, cl2lu_dev(cl));
-}
-EXPORT_SYMBOL(cl_stack_fini);
-
 static struct lu_context_key cl_key;
 
 struct cl_thread_info *cl_env_info(const struct lu_env *env)

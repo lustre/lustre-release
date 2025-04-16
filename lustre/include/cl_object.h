@@ -2056,7 +2056,6 @@ struct cl_site {
 
 int  cl_site_init(struct cl_site *s, struct cl_device *top);
 void cl_site_fini(struct cl_site *s);
-void cl_stack_fini(const struct lu_env *env, struct cl_device *cl);
 
 /**
  * Output client site statistical counters into a buffer. Suitable for

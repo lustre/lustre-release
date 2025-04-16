@@ -204,7 +204,7 @@ static struct lu_device *lov_device_fini(const struct lu_env *env,
 			if (!ld->ld_md_tgts[i].ldm_mdc)
 				continue;
 
-			cl_stack_fini(env, ld->ld_md_tgts[i].ldm_mdc);
+			lu_stack_fini(env, cl2lu_dev(ld->ld_md_tgts[i].ldm_mdc));
 			ld->ld_md_tgts[i].ldm_mdc = NULL;
 			ld->ld_lov->lov_mdc_tgts[i].lmtd_mdc = NULL;
 		}
@@ -218,7 +218,7 @@ static struct lu_device *lov_device_fini(const struct lu_env *env,
 
 			lsd = ld->ld_target[desc->ltd_index];
 			if (lsd) {
-				cl_stack_fini(env, lovsub2cl_dev(lsd));
+				lu_stack_fini(env, lovsub2lu_dev(lsd));
 				ld->ld_target[desc->ltd_index] = NULL;
 			}
 		}
@@ -338,7 +338,7 @@ static void lov_cl_del_target(const struct lu_env *env, struct lu_device *dev,
 	ENTRY;
 
 	if (ld->ld_target[index]) {
-		cl_stack_fini(env, lovsub2cl_dev(ld->ld_target[index]));
+		lu_stack_fini(env, lovsub2lu_dev(ld->ld_target[index]));
 		ld->ld_target[index] = NULL;
 	}
 	EXIT;
