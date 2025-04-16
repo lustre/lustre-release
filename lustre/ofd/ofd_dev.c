@@ -3167,6 +3167,7 @@ static struct lu_device *ofd_device_fini(const struct lu_env *env,
 {
 	ENTRY;
 	ofd_fini(env, ofd_dev(d));
+	target_cleanup_recovery(d->ld_obd);
 	RETURN(NULL);
 }
 

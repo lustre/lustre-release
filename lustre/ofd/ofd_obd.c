@@ -1299,24 +1299,6 @@ out:
 }
 
 /**
- * Implementation of obd_ops::o_precleanup.
- *
- * This function stops device activity before shutting it down. It is called
- * from a cleanup function upon forceful device cleanup. For OFD there are no
- * special actions, it just invokes target_recovery_cleanup().
- *
- * \param[in] obd	OBD device of OFD
- *
- * \retval		0
- */
-static int ofd_precleanup(struct obd_device *obd)
-{
-	ENTRY;
-	target_cleanup_recovery(obd);
-	RETURN(0);
-}
-
-/**
  * Implementation of obd_ops::o_health_check.
  *
  * This function checks the OFD device health - ability to respond on
@@ -1414,7 +1396,6 @@ const struct obd_ops ofd_obd_ops = {
 	.o_postrecov		= ofd_obd_postrecov,
 	.o_getattr		= ofd_echo_getattr,
 	.o_iocontrol		= ofd_iocontrol,
-	.o_precleanup		= ofd_precleanup,
 	.o_health_check		= ofd_health_check,
 	.o_set_info_async	= ofd_set_info_async,
 	.o_get_info		= ofd_get_info,
