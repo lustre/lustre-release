@@ -545,72 +545,51 @@ static inline int obd_set_info_async(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/*
- * obd-lu integration.
- *
- * Functionality is being moved into new lu_device-based layering, but some
- * pieces of configuration process are still based on obd devices.
- *
- * Specifically, lu_device_type_operations::ldto_device_alloc() methods fully
- * subsume ->o_setup() methods of obd devices they replace. The same for
- * lu_device_operations::ldo_process_config() and ->o_process_config(). As a
- * result, obd_setup() and obd_process_config() branch and call one XOR
- * another.
- *
- * Yet neither lu_device_type_operations::ldto_device_fini() nor
- * lu_device_type_operations::ldto_device_free() fully implement the
- * functionality of ->o_precleanup() and ->o_cleanup() they override. Hence,
- * obd_precleanup() and obd_cleanup() call both lu_device and obd operations.
- */
 static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
-	int rc;
 	struct obd_type *type = obd->obd_type;
+	struct lu_context session_ctx;
 	struct lu_device_type *ldt;
+	struct lu_device *dev;
+	struct lu_env env;
+	int rc;
 
 	ENTRY;
 
 	wait_var_event(&type->typ_lu,
 		       smp_load_acquire(&type->typ_lu) != OBD_LU_TYPE_SETUP);
+
 	ldt = type->typ_lu;
-	if (ldt != NULL) {
-		struct lu_context session_ctx;
-		struct lu_device *dev;
-		struct lu_env env;
+	LASSERT(ldt);
 
-		lu_context_init(&session_ctx, LCT_SESSION | LCT_SERVER_SESSION);
-		session_ctx.lc_thread = NULL;
-		lu_context_enter(&session_ctx);
+	lu_context_init(&session_ctx, LCT_SESSION | LCT_SERVER_SESSION);
+	session_ctx.lc_thread = NULL;
+	lu_context_enter(&session_ctx);
 
-		rc = lu_env_init(&env, ldt->ldt_ctx_tags);
-		if (rc == 0) {
-			env.le_ses = &session_ctx;
-			dev = ldto_device_alloc(&env, ldt, cfg);
-			if (!IS_ERR(dev)) {
-				obd->obd_lu_dev = dev;
-				dev->ld_obd = obd;
-				dev->ld_type = ldt;
+	rc = lu_env_init(&env, ldt->ldt_ctx_tags);
+	if (rc == 0) {
+		env.le_ses = &session_ctx;
+		dev = ldto_device_alloc(&env, ldt, cfg);
+		if (!IS_ERR(dev)) {
+			obd->obd_lu_dev = dev;
+			dev->ld_obd = obd;
+			dev->ld_type = ldt;
+
 #ifdef HAVE_SERVER_SUPPORT
-				if (lu_device_is_dt(dev) &&
-				    lu2dt_dev(dev)->dd_rdonly)
-					obd->obd_read_only = 1;
+			if (lu_device_is_dt(dev) &&
+			    lu2dt_dev(dev)->dd_rdonly)
+				obd->obd_read_only = 1;
 #endif
-				rc = ldto_device_init(&env, dev, ldt->ldt_name, NULL);
-			} else {
-				rc = PTR_ERR(dev);
-			}
-			lu_env_fini(&env);
+
+			rc = ldto_device_init(&env, dev, ldt->ldt_name, NULL);
+		} else {
+			rc = PTR_ERR(dev);
 		}
-		lu_context_exit(&session_ctx);
-		lu_context_fini(&session_ctx);
-	} else {
-		if (!obd->obd_type->typ_dt_ops->o_setup) {
-			CERROR("%s: no %s operation\n", obd->obd_name,
-			       __func__);
-			RETURN(-EOPNOTSUPP);
-		}
-		rc = obd->obd_type->typ_dt_ops->o_setup(obd, cfg);
+		lu_env_fini(&env);
 	}
+	lu_context_exit(&session_ctx);
+	lu_context_fini(&session_ctx);
+
 	RETURN(rc);
 }
 
@@ -618,54 +597,53 @@ static inline int obd_precleanup(struct obd_device *obd)
 {
 	struct lu_device_type *ldt = obd->obd_type->typ_lu;
 	struct lu_device *d = obd->obd_lu_dev;
+	struct lu_env *env = lu_env_find();
+	struct lu_env _env;
 	int rc = -ENOMEM;
 
 	ENTRY;
 
-	if (ldt != NULL && d != NULL) {
-		struct lu_env *env = lu_env_find();
-		struct lu_env _env;
+	LASSERT(ldt);
 
-		if (!env && lu_env_init(&_env, ldt->ldt_ctx_tags) == 0) {
-			env = &_env;
-			rc = lu_env_add(env);
-		}
-		ldto_device_fini(env, d);
-		if (env == &_env) {
-			if (rc == 0)
-				lu_env_remove(env);
-			lu_env_fini(env);
-		}
-	}
-
-	if (!obd->obd_type->typ_dt_ops->o_precleanup)
+	if (!d)
 		RETURN(0);
 
-	rc = obd->obd_type->typ_dt_ops->o_precleanup(obd);
-	RETURN(rc);
+	if (!env && lu_env_init(&_env, ldt->ldt_ctx_tags) == 0) {
+		env = &_env;
+		rc = lu_env_add(env);
+	}
+
+	ldto_device_fini(env, d);
+	if (env == &_env) {
+		if (!rc)
+			lu_env_remove(env);
+		lu_env_fini(env);
+	}
+
+	RETURN(0);
 }
 
 static inline int obd_cleanup(struct obd_device *obd)
 {
-	int rc;
 	struct lu_device_type *ldt = obd->obd_type->typ_lu;
 	struct lu_device *d = obd->obd_lu_dev;
+	struct lu_env env;
+	int rc;
 
 	ENTRY;
-	if (ldt != NULL && d != NULL) {
-		struct lu_env env;
 
-		rc = lu_env_init(&env, ldt->ldt_ctx_tags);
-		if (rc == 0) {
-			ldto_device_free(&env, d);
-			lu_env_fini(&env);
-			obd->obd_lu_dev = NULL;
-		}
-	}
-	if (!obd->obd_type->typ_dt_ops->o_cleanup)
+	LASSERT(ldt);
+
+	if (!d)
 		RETURN(0);
 
-	rc = obd->obd_type->typ_dt_ops->o_cleanup(obd);
+	rc = lu_env_init(&env, ldt->ldt_ctx_tags);
+	if (rc == 0) {
+		ldto_device_free(&env, d);
+		lu_env_fini(&env);
+		obd->obd_lu_dev = NULL;
+	}
+
 	RETURN(rc);
 }
 
@@ -695,29 +673,22 @@ static inline void obd_cleanup_client_import(struct obd_device *obd)
 static inline int obd_process_config(struct obd_device *obd, int datalen,
 				     void *data)
 {
-	int rc;
 	struct lu_device_type *ldt = obd->obd_type->typ_lu;
 	struct lu_device *d = obd->obd_lu_dev;
+	struct lu_env env;
+	int rc;
 
 	ENTRY;
 
-	obd->obd_process_conf = 1;
-	if (ldt != NULL && d != NULL) {
-		struct lu_env env;
+	LASSERT(ldt);
+	LASSERT(d);
 
-		rc = lu_env_init(&env, ldt->ldt_ctx_tags);
-		if (rc == 0) {
-			rc = d->ld_ops->ldo_process_config(&env, d, data);
-			lu_env_fini(&env);
-		}
-	} else {
-		if (!obd->obd_type->typ_dt_ops->o_process_config) {
-			CERROR("%s: no %s operation\n",
-			       obd->obd_name, __func__);
-			RETURN(-EOPNOTSUPP);
-		}
-		rc = obd->obd_type->typ_dt_ops->o_process_config(obd, datalen,
-								 data);
+	obd->obd_process_conf = 1;
+
+	rc = lu_env_init(&env, ldt->ldt_ctx_tags);
+	if (rc == 0) {
+		rc = d->ld_ops->ldo_process_config(&env, d, data);
+		lu_env_fini(&env);
 	}
 
 	obd->obd_process_conf = 0;
