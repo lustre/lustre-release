@@ -301,6 +301,8 @@ static struct lu_device *lov_device_free(const struct lu_env *env,
 	struct lov_device *ld = lu2lov_dev(d);
 	const int nr = ld->ld_target_nr;
 
+	lov_cleanup(d->ld_obd);
+
 	lu_site_fini(&ld->ld_site);
 
 	cl_device_fini(lu2cl_dev(d));

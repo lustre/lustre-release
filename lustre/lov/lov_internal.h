@@ -291,6 +291,7 @@ __u16 lov_get_stripe_count(struct lov_obd *lov, __u32 magic,
 int lov_connect_obd(struct obd_device *obd, u32 index, int activate,
 		    struct obd_connect_data *data);
 int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
+int lov_cleanup(struct obd_device *obd);
 int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
 			    u32 *indexp, int *genp);
 int lov_del_target(struct obd_device *obd, u32 index,

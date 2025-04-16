@@ -745,7 +745,7 @@ out:
 	return rc;
 }
 
-static int lov_cleanup(struct obd_device *obd)
+int lov_cleanup(struct obd_device *obd)
 {
 	struct lu_tgt_descs *ltd = &obd->u.lov.lov_ost_descs;
 	struct lov_obd *lov = &obd->u.lov;
@@ -1314,8 +1314,6 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
 
 static const struct obd_ops lov_obd_ops = {
 	.o_owner		= THIS_MODULE,
-	.o_setup		= lov_setup,
-	.o_cleanup		= lov_cleanup,
 	.o_connect		= lov_connect,
 	.o_disconnect		= lov_disconnect,
 	.o_statfs		= lov_statfs,
