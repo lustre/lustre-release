@@ -38,9 +38,8 @@ struct nodemap_config *active_config;
 static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src);
 
 /**
- * Nodemap destructor
- *
- * \param	nodemap		nodemap to destroy
+ * nodemap_destroy() - Nodemap destructor
+ * @nodemap: nodemap to destroy
  */
 static void nodemap_destroy(struct lu_nodemap *nodemap)
 {
@@ -80,7 +79,7 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 	EXIT;
 }
 
-/**
+/*
  * Functions used for the cfs_hash
  */
 void nodemap_getref(struct lu_nodemap *nodemap)
@@ -90,7 +89,7 @@ void nodemap_getref(struct lu_nodemap *nodemap)
 	       nodemap->nm_name, nodemap, refcount_read(&nodemap->nm_refcount));
 }
 
-/**
+/*
  * Destroy nodemap if last reference is put. Should be called outside
  * active_config_lock
  */
@@ -170,10 +169,12 @@ static struct cfs_hash_ops nodemap_hash_operations = {
 /* end of cfs_hash functions */
 
 /**
- * Initialize nodemap_hash
+ * nodemap_init_hash() - Initialize nodemap_hash
+ * @nmc: nodemap_config struct for which hash getting initialize
  *
- * \retval	0		success
- * \retval	-ENOMEM		cannot create hash
+ * Return:
+ * * %0		success
+ * * %-ENOMEM		cannot create hash
  */
 static int nodemap_init_hash(struct nodemap_config *nmc)
 {
@@ -195,13 +196,15 @@ static int nodemap_init_hash(struct nodemap_config *nmc)
 }
 
 /**
- * Check for valid modification of nodemap
- *
- * \param	nodemap		the nodemap to modify
- * \retval	true		if the modification is allowed
+ * allow_op_on_nm() - Check for valid modification of nodemap
+ * @nodemap: the nodemap to modify
  *
  * It is not allowed to modify a nodemap on a non-MGS server if it is a static,
  * on-disk nodemap.
+ *
+ * Return:
+ * * %true		if the modification is allowed
+ *
  */
 static bool allow_op_on_nm(struct lu_nodemap *nodemap)
 {
@@ -211,12 +214,10 @@ static bool allow_op_on_nm(struct lu_nodemap *nodemap)
 }
 
 /**
- * Check if sub-nodemap can raise privileges
- *
- * \param	nodemap		the nodemap to modify
- * \param	priv		the attempted privilege raise
- * \param	val		new value for the field
- * \retval	true		if the modification is allowed
+ * check_privs_for_op() - Check if sub-nodemap can raise privileges
+ * @nodemap: the nodemap to modify
+ * @priv: the attempted privilege raise
+ * @val: new value for the field
  *
  * The following properties are checked:
  * - nmf_allow_root_access
@@ -236,6 +237,9 @@ static bool allow_op_on_nm(struct lu_nodemap *nodemap)
  * - nmf_rbac to fewer roles
  * - nmf_rbac_raise to fewer roles
  * - nmf_forbid_encryption from 1 (parent) to 0
+ *
+ * Return:
+ * * %true		if the modification is allowed
  */
 static bool check_privs_for_op(struct lu_nodemap *nodemap,
 			       enum nodemap_raise_privs priv, u64 val)
@@ -281,11 +285,12 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
 }
 
 /**
- * Check for valid nodemap name
+ * nodemap_name_is_valid() - Check for valid nodemap name
+ * @name: nodemap name
  *
- * \param	name		nodemap name
- * \retval	true		valid
- * \retval	false		invalid
+ * Return:
+ * * %true		valid
+ * * %false		invalid
  */
 static bool nodemap_name_is_valid(const char *name)
 {
@@ -302,15 +307,16 @@ static bool nodemap_name_is_valid(const char *name)
 }
 
 /**
- * Nodemap lookup
+ * nodemap_lookup() - Nodemap lookup
+ * @name: name of nodemap
  *
  * Look nodemap up in the active_config nodemap hash. Caller should hold the
  * active_config_lock.
  *
- * \param	name		name of nodemap
- * \retval	nodemap		pointer set to found nodemap
- * \retval	-EINVAL		name is not valid
- * \retval	-ENOENT		nodemap not found
+ * Return:
+ * * %nodemap		pointer set to found nodemap
+ * * %-EINVAL		name is not valid
+ * * %-ENOENT		nodemap not found
  */
 struct lu_nodemap *nodemap_lookup(const char *name)
 {
@@ -327,13 +333,16 @@ struct lu_nodemap *nodemap_lookup(const char *name)
 }
 
 /**
+ * nodemap_classify_nid() - Classify the nid into the proper nodemap.
+ * @nid: nid to classify
+ *
  * Classify the nid into the proper nodemap. Caller must hold active config and
  * nm_range_tree_lock, and call nodemap_putref when done with nodemap.
  *
- * \param	nid			nid to classify
- * \retval	nodemap			nodemap containing the nid
- * \retval	default_nodemap		default nodemap
- * \retval	-EINVAL			LO nid given without other local nid
+ * Return:
+ * * %nodemap			nodemap containing the nid
+ * * %default_nodemap		default nodemap
+ * * %-EINVAL			LO nid given without other local nid
  */
 struct lu_nodemap *nodemap_classify_nid(struct lnet_nid *nid)
 {
@@ -369,7 +378,7 @@ struct lu_nodemap *nodemap_classify_nid(struct lnet_nid *nid)
 	RETURN(nodemap);
 }
 
-/**
+/*
  * simple check for default nodemap
  */
 static bool is_default_nodemap(const struct lu_nodemap *nodemap)
@@ -378,11 +387,14 @@ static bool is_default_nodemap(const struct lu_nodemap *nodemap)
 }
 
 /**
- * parse a nodemap range string into two nids
+ * nodemap_parse_range() - parse a nodemap range string into two nids
+ * @range_str: string to parse
+ * @range: array of two nids
+ * @netmask: network mask (prefix length) [out]
  *
- * \param	range_str		string to parse
- * \param	range[2]		array of two nids
- * \reyval	0 on success
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int nodemap_parse_range(const char *range_str, struct lnet_nid range[2],
 			u8 *netmask)
@@ -435,18 +447,19 @@ out:
 EXPORT_SYMBOL(nodemap_parse_range);
 
 /**
+ * nodemap_parse_idmap() - parse a string containing an id map
+ * @nodemap_name: nodemap name string
+ * @idmap_str: map string
+ * @idmap: array[2] of __u32
+ * @range_count: potential idmap range u32
+ *
  * parse a string containing an id map of form "client_id:filesystem_id"
- * into an array of __u32 * for use in mapping functions
+ * into an array of __u32 * for use in mapping functions the string can
+ * also be a range of "ci_start-ci_end:fs_start[-fs_end]"
  *
- * the string can also be a range of "ci_start-ci_end:fs_start[-fs_end]"
- *
- * \param	nodemap_name		nodemap name string
- * \param	idmap_str		map string
- * \param	idmap			array[2] of __u32
- * \param	range_count		potential idmap range u32
- *
- * \retval	0 on success
- * \retval	-EINVAL if idmap cannot be parsed
+ * Return:
+ * * %0 on success
+ * * %-EINVAL if idmap cannot be parsed
  */
 int nodemap_parse_idmap(const char *nodemap_name, char *idmap_str,
 			__u32 idmap[2], u32 *range_count)
@@ -519,13 +532,13 @@ int nodemap_parse_idmap(const char *nodemap_name, char *idmap_str,
 EXPORT_SYMBOL(nodemap_parse_idmap);
 
 /**
- * add a member to a nodemap
+ * nodemap_add_member() - add a member to a nodemap
+ * @nid: nid to add to the members
+ * @exp: obd_export structure for the connection that is being added
  *
- * \param	nid		nid to add to the members
- * \param	exp		obd_export structure for the connection
- *				that is being added
- * \retval	-EINVAL		export is NULL, or has invalid NID
- * \retval	-EEXIST		export is already member of a nodemap
+ * Return:
+ * * %-EINVAL		export is NULL, or has invalid NID
+ * * %-EEXIST		export is already member of a nodemap
  */
 int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp)
 {
@@ -556,9 +569,8 @@ int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp)
 EXPORT_SYMBOL(nodemap_add_member);
 
 /**
- * delete a member from a nodemap
- *
- * \param	exp		export to remove from a nodemap
+ * nodemap_del_member() - delete a member from a nodemap
+ * @exp: export to remove from a nodemap
  */
 void nodemap_del_member(struct obd_export *exp)
 {
@@ -594,16 +606,15 @@ out:
 EXPORT_SYMBOL(nodemap_del_member);
 
 /**
- * add an idmap to the proper nodemap trees
- *
- * \param	nodemap		nodemap to add idmap to
- * \param	id_type		NODEMAP_UID or NODEMAP_GID
- * \param	map		array[2] __u32 containing the map values
- *				map[0] is client id
- *				map[1] is the filesystem id
- *
- * \retval	0	on success
- * \retval	< 0	if error occurs
+ * nodemap_add_idmap_helper() - add an idmap to the proper nodemap trees
+ * @nodemap: nodemap to add idmap to
+ * @id_type: NODEMAP_UID or NODEMAP_GID
+ * @map: array[2] __u32 containing the map values
+ *                map[0] is client id
+ *                map[1] is the filesystem id
+ * Return:
+ * * %0 on success
+ * * %<0 if error occurs
  */
 int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,
 			     enum nodemap_id_type id_type,
@@ -702,15 +713,17 @@ out:
 EXPORT_SYMBOL(nodemap_add_idmap);
 
 /**
- * delete idmap from proper nodemap tree
+ * nodemap_del_idmap() - delete idmap from proper nodemap tree
  *
- * \param	name		name of nodemap
- * \param	id_type		NODEMAP_UID or NODEMAP_GID
- * \param	map		array[2] __u32 containing the mapA values
- *				map[0] is client id
- *				map[1] is the filesystem id
+ * @nodemap_name: name of nodemap
+ * @id_type: NODEMAP_UID or NODEMAP_GID
+ * @map: array[2] __u32 containing the mapA values
+ *       map[0] is client id
+ *       map[1] is the filesystem id
  *
- * \retval	0 on success
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2])
@@ -771,8 +784,10 @@ static int nodemap_del_idmap_range(const char *nodemap_name,
 }
 
 /**
- * Get nodemap assigned to given export. Takes a reference on the nodemap.
+ * nodemap_get_from_exp() - Get nodemap assigned to given export.
+ * @exp: export to get nodemap for
  *
+ * Get nodemap assigned to given export. Takes a reference on the nodemap.
  * Note that this function may return either NULL, or an ERR_PTR()
  * or a valid nodemap pointer.  All of the functions accessing the
  * returned nodemap can check IS_ERR(nodemap) to see if an error is
@@ -781,11 +796,10 @@ static int nodemap_del_idmap_range(const char *nodemap_name,
  * functions must check for nodemap == NULL and do nothing, and the
  * nodemap returned from this function should not be dereferenced.
  *
- * \param	export		export to get nodemap for
- *
- * \retval	pointer to nodemap on success
- * \retval	NULL	nodemap subsystem disabled
- * \retval	-EACCES	export does not have nodemap assigned
+ * Return:
+ * * %pointer to nodemap on success
+ * * %NULL	nodemap subsystem disabled
+ * * %-EACCES	export does not have nodemap assigned
  */
 struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp)
 {
@@ -815,15 +829,11 @@ struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp)
 EXPORT_SYMBOL(nodemap_get_from_exp);
 
 /**
- * mapping function for nodemap idmaps
- *
- * \param	nodemap		lu_nodemap structure defining nodemap
- * \param	node_type	NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
- * \param	tree_type	NODEMAP_CLIENT_TO_FS or
- *				NODEMAP_FS_TO_CLIENT
- * \param	id		id to map
- *
- * \retval	mapped id according to the rules below.
+ * nodemap_map_id() - mapping function for nodemap idmaps
+ * @nodemap: lu_nodemap structure defining nodemap
+ * @id_type: NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
+ * @tree_type: NODEMAP_CLIENT_TO_FS or NODEMAP_FS_TO_CLIENT
+ * @id: id to map
  *
  * if the nodemap_active is false, just return the passed id without mapping
  *
@@ -839,6 +849,9 @@ EXPORT_SYMBOL(nodemap_get_from_exp);
  *
  * after these checks, search the proper tree for the mapping, and if found
  * return the mapped value, otherwise return the squash uid or gid.
+ *
+ * Return:
+ * * %mapped id according to the rules below.
  */
 __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_id_type id_type,
@@ -964,15 +977,16 @@ out:
 EXPORT_SYMBOL(nodemap_map_id);
 
 /**
- * Map posix ACL entries according to the nodemap membership. Removes any
- * squashed ACLs.
+ * nodemap_map_acl() - Map posix ACL entries according to the nodemap
+ * membership. Removes any squashed ACLs.
+ * @nodemap: nodemap
+ * @buf: buffer containing xattr encoded ACLs
+ * @size: size of ACLs in bytes
+ * @tree_type: direction of mapping
  *
- * \param	lu_nodemap	nodemap
- * \param	buf		buffer containing xattr encoded ACLs
- * \param	size		size of ACLs in bytes
- * \param	tree_type	direction of mapping
- * \retval	size		new size of ACLs in bytes
- * \retval	-EINVAL		bad \a size param, see posix_acl_xattr_count()
+ * Return:
+ * * %size		new size of ACLs in bytes
+ * * %-EINVAL		bad @size param, see posix_acl_xattr_count()
  */
 ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 			enum nodemap_tree_type tree_type)
@@ -1125,16 +1139,17 @@ out:
 	return rc;
 }
 
-/*
- * Add nid range to given nodemap
+/**
+ * nodemap_add_range_helper() - Add nid range to given nodemap
+ * @config: nodemap config to work on
+ * @nodemap: nodemap to add range to
+ * @nid: nid range to add
+ * @netmask: network mask (prefix length)
+ * @range_id: should be 0 unless loading from disk
  *
- * \param	config		nodemap config to work on
- * \param	nodemap		nodemap to add range to
- * \param	nid		nid range to add
- * \param	range_id	should be 0 unless loading from disk
- * \retval	0		success
- * \retval	-ENOMEM
- *
+ * Return:
+ * * %0		success
+ * * %-ENOMEM on failure
  */
 int nodemap_add_range_helper(struct nodemap_config *config,
 			     struct lu_nodemap *nodemap,
@@ -1242,13 +1257,17 @@ out:
 EXPORT_SYMBOL(nodemap_add_range);
 
 /**
- * delete a range
- * \param	name		nodemap name
- * \param	nid		nid range
- * \retval	0 on success
+ * nodemap_del_range() - delete a range
+ * @name: nodemap name
+ * @nid: nid range
+ * @netmask: network mask (prefix length)
  *
  * Delete range from global range tree, and remove it
  * from the list in the associated nodemap.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 		      u8 netmask)
@@ -1304,15 +1323,18 @@ static void nodemap_fileset_reset(struct lu_nodemap *nodemap)
 }
 
 /**
+ * nodemap_set_fileset_iam() - Set a fileset on a nodemap
+ * @nodemap: the nodemap to set fileset on
+ * @fileset: string containing fileset
+ *
  * Set a fileset on a nodemap in memory and the nodemap IAM records.
  * If the nodemap is dynamic, the nodemap IAM update is transparently skipped in
  * the nodemap_idx_fileset_* functions to update only the in-memory nodemap.
  *
- * \param	nodemap		the nodemap to set fileset on
- * \param	fileset		string containing fileset
- * \retval	0 on success
- * \retval	-EINVAL		invalid fileset: Does not start with '/'
- * \retval	-EIO		undo operation failed during IAM update
+ * Return:
+ * * %0 on success
+ * * %-EINVAL		invalid fileset: Does not start with '/'
+ * * %-EIO		undo operation failed during IAM update
  */
 static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
 				   const char *fileset)
@@ -1372,16 +1394,18 @@ out:
 }
 
 /**
- * Set a fileset on a nodemap. This is a local operation and not persistent.
+ * nodemap_set_fileset_local() - Set a fileset on a nodemap. This is a local
+ * operation and not persistent.
+ * @nodemap: the nodemap to set fileset on
+ * @fileset: string containing fileset
  *
  * This function is a remnant from when fileset updates were made through
  * the params llog, which caused "lctl set_param" to be called on
  * each server locally. For backward compatibility this functionality is kept.
  *
- * \param	nodemap		the nodemap to set fileset on
- * \param	fileset		string containing fileset
- * \retval	0 on success
- * \retval	-EINVAL		invalid fileset: Does not start with '/'
+ * Return:
+ * * %0 on success
+ * * %-EINVAL		invalid fileset: Does not start with '/'
  */
 static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
 				     const char *fileset)
@@ -1425,13 +1449,15 @@ static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
 }
 
 /**
- * Copy a fileset from a source to a destination nodemap. This is a local,
- * non-persistent operation made for dynamic nodemaps.
- * *
- * \param	dst		the nodemap to set fileset on
- * \param	src		the nodemap to fetch fileset from
- * \retval	0 on success
- * \retval	< 0 on error
+ * nodemap_copy_fileset() - Copy a fileset from a source to destination nodemap.
+ * @dst: the nodemap to set fileset on
+ * @src: the nodemap to fetch fileset from
+ *
+ * This is a local, non-persistent operation made for dynamic nodemaps.
+ *
+ * Return:
+ * * %0 on success
+ * * %< 0 on error
  */
 static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
 {
@@ -1453,15 +1479,16 @@ static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
 }
 
 /**
- * Set fileset on a named nodemap
+ * nodemap_set_fileset() - Set fileset on a named nodemap
+ * @name: name of the nodemap to set fileset on
+ * @fileset: string containing fileset
+ * @checkperm: true if permission check is required
+ * @ioctl_op: true if called from ioctl nodemap functions
  *
- * \param	name		name of the nodemap to set fileset on
- * \param	fileset		string containing fileset
- * \param	checkperm	true if permission check is required
- * \param	ioctl_op	true if called from ioctl nodemap functions
- * \retval	0 on success
- * \retval	-ENAMETOOLONG	fileset is too long
- * \retval	-EINVAL		name or fileset is empty or NULL
+ * Return:
+ * * %0 on success
+ * * %-ENAMETOOLONG	fileset is too long
+ * * %-EINVAL		name or fileset is empty or NULL
  */
 int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
 			bool ioctl_op)
@@ -1519,11 +1546,10 @@ out_unlock:
 EXPORT_SYMBOL(nodemap_set_fileset);
 
 /**
- * get fileset defined on nodemap
- * \param	nodemap		nodemap to get fileset from
- * \retval	fileset name, or NULL if not defined or not activated
+ * nodemap_get_fileset() - get fileset defined on nodemap
+ * @nodemap: nodemap to get fileset from
  *
- * get the fileset defined on the nodemap
+ * Returns %fileset name, or NULL if not defined or not activated
  */
 char *nodemap_get_fileset(const struct lu_nodemap *nodemap)
 {
@@ -1579,12 +1605,14 @@ static int nodemap_validate_sepol(const char *sepol)
 }
 
 /**
- * set SELinux policy on nodemap
- * \param	name		nodemap to set SELinux policy info on
- * \param	sepol		string containing SELinux policy info
- * \retval	0 on success
+ * nodemap_set_sepol() - set SELinux policy on nodemap
+ * @name: nodemap to set SELinux policy info on
+ * @sepol: string containing SELinux policy info
+ * @checkperm: if true, check for valid modification of nodemap else skip
  *
  * set SELinux policy info on the named nodemap
+ *
+ * Return 0 on success
  */
 int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm)
 {
@@ -1626,11 +1654,10 @@ out:
 EXPORT_SYMBOL(nodemap_set_sepol);
 
 /**
- * get SELinux policy info defined on nodemap
- * \param	nodemap		nodemap to get SELinux policy info from
- * \retval	SELinux policy info, or NULL if not defined or not activated
+ * nodemap_get_sepol() - get SELinux policy info defined on nodemap
+ * @nodemap: nodemap to get SELinux policy info from
  *
- * get the SELinux policy info defined on the nodemap
+ * Returns SELinux policy info, or NULL if not defined or not activated
  */
 const char *nodemap_get_sepol(const struct lu_nodemap *nodemap)
 {
@@ -1642,7 +1669,11 @@ const char *nodemap_get_sepol(const struct lu_nodemap *nodemap)
 EXPORT_SYMBOL(nodemap_get_sepol);
 
 /**
- * Nodemap constructor
+ * nodemap_create() - Nodemap constructor
+ * @name: name of nodemap
+ * @config: pointer to struct nodemap_config
+ * @is_default: true if default nodemap
+ * @dynamic: if true nodemap will be dynamic (can be modified runtime)
  *
  * Creates an lu_nodemap structure and assigns sane default
  * member values. If this is the default nodemap, the defaults
@@ -1652,12 +1683,11 @@ EXPORT_SYMBOL(nodemap_get_sepol);
  *
  * Requires that the caller take the active_config_lock
  *
- * \param	name		name of nodemap
- * \param	is_default	true if default nodemap
- * \retval	nodemap		success
- * \retval	-EINVAL		invalid nodemap name
- * \retval	-EEXIST		nodemap already exists
- * \retval	-ENOMEM		cannot allocate memory for nodemap
+ * Return:
+ * * %nodemap		success
+ * * %-EINVAL		invalid nodemap name
+ * * %-EEXIST		nodemap already exists
+ * * %-ENOMEM		cannot allocate memory for nodemap
  */
 struct lu_nodemap *nodemap_create(const char *name,
 				  struct nodemap_config *config,
@@ -1783,11 +1813,12 @@ out:
 }
 
 /**
- * Set the nmf_deny_unknown flag to true or false.
- * \param	name		nodemap name
- * \param	deny_unknown	if true, squashed users will get EACCES
- * \retval	0 on success
+ * nodemap_set_deny_unknown() - Set the nmf_deny_unknown flag to true or false.
+ * @name: nodemap name
+ * @deny_unknown: if true, squashed users will get EACCES
  *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_deny_unknown(const char *name, bool deny_unknown)
 {
@@ -1815,11 +1846,12 @@ out:
 EXPORT_SYMBOL(nodemap_set_deny_unknown);
 
 /**
- * Set the nmf_allow_root_access flag to true or false.
- * \param	name		nodemap name
- * \param	allow_root	if true, nodemap will not squash the root user
- * \retval	0 on success
+ * nodemap_set_allow_root() - Set the nmf_allow_root_access flag to true/false.
+ * @name: nodemap name
+ * @allow_root: if true, nodemap will not squash the root user
  *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_allow_root(const char *name, bool allow_root)
 {
@@ -1846,12 +1878,13 @@ out:
 EXPORT_SYMBOL(nodemap_set_allow_root);
 
 /**
- * Set the nmf_trust_client_ids flag to true or false.
+ * nodemap_set_trust_client_ids() - Set the nmf_trust_client_ids flag to true or
+ * false.
+ * @name: nodemap name
+ * @trust_client_ids: if true, nodemap will not map its IDs
  *
- * \param	name			nodemap name
- * \param	trust_client_ids	if true, nodemap will not map its IDs
- * \retval	0 on success
- *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids)
 {
@@ -1968,16 +2001,17 @@ out:
 EXPORT_SYMBOL(nodemap_set_rbac);
 
 /**
- * Update the squash_uid for a nodemap.
- *
- * \param	name		nodemap name
- * \param	uid		the new uid to squash unknown users to
- * \retval	0 on success
+ * nodemap_set_squash_uid() - Update the squash_uid for a nodemap.
+ * @name: nodemap name
+ * @uid: the new uid to squash unknown users to
  *
  * Update the squash_uid for a nodemap. The squash_uid is the uid
  * that the all client uids are mapped to if nodemap is active,
  * the trust_client_ids flag is not set, and the uid is not in
  * the idmap tree.
+ *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_squash_uid(const char *name, uid_t uid)
 {
@@ -2004,16 +2038,17 @@ out:
 EXPORT_SYMBOL(nodemap_set_squash_uid);
 
 /**
- * Update the squash_gid for a nodemap.
- *
- * \param	name		nodemap name
- * \param	gid		the new gid to squash unknown gids to
- * \retval	0 on success
+ * nodemap_set_squash_gid() - Update the squash_gid for a nodemap.
+ * @name: nodemap name
+ * @gid: the new gid to squash unknown gids to
  *
  * Update the squash_gid for a nodemap. The squash_gid is the gid
  * that the all client gids are mapped to if nodemap is active,
  * the trust_client_ids flag is not set, and the gid is not in
  * the idmap tree.
+ *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_squash_gid(const char *name, gid_t gid)
 {
@@ -2040,16 +2075,18 @@ out:
 EXPORT_SYMBOL(nodemap_set_squash_gid);
 
 /**
- * Update the squash_projid for a nodemap.
- *
- * \param	name		nodemap name
- * \param	gid		the new projid to squash unknown projids to
- * \retval	0 on success
+ * nodemap_set_squash_projid() - Update the squash_projid for a nodemap.
+ * @name: nodemap name
+ * @projid: the new projid to squash unknown projids to
  *
  * Update the squash_projid for a nodemap. The squash_projid is the projid
  * that the all client projids are mapped to if nodemap is active,
  * the trust_client_ids flag is not set, and the projid is not in
  * the idmap tree.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int nodemap_set_squash_projid(const char *name, projid_t projid)
 {
@@ -2076,7 +2113,10 @@ out:
 EXPORT_SYMBOL(nodemap_set_squash_projid);
 
 /**
- * Check if nodemap allows setting quota.
+ * nodemap_can_setquota() - Check if nodemap allows setting quota.
+ * @nodemap: nodemap to check access for
+ * @qc_type: quota type
+ * @id: client id to map
  *
  * If nodemap is not active, always allow.
  * For user and group quota, allow if the nodemap allows root access, unless
@@ -2084,10 +2124,8 @@ EXPORT_SYMBOL(nodemap_set_squash_projid);
  * For project quota, allow if project id is not squashed or deny_unknown
  * is not set.
  *
- * \param	nodemap		nodemap to check access for
- * \param	qc_type		quota type
- * \param	id		client id to map
- * \retval	true is setquota is allowed, false otherwise
+ * Return:
+ * * %true is setquota is allowed, %false otherwise
  */
 bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id)
 {
@@ -2118,11 +2156,13 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id)
 EXPORT_SYMBOL(nodemap_can_setquota);
 
 /**
- * Set the nmf_enable_audit flag to true or false.
- * \param	name		nodemap name
- * \param	audit_mode	if true, allow audit
- * \retval	0 on success
+ * nodemap_set_audit_mode() - Set the nmf_enable_audit flag to true or false.
+ * @name: nodemap name
+ * @enable_audit: if true, allow audit
  *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int nodemap_set_audit_mode(const char *name, bool enable_audit)
 {
@@ -2149,11 +2189,13 @@ out:
 EXPORT_SYMBOL(nodemap_set_audit_mode);
 
 /**
- * Set the nmf_forbid_encryption flag to true or false.
- * \param	name			nodemap name
- * \param	forbid_encryption	if true, forbid encryption
- * \retval	0 on success
+ * nodemap_set_forbid_encryption() - Set the nmf_forbid_encryption flag to true
+ * or false.
+ * @name: nodemap name
+ * @forbid_encryption: if true, forbid encryption
  *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption)
 {
@@ -2181,14 +2223,16 @@ out:
 EXPORT_SYMBOL(nodemap_set_forbid_encryption);
 
 /**
- * Set the rbac_raise and nmf_rbac_raise properties.
+ * nodemap_set_raise_privs() - Set the rbac_raise and nmf_rbac_raise properties.
+ * @name: nodemap name
+ * @privs: bitfield for privs that can be raised
+ * @rbac_raise: bitfield for roles that can be raised
+ *
  * If NODEMAP_RAISE_PRIV_RAISE is not set on parent, it is only possible to
  * reduce the scope.
- * \param	name			nodemap name
- * \param	privs			bitfield for privs that can be raised
- * \param	rbac_raise		bitfield for roles that can be raised
- * \retval	0 on success
  *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_raise_privs(const char *name, enum nodemap_raise_privs privs,
 			    enum nodemap_rbac_roles rbac_raise)
@@ -2227,11 +2271,12 @@ out:
 EXPORT_SYMBOL(nodemap_set_raise_privs);
 
 /**
- * Set the nmf_readonly_mount flag to true or false.
- * \param	name			nodemap name
- * \param	readonly_mount		if true, forbid rw mount
- * \retval	0 on success
+ * nodemap_set_readonly_mount() - Set the nmf_readonly_mount flag to true/false.
+ * @name: nodemap name
+ * @readonly_mount: if true, forbid rw mount
  *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_readonly_mount(const char *name, bool readonly_mount)
 {
@@ -2259,11 +2304,12 @@ out:
 EXPORT_SYMBOL(nodemap_set_readonly_mount);
 
 /**
- * Set the nmf_deny_mount flag to true or false.
- * \param	name			nodemap name
- * \param	deny_mount		if true, rejects mount attempt
- * \retval	0 on success
+ * nodemap_set_deny_mount() - Set the nmf_deny_mount flag to true or false.
+ * @name: nodemap name
+ * @deny_mount: if true, rejects mount attempt
  *
+ * Return:
+ * * %0 on success
  */
 int nodemap_set_deny_mount(const char *name, bool deny_mount)
 {
@@ -2287,13 +2333,15 @@ int nodemap_set_deny_mount(const char *name, bool deny_mount)
 EXPORT_SYMBOL(nodemap_set_deny_mount);
 
 /**
- * Add a nodemap
+ * nodemap_add() - Add a nodemap
+ * @nodemap_name: name of nodemap
+ * @dynamic: if true nodemap will be dynamic (can be modified runtime)
  *
- * \param	name		name of nodemap
- * \retval	0		success
- * \retval	-EINVAL		invalid nodemap name
- * \retval	-EEXIST		nodemap already exists
- * \retval	-ENOMEM		cannot allocate memory for nodemap
+ * Return:
+ * * %0		success
+ * * %-EINVAL		invalid nodemap name
+ * * %-EEXIST		nodemap already exists
+ * * %-ENOMEM		cannot allocate memory for nodemap
  */
 int nodemap_add(const char *nodemap_name, bool dynamic)
 {
@@ -2324,12 +2372,13 @@ int nodemap_add(const char *nodemap_name, bool dynamic)
 EXPORT_SYMBOL(nodemap_add);
 
 /**
- * Delete a nodemap
+ * nodemap_del() - Delete a nodemap
+ * @nodemap_name: name of nodemmap
  *
- * \param	name		name of nodemmap
- * \retval	0		success
- * \retval	-EINVAL		invalid input
- * \retval	-ENOENT		no existing nodemap
+ * Return:
+ * * %0		success
+ * * %-EINVAL		invalid input
+ * * %-ENOENT		no existing nodemap
  */
 int nodemap_del(const char *nodemap_name)
 {
@@ -2452,17 +2501,20 @@ int nodemap_add_offset_helper(struct lu_nodemap *nodemap, __u32 offset_start,
 }
 
 /**
+ * nodemap_add_offset() - Add offset to nodemap (add mapping offset)
+ * @nodemap_name: name of nodemmap
+ * @offset: offset+limit
+ *
  * The nodemap offset shifts client UID/GID/PROJIDs from the range [0,limit)
  * to a new range [offset,offset+limit).  This is useful for clusters that share
  * a single filesystem among several tenants that administer their IDs
  * independently. The offsets provide non-overlapping spaces with "limit"
  * IDs each without having to configure individual idmaps for each ID.
  *
- * \param	name		name of nodemmap
- * \param	offset		offset+limit
- * \retval	0		success
- * \retval	-EINVAL		invalid input
- * \retval	-ENOENT		no existing nodemap
+ * Return:
+ * * %0		success
+ * * %-EINVAL		invalid input
+ * * %-ENOENT		no existing nodemap
  */
 int nodemap_add_offset(const char *nodemap_name, char *offset)
 {
@@ -2591,12 +2643,13 @@ int nodemap_del_offset_helper(struct lu_nodemap *nodemap)
 }
 
 /**
- * Delete mapping offset.
+ * nodemap_del_offset() - Delete mapping offset.
+ * @nodemap_name: name of nodemmap
  *
- * \param	name		name of nodemmap
- * \retval	0		success
- * \retval	-EINVAL		invalid input
- * \retval	-ENOENT		no existing nodemap
+ * Return:
+ * * %0		success
+ * * %-EINVAL		invalid input
+ * * %-ENOENT		no existing nodemap
  */
 int nodemap_del_offset(const char *nodemap_name)
 {
@@ -2629,9 +2682,12 @@ out:
 }
 
 /**
- * activate nodemap functions
+ * nodemap_activate() - activate nodemap functions
+ * @value: 1 for on, 0 for off
  *
- * \param	value		1 for on, 0 for off
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int nodemap_activate(const bool value)
 {
@@ -2656,12 +2712,13 @@ int nodemap_activate(const bool value)
 EXPORT_SYMBOL(nodemap_activate);
 
 /**
- * Helper iterator to convert nodemap hash to list.
+ * nodemap_cleanup_iter_cb() - Helper iterator to convert nodemap hash to list.
+ * @hs: hash structure
+ * @bd: bucket descriptor
+ * @hnode: hash node
+ * @nodemap_list_head: list head for list of nodemaps in hash
  *
- * \param	hs			hash structure
- * \param	bd			bucket descriptor
- * \param	hnode			hash node
- * \param	nodemap_list_head	list head for list of nodemaps in hash
+ * Return always 0
  */
 static int nodemap_cleanup_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				   struct hlist_node *hnode,
@@ -2702,7 +2759,8 @@ struct nodemap_config *nodemap_config_alloc(void)
 EXPORT_SYMBOL(nodemap_config_alloc);
 
 /**
- * Walk the nodemap_hash and remove all nodemaps.
+ * nodemap_config_dealloc() - Walk the nodemap_hash and remove all nodemaps.
+ * @config: pointer to struct nodemap_config which will get dealloc
  */
 void nodemap_config_dealloc(struct nodemap_config *config)
 {
@@ -2816,7 +2874,7 @@ void nodemap_config_set_active(struct nodemap_config *config)
 	EXIT;
 }
 
-/**
+/*
  * Cleanup nodemap module on exit
  */
 void nodemap_mod_exit(void)
@@ -2825,7 +2883,7 @@ void nodemap_mod_exit(void)
 	nodemap_procfs_exit();
 }
 
-/**
+/*
  * Initialize the nodemap module
  */
 int nodemap_mod_init(void)
@@ -2858,7 +2916,7 @@ out:
 	return rc;
 }
 
-/**
+/*
  * Revoke locks for all nodemaps.
  */
 void nm_member_revoke_all(void)
@@ -2878,13 +2936,15 @@ void nm_member_revoke_all(void)
 }
 
 /**
+ * nodemap_test_nid() - Returns the nodemap classification for a given nid into
+ * an ioctl buffer.
+ * @nid: nid to classify
+ * @name_buf: buffer to write the nodemap name to
+ * @name_len: length of buffer
+ *
  * Returns the nodemap classification for a given nid into an ioctl buffer.
  * Useful for testing the nodemap configuration to make sure it is working as
  * expected.
- *
- * \param	nid		nid to classify
- * \param[out]	name_buf	buffer to write the nodemap name to
- * \param	name_len	length of buffer
  */
 void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len)
 {
@@ -2908,16 +2968,18 @@ void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len)
 EXPORT_SYMBOL(nodemap_test_nid);
 
 /**
+ * nodemap_test_id() - Passes back the id mapping for a given nid/id pair.
+ * @nid: nid to classify
+ * @idtype: uid or gid
+ * @client_id: id to map to fs
+ * @fs_id: pointer to save mapped fs_id to
+ *
  * Passes back the id mapping for a given nid/id pair. Useful for testing the
  * nodemap configuration to make sure it is working as expected.
  *
- * \param	nid		nid to classify
- * \param	idtype		uid or gid
- * \param	client_id	id to map to fs
- * \param	fs_id_buf	pointer to save mapped fs_id to
- *
- * \retval	0	success
- * \retval	-EINVAL	invalid NID
+ * Return:
+ * * %0	success
+ * * %-EINVAL	invalid NID
  */
 int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 		    u32 client_id, u32 *fs_id)
@@ -3217,6 +3279,16 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 	RETURN(rc);
 }
 
+/**
+ * server_iocontrol_nodemap() - nodemap related ioctl commands
+ * @obd: OBD device
+ * @data: IOCTL data
+ * @dynamic: if true nodemap will be dynamic (can be modified runtime)
+ *
+ * Return:
+ * * %0 on success
+ * * %< 0 on error
+ */
 int server_iocontrol_nodemap(struct obd_device *obd,
 			     struct obd_ioctl_data *data, bool dynamic)
 {
