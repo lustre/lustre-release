@@ -124,6 +124,8 @@ struct upcall_cache_ops {
 				     struct upcall_cache_entry *);
 	int             (*parse_downcall)(struct upcall_cache *,
 					  struct upcall_cache_entry *, void *);
+	int             (*accept_expired)(struct upcall_cache *,
+					  struct upcall_cache_entry *);
 };
 
 struct upcall_cache {

@@ -607,6 +607,44 @@ out:
 	RETURN(status);
 }
 
+/* Returns 1 to tell the expired entry is acceptable */
+static inline int rsc_accept_expired(struct upcall_cache *cache,
+				     struct upcall_cache_entry *entry)
+{
+	struct gss_rsc *rsc;
+	time64_t now = ktime_get_seconds();
+
+	if (!entry)
+		return 0;
+
+	rsc = &entry->u.rsc;
+
+	/* entry not expired? */
+	if (now < entry->ue_expire)
+		return 0;
+
+	/* We want to accept an expired entry in the following case:
+	 * the client received an ldlm callback request to release a lock,
+	 * and the server used an expired reverse context to send this request.
+	 * The server cannot be blamed for that, as it only has a reverse
+	 * context and cannot refresh it explicitly. And the client cannot
+	 * refuse to use the associated gss context, otherwise it fails to reply
+	 * to the ldlm callback request and gets evicted. The client, which is
+	 * responsible for the context, cannot refresh it immediately, as it
+	 * would not match the reverse context used by the server. But the
+	 * client context is going to be refreshed right after that, along with
+	 * the subsequent ldlm cancel request.
+	 * The way to make sure we are presently dealing with a client-side
+	 * rpc sec context is to check that sc_target is not NULL and
+	 * gsc_rvs_hdl is empty. On server side gsc_rvs_hdl (the reverse handle)
+	 * is always set.
+	 */
+	if (rsc->sc_target && rawobj_empty(&rsc->sc_ctx.gsc_rvs_hdl))
+		return 1;
+
+	return 0;
+}
+
 struct gss_rsc *rsc_entry_get(struct upcall_cache *cache, struct gss_rsc *rsc)
 {
 	struct upcall_cache_entry *entry;
@@ -639,6 +677,7 @@ struct upcall_cache_ops rsc_upcall_cache_ops = {
 	.downcall_compare = rsc_downcall_compare,
 	.do_upcall	  = rsc_do_upcall,
 	.parse_downcall	  = rsc_parse_downcall,
+	.accept_expired   = rsc_accept_expired,
 };
 
 struct upcall_cache *rsccache;
@@ -661,6 +700,8 @@ static struct gss_rsc *gss_svc_searchbyctx(rawobj_t *handle)
 	if (IS_ERR_OR_NULL(found))
 		return found;
 	if (!found->sc_ctx.gsc_mechctx) {
+		CWARN("ctx hdl %#llx does not have mech ctx: rc = %d\n",
+		      gss_handle_to_u64(handle), -ENOENT);
 		rsc_entry_put(rsccache, found);
 		return ERR_PTR(-ENOENT);
 	}
@@ -966,9 +1007,10 @@ struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
 
 	rscp = gss_svc_searchbyctx(&gw->gw_handle);
 	if (IS_ERR_OR_NULL(rscp)) {
-		CWARN("Invalid gss ctx hdl %#llx from %s\n",
+		CWARN("Invalid gss ctx hdl %#llx from %s: rc = %ld\n",
 		      gss_handle_to_u64(&gw->gw_handle),
-		      libcfs_nidstr(&req->rq_peer.nid));
+		      libcfs_nidstr(&req->rq_peer.nid),
+		      rscp ? PTR_ERR(rscp) : -1);
 		return NULL;
 	}
 
