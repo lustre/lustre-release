@@ -765,34 +765,41 @@ int lustre_lnet_show_udsp(int idx, int seq_no, struct cYAML **show_rc,
 					udsp->udsp_idx) == NULL)
 			goto out;
 
-		memset(tmp, 0, LNET_MAX_STR_LEN);
-		rc = lustre_lnet_nid_descr2str(&udsp->udsp_src, tmp,
-					       LNET_MAX_STR_LEN);
+		if (udsp->udsp_src.ud_net_id.udn_net_type) {
+			memset(tmp, 0, LNET_MAX_STR_LEN);
+			rc = lustre_lnet_nid_descr2str(&udsp->udsp_src, tmp,
+						       LNET_MAX_STR_LEN);
 
-		if (rc)
-			goto out;
+			if (rc)
+				goto out;
 
-		if (cYAML_create_string(item, "src", tmp) == NULL)
-			goto out;
-		memset(tmp, 0, LNET_MAX_STR_LEN);
-		rc = lustre_lnet_nid_descr2str(&udsp->udsp_dst, tmp,
-					       LNET_MAX_STR_LEN);
+			if (cYAML_create_string(item, "src", tmp) == NULL)
+				goto out;
+		}
 
-		if (rc)
-			goto out;
+		if (udsp->udsp_dst.ud_net_id.udn_net_type) {
+			memset(tmp, 0, LNET_MAX_STR_LEN);
+			rc = lustre_lnet_nid_descr2str(&udsp->udsp_dst, tmp,
+						       LNET_MAX_STR_LEN);
 
-		if (cYAML_create_string(item, "dst", tmp) == NULL)
-			goto out;
+			if (rc)
+				goto out;
 
-		memset(tmp, 0, LNET_MAX_STR_LEN);
-		rc = lustre_lnet_nid_descr2str(&udsp->udsp_rte, tmp,
-					       LNET_MAX_STR_LEN);
+			if (cYAML_create_string(item, "dst", tmp) == NULL)
+				goto out;
+		}
 
-		if (rc)
-			goto out;
+		if (udsp->udsp_rte.ud_net_id.udn_net_type) {
+			memset(tmp, 0, LNET_MAX_STR_LEN);
+			rc = lustre_lnet_nid_descr2str(&udsp->udsp_rte, tmp,
+						       LNET_MAX_STR_LEN);
 
-		if (cYAML_create_string(item, "rte", tmp) == NULL)
-			goto out;
+			if (rc)
+				goto out;
+
+			if (cYAML_create_string(item, "rte", tmp) == NULL)
+				goto out;
+		}
 
 		if (yaml_add_udsp_action(item, udsp))
 			goto out;

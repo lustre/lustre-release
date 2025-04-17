@@ -5720,6 +5720,144 @@ test_402() {
 }
 run_test 402 "Destination net rule should not panic"
 
+test_403() {
+	local rule_type
+
+	for rule_type in src dst; do
+		reinit_dlc || return $?
+
+		local nid
+
+		if [[ ${NETTYPE} == kfi* ]] || [[ ${NETTYPE} == gni* ]]; then
+			nid=401@kfi
+		else
+			nid=1.1.1.1@${NETTYPE}
+		fi
+
+		for arg in ${NETTYPE} ${nid}; do
+			cat <<EOF > $TMP/$TESTSUITE-$testnum-expected.yaml
+udsp:
+- idx: 0
+  ${rule_type}: ${arg}
+  action:
+    priority: 1
+EOF
+
+			do_lnetctl udsp add --${rule_type} ${arg} --prio 1 ||
+				error "udsp add failed rc=$?"
+
+			$LNETCTL udsp show > $TMP/$TESTSUITE-$testnum-actual.yaml
+
+			compare_yaml_files || return $?
+
+			do_lnetctl udsp del --idx 0 ||
+				error "udsp del failed rc=$?"
+
+			do_lnetctl udsp show
+
+			[[ -z $($LNETCTL udsp show) ]] ||
+				error "Unexpected udsp show output"
+		done
+	done
+
+	return 0
+}
+run_test 403 "Add and delete udsp net and nid rules"
+
+check_udsp_priorities() {
+	local rule_type="$1"
+
+	if [[ $rule_type == both ]]; then
+		check_net_udsp_prio "$net" "$nid" "1" "-1"
+		check_peer_udsp_prio "$net" "$nid" "1" "-1"
+	elif [[ ${rule_type} == src ]]; then
+		check_net_udsp_prio "$net" "$nid" "1" "-1"
+	else
+		check_peer_udsp_prio "$net" "$nid" "1" "-1"
+	fi
+}
+
+do_udsp_test() {
+	local rule_type="$1"
+	local net="$2"
+	local nid="$3"
+
+	local arg arg_type
+
+	if [[ -n $net ]]; then
+		arg=$net
+		arg_type="net"
+	else
+		arg=$nid
+		arg_type="nid"
+	fi
+
+	[[ -n $net ]] && arg=$net || arg=$nid
+
+	if [[ $rule_type == both ]]; then
+		do_lnetctl udsp add --src $arg --prio 1 ||
+			error "Failed to add $rule_type $arg_type priority rule"
+		do_lnetctl udsp add --dst $arg --prio 1 ||
+			error "Failed to add $rule_type $arg_type priority rule"
+	else
+		do_lnetctl udsp add --$rule_type $arg --prio 1 ||
+			error "Failed to add $rule_type $arg_type priority rule"
+	fi
+
+	do_lnetctl discover "$($LCTL list_nids | head -n 1)" ||
+		error "failed to discover myself"
+
+	check_udsp_priorities "$rule_type"
+
+	$LNETCTL export --backup > $TMP/$TESTSUITE-$testnum-expected.yaml ||
+		error "export failed"
+
+	reinit_dlc || return $?
+
+	$LNETCTL import $TMP/$TESTSUITE-$testnum-expected.yaml ||
+		error "Failed to import from backup"
+
+	$LNETCTL export --backup > $TMP/$TESTSUITE-$testnum-actual.yaml ||
+		error "export failed"
+
+	compare_yaml_files || error "Unexpected config after import"
+
+	do_lnetctl discover "$($LCTL list_nids | head -n 1)" ||
+		error "failed to discover myself"
+
+	check_udsp_priorities "$rule_type"
+}
+
+test_404() {
+	local rule_type nid
+
+	for rule_type in src dst both ; do
+		reinit_dlc || return $?
+
+		add_net "${NETTYPE}" "${INTERFACES[0]}"
+		add_net "${NETTYPE}2" "${INTERFACES[0]}"
+
+		nid=$($LCTL list_nids | head -n 1)
+
+		do_udsp_test ${rule_type} "${NETTYPE}" "${nid}" || return $?
+
+		reinit_dlc || return $?
+
+		add_net "${NETTYPE}" "${INTERFACES[0]}"
+		add_net "${NETTYPE}2" "${INTERFACES[0]}"
+
+		nid=$($LCTL list_nids | tail -n 1)
+
+		do_lnetctl discover "$($LCTL list_nids | head -n 1)" ||
+			error "Failed to discover myself"
+
+		do_udsp_test ${rule_type} "${NETTYPE}2" "${nid}" || return $?
+	done
+
+	return 0
+}
+run_test 404 "Check udsp src/dst net rule"
+
 test_410() {
 	reinit_dlc || return $?
 
