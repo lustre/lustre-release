@@ -26,8 +26,8 @@
 #include <lustre_compat.h>
 #include "ptlrpc_internal.h"
 
-/**
- * \name ORR/TRR policy
+/*
+ * ORR/TRR policy
  *
  * ORR/TRR (Object-based Round Robin/Target-based Round Robin) NRS policies
  *
@@ -48,23 +48,22 @@
  * instances. It is possible that this may need to be re-examined in the future,
  * along with potentially coalescing other policies that perform batched request
  * scheduling in a Round-Robin manner, all into one policy.
- *
- * @{
  */
 
 #define NRS_POL_NAME_ORR	"orr"
 #define NRS_POL_NAME_TRR	"trr"
 
 /**
- * Checks if the RPC type of \a nrq is currently handled by an ORR/TRR policy
+ * nrs_orr_req_supported() - Checks if the RPC type of @nrq is currently handled
+ * by an ORR/TRR policy
+ * @orrd: the ORR/TRR policy scheduler instance
+ * @nrq: the request
+ * @opcode: the opcode is saved here, just in order to avoid calling
+ * lustre_msg_get_opc() again later [out]
  *
- * \param[in]  orrd   the ORR/TRR policy scheduler instance
- * \param[in]  nrq    the request
- * \param[out] opcode the opcode is saved here, just in order to avoid calling
- *		      lustre_msg_get_opc() again later
- *
- * \retval true  request type is supported by the policy instance
- * \retval false request type is not supported by the policy instance
+ * Return:
+ * * %true  request type is supported by the policy instance
+ * * %false request type is not supported by the policy instance
  */
 static bool nrs_orr_req_supported(struct nrs_orr_data *orrd,
 				  struct ptlrpc_nrs_request *nrq, __u32 *opcode)
@@ -93,16 +92,16 @@ static bool nrs_orr_req_supported(struct nrs_orr_data *orrd,
 }
 
 /**
- * Returns the ORR/TRR key fields for the request \a nrq in \a key.
+ * nrs_orr_key_fill() - Returns ORR/TRR key fields for the request @nrq in @key.
+ * @orrd: the ORR/TRR policy scheduler instance
+ * @nrq: the request
+ * @opc: the request's opcode
+ * @name: the policy name
+ * @key: fields of the key are returned here [out]
  *
- * \param[in]  orrd the ORR/TRR policy scheduler instance
- * \param[in]  nrq  the request
- * \param[in]  opc  the request's opcode
- * \param[in]  name the policy name
- * \param[out] key  fields of the key are returned here.
- *
- * \retval 0   key filled successfully
- * \retval < 0 error
+ * Return:
+ * * %0 key filled successfully
+ * * %< 0 error
  */
 static int nrs_orr_key_fill(struct nrs_orr_data *orrd,
 			    struct ptlrpc_nrs_request *nrq, __u32 opc,
@@ -155,12 +154,11 @@ static int nrs_orr_key_fill(struct nrs_orr_data *orrd,
 }
 
 /**
- * Populates the range values in \a range with logical offsets obtained via
- * \a nb.
- *
- * \param[in]  nb	niobuf_remote struct array for this request
- * \param[in]  niocount	count of niobuf_remote structs for this request
- * \param[out] range	the offset range is returned here
+ * nrs_orr_range_fill_logical() - Populates the range values in @range with
+ * logical offsets obtained via @nb.
+ * @nb: niobuf_remote struct array for this request
+ * @niocount: count of niobuf_remote structs for this request
+ * @range: the offset range is returned here
  */
 static void nrs_orr_range_fill_logical(struct niobuf_remote *nb, int niocount,
 				       struct nrs_orr_req_range *range)
@@ -171,25 +169,26 @@ static void nrs_orr_range_fill_logical(struct niobuf_remote *nb, int niocount,
 			 nb[niocount - 1].rnb_len - 1) | ~PAGE_MASK;
 }
 
-/**
+/*
  * We obtain information just for a single extent, as the request can only be in
  * a single place in the binary heap anyway.
  */
 #define ORR_NUM_EXTENTS 1
 
 /**
- * Converts the logical file offset range in \a range, to a physical disk offset
- * range in \a range, for a request. Uses obd_get_info() in order to carry out a
+ * nrs_orr_range_fill_physical() - Converts the logical file offset range
+ * @nrq: the request
+ * @oa: obdo struct for this request
+ * @range: the offset range in bytes; logical range[in], physical range[out]
+ *
+ * Converts the logical file offset range in @range, to a physical disk offset
+ * range in @range, for a request. Uses obd_get_info() in order to carry out a
  * fiemap call and obtain backend-fs extent information. The returned range is
  * in physical block numbers.
  *
- * \param[in]	  nrq	the request
- * \param[in]	  oa	obdo struct for this request
- * \param[in,out] range	the offset range in bytes; logical range in, physical
- *			range out
- *
- * \retval 0	physical offsets obtained successfully
- * \retvall < 0 error
+ * Return:
+ * * %0 physical offsets obtained successfully
+ * * %<0 error
  */
 static int nrs_orr_range_fill_physical(struct ptlrpc_nrs_request *nrq,
 				       struct obdo *oa,
@@ -242,17 +241,17 @@ out:
 }
 
 /**
- * Sets the offset range the request covers; either in logical file
- * offsets or in physical disk offsets.
+ * nrs_orr_range_fill() - Sets the offset range the request covers;
+ * either in logical file offsets or in physical disk offsets.
+ * @nrq: the request
+ * @orrd: the ORR/TRR policy scheduler instance
+ * @opc: the request's opcode
+ * @moving_req: is the request in the process of moving onto the high-priority
+ * NRS head?
  *
- * \param[in] nrq	 the request
- * \param[in] orrd	 the ORR/TRR policy scheduler instance
- * \param[in] opc	 the request's opcode
- * \param[in] moving_req is the request in the process of moving onto the
- *			 high-priority NRS head?
- *
- * \retval 0	range filled successfully
- * \retval != 0 error
+ * Return:
+ * * %0 range filled successfully
+ * * %!=0 on error
  */
 static int nrs_orr_range_fill(struct ptlrpc_nrs_request *nrq,
 			      struct nrs_orr_data *orrd, __u32 opc,
@@ -325,14 +324,16 @@ out:
 }
 
 /**
+ * nrs_orr_genobjname() - Generates a character string
+ * @policy: the policy instance
+ * @name:  the character array that will hold the generated name [out]
+ *
  * Generates a character string that can be used in order to register uniquely
  * named slab objects for ORR/TRR policy instances. The character string is
  * unique per policy instance, as it includes the policy's name, the CPT number,
  * and a {reg|hp} token, and there is one policy instance per NRS head on each
  * CPT, and the policy is only compatible with the ost_io service.
  *
- * \param[in] policy the policy instance
- * \param[out] name  the character array that will hold the generated name
  */
 static void nrs_orr_genobjname(struct ptlrpc_nrs_policy *policy, char *name)
 {
@@ -342,7 +343,7 @@ static void nrs_orr_genobjname(struct ptlrpc_nrs_policy *policy, char *name)
 		 "_reg_" : "_hp_", nrs_pol2cptid(policy));
 }
 
-/**
+/*
  * ORR/TRR hash operations
  */
 static u32 nrs_orr_hashfn(const void *data, u32 len, u32 seed)
@@ -389,7 +390,9 @@ static const struct rhashtable_params nrs_orr_hash_params = {
 #define NRS_ORR_QUANTUM_DFLT	256
 
 /**
- * Binary heap predicate.
+ * orr_req_compare() - Binary heap predicate.
+ * @e1: the first binheap node to compare
+ * @e2: the second binheap node to compare
  *
  * Uses
  * ptlrpc_nrs_request::nr_u::orr::or_round,
@@ -398,11 +401,9 @@ static const struct rhashtable_params nrs_orr_hash_params = {
  * produce a binary predicate that indicates their relative priority, so that
  * the binary heap can perform the necessary sorting operations.
  *
- * \param[in] e1 the first binheap node to compare
- * \param[in] e2 the second binheap node to compare
- *
- * \retval 0 e1 > e2
- * \retval 1 e1 < e2
+ * Return:
+ * * %0 e1 > e2
+ * * %1 e1 < e2
  */
 static int
 orr_req_compare(struct binheap_node *e1, struct binheap_node *e2)
@@ -457,7 +458,7 @@ orr_req_compare(struct binheap_node *e1, struct binheap_node *e2)
 	}
 }
 
-/**
+/*
  * ORR binary heap operations
  */
 static struct binheap_ops nrs_orr_heap_ops = {
@@ -467,13 +468,14 @@ static struct binheap_ops nrs_orr_heap_ops = {
 };
 
 /**
+ * nrs_orr_init() - initialize an ORR/TRR
+ * @policy: the policy instance
+ *
  * Prints a warning message if an ORR/TRR policy is started on a service with
  * more than one CPT.  Not printed on the console for now, since we don't
  * have any performance metrics in the first place, and it is annoying.
  *
- * \param[in] policy the policy instance
- *
- * \retval 0 success
+ * Return always 0
  */
 static int nrs_orr_init(struct ptlrpc_nrs_policy *policy)
 {
@@ -488,12 +490,13 @@ static int nrs_orr_init(struct ptlrpc_nrs_policy *policy)
 }
 
 /**
- * Called when an ORR policy instance is started.
+ * nrs_orr_start() - Called when an ORR policy instance is started.
+ * @policy: the policy
+ * @arg: Unused
  *
- * \param[in] policy the policy
- *
- * \retval -ENOMEM OOM error
- * \retval 0	   success
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM OOM error
  */
 static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
@@ -566,13 +569,12 @@ out_orrd:
 }
 
 /**
- * Called when an ORR/TRR policy instance is stopped.
+ * nrs_orr_stop() - Called when an ORR/TRR policy instance is stopped.
+ * @policy: the policy
  *
  * Called when the policy has been instructed to transition to the
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state and has no more
  * pending requests to serve.
- *
- * \param[in] policy the policy
  */
 static void nrs_orr_stop(struct ptlrpc_nrs_policy *policy)
 {
@@ -606,18 +608,18 @@ static void nrs_orr_stop(struct ptlrpc_nrs_policy *policy)
 }
 
 /**
- * Performs a policy-specific ctl function on ORR/TRR policy instances; similar
- * to ioctl.
- *
- * \param[in]	  policy the policy instance
- * \param[in]	  opc	 the opcode
- * \param[in,out] arg	 used for passing parameters and information
+ * nrs_orr_ctl() - Performs a policy-specific ctl function on ORR/TRR policy
+ * instances; similar to ioctl.
+ * @policy: the policy instance
+ * @opc: the opcode
+ * @arg: used for passing parameters and information [out]
  *
  * \pre assert_spin_locked(&policy->pol_nrs->->nrs_lock)
  * \post assert_spin_locked(&policy->pol_nrs->->nrs_lock)
  *
- * \retval 0   operation carried successfully
- * \retval -ve error
+ * Return:
+ * * %0   operation carried successfully
+ * * %-ve error
  */
 static int nrs_orr_ctl(struct ptlrpc_nrs_policy *policy,
 		       enum ptlrpc_nrs_ctl opc, void *arg)
@@ -676,26 +678,24 @@ static int nrs_orr_ctl(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
+ * nrs_orr_res_get() - Obtains resources for ORR/TRR policy instances
+ * @policy: the policy for which resources are being taken for request @nrq
+ * @nrq: the request for which resources are being taken
+ * @parent: parent resource, embedded in nrs_orr_data for the ORR/TRR policies
+ * @resp: used to return resource references [out]
+ * @moving_req: signifies limited caller context; used to perform memory
+ * allocations in an atomic context in this policy
+ *
  * Obtains resources for ORR/TRR policy instances. The top-level resource lives
- * inside \e nrs_orr_data and the second-level resource inside
- * \e nrs_orr_object instances.
+ * inside @nrs_orr_data and the second-level resource inside @nrs_orr_object
+ * instances.
+ * Note: see nrs_resource_get_safe()
  *
- * \param[in]  policy	  the policy for which resources are being taken for
- *			  request \a nrq
- * \param[in]  nrq	  the request for which resources are being taken
- * \param[in]  parent	  parent resource, embedded in nrs_orr_data for the
- *			  ORR/TRR policies
- * \param[out] resp	  used to return resource references
- * \param[in]  moving_req signifies limited caller context; used to perform
- *			  memory allocations in an atomic context in this
- *			  policy
- *
- * \retval 0   we are returning a top-level, parent resource, one that is
- *	       embedded in an nrs_orr_data object
- * \retval 1   we are returning a bottom-level resource, one that is embedded
- *	       in an nrs_orr_object object
- *
- * \see nrs_resource_get_safe()
+ * Return:
+ * * %0 we are returning a top-level, parent resource, one that is embedded in
+ * an nrs_orr_data object
+ * * %1 we are returning a bottom-level resource, one that is embedded in an
+ * nrs_orr_object object
  */
 static int nrs_orr_res_get(struct ptlrpc_nrs_policy *policy,
 			   struct ptlrpc_nrs_request *nrq,
@@ -815,11 +815,12 @@ static void nrs_orr_object_free(struct rcu_head *head)
 }
 
 /**
+ * nrs_orr_res_put() - Called when releasing references
+ * @policy: the policy the resource belongs to
+ * @res: the resource to be released
+ *
  * Called when releasing references to the resource hierachy obtained for a
  * request for scheduling using ORR/TRR policy instances
- *
- * \param[in] policy   the policy the resource belongs to
- * \param[in] res      the resource to be released
  */
 static void nrs_orr_res_put(struct ptlrpc_nrs_policy *policy,
 			    const struct ptlrpc_nrs_resource *res)
@@ -844,26 +845,25 @@ static void nrs_orr_res_put(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
+ * nrs_trr_res_get() - Obtains resources for TRR policy instances
+ * @policy: the policy for which resources are being taken for request @nrq
+ * @nrq: the request for which resources are being taken
+ * @parent: parent resource, embedded in nrs_orr_data for the TRR policies
+ * @resp: used to return resource references
+ * @moving_req: signifies limited caller context; used to perform memory
+ * allocations in an atomic context in this
+ *
  * Obtains resources for TRR policy instances. The top-level resource lives
- * inside \e nrs_orr_data and the second-level resource inside
- * \e nrs_orr_object instances.
+ * inside @nrs_orr_data and the second-level resource inside
+ * @nrs_orr_object instances.
+ * Note: see nrs_resource_get_safe()
  *
- * @policy	the policy for which resources are being taken for
- *		request @nrq
- * @nrq		the request for which resources are being taken
- * @parent	parent resource, embedded in nrs_orr_data for the
- *		TRR policies
- * @resp	used to return resource references
- * @moving_req	signifies limited caller context; used to perform
- *		memory allocations in an atomic context in this
- *		policy
+ * Return:
+ * * %0 we are returning a top-level, parent resource, one that is embedded in
+ * an nrs_orr_data object
+ * * %1 we are returning a bottom-level resource, one that is embedded in an
+ * nrs_orr_object object
  *
- * RETURN	0 we are returning a top-level, parent resource, one that is
- *		  embedded in an nrs_orr_data object
- *		1 we are returning a bottom-level resource, one that is embedded
- *		  in an nrs_orr_object object
- *
- * \see nrs_resource_get_safe()
  */
 static int nrs_trr_res_get(struct ptlrpc_nrs_policy *policy,
 			   struct ptlrpc_nrs_request *nrq,
@@ -959,22 +959,20 @@ found_orro:
 }
 
 /**
+ * nrs_orr_req_get() - Returns request that is at the root of the binary heap
+ * @policy: the policy instance being polled
+ * @peek: when set, signifies that we just want to examine the
+ *		    request, and not handle it, so the request is not removed
+ *		    from the policy.
+ * @force: force the policy to return a request; unused in this policy
+ *
  * Called when polling an ORR/TRR policy instance for a request so that it can
  * be served. Returns the request that is at the root of the binary heap, as
  * that is the lowest priority one (i.e. binheap is an implementation of a
  * min-heap)
+ * Note: see ptlrpc_nrs_req_get_nolock() and nrs_request_get()
  *
- * \param[in] policy the policy instance being polled
- * \param[in] peek   when set, signifies that we just want to examine the
- *		     request, and not handle it, so the request is not removed
- *		     from the policy.
- * \param[in] force  force the policy to return a request; unused in this policy
- *
- * \retval the request to be handled
- * \retval NULL no request available
- *
- * \see ptlrpc_nrs_req_get_nolock()
- * \see nrs_request_get()
+ * Return the request to be handled or NULL when no request is available
  */
 static
 struct ptlrpc_nrs_request *nrs_orr_req_get(struct ptlrpc_nrs_policy *policy,
@@ -1035,7 +1033,11 @@ struct ptlrpc_nrs_request *nrs_orr_req_get(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Sort-adds request \a nrq to an ORR/TRR \a policy instance's set of queued
+ * nrs_orr_req_add() - Adds request @nrq to an ORR/TRR @policy instance's
+ * @policy: the policy
+ * @nrq: the request to add
+ *
+ * Sort-adds request @nrq to an ORR/TRR @policy instance's set of queued
  * requests in the policy's binary heap.
  *
  * A scheduling round is a stream of requests that have been sorted in batches
@@ -1061,11 +1063,9 @@ struct ptlrpc_nrs_request *nrs_orr_req_get(struct ptlrpc_nrs_policy *policy,
  * batch consisting of an ordered set of requests according to their logical
  * file or physical disk offsets.
  *
- * \param[in] policy the policy
- * \param[in] nrq    the request to add
- *
- * \retval 0	request successfully added
- * \retval != 0 error
+ * Return:
+ * * %0 request successfully added
+ * * %!= 0 error
  */
 static int nrs_orr_req_add(struct ptlrpc_nrs_policy *policy,
 			   struct ptlrpc_nrs_request *nrq)
@@ -1125,11 +1125,10 @@ static int nrs_orr_req_add(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Removes request \a nrq from an ORR/TRR \a policy instance's set of queued
- * requests.
- *
- * \param[in] policy the policy
- * \param[in] nrq    the request to remove
+ * nrs_orr_req_del() - Removes request @nrq from an ORR/TRR @policy instance's
+ * set of queued requests.
+ * @policy: the policy
+ * @nrq: the request to remove
  */
 static void nrs_orr_req_del(struct ptlrpc_nrs_policy *policy,
 			    struct ptlrpc_nrs_request *nrq)
@@ -1172,11 +1171,10 @@ static void nrs_orr_req_del(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Called right after the request @nrq finishes being handled by ORR policy
- * instance \a policy.
- *
- * @policy	the policy that handled the request
- * @nrq		the request that was handled
+ * nrs_orr_req_stop() - Called right after the request @nrq finishes being
+ * handled by ORR policy instance @policy.
+ * @policy: the policy that handled the request
+ * @nrq: the request that was handled
  */
 static void nrs_orr_req_stop(struct ptlrpc_nrs_policy *policy,
 			     struct ptlrpc_nrs_request *nrq)
@@ -1189,11 +1187,10 @@ static void nrs_orr_req_stop(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Called right after the request @nrq finishes being handled by TRR policy
- * instance @policy.
- *
- * @policy	the policy that handled the request
- * @nrq		the request that was handled
+ * nrs_trr_req_stop() - Called right after the request @nrq finishes being
+ * handled by TRR policy instance @policy.
+ * @policy: the policy that handled the request
+ * @nrq: the request that was handled
  */
 static void nrs_trr_req_stop(struct ptlrpc_nrs_policy *policy,
 			     struct ptlrpc_nrs_request *nrq)
@@ -1204,11 +1201,11 @@ static void nrs_trr_req_stop(struct ptlrpc_nrs_policy *policy,
 	       nrq->nr_u.orr.or_key.ok_idx, nrq->nr_u.orr.or_round);
 }
 
-/**
+/*
  * debugfs interface
  */
 
-/**
+/*
  * This allows to bundle the policy name into the lprocfs_vars::data pointer
  * so that lprocfs read/write functions can be used by both the ORR and TRR
  * policies.
@@ -1222,7 +1219,7 @@ static struct nrs_lprocfs_orr_data {
 	.name = NRS_POL_NAME_TRR
 };
 
-/**
+/*
  * Retrieves the value of the Round Robin quantum (i.e. the maximum batch size)
  * for ORR/TRR policy instances on both the regular and high-priority NRS head
  * of a service, as long as a policy instance is not in the
@@ -1292,7 +1289,7 @@ no_hp:
 	return rc;
 }
 
-/**
+/*
  * Sets the value of the Round Robin quantum (i.e. the maximum batch size)
  * for ORR/TRR policy instances of a service. The user can set the quantum size
  * for the regular and high priority NRS head separately by specifying each
@@ -1440,7 +1437,7 @@ LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_orr_quantum);
 #define LPROCFS_NRS_OFF_NAME_PHYSICAL		"physical"
 #define LPROCFS_NRS_OFF_NAME_LOGICAL		"logical"
 
-/**
+/*
  * Retrieves the offset type used by ORR/TRR policy instances on both the
  * regular and high-priority NRS head of a service, as long as a policy
  * instance is not in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state;
@@ -1509,7 +1506,7 @@ no_hp:
 	return rc;
 }
 
-/**
+/*
  * Max valid command string is the size of the labels, plus "physical" twice.
  * plus a separating ' '
  */
@@ -1517,7 +1514,7 @@ no_hp:
 	sizeof(LPROCFS_NRS_OFF_NAME_REG LPROCFS_NRS_OFF_NAME_PHYSICAL " "      \
 	       LPROCFS_NRS_OFF_NAME_HP LPROCFS_NRS_OFF_NAME_PHYSICAL)
 
-/**
+/*
  * Sets the type of offsets used to order RPCs in ORR/TRR policy instances. The
  * user can set offset type for the regular or high priority NRS head
  * separately by specifying each value, or both together in a single invocation.
@@ -1662,7 +1659,7 @@ LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_orr_offset_type);
 #define LPROCFS_NRS_SUPP_NAME_WRITES		"writes"
 #define LPROCFS_NRS_SUPP_NAME_READWRITES	"reads_and_writes"
 
-/**
+/*
  * Translates enum nrs_orr_supp values to a corresponding string.
  */
 static const char *nrs_orr_supp2str(enum nrs_orr_supp supp)
@@ -1680,7 +1677,7 @@ static const char *nrs_orr_supp2str(enum nrs_orr_supp supp)
 	}
 }
 
-/**
+/*
  * Translates strings to the corresponding enum nrs_orr_supp value
  */
 static enum nrs_orr_supp nrs_orr_str2supp(const char *val)
@@ -1698,7 +1695,7 @@ static enum nrs_orr_supp nrs_orr_str2supp(const char *val)
 		return -EINVAL;
 }
 
-/**
+/*
  * Retrieves the type of RPCs handled at the point of invocation by ORR/TRR
  * policy instances on both the regular and high-priority NRS head of a service,
  * as long as a policy instance is not in the
@@ -1770,7 +1767,7 @@ no_hp:
 	return rc;
 }
 
-/**
+/*
  * Max valid command string is the size of the labels, plus "reads_and_writes"
  * twice, plus a separating ' '
  */
@@ -1779,7 +1776,7 @@ no_hp:
 	       NRS_LPROCFS_REQ_SUPP_NAME_HP LPROCFS_NRS_SUPP_NAME_READWRITES   \
 	       " ")
 
-/**
+/*
  * Sets the type of RPCs handled by ORR/TRR policy instances. The user can
  * modify this setting for the regular or high priority NRS heads separately, or
  * both together in a single invocation.
@@ -1956,7 +1953,7 @@ struct ptlrpc_nrs_pol_conf nrs_conf_orr = {
 	.nc_compat_svc_name	= "ost_io",
 };
 
-/**
+/*
  * TRR, Target-based Round Robin policy
  *
  * TRR reuses much of the functions and data structures of ORR
@@ -1988,7 +1985,7 @@ static int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 	return 0;
 }
 
-/**
+/*
  * Reuse much of the ORR functionality for TRR.
  */
 static const struct ptlrpc_nrs_pol_ops nrs_trr_ops = {
@@ -2010,7 +2007,3 @@ struct ptlrpc_nrs_pol_conf nrs_conf_trr = {
 	.nc_compat		= nrs_policy_compat_one,
 	.nc_compat_svc_name	= "ost_io",
 };
-
-/** @} ORR/TRR policy */
-
-/** @} nrs */
