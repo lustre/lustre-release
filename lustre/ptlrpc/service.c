@@ -2481,8 +2481,14 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	       libcfs_idstr(&request->rq_peer), op,
 	       lustre_msg_get_jobid(request->rq_reqmsg) ?: "");
 
-	if (op != OBD_PING)
-		CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
+	if (CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_PAUSE_REQ)) {
+		if (op != OBD_PING && op != OST_STATFS &&
+		    op != MDS_STATFS && op != OST_CREATE &&
+		    op != OST_DISCONNECT) {
+			DEBUG_REQ(D_ERROR, request, "HIT");
+			CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
+		}
+	}
 
 	CDEBUG(D_NET, "got req %llu\n", request->rq_xid);
 
