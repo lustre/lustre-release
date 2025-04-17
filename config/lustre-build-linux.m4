@@ -879,6 +879,10 @@ ifneq (\$(SINC),)
 LINUXINCLUDE += -I\$(SINC)
 else
 LINUXINCLUDE += -I\$(ZINC)/include/spl
+LINUXINCLUDE += -I\$(ZINC)/include/zfs
+LINUXINCLUDE += -I\$(ZINC)/include/os/linux/spl
+LINUXINCLUDE += -I\$(ZINC)/include/os/linux/zfs
+LINUXINCLUDE += -I\$(ZINC)/include/os/linux/kernel
 endif
 endif
 LINUXINCLUDE += -include $CONFIG_INCLUDE
