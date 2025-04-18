@@ -26,7 +26,7 @@
 
 #include "ptlrpc_internal.h"
 
-/**
+/*
  * Identify what request from replay list needs to be replayed next
  * (based on what we have already replayed) and send it to server.
  */
@@ -135,7 +135,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 	RETURN(rc);
 }
 
-/**
+/*
  * Schedule resending of request on sending_list. This is done after
  * we completed replaying of requests and locks.
  */
@@ -175,7 +175,7 @@ int ptlrpc_resend(struct obd_import *imp)
 	RETURN(0);
 }
 
-/**
+/*
  * Go through all requests in delayed list and wake their threads
  * for resending
  */
@@ -219,11 +219,18 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 }
 
 /**
- * Administratively active/deactive a client.
+ * ptlrpc_set_import_active() - Administratively active/deactive a client.
+ * @imp: import object
+ * @active: flag to activate(1) or de-activate(0)
+ *
  * This should only be called by the ioctl interface, currently
  *  - the lctl deactivate and activate commands
  *  - echo 0/1 >> /proc/osc/XXX/active
  *  - client umount -f (ll_umount_begin)
+ *
+ * Returns:
+ * * %0 on successful activation/deactivation
+ * * %negative on failure
  */
 int ptlrpc_set_import_active(struct obd_import *imp, int active)
 {

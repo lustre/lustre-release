@@ -13,12 +13,11 @@
 #include "nodemap_internal.h"
 
 /**
- * Allocate the lu_idmap structure
+ * idmap_create() - Allocate the lu_idmap structure
+ * @client_id: client uid or gid
+ * @fs_id: filesystem uid or gid
  *
- * \param	client_id		client uid or gid
- * \param	fs_id			filesystem uid or gid
- *
- * \retval	alloated lu_idmap structure on success, NULL otherwise
+ * Return alloated lu_idmap structure on success, NULL otherwise
  */
 struct lu_idmap *idmap_create(__u32 client_id, __u32 fs_id)
 {
@@ -47,18 +46,18 @@ static void idmap_destroy(struct lu_idmap *idmap)
 }
 
 /**
- * Insert idmap into the proper trees
+ * idmap_insert() - Insert idmap into the proper trees
+ * @id_type: NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
+ * @idmap: lu_idmap structure to insert
+ * @nodemap: nodemap to associate with the map
  *
- * \param	id_type		NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
- * \param	idmap		lu_idmap structure to insert
- * \param	nodemap		nodemap to associate with the map
- *
- * \retval	NULL		 on success
- * \retval	ERR_PTR(-EEXIST) if this idmap already exists
- * \retval	struct lu_idmap	 if only id_client or id_fs of this idmap
- *				 is matched, return the matched idmap.
- *				 The caller will delete this old idmap and
- *				 its index before insert the new idmap again.
+ * Return:
+ * * %NULL		 on success
+ * * %ERR_PTR(-EEXIST) if this idmap already exists
+ * * %struct lu_idmap	 if only id_client or id_fs of this idmap
+ *			 is matched, return the matched idmap.
+ *			 The caller will delete this old idmap and
+ *			 its index before insert the new idmap again.
  */
 struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
 			      struct lu_idmap *idmap,
@@ -149,12 +148,10 @@ struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
 }
 
 /**
- * Delete idmap from the correct nodemap tree
- *
- * \param	node_type		0 for UID
- *					1 for GID
- * \param	idmap			idmap to delete
- * \param	nodemap			assoicated idmap
+ * idmap_delete() - Delete idmap from the correct nodemap tree
+ * @id_type: 0 for UID and 1 for GID
+ * @idmap: idmap to delete
+ * @nodemap: assoicated idmap
  */
 void idmap_delete(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 		  struct lu_nodemap *nodemap)
@@ -182,16 +179,14 @@ void idmap_delete(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 }
 
 /**
- * Search for an existing id in the nodemap trees.
+ * idmap_search() - Search for an existing id in the nodemap trees.
+ * @nodemap: nodemap trees to search
+ * @tree_type: 0 for filesystem to client maps
+ *             1 for client to filesystem maps
+ * @id_type: 0 for UID or 1 for GID
+ * @id: numeric id for which to search
  *
- * \param	nodemap		nodemap trees to search
- * \param	tree_type	0 for filesystem to client maps
- *				1 for client to filesystem maps
- * \param	id_type		0 for UID
- *				1 for GID
- * \param	id		numeric id for which to search
- *
- * \retval	lu_idmap structure with the map on success
+ * Returns lu_idmap structure with the map on success
  */
 struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			      enum nodemap_tree_type tree_type,
