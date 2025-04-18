@@ -63,7 +63,7 @@ struct batch_work_resend {
 	int				 bwr_index;
 };
 
-/**
+/*
  * Prepare inline update request
  *
  * Prepare BUT update ptlrpc inline request, and the request usuanlly includes
@@ -238,7 +238,7 @@ static int batch_update_buffer_create(struct batch_update_head *head,
 	return 0;
 }
 
-/**
+/*
  * Destroy an @object_update_callback.
  */
 static void object_update_callback_fini(struct object_update_callback *ouc)
@@ -248,7 +248,7 @@ static void object_update_callback_fini(struct object_update_callback *ouc)
 	OBD_FREE_PTR(ouc);
 }
 
-/**
+/*
  * Insert an @object_update_callback into the the @batch_update_head.
  *
  * Usually each update in @batch_update_head will have one correspondent
@@ -273,7 +273,7 @@ batch_insert_update_callback(struct batch_update_head *head, void *data,
 	return 0;
 }
 
-/**
+/*
  * Allocate and initialize batch update request.
  *
  * @batch_update_head is being used to track updates being executed on
