@@ -9660,16 +9660,6 @@ static int print_one_quota(char *mnt, char *name, struct if_quotactl *qctl,
 	__u64 total_ialloc = 0, total_balloc = 0;
 	int inacc;
 
-	if (!param->qp_show_default && qctl->qc_id == 0) {
-		qctl->qc_dqblk.dqb_bhardlimit = 0;
-		qctl->qc_dqblk.dqb_bsoftlimit = 0;
-		qctl->qc_dqblk.dqb_ihardlimit = 0;
-		qctl->qc_dqblk.dqb_isoftlimit = 0;
-		qctl->qc_dqblk.dqb_btime = 0;
-		qctl->qc_dqblk.dqb_itime = 0;
-		qctl->qc_dqblk.dqb_valid |= QIF_LIMITS | QIF_TIMES;
-	}
-
 	if (qctl->qc_dqblk.dqb_valid & QIF_BTIME &&
 	    LQUOTA_FLAG(qctl->qc_dqblk.dqb_btime) & LQUOTA_FLAG_DEFAULT)
 		qctl->qc_dqblk.dqb_btime &= LQUOTA_GRACE_MASK;

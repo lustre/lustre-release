@@ -6906,6 +6906,68 @@ test_93()
 }
 run_test 93 "update projid while client write to OST"
 
+test_95() {
+	local cmd="do_facet mgs $LCTL get_param -n "
+	local squash=100
+	local off=100000
+	local lim=70000
+	local nm="nm0"
+	local ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local nid=$(h2nettype $ip)
+
+	$LFS setquota -u $off -B1025 $DIR ||
+		error "Can't setquota for uid $off"
+	stack_trap "$LFS setquota -u $off -B0 $DIR"
+	$LFS setquota -g $off -B1026 $DIR ||
+		error "Can't setquota for gid $off"
+	stack_trap "$LFS setquota -g $off -B0 $DIR"
+	$LFS setquota -p $((off + squash)) -B1027 $DIR ||
+		error "Can't setquota for project $((off + squash))"
+	stack_trap "$LFS setquota -p $((off + squash)) -B0 $DIR"
+
+	local act=$($cmd nodemap.active)
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+	stack_trap "do_facet mgs $LCTL nodemap_activate $act; \
+		    wait_nm_sync active"
+
+	do_facet mgs $LCTL nodemap_add $nm ||
+		error "unable to add $nm as nodemap"
+	stack_trap "do_facet mgs $LCTL nodemap_del $nm"
+
+	do_facet mgs $LCTL nodemap_add_range --name $nm --range $nid ||
+		error "Add range $nid to $nm failed"
+
+	do_facet mgs "$LCTL nodemap_modify --name $nm \
+		--property squash_uid --value $squash"
+
+	do_facet mgs "$LCTL nodemap_modify --name $nm \
+		--property squash_gid --value $squash"
+
+	do_facet mgs "$LCTL nodemap_modify --name $nm \
+		--property squash_projid --value $squash"
+
+	do_facet mgs $LCTL nodemap_add_offset --name $nm \
+		--offset $off --limit $lim ||
+			error "cannot set offset $off-$((lim + off - 1))"
+
+	do_facet mgs $LCTL nodemap_modify --name $nm --property admin --value 1
+	wait_nm_sync $nm admin_nodemap
+
+	$LFS quota -u 0 $DIR
+	(( $($LFS quota -q -u 0 --bhardlimit $DIR) == 1025 )) ||
+		error "Wrong user limit for squashed root"
+
+	$LFS quota -g 0 $DIR
+	(( $($LFS quota -q -g 0 --bhardlimit $DIR) == 1026 )) ||
+		error "Wrong group limit for squashed root"
+
+	$LFS quota -p 0 $DIR
+	(( $($LFS quota -q -p 0 --bhardlimit $DIR) == 1027 )) ||
+		error "Wrong proj limit for squashed root"
+}
+run_test 95 "Correct limits for squashed root"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \
