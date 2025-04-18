@@ -711,9 +711,9 @@ static inline __u32 lustre_msg_buflen_v2(struct lustre_msg_v2 *m, __u32 n)
 }
 
 /**
- * lustre_msg_buflen - return the length of buffer \a n in message \a m
- * \param m lustre_msg (request or reply) to look at
- * \param n message index (base 0)
+ * lustre_msg_buflen() - return the length of buffer @n in message @m
+ * @m: lustre_msg (request or reply) to look at
+ * @n: message index (base 0)
  *
  * returns zero for non-existent message indices
  */
@@ -1703,9 +1703,21 @@ void ptlrpc_request_set_replen(struct ptlrpc_request *req)
 EXPORT_SYMBOL(ptlrpc_request_set_replen);
 
 /**
- * Send a remote set_info_async.
+ * do_set_info_async() - Send a remote set_info_async.
+ * @imp: import object
+ * @opcode: operation type
+ * @version: operation version
+ * @keylen: length of key
+ * @key: pointer to key
+ * @vallen: length of value
+ * @val: pointer to value
+ * @set: pointer to ptlrpc_request_set (request to be added)
  *
  * This may go from client to server or server to client.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int do_set_info_async(struct obd_import *imp,
 		      int opcode, int version,

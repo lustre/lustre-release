@@ -166,7 +166,7 @@ ptlrpcd_select_pc(struct ptlrpc_request *req)
 	return &pd->pd_threads[idx];
 }
 
-/**
+/*
  * Return transferred RPCs count.
  */
 static int ptlrpcd_steal_rqset(struct ptlrpc_request_set *des,
@@ -191,6 +191,9 @@ static int ptlrpcd_steal_rqset(struct ptlrpc_request_set *des,
 }
 
 /**
+ * ptlrpcd_add_req() - Requests that are added to the ptlrpcd queue
+ * @req: request to add to ptlrpcd
+ *
  * Requests that are added to the ptlrpcd queue are sent via
  * ptlrpcd_check->ptlrpc_check_set().
  */
@@ -350,9 +353,15 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 }
 
 /**
- * Main ptlrpcd thread.
+ * ptlrpcd() - Main ptlrpcd thread.
+ * @arg: pointer to struct ptlrpcd_ctl
+ *
  * ptlrpc's code paths like to execute in process context, so we have this
  * thread which spins on a set which contains the rpcs and sends them.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int ptlrpcd(void *arg)
 {
