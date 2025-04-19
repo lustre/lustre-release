@@ -17,13 +17,14 @@
 
 
 /**
+ * nm_member_del() - Delete an export from a nodemap's member list
+ * @nodemap: nodemap containing list
+ * @exp: export member to delete
+ *
  * Delete an export from a nodemap's member list. Called after client
  * disconnects, or during system shutdown.
  *
- * Requires active_config_lock and nodemap's nm_member_list_lock.
- *
- * \param	nodemap		nodemap containing list
- * \param	exp		export member to delete
+ * Note: Requires active_config_lock and nodemap's nm_member_list_lock.
  */
 void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp)
 {
@@ -49,11 +50,10 @@ void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp)
 }
 
 /**
- * Delete a member list from a nodemap
+ * nm_member_delete_list() - Delete a member list from a nodemap
+ * @nodemap: nodemap to remove the list from
  *
  * Requires active config lock.
- *
- * \param	nodemap		nodemap to remove the list from
  */
 void nm_member_delete_list(struct lu_nodemap *nodemap)
 {
@@ -68,14 +68,16 @@ void nm_member_delete_list(struct lu_nodemap *nodemap)
 }
 
 /**
- * Add a member export to a nodemap
+ * nm_member_add() - Add a member export to a nodemap
+ * @nodemap: nodemap to add to
+ * @exp: obd_export to add
  *
  * Must be called under active_config_lock.
  *
- * \param	nodemap		nodemap to add to
- * \param	exp		obd_export to add
- * \retval	-EEXIST		export is already part of a different nodemap
- * \retval	-EINVAL		export is NULL
+ * Return:
+ * * %0 on sucessful add
+ * * %-EEXIST export is already part of a different nodemap
+ * * %-EINVAL export is NULL
  */
 int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp)
 {
@@ -119,7 +121,7 @@ int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp)
 	RETURN(0);
 }
 
-/**
+/*
  * Revokes the locks on an export if it is attached to an MDT and not in
  * recovery. As a performance enhancement, the lock revoking process could
  * revoke only the locks that cover files affected by the nodemap change.
@@ -136,6 +138,9 @@ static void nm_member_exp_revoke(struct obd_export *exp)
 }
 
 /**
+ * nm_member_reclassify_nodemap() - Reclassify members of a nodemap
+ * @nodemap: nodemap with members to reclassify
+ *
  * Reclassify the members of a nodemap after range changes or activation.
  * This function reclassifies the members of a nodemap based on the member
  * export's NID and the nodemap's new NID ranges. Exports that are no longer
@@ -144,8 +149,6 @@ static void nm_member_exp_revoke(struct obd_export *exp)
  *
  * Callers should hold the active_config_lock and active_config
  * nmc_range_tree_lock.
- *
- * \param	nodemap		nodemap with members to reclassify
  */
 void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 {
@@ -209,13 +212,13 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 }
 
 /**
- * Revoke the locks for member exports if nodemap system is active.
+ * nm_member_revoke_locks() - Revoke the locks for member exports if nodemap
+ * system is active.
+ * @nodemap: nodemap that has been altered
  *
  * Changing the idmap is akin to deleting the security context. If the locks
  * are not canceled, the client could cache permissions that are no longer
  * correct with the map.
- *
- * \param	nodemap		nodemap that has been altered
  */
 void nm_member_revoke_locks(struct lu_nodemap *nodemap)
 {

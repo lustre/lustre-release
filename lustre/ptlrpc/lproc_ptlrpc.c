@@ -452,9 +452,10 @@ static ssize_t threads_max_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(threads_max);
 
 /**
- * Translates \e ptlrpc_nrs_pol_state values to human-readable strings.
+ * nrs_state2str() - Translates @state values to human-readable strings.
+ * @state: The policy state
  *
- * \param[in] state The policy state
+ * Returns char *(string) correspoding to @state or NULl
  */
 static const char *nrs_state2str(enum ptlrpc_nrs_pol_state state)
 {
@@ -476,12 +477,11 @@ static const char *nrs_state2str(enum ptlrpc_nrs_pol_state state)
 }
 
 /**
- * Obtains status information for \a policy.
+ * nrs_policy_get_info_locked() - Obtains status information for @policy.
+ * @policy: The policy
+ * @info: Holds returned status information [out]
  *
- * Information is copied in \a info.
- *
- * \param[in] policy The policy
- * \param[out] info  Holds returned status information
+ * Information is copied in @info.
  */
 static void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
 				       struct ptlrpc_nrs_pol_info *info)
@@ -504,7 +504,7 @@ static void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
 	info->pi_req_started = policy->pol_req_started;
 }
 
-/**
+/*
  * Reads and prints policy status information for all policies of a PTLRPC
  * service.
  */
@@ -689,14 +689,14 @@ out:
 }
 
 #define LPROCFS_NRS_WR_MAX_ARG (1024)
-/**
+/*
  * The longest valid command string is the maxium policy name size, plus the
  * length of the " reg" substring, plus the lenght of argument
  */
 #define LPROCFS_NRS_WR_MAX_CMD (NRS_POL_NAME_MAX + sizeof(" reg") - 1 + \
 				LPROCFS_NRS_WR_MAX_ARG)
 
-/**
+/*
  * Starts and stops a given policy on a PTLRPC service.
  *
  * Commands consist of the policy name, followed by an optional [reg|hp] token;
