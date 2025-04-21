@@ -6,7 +6,7 @@ TBD Whamcloud
          5.14.0-503.31.1.el9  (RHEL9.5)
          5.14.0-427.42.1.el9  (RHEL9.4)
          5.14.0-362.24.1.el9  (RHEL9.3)
-         4.18.0-553.46.1.el8  (RHEL8.10)
+         4.18.0-553.50.1.el8  (RHEL8.10)
          4.18.0-513.24.1.el8  (RHEL8.9)
          4.18.0-477.27.1.el8  (RHEL8.8)
        * Other server kernels known to build and work at some point (others may also work):
@@ -46,7 +46,7 @@ TBD Whamcloud
          5.14.0-503.31.1.el9  (RHEL9.5)
          5.14.0-427.42.1.el9  (RHEL9.4)
          5.14.0-362.24.1.el9  (RHEL9.3)
-         4.18.0-553.46.1.el8  (RHEL8.10)
+         4.18.0-553.50.1.el8  (RHEL8.10)
          4.18.0-513.24.1.el8  (RHEL8.9)
          4.18.0-477.27.1.el8  (RHEL8.8)
          5.15.0-88            (Ubuntu 22.04)
@@ -87,7 +87,7 @@ TBD Whamcloud
          5.11.0-31            (Ubuntu 20.04.3 HWE)
          5.11.0               (vanilla kernel.org)
          5.10.0               (openEuler 22.03 LTS)
-       * Recommended e2fsprogs version: 1.47.1-wc1 or newer
+       * Recommended e2fsprogs version: 1.47.2-wc1 or newer
        * Recommended ZFS version: 2.2.6
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
