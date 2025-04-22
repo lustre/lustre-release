@@ -2507,6 +2507,8 @@ void cl_sync_io_init_notify(struct cl_sync_io *anchor, int nr, void *dio_aio,
 
 int cl_sync_io_wait(const struct lu_env *env, struct cl_sync_io *anchor,
 		    long timeout);
+void __cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
+		       int count, int ioret);
 void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		     int ioret);
 int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,

@@ -1789,19 +1789,30 @@ EXPORT_SYMBOL(ll_dio_user_copy);
 /*
  * Indicate that transfer of a single page completed.
  */
-void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
-		     int ioret)
+void __cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
+		       int count, int ioret)
 {
+	int sync_nr;
+
 	ENTRY;
 
 	if (anchor->csi_sync_rc == 0 && ioret < 0)
 		anchor->csi_sync_rc = ioret;
+
+	/* because there is no atomic_sub_and_lock, we have to do this slightly
+	 * awkward subtraction when we have count > 1, handling all but 1 of
+	 * our 'count' entries
+	 */
+	if (count > 1)
+		sync_nr = atomic_sub_return(count - 1, &anchor->csi_sync_nr);
+	else
+		sync_nr = atomic_read(&anchor->csi_sync_nr);
 	/*
 	 * Synchronous IO done without releasing page lock (e.g., as a part of
 	 * ->{prepare,commit}_write(). Completion is used to signal the end of
 	 * IO.
 	 */
-	LASSERT(atomic_read(&anchor->csi_sync_nr) > 0);
+	LASSERT(sync_nr > 0);
 	LASSERT(atomic_read(&anchor->csi_complete) == 0);
 	if (atomic_dec_and_lock(&anchor->csi_sync_nr,
 				&anchor->csi_waitq.lock)) {
@@ -1854,6 +1865,13 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		}
 	}
 	EXIT;
+}
+EXPORT_SYMBOL(__cl_sync_io_note);
+
+void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
+		     int ioret)
+{
+	__cl_sync_io_note(env, anchor, 1, ioret);
 }
 EXPORT_SYMBOL(cl_sync_io_note);
 
