@@ -19,6 +19,7 @@ init_logging
 
 ALWAYS_EXCEPT="$SANITY_LNET_EXCEPT "
 always_except LU-10391 253 254
+always_except LU-18751 410
 
 [[ "$SLOW" = "no" ]] && EXCEPT_SLOW=""
 
