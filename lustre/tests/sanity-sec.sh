@@ -5516,7 +5516,7 @@ cleanup_local_client_nodemap() {
 	fi
 }
 
-cleanup_55() {
+cleanup_local_client_nodemap_with_mounts() {
 	# unmount client
 	if is_mounted $MOUNT; then
 		umount_client $MOUNT || error "umount $MOUNT failed"
@@ -5556,7 +5556,7 @@ test_55() {
 	do_nodes $(comma_list $(all_mdts_nodes)) \
 		$LCTL set_param mdt.*.identity_upcall=NONE
 
-	stack_trap cleanup_55 EXIT
+	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
 
 	setup_local_client_nodemap "c0" 0 1
 
@@ -8036,6 +8036,57 @@ test_76() {
 		error "touch $DIR/$tdir/fileA as $user failed"
 }
 run_test 76 "suppgroups and gid mapping"
+
+test_77() {
+	local squash=100
+	local nm=c0
+
+	(( $MDS1_VERSION >= $(version_code 2.16.54) )) ||
+		skip "Need MDS version >= 2.16.54 for proper root offsetting"
+
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_upcall=NONE
+
+	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
+
+	# create dir before nodemap create
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# setup nodemap with offset
+	setup_local_client_nodemap $nm 1 0
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property squash_uid --value $squash ||
+		error "Setting squash_uid=$squash on $nm failed"
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property squash_gid --value $squash ||
+		error "Setting squash_gid=$squash on $nm failed"
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property squash_projid --value $squash ||
+		error "Setting squash_projid=$squash on $nm failed"
+	do_facet mgs $LCTL nodemap_add_offset --name $nm \
+		--offset 100000 --limit 200000 ||
+			error "nodemap_add_offset failed"
+	wait_nm_sync $nm offset
+
+	# remount client to take nodemap into account
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount failed"
+	wait_ssk
+
+	# create a file as root...
+	touch $DIR/$tdir/fileA
+	# the owner:group ids read back should be 0:0
+	ls -ln $DIR/$tdir/fileA
+	[[ $(stat -c "%u:%g" $DIR/$tdir/fileA) == "0:0" ]] ||
+		error "bad owner/group for root file"
+}
+run_test 77 "root offsetting"
 
 log "cleanup: ======================================================"
 

@@ -866,44 +866,74 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	ENTRY;
 
 	if (!nodemap_active)
-		goto out;
+		GOTO(out, found_id);
 
 	if (unlikely(nodemap == NULL))
-		goto out;
+		GOTO(out, found_id);
 
-	if (id_type != NODEMAP_PROJID && id == 0) {
+	if (id_type == NODEMAP_UID) {
+		offset_start = nodemap->nm_offset_start_uid;
+		offset_limit = nodemap->nm_offset_limit_uid;
+	} else if (id_type == NODEMAP_GID) {
+		offset_start = nodemap->nm_offset_start_uid;
+		offset_limit = nodemap->nm_offset_limit_gid;
+	} else if (id_type == NODEMAP_PROJID) {
+		offset_start = nodemap->nm_offset_start_projid;
+		offset_limit = nodemap->nm_offset_limit_projid;
+	} else {
+		CERROR("%s: nodemap invalid id_type provided\n",
+		       nodemap->nm_name);
+		GOTO(out, found_id);
+	}
+
+	/* if mapping from fs to client id space, start by un-offsetting */
+	if ((offset_start != 0 || offset_limit != 0) &&
+	    tree_type == NODEMAP_FS_TO_CLIENT) {
+		if (found_id < offset_start ||
+		    found_id >= offset_start + offset_limit) {
+			/* If we are outside boundaries, squash id */
+			CDEBUG(D_SEC,
+			       "%s: id %d for type %u is below nodemap start %u, squash\n",
+			       nodemap->nm_name, found_id, id_type,
+			       offset_start);
+			GOTO(squash, found_id);
+		}
+		found_id -= offset_start;
+	}
+
+	if (id_type != NODEMAP_PROJID && found_id == 0) {
 		/* root id is mapped and offset just as the other ids. This
 		 * means root cannot remain root as soon as offset is defined.
 		 */
 		if (nodemap->nmf_allow_root_access)
-			goto offset;
-		goto map;
+			GOTO(offset, found_id);
+		GOTO(map, found_id);
 	}
 
 	if (id_type == NODEMAP_UID &&
 	    !(nodemap->nmf_map_mode & NODEMAP_MAP_UID))
-		goto offset;
+		GOTO(offset, found_id);
 
 	if (id_type == NODEMAP_GID &&
 	    !(nodemap->nmf_map_mode & NODEMAP_MAP_GID))
-		goto offset;
+		GOTO(offset, found_id);
 
 	if (id_type == NODEMAP_PROJID &&
 	    !(nodemap->nmf_map_mode & NODEMAP_MAP_PROJID))
-		goto offset;
+		GOTO(offset, found_id);
 
 	if (nodemap->nmf_trust_client_ids)
-		goto offset;
+		GOTO(offset, found_id);
 
 map:
 	if (is_default_nodemap(nodemap))
-		goto squash;
+		GOTO(squash, found_id);
 
 	down_read(&nodemap->nm_idmap_lock);
-	idmap = idmap_search(nodemap, tree_type, id_type, id);
+	idmap = idmap_search(nodemap, tree_type, id_type, found_id);
 	if (idmap == NULL) {
 		up_read(&nodemap->nm_idmap_lock);
-		goto squash;
+		GOTO(squash, found_id);
 	}
 
 	if (tree_type == NODEMAP_FS_TO_CLIENT)
@@ -921,47 +951,22 @@ squash:
 	else if (id_type == NODEMAP_PROJID)
 		found_id = nodemap->nm_squash_projid;
 	attempted_squash = true;
+
 offset:
-	if (id_type == NODEMAP_UID) {
-		offset_start = nodemap->nm_offset_start_uid;
-		offset_limit = nodemap->nm_offset_limit_uid;
-	} else if (id_type == NODEMAP_GID) {
-		offset_start = nodemap->nm_offset_start_uid;
-		offset_limit = nodemap->nm_offset_limit_gid;
-	} else if (id_type == NODEMAP_PROJID) {
-		offset_start = nodemap->nm_offset_start_projid;
-		offset_limit = nodemap->nm_offset_limit_projid;
-	} else {
-		CERROR("%s: nodemap invalid id_type provided\n",
-		       nodemap->nm_name);
-		GOTO(out, id);
-	}
-
-	if (offset_start == 0 && offset_limit == 0)
-		GOTO(out, found_id);
-
-	if (tree_type == NODEMAP_FS_TO_CLIENT) {
-		if (found_id < offset_start) {
-			/* If we are outside boundaries, try to squash before
-			 * offsetting, and return unmapped otherwise.
-			 */
-			if (!attempted_squash)
-				GOTO(squash, found_id);
-
-			CDEBUG(D_SEC,
-			       "%s: squash_id for type %u is below nodemap start %u, use unmapped value %u\n",
-			       nodemap->nm_name, id_type, offset_start,
-			       found_id);
-			GOTO(out, found_id);
-		}
-		found_id -= offset_start;
-	} else {
+	/* if mapping from client to fs id space, end with offsetting */
+	if ((offset_start != 0 || offset_limit != 0) &&
+	    tree_type == NODEMAP_CLIENT_TO_FS) {
 		if (found_id >= offset_limit) {
 			/* If we are outside boundaries, try to squash before
 			 * offsetting, and return unmapped otherwise.
 			 */
-			if (!attempted_squash)
+			if (!attempted_squash) {
+				CDEBUG(D_SEC,
+				       "%s: id %d for type %u is outside nodemap limit %u, squash\n",
+				       nodemap->nm_name, found_id, id_type,
+				       offset_limit);
 				GOTO(squash, found_id);
+			}
 
 			CDEBUG(D_SEC,
 			       "%s: squash_id for type %u is outside nodemap limit %u, use unmapped value %u\n",
