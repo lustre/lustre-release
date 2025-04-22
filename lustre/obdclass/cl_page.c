@@ -1032,6 +1032,22 @@ out:
 }
 EXPORT_SYMBOL(cl_page_prep);
 
+/* this is the equivalent of cl_page_completion for a dio pages struct, but is
+ * much simpler - in fact, it only needs to note the completion in the sync io
+ */
+void cl_dio_pages_completion(const struct lu_env *env,
+			     struct cl_dio_pages *cdp, int count, int ioret)
+{
+	struct cl_sub_dio *sdio = container_of(cdp, struct cl_sub_dio,
+					       csd_dio_pages);
+	ENTRY;
+
+	__cl_sync_io_note(env, &sdio->csd_sync, count, ioret);
+
+	EXIT;
+}
+EXPORT_SYMBOL(cl_dio_pages_completion);
+
 /**
  * Notify layers about transfer completion.
  *

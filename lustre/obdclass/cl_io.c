@@ -1807,6 +1807,10 @@ void __cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		sync_nr = atomic_sub_return(count - 1, &anchor->csi_sync_nr);
 	else
 		sync_nr = atomic_read(&anchor->csi_sync_nr);
+
+	CDEBUG(D_VFSTRACE,
+	       "Noting completion of %d items, %d items remaining.\n",
+	       count, sync_nr - 1);
 	/*
 	 * Synchronous IO done without releasing page lock (e.g., as a part of
 	 * ->{prepare,commit}_write(). Completion is used to signal the end of

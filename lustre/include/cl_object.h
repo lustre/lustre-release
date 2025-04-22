@@ -2259,12 +2259,14 @@ int cl_page_is_owned(const struct cl_page *pg, const struct cl_io *io);
  */
 int cl_page_prep(const struct lu_env *env, struct cl_io *io,
 		 struct cl_page *pg, enum cl_req_type crt);
-void cl_page_completion(const struct lu_env *env, struct cl_page *pg,
-			 enum cl_req_type crt, int ioret);
+void cl_dio_pages_completion(const struct lu_env *env, struct cl_dio_pages *pg,
+			     int count, int ioret);
+void cl_page_completion(const struct lu_env *env,
+			struct cl_page *pg, enum cl_req_type crt, int ioret);
 int cl_page_make_ready(const struct lu_env *env, struct cl_page *pg,
 		       enum cl_req_type crt);
-void cl_page_clip(const struct lu_env *env, struct cl_page *pg,
-		  int from, int to);
+void cl_page_clip(const struct lu_env *env, struct cl_page *pg, int from,
+		  int to);
 int cl_page_flush(const struct lu_env *env, struct cl_io *io,
 		  struct cl_page *pg);
 
@@ -2556,6 +2558,7 @@ struct cl_dio_pages {
 	struct page		**cdp_pages;
 
 	struct cl_page		**cdp_cl_pages;
+	struct cl_sync_io	*cdp_sync_io;
 	struct cl_2queue	cdp_queue;
 	/* the file offset of the first page. */
 	loff_t                  cdp_file_offset;
