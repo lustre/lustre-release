@@ -62,9 +62,6 @@ static int lbug_on_grant_miscount;
 module_param(lbug_on_grant_miscount, int, 0644);
 MODULE_PARM_DESC(lbug_on_grant_miscount, "LBUG on grant miscount");
 
-/* Clients typically hold 2x their max_rpcs_in_flight of grant space */
-#define TGT_GRANT_SHRINK_LIMIT(exp)	(2ULL * 8 * exp_max_brw_size(exp))
-
 /* Helpers to inflate/deflate grants for clients that do not support the grant
  * parameters */
 static inline u64 tgt_grant_inflate(struct tg_grants_data *tgd, u64 val)
@@ -588,8 +585,9 @@ static void tgt_grant_shrink(struct obd_export *exp, struct obdo *oa,
 
 	assert_spin_locked(&tgd->tgd_grant_lock);
 	LASSERT(exp);
-	if (left_space >= tgd->tgd_tot_granted_clients *
-			  TGT_GRANT_SHRINK_LIMIT(exp))
+
+	/* don't need to shrink grant if it uses less than 25% of left space */
+	if (tgd->tgd_tot_granted * 4 < left_space)
 		return;
 
 	grant_shrink = oa->o_grant;
