@@ -886,7 +886,10 @@ static inline bool lov_pool_is_reserved(const char *pool)
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
 	struct ost_id l_ost_oi;   /* OST object ID */
-	__u32 l_ost_gen;          /* generation of this OST index */
+	union {
+		__u32 l_ost_type; /* type of data stored in OST object */
+		__u32 l_ost_gen;  /* generation of this OST index */
+	};
 	__u32 l_ost_idx;          /* OST index in LOV */
 } __attribute__((packed));
 

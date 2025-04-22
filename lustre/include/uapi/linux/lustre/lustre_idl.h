@@ -850,7 +850,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_MIRROR_ID_FIX     0x2000000000ULL /* rr_mirror_id move */
 #define OBD_CONNECT2_UPDATE_LAYOUT     0x4000000000ULL /* update compressibility */
 #define OBD_CONNECT2_READDIR_OPEN	0x8000000000ULL /* read first dir page on open */
-
+#define OBD_CONNECT2_FLR_EC	       0x10000000000ULL	/* parity support */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.  Email adilger@whamcloud.com
@@ -1232,7 +1232,10 @@ enum obdo_flags {
 #define lov_ost_data lov_ost_data_v1
 struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
 	struct ost_id l_ost_oi;	  /* OST object ID */
-	__u32 l_ost_gen;          /* generation of this l_ost_idx */
+	union {
+		__u32 l_ost_type; /* type of data stored in OST object */
+		__u32 l_ost_gen;  /* generation of this l_ost_idx */
+	};
 	__u32 l_ost_idx;          /* OST index in LOV (lov_tgt_desc->tgts) */
 };
 
