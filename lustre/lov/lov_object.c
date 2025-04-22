@@ -47,6 +47,9 @@ struct lov_layout_operations {
 			  lu_printer_t p, const struct lu_object *o);
 	int  (*llo_page_init)(const struct lu_env *env, struct cl_object *obj,
 			      struct cl_page *page, pgoff_t index);
+	int  (*llo_dio_pages_init)(const struct lu_env *env,
+				   struct cl_object *obj,
+				   struct cl_dio_pages *cdp, pgoff_t index);
 	int  (*llo_lock_init)(const struct lu_env *env,
 			      struct cl_object *obj, struct cl_lock *lock,
 			      const struct cl_io *io);
@@ -1125,6 +1128,7 @@ static const struct lov_layout_operations lov_dispatch[] = {
 		.llo_fini      = lov_fini_empty,
 		.llo_print     = lov_print_empty,
 		.llo_page_init = lov_page_init_empty,
+		.llo_dio_pages_init = lov_dio_pages_init_empty,
 		.llo_lock_init = lov_lock_init_empty,
 		.llo_io_init   = lov_io_init_empty,
 		.llo_getattr   = lov_attr_get_empty,
@@ -1136,6 +1140,7 @@ static const struct lov_layout_operations lov_dispatch[] = {
 		.llo_fini      = lov_fini_released,
 		.llo_print     = lov_print_released,
 		.llo_page_init = lov_page_init_empty,
+		.llo_dio_pages_init = lov_dio_pages_init_empty,
 		.llo_lock_init = lov_lock_init_empty,
 		.llo_io_init   = lov_io_init_released,
 		.llo_getattr   = lov_attr_get_released,
@@ -1147,6 +1152,7 @@ static const struct lov_layout_operations lov_dispatch[] = {
 		.llo_fini      = lov_fini_composite,
 		.llo_print     = lov_print_composite,
 		.llo_page_init = lov_page_init_composite,
+		.llo_dio_pages_init = lov_dio_pages_init_composite,
 		.llo_lock_init = lov_lock_init_composite,
 		.llo_io_init   = lov_io_init_composite,
 		.llo_getattr   = lov_attr_get_composite,
@@ -1158,6 +1164,7 @@ static const struct lov_layout_operations lov_dispatch[] = {
 		.llo_fini      = lov_fini_released,
 		.llo_print     = lov_print_foreign,
 		.llo_page_init = lov_page_init_foreign,
+		.llo_dio_pages_init = lov_dio_pages_init_foreign,
 		.llo_lock_init = lov_lock_init_empty,
 		.llo_io_init   = lov_io_init_empty,
 		.llo_getattr   = lov_attr_get_empty,
@@ -1564,6 +1571,13 @@ static int lov_page_init(const struct lu_env *env, struct cl_object *obj,
 {
 	return LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_page_init, env, obj, page,
 				    index);
+}
+
+static int lov_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
+			 struct cl_dio_pages *cdp, pgoff_t index)
+{
+	return LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_dio_pages_init, env, obj,
+				    cdp, index);
 }
 
 /**
@@ -2312,6 +2326,7 @@ static int lov_object_flush(const struct lu_env *env, struct cl_object *obj,
 
 static const struct cl_object_operations lov_ops = {
 	.coo_page_init    = lov_page_init,
+	.coo_dio_pages_init = lov_dio_pages_init,
 	.coo_lock_init    = lov_lock_init,
 	.coo_io_init      = lov_io_init,
 	.coo_attr_get     = lov_attr_get,

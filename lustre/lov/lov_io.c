@@ -1348,7 +1348,7 @@ static int lov_dio_submit(const struct lu_env *env,
 		struct cl_2queue  *cl2q = &lov_env_info(env)->lti_cl2q;
 
 		page = cl_page_list_first(qin);
-		if (lov_page_is_empty(page)) {
+		if (lov_pages_is_empty(cdp)) {
 			cl_page_list_move(&queue->c2_qout, qin, page);
 
 			/*

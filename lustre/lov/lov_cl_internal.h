@@ -556,11 +556,24 @@ enum {
 	CP_LOV_INDEX_EMPTY = -1U,
 };
 
+static inline bool lov_pages_is_empty(struct cl_dio_pages *cdp)
+{
+	return cdp->cdp_lov_index == CP_LOV_INDEX_EMPTY;
+}
+
 static inline bool lov_page_is_empty(const struct cl_page *cp)
 {
 	return cp->cp_lov_index == CP_LOV_INDEX_EMPTY;
 }
 
+
+int lov_dio_pages_init_empty(const struct lu_env *env, struct cl_object *obj,
+			     struct cl_dio_pages *cdp, pgoff_t index);
+int lov_dio_pages_init_composite(const struct lu_env *env,
+				 struct cl_object *obj,
+				 struct cl_dio_pages *cdp, pgoff_t index);
+int lov_dio_pages_init_foreign(const struct lu_env *env, struct cl_object *obj,
+			       struct cl_dio_pages *cdp, pgoff_t index);
 int   lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
 			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
