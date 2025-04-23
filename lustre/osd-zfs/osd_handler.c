@@ -88,7 +88,7 @@ static void arc_prune_func(int64_t bytes, void *private)
 		return;
 	}
 
-	lu_site_purge(&env, site, (bytes >> 10));
+	lu_site_limit(&env, site, (bytes >> 10));
 
 	lu_env_fini(&env);
 }

@@ -737,6 +737,8 @@ void lu_object_unhash(const struct lu_env *env, struct lu_object *o);
 int lu_site_purge_objects(const struct lu_env *env, struct lu_site *s, int nr,
 			  int canblock);
 
+void lu_site_limit(const struct lu_env *env, struct lu_site *s, u64 limit);
+
 static inline int lu_site_purge(const struct lu_env *env, struct lu_site *s,
 				int nr)
 {

@@ -62,11 +62,9 @@ enum {
 	LU_CACHE_PERCENT_DEFAULT = 20
 };
 
-#define	LU_CACHE_NR_MAX_ADJUST		512
+#define	LU_CACHE_NR_MAX_ADJUST		1024
 #define	LU_CACHE_NR_UNLIMITED		-1
 #define	LU_CACHE_NR_DEFAULT		LU_CACHE_NR_UNLIMITED
-/** This is set to roughly (20 * OSS_NTHRS_MAX) to prevent thrashing */
-#define	LU_CACHE_NR_ZFS_LIMIT		10240
 
 #define	LU_CACHE_NR_MIN			4096
 #define	LU_CACHE_NR_MAX			0x80000000UL
@@ -622,23 +620,30 @@ int lu_object_invariant(const struct lu_object *o)
  * maximum number of objects is capped by LU_CACHE_MAX_ADJUST.  This ensures
  * that many concurrent threads will not accidentally purge the entire cache.
  */
-static void lu_object_limit(const struct lu_env *env,
-			    struct lu_device *dev)
+void lu_site_limit(const struct lu_env *env, struct lu_site *s,
+		   u64 nr)
 {
-	u64 size, nr;
+	u64 size;
 
-	if (lu_cache_nr == LU_CACHE_NR_UNLIMITED)
+	if (nr == LU_CACHE_NR_UNLIMITED)
 		return;
 
-	size = atomic_read(&dev->ld_site->ls_obj_hash.nelems);
-	nr = (u64)lu_cache_nr;
+	size = atomic_read(&s->ls_obj_hash.nelems);
 	if (size <= nr)
 		return;
 
-	lu_site_purge_objects(env, dev->ld_site,
+	lu_site_purge_objects(env, s,
 			      min_t(u64, size - nr, LU_CACHE_NR_MAX_ADJUST),
 			      0);
 }
+EXPORT_SYMBOL(lu_site_limit);
+
+static void lu_object_limit(const struct lu_env *env,
+			    struct lu_device *dev)
+{
+	lu_site_limit(env, dev->ld_site, (u64)lu_cache_nr);
+}
+
 
 static struct lu_object *htable_lookup(const struct lu_env *env,
 				       struct lu_device *dev,
@@ -999,17 +1004,6 @@ EXPORT_SYMBOL(lu_site_print);
 static void lu_htable_limits(struct lu_device *top)
 {
 	unsigned long cache_size;
-
-	/*
-	 * For ZFS based OSDs the cache should be disabled by default.  This
-	 * allows the ZFS ARC maximum flexibility in determining what buffers
-	 * to cache.  If Lustre has objects or buffer which it wants to ensure
-	 * always stay cached it must maintain a hold on them.
-	 */
-	if (strcmp(top->ld_type->ldt_name, LUSTRE_OSD_ZFS_NAME) == 0) {
-		lu_cache_nr = LU_CACHE_NR_ZFS_LIMIT;
-		return;
-	}
 
 	/*
 	 * Calculate hash table size, assuming that we want reasonable

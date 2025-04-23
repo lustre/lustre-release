@@ -28,15 +28,7 @@
 #include <linux/sched/mm.h>
 #endif
 
-#ifdef HAVE_TOTALRAM_PAGES_AS_FUNC
- #ifndef cfs_totalram_pages
-  #define cfs_totalram_pages() totalram_pages()
- #endif
-#else
- #ifndef cfs_totalram_pages
-  #define cfs_totalram_pages() totalram_pages
- #endif
-#endif
+unsigned long cfs_totalram_pages(void);
 
 #ifndef HAVE_MEMALLOC_RECLAIM
 static inline unsigned int memalloc_noreclaim_save(void)
