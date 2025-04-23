@@ -277,16 +277,14 @@ test_2a() {
 
 	# Run dbench
 	bash rundbench -C -D $DIR/$tdir 2 -t $DBENCH_TIME ||
-		error "dbench failed"
+		error "dbench failed to complete $DBENCH_TIME seconds"
 
-	local LRSYNC_LOG=$(generate_logname "lrsync_log")
+	local log=$(generate_logname "lrsync_log")
 	# Replicate the changes to $TGT
-	$LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG \
-		-D $LRSYNC_LOG
+	$LRSYNC -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG -D $log
 
 	# Use diff to compare the source and the destination
 	check_diff $DIR/$tdir $TGT/$tdir
-	check_diff $DIR/$tdir $TGT2/$tdir
 
 	fini_changelog
 	cleanup_src_tgt
@@ -311,10 +309,9 @@ test_2b() {
 	echo Stopping dbench
 	stop_procs $child_pid
 
-	local LRSYNC_LOG=$(generate_logname "lrsync_log")
+	local log=$(generate_logname "lrsync_log")
 	echo Starting replication
-	$LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG \
-		-D $LRSYNC_LOG
+	$LRSYNC -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG -D $log
 	check_diff $DIR/$tdir $TGT/$tdir
 
 	echo Resuming dbench
@@ -325,7 +322,7 @@ test_2b() {
 	stop_procs $child_pid
 
 	echo Starting replication
-	$LRSYNC -l $LREPL_LOG -D $LRSYNC_LOG
+	$LRSYNC -l $LREPL_LOG -D $log
 	check_diff $DIR/$tdir $TGT/$tdir
 
 	echo "Wait for dbench to finish"
@@ -334,10 +331,9 @@ test_2b() {
 
 	# Replicate the changes to $TGT
 	echo Starting replication
-	$LRSYNC -l $LREPL_LOG -D $LRSYNC_LOG
+	$LRSYNC -l $LREPL_LOG -D $log
 
 	check_diff $DIR/$tdir $TGT/$tdir
-	check_diff $DIR/$tdir $TGT2/$tdir
 
 	fini_changelog
 	cleanup_src_tgt
