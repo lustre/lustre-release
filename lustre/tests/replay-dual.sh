@@ -1305,7 +1305,7 @@ test_33() { # LU-15935
 	local at_min_old
 	at_min_old=$(at_min_get ost1)
 	at_min_set 60 ost
-	stack_trap "at_min_set $at_min_old ost"
+	stack_trap "at_min_set $at_min_old ost || true"
 
 	# Clean old locks
 	cancel_lru_locks mdc
