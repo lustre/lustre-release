@@ -1195,17 +1195,44 @@ int server_mti_print(const char *title, struct mgs_target_info *mti)
 }
 EXPORT_SYMBOL(server_mti_print);
 
+struct nid_fetch_data {
+	GENRADIX(struct lnet_nid) nfd_radix;
+	struct lustre_mount_data *nfd_lmd;
+	unsigned int nfd_pos;
+};
+
+static int server_nid2radix(void *data, struct lnet_nid *nid)
+{
+	struct nid_fetch_data *nfd = data;
+	struct lnet_nid *tmp;
+
+	if (nid_is_lo0(nid))
+		return 0;
+
+	if (test_bit(LMD_FLG_NO_PRIMNODE, nfd->nfd_lmd->lmd_flags) &&
+	    class_match_nid(nfd->nfd_lmd->lmd_params, PARAM_FAILNODE, nid) < 1)
+		return 0;
+
+	tmp = genradix_ptr_alloc(&nfd->nfd_radix, nfd->nfd_pos, GFP_KERNEL);
+	if (!tmp)
+		return -ENOMEM;
+	*tmp = *nid;
+	nfd->nfd_pos++;
+
+	return 0;
+}
+
 /* Generate data for registration */
-static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi)
+static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi,
+					      bool registration)
 {
 	size_t len = offsetof(struct mgs_target_info, mti_nidlist);
-	GENRADIX(struct lnet_processid) plist;
-	struct lnet_processid id, *tmp;
+	struct nid_fetch_data nfd;
 	struct mgs_target_info *mti;
 	bool large_nid = false;
-	int nid_count = 0;
-	int rc, i = 0;
-	int cplen = 0;
+	__u32 refnet = LNET_NET_ANY;
+	char *buf;
+	int rc, i = 0, nid_count;
 
 	ENTRY;
 	if (!IS_SERVER(lsi))
@@ -1215,73 +1242,67 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi)
 	    OBD_CONNECT2_LARGE_NID)
 		large_nid = true;
 
-	genradix_init(&plist);
-
-	while (LNetGetId(i++, &id, large_nid) != -ENOENT) {
-		if (nid_is_lo0(&id.nid))
-			continue;
-
-		/* server use --servicenode param, only allow specified
-		 * nids be registered
-		 */
-		if (test_bit(LMD_FLG_NO_PRIMNODE, lsi->lsi_lmd->lmd_flags) &&
-		    class_match_nid(lsi->lsi_lmd->lmd_params,
-				    PARAM_FAILNODE, &id.nid) < 1)
-			continue;
-
-		if (!class_find_param(lsi->lsi_lmd->lmd_params,
-					PARAM_NETWORK, NULL)) {
-			if (LNetGetPeerDiscoveryStatus()) {
-				CERROR("LNet Dynamic Peer Discovery is enabled"
-				       " on this node. 'network' option used in"
-				       " mkfs.lustre cannot be taken into"
-				       " account.\n");
-				GOTO(free_list, mti = ERR_PTR(-EINVAL));
-			}
-		}
-
-		/* match specified network */
-		if (!class_match_net(lsi->lsi_lmd->lmd_params,
-				     PARAM_NETWORK, LNET_NID_NET(&id.nid)))
-			continue;
-
-		tmp = genradix_ptr_alloc(&plist, nid_count++, GFP_KERNEL);
-		if (!tmp)
-			GOTO(free_list, mti = ERR_PTR(-ENOMEM));
-
-		if (large_nid)
-			len += LNET_NIDSTR_SIZE;
-		*tmp = id;
+	buf = lsi->lsi_lmd->lmd_params;
+	/* The 'network' parameter is used on target to define a primary
+	 * network which target uses to communicate with others targets,
+	 * but it shouldn't restrict clients access to that target.
+	 * So upon registration network filtering is needed to produce configs
+	 * with NIDs on specified networks only, if that is needed.
+	 * Сonversely, for notification about target local NIDs it shouldn't
+	 * be applied, so IR will receive all available NIDs on target.
+	 */
+	if (registration) {
+		/* Prefer mount option value firts if provided */
+		if (lsi->lsi_lmd->lmd_nidnet)
+			refnet = libcfs_str2net(lsi->lsi_lmd->lmd_nidnet);
+		else if (!class_find_param(buf, PARAM_NETWORK, &buf))
+			class_parse_net(buf, &refnet, NULL);
 	}
 
-	if (nid_count == 0) {
+	if (refnet != LNET_NET_ANY && LNetGetPeerDiscoveryStatus()) {
+		CERROR("LNet Dynamic Peer Discovery is enabled on this node. 'network' option cannot be taken into account.\n");
+		RETURN(ERR_PTR(-EINVAL));
+	}
+
+	genradix_init(&nfd.nfd_radix);
+	/* avoid allocation inside callback */
+	genradix_prealloc(&nfd.nfd_radix, MTI_NIDS_MAX, GFP_KERNEL);
+	nfd.nfd_lmd = lsi->lsi_lmd;
+	nfd.nfd_pos = 0;
+
+	LNetFetchNIDs(server_nid2radix, refnet, &nfd);
+	nid_count = nfd.nfd_pos;
+	if (!nid_count) {
 		CERROR("Failed to get NID for server %s, please check whether the target is specifed with improper --servicenode or --network options.\n",
 		       lsi->lsi_svname);
-		GOTO(free_list, mti = ERR_PTR(-EINVAL));
+		GOTO(free_radix, mti = ERR_PTR(-EINVAL));
 	}
+
+	if (large_nid)
+		len += NIDLIST_SIZE(nid_count);
+	else if (nid_count > MTI_NIDS_MAX)
+		nid_count = MTI_NIDS_MAX;
 
 	OBD_ALLOC(mti, len);
 	if (!mti)
-		GOTO(free_list, mti = ERR_PTR(-ENOMEM));
+		GOTO(free_radix, mti = ERR_PTR(-ENOMEM));
+
+	mti->mti_nid_count = nid_count;
+	for (i = 0; i < mti->mti_nid_count; i++) {
+		struct lnet_nid *nid;
+
+		nid = genradix_ptr(&nfd.nfd_radix, i);
+		if (large_nid)
+			libcfs_nidstr_r(nid, mti->mti_nidlist[i],
+					sizeof(mti->mti_nidlist[i]));
+		else
+			mti->mti_nids[i] = lnet_nid_to_nid4(nid);
+	}
 
 	rc = strscpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname));
 	if (rc < 0)
 		GOTO(free_mti, rc);
 
-	if (!large_nid && nid_count >= MTI_NIDS_MAX)
-		mti->mti_nid_count = MTI_NIDS_MAX;
-	else
-		mti->mti_nid_count = nid_count;
-
-	for (i = 0; i < mti->mti_nid_count; i++) {
-		tmp = genradix_ptr(&plist, i);
-
-		if (large_nid)
-			libcfs_nidstr_r(&tmp->nid, mti->mti_nidlist[i],
-					sizeof(mti->mti_nidlist[i]));
-		else
-			mti->mti_nids[i] = lnet_nid_to_nid4(&tmp->nid);
-	}
 	mti->mti_lustre_ver = LUSTRE_VERSION_CODE;
 	mti->mti_config_ver = 0;
 
@@ -1302,17 +1323,15 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi)
 	/* use NID strings instead */
 	if (large_nid)
 		mti->mti_flags |= LDD_F_LARGE_NID;
-	cplen = strscpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
-			sizeof(mti->mti_params));
-	if (cplen >= sizeof(mti->mti_params))
-		rc = -E2BIG;
+	rc = strscpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
+		     sizeof(mti->mti_params));
 free_mti:
 	if (rc < 0) {
 		OBD_FREE(mti, len);
 		mti = ERR_PTR(rc);
 	}
-free_list:
-	genradix_free(&plist);
+free_radix:
+	genradix_free(&nfd.nfd_radix);
 
 	return mti;
 }
@@ -1333,7 +1352,7 @@ static int server_register_target(struct lustre_sb_info *lsi)
 
 	ENTRY;
 	LASSERT(mgc);
-	mti = server_lsi2mti(lsi);
+	mti = server_lsi2mti(lsi, true);
 	if (IS_ERR(mti))
 		GOTO(out, rc = PTR_ERR(mti));
 
@@ -1409,7 +1428,7 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
 
 	ENTRY;
 	LASSERT(mgc);
-	mti = server_lsi2mti(lsi);
+	mti = server_lsi2mti(lsi, false);
 	if (IS_ERR(mti))
 		GOTO(out, rc = PTR_ERR(mti));
 

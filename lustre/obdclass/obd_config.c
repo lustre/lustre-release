@@ -500,6 +500,7 @@ int class_parse_net(char *buf, __u32 *net, char **endh)
 {
 	return class_parse_value(buf, CLASS_PARSE_NET, (void *)net, endh, 0);
 }
+EXPORT_SYMBOL(class_parse_net);
 
 /*
  * 1 param contains key and match

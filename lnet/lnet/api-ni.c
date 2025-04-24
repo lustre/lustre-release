@@ -10329,6 +10329,43 @@ bool LNetIsPeerLocal(struct lnet_nid *nid)
 EXPORT_SYMBOL(LNetIsPeerLocal);
 
 /**
+ * Retrieve an array of lnet_nid NIDs grouped by networks or for particular
+ * network only.
+ *
+ * @cb: callback to pass each new NID to.
+ * @netid: if not LNET_NET_ANY then fetch only NIDs on that @netid
+ * @data: caller data to pass through.
+ *
+ * Callback is called for each found NID, so that is up to caller
+ * how to handle and organize them.
+ *
+ * Return: 0 or error code from callback
+ */
+int LNetFetchNIDs(int (*cb)(void *private, struct lnet_nid *nid),
+		  __u32 netid, void *data)
+{
+	struct lnet_net *net;
+	struct lnet_ni *ni;
+	int rc = 0;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		if (netid != LNET_NET_ANY && netid != net->net_id)
+			continue;
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			rc = cb(data, &ni->ni_nid);
+			if (rc < 0)
+				goto err_unlock;
+		}
+	}
+err_unlock:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	return rc;
+}
+EXPORT_SYMBOL(LNetFetchNIDs);
+
+/**
  * Retrieve the struct lnet_process_id ID of LNet interface at \a index.
  * Note that all interfaces share a same PID, as requested by LNetNIInit().
  *
