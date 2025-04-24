@@ -1417,7 +1417,7 @@ osd_dirent_update(const struct lu_env *env, struct osd_device *dev,
 		RETURN(-ENOMEM);
 
 	dmu_tx_hold_zap(tx, zap, TRUE, NULL);
-	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	rc = -dmu_tx_assign(tx, DMU_TX_WAIT);
 	if (!rc)
 		rc = -zap_update(dev->od_os, zap, key, 8, sizeof(*zde) / 8,
 				 (const void *)zde, tx);
@@ -1447,7 +1447,7 @@ static int osd_update_entry_for_agent(const struct lu_env *env,
 
 	dmu_tx_hold_sa_create(tx, osd_find_dnsize(osd, OSD_BASE_EA_IN_BONUS));
 	dmu_tx_hold_zap(tx, zap, FALSE, NULL);
-	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	rc = -dmu_tx_assign(tx, DMU_TX_WAIT);
 	if (rc) {
 		dmu_tx_abort(tx);
 		GOTO(out, rc);

@@ -199,7 +199,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		 */
 		RETURN(-EIO);
 
-	rc = -dmu_tx_assign(oh->ot_tx, TXG_WAIT);
+	rc = -dmu_tx_assign(oh->ot_tx, DMU_TX_WAIT);
 	if (unlikely(rc != 0)) {
 		/* dmu will call commit callback with error code during abort */
 		if (!lu_device_is_md(&d->dd_lu_dev) && rc == -ENOSPC)
@@ -1018,7 +1018,7 @@ int osd_unlinked_object_free(const struct lu_env *env, struct osd_device *osd,
 	dmu_tx_hold_free(tx, oid, 0, DMU_OBJECT_END);
 	osd_tx_hold_zap(tx, osd->od_unlinked->dn_object, osd->od_unlinked,
 			FALSE, NULL);
-	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	rc = -dmu_tx_assign(tx, DMU_TX_WAIT);
 	if (rc != 0) {
 		CWARN("%s: Cannot assign tx for %llu: rc = %d\n",
 		      osd->od_svname, oid, rc);

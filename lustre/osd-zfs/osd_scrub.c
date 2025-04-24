@@ -75,7 +75,7 @@ int osd_scrub_refresh_mapping(const struct lu_env *env,
 				   sizeof(info->oti_str), &dn);
 	osd_tx_hold_zap(tx, zapid, dn,
 			ops == DTO_INDEX_INSERT ? TRUE : FALSE, NULL);
-	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	rc = -dmu_tx_assign(tx, DMU_TX_WAIT);
 	if (rc) {
 		dmu_tx_abort(tx);
 		GOTO(log, rc);
@@ -1963,7 +1963,7 @@ static int osd_remove_ml_file(const struct lu_env *env, struct osd_device *dev,
 	}
 
 	dmu_tx_hold_zap(tx, dir, FALSE, NULL);
-	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	rc = -dmu_tx_assign(tx, DMU_TX_WAIT);
 	if (rc)
 		GOTO(abort, rc);
 
@@ -2098,7 +2098,7 @@ static int osd_create_lastid(const struct lu_env *env, struct osd_device *dev,
 	dmu_tx_hold_sa_create(tx, osd_find_dnsize(dev, OSD_BASE_EA_IN_BONUS));
 	dmu_tx_hold_zap(tx, dir, FALSE, NULL);
 
-	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	rc = -dmu_tx_assign(tx, DMU_TX_WAIT);
 	if (rc)
 		GOTO(abort, rc);
 
@@ -2325,7 +2325,7 @@ static int osd_scan_lastid_seq(const struct lu_env *env,
 	if (lastid < lastid_known)
 		dmu_tx_hold_write_by_dnode(tx, dn, 0, sizeof(lastid));
 
-	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	rc = -dmu_tx_assign(tx, DMU_TX_WAIT);
 	if (rc)
 		GOTO(abort, rc);
 
