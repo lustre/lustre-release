@@ -190,7 +190,7 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 	if (rc != 0)
 		RETURN(rc);
 
-	obdo = object_update_param_get(update, 0, NULL);
+	obdo = object_update_param_get(update, 0, NULL, NULL, NULL);
 	if (IS_ERR(obdo))
 		RETURN(PTR_ERR(obdo));
 
@@ -200,7 +200,7 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 	if (parent_fid != NULL) {
 		struct lu_fid *tmp;
 
-		tmp = object_update_param_get(update, 1, NULL);
+		tmp = object_update_param_get(update, 1, NULL, NULL, NULL);
 		if (IS_ERR(tmp))
 			RETURN(PTR_ERR(tmp));
 
@@ -241,7 +241,7 @@ int out_attr_set_pack(const struct lu_env *env, struct object_update *update,
 	if (rc != 0)
 		RETURN(rc);
 
-	obdo = object_update_param_get(update, 0, NULL);
+	obdo = object_update_param_get(update, 0, NULL, NULL, NULL);
 	if (IS_ERR(obdo))
 		RETURN(PTR_ERR(obdo));
 

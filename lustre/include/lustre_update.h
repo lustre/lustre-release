@@ -178,10 +178,11 @@ update_ops_get_op(const struct update_ops *ops, unsigned int index,
 
 static inline void
 *object_update_param_get(const struct object_update *update, size_t index,
-			 size_t *size)
+			 size_t *size, const char *name, const char *type)
 {
-	const struct	object_update_param *param;
-	size_t		i;
+	const struct object_update_param *param;
+	size_t i;
+	int rc = 0;
 
 	if (index >= update->ou_params_count)
 		return ERR_PTR(-EINVAL);
@@ -191,11 +192,19 @@ static inline void
 		param = (struct object_update_param *)((char *)param +
 			object_update_param_size(param));
 
-	if (size != NULL)
-		*size = param->oup_len;
-
 	if (param->oup_len == 0)
 		return ERR_PTR(-ENODATA);
+
+	if (size) {
+		if (unlikely((*size != 0 && *size != param->oup_len) ||
+			     (*size == 0 && param->oup_len == 0))) {
+			rc = -EPROTO;
+			CERROR("%s: wrong size for %s in RPC %zu != %u: rc = %d\n",
+			       name, type, *size, param->oup_len, rc);
+			return ERR_PTR(rc);
+		}
+		*size = param->oup_len;
+	}
 
 	return (void *)&param->oup_buf[0];
 }
