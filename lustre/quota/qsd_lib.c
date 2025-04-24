@@ -73,13 +73,15 @@ static int qsd_state_seq_show(struct seq_file *m, void *data)
 	/* TODO: further pool ID should be removed or
 	 * replaced with pool Name */
 	seq_printf(m, "target name:    %s\n"
-		   "pool ID:        %d\n"
-		   "type:           %s\n"
-		   "quota enabled:  %s\n"
-		   "conn to master: %s\n",
+		   "pool ID:         %d\n"
+		   "type:            %s\n"
+		   "quota enabled:   %s\n"
+		   "conn to master:  %s\n"
+		   "glimpse_refresh: %d\n",
 		   qsd->qsd_svname, 0,
 		   qsd->qsd_is_md ? "md" : "dt", enabled,
-		   qsd->qsd_exp_valid ? "setup" : "not setup yet");
+		   qsd->qsd_exp_valid ? "setup" : "not setup yet",
+		   qsd->qsd_glimpse_refresh);
 
 	if (qsd->qsd_prepared) {
 		memset(enabled, 0, sizeof(enabled));

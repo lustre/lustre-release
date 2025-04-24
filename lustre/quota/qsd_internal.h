@@ -86,16 +86,17 @@ struct qsd_instance {
 	 * enforced here (via procfs) */
 	int			 qsd_timeout;
 
+	/* count of qunit updates during glimpse */
+	int			 qsd_glimpse_refresh;
+
 	unsigned long		qsd_is_md:1,    /* managing quota for mdt */
 				qsd_started:1,  /* instance is now started */
-				qsd_prepared:1, /* qsd_prepare() successfully
-						  * called */
+				qsd_prepared:1, /* qsd_prepare() succeeded */
 				qsd_exp_valid:1,/* qsd_exp is now valid */
 				qsd_stopping:1, /* qsd_instance is stopping */
 				qsd_updating:1, /* qsd is updating record */
 				qsd_exclusive:1, /* upd exclusive with reint */
 				qsd_root_prj_enable:1;
-
 };
 
 /*

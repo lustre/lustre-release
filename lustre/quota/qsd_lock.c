@@ -381,26 +381,11 @@ static int qsd_id_blocking_ast(struct ldlm_lock *lock,
 		 * up or eviction)
 		 */
 		if (!(lock->l_flags & LDLM_FL_LOCAL_ONLY)) {
-			/* allocate environment */
-			OBD_ALLOC_PTR(env);
-			if (!env) {
-				lqe_putref(lqe);
+			env = lu_env_find();
+			if (env)
+				rc = qsd_adjust(env, lqe);
+			else
 				rc = -ENOMEM;
-				break;
-			}
-
-			/* initialize environment */
-			rc = lu_env_init(env, LCT_DT_THREAD);
-			if (rc) {
-				OBD_FREE_PTR(env);
-				lqe_putref(lqe);
-				break;
-			}
-
-			rc = qsd_adjust(env, lqe);
-
-			lu_env_fini(env);
-			OBD_FREE_PTR(env);
 		}
 
 		/* release lqe reference grabbed by qsd_id_ast_data_get() */
@@ -446,10 +431,18 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 	lqe_write_lock(lqe);
 	lvb->lvb_id_rel = 0;
 	if (desc->gl_qunit != 0 && desc->gl_qunit != lqe->lqe_qunit) {
+		struct lu_env *env;
 		long long space;
 
 		/* extract new qunit from glimpse request */
 		qsd_set_qunit(lqe, desc->gl_qunit);
+
+		lqe_write_unlock(lqe);
+		env = lu_env_find();
+		if (env)
+			qsd_refresh_usage(env, lqe);
+		lqe_write_lock(lqe);
+		lqe2qqi(lqe)->qqi_qsd->qsd_glimpse_refresh++;
 
 		space  = lqe->lqe_granted - lqe->lqe_pending_rel;
 		space -= lqe->lqe_usage;
