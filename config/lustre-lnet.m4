@@ -945,6 +945,7 @@ AS_IF([test "x$enable_gni" = xyes], [
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 
+	AC_DEFINE(HAVE_GNILND, 1, [support gemini LND])
 	AC_SUBST(ENABLE_GNI, yes)
 ], [
 	AC_SUBST(ENABLE_GNI, no)

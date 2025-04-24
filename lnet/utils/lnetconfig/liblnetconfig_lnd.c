@@ -122,6 +122,7 @@ lustre_kfilnd_show_tun(struct cYAML *lndparams,
 }
 #endif
 
+#ifdef HAVE_GNILND
 static int
 lustre_gnilnd_show_tun(struct cYAML *lndparams,
 			struct lnet_ioctl_config_gnilnd_tunables *lnd_cfg)
@@ -132,6 +133,7 @@ lustre_gnilnd_show_tun(struct cYAML *lndparams,
 
 	return LUSTRE_CFG_RC_NO_ERR;
 }
+#endif
 
 int
 lustre_net_show_tunables(struct cYAML *tunables,
@@ -184,9 +186,11 @@ lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 					    &lnd->lnd_tun_u.lnd_kfi,
 					    backup);
 #endif
+#ifdef HAVE_GNILND
 	else if (net_type == GNILND)
 		rc = lustre_gnilnd_show_tun(lnd_tunables,
 					    &lnd->lnd_tun_u.lnd_gni);
+#endif
 	return rc;
 }
 
