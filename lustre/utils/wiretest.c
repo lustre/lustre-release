@@ -1482,8 +1482,10 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT2_DMV_IMP_INHERIT);
 	LASSERTF(OBD_CONNECT2_ENCRYPT_FID2PATH == 0x40000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_ENCRYPT_FID2PATH);
+#ifdef HAVE_SERVER_SUPPORT
 	LASSERTF(OBD_CONNECT2_REPLAY_CREATE == 0x80000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_REPLAY_CREATE);
+#endif
 	LASSERTF(OBD_CONNECT2_LARGE_NID == 0x100000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_LARGE_NID);
 	LASSERTF(OBD_CONNECT2_COMPRESS == 0x200000000ULL, "found 0x%.16llxULL\n",
@@ -4823,7 +4825,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct quota_body, qb_padding1[4]));
 	LASSERTF((int)sizeof(((struct quota_body *)0)->qb_padding1[4]) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct quota_body *)0)->qb_padding1[4]));
-#endif /* HAVE_SERVER_SUPPORT */
 
 	/* Checks for struct mgs_target_info */
 	LASSERTF((int)sizeof(struct mgs_target_info) == 4544, "found %lld\n",
@@ -4876,6 +4877,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mgs_target_info, mti_nidlist[0]));
 	LASSERTF((int)sizeof(((struct mgs_target_info *)0)->mti_nidlist[0]) == 64, "found %lld\n",
 		 (long long)(int)sizeof(((struct mgs_target_info *)0)->mti_nidlist[0]));
+#endif /* HAVE_SERVER_SUPPORT */
 
 	/* Checks for struct mgs_nidtbl_entry */
 	LASSERTF((int)sizeof(struct mgs_nidtbl_entry) == 24, "found %lld\n",

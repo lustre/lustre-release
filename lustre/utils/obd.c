@@ -78,7 +78,7 @@
 #include <linux/lustre/lustre_ver.h>
 
 #include <lustre/lustreapi.h>
-#include <uapi/linux/lustre/lustre_disk.h>
+#include <linux/lustre/lustre_disk.h>
 
 #define MAX_STRING_SIZE 128
 

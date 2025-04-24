@@ -78,7 +78,7 @@
 #include <linux/lnet/nidstr.h>
 #include <lnetconfig/cyaml.h>
 #include "lstddef.h"
-#include <uapi/linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_idl.h>
 #include "callvpe.h"
 
 #ifndef NSEC_PER_SEC
