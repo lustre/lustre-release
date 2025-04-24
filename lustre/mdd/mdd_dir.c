@@ -2946,21 +2946,33 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			GOTO(err_initlized, rc);
 	}
 
+	/* remove the quotes if present before storing it in the xattr. */
 	if (initial_create &&
 	    spec->sp_cr_job_xattr[0] != '\0' &&
 	    jobid[0] != '\0' &&
-	    (S_ISREG(attr->la_mode) || S_ISDIR(attr->la_mode))) {
+	    (S_ISREG(attr->la_mode) ||
+	     S_ISDIR(attr->la_mode))) {
 		jobid_len = strnlen(jobid, LUSTRE_JOBID_SIZE);
-		buf = mdd_buf_get_const(env, jobid, jobid_len);
-
-		rc = mdo_xattr_set(env, son, buf, spec->sp_cr_job_xattr, 0,
-				   handle);
-		/* this xattr is nonessential, so ignore errors. */
-		if (rc != 0) {
-			CDEBUG(D_INODE,
-			       DFID" failed to set xattr '%s': rc = %d\n",
-			       PFID(son_fid), spec->sp_cr_job_xattr, rc);
-			rc = 0;
+		if (jobid_len > 1 &&
+		    jobid[0] == '"' &&
+		    jobid[jobid_len - 1] == '"'){
+			jobid++;
+			jobid_len -= 2;
+		}
+		if (jobid_len > 0) {
+			buf = mdd_buf_get_const(env, jobid, jobid_len);
+			rc = mdo_xattr_set(env, son, buf,
+					   spec->sp_cr_job_xattr, 0,
+					   handle);
+			/* this xattr is nonessential, so ignore errors. */
+			if (rc != 0) {
+				CDEBUG(D_INODE,
+				       DFID
+				       " failed to set xattr '%s': rc = %d\n",
+				       PFID(son_fid),
+				       spec->sp_cr_job_xattr, rc);
+				rc = 0;
+			}
 		}
 	}
 
