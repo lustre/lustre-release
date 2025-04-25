@@ -77,7 +77,7 @@ struct hsm_copytool_private {
 #define CP_PRIV_MAGIC 0x19880429
 struct hsm_copyaction_private {
 	__u32					 magic;
-	__u32					 source_fd;
+	__s32					 source_fd;
 	__s32					 data_fd;
 	const struct hsm_copytool_private	*ct_priv;
 	struct hsm_copy				 copy;
