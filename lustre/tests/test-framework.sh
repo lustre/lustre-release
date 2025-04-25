@@ -559,7 +559,7 @@ init_test_env() {
 	export PERM_CMD=$(echo ${PERM_CMD:-"$LCTL conf_param"})
 
 	export L_GETIDENTITY=${L_GETIDENTITY:-"$LUSTRE/utils/l_getidentity"}
-	if [ ! -f "$L_GETIDENTITY" ]; then
+	if [ ! -x "$L_GETIDENTITY" ]; then
 		if $(which l_getidentity > /dev/null 2>&1); then
 			export L_GETIDENTITY=$(which l_getidentity)
 		else
