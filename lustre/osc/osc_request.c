@@ -3246,6 +3246,8 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 			 */
 			aa->oa_lvb    = NULL;
 			aa->oa_flags  = NULL;
+			/* don't block async enqueue RPCs trying to resend */
+			req->rq_no_delay = req->rq_no_resend = 1;
 		}
 
 		req->rq_interpret_reply = osc_enqueue_interpret;
