@@ -2995,21 +2995,27 @@ AC_DEFUN([LC_LM_COMPARE_OWNER_EXISTS], [
 	])
 ]) # LC_LM_COMPARE_OWNER_EXISTS
 
-#
-# LC_FSCRYPT_SUPPORT
-#
-# 5.4 introduced fscrypt encryption policies v2
-#
 AC_DEFUN([LC_FSCRYPT_SUPPORT], [
-LB_CHECK_COMPILE([for fscrypt in-kernel support],
-fscrypt_support, [
-	#define __FS_HAS_ENCRYPTION 0
+saved_flags="$CFLAGS"
+CFLAGS="-Werror"
+AC_MSG_CHECKING([for fscrypt in-kernel support])
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+	#include <strings.h>
 	#include <linux/fscrypt.h>
-],[
-	fscrypt_ioctl_get_policy_ex(NULL, NULL);
-],[
+
+	int main(void) {
+		struct fscrypt_policy_v2 policy;
+
+		bzero(&policy, sizeof(policy));
+		return 0;
+	}
+])],[
 	has_fscrypt_support="yes"
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
 ])
+CFLAGS="$saved_flags"
 ]) # LC_FSCRYPT_SUPPORT used by LC_CONFIG_CRYPTO
 
 #
@@ -5898,7 +5904,7 @@ AS_IF([test "x$enable_crypto" != xno -a "x$enable_dist" = xno], [
 	)
 	LC_IS_ENCRYPTED
 	LC_FSCRYPT_SUPPORT])
-AS_IF([test "x$enable_crypto" = xin-kernel], [
+AS_IF([test "x$enable_crypto" = xin-kernel -o "x$enable_modules" = xno -a "x$enable_dist" = xno], [
 	AS_IF([test "x$has_fscrypt_support" = xyes], [
 	      AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via in-kernel fscrypt])], [
 	      AC_MSG_ERROR([Lustre client crypto cannot be enabled via in-kernel fscrypt.])
