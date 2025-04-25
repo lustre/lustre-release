@@ -5377,20 +5377,10 @@ stopall() {
 	# if we use do_facet <facet> only after the facet added, but
 	# currently we use do_facet mds in local.sh
 	local num
-	for num in `seq $MDSCOUNT`; do
-		stop mds$num -f
-		rm -f ${TMP}/mds${num}active
-	done
+	unmountmds
 	combined_mgs_mds && rm -f $TMP/mgsactive
-
-	for num in `seq $OSTCOUNT`; do
-		stop ost$num -f
-		rm -f $TMP/ost${num}active
-	done
-
-	if ! combined_mgs_mds ; then
-		stop mgs
-	fi
+	unmountoss
+	unmountmgs
 
 	if $SHARED_KEY; then
 		export SK_MOUNTED=false
@@ -5811,6 +5801,13 @@ writeconf_all () {
 	return $rc
 }
 
+unmountmgs() {
+	if ! combined_mgs_mds ; then
+		stop mgs -f
+		rm -f $TMP/mgsactive
+	fi
+}
+
 mountmgs() {
 	if ! combined_mgs_mds ; then
 		start mgs $(mgsdevname) $MGS_MOUNT_OPTS
@@ -5818,20 +5815,33 @@ mountmgs() {
 	fi
 }
 
+unmountmds() {
+	local mdsnum
+
+	for ((mdsnum=1; mdsnum <= $MDSCOUNT; mdsnum++)); do
+		local facet=mds$mdsnum
+
+		stop $facet -f
+		rm -f $TMP/${facet}active
+	done
+}
+
 mountmds() {
-	local num
-	local devname
-	local host
-	local varname
-	for num in $(seq $MDSCOUNT); do
-		devname=$(mdsdevname $num)
-		start mds$num $devname $MDS_MOUNT_OPTS
+	local mdsnum
+
+	for ((mdsnum=1; mdsnum <= $MDSCOUNT; mdsnum++)); do
+		local devname=$(mdsdevname $mdsnum)
+		local facet=mds$mdsnum
+
+		start $facet $devname $MDS_MOUNT_OPTS
 
 		# We started mds$num, now we should set mds${num}_HOST
 		# and mds${num}failover_HOST variables properly if they
 		# are not set.
-		host=$(facet_host mds$num)
-		for varname in mds${num}_HOST mds${num}failover_HOST; do
+		local host=$(facet_host $facet)
+		local varname
+
+		for varname in ${facet}_HOST ${facet}failover_HOST; do
 			if [[ -z "${!varname}" ]]; then
 				eval $varname=$host
 			fi
@@ -5846,28 +5856,32 @@ mountmds() {
 }
 
 unmountoss() {
-	local num
+	local ostnum
 
-	for num in $(seq $OSTCOUNT); do
-		stop ost$num -f
-		rm -f $TMP/ost${num}active
+	for ((ostnum=1; ostnum <= $OSTCOUNT; ostnum++)); do
+		local facet=ost$ostnum
+
+		stop $facet -f
+		rm -f $TMP/${facet}active
 	done
 }
 
 mountoss() {
-	local num
-	local devname
-	local host
-	local varname
-	for num in $(seq $OSTCOUNT); do
-		devname=$(ostdevname $num)
-		start ost$num $devname $OST_MOUNT_OPTS
+	local ostnum
+
+	for ((ostnum=1; ostnum <= $OSTCOUNT; ostnum++)); do
+		local devname=$(ostdevname $ostnum)
+		local facet=ost$ostnum
+
+		start $facet $devname $OST_MOUNT_OPTS
 
 		# We started ost$num, now we should set ost${num}_HOST
 		# and ost${num}failover_HOST variables properly if they
 		# are not set.
-		host=$(facet_host ost$num)
-		for varname in ost${num}_HOST ost${num}failover_HOST; do
+		local host=$(facet_host $facet)
+		local varname
+
+		for varname in ${facet}_HOST ${facet}failover_HOST; do
 			if [[ -z "${!varname}" ]]; then
 				eval $varname=$host
 			fi

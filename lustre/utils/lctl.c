@@ -798,15 +798,15 @@ command_t cmdlist[] = {
 	{"lcfg_clear", jt_lcfg_clear, 0,
 	 "drop unused config llog records for a device or filesystem.\n"
 	 "clients and servers must be unmounted during this operation.\n"
-	 "usage: clear_conf {FSNAME|DEVNAME}"},
+	 "usage: lcfg_clear {FSNAME|DEVNAME}"},
 	{"clear_conf", jt_lcfg_clear, 0, "alias for 'lcfg_clear'\n"},
 	{"lcfg_fork", jt_lcfg_fork, 0,
 	 "copy configuration logs for named filesystem with given name\n"
-	 "usage: fork_lcfg FSNAME NEWNAME"},
+	 "usage: lcfg_fork FSNAME NEWNAME"},
 	{"fork_lcfg", jt_lcfg_fork, 0, "alias for 'lcfg_fork'\n"},
 	{"lcfg_erase", jt_lcfg_erase, 0,
 	 "permanently erase configuration logs for the named filesystem\n"
-	 "usage: erase_lcfg FSNAME"},
+	 "usage: lcfg_erase [--help] [--quiet] FSNAME"},
 	{"erase_lcfg", jt_lcfg_erase, 0, "alias for 'lcfg_erase'\n"},
 #endif /* HAVE_SERVER_SUPPORT */
 

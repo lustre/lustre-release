@@ -12897,6 +12897,60 @@ test_200e() {
 }
 run_test 200e "set CPU pattern using relative core exclusion"
 
+test_250() {
+	(( $MGS_VERSION >= $(version_code 2.16.54.86) )) ||
+		skip "need MGS >= 2.16.54.86 to erase FSNAME params"
+
+	stack_trap "stopall; export FSNAME=$FSNAME; formatall"
+	export FSNAME=tst250fs
+
+	# Set up a new filesystem
+	formatall || error "Failed to format filesystem"
+
+	mountmgs || error "Failed to mount MGS"
+	mountmds || error "Failed to mount MDS"
+	mountoss || error "Failed to mount OST"
+
+	do_facet mgs $LCTL llog_catlist
+
+	# Set some test parameters that include the fsname
+	do_facet mgs $LCTL set_param -P osc.$FSNAME-*.max_rpcs_in_flight=16 ||
+		error "Failed to set OSC parameter"
+	do_facet mgs $LCTL set_param -P mdt.$FSNAME-*.enable_pin_gid=-1 ||
+		error "Failed to set MDT parameter"
+	do_facet mgs $LCTL set_param -P llite.$FSNAME-*.max_read_ahead_mb=32 ||
+		error "Failed to set llite parameter"
+	# Set a parameter that does not include the fsname
+	do_facet mgs $LCTL set_param -P osc.*.max_dirty_mb=512 ||
+		error "Failed to set OSC parameter"
+
+	# Verify parameters were set
+	local params=$(do_facet mgs $LCTL llog_print params)
+	[[ -n "$params" ]] || error "No parameters found for $FSNAME"
+	echo -e "Found parameters:\n$params"
+
+	local output=$(do_facet mgs $LCTL lcfg_erase $FSNAME 2>&1) ||
+		error "lcfg_erase failed"
+	echo -e "lcfg_erase output:\n$output"
+	[[ "$output" =~ "erased 3 parameters" ]] ||
+		error "lcfg_erase did not list erased parameters"
+	do_facet mgs "sync; sleep 5; sync"
+	do_facet mgs $LCTL llog_catlist | grep $FSNAME &&
+		error "lcfg_erase did not remove $FSNAME logs"
+
+	# Verify all parameters for $FSNAME were removed
+	params=$(do_facet mgs $LCTL llog_print params | grep $FSNAME)
+	echo -e "remaining $FSNAME params:\n$params"
+	[[ -z "$params" ]] || error "$FSNAME parameters left after lcfg_erase"
+
+	# Verify parameter not including $FSNAME was not removed
+	params=$(do_facet mgs $LCTL llog_print params)
+	echo -e "remaining params:\n$params"
+	[[ "$params" =~ "max_dirty_mb" ]] ||
+		error "Non-$FSNAME parameter 'osc.*.max_dirty_mb' removed"
+}
+run_test 250 "verify lcfg_erase removes filesystem parameters"
+
 #
 # (This was sanity/802a)
 #

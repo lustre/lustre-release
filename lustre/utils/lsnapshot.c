@@ -1413,7 +1413,7 @@ static int snapshot_create(struct snapshot_instance *si)
 	}
 
 	/* 2. Fork config llog on MGS */
-	__argv[0] = "fork_lcfg";
+	__argv[0] = "lcfg_fork";
 	__argv[2] = new_fsname;
 	rc = jt_lcfg_fork(3, __argv);
 	if (rc) {
@@ -1467,7 +1467,7 @@ out:
 		__snapshot_destroy(si, &si->si_mdts_list);
 		snapshot_wait(si, &rc2);
 
-		__argv[0] = "erase_lcfg";
+		__argv[0] = "lcfg_erase";
 		__argv[1] = new_fsname;
 		__argv[2] = "-q";
 		jt_lcfg_erase(3, __argv);
@@ -1729,16 +1729,16 @@ static int snapshot_destroy(struct snapshot_instance *si)
 	if ((!rc && !rc1 && !rc2) || si->si_force) {
 		char *__argv[3];
 
-		__argv[0] = "erase_lcfg";
+		__argv[0] = "lcfg_erase";
 		__argv[1] = fsname;
 		__argv[2] = "-q";
 		rc3 = jt_lcfg_erase(3, __argv);
 		if (rc3 && errno == ENOENT)
 			rc3 = 0;
 		if (rc3)
-			SNAPSHOT_ADD_LOG(si, "Can't erase config for destroy "
-					 "snapshot %s, fsname %s: rc = %d\n",
-					 si->si_ssname, fsname, rc3);
+			SNAPSHOT_ADD_LOG(si,
+					 "%s: cannot erase config for snapshot '%s' destroy: rc = %d\n",
+					 fsname, si->si_ssname, rc3);
 	}
 
 	return rc ? rc : (rc1 ? rc1 : (rc2 ? rc2 : rc3));

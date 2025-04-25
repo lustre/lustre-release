@@ -1915,7 +1915,9 @@ restart:
 		if (cld_is_recover(cld))
 			CWARN("%s: IR log %s failed, not fatal: rc = %d\n",
 			      mgc->obd_name, cld->cld_logname, rc);
-		mgc_requeue_add(cld);
+		/* no log on server anymore, requeue is useless */
+		if (rc != -ENOENT)
+			mgc_requeue_add(cld);
 		rc = 0;
 	}
 

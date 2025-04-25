@@ -734,7 +734,7 @@ error:
 	if (rc == 0) {
 		yaml_emitter_log_error(&request, stderr);
 		yaml_emitter_cleanup(&request);
-		rc = -EINVAL;
+		rc = -EOPNOTSUPP;
 		goto free_reply;
 	}
 	yaml_emitter_cleanup(&request);
