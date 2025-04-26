@@ -147,21 +147,32 @@ static struct ll_eopcode {
 
 const char *ll_opcode2str(__u32 opcode)
 {
+	static char unknown_opcode[32];
 	__u32 offset = opcode_offset(opcode);
 
-	/* When one of the assertions below fail, chances are that:
-	 *     1) A new opcode was added in include/lustre/lustre_idl.h,
-	 *        but is missing from the table above.
-	 * or  2) The opcode space was renumbered or rearranged,
-	 *        and the opcode_offset() function in
-	 *        ptlrpc_internal.h needs to be modified.
-	 */
-	LASSERTF(offset < LUSTRE_MAX_OPCODES,
-		 "offset %u >= LUSTRE_MAX_OPCODES %u\n",
-		 offset, LUSTRE_MAX_OPCODES);
-	LASSERTF(ll_rpc_opcode_table[offset].opcode == opcode,
-		 "ll_rpc_opcode_table[%u].opcode %u != opcode %u\n",
-		 offset, ll_rpc_opcode_table[offset].opcode, opcode);
+	/* Handle invalid opcodes gracefully */
+	if (offset == -1 || offset >= LUSTRE_MAX_OPCODES) {
+		snprintf(unknown_opcode, sizeof(unknown_opcode),
+			 "unknown-opcode-%u", opcode);
+		return unknown_opcode;
+	}
+
+	/* Verify the opcode table is correct */
+	if (ll_rpc_opcode_table[offset].opcode != opcode) {
+		/* This should not happen unless there's a bug in the
+		 * opcode_offset() function or the opcode table.
+		 */
+		snprintf(unknown_opcode, sizeof(unknown_opcode),
+			 "opcode-mismatch-%u", opcode);
+		return unknown_opcode;
+	}
+
+	/* If the opname is NULL, return a string with the opcode number */
+	if (ll_rpc_opcode_table[offset].opname == NULL) {
+		snprintf(unknown_opcode, sizeof(unknown_opcode),
+			 "unnamed-opcode-%u", opcode);
+		return unknown_opcode;
+	}
 
 	return ll_rpc_opcode_table[offset].opname;
 }
