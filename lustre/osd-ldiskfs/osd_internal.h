@@ -1107,6 +1107,9 @@ static inline struct osd_device *osd_obj2dev(const struct osd_object *o)
 
 static inline struct super_block *osd_sb(const struct osd_device *dev)
 {
+	if (!dev->od_mnt)
+		return NULL;
+
 	return dev->od_mnt->mnt_sb;
 }
 

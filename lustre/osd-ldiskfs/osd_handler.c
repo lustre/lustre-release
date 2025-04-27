@@ -8853,7 +8853,7 @@ static int osd_health_check(const struct lu_env *env, struct obd_device *obd)
 	struct osd_device *osd = osd_dev(obd->obd_lu_dev);
 	struct super_block *sb = osd_sb(osd);
 
-	return (osd->od_mnt == NULL || sb->s_flags & SB_RDONLY);
+	return (!sb || sb->s_flags & SB_RDONLY);
 }
 
 static int osd_get_info(const struct lu_env *env, struct obd_export *exp,
