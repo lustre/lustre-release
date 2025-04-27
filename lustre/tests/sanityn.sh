@@ -1262,9 +1262,8 @@ test_32b() { # bug 11270
 	local facets=$(get_facets OST)
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 
-	save_lustre_params client "osc.*.contention_seconds" > $p
 	save_lustre_params $facets \
-		"ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
+		"ldlm.namespaces.filter-*.max_nolock_bytes" > $p
 	save_lustre_params $facets \
 		"ldlm.namespaces.filter-*.contended_locks" >> $p
 	save_lustre_params $facets \
@@ -1276,7 +1275,6 @@ test_32b() { # bug 11270
 		"lctl set_param -n ldlm.namespaces.*.max_nolock_bytes=2000000 \
 			ldlm.namespaces.filter-*.contended_locks=0 \
 			ldlm.namespaces.filter-*.contention_seconds=60"
-	lctl set_param -n $OSC.*.contention_seconds=60
 	for i in {1..5}; do
 		dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
@@ -1286,13 +1284,12 @@ test_32b() { # bug 11270
 	[ $(calc_stats $OSC.*.${OSC}_stats lockless_write_bytes) -ne 0 ] ||
 		error "lockless i/o was not triggered"
 	# disable lockless i/o (it is disabled by default)
+	# set contention_seconds to 0 at client too, otherwise Lustre still
+	# remembers lock contention
 	do_nodes $(comma_list $(osts_nodes)) \
 		"lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes=0 \
 			ldlm.namespaces.filter-*.contended_locks=32 \
 			ldlm.namespaces.filter-*.contention_seconds=0"
-	# set contention_seconds to 0 at client too, otherwise Lustre still
-	# remembers lock contention
-	lctl set_param -n $OSC.*.contention_seconds=0
 	clear_stats $OSC.*.${OSC}_stats
 	for i in {1..1}; do
 		dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > \

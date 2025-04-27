@@ -23035,9 +23035,8 @@ test_216() { # bug 20317
 	local facets=$(get_facets OST)
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 
-	save_lustre_params client "osc.*.contention_seconds" > $p
 	save_lustre_params $facets \
-		"ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
+		"ldlm.namespaces.filter-*.max_nolock_bytes" > $p
 	save_lustre_params $facets \
 		"ldlm.namespaces.filter-*.contended_locks" >> $p
 	save_lustre_params $facets \
@@ -23050,7 +23049,6 @@ test_216() { # bug 20317
 		"lctl set_param -n ldlm.namespaces.*.max_nolock_bytes=2000000 \
 			ldlm.namespaces.filter-*.contended_locks=0 \
 			ldlm.namespaces.filter-*.contention_seconds=60"
-	lctl set_param -n osc.*.contention_seconds=60
 
 	$DIRECTIO write $DIR/$tfile 0 10 4096
 	$CHECKSTAT -s 40960 $DIR/$tfile
@@ -23060,7 +23058,6 @@ test_216() { # bug 20317
 		"lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes=0 \
 			ldlm.namespaces.filter-*.contended_locks=32 \
 			ldlm.namespaces.filter-*.contention_seconds=0"
-	lctl set_param -n osc.*.contention_seconds=0
 	clear_stats osc.*.osc_stats
 
 	dd if=/dev/zero of=$DIR/$tfile count=0
