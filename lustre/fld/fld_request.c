@@ -418,41 +418,42 @@ out_req:
 	return rc;
 }
 
-int fld_client_lookup(struct lu_client_fld *fld, u64 seq, u32 *mds,
-		      u32 flags, const struct lu_env *env)
+int fld_client_lookup(struct lu_client_fld *fld, u64 seq, u32 flags,
+		      const struct lu_env *env, struct lu_seq_range *res)
 {
-	struct lu_seq_range res = { 0 };
 	struct lu_fld_target *target;
 	struct lu_fld_target *origin;
 	int rc;
 
 	ENTRY;
 
-	rc = fld_cache_lookup(fld->lcf_cache, seq, &res);
-	if (rc == 0) {
-		*mds = res.lsr_index;
+	LASSERT(fld != NULL);
+	LASSERT(res != NULL);
+
+	rc = fld_cache_lookup(fld->lcf_cache, seq, res);
+	if (rc == 0)
 		RETURN(0);
-	}
 
 	/* Can not find it in the cache */
 	target = fld_client_get_target(fld, seq);
 	LASSERT(target != NULL);
 	origin = target;
+
 again:
 	CDEBUG(D_INFO, "%s: Lookup fld entry (seq: %#llx) on target %s (idx %llu)\n",
 	       fld->lcf_name, seq, fld_target_name(target), target->ft_idx);
 
-	res.lsr_start = seq;
-	fld_range_set_type(&res, flags);
+	res->lsr_start = seq;
+	fld_range_set_type(res, flags);
 
 #ifdef HAVE_SERVER_SUPPORT
 	if (target->ft_srv) {
 		LASSERT(env != NULL);
-		rc = fld_server_lookup(env, target->ft_srv, seq, &res);
+		rc = fld_server_lookup(env, target->ft_srv, seq, res);
 	} else
 #endif /* HAVE_SERVER_SUPPORT */
 	{
-		rc = fld_client_rpc(target->ft_exp, &res, FLD_QUERY, NULL);
+		rc = fld_client_rpc(target->ft_exp, res, FLD_QUERY, NULL);
 	}
 
 	if (rc == -ESHUTDOWN) {
@@ -479,10 +480,8 @@ again:
 		if (target != origin)
 			goto again;
 	}
-	if (rc == 0) {
-		*mds = res.lsr_index;
-		fld_cache_insert(fld->lcf_cache, &res);
-	}
+	if (rc == 0)
+		fld_cache_insert(fld->lcf_cache, res);
 
 	RETURN(rc);
 }

@@ -426,13 +426,14 @@ static int lov_attr_get_dom(const struct lu_env *env, struct lov_object *lov,
 static int lov_fld_lookup(struct lov_device *ld, const struct lu_fid *fid,
 			  __u32 *nr)
 {
+	struct lu_seq_range res = {0};
 	__u32 mds_idx;
 	int i, rc;
 
 	ENTRY;
 
 	rc = fld_client_lookup(&ld->ld_lmv->u.lmv.lmv_fld, fid_seq(fid),
-			       &mds_idx, LU_SEQ_RANGE_MDT, NULL);
+			       LU_SEQ_RANGE_MDT, NULL, &res);
 	if (rc) {
 		CERROR("%s: error while looking for mds number. Seq %#llx"
 		       ", err = %d\n", lu_dev_name(cl2lu_dev(&ld->ld_cl)),
@@ -440,6 +441,7 @@ static int lov_fld_lookup(struct lov_device *ld, const struct lu_fid *fid,
 		RETURN(rc);
 	}
 
+	mds_idx = res.lsr_index;
 	CDEBUG(D_INODE, "FLD lookup got mds #%x for fid="DFID"\n",
 	       mds_idx, PFID(fid));
 

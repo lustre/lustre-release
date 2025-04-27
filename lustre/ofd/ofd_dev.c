@@ -57,6 +57,8 @@
 #include <lustre_quota.h>
 #include <lustre_nodemap.h>
 #include <lustre_log.h>
+#include <llog_swab.h>
+#include <lustre_swab.h>
 #include <linux/falloc.h>
 
 #include "ofd_internal.h"
@@ -990,6 +992,82 @@ static int lock_zero_regions(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/**
+ * ofd_fid2path() - load parent FID.
+ * @info: Per-thread common data shared by ost level handlers.
+ * @fp:   User-provided struct for arguments and to store MDT-FID information.
+ *
+ * Part of the OST layer implementation of lfs fid2path.
+ *
+ * Return: 0 Lookup successful,
+ *         negative errno if there was a problem
+ */
+static int ofd_fid2path(struct ofd_thread_info *info,
+			struct getinfo_fid2path *fp)
+{
+	struct ofd_device *ofd = ofd_exp(info->fti_exp);
+	struct ofd_object *fo = NULL;
+	int rc;
+
+	ENTRY;
+
+	if (!fid_is_sane(&fp->gf_fid))
+		RETURN(-EINVAL);
+
+	if (!fid_is_namespace_visible(&fp->gf_fid)) {
+		CDEBUG(D_IOCTL,
+		       "%s: "DFID" is invalid, f_seq should be >= %#llx, or f_oid != 0, or f_ver == 0\n",
+		       ofd_name(ofd), PFID(&fp->gf_fid),
+		       (__u64)FID_SEQ_NORMAL);
+		RETURN(-EINVAL);
+	}
+
+	fo = ofd_object_find(info->fti_env, ofd, &fp->gf_fid);
+	if (IS_ERR_OR_NULL(fo)) {
+		rc = IS_ERR(fo) ? PTR_ERR(fo) : -ENOENT;
+		CDEBUG(D_IOCTL, "%s: cannot find "DFID": rc=%d\n",
+			ofd_name(ofd), PFID(&fp->gf_fid), rc);
+		RETURN(rc);
+	}
+	if (!ofd_object_exists(fo))
+		GOTO(out, rc = -ENOENT);
+
+	rc = ofd_object_ff_load(info->fti_env, fo, false);
+	if (rc) {
+		CDEBUG(D_IOCTL, "%s: ff_load failed for "DFID": rc=%d\n",
+			ofd_name(ofd), PFID(&fp->gf_fid), rc);
+		GOTO(out, rc);
+	}
+
+	fp->gf_fid = fo->ofo_ff.ff_parent;
+	fp->gf_fid.f_ver = 0;
+
+out:
+	if (fo)
+		ofd_object_put(info->fti_env, fo);
+
+	RETURN(rc);
+}
+
+static int ofd_rpc_fid2path(struct tgt_session_info *tsi,
+			    struct ofd_thread_info *info,
+			    void *key, int keylen,
+			    void *val, int vallen)
+{
+	struct getinfo_fid2path *fpout, *fpin;
+	int rc = 0;
+
+	fpin = key + round_up(sizeof(KEY_FID2PATH), 8);
+	fpout = val;
+
+	if (req_capsule_req_need_swab(tsi->tsi_pill))
+		lustre_swab_fid2path(fpin);
+
+	memcpy(fpout, fpin, sizeof(*fpin));
+
+	rc = ofd_fid2path(info, fpout);
+	RETURN(rc);
+}
 
 /**
  * OFD request handler for OST_GET_INFO RPC.
@@ -998,6 +1076,7 @@ static int lock_zero_regions(const struct lu_env *env,
  * - KEY_LAST_ID (obsolete)
  * - KEY_FIEMAP
  * - KEY_LAST_FID
+ * - KEY_FID2PATH
  *
  * This function reads needed data from storage and fills reply with it.
  *
@@ -1126,6 +1205,35 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		       PFID(fid));
 out_put:
 		ofd_seq_put(tsi->tsi_env, oseq);
+	} else if (KEY_IS(KEY_FID2PATH)) {
+		__u32 *vallen;
+		void *valout;
+
+		req_capsule_extend(tsi->tsi_pill, &RQF_MDS_FID2PATH);
+		vallen = req_capsule_client_get(tsi->tsi_pill,
+						&RMF_GETINFO_VALLEN);
+		if (!vallen) {
+			CDEBUG(D_IOCTL,
+			       "%s: cannot get RMF_GETINFO_VALLEN buffer\n",
+			       tgt_name(tsi->tsi_tgt));
+			RETURN(err_serious(-EPROTO));
+		}
+
+		req_capsule_set_size(tsi->tsi_pill, &RMF_GETINFO_VAL,
+				     RCL_SERVER, *vallen);
+		rc = req_capsule_server_pack(tsi->tsi_pill);
+		if (rc)
+			RETURN(err_serious(rc));
+
+		valout = req_capsule_server_get(tsi->tsi_pill,
+						&RMF_GETINFO_VAL);
+		if (!valout) {
+			CDEBUG(D_IOCTL,
+			       "%s: cannot get get-info RPC out buffer\n",
+			       tgt_name(tsi->tsi_tgt));
+			RETURN(-ENOMEM);
+		}
+		rc = ofd_rpc_fid2path(tsi, fti, key, keylen, valout, *vallen);
 	} else {
 		CERROR("%s: not supported key %s\n", tgt_name(tsi->tsi_tgt),
 		       (char *)key);

@@ -140,8 +140,8 @@ void fld_client_fini(struct lu_client_fld *fld);
 
 void fld_client_flush(struct lu_client_fld *fld);
 
-int fld_client_lookup(struct lu_client_fld *fld, u64 seq, u32 *mds,
-		      __u32 flags, const struct lu_env *env);
+int fld_client_lookup(struct lu_client_fld *fld, u64 seq, u32 flags,
+		      const struct lu_env *env, struct lu_seq_range *res);
 
 int fld_client_create(struct lu_client_fld *fld, struct lu_seq_range *range,
 		      const struct lu_env *env);

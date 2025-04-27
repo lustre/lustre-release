@@ -3488,11 +3488,55 @@ lookup:
 	return rc;
 }
 
+/**
+ * The FID provided could be either an MDT FID or an OST FID, both need to
+ * be handled here.
+ * 1. query from fldb-server the actual type of this FID
+ * 2a. if it's an OST-FID, try OSC_IOCONTROL(FID2PATH) with given FID, which
+ * should return the corresponding parent FID, i.e. the MDT FID
+ * 2b. otherwise it's a MDT FID already, continue to step 3
+ * 3. take the MDT FID calling MDC_IOCONTROL(FID2PATH)
+ */
 int __ll_fid2path(struct inode *inode, struct getinfo_fid2path *gfout,
 		  size_t outsize, __u32 pathlen_orig)
 {
 	struct obd_export *exp = ll_i2mdexp(inode);
+	struct obd_device *md_exp = ll_i2sbi(inode)->ll_md_exp->exp_obd;
+	struct lmv_obd *lmv = &md_exp->u.lmv;
+	struct lu_seq_range res = {0};
 	int rc;
+
+	rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(&gfout->gf_fid),
+			       LU_SEQ_RANGE_ANY, NULL, &res);
+	if (rc) {
+		CDEBUG(D_IOCTL,
+		       "%s: Error looking for target idx. Seq %#llx: rc=%d\n",
+		       md_exp->obd_name, fid_seq(&gfout->gf_fid), rc);
+		RETURN(rc);
+	}
+
+	/* Call osc_iocontrol */
+	if (res.lsr_flags == LU_SEQ_RANGE_OST) {
+		__u64 gf_recno = gfout->gf_recno;
+		__u32 gf_linkno = gfout->gf_linkno;
+		struct obd_export *dt_exp = ll_i2dtexp(inode);
+
+		/* Pass 'ost_idx' down to the lower layer via u.gf_root_fid,
+		 * which is a non-functional field in the OST context
+		 */
+		gfout->gf_u.gf_root_fid->f_oid = res.lsr_index;
+
+		rc = obd_iocontrol(OBD_IOC_FID2PATH, dt_exp, outsize, gfout,
+				   NULL);
+		if (rc) {
+			CDEBUG(D_IOCTL,
+			       "%s: Err on FID2PATH(OST), Seq %#llx: rc=%d\n",
+			       md_exp->obd_name, fid_seq(&gfout->gf_fid), rc);
+			RETURN(rc);
+		}
+		gfout->gf_recno = gf_recno;
+		gfout->gf_linkno = gf_linkno;
+	}
 
 	/* Append root FID after gfout to let MDT know the root FID so that
 	 * it can lookup the correct path, this is mainly for fileset.

@@ -18729,6 +18729,32 @@ test_154B() {
 }
 run_test 154B "verify the ll_decode_linkea tool"
 
+test_154C() {
+	(( $MDS1_VERSION >= $(version_code 2.16.54) )) ||
+		skip "need MDS1 version >= 2.16.54 for OST FID lookup"
+	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	local tf=$DIR/$tfile
+	$LFS setstripe -c2 -i0 -S1M $tf
+	dd if=/dev/zero of=$tf bs=1M count=8
+
+	stack_trap "rm -rf $tf; wait_delete_completed"
+
+	local stripe_info=$($LFS getstripe $tf)
+	# for each OST object, execute fid2path
+	while read -r lfid ofid; do
+		# keep only valid lines to parse
+		[[ "$lfid" == "l_fid:" ]] || continue
+
+		found=$($LFS fid2path "$MOUNT" "$ofid")
+		echo "ost_fid=$ofid with outpath=$found"
+		[[ -n "$found" ]] ||
+			error "fid2path failed on $ofid"
+		[[ "$found" == "$tf" ]] || error "fid2path $found != $tf"
+	done < <($LFS getstripe -y $tf)
+}
+run_test 154C "lfs fid2path on OST FID"
+
 test_154a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"

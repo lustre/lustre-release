@@ -909,6 +909,42 @@ out_rqset:
 	RETURN(rc);
 }
 
+/**
+ * lov_fid2path() - retrieve corresponding MDT FID from given OST FID
+ * @karg: pointer to struct getinfo_fid2path{}, carrying the OST FID
+ *        as the input, and the MDT FID as the output
+ *
+ * Note: the OST index is retrieved from upper layer's u.gf_root_fid
+ */
+static int lov_fid2path(struct lov_obd *lov, int len, void *karg,
+			void __user *uarg)
+{
+	struct lov_tgt_desc *tgt = NULL;
+	struct getinfo_fid2path *gf;
+	u32 ost_idx;
+	int rc;
+
+	gf = karg;
+	ost_idx = gf->gf_u.gf_root_fid->f_oid;
+	if (!fid_is_sane(&gf->gf_fid))
+		RETURN(-EINVAL);
+
+	tgt = lov_tgt(lov, ost_idx);
+	if (!tgt) {
+		CDEBUG(D_IOCTL, DFID" retrieve tgt failed, idx:%u\n",
+		       PFID(&gf->gf_fid), ost_idx);
+		RETURN(-EIO);
+	}
+
+	rc = obd_iocontrol(OBD_IOC_FID2PATH, tgt->ltd_exp, len, gf, uarg);
+	if (rc)
+		CDEBUG(D_IOCTL, "%s: err consult "DFID" on OST: rc=%d\n",
+		       tgt->ltd_exp->exp_obd->obd_name,
+		       PFID(&gf->gf_fid), rc);
+
+	RETURN(rc);
+}
+
 static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
@@ -1041,6 +1077,10 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			qctl->obd_uuid = tgt->ltd_uuid;
 		}
 		OBD_FREE_PTR(oqctl);
+		break;
+	}
+	case OBD_IOC_FID2PATH: {
+		rc = lov_fid2path(lov, len, karg, uarg);
 		break;
 	}
 	default: {

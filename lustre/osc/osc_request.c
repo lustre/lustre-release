@@ -26,6 +26,7 @@
 #include <lustre_net.h>
 #include <lustre_obdo.h>
 #include <lustre_osc.h>
+#include <lustre_swab.h>
 #include <obd.h>
 #include <obd_cksum.h>
 #include <obd_class.h>
@@ -3463,6 +3464,42 @@ out:
 	return rc;
 }
 
+static int osc_ioc_fid2path(struct obd_export *exp,
+			    struct getinfo_fid2path *gf)
+{
+	__u32 keylen, vallen;
+	void *key;
+	int rc;
+
+	if (!fid_is_sane(&gf->gf_fid))
+		RETURN(-EINVAL);
+
+	/* Key is KEY_FID2PATH + getinfo_fid2path description */
+	keylen = round_up(sizeof(KEY_FID2PATH), 8) + sizeof(*gf);
+	OBD_ALLOC(key, keylen);
+	if (key == NULL)
+		RETURN(-ENOMEM);
+
+	memcpy(key, KEY_FID2PATH, sizeof(KEY_FID2PATH));
+	memcpy(key + round_up(sizeof(KEY_FID2PATH), 8), gf, sizeof(*gf));
+
+	/* Val is struct getinfo_fid2path result */
+	vallen = sizeof(*gf);
+
+	rc = obd_get_info(NULL, exp, keylen, key, &vallen, gf);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	if (vallen < sizeof(*gf))
+		GOTO(out, rc = -EPROTO);
+	if (vallen > sizeof(*gf))
+		GOTO(out, rc = -EOVERFLOW);
+
+out:
+	OBD_FREE(key, keylen);
+	return rc;
+}
+
 static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
@@ -3492,6 +3529,9 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 					   data->ioc_inlbuf1, 0);
 		if (rc > 0)
 			rc = 0;
+		break;
+	case OBD_IOC_FID2PATH:
+		rc = osc_ioc_fid2path(exp, karg);
 		break;
 	case OBD_IOC_GETATTR:
 		if (unlikely(karg == NULL)) {
@@ -3523,6 +3563,58 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 	module_put(THIS_MODULE);
 	return rc;
+}
+
+static int osc_get_info(const struct lu_env *env, struct obd_export *exp,
+			__u32 keylen, void *key, __u32 *vallen, void *val)
+{
+	struct obd_import *imp = class_exp2cliimp(exp);
+	struct ptlrpc_request *req;
+	int rc = -EINVAL;
+	char *tmp;
+
+	ENTRY;
+	req = ptlrpc_request_alloc(imp, &RQF_MDS_FID2PATH);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_KEY, RCL_CLIENT,
+			     keylen);
+	req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VALLEN,
+			     RCL_CLIENT, sizeof(*vallen));
+
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_GET_INFO);
+	if (rc != 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_KEY);
+	memcpy(tmp, key, keylen);
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_VALLEN);
+	memcpy(tmp, vallen, sizeof(*vallen));
+
+	req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VAL,
+			     RCL_SERVER, *vallen);
+	ptlrpc_request_set_replen(req);
+
+	/* if server failed to resolve FID, and OI scrub not able to fix it, it
+	 * will return -EINPROGRESS, ptlrpc_queue_wait() will keep retrying,
+	 * set request interruptible to avoid deadlock.
+	 */
+	if (KEY_IS(KEY_FID2PATH))
+		req->rq_allow_intr = 1;
+
+	rc = ptlrpc_queue_wait(req);
+	if (rc == 0) {
+		tmp = req_capsule_server_get(&req->rq_pill, &RMF_GETINFO_VAL);
+		memcpy(val, tmp, *vallen);
+		if (req_capsule_rep_need_swab(&req->rq_pill))
+			lustre_swab_fid2path(val);
+	}
+	ptlrpc_req_put(req);
+
+	RETURN(rc);
 }
 
 int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
@@ -4080,6 +4172,7 @@ static const struct obd_ops osc_obd_ops = {
 	.o_getattr              = osc_getattr,
 	.o_setattr              = osc_setattr,
 	.o_iocontrol            = osc_iocontrol,
+	.o_get_info             = osc_get_info,
 	.o_set_info_async       = osc_set_info_async,
 	.o_import_event         = osc_import_event,
 	.o_quotactl             = osc_quotactl,
