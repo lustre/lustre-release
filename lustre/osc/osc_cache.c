@@ -28,9 +28,9 @@ static int extent_debug; /* set it to be true for more debug */
 static void osc_update_pending(struct osc_object *obj, int cmd, int delta);
 static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 			   enum osc_extent_state state);
-static void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
-			      struct osc_object *osc,
-			      struct osc_async_page *oap, int sent, int rc);
+static void osc_completion(const struct lu_env *env, struct osc_object *osc,
+			   struct osc_async_page *oap, enum cl_req_type crt,
+			   int rc);
 static int osc_make_ready(const struct lu_env *env, struct osc_async_page *oap,
 			  int cmd);
 static int osc_refresh_count(const struct lu_env *env, struct osc_object *osc,
@@ -833,7 +833,13 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 	int blocksize = cli->cl_import->imp_obd->obd_osfs.os_bsize ? : 4096;
 	loff_t last_off = 0;
 	int last_count = -1;
+	enum cl_req_type crt;
 	ENTRY;
+
+	if (ext->oe_rw == 0)
+		crt = CRT_WRITE;
+	else
+		crt = CRT_READ;
 
 	OSC_EXTENT_DUMP(D_CACHE, ext, "extent finished.\n");
 
@@ -854,7 +860,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		}
 
 		--ext->oe_nr_pages;
-		osc_ap_completion(env, cli, osc, oap, sent, rc);
+		osc_completion(env, osc, oap, crt, rc);
 	}
 	EASSERT(ext->oe_nr_pages == 0, ext);
 
@@ -1286,31 +1292,34 @@ static int osc_refresh_count(const struct lu_env *env, struct osc_object *osc,
 		return PAGE_SIZE;
 }
 
-static int osc_completion(const struct lu_env *env, struct osc_object *osc,
-			  struct osc_async_page *oap, int cmd, int rc)
+/* this must be called holding the loi list lock to give coverage to exit_cache,
+ * async_flag maintenance
+ */
+static void osc_completion(const struct lu_env *env, struct osc_object *osc,
+			   struct osc_async_page *oap, enum cl_req_type crt,
+			   int rc)
 {
 	struct osc_page   *opg  = oap2osc_page(oap);
 	struct cl_page    *page = oap2cl_page(oap);
-	enum cl_req_type   crt;
 	int srvlock;
 	int cptype = page->cp_type;
 
 	ENTRY;
 
-	cmd &= ~OBD_BRW_NOQUOTA;
 	if (cptype != CPT_TRANSIENT) {
+		/* As the transfer for this page is done, clear the flags */
+		oap->oap_async_flags = 0;
+
 		LASSERTF(equi(page->cp_state == CPS_PAGEIN,
-			      cmd == OBD_BRW_READ),
-			 "cp_state:%u, cmd:%d\n", page->cp_state, cmd);
+			      crt == CRT_READ),
+			 "cp_state:%u, crt:%d\n", page->cp_state, crt);
 		LASSERTF(equi(page->cp_state == CPS_PAGEOUT,
-			      cmd == OBD_BRW_WRITE),
-			"cp_state:%u, cmd:%d\n", page->cp_state, cmd);
+			      crt == CRT_WRITE),
+			"cp_state:%u, crt:%d\n", page->cp_state, crt);
 		LASSERT(opg->ops_transfer_pinned);
 		/* Clear opg->ops_transfer_pinned before VM lock is released.*/
 		opg->ops_transfer_pinned = 0;
 	}
-
-	crt = cmd == OBD_BRW_READ ? CRT_READ : CRT_WRITE;
 
 	srvlock = oap->oap_brw_flags & OBD_BRW_SRVLOCK;
 
@@ -1339,7 +1348,8 @@ static int osc_completion(const struct lu_env *env, struct osc_object *osc,
 	if (cptype != CPT_TRANSIENT)
 		cl_page_put(env, page);
 
-	RETURN(0);
+	EXIT;
+	return;
 }
 
 #define OSC_DUMP_GRANT(mask, cli, fmt, args...) do {			\
@@ -1767,26 +1777,6 @@ static int osc_list_maint(struct client_obd *cli, struct osc_object *osc)
 	spin_unlock(&cli->cl_loi_list_lock);
 
 	return is_ready;
-}
-
-/* this must be called holding the loi list lock to give coverage to exit_cache,
- * async_flag maintenance
- */
-static void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
-			      struct osc_object *osc,
-			      struct osc_async_page *oap, int sent, int rc)
-{
-	ENTRY;
-
-	/* As the transfer for this page is being done, clear the flags */
-	oap->oap_async_flags = 0;
-
-	rc = osc_completion(env, osc, oap, oap->oap_cmd, rc);
-	if (rc)
-		CERROR("completion on oap %p obj %p returns %d.\n",
-		       oap, osc, rc);
-
-	EXIT;
 }
 
 struct extent_rpc_data {
@@ -2580,10 +2570,15 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 	int mppr = cli->cl_max_pages_per_rpc;
 	pgoff_t start = CL_PAGE_EOF;
 	bool can_merge = true;
+	enum cl_req_type crt;
 	int page_count = 0;
 	pgoff_t end = 0;
-
 	ENTRY;
+
+	if (brw_flags & OBD_BRW_READ)
+		crt = CRT_READ;
+	else
+		crt = CRT_WRITE;
 
 	list_for_each_entry(oap, list, oap_pending_item) {
 		struct osc_page *opg = oap2osc_page(oap);
@@ -2606,7 +2601,7 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 
 		list_for_each_entry_safe(oap, tmp, list, oap_pending_item) {
 			list_del_init(&oap->oap_pending_item);
-			osc_ap_completion(env, cli, obj, oap, 0, -ENOMEM);
+			osc_completion(env, obj, oap, crt, -ENOMEM);
 		}
 		RETURN(-ENOMEM);
 	}
@@ -2703,8 +2698,13 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 	bool	can_merge   = true;
 	pgoff_t start      = CL_PAGE_EOF;
 	pgoff_t end        = 0;
-
+	enum cl_req_type crt;
 	ENTRY;
+
+	if (brw_flags & OBD_BRW_READ)
+		crt = CRT_READ;
+	else
+		crt = CRT_WRITE;
 
 	list_for_each_entry(oap, list, oap_pending_item) {
 		struct osc_page *opg = oap2osc_page(oap);
@@ -2728,7 +2728,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 
 		list_for_each_entry_safe(oap, tmp, list, oap_pending_item) {
 			list_del_init(&oap->oap_pending_item);
-			osc_ap_completion(env, cli, obj, oap, 0, -ENOMEM);
+			osc_completion(env, obj, oap, crt, -ENOMEM);
 		}
 		RETURN(-ENOMEM);
 	}
