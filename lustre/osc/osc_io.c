@@ -261,6 +261,8 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	bool sync_queue = false;
 	int result = 0;
 	int brw_flags;
+	int from = -1;
+	int to = -1;
 	int i = 0;
 
 	LASSERT(qin->pl_nr > 0);
@@ -290,6 +292,8 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 
 		opg = osc_cl_page_osc(page, osc);
 		oap = &opg->ops_oap;
+		if (from == -1)
+			from = i;
 
 		osc_page_submit(env, opg, crt, brw_flags);
 		list_add_tail(&oap->oap_pending_item, &list);
@@ -313,19 +317,24 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 				sync_queue = true;
 		}
 
+		to = i;
 		if (sync_queue) {
-			result = osc_queue_dio_pages(env, top_io, osc, &list,
+			result = osc_queue_dio_pages(env, top_io, osc, cdp,
+						     &list, from, to,
 						     brw_flags);
 			if (result < 0)
 				break;
+			from = -1;
 			queued = 0;
 			sync_queue = false;
 		}
 	}
 
-	if (queued > 0)
-		result = osc_queue_dio_pages(env, top_io, osc, &list,
-					     brw_flags);
+	if (queued > 0) {
+		LASSERT(to != -1);
+		result = osc_queue_dio_pages(env, top_io, osc, cdp, &list,
+					     from, to, brw_flags);
+	}
 
 	/* Update c/mtime for sync write. LU-7310 */
 	if (crt == CRT_WRITE && qout->pl_nr > 0 && result == 0) {

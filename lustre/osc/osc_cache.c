@@ -2559,7 +2559,8 @@ out:
 }
 
 int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
-			struct osc_object *obj, struct list_head *list,
+			struct osc_object *obj, struct cl_dio_pages *cdp,
+			struct list_head *list, int from_page, int to_page,
 			int brw_flags)
 {
 	struct client_obd *cli = osc_cli(obj);
@@ -2567,12 +2568,16 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 	struct osc_async_page *oap;
 	struct osc_extent *ext;
 	struct osc_lock *oscl;
+	struct cl_page *page;
+	struct osc_page *opg;
 	int mppr = cli->cl_max_pages_per_rpc;
 	pgoff_t start = CL_PAGE_EOF;
 	bool can_merge = true;
 	enum cl_req_type crt;
 	int page_count = 0;
 	pgoff_t end = 0;
+	int i;
+
 	ENTRY;
 
 	if (brw_flags & OBD_BRW_READ)
@@ -2580,9 +2585,13 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 	else
 		crt = CRT_WRITE;
 
-	list_for_each_entry(oap, list, oap_pending_item) {
-		struct osc_page *opg = oap2osc_page(oap);
-		pgoff_t index = osc_index(opg);
+	for (i = from_page; i <= to_page; i++) {
+		pgoff_t index;
+
+		page = cdp->cdp_cl_pages[i];
+		opg = osc_cl_page_osc(page, obj);
+		oap = &opg->ops_oap;
+		index = osc_index(opg);
 
 		if (index > end)
 			end = index;
@@ -2597,9 +2606,11 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 
 	ext = osc_extent_alloc(obj);
 	if (ext == NULL) {
-		struct osc_async_page *tmp;
+		for (i = from_page; i <= to_page; i++) {
+			page = cdp->cdp_cl_pages[i];
+			opg = osc_cl_page_osc(page, obj);
+			oap = &opg->ops_oap;
 
-		list_for_each_entry_safe(oap, tmp, list, oap_pending_item) {
 			list_del_init(&oap->oap_pending_item);
 			osc_completion(env, obj, oap, crt, -ENOMEM);
 		}
@@ -2642,7 +2653,11 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 		CDEBUG(D_CACHE, "requesting %d bytes grant\n", grants);
 		spin_lock(&cli->cl_loi_list_lock);
 		if (osc_reserve_grant(cli, grants) == 0) {
-			list_for_each_entry(oap, list, oap_pending_item) {
+			for (i = from_page; i <= to_page; i++) {
+				page = cdp->cdp_cl_pages[i];
+				opg = osc_cl_page_osc(page, obj);
+				oap = &opg->ops_oap;
+
 				osc_consume_write_grant(cli,
 							&oap->oap_brw_page);
 			}
