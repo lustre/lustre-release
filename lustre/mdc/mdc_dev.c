@@ -1606,6 +1606,7 @@ drop_lock:
 
 static const struct cl_object_operations mdc_ops = {
 	.coo_page_init = osc_page_init,
+	.coo_dio_pages_init = osc_dio_pages_init,
 	.coo_lock_init = mdc_lock_init,
 	.coo_io_init = mdc_io_init,
 	.coo_attr_get = mdc_attr_get,

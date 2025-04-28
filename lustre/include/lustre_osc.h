@@ -526,6 +526,8 @@ extern struct lu_context_key osc_session_key;
 #define OSC_FLAGS (ASYNC_URGENT|ASYNC_READY)
 
 /* osc_page.c */
+int osc_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
+		       struct cl_dio_pages *cdp, pgoff_t index);
 int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 		  struct cl_page *page, pgoff_t ind);
 void osc_index2policy(union ldlm_policy_data *policy,

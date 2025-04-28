@@ -407,6 +407,7 @@ static void osc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 
 static const struct cl_object_operations osc_ops = {
 	.coo_page_init    = osc_page_init,
+	.coo_dio_pages_init = osc_dio_pages_init,
 	.coo_lock_init    = osc_lock_init,
 	.coo_io_init      = osc_io_init,
 	.coo_attr_get     = osc_attr_get,

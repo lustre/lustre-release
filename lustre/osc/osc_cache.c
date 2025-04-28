@@ -2616,6 +2616,7 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 	struct osc_lock *oscl;
 	struct cl_page *page;
 	struct osc_page *opg;
+	pgoff_t cdp_index = cdp->cdp_osc_off >> PAGE_SHIFT;
 	int page_count = to_page - from_page + 1;
 	int mppr = cli->cl_max_pages_per_rpc;
 	pgoff_t start = CL_PAGE_EOF;
@@ -2640,19 +2641,8 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 	if (unlikely(cdp->cdp_from > 0 || cdp->cdp_to < PAGE_SIZE - 1))
 		can_merge = false;
 
-	for (i = from_page; i <= to_page; i++) {
-		pgoff_t index;
-
-		page = cdp->cdp_cl_pages[i];
-		opg = osc_cl_page_osc(page, obj);
-		oap = &opg->ops_oap;
-		index = osc_index(opg);
-
-		if (index > end)
-			end = index;
-		if (index < start)
-			start = index;
-	}
+	start = cdp_index + from_page;
+	end = cdp_index + to_page;
 
 	ext = osc_extent_alloc(obj);
 	if (ext == NULL) {

@@ -2586,6 +2586,7 @@ struct cl_dio_pages {
 	/* the file offset of the first page. */
 	loff_t                  cdp_file_offset;
 	unsigned int		cdp_lov_index;
+	loff_t			cdp_osc_off;
 	/** # of pages in the array. */
 	unsigned int		cdp_page_count;
 	/* the first and last page can be incomplete, this records the

@@ -217,6 +217,15 @@ static const struct cl_page_operations osc_page_ops = {
 	.cpo_page_touch	   = osc_page_touch,
 };
 
+int osc_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
+		       struct cl_dio_pages *cdp, pgoff_t index)
+{
+	cdp->cdp_osc_off = index << PAGE_SHIFT;
+
+	return 0;
+}
+EXPORT_SYMBOL(osc_dio_pages_init);
+
 int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 		  struct cl_page *cl_page, pgoff_t index)
 {
