@@ -257,6 +257,7 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	unsigned int ppc_bits = cli->cl_chunkbits - PAGE_SHIFT;
 	unsigned int max_pages = cli->cl_max_pages_per_rpc;
 	unsigned int ppc = 1 << ppc_bits;
+	unsigned int total_queued = 0;
 	unsigned int queued = 0;
 	bool sync_queue = false;
 	int result = 0;
@@ -301,6 +302,7 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 		cl_page_list_move(qout, qin, page);
 
 		queued++;
+		total_queued++;
 		if (queued == max_pages) {
 			sync_queue = true;
 		} else if (crt == CRT_WRITE) {
@@ -337,7 +339,7 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	}
 
 	/* Update c/mtime for sync write. LU-7310 */
-	if (crt == CRT_WRITE && qout->pl_nr > 0 && result == 0) {
+	if (crt == CRT_WRITE && total_queued > 0 && result == 0) {
 		struct cl_attr *attr = &osc_env_info(env)->oti_attr;
 		struct cl_object *obj   = ios->cis_obj;
 
@@ -347,8 +349,9 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 		cl_object_attr_unlock(obj);
 	}
 
-	CDEBUG(D_INFO, "%d/%d %d\n", qin->pl_nr, qout->pl_nr, result);
-	return qout->pl_nr > 0 ? 0 : result;
+	CDEBUG(D_INFO, "%d/%u %d\n", total_queued, cdp->cdp_page_count,
+	       result);
+	return total_queued > 0 ? 0 : result;
 }
 
 int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
