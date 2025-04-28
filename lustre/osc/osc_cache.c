@@ -2616,11 +2616,11 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 	struct osc_lock *oscl;
 	struct cl_page *page;
 	struct osc_page *opg;
+	int page_count = to_page - from_page + 1;
 	int mppr = cli->cl_max_pages_per_rpc;
 	pgoff_t start = CL_PAGE_EOF;
 	bool can_merge = true;
 	enum cl_req_type crt;
-	int page_count = 0;
 	pgoff_t end = 0;
 	int i;
 
@@ -2630,6 +2630,15 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 		crt = CRT_READ;
 	else
 		crt = CRT_WRITE;
+
+	/* we should never have more pages than can fit in an RPC, but if we do
+	 * we must allow sending of a larger RPC
+	 */
+	while (page_count > mppr)
+		mppr = mppr << 1;
+
+	if (unlikely(cdp->cdp_from > 0 || cdp->cdp_to < PAGE_SIZE - 1))
+		can_merge = false;
 
 	for (i = from_page; i <= to_page; i++) {
 		pgoff_t index;
@@ -2643,11 +2652,6 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 			end = index;
 		if (index < start)
 			start = index;
-		++page_count;
-		mppr <<= (page_count > mppr);
-
-		if (unlikely(oap->oap_count < PAGE_SIZE))
-			can_merge = false;
 	}
 
 	ext = osc_extent_alloc(obj);
