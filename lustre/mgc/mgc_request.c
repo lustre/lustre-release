@@ -456,8 +456,6 @@ out_err:
 	return ERR_PTR(rc);
 }
 
-DEFINE_MUTEX(llog_process_lock);
-
 static inline void config_mark_cld_stop_nolock(struct config_llog_data *cld)
 {
 	ENTRY;
