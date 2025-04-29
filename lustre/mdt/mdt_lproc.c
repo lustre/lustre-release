@@ -811,6 +811,8 @@ static ssize_t name##_show(struct kobject *kobj, struct attribute *attr,\
 	struct obd_device *obd = container_of(kobj, struct obd_device,	\
 					      obd_kset.kobj);		\
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);		\
+	if (IS_ERR_OR_NULL(mdt))					\
+		return -ENOENT;						\
 	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_##name);	\
 }									\
 static ssize_t name##_store(struct kobject *kobj, struct attribute *attr,\
@@ -821,6 +823,8 @@ static ssize_t name##_store(struct kobject *kobj, struct attribute *attr,\
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);		\
 	bool val;							\
 	int rc;								\
+	if (IS_ERR_OR_NULL(mdt))					\
+		return -ENOENT;						\
 	rc = kstrtobool(buffer, &val);					\
 	if (rc)								\
 		return rc;						\
