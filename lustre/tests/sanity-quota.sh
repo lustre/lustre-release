@@ -6915,6 +6915,9 @@ test_95() {
 	local ip=$(host_nids_address $HOSTNAME $NETTYPE)
 	local nid=$(h2nettype $ip)
 
+	(( $MDS1_VERSION >= $(version_code 2_16_52-39-gb162043239) )) ||
+		skip "need MDS >= 2.16.52.39 to have idmap fix for root"
+
 	$LFS setquota -u $off -B1025 $DIR ||
 		error "Can't setquota for uid $off"
 	stack_trap "$LFS setquota -u $off -B0 $DIR"
