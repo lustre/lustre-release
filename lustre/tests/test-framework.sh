@@ -8672,14 +8672,12 @@ run_mdtest () {
 	create-small)
 		stripe_options=(-c 1 -i 0)
 		mdtest_actions=(-F -R)
-		file_size=1024
+		file_size=3901
 		num_files=100000
 		;;
 	create-large)
-		stripe_options=(-c -1)
 		mdtest_actions=(-F -R)
-		file_size=$((1024 * 1024 * 1024))
-		num_files=16
+		num_files=1000000
 		;;
 	lookup-single)
 		stripe_options=(-c 1)

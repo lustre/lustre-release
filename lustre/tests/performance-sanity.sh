@@ -30,10 +30,6 @@ env_verify()
 test_1() {
 	env_verify
 	echo "Small files creation performance test"
-	# LU-2600/LU-4108 - Decrease load on zfs
-	if [[ "$SLOW" == no && "$mds1_FSTYPE" == zfs ]]; then
-		NUM_FILES=10000
-	fi
 	run_mdtest create-small
 }
 run_test 1 "small files create/open/delete"
@@ -41,6 +37,10 @@ run_test 1 "small files create/open/delete"
 test_2() {
 	env_verify
 	echo "Large files creation performance test"
+	# LU-2600/LU-4108 - Decrease load on zfs
+	if [[ "$SLOW" == no && "$mds1_FSTYPE" == zfs ]]; then
+		NUM_FILES=10000
+	fi
 	run_mdtest create-large
 }
 run_test 2 "large files create/open/delete"
