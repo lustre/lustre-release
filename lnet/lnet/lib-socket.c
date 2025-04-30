@@ -564,8 +564,8 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns,
 			continue;
 
 		if (!(flags & IFF_UP)) {
-			CWARN("lnet: Ignoring interface %s: it's down\n",
-			      dev->name);
+			CDEBUG(D_NET, "Ignoring interface %s: it's down\n",
+			       dev->name);
 			continue;
 		}
 

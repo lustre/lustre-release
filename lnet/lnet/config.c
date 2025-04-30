@@ -1548,14 +1548,13 @@ int lnet_inet_select(struct lnet_ni *ni,
 		return if_idx;
 
 	if (addr_set)
-		CERROR("%s: failed to find IP address %s\n",
+		CERROR("%s: failed to find UP interface with IP address %s\n",
 		       libcfs_lnd2modname(ni->ni_nid.nid_type),
 		       libcfs_nidstr(&ni->ni_nid));
 	else if (ni->ni_interface)
-		CERROR("%s: failed to find interface %s%s%s\n",
+		CERROR("%s: failed to find UP interface %s\n",
 		       libcfs_lnd2modname(ni->ni_nid.nid_type),
-		       ni->ni_interface, addr_set ? "@" : "",
-		       addr_set ? libcfs_nidstr(&ni->ni_nid) : "");
+		       ni->ni_interface);
 
 	return -EINVAL;
 }
