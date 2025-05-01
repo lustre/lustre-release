@@ -1856,8 +1856,11 @@ static void
 kiblnd_fini_fmr_poolset(struct kib_fmr_poolset *fps)
 {
 	if (fps->fps_net != NULL) { /* initialized? */
+		/* added spinlock to protect poolset */
+		spin_lock(&fps->fps_lock);
 		kiblnd_destroy_fmr_pool_list(&fps->fps_failed_pool_list);
 		kiblnd_destroy_fmr_pool_list(&fps->fps_pool_list);
+		spin_unlock(&fps->fps_lock);
 	}
 }
 
@@ -2245,8 +2248,11 @@ static void
 kiblnd_fini_poolset(struct kib_poolset *ps)
 {
 	if (ps->ps_net != NULL) { /* initialized? */
+		/* added spinlock to protect poolset */
+		spin_lock(&ps->ps_lock);
 		kiblnd_destroy_pool_list(&ps->ps_failed_pool_list);
 		kiblnd_destroy_pool_list(&ps->ps_pool_list);
+		spin_unlock(&ps->ps_lock);
 	}
 }
 
