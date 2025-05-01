@@ -853,8 +853,7 @@ void cfs_trace_debug_print(void)
 			p += strlen(fn) + 1;
 			len = hdr->ph_len - (int)(p - (char *)hdr);
 
-			cfs_print_to_console(hdr, D_EMERG, file, fn,
-					     "%.*s", len, p);
+			cfs_print_to_console(hdr, file, fn, "%.*s", len, p);
 
 			p += len;
 		}
@@ -880,8 +879,7 @@ void cfs_trace_debug_print(void)
 			p += strlen(fn) + 1;
 			len = hdr->ph_len - (int)(p - (char *)hdr);
 
-			cfs_print_to_console(hdr, D_EMERG, file, fn,
-					     "%.*s", len, p);
+			cfs_print_to_console(hdr, file, fn, "%.*s", len, p);
 
 			p += len;
 		}
