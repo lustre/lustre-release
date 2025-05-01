@@ -18,7 +18,6 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$SANITYN_EXCEPT "
-always_except LU-7105	28
 [[ $(uname -r) = *"debug" ]] &&
 	always_except LU-10870	40a
 
@@ -1133,11 +1132,6 @@ test_27() {
 	[ $? -ne 0 ] && lctl dk $TMP/debug || true
 }
 run_test 27 "align non-overlapping extent locks from request ==="
-
-test_28() { # bug 9977
-	skip "echo_client on osc is no longer supported"
-}
-run_test 28 "read/write/truncate file with lost stripes"
 
 test_30() { #b=11110, LU-2523
 	test_mkdir $DIR1/$tdir
