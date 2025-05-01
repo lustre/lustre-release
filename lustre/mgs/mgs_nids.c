@@ -47,6 +47,119 @@ static int nidtbl_is_sane(struct mgs_nidtbl *tbl)
 	return 1;
 }
 
+static unsigned int mgs_tgt_nid_count(struct mgs_nidtbl_target *tgt,
+				      unsigned long netid)
+{
+	struct tnt_nidlist *tnl;
+	void *xa_tnl;
+	unsigned int nids_total = 0;
+
+	if (netid == LNET_NET_ANY) {
+		xa_for_each(&tgt->mnt_xa_nids, netid, xa_tnl) {
+			tnl = xa_tnl;
+			nids_total += tnl->tnl_count;
+		}
+	} else {
+		/* only particular net */
+		tnl = xa_load(&tgt->mnt_xa_nids, netid);
+		if (tnl)
+			nids_total += tnl->tnl_count;
+	}
+	return nids_total;
+}
+
+static int nidtbl_tnl2entry(struct mgs_nidtbl_entry *entry,
+			    struct tnt_nidlist *tnl, unsigned int limit)
+{
+	unsigned int tail = limit - entry->mne_length;
+	unsigned int count = tail / entry->mne_nid_size;
+	int i, rc = 0;
+
+	if (tnl->tnl_count > count) {
+		CDEBUG(D_MGS,
+		       "IR: only +%u NIDs (%u total) fits in unit size %u\n",
+		       count, count + entry->mne_nid_count, limit);
+		rc = -EOVERFLOW;
+	} else {
+		count = tnl->tnl_count;
+	}
+
+	for (i = 0; i < count; i++) {
+		struct lnet_nid nid;
+		int err;
+
+		err = libcfs_strnid(&nid, tnl->tnl_nids[i]);
+		if (err < 0) {
+			CDEBUG(D_MGS, "IR: bad NID #%d in nidtbl: %s\n",
+			       i, tnl->tnl_nids[i]);
+			continue;
+		}
+
+		if (entry->mne_nid_type == 0) {
+			if (!nid_is_nid4(&nid))
+				continue;
+
+			entry->u.nids[entry->mne_nid_count] =
+						lnet_nid_to_nid4(&nid);
+		} else {
+			/* If the mgs_target_info NIDs are
+			 * struct lnet_nid that have been
+			 * expanded in size we still can
+			 * use the nid if it fits in what
+			 * the client supports.
+			 */
+			if (NID_BYTES(&nid) > entry->mne_nid_size)
+				continue;
+			entry->u.nidlist[entry->mne_nid_count] = nid;
+		}
+		entry->mne_nid_count++;
+		entry->mne_length += entry->mne_nid_size;
+	}
+
+	return rc;
+}
+
+static int nidtbl_fill_entry(struct mgs_nidtbl_target *tgt,
+			     struct mgs_nidtbl_entry *entry,
+			     unsigned long netid, unsigned int limit)
+{
+	struct tnt_nidlist *tnl;
+	void *xa_tnl;
+	unsigned long xa_index;
+	int rc = 0;
+
+	/* fill in entry. */
+	entry->mne_version = tgt->mnt_version;
+	entry->mne_instance = tgt->mnt_instance;
+	entry->mne_index = tgt->mnt_stripe_index;
+	entry->mne_length = sizeof(*entry);
+	entry->mne_type = tgt->mnt_type;
+	entry->mne_nid_count = 0;
+
+	if (netid == LNET_NET_ANY) {
+		/* Without restrictions it gets all NIDs across all nets */
+		xa_for_each(&tgt->mnt_xa_nids, xa_index, xa_tnl) {
+			tnl = xa_tnl;
+			CDEBUG(D_INFO, "IR: %u NIDs from NET #%lu\n",
+			       tnl->tnl_count, xa_index);
+			rc = nidtbl_tnl2entry(entry, tnl, limit);
+			if (rc)
+				break;
+		}
+	} else {
+		xa_index = LNET_NETNUM(netid);
+		/* only particular netid */
+		tnl = xa_load(&tgt->mnt_xa_nids, xa_index);
+		if (tnl) {
+			CDEBUG(D_INFO, "IR: %u NIDs from NET #%lu\n",
+			       tnl->tnl_count, xa_index);
+			rc = nidtbl_tnl2entry(entry, tnl, limit);
+		} else {
+			CDEBUG(D_MGS, "IR: no NIDs for NET #%lu\n", xa_index);
+		}
+	}
+	return rc;
+}
 /**
  * Fetch nidtbl entries whose version are not less than @version
  * nidtbl entries will be packed in @pages by @unit_size units - entries
@@ -60,8 +173,9 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 	struct mgs_nidtbl_target *tgt;
 	struct mgs_nidtbl_entry *entry;
 	struct mgs_nidtbl_entry *last_in_unit = NULL;
-	struct mgs_target_info *mti;
 	__u64 version = res->mcr_offset;
+	unsigned long netid;
+	unsigned int nid_count;
 	bool nobuf = false;
 	void *buf = NULL;
 	int bytes_in_unit = 0;
@@ -85,29 +199,34 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 	}
 
 	/*
-	 * iterate over all targets to compose a bitmap by the type of llog.
-	 * If the llog is for MDTs, llog entries for OSTs will be returned;
-	 * otherwise, it's for clients, then llog entries for both OSTs and
-	 * MDTs will be returned.
+	 * iterate over all targets to compose IR log entries.
 	 */
 	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
 		int entry_len = sizeof(*entry);
-		int i;
 
 		if (tgt->mnt_version < version)
 			continue;
 
-		/* write target recover information */
-		mti  = &tgt->mnt_mti;
+		/* Network filtering. Possibly can come from:
+		 * - any server restriction policy NETs vs clients
+		 * - any client supplied hints about its networks
+		 * - network used by this request
+		 * - etc.
+		 */
+		/* no filtering yet */
+		netid = LNET_NET_ANY;
+		nid_count = mgs_tgt_nid_count(tgt, netid);
+
 		if (!nid_size)
-			entry_len += mti->mti_nid_count * sizeof(lnet_nid_t);
+			entry_len += nid_count * sizeof(lnet_nid_t);
 		else
-			entry_len += mti->mti_nid_count * nid_size;
+			entry_len += nid_count * nid_size;
 
 		if (entry_len > unit_size) {
-			CWARN("nidtbl: too large entry: entry length %d, unit size: %d\n",
-			      entry_len, unit_size);
-			GOTO(out, rc = -EOVERFLOW);
+			CDEBUG(D_MGS,
+			       "nidtbl: entry has %u NIDs, can't fit in %d\n",
+			       nid_count, unit_size);
+			/* return as many NIDs as can fit */
 		}
 
 		if (bytes_in_unit < entry_len) {
@@ -154,11 +273,6 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 
 		/* fill in entry. */
 		entry = (struct mgs_nidtbl_entry *)buf;
-		entry->mne_version = tgt->mnt_version;
-		entry->mne_instance = mti->mti_instance;
-		entry->mne_index = mti->mti_stripe_index;
-		entry->mne_length = entry_len;
-		entry->mne_type = tgt->mnt_type;
 		if (nid_size) {
 			entry->mne_nid_size = nid_size;
 			entry->mne_nid_type = 1;
@@ -166,59 +280,22 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 			entry->mne_nid_size = sizeof(lnet_nid_t);
 			entry->mne_nid_type = 0;
 		}
-		entry->mne_nid_count = 0;
-		/* We have been sent the newer larger NID format but the
-		 * current nidtbl doesn't support it. So filter the NIDs
-		 * sent to reject any real larger size NIDS.
+		/* if no NIDs filled then emit error and continue
+		 * with partial nidlist otherwise.
 		 */
-		if (target_supports_large_nid(mti)) {
-			for (i = 0; i < mti->mti_nid_count; i++) {
-				struct lnet_nid nid;
-				int err;
-
-				err = libcfs_strnid(&nid, mti->mti_nidlist[i]);
-				if (err < 0)
-					GOTO(out, rc = err);
-
-				if (nid_size == 0) {
-					if (!nid_is_nid4(&nid))
-						continue;
-
-					entry->u.nids[entry->mne_nid_count] =
-						lnet_nid_to_nid4(&nid);
-				} else {
-					/* If the mgs_target_info NIDs are
-					 * struct lnet_nid that have been
-					 * expanded in size we still can
-					 * use the nid if it fits in what
-					 * the client supports.
-					 */
-					if (NID_BYTES(&nid) > nid_size)
-						continue;
-
-					entry->u.nidlist[entry->mne_nid_count] =
-						nid;
-				}
-				entry->mne_nid_count++;
-			}
-		} else {
-			if (nid_size) {
-				for (i = 0; i < mti->mti_nid_count; i++)
-					lnet_nid4_to_nid(mti->mti_nids[i],
-							 &entry->u.nidlist[i]);
-			} else {
-				memcpy(entry->u.nids, mti->mti_nids,
-				       mti->mti_nid_count * sizeof(lnet_nid_t));
-			}
-			entry->mne_nid_count = mti->mti_nid_count;
+		nidtbl_fill_entry(tgt, entry, netid, bytes_in_unit);
+		if (!entry->mne_nid_count) {
+			rc = -EOVERFLOW;
+			break;
 		}
+		entry_len = entry->mne_length;
 
 		version = tgt->mnt_version;
-		rc     += entry_len;
-		buf    += entry_len;
+		rc += entry_len;
+		buf += entry_len;
 
 		bytes_in_unit -= entry_len;
-		last_in_unit   = entry;
+		last_in_unit = entry;
 
 		CDEBUG(D_MGS, "fsname %s, entry size %d, pages %d/%d/%d/%d.\n",
 		       tbl->mn_fsdb->fsdb_name, entry_len,
@@ -231,10 +308,11 @@ out:
 	res->mcr_size = tbl->mn_version;
 	res->mcr_offset = nobuf ? version : tbl->mn_version;
 	mutex_unlock(&tbl->mn_lock);
-	LASSERT(ergo(version == 1, rc == 0)); /* get the log first time */
 
 	CDEBUG(D_MGS, "Read IR logs %s return with %d, version %llu\n",
 	       tbl->mn_fsdb->fsdb_name, rc, version);
+	LASSERT(ergo(version == 1, rc <= 0)); /* get the log first time */
+
 	RETURN(rc);
 }
 
@@ -337,6 +415,120 @@ static int nidtbl_read_version(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/* Overwrite or append nidlist with new one */
+static int mgs_tnl_update(struct mgs_nidtbl_target *tgt, unsigned long net,
+			  struct mgs_target_info *mti, unsigned int mti_off,
+			  unsigned int count)
+{
+	struct tnt_nidlist *tnl, *oldtnl;
+	size_t newsize, oldsize = 0;
+	unsigned int tnl_off = 0;
+	int i, rc;
+
+	if (net == LNET_NETNUM(LNET_NET_ANY))
+		return 0;
+
+	oldtnl = xa_load(&tgt->mnt_xa_nids, net);
+	if (oldtnl) {
+		oldsize = oldtnl->tnl_size;
+		/* if version is the same then append case */
+		if (oldtnl->tnl_version == tgt->mnt_version)
+			tnl_off = oldtnl->tnl_count;
+	}
+
+	/* start with 4 slots as minumum */
+	newsize = TNL_SIZE(max_t(unsigned int, tnl_off + count, 4));
+	if (newsize > oldsize) {
+		newsize = size_roundup_power2(newsize);
+		OBD_ALLOC(tnl, newsize);
+		if (!tnl) {
+			rc = -ENOMEM;
+			CERROR("%s: can't allocate nidlist, rc = %d\n",
+			       mti->mti_svname, rc);
+			return rc;
+		}
+		if (oldtnl && tnl_off) /* append case */
+			memcpy(tnl, oldtnl, TNL_SIZE(oldtnl->tnl_count));
+		tnl->tnl_size = newsize;
+	} else {
+		tnl = oldtnl;
+	}
+
+	CDEBUG(D_MGS, "nidtbl: %s %u NIDs to NET #%lu\n",
+	       tnl_off ? "append" : "write", count, net);
+	if (target_supports_large_nid(mti)) {
+		memcpy(&tnl->tnl_nids[tnl_off], &mti->mti_nidlist[mti_off],
+		       count * LNET_NIDSTR_SIZE);
+	} else {
+		for (i = 0; i < count; i++)
+			libcfs_nid2str_r(mti->mti_nids[mti_off + i],
+					 tnl->tnl_nids[tnl_off + i],
+					 LNET_NIDSTR_SIZE);
+	}
+	tnl->tnl_count = tnl_off + count;
+	tnl->tnl_version = tgt->mnt_version;
+
+	if (tnl == oldtnl)
+		return 0;
+
+	oldtnl = xa_store(&tgt->mnt_xa_nids, net, tnl, GFP_KERNEL);
+	rc = xa_err(oldtnl);
+	if (rc) {
+		CDEBUG(D_MGS, "nidtbl: can't store NET #%lu, rc = %d\n",
+		       net, rc);
+		/* free tnl and keep using oldtnl whatever it is */
+		OBD_FREE(tnl, tnl->tnl_size);
+	} else {
+		OBD_FREE(oldtnl, oldtnl->tnl_size);
+	}
+
+	return rc;
+}
+
+static unsigned int mti_nidnet(struct mgs_target_info *mti, int i)
+{
+	struct lnet_nid nid;
+	int rc;
+
+	if (target_supports_large_nid(mti)) {
+		rc = libcfs_strnid(&nid, mti->mti_nidlist[i]);
+		if (rc)
+			return LNET_NETNUM(LNET_NET_ANY);
+	} else {
+		lnet_nid4_to_nid(mti->mti_nids[i], &nid);
+	}
+
+	return LNET_NETNUM(LNET_NID_NET(&nid));
+}
+
+/**
+ * parse incoming target info and update NID lists
+ */
+static int mgs_build_nidlists(struct mgs_nidtbl_target *tgt,
+			      struct mgs_target_info *mti)
+{
+	unsigned long net;
+	int i, rc = 0;
+
+	/* Usually it is build on target on network basis, so assume that
+	 * and search forward to find a sequence of nids at the same net
+	 */
+	i = 0;
+	while (i < mti->mti_nid_count) {
+		int cnt = 1;
+
+		net = mti_nidnet(mti, i);
+		while (i + cnt < mti->mti_nid_count &&
+		       mti_nidnet(mti, i + cnt) == net)
+			cnt++;
+		rc = mgs_tnl_update(tgt, net, mti, i, cnt);
+		if (rc)
+			break;
+		i += cnt;
+	}
+	return rc;
+}
+
 static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 			    struct mgs_target_info *mti)
 {
@@ -344,7 +536,6 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 	struct mgs_nidtbl_target *tgt;
 	bool found = false;
 	int type = mti->mti_flags & LDD_F_SV_TYPE_MASK;
-	size_t mti_len = 0;
 	int rc = 0;
 
 	ENTRY;
@@ -354,22 +545,15 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 	tbl = &fsdb->fsdb_nidtbl;
 	mutex_lock(&tbl->mn_lock);
 	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
-		struct mgs_target_info *info = &tgt->mnt_mti;
-
 		if (type == tgt->mnt_type &&
-		    mti->mti_stripe_index == info->mti_stripe_index) {
+		    mti->mti_stripe_index == tgt->mnt_stripe_index) {
 			found = true;
 			break;
 		}
 	}
 
-	if (target_supports_large_nid(mti))
-		mti_len = mti->mti_nid_count * LNET_NIDSTR_SIZE;
 	if (!found) {
-		size_t len = offsetof(struct mgs_nidtbl_target,
-				      mnt_mti.mti_nidlist);
-
-		OBD_ALLOC(tgt, len + mti_len);
+		OBD_ALLOC_PTR(tgt);
 		if (!tgt)
 			GOTO(out, rc = -ENOMEM);
 
@@ -378,15 +562,18 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 		tgt->mnt_version = 0; /* 0 means invalid */
 		tgt->mnt_type = type;
 
+		tgt->mnt_stripe_index = mti->mti_stripe_index;
+		xa_init(&tgt->mnt_xa_nids);
 		++tbl->mn_nr_targets;
 	}
 
+	tgt->mnt_instance = mti->mti_instance;
 	tgt->mnt_version = ++tbl->mn_version;
-	tgt->mnt_mti = *mti;
-	if (target_supports_large_nid(mti))
-		memcpy(tgt->mnt_mti.mti_nidlist, mti->mti_nidlist, mti_len);
 
 	list_move_tail(&tgt->mnt_list, &tbl->mn_targets);
+	rc = mgs_build_nidlists(tgt, mti);
+	if (rc)
+		GOTO(out, rc);
 
 	rc = nidtbl_update_version(env, fsdb->fsdb_mgs, tbl);
 	EXIT;
@@ -402,8 +589,6 @@ out:
 static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 {
 	struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
-	size_t len = offsetof(struct mgs_nidtbl_target,
-			      mnt_mti.mti_nidlist);
 	LIST_HEAD(head);
 
 	mutex_lock(&tbl->mn_lock);
@@ -413,14 +598,21 @@ static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 
 	while (!list_empty(&head)) {
 		struct mgs_nidtbl_target *tgt;
-		size_t mti_len = 0;
+		unsigned long xa_index;
+		void *xa_nids;
 
 		tgt = list_first_entry(&head, struct mgs_nidtbl_target,
 				       mnt_list);
-		if (target_supports_large_nid(&tgt->mnt_mti))
-			mti_len += tgt->mnt_mti.mti_nid_count * LNET_NIDSTR_SIZE;
 		list_del(&tgt->mnt_list);
-		OBD_FREE(tgt, len + mti_len);
+		xa_for_each(&tgt->mnt_xa_nids, xa_index, xa_nids) {
+			struct tnt_nidlist *tnl = xa_nids;
+
+			xa_erase(&tgt->mnt_xa_nids, xa_index);
+			OBD_FREE(tnl, tnl->tnl_size);
+		}
+
+		xa_destroy(&tgt->mnt_xa_nids);
+		OBD_FREE_PTR(tgt);
 	}
 }
 

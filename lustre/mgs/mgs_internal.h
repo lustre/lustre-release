@@ -13,7 +13,7 @@
 
 #ifndef _MGS_INTERNAL_H
 #define _MGS_INTERNAL_H
-
+#include <lustre_compat/linux/xarray.h>
 #include <libcfs/libcfs.h>
 #include <lustre_log.h>
 #include <lustre_export.h>
@@ -29,19 +29,32 @@
  * restarting targets.
  */
 struct mgs_nidtbl;
+
+struct tnt_nidlist {
+	u64	     tnl_version;
+	unsigned int tnl_size; /* preallocated size */
+	unsigned int tnl_count;
+	char	     tnl_nids[][LNET_NIDSTR_SIZE];
+};
+
+#define TNL_SIZE(count) (LNET_NIDSTR_SIZE * count + \
+			 offsetof(struct tnt_nidlist, tnl_nids))
+
 struct mgs_nidtbl_target {
 	struct list_head	mnt_list;
 	struct mgs_nidtbl      *mnt_fs;
 	u64			mnt_version;
-	int			mnt_type;	/* OST or MDT */
-	struct mgs_target_info	mnt_mti;
+	int			mnt_type; /* OST or MDT */
+	__u32			mnt_stripe_index;
+	__u32			mnt_instance; /* Running instance of target */
+	struct xarray		mnt_xa_nids;
 };
 
 enum {
-        IR_FULL = 0,
-        IR_STARTUP,
-        IR_DISABLED,
-        IR_PARTIAL
+	IR_FULL = 0,
+	IR_STARTUP,
+	IR_DISABLED,
+	IR_PARTIAL
 };
 
 #define IR_STRINGS { "full", "startup", "disabled", "partial" }
