@@ -1,5 +1,5 @@
-.TH LCTL-POOL_DESTROY 8 2024-09-08 Lustre "Lustre Configuration Utilities"
-.SH Name
+.TH LCTL-POOL_DESTROY 8 2025-05-01 Lustre "Lustre Configuration Utilities"
+.SH NAME
 lctl-pool_destroy \- delete an OST pool
 .SH SYNOPSIS
 .SY "lctl pool_destroy"
@@ -14,15 +14,6 @@ in the filesystem named
 The
 .B lctl pool_destroy
 command must be run on the MGS node and can only be used by the root user.
-.SH OPTIONS
-.TP
-.BR -n ", " --nowait
-Do not wait and check if pool is updated on a client.
-This is useful when calling a lot of
-.RB \(dq lctl \ pool_*\(dq
-in a row. This avoids revoking the clients "CONFIG" lock for each
-command (by default clients retake their lock and update their configurations
-in a delay between 5-10s).
 .SH NOTES
 After updating the MGS configuration,
 this command tries to wait and check if pools are updated on a client.
@@ -30,15 +21,22 @@ If the MGS is on a separate node from the MDS, a Lustre client must
 be mounted on the MGS node while the
 .B lctl
 commands are being run for this. Otherwise, the client check is skipped.
+.SH OPTIONS
+.TP
+.BR -n ", " --nowait
+Do not wait and check if pool is updated on a client.
+This is useful when calling a lot of
+.RB ' "lctl pool_*" '
+commands in a row, to avoid waiting for each command to complete.
 .SH EXAMPLES
 Delete a pool named
-.B local
+.B flash
 in the
 .B testfs
-filesystem.
+filesystem:
 .RS
 .EX
-.B # lctl pool_destroy testfs.local
+.B # lctl pool_destroy testfs.flash
 .EE
 .RE
 .SH AVAILABILITY

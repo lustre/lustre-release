@@ -1,10 +1,10 @@
-.TH LCTL-POOL_NEW 8 2024-08-14 Lustre "Lustre Configuration Utilities"
+.TH LCTL-POOL_NEW 8 2025-05-01 Lustre "Lustre Configuration Utilities"
 .SH NAME
-lctl-pool_new \- create a new OST pool
+lctl-pool_new \- create a new named list of OSTs
 .SH SYNOPSIS
 .SY "lctl pool_new"
 .RB [ --nowait | -n ]
-.IR FSNAME . POOL
+.IR FSNAME . POOLNAME
 .YS
 .SH DESCRIPTION
 Create a list of OSTs with the name
@@ -16,14 +16,30 @@ The
 command must be run on the MGS node and can only be used by the
 root user.
 .P
-.BR NOTE:
-After updating the MGS configuration, this command tries to wait and
-check if pools are updated on a client.
+The
+.I POOLNAME
+must be 15 or fewer alphanumeric characters ('A-Za-z0-9'), and may contain
+hyphen ('-') and underscore ('_') characters. The period ('.') character can
+only be used to separate the
+.I FSNAME
+from the
+.I POOLNAME
+in commands to uniquely identify the pool when multiple filesystems are mounted
+on a node. The pool name must not be one of the reserved keywords
+.RB ' none ',
+.RB ' ignore ',
+or
+.RB ' inherit '.
+.P
+.SH NOTES
+After updating the MGS configuration, this command will wait up to 12s and
+check if pools are updated on a client, unless the
+.B --nowait
+option is used.
 If the MGS is on a separate node from the MDS, a Lustre client must
 be mounted on the MGS node while the
 .B lctl
-commands are being run for this. Otherwise, the client check is
-skipped.
+commands are being run for this. Otherwise, the client check is skipped.
 .P
 This named list of OSTs can be used by
 .BR lfs-setstripe (1)
@@ -31,35 +47,36 @@ to specify the OSTs on which new files can be created, and
 .BR lfs-find (1)
 to locate files that were created on the specified pool. As well,
 .BR lfs-df (1)
-can show only the free space or inodes in a named pool.
+can show only the free space or inodes in a named pool.  The
+.BR lfs-quota (1)
+and
+.BR lfs-setquota (1)
+commands can use a pool name to get/set a quota limit for OSTs in the pool.
 .SH OPTIONS
 .TP
 .BR -n ", " --nowait
-Do not wait and check if pool is updated on a client. This is useful
-when calling a lot of "
-.B lctl
-pool_*" in a row. This avoids revoking the clients "CONFIG" lock for each
-command (by default clients retake their lock and update their configurations
-in a delay between 5-10s).
+Do not wait and check if pool is updated on a client.
+This is useful when calling a lot of
+.RB ' "lctl pool_*" '
+commands in a row, to avoid waiting for each command to complete.
 .SH EXAMPLES
-.PP
 Create a pool named
-.B local
+.B flash
 in the
 .B testfs
 filesystem:
-.RS 8
+.RS
 .EX
-.B # lfs pool_new testfs.local
+.B # lfs pool_new testfs.flash
 .EE
 .RE
 .PP
-Add OSTs numbered 12, 13, and 14 to the
-.B testfs.local
+Add OSTs numbered 8, 10, and 12 through 14 to the
+.B testfs.flash
 pool:
-.RS 8
+.RS
 .EX
-.B # lfs pool_add testfs.local 12 13 14
+.B # lfs pool_add testfs.flash 8 10 12-14
 .EE
 .RE
 .SH AVAILABILITY
@@ -69,9 +86,10 @@ is part of the
 filesystem package since release 1.7.0
 .\" Added in commit 1.6.0-1808-g665e36b780
 .SH SEE ALSO
-.BR lfs-df (1),
-.BR lfs-find (1),
-.BR lfs-setstripe (1),
-.BR lustre (7)
+.BR lustre (7),
 .BR lctl (8),
 .BR lctl-pool_add (8),
+.BR lfs-df (1),
+.BR lfs-find (1),
+.BR lfs-setquota (1),
+.BR lfs-setstripe (1)

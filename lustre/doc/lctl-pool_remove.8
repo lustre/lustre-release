@@ -1,4 +1,4 @@
-.TH LCTL-POOL_REMOVE 8 2024-08-30 Lustre "Lustre Configuration Utilities"
+.TH LCTL-POOL_REMOVE 8 2025-05-01 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-pool_remove \- remove OST from a named pool
 .SH SYNOPSIS
@@ -40,41 +40,39 @@ index values.
 .BR -n ", " --nowait
 Do not wait and check if pool is updated on a client.
 This is useful when calling a lot of
-.RB \(dq "lctl pool_" *\(dq
-in a row. This avoids revoking the clients "CONFIG" lock for each
-command (by default clients retake their lock and update their configurations
-in a delay between 5-10s).
+.RB ' "lctl pool_*" '
+commands in a row, to avoid waiting for each command to complete.
 .SH EXAMPLES
-Remove OSTs numbered 8, 9, and 10 from the
-.B testfs.local
-pool.
+Remove OSTs numbered 8, 10, and 12 from the
+.B testfs.flash
+pool:
 .RS
 .EX
-.B # lctl pool_remove testfs.local OST0008 OST0009 OST000a
-OST lustre-OST0008_UUID removed from pool lustre.local
-OST lustre-OST0009_UUID removed from pool lustre.local
-OST lustre-OST000a_UUID removed from pool lustre.local
+.B # lctl pool_remove testfs.flash OST0008 OST000a OST000c
+OST lustre-OST0008_UUID removed from pool lustre.flash
+OST lustre-OST000a_UUID removed from pool lustre.flash
+OST lustre-OST000c_UUID removed from pool lustre.flash
 or
-.B # lctl pool_remove testfs.local OST[8-a]
-OST lustre-OST0008_UUID removed from pool lustre.local
-OST lustre-OST0009_UUID removed from pool lustre.local
-OST lustre-OST000a_UUID removed from pool lustre.local
+.B # lctl pool_remove testfs.flash OST[8-c/2]
+OST lustre-OST0008_UUID removed from pool lustre.flash
+OST lustre-OST000a_UUID removed from pool lustre.flash
+OST lustre-OST000c_UUID removed from pool lustre.flash
 .EE
 .RE
 .PP
-List of OSTs can be set with comma seperated values or a combined format
+List of OSTs can be set with comma seperated values or a combined format:
 .RS
 .EX
-.B # lctl pool_remove testfs.local OST[8,a]
-OST lustre-OST0008_UUID removed from pool lustre.local
-OST lustre-OST000a_UUID removed from pool lustre.local
+.B # lctl pool_remove testfs.flash OST[8,a]
+OST lustre-OST0008_UUID removed from pool lustre.flash
+OST lustre-OST000a_UUID removed from pool lustre.flash
 or
-.B # lctl pool_remove testfs.local OST[4-6,8,a]
-OST lustre-OST0004_UUID removed from pool lustre.local
-OST lustre-OST0005_UUID removed from pool lustre.local
-OST lustre-OST0006_UUID removed from pool lustre.local
-OST lustre-OST0008_UUID removed from pool lustre.local
-OST lustre-OST000a_UUID removed from pool lustre.local
+.B # lctl pool_remove testfs.flash OST[4-6,8,a]
+OST lustre-OST0004_UUID removed from pool lustre.flash
+OST lustre-OST0005_UUID removed from pool lustre.flash
+OST lustre-OST0006_UUID removed from pool lustre.flash
+OST lustre-OST0008_UUID removed from pool lustre.flash
+OST lustre-OST000a_UUID removed from pool lustre.flash
 .EE
 .RE
 .SH AVAILABILITY

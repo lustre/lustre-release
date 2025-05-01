@@ -23,24 +23,24 @@ If specified, show the OSTs in the pool named
 .IR POOLNAME .
 .SH EXAMPLES
 List all OSTs in the pool
-.B local
+.B flash
 in the filesystem
-.B testfs
+.BR testfs :
 .RS
 .EX
-.B # lctl pool_list testfs.local
-Pool: lustre.local
+.B # lctl pool_list testfs.flash
+Pool: lustre.flash
 testfs-OST0001_UUID
 .EE
 .RE
 .PP
 List all pools in the filesystem
-.B testfs
+.BR testfs :
 .RS
 .EX
 .B # lctl pool_list testfs
 Pools from testfs:
-testfs.local
+testfs.flash
 testfs.remote
 .EE
 .RE

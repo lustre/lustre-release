@@ -1,14 +1,14 @@
-.TH LCTL-POOL_ADD 8 2024-08-14 Lustre "Lustre Configuration Utilities"
+.TH LCTL-POOL_ADD 8 2025-05-01 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-pool_add \- add OSTs to a named pool
 .SH SYNOPSIS
 .SY "lctl pool_add"
 .RB [ --nowait | -n ]
-.IR FSNAME . POOL
+.IR FSNAME . POOLNAME
 .IR OST_INDEX1 " [" OST_INDEX2 ...]
 .SY "lctl pool_add"
 .RB [ --nowait | -n ]
-.IR FSNAME . POOL
+.IR FSNAME . POOLNAME
 .IR OST_RANGE1 " [" OST_RANGE2 ...]
 .YS
 .SH DESCRIPTION
@@ -34,55 +34,58 @@ to
 index values.
 .P
 .BR NOTE:
-After updating the MGS configuration, this command tries to wait and
-check if pools are updated on a client.
+After updating the MGS configuration, this command will wait up to 12s and
+check if pools are updated on a client, unless the
+.B --nowait
+option is used.
 If the MGS is on a separate node from the MDS, a Lustre client must
 be mounted on the MGS node while the
 .B lctl
-commands are being run for this. Otherwise, the client check is
-skipped.
+commands are being run for this. Otherwise, the client check is skipped.
 .P
-The OST pool can be used by
+This named list of OSTs can be used by
 .BR lfs-setstripe (1)
-to specify the OSTs on which new files can be created, and
-.BR lfs-find (1)
-to locate files that were initially created on the specified
-.IR poolname .
-Note however, that the OSTs that make up a specific pool may change
+to specify the OSTs on which new files can be created, though it is
+important to note that the OSTs that make up a specific pool may change
 over time, and it is the
 .I poolname
 used at creation time that is stored on each file, not necessarily
-OSTs that are in the current pool. As well,
+OSTs that are in the current pool.  The
+.BR lfs-find (1)
+command can locate files that were initially created on the specified
+.IR poolname .
+As well,
 .BR lfs-df (1)
-can show only the free space or inodes in a named pool.
+can show only the free space or inodes in a named pool.  The
+.BR lfs-quota (1)
+and
+.BR lfs-setquota (1)
+commands can use a pool name to get/set a quota limit for OSTs in the pool.
 .SH OPTIONS
 .TP
 .BR -n ", " --nowait
-Do not wait and check if pool is updated on a client. This is useful
-when calling a lot of "
-.B lctl
-pool_*" in a row. This avoids revoking the clients "CONFIG" lock for each
-command (by default clients retake their lock and update their configurations
-in a delay between 5-10s).
+Do not wait and check if pool is updated on a client.
+This is useful when calling a lot of
+.RB ' "lctl pool_*" '
+commands in a row, to avoid waiting for each command to complete.
 .SH EXAMPLES
-.PP
 Create a pool named
-.B local
+.B flash
 in the
 .B testfs
 filesystem:
-.RS 8
+.RS
 .EX
-.B # lfs pool_new testfs.local
+.B # lfs pool_new testfs.flash
 .EE
 .RE
 .PP
-Add OSTs numbered 12, 13, and 14 to the
-.B testfs.local
+Add OSTs numbered 8, 10, and 12 through 14 to the
+.B testfs.flash
 pool:
-.RS 8
+.RS
 .EX
-.B # lfs pool_add testfs.local 12 13 14
+.B # lfs pool_add testfs.flash 8 10 12-14
 .EE
 .RE
 .SH AVAILABILITY
