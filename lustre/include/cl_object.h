@@ -1420,9 +1420,6 @@ struct cl_read_ahead {
 	 * used for releasing DLM locks acquired during read-ahead.
 	 */
 	struct list_head cra_linkage;
-
-	/* whether lock is in contention */
-	bool		 cra_contention;
 };
 
 static inline void cl_read_ahead_release(const struct lu_env *env,

@@ -84,8 +84,6 @@ static int osc_io_read_ahead_prep(const struct lu_env *env,
 		ra->cra_release = osc_read_ahead_release;
 		ra->cra_dlmlock = dlmlock;
 		ra->cra_oio = oio;
-		if (ra->cra_end_idx != CL_PAGE_EOF)
-			ra->cra_contention = true;
 		ra->cra_end_idx = min_t(pgoff_t,
 					ra->cra_end_idx,
 					(oinfo->loi_kms - 1) >> PAGE_SHIFT);

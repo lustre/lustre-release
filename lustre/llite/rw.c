@@ -426,22 +426,13 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 		if (skip_index && page_idx == skip_index)
 			continue;
 		if (ras_inside_ra_window(page_idx, ria)) {
+			/* if we haven't checked lock coverage yet or if we're
+			 * outside the current lock, we must call in to
+			 * cl_io_read_ahead to check for a lock
+			 */
 			if (!ra || ra->cra_end_idx == 0 ||
 			    ra->cra_end_idx < page_idx) {
 				pgoff_t end_idx;
-
-				/*
-				 * Do not shrink ria_end_idx at any case until
-				 * the minimum end of current read is covered.
-				 *
-				 * Do not extend read lock accross stripe if
-				 * lock contention detected.
-				 */
-				if (ra && ra->cra_contention &&
-				    page_idx > ria->ria_end_idx_min) {
-					ria->ria_end_idx = *ra_end;
-					break;
-				}
 
 				OBD_ALLOC_PTR(ra);
 				if (ra == NULL)
