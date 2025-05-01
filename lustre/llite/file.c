@@ -31,6 +31,7 @@
 #include <lustre_compat/linux/linux-misc.h>
 
 #include <uapi/linux/lustre/lustre_ioctl.h>
+#include <lustre_kernelcomm.h>
 #include <lustre_swab.h>
 
 #include "cl_object.h"
@@ -404,6 +405,27 @@ out:
 	RETURN(rc);
 }
 
+static int ll_hsm_agent_deregister(struct obd_export *exp)
+{
+	struct lustre_kernelcomm lk = {
+		.lk_group = KUC_GRP_HSM,
+		.lk_flags = LK_FLG_STOP,
+	};
+	int rc = 0;
+
+	rc = obd_iocontrol(LL_IOC_HSM_CT_START, exp, sizeof(lk), &lk, NULL);
+	if (rc) {
+		struct obd_import *imp = class_exp2cliimp(exp);
+
+		CWARN("%s: cannot deregister HSM agent on close (uuid: %s): rc = %d\n",
+		      exp->exp_obd->obd_name,
+		      obd_uuid2str(&imp->imp_obd->obd_uuid), rc);
+	}
+
+	return rc;
+}
+
+
 /* While this returns an error code, fput() the caller does not, so we need
  * to make every effort to clean up all of our state here.  Also, applications
  * rarely check close errors and even if an error is returned they will not
@@ -432,6 +454,10 @@ int ll_file_release(struct inode *inode, struct file *file)
 	if (S_ISDIR(inode->i_mode) &&
 	    (lli->lli_opendir_key == lfd || lfd->fd_sai))
 		ll_deauthorize_statahead(inode, lfd);
+
+	/* Deregister HSM agent, if present (in case of copytool crash) */
+	if (S_ISDIR(inode->i_mode) && unlikely(lfd->lfd_hsm_agent_registered))
+		ll_hsm_agent_deregister(ll_i2mdexp(inode));
 
 	if (is_root_inode(inode)) {
 		file->private_data = NULL;

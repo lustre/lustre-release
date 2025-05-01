@@ -3841,7 +3841,7 @@ test_105() {
 }
 run_test 105 "Restart of coordinator"
 
-test_106() {
+test_106a() {
 	# test needs a running copytool
 	copytool setup
 
@@ -3860,7 +3860,27 @@ test_106() {
 	uuid=$(get_agent_uuid $(facet_active_host $SINGLEAGT))
 	check_agent_registered $uuid
 }
-run_test 106 "Copytool register/unregister"
+run_test 106a "Copytool register/unregister"
+
+test_106b() {
+	# test needs a running copytool
+	copytool setup
+
+	local uuid=$(get_agent_uuid)
+
+	check_agent_registered $uuid
+
+	search_copytools || error "No copytool found"
+
+	kill_copytools "" KILL
+	wait_copytools || error "Copytool failed to stop"
+
+	check_agent_unregistered $uuid
+
+	copytool setup
+	check_agent_registered $uuid
+}
+run_test 106b "Unregister agent after a copytool crash"
 
 test_107() {
 	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode" && return

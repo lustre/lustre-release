@@ -1127,9 +1127,12 @@ progress:
 }
 
 
-static int copy_and_ct_start(int cmd, struct obd_export *exp,
+static int copy_and_ct_start(int cmd, struct file *file,
 			     const struct lustre_kernelcomm __user *data)
 {
+	struct ll_file_data *lfd = file->private_data;
+	struct inode *inode = file_inode(file);
+	struct obd_export *exp = ll_i2mdexp(inode);
 	struct lustre_kernelcomm *lk;
 	struct lustre_kernelcomm *tmp;
 	size_t size = sizeof(*lk);
@@ -1144,6 +1147,9 @@ static int copy_and_ct_start(int cmd, struct obd_export *exp,
 
 	if (copy_from_user(lk, data, size))
 		GOTO(out_lk, rc = -EFAULT);
+
+	if (!(lk->lk_flags & LK_FLG_STOP) && lfd->lfd_hsm_agent_registered)
+		GOTO(out_lk, rc = -EEXIST);
 
 	if (lk->lk_flags & LK_FLG_STOP)
 		goto do_ioctl;
@@ -1228,6 +1234,8 @@ static int copy_and_ct_start(int cmd, struct obd_export *exp,
 	}
 do_ioctl:
 	rc = obd_iocontrol(cmd, exp, size, lk, NULL);
+	if (!rc)
+		lfd->lfd_hsm_agent_registered = !(lk->lk_flags & LK_FLG_STOP);
 out_lk:
 	OBD_FREE(lk, size);
 	return rc;
@@ -2655,7 +2663,7 @@ out_hur:
 		if (!capable(CAP_SYS_ADMIN))
 			RETURN(-EPERM);
 
-		rc = copy_and_ct_start(cmd, sbi->ll_md_exp, uarg);
+		rc = copy_and_ct_start(cmd, file, uarg);
 		RETURN(rc);
 
 	case LL_IOC_HSM_COPY_START: {

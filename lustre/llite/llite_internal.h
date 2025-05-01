@@ -1116,7 +1116,8 @@ struct ll_file_data {
 	 * false: unknown failure, should report.
 	 */
 	bool				fd_write_failed;
-	unsigned int			lfd_lock_no_expand:1;
+	unsigned int			lfd_lock_no_expand:1,
+					lfd_hsm_agent_registered:1;
 	enum ll_file_flags		lfd_file_flags;
 	enum mds_open_flags		fd_open_mode;
 	/* striped directory may read partially if some stripe inaccessible,

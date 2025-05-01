@@ -11893,9 +11893,10 @@ copytool_continue() {
 
 kill_copytools() {
 	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
+	local signal=${2:-TERM}
 
-	echo "Killing existing copytools on $hosts"
-	pkill_copytools "$hosts" TERM || return 0
+	echo "Killing existing copytools on $hosts with signal $signal"
+	pkill_copytools "$hosts" "$signal" || return 0
 	copytool_continue "$hosts"
 }
 
