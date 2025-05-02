@@ -29,7 +29,8 @@ void kfilnd_tn_event_handler(struct kfilnd_transaction *tn,
 			     enum tn_events event, int status);
 void kfilnd_tn_cleanup(void);
 int kfilnd_tn_init(void);
-int kfilnd_tn_set_kiov_buf(struct kfilnd_transaction *tn, struct bio_vec *kiov,
-		           size_t num_iov, size_t offset, size_t nob);
+int kfilnd_tn_set_buf(struct lnet_ni *ni, struct kfilnd_transaction *tn,
+			   struct bio_vec *kiov, int num_iov, int offset,
+			   int nob);
 
 #endif /* _KFILND_TN_ */

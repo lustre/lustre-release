@@ -53,6 +53,7 @@
 #include <linux/libcfs/libcfs.h>
 #include <lustre_compat/net/linux-net.h>
 #include <lnet/lib-lnet.h>
+#include <lnet/lnet_rdma.h>
 #include "kfi_endpoint.h"
 #include "kfi_errno.h"
 #include "kfi_rma.h"
@@ -775,8 +776,18 @@ struct kfilnd_transaction {
 	/* LNet buffer used to register a memory region or perform a RMA
 	 * operation.
 	 */
+#ifdef HAVE_KFI_SGL
+	/* Set to true if @tn_sgt is mapped */
+	bool			tn_sgt_mapped;
+	struct sg_table		tn_sgt;
+	enum dma_data_direction	tn_dmadir;
+#else
 	struct bio_vec		tn_kiov[LNET_MAX_IOV];
+#endif
 	unsigned int		tn_num_iovec;
+
+	/* Force RDMA */
+	bool			tn_gpu;
 
 	/* LNet transaction payload byte count. */
 	unsigned int		tn_nob;

@@ -89,6 +89,7 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 	int rc;
 	bool tn_key = false;
 	lnet_nid_t tgt_nid4;
+	bool gpu = lnet_md_is_gpu(msg->msg_md);
 
 	switch (type) {
 	default:
@@ -108,7 +109,7 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 
 		nob = offsetof(struct kfilnd_msg,
 			       proto.immed.payload[msg->msg_md->md_length]);
-		if (nob <= KFILND_IMMEDIATE_MSG_SIZE) {
+		if (nob <= KFILND_IMMEDIATE_MSG_SIZE && !gpu) {
 			lnd_msg_type = KFILND_MSG_IMMEDIATE;
 			break;
 		}
@@ -121,7 +122,7 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 	case LNET_MSG_PUT:
 		nob = offsetof(struct kfilnd_msg,
 			       proto.immed.payload[msg->msg_len]);
-		if (nob <= KFILND_IMMEDIATE_MSG_SIZE) {
+		if (nob <= KFILND_IMMEDIATE_MSG_SIZE && !gpu) {
 			lnd_msg_type = KFILND_MSG_IMMEDIATE;
 			break;
 		}
@@ -152,23 +153,30 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 		}
 	}
 
+	tn->tn_gpu = gpu;
+
 	switch (lnd_msg_type) {
 	case KFILND_MSG_IMMEDIATE:
-		rc = kfilnd_tn_set_kiov_buf(tn, msg->msg_kiov, msg->msg_niov,
-					    msg->msg_offset, msg->msg_len);
-		if (rc) {
-			CERROR("Failed to setup immediate buffer rc %d\n", rc);
-			kfilnd_tn_free(tn);
-			return rc;
-		}
+		CDEBUG(D_NET,
+		       "tn %p msg_kiov %p msg_niov %u msg_offset %u msg_len %u\n",
+		       tn, msg->msg_kiov, msg->msg_niov,
+		       msg->msg_offset, msg->msg_len);
 
+		lnet_copy_kiov2flat(KFILND_IMMEDIATE_MSG_SIZE,
+				    tn->tn_tx_msg.msg,
+				    offsetof(struct kfilnd_msg,
+					     proto.immed.payload),
+				    msg->msg_niov, msg->msg_kiov,
+				    msg->msg_offset, msg->msg_len);
+
+		tn->tn_nob = msg->msg_len;
 		event = TN_EVENT_INIT_IMMEDIATE;
 		break;
 
 	case KFILND_MSG_BULK_PUT_REQ:
 		tn->sink_buffer = false;
-		rc = kfilnd_tn_set_kiov_buf(tn, msg->msg_kiov, msg->msg_niov,
-					    msg->msg_offset, msg->msg_len);
+		rc = kfilnd_tn_set_buf(ni, tn, msg->msg_kiov, msg->msg_niov,
+				       msg->msg_offset, msg->msg_len);
 		if (rc) {
 			CERROR("Failed to setup PUT source buffer rc %d\n", rc);
 			kfilnd_tn_free(tn);
@@ -191,10 +199,10 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 		}
 
 		tn->sink_buffer = true;
-		rc = kfilnd_tn_set_kiov_buf(tn, msg->msg_md->md_kiov,
-					    msg->msg_md->md_niov,
-					    msg->msg_md->md_offset,
-					    msg->msg_md->md_length);
+		rc = kfilnd_tn_set_buf(ni, tn, msg->msg_md->md_kiov,
+				       msg->msg_md->md_niov,
+				       msg->msg_md->md_offset,
+				       msg->msg_md->md_length);
 		if (rc) {
 			CERROR("Failed to setup GET sink buffer rc %d\n", rc);
 			kfilnd_tn_free(tn);
@@ -272,10 +280,17 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 		if (mlen == 0) {
 			event = TN_EVENT_SKIP_TAG_RMA;
 		} else {
+			struct lnet_libmd *msg_md = NULL;
+
+			if (msg)
+				msg_md = msg->msg_md;
+
+			tn->tn_gpu = lnet_md_is_gpu(msg_md);
+
 			/* Post the buffer given us as a sink  */
 			tn->sink_buffer = true;
-			rc = kfilnd_tn_set_kiov_buf(tn, kiov, niov, offset,
-						    mlen);
+			rc = kfilnd_tn_set_buf(ni, tn, kiov, niov, offset,
+					       mlen);
 			if (rc) {
 				CERROR("Failed to setup PUT sink buffer rc %d\n", rc);
 				kfilnd_tn_free(tn);
@@ -290,12 +305,18 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 			event = TN_EVENT_SKIP_TAG_RMA;
 			status = -ENODATA;
 		} else {
+			struct lnet_libmd *msg_md = NULL;
+
+			if (msg)
+				msg_md = msg->msg_md;
+
+			tn->tn_gpu = lnet_md_is_gpu(msg_md);
+
 			/* Post the buffer given to us as a source  */
 			tn->sink_buffer = false;
-			rc = kfilnd_tn_set_kiov_buf(tn, msg->msg_kiov,
-						    msg->msg_niov,
-						    msg->msg_offset,
-						    msg->msg_len);
+			rc = kfilnd_tn_set_buf(ni, tn, msg->msg_kiov,
+					       msg->msg_niov, msg->msg_offset,
+					       msg->msg_len);
 			if (rc) {
 				CERROR("Failed to setup GET source buffer rc %d\n", rc);
 				kfilnd_tn_free(tn);
@@ -456,6 +477,18 @@ kfilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	return rc;
 }
 
+static unsigned int
+kfilnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
+{
+	struct kfilnd_dev *dev = ni->ni_data;
+	struct device *device = NULL;
+
+	if (dev)
+		device = dev->device;
+
+	return lnet_get_dev_prio(device, dev_idx);
+}
+
 static int kfilnd_startup(struct lnet_ni *ni);
 
 static const struct lnet_lnd the_kfilnd = {
@@ -469,6 +502,7 @@ static const struct lnet_lnd the_kfilnd = {
 	.lnd_nl_set		= kfilnd_nl_set,
 	.lnd_get_timeout	= kfilnd_timeout,
 	.lnd_keys		= &kfilnd_tunables_keys,
+	.lnd_get_dev_prio	= kfilnd_get_dev_prio,
 };
 
 static int kfilnd_startup(struct lnet_ni *ni)

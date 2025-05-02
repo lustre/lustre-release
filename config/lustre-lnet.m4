@@ -1080,6 +1080,18 @@ AC_ARG_WITH([kfi],
 			AC_DEFINE(HAVE_KFI_CXI_DOM_OPS, 1,
 				[kfi_cxi domain ops are available])
 		])
+		LB_CHECK_COMPILE([if KFI_SGL IOV type is supported],
+		KFABRIC_KFI_SGL, [
+			#include <kfabric.h>
+			#include <kfi_rma.h>
+		],[
+			struct kfi_msg_rma rma = {
+				.type = KFI_SGL,
+			};
+		],[
+			AC_DEFINE(HAVE_KFI_SGL, 1,
+				  [KFI_SGL IOV type is supported])
+		])
 	],[])
 AC_DEFINE(HAVE_KFILND, 1, [support kfabric LND])
 AC_SUBST(KFICPPFLAGS)

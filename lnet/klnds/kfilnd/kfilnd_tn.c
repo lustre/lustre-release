@@ -154,13 +154,6 @@ static void kfilnd_tn_pack_immed_msg(struct kfilnd_transaction *tn)
 	/* Pack the protocol header and payload. */
 	lnet_hdr_to_nid4(&tn->tn_lntmsg->msg_hdr, &msg->proto.immed.hdr);
 
-	lnet_copy_kiov2flat(KFILND_IMMEDIATE_MSG_SIZE,
-			    msg,
-			    offsetof(struct kfilnd_msg,
-				     proto.immed.payload),
-			    tn->tn_num_iovec, tn->tn_kiov, 0,
-			    tn->tn_nob);
-
 	/* Pack the transport header. */
 	msg->magic = KFILND_MSG_MAGIC;
 	msg->version = tn->tn_kp->kp_version;
@@ -446,6 +439,26 @@ static void kfilnd_tn_finalize(struct kfilnd_transaction *tn, bool *tn_released)
 	/* Release the reference on the multi-receive buffer. */
 	if (tn->tn_posted_buf)
 		kfilnd_ep_imm_buffer_put(tn->tn_posted_buf);
+
+#ifdef HAVE_KFI_SGL
+	if (tn->tn_sgt_mapped) {
+		struct device *device = tn->tn_ep->end_dev->device;
+		enum dma_data_direction dmadir = tn->tn_dmadir;
+		int rc = 0;
+
+		if (tn->tn_gpu)
+			rc = lnet_rdma_unmap_sg(device, tn->tn_sgt.sgl,
+						tn->tn_sgt.nents, dmadir);
+		else
+			dma_unmap_sgtable(device, &tn->tn_sgt, dmadir, 0);
+
+		CDEBUG(D_NET,
+		       "tn %p tn_sgt %p sgl %p dir %u orig_nents %u nents %u gpu %s rc %d\n",
+		       tn, &tn->tn_sgt, tn->tn_sgt.sgl, tn->tn_dmadir,
+		       tn->tn_sgt.orig_nents, tn->tn_sgt.nents,
+		       tn->tn_gpu ? "y" : "n", rc);
+	}
+#endif
 
 	/* Finalize LNet operation. */
 	if (tn->tn_lntmsg) {
@@ -1560,6 +1573,11 @@ void kfilnd_tn_free(struct kfilnd_transaction *tn)
 	if (tn->tn_mr_key)
 		kfilnd_ep_put_key(tn->tn_ep, tn->tn_mr_key);
 
+#ifdef HAVE_KFI_SGL
+	if (tn->tn_sgt_mapped)
+		sg_free_table(&tn->tn_sgt);
+#endif
+
 	/* Free send message buffer if needed. */
 	if (tn->tn_tx_msg.msg)
 		kmem_cache_free(imm_buf_cache, tn->tn_tx_msg.msg);
@@ -1630,8 +1648,6 @@ static struct kfilnd_transaction *kfilnd_tn_alloc_common(struct kfilnd_ep *ep,
 	return tn;
 
 err_free_tn:
-	if (tn->tn_tx_msg.msg)
-		kmem_cache_free(imm_buf_cache, tn->tn_tx_msg.msg);
 	kmem_cache_free(tn_cache, tn);
 err:
 	return ERR_PTR(rc);
@@ -1796,23 +1812,94 @@ err:
 	return -ENOMEM;
 }
 
-/**
- * kfilnd_tn_set_kiov_buf() - Set the buffer used for a transaction.
- * @tn: Transaction to have buffer set.
- * @kiov: LNet KIOV buffer.
- * @num_iov: Number of IOVs.
- * @offset: Offset into IOVs where the buffer starts.
- * @len: Length of the buffer.
- *
- * This function takes the user provided IOV, offset, and len, and sets the
- * transaction buffer. The user provided IOV is an LNet KIOV. When the
- * transaction buffer is configured, the user provided offset is applied
- * when the transaction buffer is configured (i.e. the transaction buffer
- * offset is zero).
- */
-int kfilnd_tn_set_kiov_buf(struct kfilnd_transaction *tn,
-			   struct bio_vec *kiov, size_t num_iov,
-			   size_t offset, size_t len)
+#ifdef HAVE_KFI_SGL
+static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
+				 struct kfilnd_transaction *tn,
+				 struct bio_vec *kiov, int num_iov, int offset,
+				 int nob)
+{
+	struct kfilnd_dev *dev = ni->ni_data;
+	struct scatterlist *sg;
+	int fragnob;
+	int max_nkiov;
+	int sg_count = 0;
+	int rc = 0;
+
+	tn->tn_nob = nob;
+
+	while (offset >= kiov->bv_len) {
+		offset -= kiov->bv_len;
+		num_iov--;
+		kiov++;
+		LASSERT(num_iov > 0);
+	}
+
+	max_nkiov = num_iov;
+	rc = sg_alloc_table(&tn->tn_sgt, max_nkiov, GFP_KERNEL);
+	if (rc) {
+		CERROR("sg_alloc_table failed rc = %d\n", rc);
+		return rc;
+	}
+
+	sg = tn->tn_sgt.sgl;
+	do {
+		LASSERT(num_iov > 0);
+
+		if (!sg) {
+			CERROR("lacking enough sg entries to map tx: rc = %d\n",
+			       -EFAULT);
+			sg_free_table(&tn->tn_sgt);
+			return -EFAULT;
+		}
+
+		sg_count++;
+
+		fragnob = min_t(int, (kiov->bv_len - offset), nob);
+
+		sg_set_page(sg, kiov->bv_page, fragnob,
+			    kiov->bv_offset + offset);
+		sg = sg_next(sg);
+
+		offset = 0;
+		kiov++;
+		num_iov--;
+		nob -= fragnob;
+	} while (nob > 0);
+
+	tn->tn_dmadir = tn->sink_buffer ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
+
+	tn->tn_sgt.orig_nents = sg_count;
+
+	if (tn->tn_gpu) {
+		rc = lnet_rdma_map_sg_attrs(dev->device, tn->tn_sgt.sgl,
+					    sg_count, tn->tn_dmadir);
+		if (rc > 0)
+			tn->tn_sgt.nents = rc;
+	} else {
+		rc = dma_map_sgtable(dev->device, &tn->tn_sgt, tn->tn_dmadir,
+				     0);
+	}
+
+	tn->tn_sgt_mapped = true;
+
+	/* tn_num_iovec used for convenience in some debug messages */
+	tn->tn_num_iovec = tn->tn_sgt.nents;
+
+	CDEBUG(D_NET,
+	       "tn %p tn_sgt %p sgl %p dir %u nob %d orig_nents %u nents %u gpu %s rc %d\n",
+	       tn, &tn->tn_sgt, tn->tn_sgt.sgl, tn->tn_dmadir, tn->tn_nob,
+	       tn->tn_sgt.orig_nents, tn->tn_sgt.nents, tn->tn_gpu ? "y" : "n",
+	       rc);
+
+	return rc < 0 ? rc : 0;
+}
+
+#else
+
+static int kfilnd_tn_set_kiov_buf(struct lnet_ni *ni,
+				  struct kfilnd_transaction *tn,
+				  struct bio_vec *kiov, size_t num_iov,
+				  size_t offset, size_t len)
 {
 	size_t i;
 	size_t cur_len = 0;
@@ -1853,4 +1940,29 @@ int kfilnd_tn_set_kiov_buf(struct kfilnd_transaction *tn,
 	tn->tn_nob = cur_len;
 
 	return 0;
+}
+#endif /* HAVE_KFI_SGL */
+
+/**
+ * kfilnd_tn_set_buf() - Set the buffer used for a transaction.
+ * @tn: Transaction to have buffer set.
+ * @kiov: LNet KIOV buffer.
+ * @num_iov: Number of IOVs.
+ * @offset: Offset into IOVs where the buffer starts.
+ * @len: Length of the buffer.
+ *
+ * This function takes the user provided IOV, offset, and len, and sets the
+ * transaction buffer. The user provided IOV is an LNet KIOV. When the
+ * transaction buffer is configured, the user provided offset is applied
+ * when the transaction buffer is configured (i.e. the transaction buffer
+ * offset is zero).
+ */
+int kfilnd_tn_set_buf(struct lnet_ni *ni, struct kfilnd_transaction *tn,
+		      struct bio_vec *kiov, int num_iov, int offset, int nob)
+{
+#ifdef HAVE_KFI_SGL
+	return kfilnd_tn_set_sgl_buf(ni, tn, kiov, num_iov, offset, nob);
+#else
+	return kfilnd_tn_set_kiov_buf(ni, tn, kiov, num_iov, offset, nob);
+#endif
 }
