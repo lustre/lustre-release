@@ -592,9 +592,9 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 	sbi = ll_i2sbi(inode);
 
 	CDEBUG(D_READA|D_IOTRACE,
-	       "%s: async ra from %lu to %lu triggered by user pid %d\n",
-	       file_dentry(file)->d_name.name, work->lrw_start_idx,
-	       work->lrw_end_idx, work->lrw_user_pid);
+	       "%s:"DFID": async ra from %lu to %lu triggered by user pid %d\n",
+	       file_dentry(file)->d_name.name, PFID(ll_inode2fid(inode)),
+	       work->lrw_start_idx, work->lrw_end_idx, work->lrw_user_pid);
 
 	env = cl_env_alloc(&refcheck, LCT_NOREF);
 	if (IS_ERR(env))
@@ -1691,10 +1691,15 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
 				   uptodate, file, skip_index,
 				   &ra_start_index);
-		CDEBUG(D_READA|D_IOTRACE,
-		       DFID " %d pages read ahead at %lu, triggered by user read at %lu\n",
+		/* to keep iotrace clean, we only print here if we actually
+		 * read pages
+		 */
+		CDEBUG(D_READA | (rc2 ? D_IOTRACE : 0),
+		       DFID " %d pages read ahead at %lu, triggered by user read at %lu, stride offset %lld, stride length %lld, stride bytes %lld\n",
 		       PFID(ll_inode2fid(inode)), rc2, ra_start_index,
-		       vvp_index(vpg));
+		       vvp_index(vpg), ras->ras_stride_offset,
+		       ras->ras_stride_length, ras->ras_stride_bytes);
+
 	} else if (vvp_index(vpg) == io_start_index &&
 		   io_end_index - io_start_index > 0) {
 		rc2 = ll_readpages(env, io, &queue->c2_qin, io_start_index + 1,
