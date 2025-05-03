@@ -199,44 +199,58 @@ SERVER_ONLY_EXPORT_SYMBOL(lustre_start_simple);
 
 static DEFINE_MUTEX(mgc_start_lock);
 
-/* 9 for '_%x' (INT_MAX as hex is 8 chars - '7FFFFFFF') and 1 for '\0' */
-#define NIDUUID_SUFFIX_MAX_LEN 10
-static inline int mgc_niduuid_create(char **niduuid, char *nidstr)
+/**
+ * Parse MGS failover nodes from provided NID list and add
+ * them to existing MGC import
+ */
+static bool lustre_add_mgc_failnodes(struct obd_device *obd, char *ptr)
 {
-	size_t niduuid_len = strlen(nidstr) + strlen(LUSTRE_MGC_OBDNAME) +
-			     NIDUUID_SUFFIX_MAX_LEN;
+	struct obd_import *imp = obd->u.cli.cl_import;
+	char node[LNET_NIDSTR_SIZE];
+	struct lnet_nid nid;
+	int rc;
+	bool large_nids = false;
 
-	LASSERT(niduuid);
+	LASSERT(imp);
 
-	/* See comment in niduuid_create() */
-	if (niduuid_len > UUID_MAX) {
-		nidstr += niduuid_len - UUID_MAX;
-		niduuid_len = strlen(LUSTRE_MGC_OBDNAME) +
-			      strlen(nidstr) + NIDUUID_SUFFIX_MAX_LEN;
+	/* Add any failover MGS NIDs */
+	while (ptr) {
+		int count = 0;
+
+		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
+			large_nids |= !nid_is_nid4(&nid);
+
+			/* New failover node */
+			if (!count) /* construct node UUID from primary NID */
+				libcfs_nidstr_r(&nid, node, LNET_NIDSTR_SIZE);
+
+			rc = class_add_uuid(node, &nid);
+			if (rc) {
+				libcfs_nidstr_r(&nid, node, LNET_NIDSTR_SIZE);
+				CWARN("%s: can't add failover NID %s, rc = %d\n",
+				      obd->obd_name, node, rc);
+			} else {
+				count++;
+			}
+			if (*ptr == ':')
+				break;
+		}
+		/* if new peer mapping was created */
+		if (count > 0) {
+			struct obd_uuid uuid;
+
+			obd_str2uuid(&uuid, node);
+			rc = obd_add_conn(imp, &uuid, 0);
+			if (rc)
+				CWARN("%s: can't add failover peer %s, rc = %d\n",
+				      obd->obd_name, node, rc);
+		} else {
+			/* at ":/fsname" */
+			break;
+		}
 	}
 
-	OBD_ALLOC(*niduuid, niduuid_len);
-	if (!*niduuid)
-		return -ENOMEM;
-
-	snprintf(*niduuid, niduuid_len, "%s%s", LUSTRE_MGC_OBDNAME, nidstr);
-	return 0;
-}
-
-static inline void mgc_niduuid_destroy(char **niduuid)
-{
-	if (*niduuid) {
-		char *tmp = strchr(*niduuid, '_');
-
-		/* If the "_%x" suffix hasn't been added yet then the size
-		 * calculation below should still be correct
-		 */
-		if (tmp)
-			*tmp = '\0';
-
-		OBD_FREE(*niduuid, strlen(*niduuid) + NIDUUID_SUFFIX_MAX_LEN);
-	}
-	*niduuid = NULL;
+	return large_nids;
 }
 
 /**
@@ -256,10 +270,10 @@ int lustre_start_mgc(struct super_block *sb)
 	uuid_t uuidc;
 	struct lnet_nid nid;
 	char nidstr[LNET_NIDSTR_SIZE];
-	char *mgcname = NULL, *niduuid = NULL, *mgssec = NULL;
+	char *mgcname = NULL, *mgssec = NULL;
 	bool large_nids = false;
-	char *ptr, *niduuid_suffix;
-	int rc = 0, i = 0, j;
+	char *ptr;
+	int rc = 0, i = 0;
 	size_t len;
 
 	ENTRY;
@@ -306,8 +320,7 @@ int lustre_start_mgc(struct super_block *sb)
 	libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr));
 	len = strlen(LUSTRE_MGC_OBDNAME) + strlen(nidstr) + 1;
 	OBD_ALLOC(mgcname, len);
-	rc = mgc_niduuid_create(&niduuid, nidstr);
-	if (rc || mgcname == NULL)
+	if (!mgcname)
 		GOTO(out_free, rc = -ENOMEM);
 
 	snprintf(mgcname, len, "%s%s", LUSTRE_MGC_OBDNAME, nidstr);
@@ -357,6 +370,8 @@ int lustre_start_mgc(struct super_block *sb)
 			}
 		}
 
+		lustre_add_mgc_failnodes(obd, ptr);
+
 		recov_bk = 0;
 		/*
 		 * If we are restarting the MGS, don't try to keep the MGC's
@@ -386,9 +401,8 @@ int lustre_start_mgc(struct super_block *sb)
 
 	/* Add the primary NIDs for the MGS */
 	i = 0;
-	niduuid_suffix = niduuid + strlen(niduuid);
-	snprintf(niduuid_suffix, NIDUUID_SUFFIX_MAX_LEN, "_%x", i);
 	if (IS_SERVER(lsi)) {
+		/* All mgsnode are listed in lmd_mgs at this moment */
 		ptr = lsi->lsi_lmd->lmd_mgs;
 		CDEBUG(D_MOUNT, "mgs NIDs %s.\n", ptr);
 		if (IS_MGS(lsi)) {
@@ -397,16 +411,11 @@ int lustre_start_mgc(struct super_block *sb)
 
 			while ((rc = LNetGetId(i++, &id, true)) != -ENOENT) {
 				rc = do_lcfg_nid(mgcname, &id.nid,
-						 LCFG_ADD_UUID,
-						 niduuid);
+						LCFG_ADD_UUID, nidstr);
 			}
 		} else {
-			/* Use mgsnode= nids */
-			/* mount -o mgsnode=nid */
-			if (lsi->lsi_lmd->lmd_mgs) {
-				ptr = lsi->lsi_lmd->lmd_mgs;
-			} else if (class_find_param(ptr, PARAM_MGSNODE,
-						    &ptr) != 0) {
+			/* Target must have at least one mgsnode */
+			if (!ptr) {
 				CERROR("No MGS NIDs given.\n");
 				GOTO(out_free, rc = -EINVAL);
 			}
@@ -417,8 +426,7 @@ int lustre_start_mgc(struct super_block *sb)
 			 */
 			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
 				rc = do_lcfg_nid(mgcname, &nid,
-						 LCFG_ADD_UUID,
-						 niduuid);
+						 LCFG_ADD_UUID, nidstr);
 				if (rc == 0)
 					++i;
 				/* Stop at the first failover NID */
@@ -430,8 +438,7 @@ int lustre_start_mgc(struct super_block *sb)
 		/* Use NIDs from mount line: uml1,1@elan:uml2,2@elan:/lustre */
 		ptr = lsi->lsi_lmd->lmd_dev;
 		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
-			rc = do_lcfg_nid(mgcname, &nid, LCFG_ADD_UUID,
-					 niduuid);
+			rc = do_lcfg_nid(mgcname, &nid, LCFG_ADD_UUID, nidstr);
 			if (rc == 0)
 				++i;
 			/* Stop at the first failover NID */
@@ -443,7 +450,6 @@ int lustre_start_mgc(struct super_block *sb)
 		CERROR("No valid MGS NIDs found.\n");
 		GOTO(out_free, rc = -EINVAL);
 	}
-	lsi->lsi_lmd->lmd_mgs_failnodes = 1;
 
 	/* Random uuid for MGC allows easier reconnects */
 	OBD_ALLOC_PTR(uuid);
@@ -456,45 +462,17 @@ int lustre_start_mgc(struct super_block *sb)
 	/* Start the MGC */
 	rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME,
 				 (char *)uuid->uuid, LUSTRE_MGS_OBDNAME,
-				 niduuid, NULL, lsi->lsi_lmd->lmd_nidnet);
+				 nidstr, NULL, lsi->lsi_lmd->lmd_nidnet);
 	if (rc)
 		GOTO(out_free, rc);
-
-	/* Add any failover MGS NIDs */
-	i = 1;
-	while (ptr && ((*ptr == ':' ||
-	       class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0))) {
-		/* New failover node */
-		snprintf(niduuid_suffix, NIDUUID_SUFFIX_MAX_LEN, "_%x", i);
-		j = 0;
-		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
-			if (!nid_is_nid4(&nid))
-				large_nids = true;
-
-			rc = do_lcfg_nid(mgcname, &nid, LCFG_ADD_UUID,
-					 niduuid);
-			if (rc == 0)
-				++j;
-			if (*ptr == ':')
-				break;
-		}
-		if (j > 0) {
-			rc = do_lcfg(mgcname, 0, LCFG_ADD_CONN,
-				     niduuid, NULL, NULL, NULL);
-			if (rc == 0)
-				++i;
-		} else {
-			/* at ":/fsname" */
-			break;
-		}
-	}
-	lsi->lsi_lmd->lmd_mgs_failnodes = i;
 
 	obd = class_name2obd(mgcname);
 	if (!obd) {
 		CERROR("Can't find mgcobd %s\n", mgcname);
 		GOTO(out_free, rc = -ENOTCONN);
 	}
+
+	large_nids = lustre_add_mgc_failnodes(obd, ptr);
 
 	rc = obd_set_info_async(NULL, obd->obd_self_export,
 				strlen(KEY_MGSSEC), KEY_MGSSEC,
@@ -551,7 +529,6 @@ out_free:
 	OBD_FREE_PTR(uuid);
 	OBD_FREE_PTR(data);
 	OBD_FREE(mgcname, len);
-	mgc_niduuid_destroy(&niduuid);
 
 	RETURN(rc);
 }
@@ -561,9 +538,7 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct obd_device *obd;
-	char *niduuid = NULL, *niduuid_suffix;
-	char nidstr[LNET_NIDSTR_SIZE];
-	int i, rc = 0;
+	int rc = 0;
 
 	ENTRY;
 
@@ -573,16 +548,6 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 	if (!obd)
 		RETURN(-ENOENT);
 	lsi->lsi_mgc = NULL;
-
-	/* Reconstruct the NID uuid from the obd_name */
-	strscpy(nidstr, &obd->obd_name[0] + strlen(LUSTRE_MGC_OBDNAME),
-		sizeof(nidstr));
-
-	rc = mgc_niduuid_create(&niduuid, nidstr);
-	if (rc)
-		RETURN(-ENOMEM);
-
-	niduuid_suffix = niduuid + strlen(niduuid);
 
 	mutex_lock(&mgc_start_lock);
 	LASSERT(atomic_read(&obd->u.cli.cl_mgc_refcount) > 0);
@@ -616,19 +581,9 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 	if (rc)
 		GOTO(out, rc);
 
-	for (i = 0; i < lsi->lsi_lmd->lmd_mgs_failnodes; i++) {
-		snprintf(niduuid_suffix, NIDUUID_SUFFIX_MAX_LEN, "_%x", i);
-		rc = do_lcfg(LUSTRE_MGC_OBDNAME, 0, LCFG_DEL_UUID,
-			     niduuid, NULL, NULL, NULL);
-		if (rc)
-			CERROR("del MDC UUID %s failed: rc = %d\n",
-			       niduuid, rc);
-	}
 out:
 	/* class_import_put will get rid of the additional connections */
 	mutex_unlock(&mgc_start_lock);
-
-	mgc_niduuid_destroy(&niduuid);
 
 	RETURN(rc);
 }

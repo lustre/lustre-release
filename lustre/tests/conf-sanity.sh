@@ -12052,6 +12052,37 @@ test_155() {
 }
 run_test 155 "gap in seq allocation from ofd after restarting"
 
+test_160() {
+	((OST1_VERSION >= $(version_code 2.16.55) )) ||
+		skip "need OST >= 2.16.55 to have MGC with all failovers"
+
+	stopall
+	reformat
+
+	local mgs_nid=$(do_facet mgs $LCTL list_nids | head -1)
+	local failover_nid="192.168.252.160@${NETTYPE}"
+	local mgs_nodes=$mgs_nid:$failover_nid
+	local tmp_mnt="$TMP/lmount"
+	local count;
+
+	start_mgsmds
+	start_ost
+
+	stack_trap "cleanup; reformat"
+
+	do_facet mgs "mkdir -p $tmp_mnt"
+	do_facet mgs "$MOUNT_CMD $mgs_nodes:/$FSNAME $tmp_mnt" ||
+		error "Fail to mount local client on MGS"
+	do_facet mgs "umount $tmp_mnt"
+
+	do_facet mgs "$LCTL get_param mgc.MGC${mgs_nid}.import"
+	count=$(do_facet mgs "$LCTL get_param mgc.MGC${mgs_nid}.import" |
+		grep -c "$failover_nid")
+	(( count > 0 )) ||
+		error "MGC misses failover MGS nid"
+}
+run_test 160 "MGC updates failnodes from all participants"
+
 cleanup_200() {
 	local modopts=$1
 	stopall
