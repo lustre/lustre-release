@@ -78,7 +78,6 @@ MODULE_PARM_DESC(ldiskfs_track_declares_assert, "LBUG during tracking of declare
 struct work_struct flush_fput;
 atomic_t descriptors_cnt;
 unsigned int ldiskfs_flush_descriptors_cnt = 5000;
-unsigned int ldiskfs_flush_descriptors_seconds = 10;
 
 /* 1 GiB in 512-byte sectors */
 int ldiskfs_delayed_unlink_blocks = (1 << (30 - 9));
