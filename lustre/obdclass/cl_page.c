@@ -44,7 +44,7 @@
 #include <cl_object.h>
 #include "cl_internal.h"
 
-static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg);
+static void __cl_page_delete(const struct lu_env *env, struct cl_page *pg);
 static DEFINE_MUTEX(cl_page_kmem_mutex);
 
 #ifdef LIBCFS_DEBUG
@@ -118,8 +118,8 @@ static void cs_pagestate_dec(const struct cl_object *obj,
  */
 static void cl_page_get_trust(struct cl_page *page)
 {
-	LASSERT(atomic_read(&page->cp_ref) > 0);
-	atomic_inc(&page->cp_ref);
+	LASSERT(refcount_read(&page->cp_ref) > 0);
+	refcount_inc(&page->cp_ref);
 }
 
 static struct cl_page_slice *
@@ -145,29 +145,6 @@ cl_page_slice_get(const struct cl_page *cl_page, int index)
 	     slice = cl_page_slice_get(cl_page, i); i >= 0;	\
 	     slice = cl_page_slice_get(cl_page, --i))
 
-/**
- * Returns a slice within a cl_page, corresponding to the given layer in the
- * device stack.
- *
- * \see cl_lock_at()
- */
-static const struct cl_page_slice *
-cl_page_at_trusted(const struct cl_page *cl_page,
-                   const struct lu_device_type *dtype)
-{
-	const struct cl_page_slice *slice;
-	int i;
-
-	ENTRY;
-
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_obj->co_lu.lo_dev->ld_type == dtype)
-			RETURN(slice);
-	}
-
-	RETURN(NULL);
-}
-
 static void __cl_page_free(struct cl_page *cl_page, unsigned short bufsize)
 {
 	int index = cl_page->cp_kmem_index;
@@ -181,32 +158,41 @@ static void __cl_page_free(struct cl_page *cl_page, unsigned short bufsize)
 	}
 }
 
-static void cl_page_free(const struct lu_env *env, struct cl_page *cl_page,
+static void cl_page_free(const struct lu_env *env, struct cl_page *cp,
 			 struct pagevec *pvec)
 {
-	struct cl_object *obj  = cl_page->cp_obj;
+	struct cl_object *obj  = cp->cp_obj;
 	unsigned short bufsize = cl_object_header(obj)->coh_page_bufsize;
-	struct cl_page_slice *slice;
-	int i;
+	struct page *vmpage;
 
 	ENTRY;
-	PASSERT(env, cl_page, list_empty(&cl_page->cp_batch));
-	PASSERT(env, cl_page, cl_page->cp_owner == NULL);
-	PASSERT(env, cl_page, cl_page->cp_state == CPS_FREEING);
+	PASSERT(env, cp, list_empty(&cp->cp_batch));
+	PASSERT(env, cp, cp->cp_owner == NULL);
+	PASSERT(env, cp, cp->cp_state == CPS_FREEING);
 
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (unlikely(slice->cpl_ops->cpo_fini != NULL))
-			slice->cpl_ops->cpo_fini(env, slice, pvec);
+	if (cp->cp_type == CPT_CACHEABLE) {
+		/* vmpage->private was already cleared when page was
+		 * moved into CPS_FREEING state. */
+		vmpage = cp->cp_vmpage;
+		LASSERT(vmpage != NULL);
+		LASSERT((struct cl_page *)vmpage->private != cp);
+
+		if (pvec != NULL) {
+			if (!pagevec_add(pvec, vmpage))
+				pagevec_release(pvec);
+		} else {
+			put_page(vmpage);
+		}
 	}
-	cl_page->cp_layer_count = 0;
+
+	cp->cp_layer_count = 0;
 	cs_page_dec(obj, CS_total);
-	cs_pagestate_dec(obj, cl_page->cp_state);
-	lu_object_ref_del_at(&obj->co_lu, &cl_page->cp_obj_ref,
-			     "cl_page", cl_page);
-	if (cl_page->cp_type != CPT_TRANSIENT)
+	cs_pagestate_dec(obj, cp->cp_state);
+	lu_object_ref_del_at(&obj->co_lu, &cp->cp_obj_ref, "cl_page", cp);
+	if (cp->cp_type != CPT_TRANSIENT)
 		cl_object_put(env, obj);
-	lu_ref_fini(&cl_page->cp_reference);
-	__cl_page_free(cl_page, bufsize);
+	lu_ref_fini(&cp->cp_reference);
+	__cl_page_free(cp, bufsize);
 	EXIT;
 }
 
@@ -285,7 +271,7 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 		 */
 		BUILD_BUG_ON((1 << CP_STATE_BITS) < CPS_NR); /* cp_state */
 		BUILD_BUG_ON((1 << CP_TYPE_BITS) < CPT_NR); /* cp_type */
-		atomic_set(&cl_page->cp_ref, 1);
+		refcount_set(&cl_page->cp_ref, 1);
 		cl_page->cp_obj = o;
 		if (type != CPT_TRANSIENT)
 			cl_object_get(o);
@@ -310,7 +296,7 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 				result = o->co_ops->coo_page_init(env, o,
 							cl_page, ind);
 				if (result != 0) {
-					cl_page_delete0(env, cl_page);
+					__cl_page_delete(env, cl_page);
 					cl_page_free(env, cl_page, NULL);
 					cl_page = ERR_PTR(result);
 					break;
@@ -389,9 +375,9 @@ static inline int cl_page_invariant(const struct cl_page *pg)
 	return cl_page_in_use_noref(pg);
 }
 
-static void cl_page_state_set0(const struct lu_env *env,
-			       struct cl_page *cl_page,
-			       enum cl_page_state state)
+static void __cl_page_state_set(const struct lu_env *env,
+				struct cl_page *cl_page,
+				enum cl_page_state state)
 {
 	enum cl_page_state old;
 
@@ -454,7 +440,7 @@ static void cl_page_state_set0(const struct lu_env *env,
 static void cl_page_state_set(const struct lu_env *env,
                               struct cl_page *page, enum cl_page_state state)
 {
-        cl_page_state_set0(env, page, state);
+	__cl_page_state_set(env, page, state);
 }
 
 /**
@@ -484,12 +470,12 @@ void cl_pagevec_put(const struct lu_env *env, struct cl_page *page,
 {
         ENTRY;
         CL_PAGE_HEADER(D_TRACE, env, page, "%d\n",
-		       atomic_read(&page->cp_ref));
+		       refcount_read(&page->cp_ref));
 
-	if (atomic_dec_and_test(&page->cp_ref)) {
+	if (refcount_dec_and_test(&page->cp_ref)) {
 		LASSERT(page->cp_state == CPS_FREEING);
 
-		LASSERT(atomic_read(&page->cp_ref) == 0);
+		LASSERT(refcount_read(&page->cp_ref) == 0);
 		PASSERT(env, page, page->cp_owner == NULL);
 		PASSERT(env, page, list_empty(&page->cp_batch));
 		/*
@@ -543,13 +529,6 @@ struct cl_page *cl_vmpage_page(struct page *vmpage, struct cl_object *obj)
 }
 EXPORT_SYMBOL(cl_vmpage_page);
 
-const struct cl_page_slice *cl_page_at(const struct cl_page *page,
-                                       const struct lu_device_type *dtype)
-{
-        return cl_page_at_trusted(page, dtype);
-}
-EXPORT_SYMBOL(cl_page_at);
-
 static void cl_page_owner_clear(struct cl_page *page)
 {
 	ENTRY;
@@ -569,31 +548,25 @@ static void cl_page_owner_set(struct cl_page *page)
 	EXIT;
 }
 
-void cl_page_disown0(const struct lu_env *env,
-		     struct cl_io *io, struct cl_page *cl_page)
+void __cl_page_disown(const struct lu_env *env, struct cl_page *cp)
 {
-	const struct cl_page_slice *slice;
+	struct page *vmpage;
 	enum cl_page_state state;
-	int i;
 
-        ENTRY;
-	state = cl_page->cp_state;
-	PINVRNT(env, cl_page, state == CPS_OWNED ||
-		state == CPS_FREEING);
-	PINVRNT(env, cl_page, cl_page_invariant(cl_page) ||
-		state == CPS_FREEING);
-	cl_page_owner_clear(cl_page);
+	ENTRY;
+	state = cp->cp_state;
+	PINVRNT(env, cp, state == CPS_OWNED || state == CPS_FREEING);
+	PINVRNT(env, cp, cl_page_invariant(cp) || state == CPS_FREEING);
+	cl_page_owner_clear(cp);
 
 	if (state == CPS_OWNED)
-		cl_page_state_set(env, cl_page, CPS_CACHED);
-        /*
-	 * Completion call-backs are executed in the bottom-up order, so that
-	 * uppermost layer (llite), responsible for VFS/VM interaction runs
-	 * last and can release locks safely.
-	 */
-	cl_page_slice_for_each_reverse(cl_page, slice, i) {
-		if (slice->cpl_ops->cpo_disown != NULL)
-			(*slice->cpl_ops->cpo_disown)(env, slice, io);
+		cl_page_state_set(env, cp, CPS_CACHED);
+
+	if (cp->cp_type == CPT_CACHEABLE) {
+		vmpage = cp->cp_vmpage;
+		LASSERT(vmpage != NULL);
+		LASSERT(PageLocked(vmpage));
+		unlock_page(vmpage);
 	}
 
 	EXIT;
@@ -627,48 +600,55 @@ EXPORT_SYMBOL(cl_page_is_owned);
  *             or, page was owned by another thread, or in IO.
  *
  * \see cl_page_disown()
- * \see cl_page_operations::cpo_own()
  * \see cl_page_own_try()
  * \see cl_page_own
  */
-static int cl_page_own0(const struct lu_env *env, struct cl_io *io,
-			struct cl_page *cl_page, int nonblock)
+static int __cl_page_own(const struct lu_env *env, struct cl_io *io,
+			 struct cl_page *cl_page, int nonblock)
 {
-	const struct cl_page_slice *slice;
-	int result = 0;
-	int i;
+	struct page *vmpage = cl_page->cp_vmpage;
+	int result;
 
 	ENTRY;
 	PINVRNT(env, cl_page, !cl_page_is_owned(cl_page, io));
-        io = cl_io_top(io);
 
 	if (cl_page->cp_state == CPS_FREEING) {
 		result = -ENOENT;
 		goto out;
 	}
 
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_ops->cpo_own)
-			result = (*slice->cpl_ops->cpo_own)(env, slice,
-							    io, nonblock);
-		if (result != 0)
-			break;
-	}
-	if (result > 0)
-		result = 0;
+	LASSERT(vmpage != NULL);
 
-	if (result == 0) {
-		PASSERT(env, cl_page, cl_page->cp_owner == NULL);
-		cl_page->cp_owner = cl_io_top(io);
-		cl_page_owner_set(cl_page);
-		if (cl_page->cp_state != CPS_FREEING) {
-			cl_page_state_set(env, cl_page, CPS_OWNED);
-		} else {
-			cl_page_disown0(env, io, cl_page);
-			result = -ENOENT;
+	if (cl_page->cp_type == CPT_TRANSIENT) {
+		/* OK */
+	} else if (nonblock) {
+		if (!trylock_page(vmpage)) {
+			result = -EAGAIN;
+			goto out;
 		}
+
+		if (unlikely(PageWriteback(vmpage))) {
+			unlock_page(vmpage);
+			result = -EAGAIN;
+			goto out;
+                }
+	} else {
+		lock_page(vmpage);
+		wait_on_page_writeback(vmpage);
 	}
 
+	PASSERT(env, cl_page, cl_page->cp_owner == NULL);
+	cl_page->cp_owner = cl_io_top(io);
+	cl_page_owner_set(cl_page);
+
+	if (cl_page->cp_state == CPS_FREEING) {
+		__cl_page_disown(env, cl_page);
+		result = -ENOENT;
+		goto out;
+	}
+
+	cl_page_state_set(env, cl_page, CPS_OWNED);
+	result = 0;
 out:
 	PINVRNT(env, cl_page, ergo(result == 0,
 		cl_page_invariant(cl_page)));
@@ -678,23 +658,23 @@ out:
 /**
  * Own a page, might be blocked.
  *
- * \see cl_page_own0()
+ * \see __cl_page_own()
  */
 int cl_page_own(const struct lu_env *env, struct cl_io *io, struct cl_page *pg)
 {
-        return cl_page_own0(env, io, pg, 0);
+	return __cl_page_own(env, io, pg, 0);
 }
 EXPORT_SYMBOL(cl_page_own);
 
 /**
  * Nonblock version of cl_page_own().
  *
- * \see cl_page_own0()
+ * \see __cl_page_own()
  */
 int cl_page_own_try(const struct lu_env *env, struct cl_io *io,
                     struct cl_page *pg)
 {
-        return cl_page_own0(env, io, pg, 1);
+	return __cl_page_own(env, io, pg, 1);
 }
 EXPORT_SYMBOL(cl_page_own_try);
 
@@ -704,32 +684,28 @@ EXPORT_SYMBOL(cl_page_own_try);
  *
  * Called when page is already locked by the hosting VM.
  *
- * \pre !cl_page_is_owned(cl_page, io)
- * \post cl_page_is_owned(cl_page, io)
- *
- * \see cl_page_operations::cpo_assume()
+ * \pre !cl_page_is_owned(cp, io)
+ * \post cl_page_is_owned(cp, io)
  */
 void cl_page_assume(const struct lu_env *env,
-		    struct cl_io *io, struct cl_page *cl_page)
+		    struct cl_io *io, struct cl_page *cp)
 {
-	const struct cl_page_slice *slice;
-	int i;
+	struct page *vmpage;
 
 	ENTRY;
+	PINVRNT(env, cp, cl_object_same(cp->cp_obj, io->ci_obj));
 
-	PINVRNT(env, cl_page,
-		cl_object_same(cl_page->cp_obj, io->ci_obj));
-	io = cl_io_top(io);
-
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_ops->cpo_assume != NULL)
-			(*slice->cpl_ops->cpo_assume)(env, slice, io);
+	if (cp->cp_type == CPT_CACHEABLE) {
+		vmpage = cp->cp_vmpage;
+		LASSERT(vmpage != NULL);
+		LASSERT(PageLocked(vmpage));
+		wait_on_page_writeback(vmpage);
 	}
 
-	PASSERT(env, cl_page, cl_page->cp_owner == NULL);
-	cl_page->cp_owner = cl_io_top(io);
-	cl_page_owner_set(cl_page);
-	cl_page_state_set(env, cl_page, CPS_OWNED);
+	PASSERT(env, cp, cp->cp_owner == NULL);
+	cp->cp_owner = cl_io_top(io);
+	cl_page_owner_set(cp);
+	cl_page_state_set(env, cp, CPS_OWNED);
 	EXIT;
 }
 EXPORT_SYMBOL(cl_page_assume);
@@ -740,28 +716,25 @@ EXPORT_SYMBOL(cl_page_assume);
  * Moves cl_page into cl_page_state::CPS_CACHED without releasing a lock
  * on the underlying VM page (as VM is supposed to do this itself).
  *
- * \pre   cl_page_is_owned(cl_page, io)
- * \post !cl_page_is_owned(cl_page, io)
- *
- * \see cl_page_assume()
+ * \pre   cl_page_is_owned(cp, io)
+ * \post !cl_page_is_owned(cp, io)
  */
 void cl_page_unassume(const struct lu_env *env,
-		      struct cl_io *io, struct cl_page *cl_page)
+		      struct cl_io *io, struct cl_page *cp)
 {
-	const struct cl_page_slice *slice;
-	int i;
+	struct page *vmpage;
 
-        ENTRY;
-	PINVRNT(env, cl_page, cl_page_is_owned(cl_page, io));
-	PINVRNT(env, cl_page, cl_page_invariant(cl_page));
+	ENTRY;
+	PINVRNT(env, cp, cl_page_is_owned(cp, io));
+	PINVRNT(env, cp, cl_page_invariant(cp));
 
-	io = cl_io_top(io);
-	cl_page_owner_clear(cl_page);
-	cl_page_state_set(env, cl_page, CPS_CACHED);
+	cl_page_owner_clear(cp);
+	cl_page_state_set(env, cp, CPS_CACHED);
 
-	cl_page_slice_for_each_reverse(cl_page, slice, i) {
-		if (slice->cpl_ops->cpo_unassume != NULL)
-			(*slice->cpl_ops->cpo_unassume)(env, slice, io);
+	if (cp->cp_type == CPT_CACHEABLE) {
+		vmpage = cp->cp_vmpage;
+		LASSERT(vmpage != NULL);
+		LASSERT(PageLocked(vmpage));
 	}
 
 	EXIT;
@@ -777,7 +750,6 @@ EXPORT_SYMBOL(cl_page_unassume);
  * \post !cl_page_is_owned(pg, io)
  *
  * \see cl_page_own()
- * \see cl_page_operations::cpo_disown()
  */
 void cl_page_disown(const struct lu_env *env,
                     struct cl_io *io, struct cl_page *pg)
@@ -785,10 +757,7 @@ void cl_page_disown(const struct lu_env *env,
 	PINVRNT(env, pg, cl_page_is_owned(pg, io) ||
 		pg->cp_state == CPS_FREEING);
 
-	ENTRY;
-	io = cl_io_top(io);
-	cl_page_disown0(env, io, pg);
-	EXIT;
+	__cl_page_disown(env, pg);
 }
 EXPORT_SYMBOL(cl_page_disown);
 
@@ -803,43 +772,51 @@ EXPORT_SYMBOL(cl_page_disown);
  * \see cl_page_operations::cpo_discard()
  */
 void cl_page_discard(const struct lu_env *env,
-		     struct cl_io *io, struct cl_page *cl_page)
+		     struct cl_io *io, struct cl_page *cp)
 {
+	struct page *vmpage;
 	const struct cl_page_slice *slice;
 	int i;
 
-	PINVRNT(env, cl_page, cl_page_is_owned(cl_page, io));
-	PINVRNT(env, cl_page, cl_page_invariant(cl_page));
+	PINVRNT(env, cp, cl_page_is_owned(cp, io));
+	PINVRNT(env, cp, cl_page_invariant(cp));
 
-	cl_page_slice_for_each(cl_page, slice, i) {
+	cl_page_slice_for_each(cp, slice, i) {
 		if (slice->cpl_ops->cpo_discard != NULL)
 			(*slice->cpl_ops->cpo_discard)(env, slice, io);
+	}
+
+	if (cp->cp_type == CPT_CACHEABLE) {
+		vmpage = cp->cp_vmpage;
+		LASSERT(vmpage != NULL);
+		LASSERT(PageLocked(vmpage));
+		generic_error_remove_page(vmpage->mapping, vmpage);
+	} else {
+		cl_page_delete(env, cp);
 	}
 }
 EXPORT_SYMBOL(cl_page_discard);
 
 /**
  * Version of cl_page_delete() that can be called for not fully constructed
- * cl_pages, e.g. in an error handling cl_page_find()->cl_page_delete0()
+ * cl_pages, e.g. in an error handling cl_page_find()->__cl_page_delete()
  * path. Doesn't check cl_page invariant.
  */
-static void cl_page_delete0(const struct lu_env *env,
-			    struct cl_page *cl_page)
+static void __cl_page_delete(const struct lu_env *env, struct cl_page *cp)
 {
 	const struct cl_page_slice *slice;
 	int i;
 
-        ENTRY;
-
-	PASSERT(env, cl_page, cl_page->cp_state != CPS_FREEING);
+	ENTRY;
+	PASSERT(env, cp, cp->cp_state != CPS_FREEING);
 
 	/*
 	 * Severe all ways to obtain new pointers to @pg.
 	 */
-	cl_page_owner_clear(cl_page);
-	cl_page_state_set0(env, cl_page, CPS_FREEING);
+	cl_page_owner_clear(cp);
+	__cl_page_state_set(env, cp, CPS_FREEING);
 
-	cl_page_slice_for_each_reverse(cl_page, slice, i) {
+	cl_page_slice_for_each_reverse(cp, slice, i) {
 		if (slice->cpl_ops->cpo_delete != NULL)
 			(*slice->cpl_ops->cpo_delete)(env, slice);
 	}
@@ -875,59 +852,10 @@ void cl_page_delete(const struct lu_env *env, struct cl_page *pg)
 {
 	PINVRNT(env, pg, cl_page_invariant(pg));
 	ENTRY;
-	cl_page_delete0(env, pg);
+	__cl_page_delete(env, pg);
 	EXIT;
 }
 EXPORT_SYMBOL(cl_page_delete);
-
-/**
- * Marks page up-to-date.
- *
- * Call cl_page_operations::cpo_export() through all layers top-to-bottom. The
- * layer responsible for VM interaction has to mark/clear page as up-to-date
- * by the \a uptodate argument.
- *
- * \see cl_page_operations::cpo_export()
- */
-void cl_page_export(const struct lu_env *env, struct cl_page *cl_page,
-		    int uptodate)
-{
-	const struct cl_page_slice *slice;
-	int i;
-
-	PINVRNT(env, cl_page, cl_page_invariant(cl_page));
-
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_ops->cpo_export != NULL)
-			(*slice->cpl_ops->cpo_export)(env, slice, uptodate);
-	}
-}
-EXPORT_SYMBOL(cl_page_export);
-
-/**
- * Returns true, if \a page is VM locked in a suitable sense by the calling
- * thread.
- */
-int cl_page_is_vmlocked(const struct lu_env *env,
-			const struct cl_page *cl_page)
-{
-        const struct cl_page_slice *slice;
-	int result;
-
-	ENTRY;
-	slice = cl_page_slice_get(cl_page, 0);
-	PASSERT(env, cl_page, slice->cpl_ops->cpo_is_vmlocked != NULL);
-        /*
-	 * Call ->cpo_is_vmlocked() directly instead of going through
-         * CL_PAGE_INVOKE(), because cl_page_is_vmlocked() is used by
-         * cl_page_invariant().
-         */
-        result = slice->cpl_ops->cpo_is_vmlocked(env, slice);
-	PASSERT(env, cl_page, result == -EBUSY || result == -ENODATA);
-
-	RETURN(result == -EBUSY);
-}
-EXPORT_SYMBOL(cl_page_is_vmlocked);
 
 void cl_page_touch(const struct lu_env *env,
 		   const struct cl_page *cl_page, size_t to)
@@ -965,50 +893,41 @@ static void cl_page_io_start(const struct lu_env *env,
 }
 
 /**
- * Prepares page for immediate transfer. cl_page_operations::cpo_prep() is
- * called top-to-bottom. Every layer either agrees to submit this page (by
- * returning 0), or requests to omit this page (by returning -EALREADY). Layer
- * handling interactions with the VM also has to inform VM that page is under
- * transfer now.
+ * Prepares page for immediate transfer. Return -EALREADY if this page
+ * should be omitted from transfer.
  */
 int cl_page_prep(const struct lu_env *env, struct cl_io *io,
-		 struct cl_page *cl_page, enum cl_req_type crt)
+		 struct cl_page *cp, enum cl_req_type crt)
 {
-	const struct cl_page_slice *slice;
-	int result = 0;
-	int i;
+	struct page *vmpage = cp->cp_vmpage;
+	int rc;
 
-	PINVRNT(env, cl_page, cl_page_is_owned(cl_page, io));
-	PINVRNT(env, cl_page, cl_page_invariant(cl_page));
-	PINVRNT(env, cl_page, crt < CRT_NR);
+	PASSERT(env, cp, crt < CRT_NR);
+	PINVRNT(env, cp, cl_page_is_owned(cp, io));
+	PINVRNT(env, cp, cl_page_invariant(cp));
 
-        /*
-	 * this has to be called bottom-to-top, so that llite can set up
-	 * PG_writeback without risking other layers deciding to skip this
-	 * page.
-	 */
-	if (crt >= CRT_NR)
-		return -EINVAL;
+	if (cp->cp_type == CPT_TRANSIENT) {
+		/* Nothing to do. */
+	} else if (crt == CRT_READ) {
+		if (PageUptodate(vmpage))
+			GOTO(out, rc = -EALREADY);
+	} else {
+		LASSERT(PageLocked(vmpage));
+		LASSERT(!PageDirty(vmpage));
 
-	if (cl_page->cp_type != CPT_TRANSIENT) {
-		cl_page_slice_for_each(cl_page, slice, i) {
-			if (slice->cpl_ops->cpo_own)
-				result =
-				 (*slice->cpl_ops->io[crt].cpo_prep)(env,
-								     slice,
-								     io);
-			if (result != 0)
-				break;
-		}
+		/* ll_writepage path is not a sync write, so need to
+		 * set page writeback flag
+		 */
+		if (cp->cp_sync_io == NULL)
+			set_page_writeback(vmpage);
 	}
 
-	if (result >= 0) {
-		result = 0;
-		cl_page_io_start(env, cl_page, crt);
-	}
+	cl_page_io_start(env, cp, crt);
+	rc = 0;
+out:
+	CL_PAGE_HEADER(D_TRACE, env, cp, "%d %d\n", crt, rc);
 
-	CL_PAGE_HEADER(D_TRACE, env, cl_page, "%d %d\n", crt, result);
-	return result;
+	return rc;
 }
 EXPORT_SYMBOL(cl_page_prep);
 
@@ -1065,36 +984,51 @@ EXPORT_SYMBOL(cl_page_completion);
  *
  * \pre  cl_page->cp_state == CPS_CACHED
  * \post cl_page->cp_state == CPS_PAGEIN || cl_page->cp_state == CPS_PAGEOUT
- *
- * \see cl_page_operations::cpo_make_ready()
  */
-int cl_page_make_ready(const struct lu_env *env, struct cl_page *cl_page,
-                       enum cl_req_type crt)
+int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
+		       enum cl_req_type crt)
 {
-	const struct cl_page_slice *slice;
-	int result = 0;
-	int i;
+	struct page *vmpage = cp->cp_vmpage;
+	int rc;
 
-        ENTRY;
-	PINVRNT(env, cl_page, crt < CRT_NR);
-	if (crt >= CRT_NR)
-		RETURN(-EINVAL);
+	ENTRY;
+	PASSERT(env, cp, crt == CRT_WRITE);
 
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_ops->io[crt].cpo_make_ready != NULL)
-			result = (*slice->cpl_ops->io[crt].cpo_make_ready)(env, slice);
-		if (result != 0)
-			break;
+	if (cp->cp_type == CPT_TRANSIENT)
+		GOTO(out, rc = 0);
+
+	lock_page(vmpage);
+
+	if (clear_page_dirty_for_io(vmpage)) {
+		LASSERT(cp->cp_state == CPS_CACHED);
+		/* This actually clears the dirty bit in the
+		 * radix tree.
+		 */
+		set_page_writeback(vmpage);
+		CL_PAGE_HEADER(D_PAGE, env, cp, "readied\n");
+		rc = 0;
+	} else if (cp->cp_state == CPS_PAGEOUT) {
+		/* is it possible for osc_flush_async_page()
+		 * to already make it ready?
+		 */
+		rc = -EALREADY;
+	} else {
+		CL_PAGE_DEBUG(D_ERROR, env, cp,
+			      "unexpecting page state %d\n",
+			      cp->cp_state);
+		LBUG();
 	}
 
-	if (result >= 0) {
-		result = 0;
-		PASSERT(env, cl_page, cl_page->cp_state == CPS_CACHED);
-		cl_page_io_start(env, cl_page, crt);
-        }
-	CL_PAGE_HEADER(D_TRACE, env, cl_page, "%d %d\n", crt, result);
+	unlock_page(vmpage);
+out:
+	if (rc == 0) {
+		PASSERT(env, cp, cp->cp_state == CPS_CACHED);
+		cl_page_io_start(env, cp, crt);
+	}
 
-	RETURN(result);
+	CL_PAGE_HEADER(D_TRACE, env, cp, "%d %d\n", crt, rc);
+
+	return rc;
 }
 EXPORT_SYMBOL(cl_page_make_ready);
 
@@ -1160,7 +1094,7 @@ void cl_page_header_print(const struct lu_env *env, void *cookie,
 {
 	(*printer)(env, cookie,
 		   "page@%p[%d %p %d %d %p]\n",
-		   pg, atomic_read(&pg->cp_ref), pg->cp_obj,
+		   pg, refcount_read(&pg->cp_ref), pg->cp_obj,
 		   pg->cp_state, pg->cp_type,
 		   pg->cp_owner);
 }
@@ -1170,21 +1104,36 @@ EXPORT_SYMBOL(cl_page_header_print);
  * Prints human readable representation of \a cl_page to the \a f.
  */
 void cl_page_print(const struct lu_env *env, void *cookie,
-		   lu_printer_t printer, const struct cl_page *cl_page)
+		   lu_printer_t printer, const struct cl_page *cp)
 {
+	struct page *vmpage = cp->cp_vmpage;
 	const struct cl_page_slice *slice;
 	int result = 0;
 	int i;
 
-	cl_page_header_print(env, cookie, printer, cl_page);
-	cl_page_slice_for_each(cl_page, slice, i) {
+	cl_page_header_print(env, cookie, printer, cp);
+
+	(*printer)(env, cookie, "vmpage @%p", vmpage);
+
+	if (vmpage != NULL) {
+		(*printer)(env, cookie, " %lx %d:%d %lx %lu %slru",
+			   (long)vmpage->flags, page_count(vmpage),
+			   page_mapcount(vmpage), vmpage->private,
+			   page_index(vmpage),
+			   list_empty(&vmpage->lru) ? "not-" : "");
+	}
+
+	(*printer)(env, cookie, "\n");
+
+	cl_page_slice_for_each(cp, slice, i) {
 		if (slice->cpl_ops->cpo_print != NULL)
 			result = (*slice->cpl_ops->cpo_print)(env, slice,
-							     cookie, printer);
+							      cookie, printer);
 		if (result != 0)
 			break;
 	}
-	(*printer)(env, cookie, "end page@%p\n", cl_page);
+
+	(*printer)(env, cookie, "end page@%p\n", cp);
 }
 EXPORT_SYMBOL(cl_page_print);
 
@@ -1232,7 +1181,6 @@ void cl_page_slice_add(struct cl_page *cl_page, struct cl_page_slice *slice,
 	LASSERT(cl_page->cp_layer_count < CP_MAX_LAYER);
 	LASSERT(offset < (1 << sizeof(cl_page->cp_layer_offset[0]) * 8));
 	cl_page->cp_layer_offset[cl_page->cp_layer_count++] = offset;
-	slice->cpl_obj  = obj;
 	slice->cpl_ops  = ops;
 	slice->cpl_page = cl_page;
 
@@ -1253,7 +1201,7 @@ struct cl_client_cache *cl_cache_init(unsigned long lru_page_max)
 		RETURN(NULL);
 
 	/* Initialize cache data */
-	atomic_set(&cache->ccc_users, 1);
+	refcount_set(&cache->ccc_users, 1);
 	cache->ccc_lru_max = lru_page_max;
 	atomic_long_set(&cache->ccc_lru_left, lru_page_max);
 	spin_lock_init(&cache->ccc_lru_lock);
@@ -1274,7 +1222,7 @@ EXPORT_SYMBOL(cl_cache_init);
  */
 void cl_cache_incref(struct cl_client_cache *cache)
 {
-	atomic_inc(&cache->ccc_users);
+	refcount_inc(&cache->ccc_users);
 }
 EXPORT_SYMBOL(cl_cache_incref);
 
@@ -1285,7 +1233,7 @@ EXPORT_SYMBOL(cl_cache_incref);
  */
 void cl_cache_decref(struct cl_client_cache *cache)
 {
-	if (atomic_dec_and_test(&cache->ccc_users))
+	if (refcount_dec_and_test(&cache->ccc_users))
 		OBD_FREE(cache, sizeof(*cache));
 }
 EXPORT_SYMBOL(cl_cache_decref);

@@ -721,7 +721,7 @@ enum cl_page_type {
 
 #define	CP_STATE_BITS	4
 #define	CP_TYPE_BITS	2
-#define	CP_MAX_LAYER	3
+#define	CP_MAX_LAYER	2
 
 /**
  * Fields are protected by the lock on struct page, except for atomics and
@@ -734,7 +734,7 @@ enum cl_page_type {
  */
 struct cl_page {
 	/** Reference counter. */
-	atomic_t		cp_ref;
+	refcount_t		cp_ref;
 	/** layout_entry + stripe index, composed using lov_comp_index() */
 	unsigned int		cp_lov_index;
 	/** page->index of the page within the whole file */
@@ -752,22 +752,24 @@ struct cl_page {
 	/** Linkage of pages within group. Pages must be owned */
 	struct list_head	cp_batch;
 	/** array of slices offset. Immutable after creation. */
-	unsigned char		cp_layer_offset[CP_MAX_LAYER]; /* 24 bits */
+	unsigned char		cp_layer_offset[CP_MAX_LAYER];
 	/** current slice index */
-	unsigned char		cp_layer_count:2; /* 26 bits */
+	unsigned char		cp_layer_count:2;
 	/**
 	 * Page state. This field is const to avoid accidental update, it is
 	 * modified only internally within cl_page.c. Protected by a VM lock.
 	 */
-	enum cl_page_state	 cp_state:CP_STATE_BITS; /* 30 bits */
+	enum cl_page_state	 cp_state:CP_STATE_BITS;
         /**
          * Page type. Only CPT_TRANSIENT is used so far. Immutable after
          * creation.
          */
-	enum cl_page_type	cp_type:CP_TYPE_BITS; /* 32 bits */
+	enum cl_page_type	cp_type:CP_TYPE_BITS;
+	unsigned		cp_defer_uptodate:1,
+				cp_ra_updated:1,
+				cp_ra_used:1;
 	/* which slab kmem index this memory allocated from */
-	short int		cp_kmem_index; /* 48 bits */
-	unsigned int		cp_unused1:16;	/* 64 bits */
+	short int		cp_kmem_index;
 
 	/**
 	 * Owning IO in cl_page_state::CPS_OWNED state. Sub-page can be owned
@@ -791,11 +793,6 @@ struct cl_page {
  */
 struct cl_page_slice {
         struct cl_page                  *cpl_page;
-        /**
-         * Object slice corresponding to this page slice. Immutable after
-         * creation.
-         */
-        struct cl_object                *cpl_obj;
         const struct cl_page_operations *cpl_ops;
 };
 
@@ -825,7 +822,7 @@ enum cl_req_type {
  *
  * Methods taking an \a io argument are for the activity happening in the
  * context of given \a io. Page is assumed to be owned by that io, except for
- * the obvious cases (like cl_page_operations::cpo_own()).
+ * the obvious cases.
  *
  * \see vvp_page_ops, lov_page_ops, osc_page_ops
  */
@@ -833,65 +830,8 @@ struct cl_page_operations {
         /**
 	 * cl_page<->struct page methods. Only one layer in the stack has to
          * implement these. Current code assumes that this functionality is
-         * provided by the topmost layer, see cl_page_disown0() as an example.
+	 * provided by the topmost layer, see __cl_page_disown() as an example.
          */
-
-        /**
-         * Called when \a io acquires this page into the exclusive
-         * ownership. When this method returns, it is guaranteed that the is
-         * not owned by other io, and no transfer is going on against
-         * it. Optional.
-         *
-         * \see cl_page_own()
-         * \see vvp_page_own(), lov_page_own()
-         */
-        int  (*cpo_own)(const struct lu_env *env,
-                        const struct cl_page_slice *slice,
-                        struct cl_io *io, int nonblock);
-        /** Called when ownership it yielded. Optional.
-         *
-         * \see cl_page_disown()
-         * \see vvp_page_disown()
-         */
-        void (*cpo_disown)(const struct lu_env *env,
-                           const struct cl_page_slice *slice, struct cl_io *io);
-        /**
-         * Called for a page that is already "owned" by \a io from VM point of
-         * view. Optional.
-         *
-         * \see cl_page_assume()
-         * \see vvp_page_assume(), lov_page_assume()
-         */
-        void (*cpo_assume)(const struct lu_env *env,
-                           const struct cl_page_slice *slice, struct cl_io *io);
-        /** Dual to cl_page_operations::cpo_assume(). Optional. Called
-         * bottom-to-top when IO releases a page without actually unlocking
-         * it.
-         *
-         * \see cl_page_unassume()
-         * \see vvp_page_unassume()
-         */
-        void (*cpo_unassume)(const struct lu_env *env,
-                             const struct cl_page_slice *slice,
-                             struct cl_io *io);
-        /**
-         * Announces whether the page contains valid data or not by \a uptodate.
-         *
-         * \see cl_page_export()
-         * \see vvp_page_export()
-         */
-        void  (*cpo_export)(const struct lu_env *env,
-                            const struct cl_page_slice *slice, int uptodate);
-        /**
-         * Checks whether underlying VM page is locked (in the suitable
-         * sense). Used for assertions.
-         *
-         * \retval    -EBUSY: page is protected by a lock of a given mode;
-         * \retval  -ENODATA: page is not protected by a lock;
-         * \retval         0: this layer cannot decide. (Should never happen.)
-         */
-        int (*cpo_is_vmlocked)(const struct lu_env *env,
-                               const struct cl_page_slice *slice);
 
 	/**
 	 * Update file attributes when all we have is this page.  Used for tiny
@@ -921,10 +861,6 @@ struct cl_page_operations {
          */
         void (*cpo_delete)(const struct lu_env *env,
                            const struct cl_page_slice *slice);
-        /** Destructor. Frees resources and slice itself. */
-        void (*cpo_fini)(const struct lu_env *env,
-			 struct cl_page_slice *slice,
-			 struct pagevec *pvec);
         /**
          * Optional debugging helper. Prints given page slice.
          *
@@ -953,22 +889,8 @@ struct cl_page_operations {
          */
         struct {
                 /**
-                 * Called when a page is submitted for a transfer as a part of
-                 * cl_page_list.
-                 *
-                 * \return    0         : page is eligible for submission;
-                 * \return    -EALREADY : skip this page;
-                 * \return    -ve       : error.
-                 *
-                 * \see cl_page_prep()
-                 */
-                int  (*cpo_prep)(const struct lu_env *env,
-                                 const struct cl_page_slice *slice,
-                                 struct cl_io *io);
-                /**
                  * Completion handler. This is guaranteed to be eventually
-                 * fired after cl_page_operations::cpo_prep() or
-                 * cl_page_operations::cpo_make_ready() call.
+		 * fired after cl_page_prep() or cl_page_make_ready() call.
                  *
                  * This method can be called in a non-blocking context. It is
                  * guaranteed however, that the page involved and its object
@@ -980,18 +902,6 @@ struct cl_page_operations {
                 void (*cpo_completion)(const struct lu_env *env,
                                        const struct cl_page_slice *slice,
                                        int ioret);
-                /**
-                 * Called when cached page is about to be added to the
-                 * ptlrpc request as a part of req formation.
-                 *
-                 * \return    0       : proceed with this page;
-                 * \return    -EAGAIN : skip this page;
-                 * \return    -ve     : error.
-                 *
-                 * \see cl_page_make_ready()
-                 */
-                int  (*cpo_make_ready)(const struct lu_env *env,
-                                       const struct cl_page_slice *slice);
         } io[CRT_NR];
         /**
          * Tell transfer engine that only [to, from] part of a page should be
@@ -1051,6 +961,11 @@ static inline struct page *cl_page_vmpage(const struct cl_page *page)
 	return page->cp_vmpage;
 }
 
+static inline pgoff_t cl_page_index(const struct cl_page *cp)
+{
+	return cl_page_vmpage(cp)->index;
+}
+
 /**
  * Check if a cl_page is in use.
  *
@@ -1059,7 +974,7 @@ static inline struct page *cl_page_vmpage(const struct cl_page *page)
  */
 static inline bool __page_in_use(const struct cl_page *page, int refc)
 {
-	return (atomic_read(&page->cp_ref) > refc + 1);
+	return (refcount_read(&page->cp_ref) > refc + 1);
 }
 
 /**
@@ -2264,10 +2179,6 @@ void            cl_page_header_print(const struct lu_env *env, void *cookie,
                                      lu_printer_t printer,
                                      const struct cl_page *pg);
 struct cl_page *cl_vmpage_page      (struct page *vmpage, struct cl_object *obj);
-struct cl_page *cl_page_top         (struct cl_page *page);
-
-const struct cl_page_slice *cl_page_at(const struct cl_page *page,
-                                       const struct lu_device_type *dtype);
 
 /**
  * \name ownership
@@ -2321,12 +2232,8 @@ int  cl_page_flush      (const struct lu_env *env, struct cl_io *io,
 void    cl_page_discard(const struct lu_env *env, struct cl_io *io,
 			struct cl_page *pg);
 void    cl_page_delete(const struct lu_env *env, struct cl_page *pg);
-int     cl_page_is_vmlocked(const struct lu_env *env,
-			    const struct cl_page *pg);
 void	cl_page_touch(const struct lu_env *env, const struct cl_page *pg,
 		      size_t to);
-void    cl_page_export(const struct lu_env *env,
-		       struct cl_page *pg, int uptodate);
 loff_t  cl_offset(const struct cl_object *obj, pgoff_t idx);
 pgoff_t cl_index(const struct cl_object *obj, loff_t offset);
 size_t  cl_page_size(const struct cl_object *obj);
@@ -2349,7 +2256,7 @@ struct cl_client_cache {
 	 * # of client cache refcount
 	 * # of users (OSCs) + 2 (held by llite and lov)
 	 */
-	atomic_t		ccc_users;
+	refcount_t		ccc_users;
 	/**
 	 * # of threads are doing shrinking
 	 */
@@ -2537,7 +2444,7 @@ void cl_page_list_splice(struct cl_page_list *list,
 void cl_page_list_del(const struct lu_env *env,
 		      struct cl_page_list *plist, struct cl_page *page);
 void cl_page_list_disown(const struct lu_env *env,
-			 struct cl_io *io, struct cl_page_list *plist);
+			 struct cl_page_list *plist);
 void cl_page_list_assume(const struct lu_env *env,
 			 struct cl_io *io, struct cl_page_list *plist);
 void cl_page_list_discard(const struct lu_env *env,
@@ -2545,10 +2452,7 @@ void cl_page_list_discard(const struct lu_env *env,
 void cl_page_list_fini(const struct lu_env *env, struct cl_page_list *plist);
 
 void cl_2queue_init(struct cl_2queue *queue);
-void cl_2queue_add(struct cl_2queue *queue, struct cl_page *page,
-		   bool get_ref);
-void cl_2queue_disown(const struct lu_env *env, struct cl_io *io,
-		      struct cl_2queue *queue);
+void cl_2queue_disown(const struct lu_env *env, struct cl_2queue *queue);
 void cl_2queue_assume(const struct lu_env *env, struct cl_io *io,
 		      struct cl_2queue *queue);
 void cl_2queue_discard(const struct lu_env *env, struct cl_io *io,

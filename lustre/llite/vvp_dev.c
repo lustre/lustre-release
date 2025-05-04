@@ -464,17 +464,15 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 static void vvp_pgcache_page_show(const struct lu_env *env,
 				  struct seq_file *seq, struct cl_page *page)
 {
-	struct vvp_page *vpg;
-	struct page      *vmpage;
-	int              has_flags;
+	struct page *vmpage;
+	int has_flags;
 
-	vpg = cl2vvp_page(cl_page_at(page, &vvp_device_type));
-	vmpage = vpg->vpg_page;
-	seq_printf(seq, " %5i | %p %p %s %s %s | %p "DFID"(%p) %lu %u [",
+	vmpage = page->cp_vmpage;
+	seq_printf(seq, " %5i | %p %p %s %s | %p "DFID"(%p) %lu %u [",
 		   0 /* gen */,
-		   vpg, page,
+		   NULL, /* was vvp_page */
+		   page,
 		   "none",
-		   vpg->vpg_defer_uptodate ? "du" : "- ",
 		   PageWriteback(vmpage) ? "wb" : "-",
 		   vmpage,
 		   PFID(ll_inode2fid(vmpage->mapping->host)),

@@ -84,7 +84,6 @@ struct osc_async_page {
 	struct brw_page		oap_brw_page;
 
 	struct ptlrpc_request	*oap_request;
-	struct client_obd	*oap_cli;
 	struct osc_object	*oap_obj;
 
 	spinlock_t		 oap_lock;
@@ -844,6 +843,11 @@ static inline struct osc_page *oap2osc(struct osc_async_page *oap)
 static inline pgoff_t osc_index(struct osc_page *opg)
 {
 	return opg->ops_oap.oap_obj_off >> PAGE_SHIFT;
+}
+
+static inline struct osc_object *osc_page_object(struct osc_page *ops)
+{
+	return ops->ops_oap.oap_obj;
 }
 
 static inline struct cl_page *oap2cl_page(struct osc_async_page *oap)

@@ -51,7 +51,6 @@ extern struct kmem_cache *cl_page_kmem_array[16];
 extern unsigned short cl_page_kmem_size_array[16];
 
 struct cl_thread_info *cl_env_info(const struct lu_env *env);
-void cl_page_disown0(const struct lu_env *env,
-		     struct cl_io *io, struct cl_page *pg);
+void __cl_page_disown(const struct lu_env *env, struct cl_page *pg);
 
 #endif /* _CL_INTERNAL_H */

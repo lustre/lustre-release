@@ -81,7 +81,7 @@ static void osc_page_transfer_put(const struct lu_env *env,
 static void osc_page_transfer_add(const struct lu_env *env,
                                   struct osc_page *opg, enum cl_req_type crt)
 {
-	struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
+	struct osc_object *obj = osc_page_object(opg);
 
 	osc_lru_use(osc_cli(obj), opg);
 }
@@ -124,7 +124,7 @@ static int osc_page_print(const struct lu_env *env,
 {
 	struct osc_page *opg = cl2osc_page(slice);
 	struct osc_async_page *oap = &opg->ops_oap;
-	struct osc_object *obj = cl2osc(slice->cpl_obj);
+	struct osc_object *obj = osc_page_object(opg);
 	struct client_obd *cli = &osc_export(obj)->exp_obd->u.cli;
 
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
@@ -141,7 +141,7 @@ static int osc_page_print(const struct lu_env *env,
 			  /* 2 */
 			  oap->oap_obj_off, oap->oap_page_off, oap->oap_count,
 			  oap->oap_async_flags, oap->oap_brw_flags,
-			  oap->oap_request, oap->oap_cli, obj,
+			  oap->oap_request, cli, obj,
 			  /* 3 */
 			  opg->ops_transfer_pinned,
 			  osc_submit_duration(opg), opg->ops_srvlock,
@@ -170,7 +170,7 @@ static void osc_page_delete(const struct lu_env *env,
 			    const struct cl_page_slice *slice)
 {
 	struct osc_page   *opg = cl2osc_page(slice);
-	struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
+	struct osc_object *obj = osc_page_object(opg);
 	int rc;
 
 	ENTRY;
@@ -238,7 +238,7 @@ static void osc_page_touch(const struct lu_env *env,
 			  const struct cl_page_slice *slice, size_t to)
 {
 	struct osc_page *opg = cl2osc_page(slice);
-	struct cl_object *obj = opg->ops_cl.cpl_obj;
+	struct cl_object *obj = osc2cl(osc_page_object(opg));
 
 	osc_page_touch_at(env, obj, osc_index(opg), to);
 }
@@ -369,7 +369,7 @@ static int osc_cache_too_much(struct client_obd *cli)
 	unsigned long budget;
 
 	LASSERT(cache != NULL);
-	budget = cache->ccc_lru_max / (atomic_read(&cache->ccc_users) - 2);
+	budget = cache->ccc_lru_max / (refcount_read(&cache->ccc_users) - 2);
 
 	/* if it's going to run out LRU slots, we should free some, but not
 	 * too much to maintain faireness among OSCs. */
@@ -733,7 +733,7 @@ static long osc_lru_reclaim(struct client_obd *cli, unsigned long npages)
 	cache->ccc_lru_shrinkers++;
 	list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
 
-	max_scans = atomic_read(&cache->ccc_users) - 2;
+	max_scans = refcount_read(&cache->ccc_users) - 2;
 	while (--max_scans > 0 &&
 	       (scan = list_first_entry_or_null(&cache->ccc_lru,
 						  struct client_obd,

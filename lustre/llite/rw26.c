@@ -400,7 +400,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		/* We keep the refcount from cl_page_find, so we don't need
 		 * another one here
 		 */
-		cl_2queue_add(queue, page, false);
+		cl_page_list_add(&queue->c2_qin, page, false);
 		/*
 		 * Set page clip to tell transfer formation engine
 		 * that page has to be sent even if it is beyond KMS.
@@ -441,7 +441,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	}
 
 	cl_2queue_discard(env, io, queue);
-	cl_2queue_disown(env, io, queue);
+	cl_2queue_disown(env, queue);
 	cl_2queue_fini(env, queue);
 	RETURN(rc);
 }
@@ -646,8 +646,7 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 {
 	struct cl_attr *attr   = vvp_env_thread_attr(env);
 	struct cl_object *obj  = io->ci_obj;
-	struct vvp_page *vpg   = cl_object_page_slice(obj, pg);
-	loff_t          offset = cl_offset(obj, vvp_index(vpg));
+	loff_t          offset = cl_offset(obj, cl_page_index(pg));
 	int             result;
 	ENTRY;
 
@@ -665,15 +664,15 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 	 * purposes here we can treat it like i_size.
 	 */
 	if (attr->cat_kms <= offset) {
-		char *kaddr = kmap_atomic(vpg->vpg_page);
+		char *kaddr = kmap_atomic(pg->cp_vmpage);
 
 		memset(kaddr, 0, cl_page_size(obj));
 		kunmap_atomic(kaddr);
 		GOTO(out, result = 0);
 	}
 
-	if (vpg->vpg_defer_uptodate) {
-		vpg->vpg_ra_used = 1;
+	if (pg->cp_defer_uptodate) {
+		pg->cp_ra_used = 1;
 		GOTO(out, result = 0);
 	}
 

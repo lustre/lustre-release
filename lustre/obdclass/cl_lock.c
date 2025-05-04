@@ -44,16 +44,16 @@
 #include <cl_object.h>
 #include "cl_internal.h"
 
-static void cl_lock_trace0(int level, const struct lu_env *env,
-			   const char *prefix, const struct cl_lock *lock,
-			   const char *func, const int line)
+static void __cl_lock_trace(int level, const struct lu_env *env,
+			    const char *prefix, const struct cl_lock *lock,
+			    const char *func, const int line)
 {
 	struct cl_object_header *h = cl_object_header(lock->cll_descr.cld_obj);
 	CDEBUG(level, "%s: %p (%p/%d) at %s():%d\n",
 	       prefix, lock, env, h->coh_nesting, func, line);
 }
 #define cl_lock_trace(level, env, prefix, lock)                         \
-        cl_lock_trace0(level, env, prefix, lock, __FUNCTION__, __LINE__)
+	__cl_lock_trace(level, env, prefix, lock, __FUNCTION__, __LINE__)
 
 /**
  * Adds lock slice to the compound lock.

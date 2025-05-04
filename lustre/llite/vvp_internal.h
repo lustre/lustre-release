@@ -208,26 +208,8 @@ struct vvp_object {
 };
 
 /**
- * VVP-private page state.
+ * There is no VVP-private page state.
  */
-struct vvp_page {
-	struct cl_page_slice vpg_cl;
-	unsigned	vpg_defer_uptodate:1,
-			vpg_ra_updated:1,
-			vpg_ra_used:1;
-	/** VM page */
-	struct page	*vpg_page;
-};
-
-static inline struct vvp_page *cl2vvp_page(const struct cl_page_slice *slice)
-{
-	return container_of(slice, struct vvp_page, vpg_cl);
-}
-
-static inline pgoff_t vvp_index(struct vvp_page *vpg)
-{
-	return vpg->vpg_page->index;
-}
 
 struct vvp_device {
 	struct cl_device    vdv_cl;
@@ -266,11 +248,6 @@ static inline struct inode *vvp_object_inode(const struct cl_object *obj)
 
 int vvp_object_invariant(const struct cl_object *obj);
 struct vvp_object *cl_inode2vvp(struct inode *inode);
-
-static inline struct page *cl2vm_page(const struct cl_page_slice *slice)
-{
-	return cl2vvp_page(slice)->vpg_page;
-}
 
 #ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 # define CLOBINVRNT(env, clob, expr)					\
