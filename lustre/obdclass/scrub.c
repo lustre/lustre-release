@@ -461,7 +461,7 @@ void scrub_stop(struct lustre_scrub *scrub)
 }
 EXPORT_SYMBOL(scrub_stop);
 
-const char *const scrub_status_names[] = {
+static const char *const scrub_status_names[] = {
 	"init",
 	"scanning",
 	"completed",
@@ -472,7 +472,7 @@ const char *const scrub_status_names[] = {
 	NULL
 };
 
-const char *const scrub_flags_names[] = {
+static const char *const scrub_flags_names[] = {
 	"recreated",
 	"inconsistent",
 	"auto",
@@ -480,7 +480,7 @@ const char *const scrub_flags_names[] = {
 	NULL
 };
 
-const char *const scrub_param_names[] = {
+static const char *const scrub_param_names[] = {
 	"failout",
 	"dryrun",
 	NULL

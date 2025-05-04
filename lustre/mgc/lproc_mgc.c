@@ -36,7 +36,7 @@ static int mgc_ir_state_seq_show(struct seq_file *m, void *v)
 
 LDEBUGFS_SEQ_FOPS_RO(mgc_ir_state);
 
-struct ldebugfs_vars ldebugfs_mgc_obd_vars[] = {
+static struct ldebugfs_vars ldebugfs_mgc_obd_vars[] = {
 	{ .name	=	"connect_flags",
 	  .fops	=	&mgc_connect_flags_fops	},
 	{ .name	=	"mgs_server_uuid",

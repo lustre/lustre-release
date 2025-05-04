@@ -20,7 +20,7 @@
 static LIST_HEAD(nodemap_pde_list);
 
 /* nodemap debugfs root directory under lustre */
-struct dentry *nodemap_root;
+static struct dentry *nodemap_root;
 
 /**
  * Reads and prints the idmap for the given nodemap.

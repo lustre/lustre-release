@@ -16,6 +16,7 @@
 #include <obd_target.h>
 #include <obd_cksum.h>
 #include "tgt_internal.h"
+#include "lu_target.h"
 #include "../ptlrpc/ptlrpc_internal.h"
 
 /* This must be longer than the longest string below */

@@ -537,7 +537,7 @@ ldebugfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 }
 EXPORT_SYMBOL(ldebugfs_nid_stats_clear_seq_write);
 
-struct ldebugfs_vars ldebugfs_obd_exports_vars[] = {
+static struct ldebugfs_vars ldebugfs_obd_exports_vars[] = {
 	{ .name =	"nodemap",
 	  .fops =	&ldebugfs_exp_nodemap_fops	},
 	{ .name	=	"uuid",

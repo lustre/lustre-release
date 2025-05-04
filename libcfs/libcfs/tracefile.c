@@ -34,7 +34,7 @@ enum cfs_trace_buf_type {
 	CFS_TCD_TYPE_CNT
 };
 
-union cfs_trace_data_union (*cfs_trace_data[CFS_TCD_TYPE_CNT])[NR_CPUS] __cacheline_aligned;
+static union cfs_trace_data_union (*cfs_trace_data[CFS_TCD_TYPE_CNT])[NR_CPUS] __cacheline_aligned;
 
 /* Pages containing records already processed by daemon.
  * Link via ->lru, use size in ->private
@@ -46,7 +46,7 @@ static long daemon_pages_max;
 char cfs_tracefile[TRACEFILE_NAME_SIZE];
 long long cfs_tracefile_size = CFS_TRACEFILE_SIZE;
 
-struct task_struct *tctl_task;
+static struct task_struct *tctl_task;
 
 static atomic_t cfs_tage_allocated = ATOMIC_INIT(0);
 static DECLARE_RWSEM(cfs_tracefile_sem);

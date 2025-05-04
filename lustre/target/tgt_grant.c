@@ -58,7 +58,7 @@
 
 #include "tgt_internal.h"
 
-int lbug_on_grant_miscount;
+static int lbug_on_grant_miscount;
 module_param(lbug_on_grant_miscount, int, 0644);
 MODULE_PARM_DESC(lbug_on_grant_miscount, "LBUG on grant miscount");
 

@@ -60,7 +60,7 @@ module_param(mds_cpu_bind, uint, 0444);
 MODULE_PARM_DESC(mds_cpu_bind,
 		 "bind MDS threads to particular CPU partitions");
 
-int mds_max_io_threads = 512;
+static int mds_max_io_threads = 512;
 module_param(mds_max_io_threads, int, 0444);
 MODULE_PARM_DESC(mds_max_io_threads,
 		 "maximum number of MDS IO service threads");

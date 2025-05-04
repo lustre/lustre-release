@@ -157,7 +157,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 struct kmem_cache *lod_object_kmem;
 
 /* Slab for dt_txn_callback */
-struct kmem_cache *lod_txn_callback_kmem;
+static struct kmem_cache *lod_txn_callback_kmem;
 static struct lu_kmem_descr lod_caches[] = {
 	{
 		.ckd_cache = &lod_object_kmem,

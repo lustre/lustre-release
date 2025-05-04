@@ -661,7 +661,7 @@ LDEBUGFS_SEQ_FOPS_RO_TYPE(osc, timeouts);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osc, state);
 LDEBUGFS_SEQ_FOPS_RW_TYPE(osc, import);
 
-struct ldebugfs_vars ldebugfs_osc_obd_vars[] = {
+static struct ldebugfs_vars ldebugfs_osc_obd_vars[] = {
 	{ .name	=	"connect_flags",
 	  .fops	=	&osc_connect_flags_fops		},
 	{ .name	=	"ost_server_uuid",

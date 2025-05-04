@@ -25,7 +25,7 @@
 
 #define OSS_SERVICE_WATCHDOG_FACTOR 2
 
-int oss_max_threads = 512;
+static int oss_max_threads = 512;
 module_param(oss_max_threads, int, 0444);
 MODULE_PARM_DESC(oss_max_threads, "maximum number of OSS service threads");
 

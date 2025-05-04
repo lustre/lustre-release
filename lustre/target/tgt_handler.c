@@ -1573,9 +1573,9 @@ void tgt_register_lfsck_in_notify_local(int (*notify)(const struct lu_env *,
 }
 EXPORT_SYMBOL(tgt_register_lfsck_in_notify_local);
 
-int (*tgt_lfsck_in_notify)(const struct lu_env *env,
-			   struct dt_device *key,
-			   struct lfsck_request *lr) = NULL;
+static int (*tgt_lfsck_in_notify)(const struct lu_env *env,
+				  struct dt_device *key,
+				  struct lfsck_request *lr) = NULL;
 
 void tgt_register_lfsck_in_notify(int (*notify)(const struct lu_env *,
 						struct dt_device *,

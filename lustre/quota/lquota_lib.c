@@ -20,7 +20,7 @@
 
 struct kmem_cache *lqe_kmem;
 
-struct lu_kmem_descr lquota_caches[] = {
+static struct lu_kmem_descr lquota_caches[] = {
 	{
 		.ckd_cache = &lqe_kmem,
 		.ckd_name  = "lqe_kmem",

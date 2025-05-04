@@ -30,7 +30,7 @@
 
 static struct cfs_hash *jobid_hash;
 static struct cfs_hash_ops jobid_hash_ops;
-spinlock_t jobid_hash_lock;
+static spinlock_t jobid_hash_lock;
 
 #define RESCAN_INTERVAL 30
 #define DELETE_INTERVAL 300

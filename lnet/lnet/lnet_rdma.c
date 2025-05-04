@@ -21,9 +21,9 @@
 
 #define ERROR_PRINT_DEADLINE 3600
 
-atomic_t nvfs_shutdown = ATOMIC_INIT(1);
-struct nvfs_dma_rw_ops *nvfs_ops = NULL;
-struct percpu_counter nvfs_n_ops;
+static atomic_t nvfs_shutdown = ATOMIC_INIT(1);
+static struct nvfs_dma_rw_ops *nvfs_ops;
+static struct percpu_counter nvfs_n_ops;
 
 static inline long nvfs_count_ops(void)
 {

@@ -186,7 +186,7 @@ out:
 	return item->mop_cb(item, rc);
 }
 
-object_update_interpret_t mdc_update_interpreters[MD_OP_MAX] = {
+static object_update_interpret_t mdc_update_interpreters[MD_OP_MAX] = {
 	[MD_OP_GETATTR]	= mdc_batch_getattr_interpret,
 };
 

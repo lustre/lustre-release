@@ -1878,7 +1878,7 @@ static const struct rhashtable_params lu_env_rhash_params = {
 	.head_offset = offsetof(struct lu_env_item, lei_linkage),
 };
 
-struct rhashtable lu_env_rhash;
+static struct rhashtable lu_env_rhash;
 
 struct lu_env_percpu {
 	struct task_struct *lep_task;

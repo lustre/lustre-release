@@ -19,6 +19,7 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_kernelcomm.h>
+#include <obd_cksum.h>
 
 #ifdef CONFIG_PROC_FS
 

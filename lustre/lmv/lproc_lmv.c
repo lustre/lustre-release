@@ -406,7 +406,7 @@ static const struct proc_ops lmv_proc_target_fops = {
 	.proc_release	= seq_release,
 };
 
-struct lprocfs_vars lprocfs_lmv_obd_vars[] = {
+static struct lprocfs_vars lprocfs_lmv_obd_vars[] = {
 	{ .name =	"qos_exclude_prefixes",
 	  .fops =	&qos_exclude_prefixes_fops },
 	{ .name =	"target_obd",

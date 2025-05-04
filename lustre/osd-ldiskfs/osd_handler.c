@@ -80,13 +80,13 @@ atomic_t descriptors_cnt;
 unsigned int ldiskfs_flush_descriptors_cnt = 5000;
 
 /* 1 GiB in 512-byte sectors */
-int ldiskfs_delayed_unlink_blocks = (1 << (30 - 9));
+static int ldiskfs_delayed_unlink_blocks = (1 << (30 - 9));
 
 /* Slab to allocate dynlocks */
 struct kmem_cache *dynlock_cachep;
 
 /* Slab to allocate osd_it_ea */
-struct kmem_cache *osd_itea_cachep;
+static struct kmem_cache *osd_itea_cachep;
 
 static struct lu_kmem_descr ldiskfs_caches[] = {
 	{

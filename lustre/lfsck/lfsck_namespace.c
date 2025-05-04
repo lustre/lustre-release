@@ -6913,7 +6913,7 @@ out:
 	EXIT;
 }
 
-const struct lfsck_assistant_operations lfsck_namespace_assistant_ops = {
+static const struct lfsck_assistant_operations lfsck_namespace_assistant_ops = {
 	.la_handler_p1		= lfsck_namespace_assistant_handler_p1,
 	.la_handler_p2		= lfsck_namespace_assistant_handler_p2,
 	.la_fill_pos		= lfsck_namespace_assistant_fill_pos,

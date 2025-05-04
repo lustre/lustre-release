@@ -2281,7 +2281,7 @@ nrs_tbf_opcode_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 }
 
 
-struct nrs_tbf_ops nrs_tbf_opcode_ops = {
+static struct nrs_tbf_ops nrs_tbf_opcode_ops = {
 	.o_name = NRS_TBF_TYPE_OPCODE,
 	.o_startup = nrs_tbf_opcode_startup,
 	.o_cli_find = nrs_tbf_opcode_cli_find,
@@ -2595,7 +2595,7 @@ static void nrs_tbf_id_rule_fini(struct nrs_tbf_rule *rule)
 	OBD_FREE_STR(rule->tr_ids_str);
 }
 
-struct nrs_tbf_ops nrs_tbf_uid_ops = {
+static struct nrs_tbf_ops nrs_tbf_uid_ops = {
 	.o_name = NRS_TBF_TYPE_UID,
 	.o_startup = nrs_tbf_id_startup,
 	.o_cli_find = nrs_tbf_id_cli_find,
@@ -2608,7 +2608,7 @@ struct nrs_tbf_ops nrs_tbf_uid_ops = {
 	.o_rule_fini = nrs_tbf_id_rule_fini,
 };
 
-struct nrs_tbf_ops nrs_tbf_gid_ops = {
+static struct nrs_tbf_ops nrs_tbf_gid_ops = {
 	.o_name = NRS_TBF_TYPE_GID,
 	.o_startup = nrs_tbf_id_startup,
 	.o_cli_find = nrs_tbf_id_cli_find,

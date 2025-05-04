@@ -1669,7 +1669,7 @@ static int mdc_process_config(const struct lu_env *env, struct lu_device *d,
 	return count > 0 ? 0 : count;
 }
 
-const struct lu_device_operations mdc_lu_ops = {
+static const struct lu_device_operations mdc_lu_ops = {
 	.ldo_object_alloc = mdc_object_alloc,
 	.ldo_process_config = mdc_process_config,
 	.ldo_recovery_complete = NULL,

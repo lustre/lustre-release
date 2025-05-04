@@ -381,7 +381,7 @@ static struct attribute *zfs_attrs[] = {
 	NULL,
 };
 
-struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
+static struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
 	{ .name	=	"oi_scrub",
 	  .fops	=	&zfs_osd_oi_scrub_fops		},
 	{ 0 }

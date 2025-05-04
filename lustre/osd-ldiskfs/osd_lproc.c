@@ -807,7 +807,7 @@ static ssize_t extents_dense_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(extents_dense);
 #endif
 
-struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
+static struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
 	{ .name =	"oi_scrub",
 	  .fops =	&ldiskfs_osd_oi_scrub_fops      },
 	{ NULL }

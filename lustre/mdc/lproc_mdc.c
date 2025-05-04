@@ -569,7 +569,7 @@ LDEBUGFS_SEQ_FOPS_RO_TYPE(mdc, timeouts);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(mdc, state);
 LDEBUGFS_SEQ_FOPS_RW_TYPE(mdc, import);
 
-struct ldebugfs_vars ldebugfs_mdc_obd_vars[] = {
+static struct ldebugfs_vars ldebugfs_mdc_obd_vars[] = {
 	{ .name	=	"connect_flags",
 	  .fops	=	&mdc_connect_flags_fops	},
 	{ .name	=	"mds_server_uuid",

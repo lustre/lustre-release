@@ -270,7 +270,7 @@ static int lustre_device_done(struct netlink_callback *cb)
 	return 0;
 }
 
-struct ln_key_list stats_params = {
+static struct ln_key_list stats_params = {
 	.lkl_maxattr	= LUSTRE_PARAM_ATTR_MAX,
 	.lkl_list	= {
 		[LUSTRE_PARAM_ATTR_HDR] = {
