@@ -1776,7 +1776,7 @@ int pcc_inode_setattr(struct inode *inode, struct iattr *attr,
 	inode_lock(pcc_dentry->d_inode);
 	old_cred = override_creds(pcc_super_cred(inode->i_sb));
 #ifdef HAVE_USER_NAMESPACE_ARG
-	rc = pcc_dentry->d_inode->i_op->setattr(&init_user_ns, pcc_dentry,
+	rc = pcc_dentry->d_inode->i_op->setattr(&nop_mnt_idmap, pcc_dentry,
 						&attr2);
 #else
 	rc = pcc_dentry->d_inode->i_op->setattr(pcc_dentry, &attr2);
@@ -2141,7 +2141,7 @@ static int pcc_inode_remove(struct inode *inode, struct dentry *pcc_dentry)
 {
 	int rc;
 
-	rc = vfs_unlink(&init_user_ns,
+	rc = vfs_unlink(&nop_mnt_idmap,
 			pcc_dentry->d_parent->d_inode, pcc_dentry);
 	if (rc)
 		CWARN("%s: failed to unlink PCC file %pd, rc = %d\n",
@@ -2166,7 +2166,7 @@ pcc_mkdir(struct dentry *base, const char *name, umode_t mode)
 	if (d_is_positive(dentry))
 		goto out;
 
-	rc = vfs_mkdir(&init_user_ns, dir, dentry, mode);
+	rc = vfs_mkdir(&nop_mnt_idmap, dir, dentry, mode);
 	if (rc) {
 		dput(dentry);
 		dentry = ERR_PTR(rc);
@@ -2222,7 +2222,7 @@ pcc_create(struct dentry *base, const char *name, umode_t mode)
 	if (d_is_positive(dentry))
 		goto out;
 
-	rc = vfs_create(&init_user_ns, dir, dentry, mode, false);
+	rc = vfs_create(&nop_mnt_idmap, dir, dentry, mode, false);
 	if (rc) {
 		dput(dentry);
 		dentry = ERR_PTR(rc);
@@ -2288,7 +2288,7 @@ int pcc_inode_reset_iattr(struct dentry *dentry, unsigned int valid,
 	attr.ia_size = size;
 
 	inode_lock(inode);
-	rc = notify_change(&init_user_ns, dentry, &attr, NULL);
+	rc = notify_change(&nop_mnt_idmap, dentry, &attr, NULL);
 	inode_unlock(inode);
 
 	RETURN(rc);
@@ -2376,7 +2376,7 @@ void pcc_create_attach_cleanup(struct super_block *sb,
 		int rc;
 
 		old_cred = override_creds(pcc_super_cred(sb));
-		rc = vfs_unlink(&init_user_ns,
+		rc = vfs_unlink(&nop_mnt_idmap,
 				pca->pca_dentry->d_parent->d_inode,
 				pca->pca_dentry);
 		if (rc)

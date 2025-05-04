@@ -1112,7 +1112,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 	 * to proceed with lookup. LU-4185
 	 */
 	if ((flags & LOOKUP_CREATE) && !(flags & LOOKUP_OPEN) &&
-	    (inode_permission(&init_user_ns,
+	    (inode_permission(&nop_mnt_idmap,
 			      parent, MAY_WRITE | MAY_EXEC) == 0))
 		return NULL;
 
@@ -1749,7 +1749,7 @@ err_exit:
 	RETURN(err);
 }
 
-static int ll_mknod(struct user_namespace *mnt_userns, struct inode *dir,
+static int ll_mknod(struct mnt_idmap *map, struct inode *dir,
 		    struct dentry *dchild, umode_t mode, dev_t rdev)
 {
 	ktime_t kstart = ktime_get();
@@ -1791,9 +1791,8 @@ static int ll_mknod(struct user_namespace *mnt_userns, struct inode *dir,
 /*
  * Plain create. Intent create is handled in atomic_open.
  */
-static int ll_create_nd(struct user_namespace *mnt_userns,
-			struct inode *dir, struct dentry *dentry,
-			umode_t mode, bool want_excl)
+static int ll_create_nd(struct mnt_idmap *map, struct inode *dir,
+			struct dentry *dentry, umode_t mode, bool want_excl)
 {
 	ktime_t kstart = ktime_get();
 	int rc;
@@ -1806,7 +1805,7 @@ static int ll_create_nd(struct user_namespace *mnt_userns,
 
 	/* Using mknod(2) to create a regular file is designed to not recognize
 	 * volatile file name, so we use ll_mknod() here. */
-	rc = ll_mknod(mnt_userns, dir, dentry, mode, 0);
+	rc = ll_mknod(map, dir, dentry, mode, 0);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:name=%pd, unhashed %d\n",
 	       dentry, d_unhashed(dentry));
@@ -1818,7 +1817,7 @@ static int ll_create_nd(struct user_namespace *mnt_userns,
 	return rc;
 }
 
-static int ll_symlink(struct user_namespace *mnt_userns, struct inode *dir,
+static int ll_symlink(struct mnt_idmap *map, struct inode *dir,
 		      struct dentry *dchild, const char *oldpath)
 {
 	ktime_t kstart = ktime_get();
@@ -1888,7 +1887,7 @@ out:
 	RETURN(err);
 }
 
-static int ll_mkdir(struct user_namespace *mnt_userns, struct inode *dir,
+static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
 		    struct dentry *dchild, umode_t mode)
 {
 	ktime_t kstart = ktime_get();
@@ -2063,7 +2062,7 @@ out:
 	RETURN(rc);
 }
 
-static int ll_rename(struct user_namespace *mnt_userns,
+static int ll_rename(struct mnt_idmap *map,
 		     struct inode *src, struct dentry *src_dchild,
 		     struct inode *tgt, struct dentry *tgt_dchild
 #if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_IOPS_RENAME_WITH_FLAGS)

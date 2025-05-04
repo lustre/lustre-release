@@ -62,7 +62,7 @@ struct posix_acl *ll_get_acl(struct inode *inode, int type
 }
 
 #ifdef HAVE_IOP_SET_ACL
-int ll_set_acl(struct user_namespace *mnt_userns, struct inode *inode,
+int ll_set_acl(struct mnt_idmap *map, struct inode *inode,
 	       struct posix_acl *acl, int type)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -77,7 +77,7 @@ int ll_set_acl(struct user_namespace *mnt_userns, struct inode *inode,
 	case ACL_TYPE_ACCESS:
 		name = XATTR_NAME_POSIX_ACL_ACCESS;
 		if (acl)
-			rc = posix_acl_update_mode(mnt_userns, inode,
+			rc = posix_acl_update_mode(map, inode,
 						   &inode->i_mode, &acl);
 		break;
 

@@ -114,8 +114,8 @@ static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
 	}
 
 	CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
-	       libcfs_nid2str(peernid),
-	       ucred->uc_fsuid, ucred->uc_fsgid, ucred->uc_cap.cap[0],
+	       libcfs_nid2str(peernid), ucred->uc_fsuid, ucred->uc_fsgid,
+	       (u32)ll_capability_u32(ucred->uc_cap),
 	       squash->rsi_uid, squash->rsi_gid, 0);
 
 	ucred->uc_fsuid = squash->rsi_uid;
@@ -318,7 +318,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
 	ucred->uc_cap = CAP_EMPTY_SET;
 	if (!nodemap || ucred->uc_o_uid != nodemap->nm_squash_uid)
-		ucred->uc_cap.cap[0] = pud->pud_cap;
+		ll_set_capability_u32(&ucred->uc_cap, pud->pud_cap);
 
 	ucred->uc_fsuid = pud->pud_fsuid;
 	ucred->uc_fsgid = pud->pud_fsgid;
@@ -562,7 +562,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	uc->uc_suppgids[1] = -1;
 	uc->uc_ginfo = NULL;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = body->mbo_capability;
+	ll_set_capability_u32(&uc->uc_cap, body->mbo_capability);
 
 	rc = old_init_ucred_common(info, nodemap);
 	nodemap_putref(nodemap);
@@ -1148,11 +1148,11 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	uc->uc_fsuid = rec->sa_fsuid;
 	uc->uc_fsgid = rec->sa_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->sa_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->sa_cap);
 	uc->uc_suppgids[0] = rec->sa_suppgid;
 	uc->uc_suppgids[1] = -1;
 
-        rr->rr_fid1 = &rec->sa_fid;
+	rr->rr_fid1 = &rec->sa_fid;
 	la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
 	la->la_mode  = rec->sa_mode;
 	la->la_flags = rec->sa_attr_flags;
@@ -1311,7 +1311,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	uc->uc_fsuid = rec->cr_fsuid;
 	uc->uc_fsgid = rec->cr_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->cr_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->cr_cap);
 	uc->uc_suppgids[0] = rec->cr_suppgid1;
 	uc->uc_suppgids[1] = -1;
 	uc->uc_umask = rec->cr_umask;
@@ -1399,17 +1399,17 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 	uc->uc_fsuid = rec->lk_fsuid;
 	uc->uc_fsgid = rec->lk_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->lk_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->lk_cap);
 	uc->uc_suppgids[0] = rec->lk_suppgid1;
 	uc->uc_suppgids[1] = rec->lk_suppgid2;
 
-        attr->la_uid = rec->lk_fsuid;
-        attr->la_gid = rec->lk_fsgid;
-        rr->rr_fid1 = &rec->lk_fid1;
-        rr->rr_fid2 = &rec->lk_fid2;
-        attr->la_ctime = rec->lk_time;
-        attr->la_mtime = rec->lk_time;
-        attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME;
+	attr->la_uid = rec->lk_fsuid;
+	attr->la_gid = rec->lk_fsgid;
+	rr->rr_fid1 = &rec->lk_fid1;
+	rr->rr_fid2 = &rec->lk_fid2;
+	attr->la_ctime = rec->lk_time;
+	attr->la_mtime = rec->lk_time;
+	attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME;
 
 	rc = mdt_name_unpack(pill, &RMF_NAME, &rr->rr_name, 0);
 	if (rc < 0)
@@ -1444,7 +1444,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 	uc->uc_fsuid = rec->ul_fsuid;
 	uc->uc_fsgid = rec->ul_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->ul_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->ul_cap);
 	uc->uc_suppgids[0] = rec->ul_suppgid1;
 	uc->uc_suppgids[1] = -1;
 
@@ -1502,7 +1502,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 	uc->uc_fsuid = rec->rn_fsuid;
 	uc->uc_fsgid = rec->rn_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->rn_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->rn_cap);
 	uc->uc_suppgids[0] = rec->rn_suppgid1;
 	uc->uc_suppgids[1] = rec->rn_suppgid2;
 
@@ -1556,7 +1556,7 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 	uc->uc_fsuid = rec->rn_fsuid;
 	uc->uc_fsgid = rec->rn_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->rn_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->rn_cap);
 	uc->uc_suppgids[0] = rec->rn_suppgid1;
 	uc->uc_suppgids[1] = rec->rn_suppgid2;
 
@@ -1658,7 +1658,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	uc->uc_fsuid = rec->cr_fsuid;
 	uc->uc_fsgid = rec->cr_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->cr_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->cr_cap);
 	uc->uc_suppgids[0] = rec->cr_suppgid1;
 	uc->uc_suppgids[1] = rec->cr_suppgid2;
 	uc->uc_umask = rec->cr_umask;
@@ -1748,40 +1748,40 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 	uc->uc_fsuid  = rec->sx_fsuid;
 	uc->uc_fsgid  = rec->sx_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->sx_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->sx_cap);
 	uc->uc_suppgids[0] = rec->sx_suppgid1;
 	uc->uc_suppgids[1] = -1;
 
-        rr->rr_opcode = rec->sx_opcode;
-        rr->rr_fid1   = &rec->sx_fid;
-        attr->la_valid = rec->sx_valid;
-        attr->la_ctime = rec->sx_time;
-        attr->la_size = rec->sx_size;
-        attr->la_flags = rec->sx_flags;
+	rr->rr_opcode = rec->sx_opcode;
+	rr->rr_fid1   = &rec->sx_fid;
+	attr->la_valid = rec->sx_valid;
+	attr->la_ctime = rec->sx_time;
+	attr->la_size = rec->sx_size;
+	attr->la_flags = rec->sx_flags;
 
 	rc = mdt_name_unpack(pill, &RMF_NAME, &rr->rr_name, 0);
 	if (rc < 0)
 		RETURN(rc);
 
-        if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
-                rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
-                                                        RCL_CLIENT);
+	if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
+		rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
+							RCL_CLIENT);
 
 		if (rr->rr_eadatalen > info->mti_mdt->mdt_max_ea_size)
 			RETURN(-E2BIG);
 
-                if (rr->rr_eadatalen > 0) {
-                        rr->rr_eadata = req_capsule_client_get(pill,
-                                                               &RMF_EADATA);
-                        if (rr->rr_eadata == NULL)
-                                RETURN(-EFAULT);
-                } else {
-                        rr->rr_eadata = NULL;
-                }
-        } else if (!(attr->la_valid & OBD_MD_FLXATTRRM)) {
-                CDEBUG(D_INFO, "no xattr data supplied\n");
-                RETURN(-EFAULT);
-        }
+		if (rr->rr_eadatalen > 0) {
+			rr->rr_eadata = req_capsule_client_get(pill,
+							       &RMF_EADATA);
+			if (rr->rr_eadata == NULL)
+				RETURN(-EFAULT);
+		} else {
+			rr->rr_eadata = NULL;
+		}
+	} else if (!(attr->la_valid & OBD_MD_FLXATTRRM)) {
+		CDEBUG(D_INFO, "no xattr data supplied\n");
+		RETURN(-EFAULT);
+	}
 
 	rc = req_check_sepol(pill);
 	if (rc)
@@ -1790,7 +1790,7 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 	if (mdt_dlmreq_unpack(info) < 0)
 		RETURN(-EPROTO);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int mdt_resync_unpack(struct mdt_thread_info *info)
@@ -1810,7 +1810,7 @@ static int mdt_resync_unpack(struct mdt_thread_info *info)
 	uc->uc_fsuid = rec->rs_fsuid;
 	uc->uc_fsgid = rec->rs_fsgid;
 	uc->uc_cap = CAP_EMPTY_SET;
-	uc->uc_cap.cap[0] = rec->rs_cap;
+	ll_set_capability_u32(&uc->uc_cap, rec->rs_cap);
 
 	rr->rr_fid1   = &rec->rs_fid;
 	rr->rr_mirror_id = rec->rs_mirror_id;

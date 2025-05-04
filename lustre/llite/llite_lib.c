@@ -1929,7 +1929,7 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 			    !S_ISDIR(inode->i_mode)) {
 				ia_valid = op_data->op_attr.ia_valid;
 				op_data->op_attr.ia_valid &= ~TIMES_SET_FLAGS;
-				rc = simple_setattr(&init_user_ns, dentry,
+				rc = simple_setattr(&nop_mnt_idmap, dentry,
 						    &op_data->op_attr);
 				op_data->op_attr.ia_valid = ia_valid;
 			}
@@ -1952,7 +1952,7 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 	op_data->op_attr.ia_valid &= ~(TIMES_SET_FLAGS | ATTR_SIZE);
 	if (S_ISREG(inode->i_mode))
 		inode_lock(inode);
-	rc = simple_setattr(&init_user_ns, dentry, &op_data->op_attr);
+	rc = simple_setattr(&nop_mnt_idmap, dentry, &op_data->op_attr);
 	if (S_ISREG(inode->i_mode))
 		inode_unlock(inode);
 	op_data->op_attr.ia_valid = ia_valid;
@@ -2431,14 +2431,13 @@ out:
 	RETURN(rc);
 }
 
-int ll_setattr(struct user_namespace *mnt_userns, struct dentry *de,
-	       struct iattr *attr)
+int ll_setattr(struct mnt_idmap *map, struct dentry *de, struct iattr *attr)
 {
 	int mode = de->d_inode->i_mode;
 	enum op_xvalid xvalid = 0;
 	int rc;
 
-	rc = setattr_prepare(mnt_userns, de, attr);
+	rc = setattr_prepare(map, de, attr);
 	if (rc)
 		return rc;
 

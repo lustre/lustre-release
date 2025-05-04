@@ -96,7 +96,7 @@ static int xattr_type_filter(struct ll_sb_info *sbi,
 #endif
 
 static int ll_xattr_set_common(const struct xattr_handler *handler,
-			       struct user_namespace *mnt_userns,
+			       struct mnt_idmap *map,
 			       struct dentry *dentry, struct inode *inode,
 			       const char *name, const void *value, size_t size,
 			       int flags)
@@ -129,7 +129,7 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 
 	if ((handler->flags == XATTR_ACL_ACCESS_T ||
 	     handler->flags == XATTR_ACL_DEFAULT_T) &&
-	    !inode_owner_or_capable(mnt_userns, inode))
+	    !inode_owner_or_capable(map, inode))
 		RETURN(-EPERM);
 
 	/* b10667: ignore lustre special xattr for now */
@@ -341,7 +341,7 @@ static int ll_setstripe_ea(struct dentry *dentry, struct lov_user_md *lump,
 #endif
 
 static int ll_xattr_set(const struct xattr_handler *handler,
-			struct user_namespace *mnt_userns,
+			struct mnt_idmap *map,
 			struct dentry *dentry, struct inode *inode,
 			const char *name, const void *value, size_t size,
 			int flags)
@@ -375,7 +375,7 @@ static int ll_xattr_set(const struct xattr_handler *handler,
 	    le32_to_cpu(LOV_MAGIC_MASK)) == le32_to_cpu(LOV_MAGIC_MAGIC))
 		lustre_swab_lov_user_md((struct lov_user_md *)value, 0);
 
-	return ll_xattr_set_common(handler, mnt_userns, dentry, inode, name,
+	return ll_xattr_set_common(handler, map, dentry, inode, name,
 				   value, size, flags);
 }
 

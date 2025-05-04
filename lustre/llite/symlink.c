@@ -282,7 +282,7 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
 #if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 static int ll_getattr_link(
 #if defined(HAVE_USER_NAMESPACE_ARG)
-			   struct user_namespace *mnt_userns,
+			   struct mnt_idmap *map,
 #endif
 			   const struct path *path, struct kstat *stat,
 			   u32 request_mask, unsigned int flags)
@@ -293,7 +293,7 @@ static int ll_getattr_link(
 	const char *link;
 	int rc;
 
-	rc = ll_getattr(mnt_userns, path, stat, request_mask, flags);
+	rc = ll_getattr(map, path, stat, request_mask, flags);
 	if (rc || !IS_ENCRYPTED(inode))
 		return rc;
 

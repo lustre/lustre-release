@@ -797,7 +797,7 @@ failed:
 
 /* foreign fake-symlink version of ll_getattr() */
 #if defined(HAVE_USER_NAMESPACE_ARG)
-int ll_foreign_symlink_getattr(struct user_namespace *mnt_userns,
+int ll_foreign_symlink_getattr(struct mnt_idmap *map,
 			       const struct path *path, struct kstat *stat,
 			       u32 request_mask, unsigned int flags)
 {

@@ -1173,7 +1173,7 @@ extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
                               struct ll_file_data *file, loff_t pos,
                               size_t count, int rw);
 #if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
-int ll_getattr(struct user_namespace *mnt_userns, const struct path *path,
+int ll_getattr(struct mnt_idmap *, const struct path *path,
 	       struct kstat *stat, u32 request_mask, unsigned int flags);
 #else
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
@@ -1186,7 +1186,7 @@ struct posix_acl *ll_get_acl(struct inode *inode, int type
 			     , bool rcu
 #endif /* HAVE_GET_ACL_RCU_ARG */
 			     );
-int ll_set_acl(struct user_namespace *mnt_userns, struct inode *inode,
+int ll_set_acl(struct mnt_idmap *mnt_userns, struct inode *inode,
 	       struct posix_acl *acl, int type);
 #else  /* !CONFIG_LUSTRE_FS_POSIX_ACL */
 #define ll_get_acl NULL
@@ -1213,8 +1213,7 @@ int ll_migrate(struct inode *parent, struct file *file,
 	       struct lmv_user_md *lum, const char *name, __u32 flags);
 int ll_get_fid_by_name(struct inode *parent, const char *name,
 		       int namelen, struct lu_fid *fid, struct inode **inode);
-int ll_inode_permission(struct user_namespace *mnt_userns, struct inode *inode,
-			int mask);
+int ll_inode_permission(struct mnt_idmap *, struct inode *inode, int mask);
 int ll_ioctl_check_project(struct inode *inode, __u32 xflags, __u32 projid);
 int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 			unsigned long arg);
@@ -1274,8 +1273,7 @@ int volatile_ref_file(const char *volatile_name, int volatile_len,
 		      struct file **ref_file);
 int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 		   enum op_xvalid xvalid, bool hsm_import);
-int ll_setattr(struct user_namespace *mnt_userns, struct dentry *de,
-	       struct iattr *attr);
+int ll_setattr(struct mnt_idmap *, struct dentry *de, struct iattr *attr);
 int ll_statfs(struct dentry *de, struct kstatfs *sfs);
 int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 		       u32 flags);

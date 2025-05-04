@@ -3639,6 +3639,81 @@ AC_DEFUN([LC_HAVE_DENTRY_D_CHILDREN], [
 ]) # LC_HAVE_DENTRY_D_CHILDREN
 
 #
+# LC_HAVE_U64_CAPABILITY
+#
+# linux kernel v6.2-13111-gf122a08b197d
+#   capability: just use a 'u64' instead of a 'u32[2]' array
+#
+AC_DEFUN([LC_SRC_HAVE_U64_CAPABILITY], [
+	LB2_LINUX_TEST_SRC([kernel_cap_t_has_u64_value], [
+		#include <linux/cred.h>
+		#include <linux/capability.h>
+	],[
+		kernel_cap_t cap __attribute__ ((unused));
+		cap.val = 0xffffffffffffffffull;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_U64_CAPABILITY], [
+	AC_MSG_CHECKING([if 'kernel_cap_t' has u64 val])
+	LB2_LINUX_TEST_RESULT([kernel_cap_t_has_u64_value], [
+		AC_DEFINE(HAVE_U64_CAPABILITY, 1,
+			['kernel_cap_t' has u64 val])
+	])
+]) # LC_HAVE_U64_CAPABILITY
+
+#
+# LC_HAVE_MNT_IDMAP_ARG
+#
+# linux kernel v6.2-rc1-4-gb74d24f7a74f
+#   fs: port ->getattr() to pass mnt_idmap
+# linux kernel v6.2-rc1-3-gc1632a0f1120
+#   fs: port ->setattr() to pass mnt_idmap
+#
+AC_DEFUN([LC_SRC_HAVE_MNT_IDMAP_ARG], [
+	LB2_LINUX_TEST_SRC([inode_ops_getattr_has_mnt_idmap_argument], [
+		#include <linux/mount.h>
+		#include <linux/fs.h>
+	],[
+		((struct inode_operations *)1)->getattr((struct mnt_idmap *)NULL,
+							NULL, NULL, 0, 0);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_MNT_IDMAP_ARG], [
+	AC_MSG_CHECKING([if 'inode_operations' members have mnt_idmap argument])
+	LB2_LINUX_TEST_RESULT([inode_ops_getattr_has_mnt_idmap_argument], [
+		AC_DEFINE(HAVE_MNT_IDMAP_ARG, 1,
+			['inode_operations' members have mnt_idmap argument])
+		AC_DEFINE(HAVE_USER_NAMESPACE_ARG, 1,
+			[use mnt_idmap in place of user_namespace argument])
+		AC_DEFINE(HAVE_DQUOT_TRANSFER_WITH_USER_NS, 1,
+			[use mnt_idmap with dquot_transfer])
+	])
+]) # LC_HAVE_MNT_IDMAP_ARG
+
+#
+# LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
+#
+# Linux commit v6.2-rc3-9-g5970e15dbcfe
+#   filelock: move file locking definitions to separate header file
+#
+AC_DEFUN([LC_SRC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK], [
+	LB2_LINUX_TEST_SRC([locks_lock_file_wait_in_filelock], [
+		#include <linux/filelock.h>
+	],[
+		locks_lock_file_wait(NULL, NULL);
+	])
+])
+AC_DEFUN([LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK], [
+	AC_MSG_CHECKING([if 'locks_lock_file_wait' exists in filelock.h])
+	LB2_LINUX_TEST_RESULT([locks_lock_file_wait_in_filelock], [
+		AC_DEFINE(HAVE_LOCKS_LOCK_FILE_WAIT, 1,
+			[kernel has locks_lock_file_wait in filelock.h])
+		AC_DEFINE(HAVE_LINUX_FILELOCK_HEADER, 1,
+			[linux/filelock.h is present])
+	])
+]) # LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3877,6 +3952,11 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 6.8
 	LC_SRC_HAVE_DENTRY_D_CHILDREN
+
+	# 6.3
+	LC_SRC_HAVE_MNT_IDMAP_ARG
+	LC_SRC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
+	LC_SRC_HAVE_U64_CAPABILITY
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -4129,6 +4209,11 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 6.8
 	LC_HAVE_DENTRY_D_CHILDREN
+
+	# 6.3
+	LC_HAVE_MNT_IDMAP_ARG
+	LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
+	LC_HAVE_U64_CAPABILITY
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

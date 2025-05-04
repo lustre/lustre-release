@@ -2609,7 +2609,7 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
 	pud->pud_gid = from_kgid(&init_user_ns, current_gid());
 	pud->pud_fsuid = from_kuid(&init_user_ns, current_fsuid());
 	pud->pud_fsgid = from_kgid(&init_user_ns, current_fsgid());
-	pud->pud_cap = current_cap().cap[0];
+	pud->pud_cap = ll_capability_u32(current_cap());
 	pud->pud_ngroups = (msg->lm_buflens[offset] - sizeof(*pud)) / 4;
 
 	task_lock(current);
