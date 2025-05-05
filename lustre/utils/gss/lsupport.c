@@ -228,6 +228,7 @@ out:
 static int getaddrcanonname(const uint32_t addr, char *buf, int buflen)
 {
 	struct sockaddr_in srcaddr;
+	char ipstr[INET_ADDRSTRLEN] = "\0";
 	int err = 0;
 	int rc = -1;
 
@@ -248,13 +249,18 @@ static int getaddrcanonname(const uint32_t addr, char *buf, int buflen)
 	srcaddr.sin_addr.s_addr = (in_addr_t)addr;
 
 	err = getnameinfo((struct sockaddr *)&srcaddr, sizeof(srcaddr),
-			  buf, buflen, NULL, 0, 0);
+			  buf, buflen, NULL, 0, NI_NAMEREQD);
 	if (err != 0) {
-		printerr(LL_ERR,
-			 "failed to get nameinfo for 0x%x: %s\n",
-			 addr, gai_strerror(err));
+		if (inet_ntop(srcaddr.sin_family, &srcaddr.sin_addr, ipstr,
+			      INET_ADDRSTRLEN))
+			printerr(LL_ERR, "failed to get name for %s: %s\n",
+				 ipstr, gai_strerror(err));
+		else
+			printerr(LL_ERR, "failed to get name for 0x%x: %s\n",
+				 addr, gai_strerror(err));
 		goto out;
 	}
+
 	rc = 0;
 
 out:
