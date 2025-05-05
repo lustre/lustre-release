@@ -2360,6 +2360,11 @@ free_param:
 	return rc;
 }
 
+int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count)
+{
+	return llapi_get_target_uuids(fd, uuidp, NULL, mdt_count, LMV_TYPE);
+}
+
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 {
 	return llapi_get_target_uuids(fd, uuidp, NULL, ost_count, LOV_TYPE);
