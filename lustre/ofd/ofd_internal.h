@@ -19,6 +19,7 @@
 #include <dt_object.h>
 #include <md_object.h>
 #include <lustre_fid.h>
+#include <lustre_nodemap.h>
 
 #define OFD_INIT_OBJID	0
 #define OFD_PRECREATE_BATCH_DEFAULT (OBJ_SUBDIR_COUNT * 4)
@@ -70,17 +71,28 @@ enum {
 static inline void ofd_counter_incr(struct obd_export *exp, int opcode,
 				    char *jobid, long amount)
 {
-	if (exp->exp_obd && exp->exp_obd->obd_stats)
+	struct lu_nodemap *nm;
+
+	if (unlikely(!exp->exp_obd))
+		return;
+
+	if (likely(exp->exp_obd->obd_stats))
 		lprocfs_counter_add(exp->exp_obd->obd_stats, opcode, amount);
 
-	if (exp->exp_obd && obd2obt(exp->exp_obd)->obt_jobstats.ojs_cntr_num &&
+	if (obd2obt(exp->exp_obd)->obt_jobstats.ojs_cntr_num &&
 	    (exp_connect_flags(exp) & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd, jobid, opcode, amount);
 
 	if (exp->exp_nid_stats != NULL &&
-	    exp->exp_nid_stats->nid_stats != NULL) {
+	    exp->exp_nid_stats->nid_stats != NULL)
 		lprocfs_counter_add(exp->exp_nid_stats->nid_stats, opcode,
 				    amount);
+
+	nm = nodemap_get_from_exp(exp);
+	if (!IS_ERR_OR_NULL(nm)) {
+		if (likely(nm->nm_dt_stats))
+			lprocfs_counter_add(nm->nm_dt_stats, opcode, amount);
+		nodemap_putref(nm);
 	}
 }
 

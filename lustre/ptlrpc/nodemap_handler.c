@@ -49,6 +49,10 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 
 	if (nodemap->nm_pde_data != NULL)
 		lprocfs_nodemap_remove(nodemap->nm_pde_data);
+	if (nodemap->nm_dt_stats)
+		lprocfs_stats_free(&nodemap->nm_dt_stats);
+	if (nodemap->nm_md_stats)
+		lprocfs_stats_free(&nodemap->nm_md_stats);
 
 	OBD_FREE(nodemap->nm_fileset_prim, nodemap->nm_fileset_prim_size);
 
@@ -3361,6 +3365,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 		list_add(&nodemap->nm_parent_entry,
 			 &parent_nodemap->nm_subnodemaps);
 
+	mutex_init(&nodemap->nm_stats_lock);
 	mutex_init(&nodemap->nm_member_list_lock);
 	init_rwsem(&nodemap->nm_idmap_lock);
 
@@ -4494,6 +4499,15 @@ void nodemap_config_set_active(struct nodemap_config *config)
 		if (old_nm != NULL) {
 			nodemap->nm_pde_data = old_nm->nm_pde_data;
 			old_nm->nm_pde_data = NULL;
+
+			/* old nodemap can't be used for new exports */
+			mutex_lock(&nodemap->nm_stats_lock);
+			nodemap->nm_dt_stats = old_nm->nm_dt_stats;
+			nodemap->nm_md_stats = old_nm->nm_md_stats;
+			old_nm->nm_dt_stats = NULL;
+			old_nm->nm_md_stats = NULL;
+			mutex_unlock(&nodemap->nm_stats_lock);
+
 			nodemap_putref(old_nm);
 		} else {
 			bool is_def = (nodemap == config->nmc_default_nodemap);

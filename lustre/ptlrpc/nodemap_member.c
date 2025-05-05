@@ -68,6 +68,53 @@ void nm_member_delete_list(struct lu_nodemap *nodemap)
 	mutex_unlock(&nodemap->nm_member_list_lock);
 }
 
+static void nm_register_obd_stats(struct lu_nodemap *nm, struct obd_export *exp)
+{
+	struct obd_device *obd = exp->exp_obd;
+
+	if (unlikely(!exp->exp_obd->obd_stats && !exp->exp_obd->obd_md_stats))
+		return;
+	if (obd->obd_stats && nm->nm_dt_stats)
+		return;
+	if (obd->obd_md_stats && nm->nm_md_stats)
+		return;
+
+	mutex_lock(&nm->nm_stats_lock);
+	if (obd->obd_md_stats && !nm->nm_md_stats) {
+		/*
+		 * here we have no idea how to configure stats properly
+		 * (fields, their names, units, etc), so we rather ask
+		 * obdclass to duplicate configuration of the existing
+		 * stats.
+		 */
+		nm->nm_md_stats = lprocfs_stats_dup(obd->obd_md_stats);
+		if (!nm->nm_md_stats) {
+			CERROR("%s: can't alloc stats for nodemap %s\n",
+				obd->obd_name, nm->nm_name);
+			goto unlock;
+		}
+		debugfs_create_file("md_stats", 0644,
+				    nm->nm_pde_data->npe_debugfs_entry,
+				    nm->nm_md_stats,
+				    &ldebugfs_stats_seq_fops);
+	}
+	if (obd->obd_stats && !nm->nm_dt_stats) {
+		nm->nm_dt_stats = lprocfs_stats_dup(obd->obd_stats);
+		if (!nm->nm_dt_stats) {
+			CERROR("%s: can't alloc stats for nodemap %s\n",
+				obd->obd_name, nm->nm_name);
+			goto unlock;
+		}
+		debugfs_create_file("dt_stats", 0644,
+				    nm->nm_pde_data->npe_debugfs_entry,
+				    nm->nm_dt_stats,
+				    &ldebugfs_stats_seq_fops);
+	}
+
+unlock:
+	mutex_unlock(&nm->nm_stats_lock);
+}
+
 /**
  * nm_member_add() - Add a member export to a nodemap
  * @nodemap: nodemap to add to
@@ -118,6 +165,8 @@ int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp)
 	list_add(&exp->exp_target_data.ted_nodemap_member,
 		 &nodemap->nm_member_list);
 	mutex_unlock(&nodemap->nm_member_list_lock);
+
+	nm_register_obd_stats(nodemap, exp);
 
 	RETURN(0);
 }
@@ -368,6 +417,8 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 			list_add(&exp->exp_target_data.ted_nodemap_member,
 				 &new_nodemap->nm_member_list);
 			mutex_unlock(&new_nodemap->nm_member_list_lock);
+
+			nm_register_obd_stats(new_nodemap, exp);
 
 			if (nodemap_active) {
 				down_read(&nodemap->nm_idmap_lock);

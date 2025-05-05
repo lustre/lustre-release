@@ -1572,6 +1572,28 @@ void lprocfs_stats_free(struct lprocfs_stats **statsh)
 }
 EXPORT_SYMBOL(lprocfs_stats_free);
 
+struct lprocfs_stats *lprocfs_stats_dup(struct lprocfs_stats *stats)
+{
+	struct lprocfs_stats *s;
+	int i;
+
+	s = lprocfs_stats_alloc(stats->ls_num, stats->ls_flags);
+	if (IS_ERR(s))
+		return s;
+
+	for (i = 0; i < stats->ls_num; i++) {
+		struct lprocfs_counter_header *header;
+
+		header = &stats->ls_cnt_header[i];
+		s->ls_cnt_header[i].lc_config = header->lc_config;
+		s->ls_cnt_header[i].lc_name = header->lc_name;
+		s->ls_cnt_header[i].lc_units = header->lc_units;
+	}
+
+	return s;
+}
+EXPORT_SYMBOL(lprocfs_stats_dup);
+
 unsigned int lustre_stats_scan(struct lustre_stats_list *slist, const char *source)
 {
 	struct lprocfs_stats *item, **stats;

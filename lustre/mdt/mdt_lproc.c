@@ -39,6 +39,7 @@
 #include "mdt_internal.h"
 #include <obd_cksum.h>
 #include <linux/libcfs/libcfs_caps.h>
+#include <lustre_nodemap.h>
 
 /**
  * The rename stats output would be YAML formats, like
@@ -1549,18 +1550,32 @@ int ldebugfs_mdt_open_files_seq_open(struct inode *inode, struct file *file)
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode, long amount)
 {
 	struct obd_export *exp = req->rq_export;
+	struct lu_nodemap *nm;
 
-	if (exp->exp_obd && exp->exp_obd->obd_md_stats)
+	if (unlikely(!exp->exp_obd))
+		return;
+
+	if (likely(exp->exp_obd->obd_md_stats))
 		lprocfs_counter_add(exp->exp_obd->obd_md_stats,
 				    opcode + LPROC_MD_LAST_OPC, amount);
+
 	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
 		lprocfs_counter_add(exp->exp_nid_stats->nid_stats, opcode,
 				    amount);
-	if (exp->exp_obd && obd2obt(exp->exp_obd)->obt_jobstats.ojs_cntr_num &&
+
+	if (obd2obt(exp->exp_obd)->obt_jobstats.ojs_cntr_num &&
 	    (exp_connect_flags(exp) & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd,
 				      lustre_msg_get_jobid(req->rq_reqmsg),
 				      opcode, amount);
+
+	nm = nodemap_get_from_exp(exp);
+	if (!IS_ERR_OR_NULL(nm)) {
+		if (likely(nm->nm_md_stats))
+			lprocfs_counter_add(nm->nm_md_stats,
+					    opcode + LPROC_MD_LAST_OPC, amount);
+		nodemap_putref(nm);
+	}
 }
 
 static const char * const mdt_stats[] = {

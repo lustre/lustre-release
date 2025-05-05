@@ -185,6 +185,9 @@ struct lu_nodemap {
 	struct lu_nodemap	*nm_parent_nm;
 	/* user capabilities */
 	kernel_cap_t		 nm_capabilities;
+	struct lprocfs_stats    *nm_dt_stats;
+	struct lprocfs_stats    *nm_md_stats;
+	struct mutex		 nm_stats_lock;
 };
 
 /* Store handles to local MGC storage to save config locally. In future

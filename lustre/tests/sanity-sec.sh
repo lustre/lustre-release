@@ -2056,6 +2056,20 @@ test_24() {
 }
 run_test 24 "check nodemap proc files for LBUGs and Oopses"
 
+function filter_nodemap_info() {
+	local awkcmd
+	local facet=$1
+
+	shift
+	awkcmd='/^nodemap[.].*[.]dt_stats=/{ignore=1; next}
+		/^nodemap[.].*[.]md_stats=/{ignore=1; next}
+		/^nodemap./{ignore=0}
+		{if(ignore==0)print}'
+
+	do_facet $facet $LCTL $* | awk "$awkcmd"
+	return ${PIPESTATUS[0]}
+}
+
 test_25a() {
 	local tmpfile=$(mktemp)
 	local tmpfile2=$(mktemp)
@@ -2063,6 +2077,8 @@ test_25a() {
 	local tmpfile4=$(mktemp)
 	local subdir=c0dir
 	local client
+
+	stack_trap "rm -f $tmpfile $tmpfile2 $tmpfile3 $tmpfile4"
 
 	nodemap_version_check || return 0
 
@@ -2097,8 +2113,8 @@ test_25a() {
 
 	wait_nm_sync test25 id
 
-	do_facet mgs $LCTL $nodemap_info > $tmpfile
-	do_facet mds $LCTL $nodemap_info > $tmpfile2
+	filter_nodemap_info mgs $nodemap_info >$tmpfile
+	filter_nodemap_info mds $nodemap_info >$tmpfile2
 
 	if ! $SHARED_KEY; then
 		# will conflict with SK's nodemaps
@@ -2108,13 +2124,25 @@ test_25a() {
 	zconf_umount_clients $CLIENTS $MOUNT ||
 	    error "unable to umount clients $CLIENTS"
 
-	do_facet mgs $LCTL $nodemap_info > $tmpfile3
-	diff -q $tmpfile3 $tmpfile >& /dev/null ||
+	filter_nodemap_info mgs $nodemap_info >$tmpfile3
+	diff -q $tmpfile3 $tmpfile >& /dev/null || {
+		echo "== $tmpfile =="
+		cat $tmpfile
+		echo "== $tmpfile3 =="
+		cat $tmpfile3
+		echo
 		error "$nodemap_info diff on MGS after remount"
+	}
 
-	do_facet mds $LCTL $nodemap_info > $tmpfile4
-	diff -q $tmpfile4 $tmpfile2 >& /dev/null ||
+	filter_nodemap_info mds $nodemap_info >$tmpfile4
+	diff -q $tmpfile4 $tmpfile2 >& /dev/null || {
+		echo "== $tmpfile4 =="
+		cat $tmpfile4
+		echo "== $tmpfile2 =="
+		cat $tmpfile2
+		echo
 		error "$nodemap_info diff on MDS after remount"
+	}
 
 	# cleanup nodemap
 	do_facet mgs $LCTL nodemap_del test25 ||
@@ -2124,7 +2152,6 @@ test_25a() {
 	zconf_mount_clients $CLIENTS $MOUNT ||
 	    error "unable to mount clients $CLIENTS"
 
-	rm -f $tmpfile $tmpfile2
 	export SK_UNIQUE_NM=false
 }
 run_test 25a "test save and reload nodemap config"
@@ -2154,10 +2181,10 @@ test_25b() {
 		error "unable to add fileset info"
 
 	# full nodemap dump
-	do_facet mgs $LCTL $nodemap_info > $info_dump ||
+	filter_nodemap_info mgs $nodemap_info > $info_dump ||
 		error "$nodemap_info failed"
 	stack_trap "rm -f $info_dump" EXIT
-	do_facet mgs $LCTL get_param -R nodemap > $param_dump ||
+	filter_nodemap_info mgs get_param -R nodemap > $param_dump ||
 		error "get_param -R nodemap failed"
 	stack_trap "rm -f $param_dump" EXIT
 
@@ -2165,19 +2192,19 @@ test_25b() {
 		error "$nodemap_info differs from get_param output (1)"
 
 	# nodemap dump for $nm
-	do_facet mgs $LCTL $nodemap_info --name $nm > $info_dump ||
+	filter_nodemap_info mgs $nodemap_info --name $nm > $info_dump ||
 		error "$nodemap_info failed"
-	do_facet mgs $LCTL get_param -R nodemap.$nm > $param_dump ||
+	filter_nodemap_info mgs get_param -R nodemap.$nm > $param_dump ||
 		error "get_param -R nodemap.$nm failed"
 
 	diff -q $info_dump $param_dump >& /dev/null ||
 		error "$nodemap_info differs from get_param output (2)"
 
 	# nodemap dump for $nm and property fileset
-	do_facet mgs $LCTL $nodemap_info --name $nm \
+	filter_nodemap_info mgs $nodemap_info --name $nm \
 		--property fileset > $info_dump ||
 		error "$nodemap_info failed"
-	do_facet mgs $LCTL get_param nodemap.$nm.fileset > $param_dump ||
+	filter_nodemap_info mgs get_param nodemap.$nm.fileset > $param_dump ||
 		error "get_param nodemap.$nm.fileset failed"
 
 	diff -q $info_dump $param_dump >& /dev/null ||
@@ -10217,6 +10244,178 @@ test_77() {
 		error "bad owner/group for root file"
 }
 run_test 77 "root offsetting"
+
+function parse_nodemap_stats() {
+	local awkcmd
+
+	awkcmd='/open/			{ropen=$2}
+		/close/			{rclose=$2}
+		/mknod/			{mknod=$2}
+		/link/			{link=$2}
+		/unlink/		{unlink=$2}
+		/mkdir/			{mkdir=$2}
+		/rmdir/			{rmdir=$2}
+		/rename/		{rename=$2}
+		/getattr/		{getattr=$2}
+		/setattr/		{setattr=$2}
+		/getxattr/		{getxattr=$2}
+		/setxattr/		{setxattr=$2}
+		/statfs/		{statfs=$2}
+		/sync/			{sync=$2}
+		/samedir_rename/	{samedir_rename=$2}
+		/parallel_rename_file/	{parallel_rename_file=$2}
+		/parallel_rename_dir/	{parallel_rename_dir=$2}
+		/crossdir_rename/	{crossdir_rename=$2}
+		/rename_trylocks/	{rename_trylocks=$2}
+		/read_bytes/		{read_bytes=$2}
+		/write_bytes/		{write_bytes=$2}
+		/read/			{rread=$2}
+		/write/			{rwrite=$2}
+		/punch/			{punch=$2}
+		/migrate/		{migrate=$2}
+		/fallocate/		{fallocate=$2}
+		END {print \
+			"[OPEN]=" ropen, \
+			"[CLOSE]=" rclose, \
+			"[MKNOD]=" mknod, \
+			"[LINK]=" link, \
+			"[UNLINK]=" unlink, \
+			"[MKDIR]=" mkdir, \
+			"[RMDIR]=" rmdir, \
+			"[RENAME]=" rename, \
+			"[GETATTR]=" getattr, \
+			"[SETATTR]=" setattr, \
+			"[GETXATTR]=" getxattr, \
+			"[SETXATTR]=" setxattr, \
+			"[STATFS]=" statfs, \
+			"[SYNC]=" sync, \
+			"[SAMEDIR_RENAME]=" samedir_rename, \
+			"[PARALLEL_RENAME_FILE]=" parallel_rename_file, \
+			"[PARALLEL_RENAME_DIR]=" parallel_rename_dir, \
+			"[CROSSDIR_RENAME]=" crossdir_rename, \
+			"[RENAME_TRYLOCKS]=" rename_trylocks, \
+			"[READ_BYTES]=" read_bytes, \
+			"[WRITE_BYTES]=" write_bytes, \
+			"[READ]=" rread, \
+			"[WRITE]=" rwrite, \
+			"[PUNCH]=" punch, \
+			"[MIGRATE]=" migrate, \
+			"[FALLOCATE]=" fallocate }'
+
+	do_facet $1 $LCTL get_param -n nodemap.${2}.*_stats |
+		awk "$awkcmd"
+}
+
+test_78() {
+	local activedefault
+	local td=$DIR/$tdir
+	declare -A stats
+
+	(( $MGS_VERSION >= $(version_code 2.16.54) )) ||
+		skip "nodemap stats need 2.16.54+"
+
+	test_mkdir -i0 -c1 $td || error "can't mkdir $td"
+	chmod a+rwx $td || error "can't chmod"
+	$LFS setstripe -i0 -c1 $td || error "can't set def striping"
+
+	# make sure servers are in a privileged nodemap (default here)
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 0"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 0"
+	wait_nm_sync default trusted_nodemap
+
+	activedefault=$(do_facet mgs $LCTL get_param -n nodemap.active)
+	(( $activedefault == 1 )) || {
+		do_facet mgs $LCTL nodemap_activate 1
+		wait_nm_sync active
+		stack_trap cleanup_active EXIT
+	}
+
+	do_facet mgs $LCTL nodemap_add c0
+	stack_trap "do_facet mgs $LCTL nodemap_del c0"
+	do_facet mgs $LCTL nodemap_add c1
+	stack_trap "do_facet mgs $LCTL nodemap_del c1"
+
+	local client_ip=$(host_nids_address ${clients_arr[0]} $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+	echo "add client ${clients_arr[0]} with $client_ip"
+	do_facet mgs $LCTL nodemap_add_range \
+		--name c0 --range $client_nid ||
+		error "Add range $client_nid to c0 failed rc = $?"
+	$LCTL nodemap_modify --name c0 --property admin --value 1
+	$LCTL nodemap_modify --name c0 --property trusted --value 1
+	wait_nm_sync c0 trusted_nodemap
+
+	(( num_clients > 1 )) && {
+		client_ip=$(host_nids_address ${clients_arr[1]} $NETTYPE)
+		client_nid=$(h2nettype $client_ip)
+		echo "add client ${clients_arr[1]} with $client_ip"
+		do_facet mgs $LCTL nodemap_add_range \
+			--name c1 --range $client_nid ||
+			error "Add range $client_nid to c1 failed rc = $?"
+		$LCTL nodemap_modify --name c1 --property admin --value 1
+		$LCTL nodemap_modify --name c1 --property trusted --value 1
+		wait_nm_sync c1 trusted_nodemap
+	}
+
+	# clear lru before IOs, as clients have been moved to a nodemap
+	do_nodes $(comma_list $clients) $LCTL set_param \
+		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
+
+	echo "stats before test"
+	do_facet mds1 "$LCTL get_param nodemap.c0.exports"
+	do_facet mds1 "$LCTL get_param nodemap.c0.md_stats"
+	do_facet ost1 "$LCTL get_param nodemap.c0.dt_stats"
+	(( num_clients > 1 )) && {
+		do_facet mds1 "$LCTL get_param nodemap.c1.exports"
+		do_facet mds1 "$LCTL get_param nodemap.c1.md_stats"
+		do_facet ost1 "$LCTL get_param nodemap.c1.dt_stats"
+	}
+
+	do_node ${clients_arr[0]} \
+		"dd if=/dev/zero of=$td/$tfile bs=1k count=1 conv=fsync"
+
+	(( num_clients > 1 )) &&
+		do_node ${clients_arr[1]} \
+			"dd if=/dev/zero of=$td/$tfile-2 bs=1k count=1 conv=fsync"
+
+	do_node ${clients_arr[0]} "rm -rf $td/*"
+	ls -lR $td
+
+	echo "stats after test"
+	do_facet mds1 "$LCTL get_param nodemap.c0.md_stats"
+	do_facet ost1 "$LCTL get_param nodemap.c0.dt_stats"
+	eval stats=($(parse_nodemap_stats mds1 c0))
+	(( ${stats[OPEN]} >= 1 && ${stats[CLOSE]} >= 1 &&
+	   ${stats[UNLINK]} >= 1 && ${stats[GETATTR]} >= 1 )) || {
+		do_facet mds2 "$LCTL get_param nodemap.c0.md_stats"
+		do_facet mds3 "$LCTL get_param nodemap.c0.md_stats"
+		do_facet mds4 "$LCTL get_param nodemap.c0.md_stats"
+		error "unexpected stats in c0"
+	   }
+	eval stats=($(parse_nodemap_stats ost1 c0))
+	(( ${stats[WRITE]} == 1 && ${stats[SYNC]} == 1 )) ||
+		do_facet ost1 "$LCTL get_param nodemap.c0.dt_stats"
+	(( num_clients > 1 )) && {
+		eval stats=($(parse_nodemap_stats mds1 c1))
+		do_facet mds1 "$LCTL get_param nodemap.c1.md_stats"
+		do_facet ost1 "$LCTL get_param nodemap.c1.dt_stats"
+		(( ${stats[OPEN]} >= 1 && ${stats[CLOSE]} >= 1 &&
+		   ${stats[GETATTR]} >= 1 )) ||
+			error "unexpected stats in c1"
+		eval stats=($(parse_nodemap_stats ost1 c1))
+		(( ${stats[WRITE]} == 1 && ${stats[SYNC]} == 1 )) ||
+			error "unexpected stats in c1"
+	}
+
+	return 0
+}
+run_test 78 "nodemap stats"
 
 test_79() {
 	# reserve test_79
