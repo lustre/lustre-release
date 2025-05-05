@@ -18,20 +18,25 @@ LOG2=${LOG}2
 
 SUCCESS=1
 
-rm -f $OOS $OOS2 $LOG $LOG2 $OOSFALLOCATE
+rm -f $OOS $OOS2 $OOSFALLOCATE $LOG $LOG2
+wait_delete_completed
 
-sync; sleep 1; sync	# to ensure we get up-to-date statfs info
+sync; sleep_maxage; sync	# to ensure we get up-to-date statfs info
 
 STRIPECOUNT=$($LCTL get_param -n lov.*.activeobd | head -n 1)
 ORIGFREE=$($LCTL get_param -n llite.*.kbytesavail | head -n 1)
 NUMBER_OF_FREE_BLOCKS=4096  # for dd command keep only 4MB space
 FALLOCATE_SIZE=$(( $ORIGFREE - $NUMBER_OF_FREE_BLOCKS )) # space to fill FS
-MAXFREE=${MAXFREE:-$((1048576000 * $STRIPECOUNT))}
+if check_fallocate_supported; then
+	MAXFREE=${MAXFREE:-$((1048576000 * $STRIPECOUNT))}
+else
+	MAXFREE=${MAXFREE:-$((400000 * $STRIPECOUNT))}
+fi
 echo STRIPECOUNT=$STRIPECOUNT ORIGFREE=$ORIGFREE MAXFREE=$MAXFREE
 
 
 if (( $ORIGFREE > $MAXFREE )); then
-	skip "$0: ${ORIGFREE}kB free gt MAXFREE ${MAXFREE}kB, increase $MAXFREE (or reduce test fs size) to proceed"
+	skip "$0: ${ORIGFREE}KB free > ${MAXFREE}KB, increase MAXFREE (or reduce fs size)"
 	exit 0
 fi
 
@@ -42,9 +47,11 @@ $LFS setstripe $OOS -c $STRIPECOUNT
 $LFS setstripe $OOS2 -c $STRIPECOUNT
 $LFS setstripe $OOSFALLOCATE -c $STRIPECOUNT
 
+stack_trap "rm -f $OOS $OOS2 $OOSFALLOCATE; wait_delete_completed"
+
 # skip ZFS due to https://github.com/openzfs/zfs/issues/326
 # TODO: check support for zfs set reservation=10G to reduce free space
-if [[ $(facet_fstype $facet) != zfs ]]; then
+if check_fallocate_supported; then
 	if ! fallocate -l $FALLOCATE_SIZE $OOSFALLOCATE 2>> $LOG; then
 		echo "ERROR: fallocate -l $FALLOCATE_SIZE $OOSFALLOCATE failed"
 		SUCCESS=0
@@ -63,10 +70,10 @@ if wait $DDPID; then
 	SUCCESS=0
 fi
 
-[ ! -s "$LOG" ] && error "LOG file is empty!"
-[ ! -s "$LOG2" ] && error "LOG2 file is empty!"
+[[ -s "$LOG" ]] || error "LOG file is empty!"
+[[ -s "$LOG2" ]] || error "LOG2 file is empty!"
 
-if [ "`cat $LOG $LOG2 | grep -c 'No space left on device'`" -ne 2 ]; then
+if (( $(cat $LOG $LOG2 | grep -c 'No space left on device') != 2 )); then
 	echo "ERROR: dd not return ENOSPC"
 	SUCCESS=0
 fi
@@ -79,20 +86,22 @@ if ! oos_full; then
 	SUCCESS=0
 fi
 
-RECORDSOUT=$((`grep "records out" $LOG | cut -d+ -f 1` +
-              `grep "records out" $LOG2 | cut -d+ -f 1`))
+RECORDSOUT=$(($(grep "records out" $LOG | cut -d+ -f 1) +
+              $(grep "records out" $LOG2 | cut -d+ -f 1)))
 
-FILESIZE=$((`ls -l $OOS | awk '{print $5}'` + `ls -l $OOS2 | awk '{print $5}'`))
-if [ "$RECORDSOUT" -ne $(($FILESIZE / 1024)) ]; then
-	echo "ERROR: blocks written by dd not equal to the size of file"
+FILESIZE=$(($(stat -c '%b*%B' $OOS) + $(stat -c '%b*%B' $OOS2)))
+if (( $RECORDSOUT != $FILESIZE / 1024 )); then
+	echo "ERROR: dd blocks $RECORDSOUT != file size $((FILESIZE/1024))"
+	SUCCESS=0
+fi
+
+if (( $RECORDSOUT < $ORIGFREE * 99 / 100 )); then
+	echo "ERROR: dd blocks $RECORDSOUT != file size $((FILESIZE/1024))"
 	SUCCESS=0
 fi
 
 echo LOG LOG2 file
-cat $LOG $LOG2
-
-rm -f $OOS $OOS2 $OOSFALLOCATE
-sync; sleep 1; sync
+grep . $LOG $LOG2
 
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
