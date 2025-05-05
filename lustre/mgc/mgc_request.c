@@ -649,7 +649,7 @@ static int mgc_requeue_thread(void *data)
 		 */
 		to = mgc_requeue_timeout_min == 0 ? 1 : mgc_requeue_timeout_min;
 		to = cfs_time_seconds(mgc_requeue_timeout_min) +
-			prandom_u32_max(cfs_time_seconds(to));
+			get_random_u32_below(cfs_time_seconds(to));
 		wait_event_idle_timeout(rq_waitq,
 					rq_state & (RQ_STOP | RQ_PRECLEANUP), to);
 

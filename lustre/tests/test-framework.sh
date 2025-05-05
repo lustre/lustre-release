@@ -468,7 +468,7 @@ export LINUX_VERSION_CODE=$(version_code ${LINUX_VERSION//\./ })
 
 # Report the Lustre build version string (e.g. 1.8.7.3 or 2.4.1).
 #
-# usage: lustre_build_version
+# usage: lustre_build_version_node
 #
 # All Lustre versions support "lctl get_param" to report the version of the
 # code running in the kernel (what our tests are interested in), but it
@@ -495,21 +495,19 @@ export LINUX_VERSION_CODE=$(version_code ${LINUX_VERSION//\./ })
 # lctl --version:		lctl 2.6.50
 #
 # output: prints version string to stdout in (up to 4) dotted-decimal values
-lustre_build_version() {
-	local facet=${1:-client}
-	local facet_version=${facet}_VERSION
-
-	# if the global variable is already set, then use that
-	[ -n "${!facet_version}" ] && echo ${!facet_version} && return
+lustre_build_version_node() {
+	local node=$1
+	local ver
+	local lver
 
 	# this is the currently-running version of the kernel modules
-	local ver=$(do_facet $facet "$LCTL get_param -n version 2>/dev/null")
+	ver=$(do_node $node "$LCTL get_param -n version 2>/dev/null")
 	# we mostly test 2.10+ systems, only try others if the above fails
 	if [ -z "$ver" ]; then
-		ver=$(do_facet $facet "$LCTL lustre_build_version 2>/dev/null")
+		ver=$(do_node $node "$LCTL lustre_build_version 2>/dev/null")
 	fi
 	if [ -z "$ver" ]; then
-		ver=$(do_facet $facet "$LCTL --version 2>/dev/null" |
+		ver=$(do_node $node "$LCTL --version 2>/dev/null" |
 		      cut -d' ' -f2)
 	fi
 	local lver=$(egrep -i "lustre: |version: " <<<"$ver" | head -n 1)
@@ -518,6 +516,19 @@ lustre_build_version() {
 	lver=$(sed -e 's/[^:]*: //' -e 's/^v//' -e 's/[ -].*//' <<<$ver |
 	       tr _ . | cut -d. -f1-4)
 
+	echo $lver
+}
+
+lustre_build_version() {
+	local facet=${1:-client}
+	local node=$(facet_active_host $facet)
+	local facet_version=${facet}_VERSION
+	local lver
+
+	# if the global variable is already set, then use that
+	[ -n "${!facet_version}" ] && echo ${!facet_version} && return
+
+	lver=$(lustre_build_version_node $node)
 	# save in global variable for the future
 	export $facet_version=$lver
 

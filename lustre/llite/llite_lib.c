@@ -2665,7 +2665,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	}
 
 	if (body->mbo_valid & OBD_MD_FLACL)
-		lli_replace_acl(lli, md);
+		lli_replace_acl(lli, md->posix_acl);
 
 	api32 = test_bit(LL_SBI_32BIT_API, sbi->ll_flags);
 	inode->i_ino = cl_fid_build_ino(&body->mbo_fid1, api32);

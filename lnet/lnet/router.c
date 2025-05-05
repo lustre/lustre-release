@@ -633,7 +633,7 @@ lnet_add_route_to_rnet(struct lnet_remotenet *rnet, struct lnet_route *route)
 	 * different nodes are using the same list of routers, they end up
 	 * preferring different routers.
 	 */
-	offset = prandom_u32_max(len + 1);
+	offset = get_random_u32_below(len + 1);
 	list_for_each(e, &rnet->lrn_routes) {
 		if (offset == 0)
 			break;

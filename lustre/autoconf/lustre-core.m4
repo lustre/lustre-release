@@ -911,10 +911,11 @@ AC_DEFUN([LC_SRC_IOPS_RENAME_WITH_FLAGS], [
 	LB2_LINUX_TEST_SRC([iops_rename_with_flags], [
 		#include <linux/fs.h>
 	],[
+		struct inode_operations *iops = NULL;
 		struct inode *i1 = NULL, *i2 = NULL;
 		struct dentry *d1 = NULL, *d2 = NULL;
-		int rc;
-		rc = ((struct inode_operations *)0)->rename(i1, d1, i2, d2, 0);
+
+		iops->rename(i1, d1, i2, d2, 0);
 	])
 ]) # LC_IOPS_RENAME_WITH_FLAGS
 AC_DEFUN([LC_IOPS_RENAME_WITH_FLAGS], [
@@ -1382,10 +1383,11 @@ AC_DEFUN([LC_SRC_SYMLINK_OPS_USE_NAMEIDATA], [
 		#include <linux/namei.h>
 		#include <linux/fs.h>
 	],[
+		struct inode_operations *iops = NULL;
 		struct nameidata *nd = NULL;
 
-		((struct inode_operations *)0)->follow_link(NULL, nd);
-		((struct inode_operations *)0)->put_link(NULL, nd, NULL);
+		iops->follow_link(NULL, nd);
+		iops->put_link(NULL, nd, NULL);
 	])
 ])
 AC_DEFUN([LC_SYMLINK_OPS_USE_NAMEIDATA], [
@@ -2247,9 +2249,10 @@ AC_DEFUN([LC_SRC_INODEOPS_ENHANCED_GETATTR], [
 	LB2_LINUX_TEST_SRC([getattr_path], [
 		#include <linux/fs.h>
 	],[
+		struct inode_operations *iops = NULL;
 		struct path path;
 
-		((struct inode_operations *)1)->getattr(&path, NULL, 0, 0);
+		iops->getattr(&path, NULL, 0, 0);
 	])
 ])
 AC_DEFUN([LC_INODEOPS_ENHANCED_GETATTR], [
@@ -2985,7 +2988,9 @@ AC_DEFUN([LC_SRC_HAVE_GET_ACL_RCU_ARG], [
 	LB2_LINUX_TEST_SRC([get_acl_rcu_argument], [
 		#include <linux/fs.h>
 	],[
-		((struct inode_operations *)1)->get_acl((struct inode *)NULL, 0, false);
+		struct inode_operations *iops = NULL;
+
+		iops->get_acl((struct inode *)NULL, 0, false);
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_GET_ACL_RCU_ARG], [
@@ -3711,8 +3716,9 @@ AC_DEFUN([LC_SRC_HAVE_MNT_IDMAP_ARG], [
 		#include <linux/mount.h>
 		#include <linux/fs.h>
 	],[
-		((struct inode_operations *)1)->getattr((struct mnt_idmap *)NULL,
-							NULL, NULL, 0, 0);
+		struct inode_operations *iops = NULL;
+
+		iops->getattr((struct mnt_idmap *)NULL,	NULL, NULL, 0, 0);
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_MNT_IDMAP_ARG], [
@@ -3726,6 +3732,58 @@ AC_DEFUN([LC_HAVE_MNT_IDMAP_ARG], [
 			[use mnt_idmap with dquot_transfer])
 	])
 ]) # LC_HAVE_MNT_IDMAP_ARG
+
+#
+# LC_HAVE_GET_RANDOM_U32_BELOW
+#
+# Linux commit v6.1-13825-g3c202d14a9d7
+#   prandom: remove prandom_u32_max()
+#
+AC_DEFUN([LC_SRC_HAVE_GET_RANDOM_U32_BELOW], [
+	LB2_LINUX_TEST_SRC([get_random_u32_below], [
+		#include <linux/random.h>
+	],[
+		u32 rand32 = get_random_u32_below(99);
+		(void)rand32;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_GET_RANDOM_U32_BELOW], [
+	AC_MSG_CHECKING([if get_random_u32_below()is available])
+	LB2_LINUX_TEST_RESULT([get_random_u32_below], [
+		AC_DEFINE(HAVE_GET_RANDOM_U32_BELOW, 1,
+			[get_random_u32_below() is available])
+	],[
+		AC_DEFINE([get_random_u32_below(v)], [prandom_u32_max(v)],
+			[get_random_u32_below() is not available])
+	])
+]) # LC_HAVE_GET_RANDOM_U32_BELOW
+
+#
+# LC_HAVE_ACL_WITH_DENTRY
+#
+# Linux commit v6.1-rc1-2-g138060ba92b3
+#   fs: pass dentry to set acl method
+# Linux commit v6.1-rc1-4-g7420332a6ff4
+#   fs: add new get acl method
+#
+AC_DEFUN([LC_SRC_HAVE_ACL_WITH_DENTRY], [
+	LB2_LINUX_TEST_SRC([acl_with_dentry], [
+		#include <linux/fs.h>
+	],[
+		struct inode_operations *iops = NULL;
+		struct dentry *dentry = NULL;
+
+		iops->get_acl(NULL, dentry, 0);
+		(void)dentry;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_ACL_WITH_DENTRY], [
+	AC_MSG_CHECKING([if 'get_acl' and 'set_acl' use dentry argument])
+	LB2_LINUX_TEST_RESULT([acl_with_dentry], [
+		AC_DEFINE(HAVE_ACL_WITH_DENTRY, 1,
+			['get_acl' and 'set_acl' use dentry argument])
+	])
+]) # LC_HAVE_ACL_WITH_DENTRY
 
 #
 # LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
@@ -3889,6 +3947,28 @@ AC_DEFUN([LC_HAVE_STRUCT_PAGEVEC], [
 			['struct pagevec' is available])
 	])
 ]) # LC_HAVE_STRUCT_PAGEVEC
+
+#
+# LC_IOP_GET_INODE_ACL
+#
+# linux kernel v6.1-rc1-3-gcac2f8b8d8
+#   fs: rename current get acl method
+#
+AC_DEFUN([LC_SRC_IOP_GET_INODE_ACL], [
+	LB2_LINUX_TEST_SRC([inode_ops_get_inode_acl], [
+		#include <linux/fs.h>
+	],[
+		struct inode_operations iop;
+		iop.get_inode_acl = NULL;
+	])
+])
+AC_DEFUN([LC_IOP_GET_INODE_ACL], [
+	AC_MSG_CHECKING([if inode_operations has .get_inode_acl member function])
+	LB2_LINUX_TEST_RESULT([inode_ops_get_inode_acl], [
+		AC_DEFINE(HAVE_IOP_GET_INODE_ACL, 1,
+			[inode_operations has .get_inode_acl member function])
+	])
+]) # LC_IOP_GET_INODE_ACL
 
 #
 # LC_PROG_LINUX
@@ -4124,6 +4204,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_GET_RANDOM_U32_AND_U64
 	LC_SRC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
 	LC_SRC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
+	LC_SRC_IOP_GET_INODE_ACL
 
 	# 6.6
 	LC_SRC_HAVE_FLUSH___WORKQUEUE
@@ -4143,6 +4224,10 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 	LC_SRC_HAVE_FOLIO_BATCH
 	LC_SRC_HAVE_STRUCT_PAGEVEC
+
+	# 6.2
+	LC_SRC_HAVE_GET_RANDOM_U32_BELOW
+	LC_SRC_HAVE_ACL_WITH_DENTRY
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -4391,6 +4476,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_GET_RANDOM_U32_AND_U64
 	LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
 	LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
+	LC_IOP_GET_INODE_ACL
 
 	# 6.6
 	LC_HAVE_FLUSH___WORKQUEUE
@@ -4410,6 +4496,10 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 	LC_HAVE_FOLIO_BATCH
 	LC_HAVE_STRUCT_PAGEVEC
+
+	# 6.2
+	LC_HAVE_GET_RANDOM_U32_BELOW
+	LC_HAVE_ACL_WITH_DENTRY
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

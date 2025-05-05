@@ -38,33 +38,112 @@
 
 #include "llite_internal.h"
 
-struct posix_acl *ll_get_acl(struct inode *inode, int type
-#ifdef HAVE_GET_ACL_RCU_ARG
-			     , bool rcu
-#endif /* HAVE_GET_ACL_RCU_ARG */
-			    )
+static struct posix_acl *
+ll_get_acl_common(struct inode *inode, int type, bool rcu)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct posix_acl *acl = NULL;
+	char *value = NULL;
+	int len, xtype;
+	char buf[200];
+	char *xname;
 	ENTRY;
 
-#ifdef HAVE_GET_ACL_RCU_ARG
 	if (rcu)
 		return ERR_PTR(-ECHILD);
-#endif
 
+	if (type == ACL_TYPE_ACCESS && lli->lli_posix_acl)
+		goto lli_acl;
+
+	switch (type) {
+	case ACL_TYPE_ACCESS:
+		xname = XATTR_NAME_ACL_ACCESS;
+		xtype = XATTR_ACL_ACCESS_T;
+		break;
+	case ACL_TYPE_DEFAULT:
+		xname = XATTR_NAME_ACL_DEFAULT;
+		xtype = XATTR_ACL_DEFAULT_T;
+		break;
+	default:
+		return ERR_PTR(-EINVAL);
+	}
+
+	len = ll_xattr_list(inode, xname, xtype, NULL, 0, OBD_MD_FLXATTR);
+	if (len > 0) {
+		if (len > sizeof(buf))
+			value = kmalloc(len, GFP_NOFS);
+		else
+			value = buf;
+		if (!value)
+			return ERR_PTR(-ENOMEM);
+		len = ll_xattr_list(inode, xname, xtype, value, len,
+				    OBD_MD_FLXATTR);
+	}
+	if (len > 0)
+		acl = posix_acl_from_xattr(&init_user_ns, value, len);
+	else if (len == -ENODATA || len == -ENOSYS || len == -EOPNOTSUPP)
+		acl = NULL;
+	else
+		acl = ERR_PTR(len);
+	if (value && value != buf)
+		kfree(value);
+
+	if (IS_ERR_OR_NULL(acl))
+		goto out;
+	if (type == ACL_TYPE_DEFAULT) {
+		acl = posix_acl_dup(acl);
+		goto out;
+	}
+	if (type == ACL_TYPE_ACCESS)
+		lli_replace_acl(lli, acl);
+
+lli_acl:
 	read_lock(&lli->lli_lock);
 	/* VFS' acl_permission_check->check_acl will release the refcount */
 	acl = posix_acl_dup(lli->lli_posix_acl);
 	read_unlock(&lli->lli_lock);
 
+out:
 	RETURN(acl);
 }
 
+/* v6.1-rc1-3-gcac2f8b8d8b5 */
+struct posix_acl *ll_get_inode_acl(struct inode *inode, int type, bool rcu)
+{
+	return ll_get_acl_common(inode, type, rcu);
+}
+
+struct posix_acl *ll_get_acl(
+#ifdef HAVE_ACL_WITH_DENTRY
+	struct mnt_idmap *map, struct dentry *dentry, int type)
+#elif defined HAVE_GET_ACL_RCU_ARG
+	struct inode *inode, int type, bool rcu)
+#else
+	struct inode *inode, int type)
+#endif /* HAVE_GET_ACL_RCU_ARG */
+{
+#ifdef HAVE_ACL_WITH_DENTRY
+	struct inode *inode = dentry->d_inode;
+#endif
+#ifndef HAVE_GET_ACL_RCU_ARG
+	bool rcu = false;
+#endif
+
+	return ll_get_acl_common(inode, type, rcu);
+}
+
 #ifdef HAVE_IOP_SET_ACL
-int ll_set_acl(struct mnt_idmap *map, struct inode *inode,
+int ll_set_acl(struct mnt_idmap *map,
+#ifdef HAVE_ACL_WITH_DENTRY
+	       struct dentry *dentry,
+#else
+	       struct inode *inode,
+#endif
 	       struct posix_acl *acl, int type)
 {
+#ifdef HAVE_ACL_WITH_DENTRY
+	struct inode *inode = dentry->d_inode;
+#endif
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req = NULL;
 	const char *name = NULL;
@@ -76,9 +155,6 @@ int ll_set_acl(struct mnt_idmap *map, struct inode *inode,
 	switch (type) {
 	case ACL_TYPE_ACCESS:
 		name = XATTR_NAME_POSIX_ACL_ACCESS;
-		if (acl)
-			rc = posix_acl_update_mode(map, inode,
-						   &inode->i_mode, &acl);
 		break;
 
 	case ACL_TYPE_DEFAULT:

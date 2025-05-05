@@ -395,12 +395,16 @@ static inline void lli_clear_acl(struct ll_inode_info *lli)
 }
 
 static inline void lli_replace_acl(struct ll_inode_info *lli,
-				   struct lustre_md *md)
+				   struct posix_acl *acl)
 {
 	write_lock(&lli->lli_lock);
 	if (lli->lli_posix_acl)
 		posix_acl_release(lli->lli_posix_acl);
-	lli->lli_posix_acl = md->posix_acl;
+	lli->lli_posix_acl = acl;
+	if (!acl) {
+		forget_cached_acl(&lli->lli_vfs_inode, ACL_TYPE_ACCESS);
+		forget_cached_acl(&lli->lli_vfs_inode, ACL_TYPE_DEFAULT);
+	}
 	write_unlock(&lli->lli_lock);
 }
 #else
@@ -409,7 +413,7 @@ static inline void lli_clear_acl(struct ll_inode_info *lli)
 }
 
 static inline void lli_replace_acl(struct ll_inode_info *lli,
-				   struct lustre_md *md)
+				   struct posix_acl *acl)
 {
 }
 #endif
@@ -1181,12 +1185,24 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		      unsigned int flags, bool foreign);
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-struct posix_acl *ll_get_acl(struct inode *inode, int type
-#ifdef HAVE_GET_ACL_RCU_ARG
-			     , bool rcu
-#endif /* HAVE_GET_ACL_RCU_ARG */
-			     );
-int ll_set_acl(struct mnt_idmap *mnt_userns, struct inode *inode,
+struct posix_acl *ll_get_acl(
+ #ifdef HAVE_ACL_WITH_DENTRY
+	struct mnt_idmap *, struct dentry *, int);
+ #elif defined HAVE_GET_ACL_RCU_ARG
+	struct inode *inode, int type, bool rcu);
+ #else
+	struct inode *inode, int type);
+ #endif /* HAVE_GET_ACL_RCU_ARG */
+
+struct posix_acl *
+ll_get_inode_acl(struct inode *inode, int type, bool rcu);
+
+int ll_set_acl(struct mnt_idmap *mnt_userns,
+ #ifdef HAVE_ACL_WITH_DENTRY
+	       struct dentry *dentry,
+ #else
+	       struct inode *inode,
+ #endif
 	       struct posix_acl *acl, int type);
 #else  /* !CONFIG_LUSTRE_FS_POSIX_ACL */
 #define ll_get_acl NULL

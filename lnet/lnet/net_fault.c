@@ -174,9 +174,9 @@ lnet_drop_rule_add(struct lnet_fault_attr *attr)
 	if (attr->u.drop.da_interval != 0) {
 		rule->dr_time_base = ktime_get_seconds() + attr->u.drop.da_interval;
 		rule->dr_drop_time = ktime_get_seconds() +
-				     prandom_u32_max(attr->u.drop.da_interval);
+				     get_random_u32_below(attr->u.drop.da_interval);
 	} else {
-		rule->dr_drop_at = prandom_u32_max(attr->u.drop.da_rate);
+		rule->dr_drop_at = get_random_u32_below(attr->u.drop.da_rate);
 	}
 
 	lnet_net_lock(LNET_LOCK_EX);
@@ -281,10 +281,10 @@ lnet_drop_rule_reset(void)
 
 		memset(&rule->dr_stat, 0, sizeof(rule->dr_stat));
 		if (attr->u.drop.da_rate != 0) {
-			rule->dr_drop_at = prandom_u32_max(attr->u.drop.da_rate);
+			rule->dr_drop_at = get_random_u32_below(attr->u.drop.da_rate);
 		} else {
 			rule->dr_drop_time = ktime_get_seconds() +
-					     prandom_u32_max(attr->u.drop.da_interval);
+					     get_random_u32_below(attr->u.drop.da_interval);
 			rule->dr_time_base = ktime_get_seconds() + attr->u.drop.da_interval;
 		}
 		spin_unlock(&rule->dr_lock);
@@ -303,7 +303,7 @@ lnet_fault_match_health(enum lnet_msg_hstatus *hstatus, __u32 mask)
 	int i;
 
 	/* assign a random failure */
-	choice = prandom_u32_max(LNET_MSG_STATUS_END - LNET_MSG_STATUS_OK);
+	choice = get_random_u32_below(LNET_MSG_STATUS_END - LNET_MSG_STATUS_OK);
 	if (choice == 0)
 		choice++;
 
@@ -369,7 +369,7 @@ drop_rule_match(struct lnet_drop_rule *rule, lnet_nid_t src,
 	/* match this rule, check drop rate now */
 	spin_lock(&rule->dr_lock);
 	if (attr->u.drop.da_random) {
-		int value = prandom_u32_max(attr->u.drop.da_interval);
+		int value = get_random_u32_below(attr->u.drop.da_interval);
 		if (value >= (attr->u.drop.da_interval / 2))
 			drop = true;
 		else
@@ -384,7 +384,7 @@ drop_rule_match(struct lnet_drop_rule *rule, lnet_nid_t src,
 				rule->dr_time_base = now;
 
 			rule->dr_drop_time = rule->dr_time_base +
-					     prandom_u32_max(attr->u.drop.da_interval);
+					     get_random_u32_below(attr->u.drop.da_interval);
 			rule->dr_time_base += attr->u.drop.da_interval;
 
 			CDEBUG(D_NET, "Drop Rule %s->%s: next drop : %lld\n",
@@ -400,7 +400,7 @@ drop_rule_match(struct lnet_drop_rule *rule, lnet_nid_t src,
 		count = rule->dr_stat.fs_count;
 		if (do_div(count, attr->u.drop.da_rate) == 0) {
 			rule->dr_drop_at = rule->dr_stat.fs_count +
-					   prandom_u32_max(attr->u.drop.da_rate);
+					   get_random_u32_below(attr->u.drop.da_rate);
 			CDEBUG(D_NET, "Drop Rule %s->%s: next drop: %lu\n",
 			       libcfs_nid2str(attr->fa_src),
 			       libcfs_nid2str(attr->fa_dst), rule->dr_drop_at);
@@ -552,7 +552,7 @@ delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
 				rule->dl_time_base = now;
 
 			rule->dl_delay_time = rule->dl_time_base +
-					      prandom_u32_max(attr->u.delay.la_interval);
+					      get_random_u32_below(attr->u.delay.la_interval);
 			rule->dl_time_base += attr->u.delay.la_interval;
 
 			CDEBUG(D_NET, "Delay Rule %s->%s: next delay : %lld\n",
@@ -569,7 +569,7 @@ delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
 		count = rule->dl_stat.fs_count;
 		if (do_div(count, attr->u.delay.la_rate) == 0) {
 			rule->dl_delay_at = rule->dl_stat.fs_count +
-					    prandom_u32_max(attr->u.delay.la_rate);
+					    get_random_u32_below(attr->u.delay.la_rate);
 			CDEBUG(D_NET, "Delay Rule %s->%s: next delay: %lu\n",
 			       libcfs_nid2str(attr->fa_src),
 			       libcfs_nid2str(attr->fa_dst), rule->dl_delay_at);
@@ -861,9 +861,9 @@ lnet_delay_rule_add(struct lnet_fault_attr *attr)
 		rule->dl_time_base = ktime_get_seconds() +
 				     attr->u.delay.la_interval;
 		rule->dl_delay_time = ktime_get_seconds() +
-				      prandom_u32_max(attr->u.delay.la_interval);
+				      get_random_u32_below(attr->u.delay.la_interval);
 	} else {
-		rule->dl_delay_at = prandom_u32_max(attr->u.delay.la_rate);
+		rule->dl_delay_at = get_random_u32_below(attr->u.delay.la_rate);
 	}
 
 	rule->dl_msg_send = -1;
@@ -1007,10 +1007,10 @@ lnet_delay_rule_reset(void)
 
 		memset(&rule->dl_stat, 0, sizeof(rule->dl_stat));
 		if (attr->u.delay.la_rate != 0) {
-			rule->dl_delay_at = prandom_u32_max(attr->u.delay.la_rate);
+			rule->dl_delay_at = get_random_u32_below(attr->u.delay.la_rate);
 		} else {
 			rule->dl_delay_time = ktime_get_seconds() +
-					      prandom_u32_max(attr->u.delay.la_interval);
+					      get_random_u32_below(attr->u.delay.la_interval);
 			rule->dl_time_base = ktime_get_seconds() +
 					     attr->u.delay.la_interval;
 		}

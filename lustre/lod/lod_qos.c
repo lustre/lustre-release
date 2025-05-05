@@ -782,7 +782,7 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	spin_lock(&lqr->lqr_alloc);
 	if (--lqr->lqr_start_count <= 0) {
 		atomic_set(&lqr->lqr_start_idx,
-			    prandom_u32_max(osts->op_count));
+			    get_random_u32_below(osts->op_count));
 		lqr->lqr_start_count =
 			(LOV_CREATE_RESEED_MIN / max(osts->op_count, 1U) +
 			 LOV_CREATE_RESEED_MULT) * max(osts->op_count, 1U);
@@ -976,7 +976,7 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	spin_lock(&lqr->lqr_alloc);
 	if (--lqr->lqr_start_count <= 0) {
 		atomic_set(&lqr->lqr_start_idx,
-			    prandom_u32_max(pool->op_count));
+			    get_random_u32_below(pool->op_count));
 		lqr->lqr_start_count =
 			(LOV_CREATE_RESEED_MIN / max(pool->op_count, 1U) +
 			 LOV_CREATE_RESEED_MULT) * max(pool->op_count, 1U);
