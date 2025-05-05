@@ -501,17 +501,75 @@ check_agent_unregistered() {
 	done
 }
 
+get_agent_mntpnt() {
+	local agent=${1:-$(facet_active_host $SINGLEAGT)}
+	local -a ct_cmd
+
+	ct_cmd=( $(do_rpc_nodes $agent \
+		pgrep --pidfile=$HSMTOOL_PID_FILE --list-full hsmtool) ) ||
+		return $?
+
+	# last parameter on  copytool cmd-line.
+	[[ -n "${ct_cmd[-1]}" ]] || return 1
+	echo ${ct_cmd[-1]}
+}
+
 get_agent_uuid() {
 	local agent=${1:-$(facet_active_host $SINGLEAGT)}
+	local mntpnt
 
-	# Lustre mount-point is mandatory and last parameter on
-	# copytool cmd-line.
-	local mntpnt=$(do_rpc_nodes $agent \
-			pgrep --pidfile=$HSMTOOL_PID_FILE --list-full hsmtool |
-		       awk '{print $NF}')
-	[ -n "$mntpnt" ] || error "Found no Agent or with no mount-point "\
-				  "parameter"
+	# Lustre mount-point is mandatory
+	mntpnt=$(get_agent_mntpnt $agent) ||
+		error "Found no Agent or with no mount-point parameter"
+
 	do_rpc_nodes $agent get_client_uuid $mntpnt | cut -d' ' -f2
+}
+
+evict_agent() {
+	local uuid=$1
+	local -i mdtidx;
+
+	for ((mdtidx = 0; mdtidx < MDSCOUNT; mdtidx++)); do
+		local facet=mds$(($mdtidx + 1))
+		local prefix=${MDT_PREFIX}${mdtidx}
+
+		do_facet $facet "$LCTL set_param $prefix.evict_client=$uuid"
+	done
+}
+
+declare -A saved_agent_instances
+
+disconnect_agent_node() {
+	local agent=${1:-$(facet_active_host $SINGLEAGT)}
+	local mntpnt
+
+	mntpnt=$(get_agent_mntpnt $agent) ||
+		error "Found no Agent or with no mount-point parameter"
+
+	local instance=$(do_node $agent $LFS getname -i $mntpnt)
+	saved_agent_instances[$agent]=$instance
+
+	local uuid=$(get_agent_uuid $agent)
+	local mdc_agt="$FSNAME-MDT*-mdc-$instance"
+
+	do_node $agent $LCTL set_param mdc.$mdc_agt.active=0
+	stack_trap "do_node $agent $LCTL set_param mdc.$mdc_agt.active=1"
+
+	# manually disconnect the agent client from the mdts
+	evict_agent $uuid
+}
+
+reconnect_agent_node() {
+	local agent=${1:-$(facet_active_host $SINGLEAGT)}
+	local instance=${saved_agent_instances[$agent]}
+
+	[[ -n "$instance" ]] ||
+		error "agent was not previously disconnected"
+
+	local mdc_agt="$FSNAME-MDT*-mdc-$instance"
+	do_node $agent $LCTL set_param mdc.$mdc_agt.active=1
+
+	wait_clients_import_ready "$agent" mds1
 }
 
 # initiate variables
@@ -3881,6 +3939,30 @@ test_106b() {
 	check_agent_registered $uuid
 }
 run_test 106b "Unregister agent after a copytool crash"
+
+test_106c() {
+
+	(( MDS1_VERSION >= $(version_code v2_16_58-105) )) ||
+		skip "need MDS version at least v2_16_58-105"
+
+	# test needs a running copytool
+	copytool setup
+
+	local uuid=$(get_agent_uuid)
+
+	check_agent_registered $uuid
+
+	search_copytools || error "No copytool found"
+
+	# disconnect the client agent
+	disconnect_agent_node
+	check_agent_unregistered $uuid
+
+	# reconnect the client agent
+	reconnect_agent_node
+	check_agent_registered $uuid
+}
+run_test 106c "Unregister copytool on client eviction"
 
 test_107() {
 	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode" && return

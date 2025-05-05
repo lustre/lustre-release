@@ -7408,6 +7408,8 @@ static int mdt_export_cleanup(struct obd_export *exp)
 			mdt_mfd_close(info, mfd);
 		}
 	}
+	mdt_hsm_agent_unregister(info, &exp->exp_client_uuid);
+
 	info->mti_mdt = NULL;
 	/* cleanup client slot early */
 	/* Do not erase record for recoverable client. */
