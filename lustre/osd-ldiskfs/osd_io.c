@@ -807,10 +807,10 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
-	struct pagevec pvec;
+	struct folio_batch fbatch;
 	int i;
 
-	ll_pagevec_init(&pvec, 0);
+	ll_folio_batch_init(&fbatch, 0);
 
 	for (i = 0; i < npages; i++) {
 		struct page *page = lnb[i].lnb_page;
@@ -826,8 +826,8 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 		} else {
 			if (lnb[i].lnb_locked)
 				unlock_page(page);
-			if (pagevec_add(&pvec, page) == 0)
-				pagevec_release(&pvec);
+			if (folio_batch_add_page(&fbatch, page) == 0)
+				folio_batch_release(&fbatch);
 		}
 
 		lnb[i].lnb_page = NULL;
@@ -835,8 +835,8 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERTF(oti->oti_dio_pages_used == 0, "%d\n", oti->oti_dio_pages_used);
 
-	/* Release any partial pagevec */
-	pagevec_release(&pvec);
+	/* Release any partial folio_batch */
+	folio_batch_release(&fbatch);
 
 	RETURN(0);
 }

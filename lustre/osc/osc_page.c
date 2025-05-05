@@ -503,13 +503,13 @@ static void osc_lru_use(struct client_obd *cli, struct osc_page *opg)
 	}
 }
 
-static void discard_pagevec(const struct lu_env *env, struct cl_io *io,
-				struct cl_page **pvec, int max_index)
+static void discard_cl_pages(const struct lu_env *env, struct cl_io *io,
+			     struct cl_page **pvec, int max_index)
 {
-	struct pagevec *pagevec = &osc_env_info(env)->oti_pagevec;
+	struct folio_batch *fbatch = &osc_env_info(env)->oti_fbatch;
 	int i;
 
-	ll_pagevec_init(pagevec, 0);
+	ll_folio_batch_init(fbatch, 0);
 	for (i = 0; i < max_index; i++) {
 		struct cl_page *page = pvec[i];
 
@@ -517,11 +517,11 @@ static void discard_pagevec(const struct lu_env *env, struct cl_io *io,
 		cl_page_delete(env, page);
 		cl_page_discard(env, io, page);
 		cl_page_disown(env, io, page);
-		cl_pagevec_put(env, page, pagevec);
+		cl_batch_put(env, page, fbatch);
 
 		pvec[i] = NULL;
 	}
-	pagevec_release(pagevec);
+	folio_batch_release(fbatch);
 }
 
 /**
@@ -613,7 +613,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 			spin_unlock(&cli->cl_lru_list_lock);
 
 			if (clobj != NULL) {
-				discard_pagevec(env, io, pvec, index);
+				discard_cl_pages(env, io, pvec, index);
 				index = 0;
 
 				cl_io_fini(env, io);
@@ -658,7 +658,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		pvec[index++] = page;
 		if (unlikely(index == OTI_PVEC_SIZE)) {
 			spin_unlock(&cli->cl_lru_list_lock);
-			discard_pagevec(env, io, pvec, index);
+			discard_cl_pages(env, io, pvec, index);
 			index = 0;
 
 			spin_lock(&cli->cl_lru_list_lock);
@@ -670,7 +670,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 	spin_unlock(&cli->cl_lru_list_lock);
 
 	if (clobj != NULL) {
-		discard_pagevec(env, io, pvec, index);
+		discard_cl_pages(env, io, pvec, index);
 
 		cl_io_fini(env, io);
 		cl_object_put(env, clobj);

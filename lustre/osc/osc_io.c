@@ -300,13 +300,13 @@ int osc_io_commit_async(const struct lu_env *env,
 			struct cl_page_list *qin, int from, int to,
 			cl_commit_cbt cb)
 {
-	struct cl_io    *io = ios->cis_io;
-	struct osc_io   *oio = cl2osc_io(env, ios);
+	struct cl_io *io = ios->cis_io;
+	struct osc_io *oio = cl2osc_io(env, ios);
 	struct osc_object *osc = cl2osc(ios->cis_obj);
-	struct cl_page  *page;
-	struct cl_page  *last_page;
+	struct cl_page *page;
+	struct cl_page *last_page;
 	struct osc_page *opg;
-	struct pagevec  *pvec = &osc_env_info(env)->oti_pagevec;
+	struct folio_batch *fbatch = &osc_env_info(env)->oti_fbatch;
 	int result = 0;
 	ENTRY;
 
@@ -326,7 +326,7 @@ int osc_io_commit_async(const struct lu_env *env,
 		}
 	}
 
-	ll_pagevec_init(pvec, 0);
+	ll_folio_batch_init(fbatch, 0);
 
 	while (qin->pl_nr > 0) {
 		struct osc_async_page *oap;
@@ -358,9 +358,9 @@ int osc_io_commit_async(const struct lu_env *env,
 		cl_page_list_del(env, qin, page);
 
 		/* if there are no more slots, do the callback & reinit */
-		if (pagevec_add(pvec, page->cp_vmpage) == 0) {
-			(*cb)(env, io, pvec);
-			pagevec_reinit(pvec);
+		if (!folio_batch_add_page(fbatch, page->cp_vmpage)) {
+			(*cb)(env, io, fbatch);
+			folio_batch_reinit(fbatch);
 		}
 	}
 	/* The shrink interval is in seconds, so we can update it once per
@@ -369,9 +369,9 @@ int osc_io_commit_async(const struct lu_env *env,
 	osc_update_next_shrink(osc_cli(osc));
 
 
-	/* Clean up any partially full pagevecs */
-	if (pagevec_count(pvec) != 0)
-		(*cb)(env, io, pvec);
+	/* Clean up any partially full folio_batches */
+	if (folio_batch_count(fbatch) != 0)
+		(*cb)(env, io, fbatch);
 
 	/* Can't access these pages any more. Page can be in transfer and
 	 * complete at any time. */

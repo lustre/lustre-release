@@ -43,6 +43,7 @@
 #include <linux/blkdev.h>
 #include <linux/slab.h>
 #include <linux/security.h>
+#include <linux/pagevec.h>
 #include <linux/workqueue.h>
 #include <libcfs/linux/linux-fs.h>
 #include <obd_support.h>
@@ -436,12 +437,6 @@ static inline struct timespec current_time(struct inode *inode)
 #define smp_store_mb(var, value)	set_mb(var, value)
 #endif
 
-#ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
-#define ll_pagevec_init(pvec, n) pagevec_init(pvec)
-#else
-#define ll_pagevec_init(pvec, n) pagevec_init(pvec, n)
-#endif
-
 #ifdef HAVE_D_COUNT
 #  define ll_d_count(d)		d_count(d)
 #else
@@ -460,20 +455,6 @@ static inline struct timespec current_time(struct inode *inode)
 #define i_pages tree_lock
 #define ll_xa_lock_irqsave(lockp, flags) spin_lock_irqsave(lockp, flags)
 #define ll_xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, flags)
-#endif
-
-/* Linux commit v5.15-12273-gab2f9d2d3626
- *   mm: unexport {,un}lock_page_memcg
- *
- * Note that the functions are still defined or declared breaking
- * the simple approach of just defining the missing functions here
- */
-#ifdef HAVE_LOCK_PAGE_MEMCG
-#define vvp_lock_page_memcg(page)	lock_page_memcg((page))
-#define vvp_unlock_page_memcg(page)	unlock_page_memcg((page))
-#else
-#define vvp_lock_page_memcg(page)
-#define vvp_unlock_page_memcg(page)
 #endif
 
 #ifndef KMEM_CACHE_USERCOPY
@@ -651,6 +632,43 @@ static inline struct page *ll_read_cache_page(struct address_space *mapping,
 	return read_cache_page(mapping, index, filler, data);
 #endif /* HAVE_READ_CACHE_PAGE_WANTS_FILE */
 }
+
+#ifdef HAVE_FOLIO_BATCH
+# define ll_folio_batch_init(batch, n)	folio_batch_init(batch)
+# define fbatch_at(fbatch, f)		((fbatch)->folios[(f)])
+# define fbatch_at_npgs(fbatch, f)	folio_nr_pages((fbatch)->folios[(f)])
+# define fbatch_at_pg(fbatch, f, pg)	folio_page((fbatch)->folios[(f)], (pg))
+# define folio_batch_add_page(fbatch, page) \
+	 folio_batch_add(fbatch, page_folio(page))
+# ifndef HAVE_FOLIO_BATCH_REINIT
+static inline void folio_batch_reinit(struct folio_batch *fbatch)
+{
+	fbatch->nr = 0;
+}
+# endif /* HAVE_FOLIO_BATCH_REINIT */
+
+#else /* !HAVE_FOLIO_BATCH */
+
+# ifdef HAVE_PAGEVEC
+#  define folio_batch			pagevec
+# endif
+# define folio_batch_init(pvec)		pagevec_init(pvec)
+# define folio_batch_reinit(pvec)	pagevec_reinit(pvec)
+# define folio_batch_count(pvec)	pagevec_count(pvec)
+# define folio_batch_space(pvec)	pagevec_space(pvec)
+# define folio_batch_add_page(pvec, page) \
+	 pagevec_add(pvec, page)
+# define folio_batch_release(pvec) \
+	 pagevec_release(((struct pagevec *)pvec))
+# ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
+#  define ll_folio_batch_init(pvec, n)	pagevec_init(pvec)
+# else
+#  define ll_folio_batch_init(pvec, n)	pagevec_init(pvec, n)
+# endif
+# define fbatch_at(pvec, n)		((pvec)->pages[(n)])
+# define fbatch_at_npgs(pvec, n)	1
+# define fbatch_at_pg(pvec, n, pg)	((pvec)->pages[(n)])
+#endif /* HAVE_FOLIO_BATCH */
 
 #ifndef HAVE_FLUSH___WORKQUEUE
 #define __flush_workqueue(wq)	flush_scheduled_work()
