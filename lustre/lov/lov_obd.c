@@ -1048,7 +1048,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		QCTL_COPY(oqctl, qctl);
 		rc = obd_quotactl(tgt->ltd_exp, oqctl);
 		if (rc == 0) {
-			QCTL_COPY(qctl, oqctl);
+			QCTL_COPY_NO_PNAME(qctl, oqctl);
 			qctl->qc_valid = QC_OSTIDX;
 			qctl->obd_uuid = tgt->ltd_uuid;
 		}

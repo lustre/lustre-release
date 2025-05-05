@@ -50,6 +50,7 @@
 
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_swab.h>
+#include <libcfs/linux/linux-misc.h>
 
 #include "cl_object.h"
 #include "llite_internal.h"
@@ -1686,7 +1687,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		 * to pipes
 		 */
 		is_parallel_dio = !iov_iter_is_pipe(args->u.normal.via_iter) &&
-			       !is_aio;
+				  !is_aio;
 
 		if (!ll_sbi_has_parallel_dio(sbi))
 			is_parallel_dio = false;
@@ -5700,6 +5701,14 @@ int ll_inode_permission(struct mnt_idmap *idmap, struct inode *inode, int mask)
 	RETURN(rc);
 }
 
+#if defined(HAVE_FILEMAP_SPLICE_READ)
+# define ll_splice_read		filemap_splice_read
+#elif !defined(HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT)
+# define ll_splice_read		generic_file_splice_read
+#else
+# define ll_splice_read		pcc_file_splice_read
+#endif
+
 /* -o localflock - only provides locally consistent flock locks */
 static const struct file_operations ll_file_operations = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
@@ -5720,11 +5729,7 @@ static const struct file_operations ll_file_operations = {
 	.release	= ll_file_release,
 	.mmap		= ll_file_mmap,
 	.llseek		= ll_file_seek,
-#ifndef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
-	.splice_read	= generic_file_splice_read,
-#else
-	.splice_read	= pcc_file_splice_read,
-#endif
+	.splice_read	= ll_splice_read,
 #ifdef HAVE_ITER_FILE_SPLICE_WRITE
 	.splice_write	= iter_file_splice_write,
 #endif
@@ -5752,11 +5757,7 @@ static const struct file_operations ll_file_operations_flock = {
 	.release	= ll_file_release,
 	.mmap		= ll_file_mmap,
 	.llseek		= ll_file_seek,
-#ifndef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
-	.splice_read	= generic_file_splice_read,
-#else
-	.splice_read	= pcc_file_splice_read,
-#endif
+	.splice_read	= ll_splice_read,
 #ifdef HAVE_ITER_FILE_SPLICE_WRITE
 	.splice_write	= iter_file_splice_write,
 #endif
@@ -5787,11 +5788,7 @@ static const struct file_operations ll_file_operations_noflock = {
 	.release	= ll_file_release,
 	.mmap		= ll_file_mmap,
 	.llseek		= ll_file_seek,
-#ifndef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
-	.splice_read	= generic_file_splice_read,
-#else
-	.splice_read	= pcc_file_splice_read,
-#endif
+	.splice_read	= ll_splice_read,
 #ifdef HAVE_ITER_FILE_SPLICE_WRITE
 	.splice_write	= iter_file_splice_write,
 #endif
