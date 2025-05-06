@@ -833,7 +833,7 @@ static int llog_process_thread_daemonize(void *arg)
 		 * free_nsproxy() which is not exported by the kernel
 		 * (defined in kernel/nsproxy.c) */
 		if (curr_ns)
-			atomic_dec(&curr_ns->count);
+			nsproxy_dec(curr_ns);
 	}
 	task_unlock(lpi->lpi_reftask);
 

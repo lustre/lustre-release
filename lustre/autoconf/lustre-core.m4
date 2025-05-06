@@ -3637,27 +3637,6 @@ AC_DEFUN([LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG], [
 ]) # LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
 
 #
-# LC_HAVE_FLUSH___WORKQUEUE
-#
-# linux kernel v6.5-rc1-7-g20bdedafd2f6
-#   workqueue: Warn attempt to flush system-wide workqueues.
-#
-AC_DEFUN([LC_SRC_HAVE_FLUSH___WORKQUEUE], [
-	LB2_LINUX_TEST_SRC([flush_scheduled_work_warning], [
-		#include <linux/workqueue.h>
-	],[
-		__flush_workqueue(system_wq);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_FLUSH___WORKQUEUE], [
-	AC_MSG_CHECKING([if 'flush_scheduled_work()' throws warning])
-	LB2_LINUX_TEST_RESULT([flush_scheduled_work_warning], [
-		AC_DEFINE(HAVE_FLUSH___WORKQUEUE, 1,
-			['__flush_workqueue(system_wq)' is available])
-	])
-]) # LC_HAVE_FLUSH___WORKQUEUE
-
-#
 # LC_HAVE_DENTRY_D_CHILDREN
 #
 # Linux commit v6.7-rc1-3-gda549bdd15c2
@@ -3971,6 +3950,152 @@ AC_DEFUN([LC_IOP_GET_INODE_ACL], [
 ]) # LC_IOP_GET_INODE_ACL
 
 #
+# LC_HAVE_FLUSH___WORKQUEUE
+#
+# linux kernel v6.5-rc1-7-g20bdedafd2f6
+#   workqueue: Warn attempt to flush system-wide workqueues.
+#
+AC_DEFUN([LC_SRC_HAVE_FLUSH___WORKQUEUE], [
+	LB2_LINUX_TEST_SRC([flush_scheduled_work_warning], [
+		#include <linux/workqueue.h>
+	],[
+		__flush_workqueue(system_wq);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FLUSH___WORKQUEUE], [
+	AC_MSG_CHECKING([if 'flush_scheduled_work()' throws warning])
+	LB2_LINUX_TEST_RESULT([flush_scheduled_work_warning], [
+		AC_DEFINE(HAVE_FLUSH___WORKQUEUE, 1,
+			['__flush_workqueue(system_wq)' is available])
+	])
+]) # LC_HAVE_FLUSH___WORKQUEUE
+
+#
+# LC_HAVE_INODE_GET_CTIME
+#
+# linux kernel v6.5-rc1-92-g13bc24457850
+#   fs: rename i_ctime field to __i_ctime
+#
+AC_DEFUN([LC_SRC_HAVE_INODE_GET_CTIME], [
+	LB2_LINUX_TEST_SRC([inode_get_ctime_exists], [
+		#include <linux/fs.h>
+	],[
+		struct inode *inode = NULL;
+		struct timespec64 ts __attribute__ ((unused));
+
+		ts = inode_get_ctime(inode);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_INODE_GET_CTIME], [
+	AC_MSG_CHECKING([if 'inode_get_ctime()' exists])
+	LB2_LINUX_TEST_RESULT([inode_get_ctime_exists], [
+		AC_DEFINE(HAVE_INODE_GET_CTIME, 1,
+			['inode_get_ctime()' exists])
+	])
+]) # LC_HAVE_INODE_GET_CTIME
+
+#
+# LC_HAVE_MMAP_WRITE_TRYLOCK
+#
+# linux kernel v6.5-rc4-110-gcf95e337cb63
+#   mm: delete mmap_write_trylock() and vma_try_start_write()
+#
+AC_DEFUN([LC_SRC_HAVE_MMAP_WRITE_TRYLOCK], [
+	LB2_LINUX_TEST_SRC([mmap_write_trylock_removed], [
+		#include <linux/mmap_lock.h>
+	],[
+		struct mm_struct *mm = NULL;
+
+		(void)mmap_write_trylock(mm);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_MMAP_WRITE_TRYLOCK], [
+	AC_MSG_CHECKING([if 'mmap_write_trylock()' is available])
+	LB2_LINUX_TEST_RESULT([mmap_write_trylock_removed], [
+		AC_DEFINE(HAVE_MMAP_WRITE_TRYLOCK, 1,
+			['mmap_write_trylock()' is available])
+	])
+]) # LC_HAVE_MMAP_WRITE_TRYLOCK
+
+#
+# LC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG
+#
+# linux kernel v6.5-rc1-95-g0d72b92883c6
+#   fs: pass the request_mask to generic_fillattr
+#
+AC_DEFUN([LC_SRC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG], [
+	LB2_LINUX_TEST_SRC([generic_fillattr_has_request_mask_arg], [
+		#include <linux/fs.h>
+	],[
+		struct inode *inode = NULL;
+		struct mnt_idmap *map = NULL;
+		struct kstat *kstat = NULL;
+
+		generic_fillattr(map, 0, inode, kstat);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG], [
+	AC_MSG_CHECKING([if 'generic_fillattr()' has request_mask argument])
+	LB2_LINUX_TEST_RESULT([generic_fillattr_has_request_mask_arg], [
+		AC_DEFINE(HAVE_GENERIC_FILEATTR_HAS_MASK_ARG, 1,
+			['generic_fillattr()' has request_mask argument])
+		AC_DEFINE([RQMASK_ARG], [0,], [default request_mask argument])
+	], [
+		AC_DEFINE([RQMASK_ARG], [], [no request_mask argument needed])
+	])
+]) # LC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG
+
+#
+# LC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
+#
+# Linux commit v6.5-rc2-20-g2ddd3cac1fa9
+#   nsproxy: Convert nsproxy.count to refcount_t
+#
+AC_DEFUN([LC_SRC_HAVE_NSPROXY_COUNT_AS_REFCOUNT], [
+	LB2_LINUX_TEST_SRC([struct_nsproxy_count_refcount_t], [
+		#include <linux/nsproxy.h>
+	],[
+		struct nsproxy *nsproxy = NULL;
+
+		refcount_dec(&nsproxy->count);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_NSPROXY_COUNT_AS_REFCOUNT], [
+	AC_MSG_CHECKING([if 'struct nsproxy.count' is refcount_t])
+	LB2_LINUX_TEST_RESULT([struct_nsproxy_count_refcount_t], [
+		AC_DEFINE(HAVE_NSPROXY_COUNT_AS_REFCOUNT, 1,
+			['struct nsproxy.count' is refcount_t])
+	])
+]) # LC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
+
+#
+# LC_HAVE_INODE_GET_MTIME_SEC
+#
+# Linux commit v6.6-rc5-1-g077c212f0344
+#   fs: new accessor methods for atime and mtime
+#
+# Linux commit v6.6-rc5-86-g12cd44023651
+#   fs: rename inode i_atime and i_mtime fields
+#
+AC_DEFUN([LC_SRC_HAVE_INODE_GET_MTIME_SEC], [
+	LB2_LINUX_TEST_SRC([inode_get_mtime_exists], [
+		#include <linux/fs.h>
+	],[
+		struct inode *inode = NULL;
+		time64_t sec __attribute__ ((unused));
+
+		sec = inode_get_mtime_sec(inode);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_INODE_GET_MTIME_SEC], [
+	AC_MSG_CHECKING([if 'inode_get_mtime()' exists])
+	LB2_LINUX_TEST_RESULT([inode_get_mtime_exists], [
+		AC_DEFINE(HAVE_INODE_GET_MTIME_SEC, 1,
+			['inode_get_mtime()' exists])
+	])
+]) # LC_HAVE_INODE_GET_MTIME_SEC
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -4206,9 +4331,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
 	LC_SRC_IOP_GET_INODE_ACL
 
-	# 6.6
-	LC_SRC_HAVE_FLUSH___WORKQUEUE
-
 	# 6.8
 	LC_SRC_HAVE_DENTRY_D_CHILDREN
 
@@ -4228,6 +4350,16 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 6.2
 	LC_SRC_HAVE_GET_RANDOM_U32_BELOW
 	LC_SRC_HAVE_ACL_WITH_DENTRY
+
+	# 6.6
+	LC_SRC_HAVE_FLUSH___WORKQUEUE
+	LC_SRC_HAVE_INODE_GET_CTIME
+	LC_SRC_HAVE_MMAP_WRITE_TRYLOCK
+	LC_SRC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG
+	LC_SRC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
+
+	# 6.7
+	LC_SRC_HAVE_INODE_GET_MTIME_SEC
 
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
@@ -4478,9 +4610,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
 	LC_IOP_GET_INODE_ACL
 
-	# 6.6
-	LC_HAVE_FLUSH___WORKQUEUE
-
 	# 6.8
 	LC_HAVE_DENTRY_D_CHILDREN
 
@@ -4500,6 +4629,16 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 6.2
 	LC_HAVE_GET_RANDOM_U32_BELOW
 	LC_HAVE_ACL_WITH_DENTRY
+
+	# 6.6
+	LC_HAVE_FLUSH___WORKQUEUE
+	LC_HAVE_INODE_GET_CTIME
+	LC_HAVE_MMAP_WRITE_TRYLOCK
+	LC_HAVE_GENERIC_FILEATTR_HAS_MASK_ARG
+	LC_HAVE_NSPROXY_COUNT_AS_REFCOUNT
+
+	# 6.7
+	LC_HAVE_INODE_GET_MTIME_SEC
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

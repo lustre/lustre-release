@@ -91,9 +91,9 @@ static int vvp_attr_get(const struct lu_env *env, struct cl_object *obj,
 	 */
 
 	attr->cat_size = i_size_read(inode);
-	attr->cat_mtime = inode->i_mtime.tv_sec;
-	attr->cat_atime = inode->i_atime.tv_sec;
-	attr->cat_ctime = inode->i_ctime.tv_sec;
+	attr->cat_mtime = inode_get_mtime_sec(inode);
+	attr->cat_atime = inode_get_atime_sec(inode);
+	attr->cat_ctime = inode_get_ctime_sec(inode);
 	attr->cat_blocks = inode->i_blocks;
 	attr->cat_uid = from_kuid(&init_user_ns, inode->i_uid);
 	attr->cat_gid = from_kgid(&init_user_ns, inode->i_gid);
@@ -112,11 +112,11 @@ static int vvp_attr_update(const struct lu_env *env, struct cl_object *obj,
 	if (valid & CAT_GID)
 		inode->i_gid = make_kgid(&init_user_ns, attr->cat_gid);
 	if (valid & CAT_ATIME)
-		inode->i_atime.tv_sec = attr->cat_atime;
+		inode_set_atime(inode, attr->cat_atime, 0);
 	if (valid & CAT_MTIME)
-		inode->i_mtime.tv_sec = attr->cat_mtime;
+		inode_set_mtime(inode, attr->cat_mtime, 0);
 	if (valid & CAT_CTIME)
-		inode->i_ctime.tv_sec = attr->cat_ctime;
+		inode_set_ctime(inode, attr->cat_ctime, 0);
 	if (0 && valid & CAT_SIZE)
 		i_size_write(inode, attr->cat_size);
 	if (valid & CAT_PROJID)
@@ -178,9 +178,9 @@ static int vvp_object_glimpse(const struct lu_env *env,
 	struct inode *inode = vvp_object_inode(obj);
 
 	ENTRY;
-	lvb->lvb_mtime = inode->i_mtime.tv_sec;
-	lvb->lvb_atime = inode->i_atime.tv_sec;
-	lvb->lvb_ctime = inode->i_ctime.tv_sec;
+	lvb->lvb_mtime = inode_get_mtime_sec(inode);
+	lvb->lvb_atime = inode_get_atime_sec(inode);
+	lvb->lvb_ctime = inode_get_ctime_sec(inode);
 
 	/*
 	 * LU-417: Add dirty pages block count lest i_blocks reports 0, some

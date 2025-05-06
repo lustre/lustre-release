@@ -625,7 +625,7 @@ struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
 }
 #endif /* !HAVE_ALLOC_FILE_PSEUDO */
 
-#ifdef HAVE_INODE_TIMESPEC64
+#if defined HAVE_INODE_TIMESPEC64 || defined HAVE_INODE_GET_MTIME_SEC
 # define osd_timespec			timespec64
 #else
 # define osd_timespec			timespec
