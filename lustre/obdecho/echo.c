@@ -20,6 +20,7 @@
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
+#include <lustre_nodemap.h>
 
 #include "echo_internal.h"
 
@@ -59,7 +60,9 @@ static int echo_connect(const struct lu_env *env,
 			struct obd_uuid *cluuid, struct obd_connect_data *data,
 			void *localdata)
 {
+	struct lnet_nid *client_nid = localdata;
 	struct lustre_handle conn = { 0 };
+	struct obd_export *lexp;
 	int rc;
 
 	data->ocd_connect_flags &= ECHO_CONNECT_SUPPORTED;
@@ -72,16 +75,38 @@ static int echo_connect(const struct lu_env *env,
 		CERROR("can't connect %d\n", rc);
 		return rc;
 	}
-	*exp = class_conn2export(&conn);
+	lexp = class_conn2export(&conn);
 
-	return 0;
+	if (lexp) {
+		rc = nodemap_add_member(client_nid, lexp);
+		if (rc == -EEXIST)
+			rc = 0;
+		if (rc)
+			GOTO(out, rc);
+	}
+
+out:
+	if (rc) {
+		class_disconnect(lexp);
+		nodemap_del_member(lexp);
+		*exp = NULL;
+	} else {
+		*exp = lexp;
+	}
+
+	return rc;
 }
 
 static int echo_disconnect(struct obd_export *exp)
 {
+	int rc;
+
 	LASSERT(exp != NULL);
 
-	return server_disconnect_export(exp);
+	rc = server_disconnect_export(exp);
+	nodemap_del_member(exp);
+
+	return rc;
 }
 
 static int echo_init_export(struct obd_export *exp)

@@ -2421,7 +2421,7 @@ static int echo_client_setup(const struct lu_env *env,
 {
 	struct echo_client_obd *ec = &obd->u.echo_client;
 	struct obd_device *tgt;
-	struct obd_uuid echo_uuid = { "ECHO_UUID" };
+	struct obd_uuid echo_uuid = { LUSTRE_ECHO_UUID };
 	struct obd_connect_data *ocd = NULL;
 	int rc;
 

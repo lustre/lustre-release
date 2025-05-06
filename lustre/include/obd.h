@@ -504,6 +504,8 @@ struct tgt_thread_big_cache {
 #define LUSTRE_MGS_OBDNAME "MGS"
 #define LUSTRE_MGC_OBDNAME "MGC"
 
+#define LUSTRE_ECHO_UUID "ECHO_UUID"
+
 static inline int is_lwp_on_mdt(char *name)
 {
 	char *ptr;

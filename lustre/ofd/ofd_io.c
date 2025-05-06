@@ -1485,7 +1485,11 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 						       NODEMAP_FS_TO_CLIENT,
 						       oa->o_projid);
 		} else if (old_rc == 0) {
-			old_rc = PTR_ERR(nodemap);
+			/* always allow ECHO client */
+			if (strcmp(obd_uuid2str(&exp->exp_client_uuid),
+				   LUSTRE_ECHO_UUID) != 0 ||
+			    exp->exp_connection)
+				old_rc = PTR_ERR(nodemap);
 		}
 
 		if (!IS_ERR_OR_NULL(nodemap)) {
