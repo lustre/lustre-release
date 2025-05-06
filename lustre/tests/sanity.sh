@@ -7666,21 +7666,18 @@ test_56oe() {
 		stat -c "%Z" $dir/$tfile-c.$val
 		touch --date="$val $unit ago" -a $dir/$tfile-a.$val
 		touch --date="$val $unit ago" -m $dir/$tfile-m.$val
-		(( val % 5 != 2 )) || sleep 10
+		(( val % 5 != 2 )) || sleep 60
 	done
 
 	local now=$(date +%s)
-	local lower_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.8) + 2 ))
-	local upper_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.2) - 2 ))
-
-	(( now == $(date +%s))) ||
-		skip "System is too slow for accurate results"
+	local lower_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.8) + 30 ))
+	local upper_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.2) - 30 ))
 
 	cmd="$LFS find $dir -ctime -${upper_bound}s -ctime +${lower_bound}s"
 	nums=$($cmd | grep -c c.*)
 
 	(( nums == expected )) ||
-		error "'$cmd' wrong: found $nums, expected $expected"
+		error "'$cmd' wrong: found $nums between $lower_bound and $upper_bound, expected $expected"
 
 	local cmd="$LFS find $dir -atime +7h30m -atime -2h30m"
 	local nums=$($cmd | wc -l)
