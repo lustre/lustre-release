@@ -2904,8 +2904,9 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 	if (initial_create && spec->sp_cr_file_secctx_name != NULL) {
 		buf = mdd_buf_get_const(env, spec->sp_cr_file_secctx,
 					spec->sp_cr_file_secctx_size);
-		rc = mdo_xattr_set(env, son, buf, spec->sp_cr_file_secctx_name,
-				   0, handle);
+		rc = mdo_xattr_set(env, son, buf,
+				   spec->sp_cr_file_secctx_name, 0,
+				   handle);
 		if (rc < 0)
 			GOTO(err_initlized, rc);
 	}
@@ -2920,16 +2921,13 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			GOTO(err_initlized, rc);
 	}
 
-	/* remove the quotes if present before storing it in the xattr. */
-	if (initial_create &&
-	    spec->sp_cr_job_xattr[0] != '\0' &&
+	/* removes enclosing quotes from JobID before storing in xattr */
+	if (initial_create && spec->sp_cr_job_xattr[0] != '\0' &&
 	    jobid[0] != '\0' &&
-	    (S_ISREG(attr->la_mode) ||
-	     S_ISDIR(attr->la_mode))) {
+	    (S_ISREG(attr->la_mode) || S_ISDIR(attr->la_mode))) {
 		jobid_len = strnlen(jobid, LUSTRE_JOBID_SIZE);
-		if (jobid_len > 1 &&
-		    jobid[0] == '"' &&
-		    jobid[jobid_len - 1] == '"'){
+		if (jobid[0] == '"' && jobid[jobid_len - 1] == '"' &&
+		    jobid_len >= 2) {
 			jobid++;
 			jobid_len -= 2;
 		}
@@ -2938,11 +2936,10 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			rc = mdo_xattr_set(env, son, buf,
 					   spec->sp_cr_job_xattr, 0,
 					   handle);
-			/* this xattr is nonessential, so ignore errors. */
+			/* this xattr is nonessential, ignore errors. */
 			if (rc != 0) {
-				CDEBUG(D_INODE,
-				       DFID
-				       " failed to set xattr '%s': rc = %d\n",
+				CDEBUG(D_INODE, DFID
+				       " failed to set '%s': rc = %d\n",
 				       PFID(son_fid),
 				       spec->sp_cr_job_xattr, rc);
 				rc = 0;
@@ -2955,7 +2952,7 @@ err_initlized:
 		int rc2;
 
 		if (S_ISDIR(attr->la_mode)) {
-			/* Drop the reference, no need to delete "."/"..",
+			/* Drop reference, no need to delete "."/"..",
 			 * because the object to be destroyed directly.
 			 */
 			rc2 = mdo_ref_del(env, son, handle);
