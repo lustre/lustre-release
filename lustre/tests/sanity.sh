@@ -1728,6 +1728,39 @@ test_27cf() {
 }
 run_test 27cf "'setstripe -o' on inactive OSTs should return error"
 
+test_27cg() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	[[ $mds1_FSTYPE != "ldiskfs" ]] && skip_env "ldiskfs only test"
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
+
+	local osts="0"
+
+	for ((i=1;i<1000;i++)); do
+		osts+=",$((i % OSTCOUNT))"
+	done
+
+	local mdts=$(comma_list $(mdts_nodes))
+	local before=$(do_nodes $mdts \
+		"$LCTL get_param -n osd-ldiskfs.*MDT*.stats" |
+		awk '/many credits/{print $3}' |
+		calc_sum)
+
+	$LFS setstripe -o $osts $DIR/$tfile || error "setstripe failed"
+	$LFS getstripe $DIR/$tfile | grep stripe
+
+	rm -f $DIR/$tfile || error "can't unlink"
+
+	after=$(do_nodes $mdts \
+		"$LCTL get_param -n osd-ldiskfs.*MDT*.stats" |
+		awk '/many credits/{print $3}' |
+		calc_sum)
+
+	(( before == after )) ||
+		error "too many credits happened: $after > $before"
+}
+run_test 27cg "1000 shouldn't cause too many credits"
+
 test_27d() {
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 0 -i -1 -S 0 $DIR/$tdir/$tfile ||

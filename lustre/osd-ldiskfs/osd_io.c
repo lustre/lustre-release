@@ -1955,6 +1955,9 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	bits = sb->s_blocksize_bits;
 	bs = 1 << bits;
 
+	if (osd_tx_was_declared(env, oh, dt, DTO_WRITE_BASE, _pos))
+		RETURN(0);
+
 	if (_pos == -1) {
 		/* if this is an append, then we
 		 * should expect cross-block record

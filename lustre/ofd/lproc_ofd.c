@@ -1059,35 +1059,35 @@ void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset)
 	LASSERT(stats && stats->ls_num >= LPROC_OFD_STATS_LAST);
 
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_READ_BYTES,
-			     LPROCFS_TYPE_BYTES_FULL, "read_bytes", "bytes");
+			     LPROCFS_TYPE_BYTES_FULL, "read_bytes");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_WRITE_BYTES,
-			     LPROCFS_TYPE_BYTES_FULL, "write_bytes", "bytes");
+			     LPROCFS_TYPE_BYTES_FULL, "write_bytes");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_READ,
-			     LPROCFS_TYPE_LATENCY, "read", "usecs");
+			     LPROCFS_TYPE_LATENCY, "read");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_WRITE,
-			     LPROCFS_TYPE_LATENCY, "write", "usecs");
+			     LPROCFS_TYPE_LATENCY, "write");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_GETATTR,
-			     LPROCFS_TYPE_LATENCY, "getattr", "usecs");
+			     LPROCFS_TYPE_LATENCY, "getattr");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_SETATTR,
-			     LPROCFS_TYPE_LATENCY, "setattr", "usecs");
+			     LPROCFS_TYPE_LATENCY, "setattr");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_PUNCH,
-			     LPROCFS_TYPE_LATENCY, "punch", "usecs");
+			     LPROCFS_TYPE_LATENCY, "punch");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_SYNC,
-			     LPROCFS_TYPE_LATENCY, "sync", "usecs");
+			     LPROCFS_TYPE_LATENCY, "sync");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_DESTROY,
-			     LPROCFS_TYPE_LATENCY, "destroy", "usecs");
+			     LPROCFS_TYPE_LATENCY, "destroy");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_CREATE,
-			     LPROCFS_TYPE_LATENCY, "create", "usecs");
+			     LPROCFS_TYPE_LATENCY, "create");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_STATFS,
-			     LPROCFS_TYPE_LATENCY, "statfs", "usecs");
+			     LPROCFS_TYPE_LATENCY, "statfs");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_GET_INFO,
-			     LPROCFS_TYPE_LATENCY, "get_info", "usecs");
+			     LPROCFS_TYPE_LATENCY, "get_info");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_SET_INFO,
-			     LPROCFS_TYPE_LATENCY, "set_info", "usecs");
+			     LPROCFS_TYPE_LATENCY, "set_info");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_QUOTACTL,
-			     LPROCFS_TYPE_LATENCY, "quotactl", "usecs");
+			     LPROCFS_TYPE_LATENCY, "quotactl");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_PREALLOC,
-			     LPROCFS_TYPE_LATENCY, "prealloc", "usecs");
+			     LPROCFS_TYPE_LATENCY, "prealloc");
 }
 
 LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);

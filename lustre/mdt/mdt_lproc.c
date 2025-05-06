@@ -1596,11 +1596,10 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset)
 		    midx == LPROC_MDT_IO_WRITE_BYTES)
 			lprocfs_counter_init(stats, oidx,
 					     LPROCFS_TYPE_BYTES_FULL,
-					     mdt_stats[midx], "bytes");
+					     mdt_stats[midx]);
 		else
-			lprocfs_counter_init(stats, oidx,
-					     LPROCFS_TYPE_LATENCY,
-					     mdt_stats[midx], "usecs");
+			lprocfs_counter_init(stats, oidx, LPROCFS_TYPE_LATENCY,
+					     mdt_stats[midx]);
 	}
 }
 

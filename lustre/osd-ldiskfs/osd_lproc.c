@@ -84,32 +84,34 @@ static int osd_stats_init(struct osd_device *osd)
 	ENTRY;
         osd->od_stats = lprocfs_alloc_stats(LPROC_OSD_LAST, 0);
 	if (osd->od_stats) {
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
-                                     LPROCFS_CNTR_AVGMINMAX|LPROCFS_CNTR_STDDEV,
-                                     "get_page", "usec");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_NO_PAGE,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "get_page_failures", "num");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_ACCESS,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_access", "pages");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_HIT,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_hit", "pages");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_MISS,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "cache_miss", "pages");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
+				     LPROCFS_TYPE_LATENCY, "get_page");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_NO_PAGE,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_REQS,
+				     "get_page_failures");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_ACCESS,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+				     "cache_access");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_HIT,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+				     "cache_hit");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_MISS,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+				     "cache_miss");
 #if OSD_THANDLE_STATS
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_STARTING,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "thandle starting", "usec");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_OPEN,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "thandle open", "usec");
-                lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_CLOSING,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "thandle closing", "usec");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_STARTING,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_USECS,
+				     "thandle starting");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_OPEN,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_USECS,
+				     "thandle open");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_THANDLE_CLOSING,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_USECS,
+				     "thandle closing");
 #endif
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_TOO_MANY_CREDITS,
+				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_REQS,
+				     "many_credits");
 		result = 0;
 	}
 
@@ -787,14 +789,14 @@ ssize_t index_backup_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(index_backup);
 
 struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
-	{ .name	=	"oi_scrub",
-	  .fops	=	&ldiskfs_osd_oi_scrub_fops	},
-	{ .name	=	"readcache_max_filesize",
-	  .fops	=	&ldiskfs_osd_readcache_fops	},
-	{ .name	=	"readcache_max_io_mb",
-	  .fops	=	&ldiskfs_osd_readcache_max_io_fops	},
-	{ .name	=	"writethrough_max_io_mb",
-	  .fops	=	&ldiskfs_osd_writethrough_max_io_fops	},
+	{ .name =	"oi_scrub",
+	  .fops =	&ldiskfs_osd_oi_scrub_fops      },
+	{ .name =	"readcache_max_filesize",
+	  .fops =	&ldiskfs_osd_readcache_fops     },
+	{ .name =	"readcache_max_io_mb",
+	  .fops =	&ldiskfs_osd_readcache_max_io_fops      },
+	{ .name =	"writethrough_max_io_mb",
+	  .fops =	&ldiskfs_osd_writethrough_max_io_fops   },
 	{ NULL }
 };
 

@@ -451,6 +451,11 @@ struct osd_thandle {
 	ktime_t oth_started;
 #endif
 	struct list_head	ot_trunc_locks;
+	/*
+	 * list of declarations, used for large transactions to check
+	 * for duplicates, like llogs
+	 */
+	struct list_head	ot_declare_list;
 };
 
 /**
@@ -469,6 +474,13 @@ enum dt_txn_op {
         DTO_ATTR_SET_CHOWN,
 
         DTO_NR
+};
+
+struct osd_obj_declare {
+	struct list_head	old_list;
+	struct lu_fid		old_fid;
+	enum dt_txn_op		old_op;
+	loff_t			old_pos;
 };
 
 /*
@@ -490,6 +502,7 @@ enum {
         LPROC_OSD_THANDLE_OPEN,
         LPROC_OSD_THANDLE_CLOSING,
 #endif
+	LPROC_OSD_TOO_MANY_CREDITS,
         LPROC_OSD_LAST,
 };
 #endif
@@ -1746,6 +1759,9 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 
 	return false;
 }
+
+bool osd_tx_was_declared(const struct lu_env *env, struct osd_thandle *oth,
+			 struct dt_object *dt, enum dt_txn_op op, loff_t p);
 
 #ifdef HAVE_DQUOT_TRANSFER_WITH_USER_NS
 #define osd_dquot_transfer(ns, i, a)	dquot_transfer((ns), (i), (a))

@@ -4385,6 +4385,10 @@ active_err:
 		GOTO(end, rc);
 	}
 
+	/* For handling degraded zfs OST */
+	if (class_match_param(ptr, PARAM_AUTODEGRADE, NULL) == 0)
+		GOTO(end, rc);
+
         LCONSOLE_WARN("Ignoring unrecognized param '%s'\n", ptr);
 
 end:

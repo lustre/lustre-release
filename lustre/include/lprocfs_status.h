@@ -140,18 +140,22 @@ struct rename_stats {
  * multiply per counter increment.
  */
 
-enum {
+enum lprocfs_counter_config {
 	LPROCFS_CNTR_EXTERNALLOCK	= 0x0001,
 	LPROCFS_CNTR_AVGMINMAX		= 0x0002,
 	LPROCFS_CNTR_STDDEV		= 0x0004,
 
-	/* counter data type */
-	LPROCFS_TYPE_REQS		= 0x0100,
+	/* counter unit type */
+	LPROCFS_TYPE_REQS		= 0x0000, /* default if config = 0 */
 	LPROCFS_TYPE_BYTES		= 0x0200,
 	LPROCFS_TYPE_PAGES		= 0x0400,
-	LPROCFS_TYPE_USEC		= 0x0800,
+	LPROCFS_TYPE_LOCKS		= 0x0500,
+	LPROCFS_TYPE_LOCKSPS		= 0x0600,
+	LPROCFS_TYPE_SECS		= 0x0700,
+	LPROCFS_TYPE_USECS		= 0x0800,
+	LPROCFS_TYPE_MASK		= 0x0f00,
 
-	LPROCFS_TYPE_LATENCY		= LPROCFS_TYPE_USEC |
+	LPROCFS_TYPE_LATENCY		= LPROCFS_TYPE_USECS |
 					  LPROCFS_CNTR_AVGMINMAX |
 					  LPROCFS_CNTR_STDDEV,
 	LPROCFS_TYPE_BYTES_FULL		= LPROCFS_TYPE_BYTES |
@@ -161,9 +165,9 @@ enum {
 #define LC_MIN_INIT ((~(__u64)0) >> 1)
 
 struct lprocfs_counter_header {
-	unsigned int		lc_config;
-	const char		*lc_name;   /* must be static */
-	const char		*lc_units;  /* must be static */
+	enum lprocfs_counter_config	lc_config;
+	const char			*lc_name;   /* must be static */
+	const char			*lc_units;  /* must be static */
 };
 
 struct lprocfs_counter {
@@ -535,8 +539,11 @@ extern int lprocfs_alloc_obd_stats(struct obd_device *obd,
 extern int lprocfs_alloc_md_stats(struct obd_device *obd,
 				  unsigned int num_private_stats);
 extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
-				 unsigned conf, const char *name,
-				 const char *units);
+				 enum lprocfs_counter_config config,
+				 const char *name);
+extern void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
+				       enum lprocfs_counter_config config,
+				       const char *name, const char *units);
 extern void lprocfs_free_obd_stats(struct obd_device *obd);
 extern void lprocfs_free_md_stats(struct obd_device *obd);
 struct obd_export;
@@ -920,24 +927,26 @@ int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 #define proc_lustre_root NULL
 
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
-                                       int index, long amount)
+				       int index, long amount)
 { return; }
-static inline void lprocfs_counter_incr(struct lprocfs_stats *stats,
-                                        int index)
+static inline void lprocfs_counter_incr(struct lprocfs_stats *stats, int index)
 { return; }
 static inline void lprocfs_counter_sub(struct lprocfs_stats *stats,
-                                       int index, long amount)
+				       int index, long amount)
 { return; }
-static inline void lprocfs_counter_decr(struct lprocfs_stats *stats,
-                                        int index)
+static inline void lprocfs_counter_decr(struct lprocfs_stats *stats, int index)
 { return; }
-static inline void lprocfs_counter_init(struct lprocfs_stats *stats,
-                                        int index, unsigned conf,
-                                        const char *name, const char *units)
+static inline void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
+					enum lprocfs_counter_config config,
+					const char *name)
+{ return; }
+static inline void lprocfs_counter_init_units(struct lprocfs_stats *stats,
+				int index, enum lprocfs_counter_config config,
+				const char *name, const char *units)
 { return; }
 
 static inline __u64 lc_read_helper(struct lprocfs_counter *lc,
-                                   enum lprocfs_fields_flags field)
+				   enum lprocfs_fields_flags field)
 { return 0; }
 
 /* NB: we return !NULL to satisfy error checker */

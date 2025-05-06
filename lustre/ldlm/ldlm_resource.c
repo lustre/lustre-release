@@ -744,7 +744,8 @@ int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
 	}
 
 	lprocfs_counter_init(ns->ns_stats, LDLM_NSS_LOCKS,
-			     LPROCFS_CNTR_AVGMINMAX, "locks", "locks");
+			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_LOCKS,
+			     "locks");
 
 	return err;
 }

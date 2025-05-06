@@ -53,14 +53,17 @@ sync_degrade_state()
 	local dataset="$1"
 	local state="$2"
 	local service=$($ZFS list -H -o lustre:svname ${dataset})
-
-	zed_log_msg "Lustre:sync_degrade_state pool:${dataset} degraded:${state}"
+	local autodegrade=$($ZFS get -rH -s local -t filesystem -o value \
+			    lustre:autodegrade ${dataset})
 
 	if [ -n "${service}" ] && [ "${service}" != "-" ] ; then
 		local current=$($LCTL get_param -n obdfilter.${service}.degraded)
 
-		if [ "${current}" != "${state}" ] ; then
+		if [ "${current}" != "${state}" ] &&
+		   [ "${autodegrade}" == "on" ] ; then
 			$LCTL set_param obdfilter.${service}.degraded=${state}
+			ds_state="pool:${dataset} degraded:${state}"
+			zed_log_msg "Lustre:sync_degrade_state $ds_state"
 		fi
 	fi
 }

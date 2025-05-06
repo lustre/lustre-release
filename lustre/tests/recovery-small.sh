@@ -3119,9 +3119,9 @@ test_144a() {
 		kill -9 $pid >/dev/null 2>&1
 	done
 
-	before=$(date +%s)
+	before=$SECONDS
 	fail mds1
-	after=$(date +%s)
+	after=$SECONDS
 	# here we measure MDT stop + MDT start time. For error case MDT stop takes
 	# about obd_timeout-60 (240) seconds. Without error - less than 30s.
 	# MDT start takes different time depends on a configuration, let's check

@@ -422,6 +422,8 @@ enum osd_destroy_type {
 	OSD_DESTROY_ASYNC = 2,
 };
 
+#define OSD_MAX_DBUFS	2	/* how many dbufs to cache in object */
+
 struct osd_object {
 	struct dt_object	 oo_dt;
 	/*
@@ -475,6 +477,7 @@ struct osd_object {
 		uint64_t	oo_parent; /* used only at object creation */
 	};
 	struct lu_object_header *oo_header;
+	dmu_buf_t *oo_dbs[OSD_MAX_DBUFS];
 };
 
 int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *,
@@ -1174,5 +1177,7 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 #else
 #define osd_dmu_offset_next(os, obj, hole, res) (EOPNOTSUPP)
 #endif
+
+extern char osd_0copy_tag[];
 
 #endif /* _OSD_INTERNAL_H */

@@ -346,27 +346,25 @@ void lproc_mgs_cleanup(struct mgs_device *mgs)
 		mgs->mgs_proc_live = NULL;
 	}
 
-        lprocfs_free_per_client_stats(obd);
+	lprocfs_free_per_client_stats(obd);
 	lprocfs_obd_cleanup(obd);
-        lprocfs_free_obd_stats(obd);
-        lprocfs_free_md_stats(obd);
+	lprocfs_free_obd_stats(obd);
+	lprocfs_free_md_stats(obd);
 }
 
 void mgs_counter_incr(struct obd_export *exp, int opcode)
 {
-        lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
-        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
-                lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
+	lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
+	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
+		lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
 }
 
 void mgs_stats_counter_init(struct lprocfs_stats *stats)
 {
-        lprocfs_counter_init(stats, LPROC_MGS_CONNECT, 0, "connect", "reqs");
-        lprocfs_counter_init(stats, LPROC_MGS_DISCONNECT, 0, "disconnect",
-                             "reqs");
-        lprocfs_counter_init(stats, LPROC_MGS_EXCEPTION, 0, "exception",
-                             "reqs");
-        lprocfs_counter_init(stats, LPROC_MGS_TARGET_REG, 0, "tgtreg", "reqs");
-        lprocfs_counter_init(stats, LPROC_MGS_TARGET_DEL, 0, "tgtdel", "reqs");
+	lprocfs_counter_init(stats, LPROC_MGS_CONNECT, 0, "connect");
+	lprocfs_counter_init(stats, LPROC_MGS_DISCONNECT, 0, "disconnect");
+	lprocfs_counter_init(stats, LPROC_MGS_EXCEPTION, 0, "exception");
+	lprocfs_counter_init(stats, LPROC_MGS_TARGET_REG, 0, "tgtreg");
+	lprocfs_counter_init(stats, LPROC_MGS_TARGET_DEL, 0, "tgtdel");
 }
 #endif
