@@ -408,6 +408,12 @@ struct osd_thandle {
 	struct list_head       ot_commit_dcb_list;
 	struct list_head       ot_stop_dcb_list;
 	unsigned int		ot_credits;
+	/*
+	 * For iterative operation within one transaction,
+	 * for example fallocate, it is a number of credits
+	 * enough for completing at least one iteration.
+	 */
+	unsigned int		ot_credits_iter;
 	unsigned int		oh_declared_ext;
 
 	/* quota IDs related to the transaction */

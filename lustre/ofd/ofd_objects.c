@@ -788,9 +788,9 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 	struct ofd_thread_info *info = ofd_info(env);
 	struct ofd_device *ofd = ofd_obj2dev(fo);
 	struct dt_object *dob = ofd_object_child(fo);
-	struct thandle *th;
 	struct filter_fid *ff = &info->fti_mds_fid;
 	bool ff_needed = false;
+	bool restart;
 	int rc;
 
 	ENTRY;
@@ -824,58 +824,67 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 		}
 	}
 
-	th = ofd_trans_create(env, ofd);
-	if (IS_ERR(th))
-		RETURN(PTR_ERR(th));
+	do {
+		struct thandle *th;
 
-	rc = dt_declare_attr_set(env, dob, la, th);
-	if (rc)
-		GOTO(stop, rc);
+		restart = false;
 
-	rc = dt_declare_fallocate(env, dob, start, end, mode, th);
-	if (rc)
-		GOTO(stop, rc);
+		th = ofd_trans_create(env, ofd);
+		if (IS_ERR(th))
+			RETURN(PTR_ERR(th));
 
-	if (ff_needed) {
-		info->fti_buf.lb_buf = ff;
-		info->fti_buf.lb_len = sizeof(*ff);
-		rc = dt_declare_xattr_set(env, ofd_object_child(fo),
-					  &info->fti_buf, XATTR_NAME_FID, 0,
-					  th);
+		rc = dt_declare_attr_set(env, dob, la, th);
 		if (rc)
 			GOTO(stop, rc);
-	}
 
-	rc = ofd_trans_start(env, ofd, fo, th);
-	if (rc)
-		GOTO(stop, rc);
+		if (ff_needed) {
+			info->fti_buf.lb_buf = ff;
+			info->fti_buf.lb_len = sizeof(*ff);
+			rc = dt_declare_xattr_set(env, ofd_object_child(fo),
+					&info->fti_buf, XATTR_NAME_FID, 0,
+					th);
+			if (rc)
+				GOTO(stop, rc);
+		}
 
-	ofd_read_lock(env, fo);
-	if (!ofd_object_exists(fo))
-		GOTO(unlock, rc = -ENOENT);
+		rc = dt_declare_fallocate(env, dob, start, end, mode, th);
+		if (rc)
+			GOTO(stop, rc);
 
-	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
-		tgt_fmd_update(info->fti_exp, &fo->ofo_header.loh_fid,
-			       info->fti_xid);
+		rc = ofd_trans_start(env, ofd, fo, th);
+		if (rc)
+			GOTO(stop, rc);
 
-	rc = dt_falloc(env, dob, start, end, mode, th);
-	if (rc)
-		GOTO(unlock, rc);
+		ofd_read_lock(env, fo);
+		if (!ofd_object_exists(fo))
+			GOTO(unlock, rc = -ENOENT);
 
-	rc = dt_attr_set(env, dob, la, th);
-	if (rc)
-		GOTO(unlock, rc);
+		if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
+			tgt_fmd_update(info->fti_exp, &fo->ofo_header.loh_fid,
+					info->fti_xid);
 
-	if (ff_needed) {
-		rc = dt_xattr_set(env, ofd_object_child(fo), &info->fti_buf,
-				  XATTR_NAME_FID, 0, th);
-		if (!rc)
-			filter_fid_le_to_cpu(&fo->ofo_ff, ff, sizeof(*ff));
-	}
+		rc = dt_falloc(env, dob, &start, end, mode, th);
+		if (rc == -EAGAIN)
+			restart = true;
+		if (rc)
+			GOTO(unlock, rc);
+
+		rc = dt_attr_set(env, dob, la, th);
+		if (rc)
+			GOTO(unlock, rc);
+
+		if (ff_needed) {
+			rc = dt_xattr_set(env, ofd_object_child(fo),
+					&info->fti_buf, XATTR_NAME_FID, 0, th);
+			if (!rc)
+				filter_fid_le_to_cpu(&fo->ofo_ff, ff,
+						     sizeof(*ff));
+		}
 unlock:
-	ofd_read_unlock(env, fo);
+		ofd_read_unlock(env, fo);
 stop:
-	ofd_trans_stop(env, ofd, th, rc);
+		ofd_trans_stop(env, ofd, th, rc);
+	} while (restart);
 	RETURN(rc);
 }
 

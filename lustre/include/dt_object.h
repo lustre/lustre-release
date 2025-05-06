@@ -1454,7 +1454,7 @@ struct dt_body_operations {
 	 */
 	int (*dbo_fallocate)(const struct lu_env *env,
 			    struct dt_object *dt,
-			    __u64 start,
+			    __u64 *start,
 			    __u64 end,
 			    int mode,
 			    struct thandle *th);
@@ -2723,7 +2723,7 @@ static inline int dt_declare_fallocate(const struct lu_env *env,
 }
 
 static inline int dt_falloc(const struct lu_env *env, struct dt_object *dt,
-			      __u64 start, __u64 end, int mode,
+			      __u64 *start, __u64 end, int mode,
 			      struct thandle *th)
 {
 	LASSERT(dt);

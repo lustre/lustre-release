@@ -844,43 +844,51 @@ static int mdt_object_fallocate(const struct lu_env *env, struct dt_device *dt,
 				struct dt_object *dob, __u64 start, __u64 end,
 				int mode, struct lu_attr *la)
 {
-	struct thandle *th;
 	int rc;
+	bool restart;
 
 	ENTRY;
 
 	if (!dt_object_exists(dob))
 		RETURN(-ENOENT);
 
-	th = dt_trans_create(env, dt);
-	if (IS_ERR(th))
-		RETURN(PTR_ERR(th));
+	do {
+		struct thandle *th;
 
-	rc = dt_declare_attr_set(env, dob, la, th);
-	if (rc)
-		GOTO(stop, rc);
+		restart = false;
 
-	rc = dt_declare_fallocate(env, dob, start, end, mode, th);
-	if (rc)
-		GOTO(stop, rc);
+		th = dt_trans_create(env, dt);
+		if (IS_ERR(th))
+			RETURN(PTR_ERR(th));
 
-	tgt_vbr_obj_data_set(env, dob, true);
-	rc = dt_trans_start(env, dt, th);
-	if (rc)
-		GOTO(stop, rc);
+		rc = dt_declare_attr_set(env, dob, la, th);
+		if (rc)
+			GOTO(stop, rc);
 
-	dt_write_lock(env, dob, 0);
-	rc = dt_falloc(env, dob, start, end, mode, th);
-	if (rc)
-		GOTO(unlock, rc);
-	rc = dt_attr_set(env, dob, la, th);
-	if (rc)
-		GOTO(unlock, rc);
+		rc = dt_declare_fallocate(env, dob, start, end, mode, th);
+		if (rc)
+			GOTO(stop, rc);
+
+		tgt_vbr_obj_data_set(env, dob, true);
+		rc = dt_trans_start(env, dt, th);
+		if (rc)
+			GOTO(stop, rc);
+
+		dt_write_lock(env, dob, 0);
+		rc = dt_falloc(env, dob, &start, end, mode, th);
+		if (rc == -EAGAIN)
+			restart = true;
+		if (rc)
+			GOTO(unlock, rc);
+		rc = dt_attr_set(env, dob, la, th);
+		if (rc)
+			GOTO(unlock, rc);
 unlock:
-	dt_write_unlock(env, dob);
+		dt_write_unlock(env, dob);
 stop:
-	th->th_result = rc;
-	dt_trans_stop(env, dt, th);
+		th->th_result = rc;
+		dt_trans_stop(env, dt, th);
+	} while (restart);
 	RETURN(rc);
 }
 

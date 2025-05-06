@@ -810,21 +810,18 @@ cleanup:
 }
 
 #ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
-static int osd_extend_restart_trans(handle_t *handle, int needed,
+static int osd_extend_trans(handle_t *handle, int needed,
 				    struct inode *inode)
 {
 	int rc;
 
-	rc = ldiskfs_journal_ensure_credits(handle, needed,
+	rc = __ldiskfs_journal_ensure_credits(handle, needed, 2 * needed,
 		ldiskfs_trans_default_revoke_credits(inode->i_sb));
-	/* this means journal has been restarted */
-	if (rc > 0)
-		rc = 0;
 
 	return rc;
 }
 #else
-static int osd_extend_restart_trans(handle_t *handle, int needed,
+static int osd_extend_trans(handle_t *handle, int needed,
 				    struct inode *inode)
 {
 	int rc;
@@ -833,10 +830,7 @@ static int osd_extend_restart_trans(handle_t *handle, int needed,
 		return 0;
 	rc = ldiskfs_journal_extend(handle,
 				needed - handle->h_buffer_credits);
-	if (rc <= 0)
-		return rc;
-
-	return ldiskfs_journal_restart(handle, needed);
+	return rc;
 }
 #endif /* HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS */
 
@@ -2137,18 +2131,30 @@ static int osd_declare_fallocate(const struct lu_env *env,
 		/* quota space should be reported in 1K blocks */
 		quota_space = toqb(quota_space) + toqb(end - start) +
 			LDISKFS_META_TRANS_BLOCKS(inode->i_sb);
-
-		/*
-		 * We don't need to reserve credits for whole fallocate here.
-		 * We reserve space only for metadata. Fallocate credits are
-		 * extended as required
-		 */
 	}
+
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   i_projid_read(inode), quota_space, oh,
 				   osd_dt_obj(dt), NULL, OSD_QID_BLK);
 	if (rc)
 		RETURN(rc);
+
+	if ((mode & FALLOC_FL_PUNCH_HOLE) == 0) {
+		unsigned int crds_per_ext;
+		ldiskfs_lblk_t blen;
+
+		blen = osd_i_blocks(inode, ALIGN(end, 1 << inode->i_blkbits)) -
+		       osd_i_blocks(inode, start);
+
+		crds_per_ext = ldiskfs_chunk_trans_blocks(inode, blen);
+		/*
+		 * allow one more fallocate iteration when num credits
+		 * enough to insert one extend + quota/xattrs updates
+		 */
+		oh->ot_credits_iter = oh->ot_credits + crds_per_ext;
+		/* at tx start, reserve tx space for 5 extent inserts */
+		oh->ot_credits += 5 * crds_per_ext;
+	}
 
 	/*
 	 * The both hole punch and allocation may need few transactions
@@ -2165,16 +2171,14 @@ static int osd_declare_fallocate(const struct lu_env *env,
 
 static int osd_fallocate_preallocate(const struct lu_env *env,
 				     struct dt_object *dt,
-				     __u64 start, __u64 end, int mode,
+				     __u64 *start, __u64 end, int mode,
 				     struct thandle *th)
 {
 	struct osd_thandle *oh = container_of(th, struct osd_thandle, ot_super);
 	handle_t *handle = ldiskfs_journal_current_handle();
-	unsigned int save_credits = oh->ot_credits;
 	struct osd_object *obj = osd_dt_obj(dt);
 	struct inode *inode = obj->oo_inode;
 	struct ldiskfs_map_blocks map;
-	unsigned int credits;
 	ldiskfs_lblk_t blen;
 	ldiskfs_lblk_t boff;
 	loff_t new_size = 0;
@@ -2189,13 +2193,13 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 	LASSERT(inode != NULL);
 
 	CDEBUG(D_INODE, "fallocate: inode #%lu: start %llu end %llu mode %d\n",
-	       inode->i_ino, start, end, mode);
+	       inode->i_ino, *start, end, mode);
 
 	dquot_initialize(inode);
 
 	LASSERT(th);
 
-	boff = osd_i_blocks(inode, start);
+	boff = osd_i_blocks(inode, *start);
 	blen = osd_i_blocks(inode, ALIGN(end, 1 << inode->i_blkbits)) - boff;
 
 	/* Create and mark new extents as either zero or unwritten */
@@ -2228,35 +2232,10 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 	if (blen <= EXT_UNWRITTEN_MAX_LEN)
 		flags |= LDISKFS_GET_BLOCKS_NO_NORMALIZE;
 
-	/*
-	 * credits to insert 1 extent into extent tree.
-	 */
-	credits = ldiskfs_chunk_trans_blocks(inode, blen);
 	depth = ext_depth(inode);
 
 	while (rc >= 0 && blen) {
 		loff_t epos;
-
-		/*
-		 * Recalculate credits when extent tree depth changes.
-		 */
-		if (depth != ext_depth(inode)) {
-			credits = ldiskfs_chunk_trans_blocks(inode, blen);
-			depth = ext_depth(inode);
-		}
-
-		/* TODO: quota check */
-		if (handle->h_transaction->t_state == T_RUNNING) {
-			rc = osd_extend_restart_trans(handle, credits, inode);
-		} else {
-			rc = ldiskfs_journal_restart(handle, credits
-#ifdef HAVE_LDISKFS_JOURNAL_ENSURE_CREDITS
-				,ldiskfs_trans_default_revoke_credits(inode->i_sb)
-#endif
-				);
-		}
-		if (rc)
-			break;
 
 		rc = ldiskfs_map_blocks(handle, inode, &map, flags);
 		if (rc <= 0) {
@@ -2268,6 +2247,7 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 		}
 
 		map.m_lblk += rc;
+		*start += rc;
 		map.m_len = blen = blen - rc;
 		epos = (loff_t)map.m_lblk << inode->i_blkbits;
 		inode_set_ctime_current(inode);
@@ -2286,20 +2266,32 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 		}
 
 		ldiskfs_mark_inode_dirty(handle, inode);
-	}
+
+		/* do not attempt to extend an old transaction */
+		if (handle->h_transaction->t_state != T_RUNNING)
+			GOTO(out, rc = -EAGAIN);
+
+		/*
+		 * Recalculate credits when extent tree depth changes.
+		 */
+		if (depth != ext_depth(inode))
+			GOTO(out, rc = -EAGAIN);
+
+		rc = osd_extend_trans(handle, oh->ot_credits_iter, inode);
+		if (rc > 0)
+			GOTO(out, rc = -EAGAIN);
+		if (rc)
+			GOTO(out, rc);
+}
 
 out:
-	/* extand credits if needed for operations such as attribute set */
-	if (rc >= 0)
-		rc = osd_extend_restart_trans(handle, save_credits, inode);
-
 	inode_unlock(inode);
 
 	RETURN(rc);
 }
 
 static int osd_fallocate_advance(const struct lu_env *env, struct dt_object *dt,
-				  __u64 start, __u64 end, int mode,
+				  __u64 *start, __u64 end, int mode,
 				  struct thandle *th)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
@@ -2326,7 +2318,7 @@ static int osd_fallocate_advance(const struct lu_env *env, struct dt_object *dt,
 		LASSERT(al->tl_shared == 0);
 		found = 1;
 		/* do actual punch/zero in osd_trans_stop() */
-		al->tl_start = start;
+		al->tl_start = *start;
 		al->tl_end = end;
 		al->tl_mode = mode;
 		al->tl_fallocate = true;
@@ -2337,7 +2329,7 @@ static int osd_fallocate_advance(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
-			 __u64 start, __u64 end, int mode, struct thandle *th)
+			 __u64 *start, __u64 end, int mode, struct thandle *th)
 {
 	int rc;
 
