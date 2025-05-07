@@ -187,7 +187,7 @@ LUSTRE_RW_ATTR(atime_diff);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_last_id_seq_show(struct seq_file *m, void *data)
+static int last_id_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd;
@@ -197,6 +197,8 @@ static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 		return 0;
 
 	ofd = ofd_dev(obd->obd_lu_dev);
+	if (IS_ERR_OR_NULL(ofd))
+		return -ENODEV;
 
 	read_lock(&ofd->ofd_seq_list_lock);
 	list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {
@@ -212,7 +214,7 @@ static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 	return 0;
 }
 
-LPROC_SEQ_FOPS_RO(ofd_last_id);
+LDEBUGFS_SEQ_FOPS_RO(last_id);
 
 /**
  * Show if the OFD is in degraded mode.
@@ -462,34 +464,33 @@ static ssize_t sync_journal_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(sync_journal);
 
-static int ofd_brw_size_seq_show(struct seq_file *m, void *data)
+static ssize_t brw_size_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
 {
-	struct obd_device	*obd = m->private;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", ofd->ofd_brw_size / ONE_MB_BRW_SIZE);
-	return 0;
+	if (IS_ERR_OR_NULL(ofd))
+		return -ENODEV;
+
+	return  scnprintf(buf, PAGE_SIZE, "%u\n",
+			  ofd->ofd_brw_size / ONE_MB_BRW_SIZE);
 }
 
-static ssize_t
-ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
-		       size_t count, loff_t *off)
+static ssize_t brw_size_store(struct kobject *kobj, struct attribute *attr,
+			      const char *buffer, size_t count)
 {
-	struct seq_file	*m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
-	char kernbuf[22] = "";
 	u64 val;
 	int rc;
 
-	if (count >= sizeof(kernbuf))
-		return -EINVAL;
+	if (IS_ERR_OR_NULL(ofd))
+		return -ENODEV;
 
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	rc = sysfs_memparse(kernbuf, count, &val, "MiB");
+	rc = sysfs_memparse(buffer, count, &val, "MiB");
 	if (rc < 0)
 		return rc;
 
@@ -506,43 +507,7 @@ ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ofd_brw_size);
-
-/*
- * ofd_checksum_type(server) proc handling
- */
-static int ofd_checksum_type_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct lu_target *lut;
-	enum cksum_types pref;
-	int i;
-
-	if (!obd)
-		return 0;
-
-	lut = obd2obt(obd)->obt_lut;
-	/* select fastest checksum type on the server */
-	pref = obd_cksum_type_select(obd->obd_name,
-				     lut->lut_cksum_types_supported,
-				     lut->lut_dt_conf.ddp_t10_cksum_type);
-
-	for (i = 0; cksum_name[i] != NULL; i++) {
-		if ((BIT(i) & lut->lut_cksum_types_supported) == 0)
-			continue;
-
-		if (pref == BIT(i))
-			seq_printf(m, "[%s] ", cksum_name[i]);
-		else
-			seq_printf(m, "%s ", cksum_name[i]);
-	}
-	seq_puts(m, "\n");
-
-	return 0;
-}
-
-LPROC_SEQ_FOPS_RO(ofd_checksum_type);
-
+LUSTRE_RW_ATTR(brw_size);
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
 static ssize_t sync_on_lock_cancel_show(struct kobject *kobj,
@@ -686,15 +651,18 @@ LUSTRE_RW_ATTR(lfsck_speed_limit);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_lfsck_layout_seq_show(struct seq_file *m, void *data)
+static int lfsck_layout_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
+	if (IS_ERR_OR_NULL(ofd))
+		return -ENODEV;
+
 	return lfsck_dump(m, ofd->ofd_osd, LFSCK_TYPE_LAYOUT);
 }
 
-LPROC_SEQ_FOPS_RO(ofd_lfsck_layout);
+LDEBUGFS_SEQ_FOPS_RO(lfsck_layout);
 
 /**
  * Show if LFSCK performed parent FID verification.
@@ -705,10 +673,13 @@ LPROC_SEQ_FOPS_RO(ofd_lfsck_layout);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
+static int lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	if (IS_ERR_OR_NULL(ofd))
+		return -ENODEV;
 
 	seq_printf(m, "switch: %s\ndetected: %llu\nrepaired: %llu\n",
 		   ofd->ofd_lfsck_verify_pfid ? "on" : "off",
@@ -734,14 +705,17 @@ static int ofd_lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
  * \retval		negative number on error
  */
 static ssize_t
-ofd_lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
+			    size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
+
+	if (IS_ERR_OR_NULL(ofd))
+		return -ENODEV;
 
 	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
@@ -756,7 +730,7 @@ ofd_lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
 	return count;
 }
 
-LPROC_SEQ_FOPS(ofd_lfsck_verify_pfid);
+LDEBUGFS_SEQ_FOPS(lfsck_verify_pfid);
 
 static ssize_t access_log_mask_show(struct kobject *kobj,
 			struct attribute *attr, char *buf)
@@ -857,14 +831,14 @@ static ssize_t access_log_size_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(access_log_size);
 
-static int ofd_site_stats_seq_show(struct seq_file *m, void *data)
+static int site_stats_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
 
 	return lu_site_stats_seq_print(obd->obd_lu_dev->ld_site, m);
 }
 
-LPROC_SEQ_FOPS_RO(ofd_site_stats);
+LDEBUGFS_SEQ_FOPS_RO(site_stats);
 
 /**
  * Show if the OFD enforces T10PI checksum.
@@ -928,13 +902,13 @@ static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(checksum_t10pi_enforce);
 
-LPROC_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
 LUSTRE_RW_ATTR(recovery_time_hard);
 LUSTRE_RW_ATTR(recovery_time_soft);
 LUSTRE_RW_ATTR(ir_factor);
 
-LPROC_SEQ_FOPS_WR_ONLY(ofd, evict_client);
-LPROC_SEQ_FOPS_RW_TYPE(ofd, checksum_dump);
+LUSTRE_WO_ATTR(evict_client);
+LUSTRE_ATTR(checksum_dump, 0644, dt_checksum_dump_show, dt_checksum_dump_store);
+LUSTRE_ATTR(checksum_type, 0444, dt_checksum_type_show, NULL);
 LUSTRE_RW_ATTR(job_cleanup_interval);
 
 LUSTRE_RO_ATTR(tot_dirty);
@@ -947,33 +921,22 @@ LUSTRE_RO_ATTR(num_exports);
 LUSTRE_RW_ATTR(grant_check_threshold);
 LUSTRE_RO_ATTR(eviction_count);
 
-struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
-	{ .name =	"last_id",
-	  .fops =	&ofd_last_id_fops		},
-	{ .name =	"recovery_status",
-	  .fops =	&ofd_recovery_status_fops	},
-	{ .name =	"evict_client",
-	  .fops =	&ofd_evict_client_fops		},
-	{ .name =	"brw_size",
-	  .fops =	&ofd_brw_size_fops		},
-	{ .name =	"checksum_dump",
-	  .fops =	&ofd_checksum_dump_fops		},
-	{ .name =	"lfsck_layout",
-	  .fops =	&ofd_lfsck_layout_fops		},
-	{ .name	=	"lfsck_verify_pfid",
-	  .fops	=	&ofd_lfsck_verify_pfid_fops	},
-	{ .name =	"site_stats",
-	  .fops =	&ofd_site_stats_fops		},
-	{ .name =	"checksum_type",
-	  .fops =	&ofd_checksum_type_fops		},
-	{ NULL }
-};
-
+LDEBUGFS_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(ofd, recovery_stale_clients);
 
-struct ldebugfs_vars ldebugfs_ofd_obd_vars[] = {
+static struct ldebugfs_vars ldebugfs_ofd_obd_vars[] = {
+	{ .name =	"last_id",
+	  .fops =	&last_id_fops			},
+	{ .name =	"lfsck_layout",
+	  .fops =	&lfsck_layout_fops		},
+	{ .name	=	"lfsck_verify_pfid",
+	  .fops	=	&lfsck_verify_pfid_fops	},
+	{ .name =	"recovery_status",
+	  .fops =	&ofd_recovery_status_fops	},
 	{ .name =	"recovery_stale_clients",
 	  .fops =	&ofd_recovery_stale_clients_fops},
+	{ .name =	"site_stats",
+	  .fops =	&site_stats_fops		},
 	{ NULL }
 };
 
@@ -1040,8 +1003,12 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_access_log_mask.attr,
 	&lustre_attr_access_log_size.attr,
 	&lustre_attr_atime_diff.attr,
+	&lustre_attr_brw_size.attr,
+	&lustre_attr_checksum_dump.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
+	&lustre_attr_checksum_type.attr,
 	&lustre_attr_degraded.attr,
+	&lustre_attr_evict_client.attr,
 	&lustre_attr_eviction_count.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_grant_check_threshold.attr,
@@ -1096,7 +1063,6 @@ int ofd_tunables_init(struct ofd_device *ofd)
 	 */
 	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(ofd);
 	obd->obd_debugfs_vars = ldebugfs_ofd_obd_vars;
-	obd->obd_vars = lprocfs_ofd_obd_vars;
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc) {
 		CERROR("%s: lprocfs_obd_setup failed: %d.\n",

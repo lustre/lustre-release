@@ -18,6 +18,7 @@
 
 #include <cfs_hash.h>
 #include <obd_class.h>
+#include <obd_cksum.h>
 #include <lprocfs_status.h>
 #include <lustre_nodemap.h>
 
@@ -96,6 +97,29 @@ int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_recovery_stale_clients_seq_show);
 
+ssize_t evict_client_store(struct kobject *kobj, struct attribute *attr,
+			   const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	char *tmpbuf = skip_spaces(buffer);
+
+	tmpbuf = strsep(&tmpbuf, " \t\n\f\v\r");
+	class_incref(obd, __func__, current);
+
+	if (strncmp(tmpbuf, "nid:", 4) == 0)
+		obd_export_evict_by_nid(obd, tmpbuf + 4);
+	else if (strncmp(tmpbuf, "uuid:", 5) == 0)
+		obd_export_evict_by_uuid(obd, tmpbuf + 5);
+	else
+		obd_export_evict_by_uuid(obd, tmpbuf);
+
+	class_decref(obd, __func__, current);
+
+	return count;
+}
+EXPORT_SYMBOL(evict_client_store);
+
 #ifdef CONFIG_PROC_FS
 #define BUFLEN LNET_NIDSTR_SIZE
 
@@ -141,6 +165,7 @@ out:
 EXPORT_SYMBOL(lprocfs_evict_client_seq_write);
 
 #undef BUFLEN
+#endif /* CONFIG_PROC_FS*/
 
 ssize_t eviction_count_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf)
@@ -987,6 +1012,7 @@ ssize_t ir_factor_store(struct kobject *kobj, struct attribute *attr,
 }
 EXPORT_SYMBOL(ir_factor_store);
 
+#ifdef CONFIG_PROC_FS
 int lprocfs_checksum_dump_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -1015,6 +1041,70 @@ lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
 	return count;
 }
 EXPORT_SYMBOL(lprocfs_checksum_dump_seq_write);
+#endif /* CONFIG_PROC_FS */
+
+ssize_t dt_checksum_dump_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", obd->obd_checksum_dump);
+}
+EXPORT_SYMBOL(dt_checksum_dump_show);
+
+ssize_t dt_checksum_dump_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc < 0)
+		return rc;
+
+	obd->obd_checksum_dump = val;
+
+	return count;
+}
+EXPORT_SYMBOL(dt_checksum_dump_store);
+
+/*
+ * checksum_type(server) sysfs handling
+ */
+ssize_t dt_checksum_type_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lu_target *lut;
+	enum cksum_types pref;
+	int count = 0, i;
+
+	lut = obd2obt(obd)->obt_lut;
+	/* select fastest checksum type on the server */
+	pref = obd_cksum_type_select(obd->obd_name,
+				     lut->lut_cksum_types_supported,
+				     lut->lut_dt_conf.ddp_t10_cksum_type);
+
+	for (i = 0; cksum_name[i] != NULL; i++) {
+		if ((BIT(i) & lut->lut_cksum_types_supported) == 0)
+			continue;
+
+		if (pref == BIT(i))
+			count += scnprintf(buf + count, PAGE_SIZE, "[%s] ",
+					   cksum_name[i]);
+		else
+			count += scnprintf(buf + count, PAGE_SIZE, "%s ",
+					   cksum_name[i]);
+	}
+	count += scnprintf(buf + count, PAGE_SIZE, "\n");
+
+	return count;
+}
+EXPORT_SYMBOL(dt_checksum_type_show);
 
 ssize_t recovery_time_soft_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -1083,5 +1173,3 @@ ssize_t instance_show(struct kobject *kobj, struct attribute *attr,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", obd2obt(obd)->obt_instance);
 }
 EXPORT_SYMBOL(instance_show);
-
-#endif /* CONFIG_PROC_FS*/

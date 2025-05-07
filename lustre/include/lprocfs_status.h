@@ -617,6 +617,8 @@ lprocfs_timeouts_seq_write(struct file *file, const char __user *buffer,
 extern ssize_t
 lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off);
+ssize_t evict_client_store(struct kobject *kobj, struct attribute *attr,
+			   const char *buffer, size_t count);
 #endif
 ssize_t ping_store(struct kobject *kobj, struct attribute *attr,
 		   const char *buffer, size_t count);
@@ -661,7 +663,25 @@ unsigned long lprocfs_oh_counter_pcpu(struct obd_hist_pcpu *oh,
 void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 			   struct lprocfs_counter *cnt);
 
+/* lprocfs_status.c: dump pages on cksum error */
+ssize_t checksum_type_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf);
+ssize_t checksum_type_store(struct kobject *kobj, struct attribute *attr,
+			    const char *buffer, size_t count);
 #ifdef HAVE_SERVER_SUPPORT
+ssize_t dt_checksum_type_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf);
+ssize_t dt_checksum_dump_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf);
+ssize_t dt_checksum_dump_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count);
+#ifdef CONFIG_PROC_FS
+int lprocfs_checksum_dump_seq_show(struct seq_file *m, void *data);
+#endif
+ssize_t
+lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *off);
+
 /* lprocfs_status.c: recovery status */
 int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data);
 
@@ -677,16 +697,6 @@ ssize_t ir_factor_show(struct kobject *kobj, struct attribute *attr,
 ssize_t ir_factor_store(struct kobject *kobj, struct attribute *attr,
 			const char *buffer, size_t count);
 #endif
-
-/* lprocfs_status.c: dump pages on cksum error */
-int lprocfs_checksum_dump_seq_show(struct seq_file *m, void *data);
-ssize_t
-lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off);
-ssize_t checksum_type_show(struct kobject *kobj, struct attribute *attr,
-			   char *buf);
-ssize_t checksum_type_store(struct kobject *kobj, struct attribute *attr,
-			    const char *buffer, size_t count);
 
 extern int lprocfs_single_release(struct inode *i, struct file *f);
 extern int lprocfs_seq_release(struct inode *i, struct file *f);
