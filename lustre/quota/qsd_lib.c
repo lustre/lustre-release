@@ -36,7 +36,7 @@
 
 struct kmem_cache *upd_kmem;
 
-struct lu_kmem_descr qsd_caches[] = {
+static struct lu_kmem_descr qsd_caches[] = {
 	{
 		.ckd_cache = &upd_kmem,
 		.ckd_name  = "upd_kmem",
