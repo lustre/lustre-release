@@ -1620,20 +1620,21 @@ static int quotactl_getallquota(struct ll_sb_info *sbi,
 	struct if_quotactl_iter *iter = NULL;
 	void __user *buffer = (void __user *)qctl->qc_allquota_buffer;
 	__u64 cur = 0, count = qctl->qc_allquota_buflen;
+	bool found = false;
 	int rc = 0;
 
 	ENTRY;
 
 	mutex_lock(&quotactl_iter_lock);
 
-	while ((ll_iter = list_first_entry_or_null(&sbi->ll_all_quota_list,
-						struct ll_quotactl_iter_list,
-						lqil_sbi_list)) != NULL) {
-		if (qctl->qc_allquota_mark == ll_iter->lqil_mark)
+	list_for_each_entry(ll_iter, &sbi->ll_all_quota_list, lqil_sbi_list) {
+		if (qctl->qc_allquota_mark == ll_iter->lqil_mark) {
+			found = true;
 			break;
+		}
 	}
 
-	if (!ll_iter) {
+	if (!found) {
 		mutex_unlock(&quotactl_iter_lock);
 		RETURN(-EBUSY);
 	}
@@ -1665,6 +1666,9 @@ static int quotactl_getallquota(struct ll_sb_info *sbi,
 		list_del_init(&iter->qci_link);
 		OBD_SLAB_FREE_PTR(iter, quota_iter_slab);
 	}
+
+	list_del_init(&ll_iter->lqil_sbi_list);
+	OBD_FREE_PTR(ll_iter);
 
 	mutex_unlock(&quotactl_iter_lock);
 
