@@ -76,7 +76,7 @@ int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl, nvlist_t **sa)
 		goto out_sa;
 	}
 
-	buf = osd_zio_buf_alloc(size);
+	buf = zio_buf_alloc(size);
 	if (buf == NULL) {
 		rc = -ENOMEM;
 		goto out_sa;
@@ -84,7 +84,7 @@ int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl, nvlist_t **sa)
 	rc = -sa_lookup(hdl, SA_ZPL_DXATTR(osd), buf, size);
 	if (rc == 0)
 		rc = -nvlist_unpack(buf, size, sa, KM_SLEEP);
-	osd_zio_buf_free(buf, size);
+	zio_buf_free(buf, size);
 out_sa:
 
 	return rc;

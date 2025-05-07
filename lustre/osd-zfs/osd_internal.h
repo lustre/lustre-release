@@ -781,15 +781,7 @@ int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
 				 sizeof(__u64) /* VBR VERSION */ + \
 				 sizeof(struct lustre_mdt_attrs) /* LMA */)
 
-#ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
 int osd_find_dnsize(struct osd_device *osd, int ea_in_bonus);
-#else
-static inline int
-osd_find_dnsize(struct osd_device *osd, int ea_in_bonus)
-{
-	return DN_MAX_BONUSLEN;
-}
-#endif
 
 static inline int osd_object_is_zap(dnode_t *dn)
 {
@@ -847,43 +839,6 @@ static inline uint32_t attrs_zfs2fs(const uint64_t flags)
 
 #endif
 
-#ifndef HAVE_DSL_POOL_CONFIG
-static inline void dsl_pool_config_enter(dsl_pool_t *dp, void *name)
-{
-}
-
-static inline void dsl_pool_config_exit(dsl_pool_t *dp, void *name)
-{
-}
-#endif
-
-#ifdef HAVE_SPA_MAXBLOCKSIZE
-#define	osd_spa_maxblocksize(spa)	spa_maxblocksize(spa)
-#define	osd_spa_maxblockshift(spa)	fls64(spa_maxblocksize(spa) - 1)
-#else
-#define	osd_spa_maxblocksize(spa)	SPA_MAXBLOCKSIZE
-#define	osd_spa_maxblockshift(spa)	SPA_MAXBLOCKSHIFT
-#define	SPA_OLD_MAXBLOCKSIZE		SPA_MAXBLOCKSIZE
-#endif
-
-#ifdef HAVE_SA_SPILL_ALLOC
-static inline void *
-osd_zio_buf_alloc(size_t size)
-{
-	return sa_spill_alloc(KM_SLEEP);
-}
-
-static inline void
-osd_zio_buf_free(void *buf, size_t size)
-{
-	sa_spill_free(buf);
-}
-#else
-#define	osd_zio_buf_alloc(size)		zio_buf_alloc(size)
-#define	osd_zio_buf_free(buf, size)	zio_buf_free(buf, size)
-#endif
-
-#ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
 static inline uint64_t
 osd_dmu_object_alloc(objset_t *os, dmu_object_type_t objtype, int blocksize,
 		     int dnodesize, dmu_tx_t *tx)
@@ -931,39 +886,6 @@ osd_obj_bonuslen(struct osd_object *obj)
 
 	return bonuslen;
 }
-#else
-static inline uint64_t
-osd_dmu_object_alloc(objset_t *os, dmu_object_type_t objtype, int blocksize,
-		     int dnodesize, dmu_tx_t *tx)
-{
-	return dmu_object_alloc(os, objtype, blocksize, DMU_OT_SA,
-				DN_MAX_BONUSLEN, tx);
-}
-
-static inline uint64_t
-osd_zap_create_flags(objset_t *os, int normflags, zap_flags_t flags,
-		     dmu_object_type_t ot, int leaf_blockshift,
-		     int indirect_blockshift, int dnodesize, dmu_tx_t *tx)
-{
-	return zap_create_flags(os, normflags, flags, ot, leaf_blockshift,
-				indirect_blockshift, DMU_OT_SA,
-				DN_MAX_BONUSLEN, tx);
-}
-
-static inline int
-osd_obj_bonuslen(struct osd_object *obj)
-{
-	return DN_MAX_BONUSLEN;
-}
-#endif /* HAVE_DMU_OBJECT_ALLOC_DNSIZE */
-
-#ifdef HAVE_DMU_PREFETCH_6ARG
-#define osd_dmu_prefetch(os, obj, lvl, off, len, pri)	\
-	dmu_prefetch((os), (obj), (lvl), (off), (len), (pri))
-#else
-#define osd_dmu_prefetch(os, obj, lvl, off, len, pri)	\
-	dmu_prefetch((os), (obj), (lvl), (off))
-#endif
 
 static inline int osd_sa_handle_get(struct osd_object *obj)
 {
@@ -1011,25 +933,10 @@ static inline uint64_t osd_db_dirty_txg(dmu_buf_impl_t *db)
 	return txg;
 }
 
-#ifdef HAVE_DMU_USEROBJ_ACCOUNTING
-
-#define OSD_DMU_USEROBJ_PREFIX		DMU_OBJACCT_PREFIX
-#define OSD_DMU_USEROBJ_PREFIX_LEN	DMU_OBJACCT_PREFIX_LEN
-
 static inline bool osd_dmu_userobj_accounting_available(struct osd_device *osd)
 {
 	return dmu_objset_userobjspace_present(osd->od_os);
 }
-#else
-
-#define OSD_DMU_USEROBJ_PREFIX		"obj-"
-#define OSD_DMU_USEROBJ_PREFIX_LEN	4
-
-static inline bool osd_dmu_userobj_accounting_available(struct osd_device *osd)
-{
-	return false;
-}
-#endif /* #ifdef HAVE_DMU_USEROBJ_ACCOUNTING */
 
 static inline int osd_zap_add(struct osd_device *osd, uint64_t zap,
 			      dnode_t *dn, const char *key,
@@ -1038,10 +945,9 @@ static inline int osd_zap_add(struct osd_device *osd, uint64_t zap,
 {
 	LASSERT(zap != 0);
 
-#ifdef HAVE_ZAP_ADD_BY_DNODE
 	if (dn)
 		return -zap_add_by_dnode(dn, key, int_size, int_num, val, tx);
-#endif
+
 	return -zap_add(osd->od_os, zap, key, int_size, int_num, val, tx);
 }
 
@@ -1051,10 +957,9 @@ static inline int osd_zap_remove(struct osd_device *osd, uint64_t zap,
 {
 	LASSERT(zap != 0);
 
-#ifdef HAVE_ZAP_ADD_BY_DNODE
 	if (dn)
 		return -zap_remove_by_dnode(dn, key, tx);
-#endif
+
 	return -zap_remove(osd->od_os, zap, key, tx);
 }
 
@@ -1065,34 +970,29 @@ static inline int osd_zap_lookup(struct osd_device *osd, uint64_t zap,
 {
 	LASSERT(zap != 0);
 
-#ifdef HAVE_ZAP_ADD_BY_DNODE
 	if (dn)
 		return -zap_lookup_by_dnode(dn, key, int_size, int_num, v);
-#endif
+
 	return -zap_lookup(osd->od_os, zap, key, int_size, int_num, v);
 }
 
 static inline void osd_tx_hold_zap(dmu_tx_t *tx, uint64_t zap,
 				   dnode_t *dn, int add, const char *name)
 {
-#ifdef HAVE_DMU_TX_HOLD_ZAP_BY_DNODE
 	if (dn) {
 		dmu_tx_hold_zap_by_dnode(tx, dn, add, name);
 		return;
 	}
-#endif
 	dmu_tx_hold_zap(tx, zap, add, name);
 }
 
 static inline void osd_tx_hold_write(dmu_tx_t *tx, uint64_t oid,
 				   dnode_t *dn, uint64_t off, int len)
 {
-#ifdef HAVE_DMU_TX_HOLD_ZAP_BY_DNODE
 	if (dn) {
 		dmu_tx_hold_write_by_dnode(tx, dn, off, len);
 		return;
 	}
-#endif
 	dmu_tx_hold_write(tx, oid, off, len);
 }
 
@@ -1101,11 +1001,7 @@ static inline void osd_dmu_write(struct osd_device *osd, dnode_t *dn,
 				 const char *buf, dmu_tx_t *tx)
 {
 	LASSERT(dn);
-#ifdef HAVE_DMU_WRITE_BY_DNODE
 	dmu_write_by_dnode(dn, offset, size, buf, tx);
-#else
-	dmu_write(osd->od_os, dn->dn_object, offset, size, buf, tx);
-#endif
 }
 
 static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
@@ -1113,11 +1009,7 @@ static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
 			       char *buf, int flags)
 {
 	LASSERT(dn);
-#ifdef HAVE_DMU_READ_BY_DNODE
 	return -dmu_read_by_dnode(dn, offset, size, buf, flags);
-#else
-	return -dmu_read(osd->od_os, dn->dn_object, offset, size, buf, flags);
-#endif
 }
 
 #ifdef HAVE_DMU_OBJSET_OWN_6ARG

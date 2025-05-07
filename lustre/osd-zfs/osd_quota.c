@@ -122,7 +122,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 			rec->ispace = osd_objset_user_iused(osd, rec->bspace);
 		rc = 1;
 	} else {
-		snprintf(buf, buflen, OSD_DMU_USEROBJ_PREFIX "%llx",
+		snprintf(buf, buflen, DMU_OBJACCT_PREFIX "%llx",
 			 *((__u64 *)dtkey));
 		rc = osd_zap_lookup(osd, dn->dn_object, dn, buf,
 				    sizeof(uint64_t), 1, &rec->ispace);
@@ -220,8 +220,8 @@ static int osd_zap_locate(struct osd_it_quota *it, zap_attribute_t *za)
 		if (rc)
 			break;
 
-		if (strncmp(za->za_name, OSD_DMU_USEROBJ_PREFIX,
-			    OSD_DMU_USEROBJ_PREFIX_LEN))
+		if (strncmp(za->za_name, DMU_OBJACCT_PREFIX,
+			    DMU_OBJACCT_PREFIX_LEN))
 			break;
 
 		zap_cursor_advance(it->oiq_zc);
@@ -374,10 +374,10 @@ static int osd_it_acct_rec(const struct lu_env *env,
 		RETURN(rc);
 
 	/* inode accounting is maintained by DMU since 0.7.0 */
-	strncpy(info->oti_buf, OSD_DMU_USEROBJ_PREFIX,
-		OSD_DMU_USEROBJ_PREFIX_LEN);
-	strlcpy(info->oti_buf + OSD_DMU_USEROBJ_PREFIX_LEN, za->za_name,
-		sizeof(info->oti_buf) - OSD_DMU_USEROBJ_PREFIX_LEN);
+	strncpy(info->oti_buf, DMU_OBJACCT_PREFIX,
+		DMU_OBJACCT_PREFIX_LEN);
+	strlcpy(info->oti_buf + DMU_OBJACCT_PREFIX_LEN, za->za_name,
+		sizeof(info->oti_buf) - DMU_OBJACCT_PREFIX_LEN);
 	rc = osd_zap_lookup(osd, it->oiq_obj->oo_dn->dn_object,
 			    it->oiq_obj->oo_dn, info->oti_buf, sizeof(uint64_t),
 			    1, &rec->ispace);
