@@ -2003,6 +2003,8 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 	obj->oo_attr.la_size = 0;
 	obj->oo_attr.la_nlink = 0;
 	obj->oo_attr.la_valid |= LA_SIZE | LA_NLINK | LA_TYPE;
+	if (!(obj->oo_attr.la_valid & LA_FLAGS))
+		obj->oo_attr.la_flags = 0;
 
 #ifdef ZFS_PROJINHERIT
 	if (osd->od_projectused_dn) {

@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# config/lustre-version.m4
+#
+# Defines variables for Lustre version number
+#
+
 #
 # LUSTRE_VERSION_CPP_MACROS
 #
@@ -17,4 +27,4 @@ AC_DEFINE_UNQUOTED([LUSTRE_FIX], [$LUSTRE_FIX], [Fourth number in the Lustre ver
 # divergence from the Lustre client code in the upstream Linux kernel code.
 AC_DEFINE_UNQUOTED([LUSTRE_VERSION_STRING], ["$PACKAGE_VERSION"], [A copy of PACKAGE_VERSION])
 
-])
+]) # LUSTRE_VERSION_CPP_MACROS
