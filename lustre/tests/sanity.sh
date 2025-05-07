@@ -12339,6 +12339,7 @@ test_80() { # bug 10718
 		local save=$(do_facet ost1 $LCTL get_param -n $soc | head -n1)
 
 		# "sync_on_lock_cancel" was broken by v2_11_55_0-26-g7059644e9a
+		# Fixed in 2.13.51~79, so we'll keep it for interop with 2.12.x
 		if [ -z "$save" ]; then
 			soc="obdfilter.*.sync_on_lock_cancel"
 			save=$(do_facet ost1 $LCTL get_param -n $soc | head -n1)

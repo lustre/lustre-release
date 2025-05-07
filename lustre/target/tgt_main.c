@@ -16,7 +16,6 @@
 #include <obd_target.h>
 #include <obd_cksum.h>
 #include "tgt_internal.h"
-#include "lu_target.h"
 #include "../ptlrpc/ptlrpc_internal.h"
 
 /* This must be longer than the longest string below */
@@ -37,8 +36,8 @@ static const char * const sync_lock_cancel_states[] = {
  * \retval		0 and buffer filled with data on success
  * \retval		negative value on error
  */
-ssize_t sync_lock_cancel_show(struct kobject *kobj,
-			      struct attribute *attr, char *buf)
+static ssize_t sync_lock_cancel_show(struct kobject *kobj,
+				     struct attribute *attr, char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -47,7 +46,6 @@ ssize_t sync_lock_cancel_show(struct kobject *kobj,
 	return sprintf(buf, "%s\n",
 		       sync_lock_cancel_states[tgt->lut_sync_lock_cancel]);
 }
-EXPORT_SYMBOL(sync_lock_cancel_show);
 
 /**
  * Change policy for handling dirty data under a lock being cancelled.
@@ -70,8 +68,9 @@ EXPORT_SYMBOL(sync_lock_cancel_show);
  * \retval		\a count on success
  * \retval		negative value on error
  */
-ssize_t sync_lock_cancel_store(struct kobject *kobj, struct attribute *attr,
-			       const char *buffer, size_t count)
+static ssize_t sync_lock_cancel_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -104,7 +103,6 @@ ssize_t sync_lock_cancel_store(struct kobject *kobj, struct attribute *attr,
 	spin_unlock(&tgt->lut_flags_lock);
 	return count;
 }
-EXPORT_SYMBOL(sync_lock_cancel_store);
 LUSTRE_RW_ATTR(sync_lock_cancel);
 
 /**

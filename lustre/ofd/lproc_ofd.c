@@ -509,28 +509,6 @@ static ssize_t brw_size_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(brw_size);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
-static ssize_t sync_on_lock_cancel_show(struct kobject *kobj,
-					struct attribute *attr, char *buf)
-{
-	return sync_lock_cancel_show(kobj, attr, buf);
-}
-
-static ssize_t sync_on_lock_cancel_store(struct kobject *kobj,
-					 struct attribute *attr,
-					 const char *buffer, size_t count)
-{
-	static bool sync_on_lock_cancel_warned;
-
-	if (!sync_on_lock_cancel_warned) {
-		sync_on_lock_cancel_warned = true;
-		pr_info("ofd: 'obdfilter.*.sync_on_lock_cancel' is deprecated, use 'obdfilter.*.sync_lock_cancel' instead\n");
-	}
-	return sync_lock_cancel_store(kobj, attr, buffer, count);
-}
-LUSTRE_RW_ATTR(sync_on_lock_cancel);
-#endif
-
 /**
  * Show the limit of soft sync RPCs.
  *
@@ -1033,9 +1011,6 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_tot_pending.attr,
 	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_sync_journal.attr,
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
-	&lustre_attr_sync_on_lock_cancel.attr,
-#endif
 	&lustre_attr_at_min.attr,
 	&lustre_attr_at_max.attr,
 	&lustre_attr_at_history.attr,
