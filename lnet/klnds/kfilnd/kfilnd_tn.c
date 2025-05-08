@@ -567,12 +567,14 @@ static int kfilnd_tn_state_send_failed(struct kfilnd_transaction *tn,
 					"Unexpected error during cancel tagged receive: rc=%d",
 					rc);
 			LBUG();
+			return -EINVAL;
 		}
 		break;
 
 	default:
 		KFILND_TN_ERROR(tn, "Invalid %s event", tn_event_to_str(event));
 		LBUG();
+		return -EINVAL;
 	}
 }
 
@@ -633,6 +635,7 @@ static int kfilnd_tn_state_tagged_recv_posted(struct kfilnd_transaction *tn,
 	default:
 		KFILND_TN_ERROR(tn, "Invalid %s event", tn_event_to_str(event));
 		LBUG();
+		return -EINVAL;
 	}
 }
 
