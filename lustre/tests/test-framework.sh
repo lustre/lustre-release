@@ -429,6 +429,13 @@ init_test_env() {
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 	get_lustre_env
+	# use /dev/urandom when consuming space on ZFS to avoid compression
+	if [[ "$ost1_FSTYPE" == "zfs" ]]; then
+		DD_DEV="/dev/urandom"
+	else
+		DD_DEV="/dev/zero"
+	fi
+	DD="dd if=$DD_DEV bs=1M"
 
 	# use localrecov to enable recovery for local clients, LU-12722
 	[[ $MDS1_VERSION -lt $(version_code 2.13.52) ]] || {
@@ -538,6 +545,18 @@ lustre_build_version() {
 # Report the Lustre numeric build version code for the supplied facet.
 lustre_version_code() {
 	version_code $(lustre_build_version $1)
+}
+
+zfs_version_code() {
+	local facet=$1
+	local facet_version=${facet}_ZFS_VERSION
+
+	if [[ -z "${!facet_version}" ]]; then
+		local zfs_ver=$(do_facet $facet "modinfo --field version zfs")
+
+		export $facet_version=$(version_code ${zfs_ver%-*})
+	fi
+	echo ${!facet_version}
 }
 
 module_loaded () {
@@ -3185,7 +3204,7 @@ wait_zfs_commit() {
 	# the occupied disk space will be released
 	# only after TXGs are committed
 	if [[ $(facet_fstype $1) == zfs ]]; then
-		echo "sleep $zfs_wait for ZFS $(facet_fstype $1)"
+		echo "sleep $zfs_wait for ZFS $(facet_type $1)"
 		sleep $zfs_wait
 	fi
 }

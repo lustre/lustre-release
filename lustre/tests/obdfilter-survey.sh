@@ -8,7 +8,12 @@ init_logging
 
 # bug number for skipped test:
 ALWAYS_EXCEPT="$OBDFILTER_SURVEY_EXCEPT "
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+# it would be nice to have an "all" option :-)
+ if [[ $mds1_FSTYPE == zfs ]] &&
+    (( $(zfs_version_code mds1) >= $(version_code 2.2.7) )); then
+	always_except LU-18889 1a 1b 1c 2a 2b 3a
+fi
 
 build_test_filter
 

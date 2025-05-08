@@ -75,19 +75,17 @@ if (( $LINUX_VERSION_CODE >= $(version_code 4.18.0) &&
 	ALWAYS_EXCEPT+=" 411"
 fi
 
-#                                  5              12     8   12  15   (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 60i 64b 68 71 115 135 136 230d 300o"
+# minutes runtime:                   5              12     8   12   15
+[[ "$SLOW" = "no" ]] && EXCEPT_SLOW="27m 60i 64b 68 71 115 135 136 230d 300o"
 
-if [ "$mds1_FSTYPE" = "zfs" ]; then
-	# bug number for skipped test:
-	ALWAYS_EXCEPT+="              "
+if [[ "$mds1_FSTYPE" == "zfs" ]]; then
 	#                                               13    (min)"
-	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
+	[[ "$SLOW" == "no" ]] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
 fi
 
-if [ "$ost1_FSTYPE" = "zfs" ]; then
-	# bug number for skipped test:	LU-1941  LU-1941  LU-1941  LU-1941
-	ALWAYS_EXCEPT+="                130b 130c 130d 130e 130f 130g"
+if [[ "$ost1_FSTYPE" = "zfs" ]]; then
+	always_except LU-1941 130b 130c 130d 130e 130f 130g
+	always_except LU-9054 312
 fi
 
 proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
@@ -9554,7 +9552,7 @@ test_66() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	COUNT=${COUNT:-8}
-	dd if=/dev/zero of=$DIR/f66 bs=1k count=$COUNT
+	dd if=/dev/urandom of=$DIR/f66 bs=1k count=$COUNT
 	sync; sync_all_data; sync; sync_all_data
 	cancel_lru_locks osc
 	BLOCKS=`ls -s $DIR/f66 | awk '{ print $1 }'`
@@ -24204,6 +24202,7 @@ test_311() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local old_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
+	echo "old_iused=$old_iused"
 	local mdts=$(comma_list $(mdts_nodes))
 
 	mkdir -p $DIR/$tdir
@@ -24212,11 +24211,13 @@ test_311() {
 
 	# statfs data is not real time, let's just calculate it
 	old_iused=$((old_iused + 1000))
+	echo "suppose current old_iused=$old_iused"
 
 	local count=$(do_facet $SINGLEMDS "$LCTL get_param -n \
 			osp.*OST0000*MDT0000.create_count")
 	local max_count=$(do_facet $SINGLEMDS "$LCTL get_param -n \
 				osp.*OST0000*MDT0000.max_create_count")
+	echo "create_count=$count, max_create_count=$max_count"
 	do_nodes $mdts "$LCTL set_param -n osp.*OST0000*.max_create_count=0"
 
 	$LFS setstripe -i 0 $DIR/$tdir/$tfile || error "setstripe failed"
@@ -24224,6 +24225,8 @@ test_311() {
 	[ $index -ne 0 ] || error "$tfile stripe index is 0"
 
 	unlinkmany $DIR/$tdir/$tfile. 1000
+	wait_delete_completed
+	wait_zfs_commit $SINGLEMDS 10
 
 	do_nodes $mdts "$LCTL set_param -n \
 			osp.*OST0000*.max_create_count=$max_count"
@@ -24236,14 +24239,15 @@ test_311() {
 	local new_iused
 	for i in $(seq 120); do
 		new_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
+		echo -n "$new_iused "
 		# system may be too busy to destroy all objs in time, use
 		# a somewhat small value to not fail autotest
-		[ $((old_iused - new_iused)) -gt 400 ] && break
+		((old_iused - new_iused > 400)) && break
 		sleep 1
 	done
 
-	echo "waited $i sec, old Iused $old_iused, new Iused $new_iused"
-	[ $((old_iused - new_iused)) -gt 400 ] ||
+	echo -e "\nwaited $i sec, old Iused $old_iused, new Iused $new_iused"
+	((old_iused - new_iused > 400)) ||
 		error "objs not destroyed after unlink"
 }
 run_test 311 "disable OSP precreate, and unlink should destroy objs"
@@ -25694,7 +25698,7 @@ generate_uneven_mdts() {
 	if check_fallocate_supported mds$((min_index + 1)); then
 		cmd="fallocate -l 128K "
 	else
-		cmd="dd if=/dev/zero bs=128K count=1 of="
+		cmd="$DD bs=128K count=1 of="
 	fi
 
 	echo "using cmd $cmd"

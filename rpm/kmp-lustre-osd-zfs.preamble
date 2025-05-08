@@ -1,4 +1,3 @@
-Summary:        Lustre osd-zfs feature support
 Requires:       %{name}-osd-zfs-mount = %{version}
 %if 0%{confzfsdobjpath} != 0
 BuildRequires:  kmod-zfs-devel
