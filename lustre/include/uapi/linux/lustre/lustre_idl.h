@@ -739,7 +739,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT_GRANT			0x8ULL /* fetch grant connect */
 #define OBD_CONNECT_SRVLOCK		       0x10ULL /* server lock for RPC */
 #define OBD_CONNECT_VERSION		       0x20ULL /* versions in OCD */
-#define OBD_CONNECT_REQPORTAL		       0x40ULL /* non-IO portal */
+#define OBD_CONNECT_MGS_NIDLIST		       0x40ULL /* MGS nidlist protocol */
 #define OBD_CONNECT_ACL			       0x80ULL /* access control list */
 #define OBD_CONNECT_XATTR		      0x100ULL /* extended attributes */
 #define OBD_CONNECT_LARGE_ACL		      0x200ULL /* over 32 ACL entries */
@@ -925,8 +925,7 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_MIRROR_ID_FIX)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
-				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
-				OBD_CONNECT_INDEX | \
+				OBD_CONNECT_VERSION | OBD_CONNECT_INDEX | \
 				OBD_CONNECT_BRW_SIZE | OBD_CONNECT_CANCELSET | \
 				OBD_CONNECT_AT | LRU_RESIZE_CONNECT_FLAG | \
 				OBD_CONNECT_CKSUM | OBD_CONNECT_VBR | \
@@ -2750,6 +2749,21 @@ struct mgs_target_info {
 	__u64		mti_nids[MTI_NIDS_MAX]; /* host nids (lnet_nid_t) */
 	char		mti_params[MTI_PARAM_MAXLEN];
 	char		mti_nidlist[][LNET_NIDSTR_SIZE];
+} __attribute__((packed));
+
+enum mgs_nidlist_flags {
+	NIDLIST_APPEND		= 0x00000001, /* append NIDs to nidtable */
+	NIDLIST_IN_BULK		= 0x00000002, /* nidlist in bulk */
+	NIDLIST_COMPRESSED	= 0x00000004, /* nidlist is compressed */
+};
+
+#define MTN_NIDSTR_SIZE LNET_NIDSTR_SIZE
+#define NIDLIST_SIZE(count) (MTN_NIDSTR_SIZE * count)
+
+struct mgs_target_nidlist {
+	__u32	mtn_flags; /* flags from mgs_nids_info_flags */
+	__u32	mtn_nids;  /* amount of nids in list */
+	char	mtn_inline_list[][MTN_NIDSTR_SIZE];
 } __attribute__((packed));
 
 struct mgs_nidtbl_entry {

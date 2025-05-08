@@ -166,7 +166,6 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 					   OBD_CONNECT_LRU_RESIZE |
 #endif
 					   OBD_CONNECT_MDS |
-					   OBD_CONNECT_REQPORTAL |
 					   OBD_CONNECT_SKIP_ORPHAN |
 					   OBD_CONNECT_FID |
 					   OBD_CONNECT_LVB_TYPE |

@@ -81,6 +81,7 @@ void lustre_swab_ldlm_lock_desc(struct ldlm_lock_desc *l);
 void lustre_swab_ldlm_request(struct ldlm_request *rq);
 void lustre_swab_ldlm_reply(struct ldlm_reply *r);
 void lustre_swab_mgs_target_info(struct mgs_target_info *oinfo);
+void lustre_swab_mgs_target_nidlist(struct mgs_target_nidlist *mtn);
 void lustre_swab_mgs_nidtbl_entry_header(struct mgs_nidtbl_entry *oinfo);
 void lustre_swab_mgs_nidtbl_entry_content(struct mgs_nidtbl_entry *oinfo);
 void lustre_swab_mgs_config_body(struct mgs_config_body *body);

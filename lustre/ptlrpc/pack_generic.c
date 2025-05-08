@@ -2089,6 +2089,13 @@ void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
 		__swab64s(&mti->mti_nids[i]);
 }
 
+void lustre_swab_mgs_target_nidlist(struct mgs_target_nidlist *mtn)
+{
+	__swab32s(&mtn->mtn_flags);
+	__swab32s(&mtn->mtn_nids);
+	BUILD_BUG_ON(MTN_NIDSTR_SIZE != 64);
+}
+
 void lustre_swab_mgs_nidtbl_entry_header(struct mgs_nidtbl_entry *entry)
 {
 	__swab64s(&entry->mne_version);

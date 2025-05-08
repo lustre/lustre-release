@@ -1272,8 +1272,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT_SRVLOCK);
 	LASSERTF(OBD_CONNECT_VERSION == 0x20ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT_VERSION);
-	LASSERTF(OBD_CONNECT_REQPORTAL == 0x40ULL, "found 0x%.16llxULL\n",
-		 OBD_CONNECT_REQPORTAL);
+	LASSERTF(OBD_CONNECT_MGS_NIDLIST == 0x40ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT_MGS_NIDLIST);
 	LASSERTF(OBD_CONNECT_ACL == 0x80ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT_ACL);
 	LASSERTF(OBD_CONNECT_XATTR == 0x100ULL, "found 0x%.16llxULL\n",
@@ -4835,6 +4835,25 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mgs_target_info, mti_nidlist[0]));
 	LASSERTF((int)sizeof(((struct mgs_target_info *)0)->mti_nidlist[0]) == 64, "found %lld\n",
 		 (long long)(int)sizeof(((struct mgs_target_info *)0)->mti_nidlist[0]));
+
+	/* Checks for struct mgs_target_nidlist */
+	LASSERTF((int)sizeof(struct mgs_target_nidlist) == 8, "found %lld\n",
+		 (long long)(int)sizeof(struct mgs_target_nidlist));
+	LASSERTF((int)offsetof(struct mgs_target_nidlist, mtn_flags) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct mgs_target_nidlist, mtn_flags));
+	LASSERTF((int)sizeof(((struct mgs_target_nidlist *)0)->mtn_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mgs_target_nidlist *)0)->mtn_flags));
+	LASSERTF((int)offsetof(struct mgs_target_nidlist, mtn_nids) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct mgs_target_nidlist, mtn_nids));
+	LASSERTF((int)sizeof(((struct mgs_target_nidlist *)0)->mtn_nids) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mgs_target_nidlist *)0)->mtn_nids));
+	LASSERTF((int)offsetof(struct mgs_target_nidlist, mtn_inline_list[0]) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct mgs_target_nidlist, mtn_inline_list[0]));
+	LASSERTF((int)sizeof(((struct mgs_target_nidlist *)0)->mtn_inline_list[0]) == 64, "found %lld\n",
+		 (long long)(int)sizeof(((struct mgs_target_nidlist *)0)->mtn_inline_list[0]));
+	BUILD_BUG_ON(NIDLIST_APPEND != 0x00000001);
+	BUILD_BUG_ON(NIDLIST_IN_BULK != 0x00000002);
+	BUILD_BUG_ON(NIDLIST_COMPRESSED != 0x00000004);
 
 	/* Checks for struct mgs_nidtbl_entry */
 	LASSERTF((int)sizeof(struct mgs_nidtbl_entry) == 24, "found %lld\n",

@@ -3895,11 +3895,6 @@ static int osc_import_event(struct obd_device *obd, struct obd_import *imp,
 		if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT)
 			osc_init_grant(&obd->u.cli, ocd);
 
-		/* See bug 7198 */
-		if (ocd->ocd_connect_flags & OBD_CONNECT_REQPORTAL)
-			imp->imp_client->cli_request_portal =
-				OST_REQUEST_PORTAL;
-
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD);
 		break;
 	}

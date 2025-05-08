@@ -182,6 +182,7 @@ extern struct req_format RQF_SEC_CTX;
 extern struct req_format RQF_OBD_IDX_READ;
 /* MGS req_format */
 extern struct req_format RQF_MGS_TARGET_REG;
+extern struct req_format RQF_MGS_TARGET_REG_NIDLIST;
 extern struct req_format RQF_MGS_SET_INFO;
 extern struct req_format RQF_MGS_CONFIG_READ;
 /* fid/fld req_format */
@@ -366,6 +367,7 @@ extern struct req_msg_field RMF_LLOG_LOG_HDR;
 extern struct req_msg_field RMF_LLOGD_CONN_BODY;
 
 extern struct req_msg_field RMF_MGS_TARGET_INFO;
+extern struct req_msg_field RMF_MGS_TARGET_NIDLIST;
 extern struct req_msg_field RMF_MGS_SEND_PARAM;
 
 extern struct req_msg_field RMF_OST_BODY;

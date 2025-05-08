@@ -2464,7 +2464,7 @@ static int echo_client_setup(const struct lu_env *env,
 		return -ENOMEM;
 	}
 
-	ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL |
+	ocd->ocd_connect_flags = OBD_CONNECT_VERSION |
 				 OBD_CONNECT_BRW_SIZE |
 				 OBD_CONNECT_GRANT | OBD_CONNECT_FULL20 |
 				 OBD_CONNECT_64BITHASH | OBD_CONNECT_LVB_TYPE |

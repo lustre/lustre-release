@@ -614,7 +614,7 @@ check_obd_connect_data(void)
 	CHECK_DEFINE_64X(OBD_CONNECT_GRANT);
 	CHECK_DEFINE_64X(OBD_CONNECT_SRVLOCK);
 	CHECK_DEFINE_64X(OBD_CONNECT_VERSION);
-	CHECK_DEFINE_64X(OBD_CONNECT_REQPORTAL);
+	CHECK_DEFINE_64X(OBD_CONNECT_MGS_NIDLIST);
 	CHECK_DEFINE_64X(OBD_CONNECT_ACL);
 	CHECK_DEFINE_64X(OBD_CONNECT_XATTR);
 	CHECK_DEFINE_64X(OBD_CONNECT_LARGE_ACL);
@@ -2252,6 +2252,20 @@ check_mgs_target_info(void)
 }
 
 static void
+check_mgs_target_nidlist(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(mgs_target_nidlist);
+	CHECK_MEMBER(mgs_target_nidlist, mtn_flags);
+	CHECK_MEMBER(mgs_target_nidlist, mtn_nids);
+	CHECK_MEMBER(mgs_target_nidlist, mtn_inline_list[0]);
+
+	CHECK_CVALUE_X(NIDLIST_APPEND);
+	CHECK_CVALUE_X(NIDLIST_IN_BULK);
+	CHECK_CVALUE_X(NIDLIST_COMPRESSED);
+}
+
+static void
 check_mgs_nidtbl_entry(void)
 {
 	BLANK_LINE();
@@ -3788,6 +3802,7 @@ main(int argc, char **argv)
 	check_quota_body();
 #endif /* !HAVE_NATIVE_LINUX_CLIENT */
 	check_mgs_target_info();
+	check_mgs_target_nidlist();
 	check_mgs_nidtbl_entry();
 	check_mgs_config_body();
 	check_mgs_config_res();

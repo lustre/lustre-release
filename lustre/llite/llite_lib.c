@@ -594,7 +594,7 @@ retry_connect:
 
 	/* indicate OST features supported by this client */
 	data->ocd_connect_flags = OBD_CONNECT_GRANT | OBD_CONNECT_VERSION |
-				  OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
+				  OBD_CONNECT_BRW_SIZE |
 				  OBD_CONNECT_CANCELSET | OBD_CONNECT_FID |
 				  OBD_CONNECT_SRVLOCK |
 				  OBD_CONNECT_AT | OBD_CONNECT_OSS_CAPA |

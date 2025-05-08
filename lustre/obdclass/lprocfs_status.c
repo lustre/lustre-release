@@ -630,7 +630,7 @@ static const char *const obd_connect_names[] = {
 	"write_grant",			/* 0x04 */
 	"server_lock",			/* 0x10 */
 	"version",			/* 0x20 */
-	"request_portal",		/* 0x40 */
+	"mgs_nidlist",			/* 0x40 */
 	"acl",				/* 0x80 */
 	"xattr",			/* 0x100 */
 	"create_on_write",		/* 0x200 */
