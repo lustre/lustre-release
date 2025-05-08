@@ -330,13 +330,16 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 {
 	struct obd_device *obd = tsi->tsi_exp->exp_obd;
 	struct mgs_device *mgs = exp2mgs_dev(tsi->tsi_exp);
-	struct mgs_target_info *mti, *rep_mti;
+	struct mgs_target_info *mti, *reply_mti, *request_mti;
+	struct mgs_target_nidlist *mtn = NULL;
+	struct ptlrpc_bulk_desc *desc = NULL;
 	struct fs_db *b_fsdb = NULL; /* barrier fsdb */
 	struct fs_db *c_fsdb = NULL; /* config fsdb */
 	char barrier_name[20];
-	size_t mti_len = 0;
+	size_t mti_buflen, mti_alloc = 0;
 	int opc;
 	int rc = 0;
+	bool nidlist;
 
 	ENTRY;
 	rc = lu_env_refill((struct lu_env *)tsi->tsi_env);
@@ -345,16 +348,87 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 
 	tgt_counter_incr(tsi->tsi_exp, LPROC_MGS_TARGET_REG);
 
-	mti = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_TARGET_INFO);
-	if (mti == NULL) {
-		DEBUG_REQ(D_HA, tgt_ses_req(tsi), "no mgs_send_param");
-		RETURN(err_serious(-EFAULT));
+	nidlist = exp_connect_flags(tsi->tsi_exp) & OBD_CONNECT_MGS_NIDLIST;
+
+	request_mti = req_capsule_client_get(tsi->tsi_pill,
+					     &RMF_MGS_TARGET_INFO);
+	if (!request_mti) {
+		DEBUG_REQ(D_HA, tgt_ses_req(tsi), "no mgs_target_info");
+		RETURN(err_serious(-EPROTO));
+	}
+	mti_buflen = req_capsule_get_size(tsi->tsi_pill, &RMF_MGS_TARGET_INFO,
+					  RCL_CLIENT);
+
+	/* Compatibility code for older targets, process mti as is */
+	if (!nidlist) {
+		int limit;
+
+		mti = request_mti;
+		/* sanity check for mti_nid_count */
+		if (mti_buflen > sizeof(*mti))
+			limit = (mti_buflen - sizeof(*mti)) / MTN_NIDSTR_SIZE;
+		else
+			limit = MTI_NIDS_MAX;
+
+		if (mti->mti_nid_count > limit) {
+			CWARN("%s: bad NID count in mti: %d, req limit: %d\n",
+			      mti->mti_svname, mti->mti_nid_count, limit);
+			mti->mti_nid_count = limit;
+		}
+		goto process;
 	}
 
+	req_capsule_extend(tsi->tsi_pill, &RQF_MGS_TARGET_REG_NIDLIST);
+	if (!req_capsule_field_present(tsi->tsi_pill, &RMF_MGS_TARGET_NIDLIST,
+				       RCL_CLIENT)) {
+		DEBUG_REQ(D_HA, tgt_ses_req(tsi), "no mgs_target_nidlist");
+		RETURN(err_serious(-EPROTO));
+	}
+
+	/* new protocol with nidlist */
+	mtn = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_TARGET_NIDLIST);
+	mti_alloc = sizeof(*mti) + NIDLIST_SIZE(mtn->mtn_nids);
+	OBD_ALLOC_LARGE(mti, mti_alloc);
+	if (!mti)
+		RETURN(err_serious(-ENOMEM));
+
+	if (mtn->mtn_flags & NIDLIST_IN_BULK) {
+		int pages;
+		size_t nidlist_size = NIDLIST_SIZE(mtn->mtn_nids);
+
+		pages = DIV_ROUND_UP((sizeof(*mti) & ~PAGE_MASK) +
+				     nidlist_size, PAGE_SIZE);
+		desc = ptlrpc_prep_bulk_exp(tsi->tsi_pill->rc_req,
+					    pages, PTLRPC_BULK_OPS_COUNT,
+					    PTLRPC_BULK_GET_SINK,
+					    MGS_BULK_PORTAL,
+					    &ptlrpc_bulk_kiov_nopin_ops);
+		if (!desc)
+			GOTO(out_mti_free, rc = err_serious(-ENOMEM));
+
+		desc->bd_frag_ops->add_iov_frag(desc, mti->mti_nidlist,
+						nidlist_size);
+		tsi->tsi_pill->rc_req->rq_bulk_write = 1;
+		rc = sptlrpc_svc_prep_bulk(tsi->tsi_pill->rc_req, desc);
+		if (rc != 0)
+			GOTO(out_free, rc = err_serious(rc));
+
+		rc = target_bulk_io(tsi->tsi_pill->rc_req->rq_export, desc);
+		if (rc < 0)
+			GOTO(out_free, rc = err_serious(rc));
+	} else {
+		memcpy(mti->mti_nidlist, mtn->mtn_inline_list,
+		       NIDLIST_SIZE(mtn->mtn_nids));
+	}
+	*mti = *request_mti;
+	mti->mti_nid_count = mtn->mtn_nids;
+	mti->mti_flags |= LDD_F_LARGE_NID;
+
+process:
+	/* at this point all NIDs are in mti */
 	down_read(&mgs->mgs_barrier_rwsem);
 
-	if (OCD_HAS_FLAG(&tgt_ses_req(tsi)->rq_export->exp_connect_data,
-			 IMP_RECOV))
+	if (OCD_HAS_FLAG(&tsi->tsi_exp->exp_connect_data, IMP_RECOV))
 		opc = mti->mti_flags & LDD_F_OPC_MASK;
 	else
 		opc = LDD_F_OPC_REG;
@@ -527,29 +601,35 @@ out_norevoke:
 	if (rc)
 		mti->mti_flags |= LDD_F_ERROR;
 
-	/* send back the whole mti in the reply */
-	if (target_supports_large_nid(mti)) {
-		size_t len = offsetof(struct mgs_target_info, mti_nidlist);
+	/* Compatibility code:
+	 * if large mti was received, send back the same buffer size as that
+	 * MGC expects, so avoid buffer size mismatch errors on MGC side
+	 */
+	if (mti_buflen > sizeof(*mti)) {
 		int err;
 
-		mti_len = mti->mti_nid_count * LNET_NIDSTR_SIZE;
 		err = req_capsule_server_grow(tsi->tsi_pill,
-					      &RMF_MGS_TARGET_INFO,
-					      len + mti_len);
+					      &RMF_MGS_TARGET_INFO, mti_buflen);
 		if (err < 0)
-			RETURN(err);
+			GOTO(out_fsdb, rc = err_serious(err));
 	}
-	rep_mti = req_capsule_server_get(tsi->tsi_pill, &RMF_MGS_TARGET_INFO);
-	*rep_mti = *mti;
-	if (target_supports_large_nid(mti))
-		memcpy(rep_mti->mti_nidlist, mti->mti_nidlist, mti_len);
+	reply_mti = req_capsule_server_get(tsi->tsi_pill, &RMF_MGS_TARGET_INFO);
+	*reply_mti = *mti;
 
 	/* Flush logs to disk */
 	dt_sync(tsi->tsi_env, mgs->mgs_bottom);
+
+out_fsdb:
 	if (b_fsdb)
 		mgs_put_fsdb(mgs, b_fsdb);
 	if (c_fsdb)
 		mgs_put_fsdb(mgs, c_fsdb);
+out_free:
+	ptlrpc_free_bulk(desc);
+out_mti_free:
+	if (mti_alloc)
+		OBD_FREE_LARGE(mti, mti_alloc);
+
 	RETURN(rc);
 }
 

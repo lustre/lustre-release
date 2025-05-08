@@ -306,7 +306,9 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 {
 	ENTRY;
 
-	LASSERT(desc != NULL);
+	if (!desc)
+		return;
+
 	LASSERT(desc->bd_iov_count != LI_POISON); /* not freed already */
 	LASSERT(desc->bd_refs == 0);         /* network hands off */
 	LASSERT((desc->bd_export != NULL) ^ (desc->bd_import != NULL));
