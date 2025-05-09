@@ -684,6 +684,8 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 	struct obd_device *obd = seq->private;
 	struct client_obd *cli = &obd->u.cli;
 	unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
+	unsigned long read_lat_tot, read_lat_cum;
+	unsigned long write_lat_tot, write_lat_cum;
 	int i;
 
 	spin_lock(&cli->cl_loi_list_lock);
@@ -770,6 +772,35 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                         break;
         }
 
+	seq_puts(seq, "\n");
+	seq_puts(seq, "\t\t\tread\t\t\twrite\n");
+	seq_puts(seq, "RPC latency (us)       count   % cum % |");
+	seq_puts(seq, "       count   % cum %\n");
+
+	read_lat_tot = lprocfs_oh_sum(&cli->cl_read_io_latency_hist);
+	write_lat_tot = lprocfs_oh_sum(&cli->cl_write_io_latency_hist);
+
+	read_lat_cum = 0;
+	write_lat_cum = 0;
+	for (i = 0; i < OBD_HIST_MAX; i++) {
+		unsigned long read_lat =
+			cli->cl_read_io_latency_hist.oh_buckets[i] * 1024 / 1000;
+		unsigned long write_lat =
+			cli->cl_write_io_latency_hist.oh_buckets[i] * 1024 / 1000;
+
+		read_lat_cum += read_lat;
+		write_lat_cum += write_lat;
+		seq_printf(seq, "%d:\t\t%10lu %3u %3u   | %10lu %3u %3u\n",
+			   (i == 0) ? 0 : 1 << (i - 1),
+			   read_lat, pct(read_lat, read_lat_tot),
+			   pct(read_lat_cum, read_lat_tot),
+			   write_lat, pct(write_lat, write_lat_tot),
+			   pct(write_lat_cum, write_lat_tot));
+		if (read_lat_cum == read_lat_tot &&
+		    write_lat_cum == write_lat_tot)
+			break;
+	}
+
 	spin_unlock(&cli->cl_loi_list_lock);
 
         return 0;
@@ -789,6 +820,8 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file,
 	lprocfs_oh_clear(&cli->cl_write_page_hist);
 	lprocfs_oh_clear(&cli->cl_read_offset_hist);
 	lprocfs_oh_clear(&cli->cl_write_offset_hist);
+	lprocfs_oh_clear(&cli->cl_read_io_latency_hist);
+	lprocfs_oh_clear(&cli->cl_write_io_latency_hist);
 	cli->cl_stats_init = ktime_get_real();
 
 	return len;

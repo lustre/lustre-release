@@ -408,6 +408,8 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	spin_lock_init(&cli->cl_write_page_hist.oh_lock);
 	spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
 	spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
+	spin_lock_init(&cli->cl_read_io_latency_hist.oh_lock);
+	spin_lock_init(&cli->cl_write_io_latency_hist.oh_lock);
 	spin_lock_init(&cli->cl_batch_rpc_hist.oh_lock);
 
 	/* lru for osc. */

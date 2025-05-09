@@ -16935,6 +16935,54 @@ test_127c() { # LU-12394
 }
 run_test 127c "test llite extent stats with regular & mmap i/o"
 
+test_127d() {
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+
+	(( CLIENT_VERSION >= $(version_code 2.16.56.105) )) ||
+		skip "need client > 2.16.56.105 for osc latency stats"
+
+	local size=10
+	local file=$DIR/$tfile
+
+	# Clear RPC stats
+	$LCTL set_param osc.*.rpc_stats=clear
+
+	# Generate write I/O
+	dd if=/dev/urandom of=$file bs=1M count=$size conv=fsync ||
+		error "dd write failed"
+	stack_trap "rm -f $file"
+
+	# Drop caches to ensure read goes to server
+	cancel_lru_locks osc
+
+	# Generate read I/O
+	dd if=$file of=/dev/null bs=1M || error "dd read failed"
+
+	# Get RPC stats for debugging
+	local rpc_stats=$($LCTL get_param -n osc.*OST*.rpc_stats)
+	echo "RPC stats after I/O:"
+	echo "$rpc_stats"
+
+	# Check for read RPC latency stats
+	local read_latency=$(echo "$rpc_stats" |
+		awk '/RPC latency/,/^$/ && $1 ~ /[0-9]+:/ && $2 > 0 \
+		     { found = 1; exit }
+		     END { print (found ? "1" : "0") }')
+
+	# Check for write RPC latency stats
+	local write_latency=$(echo "$rpc_stats" |
+		awk '/RPC latency/,/^$/ && $1 ~ /[0-9]+:/ && $6 > 0 \
+		     { found = 1; exit }
+		     END { print (found ? "1" : "0") }')
+
+	echo "Read latency found: $read_latency"
+	echo "Write latency found: $write_latency"
+
+	(( read_latency == 1 )) || error "No read RPC latency stats"
+	(( write_latency == 1 )) || error "No write RPC latency stats"
+}
+run_test 127d "OSC RPC latency histograms for read and write latency"
+
 test_128() { # bug 15212
 	touch $DIR/$tfile
 	$LFS 2>&1 <<-EOF | tee $TMP/$tfile.log

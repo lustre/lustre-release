@@ -2573,7 +2573,9 @@ static int brw_interpret(const struct lu_env *env,
 	struct osc_extent *ext;
 	struct osc_extent *tmp;
 	struct lov_oinfo *loi;
+	ktime_t completion_time = ktime_get();
 	bool srvlock = false;
+	ktime_t start_time;
 
 	ENTRY;
 
@@ -2699,6 +2701,7 @@ static int brw_interpret(const struct lu_env *env,
 		       aa->aa_requested_nob :
 		       req->rq_bulk->bd_nob_transferred);
 
+	start_time = aa->aa_start_time;
 	osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
 	ptlrpc_lprocfs_brw(req, transferred);
 
@@ -2713,6 +2716,18 @@ static int brw_interpret(const struct lu_env *env,
 		cli->cl_r_in_flight--;
 	if (srvlock)
 		cli->cl_d_in_flight--;
+	/* Calculate RPC latency in microseconds and update histogram */
+	if (ktime_to_ns(start_time)) {
+		/* binary convertion, must convert to decimal for display */
+		ktime_t latency_us = ktime_sub(completion_time, start_time) >> 10;
+
+		if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE)
+			lprocfs_oh_tally_log2(&cli->cl_write_io_latency_hist,
+					      latency_us);
+		else
+			lprocfs_oh_tally_log2(&cli->cl_read_io_latency_hist,
+					      latency_us);
+	}
 	osc_wake_cache_waiters(cli);
 	spin_unlock(&cli->cl_loi_list_lock);
 
@@ -2903,6 +2918,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	INIT_LIST_HEAD(&aa->aa_exts);
 	list_splice_init(ext_list, &aa->aa_exts);
 	aa->aa_request = ptlrpc_request_addref(req);
+	aa->aa_start_time = ktime_get();
 
 	spin_lock(&cli->cl_loi_list_lock);
 	starting_offset >>= PAGE_SHIFT;

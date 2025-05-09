@@ -268,6 +268,8 @@ struct client_obd {
 	struct obd_histogram	cl_write_page_hist;
 	struct obd_histogram	cl_read_offset_hist;
 	struct obd_histogram	cl_write_offset_hist;
+	struct obd_histogram	cl_read_io_latency_hist;
+	struct obd_histogram	cl_write_io_latency_hist;
 	ktime_t			cl_batch_stats_init;
 	struct obd_histogram	cl_batch_rpc_hist;
 
