@@ -1942,7 +1942,6 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		memcpy(buf + (i << PAGE_SHIFT), p, lnb[i].lnb_len);
 		kunmap(lnb[i].lnb_page);
 		copied += lnb[i].lnb_len;
-		LASSERT(rc <= len);
 	}
 	CDEBUG(D_INFO, "Read %i (wanted %u) bytes from %llu\n", copied,
 	       len, offset);
