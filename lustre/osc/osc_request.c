@@ -2720,13 +2720,32 @@ static int brw_interpret(const struct lu_env *env,
 	if (ktime_to_ns(start_time)) {
 		/* binary convertion, must convert to decimal for display */
 		ktime_t latency_us = ktime_sub(completion_time, start_time) >> 10;
+		u32 page_count = aa->aa_page_count;
+		int idx;
 
-		if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE)
+		if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE) {
 			lprocfs_oh_tally_log2(&cli->cl_write_io_latency_hist,
 					      latency_us);
-		else
+
+			/* Update latency by size histogram */
+			if (cli->cl_write_io_latency_by_size && page_count) {
+				idx = fls(page_count) - 1;
+				lprocfs_oh_tally_log2(
+					&cli->cl_write_io_latency_by_size[idx],
+					latency_us);
+			}
+		} else {
 			lprocfs_oh_tally_log2(&cli->cl_read_io_latency_hist,
 					      latency_us);
+
+			/* Update latency by size histogram */
+			if (cli->cl_read_io_latency_by_size && page_count) {
+				idx = fls(page_count) - 1;
+				lprocfs_oh_tally_log2(
+					&cli->cl_read_io_latency_by_size[idx],
+					latency_us);
+			}
+		}
 	}
 	osc_wake_cache_waiters(cli);
 	spin_unlock(&cli->cl_loi_list_lock);

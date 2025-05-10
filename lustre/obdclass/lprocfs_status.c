@@ -629,6 +629,99 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 }
 EXPORT_SYMBOL(lprocfs_stats_collect);
 
+void obd_io_latency_stats_clear(struct obd_histogram *read_io_latency_by_size,
+				struct obd_histogram *write_io_latency_by_size,
+				int num_buckets, ktime_t *stats_init)
+{
+	int i;
+
+	*stats_init = ktime_get_real();
+	for (i = 0; i < num_buckets; i++)
+		lprocfs_oh_clear(&read_io_latency_by_size[i]);
+
+	for (i = 0; i < num_buckets; i++)
+		lprocfs_oh_clear(&write_io_latency_by_size[i]);
+}
+EXPORT_SYMBOL(obd_io_latency_stats_clear);
+
+int obd_io_latency_stats_seq_show(struct seq_file *seq,
+				 struct obd_histogram *read_io_latency_by_size,
+				 struct obd_histogram *write_io_latency_by_size,
+				 int num_buckets, ktime_t stats_init,
+				 spinlock_t *list_lock)
+{
+	unsigned long read_tot, write_tot, read_cum, write_cum;
+	int i, j, kb;
+
+	spin_lock(list_lock);
+
+	seq_puts(seq, "io_latency_by_size:\n");
+	lprocfs_stats_header(seq, ktime_get_real(), stats_init, 13,
+			     ":", false, "");
+
+	/* Print read latency histograms */
+	for (i = 0, kb = PAGE_SIZE / 1024; i < num_buckets; i++, kb <<= 1) {
+		if (!read_io_latency_by_size)
+			continue;
+
+		read_tot = lprocfs_oh_sum(&read_io_latency_by_size[i]);
+
+		if (read_tot == 0)
+			continue;
+
+		seq_printf(seq, "rd_%uK: { ", kb);
+		read_cum = 0;
+		for (j = 0; j < OBD_HIST_MAX; j++) {
+			struct obd_histogram *h = &read_io_latency_by_size[i];
+			unsigned long r = h->oh_buckets[j];
+
+			if (r == 0)
+				continue;
+
+			read_cum += r;
+			seq_printf(seq, "%dus: %lu, ",
+				   (j == 0) ? 0 : 1 << (j - 1), r);
+
+			if (read_cum == read_tot)
+				break;
+		}
+		seq_puts(seq, "}\n");
+	}
+	/* Print write latency histograms */
+	for (i = 0, kb = PAGE_SIZE / 1024; i < num_buckets; i++, kb <<= 1) {
+		if (!write_io_latency_by_size)
+			continue;
+
+		write_tot = lprocfs_oh_sum(&write_io_latency_by_size[i]);
+
+		if (write_tot == 0)
+			continue;
+
+		seq_printf(seq, "wr_%uK: { ", kb);
+		write_cum = 0;
+		for (j = 0; j < OBD_HIST_MAX; j++) {
+			struct obd_histogram *h = &write_io_latency_by_size[i];
+			unsigned long w = h->oh_buckets[j];
+
+			if (w == 0)
+				continue;
+
+			write_cum += w;
+			seq_printf(seq, "%dus: %lu, ",
+				   (j == 0) ? 0 : 1 << (j - 1), w);
+
+			if (write_cum == write_tot)
+				break;
+		}
+		seq_puts(seq, "}\n");
+	}
+
+	spin_unlock(list_lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(obd_io_latency_stats_seq_show);
+
 static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 {
 	bool first = true;

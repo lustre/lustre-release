@@ -662,23 +662,36 @@ LDEBUGFS_SEQ_FOPS_RO_TYPE(osc, timeouts);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osc, state);
 LDEBUGFS_SEQ_FOPS_RW_TYPE(osc, import);
 
-static struct ldebugfs_vars ldebugfs_osc_obd_vars[] = {
-	{ .name	=	"connect_flags",
-	  .fops	=	&osc_connect_flags_fops		},
-	{ .name	=	"ost_server_uuid",
-	  .fops	=	&osc_server_uuid_fops		},
-	{ .name	=	"osc_cached_mb",
-	  .fops	=	&osc_cached_mb_fops		},
-	{ .name	=	"timeouts",
-	  .fops	=	&osc_timeouts_fops		},
-	{ .name	=	"import",
-	  .fops	=	&osc_import_fops		},
-	{ .name	=	"state",
-	  .fops	=	&osc_state_fops			},
-	{ .name	=	"unstable_stats",
-	  .fops	=	&osc_unstable_stats_fops	},
-	{ NULL }
-};
+static int osc_io_latency_stats_seq_show(struct seq_file *seq, void *v)
+{
+	struct obd_device *obd = seq->private;
+	struct client_obd *cli = &obd->u.cli;
+	int num_buckets = PTLRPC_MAX_BRW_BITS - PAGE_SHIFT;
+
+	return obd_io_latency_stats_seq_show(seq,
+					     cli->cl_read_io_latency_by_size,
+					     cli->cl_write_io_latency_by_size,
+					     num_buckets,
+					     cli->cl_io_latency_stats_init,
+					     &cli->cl_loi_list_lock);
+}
+
+static ssize_t osc_io_latency_stats_seq_write(struct file *file,
+					       const char __user *buf,
+					       size_t len, loff_t *off)
+{
+	struct seq_file *seq = file->private_data;
+	struct obd_device *obd = seq->private;
+	struct client_obd *cli = &obd->u.cli;
+	int num_buckets = PTLRPC_MAX_BRW_BITS - PAGE_SHIFT;
+
+	obd_io_latency_stats_clear(cli->cl_read_io_latency_by_size,
+				   cli->cl_write_io_latency_by_size,
+				   num_buckets, &cli->cl_io_latency_stats_init);
+
+	return len;
+}
+LDEBUGFS_SEQ_FOPS(osc_io_latency_stats);
 
 static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {
@@ -856,16 +869,31 @@ static ssize_t osc_stats_seq_write(struct file *file,
 
 	return len;
 }
-
 LDEBUGFS_SEQ_FOPS(osc_stats);
 
-static void ldebugfs_osc_attach_seqstat(struct obd_device *obd)
-{
-	debugfs_create_file("osc_stats", 0644, obd->obd_debugfs_entry, obd,
-			    &osc_stats_fops);
-	debugfs_create_file("rpc_stats", 0644, obd->obd_debugfs_entry, obd,
-			    &osc_rpc_stats_fops);
-}
+static struct ldebugfs_vars ldebugfs_osc_obd_vars[] = {
+	{ .name	=	"connect_flags",
+	  .fops	=	&osc_connect_flags_fops		},
+	{ .name	=	"import",
+	  .fops	=	&osc_import_fops		},
+	{ .name	=	"io_latency_stats",
+	  .fops	=	&osc_io_latency_stats_fops	},
+	{ .name	=	"osc_cached_mb",
+	  .fops	=	&osc_cached_mb_fops		},
+	{ .name	=	"osc_stats",
+	  .fops	=	&osc_stats_fops			},
+	{ .name	=	"ost_server_uuid",
+	  .fops	=	&osc_server_uuid_fops		},
+	{ .name	=	"rpc_stats",
+	  .fops	=	&osc_rpc_stats_fops		},
+	{ .name	=	"state",
+	  .fops	=	&osc_state_fops			},
+	{ .name	=	"timeouts",
+	  .fops	=	&osc_timeouts_fops		},
+	{ .name	=	"unstable_stats",
+	  .fops	=	&osc_unstable_stats_fops	},
+	{ NULL }
+};
 
 LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
@@ -915,8 +943,6 @@ int osc_tunables_init(struct obd_device *obd)
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc)
 		return rc;
-
-	ldebugfs_osc_attach_seqstat(obd);
 
 	rc = sptlrpc_lprocfs_cliobd_attach(obd);
 	if (rc) {

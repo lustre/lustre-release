@@ -412,6 +412,37 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	spin_lock_init(&cli->cl_write_io_latency_hist.oh_lock);
 	spin_lock_init(&cli->cl_batch_rpc_hist.oh_lock);
 
+	/* Initialize RPC latency by size histograms */
+	{
+		int num_buckets = PTLRPC_MAX_BRW_BITS - PAGE_SHIFT;
+		int i;
+
+		OBD_ALLOC_PTR_ARRAY(cli->cl_read_io_latency_by_size,
+				    num_buckets);
+		cli->cl_io_latency_stats_init = ktime_get_real();
+		if (cli->cl_read_io_latency_by_size) {
+			for (i = 0; i < num_buckets; i++) {
+				struct obd_histogram *h;
+
+				h = &cli->cl_read_io_latency_by_size[i];
+				spin_lock_init(&h->oh_lock);
+				lprocfs_oh_clear(h);
+			}
+		}
+
+		OBD_ALLOC_PTR_ARRAY(cli->cl_write_io_latency_by_size,
+				    num_buckets);
+		if (cli->cl_write_io_latency_by_size) {
+			for (i = 0; i < num_buckets; i++) {
+				struct obd_histogram *h;
+
+				h = &cli->cl_write_io_latency_by_size[i];
+				spin_lock_init(&h->oh_lock);
+				lprocfs_oh_clear(h);
+			}
+		}
+	}
+
 	/* lru for osc. */
 	INIT_LIST_HEAD(&cli->cl_lru_osc);
 	atomic_set(&cli->cl_lru_shrinkers, 0);
@@ -490,7 +521,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		OBD_ALLOC(cli->cl_mod_tag_bitmap,
 			  BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
 		if (cli->cl_mod_tag_bitmap == NULL)
-			GOTO(err, rc = -ENOMEM);
+			GOTO(err_latency, rc = -ENOMEM);
 	}
 
 	rc = ldlm_get_ref();
@@ -581,6 +612,13 @@ err:
 	OBD_FREE(cli->cl_mod_tag_bitmap,
 		 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
 	cli->cl_mod_tag_bitmap = NULL;
+err_latency:
+	OBD_FREE_PTR_ARRAY(cli->cl_read_io_latency_by_size,
+			    PTLRPC_MAX_BRW_BITS - PAGE_SHIFT);
+	cli->cl_read_io_latency_by_size = NULL;
+	OBD_FREE_PTR_ARRAY(cli->cl_write_io_latency_by_size,
+			    PTLRPC_MAX_BRW_BITS - PAGE_SHIFT);
+	cli->cl_write_io_latency_by_size = NULL;
 
 	RETURN(rc);
 }
@@ -603,6 +641,15 @@ void client_obd_cleanup(struct obd_device *obd)
 	OBD_FREE(cli->cl_mod_tag_bitmap,
 		 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
 	cli->cl_mod_tag_bitmap = NULL;
+
+	/* Free RPC latency by size histograms */
+	OBD_FREE_PTR_ARRAY(cli->cl_read_io_latency_by_size,
+			   PTLRPC_MAX_BRW_BITS - PAGE_SHIFT);
+	cli->cl_read_io_latency_by_size = NULL;
+
+	OBD_FREE_PTR_ARRAY(cli->cl_write_io_latency_by_size,
+			   PTLRPC_MAX_BRW_BITS - PAGE_SHIFT);
+	cli->cl_write_io_latency_by_size = NULL;
 
 	EXIT;
 }

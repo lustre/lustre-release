@@ -270,6 +270,10 @@ struct client_obd {
 	struct obd_histogram	cl_write_offset_hist;
 	struct obd_histogram	cl_read_io_latency_hist;
 	struct obd_histogram	cl_write_io_latency_hist;
+	/* RPC latency histograms by size (in pages) */
+	ktime_t			cl_io_latency_stats_init;
+	struct obd_histogram	*cl_read_io_latency_by_size;
+	struct obd_histogram	*cl_write_io_latency_by_size;
 	ktime_t			cl_batch_stats_init;
 	struct obd_histogram	cl_batch_rpc_hist;
 

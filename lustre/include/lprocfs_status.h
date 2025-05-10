@@ -519,6 +519,14 @@ extern int ldebugfs_alloc_obd_stats(struct obd_device *obd,
 				    unsigned int num_stats);
 extern int lprocfs_alloc_md_stats(struct obd_device *obd,
 				  unsigned int num_private_stats);
+void obd_io_latency_stats_clear(struct obd_histogram *read_io_latency_by_size,
+				struct obd_histogram *write_io_latency_by_size,
+				int num_buckets, ktime_t *stats_init);
+extern int obd_io_latency_stats_seq_show(struct seq_file *seq,
+				 struct obd_histogram *read_io_latency_by_size,
+				 struct obd_histogram *write_io_latency_by_size,
+				 int num_buckets, ktime_t stats_init,
+				 spinlock_t *list_lock);
 extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
 				 enum lprocfs_counter_config config,
 				 const char *name);

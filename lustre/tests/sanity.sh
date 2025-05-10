@@ -16984,6 +16984,80 @@ test_127d() {
 }
 run_test 127d "OSC RPC latency histograms for read and write latency"
 
+test_127_io_latency_test() {
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+
+	local facet=$1
+	local io_latency_param=$2
+	local dev=osc
+
+	[[ $io_latency_param =~ "md[ct]" ]] && dev="mdc"
+
+	# Clear RPC stats
+	do_facet $facet $LCTL set_param $io_latency_param=clear
+
+	# Generate I/O with different sizes to populate multiple histograms
+	local file=$DIR/$tdir/$tfile
+	local count=10
+	local sizes=(4K 64K 1024K)
+	local mppr=($($LCTL get_param -n $dev.*.max_pages_per_rpc))
+	(( $mppr * $PAGE_SIZE / 1024 >= 4096 )) && sizes+=(4096K)
+
+	$LFS mkdir -i 0 $DIR/$tdir
+	stack_trap "rm -f ${file}_*"
+
+	for size in ${sizes[@]}; do
+		echo "Generating I/O with size $size"
+
+		# Write with current size
+		[[ $dev == "mdc" ]] && $LFS setstripe -E 4M -L mdt ${file}_${size} ||
+				       $LFS setstripe -c 1 -i 0 ${file}_${size}
+		dd if=/dev/urandom of=${file}_${size} bs=$size count=$count \
+			oflag=direct ||
+			error "dd write failed for size $size"
+		sync
+
+		# Read with current size
+		dd if=${file}_${size} of=/dev/null bs=$size count=$count \
+			iflag=direct ||
+			error "dd read failed for size $size"
+	done
+
+	# Get client IO latency stats for debugging
+	local io_latency_stats=$(do_facet $facet $LCTL get_param $io_latency_param)
+	echo "$io_latency_param stats after I/O:"
+	echo "$io_latency_stats"
+
+	# Check that we have entries for different sizes
+	for size in $sizes; do
+		grep -q $size <<<$io_latency_stats ||
+			error "No stats found for size $size"
+	done
+
+	local check_counts=$(echo "$io_latency_stats" |
+		awk -v count="$count" '/K: / {sum = 0
+		while (match($0, /[0-9]+us: ([0-9]+),/, arr)) {
+			sum += arr[1]
+			$0 = substr($0, RSTART + RLENGTH)
+		}
+		{ if (sum != count) print "Expected "count" entries, found "sum}
+		}')
+	[[ -z "$check_counts" ]] || error "$check_counts"
+
+	local has_read=$(echo "$io_latency_stats" | grep -c "rd_")
+	local has_write=$(echo "$io_latency_stats" | grep -c "wr_")
+
+	(( has_read == ${#sizes[@]} )) ||
+		error "Expected ${#sizes[@]} read stats, found $has_read"
+	(( has_write == ${#sizes[@]} )) ||
+		error "Expected ${#sizes[@]} write stats, found $has_write"
+}
+
+test_127e() {
+	test_127_io_latency_test client osc.*.io_latency_stats
+}
+run_test 127e "client IO latency histograms by size"
+
 test_128() { # bug 15212
 	touch $DIR/$tfile
 	$LFS 2>&1 <<-EOF | tee $TMP/$tfile.log
