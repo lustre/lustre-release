@@ -742,7 +742,6 @@ static int ptlrpcd_init(void)
 			ptlrpcds_cpt_idx[cpt] = i;
 		}
 
-		cfs_expr_list_values_free(cpts, rc);
 		ncpts = rc;
 	}
 	ptlrpcds_num = ncpts;
@@ -895,6 +894,8 @@ static int ptlrpcd_init(void)
 		}
 	}
 out:
+	if (cpts != NULL)
+		cfs_expr_list_values_free(cpts, ncpts);
 	if (rc != 0)
 		ptlrpcd_fini();
 
