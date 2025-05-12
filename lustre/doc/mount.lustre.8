@@ -5,7 +5,7 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License v2.
 .\"
-.TH MOUNT.LUSTRE 8 2024-08-28 Lustre "Lustre Configuration Utilities"
+.TH MOUNT.LUSTRE 8 2025-05-22 Lustre "Lustre Configuration Utilities"
 .SH NAME
 mount.lustre, mount.lustre_tgt \- mount helper for Lustre client/target service
 .SH SYNOPSIS
@@ -246,6 +246,11 @@ Disable Lustre client-side encryption. By default, Lustre client-side encryption
 is enabled, letting users define encryption policies on a per-directory basis.
 fscrypt userspace tool can be used for that purpose, see
 https://github.com/google/fscrypt
+.TP
+.BI retry= NUM
+Specify the number of times the mount attempt may be retried by the client, with
+an interval starting at 32 seconds for the first 5 minutes, and doubling for
+every two retries after that.
 .SS SERVER OPTIONS
 In addition to the standard mount options and backing disk type
 (e.g. ldiskfs) options listed in
