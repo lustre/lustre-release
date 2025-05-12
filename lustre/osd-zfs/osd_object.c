@@ -1082,20 +1082,17 @@ out:
 }
 #endif
 
-static int osd_declare_attr_set(const struct lu_env *env,
-				struct dt_object *dt,
+static int osd_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 				const struct lu_attr *attr,
 				struct thandle *handle)
 {
-	struct osd_thread_info	*info = osd_oti_get(env);
-	struct osd_object	*obj = osd_dt_obj(dt);
-	struct osd_device	*osd = osd_obj2dev(obj);
-	dmu_tx_hold_t		*txh;
-	struct osd_thandle	*oh;
-	uint64_t		 bspace;
-	uint32_t		 blksize;
-	int			 rc = 0;
-	bool			 found;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
+	dmu_tx_hold_t *txh;
+	struct osd_thandle *oh;
+	int rc = 0;
+	bool found;
 
 	ENTRY;
 	LASSERT(handle != NULL);
@@ -1131,68 +1128,77 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	if (oh->ot_tx->tx_err != 0)
 		GOTO(out_sem, rc = -oh->ot_tx->tx_err);
 
-	if (attr && attr->la_valid & LA_FLAGS) {
+	if (!attr)
+		GOTO(out_sem, rc = 0);
+
+	if (attr->la_valid & LA_FLAGS) {
 		/* punch must be aware we are dealing with an encrypted file */
 		if (attr->la_flags & LUSTRE_ENCRYPT_FL)
 			obj->oo_lma_flags |= LUSTRE_ENCRYPT_FL;
 	}
 
-	if (attr && (attr->la_valid & (LA_UID | LA_GID | LA_PROJID))) {
+	if (attr->la_valid & (LA_UID | LA_GID | LA_PROJID)) {
+		uint64_t bspace;
+		uint32_t blksize;
+
 		sa_object_size(obj->oo_sa_hdl, &blksize, &bspace);
 		bspace = toqb(bspace * 512);
 
 		CDEBUG(D_QUOTA,
-		       "%s: enforce quota on UID %u, GID %u, the quota space is %lld (%u)\n",
-		       osd->od_svname,
-		       attr->la_uid, attr->la_gid, bspace, blksize);
-	}
-	/* to preserve locking order - qsd_transfer() may need to flush
-	 * currently running transaction when we're out of quota.
-	 */
-	up_read(&obj->oo_guard);
+		       "%s: quota on UID=%u GID=%u PROJID=%u bspace=%lld*%u\n",
+		       osd->od_svname, attr->la_uid, attr->la_gid,
+		       attr->la_projid, bspace, blksize);
+		/* to preserve locking order - qsd_transfer() may need to flush
+		 * currently running transaction when we're out of quota.
+		 */
+		up_read(&obj->oo_guard);
 
-	/* quota enforcement for user */
-	if (attr && attr->la_valid & LA_UID &&
-	    attr->la_uid != obj->oo_attr.la_uid) {
-		rc = qsd_transfer(env, osd_def_qsd(osd),
-				  &oh->ot_quota_trans, USRQUOTA,
-				  obj->oo_attr.la_uid, attr->la_uid,
-				  bspace, &info->oti_qi);
-		if (rc)
-			GOTO(out, rc);
-	}
+		/* quota enforcement for user */
+		if (attr->la_valid & LA_UID &&
+		    attr->la_uid != obj->oo_attr.la_uid) {
+			rc = qsd_transfer(env, osd_def_qsd(osd),
+					  &oh->ot_quota_trans, USRQUOTA,
+					  obj->oo_attr.la_uid, attr->la_uid,
+					  bspace, &info->oti_qi);
+			if (rc)
+				GOTO(out, rc);
+		}
 
-	/* quota enforcement for group */
-	if (attr && attr->la_valid & LA_GID &&
-	    attr->la_gid != obj->oo_attr.la_gid) {
-		rc = qsd_transfer(env, osd_def_qsd(osd),
-				  &oh->ot_quota_trans, GRPQUOTA,
-				  obj->oo_attr.la_gid, attr->la_gid,
-				  bspace, &info->oti_qi);
-		if (rc)
-			GOTO(out, rc);
-	}
+		/* quota enforcement for group */
+		if (attr->la_valid & LA_GID &&
+		    attr->la_gid != obj->oo_attr.la_gid) {
+			rc = qsd_transfer(env, osd_def_qsd(osd),
+					  &oh->ot_quota_trans, GRPQUOTA,
+					  obj->oo_attr.la_gid, attr->la_gid,
+					  bspace, &info->oti_qi);
+			if (rc)
+				GOTO(out, rc);
+		}
+
 #ifdef ZFS_PROJINHERIT
-	/* quota enforcement for project */
-	if (attr && attr->la_valid & LA_PROJID &&
-	    attr->la_projid != obj->oo_attr.la_projid) {
-		if (!osd->od_projectused_dn)
-			GOTO(out, rc = -EOPNOTSUPP);
+		/* quota enforcement for project */
+		if (attr->la_valid & LA_PROJID &&
+		    attr->la_projid != obj->oo_attr.la_projid) {
+			if (!osd->od_projectused_dn)
+				GOTO(out, rc = -EOPNOTSUPP);
 
-		if (!zpl_is_valid_projid(attr->la_projid))
-			GOTO(out, rc = -EINVAL);
+			if (!zpl_is_valid_projid(attr->la_projid))
+				GOTO(out, rc = -EINVAL);
 
-		info->oti_qi.lqi_ignore_root_proj_quota =
-			handle->th_ignore_root_proj_quota;
-		rc = qsd_transfer(env, osd_def_qsd(osd),
-				  &oh->ot_quota_trans, PRJQUOTA,
-				  obj->oo_attr.la_projid,
-				  attr->la_projid, bspace,
-				  &info->oti_qi);
-		if (rc)
-			GOTO(out, rc);
-	}
+			info->oti_qi.lqi_ignore_root_proj_quota =
+				handle->th_ignore_root_proj_quota;
+			rc = qsd_transfer(env, osd_def_qsd(osd),
+					  &oh->ot_quota_trans, PRJQUOTA,
+					  obj->oo_attr.la_projid,
+					  attr->la_projid, bspace,
+					  &info->oti_qi);
+			if (rc)
+				GOTO(out, rc);
+		}
 #endif
+	} else {
+		up_read(&obj->oo_guard);
+	}
 out:
 	RETURN(rc);
 out_sem:

@@ -2998,18 +2998,13 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static int osd_declare_attr_set(const struct lu_env *env,
-				struct dt_object *dt,
+static int osd_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 				const struct lu_attr *attr,
 				struct thandle *handle)
 {
 	struct osd_thandle *oh;
 	struct osd_object *obj;
-	qid_t uid;
-	qid_t gid;
-	long long bspace;
 	int rc = 0;
-	bool enforce;
 
 	ENTRY;
 
@@ -3029,56 +3024,63 @@ static int osd_declare_attr_set(const struct lu_env *env,
 			     osd_dto_credits_noquota[DTO_XATTR_SET]);
 
 	if (attr == NULL || obj->oo_inode == NULL)
-		RETURN(rc);
-
-	bspace   = obj->oo_inode->i_blocks << 9;
-	bspace   = toqb(bspace);
+		RETURN(0);
 
 	/*
 	 * Changing ownership is always preformed by super user, it should not
 	 * fail with EDQUOT unless required explicitly.
 	 *
 	 * We still need to call the osd_declare_qid() to calculate the journal
-	 * credits for updating quota accounting files and to trigger quota
-	 * space adjustment once the operation is completed.
+	 * credits for updating quota accounting files for both block and inode
+	 * quotas and to trigger quota space update once operation completes.
 	 */
-	if (attr->la_valid & LA_UID || attr->la_valid & LA_GID) {
-		/* USERQUOTA */
-		uid = i_uid_read(obj->oo_inode);
-		enforce = (attr->la_valid & LA_UID) && (attr->la_uid != uid);
-		rc = osd_declare_attr_qid(env, obj, oh, bspace, uid,
-					  attr->la_uid, enforce, USRQUOTA);
-		if (rc)
-			RETURN(rc);
+	if (attr->la_valid & (LA_UID | LA_GID | LA_PROJID)) {
+		long long bspace;
+		qid_t uid = U32_MAX;
+		qid_t gid = U32_MAX;
+		qid_t projid = U32_MAX;
 
-		gid = i_gid_read(obj->oo_inode);
-		CDEBUG(D_QUOTA, "declare uid %d -> %d gid %d -> %d\n", uid,
-		       attr->la_uid, gid, attr->la_gid);
-		enforce = (attr->la_valid & LA_GID) && (attr->la_gid != gid);
-		rc = osd_declare_attr_qid(env, obj, oh, bspace, gid,
-					  attr->la_gid, enforce, GRPQUOTA);
-		if (rc)
-			RETURN(rc);
-
-	}
+		bspace = toqb(obj->oo_inode->i_blocks << 9);
+		if (attr->la_valid & LA_UID) {
+			uid = i_uid_read(obj->oo_inode);
+			rc = osd_declare_attr_qid(env, obj, oh, bspace, uid,
+						  attr->la_uid,
+						  attr->la_uid != uid,
+						  USRQUOTA);
+			if (rc)
+				RETURN(rc);
+		}
+		if (attr->la_valid & LA_GID) {
+			gid = i_gid_read(obj->oo_inode);
+			rc = osd_declare_attr_qid(env, obj, oh, bspace, gid,
+						  attr->la_gid,
+						  attr->la_gid != gid,
+						  GRPQUOTA);
+			if (rc)
+				RETURN(rc);
+		}
 #ifdef HAVE_PROJECT_QUOTA
-	if (attr->la_valid & LA_PROJID) {
-		__u32 projid = i_projid_read(obj->oo_inode);
-
-		enforce = (attr->la_valid & LA_PROJID) &&
-					(attr->la_projid != projid);
-		rc = osd_declare_attr_qid(env, obj, oh, bspace,
-					  (qid_t)projid, (qid_t)attr->la_projid,
-					  enforce, PRJQUOTA);
-		if (rc)
-			RETURN(rc);
-	}
+		if (attr->la_valid & LA_PROJID) {
+			projid = i_projid_read(obj->oo_inode);
+			rc = osd_declare_attr_qid(env, obj, oh, bspace, projid,
+						  attr->la_projid,
+						  attr->la_projid != projid,
+						  PRJQUOTA);
+			if (rc)
+				RETURN(rc);
+		}
 #endif
+		CDEBUG(D_QUOTA,
+		       "declare UID %u->%u GID %u->%u PROJID %u->%u bspace=%llu\n",
+		       uid, attr->la_uid, gid, attr->la_gid,
+		       projid, attr->la_projid, bspace);
+	}
+
 	/* punch must be aware we are dealing with an encrypted file */
 	if (attr->la_valid & LA_FLAGS && attr->la_flags & LUSTRE_ENCRYPT_FL)
 		obj->oo_lma_flags |= LUSTRE_ENCRYPT_FL;
 
-	RETURN(rc);
+	RETURN(0);
 }
 
 static int osd_inode_setattr(const struct lu_env *env,
