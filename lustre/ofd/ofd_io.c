@@ -605,6 +605,10 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	if (!ofd_object_exists(fo))
 		GOTO(obj_put, rc = -ENOENT);
 
+	rc = ofd_check_resource_ids(env, exp);
+	if (unlikely(rc))
+		GOTO(obj_put, rc);
+
 	if (ptlrpc_connection_is_local(exp->exp_connection))
 		dbt |= DT_BUFS_TYPE_LOCAL;
 
@@ -1250,6 +1254,10 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 		GOTO(out, rc = old_rc);
 	if (!ofd_object_exists(fo))
 		GOTO(out, rc = -ENOENT);
+
+	rc = ofd_check_resource_ids(env, exp);
+	if (unlikely(rc))
+		GOTO(out, rc);
 
 	/*
 	 * The first write to each object must set some attributes.  It is

@@ -684,6 +684,11 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 	if (!ofd_object_exists(fo))
 		GOTO(out, rc = -ENOENT);
 
+	ofd_info(env)->fti_obj = fo;
+
+	rc = ofd_check_resource_ids(env, ofd_info(env)->fti_exp);
+	if (unlikely(rc))
+		GOTO(out, rc);
 
 	if (la->la_valid & LA_PROJID &&
 	    CFS_FAIL_CHECK(OBD_FAIL_OUT_DROP_PROJID_SET))
@@ -798,6 +803,12 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 
 	if (!ofd_object_exists(fo))
 		RETURN(-ENOENT);
+
+	ofd_info(env)->fti_obj = fo;
+
+	rc = ofd_check_resource_ids(env, ofd_info(env)->fti_exp);
+	if (unlikely(rc))
+		RETURN(rc);
 
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);
@@ -931,6 +942,12 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		if (rc != 0)
 			GOTO(out, rc);
 	}
+
+	ofd_info(env)->fti_obj = fo;
+
+	rc = ofd_check_resource_ids(env, ofd_info(env)->fti_exp);
+	if (unlikely(rc))
+		GOTO(out, rc);
 
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);

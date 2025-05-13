@@ -8047,6 +8047,483 @@ test_75() {
 }
 run_test 75 "check uid/gid/projid are set on OST and MDT for various RPCs"
 
+setup_75a() {
+	# Assumes that variables from test_75a are set
+	# Setup c0 (trusted) and c1 (tenant) nodemaps used by the clients
+	nodemap_test_setup
+	trap cleanup_75a EXIT
+
+	# configure tentant nodemap
+	do_facet mgs $LCTL nodemap_set_fileset --name $nm_tenant \
+		--fileset "/$fileset_nm" || error "Setting fileset failed"
+	do_facet mgs $LCTL nodemap_add_offset --name $nm_tenant \
+		--offset $offset_start --limit $offset_limit ||
+		error "cannot set offset for $nm_tenant"
+	do_facet mgs $LCTL nodemap_modify --name $nm_tenant \
+		--property map_mode=projid ||
+		error "cannot set offset for $nm_tenant"
+
+	# configure trusted nodemap
+	do_facet mgs $LCTL nodemap_modify --name $nm_trusted \
+		--property admin --value 1 || error "Setting admin=1 failed"
+	do_facet mgs $LCTL nodemap_modify --name $nm_trusted \
+		--property trusted --value 1 || error "Setting trusted=1 failed"
+
+	wait_nm_sync $nm_trusted trusted_nodemap
+
+	# create and set ownership for fileset dir of "nm_tenant"
+	$run_as_trusted mkdir -p $fileset_subdir ||
+		error "mkdir $fileset_subdir failed"
+	$run_as_trusted chown $((offset_start+ID0)) $fileset_subdir
+
+	# remount clients for nodemap changes to take effect.
+	# This mounts the trusted nodemap (c0) and tenant nodemap (c1)
+	export FILESET=/
+	for client in "${clients_arr[@]}"; do
+		zconf_umount_clients $client $MOUNT ||
+			error "unable to umount client ${clients_arr[0]}"
+		zconf_mount_clients $client $MOUNT $MOUNT_OPTS ||
+			error "unable to umount client ${clients_arr[0]}"
+	done
+	unset FILESET
+	wait_ssk
+}
+
+setup_namespace_75a() {
+	# Assumes that variables from test_75a are set
+	setup_tfiles_75a() {
+		local tenant_file=$1
+		local tenant_dir=$2
+		local offset=$3
+		$run_as_trusted echo "abc" > ${fileset_subdir}/$tenant_file ||
+			error "echo $tenant_file failed"
+		$run_as_trusted mkdir -p ${fileset_subdir}/$tenant_dir ||
+			error "mkdir $tenant_dir failed"
+		$run_as_trusted chmod 777 ${fileset_subdir}/$tenant_file \
+			${fileset_subdir}/$tenant_dir ||
+			error "chmod 777 $tenant_file and $tenant_dir failed"
+		$run_as_trusted chown \
+			$((offset+ID0)):$((offset+ID0)) \
+			${fileset_subdir}/$tenant_file \
+			${fileset_subdir}/$tenant_dir ||
+			error "chown $tenant_file and $tenant_dir failed"
+	}
+
+	# setup testfiles and testdirectories. *_trusted files/dirs are
+	# world-accessible, but become inaccessible once the id_check is enabled
+	$run_as_trusted echo "abc" > ${fileset_subdir}/$tfile_trusted ||
+		error "echo $tfile_trusted failed"
+	$run_as_trusted mkdir ${fileset_subdir}/$tdir_trusted ||
+		error "mkdir $tdir_trusted failed"
+	$run_as_trusted chmod 777 ${fileset_subdir}/$tdir_trusted \
+		${fileset_subdir}/$tfile_trusted ||
+		error "chmod 777 $tdir_trusted failed"
+
+	setup_tfiles_75a $tfile_tl $tdir_tl 100000
+	setup_tfiles_75a $tfile_tenant $tdir_tenant $offset_start
+	setup_tfiles_75a $tfile_tr $tdir_tr 300000
+
+	# DoM files
+	$run_as_trusted $LFS setstripe -E 1M -L mdt \
+		 ${fileset_subdir}/${tfile_trusted}_dom ||
+		error "setstripe ${tfile_trusted}_dom failed"
+	$run_as_trusted chmod 777 ${fileset_subdir}/${tfile_trusted}_dom ||
+			error "chmod 777 ${tfile_trusted}_dom failed"
+	$run_as_trusted $LFS setstripe -E 1M -L mdt \
+		 ${fileset_subdir}/${tfile_tenant}_dom ||
+		error "setstripe ${tfile_tenant}_dom failed"
+	$run_as_trusted chown \
+			$((offset_start+ID0)):$((offset_start+ID0)) \
+			${fileset_subdir}/${tfile_tenant}_dom ||
+			error "chown ${tfile_tenant}_dom failed"
+
+	# create a file used in write tests
+	$run_as_trusted echo "def" > ${fileset_subdir}/$tf_write ||
+		error "echo  $tf_write failed"
+	$run_as_trusted chown \
+		$((offset_start+ID0)):$((offset_start+ID0)) \
+		${fileset_subdir}/$tf_write ||
+		error "chown $tf_write failed"
+}
+
+cleanup_75a() {
+	do_nodes $(all_mdts_nodes) \
+		$LCTL set_param mdt.*.enable_resource_id_check=0 ||
+			error "disabling resource id check on MDTs failed"
+
+	do_nodes $(all_osts_nodes) \
+		$LCTL set_param obdfilter.*.enable_resource_id_check=0 ||
+			error "disabling resource id check on OSTs failed"
+
+	nodemap_test_cleanup
+
+	for client in "${clients_arr[@]}"; do
+		zconf_umount_clients $client $MOUNT ||
+			error "unable to umount client $client"
+		zconf_mount_clients $client $MOUNT $MOUNT_OPTS ||
+			error "unable to umount client $client"
+	done
+	wait_ssk
+}
+
+test_75a() {
+	local offset_start=200000
+	local offset_limit=100000
+	local nm_trusted="c0"
+	local nm_tenant="c1"
+	local fileset_nm="${tdir}/${nm_tenant}_dir"
+	local fileset_subdir="${DIR}/${fileset_nm}"
+	local tfile_trusted="testfile_trusted"
+	local tfile_tenant="testfile_tenant"
+	local tdir_trusted="testdir_trusted"
+	local tdir_tenant="testdir_tenant"
+	# *_tl and *_tr files/dirs are set up such that their fs_ids are to the
+	# left and right of the tenant's offset range, respectively. This is to
+	# exercise both cases of nodemap_map_id() when mapping FS to client IDs.
+	local tfile_tl="testfile_tenant_left"
+	local tdir_tl="testdir_tenant_left"
+	local tfile_tr="testfile_tenant_right"
+	local tdir_tr="testdir_tenant_right"
+	local tf_write="testf_write"
+	local tf="testfile"
+	local client_trusted
+	local run_as_tenant
+	local out
+
+	# This test checks that the enable_resource_id_check flag works
+	# correctly by having a tenant accessing squashed files.
+	# Without this check, tenants are able to access such files
+	# that have world-accessible permissions.
+	# With the flag enabled, this is no longer possible.
+
+	# check that enable_resource_id_check flag exists
+	do_facet mds $LCTL get_param -n mdt.*.enable_resource_id_check ||
+		skip "MDS does not have the enable_resource_id_check flag"
+	do_facet ost $LCTL get_param -n obdfilter.*.enable_resource_id_check ||
+		skip "OSS does not have the enable_resource_id_check flag"
+
+	# need two clients to continue
+	(( $CLIENTCOUNT >= 2 )) || skip "need at least two clients"
+
+	if $SHARED_KEY; then
+		skip "need non-shared key for this test"
+	fi
+
+	# assign clients and helper routines
+	client_trusted=${clients_arr[0]}
+	client_tenant=${clients_arr[1]}
+	run_as_tenant="do_node $client_tenant $RUNAS_CMD -u $ID0"
+	run_as_trusted="do_node $client_trusted"
+
+	setup_75a
+
+	do_nodes $(all_mdts_nodes) \
+		$LCTL set_param mdt.*.enable_resource_id_check=0 ||
+			error "disabling resource id check on MDTs failed"
+
+	do_nodes $(all_osts_nodes) \
+		$LCTL set_param obdfilter.*.enable_resource_id_check=0 ||
+			error "disabling resource id check on OSTs failed"
+
+	report_client_view_75a() {
+		echo "Trusted view:"
+		$run_as_trusted ls -al $fileset_subdir
+		echo "------------------------------"
+		echo "Tenant view:"
+		$run_as_tenant ls -al $MOUNT
+	}
+
+	75a_drop_tenant_cache() {
+		do_node $client_tenant \
+			"sync ; echo 3 > /proc/sys/vm/drop_caches"
+	}
+
+	75a_op_test() {
+		local test_cmd="$run_as_tenant $1"
+		local test_success=${2:-true}
+		if $test_success; then
+			$test_cmd || error "$1 failed"
+		else
+			$test_cmd && error "$1 should've failed"
+		fi
+	}
+
+	75a_read_test() {
+		local test_cmd="$run_as_tenant $1"
+		local test_success=${2:-true}
+		local expected=${3:-"def"}
+		local out
+		if $test_success; then
+			out=$($test_cmd) || error "$1 failed"
+			echo $out
+			[[ $out == $expected ]] ||
+				error "read $expected for $1 incorrect"
+		else
+			$test_cmd && error "$1 should've failed"
+		fi
+	}
+
+	75a_getxattr_test() {
+		local test_cmd="$run_as_tenant getfattr -n user.abc $1"
+		local test_success=${2:-true}
+		local expected=${3:-"\"def\""}
+		local out
+		if $test_success; then
+			out=$($test_cmd | awk -F'=' '/user.abc/ {print $2}') ||
+				error "$1 failed"
+			echo $out
+			[[ $out == $expected ]] ||
+				error "getxattr $expected for $1 incorrect"
+		else
+			$test_cmd && error "$1 should've failed"
+		fi
+	}
+
+	# Setup testrun 1
+	setup_namespace_75a
+	report_client_view_75a
+	# Testrun 1 begins (check disabled)
+	# 1. write to files
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/$tfile_trusted" true
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/$tfile_tl" true
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/$tfile_tenant" true
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/$tfile_tr" true
+	75a_drop_tenant_cache
+	# 2. read from files
+	75a_read_test "cat ${MOUNT}/$tfile_trusted" true
+	75a_read_test "cat ${MOUNT}/$tfile_tl" true
+	75a_read_test "cat ${MOUNT}/$tfile_tenant" true
+	75a_read_test "cat ${MOUNT}/$tfile_tr" true
+	75a_drop_tenant_cache
+	# 3. create files in various dirs
+	75a_op_test "touch ${MOUNT}/${tdir_trusted}/$tf" true
+	75a_op_test "touch ${MOUNT}/${tdir_tl}/$tf" true
+	75a_op_test "touch ${MOUNT}/${tdir_tenant}/$tf" true
+	75a_op_test "touch ${MOUNT}/${tdir_tr}/$tf" true
+	# 4. soft and hard links
+	75a_op_test "ln ${MOUNT}/$tfile_trusted \
+		${MOUNT}/${tfile_trusted}_hlink" true
+	75a_op_test "ln -s ${MOUNT}/$tfile_trusted \
+		${MOUNT}/${tfile_trusted}_slink" true
+	75a_op_test "ln ${MOUNT}/$tfile_tl \
+		${MOUNT}/${tfile_tl}_hlink" true
+	75a_op_test "ln -s ${MOUNT}/$tfile_tl \
+		${MOUNT}/${tfile_tl}_slink" true
+	75a_op_test "ln ${MOUNT}/$tfile_tenant \
+		${MOUNT}/${tfile_tenant}_hlink" true
+	75a_op_test "ln -s ${MOUNT}/$tfile_tenant \
+		${MOUNT}/${tfile_tenant}_slink" true
+	75a_op_test "ln ${MOUNT}/$tfile_tr \
+		${MOUNT}/${tfile_tr}_hlink" true
+	75a_op_test "ln -s ${MOUNT}/$tfile_tr \
+		${MOUNT}/${tfile_tr}_slink" true
+	75a_read_test "cat ${MOUNT}/${tfile_trusted}_hlink" true
+	75a_read_test "cat ${MOUNT}/${tfile_trusted}_slink" true
+	75a_read_test "cat ${MOUNT}/${tfile_tl}_hlink" true
+	75a_read_test "cat ${MOUNT}/${tfile_tl}_slink" true
+	75a_read_test "cat ${MOUNT}/${tfile_tenant}_hlink" true
+	75a_read_test "cat ${MOUNT}/${tfile_tenant}_slink" true
+	75a_read_test "cat ${MOUNT}/${tfile_tr}_hlink" true
+	75a_read_test "cat ${MOUNT}/${tfile_tr}_slink" true
+	75a_op_test "rm ${MOUNT}/*_hlink" true
+	75a_op_test "rm ${MOUNT}/*_slink" true
+	# 5. fallocate (zfs does not support pre-allocation via fallocate(2))
+	if [[ "$ost1_FSTYPE" == "ldiskfs" ]]; then
+		75a_op_test "fallocate -l 1M ${MOUNT}/$tfile_trusted" true
+		75a_op_test "fallocate -l 1M ${MOUNT}/$tfile_tl" true
+		75a_op_test "fallocate -l 1M ${MOUNT}/$tfile_tenant" true
+		75a_op_test "fallocate -l 1M ${MOUNT}/$tfile_tr" true
+	fi
+	# 6. truncate
+	75a_op_test "$TRUNCATE ${MOUNT}/$tfile_trusted 524288" true
+	75a_op_test "$TRUNCATE ${MOUNT}/$tfile_tl 524288" true
+	75a_op_test "$TRUNCATE ${MOUNT}/$tfile_tenant 524288" true
+	75a_op_test "$TRUNCATE ${MOUNT}/$tfile_tr 524288" true
+	# 7. rename files (and back)
+	75a_op_test "mv ${MOUNT}/$tfile_trusted ${MOUNT}/${tfile_trusted}_" true
+	75a_op_test "mv ${MOUNT}/${tfile_trusted}_ ${MOUNT}/$tfile_trusted" true
+	75a_op_test "mv ${MOUNT}/$tfile_tl ${MOUNT}/${tfile_tl}_" true
+	75a_op_test "mv ${MOUNT}/${tfile_tl}_ ${MOUNT}/$tfile_tl" true
+	75a_op_test "mv ${MOUNT}/$tfile_tenant ${MOUNT}/${tfile_tenant}_" true
+	75a_op_test "mv ${MOUNT}/${tfile_tenant}_ ${MOUNT}/$tfile_tenant" true
+	75a_op_test "mv ${MOUNT}/$tfile_tr ${MOUNT}/${tfile_tr}_" true
+	75a_op_test "mv ${MOUNT}/${tfile_tr}_ ${MOUNT}/$tfile_tr" true
+	# 8. trigger setattr operation with "touch" (timestamp update)
+	75a_op_test "touch ${MOUNT}/$tfile_trusted" true
+	75a_op_test "touch ${MOUNT}/$tfile_tl" true
+	75a_op_test "touch ${MOUNT}/$tfile_tenant" true
+	75a_op_test "touch ${MOUNT}/$tfile_tr" true
+	# 9. xattr, set and get
+	75a_op_test "setfattr -n user.abc -v def ${MOUNT}/$tfile_trusted" true
+	75a_op_test "setfattr -n user.abc -v def ${MOUNT}/$tfile_tl" true
+	75a_op_test "setfattr -n user.abc -v def ${MOUNT}/$tfile_tenant" true
+	75a_op_test "setfattr -n user.abc -v def ${MOUNT}/$tfile_tr" true
+	75a_getxattr_test ${MOUNT}/$tfile_trusted true
+	75a_getxattr_test ${MOUNT}/$tfile_tl true
+	75a_getxattr_test ${MOUNT}/$tfile_tenant true
+	75a_getxattr_test ${MOUNT}/$tfile_tr true
+	# 10. remove create files from tenant dirs
+	75a_op_test "rm ${MOUNT}/${tdir_trusted}/$tf" true
+	75a_op_test "rm ${MOUNT}/${tdir_tl}/$tf" true
+	75a_op_test "rm ${MOUNT}/${tdir_tenant}/$tf" true
+	75a_op_test "rm ${MOUNT}/${tdir_tr}/$tf" true
+	# 11. remove all tenant dirs
+	75a_op_test "rmdir ${MOUNT}/$tdir_trusted" true
+	75a_op_test "rmdir ${MOUNT}/$tdir_tl" true
+	75a_op_test "rmdir ${MOUNT}/$tdir_tenant" true
+	75a_op_test "rmdir ${MOUNT}/$tdir_tr" true
+	# 12. remove remaining tenant files from root
+	75a_op_test "rm ${MOUNT}/$tfile_trusted" true
+	75a_op_test "rm ${MOUNT}/$tfile_tl" true
+	75a_op_test "rm ${MOUNT}/$tfile_tenant" true
+	75a_op_test "rm ${MOUNT}/$tfile_tr" true
+	# 13. Data on MDT cases
+	if [[ "$mds1_FSTYPE" == "ldiskfs" ]]; then
+		75a_op_test "fallocate -l 1M ${MOUNT}/${tfile_trusted}_dom" true
+	fi
+	75a_op_test "$TRUNCATE ${MOUNT}/${tfile_trusted}_dom 524288" true
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/${tfile_trusted}_dom" true
+	75a_drop_tenant_cache
+	75a_read_test "cat ${MOUNT}/${tfile_trusted}_dom" true
+	75a_op_test "rm ${MOUNT}/${tfile_trusted}_dom" true
+
+	if [[ "$mds1_FSTYPE" == "ldiskfs" ]]; then
+		75a_op_test "fallocate -l 1M ${MOUNT}/${tfile_tenant}_dom" true
+	fi
+	75a_op_test "$TRUNCATE ${MOUNT}/${tfile_tenant}_dom 524288" true
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/${tfile_tenant}_dom" true
+	75a_drop_tenant_cache
+	75a_read_test "cat ${MOUNT}/${tfile_tenant}_dom" true
+	75a_op_test "rm ${MOUNT}/${tfile_tenant}_dom" true
+
+	report_client_view_75a
+
+	do_nodes $(all_mdts_nodes) \
+		$LCTL set_param mdt.*.enable_resource_id_check=1 ||
+			error "enabling resource id check on MDTs failed"
+
+	do_nodes $(all_osts_nodes) \
+		$LCTL set_param obdfilter.*.enable_resource_id_check=1 ||
+			error "enabling resource id check on OSTs failed"
+
+	# Setup testrun 2
+	setup_namespace_75a
+	report_client_view_75a
+
+	# Testrun 2 begins (check enabled)
+	# 1. write to files
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/$tfile_trusted" false
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/$tfile_tl" false
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/$tfile_tenant" true
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/$tfile_tr" false
+	75a_drop_tenant_cache
+	# 2. read from files
+	75a_read_test "cat ${MOUNT}/$tfile_trusted" false
+	75a_read_test "cat ${MOUNT}/$tfile_tl" false
+	75a_read_test "cat ${MOUNT}/$tfile_tenant" true
+	75a_read_test "cat ${MOUNT}/$tfile_tr" false
+	75a_drop_tenant_cache
+	# 3. create files
+	75a_op_test "touch ${MOUNT}/${tdir_trusted}/$tf" false
+	75a_op_test "touch ${MOUNT}/${tdir_tl}/$tf" false
+	75a_op_test "touch ${MOUNT}/${tdir_tenant}/$tf" true
+	75a_op_test "touch ${MOUNT}/${tdir_tr}/$tf" false
+	# 4. soft and hard links (cannot create hard links but soft links)
+	75a_op_test "ln ${MOUNT}/$tfile_trusted \
+		${MOUNT}/${tfile_trusted}_hlink" false
+	75a_op_test "ln -s ${MOUNT}/$tfile_trusted \
+		${MOUNT}/${tfile_trusted}_slink" true
+	75a_op_test "ln ${MOUNT}/$tfile_tl \
+		${MOUNT}/${tfile_tl}_hlink" false
+	75a_op_test "ln -s ${MOUNT}/$tfile_tl \
+		${MOUNT}/${tfile_tl}_slink" true
+	75a_op_test "ln ${MOUNT}/$tfile_tenant \
+		${MOUNT}/${tfile_tenant}_hlink" true
+	75a_op_test "ln -s ${MOUNT}/$tfile_tenant \
+		${MOUNT}/${tfile_tenant}_slink" true
+	75a_op_test "ln ${MOUNT}/$tfile_tr \
+		${MOUNT}/${tfile_tr}_hlink" false
+	75a_op_test "ln -s ${MOUNT}/$tfile_tr \
+		${MOUNT}/${tfile_tr}_slink" true
+	# can only read soft-links pointing to permitted files
+	75a_read_test "cat ${MOUNT}/${tfile_trusted}_slink" false
+	75a_read_test "cat ${MOUNT}/${tfile_tl}_slink" false
+	75a_read_test "cat ${MOUNT}/${tfile_tenant}_slink" true
+	75a_read_test "cat ${MOUNT}/${tfile_tr}_slink" false
+	# can remove all links created by tenant
+	75a_op_test "rm ${MOUNT}/${tfile_trusted}_slink" true
+	75a_op_test "rm ${MOUNT}/${tfile_tl}_slink" true
+	75a_op_test "rm ${MOUNT}/${tfile_tenant}_slink" true
+	75a_op_test "rm ${MOUNT}/${tfile_tr}_slink" true
+	75a_op_test "rm ${MOUNT}/${tfile_tenant}_hlink" true
+	# 5. fallocate (only on ldiskfs, zfs does not support pre-allocation)
+	if [[ "$ost1_FSTYPE" == "ldiskfs" ]]; then
+		75a_op_test "fallocate -l 1M ${MOUNT}/$tfile_trusted" false
+		75a_op_test "fallocate -l 1M ${MOUNT}/$tfile_tl" false
+		75a_op_test "fallocate -l 1M ${MOUNT}/$tfile_tenant" true
+		75a_op_test "fallocate -l 1M ${MOUNT}/$tfile_tr" false
+	fi
+	# 6. truncate
+	75a_op_test "$TRUNCATE ${MOUNT}/$tfile_trusted 524288" false
+	75a_op_test "$TRUNCATE ${MOUNT}/$tfile_tl 524288" false
+	75a_op_test "$TRUNCATE ${MOUNT}/$tfile_tenant 524288" true
+	75a_op_test "$TRUNCATE ${MOUNT}/$tfile_tr 524288" false
+	# 7. rename files (and back)
+	75a_op_test "mv ${MOUNT}/$tfile_trusted \
+		${MOUNT}/${tfile_trusted}_" false
+	75a_op_test "mv ${MOUNT}/$tfile_tl ${MOUNT}/${tfile_tl}_" false
+	75a_op_test "mv ${MOUNT}/$tfile_tenant ${MOUNT}/${tfile_tenant}_" true
+	75a_op_test "mv ${MOUNT}/${tfile_tenant}_ ${MOUNT}/$tfile_tenant" true
+	75a_op_test "mv ${MOUNT}/$tfile_tr ${MOUNT}/${tfile_tr}_" false
+	# 8. trigger setattr operation with "touch" (timestamp update)
+	75a_op_test "touch ${MOUNT}/$tfile_trusted" false
+	75a_op_test "touch ${MOUNT}/$tfile_tl" false
+	75a_op_test "touch ${MOUNT}/$tfile_tenant" true
+	75a_op_test "touch ${MOUNT}/$tfile_tr" false
+	# 9. xattr, set and get
+	75a_op_test "setfattr -n user.abc -v def ${MOUNT}/$tfile_trusted" false
+	75a_op_test "setfattr -n user.abc -v def ${MOUNT}/$tfile_tl" false
+	75a_op_test "setfattr -n user.abc -v def ${MOUNT}/$tfile_tenant" true
+	75a_op_test "setfattr -n user.abc -v def ${MOUNT}/$tfile_tr" false
+	75a_getxattr_test ${MOUNT}/$tfile_trusted false
+	75a_getxattr_test ${MOUNT}/$tfile_tl false
+	75a_getxattr_test ${MOUNT}/$tfile_tenant true
+	75a_getxattr_test ${MOUNT}/$tfile_tr false
+	# 10. remove create files from tenant dirs
+	75a_op_test "rm ${MOUNT}/${tdir_tenant}/$tf" true
+	# 11. attempt to remove all tenant dirs
+	75a_op_test "rmdir ${MOUNT}/$tdir_trusted" false
+	75a_op_test "rmdir ${MOUNT}/$tdir_tl" false
+	75a_op_test "rmdir ${MOUNT}/$tdir_tenant" true
+	75a_op_test "rmdir ${MOUNT}/$tdir_tr" false
+	# 12. attempt to remove remaining tenant files from root
+	75a_op_test "rm ${MOUNT}/$tfile_trusted" false
+	75a_op_test "rm ${MOUNT}/$tfile_tl" false
+	75a_op_test "rm ${MOUNT}/$tfile_tenant" true
+	75a_op_test "rm ${MOUNT}/$tfile_tr" false
+	# 13. Data on MDT cases
+	if [[ "$mds1_FSTYPE" == "ldiskfs" ]]; then
+		75a_op_test "fallocate -l 1M ${MOUNT}/${tfile_trusted}_dom" \
+			false
+	fi
+	75a_op_test "$TRUNCATE ${MOUNT}/${tfile_trusted}_dom 524288" false
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/${tfile_trusted}_dom" false
+	75a_read_test "cat ${MOUNT}/${tfile_trusted}_dom" false
+	75a_op_test "rm ${MOUNT}/${tfile_trusted}_dom" false
+
+	if [[ "$mds1_FSTYPE" == "ldiskfs" ]]; then
+		75a_op_test "fallocate -l 1M ${MOUNT}/${tfile_tenant}_dom" true
+	fi
+	75a_op_test "$TRUNCATE ${MOUNT}/${tfile_tenant}_dom 524288" true
+	75a_op_test "cp ${MOUNT}/$tf_write ${MOUNT}/${tfile_tenant}_dom" true
+	75a_drop_tenant_cache
+	75a_read_test "cat ${MOUNT}/${tfile_tenant}_dom" true
+	75a_op_test "rm ${MOUNT}/${tfile_tenant}_dom" true
+
+	report_client_view_75a
+}
+run_test 75a "test resource fs IDs against nodemap offset"
+
 cleanup_76() {
 	# unmount client
 	if is_mounted $MOUNT; then

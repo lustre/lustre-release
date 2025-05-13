@@ -558,6 +558,10 @@ static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	if (!mdt_object_exists(parent))
 		GOTO(put_parent, rc = -ENOENT);
 
+	rc = mdt_check_resource_ids(info, parent);
+	if (unlikely(rc))
+		GOTO(put_parent, rc);
+
 	rc = mdt_check_enc(info, parent);
 	if (rc)
 		GOTO(put_parent, rc);
@@ -926,6 +930,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (!mdt_object_exists(mo))
 		GOTO(out_put, rc = -ENOENT);
 
+	rc = mdt_check_resource_ids(info, mo);
+	if (unlikely(rc))
+		GOTO(out_put, rc);
+
 	if (mdt_object_remote(mo))
 		GOTO(out_put, rc = -EREMOTE);
 
@@ -1288,6 +1296,10 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			GOTO(put_child, rc = -ENOENT);
 	}
 
+	rc = mdt_check_resource_ids(info, mc);
+	if (unlikely(rc))
+		GOTO(put_child, rc);
+
 	child_lh = &info->mti_lh[MDT_LH_CHILD];
 	if (mdt_object_remote(mc)) {
 		struct mdt_body	 *repbody;
@@ -1464,6 +1476,10 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 		GOTO(put_source, rc = -ENOENT);
 	}
 
+	rc = mdt_check_resource_ids(info, ms);
+	if (unlikely(rc))
+		GOTO(put_source, rc);
+
 	CFS_RACE(OBD_FAIL_MDS_LINK_RENAME_RACE);
 
 	lhp = &info->mti_lh[MDT_LH_PARENT];
@@ -1473,6 +1489,10 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
 	rc = mdt_version_get_check_save(info, mp, 0);
 	if (rc)
+		GOTO(unlock_parent, rc);
+
+	rc = mdt_check_resource_ids(info, mp);
+	if (unlikely(rc))
 		GOTO(unlock_parent, rc);
 
 	rc = mdt_check_enc(info, mp);
@@ -2288,6 +2308,10 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	if (!S_ISDIR(lu_object_attr(&pobj->mot_obj)))
 		GOTO(put_parent, rc = -ENOTDIR);
 
+	rc = mdt_check_resource_ids(info, pobj);
+	if (unlikely(rc))
+		GOTO(put_parent, rc);
+
 	rc = mdt_check_enc(info, pobj);
 	if (rc)
 		GOTO(put_parent, rc);
@@ -2739,6 +2763,10 @@ lock_bfl:
 	if (IS_ERR(msrcdir))
 		RETURN(PTR_ERR(msrcdir));
 
+	rc = mdt_check_resource_ids(info, msrcdir);
+	if (unlikely(rc))
+		GOTO(out_put_srcdir, rc);
+
 	rc = mdt_check_enc(info, msrcdir);
 	if (rc)
 		GOTO(out_put_srcdir, rc);
@@ -2754,6 +2782,11 @@ lock_bfl:
 		if (IS_ERR(mtgtdir))
 			GOTO(out_put_srcdir, rc = PTR_ERR(mtgtdir));
 	}
+
+	/* if this succeeds we do not need to check "mnew" later again */
+	rc = mdt_check_resource_ids(info, mtgtdir);
+	if (unlikely(rc))
+		GOTO(out_put_tgtdir, rc);
 
 	rc = mdt_check_enc(info, mtgtdir);
 	if (rc)
@@ -2877,6 +2910,10 @@ lock_bfl:
 				"object does not exist");
 		GOTO(out_put_old, rc = -ENOENT);
 	}
+
+	rc = mdt_check_resource_ids(info, mold);
+	if (unlikely(rc))
+		GOTO(out_put_old, rc);
 
 	if (mdt_object_remote(mold) && !mdt->mdt_enable_remote_rename)
 		GOTO(out_put_old, rc = -EXDEV);

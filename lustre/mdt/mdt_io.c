@@ -322,6 +322,7 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			   struct niobuf_remote *rnb, int *nr_local,
 			   struct niobuf_local *lnb)
 {
+	struct mdt_thread_info *info = mdt_th_info(env);
 	struct dt_object *dob;
 	int i, j, rc;
 	int maxlnb = *nr_local;
@@ -348,6 +349,11 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 		 */
 		RETURN(0);
 	}
+
+	rc = mdt_check_resource_ids(info, mo);
+	if (unlikely(rc))
+		GOTO(out_sem, rc);
+
 	if (lu_object_is_dying(&mo->mot_header)) {
 		CDEBUG_LIMIT(level,
 			     "%s: READ IO to stale obj "DFID": rc = %d\n",
@@ -382,6 +388,7 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	RETURN(0);
 buf_put:
 	dt_bufs_put(env, dob, lnb, *nr_local);
+out_sem:
 	up_read(&mo->mot_dom_sem);
 	return rc;
 }
@@ -393,6 +400,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			    struct niobuf_remote *rnb, int *nr_local,
 			    struct niobuf_local *lnb)
 {
+	struct mdt_thread_info *info = mdt_th_info(env);
 	struct dt_object *dob;
 	int i, j, k, rc = 0;
 	int maxlnb = *nr_local;
@@ -417,6 +425,11 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		/* exit with no data written, note nr_local = 0 above */
 		GOTO(unlock, rc);
 	}
+
+	rc = mdt_check_resource_ids(info, mo);
+	if (unlikely(rc))
+		GOTO(unlock, rc);
+
 	if (lu_object_is_dying(&mo->mot_header)) {
 		/* This is possible race between object destroy followed by
 		 * discard BL AST and client cache flushing. Object is
@@ -1101,6 +1114,10 @@ int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 		GOTO(out_put, rc);
 	}
 
+	rc = mdt_check_resource_ids(info, mo);
+	if (unlikely(rc))
+		GOTO(out_put, rc);
+
 	la_from_obdo(la, oa, OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
 
 	down_write(&mo->mot_dom_sem);
@@ -1373,6 +1390,10 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 		       exp->exp_obd->obd_name, PFID(&tsi->tsi_fid), rc);
 		GOTO(out_put, rc);
 	}
+
+	rc = mdt_check_resource_ids(info, mo);
+	if (unlikely(rc))
+		GOTO(out_put, rc);
 
 	down_write(&mo->mot_dom_sem);
 	dob = mdt_obj2dt(mo);

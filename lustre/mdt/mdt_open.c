@@ -744,6 +744,10 @@ static int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep,
 	if (IS_ERR(o))
 		RETURN(rc = PTR_ERR(o));
 
+	rc = mdt_check_resource_ids(info, o);
+	if (unlikely(rc))
+		GOTO(out, rc);
+
 	rc = mdt_check_enc(info, o);
 	if (rc)
 		GOTO(out, rc);
@@ -1158,8 +1162,12 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 		GOTO(out, rc = -ENOENT);
 	}
 
-	/* do not check enc for directory: always allow open */
+	/* do not check enc or id for directory: always allow open */
 	if (!S_ISDIR(lu_object_attr(&o->mot_obj))) {
+		rc = mdt_check_resource_ids(info, o);
+		if (unlikely(rc))
+			GOTO(out, rc);
+
 		rc = mdt_check_enc(info, o);
 		if (rc)
 			GOTO(out, rc);
@@ -1249,9 +1257,14 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
+
 	o = mdt_object_find(info->mti_env, info->mti_mdt, fid);
 	if (IS_ERR(o))
 		RETURN(rc = PTR_ERR(o));
+
+	rc = mdt_check_resource_ids(info, o);
+	if (unlikely(rc))
+		GOTO(out, rc);
 
 	rc = mdt_check_enc(info, o);
 	if (rc)
@@ -1529,6 +1542,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	    parent->mot_obj.lo_header->loh_attr & LOHA_FSCRYPT_MD &&
 	    open_flags & MDS_OPEN_CREAT)
 		GOTO(out_parent, result = -EPERM);
+
+	result = mdt_check_resource_ids(info, parent);
+	if (unlikely(result))
+		GOTO(out_parent, result);
 
 	result = mdt_check_enc(info, parent);
 	if (result)

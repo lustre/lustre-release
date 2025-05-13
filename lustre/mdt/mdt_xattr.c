@@ -246,6 +246,10 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	if (rc)
 		RETURN(err_serious(rc));
 
+	rc = mdt_check_resource_ids(info, info->mti_object);
+	if (unlikely(rc))
+		RETURN(err_serious(rc));
+
 	next = mdt_object_child(info->mti_object);
 	easize = mdt_getxattr_pack_reply(info);
 	if (easize == -ENODATA)
@@ -616,6 +620,10 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart, LCK_EX);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
+
+	rc = mdt_check_resource_ids(info, obj);
+	if (unlikely(rc))
+		GOTO(out_unlock, rc);
 
 	tgt_vbr_obj_set(env, mdt_obj2dt(obj));
 	rc = mdt_version_get_check_save(info, obj, 0);
