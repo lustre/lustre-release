@@ -9287,7 +9287,8 @@ static void diff2str(time_t seconds, char *buf, time_t now)
 static void print_quota_val(char *val, int cols, bool print_over,
 			    struct quota_param *param)
 {
-	if ((param->qp_detail & (param->qp_detail - 1)) == 0) /* single value */
+	if ((param->qp_detail & (param->qp_detail - 1)) == 0 &&
+	     !param->qp_show_qid) /* single value */
 		printf("%s", val);
 	else if (param->qp_delim[0])
 		printf("%*s%s", cols, val, param->qp_delim);

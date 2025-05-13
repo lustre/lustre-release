@@ -4215,7 +4215,7 @@ test_get_allquota() {
 	unlinkmany ${TFILE} $qid_cnt
 }
 
-test_49()
+test_49a()
 {
 	(( MDS1_VERSION >= $(version_code 2.15.60) )) ||
 		skip "Need MDS version at least 2.15.60"
@@ -4274,7 +4274,19 @@ test_49()
 	formatall
 	setupall
 }
-run_test 49 "lfs quota -a prints the quota usage for all quota IDs"
+run_test 49a "lfs quota -a prints the quota usage for all quota IDs"
+
+test_49b() {
+	local root_name
+
+	(( MDS1_VERSION >= $(version_code v2_15_61-145-g3edc718) )) ||
+		skip "Need MDS version >= 2.15.61 for lfs quota all support"
+
+	root_name=$($LFS quota -a -u --busage $DIR | awk '/root/ {print $1}')
+	# check username is not merged with the usage
+	[[ $root_name == "root" ]] || error "root name is insane: $root_name"
+}
+run_test 49b "lfs quota -a --blocks has a delimiter"
 
 test_50() {
 	! is_project_quota_supported &&
