@@ -173,25 +173,60 @@ static int mgc_fs_clear(const struct lu_env *env, struct obd_device *obd)
 static int mgc_target_register(struct obd_export *exp,
 			       struct mgs_target_info *mti)
 {
-	size_t mti_len = offsetof(struct mgs_target_info, mti_nidlist);
 	struct ptlrpc_request *req;
-	struct mgs_target_info *req_mti, *rep_mti;
+	struct mgs_target_info *request_mti, *reply_mti;
+	struct mgs_target_nidlist *mtn;
+	struct ptlrpc_bulk_desc *desc;
+	size_t nidlist_size = NIDLIST_SIZE(mti->mti_nid_count);
+	int pages = 0;
+	unsigned int avail = 0;
+	size_t bufsize;
 	int rc;
+	bool nidlist, large_nids;
 
 	ENTRY;
-	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MGS_TARGET_REG);
+
+	server_mti_print("mgc_target_register: req", mti);
+
+	nidlist = exp_connect_flags(exp) & OBD_CONNECT_MGS_NIDLIST;
+	large_nids = exp_connect_flags2(exp) & OBD_CONNECT2_LARGE_NID;
+
+	/* it is OK to use new protocol with an old MGS, mti buffer is the
+	 * same in both cases
+	 */
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_MGS_TARGET_REG_NIDLIST);
 	if (!req)
 		RETURN(-ENOMEM);
 
-	server_mti_print("mgc_target_register: req", mti);
-	if (target_supports_large_nid(mti)) {
-		mti_len += mti->mti_nid_count * LNET_NIDSTR_SIZE;
+	if (large_nids || nidlist) {
+		bufsize = MGS_MAXREQSIZE - sizeof(struct ptlrpc_body) -
+			  sizeof(*mti) - sizeof(*mtn);
+		avail = bufsize / MTN_NIDSTR_SIZE;
+	} else {
+		nidlist_size = 0;
+	}
 
+	if (nidlist) {
+		if (mti->mti_nid_count <= avail) { /* inline buffer */
+			req_capsule_set_size(&req->rq_pill,
+					     &RMF_MGS_TARGET_NIDLIST,
+					     RCL_CLIENT,
+					     sizeof(*mtn) + nidlist_size);
+		} else { /* use bulk for big NID lists */
+			pages = DIV_ROUND_UP((sizeof(*mti) & ~PAGE_MASK) +
+					     nidlist_size, PAGE_SIZE);
+		}
+	} else if (large_nids) {
+		if (mti->mti_nid_count > avail) {
+			/* can't fit, send all we can */
+			CDEBUG(D_MGC, "can fit only %u NIDs from %u\n",
+			       avail, mti->mti_nid_count);
+			mti->mti_nid_count = avail;
+			nidlist_size = NIDLIST_SIZE(avail);
+		}
 		req_capsule_set_size(&req->rq_pill, &RMF_MGS_TARGET_INFO,
-				     RCL_CLIENT, mti_len);
-
-		req_capsule_set_size(&req->rq_pill, &RMF_MGS_TARGET_INFO,
-				     RCL_SERVER, mti_len);
+				     RCL_CLIENT, sizeof(*mti) + nidlist_size);
 	}
 
 	rc = ptlrpc_request_pack(req, LUSTRE_MGS_VERSION, MGS_TARGET_REG);
@@ -200,13 +235,43 @@ static int mgc_target_register(struct obd_export *exp,
 		RETURN(rc);
 	}
 
-	req_mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
-	if (!req_mti) {
+	request_mti = req_capsule_client_get(&req->rq_pill,
+					     &RMF_MGS_TARGET_INFO);
+	if (!request_mti) {
 		ptlrpc_req_put(req);
 		RETURN(-ENOMEM);
 	}
+	*request_mti = *mti;
 
-	memcpy(req_mti, mti, mti_len);
+	mtn = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_NIDLIST);
+	if (!mtn) {
+		ptlrpc_req_put(req);
+		RETURN(-ENOMEM);
+	}
+	mtn->mtn_nids = mti->mti_nid_count;
+	mtn->mtn_flags = 0;
+
+	if (pages) {
+		LASSERT(nidlist);
+		mtn->mtn_flags |= NIDLIST_IN_BULK;
+		req->rq_bulk_write = 1;
+		desc = ptlrpc_prep_bulk_imp(req, pages,
+					    MD_MAX_BRW_SIZE >> LNET_MTU_BITS,
+					    PTLRPC_BULK_GET_SOURCE,
+					    MGS_BULK_PORTAL,
+					    &ptlrpc_bulk_kiov_nopin_ops);
+		if (!desc) {
+			ptlrpc_req_put(req);
+			RETURN(-ENOMEM);
+		}
+		desc->bd_frag_ops->add_iov_frag(desc, mti->mti_nidlist,
+						nidlist_size);
+	} else if (nidlist) {
+		memcpy(mtn->mtn_inline_list, mti->mti_nidlist, nidlist_size);
+	} else if (large_nids) {
+		memcpy(request_mti, mti, sizeof(*mti) + nidlist_size);
+	}
+
 	ptlrpc_request_set_replen(req);
 	CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
 	/* Limit how long we will wait for the enqueue to complete */
@@ -222,15 +287,10 @@ static int mgc_target_register(struct obd_export *exp,
 
 	rc = ptlrpc_queue_wait(req);
 	if (ptlrpc_client_replied(req)) {
-		rep_mti = req_capsule_server_get(&req->rq_pill,
-						 &RMF_MGS_TARGET_INFO);
-		if (rep_mti) {
-			mti_len = offsetof(struct mgs_target_info, mti_nidlist);
-
-			if (target_supports_large_nid(mti))
-				mti_len += mti->mti_nid_count * LNET_NIDSTR_SIZE;
-			memcpy(mti, rep_mti, mti_len);
-		}
+		reply_mti = req_capsule_server_get(&req->rq_pill,
+						   &RMF_MGS_TARGET_INFO);
+		if (reply_mti)
+			*mti = *reply_mti;
 	}
 	if (!rc) {
 		CDEBUG(D_MGC, "register %s got index = %d\n",

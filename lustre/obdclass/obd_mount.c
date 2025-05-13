@@ -513,6 +513,7 @@ int lustre_start_mgc(struct super_block *sb)
 				  OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV |
 				  OBD_CONNECT_LVB_TYPE |
 				  OBD_CONNECT_BULK_MBITS | OBD_CONNECT_BARRIER |
+				  OBD_CONNECT_MGS_NIDLIST |
 				  OBD_CONNECT_FLAGS2;
 	data->ocd_connect_flags2 = OBD_CONNECT2_REP_MBITS |
 				   OBD_CONNECT2_LARGE_NID;

@@ -1268,7 +1268,11 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi)
 	if (rc < 0)
 		GOTO(free_mti, rc);
 
-	mti->mti_nid_count = nid_count;
+	if (!large_nid && nid_count >= MTI_NIDS_MAX)
+		mti->mti_nid_count = MTI_NIDS_MAX;
+	else
+		mti->mti_nid_count = nid_count;
+
 	for (i = 0; i < mti->mti_nid_count; i++) {
 		tmp = genradix_ptr(&plist, i);
 
