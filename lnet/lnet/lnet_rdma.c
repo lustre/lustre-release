@@ -2,20 +2,11 @@
 
 /* This file is part of Lustre, http://www.lustre.org/ */
 
-#ifdef WITH_GDS
-#include "nvfs-dma.h"
-#else
-#include <lnet/lnet_gds.h>
-#endif
-
 #include <lnet/lnet_rdma.h>
 #include <libcfs/libcfs.h>
 
 /* MAX / MIN conflict */
 #include <lnet/lib-lnet.h>
-
-#define NVFS_IO_ERR			-1
-#define NVFS_CPU_REQ			-2
 
 #define NVFS_HOLD_TIME_MS 1000
 

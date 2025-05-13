@@ -13,6 +13,5 @@ EXTRA_DIST = \
 	lnet_compat.h \
 	lnet_crypto.h \
 	lnet_rdma.h \
-	lnet_gds.h \
 	lock.h \
 	socklnd.h

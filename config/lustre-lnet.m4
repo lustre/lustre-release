@@ -1322,13 +1322,13 @@ AC_MSG_NOTICE([LNet core checks
 
 AC_ARG_WITH([cuda],
 	AS_HELP_STRING([--with-cuda=path],
-			[Path to the CUDA sources. Set to 'no' to disable.]),
+			[Path to the CUDA sources.]),
 			[cudapath="$withval"],
 			[cudapath1=`ls -d1 /usr/src/nvidia-*/nvidia/ 2>/dev/null | tail -1`])
 
 AC_ARG_WITH([gds],
 	AS_HELP_STRING([--with-gds=path],
-			[Path to the GDS sources. Set to 'no' to disable.]),
+			[Path to the GDS sources.]),
 			[gdspath="$withval"],
 			[gdspath1=`ls -d1 /usr/src/nvidia-fs*/ 2>/dev/null | tail -1`])
 
@@ -1366,7 +1366,7 @@ AS_IF([test -e "${cudapath}" && test -e "${gdspath}"],[
 			AC_MSG_RESULT([GDS path is ${gdspath}])
 			[GDS_PATH=${gdspath}]
 			AC_SUBST(GDS_PATH)
-			AC_DEFINE(WITH_GDS, 1, "GDS build enabled")
+			AC_DEFINE(WITH_EXTERNAL_GDS_HEADER, 1, "GDS build enabled")
 		], [
 		    AC_MSG_RESULT([GDS sources not found: config-host.h does not exist])
         ])
@@ -1374,7 +1374,7 @@ AS_IF([test -e "${cudapath}" && test -e "${gdspath}"],[
 		AC_MSG_RESULT([GDS sources not found: nvfs-dma.h does not exist])
     ])
 ],[
-	AC_MSG_WARN([CUDA or GDS sources not found. GDS support disabled])
+	AC_MSG_WARN([CUDA or GDS sources not found. Using embedded GDS headers.])
 ])
 
 # lnet/utils/lnetconfig/liblnetconfig_netlink.c
