@@ -271,6 +271,70 @@ static ssize_t degraded_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(degraded);
 
 /**
+ * enable_resource_id_check_show() - Show if resource ID checking is enabled
+ * on the OST.
+ *
+ * @kobj: kobject for the OFD device
+ * @attr: attribute for the OFD device
+ * @buf: buffer to write the value to
+ *
+ * When enabled, an OST object's UID and GID are checked against
+ * the nodemap mapping rules.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+static ssize_t enable_resource_id_check_show(struct kobject *kobj,
+					     struct attribute *attr, char *buf)
+{
+	struct obd_device *obd =
+		container_of(kobj, struct obd_device, obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 ofd->ofd_lut.lut_enable_resource_id_check);
+}
+
+/**
+ * enable_resource_id_check_store() - Enable or disable resource ID checking
+ * on the OST.
+ *
+ * @kobj: kobject for the OFD device
+ * @attr: attribute for the OFD device
+ * @buffer: buffer containing the value to set
+ * @count: length of the buffer
+ *
+ * This is used to interface to userspace administrative tools to enable
+ * or disable resource ID checking on the OST.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+static ssize_t enable_resource_id_check_store(struct kobject *kobj,
+					      struct attribute *attr,
+					      const char *buffer, size_t count)
+{
+	struct obd_device *obd =
+		container_of(kobj, struct obd_device, obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&ofd->ofd_flags_lock);
+	ofd->ofd_lut.lut_enable_resource_id_check = val;
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_resource_id_check);
+
+/**
  * Show if the OFD is in no precreate mode.
  *
  * This means OFD has been adminstratively disabled at the OST to prevent
@@ -981,11 +1045,15 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_access_log_mask.attr,
 	&lustre_attr_access_log_size.attr,
 	&lustre_attr_atime_diff.attr,
+	&lustre_attr_at_history.attr,
+	&lustre_attr_at_max.attr,
+	&lustre_attr_at_min.attr,
 	&lustre_attr_brw_size.attr,
 	&lustre_attr_checksum_dump.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
 	&lustre_attr_checksum_type.attr,
 	&lustre_attr_degraded.attr,
+	&lustre_attr_enable_resource_id_check.attr,
 	&lustre_attr_evict_client.attr,
 	&lustre_attr_eviction_count.attr,
 	&lustre_attr_fstype.attr,
@@ -997,12 +1065,12 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_job_cleanup_interval.attr,
 	&lustre_attr_lfsck_speed_limit.attr,
 	&lustre_attr_no_create.attr,
-	&lustre_attr_readonly.attr,
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 20, 53, 0)
 	&lustre_attr_no_precreate.attr,
 #endif
 	&lustre_attr_num_exports.attr,
 	&lustre_attr_precreate_batch.attr,
+	&lustre_attr_readonly.attr,
 	&lustre_attr_recovery_time_hard.attr,
 	&lustre_attr_recovery_time_soft.attr,
 	&lustre_attr_seqs_allocated.attr,
@@ -1011,9 +1079,6 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_tot_pending.attr,
 	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_sync_journal.attr,
-	&lustre_attr_at_min.attr,
-	&lustre_attr_at_max.attr,
-	&lustre_attr_at_history.attr,
 	NULL,
 };
 

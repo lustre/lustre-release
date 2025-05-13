@@ -157,7 +157,11 @@ struct lu_target {
 				 /* enforce recovery for local clients */
 				 lut_local_recovery:1,
 				 lut_cksum_t10pi_enforce:1,
-				 lut_no_create:1;
+				 lut_no_create:1,
+				 /* if enabled, MDT inodes UID/GID are checked
+				  * against the nodemap mapping rules.
+				  */
+				 lut_enable_resource_id_check:1;
 	/* checksum types supported on this node */
 	enum cksum_types	 lut_cksum_types_supported;
 	/** last_rcvd file */

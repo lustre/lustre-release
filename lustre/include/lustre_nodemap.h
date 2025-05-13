@@ -219,6 +219,8 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 			enum nodemap_tree_type tree_type);
 int nodemap_map_suppgid(struct lu_nodemap *nodemap, int suppgid);
+int nodemap_check_resource_ids(struct obd_export *exp, __u32 fs_uid,
+			       __u32 fs_gid);
 #ifdef HAVE_SERVER_SUPPORT
 void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len);
 #else

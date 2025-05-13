@@ -750,6 +750,46 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 		return new_init_ucred(info, REC_INIT, NULL);
 }
 
+/**
+ * mdt_check_resource_id() - check client access to resource via nodemap
+ *
+ * @info: mdt thread environment
+ * @obj: mdt object to check
+ *
+ * Check whether the client is allowed to access the resource by consulting
+ * the nodemap with the client's export and the MDT inode's UID/GID attributes.
+ *
+ * Return:
+ * * %0 on success (access is allowed)
+ * * %-ECHRNG if access is denied
+ */
+int mdt_check_resource_ids(struct mdt_thread_info *info, struct mdt_object *obj)
+{
+	struct dt_object *dt;
+	struct lu_attr la = { 0 };
+
+	ENTRY;
+
+	if (info->mti_mdt->mdt_lut.lut_enable_resource_id_check == 0)
+		RETURN(0);
+
+	dt = mdt_obj2dt(obj);
+
+	/* Get attributes from MDT inode */
+	if (dt && dt->do_ops && dt->do_ops->do_attr_get) {
+		dt_attr_get(info->mti_env, mdt_obj2dt(obj), &la);
+	} else {
+		/* log this case but don't return err code */
+		CERROR("%s: no dt object for " DFID ": rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(obj)),
+		       -ENOENT);
+		RETURN(0);
+	}
+
+	RETURN(nodemap_check_resource_ids(mdt_info_req(info)->rq_export,
+					  la.la_uid, la.la_gid));
+}
+
 /* copied from lov/lov_ea.c, just for debugging, will be removed later */
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid)
 {

@@ -989,6 +989,8 @@ int mdt_check_ucred(struct mdt_thread_info *info);
 int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body);
 int mdt_init_ucred_reint(struct mdt_thread_info *info);
 void mdt_exit_ucred(struct mdt_thread_info *info);
+int mdt_check_resource_ids(struct mdt_thread_info *info,
+			   struct mdt_object *obj);
 int mdt_version_get_check(struct mdt_thread_info *info, struct mdt_object *mto,
 			  int idx);
 void mdt_version_get_save(struct mdt_thread_info *info, struct mdt_object *mto,

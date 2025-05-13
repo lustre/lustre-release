@@ -492,6 +492,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	lut->lut_cksum_t10pi_enforce = 0;
 	lut->lut_cksum_types_supported =
 		obd_cksum_types_supported_server(obd->obd_name);
+	lut->lut_enable_resource_id_check = 0;
 
 	spin_lock_init(&lut->lut_slc_locks_guard);
 	INIT_LIST_HEAD(&lut->lut_slc_locks);

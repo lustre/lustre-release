@@ -40,6 +40,9 @@
  */
 #define OFD_DEF_ATIME_DIFF	0 /* disabled */
 
+/* Special mode value for OST objects with unset attributes */
+#define OFD_UNSET_ATTRS_MODE (S_IFREG | S_ISUID | S_ISGID | S_ISVTX | 0666)
+
 /* request stats */
 enum {
 	LPROC_OFD_STATS_READ_BYTES = 0,
@@ -394,6 +397,7 @@ int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la);
 int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 			 struct lu_attr *la, int is_setattr);
+int ofd_check_resource_ids(const struct lu_env *env, struct obd_export *exp);
 
 static inline
 struct ofd_object *ofd_object_find_exists(const struct lu_env *env,

@@ -22,6 +22,7 @@
 #include <dt_object.h>
 #include <lustre_lfsck.h>
 #include <lustre_export.h>
+#include <lustre_nodemap.h>
 
 #include "ofd_internal.h"
 
@@ -290,7 +291,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		RETURN(-ENOMEM);
 
 	info->fti_attr.la_valid = LA_TYPE | LA_MODE;
-	info->fti_attr.la_mode = S_IFREG | S_ISUID | S_ISGID | S_ISVTX | 0666;
+	info->fti_attr.la_mode = OFD_UNSET_ATTRS_MODE;
 	info->fti_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 	info->fti_attr.la_valid |= LA_ATIME | LA_MTIME | LA_CTIME;
@@ -1120,4 +1121,54 @@ int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		rc = -ENOENT;
 	}
 	RETURN(rc);
+}
+
+/**
+ * ofd_check_resource_id() - check client access to resource via nodemap
+ *
+ * @env: execution environment
+ * @exp: OBD export of client
+ *
+ * Check whether the client is allowed to access the resource by consulting
+ * the nodemap with the client's export and the OST objects's UID/GID attr.
+ *
+ * Return:
+ * * %0 on success (access is allowed)
+ * * %-ECHRNG if access is denied
+ */
+int ofd_check_resource_ids(const struct lu_env *env, struct obd_export *exp)
+{
+	struct ofd_object *fo;
+	struct lu_attr la = { 0 };
+	int rc = 0;
+
+	ENTRY;
+
+	if (ofd_exp(exp)->ofd_lut.lut_enable_resource_id_check == 0)
+		RETURN(0);
+
+	fo = ofd_info(env)->fti_obj;
+
+	rc = dt_attr_get(env, ofd_object_child(fo), &la);
+	if (rc) {
+		/* log this case but don't return err code */
+		CERROR("%s: failed to get attr for obj " DFID ": rc = %d\n",
+		       ofd_name(ofd_exp(exp)),
+		       PFID(lu_object_fid(&fo->ofo_obj.do_lu)), rc);
+		RETURN(0);
+	}
+
+	/* Objects with OFD_UNSET_ATTRS_MODE have no ID associated with them
+	 * yet. Therefore, we can't verify that the stored IDs are valid.
+	 * TODO Instead, the object will be repaired for future accesses based
+	 * on the IDs set on the corresponding MDT inode.
+	 */
+	if (la.la_mode == OFD_UNSET_ATTRS_MODE) {
+		CDEBUG(D_SEC,
+		       "OST object " DFID " has unset attributes (mode=0%o), skipping ID check\n",
+		       PFID(lu_object_fid(&fo->ofo_obj.do_lu)), la.la_mode);
+		RETURN(0);
+	}
+
+	RETURN(nodemap_check_resource_ids(exp, la.la_uid, la.la_gid));
 }

@@ -805,6 +805,68 @@ MDT_BOOL_RW_ATTR(enable_dmv_implicit_inherit);
 MDT_BOOL_RW_ATTR(enable_dmv_xattr);
 MDT_BOOL_RW_ATTR(enable_rename_trylock);
 
+/**
+ * enable_resource_id_check_show() - Show if resource ID checking is enabled
+ * on the MDT.
+ *
+ * @kobj: kobject for the MDT device
+ * @attr: attribute for the MDT device
+ * @buf: buffer to write the value to
+ *
+ * When enabled, MDT inodes UID/GID are checked against
+ * the nodemap mapping rules.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+static ssize_t enable_resource_id_check_show(struct kobject *kobj,
+					     struct attribute *attr, char *buf)
+{
+	struct obd_device *obd =
+		container_of(kobj, struct obd_device, obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_lut.lut_enable_resource_id_check);
+}
+
+/**
+ * enable_resource_id_check_store() - Enable or disable resource ID checking
+ * on the MDT.
+ *
+ * @kobj: kobject for the MDT device
+ * @attr: attribute for the MDT device
+ * @buffer: buffer containing the value to set
+ * @count: length of the buffer
+ *
+ * This is used to interface to userspace administrative tools to enable
+ * or disable resource ID checking on the MDT.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+static ssize_t enable_resource_id_check_store(struct kobject *kobj,
+					      struct attribute *attr,
+					      const char *buffer, size_t count)
+{
+	struct obd_device *obd =
+		container_of(kobj, struct obd_device, obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_lut.lut_enable_resource_id_check = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_resource_id_check);
+
 static ssize_t enable_pin_gid_show(struct kobject *kobj,
 				   struct attribute *attr, char *buf)
 {
@@ -1436,6 +1498,8 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_remote_dir_gid.attr,
 	&lustre_attr_enable_remote_rename.attr,
 	&lustre_attr_enable_remote_subdir_mount.attr,
+	&lustre_attr_enable_rename_trylock.attr,
+	&lustre_attr_enable_resource_id_check.attr,
 	&lustre_attr_enable_strict_som.attr,
 	&lustre_attr_enable_striped_dir.attr,
 	&lustre_attr_commit_on_sharing.attr,
@@ -1455,7 +1519,6 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_dir_restripe_nsonly.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
-	&lustre_attr_enable_rename_trylock.attr,
 	NULL,
 };
 

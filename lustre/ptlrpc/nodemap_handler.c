@@ -1058,12 +1058,15 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 EXPORT_SYMBOL(nodemap_map_acl);
 
 /**
- * Map supplementary groups received from client.
+ * nodemap_map_supplementary_groups() - map supplementary groups received
+ * from the client
  *
- * \param	lu_nodemap	nodemap
- * \param	id		id to map
+ * @nodemap: nodemap
+ * @suppgid: id to map
  *
- * \retval	mapped id or -1 for invalid suppgid
+ * Return:
+ * * mapped id on success
+ * * %-1 for invalid suppgid
  */
 int nodemap_map_suppgid(struct lu_nodemap *nodemap, int suppgid)
 {
@@ -1072,6 +1075,62 @@ int nodemap_map_suppgid(struct lu_nodemap *nodemap, int suppgid)
 							suppgid);
 }
 EXPORT_SYMBOL(nodemap_map_suppgid);
+
+/**
+ * nodemap_check_resource_id() - check if export can access a resource
+ *
+ * @exp: export to check
+ * @fs_uid: uid of the resource
+ * @fs_gid: gid of the resource
+ *
+ * Checks whether an export should be able to access a resource. This is called,
+ * e.g., for an MDT inode or OST object. If both UID and GID are squashed,
+ * the export should not be able to access the object since it is from outside
+ * the nodemap ID range.
+ *
+ * Return:
+ * * %0 on success (access is allowed)
+ * * %-ECHRNG if access is denied
+ */
+int nodemap_check_resource_ids(struct obd_export *exp, __u32 fs_uid,
+			       __u32 fs_gid)
+{
+	struct lu_nodemap *nodemap;
+	__u32 client_uid, client_gid;
+	__u32 client_squashed_uid, client_squashed_gid;
+	int rc = 0;
+
+	ENTRY;
+
+	nodemap = nodemap_get_from_exp(exp);
+	if (IS_ERR_OR_NULL(nodemap))
+		RETURN(0);
+
+	client_uid = nodemap_map_id(nodemap, NODEMAP_UID, NODEMAP_FS_TO_CLIENT,
+				    fs_uid);
+	client_gid = nodemap_map_id(nodemap, NODEMAP_GID, NODEMAP_FS_TO_CLIENT,
+				    fs_gid);
+	client_squashed_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+					     NODEMAP_FS_TO_CLIENT,
+					     nodemap->nm_squash_uid);
+	client_squashed_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+					     NODEMAP_FS_TO_CLIENT,
+					     nodemap->nm_squash_gid);
+
+	if (client_uid == client_squashed_uid &&
+	    client_gid == client_squashed_gid) {
+		CDEBUG(D_SEC,
+		       "Nodemap %s: access denied for export %s (at %s) fs_uid=%u fs_gid=%u\n",
+		       nodemap->nm_name, obd_uuid2str(&exp->exp_client_uuid),
+		       obd_export_nid2str(exp), fs_uid, fs_gid);
+		GOTO(out, rc = -ECHRNG);
+	}
+
+out:
+	nodemap_putref(nodemap);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(nodemap_check_resource_ids);
 
 static int nodemap_inherit_properties(struct lu_nodemap *dst,
 				      struct lu_nodemap *src)
