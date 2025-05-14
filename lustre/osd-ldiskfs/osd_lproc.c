@@ -89,7 +89,7 @@ static int osd_stats_init(struct osd_device *osd)
 	int result = -ENOMEM;
 
 	ENTRY;
-	scnprintf(param, sizeof(param), "osd-zfs.%s.stats", osd_name(osd));
+	scnprintf(param, sizeof(param), "osd-ldiskfs.%s.stats", osd_name(osd));
 	osd->od_stats = ldebugfs_stats_alloc(LPROC_OSD_LAST, param,
 					     osd->od_dt_dev.dd_debugfs_entry,
 					     0);
