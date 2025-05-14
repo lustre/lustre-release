@@ -999,6 +999,7 @@ void tgt_grant_dealloc(struct obd_export *exp, struct obdo *oa)
 	if (!disconnected) {
 		tgd->tgd_tot_granted -= oa->o_grant;
 		ted->ted_grant -= oa->o_grant;
+		oa->o_grant = 0;
 	}
 	spin_unlock(&tgd->tgd_grant_lock);
 }
