@@ -13,7 +13,10 @@ esac
 AS_IF([test -z "$LDISKFS_SERIES"], [
 AS_IF([test x$RHEL_KERNEL = xyes], [
 	case $RHEL_RELEASE_NO in
-	810)    LDISKFS_SERIES="4.18-rhel8.10.series"   ;;
+	810)    LDISKFS_SERIES="4.18-rhel8.10.series"
+		AS_VERSION_COMPARE([$RHEL_RELEASE_STR],[553.22.1],
+			[LDISKFS_SERIES="4.18-rhel8.10-553.series"],[],[])
+		;;
 	89)     LDISKFS_SERIES="4.18-rhel8.9.series"    ;;
 	88)     LDISKFS_SERIES="4.18-rhel8.8.series"    ;;
 	87)     LDISKFS_SERIES="4.18-rhel8.7.series"    ;;
