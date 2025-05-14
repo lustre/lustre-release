@@ -759,6 +759,10 @@ struct kfilnd_transaction {
 
 	bool			is_initiator;	/* Initiated LNet transfer. */
 
+	bool			tn_early_rx; /* Indicates RX arrived before peer
+					      * handshake
+					      */
+
 	/* Transaction send message and target address. */
 	kfi_addr_t		tn_target_addr;
 	struct kfilnd_peer	*tn_kp;

@@ -185,17 +185,6 @@ static uint64_t gen_init_tag_bits(struct kfilnd_transaction *tn)
 		tn->tn_response_mr_key;
 }
 
-static bool tn_session_key_is_valid(struct kfilnd_transaction *tn)
-{
-	if (tn->tn_response_session_key == tn->tn_kp->kp_remote_session_key)
-		return true;
-
-	KFILND_TN_DEBUG(tn, "Detected session key mismatch %u != %u\n",
-			tn->tn_response_session_key,
-			tn->tn_kp->kp_remote_session_key);
-	return false;
-}
-
 /**
  * kfilnd_ep_post_tagged_send() - Post a tagged send operation.
  * @ep: KFI LND endpoint used to post the tagged receivce operation.
@@ -223,9 +212,6 @@ int kfilnd_ep_post_tagged_send(struct kfilnd_ep *ep,
 	if (ep->end_dev->kfd_state != KFILND_STATE_INITIALIZED)
 		return -EINVAL;
 
-	if (!tn_session_key_is_valid(tn))
-		return -EINVAL;
-
 	/* Progress transaction to failure if send should fail. */
 	if (CFS_FAIL_CHECK(CFS_KFI_FAIL_TAGGED_SEND_EVENT)) {
 		rc = kfilnd_ep_gen_fake_err(ep, &fake_error);
@@ -246,15 +232,18 @@ int kfilnd_ep_post_tagged_send(struct kfilnd_ep *ep,
 	case 0:
 	case -EAGAIN:
 		KFILND_EP_DEBUG(ep,
-				"TN %p: %s tagged send of with tag 0x%x to peer 0x%llx: rc=%d",
+				"TN %p: %s tagged send of with tag 0x%x to peer %s(0x%llx): rc=%d",
 				tn, rc ? "Failed to post" : "Posted",
-				tn->tn_response_mr_key, tn->tn_target_addr, rc);
+				tn->tn_response_mr_key,
+				libcfs_nid2str(tn->tn_kp->kp_nid),
+				tn->tn_target_addr, rc);
 		break;
 
 	default:
 		KFILND_EP_ERROR(ep,
-				"TN %p: Failed to post tagged send with tag 0x%x to peer 0x%llx: rc=%d",
+				"TN %p: Failed to post tagged send with tag 0x%x to peer %s(0x%llx): rc=%d",
 				tn, tn->tn_response_mr_key,
+				libcfs_nid2str(tn->tn_kp->kp_nid),
 				tn->tn_target_addr, rc);
 	}
 
@@ -416,15 +405,17 @@ int kfilnd_ep_post_send(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 	case 0:
 	case -EAGAIN:
 		KFILND_EP_DEBUG(ep,
-				"TN %p: %s send of %lu bytes to peer 0x%llx: rc=%d",
+				"TN %p: %s send of %lu bytes to peer %s(0x%llx): rc=%d",
 				tn, rc ? "Failed to post" : "Posted",
-				len, tn->tn_target_addr, rc);
+				len, libcfs_nid2str(tn->tn_kp->kp_nid),
+				tn->tn_target_addr, rc);
 		break;
 
 	default:
 		KFILND_EP_ERROR(ep,
-				"TN %p: Failed to post send of %lu bytes to peer 0x%llx: rc=%d",
-				tn, len, tn->tn_target_addr, rc);
+				"TN %p: Failed to post send of %lu bytes to peer %s(0x%llx): rc=%d",
+				tn, len, libcfs_nid2str(tn->tn_kp->kp_nid),
+				tn->tn_target_addr, rc);
 	}
 
 	return rc;
@@ -468,9 +459,6 @@ int kfilnd_ep_post_write(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 
 	/* Make sure the device is not being shut down */
 	if (ep->end_dev->kfd_state != KFILND_STATE_INITIALIZED)
-		return -EINVAL;
-
-	if (!tn_session_key_is_valid(tn))
 		return -EINVAL;
 
 	/* Progress transaction to failure if read should fail. */
@@ -548,9 +536,6 @@ int kfilnd_ep_post_read(struct kfilnd_ep *ep, struct kfilnd_transaction *tn)
 
 	/* Make sure the device is not being shut down */
 	if (ep->end_dev->kfd_state != KFILND_STATE_INITIALIZED)
-		return -EINVAL;
-
-	if (!tn_session_key_is_valid(tn))
 		return -EINVAL;
 
 	/* Progress transaction to failure if read should fail. */
