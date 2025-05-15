@@ -17,6 +17,12 @@
 
 #include <uapi/linux/lustre/lustre_disk.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
+#include <crypto/hash.h>
+#ifdef HAVE_CRYPTO_SHA2_HEADER
+#include <crypto/sha2.h>
+#else
+#include <crypto/sha.h>
+#endif
 
 #define LUSTRE_NODEMAP_NAME "nodemap"
 
@@ -189,6 +195,8 @@ struct lu_nodemap {
 	struct lprocfs_stats    *nm_dt_stats;
 	struct lprocfs_stats    *nm_md_stats;
 	struct mutex		 nm_stats_lock;
+	/* sha256 of the nodemap name */
+	char			 nm_sha[SHA256_DIGEST_SIZE];
 };
 
 /* Store handles to local MGC storage to save config locally. In future

@@ -3184,6 +3184,32 @@ const char *nodemap_get_sepol(const struct lu_nodemap *nodemap)
 }
 EXPORT_SYMBOL(nodemap_get_sepol);
 
+static int nodemap_sha256(struct lu_nodemap *nodemap)
+{
+	struct crypto_shash *tfm;
+	int rc;
+
+	tfm = crypto_alloc_shash("sha256", 0, 0);
+	if (IS_ERR(tfm))
+		GOTO(out_sha, rc = PTR_ERR(tfm));
+
+	{
+		SHASH_DESC_ON_STACK(desc, tfm);
+		desc->tfm = tfm;
+		rc = crypto_shash_digest(desc, nodemap->nm_name,
+					 strlen(nodemap->nm_name),
+					 nodemap->nm_sha);
+		shash_desc_zero(desc);
+	}
+
+	crypto_free_shash(tfm);
+out_sha:
+	if (rc)
+		memset(nodemap->nm_sha, 0, sizeof(nodemap->nm_sha));
+
+	return rc;
+}
+
 /**
  * nodemap_set_capabilities() - Define user capabilities on nodemap
  * @name: name of nodemap
@@ -3407,6 +3433,16 @@ struct lu_nodemap *nodemap_create(const char *name,
 	mutex_init(&nodemap->nm_member_list_lock);
 	init_rwsem(&nodemap->nm_idmap_lock);
 
+	/* compute sha256 of nodemap name and put it in nm_sha */
+	rc = nodemap_sha256(nodemap);
+	if (rc) {
+		CDEBUG_LIMIT(D_INFO,
+			     "%s: failed to generate sha256 for nodemap name: rc=%d\n",
+			     nodemap->nm_name, rc);
+		if (nodemap->nmf_gss_identify)
+			GOTO(out_list_hash, rc = -ENOENT);
+	}
+
 	if (is_default) {
 		nodemap->nm_id = LUSTRE_NODEMAP_DEFAULT_ID;
 		config->nmc_default_nodemap = nodemap;
@@ -3421,6 +3457,10 @@ struct lu_nodemap *nodemap_create(const char *name,
 
 	RETURN(nodemap);
 
+out_list_hash:
+	if (!list_empty(&nodemap->nm_parent_entry))
+		list_del(&nodemap->nm_parent_entry);
+	(void *)cfs_hash_del_key(hash, newname);
 out:
 	OBD_FREE_PTR(nodemap);
 	if (!IS_ERR_OR_NULL(parent_nodemap))
@@ -4030,6 +4070,14 @@ int nodemap_set_gss_identify(const char *name, bool gss_identify)
 	if (!list_empty(&nodemap->nm_ranges)) {
 		CDEBUG(D_INFO,
 		       "nodemap %s must have empty NID range to set 'gssonly_identification' property\n",
+		       nodemap->nm_name);
+		GOTO(out_putref, rc = -EPERM);
+	}
+
+	if (memcmp(nodemap->nm_sha, (const char[SHA256_DIGEST_SIZE]){0},
+		   SHA256_DIGEST_SIZE) == 0) {
+		CDEBUG(D_INFO,
+		       "nodemap %s must have valid sha256 to set 'gssonly_identification' property\n",
 		       nodemap->nm_name);
 		GOTO(out_putref, rc = -EPERM);
 	}
