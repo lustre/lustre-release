@@ -1,0 +1,44 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# Autoconf generated configure scripts allow users to
+# specify defaults and environment variables via scripts.
+# This is an example to be used with ktest.
+#
+# CONFIG_SITE="./config/config.site.ktest" ./configure
+#
+# ktest: https://github.com/koverstreet/ktest
+# Docs: https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.72/html_node/Site-Defaults.html
+#
+# Author: Timothy Day <timday@amazon.com>
+#
+
+# Disable strict errors for LLVM
+if [[ -n "$LLVM" ]]; then
+	enable_strict_errors="no"
+fi
+
+# Disable persistent OSDs
+with_ldiskfs="no"
+with_zfs="no"
+
+# Disable optional features
+with_o2ib="no"
+enable_gss="no"
+
+# Always build the server
+enable_server="yes"
+
+# ktest uses statically linked tools
+enable_shared="no"
+
+# Assume that Linux is in the same directory
+# as Lustre
+with_linux="$PWD/../linux/"
+
+# Build the kernel via ktest into tmp
+ARCH="$(uname -m)"
+with_linux_obj="/tmp/ktest-out/kernel_build.$ARCH/"
