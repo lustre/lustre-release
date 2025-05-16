@@ -3831,6 +3831,41 @@ test_162() {
 }
 run_test 162 "File attributes should be persisted after MDS failover"
 
+test_163() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( "$MDS1_VERSION" >= $(version_code 2.16.54) )) ||
+		skip "Need MDS version at least 2.16.54 to skip llog holes"
+
+	local mdtidx
+	local mdtsvc
+
+	changelog_register || error "changelog_register failed"
+	stack_trap changelog_deregister EXIT
+	test_mkdir -c 0 $DIR/$tdir || error "mkdir $tdir failed"
+	mdtidx=$(($($LFS getdirstripe -i $DIR/$tdir) + 1))
+	mdtsvc=$(facet_svc mds$mdtidx)
+	echo mds$mdtidx $mdtsvc
+
+	cl_mask=$(do_facet mds$mdtidx $LCTL get_param mdd.$mdtsvc.changelog_mask -n)
+	changelog_chmask "ALL"
+	stack_trap "do_facet mds$mdtidx \
+		$LCTL set_param mdd.$mdtsvc.changelog_mask=\'$cl_mask\' -n" EXIT
+
+	#define OBD_FAIL_MDS_CHANGELOG_FAIL_WRITE			0x18f
+	do_facet mds$mdtidx $LCTL set_param fail_loc=0x18f fail_val=30
+
+	# generate some changelog records to create a gap every 31 index
+	for (( i = 0; i < 10; i++)); do
+		createmany -m $DIR/$tdir/$tfile_$i 40 &
+	done
+
+	# Check changelog gap processing without a jump to a next chunk
+	changelog_dump | awk -F'[ .]' '{if(prev != "" && $2 - prev > 2) \
+			{print"Errot between "prev" and "$2; exit 1}prev=$2}' ||
+			error "Found a gap"
+}
+run_test 163 "changelog check for fail write and processing records"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

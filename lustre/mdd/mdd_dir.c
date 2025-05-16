@@ -839,7 +839,11 @@ int mdd_changelog_write_rec(const struct lu_env *env,
 		lgi_buf.lb_len = rec->cr_hdr.lrh_len;
 		lgi_buf.lb_buf = rec;
 
-		rc = dt_record_write(env, o, &lgi_buf, &offset, th);
+		if (CFS_FAIL_CHECK(OBD_FAIL_MDS_CHANGELOG_FAIL_WRITE) &&
+		    (rec->cr.cr_index % (cfs_fail_val + 1)) == 0)
+			rc = -EIO;
+		else
+			rc = dt_record_write(env, o, &lgi_buf, &offset, th);
 
 		if (rc) {
 			CERROR("%s: failed to write changelog record file "DFID" rec idx %u off %llu chnlg idx %llu: rc = %d\n",

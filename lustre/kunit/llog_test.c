@@ -1174,8 +1174,8 @@ static int test_8_cb(const struct lu_env *env, struct llog_handle *llh,
 	return 0;
 }
 
-static int llog_zeroes(const struct lu_env *env, struct dt_object *o,
-		      __u64 start, __u64 end)
+static int llog_fill_bytes(const struct lu_env *env, struct dt_object *o,
+			   __u64 start, __u64 end, char byte)
 {
 	struct lu_attr la;
 	struct thandle *th;
@@ -1190,6 +1190,8 @@ static int llog_zeroes(const struct lu_env *env, struct dt_object *o,
 	OBD_ALLOC(buf, end - start);
 	if (!buf)
 		RETURN(-ENOMEM);
+
+	memset(buf, byte, end - start);
 
 	LASSERT(o);
 	d = lu2dt_dev(o->do_lu.lo_dev);
@@ -1334,8 +1336,8 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 
 	/* must lost all 20 records */
 	CWARN("8b: clean first llog record in catalog\n");
-	llog_zeroes(env, llh->lgh_obj, 8192 + plain_pos,
-		    8192 + plain_pos + sizeof(struct llog_logid_rec));
+	llog_fill_bytes(env, llh->lgh_obj, 8192 + plain_pos,
+			8192 + plain_pos + sizeof(struct llog_logid_rec), 0x5a);
 
 	rc2 = llog_cat_close(env, llh);
 	if (rc2) {
@@ -1347,10 +1349,10 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 
 	/* lost 28 records, from 5 to 32 in block */
 	CWARN("8c: corrupt first chunk in the middle\n");
-	llog_zeroes(env, obj, 8192 + reclen * 4, 8192 + reclen * 10);
+	llog_fill_bytes(env, obj, 8192 + reclen * 4, 8192 + reclen * 10, 0xff);
 	/* lost whole chunk - 32 records */
 	CWARN("8c: corrupt second chunk at start\n");
-	llog_zeroes(env, obj, 16384, 16384 + reclen);
+	llog_fill_bytes(env, obj, 16384, 16384 + reclen, 0x01);
 
 	CWARN("8d: count survived records\n");
 	rc = llog_open(env, ctxt, &llh, &cat_logid, NULL, LLOG_OPEN_EXISTS);

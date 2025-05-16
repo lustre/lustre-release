@@ -263,6 +263,7 @@ extern bool obd_enable_fname_encoding;
 #define OBD_FAIL_MDS_CHANGELOG_ENOSPC		0x18c
 #define OBD_FAIL_MDS_BATCH_NET			0x18d
 #define OBD_FAIL_MDS_HSM_DATA_VERSION_NET	0x18e
+#define OBD_FAIL_MDS_CHANGELOG_FAIL_WRITE	0x18f
 
 /* OI scrub */
 #define OBD_FAIL_OSD_SCRUB_DELAY		0x190

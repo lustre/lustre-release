@@ -493,6 +493,24 @@ static inline bool llog_is_index_skipable(int idx, struct llog_log_hdr *llh,
 	return !test_bit_le(idx, LLOG_HDR_BITMAP(llh));
 }
 
+static inline int llog_skip_gap(struct llog_rec_hdr *start, char *end)
+{
+	struct llog_rec_hdr *rec = start;
+
+	/* skipping zero gap */
+	while ((rec->lrh_index == 0 || rec->lrh_len == 0) &&
+	       (char *)rec < (char *)end)
+		rec = (typeof(rec))(((char *)rec) + 4);
+
+	if ((char *)rec > end ||
+	    !((rec->lrh_type & LLOG_OP_MASK) == LLOG_OP_MAGIC ||
+	      ((rec->lrh_type & __swab32(LLOG_OP_MASK)) ==
+	       __swab32(LLOG_OP_MAGIC))))
+		return -ENOENT;
+
+	return (int)((char *)rec - (char *)start);
+}
+
 static int llog_process_thread(void *arg)
 {
 	struct llog_process_info *lpi = arg;
@@ -692,16 +710,27 @@ repeat:
 
 			rc = llog_verify_record(loghandle, rec);
 			if (rc) {
+				int gap_size;
+
 				CDEBUG(D_OTHER, "invalid record at index %d\n",
 				       index);
 				/*
 				 * for fixed-sized llogs we can skip one record
 				 * by using llh_size from llog header.
-				 * Otherwise skip the next llog chunk.
 				 */
 				rc = 0;
 				if (llh->llh_flags & LLOG_F_IS_FIXSIZE) {
 					rec->lrh_len = llh->llh_size;
+					goto next_rec;
+				}
+				/*
+				 * for zero gap we can find a next record.
+				 * Otherwise skip the next llog chunk.
+				 */
+				gap_size = llog_skip_gap(rec, buf + chunk_size -
+							 LLOG_MIN_REC_SIZE);
+				if (gap_size > 0) {
+					rec->lrh_len = gap_size;
 					goto next_rec;
 				}
 				/* make sure that is always next block */
