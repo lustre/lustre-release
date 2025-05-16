@@ -23,6 +23,7 @@
 #else
 #include <crypto/sha.h>
 #endif
+#include <linux/rhashtable.h>
 
 #define LUSTRE_NODEMAP_NAME "nodemap"
 
@@ -197,6 +198,8 @@ struct lu_nodemap {
 	struct mutex		 nm_stats_lock;
 	/* sha256 of the nodemap name */
 	char			 nm_sha[SHA256_DIGEST_SIZE];
+	/* access by nodemap name sha hash */
+	struct rhash_head	 nm_sha_hash;
 };
 
 /* Store handles to local MGC storage to save config locally. In future
@@ -337,6 +340,12 @@ struct nodemap_config {
 	 * nodemaps
 	 */
 	struct cfs_hash *nmc_nodemap_hash;
+
+	/**
+	 * Hash keyed on nodemap name sha
+	 * containing all nodemaps
+	 */
+	struct rhashtable nmc_nodemap_sha_hash;
 };
 
 struct nodemap_config *nodemap_config_alloc(void);

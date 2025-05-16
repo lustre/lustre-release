@@ -205,6 +205,49 @@ static int nodemap_init_hash(struct nodemap_config *nmc)
 	return 0;
 }
 
+static u32 nodemap_sha_hashfn(const void *data, u32 len, u32 seed)
+{
+	const u64 *chunks = (const u64 *)data;
+	int i;
+
+	/* Combine the hash of each 64-bit chunk */
+	for (i = 0; i < SHA256_DIGEST_SIZE / sizeof(u64); i++)
+		seed ^= cfs_hash_64(chunks[i], 32);
+
+	return seed;
+}
+
+static int nodemap_sha_cmpfn(struct rhashtable_compare_arg *arg,
+			     const void *obj)
+{
+	const struct lu_nodemap *nm = obj;
+	const char *sha = arg->key;
+
+	return memcmp(sha, nm->nm_sha, SHA256_DIGEST_SIZE);
+}
+
+static const struct rhashtable_params nodemap_sha_hash_params = {
+	.key_len        = SHA256_DIGEST_SIZE,
+	.key_offset	= offsetof(struct lu_nodemap, nm_sha),
+	.head_offset	= offsetof(struct lu_nodemap, nm_sha_hash),
+	.hashfn		= nodemap_sha_hashfn,
+	.obj_cmpfn	= nodemap_sha_cmpfn,
+};
+
+/**
+ * nodemap_init_sha_hash() - Initialize nodemap_sha_hash
+ * @nmc: nodemap_config struct for which sha hash is getting initialized
+ *
+ * Return:
+ * * %0		success
+ * * %-ENOMEM		cannot create hash
+ */
+static int nodemap_init_sha_hash(struct nodemap_config *nmc)
+{
+	return rhashtable_init(&nmc->nmc_nodemap_sha_hash,
+			       &nodemap_sha_hash_params);
+}
+
 /**
  * allow_op_on_nm() - Check for valid modification of nodemap
  * @nodemap: the nodemap to modify
@@ -353,6 +396,49 @@ struct lu_nodemap *nodemap_lookup(const char *name)
 		return ERR_PTR(-ENOENT);
 
 	return nodemap;
+}
+
+/**
+ * nodemap_sha_lookup() - Nodemap lookup by sha of nodemap name
+ * @sha: sha of nodemap name
+ * @name_buf: buffer to write the nodemap name to
+ * @name_bufsz: length of buffer
+ *
+ * Look nodemap up in the active_config nodemap sha hash, and return its name.
+ * Only nodemaps with the gssonly_identification property set can be looked up
+ * like that.
+ *
+ * Return:
+ * * %-EINVAL		buffer for nodemap name is too small
+ * * %-EPERM		nodemap does not have gssonly_identification property
+ * * %-ENOENT		nodemap not found
+ * * %0			success
+ */
+int nodemap_sha_lookup(const char *sha, char *name_buf, size_t name_bufsz)
+{
+	struct lu_nodemap *nodemap;
+	int rc = 0;
+
+	if (name_bufsz <= LUSTRE_NODEMAP_NAME_LENGTH)
+		return -EINVAL;
+
+	mutex_lock(&active_config_lock);
+	nodemap = rhashtable_lookup_fast(&active_config->nmc_nodemap_sha_hash,
+					 sha, nodemap_sha_hash_params);
+	mutex_unlock(&active_config_lock);
+
+	if (!nodemap)
+		return -ENOENT;
+
+	nodemap_getref(nodemap);
+	if (!nodemap->nmf_gss_identify)
+		GOTO(out, rc = -EPERM);
+
+	strscpy(name_buf, nodemap->nm_name, name_bufsz);
+
+out:
+	nodemap_putref(nodemap);
+	return rc;
 }
 
 /**
@@ -3441,6 +3527,13 @@ struct lu_nodemap *nodemap_create(const char *name,
 			     nodemap->nm_name, rc);
 		if (nodemap->nmf_gss_identify)
 			GOTO(out_list_hash, rc = -ENOENT);
+	} else {
+		rc = rhashtable_insert_fast(&config->nmc_nodemap_sha_hash,
+					    &nodemap->nm_sha_hash,
+					    nodemap_sha_hash_params);
+		if (rc)
+			GOTO(out_list_hash, rc = -EEXIST);
+		nodemap_getref(nodemap);
 	}
 
 	if (is_default) {
@@ -4191,6 +4284,11 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 		GOTO(out, rc = -ENOENT);
 	}
 
+	(void)rhashtable_remove_fast(&active_config->nmc_nodemap_sha_hash,
+				     &nodemap->nm_sha_hash,
+				     nodemap_sha_hash_params);
+	nodemap_putref(nodemap);
+
 	/* erase nodemap from active ranges to prevent client assignment */
 	down_write(&active_config->nmc_range_tree_lock);
 	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
@@ -4566,6 +4664,13 @@ struct nodemap_config *nodemap_config_alloc(void)
 		return ERR_PTR(rc);
 	}
 
+	rc = nodemap_init_sha_hash(config);
+	if (rc != 0) {
+		cfs_hash_putref(config->nmc_nodemap_hash);
+		OBD_FREE_PTR(config);
+		return ERR_PTR(rc);
+	}
+
 	init_rwsem(&config->nmc_range_tree_lock);
 	init_rwsem(&config->nmc_ban_range_tree_lock);
 
@@ -4579,6 +4684,13 @@ struct nodemap_config *nodemap_config_alloc(void)
 }
 EXPORT_SYMBOL(nodemap_config_alloc);
 
+static void lu_nodemap_exit(void *vnodemap, void *data)
+{
+	struct lu_nodemap *nm = vnodemap;
+
+	nodemap_putref(nm);
+}
+
 /**
  * nodemap_config_dealloc() - Walk the nodemap_hash and remove all nodemaps.
  * @config: pointer to struct nodemap_config which will get dealloc
@@ -4591,6 +4703,8 @@ void nodemap_config_dealloc(struct nodemap_config *config)
 	struct lu_nid_range	*range_temp;
 	LIST_HEAD(nodemap_list_head);
 
+	rhashtable_free_and_destroy(&config->nmc_nodemap_sha_hash,
+				    lu_nodemap_exit, NULL);
 	cfs_hash_for_each_safe(config->nmc_nodemap_hash,
 			       nodemap_cleanup_iter_cb, &nodemap_list_head);
 	cfs_hash_putref(config->nmc_nodemap_hash);

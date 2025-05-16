@@ -124,6 +124,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 				  bool is_default, bool dynamic);
 void nodemap_putref(struct lu_nodemap *nodemap);
 struct lu_nodemap *nodemap_lookup(const char *name);
+int nodemap_sha_lookup(const char *sha, char *name_buf, size_t name_len);
 
 int nodemap_procfs_init(void);
 void nodemap_procfs_exit(void);
