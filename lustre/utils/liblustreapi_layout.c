@@ -25,8 +25,10 @@
 #include <time.h>
 
 #include <libcfs/util/list.h>
+#include <linux/lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
+#include "lstddef.h"
 
 /**
  * Layout component, which contains all attributes of a plain
@@ -3258,57 +3260,13 @@ int llapi_mirror_find(struct llapi_layout *layout, uint64_t file_start,
 	return mirror_id;
 }
 
-#ifndef NSEC_PER_SEC
-# define NSEC_PER_SEC 1000000000UL
-#endif
-#define ONE_MB 0x100000
-static struct timespec timespec_sub(struct timespec *before,
-				    struct timespec *after)
-{
-	struct timespec ret;
-
-	ret.tv_sec = after->tv_sec - before->tv_sec;
-	if (after->tv_nsec < before->tv_nsec) {
-		ret.tv_sec--;
-		ret.tv_nsec = NSEC_PER_SEC + after->tv_nsec - before->tv_nsec;
-	} else {
-		ret.tv_nsec = after->tv_nsec - before->tv_nsec;
-	}
-
-	return ret;
-}
-
-static void stats_log(struct timespec *now, struct timespec *start_time,
-		      ssize_t read_bytes, size_t write_bytes,
-		      off_t file_size_bytes)
-{
-	struct timespec diff = timespec_sub(start_time, now);
-
-	if (file_size_bytes == 0)
-		return;
-
-	if (diff.tv_sec == 0 && diff.tv_nsec == 0)
-		return;
-
-	llapi_printf(LLAPI_MSG_NORMAL,
-		     "- { seconds: %li, rmbps: %5.2g, wmbps: %5.2g, copied: %lu, size: %lu, pct: %lu%% }\n",
-		     diff.tv_sec,
-		     (double) read_bytes/((ONE_MB * diff.tv_sec) +
-			     ((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
-		     (double) write_bytes/((ONE_MB * diff.tv_sec) +
-			     ((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
-		     write_bytes/ONE_MB,
-		     file_size_bytes/ONE_MB,
-		     ((write_bytes*100)/file_size_bytes));
-}
-
 int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 				    struct llapi_resync_comp *comp_array,
-				    int comp_size,  uint64_t start,
-				    uint64_t end,
+				    int comp_size, uint64_t start, uint64_t end,
 				    unsigned long stats_interval_sec,
-				    unsigned long bandwidth_bytes_sec)
+				    uint64_t bandwidth_bytes_sec)
 {
+	struct stat stbuf;
 	size_t buflen = 64 << 20; /* 64M */
 	ssize_t page_size;
 	void *buf;
@@ -3322,16 +3280,22 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 	struct timespec start_time;
 	struct timespec now;
 	struct timespec last_bw_print;
-	size_t total_bytes_read = 0;
-	size_t total_bytes_written = 0;
-	off_t write_estimation_bytes = 0;
-	struct stat st;
+	uint64_t total_bytes_read = 0;
+	uint64_t total_bytes_written = 0;
+	uint64_t write_estimation_bytes = 0;
 
-	rc = fstat(fd, &st);
+	rc = fstat(fd, &stbuf);
 	if (rc < 0)
 		return -errno;
-	if (bandwidth_bytes_sec > 0 || stats_interval_sec)
-		write_estimation_bytes = st.st_size * comp_size;
+
+	/* estimate is too big for sparse file, but good enough for % done */
+	if (bandwidth_bytes_sec > 0 || stats_interval_sec) {
+		for (i = 0; i < comp_size; i++) {
+			write_estimation_bytes +=
+				min_t(uint64_t, comp_array[i].lrc_end,
+				      stbuf.st_size) - comp_array[i].lrc_start;
+		}
+	}
 
 	/* limit transfer size to what can be sent in one second */
 	if (bandwidth_bytes_sec && bandwidth_bytes_sec < buflen)
@@ -3471,8 +3435,6 @@ do_read:
 		to_write = ((bytes_read - 1) | (page_size - 1)) + 1;
 
 		for (i = 0; i < comp_size; i++) {
-			unsigned long long write_target;
-			struct timespec diff;
 			ssize_t written;
 			off_t pos2 = pos;
 			size_t to_write2 = to_write;
@@ -3507,53 +3469,21 @@ do_read:
 			assert(written == to_write2);
 			total_bytes_written += written;
 
-			if (bandwidth_bytes_sec == 0)
+			if (!bandwidth_bytes_sec && !stats_interval_sec)
 				continue;
 
 			clock_gettime(CLOCK_MONOTONIC, &now);
-			diff = timespec_sub(&start_time, &now);
-			write_target = ((bandwidth_bytes_sec * diff.tv_sec) +
-				((bandwidth_bytes_sec *
-				diff.tv_nsec)/NSEC_PER_SEC));
+			llapi_bandwidth_throttle(&now, &start_time,
+						 bandwidth_bytes_sec,
+						 total_bytes_written);
 
-			if (write_target < total_bytes_written) {
-				unsigned long long excess;
-				struct timespec delay = { 0, 0 };
-
-				excess = total_bytes_written - write_target;
-
-				if (excess == 0)
-					continue;
-
-				delay.tv_sec = excess / bandwidth_bytes_sec;
-				delay.tv_nsec = (excess % bandwidth_bytes_sec) *
-					NSEC_PER_SEC / bandwidth_bytes_sec;
-
-				do {
-					rc = clock_nanosleep(CLOCK_MONOTONIC, 0,
-							     &delay, &delay);
-				} while (rc < 0 && errno == EINTR);
-
-				if (rc < 0) {
-					llapi_error(LLAPI_MSG_ERROR, rc,
-						"errors: delay for bandwidth control failed: %s\n",
-						strerror(-rc));
-					rc = 0;
-				}
-			}
-
-			if (stats_interval_sec) {
-				clock_gettime(CLOCK_MONOTONIC, &now);
-				if ((total_bytes_written != end - start) &&
-				     (now.tv_sec >= last_bw_print.tv_sec +
-						 stats_interval_sec)) {
-					stats_log(&now, &start_time,
-						  total_bytes_read,
-						  total_bytes_written,
-						  write_estimation_bytes);
-					last_bw_print = now;
-				}
-			}
+			if (stats_interval_sec &&
+			    total_bytes_written != write_estimation_bytes)
+				llapi_stats_log(&now, &start_time,
+					  &last_bw_print, stats_interval_sec,
+					  total_bytes_read, total_bytes_written,
+					  total_bytes_written,
+					  write_estimation_bytes);
 		}
 		pos += bytes_read;
 	}
@@ -3570,9 +3500,10 @@ do_read:
 	/* Output at least one log, regardless of stats_interval */
 	if (stats_interval_sec) {
 		clock_gettime(CLOCK_MONOTONIC, &now);
-		stats_log(&now, &start_time, total_bytes_read,
-			  total_bytes_written,
-			  write_estimation_bytes);
+		llapi_stats_log(&now, &start_time,
+				&last_bw_print, stats_interval_sec,
+				total_bytes_read, total_bytes_written,
+				write_estimation_bytes, write_estimation_bytes);
 	}
 
 	/**
@@ -3587,7 +3518,7 @@ do_read:
 		if (pos < comp->lrc_start || pos >= comp->lrc_end)
 			continue;
 
-		if (pos < st.st_size) {
+		if (pos < stbuf.st_size) {
 			rc = llapi_mirror_punch(fd, comp->lrc_mirror_id, pos,
 						comp->lrc_end - pos);
 		} else {
@@ -3901,13 +3832,13 @@ out_err:
 /* Print explanation of layout error */
 void llapi_layout_sanity_perror(int error)
 {
-	if (error >= LSE_LAST || error < 0) {
-		fprintf(stdout, "Invalid layout, unrecognized error: %d\n",
-			error);
-	} else {
-		fprintf(stdout, "Invalid layout: %s\n",
-			llapi_layout_strerror[error]);
-	}
+	if (error >= LSE_LAST || error < 0)
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "Invalid layout, unrecognized error: %d\n",
+				  error);
+	else
+		llapi_err_noerrno(LLAPI_MSG_ERROR, "Invalid layout: %s\n",
+				  llapi_layout_strerror[error]);
 }
 
 /* Walk a layout and enforce sanity checks that apply to > 1 component

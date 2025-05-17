@@ -40,51 +40,46 @@
 #define _GNU_SOURCE
 #endif
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <inttypes.h>
-#include <getopt.h>
-#include <string.h>
-#include <mntent.h>
-#include <unistd.h>
-#include <errno.h>
+#include <asm/byteorder.h>
+#include <ctype.h>
+#include <dirent.h>
 #include <err.h>
-#include <pwd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
 #include <grp.h>
+#include <inttypes.h>
+#include <libgen.h>
+#include <mntent.h>
+#include <pwd.h>
 #include <regex.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
+#include <sys/param.h>
 #include <sys/quota.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/param.h>
 #include <sys/xattr.h>
-#include <fcntl.h>
-#include <dirent.h>
 #include <time.h>
-#include <ctype.h>
+#include <unistd.h>
 #include <zlib.h>
-#include <libgen.h>
-#include <asm/byteorder.h>
-#include "lfs_project.h"
 
-#include <libcfs/util/string.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
 #include <libcfs/util/string.h>
-#include <lustre/lustreapi.h>
-#include <linux/lustre/lustre_ver.h>
-#include <linux/lustre/lustre_param.h>
 #include <linux/lnet/nidstr.h>
-#include <lnetconfig/cyaml.h>
-#include "lstddef.h"
 #include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_param.h>
+#include <linux/lustre/lustre_ver.h>
+#include <lnetconfig/cyaml.h>
+#include <lustre/lustreapi.h>
 #include "callvpe.h"
-
-#ifndef NSEC_PER_SEC
-# define NSEC_PER_SEC 1000000000UL
-#endif
-#define ONE_MB 0x100000
+#include "lfs_project.h"
+#include "lstddef.h"
+#include "lustreapi_internal.h"
 
 /* all functions */
 static int lfs_find(int argc, char **argv);
@@ -884,44 +879,6 @@ out:
 	return rc;
 }
 
-static struct timespec timespec_sub(struct timespec *before,
-				    struct timespec *after)
-{
-	struct timespec ret;
-
-	ret.tv_sec = after->tv_sec - before->tv_sec;
-	if (after->tv_nsec < before->tv_nsec) {
-		ret.tv_sec--;
-		ret.tv_nsec = NSEC_PER_SEC + after->tv_nsec - before->tv_nsec;
-	} else {
-		ret.tv_nsec = after->tv_nsec - before->tv_nsec;
-	}
-
-	return ret;
-}
-
-static void stats_log(struct timespec *now, struct timespec *start_time,
-		      ssize_t read_bytes, size_t write_bytes,
-		      off_t file_size_bytes)
-{
-	struct timespec diff = timespec_sub(start_time, now);
-
-	if (file_size_bytes == 0)
-		return;
-
-	if (diff.tv_sec == 0 && diff.tv_nsec == 0)
-		return;
-
-	printf("- { seconds: %li, rmbps: %5.2g, wmbps: %5.2g, copied: %lu, size: %lu, pct: %lu%% }\n",
-		diff.tv_sec,
-		(double) read_bytes/((ONE_MB * diff.tv_sec) +
-			((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
-		(double) write_bytes/((ONE_MB * diff.tv_sec) +
-			((ONE_MB * diff.tv_nsec)/NSEC_PER_SEC)),
-		write_bytes/ONE_MB, file_size_bytes/ONE_MB,
-		((write_bytes*100)/file_size_bytes));
-}
-
 static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			     unsigned long long bandwidth_bytes_sec,
 			     long stats_interval_sec, off_t file_size_bytes)
@@ -1043,9 +1000,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 
 		to_write = rsize;
 		while (to_write > 0) {
-			unsigned long long write_target;
 			ssize_t written;
-			struct timespec diff;
 
 			written = pwrite(fd_dst, buf, to_write, pos);
 			if (written < 0) {
@@ -1063,46 +1018,16 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 				continue;
 
 			clock_gettime(CLOCK_MONOTONIC, &now);
-			diff = timespec_sub(&start_time, &now);
-			write_target = ((bandwidth_bytes_sec * diff.tv_sec) +
-				((bandwidth_bytes_sec *
-				diff.tv_nsec)/NSEC_PER_SEC));
-
-			if (write_target < write_bytes) {
-				unsigned long long excess;
-				struct timespec delay = { 0, 0 };
-
-				excess = write_bytes - write_target;
-
-				if (excess == 0)
-					continue;
-
-				delay.tv_sec = excess / bandwidth_bytes_sec;
-				delay.tv_nsec = (excess % bandwidth_bytes_sec) *
-					NSEC_PER_SEC / bandwidth_bytes_sec;
-
-				do {
-					rc = clock_nanosleep(CLOCK_MONOTONIC, 0,
-							     &delay, &delay);
-				} while (rc < 0 && errno == EINTR);
-
-				if (rc < 0) {
-					if (stats_interval_sec)
-						llapi_error(LLAPI_MSG_WARN, rc,
-							    "delay for bandwidth control failed");
-					rc = 0;
-				}
-			}
+			llapi_bandwidth_throttle(&now, &start_time,
+						 bandwidth_bytes_sec,
+						 write_bytes);
 		}
 
-		clock_gettime(CLOCK_MONOTONIC, &now);
-		if (stats_interval_sec && (write_bytes != file_size_bytes) &&
-			(now.tv_sec >= last_bw_print.tv_sec +
-			stats_interval_sec)) {
-			stats_log(&now, &start_time,
-				  read_bytes, write_bytes,
-				  file_size_bytes);
-			last_bw_print = now;
+		if (stats_interval_sec && write_bytes != file_size_bytes) {
+			clock_gettime(CLOCK_MONOTONIC, &now);
+			llapi_stats_log(&now, &start_time, &last_bw_print,
+					stats_interval_sec, read_bytes,
+					write_bytes, pos, file_size_bytes);
 		}
 
 		if (rc || rsize < to_read)
@@ -1112,8 +1037,9 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	/* Output at least one log, regardless of stats_interval */
 	if (stats_interval_sec) {
 		clock_gettime(CLOCK_MONOTONIC, &now);
-		stats_log(&now, &start_time, read_bytes, write_bytes,
-			  file_size_bytes);
+		llapi_stats_log(&now, &start_time, &last_bw_print,
+				stats_interval_sec, read_bytes, write_bytes,
+				file_size_bytes, file_size_bytes);
 	}
 
 	rc = fsync(fd_dst);

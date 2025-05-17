@@ -22,17 +22,18 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sched.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/xattr.h>
 #include <unistd.h>
-#include <sched.h>
 
-#include <libcfs/util/ioctl.h>
 #include <libcfs/util/hash.h>
-#include <lustre/lustreapi.h>
+#include <libcfs/util/ioctl.h>
 #include <linux/lustre/lustre_fid.h>
+#include <linux/lustre/lustre_ioctl.h>
+#include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 
 /* strip instances of // (DNE striped directory) when copying to reply buffer */

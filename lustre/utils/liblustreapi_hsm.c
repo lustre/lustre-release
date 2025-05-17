@@ -16,32 +16,32 @@
  * Author: Henri Doreau <henri.doreau@cea.fr>
  */
 
-#include <fcntl.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stddef.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <malloc.h>
-#include <errno.h>
 #include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <fnmatch.h>
+#include <malloc.h>
+#include <signal.h>
 #include <stdarg.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
-#include <utime.h>
-#include <sys/syscall.h>
-#include <fnmatch.h>
-#include <signal.h>
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
 #else
 #include <unistd.h>
 #endif
+#include <utime.h>
 
 #include <linux/lnet/lnetctl.h>
+#include <linux/lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 

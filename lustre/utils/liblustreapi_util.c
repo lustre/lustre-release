@@ -506,3 +506,67 @@ int llapi_get_fsname(const char *path, char *fsname, size_t fsname_len)
 {
 	return llapi_get_fsname_instance(path, fsname, fsname_len, NULL, 0);
 }
+
+void llapi_bandwidth_throttle(struct timespec *now, struct timespec *start_time,
+			      uint64_t bandwidth_bytes_sec,
+			      uint64_t total_bytes_written)
+{
+	struct timespec diff;
+	struct timespec delay = { 0, 0 };
+	size_t write_target;
+	long long excess;
+	int rc;
+
+	if (bandwidth_bytes_sec == 0)
+		return;
+
+	diff = timespec_sub(start_time, now);
+	write_target = (bandwidth_bytes_sec * diff.tv_sec) +
+		       (bandwidth_bytes_sec * diff.tv_nsec / NSEC_PER_SEC);
+
+	excess = (long long)total_bytes_written - (long long)write_target;
+	if (excess <= 0)
+		return;
+
+	delay.tv_sec = excess / bandwidth_bytes_sec;
+	delay.tv_nsec = (excess % bandwidth_bytes_sec) * NSEC_PER_SEC /
+			bandwidth_bytes_sec;
+
+	do {
+		rc = clock_nanosleep(CLOCK_MONOTONIC, 0, &delay, &delay);
+	} while (rc < 0 && errno == EINTR);
+
+	if (rc < 0)
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "errors: delay for bandwidth control failed\n");
+}
+
+void llapi_stats_log(struct timespec *now, struct timespec *start_time,
+		     struct timespec *last_print, int stats_interval_sec,
+		     uint64_t read_bytes, uint64_t write_bytes,
+		     uint64_t offset, uint64_t file_size_bytes)
+{
+	struct timespec diff_print;
+	struct timespec diff;
+
+	if (file_size_bytes == 0)
+		return;
+
+	diff_print = timespec_sub(last_print, now);
+	if (diff_print.tv_sec < stats_interval_sec &&
+	    offset != file_size_bytes)
+		return;
+
+	diff = timespec_sub(start_time, now);
+
+	llapi_printf(LLAPI_MSG_NORMAL,
+		     "- { seconds: %li, rmbps: %5.2g, wmbps: %5.2g, copied: %lu, total: %lu, pct: %lu%% }\n",
+		     diff.tv_sec,
+		     (double)read_bytes / (ONE_MB * diff.tv_sec +
+					  ONE_MB * diff.tv_nsec / NSEC_PER_SEC),
+		     (double)write_bytes / (ONE_MB * diff.tv_sec +
+					  ONE_MB * diff.tv_nsec / NSEC_PER_SEC),
+		     offset / ONE_MB, file_size_bytes / ONE_MB,
+		     offset * 100 / file_size_bytes);
+	*last_print = *now;
+}

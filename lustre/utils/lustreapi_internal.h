@@ -34,14 +34,14 @@
 #ifndef _LUSTREAPI_INTERNAL_H_
 #define _LUSTREAPI_INTERNAL_H_
 
+#include <dirent.h>
 #include <limits.h>
 #include <stdint.h>
-#include <dirent.h>
+#include <time.h>
 
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
 
-#include <linux/lustre/lustre_ioctl.h>
 #include <linux/lustre/lustre_kernelcomm.h>
 
 #include <lustre/lustreapi.h>
@@ -71,6 +71,7 @@
 
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index,
 		  dev_t *dev, char **out_nid);
+struct obd_ioctl_data;
 int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len);
 int llapi_ioctl_dev(int dev_id, unsigned int cmd, void *buf);
 int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len);
@@ -160,10 +161,6 @@ static inline bool llapi_pool_name_is_valid(const char **pool_name)
 	return true;
 }
 
-/* Compatibility macro for legacy llapi functions that use "offset"
- * terminology instead of the preferred "index". */
-#define llapi_stripe_offset_is_valid(os) llapi_stripe_index_is_valid(os)
-
 static inline bool llapi_dir_stripe_count_is_valid(int64_t count)
 {
 	return count >= LMV_OVERSTRIPE_COUNT_MAX &&
@@ -233,4 +230,36 @@ int llapi_semantic_traverse(char *path, int size, int parent,
 			    semantic_func_t sem_init,
 			    semantic_func_t sem_fini, void *data,
 			    struct dirent64 *de);
+
+#ifndef NSEC_PER_SEC
+#define NSEC_PER_SEC 1000000000UL
+#endif
+#ifndef ONE_MB
+#define ONE_MB (1024 * 1024)
+#endif
+
+static inline struct timespec timespec_sub(struct timespec *before,
+					   struct timespec *after)
+{
+	struct timespec ret;
+
+	ret.tv_sec = after->tv_sec - before->tv_sec;
+	if (after->tv_nsec < before->tv_nsec) {
+		ret.tv_sec--;
+		ret.tv_nsec = NSEC_PER_SEC + after->tv_nsec - before->tv_nsec;
+	} else {
+		ret.tv_nsec = after->tv_nsec - before->tv_nsec;
+	}
+
+	return ret;
+}
+
+/* not ready to expose as official APIs yet, but want to share code */
+void llapi_bandwidth_throttle(struct timespec *now, struct timespec *start_time,
+			      uint64_t bandwidth_bytes_sec,
+			      uint64_t total_bytes_written);
+void llapi_stats_log(struct timespec *now, struct timespec *start_time,
+		     struct timespec *last_print, int stats_interval_sec,
+		     uint64_t read_bytes, uint64_t write_bytes,
+		     uint64_t offset, uint64_t file_size_bytes);
 #endif /* _LUSTREAPI_INTERNAL_H_ */
