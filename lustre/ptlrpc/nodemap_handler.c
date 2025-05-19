@@ -5534,6 +5534,22 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 		if (out_ro_cmd)
 			*out_ro_cmd = true;
 		break;
+	case LCFG_NODEMAP_LOOKUP_SHA:
+		if (lcfg->lcfg_bufcount != 2)
+			GOTO(out_lcfg, rc = -EINVAL);
+		if (LUSTRE_CFG_BUFLEN(lcfg, 1) != SHA256_DIGEST_SIZE)
+			GOTO(out_lcfg, rc = -EINVAL);
+
+		param = lustre_cfg_buf(lcfg, 1);
+		rc = nodemap_sha_lookup(param, name_buf, sizeof(name_buf));
+		if (rc)
+			GOTO(out_lcfg, rc);
+		rc = copy_to_user(data->ioc_pbuf1, name_buf,
+				  min_t(size_t, data->ioc_plen1,
+					sizeof(name_buf)));
+		if (rc)
+			GOTO(out_lcfg, rc = -EFAULT);
+		break;
 	case LCFG_NODEMAP_TEST_ID:
 		if (lcfg->lcfg_bufcount != 4)
 			GOTO(out_lcfg, rc = -EINVAL);
