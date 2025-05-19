@@ -34,7 +34,7 @@ static int nidtbl_is_sane(struct mgs_nidtbl *tbl)
 	struct mgs_nidtbl_target *tgt;
 	int version = 0;
 
-	LASSERT(mutex_is_locked(&tbl->mn_lock));
+	LASSERT(rwsem_is_locked(&tbl->mn_lock));
 	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
 		if (!tgt->mnt_version)
 			continue;
@@ -190,7 +190,7 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 	LASSERT((unit_size & (unit_size - 1)) == 0);
 	LASSERT(nrpages << PAGE_SHIFT >= units_total * unit_size);
 
-	mutex_lock(&tbl->mn_lock);
+	down_read(&tbl->mn_lock);
 	LASSERT(nidtbl_is_sane(tbl));
 
 	/* no more entries ? */
@@ -309,7 +309,7 @@ out:
 	LASSERT(version <= tbl->mn_version);
 	res->mcr_size = tbl->mn_version;
 	res->mcr_offset = nobuf ? version : tbl->mn_version;
-	mutex_unlock(&tbl->mn_lock);
+	up_read(&tbl->mn_lock);
 
 	CDEBUG(D_MGS, "Read IR logs %s return with %d, version %llu\n",
 	       tbl->mn_fsdb->fsdb_name, rc, version);
@@ -337,7 +337,7 @@ static int nidtbl_update_version(const struct lu_env *env,
 	if (mgs->mgs_bottom->dd_rdonly)
 		RETURN(0);
 
-	LASSERT(mutex_is_locked(&tbl->mn_lock));
+	LASSERT(rwsem_is_locked(&tbl->mn_lock));
 
 	fsdb = local_file_find_or_create(env, mgs->mgs_los, mgs->mgs_nidtbl_dir,
 					 tbl->mn_fsdb->fsdb_name,
@@ -386,7 +386,7 @@ static int nidtbl_read_version(const struct lu_env *env,
 
 	ENTRY;
 
-	LASSERT(mutex_is_locked(&tbl->mn_lock));
+	LASSERT(rwsem_is_locked(&tbl->mn_lock));
 
 	LASSERT(mgs->mgs_nidtbl_dir);
 	rc = dt_lookup_dir(env, mgs->mgs_nidtbl_dir, tbl->mn_fsdb->fsdb_name,
@@ -564,7 +564,7 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 	LASSERT(type != 0);
 
 	tbl = &fsdb->fsdb_nidtbl;
-	mutex_lock(&tbl->mn_lock);
+	down_write(&tbl->mn_lock);
 	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
 		if (type == tgt->mnt_type &&
 		    mti->mti_stripe_index == tgt->mnt_stripe_index) {
@@ -600,7 +600,7 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 	EXIT;
 
 out:
-	mutex_unlock(&tbl->mn_lock);
+	up_write(&tbl->mn_lock);
 	if (rc)
 		CERROR("Write NID table version for file system %s error %d\n",
                        fsdb->fsdb_name, rc);
@@ -612,10 +612,10 @@ static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 	struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
 	LIST_HEAD(head);
 
-	mutex_lock(&tbl->mn_lock);
+	down_write(&tbl->mn_lock);
 	tbl->mn_nr_targets = 0;
 	list_splice_init(&tbl->mn_targets, &head);
-	mutex_unlock(&tbl->mn_lock);
+	up_write(&tbl->mn_lock);
 
 	while (!list_empty(&head)) {
 		struct mgs_nidtbl_target *tgt;
@@ -643,12 +643,12 @@ static int mgs_nidtbl_init_fs(const struct lu_env *env, struct fs_db *fsdb)
 	int rc;
 
 	INIT_LIST_HEAD(&tbl->mn_targets);
-	mutex_init(&tbl->mn_lock);
+	init_rwsem(&tbl->mn_lock);
 	tbl->mn_nr_targets = 0;
 	tbl->mn_fsdb = fsdb;
-	mutex_lock(&tbl->mn_lock);
+	down_write(&tbl->mn_lock);
 	rc = nidtbl_read_version(env, fsdb->fsdb_mgs, tbl, &tbl->mn_version);
-	mutex_unlock(&tbl->mn_lock);
+	up_write(&tbl->mn_lock);
 	if (rc < 0)
 		CERROR("%s: IR: failed to read current version, rc = %d\n",
 		       fsdb->fsdb_mgs->mgs_obd->obd_name, rc);

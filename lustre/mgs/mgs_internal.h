@@ -87,7 +87,7 @@ struct mgs_fsc {
 struct mgs_nidtbl {
 	struct fs_db		*mn_fsdb;
 	struct file		*mn_version_file;
-	struct mutex		 mn_lock;
+	struct rw_semaphore	 mn_lock;
 	u64			 mn_version;
 	int			 mn_nr_targets;
 	struct list_head	 mn_targets;
