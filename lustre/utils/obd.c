@@ -774,48 +774,6 @@ int jt_opt_net(int argc, char **argv)
 #define OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE)
 #endif
 
-static bool is_mgs(void)
-{
-	glob_t path;
-	int rc;
-
-	rc = cfs_get_param_paths(&path, "mgs/MGS/exports");
-	if (!rc) {
-		cfs_free_param_data(&path);
-		return true;
-	}
-
-	return false;
-}
-
-static bool is_mds(void)
-{
-	glob_t path;
-	int rc;
-
-	rc = cfs_get_param_paths(&path, "mdt/*-MDT*/exports");
-	if (!rc) {
-		cfs_free_param_data(&path);
-		return true;
-	}
-
-	return false;
-}
-
-static bool is_oss(void)
-{
-	glob_t path;
-	int rc;
-
-	rc = cfs_get_param_paths(&path, "obdfilter/*-OST*/exports");
-	if (!rc) {
-		cfs_free_param_data(&path);
-		return true;
-	}
-
-	return false;
-}
-
 static int get_mds_device(void)
 {
 	char mds[] = "$MDS";

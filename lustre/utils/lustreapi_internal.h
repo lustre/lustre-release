@@ -195,6 +195,48 @@ int lov_comp_md_size(struct lov_comp_md_v1 *lcm);
 
 int open_parent(const char *path);
 
+static inline bool is_mgs(void)
+{
+	glob_t path;
+	int rc;
+
+	rc = cfs_get_param_paths(&path, "mgs/MGS/exports");
+	if (!rc) {
+		cfs_free_param_data(&path);
+		return true;
+	}
+
+	return false;
+}
+
+static inline bool is_mds(void)
+{
+	glob_t path;
+	int rc;
+
+	rc = cfs_get_param_paths(&path, "mdt/*-MDT*/exports");
+	if (!rc) {
+		cfs_free_param_data(&path);
+		return true;
+	}
+
+	return false;
+}
+
+static inline bool is_oss(void)
+{
+	glob_t path;
+	int rc;
+
+	rc = cfs_get_param_paths(&path, "obdfilter/*-OST*/exports");
+	if (!rc) {
+		cfs_free_param_data(&path);
+		return true;
+	}
+
+	return false;
+}
+
 typedef int (semantic_func_t)(char *path, int p, int *d,
 			      void *data, struct dirent64 *de);
 
