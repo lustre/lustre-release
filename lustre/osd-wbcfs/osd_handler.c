@@ -499,18 +499,24 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
 	ENTRY;
 
 	OBD_ALLOC_PTR(osd);
-	if (osd == NULL)
+	if (!osd)
 		RETURN(ERR_PTR(-ENOMEM));
 
 	rc = dt_device_init(&osd->od_dt_dev, t);
-	if (unlikely(rc)) {
-		OBD_FREE_PTR(osd);
-		GOTO(out, rc);
-	}
+	if (rc)
+		GOTO(out_free, rc);
 
 	rc = __osd_device_init(env, osd, cfg);
-out:
-	RETURN(rc == 0 ? osd2lu_dev(osd) : ERR_PTR(rc));
+	if (rc)
+		GOTO(out_dev_fini, rc);
+
+	RETURN(osd2lu_dev(osd));
+
+out_dev_fini:
+	dt_device_fini(&osd->od_dt_dev);
+out_free:
+	OBD_FREE_PTR(osd);
+	RETURN(ERR_PTR(rc));
 }
 
 static struct lu_device *osd_device_free(const struct lu_env *env,
