@@ -397,19 +397,15 @@ static int osd_dir_it_get(const struct lu_env *env,
 {
 	struct osd_it *it = (struct osd_it *)di;
 	struct file *file = &it->oit_file;
+	loff_t offset;
 
 	ENTRY;
 
 	LASSERT(((const char *)key)[0] == '\0');
-	if (file->f_op->llseek) {
-		loff_t offset;
 
-		offset = file->f_op->llseek(file, 0, 0);
-		if (offset != 0)
-			CWARN("Failed to llseek(): offset %lld != 0\n", offset);
-	} else {
-		it->oit_file.f_pos = 0;
-	}
+	offset = file->f_op->llseek(file, 0, 0);
+	if (offset)
+		CWARN("Failed to llseek(): offset %lld != 0\n", offset);
 
 	it->oit_rd_dirent = 0;
 	it->oit_it_dirent = 0;
@@ -782,14 +778,10 @@ static int osd_dir_it_load(const struct lu_env *env,
 
 	ENTRY;
 
-	if (file->f_op->llseek) {
-		offset = file->f_op->llseek(file, hash, 0);
-		if (offset != hash)
-			CWARN("Failed to llseek(): offset %lld != hash %llu\n",
-			      offset, hash);
-	} else {
-		it->oit_file.f_pos = hash;
-	}
+	offset = file->f_op->llseek(file, hash, 0);
+	if (offset != hash)
+		CWARN("Failed to llseek(): offset %lld != hash %llu\n",
+		      offset, hash);
 
 	rc = osd_memfs_it_fill(env, di);
 	if (rc > 0)
