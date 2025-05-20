@@ -161,7 +161,8 @@ static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 					      ot_super);
 
 	LASSERT(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC);
-	LASSERT(&dcb->dcb_func != NULL);
+	LASSERT(dcb->dcb_func);
+
 	if (dcb->dcb_flags & DCB_TRANS_STOP)
 		list_add(&dcb->dcb_linkage, &oh->ot_stop_dcb_list);
 	else
