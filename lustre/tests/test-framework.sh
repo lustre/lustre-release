@@ -12465,7 +12465,7 @@ wait_nm_sync() {
 		is_active=1
 		opt=""
 	fi
-	(( is_active == 0 )) && [[ "$proc_param" != "active" ]] && return
+	(( is_active == 0 )) && [[ "$proc_param" != "active" ]] && return 0
 
 	if [[ -z "$value" ]]; then
 		do_node_cmd="do_facet mgs $LCTL get_param $opt \
@@ -12486,7 +12486,7 @@ wait_nm_sync() {
 	      $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
 		echo "waiting 10 secs for sync"
 		sleep 10
-		return
+		return 0
 	fi
 
 	local nodes=$(all_server_nodes)
