@@ -679,53 +679,91 @@ EXPORT_SYMBOL(nodemap_parse_idmap);
 
 /**
  * nodemap_add_member() - add a member to a nodemap
+ * @svc_ctx: security context
  * @nid: nid to add to the members
  * @exp: obd_export structure for the connection that is being added
  *
+ * Add a member export to a nodemap.
+ * First we try to find the nodemap based on the name provided in the security
+ * context. Only nodemaps with the gssony_identification property set can be
+ * selected this way, otherwise we return -EPERM.
+ * If the security context does not provide any nodemap name, we try to find the
+ * nodemap based on the provided client nid.
+ *
  * Return:
- * * %-EINVAL		export is NULL, or has invalid NID
+ * * %-EINVAL		export is NULL, or name is invalid, or NID is invalid
+ * * %-ENOENT		nodemap not found
+ * * %-EPERM		nodemap does not have gssonly_identification property
  * * %-EEXIST		export is already member of a nodemap
  */
-int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp)
+int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
+		       struct obd_export *exp)
 {
 	struct lu_nodemap *nodemap;
-	bool banned;
-	int rc = 0;
+	bool banned = false;
+	char *name = NULL;
+	int rc;
 
 	ENTRY;
-	mutex_lock(&active_config_lock);
-	down_read(&active_config->nmc_range_tree_lock);
-	down_read(&active_config->nmc_ban_range_tree_lock);
 
-	nodemap = nodemap_classify_nid(nid, &banned);
-	if (IS_ERR(nodemap)) {
-		rc = PTR_ERR(nodemap);
-		LCONSOLE_WARN(
-			"%s: error adding %s to nodemap, no valid NIDs found: rc=%d\n",
-			exp->exp_obd->obd_name, libcfs_nidstr(nid), rc);
+	if (svc_ctx)
+		name = svc_ctx->sc_nodemap;
+
+	mutex_lock(&active_config_lock);
+	if (name) {
+		nodemap = nodemap_lookup(name);
+		if (IS_ERR(nodemap)) {
+			rc = PTR_ERR(nodemap);
+			CWARN("%s: error adding to nodemap %s not found: rc = %d\n",
+			      exp->exp_obd->obd_name, name, rc);
+			mutex_unlock(&active_config_lock);
+			GOTO(out, rc);
+		}
+		if (!nodemap->nmf_gss_identify) {
+			rc = -EPERM;
+			CWARN("%s: error adding to nodemap %s, gssonly_identification not set: rc = %d\n",
+			      exp->exp_obd->obd_name, name, rc);
+			GOTO(out_unlock, rc);
+		}
+	} else if (nid) {
+		down_read(&active_config->nmc_range_tree_lock);
+		down_read(&active_config->nmc_ban_range_tree_lock);
+		nodemap = nodemap_classify_nid(nid, &banned);
+		up_read(&active_config->nmc_range_tree_lock);
+		up_read(&active_config->nmc_ban_range_tree_lock);
+		if (IS_ERR(nodemap)) {
+			rc = PTR_ERR(nodemap);
+			CWARN("%s: error adding to nodemap, no valid NIDs found: rc = %d\n",
+			      exp->exp_obd->obd_name, rc);
+			mutex_unlock(&active_config_lock);
+			GOTO(out, rc);
+		}
 	} else {
-		rc = nm_member_add(nodemap, exp);
-		exp->exp_banned = banned;
-		if (banned)
-			LCONSOLE_WARN("%s: adding %sNID %s to nodemap %s\n",
-				      exp->exp_obd->obd_name,
-				      banned ? "banned " : "",
-				      libcfs_nidstr(nid),
-				      nodemap->nm_name);
-		else
-			CDEBUG(D_SEC, "%s: adding %sNID %s to nodemap %s\n",
-			       exp->exp_obd->obd_name, banned ? "banned " : "",
-			       libcfs_nidstr(nid),
-			       nodemap->nm_name);
+		rc = -EINVAL;
+		CWARN("%s: error adding to nodemap, no valid svc ctx or NID provided: rc = %d\n",
+		      exp->exp_obd->obd_name, rc);
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc);
 	}
 
-	up_read(&active_config->nmc_range_tree_lock);
-	up_read(&active_config->nmc_ban_range_tree_lock);
+	rc = nm_member_add(nodemap, exp);
+	exp->exp_banned = banned;
+	if (banned)
+		LCONSOLE_WARN("%s: adding %sNID %s to nodemap %s\n",
+			      exp->exp_obd->obd_name,
+			      banned ? "banned " : "",
+			      libcfs_nidstr(nid),
+			      nodemap->nm_name);
+	else
+		CDEBUG(D_SEC, "%s: adding %sNID %s to nodemap %s\n",
+		       exp->exp_obd->obd_name, banned ? "banned " : "",
+		       libcfs_nidstr(nid),
+		       nodemap->nm_name);
+
+out_unlock:
 	mutex_unlock(&active_config_lock);
-
-	if (!IS_ERR(nodemap))
-		nodemap_putref(nodemap);
-
+	nodemap_putref(nodemap);
+out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(nodemap_add_member);

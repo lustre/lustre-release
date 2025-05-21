@@ -60,7 +60,9 @@ static int echo_connect(const struct lu_env *env,
 			struct obd_uuid *cluuid, struct obd_connect_data *data,
 			void *localdata)
 {
-	struct lnet_nid *client_nid = localdata;
+	struct ptlrpc_request *req = localdata;
+	struct ptlrpc_svc_ctx *svc_ctx = NULL;
+	struct lnet_nid *client_nid = NULL;
 	struct lustre_handle conn = { 0 };
 	struct obd_export *lexp;
 	int rc;
@@ -78,11 +80,22 @@ static int echo_connect(const struct lu_env *env,
 	lexp = class_conn2export(&conn);
 
 	if (lexp) {
-		rc = nodemap_add_member(client_nid, lexp);
-		if (rc == -EEXIST)
-			rc = 0;
-		if (rc)
-			GOTO(out, rc);
+		if (req) {
+			svc_ctx = req->rq_svc_ctx;
+			client_nid = &req->rq_peer.nid;
+		}
+
+		if (svc_ctx || client_nid) {
+			rc = nodemap_add_member(svc_ctx, client_nid, lexp);
+			if (rc == -EEXIST)
+				rc = 0;
+			if (rc)
+				GOTO(out, rc);
+		} else {
+			CDEBUG(D_HA,
+			       "%s: cannot find nodemap for client %s: svc_ctx and nid are null\n",
+			       obd->obd_name, cluuid->uuid);
+		}
 	}
 
 out:

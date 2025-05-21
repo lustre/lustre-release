@@ -217,7 +217,8 @@ struct lu_nodemap *nodemap_lookup_unlocked(const char *name);
 int nodemap_add(const char *nodemap_name, bool dynamic);
 int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset);
 void nodemap_clear_dynamic_nodemaps(void);
-int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp);
+int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
+		       struct obd_export *exp);
 void nodemap_del_member(struct obd_export *exp);
 int nodemap_parse_range(const char *range_string, struct lnet_nid range[2],
 			u8 *netmask);

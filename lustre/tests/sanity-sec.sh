@@ -10490,11 +10490,131 @@ test_78() {
 }
 run_test 78 "nodemap stats"
 
-test_79() {
-	# reserve test_79
-	skip "not implemented yet"
+cleanup_79() {
+	# unmount client
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	cleanup_unload_ssk nm0
+
+	# reset and deactivate nodemaps, remount client
+	do_facet mgs $LCTL nodemap_del nm0
+	$LGSS_SK -l $SK_PATH/$FSNAME.key
+	cleanup_local_client_nodemap c0
+
+	# remount client on $MOUNT_2
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
+	fi
+	wait_ssk
 }
-#run_test 79 "ssk for nodemap identification"
+
+test_79() {
+	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	client_nid=$(h2nettype $client_ip)
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS version >= 2.17.50 for gss identification"
+
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_upcall=NONE
+
+	stack_trap cleanup_79 EXIT
+
+	mds1_mdtcnt=$(do_facet mds1 $LCTL list_param mdt.* | wc -l)
+
+	$LFS mkdir -c1 -i0 $DIR/$tdir
+	$LFS mkdir -c1 -i0 $DIR/$tdir/c0
+	touch $DIR/$tdir/c0/this_is_c0
+	$LFS mkdir -c1 -i0 $DIR/$tdir/nm0
+	touch $DIR/$tdir/nm0/this_is_nm0
+
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# create nodemap c0, SSK key already created by test framework
+	setup_local_client_nodemap c0 1 1
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		--property gssonly_identification --value 1 &&
+		error "gssonly_identification on c0 with nid range should fail"
+	do_facet mgs $LCTL nodemap_del_range --name c0 --range $client_nid ||
+		error "del range on c0 failed"
+	do_facet mgs $LCTL nodemap_set_fileset --name c0 \
+		--fileset "/$tdir/c0" ||
+			error "set_fileset on c0 failed"
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		--property gssonly_identification --value 1 ||
+		error "setting gssonly_identification on c0 failed"
+	do_facet mgs $LCTL nodemap_add_range --name c0 --range $client_nid &&
+		error "add range on c0 with gssonly_identification shoud fail"
+	wait_nm_sync c0 gssonly_identification
+	do_facet mgs $LCTL get_param -R 'nodemap.*'
+
+	# remount client to take nodemap into account
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount failed (1)"
+	wait_ssk
+
+	[[ -f $DIR/this_is_c0 ]] || error "failed to get c0"
+
+	# unmount client
+	umount_client $MOUNT || error "umount $MOUNT failed"
+
+	# unload c0 key on client
+	keyctl show | grep lustre:$FSNAME | cut -c1-11 | sed -e 's/ //g;' |
+		xargs -IX keyctl revoke X
+	keyctl reap
+
+	# create nodemap nm0
+	do_facet mgs $LCTL nodemap_add nm0
+	do_facet mgs $LCTL nodemap_modify --name nm0 \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name nm0 \
+		--property trusted --value 1
+	do_facet mgs $LCTL nodemap_set_fileset --name nm0 \
+		--fileset "/$tdir/nm0" ||
+			error "set_fileset on nm0 failed"
+	do_facet mgs $LCTL nodemap_modify --name nm0 \
+		--property gssonly_identification --value 1 ||
+		error "setting gssonly_identification on nm0 failed"
+	wait_nm_sync nm0 gssonly_identification
+	do_facet mgs $LCTL get_param -R 'nodemap.*'
+
+	# create ssk for nm0, stack_trap
+	generate_load_ssk nm0
+
+	# mount client, should see nm0 fileset
+	$MOUNT_CMD -o $MOUNT_OPTS $MGSNID:/$FSNAME $MOUNT ||
+		error "remount failed (2)"
+	wait_ssk
+
+	[[ -f $DIR/this_is_nm0 ]] || error "failed to get nm0"
+
+	do_facet mds1 $LCTL get_param nodemap.*.exports
+	count=$(do_facet mds1 $LCTL get_param -n nodemap.nm0.exports |
+		grep -c $client_nid)
+	(( count == mds1_mdtcnt )) ||
+		error "$count exps for $client_nid on nm0 ($mds1_mdtcnt) (1)"
+
+	# change unrelated nodemap property, just to refresh nodemap definitions
+	do_facet mgs $LCTL nodemap_modify --name c0 \
+		--property audit_mode --value 0 ||
+		error "setting audit_mode on c0 failed"
+	wait_nm_sync c0 audit_mode
+
+	do_facet mds1 $LCTL get_param nodemap.*.exports
+	count=$(do_facet mds1 $LCTL get_param -n nodemap.nm0.exports |
+		grep -c $client_nid)
+	(( count == mds1_mdtcnt )) ||
+		error "$count exps for $client_nid on nm0 ($mds1_mdtcnt) (2)"
+}
+run_test 79 "ssk for nodemap identification"
 
 test_81a() {
 	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)

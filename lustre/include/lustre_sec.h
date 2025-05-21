@@ -888,6 +888,7 @@ static inline int sec_is_rootonly(struct ptlrpc_sec *sec)
 struct ptlrpc_svc_ctx {
 	atomic_t                        sc_refcount;
 	struct ptlrpc_sec_policy       *sc_policy;
+	char			       *sc_nodemap;
 };
 
 /*

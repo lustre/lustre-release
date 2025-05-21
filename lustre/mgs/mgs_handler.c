@@ -1772,6 +1772,9 @@ static int mgs_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_device *obd, struct obd_uuid *cluuid,
 			     struct obd_connect_data *data, void *localdata)
 {
+	struct ptlrpc_request *req = localdata;
+	struct lnet_nid *client_nid = NULL;
+
 	ENTRY;
 
 	if (exp == NULL || obd == NULL || cluuid == NULL)
@@ -1789,7 +1792,10 @@ static int mgs_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 		data->ocd_version = LUSTRE_VERSION_CODE;
 	}
 
-	RETURN(mgs_export_stats_init(obd, exp, localdata));
+	if (req)
+		client_nid = &req->rq_peer.nid;
+
+	RETURN(mgs_export_stats_init(obd, exp, client_nid));
 }
 
 static int mgs_obd_connect(const struct lu_env *env, struct obd_export **exp,

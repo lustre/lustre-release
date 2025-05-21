@@ -2371,6 +2371,7 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
 
 	grctx->src_base.sc_policy = sptlrpc_policy_get(policy);
 	atomic_set(&grctx->src_base.sc_refcount, 1);
+	grctx->src_base.sc_nodemap = NULL;
 	req->rq_svc_ctx = &grctx->src_base;
 	gw = &grctx->src_wirectx;
 
@@ -2405,6 +2406,8 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
 	switch (rc) {
 	case SECSVC_OK:
 		LASSERT (grctx->src_ctx);
+
+		grctx->src_base.sc_nodemap = grctx->src_ctx->gsc_nm_name;
 
 		req->rq_auth_gss = 1;
 		req->rq_auth_usr_mdt = grctx->src_ctx->gsc_usr_mds;

@@ -1662,6 +1662,57 @@ init_gss() {
 	do_nodesv $servers "$LCTL set_param sptlrpc.gss.rsi_upcall=$L_GETAUTH"
 }
 
+generate_load_ssk() {
+	local nodes_list=$(all_nodes)
+	local nm=$1
+
+	$GSS_SK || return 0
+
+	# Generate key
+	$LGSS_SK -t server -f$FSNAME -n $nm -w $SK_PATH/nodemap/$nm.key \
+	       -d /dev/urandom >/dev/null 2>&1
+
+	# Distribute key
+	if ! local_mode; then
+		for lnode in ${nodes_list//,/ }; do
+			scp $SK_PATH/nodemap/$nm.key \
+				${lnode}:${SK_PATH}/nodemap/
+		done
+	fi
+
+	# Set client key to client type to generate prime P
+	if local_mode; then
+		do_nodes $(comma_list $(all_nodes)) "$LGSS_SK -t client,server \
+			-m $SK_PATH/nodemap/$nm.key >/dev/null 2>&1"
+	else
+	        $LGSS_SK -t client -m $SK_PATH/nodemap/$nm.key >/dev/null 2>&1
+	fi
+
+	# Load key
+	do_nodes $(comma_list $(all_server_nodes)) \
+		"$LGSS_SK -t server -l $SK_PATH/nodemap/$nm.key"
+	$LGSS_SK -l $SK_PATH/nodemap/$nm.key
+	do_nodes $(comma_list $(all_nodes)) \
+		"keyctl show | grep lustre | cut -c1-11 |
+		sed -e 's/ //g;' |
+		xargs -IX keyctl setperm X 0x3f3f3f3f"
+}
+
+cleanup_unload_ssk() {
+	local nm=$1
+
+	$GSS_SK || return 0
+
+	do_nodes $(comma_list $(all_server_nodes)) \
+		"keyctl show | grep lustre:$FSNAME:$nm | cut -c1-11 |
+		sed -e 's/ //g;' |
+		xargs -IX keyctl revoke X"
+	keyctl show | grep lustre:$FSNAME | cut -c1-11 | sed -e 's/ //g;' |
+		xargs -IX keyctl revoke X
+	do_nodes $(comma_list $(all_nodes)) "keyctl reap"
+	do_nodes $(comma_list $(all_nodes)) "rm -f $SK_PATH/nodemap/$nm.key"
+}
+
 cleanup_gss() {
 	if $GSS; then
 		stop_gss_daemons

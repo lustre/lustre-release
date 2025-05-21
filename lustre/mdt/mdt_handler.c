@@ -7472,11 +7472,13 @@ static int mdt_obd_connect(const struct lu_env *env,
 			   struct obd_connect_data *data,
 			   void *localdata)
 {
-	struct obd_export	*lexp;
-	struct lustre_handle	conn = { 0 };
-	struct mdt_device	*mdt;
-	int			 rc;
-	struct lnet_nid		*client_nid = localdata;
+	struct ptlrpc_request *req = localdata;
+	struct ptlrpc_svc_ctx *svc_ctx = NULL;
+	struct lnet_nid *client_nid = NULL;
+	struct lustre_handle conn = { 0 };
+	struct obd_export *lexp;
+	struct mdt_device *mdt;
+	int rc;
 
 	ENTRY;
 
@@ -7511,9 +7513,20 @@ static int mdt_obd_connect(const struct lu_env *env,
 	lexp = class_conn2export(&conn);
 	LASSERT(lexp != NULL);
 
-	rc = nodemap_add_member(client_nid, lexp);
-	if (rc != 0 && rc != -EEXIST)
-		GOTO(out, rc);
+	if (req) {
+		svc_ctx = req->rq_svc_ctx;
+		client_nid = &req->rq_peer.nid;
+	}
+
+	if (svc_ctx || client_nid) {
+		rc = nodemap_add_member(svc_ctx, client_nid, lexp);
+		if (rc != 0 && rc != -EEXIST)
+			GOTO(out, rc);
+	} else {
+		CDEBUG(D_HA,
+		       "%s: cannot find nodemap for client %s: svc_ctx and nid are null\n",
+		       obd->obd_name, cluuid->uuid);
+	}
 
 	rc = mdt_connect_internal(env, lexp, mdt, data, false);
 	if (rc == 0) {
@@ -7522,8 +7535,8 @@ static int mdt_obd_connect(const struct lu_env *env,
 		LASSERT(lcd);
 		memcpy(lcd->lcd_uuid, cluuid, sizeof(lcd->lcd_uuid));
 		rc = tgt_client_new(env, lexp);
-		if (rc == 0)
-			mdt_export_stats_init(obd, lexp, localdata);
+		if (rc == 0 && client_nid)
+			mdt_export_stats_init(obd, lexp, client_nid);
 	}
 out:
 	if (rc != 0) {
@@ -7543,24 +7556,39 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 			     struct obd_connect_data *data,
 			     void *localdata)
 {
-	struct lnet_nid *client_nid = localdata;
+	struct ptlrpc_request *req = localdata;
+	struct ptlrpc_svc_ctx *svc_ctx = NULL;
+	struct lnet_nid *client_nid = NULL;
 	int rc;
 
 	ENTRY;
 
-	if (exp == NULL || obd == NULL || cluuid == NULL)
+	if (!exp || !obd || !cluuid)
 		RETURN(-EINVAL);
 
-	rc = nodemap_add_member(client_nid, exp);
-	if (rc != 0 && rc != -EEXIST)
-		RETURN(rc);
+	if (req) {
+		svc_ctx = req->rq_svc_ctx;
+		client_nid = &req->rq_peer.nid;
+	}
+
+	if (svc_ctx || client_nid) {
+		rc = nodemap_add_member(svc_ctx, client_nid, exp);
+		if (rc != 0 && rc != -EEXIST)
+			RETURN(rc);
+	} else {
+		CDEBUG(D_HA,
+		       "%s: cannot find nodemap for client %s: svc_ctx and nid are null\n",
+		       obd->obd_name, cluuid->uuid);
+	}
 
 	rc = mdt_connect_internal(env, exp, mdt_dev(obd->obd_lu_dev), data,
 				  true);
-	if (rc == 0)
-		mdt_export_stats_init(obd, exp, localdata);
-	else
+	if (rc == 0) {
+		if (client_nid)
+			mdt_export_stats_init(obd, exp, client_nid);
+	} else {
 		nodemap_del_member(exp);
+	}
 
 	RETURN(rc);
 }

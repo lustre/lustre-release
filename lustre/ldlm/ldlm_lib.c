@@ -1494,8 +1494,7 @@ no_export:
 		} else {
 dont_check_exports:
 			rc = obd_connect(req->rq_svc_thread->t_env,
-					 &export, target, &cluuid, data,
-					 &req->rq_peer.nid);
+					 &export, target, &cluuid, data, req);
 			if (mds_conn && CFS_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
 				lustre_msg_add_op_flags(req->rq_repmsg,
 							MSG_CONNECT_RECOVERING);
@@ -1514,8 +1513,7 @@ dont_check_exports:
 			class_export_put(export);
 		}
 		rc = obd_reconnect(req->rq_svc_thread->t_env,
-				   export, target, &cluuid, data,
-				   &req->rq_peer.nid);
+				   export, target, &cluuid, data, req);
 		if (rc == 0) {
 			reconnected = true;
 			/*
