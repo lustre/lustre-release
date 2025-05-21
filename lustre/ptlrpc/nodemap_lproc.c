@@ -348,17 +348,21 @@ out:
 LDEBUGFS_SEQ_FOPS(nodemap_sepol);
 
 /**
- * Reads and prints the exports attached to the given nodemap.
+ * nodemap_exports_show() - Reads and prints the exports attached
+ * to the given nodemap
  *
- * \param	m		seq file in proc fs, stores nodemap
- * \param	data		unused
- * \retval	0		success
+ * @m: seq file in proc fs, stores nodemap
+ * @unused: unused
+ *
+ * Return:
+ * * %0 on success
+ * * negative error code on failure
  */
-static int nodemap_exports_show(struct seq_file *m, void *data)
+static int nodemap_exports_show(struct seq_file *m, void *unused)
 {
 	struct lu_nodemap *nodemap;
 	struct obd_export *exp;
-	char nidstr[LNET_NIDSTR_SIZE] = "<unknown>";
+	char nidstr[LNET_NIDSTR_SIZE];
 	bool cont = false;
 	int rc;
 
@@ -368,7 +372,7 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
-			(char *)m->private, rc);
+		       (char *)m->private, rc);
 		return rc;
 	}
 
@@ -377,14 +381,17 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
 	mutex_lock(&nodemap->nm_member_list_lock);
 	list_for_each_entry(exp, &nodemap->nm_member_list,
 			    exp_target_data.ted_nodemap_member) {
-		if (exp->exp_connection != NULL)
+		if (exp->exp_connection)
 			libcfs_nidstr_r(&exp->exp_connection->c_peer.nid,
-					  nidstr, sizeof(nidstr));
+					nidstr, sizeof(nidstr));
+		else
+			strscpy(nidstr, "<unknown>", sizeof(nidstr));
+
 		if (cont)
 			seq_puts(m, ",");
 		cont = true;
-		seq_printf(m, "\n { nid: %s, uuid: %s }",
-			   nidstr, exp->exp_client_uuid.uuid);
+		seq_printf(m, "\n { nid: %s, uuid: %s, dev: %s }", nidstr,
+			   exp->exp_client_uuid.uuid, exp->exp_obd->obd_name);
 	}
 	mutex_unlock(&nodemap->nm_member_list_lock);
 
