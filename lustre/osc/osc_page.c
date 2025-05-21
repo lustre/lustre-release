@@ -148,16 +148,21 @@ static void osc_page_delete(const struct lu_env *env,
 
 	osc_lru_del(osc_cli(obj), opg);
 
-	spin_lock(&obj->oo_tree_lock);
 	if (opg->ops_intree) {
-		value = radix_tree_delete(&obj->oo_tree,
-					  osc_index(opg));
+		spin_lock(&obj->oo_tree_lock);
+		value = radix_tree_delete(&obj->oo_tree, osc_index(opg));
 		if (value != NULL) {
 			--obj->oo_npages;
 			opg->ops_intree = 0;
+		} else {
+			struct obd_device *obd =
+					obj->oo_cl.co_lu.lo_dev->ld_obd;
+
+			CERROR("%s: radix tree delete failed on page %p (index=%lu)\n",
+			       obd->obd_name, opg, osc_index(opg));
 		}
+		spin_unlock(&obj->oo_tree_lock);
 	}
-	spin_unlock(&obj->oo_tree_lock);
 
 	LASSERT(ergo(value != NULL, value == opg));
 
@@ -241,12 +246,32 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 		if (result == 0) {
 			result = radix_tree_preload(GFP_NOFS);
 			if (result == 0) {
+				struct obd_device *obd =
+					osc->oo_cl.co_lu.lo_dev->ld_obd;
+
 				spin_lock(&osc->oo_tree_lock);
 				result = radix_tree_insert(&osc->oo_tree,
 							   index, opg);
 				if (result == 0) {
 					++osc->oo_npages;
 					opg->ops_intree = 1;
+				} else if (result == -EEXIST) {
+					void radix_tree_rcu **slot;
+					struct osc_page *old;
+
+					slot = radix_tree_lookup_slot(
+							&osc->oo_tree, index);
+					if (slot) {
+						old = radix_tree_deref_slot(
+									slot);
+						CERROR("%s: radix tree insert encountered EXISTING page %p (index=%lu)\n",
+						       obd ->obd_name, old,
+						       osc_index(old));
+					}
+				} else {
+					CERROR("%s: radix tree insert failed on page %p (index=%lu): rc = %d\n",
+					       obd->obd_name, opg, index,
+					       result);
 				}
 				spin_unlock(&osc->oo_tree_lock);
 

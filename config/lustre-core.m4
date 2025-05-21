@@ -2280,6 +2280,29 @@ AC_DEFUN([LC_HAVE_BDI_IO_PAGES], [
 ]) # LC_HAVE_BDI_IO_PAGES
 
 #
+# LC_RADIX_TREE_REPLACE_SLOT_3ARGS
+#
+# Kernel version commit v4.9-2178-g6d75f366b924
+# lib: radix-tree: check accounting of existing slot replacement users
+# This patch pass the radix tree root to radix_tree_replace_slot,to replaces
+# slots with contents that need proper accounting.
+#
+AC_DEFUN([LC_SRC_RADIX_TREE_REPLACE_SLOT_3ARGS], [
+	LB2_LINUX_TEST_SRC([radix_tree_replace_slot_3args], [
+		#include <linux/radix-tree.h>
+	],[
+		radix_tree_replace_slot(NULL, NULL, NULL);
+	])
+])
+AC_DEFUN([LC_RADIX_TREE_REPLACE_SLOT_3ARGS], [
+	AC_MSG_CHECKING([if 'radix_tree_replace_slot' has 3 args])
+	LB2_LINUX_TEST_RESULT([radix_tree_replace_slot_3args], [
+		AC_DEFINE(HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS, 1,
+			[radix_tree_replace_slot has 3 args])
+	])
+]) # LC_RADIX_TREE_REPLACE_SLOT_3ARGS
+
+#
 # LC_IOP_GENERIC_READLINK
 #
 # Kernel version 4.10 commit dfeef68862edd7d4bafe68ef7aeb5f658ef24bb5
@@ -5284,6 +5307,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_VFS_SETXATTR
 	LC_SRC_POSIX_ACL_UPDATE_MODE
 	LC_SRC_HAVE_BDI_IO_PAGES
+	LC_SRC_RADIX_TREE_REPLACE_SLOT_3ARGS
 
 	# 4.10
 	LC_SRC_IOP_GENERIC_READLINK
@@ -5613,6 +5637,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_VFS_SETXATTR
 	LC_POSIX_ACL_UPDATE_MODE
 	LC_HAVE_BDI_IO_PAGES
+	LC_RADIX_TREE_REPLACE_SLOT_3ARGS
 
 	# 4.10
 	LC_IOP_GENERIC_READLINK

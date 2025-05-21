@@ -890,6 +890,12 @@ void cl_page_discard(const struct lu_env *env,
 
 	PINVRNT(env, cp, cl_page_is_owned(cp, io));
 	PINVRNT(env, cp, cl_page_invariant(cp));
+
+	/* remove from radix tree if possible, lest generic_error_remove_page()
+	 * failed to reach folio_invalidate()
+	 */
+	cl_page_delete(env, cp);
+
 	vmpage = cp->cp_vmpage;
 	LASSERT(vmpage != NULL);
 	LASSERT(PageLocked(vmpage));

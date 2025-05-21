@@ -945,4 +945,10 @@ static inline int folio_mapcount_page(struct page *page)
 #define folio_mapcount_page(pg)			page_mapcount((pg))
 #endif /* HAVE_FOLIO_MAPCOUNT */
 
+#ifdef HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS
+# define radix_tree_rcu	__rcu
+#else /* !HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
+# define radix_tree_rcu
+#endif /* HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
+
 #endif /* _LUSTRE_COMPAT_H */

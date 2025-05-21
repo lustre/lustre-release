@@ -66,6 +66,7 @@ int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 	atomic_set(&osc->oo_nr_writes, 0);
 	spin_lock_init(&osc->oo_lock);
 	spin_lock_init(&osc->oo_tree_lock);
+	INIT_RADIX_TREE(&osc->oo_tree, GFP_ATOMIC);
 	spin_lock_init(&osc->oo_ol_spin);
 	INIT_LIST_HEAD(&osc->oo_ol_list);
 
