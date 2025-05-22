@@ -3254,7 +3254,7 @@ static void signal_server(int sig)
 
 int obd_initialize(int argc, char **argv)
 {
-	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
+	llapi_register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
 
 	return 0;
 }

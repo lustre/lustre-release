@@ -498,6 +498,98 @@ out_free:
 	return res;
 }
 
+/**
+ * nodemap_lookup_by_sha() - Send a nodemap ioctl that takes the sha256 of name
+ *			     as input and receives a nodemap name in the reply.
+ * @sha:		 sha256 of nodemap name
+ * @nodemap_name:	 buffer to store returned nodemap name
+ * @nodemap_name_bufsz:	 size of the nodemap_name buffer
+ *
+ * Return:
+ * * %0		success
+ * * %-errno	on failure
+ */
+int nodemap_lookup_by_sha(gss_buffer_desc *sha, char *nodemap_name,
+			  int nodemap_name_bufsz)
+{
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg = NULL;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN];
+	char *buf = rawbuf;
+	int rc;
+
+	if (!sha->value || !sha->length || !nodemap_name ||
+	    nodemap_name_bufsz < LUSTRE_NODEMAP_NAME_LENGTH + 1)
+		return -EINVAL;
+
+	llapi_register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
+	if (srv_ioc_dev < 0) {
+		rc = set_srv_ioc_dev();
+		if (rc < 0) {
+			printerr(LL_ERR, "no device for ioctl: %s\n",
+				 strerror(-rc));
+			goto out;
+		}
+	}
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = srv_ioc_dev;
+	data.ioc_version = OBD_IOCTL_VERSION;
+
+	lustre_cfg_bufs_reset(&bufs, NULL);
+	lustre_cfg_bufs_set(&bufs, 1, sha->value, sha->length);
+
+	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (!lcfg) {
+		errno = ENOMEM;
+		rc = -errno;
+		goto out;
+	}
+	lustre_cfg_init(lcfg, LCFG_NODEMAP_LOOKUP_SHA, &bufs);
+	rc = lustre_cfg_sanity_check(lcfg, lustre_cfg_len(bufs.lcfg_bufcount,
+							  bufs.lcfg_buflen));
+	if (rc)
+		goto out;
+	data.ioc_type = LUSTRE_CFG_TYPE;
+	data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
+					lcfg->lcfg_buflens);
+	data.ioc_pbuf1 = (void *)lcfg;
+
+	memset(buf, 0, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		printerr(LL_ERR, "invalid ioctl input: %s\n", strerror(-rc));
+		goto out;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NODEMAP, buf);
+	if (rc < 0) {
+		rc = -errno;
+		printerr(LL_ERR, "nodemap ioctl failed: %s\n", strerror(-rc));
+		goto out;
+	}
+
+	rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	if (rc) {
+		printerr(LL_ERR, "cannot unpack ioctl response: %s\n",
+			 strerror(-rc));
+		goto out;
+	}
+
+	if (data.ioc_plen1 < LUSTRE_NODEMAP_NAME_LENGTH + 1) {
+		rc = -EINVAL;
+		goto out;
+	}
+	memcpy(nodemap_name, data.ioc_pbuf1, LUSTRE_NODEMAP_NAME_LENGTH + 1);
+
+out:
+	/* close OBD_DEV_ID now that we do not need it anymore */
+	llapi_unregister_ioc_dev(OBD_DEV_ID);
+	free(lcfg);
+	return rc;
+}
+
 static int handle_sk(struct svc_nego_data *snd)
 {
 #ifdef HAVE_OPENSSL_SSK

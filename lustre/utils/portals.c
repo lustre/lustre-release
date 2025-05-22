@@ -283,7 +283,7 @@ int ptl_initialize(int argc, char **argv)
 	if (argc > 1)
 		g_net_interactive = true;
 
-	register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
+	llapi_register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
 
 	return 0;
 }

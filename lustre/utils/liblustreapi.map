@@ -8,7 +8,6 @@
 	mdt_hash_name;
 	lu_foreign_types;
 	Parser_*;
-	register_ioc_*;
     local:
 	*;
 };

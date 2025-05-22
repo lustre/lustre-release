@@ -592,12 +592,12 @@ emitter_error:
 
 int lustre_lnet_config_lib_init(void)
 {
-	return register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
+	return llapi_register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
 }
 
 void lustre_lnet_config_lib_uninit(void)
 {
-	unregister_ioc_dev(LNET_DEV_ID);
+	llapi_unregister_ioc_dev(LNET_DEV_ID);
 }
 
 int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
