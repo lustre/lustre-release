@@ -211,6 +211,7 @@ autodetect_target() {
         sles15.3) target="$(uname -r | cut -d . -f 1,2)-sles15sp3";;
 	sles15.4) target="$(uname -r | cut -d . -f 1,2)-sles15sp4";;
 	sles15.5) target="$(uname -r | cut -d . -f 1,2)-sles15sp5";;
+	sles15.6) target="$(uname -r | cut -d . -f 1,2)-sles15sp6";;
           fc18)   target="3.x-fc18";;
              *)   fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
     esac
