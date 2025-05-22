@@ -7092,7 +7092,7 @@ test_94()
 }
 run_test 94 "lfs quota all respects nodemap offset"
 
-test_95() {
+test_95a() {
 	local cmd="do_facet mgs $LCTL get_param -n "
 	local squash=100
 	local off=100000
@@ -7155,7 +7155,49 @@ test_95() {
 	(( $($LFS quota -q -p 0 --bhardlimit $DIR) == 1027 )) ||
 		error "Wrong proj limit for squashed root"
 }
-run_test 95 "Correct limits for squashed root"
+run_test 95a "Correct limits for squashed root"
+
+test_95b()
+{
+	local cmd="do_facet mgs $LCTL get_param -n "
+	local trusted
+	local projid
+	local act
+	local size
+
+	is_project_quota_supported || skip "project is not supported"
+	setup_quota_test || error "setup quota failed with $?"
+
+	trusted=$($cmd nodemap.default.trusted_nodemap)
+	do_facet mgs "$LCTL nodemap_modify --name default \
+		--property trusted --value 0"
+	stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value $trusted"
+
+	projid=$($cmd nodemap.default.squash_projid)
+	do_facet mgs "$LCTL nodemap_modify --name default \
+		--property squash_projid --value $TSTPRJID"
+	stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+		--property squash_projid --value $projid"
+
+	$LFS setquota -p $TSTPRJID -B10M $MOUNT ||
+		error "Set default quotas with squashed uid"
+
+	$LFS project -p 0 -sr $DIR
+	stack_trap "$LFS project -C -r $DIR"
+	$LFS project $DIR
+
+	act=$($cmd nodemap.active)
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+	stack_trap "do_facet mgs $LCTL nodemap_activate $act; \
+		    wait_nm_sync active"
+
+	size=$(df -h --output=size $DIR | awk 'NR > 1 {print $1}')
+	echo "size :$size"
+	[[ $size == "10M" ]] || error "Wrong df size:$size, expect:10M"
+}
+run_test 95b "df respects squashed project id"
 
 quota_fini()
 {
