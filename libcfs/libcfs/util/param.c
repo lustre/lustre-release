@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1
+// SPDX-License-Identifier: LGPL-2.1+
 
 /*
  * This code handles user interaction with the configuration interface

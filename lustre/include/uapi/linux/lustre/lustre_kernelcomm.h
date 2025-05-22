@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LGPL-2.1 WITH Linux-syscall-note */
+/* SPDX-License-Identifier: LGPL-2.1+ WITH Linux-syscall-note */
 
 /*
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.

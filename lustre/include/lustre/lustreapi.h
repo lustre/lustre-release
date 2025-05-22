@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+/* SPDX-License-Identifier: LGPL-2.1+ */
 
 /*
  * Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.

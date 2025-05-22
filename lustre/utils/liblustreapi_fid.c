@@ -1,33 +1,17 @@
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * LGPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Lesser General Public License
- * (LGPL) version 2.1 or (at your discretion) any later version.
- * (LGPL) version 2.1 accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/lgpl-2.1.html
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * LGPL HEADER END
- */
-/*
- * lustre/utils/liblustreapi_fid.c
- *
- * lustreapi library for FID mapping calls for determining the pathname
- * of Lustre files from the File IDentifier.
- *
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
  * Copyright (c) 2011, 2017, Intel Corporation.
  *
  * Copyright (c) 2018, 2019, Data Direct Networks
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ *
+ * lustreapi library for FID mapping calls for determining the pathname
+ * of Lustre files from the File IDentifier.
  */
 
 /* for O_DIRECTORY and struct file_handle */

@@ -1,27 +1,11 @@
+// SPDX-License-Identifier: LGPL-2.1+
 /*
- * LGPL HEADER START
- *
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Lesser General Public License
- * (LGPL) version 2.1 or (at your discretion) any later version.
- * (LGPL) version 2.1 accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/lgpl-2.1.html
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * LGPL HEADER END
+ * Copyright (c) 2017, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
- * lustre/utils/liblustreapi_mirror.c
- *
- * Copyright (c) 2017, Intel Corporation.
+ * library for creating and managing File Level Redundancy (FLR) mirrors
  *
  * Author: Jinshan Xiong <jinshan.xiong@intel.com>
  */
