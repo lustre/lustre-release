@@ -57,6 +57,9 @@ do {								\
 
 #define STRINGIFY(a) #a
 
+#define CHECK_BUILD_TEST(a)					\
+	printf("	BUILD_BUG_ON("#a");\n")
+
 #define CHECK_CDEFINE(a)					\
 	printf("	BUILD_BUG_ON("#a" != "STRINGIFY(a) ");\n")
 
@@ -137,12 +140,24 @@ do {								\
 	CHECK_VALUE((int)sizeof(((struct s *)0)->m));		\
 } while(0)
 
+#define CHECK_MEMBER_SIZEOF_ARRAY_ELEMENT(s, m)			\
+do {								\
+	CHECK_VALUE((int)sizeof(*((struct s *)0)->m));		\
+} while(0)
+
 #define CHECK_MEMBER_SIZEOF_TYPEDEF(s, m)			\
 do {								\
 	CHECK_VALUE((int)sizeof(((s *)0)->m));			\
 } while(0)
 
-#define CHECK_MEMBER_IS_FLEXIBLE(s, m)			\
+#define CHECK_MEMBER_IS_FLEXIBLE(s, m)					\
+do {									\
+	CHECK_MEMBER_OFFSET(s, m);					\
+	CHECK_MEMBER_SIZEOF_ARRAY_ELEMENT(s, m);			\
+	CHECK_BUILD_TEST(offsetof(struct s, m) != sizeof(struct s));	\
+} while (0)
+
+#define CHECK_MEMBER_IS_FLEXIBLE_OR_ZERO_LENGTH(s, m)			\
 do {									\
 	CHECK_MEMBER_OFFSET(s, m);					\
 	CHECK_BUILD_TEST(offsetof(struct s, m) != sizeof(struct s));	\
@@ -877,7 +892,7 @@ check_lov_comp_md_v1(void)
 	CHECK_MEMBER(lov_comp_md_v1, lcm_mirror_count);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding1);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding2);
-	CHECK_MEMBER(lov_comp_md_v1, lcm_entries[0]);
+	CHECK_MEMBER_IS_FLEXIBLE(lov_comp_md_v1, lcm_entries);
 
 	CHECK_CDEFINE(LOV_MAGIC_COMP_V1);
 
@@ -1630,7 +1645,7 @@ check_ldlm_request(void)
 	CHECK_MEMBER(ldlm_request, lock_flags);
 	CHECK_MEMBER(ldlm_request, lock_count);
 	CHECK_MEMBER(ldlm_request, lock_desc);
-	CHECK_MEMBER(ldlm_request, lock_handle);
+	CHECK_MEMBER_IS_FLEXIBLE(ldlm_request, lock_handle);
 }
 
 static void
@@ -2331,7 +2346,7 @@ check_hsm_action_list(void)
 	CHECK_MEMBER(hsm_action_list, hal_flags);
 	CHECK_MEMBER(hsm_action_list, hal_archive_id);
 	CHECK_MEMBER(hsm_action_list, padding1);
-	CHECK_MEMBER(hsm_action_list, hal_fsname);
+	CHECK_MEMBER_IS_FLEXIBLE(hsm_action_list, hal_fsname);
 }
 
 static void
@@ -2549,7 +2564,7 @@ static void check_object_update_param(void)
 	CHECK_MEMBER(object_update_param, oup_len);
 	CHECK_MEMBER(object_update_param, oup_padding);
 	CHECK_MEMBER(object_update_param, oup_padding2);
-	CHECK_MEMBER(object_update_param, oup_buf);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update_param, oup_buf);
 }
 
 static void check_object_update(void)
@@ -2563,7 +2578,7 @@ static void check_object_update(void)
 	CHECK_MEMBER(object_update, ou_padding1);
 	CHECK_MEMBER(object_update, ou_batchid);
 	CHECK_MEMBER(object_update, ou_fid);
-	CHECK_MEMBER(object_update, ou_params);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update, ou_params);
 
 	CHECK_CVALUE_X(UPDATE_FL_OST);
 	CHECK_CVALUE_X(UPDATE_FL_SYNC);
@@ -2578,7 +2593,7 @@ static void check_object_update_request(void)
 	CHECK_MEMBER(object_update_request, ourq_magic);
 	CHECK_MEMBER(object_update_request, ourq_count);
 	CHECK_MEMBER(object_update_request, ourq_padding);
-	CHECK_MEMBER(object_update_request, ourq_updates);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update_request, ourq_updates);
 
 	CHECK_CDEFINE(UPDATE_REQUEST_MAGIC);
 }
@@ -2590,7 +2605,7 @@ static void check_object_update_result(void)
 	CHECK_MEMBER(object_update_result, our_rc);
 	CHECK_MEMBER(object_update_result, our_datalen);
 	CHECK_MEMBER(object_update_result, our_padding);
-	CHECK_MEMBER(object_update_result, our_data);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update_result, our_data);
 }
 
 static void check_object_update_reply(void)
@@ -2600,7 +2615,7 @@ static void check_object_update_reply(void)
 	CHECK_MEMBER(object_update_reply, ourp_magic);
 	CHECK_MEMBER(object_update_reply, ourp_count);
 	CHECK_MEMBER(object_update_reply, ourp_padding);
-	CHECK_MEMBER(object_update_reply, ourp_lens);
+	CHECK_MEMBER_IS_FLEXIBLE(object_update_reply, ourp_lens);
 
 	CHECK_CDEFINE(UPDATE_REPLY_MAGIC);
 }
@@ -2613,7 +2628,7 @@ static void check_out_update_header(void)
 	CHECK_MEMBER(out_update_header, ouh_count);
 	CHECK_MEMBER(out_update_header, ouh_inline_length);
 	CHECK_MEMBER(out_update_header, ouh_reply_size);
-	CHECK_MEMBER(out_update_header, ouh_inline_data);
+	CHECK_MEMBER_IS_FLEXIBLE(out_update_header, ouh_inline_data);
 
 	CHECK_CDEFINE(OUT_UPDATE_HEADER_MAGIC);
 	CHECK_CDEFINE(OUT_UPDATE_MAX_INLINE_SIZE);

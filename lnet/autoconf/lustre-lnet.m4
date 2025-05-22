@@ -294,7 +294,8 @@ AC_SUBST(ENABLEO2IB)
 
 AS_IF([test $ENABLEO2IB != "no"], [
 	EXTRA_CHECK_INCLUDE="$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE"
-	if test ! $O2IBPATH -ef $LINUX_OBJ; then
+	if test ! $O2IBPATH -ef $LINUX_OBJ &&
+	   test -f $O2IBPATH/Module.symvers; then
 		KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS $O2IBPATH/Module.symvers"
 	fi
 

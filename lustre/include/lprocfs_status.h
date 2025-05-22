@@ -174,17 +174,9 @@ struct lprocfs_counter {
 	__s64	lc_count;
 	__s64	lc_min;
 	__s64	lc_max;
+	__s64	lc_sum;
 	__s64	lc_sumsquare;
-	/*
-	 * Every counter has lc_array_sum[0], while lc_array_sum[1] is only
-	 * for irq context counter, i.e. stats with
-	 * LPROCFS_STATS_FLAG_IRQ_SAFE flag, its counter need
-	 * lc_array_sum[1]
-	 */
-	__s64	lc_array_sum[1];
 };
-#define lc_sum		lc_array_sum[0]
-#define lc_sum_irq	lc_array_sum[1]
 
 struct lprocfs_percpu {
 	struct lprocfs_counter lp_cntr[0];
@@ -199,7 +191,6 @@ enum lprocfs_stats_flags {
 	LPROCFS_STATS_FLAG_NONE     = 0x0000, /* per cpu counter */
 	LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* stats have no percpu
 					       * area and need locking */
-	LPROCFS_STATS_FLAG_IRQ_SAFE = 0x0002, /* alloc need irq safe */
 };
 
 enum lprocfs_fields_flags {
@@ -481,10 +472,6 @@ lprocfs_stats_counter_size(struct lprocfs_stats *stats)
 
 	percpusize = offsetof(struct lprocfs_percpu, lp_cntr[stats->ls_num]);
 
-	/* irq safe stats need lc_array_sum[1] */
-	if ((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
-		percpusize += stats->ls_num * sizeof(__s64);
-
 	if ((stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) == 0)
 		percpusize = L1_CACHE_ALIGN(percpusize);
 
@@ -498,9 +485,6 @@ lprocfs_stats_counter_get(struct lprocfs_stats *stats, unsigned int cpuid,
 	struct lprocfs_counter *cntr;
 
 	cntr = &stats->ls_percpu[cpuid]->lp_cntr[index];
-
-	if ((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
-		cntr = (void *)cntr + index * sizeof(__s64);
 
 	return cntr;
 }

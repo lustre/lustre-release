@@ -103,7 +103,7 @@ struct obd_ioctl_data {
 	__u32		ioc_inllen4;
 	char	       *ioc_inlbuf4;
 
-	char		ioc_bulk[0];
+	char		ioc_bulk[];
 };
 
 struct obd_ioctl_hdr {

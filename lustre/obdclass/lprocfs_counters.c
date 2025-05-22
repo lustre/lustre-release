@@ -69,16 +69,8 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx, long amount)
 		 * as memory allocation could trigger memory shrinker call
 		 * ldlm_pool_shrink(), which calls lprocfs_counter_add().
 		 * LU-1727.
-		 *
-		 * Only obd_memory uses LPROCFS_STATS_FLAG_IRQ_SAFE
-		 * flag, because it needs accurate counting lest memory leak
-		 * check reports error.
 		 */
-		if (in_interrupt() &&
-		    (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
-			percpu_cntr->lc_sum_irq += amount;
-		else
-			percpu_cntr->lc_sum += amount;
+		percpu_cntr->lc_sum += amount;
 
 		if (header->lc_config & LPROCFS_CNTR_STDDEV)
 			percpu_cntr->lc_sumsquare += (__s64)amount * amount;
@@ -119,16 +111,8 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
 		 * softirq context - right now that's the only case we're in
 		 * softirq context here, use separate counter for that.
 		 * bz20650.
-		 *
-		 * Only obd_memory uses LPROCFS_STATS_FLAG_IRQ_SAFE
-		 * flag, because it needs accurate counting lest memory leak
-		 * check reports error.
 		 */
-		if (in_interrupt() &&
-		    (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
-			percpu_cntr->lc_sum_irq -= amount;
-		else
-			percpu_cntr->lc_sum -= amount;
+		percpu_cntr->lc_sum -= amount;
 	}
 	lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
 }

@@ -41,7 +41,7 @@
 struct lnet_text_buf {
 	struct list_head	ltb_list;	/* stash on lists */
 	int			ltb_size;	/* allocated size */
-	char			ltb_text[0];	/* text buffer */
+	char			ltb_text[];	/* text buffer */
 };
 
 static int lnet_tbnob = 0;			/* track text buf allocation */

@@ -85,7 +85,7 @@ lnet_selftest_exit(void)
 	}
 }
 
-void
+static void
 lnet_selftest_structure_assertion(void)
 {
 	BUILD_BUG_ON(sizeof(struct srpc_msg) != 160);
@@ -104,6 +104,12 @@ lnet_selftest_init(void)
 	int nscheds;
 	int rc = -ENOMEM;
 	int i;
+
+	/* This assertion checks that struct sizes do not drift
+	 * inadvertently and induce crashes when different nodes
+	 * running LNet Selftest have mismatched structures.
+	 */
+	lnet_selftest_structure_assertion();
 
 	lst_serial_wq = alloc_ordered_workqueue("lst_s", 0);
 	if (!lst_serial_wq) {

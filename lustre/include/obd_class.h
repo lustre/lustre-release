@@ -265,7 +265,7 @@ struct config_llog_data {
 	unsigned int		    cld_stopping:1, /* we were told to stop
 						     * watching */
 				    cld_lostlock:1; /* lock not requeued */
-	char			    cld_logname[0];
+	char			    cld_logname[];
 };
 
 struct lustre_profile {

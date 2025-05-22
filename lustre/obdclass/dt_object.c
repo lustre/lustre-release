@@ -698,7 +698,7 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 {
 	struct idx_info *ii = (struct idx_info *)arg;
 	struct lu_idxpage *lip = &lp->lp_idx;
-	char *entry;
+	void *entry;
 	__u64 hash;
 	__u16 hashsize = 0;
 	__u16 keysize = 0;

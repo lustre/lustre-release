@@ -88,24 +88,21 @@ struct ldlm_async_args {
  * LDLM_LOCKREQ_HANDLE -1 slots are available.
  * Otherwise, LDLM_LOCKREQ_HANDLE slots are available.
  *
- * \param[in] count
- * \param[in] type
+ * \param[in] count - total number of lock handles to include for cancel
+ * \param[in] type  - LDLM RPC request type
  *
  * \retval size of the request buffer
  */
 int ldlm_request_bufsize(int count, int type)
 {
-	int avail = LDLM_LOCKREQ_HANDLES;
-
 	if (type == LDLM_ENQUEUE)
-		avail -= LDLM_ENQUEUE_CANCEL_OFF;
+		count++;
 
-	if (count > avail)
-		avail = (count - avail) * sizeof(struct lustre_handle);
-	else
-		avail = 0;
+	/* keep minimum handles to keep struct size for compatibility */
+	if (count < LDLM_LOCKREQ_HANDLES)
+		count = LDLM_LOCKREQ_HANDLES;
 
-	return sizeof(struct ldlm_request) + avail;
+	return offsetof(struct ldlm_request, lock_handle[count]);
 }
 
 void ldlm_expired_completion_wait(struct lock_wait_data *lwd)
