@@ -868,6 +868,31 @@ int parse_param_file(char *path)
 	return rc;
 }
 
+/**
+ * Check if vm.dirty_ratio is set to a value that may cause performance issues.
+ * Lustre's writeback support does not work well with vm_dirty_ratio set to 0.
+ * Values below 10 can cause inefficient write behavior under load.
+ */
+static void check_vm_dirty_ratio(void)
+{
+	int dirty_ratio = 0;
+	FILE *fp = fopen("/proc/sys/vm/dirty_ratio", "r");
+
+	if (fp) {
+		if (fscanf(fp, "%d", &dirty_ratio) == 1 && dirty_ratio < 10) {
+			fprintf(stderr,
+				"Warning: vm.dirty_ratio is set to %d, which may hurt performance\n",
+				dirty_ratio);
+			fprintf(stderr, "Consider increasing it to at least 10 using:\n");
+			fprintf(stderr, "  sysctl -w vm.dirty_ratio=10\n");
+		}
+		fclose(fp);
+		return;
+	}
+
+	return;
+}
+
 int set_client_params(char *fsname)
 {
 	char path[PATH_MAX];
@@ -979,7 +1004,10 @@ int main(int argc, char *const argv[])
 	}
 
 	client = (strstr(mop.mo_usource, ":/") != NULL);
-	if (!client) {
+	if (client) {
+		/* Check vm.dirty_ratio for client mounts */
+		check_vm_dirty_ratio();
+	} else {
 #ifdef HAVE_SERVER_SUPPORT
 		rc = osd_init();
 		if (rc)
