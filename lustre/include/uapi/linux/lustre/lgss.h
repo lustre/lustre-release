@@ -101,6 +101,8 @@ struct rsc_downcall_data {
 	__u32		scd_uid;
 	__u32		scd_gid;
 	char		scd_mechname[8];
+	/* nodemap name, LUSTRE_NODEMAP_NAME_LENGTH = 16 */
+	char		scd_nmname[24];
 	__s64		scd_offset;
 	__u32		scd_len;
 	__u32		scd_padding;

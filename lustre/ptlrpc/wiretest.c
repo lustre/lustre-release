@@ -4533,7 +4533,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)sizeof(*((struct rsi_downcall_data *)0)->sid_val));
 
 	/* Checks for struct rsc_downcall_data */
-	LASSERTF((int)sizeof(struct rsc_downcall_data) == 48, "found %lld\n",
+	LASSERTF((int)sizeof(struct rsc_downcall_data) == 72, "found %lld\n",
 		 (long long)(int)sizeof(struct rsc_downcall_data));
 	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_magic) == 0, "found %lld\n",
 		 (long long)(int)offsetof(struct rsc_downcall_data, scd_magic));
@@ -4563,19 +4563,23 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct rsc_downcall_data, scd_mechname));
 	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_mechname) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_mechname));
-	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_offset) == 32, "found %lld\n",
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_nmname) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct rsc_downcall_data, scd_nmname));
+	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_nmname) == 24, "found %lld\n",
+		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_nmname));
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_offset) == 56, "found %lld\n",
 		 (long long)(int)offsetof(struct rsc_downcall_data, scd_offset));
 	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_offset) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_offset));
-	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_len) == 40, "found %lld\n",
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_len) == 64, "found %lld\n",
 		 (long long)(int)offsetof(struct rsc_downcall_data, scd_len));
 	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_len) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_len));
-	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_padding) == 44, "found %lld\n",
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_padding) == 68, "found %lld\n",
 		 (long long)(int)offsetof(struct rsc_downcall_data, scd_padding));
 	LASSERTF((int)sizeof(((struct rsc_downcall_data *)0)->scd_padding) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct rsc_downcall_data *)0)->scd_padding));
-	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_val) == 48, "found %lld\n",
+	LASSERTF((int)offsetof(struct rsc_downcall_data, scd_val) == 72, "found %lld\n",
 		 (long long)(int)offsetof(struct rsc_downcall_data, scd_val));
 	LASSERTF((int)sizeof(*((struct rsc_downcall_data *)0)->scd_val) == 1, "found %lld\n",
 		 (long long)(int)sizeof(*((struct rsc_downcall_data *)0)->scd_val));

@@ -93,7 +93,8 @@ struct svc_nego_data {
 };
 
 static int do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
-			   gss_OID mechoid, gss_buffer_desc *ctx_token)
+			   gss_OID mechoid, gss_buffer_desc *ctx_token,
+			   char *nodemap)
 {
 	struct rsc_downcall_data *rsc_dd;
 	int blen, fd, size, rc = -1;
@@ -130,6 +131,13 @@ static int do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	if (snprintf(rsc_dd->scd_mechname, sizeof(rsc_dd->scd_mechname),
 		     "%s", mechname) >= sizeof(rsc_dd->scd_mechname))
 		goto out;
+	if (nodemap) {
+		if (snprintf(rsc_dd->scd_nmname, sizeof(rsc_dd->scd_nmname),
+			     "%s", nodemap) >= sizeof(rsc_dd->scd_nmname))
+			goto out;
+	} else {
+		rsc_dd->scd_nmname[0] = '\0';
+	}
 
 	bp = rsc_dd->scd_val;
 	gss_buffer_write(&bp, &blen, out_handle->value, out_handle->length);
@@ -597,12 +605,11 @@ static int handle_sk(struct svc_nego_data *snd)
 	struct svc_cred cred;
 	gss_buffer_desc bufs[SK_INIT_BUFFERS];
 	gss_buffer_desc remote_pub_key = GSS_C_EMPTY_BUFFER;
-	char *target;
+	char *target, *nmname_out = NULL;
 	uint32_t rc = GSS_S_DEFECTIVE_TOKEN;
 	uint32_t version;
 	uint32_t flags;
-	int i;
-	int attempts = 0;
+	int attempts = 0, i, ret;
 
 	printerr(LL_DEBUG, "Handling sk request\n");
 	memset(bufs, 0, sizeof(gss_buffer_desc) * SK_INIT_BUFFERS);
@@ -643,6 +650,25 @@ static int handle_sk(struct svc_nego_data *snd)
 		goto cleanup_buffers;
 	}
 	memcpy(&flags, bufs[SK_INIT_FLAGS].value, sizeof(flags));
+
+	/* Check that the cluster hash matches the hash of nodemap name */
+	rc = sk_verify_hash(snd->nm_name, EVP_sha256(), &bufs[SK_INIT_NODEMAP]);
+	if (rc != GSS_S_COMPLETE) {
+		/* sha256 of nodemap name contained in request from client does
+		 * not match nodemap inferred by server from client NID.
+		 * So try to fetch nodemap name corresponding to client sha256.
+		 */
+		ret = nodemap_lookup_by_sha(&bufs[SK_INIT_NODEMAP],
+					    snd->nm_name, sizeof(snd->nm_name));
+		if (ret) {
+			printerr(LL_ERR,
+				 "Cluster hash failed validation: 0x%x\n", rc);
+			goto cleanup_buffers;
+		}
+		nmname_out = snd->nm_name;
+	}
+	printerr(LL_DEBUG, "Using nodemap name %s for authentication\n",
+		 snd->nm_name);
 
 	skc = sk_create_cred(target, snd->nm_name, be32toh(flags));
 	if (!skc) {
@@ -689,13 +715,6 @@ static int handle_sk(struct svc_nego_data *snd)
 	if (rc != GSS_S_COMPLETE) {
 		printerr(LL_ERR, "HMAC verification error: 0x%x from peer %s\n",
 			 rc, libcfs_nid2str((lnet_nid_t)snd->nid));
-		goto cleanup_partial;
-	}
-
-	/* Check that the cluster hash matches the hash of nodemap name */
-	rc = sk_verify_hash(snd->nm_name, EVP_sha256(), &skc->sc_nodemap_hash);
-	if (rc != GSS_S_COMPLETE) {
-		printerr(LL_ERR, "Cluster hash failed validation: 0x%x\n", rc);
 		goto cleanup_partial;
 	}
 
@@ -793,7 +812,8 @@ redo:
 	if (skc->sc_flags & LGSS_ROOT_CRED_OST)
 		cred.cr_usr_oss = 1;
 
-	do_svc_downcall(&snd->out_handle, &cred, snd->mech, &snd->ctx_token);
+	do_svc_downcall(&snd->out_handle, &cred, snd->mech, &snd->ctx_token,
+			nmname_out);
 
 	/* cleanup ctx_token, out_tok is cleaned up in handle_channel_request */
 	if (remote_pub_key.length != 0) {
@@ -899,7 +919,8 @@ static int handle_null(struct svc_nego_data *snd)
 	if (flags & LGSS_ROOT_CRED_OST)
 		cred.cr_usr_oss = 1;
 
-	do_svc_downcall(&snd->out_handle, &cred, snd->mech, &snd->ctx_token);
+	do_svc_downcall(&snd->out_handle, &cred, snd->mech, &snd->ctx_token,
+			NULL);
 
 	/* cleanup ctx_token, out_tok is cleaned up in handle_channel_req */
 	free(snd->ctx_token.value);
@@ -976,7 +997,7 @@ static int handle_krb(struct svc_nego_data *snd)
 		gss_delete_sec_context(&ignore_min_stat, &snd->ctx,
 				       &ignore_out_tok);
 
-	do_svc_downcall(&snd->out_handle, &cred, mech, &snd->ctx_token);
+	do_svc_downcall(&snd->out_handle, &cred, mech, &snd->ctx_token, NULL);
 	/* We no longer need the context token */
 	if (snd->ctx_token.length)
 		(void)gss_release_buffer(&ignore_min_stat, &snd->ctx_token);

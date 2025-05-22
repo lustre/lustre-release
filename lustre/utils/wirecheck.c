@@ -2082,6 +2082,7 @@ check_rsc_downcall_data(void)
 	CHECK_MEMBER(rsc_downcall_data, scd_uid);
 	CHECK_MEMBER(rsc_downcall_data, scd_gid);
 	CHECK_MEMBER(rsc_downcall_data, scd_mechname);
+	CHECK_MEMBER(rsc_downcall_data, scd_nmname);
 	CHECK_MEMBER(rsc_downcall_data, scd_offset);
 	CHECK_MEMBER(rsc_downcall_data, scd_len);
 	CHECK_MEMBER(rsc_downcall_data, scd_padding);
