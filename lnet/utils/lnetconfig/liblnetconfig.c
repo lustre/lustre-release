@@ -304,14 +304,14 @@ int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
 
 	if (strchr(nidstr, '*')) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "asterisk not allowed in nidstring \"%s\"", nidstr);
+			 "asterisk not allowed in nidstring '%s'", nidstr);
 		return LUSTRE_CFG_RC_BAD_PARAM;
 	}
 
 	INIT_LIST_HEAD(&nidlist);
 	if (!cfs_parse_nidlist(nidstr, strlen(nidstr), &nidlist)) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "Unable to parse nidlist from: %s\n", nidstr);
+			 "\"Unable to parse nidlist from: %s\"", nidstr);
 		return LUSTRE_CFG_RC_BAD_PARAM;
 	}
 
@@ -320,20 +320,20 @@ int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
 
 	if (num_nids == -1) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "\"%s\" specifies more than the %d NIDs allowed by this operation.",
+			 "\"'%s' specifies more than the %d NIDs allowed by this operation\"",
 			 nidstr, max_nids);
 		return LUSTRE_CFG_RC_BAD_PARAM;
 	}
 
 	if (num_nids < 0) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "Failed to expand nidstr: %s", strerror(num_nids));
+			 "\"Failed to expand nidstr: %s\"", strerror(num_nids));
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 	}
 
 	if (num_nids == 0) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "\"%s\" did not expand to any nids", nidstr);
+			 "\"'%s' did not expand to any nids\"", nidstr);
 		return LUSTRE_CFG_RC_BAD_PARAM;
 	}
 
@@ -1010,7 +1010,9 @@ static int infra_ping_nid(char *ping_nids, char *src_nidstr, char *oper,
 		rc = l_ioctl(LNET_DEV_ID, ioc_call, &ping);
 		if (rc != 0) {
 			snprintf(err_str,
-				 sizeof(err_str), "failed to %s %s: %s\n", oper,
+				 sizeof(err_str),
+				 "\"failed to %s %s: %s\"",
+				 oper,
 				 id.pid == LNET_PID_ANY ?
 				 libcfs_nid2str(id.nid) :
 				 libcfs_id2str(id), strerror(errno));
@@ -1226,7 +1228,7 @@ int lustre_lnet_modify_peer(char *prim_nid, char *nids, bool is_mr, int cmd,
 	if (pnid == LNET_NID_ANY) {
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			"badly formatted primary NID: %s", prim_nid);
+			"\"badly formatted primary NID: %s\"", prim_nid);
 		goto out;
 	}
 
@@ -1314,7 +1316,7 @@ static int lustre_lnet_route_common(char *nw, char *nidstr, int hops, int prio,
 			errno != EHOSTUNREACH) {
 			rc = -errno;
 			snprintf(err_str, LNET_MAX_STR_LEN,
-					"route operation failed: %s",
+					"\"route operation failed: %s\"",
 					strerror(errno));
 			goto out;
 		} else if (errno == EEXIST) {
@@ -1338,13 +1340,13 @@ int lustre_lnet_config_route(char *nw, char *nidstr, int hops, int prio,
 			     int sen, int seq_no, struct cYAML **err_rc)
 {
 	int rc;
-	char err_str[LNET_MAX_STR_LEN] = "\"generic error\"";
+	char err_str[LNET_MAX_STR_LEN] = "generic error";
 
 	if (hops == -1) {
 		hops = LNET_UNDEFINED_HOPS;
 	} else if (hops < 1 || hops > 255) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "\"invalid hop count %d, must be between 1 and 255\"",
+			 "invalid hop count %d, must be between 1 and 255",
 			 hops);
 		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
 		goto out;
@@ -1354,7 +1356,7 @@ int lustre_lnet_config_route(char *nw, char *nidstr, int hops, int prio,
 		prio = 0;
 	} else if (prio < 0) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "\"invalid priority %d, must be greater than 0\"",
+			 "invalid priority %d, must be greater than 0",
 			 prio);
 		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
 		goto out;
@@ -1364,7 +1366,7 @@ int lustre_lnet_config_route(char *nw, char *nidstr, int hops, int prio,
 		sen = 1;
 	} else if (sen < 1) {
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "\"invalid health sensitivity %d, must be 1 or greater\"",
+			 "invalid health sensitivity %d, must be 1 or greater",
 			 sen);
 		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
 		goto out;
@@ -1546,7 +1548,7 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 	} else
 		rc = LUSTRE_CFG_RC_NO_ERR;
 
-	snprintf(err_str, sizeof(err_str), "\"success\"");
+	snprintf(err_str, sizeof(err_str), "success");
 out:
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR || !exist) {
 		cYAML_free_tree(root);
@@ -1985,17 +1987,17 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 	int rc;
 
 	if (!tmp && !tmp2) {
-		*errmsg = "Unable to parse nidlist: [] are missing";
+		*errmsg = "\"Unable to parse nidlist: [] are missing\"";
 		return -ERANGE;
 	}
 
 	if ((tmp && !tmp2) || (!tmp && tmp2)) {
-		*errmsg = "Unable to parse nidlist: incomplete bracket set";
+		*errmsg = "\"Unable to parse nidlist: incomplete bracket set\"";
 		return -EINVAL;
 	}
 
 	if (range > tmp2) {
-		*errmsg = "Unable to parse nidlist: improper bracket ordering";
+		*errmsg = "\"Unable to parse nidlist: improper bracket ordering\"";
 		return -EINVAL;
 	}
 
@@ -2013,7 +2015,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 		} else if (*range == '-') {
 			range++;
 			if (!isxdigit(*range)) {
-				*errmsg = "Unable to parse nidlist: range needs number after -";
+				*errmsg = "\"Unable to parse nidlist: range needs number after -\"";
 				return -ERANGE;
 			}
 
@@ -2024,7 +2026,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 		} else if (*range == '/') {
 			range++;
 			if (!isdigit(*range)) {
-				*errmsg = "Unable to parse nidlist: range needs number after /";
+				*errmsg = "\"Unable to parse nidlist: range needs number after /\"";
 				return -ERANGE;
 			}
 
@@ -2043,7 +2045,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 
 			range++;
 			if (!isxdigit(*range)) {
-				*errmsg = "Unable to parse nidlist: range needs number after ,";
+				*errmsg = "\"Unable to parse nidlist: range needs number after ,\"";
 				return -ERANGE;
 			}
 
@@ -2057,7 +2059,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 					last = strtoul(num, NULL, base);
 
 				if (first > last) {
-					*errmsg = "Unable to parse nidlist: range is wrong order";
+					*errmsg = "\"Unable to parse nidlist: range is wrong order\"";
 					return -ERANGE;
 				}
 
@@ -2077,7 +2079,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 					} else {
 						item = calloc(1, sizeof(struct nid_node));
 						if (!item) {
-							*errmsg = "Unable to parse nidlist: allocation failed";
+							*errmsg = "\"Unable to parse nidlist: allocation failed\"";
 							return -ENOMEM;
 						}
 						snprintf(item->nidstr, sizeof(item->nidstr),
@@ -2096,7 +2098,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 
 				item = calloc(1, sizeof(struct nid_node));
 				if (!item) {
-					*errmsg = "Unable to parse nidlist: allocation failed";
+					*errmsg = "\"Unable to parse nidlist: allocation failed\"";
 					return -ENOMEM;
 				}
 				snprintf(item->nidstr, sizeof(item->nidstr),
@@ -2109,7 +2111,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 			memset(num, 0, sizeof(num));
 			off = 0;
 		} else {
-			*errmsg = "Unable to parse nidlist: invalid character in range";
+			*errmsg = "\"Unable to parse nidlist: invalid character in range\"";
 			return -EINVAL;
 		}
 	}
@@ -2134,7 +2136,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 		int len = strlen(nid);
 
 		if (first > last) {
-			*errmsg = "Unable to parse nidlist: range is wrong order";
+			*errmsg = "\"Unable to parse nidlist: range is wrong order\"";
 			return -ERANGE;
 		}
 
@@ -2162,7 +2164,7 @@ static int unroll_nid_range_scan(struct nid_node *list, const char *nid,
 
 				item = calloc(1, sizeof(struct nid_node));
 				if (!item) {
-					*errmsg = "Unable to parse nidlist: allocation failed";
+					*errmsg = "\"Unable to parse nidlist: allocation failed\"";
 					return -ENOMEM;
 				}
 				snprintf(item->nidstr, sizeof(item->nidstr),
@@ -2194,12 +2196,12 @@ int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
 	}
 
 	if (strstr(nidstr, "<?>")) {
-		*errmsg = "Unable to parse nidlist: LNET_ANY_NID is unsupported";
+		*errmsg = "\"Unable to parse nidlist: LNET_ANY_NID is unsupported\"";
 		return -EINVAL;
 	}
 
 	if (strchr(nidstr, '@') == NULL) {
-		*errmsg = "Unable to parse nidlist: no valid NIDs in string";
+		*errmsg = "\"Unable to parse nidlist: no valid NIDs in string\"";
 		return -EINVAL;
 	}
 
@@ -2218,7 +2220,7 @@ int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
 
 			item = calloc(1, sizeof(struct nid_node));
 			if (!item) {
-				*errmsg = "Unable to parse nidlist: allocation failed";
+				*errmsg = "\"Unable to parse nidlist: allocation failed\"";
 				rc = -ENOMEM;
 				goto err;
 			}
@@ -2232,7 +2234,7 @@ int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
 			 */
 			rc = libcfs_strnid(&NID, orig);
 			if (rc < 0) {
-				*errmsg = "Unable to parse nidlist: invalid NID in nidstr";
+				*errmsg = "\"Unable to parse nidlist: invalid NID in nidstr\"";
 				goto err;
 			}
 
@@ -2639,7 +2641,7 @@ lustre_lnet_config_healthv(int value, bool all, lnet_nid_t nid,
 	if (rc != 0) {
 		rc = -errno;
 		snprintf(err_str,
-			 sizeof(err_str), "Can not configure health value: %s",
+			 sizeof(err_str), "\"Can not configure health value: %s\"",
 			 strerror(errno));
 	}
 
@@ -2665,7 +2667,7 @@ lustre_lnet_config_peer(int state, lnet_nid_t nid, char *name,
 	if (rc != 0) {
 		rc = -errno;
 		snprintf(err_str,
-			 sizeof(err_str), "Can not set peer property: %s",
+			 sizeof(err_str), "\"Can not set peer property: %s\"",
 			 strerror(errno));
 	}
 
@@ -2700,7 +2702,7 @@ lustre_lnet_config_conns_per_peer(int value, bool all, lnet_nid_t nid,
 			rc = -errno;
 			snprintf(err_str,
 				 sizeof(err_str),
-				 "Can not configure conns_per_peer value: %s",
+				 "\"Can not configure conns_per_peer value: %s\"",
 				 strerror(errno));
 		}
 	}
@@ -4785,7 +4787,7 @@ static int show_recovery_queue(enum lnet_health_type type, char *name,
 			goto out;
 	}
 
-	snprintf(err_str, sizeof(err_str), "success\n");
+	snprintf(err_str, sizeof(err_str), "success");
 
 	rc = 0;
 
@@ -4837,7 +4839,7 @@ int lustre_lnet_show_peer_debug_info(char *peer_nid, int seq_no,
 	if (pnid == LNET_NID_ANY) {
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			"badly formatted primary NID: %s", peer_nid);
+			"\"badly formatted primary NID: %s\"", peer_nid);
 		goto out;
 	}
 
@@ -5157,7 +5159,7 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 	if (!show_rc)
 		cYAML_print_tree(root);
 
-	snprintf(err_str, sizeof(err_str), "\"success\"");
+	snprintf(err_str, sizeof(err_str), "success");
 	rc = LUSTRE_CFG_RC_NO_ERR;
 out:
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
@@ -5193,7 +5195,7 @@ int lustre_lnet_reset_stats(int seq_no, struct cYAML **err_rc)
 			 strerror(l_errno));
 		rc = -l_errno;
 	} else {
-		snprintf(err_str, sizeof(err_str), "\"success\"");
+		snprintf(err_str, sizeof(err_str), "success");
 		rc = LUSTRE_CFG_RC_NO_ERR;
 	}
 
@@ -5700,7 +5702,7 @@ static int handle_yaml_peer_common(struct cYAML *tree, struct cYAML **show_rc,
 	if (!prim_nid) {
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			 "\"primary nid\" must be specified");
+			 "the 'primary nid' must be specified");
 		goto failed;
 	}
 
@@ -5711,7 +5713,7 @@ static int handle_yaml_peer_common(struct cYAML *tree, struct cYAML **show_rc,
 	if (pnid == LNET_NID_ANY) {
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		snprintf(err_str, LNET_MAX_STR_LEN,
-			"badly formatted primary NID: %s", prim_nidstr);
+			"\"badly formatted primary NID: %s\"", prim_nidstr);
 		goto failed;
 	}
 
@@ -5749,7 +5751,7 @@ static int handle_yaml_peer_common(struct cYAML *tree, struct cYAML **show_rc,
 			else if (strcmp(mr->cy_valuestring, "True") != 0) {
 				rc = LUSTRE_CFG_RC_BAD_PARAM;
 				snprintf(err_str, LNET_MAX_STR_LEN,
-					 "Multi-Rail must be set to \"True\" or \"False\" found \"%s\"",
+					 "Multi-Rail must be set to 'True' or 'False' found '%s'",
 					 mr->cy_valuestring);
 				goto failed;
 			}
@@ -6369,7 +6371,7 @@ static int lustre_yaml_cb_helper(char *f, int len,
 		cb = lookup_fn(child->cy_string, table);
 		if (cb == NULL) {
 			snprintf(err_str, sizeof(err_str),
-				"\"call back for '%s' not found\"",
+				"call back for '%s' not found",
 				child->cy_string);
 			cYAML_build_error(LUSTRE_CFG_RC_BAD_PARAM, -1,
 					"yaml", "helper", err_str, err_rc);
