@@ -465,12 +465,15 @@ static void rsc_entry_init(struct upcall_cache_entry *entry,
 
 	memset(&rsc->sc_ctx.gsc_seqdata, 0, sizeof(rsc->sc_ctx.gsc_seqdata));
 	spin_lock_init(&rsc->sc_ctx.gsc_seqdata.ssd_lock);
+
+	rsc->sc_ctx.gsc_nm_name = NULL;
 }
 
 void __rsc_free(struct gss_rsc *rsc)
 {
 	rawobj_free(&rsc->sc_handle);
 	rawobj_free(&rsc->sc_ctx.gsc_rvs_hdl);
+	OBD_FREE(rsc->sc_ctx.gsc_nm_name, LUSTRE_NODEMAP_NAME_LENGTH + 1);
 	lgss_delete_sec_context(&rsc->sc_ctx.gsc_mechctx);
 }
 
@@ -568,6 +571,17 @@ static int rsc_parse_downcall(struct upcall_cache *cache,
 	rsc->sc_ctx.gsc_usr_oss = !!(scd->scd_flags & RSC_DATA_FLAG_OSS);
 	rsc->sc_ctx.gsc_mapped_uid = scd->scd_mapped_uid;
 	rsc->sc_ctx.gsc_uid = scd->scd_uid;
+
+	if (strlen(scd->scd_nmname)) {
+		OBD_ALLOC(rsc->sc_ctx.gsc_nm_name,
+			  LUSTRE_NODEMAP_NAME_LENGTH + 1);
+		if (!rsc->sc_ctx.gsc_nm_name) {
+			status = -ENOMEM;
+			goto out;
+		}
+		strscpy(rsc->sc_ctx.gsc_nm_name, scd->scd_nmname,
+			LUSTRE_NODEMAP_NAME_LENGTH + 1);
+	}
 
 	rsc->sc_ctx.gsc_gid = scd->scd_gid;
 	gm = lgss_name_to_mech(scd->scd_mechname);
