@@ -1456,8 +1456,11 @@ static int server_start_targets(struct super_block *sb)
 		name_service = LUSTRE_OSS_NAME;
 	}
 
-	/* make sure MDS/OSS is started */
-	mutex_lock(&server_start_lock);
+	/* make sure MDS/OSS is started, but allow mount to be killed */
+	rc = mutex_lock_interruptible(&server_start_lock);
+	if (rc)
+		RETURN(rc);
+
 	obd = class_name2obd(obd_name_service);
 	if (!obd) {
 		rc = lustre_start_simple(obd_name_service, name_service,

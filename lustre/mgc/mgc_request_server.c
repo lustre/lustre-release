@@ -65,6 +65,9 @@ static int mgc_local_llog_fini(const struct lu_env *env,
 	RETURN(0);
 }
 
+/* Configure the MGC to fetch config logs from the MGS to a local
+ * filesystem device during mount.
+ */
 static int mgc_fs_setup(const struct lu_env *env, struct obd_device *obd,
 			struct super_block *sb)
 {
@@ -78,8 +81,14 @@ static int mgc_fs_setup(const struct lu_env *env, struct obd_device *obd,
 	LASSERT(lsi);
 	LASSERT(lsi->lsi_dt_dev);
 
-	/* The mgc fs exclusion mutex. Only one fs can be setup at a time. */
-	mutex_lock(&cli->cl_mgc_mutex);
+	/* MGC can currently only fetch config logs for one fs at a time.
+	 * Allow this mount to be killed if it is hung for some reason.
+	 */
+	rc = mutex_lock_interruptible(&cli->cl_mgc_mutex);
+	CDEBUG(D_MGC, "%s: cl_mgc_mutex %s for %s: rc = %d\n", obd->obd_name,
+	       lsi->lsi_osd_obdname, rc ? "interrupted" : "locked", rc);
+	if (rc)
+		RETURN(rc);
 
 	/* Setup the configs dir */
 	fid.f_seq = FID_SEQ_LOCAL_NAME;
@@ -114,11 +123,11 @@ static int mgc_fs_setup(const struct lu_env *env, struct obd_device *obd,
 		GOTO(out_llog, rc);
 
 	/* We take an obd ref to insure that we can't get to mgc_cleanup
-	 * without calling mgc_fs_cleanup first.
+	 * without calling mgc_fs_clear() first.
 	 */
 	class_incref(obd, "mgc_fs", obd);
 
-	/* We keep the cl_mgc_sem until mgc_fs_cleanup */
+	/* We hold the cl_mgc_mutex until mgc_fs_clear() is called */
 	EXIT;
 out_llog:
 	if (rc) {
@@ -130,12 +139,15 @@ out_los:
 		local_oid_storage_fini(env, cli->cl_mgc_los);
 out_mutex:
 		cli->cl_mgc_los = NULL;
+		CDEBUG(D_MGC, "%s: cl_mgc_mutex unlock for %s: rc = %d\n",
+		       obd->obd_name, lsi->lsi_osd_obdname, rc);
 		mutex_unlock(&cli->cl_mgc_mutex);
 	}
 	return rc;
 }
 
-static int mgc_fs_cleanup(const struct lu_env *env, struct obd_device *obd)
+/* Unconfigure the MGC from fetching config logs to the local device */
+static int mgc_fs_clear(const struct lu_env *env, struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
 
@@ -151,6 +163,7 @@ static int mgc_fs_cleanup(const struct lu_env *env, struct obd_device *obd)
 	cli->cl_mgc_los = NULL;
 
 	class_decref(obd, "mgc_fs", obd);
+	CDEBUG(D_MGC, "%s: cl_mgc_mutex unlock\n", obd->obd_name);
 	mutex_unlock(&cli->cl_mgc_mutex);
 
 	RETURN(0);
@@ -266,7 +279,7 @@ int mgc_set_info_async_server(const struct lu_env *env,
 	if (KEY_IS(KEY_CLEAR_FS)) {
 		if (vallen != 0)
 			RETURN(-EINVAL);
-		rc = mgc_fs_cleanup(env, exp->exp_obd);
+		rc = mgc_fs_clear(env, exp->exp_obd);
 		RETURN(rc);
 	}
 
@@ -546,8 +559,9 @@ static int mgc_llog_local_copy(const struct lu_env *env,
 	/* build new local llog */
 	rc = llog_backup(env, obd, rctxt, lctxt, logname, logname);
 	if (rc == -ENOENT) {
-		CWARN("%s: no remote llog for %s, check MGS config\n",
-		      obd->obd_name, logname);
+		CDEBUG_LIMIT(strstr(logname, "sptlrpc") ? D_MGC : D_WARNING,
+			     "%s: no remote llog for %s, check MGS config\n",
+			     obd->obd_name, logname);
 		llog_erase(env, lctxt, NULL, logname);
 	} else if (rc < 0) {
 		/* error during backup, get local one back from the copy */
