@@ -2791,7 +2791,7 @@ static void ptlrpc_watchdog_fire(struct work_struct *work)
 			      thread->t_task->comm, thread->t_task->pid,
 			      ms_elapsed, ms_frac);
 
-		libcfs_debug_dumpstack(thread->t_task);
+		sched_show_task(thread->t_task);
 	} else {
 		LCONSOLE_WARN("%s: service thread pid %u was inactive for %llu.%03u seconds. Watchdog stack traces are limited to 3 per %u seconds, skipping this one.\n",
 			      thread->t_task->comm, thread->t_task->pid,
