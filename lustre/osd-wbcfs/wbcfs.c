@@ -596,8 +596,9 @@ static int memfs_dcache_readdir(struct file *file, struct dir_context *ctx)
  */
 static int memfs_write_end(struct file *file, struct address_space *mapping,
 			   loff_t pos, unsigned int len, unsigned int copied,
-			   struct page *page, void *fsdata)
+			   struct wbe_folio *vmfolio, void *fsdata)
 {
+	struct page *page = wbe_folio_page(vmfolio);
 	struct inode *inode = page->mapping->host;
 	loff_t last_pos = pos + copied;
 
