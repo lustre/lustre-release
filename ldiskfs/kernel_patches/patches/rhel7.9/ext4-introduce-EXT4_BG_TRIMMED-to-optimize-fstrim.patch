@@ -177,14 +177,17 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  	ext4_group_desc_csum_set(sb, block_group, gdp);
  	ext4_unlock_group(sb, block_group);
  
-@@ -5676,9 +5685,16 @@ ext4_trim_all_free(struct super_block *s
+@@ -5676,9 +5685,19 @@ ext4_trim_all_free(struct super_block *s
  	void *bitmap;
  	ext4_grpblk_t next, count = 0, free_count = 0;
  	struct ext4_buddy e4b;
 +	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
 +	struct ext4_group_desc *gdp;
++	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
 +	struct buffer_head *gd_bh;
 +	ext4_grpblk_t freed_last_trimmed_orig;
++	bool track_trim = (es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM)) &&
++			  !(sb->s_flags & MS_RDONLY);
  	int ret = 0;
  
  	trace_ext4_trim_all_free(sb, group, start, max);
@@ -194,21 +197,20 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  
  	ret = ext4_mb_load_buddy(sb, group, &e4b);
  	if (ret)
-@@ -5682,10 +5700,12 @@ ext4_trim_all_free(struct super_block *s
+@@ -5687,10 +5705,11 @@ ext4_trim_all_free(struct super_block *s
  	bitmap = e4b.bd_bitmap;
  
  	ext4_lock_group(sb, group);
 -	if (EXT4_MB_GRP_WAS_TRIMMED(e4b.bd_info) &&
-+	if (es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM) &&
-+	    gdp->bg_flags & cpu_to_le16(EXT4_BG_TRIMMED) &&
++	if (gdp->bg_flags & cpu_to_le16(EXT4_BG_TRIMMED) &&
  	    minblocks >= atomic_read(&EXT4_SB(sb)->s_last_trim_minblks))
  		goto out;
  
-+	freed_last_trimmed_orig = e4b.bd_info->bb_freed_since_trim;
++	freed_last_trimmed_orig = grp->bb_freed_since_trim;
  	start = (e4b.bd_info->bb_first_free > start) ?
  		e4b.bd_info->bb_first_free : start;
  
-@@ -5721,14 +5741,46 @@ ext4_trim_all_free(struct super_block *s
+@@ -5726,14 +5745,54 @@ ext4_trim_all_free(struct super_block *s
  			break;
  	}
  
@@ -220,40 +222,48 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/mballoc.c
  out:
  	ext4_unlock_group(sb, group);
  	ext4_mb_unload_buddy(&e4b);
-+	if (ret > 0 && es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM)) {
+ 
++	if (ret > 0) {
++		handle_t *handle = NULL;
 +		int err;
-+		handle_t *handle;
 +
-+		handle = ext4_journal_start_sb(sb, EXT4_HT_FS_TRIM, 1);
-+		if (IS_ERR(handle)) {
-+			ret = PTR_ERR(handle);
-+			goto out_return;
++		if (track_trim) {
++			handle = ext4_journal_start_sb(sb, EXT4_HT_FS_TRIM, 1);
++			if (IS_ERR(handle)) {
++				ret = PTR_ERR(handle);
++				goto out_return;
++			}
++			err = ext4_journal_get_write_access(handle, gd_bh);
++			if (err) {
++				ret = err;
++				goto out_journal;
++			}
 +		}
-+		err = ext4_journal_get_write_access(handle, gd_bh);
-+		if (err) {
-+			ret = err;
-+			goto out_journal;
-+		}
++
 +		ext4_lock_group(sb, group);
 +		/* someone freed blocks while we were working on the group */
-+		if (freed_last_trimmed_orig !=
-+			e4b.bd_info->bb_freed_since_trim) {
++		if (freed_last_trimmed_orig != grp->bb_freed_since_trim) {
 +			ext4_unlock_group(sb, group);
 +			goto out_journal;
 +		}
 +		gdp->bg_flags |= cpu_to_le16(EXT4_BG_TRIMMED);
-+		e4b.bd_info->bb_freed_since_trim = 0;
++		grp->bb_freed_since_trim = 0;
 +		ext4_group_desc_csum_set(sb, group, gdp);
 +		ext4_unlock_group(sb, group);
-+		err = ext4_handle_dirty_metadata(handle, NULL, gd_bh);
-+		if (err)
-+			ret = err;
++
++		if (track_trim) {
++			err = ext4_handle_dirty_metadata(handle, NULL, gd_bh);
++			if (err)
++				ret = err;
++		}
 +out_journal:
-+		err = ext4_journal_stop(handle);
-+		if (err)
-+			ret = err;
++		if (track_trim) {
++			err = ext4_journal_stop(handle);
++			if (err)
++				ret = err;
++		}
 +	}
- 
++
 +out_return:
  	ext4_debug("trimmed %d blocks in the group %d\n",
  		count, group);
@@ -262,7 +272,18 @@ Index: linux-3.10.0-1160.88.1.el7/fs/ext4/super.c
 ===================================================================
 --- linux-3.10.0-1160.88.1.el7.orig/fs/ext4/super.c
 +++ linux-3.10.0-1160.88.1.el7/fs/ext4/super.c
-@@ -2936,6 +2936,7 @@ EXT4_RW_ATTR_SBI_UI(mb_prefetch, s_mb_pr
+@@ -2295,6 +2295,10 @@ static int ext4_check_descriptors(struct
+ 				return 0;
+ 			}
+ 		}
++		if (!(sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM))) {
++			gdp->bg_flags &= cpu_to_le16(~EXT4_BG_TRIMMED);
++			ext4_group_desc_csum_set(sb, i, gdp);
++		}
+ 		ext4_unlock_group(sb, i);
+ 		if (!flexbg_flag)
+ 			first_block += EXT4_BLOCKS_PER_GROUP(sb);
+@@ -2936,6 +2940,7 @@ EXT4_RW_ATTR_SBI_UI(mb_prefetch, s_mb_pr
  EXT4_RW_ATTR_SBI_UI(mb_prefetch_limit, s_mb_prefetch_limit);
  EXT4_DEPRECATED_ATTR(max_writeback_mb_bump, 128);
  EXT4_RW_ATTR_SBI_UI(extent_max_zeroout_kb, s_extent_max_zeroout_kb);

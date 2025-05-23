@@ -177,19 +177,22 @@ Index: linux-5.14.0-427.20.1.el9.x86_64/fs/ext4/mballoc.c
 +	}
  	ext4_group_desc_csum_set(sb, block_group, gdp);
  	ext4_unlock_group(sb, block_group);
-
-@@ -7024,10 +7033,18 @@ ext4_trim_all_free(struct super_block *s
+ 
+@@ -7024,10 +7033,21 @@ ext4_trim_all_free(struct super_block *s
  		   ext4_grpblk_t minblocks, bool set_trimmed)
  {
  	struct ext4_buddy e4b;
 +	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
 +	struct ext4_group_desc *gdp;
++	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
 +	struct buffer_head *gd_bh;
 +	ext4_grpblk_t freed_last_trimmed_orig;
++	bool track_trim = (es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM)) &&
++			  !sb_rdonly(sb);
  	int ret;
-
+ 
  	trace_ext4_trim_all_free(sb, group, start, max);
-
+ 
 +	gdp = ext4_get_group_desc(sb, group, &gd_bh);
 +	if (!gdp)
 +		return -EIO;
@@ -197,15 +200,14 @@ Index: linux-5.14.0-427.20.1.el9.x86_64/fs/ext4/mballoc.c
  	ret = ext4_mb_load_buddy(sb, group, &e4b);
  	if (ret) {
  		return ret;
-@@ -7035,11 +7052,12 @@ ext4_trim_all_free(struct super_block *s
-
+@@ -7035,11 +7054,11 @@ ext4_trim_all_free(struct super_block *s
+ 
  	ext4_lock_group(sb, group);
-
+ 
 -	if (!EXT4_MB_GRP_WAS_TRIMMED(e4b.bd_info) ||
-+	freed_last_trimmed_orig = e4b.bd_info->bb_freed_since_trim;
++	freed_last_trimmed_orig = grp->bb_freed_since_trim;
 +
-+	if (!(es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM) &&
-+	      gdp->bg_flags & cpu_to_le16(EXT4_BG_TRIMMED)) ||
++	if (!(gdp->bg_flags & cpu_to_le16(EXT4_BG_TRIMMED)) ||
  	    minblocks < EXT4_SB(sb)->s_last_trim_minblks) {
  		ret = ext4_try_to_trim_range(sb, &e4b, start, max, minblocks);
 -		if (ret >= 0 && set_trimmed)
@@ -213,45 +215,52 @@ Index: linux-5.14.0-427.20.1.el9.x86_64/fs/ext4/mballoc.c
  	} else {
  		ret = 0;
  	}
-@@ -7047,6 +7065,42 @@ ext4_trim_all_free(struct super_block *s
+@@ -7047,6 +7066,49 @@ ext4_trim_all_free(struct super_block *s
  	ext4_unlock_group(sb, group);
  	ext4_mb_unload_buddy(&e4b);
-
-+	if (ret > 0 && set_trimmed &&
-+	    es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM)) {
+ 
++	if (ret > 0 && set_trimmed) {
++		handle_t *handle = NULL;
 +		int err;
-+		handle_t *handle;
 +
-+		handle = ext4_journal_start_sb(sb, EXT4_HT_FS_TRIM, 1);
-+		if (IS_ERR(handle)) {
-+			ret = PTR_ERR(handle);
-+			goto out_return;
++		if (track_trim) {
++			handle = ext4_journal_start_sb(sb, EXT4_HT_FS_TRIM, 1);
++			if (IS_ERR(handle)) {
++				ret = PTR_ERR(handle);
++				goto out_return;
++			}
++			err = ext4_journal_get_write_access(handle, sb, gd_bh,
++							    EXT4_JTR_NONE);
++			if (err) {
++				ret = err;
++				goto out_journal;
++			}
 +		}
-+		err = ext4_journal_get_write_access(handle, sb, gd_bh,
-+						    EXT4_JTR_NONE);
-+		if (err) {
-+			ret = err;
-+			goto out_journal;
-+		}
++
 +		ext4_lock_group(sb, group);
 +		/* someone freed blocks while we were working on the group */
-+		if (freed_last_trimmed_orig !=
-+		    e4b.bd_info->bb_freed_since_trim) {
++		if (freed_last_trimmed_orig != grp->bb_freed_since_trim) {
 +			ext4_unlock_group(sb, group);
 +			goto out_journal;
 +		}
 +		gdp->bg_flags |= cpu_to_le16(EXT4_BG_TRIMMED);
-+		e4b.bd_info->bb_freed_since_trim = 0;
++		grp->bb_freed_since_trim = 0;
 +		ext4_group_desc_csum_set(sb, group, gdp);
 +		ext4_unlock_group(sb, group);
-+		err = ext4_handle_dirty_metadata(handle, NULL, gd_bh);
-+		if (err)
-+			ret = err;
++
++		if (track_trim) {
++			err = ext4_handle_dirty_metadata(handle, NULL, gd_bh);
++			if (err)
++				ret = err;
++		}
 +out_journal:
-+		err = ext4_journal_stop(handle);
-+		if (err)
-+			ret = err;
++		if (track_trim) {
++			err = ext4_journal_stop(handle);
++			if (err)
++				ret = err;
++		}
 +	}
++
 +out_return:
  	ext4_debug("trimmed %d blocks in the group %d\n",
  		ret, group);
@@ -276,3 +285,18 @@ Index: linux-5.14.0-162.23.1.el9_1/fs/ext4/sysfs.c
  	ATTR_LIST(trigger_fs_error),
  	ATTR_LIST(err_ratelimit_interval_ms),
  	ATTR_LIST(err_ratelimit_burst),
+Index: linux-5.14.0-427.20.1.el9_4/fs/ext4/super.c
+===================================================================
+--- linux-5.14.0-427.20.1.el9_4.orig/fs/ext4/super.c
++++ linux-5.14.0-427.20.1.el9_4/fs/ext4/super.c
+@@ -3354,6 +3354,10 @@ static int ext4_check_descriptors(struct
+ 				return 0;
+ 			}
+ 		}
++		if (!(sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM))) {
++			gdp->bg_flags &= cpu_to_le16(~EXT4_BG_TRIMMED);
++			ext4_group_desc_csum_set(sb, i, gdp);
++		}
+ 		ext4_unlock_group(sb, i);
+ 		if (!flexbg_flag)
+ 			first_block += EXT4_BLOCKS_PER_GROUP(sb);
