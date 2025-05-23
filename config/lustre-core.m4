@@ -2617,18 +2617,6 @@ is_encrypted, [
 ]) # LC_IS_ENCRYPTED used by LC_CONFIG_CRYPTO
 
 #
-# LC_EXPORT_HAVE_SCHED_SHOW_TASK
-#
-# Linux commit v4.14-rc4-2-g0032f4e88976
-#  rcutorture: Dump writer stack if stalled
-#
-AC_DEFUN([LC_EXPORT_HAVE_SCHED_SHOW_TASK], [
-LB_CHECK_EXPORT([sched_show_task], [kernel/sched/core.c],
-	[AC_DEFINE(HAVE_SCHED_SHOW_TASK, 1,
-			[sched_show_task() is exported by the kernel])])
-]) # LC_EXPORT_HAVE_SCHED_SHOW_TASK
-
-#
 # LC_I_PAGES
 #
 # kernel 4.17 commit b93b016313b3ba8003c3b8bb71f569af91f19fc7
@@ -5782,9 +5770,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.8 - Check export
 	LC_EXPORT_DEFAULT_FILE_SPLICE_READ
-
-	# 4.15 - Check export
-	LC_EXPORT_HAVE_SCHED_SHOW_TASK
 
 	# 5.2 - Check export
 	LC_ACCOUNT_PAGE_DIRTIED

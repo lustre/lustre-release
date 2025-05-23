@@ -20,9 +20,7 @@
 #include "heap.h"
 
 #include <linux/sched.h>
-#ifdef HAVE_SCHED_SHOW_TASK
 #include <linux/sched/debug.h>
-#endif
 
 struct ldlm_namespace;
 struct obd_import;
@@ -52,10 +50,6 @@ extern struct mutex pinger_mutex;
 
 extern lnet_handler_t ptlrpc_handler;
 extern struct percpu_ref ptlrpc_pending;
-
-#ifndef HAVE_SCHED_SHOW_TASK
-#define sched_show_task(task)		libcfs_debug_dumpstack((task))
-#endif
 
 /* ptlrpcd.c */
 int ptlrpcd_start(struct ptlrpcd_ctl *pc);

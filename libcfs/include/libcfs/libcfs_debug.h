@@ -45,7 +45,6 @@ int cfs_mask2str(char *str, int size, u64 mask, const char *(*bit2str)(int),
 
 int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys);
 int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys);
-void libcfs_debug_dumpstack(struct task_struct *tsk);
 
 /* Has there been an LBUG? */
 extern unsigned int libcfs_catastrophe;

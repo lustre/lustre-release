@@ -739,28 +739,6 @@ AC_DEFUN([LIBCFS_BROKEN_HASH_64], [
 ]) # LIBCFS_BROKEN_HASH_64
 
 #
-# LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
-#
-# linux 4.6 kernel changed stacktrace_ops address to return an int
-#
-AC_DEFUN([LIBCFS_SRC_STACKTRACE_OPS_ADDRESS_RETURN_INT], [
-	LB2_LINUX_TEST_SRC([stacktrace_ops_address_return_int], [
-		#include <asm/stacktrace.h>
-	],[
-		int rc;
-
-		rc = ((struct stacktrace_ops *)0)->address(NULL, 0, 0);
-	])
-])
-AC_DEFUN([LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct stacktrace_ops' address function returns an int],
-	[stacktrace_ops_address_return_int], [
-		AC_DEFINE(STACKTRACE_OPS_ADDRESS_RETURN_INT, 1,
-			['struct stacktrace_ops' address function returns an int])
-	])
-]) # LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
-
-#
 # Kernel version 4.6 removed both struct task_struct and struct mm_struct
 # arguments to get_user_pages
 #
@@ -886,30 +864,6 @@ AC_DEFUN([LIBCFS_RHLTABLE], [
 		AC_DEFINE(HAVE_RHLTABLE, 1, [struct rhltable exist])
 	])
 ]) # LIBCFS_RHLTABLE
-
-#
-# LIBCFS_STACKTRACE_OPS
-#
-# Kernel version 4.8 commit c8fe4609827aedc9c4b45de80e7cdc8ccfa8541b
-# removed both struct stacktrace_ops and dump_trace() function
-#
-AC_DEFUN([LIBCFS_SRC_STACKTRACE_OPS], [
-	LB2_LINUX_TEST_SRC([stacktrace_ops], [
-		struct task_struct;
-		struct pt_regs;
-		#include <asm/stacktrace.h>
-	],[
-		struct stacktrace_ops ops;
-		ops.stack = NULL;
-	])
-])
-AC_DEFUN([LIBCFS_STACKTRACE_OPS], [
-LB2_MSG_LINUX_TEST_RESULT([if 'struct stacktrace_ops' exists],
-	[stacktrace_ops], [
-		AC_DEFINE(HAVE_STACKTRACE_OPS, 1,
-			[struct stacktrace_ops exists])
-	])
-]) # LIBCFS_STACKTRACE_OPS
 
 #
 # LIBCFS_RHASHTABLE_WALK_ENTER
@@ -1397,24 +1351,6 @@ AC_DEFUN([LIBCFS_DEFINE_TIMER], [
 			[DEFINE_TIMER uses only 2 arguements])
 	])
 ]) # LIBCFS_DEFINE_TIMER
-
-#
-# LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
-#
-# Kernel 2.6.27 commit 8594698ebddeef5443b7da8258ae33b3eaca61d5
-# exported save_stack_trace_tsk for x86.
-# Kernel 2.6.27 commit 01f4b8b8b8db09b88be7df7e51192e4e678b69d3
-# exported save_stack_trace_tsk for powerpc
-# Kernel 4.13 commit e27c7fa015d61c8be6a2c32b2144aad2ae6ec975
-# exported save_stack_trace_tsk for arm64
-# Kernel 4.14 commit 9a3dc3186fc3795e076a4122da9e0258651a9631
-# exported save_stack_trace_tsk for arm
-#
-AC_DEFUN([LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK], [
-LB_CHECK_EXPORT([save_stack_trace_tsk], [arch/$SUBARCH/kernel/stacktrace.c],
-	[AC_DEFINE(HAVE_SAVE_STACK_TRACE_TSK, 1,
-		[save_stack_trace_tsk is exported])])
-]) # LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
 
 #
 # LIBCFS_LOCKDEP_IS_HELD
@@ -2578,7 +2514,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_RHASHTABLE_REPLACE
 	# 4.6
 	LIBCFS_SRC_BROKEN_HASH_64
-	LIBCFS_SRC_STACKTRACE_OPS_ADDRESS_RETURN_INT
 	LIBCFS_SRC_GET_USER_PAGES_6ARG
 	LIBCFS_SRC_STRINGHASH
 	# 4.7
@@ -2734,7 +2669,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_RHASHTABLE_REPLACE
 	# 4.6
 	LIBCFS_BROKEN_HASH_64
-	LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 	LIBCFS_GET_USER_PAGES_6ARG
 	LIBCFS_STRINGHASH
 	# 4.7
@@ -2854,8 +2788,6 @@ LIBCFS_CONFIG_PANIC_DUMPLOG
 
 # 4.6 - Export Check
 LIBCFS_EXPORT_KSET_FIND_OBJ
-# 4.13 - Export Check
-LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
 # 5.0 - Export Check
 LIBCFS_GENRADIX
 # 5.7 - Export Check
