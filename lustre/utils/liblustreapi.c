@@ -5116,6 +5116,15 @@ static int printf_format_lustre(char *seq, char *buffer, size_t size,
 	 * and dirs, so handle all of those here.
 	 */
 	switch (*seq) {
+	case 'a': /* file attributes */
+		longopt = false;
+		fallthrough;
+	case 'A':
+		lstx = &param->fp_lmd->lmd_stx;
+
+		*wrote = printf_format_file_attributes(buffer, size, lstx,
+						       longopt);
+		goto format_done;
 	case 'F':
 		err = llapi_path2fid(path, &fid);
 		if (err) {
@@ -5127,15 +5136,6 @@ static int printf_format_lustre(char *seq, char *buffer, size_t size,
 		goto format_done;
 	case 'P':
 		*wrote = snprintf(buffer, size, "%u", projid);
-		goto format_done;
-	case 'a': /* file attributes */
-		longopt = false;
-		fallthrough;
-	case 'A':
-		lstx = &param->fp_lmd->lmd_stx;
-
-		*wrote = printf_format_file_attributes(buffer, size, lstx,
-						       longopt);
 		goto format_done;
 	}
 
@@ -5470,7 +5470,7 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 	case 'M':	/* file access mode */
 		*wrote = snprintf_access_mode(buffer, size, mode);
 		break;
-	case 'n':	/* number of links */
+	case 'n':	/* number of hard links */
 		*wrote = snprintf(buffer, size, "%u",
 				  param->fp_lmd->lmd_stx.stx_nlink);
 		break;

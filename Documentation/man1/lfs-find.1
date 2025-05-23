@@ -1,4 +1,4 @@
-.TH LFS-FIND 1 2024-08-15" Lustre "Lustre User Utilities"
+.TH LFS-FIND 1 2025-05-23" Lustre "Lustre User Utilities"
 .SH NAME
 lfs-find \- Lustre client utility to list files with specific attributes
 .SH SYNOPSIS
@@ -201,11 +201,11 @@ the margin of error is based on the smallest unit used, so
 has a margin of error of one day, while
 .B -atime 72h
 has a margin of error of one hour. If both
-.BI "-atime +" older
+.BI "-atime +" OLDER
 and
-.BI "-atime -" newer
+.BI "-atime -" NEWER
 are used, then files with atime within the range
-.IR older - newer
+.IR OLDER - NEWER
 are matched.
 .TP
 .BR --attrs
@@ -223,9 +223,9 @@ Blocks allocated by the file is
 (bytes),
 .BR K ibi-,
 .BR M ebi-,
-.BR G Ribi-,
-.BR T Rebi-,
-.BR P Rebi-,
+.BR G ibi-,
+.BR T ebi-,
+.BR P ebi-,
 or
 .BR E bi-bytes
 if that suffix is given.
@@ -293,7 +293,7 @@ The file has component start offset
 .TP
 .BR --foreign
 File has a foreign (non-Lustre/free format) layout and is of the given
-.IR type ,
+.IR TYPE ,
 if specified. Presently only
 .B none
 or
@@ -301,10 +301,14 @@ or
 are defined types, though 32-bit numeric types can also be used.
 .TP
 .BR -g ", " --gid
-File has specified numeric group ID.
+File has specified numeric group ID
+.IR GID .
 .TP
 .BR -G ", " --group
-File belongs to specified group, numeric group ID allowed.
+File belongs to specified
+.IR GROUPNAME ,
+or numeric group
+.IR GID .
 .TP
 .BR -h ", " --help
 Print usage message.
@@ -327,7 +331,13 @@ Files that have the first data component on an MDT.
 Use file size and blocks from MDT, if available, to avoid extra RPCs.
 .TP
 .BR --ls
-Print files in a format similar to 'ls -l', showing the inode number, allocated blocks, permissions, link count, owner, group, size, file type, and path. This is equivalent to using --printf with the format string "%i\t%k\t%M\t%n\t%u\t%g\t%s\t%t\t%p\n".
+Print files in a format similar to
+.RB ' "ls -l" ',
+showing the inode number, allocated blocks, permissions, link count,
+owner, group, size, file type, and path.
+This is equivalent to specifying the
+.B \'--printf '%i\\\\t%k\\\\t%M\\\\t%n\\\\t%u\\\\t%g\\\\t%s\\\\t%t\\\\t%p\\\\n'
+option.
 .TP
 .BR --links
 File has
@@ -499,7 +509,7 @@ are set, this test matches any file.
 .TP
 .BR --pool
 Layout was created with the specified
-.I pool
+.I POOL
 name. For composite files, this may match the pool of any component.
 .BR -P ", " --print
 Prints the file or directory name to standard output if it matches
@@ -561,7 +571,10 @@ File\'s groupname.
 File\'s numeric group ID.
 .TP
 .B %i
-Inode number.
+File\'s inode number in decimal.
+.TP
+.B %k
+The amount of storage space allocated for this file in 1K blocks.
 .TP
 .B %m
 File permission bits (in octal).
@@ -573,7 +586,7 @@ File permissions (rwx format)
 Number of hard links to file.
 .TP
 .B %p
-File's name.
+File's pathname name.
 .TP
 .B %s
 File size in bytes.
@@ -614,8 +627,8 @@ unknown attributes.
 .RE
 .TP
 .B %Lc
-File\'s stripe count. For a composite file, this is the stripe count of the last
-instantiated component.
+File or directory stripe count. For a composite file,
+this is the stripe count of the last instantiated component.
 .TP
 .B %LF
 File Identifier (FID) associated with the file.
@@ -655,19 +668,19 @@ File size is
 .BR c hars
 (bytes),
 .BR K ibi-,
-.BR M Rebi-,
-.BR G Ribi-,
-.BR T Rebi-,
-.BR P Rebi-,
+.BR M ebi-,
+.BR G ibi-,
+.BR T ebi-,
+.BR P ebi-,
 or
-.BR E Rbi-bytes
+.BR E bi-bytes
 if a suffix is given.
 .TP
 .BR -k ", " --skip
 Skip
 .I PERCENT
-of the total that match the other filters. This is
-useful together with
+of the total files that match the other filters.
+This is useful together with
 .BR lfs-migrate (1)
 to allow processing only a fraction of the files to rebalance files when new
 OSTs are added to the filesystem.
@@ -692,32 +705,32 @@ are multiple OSTs that are being replaced.
 Stripe size is
 .I N
 bytes, or
-.BR K Ribi-,
-.BR M Rebi-,
-.BR G Ribi-,
-.BR T Rebi-,
-.BR P Rebi-,
+.BR K ibi-,
+.BR M ebi-,
+.BR G ibi-,
+.BR T ebi-,
+.BR P ebi-,
 or
-.BR E Rbi-abytes
+.BR E bi-abytes
 if a suffix is given. For composite files,
 this matches the stripe size of the last initialized non-extension component.
 .TP
 .BR -z ", " --extension-size ", " --ext-size
 Extension size is
 .I N bytes, or
-.BR K Ribi-,
-.BR M Rebi-,
-.BR G Ribi-,
-.BR T Rebi-,
-.BR P Rebi-,
+.BR K ibi-,
+.BR M ebi-,
+.BR G ibi-,
+.BR T ebi-,
+.BR P ebi-,
 or
-.BR E Rbi-abytes
+.BR E bi-bytes
 if a suffix is given.
 For composite files, this matches the extension size of any extension component.
 .TP
 .BR -t ", " --type
 File has type:
-.BR b Rlock,
+.BR b lock,
 .BR c haracter,
 .BR d irectory,
 .BR f ile,
@@ -727,12 +740,16 @@ or
 .BR s ocket.
 .TP
 .BR -u ", " --uid
-File has specified numeric user ID.
+File has specified numeric user ID
+.IR UID .
 .TP
 .BR -U ", " --user
-File owned by specified user, numeric user ID also allowed.
+File owned by specified
+.IR USERNAME ,
+or numeric user
+.IR UID .
 .TP
-.B --xattr \fINAME\fR[\fB=\fIVALUE\fR]
+.BI --xattr NAME\fR[ = VALUE \fR]
 File has an extended attribute with name matching the regular expression
 .RB ( regex (7))
 .IR NAME ,
@@ -785,102 +802,102 @@ are specified does not affect how the files are matched.
 .SH EXAMPLES
 Efficiently lists all files in a given directory and its subdirectories,
 without fetching any file attributes:
-.RS
 .EX
+.RS
 .B # lfs find /mnt/lustre
-.EE
 .RE
+.EE
 .PP
 Prints a formatted find string, listing the username, access mode and inode
-number.
-.RS
+number:
 .EX
+.RS
 .B # lfs find /mnt/lustre -printf "%u %M %i \n"
-.EE
 .RE
+.EE
 .PP
 Recursively list all regular files in given directory more than 30 days old:
-.RS
 .EX
+.RS
 .B # lfs find /mnt/lustre -mtime +30 -type f -print
-.EE
 .RE
+.EE
 .PP
 Recursively find all files in
 .B test
 that have objects on OST0002 or OST0003 and migrate them to other OSTs. See
 .BR lfs_migrate (1)
 for more details:
-.RS
 .EX
+.RS
 .B # lfs find /mnt/lustre/test -o OST0002,OST0003 -print0 | lfs_migrate -y
-.EE
 .RE
+.EE
 .PP
 Recursively list all files ending with
 .B .mpg
 that have more than 3 components:
-.RS
 .EX
+.RS
 .B # lfs find -name "*.mpg" --component-count +3 /mnt/lustre
-.EE
 .RE
+.EE
 .PP
 Recursively list all files that have at least one component with both 'init'
 and 'prefer' flags set, and doesn't have flag 'stale' set:
-.RS
 .EX
+.RS
 .B # lfs find --component-flags=init,prefer,^stale /mnt/lustre
-.EE
 .RE
+.EE
 .PP
 Recursively list all mirrored files that have more than 2 mirrors:
-.RS
 .EX
+.RS
 .B # lfs find --mirror-count +2 /mnt/lustre
-.EE
 .RE
+.EE
 .PP
 Recursively list all out-of-sync mirrored files:
-.RS
 .EX
+.RS
 .B # lfs find ! --mirror-state=ro /mnt/lustre
-.EE
 .RE
+.EE
 .PP
 Recursively list all but foreign files/dirs of
 .B symlink
 type:
-.RS
 .EX
+.RS
 .B # lfs find ! --foreign=symlink /mnt/lustre
-.EE
 .RE
+.EE
 .PP
 Recursively list all files with the specified "user.job" extended attribute:
-.RS
 .EX
+.RS
 .B # lfs find -xattr user.job=202310.* /mnt/lustre
-.EE
 .RE
+.EE
 .PP
 Recursively list all files in /var/www that have any SELinux extended attribute,
 but that do NOT have an SELinux extended attribute with a value containing
 "httpd":
-.RS
 .EX
+.RS
 .B # lfs find -xattr security.selinux ! -xattr security.selinux=.*httpd.* \
 /var/www
-.EE
 .RE
+.EE
 .PP
 Recursively list all files in a directory with detailed information in a format
 similar to 'ls -l':
-.RS
 .EX
+.RS
 .B # lfs find /mnt/lustre --ls
-.EE
 .RE
+.EE
 .SH AVAILABILITY
 .B lfs find
 is part of the
