@@ -17,7 +17,6 @@ SUBDIRS := @LDISKFS_SUBDIR@ \
 	lib \
 	libcfs \
 	lnet \
-	lustre/include \
 	lustre/utils \
 	lustre/tests \
 	lustre/scripts \
@@ -29,7 +28,6 @@ DIST_SUBDIRS := ldiskfs \
 	lib \
 	libcfs \
 	lnet \
-	lustre/include \
 	lustre/utils \
 	lustre/tests \
 	lustre/scripts \
@@ -38,7 +36,28 @@ DIST_SUBDIRS := ldiskfs \
 
 AUTOMAKE_OPTIONS = foreign
 
+UAPI_LUSTRE_EXCLUDE =
+if !SERVER
+UAPI_LUSTRE_EXCLUDE += lustre_access_log.h lustre_barrier_user.h \
+	lustre_disk.h lustre_lfsck_user.h lustre_log_user.h
+endif
+
 install-data-local:
+	for fname in $$(find lustre/include/lustre -type f -name '*.h'); do \
+		target=$$(echo $${fname} | sed 's:^lustre/include/::g'); \
+		$(INSTALL) -D -m 0644 $${fname} $(DESTDIR)$(includedir)/$${target}; \
+	done
+	for fname in $$(find lustre/include/uapi/linux/lustre -type f -name '*.h'); do \
+		base=$$(basename $${fname}); \
+		skip=false; \
+		for s in $(UAPI_LUSTRE_EXCLUDE); do \
+			if test "$$base" = "$$s"; then skip=true; break; fi; \
+		done; \
+		if ! $$skip; then \
+			target=$$(echo $${fname} | sed 's:^lustre/include/uapi/::g'); \
+			$(INSTALL) -D -m 0644 $${fname} $(DESTDIR)$(includedir)/$${target}; \
+		fi; \
+	done
 if MODULES
 	$(MKDIR_P) $(DESTDIR)$(modulefsdir)
 	for ko in $$(find lustre/ ldiskfs/ -name '*.ko' 2>/dev/null); do \
@@ -194,6 +213,8 @@ undef.h: config.h.in
 
 dist-hook: undef.h
 	find include/ -type f \( -name "*.h" \) \
+		-exec cp --parents {} $(distdir) \;
+	find lustre/include/ -type f \( -name "*.h" \) \
 		-exec cp --parents {} $(distdir) \;
 	find lustre_compat/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
 		-exec cp --parents {} $(distdir) \;
