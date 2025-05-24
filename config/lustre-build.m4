@@ -251,11 +251,15 @@ AC_MSG_RESULT([$enable_utils])
 # Build LNet Unit Test Framework?
 #
 AC_DEFUN([LB_CONFIG_LUTF], [
-AX_PYTHON_DEVEL()
+# Python development libs are optional, disable LUTF is not available
+# if you have python 2 and python3 and python defaults to 2 you can enable
+# python3 here by setting PYTHON_VERSION=3 before calling configure, example:
+#  $ PYTHON_VERSION=3 ./configure [options]
+AX_PYTHON_DEVEL([>= '3.6'], [true])
 AS_IF([test "x$enable_dist" != xno], [
 	enable_lutf="yes"
 ], [
-  AS_IF([test "x$PYTHON_VERSION_CHECK" = xno], [
+  AS_IF([test "x$ax_python_devel_found" = xno], [
 	enable_lutf="no"
   ], [
 	AX_PKG_SWIG(2.0, [ enable_lutf="yes" ],
