@@ -1543,7 +1543,7 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 		 */
 		result = cl_sync_file_range(inode, offset,
 					    offset + PAGE_SIZE - 1,
-					    CL_FSYNC_LOCAL, 1);
+					    CL_FSYNC_LOCAL, 1, IO_PRIO_NORMAL);
 		if (result > 0) {
 			/* May have written more than one page. decreasing this
 			 * page because the caller will count it.
@@ -1570,6 +1570,7 @@ out:
 int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 {
 	struct inode *inode = mapping->host;
+	enum cl_io_priority prio = IO_PRIO_NORMAL;
 	loff_t start;
 	loff_t end;
 	enum cl_fsync_mode mode;
@@ -1611,8 +1612,11 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 		wb = inode_to_wb(inode);
 		if (wbc->for_background ||
 		    (wb->start_all_reason == WB_REASON_VMSCAN &&
-		     test_bit(WB_start_all, &wb->state)))
+		     test_bit(WB_start_all, &wb->state))) {
 			mode = CL_FSYNC_RECLAIM;
+			if (wb->dirty_exceeded)
+				prio = IO_PRIO_DIRTY_EXCEEDED;
+		}
 		spin_unlock(&inode->i_lock);
 #else
 		/*
@@ -1634,7 +1638,7 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	 * inside the IO context of write, which will cause deadlock at
 	 * layout_conf since it waits for active IOs to complete.
 	 */
-	result = cl_sync_file_range(inode, start, end, mode, 1);
+	result = cl_sync_file_range(inode, start, end, mode, 1, prio);
 	if (result > 0) {
 		wbc->nr_to_write -= result;
 		result = 0;

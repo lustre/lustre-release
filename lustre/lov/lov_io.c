@@ -758,6 +758,7 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 		io->u.ci_fsync.fi_end = end;
 		io->u.ci_fsync.fi_fid = parent->u.ci_fsync.fi_fid;
 		io->u.ci_fsync.fi_mode = parent->u.ci_fsync.fi_mode;
+		io->u.ci_fsync.fi_prio = parent->u.ci_fsync.fi_prio;
 		break;
 	}
 	case CIT_READ:
@@ -1445,10 +1446,11 @@ static int lov_io_submit(const struct lu_env *env,
 static int lov_io_commit_async(const struct lu_env *env,
 			       const struct cl_io_slice *ios,
 			       struct cl_page_list *queue, int from, int to,
-			       cl_commit_cbt cb)
+			       cl_commit_cbt cb, enum cl_io_priority prio)
 {
 	struct cl_page_list *plist = &lov_env_info(env)->lti_plist;
 	struct lov_io *lio = cl2lov_io(env, ios);
+	bool hp = cl_io_high_prio(prio);
 	struct lov_io_sub *sub;
 	struct cl_page *page;
 	int rc = 0;
@@ -1463,7 +1465,7 @@ static int lov_io_commit_async(const struct lu_env *env,
 		LASSERT(!IS_ERR(sub));
 		LASSERT(sub == &lio->lis_single_subio);
 		rc = cl_io_commit_async(sub->sub_env, &sub->sub_io, queue,
-					from, to, cb);
+					from, to, cb, prio);
 		RETURN(rc);
 	}
 
@@ -1493,7 +1495,8 @@ static int lov_io_commit_async(const struct lu_env *env,
 		sub = lov_sub_get(env, lio, index);
 		if (!IS_ERR(sub)) {
 			rc = cl_io_commit_async(sub->sub_env, &sub->sub_io,
-						plist, from, stripe_to, cb);
+						plist, from, stripe_to, cb,
+						prio);
 		} else {
 			rc = PTR_ERR(sub);
 			break;
@@ -1504,9 +1507,14 @@ static int lov_io_commit_async(const struct lu_env *env,
 
 		from = 0;
 
-		if (lov_comp_entry(index) !=
+		if (!hp && lov_comp_entry(index) !=
 		    lov_comp_entry(page->cp_lov_index))
-			cl_io_extent_release(sub->sub_env, &sub->sub_io);
+			cl_io_extent_release(sub->sub_env, &sub->sub_io, prio);
+	}
+
+	if (rc == 0 && hp) {
+		list_for_each_entry(sub, &lio->lis_subios, sub_list)
+			cl_io_extent_release(sub->sub_env, &sub->sub_io, prio);
 	}
 
 	/* for error case, add the page back into the qin list */

@@ -422,7 +422,7 @@ void osc_page_touch_at(const struct lu_env *env, struct cl_object *obj,
 int osc_io_commit_async(const struct lu_env *env,
 			const struct cl_io_slice *ios,
 			struct cl_page_list *qin, int from, int to,
-			cl_commit_cbt cb)
+			cl_commit_cbt cb, enum cl_io_priority prio)
 {
 	struct cl_io *io = ios->cis_io;
 	struct osc_io *oio = cl2osc_io(env, ios);
@@ -500,8 +500,8 @@ int osc_io_commit_async(const struct lu_env *env,
 	/* for sync write, kernel will wait for this page to be flushed before
 	 * osc_io_end() is called, so release it earlier.
 	 * for mkwrite(), it's known there is no further pages. */
-	if (cl_io_is_sync_write(io) && oio->oi_active != NULL) {
-		osc_extent_release(env, oio->oi_active);
+	if (cl_io_is_sync_write(io) && oio->oi_active) {
+		osc_extent_release(env, oio->oi_active, prio);
 		oio->oi_active = NULL;
 	}
 
@@ -511,12 +511,13 @@ int osc_io_commit_async(const struct lu_env *env,
 EXPORT_SYMBOL(osc_io_commit_async);
 
 void osc_io_extent_release(const struct lu_env *env,
-			   const struct cl_io_slice *ios)
+			   const struct cl_io_slice *ios,
+			   enum cl_io_priority prio)
 {
 	struct osc_io *oio = cl2osc_io(env, ios);
 
 	if (oio->oi_active != NULL) {
-		osc_extent_release(env, oio->oi_active);
+		osc_extent_release(env, oio->oi_active, prio);
 		oio->oi_active = NULL;
 	}
 }
@@ -686,7 +687,8 @@ int osc_punch_start(const struct lu_env *env, struct cl_io *io,
 	int rc;
 
 	ENTRY;
-	rc = osc_cache_writeback_range(env, osc, pg_start, pg_end, 1, 0);
+	rc = osc_cache_writeback_range(env, osc, pg_start, pg_end, 1, 0,
+				       IO_PRIO_NORMAL);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -1106,9 +1108,16 @@ static int osc_io_fsync_start(const struct lu_env *env,
 	if (fio->fi_mode == CL_FSYNC_RECLAIM) {
 		struct client_obd *cli = osc_cli(osc);
 
-		if (!atomic_long_read(&cli->cl_unstable_count)) {
-			/* Stop flush when there are no unstable pages? */
-			CDEBUG(D_CACHE, "unstable count is zero\n");
+		if (!atomic_read(&osc->oo_nr_ios) &&
+		    !atomic_read(&osc->oo_nr_writes) &&
+		    !atomic_long_read(&cli->cl_unstable_count)) {
+			/*
+			 * No active I/O, no dirty pages needing to write and
+			 * no unstable pages needing to commit.
+			 */
+			CDEBUG(D_CACHE,
+			       "%s: unstable/dirty counts are both zero\n",
+			       cli_name(cli));
 			RETURN(0);
 		}
 	}
@@ -1117,7 +1126,8 @@ static int osc_io_fsync_start(const struct lu_env *env,
 		end = CL_PAGE_EOF;
 
 	result = osc_cache_writeback_range(env, osc, start, end, 0,
-					   fio->fi_mode == CL_FSYNC_DISCARD);
+					   fio->fi_mode == CL_FSYNC_DISCARD,
+					   fio->fi_prio);
 	if (result < 0 && fio->fi_mode == CL_FSYNC_DISCARD) {
 		CDEBUG(D_CACHE,
 		       "%s: ignore error %d on discarding "DFID":[%lu-%lu]\n",
@@ -1258,7 +1268,7 @@ void osc_io_end(const struct lu_env *env, const struct cl_io_slice *slice)
 	struct osc_io *oio = cl2osc_io(env, slice);
 
 	if (oio->oi_active) {
-		osc_extent_release(env, oio->oi_active);
+		osc_extent_release(env, oio->oi_active, IO_PRIO_NORMAL);
 		oio->oi_active = NULL;
 	}
 }

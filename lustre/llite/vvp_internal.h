@@ -247,7 +247,8 @@ struct vvp_object *cl_inode2vvp(struct inode *inode);
 
 int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 		struct cl_io *io);
-int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io);
+int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io,
+			enum cl_io_priority prio);
 int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 		  struct cl_page *page, pgoff_t index);
 struct lu_object *vvp_object_alloc(const struct lu_env *env,

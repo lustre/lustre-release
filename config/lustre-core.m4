@@ -4406,6 +4406,29 @@ AC_DEFUN([LC_HAVE_FOLIO_BATCH_REINIT], [
 ]) # LC_HAVE_FOLIO_BATCH_REINIT
 
 #
+# LC_HAVE_INODE_ATTACH_WB_FOLIO
+#
+# linux kernel v6.2-rc4 commit: 9cfb816b1c6c99f4b3c1d4a0fb096162cd17ec71
+# mm/fs: convert inode_attach_wb() to take a folio
+#
+AC_DEFUN([LC_SRC_HAVE_INODE_ATTACH_WB_FOLIO], [
+	LB2_LINUX_TEST_SRC([inode_attach_wb_folio_arg], [
+		#include <linux/writeback.h>
+	],[
+		struct folio *folio = NULL;
+
+		inode_attach_wb(NULL, folio);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_INODE_ATTACH_WB_FOLIO], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'inode_attach_wb()' takes folio],
+	[inode_attach_wb_folio_arg], [
+		AC_DEFINE(HAVE_INODE_ATTACH_WB_FOLIO, 1,
+			['inode_attach_wb()' takes folio])
+	])
+]) # LC_HAVE_INODE_ATTACH_WB_FOLIO
+
+#
 # LC_HAVE_IOV_ITER_IOVEC
 #
 # linux kernel v6.3-rc4-32-g6eb203e1a868
@@ -5399,6 +5422,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 	LC_SRC_HAVE_U64_CAPABILITY
 	LC_SRC_HAVE_FOLIO_BATCH_REINIT
+	LC_SRC_HAVE_INODE_ATTACH_WB_FOLIO
 
 	# 6.4
 	LC_SRC_HAVE_IOV_ITER_IOVEC
@@ -5737,6 +5761,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 	LC_HAVE_U64_CAPABILITY
 	LC_HAVE_FOLIO_BATCH_REINIT
+	LC_HAVE_INODE_ATTACH_WB_FOLIO
 
 	# 6.4
 	LC_HAVE_IOV_ITER_IOVEC

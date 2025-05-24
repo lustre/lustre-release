@@ -256,7 +256,7 @@ static int mdc_lock_flush(const struct lu_env *env, struct osc_object *obj,
 
 	if (mode == CLM_WRITE) {
 		result = osc_cache_writeback_range(env, obj, start, end, 1,
-						   discard);
+						   discard, IO_PRIO_NORMAL);
 		CDEBUG(D_CACHE, "object %p: [%lu -> %lu] %d pages were %s.\n",
 		       obj, start, end, result,
 		       discard ? "discarded" : "written back");
@@ -1182,9 +1182,16 @@ static int mdc_io_fsync_start(const struct lu_env *env,
 	if (fio->fi_mode == CL_FSYNC_RECLAIM) {
 		struct client_obd *cli = osc_cli(osc);
 
-		if (!atomic_long_read(&cli->cl_unstable_count)) {
-			/* Stop flush when there are no unstable pages? */
-			CDEBUG(D_CACHE, "unstable count is zero\n");
+		if (!atomic_read(&osc->oo_nr_ios) &&
+		    !atomic_read(&osc->oo_nr_writes) &&
+		    !atomic_long_read(&cli->cl_unstable_count)) {
+			/*
+			 * No active IO, no dirty pages needing to write and no
+			 * unstable pages needing to commit.
+			 */
+			CDEBUG(D_CACHE,
+			       "%s: dirty/unstable counts are both zero\n",
+			       cli_name(cli));
 			RETURN(0);
 		}
 	}
@@ -1193,7 +1200,8 @@ static int mdc_io_fsync_start(const struct lu_env *env,
 	 * possible range despite of supplied start/end values.
 	 */
 	result = osc_cache_writeback_range(env, osc, 0, CL_PAGE_EOF, 0,
-					   fio->fi_mode == CL_FSYNC_DISCARD);
+					   fio->fi_mode == CL_FSYNC_DISCARD,
+					   fio->fi_prio);
 	if (result > 0) {
 		fio->fi_nr_written += result;
 		result = 0;

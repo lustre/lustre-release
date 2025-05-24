@@ -196,8 +196,7 @@ static int osc_extent_sanity_check0(struct osc_extent *ext,
 			GOTO(out, rc = 65);
 		fallthrough;
 	default:
-		if (atomic_read(&ext->oe_users) > 0)
-			GOTO(out, rc = 70);
+		break;
 	}
 
 	if (ext->oe_max_end < ext->oe_end || ext->oe_end < ext->oe_start)
@@ -564,10 +563,13 @@ static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 /**
  * Drop user count of osc_extent, and unplug IO asynchronously.
  */
-void osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
+void osc_extent_release(const struct lu_env *env, struct osc_extent *ext,
+			enum cl_io_priority prio)
 {
 	struct osc_object *obj = ext->oe_obj;
 	struct client_obd *cli = osc_cli(obj);
+	bool hp = cl_io_high_prio(prio);
+
 	ENTRY;
 
 	LASSERT(atomic_read(&ext->oe_users) > 0);
@@ -575,15 +577,26 @@ void osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 	LASSERT(ext->oe_grants > 0);
 
 	if (atomic_dec_and_lock(&ext->oe_users, &obj->oo_lock)) {
-		LASSERT(ext->oe_state == OES_ACTIVE);
 		if (ext->oe_trunc_pending) {
-			/* a truncate process is waiting for this extent.
+			/*
+			 * A truncate process is waiting for this extent.
 			 * This may happen due to a race, check
-			 * osc_cache_truncate_start(). */
+			 * osc_cache_truncate_start().
+			 */
+			if (ext->oe_state != OES_ACTIVE) {
+				int rc;
+
+				osc_object_unlock(obj);
+				rc = osc_extent_wait(env, ext, OES_INV);
+				if (rc < 0)
+					OSC_EXTENT_DUMP(D_ERROR, ext,
+							"error: %d.\n", rc);
+				osc_object_lock(obj);
+			}
 			osc_extent_state_set(ext, OES_TRUNC);
 			ext->oe_trunc_pending = 0;
 			osc_object_unlock(obj);
-		} else {
+		} else if (ext->oe_state == OES_ACTIVE) {
 			int grant = 0;
 
 			osc_extent_state_set(ext, OES_CACHE);
@@ -596,17 +609,16 @@ void osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 			if (osc_extent_merge(env, ext, next_extent(ext)) == 0)
 				grant += cli->cl_grant_extent_tax;
 
-			if (!ext->oe_rw && ext->oe_dlmlock) {
-				bool hp;
-
+			if (!hp && !ext->oe_rw && ext->oe_dlmlock) {
 				lock_res_and_lock(ext->oe_dlmlock);
 				hp = ldlm_is_cbpending(ext->oe_dlmlock);
 				unlock_res_and_lock(ext->oe_dlmlock);
-
-				/* HP extent should be written ASAP. */
-				if (hp)
-					ext->oe_hp = 1;
 			}
+
+
+			/* HP extent should be written ASAP. */
+			if (hp)
+				ext->oe_hp = 1;
 
 			if (ext->oe_hp)
 				list_move_tail(&ext->oe_link,
@@ -621,9 +633,14 @@ void osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 			osc_object_unlock(obj);
 			if (grant > 0)
 				osc_unreserve_grant(cli, 0, grant);
+		} else {
+			osc_object_unlock(obj);
 		}
 
-		osc_io_unplug_async(env, cli, obj);
+		if (unlikely(cl_io_high_prio(prio)))
+			osc_io_unplug(env, cli, obj);
+		else
+			osc_io_unplug_async(env, cli, obj);
 	}
 	osc_extent_put(env, ext);
 
@@ -916,7 +933,7 @@ static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 	}
 	osc_object_unlock(obj);
 	if (rc == 1)
-		osc_extent_release(env, ext);
+		osc_extent_release(env, ext, IO_PRIO_NORMAL);
 
 	/* wait for the extent until its state becomes @state */
 	rc = wait_event_idle_timeout(ext->oe_waitq,
@@ -1160,6 +1177,9 @@ static int osc_extent_expand(struct osc_extent *ext, pgoff_t index,
 
 	LASSERT(ext->oe_max_end >= index && ext->oe_start <= index);
 	osc_object_lock(obj);
+	if (ext->oe_state != OES_ACTIVE)
+		GOTO(out, rc = -ESTALE);
+
 	LASSERT(sanity_check_nolock(ext) == 0);
 	end_chunk = ext->oe_end >> ppc_bits;
 	if (chunk > end_chunk + 1)
@@ -2342,7 +2362,10 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	 * 2. otherwise, a new extent will be allocated. */
 
 	ext = oio->oi_active;
-	if (ext != NULL && ext->oe_start <= index && ext->oe_max_end >= index) {
+	if (ext != NULL && ext->oe_state != OES_ACTIVE) {
+		need_release = 1;
+	} else if (ext != NULL && ext->oe_start <= index &&
+		   ext->oe_max_end >= index) {
 		/* one chunk plus extent overhead must be enough to write this
 		 * page */
 		grants = (1 << cli->cl_chunkbits) + cli->cl_grant_extent_tax;
@@ -2376,7 +2399,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		need_release = 1;
 	}
 	if (need_release) {
-		osc_extent_release(env, ext);
+		osc_extent_release(env, ext, IO_PRIO_NORMAL);
 		oio->oi_active = NULL;
 		ext = NULL;
 	}
@@ -2407,6 +2430,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 				grants = tmp;
 		}
 
+restart_find:
 		tmp = grants;
 		if (rc == 0) {
 			ext = osc_extent_find(env, osc, index, &tmp);
@@ -2430,6 +2454,28 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		LASSERT((oap->oap_brw_flags & OBD_BRW_FROM_GRANT) != 0);
 
 		osc_object_lock(osc);
+		if (ext->oe_state != OES_ACTIVE) {
+			if (ext->oe_state == OES_CACHE) {
+				osc_extent_state_set(ext, OES_ACTIVE);
+				osc_update_pending(osc, OBD_BRW_WRITE,
+						   -ext->oe_nr_pages);
+				list_del_init(&ext->oe_link);
+			} else {
+				osc_object_unlock(osc);
+				osc_extent_get(ext);
+				osc_extent_release(env, ext, IO_PRIO_NORMAL);
+				oio->oi_active = NULL;
+
+				/* Waiting for IO finished.  */
+				rc = osc_extent_wait(env, ext, OES_INV);
+				osc_extent_put(env, ext);
+				if (rc < 0)
+					RETURN(rc);
+
+				GOTO(restart_find, rc);
+			}
+		}
+
 		if (ext->oe_nr_pages == 0)
 			ext->oe_srvlock = ops->ops_srvlock;
 		else
@@ -3097,14 +3143,18 @@ EXPORT_SYMBOL(osc_cache_wait_range);
  * Return how many pages will be issued, or error code if error occurred.
  */
 int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
-			      pgoff_t start, pgoff_t end, int hp, int discard)
+			      pgoff_t start, pgoff_t end, int hp, int discard,
+			      enum cl_io_priority prio)
 {
 	struct osc_extent *ext;
 	LIST_HEAD(discard_list);
+	bool active_ext_check = false;
 	bool unplug = false;
 	int result = 0;
+
 	ENTRY;
 
+repeat:
 	osc_object_lock(obj);
 	ext = osc_extent_search(obj, start);
 	if (ext == NULL)
@@ -3176,6 +3226,16 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 			 * grants. We do this for the correctness of fsync. */
 			LASSERT(hp == 0 && discard == 0);
 			ext->oe_urgent = 1;
+
+			if (active_ext_check) {
+				osc_extent_state_set(ext, OES_CACHE);
+				list_move_tail(&ext->oe_link,
+					       &obj->oo_urgent_exts);
+				osc_update_pending(obj, OBD_BRW_WRITE,
+						   ext->oe_nr_pages);
+				unplug = true;
+			}
+
 			break;
 		case OES_TRUNC:
 			/* this extent is being truncated, can't do anything
@@ -3223,7 +3283,22 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 			result = rc;
 	}
 
-	OSC_IO_DEBUG(obj, "pageout [%lu, %lu], %d.\n", start, end, result);
+	OSC_IO_DEBUG(obj, "pageout [%lu, %lu] npages %lu: rc=%d.\n",
+		     start, end, obj->oo_npages, result);
+
+	/*
+	 * Try to flush the active I/O extents of the object.
+	 * Otherwise, the user process writing the file may be dirty exceeded
+	 * and waiting endless in balance_dirty_pages().
+	 */
+	if (result == 0 && prio == IO_PRIO_DIRTY_EXCEEDED &&
+	    !active_ext_check && atomic_read(&obj->oo_nr_ios) &&
+	    obj->oo_npages > 0) {
+		osc_extent_tree_dump(D_CACHE, obj);
+		active_ext_check = true;
+		GOTO(repeat, result);
+	}
+
 	RETURN(result);
 }
 EXPORT_SYMBOL(osc_cache_writeback_range);

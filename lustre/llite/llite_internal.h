@@ -1379,7 +1379,8 @@ int ll_read_folio(struct file *file, struct folio *folio);
 int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 			   struct cl_page *page, struct file *file);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
-int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io);
+int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io,
+			enum cl_io_priority prio);
 
 enum lcc_type;
 void ll_cl_add(struct inode *inode, const struct lu_env *env, struct cl_io *io,
@@ -2002,7 +2003,8 @@ dentry_may_statahead(struct inode *dir, struct dentry *dentry)
 }
 
 int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
-		       enum cl_fsync_mode mode, int ignore_layout);
+		       enum cl_fsync_mode mode, int ignore_layout,
+		       enum cl_io_priority prio);
 
 static inline int ll_file_nolock(const struct file *file)
 {

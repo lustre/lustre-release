@@ -631,13 +631,14 @@ EXPORT_SYMBOL(cl_io_lru_reserve);
  * @from: Starting position
  * @to: Ending position
  * @cb: callback function
+ * @prio: I/O priority
  *
  * Returns 0 if all pages committed, or errcode if error occurred.
  * see cl_io_operations::cio_commit_async()
  */
 int cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
 		       struct cl_page_list *queue, int from, int to,
-		       cl_commit_cbt cb)
+		       cl_commit_cbt cb, enum cl_io_priority prio)
 {
 	const struct cl_io_slice *scan;
 	int result = 0;
@@ -647,7 +648,7 @@ int cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
 		if (scan->cis_iop->cio_commit_async == NULL)
 			continue;
 		result = scan->cis_iop->cio_commit_async(env, scan, queue,
-							 from, to, cb);
+							 from, to, cb, prio);
 		if (result != 0)
 			break;
 	}
@@ -655,7 +656,8 @@ int cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(cl_io_commit_async);
 
-void cl_io_extent_release(const struct lu_env *env, struct cl_io *io)
+void cl_io_extent_release(const struct lu_env *env, struct cl_io *io,
+			  enum cl_io_priority prio)
 {
 	const struct cl_io_slice *scan;
 	ENTRY;
@@ -663,7 +665,7 @@ void cl_io_extent_release(const struct lu_env *env, struct cl_io *io)
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->cio_extent_release == NULL)
 			continue;
-		scan->cis_iop->cio_extent_release(env, scan);
+		scan->cis_iop->cio_extent_release(env, scan, prio);
 	}
 	EXIT;
 }

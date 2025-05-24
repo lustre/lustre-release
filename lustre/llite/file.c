@@ -5287,7 +5287,7 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
 		/* flush local cache first if any */
 		cl_sync_file_range(inode, offset, OBD_OBJECT_EOF,
-				   CL_FSYNC_LOCAL, 0);
+				   CL_FSYNC_LOCAL, 0, IO_PRIO_NORMAL);
 
 		retval = ll_lseek(file, offset, origin);
 		if (retval < 0)
@@ -5343,7 +5343,8 @@ static int ll_flush(struct file *file, fl_owner_t id)
  * Return how many pages have been written.
  */
 int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
-		       enum cl_fsync_mode mode, int ignore_layout)
+		       enum cl_fsync_mode mode, int ignore_layout,
+		       enum cl_io_priority prio)
 {
 	struct lu_env *env;
 	struct cl_io *io;
@@ -5373,6 +5374,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	fio->fi_fid = ll_inode2fid(inode);
 	fio->fi_mode = mode;
 	fio->fi_nr_written = 0;
+	fio->fi_prio = prio;
 
 	if (cl_io_init(env, io, CIT_FSYNC, io->ci_obj) == 0)
 		result = cl_io_loop(env, io);
@@ -5451,7 +5453,8 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		err = pcc_fsync(file, start, end, datasync, &cached);
 		if (!cached)
 			err = cl_sync_file_range(inode, start, end,
-						 CL_FSYNC_ALL, 0);
+						 CL_FSYNC_ALL, 0,
+						 IO_PRIO_NORMAL);
 		if (rc == 0 && err < 0)
 			rc = err;
 		if (rc < 0)

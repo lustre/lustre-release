@@ -563,7 +563,8 @@ int osc_cache_truncate_start(const struct lu_env *env, struct osc_object *obj,
 			     __u64 size, struct osc_extent **extp);
 void osc_cache_truncate_end(const struct lu_env *env, struct osc_extent *ext);
 int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
-			      pgoff_t start, pgoff_t end, int hp, int discard);
+			      pgoff_t start, pgoff_t end, int hp, int discard,
+			      enum cl_io_priority prio);
 int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
 			 pgoff_t start, pgoff_t end);
 int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
@@ -645,9 +646,10 @@ int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 int osc_io_commit_async(const struct lu_env *env,
 			const struct cl_io_slice *ios,
 			struct cl_page_list *qin, int from, int to,
-			cl_commit_cbt cb);
+			cl_commit_cbt cb, enum cl_io_priority prio);
 void osc_io_extent_release(const struct lu_env *env,
-			   const struct cl_io_slice *ios);
+			   const struct cl_io_slice *ios,
+			   enum cl_io_priority prio);
 int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios);
 void osc_io_iter_fini(const struct lu_env *env,
 		      const struct cl_io_slice *ios);
@@ -731,6 +733,11 @@ static inline struct obd_export *osc_export(const struct osc_object *obj)
 static inline struct client_obd *osc_cli(const struct osc_object *obj)
 {
 	return &osc_export(obj)->exp_obd->u.cli;
+}
+
+static inline char *cli_name(struct client_obd *cli)
+{
+	return cli->cl_import->imp_obd->obd_name;
 }
 
 static inline struct osc_object *cl2osc(const struct cl_object *obj)

@@ -1428,6 +1428,36 @@ static inline void cl_read_ahead_release(const struct lu_env *env,
 		ra->cra_release(env, ra);
 }
 
+enum cl_io_priority {
+	/* Normal I/O, usually just queue the pages in the client side cache. */
+	IO_PRIO_NORMAL	= 0,
+	/* I/O is urgent and should flush queued pages to OSTs ASAP. */
+	IO_PRIO_URGENT,
+	/* The memcg is under high memory pressure and the user write process
+	 * is dirty exceeded and under rate limiting in balance_dirty_pages().
+	 * It needs to flush dirty pages for the corresponding @wb ASAP.
+	 */
+	IO_PRIO_DIRTY_EXCEEDED,
+	/*
+	 * I/O is urgent and flushing pages are marked with OBD_BRW_SOFT_SYNC
+	 * flag and may trigger a soft sync on OSTs. Thus it can free unstable
+	 * pages much quickly.
+	 */
+	IO_PRIO_SOFT_SYNC,
+	/*
+	 * The system or a certain memcg is under high memory pressure. Need to
+	 * flush dirty pages to OSTs immediately and I/O RPC must wait the write
+	 * transcation commit on OSTs synchronously to release unstable pages.
+	 */
+	IO_PRIO_HARD_SYNC,
+	IO_PRIO_MAX,
+};
+
+static inline bool cl_io_high_prio(enum cl_io_priority prio)
+{
+	return prio >= IO_PRIO_URGENT;
+}
+
 /**
  * Per-layer io operations.
  * \see vvp_io_ops, lov_io_ops, lovsub_io_ops, osc_io_ops
@@ -1540,12 +1570,13 @@ struct cl_io_operations {
 	int  (*cio_commit_async)(const struct lu_env *env,
 				 const struct cl_io_slice *slice,
 				 struct cl_page_list *queue, int from, int to,
-				 cl_commit_cbt cb);
+				 cl_commit_cbt cb, enum cl_io_priority prio);
 	/**
 	 * Release active extent.
 	 */
 	void  (*cio_extent_release)(const struct lu_env *env,
-				    const struct cl_io_slice *slice);
+				    const struct cl_io_slice *slice,
+				    enum cl_io_priority prio);
 	/**
 	 * Decide maximum read ahead extent
 	 *
@@ -1833,13 +1864,14 @@ struct cl_io {
 			struct cl_page *ft_page;
 		} ci_fault;
 		struct cl_fsync_io {
-			loff_t             fi_start;
-			loff_t             fi_end;
+			loff_t			 fi_start;
+			loff_t			 fi_end;
 			/** file system level fid */
-			struct lu_fid     *fi_fid;
-			enum cl_fsync_mode fi_mode;
+			struct lu_fid	 	*fi_fid;
+			enum cl_fsync_mode	 fi_mode;
 			/* how many pages were written/discarded */
-			unsigned int       fi_nr_written;
+			unsigned int		 fi_nr_written;
+			enum cl_io_priority	 fi_prio;
 		} ci_fsync;
 		struct cl_ladvise_io {
 			__u64			 lio_start;
@@ -2389,8 +2421,9 @@ int   cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
 			long timeout);
 int   cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
 			  struct cl_page_list *queue, int from, int to,
-			  cl_commit_cbt cb);
-void  cl_io_extent_release(const struct lu_env *env, struct cl_io *io);
+			  cl_commit_cbt cb, enum cl_io_priority prio);
+void  cl_io_extent_release(const struct lu_env *env, struct cl_io *io,
+			   enum cl_io_priority prio);
 int cl_io_lru_reserve(const struct lu_env *env, struct cl_io *io,
 		      loff_t pos, size_t bytes);
 int   cl_io_read_ahead(const struct lu_env *env, struct cl_io *io,

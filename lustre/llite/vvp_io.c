@@ -1182,7 +1182,8 @@ static bool page_list_sanity_check(struct cl_object *obj,
 }
 
 /* Return how many bytes have queued or written */
-int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
+int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io,
+			enum cl_io_priority prio)
 {
 	struct cl_object *obj = io->ci_obj;
 	struct inode *inode = vvp_object_inode(obj);
@@ -1198,8 +1199,9 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	if (npages == 0)
 		RETURN(0);
 
-	CDEBUG(D_VFSTRACE, "commit async pages: %d, from %d, to %d\n",
-		npages, vio->u.readwrite.vui_from, vio->u.readwrite.vui_to);
+	CDEBUG(D_VFSTRACE, "commit async pages: %d, from %d, to %d prio %d\n",
+		npages, vio->u.readwrite.vui_from, vio->u.readwrite.vui_to,
+		prio);
 
 	LASSERT(page_list_sanity_check(obj, queue));
 
@@ -1207,7 +1209,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	rc = cl_io_commit_async(env, io, queue,
 				vio->u.readwrite.vui_from,
 				vio->u.readwrite.vui_to,
-				write_commit_callback);
+				write_commit_callback, prio);
 	npages -= queue->pl_nr; /* already committed pages */
 	if (npages > 0) {
 		/* calculate how many bytes were written */
@@ -1231,7 +1233,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	LASSERT(ergo(rc == 0, queue->pl_nr == 0));
 
 	/* out of quota, try sync write */
-	if (rc == -EDQUOT && !cl_io_is_mkwrite(io)) {
+	if ((rc == -EDQUOT && !cl_io_is_mkwrite(io)) || prio > IO_PRIO_NORMAL) {
 		struct ll_inode_info *lli = ll_i2info(inode);
 
 		rc = vvp_io_commit_sync(env, io, queue,
@@ -1375,7 +1377,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 	}
 
 	if (result > 0) {
-		result = vvp_io_write_commit(env, io);
+		result = vvp_io_write_commit(env, io, IO_PRIO_NORMAL);
 		/* Simulate short commit */
 		if (CFS_FAULT_CHECK(OBD_FAIL_LLITE_SHORT_COMMIT)) {
 			vio->u.readwrite.vui_written >>= 1;
@@ -1613,7 +1615,8 @@ static int vvp_io_fault_start(const struct lu_env *env,
 			 * still have chance to detect it.
 			 */
 			result = cl_io_commit_async(env, io, plist, 0, to,
-						    mkwrite_commit_callback);
+						    mkwrite_commit_callback,
+						    IO_PRIO_NORMAL);
 			/* Have overquota flag, trying sync write to check
 			 * whether indeed out of quota
 			 */
@@ -1627,7 +1630,8 @@ static int vvp_io_fault_start(const struct lu_env *env,
 					cl_page_list_add(plist, page, true);
 					result = cl_io_commit_async(env, io,
 						plist, 0, to,
-						mkwrite_commit_callback);
+						mkwrite_commit_callback,
+						IO_PRIO_NORMAL);
 					io->ci_noquota = 0;
 				} else {
 					cl_page_put(env, page);

@@ -3265,7 +3265,8 @@ void ll_delete_inode(struct inode *inode)
 		 * unlink, so that file is not opened somewhere else
 		 */
 		cl_sync_file_range(inode, 0, OBD_OBJECT_EOF, inode->i_nlink ?
-				   CL_FSYNC_LOCAL : CL_FSYNC_DISCARD, 1);
+				   CL_FSYNC_LOCAL : CL_FSYNC_DISCARD, 1,
+				   IO_PRIO_NORMAL);
 	}
 
 	ll_truncate_inode_pages_final(inode);

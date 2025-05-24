@@ -781,7 +781,7 @@ again:
 		}
 
 		/* commit pages and then wait for page lock */
-		result = vvp_io_write_commit(env, io);
+		result = vvp_io_write_commit(env, io, IO_PRIO_NORMAL);
 		if (result < 0)
 			GOTO(out, result);
 
@@ -903,6 +903,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 	struct cl_page *page;
 	struct page *vmpage = wbe_folio_page(vmfolio);
 	unsigned from = pos & (PAGE_SIZE - 1);
+	enum cl_io_priority prio = IO_PRIO_NORMAL;
 	bool unplug = false;
 	int result = 0;
 	ENTRY;
@@ -926,6 +927,29 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 	LASSERT(cl_page_is_owned(page, io));
 	if (copied > 0) {
 		struct cl_page_list *plist = &vio->u.readwrite.vui_queue;
+#ifdef SB_I_CGROUPWB
+		struct inode *inode = file_inode(file);
+		struct bdi_writeback *wb;
+
+		spin_lock(&inode->i_lock);
+#ifdef HAVE_INODE_ATTACH_WB_FOLIO
+		inode_attach_wb(inode, page_folio(vmpage));
+#else
+		inode_attach_wb(inode, vmpage);
+#endif
+		wb = inode_to_wb(inode);
+		LASSERTF(wb != NULL, "wb@%pK\n", wb);
+		if (wb->dirty_exceeded) {
+			unplug = true;
+			prio = IO_PRIO_URGENT;
+			CDEBUG(D_IOTRACE, "wb@%pK dirty_ratelimit=%lu balanced_dirty_ratelimit=%lu dirty_exceeded=%d state=%lX last_old_flush=%lu\n",
+			       wb, wb->dirty_ratelimit,
+			       wb->balanced_dirty_ratelimit,
+			       wb->dirty_exceeded, wb->state,
+			       wb->last_old_flush);
+		}
+		spin_unlock(&inode->i_lock);
+#endif
 
 		lcc->lcc_page = NULL; /* page will be queued */
 
@@ -962,7 +986,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 	    io->u.ci_rw.crw_pos + io->u.ci_rw.crw_bytes)
 		unplug = true;
 	if (unplug)
-		result = vvp_io_write_commit(env, io);
+		result = vvp_io_write_commit(env, io, prio);
 
 	if (result < 0)
 		io->ci_result = result;

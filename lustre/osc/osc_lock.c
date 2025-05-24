@@ -349,7 +349,7 @@ static int osc_lock_flush(struct osc_object *obj, pgoff_t start, pgoff_t end,
 
 	if (mode == CLM_WRITE) {
 		rc = osc_cache_writeback_range(env, obj, start, end, 1,
-					       discard);
+					       discard, IO_PRIO_NORMAL);
 		CDEBUG(D_CACHE, "object %p: [%lu -> %lu] %d pages were %s.\n",
 		       obj, start, end, rc,
 		       discard ? "discarded" : "written back");
