@@ -236,19 +236,20 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
+	"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"			\
 	"\t\t[--block|-b] [--non-block|-n]\n"				\
 	"\t\t[--non-direct|-D] [--verbose|-v] FILENAME\n"		\
-	"\t\t[--non-direct|-D] [--verbose|-v]\n"			\
+	"\t\t[--stats-interval SECONDS]\n"				\
 	"\t\t-0|--null|--files-from=LIST_FILE|FILENAME ...\n"
 
 #define SETDIRSTRIPE_USAGE						\
-	"		[--mdt-count|-c stripe_count>\n"		\
-	"		[--help|-h] [--mdt-hash|-H mdt_hash]\n"		\
-	"		[--mdt-index|-i mdt_index[,mdt_index,...]\n"	\
-	"		[--mdt-overcount|-C stripe_count>\n"		\
-	"		[--default|-D] [--mode|-o mode]\n"		\
-	"		[--max-inherit|-X max_inherit]\n"		\
-	"		[--max-inherit-rr max_inherit_rr] <dir>\n"	\
+	"\t\t[--mdt-count|-c stripe_count>\n"				\
+	"\t\t[--help|-h] [--mdt-hash|-H mdt_hash]\n"			\
+	"\t\t[--mdt-index|-i mdt_index[,mdt_index,...]\n"		\
+	"\t\t[--mdt-overcount|-C stripe_count>\n"			\
+	"\t\t[--default|-D] [--mode|-o mode]\n"				\
+	"\t\t[--max-inherit|-X max_inherit]\n"				\
+	"\t\t[--max-inherit-rr max_inherit_rr] <dir>\n"			\
 	"To create dir with a foreign (free format) layout :\n"		\
 	"setdirstripe|mkdir --foreign[=FOREIGN_TYPE] -x|-xattr STRING " \
 	"		[--mode|-o MODE] [--flags HEX] DIRECTORY\n"
@@ -297,7 +298,7 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Extend a mirrored file.\n"
 "Usage: lfs mirror extend [--mirror-count|-N[MIRROR_COUNT]]\n"
 		"\t\t[--no-verify] [--stats|--stats-interval=STATS_INTERVAL]\n"
-		"\t\t[--bandwidth-limit|--W BANDWIDTH]\n"
+		"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"
 		"\t\t[-f VICTIM_FILE]\n"
 		"\t\t" SSM_SETSTRIPE_OPT "]\n"
 		"\t\t-0|--null|--files-from=LIST_FILE|FILENAME ...\n" },
@@ -322,7 +323,7 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
 		"usage: lfs mirror resync [--only MIRROR_ID[,...]]|\n"
 		"\t\t[--stats|--stats-interval=SECONDS]\n"
-		"\t\t[--W |--bandwidth-limit=BANDWIDTH_MB]\n"
+		"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"
 		"\t\tMIRRORED_FILE [MIRRORED_FILE2...]\n" },
 	{ .pc_name = "verify", .pc_func = lfs_mirror_verify,
 	  .pc_help = "Verify mirrored file(s).\n"
@@ -3818,7 +3819,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	/* --verbose is only valid in migrate mode */
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument},
-	{ .val = 'W',	.name = "bandwidth",	.has_arg = required_argument },
+	{ .val = 'W',  .name = "bandwidth-limit", .has_arg = required_argument},
 	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
 /* dirstripe { .val = 'X',.name = "max-inherit",.has_arg = required_argument }*/
 	{ .val = 'y',	.name = "yaml",		.has_arg = required_argument },
@@ -5724,7 +5725,7 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'u',	.name = "uid",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "user",		.has_arg = required_argument },
 /* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
-/* setstripe { .val = 'W', .name = "bandwidth",	.has_arg = required_argument }, */
+/*migrate{.val = 'W', .name = "bandwidth-limit",.has_arg = required_argument},*/
 	{ .val = LFS_XATTRS_MATCH_OPT,
 			.name = "xattr",	.has_arg = required_argument },
 	{ .val = 'z',	.name = "extension-size",
@@ -6690,7 +6691,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 /* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 /* dirstripe { .val = 'X',.name = "max-inherit",.has_arg = required_argument }*/
-/* setstripe { .val = 'W', .name = "bandwidth",	.has_arg = required_argument }*/
+/* migrate{.val = 'W', .name = "bandwidth-limit",.has_arg = required_argument}*/
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
 	{ .val = 'z',	.name = "extension-size", .has_arg = no_argument },
 	{ .val = 'z',	.name = "ext-size",	.has_arg = no_argument },
@@ -12608,12 +12609,10 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
-	{ .val = 'W',	.name = "bandwidth",	.has_arg = required_argument },
-	{ .val = LFS_STATS_OPT,
-			.name = "stats",	.has_arg = no_argument},
+	{ .val = 'W',  .name = "bandwidth-limit", .has_arg = required_argument},
+	{ .val = LFS_STATS_OPT, .name = "stats", .has_arg = no_argument},
 	{ .val = LFS_STATS_INTERVAL_OPT,
-			.name = "stats-interval",
-						.has_arg = required_argument},
+			.name = "stats-interval", .has_arg = required_argument},
 	{ .name = NULL } };
 	struct ll_ioc_lease *ioc = NULL;
 	__u16 mirror_ids[128] = { 0 };

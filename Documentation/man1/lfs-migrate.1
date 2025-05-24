@@ -1,4 +1,4 @@
-.TH LFS-MIGRATE 1 2024-08-20 Lustre "Lustre User Utilities"
+.TH LFS-MIGRATE 1 2025-05-23 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-migrate \- migrate files or directories between MDTs or OSTs.
 .SH SYNOPSIS
@@ -21,7 +21,14 @@ and all inodes/directories therein between MDTs.
 
 .SH OPTIONS
 .SS OST MIGRATE OPTIONS
-.P
+The
+.B lfs migrate
+command can be used for moving files from one (or more) OSTs to other
+OSTs (e.g. for space balancing between OSTs, or to evacuate an OST for
+hardware reasons), to change the stripe count or other layout parameters
+of a file (e.g. to increase the bandwidth of a file by striping it over
+multiple OSTs), or to move the file between different classes of storage
+(e.g. SSD vs. HDD OSTs, or local vs. remote OSTs in different pools).
 .IR FILES_FROM
 may be:
 .TP
@@ -35,20 +42,9 @@ Usually is used after a pipeline from \fBlfs find --print0\fR command.
 .TP
 .BR --files-from = \fILIST_FILE
 Read file names from file \fILIST_FILE\fR. One line for each file name.
-If \fILIST_FILE\fR is \fB-\fR, read from stdin.
-If \fB--null\fR is specified at the same time,
-file names are separated by a NUL char.
+If \fILIST_FILE\fR is \fB-\fR, read from stdandard input.
+If \fB--null\fR is also specified, file names are separated by a NUL char.
 
-.SH OST MIGRATE OPTIONS
-.P
-The
-.B lfs migrate
-command can be used for moving files from one (or more) OSTs to other
-OSTs (e.g. for space balancing between OSTs, or to evacuate an OST for
-hardware reasons), to change the stripe count or other layout parameters
-of a file (e.g. to increase the bandwidth of a file by striping it over
-multiple OSTs), or to move the file between different classes of storage
-(e.g. SSD vs. HDD OSTs, or local vs. remote OSTs in different pools).
 .P
 In OST object migration mode, the command supports the same
 .I SETSTRIPE_OPTIONS
@@ -105,13 +101,19 @@ This option cannot be used on encrypted files when the encryption key is not
 available. It will result in
 .BR -ENOKEY .
 .TP
-.BR -W ", " --bandwidth
-Limit how much file system bandwidth a migrate job can consume.
+.BR -W ", " --bandwidth " \fIBANDWIDTH_MB\fR[" MG ]
+Limit the read and write bandwidth a migrate job consumes to no more than
+.I BANDWIDTH_MB
+MiB/s. An optional suffix can be used to specify units in
+.BR M ebibytes
+or
+.BR G ibibytes
+per second.
 .TP
 .BR --stats
 Output verbose stats about migrate job progress in YAML format.
 .TP
-.BR --stats-interval
+.BI --stats-interval " SECONDS"
 Controls how often the stats are output; this defaults to 5 seconds.
 .TP
 .BR -v ", " --verbose
@@ -146,7 +148,7 @@ across all of the specified MDT indices as if an equivalent
 .BI -c N
 option were given.
 .TP
-.BR -c ", " --mdt-count=\fICOUNT\fR
+.BR -c ", " --mdt-count= \fICOUNT
 All directories and subdirectories in the tree will be striped across
 .I COUNT
 MDTs, always using
@@ -174,10 +176,10 @@ and
 .RB ' "lfs getstripe -d" '.
 .TP
 .BR --clear-fixed
-Do not set LMV_HASH_FLAG_FIXED upon migrating the directory. It allows a striped dir
-with only one stripe to be converted to a plain directory.
+Do not set LMV_HASH_FLAG_FIXED upon migrating the directory. It allows a
+striped dir with only one stripe to be converted to a plain directory.
 .TP
-.BR -H ", " --mdt-hash=\fIHASH_TYPE\fR
+.BR -H ", " --mdt-hash= \fIHASH_TYPE
 Use
 .I HASH_TYPE
 for the new directory layout.
@@ -223,67 +225,71 @@ migrated file(s) to be a new, and cause them to be backed up again.
 This migrates the data in
 .B file1
 into a new layout with 2 stripes:
-.RS
 .EX
+.RS
 .B # lfs migrate -c 2 /mnt/lustre/file1
-.EE
 .RE
+.EE
 .PP
 This migrates the data in
 .B file2
 into a three component composite layout (number of stripes depends on
 file size):
-.RS
 .EX
+.RS
 .B # lfs migrate -E 256M -c 1 -E 16G -c 4 -E eof -c 40 /mnt/lustre/file2
-.EE
 .RE
+.EE
 .PP
 Recursively move the subdirectories and inodes contained in directory
 .B remotedir
 from its current MDT to MDT0000 and MDT0002. The
 .B testremote
 directory and all of its subdirectories will be striped across both MDTs:
-.RS
 .EX
+.RS
 .B # lfs migrate -m 0,2 testremote
-.EE
 .RE
+.EE
 .PP
-Move ./testremote and the first level of sub files from their current MDT
+Move
+.B ./testremote
+and the first level of sub files from their current MDT
 to the MDT with index 0 and 2. Different from above case, the layout of
-subdirectories under ./testremote won't be changed:
-.RS
+subdirectories under
+.B ./testremote
+won't be changed:
 .EX
+.RS
 .B # lfs migrate -m 0,2 -d ./testremote
-.EE
 .RE
+.EE
 .PP
 Set a default PFL layout (without any DoM component) on the directory
 .BR topdir :
-.RS
 .EX
+.RS
 .B # lfs setstripe -E 256M -c 1 -E 16G -c 4 -E eof -c 40 topdir
-.EE
 .RE
+.EE
 then find and migrate all regular files that have an
 .B mdt
 component to copy the default layout from the specified
 .BR topdir :
-.RS
 .EX
+.RS
 .B # lfs find dir -type f -L mdt -0 | lfs migrate -0 --copy topdir
-.EE
 .RE
+.EE
 and finally migrate the directory
 .B topdir
 and all files and subdirectories in that tree to MDT0002. This allows
 migrating files with DoM components off an MDT:
-.RS
 .EX
+.RS
 .B # lfs migrate -m 2 topdir
-.EE
 .RE
+.EE
 .SH AVAILABILITY
 The
 .B lfs migrate

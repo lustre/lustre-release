@@ -1,14 +1,14 @@
-.TH LFS-MIRROR-EXTEND 1 2024-08-20 Lustre "Lustre User Utilities"
+.TH LFS-MIRROR-EXTEND 1 2025-05-23 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-extend \- add mirror(s) to an existing file
 .SH SYNOPSIS
 .SY "lfs mirror extend"
- [\fB--bandwidth-limit\fR|\fB-W\fR \fIMB_PER_SEC\fR]
- [\fB--mirror-count\fR|\fB-N\fR[\fIMIRROR_COUNT\fR]]
- [\fB--no-verify\fR]
- [\fB--stats\fR|\fB--stats-interval\fR=\fISECONDS\fR]
- [\fISETSTRIPE_OPTIONS\fR|\fB-f\fR \fIVICTIM_FILE\fR]
- \fIFILES_FROM\fR
+.RB [ --bandwidth | "-W \fIBANDWIDTH_MB" [ MG ]
+.RB [ --mirror-count | -N [[ = ] \fIMIRROR_COUNT ]]
+.RB [ --no-verify ]
+.RB [ --stats | --stats-interval=\fISECONDS ]
+.RI [ SETSTRIPE_OPTIONS "|\fB-f " VICTIM_FILE ]
+.I FILES_FROM
 .YS
 .SH DESCRIPTION
 This command adds mirror(s) to existing file(s) specified by \fIFILES_FROM\fR.
@@ -136,14 +136,14 @@ This option enables progress updates every
 .I STATS_INTERVAL
 seconds, in YAML format.
 .TP
-.BR -W ", " --bandwidth-limit " \fIBANDWIDTH"
-This option enables throttling so that mirror extending writes no more than
-.I BANDWIDTH
-bytes a second. An optional suffix can be used to specify the units in
-.BR K ilobytes,
-.BR M egabytes
+.BR -W ", " --bandwidth " \fIBANDWIDTH_MB\fR[" MG ]
+Limit the read and write bandwidth a mirror extend consumes to no more than
+.I BANDWIDTH_MB
+MiB/s. An optional suffix can be used to specify units in
+.BR M ebibytes
 or
-.BR G igabytes.
+.BR G ibibytes
+per second.
 .SH EXAMPLES
 Add 2 mirrors to /mnt/lustre/file1. If file1 is a non-mirrored file, then the
 command will convert it to a mirrored file first and then add mirrors. Each

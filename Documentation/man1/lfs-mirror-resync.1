@@ -1,11 +1,11 @@
-.TH LFS-MIRROR-RESYNC 1 2024-08-20 Lustre "Lustre User Utilities"
+.TH LFS-MIRROR-RESYNC 1 2025-05-23 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-resync \- resynchronize an out-of-sync mirrored file
 .SH SYNOPSIS
 .SY "lfs mirror resync"
 .RB [ --only
 .IR MIRROR_ID [,...]]
-.RB [ --bandwidth-limit= | -W
+.RB [ --bandwidth= | -W
 .IR BANDWIDTH_MB ]
 .RB [ --stats ]
 .RB [ --stats-interval=\c
@@ -58,15 +58,14 @@ This option enables progress updates every
 .I STATS_INTERVAL
 seconds, in YAML format.
 .TP
-.BR -W ", " --bandwidth-limit " \fIBANDWIDTH_MB"
-This option enables throttling so that mirror extending writes no more than
+.BR -W ", " --bandwidth " \fIBANDWIDTH_MB\fR[" MG ]
+Limit the read and write bandwidth a mirror resync consumes to no more than
 .I BANDWIDTH_MB
-(default unit megabyte) a second. An optional suffix can be used to specify the
-units in
-.BR K ilobytes,
+MiB/s. An optional suffix can be used to specify units in
 .BR M egabytes
 or
-.BR G igabytes.
+.BR G igabytes
+per second.
 .SH EXAMPLES
 Resynchronize all of the stale and sync-able mirror(s) for /mnt/lustre/file1
 and /mnt/lustre/file2:
