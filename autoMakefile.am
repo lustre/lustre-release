@@ -222,7 +222,7 @@ rpm-local:
 
 if SERVER
 dkms-srpm: $(PACKAGE)-dkms.spec dist Makefile
-	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX); \
 	$(MAKE) $(AM_MAKEFLAGS) \
 		rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1; \
 	$(RPMBUILD) \
@@ -247,7 +247,7 @@ dkms-srpm: $(PACKAGE)-dkms.spec dist Makefile
 	rm -rf $$rpmbuilddir
 
 dkms-rpm: dkms-srpm
-	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX); \
 	$(RPMBUILD) \
 		--define "_tmppath $$rpmbuilddir/TMP" \
 		--define "_topdir $$rpmbuilddir" \
@@ -271,7 +271,7 @@ dkms-rpm: dkms-srpm
 else
 
 dkms-srpm: $(PACKAGE)-dkms.spec dist Makefile
-	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX); \
 	$(MAKE) $(AM_MAKEFLAGS) \
 		rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1; \
 	$(RPMBUILD) \
@@ -284,7 +284,7 @@ dkms-srpm: $(PACKAGE)-dkms.spec dist Makefile
 	rm -rf $$rpmbuilddir
 
 dkms-rpm: dkms-srpm
-	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX); \
 	$(RPMBUILD) \
 		--define "_tmppath $$rpmbuilddir/TMP" \
 		--define "_topdir $$rpmbuilddir" \
@@ -301,7 +301,7 @@ dkms-srpms: dkms-srpm
 dkms-rpms: dkms-rpm
 
 rpms: srpm
-	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX); \
 	if test "x@CONFIG_CACHE_FILE@" != "x"; then \
 		export CONFIG_CACHE_FILE="@CONFIG_CACHE_FILE@"; \
 	fi; \
@@ -316,7 +316,7 @@ rpms: srpm
 	rm -rf $$rpmbuilddir
 
 srpm: @PACKAGE_TARNAME@.spec dist Makefile
-	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX); \
 	$(MAKE) $(AM_MAKEFLAGS) \
 		rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1; \
 	cp $(top_srcdir)/rpm/* $(top_srcdir); \
@@ -383,7 +383,7 @@ debs: undef.h debs_common
 	if test "x@CONFIG_CACHE_FILE@" != "x"; then \
 		export CONFIG_CACHE_FILE="@CONFIG_CACHE_FILE@"; \
 	fi; \
-	debiantmp=$$(mktemp -t -d debbuild-$$USER-XXXXXXXX) ; \
+	debiantmp=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d debbuild-$$USER-XXXXXXXX) ; \
 	cp debian/control.main $$debiantmp/control.main.bkp ; \
 	cp debian/control.modules.in $$debiantmp/control.modules.in.bkp ; \
 	if test "x@ENABLE_GSS@" = "xyes"; then \
