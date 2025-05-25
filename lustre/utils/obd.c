@@ -6539,7 +6539,7 @@ int jt_pcc_del(int argc, char **argv)
 	{ .val = 'k',	.name = "keep-data",	.has_arg = no_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
-	char fsname[MAX_OBD_NAME + 1];
+	char fsname[PATH_MAX];
 	const char *mntpath;
 	const char *pccpath;
 	__u32 flags = PCC_CLEANUP_FL_NONE;
@@ -6596,7 +6596,7 @@ int jt_pcc_clear(int argc, char **argv)
 	{ .val = 'k',	.name = "keep-data",	.has_arg = no_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
-	char fsname[MAX_OBD_NAME + 1];
+	char fsname[PATH_MAX];
 	const char *mntpath;
 	__u32 flags = PCC_CLEANUP_FL_NONE;
 	int verbose = LLAPI_MSG_INFO;

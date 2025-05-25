@@ -82,8 +82,8 @@
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_ostid.h>
 #include <linux/lustre/lustre_ioctl.h>
-#include "lustreapi_internal.h"
 #include "lstddef.h"
+#include "lustreapi_internal.h"
 
 #define FORMATTED_BUF_LEN	1024
 
@@ -7261,8 +7261,9 @@ static void do_target_check(char *obd_type_name, char *obd_name,
 
 int llapi_target_check(int type_num, char **obd_type, char *dir)
 {
-	char nid[MAX_LINE_LEN], instance[MAX_INSTANCE_LEN];
+	char instance[MAX_INSTANCE_LEN];
 	struct check_target_filter filter = {NULL, NULL};
+	char *nid = NULL;
 	int rc;
 
 	if (dir == NULL || dir[0] == '\0')
@@ -7270,7 +7271,7 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
 					    do_target_check);
 
 	rc = get_root_path(WANT_NID | WANT_ERROR, NULL, NULL, dir, -1, NULL,
-			   nid);
+			   &nid);
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "cannot get nid of path '%s'", dir);
@@ -7280,11 +7281,16 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
 
 	rc = llapi_get_instance(dir, instance, ARRAY_SIZE(instance));
 	if (rc)
-		return rc;
+		goto out;
+
 	filter.instance = instance;
 
-	return llapi_target_iterate(type_num, obd_type, &filter,
+	rc = llapi_target_iterate(type_num, obd_type, &filter,
 				    do_target_check);
+
+out:
+	free(nid);
+	return rc;
 }
 
 #undef MAX_STRING_SIZE

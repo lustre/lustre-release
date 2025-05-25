@@ -47,7 +47,6 @@
 #include <lustre/lustreapi.h>
 
 #define MAX_IOC_BUFLEN	8192
-#define MAX_LINE_LEN	 256
 #define MAX_INSTANCE_LEN  32
 
 #define WANT_PATH   0x1
@@ -69,7 +68,7 @@
 #endif
 
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index,
-		  dev_t *dev, char *nid);
+		  dev_t *dev, char **out_nid);
 int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len);
 int llapi_ioctl_dev(int dev_id, unsigned int cmd, void *buf);
 int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len);
