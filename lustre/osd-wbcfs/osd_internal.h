@@ -51,6 +51,7 @@ struct osd_device {
 	int			 od_index;
 	atomic_t		 od_connects;
 	struct lu_site		 od_site;
+
 	/*
 	 * Enable to write back the data in the memory FS into the
 	 * persistent storage.
@@ -250,5 +251,12 @@ static inline __u32 lu_fid_build_gen(const struct lu_fid *fid)
 
 	RETURN(fid_flatten64(fid) >> 32);
 }
+
+/*
+ * Lustre procfs
+ */
+
+int osd_procfs_init(struct osd_device *osd, const char *name);
+void osd_procfs_fini(struct osd_device *osd);
 
 #endif /* _OSD_INTERNAL_H */

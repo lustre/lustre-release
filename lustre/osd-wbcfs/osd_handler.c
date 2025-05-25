@@ -469,9 +469,13 @@ static int __osd_device_init(const struct lu_env *env, struct osd_device *osd,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lu_site_init(&osd->od_site, ld);
+	rc = osd_procfs_init(osd, osd->od_svname);
 	if (rc)
 		GOTO(out_mnt, rc);
+
+	rc = lu_site_init(&osd->od_site, ld);
+	if (rc)
+		GOTO(out_procfs, rc);
 	osd->od_site.ls_bottom_dev = ld;
 
 	rc = lu_site_init_finish(&osd->od_site);
@@ -482,6 +486,8 @@ static int __osd_device_init(const struct lu_env *env, struct osd_device *osd,
 
 out_site:
 	lu_site_fini(&osd->od_site);
+out_procfs:
+	osd_procfs_fini(osd);
 out_mnt:
 	osd_umount(env, osd);
 out:
@@ -533,6 +539,7 @@ static struct lu_device *osd_device_free(const struct lu_env *env,
 
 	lu_site_fini(&osd->od_site);
 	dt_device_fini(&osd->od_dt_dev);
+	osd_procfs_fini(osd);
 	OBD_FREE_PTR(osd);
 
 	RETURN(NULL);

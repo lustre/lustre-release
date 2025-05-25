@@ -307,10 +307,7 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 	debugfs_create_file("clear", 0644, obd->obd_debugfs_exports,
 			    obd, &mgs_nid_stats_clear_fops);
 
-	/* TODO: OSD wbcfs does not have lprocfs. Add it later... */
 	osd_obd = mgs->mgs_bottom->dd_lu_dev.ld_obd;
-	if (obd_is_osd_wbcfs(osd_obd))
-		return 0;
 
 	rc = sysfs_create_link(&obd->obd_kset.kobj, &mgs->mgs_bottom->dd_kobj,
 			       "osd");
