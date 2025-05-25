@@ -3118,6 +3118,6 @@ int dt_global_init(void);
 void dt_global_fini(void);
 int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
 		     const char *name, struct ldebugfs_vars *list);
-int dt_tunables_fini(struct dt_device *dt);
+void dt_tunables_fini(struct dt_device *dt);
 
 #endif /* __LUSTRE_DT_OBJECT_H */

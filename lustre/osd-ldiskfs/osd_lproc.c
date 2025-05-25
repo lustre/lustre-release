@@ -891,7 +891,7 @@ out:
 	return rc;
 }
 
-int osd_procfs_fini(struct osd_device *osd)
+void osd_procfs_fini(struct osd_device *osd)
 {
 	lprocfs_fini_brw_stats(&osd->od_brw_stats);
 
@@ -901,5 +901,5 @@ int osd_procfs_fini(struct osd_device *osd)
 	if (osd->od_proc_entry)
 		lprocfs_remove(&osd->od_proc_entry);
 
-	return dt_tunables_fini(&osd->od_dt_dev);
+	dt_tunables_fini(&osd->od_dt_dev);
 }

@@ -437,7 +437,7 @@ out:
 	return rc;
 }
 
-int osd_procfs_fini(struct osd_device *osd)
+void osd_procfs_fini(struct osd_device *osd)
 {
 	ENTRY;
 
@@ -451,5 +451,5 @@ int osd_procfs_fini(struct osd_device *osd)
 		osd->od_proc_entry = NULL;
 	}
 
-	return dt_tunables_fini(&osd->od_dt_dev);
+	dt_tunables_fini(&osd->od_dt_dev);
 }

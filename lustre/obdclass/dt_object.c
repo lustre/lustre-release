@@ -1264,18 +1264,16 @@ static void dt_sysfs_release(struct kobject *kobj)
 	complete(&dt->dd_kobj_unregister);
 }
 
-int dt_tunables_fini(struct dt_device *dt)
+void dt_tunables_fini(struct dt_device *dt)
 {
 	if (!dt)
-		return -EINVAL;
+		return;
 
 	if (dt->dd_def_attrs) {
 		sysfs_remove_files(&dt->dd_kobj, dt->dd_def_attrs);
 		kobject_put(&dt->dd_kobj);
 		wait_for_completion(&dt->dd_kobj_unregister);
 	}
-
-	return 0;
 }
 EXPORT_SYMBOL(dt_tunables_fini);
 

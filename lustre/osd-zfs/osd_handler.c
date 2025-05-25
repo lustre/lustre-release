@@ -1311,7 +1311,6 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct osd_device *o = osd_dev(d);
-	int rc;
 
 	ENTRY;
 	osd_index_backup(env, o, false);
@@ -1327,12 +1326,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	/* now with all the callbacks completed we can cleanup the remainings */
 	osd_shutdown(env, o);
 	osd_scrub_cleanup(env, o);
-
-	rc = osd_procfs_fini(o);
-	if (rc) {
-		CERROR("proc fini error %d\n", rc);
-		RETURN(ERR_PTR(rc));
-	}
+	osd_procfs_fini(o);
 
 	if (o->od_os)
 		osd_umount(env, o);
