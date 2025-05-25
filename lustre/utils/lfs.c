@@ -1464,11 +1464,10 @@ static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
 
 	fd = llapi_layout_file_open(fname, open_flags, open_mode, layout);
 	if (fd < 0)
-		fprintf(stderr, "%s: %s '%s': %s\n", progname,
-			S_ISDIR(st.st_mode) ?
+		llapi_error(LLAPI_MSG_ERROR, errno, "%s: %s '%s'\n",
+			    progname, S_ISDIR(st.st_mode) ?
 				"cannot set default composite layout for" :
-				"cannot create composite file",
-			fname, strerror(errno));
+				"cannot create composite file", fname);
 	return fd;
 }
 

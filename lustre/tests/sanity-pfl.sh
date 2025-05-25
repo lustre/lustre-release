@@ -1025,7 +1025,7 @@ test_16b() {
 	local dir=$DIR/$tdir/dir
 	local temp=$DIR/$tdir/template
 	# We know OSTCOUNT < (LOV_MAX_STRIPE_COUNT / 2), so this is overstriping
-	local large_count=$((LOV_MAX_STRIPE_COUNT / 2 + 10))
+	local large_count=$((LOV_MAX_STRIPE_COUNT / 2))
 
 	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
@@ -1053,8 +1053,12 @@ test_16b() {
 	#	                    3. PFL dir + overstriping
 	# set stripe for source dir
 	test_mkdir $dir
-	$LFS setstripe -E1m -S 1M -o 0,0 -E2m -C $large_count -E-1 $dir ||
-		error "setstripe $dir failed"
+	$LFS setstripe -E1m -S 1M -o 0,0 -E2m -C $large_count -E-1 $dir || {
+		$LFS df -v $dir
+		$LFS df -i $dir
+		getfattr -d -m - -e hex $dir
+	 	error "setstripe -E2m -C $large_count -E-1 $dir failed" 
+	}
 
 	test_mkdir $dir.copy
 	echo "3. PFL dir"

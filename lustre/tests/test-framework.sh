@@ -11550,17 +11550,28 @@ verify_yaml_layout() {
 	local temp=$3
 	local msg_prefix=$4
 
-	echo "getstripe --yaml $src"
-	$LFS getstripe --yaml $src > $temp || error "getstripe $src failed"
-	echo "setstripe --yaml=$temp $dst"
-	$LFS setstripe --yaml=$temp $dst|| error "setstripe $dst failed"
+	echo "$msg_prefix: getstripe --yaml $src"
+	$LFS getstripe --yaml $src > $temp ||
+		error "$msg_prefix: getstripe $src failed"
+	echo "$msg_prefix: setstripe --yaml=$temp $dst"
+	$LFS setstripe --yaml=$temp $dst || {
+		$LFS df -v $dst
+		$LFS df -i $dst
+		sed -e "s/^/$msg_prefix-yaml: /" $temp
+		getfattr -d -m - -e hex $src
+		getfattr -d -m - -e hex $dst
+		error "$msg_prefix: setstripe '$dst' failed"
+	}
 
-	echo "compare"
-	local layout1=$(get_layout_param $src)
-	local layout2=$(get_layout_param $dst)
+	echo "$msg_prefix: compare"
+	local layout_src=$(get_layout_param $src)
+	local layout_dst=$(get_layout_param $dst)
 	# compare their layout info
-	[ "$layout1" == "$layout2" ] ||
-		error "$msg_prefix $src/$dst layouts are not equal"
+	[ "$layout_src" == "$layout_dst" ] || {
+		sed -e "s/^/$msg_prefix-src: /" <<< $layout_src
+		sed -e "s/^/$msg_prefix-dst: /" <<< $layout_dst
+		error "$msg_prefix: $src/$dst layouts are not equal"
+	}
 }
 
 is_project_quota_supported() {

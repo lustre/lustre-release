@@ -1781,13 +1781,12 @@ int llapi_layout_pool_name_set(struct llapi_layout *layout,
 int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 			   const struct llapi_layout *layout)
 {
-	int fd;
-	int rc;
-	int tmp;
-	struct lov_user_md *lum;
+	struct lov_user_md *lum = NULL;
 	size_t lum_size;
 	char fsname[MAX_OBD_NAME + 1] = { 0 };
 	struct llapi_layout_comp *comp;
+	int fd;
+	int rc;
 
 	comp = __llapi_layout_cur_comp(layout);
 
@@ -1817,24 +1816,24 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 		}
 	}
 
-	/* Object creation must be postponed until after layout attributes
-	 * have been applied. */
-	if (layout != NULL && (open_flags & O_CREAT))
-		open_flags |= O_LOV_DELAY_CREATE;
+	if (layout) {
+		lum = llapi_layout_to_lum(layout);
+		if (!lum) {
+			fd = -1;
+			goto out_errno;
+		}
+
+		/* Object creation must be postponed until after layout
+		 * attributes have been applied.
+		 */
+		if (open_flags & O_CREAT)
+			open_flags |= O_LOV_DELAY_CREATE;
+	}
 
 	fd = open(path, open_flags, mode);
 
 	if (layout == NULL || fd < 0)
-		return fd;
-
-	lum = llapi_layout_to_lum(layout);
-
-	if (lum == NULL) {
-		tmp = errno;
-		close(fd);
-		errno = tmp;
-		return -1;
-	}
+		goto out_free;
 
 	if (lum->lmm_magic == LOV_USER_MAGIC_COMP_V1)
 		lum_size = ((struct lov_comp_md_v1 *)lum)->lcm_size;
@@ -1846,14 +1845,23 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 
 	rc = fsetxattr(fd, XATTR_LUSTRE_LOV, lum, lum_size, 0);
 	if (rc < 0) {
-		tmp = errno;
+		int tmp = errno;
+
+		/* caller usually prints error, but doesn't know xattr size */
+		if (errno == ENOSPC)
+			llapi_error(LLAPI_MSG_ERROR, errno,
+				    "error setting %zd-byte layout on '%s'\n",
+				    lum_size, path);
 		close(fd);
 		errno = tmp;
 		fd = -1;
 	}
 
+out_free:
 	free(lum);
-	errno = errno == EOPNOTSUPP ? ENOTTY : errno;
+out_errno:
+	if (errno == EOPNOTSUPP)
+		errno = ENOTTY;
 
 	return fd;
 }
