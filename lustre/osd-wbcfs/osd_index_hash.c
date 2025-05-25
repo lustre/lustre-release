@@ -33,9 +33,9 @@ static int osd_hash_index_lookup(const struct lu_env *env, struct dt_object *dt,
 
 	ENTRY;
 
-	down_read(&obj->oo_sem);
+	down_read(&obj->oo_guard);
 	rc = hash_index_lookup(hind, (void *)key, rec);
-	up_read(&obj->oo_sem);
+	up_read(&obj->oo_guard);
 
 	RETURN(rc);
 }
@@ -51,9 +51,9 @@ osd_hash_index_insert(const struct lu_env *env, struct dt_object *dt,
 
 	ENTRY;
 
-	down_write(&obj->oo_sem);
+	down_write(&obj->oo_guard);
 	rc = hash_index_insert(hind, (void *)key, 0, (void *)rec, 0);
-	up_write(&obj->oo_sem);
+	up_write(&obj->oo_guard);
 	RETURN(rc);
 }
 
@@ -65,9 +65,9 @@ static int osd_hash_index_delete(const struct lu_env *env, struct dt_object *dt,
 
 	ENTRY;
 
-	down_write(&obj->oo_sem);
+	down_write(&obj->oo_guard);
 	hash_index_remove(hind, (void *)key);
-	up_write(&obj->oo_sem);
+	up_write(&obj->oo_guard);
 
 	RETURN(0);
 }
@@ -123,7 +123,7 @@ static int osd_hash_index_it_get(const struct lu_env *env, struct dt_it *di,
 	hind = &MEMFS_I(obj->oo_inode)->mei_hash_index;
 	keylen = hind->hi_htbl_params.key_len;
 
-	down_read(&obj->oo_sem);
+	down_read(&obj->oo_guard);
 	list_for_each_entry(entry, &hind->hi_list, he_list_item) {
 		if (memcmp(key, entry->he_buf, keylen) == 0) {
 			it->hit_cursor = &entry->he_list_item;
@@ -131,7 +131,7 @@ static int osd_hash_index_it_get(const struct lu_env *env, struct dt_it *di,
 			break;
 		}
 	}
-	up_read(&obj->oo_sem);
+	up_read(&obj->oo_guard);
 
 	RETURN(rc);
 }
@@ -154,11 +154,11 @@ static int osd_hash_index_it_next(const struct lu_env *env, struct dt_it *di)
 		RETURN(-ENOENT);
 
 	hind = &MEMFS_I(obj->oo_inode)->mei_hash_index;
-	down_read(&obj->oo_sem);
+	down_read(&obj->oo_guard);
 	it->hit_cursor = it->hit_cursor->next;
 	if (it->hit_cursor == &hind->hi_list)
 		rc = 1;
-	up_read(&obj->oo_sem);
+	up_read(&obj->oo_guard);
 	RETURN(rc);
 }
 

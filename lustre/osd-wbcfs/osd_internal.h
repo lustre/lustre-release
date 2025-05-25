@@ -24,19 +24,19 @@
 
 struct osd_object {
 	struct dt_object	 oo_dt;
+
 	/*
 	 * Inode in the memory FS for file system object represented by this
 	 * osd_object. This inode is pinned for the whole duration of the file
 	 * life.
 	 */
 	struct inode		*oo_inode;
-	/* Used to implement osd_{read|write}_{lock|unlock}. */
-	struct rw_semaphore	 oo_sem;
-	/* protects inode attributes. */
-	spinlock_t		 oo_guard;
+	struct rw_semaphore	 oo_guard;
+
 	/* the i_flags in LMA */
 	__u32			 oo_lma_flags;
 	__u32			 oo_destroyed:1;
+
 	struct lu_object_header	*oo_header;
 };
 

@@ -211,7 +211,7 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(!dt_object_remote(dt));
 
-	spin_lock(&obj->oo_guard);
+	down_read(&obj->oo_guard);
 	osd_inode_getattr(env, obj->oo_inode, attr);
 	if (obj->oo_lma_flags & LUSTRE_ORPHAN_FL) {
 		attr->la_valid |= LA_FLAGS;
@@ -221,10 +221,12 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 		attr->la_valid |= LA_FLAGS;
 		attr->la_flags |= LUSTRE_ENCRYPT_FL;
 	}
-	spin_unlock(&obj->oo_guard);
+	up_read(&obj->oo_guard);
+
 	CDEBUG(D_INFO, "%s: getattr "DFID" inode@%pK nlink=%d\n",
 	       osd_name(osd_obj2dev(obj)), PFID(lu_object_fid(&dt->do_lu)),
 	       obj->oo_inode, obj->oo_inode->i_nlink);
+
 	return 0;
 }
 
@@ -309,9 +311,9 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(!dt_object_remote(dt));
 	inode = obj->oo_inode;
-	spin_lock(&obj->oo_guard);
+	down_write(&obj->oo_guard);
 	rc = osd_inode_setattr(env, inode, attr);
-	spin_unlock(&obj->oo_guard);
+	up_write(&obj->oo_guard);
 	if (rc)
 		RETURN(rc);
 
@@ -654,9 +656,9 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 			       osd_name(osd), PFID(fid), inode->i_ino,
 			       inode->i_nlink);
 
-		spin_lock(&obj->oo_guard);
+		down_write(&obj->oo_guard);
 		clear_nlink(inode);
-		spin_unlock(&obj->oo_guard);
+		up_write(&obj->oo_guard);
 	}
 
 	set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
@@ -699,13 +701,13 @@ static int osd_ref_add(const struct lu_env *env, struct dt_object *dt,
 	 * This also has to properly handle the case of inodes with nlink == 0
 	 * in case they are being linked into the PENDING directory
 	 */
-	spin_lock(&obj->oo_guard);
+	down_write(&obj->oo_guard);
 	if (unlikely(inode->i_nlink == 0))
 		/* inc_nlink from 0 may cause WARN_ON */
 		set_nlink(inode, 1);
 	else
 		inc_nlink(inode);
-	spin_unlock(&obj->oo_guard);
+	up_write(&obj->oo_guard);
 
 	return rc;
 }
@@ -729,12 +731,12 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_REF_DEL))
 		return -EIO;
 
-	spin_lock(&obj->oo_guard);
+	down_write(&obj->oo_guard);
 	if (inode->i_nlink == 0) {
 		CDEBUG_LIMIT(fid_is_norm(lu_object_fid(&dt->do_lu)) ?
 			     D_ERROR : D_INODE, "%s: nlink == 0 on "DFID".\n",
 			     osd_name(osd), PFID(lu_object_fid(&dt->do_lu)));
-		spin_unlock(&obj->oo_guard);
+		up_write(&obj->oo_guard);
 		return 0;
 	}
 
@@ -743,7 +745,7 @@ static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
 
 	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 2)
 		drop_nlink(inode);
-	spin_unlock(&obj->oo_guard);
+	up_write(&obj->oo_guard);
 
 	return 0;
 }

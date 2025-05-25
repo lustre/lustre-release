@@ -73,12 +73,11 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
 
 	l = &obj->oo_dt.do_lu;
 	dt_object_init(&obj->oo_dt, NULL, d);
-	obj->oo_header = NULL;
 	obj->oo_dt.do_ops = &osd_obj_ops;
 	l->lo_ops = &osd_lu_obj_ops;
-	spin_lock_init(&obj->oo_guard);
 	init_rwsem(&obj->oo_dt.dd_sem);
-	init_rwsem(&obj->oo_sem);
+	init_rwsem(&obj->oo_guard);
+
 	return l;
 }
 
