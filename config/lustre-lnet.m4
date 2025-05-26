@@ -283,7 +283,11 @@ Auto detection of external O2IB failed. Build of external o2ib disabled.])
 			rdma_destroy_id(NULL);
 		],[
 			EXT_O2IBLND="o2iblnd"
-			EXT_O2IB_VER=$(ofed_info -n | tr . -)
+			EXT_O2IB_VER="None"
+			EXT_OFED_INFO=$(command -v ofed_info)
+			if test -n "$EXT_OFED_INFO" ; then
+				EXT_O2IB_VER=$(ofed_info -n | tr . -)
+			fi
 		],[
 			case $ENABLEO2IB in
 			"yes") AC_MSG_ERROR([cannot compile with OpenIB gen2 headers]) ;;

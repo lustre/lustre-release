@@ -145,6 +145,7 @@ module() {
   STRIP[\${#STRIP[@]}]=\${do_strip}
 }
 # Common modules for both Client & Server
+module libcfs        libcfs/libcfs      lnet
 module lnet_selftest lnet/selftest      lnet
 module lnet          lnet/lnet          lnet
 module ksocklnd      lnet/klnds/socklnd lnet
@@ -163,37 +164,47 @@ if [ "x\${ext_mofed}" = "xyes" ] ; then
 elif [ "x\${int_mofed}" = "xyes" ] ; then
     module ko2iblnd lnet/klnds/in-kernel-o2iblnd lnet
 fi
-module libcfs        libcfs/libcfs      lnet
-module ptlrpc    lustre/ptlrpc   lustre
-module lov       lustre/lov      lustre
-module fld       lustre/fld      lustre
-module obdecho   lustre/obdecho  lustre
-module osc       lustre/osc      lustre
-module mgc       lustre/mgc      lustre
-module fid       lustre/fid      lustre
-module mdc       lustre/mdc      lustre
-module obdclass  lustre/obdclass lustre
-module lmv       lustre/lmv      lustre
-module lustre    lustre/llite    lustre
-echo "\${OPTS} " | grep -E -q -- '--enable-gss[^-]'
-if [[ \$? -eq 0 ]] ; then
+# Lustre client modules:
+# MODULE NAME    PATH TO MODULE               INSTALL PATH
+# -------------  -------------------------    ------------
+module ec        lustre/ec                    lustre
+module fid       lustre/fid                   lustre
+module fld       lustre/fld                   lustre
+module lmv       lustre/lmv                   lustre
+module lov       lustre/lov                   lustre
+module lustre    lustre/llite                 lustre
+module mdc       lustre/mdc                   lustre
+module mgc       lustre/mgc                   lustre
+module obdclass  lustre/obdclass              lustre
+module obdecho   lustre/obdecho               lustre
+module osc       lustre/osc                   lustre
+module ptlrpc    lustre/ptlrpc                lustre
+if grep -E -q -- '--enable-gss[^-]' <<< \${OPTS}; then
     module ptlrpc_gss lustre/ptlrpc/gss fs/lustre
+fi
+# Lustre client kunit modules, --enable-tests
+if grep -q ' --enable-tests' <<< \${OPTS}; then
+    # MODULE NAME              PATH TO MODULE   INSTALL PATH
+    # ----------------------   --------------   ------------
+    module obd_mod_rpcs_test   lustre/kunit     lustre
+    module kinode              lustre/kunit     lustre
+    module obd_test            lustre/kunit     lustre
 fi
 EOF
 if [ $pkgname != "lustre-client" ] ; then
 	cat >>${filename} <<EOF
-# Server Modules
-module ofd       lustre/ofd      lustre
-module ost       lustre/ost      lustre
-module lfsck     lustre/lfsck    lustre
-module mgs       lustre/mgs      lustre
-module lquota    lustre/lquota   lustre
-module mdt       lustre/mdt      lustre
-module osp       lustre/osp      lustre
-module mdd       lustre/mdd      lustre
-module llog_test lustre/obdclass lustre
-module obd_test  lustre/obdclass lustre
-module lod       lustre/lod      lustre
+# Lustre server Modules
+# MODULE NAME     PATH TO MODULE    INSTALL PATH
+# -------------   ---------------   ------------
+module ofd        lustre/ofd        lustre
+module lfsck      lustre/lfsck      lustre
+module mgs        lustre/mgs        lustre
+module lquota     lustre/quota      lustre
+module mdt        lustre/mdt        lustre
+module osp        lustre/osp        lustre
+module mdd        lustre/mdd        lustre
+module lod        lustre/lod        lustre
+module osd_wbcfs  lustre/osd-wbcfs  lustre
 EOF
 fi
 if [ $pkgname = "lustre-zfs" -o $pkgname = "lustre-all" ] ; then
@@ -205,8 +216,15 @@ fi
 if [ $pkgname = "lustre-ldiskfs" -o $pkgname = "lustre-all" ] ; then
 	cat >>${filename} <<EOF
 # Module for ldiskfs backing
-module osd_ldiskfs   lustre/osd_ldiskfs  lustre
+module osd_ldiskfs   lustre/osd-ldiskfs  lustre
 # ldiskfs module
 module ldiskfs       ldiskfs             lustre
+# Lustre server kunit modules, --enable-tests
+if grep -q ' --enable-tests' <<< \${OPTS}; then
+    # MODULE NAME          PATH TO MODULE   INSTALL PATH
+    # ------------------   --------------   ------------
+    module llog_test       lustre/kunit     lustre
+    module ldlm_extent     lustre/kunit     lustre
+fi
 EOF
 fi

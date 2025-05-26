@@ -113,6 +113,7 @@ module() {
   STRIP[${#STRIP[@]}]=${do_strip}
 }
 
+# Common modules for both Client & Server
 module libcfs        libcfs/libcfs      net/lustre
 module lnet          lnet/lnet          net/lustre
 module lnet_selftest lnet/selftest      net/lustre
@@ -171,20 +172,30 @@ if [ "x${ext_mofed}" = "xyes" ] ; then
 elif [ "x${int_mofed}" = "xyes" ] ; then
     module ko2iblnd lnet/klnds/in-kernel-o2iblnd net/lustre
 fi
-
-module fid       lustre/fid      fs/lustre
-module fld       lustre/fld      fs/lustre
-module lmv       lustre/lmv      fs/lustre
-module lov       lustre/lov      fs/lustre
-module lustre    lustre/llite    fs/lustre
-module mdc       lustre/mdc      fs/lustre
-module mgc       lustre/mgc      fs/lustre
-module obdclass  lustre/obdclass fs/lustre
-module obdecho   lustre/obdecho  fs/lustre
-module osc       lustre/osc      fs/lustre
-module ptlrpc    lustre/ptlrpc   fs/lustre
-
+# Lustre client modules:
+# MODULE NAME    PATH TO MODULE               INSTALL PATH
+# -------------  -------------------------    ------------
+module ec        lustre/ec                    fs/lustre
+module fid       lustre/fid                   fs/lustre
+module fld       lustre/fld                   fs/lustre
+module lmv       lustre/lmv                   fs/lustre
+module lov       lustre/lov                   fs/lustre
+module lustre    lustre/llite                 fs/lustre
+module mdc       lustre/mdc                   fs/lustre
+module mgc       lustre/mgc                   fs/lustre
+module obdclass  lustre/obdclass              fs/lustre
+module obdecho   lustre/obdecho               fs/lustre
+module osc       lustre/osc                   fs/lustre
+module ptlrpc    lustre/ptlrpc                fs/lustre
 # Lustre optional gss module:
-if echo "${OPTS} " | grep -E -q -- '--enable-gss[^-]' ; then
+if grep -E -q -- '--enable-gss[^-]' <<< ${OPTS}; then
     module ptlrpc_gss lustre/ptlrpc/gss fs/lustre
+fi
+# client kunit modules, --enable-tests
+if grep -q ' --enable-tests' <<< ${OPTS}; then
+   # MODULE NAME              PATH TO MODULE   INSTALL PATH
+   # ----------------------   --------------   ------------
+   module kinode              lustre/kunit     fs/lustre
+   module obd_mod_rpcs_test   lustre/kunit     fs/lustre
+   module obd_test            lustre/kunit     fs/lustre
 fi
