@@ -59,6 +59,12 @@ void LNetPrimaryNID(struct lnet_nid *nid);
 bool LNetIsPeerLocal(struct lnet_nid *nid);
 int LNetPeerDiscovered(struct lnet_nid *nid);
 
+struct nid_update_info;
+int LNetRegisterNIDUpdates(int (*nid_update_cb)(void *private,
+						struct nid_update_info *nui),
+			   void *cb_data);
+void LNetUnRegisterNIDUpdates(void *cb_data);
+
 /** @} lnet_addr */
 
 

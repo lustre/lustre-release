@@ -3025,6 +3025,7 @@ int lnet_lib_init(void)
 	the_lnet.ln_refcount = 0;
 	INIT_LIST_HEAD(&the_lnet.ln_net_zombie);
 	INIT_LIST_HEAD(&the_lnet.ln_msg_resend);
+	INIT_LIST_HEAD(&the_lnet.ln_nid_update_callbacks);
 
 	/* The hash table size is the number of bits it takes to express the set
 	 * ln_num_routes, minus 1 (better to under estimate than over so we
@@ -3061,6 +3062,9 @@ void lnet_lib_exit(void)
 	for (i = 0; i < NUM_LNDS; i++)
 		LASSERT(!the_lnet.ln_lnds[i]);
 	lnet_destroy_locks();
+
+	LASSERT(list_empty(&the_lnet.ln_nid_update_callbacks));
+
 	genl_unregister_family(&lnet_family);
 }
 
@@ -3272,6 +3276,67 @@ LNetNIFini(void)
 	return 0;
 }
 EXPORT_SYMBOL(LNetNIFini);
+
+int LNetRegisterNIDUpdates(int (*nid_update_cb)(void *private,
+						struct nid_update_info *nui),
+			   void *cb_data)
+{
+	bool found = false;
+	struct nid_update_callback_reg *tmp;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+	list_for_each_entry(tmp, &the_lnet.ln_nid_update_callbacks, nur_list) {
+		if (tmp->nur_data == cb_data) {
+			tmp->nur_cb = nid_update_cb;
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		struct nid_update_callback_reg *nur;
+
+		LIBCFS_ALLOC(nur, sizeof(*nur));
+		if (!nur) {
+			mutex_unlock(&the_lnet.ln_api_mutex);
+			return -ENOMEM;
+		}
+
+		nur->nur_cb = nid_update_cb;
+		nur->nur_data = cb_data;
+		list_add_tail(&nur->nur_list,
+			      &the_lnet.ln_nid_update_callbacks);
+	}
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	CDEBUG(D_NET, "Registering %p/%p party for NID updates\n",
+	       nid_update_cb, cb_data);
+
+	return 0;
+}
+EXPORT_SYMBOL(LNetRegisterNIDUpdates);
+
+/* use the function pointer as the key */
+void LNetUnRegisterNIDUpdates(void *cb_data)
+{
+	struct nid_update_callback_reg *nur, *tmp, *delnur = NULL;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+	list_for_each_entry_safe(nur, tmp, &the_lnet.ln_nid_update_callbacks,
+				 nur_list) {
+		if (nur->nur_data == cb_data) {
+			list_del(&nur->nur_list);
+			delnur = nur;
+			break;
+		}
+	}
+	mutex_unlock(&the_lnet.ln_api_mutex);
+	if (delnur)
+		LIBCFS_FREE(delnur, sizeof(*delnur));
+	CDEBUG(D_NET, "UnRegistering %p party for NID updates\n",
+	       cb_data);
+}
+EXPORT_SYMBOL(LNetUnRegisterNIDUpdates);
 
 /**
  * Grabs the ni data from the ni structure and fills the out
@@ -3599,6 +3664,55 @@ static int lnet_get_ni_stats(struct lnet_ioctl_element_msg_stats *msg_stats)
 	return rc;
 }
 
+/* called with api_mutex locked */
+static void lnet_notify_net_update(struct lnet_net *net, bool delete)
+{
+	struct nid_update_info nui;
+	struct nid_update_callback_reg *nur;
+	struct lnet_ni *ni;
+	struct lnet_nid *pnid;
+	unsigned int i = 0;
+
+	if (list_empty(&the_lnet.ln_nid_update_callbacks))
+		return;
+
+	nui.nui_net = net->net_id;
+	nui.nui_count = 0;
+
+	if (delete) {
+		CDEBUG(D_NET, "Notify about deletion of net #%u\n",
+		       net->net_id);
+		list_for_each_entry(nur, &the_lnet.ln_nid_update_callbacks,
+				    nur_list)
+			nur->nur_cb(nur->nur_data, &nui);
+		return;
+	}
+
+	genradix_init(&nui.nui_rdx);
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+		if (nid_is_lo0(&ni->ni_nid))
+			continue;
+		pnid = genradix_ptr_alloc(&nui.nui_rdx, i, GFP_KERNEL);
+		if (!pnid) {
+			CWARN("can't allocate memory for %d NIDs\n", i);
+			break;
+		}
+		*pnid = ni->ni_nid;
+		i++;
+	}
+	if (i > 0) {
+		CDEBUG(D_NET, "Notify about %d local NIDs at net #%d\n",
+		       i, net->net_id);
+		nui.nui_count = i;
+		list_for_each_entry(nur, &the_lnet.ln_nid_update_callbacks,
+				    nur_list)
+			nur->nur_cb(nur->nur_data, &nui);
+	} else {
+		CDEBUG(D_NET, "no local nids found\n");
+	}
+	genradix_free(&nui.nui_rdx);
+}
+
 static int lnet_add_net_common(struct lnet_net *net,
 			       struct lnet_ioctl_config_lnd_tunables *tun)
 {
@@ -3690,6 +3804,9 @@ static int lnet_add_net_common(struct lnet_net *net,
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	lnet_ping_target_update(pbuf, ping_mdh);
+
+	/* update interested entities of the NID change */
+	lnet_notify_net_update(net, false);
 
 	return 0;
 
@@ -3853,6 +3970,8 @@ int lnet_dyn_del_ni(struct lnet_nid *nid)
 
 		lnet_net_unlock(0);
 
+		lnet_notify_net_update(net, true);
+
 		/* create and link a new ping info, before removing the old one */
 		rc = lnet_ping_target_setup(&pbuf, &ping_mdh,
 					    LNET_PING_INFO_HDR_SIZE +
@@ -3881,6 +4000,8 @@ int lnet_dyn_del_ni(struct lnet_nid *nid)
 	net_empty = list_is_singular(&net->net_ni_list);
 
 	lnet_net_unlock(0);
+
+	lnet_notify_net_update(net, net_empty);
 
 	/* create and link a new ping info, before removing the old one */
 	rc = lnet_ping_target_setup(&pbuf, &ping_mdh,

@@ -623,6 +623,7 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 	lsi->lsi_flags = LSI_UMOUNT_FAILOVER;
 	INIT_LIST_HEAD(&lsi->lsi_lwp_list);
 	mutex_init(&lsi->lsi_lwp_mutex);
+	INIT_LIST_HEAD(&lsi->lsi_notifier_link);
 
 	RETURN(lsi);
 }

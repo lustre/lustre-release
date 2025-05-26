@@ -1429,10 +1429,152 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
 	if (!rc && !(mti->mti_flags & LDD_F_ERROR) &&
 	    (mti->mti_flags & LDD_F_IR_CAPABLE))
 		lsi->lsi_flags |= LDD_F_IR_CAPABLE;
-
 	OBD_FREE(mti, mti_len);
 out:
 	RETURN(rc);
+}
+
+/* NID update motifier */
+static LIST_HEAD(tgt_nu_list);
+static DECLARE_RWSEM(tgt_nu_lock);
+static atomic_t tgt_nu_count = ATOMIC_INIT(0);
+static struct workqueue_struct *tgt_nu_wq;
+
+struct tgt_notifier_work {
+	struct delayed_work    tnw_work;
+	struct mgs_target_info tnw_mti;
+};
+
+/**
+ * Notify the MGS that this target has new NIDs configured.
+ */
+static int tgt_nids_notify(struct lustre_sb_info *lsi,
+			   struct tgt_notifier_work *tnw)
+{
+	struct obd_device *mgc = lsi->lsi_mgc;
+	int rc = 0;
+
+	ENTRY;
+	LASSERT(mgc);
+
+	/* async RPC to be implement in next patch */
+
+	RETURN(rc);
+}
+
+static void tgt_nid_notifier(struct work_struct *ws)
+{
+	struct tgt_notifier_work *tnw;
+	struct lustre_sb_info *lsi;
+	int rc;
+
+	tnw = container_of(ws, struct tgt_notifier_work, tnw_work.work);
+
+	down_read(&tgt_nu_lock);
+	list_for_each_entry(lsi, &tgt_nu_list, lsi_notifier_link) {
+		rc = tgt_nids_notify(lsi, tnw);
+		CDEBUG(D_CONFIG, "%s: queue update for %d new NIDs, rc = %d\n",
+		       lsi->lsi_svname, tnw->tnw_mti.mti_nid_count, rc);
+	}
+	up_read(&tgt_nu_lock);
+
+	OBD_FREE(tnw, sizeof(*tnw) + NIDLIST_SIZE(tnw->tnw_mti.mti_nid_count));
+}
+
+static int tgt_nid_update_cb(void *data, struct nid_update_info *nui)
+{
+	struct tgt_notifier_work *tnw;
+	struct lnet_nid *tmp;
+	int i;
+
+	OBD_ALLOC(tnw, sizeof(*tnw) + NIDLIST_SIZE(nui->nui_count));
+	if (!tnw)
+		RETURN(-ENOMEM);
+
+	INIT_DELAYED_WORK(&tnw->tnw_work, tgt_nid_notifier);
+
+	tnw->tnw_mti.mti_nid_count = nui->nui_count;
+
+	CDEBUG(D_CONFIG,"new NID update from LNet\n");
+	for (i = 0; i < nui->nui_count; i++) {
+		tmp = genradix_ptr(&nui->nui_rdx, i);
+		libcfs_nidstr_r(tmp, tnw->tnw_mti.mti_nidlist[i],
+				sizeof(tnw->tnw_mti.mti_nidlist[i]));
+		CDEBUG(D_CONFIG,
+		       "NID #%d: %s\n", i, tnw->tnw_mti.mti_nidlist[i]);
+	}
+
+	queue_delayed_work(tgt_nu_wq, &tnw->tnw_work, 0);
+
+	return 0;
+}
+
+static int tgt_del_notifier(struct lustre_sb_info *lsi)
+{
+
+	int rc = 0;
+
+	ENTRY;
+
+	/* server_put_super() can be called before target start */
+	if (list_empty(&lsi->lsi_notifier_link))
+		return 0;
+
+	down_write(&tgt_nu_lock);
+	list_del_init(&lsi->lsi_notifier_link);
+	up_write(&tgt_nu_lock);
+
+	if (atomic_dec_and_test(&tgt_nu_count)) {
+		LASSERT(list_empty(&tgt_nu_list));
+
+		if (tgt_nu_wq) {
+			LNetUnRegisterNIDUpdates(&tgt_nu_wq);
+			destroy_workqueue(tgt_nu_wq);
+			tgt_nu_wq = NULL;
+		}
+	}
+
+	return rc;
+}
+
+static int tgt_add_notifier(struct lustre_sb_info *lsi)
+{
+	int rc = 0;
+
+	ENTRY;
+
+	down_write(&tgt_nu_lock);
+	if (atomic_inc_return(&tgt_nu_count) == 1) {
+		tgt_nu_wq = cfs_cpt_bind_workqueue("tgt_nid_notifier",
+						   cfs_cpt_tab, 0,
+						   CFS_CPT_ANY, 1);
+		if (IS_ERR(tgt_nu_wq)) {
+			rc = PTR_ERR(tgt_nu_wq);
+			CERROR("%s: can't start notifier workqueue, rc = %d\n",
+			       lsi->lsi_svname, rc);
+			GOTO(fail_wq, rc);
+		}
+		rc = LNetRegisterNIDUpdates(tgt_nid_update_cb, &tgt_nu_wq);
+		if (rc) {
+			CWARN("%s: can't register LNet NID callback, rc = %d\n",
+			      lsi->lsi_svname, rc);
+			GOTO(fail_reg, rc);
+		}
+	}
+
+	list_add_tail(&lsi->lsi_notifier_link, &tgt_nu_list);
+	up_write(&tgt_nu_lock);
+
+	return 0;
+
+fail_reg:
+	destroy_workqueue(tgt_nu_wq);
+fail_wq:
+	tgt_nu_wq = NULL;
+	atomic_dec(&tgt_nu_count);
+	up_write(&tgt_nu_lock);
+
+	return rc;
 }
 
 /* Start server targets: MDTs and OSTs */
@@ -1574,6 +1716,9 @@ static int server_start_targets(struct super_block *sb)
 		}
 	}
 
+	if (rc == 0)
+		rc = tgt_add_notifier(lsi);
+
 	/* abort recovery only on the complete stack:
 	 * many devices can be involved
 	 */
@@ -1704,7 +1849,9 @@ static void server_put_super(struct super_block *sb)
 
 	/* disconnect the lwp first to drain off the inflight request */
 	if (IS_OST(lsi) || IS_MDT(lsi)) {
-		int	rc;
+		int rc;
+
+		tgt_del_notifier(lsi);
 
 		rc = lustre_disconnect_lwp(sb);
 		if (rc != 0 && rc != -ETIMEDOUT && rc != -ENODEV &&

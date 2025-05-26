@@ -25,6 +25,7 @@
 #include <linux/types.h>
 #include <linux/kref.h>
 #include <net/genetlink.h>
+#include <lustre_compat/linux/generic-radix-tree.h>
 
 #include <uapi/linux/lnet/lnet-nl.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
@@ -1916,6 +1917,18 @@ struct lnet_udsp {
 #define LNET_STATE_RUNNING		1	/* started up OK */
 #define LNET_STATE_STOPPING		2	/* telling thread to stop */
 
+struct nid_update_info {
+	GENRADIX(struct lnet_nid) nui_rdx;
+	unsigned int		  nui_count;
+	__u32			  nui_net;
+};
+
+struct nid_update_callback_reg {
+	struct list_head nur_list;
+	int (*nur_cb)(void *private, struct nid_update_info *nui);
+	void *nur_data;
+};
+
 struct lnet {
 	/* CPU partition table of LNet */
 	struct cfs_cpt_table		*ln_cpt_table;
@@ -2084,6 +2097,8 @@ struct lnet {
 	struct completion		ln_started;
 	/* UDSP list */
 	struct list_head		ln_udsp_list;
+
+	struct list_head		ln_nid_update_callbacks;
 
 	/* Number of messages that have exceeded their message deadline */
 	atomic_t			ln_late_msg_count;
