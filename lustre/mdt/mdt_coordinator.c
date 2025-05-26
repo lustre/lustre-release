@@ -822,7 +822,11 @@ fail_to_start:
 			      " no error\n",
 		       mdt_obd_name(mdt), current->pid);
 
-	set_cdt_state(cdt, CDT_STOPPED);
+	/* Clear cdt_task under lock to avoid race with mdt_hsm_cdt_stop() */
+	mutex_lock(&cdt->cdt_state_lock);
+	cdt->cdt_task = NULL;
+	set_cdt_state_locked(cdt, CDT_STOPPED);
+	mutex_unlock(&cdt->cdt_state_lock);
 
 	/* Inform mdt_hsm_cdt_stop(). */
 	wake_up(&cdt->cdt_waitq);
@@ -1218,9 +1222,11 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 		CERROR("%s: error starting coordinator thread: %d\n",
 		       mdt_obd_name(mdt), rc);
 	} else {
+		/* Set task under lock to avoid race with mdt_hsm_cdt_stop() */
+		mutex_lock(&cdt->cdt_state_lock);
 		cdt->cdt_task = task;
-		wait_event(cdt->cdt_waitq,
-			   cdt->cdt_state != CDT_INIT);
+		mutex_unlock(&cdt->cdt_state_lock);
+		wait_event(cdt->cdt_waitq, cdt->cdt_state != CDT_INIT);
 		CDEBUG(D_HSM, "%s: coordinator thread started\n",
 		       mdt_obd_name(mdt));
 		rc = 0;
@@ -1236,6 +1242,7 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 {
 	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct task_struct *task;
 	int rc;
 
 	ENTRY;
@@ -1245,13 +1252,22 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 	if (rc)
 		RETURN(rc);
 
-	kthread_stop(cdt->cdt_task);
+	/* Get task pointer under lock to avoid race with thread exit */
+	mutex_lock(&cdt->cdt_state_lock);
+	task = cdt->cdt_task;
+	if (task)
+		cdt->cdt_task = NULL;
+	mutex_unlock(&cdt->cdt_state_lock);
+
+	/* Only call kthread_stop if we have a valid task */
+	if (task)
+		kthread_stop(task);
+
 	rc = wait_event_interruptible(cdt->cdt_waitq,
 				      cdt->cdt_state == CDT_STOPPED);
 	if (rc)
 		RETURN(-EINTR);
 
-	cdt->cdt_task = NULL;
 	RETURN(0);
 }
 
