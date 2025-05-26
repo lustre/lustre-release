@@ -2981,6 +2981,7 @@ test_40() {
 	local p=""
 	local fid=""
 	local max_requests=$(get_hsm_param max_requests)
+	local huge_num=$((2**60))
 
 	stack_trap "set_hsm_param max_requests $max_requests" EXIT
 	# Increase the number of HSM request that can be performed in
@@ -2988,7 +2989,18 @@ test_40() {
 	# also limits the number of requests per seconds that can be
 	# performed, so we pick a decent number. But we also need to keep
 	# that number low because the copytool has no rate limit and will
-	# fail some requests if if gets too many at once.
+	# fail some requests if it gets too many at once.
+	if (( $MDS1_VERSION >= $(version_code v2_16_56-40) )); then
+		set_hsm_param max_requests $huge_num &&
+			error "set max_requests=$huge_num should failed" ||
+			echo "set max_requests=$huge_num failed with $?"
+
+		tmp_reqs=$(get_hsm_param max_requests)
+		(( $tmp_reqs < $huge_num && $tmp_reqs > $max_requests )) ||
+			error "Should set max_requests to be a reasonable value"
+		do_facet mds1 "dmesg | tail -n 5 | grep 'to set HSM max_requests='" ||
+			true
+	fi
 	set_hsm_param max_requests 300
 
 	for i in $(seq 1 $file_count); do
@@ -3047,6 +3059,7 @@ test_50() {
 	local dir=$DIR/$tdir
 	local batch_max=50
 
+	stack_trap "set_hsm_param max_requests $(get_hsm_param max_requests)"
 	set_hsm_param max_requests 1000000
 	mkdir $dir || error "mkdir $dir failed"
 	df -i $MOUNT
@@ -3655,6 +3668,8 @@ double_verify_reset_hsm_param() {
 	local val=$(get_hsm_param $p)
 	local save=$val
 	local val2=$(($val * 2))
+
+	stack_trap "set_hsm_param $p $save"
 	set_hsm_param $p $val2
 	val=$(get_hsm_param $p)
 	[[ $val == $val2 ]] ||

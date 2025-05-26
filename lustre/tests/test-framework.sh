@@ -12088,8 +12088,8 @@ mdts_set_param() {
 		# if $arg include -P option, run 1 set_param per MDT on the MGS
 		# else, run set_param on each MDT
 		[[ $arg = *"-P"* ]] && facet=mgs
-		do_facet $facet $LCTL set_param $arg mdt.${MDT[$idx]}.$key$value
-		[[ $? != 0 ]] && rc=1
+		do_facet $facet $LCTL set_param $arg mdt.${MDT[$idx]}.$key$value ||
+			rc=$?
 	done
 	return $rc
 }

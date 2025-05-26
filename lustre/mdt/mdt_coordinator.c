@@ -115,8 +115,8 @@ struct hsm_scan_data {
 	u32			 hsd_start_cat_idx;
 	u32			 hsd_start_rec_idx;
 	int			 hsd_action_count;
-	int			 hsd_request_len; /* array alloc len */
-	int			 hsd_request_count; /* array used count */
+	u64			 hsd_request_len; /* array alloc len */
+	u64			 hsd_request_count; /* array used count */
 	struct hsm_scan_request	*hsd_request;
 };
 
@@ -632,7 +632,6 @@ static int mdt_coordinator(void *data)
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	struct hsm_scan_data	 hsd = { NULL };
 	time64_t		 last_housekeeping = 0;
-	size_t request_sz = 0;
 	int rc;
 	ENTRY;
 
@@ -721,21 +720,20 @@ static int mdt_coordinator(void *data)
 			 * we need to allocate a new buffer
 			 */
 			struct hsm_scan_request *tmp = NULL;
-			int max_requests = cdt->cdt_max_requests;
-			OBD_ALLOC_LARGE(tmp, max_requests *
-					sizeof(struct hsm_scan_request));
+			u64 max_requests = cdt->cdt_max_requests;
+
+			OBD_ALLOC_PTR_ARRAY_LARGE(tmp, max_requests);
 			if (!tmp) {
-				CERROR("Failed to resize request buffer, "
-				       "keeping it at %d\n",
-				       hsd.hsd_request_len);
+				CERROR("%s: error resizing buffer to %llu, keep %llu: rc = %d\n",
+				       mdt_obd_name(mdt), max_requests,
+				       hsd.hsd_request_len, -ENOMEM);
 			} else {
 				if (hsd.hsd_request != NULL)
-					OBD_FREE_LARGE(hsd.hsd_request,
-						       request_sz);
+					OBD_FREE_PTR_ARRAY_LARGE(
+						hsd.hsd_request,
+						hsd.hsd_request_len);
 
 				hsd.hsd_request_len = max_requests;
-				request_sz = hsd.hsd_request_len *
-					sizeof(struct hsm_scan_request);
 				hsd.hsd_request = tmp;
 			}
 		}
@@ -749,7 +747,7 @@ static int mdt_coordinator(void *data)
 		if (rc < 0)
 			goto clean_cb_alloc;
 
-		CDEBUG(D_HSM, "found %d requests to send\n",
+		CDEBUG(D_HSM, "found %llu requests to send\n",
 		       hsd.hsd_request_count);
 
 		if (list_empty(&cdt->cdt_agents)) {
@@ -809,7 +807,7 @@ clean_cb_alloc:
 	}
 
 	if (hsd.hsd_request != NULL)
-		OBD_FREE_LARGE(hsd.hsd_request, request_sz);
+		OBD_FREE_PTR_ARRAY_LARGE(hsd.hsd_request, hsd.hsd_request_len);
 
 fail_to_start:
 	mdt_hsm_cdt_cleanup(mdt);
@@ -1064,6 +1062,65 @@ int hsm_init_ucred(struct lu_ucred *uc)
 	RETURN(0);
 }
 
+#define HAI_DATA_SIZE_EST (128)
+#define HAI_SIZE_EST (sizeof(struct hsm_action_item) + HAI_DATA_SIZE_EST)
+#define HSM_ACTIVE_REQ_SIZE_EST (sizeof(struct cdt_agent_req) + \
+				 sizeof(struct hsm_mem_req_rec) + \
+				 HAI_DATA_SIZE_EST)
+/* mdt_coordinatoor prealloc: max_requests * sizeof(struct hsm_scan_request) */
+#define HSM_SCAN_REQ_SIZE (sizeof(struct hsm_scan_request))
+
+/* The memory footprint estimation is the sum of the memory needed to build hal
+ * requests and the one needed to cache the active requests.
+ */
+#define HSM_REQ_MEM_FOOTPRINT_EST (HSM_SCAN_REQ_SIZE + HSM_ACTIVE_REQ_SIZE_EST)
+
+static u64 max_requests_total;
+static DEFINE_SPINLOCK(max_requests_total_lock);
+
+/* Limit total max_requests to 1/8 total memory */
+static int mdt_hsm_max_requests_update(struct coordinator *cdt, u64 new)
+{
+	u64 max_ram = cfs_totalram_pages() * PAGE_SIZE / 8;
+	int rc = 0;
+
+	if (new == cdt->cdt_max_requests)
+		return 0;
+
+	spin_lock(&max_requests_total_lock);
+	if (new < cdt->cdt_max_requests) {
+		LASSERT(max_requests_total >= cdt->cdt_max_requests - new);
+		max_requests_total -= cdt->cdt_max_requests - new;
+		cdt->cdt_max_requests = new;
+	} else if (new > cdt->cdt_max_requests) {
+		u64 max_ram_reqs = max_ram / HSM_REQ_MEM_FOOTPRINT_EST;
+		u64 to_add = new - cdt->cdt_max_requests;
+		struct mdt_device *mdt = container_of(cdt, typeof(*mdt),
+						      mdt_coordinator);
+
+		if (to_add > max_ram_reqs ||
+		    max_requests_total > max_ram_reqs - to_add) {
+			rc = -ENOMEM;
+			LCONSOLE_WARN("%s: No more memory to set HSM max_requests=%llu (max request memory: %lluMB, current total %llu/%llu): rc = %d\n",
+				      mdt_obd_name(mdt), new, max_ram >> 20,
+				      max_requests_total, max_ram_reqs, rc);
+			to_add = max_ram_reqs - max_requests_total;
+		}
+
+		max_requests_total += to_add;
+		cdt->cdt_max_requests += to_add;
+
+		/* no memory available for a new MDT -> allow 1 more request */
+		if (!cdt->cdt_max_requests) {
+			max_requests_total++;
+			cdt->cdt_max_requests++;
+		}
+	}
+	spin_unlock(&max_requests_total_lock);
+
+	return rc;
+}
+
 /**
  * initialize coordinator struct
  * \param mdt [IN] device
@@ -1124,9 +1181,11 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	cdt->cdt_default_archive_id = 1;
 	cdt->cdt_grace_delay = 60;
 	cdt->cdt_loop_period = 10;
-	cdt->cdt_max_requests = 3;
 	cdt->cdt_policy = CDT_DEFAULT_POLICY;
 	cdt->cdt_active_req_timeout = 3600;
+
+	cdt->cdt_max_requests = 0;
+	mdt_hsm_max_requests_update(cdt, 3);
 
 	/* by default do not remove archives on last unlink */
 	cdt->cdt_remove_archive_on_last_unlink = false;
@@ -1151,6 +1210,8 @@ int  mdt_hsm_cdt_fini(struct mdt_device *mdt)
 {
 	struct coordinator *cdt = &mdt->mdt_coordinator;
 	ENTRY;
+
+	mdt_hsm_max_requests_update(cdt, 0);
 
 	lu_context_exit(cdt->cdt_env.le_ses);
 	lu_context_fini(cdt->cdt_env.le_ses);
@@ -2285,11 +2346,13 @@ static ssize_t max_requests_store(struct kobject *kobj, struct attribute *attr,
 	rc = kstrtoull(buffer, 0, &val);
 	if (rc)
 		return rc;
+	if (!val)
+		return -EINVAL;
+	rc = mdt_hsm_max_requests_update(cdt, val);
+	if (rc)
+		return rc;
 
-	if (val != 0)
-		cdt->cdt_max_requests = val;
-
-	return val ? count : -EINVAL;
+	return count;
 }
 LUSTRE_RW_ATTR(max_requests);
 
