@@ -186,9 +186,9 @@ wait_reintegration() {
 		if $(facet_up $tgt); then
 			# reintegration starts after recovery completion
 			wait_recovery_complete $tgt
-			wait_update_facet $tgt "$cmd |
-				grep "$qtype" | awk '{ print \\\$3 }'" \
-					"$result" $max || return 1
+			wait_update_facet $tgt "$cmd | grep $qtype |
+				awk '{ print \\\$3 }'" "$result" $max ||
+				return 1
 		fi
 	done
 	return 0
