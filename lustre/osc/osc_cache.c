@@ -1511,7 +1511,7 @@ static int osc_enter_cache_try(struct client_obd *cli,
 {
 	int rc;
 
-	OSC_DUMP_GRANT(D_CACHE, cli, "need:%d\n", bytes);
+	OSC_DUMP_GRANT(D_CACHE, cli, "need:%d", bytes);
 
 	rc = osc_reserve_grant(cli, bytes);
 	if (rc < 0)
@@ -1583,7 +1583,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 
 	ENTRY;
 
-	OSC_DUMP_GRANT(D_CACHE, cli, "need:%d\n", bytes);
+	OSC_DUMP_GRANT(D_CACHE, cli, "need:%d", bytes);
 
 	spin_lock(&cli->cl_loi_list_lock);
 
@@ -1592,7 +1592,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSC_NO_GRANT) ||
 	    cli->cl_dirty_max_pages == 0 ||
 	    cli->cl_ar.ar_force_sync || loi->loi_ar.ar_force_sync) {
-		OSC_DUMP_GRANT(D_CACHE, cli, "forced sync i/o\n");
+		OSC_DUMP_GRANT(D_CACHE, cli, "forced sync i/o");
 		GOTO(out, rc = -EDQUOT);
 	}
 
@@ -1615,20 +1615,20 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 
 	if (entered) {
 		if (remain == timeout)
-			OSC_DUMP_GRANT(D_CACHE, cli, "granted from cache\n");
+			OSC_DUMP_GRANT(D_CACHE, cli, "granted from cache");
 		else
 			OSC_DUMP_GRANT(D_CACHE, cli,
-				       "finally got grant space\n");
+				       "finally got grant space");
 		wake_up(&cli->cl_cache_waiters);
 		rc = 0;
 	} else if (remain == 0) {
 		OSC_DUMP_GRANT(D_CACHE, cli,
-			       "timeout, fall back to sync i/o\n");
+			       "timeout, fall back to sync i/o");
 		osc_extent_tree_dump(D_CACHE, osc);
 		/* fall back to synchronous I/O */
 	} else {
 		OSC_DUMP_GRANT(D_CACHE, cli,
-			       "no grant space, fall back to sync i/o\n");
+			       "no grant space, fall back to sync i/o");
 		wake_up_all(&cli->cl_cache_waiters);
 	}
 	EXIT;
