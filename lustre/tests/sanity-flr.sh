@@ -408,7 +408,7 @@ test_0b() {
 
 	if [ $MDS1_VERSION -ge $(version_code 2.12.55) ]; then
 		# LU-11022 - remove mirror by pool name
-		local=cnt cnt=$($LFS getstripe $tf | grep archive | wc -l)
+		local cnt=$($LFS getstripe $tf | grep archive | wc -l)
 		[ "$cnt" != "1" ] && error "unexpected mirror count $cnt"
 		$LFS mirror delete --pool archive $tf || error "delete mirror"
 		cnt=$($LFS getstripe $tf | grep archive | wc -l)
