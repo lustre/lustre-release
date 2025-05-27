@@ -197,14 +197,28 @@ Print OST and MDT indexes in hexadecimal rather than decimal.
 Show only the file layout, which is one of:
 .RS 1.2i
 .TP
+.B bad
+Files that have an invalid layout and are inaccessible.
+.TP
+.B foreign
+Files that have a foreign (non-Lustre/free format) component.
+Such files may be inaccessible without external software integration.
+.TP
+.B hole
+Files that are missing a data object,
+possibly due to OST failure and layout reconstruction by LFSCK.
+.TP
+.B mdt
+Files that store the first data component on the MDT holding the inode.
+.TP
+.B overstriped
+Files have more than one stripe per OST for improved lock scalability.
+.TP
 .B raid0
 Traditional Lustre RAID-0 striping format.
 .TP
 .B released
 HSM-archived files that are not resident in the filesystem.
-.TP
-.B mdt
-Files that have the first data component on an MDT.
 .RE
 .TP
 .BR -m ", " --mdt ", " --mdt-index

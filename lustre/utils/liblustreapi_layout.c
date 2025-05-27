@@ -727,11 +727,11 @@ out_layout:
 	goto out;
 }
 
-__u32 llapi_pattern_to_lov(uint64_t pattern)
+enum lov_pattern llapi_pattern_to_lov(uint64_t llapi_pattern)
 {
-	__u32 lov_pattern;
+	enum lov_pattern lov_pattern;
 
-	switch (pattern) {
+	switch (llapi_pattern) {
 	case LLAPI_LAYOUT_DEFAULT:
 		lov_pattern = LOV_PATTERN_RAID0;
 		break;
@@ -1926,6 +1926,84 @@ __u16 llapi_layout_string_flags(char *string)
 		return LCM_FL_SYNC_PENDING;
 
 	return 0;
+}
+
+static struct {
+	enum lov_pattern	 llpn_pattern;
+	const char		*llpn_pattern_name;
+} lov_pattern_names[] = {
+	{ LOV_PATTERN_RAID0,		"raid0" },
+	{ LOV_PATTERN_RAID1,		"raid1" },
+	{ LOV_PATTERN_MDT,		"mdt" },
+	{ LOV_PATTERN_OVERSTRIPING,	"overstriped" },  /* getstripe */
+	{ LOV_PATTERN_OVERSTRIPING,	"overstriping" }, /* setstripe compat */
+	{ LOV_PATTERN_BAD,		"bad" },
+	{ LOV_PATTERN_FOREIGN,		"foreign" },
+	{ LOV_PATTERN_COMPRESS,		"compress" },
+	{ LOV_PATTERN_F_HOLE,		"hole" },
+	{ LOV_PATTERN_F_RELEASED,	"released" },
+	{ LOV_PATTERN_DEFAULT,		"default" },
+	{ 0, NULL }
+};
+
+int llapi_lov_string_pattern(const char *string, enum lov_pattern *pattern)
+{
+	const char *p;
+
+	*pattern = 0;
+	for (p = string; p != NULL; p = strchr(p, ',')) {
+		int i;
+
+		while (*p == ',')
+			p++;
+		if (*p == '\0')
+			break;
+		for (i = 0; lov_pattern_names[i].llpn_pattern != 0; i++) {
+			int l;
+
+			l = strlen(lov_pattern_names[i].llpn_pattern_name);
+			if (strncmp(p, lov_pattern_names[i].llpn_pattern_name,
+				    l))
+				continue;
+			*pattern |= lov_pattern_names[i].llpn_pattern;
+			break;
+		}
+		if (lov_pattern_names[i].llpn_pattern == 0) {
+			errno = EINVAL;
+			return -errno;
+		}
+	}
+
+	return 0;
+}
+
+char *llapi_lov_pattern_string(enum lov_pattern pattern, char *buf,
+			       size_t buflen)
+{
+	char *p = buf;
+	int l = 0;
+	int i;
+
+	p[0] = '\0';
+	for (i = 0; lov_pattern_names[i].llpn_pattern && pattern; i++) {
+		if ((lov_pattern_names[i].llpn_pattern & pattern) ==
+		    lov_pattern_names[i].llpn_pattern) {
+			l += snprintf(p, buflen - l, "%s%s", buf[0] ? "," : "",
+				      lov_pattern_names[i].llpn_pattern_name);
+			pattern &= ~lov_pattern_names[i].llpn_pattern;
+			if (l >= buflen) {
+				errno = EOVERFLOW;
+				return NULL;
+			}
+			p = buf + l;
+		}
+	}
+
+	if (pattern)
+		snprintf(buf, buflen, "%sunknown_%x", buf[0] ? "," : "",
+			pattern);
+
+	return buf;
 }
 
 /**

@@ -5171,31 +5171,6 @@ static inline int gid2name(char **name, unsigned int id)
 	return 0;
 }
 
-static int name2layout(__u32 *layout, char *name)
-{
-	char *ptr, *layout_name;
-
-	*layout = 0;
-	for (ptr = name; ; ptr = NULL) {
-		layout_name = strtok(ptr, ",");
-		if (!layout_name)
-			break;
-		if (strcmp(layout_name, "released") == 0)
-			*layout |= LOV_PATTERN_F_RELEASED;
-		else if (strcmp(layout_name, "raid0") == 0)
-			*layout |= LOV_PATTERN_RAID0;
-		else if (strcmp(layout_name, "mdt") == 0)
-			*layout |= LOV_PATTERN_MDT;
-		else if (strcmp(layout_name, "overstriping") == 0)
-			*layout |= LOV_PATTERN_OVERSTRIPING;
-		else if (strcmp(layout_name, "foreign") == 0)
-			*layout |= LOV_PATTERN_FOREIGN;
-		else
-			return -1;
-	}
-	return 0;
-}
-
 static int name2attrs(char *name, __u64 *attrs, __u64 *neg_attrs)
 {
 	char *ptr, *attr_name = name;
@@ -6317,7 +6292,7 @@ static int lfs_find(int argc, char **argv)
 			param.fp_lazy = 1;
 			break;
 		case 'L':
-			ret = name2layout(&param.fp_layout, optarg);
+			ret = llapi_lov_string_pattern(optarg, &param.fp_layout);
 			if (ret)
 				goto err;
 			param.fp_exclude_layout = !!neg_opt;

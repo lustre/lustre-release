@@ -667,7 +667,8 @@ int llapi_file_is_encrypted(int fd)
 
 int llapi_file_open_pool(const char *name, int flags, int mode,
 			 unsigned long long stripe_size, int stripe_offset,
-			 int stripe_count, int stripe_pattern, char *pool_name)
+			 int stripe_count, enum lov_pattern stripe_pattern,
+			 char *pool_name)
 {
 	const struct llapi_stripe_param param = {
 		.lsp_stripe_size = stripe_size,
@@ -681,7 +682,7 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
 
 int llapi_file_open(const char *name, int flags, int mode,
 		    unsigned long long stripe_size, int stripe_offset,
-		    int stripe_count, int stripe_pattern)
+		    int stripe_count, enum lov_pattern stripe_pattern)
 {
 	return llapi_file_open_pool(name, flags, mode, stripe_size,
 				    stripe_offset, stripe_count,
@@ -790,7 +791,8 @@ out_err:
 }
 
 int llapi_file_create(const char *name, unsigned long long stripe_size,
-		      int stripe_offset, int stripe_count, int stripe_pattern)
+		      int stripe_offset, int stripe_count,
+		      enum lov_pattern stripe_pattern)
 {
 	int fd;
 
@@ -806,7 +808,7 @@ int llapi_file_create(const char *name, unsigned long long stripe_size,
 
 int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
 			   int stripe_offset, int stripe_count,
-			   int stripe_pattern, char *pool_name)
+			   enum lov_pattern stripe_pattern, char *pool_name)
 {
 	int fd;
 
@@ -1184,7 +1186,7 @@ out:
 }
 
 int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
-			  int stripe_count, int stripe_pattern,
+			  int stripe_count, enum lov_pattern stripe_pattern,
 			  const char *pool_name)
 {
 	const struct llapi_stripe_param param = {
@@ -2733,23 +2735,6 @@ int sattr_cache_get_defaults(const char *const fsname,
 	return 0;
 }
 
-static char *layout2name(__u32 layout_pattern)
-{
-	if (layout_pattern & LOV_PATTERN_F_RELEASED)
-		return "released";
-	else if (layout_pattern & LOV_PATTERN_FOREIGN)
-		return "foreign";
-	else if (layout_pattern == LOV_PATTERN_MDT)
-		return "mdt";
-	else if (layout_pattern == LOV_PATTERN_RAID0)
-		return "raid0";
-	else if (layout_pattern ==
-			(LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING))
-		return "raid0,overstriped";
-	else
-		return "unknown";
-}
-
 enum lov_dump_flags {
 	LDF_IS_DIR	= 0x0001,
 	LDF_IS_RAW	= 0x0002,
@@ -2927,13 +2912,17 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	}
 
 	if ((verbose & VERBOSE_PATTERN)) {
+		char buf[128];
+
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_PATTERN)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%spattern:       ",
 				     space, prefix);
 		if (lov_pattern_supported(lum->lmm_pattern))
 			llapi_printf(LLAPI_MSG_NORMAL, "%s",
-				     layout2name(lum->lmm_pattern));
+				     llapi_lov_pattern_string(lum->lmm_pattern,
+							buf, sizeof(buf)) ?:
+							"overflow");
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%x", lum->lmm_pattern);
 		separator = (!yaml && is_dir) ? " " : "\n";

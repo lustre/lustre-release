@@ -1,0 +1,31 @@
+.TH LLAPI_LOV_STRING_PATTERN 3 2025-06-04 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_lov_string_pattern \- convert pattern name string to LOV_PATTERN mask
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_lov_string_pattern(const char *" string ", enum lov_pattern *" pattern );
+.fi
+.SH DESCRIPTION
+.B llapi_lov_string_pattern()
+converts the comma-separated list of LOV pattern names in
+.I string
+to a mask of
+.B LOV_PATTERN_*
+flags returned in
+.IR pattern .
+.SH RETURN VALUES
+.BR llapi_lov_string_pattern( )
+returns 0 on success, or
+.B -EINVAL
+on failure (in which case, errno is set appropriately).
+.SH AVAILABILITY
+.BR llapi_lov_string_pattern ()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.17.0
+.SH SEE ALSO
+.BR llapi_lov_pattern_string (3),
+.BR lustre (7),
+.BR lustreapi (7)

@@ -128,7 +128,7 @@ struct llapi_stripe_param {
 	unsigned long long	lsp_stripe_size;
 	char			*lsp_pool;
 	int			lsp_stripe_offset;
-	int			lsp_stripe_pattern;
+	enum lov_pattern	lsp_stripe_pattern;
 	/* Number of stripes. Size of lsp_osts[] if lsp_specific is true.*/
 	int			lsp_stripe_count;
 	bool			lsp_is_specific;
@@ -147,7 +147,7 @@ enum {
 	LLAPI_MIGRATION_VERBOSE		= 0x0008,
 };
 
-__u32 llapi_pattern_to_lov(uint64_t pattern);
+enum lov_pattern llapi_pattern_to_lov(uint64_t pattern);
 
 int llapi_file_open_param(const char *name, int flags, mode_t mode,
 			  const struct llapi_stripe_param *param);
@@ -155,16 +155,18 @@ int llapi_file_is_encrypted(int fd);
 int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
 			      __u32 flags, char *foreign_lov);
 int llapi_file_create(const char *name, unsigned long long stripe_size,
-		      int stripe_offset, int stripe_count, int stripe_pattern);
+		      int stripe_offset, int stripe_count,
+		      enum lov_pattern stripe_pattern);
 int llapi_file_open(const char *name, int flags, int mode,
 		    unsigned long long stripe_size, int stripe_offset,
-		    int stripe_count, int stripe_pattern);
+		    int stripe_count, enum lov_pattern stripe_pattern);
 int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
 			   int stripe_offset, int stripe_count,
-			   int stripe_pattern, char *pool_name);
+			   enum lov_pattern stripe_pattern, char *pool_name);
 int llapi_file_open_pool(const char *name, int flags, int mode,
 			 unsigned long long stripe_size, int stripe_offset,
-			 int stripe_count, int stripe_pattern, char *pool_name);
+			 int stripe_count, enum lov_pattern stripe_pattern,
+			 char *pool_name);
 int llapi_poollist(const char *name);
 int llapi_get_poolbuf(const char *name, char **buf,
 		      char ***poolist, int *poolcount);
@@ -492,7 +494,7 @@ int llapi_dir_create(const char *name, mode_t mode,
 int llapi_dir_create_foreign(const char *name, mode_t mode, __u32 type,
 			     __u32 flags, const char *value);
 int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
-			  int stripe_count, int stripe_pattern,
+			  int stripe_count, enum lov_pattern stripe_pattern,
 			  const char *poolname);
 int llapi_direntry_remove(char *dname);
 int llapi_unlink_foreign(char *dname);
@@ -713,8 +715,8 @@ int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
 int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp);
 int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 		     unsigned long long stripe_size, int stripe_offset,
-		     int stripe_count, int stripe_pattern, char *pool_name,
-		     struct lu_fid *newfid);
+		     int stripe_count, enum lov_pattern stripe_pattern,
+		     char *pool_name, struct lu_fid *newfid);
 
 /* HSM user interface */
 struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
@@ -1209,6 +1211,9 @@ int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags);
 int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags);
 const char *llapi_layout_flags_string(uint32_t flags);
 __u16 llapi_layout_string_flags(char *string);
+char *llapi_lov_pattern_string(enum lov_pattern pattern, char *buf,
+			       size_t buflen);
+int llapi_lov_string_pattern(const char *string, enum lov_pattern *pattern);
 
 /**
  * llapi_layout_mirror_count_get() - Get mirror count from the header of

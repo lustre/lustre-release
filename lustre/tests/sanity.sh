@@ -24045,10 +24045,10 @@ test_228c() {
 run_test 228c "NOT shrink the last entry in OI index node to recycle idle leaf"
 
 test_229() { # LU-2482, LU-3448
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
-	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
-		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+	(( $MDS1_VERSION >= $(version_code 2.4.50.0-53-ga61ff5914b) )) ||
+		skip "need MDS >= 2.4.50.53 for HSM released file"
 
 	rm -f $DIR/$tfile
 
@@ -24059,11 +24059,11 @@ test_229() { # LU-2482, LU-3448
 	$LFS getstripe -v $DIR/$tfile
 
 	local pattern=$($LFS getstripe -L $DIR/$tfile)
-	[ X"$pattern" = X"released" ] || error "pattern error ($pattern)"
+	[[ "$pattern" =~ "released" ]] || error "pattern error ($pattern)"
 
 	local stripe_count=$($LFS getstripe -c $DIR/$tfile) ||
 		error "getstripe"
-	[ $stripe_count -eq 2 ] || error "stripe count not 2 ($stripe_count)"
+	(( $stripe_count == 2 )) || error "stripe count not 2 ($stripe_count)"
 	stat $DIR/$tfile || error "failed to stat released file"
 
 	chown $RUNAS_ID $DIR/$tfile ||

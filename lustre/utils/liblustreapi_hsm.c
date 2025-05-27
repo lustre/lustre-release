@@ -1421,8 +1421,8 @@ int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
  */
 int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 		     unsigned long long stripe_size, int stripe_offset,
-		     int stripe_count, int stripe_pattern, char *pool_name,
-		     struct lu_fid *newfid)
+		     int stripe_count, enum lov_pattern stripe_pattern,
+		     char *pool_name, struct lu_fid *newfid)
 {
 	struct hsm_user_import	 hui;
 	int			 fd;

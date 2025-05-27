@@ -1241,14 +1241,13 @@ struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
 
 #define lov_mds_md lov_mds_md_v1
 struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
-	__u32 lmm_magic;          /* magic number = LOV_MAGIC_V1 */
-	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-	struct ost_id	lmm_oi;	  /* LOV object ID */
-	__u32 lmm_stripe_size;    /* size of stripe in bytes */
-	/* lmm_stripe_count used to be __u32 */
-	__u16 lmm_stripe_count;   /* num stripes in use for this object */
-	__u16 lmm_layout_gen;     /* layout generation number */
-	struct lov_ost_data_v1 lmm_objects[]; /* per-stripe data */
+	__u32			lmm_magic;        /* LOV_MAGIC_V1 */
+	enum lov_pattern	lmm_pattern;      /* LOV_PATTERN_RAID0, ... */
+	struct ost_id		lmm_oi;	          /* LOV object ID */
+	__u32			lmm_stripe_size;  /* size of stripe in bytes */
+	__u16			lmm_stripe_count; /* OST stripes in layout */
+	__u16			lmm_layout_gen;   /* layout generation number */
+	struct lov_ost_data_v1  lmm_objects[];    /* per-stripe data */
 };
 
 #define MAX_MD_SIZE_OLD (sizeof(struct lov_mds_md) +			\
@@ -1299,15 +1298,14 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_JOB_MAX_LEN	13
 
 struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
-	__u32 lmm_magic;          /* magic number = LOV_MAGIC_V3 */
-	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-	struct ost_id	lmm_oi;	  /* LOV object ID */
-	__u32 lmm_stripe_size;    /* size of stripe in bytes */
-	/* lmm_stripe_count used to be __u32 */
-	__u16 lmm_stripe_count;   /* num stripes in use for this object */
-	__u16 lmm_layout_gen;     /* layout generation number */
-	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /* must be 32bit aligned */
-	struct lov_ost_data_v1 lmm_objects[]; /* per-stripe data */
+	__u32			lmm_magic;        /* LOV_MAGIC_V3 */
+	enum lov_pattern	lmm_pattern;      /* LOV_PATTERN_RAID0, ... */
+	struct ost_id		lmm_oi;	          /* LOV object ID */
+	__u32			lmm_stripe_size;  /* size of stripe in bytes */
+	__u16			lmm_stripe_count; /* OST stripes in layout */
+	__u16			lmm_layout_gen;   /* layout generation number */
+	char                    lmm_pool_name[LOV_MAXPOOLNAME + 1];
+	struct lov_ost_data_v1  lmm_objects[];    /* per-stripe data */
 };
 
 static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
@@ -2518,7 +2516,7 @@ struct lov_desc {
 	__u32 ld_tgt_count;		/* how many OBD's */
 	__u32 ld_active_tgt_count;	/* how many active */
 	__s32 ld_default_stripe_count;	/* how many objects are used */
-	__u32 ld_pattern;		/* default PATTERN_RAID0 */
+	enum lov_pattern ld_pattern;	/* default LOV_PATTERN_RAID0 */
 	__u64 ld_default_stripe_size;	/* in bytes */
 	__s64 ld_default_stripe_offset;	/* starting OST index */
 	__u32 ld_padding_0;		/* unused */

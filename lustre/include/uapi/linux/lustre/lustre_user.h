@@ -785,29 +785,31 @@ enum ll_file_flags {
 #define LMV_USER_MAGIC_V0	0x0CD20CD0    /* old default lmv magic*/
 #define LMV_USER_MAGIC_SPECIFIC	0x0CD40CD0
 
-#define LOV_PATTERN_NONE		0x000
-#define LOV_PATTERN_RAID0		0x001
-#define LOV_PATTERN_RAID1		0x002
-#define LOV_PATTERN_MDT			0x100
-#define LOV_PATTERN_OVERSTRIPING	0x200
-#define LOV_PATTERN_FOREIGN		0x400
-#define LOV_PATTERN_COMPRESS		0x800
+enum lov_pattern {
+	LOV_PATTERN_NONE =		0x000,
+	LOV_PATTERN_RAID0 =		0x001,
+	LOV_PATTERN_RAID1 =		0x002,
+	LOV_PATTERN_MDT =		0x100,
+	LOV_PATTERN_OVERSTRIPING =	0x200,
+	LOV_PATTERN_FOREIGN =		0x400,
+	LOV_PATTERN_COMPRESS =		0x800,
 
-/* combine exclusive patterns as a bad pattern */
-#define LOV_PATTERN_BAD		(LOV_PATTERN_RAID1 | LOV_PATTERN_MDT | \
-				 LOV_PATTERN_FOREIGN)
+	/* combine exclusive patterns as a bad pattern */
+	LOV_PATTERN_BAD =		(LOV_PATTERN_RAID1 | LOV_PATTERN_MDT |
+					 LOV_PATTERN_FOREIGN),
 
-#define LOV_PATTERN_F_MASK	0xffff0000
-#define LOV_PATTERN_F_HOLE	0x40000000 /* there is hole in LOV EA */
-#define LOV_PATTERN_F_RELEASED	0x80000000 /* HSM released file */
-#define LOV_PATTERN_DEFAULT	0xffffffff
+	LOV_PATTERN_F_MASK =		0xffff0000,
+	LOV_PATTERN_F_HOLE =		0x40000000, /* hole in LOV EA objects */
+	LOV_PATTERN_F_RELEASED =	0x80000000, /* HSM released file */
+	LOV_PATTERN_DEFAULT =		0xffffffff
+};
 
 #define LOV_OFFSET_DEFAULT      ((__u16)-1)
 #define LMV_OFFSET_DEFAULT      ((__u32)-1)
 
-static inline bool lov_pattern_supported(__u32 pattern)
+static inline bool lov_pattern_supported(enum lov_pattern pattern)
 {
-	__u32 pattern_base = pattern & ~LOV_PATTERN_F_RELEASED;
+	enum lov_pattern pattern_base = pattern & ~LOV_PATTERN_F_RELEASED;
 
 	return pattern_base == LOV_PATTERN_RAID0 ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
@@ -818,7 +820,7 @@ static inline bool lov_pattern_supported(__u32 pattern)
  * having many extra checks on lov_pattern_supported, we have this separate
  * check for non-released, non-readonly, non-DOM components
  */
-static inline bool lov_pattern_supported_normal_comp(__u32 pattern)
+static inline bool lov_pattern_supported_normal_comp(enum lov_pattern pattern)
 {
 	return pattern == LOV_PATTERN_RAID0 ||
 	       pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING);

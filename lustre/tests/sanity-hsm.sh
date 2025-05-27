@@ -1014,7 +1014,7 @@ test_11a() {
 	echo -n "Verifying released pattern: "
 	local PTRN=$($LFS getstripe -L $f)
 	echo $PTRN
-	[[ $PTRN == released ]] || error "Is not released"
+	[[ $PTRN =~ released ]] || error "Is not released"
 	local fid=$(path2fid $f)
 	echo "Verifying new fid $fid in archive"
 

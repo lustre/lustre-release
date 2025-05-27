@@ -1,0 +1,35 @@
+.TH LLAPI_LOV_PATTERN_STRING 3 2025-06-04 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_lov_pattern_string \- convert LOV_PATTERN mask to string
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_lov_pattern_string(enum lov_pattern " pattern ", char *" buf \
+                                ", size_t " buflen ");"
+.fi
+.SH DESCRIPTION
+.B llapi_lov_pattern_string()
+converts the
+.I pattern
+mask to a comma-separated string of pattern names
+in the
+.I buf
+buffer, up to
+.I buflen
+bytes in length.
+.SH RETURN VALUES
+.B llapi_lov_pattern_string()
+returns a pointer to the
+.B buf
+string on success, or NULL on failure
+(currently only in case of buffer overflow).
+.SH AVAILABILITY
+.BR llapi_lov_pattern_string ()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.17.0
+.SH SEE ALSO
+.BR llapi_lov_string_pattern (3),
+.BR lustre (7),
+.BR lustreapi (7)
