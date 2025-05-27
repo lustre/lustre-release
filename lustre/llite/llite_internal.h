@@ -1887,7 +1887,8 @@ struct ll_statahead_info {
 			__u8	sai_fname_zeroed_len;
 		};
 	};
-	char			sai_fname[NAME_MAX];
+	/* match array size of llapi_lu_ladvise2:lla_buf */
+	char			sai_fname[NAME_MAX + 1];
 };
 
 /* Per inode statahead information */
