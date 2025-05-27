@@ -34889,7 +34889,7 @@ test_851() {
 	> $report
 
 	echo "1234567890" > $file
-	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 30 ||
+	wait_update_cond $(facet_active_host client) "stat -c %s $report" "-gt" "0" 30 ||
 		error "fanotify did not report anything after 30 seconds when file is created"
 	grep -a -E "open.*:$file:" $report ||
 		error "no open event for writing $file"
@@ -34900,7 +34900,7 @@ test_851() {
 
 	> $report
 	cat $file
-	wait_update_cond localhost "stat -c %s $report" "-gt" "0" 30 ||
+	wait_update_cond $(facet_active_host client) "stat -c %s $report" "-gt" "0" 30 ||
 		error "fanotify did not report anything after 30 seconds when file is read"
 	grep -a -E "open.*:$file:" $report ||
 		error "no open event for reading $file"
