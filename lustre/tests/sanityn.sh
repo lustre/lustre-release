@@ -1082,7 +1082,7 @@ test_26b() {
         mt2=`stat -c %Y $DIR2/$tfile`
 
         if [ x"$mt1" != x"$mt2" ]; then
-                error "not equal mtime, client1: "$mt1", client2: "$mt2"."
+                error "not equal mtime, client1: \"$mt1\", client2: \"$mt2\"."
         fi
 }
 run_test 26b "sync mtime between ost and mds"
