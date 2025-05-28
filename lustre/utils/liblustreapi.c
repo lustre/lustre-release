@@ -6628,8 +6628,17 @@ static int cb_migrate_mdt_fini(char *path, int p, int *dp, void *data,
 	}
 
 	ret = setxattr(path, XATTR_NAME_LMV, lmu, lmulen, 0);
-	if (ret == -EALREADY)
-		ret = 0;
+	if (ret == -1) {
+		if (errno == EALREADY) {
+			ret = 0;
+		} else {
+			llapi_error(LLAPI_MSG_ERROR, errno,
+				    "%s: error completing migration of %s",
+				    __func__, path);
+			ret = -errno;
+		}
+	}
+
 out:
 	cb_common_fini(path, p, dp, data, de);
 	return ret;

@@ -21,6 +21,7 @@
 #include <linux/file.h>
 #include <linux/sched.h>
 #include <linux/user_namespace.h>
+#include <linux/capability.h>
 #include <linux/uidgid.h>
 #include <linux/falloc.h>
 #include <linux/ktime.h>
@@ -5968,6 +5969,13 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	 */
 	if (is_root_inode(child_inode))
 		GOTO(out_iput, rc = -EINVAL);
+
+	/*
+	 * setxattr() used for finishing the dir migration, has the same
+	 * capability check for updating attributes in "trusted" namespace.
+	 */
+	if (!capable(CAP_SYS_ADMIN))
+		GOTO(out_iput, rc = -EPERM);
 
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
 				     child_inode->i_mode, LUSTRE_OPC_ANY, NULL);
