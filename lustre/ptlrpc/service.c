@@ -51,9 +51,9 @@ static void ptlrpc_at_remove_timed(struct ptlrpc_request *req);
 static int ptlrpc_start_threads(struct ptlrpc_service *svc);
 static int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait);
 
-/** Holds a list of all PTLRPC services */
+/* Holds a list of all PTLRPC services */
 LIST_HEAD(ptlrpc_all_services);
-/** Used to protect the \e ptlrpc_all_services list */
+/* Used to protect the @ptlrpc_all_services list */
 struct mutex ptlrpc_all_services_mutex;
 
 static struct ptlrpc_request_buffer_desc *
@@ -160,8 +160,12 @@ static int ptlrpc_grow_req_bufs(struct ptlrpc_service_part *svcpt, int post)
 }
 
 /**
- * Part of Rep-Ack logic.
- * Puts a lock and its mode into reply state assotiated to request reply.
+ * ptlrpc_save_lock() - Part of Rep-Ack(Reply Acknowledgement) logic
+ * @req: pointer to struct ptlrpc_request
+ * @lock: pointer to lustre_handle (to be saved)
+ * @no_ack: if True, server will not wait for client ack. (incl difficult reqs)
+ *
+ * Puts(saves) a lock and its mode into reply state assotiated to request reply
  */
 void ptlrpc_save_lock(struct ptlrpc_request *req, struct lustre_handle *lock,
 		      bool no_ack)
@@ -230,25 +234,17 @@ struct rs_batch {
 /** reply handling service. */
 static struct ptlrpc_hr_service		ptlrpc_hr;
 
-/**
- * maximum mumber of replies scheduled in one batch
- */
+/* maximum mumber of replies scheduled in one batch */
 #define MAX_SCHEDULED 256
 
-/**
- * Initialize a reply batch.
- *
- * \param b batch
- */
+/* Initialize a reply batch. */
 static void rs_batch_init(struct rs_batch *b)
 {
 	memset(b, 0, sizeof(*b));
 	INIT_LIST_HEAD(&b->rsb_replies);
 }
 
-/**
- * Choose an hr thread to dispatch requests to.
- */
+/* Choose an hr thread to dispatch requests to. */
 static
 struct ptlrpc_hr_thread *ptlrpc_hr_select(struct ptlrpc_service_part *svcpt)
 {
@@ -271,11 +267,8 @@ struct ptlrpc_hr_thread *ptlrpc_hr_select(struct ptlrpc_service_part *svcpt)
 	return &hrp->hrp_thrs[rotor % hrp->hrp_nthrs];
 }
 
-/**
- * Dispatch all replies accumulated in the batch to one from
+/* Dispatch all replies accumulated in the batch to one from
  * dedicated reply handling threads.
- *
- * \param b batch
  */
 static void rs_batch_dispatch(struct rs_batch *b)
 {
@@ -294,11 +287,11 @@ static void rs_batch_dispatch(struct rs_batch *b)
 }
 
 /**
- * Add a reply to a batch.
- * Add one reply object to a batch, schedule batched replies if overload.
+ * rs_batch_add() - Add a reply to a batch.
+ * @b: pointer to struct rs_batch where @rs will be added
+ * @rs: pointer to ptlrpc_reply_state to be added to @b
  *
- * \param b batch
- * \param rs reply
+ * Add one reply object to a batch, schedule batched replies if overload.
  */
 static void rs_batch_add(struct rs_batch *b, struct ptlrpc_reply_state *rs)
 {
@@ -323,12 +316,8 @@ static void rs_batch_add(struct rs_batch *b, struct ptlrpc_reply_state *rs)
 	spin_unlock(&rs->rs_lock);
 }
 
-/**
- * Reply batch finalization.
- * Dispatch remaining replies from the batch
+/* Reply batch finalization. Dispatch remaining replies from the batch
  * and release remaining spinlock.
- *
- * \param b batch
  */
 static void rs_batch_fini(struct rs_batch *b)
 {
@@ -341,8 +330,7 @@ static void rs_batch_fini(struct rs_batch *b)
 #define DECLARE_RS_BATCH(b)     struct rs_batch b
 
 
-/**
- * Put reply state into a queue for processing because we received
+/* Put reply state into a queue for processing because we received
  * ACK from the client
  */
 void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs)
@@ -584,7 +572,14 @@ static void ptlrpc_server_nthreads_check(struct ptlrpc_service *svc,
 }
 
 /**
- * Initialize percpt data for a service
+ * ptlrpc_service_part_init() - Initialize percpt data for a service
+ * @svc: pointer to ptlrpc_service struct
+ * @svcpt: pltrpc_service_part which is to get intialize
+ * @cpt: CPU ID @svcpt will be tied to
+ *
+ * Returns:
+ * * %0 on success
+ * * %negative on failure
  */
 static int ptlrpc_service_part_init(struct ptlrpc_service *svc,
 				    struct ptlrpc_service_part *svcpt, int cpt)
@@ -678,9 +673,15 @@ static int ptlrpc_service_part_init(struct ptlrpc_service *svc,
 }
 
 /**
- * Initialize service on a given portal.
- * This includes starting serving threads , allocating and posting rqbds and
+ * ptlrpc_register_service() - Initialize service on a given portal (LNET)
+ * @conf: pointer to ptlrpc_service_conf (configuration)
+ * @parent: Parent directory under sysfs
+ * @debugfs_entry: Parent directoy under debugfs
+ *
+ * This includes starting serving threads, allocating and posting rqbds and
  * so on.
+ *
+ * Return pointer to ptlrpc_service on Success else ERR_PTR on failure
  */
 struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 					       struct kset *parent,
@@ -860,7 +861,10 @@ failed:
 EXPORT_SYMBOL(ptlrpc_register_service);
 
 /**
- * to actually free the request, must be called without holding svc_lock.
+ * ptlrpc_server_free_request() - free the request
+ * @req: ptlrpc request
+ *
+ * Actually free the request, must be called without holding svc_lock.
  * note it's caller's responsibility to unlink req->rq_list.
  */
 static void ptlrpc_server_free_request(struct ptlrpc_request *req)
@@ -887,6 +891,9 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
 }
 
 /**
+ * ptlrpc_server_drop_request() - drop a reference count of the request
+ * @req: pltrpc request
+ *
  * drop a reference count of the request. if it reaches 0, we either
  * put it into history list, or free it immediately.
  */
@@ -1039,7 +1046,13 @@ void ptlrpc_del_exp_list(struct ptlrpc_request *req)
 	spin_unlock(&req->rq_export->exp_rpc_lock);
 }
 
-/** Change request export and move hp request from old export to new */
+/**
+ * ptlrpc_request_change_export() - Change request export
+ * @req: ptlrpc request export to be changed
+ * @export: new export @req is changed to
+ *
+ * Change request export and move hp request from old export to new
+ */
 void ptlrpc_request_change_export(struct ptlrpc_request *req,
 				  struct obd_export *export)
 {
@@ -1064,8 +1077,7 @@ void ptlrpc_request_change_export(struct ptlrpc_request *req,
 	class_export_rpc_inc(export);
 }
 
-/**
- * to finish a request: stop sending more early replies, and release
+/* to finish a request: stop sending more early replies, and release
  * the request.
  */
 static void ptlrpc_server_finish_request(struct ptlrpc_service_part *svcpt,
@@ -1076,8 +1088,7 @@ static void ptlrpc_server_finish_request(struct ptlrpc_service_part *svcpt,
 	ptlrpc_server_drop_request(req);
 }
 
-/**
- * to finish an active request: stop sending more early replies, and release
+/* to finish an active request: stop sending more early replies, and release
  * the request. should be called after we finished handling the request.
  */
 static void ptlrpc_server_finish_active_request(
@@ -1100,6 +1111,13 @@ static void ptlrpc_server_finish_active_request(
 }
 
 /**
+ * ptlrpc_export_timeout() - Calcuate an export eviction timeout
+ * @obd: export to calucalte the timout of
+ * @at: AT of RPC service time to calculate timeout for
+ * @netl: network AT
+ * @rpc_left_time: left service time for the current RPC 0 if not applicable
+ * @pinger: if the caller is ping evictor or ldlm
+ *
  * Calculate an export eviction timeout.
  * Used for both cases, lock prolong timeout and ping evictor timeout.
  *
@@ -1121,13 +1139,7 @@ static void ptlrpc_server_finish_active_request(
  * from the RPC (i.e. the view of the client on the current AT) is taken into
  * account.
  *
- * \param[in] at	      AT of RPC service time to calculate timeout for
- * \param[in] net_at	      network AT
- * \param[in] rpc_left_time   left service time for the current RPC
- *                            0 if not applicable
- * \param[in] pinger	      if the caller is ping evictor or ldlm
- *
- * \retval             timeout in seconds to wait for the next client's RPC
+ * Return timeout in seconds to wait for the next client's RPC
  */
 static timeout_t ptlrpc_export_timeout(struct obd_device *obd,
 				       struct adaptive_timeout *at,
@@ -1167,11 +1179,17 @@ static timeout_t ptlrpc_export_timeout(struct obd_device *obd,
 }
 
 /**
+ * ptlrpc_export_prolong_timeout() - Used for lock prolog timeout
+ * @req: ptlrpc request
+ * @recovery: True if this is recovery
+ *
  * Used for lock prolog timeout, calculates a timeout for CANCEL to come.
  * Also used for recovery, calculates a timeout for a next recovery RPC to come.
  * In this case, there is an RPC, in hand. Thus, a particular svcpt AT is used.
  *
  * The reverse import network AT is used as an estimate for the client side one.
+ *
+ * Returns timeout value (seconds)
  */
 timeout_t ptlrpc_export_prolong_timeout(struct ptlrpc_request *req,
 					bool recovery)
@@ -1191,7 +1209,7 @@ timeout_t ptlrpc_export_prolong_timeout(struct ptlrpc_request *req,
 				     ktime_get_real_seconds(), false);
 }
 
-/**
+/*
  * Used for ping evictor, calculates a timeout for any next RPC to come.
  * As there are different portals and the AT stats is separated for them,
  * just the last RPC AT is used here.
@@ -1209,7 +1227,7 @@ static timeout_t ptlrpc_export_pinger_timeout(struct ptlrpc_request *req)
 				     netl, 0, true);
 }
 
-/**
+/*
  * In case the net was down and just came back, when the 1st timeout has been
  * already expired, clients just keep sending re-connects. Applying the same
  * formula as in ptlrpc_export_timeout() to this case we get:
@@ -1228,7 +1246,7 @@ static timeout_t ptlrpc_export_extra_timeout(struct obd_export *exp)
 	return 3 * INITIAL_CONNECT_TIMEOUT + CONNECTION_SWITCH_MAX + 2 * netl;
 }
 
-/**
+/*
  * This function makes sure dead exports are evicted in a timely manner.
  * This function is only called when some export receives a message (i.e.,
  * the network is up.)
@@ -1337,7 +1355,9 @@ err:
 }
 
 /**
- * Sanity check request \a req.
+ * ptlrpc_check_req() - Sanity check request @req.
+ * @req: ptlrpc request
+ *
  * Return 0 if all is ok, error code otherwise.
  */
 static int ptlrpc_check_req(struct ptlrpc_request *req)
@@ -1484,8 +1504,7 @@ static void ptlrpc_at_remove_timed(struct ptlrpc_request *req)
 	array->paa_count--;
 }
 
-/*
- * Attempt to extend the request deadline by sending an early reply to the
+/* Attempt to extend the request deadline by sending an early reply to the
  * client.
  */
 static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
@@ -1865,11 +1884,14 @@ ptlrpc_server_mark_in_progress_obsolete(struct ptlrpc_request *req)
 #endif
 
 /**
- * Check if a request should be assigned with a high priority.
+ * ptlrpc_server_hpreq_init() - Check request can be assigned with high priority
+ * @svcpt: the PTLRPC service partition
+ * @req: ptlrpc thread
  *
- * \retval	< 0: error occurred
- *		  0: normal RPC request
- *		 +1: high priority request
+ * Return:
+ * * %<0 error occurred
+ * * %0 normal RPC request
+ * * %1 high priority request
  */
 static int ptlrpc_server_hpreq_init(struct ptlrpc_service_part *svcpt,
 				    struct ptlrpc_request *req)
@@ -1909,7 +1931,7 @@ static int ptlrpc_server_hpreq_init(struct ptlrpc_service_part *svcpt,
 	RETURN(rc);
 }
 
-/** Remove the request from the export list. */
+/* Remove the request from the export list. */
 static void ptlrpc_server_hpreq_fini(struct ptlrpc_request *req)
 {
 	ENTRY;
@@ -2056,7 +2078,7 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 	RETURN(0);
 }
 
-/**
+/*
  * Allow to handle high priority request
  * User can call it w/o any lock but need to hold
  * ptlrpc_service_part::scp_req_lock to get reliable result
@@ -2100,7 +2122,7 @@ static bool ptlrpc_server_high_pending(struct ptlrpc_service_part *svcpt,
 	       ptlrpc_nrs_req_pending_nolock(svcpt, true);
 }
 
-/**
+/*
  * Only allow normal priority requests on a service that has a high-priority
  * queue if forced (i.e. cleanup), if there are other high priority requests
  * already being processed (i.e. those threads can service more high-priority
@@ -2144,13 +2166,13 @@ static bool ptlrpc_server_normal_pending(struct ptlrpc_service_part *svcpt,
 	       ptlrpc_nrs_req_pending_nolock(svcpt, false);
 }
 
-/**
+/*
  * Returns true if there are requests available in incoming
  * request queue for processing and it is allowed to fetch them.
  * User can call it w/o any lock but need to hold ptlrpc_service::scp_req_lock
  * to get reliable result
- * \see ptlrpc_server_allow_normal
- * \see ptlrpc_server_allow high
+ * see @ptlrpc_server_allow_normal
+ * see @ptlrpc_server_allow high
  */
 static inline
 bool ptlrpc_server_request_pending(struct ptlrpc_service_part *svcpt,
@@ -2161,9 +2183,14 @@ bool ptlrpc_server_request_pending(struct ptlrpc_service_part *svcpt,
 }
 
 /**
- * Fetch a request for processing from queue of unprocessed requests.
+ * ptlrpc_server_request_get() - Fetch a request for processing from queue of
+ * unprocessed requests.
+ * @svcpt: the PTLRPC service partition
+ * @force: If true Fetch the request regardless (even if it is stuck)
+ *
  * Favors high-priority requests.
- * Returns a pointer to fetched request.
+ *
+ * Returns a pointer to fetched request else NULL
  */
 static struct ptlrpc_request *
 ptlrpc_server_request_get(struct ptlrpc_service_part *svcpt, bool force)
@@ -2208,10 +2235,17 @@ got_request:
 }
 
 /**
- * Handle freshly incoming reqs, add to timed early reply list,
- * pass on to regular request queue.
- * All incoming requests pass through here before getting into
- * ptlrpc_server_handle_req later on.
+ * ptlrpc_server_handle_req_in() - Handle freshly incoming reqs
+ * @svcpt: the PTLRPC service partition
+ * @thread: ptlrpc thread
+ *
+ * Handle freshly incoming reqs, add to timed early reply list, pass on to
+ * regular request queue. All incoming requests pass through here before getting
+ * into @ptlrpc_server_handle_req later on.
+ *
+ * Return:
+ * * %0 Request was processed
+ * * %1 Request not processed or no request available
  */
 static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 				       struct ptlrpc_thread *thread)
@@ -2395,8 +2429,15 @@ err_req:
 }
 
 /**
- * Main incoming request handling logic.
+ * ptlrpc_server_handle_request() - Main incoming request handling logic
+ * @svcpt: pointer to struct ptlrpc_service_part
+ * @thread: pointer to struct ptlrpc_thread(actual handling done by this thread)
+ *
  * Calls handler function from service to do actual processing.
+ *
+ * Return:
+ * * %1 request is processed
+ * * %0 no request processed or request not available
  */
 static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 					struct ptlrpc_thread *thread)
@@ -2571,9 +2612,7 @@ put_conn:
 	RETURN(1);
 }
 
-/**
- * An internal function to process a single reply state object.
- */
+/* An internal function to process a single reply state object. */
 static int ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 {
 	struct ptlrpc_service_part *svcpt = rs->rs_svcpt;
@@ -2714,9 +2753,15 @@ static inline int ptlrpc_threads_enough(struct ptlrpc_service_part *svcpt)
 }
 
 /**
- * allowed to create more threads
+ * ptlrpc_threads_increasable() - allowed to create more threads
+ * @svcpt: the PTLRPC service partition to increase thread
+ *
  * user can call it w/o any lock but need to hold
  * ptlrpc_service_part::scp_lock to get reliable result
+ *
+ * Return:
+ * * %0 if it can be increased
+ * * %1 if it cannot be increased
  */
 static inline int ptlrpc_threads_increasable(struct ptlrpc_service_part *svcpt)
 {
@@ -2725,9 +2770,7 @@ static inline int ptlrpc_threads_increasable(struct ptlrpc_service_part *svcpt)
 	       svcpt->scp_service->srv_nthrs_cpt_limit;
 }
 
-/**
- * too many requests and allowed to create more threads
- */
+/* too many requests and allowed to create more threads */
 static inline int ptlrpc_threads_need_create(struct ptlrpc_service_part *svcpt)
 {
 	return !ptlrpc_threads_enough(svcpt) &&
@@ -2872,9 +2915,16 @@ void ptlrpc_watchdog_delete(struct delayed_work *work)
 }
 
 /**
- * requests wait on preprocessing
+ * ptlrpc_server_request_incoming() - check incoming queue for requests which
+ * is waiting for processing
+ * @svcpt: pointer to struct ptlrpc_service_part
+ *
  * user can call it w/o any lock but need to hold
  * ptlrpc_service_part::scp_lock to get reliable result
+ *
+ * Returns:
+ * * %1 if incoming requests waiting to be processed
+ * * %0 if incoming request queue is empty
  */
 static inline int
 ptlrpc_server_request_incoming(struct ptlrpc_service_part *svcpt)
@@ -2918,10 +2968,14 @@ ptlrpc_wait_event(struct ptlrpc_service_part *svcpt,
 }
 
 /**
- * Main thread body for service threads.
+ * ptlrpc_main() - Main thread body for service threads.
+ * @arg: pointer to a struct ptlrpc_thread
+ *
  * Waits in a loop waiting for new requests to process to appear.
  * Every time an incoming requests is added to its queue, a waitq
  * is woken up and one of the threads will handle it.
+ *
+ * Returns 0 on success or error code on failure
  */
 static int ptlrpc_main(void *arg)
 {
@@ -3131,8 +3185,14 @@ static int hrt_dont_sleep(struct ptlrpc_hr_thread *hrt,
 }
 
 /**
- * Main body of "handle reply" function.
+ * ptlrpc_hr_main() - Main body of "handle reply" function.
+ * @arg: Pointer to struct 'ptlrpc_hr_thread'
+ *
  * It processes acked reply states
+ *
+ * Returns:
+ * * %0 on success
+ * * %ERRNO on failure
  */
 static int ptlrpc_hr_main(void *arg)
 {
@@ -3307,9 +3367,7 @@ static void ptlrpc_svcpt_stop_threads(struct ptlrpc_service_part *svcpt)
 	EXIT;
 }
 
-/**
- * Stops all threads of a particular service \a svc
- */
+/* Stops all threads of a particular service @svc */
 static void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
 {
 	struct ptlrpc_service_part *svcpt;
@@ -3544,9 +3602,7 @@ void ptlrpc_hr_fini(void)
 }
 
 
-/**
- * Wait until all already scheduled replies are processed.
- */
+/* Wait until all already scheduled replies are processed */
 static void ptlrpc_wait_replies(struct ptlrpc_service_part *svcpt)
 {
 	while (1) {
@@ -3801,7 +3857,8 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 
 /**
- * Returns 0 if the service is healthy.
+ * ptlrpc_svcpt_health_check() - checks the health of a PTLRPC service
+ * @svcpt: PTLRPC service partition structure to be cecked for health
  *
  * Check whether requests have been waiting in the queue for an excessive
  * time without being processed.  Individual requests may wait in the queue
@@ -3810,6 +3867,10 @@ EXPORT_SYMBOL(ptlrpc_unregister_service);
  *
  * We'll use this health check to govern whether a node needs to be shot,
  * so it's intentionally non-aggressive.
+ *
+ * Returns:
+ * * %0 if the service is healthy.
+ * * %negative if the service is not healthy.
  */
 static int ptlrpc_svcpt_health_check(struct ptlrpc_service_part *svcpt)
 {
