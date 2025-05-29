@@ -519,10 +519,11 @@ static void pool_insert_ptrs(void ***ptr_pages, int nptr_pages, int nobjects,
 #define POOL_INIT_SIZE (PTLRPC_MAX_BRW_SIZE / 4)
 static int pool_add_objects(int nobjects, struct obd_page_pool *page_pool)
 {
-	void ***ptr_pages;
+	unsigned int pool_order = page_pool->opp_order;
 	int nptr_pages, alloced = 0;
 	int i, j, rc = -ENOMEM;
-	unsigned int pool_order = page_pool->opp_order;
+	unsigned long clean;
+	void ***ptr_pages;
 
 	if (nobjects < POOL_INIT_SIZE / object_size(page_pool))
 		nobjects = POOL_INIT_SIZE / object_size(page_pool);
@@ -583,12 +584,15 @@ static int pool_add_objects(int nobjects, struct obd_page_pool *page_pool)
 
 out_ptr_pages:
 	if (rc) {
-		pool_cleanup(ptr_pages, nptr_pages, page_pool);
+		clean = pool_cleanup(ptr_pages, nptr_pages, page_pool);
+		CDEBUG(D_SEC, "cleaned %lu elements from pool\n", clean);
+		OBD_FREE_PTR_ARRAY(ptr_pages, nptr_pages);
 	}
 out:
 	if (rc) {
 		page_pool->opp_st_grow_fails++;
-		CERROR("Failed to allocate %d objects: rc = %d\n", nobjects, rc);
+		CERROR("Failed to allocate %d objects: rc = %d\n", nobjects,
+		       rc);
 	}
 
 	mutex_unlock(&page_pool->add_pages_mutex);
