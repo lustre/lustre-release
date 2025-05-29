@@ -258,6 +258,18 @@ lnet_ni_set_status(struct lnet_ni *ni, __u32 status)
 	return update;
 }
 
+static inline unsigned int
+lnet_ni_get_status(struct lnet_ni *ni)
+{
+	unsigned int status;
+
+	lnet_ni_lock(ni);
+	status = lnet_ni_get_status_locked(ni);
+	lnet_ni_unlock(ni);
+
+	return status;
+}
+
 static inline void lnet_md_wait_handling(struct lnet_libmd *md, int cpt)
 {
 	wait_queue_head_t *wq = __var_waitqueue(md);

@@ -741,11 +741,8 @@ proc_lnet_nis(const struct ctl_table *table, int write,
 			if (the_lnet.ln_routing)
 				last_alive = now - ni->ni_net->net_last_alive;
 
-			lnet_ni_lock(ni);
-			LASSERT(ni->ni_status != NULL);
-			stat = (lnet_ni_get_status_locked(ni) ==
+			stat = (lnet_ni_get_status(ni) ==
 				LNET_NI_STATUS_UP) ? "up" : "down";
-			lnet_ni_unlock(ni);
 
 			/* @lo forever alive */
 			if (ni->ni_net->net_lnd->lnd_type == LOLND) {
