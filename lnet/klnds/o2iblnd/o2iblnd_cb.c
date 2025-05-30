@@ -3430,6 +3430,12 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 
 	case RDMA_CM_EVENT_UNREACHABLE:
 		conn = cmid->context;
+
+		/* In case we have a flapping network, we can get this event
+		 * before conn is created */
+		if (conn == NULL)
+			return -ENETDOWN;
+
 		CNETERR("%s: UNREACHABLE %d cm_id %p conn %p ibc_state: %d\n",
 			libcfs_nidstr(&conn->ibc_peer->ibp_nid),
 			event->status, cmid, conn, conn->ibc_state);
