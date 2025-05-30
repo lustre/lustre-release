@@ -487,10 +487,6 @@ struct kib_rx {					/* receive message */
 	__u64			rx_msgaddr;
 	/* for dma_unmap_single() */
 	DEFINE_DMA_UNMAP_ADDR(rx_msgunmap);
-	/* receive work item... */
-	struct ib_recv_wr	rx_wrq;
-	/* ...and its memory */
-	struct ib_sge		rx_sge;
 };
 
 #define IBLND_POSTRX_DONT_POST    0             /* don't post */

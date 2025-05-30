@@ -144,7 +144,8 @@ kiblnd_post_rx(struct kib_rx *rx, int credit)
 {
 	struct kib_conn *conn = rx->rx_conn;
 	struct kib_net *net = conn->ibc_peer->ibp_ni->ni_data;
-	struct ib_recv_wr *bad_wrq = NULL;
+	struct ib_recv_wr wrq = {0};
+	struct ib_sge rx_sge = {0};
 #ifdef HAVE_OFED_IB_GET_DMA_MR
 	struct ib_mr *mr = conn->ibc_hdev->ibh_mrs;
 #endif
@@ -158,17 +159,17 @@ kiblnd_post_rx(struct kib_rx *rx, int credit)
 #ifdef HAVE_OFED_IB_GET_DMA_MR
 	LASSERT(mr != NULL);
 
-	rx->rx_sge.lkey   = mr->lkey;
+	rx_sge.lkey   = mr->lkey;
 #else
-	rx->rx_sge.lkey   = conn->ibc_hdev->ibh_pd->local_dma_lkey;
+	rx_sge.lkey   = conn->ibc_hdev->ibh_pd->local_dma_lkey;
 #endif
-	rx->rx_sge.addr   = rx->rx_msgaddr;
-	rx->rx_sge.length = IBLND_MSG_SIZE;
+	rx_sge.addr   = rx->rx_msgaddr;
+	rx_sge.length = IBLND_MSG_SIZE;
 
-	rx->rx_wrq.next = NULL;
-	rx->rx_wrq.sg_list = &rx->rx_sge;
-	rx->rx_wrq.num_sge = 1;
-	rx->rx_wrq.wr_id = kiblnd_ptr2wreqid(rx, IBLND_WID_RX);
+	wrq.next = NULL;
+	wrq.sg_list = &rx_sge;
+	wrq.num_sge = 1;
+	wrq.wr_id = kiblnd_ptr2wreqid(rx, IBLND_WID_RX);
 
 	LASSERT(conn->ibc_state >= IBLND_CONN_INIT);
 	LASSERT(rx->rx_nob >= 0);              /* not posted */
@@ -184,15 +185,10 @@ kiblnd_post_rx(struct kib_rx *rx, int credit)
 	 * own this rx (and rx::rx_conn) anymore, LU-5678.
 	 */
 	kiblnd_conn_addref(conn);
-#ifdef HAVE_OFED_IB_POST_SEND_RECV_CONST
-	rc = ib_post_recv(conn->ibc_cmid->qp, &rx->rx_wrq,
-			  (const struct ib_recv_wr **)&bad_wrq);
-#else
-	rc = ib_post_recv(conn->ibc_cmid->qp, &rx->rx_wrq, &bad_wrq);
-#endif
+	rc = ib_post_recv(conn->ibc_cmid->qp, &wrq, NULL);
 	if (unlikely(rc != 0)) {
-		CERROR("Can't post rx for %s: bad_wrq: %p: rc = %d\n",
-		       libcfs_nidstr(&conn->ibc_peer->ibp_nid), bad_wrq, rc);
+		CERROR("Can't post rx for %s: rc = %d\n",
+		       libcfs_nidstr(&conn->ibc_peer->ibp_nid), rc);
 		rx->rx_nob = 0;
 	}
 
