@@ -1037,7 +1037,8 @@ struct ptlrpc_request {
 		/* bulk request, sent to server, but uncommitted */
 		rq_unstable:1,
 		rq_early_free_repbuf:1, /* free reply buffer in advance */
-		rq_allow_intr:1;
+		rq_allow_intr:1,
+		rq_pause_after_reply:1;
 	/** @} */
 
 	/** server-side flags are serialized by rq_lock @{ */
@@ -2259,6 +2260,7 @@ struct ptlrpc_service *ptlrpc_register_service(
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int ptlrpc_service_health_check(struct ptlrpc_service *service);
 void ptlrpc_server_drop_request(struct ptlrpc_request *req);
+void ptlrpc_del_exp_list(struct ptlrpc_request *req);
 void ptlrpc_request_change_export(struct ptlrpc_request *req,
 				  struct obd_export *export);
 void ptlrpc_update_export_timer(struct ptlrpc_request *req);

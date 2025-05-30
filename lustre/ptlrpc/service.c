@@ -1023,9 +1023,14 @@ static void ptlrpc_add_exp_list_nolock(struct ptlrpc_request *req,
 		set_bit(tag - 1, export->exp_used_slots);
 }
 
-static void ptlrpc_del_exp_list(struct ptlrpc_request *req)
+void ptlrpc_del_exp_list(struct ptlrpc_request *req)
 {
-	__u16 tag = lustre_msg_get_tag(req->rq_reqmsg);
+	__u16 tag = 0;
+
+	if (unlikely(!req->rq_export))
+		return;
+	if (likely(req->rq_reqmsg))
+		tag = lustre_msg_get_tag(req->rq_reqmsg);
 
 	spin_lock(&req->rq_export->exp_rpc_lock);
 	list_del_init(&req->rq_exp_list);
@@ -1623,6 +1628,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 			lustre_msg_get_handle(reqcopy->rq_reqmsg));
 	if (reqcopy->rq_export == NULL)
 		GOTO(out, rc = -ENODEV);
+	INIT_LIST_HEAD(&reqcopy->rq_exp_list);
 
 	/* RPC ref */
 	class_export_rpc_inc(reqcopy->rq_export);
@@ -2553,6 +2559,11 @@ put_conn:
 			  "sent %d early replies before finishing in %llds",
 			  request->rq_early_count,
 			  div_u64(arrived_usecs, USEC_PER_SEC));
+	}
+	if (unlikely(request->rq_pause_after_reply)) {
+		DEBUG_REQ(D_WARNING, request, "pause req after reply");
+		schedule_timeout_uninterruptible(cfs_time_seconds(3));
+		DEBUG_REQ(D_WARNING, request, "continue");
 	}
 
 	ptlrpc_server_finish_active_request(svcpt, request);

@@ -735,6 +735,12 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 	if (unlikely(rc))
 		goto out;
 
+	/*
+	 * remove from the export list so quick
+	 * resend won't find the original one.
+	 */
+	ptlrpc_del_exp_list(req);
+
 	req->rq_sent = ktime_get_real_seconds();
 
 	rc = ptl_send_buf(&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,

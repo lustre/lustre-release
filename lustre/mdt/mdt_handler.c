@@ -2108,6 +2108,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	if (info->mti_mdt->mdt_enable_dir_auto_split)
 		ma_need |= MA_DIRENT_CNT;
 
+	if (CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_GETATTR, cfs_fail_val))
+		req->rq_pause_after_reply = 1;
+
 	if (info->mti_cross_ref) {
 		/* Only getattr on the child. Parent is on another node. */
 		mdt_set_disposition(info, ldlm_rep,

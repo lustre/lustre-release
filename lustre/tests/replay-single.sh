@@ -5382,6 +5382,31 @@ test_202() {
 }
 run_test 202 "pfl replay should recovery layout generation"
 
+test_203() {
+	mount_client $MOUNT2
+	stack_trap "umount_client $MOUNT2"
+
+	local start=$SECONDS
+#define OBD_FAIL_MDS_PAUSE_GETATTR		0x2403
+	do_facet mds1 "$LCTL set_param fail_loc=0x80002403 fail_val=2"
+	echo "STAT"
+	stat $MOUNT/$tfile &
+	local PID=$!
+
+	sleep 0.5
+
+	echo "SETSTRIPE"
+	$LFS setstripe -E 1MB -c -1 -E 2MB -c -1 -E 3MB -c -1 -E 4MB -c -1 \
+		-E 5MB -c -1 -E 6MB -c -1 -E 7MB -c -1 -E 8MB -c -1 \
+		-E 9MB -c -1 -E 10MB -c -1 -E 11MB -c -1 -E eof -c -1 \
+		$MOUNT2/$tfile
+
+	wait $PID
+	do_facet mds1 "$LCTL set_param fail_loc=0 fail_val=0"
+	(( SECONDS-start < TIMEOUT/2 )) ||
+		error "took too long: $((SECONDS-start)) >= $((TIMEOUT/2))"
+}
+run_test 203 "resend can hit original request"
 
 complete_test $SECONDS
 check_and_cleanup_lustre
