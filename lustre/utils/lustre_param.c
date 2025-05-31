@@ -1536,13 +1536,16 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 	char *line = NULL;
 	bool found_param_name = false;
 	bool found_param_value = false;
+	bool paths_flag = false;
 	size_t len = 0;
-	size_t buf_len;
+	size_t buf_len = 0;
 	FILE *file = NULL;
 	int fd = -1;
 	int rc, rc1;
 
-	buf_len = strlen(buf);
+	if (buf)
+		buf_len = strlen(buf);
+
 	if (buf && buf[buf_len - 1] == '\n') {
 		param = buf;
 	} else {
@@ -1588,6 +1591,7 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 			free(tmp_path);
 			goto out;
 		}
+		paths_flag = true;
 		free(tmp_path);
 	}
 
@@ -1605,6 +1609,11 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 				break;
 			}
 		}
+
+		/* free line, we do not need anymore */
+		free(line);
+		line = NULL;
+
 		if (found_param_value && !popt->po_delete)
 			goto out_file; /* nothing to change */
 	}
@@ -1619,7 +1628,7 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 			fprintf(stderr,
 				"error: %s: client: failed open file %s: %s\n",
 				jt_cmdname(func), path, strerror(-rc));
-			goto out_fd;
+			goto out_open;
 		}
 		rc1 = write(fd, param, strlen(param));
 		if (rc1 < strlen(param)) {
@@ -1637,11 +1646,23 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 		char *tmp_path;
 		char *bak_path;
 
+		/* Case where lctl set_param --client <params>=NNN is called
+		 * Where path is normally (mount.client.params)
+		 * Then, bak_path would be (mount.client.params.bak) under
+		 * /etc/lustre
+		 */
 		line = NULL;
 		len = 0;
 
 		tmp_len = strlen(path) + 8;
 		tmp_path = malloc(tmp_len);
+		if (!tmp_path) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: client: failed allocation %s: %s\n",
+				jt_cmdname(func), "tmp_len", strerror(-rc));
+			goto out_file;
+		}
 		snprintf(tmp_path, tmp_len, "%s.XXXXXX", path);
 
 		rewind(file);
@@ -1652,17 +1673,32 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 			fprintf(stderr,
 				"error: %s: client: failed open file %s: %s\n",
 				jt_cmdname(func), tmp, strerror(-rc));
-			goto out_fd;
+			goto out_open;
 		}
 
 		bak_path = malloc(strlen(path) + 5);
+		if (!bak_path) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: client: failed allocation %s: %s\n",
+				jt_cmdname(func), "bak_path", strerror(-rc));
+			goto out_fd;
+		}
 		snprintf(bak_path, strlen(path) + 5, "%s.bak", path);
 		gettimeofday(&now, NULL);
+
+		/* Handle case where "lctl set_param --client <params>=NNN" is
+		 * subsequently called more than once. Create bak_path file if
+		 * bak_path dentry is NULL.
+		 */
 		if (stat(bak_path, &st) == -1 ||
 		    st.st_atim.tv_sec < now.tv_sec - 100) {
 			rc = rename(path, bak_path);
-			free(bak_path);
 		}
+
+		/* bak_path can be cleaned up now */
+		free(bak_path);
+
 		if (rc) {
 			fprintf(stderr,
 				"error: %s: client: failed to backup %s: %s\n",
@@ -1680,7 +1716,7 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 						"error: %s: client: failed to write '%s': %s\n",
 						jt_cmdname(func), param,
 						strerror(-rc));
-					goto out;
+					goto out_fd;
 				}
 			} else {
 				rc1 = write(fd, line, line_len);
@@ -1690,7 +1726,7 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 						"error: %s: client: failed to write '%s': %s\n",
 						jt_cmdname(func), line,
 						strerror(-rc));
-					goto out;
+					goto out_fd;
 				}
 			}
 		}
@@ -1709,17 +1745,23 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 			fprintf(stderr,
 				"error: %s: client: failed to rename %s: %s\n",
 				jt_cmdname(func), tmp_path, strerror(-rc));
+			free(tmp_path);
 			goto out_fd;
 		}
+		free(tmp_path);
 	}
 
 out_fd:
 	close(fd);
+out_open:
+	if (paths_flag)
+		globfree(&paths);
 out_file:
 	if (file)
 		fclose(file);
-	free(line);
 out:
+	if (line)
+		free(line);
 	if (param != buf)
 		free(param);
 	free(param_name);
