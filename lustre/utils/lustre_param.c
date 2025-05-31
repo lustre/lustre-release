@@ -1604,6 +1604,7 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 			fprintf(stderr,
 				"error: %s: client: param_paths '%s': %s\n",
 				jt_cmdname(func), param_name, strerror(errno));
+			free(tmp_path);
 			goto out;
 		}
 		free(tmp_path);
