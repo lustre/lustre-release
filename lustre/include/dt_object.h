@@ -3054,7 +3054,10 @@ static inline int dt_last_seq_get(const struct lu_env *env,
 {
 	LASSERT(dev);
 	LASSERT(dev->dd_ops);
-	LASSERT(dev->dd_ops->dt_last_seq_get);
+
+	if (!dev->dd_ops->dt_last_seq_get)
+		return -EINVAL;
+
 	return dev->dd_ops->dt_last_seq_get(env, dev, seq);
 }
 
