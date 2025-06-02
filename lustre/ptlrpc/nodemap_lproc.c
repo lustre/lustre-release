@@ -1158,6 +1158,34 @@ static int nodemap_parent_seq_show(struct seq_file *seq, void *data)
 	return 0;
 }
 
+/**
+ * Reads and prints the gssonly_identification flag for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_gssonly_identify_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	seq_printf(m, "%d\n", (int)nodemap->nmf_gss_identify);
+	nodemap_putref(nodemap);
+
+	return 0;
+}
+
 static struct ldebugfs_vars lprocfs_nm_module_vars[] = {
 	{
 		.name		= "active",
@@ -1185,6 +1213,7 @@ LDEBUGFS_SEQ_FOPS_RO(nodemap_raise_privs);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_readonly_mount);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_deny_mount);
 LDEBUGFS_SEQ_FOPS_RO(nodemap_parent);
+LDEBUGFS_SEQ_FOPS_RO(nodemap_gssonly_identify);
 
 static const struct file_operations nodemap_ranges_fops = {
 	.open		= nodemap_ranges_open,
@@ -1243,6 +1272,10 @@ static struct ldebugfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "forbid_encryption",
 		.fops		= &nodemap_forbid_encryption_fops,
+	},
+	{
+		.name		= "gssonly_identification",
+		.fops		= &nodemap_gssonly_identify_fops,
 	},
 	{
 		.name		= "id",

@@ -1223,6 +1223,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_fileset_use_iam = 1;
 		dst->nmf_raise_privs = NODEMAP_RAISE_PRIV_NONE;
 		dst->nmf_rbac_raise = NODEMAP_RBAC_NONE;
+		dst->nmf_gss_identify = 0;
 
 		dst->nm_squash_uid = NODEMAP_NOBODY_UID;
 		dst->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1250,6 +1251,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_fileset_use_iam = 1;
 		dst->nmf_raise_privs = src->nmf_raise_privs;
 		dst->nmf_rbac_raise = src->nmf_rbac_raise;
+		dst->nmf_gss_identify = src->nmf_gss_identify;
 		dst->nm_squash_uid = src->nm_squash_uid;
 		dst->nm_squash_gid = src->nm_squash_gid;
 		dst->nm_squash_projid = src->nm_squash_projid;
@@ -1425,6 +1427,13 @@ int nodemap_add_range(const char *name, const struct lnet_nid nid[2],
 
 	if (!allow_op_on_nm(nodemap))
 		GOTO(out_unlock, rc = -ENXIO);
+
+	if (nodemap->nmf_gss_identify) {
+		CDEBUG(D_INFO,
+		       "cannot add any NID range on nodemap %s because 'gssonly_identification' property is set\n",
+		       nodemap->nm_name);
+		GOTO(out_unlock, rc = -EPERM);
+	}
 
 	rc = nodemap_add_range_helper(active_config, nodemap, nid,
 				      netmask, 0);
@@ -3995,6 +4004,48 @@ out_putref:
 EXPORT_SYMBOL(nodemap_set_deny_mount);
 
 /**
+ * nodemap_set_gss_identify() - Set the nmf_gss_identify flag to true or false.
+ * @name: nodemap name
+ * @gss_identify: if true, identify clients based on the GSS token
+ *
+ * Return:
+ * * %0 on success
+ */
+int nodemap_set_gss_identify(const char *name, bool gss_identify)
+{
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	if (is_default_nodemap(nodemap))
+		GOTO(out_putref, rc = -EINVAL);
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -EPERM);
+
+	if (!list_empty(&nodemap->nm_ranges)) {
+		CDEBUG(D_INFO,
+		       "nodemap %s must have empty NID range to set 'gssonly_identification' property\n",
+		       nodemap->nm_name);
+		GOTO(out_putref, rc = -EPERM);
+	}
+
+	nodemap->nmf_gss_identify = gss_identify;
+	rc = nodemap_idx_nodemap_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+
+out_putref:
+	nodemap_putref(nodemap);
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_gss_identify);
+
+/**
  * nodemap_add() - Add a nodemap
  * @nodemap_name: name of nodemap
  * @dynamic: if true nodemap will be dynamic (can be modified runtime)
@@ -4999,6 +5050,12 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 		if (rc == 0)
 			rc = nodemap_set_deny_mount(nodemap_name, bool_switch);
 		break;
+	case LCFG_NODEMAP_GSS_IDENTIFY:
+		rc = kstrtobool(param, &bool_switch);
+		if (rc == 0)
+			rc = nodemap_set_gss_identify(nodemap_name,
+						      bool_switch);
+		break;
 	case LCFG_NODEMAP_MAP_MODE:
 	{
 		char *p;
@@ -5385,6 +5442,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 	case LCFG_NODEMAP_RAISE_PRIVS:
 	case LCFG_NODEMAP_READONLY_MOUNT:
 	case LCFG_NODEMAP_DENY_MOUNT:
+	case LCFG_NODEMAP_GSS_IDENTIFY:
 	case LCFG_NODEMAP_RBAC:
 		if (lcfg->lcfg_bufcount != 4)
 			GOTO(out_lcfg, rc = -EINVAL);

@@ -1,4 +1,4 @@
-.TH LCTL-NODEMAP_MODIFY 8 2025-02-28 Lustre "Lustre Configuration Utilities"
+.TH LCTL-NODEMAP_MODIFY 8 2025-07-09 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-nodemap_modify \- modify a nodemap property
 .SH SYNOPSIS
@@ -166,6 +166,15 @@ INTERNAL, so that servers trust supplementary groups as provided by clients.
 .br
 Apart from all, any role not explicitly specified is forbidden.
 And to forbid all roles, use 'none' value.
+.TP
+.B gssonly_identification
+If set to 1, clients for this nodemap are no longer identified based on their
+NIDs, but instead by the GSS token they are using to authenticate. Consequently,
+a nodemap with this property set cannot have any NID ranges defined. Any client
+using the GSS token associated with this nodemap to authenticate is considered
+part of this nodemap.
+.br
+Defaults to 0.
 .RE
 .TP
 .BI --value " VALUE"

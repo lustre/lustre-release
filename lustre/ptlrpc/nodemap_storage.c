@@ -89,6 +89,7 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 	nr->ncr.ncr_flags2 =
 		(nodemap->nmf_readonly_mount ? NM_FL2_READONLY_MOUNT : 0) |
 		(nodemap->nmf_deny_mount ? NM_FL2_DENY_MOUNT : 0) |
+		(nodemap->nmf_gss_identify ? NM_FL2_GSS_IDENTIFY : 0) |
 		(nodemap->nmf_fileset_use_iam ? NM_FL2_FILESET_USE_IAM : 0);
 	nr->ncr.ncr_padding1 = 0;
 	nr->ncr.ncr_squash_projid = cpu_to_le32(nodemap->nm_squash_projid);
@@ -1632,6 +1633,7 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	flags2 = rec->ncr.ncr_flags2;
 	nodemap->nmf_readonly_mount = flags2 & NM_FL2_READONLY_MOUNT;
 	nodemap->nmf_deny_mount = flags2 & NM_FL2_DENY_MOUNT;
+	nodemap->nmf_gss_identify = flags2 & NM_FL2_GSS_IDENTIFY;
 	nodemap->nmf_fileset_use_iam = flags2 & NM_FL2_FILESET_USE_IAM;
 
 	/* by default, and in the absence of cluster_roles, grant all rbac roles

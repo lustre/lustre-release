@@ -104,7 +104,8 @@ struct lu_nodemap {
 				 nmf_forbid_encryption:1,
 				 nmf_readonly_mount:1,
 				 nmf_deny_mount:1,
-				 nmf_fileset_use_iam:1;
+				 nmf_fileset_use_iam:1,
+				 nmf_gss_identify:1;
 	/* bitmap for mapping type */
 	enum nodemap_mapping_modes nmf_map_mode;
 	/* bitmap for rbac, enum nodemap_rbac_roles */
@@ -235,6 +236,7 @@ int nodemap_set_raise_privs(const char *name, enum nodemap_raise_privs privs,
 			    enum nodemap_rbac_roles rbac_raise);
 int nodemap_set_readonly_mount(const char *name, bool readonly_mount);
 int nodemap_set_deny_mount(const char *name, bool deny_mount);
+int nodemap_set_gss_identify(const char *name, bool gss_identify);
 bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
 			  __u32 qc_type, __u32 id);
 int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,

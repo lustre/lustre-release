@@ -5176,6 +5176,8 @@ int jt_nodemap_modify(int argc, char **argv)
 		cmd = LCFG_NODEMAP_RBAC;
 	} else if (strcmp("deny_mount", param) == 0) {
 		cmd = LCFG_NODEMAP_DENY_MOUNT;
+	} else if (strcmp("gssonly_identification", param) == 0) {
+		cmd = LCFG_NODEMAP_GSS_IDENTIFY;
 	} else {
 		fprintf(stderr,
 			"error: %s: nodemap_modify invalid property: %s\n",
