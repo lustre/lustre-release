@@ -8647,6 +8647,12 @@ test_77() {
 }
 run_test 77 "root offsetting"
 
+test_79() {
+	# reserve test_79
+	skip "not implemented yet"
+}
+#run_test 79 "ssk for nodemap identification"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
