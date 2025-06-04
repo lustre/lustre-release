@@ -35,7 +35,7 @@ u64 stripe_width(struct lov_stripe_md *lsm, unsigned int index)
 u64 lov_stripe_size(struct lov_stripe_md *lsm, int index, u64 ost_size,
 		    int stripeno)
 {
-	u32 ssize = lsm->lsm_entries[index]->lsme_stripe_size;
+	u64 ssize = lsm->lsm_entries[index]->lsme_stripe_size;
 	u32 stripe_size;
 	u64 swidth;
 	u64 lov_size;

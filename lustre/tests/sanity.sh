@@ -6074,6 +6074,25 @@ test_44f() {
 }
 run_test 44f "Check fiemap for sparse files"
 
+test_44g() {
+	# max stripe size is 4G - 64K
+	$LFS setstripe -C 4 -S 4194240k $DIR/$tfile
+	dd if=/dev/zero of=$DIR/$tfile conv=notrunc bs=64k count=1 \
+	   seek=$((65535 * 3 + 65533))
+
+	$LFS setstripe -c 2 -S 2g $DIR/$tfile-2
+	dd if=/dev/zero of=$DIR/$tfile-2 conv=notrunc bs=64k count=1 \
+	   seek=65535
+
+	cancel_lru_locks osc
+
+	$CHECKSTAT -s $(((65535 * 3 + 65534) * 65536)) $DIR/$tfile ||
+	    error "wrong $DIR/$tfile size"
+	$CHECKSTAT -s 4294967296 $DIR/$tfile-2 ||
+	    error "wrong $DIR/$tfile-2 size"
+}
+run_test 44g "test overflow in lov_stripe_size"
+
 dirty_osc_total() {
 	tot=0
 	for d in `lctl get_param -n ${OSC}.*.cur_dirty_bytes`; do
