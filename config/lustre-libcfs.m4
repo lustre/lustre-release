@@ -1906,6 +1906,22 @@ AC_DEFUN([LIBCFS_BLK_INTEGRITY_NOVERIFY], [
 	])
 ]) # LIBCFS_BLK_INTEGRITY_NOVERIFY
 
+#
+# LIBCFS_LINUX_BIO_INTEGRITY_HEADER
+#
+# Linux commit v6.10-rc6-157-gda042a365515
+#   block: split integrity support out of bio.h
+#
+AC_DEFUN([LIBCFS_SRC_LINUX_BIO_INTEGRITY_HEADER], [
+	LB2_CHECK_LINUX_HEADER_SRC([linux/bio-integrity.h], [-Werror])
+])
+AC_DEFUN([LIBCFS_LINUX_BIO_INTEGRITY_HEADER], [
+	LB2_CHECK_LINUX_HEADER_RESULT([linux/bio-integrity.h], [
+		AC_DEFINE(HAVE_LINUX_BIO_INTEGRITY_HEADER, 1,
+			[linux/bio-integrity.h is present])
+	])
+]) # LIBCFS_LINUX_BIO_INTEGRITY_HEADER
+
 dnl #
 dnl # Generate and compile all of the kernel API test cases to determine
 dnl # which interfaces are available.  By invoking the kernel build system

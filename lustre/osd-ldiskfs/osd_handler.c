@@ -2593,6 +2593,68 @@ out:
 	return result;
 }
 
+static void osd_init_t10_type(struct osd_device *osd)
+{
+	struct blk_integrity *bi = bdev_get_integrity(osd_sb(osd)->s_bdev);
+	unsigned short interval;
+	const char *name;
+
+	osd->od_t10_type = 0;
+	if (bi) {
+		interval = blk_integrity_interval(bi);
+		name = blk_integrity_name(bi);
+		/*
+		 * Expected values:
+		 * T10-DIF-TYPE1-CRC
+		 * T10-DIF-TYPE2-CRC
+		 * T10-DIF-TYPE3-CRC
+		 * T10-DIF-TYPE1-IP
+		 * T10-DIF-TYPE2-IP
+		 * T10-DIF-TYPE3-IP
+		 */
+		if (strncmp(name, "T10-DIF-TYPE",
+			    sizeof("T10-DIF-TYPE") - 1) == 0) {
+			/* also skip "1/2/3-" at end */
+			const int type_off = sizeof("T10-DIF-TYPE.");
+			char type_number = name[type_off - 2];
+
+			if (interval != 512 && interval != 4096) {
+				CERROR("%s: unsupported T10PI sector size %u\n",
+				       osd->od_svname, interval);
+				return;
+			}
+			switch (type_number) {
+			case '1':
+				osd->od_t10_type = OSD_T10_TYPE1;
+				break;
+			case '2':
+				osd->od_t10_type = OSD_T10_TYPE2;
+				break;
+			case '3':
+				osd->od_t10_type = OSD_T10_TYPE3;
+				break;
+			default:
+				CERROR("%s: unsupported T10PI type %s\n",
+				       osd->od_svname, name);
+				return;
+			}
+			if (strcmp(name + type_off, "CRC") == 0) {
+				osd->od_t10_type |= OSD_T10_TYPE_CRC;
+			} else if (strcmp(name + type_off, "IP") == 0) {
+				osd->od_t10_type |= OSD_T10_TYPE_IP;
+			} else {
+				CERROR("%s: unsupported checksum type of T10PI type '%s'\n",
+				       osd->od_svname, name);
+				osd->od_t10_type = 0;
+			}
+
+		} else {
+			CERROR("%s: unsupported T10PI type '%s'\n",
+			       osd->od_svname, name);
+		}
+	}
+}
+
 /**
  * Estimate space needed for file creations. We assume the largest filename
  * which is 2^64 - 1, hence a filename of 20 chars.
@@ -2616,7 +2678,6 @@ static void osd_conf_get(const struct lu_env *env,
 	struct osd_device *d = osd_dt_dev(dev);
 	struct super_block *sb = osd_sb(d);
 	struct blk_integrity *bi = bdev_get_integrity(sb->s_bdev);
-	const char *name;
 	int ea_overhead;
 
 	/*
@@ -2684,65 +2745,15 @@ static void osd_conf_get(const struct lu_env *env,
 	param->ddp_t10_cksum_type = 0;
 	if (bi) {
 		unsigned short interval = blk_integrity_interval(bi);
-		name = blk_integrity_name(bi);
-		/*
-		 * Expected values:
-		 * T10-DIF-TYPE1-CRC
-		 * T10-DIF-TYPE2-CRC
-		 * T10-DIF-TYPE3-CRC
-		 * T10-DIF-TYPE1-IP
-		 * T10-DIF-TYPE2-IP
-		 * T10-DIF-TYPE3-IP
-		 */
-		if (strncmp(name, "T10-DIF-TYPE",
-			    sizeof("T10-DIF-TYPE") - 1) == 0) {
-			/* also skip "1/2/3-" at end */
-			const int type_off = sizeof("T10-DIF-TYPE.");
-			char type_number = name[type_off - 2];
 
-			if (interval != 512 && interval != 4096) {
-				CERROR("%s: unsupported T10PI sector size %u\n",
-				       d->od_svname, interval);
-				goto out;
-			}
-			switch (type_number) {
-			case '1':
-				d->od_t10_type = OSD_T10_TYPE1;
-				break;
-			case '2':
-				d->od_t10_type = OSD_T10_TYPE2;
-				break;
-			case '3':
-				d->od_t10_type = OSD_T10_TYPE3;
-				break;
-			default:
-				CERROR("%s: unsupported T10PI type %s\n",
-				       d->od_svname, name);
-				goto out;
-			}
-			if (strcmp(name + type_off, "CRC") == 0) {
-				d->od_t10_type |= OSD_T10_TYPE_CRC;
-				param->ddp_t10_cksum_type = interval == 512 ?
-					OBD_CKSUM_T10CRC512 :
-					OBD_CKSUM_T10CRC4K;
-			} else if (strcmp(name + type_off, "IP") == 0) {
-				d->od_t10_type |= OSD_T10_TYPE_IP;
-				param->ddp_t10_cksum_type = interval == 512 ?
-					OBD_CKSUM_T10IP512 :
-					OBD_CKSUM_T10IP4K;
-			} else {
-				CERROR("%s: unsupported checksum type of T10PI type '%s'\n",
-				       d->od_svname, name);
-				d->od_t10_type = 0;
-			}
-
-		} else {
-			CERROR("%s: unsupported T10PI type '%s'\n",
-			       d->od_svname, name);
-		}
+		if (d->od_t10_type & OSD_T10_TYPE_CRC)
+			param->ddp_t10_cksum_type = interval == 512 ?
+				OBD_CKSUM_T10CRC512 : OBD_CKSUM_T10CRC4K;
+		else if (d->od_t10_type & OSD_T10_TYPE_IP)
+			param->ddp_t10_cksum_type = interval == 512 ?
+				OBD_CKSUM_T10IP512 : OBD_CKSUM_T10IP4K;
 	}
 
-out:
 	param->ddp_has_lseek_data_hole = true;
 }
 
@@ -8560,6 +8571,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	if (o->od_extent_bytes_percpu)
 		free_percpu(o->od_extent_bytes_percpu);
 	osd_obj_map_fini(o);
+	if (o->od_integrityd_wq)
+		destroy_workqueue(o->od_integrityd_wq);
 	osd_umount(env, o);
 
 	RETURN(NULL);
@@ -8593,7 +8606,6 @@ static int osd_device_init0(const struct lu_env *env,
 	INIT_LIST_HEAD(&o->od_index_restore_list);
 	spin_lock_init(&o->od_lock);
 	o->od_index_backup_policy = LIBP_NONE;
-	o->od_t10_type = 0;
 	init_waitqueue_head(&o->od_commit_cb_done);
 
 	o->od_read_cache = 1;
@@ -8627,9 +8639,23 @@ static int osd_device_init0(const struct lu_env *env,
 	o->od_nonrotational =
 		blk_queue_nonrot(bdev_get_queue(osd_sb(o)->s_bdev));
 
+	osd_init_t10_type(o);
+	if (o->od_t10_type != OSD_T10_TYPE_UNKNOWN) {
+		/*
+		 * integrityd won't block much but may burn a lot of CPU cycles.
+		 * Make it highpri CPU intensive wq with max concurrency of 1.
+		 */
+		o->od_integrityd_wq = alloc_workqueue("%s-integrityd",
+						WQ_MEM_RECLAIM | WQ_HIGHPRI |
+						WQ_CPU_INTENSIVE, 1,
+						osd_name(o));
+		if (!o->od_integrityd_wq)
+			GOTO(out_mnt, rc = -ENOMEM);
+	}
+
 	rc = osd_obj_map_init(env, o);
 	if (rc != 0)
-		GOTO(out_mnt, rc);
+		GOTO(out_wq, rc);
 
 	rc = lu_site_init(&o->od_site, l);
 	if (rc != 0)
@@ -8712,6 +8738,9 @@ out_site:
 	lu_site_fini(&o->od_site);
 out_compat:
 	osd_obj_map_fini(o);
+out_wq:
+	if (o->od_integrityd_wq)
+		destroy_workqueue(o->od_integrityd_wq);
 out_mnt:
 	osd_umount(env, o);
 out:

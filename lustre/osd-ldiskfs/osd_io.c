@@ -63,11 +63,12 @@ static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
 	bio->bi_private = bio_private;
 	bio_private->obp_start_page_idx = start_page_idx;
 	bio_private->obp_iobuf = iobuf;
+	bio_private->obp_bio = bio;
 
 	RETURN(0);
 }
 
-static void osd_bio_fini(struct bio *bio)
+static void osd_bio_uninit(struct bio *bio)
 {
 	struct osd_bio_private *bio_private;
 
@@ -75,6 +76,8 @@ static void osd_bio_fini(struct bio *bio)
 		return;
 	bio_private = bio->bi_private;
 	bio_put(bio);
+	if (bio_private->obp_integrity_buf != NULL)
+		kfree(bio_private->obp_integrity_buf);
 	OBD_SLAB_FREE(bio_private, biop_cachep, sizeof(*bio_private));
 }
 
@@ -191,6 +194,36 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 	iobuf->dr_error = 0;
 }
 
+void osd_bio_fini(struct bio *bio)
+{
+	struct osd_bio_private *bio_private = bio->bi_private;
+	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
+
+	/*
+	 * set dr_elapsed before dr_numreqs turns to 0, otherwise
+	 * it's possible that service thread will see dr_numreqs
+	 * is zero, but dr_elapsed is not set yet, leading to lost
+	 * data in this processing and an assertion in a subsequent
+	 * call to OSD.
+	 */
+	if (atomic_read(&iobuf->dr_numreqs) == 1) {
+		ktime_t now = ktime_get();
+
+		iobuf->dr_elapsed = ktime_sub(now, iobuf->dr_start_time);
+		iobuf->dr_elapsed_valid = 1;
+	}
+	if (atomic_dec_and_test(&iobuf->dr_numreqs))
+		wake_up(&iobuf->dr_wait);
+
+	/* Completed bios used to be chained off iobuf->dr_bios and freed in
+	 * filter_clear_dreq().  It was then possible to exhaust the biovec-256
+	 * mempool when serious on-disk fragmentation was encountered,
+	 * deadlocking the OST.  The bios are now released as soon as complete
+	 * so the pool cannot be exhausted while IOs are competing. b=10076
+	 */
+	osd_bio_uninit(bio);
+}
+
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
 static void dio_complete_routine(struct bio *bio)
 {
@@ -237,28 +270,16 @@ static void dio_complete_routine(struct bio *bio, int error)
 	if (error != 0 && iobuf->dr_error == 0)
 		iobuf->dr_error = error;
 
-	/*
-	 * set dr_elapsed before dr_numreqs turns to 0, otherwise
-	 * it's possible that service thread will see dr_numreqs
-	 * is zero, but dr_elapsed is not set yet, leading to lost
-	 * data in this processing and an assertion in a subsequent
-	 * call to OSD.
-	 */
-	if (atomic_read(&iobuf->dr_numreqs) == 1) {
-		ktime_t now = ktime_get();
-
-		iobuf->dr_elapsed = ktime_sub(now, iobuf->dr_start_time);
-		iobuf->dr_elapsed_valid = 1;
+	if (bio_data_dir(bio) == READ && iobuf->dr_error == 0 &&
+	    bio_private->obp_integrity_buf != NULL &&
+	    bdev_integrity_enabled(osd_sb(iobuf->dr_dev)->s_bdev,
+				   iobuf->dr_rw)) {
+		INIT_WORK(&bio_private->obp_work, osd_bio_integrity_verify_fn);
+		queue_work(iobuf->dr_dev->od_integrityd_wq,
+			   &bio_private->obp_work);
+		return;
 	}
-	if (atomic_dec_and_test(&iobuf->dr_numreqs))
-		wake_up(&iobuf->dr_wait);
 
-	/* Completed bios used to be chained off iobuf->dr_bios and freed in
-	 * filter_clear_dreq().  It was then possible to exhaust the biovec-256
-	 * mempool when serious on-disk fragmentation was encountered,
-	 * deadlocking the OST.  The bios are now released as soon as complete
-	 * so the pool cannot be exhausted while IOs are competing. b=10076
-	 */
 	osd_bio_fini(bio);
 }
 
@@ -377,7 +398,6 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	int page_idx, page_idx_start;
 	int i;
 	int rc = 0;
-	bool integrity_enabled;
 	struct blk_plug plug;
 	int blocks_left_page;
 
@@ -385,7 +405,6 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 
 	LASSERT(iobuf->dr_npages == npages);
 	iobuf->dr_start_time = ktime_get();
-	integrity_enabled = bdev_integrity_enabled(bdev, iobuf->dr_rw);
 
 	if (!count)
 		count = npages * blocks_per_page;
@@ -503,7 +522,7 @@ out:
 	if (rc == 0)
 		rc = iobuf->dr_error;
 	else
-		osd_bio_fini(bio);
+		osd_bio_uninit(bio);
 
 	if (iobuf->dr_rw == 0 || CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT))
 		osd_fini_iobuf(osd, iobuf);

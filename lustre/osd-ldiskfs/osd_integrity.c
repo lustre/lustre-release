@@ -12,32 +12,17 @@
  * Author: Li Xi
  */
 
-#ifdef HAVE_LINUX_BLK_INTEGRITY_HEADER
- #include <linux/blk-integrity.h>
-#else
- #include <linux/blkdev.h>
-#endif
-#include <linux/blk_types.h>
-
 #include <obd_cksum.h>
 #include <lustre_compat.h>
 
 #include "osd_internal.h"
 
-#if IS_ENABLED(CONFIG_CRC_T10DIF)
-#ifdef HAVE_BLK_INTEGRITY_ITER
-# define blk_status_gen blk_status_t
-# define RETURN_GEN(_gen_fn) return _gen_fn
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+# include <linux/t10-pi.h>
 #else
-# define blk_status_gen void
-# define RETURN_GEN(_gen_fn) _gen_fn
-# define blk_integrity_iter blk_integrity_exchg
-# define interval sector_size
-# define seed sector
 # define blk_status_t int
 # define BLK_STS_PROTECTION -EIO
 # define BLK_STS_OK 0
-#endif
 /*
  * Data Integrity Field tuple.
  */
@@ -49,13 +34,28 @@ struct t10_pi_tuple {
 
 #define T10_PI_APP_ESCAPE cpu_to_be16(0xffff)
 #define T10_PI_REF_ESCAPE cpu_to_be32(0xffffffff)
+#endif
 
-static struct niobuf_local *find_lnb(struct blk_integrity_iter *iter)
+struct osd_blk_integrity_iter {
+	void			*prot_buf;
+	void			*data_buf;
+	sector_t		seed;
+	unsigned int		data_size;
+	unsigned short		interval;
+	unsigned char		tuple_size;
+	const char		*disk_name;
+	struct bio		*bio;
+	unsigned int		bi_idx;
+};
+
+typedef blk_status_t (osd_integrity_proc_fn) (struct osd_blk_integrity_iter *);
+
+static struct niobuf_local *find_lnb(struct osd_blk_integrity_iter *iter)
 {
 	struct bio *bio = iter->bio;
-	struct bio_vec *bv = &bio->bi_io_vec[iter->bi_idx];
 	struct osd_bio_private *bio_private = bio->bi_private;
 	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
+	struct page *page = virt_to_page(iter->data_buf);
 	int index = bio_private->obp_start_page_idx + iter->bi_idx;
 	int i;
 
@@ -65,7 +65,7 @@ static struct niobuf_local *find_lnb(struct blk_integrity_iter *iter)
 	 * e.g. a page mapped to a hole in the middle.
 	 */
 	for (i = index; i < iobuf->dr_npages; i++) {
-		if (iobuf->dr_lnbs[i]->lnb_page == bv->bv_page)
+		if (iobuf->dr_lnbs[i]->lnb_page == page)
 			return iobuf->dr_lnbs[i];
 	}
 
@@ -79,11 +79,11 @@ static struct niobuf_local *find_lnb(struct blk_integrity_iter *iter)
  * Type 3 protection has a 16-bit guard tag and 16 + 32 bits of opaque
  * tag space.
  */
-static blk_status_gen osd_dif_generate(struct blk_integrity_iter *iter,
+static blk_status_t osd_dif_generate(struct osd_blk_integrity_iter *iter,
 				obd_dif_csum_fn *fn, enum osd_t10_type type)
 {
 	struct niobuf_local *lnb = find_lnb(iter);
-	__be16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
+	__be16 *lnb_guard_buf = lnb ? lnb->lnb_guards : NULL;
 	unsigned int i;
 
 	ENTRY;
@@ -91,8 +91,8 @@ static blk_status_gen osd_dif_generate(struct blk_integrity_iter *iter,
 		struct t10_pi_tuple *pi = iter->prot_buf;
 
 		if (lnb && lnb->lnb_guard_rpc) {
-			pi->guard_tag = *guard_buf;
-			guard_buf++;
+			pi->guard_tag = *lnb_guard_buf;
+			lnb_guard_buf++;
 		} else {
 			pi->guard_tag = fn(iter->data_buf, iter->interval);
 		}
@@ -104,22 +104,18 @@ static blk_status_gen osd_dif_generate(struct blk_integrity_iter *iter,
 			pi->ref_tag = 0;
 
 		iter->data_buf += iter->interval;
-		iter->prot_buf += sizeof(struct t10_pi_tuple);
+		iter->prot_buf += iter->tuple_size;
 		iter->seed++;
 	}
 
-#ifdef HAVE_BLK_INTEGRITY_ITER
 	RETURN(BLK_STS_OK);
-#else
-	RETURN_EXIT;
-#endif
 }
 
-static blk_status_t osd_dif_verify(struct blk_integrity_iter *iter,
+static blk_status_t osd_dif_verify(struct osd_blk_integrity_iter *iter,
 				   obd_dif_csum_fn *fn, enum osd_t10_type type)
 {
 	struct niobuf_local *lnb = find_lnb(iter);
-	__be16 *guard_buf = lnb ? lnb->lnb_guards : NULL;
+	__be16 *lnb_guard_buf = lnb ? lnb->lnb_guards : NULL;
 	unsigned int i;
 
 	ENTRY;
@@ -161,14 +157,14 @@ static blk_status_t osd_dif_verify(struct blk_integrity_iter *iter,
 			RETURN(BLK_STS_PROTECTION);
 		}
 
-		if (guard_buf) {
-			*guard_buf = csum;
-			guard_buf++;
+		if (lnb_guard_buf) {
+			*lnb_guard_buf = pi->guard_tag;
+			lnb_guard_buf++;
 		}
 
 next:
 		iter->data_buf += iter->interval;
-		iter->prot_buf += sizeof(struct t10_pi_tuple);
+		iter->prot_buf += iter->tuple_size;
 		iter->seed++;
 	}
 
@@ -178,65 +174,82 @@ next:
 	RETURN(BLK_STS_OK);
 }
 
-static blk_status_gen osd_dif_type1_generate_crc(struct blk_integrity_iter *iter)
+static blk_status_t osd_dif_type1_generate_crc(struct osd_blk_integrity_iter *iter)
 {
-	RETURN_GEN(osd_dif_generate(iter, obd_dif_crc_fn, OSD_T10_TYPE1));
+	return osd_dif_generate(iter, obd_dif_crc_fn, OSD_T10_TYPE1);
 }
 
-static blk_status_gen osd_dif_type1_generate_ip(struct blk_integrity_iter *iter)
+static blk_status_t osd_dif_type1_generate_ip(struct osd_blk_integrity_iter *iter)
 {
-	RETURN_GEN(osd_dif_generate(iter, obd_dif_ip_fn, OSD_T10_TYPE1));
+	return osd_dif_generate(iter, obd_dif_ip_fn, OSD_T10_TYPE1);
 }
 
-static blk_status_gen osd_dif_type3_generate_crc(struct blk_integrity_iter *iter)
+static blk_status_t osd_dif_type3_generate_crc(struct osd_blk_integrity_iter *iter)
 {
-	RETURN_GEN(osd_dif_generate(iter, obd_dif_crc_fn, OSD_T10_TYPE3));
+	return osd_dif_generate(iter, obd_dif_crc_fn, OSD_T10_TYPE3);
 }
 
-static blk_status_gen osd_dif_type3_generate_ip(struct blk_integrity_iter *iter)
+static blk_status_t osd_dif_type3_generate_ip(struct osd_blk_integrity_iter *iter)
 {
-	RETURN_GEN(osd_dif_generate(iter, obd_dif_ip_fn, OSD_T10_TYPE3));
+	return osd_dif_generate(iter, obd_dif_ip_fn, OSD_T10_TYPE3);
 }
-static blk_status_t osd_dif_type1_verify_crc(struct blk_integrity_iter *iter)
+static blk_status_t osd_dif_type1_verify_crc(struct osd_blk_integrity_iter *iter)
 {
 	return osd_dif_verify(iter, obd_dif_crc_fn, OSD_T10_TYPE1);
 }
 
-static blk_status_t osd_dif_type1_verify_ip(struct blk_integrity_iter *iter)
+static blk_status_t osd_dif_type1_verify_ip(struct osd_blk_integrity_iter *iter)
 {
 	return osd_dif_verify(iter, obd_dif_ip_fn, OSD_T10_TYPE1);
 }
 
-static blk_status_t osd_dif_type3_verify_crc(struct blk_integrity_iter *iter)
+static blk_status_t osd_dif_type3_verify_crc(struct osd_blk_integrity_iter *iter)
 {
 	return osd_dif_verify(iter, obd_dif_crc_fn, OSD_T10_TYPE3);
 }
 
-static blk_status_t osd_dif_type3_verify_ip(struct blk_integrity_iter *iter)
+static blk_status_t osd_dif_type3_verify_ip(struct osd_blk_integrity_iter *iter)
 {
 	return osd_dif_verify(iter, obd_dif_ip_fn, OSD_T10_TYPE3);
 }
 
-int osd_get_integrity_profile(struct osd_device *osd,
-			      integrity_gen_fn **generate_fn,
-			      integrity_vrfy_fn **verify_fn)
+static int osd_get_integrity_proc_fn(struct osd_device *osd, int rw,
+			      osd_integrity_proc_fn **proc_fn)
 {
+	*proc_fn = NULL;
+
 	switch (osd->od_t10_type) {
 	case OSD_T10_TYPE1_CRC:
-		*verify_fn = osd_dif_type1_verify_crc;
-		*generate_fn = osd_dif_type1_generate_crc;
+		if (rw == 1)
+			*proc_fn = osd_dif_type1_generate_crc;
+		else if (rw == 0)
+			*proc_fn = osd_dif_type1_verify_crc;
+		else
+			return -EINVAL;
 		break;
 	case OSD_T10_TYPE3_CRC:
-		*verify_fn = osd_dif_type3_verify_crc;
-		*generate_fn = osd_dif_type3_generate_crc;
+		if (rw == 1)
+			*proc_fn = osd_dif_type3_generate_crc;
+		else if (rw == 0)
+			*proc_fn = osd_dif_type3_verify_crc;
+		else
+			return -EINVAL;
 		break;
 	case OSD_T10_TYPE1_IP:
-		*verify_fn = osd_dif_type1_verify_ip;
-		*generate_fn = osd_dif_type1_generate_ip;
+		if (rw == 1)
+			*proc_fn = osd_dif_type1_generate_ip;
+		else if (rw == 0)
+			*proc_fn = osd_dif_type1_verify_ip;
+		else
+			return -EINVAL;
 		break;
 	case OSD_T10_TYPE3_IP:
-		*verify_fn = osd_dif_type3_verify_ip;
-		*generate_fn = osd_dif_type3_generate_ip;
+		if (rw == 1)
+			*proc_fn = osd_dif_type3_generate_ip;
+		else if (rw == 0)
+			*proc_fn = osd_dif_type3_verify_ip;
+		else
+			return -EINVAL;
 		break;
 	default:
 		return -ENOTSUPP;
@@ -244,9 +257,7 @@ int osd_get_integrity_profile(struct osd_device *osd,
 
 	return 0;
 }
-#endif /* CONFIG_CRC_T10DIF */
 
-#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY) && defined(HAVE_BIO_INTEGRITY_PREP_FN)
 /*
  * This function will change the data written, thus it should only be
  * used when checking data integrity feature
@@ -337,33 +348,264 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 	return 0;
 }
 
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+static blk_status_t osd_bio_integrity_process(struct bio *bio,
+		struct bvec_iter *proc_iter, void *prot_buf,
+		osd_integrity_proc_fn *proc_fn)
+{
+	struct blk_integrity *bi = blk_get_integrity(bio_get_disk(bio));
+	struct osd_blk_integrity_iter iter;
+	struct bvec_iter bviter;
+	struct bio_vec bv;
+	blk_status_t ret = BLK_STS_OK;
+	unsigned int pg_offset_total = 0;
+	unsigned int pg_offset_cur = 0;
+	unsigned int last_bi_idx = 0;
+
+	iter.disk_name = bio_get_disk(bio)->disk_name;
+	iter.interval = 1 << bi->interval_exp;
+	iter.tuple_size = bi->tuple_size;
+	iter.seed = proc_iter->bi_sector;
+	iter.prot_buf = prot_buf;
+	iter.bio = bio;
+
+	__bio_for_each_segment(bv, bio, bviter, *proc_iter) {
+		void *kaddr = kmap_local_page(bv.bv_page);
+
+		/*
+		 * For kernels with multipage bvec, a single bio_vec could hold
+		 * a number of contiguous pages. The bi_idx could be smaller
+		 * than the page index, making it slower to find the lnb.
+		 * We need to calculate the index into dr_lnbs here.
+		 */
+		if (bviter.bi_idx != last_bi_idx) {
+			pg_offset_total += pg_offset_cur;
+			last_bi_idx = bviter.bi_idx;
+		}
+		pg_offset_cur = bv.bv_page - (__bvec_iter_bvec(bio->bi_io_vec, bviter))->bv_page;
+
+		iter.data_buf = kaddr + bv.bv_offset;
+		iter.data_size = bv.bv_len;
+		iter.bi_idx = bviter.bi_idx + pg_offset_total + pg_offset_cur;
+
+		ret = proc_fn(&iter);
+		kunmap_local(kaddr);
+
+		if (ret)
+			break;
+
+	}
+	return ret;
+}
+#else
+static blk_status_t osd_bio_integrity_process(struct bio *bio, void *prot_buf,
+					      osd_integrity_proc_fn *proc_fn)
+{
+	struct blk_integrity *bi = blk_get_integrity(bio_get_disk(bio));
+	struct osd_blk_integrity_iter iter;
+	struct bio_vec *bv;
+	unsigned int i;
+	blk_status_t ret = BLK_STS_OK;
+
+	iter.disk_name = bio_get_disk(bio)->disk_name;
+	iter.interval = bi->sector_size;
+	iter.tuple_size = bi->tuple_size;
+	iter.seed = bio->bi_integrity->bip_sector;
+	iter.prot_buf = prot_buf;
+	iter.bio = bio;
+
+	bio_for_each_segment(bv, bio, i) {
+		void *kaddr = kmap_atomic(bv->bv_page);
+
+		iter.data_buf = kaddr + bv->bv_offset;
+		iter.data_size = bv->bv_len;
+		iter.bi_idx = i;
+
+		ret = proc_fn(&iter);
+		kunmap_atomic(kaddr);
+
+		if (ret)
+			break;
+
+	}
+	return ret;
+}
+#endif
+
+void osd_bio_integrity_verify_fn(struct work_struct *work)
+{
+	osd_integrity_proc_fn *verify_fn = NULL;
+	struct osd_bio_private *bio_private =
+		container_of(work, struct osd_bio_private, obp_work);
+	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
+	struct bio *bio = bio_private->obp_bio;
+	blk_status_t ret;
+	int rc;
+
+	rc = osd_get_integrity_proc_fn(iobuf->dr_dev, iobuf->dr_rw,
+				       &verify_fn);
+	if (rc)
+		goto out;
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+	ret = osd_bio_integrity_process(bio, &bio_private->obp_integrity_iter,
+				bio_private->obp_integrity_buf, verify_fn);
+	iobuf->dr_error = blk_status_to_errno(ret);
+	bio->bi_status = ret;
+#else
+	bio->bi_idx = bio->bi_integrity->saved_bi_idx;
+	ret = osd_bio_integrity_process(bio, bio_private->obp_integrity_buf,
+					verify_fn);
+	iobuf->dr_error = ret;
+#endif
+
+out:
+	osd_bio_fini(bio);
+}
+
+/*
+ * Prepares the bio for integrity I/O, which is essentially what
+ * bio_integrity_prep() does. The difference is that we don't set
+ * BIP_BLOCK_INTEGRITY flag on the integrity payload, so the
+ * integrity metadata buffer is not freed when the I/O is completed,
+ * giving us the chance to get/put guard tags from/to ptlrpc.
+ *
+ * The integrity payload will be freed by kernel at bio_endin() time,
+ * the metadata buffer will be freed by us in osd_bio_fini().
+ *
+ * For a WRITE, we fill the metadata buffer immdiately, for a READ,
+ * upon I/O completion it's up to us to verify data intgerity
+ * with the metadata buffer containing integrity metadata read
+ * from the storage device.
+ */
 int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 			     struct osd_iobuf *iobuf)
 {
-	integrity_gen_fn *generate_fn = NULL;
-	integrity_vrfy_fn *verify_fn = NULL;
+	osd_integrity_proc_fn *generate_fn = NULL;
+	struct bio_integrity_payload *bip;
+	struct blk_integrity *bi = blk_get_integrity(bio_get_disk(bio));
+	struct osd_bio_private *bio_private = bio->bi_private;
+	void *buf, *buf_ptr;
+	unsigned long start, end;
+	unsigned int len, nr_pages;
+	unsigned int bytes, offset, i;
+	gfp_t gfp = GFP_NOIO;
 	int rc;
 
 	ENTRY;
 
-	if (!iobuf->dr_integrity)
+	if (!bdev_integrity_enabled(osd_sb(osd)->s_bdev, iobuf->dr_rw))
 		RETURN(0);
 
-	rc = osd_get_integrity_profile(osd, &generate_fn, &verify_fn);
-	if (rc)
-		RETURN(rc);
+	if (!bio_sectors(bio))
+		RETURN(0);
 
-# ifdef HAVE_BIO_INTEGRITY_PREP_FN_RETURNS_BOOL
-	if (!bio_integrity_prep_fn(bio, generate_fn, verify_fn))
-		RETURN(blk_status_to_errno(bio->bi_status));
-# else
-	rc = bio_integrity_prep_fn(bio, generate_fn, verify_fn);
-	if (rc)
-		RETURN(rc);
-# endif
+	if (osd->od_t10_type == OSD_T10_TYPE_UNKNOWN)
+		RETURN(0);
 
-	/* Verify and inject fault only when writing */
+	/*
+	 * Zero the memory allocated to not leak uninitialized kernel
+	 * memory to disk.  For PI this only affects the app tag, but
+	 * for non-integrity metadata it affects the entire metadata
+	 * buffer.
+	 */
 	if (iobuf->dr_rw == 1) {
+		rc = osd_get_integrity_proc_fn(osd, iobuf->dr_rw, &generate_fn);
+		if (rc)
+			RETURN(rc);
+		gfp |= __GFP_ZERO;
+	}
+
+	/* Allocate kernel buffer for protection data */
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+	len = bio_integrity_bytes(bi, bio_sectors(bio));
+#else
+	len = (bi->sector_size == 4096 ?
+	       bio_sectors(bio) >> 3 : bio_sectors(bio)) * bi->tuple_size;
+#endif
+	buf = kmalloc(len, gfp);
+	if (unlikely(buf == NULL)) {
+		CERROR("%s: could not allocate integrity buffer\n",
+		       osd_name(osd));
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+		bio->bi_status = BLK_STS_RESOURCE;
+#endif
+		RETURN(-ENOMEM);
+	}
+
+	end = (((unsigned long)buf) + len + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	start = ((unsigned long)buf) >> PAGE_SHIFT;
+	nr_pages = end - start;
+
+	/* Allocate bio integrity payload and integrity vectors */
+	bip = bio_integrity_alloc(bio, GFP_NOIO, nr_pages);
+	if (IS_ERR(bip)) {
+		CERROR("%s: could not allocate data integrity bioset\n",
+		       osd_name(osd));
+		kfree(buf);
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+		bio->bi_status = BLK_STS_RESOURCE;
+#endif
+		RETURN(-ENOMEM);
+	}
+
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+#  ifdef HAVE_CSUM_TYPE_BLK_INTEGRITY
+	if (bi->csum_type == BLK_INTEGRITY_CSUM_IP)
+#  else
+	if (bi->flags & BLK_INTEGRITY_IP_CHECKSUM)
+#  endif
+		bip->bip_flags |= BIP_IP_CHECKSUM;
+#endif
+
+	/* Map it */
+	offset = offset_in_page(buf);
+	buf_ptr = buf;
+	for (i = 0; i < nr_pages && len > 0; i++) {
+		bytes = PAGE_SIZE - offset;
+
+		if (bytes > len)
+			bytes = len;
+
+		if (bio_integrity_add_page(bio, virt_to_page(buf_ptr), bytes,
+					   offset) < bytes) {
+			CERROR("%s: could not attach integrity payload\n",
+			       osd_name(osd));
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+			bio->bi_status = BLK_STS_RESOURCE;
+#endif
+			kfree(buf);
+			RETURN(-ENOMEM);
+		}
+
+		buf_ptr += bytes;
+		len -= bytes;
+		offset = 0;
+	}
+
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+	/*
+	 * reset bip_iter.bi_size, usually bio_integrity_add_page does that
+	 * for us, but some older kernels doesn't have 80814b8e359f7
+	 */
+	bip->bip_iter.bi_size = bio_integrity_bytes(bi, bio_sectors(bio));
+	bip_set_seed(bip, bio->bi_iter.bi_sector);
+#else
+	bip->bip_buf = buf;
+	bip->bip_size = (bi->sector_size == 4096 ?
+			 bio_sectors(bio) >> 3 : bio_sectors(bio)) *
+			bi->tuple_size;
+	bip->bip_sector = bio->bi_sector;
+#endif
+	bio_private->obp_integrity_buf = buf;
+
+	if (iobuf->dr_rw == 1) {
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+		osd_bio_integrity_process(bio, &bio->bi_iter, buf, generate_fn);
+#else
+		osd_bio_integrity_process(bio, buf, generate_fn);
+#endif
+
+		/* Verify and inject fault only when writing */
 		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_CMP))) {
 			struct super_block *sb = osd_sb(osd);
 			struct osd_bio_private *b_priv = bio->bi_private;
@@ -374,10 +616,15 @@ int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 			if (rc)
 				RETURN(rc);
 		}
-
 		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT)))
 			bio_integrity_fault_inject(bio);
+	} else {
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+		bio_private->obp_integrity_iter = bio->bi_iter;
+#else
+		bip->saved_bi_idx = bio->bi_idx;
+#endif
 	}
+
 	RETURN(0);
 }
-#endif /* CONFIG_BLK_DEV_INTEGRITY */

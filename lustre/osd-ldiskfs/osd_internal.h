@@ -338,6 +338,7 @@ struct osd_device {
 	atomic_t		 od_commit_cb_in_flight;
 	wait_queue_head_t	 od_commit_cb_done;
 	unsigned int __percpu	*od_extent_bytes_percpu;
+	struct workqueue_struct	*od_integrityd_wq;
 };
 
 static inline struct qsd_instance *osd_def_qsd(struct osd_device *osd)
@@ -585,8 +586,7 @@ struct osd_iobuf {
 	int                dr_frags;
 	unsigned int       dr_init_at:16, /* the line iobuf was initialized */
 			   dr_elapsed_valid:1, /* we really did count time */
-			   dr_rw:1,
-			   dr_integrity:1;
+			   dr_rw:1;
 	struct niobuf_local	**dr_lnbs;
 	struct lu_buf	   dr_bl_buf;
 	struct lu_buf	   dr_lnb_buf;
@@ -1519,6 +1519,7 @@ static inline struct buffer_head *__ldiskfs_bread(handle_t *handle,
 #define osd_ldiskfs_dec_count(h, inode)		ldiskfs_dec_count((inode))
 #endif /* HAVE_EXT4_INC_DEC_COUNT_2ARGS */
 
+void osd_bio_fini(struct bio *bio);
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf);
 
 static inline int
@@ -1616,28 +1617,21 @@ void osd_execute_truncate(struct osd_object *obj);
 #define LDISKFS_XATTR_MAX_LARGE_EA_SIZE    (1024 * 1024)
 
 struct osd_bio_private {
+	struct work_struct	obp_work;
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+	struct bvec_iter	obp_integrity_iter;
+#endif
+	struct bio		*obp_bio;
 	struct osd_iobuf	*obp_iobuf;
+	void			*obp_integrity_buf;
 	/* Start page index in the obp_iobuf for the bio */
 	int			 obp_start_page_idx;
 };
 extern struct kmem_cache *biop_cachep;
 
-#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY) && defined(HAVE_BIO_INTEGRITY_PREP_FN)
 int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 				    struct osd_iobuf *iobuf);
-#else  /* !CONFIG_BLK_DEV_INTEGRITY */
-#define osd_bio_integrity_handle(osd, bio, iobuf) (0)
-#endif
-
-#ifdef HAVE_BIO_INTEGRITY_PREP_FN
-# ifdef HAVE_BLK_INTEGRITY_ITER
-#  define integrity_gen_fn integrity_processing_fn
-#  define integrity_vrfy_fn integrity_processing_fn
-# endif
-int osd_get_integrity_profile(struct osd_device *osd,
-			      integrity_gen_fn **generate_fn,
-			      integrity_vrfy_fn **verify_fn);
-#endif /* HAVE_BIO_INTEGRITY_PREP_FN */
+void osd_bio_integrity_verify_fn(struct work_struct *work);
 
 #ifdef HAVE_BIO_BI_PHYS_SEGMENTS
 #define osd_bio_nr_segs(bio)		((bio)->bi_phys_segments)
@@ -1678,9 +1672,7 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 
 static inline unsigned int bip_size(struct bio_integrity_payload *bip)
 {
-#ifdef HAVE_BLK_INTEGRITY_NOVERIFY
-	return bip->bip_iter.bi_size;
-#elif defined HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
 	return bip->bip_iter.bi_size;
 #else
 	return bip->bip_size;
