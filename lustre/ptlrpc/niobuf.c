@@ -585,19 +585,23 @@ static void kick_cpu_latency(struct ptlrpc_connection *conn,
 		return;
 
 #ifdef CONFIG_PROC_FS
-	if (ptlrpc_pmqos_use_stats_for_duration == true && obd != NULL &&
-	    obd->obd_svc_stats != NULL) {
-		struct lprocfs_counter ret;
+	if (ptlrpc_pmqos_use_stats_for_duration == true && obd != NULL) {
+		/* prevent racing with OBD cleanup (umount !) */
+		spin_lock(&obd->obd_dev_lock);
+		if (!obd->obd_stopping && obd->obd_svc_stats != NULL) {
+			struct lprocfs_counter ret;
 
-		lprocfs_stats_collect(obd->obd_svc_stats,
-				      PTLRPC_REQWAIT_CNTR, &ret);
-		/* use 125% of average wait time (lc_sum/lc_count)
-		 * instead of lc_max
-		 */
-		if (ret.lc_count != 0)
-			time = (ret.lc_sum / ret.lc_count) * 5 / 4;
-		CDEBUG(D_INFO, "%s: using a timeout of %llu usecs (%lu jiffies)\n",
-		       obd->obd_name, time, usecs_to_jiffies(time));
+			lprocfs_stats_collect(obd->obd_svc_stats,
+					      PTLRPC_REQWAIT_CNTR, &ret);
+			/* use 125% of average wait time (lc_sum/lc_count)
+			 * instead of lc_max
+			 */
+			if (ret.lc_count != 0)
+				time = (ret.lc_sum / ret.lc_count) * 5 / 4;
+			CDEBUG(D_INFO, "%s: using a timeout of %llu usecs (%lu jiffies)\n",
+			       obd->obd_name, time, usecs_to_jiffies(time));
+		}
+		spin_unlock(&obd->obd_dev_lock);
 	}
 #endif
 
