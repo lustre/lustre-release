@@ -381,8 +381,15 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 		       int len, int options, struct lnet_process_id peer4,
 		       struct lnet_handle_md *mdh, struct srpc_event *ev)
 {
+	struct lnet_md md = {
+		.umd_user_ptr  = ev,
+		.umd_start     = buf,
+		.umd_length    = len,
+		.umd_handler   = srpc_data.rpc_lnet_handler,
+		.umd_threshold = 1,
+		.umd_options   = options,
+	};
 	int rc;
-	struct lnet_md md;
 	struct lnet_me *me;
 	struct lnet_processid peer;
 
@@ -397,13 +404,6 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 		LASSERT(rc == -ENOMEM);
 		return -ENOMEM;
 	}
-
-	md.threshold = 1;
-	md.user_ptr  = ev;
-	md.start     = buf;
-	md.length    = len;
-	md.options   = options;
-	md.handler   = srpc_data.rpc_lnet_handler;
 
 	rc = LNetMDAttach(me, &md, LNET_UNLINK, mdh);
 	if (rc != 0) {
@@ -425,20 +425,20 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
 		      lnet_nid_t self4, struct lnet_handle_md *mdh,
 		      struct srpc_event *ev)
 {
+	struct lnet_md md = {
+		.umd_user_ptr  = ev,
+		.umd_start     = buf,
+		.umd_length    = len,
+		.umd_handler   = srpc_data.rpc_lnet_handler,
+		.umd_threshold = ((options & LNET_MD_OP_GET) != 0) ? 2 : 1,
+		.umd_options   = options & ~(LNET_MD_OP_PUT | LNET_MD_OP_GET),
+	};
 	int rc;
-	struct lnet_md md;
 	struct lnet_nid self;
 	struct lnet_processid peer;
 
 	lnet_nid4_to_nid(self4, &self);
 	lnet_pid4_to_pid(peer4, &peer);
-
-	md.user_ptr  = ev;
-	md.start     = buf;
-	md.length    = len;
-	md.handler   = srpc_data.rpc_lnet_handler;
-	md.threshold = ((options & LNET_MD_OP_GET) != 0) ? 2 : 1;
-	md.options   = options & ~(LNET_MD_OP_PUT | LNET_MD_OP_GET);
 
 	rc = LNetMDBind(&md, LNET_UNLINK, mdh);
 	if (rc != 0) {

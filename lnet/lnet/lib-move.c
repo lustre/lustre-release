@@ -4116,13 +4116,13 @@ lnet_send_ping(struct lnet_nid *dest_nid,
 	}
 
 	/* initialize md content */
-	md.start     = &pbuf->pb_info;
-	md.length    = bytes;
-	md.threshold = 2; /* GET/REPLY */
-	md.max_size  = 0;
-	md.options   = LNET_MD_TRUNCATE | LNET_MD_TRACK_RESPONSE;
-	md.user_ptr  = user_data;
-	md.handler   = handler;
+	md.umd_start = &pbuf->pb_info;
+	md.umd_length = bytes;
+	md.umd_threshold = 2; /* GET/REPLY */
+	md.umd_max_size = 0;
+	md.umd_options = LNET_MD_TRUNCATE | LNET_MD_TRACK_RESPONSE;
+	md.umd_user_ptr = user_data;
+	md.umd_handler = handler;
 
 	rc = LNetMDBind(&md, LNET_UNLINK, mdh);
 	if (rc) {

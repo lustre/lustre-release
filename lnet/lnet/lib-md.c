@@ -117,11 +117,12 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 	if (lnet_md_validate(umd) != 0)
 		return ERR_PTR(-EINVAL);
 
-	if (umd->options & LNET_MD_KIOV)
-		niov = umd->length;
+	if (umd->umd_options & LNET_MD_KIOV)
+		niov = umd->umd_length;
 	else
-		niov = DIV_ROUND_UP(offset_in_page(umd->start) + umd->length,
-				    PAGE_SIZE);
+		niov = DIV_ROUND_UP(
+			offset_in_page(umd->umd_start) + umd->umd_length,
+			PAGE_SIZE);
 	size = offsetof(struct lnet_libmd, md_kiov[niov]);
 
 	if (size <= LNET_SMALL_MD_SIZE) {
@@ -142,22 +143,22 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 	lmd->md_niov = niov;
 	INIT_LIST_HEAD(&lmd->md_list);
 	lmd->md_me = NULL;
-	lmd->md_start = umd->start;
+	lmd->md_start = umd->umd_start;
 	lmd->md_offset = 0;
-	lmd->md_max_size = umd->max_size;
-	lmd->md_options = umd->options;
-	lmd->md_user_ptr = umd->user_ptr;
+	lmd->md_max_size = umd->umd_max_size;
+	lmd->md_options = umd->umd_options;
+	lmd->md_user_ptr = umd->umd_user_ptr;
 	lmd->md_handler = NULL;
-	lmd->md_threshold = umd->threshold;
+	lmd->md_threshold = umd->umd_threshold;
 	lmd->md_refcount = 0;
 	lmd->md_flags = (unlink == LNET_UNLINK) ? LNET_MD_FLAG_AUTO_UNLINK : 0;
-	lmd->md_bulk_handle = umd->bulk_handle;
+	lmd->md_bulk_handle = umd->umd_bulk_handle;
 
-	if (umd->options & LNET_MD_GPU_ADDR)
+	if (umd->umd_options & LNET_MD_GPU_ADDR)
 		lmd->md_flags |= LNET_MD_FLAG_GPU;
 
-	if (umd->options & LNET_MD_KIOV) {
-		memcpy(lmd->md_kiov, umd->start,
+	if (umd->umd_options & LNET_MD_KIOV) {
+		memcpy(lmd->md_kiov, umd->umd_start,
 		       niov * sizeof(lmd->md_kiov[0]));
 
 		for (i = 0; i < (int)niov; i++) {
@@ -173,15 +174,15 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 
 		lmd->md_length = total_length;
 
-		if ((umd->options & LNET_MD_MAX_SIZE) && /* max size used */
-		    (umd->max_size < 0 ||
-		     umd->max_size > total_length)) { /* illegal max_size */
+		if ((umd->umd_options & LNET_MD_MAX_SIZE) && /* max size used */
+		    (umd->umd_max_size < 0 ||
+		     umd->umd_max_size > total_length)) { /* illegal max_size */
 			lnet_md_free(lmd);
 			return ERR_PTR(-EINVAL);
 		}
 	} else {   /* contiguous - split into pages */
-		void *pa = umd->start;
-		int len = umd->length;
+		void *pa = umd->umd_start;
+		int len = umd->umd_length;
 
 		lmd->md_length = len;
 		i = 0;
@@ -207,9 +208,9 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 		WARN(!(lmd->md_options  & LNET_MD_GNILND) && i > LNET_MAX_IOV,
 			"Max IOV exceeded: %d should be < %d\n",
 			i, LNET_MAX_IOV);
-		if ((umd->options & LNET_MD_MAX_SIZE) && /* max size used */
-		    (umd->max_size < 0 ||
-		     umd->max_size > (int)umd->length)) { /* illegal max_size */
+		if ((umd->umd_options & LNET_MD_MAX_SIZE) && /* max size used */
+		    (umd->umd_max_size < 0 ||
+		     umd->umd_max_size > (int)umd->umd_length)) {
 			lnet_md_free(lmd);
 			return ERR_PTR(-EINVAL);
 		}
@@ -275,16 +276,16 @@ lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_event *ev)
 static int
 lnet_md_validate(const struct lnet_md *umd)
 {
-	if (umd->start == NULL && umd->length != 0) {
+	if (umd->umd_start == NULL && umd->umd_length != 0) {
 		CERROR("MD start pointer can not be NULL with length %u\n",
-		       umd->length);
+		       umd->umd_length);
 		return -EINVAL;
 	}
 
-	if ((umd->options & LNET_MD_KIOV) &&
-	    umd->length > LNET_MAX_IOV) {
+	if ((umd->umd_options & LNET_MD_KIOV) &&
+	    umd->umd_length > LNET_MAX_IOV) {
 		CERROR("Invalid option: too many fragments %u, %d max\n",
-		       umd->length, LNET_MAX_IOV);
+		       umd->umd_length, LNET_MAX_IOV);
 		return -EINVAL;
 	}
 
@@ -300,7 +301,7 @@ lnet_md_validate(const struct lnet_md *umd)
  * structure and the MD maintained by the LNet.
  * \param unlink A flag to indicate whether the MD is automatically unlinked
  * when it becomes inactive, either because the operation threshold drops to
- * zero or because the available memory becomes less than \a umd.max_size.
+ * zero or because the available memory becomes less than \a umd.umd_max_size.
  * (Note that the check for unlinking a MD only occurs after the completion
  * of a successful operation on the MD.) The value LNET_UNLINK enables auto
  * unlinking; the value LNET_RETAIN disables it.
@@ -325,7 +326,7 @@ LNetMDAttach(struct lnet_me *me, const struct lnet_md *umd,
 	LASSERT(the_lnet.ln_refcount > 0);
 	LASSERT(!me->me_md);
 
-	if ((umd->options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) == 0) {
+	if ((umd->umd_options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) == 0) {
 		CERROR("Invalid option: no MD_OP set\n");
 		md = ERR_PTR(-EINVAL);
 	} else
@@ -340,7 +341,7 @@ LNetMDAttach(struct lnet_me *me, const struct lnet_md *umd,
 		return PTR_ERR(md);
 	}
 
-	lnet_md_link(md, umd->handler, cpt);
+	lnet_md_link(md, umd->umd_handler, cpt);
 
 	/* attach this MD to portal of ME and check if it matches any
 	 * blocked msgs on this portal */
@@ -361,7 +362,7 @@ EXPORT_SYMBOL(LNetMDAttach);
  * Create a "free floating" memory descriptor - a MD that is not associated
  * with a ME. Such MDs are usually used in LNetPut() and LNetGet() operations.
  *
- * \param umd,unlink See the discussion for LNetMDAttach().
+ * \param umd,umd_unlink See the discussion for LNetMDAttach().
  * \param handle On successful returns, a handle to the newly created MD is
  * saved here. This handle can be used later in LNetMDUnlink(), LNetPut(),
  * and LNetGet() operations.
@@ -380,7 +381,7 @@ LNetMDBind(const struct lnet_md *umd, enum lnet_unlink unlink,
 
 	LASSERT(the_lnet.ln_refcount > 0);
 
-	if ((umd->options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) != 0) {
+	if ((umd->umd_options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) != 0) {
 		CERROR("Invalid option: GET|PUT illegal on active MDs\n");
 		return -EINVAL;
 	}
@@ -398,7 +399,7 @@ LNetMDBind(const struct lnet_md *umd, enum lnet_unlink unlink,
 
 	cpt = lnet_res_lock_current();
 
-	lnet_md_link(md, umd->handler, cpt);
+	lnet_md_link(md, umd->umd_handler, cpt);
 
 	lnet_md2handle(handle, md);
 

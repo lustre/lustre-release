@@ -35,26 +35,26 @@ void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 
 	/* just send a lnet header */
 	if (mdidx >= desc->bd_md_count) {
-		md->options |= LNET_MD_KIOV;
-		md->length = 0;
-		md->start = NULL;
+		md->umd_options |= LNET_MD_KIOV;
+		md->umd_length = 0;
+		md->umd_start = NULL;
 		return;
 	}
 
 	if (desc->bd_is_rdma)
-		md->options |= LNET_MD_GPU_ADDR;
+		md->umd_options |= LNET_MD_GPU_ADDR;
 
 	start = desc->bd_mds_off[mdidx];
 	if (mdidx == (desc->bd_md_count - 1))
-		md->length = desc->bd_iov_count - start;
+		md->umd_length = desc->bd_iov_count - start;
 	else
-		md->length = desc->bd_mds_off[mdidx + 1] - start;
+		md->umd_length = desc->bd_mds_off[mdidx + 1] - start;
 
-	md->options |= LNET_MD_KIOV;
+	md->umd_options |= LNET_MD_KIOV;
 	if (desc->bd_enc_vec)
-		md->start = &desc->bd_enc_vec[start];
+		md->umd_start = &desc->bd_enc_vec[start];
 	else
-		md->start = &desc->bd_vec[start];
+		md->umd_start = &desc->bd_vec[start];
 }
 
 

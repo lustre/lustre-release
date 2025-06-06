@@ -1971,14 +1971,14 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 	}
 
 	/* initialize md content */
-	md.start     = &(*ppbuf)->pb_info;
-	md.length    = (*ppbuf)->pb_nbytes;
-	md.threshold = LNET_MD_THRESH_INF;
-	md.max_size  = 0;
-	md.options   = LNET_MD_OP_GET | LNET_MD_TRUNCATE |
-		       LNET_MD_MANAGE_REMOTE;
-	md.handler   = the_lnet.ln_ping_target_handler;
-	md.user_ptr  = *ppbuf;
+	md.umd_start = &(*ppbuf)->pb_info;
+	md.umd_length = (*ppbuf)->pb_nbytes;
+	md.umd_threshold = LNET_MD_THRESH_INF;
+	md.umd_max_size = 0;
+	md.umd_options = LNET_MD_OP_GET | LNET_MD_TRUNCATE |
+			  LNET_MD_MANAGE_REMOTE;
+	md.umd_handler = the_lnet.ln_ping_target_handler;
+	md.umd_user_ptr = *ppbuf;
 
 	rc = LNetMDAttach(me, &md, LNET_RETAIN, ping_mdh);
 	if (rc != 0) {
@@ -2214,13 +2214,13 @@ int lnet_push_target_post(struct lnet_ping_buffer *pbuf,
 	kref_get(&pbuf->pb_refcnt);
 
 	/* initialize md content */
-	md.start     = &pbuf->pb_info;
-	md.length    = pbuf->pb_nbytes;
-	md.threshold = 1;
-	md.max_size  = 0;
-	md.options   = LNET_MD_OP_PUT | LNET_MD_TRUNCATE;
-	md.user_ptr  = pbuf;
-	md.handler   = the_lnet.ln_push_target_handler;
+	md.umd_start = &pbuf->pb_info;
+	md.umd_length = pbuf->pb_nbytes;
+	md.umd_threshold = 1;
+	md.umd_max_size = 0;
+	md.umd_options = LNET_MD_OP_PUT | LNET_MD_TRUNCATE;
+	md.umd_user_ptr = pbuf;
+	md.umd_handler = the_lnet.ln_push_target_handler;
 
 	rc = LNetMDAttach(me, &md, LNET_UNLINK, mdhp);
 	if (rc) {
@@ -10072,13 +10072,13 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 		return -ENOMEM;
 
 	/* initialize md content */
-	md.start     = &pbuf->pb_info;
-	md.length    = id_bytes;
-	md.threshold = 2; /* GET/REPLY */
-	md.max_size  = 0;
-	md.options   = LNET_MD_TRUNCATE;
-	md.user_ptr  = &pd;
-	md.handler   = lnet_ping_event_handler;
+	md.umd_start = &pbuf->pb_info;
+	md.umd_length = id_bytes;
+	md.umd_threshold = 2; /* GET/REPLY */
+	md.umd_max_size = 0;
+	md.umd_options = LNET_MD_TRUNCATE;
+	md.umd_user_ptr = &pd;
+	md.umd_handler = lnet_ping_event_handler;
 
 	init_completion(&pd.completion);
 

@@ -3869,7 +3869,7 @@ __must_hold(&lp->lp_lock)
 {
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_processid id;
-	struct lnet_md md;
+	struct lnet_md md = { NULL };
 	int cpt;
 	int rc;
 
@@ -3895,13 +3895,13 @@ __must_hold(&lp->lp_lock)
 	lnet_net_unlock(cpt);
 
 	/* Push source MD */
-	md.start     = &pbuf->pb_info;
-	md.length    = pbuf->pb_nbytes;
-	md.threshold = 2; /* Put/Ack */
-	md.max_size  = 0;
-	md.options   = LNET_MD_TRACK_RESPONSE;
-	md.handler   = the_lnet.ln_dc_handler;
-	md.user_ptr  = lp;
+	md.umd_start = &pbuf->pb_info;
+	md.umd_length = pbuf->pb_nbytes;
+	md.umd_threshold = 2; /* Put/Ack */
+	md.umd_max_size = 0;
+	md.umd_options = LNET_MD_TRACK_RESPONSE;
+	md.umd_handler = the_lnet.ln_dc_handler;
+	md.umd_user_ptr = lp;
 
 	rc = LNetMDBind(&md, LNET_UNLINK, &lp->lp_push_mdh);
 	if (rc) {

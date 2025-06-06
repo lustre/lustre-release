@@ -45,23 +45,24 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 			struct lnet_handle_md *bulk_cookie)
 {
 	int rc;
-	struct lnet_md md;
+	struct lnet_md md = {
+		.umd_start     = base,
+		.umd_length    = len,
+		.umd_threshold = (ack == LNET_ACK_REQ) ? 2 : 1,
+		.umd_options   = PTLRPC_MD_OPTIONS,
+		.umd_user_ptr  = cbid,
+		.umd_handler   = ptlrpc_handler,
+	};
 
 	ENTRY;
 
 	LASSERT(portal != 0);
 	CDEBUG(D_INFO, "peer_id %s\n", libcfs_idstr(peer_id));
-	md.start     = base;
-	md.length    = len;
-	md.threshold = (ack == LNET_ACK_REQ) ? 2 : 1;
-	md.options   = PTLRPC_MD_OPTIONS;
-	md.user_ptr  = cbid;
-	md.handler   = ptlrpc_handler;
-	LNetInvalidateMDHandle(&md.bulk_handle);
+	LNetInvalidateMDHandle(&md.umd_bulk_handle);
 
 	if (bulk_cookie) {
-		md.bulk_handle = *bulk_cookie;
-		md.options |= LNET_MD_BULK_HANDLE;
+		md.umd_bulk_handle = *bulk_cookie;
+		md.umd_options |= LNET_MD_BULK_HANDLE;
 	}
 
 	if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_ACK, CFS_FAIL_ONCE) &&
@@ -150,14 +151,14 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
  */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 {
-	struct obd_export	*exp = desc->bd_export;
-	struct lnet_nid		 self_nid;
-	struct lnet_processid	 peer_id;
-	int			 rc = 0;
-	__u64			 mbits;
-	int			 posted_md;
-	int			 total_md;
-	struct lnet_md		 md;
+	struct obd_export *exp = desc->bd_export;
+	struct lnet_nid self_nid;
+	struct lnet_processid peer_id;
+	int rc = 0;
+	__u64 mbits;
+	int posted_md;
+	int total_md;
+	struct lnet_md md = { NULL };
 
 	ENTRY;
 
@@ -188,12 +189,12 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	desc->bd_refs = total_md;
 	desc->bd_failure = 0;
 
-	md.user_ptr = &desc->bd_cbid;
-	md.handler = ptlrpc_handler;
-	md.threshold = 2; /* SENT and ACK/REPLY */
+	md.umd_user_ptr = &desc->bd_cbid;
+	md.umd_handler = ptlrpc_handler;
+	md.umd_threshold = 2; /* SENT and ACK/REPLY */
 
 	for (posted_md = 0; posted_md < total_md; mbits++) {
-		md.options = PTLRPC_MD_OPTIONS;
+		md.umd_options = PTLRPC_MD_OPTIONS;
 
 		/* Note. source and sink buf frags are page-aligned. Else send
 		 * client bulk sizes over and split server buffer accordingly
@@ -314,7 +315,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	int total_md;
 	__u64 mbits;
 	struct lnet_me *me;
-	struct lnet_md md;
+	struct lnet_md md = { NULL };
 
 	ENTRY;
 
@@ -360,13 +361,13 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	desc->bd_registered = 1;
 	desc->bd_last_mbits = mbits;
 	desc->bd_refs = total_md;
-	md.user_ptr = &desc->bd_cbid;
-	md.handler = ptlrpc_handler;
-	md.threshold = 1;                       /* PUT or GET */
+	md.umd_user_ptr = &desc->bd_cbid;
+	md.umd_handler = ptlrpc_handler;
+	md.umd_threshold = 1;                       /* PUT or GET */
 
 	for (posted_md = 0; posted_md < desc->bd_md_count;
 	     posted_md++, mbits++) {
-		md.options = PTLRPC_MD_OPTIONS |
+		md.umd_options = PTLRPC_MD_OPTIONS |
 			     (ptlrpc_is_bulk_op_get(desc->bd_type) ?
 			      LNET_MD_OP_GET : LNET_MD_OP_PUT);
 		ptlrpc_fill_bulk_md(&md, desc, posted_md);
@@ -1025,16 +1026,16 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	spin_unlock(&request->rq_lock);
 
 	if (!noreply) {
-		reply_md.start     = request->rq_repbuf;
-		reply_md.length    = request->rq_repbuf_len;
+		reply_md.umd_start = request->rq_repbuf;
+		reply_md.umd_length = request->rq_repbuf_len;
 		/* Allow multiple early replies */
-		reply_md.threshold = LNET_MD_THRESH_INF;
+		reply_md.umd_threshold = LNET_MD_THRESH_INF;
 		/* Manage remote for early replies */
-		reply_md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT |
+		reply_md.umd_options = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT |
 			LNET_MD_MANAGE_REMOTE |
 			LNET_MD_TRUNCATE; /* allow to make EOVERFLOW error */;
-		reply_md.user_ptr  = &request->rq_reply_cbid;
-		reply_md.handler = ptlrpc_handler;
+		reply_md.umd_user_ptr = &request->rq_reply_cbid;
+		reply_md.umd_handler = ptlrpc_handler;
 
 		/* We must see the unlink callback to set rq_reply_unlinked,
 		 * so we can't auto-unlink
@@ -1135,8 +1136,17 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 		.nid = LNET_ANY_NID,
 		.pid = LNET_PID_ANY
 	};
+	struct lnet_md md = {
+		.umd_start     = rqbd->rqbd_buffer,
+		.umd_length    = service->srv_buf_size,
+		.umd_max_size  = service->srv_max_req_size,
+		.umd_threshold = LNET_MD_THRESH_INF,
+		.umd_options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT |
+		             LNET_MD_MAX_SIZE,
+		.umd_user_ptr  = &rqbd->rqbd_cbid,
+		.umd_handler   = ptlrpc_handler,
+	};
 	int rc;
-	struct lnet_md md;
 	struct lnet_me *me;
 
 	CDEBUG(D_NET, "%s: registering portal %d\n", service->srv_name,
@@ -1161,14 +1171,6 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 
 	LASSERT(rqbd->rqbd_refcount == 0);
 	rqbd->rqbd_refcount = 1;
-
-	md.start     = rqbd->rqbd_buffer;
-	md.length    = service->srv_buf_size;
-	md.max_size  = service->srv_max_req_size;
-	md.threshold = LNET_MD_THRESH_INF;
-	md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT | LNET_MD_MAX_SIZE;
-	md.user_ptr  = &rqbd->rqbd_cbid;
-	md.handler   = ptlrpc_handler;
 
 	rc = LNetMDAttach(me, &md, LNET_UNLINK, &rqbd->rqbd_md_h);
 	if (rc == 0) {

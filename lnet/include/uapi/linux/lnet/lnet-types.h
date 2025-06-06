@@ -343,8 +343,8 @@ struct lnet_md {
 	 * one must start on page boundary, and all but the last must end on
 	 * page boundary.
 	 */
-	void		*start;
-	unsigned int	 length;
+	void		*umd_start;
+	unsigned int	 umd_length;
 	/**
 	 * Specifies the maximum number of operations that can be performed
 	 * on the memory descriptor. An operation is any action that could
@@ -355,7 +355,7 @@ struct lnet_md {
 	 * there is no bound on the number of operations that may be applied
 	 * to a MD.
 	 */
-	int		 threshold;
+	int		 umd_threshold;
 	/**
 	 * Specifies the largest incoming request that the memory descriptor
 	 * should respond to. When the unused portion of a MD (length -
@@ -363,7 +363,8 @@ struct lnet_md {
 	 * does not respond to further operations. This value is only used
 	 * if the LNET_MD_MAX_SIZE option is set.
 	 */
-	int		 max_size;
+	int		 umd_max_size;
+
 	/**
 	 * Specifies the behavior of the memory descriptor. A bitwise OR
 	 * of the following values can be used:
@@ -404,20 +405,20 @@ struct lnet_md {
 	 *   region (i.e. sum of all fragment lengths) must not be less than
 	 *   \a max_size.
 	 */
-	unsigned int	 options;
+	unsigned int	 umd_options;
 	/**
 	 * A user-specified value that is associated with the memory
 	 * descriptor. The value does not need to be a pointer, but must fit
 	 * in the space used by a pointer. This value is recorded in events
 	 * associated with operations on this MD.
 	 */
-	void		*user_ptr;
+	void		*umd_user_ptr;
 	/**
 	 * The event handler used to log the operations performed on
 	 * the memory region. If this argument is NULL operations
 	 * performed on this memory descriptor are not logged.
 	 */
-	lnet_handler_t	handler;
+	lnet_handler_t	umd_handler;
 	/**
 	 * The bulk MD handle which was registered to describe the buffers
 	 * either to be used to transfer data to the peer or receive data
@@ -426,7 +427,7 @@ struct lnet_md {
 	 * nearest local network interface. This value is only used
 	 * if the LNET_MD_BULK_HANDLE option is set.
 	 */
-	struct lnet_handle_md bulk_handle;
+	struct lnet_handle_md umd_bulk_handle;
 };
 
 /* Max Transfer Unit (minimum supported everywhere).
