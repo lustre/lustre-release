@@ -987,7 +987,7 @@ static int lod_osts_seq_open(struct inode *inode, struct file *file)
 		return rc;
 
 	seq = file->private_data;
-	seq->private = pde_data(inode);
+	seq->private = inode->i_private;
 	return 0;
 }
 
@@ -1342,12 +1342,12 @@ struct lprocfs_vars lprocfs_lod_spill_vars[] = {
 	{ NULL }
 };
 
-static struct proc_ops lod_proc_target_fops = {
-	PROC_OWNER(THIS_MODULE)
-	.proc_open	= lod_osts_seq_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_release	= lprocfs_seq_release,
+static const struct file_operations lod_debugfs_target_fops = {
+	.owner		= THIS_MODULE,
+	.open		= lod_osts_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
 };
 
 static struct attribute *lod_attrs[] = {
@@ -1533,14 +1533,6 @@ int lod_procfs_init(struct lod_device *lod)
 		GOTO(out, rc);
 	}
 
-	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
-				0444, &lod_proc_target_fops, obd);
-	if (rc) {
-		CWARN("%s: Error adding the target_obd file %d\n",
-		      obd->obd_name, rc);
-		GOTO(out, rc);
-	}
-
 	lod->lod_pool_proc_entry = lprocfs_register("pools",
 						    obd->obd_proc_entry,
 						    NULL, NULL);
@@ -1581,6 +1573,9 @@ int lod_procfs_init(struct lod_device *lod)
 
 
 	ldebugfs_add_vars(obd->obd_debugfs_entry, ldebugfs_lod_vars, lod);
+
+	debugfs_create_file("target_obd", 0444, obd->obd_debugfs_entry,
+			    obd, &lod_debugfs_target_fops);
 
 	lod->lod_debugfs = ldebugfs_add_symlink(obd->obd_name, "lov",
 						"../lod/%s", obd->obd_name);

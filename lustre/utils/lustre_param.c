@@ -1118,10 +1118,11 @@ int jt_lcfg_listparam(int argc, char **argv)
 			if (rc == 0)
 				rc = rc2;
 
-			if (rc2 == -ENOENT && getuid() != 0)
+			if (rc2 == -ENOENT && getuid() != 0) {
 				rc2 = llapi_param_display_value(path, 0,
 								PARAM_FLAGS_SHOW_SOURCE,
 								stdout);
+			}
 			if (rc2 < 0) {
 				fprintf(stderr, "error: %s: listing '%s': %s\n",
 					jt_cmdname(argv[0]), path,

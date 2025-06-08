@@ -178,7 +178,6 @@ static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(desc_uuid);
 
-#ifdef CONFIG_PROC_FS
 static void *lov_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
 	struct obd_device *obd = p->private;
@@ -247,18 +246,17 @@ static int lov_target_seq_open(struct inode *inode, struct file *file)
 		return rc;
 
 	seq = file->private_data;
-	seq->private = pde_data(inode);
+	seq->private = inode->i_private;
 	return 0;
 }
 
-static const struct proc_ops lov_proc_target_fops = {
-	PROC_OWNER(THIS_MODULE)
-	.proc_open	= lov_target_seq_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_release	= lprocfs_seq_release,
+static const struct file_operations lov_debugfs_target_fops = {
+	.owner		= THIS_MODULE,
+	.open		= lov_target_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
 };
-#endif /* CONFIG_PROC_FS */
 
 static struct attribute *lov_attrs[] = {
 	&lustre_attr_activeobd.attr,
@@ -283,13 +281,9 @@ int lov_tunables_init(struct obd_device *obd)
 	if (rc)
 		GOTO(out, rc);
 
+	debugfs_create_file("target_obd", 0444, obd->obd_debugfs_entry,
+			    obd, &lov_debugfs_target_fops);
 #ifdef CONFIG_PROC_FS
-	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd", 0444,
-				&lov_proc_target_fops, obd);
-	if (rc)
-		CWARN("%s: Error adding the target_obd file : rc %d\n",
-		      obd->obd_name, rc);
-
 	lov->lov_pool_proc_entry = lprocfs_register("pools",
 						    obd->obd_proc_entry,
 						    NULL, NULL);

@@ -516,6 +516,8 @@ enum tgt_type {
        LMV_TYPE = 2,
        CLI_TYPE = 3,
 };
+int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp, int *indices,
+			   char **status, int *ost_count, enum tgt_type type);
 int llapi_file_get_type_uuid(const char *path, enum tgt_type type,
 			struct obd_uuid *uuid);
 int llapi_file_fget_type_uuid(int fd, enum tgt_type type,

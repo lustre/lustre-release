@@ -179,7 +179,6 @@ static ssize_t qos_threshold_rr_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(qos_threshold_rr);
 
-#ifdef CONFIG_PROC_FS
 /* directories with exclude prefixes will be created on the same MDT as its
  * parent directory, the prefixes are set with the rule as shell environment
  * PATH: ':' is used as separator for prefixes. And for convenience, '+/-' is
@@ -323,7 +322,13 @@ static ssize_t qos_exclude_prefixes_seq_write(struct file *file,
 	OBD_FREE(buf, count + 1);
 	return count;
 }
-LPROC_SEQ_FOPS(qos_exclude_prefixes);
+LDEBUGFS_SEQ_FOPS(qos_exclude_prefixes);
+
+static struct ldebugfs_vars ldebugfs_lmv_obd_vars[] = {
+	{ .name =	"qos_exclude_prefixes",
+	  .fops =	&qos_exclude_prefixes_fops },
+	{ NULL }
+};
 
 static void *lmv_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
@@ -394,26 +399,17 @@ static int lmv_target_seq_open(struct inode *inode, struct file *file)
                 return rc;
 
 	seq = file->private_data;
-	seq->private = pde_data(inode);
+	seq->private = inode->i_private;
 	return 0;
 }
 
-static const struct proc_ops lmv_proc_target_fops = {
-	PROC_OWNER(THIS_MODULE)
-	.proc_open	= lmv_target_seq_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_release	= seq_release,
+static const struct file_operations lmv_debugfs_target_fops = {
+	.owner		= THIS_MODULE,
+	.open		= lmv_target_seq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
 };
-
-static struct lprocfs_vars lprocfs_lmv_obd_vars[] = {
-	{ .name =	"qos_exclude_prefixes",
-	  .fops =	&qos_exclude_prefixes_fops },
-	{ .name =	"target_obd",
-	  .fops =	&lmv_proc_target_fops },
-	{ NULL }
-};
-#endif /* CONFIG_PROC_FS */
 
 static struct attribute *lmv_attrs[] = {
 	&lustre_attr_activeobd.attr,
@@ -432,9 +428,7 @@ int lmv_tunables_init(struct obd_device *obd)
 	int rc;
 
 	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(lmv);
-#ifdef CONFIG_PROC_FS
-	obd->obd_vars = lprocfs_lmv_obd_vars;
-#endif
+	obd->obd_debugfs_vars = ldebugfs_lmv_obd_vars;
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc)
 		goto out_failed;
@@ -445,6 +439,8 @@ int lmv_tunables_init(struct obd_device *obd)
 		goto out_failed;
 	}
 #endif /* CONFIG_PROC_FS */
+	debugfs_create_file("target_obd", 0444, obd->obd_debugfs_entry,
+			    obd, &lmv_debugfs_target_fops);
 out_failed:
 	return rc;
 }

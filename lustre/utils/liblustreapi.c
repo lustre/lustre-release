@@ -1501,8 +1501,6 @@ err:
 	return rc;
 }
 
-#define OBD_NOT_FOUND           (-1)
-
 static bool lmv_is_foreign(__u32 magic)
 {
 	return magic == LMV_MAGIC_FOREIGN;
@@ -2287,76 +2285,6 @@ int llapi_file_get_type_uuid(const char *path, enum tgt_type type,
 	return rc;
 }
 
-/*
- * If uuidp is NULL, return the number of available obd uuids.
- * If uuidp is non-NULL, then it will return the uuids of the obds. If
- * there are more OSTs than allocated to uuidp, then an error is returned with
- * the ost_count set to number of available obd uuids.
- */
-static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp, int *indices,
-				  int *ost_count, enum tgt_type type)
-{
-	char buf[PATH_MAX], format[32];
-	int i, rc = 0;
-	struct obd_uuid name;
-	glob_t param;
-	FILE *fp;
-
-	/* Get the lov name */
-	rc = llapi_file_fget_type_uuid(fd, type, &name);
-	if (rc != 0)
-		return rc;
-
-	/* Now get the ost uuids */
-	rc = get_lustre_param_path(type == LOV_TYPE ? "lov" : "lmv", name.uuid,
-				   FILTER_BY_EXACT, "target_obd", &param);
-	if (rc != 0)
-		return -ENOENT;
-
-	fp = fopen(param.gl_pathv[0], "r");
-	if (fp == NULL) {
-		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "error: opening '%s'",
-			    param.gl_pathv[0]);
-		goto free_param;
-	}
-
-	snprintf(format, sizeof(format),
-		 "%%d: %%%zus", sizeof(uuidp[0].uuid) - 1);
-	for (i = 0; fgets(buf, sizeof(buf), fp); i++) {
-		int index;
-
-		if (sscanf(buf, format, &index, name.uuid) < 2)
-			break;
-
-		if (i < *ost_count) {
-			if (uuidp != NULL)
-				uuidp[i] = name;
-			if (indices != NULL)
-				indices[i] = index;
-		}
-	}
-	fclose(fp);
-
-	if (uuidp && (i > *ost_count))
-		rc = -EOVERFLOW;
-
-	*ost_count = i;
-free_param:
-	cfs_free_param_data(&param);
-	return rc;
-}
-
-int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count)
-{
-	return llapi_get_target_uuids(fd, uuidp, NULL, mdt_count, LMV_TYPE);
-}
-
-int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
-{
-	return llapi_get_target_uuids(fd, uuidp, NULL, ost_count, LOV_TYPE);
-}
-
 int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
 {
 	int root;
@@ -2405,92 +2333,6 @@ int llapi_uuid_match(char *real_uuid, char *search_uuid)
 }
 
 /*
- * Here, param->fp_obd_uuid points to a single obduuid, the index of which is
- * returned in param->fp_obd_index
- */
-static int setup_obd_uuid(int fd, char *dname, struct find_param *param)
-{
-	struct obd_uuid obd_uuid;
-	char buf[PATH_MAX];
-	glob_t param_data;
-	char format[32];
-	int rc = 0;
-	FILE *fp;
-	enum tgt_type type = param->fp_get_lmv ? LMV_TYPE : LOV_TYPE;
-
-	if (param->fp_got_uuids)
-		return rc;
-
-	/* Get the lov/lmv name */
-	rc = llapi_file_fget_type_uuid(fd, type, &obd_uuid);
-	if (rc) {
-		if (rc != -ENOTTY) {
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "error: can't get %s name: %s",
-				    param->fp_get_lmv ? "lmv" : "lov",
-				    dname);
-		} else {
-			rc = 0;
-		}
-		return rc;
-	}
-
-	param->fp_got_uuids = 1;
-
-	/* Now get the ost uuids */
-	rc = get_lustre_param_path(param->fp_get_lmv ? "lmv" : "lov",
-				   obd_uuid.uuid, FILTER_BY_EXACT,
-				   "target_obd", &param_data);
-	if (rc != 0)
-		return -ENOENT;
-
-	fp = fopen(param_data.gl_pathv[0], "r");
-	if (fp == NULL) {
-		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "error: opening '%s'",
-			    param_data.gl_pathv[0]);
-		goto free_param;
-	}
-
-	if (!param->fp_obd_uuid && !param->fp_quiet && !param->fp_obds_printed)
-		llapi_printf(LLAPI_MSG_NORMAL, "%s:\n",
-			     param->fp_get_lmv ? "MDTS" : "OBDS");
-
-	snprintf(format, sizeof(format),
-		 "%%d: %%%zus", sizeof(obd_uuid.uuid) - 1);
-	while (fgets(buf, sizeof(buf), fp) != NULL) {
-		int index;
-
-		if (sscanf(buf, format, &index, obd_uuid.uuid) < 2)
-			break;
-
-		if (param->fp_obd_uuid) {
-			if (llapi_uuid_match(obd_uuid.uuid,
-					     param->fp_obd_uuid->uuid)) {
-				param->fp_obd_index = index;
-				break;
-			}
-		} else if (!param->fp_quiet && !param->fp_obds_printed) {
-			/* Print everything */
-			llapi_printf(LLAPI_MSG_NORMAL, "%s", buf);
-		}
-	}
-	param->fp_obds_printed = 1;
-
-	fclose(fp);
-
-	if (param->fp_obd_uuid && (param->fp_obd_index == OBD_NOT_FOUND)) {
-		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "error: %s: unknown obduuid: %s",
-				  __func__, param->fp_obd_uuid->uuid);
-		rc = -EINVAL;
-	}
-free_param:
-	cfs_free_param_data(&param_data);
-	return rc;
-}
-
-/*
  * In this case, param->fp_obd_uuid will be an array of obduuids and
  * obd index for all these obduuids will be returned in
  * param->fp_obd_indexes
@@ -2521,7 +2363,7 @@ static int setup_indexes(int d, char *path, struct obd_uuid *obduuids,
 	}
 
 retry_get_uuids:
-	ret = llapi_get_target_uuids(d, uuids, indices, &obdcount, type);
+	ret = llapi_get_target_uuids(d, uuids, indices, NULL, &obdcount, type);
 	if (ret) {
 		if (ret == -EOVERFLOW) {
 			struct obd_uuid *uuids_temp;
@@ -2619,21 +2461,6 @@ static int setup_target_indexes(int d, char *path, struct find_param *param)
 	}
 
 	param->fp_got_uuids = 1;
-
-	return ret;
-}
-
-int llapi_ostlist(char *path, struct find_param *param)
-{
-	int fd;
-	int ret;
-
-	fd = open(path, O_RDONLY | O_DIRECTORY);
-	if (fd < 0)
-		return -errno;
-
-	ret = setup_obd_uuid(fd, path, param);
-	close(fd);
 
 	return ret;
 }
@@ -6889,7 +6716,7 @@ static int cb_getstripe(char *path, int p, int *dp, void *data,
 
 	if (param->fp_obd_uuid) {
 		param->fp_quiet = 1;
-		ret = setup_obd_uuid(d != -1 ? d : p, path, param);
+		ret = llapi_ostlist(path, param);
 		if (ret)
 			return ret;
 	}

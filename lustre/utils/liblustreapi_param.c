@@ -498,6 +498,86 @@ static int print_out_devices(yaml_parser_t *reply, enum lctl_param_flags flags)
 	return rc;
 }
 
+static int print_out_targets(yaml_parser_t *reply, int version, int flags)
+{
+	char buf[PATH_MAX / 2], *tmp = NULL;
+	size_t buf_len = sizeof(buf);
+	yaml_event_t event;
+	bool done = false;
+	int rc;
+
+	while (!done) {
+		rc = yaml_parser_parse(reply, &event);
+		if (rc == 0)
+			break;
+
+		if (event.type == YAML_SCALAR_EVENT) {
+			char *value = (char *)event.data.scalar.value;
+
+			if (strcmp(value, "source") == 0) {
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				if (event.type != YAML_SCALAR_EVENT)
+					return -EINVAL;
+
+				value = (char *)event.data.scalar.value;
+
+				if (!version) {
+					fprintf(stdout, "%s.target_obd\n",
+						value);
+				} else if (flags & PARAM_FLAGS_SHOW_SOURCE) {
+					fprintf(stdout, "%s.target_obd=\n",
+						value);
+				}
+			} else if (strcmp(value, "index") == 0 && version) {
+				memset(buf, 0, buf_len);
+				tmp = buf;
+
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				if (event.type != YAML_SCALAR_EVENT)
+					return -EINVAL;
+
+				value = (char *)event.data.scalar.value;
+				snprintf(tmp, buf_len, "%s: ", value);
+				tmp += strlen(value) + 2;
+				buf_len -= strlen(value) + 2;
+			} else if (strcmp(value, "uuid") == 0 && version) {
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				if (event.type != YAML_SCALAR_EVENT ||
+				    !tmp)
+					return -EINVAL;
+
+				value = (char *)event.data.scalar.value;
+				snprintf(tmp, buf_len, "%s", value);
+				tmp += strlen(value) + 2;
+				buf_len -= strlen(value) + 2;
+			} else if (strcmp(value, "status") == 0 && version) {
+				rc = yaml_parser_parse(reply, &event);
+				if (rc == 0)
+					break;
+
+				if (event.type != YAML_SCALAR_EVENT)
+					return -EINVAL;
+
+				value = (char *)event.data.scalar.value;
+				fprintf(stdout, "%s %s\n", buf, value);
+			}
+		}
+
+		done = (event.type == YAML_DOCUMENT_END_EVENT);
+		yaml_event_delete(&event);
+	}
+	return rc == 1 ? 0 : -EINVAL;
+}
+
 static int print_out_stats(yaml_parser_t *reply, int version, int flags)
 {
 	bool show_path = flags & PARAM_FLAGS_SHOW_SOURCE;
@@ -655,6 +735,8 @@ static int lcfg_param_get_yaml(yaml_parser_t *reply, struct nl_sock *sk,
 
 	if (strcmp(group, "devices") == 0)
 		cmd = LUSTRE_CMD_DEVICES;
+	else if (strcmp(group, "target_obd") == 0)
+		cmd = LUSTRE_CMD_TARGETS;
 	else if (strcmp(group, "stats") == 0)
 		cmd = LUSTRE_CMD_STATS;
 
@@ -838,6 +920,9 @@ int llapi_param_display_value(char *path, int version,
 
 				if (strcmp(value, "devices") == 0)
 					rc = print_out_devices(&reply, flags);
+				else if (strcmp(value, "target_obd") == 0)
+					rc = print_out_targets(&reply, version,
+							       flags);
 				else if (strcmp(value, "stats") == 0)
 					rc = print_out_stats(&reply, version,
 							     flags);
@@ -898,6 +983,255 @@ free_reply:
 	yaml_parser_delete(&reply);
 	nl_socket_free(sk);
 	return rc == 1 ? 0 : rc;
+}
+
+/*
+ * If uuidp is NULL, return the number of available obd uuids.
+ * If uuidp is non-NULL, then it will return the uuids of the obds. If
+ * there are more OSTs than allocated to uuidp, then an error is returned with
+ * the ost_count set to number of available obd uuids.
+ */
+int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp, int *indices,
+			   char **status, int *ost_count, enum tgt_type type)
+{
+	struct obd_uuid name;
+	char buf[PATH_MAX];
+	int rc = 0, i = 0;
+	glob_t param;
+	FILE *fp;
+
+	/* Get the lov / lmv name */
+	rc = llapi_file_fget_type_uuid(fd, type, &name);
+	if (rc != 0)
+		return rc;
+
+	/* Now get the ost uuids */
+	rc = get_lustre_param_path(type == LOV_TYPE ? "lov" : "lmv", name.uuid,
+				   FILTER_BY_EXACT, "target_obd", &param);
+	if (rc != 0) {
+		yaml_parser_t reply;
+		yaml_event_t event;
+		struct nl_sock *sk;
+		bool done = false;
+
+		sk = nl_socket_alloc();
+		if (!sk)
+			return -ENOMEM;
+
+		snprintf(buf, sizeof(buf), "%s.%s.target_obd",
+			 type == LOV_TYPE ? "lov" : "lmv", name.uuid);
+
+		rc = lcfg_param_get_yaml(&reply, sk, LUSTRE_GENL_VERSION,
+					 NLM_F_DUMP, buf);
+		if (rc < 0) {
+			if (rc == -EOPNOTSUPP)
+				goto old_api;
+			return rc;
+		}
+
+		while (!done) {
+			rc = yaml_parser_parse(&reply, &event);
+			if (rc == 0)
+				break;
+
+			if ((!*ost_count || i < *ost_count) &&
+			    event.type == YAML_SCALAR_EVENT) {
+				char *value = (char *)event.data.scalar.value;
+
+				if (strcmp(value, "index") == 0) {
+					if (indices != NULL) {
+						yaml_event_delete(&event);
+						rc = yaml_parser_parse(&reply,
+								       &event);
+						if (rc == 0)
+							break;
+
+						value = (char *)event.data.scalar.value;
+						indices[i] = strtoul(value, NULL, 10);
+						if (indices[i] == ULONG_MAX)
+							break;
+					}
+				}
+
+				if (strcmp(value, "uuid") == 0) {
+					if (uuidp != NULL) {
+						yaml_event_delete(&event);
+						rc = yaml_parser_parse(&reply,
+								       &event);
+						if (rc == 0)
+							break;
+
+						strcpy(uuidp[i].uuid,
+						      (char *)event.data.scalar.value);
+					}
+				}
+
+				if (strcmp(value, "status") == 0) {
+					if (status != NULL) {
+						yaml_event_delete(&event);
+						rc = yaml_parser_parse(&reply,
+								       &event);
+						if (rc == 0)
+							break;
+
+						value = (char *)event.data.scalar.value;
+						status[i] = strdup(value);
+					}
+					i++; /* status is last */
+				}
+			}
+
+			done = (event.type == YAML_STREAM_END_EVENT);
+			yaml_event_delete(&event);
+		}
+
+		if (rc == 0) {
+			yaml_parser_log_error(&reply, stderr, "llapi_get_target_uuids: ");
+			rc = -EINVAL;
+		}
+
+		if (indices && indices[i] == ULONG_MAX)
+			rc = -ERANGE;
+
+		if (uuidp && (i > *ost_count))
+			rc = -EOVERFLOW;
+
+		if (status && (i > *ost_count))
+			rc = -EOVERFLOW;
+
+		*ost_count = i;
+
+		return rc == 1 ? 0 : rc;
+	}
+old_api:
+	fp = fopen(param.gl_pathv[0], "r");
+	if (fp == NULL) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: opening '%s'",
+			    param.gl_pathv[0]);
+		goto free_param;
+	}
+
+	for (i = 0; fgets(buf, sizeof(buf), fp); i++) {
+		char state[10];
+		int index;
+
+		if (sscanf(buf, "%d: %s %s", &index, name.uuid, state) < 3)
+			break;
+
+		if (i < *ost_count) {
+			if (uuidp != NULL)
+				uuidp[i] = name;
+			if (indices != NULL)
+				indices[i] = index;
+			if (status != NULL)
+				status[i] = strdup(state);
+		}
+	}
+
+	if (uuidp && (i > *ost_count))
+		rc = -EOVERFLOW;
+
+	if (status && (i > *ost_count))
+		rc = -EOVERFLOW;
+
+	*ost_count = i;
+free_param:
+	cfs_free_param_data(&param);
+	return rc;
+}
+
+int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count)
+{
+	return llapi_get_target_uuids(fd, uuidp, NULL, NULL, mdt_count, LMV_TYPE);
+}
+
+int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
+{
+	return llapi_get_target_uuids(fd, uuidp, NULL, NULL, ost_count, LOV_TYPE);
+}
+
+int llapi_ostlist(char *path, struct find_param *param)
+{
+	struct obd_uuid *uuidp;
+	int *indices, fd;
+	char **status;
+	int obdcount;
+	int i, rc;
+
+	if (param->fp_got_uuids)
+		return 0;
+
+	rc = llapi_get_obd_count(path, &obdcount, param->fp_get_lmv);
+	if (rc < 0)
+		return rc;
+
+	uuidp = calloc(obdcount, sizeof(*uuidp));
+	if (uuidp == NULL)
+		return -ENOMEM;
+
+	indices = calloc(obdcount, sizeof(*indices));
+	if (indices == NULL) {
+		rc = -ENOMEM;
+		goto out_uuidp;
+	}
+
+	status = calloc(obdcount, sizeof(*status));
+	if (status == NULL) {
+		rc = -ENOMEM;
+		goto out_indices;
+	}
+
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		goto out_status;
+	}
+
+	rc = llapi_get_target_uuids(fd, uuidp, indices, status, &obdcount,
+				    param->fp_get_lmv ? LMV_TYPE : LOV_TYPE);
+	if (rc < 0) {
+		close(fd);
+		goto out_status;
+	}
+
+	param->fp_got_uuids = 1;
+
+	if (!param->fp_obd_uuid && !param->fp_quiet && !param->fp_obds_printed)
+		llapi_printf(LLAPI_MSG_NORMAL, "%s:\n",
+			     param->fp_get_lmv ? "MDTS" : "OBDS");
+
+	for (i = 0; i < obdcount; i++) {
+		if (param->fp_obd_uuid) {
+			if (llapi_uuid_match(uuidp[i].uuid,
+					     param->fp_obd_uuid->uuid)) {
+				param->fp_obd_index = indices[i];
+				break;
+			}
+		} else if (!param->fp_quiet && !param->fp_obds_printed) {
+			/* Print everything */
+			llapi_printf(LLAPI_MSG_NORMAL, "%d: %s %s\n",
+				     indices[i], uuidp[i].uuid, status[i]);
+		}
+	}
+	param->fp_obds_printed = 1;
+
+	if (param->fp_obd_uuid && (param->fp_obd_index == OBD_NOT_FOUND)) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "error: %s: unknown obduuid: %s",
+				  __func__, param->fp_obd_uuid->uuid);
+		rc = -EINVAL;
+	}
+
+	close(fd);
+out_status:
+	free(status);
+out_indices:
+	free(indices);
+out_uuidp:
+	free(uuidp);
+
+	return rc;
 }
 
 /**

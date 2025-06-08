@@ -62,6 +62,8 @@
 #define LUSTRE_ENCRYPTION_UNIT_SIZE   ((size_t)1 << LUSTRE_ENCRYPTION_BLOCKBITS)
 #define LUSTRE_ENCRYPTION_MASK        (~(LUSTRE_ENCRYPTION_UNIT_SIZE - 1))
 
+#define OBD_NOT_FOUND	(-1)
+
 /* mount point listings in /proc/mounts */
 #ifndef PROC_MOUNTS
 #define PROC_MOUNTS "/proc/mounts"

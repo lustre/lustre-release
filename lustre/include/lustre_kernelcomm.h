@@ -159,6 +159,53 @@ unsigned int lustre_stats_scan(struct lustre_stats_list *slist, const char *filt
 int lustre_stats_dump(struct sk_buff *msg, struct netlink_callback *cb);
 int lustre_stats_done(struct netlink_callback *cb);
 
+/**
+ * enum lustre_target_attrs	      - Lustre general top-level netlink
+ *					attributes that describe lustre
+ *					'target_obd'. These values are used
+ *					to piece togther messages for
+ *					sending and receiving.
+ *
+ * @LUSTRE_TARGET_ATTR_UNSPEC:		unspecified attribute to catch errors
+ *
+ * @LUSTRE_TARGET_ATTR_HDR:		Netlink group this data is for
+ *					(NLA_NUL_STRING)
+ * @LUSTRE_TARGET_ATTR_SOURCE:		obd device targets belong too
+ *					(NLA_STRING)
+ * @LUSTRE_TARGET_ATTR_PROP_LIST:	list of target properties (NLA_NESTED)
+ */
+enum lustre_target_attrs {
+	LUSTRE_TARGET_ATTR_UNSPEC = 0,
+
+	LUSTRE_TARGET_ATTR_HDR,
+	LUSTRE_TARGET_ATTR_SOURCE,
+	LUSTRE_TARGET_ATTR_PROP_LIST,
+
+	__LUSTRE_TARGET_ATTR_MAX_PLUS_ONE,
+};
+
+#define LUSTRE_TARGET_ATTR_MAX	(__LUSTRE_TARGET_ATTR_MAX_PLUS_ONE - 1)
+
+/**
+ * enum lustre_target_props_attrs
+ *
+ * @LUSTRE_TARGET_PROP_ATTR_UNSPEC:	unspecified attribute to catch errors
+ * @LUSTRE_TARGET_PROP_ATTR_INDEX:	target number used as an index (NLA_U16)
+ * @LUSTRE_DEVICE_PROP_ATTR_UUID:	UUID of the target (NLA_STRING)
+ * @LUSTRE_DEVICE_PROP_ATTR_STATUS:	status of the target (NLA_STRING)
+ */
+enum lustre_target_prop_attrs {
+	LUSTRE_TARGET_PROP_ATTR_UNSPEC = 0,
+
+	LUSTRE_TARGET_PROP_ATTR_INDEX,
+	LUSTRE_TARGET_PROP_ATTR_UUID,
+	LUSTRE_TARGET_PROP_ATTR_STATUS,
+
+	__LUSTRE_TARGET_PROP_ATTR_MAX_PLUS_ONE,
+};
+
+#define LUSTRE_TARGET_PROP_ATTR_MAX	(__LUSTRE_TARGET_PROP_ATTR_MAX_PLUS_ONE - 1)
+
 /* prototype for callback function on kuc groups */
 typedef int (*libcfs_kkuc_cb_t)(void *data, void *cb_arg);
 

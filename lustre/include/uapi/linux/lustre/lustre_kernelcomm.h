@@ -30,12 +30,14 @@
  * @LUSTRE_CMD_UNSPEC:			unspecified command to catch errors
  *
  * @LUSTRE_CMD_DEVICES:			command to manage the Lustre devices
+ * @LUSTRE_CMD_TARGETS:			command to manage the Lustre targets
  * @LUSTRE_CMD_STATS:			Lustre stats collection command
  */
 enum lustre_commands {
 	LUSTRE_CMD_UNSPEC	= 0,
 
 	LUSTRE_CMD_DEVICES	= 1,
+	LUSTRE_CMD_TARGETS	= 3,
 	LUSTRE_CMD_STATS	= 5,
 
 	__LUSTRE_CMD_MAX_PLUS_ONE
