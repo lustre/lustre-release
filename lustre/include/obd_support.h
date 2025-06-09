@@ -821,8 +821,10 @@ extern __u64 obd_memory_max(void);
 #if OBD_DEBUG_MEMUSAGE
 /* message format here needs to match regexp in lustre/tests/leak_finder.pl */
 #define OBD_ALLOC_POST(ptr, size, name)					\
+do {									\
 	obd_memory_add(size);						\
-	LIBCFS_MEM_MSG(ptr, size, name)
+	LIBCFS_MEM_MSG(ptr, size, name);				\
+} while (0)
 
 /* message format here needs to match regexp in lustre/tests/leak_finder.pl */
 #define OBD_FREE_PRE(ptr, size, name)					\
