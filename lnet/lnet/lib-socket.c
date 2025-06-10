@@ -165,8 +165,8 @@ out:
 EXPORT_SYMBOL(choose_ipv4_src);
 
 static struct socket *
-lnet_sock_create(int interface, struct sockaddr *remaddr,
-		 int local_port, struct net *ns)
+lnet_sock_create(int interface, struct sockaddr *remaddr, int local_port,
+		 struct net *ns, struct sockaddr *addr)
 {
 	struct socket *sock;
 	int rc;
@@ -175,6 +175,9 @@ lnet_sock_create(int interface, struct sockaddr *remaddr,
 	family = AF_INET6;
 	if (remaddr)
 		family = remaddr->sa_family;
+	else if (addr)
+		family = addr->sa_family;
+
 retry:
 #ifdef HAVE_SOCK_CREATE_KERN_USE_NET
 	rc = sock_create_kern(ns, family, SOCK_STREAM, 0, &sock);
@@ -208,7 +211,8 @@ retry:
 
 			sin->sin_family = AF_INET;
 			sin->sin_addr.s_addr = INADDR_ANY;
-			if (interface >= 0 && remaddr) {
+
+			if (interface >= 0 && remaddr && !addr) {
 				struct sockaddr_in *rem = (void *)remaddr;
 				__u32 ip;
 
@@ -219,6 +223,11 @@ retry:
 				if (rc)
 					goto failed;
 				sin->sin_addr.s_addr = htonl(ip);
+			} else if (addr) {
+				struct sockaddr_in *src;
+
+				src = (struct sockaddr_in *)addr;
+				sin->sin_addr.s_addr = src->sin_addr.s_addr;
 			}
 			sin->sin_port = htons(local_port);
 			break;
@@ -270,7 +279,7 @@ retry:
 			}
 #endif /* HAVE_KERNEL_SETSOCKOPT */
 
-			if (interface >= 0 && remaddr) {
+			if (interface >= 0 && remaddr && !addr) {
 				struct sockaddr_in6 *rem = (void *)remaddr;
 				struct net_device *dev;
 
@@ -285,7 +294,13 @@ retry:
 				ipv6_dev_get_saddr(ns, dev, &rem->sin6_addr, 0,
 						   &sin6->sin6_addr);
 				rcu_read_unlock();
+			} else if (addr) {
+				const struct sockaddr_in6 *src6;
+
+				src6 = (const struct sockaddr_in6 *)addr;
+				sin6->sin6_addr = src6->sin6_addr;
 			}
+
 			sin6->sin6_port = htons(local_port);
 			break;
 		}
@@ -376,12 +391,18 @@ void lnet_sock_getbuf(struct socket *sock, int *txbufsize, int *rxbufsize)
 EXPORT_SYMBOL(lnet_sock_getbuf);
 
 struct socket *
-lnet_sock_listen(int local_port, int backlog, struct net *ns)
+lnet_sock_listen(int local_port, int backlog, struct net *ns,
+		 struct sockaddr *addr, int ifindex)
 {
 	struct socket *sock;
 	int rc;
 
-	sock = lnet_sock_create(-1, NULL, local_port, ns);
+
+#ifdef HAVE_SOCK_CREATE_KERN_USE_NET
+	sock = lnet_sock_create(ifindex, NULL, local_port, ns, addr);
+#else
+	sock = lnet_sock_create(-1, NULL, local_port, ns, NULL);
+#endif
 	if (IS_ERR(sock)) {
 		rc = PTR_ERR(sock);
 		if (rc == -EADDRINUSE)
@@ -407,7 +428,7 @@ lnet_sock_connect(int interface, int local_port,
 	struct socket *sock;
 	int rc;
 
-	sock = lnet_sock_create(interface, peeraddr, local_port, ns);
+	sock = lnet_sock_create(interface, peeraddr, local_port, ns, 0);
 	if (IS_ERR(sock))
 		return sock;
 
@@ -469,7 +490,6 @@ static int lnet_inet4_enumerate(struct net_device *dev, int flags,
 			}
 			ifaces = tmp;
 		}
-
 		ifaces[nip].li_cpt = cpt;
 		ifaces[nip].li_iff_master = !!(flags & IFF_MASTER);
 		ifaces[nip].li_size = sizeof(ifa->ifa_local);

@@ -936,6 +936,10 @@ int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
+int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
+			     int ifindex, struct net *ni_net_ns);
+void lnet_acceptor_remove_socket(const char *iface);
+
 
 struct lnet_inetdev {
 	u32	li_cpt;
@@ -964,8 +968,8 @@ int lnet_sock_getaddr(struct socket *socket, bool remote,
 int lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
 int lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
 
-struct socket *lnet_sock_listen(int port, int backlog,
-				struct net *ns);
+struct socket *lnet_sock_listen(int port, int backlog, struct net *ns,
+				struct sockaddr *addr, int ifindex);
 struct socket *lnet_sock_connect(int interface, int local_port,
 				 struct sockaddr *peeraddr,
 				 struct net *ns);

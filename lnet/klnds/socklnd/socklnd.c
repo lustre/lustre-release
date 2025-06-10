@@ -2503,6 +2503,8 @@ ksocknal_shutdown(struct lnet_ni *ni)
 	/* Delete all peers */
 	ksocknal_del_peer(ni, NULL);
 
+	lnet_acceptor_remove_socket(net->ksnn_interface.ksni_name);
+
 	/* Wait for all peer_ni state to clean up */
 	wait_var_event_warning(&net->ksnn_npeers,
 			       atomic_read(&net->ksnn_npeers) ==
@@ -2632,6 +2634,7 @@ ksocknal_startup(struct lnet_ni *ni)
 	struct lnet_inetdev *ifaces = NULL;
 	int rc, if_idx;
 	int dev_status;
+	__u32 ipaddr = 0;
 
 	LASSERT(ni->ni_net->net_lnd == &the_ksocklnd);
 	if (ksocknal_data.ksnd_init == SOCKNAL_INIT_NOTHING) {
@@ -2691,6 +2694,7 @@ ksocknal_startup(struct lnet_ni *ni)
 		ksi->ksni_netmask = ifaces[if_idx].li_netmask;
 		ni->ni_nid.nid_size = 0;
 		ni->ni_nid.nid_addr[0] = sa->sin_addr.s_addr;
+		ipaddr = sa->sin_addr.s_addr;
 	}
 	strscpy(ksi->ksni_name, ifaces[if_idx].li_name, sizeof(ksi->ksni_name));
 
@@ -2704,6 +2708,12 @@ ksocknal_startup(struct lnet_ni *ni)
 				&dev_status) < 0) ||
 	     (dev_status <= 0))
 		lnet_set_link_fatal_state(ni, 1);
+
+	rc = lnet_acceptor_add_socket(ksi->ksni_name,
+				      (struct sockaddr *)&ksi->ksni_addr,
+				      ksi->ksni_index, ni->ni_net_ns);
+	if (rc != 0)
+		goto out_net;
 
 	list_add(&net->ksnn_list, &ksocknal_data.ksnd_nets);
 	net->ksnn_ni = ni;

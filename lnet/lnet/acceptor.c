@@ -14,10 +14,28 @@
 #include <net/sock.h>
 #include <lnet/lib-lnet.h>
 #include <linux/sunrpc/addr.h>
+#include <linux/net.h>
+#include <linux/inet.h>
+#include <linux/netdevice.h>
+#include <linux/inetdevice.h>
+#include <linux/module.h>
 
 static int   accept_port    = 988;
 static int   accept_backlog = 127;
 static int   accept_timeout = 5;
+
+struct listening_socket {
+	struct socket	*liss_sock;
+	int		liss_port;
+	char		liss_iface[IFNAMSIZ];
+	struct		list_head liss_list;
+	struct		list_head liss_tmp_list;
+	atomic_t	refcnt;
+};
+
+static LIST_HEAD(socket_list);
+static DEFINE_SPINLOCK(socket_lock);
+static atomic_t active_sockets = ATOMIC_INIT(0);
 
 static struct {
 	int			pta_shutdown;
@@ -34,6 +52,8 @@ static struct {
 } lnet_acceptor_state = {
 	.pta_shutdown = 1
 };
+
+extern void sock_def_readable(struct sock *sk);
 
 int
 lnet_acceptor_port(void)
@@ -107,6 +127,133 @@ lnet_connect_console_error(int rc, struct lnet_nid *peer_nid,
 	}
 }
 EXPORT_SYMBOL(lnet_connect_console_error);
+
+#ifdef HAVE_SK_DATA_READY_ONE_ARG
+static void lnet_acceptor_ready(struct sock *sk)
+#else
+static void lnet_acceptor_ready(struct sock *sk, int len)
+#endif
+{
+	rmb();
+#ifdef HAVE_SK_DATA_READY_ONE_ARG
+	lnet_acceptor_state.pta_odata(sk);
+#else
+	lnet_acceptor_state.pta_odata(sk, 0);
+#endif
+
+	atomic_set(&lnet_acceptor_state.pta_ready, 1);
+	wake_up_interruptible(&lnet_acceptor_state.pta_waitq);
+}
+
+int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
+			     int ifindex, struct net *ni_net_ns)
+{
+	struct listening_socket *lsock;
+	int port = accept_port;
+	int rc;
+	char ip_str[INET6_ADDRSTRLEN];
+
+
+#ifndef HAVE_SOCK_CREATE_KERN_USE_NET
+	if (atomic_read(&active_sockets))
+		return 0;
+#endif
+
+	if (addr == NULL)
+		return -EINVAL;
+	if (port <= 0 || port > USHRT_MAX)
+		return -EINVAL;
+	if (strlen(iface) >= IFNAMSIZ)
+		return -EINVAL;
+
+	lsock = kmalloc(sizeof(*lsock), GFP_KERNEL);
+	if (!lsock)
+		return -ENOMEM;
+
+	lsock->liss_sock = lnet_sock_listen(accept_port, accept_backlog,
+					    ni_net_ns, addr, ifindex);
+
+	if (IS_ERR(lsock->liss_sock)) {
+		rc = PTR_ERR(lsock->liss_sock);
+		return rc;
+	}
+
+	strscpy(lsock->liss_iface, iface, IFNAMSIZ);
+	lsock->liss_port = port;
+
+	/* Setup socket callback properly */
+	lnet_acceptor_state.pta_odata = lsock->liss_sock->sk->sk_data_ready;
+	lsock->liss_sock->sk->sk_data_ready = lnet_acceptor_ready;
+
+	spin_lock(&socket_lock);
+	atomic_set(&lsock->refcnt, 1);
+	list_add_tail(&lsock->liss_list, &socket_list);
+	atomic_inc(&active_sockets);
+	spin_unlock(&socket_lock);
+
+	wmb();
+	atomic_set(&lnet_acceptor_state.pta_ready, 1);
+
+	switch (addr->sa_family) {
+	case AF_INET: {
+		const struct sockaddr_in *addr4 =
+			(const struct sockaddr_in *)addr;
+		snprintf(ip_str, sizeof(ip_str), "%pI4", &addr4->sin_addr);
+		break;
+	}
+	case AF_INET6: {
+		const struct sockaddr_in6 *addr6 =
+			(const struct sockaddr_in6 *)addr;
+		snprintf(ip_str, sizeof(ip_str), "%pI6", &addr6->sin6_addr);
+		break;
+	}
+	}
+	CDEBUG(D_NET, "Added socket on %s:%d (IP: %s)\n", iface, port, ip_str);
+
+
+	if (!lnet_acceptor_state.pta_shutdown)
+		wake_up(&lnet_acceptor_state.pta_waitq);
+	return 0;
+}
+EXPORT_SYMBOL(lnet_acceptor_add_socket);
+
+void lnet_acceptor_remove_socket(const char *iface)
+{
+	struct listening_socket *lsock, *tmp, *to_free = NULL;
+	bool found = false;
+
+	spin_lock(&socket_lock);
+	list_for_each_entry_safe(lsock, tmp, &socket_list, liss_list) {
+		if (strcmp(lsock->liss_iface, iface) == 0) {
+			list_del(&lsock->liss_list);
+			atomic_dec(&active_sockets);
+
+			if (lsock->liss_sock->sk)
+				lsock->liss_sock->sk->sk_data_ready =
+					lnet_acceptor_state.pta_odata;
+
+			if (atomic_dec_and_test(&lsock->refcnt)) {
+				/* Defer release to avoid sleeping under
+				   spinlock */
+				to_free = lsock;
+			}
+
+			CDEBUG(D_NET, "Removed socket on %s\n", iface);
+			found = true;
+			break;
+		}
+	}
+	spin_unlock(&socket_lock);
+
+	if (to_free) {
+		sock_release(to_free->liss_sock);
+		kfree(to_free);
+	}
+
+	if (!found)
+		CERROR("Interface %s not found\n", iface);
+}
+EXPORT_SYMBOL(lnet_acceptor_remove_socket);
 
 struct socket *
 lnet_connect(struct lnet_nid *peer_nid, int interface,
@@ -327,132 +474,140 @@ lnet_accept(struct socket *sock, __u32 magic)
 	return rc;
 }
 
-#ifdef HAVE_SK_DATA_READY_ONE_ARG
-static void lnet_acceptor_ready(struct sock *sk)
-#else
-static void lnet_acceptor_ready(struct sock *sk, int len)
-#endif
-{
-	/* Ensure pta_odata has actually been set before calling it */
-	rmb();
-#ifdef HAVE_SK_DATA_READY_ONE_ARG
-	lnet_acceptor_state.pta_odata(sk);
-#else
-	lnet_acceptor_state.pta_odata(sk, 0);
-#endif
-
-	atomic_set(&lnet_acceptor_state.pta_ready, 1);
-	wake_up(&lnet_acceptor_state.pta_waitq);
-}
-
 static int
 lnet_acceptor(void *arg)
 {
-	struct socket  *newsock;
-	int	       rc;
-	__u32	       magic;
+	struct socket  *newsock = NULL;
+	__u32 magic;
 	struct sockaddr_storage peer;
-	int	       secure = (int)((uintptr_t)arg);
+	int secure = (int)((uintptr_t)arg);
+	struct listening_socket *lsock, *tmp;
+	int rc = 0;
+	LIST_HEAD(copy_list);
 
 	LASSERT(lnet_acceptor_state.pta_sock == NULL);
 
-	lnet_acceptor_state.pta_sock =
-		lnet_sock_listen(accept_port, accept_backlog,
-				 lnet_acceptor_state.pta_ns);
-	if (IS_ERR(lnet_acceptor_state.pta_sock)) {
-		rc = PTR_ERR(lnet_acceptor_state.pta_sock);
-		if (rc == -EADDRINUSE)
-			LCONSOLE_ERROR("Can't start acceptor on port %d: port already in use\n",
-				       accept_port);
-		else
-			LCONSOLE_ERROR("Can't start acceptor on port %d: unexpected error %d\n",
-				       accept_port, rc);
-
-		lnet_acceptor_state.pta_sock = NULL;
-	} else {
-		rc = 0;
-		LCONSOLE(0, "Accept %s, port %d\n", accept_type, accept_port);
-		init_waitqueue_head(&lnet_acceptor_state.pta_waitq);
-		lnet_acceptor_state.pta_odata =
-			lnet_acceptor_state.pta_sock->sk->sk_data_ready;
-		/* ensure pta_odata gets set before there is any chance of
-		 * lnet_accept_ready() trying to read it.
-		 */
-		wmb();
-		lnet_acceptor_state.pta_sock->sk->sk_data_ready =
-			lnet_acceptor_ready;
-		atomic_set(&lnet_acceptor_state.pta_ready, 1);
-	}
+	init_waitqueue_head(&lnet_acceptor_state.pta_waitq);
 
 	/* set init status and unblock parent */
 	lnet_acceptor_state.pta_shutdown = rc;
 	complete(&lnet_acceptor_state.pta_signal);
 
-	if (rc != 0)
-		return rc;
-
 	while (!lnet_acceptor_state.pta_shutdown) {
-
-		wait_event_idle(lnet_acceptor_state.pta_waitq,
+		wait_event_interruptible(lnet_acceptor_state.pta_waitq,
 				lnet_acceptor_state.pta_shutdown ||
 				atomic_read(&lnet_acceptor_state.pta_ready));
+
+		if (!atomic_read(&active_sockets))
+			continue;
 		if (!atomic_read(&lnet_acceptor_state.pta_ready))
 			continue;
 		atomic_set(&lnet_acceptor_state.pta_ready, 0);
-		rc = kernel_accept(lnet_acceptor_state.pta_sock, &newsock,
-				   SOCK_NONBLOCK);
-		if (rc != 0) {
-			if (rc != -EAGAIN) {
-				CWARN("Accept error %d: pausing...\n", rc);
-				schedule_timeout_uninterruptible(
+
+		spin_lock(&socket_lock);
+		list_for_each_entry(lsock, &socket_list, liss_list) {
+			if (lsock->liss_sock &&
+			    atomic_read(&lsock->refcnt) > 0) {
+				atomic_inc(&lsock->refcnt);
+				list_add_tail(&lsock->liss_tmp_list,
+					      &copy_list);
+			}
+		}
+		spin_unlock(&socket_lock);
+
+		list_for_each_entry_safe(lsock, tmp, &copy_list,
+					 liss_tmp_list) {
+			list_del_init(&lsock->liss_tmp_list);
+			rc = kernel_accept(lsock->liss_sock, &newsock,
+					   SOCK_NONBLOCK);
+			if (rc != 0) {
+				if (rc != -EAGAIN) {
+					CWARN("Accept error %d: pausing...\n",
+					      rc);
+					schedule_timeout_uninterruptible(
 					cfs_time_seconds(1));
+				}
+				if (atomic_dec_and_test(&lsock->refcnt)) {
+					sock_release(lsock->liss_sock);
+					kfree(lsock);
+				}
+				continue;
+			}
+			/* make sure we call lnet_sock_accept() again,
+			   until it fails */
+			atomic_set(&lnet_acceptor_state.pta_ready, 1);
+
+			CDEBUG(D_NET, "Accepted connection on %s:%d\n",
+			       lsock->liss_iface, lsock->liss_port);
+
+			rc = lnet_sock_getaddr(newsock, true, &peer);
+			if (rc != 0) {
+				CERROR("Can't determine new connection's address\n");
+				goto failed;
+			}
+
+			if (secure &&
+			    rpc_get_port((struct sockaddr *)&peer) >
+					 LNET_ACCEPTOR_MAX_RESERVED_PORT) {
+				CERROR("Refusing connection from %pIScp: insecure port.\n",
+				       &peer);
+				goto failed;
+			}
+
+			rc = lnet_sock_read(newsock, &magic, sizeof(magic),
+					    accept_timeout);
+			if (rc != 0) {
+				CERROR("Error %d reading connection request from %pISc\n",
+				       rc, &peer);
+				goto failed;
+			}
+
+			rc = lnet_accept(newsock, magic);
+			if (rc != 0)
+				goto failed;
+
+			if (atomic_dec_and_test(&lsock->refcnt)) {
+				sock_release(lsock->liss_sock);
+				kfree(lsock);
 			}
 			continue;
-		}
-
-		/* make sure we call lnet_sock_accept() again, until it fails */
-		atomic_set(&lnet_acceptor_state.pta_ready, 1);
-
-		rc = lnet_sock_getaddr(newsock, true, &peer);
-		if (rc != 0) {
-			CERROR("Can't determine new connection's address\n");
-			goto failed;
-		}
-
-		if (secure &&
-		    rpc_get_port((struct sockaddr *)&peer) >
-		    LNET_ACCEPTOR_MAX_RESERVED_PORT) {
-			CERROR("Refusing connection from %pIScp: insecure port.\n",
-			       &peer);
-			goto failed;
-		}
-
-		rc = lnet_sock_read(newsock, &magic, sizeof(magic),
-				      accept_timeout);
-		if (rc != 0) {
-			CERROR("Error %d reading connection request from %pISc\n",
-			       rc, &peer);
-			goto failed;
-		}
-
-		rc = lnet_accept(newsock, magic);
-		if (rc != 0)
-			goto failed;
-
-		continue;
 
 failed:
-		sock_release(newsock);
+			if (newsock) {
+				sock_release(newsock);
+				newsock = NULL;
+			}
+			if (atomic_dec_and_test(&lsock->refcnt)) {
+				sock_release(lsock->liss_sock);
+				kfree(lsock);
+			}
+		}
 	}
 
-	lnet_acceptor_state.pta_sock->sk->sk_data_ready =
-		lnet_acceptor_state.pta_odata;
-	sock_release(lnet_acceptor_state.pta_sock);
-	lnet_acceptor_state.pta_sock = NULL;
+	INIT_LIST_HEAD(&copy_list);
+
+	spin_lock(&socket_lock);
+	list_for_each_entry_safe(lsock, tmp, &socket_list, liss_list) {
+		list_del(&lsock->liss_list);
+		atomic_dec(&active_sockets);
+
+		if (lsock->liss_sock->sk)
+			lsock->liss_sock->sk->sk_data_ready =
+				lnet_acceptor_state.pta_odata;
+
+		if (atomic_dec_and_test(&lsock->refcnt)) 
+			list_add_tail(&lsock->liss_tmp_list, &copy_list);
+	}
+	spin_unlock(&socket_lock);
+
+	/* Now safely free all lsocks outside lock */
+	list_for_each_entry_safe(lsock, tmp, &copy_list, liss_tmp_list) {
+		list_del_init(&lsock->liss_tmp_list);
+		sock_release(lsock->liss_sock);
+		kfree(lsock);
+	}
 
 	CDEBUG(D_NET, "Acceptor stopping\n");
-
-	/* unblock lnet_acceptor_stop() */
 	complete(&lnet_acceptor_state.pta_signal);
 	return 0;
 }
@@ -510,11 +665,9 @@ lnet_acceptor_start(void)
 	/* wait for acceptor to startup */
 	wait_for_completion(&lnet_acceptor_state.pta_signal);
 
-	if (!lnet_acceptor_state.pta_shutdown) {
+	if (!lnet_acceptor_state.pta_shutdown)
 		/* started OK */
-		LASSERT(lnet_acceptor_state.pta_sock != NULL);
 		return 0;
-	}
 
 	LASSERT(lnet_acceptor_state.pta_sock == NULL);
 

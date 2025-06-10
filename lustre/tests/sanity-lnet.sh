@@ -1863,6 +1863,11 @@ test_200() {
 	cleanup_lnet || return $?
 	setup_netns || error "setup_netns failed with $?"
 	load_lnet "networks=\"\""
+	ip a
+	ss -ltunp
+	do_ns ip a
+	do_ns ss -ltunp
+	lsmod | grep lnet
 	do_ns $LNETCTL lnet configure $LNET_CONFIG_INIT_OPT ||
 		error "Failed to configure LNet in non-default namespace rc = $?"
 	$LNETCTL net show --net tcp | grep -q "nid: $FAKE_NID$" ||
@@ -4274,6 +4279,30 @@ test_280() {
 	$LUSTRE_RMMOD
 }
 run_test 280 "Don't panic when request_module fails"
+
+test_290() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+	if (( $LINUX_VERSION_CODE < $(version_code 4.2.0) )); then
+		skip "Need kernel >= 4.2.0 for local net namespace"
+	fi
+
+	cleanup_lnet || error "Failed to unload modules before test execution"
+	setup_fakeif || error "Failed to add fake IF"
+	reinit_dlc || return $?
+
+	$LNETCTL net add --nid ${FAKE_IP}@tcp
+	sleep 1
+	accept_port=$(cat /sys/module/lnet/parameters/accept_port)
+	binding_found=$(ss -ltnup | awk -v ip="${FAKE_IP}" -v port="${accept_port}" '
+		$5 == ip ":" port { print }
+	')
+	if [[ -z "$binding_found" ]]; then
+		error "Explicit binding not found for ${FAKE_IP}:${accept_port}"
+	fi
+
+	cleanup_fakeif
+}
+run_test 290 "Check that lnet acceptor is using explicit address binding"
 
 test_300() {
 	# LU-13274
