@@ -146,8 +146,9 @@ memory region pointed by
 .I ladvise
 is not properly mapped.
 .TP
-.B ENOTSUPP
-Advice type is not supported.
+.B EOPNOTSUPP
+Advice type is not supported. Before Lustre 2.16, the NFS-specific
+error code was returned, but this does not print a useful error string.
 .SH AVAILABILITY
 .B llapi_ladvise()
 is part of the

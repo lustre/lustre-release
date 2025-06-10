@@ -61,6 +61,9 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 
 	rc = ioctl(fd, LL_IOC_LADVISE, ladvise_hdr);
 	if (rc < 0) {
+		/* replace NFS error code with correct one */
+		if (errno == ENOTSUP)
+			errno = EOPNOTSUPP;
 		llapi_error(LLAPI_MSG_ERROR, -errno, "cannot give advice");
 		goto out;
 	} else {

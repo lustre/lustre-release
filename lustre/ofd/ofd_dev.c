@@ -2402,7 +2402,7 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 		/* Handle different advice types */
 		switch (ladvise->lla_advice) {
 		default:
-			rc = -ENOTSUPP;
+			rc = -EOPNOTSUPP;
 			break;
 		case LU_LADVISE_WILLREAD:
 			if (tbc == NULL)

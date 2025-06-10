@@ -4019,7 +4019,7 @@ static int ll_ladvise_sanity(struct inode *inode,
 	int rc = 0;
 
 	if (advice > LU_LADVISE_MAX || advice == LU_LADVISE_INVALID) {
-		rc = -EINVAL;
+		rc = -EOPNOTSUPP;
 		CDEBUG(D_VFSTRACE,
 		       "%s: advice with value '%d' not recognized, last supported advice is %s (value '%d'): rc = %d\n",
 		       sbi->ll_fsname, advice,
