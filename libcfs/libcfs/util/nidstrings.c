@@ -722,6 +722,20 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_expand_addrrange	= libcfs_num_addr_range_expand
 	},
 	{
+		.nf_type		= EFALND,
+		.nf_name		= "efa",
+		.nf_modname		= "kefalnd",
+		.nf_addr2str		= libcfs_ip_addr2str,
+		.nf_addr2str_size	= libcfs_ip_addr2str_size,
+		.nf_str2addr		= libcfs_ip_str2addr,
+		.nf_str2addr_size	= libcfs_ip_str2addr_size,
+		.nf_parse_addrlist	= cfs_ip_addr_parse,
+		.nf_print_addrlist	= libcfs_ip_addr_range_print,
+		.nf_match_addr		= cfs_ip_addr_match,
+		.nf_min_max		= cfs_ip_min_max,
+		.nf_expand_addrrange	= libcfs_ip_addr_range_expand
+	},
+	{
 		.nf_type		= BXI3LND,
 		.nf_name		= "bxi3f",
 		.nf_modname		= "kbxi3lnd",
