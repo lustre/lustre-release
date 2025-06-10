@@ -45,13 +45,12 @@ static void *find_worker(void *arg)
 			queue->fwq_tail = NULL;
 		pthread_mutex_unlock(&queue->fwq_lock);
 
-
 		// TODO: Error propagation, interesting...
 		llapi_semantic_traverse(unit->fwu_path, 2 * PATH_MAX, -1,
 					cb_find_init, cb_common_fini,
 					unit->fwu_param, NULL);
 		work_unit_free(unit);
-		__sync_fetch_and_sub(&queue->fwq_active_units, 1);
+		ll_atomic_fetch_sub(&queue->fwq_active_units, 1);
 	}
 
 	return NULL;
