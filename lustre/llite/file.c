@@ -6588,6 +6588,9 @@ static long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 	struct inode *inode = file_inode(filp);
 	int rc;
 
+	CDEBUG(D_VFSTRACE,  "VFS Op: "DNAME", mode %x, offset %lld, len %lld\n",
+	       encode_fn_file(filp), mode, offset, len);
+
 	if (offset < 0 || len <= 0)
 		RETURN(-EINVAL);
 	/*
