@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if ! $FRAMEWORK_NEEDS_INIT; then
+	return 0
+fi
+FRAMEWORK_NEEDS_INIT=false
+
 trap 'print_summary && print_stack_trace | tee $TF_FAIL && \
     echo "$TESTSUITE: FAIL: test-framework exiting on error"' ERR
 set -e
