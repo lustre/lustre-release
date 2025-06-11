@@ -1,0 +1,98 @@
+From cf546dd289e0f6d2594c25e2fb4e19ee67c6d988 Mon Sep 17 00:00:00 2001
+From: Mikulas Patocka <mpatocka@redhat.com>
+Date: Mon, 27 May 2024 17:40:10 +0200
+Subject: [PATCH] block: change rq_integrity_vec to respect the iterator
+
+If we allocate a bio that is larger than NVMe maximum request size,
+attach integrity metadata to it and send it to the NVMe subsystem, the
+integrity metadata will be corrupted.
+
+Splitting the bio works correctly. The function bio_split will clone the
+bio, trim the iterator of the first bio and advance the iterator of the
+second bio.
+
+However, the function rq_integrity_vec has a bug - it returns the first
+vector of the bio's metadata and completely disregards the metadata
+iterator that was advanced when the bio was split. Thus, the second bio
+uses the same metadata as the first bio and this leads to metadata
+corruption.
+
+This commit changes rq_integrity_vec, so that it calls mp_bvec_iter_bvec
+instead of returning the first vector. mp_bvec_iter_bvec reads the
+iterator and uses it to build a bvec for the current position in the
+iterator.
+
+The "queue_max_integrity_segments(rq->q) > 1" check was removed, because
+the updated rq_integrity_vec function works correctly with multiple
+segments.
+
+Signed-off-by: Mikulas Patocka <mpatocka@redhat.com>
+Reviewed-by: Anuj Gupta <anuj20.g@samsung.com>
+Reviewed-by: Kanchan Joshi <joshi.k@samsung.com>
+Reviewed-by: Christoph Hellwig <hch@lst.de>
+Link: https://lore.kernel.org/r/49d1afaa-f934-6ed2-a678-e0d428c63a65@redhat.com
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ drivers/nvme/host/pci.c       |  6 +++---
+ include/linux/blk-integrity.h | 14 +++++++-------
+ 2 files changed, 10 insertions(+), 10 deletions(-)
+
+Index: linux-5.14.0-362.18.1.el9_3/drivers/nvme/host/pci.c
+===================================================================
+--- linux-5.14.0-362.18.1.el9_3.orig/drivers/nvme/host/pci.c
++++ linux-5.14.0-362.18.1.el9_3/drivers/nvme/host/pci.c
+@@ -827,9 +827,9 @@ static blk_status_t nvme_map_metadata(st
+ 		struct nvme_command *cmnd)
+ {
+ 	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
++	struct bio_vec bv = rq_integrity_vec(req);
+ 
+-	iod->meta_dma = dma_map_bvec(dev->dev, rq_integrity_vec(req),
+-			rq_dma_dir(req), 0);
++	iod->meta_dma = dma_map_bvec(dev->dev, &bv, rq_dma_dir(req), 0);
+ 	if (dma_mapping_error(dev->dev, iod->meta_dma))
+ 		return BLK_STS_IOERR;
+ 	cmnd->rw.metadata = cpu_to_le64(iod->meta_dma);
+@@ -970,7 +970,7 @@ static __always_inline void nvme_pci_unm
+ 	        struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
+ 
+ 		dma_unmap_page(dev->dev, iod->meta_dma,
+-			       rq_integrity_vec(req)->bv_len, rq_dma_dir(req));
++			       rq_integrity_vec(req).bv_len, rq_dma_dir(req));
+ 	}
+ 
+ 	if (blk_rq_nr_phys_segments(req))
+Index: linux-5.14.0-362.18.1.el9_3/include/linux/blk-integrity.h
+===================================================================
+--- linux-5.14.0-362.18.1.el9_3.orig/include/linux/blk-integrity.h
++++ linux-5.14.0-362.18.1.el9_3/include/linux/blk-integrity.h
+@@ -108,14 +108,13 @@ static inline bool blk_integrity_rq(stru
+ }
+ 
+ /*
+- * Return the first bvec that contains integrity data.  Only drivers that are
+- * limited to a single integrity segment should use this helper.
++ * Return the current bvec that contains the integrity data. bip_iter may be
++ * advanced to iterate over the integrity data.
+  */
+-static inline struct bio_vec *rq_integrity_vec(struct request *rq)
++static inline struct bio_vec rq_integrity_vec(struct request *rq)
+ {
+-	if (WARN_ON_ONCE(queue_max_integrity_segments(rq->q) > 1))
+-		return NULL;
+-	return rq->bio->bi_integrity->bip_vec;
++	return mp_bvec_iter_bvec(rq->bio->bi_integrity->bip_vec,
++				 rq->bio->bi_integrity->bip_iter);
+ }
+ #else /* CONFIG_BLK_DEV_INTEGRITY */
+ static inline int blk_rq_count_integrity_sg(struct request_queue *q,
+@@ -181,7 +180,8 @@ static inline int blk_integrity_rq(struc
+ 
+ static inline struct bio_vec *rq_integrity_vec(struct request *rq)
+ {
+-	return NULL;
++	/* the optimizer will remove all calls to this function */
++	return (struct bio_vec){ };
+ }
+ #endif /* CONFIG_BLK_DEV_INTEGRITY */
+ #endif /* _LINUX_BLK_INTEGRITY_H */
