@@ -1238,10 +1238,15 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 	if (cathandle->lgh_obj == NULL)
 		return 0;
 
+	/* cancel record and decrease count, then move llh_cat_idx */
 	/* remove plain llog entry from catalog by index */
-	llog_cat_set_first_idx(cathandle, index);
 	rc = llog_cancel_rec(env, cathandle, index);
-	if (!rc && loghandle)
+	if (rc < 0)
+		return rc;
+
+	llog_cat_set_first_idx(cathandle, index);
+
+	if (loghandle)
 		CDEBUG(D_HA,
 		       "cancel plain log "DFID" at index %u of catalog "DFID"\n",
 		       PLOGID(&loghandle->lgh_id), index,
