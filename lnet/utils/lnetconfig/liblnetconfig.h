@@ -1114,4 +1114,5 @@ void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr);
 int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
 				     lnet_nid_t **nids, __u32 *nnids,
 				     char *err_str, size_t str_len);
+int lustre_lnet_kfi_intf2cxi(struct lnet_dlc_intf_descr *intf);
 #endif /* LIB_LNET_CONFIG_API_H */

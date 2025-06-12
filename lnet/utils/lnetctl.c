@@ -2419,6 +2419,22 @@ free_reply:
 	return rc == 1 ? 0 : rc;
 }
 
+static int kfi_intflist2cxi(struct list_head *nw_intflist)
+{
+	struct lnet_dlc_intf_descr *intf;
+	int rc;
+
+	list_for_each_entry(intf, nw_intflist, intf_on_network) {
+		rc = lustre_lnet_kfi_intf2cxi(intf);
+		if (rc != LUSTRE_CFG_RC_NO_ERR) {
+			fprintf(stderr, "couldn't query kfi intf %s",
+				intf->intf_name);
+			return rc;
+		}
+	}
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
 static int jt_add_ni(int argc, char **argv)
 {
 	char *ip2net = NULL;
@@ -2594,6 +2610,13 @@ static int jt_add_ni(int argc, char **argv)
 		strcpy(&tunables.lt_tun.lnd_tun_u.lnd_kfi.lnd_traffic_class_str[0],
 		       traffic_class);
 		found = true;
+	}
+
+	/* kfi can convert linux network device names to cxi devices */
+	if (LNET_NETTYP(nw_descr.nw_id) == KFILND) {
+		rc = kfi_intflist2cxi(&nw_descr.nw_intflist);
+		if (rc)
+			return rc;
 	}
 #endif
 
@@ -2774,6 +2797,15 @@ static int jt_del_ni(int argc, char **argv)
 		}
 		net_id = libcfs_net2str(nw_descr.nw_id);
 	}
+
+#ifdef HAVE_KFILND
+	/* kfi can convert linux network device names to cxi devices */
+	if (LNET_NETTYP(nw_descr.nw_id) == KFILND) {
+		rc = kfi_intflist2cxi(&nw_descr.nw_intflist);
+		if (rc)
+			return rc;
+	}
+#endif
 
 	rc = yaml_lnet_config_ni(net_id, NULL, &nw_descr, NULL, -1, NULL,
 				 LNET_GENL_VERSION, 0, stdout);

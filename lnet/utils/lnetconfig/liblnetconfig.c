@@ -40,12 +40,12 @@
 #include "liblnetconfig.h"
 #include <glob.h>
 #include <libcfs/util/param.h>
+#include <dirent.h>
 
 #ifndef HAVE_USRSPC_RDMA_PS_TCP
 #define RDMA_PS_TCP 0x0106
 #endif
 
-#define cxi_nic_addr_path "/sys/class/cxi/cxi%u/device/properties/"
 const char *gmsg_stat_names[] = {"sent_stats", "received_stats",
 				 "dropped_stats"};
 
@@ -1737,15 +1737,77 @@ static int lustre_lnet_queryip(struct lnet_dlc_intf_descr *intf, __u32 *ip)
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
+#define device_path "/sys/class/net/%s/device/cxi"
+int lustre_lnet_kfi_intf2cxi(struct lnet_dlc_intf_descr *intf)
+{
+	DIR *dir = NULL;
+	struct dirent *entry;
+	char *path;
+	int count = 0;
+	int rc = 0;
+	int size;
+
+	/* Already cxi device name, nothing to do */
+	if (!strncmp(intf->intf_name, "cxi", 3))
+		return LUSTRE_CFG_RC_NO_ERR;
+
+	/* Get cxi device name from the network interface. e.g. cxi0 below
+	 * # ls /sys/class/net/hsn0/device/cxi
+	 * cxi0
+	 * #
+	 */
+	size = snprintf(NULL, 0, device_path, intf->intf_name) + 1;
+	path = malloc(size);
+	if (!path)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+	sprintf(path, device_path, intf->intf_name);
+
+	dir = opendir(path);
+	free(path);
+	if (!dir)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	while ((entry = readdir(dir)) != NULL) {
+		if (strncmp(entry->d_name, "cxi", 3))
+			continue;
+
+		/* There should only be a single cxi device, and
+		 * its name should fit in the intf_name buffer
+		 */
+		if (count ||
+		    strlen(entry->d_name) >= sizeof(intf->intf_name)) {
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			break;
+		}
+
+		/* Overwrite the interface name with the cxi device */
+		strncpy(intf->intf_name, entry->d_name,
+			sizeof(intf->intf_name));
+		count++;
+	}
+
+	closedir(dir);
+
+	if (count != 1)
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+
+	return rc;
+}
+
+#define cxi_nic_addr_path "/sys/class/cxi/cxi%u/device/properties/"
 static int lustre_lnet_kfi_intf2nid(struct lnet_dlc_intf_descr *intf,
 				    __u32 *nid_addr)
 {
 	unsigned int nic_index;
-	int rc;
+	int rc = 0;
 	char *nic_addr_path;
 	char val[128];
 	int size;
 	long int addr;
+
+	rc = lustre_lnet_kfi_intf2cxi(intf);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		return rc;
 
 	rc = sscanf(intf->intf_name, "cxi%u", &nic_index);
 	if (rc != 1)
