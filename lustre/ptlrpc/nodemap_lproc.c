@@ -24,11 +24,13 @@ static LIST_HEAD(nodemap_pde_list);
 static struct dentry *nodemap_root;
 
 /**
- * Reads and prints the idmap for the given nodemap.
+ * nodemap_idmap_show() - Reads and prints the idmap for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int nodemap_idmap_show(struct seq_file *m, void *data)
 {
@@ -96,11 +98,13 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 }
 
 /**
- * Attaches nodemap_idmap_show to proc file.
+ * nodemap_idmap_open() - Attaches nodemap_idmap_show to proc file.
+ * @inode: inode of seq file in proc fs
+ * @file: seq file
  *
- * \param	inode		inode of seq file in proc fs
- * \param	file		seq file
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int nodemap_idmap_open(struct inode *inode, struct file *file)
 {
@@ -108,11 +112,14 @@ static int nodemap_idmap_open(struct inode *inode, struct file *file)
 }
 
 /**
- * Reads and prints the UID/GID/PROJID offsets for the given nodemap.
+ * nodemap_offset_seq_show() - Reads and prints the UID/GID/PROJID offsets for
+ * the given nodemap.
+ * @m: seq file in proc fs Return:
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return
+ * * %0 on success
+ * * %negative on failure
  */
 static int nodemap_offset_seq_show(struct seq_file *m, void *data)
 {
@@ -202,11 +209,13 @@ out:
 }
 
 /**
- * Reads and prints the NID ranges for the given nodemap.
+ * nodemap_ranges_show() - Reads and prints NID ranges for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return
+ * * %0 on success
+ * * %negative on failure
  */
 static int nodemap_ranges_show(struct seq_file *m, void *data)
 {
@@ -249,11 +258,13 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 }
 
 /**
- * Connects nodemap_idmap_show to proc file.
+ * nodemap_ranges_open() - Connects nodemap_idmap_show to proc file.
+ * @inode: inode of seq file in proc fs
+ * @file: seq file
  *
- * \param	inode		inode of seq file in proc fs
- * \param	file		seq file
- * \retval	0		success
+ * Return
+ * * %0 on success
+ * * %negative on failure
  */
 static int nodemap_ranges_open(struct inode *inode, struct file *file)
 {
@@ -261,11 +272,13 @@ static int nodemap_ranges_open(struct inode *inode, struct file *file)
 }
 
 /**
- * Reads and prints the fileset for the given nodemap.
+ * nodemap_fileset_seq_show() - Reads and prints fileset for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return
+ * * %0 on success
+ * * %negative on failure
  */
 static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 {
@@ -291,14 +304,15 @@ static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Set a fileset on a nodemap.
+ * nodemap_fileset_seq_write() - Set a fileset on a nodemap.
+ * @file: proc file
+ * @buffer: string, "<fileset>"
+ * @count: @buffer length
+ * @off: unused
  *
- * \param[in] file      proc file
- * \param[in] buffer    string, "<fileset>"
- * \param[in] count     \a buffer length
- * \param[in] off       unused
- * \retval              \a count on success
- * \retval              negative number on error
+ * Return
+ * * %0 on success
+ * * %negative on failure
  */
 static ssize_t
 nodemap_fileset_seq_write(struct file *file,
@@ -337,11 +351,13 @@ out:
 LDEBUGFS_SEQ_FOPS(nodemap_fileset);
 
 /**
- * Reads and prints the SELinux policy info for the given nodemap.
+ * nodemap_sepol_seq_show() - Reads/prints SELinux policy info for given nodemap
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return
+ * * %0 on success
+ * * %negative on failure
  */
 static int nodemap_sepol_seq_show(struct seq_file *m, void *data)
 {
@@ -364,14 +380,15 @@ static int nodemap_sepol_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Set SELinux policy info on a nodemap.
+ * nodemap_sepol_seq_write() - Set SELinux policy info on a nodemap.
+ * @file: proc file
+ * @buffer: string, "<sepol>"
+ * @count: @buffer length
+ * @off: unused
  *
- * \param[in] file      proc file
- * \param[in] buffer    string, "<sepol>"
- * \param[in] count     \a buffer length
- * \param[in] off       unused
- * \retval              \a count on success
- * \retval              negative number on error
+ * Return
+ * * %0 on success
+ * * %negative on failure
  */
 static ssize_t
 nodemap_sepol_seq_write(struct file *file,
@@ -408,13 +425,12 @@ LDEBUGFS_SEQ_FOPS(nodemap_sepol);
 /**
  * nodemap_exports_show() - Reads and prints the exports attached
  * to the given nodemap
- *
  * @m: seq file in proc fs, stores nodemap
  * @unused: unused
  *
  * Return:
  * * %0 on success
- * * negative error code on failure
+ * * %negative error code on failure
  */
 static int nodemap_exports_show(struct seq_file *m, void *unused)
 {
@@ -462,11 +478,13 @@ static int nodemap_exports_show(struct seq_file *m, void *unused)
 }
 
 /**
- * Attaches nodemap_idmap_show to proc file.
+ * nodemap_exports_open() - Attaches nodemap_idmap_show to proc file.
+ * @inode: inode of seq file in proc fs
+ * @file: seq file
  *
- * \param	inode		inode of seq file in proc fs
- * \param	file		seq file
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_exports_open(struct inode *inode, struct file *file)
 {
@@ -474,11 +492,12 @@ static int nodemap_exports_open(struct inode *inode, struct file *file)
 }
 
 /**
- * Reads and prints the active flag for the given nodemap.
+ * nodemap_active_seq_show() - Reads and prints active flag for given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
  */
 static int nodemap_active_seq_show(struct seq_file *m, void *data)
 {
@@ -487,14 +506,15 @@ static int nodemap_active_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Activate/deactivate nodemap.
+ * nodemap_active_seq_write() - Activate/deactivate nodemap.
+ * @file: proc file
+ * @buffer: string, "1" or "0" to activate/deactivate nodemap
+ * @count: @buffer length
+ * @off: unused
  *
- * \param[in] file      proc file
- * \param[in] buffer    string, "1" or "0" to activate/deactivate nodemap
- * \param[in] count     \a buffer length
- * \param[in] off       unused
- * \retval              \a count on success
- * \retval              negative number on error
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static ssize_t
 nodemap_active_seq_write(struct file *file, const char __user *buffer,
@@ -525,11 +545,13 @@ nodemap_active_seq_write(struct file *file, const char __user *buffer,
 LDEBUGFS_SEQ_FOPS(nodemap_active);
 
 /**
- * Reads and prints the nodemap ID for the given nodemap.
+ * nodemap_id_seq_show() - Reads and prints the nodemap ID for the given nodemap
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_id_seq_show(struct seq_file *m, void *data)
 {
@@ -552,11 +574,13 @@ static int nodemap_id_seq_show(struct seq_file *m, void *data)
 LDEBUGFS_SEQ_FOPS_RO(nodemap_id);
 
 /**
- * Reads and prints the root squash UID for the given nodemap.
+ * nodemap_squash_uid_seq_show() - Read/print root squash UID for given nodemap
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
 {
@@ -578,11 +602,13 @@ static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the root squash GID for the given nodemap.
+ * nodemap_squash_gid_seq_show() - Read/print root squash GID for given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 {
@@ -604,11 +630,13 @@ static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the squash PROJID for the given nodemap.
+ * nodemap_squash_projid_seq_show() - Read/print squash PROJID for given nodemap
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_squash_projid_seq_show(struct seq_file *m, void *data)
 {
@@ -631,11 +659,13 @@ static int nodemap_squash_projid_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the trusted flag for the given nodemap.
+ * nodemap_trusted_seq_show() - Read/print trusted flag for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_trusted_seq_show(struct seq_file *m, void *data)
 {
@@ -658,11 +688,13 @@ static int nodemap_trusted_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the admin flag for the given nodemap.
+ * nodemap_admin_seq_show() - Read/print the admin flag for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 {
@@ -685,11 +717,13 @@ static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the mapping mode for the given nodemap.
+ * nodemap_map_mode_seq_show() - Read/print mapping mode for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_map_mode_seq_show(struct seq_file *m, void *data)
 {
@@ -728,11 +762,13 @@ static int nodemap_map_mode_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the rbac for the given nodemap.
+ * nodemap_rbac_seq_show() - Reads and prints the rbac for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_rbac_seq_show(struct seq_file *m, void *data)
 {
@@ -774,11 +810,14 @@ static int nodemap_rbac_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the deny_unknown flag for the given nodemap.
+ * nodemap_deny_unknown_seq_show() - Read/print deny_unknown flag for given
+ * nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_deny_unknown_seq_show(struct seq_file *m, void *data)
 {
@@ -801,11 +840,14 @@ static int nodemap_deny_unknown_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the audit_mode flag for the given nodemap.
+ * nodemap_audit_mode_seq_show() - Reads and prints the audit_mode flag for the
+ * given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_audit_mode_seq_show(struct seq_file *m, void *data)
 {
@@ -828,11 +870,14 @@ static int nodemap_audit_mode_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the forbid_encryption flag for the given nodemap.
+ * nodemap_forbid_encryption_seq_show() - Reads and prints the forbid_encryption
+ * flag for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_forbid_encryption_seq_show(struct seq_file *m, void *data)
 {
@@ -855,11 +900,14 @@ static int nodemap_forbid_encryption_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the raise_privs property for the given nodemap.
+ * nodemap_raise_privs_seq_show() - Reads and prints the raise_privs property
+ * for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_raise_privs_seq_show(struct seq_file *m, void *data)
 {
@@ -922,11 +970,14 @@ putref:
 }
 
 /**
- * Reads and prints the readonly_mount flag for the given nodemap.
+ * nodemap_readonly_mount_seq_show() - Reads and prints the readonly_mount flag
+ * for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_readonly_mount_seq_show(struct seq_file *m, void *data)
 {
@@ -949,11 +1000,14 @@ static int nodemap_readonly_mount_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the deny_mount flag for the given nodemap.
+ * nodemap_deny_mount_seq_show() - Reads and prints the deny_mount flag for the
+ * given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_deny_mount_seq_show(struct seq_file *m, void *data)
 {
@@ -977,11 +1031,14 @@ static int nodemap_deny_mount_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Reads and prints the name of the parent nodemap for the given nodemap.
+ * nodemap_parent_seq_show() - Reads and prints the name of the parent nodemap
+ * for the given nodemap.
+ * @seq: seq file in proc fs
+ * @data: unused
  *
- * \param	seq		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 static int nodemap_parent_seq_show(struct seq_file *seq, void *data)
 {
@@ -1229,9 +1286,11 @@ static struct ldebugfs_vars lprocfs_default_nodemap_vars[] = {
 };
 
 /**
- * Initialize the nodemap procfs directory.
+ * nodemap_procfs_init() - Initialize the nodemap procfs directory.
  *
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 int nodemap_procfs_init(void)
 {
@@ -1249,7 +1308,7 @@ int nodemap_procfs_init(void)
 	return rc;
 }
 
-/**
+/*
  * Cleanup nodemap proc entry data structures.
  */
 void nodemap_procfs_exit(void)
@@ -1265,7 +1324,7 @@ void nodemap_procfs_exit(void)
 	}
 }
 
-/**
+/*
  * Remove a nodemap's procfs entry and related data.
  */
 void lprocfs_nodemap_remove(struct nodemap_pde *nm_pde)
@@ -1276,11 +1335,13 @@ void lprocfs_nodemap_remove(struct nodemap_pde *nm_pde)
 }
 
 /**
- * Register the proc directory for a nodemap
+ * lprocfs_nodemap_register() - Register the proc directory for a nodemap
+ * @nodemap: nodemap to make the proc dir for
+ * @is_default: 1 if default nodemap
  *
- * \param	nodemap		nodemap to make the proc dir for
- * \param	is_default:	1 if default nodemap
- * \retval	0		success
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
  */
 int lprocfs_nodemap_register(struct lu_nodemap *nodemap, bool is_default)
 {
