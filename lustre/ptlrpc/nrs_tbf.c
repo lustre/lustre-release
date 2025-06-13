@@ -19,12 +19,10 @@
 #include <lustre_req_layout.h>
 #include "ptlrpc_internal.h"
 
-/**
- * \name tbf
+/*
+ * name tbf
  *
  * Token Bucket Filter over client NIDs
- *
- * @{
  */
 
 #define NRS_POL_NAME_TBF	"tbf"
@@ -327,17 +325,18 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Change the rank of a rule in the rule list
+ * nrs_tbf_rule_change_rank() - Change the rank of a rule in the rule list
+ * @policy: the policy instance
+ * @head: the TBF policy instance
+ * @name: the rule name to be moved
+ * @next_name: the rule name before which the matched rule will be moved
  *
  * The matched rule will be moved to the position right before another
  * given rule.
  *
- * \param[in] policy	the policy instance
- * \param[in] head	the TBF policy instance
- * \param[in] name	the rule name to be moved
- * \param[in] next_name	the rule name before which the matched rule will be
- *			moved
- *
+ * Return
+ * * %0 on success
+ * * %negative on error
  */
 static int
 nrs_tbf_rule_change_rank(struct ptlrpc_nrs_policy *policy,
@@ -476,13 +475,13 @@ nrs_tbf_command(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Binary heap predicate.
+ * tbf_cli_compare() - Binary heap predicate.
+ * @e1: the first binheap node to compare
+ * @e2: the second binheap node to compare
  *
- * \param[in] e1 the first binheap node to compare
- * \param[in] e2 the second binheap node to compare
- *
- * \retval 0 e1 > e2
- * \retval 1 e1 < e2
+ * Return
+ * * %0 if e1 > e2
+ * * %1 if e1 < e2
  */
 static int
 tbf_cli_compare(struct binheap_node *e1, struct binheap_node *e2)
@@ -507,7 +506,7 @@ tbf_cli_compare(struct binheap_node *e1, struct binheap_node *e2)
 	return 1;
 }
 
-/**
+/*
  * TBF binary heap operations
  */
 static struct binheap_ops nrs_tbf_heap_ops = {
@@ -763,8 +762,8 @@ nrs_tbf_jobid_startup(struct ptlrpc_nrs_policy *policy,
 	return rc;
 }
 
-/**
- * Frees jobid of \a list.
+/*
+ * Frees jobid of @jobid_list.
  *
  */
 static void
@@ -996,7 +995,7 @@ static struct nrs_tbf_ops nrs_tbf_jobid_ops = {
 	.o_rule_fini = nrs_tbf_jobid_rule_fini,
 };
 
-/**
+/*
  * libcfs_hash operations for nrs_tbf_net::cn_cli_hash
  *
  * This uses ptlrpc_request::rq_peer.nid (as nid4) as its key, in order to hash
@@ -1368,7 +1367,7 @@ nrs_tbf_cli_hash_lookup(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	return cli;
 }
 
-/**
+/*
  * ONLY opcode presented in this function will be checked in
  * nrs_tbf_id_cli_set(). That means, we can add or remove an
  * opcode to enable or disable requests handled in nrs_tbf
@@ -2655,17 +2654,21 @@ static struct nrs_tbf_type nrs_tbf_types[] = {
 };
 
 /**
+ * nrs_tbf_start() - policy to start
+ * @policy: The policy to start
+ * @arg: tbf flags
+ *
  * Is called before the policy transitions into
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STARTED; allocates and initializes a
  * policy-specific private data structure.
  *
- * \param[in] policy The policy to start
+ * see nrs_policy_register()
+ * see nrs_policy_ctl()
  *
- * \retval -ENOMEM OOM error
- * \retval  0	   success
+ * Return
+ * * %0 on success
+ * * %errno on error (-ENOMEM (OOM) error)
  *
- * \see nrs_policy_register()
- * \see nrs_policy_ctl()
  */
 static int nrs_tbf_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
@@ -2731,13 +2734,14 @@ out:
 }
 
 /**
+ * nrs_tbf_stop() - Stop policy transction
+ * @policy: The policy to stop
+ *
  * Is called before the policy transitions into
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED; deallocates the policy-specific
  * private data structure.
  *
- * \param[in] policy The policy to stop
- *
- * \see nrs_policy_stop0()
+ * see nrs_policy_stop0()
  */
 static void nrs_tbf_stop(struct ptlrpc_nrs_policy *policy)
 {
@@ -2769,18 +2773,18 @@ static void nrs_tbf_stop(struct ptlrpc_nrs_policy *policy)
 }
 
 /**
- * Performs a policy-specific ctl function on TBF policy instances; similar
- * to ioctl.
+ * nrs_tbf_ctl() - Performs a policy-specific ctl function on TBF policy
+ * instances; similar to ioctl.
+ * @policy: the policy instance
+ * @opc: the opcode
+ * @arg: used for passing parameters and information[in,out]
  *
- * \param[in]	  policy the policy instance
- * \param[in]	  opc	 the opcode
- * \param[in,out] arg	 used for passing parameters and information
+ * pre: assert_spin_locked(&policy->pol_nrs->->nrs_lock)
+ * post: assert_spin_locked(&policy->pol_nrs->->nrs_lock)
  *
- * \pre assert_spin_locked(&policy->pol_nrs->->nrs_lock)
- * \post assert_spin_locked(&policy->pol_nrs->->nrs_lock)
- *
- * \retval 0   operation carried out successfully
- * \retval -ve error
+ * Return
+ * * %0 on success (operation carried out successfully)
+ * * %negative on error
  */
 static int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy,
 		       enum ptlrpc_nrs_ctl opc,
@@ -2838,17 +2842,18 @@ static int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Is called for obtaining a TBF policy resource.
+ * nrs_tbf_res_get() - Is called for obtaining a TBF policy resource.
+ * @policy: The policy on which the request is being asked for
+ * @nrq: The request for which resources are being taken
+ * @parent: Parent resource, unused in this policy
+ * @resp: Resources references are placed in this array[out]
+ * @moving_req: Signifies limited caller context; unused in this policy
  *
- * \param[in]  policy	  The policy on which the request is being asked for
- * \param[in]  nrq	  The request for which resources are being taken
- * \param[in]  parent	  Parent resource, unused in this policy
- * \param[out] resp	  Resources references are placed in this array
- * \param[in]  moving_req Signifies limited caller context; unused in this
- *			  policy
+ * see nrs_resource_get_safe()
  *
- *
- * \see nrs_resource_get_safe()
+ * Return
+ * * %0 on success
+ * * %negative on error
  */
 static int nrs_tbf_res_get(struct ptlrpc_nrs_policy *policy,
 			   struct ptlrpc_nrs_request *nrq,
@@ -2921,11 +2926,11 @@ out:
 }
 
 /**
- * Called when releasing references to the resource hierachy obtained for a
+ * nrs_tbf_res_put() - Called when releasing references to the resource hierachy
+ * obtained for a
  * request for scheduling using the TBF policy.
- *
- * \param[in] policy   the policy the resource belongs to
- * \param[in] res      the resource to be released
+ * @policy: the policy the resource belongs to
+ * @res: the resource to be released
  */
 static void nrs_tbf_res_put(struct ptlrpc_nrs_policy *policy,
 			    const struct ptlrpc_nrs_resource *res)
@@ -2946,20 +2951,20 @@ static void nrs_tbf_res_put(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Called when getting a request from the TBF policy for handling, or just
- * peeking; removes the request from the policy when it is to be handled.
+ * nrs_tbf_req_get() - Called when getting a request from the TBF policy for
+ * handling, or just peeking; removes the request from the policy when it is
+ * to be handled.
+ * @policy: The policy
+ * @peek: When set, signifies that we just want to examine the request,
+ * and not handle it, so the request is not removed from the policy.
+ * @force: Force the policy to return a request
  *
- * \param[in] policy The policy
- * \param[in] peek   When set, signifies that we just want to examine the
- *		     request, and not handle it, so the request is not removed
- *		     from the policy.
- * \param[in] force  Force the policy to return a request
+ * See: ptlrpc_nrs_req_get_nolock()
+ * See: nrs_request_get()
  *
- * \retval The request to be handled; this is the next request in the TBF
- *	   rule
+ * Return The request to be handled; this is the next request in the TBF
+ *	rule
  *
- * \see ptlrpc_nrs_req_get_nolock()
- * \see nrs_request_get()
  */
 static
 struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
@@ -3064,13 +3069,12 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Adds request \a nrq to \a policy's list of queued requests
+ * nrs_tbf_req_add() - Adds request @nrq to @policy's list of queued requests
+ * @policy: The policy
+ * @nrq: The request to add
  *
- * \param[in] policy The policy
- * \param[in] nrq    The request to add
- *
- * \retval 0 success; nrs_request_enqueue() assumes this function will always
- *		      succeed
+ * Return 0 on success; nrs_request_enqueue() assumes this function will always
+ * succeed
  */
 static int nrs_tbf_req_add(struct ptlrpc_nrs_policy *policy,
 			   struct ptlrpc_nrs_request *nrq)
@@ -3127,10 +3131,10 @@ static int nrs_tbf_req_add(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Removes request \a nrq from \a policy's list of queued requests.
- *
- * \param[in] policy The policy
- * \param[in] nrq    The request to remove
+ * nrs_tbf_req_del() - Removes request @nrq from @policy's list of queued
+ * requests.
+ * @policy: The policy
+ * @nrq: The request to remove
  */
 static void nrs_tbf_req_del(struct ptlrpc_nrs_policy *policy,
 			     struct ptlrpc_nrs_request *nrq)
@@ -3158,14 +3162,13 @@ static void nrs_tbf_req_del(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Prints a debug statement right before the request \a nrq stops being
- * handled.
+ * nrs_tbf_req_stop() - Prints a debug statement right before the request
+ * @nrq stops being handled.
+ * @policy: The policy handling the request
+ * @nrq: The request being handled
  *
- * \param[in] policy The policy handling the request
- * \param[in] nrq    The request being handled
- *
- * \see ptlrpc_server_finish_request()
- * \see ptlrpc_nrs_req_stop_nolock()
+ * ptlrpc_server_finish_request()
+ * ptlrpc_nrs_req_stop_nolock()
  */
 static void nrs_tbf_req_stop(struct ptlrpc_nrs_policy *policy,
 			      struct ptlrpc_nrs_request *nrq)
@@ -3180,11 +3183,11 @@ static void nrs_tbf_req_stop(struct ptlrpc_nrs_policy *policy,
 	       nrq->nr_u.tbf.tr_sequence);
 }
 
-/**
+/*
  * debugfs interface
  */
 
-/**
+/*
  * The maximum RPC rate.
  */
 #define LPROCFS_NRS_RATE_MAX		1000000ULL	/* 1rpc/us */
@@ -3484,13 +3487,12 @@ out:
 }
 
 /**
- * Get the TBF policy type (nid, jobid, etc) preset by
+ * nrs_tbf_type_flag() - Get the TBF policy type (nid, jobid, etc) preset by
  * proc entry 'nrs_policies' for command buffer parsing.
+ * @svc: the PTLRPC service
+ * @queue: the NRS queue type
  *
- * \param[in] svc the PTLRPC service
- * \param[in] queue the NRS queue type
- *
- * \retval the preset TBF policy type flag
+ * Return the preset TBF policy type flag
  */
 static __u32
 nrs_tbf_type_flag(struct ptlrpc_service *svc, enum ptlrpc_nrs_queue_type queue)
@@ -3583,12 +3585,13 @@ out:
 LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_tbf_rule);
 
 /**
- * Initializes a TBF policy's lprocfs interface for service \a svc
+ * nrs_tbf_lprocfs_init() - Initializes a TBF policy's lprocfs interface for
+ * service @svc
+ * @svc: the service (Portal RPC)
  *
- * \param[in] svc the service
- *
- * \retval 0	success
- * \retval != 0	error
+ * Return
+ * * %0 on success
+ * * %!=0 on error
  */
 static int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 {
@@ -3607,7 +3610,7 @@ static int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 	return 0;
 }
 
-/**
+/*
  * TBF policy operations
  */
 static const struct ptlrpc_nrs_pol_ops nrs_tbf_ops = {
@@ -3623,7 +3626,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_tbf_ops = {
 	.op_lprocfs_init	= nrs_tbf_lprocfs_init,
 };
 
-/**
+/*
  * TBF policy configuration
  */
 struct ptlrpc_nrs_pol_conf nrs_conf_tbf = {
@@ -3631,7 +3634,3 @@ struct ptlrpc_nrs_pol_conf nrs_conf_tbf = {
 	.nc_ops			= &nrs_tbf_ops,
 	.nc_compat		= nrs_policy_compat_all,
 };
-
-/** @} tbf */
-
-/** @} nrs */
