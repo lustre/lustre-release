@@ -5938,7 +5938,7 @@ test_44a() {
 
 	local stride=$($LFS getstripe -S -d $DIR)
 	if [[ $nstripe -eq 0 || $nstripe -eq -1 ]]; then
-		nstripe=$($LFS df $DIR | grep OST: | wc -l)
+		nstripe=$($LFS df -o $DIR | wc -l)
 	fi
 
 	OFFSETS="0 $((stride/2)) $((stride-1))"
@@ -6595,7 +6595,7 @@ test_51f() {
 	local ulimit_old=$(ulimit -n)
 	local spare=20 # number of spare fd's for scripts/libraries, etc.
 	local mdt=$($LFS getstripe -m $DIR/$tdir)
-	local numfree=$($LFS df -i $DIR/$tdir | awk '/MDT:'$mdt'/ { print $4 }')
+	local numfree=$($LFS df -i --mdt=$mdt $DIR/$tdir | awk '{ print $4 }')
 
 	echo "MDT$mdt numfree=$numfree, max=$max"
 	[[ $numfree -gt $max ]] && numfree=$max || numfree=$((numfree * 7 / 8))
@@ -7146,15 +7146,16 @@ test_56ca() {
 run_test 56ca "'lfs df -v' correctly reports 'R' flag when OST set as Readonly"
 
 test_56d() {
-	local mdts=$($LFS df -v $MOUNT | grep -c MDT)
-	local osts=$($LFS df -v $MOUNT | grep -c OST)
+	local mdts=$($LFS df -v -m $MOUNT | wc -l)
+	local osts=$($LFS df -v -o $MOUNT | wc -l)
 
 	$LFS df $MOUNT
 
-	(( mdts == MDSCOUNT )) ||
-		error "lfs df -v showed $mdts MDTs, not $MDSCOUNT"
-	(( osts == OSTCOUNT )) ||
-		error "lfs df -v showed $osts OSTs, not $OSTCOUNT"
+	# Subtract 4 for the header line and summary information
+	(( mdts - 4 == MDSCOUNT )) ||
+		error "lfs df -v -m showed $((mdts - 4)) MDTs, not $MDSCOUNT"
+	(( osts - 4 == OSTCOUNT )) ||
+		error "lfs df -v -o showed $((osts - 4)) OSTs, not $OSTCOUNT"
 }
 run_test 56d "'lfs df -v' prints only configured devices"
 
@@ -12313,8 +12314,8 @@ test_78() { # bug 10901
 	[[ $F78SIZE -gt $MEMTOTAL ]] && F78SIZE=$MEMTOTAL
 	[[ $F78SIZE -gt 512 ]] && F78SIZE=512
 	[[ $F78SIZE -gt $((MAXFREE / 1024)) ]] && F78SIZE=$((MAXFREE / 1024))
-	SMALLESTOST=$($LFS df $DIR | grep OST | awk '{ print $4 }' | sort -n |
-		head -n1)
+	SMALLESTOST=$($LFS df -o $DIR | awk '{ print $4 }' | sort -n |
+		      head -n1)
 	echo "Smallest OST: $SMALLESTOST"
 	[[ $SMALLESTOST -lt 10240 ]] &&
 		skip "too small OSTSIZE, useless to run large O_DIRECT test"
@@ -23435,7 +23436,7 @@ test_220() { #LU-325
 
 	# create on MDT0000 so the last_id and next_id are correct
 	mkdir_on_mdt0 $DIR/$tdir
-	local OST=$($LFS df $DIR | awk '/OST:'$OSTIDX'/ { print $1 }')
+	local OST=$($LFS df --ost=$OSTIDX $DIR | awk '{ print $1 }')
 	OST=${OST%_UUID}
 
 	# on the mdt's osc
@@ -33758,7 +33759,7 @@ test_803a() {
 	sleep 3
 	echo "before create:"
 	$LFS df -i $MOUNT
-	local before_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
+	local before_used=$($LFS df -i -m0 | awk '{print $3}')
 
 	for i in {1..10}; do
 		$LFS mkdir -c 1 -i 1 $DIR/$tdir/foo$i ||
@@ -33770,7 +33771,7 @@ test_803a() {
 	sleep 3
 	echo "after create:"
 	$LFS df -i $MOUNT
-	local after_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
+	local after_used=$($LFS df -i -m0 | awk '{print $3}')
 
 	# allow for an llog to be cleaned up during the test
 	[ $after_used -ge $((before_used + 10 - 1)) ] ||
@@ -33787,7 +33788,7 @@ test_803a() {
 	sleep 3 # avoid MDT return cached statfs
 	echo "after unlink:"
 	$LFS df -i $MOUNT
-	after_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
+	after_used=$($LFS df -i -m0 | awk '{print $3}')
 
 	# allow for an llog to be created during the test
 	[ $after_used -le $((before_used + 1)) ] ||

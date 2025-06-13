@@ -139,17 +139,25 @@ the client.  This avoids blocking the
 output if a target is offline or unreachable, and only returns the
 space on OSTs that can currently be accessed.
 .TP
-.BR -m ", " --mdt
+.BR -m ", " --mdt "[="\fIINDEX\fR]
 Filter output to show information on
 .B MDT
-devices. Can be used with
+devices. If
+.I INDEX
+is specified, it must be attached to the option without a space, like "-m\fIINDEX\fR" or "--mdt=\fIINDEX\fR".
+For example: "-m0" or "--mdt=0".
+Can be used with
 .BR -o
 to show both types of devices, which is equivalent to having neither option.
 .TP
-.BR -o ", " --ost
+.BR -o ", " --ost "[="\fIINDEX\fR]
 Filter output to show information on
-.B OSTc
-devices. Can be used with
+.B OST
+devices. If
+.I INDEX
+is specified, it must be attached to the option without a space, like "-o\fIINDEX\fR" or "--ost=\fIINDEX\fR".
+For example: "-o0" or "--ost=0".
+Can be used with
 .BR -m
 to show both types of devices, which is equivalent to having neither option.
 .TP
@@ -249,6 +257,15 @@ filesystem, even if not currently connected:
 .RS
 .EX
 .B # lfs df -v /mnt/testfs
+.EE
+.RE
+.PP
+List space usage for only OST index 1 of the
+.B testfs
+filesystem:
+.RS
+.EX
+.B # lfs df -o1 /mnt/testfs
 .EE
 .RE
 .SH AVAILABILITY

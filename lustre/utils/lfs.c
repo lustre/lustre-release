@@ -524,7 +524,7 @@ command_t cmdlist[] = {
 	 "report filesystem disk space usage or inodes usage "
 	 "of each MDS and all OSDs or a batch belonging to a specific pool.\n"
 	 "Usage: df [--inodes|-i] [--human-readable|-h] [--lazy|-l]\n"
-	 "[--mdt|-m] [--ost|-o]\n"
+	 "[--mdt|-m[INDEX]] [--ost|-o[INDEX]]\n"
 	 "[--pool|-p FSNAME[.POOL]] [PATH]"},
 	{"getname", lfs_getname, 0,
 	 "list instances and specified mount points [for specified path only]\n"
@@ -7446,7 +7446,7 @@ struct ll_statfs_buf {
 };
 
 static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
-		 int ops, struct ll_statfs_buf *lsb)
+		 int ops, struct ll_statfs_buf *lsb, int mdt_idx, int ost_idx)
 {
 	struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
 	struct obd_uuid uuid_buf;
@@ -7484,7 +7484,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		return rc;
 	}
 
-	if (flags & MNTDF_SHOW) {
+	if (flags & MNTDF_SHOW && (ost_idx == -1 && mdt_idx == -1)) {
 		if (flags & MNTDF_INODES)
 			printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
 			       "UUID", "Inodes", "IUsed", "IFree",
@@ -7504,6 +7504,15 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 
 		for (index = 0; index < LOV_ALL_STRIPES &&
 		     (!lsb || lsb->sb_count < LL_STATFS_MAX); index++) {
+			/* Skip indices that don't match the requested one */
+			if (tp->st_op == LL_STATFS_LMV && mdt_idx >= 0 &&
+			    index != mdt_idx)
+				continue;
+
+			if (tp->st_op == LL_STATFS_LOV && ost_idx >= 0 &&
+			    index != ost_idx)
+				continue;
+
 			memset(&stat_buf, 0, sizeof(struct obd_statfs));
 			memset(&uuid_buf, 0, sizeof(struct obd_uuid));
 			type = flags & MNTDF_LAZY ?
@@ -7592,7 +7601,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		sum.os_files = (sum.os_files - sum.os_ffree) + ost_ffree;
 		sum.os_ffree = ost_ffree;
 	}
-	if (flags & MNTDF_SHOW) {
+	if (flags & MNTDF_SHOW && ost_idx == -1 && mdt_idx == -1) {
 		printf("\n");
 		showdf(mntdir, &sum, "filesystem_summary:", flags, NULL, 0, 0);
 		printf("\n");
@@ -8193,18 +8202,20 @@ static int lfs_df(int argc, char **argv)
 	int ops = 0;
 	int c, rc = 0, rc1 = 0, index = 0, arg_idx = 0;
 	char fsname[PATH_MAX] = "", *pool_name = NULL;
+	int mdt_idx = -1;
+	int ost_idx = -1;
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "human-readable", .has_arg = no_argument },
 	{ .val = 'H',	.name = "si",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "inodes",	.has_arg = no_argument },
 	{ .val = 'l',	.name = "lazy",		.has_arg = no_argument },
+	{ .val = 'm',	.name = "mdt",		.has_arg = optional_argument },
+	{ .val = 'o',	.name = "ost",		.has_arg = optional_argument },
 	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
-	{ .val = 'm',	.name = "mdt",		.has_arg = no_argument },
-	{ .val = 'o',	.name = "ost",		.has_arg = no_argument },
 	{ .name = NULL} };
 
-	while ((c = getopt_long(argc, argv, "hHilmop:v",
+	while ((c = getopt_long(argc, argv, "hHilm::o::p:v",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'h':
@@ -8221,9 +8232,35 @@ static int lfs_df(int argc, char **argv)
 			break;
 		case 'm':
 			ops |= LL_STATFS_LMV;
+			if (optarg) {
+				char *end;
+				errno = 0;
+				
+				mdt_idx = strtol(optarg, &end, 0);
+				if (errno != 0 || *end != '\0' || mdt_idx < 0 ||
+				    mdt_idx > LOV_V1_INSANE_STRIPE_INDEX) {
+					fprintf(stderr,
+						"%s: invalid MDT index '%s'\n",
+						progname, optarg);
+					return CMD_HELP;
+				}
+			}
 			break;
 		case 'o':
 			ops |= LL_STATFS_LOV;
+			if (optarg) {
+				char *end;
+				errno = 0;
+
+				ost_idx = strtol(optarg, &end, 0);
+				if (errno != 0 || *end != '\0' || ost_idx < 0 ||
+				    ost_idx > LOV_V1_INSANE_STRIPE_INDEX) {
+					fprintf(stderr,
+						"%s: invalid OST index '%s'\n",
+						progname, optarg);
+					return CMD_HELP;
+				}
+			}
 			break;
 		case 'p':
 			pool_name = optarg;
@@ -8249,7 +8286,8 @@ static int lfs_df(int argc, char **argv)
 			if (mntdir[0] == '\0')
 				continue;
 
-			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL);
+			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL,
+				   mdt_idx, ost_idx);
 			if (rc || path[0] != '\0')
 				break;
 
@@ -8288,7 +8326,8 @@ static int lfs_df(int argc, char **argv)
 			if (mntdir[0] == '\0')
 				continue;
 
-			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL);
+			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL,
+				   mdt_idx, ost_idx);
 			if (rc || path[0] != '\0') {
 				valid = true;
 
