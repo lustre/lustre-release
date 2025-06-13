@@ -782,13 +782,23 @@ kefalnd_map_msg_iov(struct kefa_ni *efa_ni, struct kefa_tx *tx, int nkiov,
 		    struct bio_vec *kiov, int offset, int nob,
 		    bool remote_access_fmr)
 {
-	tx->nfrags = kefalnd_bio_vec_to_sgl(efa_ni, tx->frags, kiov, nkiov,
-					    offset, nob);
-	if (tx->nfrags < 0)
-		return tx->nfrags;
+	int rc;
+
+	rc = kefalnd_bio_vec_to_sgl(efa_ni, tx->frags, kiov, nkiov,
+				    offset, nob);
+	if (rc < 0)
+		goto out;
+
+	tx->nfrags = rc;
 
 	/* Map the SGs to our device */
-	return kefalnd_map_tx(efa_ni, tx, remote_access_fmr);
+	rc = kefalnd_map_tx(efa_ni, tx, remote_access_fmr);
+
+out:
+	if (rc != 0)
+		tx->hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
+
+	return rc;
 }
 
 static void
@@ -1022,6 +1032,7 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		EFA_DEV_DEBUG(efa_ni->efa_dev,
 			      "can't establish connection to peer NI[%s]\n",
 			      libcfs_nidstr(&target->nid));
+		tx->hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
 		kefalnd_tx_done(tx);
 		return -ENOTCONN;
 	}
@@ -1070,6 +1081,7 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 				    "can't create reply for GET for peer NI[%s]\n",
 				    libcfs_nidstr(&target->nid));
 
+			tx->hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kefalnd_tx_done(tx);
 			return -EIO;
 		}
@@ -1195,7 +1207,6 @@ kefalnd_handle_putr_req(struct kefa_ni *efa_ni, struct kefa_conn *conn,
 			    "can't setup GET src for peer NI[%s]. err[%d]\n",
 			    libcfs_nidstr(&conn->remote_nid), rc);
 
-		tx->hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 		kefalnd_tx_done(tx);
 		kefalnd_send_completion(efa_ni, conn, EFALND_MSG_PUTR_DONE, rc,
 					src_cookie);
@@ -1265,7 +1276,6 @@ kefalnd_handle_getr_req(struct kefa_ni *efa_ni, struct kefa_conn *conn,
 			    "can't setup GET src for peer NI[%s]. err[%d]\n",
 			    libcfs_nidstr(&conn->remote_nid), rc);
 
-		tx->hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 		kefalnd_tx_done(tx);
 		kefalnd_send_completion(efa_ni, conn, EFALND_MSG_NACK, rc,
 					sink_cookie);
