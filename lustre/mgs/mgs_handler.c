@@ -360,7 +360,7 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 					  RCL_CLIENT);
 
 	/* Compatibility code for older targets, process mti as is */
-	if (!nidlist) {
+	if (!nidlist || !target_supports_large_nid(request_mti)) {
 		int limit;
 
 		mti = request_mti;
