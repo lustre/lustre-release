@@ -23,15 +23,13 @@
 #include <obd_class.h>
 #include "ptlrpc_internal.h"
 
-/**
- * \name delay
+/*
+ * name delay
  *
  * The delay policy schedules RPCs so that they are only processed after some
  * configurable amount of time (in seconds) has passed.
  *
  * The defaults were chosen arbitrarily.
- *
- * @{
  */
 
 #define NRS_POL_NAME_DELAY	"delay"
@@ -44,14 +42,17 @@
 #define NRS_DELAY_PCT_DEFAULT	100
 
 /**
- * Binary heap predicate.
+ * delay_req_compare() - Binary heap predicate.
+ * @e1: start time of request
+ * @e2: start time of second request
  *
  * Elements are sorted according to the start time assigned to the requests
  * upon enqueue. An element with an earlier start time is "less than" an
  * element with a later start time.
  *
- * \retval 0 start_time(e1) > start_time(e2)
- * \retval 1 start_time(e1) <= start_time(e2)
+ * Return
+ * * %0 if start_time(e1) > start_time(e2)
+ * * %1 if start_time(e1) <= start_time(e2)
  */
 static int delay_req_compare(struct binheap_node *e1,
 			     struct binheap_node *e2)
@@ -73,18 +74,19 @@ static struct binheap_ops nrs_delay_heap_ops = {
 };
 
 /**
+ * nrs_delay_start() - called to start policy
+ * @policy: The policy to start
+ * @arg: Generic char buffer; unused in this policy
  * Is called before the policy transitions into
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STARTED; allocates and initializes
  * the delay-specific private data structure.
  *
- * \param[in] policy The policy to start
- * \param[in] Generic char buffer; unused in this policy
+ * see nrs_policy_register()
+ * see nrs_policy_ctl()
  *
- * \retval -ENOMEM OOM error
- * \retval  0	   success
- *
- * \see nrs_policy_register()
- * \see nrs_policy_ctl()
+ * Return
+ * * %0 on success
+ * * %errno on failure (-ENOMEM OOM)
  */
 static int nrs_delay_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
@@ -118,13 +120,14 @@ static int nrs_delay_start(struct ptlrpc_nrs_policy *policy, char *arg)
 }
 
 /**
+ * nrs_delay_stop() - called to stop policy
+ * @policy: The policy to stop
+ *
  * Is called before the policy transitions into
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED; deallocates the delay-specific
  * private data structure.
  *
- * \param[in] policy The policy to stop
- *
- * \see nrs_policy_stop0()
+ * see nrs_policy_stop0()
  */
 static void nrs_delay_stop(struct ptlrpc_nrs_policy *policy)
 {
@@ -140,18 +143,16 @@ static void nrs_delay_stop(struct ptlrpc_nrs_policy *policy)
 }
 
 /**
- * Is called for obtaining a delay policy resource.
+ * nrs_delay_res_get() - Is called for obtaining a delay policy resource.
+ * @policy: The policy on which the request is being asked for
+ * @nrq: The request for which resources are being taken
+ * @parent: Parent resource, unused in this policy
+ * @resp: Resources references are placed in this array[out]
+ * @moving_req: Signifies limited caller context; unused in this policy
  *
- * \param[in]  policy	  The policy on which the request is being asked for
- * \param[in]  nrq	  The request for which resources are being taken
- * \param[in]  parent	  Parent resource, unused in this policy
- * \param[out] resp	  Resources references are placed in this array
- * \param[in]  moving_req Signifies limited caller context; unused in this
- *			  policy
+ * see nrs_resource_get_safe()
  *
- * \retval 1 The delay policy only has a one-level resource hierarchy
- *
- * \see nrs_resource_get_safe()
+ * Return 1 The delay policy only has a one-level resource hierarchy
  */
 static int nrs_delay_res_get(struct ptlrpc_nrs_policy *policy,
 			     struct ptlrpc_nrs_request *nrq,
@@ -167,22 +168,22 @@ static int nrs_delay_res_get(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
+ * nrs_delay_req_get() - Get a request from the delay policy
+ * @policy: The policy
+ * @peek: When set, signifies that we just want to examine the request, and not
+ *	  handle it, so the request is not removed from the policy.
+ * @force: Force the policy to return a request
+ *
  * Called when getting a request from the delay policy for handling, or just
  * peeking; removes the request from the policy when it is to be handled.
  * Requests are only removed from this policy when their start time has
  * passed.
  *
- * \param[in] policy The policy
- * \param[in] peek   When set, signifies that we just want to examine the
- *		     request, and not handle it, so the request is not removed
- *		     from the policy.
- * \param[in] force  Force the policy to return a request
+ * see ptlrpc_nrs_req_get_nolock()
+ * see nrs_request_get()
  *
- * \retval The request to be handled
- * \retval NULL no request available
+ * Return The request to be handled or NULL no request available
  *
- * \see ptlrpc_nrs_req_get_nolock()
- * \see nrs_request_get()
  */
 static
 struct ptlrpc_nrs_request *nrs_delay_req_get(struct ptlrpc_nrs_policy *policy,
@@ -209,7 +210,10 @@ struct ptlrpc_nrs_request *nrs_delay_req_get(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Adds request \a nrq to a delay \a policy instance's set of queued requests
+ * nrs_delay_req_add() - Adds request @nrq to a delay @policy instance's set of
+ * queued requests
+ * @policy: The policy
+ * @nrq: The request to add
  *
  * A percentage (delay_pct) of incoming requests are delayed by this policy.
  * If selected for delay a request start time is calculated. A start time
@@ -218,12 +222,9 @@ struct ptlrpc_nrs_request *nrs_delay_req_get(struct ptlrpc_nrs_policy *policy,
  * delay_req_compare() to maintain a set of requests ordered by their start
  * times.
  *
- * \param[in] policy The policy
- * \param[in] nrq    The request to add
- *
- * \retval 0 request added
- * \retval 1 request not added
- *
+ * Return
+ * * %0 request added
+ * * %1 request not added
  */
 static int nrs_delay_req_add(struct ptlrpc_nrs_policy *policy,
 			     struct ptlrpc_nrs_request *nrq)
@@ -243,10 +244,10 @@ static int nrs_delay_req_add(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Removes request \a nrq from \a policy's list of queued requests.
- *
- * \param[in] policy The policy
- * \param[in] nrq    The request to remove
+ * nrs_delay_req_del() - Removes request @nrq from @policy's list of queued
+ * requests.
+ * @policy: The policy
+ * @nrq: The request to remove
  */
 static void nrs_delay_req_del(struct ptlrpc_nrs_policy *policy,
 			      struct ptlrpc_nrs_request *nrq)
@@ -257,14 +258,13 @@ static void nrs_delay_req_del(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Prints a debug statement right before the request \a nrq stops being
- * handled.
+ * nrs_delay_req_stop() - Prints a debug statement right before the
+ * request @nrq stops being handled.
+ * @policy: The policy handling the request
+ * @nrq: The request being handled
  *
- * \param[in] policy The policy handling the request
- * \param[in] nrq    The request being handled
- *
- * \see ptlrpc_server_finish_request()
- * \see ptlrpc_nrs_req_stop_nolock()
+ * see ptlrpc_server_finish_request()
+ * see ptlrpc_nrs_req_stop_nolock()
  */
 static void nrs_delay_req_stop(struct ptlrpc_nrs_policy *policy,
 			       struct ptlrpc_nrs_request *nrq)
@@ -280,17 +280,18 @@ static void nrs_delay_req_stop(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Performs ctl functions specific to delay policy instances; similar to ioctl
+ * nrs_delay_ctl() - Performs ctl functions specific to delay policy instances;
+ * similar to ioctl
+ * @policy: the policy instance
+ * @opc: the opcode
+ * @arg: used for passing parameters and information[in, out]
  *
- * \param[in]     policy the policy instance
- * \param[in]     opc    the opcode
- * \param[in,out] arg    used for passing parameters and information
+ * pre assert_spin_locked(&policy->pol_nrs->->nrs_lock)
+ * post assert_spin_locked(&policy->pol_nrs->->nrs_lock)
  *
- * \pre assert_spin_locked(&policy->pol_nrs->->nrs_lock)
- * \post assert_spin_locked(&policy->pol_nrs->->nrs_lock)
- *
- * \retval 0   operation carried out successfully
- * \retval -ve error
+ * Return
+ * * %0 on success (operation carried out successfully)
+ * * %negative on failure
  */
 static int nrs_delay_ctl(struct ptlrpc_nrs_policy *policy,
 			 enum ptlrpc_nrs_ctl opc, void *arg)
@@ -340,7 +341,7 @@ static int nrs_delay_ctl(struct ptlrpc_nrs_policy *policy,
 	RETURN(0);
 }
 
-/**
+/*
  * debugfs interface
  */
 
@@ -352,7 +353,7 @@ static int nrs_delay_ctl(struct ptlrpc_nrs_policy *policy,
 #define LPROCFS_NRS_DELAY_MIN_NAME_REG		"reg_delay_min:"
 #define LPROCFS_NRS_DELAY_MIN_NAME_HP		"hp_delay_min:"
 
-/**
+/*
  * Max size of the nrs_delay_min seq_write buffer. Needs to be large enough
  * to hold the string: "reg_min_delay:65535 hp_min_delay:65535"
  */
@@ -366,7 +367,7 @@ static int nrs_delay_ctl(struct ptlrpc_nrs_policy *policy,
 #define LPROCFS_NRS_DELAY_MAX_NAME_REG		"reg_delay_max:"
 #define LPROCFS_NRS_DELAY_MAX_NAME_HP		"hp_delay_max:"
 
-/**
+/*
  * Similar to LPROCFS_NRS_DELAY_MIN_SIZE above, but for the nrs_delay_max
  * variable.
  */
@@ -382,7 +383,7 @@ static int nrs_delay_ctl(struct ptlrpc_nrs_policy *policy,
 #define LPROCFS_NRS_DELAY_PCT_NAME_REG		"reg_delay_pct:"
 #define LPROCFS_NRS_DELAY_PCT_NAME_HP		"hp_delay_pct:"
 
-/**
+/*
  * Similar to LPROCFS_NRS_DELAY_MIN_SIZE above, but for the nrs_delay_pct
  * variable.
  */
@@ -392,7 +393,7 @@ static int nrs_delay_ctl(struct ptlrpc_nrs_policy *policy,
 	       " " LPROCFS_NRS_DELAY_PCT_NAME_HP			       \
 	       __stringify(LPROCFS_NRS_DELAY_PCT_MAX_VAL))
 
-/**
+/*
  * Helper for delay's seq_write functions.
  */
 static ssize_t
@@ -503,7 +504,7 @@ free_kernbuf:
 	return rc;
 }
 
-/**
+/*
  * Retrieves the value of the minimum delay for delay policy instances on both
  * the regular and high-priority NRS head of a service, as long as a policy
  * instance is not in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state;
@@ -550,7 +551,7 @@ ptlrpc_lprocfs_nrs_delay_min_seq_show(struct seq_file *m, void *data)
 	return rc;
 }
 
-/**
+/*
  * Sets the value of the minimum request delay for delay policy instances of a
  * service. The user can set the minimum request delay for the regular or high
  * priority NRS head individually by specifying each value, or both together in
@@ -586,7 +587,7 @@ ptlrpc_lprocfs_nrs_delay_min_seq_write(struct file *file,
 }
 LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_min);
 
-/**
+/*
  * Retrieves the value of the maximum delay for delay policy instances on both
  * the regular and high-priority NRS head of a service, as long as a policy
  * instance is not in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state;
@@ -633,7 +634,7 @@ ptlrpc_lprocfs_nrs_delay_max_seq_show(struct seq_file *m, void *data)
 	return rc;
 }
 
-/**
+/*
  * Sets the value of the maximum request delay for delay policy instances of a
  * service. The user can set the maximum request delay for the regular or high
  * priority NRS head individually by specifying each value, or both together in
@@ -669,7 +670,7 @@ ptlrpc_lprocfs_nrs_delay_max_seq_write(struct file *file,
 }
 LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_max);
 
-/**
+/*
  * Retrieves the value of the percentage of requests which should be delayed
  * for delay policy instances on both the regular and high-priority NRS head
  * of a service, as long as a policy instance is not in the
@@ -717,7 +718,7 @@ ptlrpc_lprocfs_nrs_delay_pct_seq_show(struct seq_file *m, void *data)
 	return rc;
 }
 
-/**
+/*
  * Sets the value of the percentage of requests to be delayed for delay policy
  * instances of a service. The user can set the percentage for the regular or
  * high-priority NRS head individually by specifying each value, or both
@@ -777,7 +778,7 @@ static int nrs_delay_lprocfs_init(struct ptlrpc_service *svc)
 	return 0;
 }
 
-/**
+/*
  * Delay policy operations
  */
 static const struct ptlrpc_nrs_pol_ops nrs_delay_ops = {
@@ -792,7 +793,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_delay_ops = {
 	.op_lprocfs_init	= nrs_delay_lprocfs_init,
 };
 
-/**
+/*
  * Delay policy configuration
  */
 struct ptlrpc_nrs_pol_conf nrs_conf_delay = {
@@ -800,7 +801,3 @@ struct ptlrpc_nrs_pol_conf nrs_conf_delay = {
 	.nc_ops			= &nrs_delay_ops,
 	.nc_compat		= nrs_policy_compat_all,
 };
-
-/** @} delay */
-
-/** @} nrs */
