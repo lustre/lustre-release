@@ -404,9 +404,9 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index,
 
 	assert(fsname || path);
 
-	if (!(want & WANT_INDEX) || !(want & WANT_NID))
+	if (!(want & WANT_INDEX) && !(want & WANT_NID))
 		rc = get_root_path_fast(want, fsname, outfd, path, dev);
-	if (rc || (want & WANT_NID))
+	if (rc)
 		rc = get_root_path_slow(want, fsname, outfd, path, index, dev,
 					out_nid);
 
