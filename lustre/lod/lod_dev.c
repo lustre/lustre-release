@@ -1849,6 +1849,7 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 	struct lod_device *lod = dt2lod_dev(dev);
 	struct lu_tgt_desc *tgt;
 	int rc = 0;
+	int rc2;
 
 	ENTRY;
 
@@ -1856,41 +1857,52 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 	lod_foreach_ost(lod, tgt) {
 		if (tgt->ltd_discon)
 			continue;
-		rc = dt_sync(env, tgt->ltd_tgt);
-		if (rc) {
-			if (rc != -ENOTCONN) {
-				CERROR("%s: can't sync ost %u: rc = %d\n",
-				       lod2obd(lod)->obd_name, tgt->ltd_index,
-				       rc);
-				break;
+		rc2 = dt_sync(env, tgt->ltd_tgt);
+		if (rc2) {
+			int level;
+
+			if (rc2 == -ENOTCONN) {
+				rc2 = 0;
+				level = D_INFO;
+			} else {
+				level = D_ERROR;
 			}
-			rc = 0;
+			CDEBUG_LIMIT(level,
+				     "%s: cannot sync OST%04x: rc = %d\n",
+				     lod2obd(lod)->obd_name, tgt->ltd_index,
+				     rc2);
+			if (!rc)
+				rc = rc2;
 		}
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
-
-	if (rc)
-		RETURN(rc);
-
 	lod_getref(&lod->lod_mdt_descs);
 	lod_foreach_mdt(lod, tgt) {
 		if (tgt->ltd_discon)
 			continue;
-		rc = dt_sync(env, tgt->ltd_tgt);
-		if (rc) {
-			if (rc != -ENOTCONN) {
-				CERROR("%s: can't sync mdt %u: rc = %d\n",
-				       lod2obd(lod)->obd_name, tgt->ltd_index,
-				       rc);
-				break;
+		rc2 = dt_sync(env, tgt->ltd_tgt);
+		if (rc2) {
+			int level;
+
+			if (rc2 == -ENOTCONN) {
+				rc2 = 0;
+				level = D_INFO;
+			} else {
+				level = D_ERROR;
 			}
-			rc = 0;
+			CDEBUG_LIMIT(level,
+				     "%s: cannot sync MDT%04x: rc = %d\n",
+				     lod2obd(lod)->obd_name, tgt->ltd_index,
+				     rc2);
+			if (!rc)
+				rc = rc2;
 		}
 	}
 	lod_putref(lod, &lod->lod_mdt_descs);
 
-	if (rc == 0)
-		rc = dt_sync(env, lod->lod_child);
+	rc2 = dt_sync(env, lod->lod_child);
+	if (rc2 && !rc)
+		rc = rc2;
 
 	RETURN(rc);
 }
