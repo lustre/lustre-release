@@ -30,10 +30,11 @@
 
 #include <lustre_compat.h>
 #include <libcfs/linux/linux-time.h>
-#include <libcfs/linux/linux-wait.h>
 #include <libcfs/linux/linux-misc.h>
 #include <libcfs/linux/linux-mem.h>
 #include <lustre_compat/linux/xarray.h>
+#include <lustre_compat/linux/wait_bit.h>
+#include <lustre_compat/linux/wait.h>
 #include <lustre_crypto.h>
 
 #ifndef HAVE_KTIME_GET_TS64

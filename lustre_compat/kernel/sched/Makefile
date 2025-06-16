@@ -4,4 +4,4 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-EXTRA_DIST = linux-prim.c
+sched_objs := wait.o wait_bit.o
