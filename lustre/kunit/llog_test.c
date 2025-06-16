@@ -1244,7 +1244,7 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 {
 	struct llog_handle *llh = NULL;
 	char name[10];
-	int rc, rc2, i;
+	int rc, i;
 	int orig_counter;
 	struct llog_test8_rec ltr;
 	struct llog_ctxt *ctxt;
@@ -1300,11 +1300,9 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	llog_close(env, llh->u.chd.chd_current_log);
 	llh->u.chd.chd_current_log = NULL;
 
-	rc2 = llog_cat_close(env, llh);
-	if (rc2) {
-		CERROR("8a: close log %s failed: %d\n", name, rc2);
-		if (rc == 0)
-			rc = rc2;
+	rc = llog_cat_close(env, llh);
+	if (rc) {
+		CERROR("8a: close log %s failed: %d\n", name, rc);
 		GOTO(out_put, rc);
 	}
 
@@ -1339,11 +1337,9 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	llog_fill_bytes(env, llh->lgh_obj, 8192 + plain_pos,
 			8192 + plain_pos + sizeof(struct llog_logid_rec), 0x5a);
 
-	rc2 = llog_cat_close(env, llh);
-	if (rc2) {
-		CERROR("8b: close log %s failed: %d\n", name, rc2);
-		if (rc == 0)
-			rc = rc2;
+	rc = llog_cat_close(env, llh);
+	if (rc) {
+		CERROR("8b: close log %s failed: %d\n", name, rc);
 		GOTO(out_put, rc);
 	}
 
@@ -1385,11 +1381,9 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 
 out:
 	CWARN("8d: close re-opened catalog\n");
-	rc2 = llog_cat_close(env, llh);
-	if (rc2) {
-		CERROR("8d: close log %s failed: %d\n", name, rc2);
-		if (rc == 0)
-			rc = rc2;
+	rc = llog_cat_close(env, llh);
+	if (rc) {
+		CERROR("8d: close log %s failed: %d\n", name, rc);
 	}
 out_put:
 	llog_ctxt_put(ctxt);
