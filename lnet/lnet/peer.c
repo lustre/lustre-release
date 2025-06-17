@@ -4124,11 +4124,7 @@ static int lnet_peer_discovery(void *arg)
 				rc = lnet_peer_ping_failed(lp);
 			else if (lp->lp_state & LNET_PEER_PUSH_FAILED)
 				rc = lnet_peer_push_failed(lp);
-			else if (lp->lp_state & LNET_PEER_FORCE_PING)
-				rc = lnet_peer_send_ping(lp);
-			else if (lp->lp_state & LNET_PEER_FORCE_PUSH)
-				rc = lnet_peer_send_push(lp);
-			else if (!(lp->lp_state & LNET_PEER_NIDS_UPTODATE))
+			else if (lnet_peer_needs_ping(lp))
 				rc = lnet_peer_send_ping(lp);
 			else if (lnet_peer_needs_push(lp))
 				rc = lnet_peer_send_push(lp);

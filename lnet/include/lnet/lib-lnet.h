@@ -1127,6 +1127,17 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 	return false;
 }
 
+static inline bool
+lnet_peer_needs_ping(struct lnet_peer *lp)
+{
+	if (lp->lp_state & LNET_PEER_FORCE_PING)
+		return true;
+	else if (!(lp->lp_state & LNET_PEER_NIDS_UPTODATE))
+		return true;
+
+	return false;
+}
+
 static inline unsigned int
 lnet_get_next_recovery_ping(unsigned int ping_count, time64_t now)
 {
