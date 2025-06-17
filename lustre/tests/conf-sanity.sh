@@ -10,9 +10,9 @@ export FORCE_TEST_111=${FORCE_TEST_111:-false}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
+init_test_env "$@"
 . $LUSTRE/tests/conf-sanity-framework.sh
 
-init_test_env "$@"
 init_logging
 
 #                                  tool to create lustre filesystem images
