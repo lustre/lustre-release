@@ -767,19 +767,19 @@ static inline void cfs_delete_from_page_cache(struct page *page)
 	if (!page->mapping)
 		return;
 	LASSERT(PageLocked(page));
-	get_page(page);
-	unlock_page(page);
-	/* on entry page is locked */
 	if (S_ISREG(page->mapping->host->i_mode)) {
 		generic_error_remove_folio(page->mapping, page_folio(page));
 	} else {
 		loff_t lstart = page->index << PAGE_SHIFT;
 		loff_t lend = lstart + PAGE_SIZE - 1;
+		struct address_space *mapping = page->mapping;
 
-		truncate_inode_pages_range(page->mapping, lstart, lend);
+		get_page(page);
+		unlock_page(page);
+		truncate_inode_pages_range(mapping, lstart, lend);
+		lock_page(page);
+		put_page(page);
 	}
-	lock_page(page);
-	put_page(page);
 }
 #endif
 
