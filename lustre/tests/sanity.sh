@@ -29278,7 +29278,7 @@ test_311() {
 
 	unlinkmany $DIR/$tdir/$tfile. 1000
 	wait_delete_completed
-	wait_zfs_commit $SINGLEMDS 10
+	wait_zfs_commit $SINGLEMDS 20
 
 	do_nodes $mdts "$LCTL set_param -n \
 			osp.*OST0000*.max_create_count=$max_count"
