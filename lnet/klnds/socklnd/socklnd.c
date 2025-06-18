@@ -2646,8 +2646,6 @@ ksocknal_startup(struct lnet_ni *ni)
 	net->ksnn_incarnation = ktime_get_real_ns();
 	ni->ni_data = net;
 
-	ksocknal_tunables_setup(ni);
-
 	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns,
 				 the_lnet.ln_nis_use_large_nids);
 	if (rc < 0)
@@ -2667,6 +2665,8 @@ ksocknal_startup(struct lnet_ni *ni)
 		if (rc < 0)
 			CWARN("ksocklnd failed to allocate ni_interface\n");
 	}
+
+	ksocknal_tunables_setup(ni);
 
 	ni->ni_dev_cpt = ifaces[if_idx].li_cpt;
 	ksi->ksni_index = ifaces[if_idx].li_index;
