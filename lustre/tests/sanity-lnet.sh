@@ -39,6 +39,14 @@ cleanup_lnet() {
 	unload_modules
 }
 
+if (( $MDS1_VERSION >= $(version_code 2.16.56) )); then
+	net_delay_add="net_delay add"
+	net_delay_del="net_delay del"
+else
+	net_delay_add="net_delay_add"
+	net_delay_del="net_delay_del"
+fi
+
 restore_modules=false
 if module_loaded lnet ; then
 	cleanup_lnet || error "Failed to unload modules before test execution"
@@ -2211,7 +2219,7 @@ del_drop_rule() {
 
 add_delay_rule() {
 	if ((${RANDOM} % 2 == 0)); then
-		do_lctl net_delay add $@ ||
+		do_lctl $net_delay_add $@ ||
 			error "$LCTL net_delay add $@ failed rc = $?"
 	else
 		do_lnetctl fault delay add $@ ||
@@ -2221,7 +2229,7 @@ add_delay_rule() {
 
 del_delay_rule() {
 	if ((${RANDOM} % 2 == 0)); then
-		do_lctl net_delay del $@ ||
+		do_lctl $net_delay_del $@ ||
 			error "$LCTL net_delay del $@ failed rc = $?"
 	else
 		do_lnetctl fault delay del $@ ||
@@ -4079,7 +4087,7 @@ test_256() {
 
 	for lnid in ${LNIDS[@]}; do
 		for rnid in ${rpeer_nids[@]}; do
-			cmd="$LCTL net_delay_add -s ${lnid} -d ${rnid} $args"
+			cmd="$LCTL $net_delay_add -s ${lnid} -d ${rnid} $args"
 			echo "$router $cmd"
 			do_node $router $cmd || error "Failed to add delay rule"
 		done
@@ -4105,7 +4113,7 @@ test_256() {
 	echo "Issued last ping - sleep $delay"
 	sleep ${delay}
 
-	do_node $router $LCTL net_delay del -a
+	do_node $router $LCTL $net_delay_del -a
 
 	local rc=0 rcsum=0
 	for idx in $(seq 1 $((rtr_pc + 1))); do
