@@ -41,24 +41,27 @@ static int range_is_included(struct lu_nid_range *needle,
 	return __range_is_included(START(needle), LAST(needle), haystack);
 }
 
-/*
- * range constructor
+/**
+ * range_create_generic() - Create a NID range
+ * @nm_range_tree: range tree where to create range
+ * @start_nid: starting nid of the range
+ * @end_nid: ending nid of the range
+ * @netmask: network mask prefix length
+ * @nodemap: nodemap that contains this range
+ * @range_id: should be 0 unless loading from disk
  *
- * \param	config		nodemap config - used to set range id
- * \param	start_nid	starting nid of the range
- * \param	end_nid		ending nid of the range
- * \param	netmask		network mask prefix length
- * \param	nodemap		nodemap that contains this range
- * \param	range_id	should be 0 unless loading from disk
- * \retval	lu_nid_range on success, NULL on failure
+ * Return:
+ * * %range	range created
+ * * %NULL	on failure
  */
-struct lu_nid_range *range_create(struct nodemap_config *config,
-				  const struct lnet_nid *start_nid,
-				  const struct lnet_nid *end_nid,
-				  u8 netmask, struct lu_nodemap *nodemap,
-				  unsigned int range_id)
+static
+struct lu_nid_range *range_create_generic(
+	struct nodemap_range_tree *nm_range_tree,
+	const struct lnet_nid *start_nid,
+	const struct lnet_nid *end_nid,
+	u8 netmask, struct lu_nodemap *nodemap,
+	unsigned int range_id)
 {
-	struct nodemap_range_tree *nm_range_tree;
 	struct lu_nid_range *range;
 	LIST_HEAD(tmp_nidlist);
 
@@ -139,7 +142,6 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 	}
 
 	/* if we are loading from save, use on disk id num */
-	nm_range_tree = &config->nmc_range_tree;
 	if (range_id != 0) {
 		if (nm_range_tree->nmrt_range_highest_id < range_id)
 			nm_range_tree->nmrt_range_highest_id = range_id;
@@ -164,17 +166,34 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 	return range;
 }
 
-/*
- * find the exact range
+/**
+ * range_create() - Create a regular NID range
+ * @config: nodemap config to work on
+ * @start_nid: starting nid of the range
+ * @end_nid: ending nid of the range
+ * @netmask: network mask prefix length
+ * @nodemap: nodemap that contains this range
+ * @range_id: should be 0 unless loading from disk
  *
- * \param	start_nid		starting nid
- * \param	end_nid			ending nid
- * \retval	matching range or NULL
+ * Return:
+ * * %range	range created
+ * * %NULL	on failure
  */
+struct lu_nid_range *range_create(struct nodemap_config *config,
+				  const struct lnet_nid *start_nid,
+				  const struct lnet_nid *end_nid,
+				  u8 netmask, struct lu_nodemap *nodemap,
+				  unsigned int range_id)
+{
+	return range_create_generic(&config->nmc_range_tree, start_nid, end_nid,
+				    netmask, nodemap, range_id);
+}
+
 static
 struct lu_nid_range *__range_find(struct nodemap_range_tree *nm_range_tree,
 				  const struct lnet_nid *start_nid,
-				  const struct lnet_nid *end_nid)
+				  const struct lnet_nid *end_nid,
+				  bool exact)
 {
 	struct lu_nid_range *range, *found;
 	lnet_nid_t nid4[2];
@@ -187,14 +206,18 @@ struct lu_nid_range *__range_find(struct nodemap_range_tree *nm_range_tree,
 
 	range = nm_range_iter_first(&nm_range_tree->nmrt_range_interval_root,
 				    nid4[0], nid4[1]);
+
 	while (range) {
 		if (__range_is_included(nid4[0], nid4[1], range)) {
 			found = __range_find(&range->rn_subtree,
-					     start_nid, end_nid);
+					     start_nid, end_nid, exact);
 			if (found)
 				return found;
+			if (!exact)
+				break;
 		}
-		if (nid_same(&range->rn_start, start_nid) &&
+		if (exact &&
+		    nid_same(&range->rn_start, start_nid) &&
 		    nid_same(&range->rn_end, end_nid))
 			break;
 		range = nm_range_iter_next(range, nid4[0], nid4[1]);
@@ -203,38 +226,84 @@ struct lu_nid_range *__range_find(struct nodemap_range_tree *nm_range_tree,
 	return range;
 }
 
-struct lu_nid_range *range_find(struct nodemap_config *config,
-				const struct lnet_nid *start_nid,
-				const struct lnet_nid *end_nid,
-				u8 netmask)
+/**
+ * range_find_generic() - Find a NID range
+ * @nm_range_tree: range tree where to find range
+ * @netmask_setup: netmask where to find range
+ * @start_nid: starting nid of the range
+ * @end_nid: ending nid of the range
+ * @netmask: network mask prefix length
+ * @exact: true to get an exact match, false to get including range
+ *
+ * Return:
+ * * %range	range found
+ * * %NULL	on failure
+ */
+static struct lu_nid_range *range_find_generic(
+	struct nodemap_range_tree *nm_range_tree,
+	struct list_head *netmask_setup,
+	const struct lnet_nid *start_nid,
+	const struct lnet_nid *end_nid,
+	u8 netmask, bool exact)
 {
 	struct lu_nid_range *range = NULL;
 
 	if (!netmask) {
-		return __range_find(&config->nmc_range_tree,
-				    start_nid, end_nid);
+		return __range_find(nm_range_tree, start_nid, end_nid, exact);
 	}
 
-	if (!list_empty(&config->nmc_netmask_setup)) {
+	if (!list_empty(netmask_setup)) {
 		struct lu_nid_range *range_temp;
 		u8 len;
 
-		list_for_each_entry_safe(range, range_temp,
-					 &config->nmc_netmask_setup,
+		list_for_each_entry_safe(range, range_temp, netmask_setup,
 					 rn_collect) {
 			len = cfs_nidmask_get_length(&range->rn_nidlist);
-
-			if (cfs_match_nid(start_nid, &range->rn_nidlist) &&
-			    netmask == len)
-				return range;
+			if (cfs_match_nid(start_nid, &range->rn_nidlist)) {
+				if (exact) {
+					if (netmask == len)
+						return range;
+				} else {
+					/* Since cfs_match_nid() confirmed
+					 * start_nid falls into the stored range
+					 * we only need to verify the query is
+					 * more specific.
+					 */
+					if (netmask >= len)
+						return range;
+				}
+			}
 		}
 	}
 
 	return NULL;
 }
 
-/*
- * range destructor
+/**
+ * range_find() - Find an exact regular NID range
+ * @config: nodemap config to work on
+ * @start_nid: starting nid of the range
+ * @end_nid: ending nid of the range
+ * @netmask: network mask prefix length
+ * @exact: true to get an exact match, false to get including range
+ *
+ * Return:
+ * * %range	range found
+ * * %NULL	on failure
+ */
+struct lu_nid_range *range_find(struct nodemap_config *config,
+				const struct lnet_nid *start_nid,
+				const struct lnet_nid *end_nid,
+				u8 netmask, bool exact)
+{
+	return range_find_generic(&config->nmc_range_tree,
+				  &config->nmc_netmask_setup,
+				  start_nid, end_nid, netmask, exact);
+}
+
+/**
+ * range_destroy() - Range destructor
+ * @range: range to destroy
  */
 void range_destroy(struct lu_nid_range *range)
 {
@@ -245,16 +314,6 @@ void range_destroy(struct lu_nid_range *range)
 	OBD_FREE_PTR(range);
 }
 
-/*
- * insert a nid range into the interval tree
- *
- * \param	range		range to insert
- * \retval	0 on success
- *
- * This function checks that the given nid range
- * does not overlap so that each nid can belong
- * to exactly one range
- */
 static int __range_insert(struct nodemap_range_tree *nm_range_tree,
 			  struct lu_nid_range *range,
 			  struct lu_nid_range **parent_range, bool dynamic)
@@ -287,32 +346,74 @@ out_insert:
 	return rc;
 }
 
-int range_insert(struct nodemap_config *config, struct lu_nid_range *range,
-		 struct lu_nid_range **parent_range, bool dynamic)
+/**
+ * range_insert_generic() - Insert a nid range into the interval tree
+ * @nm_range_tree: range tree where to insert range
+ * @netmask_setup: netmask where to insert range
+ * @range: range to insert
+ * @parent_range: parent range
+ * @dynamic: is dynamic nodemap
+ *
+ * This function checks that the given nid range
+ * does not overlap so that each nid can belong
+ * to exactly one range.
+ *
+ * Return:
+ * * %0		success
+ * * %-errno	on failure
+ */
+static int range_insert_generic(struct nodemap_range_tree *nm_range_tree,
+				struct list_head *netmask_setup,
+				struct lu_nid_range *range,
+				struct lu_nid_range **parent_range,
+				bool dynamic)
 {
 	int rc = 0;
 
 	if (!range->rn_netmask) {
-		rc = __range_insert(&config->nmc_range_tree,
-				    range, parent_range, dynamic);
+		rc = __range_insert(nm_range_tree, range, parent_range,
+				    dynamic);
 	} else {
-		if (range_find(config, &range->rn_start, &range->rn_end,
-			       range->rn_netmask))
+		if (range_find_generic(nm_range_tree, netmask_setup,
+				       &range->rn_start, &range->rn_end,
+				       range->rn_netmask, true))
 			return -EEXIST;
 
-		list_add(&range->rn_collect, &config->nmc_netmask_setup);
+		list_add(&range->rn_collect, netmask_setup);
 	}
 
 	return rc;
 }
 
-/*
- * delete a range from the interval tree and any
- * associated nodemap references
+/**
+ * range_insert() - Insert a nid range into the regular interval tree
+ * @config: nodemap config to work on
+ * @range: range to insert
+ * @parent_range: parent range
+ * @dynamic: is dynamic nodemap
  *
- * \param	range		range to remove
+ * This function checks that the given nid range
+ * does not overlap so that each nid can belong
+ * to exactly one range.
+ *
+ * Return:
+ * * %0		success
+ * * %-errno	on failure
  */
-void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
+int range_insert(struct nodemap_config *config, struct lu_nid_range *range,
+		 struct lu_nid_range **parent_range, bool dynamic)
+{
+	return range_insert_generic(&config->nmc_range_tree,
+				    &config->nmc_netmask_setup,
+				    range, parent_range, dynamic);
+}
+
+/**
+ * range_delete_generic() - Delete a range from the interval tree and any
+ *			    associated nodemap references
+ * @range: range to delete
+ */
+static void range_delete_generic(struct lu_nid_range *range)
 {
 	list_del(&range->rn_list);
 
@@ -327,11 +428,17 @@ void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
 	range_destroy(range);
 }
 
-/*
- * search the interval tree for a nid within a range
- *
- * \param	nid		nid to search for
+/**
+ * range_delete() - Delete a range from the regular interval tree and any
+ *		    associated nodemap references
+ * @config: nodemap config to work on
+ * @range: range to delete
  */
+void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
+{
+	range_delete_generic(range);
+}
+
 static
 struct lu_nid_range *__range_search(struct nodemap_range_tree *nm_range_tree,
 				    struct lnet_nid *nid)
@@ -350,18 +457,28 @@ struct lu_nid_range *__range_search(struct nodemap_range_tree *nm_range_tree,
 	return range;
 }
 
-struct lu_nid_range *range_search(struct nodemap_config *config,
-				  struct lnet_nid *nid)
+/**
+ * range_search_generic() - Search interval tree for a nid within a range
+ * @nm_range_tree: range tree to search
+ * @netmask_setup: netmask to search
+ * @nid: nid to search for
+ *
+ * Return:
+ * * %range	range containing nid
+ * * %NULL	on failure
+ */
+static struct lu_nid_range *range_search_generic(
+	struct nodemap_range_tree *nm_range_tree,
+	struct list_head *netmask_setup, struct lnet_nid *nid)
 {
 	if (nid_is_nid4(nid)) {
-		return __range_search(&config->nmc_range_tree, nid);
+		return __range_search(nm_range_tree, nid);
 	}
 
-	if (!list_empty(&config->nmc_netmask_setup)) {
+	if (!list_empty(netmask_setup)) {
 		struct lu_nid_range *range, *range_temp;
 
-		list_for_each_entry_safe(range, range_temp,
-					 &config->nmc_netmask_setup,
+		list_for_each_entry_safe(range, range_temp, netmask_setup,
 					 rn_collect) {
 			if (cfs_match_nid(nid, &range->rn_nidlist))
 				return range;
@@ -369,4 +486,20 @@ struct lu_nid_range *range_search(struct nodemap_config *config,
 	}
 
 	return NULL;
+}
+
+/**
+ * range_search() - Search regular interval tree for a nid within a range
+ * @config: nodemap config to work on
+ * @nid: nid to search for
+ *
+ * Return:
+ * * %range	range containing nid
+ * * %NULL	on failure
+ */
+struct lu_nid_range *range_search(struct nodemap_config *config,
+				  struct lnet_nid *nid)
+{
+	return range_search_generic(&config->nmc_range_tree,
+				    &config->nmc_netmask_setup, nid);
 }

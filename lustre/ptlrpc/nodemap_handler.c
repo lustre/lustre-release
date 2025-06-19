@@ -1377,7 +1377,7 @@ int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 		GOTO(out_putref, rc = -ENXIO);
 
 	down_write(&active_config->nmc_range_tree_lock);
-	range = range_find(active_config, &nid[0], &nid[1], netmask);
+	range = range_find(active_config, &nid[0], &nid[1], netmask, true);
 	if (range == NULL) {
 		up_write(&active_config->nmc_range_tree_lock);
 		GOTO(out_putref, rc = -EINVAL);

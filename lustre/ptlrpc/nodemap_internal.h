@@ -139,7 +139,7 @@ struct lu_nid_range *range_search(struct nodemap_config *config,
 struct lu_nid_range *range_find(struct nodemap_config *config,
 				const struct lnet_nid *start_nid,
 				const struct lnet_nid *end_nid,
-				u8 netmask);
+				u8 netmask, bool exact);
 void range_init_tree(void);
 struct lu_idmap *idmap_create(__u32 client_id, __u32 fs_id);
 struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
