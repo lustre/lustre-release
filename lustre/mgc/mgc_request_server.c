@@ -302,6 +302,89 @@ static int mgc_target_register(struct obd_export *exp,
 	RETURN(rc);
 }
 
+static int mgc_nid_notify_interpret(const struct lu_env *env,
+				    struct ptlrpc_request *req,
+				    void *args, int rc)
+{
+	struct mgs_target_info *mti;
+
+	mti = req_capsule_server_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
+	if (!mti)
+		return -EPROTO;
+
+	server_mti_print("mgc_nid_notify: rep", mti);
+
+	if (rc)
+		CDEBUG(D_MGC, "%s: NID notify failed, rc = %d\n",
+		       mti->mti_svname, rc);
+	return rc;
+}
+
+static int mgc_nid_notify(struct obd_export *exp,
+			  struct mgs_target_info *mti)
+{
+	struct ptlrpc_request *req;
+	struct mgs_target_info *request_mti;
+	struct mgs_target_nidlist *mtn;
+	size_t bufsize, nidlist_size;
+	unsigned int avail;
+	int rc;
+
+	server_mti_print("mgc_nid_notify: req", mti);
+
+	if (!(exp_connect_flags(exp) & OBD_CONNECT_MGS_NIDLIST))
+		RETURN(-ENOPROTOOPT);
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_MGS_TARGET_REG_NIDLIST);
+	if (!req)
+		RETURN(-ENOMEM);
+
+	bufsize = MGS_MAXREQSIZE - sizeof(struct ptlrpc_body) -
+		  sizeof(*mti) - sizeof(*mtn);
+	avail = bufsize / MTN_NIDSTR_SIZE;
+
+	if (mti->mti_nid_count > avail) {
+		/* inline buffer should fit NIDs on single network, but still */
+		CWARN("%s: too many NIDs for buffer: %u > %d\n",
+		      mti->mti_svname, mti->mti_nid_count, avail);
+		mti->mti_nid_count = avail;
+	}
+	nidlist_size = NIDLIST_SIZE(mti->mti_nid_count);
+	req_capsule_set_size(&req->rq_pill, &RMF_MGS_TARGET_NIDLIST,
+			     RCL_CLIENT, sizeof(*mtn) + nidlist_size);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MGS_VERSION, MGS_TARGET_REG);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	request_mti = req_capsule_client_get(&req->rq_pill,
+					     &RMF_MGS_TARGET_INFO);
+	if (!request_mti) {
+		ptlrpc_req_put(req);
+		RETURN(-ENOMEM);
+	}
+	*request_mti = *mti;
+
+	mtn = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_NIDLIST);
+	if (!mtn) {
+		ptlrpc_req_put(req);
+		RETURN(-ENOMEM);
+	}
+	mtn->mtn_nids = mti->mti_nid_count;
+	mtn->mtn_flags = NIDLIST_APPEND;
+	memcpy(mtn->mtn_inline_list, mti->mti_nidlist, nidlist_size);
+
+	ptlrpc_request_set_replen(req);
+	req->rq_interpret_reply = mgc_nid_notify_interpret;
+
+	ptlrpcd_add_req(req);
+
+	return 0;
+}
+
 int mgc_set_info_async_server(const struct lu_env *env,
 			      struct obd_export *exp,
 			      u32 keylen, void *key,
@@ -325,6 +408,19 @@ int mgc_set_info_async_server(const struct lu_env *env,
 		CDEBUG(D_MGC, "register_target %s %#x\n",
 		       mti->mti_svname, mti->mti_flags);
 		rc =  mgc_target_register(exp, mti);
+		RETURN(rc);
+	}
+	if (KEY_IS(KEY_NID_NOTIFY)) {
+		size_t mti_len = offsetof(struct mgs_target_info, mti_nidlist);
+		struct mgs_target_info *mti = val;
+
+		mti_len += NIDLIST_SIZE(mti->mti_nid_count);
+		if (vallen != mti_len)
+			RETURN(-EINVAL);
+
+		CDEBUG(D_MGC, "NID notify for %s about %d new NIDs\n",
+		       mti->mti_svname, mti->mti_nid_count);
+		rc =  mgc_nid_notify(exp, mti);
 		RETURN(rc);
 	}
 	if (KEY_IS(KEY_SET_FS)) {

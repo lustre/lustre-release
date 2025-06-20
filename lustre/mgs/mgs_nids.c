@@ -512,7 +512,26 @@ static int mgs_build_nidlists(struct mgs_nidtbl_target *tgt,
 	unsigned long net;
 	int i, rc = 0;
 
-	/* Usually it is build on target on network basis, so assume that
+	/* Delete NET */
+	if (mti->mti_nidlist[0][0] == NETDEL_TOKEN) {
+		struct tnt_nidlist *tnl;
+
+		net = libcfs_str2net(mti->mti_nidlist[0] + 1);
+		if (net == LNET_NET_ANY) {
+			CDEBUG(D_MGS, "nidtbl: can't parse NET %s\n",
+			       mti->mti_nidlist[0] + 1);
+			return 0;
+		}
+
+		CDEBUG(D_MGS, "nidtbl: remove NET #%lu\n", net);
+		tnl = xa_erase(&tgt->mnt_xa_nids, LNET_NETNUM(net));
+		if (tnl)
+			OBD_FREE(tnl, tnl->tnl_size);
+
+		return 0;
+	}
+
+	/* Usually it is built on target on network basis, so assume that
 	 * and search forward to find a sequence of nids at the same net
 	 */
 	i = 0;

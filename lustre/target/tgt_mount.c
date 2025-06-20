@@ -1451,15 +1451,48 @@ struct tgt_notifier_work {
 static int tgt_nids_notify(struct lustre_sb_info *lsi,
 			   struct tgt_notifier_work *tnw)
 {
-	struct obd_device *mgc = lsi->lsi_mgc;
-	int rc = 0;
+	struct mgs_target_info *mti = &tnw->tnw_mti;
+	struct obd_device *mgc = lsi->lsi_mgc, *obd;
+	int mti_len = sizeof(*mti) + NIDLIST_SIZE(mti->mti_nid_count);
+	const char *tgt;
+	int rc;
 
-	ENTRY;
 	LASSERT(mgc);
 
-	/* async RPC to be implement in next patch */
+	rc = strscpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname));
+	if (rc < 0)
+		return rc;
 
-	RETURN(rc);
+	rc = server_name2fsname(lsi->lsi_svname, mti->mti_fsname, &tgt);
+	if (rc < 0) {
+		CDEBUG(D_CONFIG, "%s: can't get fsname, rc = %d\n",
+		       lsi->lsi_svname, rc);
+		return rc;
+	}
+
+	rc = target_name2index(++tgt, &mti->mti_stripe_index, NULL);
+	if (rc < 0) {
+		CDEBUG(D_CONFIG, "%s: can't get target index, rc = %d\n",
+		       lsi->lsi_svname, rc);
+		return rc;
+	}
+
+	mti->mti_flags = lsi->lsi_flags & LDD_F_SV_TYPE_MASK;
+	mti->mti_flags |= LDD_F_OPC_READY | LDD_F_LARGE_NID;
+
+	obd = class_name2obd(lsi->lsi_svname);
+	if (!obd) {
+		CDEBUG(D_CONFIG, "%s: can't find OBD by server name\n",
+		       lsi->lsi_svname);
+		return -ENXIO;
+	}
+	mti->mti_instance = obd2obt(obd)->obt_instance;
+
+	rc = obd_set_info_async(NULL, mgc->u.cli.cl_mgc_mgsexp,
+				sizeof(KEY_NID_NOTIFY), KEY_NID_NOTIFY,
+				mti_len, mti, NULL);
+
+	return rc;
 }
 
 static void tgt_nid_notifier(struct work_struct *ws)
@@ -1485,23 +1518,31 @@ static int tgt_nid_update_cb(void *data, struct nid_update_info *nui)
 {
 	struct tgt_notifier_work *tnw;
 	struct lnet_nid *tmp;
-	int i;
+	unsigned int i = nui->nui_count ? : 1;
 
-	OBD_ALLOC(tnw, sizeof(*tnw) + NIDLIST_SIZE(nui->nui_count));
+	OBD_ALLOC(tnw, sizeof(*tnw) + NIDLIST_SIZE(i));
 	if (!tnw)
 		RETURN(-ENOMEM);
 
 	INIT_DELAYED_WORK(&tnw->tnw_work, tgt_nid_notifier);
 
-	tnw->tnw_mti.mti_nid_count = nui->nui_count;
+	if (nui->nui_count) {
+		tnw->tnw_mti.mti_nid_count = nui->nui_count;
 
-	CDEBUG(D_CONFIG,"new NID update from LNet\n");
-	for (i = 0; i < nui->nui_count; i++) {
-		tmp = genradix_ptr(&nui->nui_rdx, i);
-		libcfs_nidstr_r(tmp, tnw->tnw_mti.mti_nidlist[i],
-				sizeof(tnw->tnw_mti.mti_nidlist[i]));
-		CDEBUG(D_CONFIG,
-		       "NID #%d: %s\n", i, tnw->tnw_mti.mti_nidlist[i]);
+		CDEBUG(D_CONFIG, "new NID update from LNet\n");
+		for (i = 0; i < nui->nui_count; i++) {
+			tmp = genradix_ptr(&nui->nui_rdx, i);
+			libcfs_nidstr_r(tmp, tnw->tnw_mti.mti_nidlist[i],
+					sizeof(tnw->tnw_mti.mti_nidlist[i]));
+			CDEBUG(D_CONFIG, "NID #%d: %s\n", i,
+			       tnw->tnw_mti.mti_nidlist[i]);
+		}
+	} else {
+		/* to delete network send string identifier in form #<net> */
+		tnw->tnw_mti.mti_nid_count = 1;
+		tnw->tnw_mti.mti_nidlist[0][0] = NETDEL_TOKEN;
+		libcfs_net2str_r(nui->nui_net, tnw->tnw_mti.mti_nidlist[0] + 1,
+				 MTN_NIDSTR_SIZE - 1);
 	}
 
 	queue_delayed_work(tgt_nu_wq, &tnw->tnw_work, 0);

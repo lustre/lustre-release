@@ -2758,6 +2758,7 @@ enum mgs_nidlist_flags {
 
 #define MTN_NIDSTR_SIZE LNET_NIDSTR_SIZE
 #define NIDLIST_SIZE(count) (MTN_NIDSTR_SIZE * count)
+#define NETDEL_TOKEN '#'
 
 struct mgs_target_nidlist {
 	__u32	mtn_flags; /* flags from mgs_nids_info_flags */

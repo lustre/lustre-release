@@ -4127,6 +4127,8 @@ lnet_dyn_del_net(u32 net_id)
 
 	lnet_net_unlock(0);
 
+	lnet_notify_net_update(net, true);
+
 	/* create and link a new ping info, before removing the old one */
 	rc = lnet_ping_target_setup(&pbuf, &ping_mdh,
 				    LNET_PING_INFO_HDR_SIZE +

@@ -846,6 +846,7 @@ static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 #define KEY_MGSSEC              "mgssec"
 #define KEY_READ_ONLY           "read-only"
 #define KEY_REGISTER_TARGET     "register_target"
+#define KEY_NID_NOTIFY		"nid_notify"
 #define KEY_SET_FS              "set_fs"
 #define KEY_TGT_COUNT           "tgt_count"
 /*      KEY_SET_INFO in lustre_idl.h */
