@@ -1415,6 +1415,18 @@ static void process_semaphore_timer(struct timer_list *t)
 }
 #endif
 
+/* Whether QoS data in pool is up-to-date and balanced. */
+static bool pool_qos_is_usable(struct lod_pool_desc *pool)
+{
+	time64_t now;
+
+	now = ktime_get_real_seconds();
+	if (pool->pool_same_space && now < pool->pool_same_space_expire)
+		return false;
+
+	return true;
+}
+
 /**
  * lod_pool_qos_penalties_calc() - Calculate penalties per-ost in a pool
  * @lod: lod_device
@@ -1444,11 +1456,6 @@ static int lod_pool_qos_penalties_calc(struct lod_device *lod,
 
 	ENTRY;
 
-	now = ktime_get_real_seconds();
-
-	if (pool->pool_same_space && now < pool->pool_same_space_expire)
-		GOTO(out, rc = 0);
-
 	num_active = osts->op_count - 1;
 	if (num_active < 1)
 		GOTO(out, rc = -EAGAIN);
@@ -1457,6 +1464,7 @@ static int lod_pool_qos_penalties_calc(struct lod_device *lod,
 
 	ba_min = (__u64)(-1);
 	ba_max = 0;
+	now = ktime_get_real_seconds();
 
 	/* Calculate penalty per OST */
 	for (i = 0; i < osts->op_count; i++) {
@@ -1580,16 +1588,17 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (lod_comp->llc_pool != NULL)
 		pool = lod_find_pool(lod, lod_comp->llc_pool);
 
-	if (pool != NULL) {
+	/* Detect -EAGAIN early, before expensive qos write lock is taken. */
+	if (pool) {
 		down_read(&pool_tgt_rw_sem(pool));
+		if (!pool_qos_is_usable(pool))
+			GOTO(out_nolock, rc = -EAGAIN);
 		osts = &(pool->pool_obds);
 	} else {
+		if (!ltd_qos_is_usable(&lod->lod_ost_descs))
+			GOTO(out_nolock, rc = -EAGAIN);
 		osts = &lod->lod_ost_descs.ltd_tgt_pool;
 	}
-
-	/* Detect -EAGAIN early, before expensive lock is taken. */
-	if (!ltd_qos_is_usable(&lod->lod_ost_descs))
-		GOTO(out_nolock, rc = -EAGAIN);
 
 	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
 		stripes_per_ost =
@@ -1623,13 +1632,15 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	 * Check again, while we were sleeping on @lq_rw_sem things could
 	 * change.
 	 */
-	if (!ltd_qos_is_usable(&lod->lod_ost_descs))
-		GOTO(out, rc = -EAGAIN);
-
-	if (pool != NULL)
+	if (pool) {
+		if (!pool_qos_is_usable(pool))
+			GOTO(out, rc = -EAGAIN);
 		rc = lod_pool_qos_penalties_calc(lod, pool);
-	else
+	} else {
+		if (!ltd_qos_is_usable(&lod->lod_ost_descs))
+			GOTO(out, rc = -EAGAIN);
 		rc = ltd_qos_penalties_calc(&lod->lod_ost_descs);
+	}
 	if (rc)
 		GOTO(out, rc);
 
