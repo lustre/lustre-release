@@ -826,6 +826,21 @@ test_17o() {
 }
 run_test 17o "stat file with incompat LMA feature"
 
+test_17q() {
+	(( $MDS1_VERSION >= $(version_code 2.14.0-ddn212) )) ||
+		skip "Need MDS >= 2.14.0-ddn212 for symlink xattr"
+	local mdts=$(comma_list $(mdts_nodes))
+
+	ln -s foo $DIR/$tfile
+	setfattr -h -n trusted.test -v "$(head -200 /etc/services)" $DIR/$tfile ||
+		error "setfattr large xattr on symlink failed"
+	cancel_lru_locks mdc
+	sysctl -w vm.drop_caches=3
+	do_nodes $mdts sysctl -w vm.drop_caches=3
+	ls -l $DIR/$tfile || error "ls -l failed"
+}
+run_test 17q "set large xattr on fast symlink"
+
 test_18() {
 	touch $DIR/$tfile || error "Failed to touch $DIR/$tfile: $?"
 	ls $DIR || error "Failed to ls $DIR: $?"
