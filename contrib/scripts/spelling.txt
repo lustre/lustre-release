@@ -60,6 +60,7 @@ it_flags||it_open_flags
 kmem_cache_alloc.*GFP_ZERO||kmem_cache_zalloc
 LCK_MINMODE||LCK_MODE_MIN
 LCK_MAXMODE||LCK_MODE_END
+LDEBUGFS_SEQ_FOPS_.*||create Documentation/man4/ page for this parameter
 ldebugfs_remove||debugfs_remove_recursive
 ldlm_appetite_t||enum ldlm_appetite
 ldlm_cancel_flags_t||enum ldlm_cancel_flags
@@ -241,6 +242,9 @@ LPROC_SEQ_FOPS_RO_TYPE||LUSTRE_RO_ATTR
 LPROC_SEQ_FOPS_RO||LUSTRE_RO_ATTR
 LPROC_SEQ_FOPS_RW_TYPE||LUSTRE_RW_ATTR
 LPROC_SEQ_FOPS_WR_ONLY||LUSTRE_WO_ATTR
+LUSTRE_RO_ATTR||create Documentation/man4/ page for this parameter
+LUSTRE_RW_ATTR||create Documentation/man4/ page for this parameter
+LUSTRE_WO_ATTR||create Documentation/man4/ page for this parameter
 lu_str_to_s64||sysfs_memparse
 l_wait_event||wait_event_idle
 l_wait_event_exclusive||l_wait_event_abortable_exclusive
