@@ -17,6 +17,7 @@ linux-5.14/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
 linux-5.10/ext4-give-warning-with-dir-htree-growing.patch
 ubuntu18/ext4-jcb-optimization.patch
 linux-5.10/ext4-attach-jinode-in-writepages.patch
+base/ext4-symlink-xattr-inode-fix.patch
 rhel8/ext4-dont-check-before-replay.patch
 base/ext4-fix-ext4_inode_attach_jinode.patch
 rhel7.6/ext4-export-orphan-add.patch
