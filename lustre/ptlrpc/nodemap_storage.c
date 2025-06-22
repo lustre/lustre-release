@@ -343,17 +343,17 @@ out:
 }
 
 /**
- * Batch inserts a number of keys and records into the nodemap IAM.
+ * nodemap_idx_insert_batch() - Batch inserts a number of keys and records into
+ * the nodemap IAM.
+ * @env: execution environment
+ * @idx: index object to insert into
+ * @nks: array of keys to insert
+ * @nrs: array of records to insert
+ * @count: number of keys and records to insert
+ * @inserted_out: pointer to the number of records inserted. Maybe set to NULL
+ * if not needed.
  *
- * \param	env		execution environment
- * \param	idx		index object to insert into
- * \param	nks		array of keys to insert
- * \param	nrs		array of records to insert
- * \param	count		number of keys and records to insert
- * \param	inserted_out	pointer to the number of records inserted.
- *				May be set to NULL if not needed.
- *
- * \retval			negative errno if the insertion fails
+ * Returns %negative errno if the insertion fails
  */
 static int nodemap_idx_insert_batch(const struct lu_env *env,
 				    struct dt_object *idx,
@@ -467,18 +467,19 @@ out:
 }
 
 /**
- * Batch deletes a number of keys and records from the nodemap IAM.
+ * nodemap_idx_delete_batch() - Batch deletes a number of keys and records from
+ * the nodemap IAM.
+ * @env: execution environment
+ * @idx: index object to delete
+ * @nks: array of keys to delete
+ * @count: number of keys to delete
+ * @deleted_out: pointer to the number of records deleted. May be set to NULL if
+ * not needed.
  *
- * \param	env		execution environment
- * \param	idx		index object to delete
- * \param	nks		array of keys to delete
- * \param	nrs		array of records to delete
- * \param	count		number of keys to delete
- * \param	deleted_out	pointer to the number of records deleted.
- *				May be set to NULL if not needed.
- *
- * \retval			negative errno if the insertion fails.
- *				ENOENT if the key does not exist is ignored.
+ * Return:
+ * * %0 on success
+ * * %negative errno if the insertion fails.
+ * * %-ENOENT if the key does not exist is ignored.
  */
 static int nodemap_idx_delete_batch(const struct lu_env *env,
 				    struct dt_object *idx,
@@ -778,18 +779,18 @@ int nodemap_idx_offset_del(const struct lu_nodemap *nodemap)
 }
 
 /**
- * Inserts fileset fragments (identified by struct lu_nodemap_fileset_info) into
- * the nodemap IAM.
+ * nodemap_idx_fileset_fragments_add() - Inserts fileset fragments (identified
+ * by struct lu_nodemap_fileset_info) into the nodemap IAM.
+ * @fset_info: fileset info to be inserted into the nodemap IAM
+ * @env: execution environment
+ * @idx: index object to insert into
+ * @inserted_out: pointer to the number of records inserted. May be set to NULL
+ * if not needed.
  *
- * \param	fset_info	fileset info to be inserted into the nodemap IAM
- * \param	env		execution environment
- * \param	idx		index object to insert into
- * \param	inserted_out	pointer to the number of records inserted.
- *				May be set to NULL if not needed.
- *
- * \retval	0		on success
- * \retval	-EINVAL		invalid input parameters
- * \retval	-ENOMEM		memory allocation failure
+ * Return:
+ * * %0 on success
+ * * %-EINVAL invalid input parameters
+ * * %-ENOMEM memory allocation failure
  */
 static int nodemap_idx_fileset_fragments_add(
 	const struct lu_nodemap_fileset_info *fset_info,
@@ -843,18 +844,18 @@ out_cleanup:
 }
 
 /**
- * Deletes fileset fragments (identified by struct lu_nodemap_fileset_info) from
- * the nodemap IAM.
+ * nodemap_idx_fileset_fragments_del() - Deletes fileset fragments (identified
+ * by struct lu_nodemap_fileset_info) from the nodemap IAM.
+ * @fset_info: fileset info to be deleted from the nodemap IAM
+ * @env: execution environment
+ * @idx: index object to delete from
+ * @deleted_out: pointer to the number of records deleted. May be set to NULL
+ * if not needed.
  *
- * \param	fset_info	fileset info to be deleted from the nodemap IAM
- * \param	env		execution environment
- * \param	idx		index object to delete from
- * \param	deleted_out	pointer to the number of records deleted.
- *				May be set to NULL if not needed.
- *
- * \retval	0		on success
- * \retval	-EINVAL		invalid input parameters
- * \retval	-ENOMEM		memory allocation failure
+ * Return:
+ * * %0 on success
+ * * %-EINVAL invalid input parameters
+ * * %-ENOMEM memory allocation failure
  */
 static int nodemap_idx_fileset_fragments_del(
 	const struct lu_nodemap_fileset_info *fset_info,
@@ -888,14 +889,15 @@ static int nodemap_idx_fileset_fragments_del(
 }
 
 /**
- * Clears the full fileset sub id range from the nodemap IAM.
+ * nodemap_idx_fileset_fragments_clear() - Clears the full fileset sub id range
+ * from the nodemap IAM.
+ * @nodemap: nodemap where the fileset is set
+ * @env: execution environment
+ * @idx: index object to delete from
  *
- * \param	nodemap		nodemap where the fileset is set
- * \param	env		execution environment
- * \param	idx		index object to delete from
- *
- * \retval	0		on success (ENOENT during idx_delete is ignored)
- * \retval	-ENOMEM		memory allocation failure
+ * Return:
+ * * %0 on success (ENOENT during idx_delete is ignored)
+ * * %-ENOMEM memory allocation failure
  */
 static int nodemap_idx_fileset_fragments_clear(const struct lu_nodemap *nodemap,
 					       const struct lu_env *env,
@@ -926,13 +928,13 @@ static int nodemap_idx_fileset_fragments_clear(const struct lu_nodemap *nodemap,
 	return rc;
 }
 
-/**
- * Initializes the fileset info structure based on nodemap and fileset info.
- *
- * \param	fset_info	fileset info structure to be initialized
- * \param	fileset		fileset name
- * \param	nodemap		nodemap where the fileset is set
- * \param	subid		starting subid of the fileset in the IAM
+/*
+ * nodemap_fileset_info_init() - Initializes the fileset info structure based
+ * on nodemap and fileset info.
+ * @fset_info: fileset info structure to be initialized
+ * @fileset: fileset name
+ * @nodemap: nodemap where the fileset is set
+ * @subid: starting subid of the fileset in the IAM
  */
 static void nodemap_fileset_info_init(struct lu_nodemap_fileset_info *fset_info,
 				      const char *fileset,
@@ -960,18 +962,19 @@ static int nodemap_fileset_get_subid(unsigned int fileset_id)
 }
 
 /**
- * Adds a fileset to the nodemap IAM.
+ * nodemap_idx_fileset_add() - Adds a fileset to the nodemap IAM.
+ * @nodemap: the nodemap to insert the fileset
+ * @fileset: fileset name to insert
+ * @fileset_id: fileset_id: ID that uniquely identifies a fileset
  *
  * If an error occurs during the IAM insert operation, the already inserted
  * fragments are deleted. In case the latter undo operation fails, the fileset
  * is subid range is cleared and -EIO is returned.
  *
- * \param	nodemap		the nodemap to insert the fileset
- * \param	fileset		fileset name to insert
- *
- * \retval	0		on success
- * \retval	-EINVAL		invalid input parameters
- * \retval	-EIO		undo operation failed
+ * Return:
+ * * %0 on success
+ * * %-EINVAL invalid input parameters
+ * * %-EIO undo operation failed
  */
 int nodemap_idx_fileset_add(const struct lu_nodemap *nodemap,
 			    const char *fileset, unsigned int fileset_id)
@@ -1034,19 +1037,20 @@ out:
 }
 
 /**
- * Updates an existing fileset on the nodemap IAM.
+ * nodemap_idx_fileset_update() - Updates an existing fileset on the nodemap IAM
+ * @nodemap: the nodemap to update the fileset
+ * @fileset_old: fileset name to be deleted
+ * @fileset_new: fileset name to be inserted
+ * @fileset_id: fileset_id: ID that uniquely identifies a fileset
  *
  * If an error occurs during the IAM operation, an undo operation is performed.
  * In case the undo operation fails, the fileset is subid range is cleared
  * and -EIO is returned.
  *
- * \param	nodemap		the nodemap to update the fileset
- * \param	fileset_old	fileset name to be deleted
- * \param	fileset_new	fileset name to be inserted
- *
- * \retval	0		on success
- * \retval	-EINVAL		invalid input parameters
- * \retval	-EIO		undo operation failed
+ * Return:
+ * * %0 on success
+ * * %-EINVAL invalid input parameters
+ * * %-EIO undo operation failed
  */
 int nodemap_idx_fileset_update(const struct lu_nodemap *nodemap,
 			       const char *fileset_old, const char *fileset_new,
@@ -1083,18 +1087,19 @@ out:
 }
 
 /**
- * Deletes a fileset from the nodemap IAM.
+ * nodemap_idx_fileset_del() - Deletes a fileset from the nodemap IAM.
+ * @nodemap: the nodemap to delete from
+ * @fileset: fileset name to be deleted
+ * @fileset_id: fileset_id: ID that uniquely identifies a fileset
  *
  * If an error occurs during the IAM deleted operation, the already deleted
  * fragments are re-inserted. In case the latter undo operation fails,
  * the fileset is subid range is cleared and -EIO is returned.
  *
- * \param	nodemap		the nodemap to delete from
- * \param	fileset		fileset name to be deleted
- *
- * \retval	0		on success
- * \retval	-EINVAL		invalid input parameters
- * \retval	-EIO		undo operation failed
+ * Return:
+ * * %0 on success
+ * * %-EINVAL invalid input parameters
+ * * %-EIO undo operation failed
  */
 int nodemap_idx_fileset_del(const struct lu_nodemap *nodemap,
 			    const char *fileset, unsigned int fileset_id)
@@ -1157,13 +1162,12 @@ out:
 }
 
 /**
- * Clears a fileset subid range from the nodemap IAM.
+ * nodemap_idx_fileset_clear() - Clears fileset subid range from the nodemap IAM
+ * @nodemap: nodemap where the fileset is set to be cleared
  *
- *
- * \param	nodemap		nodemap where the fileset is set to be cleared
- *
- * \retval	0		on success (ENOENT during idx_delete is ignored)
- * \retval	-EINVAL		invalid input parameters
+ * Return:
+ * * %0 on success (ENOENT during idx_delete is ignored)
+ * * %-EINVAL invalid input parameters
  */
 int nodemap_idx_fileset_clear(const struct lu_nodemap *nodemap)
 {
@@ -1525,6 +1529,11 @@ static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
 }
 
 /**
+ * nodemap_cluster_rec_fileset_fragment() - Process a fileset fragment
+ * @rec: fileset fragment record
+ * @fileset: fileset to update with this fragment
+ * @fileset_size: size of the fileset
+ *
  * Process a fileset fragment and apply it to the passed fileset which
  * corresponds to a nodemap. The incoming path fragment is copied
  * to the nodemap fileset based on the fragment ID which is used to
@@ -1532,12 +1541,9 @@ static int nodemap_cluster_roles_helper(struct lu_nodemap *nodemap,
  *
  * Fragments processed by this function do not need to be in order.
  *
- * \param	rec		fileset fragment record
- * \param	fileset		fileset to update with this fragment
- * \param	fileset_size	size of the fileset
- *
- * \retval	0		on success
- * \retval	-ENOMEM		memory allocation failure
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM memory allocation failure
  */
 static int nodemap_cluster_rec_fileset_fragment(const union nodemap_rec *rec,
 						char **fileset,
@@ -1580,14 +1586,15 @@ static int nodemap_fileset_get_id(int subid)
 }
 
 /**
- * Process a fileset fragment and apply it to the current nodemap.
+ * nodemap_cluster_fileset_helper() - Process a fileset fragment and apply it to
+ * the current nodemap.
+ * @nodemap: nodemap to update with this fileset fragment
+ * @rec: fileset fragment record
+ * @subid: subid of the fileset fragment
  *
- * \param	nodemap		nodemap to update with this fileset fragment
- * \param	rec		fileset fragment record
- * \param	subid		subid of the fileset fragment
- *
- * \retval	0		on success
- * \retval	-EINVAL		invalid input parameters (invalid fset_id)
+ * Return:
+ * * %0 on success
+ * * %-EINVAL invalid input parameters (invalid fset_id)
  */
 static int nodemap_cluster_fileset_helper(struct lu_nodemap *nodemap,
 					  const union nodemap_rec *rec,
@@ -1619,17 +1626,18 @@ static int nodemap_capabilities_helper(struct lu_nodemap *nodemap,
 }
 
 /**
- * Process a key/rec pair and modify the new configuration.
+ * nodemap_process_keyrec() - Process key/rec pair and modify new configuration.
+ * @config: configuration to update with this key/rec data
+ * @key: key of the record that was loaded
+ * @rec: record that was loaded
+ * @recent_nodemap: last referenced nodemap
  *
- * \param	config		configuration to update with this key/rec data
- * \param	key		key of the record that was loaded
- * \param	rec		record that was loaded
- * \param	recent_nodemap	last referenced nodemap
- * \retval	type of record processed, see enum #nodemap_idx_type
- * \retval	-ENOENT		range or map loaded before nodemap record
- * \retval	-EINVAL		duplicate nodemap cluster records found with
- *				different IDs, or nodemap has invalid name
- * \retval	-ENOMEM
+ * Return:
+ * * %nodemap_idx_type on success (type of record processed)
+ * * %-ENOENT on failure (range or map loaded before nodemap record)
+ * * %-EINVAL on failure (duplicate nodemap cluster records found with
+ * different IDs, or nodemap has invalid name)
+ * * %-ENOMEM on failure
  */
 static int nodemap_process_keyrec(struct nodemap_config *config,
 				  const struct nodemap_key *key,
@@ -1939,7 +1947,7 @@ out:
 	RETURN(rc);
 }
 
-/**
+/*
  * Step through active config and write to disk.
  */
 static struct dt_object *
@@ -2120,8 +2128,8 @@ static void nodemap_save_all_caches(void)
 	lu_env_fini(&env);
 }
 
-/* tracks if config still needs to be loaded, either from disk or network */
-/*  0: not loaded yet
+/* Tracks if config still needs to be loaded, either from disk or network
+ *  0: not loaded yet
  *  1: successfully loaded
  * -1: loading in progress
  */
@@ -2141,11 +2149,11 @@ void nodemap_config_set_loading_mgc(bool loading)
 }
 EXPORT_SYMBOL(nodemap_config_set_loading_mgc);
 
-/**
- * After all index pages are read, filesets may use more memory than necessary.
- * So each nodemap's fileset is resized to its actual size.
- *
- * \param config	current active nodemap config
+/*
+ * nodemap_fileset_resize() - After all index pages are read, filesets may use
+ * more memory than necessary. So each nodemap's fileset is resized to its
+ * actual size.
+ * @config: current active nodemap config
  */
 static void nodemap_fileset_resize(struct nodemap_config *config)
 {
@@ -2187,10 +2195,9 @@ static void nodemap_fileset_resize(struct nodemap_config *config)
 }
 
 /**
- * Ensures that configs loaded over the wire are prioritized over those loaded
- * from disk.
- *
- * \param config	config to set as the active config
+ * nodemap_config_set_active_mgc() - Ensures that configs loaded over the wire
+ * are prioritized over those loaded from disk.
+ * @config: config to set as the active config
  */
 void nodemap_config_set_active_mgc(struct nodemap_config *config)
 {
@@ -2204,18 +2211,22 @@ void nodemap_config_set_active_mgc(struct nodemap_config *config)
 EXPORT_SYMBOL(nodemap_config_set_active_mgc);
 
 /**
+ * nm_config_file_register_mgs() - Register dt_object based on config index file
+ * @env: execution environment
+ * @obj: dt_object returned by local_index_find_or_create
+ * @los: pointer to Local OID
+ *
  * Register a dt_object representing the config index file. This should be
  * called by targets in order to load the nodemap configuration from disk. The
  * dt_object should be created with local_index_find_or_create and the index
  * features should be enabled with do_index_try.
  *
- * \param obj	dt_object returned by local_index_find_or_create
- *
- * \retval	on success: nm_config_file handle for later deregistration
- * \retval	-ENOMEM		memory allocation failure
- * \retval	-ENOENT		error loading nodemap config
- * \retval	-EINVAL		error loading nodemap config
- * \retval	-EEXIST		nodemap config already registered for MGS
+ * Return:
+ * * %nm_config_file handle on success (for later deregistration)
+ * * %-ENOMEM on failure (memory allocation failure)
+ * * %-ENOENT on failure (error loading nodemap config)
+ * * %-EINVAL on failure (error loading nodemap config)
+ * * %-EEXIST on failure (nodemap config already registered for MGS)
  */
 struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 						   struct dt_object *obj,
@@ -2311,9 +2322,11 @@ out_ncf:
 EXPORT_SYMBOL(nm_config_file_register_tgt);
 
 /**
- * Deregister a nm_config_file. Should be called by targets during cleanup.
+ * nm_config_file_deregister_mgs() - Deregister a nm_config_file
+ * @env: execution environment
+ * @ncf: pointer to nm_config_file struct
  *
- * \param ncf	config file to deregister
+ * Deregister a nm_config_file. Should be called by targets during cleanup.
  */
 void nm_config_file_deregister_mgs(const struct lu_env *env,
 				   struct nm_config_file *ncf)
@@ -2537,15 +2550,17 @@ int nodemap_index_read(struct lu_env *env, struct nm_config_file *ncf,
 EXPORT_SYMBOL(nodemap_index_read);
 
 /**
- * Returns the current nodemap configuration to MGC by walking the nodemap
- * config index and storing it in the response buffer.
+ * nodemap_get_config_req() - Returns the current nodemap configuration to MGC
+ * by walking the nodemap config index and storing it in the response buffer.
+ * @mgs_obd: pointer to obd_device
+ * @req: incoming MGS_CONFIG_READ request
  *
- * \param	req		incoming MGS_CONFIG_READ request
- * \retval	0		success
- * \retval	-EINVAL		malformed request
- * \retval	-ENOTCONN	client evicted/reconnected already
- * \retval	-ETIMEDOUT	client timeout or network error
- * \retval	-ENOMEM
+ * Return:
+ * * %0 on success
+ * * %-EINVAL on failure (malformed request)
+ * * %-ENOTCONN on failure (client evicted/reconnected already)
+ * * %-ETIMEDOUT on failure (client timeout or network error)
+ * * %-ENOMEM on failure
  */
 int nodemap_get_config_req(struct obd_device *mgs_obd,
 			   struct ptlrpc_request *req)
