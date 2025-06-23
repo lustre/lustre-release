@@ -34,8 +34,20 @@ u64 ptlrpc_pmqos_default_duration_usec = DEFAULT_CPU_LATENCY_TIMEOUT_US;
 bool ptlrpc_pmqos_use_stats_for_duration = true;
 
 /**
- * Helper function. Sends \a len bytes from \a base at offset \a offset
- * over \a conn connection to portal \a portal.
+ * ptl_send_buf() - Helper function. Sends @len bytes from @base at
+ * offset @offset over @conn connection to @portal
+ * @mdh: pointer to struct lnet_handle_md (mem descriptor handle)
+ * @base: pointer to buffer
+ * @len: length of buffer
+ * @ack: If acknowledgement is required or not
+ * @cbid: Callback id
+ * @self: Source NID (network identifier)
+ * @peer_id: Destination ID
+ * @portal: Destination where bulk is to be sent
+ * @xid: Transaction ID
+ * @offset: start offset of buffer
+ * @bulk_cookie: cookie
+ *
  * Returns 0 on success or error code.
  */
 static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
@@ -109,10 +121,16 @@ static void mdunlink_iterate_helper(struct lnet_handle_md *bd_mds, int count)
 
 #ifdef HAVE_SERVER_SUPPORT
 /**
- * Prepare bulk descriptor for specified incoming request \a req that
- * can fit \a nfrags * pages. \a type is bulk type. \a portal is where
- * the bulk to be sent. Used on server-side after request was already
- * received.
+ * ptlrpc_prep_bulk_exp() - Prepare bulk descriptor for specified incoming @req
+ * @req: PTLRPC request linked to bulk buffer
+ * @nfrags: Count of fragments (in pages)
+ * @max_brw: Max size (in pages)
+ * @type: operation type (read/write)
+ * @portal: Destination where bulk is to be sent
+ * @ops: callback
+ *
+ * Used on server-side after request was already received.
+ *
  * Returns pointer to newly allocatrd initialized bulk descriptor or NULL on
  * error.
  */
@@ -146,7 +164,9 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
 EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 
 /**
- * Starts bulk transfer for descriptor \a desc on the server.
+ * ptlrpc_start_bulk_transfer() - Start bulk transfer for @desc on the server
+ * @desc: bulk data layout descriptor
+ *
  * Returns 0 on success or error code.
  */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
@@ -261,6 +281,9 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 }
 
 /**
+ * ptlrpc_abort_bulk() - Server side bulk abort
+ * @desc: pointer to bulk data layout
+ *
  * Server side bulk abort. Idempotent. Not thread-safe (i.e. only
  * serialises with completion callback)
  */
@@ -303,7 +326,9 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 #endif /* HAVE_SERVER_SUPPORT */
 
 /**
- * Register bulk at the sender for later transfer.
+ * ptlrpc_register_bulk() - Register bulk at the sender for later transfer.
+ * @req: Request where to register bulk buffer
+ *
  * Returns 0 on success or error code.
  */
 int ptlrpc_register_bulk(struct ptlrpc_request *req)
@@ -430,8 +455,13 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 }
 
 /**
+ * ptlrpc_unregister_bulk() - Unregister bulk buffers linked to @req
+ * @req: Request to unlink bulk buffers
+ * @async: If 0 do any sync unregister. Else do a async unregister
+ *
  * Disconnect a bulk desc from the network. Idempotent. Not
  * thread-safe (i.e. only interlocks with completion callback).
+ *
  * Returns 1 on success or 0 if network unregistration failed for whatever
  * reason.
  */
@@ -674,8 +704,10 @@ static void kick_cpu_latency(struct ptlrpc_connection *conn,
 }
 
 /**
- * Send request reply from request \a req reply buffer.
- * \a flags defines reply types
+ * ptlrpc_send_reply() - Send request reply from request @req reply buffer.
+ * @req: PTLRPC request
+ * @flags: defines reply types
+ *
  * Returns 0 on success or error code
  */
 int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
@@ -771,8 +803,8 @@ int ptlrpc_reply(struct ptlrpc_request *req)
 		return (ptlrpc_send_reply(req, 0));
 }
 
-/**
- * For request \a req send an error reply back. Create empty
+/*
+ * For request @req send an error reply back. Create empty
  * reply buffers if necessary.
  */
 int ptlrpc_send_error(struct ptlrpc_request *req, int may_be_difficult)
@@ -806,9 +838,10 @@ int ptlrpc_error(struct ptlrpc_request *req)
 }
 
 /**
- * Send request \a request.
- * if \a noreply is set, don't expect any reply back and don't set up
- * reply buffers.
+ * ptl_send_rpc() - Send request @request.
+ * @request: Request to send
+ * @noreply: If set, don't expect any reply back and don't set up reply buffers
+ *
  * Returns 0 on success or error code.
  */
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
