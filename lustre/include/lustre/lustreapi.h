@@ -400,17 +400,20 @@ struct find_param {
 	unsigned long long	 fp_comp_end_units;
 	unsigned long long	 fp_mdt_count;
 	unsigned int		 fp_projid;
+	unsigned int		 fp_unused_int;
 	unsigned long long	 fp_blocks;
 	unsigned long long	 fp_blocks_units;
 
 	unsigned long		 fp_got_uuids:1,
 				 fp_obds_printed:1,
 				 fp_no_follow:1,
-				 fp_hex_idx:1;
+				 fp_hex_idx:1,
+				 fp_unused_bits:28;
 	unsigned int		 fp_depth;
 	unsigned int		 fp_hash_type;
 	unsigned int		 fp_time_margin; /* time margin in seconds */
 	__u32			 fp_foreign_type;
+	__u32			 fp_unused_u32;
 	unsigned long long	 fp_ext_size;
 	unsigned long long	 fp_ext_size_units;
 
@@ -425,15 +428,40 @@ struct find_param {
 	unsigned int		 fp_hash_inflags;
 	unsigned int		 fp_hash_exflags;
 	__u8			 fp_thread_count;
+	__u8			 fp_unused_byte1;
+	__u8			 fp_unused_byte2;
+	__u8			 fp_unused_byte3;
 	/* Print all information (lfs find only) */
 	char			 *fp_format_printf_str;
 	nlink_t			 fp_nlink;
 	__u64			 fp_attrs;
 	__u64			 fp_neg_attrs;
-	struct xattr_match_info	*fp_xattr_match_info;
-	unsigned long int	 fp_skip_percent;
+
+	unsigned int		 fp_compr_type;
+	unsigned int		 fp_compr_lvl;
+	unsigned int		 fp_compr_chunk;
+
+	unsigned int		 fp_check_compr_type:1,
+				 fp_exclude_compr_type:1,
+				 fp_check_compr_lvl:1,
+				 fp_exclude_compr_lvl:1,
+				 fp_check_compr_chunk:1,
+				 fp_exclude_compr_chunk:1,
+				 fp_unused_bit1:1,  /* Fields available to use*/
+				 fp_unused_bit2:1,  /* once used, we must add */
+				 fp_unused_bit3:1,  /* a separate flag field  */
+				 fp_unused_bit4:1,  /* at                     */
+				 fp_unused_bits2:22; /* the end of this struct */
+
+	long long		 fp_compr_lvl_sign:2,
+				 fp_compr_chunk_sign:2,
+				 fp_unused1_sign:2,  /* add sperarate field */
+				 fp_unused_signs:50; /* once used up. */
+
+	unsigned char		 fp_skip_percent;
 	unsigned long long	 fp_skip_total;
 	unsigned long long	 fp_skip_count;
+	struct xattr_match_info	*fp_xattr_match_info;
 	struct find_work_queue	*fp_queue;
 };
 

@@ -4801,7 +4801,7 @@ matched:
 static bool find_skip_file(struct find_param *param)
 {
 	if (param->fp_skip_count * 100 <
-	    param->fp_skip_percent * param->fp_skip_total++) {
+	    param->fp_skip_total++ * param->fp_skip_percent) {
 		param->fp_skip_count++;
 		return true;
 	}

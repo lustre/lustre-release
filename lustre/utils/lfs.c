@@ -6183,10 +6183,10 @@ static int lfs_find(int argc, char **argv)
 				param.fp_check_hash_flag = 1;
 			param.fp_exclude_hash_type = !!neg_opt;
 			break;
-		case 'k':
-			param.fp_skip_percent = strtoul(optarg, &endptr, 10);
-			if (param.fp_skip_percent < 0 ||
-			    param.fp_skip_percent >= 100 ||
+		case 'k': {
+			unsigned long pct = strtoul(optarg, &endptr, 10);
+
+			if (pct < 0 || pct >= 100 ||
 			    (*endptr != '\0' && *endptr != '%')) {
 				ret = -1;
 				fprintf(stderr,
@@ -6194,7 +6194,9 @@ static int lfs_find(int argc, char **argv)
 					optarg);
 				goto err;
 			}
+			param.fp_skip_percent = pct;
 			break;
+		}
 		case 'l':
 			param.fp_lazy = 1;
 			break;
