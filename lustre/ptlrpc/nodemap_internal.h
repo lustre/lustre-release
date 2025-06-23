@@ -56,6 +56,8 @@ struct lu_nid_range {
 	 */
 	struct list_head	 rn_nidlist;
 	struct rb_node		 rn_rb;
+	/* range tree where this NID range is located */
+	struct nodemap_range_tree *rn_tree;
 	/* sub ranges included in this NID range */
 	struct nodemap_range_tree rn_subtree;
 };
