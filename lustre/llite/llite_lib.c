@@ -2659,7 +2659,7 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 	u64 limit, curblock;
 	int ret;
 
-	LASSERT(S_ISDIR(inode->i_mode));
+	ENTRY;
 
 	ps = rhashtable_lookup_fast(&sbi->ll_proj_sfs_htable,
 				    &lli->lli_projid,
@@ -2667,7 +2667,7 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 	if (!ps) {
 		OBD_ALLOC_PTR(ps);
 		if (!ps)
-			return -ENOMEM;
+			RETURN(-ENOMEM);
 		ps->psc_id = lli->lli_projid;
 		mutex_init(&ps->psc_mutex);
 		orig = rhashtable_lookup_get_insert_fast(&sbi->ll_proj_sfs_htable,
@@ -2676,14 +2676,14 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 		if (orig) {
 			OBD_FREE_PTR(ps);
 			if (IS_ERR(orig))
-				return PTR_ERR(orig);
+				RETURN(PTR_ERR(orig));
 			ps = orig;
 		}
 	}
 
 	if (ktime_get_seconds() - ps->psc_age < sbi->ll_statfs_max_age) {
 		*sfs = ps->psc_sfs;
-		return 0;
+		RETURN(0);
 	}
 
 	mutex_lock(&ps->psc_mutex);
@@ -2731,7 +2731,7 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 out:
 	mutex_unlock(&ps->psc_mutex);
 
-	return ret;
+	RETURN(ret);
 }
 
 int ll_statfs(struct dentry *de, struct kstatfs *sfs)
@@ -2743,7 +2743,8 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	ktime_t kstart = ktime_get();
 	int rc;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:sb=%s (%p)\n", sb->s_id, sb);
+	CDEBUG(D_VFSTRACE, "VFS Op:sb=%s (%p) "DNAME" proj=%u\n", sb->s_id, sb,
+	       encode_fn_dentry(de), ll_i2info(de->d_inode)->lli_projid);
 
 	/* Some amount of caching on the client is allowed */
 	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_SUM);

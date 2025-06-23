@@ -3921,6 +3921,7 @@ test_41() {
 		skip "Project quota is not supported"
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
+	local file="$dir/$tfile"
 	local blimit=102400
 	local ilimit=4096
 	local projid=$((testnum * 1000))
@@ -3939,6 +3940,10 @@ test_41() {
 	test_mkdir -p $dir && change_project -sp $projid $dir
 	$LFS setquota -p $projid -b 0 -B ${blimit}K -i 0 -I $ilimit $dir ||
 		error "set project quota failed"
+	touch $file || error "touch $file failed"
+	$LFS project $file
+	local file_proj=($($LFS project $file))
+	[[ ${file_proj[0]} == $projid ]] || error "project not set on $file"
 
 	sync; sync_all_data
 	sleep_maxage
@@ -3953,9 +3958,8 @@ test_41() {
 	local iused=$(getquota -p $projid global curinodes)
 	local expected="$ilimit$iused"
 
-	wait_update $HOSTNAME \
-		"df -iP $dir | awk \\\"/$FSNAME/\\\"'{print \\\$2 \\\$3}'" \
-		"$expected" ||
+	wait_update $HOSTNAME "df -iP $dir |
+		awk \\\"/$FSNAME/\\\"'{print \\\$2 \\\$3}'" "$expected" ||
 		error "failed to get correct statfs for project quota"
 
 	expected=$(df -kP $dir | awk "/$FSNAME/"' {print $2}')
@@ -3967,16 +3971,26 @@ test_41() {
 	expected=$(df -kP $dir | awk "/$FSNAME/"' {print $3}')
 	(( expected - bused < 4)) || error "bused mismatch: $expected != $bused"
 
+	# check if df output on regular file works as expected
+	echo "== project statfs on file (prjid=$projid): $file =="
+	df -kP $file; df -iP $file; $LFS quota -p $projid $dir
+	local bused=$(getquota -p $projid global curspace)
+	local iused=$(getquota -p $projid global curinodes)
+	local expected="$ilimit$iused"
+
+	wait_update $HOSTNAME "df -iP $dir |
+		awk \\\"/$FSNAME/\\\"'{print \\\$2 \\\$3}'" "$expected" ||
+		error "failed to get correct statfs for project quota"
+
 	# disable statfs_project and check again
 	$LCTL set_param llite.*.statfs_project=0
 
 	expected=$({ df -kP $MOUNT; df -iP $MOUNT; } | \
 		awk '/'$FSNAME'/ { printf "%d %d ", $2,$3 }')
 
-	wait_update $HOSTNAME \
-		"{ df -kP $dir; df -iP $dir; } |
-		 awk '/$FSNAME/ { printf \\\"%d %d \\\", \\\$2,\\\$3 }'" \
-		"$expected" ||
+	wait_update $HOSTNAME "{ df -kP $dir; df -iP $dir; } |
+		awk '/$FSNAME/ { printf \\\"%d %d \\\", \\\$2,\\\$3 }'" \
+			"$expected" ||
 		error "failed to get correct statfs when statfs_project=0"
 }
 run_test 41 "df should return projid-specific values"
