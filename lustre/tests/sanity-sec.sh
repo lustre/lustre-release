@@ -8474,6 +8474,87 @@ test_72d() {
 }
 run_test 72d "fileset inheritance for dynamic nodemap"
 
+cleanup_72e() {
+	# unmount client
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	# reset and deactivate nodemaps, remount client
+	cleanup_local_client_nodemap
+
+	# remount client on $MOUNT_2
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} || error "remount failed"
+	fi
+	wait_ssk
+}
+
+test_72e() {
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+	local nm=c0
+	local dynnm=c1
+	local exp_cnt_orig
+	local exp_cnt_new
+
+	(( $MDS1_VERSION >= $(version_code 2.16.56) )) ||
+		skip "Need MDS version >= 2.16.56"
+
+	stack_trap cleanup_72e EXIT
+
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# setup nodemap
+	setup_local_client_nodemap $nm 1 1
+
+	# remount client to take nodemap into account
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount failed"
+	wait_ssk
+
+	# check nodemap exports
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_orig=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+			grep -c $client_nid")
+	(( exp_cnt_orig != 0 )) ||
+		error "no exports for $client_nid found on $nm"
+
+	# create dynamic nodemap
+	do_facet mds1 $LCTL nodemap_add -d -p $nm $dynnm ||
+		error "failed to create dynamic nodemap"
+	do_facet mds1 $LCTL nodemap_add_range --name $dynnm \
+		--range $client_nid ||
+		error "add_range on $dynnm failed"
+
+	# check nodemap exports, without remounting
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+			grep -c $client_nid")
+	(( exp_cnt_new == 0 )) ||
+		error "found $exp_cnt_new exports for $client_nid on $nm"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$dynnm.exports |
+			grep -c $client_nid")
+	(( exp_cnt_new == exp_cnt_orig )) ||
+		error "found $exp_cnt_new exports for $client_nid on $dynnm, expected $exp_cnt_orig"
+
+	# remove dynamic nodemap
+	do_facet mds1 $LCTL nodemap_del $dynnm ||
+		error "failed to delete dynamic nodemap"
+
+	# check nodemap exports again
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+			grep -c $client_nid")
+	(( exp_cnt_new == exp_cnt_orig )) ||
+		error "found $exp_cnt_new exports for $client_nid on $nm, expected $exp_cnt_orig"
+}
+run_test 72e "dynamic nodemap reclassify"
+
 test_73() {
 	local vaultdir1=$DIR/$tdir/vault1
 	local vaultdir2=$DIR/$tdir/vault2

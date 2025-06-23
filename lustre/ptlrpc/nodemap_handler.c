@@ -1289,8 +1289,12 @@ err_parent:
 	list_add(&range->rn_list, &nodemap->nm_ranges);
 
 	/* nodemaps have no members if they aren't on the active config */
-	if (config == active_config)
+	if (config == active_config) {
 		nm_member_reclassify_nodemap(config->nmc_default_nodemap);
+		/* for dynamic nodemap, re-assign clients from parent nodemap */
+		if (nodemap->nm_dyn)
+			nm_member_reclassify_nodemap(nodemap->nm_parent_nm);
+	}
 
 	up_write(&config->nmc_range_tree_lock);
 
@@ -1301,6 +1305,8 @@ err_parent:
 	if (config == active_config) {
 		nm_member_revoke_locks(config->nmc_default_nodemap);
 		nm_member_revoke_locks(nodemap);
+		if (nodemap->nm_dyn)
+			nm_member_revoke_locks(nodemap->nm_parent_nm);
 	}
 
 out:
