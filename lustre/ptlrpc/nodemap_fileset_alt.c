@@ -11,11 +11,10 @@
 #include "nodemap_internal.h"
 
 /**
- * Allocate a lu_fileset_alt structure with a given fileset size.
+ * fileset_alt_init() - Allocate lu_fileset_alt struct with a given fileset size
+ * @fileset_size: size of the fileset path
  *
- * \param	fileset_size	size of the fileset path
- *
- * \retval	allocated lu_fileset_alt structure on success, NULL otherwise
+ * Returns allocated lu_fileset_alt structure on success, NULL otherwise
  */
 struct lu_fileset_alt *fileset_alt_init(unsigned int fileset_size)
 {
@@ -39,11 +38,10 @@ struct lu_fileset_alt *fileset_alt_init(unsigned int fileset_size)
 EXPORT_SYMBOL(fileset_alt_init);
 
 /**
- * Create a lu_fileset_alt structure with a given fileset path.
+ * fileset_alt_create() - Create lu_fileset_alt struct with given fileset path.
+ * @fileset_path: fileset path
  *
- * \param	fileset_path	fileset path
- *
- * \retval	allocated lu_fileset_alt structure on success, NULL otherwise
+ * Returns allocated lu_fileset_alt structure on success, NULL otherwise
  */
 struct lu_fileset_alt *fileset_alt_create(const char *fileset_path)
 {
@@ -79,11 +77,12 @@ void fileset_alt_destroy_tree(struct rb_root *root)
 EXPORT_SYMBOL(fileset_alt_destroy_tree);
 
 /**
+ * get_first_free_id() - find the first free id in the rb tree on insertion.
+ * @root: pointer to the root of the rb tree
+ *
  * Helper function to find the first free id in the rb tree on insertion.
  *
- * \param	root	pointer to the root of the rb tree
- *
- * \retval	>0	first free id
+ * Return first free id found on success
  */
 static unsigned int get_first_free_id(struct rb_root *root)
 {
@@ -105,17 +104,18 @@ static unsigned int get_first_free_id(struct rb_root *root)
 }
 
 /**
+ * fileset_alt_add() - Insert a fileset into the rb tree
+ * @root: pointer to the root of the rb tree
+ * @fileset: fileset to insert
+ *
  * Insert a fileset into the rb tree. If fileset->nfa_id is 0, the first free
  * id is assigned and used. The caller is free to set its own fileset->nfa_id
  * as long as it is not 0.
  *
- * \param	root		pointer to the root of the rb tree
- * \param	fileset		fileset to insert
- *
- * \retval	0		on success
- * \retval	-EEXIST		if the fileset id already exists
- * \retval	-ENOSPC		if the fileset id exceeds
- *				LUSTRE_NODEMAP_FILESET_NUM_MAX
+ * Return:
+ * * %0 on success
+ * * %-EEXIST if the fileset id already exists
+ * * %-ENOSPC if the fileset id exceeds LUSTRE_NODEMAP_FILESET_NUM_MAX
  */
 int fileset_alt_add(struct rb_root *root, struct lu_fileset_alt *fileset)
 {
@@ -150,12 +150,13 @@ int fileset_alt_add(struct rb_root *root, struct lu_fileset_alt *fileset)
 EXPORT_SYMBOL(fileset_alt_add);
 
 /**
- * Delete a fileset from the rb tree.
+ * fileset_alt_delete() - Delete a fileset from the rb tree.
+ * @root: pointer to the root of the rb tree
+ * @fileset: fileset to delete
  *
- * \param	root		pointer to the root of the rb tree
- * \param	fileset		fileset to delete
- * \retval	>0		id of the deleted fileset
- * \retval	-EINVAL		fileset is NULL
+ * Return:
+ * * %0 id of the deleted fileset
+ * * %-EINVAL fileset is NULL
  */
 int fileset_alt_delete(struct rb_root *root, struct lu_fileset_alt *fileset)
 {
@@ -192,12 +193,11 @@ static int compare_by_id(const void *key, const struct rb_node *node)
 }
 
 /**
- * Search for a fileset by its fileset id.
+ * fileset_alt_search_id() - Search for a fileset by its fileset id.
+ * @root: pointer to the root of the rb tree
+ * @fileset_id: id of the fileset to search
  *
- * \param	root		pointer to the root of the rb tree
- * \param	fileset_id	id of the fileset to search
- *
- * \retval	lu_fileset_alt structure on success, NULL otherwise
+ * Returns lu_fileset_alt structure on success, NULL otherwise
  */
 struct lu_fileset_alt *fileset_alt_search_id(struct rb_root *root,
 					 unsigned int fileset_id)
@@ -214,12 +214,11 @@ struct lu_fileset_alt *fileset_alt_search_id(struct rb_root *root,
 EXPORT_SYMBOL(fileset_alt_search_id);
 
 /**
- * Search for a fileset by its fileset path.
+ * fileset_alt_search_path() - Search for a fileset by its fileset path.
+ * @root: pointer to the root of the rb tree
+ * @fileset_path: path of the fileset to search
  *
- * \param	root		pointer to the root of the rb tree
- * \param	fileset_path	path of the fileset to search
- *
- * \retval	lu_fileset_alt structure on success, NULL otherwise
+ * Return lu_fileset_alt structure on success, NULL otherwise
  */
 struct lu_fileset_alt *fileset_alt_search_path(struct rb_root *root,
 					   const char *fileset_path)
@@ -249,12 +248,13 @@ bool fileset_alt_path_exists(struct rb_root *root, const char *path)
 EXPORT_SYMBOL(fileset_alt_path_exists);
 
 /**
+ * fileset_alt_resize() - Resize fileset to the actual needed size
+ * @root: pointer to the root of the rb tree
+ *
  * Iterate over all rb tree entries and shrink the memory requirements
  * for the fileset to the actual needed size. This is required when the
  * fileset fragments are read from the nodemap IAM, and so the preallocated
  * size may be larger than needed.
- *
- * \param root	pointer to the root of the rb tree
  */
 void fileset_alt_resize(struct rb_root *root)
 {
