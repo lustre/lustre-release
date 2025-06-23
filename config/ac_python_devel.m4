@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # ===========================================================================
 #     https://www.gnu.org/software/autoconf-archive/ax_python_devel.html
 # ===========================================================================
@@ -45,19 +46,6 @@
 #   Copyright (c) 2009 Matteo Settenvini <matteo@member.fsf.org>
 #   Copyright (c) 2009 Horst Knorr <hk_classes@knoda.org>
 #   Copyright (c) 2013 Daniel Mullner <muellner@math.stanford.edu>
-#
-#   This program is free software: you can redistribute it and/or modify it
-#   under the terms of the GNU General Public License as published by the
-#   Free Software Foundation, either version 3 of the License, or (at your
-#   option) any later version.
-#
-#   This program is distributed in the hope that it will be useful, but
-#   WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
-#   Public License for more details.
-#
-#   You should have received a copy of the GNU General Public License along
-#   with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 #   As a special exception, the respective Autoconf Macro's copyright owner
 #   gives unlimited permission to copy, distribute and modify the configure

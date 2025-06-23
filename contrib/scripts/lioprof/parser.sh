@@ -1,20 +1,9 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-3-Clause
 #
-# This file is provided under a dual BSD/GPLv2 license.  When using or
-# redistributing this file, you may do so under either license.
-#
-# GPL LICENSE SUMMARY
 #
 # Copyright(c) 2016 Intel Corporation.
 #
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of version 2 of the GNU General Public License as
-# published by the Free Software Foundation.
-#
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
 #
 # Contact Information:
 # Cong Xu, cong.xu@intel.com

@@ -1,20 +1,12 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only
 #
-# License:      GNU General Public License (GPL)v2
 # Description:  Manages Lustre server on a shared storage
 # Written by:   Gabriele Paciucci, Nathaniel Clark
 # Release Date: 28 February 2017
 # Release Version: 1.0.1
 # Copyright (c) 2017, Intel Corporation
 #
-# This program is free software; you can redistribute it and/or modify
-# it under the terms and conditions of the GNU General Public License,
-# version 2, as published by the Free Software Foundation.
-#
-# This program is distributed in the hope it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-# General Public License for more details.
 #
 #
 # usage: ./Lustre {start|stop|status|monitor|validate-all|meta-data}
