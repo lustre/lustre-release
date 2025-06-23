@@ -34,9 +34,8 @@ struct ptlrpc_connect_async_args {
 	int pcaa_initial_connect;
 };
 
-/**
- * Updates import \a imp current state to provided \a state value
- * Helper function.
+/*
+ * Updates import @imp current state to provided @state value Helper function.
  */
 static void import_set_state_nolock(struct obd_import *imp,
 				    enum lustre_imp_state state)
@@ -146,16 +145,18 @@ static void ptlrpc_deactivate_import_nolock(struct obd_import *imp)
 }
 
 /**
- * Returns true if import was FULL, false if import was already not
+ * ptlrpc_set_import_discon() - Set import disconnected
+ * @imp: import to be disconnected
+ * @conn_cnt: connection count (epoch) of the request that timed out
+ *            and caused the disconnection.  In some cases, multiple
+ *            inflight requests can fail to a single target (e.g. OST
+ *            bulk requests) and if one has already caused a reconnection
+ *            (increasing the import->conn_cnt) the older failure should
+ *            not also cause a reconnection.  If zero it forces a reconnect.
+ * @invalid: set import invalid flag
+ *
+ * Returns %true if import was FULL, %false if import was already not
  * connected.
- * @imp - import to be disconnected
- * @conn_cnt - connection count (epoch) of the request that timed out
- *             and caused the disconnection.  In some cases, multiple
- *             inflight requests can fail to a single target (e.g. OST
- *             bulk requests) and if one has already caused a reconnection
- *             (increasing the import->conn_cnt) the older failure should
- *             not also cause a reconnection.  If zero it forces a reconnect.
- * @invalid - set import invalid flag
  */
 int ptlrpc_set_import_discon(struct obd_import *imp,
 			     __u32 conn_cnt, bool invalid)
@@ -267,6 +268,9 @@ static time64_t ptlrpc_inflight_timeout(struct obd_import *imp)
 }
 
 /**
+ * ptlrpc_invalidate_import() - Invalidate import
+ * @imp: client connection to server to be invalidate
+ *
  * This function will invalidate the import, if necessary, then block
  * for all the RPC completions, and finally notify the obd to
  * invalidate its state (ie cancel locks, clear pending requests,
@@ -463,8 +467,8 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
 }
 EXPORT_SYMBOL(ptlrpc_reconnect_import);
 
-/**
- * Connection on import \a imp is changed to another one (if more than one is
+/*
+ * Connection on import @imp is changed to another one (if more than one is
  * present). We typically chose connection that we have not tried to connect to
  * the longest
  */
@@ -664,7 +668,10 @@ int ptlrpc_connect_import(struct obd_import *imp)
 }
 
 /**
- * Attempt to (re)connect import \a imp. This includes all preparations,
+ * ptlrpc_connect_import_locked() - Attempt to (re)connect import
+ * @imp:
+ *
+ * Attempt to (re)connect import @imp. This includes all preparations,
  * initializing CONNECT RPC request and passing it to ptlrpcd for
  * actual sending.
  *
@@ -982,7 +989,7 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 	return 0;
 }
 
-/**
+/*
  * Add all replay requests back to unreplied list before start replay,
  * so that we can make sure the known replied XID is always increased
  * only even if when replaying requests.
@@ -1015,10 +1022,19 @@ static void ptlrpc_prepare_replay(struct obd_import *imp)
 }
 
 /**
- * interpret_reply callback for connect RPCs.
+ * ptlrpc_connect_interpret() - interpret_reply callback for connect RPCs.
+ * @env: execution context
+ * @request: PTLRPC request (server response)
+ * @data: thread specific data
+ * @rc: error code
+ *
  * Looks into returned status of connect operation and decides
  * what to do with the import - i.e enter recovery, promote it to
  * full state for normal operations of disconnect it due to an error.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int ptlrpc_connect_interpret(const struct lu_env *env,
 				    struct ptlrpc_request *request,
@@ -1489,9 +1505,9 @@ out:
 	RETURN(rc);
 }
 
-/**
+/*
  * interpret callback for "completed replay" RPCs.
- * \see signal_completed_replay
+ * see signal_completed_replay
  */
 static int completed_replay_interpret(const struct lu_env *env,
 				      struct ptlrpc_request *req,
@@ -1517,7 +1533,7 @@ static int completed_replay_interpret(const struct lu_env *env,
 	RETURN(0);
 }
 
-/**
+/*
  * Let server know that we have no requests to replay anymore.
  * Achieved by just sending a PING request
  */
@@ -1552,7 +1568,7 @@ static int signal_completed_replay(struct obd_import *imp)
 	RETURN(0);
 }
 
-/**
+/*
  * In kernel code all import invalidation happens in its own
  * separate thread, so that whatever application happened to encounter
  * a problem could still be killed or otherwise continue
@@ -1581,6 +1597,10 @@ static int ptlrpc_invalidate_import_thread(void *data)
 }
 
 /**
+ * ptlrpc_import_recovery_state_machine() - State machine for client-side
+ * recovery on import
+ * @imp: client side connection
+ *
  * This is the state machine for client-side recovery on import.
  *
  * Typicaly we have two possibly paths. If we came to server and it is not
@@ -1599,6 +1619,9 @@ static int ptlrpc_invalidate_import_thread(void *data)
  * After that we promote import to FULL state and send all delayed requests
  * and import is fully operational after that.
  *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 {
@@ -1804,17 +1827,19 @@ static int ptlrpc_disconnect_interpet(const struct lu_env *env,
 }
 
 /**
+ * ptlrpc_disconnect_import_async() - Disconnect import
+ * @imp: import
+ * @noclose: final close import
+ * @cmpl: completion to signal disconnect is finished
+ * @out_res: result of disconnection [out]
+ *
  * Sends disconnect request and set import state DISCONNECT/CLOSED.
  * Produces events IMP_EVENT_DISCON[IMP_EVENT_INACTIVE].
  * Signals when it is complete.
  *
- * \param[in] imp		import
- * \param[in] noclose		final close import
- * \param[in] completion	completion to signal disconnect is finished
- * \param[out] out_res		result of disconnection
- *
- * \retval 0			on seccess
- * \retval negative		negated errno on error
+ * Return:
+ * * %0 on seccess
+ * * %negative negated errno on error
  **/
 int ptlrpc_disconnect_import_async(struct obd_import *imp, int noclose,
 				   struct completion *cmpl, int *out_res)
@@ -1873,14 +1898,16 @@ int ptlrpc_disconnect_import_async(struct obd_import *imp, int noclose,
 EXPORT_SYMBOL(ptlrpc_disconnect_import_async);
 
 /**
+ * ptlrpc_disconnect_import() - Send disconnect request to import
+ * @imp: import
+ * @noclose: final close import
+ *
  * Sends disconnect request and set import state DISCONNECT/CLOSED.
  * Produces events IMP_EVENT_DISCON[IMP_EVENT_INACTIVE].
  *
- * \param[in] imp		import
- * \param[in] noclose		final close import
- *
- * \retval 0			on seccess
- * \retval negative		negated errno on error
+ * Return:
+ * * %0 on seccess
+ * * %negative negated errno on error
  **/
 int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 {
@@ -2058,6 +2085,10 @@ int ptlrpc_disconnect_and_idle_import(struct obd_import *imp)
 }
 EXPORT_SYMBOL(ptlrpc_disconnect_and_idle_import);
 
+/**
+ * ptlrpc_cleanup_imp() - Cleanup @imp when connection termination/destroy
+ * @imp: client connection to server to be cleanup
+ */
 void ptlrpc_cleanup_imp(struct obd_import *imp)
 {
 	ENTRY;
