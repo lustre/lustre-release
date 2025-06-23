@@ -1,0 +1,42 @@
+.TH LLAPI_LMV_GET_UUIDS 3 2025-06-05 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_lmv_get_uuids, llapi_lov_get_uuids \- Get device uuids
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_lmv_get_uuids(int " fd ", struct obd_uuid *" uuidp ", int *" mdt_count );"
+.BI "int llapi_lov_get_uuids(int " fd ", struct obd_uuid *" uuidp ", int *" ost_count );"
+.fi
+.SH DESCRIPTION
+The functions
+.B llapi_lmv_get_uuids()
+and
+.BR llapi_lov_get_uuids() ,
+gets the uuids for respective device type.
+.PP
+.I fd
+is the file decriptor for mount point,
+.I uuidp
+is preallocated array of obd_uuid to hold uuids
+.PP
+.I ost_count
+returns the count of uuids in the
+.I uuidp
+array.
+.SH RETURN VALUES
+Return the device uuids on success or a negative errno value on failure.
+.SH AVAILABILITY
+.BR llapi_lmv_get_uuids() ,
+.B llapi_lov_get_uuids()
+are part of the
+.BR lustre (7)
+user application interface library since before release 2.17.0
+.\" Added in commit v2_16_55-12-g05c3d88297
+.SH SEE ALSO
+.BR llapi_file_fget_lov_uuid (3),
+.BR llapi_file_get_lmv_uuid (3),
+.BR llapi_file_get_lov_uuid (3),
+.BR llapi_get_obd_count (3),
+.BR llapi_search_ost (3),
+.BR lustreapi (7)

@@ -79,6 +79,8 @@ LIBMAN = 					\
 	llapi_layout_stripe_count_set.3		\
 	llapi_layout_stripe_size_get.3		\
 	llapi_layout_stripe_size_set.3		\
+	llapi_lmv_get_uuids.3			\
+	llapi_lov_get_uuids.3			\
 	llapi_lov_pattern_string.3		\
 	llapi_lov_string_pattern.3		\
 	llapi_open_by_fid.3			\

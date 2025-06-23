@@ -494,7 +494,7 @@ sub process {
 
 # check for shared object link
 		if ($line =~ /^\.so (.*\/)?(.*\.([1-8]))$/) {
-			if (! -e "lustre/doc/$2") {
+			if (! -e "Documentation/man3/$2") {
 				ERROR("SHARED_OBJECT_PATH",
 				      "The file that .so is referencing '$2' is not a valid man page\n" . $herecurr);
 			}
