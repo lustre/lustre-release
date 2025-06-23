@@ -28,29 +28,29 @@
 #include <libcfs/libcfs.h>
 #include "ptlrpc_internal.h"
 
-/**
- * \name fifo
+/*
+ * fifo
  *
  * The FIFO policy is a logical wrapper around previous, non-NRS functionality.
  * It schedules RPCs in the same order as they are queued from LNet.
- *
- * @{
  */
 
 #define NRS_POL_NAME_FIFO	"fifo"
 
 /**
+ * nrs_fifo_start() - Policy start
+ * @policy: The policy to start
+ * @arg: unused
+ *
  * Is called before the policy transitions into
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STARTED; allocates and initializes a
  * policy-specific private data structure.
+ * see nrs_policy_register()
+ * see nrs_policy_ctl()
  *
- * \param[in] policy The policy to start
- *
- * \retval -ENOMEM OOM error
- * \retval  0	   success
- *
- * \see nrs_policy_register()
- * \see nrs_policy_ctl()
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM on OOM error
  */
 static int nrs_fifo_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
@@ -66,13 +66,12 @@ static int nrs_fifo_start(struct ptlrpc_nrs_policy *policy, char *arg)
 }
 
 /**
+ * nrs_fifo_stop() - Stop policy
+ * @policy: The policy to stop
+ *
  * Is called before the policy transitions into
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED; deallocates the policy-specific
- * private data structure.
- *
- * \param[in] policy The policy to stop
- *
- * \see nrs_policy_stop0()
+ * private data structure.  see nrs_policy_stop0()
  */
 static void nrs_fifo_stop(struct ptlrpc_nrs_policy *policy)
 {
@@ -85,22 +84,21 @@ static void nrs_fifo_stop(struct ptlrpc_nrs_policy *policy)
 }
 
 /**
- * Is called for obtaining a FIFO policy resource.
+ * nrs_fifo_res_get() - Is called for obtaining a FIFO policy resource.
+ * @policy: The policy on which the request is being asked for
+ * @nrq: The request for which resources are being taken
+ * @parent: Parent resource, unused in this policy
+ * @resp: Resources references are placed in this array [out]
+ * @moving_req: Signifies limited caller context; unused in this policy
  *
- * \param[in]  policy	  The policy on which the request is being asked for
- * \param[in]  nrq	  The request for which resources are being taken
- * \param[in]  parent	  Parent resource, unused in this policy
- * \param[out] resp	  Resources references are placed in this array
- * \param[in]  moving_req Signifies limited caller context; unused in this
- *			  policy
+ * see nrs_resource_get_safe()
  *
- * \retval 1 The FIFO policy only has a one-level resource hierarchy, as since
- *	     it implements a simple scheduling algorithm in which request
- *	     priority is determined on the request arrival order, it does not
- *	     need to maintain a set of resources that would otherwise be used
- *	     to calculate a request's priority.
- *
- * \see nrs_resource_get_safe()
+ * Return:
+ * * %1 The FIFO policy only has a one-level resource hierarchy, as since
+ *	it implements a simple scheduling algorithm in which request
+ *	priority is determined on the request arrival order, it does not
+ *	need to maintain a set of resources that would otherwise be used
+ *	to calculate a request's priority.
  */
 static int nrs_fifo_res_get(struct ptlrpc_nrs_policy *policy,
 			    struct ptlrpc_nrs_request *nrq,
@@ -116,21 +114,20 @@ static int nrs_fifo_res_get(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
+ * nrs_fifo_req_get() - Get a rquest from the FIFO policy
+ * @policy: The policy
+ * @peek: When set, signifies that we just want to examine the request, and not
+ *	handle it, so the request is not removed
+ *	from the policy.
+ * @force: Force the policy to return a request; unused in this policy
+ *
  * Called when getting a request from the FIFO policy for handling, or just
  * peeking; removes the request from the policy when it is to be handled.
+ * see ptlrpc_nrs_req_get_nolock()
+ * see nrs_request_get()
  *
- * \param[in] policy The policy
- * \param[in] peek   When set, signifies that we just want to examine the
- *		     request, and not handle it, so the request is not removed
- *		     from the policy.
- * \param[in] force  Force the policy to return a request; unused in this
- *		     policy
+ * Returns The request to be handled; this is the next request in FIFO queue
  *
- * \retval The request to be handled; this is the next request in the FIFO
- *	   queue
- *
- * \see ptlrpc_nrs_req_get_nolock()
- * \see nrs_request_get()
  */
 static
 struct ptlrpc_nrs_request * nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
@@ -159,13 +156,12 @@ struct ptlrpc_nrs_request * nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Adds request \a nrq to \a policy's list of queued requests
+ * nrs_fifo_req_add() - Adds request @nrq to @policy's list of queued requests
+ * @policy: The policy
+ * @nrq: The request to add
  *
- * \param[in] policy The policy
- * \param[in] nrq    The request to add
- *
- * \retval 0 success; nrs_request_enqueue() assumes this function will always
- *		      succeed
+ * Returns 0 on success; nrs_request_enqueue() assumes this function will always
+ *	succeed
  */
 static int nrs_fifo_req_add(struct ptlrpc_nrs_policy *policy,
 			    struct ptlrpc_nrs_request *nrq)
@@ -184,10 +180,9 @@ static int nrs_fifo_req_add(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Removes request \a nrq from \a policy's list of queued requests.
- *
- * \param[in] policy The policy
- * \param[in] nrq    The request to remove
+ * nrs_fifo_req_del() - Removes request @nrq from @policy list of queued request
+ * @policy: The policy
+ * @nrq: The request to remove
  */
 static void nrs_fifo_req_del(struct ptlrpc_nrs_policy *policy,
 			     struct ptlrpc_nrs_request *nrq)
@@ -197,14 +192,13 @@ static void nrs_fifo_req_del(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Prints a debug statement right before the request \a nrq stops being
- * handled.
+ * nrs_fifo_req_stop() - Prints a debug statement right before the request @nrq
+ * stops being handled.
+ * @policy: The policy handling the request
+ * @nrq: The request being handled
  *
- * \param[in] policy The policy handling the request
- * \param[in] nrq    The request being handled
- *
- * \see ptlrpc_server_finish_request()
- * \see ptlrpc_nrs_req_stop_nolock()
+ * see ptlrpc_server_finish_request()
+ * see ptlrpc_nrs_req_stop_nolock()
  */
 static void nrs_fifo_req_stop(struct ptlrpc_nrs_policy *policy,
 			      struct ptlrpc_nrs_request *nrq)
@@ -217,7 +211,7 @@ static void nrs_fifo_req_stop(struct ptlrpc_nrs_policy *policy,
 	       nrq->nr_u.fifo.fr_sequence);
 }
 
-/**
+/*
  * FIFO policy operations
  */
 static const struct ptlrpc_nrs_pol_ops nrs_fifo_ops = {
@@ -230,7 +224,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_fifo_ops = {
 	.op_req_stop		= nrs_fifo_req_stop,
 };
 
-/**
+/*
  * FIFO policy configuration
  */
 struct ptlrpc_nrs_pol_conf nrs_conf_fifo = {
