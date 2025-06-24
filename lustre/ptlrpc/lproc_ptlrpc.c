@@ -859,13 +859,13 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 /* make up seq_file pos from cpt */
 #define PTLRPC_REQ_CPT2POS(svc, cpt)			\
 	((svc)->srv_cpt_bits == 0 ? 0 :			\
-	 (cpt) << (64 - (svc)->srv_cpt_bits))
+	 (__u64)(cpt) << (64 - (svc)->srv_cpt_bits))
 
 /* convert sequence to position */
 #define PTLRPC_REQ_SEQ2POS(svc, seq)			\
 	((svc)->srv_cpt_bits == 0 ? (seq) :		\
-	 ((seq) >> (svc)->srv_cpt_bits) |		\
-	 ((seq) << (64 - (svc)->srv_cpt_bits)))
+	 ((__u64)(seq) >> (svc)->srv_cpt_bits) |		\
+	 ((__u64)(seq) << (64 - (svc)->srv_cpt_bits)))
 
 /* convert position to sequence */
 #define PTLRPC_REQ_POS2SEQ(svc, pos)			\
@@ -876,12 +876,12 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 static void *
 ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 {
-	struct ptlrpc_service		*svc = s->private;
-	struct ptlrpc_service_part	*svcpt;
-	struct ptlrpc_srh_iterator	*srhi;
-	unsigned int			cpt;
-	int				rc;
-	int				i;
+	struct ptlrpc_service *svc = s->private;
+	struct ptlrpc_service_part *svcpt;
+	struct ptlrpc_srh_iterator *srhi;
+	__u64 cpt;
+	int rc;
+	int i;
 
 	if (sizeof(loff_t) != sizeof(__u64)) { /* can't support */
 		CWARN("Failed to read request history because size of loff_t "
