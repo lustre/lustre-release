@@ -5035,18 +5035,20 @@ test_64() {
 
 	touch $dir1/file
 	ln -s $dir1/file $dir1/file_link
+	ln -s bad $dir1/bad_link
+	ln -s self $dir1/self_link
 	mkfifo $dir1/fifo
 
 	$LFS project -srp $TSTPRJID $dir1 >&/dev/null ||
 		error "set project should succeed"
 
 	used=$(getquota -p $TSTPRJID global curinodes)
-	[ $used -eq 4 ] || error "expected 4 got $used"
+	(( $used == 6 )) || error "expected 4 got $used"
 	$LFS project -rC $dir1 >&/dev/null ||
 		error "clear project should succeed"
 
 	used=$(getquota -p $TSTPRJID global curinodes)
-	[ $used -eq 0 ] || error "expected 0 got $used"
+	(( $used == 0 )) || error "expected 0 got $used"
 }
 run_test 64 "lfs project on non dir/files should succeed"
 

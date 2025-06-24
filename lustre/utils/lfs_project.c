@@ -103,7 +103,7 @@ new_api:
 	strncpy(bname_path, pathname, PATH_MAX);
 	dname = dirname(dname_path);
 	bname = basename(bname_path);
-	fd = open(dname, O_RDONLY | O_NOCTTY | O_NDELAY);
+	fd = open(dname, O_RDONLY | O_NOCTTY | O_NDELAY | O_NOFOLLOW);
 	if (fd < 0) {
 		ret = -errno;
 		goto out;
