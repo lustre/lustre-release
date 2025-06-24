@@ -1968,60 +1968,58 @@ run_test 4b "Grace time strings handling"
 
 # chown & chgrp (chown & chgrp successfully even out of block/file quota)
 test_5() {
-	local BLIMIT=10 # MB
-	local ILIMIT=10 # inodes
+	local blimit=10 # MB
+	local ilimit=1024 # inodes
 
 	setup_quota_test || error "setup quota failed with $?"
 
 	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
-	echo "Set quota limit (0 ${BLIMIT}M 0 $ILIMIT) for $TSTUSR.$TSTUSR"
-	$LFS setquota -u $TSTUSR -b 0 -B ${BLIMIT}M -i 0 -I $ILIMIT $DIR ||
+	echo "Set quota limit (0 ${blimit}M 0 $ilimit) for $TSTUSR.$TSTUSR"
+	$LFS setquota -u $TSTUSR -b 0 -B ${blimit}M -i 0 -I $ilimit $DIR ||
 		error "set user quota failed"
-	$LFS setquota -g $TSTUSR -b 0 -B ${BLIMIT}M -i 0 -I $ILIMIT $DIR ||
-	if is_project_quota_supported; then
+	$LFS setquota -g $TSTUSR -b 0 -B ${blimit}M -i 0 -I $ilimit $DIR ||
 		error "set group quota failed"
-		$LFS setquota -p $TSTPRJID -b 0 -B ${BLIMIT}M -i 0 \
-			-I $ILIMIT $DIR || error "set project quota failed"
+	if is_project_quota_supported; then
+		$LFS setquota -p $TSTPRJID -b 0 -B ${blimit}M -i 0 \
+			-I $ilimit $DIR || error "set project quota failed"
 	fi
 
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curinodes)
-	[ $USED -ne 0 ] && error "Used inode($USED) for user $TSTUSR isn't 0."
-	USED=$(getquota -g $TSTUSR global curinodes)
-	[ $USED -ne 0 ] && error "Used inode($USED) for group $TSTUSR isn't 0."
-	USED=$(getquota -u $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used block($USED) for user $TSTUSR isn't 0."
-	USED=$(getquota -g $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used block($USED) for group $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curinodes)
+	(( $used == 0 )) || error "Used inode($used) for user $TSTUSR isn't 0."
+	used=$(getquota -g $TSTUSR global curinodes)
+	(( $used == 0 )) || error "Used inode($used) for group $TSTUSR isn't 0."
+	used=$(getquota -u $TSTUSR global curspace)
+	(( $used == 0 )) || error "Used block($used) for user $TSTUSR isn't 0."
+	used=$(getquota -g $TSTUSR global curspace)
+	(( $used == 0 )) || error "Used block($used) for group $TSTUSR isn't 0."
 	if is_project_quota_supported; then
-		USED=$(getquota -p $TSTPRJID global curinodes)
-		[ $USED -ne 0 ] &&
-			error "Used inode($USED) for project $TSTPRJID isn't 0."
-		USED=$(getquota -p $TSTPRJID global curspace)
-		[ $USED -ne 0 ] &&
-			error "Used block($USED) for project $TSTPRJID isn't 0."
+		used=$(getquota -p $TSTPRJID global curinodes)
+		(( $used == 0 )) ||
+			error "Used inode($used) for project $TSTPRJID isn't 0."
+		used=$(getquota -p $TSTPRJID global curspace)
+		(( $used == 0 )) ||
+			error "Used block($used) for project $TSTPRJID isn't 0."
 	fi
 
-	echo "Create more than $ILIMIT files and more than $BLIMIT MB ..."
-	createmany -m $DIR/$tdir/$tfile-0_ $((ILIMIT + 1)) ||
+	echo "Create more than $ilimit files and more than $blimit MB ..."
+	createmany -m $DIR/$tdir/$tfile-0_ $((ilimit + 1)) ||
 		error "create failure, expect success"
 	if is_project_quota_supported; then
 		touch $DIR/$tdir/$tfile-0_1
 		change_project -p $TSTPRJID $DIR/$tdir/$tfile-0_1
 	fi
-	$DD of=$DIR/$tdir/$tfile-0_1 count=$((BLIMIT+1)) ||
+	$DD of=$DIR/$tdir/$tfile-0_1 count=$((blimit+1)) ||
 		error "write failure, expect success"
 
 	echo "Chown files to $TSTUSR.$TSTUSR ..."
-	for i in $(seq 0 $ILIMIT); do
-		chown $TSTUSR.$TSTUSR $DIR/$tdir/$tfile-0_$i ||
-			quota_error a $TSTUSR "chown failure, expect success"
-	done
+	chown $TSTUSR:$TSTUSR $DIR/$tdir/$tfile-0_* ||
+		quota_error a $TSTUSR "chown failure, expect success"
 
 	# cleanup
-	unlinkmany $DIR/$tdir/$tfile-0_ $((ILIMIT + 1)) ||
+	unlinkmany $DIR/$tdir/$tfile-0_ $((ilimit + 1)) ||
 		error "unlinkmany $DIR/$tdir/$tfile-0_ failed"
 }
 run_test 5 "Chown & chgrp successfully even out of block/file quota"
