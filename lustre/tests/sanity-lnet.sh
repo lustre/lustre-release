@@ -4016,10 +4016,13 @@ EOF
 
 	validate_gateway_nids
 
-	# Since we have an complex YAML config file we can test import
-	do_lnetctl lnet unconfigure ||
-		error "Failed to stop LNet rc=$?"
-	do_lnetctl import <  ${GLOBAL_YAML_FILE} || error "Import failed $?"
+	# Since we have a complex YAML config file we can test import
+	reinit_dlc || return $?
+
+	do_lnetctl import < $TMP/sanity-lnet-$testnum-actual.yaml ||
+		error "Import failed $?"
+
+	validate_gateway_nids
 }
 run_test 255 "Use lnet routes param with pdsh syntax"
 
@@ -4631,6 +4634,47 @@ test_312() {
 	cleanupall || error "Failed cleanup"
 }
 run_test 312 "TAG_RX_OK is possible after TX_FAIL"
+
+test_350() {
+	reinit_dlc || return $?
+
+	add_net ${NETTYPE} ${INTERFACES[0]} || return $?
+
+	local my_nid=$($LCTL list_nids)
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+ping:
+  nids:
+    0: $my_nid
+EOF
+
+	do_lnetctl import -e $TMP/sanity-lnet-$testnum.yaml ||
+		error "Import failed with rc = $?"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+discover:
+  nids:
+    0: $my_nid
+EOF
+
+	do_lnetctl import -e $TMP/sanity-lnet-$testnum.yaml ||
+		error "Import failed with rc = $?"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+-     primary nid: $my_nid
+      Multi-Rail: true
+      peer ni:
+      -     nid: $my_nid
+            state: NA
+EOF
+
+	$LNETCTL peer show > $TMP/sanity-lnet-$testnum-actual.yaml ||
+		error "export failed with rc = $?"
+
+	compare_yaml_files
+}
+run_test 350 "Check import --exec of ping/discover"
 
 check_udsp_prio() {
 	local target_net="${1}"

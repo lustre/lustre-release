@@ -4350,6 +4350,116 @@ static bool key_is_global_param(const char *key)
 	return false;
 }
 
+struct command_mapping {
+	const char *cm_name;
+	int cm_operation;
+	int cm_flags;
+	bool cm_exec_only;
+};
+
+static const struct command_mapping cmd_mappings[] = {
+	{"net", LNET_CMD_NETS, 0, false},
+	{"peer", LNET_CMD_PEERS, 0, false},
+	{"route", LNET_CMD_ROUTES, 0, false},
+	{"discover", LNET_CMD_PING, 0, true},
+	{"ping", LNET_CMD_PING, NLM_F_DUMP, true},
+	{NULL, 0, 0, false}
+};
+
+static int complete_and_setup_emitter(yaml_emitter_t *output,
+				      struct nl_sock *sk, int flags, int new_op,
+				      int *current_op)
+{
+	if (*current_op != LNET_CMD_UNSPEC) {
+		if (!yaml_netlink_complete_emitter(output))
+			return 0;
+	}
+
+	*current_op = new_op;
+	return yaml_netlink_setup_emitter(output, sk, LNET_GENL_NAME,
+					  LNET_GENL_VERSION, flags, new_op,
+					  true);
+}
+
+static const struct command_mapping *find_command_mapping(const char *value,
+							  char cmd,
+							  int current_op)
+{
+	const struct command_mapping *mapping = cmd_mappings;
+
+	/* The "route" yaml block can contain a "net" key */
+	if (current_op == LNET_CMD_ROUTES && !strcmp(value, "net"))
+		return NULL;
+
+	for (; mapping->cm_name; mapping++) {
+		if (!strcmp(value, mapping->cm_name)) {
+			// Check execute command restriction
+			if (cmd == 'e' && !mapping->cm_exec_only)
+				return NULL;
+
+			if (cmd != 'e' && mapping->cm_exec_only)
+				return NULL;
+
+			return mapping;
+		}
+	}
+
+	return NULL;
+}
+
+static int handle_global_parameter(yaml_parser_t *setup, yaml_event_t *event,
+				   char cmd, int flags, struct cYAML *show_rc)
+{
+	struct cYAML *err_rc = NULL;
+	long value;
+	char *key;
+	char errmsg[LNET_MAX_STR_LEN];
+	int rc;
+
+	key = strdup((char *)event->data.scalar.value);
+
+	if (!key_is_global_param(key)) {
+		snprintf(errmsg, LNET_MAX_STR_LEN, "invalid key '%s'", key);
+		errno = rc = -EINVAL;
+		yaml_lnet_print_error(flags, "import", errmsg);
+		goto out_free_key;
+	}
+
+	rc = yaml_parser_parse(setup, event);
+	if (rc == 0) {
+		yaml_parser_log_error(setup, stderr, "import: ");
+		goto out_free_key;
+	}
+
+	if (!strlen((char *)event->data.scalar.value)) {
+		snprintf(errmsg, LNET_MAX_STR_LEN,
+			 "no value specified for key '%s'", key);
+		errno = rc = -EINVAL;
+		yaml_lnet_print_error(flags, "import", errmsg);
+		goto out_free_key;
+	}
+
+	rc = parse_long((char *)event->data.scalar.value, &value);
+	if (rc != 0) {
+		snprintf(errmsg, LNET_MAX_STR_LEN,
+			 "invalid value '%s' for key '%s'",
+			(char *)event->data.scalar.value, key);
+		errno = rc = -EINVAL;
+		yaml_lnet_print_error(flags, "import", errmsg);
+		goto out_free_key;
+	}
+
+	rc = yaml_import_global_settings(key, value, cmd, show_rc, err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+	else
+		rc = 1;
+
+out_free_key:
+	free(key);
+	return rc;
+}
+
 static int jt_import(int argc, char **argv)
 {
 	char *file = NULL;
@@ -4469,6 +4579,9 @@ static int jt_import(int argc, char **argv)
 	yaml_parser_set_input_file(&setup, input);
 
 	while (!done) {
+		const char *scalar_value;
+		const struct command_mapping *mapping;
+
 		if (!yaml_parser_parse(&setup, &event)) {
 			yaml_parser_log_error(&setup, stderr, "import: ");
 			break;
@@ -4477,79 +4590,19 @@ static int jt_import(int argc, char **argv)
 		if (event.type != YAML_SCALAR_EVENT)
 			goto skip_test;
 
-		if (!strcmp((char *)event.data.scalar.value, "net") &&
-		    op != LNET_CMD_ROUTES && cmd != 'e') {
-			if (op != LNET_CMD_UNSPEC) {
-				rc = yaml_netlink_complete_emitter(&output);
-				if (rc == 0)
-					goto emitter_error;
-			}
-			op = LNET_CMD_NETS;
+		scalar_value = (char *)event.data.scalar.value;
+		mapping = find_command_mapping(scalar_value, cmd, op);
+		if (mapping) {
+			int emitter_flags = mapping->cm_flags ?: flags;
 
-			rc = yaml_netlink_setup_emitter(&output, sk,
-							LNET_GENL_NAME,
-							LNET_GENL_VERSION,
-							flags, op, true);
+			rc = complete_and_setup_emitter(&output, sk,
+							emitter_flags,
+							mapping->cm_operation,
+							&op);
 			if (rc == 0)
 				goto emitter_error;
-
 			unspec = false;
-		} else if (!strcmp((char *)event.data.scalar.value, "peer") &&
-			   cmd != 'e') {
-			if (op != LNET_CMD_UNSPEC) {
-				rc = yaml_netlink_complete_emitter(&output);
-				if (rc == 0)
-					goto emitter_error;
-			}
-			op = LNET_CMD_PEERS;
-
-			rc = yaml_netlink_setup_emitter(&output, sk,
-							LNET_GENL_NAME,
-							LNET_GENL_VERSION,
-							flags, op, true);
-			if (rc == 0)
-				goto emitter_error;
-
-			unspec = false;
-		} else if (!strcmp((char *)event.data.scalar.value, "route") &&
-			   cmd != 'e') {
-			if (op != LNET_CMD_UNSPEC) {
-				rc = yaml_netlink_complete_emitter(&output);
-				if (rc == 0)
-					goto emitter_error;
-			}
-			op = LNET_CMD_ROUTES;
-
-			rc = yaml_netlink_setup_emitter(&output, sk,
-							LNET_GENL_NAME,
-							LNET_GENL_VERSION,
-							flags, op, true);
-			if (rc == 0)
-				goto emitter_error;
-
-			unspec = false;
-		} else if ((!strcmp((char *)event.data.scalar.value, "discover") ||
-			    !strcmp((char *)event.data.scalar.value, "ping")) &&
-			   cmd == 'e') {
-			if (op != LNET_CMD_UNSPEC) {
-				rc = yaml_netlink_complete_emitter(&output);
-				if (rc == 0)
-					goto emitter_error;
-			}
-			op = LNET_CMD_PING;
-
-			if (!strcmp((char *)event.data.scalar.value, "ping"))
-				flags = NLM_F_DUMP;
-
-			rc = yaml_netlink_setup_emitter(&output, sk,
-							LNET_GENL_NAME,
-							LNET_GENL_VERSION,
-							flags, op, true);
-			if (rc == 0)
-				goto emitter_error;
-
-			unspec = false;
-		} else if (!strcmp((char *)event.data.scalar.value, "global")) {
+		} else if (!strcmp(scalar_value, "global")) {
 			if (op != LNET_CMD_UNSPEC) {
 				rc = yaml_netlink_complete_emitter(&output);
 				if (rc == 0)
@@ -4557,53 +4610,12 @@ static int jt_import(int argc, char **argv)
 			}
 			op = LNET_CMD_UNSPEC;
 		} else if (op == LNET_CMD_UNSPEC) {
-			struct cYAML *err_rc = NULL;
-			long int value;
-			char *key;
-			char errmsg[LNET_MAX_STR_LEN];
-
-			key = strdup((char *)event.data.scalar.value);
-			if (!key_is_global_param(key)) {
-				snprintf(errmsg, LNET_MAX_STR_LEN,
-					 "invalid key '%s'", key);
-				errno = rc = -EINVAL;
-				yaml_lnet_print_error(flags, "import", errmsg);
+			rc = handle_global_parameter(&setup, &event, cmd, flags,
+						     show_rc);
+			if (rc < 0)
 				goto free_reply;
-			}
-
-			rc = yaml_parser_parse(&setup, &event);
-			if (rc == 0) {
-				yaml_parser_log_error(&setup, stderr,
-						      "import: ");
+			else if (rc == 0)
 				goto emitter_error;
-			}
-
-			if (!strlen((char *)event.data.scalar.value)) {
-				snprintf(errmsg, LNET_MAX_STR_LEN,
-					 "no value specified for key '%s'",
-					 key);
-				errno = rc = -EINVAL;
-				yaml_lnet_print_error(flags, "import", errmsg);
-				goto free_reply;
-			}
-
-			rc = parse_long((char *)event.data.scalar.value,
-					&value);
-			if (rc != 0) {
-				snprintf(errmsg, LNET_MAX_STR_LEN,
-					 "invalid value '%s' for key '%s'",
-					 (char *)event.data.scalar.value, key);
-				errno = rc = -EINVAL;
-				yaml_lnet_print_error(flags, "import", errmsg);
-				goto free_reply;
-			}
-
-			rc = yaml_import_global_settings(key, value, cmd,
-							 show_rc, err_rc);
-			if (rc != LUSTRE_CFG_RC_NO_ERR)
-				cYAML_print_tree2file(stderr, err_rc);
-			else
-				rc = 1;
 		}
 skip_test:
 		if (op != LNET_CMD_UNSPEC) {
