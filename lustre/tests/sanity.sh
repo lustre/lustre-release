@@ -83,6 +83,9 @@ if [[ "$CLIENT_OS_ID_LIKE" =~ "rhel" ]]; then
 		# failure on fio io_uring I/O engine.
 		always_except LU-17289 906
 	fi
+elif [[ "$CLIENT_OS_ID_LIKE" =~ "ubuntu" ]] &&
+     (( $CLIENT_OS_VERSION_CODE == $(version_code 22.04) )); then
+	always_except LU-19124 27P
 fi
 
 if [[ "$FSTYPE" = "wbcfs" ]]; then
