@@ -1510,6 +1510,9 @@ struct ptlrpc_sec *sptlrpc_import_sec_ref(struct obd_import *imp)
 {
 	struct ptlrpc_sec *sec;
 
+	if (IS_ERR_OR_NULL(imp))
+		return NULL;
+
 	read_lock(&imp->imp_sec_lock);
 	sec = sptlrpc_sec_get(imp->imp_sec);
 	read_unlock(&imp->imp_sec_lock);
