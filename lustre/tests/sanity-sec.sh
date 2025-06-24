@@ -7598,7 +7598,7 @@ test_72c() {
 		error "modify readonly_mount for $nm on mds1 failed"
 	do_facet mds1 $LCTL nodemap_modify --name $nm \
 	       --property rbac --value file_perms,quota_ops,byfid_ops,dne_ops &&
-		error "modify rbac for $nm on mds1 should fail"
+		error "modify rbac for $nm on mds1 should fail (1)"
 	do_facet mds1 $LCTL nodemap_modify --name $nm \
 		--property rbac --value file_perms ||
 		error "modify rbac for $nm on mds1 failed (1)"
@@ -7624,6 +7624,9 @@ test_72c() {
 	do_facet mds1 $LCTL nodemap_modify --name $nm \
 	       --property rbac --value file_perms,quota_ops,byfid_ops,dne_ops ||
 		error "modify rbac for $nm on mds1 failed (2)"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+	       --property rbac --value file_perms,quota_ops,byfid_ops,chlg_ops &&
+		error "modify rbac for $nm on mds1 should fail (2)"
 	do_facet mds1 $LCTL nodemap_modify --name $nm \
 	       --property child_raise_privileges \
 	       --value trusted ||

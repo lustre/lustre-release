@@ -261,7 +261,8 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
 	if (!nodemap->nm_parent_nm)
 		return false;
 
-	if (nodemap->nm_parent_nm->nmf_raise_privs & priv)
+	if ((nodemap->nm_parent_nm->nmf_raise_privs & priv) &&
+	    priv != NODEMAP_RAISE_PRIV_RBAC)
 		return true;
 
 	switch (priv) {
@@ -279,7 +280,11 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
 	case NODEMAP_RAISE_PRIV_RO:
 		return (!nodemap->nm_parent_nm->nmf_readonly_mount || prop_val);
 	case NODEMAP_RAISE_PRIV_RBAC:
-		return !(~nodemap->nm_parent_nm->nmf_rbac & prop_val);
+		if (!(nodemap->nm_parent_nm->nmf_raise_privs & priv))
+			return !(~nodemap->nm_parent_nm->nmf_rbac & prop_val);
+		rbac_raise = nodemap->nm_parent_nm->nmf_rbac |
+			     nodemap->nm_parent_nm->nmf_rbac_raise;
+		return !(~rbac_raise & prop_val);
 	case NODEMAP_RAISE_PRIV_FORBID_ENC:
 		return (nodemap->nm_parent_nm->nmf_forbid_encryption ||
 			!prop_val);
