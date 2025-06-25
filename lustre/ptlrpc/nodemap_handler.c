@@ -252,9 +252,6 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
 	u32 rbac_raise = (u32)(val >> 32);
 	kernel_cap_t *newcaps;
 
-	if (!allow_op_on_nm(nodemap))
-		return false;
-
 	if (!nodemap->nm_dyn)
 		return true;
 
@@ -710,7 +707,7 @@ int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		GOTO(out_unlock, rc = -EINVAL);
 
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_unlock, rc = -EPERM);
+		GOTO(out_unlock, rc = -ENXIO);
 
 	rc = nodemap_add_idmap_helper(nodemap, id_type, map);
 	if (!rc)
@@ -757,7 +754,7 @@ int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	down_write(&nodemap->nm_idmap_lock);
 	idmap = idmap_search(nodemap, NODEMAP_CLIENT_TO_FS, id_type,
@@ -1324,7 +1321,7 @@ int nodemap_add_range(const char *name, const struct lnet_nid nid[2],
 		GOTO(out_unlock, rc = -EINVAL);
 
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_unlock, rc = -EPERM);
+		GOTO(out_unlock, rc = -ENXIO);
 
 	rc = nodemap_add_range_helper(active_config, nodemap, nid,
 				      netmask, 0);
@@ -1368,7 +1365,7 @@ int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 		GOTO(out_putref, rc = -EINVAL);
 
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	down_write(&active_config->nmc_range_tree_lock);
 	range = range_find(active_config, &nid[0], &nid[1], netmask);
@@ -1599,7 +1596,7 @@ int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
 		GOTO(out_unlock, rc = -EPERM);
 
 	if (checkperm && !allow_op_on_nm(nodemap))
-		GOTO(out_unlock, rc = -EPERM);
+		GOTO(out_unlock, rc = -ENXIO);
 
 	/*
 	 * Previously filesets were made persistent through the params llog,
@@ -1719,7 +1716,7 @@ int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm)
 		GOTO(out_putref, rc = -EINVAL);
 	}
 	if (checkperm && !allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	/* truncation cannot happen, as string length was checked in
 	 * nodemap_validate_sepol()
@@ -1798,6 +1795,9 @@ int nodemap_set_capabilities(const char *name, char *buffer)
 		mutex_unlock(&active_config_lock);
 		GOTO(out, rc = PTR_ERR(nodemap));
 	}
+
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
 
 	rc = kstrtoull(caps_str, 0, &caps);
 	if (rc == -EINVAL) {
@@ -2007,6 +2007,8 @@ int nodemap_set_deny_unknown(const char *name, bool deny_unknown)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_DENY_UNKN,
 				deny_unknown))
 		GOTO(out_putref, rc = -EPERM);
@@ -2040,6 +2042,8 @@ int nodemap_set_allow_root(const char *name, bool allow_root)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_ADMIN, allow_root))
 		GOTO(out_putref, rc = -EPERM);
 
@@ -2073,6 +2077,8 @@ int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_TRUSTED,
 				trust_client_ids))
 		GOTO(out_putref, rc = -EPERM);
@@ -2100,7 +2106,7 @@ int nodemap_set_mapping_mode(const char *name,
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	nodemap->nmf_map_mode = map_mode;
 	rc = nodemap_idx_nodemap_update(nodemap);
@@ -2153,6 +2159,8 @@ int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+	if (!allow_op_on_nm(nodemap))
+		GOTO(put, rc = -ENXIO);
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RBAC, rbac))
 		GOTO(put, rc = -EPERM);
 
@@ -2201,7 +2209,7 @@ int nodemap_set_squash_uid(const char *name, uid_t uid)
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	nodemap->nm_squash_uid = uid;
 	rc = nodemap_idx_nodemap_update(nodemap);
@@ -2238,7 +2246,7 @@ int nodemap_set_squash_gid(const char *name, gid_t gid)
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	nodemap->nm_squash_gid = gid;
 	rc = nodemap_idx_nodemap_update(nodemap);
@@ -2276,7 +2284,7 @@ int nodemap_set_squash_projid(const char *name, projid_t projid)
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	nodemap->nm_squash_projid = projid;
 	rc = nodemap_idx_nodemap_update(nodemap);
@@ -2352,7 +2360,7 @@ int nodemap_set_audit_mode(const char *name, bool enable_audit)
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	nodemap->nmf_enable_audit = enable_audit;
 	rc = nodemap_idx_nodemap_update(nodemap);
@@ -2384,6 +2392,8 @@ int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_FORBID_ENC,
 				forbid_encryption))
 		GOTO(out_putref, rc = -EPERM);
@@ -2424,6 +2434,8 @@ int nodemap_set_raise_privs(const char *name, enum nodemap_raise_privs privs,
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RAISE,
 				privs | (u64)rbac_raise << 32))
 		GOTO(out_putref, rc = -EPERM);
@@ -2465,6 +2477,8 @@ int nodemap_set_readonly_mount(const char *name, bool readonly_mount)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RO,
 				readonly_mount))
 		GOTO(out_putref, rc = -EPERM);
@@ -2575,7 +2589,7 @@ int nodemap_del(const char *nodemap_name)
 		GOTO(out, rc = PTR_ERR(nodemap));
 	if (!allow_op_on_nm(nodemap)) {
 		nodemap_putref(nodemap);
-		GOTO(out, rc = -EPERM);
+		GOTO(out, rc = -ENXIO);
 	}
 
 	/* delete sub-nodemaps first */
@@ -2752,7 +2766,7 @@ int nodemap_add_offset(const char *nodemap_name, char *offset)
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	if (nodemap->nm_offset_start_uid) {
 		/* nodemap has already offset  */
@@ -2843,7 +2857,7 @@ int nodemap_del_offset(const char *nodemap_name)
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -EPERM);
+		GOTO(out_putref, rc = -ENXIO);
 
 	rc = nodemap_del_offset_helper(nodemap);
 	if (rc == 0)
@@ -2872,7 +2886,7 @@ int nodemap_activate(const bool value)
 
 	if (!nodemap_mgs()) {
 		CERROR("cannot activate for non-existing MGS.\n");
-		return -EINVAL;
+		return -ENXIO;
 	}
 
 	mutex_lock(&active_config_lock);
