@@ -8095,7 +8095,7 @@ setup_namespace_75a() {
 		local tenant_file=$1
 		local tenant_dir=$2
 		local offset=$3
-		$run_as_trusted echo "abc" > ${fileset_subdir}/$tenant_file ||
+		$run_as_trusted "echo \"abc\" > ${fileset_subdir}/$tenant_file" ||
 			error "echo $tenant_file failed"
 		$run_as_trusted mkdir -p ${fileset_subdir}/$tenant_dir ||
 			error "mkdir $tenant_dir failed"
@@ -8111,7 +8111,7 @@ setup_namespace_75a() {
 
 	# setup testfiles and testdirectories. *_trusted files/dirs are
 	# world-accessible, but become inaccessible once the id_check is enabled
-	$run_as_trusted echo "abc" > ${fileset_subdir}/$tfile_trusted ||
+	$run_as_trusted "echo \"abc\" > ${fileset_subdir}/$tfile_trusted" ||
 		error "echo $tfile_trusted failed"
 	$run_as_trusted mkdir ${fileset_subdir}/$tdir_trusted ||
 		error "mkdir $tdir_trusted failed"
@@ -8138,7 +8138,7 @@ setup_namespace_75a() {
 			error "chown ${tfile_tenant}_dom failed"
 
 	# create a file used in write tests
-	$run_as_trusted echo "def" > ${fileset_subdir}/$tf_write ||
+	$run_as_trusted "echo \"def\" > ${fileset_subdir}/$tf_write" ||
 		error "echo  $tf_write failed"
 	$run_as_trusted chown \
 		$((offset_start+ID0)):$((offset_start+ID0)) \
