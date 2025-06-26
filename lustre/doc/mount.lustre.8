@@ -270,10 +270,10 @@ on an MDT after mounting. This allows a (potentially newly-formatted)
 MDT or OST to be started without clients starting to use it immediately.
 To allow the new target to be used for allocation, unmount and mount the
 target again without this option, or run
-.BI "lctl set_param mdt." fsname -OST nnnn .no_create=0
+.BI "'lctl set_param obdfilter." FSNAME -OST XXXX ".no_create=0'"
 or
-.BI "lctl set_param obdfilter." fsname -MDT nnnn .no_create=0
-on the server node.
+.BI "'lctl set_param mdt." FSNAME -MDT XXXX ".no_create=0'"
+on the appropriate server node.
 .BR NOTE :
 this does not start the OST or MDT read-only, it only disables the
 creation of new objects there. This means existing objects can be

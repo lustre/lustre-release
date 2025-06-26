@@ -63,13 +63,15 @@ on the OST.  This target will be avoided for new allocations, but
 will still be used for existing files located there or if there are
 not enough non-degraded OSTs to make up a widely-striped file.
 .TP
-.B N: no-precreate
-The target is configured to deny object precreation by the
-.BI "'lctl set_param obdfilter." TARGET ".no_precreate=1'"
+.B N: no-create
+The target is configured to deny new OST object creation by the
+.BI "'lctl set_param obdfilter." FSNAME -OST XXXX ".no_create=1'"
+option, or new subdirectory creation by the
+.BI "'lctl set_param obdfilter." FSNAME -MDT XXXX ".no_create=1'"
 parameter or
-.B '-o no_precreate'
-mount option.  This may be done to add an OST to the filesystem without
-allowing objects to be allocated on it yet, or for other reasons.
+.B '-o no_create'
+mount option.  This can be used to add an OST or MDT to the filesystem
+without allowing objects to be allocated on it yet, or for other reasons.
 .TP
 .B R: read-only
 The target filesystem is marked read-only due to filesystem
