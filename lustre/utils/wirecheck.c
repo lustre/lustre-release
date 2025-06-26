@@ -2616,6 +2616,7 @@ static void check_hsm_request(void)
 	CHECK_MEMBER(hsm_request, hr_data_len);
 	CHECK_VALUE_X(HSM_FORCE_ACTION);
 	CHECK_VALUE_X(HSM_GHOST_COPY);
+	CHECK_VALUE_X(HSM_REQ_BLOCKING);
 }
 
 static void check_hsm_user_request(void)

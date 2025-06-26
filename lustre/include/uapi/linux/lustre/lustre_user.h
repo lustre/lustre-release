@@ -2437,6 +2437,12 @@ static inline const char *hsm_user_action2name(enum hsm_user_action  a)
 /* used by CT, cannot be set by user */
 #define HSM_GHOST_COPY   0x0002
 
+/*
+ * To indicate that the action has been triggered by the
+ * kernel and a user process is currently blocked on it.
+ */
+#define	HSM_REQ_BLOCKING 0x0004
+
 /**
  * Contains all the fixed part of struct hsm_user_request.
  */

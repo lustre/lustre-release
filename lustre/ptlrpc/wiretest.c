@@ -5481,6 +5481,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)HSM_FORCE_ACTION);
 	LASSERTF(HSM_GHOST_COPY == 0x00000002UL, "found 0x%.8xUL\n",
 		(unsigned)HSM_GHOST_COPY);
+	LASSERTF(HSM_REQ_BLOCKING == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)HSM_REQ_BLOCKING);
 
 	/* Checks for struct hsm_user_request */
 	LASSERTF((int)sizeof(struct hsm_user_request) == 24, "found %lld\n",
