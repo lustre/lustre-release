@@ -4110,43 +4110,66 @@ test_delete_qid()
 	local qtype_file=$2
 	local qtype=$3
 	local qid=$4
-	local osd="osd-ldiskfs"
-
-	[ "$ost1_FSTYPE" = zfs ] && osd="osd-zfs"
+	local osd="osd-$ost1_FSTYPE"
+	local qmt=$FSNAME-QMT0000
+	local qtype_param=qmt.$qmt.dt-0x0.$qtype_file
 
 	rm -f $DIR/$tdir/$tfile
-	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile
+	touch $DIR/$tdir/$tfile
 	chmod a+rw $DIR/$tdir/$tfile
+	[[ $qtype_file =~ prj ]] && change_project -sp $qid $DIR/$tdir/$tfile
 
-	$LFS setquota $qtype $qid -B 300M $MOUNT
+	local idx=$($LFS getstripe -i $DIR/$tdir/$tfile)
+	local ost=$(ostname_from_index $idx)
+	local facet=ost$((idx + 1))
+
+	$LFS setquota $qtype $qid -B 300M $MOUNT || error "set quota failed"
 	$RUNAS $DD of=$DIR/$tdir/$tfile count=1 || error "failed to dd"
 
-	do_facet $SINGLEMDS \
-		"cat /proc/fs/lustre/qmt/$FSNAME-QMT0000/dt-0x0/$qtype_file |
-		 grep -E 'id: *$qid'" || error "QMT: no qid $qid is found"
-	echo $osd
-	do_facet ost1 \
-		"cat /proc/fs/lustre/$osd/$FSNAME-OST0000/$qslv_file |
-		 grep -E 'id: *$qid'" || error "QSD: no qid $qid is found"
+	echo "checking $qid exists on $SINGLEMDS and $facet"
+	wait_update_facet_cond $SINGLEMDS "$LCTL get_param $qtype_param |
+				      grep -E 'id: *$qid'" "=~" "$qid" || {
+		do_facet $SINGLEMDS "$LCTL get_param $qtype_param"
+		$LFS quota -a $qtype $DIR
+		error "QMT: $SINGLEMDS no qid $qid is found"
+	}
+	wait_update_facet_cond $facet "$LCTL get_param $osd.$ost.$qslv_file |
+				      grep -E 'id: *$qid'" "=~" "$qid" || {
+		do_facet $facet "$LCTL get_param $qtype_param"
+		$LFS quota -a $qtype $DIR
+		error "QSD: $facet no qid $qid is found on $ost"
+	}
 
+	echo "checking $qid removed on $SINGLEMDS and $facet"
 	$LFS setquota $qtype $qid --delete $MOUNT
-	do_facet $SINGLEMDS \
-		"cat /proc/fs/lustre/qmt/$FSNAME-QMT0000/dt-0x0/$qtype_file |
-		 grep -E 'id: *$qid'" && error "QMT: qid $qid is not deleted"
-	sleep 5
-	do_facet ost1 \
-		"cat /proc/fs/lustre/$osd/$FSNAME-OST0000/$qslv_file |
-		 grep -E 'id: *$qid'" && error "QSD: qid $qid is not deleted"
+	wait_update_facet $SINGLEMDS "$LCTL get_param $qtype_param |
+				      grep -E 'id: *$qid'" "" || {
+		do_facet $SINGLEMDS "$LCTL get_param $qtype_param"
+		$LFS quota -a $qtype $DIR
+		error "QMT: $SINGLEMDS qid $qid is not deleted"
+	}
+	wait_update_facet $facet "$LCTL get_param $osd.$ost.$qslv_file |
+				  grep -E 'id: *$qid'" "" || {
+		do_facet $facet "$LCTL get_param $qtype_param"
+		$LFS quota -a $qtype $DIR
+		error "QSD: $facet qid $qid is not deleted"
+	}
 
-	$LFS setquota $qtype $qid -B 500M $MOUNT
-	$RUNAS $DD of=$DIR/$tdir/$tfile count=1 || error "failed to dd"
-	do_facet $SINGLEMDS \
-		"cat /proc/fs/lustre/qmt/$FSNAME-QMT0000/dt-0x0/$qtype_file |
-		 grep -E 'id: *$qid'" || error "QMT: qid $pid is not recreated"
-	cat /proc/fs/lustre/$osd/$FSNAME-OST0000/$qslv_file
-	do_facet ost1 \
-		"cat /proc/fs/lustre/$osd/$FSNAME-OST0000/$qslv_file |
-		 grep -E 'id: *$qid'" || error "QSD: qid $qid is not recreated"
+	echo "checking $qid recreated on $SINGLEMDS and $facet"
+	$LFS setquota $qtype $qid -B 500M $MOUNT || error "set new quota failed"
+	$RUNAS $DD of=$DIR/$tdir/$tfile count=2 || error "failed to dd again"
+	wait_update_facet_cond $SINGLEMDS "$LCTL get_param $qtype_param |
+					   grep -E 'id: *$qid'" "=~" "$qid" || {
+		do_facet $SINGLEMDS "$LCTL get_param $qtype_param"
+		$LFS quota -a $qtype $DIR
+		error "QMT: $SINGLEMDS qid $pid is not recreated"
+	}
+	wait_update_facet_cond $facet "$LCTL get_param $osd.$ost.$qslv_file |
+				       grep -E 'id: *$qid'" "=~" "$qid" || {
+		do_facet $facet "$LCTL get_param $qtype_param"
+		$LFS quota -a $qtype $DIR
+		error "QSD: $facet qid $qid is not recreated"
+	}
 }
 
 test_48()
@@ -4155,10 +4178,10 @@ test_48()
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	quota_init
 
-	test_delete_qid "quota_slave/limit_user" "glb-usr" "-u" $TSTID
-	test_delete_qid "quota_slave/limit_group" "glb-grp" "-g" $TSTID
+	test_delete_qid "quota_slave.limit_user" "glb-usr" "-u" $TSTID
+	test_delete_qid "quota_slave.limit_group" "glb-grp" "-g" $TSTID
 	is_project_quota_supported &&
-	    test_delete_qid "quota_slave/limit_project" "glb-prj" "-p" "10000"
+	    test_delete_qid "quota_slave.limit_project" "glb-prj" "-p" "10000"
 
 	cleanup_quota_test
 }
