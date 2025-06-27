@@ -635,3 +635,11 @@ checkstack-update:
 
 checkstack-clean:
 	rm -f ${CSTK} ${CSTKO}
+
+modules:
+	$(AM_V_GEN)echo "Making modules in top-level tree"; \
+	$(MAKE) $(AM_MAKEFLAGS) $(EXTRA_MAKEFLAGS) -C $(LUSTRE_LINUX_KERNELDIR) $(LUSTRE_LINUX_MAKE_ARGS) M=$(abs_top_builddir) "CFLAGS_MODULE=-I$(abs_top_builddir)/libcfs/include -I$(abs_top_builddir)/lnet/include -I$(abs_top_builddir)/lustre/include -I$(abs_top_builddir)/include" modules
+
+modules_install:
+	$(AM_V_GEN)echo "Installing modules in top-level tree"; \
+	$(MAKE) $(AM_MAKEFLAGS) -C $(LUSTRE_LINUX_KERNELDIR) $(LUSTRE_LINUX_MAKE_ARGS) M=$(abs_top_builddir) modules_install

@@ -12,6 +12,11 @@
 #     kernel tests
 #
 
+#LUSTRE_KBUILD_DEFINES
+obj-$(CONFIG_LIBCFS)      += libcfs/
+obj-$(CONFIG_LNET)        += lnet/
+obj-$(CONFIG_LUSTRE_FS)   += lustre/
+
 ifeq ($(PATCHLEVEL),)
 
 ifeq ($(LUSTRE_LINUX_CONFIG),)
