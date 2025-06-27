@@ -2140,7 +2140,11 @@ static int osd_create_lastid(const struct lu_env *env, struct osd_device *dev,
 	dmu_tx_hold_write_by_dnode(tx, dn, 0, sizeof(lastid_known));
 
 	lastid = cpu_to_le64(lastid_known);
+#ifdef HAVE_DMU_WRITE_BY_DNODE_6ARGS
+	dmu_write_by_dnode(dn, 0, sizeof(lastid), &lastid, tx, 0);
+#else
 	dmu_write_by_dnode(dn, 0, sizeof(lastid), &lastid, tx);
+#endif
 
 	rc = osd_zap_add(dev, dir, NULL, LASTID, strlen(LASTID), num,
 			 (void *)zde, tx);
@@ -2348,8 +2352,13 @@ static int osd_scan_lastid_seq(const struct lu_env *env,
 
 	if (lastid < lastid_known) {
 		lastid = cpu_to_le64(lastid_known);
+#ifdef HAVE_DMU_WRITE_BY_DNODE_6ARGS
+		dmu_write_by_dnode(dn, 0, sizeof(lastid),
+				   (const char *) &lastid, tx, 0);
+#else
 		dmu_write_by_dnode(dn, 0, sizeof(lastid),
 				   (const char *) &lastid, tx);
+#endif
 	}
 
 	dmu_tx_commit(tx);
