@@ -775,19 +775,35 @@ AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
 	])
 	#
 	# ZFS 0.7.x adds new method dmu_write_by_dnode
+	# ZFS 2.3+ changed signature to include flags parameter
 	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_write_by_dnode'],
+	LB_CHECK_COMPILE([if ZFS has 'dmu_write_by_dnode' with 6 args],
 	dmu_write_by_dnode, [
-		#include <sys/zap.h>
+		#include <sys/dmu.h>
 		#include <sys/dnode.h>
 	],[
 		dnode_t *dn = NULL;
-		dmu_write_by_dnode(dn, 0, 0, NULL, NULL);
+		dmu_write_by_dnode(dn, 0, 0, NULL, NULL, 0);
 	],[
 		AC_DEFINE(HAVE_DMU_WRITE_BY_DNODE, 1,
 			[Have dmu_write_by_dnode() in ZFS])
+		AC_DEFINE(HAVE_DMU_WRITE_BY_DNODE_6ARGS, 1,
+			[dmu_write_by_dnode() takes 6 arguments])
 	],[
-		AC_MSG_ERROR([dmu_write_by_dnode does not exist])
+		# Try with 5 arguments for older ZFS versions
+		LB_CHECK_COMPILE([if ZFS has 'dmu_write_by_dnode' with 5 args],
+		dmu_write_by_dnode_5args, [
+			#include <sys/dmu.h>
+			#include <sys/dnode.h>
+		],[
+			dnode_t *dn = NULL;
+			dmu_write_by_dnode(dn, 0, 0, NULL, NULL);
+		],[
+			AC_DEFINE(HAVE_DMU_WRITE_BY_DNODE, 1,
+				[Have dmu_write_by_dnode() in ZFS])
+		],[
+			AC_MSG_ERROR([dmu_write_by_dnode does not exist])
+		])
 	])
 	#
 	# ZFS 0.7.x adds new method dmu_read_by_dnode
