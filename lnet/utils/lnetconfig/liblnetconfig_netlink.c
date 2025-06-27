@@ -1387,7 +1387,7 @@ static int yaml_fill_scalar_data(struct nl_msg *msg,
 	}
 
 	if (fmt & LNKF_MAPPING && sep) {
-		char *end = strchr(sep, '\n');
+		char *end;
 		int len;
 
 		/* restore ':' */
@@ -1396,6 +1396,7 @@ static int yaml_fill_scalar_data(struct nl_msg *msg,
 		while (isspace(*sep))
 			++sep;
 
+		end = strchr(sep, '\n');
 		len = end ? end - sep : strlen(sep);
 		if (len <= 0)
 			goto nla_put_failure;
