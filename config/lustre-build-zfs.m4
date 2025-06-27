@@ -774,20 +774,34 @@ AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
 		AC_MSG_ERROR([dmu_tx_hold_write_by_dnode does not exist])
 	])
 	#
-	# ZFS 0.7.x adds new method dmu_write_by_dnode
-	#
+# Check for dmu_write_uio (new API) first
+	LB_CHECK_COMPILE([if ZFS has 'dmu_write_uio'],
+	dmu_write_uio, [
+    	#include <sys/dmu.h>
+	],[
+    	dmu_write_uio(NULL, 0, NULL, 0, NULL, 0);
+	],[
+    	AC_DEFINE(HAVE_DMU_WRITE_UIO, 1, [Have dmu_write_uio() in ZFS])
+    	have_dmu_write=yes
+	],[
+    	have_dmu_write=no
+	])
+
+	# If not found, check for dmu_write_by_dnode (old API)
+	AS_IF([test "x$have_dmu_write" != "xyes"], [
 	LB_CHECK_COMPILE([if ZFS has 'dmu_write_by_dnode'],
 	dmu_write_by_dnode, [
-		#include <sys/zap.h>
-		#include <sys/dnode.h>
+    	#include <sys/dmu.h>
+    	#include <sys/dnode.h>
 	],[
-		dnode_t *dn = NULL;
-		dmu_write_by_dnode(dn, 0, 0, NULL, NULL);
+    	dnode_t *dn = NULL;
+    	dmu_write_by_dnode(dn, 0, 0, NULL, NULL);
 	],[
-		AC_DEFINE(HAVE_DMU_WRITE_BY_DNODE, 1,
-			[Have dmu_write_by_dnode() in ZFS])
+    	AC_DEFINE(HAVE_DMU_WRITE_BY_DNODE, 1, [Have dmu_write_by_dnode() in ZFS])
+    	have_dmu_write=yes
 	],[
-		AC_MSG_ERROR([dmu_write_by_dnode does not exist])
+    	AC_MSG_ERROR([Neither dmu_write_uio nor dmu_write_by_dnode exists in ZFS])
+	])
 	])
 	#
 	# ZFS 0.7.x adds new method dmu_read_by_dnode

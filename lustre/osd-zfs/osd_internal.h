@@ -1002,13 +1002,51 @@ static inline void osd_tx_hold_write(dmu_tx_t *tx, uint64_t oid,
 	dmu_tx_hold_write(tx, oid, off, len);
 }
 
+#if defined(HAVE_DMU_WRITE_UIO)
+#include <sys/uio.h>
+#include <sys/uio_impl.h>
 static inline void osd_dmu_write(struct osd_device *osd, dnode_t *dn,
 				 uint64_t offset, uint64_t size,
 				 const char *buf, dmu_tx_t *tx)
 {
 	LASSERT(dn);
-	dmu_write_by_dnode(dn, offset, size, buf, tx);
+	struct iovec iov = {
+		.iov_base = (void *)buf,
+		.iov_len = size
+	};
+	struct uio uio = {
+		.uio_iov = &iov,
+		.uio_iovcnt = 1,
+		.uio_offset = offset,
+		.uio_resid = size,
+		.uio_segflg = UIO_SYSSPACE,
+		.uio_rw = UIO_WRITE,
+	};
+	dmu_write_uio(dn->dn_objset, dn->dn_object, &uio, size, tx, 0);
 }
+#elif defined(HAVE_DMU_WRITE_BY_DNODE_6ARGS)
+#define lustre_dmu_write_by_dnode(dn, off, size, buf, tx) \
+	dmu_write_by_dnode((dn), (off), (size), (buf), (tx), 0)
+static inline void osd_dmu_write(struct osd_device *osd, dnode_t *dn,
+				 uint64_t offset, uint64_t size,
+				 const char *buf, dmu_tx_t *tx)
+{
+	LASSERT(dn);
+	lustre_dmu_write_by_dnode(dn, offset, size, buf, tx);
+}
+#elif defined(HAVE_DMU_WRITE_BY_DNODE)
+#define lustre_dmu_write_by_dnode(dn, off, size, buf, tx) \
+	dmu_write_by_dnode((dn), (off), (size), (buf), (tx))
+static inline void osd_dmu_write(struct osd_device *osd, dnode_t *dn,
+				 uint64_t offset, uint64_t size,
+				 const char *buf, dmu_tx_t *tx)
+{
+	LASSERT(dn);
+	lustre_dmu_write_by_dnode(dn, offset, size, buf, tx);
+}
+#else
+#error "No suitable dmu_write function found"
+#endif
 
 static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
 			       uint64_t offset, uint64_t size,
