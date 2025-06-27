@@ -86,6 +86,8 @@ struct lu_nodemap_fileset_info {
 	const char	*nfi_fileset;
 	/* fileset read-only flag */
 	bool		nfi_ro;
+	/* fileset is alternate */
+	bool		nfi_alt;
 };
 
 struct lu_fileset_alt {

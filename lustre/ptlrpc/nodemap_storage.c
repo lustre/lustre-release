@@ -1017,6 +1017,7 @@ nodemap_idx_fileset_info_init(struct lu_nodemap_fileset_info *fset_info,
 	fset_info->nfi_subid_fragments = fset_info->nfi_subid_header + 1;
 	fset_info->nfi_fileset = fileset;
 	fset_info->nfi_ro = read_only;
+	fset_info->nfi_alt = (fileset_id != NODEMAP_FILESET_PRIM_ID);
 
 	fset_size = (unsigned int)strlen(fset_info->nfi_fileset) + 1;
 	fset_info->nfi_fragment_cnt =

@@ -1510,6 +1510,94 @@ static int check_fileset_del_vs_parent(struct lu_nodemap *nodemap)
 	RETURN(-EPERM);
 }
 
+/**
+ * check_fileset_modify_vs_parent() - verify constraints on fileset modify
+ * @nodemap: nodemap to check
+ * @fset_info_old: old fileset information to be modified
+ * @fset_modify: new fileset information to be modified to
+ *
+ * This function uses check_fileset_add_vs_parent() to check whether a fileset
+ * rename and/or conversion is acceptable in a fileset modify operation.
+ * Changing a read-write fileset to read-only is generally permitted. If a
+ * read-only fileset is changed to read-write, we find the corresponding parent
+ * fileset (if applicable) and only permit the change if the parent fileset
+ * is also read-write.
+ *
+ * Return:
+ * * %0 on success (modification is permitted)
+ * * %-EPERM    fileset modification is not permitted
+ * * %-EINVAL    dynamic nodemap without parent
+ */
+static int
+check_fileset_modify_vs_parent(struct lu_nodemap *nodemap,
+			       struct lu_nodemap_fileset_info *fset_info_old,
+			       struct lu_nodemap_fileset_modify *fset_modify)
+{
+	const char *fset;
+	const char *p_prim;
+	int p_prim_len = 0;
+	bool p_prim_ro = false;
+	bool do_convert = false;
+
+	/* Not a dynamic nodemap: no constraints on fileset */
+	if (!nodemap->nm_dyn)
+		RETURN(0);
+
+	/* A dynamic nodemap without parent: should not happen */
+	if (!nodemap->nm_parent_nm)
+		RETURN(-EINVAL);
+
+	/* If fileset is renamed, use new fileset path */
+	if (fset_modify->nfm_fileset)
+		fset = fset_modify->nfm_fileset;
+	else
+		fset = fset_info_old->nfi_fileset;
+
+	p_prim = nodemap->nm_parent_nm->nm_fileset_prim;
+	if (p_prim) {
+		p_prim_len = strlen(p_prim);
+		p_prim_ro = nodemap->nm_parent_nm->nm_fileset_prim_ro;
+	}
+
+	if ((fset_info_old->nfi_alt &&
+	     fset_modify->nfm_type == FSM_TYPE_PRIMARY) ||
+	    (!fset_info_old->nfi_alt &&
+	     fset_modify->nfm_type == FSM_TYPE_ALTERNATE))
+		do_convert = true;
+
+	/* fileset conversion to prim and/or rename */
+	if ((do_convert || fset_modify->nfm_fileset) &&
+	    check_fileset_add_vs_parent(nodemap, fset))
+		RETURN(-EPERM);
+
+	/* Fileset flag rw -> ro is always allowed at this point since
+	 * it only restricts access further.
+	 * ro -> rw requires special care and is not allowed if an
+	 * ro fileset was inherited from the parent.
+	 */
+	if ((fset_info_old->nfi_ro &&
+	     fset_modify->nfm_access == FSM_ACCESS_RW) ||
+	    (!fset_info_old->nfi_ro &&
+	     fset_modify->nfm_access != FSM_ACCESS_RO)) {
+		struct lu_fileset_alt *fset_alt;
+
+		/* Find any parent fileset, prim or alt, that matches fset_new
+		 * and is read-only. If found, deny modification.
+		 */
+		if (p_prim_ro && p_prim && strstr(fset, p_prim) == fset &&
+		    (fset[p_prim_len] == '/' || fset[p_prim_len] == '\0'))
+			RETURN(-EPERM);
+
+		fset_alt = fileset_alt_search_path(
+			&nodemap->nm_parent_nm->nm_fileset_alt, fset, true);
+		if (fset_alt && fset_alt->nfa_ro)
+			RETURN(-EPERM);
+	}
+
+	/* any other condition: permitted */
+	RETURN(0);
+}
+
 static void nodemap_fileset_init(struct lu_nodemap *nodemap)
 {
 	nodemap->nm_fileset_prim = NULL;
@@ -1555,26 +1643,37 @@ static int nodemap_update_fileset_iam_flag(struct lu_nodemap *nodemap,
 }
 
 /**
+ * nodemap_has_any_fileset() - Check if nodemap has any filesets(prim or alt)
+ * defined
+ *
+ * @nodemap: nodemap to check
+ *
+ * The caller must hold the nodemap->nm_fileset_alt_lock.
+ *
+ * Return:
+ * * true	if nodemap has any filesets defined
+ */
+static bool nodemap_has_any_fileset(const struct lu_nodemap *nodemap)
+{
+	RETURN((nodemap->nm_fileset_prim && strlen(nodemap->nm_fileset_prim)) ||
+	       nodemap->nm_fileset_alt_sz);
+}
+
+/**
  * nodemap_fileset_del_primary() - remove primary fileset
  * @nodemap: nodemap to remove primary fileset from
- * @force: true to force fileset removal
  *
  * Return:
  * * %0 on success
  * * %-EINVAL	invalid nodemap or invalid input parameters
  * * %-EPERM	fileset removal is not permitted
  */
-static int nodemap_fileset_del_primary(struct lu_nodemap *nodemap, bool force)
+static int nodemap_fileset_del_primary(struct lu_nodemap *nodemap)
 {
-	int rc = 0;
+	int rc;
 
 	if (!nodemap)
 		RETURN(-EINVAL);
-
-	if (!force)
-		rc = check_fileset_del_vs_parent(nodemap);
-	if (rc)
-		RETURN(rc);
 
 	rc = nodemap_idx_fileset_clear(nodemap, NODEMAP_FILESET_PRIM_ID);
 	if (!rc)
@@ -1601,10 +1700,6 @@ static int nodemap_fileset_del_alternate(struct lu_nodemap *nodemap,
 				   false);
 	if (!fset)
 		RETURN(-ENOENT);
-
-	rc = check_fileset_del_vs_parent(nodemap);
-	if (rc)
-		RETURN(rc);
 
 	/* delete fileset from IAM nodemap records */
 	rc = nodemap_idx_fileset_clear(nodemap, fset->nfa_id);
@@ -1643,10 +1738,15 @@ static int nodemap_fileset_del(struct lu_nodemap *nodemap,
 	/* attempt to delete from primary fileset first */
 	if (nodemap->nm_fileset_prim &&
 	    strcmp(nodemap->nm_fileset_prim, fileset_path) == 0) {
-		rc = nodemap_fileset_del_primary(nodemap, false);
+		rc = check_fileset_del_vs_parent(nodemap);
+		if (!rc)
+			rc = nodemap_fileset_del_primary(nodemap);
 	} else {
 		down_write(&nodemap->nm_fileset_alt_lock);
-		rc = nodemap_fileset_del_alternate(nodemap, fileset_path);
+		rc = check_fileset_del_vs_parent(nodemap);
+		if (!rc)
+			rc = nodemap_fileset_del_alternate(nodemap,
+							   fileset_path);
 		up_write(&nodemap->nm_fileset_alt_lock);
 	}
 
@@ -1657,7 +1757,7 @@ static int nodemap_fileset_del(struct lu_nodemap *nodemap,
  * nodemap_fileset_clear() - Deletes all types of filesets from the nodemap
  *
  * @nodemap: nodemap to clear filesets from
- * @force: true to force fileset clear
+ * @force: true to force fileset clear, i.e., bypass parent nodemap check
  *
  * Return:
  * * %0 on success
@@ -1672,17 +1772,24 @@ static int nodemap_fileset_clear(struct lu_nodemap *nodemap, bool force)
 	if (!nodemap)
 		RETURN(-EINVAL);
 
-	if (!force && nodemap->nm_dyn) {
+	if (!force) {
 		/* If parent has any fileset (any type), child cannot wipe
 		 * all filesets.
 		 */
-		if ((nodemap->nm_parent_nm->nm_fileset_prim &&
-		     strlen(nodemap->nm_parent_nm->nm_fileset_prim)) ||
-		    nodemap->nm_parent_nm->nm_fileset_alt_sz)
-			RETURN(-EINVAL);
+		if (nodemap->nm_dyn) {
+			down_read(&nodemap->nm_parent_nm->nm_fileset_alt_lock);
+			rc = nodemap_has_any_fileset(nodemap->nm_parent_nm);
+			up_read(&nodemap->nm_parent_nm->nm_fileset_alt_lock);
+			if (rc)
+				RETURN(-EINVAL);
+		}
+
+		rc = check_fileset_del_vs_parent(nodemap);
+		if (rc)
+			RETURN(rc);
 	}
 
-	rc = nodemap_fileset_del_primary(nodemap, force);
+	rc = nodemap_fileset_del_primary(nodemap);
 	if (rc) {
 		CERROR("%s: failed to clear prim fileset: rc = %d\n",
 		       nodemap->nm_name, rc);
@@ -1696,7 +1803,7 @@ static int nodemap_fileset_clear(struct lu_nodemap *nodemap, bool force)
 		rc = nodemap_idx_fileset_clear(nodemap, fileset->nfa_id);
 		/* report errors but don't abort deletion process */
 		if (rc) {
-			CERROR("%s: failed to clear alt fileset %s: rc = %d\n",
+			CWARN("%s: failed to clear alt fileset %s: rc = %d\n",
 			       nodemap->nm_name, fileset->nfa_path, rc);
 		}
 	}
@@ -1738,10 +1845,6 @@ static int nodemap_fileset_add_primary(struct lu_nodemap *nodemap,
 					      fileset_path);
 	if (fset_alt_exists)
 		RETURN(-EEXIST);
-
-	rc = check_fileset_add_vs_parent(nodemap, fileset_path);
-	if (rc)
-		RETURN(rc);
 
 	fileset_size = strlen(fileset_path) + 1;
 
@@ -1798,10 +1901,6 @@ static int nodemap_fileset_add_alternate(struct lu_nodemap *nodemap,
 		RETURN(-EEXIST);
 	}
 
-	rc = check_fileset_add_vs_parent(nodemap, fileset_path);
-	if (rc)
-		RETURN(rc);
-
 	fset = fileset_alt_create(fileset_path, read_only);
 	if (!fset)
 		RETURN(-ENOMEM);
@@ -1856,13 +1955,23 @@ static int nodemap_fileset_add(struct lu_nodemap *nodemap,
 		RETURN(-EINVAL);
 
 	down_write(&nodemap->nm_fileset_alt_lock);
-	if (alt)
+	if (alt) {
+		rc = check_fileset_add_vs_parent(nodemap, fileset_path);
+		if (rc)
+			GOTO(out_unlock, rc);
+
 		rc = nodemap_fileset_add_alternate(nodemap, fileset_path,
 						   read_only);
-	else
+	} else {
+		rc = check_fileset_add_vs_parent(nodemap, fileset_path);
+		if (rc)
+			GOTO(out_unlock, rc);
+
 		rc = nodemap_fileset_add_primary(nodemap, fileset_path,
 						 read_only);
+	}
 
+out_unlock:
 	up_write(&nodemap->nm_fileset_alt_lock);
 
 	return rc;
@@ -1916,6 +2025,12 @@ nodemap_fileset_modify_prim(struct lu_nodemap *nodemap,
 	     strcmp(fset_modify->nfm_fileset, nodemap->nm_fileset_prim) == 0))
 		RETURN(0);
 
+	/* if nodemap is dynamic additional constraints must be checked */
+	rc = check_fileset_modify_vs_parent(nodemap, &fset_info_old,
+					    fset_modify);
+	if (rc)
+		RETURN(rc);
+
 	/* only fileset flag should be changed? */
 	if (!fset_modify->nfm_fileset &&
 	    fset_modify->nfm_type != FSM_TYPE_ALTERNATE &&
@@ -1949,7 +2064,7 @@ nodemap_fileset_modify_prim(struct lu_nodemap *nodemap,
 		fset = fset_info_old.nfi_fileset;
 
 	/* update fileset */
-	rc = nodemap_fileset_del_primary(nodemap, false);
+	rc = nodemap_fileset_del_primary(nodemap);
 	if (rc)
 		GOTO(out_cleanup, rc);
 
@@ -2020,6 +2135,12 @@ nodemap_fileset_modify_alt(struct lu_nodemap *nodemap,
 	    (!fset_modify->nfm_fileset ||
 	     strcmp(fset_modify->nfm_fileset, fset_alt->nfa_path) == 0))
 		RETURN(0);
+
+	/* if nodemap is dynamic additional constraints must be checked */
+	rc = check_fileset_modify_vs_parent(nodemap, &fset_info_old,
+					    fset_modify);
+	if (rc)
+		RETURN(rc);
 
 	/* only fileset flag should be changed? */
 	if (!fset_modify->nfm_fileset &&
@@ -2112,10 +2233,6 @@ static int nodemap_fileset_modify(struct lu_nodemap *nodemap,
 	if (fset_modify->nfm_fileset && fset_modify->nfm_fileset[0] != '/')
 		RETURN(-EINVAL);
 
-	/* TODO support dynamic nodemaps */
-	if (nodemap->nm_dyn)
-		RETURN(-EOPNOTSUPP);
-
 	down_write(&nodemap->nm_fileset_alt_lock);
 
 	if (nodemap->nm_fileset_prim &&
@@ -2172,7 +2289,11 @@ static int nodemap_set_fileset_prim_iam(struct lu_nodemap *nodemap,
 		RETURN(-EINVAL);
 
 	if (fileset_path[0] == '\0' || strcmp(fileset_path, "clear") == 0) {
-		rc = nodemap_fileset_del_primary(nodemap, false);
+		rc = check_fileset_del_vs_parent(nodemap);
+		if (rc)
+			RETURN(rc);
+
+		rc = nodemap_fileset_del_primary(nodemap);
 		if (!rc && !nodemap->nm_dyn && out_clean_llog_fileset)
 			*out_clean_llog_fileset = true;
 		GOTO(out, rc);
@@ -2446,29 +2567,6 @@ char *nodemap_get_fileset_prim(const struct lu_nodemap *nodemap)
 	return (char *)nodemap->nm_fileset_prim;
 }
 EXPORT_SYMBOL(nodemap_get_fileset_prim);
-
-/**
- * nodemap_has_any_fileset() - Check if nodemap has any filesets(prim or alt)
- * defined
- *
- * @nodemap: nodemap to check
- *
- * The caller must hold the nodemap->nm_fileset_alt_lock.
- *
- * Return:
- * * true	if nodemap has any filesets defined
- */
-static bool nodemap_has_any_fileset(const struct lu_nodemap *nodemap)
-{
-	bool found = false;
-
-	if (nodemap->nm_fileset_prim && nodemap->nm_fileset_prim[0] != '\0')
-		RETURN(true);
-
-	found = !RB_EMPTY_ROOT(&nodemap->nm_fileset_alt);
-
-	return found;
-}
 
 /**
  * nodemap_fileset_get_root() - Gets root for client mount directory based

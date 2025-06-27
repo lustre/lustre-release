@@ -2218,13 +2218,23 @@ do_facet_check_fileset() {
 	local nm=$2
 	local fset_check=$3
 	local fset_type=${4:-"primary"}
+	local fset_ro=${5:-"rw"}
 
 	if [[ $fset_type != "primary" && $fset_type != "alternate" ]]; then
 		error "unknown fileset type $fset_type"
 	fi
 
-	do_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
-		awk '/${fset_type}/ { if (\\\$3 == \\\"$fset_check\\\") print \\\$3 }'"
+	if [[ $fset_ro == "ro" ]]; then
+		do_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
+			awk -F '[[:blank:]]|,' '/${fset_type}/ { \
+			if (\\\$4 == \\\"$fset_check\\\" && \\\$7 == \\\"ro\\\" ) \
+			print \\\$4 }'"
+	else
+		do_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
+			awk -F '[[:blank:]]|,' '/${fset_type}/ { \
+			if (\\\$4 == \\\"$fset_check\\\" && \\\$7 != \\\"ro\\\" ) \
+			print \\\$4 }'"
+	fi
 }
 
 wait_update_facet_fileset() {
@@ -2254,7 +2264,6 @@ wait_nm_sync_fileset() {
 	local fset_expected=$3
 	local fset_type=${4:-"primary"}
 	local fset_ro=${5:-false}
-	local fset_access="rw"
 	local awk_expr
 
 	if [[ $fset_type != "primary" && $fset_type != "alternate" ]]; then
@@ -8727,6 +8736,191 @@ test_72e() {
 		error "found $exp_cnt_new exports for $client_nid on $nm, expected $exp_cnt_orig"
 }
 run_test 72e "dynamic nodemap reclassify"
+
+cleanup_72f() {
+	local nm=$1
+	local dyn_nm=$2
+	do_facet ost1 $LCTL nodemap_del $dyn_nm
+	nodemap_clear_filesets_and_wait $nm
+	do_facet mgs $LCTL nodemap_del $nm
+	wait_nm_sync $nm id ''
+}
+
+test_72f() {
+	local mgsnm="mgsnm_test72f"
+	local nm="dynnm_test72f"
+	local fileset_prim="/primary"
+	local fileset_alt1="/alt1"
+	local fileset_alt2="/alt2"
+	local val
+
+	(( OST1_VERSION >= $(version_code 2.16.56) )) ||
+		skip "Need OSS >= 2.16.56 multiple fileset"
+
+	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
+		skip "Need servers on different hosts"
+
+	stack_trap "cleanup_72f $mgsnm $nm" EXIT
+
+	# create parent nodemap
+	do_facet mgs $LCTL nodemap_add $mgsnm ||
+		error "adding $mgsnm on MGS failed"
+	wait_nm_sync $mgsnm id '' inactive
+
+	# create dynamic nodemap
+	do_facet ost1 $LCTL nodemap_add -d -p $mgsnm $nm ||
+		error "dynamic nodemap on server failed"
+	val=$(do_facet_check_fileset ost1 $nm "" "primary")
+	[[ "$val" == "" ]] ||
+		error "$nm should have empty fileset"
+
+	do_facet ost1 $LCTL nodemap_info --name $nm
+
+	# initial tests without parent filesets, i.e., no restrictions
+	do_facet ost1 $LCTL nodemap_fileset_add --name $nm \
+		--fileset $fileset_prim ||
+		error "add fileset $fileset_prim to $nm failed"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_prim" "primary")
+	[[ "$val" == "$fileset_prim" ]] ||
+		error "$nm should have fileset $fileset_prim"
+
+	do_facet ost1 $LCTL nodemap_fileset_add --name $nm \
+		--fileset $fileset_alt1 --alt ||
+		error "add fileset $fileset_alt1 to $nm failed"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_alt1" "alternate")
+	[[ "$val" == "$fileset_alt1" ]] ||
+		error "$nm should have fileset $fileset_alt1"
+
+	do_facet ost1 $LCTL nodemap_fileset_add --name $nm \
+		--fileset $fileset_alt2 --alt --ro ||
+		error "add fileset $fileset_alt2 to $nm failed"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_alt2" "alternate" "ro")
+	[[ "$val" == "$fileset_alt2" ]] ||
+		error "$nm should have fileset $fileset_alt2"
+
+	do_facet ost1 $LCTL nodemap_info --name $nm  --property fileset
+
+	# shuffle filesets around with fileset modify
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_prim --alt ||
+		error "failed to convert primary fileset to alt fileset"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_prim" "alternate")
+	[[ "$val" == "$fileset_prim" ]] ||
+		error "$nm should have fileset $fileset_prim"
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_alt2 --prim --rw ||
+		error "failed to convert alt fileset to primary"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_alt2" "primary")
+	[[ "$val" == "$fileset_alt2" ]] ||
+		error "$nm should have fileset $fileset_alt2"
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_alt1 --ro ||
+		error "failed to change alt fileset to read-only"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_alt1" "alternate" "ro")
+	[[ "$val" == "$fileset_alt1" ]] ||
+		error "$nm should have fileset $fileset_alt1"
+
+	do_facet ost1 $LCTL nodemap_info --name $nm --property fileset
+
+	# add filesets to parent nodemap (deletes dynamic nodemap)
+	do_facet mgs $LCTL nodemap_fileset_add --name $mgsnm \
+		--fileset $fileset_prim --ro ||
+		error "add fileset $fileset_prim to $mgsnm failed"
+	do_facet mgs $LCTL nodemap_fileset_add --name $mgsnm \
+		--fileset $fileset_alt1 --alt ||
+		error "add fileset $fileset_alt1 to $mgsnm failed"
+	do_facet mgs $LCTL nodemap_fileset_add --name $mgsnm \
+		--fileset $fileset_alt2 --alt --ro ||
+		error "add fileset $fileset_alt2 to $mgsnm failed"
+	wait_nm_sync $mgsnm fileset '' inactive
+
+	# create dynamic nodemap
+	do_facet ost1 $LCTL nodemap_add -d -p $mgsnm $nm ||
+		error "dynamic nodemap on server failed"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_prim" "primary" "ro")
+	[[ "$val" == "$fileset_prim" ]] ||
+		error "$nm should filesets set"
+
+	do_facet ost1 $LCTL nodemap_info --name $nm --property fileset
+
+	# 1. convert $fileset_prim to alternate (should succeed)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_prim --alt ||
+		error "failed to convert primary fileset to alt fileset"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_prim" "alternate" "ro")
+	[[ "$val" == "$fileset_prim" ]] ||
+		error "$nm should have fileset $fileset_prim"
+	# 2. convert $fileset_alt2 to primary and change ro -> rw (should fail)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_alt2 --prim --rw &&
+		error "should not be able to convert ro alt fileset to rw prim"
+	# 3. convert $fileset_alt2 to prim and rename (should succeed)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_alt2 --prim --rename "${fileset_alt2}/alt" ||
+		error "failed to convert alt fileset to primary"
+	val=$(do_facet_check_fileset ost1 $nm "${fileset_alt2}/alt" \
+		"primary" "ro")
+	[[ "$val" == "${fileset_alt2}/alt" ]] ||
+		error "$nm should have fileset ${fileset_alt2}/alt"
+	# 4. change $fileset_prim ro -> rw (should fail)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_prim --rw &&
+		error "should not be able to change ro alt fileset to rw"
+	# 5. change $fileset_alt1 rw -> ro (should succeed)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_alt1 --ro ||
+		error "failed to change alt rw fileset to ro"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_alt1" "alternate" "ro")
+	[[ "$val" == "$fileset_alt1" ]] ||
+		error "$nm should have fileset $fileset_alt1"
+	# 6. rename $fileset_prim to /prim (should fail)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_prim --rename "/prim" &&
+		error "should not be able to rename primary fileset outside parent's namespace restrictions"
+	# 7. delete $fileset_alt2 (should succeed)
+	do_facet ost1 $LCTL nodemap_fileset_del --name $nm \
+		--fileset "${fileset_alt2}/alt" ||
+		error "failed to delete alt fileset ${fileset_alt2}/alt"
+	val=$(do_facet_check_fileset ost1 $nm "${fileset_alt2}/alt" "primary")
+	[[ -z "$val" ]] ||
+		error "$nm should not have fileset ${fileset_alt2}/alt"
+	# 8. delete $fileset_alt1 (should succeed)
+	do_facet ost1 $LCTL nodemap_fileset_del --name $nm \
+		--fileset $fileset_alt1 ||
+		error "failed to delete alt fileset $fileset_alt1"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_alt1" "alternate" "ro")
+	[[ -z "$val" ]] ||
+		error "$nm should not have fileset $fileset_alt1"
+	# 9. rename $fileset_primary and change ro -> rw (should succeed)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset $fileset_prim --rename "${fileset_alt1}/alt" --rw ||
+		error "failed to rename primary fileset to ${fileset_alt1}/alt"
+	val=$(do_facet_check_fileset ost1 $nm "${fileset_alt1}/alt" "alternate")
+	# 10. rename $fileset_primary to /primary/prim (should fail)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset "${fileset_alt1}/alt" --rename "$fileset_prim" &&
+		error "should not be able to rename alt rw fileset to '/primary' which can only be read-only"
+	# 11. rename $fileset_primary and change rw -> ro (should succeed)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset "${fileset_alt1}/alt" --rename "$fileset_prim" --ro ||
+		error "failed to rename alt fileset to $fileset_prim"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_prim" "alternate" "ro")
+	[[ "$val" == "$fileset_prim" ]] ||
+		error "$nm should have fileset $fileset_prim"
+	# 12. convert $fileset_primary to primary (should succeed)
+	do_facet ost1 $LCTL nodemap_fileset_modify --name $nm \
+		--fileset "$fileset_prim" --prim ||
+		error "failed to convert alt fileset to primary"
+	val=$(do_facet_check_fileset ost1 $nm "$fileset_prim" "primary" "ro")
+	[[ "$val" == "$fileset_prim" ]] ||
+		error "$nm should have fileset $fileset_prim"
+	# 13. attempt to clear remaining filesets (should fail)
+	do_facet ost1 $LCTL nodemap_fileset_del --name $nm --all &&
+		error "should not be able to clear filesets on dynamic nodemap"
+
+	do_facet ost1 $LCTL nodemap_info --name $nm --property fileset
+}
+run_test 72f "fileset_modify on dynamic nodemap"
 
 test_73() {
 	local vaultdir1=$DIR/$tdir/vault1

@@ -27,6 +27,13 @@ and
 .B --fileset
 options are
 mandatory.
+.PP
+.B nodemap_fileset_modify
+can be used with dynamic nodemaps. However, filesets in dynamic nodemaps cannot
+be modified to escape the namespace restrictions imposed by any fileset set on
+the parent's nodemap. Further, read-only filesets on the parent nodemap
+cannot become read-write on the child nodemap. If the parent nodemap has no
+fileset defined, the child nodemap can freely modify any fileset.
 .SH OPTIONS
 .TP
 .BR -n ", " --name " NODEMAP_NAME"

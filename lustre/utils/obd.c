@@ -4768,12 +4768,6 @@ int jt_nodemap_fileset_modify(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	if (!is_mgs()) {
-		fprintf(stderr, "%s: This command must be run on the MGS.\n",
-			jt_cmdname(argv[0]));
-		return -1;
-	}
-
 	/* Format flags as <type>:<access> */
 	rc = snprintf(flags, sizeof(flags), "%s:%s", type_new, access_new);
 	if (rc < 0 || rc >= sizeof(flags)) {
