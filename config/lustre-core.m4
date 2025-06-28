@@ -1156,16 +1156,19 @@ AC_DEFUN([LC_HAVE_BLK_INTEGRITY_ITER], [
 #
 # 3.17 removed unused argument from lm_grant
 #
-AC_DEFUN([LC_HAVE_LM_GRANT_2ARGS], [
-LB_CHECK_COMPILE([if 'lock_manager_operations.lm_grant' takes two args],
-lm_grant, [
-	#include <linux/fs.h>
-],[
-	((struct lock_manager_operations *)NULL)->lm_grant(NULL, 0);
-],[
-	AC_DEFINE(HAVE_LM_GRANT_2ARGS, 1,
-		[lock_manager_operations.lm_grant takes two args])
+AC_DEFUN([LC_SRC_HAVE_LM_GRANT_2ARGS], [
+	LB2_LINUX_TEST_SRC([lock_manager_operations_lm_grant], [
+		#include <linux/fs.h>
+	],[
+		((struct lock_manager_operations *)NULL)->lm_grant(NULL, 0);
+	])
 ])
+AC_DEFUN([LC_HAVE_LM_GRANT_2ARGS], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'lock_manager_operations.lm_grant' takes two args],
+	[lock_manager_operations_lm_grant], [
+		AC_DEFINE(HAVE_LM_GRANT_2ARGS, 1,
+			[lock_manager_operations.lm_grant takes two args])
+	])
 ]) # LC_HAVE_LM_GRANT_2ARGS
 
 #
@@ -2537,16 +2540,19 @@ AC_DEFUN([LC_PAGEVEC_INIT_ONE_PARAM], [
 #
 # 4.14 pagevec_lookup takes three parameters
 #
-AC_DEFUN([LC_PAGEVEC_LOOKUP_THREE_PARAM], [
-LB_CHECK_COMPILE([if 'pagevec_lookup' takes three parameter],
-pagevec_lookup, [
-	#include <linux/pagevec.h>
-],[
-	pagevec_lookup(NULL, NULL, NULL);
-],[
-	AC_DEFINE(HAVE_PAGEVEC_LOOKUP_THREE_PARAM, 1,
-		['pagevec_lookup' takes three parameters])
+AC_DEFUN([LC_SRC_PAGEVEC_LOOKUP_THREE_PARAM], [
+	LB2_LINUX_TEST_SRC([pagevec_lookup_3args], [
+		#include <linux/pagevec.h>
+	],[
+		pagevec_lookup(NULL, NULL, NULL);
+	])
 ])
+AC_DEFUN([LC_PAGEVEC_LOOKUP_THREE_PARAM], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'pagevec_lookup' takes three parameter],
+	[pagevec_lookup_3args], [
+		AC_DEFINE(HAVE_PAGEVEC_LOOKUP_THREE_PARAM, 1,
+			['pagevec_lookup' takes three parameters])
+	])
 ]) # LC_PAGEVEC_LOOKUP_THREE_PARAM
 
 #
@@ -2605,15 +2611,18 @@ AC_DEFUN([LC_INTERVAL_TREE_CACHED], [
 #
 # 4.14 introduced IS_ENCRYPTED and S_ENCRYPTED
 #
-AC_DEFUN([LC_IS_ENCRYPTED], [
-LB_CHECK_COMPILE([if IS_ENCRYPTED is defined],
-is_encrypted, [
-	#include <linux/fs.h>
-],[
-	(void)IS_ENCRYPTED((struct inode *)1);
-],[
-	has_is_encrypted="yes"
+AC_DEFUN([LC_SRC_IS_ENCRYPTED], [
+	LB2_LINUX_TEST_SRC([is_encrypted], [
+		#include <linux/fs.h>
+	],[
+		(void)IS_ENCRYPTED((struct inode *)1);
+	])
 ])
+AC_DEFUN([LC_IS_ENCRYPTED], [
+	LB2_MSG_LINUX_TEST_RESULT([if IS_ENCRYPTED is defined],
+	[is_encrypted], [
+		has_is_encrypted="yes"
+	])
 ]) # LC_IS_ENCRYPTED used by LC_CONFIG_CRYPTO
 
 #
@@ -3443,21 +3452,21 @@ AC_DEFUN([LC_HAVE_FAULT_IN_IOV_ITER_READABLE], [
 # Kernel version v5.15-rc1 commit 730633f0b7f951726e87f912a6323641f674ae34
 # mm: Protect operations adding pages to page cache with invalidate_lock
 #
-AC_DEFUN([LC_HAVE_INVALIDATE_LOCK], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if have address_space have invalidate_lock member],
-address_space_invalidate_lock, [
+AC_DEFUN([LC_SRC_HAVE_INVALIDATE_LOCK], [
+	LB2_LINUX_TEST_SRC([address_space_invalidate_lock], [
 		#include <linux/fs.h>
 	],[
 		struct address_space *mapping = NULL;
 
 		filemap_invalidate_lock(mapping);
-	],[
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_INVALIDATE_LOCK], [
+	LB2_MSG_LINUX_TEST_RESULT([if filemap_invalidate_lock() is available],
+	[address_space_invalidate_lock], [
 		AC_DEFINE(HAVE_INVALIDATE_LOCK, 1,
-			[address_space invalidate_lock member exists])
+			[filemap_invalidate_lock() is available])
 	])
-EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_INVALIDATE_LOCK
 
 #
@@ -3572,19 +3581,18 @@ LB_CHECK_EXPORT([delete_from_page_cache], [mm/filemap.c],
 # Kernel 5.16-rc1 bd3488e7b4d61780eb3dfaca1cc6f4026bcffd48
 # mm/writeback: Rename __add_wb_stat() to wb_stat_mod()
 #
-AC_DEFUN([LC_HAVE_WB_STAT_MOD], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if wb_stat_mod() exists],
-wb_stat_mode, [
-	#include <linux/backing-dev.h>
-],[
-	wb_stat_mod(NULL, WB_WRITEBACK, 1);
-],[
-	AC_DEFINE(HAVE_WB_STAT_MOD, 1,
-		[wb_stat_mod() exists])
+AC_DEFUN([LC_SRC_HAVE_WB_STAT_MOD], [
+	LB2_LINUX_TEST_SRC([wb_stat_mode], [
+		#include <linux/backing-dev.h>
+	],[
+		wb_stat_mod(NULL, WB_WRITEBACK, 1);
+	],[-Werror])
 ])
-EXTRA_KCFLAGS="$tmp_flags"
+AC_DEFUN([LC_HAVE_WB_STAT_MOD], [
+	LB2_MSG_LINUX_TEST_RESULT([if wb_stat_mod() exists], [wb_stat_mode], [
+		AC_DEFINE(HAVE_WB_STAT_MOD, 1,
+			[wb_stat_mod() exists])
+	])
 ]) # LC_HAVE_WB_STAT_MOD
 
 #
@@ -5035,7 +5043,7 @@ AC_DEFUN([LC_HAVE_PAGEPRIVATE2], [
 ]) # LC_HAVE_PAGEPRIVATE2
 
 #
-# LC_STRUCT_LSM_CONTEXT
+# LC_STRUCT_LSM_CONTEXT_EARLY
 #
 # Linux commit v6.13-rc1-1-g6fba89813ccf
 #   lsm: ensure the correct LSM context releaser
@@ -5473,7 +5481,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_INTERVAL_BLK_INTEGRITY
 	LC_KEY_MATCH_DATA
 	LC_HAVE_BLK_INTEGRITY_ITER
-	LC_HAVE_LM_GRANT_2ARGS
 
 	# 3.18
 	LC_PERCPU_COUNTER_INIT
@@ -5569,7 +5576,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 4.14
 	LC_PAGEVEC_INIT_ONE_PARAM
-	LC_PAGEVEC_LOOKUP_THREE_PARAM
 	LC_BI_BDEV
 	LC_INTERVAL_TREE_CACHED
 
@@ -5640,7 +5646,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.15
 	LC_HAVE_GET_ACL_RCU_ARG
-	LC_HAVE_INVALIDATE_LOCK
 	LC_HAVE_FAULT_IN_IOV_ITER_READABLE
 
 	# 5.16
@@ -5649,7 +5654,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_KIOCB_COMPLETE_2ARGS
 	LC_FOLIO_MEMCG_LOCK_EXPORTED
 	LC_EXPORTS_DELETE_FROM_PAGE_CACHE
-	LC_HAVE_WB_STAT_MOD
 
 	# 5.17
 	LC_HAVE_INVALIDATE_FOLIO
