@@ -243,8 +243,6 @@ int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj);
 int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 		   const struct lu_attr *pattr, struct mdd_object *cobj,
 		   bool check_perm);
-int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
-		   const struct lu_attr *pattr, const struct lu_attr *attr);
 int mdd_may_delete(const struct lu_env *env, struct mdd_object *tpobj,
 		   const struct lu_attr *tpattr, struct mdd_object *tobj,
 		   const struct lu_attr *tattr, const struct lu_attr *cattr,

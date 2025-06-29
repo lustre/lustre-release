@@ -453,32 +453,6 @@ int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 	RETURN(rc);
 }
 
-/* Check whether can unlink from the pobj in the case of "cobj == NULL". */
-int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
-		   const struct lu_attr *pattr, const struct lu_attr *attr)
-{
-	int rc;
-
-	ENTRY;
-
-	if (mdd_is_dead_obj(pobj))
-		RETURN(-ENOENT);
-
-	if (attr->la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL))
-		RETURN(-EPERM);
-
-	rc = mdd_permission_internal_locked(env, pobj, pattr,
-					    MAY_WRITE | MAY_EXEC,
-					    DT_TGT_PARENT);
-	if (rc != 0)
-		RETURN(rc);
-
-	if (pattr->la_flags & LUSTRE_APPEND_FL)
-		RETURN(-EPERM);
-
-	RETURN(rc);
-}
-
 /* pobj == NULL is remote ops case, under such case, pobj's
  * VTX feature has been checked already, no need check again.
  */
