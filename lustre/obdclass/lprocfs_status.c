@@ -1422,13 +1422,12 @@ static void stats_free(struct kref *kref)
 
 	percpusize = lprocfs_stats_counter_size(stats);
 	for (i = 0; i < num_entry; i++)
-		if (stats->ls_percpu[i])
-			LIBCFS_FREE(stats->ls_percpu[i], percpusize);
+		LIBCFS_FREE(stats->ls_percpu[i], percpusize);
 
 	if (stats->ls_cnt_header) {
 		for (i = 0; i < stats->ls_num; i++)
-			if (stats->ls_cnt_header[i].lc_hist != NULL)
-				CFS_FREE_PTR(stats->ls_cnt_header[i].lc_hist);
+			CFS_FREE_PTR(stats->ls_cnt_header[i].lc_hist);
+
 		CFS_FREE_PTR_ARRAY(stats->ls_cnt_header, stats->ls_num);
 	}
 
