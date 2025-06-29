@@ -861,8 +861,7 @@ static void memfs_free_fc(struct fs_context *fc)
 {
 	struct memfs_options *ctx = fc->fs_private;
 
-	if (ctx)
-		OBD_FREE_PTR(ctx);
+	OBD_FREE_PTR(ctx);
 }
 
 static const struct fs_context_operations memfs_context_ops = {
