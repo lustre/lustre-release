@@ -36,8 +36,6 @@ struct hash_index {
 
 int hash_index_init(struct hash_index *hind, size_t kenlen, size_t reclen);
 void hash_index_fini(struct hash_index *hind);
-struct hash_index_entry *hash_index_lookup_entry(struct hash_index *hind,
-						 const void *key);
 int hash_index_lookup(struct hash_index *hind, const void *key, void *rec);
 int hash_index_insert(struct hash_index *hind, void *key, size_t keylen,
 		      void *rec, size_t reclen);

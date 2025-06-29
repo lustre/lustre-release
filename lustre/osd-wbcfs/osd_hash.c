@@ -86,16 +86,6 @@ void hash_index_fini(struct hash_index *hind)
 	rhashtable_destroy(&hind->hi_htbl);
 }
 
-struct hash_index_entry *
-hash_index_lookup_entry(struct hash_index *hind, const void *key)
-{
-	struct hash_index_entry *entry;
-
-	entry = rhashtable_lookup_fast(&hind->hi_htbl, key,
-				       hind->hi_htbl_params);
-	return entry;
-}
-
 int hash_index_lookup(struct hash_index *hind, const void *key, void *rec)
 {
 	struct hash_index_entry *entry;
