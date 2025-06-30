@@ -10,6 +10,8 @@
 # autoMakefile
 #
 
+LUSTRE_LINUX_KERNELDIR ?= $(shell uname -r | sed 's/\(.*\)/\/lib\/modules\/\1\/build/')
+
 SUBDIRS := @LDISKFS_SUBDIR@ \
 	. \
 	@LUSTREIOKIT_SUBDIR@ \
