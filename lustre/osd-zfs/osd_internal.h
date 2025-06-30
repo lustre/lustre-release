@@ -1007,7 +1007,11 @@ static inline void osd_dmu_write(struct osd_device *osd, dnode_t *dn,
 				 const char *buf, dmu_tx_t *tx)
 {
 	LASSERT(dn);
+#ifdef HAVE_DMU_WRITE_BY_DNODE_6ARGS
+	dmu_write_by_dnode(dn, offset, size, buf, tx, 0);
+#else
 	dmu_write_by_dnode(dn, offset, size, buf, tx);
+#endif
 }
 
 static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
