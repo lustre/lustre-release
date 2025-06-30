@@ -65,11 +65,13 @@
  * Context: Any context.
  * Return: An entry suitable for storing in the XArray.
  */
+#ifndef xa_mk_value
 static inline void *xa_mk_value(unsigned long v)
 {
 	WARN_ON((long)v < 0);
 	return (void *)((v << 1) | 1);
 }
+#endif
 
 /**
  * xa_to_value() - Get value stored in an XArray entry.
@@ -78,10 +80,12 @@ static inline void *xa_mk_value(unsigned long v)
  * Context: Any context.
  * Return: The value stored in the XArray entry.
  */
+#ifndef xa_to_value
 static inline unsigned long xa_to_value(const void *entry)
 {
 	return (unsigned long)entry >> 1;
 }
+#endif
 
 /**
  * xa_is_value() - Determine if an entry is a value.
@@ -90,10 +94,12 @@ static inline unsigned long xa_to_value(const void *entry)
  * Context: Any context.
  * Return: True if the entry is a value, false if it is a pointer.
  */
+#ifndef xa_is_value
 static inline bool xa_is_value(const void *entry)
 {
 	return (unsigned long)entry & 1;
 }
+#endif
 
 /**
  * xa_tag_pointer() - Create an XArray entry for a tagged pointer.
@@ -108,10 +114,12 @@ static inline bool xa_is_value(const void *entry)
  * Context: Any context.
  * Return: An XArray entry.
  */
+#ifndef xa_tag_pointer
 static inline void *xa_tag_pointer(void *p, unsigned long tag)
 {
 	return (void *)((unsigned long)p | tag);
 }
+#endif
 
 /**
  * xa_untag_pointer() - Turn an XArray entry into a plain pointer.
@@ -123,10 +131,12 @@ static inline void *xa_tag_pointer(void *p, unsigned long tag)
  * Context: Any context.
  * Return: A pointer.
  */
+#ifndef xa_untag_pointer
 static inline void *xa_untag_pointer(void *entry)
 {
 	return (void *)((unsigned long)entry & ~3UL);
 }
+#endif
 
 /**
  * xa_pointer_tag() - Get the tag stored in an XArray entry.
@@ -138,10 +148,12 @@ static inline void *xa_untag_pointer(void *entry)
  * Context: Any context.
  * Return: A tag.
  */
+#ifndef xa_pointer_tag
 static inline unsigned int xa_pointer_tag(void *entry)
 {
 	return (unsigned long)entry & 3UL;
 }
+#endif
 
 /*
  * xa_mk_internal() - Create an internal entry.
@@ -156,10 +168,12 @@ static inline unsigned int xa_pointer_tag(void *entry)
  * Context: Any context.
  * Return: An XArray internal entry corresponding to this value.
  */
+#ifndef xa_mk_internal
 static inline void *xa_mk_internal(unsigned long v)
 {
 	return (void *)((v << 2) | 2);
 }
+#endif
 
 /*
  * xa_to_internal() - Extract the value from an internal entry.
@@ -168,10 +182,12 @@ static inline void *xa_mk_internal(unsigned long v)
  * Context: Any context.
  * Return: The value which was stored in the internal entry.
  */
+#ifndef xa_to_internal
 static inline unsigned long xa_to_internal(const void *entry)
 {
 	return (unsigned long)entry >> 2;
 }
+#endif
 
 /*
  * xa_is_internal() - Is the entry an internal entry?
@@ -180,10 +196,12 @@ static inline unsigned long xa_to_internal(const void *entry)
  * Context: Any context.
  * Return: %true if the entry is an internal entry.
  */
+#ifndef xa_is_internal
 static inline bool xa_is_internal(const void *entry)
 {
 	return ((unsigned long)entry & 3) == 2;
 }
+#endif
 
 #define XA_ZERO_ENTRY		xa_mk_internal(257)
 
@@ -196,10 +214,12 @@ static inline bool xa_is_internal(const void *entry)
  *
  * Return: %true if the entry is a zero entry.
  */
+#ifndef xa_is_zero
 static inline bool xa_is_zero(const void *entry)
 {
 	return unlikely(entry == XA_ZERO_ENTRY);
 }
+#endif
 
 /**
  * xa_is_err() - Report whether an XArray operation returned an error
@@ -212,11 +232,13 @@ static inline bool xa_is_zero(const void *entry)
  * Context: Any context.
  * Return: %true if the entry indicates an error.
  */
+#ifndef xa_is_err
 static inline bool xa_is_err(const void *entry)
 {
 	return unlikely(xa_is_internal(entry) &&
 			entry >= xa_mk_internal(-MAX_ERRNO));
 }
+#endif
 
 /**
  * xa_err() - Turn an XArray result into an errno.
@@ -230,6 +252,7 @@ static inline bool xa_is_err(const void *entry)
  * Context: Any context.
  * Return: A negative errno or 0.
  */
+#ifndef xa_err
 static inline int xa_err(void *entry)
 {
 	/* xa_to_internal() would not do sign extension. */
@@ -237,6 +260,7 @@ static inline int xa_err(void *entry)
 		return (long)entry >> 2;
 	return 0;
 }
+#endif
 
 /**
  * struct xa_limit - Represents a range of IDs.
@@ -1332,7 +1356,7 @@ struct xa_state {
  * @name: Name of this operation state (usually xas).
  * @array: Array to operate on.
  * @index: Initial index of interest.
- * @order: Order of entry.
+ * @order: Entry occupies 2^@order indices.
  *
  * Declare and initialise an xa_state on the stack.  This variant of
  * XA_STATE() allows you to specify the 'order' of the element you

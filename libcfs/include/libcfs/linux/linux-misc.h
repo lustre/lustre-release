@@ -64,7 +64,9 @@
 #define user_backed_iter(iter)		iter_is_iovec(iter)
 #endif /* HAVE_USER_BACKED_ITER */
 
-#ifndef HAVE_IOV_ITER_IS_ALIGNED
+#if defined(HAVE_IOV_ITER_IS_ALIGNED) && HAVE_IOV_ITER_IS_ALIGNED
+// Kernel provides iov_iter_is_aligned, do not redefine
+#else
 static inline bool iov_iter_aligned_iovec(const struct iov_iter *i,
 					  unsigned addr_mask, unsigned len_mask)
 {
