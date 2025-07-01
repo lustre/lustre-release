@@ -1149,7 +1149,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_readonly_mount = 0;
 		dst->nmf_rbac = NODEMAP_RBAC_ALL;
 		dst->nmf_deny_mount = 0;
-		dst->nmf_fileset_use_iam = 0;
+		dst->nmf_fileset_use_iam = 1;
 		dst->nmf_raise_privs = NODEMAP_RAISE_PRIV_NONE;
 		dst->nmf_rbac_raise = NODEMAP_RBAC_NONE;
 
@@ -1177,7 +1177,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_readonly_mount = src->nmf_readonly_mount;
 		dst->nmf_rbac = src->nmf_rbac;
 		dst->nmf_deny_mount = src->nmf_deny_mount;
-		dst->nmf_fileset_use_iam = 0;
+		dst->nmf_fileset_use_iam = 1;
 		dst->nmf_raise_privs = src->nmf_raise_privs;
 		dst->nmf_rbac_raise = src->nmf_rbac_raise;
 		dst->nm_squash_uid = src->nm_squash_uid;
@@ -1401,9 +1401,39 @@ static void nodemap_fileset_reset(struct lu_nodemap *nodemap)
 }
 
 /**
+ * nodemap_update_fileset_iam_flag() - Update the "nmf_fileset_use_iam" flag and
+ * persist it to the nodemap IAM record (if called on the MGS).
+ *
+ * @nodemap: the nodemap to update
+ * @use_iam: the new value for the flag
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+static int nodemap_update_fileset_iam_flag(struct lu_nodemap *nodemap,
+					  bool use_iam)
+{
+	int rc = 0;
+
+	if (nodemap->nmf_fileset_use_iam == use_iam)
+		return rc;
+
+	nodemap->nmf_fileset_use_iam = use_iam;
+	if (nodemap_mgs())
+		rc = nodemap_idx_nodemap_update(nodemap);
+
+	return rc;
+}
+
+/**
  * nodemap_set_fileset_iam() - Set a fileset on a nodemap
  * @nodemap: the nodemap to set fileset on
  * @fileset: string containing fileset
+ * @out_clean_llog_fileset: set to true if the llog fileset entry needs to be
+ * cleaned up. This is only set to true if a fileset exists, but
+ * "nmf_fileset_use_iam" is 0 meaning that the fileset might have been set
+ * through the params llog.
  *
  * Set a fileset on a nodemap in memory and the nodemap IAM records.
  * If the nodemap is dynamic, the nodemap IAM update is transparently skipped in
@@ -1415,7 +1445,8 @@ static void nodemap_fileset_reset(struct lu_nodemap *nodemap)
  * * %-EIO		undo operation failed during IAM update
  */
 static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
-				   const char *fileset)
+				   const char *fileset,
+				   bool *out_clean_llog_fileset)
 {
 	size_t fileset_size_new;
 	char *fileset_new;
@@ -1423,8 +1454,11 @@ static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
 
 	if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0) {
 		rc = nodemap_idx_fileset_clear(nodemap);
-		if (!rc)
+		if (!rc) {
 			nodemap_fileset_reset(nodemap);
+			if (!nodemap->nm_dyn && out_clean_llog_fileset)
+				*out_clean_llog_fileset = true;
+		}
 		GOTO(out, rc);
 	}
 
@@ -1448,7 +1482,12 @@ static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
 			rc = nodemap_idx_fileset_update(
 				nodemap, nodemap->nm_prim_fileset, fileset_new,
 				0);
+		} else {
+			rc = nodemap_idx_fileset_add(nodemap, fileset_new, 0);
+			if (!rc && !nodemap->nm_dyn && out_clean_llog_fileset)
+				*out_clean_llog_fileset = true;
 		}
+
 		if (!rc)
 			nodemap_fileset_reset(nodemap);
 	} else {
@@ -1463,17 +1502,17 @@ static int nodemap_set_fileset_iam(struct lu_nodemap *nodemap,
 	}
 
 out:
-	if (!nodemap->nm_dyn && !nodemap->nmf_fileset_use_iam && !rc) {
-		nodemap->nmf_fileset_use_iam = 1;
-		rc = nodemap_idx_nodemap_update(nodemap);
-	}
+	if (!nodemap->nm_dyn && !nodemap->nmf_fileset_use_iam && !rc)
+		rc = nodemap_update_fileset_iam_flag(nodemap, true);
 
 	return rc;
 }
 
 /**
- * nodemap_set_fileset_local() - Set a fileset on a nodemap. This is a local
- * operation and not persistent.
+ * nodemap_set_fileset_llog() - Set a fileset on a nodemap. This is a local
+ * operation, not persistent, and only called when running
+ * "lctl set_param nodemap.NAME.fileset=...".
+ *
  * @nodemap: the nodemap to set fileset on
  * @fileset: string containing fileset
  *
@@ -1481,15 +1520,22 @@ out:
  * the params llog, which caused "lctl set_param" to be called on
  * each server locally. For backward compatibility this functionality is kept.
  *
+ * This function should not be used for any other purpose.
+ *
  * Return:
  * * %0 on success
  * * %-EINVAL		invalid fileset: Does not start with '/'
  */
-static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
+static int nodemap_set_fileset_llog(struct lu_nodemap *nodemap,
 				     const char *fileset)
 {
 	size_t fileset_size_new;
 	char *fileset_new;
+	int rc;
+
+	/* Abort if the IAM is already in use and a fileset is set */
+	if (nodemap->nm_prim_fileset && nodemap->nmf_fileset_use_iam)
+		RETURN(-EINVAL);
 
 	/* Allow 'fileset=clear' in addition to 'fileset=""' to clear fileset
 	 * because either command 'lctl set_param -P *.*.fileset=""' or
@@ -1502,7 +1548,9 @@ static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
 	 */
 	if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0) {
 		nodemap_fileset_reset(nodemap);
-		RETURN(0);
+		/* back to default value for use_iam flag */
+		rc = nodemap_update_fileset_iam_flag(nodemap, true);
+		RETURN(rc);
 	}
 
 	if (fileset[0] != '/')
@@ -1523,7 +1571,10 @@ static int nodemap_set_fileset_local(struct lu_nodemap *nodemap,
 	nodemap->nm_prim_fileset = fileset_new;
 	nodemap->nm_prim_fileset_size = fileset_size_new;
 
-	return 0;
+	/* Set fileset as llog fileset and update nodemap record */
+	rc = nodemap_update_fileset_iam_flag(nodemap, false);
+
+	return rc;
 }
 
 /**
@@ -1550,7 +1601,7 @@ static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
 		/* nodemap_set_fileset_iam() knows how to
 		 * handle a dynamic nodemap
 		 */
-		rc = nodemap_set_fileset_iam(dst, fileset);
+		rc = nodemap_set_fileset_iam(dst, fileset, NULL);
 	}
 
 	return rc;
@@ -1562,6 +1613,8 @@ static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
  * @fileset: string containing fileset
  * @checkperm: true if permission check is required
  * @ioctl_op: true if called from ioctl nodemap functions
+ * @out_clean_llog_fileset: set to true if the llog fileset entry needs to be
+ * cleaned up on the MGS side
  *
  * Return:
  * * %0 on success
@@ -1569,7 +1622,7 @@ static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
  * * %-EINVAL		name or fileset is empty or NULL
  */
 int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
-			bool ioctl_op)
+			bool ioctl_op, bool *out_clean_llog_fileset)
 {
 	struct lu_nodemap *nodemap = NULL;
 	int rc = 0;
@@ -1608,11 +1661,10 @@ int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
 	 * both backends. Local updates are disabled once IAM records are used.
 	 */
 	if (ioctl_op)
-		rc = nodemap_set_fileset_iam(nodemap, fileset);
-	else if (!ioctl_op && !nodemap->nmf_fileset_use_iam)
-		rc = nodemap_set_fileset_local(nodemap, fileset);
+		rc = nodemap_set_fileset_iam(nodemap, fileset,
+					     out_clean_llog_fileset);
 	else
-		rc = -EINVAL;
+		rc = nodemap_set_fileset_llog(nodemap, fileset);
 
 out_unlock:
 	mutex_unlock(&active_config_lock);
@@ -2565,13 +2617,15 @@ EXPORT_SYMBOL(nodemap_add);
 /**
  * nodemap_del() - Delete a nodemap
  * @nodemap_name: name of nodemmap
+ * @out_clean_llog_fileset: set to true if the llog fileset entry needs to be
+ * cleaned up on the MGS side.
  *
  * Return:
  * * %0		success
  * * %-EINVAL		invalid input
  * * %-ENOENT		no existing nodemap
  */
-int nodemap_del(const char *nodemap_name)
+int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 {
 	struct lu_nodemap	*nodemap;
 	struct lu_nid_range	*range;
@@ -2601,7 +2655,7 @@ int nodemap_del(const char *nodemap_name)
 			/* do our best and report any error on sub-nodemaps
 			 * but do not forward rc
 			 */
-			rc2 = nodemap_del(nm->nm_name);
+			rc2 = nodemap_del(nm->nm_name, NULL);
 			CDEBUG_LIMIT(D_INFO,
 				     "cannot del sub-nodemap %s: rc = %d\n",
 				     nm->nm_name, rc2);
@@ -2636,6 +2690,9 @@ int nodemap_del(const char *nodemap_name)
 			rc = rc2;
 
 		nodemap_fileset_reset(nodemap);
+
+		if (!nodemap->nm_dyn && !nodemap->nmf_fileset_use_iam)
+			*out_clean_llog_fileset = true;
 	}
 
 	rc2 = nodemap_idx_nodemap_del(nodemap);
@@ -3195,7 +3252,8 @@ int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 EXPORT_SYMBOL(nodemap_test_id);
 
 static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
-			   char *param, bool dynamic)
+			   char *param, bool dynamic,
+			   bool *out_clean_llog_fileset)
 {
 	struct lnet_nid nid[2];
 	bool bool_switch;
@@ -3211,7 +3269,7 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 		rc = nodemap_add(nodemap_name, dynamic);
 		break;
 	case LCFG_NODEMAP_DEL:
-		rc = nodemap_del(nodemap_name);
+		rc = nodemap_del(nodemap_name, out_clean_llog_fileset);
 		break;
 	case LCFG_NODEMAP_ADD_RANGE:
 		rc = nodemap_parse_range(param, nid, &netmask);
@@ -3458,7 +3516,8 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 			rc = -EINVAL;
 		break;
 	case LCFG_NODEMAP_SET_FILESET:
-		rc = nodemap_set_fileset(nodemap_name, param, true, true);
+		rc = nodemap_set_fileset(nodemap_name, param, true, true,
+					 out_clean_llog_fileset);
 		break;
 	case LCFG_NODEMAP_SET_SEPOL:
 		rc = nodemap_set_sepol(nodemap_name, param, true);
@@ -3484,7 +3543,8 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
  * * %< 0 on error
  */
 int server_iocontrol_nodemap(struct obd_device *obd,
-			     struct obd_ioctl_data *data, bool dynamic)
+			     struct obd_ioctl_data *data, bool dynamic,
+			     bool *out_clean_llog_fileset)
 {
 	char name_buf[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	struct lustre_cfg *lcfg = NULL;
@@ -3545,7 +3605,8 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 		if (lcfg->lcfg_bufcount != 2)
 			GOTO(out_lcfg, rc = -EINVAL);
 		nodemap_name = lustre_cfg_string(lcfg, 1);
-		rc = cfg_nodemap_cmd(cmd, nodemap_name, param, dynamic);
+		rc = cfg_nodemap_cmd(cmd, nodemap_name, param, dynamic,
+				     out_clean_llog_fileset);
 		break;
 	case LCFG_NODEMAP_TEST_NID:
 		if (lcfg->lcfg_bufcount != 2)
@@ -3614,7 +3675,8 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 			GOTO(out_lcfg, rc = -EINVAL);
 		nodemap_name = lustre_cfg_string(lcfg, 1);
 		param = lustre_cfg_string(lcfg, 2);
-		rc = cfg_nodemap_cmd(cmd, nodemap_name, param, dynamic);
+		rc = cfg_nodemap_cmd(cmd, nodemap_name, param, dynamic,
+				     out_clean_llog_fileset);
 		break;
 	case LCFG_NODEMAP_ADMIN:
 	case LCFG_NODEMAP_TRUSTED:
@@ -3633,7 +3695,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 			GOTO(out_lcfg, rc = -EINVAL);
 		nodemap_name = lustre_cfg_string(lcfg, 1);
 		param = lustre_cfg_string(lcfg, 3);
-		rc = cfg_nodemap_cmd(cmd, nodemap_name, param, dynamic);
+		rc = cfg_nodemap_cmd(cmd, nodemap_name, param, dynamic, NULL);
 		break;
 	default:
 		rc = -ENOTTY;

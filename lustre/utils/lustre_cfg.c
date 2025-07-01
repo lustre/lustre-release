@@ -411,11 +411,11 @@ static int lcfg_setparam_perm(const char *func, char *buf, bool del)
 	 * if they are the intended targets. They will blindly
 	 * try to set the parameter, and ENOTFOUND means it wasn't
 	 * for them.
-	 * Target name "general" means call on all targets. It is
+	 * Target name LUSTRE_CFG_ALL_TARGETS means call on all targets. It is
 	 * left here in case some filtering will be added in
 	 * future.
 	 */
-	lustre_cfg_bufs_set_string(&bufs, 0, "general");
+	lustre_cfg_bufs_set_string(&bufs, 0, LUSTRE_CFG_ALL_TARGETS);
 	lustre_cfg_bufs_set_string(&bufs, 1, buf);
 	if (del)
 		lustre_cfg_bufs_set_string(&bufs, 2, "del");

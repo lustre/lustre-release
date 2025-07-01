@@ -31,6 +31,13 @@
 #define LUSTRE_CFG_VERSION 0x1cf60001
 #define LUSTRE_CFG_MAX_BUFCOUNT 8
 
+/*
+ * Target name "general" calls on all targets
+ * when set at (struct) lustre_cfg_bufs[0].
+ * See lustre_cfg_bufs_set_string() and lustre_cfg_bufs_reset()
+ */
+#define LUSTRE_CFG_ALL_TARGETS "general"
+
 #define LCFG_HDR_SIZE(count) \
 	__ALIGN_KERNEL(offsetof(struct lustre_cfg, lcfg_buflens[(count)]), 8)
 

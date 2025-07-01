@@ -174,7 +174,7 @@ struct nm_config_file {
 
 int nodemap_activate(const bool value);
 int nodemap_add(const char *nodemap_name, bool dynamic);
-int nodemap_del(const char *nodemap_name);
+int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset);
 int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp);
 void nodemap_del_member(struct obd_export *exp);
 int nodemap_parse_range(const char *range_string, struct lnet_nid range[2],
@@ -208,7 +208,7 @@ int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_set_fileset(const char *name, const char *fileset, bool checkperm,
-			bool ioctl_op);
+			bool ioctl_op, bool *out_clean_llog_fileset);
 char *nodemap_get_fileset(const struct lu_nodemap *nodemap);
 int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm);
 const char *nodemap_get_sepol(const struct lu_nodemap *nodemap);
@@ -230,8 +230,8 @@ int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 		    u32 client_id, u32 *fs_id);
 
 int server_iocontrol_nodemap(struct obd_device *obd,
-			     struct obd_ioctl_data *data, bool dynamic);
-
+			     struct obd_ioctl_data *data, bool dynamic,
+			     bool *out_clean_llog_fileset);
 
 struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 						   struct dt_object *obj,

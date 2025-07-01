@@ -817,11 +817,125 @@ static int mgs_extract_fs_pool(char *arg, char *fsname, char *poolname)
 	RETURN(0);
 }
 
+/**
+ * __llog_fileset_cleanup_apply() - Forge the lustre_cfg to disable
+ * nodemap.NM_NAME.fileset on all server targets by invoking "mgs_set_param()"
+ *
+ * @env: thread context
+ * @mgs: mgs device
+ * @nodemap_name: name of the nodemap to cleanup
+ *
+ * Return:
+ * * %0 on success
+ * * %-negative error code on failure
+ */
+static int __llog_fileset_cleanup_apply(const struct lu_env *env,
+					struct mgs_device *mgs,
+					const char *nodemap_name)
+{
+	struct lustre_cfg_bufs *bufs = NULL;
+	struct lustre_cfg *lcfg = NULL;
+	char *lcfg_param = NULL;
+	const char *lcfg_format;
+	size_t lcfg_param_size;
+	int rc = 0;
+
+	lcfg_format = "nodemap.%s.fileset=";
+	lcfg_param_size = snprintf(NULL, 0, lcfg_format, nodemap_name) + 1;
+
+	OBD_ALLOC(lcfg_param, lcfg_param_size);
+	if (!lcfg_param)
+		RETURN(-ENOMEM);
+
+	snprintf(lcfg_param, lcfg_param_size, lcfg_format, nodemap_name);
+
+	OBD_ALLOC_PTR(bufs);
+	if (!bufs)
+		GOTO(out_cleanup, rc = -ENOMEM);
+
+	/* lcfg for all targets */
+	lustre_cfg_bufs_reset(bufs, LUSTRE_CFG_ALL_TARGETS);
+	lustre_cfg_bufs_set_string(bufs, 1, lcfg_param);
+
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
+		GOTO(out_cleanup, rc = -ENOMEM);
+
+	lustre_cfg_init(lcfg, LCFG_SET_PARAM, bufs);
+
+	rc = mgs_set_param(env, mgs, lcfg);
+	if (rc == -ENOENT)
+		rc = 0;
+
+out_cleanup:
+	if (lcfg)
+		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
+					      lcfg->lcfg_buflens));
+	/* lustre_cfg maintains its own buffers */
+	OBD_FREE_PTR(bufs);
+	OBD_FREE(lcfg_param, lcfg_param_size);
+
+	return rc;
+}
+
+/**
+ * mgs_llog_fileset_cleanup() - Cleanup the fileset entry from the params
+ * llog on all server targets
+ *
+ * @env: thread context
+ * @mgs: mgs device
+ * @data: ioctl data containing the nodemap name
+ *
+ * This function is necessary to provide backward compatibility with old
+ * clients versions that still use the params llog to set the fileset. If
+ * the new ioctl based nodemap fileset functions are used, the llog entry
+ * would not be removed, and could re-appear for a new similar named nodemap.
+ *
+ * Return:
+ * * %0 on success
+ * * %-negative error code on failure
+ */
+static int mgs_llog_fileset_cleanup(const struct lu_env *env,
+				    struct mgs_device *mgs,
+				    struct obd_ioctl_data *data)
+{
+	struct lustre_cfg *lcfg_in;
+	char *nodemap_name;
+	int rc;
+
+	if (data->ioc_plen1 > PAGE_SIZE)
+		GOTO(out, rc = -E2BIG);
+
+	OBD_ALLOC(lcfg_in, data->ioc_plen1);
+	if (!lcfg_in)
+		GOTO(out, rc = -ENOMEM);
+
+	if (copy_from_user(lcfg_in, data->ioc_pbuf1, data->ioc_plen1))
+		GOTO(out_cleanup, rc = -EFAULT);
+	if (lustre_cfg_sanity_check(lcfg_in, data->ioc_plen1))
+		GOTO(out_cleanup, rc = -EINVAL);
+
+	if (lcfg_in->lcfg_bufcount < 2)
+		GOTO(out_cleanup, rc = -EINVAL);
+
+	nodemap_name = lustre_cfg_string(lcfg_in, 1);
+	rc = __llog_fileset_cleanup_apply(env, mgs, nodemap_name);
+	if (rc)
+		CWARN("%s: failed to cleanup llog fileset for nodemap %s: %d\n",
+		      mgs->mgs_obd->obd_name, nodemap_name, rc);
+
+out_cleanup:
+	OBD_FREE(lcfg_in, data->ioc_plen1);
+out:
+	return rc;
+}
+
 static int mgs_iocontrol_nodemap(const struct lu_env *env,
 				 struct mgs_device *mgs,
 				 struct obd_ioctl_data *data)
 {
 	struct fs_db *fsdb;
+	bool clean_llog_fileset = false;
 	int rc;
 
 	ENTRY;
@@ -832,9 +946,24 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	rc = server_iocontrol_nodemap(mgs->mgs_obd, data, false);
+	rc = server_iocontrol_nodemap(mgs->mgs_obd, data, false,
+				      &clean_llog_fileset);
 	if (rc)
 		GOTO(out, rc);
+
+	/* A llog fileset entry might still exist and needs to be removed */
+	if (clean_llog_fileset) {
+		int rc2;
+
+		/* Attempt to clean up the llog fileset and provide a warning.
+		 * It is not serious enough to fail the original request which
+		 * was already applied on the MGS above.
+		 */
+		rc2 = mgs_llog_fileset_cleanup(env, mgs, data);
+		if (rc2)
+			CWARN("%s: failed to cleanup llog fileset: %d\n",
+			      mgs->mgs_obd->obd_name, rc2);
+	}
 
 	/* revoke nodemap lock */
 	rc = mgs_find_or_make_fsdb(env, mgs, LUSTRE_NODEMAP_NAME, &fsdb);
