@@ -129,15 +129,15 @@ autodetect_distro() {
     local version
 
     if which lsb_release >/dev/null 2>&1; then
-        name="$(lsb_release -s -i)"
-        version="$(lsb_release -s -r)"
-        case "$name" in
-            "EnterpriseEnterpriseServer")
-                name="oel"
-                ;;
-            "RedHatEnterpriseServer" | "ScientificSL" | "CentOS")
-                name="rhel"
-                ;;
+	name="$(lsb_release -s -i)"
+	version="$(lsb_release -s -r)"
+	case "$name" in
+	    "EnterpriseEnterpriseServer")
+		name="oel"
+		;;
+	    RedHatEnterprise* | Rocky* | ScientificSL | CentOS)
+		name="rhel"
+		;;
 	    "SUSE LINUX" | "SUSE")
 		name="sles"
 		case "$version" in
@@ -151,9 +151,9 @@ autodetect_distro() {
 			;;
 		esac
 		;;
-            "Fedora")
-                name="fc"
-                ;;
+	    "Fedora")
+		name="fc"
+		;;
 	    "openEuler")
 		name="oe"
 		# For LTS SP release the codename is 'LTS-SPx' e.g. 'LTS-SP1'
@@ -200,19 +200,19 @@ autodetect_distro() {
 
 # autodetect target
 autodetect_target() {
-    local distro="$1"
+    local distro="${1/-/}"
 
     local target=""
     case ${distro} in
-         rhel7*)  target="3.10-rhel7";;
-         rhel8*)  target="4.18-rhel8";;
-	rhel-9.0) target="5.14-rhel9.0";;
-	rhel-9.1) target="5.14-rhel9.1";;
-	rhel-9.2) target="5.14-rhel9.2";;
-	rhel-9.3) target="5.14-rhel9.3";;
-	rhel-9.4) target="5.14-rhel9.4";;
-	rhel-9.5) target="5.14-rhel9.5";;
-	rhel-9.6) target="5.14-rhel9.6";;
+	rhel7*)  target="3.10-rhel7";;
+	rhel8*)  target="4.18-rhel8";;
+	rhel9.0) target="5.14-rhel9.0";;
+	rhel9.1) target="5.14-rhel9.1";;
+	rhel9.2) target="5.14-rhel9.2";;
+	rhel9.3) target="5.14-rhel9.3";;
+	rhel9.4) target="5.14-rhel9.4";;
+	rhel9.5) target="5.14-rhel9.5";;
+	rhel9.6) target="5.14-rhel9.6";;
         sles11.4) target="$(uname -r | cut -d . -f 1,2)-sles11sp4";;
         sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
         sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
