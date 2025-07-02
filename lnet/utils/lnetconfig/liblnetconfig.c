@@ -6269,7 +6269,8 @@ static int handle_yaml_discover(struct cYAML *tree, struct cYAML **show_rc,
 					show_rc, err_rc);
 }
 
-static int handle_yaml_no_op()
+static int handle_yaml_no_op(struct cYAML *tree, struct cYAML **show_rc,
+			     struct cYAML **err_rc)
 {
 	return LUSTRE_CFG_RC_NO_ERR;
 }
