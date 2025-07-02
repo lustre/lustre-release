@@ -6504,6 +6504,7 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 	struct nlmsghdr *nlh = nlmsg_hdr(skb);
 	struct genlmsghdr *gnlh = nlmsg_data(nlh);
 	struct nlattr *params = genlmsg_data(gnlh);
+	struct lnet_ioctl_config_ni *conf;
 	int msg_len, rem, rc = 0;
 	struct nlattr *attr;
 
@@ -6518,9 +6519,12 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 	}
 
+	CFS_ALLOC_PTR(conf);
+	if (!conf)
+		return -ENOMEM;
+
 	nla_for_each_nested(attr, params, rem) {
 		bool ni_list = false, ipnets = false;
-		struct lnet_ioctl_config_ni conf;
 		u32 net_id = LNET_NET_ANY;
 		struct nlattr *entry;
 		int rem2;
@@ -6533,7 +6537,7 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 			case LN_SCALAR_ATTR_VALUE: {
 				ssize_t len;
 
-				memset(&conf, 0, sizeof(conf));
+				memset(conf, 0, sizeof(*conf));
 				if (nla_strcmp(entry, "ip2net") == 0) {
 					entry = nla_next(entry, &rem2);
 					if (nla_type(entry) !=
@@ -6543,9 +6547,9 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 						GOTO(out, rc = -EINVAL);
 					}
 
-					len = nla_strscpy(conf.lic_legacy_ip2nets,
+					len = nla_strscpy(conf->lic_legacy_ip2nets,
 							  entry,
-							  sizeof(conf.lic_legacy_ip2nets));
+							  sizeof(conf->lic_legacy_ip2nets));
 					if (len < 0) {
 						GENL_SET_ERR_MSG(info,
 								 "ip2net key string is invalid");
@@ -6583,8 +6587,8 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 								 "setting @lo not allowed");
 						GOTO(out, rc = -ENODEV);
 					}
-					conf.lic_legacy_ip2nets[0] = '\0';
-					conf.lic_ni_intf[0] = '\0';
+					conf->lic_legacy_ip2nets[0] = '\0';
+					conf->lic_ni_intf[0] = '\0';
 					ni_list = false;
 				}
 				if (rc < 0)
@@ -6598,7 +6602,7 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 				ipnets = false;
 				nla_for_each_nested(interface, entry, rem3) {
 					rc = lnet_genl_parse_local_ni(interface, info,
-								      net_id, &conf,
+								      net_id, conf,
 								      &ni_list);
 					if (rc < 0)
 						GOTO(out, rc);
@@ -6624,7 +6628,7 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 			}
 		} else if ((info->nlhdr->nlmsg_flags & NLM_F_CREATE) &&
 			   ipnets && ni_list) {
-			rc = lnet_handle_legacy_ip2nets(conf.lic_legacy_ip2nets,
+			rc = lnet_handle_legacy_ip2nets(conf->lic_legacy_ip2nets,
 							NULL);
 			if (rc < 0)
 				GENL_SET_ERR_MSG(info,
@@ -6632,6 +6636,8 @@ static int lnet_net_cmd(struct sk_buff *skb, struct genl_info *info)
 		}
 	}
 out:
+	CFS_FREE_PTR(conf);
+
 	return rc;
 }
 
