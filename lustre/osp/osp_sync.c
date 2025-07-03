@@ -1463,14 +1463,13 @@ out:
 		wait_event_interruptible(d->opd_sync_waitq,
 					 kthread_should_stop());
 
-	/* caller will delete args when non-zero is returned here */
-	OBD_FREE_PTR(args);
 	rc = 0;
 
 	lu_env_remove(&env);
 out_fini:
 	lu_env_fini(&env);
 
+	OBD_FREE_PTR(args);
 	RETURN(rc);
 }
 
