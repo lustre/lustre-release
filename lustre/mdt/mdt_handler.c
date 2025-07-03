@@ -407,8 +407,13 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	/* refuse access if this nodemap is set to deny mounts */
 	nodemap = nodemap_get_from_exp(exp);
 	if (!IS_ERR_OR_NULL(nodemap)) {
-		if (nodemap->nmf_deny_mount)
+		if (nodemap->nmf_deny_mount) {
+			CDEBUG(D_SEC, "%s: denying client %s (at %s)\n",
+			       exp->exp_obd->obd_name,
+			       obd_uuid2str(&exp->exp_client_uuid),
+			       obd_export_nid2str(exp));
 			GOTO(out, rc = err_serious(-EPERM));
+		}
 		/* get new root from nodemap if filesets are available */
 		rc = nodemap_fileset_get_root(exp->exp_target_data.ted_nodemap,
 					      fileset_mount, &fileset_buffer,

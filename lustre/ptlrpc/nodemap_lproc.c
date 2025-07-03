@@ -550,8 +550,9 @@ static int nodemap_exports_show(struct seq_file *m, void *unused)
 		if (cont)
 			seq_puts(m, ",");
 		cont = true;
-		seq_printf(m, "\n { nid: %s, uuid: %s, dev: %s }", nidstr,
-			   exp->exp_client_uuid.uuid, exp->exp_obd->obd_name);
+		seq_printf(m, "\n { nid: %s, uuid: %s, dev: %s%s }", nidstr,
+			   exp->exp_client_uuid.uuid, exp->exp_obd->obd_name,
+			exp->exp_banned ? ", banned: true" : "");
 	}
 	mutex_unlock(&nodemap->nm_member_list_lock);
 

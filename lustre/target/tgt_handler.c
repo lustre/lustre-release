@@ -792,6 +792,30 @@ int tgt_request_handle(struct ptlrpc_request *req)
 		GOTO(out, rc);
 	}
 
+	if (req->rq_export->exp_banned && opc != OBD_PING &&
+	    opc != OST_CONNECT && opc != OST_DISCONNECT &&
+	    opc != MDS_CONNECT && opc != MDS_DISCONNECT &&
+	    opc != MDS_CLOSE && opc != OST_CLOSE) {
+		struct lu_nodemap *nodemap;
+
+		nodemap = nodemap_get_from_exp(req->rq_export);
+		if (!IS_ERR_OR_NULL(nodemap)) {
+			LCONSOLE_WARN(
+				"operation %d from peer %s banned by nodemap %s: rc=%d\n",
+				opc, libcfs_idstr(&req->rq_peer),
+				nodemap->nm_name,  -EPERM);
+			nodemap_putref(nodemap);
+		} else {
+			LCONSOLE_WARN(
+				"operation %d from banned peer %s: rc=%d\n",
+				opc, libcfs_idstr(&req->rq_peer),
+				-EPERM);
+		}
+		req->rq_status = -EPERM;
+		rc = ptlrpc_error(req);
+		GOTO(out, rc);
+	}
+
 	tsi->tsi_tgt = tgt = class_exp2tgt(req->rq_export);
 	tsi->tsi_exp = req->rq_export;
 	if (exp_connect_flags(req->rq_export) & OBD_CONNECT_JOBSTATS)

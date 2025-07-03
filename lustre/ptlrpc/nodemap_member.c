@@ -163,6 +163,7 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 	list_for_each_entry_safe(exp, tmp, &nodemap->nm_member_list,
 				 exp_target_data.ted_nodemap_member) {
 		struct lnet_nid *nid;
+		bool banned;
 
 		/* if no conn assigned to this exp, reconnect will reclassify */
 		spin_lock(&exp->exp_lock);
@@ -174,10 +175,30 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 		}
 		spin_unlock(&exp->exp_lock);
 
-		/* nodemap_classify_nid requires nmc_range_tree_lock */
-		new_nodemap = nodemap_classify_nid(nid);
+		/* nodemap_classify_nid requires nmc_range_tree_lock and
+		 * nmc_ban_range_tree_lock
+		 */
+		down_read(&active_config->nmc_ban_range_tree_lock);
+		new_nodemap = nodemap_classify_nid(nid, &banned);
+		up_read(&active_config->nmc_ban_range_tree_lock);
 		if (IS_ERR(new_nodemap))
 			continue;
+
+		if (banned) {
+			LCONSOLE_WARN(
+			       "%s: nodemap %s banning client %s (at %s)\n",
+			       exp->exp_obd->obd_name, new_nodemap->nm_name,
+			       obd_uuid2str(&exp->exp_client_uuid),
+			       obd_export_nid2str(exp));
+			exp->exp_banned = 1;
+		} else if (exp->exp_banned) {
+			LCONSOLE_WARN(
+			       "%s: nodemap %s un-banned client %s (at %s)\n",
+			       exp->exp_obd->obd_name, new_nodemap->nm_name,
+			       obd_uuid2str(&exp->exp_client_uuid),
+			       obd_export_nid2str(exp));
+			exp->exp_banned = 0;
+		}
 
 		if (new_nodemap != nodemap) {
 			/* could deadlock if new_nodemap also reclassifying,

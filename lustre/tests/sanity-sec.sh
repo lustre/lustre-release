@@ -9916,6 +9916,236 @@ test_79() {
 }
 #run_test 79 "ssk for nodemap identification"
 
+test_81a() {
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+	local fake_nid=1.1.1.1@tcp999
+	local nm=c0
+	local dynnm=c1
+	local exp_cnt_orig
+	local exp_cnt_new
+
+	(( $MDS1_VERSION >= $(version_code 2.16.57) )) ||
+		skip "Need MDS version >= 2.16.57 for ban list support"
+
+	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
+
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# create data before nodemap setup
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	echo hi > $DIR/$tdir/$tfile || error "create $DIR/$tdir/$tfile failed"
+
+	# setup nodemap
+	setup_local_client_nodemap $nm 1 1
+
+	# check nodemap exports
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_orig=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+			grep MDT | grep -c $client_nid")
+	(( exp_cnt_orig != 0 )) ||
+		error "no exports for $client_nid found on $nm"
+
+	# check client access: should succeed
+	cancel_lru_locks
+	ls $DIR/$tdir || error "ls $DIR/$tdir failed (1)"
+	cat $DIR/$tdir/$tfile || error "cat $DIR/$tdir/$tfile failed (1)"
+
+	# add ban list
+	do_facet mgs $LCTL nodemap_banlist_add --name $nm --range $fake_nid &&
+		error "Setting banlist=$fake_nid on $nm should fail"
+	do_facet mgs $LCTL nodemap_banlist_add --name $nm --range $client_nid ||
+		error "Setting banlist=$client_nid on $nm failed"
+	wait_nm_sync $nm banlist
+
+	# check nodemap exports
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+			grep MDT | grep -c $client_nid")
+	(( exp_cnt_new == exp_cnt_orig )) ||
+		error "found $exp_cnt_new exports for $client_nid on $nm, expected $exp_cnt_orig"
+
+	# check client access: should fail
+	cancel_lru_locks
+	ls $DIR/$tdir && error "ls $DIR/$tdir should fail (1)"
+	cat $DIR/$tdir/$tfile && error "cat $DIR/$tdir/$tfile should fail (1)"
+
+	# del ban list
+	do_facet mgs $LCTL nodemap_banlist_del --name $nm --range $client_nid ||
+		error "Deleting banlist=$client_nid on $nm failed"
+	wait_nm_sync $nm banlist
+
+	# check nodemap exports
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+			grep MDT | grep -c $client_nid")
+	(( exp_cnt_new == exp_cnt_orig )) ||
+		error "found $exp_cnt_new exports for $client_nid on $nm, expected $exp_cnt_orig"
+
+	# check client access: should succeed
+	cancel_lru_locks
+	ls $DIR/$tdir || error "ls $DIR/$tdir failed (2)"
+	cat $DIR/$tdir/$tfile || error "cat $DIR/$tdir/$tfile failed (2)"
+
+	# add ban list again
+	do_facet mgs $LCTL nodemap_banlist_add --name $nm --range $client_nid ||
+		error "Setting banlist=$client_nid on $nm failed"
+	wait_nm_sync $nm banlist
+
+	# check nodemap exports
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+			grep MDT | grep -c $client_nid")
+	(( exp_cnt_new == exp_cnt_orig )) ||
+		error "found $exp_cnt_new exports for $client_nid on $nm, expected $exp_cnt_orig"
+
+	# unmount while in ban list: should succeed
+	umount_client $MOUNT || error "umount $MOUNT failed (1)"
+	# remount while in ban list: should fail
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS &&
+		error "remount should fail (1)"
+
+	# del ban list again
+	do_facet mgs $LCTL nodemap_banlist_del --name $nm --range $client_nid ||
+		error "Deleting banlist=$client_nid on $nm failed"
+	wait_nm_sync $nm banlist
+
+	# remount
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount failed (1)"
+	wait_ssk
+
+	# check client access: should succeed
+	cancel_lru_locks
+	ls $DIR/$tdir || error "ls $DIR/$tdir failed (3)"
+	cat $DIR/$tdir/$tfile || error "cat $DIR/$tdir/$tfile failed (3)"
+
+	# create dynamic nodemap
+	do_facet mds1 $LCTL nodemap_add -d -p $nm $dynnm ||
+		error "failed to create dynamic nodemap"
+	do_facet mds1 $LCTL nodemap_add_range --name $dynnm \
+		--range $client_nid ||
+		error "add_range on $dynnm failed"
+
+	# check nodemap exports, without remounting
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+			grep MDT | grep -c $client_nid")
+	(( exp_cnt_new == 0 )) ||
+		error "found $exp_cnt_new exports for $client_nid on $nm"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$dynnm.exports |
+			grep MDT | grep -c $client_nid")
+	(( exp_cnt_new == exp_cnt_orig )) ||
+		error "found $exp_cnt_new exports for $client_nid on $dynnm, expected $exp_cnt_orig"
+
+	# add ban list on dynamic nm
+	do_facet mds1 $LCTL nodemap_banlist_add --name $dynnm \
+		--range $client_nid ||
+			error "Setting banlist=$client_nid on $dynnm failed"
+
+	# check client access: should fail
+	cancel_lru_locks
+	ls $DIR/$tdir && error "ls $DIR/$tdir should fail (2)"
+	cat $DIR/$tdir/$tfile && error "cat $DIR/$tdir/$tfile should fail (2)"
+
+	# unmount while in ban list: should succeed
+	umount_client $MOUNT || error "umount $MOUNT failed (2)"
+
+	# the rest of the test cannot be executed with SSK, as we do not have
+	# a key for the dynamic nodemap
+	if $SHARED_KEY; then
+		return 0;
+	fi
+
+	# remount while in ban list: should fail
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS &&
+		error "remount should fail (2)"
+
+	# del ban list on dynamic nodemap
+	do_facet mds1 $LCTL nodemap_banlist_del --name $dynnm \
+		--range $client_nid ||
+			error "Deleting banlist=$client_nid on $dynm failed"
+
+	# remount
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount failed (2)"
+	wait_ssk
+
+	# check nodemap exports
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_new=$(do_facet mds1 "$LCTL get_param nodemap.$dynnm.exports |
+			grep MDT | grep -c $client_nid")
+	(( exp_cnt_new == exp_cnt_orig )) ||
+		error "found $exp_cnt_new exports for $client_nid on $dynnm, expected $exp_cnt_orig"
+
+	# check client access: should succeed
+	cancel_lru_locks
+	ls $DIR/$tdir || error "ls $DIR/$tdir failed (4)"
+	cat $DIR/$tdir/$tfile || error "cat $DIR/$tdir/$tfile failed (4)"
+}
+run_test 81a "nodemap ban list"
+
+test_81b() {
+	local client1_ip=$(host_nids_address ${clients_arr[0]} $NETTYPE)
+	local client1_nid=$(h2nettype $client1_ip)
+	local tf=$DIR/$tdir/$tfile
+	local client2_ip
+	local client2_nid
+	local nm=c0
+	local failed
+	local fid
+
+	(( num_clients >= 2 )) || skip "Need 2 clients"
+
+	(( $MDS1_VERSION >= $(version_code 2.16.57) )) ||
+		skip "Need MDS version >= 2.16.57 for ban list support"
+
+	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
+
+	# create data before nodemap setup
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	echo hi > $tf || error "create $tf failed"
+	fid=$(lfs path2fid $tf)
+	fid="${fid:1:-1}"
+
+	# setup nodemap
+	setup_local_client_nodemap $nm 1 1
+	client2_ip=$(host_nids_address ${clients_arr[1]} $NETTYPE)
+	client2_nid=$(h2nettype $client2_ip)
+	do_facet mgs $LCTL nodemap_add_range \
+		--name $nm --range $client2_nid ||
+		error "Add range $client2_nid to $nm failed"
+	do_facet mgs $LCTL nodemap_modify \
+		--name $nm --property deny_unknown --value 1 ||
+		error "deny_unknown=1 on $nm failed"
+	wait_nm_sync $nm deny_unknown
+
+	# from 1st client, write to file and pause
+	rmultiop_start ${clients_arr[0]} $tf OP1024yY_c ||
+		error "multiop from ${clients_arr[0]} failed"
+	stack_trap "rmultiop_stop ${clients_arr[0]} || true" EXIT
+
+	# add 1st client to ban list
+	do_facet mgs $LCTL nodemap_banlist_add \
+		--name $nm --range $client1_nid ||
+			error "Setting banlist=$client1_nid on $nm failed"
+	wait_nm_sync $nm banlist
+
+	# from 2nd client, write to same file
+	rmultiop_start ${clients_arr[1]} $tf OP3yY_c ||
+		error "multiop from ${clients_arr[1]} failed"
+	rmultiop_stop ${clients_arr[1]}
+
+	# 1st client is still banned, but it should be able to close file
+	rmultiop_stop ${clients_arr[0]}
+	failed=$(do_node ${clients_arr[0]} dmesg | grep "mdc close failed" |
+		 grep $fid)
+	[[ -z "$failed" ]] || error "client ${clients_arr[0]} failed to close"
+}
+run_test 81b "banned client does not block other"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

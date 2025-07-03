@@ -350,16 +350,18 @@ struct lu_nodemap *nodemap_lookup(const char *name)
 /**
  * nodemap_classify_nid() - Classify the nid into the proper nodemap.
  * @nid: nid to classify
+ * @out_banned: out value telling if the NID is in the nodemap banlist
  *
  * Classify the nid into the proper nodemap. Caller must hold active config and
- * nm_range_tree_lock, and call nodemap_putref when done with nodemap.
+ * nm_range_tree_lock and nmc_ban_range_tree_lock, and call nodemap_putref when
+ * done with nodemap.
  *
  * Return:
  * * %nodemap			nodemap containing the nid
  * * %default_nodemap		default nodemap
  * * %-EINVAL			LO nid given without other local nid
  */
-struct lu_nodemap *nodemap_classify_nid(struct lnet_nid *nid)
+struct lu_nodemap *nodemap_classify_nid(struct lnet_nid *nid, bool *out_banned)
 {
 	struct lu_nid_range *range;
 	struct lu_nodemap *nodemap;
@@ -381,15 +383,28 @@ struct lu_nodemap *nodemap_classify_nid(struct lnet_nid *nid)
 		CDEBUG(D_INFO, "found nid %s\n", libcfs_nidstr(nid));
 	}
 
+	if (!out_banned)
+		goto reg_range;
+
+	*out_banned = false;
+	/* first, search in the ban NIDs if interested */
+	range = ban_range_search(active_config, nid);
+	if (range) {
+		nodemap = range->rn_nodemap;
+		*out_banned = true;
+		goto out;
+	}
+
+reg_range:
+	/* then search in regular NID ranges */
 	range = range_search(active_config, nid);
 	if (range != NULL)
 		nodemap = range->rn_nodemap;
 	else
 		nodemap = active_config->nmc_default_nodemap;
 
-	LASSERT(nodemap != NULL);
+out:
 	nodemap_getref(nodemap);
-
 	RETURN(nodemap);
 }
 
@@ -558,22 +573,38 @@ EXPORT_SYMBOL(nodemap_parse_idmap);
 int nodemap_add_member(struct lnet_nid *nid, struct obd_export *exp)
 {
 	struct lu_nodemap *nodemap;
+	bool banned;
 	int rc = 0;
 
 	ENTRY;
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
+	down_read(&active_config->nmc_ban_range_tree_lock);
 
-	nodemap = nodemap_classify_nid(nid);
+	nodemap = nodemap_classify_nid(nid, &banned);
 	if (IS_ERR(nodemap)) {
-		CWARN("%s: error adding to nodemap, no valid NIDs found\n",
-		      exp->exp_obd->obd_name);
-		rc = -EINVAL;
+		rc = PTR_ERR(nodemap);
+		LCONSOLE_WARN(
+			"%s: error adding %s to nodemap, no valid NIDs found: rc=%d\n",
+			exp->exp_obd->obd_name, libcfs_nidstr(nid), rc);
 	} else {
 		rc = nm_member_add(nodemap, exp);
+		exp->exp_banned = banned;
+		if (banned)
+			LCONSOLE_WARN("%s: adding %sNID %s to nodemap %s\n",
+				      exp->exp_obd->obd_name,
+				      banned ? "banned " : "",
+				      libcfs_nidstr(nid),
+				      nodemap->nm_name);
+		else
+			CDEBUG(D_SEC, "%s: adding %sNID %s to nodemap %s\n",
+			       exp->exp_obd->obd_name, banned ? "banned " : "",
+			       libcfs_nidstr(nid),
+			       nodemap->nm_name);
 	}
 
 	up_read(&active_config->nmc_range_tree_lock);
+	up_read(&active_config->nmc_ban_range_tree_lock);
 	mutex_unlock(&active_config_lock);
 
 	if (!IS_ERR(nodemap))
@@ -1495,9 +1526,7 @@ new_range:
 	/* nodemaps have no members if they aren't on the active config */
 	if (config == active_config) {
 		nm_member_reclassify_nodemap(config->nmc_default_nodemap);
-		/* for dynamic nodemap, re-assign clients */
-		if (nodemap->nm_dyn)
-			nm_member_reclassify_nodemap(nodemap);
+		nm_member_reclassify_nodemap(nodemap);
 	}
 	up_read(&active_config->nmc_range_tree_lock);
 
@@ -4451,8 +4480,10 @@ void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len)
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
-	nodemap = nodemap_classify_nid(nid);
+	down_read(&active_config->nmc_ban_range_tree_lock);
+	nodemap = nodemap_classify_nid(nid, NULL);
 	up_read(&active_config->nmc_range_tree_lock);
+	up_read(&active_config->nmc_ban_range_tree_lock);
 	mutex_unlock(&active_config_lock);
 
 	if (IS_ERR(nodemap))
@@ -4487,8 +4518,10 @@ int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
-	nodemap = nodemap_classify_nid(nid);
+	down_read(&active_config->nmc_ban_range_tree_lock);
+	nodemap = nodemap_classify_nid(nid, NULL);
 	up_read(&active_config->nmc_range_tree_lock);
+	up_read(&active_config->nmc_ban_range_tree_lock);
 	mutex_unlock(&active_config_lock);
 
 	if (IS_ERR(nodemap))

@@ -244,6 +244,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
 
 	rc = md_close(md_exp, op_data, och->och_mod, &req);
 	if (rc != 0 && rc != -EINTR)
+		/* The below message is checked in sanity-sec test_81b */
 		CERROR("%s: inode "DFID" mdc close failed: rc = %d\n",
 		       md_exp->exp_obd->obd_name, PFID(&lli->lli_fid), rc);
 

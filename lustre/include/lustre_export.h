@@ -261,7 +261,8 @@ struct obd_export {
 				 */
 				exp_old_falloc:1,
 				exp_hashed:1,
-				exp_timed:1;
+				exp_timed:1,
+				exp_banned:1;
 	/* also protected by exp_lock */
 	enum lustre_sec_part	exp_sp_peer;
 	struct sptlrpc_flavor	exp_flvr;		/* current */
