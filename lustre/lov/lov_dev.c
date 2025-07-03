@@ -405,7 +405,7 @@ static int lov_cl_add_target(const struct lu_env *env, struct lu_device *dev,
 
 	if (!test_bit(OBDF_SET_UP, tgt->ltd_obd->obd_flags)) {
 		CERROR("Target %s not set up\n", obd_uuid2str(&tgt->ltd_uuid));
-		RETURN(-EINVAL);
+		GOTO(out, rc = -EINVAL);
 	}
 
 	rc = lov_expand_targets(env, ld);
@@ -423,6 +423,7 @@ static int lov_cl_add_target(const struct lu_env *env, struct lu_device *dev,
 		}
         }
 
+out:
 	lov_tgts_putref(obd);
 
 	RETURN(rc);
