@@ -49,25 +49,6 @@
 const char *gmsg_stat_names[] = {"sent_stats", "received_stats",
 				 "dropped_stats"};
 
-/*
- * lustre_lnet_ip_range_descr
- *	Describes an IP range.
- *	Each octect is an expression
- */
-struct lustre_lnet_ip_range_descr {
-	struct list_head ipr_entry;
-	struct list_head ipr_expr;
-};
-
-/*
- * lustre_lnet_ip2nets
- *	Describes an ip2nets rule. This can be on a list of rules.
- */
-struct lustre_lnet_ip2nets {
-	struct lnet_dlc_network_descr ip2nets_net;
-	struct list_head ip2nets_ip_ranges;
-};
-
 static int open_sysfs_file(const char *path, const char *attr, const int mode)
 {
 	int fd;
@@ -128,7 +109,7 @@ close_fd:
  * free_intf_descr
  *	frees the memory allocated for an intf descriptor.
  */
-static void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
+void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
 {
 	if (!intf_descr)
 		return;
@@ -150,7 +131,7 @@ static void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
  *		As a result of lnetctl command
  *		When building a NID or P2P selection rules
  */
-static int lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range)
+int lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range)
 {
 	struct lustre_lnet_ip_range_descr *ip_range;
 	int rc;
@@ -172,7 +153,7 @@ static int lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range)
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
-static int lustre_lnet_add_intf_descr(struct list_head *list, char *intf,
+int lustre_lnet_add_intf_descr(struct list_head *list, char *intf,
 				      int len)
 {
 	char *open_sq_bracket = NULL, *close_sq_bracket = NULL,
@@ -1929,7 +1910,7 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 	return LUSTRE_CFG_RC_MATCH;
 }
 
-static int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
+int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
 					    lnet_nid_t **nids, __u32 *nnids,
 					    char *err_str, size_t str_len)
 {
@@ -2342,7 +2323,7 @@ lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
-static int
+int
 lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
 			   struct lnet_ioctl_config_lnd_tunables *tunables,
 			   struct cfs_expr_list *global_cpts,
@@ -5345,25 +5326,20 @@ yaml_extract_cpt(struct cYAML *tree,
 
 /*
  * net:
- *    - net type: <net>[<NUM>]
-  *      local NI(s):
- *        - nid: <ip>@<net>[<NUM>]
- *          status: up
- *          interfaces:
- *               0: <intf_name>['['<expr>']']
- *               1: <intf_name>['['<expr>']']
- *        tunables:
- *               peer_timeout: <NUM>
- *               peer_credits: <NUM>
- *               peer_buffer_credits: <NUM>
- *               credits: <NUM>
-*         lnd tunables:
- *               peercredits_hiw: <NUM>
- *               map_on_demand: <NUM>
- *               concurrent_sends: <NUM>
- *               fmr_pool_size: <NUM>
- *               fmr_flush_trigger: <NUM>
- *               fmr_cache: <NUM>
+ * -     net type: <net>[<NUM>]
+ *       local NI(s):
+ *       -     interfaces:
+ *                   0: <intf_name>['['<expr>']']
+ *                   1: <intf_name>['['<expr>']']
+ *             tunables:
+ *                   peer_timeout: <NUM>
+ *                   peer_credits: <NUM>
+ *                   peer_buffer_credits: <NUM>
+ *                   credits: <NUM>
+ *             lnd tunables:
+ *                   <lnd_param1>: <val>
+ *                   <lnd_param2>: <val>
+ *                   <...>
  *
  * At least one interface is required. If no interfaces are provided the
  * network interface can not be configured.
@@ -5442,13 +5418,22 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 
 /*
  * ip2nets:
- *  - net-spec: <tcp|o2ib|gni>[NUM]
+ *  - net-spec: <net>[NUM]
  *    interfaces:
  *        0: <intf name>['['<expr>']']
  *        1: <intf name>['['<expr>']']
  *    ip-range:
  *        0: <expr.expr.expr.expr>
  *        1: <expr.expr.expr.expr>
+ *    tunables:
+ *          peer_timeout: <NUM>
+ *          peer_credits: <NUM>
+ *          peer_buffer_credits: <NUM>
+ *          credits: <NUM>
+ *    lnd tunables:
+ *          <lnd_param1>: <val>
+ *          <lnd_param2>: <val>
+ *          <...>
  */
 static int handle_yaml_config_ip2nets(struct cYAML *tree,
 				      struct cYAML **show_rc,

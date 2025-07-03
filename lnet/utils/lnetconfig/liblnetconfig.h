@@ -92,6 +92,25 @@ struct lnet_dlc_intf_descr {
 	struct cfs_expr_list *cpt_expr;
 };
 
+/*
+ * lustre_lnet_ip2nets
+ *	Describes an ip2nets rule. This can be on a list of rules.
+ */
+struct lustre_lnet_ip2nets {
+	struct lnet_dlc_network_descr ip2nets_net;
+	struct list_head ip2nets_ip_ranges;
+};
+
+/*
+ * lustre_lnet_ip_range_descr
+ *	Describes an IP range.
+ *	Each octect is an expression
+ */
+struct lustre_lnet_ip_range_descr {
+	struct list_head ipr_entry;
+	struct list_head ipr_expr;
+};
+
 /* This UDSP structures need to match the kernel space structures
  * in order for the marshall and unmarshall functions to be the same.
  */
@@ -1068,4 +1087,17 @@ int
 lnet_yaml_str_mapping(yaml_event_t *event, yaml_emitter_t *emitter,
 		      const char *key, const char *val);
 
+int
+lustre_lnet_add_intf_descr(struct list_head *list, char *intf, int len);
+int
+lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range);
+int
+lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
+			   struct lnet_ioctl_config_lnd_tunables *tunables,
+			   struct cfs_expr_list *global_cpts,
+			   int seq_no, struct cYAML **err_rc);
+void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr);
+int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
+				     lnet_nid_t **nids, __u32 *nnids,
+				     char *err_str, size_t str_len);
 #endif /* LIB_LNET_CONFIG_API_H */

@@ -2031,7 +2031,7 @@ skip_general_settings:
 				tos = tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_tos;
 			else if (LNET_NETTYP(nw_descr->nw_id) == O2IBLND)
 				tos = tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_tos;
-			snprintf(num, sizeof(num), "%u", tos);
+			snprintf(num, sizeof(num), "%d", tos);
 
 			yaml_scalar_event_initialize(&event, NULL,
 						     (yaml_char_t *)YAML_INT_TAG,
@@ -4410,6 +4410,36 @@ static const struct command_mapping *find_command_mapping(const char *value,
 	return NULL;
 }
 
+static int
+yaml_lnet_extract_long(yaml_parser_t *setup, yaml_event_t *event, char *key,
+		       long *value, int flags)
+{
+	char *valstr;
+	char errmsg[LNET_MAX_STR_LEN];
+	int rc;
+
+	valstr = (char *)event->data.scalar.value;
+	if (!strlen(valstr)) {
+		snprintf(errmsg, LNET_MAX_STR_LEN,
+			 "no value specified for key '%s'", key);
+		goto print_error;
+	}
+
+	rc = parse_long(valstr, value);
+	if (rc) {
+		snprintf(errmsg, LNET_MAX_STR_LEN,
+			 "invalid value '%s' for key '%s'", valstr, key);
+		goto print_error;
+	}
+
+	return 0;
+
+print_error:
+	errno = rc = -EINVAL;
+	yaml_lnet_print_error(flags, "import", errmsg);
+	return rc;
+}
+
 static int handle_global_parameter(yaml_parser_t *setup, yaml_event_t *event,
 				   char cmd, int flags, struct cYAML *show_rc)
 {
@@ -4434,23 +4464,9 @@ static int handle_global_parameter(yaml_parser_t *setup, yaml_event_t *event,
 		goto out_free_key;
 	}
 
-	if (!strlen((char *)event->data.scalar.value)) {
-		snprintf(errmsg, LNET_MAX_STR_LEN,
-			 "no value specified for key '%s'", key);
-		errno = rc = -EINVAL;
-		yaml_lnet_print_error(flags, "import", errmsg);
+	rc = yaml_lnet_extract_long(setup, event, key, &value, flags);
+	if (rc)
 		goto out_free_key;
-	}
-
-	rc = parse_long((char *)event->data.scalar.value, &value);
-	if (rc != 0) {
-		snprintf(errmsg, LNET_MAX_STR_LEN,
-			 "invalid value '%s' for key '%s'",
-			(char *)event->data.scalar.value, key);
-		errno = rc = -EINVAL;
-		yaml_lnet_print_error(flags, "import", errmsg);
-		goto out_free_key;
-	}
 
 	rc = yaml_import_global_settings(key, value, cmd, show_rc, err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
@@ -4461,6 +4477,604 @@ static int handle_global_parameter(yaml_parser_t *setup, yaml_event_t *event,
 out_free_key:
 	free(key);
 	return rc;
+}
+
+static void
+free_ip2nets_lists(struct lustre_lnet_ip2nets *ip2nets)
+{
+	struct lustre_lnet_ip_range_descr *ip_range_descr = NULL,
+					  *tmp = NULL;
+	struct lnet_dlc_intf_descr *intf_descr, *intf_tmp;
+
+	list_for_each_entry_safe(intf_descr, intf_tmp,
+				 &ip2nets->ip2nets_net.nw_intflist,
+				 intf_on_network) {
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
+	}
+
+	list_for_each_entry_safe(ip_range_descr, tmp,
+				 &ip2nets->ip2nets_ip_ranges,
+				 ipr_entry) {
+		struct cfs_expr_list *el, *el_tmp;
+
+		list_del(&ip_range_descr->ipr_entry);
+		list_for_each_entry_safe(el, el_tmp, &ip_range_descr->ipr_expr,
+					 el_link) {
+			list_del(&el->el_link);
+			cfs_expr_list_free(el);
+		}
+		free(ip_range_descr);
+	}
+}
+
+/* Handles ip2nets "tunables" and "lnd tunables" */
+static int
+parse_yaml_tunables(__u32 net_id,
+		    struct lnet_ioctl_config_lnd_tunables *tunables,
+		    yaml_parser_t *setup, int flags,
+		    int (*set_tunable)(__u32 net_id,
+				struct lnet_ioctl_config_lnd_tunables *tunables,
+				yaml_parser_t *, yaml_event_t  *, int))
+{
+	yaml_event_t event;
+	int rc;
+
+	if (!yaml_parser_parse(setup, &event))
+		return 0;
+
+	if (event.type != YAML_MAPPING_START_EVENT)
+		return -EINVAL;
+
+	yaml_event_delete(&event);
+
+	/* Parse the "key" event */
+	if (!yaml_parser_parse(setup, &event))
+		return 0;
+
+	while (event.type == YAML_SCALAR_EVENT) {
+		/* Consumes the "key" and "value" events */
+		rc = set_tunable(net_id, tunables, setup, &event, flags);
+		if (rc < 0)
+			return rc;
+
+		/* Parse the next "key" event" */
+		if (!yaml_parser_parse(setup, &event))
+			return 0;
+	}
+
+	return 1;
+}
+
+/* Handles ip2nets "interfaces" and "ip-range" */
+static int parse_yaml_list(yaml_parser_t *setup, struct list_head *list,
+			   int (*add_item)(struct list_head *, char *))
+{
+	yaml_event_t event;
+	char *value;
+	int rc;
+
+	if (!yaml_parser_parse(setup, &event))
+		return 0;
+
+	if (event.type != YAML_MAPPING_START_EVENT)
+		return -EINVAL;
+
+	yaml_event_delete(&event);
+
+	/* Parse the "key" event */
+	if (!yaml_parser_parse(setup, &event))
+		return 0;
+
+	while (event.type == YAML_SCALAR_EVENT) {
+		/* Delete the "key" event */
+		yaml_event_delete(&event);
+
+		/* Parse the "value" event */
+		if (!yaml_parser_parse(setup, &event))
+			return 0;
+
+		if (event.type != YAML_SCALAR_EVENT)
+			return -EINVAL;
+
+		value = (char *)event.data.scalar.value;
+
+		rc = add_item(list, value);
+		if (rc != LUSTRE_CFG_RC_NO_ERR)
+			return rc;
+
+		/* Delete the "value" event */
+		yaml_event_delete(&event);
+
+		/* Parse the next "key" event */
+		if (!yaml_parser_parse(setup, &event))
+			return 0;
+	}
+
+	return 1;
+}
+
+static int
+handle_cmn_tunable(__u32 net_id,
+		   struct lnet_ioctl_config_lnd_tunables *tunables,
+		   yaml_parser_t *setup, yaml_event_t *event, int flags)
+{
+	struct lnet_ioctl_config_lnd_cmn_tunables *cmn_tun = &tunables->lt_cmn;
+	char *key;
+	long value;
+	char errmsg[LNET_MAX_STR_LEN];
+	int rc;
+
+	key = strdup((char *)event->data.scalar.value);
+
+	yaml_event_delete(event);
+
+	rc = yaml_parser_parse(setup, event);
+	if (!rc) {
+		yaml_parser_log_error(setup, stderr, "import: ");
+		goto out_free_key;
+	}
+
+	rc = yaml_lnet_extract_long(setup, event, key, &value, flags);
+	if (rc)
+		goto out_free_key;
+
+	if (!strcmp(key, "peer_timeout")) {
+		cmn_tun->lct_peer_timeout = value;
+	} else if (!strcmp(key, "peer_credits")) {
+		cmn_tun->lct_peer_tx_credits = value;
+	} else if (!strcmp(key, "peer_buffer_credits")) {
+		cmn_tun->lct_peer_rtr_credits = value;
+	} else if (!strcmp(key, "credits")) {
+		cmn_tun->lct_max_tx_credits = value;
+	} else {
+		snprintf(errmsg, LNET_MAX_STR_LEN, "invalid key '%s'", key);
+		errno = rc = -EINVAL;
+	}
+
+	yaml_event_delete(event);
+
+	if (rc)
+		yaml_lnet_print_error(flags, "import", errmsg);
+	else
+		rc = 1;
+
+out_free_key:
+	free(key);
+	return rc;
+}
+
+static int
+handle_lnd_tunable(__u32 net_id,
+		   struct lnet_ioctl_config_lnd_tunables *tunables,
+		   yaml_parser_t *setup, yaml_event_t *event, int flags)
+{
+	struct lnet_lnd_tunables *lnd_tun = &tunables->lt_tun;
+	char *key, *valstr;
+	long value;
+	char errmsg[LNET_MAX_STR_LEN];
+	int rc;
+
+	key = strdup((char *)event->data.scalar.value);
+
+	yaml_event_delete(event);
+
+	rc = yaml_parser_parse(setup, event);
+	if (!rc) {
+		yaml_parser_log_error(setup, stderr, "import: ");
+		goto out_free_key;
+	}
+
+#ifdef HAVE_KFILND
+	if (!strcmp(key, "traffic_class") && LNET_NETTYP(net_id) == KFILND) {
+		char *tc = &lnd_tun->lnd_tun_u.lnd_kfi.lnd_traffic_class_str[0];
+
+		valstr = (char *)event->data.scalar.value;
+		if (!strlen(valstr)) {
+			snprintf(errmsg, LNET_MAX_STR_LEN,
+				 "no value specified for key '%s'", key);
+			errno = rc = -EINVAL;
+			yaml_lnet_print_error(flags, "import", errmsg);
+			goto out_free_key;
+		} else if (strlen(valstr) < LNET_MAX_STR_LEN) {
+			strcpy(tc, valstr);
+		}
+		goto out_free_key;
+	}
+#endif
+
+	rc = yaml_lnet_extract_long(setup, event, key, &value, flags);
+	if (rc)
+		goto out_free_key;
+
+#ifdef HAVE_KFILND
+	if (!strcmp(key, "auth_key") && LNET_NETTYP(net_id) == KFILND) {
+		lnd_tun->lnd_tun_u.lnd_kfi.lnd_auth_key = value;
+		goto out_free_key;
+	}
+#endif
+
+	if (!strcmp(key, "conns_per_peer")) {
+		if (LNET_NETTYP(net_id) == SOCKLND)
+			lnd_tun->lnd_tun_u.lnd_sock.lnd_conns_per_peer = value;
+		else if (LNET_NETTYP(net_id) == O2IBLND)
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_conns_per_peer = value;
+	} else if (!strcmp(key, "tos")) {
+		if (LNET_NETTYP(net_id) == SOCKLND)
+			lnd_tun->lnd_tun_u.lnd_sock.lnd_tos = value;
+		else if (LNET_NETTYP(net_id) == O2IBLND)
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_tos = value;
+	} else {
+		snprintf(errmsg, LNET_MAX_STR_LEN,
+			 "Unrecognized key '%s' for 'lnd tunables'", key);
+		errno = rc = -EINVAL;
+		yaml_lnet_print_error(flags, "import", errmsg);
+		goto out_free_key;
+	}
+
+	yaml_event_delete(event);
+	rc = 1;
+
+out_free_key:
+	free(key);
+	return rc;
+}
+
+static void
+init_ip2nets_tunables(struct lustre_lnet_ip2nets *ip2nets,
+		      struct lnet_ioctl_config_lnd_tunables *tunables)
+{
+	INIT_LIST_HEAD(&ip2nets->ip2nets_ip_ranges);
+	INIT_LIST_HEAD(&ip2nets->ip2nets_net.network_on_rule);
+	INIT_LIST_HEAD(&ip2nets->ip2nets_net.nw_intflist);
+
+	ip2nets->ip2nets_net.nw_id = LNET_NET_ANY;
+
+	memset(tunables, 0, sizeof(*tunables));
+	tunables->lt_cmn.lct_peer_timeout = -1;
+	tunables->lt_cmn.lct_peer_tx_credits = -1;
+	tunables->lt_cmn.lct_peer_rtr_credits = -1;
+	tunables->lt_cmn.lct_max_tx_credits = -1;
+}
+
+static void
+init_lnd_tunables(__u32 net_type,
+		  struct lnet_ioctl_config_lnd_tunables *tunables,
+		  bool *tunables_set)
+{
+	if (net_type == SOCKLND) {
+		tunables->lt_tun.lnd_tun_u.lnd_sock.lnd_tos = -1;
+		*tunables_set = true;
+	} else if (net_type == O2IBLND) {
+		tunables->lt_tun.lnd_tun_u.lnd_o2ib.lnd_tos = -1;
+		*tunables_set = true;
+	}
+}
+
+static int
+add_intf_helper(struct list_head *list, char *intf)
+{
+	return lustre_lnet_add_intf_descr(list, intf, strlen(intf));
+}
+
+static int
+handle_cpt_sequence(yaml_parser_t *setup, yaml_event_t *event,
+		    struct cfs_expr_list **global_cpts, int flags)
+{
+	int rc;
+	char errmsg[LNET_MAX_STR_LEN];
+
+	if (event->type != YAML_SEQUENCE_START_EVENT) {
+		snprintf(errmsg, sizeof(errmsg),
+			 "Unable to parse CPT configuration");
+		rc = -EINVAL;
+		goto print_error;
+	}
+
+	yaml_event_delete(event);
+
+	rc = yaml_parser_parse(setup, event);
+	if (!rc)
+		goto yaml_parser_error;
+
+	if (event->type != YAML_SCALAR_EVENT) {
+		snprintf(errmsg, LNET_MAX_STR_LEN,
+			 "Missing CPT configuration");
+		rc = -ENODATA;
+		goto print_error;
+	}
+
+	while (event->type != YAML_SEQUENCE_END_EVENT) {
+		struct cfs_expr_list *expr_list;
+		char *value;
+		char *tmp;
+		size_t tmpsize;
+
+		if (event->type != YAML_SCALAR_EVENT) {
+			snprintf(errmsg, sizeof(errmsg),
+				 "Malformed CPT configuration");
+			rc = -EINVAL;
+			goto print_error;
+		}
+
+		value = (char *)event->data.scalar.value;
+		tmpsize = strlen(value) + 3;
+		tmp = malloc(tmpsize);
+		if (!tmp) {
+			snprintf(errmsg, LNET_MAX_STR_LEN,
+				 "No memory for CPT configuration");
+			rc = -ENOMEM;
+			goto print_error;
+		}
+
+		snprintf(tmp, tmpsize, "[%s]", value);
+		rc = cfs_expr_list_parse(tmp, strlen(tmp), 0, UINT_MAX,
+					 &expr_list);
+		free(tmp);
+		if (rc) {
+			snprintf(errmsg, LNET_MAX_STR_LEN,
+				 "Unable to parse CPT '%s'", value);
+			goto print_error;
+		}
+
+		if (*global_cpts) {
+			list_splice_tail(&expr_list->el_exprs,
+					 &global_cpts[0]->el_exprs);
+			free(expr_list);
+		} else {
+			*global_cpts = expr_list;
+		}
+
+		yaml_event_delete(event);
+
+		rc = yaml_parser_parse(setup, event);
+		if (!rc)
+			goto yaml_parser_error;
+	}
+
+	/* Note: Caller will delete the sequence end event */
+print_error:
+	if (rc < 0) {
+		errno = rc;
+		yaml_lnet_print_error(flags, "import", errmsg);
+	}
+
+yaml_parser_error:
+	if (rc == 0) {
+		yaml_parser_log_error(setup, stderr, "ip2nets: ");
+		rc = -EINVAL;
+	}
+
+	return rc;
+}
+
+/*
+ * ip2nets:
+ *  - net-spec: <net>[NUM]
+ *    interfaces:
+ *        0: <intf name>['['<expr>']']
+ *        1: <intf name>['['<expr>']']
+ *    ip-range:
+ *        0: <expr.expr.expr.expr>
+ *        1: <expr.expr.expr.expr>
+ *    tunables:
+ *          peer_timeout: <NUM>
+ *          peer_credits: <NUM>
+ *          peer_buffer_credits: <NUM>
+ *          credits: <NUM>
+ *    lnd tunables:
+ *          <lnd_param1>: <val>
+ *          <lnd_param2>: <val>
+ *          <...>
+ */
+static int
+handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
+{
+	struct lustre_lnet_ip2nets ip2nets;
+	struct lnet_dlc_network_descr *nw_descr = &ip2nets.ip2nets_net;
+	struct lnet_ioctl_config_lnd_tunables tunables;
+	struct cfs_expr_list *global_cpts = NULL;
+	yaml_event_t event;
+	int rc = 1;
+	char errmsg[LNET_MAX_STR_LEN];
+	bool tunables_set = false;
+	bool lnd_tunables_set = false;
+
+	init_ip2nets_tunables(&ip2nets, &tunables);
+
+	while (1) {
+		char *value;
+
+		rc = yaml_parser_parse(setup, &event);
+		if (!rc)
+			goto yaml_parser_error;
+
+		/* Reached the end of the ip2nets sequence */
+		if (event.type == YAML_SEQUENCE_END_EVENT) {
+			yaml_event_delete(&event);
+			goto out;
+		}
+
+		/* Reached the end of a network specification block */
+		if (event.type == YAML_MAPPING_END_EVENT) {
+			struct lnet_ioctl_config_lnd_tunables *tun = NULL;
+			char *net;
+			lnet_nid_t *nids = NULL;
+			__u32 nnids = 0;
+			char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+
+			rc = lustre_lnet_resolve_ip2nets_rule(&ip2nets, &nids,
+							      &nnids, err_str,
+							      sizeof(err_str));
+			if (nids)
+				free(nids);
+
+			if (rc != LUSTRE_CFG_RC_NO_ERR &&
+			    rc != LUSTRE_CFG_RC_MATCH)
+				goto print_error;
+
+			if (list_empty(&ip2nets.ip2nets_net.nw_intflist)) {
+				snprintf(err_str, sizeof(err_str),
+					 "No interfaces match ip2nets rules");
+				rc = -ENOENT;
+				goto print_error;
+			}
+
+			net = libcfs_net2str(ip2nets.ip2nets_net.nw_id);
+			if (tunables_set || lnd_tunables_set)
+				tun = &tunables;
+
+			rc = yaml_lnet_config_ni(net, NULL,
+						 &ip2nets.ip2nets_net, tun, -1,
+						 global_cpts, LNET_GENL_VERSION,
+						 NLM_F_CREATE, stdout);
+			if (rc < 0) {
+				snprintf(err_str, sizeof(err_str),
+					 "Failed to configure NI on net '%s' rc = %d",
+					 net, rc);
+				goto print_error;
+			}
+
+			free_ip2nets_lists(&ip2nets);
+			init_ip2nets_tunables(&ip2nets, &tunables);
+			global_cpts = NULL;
+			tunables_set = lnd_tunables_set = false;
+		}
+
+		/* Skip other events we do not care about */
+		if (event.type != YAML_SCALAR_EVENT) {
+			yaml_event_delete(&event);
+			continue;
+		}
+
+		value = (char *)event.data.scalar.value;
+
+		/* "net-spec" must be the first scalar */
+		if (ip2nets.ip2nets_net.nw_id == LNET_NET_ANY &&
+		    strcmp(value, "net-spec")) {
+			snprintf(errmsg, LNET_MAX_STR_LEN,
+				 "Malformed input. Expect 'net-spec' found '%s'",
+				 value);
+			rc = -EINVAL;
+			goto print_error;
+		}
+
+		if (!strcmp(value, "net-spec")) {
+			yaml_event_delete(&event);
+
+			rc = yaml_parser_parse(setup, &event);
+			if (!rc)
+				goto yaml_parser_error;
+
+			value = (char *)event.data.scalar.value;
+			ip2nets.ip2nets_net.nw_id = libcfs_str2net(value);
+			if (ip2nets.ip2nets_net.nw_id == LNET_NET_ANY) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Invalid network ID '%s'",
+					 value);
+				rc = -EINVAL;
+				goto print_error;
+			}
+			init_lnd_tunables(LNET_NETTYP(ip2nets.ip2nets_net.nw_id),
+					  &tunables, &lnd_tunables_set);
+		} else if (!strcmp(value, "interfaces")) {
+			yaml_event_delete(&event);
+
+			rc = parse_yaml_list(setup, &nw_descr->nw_intflist,
+					     add_intf_helper);
+			if (rc < 0) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Failed to parse interfaces list rc = %d",
+					 rc);
+				goto print_error;
+			} else if (!rc) {
+				goto yaml_parser_error;
+			}
+		} else if (!strcmp(value, "ip-range")) {
+			yaml_event_delete(&event);
+
+			rc = parse_yaml_list(setup, &ip2nets.ip2nets_ip_ranges,
+					     lustre_lnet_add_ip_range);
+			if (rc < 0) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Failed to parse ip-range list rc = %d",
+					 rc);
+				goto print_error;
+			} else if (!rc) {
+				goto yaml_parser_error;
+			}
+		} else if (!strcmp(value, "tunables")) {
+			yaml_event_delete(&event);
+
+			rc = parse_yaml_tunables(ip2nets.ip2nets_net.nw_id,
+						 &tunables, setup, flags,
+						 handle_cmn_tunable);
+			if (rc < 0) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Failed to parse tunables rc = %d",
+					 rc);
+				goto print_error;
+			} else if (!rc) {
+				goto yaml_parser_error;
+			}
+			tunables_set = true;
+		} else if (!strcmp(value, "lnd tunables")) {
+			yaml_event_delete(&event);
+
+			rc = parse_yaml_tunables(ip2nets.ip2nets_net.nw_id,
+						 &tunables, setup, flags,
+						 handle_lnd_tunable);
+			if (rc < 0) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Failed to parse lnd tunables rc = %d",
+					 rc);
+				goto print_error;
+			} else if (!rc) {
+				goto yaml_parser_error;
+			}
+			lnd_tunables_set = true;
+		} else if (!strcmp(value, "CPT")) {
+			yaml_event_delete(&event);
+
+			rc = yaml_parser_parse(setup, &event);
+			if (!rc)
+				goto yaml_parser_error;
+
+			if (event.type == YAML_SCALAR_EVENT) {
+				value = (char *)event.data.scalar.value;
+				rc = cfs_expr_list_parse(value, strlen(value),
+							 0, UINT_MAX,
+							 &global_cpts);
+				if (rc) {
+					snprintf(errmsg, LNET_MAX_STR_LEN,
+						 "Unable to parse CPT '%s'",
+						 value);
+					goto print_error;
+				}
+			} else {
+				rc = handle_cpt_sequence(setup, &event,
+							 &global_cpts, flags);
+				if (rc < 0)
+					goto out;
+			}
+		}
+		yaml_event_delete(&event);
+	}
+
+print_error:
+	if (rc < 0) {
+		errno = rc;
+		yaml_lnet_print_error(flags, "import", errmsg);
+	}
+
+yaml_parser_error:
+	if (rc == 0) {
+		yaml_parser_log_error(setup, stderr, "ip2nets: ");
+		rc = -EINVAL;
+	}
+out:
+	free_ip2nets_lists(&ip2nets);
+	return (rc < 0) ? rc : 1;
 }
 
 static int jt_import(int argc, char **argv)
@@ -4605,6 +5219,18 @@ static int jt_import(int argc, char **argv)
 			if (rc == 0)
 				goto emitter_error;
 			unspec = false;
+		} else if (!strcmp(scalar_value, "ip2nets")) {
+			if (op != LNET_CMD_UNSPEC) {
+				rc = yaml_netlink_complete_emitter(&output);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			op = LNET_CMD_UNSPEC;
+			rc = handle_ip2nets_sequence(&setup, flags);
+			if (rc < 0)
+				goto free_reply;
+			else if (rc == 0)
+				goto emitter_error;
 		} else if (!strcmp(scalar_value, "global")) {
 			if (op != LNET_CMD_UNSPEC) {
 				rc = yaml_netlink_complete_emitter(&output);

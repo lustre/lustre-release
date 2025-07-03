@@ -1941,6 +1941,35 @@ test_112() {
 }
 run_test 112 "multiple net configurations"
 
+test_150() {
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	local nid=$($LCTL list_nids)
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet.yaml
+ip2nets:
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${INTERFACES[0]}
+    ip-range:
+        0: $(ip -o -4 a s ${INTERFACES[0]} | awk '{print $4}' | sed 's/\/.*//')
+EOF
+
+	do_lnetctl import $TMP/sanity-lnet.yaml ||
+		error "import failed with rc = $?"
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+
+	compare_yaml_files || return $?
+}
+run_test 150 "Check import of ip2nets yaml sequence"
+
 test_199() {
 	[[ ${NETTYPE} == tcp* || ${NETTYPE} == o2ib* ]] ||
 		skip "Need tcp or o2ib NETTYPE"
