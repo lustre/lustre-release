@@ -9,6 +9,10 @@ MANFILES = 					\
 	lst.8
 
 SERVER_MANFILES =				\
+	lctl-nodemap-banlist-add.8		\
+	lctl-nodemap_banlist_add.8		\
+	lctl-nodemap-banlist-del.8		\
+	lctl-nodemap_banlist_del.8		\
 	lctl-nodemap-fileset-add.8		\
 	lctl-nodemap_fileset_add.8		\
 	lctl-nodemap-fileset-del.8		\

@@ -1,0 +1,44 @@
+.TH LCTL-NODEMAP_BANLIST_DEL 8 2025-06-18 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_banlist_del \- delete an existing banned NID range from a nodemap
+.SH SYNOPSIS
+.SY "lctl nodemap_banlist_del"
+or
+.SY "lctl nodemap banlist_del"
+.BI --name " NODEMAP_NAME"
+.BI --range " NID_RANGE"
+.YS
+.SH DESCRIPTION
+.B nodemap_banlist_del
+deletes a banned NID range from a nodemap. Clients will be able to resume normal
+operations, reconnect to the servers, and will be considered part of this
+nodemap.
+.SH OPTIONS
+.TP
+.BI --name " NODEMAP_NAME"
+The name of the nodemap that this banned NID range should be deleted from.
+.TP
+.BI --range " NID_RANGE"
+The banned NID range that should be deleted from the nodemap.
+.SH EXAMPLES
+.EX
+.B # lctl nodemap_banlist_del --name remotesite --range 192.168.1.[1-254]@tcp
+.B # lctl nodemap_banlist_del --name othersite --range 192.168.2.[1-254]@tcp
+.EE
+.SH AVAILABILITY
+.B lctl nodemap_banlist_del
+is part of the
+.BR lustre (7)
+filesystem package since  release 2.16.56.
+.\" Added in commit v2_16_55_38_g22f2344
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-banlist-add (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-modify (8)

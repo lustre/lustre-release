@@ -125,6 +125,8 @@ struct lu_nodemap {
 	projid_t		 nm_squash_projid;
 	/* NID range list */
 	struct list_head	 nm_ranges;
+	/* Banned NID range list */
+	struct list_head	 nm_ban_ranges;
 	/* lock for idmap red/black trees */
 	struct rw_semaphore	 nm_idmap_lock;
 	/* UID map keyed by local UID */
@@ -205,6 +207,10 @@ int nodemap_parse_idmap(const char *nodemap_name, char *idmap_str,
 int nodemap_add_range(const char *name, const struct lnet_nid nid[2],
 		      u8 netmask);
 int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
+		      u8 netmask);
+int nodemap_add_banlist(const char *name, const struct lnet_nid nid[2],
+		      u8 netmask);
+int nodemap_del_banlist(const char *name, const struct lnet_nid nid[2],
 		      u8 netmask);
 int nodemap_set_allow_root(const char *name, bool allow_root);
 int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids);
@@ -288,14 +294,23 @@ struct nodemap_config {
 	/* Pointer to default nodemap as it is needed more often */
 	struct lu_nodemap *nmc_default_nodemap;
 
-	/* list of netmask + address prefix */
+	/* list of netmask + address prefix for regular nid ranges */
 	struct list_head nmc_netmask_setup;
+
+	/* list of netmask + address prefix for banned nid ranges */
+	struct list_head nmc_ban_netmask_setup;
 
 	/**
 	 * Lock required to access the range tree.
 	 */
 	struct rw_semaphore nmc_range_tree_lock;
 	struct nodemap_range_tree nmc_range_tree;
+
+	/**
+	 * Lock required to access the banned range tree.
+	 */
+	struct rw_semaphore nmc_ban_range_tree_lock;
+	struct nodemap_range_tree nmc_ban_range_tree;
 
 	/**
 	 * Hash keyed on nodemap name containing all

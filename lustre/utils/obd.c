@@ -4465,6 +4465,130 @@ int jt_nodemap_del_range(int argc, char **argv)
 }
 
 /**
+ * add a banned nid range to a nodemap
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ * --range			properly formatted banned nid range
+ *
+ * \retval			0 on success, -errno on error
+ */
+int jt_nodemap_banlist_add(int argc, char **argv)
+{
+	char nid_range[2 * LNET_NIDSTR_SIZE + 2];
+	char *nodemap_range = NULL;
+	char *nodemap_name = NULL;
+	int c, rc = EXIT_SUCCESS;
+
+	static struct option long_opts[] = {
+		{ .val = 'h',	.name = "help",  .has_arg = no_argument },
+		{ .val = 'n',	.name = "name",  .has_arg = required_argument },
+		{ .val = 'r',	.name = "range", .has_arg = required_argument },
+		{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "hn:r:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'r':
+			nodemap_range = optarg;
+			break;
+		case 'h':
+		case '?':
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_banlist_add: missing nodemap name\n");
+		return CMD_HELP;
+	}
+	if (!nodemap_range) {
+		fprintf(stderr, "nodemap_banlist_add: missing NID range\n");
+		return CMD_HELP;
+	}
+
+	errno = -parse_nid_range(nodemap_range, nid_range, sizeof(nid_range));
+	if (errno)
+		return CMD_HELP;
+
+	errno = -nodemap_cmd(LCFG_NODEMAP_BANLIST_ADD, false, NULL, 0, argv[0],
+			     nodemap_name, nid_range, NULL);
+	if (errno) {
+		rc = EXIT_FAILURE;
+		perror(argv[0]);
+	}
+	return rc;
+}
+
+/**
+ * delete a banned nid range from a nodemap
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ * --range			properly formatted banned nid range
+ *
+ * \retval			0 on success
+ */
+int jt_nodemap_banlist_del(int argc, char **argv)
+{
+	char nid_range[2 * LNET_NIDSTR_SIZE + 2];
+	char *nodemap_range = NULL;
+	char *nodemap_name = NULL;
+	int c, rc = EXIT_SUCCESS;
+
+	static struct option long_opts[] = {
+		{ .val = 'h', .name = "help",	 .has_arg = no_argument },
+		{ .val = 'n', .name = "name",    .has_arg = required_argument },
+		{ .val = 'r', .name = "range",   .has_arg = required_argument },
+		{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "hn:r:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'r':
+			nodemap_range = optarg;
+			break;
+		case 'h':
+		case '?':
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (!nodemap_name) {
+		fprintf(stderr, "nodemap_banlist_del: missing nodemap name\n");
+		return CMD_HELP;
+	}
+	if (!nodemap_range) {
+		fprintf(stderr, "nodemap_banlist_del: missing NID range\n");
+		return CMD_HELP;
+	}
+
+	errno = -parse_nid_range(nodemap_range, nid_range, sizeof(nid_range));
+	if (errno)
+		return CMD_HELP;
+
+	errno = -nodemap_cmd(LCFG_NODEMAP_BANLIST_DEL, false, NULL, 0, argv[0],
+			     nodemap_name, nid_range, NULL);
+	if (errno) {
+		rc = EXIT_FAILURE;
+		perror(argv[0]);
+	}
+	return rc;
+}
+
+/**
  * set a fileset on a nodemap
  *
  * \param	argc		number of args
@@ -5716,6 +5840,18 @@ int jt_nodemap_fileset_del(int argc, char **argv)
 }
 
 int jt_nodemap_fileset_modify(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_banlist_add(int argc, char **argv)
+{
+	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
+	return -EOPNOTSUPP;
+}
+
+int jt_nodemap_banlist_del(int argc, char **argv)
 {
 	fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(argv[0]));
 	return -EOPNOTSUPP;

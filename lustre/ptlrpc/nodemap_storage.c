@@ -712,6 +712,20 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 			rc = rc2;
 	}
 
+	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ban_ranges,
+				 rn_list) {
+		enum nodemap_idx_type type;
+
+		type = range->rn_netmask ? NODEMAP_NID_MASK_IDX :
+			NODEMAP_RANGE_IDX;
+		nodemap_range_key_init(&nk, type, NM_RANGE_FL_BAN,
+				       nodemap->nm_id, range->rn_id);
+		rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj,
+					 &nk, NULL);
+		if (rc2 < 0)
+			rc = rc2;
+	}
+
 	nodemap_cluster_key_init(&nk, nodemap->nm_id, NODEMAP_CLUSTER_REC);
 	rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
 	if (rc2 < 0)
@@ -1888,6 +1902,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	struct lu_nodemap *nodemap = NULL;
 	enum nodemap_idx_type type;
 	enum nodemap_id_type id_type;
+	enum nm_range_type_bits range_type;
 	struct lnet_nid nid[2];
 	int subtype, cluster_idx_key;
 	u32 nodemap_id, range_id;
@@ -1975,9 +1990,14 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 		lnet_nid4_to_nid(le64_to_cpu(rec->nrr.nrr_start_nid), &nid[0]);
 		lnet_nid4_to_nid(le64_to_cpu(rec->nrr.nrr_end_nid), &nid[1]);
 		range_id = le32_to_cpu(key->nk_range_id);
+		range_type = nm_idx_get_type(range_id);
 		range_id = nm_idx_get_id(range_id);
-		rc = nodemap_add_range_helper(config, nodemap, nid,
-					      0, range_id);
+		if (range_type & NM_RANGE_FL_BAN)
+			rc = nodemap_add_ban_range_helper(config, nodemap, nid,
+							  0, range_id);
+		else
+			rc = nodemap_add_range_helper(config, nodemap, nid,
+						      0, range_id);
 		if (rc != 0)
 			GOTO(out, rc);
 		break;
@@ -1985,10 +2005,16 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 		nid[0] = rec->nrr2.nrr_nid_prefix;
 		nid[1] = rec->nrr2.nrr_nid_prefix;
 		range_id = le32_to_cpu(key->nk_range_id);
+		range_type = nm_idx_get_type(range_id);
 		range_id = nm_idx_get_id(range_id);
-		rc = nodemap_add_range_helper(config, nodemap, nid,
-					      rec->nrr2.nrr_netmask,
-					      range_id);
+		if (range_type & NM_RANGE_FL_BAN)
+			rc = nodemap_add_ban_range_helper(config, nodemap, nid,
+							  rec->nrr2.nrr_netmask,
+							  range_id);
+		else
+			rc = nodemap_add_range_helper(config, nodemap, nid,
+						      rec->nrr2.nrr_netmask,
+						      range_id);
 		if (rc != 0)
 			GOTO(out, rc);
 		break;
@@ -2284,6 +2310,26 @@ nodemap_save_config_cache(const struct lu_env *env,
 				rc = rc2;
 		}
 		up_read(&active_config->nmc_range_tree_lock);
+
+		down_read(&active_config->nmc_ban_range_tree_lock);
+		list_for_each_entry_safe(range, range_temp,
+					 &nodemap->nm_ban_ranges, rn_list) {
+			enum nodemap_idx_type type;
+
+			type = range->rn_netmask ? NODEMAP_NID_MASK_IDX :
+				NODEMAP_RANGE_IDX;
+			nodemap_range_key_init(&nk, type, NM_RANGE_FL_BAN,
+					       nodemap->nm_id, range->rn_id);
+			rc2 = nodemap_range_rec_init(&nr, range);
+			if (rc2 < 0) {
+				rc = rc2;
+				continue;
+			}
+			rc2 = nodemap_idx_insert(env, o, &nk, &nr);
+			if (rc2 < 0)
+				rc = rc2;
+		}
+		up_read(&active_config->nmc_ban_range_tree_lock);
 
 		/* we don't need to take nm_idmap_lock because active config
 		 * lock prevents changes from happening to nodemaps

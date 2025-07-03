@@ -156,6 +156,12 @@ command_t nodemap_cmdlist[] = {
 	{.pc_name = "del_range", .pc_func = jt_nodemap_del_range,
 	 .pc_help = "delete a nid range from a nodemap\n"
 	 "usage: nodemap del_range --name NODEMAP_NAME --range NID_RANGE"},
+	{.pc_name = "banlist_add", .pc_func = jt_nodemap_banlist_add,
+	 .pc_help = "add a banned nid range to a nodemap\n"
+	 "usage: nodemap banlist_add --name NODEMAP_NAME --range NID_RANGE"},
+	{.pc_name = "banlist_del", .pc_func = jt_nodemap_banlist_del,
+	 .pc_help = "delete a banned nid range from a nodemap\n"
+	 "usage: nodemap banlist_del --name NODEMAP_NAME --range NID_RANGE"},
 	{.pc_name = "fileset_add", .pc_func = jt_nodemap_fileset_add,
 	 .pc_help = "add a fileset to a nodemap\n"
 	 "usage: nodemap fileset_add [--alt] [--ro] --name NODEMAP_NAME --fileset SUBDIRECTORY"},
@@ -597,6 +603,12 @@ command_t cmdlist[] = {
 	{"nodemap_del_range", jt_nodemap_del_range, 0,
 	 "delete a nid range from a nodemap\n"
 	 "usage: nodemap_del_range --name NODEMAP_NAME --range NID_RANGE"},
+	{"nodemap_banlist_add", jt_nodemap_banlist_add, 0,
+	 "add a banned nid range to a nodemap\n"
+	 "usage: nodemap_banlist_add --name NODEMAP_NAME --range NID_RANGE"},
+	{"nodemap_banlist_del", jt_nodemap_banlist_del, 0,
+	 "delete a banned nid range from a nodemap\n"
+	 "usage: nodemap_banlist_del --name NODEMAP_NAME --range NID_RANGE"},
 	{"nodemap_fileset_add", jt_nodemap_fileset_add, 0,
 	 "add a fileset to a nodemap\n"
 	 "usage: nodemap_fileset_add [--alt] [--ro] --name NODEMAP_NAME --fileset SUBDIRECTORY"},

@@ -209,15 +209,16 @@ out:
 }
 
 /**
- * nodemap_ranges_show() - Reads and prints NID ranges for the given nodemap.
+ * nodemap_ranges_show() - Reads and prints the regular NID ranges
+ *			   for the given nodemap
  * @m: seq file in proc fs
- * @data: unused
+ * @unused: unused
  *
- * Return
- * * %0 on success
- * * %negative on failure
+ * Return:
+ * * %0		success
+ * * %-errno	on failure
  */
-static int nodemap_ranges_show(struct seq_file *m, void *data)
+static int nodemap_ranges_show(struct seq_file *m, void *unused)
 {
 	struct lu_nodemap		*nodemap;
 	struct lu_nid_range		*range;
@@ -258,17 +259,82 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 }
 
 /**
- * nodemap_ranges_open() - Connects nodemap_idmap_show to proc file.
+ * nodemap_ranges_open() - Connects nodemap_ranges_show to proc file
  * @inode: inode of seq file in proc fs
  * @file: seq file
  *
- * Return
- * * %0 on success
- * * %negative on failure
+ * Return:
+ * * %0		success
+ * * %-errno	on failure
  */
 static int nodemap_ranges_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, nodemap_ranges_show, inode->i_private);
+}
+
+/**
+ * nodemap_ban_ranges_show() - Reads and prints the banned NID ranges
+ *			       for the given nodemap
+ * @m: seq file in proc fs
+ * @unused: unused
+ *
+ * Return:
+ * * %0		success
+ * * %-errno	on failure
+ */
+static int nodemap_ban_ranges_show(struct seq_file *m, void *unused)
+{
+	char start_nidstr[LNET_NIDSTR_SIZE];
+	char end_nidstr[LNET_NIDSTR_SIZE];
+	struct lu_nodemap *nodemap;
+	struct lu_nid_range *range;
+	bool cont = false;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	seq_puts(m, "[");
+	down_read(&active_config->nmc_ban_range_tree_lock);
+	list_for_each_entry(range, &nodemap->nm_ban_ranges, rn_list) {
+		if (cont)
+			seq_puts(m, ",");
+		cont = true;
+		libcfs_nidstr_r(&range->rn_start, start_nidstr,
+				sizeof(start_nidstr));
+		libcfs_nidstr_r(&range->rn_end, end_nidstr, sizeof(end_nidstr));
+		seq_printf(m, "\n { id: %u, start_nid: %s, end_nid: %s }",
+			   range->rn_id, start_nidstr, end_nidstr);
+	}
+	up_read(&active_config->nmc_ban_range_tree_lock);
+	mutex_unlock(&active_config_lock);
+	if (cont)
+		seq_puts(m, "\n");
+	seq_printf(m, "]\n");
+
+	nodemap_putref(nodemap);
+	return 0;
+}
+
+/**
+ * nodemap_ban_ranges_open() - Connects nodemap_ban_ranges_show to proc file
+ * @inode: inode of seq file in proc fs
+ * @file: seq file
+ *
+ * Return:
+ * * %0		success
+ * * %-errno	on failure
+ */
+static int nodemap_ban_ranges_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, nodemap_ban_ranges_show, inode->i_private);
 }
 
 /**
@@ -498,13 +564,13 @@ static int nodemap_exports_show(struct seq_file *m, void *unused)
 }
 
 /**
- * nodemap_exports_open() - Attaches nodemap_idmap_show to proc file.
+ * nodemap_exports_open() - Attaches nodemap_exports_show to proc file
  * @inode: inode of seq file in proc fs
  * @file: seq file
  *
  * Return:
- * * %0 on success
- * * %negative error code on failure
+ * * %0		success
+ * * %-errno	on failure
  */
 static int nodemap_exports_open(struct inode *inode, struct file *file)
 {
@@ -1125,6 +1191,13 @@ static const struct file_operations nodemap_ranges_fops = {
 	.release	= single_release
 };
 
+static const struct file_operations nodemap_ban_ranges_fops = {
+	.open		= nodemap_ban_ranges_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release
+};
+
 static const struct file_operations nodemap_idmap_fops = {
 	.open		= nodemap_idmap_open,
 	.read		= seq_read,
@@ -1196,6 +1269,10 @@ static struct ldebugfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "ranges",
 		.fops		= &nodemap_ranges_fops,
+	},
+	{
+		.name		= "banlist",
+		.fops		= &nodemap_ban_ranges_fops,
 	},
 	{
 		.name		= "rbac",

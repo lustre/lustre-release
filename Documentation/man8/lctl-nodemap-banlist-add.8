@@ -1,0 +1,50 @@
+.TH LCTL-NODEMAP_BANLIST_ADD 8 2025-06-18 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-nodemap_banlist_add \- define a range of banned NIDs for a nodemap
+.SH SYNOPSIS
+.SY "lctl nodemap_banlist_add"
+or
+.SY "lctl nodemap banlist_add"
+.BI --name " NODEMAP_NAME"
+.BI --range " NID_RANGE"
+.YS
+.SH DESCRIPTION
+.B nodemap_banlist_add
+adds a range of banned NIDs to an existing nodemap.
+The banned NID range must be included into the normal NID range associated with
+the nodemap.
+Clients with NIDs that fall into the banned range will be blocked by servers,
+and will get 'Operation not permitted' for all requests except unmount. The
+banning happens as soon as the nodemap definition is propagated to the servers.
+As long as a client is banned, it cannot mount Lustre.
+.SH OPTIONS
+.TP
+.BI --name " NODEMAP_NAME"
+The name of the nodemap that this banned NID range should be added to.
+.TP
+.BI --range " NID_RANGE"
+The banned NID range that should be added to the nodemap.
+The syntax is the same as the regular NID range, as detailed in
+.BR lctl-nodemap-add-range (8).
+.SH EXAMPLES
+.EX
+.B # lctl nodemap_banlist_add --name remotesite --range 192.168.1.[1-254]@tcp
+.B # lctl nodemap_banlist_add --name othersite --range 192.168.2.[1-254]@tcp
+.EE
+.SH AVAILABILITY
+.B lctl nodemap_banlist_add
+is part of the
+.BR lustre (7)
+filesystem package since release 2.16.56.
+.\" Added in commit v2_16_55_38_g22f2344
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-banlist-del (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-modify (8)

@@ -21,25 +21,8 @@
  * lu_nodemap structure for reporting purposes. Access to range tree should be
  * controlled to prevent read access during update operations.
  */
-
-#define START(node)	(lnet_nid_to_nid4(&((node)->rn_start)))
-#define LAST(node)	(lnet_nid_to_nid4(&((node)->rn_end)))
-
 INTERVAL_TREE_DEFINE(struct lu_nid_range, rn_rb, lnet_nid_t, rn_subtree_last,
 		     START, LAST, static, nm_range)
-
-static int __range_is_included(lnet_nid_t needle_start, lnet_nid_t needle_end,
-			       struct lu_nid_range *haystack)
-{
-	return LNET_NIDADDR(START(haystack)) <= LNET_NIDADDR(needle_start) &&
-	       LNET_NIDADDR(LAST(haystack)) >= LNET_NIDADDR(needle_end);
-}
-
-static int range_is_included(struct lu_nid_range *needle,
-			     struct lu_nid_range *haystack)
-{
-	return __range_is_included(START(needle), LAST(needle), haystack);
-}
 
 /**
  * range_create_generic() - Create a NID range
@@ -189,6 +172,29 @@ struct lu_nid_range *range_create(struct nodemap_config *config,
 				    netmask, nodemap, range_id);
 }
 
+/**
+ * ban_range_create() - Create a banned NID range
+ * @config: nodemap config to work on
+ * @start_nid: starting nid of the range
+ * @end_nid: ending nid of the range
+ * @netmask: network mask prefix length
+ * @nodemap: nodemap that contains this range
+ * @range_id: should be 0 unless loading from disk
+ *
+ * Return:
+ * * %range	range created
+ * * %NULL	on failure
+ */
+struct lu_nid_range *ban_range_create(struct nodemap_config *config,
+				      const struct lnet_nid *start_nid,
+				      const struct lnet_nid *end_nid,
+				      u8 netmask, struct lu_nodemap *nodemap,
+				      unsigned int range_id)
+{
+	return range_create_generic(&config->nmc_ban_range_tree, start_nid,
+				    end_nid, netmask, nodemap, range_id);
+}
+
 static
 struct lu_nid_range *__range_find(struct nodemap_range_tree *nm_range_tree,
 				  const struct lnet_nid *start_nid,
@@ -280,7 +286,7 @@ static struct lu_nid_range *range_find_generic(
 }
 
 /**
- * range_find() - Find an exact regular NID range
+ * range_find() - Find a regular NID range
  * @config: nodemap config to work on
  * @start_nid: starting nid of the range
  * @end_nid: ending nid of the range
@@ -299,6 +305,27 @@ struct lu_nid_range *range_find(struct nodemap_config *config,
 	return range_find_generic(&config->nmc_range_tree,
 				  &config->nmc_netmask_setup,
 				  start_nid, end_nid, netmask, exact);
+}
+
+/**
+ * ban_range_find() - Find an exact banned NID range
+ * @config: nodemap config to work on
+ * @start_nid: starting nid of the range
+ * @end_nid: ending nid of the range
+ * @netmask: network mask prefix length
+ *
+ * Return:
+ * * %range	range found
+ * * %NULL	on failure
+ */
+struct lu_nid_range *ban_range_find(struct nodemap_config *config,
+				    const struct lnet_nid *start_nid,
+				    const struct lnet_nid *end_nid,
+				    u8 netmask)
+{
+	return range_find_generic(&config->nmc_ban_range_tree,
+				  &config->nmc_ban_netmask_setup,
+				  start_nid, end_nid, netmask, true);
 }
 
 /**
@@ -409,6 +436,29 @@ int range_insert(struct nodemap_config *config, struct lu_nid_range *range,
 }
 
 /**
+ * ban_range_insert() - Insert a nid range into the banned interval tree
+ * @config: nodemap config to work on
+ * @range: range to insert
+ * @parent_range: parent range
+ * @dynamic: is dynamic nodemap
+ *
+ * This function checks that the given nid range
+ * does not overlap so that each nid can belong
+ * to exactly one range.
+ *
+ * Return:
+ * * %0		success
+ * * %-errno	on failure
+ */
+int ban_range_insert(struct nodemap_config *config, struct lu_nid_range *range,
+		     struct lu_nid_range **parent_range, bool dynamic)
+{
+	return range_insert_generic(&config->nmc_ban_range_tree,
+				    &config->nmc_ban_netmask_setup,
+				    range, parent_range, dynamic);
+}
+
+/**
  * range_delete_generic() - Delete a range from the interval tree and any
  *			    associated nodemap references
  * @range: range to delete
@@ -435,6 +485,17 @@ static void range_delete_generic(struct lu_nid_range *range)
  * @range: range to delete
  */
 void range_delete(struct nodemap_config *config, struct lu_nid_range *range)
+{
+	range_delete_generic(range);
+}
+
+/**
+ * ban_range_delete() - Delete a range from the banned interval tree and any
+ *			associated nodemap references
+ * @config: nodemap config to work on
+ * @range: range to delete
+ */
+void ban_range_delete(struct nodemap_config *config, struct lu_nid_range *range)
 {
 	range_delete_generic(range);
 }
@@ -502,4 +563,20 @@ struct lu_nid_range *range_search(struct nodemap_config *config,
 {
 	return range_search_generic(&config->nmc_range_tree,
 				    &config->nmc_netmask_setup, nid);
+}
+
+/**
+ * ban_range_search() - Search banned interval tree for a nid within a range
+ * @config: nodemap config to work on
+ * @nid: nid to search for
+ *
+ * Return:
+ * * %range	range containing nid
+ * * %NULL	on failure
+ */
+struct lu_nid_range *ban_range_search(struct nodemap_config *config,
+				      struct lnet_nid *nid)
+{
+	return range_search_generic(&config->nmc_ban_range_tree,
+				    &config->nmc_ban_netmask_setup, nid);
 }

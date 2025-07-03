@@ -141,6 +141,8 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_GSS_IDENTIFY	= 0x00ce065, /**< gss identification */
 	LCFG_NODEMAP_LOOKUP_SHA		= 0x00ce066, /**< lookup nm sha */
 	LCFG_NODEMAP_FILESET_MODIFY	= 0x00ce067, /**< modify fileset */
+	LCFG_NODEMAP_BANLIST_ADD  = 0x00ce068, /**< add ban list */
+	LCFG_NODEMAP_BANLIST_DEL  = 0x00ce069, /**< del ban list */
 };
 
 struct lustre_cfg_bufs {

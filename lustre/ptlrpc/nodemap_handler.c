@@ -1359,8 +1359,8 @@ EXPORT_SYMBOL(nodemap_add_range);
 int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 		      u8 netmask)
 {
+	struct lu_nid_range *range, *banlist, *range_temp;
 	struct lu_nodemap *nodemap;
-	struct lu_nid_range *range;
 	int rc = 0;
 
 	mutex_lock(&active_config_lock);
@@ -1386,7 +1386,35 @@ int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 		up_write(&active_config->nmc_range_tree_lock);
 		GOTO(out_putref, rc = -EINVAL);
 	}
+
+	/* Remove banlists that are included in the NID range to delete */
+	down_write(&active_config->nmc_ban_range_tree_lock);
+	list_for_each_entry_safe(banlist, range_temp, &nodemap->nm_ban_ranges,
+				 rn_list) {
+		if (!range_is_included(banlist, range))
+			continue;
+
+		rc = nodemap_idx_range_del(nodemap, NM_RANGE_FL_BAN, banlist);
+		if (rc < 0) {
+			CDEBUG(D_SEC,
+			       "Cannot remove banlist [ %s - %s ] included in NID range [ %s - %s ]: rc = %d\n",
+			       libcfs_nidstr(&banlist->rn_start),
+			       libcfs_nidstr(&banlist->rn_end),
+			       libcfs_nidstr(&range->rn_start),
+			       libcfs_nidstr(&range->rn_end), rc);
+			up_write(&active_config->nmc_ban_range_tree_lock);
+			up_write(&active_config->nmc_range_tree_lock);
+			GOTO(out_putref, rc);
+		}
+		ban_range_delete(active_config, banlist);
+	}
+	up_write(&active_config->nmc_ban_range_tree_lock);
+
 	rc = nodemap_idx_range_del(nodemap, NM_RANGE_FL_REG, range);
+	if (rc) {
+		up_write(&active_config->nmc_range_tree_lock);
+		GOTO(out_putref, rc);
+	}
 	range_delete(active_config, range);
 	nm_member_reclassify_nodemap(nodemap);
 	up_write(&active_config->nmc_range_tree_lock);
@@ -1401,6 +1429,184 @@ out:
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_del_range);
+
+/**
+ * nodemap_add_ban_range_helper() - Add banned nid range to given nodemap
+ * @config: nodemap config to work on
+ * @nodemap: nodemap to add range to
+ * @nid: nid range to add
+ * @netmask: network mask (prefix length)
+ * @range_id: should be 0 unless loading from disk
+ *
+ * Return:
+ * * %0		success
+ * * %-ENOMEM on failure
+ */
+int nodemap_add_ban_range_helper(struct nodemap_config *config,
+				 struct lu_nodemap *nodemap,
+				 const struct lnet_nid nid[2],
+				 u8 netmask, unsigned int range_id)
+{
+	struct lu_nid_range *range;
+	int rc = 0;
+
+	/* If range_id is non-zero, we are loading from disk. So when the ban
+	 * list was added initially, it was checked that it is included in an
+	 * existing regular NID range. Skip the test in this case.
+	 */
+	if (range_id)
+		GOTO(new_range, rc);
+
+	/* Find out if range to be added to ban list is included in
+	 * regular NID ranges for this nodemap.
+	 */
+	down_write(&active_config->nmc_range_tree_lock);
+	range = range_find(config, &nid[0], &nid[1], netmask, false);
+	if (!range || range->rn_nodemap != nodemap)
+		rc = -EINVAL;
+	up_write(&active_config->nmc_range_tree_lock);
+	if (rc)
+		GOTO(out, rc);
+
+new_range:
+	down_write(&config->nmc_ban_range_tree_lock);
+	range = ban_range_create(config, &nid[0], &nid[1], netmask, nodemap,
+			     range_id);
+	if (!range) {
+		up_write(&config->nmc_ban_range_tree_lock);
+		GOTO(out, rc = -ENOMEM);
+	}
+
+	rc = ban_range_insert(config, range, NULL, nodemap->nm_dyn);
+	if (rc) {
+		CDEBUG_LIMIT(rc == -EEXIST ? D_INFO : D_ERROR,
+			     "cannot insert nodemap range into '%s': rc = %d\n",
+			     nodemap->nm_name, rc);
+		up_write(&config->nmc_ban_range_tree_lock);
+		list_del(&range->rn_list);
+		range_destroy(range);
+		GOTO(out, rc);
+	}
+
+	list_add(&range->rn_list, &nodemap->nm_ban_ranges);
+	up_write(&config->nmc_ban_range_tree_lock);
+
+	down_read(&active_config->nmc_range_tree_lock);
+	/* nodemaps have no members if they aren't on the active config */
+	if (config == active_config) {
+		nm_member_reclassify_nodemap(config->nmc_default_nodemap);
+		/* for dynamic nodemap, re-assign clients */
+		if (nodemap->nm_dyn)
+			nm_member_reclassify_nodemap(nodemap);
+	}
+	up_read(&active_config->nmc_range_tree_lock);
+
+	/* if range_id is non-zero, we are loading from disk */
+	if (range_id == 0)
+		rc = nodemap_idx_range_add(nodemap, NM_RANGE_FL_BAN, range);
+
+	if (config == active_config) {
+		nm_member_revoke_locks(config->nmc_default_nodemap);
+		nm_member_revoke_locks(nodemap);
+	}
+
+out:
+	return rc;
+}
+
+int nodemap_add_banlist(const char *name, const struct lnet_nid nid[2],
+			u8 netmask)
+{
+	struct lu_nodemap *nodemap = NULL;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = PTR_ERR(nodemap));
+	}
+
+	if (is_default_nodemap(nodemap))
+		GOTO(out_unlock, rc = -EINVAL);
+
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_unlock, rc = -ENXIO);
+
+	rc = nodemap_add_ban_range_helper(active_config, nodemap, nid,
+					  netmask, 0);
+
+out_unlock:
+	mutex_unlock(&active_config_lock);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+
+/**
+ * nodemap_del_banlist() - delete a banned range
+ * @name: nodemap name
+ * @nid: nid range
+ * @netmask: network mask (prefix length)
+ *
+ * Delete banned range from global banned range tree, and remove it
+ * from the list in the associated nodemap.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+int nodemap_del_banlist(const char *name, const struct lnet_nid nid[2],
+		      u8 netmask)
+{
+	struct lu_nodemap *nodemap;
+	struct lu_nid_range *range;
+	int rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = PTR_ERR(nodemap));
+	}
+
+	if (is_default_nodemap(nodemap))
+		GOTO(out_putref, rc = -EINVAL);
+
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
+
+	down_write(&active_config->nmc_ban_range_tree_lock);
+	range = ban_range_find(active_config, &nid[0], &nid[1], netmask);
+	if (!range) {
+		up_write(&active_config->nmc_ban_range_tree_lock);
+		GOTO(out_putref, rc = -EINVAL);
+	}
+	if (range->rn_nodemap != nodemap) {
+		up_write(&active_config->nmc_ban_range_tree_lock);
+		GOTO(out_putref, rc = -EINVAL);
+	}
+	rc = nodemap_idx_range_del(nodemap, NM_RANGE_FL_BAN, range);
+	if (rc) {
+		up_write(&active_config->nmc_ban_range_tree_lock);
+		GOTO(out_putref, rc);
+	}
+	ban_range_delete(active_config, range);
+	up_write(&active_config->nmc_ban_range_tree_lock);
+	down_read(&active_config->nmc_range_tree_lock);
+	nm_member_reclassify_nodemap(nodemap);
+	up_read(&active_config->nmc_range_tree_lock);
+
+	nm_member_revoke_locks(active_config->nmc_default_nodemap);
+	nm_member_revoke_locks(nodemap);
+
+out_putref:
+	mutex_unlock(&active_config_lock);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_del_banlist);
 
 /**
  * check_fileset_add_vs_parent() - verify constraints on fileset add
@@ -3031,6 +3237,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 		GOTO(out, rc = -EEXIST);
 
 	INIT_LIST_HEAD(&nodemap->nm_ranges);
+	INIT_LIST_HEAD(&nodemap->nm_ban_ranges);
 	INIT_LIST_HEAD(&nodemap->nm_list);
 	INIT_LIST_HEAD(&nodemap->nm_member_list);
 	INIT_LIST_HEAD(&nodemap->nm_subnodemaps);
@@ -3707,6 +3914,16 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 		range_delete(active_config, range);
 	}
 	up_write(&active_config->nmc_range_tree_lock);
+	down_write(&active_config->nmc_ban_range_tree_lock);
+	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ban_ranges,
+				 rn_list) {
+		rc2 = nodemap_idx_range_del(nodemap, NM_RANGE_FL_BAN, range);
+		if (rc2 < 0)
+			rc = rc2;
+
+		ban_range_delete(active_config, range);
+	}
+	up_write(&active_config->nmc_ban_range_tree_lock);
 
 	/* remove all filesets from the nodemap */
 	if (nodemap->nm_fileset_prim)
@@ -4023,9 +4240,13 @@ struct nodemap_config *nodemap_config_alloc(void)
 	}
 
 	init_rwsem(&config->nmc_range_tree_lock);
+	init_rwsem(&config->nmc_ban_range_tree_lock);
 
 	INIT_LIST_HEAD(&config->nmc_netmask_setup);
+	INIT_LIST_HEAD(&config->nmc_ban_netmask_setup);
 	config->nmc_range_tree.nmrt_range_interval_root = INTERVAL_TREE_ROOT;
+	config->nmc_ban_range_tree.nmrt_range_interval_root =
+		INTERVAL_TREE_ROOT;
 
 	return config;
 }
@@ -4061,6 +4282,11 @@ void nodemap_config_dealloc(struct nodemap_config *config)
 					 rn_list)
 			range_delete(config, range);
 		up_write(&config->nmc_range_tree_lock);
+		down_write(&config->nmc_ban_range_tree_lock);
+		list_for_each_entry_safe(range, range_temp,
+					 &nodemap->nm_ban_ranges, rn_list)
+			ban_range_delete(config, range);
+		up_write(&config->nmc_ban_range_tree_lock);
 		mutex_unlock(&active_config_lock);
 
 		/* putref must be outside of ac lock if nm could be destroyed */
@@ -4441,6 +4667,18 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 		if (rc != 0)
 			break;
 		rc = nodemap_del_range(nodemap_name, nid, netmask);
+		break;
+	case LCFG_NODEMAP_BANLIST_ADD:
+		rc = nodemap_parse_range(param, nid, &netmask);
+		if (rc != 0)
+			break;
+		rc = nodemap_add_banlist(nodemap_name, nid, netmask);
+		break;
+	case LCFG_NODEMAP_BANLIST_DEL:
+		rc = nodemap_parse_range(param, nid, &netmask);
+		if (rc != 0)
+			break;
+		rc = nodemap_del_banlist(nodemap_name, nid, netmask);
 		break;
 	case LCFG_NODEMAP_ADMIN:
 		rc = kstrtobool(param, &bool_switch);
@@ -4825,6 +5063,8 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 	case LCFG_NODEMAP_DEL_PROJIDMAP:
 	case LCFG_NODEMAP_SET_SEPOL:
 	case LCFG_NODEMAP_SET_CAPS:
+	case LCFG_NODEMAP_BANLIST_ADD:
+	case LCFG_NODEMAP_BANLIST_DEL:
 		if (lcfg->lcfg_bufcount != 3)
 			GOTO(out_lcfg, rc = -EINVAL);
 		nodemap_name = lustre_cfg_string(lcfg, 1);
