@@ -2016,6 +2016,57 @@ error:
 	return rc;
 }
 
+static int
+lnet_yaml_emit_cpt_sequence(yaml_emitter_t *emitter, struct cfs_expr_list *cpts)
+{
+	yaml_event_t event;
+	__u32 *cpt_array;
+	int count, i;
+	int rc = 0;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"CPT",
+				     strlen("CPT"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	if (!yaml_emitter_emit(emitter, &event))
+		return 0;
+
+	yaml_sequence_start_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_SEQ_TAG,
+					     1,
+					     YAML_FLOW_SEQUENCE_STYLE);
+	if (!yaml_emitter_emit(emitter, &event))
+		return 0;
+
+	count = cfs_expr_list_values(cpts, LNET_MAX_SHOW_NUM_CPT, &cpt_array);
+	for (i = 0; i < count; i++) {
+		char core[INT_STRING_LEN];
+
+		snprintf(core, sizeof(core), "%u", cpt_array[i]);
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)core,
+					     strlen(core), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		if (!yaml_emitter_emit(emitter, &event))
+			goto out_free_expr;
+	}
+
+	yaml_sequence_end_event_initialize(&event);
+	if (!yaml_emitter_emit(emitter, &event))
+		goto out_free_expr;
+
+	rc = 1;
+
+out_free_expr:
+	cfs_expr_list_free(cpts);
+	if (count > 0)
+		free(cpt_array);
+
+	return rc;
+}
+
 static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 			       struct lnet_dlc_network_descr *nw_descr,
 			       struct lnet_ioctl_config_lnd_tunables *tunables,
@@ -2289,50 +2340,9 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 		}
 
 		if (global_cpts) {
-			__u32 *cpt_array;
-			int count, i;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"CPT",
-						     strlen("CPT"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
+			rc = lnet_yaml_emit_cpt_sequence(&output, global_cpts);
 			if (rc == 0)
 				goto emitter_error;
-
-			yaml_sequence_start_event_initialize(&event, NULL,
-							     (yaml_char_t *)YAML_SEQ_TAG,
-							     1,
-							     YAML_FLOW_SEQUENCE_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			count = cfs_expr_list_values(global_cpts,
-						     LNET_MAX_SHOW_NUM_CPT,
-						     &cpt_array);
-			for (i = 0; i < count; i++) {
-				char core[INT_STRING_LEN];
-
-				snprintf(core, sizeof(core), "%u", cpt_array[i]);
-				yaml_scalar_event_initialize(&event, NULL,
-							     (yaml_char_t *)YAML_STR_TAG,
-							     (yaml_char_t *)core,
-							     strlen(core), 1, 0,
-							     YAML_PLAIN_SCALAR_STYLE);
-				rc = yaml_emitter_emit(&output, &event);
-				if (rc == 0)
-					goto emitter_error;
-			}
-
-			yaml_sequence_end_event_initialize(&event);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			cfs_expr_list_free(global_cpts);
-			free(cpt_array);
 		}
 
 		yaml_mapping_end_event_initialize(&event);
@@ -4729,6 +4739,25 @@ handle_cpt_sequence(yaml_parser_t *setup, yaml_event_t *event,
 {
 	int rc;
 	char errmsg[LNET_MAX_STR_LEN];
+	char *value;
+
+	yaml_event_delete(event);
+
+	rc = yaml_parser_parse(setup, event);
+	if (!rc)
+		goto yaml_parser_error;
+
+	if (event->type == YAML_SCALAR_EVENT) {
+		value = (char *)event->data.scalar.value;
+		rc = cfs_expr_list_parse(value, strlen(value), 0, UINT_MAX,
+					 global_cpts);
+		if (rc) {
+			snprintf(errmsg, LNET_MAX_STR_LEN,
+				 "Unable to parse CPT '%s'", value);
+			goto print_error;
+		}
+		return 1;
+	}
 
 	if (event->type != YAML_SEQUENCE_START_EVENT) {
 		snprintf(errmsg, sizeof(errmsg),
@@ -4798,8 +4827,9 @@ handle_cpt_sequence(yaml_parser_t *setup, yaml_event_t *event,
 			goto yaml_parser_error;
 	}
 
-	/* Note: Caller will delete the sequence end event */
 print_error:
+	yaml_event_delete(event);
+
 	if (rc < 0) {
 		errno = rc;
 		yaml_lnet_print_error(flags, "import", errmsg);
@@ -4807,10 +4837,9 @@ print_error:
 
 yaml_parser_error:
 	if (rc == 0) {
-		yaml_parser_log_error(setup, stderr, "ip2nets: ");
+		yaml_parser_log_error(setup, stderr, "import: ");
 		rc = -EINVAL;
 	}
-
 	return rc;
 }
 
@@ -5000,29 +5029,15 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 			}
 			lnd_tunables_set = true;
 		} else if (!strcmp(value, "CPT")) {
-			yaml_event_delete(&event);
+			rc = handle_cpt_sequence(setup, &event,
+						 &global_cpts, flags);
+			if (rc < 0 || !global_cpts)
+				goto out;
 
-			rc = yaml_parser_parse(setup, &event);
-			if (!rc)
-				goto yaml_parser_error;
-
-			if (event.type == YAML_SCALAR_EVENT) {
-				value = (char *)event.data.scalar.value;
-				rc = cfs_expr_list_parse(value, strlen(value),
-							 0, UINT_MAX,
-							 &global_cpts);
-				if (rc) {
-					snprintf(errmsg, LNET_MAX_STR_LEN,
-						 "Unable to parse CPT '%s'",
-						 value);
-					goto print_error;
-				}
-			} else {
-				rc = handle_cpt_sequence(setup, &event,
-							 &global_cpts, flags);
-				if (rc < 0)
-					goto out;
-			}
+			/* handle_cpt_sequence() deletes the last event that
+			 * it parsed
+			 */
+			continue;
 		}
 		yaml_event_delete(&event);
 	}
@@ -5072,6 +5087,7 @@ static int jt_import(int argc, char **argv)
 	const char *msg = NULL;
 	yaml_emitter_t output;
 	yaml_event_t event;
+	struct cfs_expr_list *global_cpts = NULL;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -5165,7 +5181,8 @@ static int jt_import(int argc, char **argv)
 		const char *scalar_value;
 		const struct command_mapping *mapping;
 
-		if (!yaml_parser_parse(&setup, &event)) {
+		rc = yaml_parser_parse(&setup, &event);
+		if (rc == 0) {
 			yaml_parser_log_error(&setup, stderr, "import: ");
 			break;
 		}
@@ -5197,6 +5214,20 @@ static int jt_import(int argc, char **argv)
 				goto free_reply;
 			else if (rc == 0)
 				goto emitter_error;
+		} else if (op == LNET_CMD_NETS &&
+			   !strcmp(scalar_value, "CPT")) {
+			rc = handle_cpt_sequence(&setup, &event, &global_cpts,
+						 flags);
+
+			if (rc < 0 || !global_cpts)
+				goto free_reply;
+
+			rc = lnet_yaml_emit_cpt_sequence(&output, global_cpts);
+			if (rc == 0)
+				goto emitter_error;
+
+			global_cpts = NULL;
+			continue;
 		} else if (!strcmp(scalar_value, "global")) {
 			if (op != LNET_CMD_UNSPEC) {
 				rc = yaml_netlink_complete_emitter(&output);

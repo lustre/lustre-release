@@ -241,6 +241,9 @@ cfs_range_expr_parse(char *src, unsigned int min, unsigned int max,
 	re->re_stride = num;
 
 out:
+	if (re->re_lo > re->re_hi)
+		goto failed;
+
 	*expr = re;
 	return 0;
 

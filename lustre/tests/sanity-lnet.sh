@@ -4572,6 +4572,95 @@ test_260() {
 }
 run_test 260 "test that linux sysctl parameter are set correctly"
 
+test_265() {
+	reinit_dlc || return $?
+
+	local cpt
+
+	for cpt in "[1-0]" "[]"; do
+		cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+net:
+-     net type: ${NETTYPE}
+      local NI(s):
+      -     interfaces:
+                  0: ${INTERFACES[0]}
+            CPT: "${cpt}"
+EOF
+
+		! do_lnetctl import $TMP/sanity-lnet-$testnum.yaml ||
+			error "Import should have failed"
+
+		cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+net:
+-     net type: ${NETTYPE}
+      local NI(s):
+      -     interfaces:
+                  0: ${INTERFACES[0]}
+            CPT: ${cpt}
+EOF
+
+		! do_lnetctl import $TMP/sanity-lnet-$testnum.yaml ||
+			error "Import should have failed"
+	done
+}
+run_test 265 "Import of invalid CPT should fail"
+
+test_266() {
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+
+	local cpt=$($LNETCTL net show -v --net ${NETTYPE} |
+		    awk '/CPT/{print $NF}')
+	local low=$(awk -F, '{print $1}'<<<"$cpt" | tr -d '[]"')
+	local high=$(awk -F, '{print $NF}'<<<"$cpt" | tr -d '[]"')
+
+	local tyaml=$TMP/sanity-lnet-$testnum.yaml
+
+	cat <<EOF > $tyaml
+net:
+-     net type: ${NETTYPE}
+      local NI(s):
+      -     interfaces:
+                  0: ${INTERFACES[0]}
+EOF
+	$LNETCTL net show -v -n ${NETTYPE} | awk '/^\s+tunables:$/,/^\s+CPT:/' |
+		grep -v -e 'dev cpt' -e 'CPT' >> $tyaml
+
+	echo "            CPT: \"[$low-$high]\"" >> $tyaml
+
+	reinit_dlc || return $?
+
+	do_lnetctl import $tyaml || error "Import failed rc = $?"
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+
+	compare_yaml_files || return $?
+
+	cat <<EOF > $tyaml
+net:
+-     net type: ${NETTYPE}
+      local NI(s):
+      -     interfaces:
+                  0: ${INTERFACES[0]}
+EOF
+	$LNETCTL net show -v -n ${NETTYPE} | awk '/^\s+tunables:$/,/^\s+CPT:/' |
+		grep -v -e 'dev cpt' -e 'CPT' >> $tyaml
+
+	echo "            CPT: [$low-$high]" >> $tyaml
+
+	reinit_dlc || return $?
+
+	do_lnetctl import $tyaml || error "Import failed rc = $?"
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+
+	compare_yaml_files || return $?
+}
+run_test 266 "Validate CPT parsing in network sequence"
+
 test_270() {
 	[[ "$NETTYPE" =~ tcp ]] || skip "Need tcp NETTYPE"
 
