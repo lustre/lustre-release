@@ -6625,6 +6625,10 @@ void lustre_assert_wire_constants(void)
 		 (unsigned int)NM_FL2_GSS_IDENTIFY);
 	LASSERTF(NM_FS_FL_READONLY == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)NM_FS_FL_READONLY);
+	LASSERTF(NM_RANGE_FL_REG == 0x00000000UL, "found 0x%.8xUL\n",
+		 (unsigned)NM_RANGE_FL_REG);
+	LASSERTF(NM_RANGE_FL_BAN == 0x00000001UL, "found 0x%.8xUL\n",
+		 (unsigned)NM_RANGE_FL_BAN);
 	LASSERTF(NODEMAP_UID == 0, "found %lld\n",
 		 (long long)NODEMAP_UID);
 	LASSERTF(NODEMAP_GID == 1, "found %lld\n",

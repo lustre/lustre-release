@@ -828,14 +828,16 @@ static int print_nodemap(const void *key, size_t keys,
 		}
 		break;
 	case NODEMAP_RANGE_IDX:
-		printf(" }\t{ start_nid: %s, end_nid: %s }",
+		printf(" }\t{ start_nid: %s, end_nid: %s, type 0x%x }",
 		       libcfs_nid2str(__le64_to_cpu(nr->nrr.nrr_start_nid)),
-		       libcfs_nid2str(__le64_to_cpu(nr->nrr.nrr_end_nid)));
+		       libcfs_nid2str(__le64_to_cpu(nr->nrr.nrr_end_nid)),
+		       nm_idx_get_type(__le32_to_cpu(nk->nk_range_id)));
 		break;
 	case NODEMAP_NID_MASK_IDX:
-		printf(" }\t{ subnet: %s/%hhd }",
+		printf(" }\t{ subnet: %s/%hhd, type: 0x%x }",
 		       libcfs_nidstr(&nr->nrr2.nrr_nid_prefix),
-		       nr->nrr2.nrr_netmask);
+		       nr->nrr2.nrr_netmask,
+		       nm_idx_get_type(__le32_to_cpu(nk->nk_range_id)));
 		break;
 	case NODEMAP_UIDMAP_IDX:
 	case NODEMAP_GIDMAP_IDX:

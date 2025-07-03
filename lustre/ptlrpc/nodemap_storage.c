@@ -199,11 +199,12 @@ static void nodemap_idmap_rec_init(union nodemap_rec *nr, u32 id_fs)
 }
 
 static void nodemap_range_key_init(struct nodemap_key *nk,
-				   enum nodemap_idx_type type,
+				   enum nodemap_idx_type idx_type,
+				   enum nm_range_type_bits range_type,
 				   unsigned int nm_id, unsigned int rn_id)
 {
-	nk->nk_nodemap_id = cpu_to_le32(nm_idx_set_type(nm_id, type));
-	nk->nk_range_id = cpu_to_le32(rn_id);
+	nk->nk_nodemap_id = cpu_to_le32(nm_idx_set_type(nm_id, idx_type));
+	nk->nk_range_id = cpu_to_le32(nm_idx_set_type(rn_id, range_type));
 }
 
 static int nodemap_range_rec_init(union nodemap_rec *nr,
@@ -703,7 +704,8 @@ int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap)
 
 		type = range->rn_netmask ? NODEMAP_NID_MASK_IDX :
 					   NODEMAP_RANGE_IDX;
-		nodemap_range_key_init(&nk, type, nodemap->nm_id, range->rn_id);
+		nodemap_range_key_init(&nk, type, NM_RANGE_FL_REG,
+				       nodemap->nm_id, range->rn_id);
 		rc2 = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj,
 					 &nk, NULL);
 		if (rc2 < 0)
@@ -1386,6 +1388,7 @@ int nodemap_idx_capabilities_del(const struct lu_nodemap *nodemap)
 }
 
 int nodemap_idx_range_add(struct lu_nodemap *nodemap,
+			  enum nm_range_type_bits type,
 			  const struct lu_nid_range *range)
 {
 	struct nodemap_key nk;
@@ -1409,7 +1412,7 @@ int nodemap_idx_range_add(struct lu_nodemap *nodemap,
 
 	nodemap_range_key_init(&nk, range->rn_netmask ? NODEMAP_NID_MASK_IDX :
 							NODEMAP_RANGE_IDX,
-			       range->rn_nodemap->nm_id, range->rn_id);
+			       type, range->rn_nodemap->nm_id, range->rn_id);
 	rc = nodemap_range_rec_init(&nr, range);
 	if (rc < 0)
 		goto free_env;
@@ -1422,6 +1425,7 @@ free_env:
 }
 
 int nodemap_idx_range_del(struct lu_nodemap *nodemap,
+			  enum nm_range_type_bits type,
 			  const struct lu_nid_range *range)
 {
 	struct nodemap_key nk;
@@ -1444,7 +1448,7 @@ int nodemap_idx_range_del(struct lu_nodemap *nodemap,
 
 	nodemap_range_key_init(&nk, range->rn_netmask ? NODEMAP_NID_MASK_IDX :
 							NODEMAP_RANGE_IDX,
-			       range->rn_nodemap->nm_id, range->rn_id);
+			       type, range->rn_nodemap->nm_id, range->rn_id);
 	rc = nodemap_idx_delete(&env, nodemap_mgs_ncf->ncf_obj, &nk, NULL);
 	lu_env_fini(&env);
 
@@ -1886,7 +1890,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	enum nodemap_id_type id_type;
 	struct lnet_nid nid[2];
 	int subtype, cluster_idx_key;
-	u32 nodemap_id;
+	u32 nodemap_id, range_id;
 	u32 map[2];
 	int rc = 0;
 
@@ -1897,7 +1901,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	nodemap_id = le32_to_cpu(key->nk_nodemap_id);
 	type = nodemap_get_key_type(key);
 	subtype = nodemap_get_key_subtype(key);
-	nodemap_id = nm_idx_set_type(nodemap_id, 0);
+	nodemap_id = nm_idx_get_id(nodemap_id);
 
 	CDEBUG(D_INFO, "found config entry, nm_id %d type %d subtype %d\n",
 	       nodemap_id, type, subtype);
@@ -1970,17 +1974,21 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	case NODEMAP_RANGE_IDX:
 		lnet_nid4_to_nid(le64_to_cpu(rec->nrr.nrr_start_nid), &nid[0]);
 		lnet_nid4_to_nid(le64_to_cpu(rec->nrr.nrr_end_nid), &nid[1]);
-		rc = nodemap_add_range_helper(config, nodemap, nid, 0,
-					      le32_to_cpu(key->nk_range_id));
+		range_id = le32_to_cpu(key->nk_range_id);
+		range_id = nm_idx_get_id(range_id);
+		rc = nodemap_add_range_helper(config, nodemap, nid,
+					      0, range_id);
 		if (rc != 0)
 			GOTO(out, rc);
 		break;
 	case NODEMAP_NID_MASK_IDX:
 		nid[0] = rec->nrr2.nrr_nid_prefix;
 		nid[1] = rec->nrr2.nrr_nid_prefix;
+		range_id = le32_to_cpu(key->nk_range_id);
+		range_id = nm_idx_get_id(range_id);
 		rc = nodemap_add_range_helper(config, nodemap, nid,
 					      rec->nrr2.nrr_netmask,
-					      le32_to_cpu(key->nk_range_id));
+					      range_id);
 		if (rc != 0)
 			GOTO(out, rc);
 		break;
@@ -2264,8 +2272,8 @@ nodemap_save_config_cache(const struct lu_env *env,
 
 			type = range->rn_netmask ? NODEMAP_NID_MASK_IDX :
 						   NODEMAP_RANGE_IDX;
-			nodemap_range_key_init(&nk, type, nodemap->nm_id,
-					       range->rn_id);
+			nodemap_range_key_init(&nk, type, NM_RANGE_FL_REG,
+					       nodemap->nm_id, range->rn_id);
 			rc2 = nodemap_range_rec_init(&nr, range);
 			if (rc2 < 0) {
 				rc = rc2;

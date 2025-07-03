@@ -282,6 +282,11 @@ struct nodemap_cluster_rec {
 	__u32			ncr_squash_gid;
 };
 
+enum nm_range_type_bits {
+	NM_RANGE_FL_REG = 0x0,
+	NM_RANGE_FL_BAN = 0x1,
+};
+
 /* lnet_nid_t is 8 bytes */
 struct nodemap_range_rec {
 	lnet_nid_t	nrr_start_nid;
@@ -411,6 +416,7 @@ struct nodemap_key {
 	__u32 nk_nodemap_id;
 	union {
 		__u32 nk_cluster_subid;
+		/* first 4 bits of nk_range_id are range type */
 		__u32 nk_range_id;
 		__u32 nk_id_client;
 		__u32 nk_unused;

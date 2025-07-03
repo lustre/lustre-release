@@ -103,12 +103,17 @@ struct lu_fileset_alt {
 	struct rb_node	nfa_rb;
 };
 
-static inline enum nodemap_idx_type nm_idx_get_type(unsigned int id)
+static inline unsigned int nm_idx_get_type(unsigned int id)
 {
 	return id >> NM_TYPE_SHIFT;
 }
 
-static inline __u32 nm_idx_set_type(unsigned int id, enum nodemap_idx_type t)
+static inline unsigned int nm_idx_get_id(unsigned int id)
+{
+	return id & NM_TYPE_MASK;
+}
+
+static inline __u32 nm_idx_set_type(unsigned int id, unsigned int t)
 {
 	return (id & NM_TYPE_MASK) | (t << NM_TYPE_SHIFT);
 }
@@ -229,8 +234,10 @@ int nodemap_idx_idmap_del(const struct lu_nodemap *nodemap,
 			  enum nodemap_id_type id_type,
 			  const __u32 map[2]);
 int nodemap_idx_range_add(struct lu_nodemap *nodemap,
+			  enum nm_range_type_bits type,
 			  const struct lu_nid_range *range);
 int nodemap_idx_range_del(struct lu_nodemap *nodemap,
+			  enum nm_range_type_bits type,
 			  const struct lu_nid_range *range);
 int nodemap_idx_nodemap_activate(bool value);
 int nodemap_index_read(struct lu_env *env, struct nm_config_file *ncf,
