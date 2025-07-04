@@ -4536,10 +4536,42 @@ int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 EXPORT_SYMBOL(nodemap_test_id);
 
 /**
+ * nodemap_is_dynamic() - Checks if nodemap is dynamic
+ * @nodemap_name: name of nodemmap
+ *
+ * Return:
+ * * %true	nodemap is dynamic
+ * * %false	nodemap is regular
+ */
+static bool nodemap_is_dynamic(const char *nodemap_name)
+{
+	struct lu_nodemap *nodemap;
+	bool isdyn = false;
+
+	if (!nodemap_name || strcmp(nodemap_name, DEFAULT_NODEMAP) == 0)
+		RETURN(false);
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(nodemap_name);
+	mutex_unlock(&active_config_lock);
+
+	if (IS_ERR(nodemap))
+		RETURN(false);
+
+	if (nodemap->nm_dyn)
+		isdyn = true;
+
+	nodemap_putref(nodemap);
+	return isdyn;
+}
+
+/**
  * cfg_nodemap_fileset_cmd() - Fileset command handler and entry point for
  * all "lctl nodemap_fileset*" ops
  *
  * @lcfg: lustre cfg for fileset operation
+ * @dynamic: out, is a dynamic nodemap
+ * @out_clean_llog_fileset: true if fileset must be cleaned out from llog
  *
  * Return:
  * * %0 on success
@@ -4548,7 +4580,7 @@ EXPORT_SYMBOL(nodemap_test_id);
  * * %-EIO		undo operation failed during IAM update
  */
 static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
-				   bool *out_clean_llog_fileset)
+				   bool *dynamic, bool *out_clean_llog_fileset)
 {
 	struct lu_nodemap *nodemap = NULL;
 	bool fset_ro = false, fset_alt = false;
@@ -4558,6 +4590,9 @@ static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 	int rc;
 
 	ENTRY;
+
+	if (dynamic)
+		*dynamic = false;
 
 	if (lcfg->lcfg_bufcount < 2 || lcfg->lcfg_bufcount > 5)
 		RETURN(-EINVAL);
@@ -4581,6 +4616,9 @@ static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 		mutex_unlock(&active_config_lock);
 		RETURN(PTR_ERR(nodemap));
 	}
+
+	if (dynamic && nodemap->nm_dyn)
+		*dynamic = true;
 
 	if (!allow_op_on_nm(nodemap))
 		GOTO(out_unlock, rc = -ENXIO);
@@ -4670,7 +4708,7 @@ out_unlock:
 }
 
 static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
-			   char *param, bool dynamic,
+			   char *param, bool *dynamic,
 			   bool *out_clean_llog_fileset)
 {
 	struct lnet_nid nid[2];
@@ -4682,9 +4720,16 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 	int rc = 0;
 
 	ENTRY;
+
+	/* for LCFG_NODEMAP_ADD the nodemap does not exist yet,
+	 * but the dynamic input value can be trusted
+	 */
+	if (dynamic && !*dynamic)
+		*dynamic = nodemap_is_dynamic(nodemap_name);
+
 	switch (cmd) {
 	case LCFG_NODEMAP_ADD:
-		rc = nodemap_add(nodemap_name, dynamic);
+		rc = nodemap_add(nodemap_name, dynamic ? *dynamic : false);
 		break;
 	case LCFG_NODEMAP_DEL:
 		rc = nodemap_del(nodemap_name, out_clean_llog_fileset);
@@ -4963,13 +5008,14 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
  * @obd: OBD device
  * @data: IOCTL data
  * @dynamic: if true nodemap will be dynamic (can be modified runtime)
+ *	     as out value, tell caller if nodemap is dynamic
  *
  * Return:
  * * %0 on success
  * * %< 0 on error
  */
 int server_iocontrol_nodemap(struct obd_device *obd,
-			     struct obd_ioctl_data *data, bool dynamic,
+			     struct obd_ioctl_data *data, bool *dynamic,
 			     bool *out_clean_llog_fileset)
 {
 	char name_buf[LUSTRE_NODEMAP_NAME_LENGTH + 1];
@@ -5128,7 +5174,8 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 	case LCFG_NODEMAP_FILESET_ADD:
 	case LCFG_NODEMAP_FILESET_DEL:
 	case LCFG_NODEMAP_FILESET_MODIFY:
-		rc = cfg_nodemap_fileset_cmd(lcfg, out_clean_llog_fileset);
+		rc = cfg_nodemap_fileset_cmd(lcfg, dynamic,
+					     out_clean_llog_fileset);
 		break;
 	default:
 		rc = -ENOTTY;

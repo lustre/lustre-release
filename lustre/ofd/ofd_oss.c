@@ -405,9 +405,11 @@ static int oss_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct obd_ioctl_data *data;
+	bool dynamic = true;
 	int rc = 0;
 
 	ENTRY;
+
 	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
 	       obd->obd_name, cmd, len, karg, uarg);
 
@@ -416,7 +418,7 @@ static int oss_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	if (cmd != OBD_IOC_NODEMAP)
 		GOTO(out, rc = -EINVAL);
 
-	rc = server_iocontrol_nodemap(obd, data, true, NULL);
+	rc = server_iocontrol_nodemap(obd, data, &dynamic, NULL);
 	if (rc)
 		GOTO(out, rc);
 

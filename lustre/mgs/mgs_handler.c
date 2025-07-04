@@ -934,8 +934,9 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 				 struct mgs_device *mgs,
 				 struct obd_ioctl_data *data)
 {
-	struct fs_db *fsdb;
 	bool clean_llog_fileset = false;
+	bool dynamic = false;
+	struct fs_db *fsdb;
 	int rc;
 
 	ENTRY;
@@ -946,9 +947,12 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	rc = server_iocontrol_nodemap(mgs->mgs_obd, data, false,
+	rc = server_iocontrol_nodemap(mgs->mgs_obd, data, &dynamic,
 				      &clean_llog_fileset);
 	if (rc)
+		GOTO(out, rc);
+
+	if (dynamic)
 		GOTO(out, rc);
 
 	/* A llog fileset entry might still exist and needs to be removed */
