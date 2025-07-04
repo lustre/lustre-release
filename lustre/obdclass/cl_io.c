@@ -1257,20 +1257,6 @@ static inline void dio_aio_complete(struct kiocb *iocb, ssize_t res)
 #endif
 }
 
-void cl_dio_pages_2queue(struct cl_dio_pages *cdp)
-{
-	int i = 0;
-
-	cl_2queue_init(&cdp->cdp_queue);
-
-	for (i = 0; i < cdp->cdp_page_count; i++) {
-		struct cl_page *page = cdp->cdp_cl_pages[i];
-
-		cl_page_list_add(&cdp->cdp_queue.c2_qin, page, false);
-	}
-}
-EXPORT_SYMBOL(cl_dio_pages_2queue);
-
 static void cl_dio_aio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 {
 	struct cl_dio_aio *aio = container_of(anchor, typeof(*aio), cda_sync);

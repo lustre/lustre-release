@@ -2547,7 +2547,6 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		     int ioret);
 int cl_sync_io_wait_recycle(const struct lu_env *env, struct cl_sync_io *anchor,
 			    long timeout, int ioret);
-void cl_dio_pages_2queue(struct cl_dio_pages *ldp);
 struct cl_dio_aio *cl_dio_aio_alloc(struct kiocb *iocb, struct cl_object *obj,
 				    bool is_aio);
 struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
@@ -2591,7 +2590,6 @@ struct cl_dio_pages {
 
 	struct cl_page		**cdp_cl_pages;
 	struct cl_sync_io	*cdp_sync_io;
-	struct cl_2queue	cdp_queue;
 	/* the file offset of the first page. */
 	loff_t                  cdp_file_offset;
 	unsigned int		cdp_lov_index;

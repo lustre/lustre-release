@@ -242,12 +242,10 @@ int osc_io_submit(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(osc_io_submit);
 
-static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
-			    const struct cl_io_slice *ios, enum cl_req_type crt,
-			    struct cl_dio_pages *cdp, struct cl_2queue *queue)
+int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
+		   const struct cl_io_slice *ios, enum cl_req_type crt,
+		   struct cl_dio_pages *cdp)
 {
-	struct cl_page_list *qout     = &queue->c2_qout;
-	struct cl_page_list *qin      = &queue->c2_qin;
 	struct osc_object *osc  = cl2osc(ios->cis_obj);
 	struct cl_io	  *top_io = cl_io_top(io);
 	struct client_obd *cli  = osc_cli(osc);
@@ -266,9 +264,7 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	int to = -1;
 	int i = 0;
 
-	LASSERT(qin->pl_nr > 0);
-
-	CDEBUG(D_CACHE|D_READA, "%d %d\n", qin->pl_nr, crt);
+	CDEBUG(D_CACHE|D_READA, "%u %d\n", cdp->cdp_page_count, crt);
 
 	brw_flags = osc_io_srvlock(cl2osc_io(env, ios)) ? OBD_BRW_SRVLOCK : 0;
 	brw_flags |= crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;
@@ -298,8 +294,6 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 
 		osc_page_submit(env, opg, crt, brw_flags);
 		list_add_tail(&oap->oap_pending_item, &list);
-
-		cl_page_list_move(qout, qin, page);
 
 		queued++;
 		total_queued++;
@@ -352,30 +346,6 @@ static int __osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	CDEBUG(D_INFO, "%d/%u %d\n", total_queued, cdp->cdp_page_count,
 	       result);
 	return total_queued > 0 ? 0 : result;
-}
-
-int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
-		  const struct cl_io_slice *ios, enum cl_req_type crt,
-		  struct cl_dio_pages *cdp)
-{
-	struct cl_2queue *queue;
-	int rc = 0;
-
-	cl_dio_pages_2queue(cdp);
-	queue = &cdp->cdp_queue;
-
-	rc = __osc_dio_submit(env, io, ios, crt, cdp, queue);
-
-	/* if submit failed, no pages were sent */
-	LASSERT(ergo(rc != 0, list_empty(&queue->c2_qout.pl_pages)));
-	while (queue->c2_qout.pl_nr > 0) {
-		struct cl_page *page;
-
-		page = cl_page_list_first(&queue->c2_qout);
-		cl_page_list_del(env, &queue->c2_qout, page, false);
-	}
-
-	RETURN(rc);
 }
 EXPORT_SYMBOL(osc_dio_submit);
 
