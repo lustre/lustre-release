@@ -695,6 +695,7 @@ static void __exit libcfs_exit(void)
 	if (rc)
 		pr_err("LustreError: libcfs_debug_cleanup: rc = %d\n", rc);
 
+	debug_format_buffer_free_buffers();
 	cfs_arch_exit();
 }
 
