@@ -24968,9 +24968,9 @@ test_230p() {
 		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
 		$LFS setdirstripe -c $c $DIR/$tdir ||
 			error "split -c $c $tdir failed"
-		if (( MDS1_VERSION >= $(version_code 2.14.51) )); then
+		if (( MDS1_VERSION > $(version_code 2.14.0-7-10-g3ae36f4c0a) )); then
 			mdt_hash="$mdt_hash,fixed"
-		elif [ $c -eq 1 ]; then
+		elif (( $c == 1 )); then
 			mdt_hash="none"
 		fi
 		wait_update $HOSTNAME \
@@ -24984,15 +24984,18 @@ test_230p() {
 			error "$delta files migrated >= $((200 / c + 4))"
 	done
 
+	(( MDS1_VERSION >= $(version_code v2_16_52-71-g103c1f560c) )) ||
+		skip "need MDS >= 2.16.52.71 for resplitting support"
+
 	# and restripe to -c 2
 	echo Splitting the dir back to 2 stripes.
-        $LFS setdirstripe -c 2 $DIR/$tdir || {
+	$LFS setdirstripe -c 2 $DIR/$tdir || {
 		$LFS getdirstripe $DIR/$tdir
-                error "split $tdir to 2 stripes failed"
+		error "split $tdir to 2 stripes failed"
 	}
-        wait_update $HOSTNAME \
-                "$LFS getdirstripe -H $DIR/$tdir" "crush" $timeout ||
-                error "dir split not finished"
+	wait_update $HOSTNAME \
+		"$LFS getdirstripe -H $DIR/$tdir" "crush" $timeout ||
+		error "dir split not finished"
 }
 run_test 230p "dir merge"
 
