@@ -38,6 +38,7 @@ rhel9.2/ext4-filename-encode.patch
 rhel9.1/ext4-enc-flag.patch
 rhel9.2/ext4-encdata.patch
 rhel9/ext4-add-periodic-superblock-update.patch
+rhel9/ext4-add-DISCARD-stats.patch
 rhel9.4/ext4-add-IGET_NO_CHECKS-flag.patch
 rhel9.4/ext4-allow-ext4_get_group_info-to-fail.patch
 rhel9.4/ext4-not-skip-prefetching-BLOCK_UNINIT-groups.patch

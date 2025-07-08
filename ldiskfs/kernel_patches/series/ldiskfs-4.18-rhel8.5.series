@@ -35,6 +35,7 @@ rhel8.5/ext4-enc-flag.patch
 rhel8/ext4-ext-merge.patch
 base/ext4-delayed-iput.patch
 rhel8/ext4-add-periodic-superblock-update.patch
+rhel8.4/ext4-add-DISCARD-stats.patch
 rhel8.5/ext4-filename-encode.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
 rhel8.4/ext4-optimize-find_delayed_extent.patch
