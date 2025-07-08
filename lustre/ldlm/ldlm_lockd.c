@@ -3347,6 +3347,14 @@ static ssize_t lock_granted_count_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(lock_granted_count);
 #endif
 
+static ssize_t ldlm_enqueue_min_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ldlm_enqueue_min);
+}
+LUSTRE_RO_ATTR(ldlm_enqueue_min);
+
 static struct attribute *ldlm_attrs[] = {
 	&lustre_attr_dump_granted_max.attr,
 	&lustre_attr_cancel_unused_locks_before_replay.attr,
@@ -3355,6 +3363,7 @@ static struct attribute *ldlm_attrs[] = {
 	&lustre_attr_lock_limit_mb.attr,
 	&lustre_attr_lock_granted_count.attr,
 #endif
+	&lustre_attr_ldlm_enqueue_min.attr,
 	NULL,
 };
 

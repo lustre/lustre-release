@@ -1138,6 +1138,8 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	# must be equal on all the nodes
 	local INTERVAL=$(do_facet $SINGLEMDS lctl get_param -n ping_interval)
 	local AT_MAX_SAVED=$(at_max_get mds1)
+	local ENQUEUE_MIN=$(do_facet $SINGLEMDS \
+		lctl get_param -n ldlm.ldlm_enqueue_min)
 
 	at_max_set $TIMEOUT mds1
 	at_max_set $TIMEOUT ost1
@@ -1148,9 +1150,13 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 
 	zconf_umount $HOSTNAME $MOUNT2 -f
 
-	# see ptlrpc_export_timeout() for the pinger case; take a bit more the test sake
-	local TOUT=$((INTERVAL * 2 + (TIMEOUT / 20 + 5 + TIMEOUT) * 3))
-	TOUT=$((TOUT + (TOUT >> 3)))
+	# see ptlrpc_export_timeout() for the pinger case
+	local TOUT=$(((INTERVAL * 2) + TIMEOUT))
+	TOUT=$((TOUT + TIMEOUT + (TIMEOUT >> 2) + 5))
+	TOUT=$((TOUT + (TIMEOUT/20) + TIMEOUT))
+	TOUT=$((TOUT + (TOUT >> 4)))
+	# take a bit more the test sake
+	TOUT=$(((TOUT > ENQUEUE_MIN ? TOUT : ENQUEUE_MIN) + 5))
 	echo i $INTERVAL m $AT_MAX_SAVED t $TIMEOUT $TOUT
 	wait_client_evicted ost1 $ost_nexp $TOUT ||
 		error "Client was not evicted by OSS"
