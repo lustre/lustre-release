@@ -2767,18 +2767,21 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 
 	if (verbose & VERBOSE_STRIPE_OFFSET) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_STRIPE_OFFSET)
-			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_offset: ",
-				     space, prefix);
-		if (is_dir || skip_objs)
+		bool is_dom = (lov_pattern(lum->lmm_pattern) & LOV_PATTERN_MDT);
+
+		if (verbose & ~VERBOSE_STRIPE_OFFSET) {
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     is_dom ?  "%s%smdt_index:     "
+				     : "%s%sstripe_offset: ", space, prefix);
+		}
+		if (is_dir || skip_objs || is_dom)
 			if (lum->lmm_stripe_offset ==
 			    (typeof(lum->lmm_stripe_offset))(-1))
 				llapi_printf(LLAPI_MSG_NORMAL, "-1");
 			else
 				llapi_printf(LLAPI_MSG_NORMAL, fmt_idx,
 					     lum->lmm_stripe_offset);
-		else if (lov_pattern(lum->lmm_pattern) & LOV_PATTERN_MDT)
-			llapi_printf(LLAPI_MSG_NORMAL, "0");
+
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, fmt_idx,
 				     objects[0].l_ost_idx);

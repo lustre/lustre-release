@@ -2846,6 +2846,9 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 			       "comp[%d]: stripe_count=%u, stripe_size=%u\n",
 			       i, v1->lmm_stripe_count, v1->lmm_stripe_size);
 
+			if (v1->lmm_pattern & LOV_PATTERN_MDT)
+				v1->lmm_stripe_offset = ll_get_mdt_idx(inode);
+
 			if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_LOV_COMP_MAGIC) &&
 				     (cfs_fail_val == i + 1)))
 				v1->lmm_magic = LOV_MAGIC_BAD;
@@ -2853,6 +2856,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 			if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_LOV_COMP_PATTERN) &&
 				     (cfs_fail_val == i + 1)))
 				v1->lmm_pattern = LOV_PATTERN_BAD;
+
 		}
 
 		if (v1 == NULL)
