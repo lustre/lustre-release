@@ -10,9 +10,13 @@ or
 .YS
 .SH DESCRIPTION
 .B nodemap_banlist_add
-adds a range of banned NIDs to an existing nodemap.
-The banned NID range must be included into the normal NID range associated with
-the nodemap.
+adds a range of banned NIDs to an existing nodemap, either a normal or the
+default nodemap.
+For normal nodemaps, the banned NID range must be included into a regular NID
+range associated with the nodemap.
+For the default nodemap, the added range of banned NIDs must not conflict with
+any NID range defined on any other nodemap.
+.br
 Clients with NIDs that fall into the banned range will be blocked by servers,
 and will get 'Operation not permitted' for all requests except unmount. The
 banning happens as soon as the nodemap definition is propagated to the servers.
@@ -21,6 +25,7 @@ As long as a client is banned, it cannot mount Lustre.
 .TP
 .BI --name " NODEMAP_NAME"
 The name of the nodemap that this banned NID range should be added to.
+It may be 'default' and will accept any NID not in another nodemap.
 .TP
 .BI --range " NID_RANGE"
 The banned NID range that should be added to the nodemap.

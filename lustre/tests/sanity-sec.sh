@@ -9938,6 +9938,48 @@ test_81a() {
 	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	echo hi > $DIR/$tdir/$tfile || error "create $DIR/$tdir/$tfile failed"
 
+	do_facet mgs $LCTL nodemap_add $nm
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin=1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted=1
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+
+	# check nodemap exports
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt_orig=$(do_facet mds1 "$LCTL get_param nodemap.default.exports |
+			grep MDT | grep -c $client_nid")
+	(( exp_cnt_orig != 0 )) ||
+		error "no exports for $client_nid found on default"
+
+	# check client access: should succeed
+	cancel_lru_locks
+	ls $DIR/$tdir || error "ls $DIR/$tdir failed (0)"
+	cat $DIR/$tdir/$tfile || error "cat $DIR/$tdir/$tfile failed (0)"
+
+	# add ban list to default nodemap
+	stack_trap "do_facet mgs $LCTL nodemap_banlist_del --name default \
+		--range $client_nid || true" EXIT
+	do_facet mgs $LCTL nodemap_banlist_add --name default \
+		--range $client_nid ||
+		      error "Setting banlist=$client_nid on default failed"
+	wait_nm_sync default banlist
+
+	# check client access: should fail
+	cancel_lru_locks
+	ls $DIR/$tdir && error "ls $DIR/$tdir should fail (0)"
+	cat $DIR/$tdir/$tfile && error "cat $DIR/$tdir/$tfile should fail (0)"
+
+	# no nodemap can have a NID range that conflicts with default's banlist
+	do_facet mgs $LCTL nodemap_add_range \
+		--name $nm --range $client_nid &&
+		error "Add range $client_nid to $nm should fail"
+	do_facet mgs $LCTL nodemap_del $nm
+	do_facet mgs $LCTL nodemap_banlist_del --name default \
+		--range $client_nid ||
+		error "Deleting banlist=$client_nid on default failed"
+
 	# setup nodemap
 	setup_local_client_nodemap $nm 1 1
 
@@ -9954,6 +9996,9 @@ test_81a() {
 	cat $DIR/$tdir/$tfile || error "cat $DIR/$tdir/$tfile failed (1)"
 
 	# add ban list
+	do_facet mgs $LCTL nodemap_banlist_add --name default \
+		--range $client_nid &&
+		      error "Setting banlist=$client_nid on default should fail"
 	do_facet mgs $LCTL nodemap_banlist_add --name $nm --range $fake_nid &&
 		error "Setting banlist=$fake_nid on $nm should fail"
 	do_facet mgs $LCTL nodemap_banlist_add --name $nm --range $client_nid ||

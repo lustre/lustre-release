@@ -1355,6 +1355,10 @@ static struct ldebugfs_vars lprocfs_default_nodemap_vars[] = {
 		.fops		= &nodemap_raise_privs_fops,
 	},
 	{
+		.name		= "banlist",
+		.fops		= &nodemap_ban_ranges_fops,
+	},
+	{
 		.name		= "readonly_mount",
 		.fops		= &nodemap_readonly_mount_fops,
 	},
