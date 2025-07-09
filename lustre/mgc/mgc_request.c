@@ -1606,7 +1606,7 @@ again:
 		rc2 = mgc_apply_recover_logs(obd, cld, res->mcr_offset, ptr,
 					     min_t(int, ealen, PAGE_SIZE),
 					     mne_swab);
-		kunmap(pages[i]);
+		kunmap(kmap_to_page(ptr));
 		if (rc2 < 0) {
 			CWARN("%s: error processing %s log recovery: rc = %d\n",
 			      obd->obd_name,

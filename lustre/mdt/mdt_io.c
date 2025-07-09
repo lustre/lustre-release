@@ -2048,7 +2048,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		GOTO(buf_put, rc);
 	/* copy data to the buffer finally */
 	for (i = 0; i < nr_local; i++) {
-		char *p = kmap(lnb[i].lnb_page);
+		char *p = kmap_local_page(lnb[i].lnb_page);
 		long off;
 
 		LASSERT(lnb[i].lnb_page_offset == 0);
@@ -2057,7 +2057,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 			memset(p + off, 0, PAGE_SIZE - off);
 
 		memcpy(buf + (i << PAGE_SHIFT), p, lnb[i].lnb_len);
-		kunmap(lnb[i].lnb_page);
+		kunmap_local(p);
 		copied += lnb[i].lnb_len;
 	}
 	CDEBUG(D_INFO, "Read %i (wanted %u) bytes from %llu\n", copied,

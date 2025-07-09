@@ -4167,14 +4167,14 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 		dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
 		dp->ldp_hash_end   = cpu_to_le64(MDS_DIR_END_OFF);
 		dp->ldp_flags = cpu_to_le32(LDF_EMPTY);
-		rdpg_page_put(rdpg, 0);
+		rdpg_page_put(rdpg, 0, dp);
 		GOTO(out_unlock, rc = LU_PAGE_SIZE);
 	}
 
 	rc = dt_index_walk(env, mdd_object_child(mdd_obj), rdpg,
 			   mdd_dir_page_build, NULL);
 	if (rc >= 0) {
-		struct lu_dirpage	*dp;
+		struct lu_dirpage *dp;
 
 		dp = (struct lu_dirpage *)rdpg_page_get(rdpg, 0);
 		dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
@@ -4187,7 +4187,7 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 			dp->ldp_flags = cpu_to_le32(LDF_EMPTY);
 			rc = min_t(unsigned int, LU_PAGE_SIZE, rdpg->rp_count);
 		}
-		rdpg_page_put(rdpg, 0);
+		rdpg_page_put(rdpg, 0, dp);
 	}
 
 	GOTO(out_unlock, rc);

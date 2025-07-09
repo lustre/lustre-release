@@ -140,8 +140,9 @@ static void
 echo_page_debug_setup(struct page *page, int rw, u64 id,
 		      __u64 offset, int len)
 {
-	int   page_offset = offset & ~PAGE_MASK;
-	char *addr        = ((char *)kmap(page)) + page_offset;
+	int page_offset = offset & ~PAGE_MASK;
+	char *kaddr = kmap_local_page(page);
+	char *addr = kaddr + page_offset;
 
 	if (len % OBD_ECHO_BLOCK_SIZE != 0)
 		CERROR("Unexpected block size %d\n", len);
@@ -160,17 +161,18 @@ echo_page_debug_setup(struct page *page, int rw, u64 id,
 		len    -= OBD_ECHO_BLOCK_SIZE;
 	}
 
-	kunmap(page);
+	kunmap_local(kaddr);
 }
 
 static int
 echo_page_debug_check(struct page *page, u64 id,
 		      __u64 offset, int len)
 {
-	int   page_offset = offset & ~PAGE_MASK;
-	char *addr        = ((char *)kmap(page)) + page_offset;
-	int   rc          = 0;
-	int   rc2;
+	int page_offset = offset & ~PAGE_MASK;
+	char *kaddr = kmap_local_page(page);
+	char *addr = kaddr + page_offset;
+	int rc = 0;
+	int rc2;
 
 	if (len % OBD_ECHO_BLOCK_SIZE != 0)
 		CERROR("Unexpected block size %d\n", len);
@@ -187,7 +189,7 @@ echo_page_debug_check(struct page *page, u64 id,
 		len    -= OBD_ECHO_BLOCK_SIZE;
 	}
 
-	kunmap(page);
+	kunmap_local(kaddr);
 
 	return rc;
 }
@@ -277,7 +279,7 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 
 	for (i = 0; i < count; i++, (*pgs) ++, res++) {
 		struct page *page = res->lnb_page;
-		void       *addr;
+		void *addr;
 
 		if (!page) {
 			CERROR("null page objid %llu:%p, buf %d/%d\n",
@@ -286,7 +288,7 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 			return -EFAULT;
 		}
 
-		addr = kmap(page);
+		addr = kmap_local_page(page);
 
 		CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@%llu\n",
 		       res->lnb_page, addr, res->lnb_file_offset);
@@ -301,7 +303,7 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 				rc = vrc;
 		}
 
-		kunmap(page);
+		kunmap_local(addr);
 		/* NB see comment above regarding persistent pages */
 		__free_page(page);
 	}
@@ -373,7 +375,6 @@ preprw_cleanup:
 	 */
 	CERROR("cleaning up %u pages (%d obdos)\n", *pages, objcount);
 	for (i = 0; i < *pages; i++) {
-		kunmap(res[i].lnb_page);
 		/*
 		 * NB if this is a persistent page, __free_page() will just
 		 * lose the extra ref gained above
@@ -954,7 +955,8 @@ void echo_persistent_pages_fini(void)
 int echo_persistent_pages_init(void)
 {
 	struct page *pg;
-	int          i;
+	void *kaddr;
+	int i;
 
 	for (i = 0; i < ECHO_PERSISTENT_PAGES; i++) {
 		gfp_t gfp_mask = (i < ECHO_PERSISTENT_PAGES / 2) ?
@@ -966,8 +968,9 @@ int echo_persistent_pages_init(void)
 			return -ENOMEM;
 		}
 
-		memset(kmap(pg), 0, PAGE_SIZE);
-		kunmap(pg);
+		kaddr = kmap_local_page(pg);
+		memset(kaddr, 0, PAGE_SIZE);
+		kunmap_local(kaddr);
 		/* set mapping so page is not considered encrypted */
 		pg->mapping = ECHO_MAPPING_UNENCRYPTED;
 

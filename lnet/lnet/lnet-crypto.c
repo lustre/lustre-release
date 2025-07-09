@@ -326,9 +326,9 @@ static void cfs_crypto_performance_test(enum cfs_crypto_hash_alg hash_alg)
 		goto out_err;
 	}
 
-	buf = kmap(page);
+	buf = kmap_local_page(page);
 	memset(buf, 0xAD, PAGE_SIZE);
-	kunmap(page);
+	kunmap_local(buf);
 
 	for (start = jiffies, end = start + cfs_time_seconds(1) / 4,
 	     bcount = 0; time_before(jiffies, end) && err == 0; bcount++) {

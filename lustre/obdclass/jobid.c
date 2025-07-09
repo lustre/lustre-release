@@ -255,7 +255,7 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 			copy_from_user_page(vma, page, addr,
 					    buf, maddr + offset, bytes);
 		}
-		kunmap(page);
+		kunmap(kmap_to_page(maddr));
 		put_page(page);
 		len -= bytes;
 		buf += bytes;

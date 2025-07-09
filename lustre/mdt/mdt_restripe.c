@@ -520,6 +520,7 @@ static int mdt_restripe_migrate(struct mdt_thread_info *info)
 	struct lu_dirpage *dp;
 	struct lu_dirent *ent;
 	const char *name = NULL;
+	void *kaddr = NULL;
 	int namelen = 0;
 	__u16 type;
 	int idx = 0;
@@ -595,7 +596,8 @@ static int mdt_restripe_migrate(struct mdt_thread_info *info)
 	if (rc < 0)
 		GOTO(out, rc);
 
-	dp = page_address(restriper->mdr_page);
+	kaddr = kmap(restriper->mdr_page);
+	dp = kaddr;
 	for (ent = lu_dirent_start(dp); ent; ent = lu_dirent_next(ent)) {
 		LASSERT(le64_to_cpu(ent->lde_hash) >= rdpg->rp_hash);
 
@@ -666,8 +668,17 @@ static int mdt_restripe_migrate(struct mdt_thread_info *info)
 	else
 		stripe->mot_restripe_offset = le64_to_cpu(dp->ldp_hash_end);
 
+	if (kaddr) {
+		kunmap(kmap_to_page(kaddr));
+		kaddr = NULL;
+	}
+
 	EXIT;
 out:
+	if (kaddr) {
+		kunmap(kmap_to_page(kaddr));
+		kaddr = NULL;
+	}
 	if (rc) {
 		/* -EBUSY: file is opened by others */
 		if (rc != -EBUSY)

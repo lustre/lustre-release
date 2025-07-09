@@ -2978,7 +2978,10 @@ struct lmv_dir_ctxt {
 static inline void stripe_dirent_unload(struct stripe_dirent *stripe)
 {
 	if (stripe->sd_page) {
-		kunmap(stripe->sd_page);
+		if (stripe->sd_dp) {
+			kunmap(kmap_to_page(stripe->sd_dp));
+			stripe->sd_dp = NULL;
+		}
 		put_page(stripe->sd_page);
 		stripe->sd_page = NULL;
 		stripe->sd_ent = NULL;
@@ -3037,7 +3040,7 @@ static struct lu_dirent *stripe_dirent_load(struct lmv_dir_ctxt *ctxt,
 	LASSERT(!ent);
 
 	do {
-		if (stripe->sd_page) {
+		if (stripe->sd_page && stripe->sd_dp) {
 			__u64 end = le64_to_cpu(stripe->sd_dp->ldp_hash_end);
 
 			/* @hash should be the last dirent hash */
@@ -3071,6 +3074,7 @@ static struct lu_dirent *stripe_dirent_load(struct lmv_dir_ctxt *ctxt,
 		op_data->op_fid2 = oinfo->lmo_fid;
 		op_data->op_data = oinfo->lmo_root;
 
+		stripe->sd_dp = NULL;
 		rc = md_read_page(tgt->ltd_exp, op_data, ctxt->ldc_mrinfo, hash,
 				  &stripe->sd_page);
 
@@ -3081,7 +3085,7 @@ static struct lu_dirent *stripe_dirent_load(struct lmv_dir_ctxt *ctxt,
 		if (rc)
 			break;
 
-		stripe->sd_dp = page_address(stripe->sd_page);
+		stripe->sd_dp = kmap(stripe->sd_page);
 		ent = stripe_dirent_get(ctxt, lu_dirent_start(stripe->sd_dp),
 					stripe_index);
 		/* in case a page filled with ., .. and dummy, read next */
@@ -3304,6 +3308,7 @@ static int lmv_striped_read_page(struct obd_export *exp,
 	dp->ldp_flags = cpu_to_le32(dp->ldp_flags);
 	dp->ldp_hash_end = cpu_to_le64(ctxt->ldc_hash);
 
+	kunmap(kmap_to_page(dp));
 	put_lmv_dir_ctxt(ctxt);
 	OBD_FREE(ctxt, offsetof(typeof(*ctxt), ldc_stripes[stripe_count]));
 
@@ -3312,7 +3317,7 @@ static int lmv_striped_read_page(struct obd_export *exp,
 	RETURN(0);
 
 free_page:
-	kunmap(page);
+	kunmap(kmap_to_page(dp));
 	__free_page(page);
 
 	return rc;

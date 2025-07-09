@@ -197,9 +197,9 @@ int lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
 	BUILD_BUG_ON(!__same_type(cl_page->cp_lov_index, CP_LOV_INDEX_EMPTY));
 	cl_page->cp_lov_index = CP_LOV_INDEX_EMPTY;
 
-	addr = kmap(cl_page->cp_vmpage);
+	addr = kmap_local_page(cl_page->cp_vmpage);
 	memset(addr, 0, PAGE_SIZE);
-	kunmap(cl_page->cp_vmpage);
+	kunmap_local(addr);
 	SetPageUptodate(cl_page->cp_vmpage);
 	RETURN(0);
 }

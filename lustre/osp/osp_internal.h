@@ -358,7 +358,7 @@ struct osp_it {
 	__u64			  ooi_next;
 	struct dt_object	 *ooi_obj;
 	void			 *ooi_ent;
-	struct page		 *ooi_cur_page;
+	void			 *ooi_cur_kaddr;
 	struct lu_idxpage	 *ooi_cur_idxpage;
 	struct page		 **ooi_pages;
 };

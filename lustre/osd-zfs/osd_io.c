@@ -1040,10 +1040,12 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			continue;
 
 		if (lnb[i].lnb_page->mapping == (void *)obj) {
+			void *addr = kmap(lnb[i].lnb_page);
+
 			osd_dmu_write(osd, obj->oo_dn, lnb[i].lnb_file_offset,
-				      lnb[i].lnb_len, kmap(lnb[i].lnb_page) +
+				      lnb[i].lnb_len, addr +
 				      lnb[i].lnb_page_offset, oh->ot_tx);
-			kunmap(lnb[i].lnb_page);
+			kunmap(kmap_to_page(addr));
 			iosize += lnb[i].lnb_len;
 			abufsz = lnb[i].lnb_len; /* to drop cache below */
 		} else if (lnb[i].lnb_data) {

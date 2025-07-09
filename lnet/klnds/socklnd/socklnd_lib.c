@@ -389,12 +389,11 @@ ksocknal_lib_csum_tx(struct ksock_tx *tx)
 			     tx->tx_hdr.iov_len);
 
 	for (i = 0; i < tx->tx_nkiov; i++) {
-		base = kmap(tx->tx_kiov[i].bv_page) +
-			tx->tx_kiov[i].bv_offset;
+		void *kaddr = kmap_local_page(tx->tx_kiov[i].bv_page);
 
+		base = kaddr + tx->tx_kiov[i].bv_offset;
 		csum = ksocknal_csum(csum, base, tx->tx_kiov[i].bv_len);
-
-		kunmap(tx->tx_kiov[i].bv_page);
+		kunmap_local(kaddr);
 	}
 
 	if (*ksocknal_tunables.ksnd_inject_csum_error) {

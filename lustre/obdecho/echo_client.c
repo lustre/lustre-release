@@ -2045,7 +2045,7 @@ static void echo_client_page_debug_setup(struct page *page, int rw, u64 id,
 	/* no partial pages on the client */
 	LASSERT(count == PAGE_SIZE);
 
-	addr = kmap(page);
+	addr = kmap_local_page(page);
 
 	for (delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
 		if (rw == OBD_BRW_WRITE) {
@@ -2059,7 +2059,7 @@ static void echo_client_page_debug_setup(struct page *page, int rw, u64 id,
 				  stripe_off, stripe_id);
 	}
 
-	kunmap(page);
+	kunmap_local(addr);
 }
 
 static int
@@ -2075,7 +2075,7 @@ echo_client_page_debug_check(struct page *page, u64 id, u64 offset, u64 count)
 	/* no partial pages on the client */
 	LASSERT(count == PAGE_SIZE);
 
-	addr = kmap(page);
+	addr = kmap_local_page(page);
 
 	for (rc = delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
 		stripe_off = offset + delta;
@@ -2090,7 +2090,7 @@ echo_client_page_debug_check(struct page *page, u64 id, u64 offset, u64 count)
 		}
 	}
 
-	kunmap(page);
+	kunmap_local(addr);
 	return rc;
 }
 

@@ -1847,12 +1847,13 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = kmap_atomic(local_nb[i].lnb_page);
-				char *ptr2 = page_address(np);
+				char *ptr = kmap_local_page(local_nb[i].lnb_page);
+				char *ptr2 = kmap_local_page(np);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad3", min(4, len));
-				kunmap_atomic(ptr);
+				kunmap_local(ptr2);
+				kunmap_local(ptr);
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
@@ -1879,12 +1880,13 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = kmap_atomic(local_nb[i].lnb_page);
-				char *ptr2 = page_address(np);
+				char *ptr = kmap_local_page(local_nb[i].lnb_page);
+				char *ptr2 = kmap_local_page(np);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad4", min(4, len));
-				kunmap_atomic(ptr);
+				kunmap_local(ptr2);
+				kunmap_local(ptr);
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
@@ -1949,8 +1951,10 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 	}
 
 	for (i = 0; i < count; i++) {
+		void *addr = kmap(local_nb[i].lnb_page);
+
 		len = local_nb[i].lnb_len;
-		buf = kmap(local_nb[i].lnb_page);
+		buf = addr;
 		while (len != 0) {
 			rc = cfs_kernel_write(filp, buf, len, &filp->f_pos);
 			if (rc < 0) {
@@ -1961,7 +1965,7 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 			len -= rc;
 			buf += rc;
 		}
-		kunmap(local_nb[i].lnb_page);
+		kunmap(kmap_to_page(addr));
 	}
 
 	rc = vfs_fsync_range(filp, 0, LLONG_MAX, 1);
@@ -2038,9 +2042,9 @@ static int tgt_pages2shortio(struct niobuf_local *local, int npages,
 		if (len > size)
 			return -EINVAL;
 
-		ptr = kmap_atomic(local[i].lnb_page);
+		ptr = kmap_local_page(local[i].lnb_page);
 		memcpy(buf, ptr + off, len);
-		kunmap_atomic(ptr);
+		kunmap_local(ptr);
 		buf += len;
 		size -= len;
 	}
@@ -2106,12 +2110,13 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = kmap_atomic(local_nb[i].lnb_page);
-				char *ptr2 = page_address(np);
+				char *ptr = kmap_local_page(local_nb[i].lnb_page);
+				char *ptr2 = kmap_local_page(np);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad3", min(4, len));
-				kunmap_atomic(ptr);
+				kunmap_local(ptr2);
+				kunmap_local(ptr);
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
@@ -2226,12 +2231,13 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			struct page *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = kmap_atomic(local_nb[i].lnb_page);
-				char *ptr2 = page_address(np);
+				char *ptr = kmap_local_page(local_nb[i].lnb_page);
+				char *ptr2 = kmap_local_page(np);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad4", min(4, len));
-				kunmap_atomic(ptr);
+				kunmap_local(ptr2);
+				kunmap_local(ptr);
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
@@ -2246,7 +2252,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			}
 		}
 	}
-	kunmap(__page);
+	kunmap(kmap_to_page(buffer));
 	if (rc)
 		GOTO(out_hash, rc);
 
@@ -2580,11 +2586,9 @@ static int tgt_shortio2pages(struct niobuf_local *local, int npages,
 
 		CDEBUG(D_PAGE, "index %d offset = %d len = %d left = %d\n",
 		       i, off, len, size);
-		ptr = kmap_atomic(local[i].lnb_page);
-		if (ptr == NULL)
-			return -EINVAL;
+		ptr = kmap_local_page(local[i].lnb_page);
 		memcpy(ptr + off, buf, len < size ? len : size);
-		kunmap_atomic(ptr);
+		kunmap_local(ptr);
 		buf += len;
 		size -= len;
 	}

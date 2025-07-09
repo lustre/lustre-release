@@ -111,7 +111,8 @@ static int qsd_reint_entries(const struct lu_env *env,
 	size = ii->ii_recsize + ii->ii_keysize;
 
 	for (i = 0; i < npages; i++) {
-		union lu_page	*lip = kmap(pages[i]);
+		void *kaddr = kmap(pages[i]);
+		union lu_page *lip = kaddr;
 
 		for (j = 0; j < LU_PAGE_COUNT; j++) {
 			if (need_swab)
@@ -161,7 +162,7 @@ static int qsd_reint_entries(const struct lu_env *env,
 			lip++;
 		}
 out:
-		kunmap(pages[i]);
+		kunmap(kmap_to_page(kaddr));
 		if (rc)
 			break;
 	}

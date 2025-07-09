@@ -362,9 +362,11 @@ lnet_copy_kiov2kiov(unsigned int ndiov, struct bio_vec *diov,
 		    unsigned int nob)
 {
 	/* NB diov, siov are READ-ONLY */
-	unsigned int	this_nob;
-	char	       *daddr = NULL;
-	char	       *saddr = NULL;
+	unsigned int this_nob;
+	char *daddr = NULL;
+	char *saddr = NULL;
+	void *dkaddr;
+	void *skaddr;
 
 	if (nob == 0)
 		return;
@@ -394,12 +396,14 @@ lnet_copy_kiov2kiov(unsigned int ndiov, struct bio_vec *diov,
 				siov->bv_len - soffset,
 				nob);
 
-		if (daddr == NULL)
-			daddr = ((char *)kmap(diov->bv_page)) +
-				diov->bv_offset + doffset;
-		if (saddr == NULL)
-			saddr = ((char *)kmap(siov->bv_page)) +
-				siov->bv_offset + soffset;
+		if (!daddr) {
+			dkaddr = kmap_local_page(diov->bv_page);
+			daddr = dkaddr + diov->bv_offset + doffset;
+		}
+		if (!saddr) {
+			skaddr = kmap_local_page(siov->bv_page);
+			saddr = skaddr + siov->bv_offset + soffset;
+		}
 
 		/* Vanishing risk of kmap deadlock when mapping 2 pages.
 		 * However in practice at least one of the kiovs will be mapped
@@ -416,7 +420,8 @@ lnet_copy_kiov2kiov(unsigned int ndiov, struct bio_vec *diov,
 			daddr += this_nob;
 			doffset += this_nob;
 		} else {
-			kunmap(diov->bv_page);
+			kunmap_local(dkaddr);
+			dkaddr = NULL;
 			daddr = NULL;
 			diov++;
 			ndiov--;
@@ -427,7 +432,8 @@ lnet_copy_kiov2kiov(unsigned int ndiov, struct bio_vec *diov,
 			saddr += this_nob;
 			soffset += this_nob;
 		} else {
-			kunmap(siov->bv_page);
+			kunmap_local(skaddr);
+			skaddr = NULL;
 			saddr = NULL;
 			siov++;
 			nsiov--;
@@ -435,22 +441,23 @@ lnet_copy_kiov2kiov(unsigned int ndiov, struct bio_vec *diov,
 		}
 	} while (nob > 0);
 
-	if (daddr != NULL)
-		kunmap(diov->bv_page);
-	if (saddr != NULL)
-		kunmap(siov->bv_page);
+	if (daddr)
+		kunmap_local(dkaddr);
+	if (saddr)
+		kunmap_local(skaddr);
 }
 EXPORT_SYMBOL(lnet_copy_kiov2kiov);
 
 void
-lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
-		    unsigned int nkiov, struct bio_vec *kiov,
-		    unsigned int kiovoffset,
-		    unsigned int nob)
+lnet_copy_kiov2iov(unsigned int niov, struct kvec *iov, unsigned int iovoffset,
+		   unsigned int nkiov, struct bio_vec *kiov,
+		   unsigned int kiovoffset,
+		   unsigned int nob)
 {
 	/* NB iov, kiov are READ-ONLY */
-	unsigned int	this_nob;
-	char	       *addr = NULL;
+	unsigned int this_nob;
+	void *kaddr = NULL;
+	char *addr = NULL;
 
 	if (nob == 0)
 		return;
@@ -480,9 +487,10 @@ lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 				(unsigned int)kiov->bv_len - kiovoffset,
 				nob);
 
-		if (addr == NULL)
-			addr = ((char *)kmap(kiov->bv_page)) +
-				kiov->bv_offset + kiovoffset;
+		if (addr == NULL) {
+			kaddr = kmap_local_page(kiov->bv_page);
+			addr = kaddr + kiov->bv_offset + kiovoffset;
+		}
 
 		memcpy((char *)iov->iov_base + iovoffset, addr, this_nob);
 		nob -= this_nob;
@@ -499,7 +507,8 @@ lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 			addr += this_nob;
 			kiovoffset += this_nob;
 		} else {
-			kunmap(kiov->bv_page);
+			kunmap_local(kaddr);
+			kaddr = NULL;
 			addr = NULL;
 			kiov++;
 			nkiov--;
@@ -509,7 +518,7 @@ lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 	} while (nob > 0);
 
 	if (addr != NULL)
-		kunmap(kiov->bv_page);
+		kunmap_local(kaddr);
 }
 EXPORT_SYMBOL(lnet_copy_kiov2iov);
 
@@ -520,8 +529,9 @@ lnet_copy_iov2kiov(unsigned int nkiov, struct bio_vec *kiov,
 		   unsigned int nob)
 {
 	/* NB kiov, iov are READ-ONLY */
-	unsigned int	this_nob;
-	char	       *addr = NULL;
+	unsigned int this_nob;
+	void *kaddr = NULL;
+	char *addr = NULL;
 
 	if (nob == 0)
 		return;
@@ -551,18 +561,20 @@ lnet_copy_iov2kiov(unsigned int nkiov, struct bio_vec *kiov,
 				(unsigned int)iov->iov_len - iovoffset,
 				nob);
 
-		if (addr == NULL)
-			addr = ((char *)kmap(kiov->bv_page)) +
-				kiov->bv_offset + kiovoffset;
+		if (!addr) {
+			kaddr = kmap_local_page(kiov->bv_page);
+			addr = kaddr + kiov->bv_offset + kiovoffset;
+		}
 
-		memcpy (addr, (char *)iov->iov_base + iovoffset, this_nob);
+		memcpy(addr, (char *)iov->iov_base + iovoffset, this_nob);
 		nob -= this_nob;
 
 		if (kiov->bv_len > kiovoffset + this_nob) {
 			addr += this_nob;
 			kiovoffset += this_nob;
 		} else {
-			kunmap(kiov->bv_page);
+			kunmap_local(kaddr);
+			kaddr = NULL;
 			addr = NULL;
 			kiov++;
 			nkiov--;
@@ -578,8 +590,8 @@ lnet_copy_iov2kiov(unsigned int nkiov, struct bio_vec *kiov,
 		}
 	} while (nob > 0);
 
-	if (addr != NULL)
-		kunmap(kiov->bv_page);
+	if (addr)
+		kunmap_local(kaddr);
 }
 EXPORT_SYMBOL(lnet_copy_iov2kiov);
 

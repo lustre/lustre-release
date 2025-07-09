@@ -261,10 +261,10 @@ static void bio_integrity_fault_inject(struct bio *bio)
 	bio_for_each_segment_all(bvec, bio, iter_all) {
 		struct page *page = bvec->bv_page;
 
-		kaddr = kmap(page);
+		kaddr = kmap_local_page(page);
 		addr = kaddr;
 		*addr = ~(*addr);
-		kunmap(page);
+		kunmap_local(kaddr);
 		break;
 	}
 }

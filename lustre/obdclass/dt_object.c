@@ -802,16 +802,16 @@ void *rdpg_page_get(const struct lu_rdpg *rdpg, unsigned int index)
 		LASSERT(index < rdpg->rp_npages);
 		return kmap(rdpg->rp_pages[index]);
 	}
-	LASSERT(index * PAGE_SIZE  < rdpg->rp_count);
+	LASSERT(index << PAGE_SHIFT < rdpg->rp_count);
 
-	return rdpg->rp_data + index * PAGE_SIZE;
+	return rdpg->rp_data + (index << PAGE_SHIFT);
 }
 EXPORT_SYMBOL(rdpg_page_get);
 
-void rdpg_page_put(const struct lu_rdpg *rdpg, unsigned int index)
+void rdpg_page_put(const struct lu_rdpg *rdpg, unsigned int index, void *kaddr)
 {
 	if (rdpg->rp_npages)
-		kunmap(rdpg->rp_pages[index]);
+		kunmap(kmap_to_page(kaddr));
 }
 EXPORT_SYMBOL(rdpg_page_put);
 
@@ -887,10 +887,11 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 	 *  rc <  0 -> error.
 	 */
 	for (pageidx = 0; rc == 0 && bytes > 0; pageidx++) {
+		void *addr;
 		union lu_page	*lp;
 		int		 i;
 
-		lp = rdpg_page_get(rdpg, pageidx);
+		lp = addr = rdpg_page_get(rdpg, pageidx);
 		/* fill lu pages */
 		for (i = 0; i < LU_PAGE_COUNT; i++, lp++, bytes-=LU_PAGE_SIZE) {
 			rc = filler(env, obj, lp,
@@ -904,7 +905,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 				/* end of index */
 				break;
 		}
-		rdpg_page_put(rdpg, pageidx);
+		rdpg_page_put(rdpg, pageidx, addr);
 	}
 
 out:
@@ -1027,17 +1028,19 @@ EXPORT_SYMBOL(dt_index_read);
 void dt_index_page_adjust(struct page **pages, const u32 npages,
 			  const size_t nlupgs)
 {
-	u32			nlupgs_mod = nlupgs % LU_PAGE_COUNT;
-	u32			remain_nlupgs;
-	u32			pgidx;
-	struct lu_idxpage      *lip;
-	union lu_page	       *lp;
-	int			i;
+	u32 nlupgs_mod = nlupgs % LU_PAGE_COUNT;
 
 	if (nlupgs_mod) {
+		void *kaddr = kmap_local_page(pages[pgidx]);
+		struct lu_idxpage *lip;
+		union lu_page *lp;
+		u32 remain_nlupgs;
+		u32 pgidx;
+		int i;
+
 		pgidx = nlupgs / LU_PAGE_COUNT;
 		LASSERT(pgidx < npages);
-		lp = kmap(pages[pgidx]);
+		lp = kaddr;
 		remain_nlupgs = LU_PAGE_COUNT - nlupgs_mod;
 
 		/* initialize the header for the remain lu_pages */
@@ -1047,7 +1050,7 @@ void dt_index_page_adjust(struct page **pages, const u32 npages,
 			lip->lip_magic = LIP_MAGIC;
 		}
 
-		kunmap(pages[pgidx]);
+		kunmap_local(kaddr);
 	}
 }
 #else

@@ -382,6 +382,8 @@ kgnilnd_cksum_kiov(unsigned int nkiov, struct bio_vec *kiov,
 		vunmap(addr);
 	} else {
 		do {
+			void *kaddr;
+
 			fraglen = min(kiov->bv_len - offset, nob);
 
 			/* make dang sure we don't send a bogus checksum if somehow we get
@@ -392,9 +394,8 @@ kgnilnd_cksum_kiov(unsigned int nkiov, struct bio_vec *kiov,
 				 "odd fraglen %u on nkiov %d, nob %u bv_len %u offset %u kiov 0x%p\n",
 				 fraglen, nkiov, nob, kiov->bv_len,
 				 offset, kiov);
-
-			addr = (void *)kmap(kiov->bv_page) + kiov->bv_offset +
-				offset;
+			kaddr = kmap_local_page(kiov->bv_page)
+			addr = kaddr + kiov->bv_offset + offset;
 			tmpck = _kgnilnd_cksum(cksum, addr, fraglen);
 
 			CDEBUG(D_BUFFS,
@@ -407,7 +408,7 @@ kgnilnd_cksum_kiov(unsigned int nkiov, struct bio_vec *kiov,
 			if (dump_blob)
 				kgnilnd_dump_blob(D_BUFFS, "kiov cksum", addr, fraglen);
 
-			kunmap(kiov->bv_page);
+			kunmap_local(kaddr);
 
 			kiov++;
 			nkiov--;

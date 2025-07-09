@@ -1058,6 +1058,7 @@ EXPORT_SYMBOL(osc_init_grant);
 static void handle_short_read(int nob_read, size_t page_count,
 			      struct brw_page **pga)
 {
+	void *kaddr;
 	char *ptr;
 	int i = 0;
 
@@ -1066,11 +1067,11 @@ static void handle_short_read(int nob_read, size_t page_count,
 		LASSERT(page_count > 0);
 
 		if (pga[i]->bp_count > nob_read) {
+			kaddr = kmap_local_page(pga[i]->bp_page);
 			/* EOF inside this page */
-			ptr = kmap(pga[i]->bp_page) +
-				(pga[i]->bp_off & ~PAGE_MASK);
+			ptr = kaddr + (pga[i]->bp_off & ~PAGE_MASK);
 			memset(ptr + nob_read, 0, pga[i]->bp_count - nob_read);
-			kunmap(pga[i]->bp_page);
+			kunmap_local(kaddr);
 			page_count--;
 			i++;
 			break;
@@ -1083,9 +1084,10 @@ static void handle_short_read(int nob_read, size_t page_count,
 
 	/* zero remaining pages */
 	while (page_count-- > 0) {
-		ptr = kmap(pga[i]->bp_page) + (pga[i]->bp_off & ~PAGE_MASK);
+		kaddr = kmap_local_page(pga[i]->bp_page);
+		ptr = kaddr + (pga[i]->bp_off & ~PAGE_MASK);
 		memset(ptr, 0, pga[i]->bp_count);
-		kunmap(pga[i]->bp_page);
+		kunmap_local(kaddr);
 		i++;
 	}
 }
@@ -1210,10 +1212,10 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		 */
 		if (unlikely(i == 0 && opc == OST_READ &&
 			     CFS_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))) {
-			unsigned char *ptr = kmap(pga[i]->bp_page);
+			void *ptr = kmap_local_page(pga[i]->bp_page);
 
 			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
-			kunmap(pga[i]->bp_page);
+			kunmap_local(ptr);
 		}
 
 		/*
@@ -1241,7 +1243,7 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		pg_count--;
 		i++;
 	}
-	kunmap(__page);
+	kunmap(kmap_to_page(buffer));
 	if (rc)
 		GOTO(out_hash, rc);
 
@@ -1309,11 +1311,11 @@ static int osc_checksum_bulk(int nob, size_t pg_count,
 		 */
 		if (i == 0 && opc == OST_READ &&
 		    CFS_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE)) {
-			unsigned char *ptr = kmap(pga[i]->bp_page);
+			void *ptr = kmap_local_page(pga[i]->bp_page);
 			int off = pga[i]->bp_off & ~PAGE_MASK;
 
 			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
-			kunmap(pga[i]->bp_page);
+			kunmap_local(ptr);
 		}
 		cfs_crypto_hash_update_page(req, pga[i]->bp_page,
 					    pga[i]->bp_off & ~PAGE_MASK,
@@ -1854,13 +1856,13 @@ no_bulk:
 		LASSERT((pga[0]->bp_flag & OBD_BRW_SRVLOCK) ==
 			(pg->bp_flag & OBD_BRW_SRVLOCK));
 		if (short_io_size != 0 && opc == OST_WRITE) {
-			unsigned char *ptr = kmap_atomic(pg->bp_page);
+			unsigned char *ptr = kmap_local_page(pg->bp_page);
 
 			LASSERT(short_io_size >= requested_nob + pg->bp_count);
 			memcpy(short_io_buf + requested_nob,
 			       ptr + poff,
 			       pg->bp_count);
-			kunmap_atomic(ptr);
+			kunmap_local(ptr);
 		} else if (short_io_size == 0) {
 			desc->bd_frag_ops->add_kiov_frag(desc, pg->bp_page,
 							 poff, pg->bp_count);
@@ -2056,7 +2058,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 			len -= rc;
 			buf += rc;
 		}
-		kunmap(pga[i]->bp_page);
+		kunmap(kmap_to_page(buf));
 	}
 
 	rc = vfs_fsync_range(filp, 0, LLONG_MAX, 1);
@@ -2263,10 +2265,10 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
 			CDEBUG(D_CACHE, "page %p count %d\n",
 			       aa->aa_ppga[i]->bp_page, count);
-			ptr = kmap_atomic(aa->aa_ppga[i]->bp_page);
+			ptr = kmap_local_page(aa->aa_ppga[i]->bp_page);
 			memcpy(ptr + (aa->aa_ppga[i]->bp_off & ~PAGE_MASK), buf,
 			       count);
-			kunmap_atomic((void *) ptr);
+			kunmap_local((void *) ptr);
 
 			buf += count;
 			nob -= count;

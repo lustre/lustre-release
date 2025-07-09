@@ -879,7 +879,7 @@ struct lu_rdpg {
 
 /* for dt_index_walk / mdd_readpage */
 void *rdpg_page_get(const struct lu_rdpg *rdpg, unsigned int index);
-void rdpg_page_put(const struct lu_rdpg *rdpg, unsigned int index);
+void rdpg_page_put(const struct lu_rdpg *rdpg, unsigned int index, void *kaddr);
 
 enum lu_xattr_flags {
 	LU_XATTR_REPLACE = BIT(0),

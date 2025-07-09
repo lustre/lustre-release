@@ -421,8 +421,10 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 			nblocks = 1;
 
 			if (blocks[block_idx + i] == 0) {  /* hole */
+				void *addr;
 				struct niobuf_local *lnb =
 					iobuf->dr_lnbs[page_idx];
+
 				CDEBUG(D_INODE,
 				       "hole at page_idx %d, block_idx %d, at offset %llu\n",
 				       page_idx, block_idx,
@@ -434,8 +436,9 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 					 page_idx, block_idx, i,
 					 (unsigned long long)start_blocks,
 					 (unsigned long long)count, npages);
-				memset(kmap(page) + page_offset, 0, blocksize);
-				kunmap(page);
+				addr = kmap_local_page(page);
+				memset(addr + page_offset, 0, blocksize);
+				kunmap_local(addr);
 				continue;
 			}
 
@@ -1161,7 +1164,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 			osd_iobuf_add_page(iobuf, &lnb[i]);
 		} else {
 			long off;
-			char *p = kmap(lnb[i].lnb_page);
+			char *p = kmap_local_page(lnb[i].lnb_page);
 
 			off = lnb[i].lnb_page_offset;
 			if (off)
@@ -1170,7 +1173,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 			      ~PAGE_MASK;
 			if (off)
 				memset(p + off, 0, PAGE_SIZE - off);
-			kunmap(lnb[i].lnb_page);
+			kunmap_local(p);
 		}
 	}
 	end = ktime_get();

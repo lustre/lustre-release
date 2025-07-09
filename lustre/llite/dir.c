@@ -163,8 +163,6 @@ struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
 void ll_release_page(struct inode *inode, struct page *page,
 		     bool remove)
 {
-	kunmap(page);
-
 	/* Always remove the page for striped dir, because the page is
 	 * built from temporarily in LMV layer
 	 */
@@ -212,6 +210,7 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 				partial_readdir_rc);
 
 	while (rc == 0 && !done) {
+		void *kaddr = NULL;
 		struct lu_dirpage *dp;
 		struct lu_dirent  *ent;
 		__u64 hash;
@@ -223,7 +222,8 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 		}
 
 		hash = MDS_DIR_END_OFF;
-		dp = page_address(page);
+		kaddr = kmap(page);
+		dp = kaddr;
 		for (ent = lu_dirent_start(dp); ent != NULL && !done;
 		     ent = lu_dirent_next(ent)) {
 			__u16          type;
@@ -285,6 +285,10 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 
 		if (done) {
 			pos = hash;
+			if (kaddr) {
+				kunmap(kmap_to_page(kaddr));
+				kaddr = NULL;
+			}
 			ll_release_page(inode, page, false);
 			break;
 		}
@@ -294,12 +298,20 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 		if (pos == MDS_DIR_END_OFF) {
 			/* End of directory reached. */
 			done = 1;
+			if (kaddr) {
+				kunmap(kmap_to_page(kaddr));
+				kaddr = NULL;
+			}
 			ll_release_page(inode, page, false);
 		} else {
+			u32 flags = le32_to_cpu(dp->ldp_flags);
+
 			/* Normal case: continue to the next page.*/
-			ll_release_page(inode, page,
-					le32_to_cpu(dp->ldp_flags) &
-					LDF_COLLIDE);
+			if (kaddr) {
+				kunmap(kmap_to_page(kaddr));
+				kaddr = NULL;
+			}
+			ll_release_page(inode, page, flags & LDF_COLLIDE);
 			next = pos;
 			page = ll_get_dir_page(inode, op_data, pos,
 					       is_hash64, partial_readdir_rc);

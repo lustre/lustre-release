@@ -2130,6 +2130,36 @@ AC_DEFUN([LIBCFS_SEC_RELEASE_SECCTX], [
 ]) # LIBCFS_SEC_RELEASE_SECCTX
 
 #
+# LIBCFS_HAVE_KMAP_LOCAL
+#
+# Linux commit v5.10-rc2-80-gf3ba3c710ac5
+#   mm/highmem: Provide kmap_local*
+#
+AC_DEFUN([LIBCFS_SRC_HAVE_KMAP_LOCAL], [
+	LB2_LINUX_TEST_SRC([kmap_local_page], [
+		#include <linux/highmem.h>
+	],[
+		struct page *pg = NULL;
+		void *kaddr = kmap_local_page(pg);
+
+		kunmap_local(kaddr);
+	],[-Werror])
+])
+AC_DEFUN([LIBCFS_HAVE_KMAP_LOCAL], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'kmap_local*' are available],
+	[kmap_local_page], [
+		AC_DEFINE(HAVE_KMAP_LOCAL, 1,
+			[kmap_local_* functions are available])
+	],[
+		## Map kmap_local_page to kmap_atomic for older kernels
+		AC_DEFINE([kmap_local_page(p)], [kmap_atomic(p)],
+			  [need kmap_local_page map to atomic])
+		AC_DEFINE([kunmap_local(kaddr)], [kunmap_atomic((kaddr))],
+			  [need kunmap_local map to atomic])
+	])
+]) # LIBCFS_HAVE_KMAP_LOCAL
+
+#
 # LIBCFS_HAVE_KFREE_SENSITIVE
 #
 # kernel v5.10-rc1~3
@@ -2650,6 +2680,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_KEY_NEED_UNLINK
 	LIBCFS_SRC_SEC_RELEASE_SECCTX
 	# 5.10
+	LIBCFS_SRC_HAVE_KMAP_LOCAL
 	LIBCFS_SRC_HAVE_KFREE_SENSITIVE
 	LIBCFS_SRC_HAVE_CRYPTO_SHA2_HEADER
 	LIBCFS_SRC_HAVE_LIST_CMP_FUNC_T
@@ -2807,6 +2838,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_KEY_NEED_UNLINK
 	LIBCFS_SEC_RELEASE_SECCTX
 	# 5.10
+	LIBCFS_HAVE_KMAP_LOCAL
 	LIBCFS_HAVE_KFREE_SENSITIVE
 	LIBCFS_HAVE_CRYPTO_SHA2_HEADER
 	LIBCFS_HAVE_LIST_CMP_FUNC_T

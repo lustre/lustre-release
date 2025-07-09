@@ -483,7 +483,7 @@ again:
 		ptr = kmap(pages[i]);
 		rc2 = nodemap_process_idx_pages(new_config, ptr,
 						&recent_nodemap);
-		kunmap(pages[i]);
+		kunmap(kmap_to_page(ptr));
 		if (rc2 < 0) {
 			CWARN("%s: error processing %s log nodemap: rc = %d\n",
 			      obd->obd_name,

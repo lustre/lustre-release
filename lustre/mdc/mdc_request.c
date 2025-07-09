@@ -1142,7 +1142,9 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 		 */
 		wait_on_page_locked(page);
 		if (PageUptodate(page)) {
-			dp = kmap(page);
+			u32 dflags;
+
+			dp = kmap_local_page(page);
 			if (BITS_PER_LONG == 32 && hash64) {
 				*start = le64_to_cpu(dp->ldp_hash_start) >> 32;
 				*end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
@@ -1151,6 +1153,8 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 				*start = le64_to_cpu(dp->ldp_hash_start);
 				*end   = le64_to_cpu(dp->ldp_hash_end);
 			}
+			dflags = le32_to_cpu(dp->ldp_flags);
+			kunmap_local(dp);
 			if (unlikely(*start == 1 && *hash == 0))
 				*hash = *start;
 			else
@@ -1161,7 +1165,6 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 			       "offset %lx [%#llx %#llx], hash %#llx\n", offset,
 			       *start, *end, *hash);
 			if (*hash > *end) {
-				kunmap(page);
 				mdc_release_page(page, 0);
 				page = NULL;
 			} else if (*end != *start && *hash == *end) {
@@ -1171,9 +1174,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 				 * mdc_read_page_remote() will issue RPC to
 				 * fetch the page we want.
 				 */
-				kunmap(page);
-				mdc_release_page(page,
-				    le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
+				mdc_release_page(page, dflags & LDF_COLLIDE);
 				page = NULL;
 			}
 		} else {
@@ -1243,7 +1244,8 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 	int i;
 
 	for (i = 0; i < cfs_pgs; i++) {
-		struct lu_dirpage *dp = kmap(pages[i]);
+		void *addr = kmap_local_page(pages[i]);
+		struct lu_dirpage *dp = addr;
 		struct lu_dirpage *first = dp;
 		struct lu_dirent *end_dirent = NULL;
 		struct lu_dirent *ent;
@@ -1284,7 +1286,7 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 		first->ldp_flags &= ~cpu_to_le32(LDF_COLLIDE);
 		first->ldp_flags |= flags & cpu_to_le32(LDF_COLLIDE);
 
-		kunmap(pages[i]);
+		kunmap_local(addr);
 	}
 	LASSERTF(lu_pgs == 0, "left = %d\n", lu_pgs);
 }
@@ -1386,9 +1388,9 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 
 		SetPageUptodate(page);
 
-		dp = kmap(page);
+		dp = kmap_local_page(page);
 		hash = le64_to_cpu(dp->ldp_hash_start);
-		kunmap(page);
+		kunmap_local(dp);
 
 		offset = hash_x_index(hash, rp->rp_hash64);
 
@@ -1449,6 +1451,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	struct lustre_handle	lockh;
 	struct ptlrpc_request	*enq_req = NULL;
 	struct readpage_param	rp_param;
+	void *addr = NULL;
 	int rc;
 
 	ENTRY;
@@ -1513,7 +1516,6 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	}
 
 	wait_on_page_locked(page);
-	(void)kmap(page);
 	if (!PageUptodate(page)) {
 		CERROR("%s: page not updated: "DFID" at %llu: rc %d\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
@@ -1528,7 +1530,8 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	}
 
 hash_collision:
-	dp = page_address(page);
+	addr = kmap_local_page(page);
+	dp = addr;
 	if (BITS_PER_LONG == 32 && rp_param.rp_hash64) {
 		start = le64_to_cpu(dp->ldp_hash_start) >> 32;
 		end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
@@ -1552,14 +1555,15 @@ hash_collision:
 		 *
 		 * XXX not yet.
 		 */
+		kunmap_local(addr);
 		goto fail;
 	}
+	kunmap_local(addr);
 	*ppage = page;
 out_unlock:
 	ldlm_lock_decref(&lockh, it.it_lock_mode);
 	return rc;
 fail:
-	kunmap(page);
 	mdc_release_page(page, 1);
 	rc = -EIO;
 	goto out_unlock;

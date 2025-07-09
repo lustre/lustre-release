@@ -477,12 +477,12 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 
 	inode = page2inode(page);
 
-	kaddr = kmap_atomic(page);
+	kaddr = kmap_local_page(page);
 	memcpy(kaddr, lnb->lnb_data, lnb->lnb_len);
 	if (lnb->lnb_len < PAGE_SIZE)
 		memset(kaddr + lnb->lnb_len, 0,
 		       PAGE_SIZE - lnb->lnb_len);
-	kunmap_atomic(kaddr);
+	kunmap_local(kaddr);
 
 	if (inode && IS_ENCRYPTED(inode) && S_ISREG(inode->i_mode)) {
 		if (!ll_has_encryption_key(inode)) {
@@ -683,10 +683,10 @@ void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
 		lock_page(page);
 		SetPageUptodate(page);
 
-		dp = kmap_atomic(page);
+		dp = kmap_local_page(page);
 		memcpy(dp, data, PAGE_SIZE);
 		hash = le64_to_cpu(dp->ldp_hash_start);
-		kunmap_atomic(dp);
+		kunmap_local(dp);
 
 		offset = hash_x_index(hash, is_hash64);
 

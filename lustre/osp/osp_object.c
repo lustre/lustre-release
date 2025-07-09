@@ -1756,11 +1756,14 @@ void osp_it_fini(const struct lu_env *env, struct dt_it *di)
 	int		i;
 
 	if (pages != NULL) {
-		for (i = 0; i < npages; i++) {
-			if (pages[i] != NULL) {
-				if (pages[i] == it->ooi_cur_page) {
-					kunmap(pages[i]);
-					it->ooi_cur_page = NULL;
+		i = npages;
+		while (--i >= 0) {
+			if (pages[i]) {
+				if (it->ooi_cur_kaddr) {
+					void *kaddr = it->ooi_cur_kaddr;
+
+					kunmap(kmap_to_page(kaddr));
+					it->ooi_cur_kaddr = NULL;
 				}
 				__free_page(pages[i]);
 			}
@@ -1938,7 +1941,7 @@ finish_cur_idxpage:
 
 process_page:
 		if (it->ooi_pos_lu_page < LU_PAGE_COUNT) {
-			it->ooi_cur_idxpage = (void *)it->ooi_cur_page +
+			it->ooi_cur_idxpage = (void *)it->ooi_cur_kaddr +
 					 LU_PAGE_SIZE * it->ooi_pos_lu_page;
 			if (it->ooi_swab)
 				lustre_swab_lip_header(it->ooi_cur_idxpage);
@@ -1960,14 +1963,14 @@ process_page:
 			goto process_idxpage;
 		}
 
-		kunmap(it->ooi_cur_page);
-		it->ooi_cur_page = NULL;
+		kunmap(kmap_to_page(it->ooi_cur_kaddr));
+		it->ooi_cur_kaddr = NULL;
 		it->ooi_pos_page++;
 
 start:
 		pages = it->ooi_pages;
 		if (it->ooi_pos_page < it->ooi_valid_npages) {
-			it->ooi_cur_page = kmap(pages[it->ooi_pos_page]);
+			it->ooi_cur_kaddr = kmap(pages[it->ooi_pos_page]);
 			it->ooi_pos_lu_page = 0;
 			goto process_page;
 		}
@@ -1983,7 +1986,7 @@ start:
 		it->ooi_valid_npages = 0;
 		it->ooi_swab = 0;
 		it->ooi_ent = NULL;
-		it->ooi_cur_page = NULL;
+		it->ooi_cur_kaddr = NULL;
 		it->ooi_cur_idxpage = NULL;
 		it->ooi_pages = NULL;
 	}

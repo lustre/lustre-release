@@ -656,10 +656,10 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 	 * purposes here we can treat it like i_size.
 	 */
 	if (attr->cat_kms <= offset) {
-		char *kaddr = kmap_atomic(pg->cp_vmpage);
+		char *kaddr = kmap_local_page(pg->cp_vmpage);
 
 		memset(kaddr, 0, PAGE_SIZE);
-		kunmap_atomic(kaddr);
+		kunmap_local(kaddr);
 		GOTO(out, result = 0);
 	}
 

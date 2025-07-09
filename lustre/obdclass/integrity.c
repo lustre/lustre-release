@@ -35,13 +35,15 @@ int obd_page_dif_generate_buffer(const char *obd_name, struct page *page,
 {
 	unsigned int off = start;
 	unsigned int end = start + length;
+	void *addr;
 	char *data_buf;
 	__be16 *guard_buf = guard_start;
 	unsigned int data_size;
 	int guard_used = 0;
 	int rc = 0;
 
-	data_buf = kmap(page) + start;
+	addr = kmap_local_page(page);
+	data_buf = addr + start;
 	while (off < end) {
 		if (guard_used >= guard_number) {
 			rc = -E2BIG;
@@ -59,7 +61,7 @@ int obd_page_dif_generate_buffer(const char *obd_name, struct page *page,
 	}
 	*used_number = guard_used;
 out:
-	kunmap(page);
+	kunmap_local(addr);
 
 	return rc;
 }
@@ -102,7 +104,7 @@ static int __obd_t10_performance_test(const char *obd_name,
 		GOTO(out, rc);
 	}
 
-	buffer = kmap(__page);
+	buffer = kmap_local_page(__page);
 	guard_start = (__be16 *)buffer;
 	guard_number = PAGE_SIZE / sizeof(*guard_start);
 	for (i = 0; i < repeat_number; i++) {
@@ -124,7 +126,7 @@ static int __obd_t10_performance_test(const char *obd_name,
 			used_number = 0;
 		}
 	}
-	kunmap(__page);
+	kunmap_local(buffer);
 	if (rc)
 		GOTO(out_final, rc);
 
@@ -205,9 +207,9 @@ static void obd_t10_performance_test(const char *obd_name,
 		goto out;
 	}
 
-	buf = kmap(page);
+	buf = kmap_local_page(page);
 	memset(buf, 0xAD, PAGE_SIZE);
-	kunmap(page);
+	kunmap_local(buf);
 
 	for (start = jiffies, end = start + cfs_time_seconds(1) / 4,
 	     bcount = 0; time_before(jiffies, end) && rc == 0; bcount++) {
