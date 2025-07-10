@@ -1469,12 +1469,12 @@ static bool ptlrpc_console_allow(struct ptlrpc_request *req, __u32 opc, int err)
  */
 static int ptlrpc_check_status(struct ptlrpc_request *req)
 {
+	struct obd_import *imp = req->rq_import;
 	int rc;
 
 	ENTRY;
 	rc = lustre_msg_get_status(req->rq_repmsg);
 	if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
-		struct obd_import *imp = req->rq_import;
 		struct lnet_nid *nid = &imp->imp_connection->c_peer.nid;
 		__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
 
@@ -1486,8 +1486,29 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 		RETURN(rc < 0 ? rc : -EINVAL);
 	}
 
-	if (rc)
+	if (rc) {
 		DEBUG_REQ(D_INFO, req, "check status: rc = %d", rc);
+		if (lustre_msg_get_flags(req->rq_repmsg) & MSG_CLIENT_BANNED) {
+			static time64_t last_ban_time;
+			time64_t current_time;
+
+			current_time = ktime_get_real_seconds();
+			if (current_time > last_ban_time + 6 * 3600) {
+				char fsname[LUSTRE_MAXFSNAME + 1];
+
+				if (server_name2fsname(imp->imp_obd->obd_name,
+						       fsname, NULL))
+					strscpy(fsname, imp->imp_obd->obd_name,
+						sizeof(fsname));
+				last_ban_time = current_time;
+				/* The below message is checked in
+				 * sanity-sec test_81
+				 */
+				LCONSOLE_WARN("This client was banned by administrative request for file system %s. All requests will get Operation not permitted.\n",
+					      fsname);
+			}
+		}
+	}
 
 	RETURN(rc);
 }

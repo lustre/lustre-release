@@ -2042,6 +2042,7 @@ struct root_squash_info {
 	spinlock_t		rsi_lock;
 };
 
+int server_name2fsname(const char *svname, char *fsname, const char **endptr);
 int server_name2index(const char *svname, __u32 *idx, const char **endptr);
 
 /* linux-module.c */

@@ -9922,12 +9922,15 @@ test_81a() {
 	local fake_nid=1.1.1.1@tcp999
 	local nm=c0
 	local dynnm=c1
+	local header="test_81a $RANDOM"
 	local exp_cnt_orig
 	local exp_cnt_new
+	local banmsg
 
 	(( $MDS1_VERSION >= $(version_code 2.16.57) )) ||
 		skip "Need MDS version >= 2.16.57 for ban list support"
 
+	log $header
 	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
 
 	if is_mounted $MOUNT2; then
@@ -10129,6 +10132,19 @@ test_81a() {
 	cancel_lru_locks
 	ls $DIR/$tdir || error "ls $DIR/$tdir failed (4)"
 	cat $DIR/$tdir/$tfile || error "cat $DIR/$tdir/$tfile failed (4)"
+
+	# console messages may be ratelimited on later iterations
+	if (( ONLY_REPEAT_ITER != 1 )); then
+		echo "console messages may be ratelimited on iterations"
+		return 0
+	fi
+
+	# check ban message in client console
+	banmsg=$(dmesg | awk -v pattern="$header" \
+			 '$0 ~ pattern { marker=1 } \
+			 /This client was banned by administrative request/ { \
+				if (marker) { print; exit } }')
+	[[ -n "$banmsg" ]] || error "no ban message in client console"
 }
 run_test 81a "nodemap ban list"
 

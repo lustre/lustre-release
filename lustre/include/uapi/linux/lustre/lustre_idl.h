@@ -632,6 +632,9 @@ enum lustre_msg_version {
 /* #define MSG_VERSION_REPLAY	0x0020 obsolete since 1.8.2, VBR always on */
 #define MSG_REQ_REPLAY_DONE	0x0040 /* request replay over, locks next */
 #define MSG_LOCK_REPLAY_DONE	0x0080 /* lock replay over, client done */
+#define MSG_CLIENT_BANNED	0x0100 /* client is banned by nodemap */
+#define MSG_PACK_UID_GID	0x0200 /* thread UID/GID in ptlrpc_body */
+#define MSG_PACK_PROJID		0x0400 /* thread PROJID in ptlrpc_body */
 
 /* pb_op_flags for connect opcodes: MDS_CONNECT, OST_CONNECT, MGS_CONNECT */
 #define MSG_CONNECT_RECOVERING	0x00000001 /* target is in recovery */
@@ -643,8 +646,6 @@ enum lustre_msg_version {
 /* #define MSG_CONNECT_ASYNC	0x00000040 obsolete since 1.5 */
 #define MSG_CONNECT_NEXT_VER	0x00000080 /* use next version of lustre_msg */
 #define MSG_CONNECT_TRANSNO	0x00000100 /* client sent transno in replay */
-#define MSG_PACK_UID_GID	0x00000200 /* thread UID/GID in ptlrpc_body */
-#define MSG_PACK_PROJID		0x00000400 /* thread PROJID in ptlrpc_body */
 
 /* number of previous object versions in pb_pre_versions[] */
 #define PTLRPC_NUM_VERSIONS     4

@@ -828,6 +828,9 @@ int ptlrpc_send_error(struct ptlrpc_request *req, int may_be_difficult)
 	    req->rq_status != -EROFS)
 		req->rq_type = PTL_RPC_MSG_ERR;
 
+	if (req->rq_export && req->rq_export->exp_banned)
+		lustre_msg_add_flags(req->rq_repmsg, MSG_CLIENT_BANNED);
+
 	rc = ptlrpc_send_reply(req, may_be_difficult);
 	RETURN(rc);
 }
