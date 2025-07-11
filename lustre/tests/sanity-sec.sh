@@ -2060,7 +2060,7 @@ test_24() {
 }
 run_test 24 "check nodemap proc files for LBUGs and Oopses"
 
-test_25() {
+test_25a() {
 	local tmpfile=$(mktemp)
 	local tmpfile2=$(mktemp)
 	local tmpfile3=$(mktemp)
@@ -2128,9 +2128,9 @@ test_25() {
 	rm -f $tmpfile $tmpfile2
 	export SK_UNIQUE_NM=false
 }
-run_test 25 "test save and reload nodemap config"
+run_test 25a "test save and reload nodemap config"
 
-test_25a() {
+test_25b() {
 	local nm="c0"
 	local info_dump=$(mktemp)
 	local param_dump=$(mktemp)
@@ -2158,40 +2158,47 @@ test_25a() {
 	do_facet mgs $LCTL $nodemap_info > $info_dump ||
 		error "$nodemap_info failed"
 	stack_trap "rm -f $info_dump" EXIT
-	do_facet mgs $LCTL get_param -R nodemap > $param_dump
+	do_facet mgs $LCTL get_param -R nodemap > $param_dump ||
+		error "get_param -R nodemap failed"
 	stack_trap "rm -f $param_dump" EXIT
 
 	diff -q $info_dump $param_dump >& /dev/null ||
-		error "$nodemap_info differs from get_param output"
+		error "$nodemap_info differs from get_param output (1)"
 
 	# nodemap dump for $nm
 	do_facet mgs $LCTL $nodemap_info --name $nm > $info_dump ||
 		error "$nodemap_info failed"
-	do_facet mgs $LCTL get_param -R nodemap.$nm > $param_dump
+	do_facet mgs $LCTL get_param -R nodemap.$nm > $param_dump ||
+		error "get_param -R nodemap.$nm failed"
 
 	diff -q $info_dump $param_dump >& /dev/null ||
-		error "$nodemap_info differs from get_param output"
+		error "$nodemap_info differs from get_param output (2)"
 
 	# nodemap dump for $nm and property fileset
 	do_facet mgs $LCTL $nodemap_info --name $nm \
 		--property fileset > $info_dump ||
 		error "$nodemap_info failed"
-	do_facet mgs $LCTL get_param nodemap.$nm.fileset > $param_dump
+	do_facet mgs $LCTL get_param nodemap.$nm.fileset > $param_dump ||
+		error "get_param nodemap.$nm.fileset failed"
 
 	diff -q $info_dump $param_dump >& /dev/null ||
-		error "$nodemap_info differs from get_param output"
+		error "$nodemap_info differs from get_param output (3)"
 
 	# cross nodemap dump for property ranges
 	do_facet mgs $LCTL $nodemap_info --property ranges > $info_dump ||
 		error "$nodemap_info failed"
-	do_facet mgs $LCTL get_param -R nodemap.*.ranges > $param_dump
+	do_facet mgs $LCTL get_param -R nodemap.*.ranges > $param_dump ||
+		error "get_param -R nodemap.*.ranges failed"
+
+	diff -q $info_dump $param_dump >& /dev/null ||
+		error "$nodemap_info differs from get_param output (4)"
 
 	# back to non-nodemap setup
 	if $SHARED_KEY; then
 		export SK_UNIQUE_NM=false
 	fi
 }
-run_test 25a "test nodemap info values"
+run_test 25b "test nodemap info values"
 
 test_26() {
 	nodemap_version_check || return 0
