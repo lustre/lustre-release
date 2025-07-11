@@ -41,21 +41,19 @@
 #define OUT_UPDATE_BUFFER_SIZE_MAX	(256 * 4096)  /*  1M update size now */
 
 /**
- * Interpreter call for object creation
+ * osp_create_interpreter() - Interpreter call for object creation
+ * @env: execution environment
+ * @reply: update reply
+ * @req: ptlrpc update request for creating object
+ * @obj: object to be created
+ * @data: data used in this function.
+ * @index: index(position) of create update in the whole updates
+ * @rc: update result on the remote MDT.
  *
  * Object creation interpreter, which will be called after creating
  * the remote object to set flags and status.
  *
- * \param[in] env	execution environment
- * \param[in] reply	update reply
- * \param[in] req	ptlrpc update request for creating object
- * \param[in] obj	object to be created
- * \param[in] data	data used in this function.
- * \param[in] index	index(position) of create update in the whole
- *                      updates
- * \param[in] rc	update result on the remote MDT.
- *
- * \retval		only return 0 for now
+ * Return only return 0 for now
  */
 static int osp_create_interpreter(const struct lu_env *env,
 				  struct object_update_reply *reply,
@@ -92,20 +90,21 @@ static int osp_create_interpreter(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_object_operations::do_declare_create
+ * osp_md_declare_create() - Implementation of do_declare_create
+ * @env: execution environment
+ * @dt: remote object to be created
+ * @attr: attribute of the created object
+ * @hint: creation hint
+ * @dof: creation format information
+ * @th: the transaction handle
  *
+ * Implementation of dt_object_operations::do_declare_create
  * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
- * \param[in] env	execution environment
- * \param[in] dt	remote object to be created
- * \param[in] attr	attribute of the created object
- * \param[in] hint	creation hint
- * \param[in] dof	creation format information
- * \param[in] th	the transaction handle
- *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 int osp_md_declare_create(const struct lu_env *env, struct dt_object *dt,
 			  struct lu_attr *attr, struct dt_allocation_hint *hint,
@@ -132,20 +131,20 @@ update_buffer_get_update(struct object_update_request *request,
 }
 
 /**
- * Implementation of dt_object_operations::do_create
+ * osp_md_create() - Implementation of dt_object_operations::do_create
+ * @env: execution environment
+ * @dt: object to be created
+ * @attr: attribute of the created object
+ * @hint: creation hint
+ * @dof: creation format information
+ * @th: the transaction handle
  *
  * It adds an OUT_CREATE sub-request into the OUT RPC that will be flushed
  * when the transaction stop, and sets necessary flags for created object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be created
- * \param[in] attr	attribute of the created object
- * \param[in] hint	creation hint
- * \param[in] dof	creation format information
- * \param[in] th	the transaction handle
- *
- * \retval		0 if packing creation succeeds.
- * \retval		negative errno if packing creation fails.
+ * Return:
+ * * %0 if packing creation succeeds.
+ * * %negative errno if packing creation fails.
  */
 int osp_md_create(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_attr *attr, struct dt_allocation_hint *hint,
@@ -188,17 +187,18 @@ out:
 }
 
 /**
- * Implementation of dt_object_operations::do_declare_ref_del
+ * osp_md_declare_ref_del() - Implementation of do_declare_ref_del
+ * @env: execution environment
+ * @dt: object to decrease the reference count.
+ * @th: the transaction handle of refcount decrease.
  *
+ * Implementation of dt_object_operations::do_declare_ref_del
  * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to decrease the reference count.
- * \param[in] th	the transaction handle of refcount decrease.
- *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 static int osp_md_declare_ref_del(const struct lu_env *env,
 				  struct dt_object *dt, struct thandle *th)
@@ -207,17 +207,17 @@ static int osp_md_declare_ref_del(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_object_operations::do_ref_del
+ * osp_md_ref_del() - Implementation of dt_object_operations::do_ref_del
+ * @env: execution environment
+ * @dt: object to decrease the reference count
+ * @th: the transaction handle
  *
  * Add an OUT_REF_DEL sub-request into the OUT RPC that will be
  * flushed when the transaction stop.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to decrease the reference count
- * \param[in] th	the transaction handle
- *
- * \retval		0 if packing ref_del succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing ref_del succeeds.
+ * * %negative errno if packing fails.
  */
 static int osp_md_ref_del(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th)
@@ -234,17 +234,18 @@ static int osp_md_ref_del(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Implementation of dt_object_operations::do_declare_ref_del
+ * osp_md_declare_ref_add() - Implementation of do_declare_ref_del
+ * @env: execution environment
+ * @dt: object on which to increase the reference count.
+ * @th: the transaction handle.
  *
+ * Implementation of dt_object_operations::do_declare_ref_del
  * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to increase the reference count.
- * \param[in] th	the transaction handle.
- *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 static int osp_md_declare_ref_add(const struct lu_env *env,
 				  struct dt_object *dt, struct thandle *th)
@@ -253,17 +254,17 @@ static int osp_md_declare_ref_add(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_object_operations::do_ref_add
+ * osp_md_ref_add() - Implementation of dt_object_operations::do_ref_add
+ * @env: execution environment
+ * @dt: object on which to increase the reference count
+ * @th: the transaction handle
  *
  * Add an OUT_REF_ADD sub-request into the OUT RPC that will be flushed
  * when the transaction stop.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to increase the reference count
- * \param[in] th	the transaction handle
- *
- * \retval		0 if packing ref_add succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing ref_add succeeds.
+ * * %negative errno if packing fails.
  */
 static int osp_md_ref_add(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th)
@@ -280,18 +281,17 @@ static int osp_md_ref_add(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Implementation of dt_object_operations::do_ah_init
+ * osp_md_ah_init() - Implementation of dt_object_operations::do_ah_init
+ * @env: execution environment
+ * @ah: the hint to be initialized
+ * @parent: the parent of the object
+ * @child: the object to be created
+ * @child_mode: the mode of the created object
  *
  * Initialize the allocation hint for object creation, which is usually called
  * before the creation, and these hints (parent and child mode) will be sent to
  * the remote Object Update Target (OUT) and used in the object create process,
  * same as OSD object creation.
- *
- * \param[in] env	execution environment
- * \param[in] ah	the hint to be initialized
- * \param[in] parent	the parent of the object
- * \param[in] child	the object to be created
- * \param[in] child_mode the mode of the created object
  */
 static void osp_md_ah_init(const struct lu_env *env,
 			   struct dt_allocation_hint *ah,
@@ -305,18 +305,19 @@ static void osp_md_ah_init(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_object_operations::do_declare_attr_get
+ * osp_md_declare_attr_set() - Implementation of do_declare_attr_get
+ * @env: execution environment
+ * @dt: object on which to set attributes
+ * @attr: attributes to be set
+ * @th: the transaction handle
  *
+ * Implementation of dt_object_operations::do_declare_attr_get
  * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object on which to set attributes
- * \param[in] attr	attributes to be set
- * \param[in] th	the transaction handle
- *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_attr *attr, struct thandle *th)
@@ -325,20 +326,20 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Implementation of dt_object_operations::do_attr_set
+ * osp_md_attr_set() - Implementation of dt_object_operations::do_attr_set
+ * @env: execution environment
+ * @dt: object to set attributes
+ * @attr: attributes to be set
+ * @th: the transaction handle
  *
  * Set attributes to the specified remote object.
  *
  * Add the OUT_ATTR_SET sub-request into the OUT RPC that will be flushed
  * when the transaction stop.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to set attributes
- * \param[in] attr	attributes to be set
- * \param[in] th	the transaction handle
- *
- * \retval		0 if packing attr_set succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing attr_set succeeds.
+ * * %negative errno if packing fails.
  */
 int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 		    const struct lu_attr *attr, struct thandle *th)
@@ -355,16 +356,15 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Implementation of dt_object_operations::do_read_lock
+ * osp_md_read_lock() - Implementation of dt_object_operations::do_read_lock
+ * @env: execution environment
+ * @dt: object to be locked
+ * @role: lock role from MDD layer, see dt_object_role().
  *
  * osp_md_{read,write}_lock() will only lock the remote object in the
  * local cache, which uses the semaphore (opo_sem) inside the osp_object to
  * lock the object. Note: it will not lock the object in the whole cluster,
  * which relies on the LDLM lock.
- *
- * \param[in] env	execution environment
- * \param[in] dt	object to be locked
- * \param[in] role	lock role from MDD layer, see dt_object_role().
  */
 static void osp_md_read_lock(const struct lu_env *env, struct dt_object *dt,
 			     unsigned role)
@@ -378,13 +378,12 @@ static void osp_md_read_lock(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Implementation of dt_object_operations::do_write_lock
+ * osp_md_write_lock() - Implementation of dt_object_operations::do_write_lock
+ * @env: execution environment
+ * @dt: object to be locked
+ * @role: lock role from MDD layer, see dt_object_role().
  *
  * Lock the remote object in write mode.
- *
- * \param[in] env	execution environment
- * \param[in] dt	object to be locked
- * \param[in] role	lock role from MDD layer, see dt_object_role().
  */
 static void osp_md_write_lock(const struct lu_env *env, struct dt_object *dt,
 			      unsigned role)
@@ -398,12 +397,11 @@ static void osp_md_write_lock(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Implementation of dt_object_operations::do_read_unlock
+ * osp_md_read_unlock() - Implementation of dt_object_operations::do_read_unlock
+ * @env: execution environment
+ * @dt: object to be unlocked
  *
  * Unlock the read lock of remote object.
- *
- * \param[in] env	execution environment
- * \param[in] dt	object to be unlocked
  */
 static void osp_md_read_unlock(const struct lu_env *env, struct dt_object *dt)
 {
@@ -413,12 +411,12 @@ static void osp_md_read_unlock(const struct lu_env *env, struct dt_object *dt)
 }
 
 /**
+ * osp_md_write_unlock() - Implementation of do_write_unlock
+ * @env: execution environment
+ * @dt: object to be unlocked
+ *
  * Implementation of dt_object_operations::do_write_unlock
- *
  * Unlock the write lock of remote object.
- *
- * \param[in] env	execution environment
- * \param[in] dt	object to be unlocked
  */
 static void osp_md_write_unlock(const struct lu_env *env, struct dt_object *dt)
 {
@@ -430,12 +428,14 @@ static void osp_md_write_unlock(const struct lu_env *env, struct dt_object *dt)
 }
 
 /**
- * Implementation of dt_object_operations::do_write_locked
+ * osp_md_write_locked() - Implementation of do_write_locked
+ * @env: execution environment
+ * @dt: object to be tested
  *
+ * Implementation of dt_object_operations::do_write_locked
  * Test if the object is locked in write mode.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be tested
+ * Return %1 is object is locked else %0
  */
 static int osp_md_write_locked(const struct lu_env *env, struct dt_object *dt)
 {
@@ -445,18 +445,18 @@ static int osp_md_write_locked(const struct lu_env *env, struct dt_object *dt)
 }
 
 /**
- * Implementation of dt_index_operations::dio_lookup
+ * osp_md_index_lookup() - Implementation of dt_index_operations::dio_lookup
+ * @env: execution environment
+ * @dt: index object to lookup
+ * @rec: record in which to return lookup result [out]
+ * @key: key of index which will be looked up
  *
  * Look up record by key under a remote index object. It packs lookup update
  * into RPC, sends to the remote OUT and waits for the lookup result.
  *
- * \param[in] env	execution environment
- * \param[in] dt	index object to lookup
- * \param[out] rec	record in which to return lookup result
- * \param[in] key	key of index which will be looked up
- *
- * \retval		1 if the lookup succeeds.
- * \retval              negative errno if the lookup fails.
+ * Return:
+ * * %1 if the lookup succeeds.
+ * * %negative errno if the lookup fails.
  */
 static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 			       struct dt_rec *rec, const struct dt_key *key)
@@ -537,19 +537,20 @@ out:
 }
 
 /**
- * Implementation of dt_index_operations::dio_declare_insert
+ * osp_md_declare_index_insert() - Implementation of dio_declare_insert
+ * @env: execution environment
+ * @dt: object for which to insert index
+ * @rec: record of the index which will be inserted
+ * @key: key of the index which will be inserted
+ * @th: the transaction handle
  *
+ * Implementation of dt_index_operations::dio_declare_insert
  * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object for which to insert index
- * \param[in] rec	record of the index which will be inserted
- * \param[in] key	key of the index which will be inserted
- * \param[in] th	the transaction handle
- *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 static int osp_md_declare_index_insert(const struct lu_env *env,
 				       struct dt_object *dt,
@@ -561,19 +562,19 @@ static int osp_md_declare_index_insert(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_index_operations::dio_insert
+ * osp_md_index_insert() - Implementation of dt_index_operations::dio_insert
+ * @env: execution environment
+ * @dt: object for which to insert index
+ * @rec: record of the index to be inserted
+ * @key: key of the index to be inserted
+ * @th: the transaction handle
  *
  * Add an OUT_INDEX_INSERT sub-request into the OUT RPC that will
  * be flushed when the transaction stop.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object for which to insert index
- * \param[in] rec	record of the index to be inserted
- * \param[in] key	key of the index to be inserted
- * \param[in] th	the transaction handle
- *
- * \retval		0 if packing index insert succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing index insert succeeds.
+ * * %negative errno if packing fails.
  */
 static int osp_md_index_insert(const struct lu_env *env, struct dt_object *dt,
 			       const struct dt_rec *rec,
@@ -591,18 +592,19 @@ static int osp_md_index_insert(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
- * Implementation of dt_index_operations::dio_declare_delete
+ * osp_md_declare_index_delete() - Implementation of dio_declare_delete
+ * @env: execution environment
+ * @dt: object for which to delete index
+ * @key: key of the index
+ * @th: the transaction handle
  *
+ * Implementation of dt_index_operations::dio_declare_delete
  * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object for which to delete index
- * \param[in] key	key of the index
- * \param[in] th	the transaction handle
- *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 static int osp_md_declare_index_delete(const struct lu_env *env,
 				       struct dt_object *dt,
@@ -613,18 +615,18 @@ static int osp_md_declare_index_delete(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_index_operations::dio_delete
+ * osp_md_index_delete() - Implementation of dt_index_operations::dio_delete
+ * @env: execution environment
+ * @dt: object for which to delete index
+ * @key: key of the index which will be deleted
+ * @th: the transaction handle
  *
  * Add an OUT_INDEX_DELETE sub-request into the OUT RPC that will
  * be flushed when the transaction stop.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object for which to delete index
- * \param[in] key	key of the index which will be deleted
- * \param[in] th	the transaction handle
- *
- * \retval		0 if packing index delete succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing index delete succeeds.
+ * * %negative errno if packing fails.
  */
 static int osp_md_index_delete(const struct lu_env *env,
 			       struct dt_object *dt,
@@ -644,18 +646,18 @@ static int osp_md_index_delete(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_index_operations::dio_it.next
+ * osp_md_index_it_next() - Implementation of dt_index_operations::dio_it.next
+ * @env: execution environment
+ * @di: iterator of this iteration
  *
  * Advance the pointer of the iterator to the next entry. It shares a similar
  * internal implementation with osp_orphan_it_next(), which is being used for
  * remote orphan index object. This method will be used for remote directory.
  *
- * \param[in] env	execution environment
- * \param[in] di	iterator of this iteration
- *
- * \retval		0 if the pointer is advanced successfully.
- * \retval		1 if it reaches to the end of the index object.
- * \retval		negative errno if the pointer cannot be advanced.
+ * Return:
+ * * %0 if the pointer is advanced successfully.
+ * * %1 if it reaches to the end of the index object.
+ * * %negative errno if the pointer cannot be advanced.
  */
 static int osp_md_index_it_next(const struct lu_env *env, struct dt_it *di)
 {
@@ -695,16 +697,16 @@ again:
 }
 
 /**
- * Implementation of dt_index_operations::dio_it.key
+ * osp_it_key() - Implementation of dt_index_operations::dio_it.key
+ * @env: execution environment
+ * @di: iterator of this iteration
  *
  * Get the key at current iterator poisiton. These iteration methods
  * (dio_it) will only be used for iterating the remote directory, so
  * the key is the name of the directory entry.
  *
- * \param[in] env	execution environment
- * \param[in] di	iterator of this iteration
- *
- * \retval		name of the current entry
+ * Return:
+ * * %name of the current entry
  */
 static struct dt_key *osp_it_key(const struct lu_env *env,
 				 const struct dt_it *di)
@@ -716,18 +718,17 @@ static struct dt_key *osp_it_key(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_index_operations::dio_it.key_size
+ * osp_it_key_size() - Implementation of dt_index_operations::dio_it.key_size
+ * @env: execution environment
+ * @di: iterator of this iteration
  *
  * Get the key size at current iterator poisiton. These iteration methods
  * (dio_it) will only be used for iterating the remote directory, so the key
  * size is the name size of the directory entry.
  *
- * \param[in] env	execution environment
- * \param[in] di	iterator of this iteration
- *
- * \retval		name size of the current entry
+ * Return:
+ * * %size of name of the current entry
  */
-
 static int osp_it_key_size(const struct lu_env *env, const struct dt_it *di)
 {
 	struct osp_it		*it = (struct osp_it *)di;
@@ -737,19 +738,17 @@ static int osp_it_key_size(const struct lu_env *env, const struct dt_it *di)
 }
 
 /**
- * Implementation of dt_index_operations::dio_it.rec
+ * osp_md_index_it_rec() - Implementation of dt_index_operations::dio_it.rec
+ * @env: execution environment
+ * @di: iterator of this iteration
+ * @rec: the record to be returned [out]
+ * @attr: attributes of the index object, so it knows how to pack the entry.
  *
  * Get the record at current iterator position. These iteration methods
  * (dio_it) will only be used for iterating the remote directory, so it
  * uses lu_dirent_calc_size() to calculate the record size.
  *
- * \param[in] env	execution environment
- * \param[in] di	iterator of this iteration
- * \param[out] rec	the record to be returned
- * \param[in] attr	attributes of the index object, so it knows
- *                      how to pack the entry.
- *
- * \retval		only return 0 for now
+ * Returns 0 always for now
  */
 static int osp_md_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 			       struct dt_rec *rec, __u32 attr)
@@ -764,18 +763,17 @@ static int osp_md_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 }
 
 /**
- * Implementation of dt_index_operations::dio_it.load
+ * osp_it_load() - Implementation of dt_index_operations::dio_it.load
+ * @env: pointer to the thread context
+ * @di: pointer to the iteration structure
+ * @hash: the specified position
  *
  * Locate the iteration cursor to the specified position (cookie).
  *
- * \param[in] env	pointer to the thread context
- * \param[in] di	pointer to the iteration structure
- * \param[in] hash	the specified position
- *
- * \retval		positive number for locating to the exactly position
- *			or the next
- * \retval		0 for arriving at the end of the iteration
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for locating to the exactly position or the next
+ * * %0 for arriving at the end of the iteration
+ * * %negative error number on failure
  */
 static int osp_it_load(const struct lu_env *env, const struct dt_it *di,
 		       __u64 hash)
@@ -815,17 +813,18 @@ const struct dt_index_operations osp_md_index_ops = {
 };
 
 /**
- * Implement OSP layer dt_object_operations::do_xattr_list() interface.
+ * osp_md_xattr_list() - Implement OSP layer do_xattr_list() interface.
+ * @env: pointer to the thread context
+ * @dt: pointer to the OSP layer dt_object
+ * @buf: pointer to the lu_buf to hold the extended attribute [out]
  *
+ * Implement OSP layer dt_object_operations::do_xattr_list() interface.
  * List extended attribute from the specified MDT/OST object, result is not
  * cached because this is called by directory migration only.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] dt	pointer to the OSP layer dt_object
- * \param[out] buf	pointer to the lu_buf to hold the extended attribute
- *
- * \retval		positive bytes used/required in the buffer
- * \retval		negative error number on failure
+ * Return:
+ * * %positive bytes used/required in the buffer
+ * * %negative error number on failure
  */
 static int osp_md_xattr_list(const struct lu_env *env, struct dt_object *dt,
 			     const struct lu_buf *buf)
@@ -904,18 +903,18 @@ out:
 }
 
 /**
- * Implementation of dt_object_operations::do_index_try
+ * osp_md_index_try() - Implementation of dt_object_operations::do_index_try
+ * @env: execution environment
+ * @dt: index object to be initialized
+ * @feat: the index feature of the object
  *
  * Try to initialize the index API pointer for the given object. This
  * is the entry point of the index API, i.e. we must call this method
  * to initialize the index object before calling other index methods.
  *
- * \param[in] env	execution environment
- * \param[in] dt	index object to be initialized
- * \param[in] feat	the index feature of the object
- *
- * \retval		0 if the initialization succeeds.
- * \retval              negative errno if the initialization fails.
+ * Return:
+ * * %0 if the initialization succeeds.
+ * * %negative errno if the initialization fails.
  */
 static int osp_md_index_try(const struct lu_env *env,
 			    struct dt_object *dt,
@@ -926,21 +925,21 @@ static int osp_md_index_try(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_object_operations::do_object_lock
+ * osp_md_object_lock() - Implementation of dt_object_operations::do_object_lock
+ * @env: execution environment
+ * @dt: object to be locked
+ * @lh: lock handle [out]
+ * @einfo: enqueue information
+ * @policy: lock policy
  *
  * Enqueue a lock (by ldlm_cli_enqueue()) of remote object on the remote MDT,
  * which will lock the object in the global namespace. And because the
  * cross-MDT locks are relatively rare compared with normal local MDT operation,
  * let's release it right away, instead of putting it into the LRU list.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be locked
- * \param[out] lh	lock handle
- * \param[in] einfo	enqueue information
- * \param[in] policy	lock policy
- *
- * \retval		ELDLM_OK if locking the object succeeds.
- * \retval		negative errno if locking fails.
+ * Return:
+ * * %ELDLM_OK if locking the object succeeds.
+ * * %negative errno if locking fails.
  */
 static int osp_md_object_lock(const struct lu_env *env,
 			      struct dt_object *dt,
@@ -973,16 +972,17 @@ static int osp_md_object_lock(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_object_operations::do_object_unlock
+ * osp_md_object_unlock() - Implementation of do_object_unlock
+ * @env: execution environment
+ * @dt: object to be unlocked
+ * @einfo: lock enqueue information
+ * @policy: lock policy
  *
+ * Implementation of dt_object_operations::do_object_unlock
  * Cancel a lock of a remote object.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be unlocked
- * \param[in] einfo	lock enqueue information
- * \param[in] policy	lock policy
- *
- * \retval		Only return 0 for now.
+ * Return:
+ * * %Only return 0 for now.
  */
 static int osp_md_object_unlock(const struct lu_env *env,
 				struct dt_object *dt,
@@ -998,17 +998,18 @@ static int osp_md_object_unlock(const struct lu_env *env,
 }
 
 /**
- * Implement OSP layer dt_object_operations::do_declare_destroy() interface.
+ * osp_md_declare_destroy() - Implement OSP layer do_declare_destroy() interface
+ * @env: pointer to the thread context
+ * @dt: pointer to the OSP layer dt_object to be destroyed
+ * @th: pointer to the transaction handler
  *
+ * Implement OSP layer dt_object_operations::do_declare_destroy() interface.
  * Create the dt_update_request to track the update for this OSP
  * in the transaction.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] dt	pointer to the OSP layer dt_object to be destroyed
- * \param[in] th	pointer to the transaction handler
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int osp_md_declare_destroy(const struct lu_env *env,
 				  struct dt_object *dt,
@@ -1027,19 +1028,20 @@ static int osp_destroy_interpreter(const struct lu_env *env,
 }
 
 /**
- * Implement OSP layer dt_object_operations::do_destroy() interface.
+ * osp_md_destroy() - Implement OSP layer do_destroy() interface.
+ * @env: pointer to the thread context
+ * @dt: pointer to the OSP layer dt_object to be destroyed
+ * @th: pointer to the transaction handler
  *
+ * Implement OSP layer dt_object_operations::do_destroy() interface.
  * Pack the destroy update into the RPC buffer, which will be sent
  * to the remote MDT during transaction stop.
  *
  * It also marks the object as non-cached.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] dt	pointer to the OSP layer dt_object to be destroyed
- * \param[in] th	pointer to the transaction handler
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th)
@@ -1114,19 +1116,20 @@ const struct dt_object_operations osp_md_obj_ops = {
 };
 
 /**
- * Implementation of dt_body_operations::dbo_declare_write
+ * osp_md_declare_write() - Implementation of dbo_declare_write
+ * @env: execution environment
+ * @dt: object to be written
+ * @buf: buffer to write which includes an embedded size field
+ * @pos: offet in the object to start writing at
+ * @th: transaction handle
  *
+ * Implementation of dt_body_operations::dbo_declare_write
  * Create the osp_update_request to track the update for this OSP
  * in the transaction.
-  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be written
- * \param[in] buf	buffer to write which includes an embedded size field
- * \param[in] pos	offet in the object to start writing at
- * \param[in] th	transaction handle
  *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 static ssize_t osp_md_declare_write(const struct lu_env *env,
 				    struct dt_object *dt,
@@ -1175,19 +1178,19 @@ static int osp_write_interpreter(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_body_operations::dbo_write
+ * osp_md_write() - Implementation of dt_body_operations::dbo_write
+ * @env: execution environment
+ * @dt: object to be written
+ * @buf: buffer to write which includes an embedded size field
+ * @pos: offet in the object to start writing at
+ * @th: transaction handle
  *
  * Pack the write object update into the RPC buffer, which will be sent
  * to the remote MDT during transaction stop.
  *
- * \param[in] env	execution environment
- * \param[in] dt	object to be written
- * \param[in] buf	buffer to write which includes an embedded size field
- * \param[in] pos	offet in the object to start writing at
- * \param[in] th	transaction handle
- *
- * \retval		the buffer size in bytes if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %size of buffer in bytes if packing succeeds.
+ * * %negative errno if packing fails.
  */
 static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_buf *buf, loff_t *pos,
