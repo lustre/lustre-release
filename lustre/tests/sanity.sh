@@ -243,12 +243,12 @@ assert_DIR
 
 MAXFREE=${MAXFREE:-$((300000 * $OSTCOUNT))}
 
-[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
-[ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
-rm -rf $DIR/[Rdfs][0-9]*
+[[ -f $DIR/d52a/foo ]] && chattr -a $DIR/d52a/foo
+[[ -f $DIR/d52b/foo ]] && chattr -i $DIR/d52b/foo
+cleanup_test_dirs "$DIR"
 
 # $RUNAS_ID may get set incorrectly somewhere else
-[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
+(( $UID != 0 || $RUNAS_ID != 0 )) ||
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
@@ -363,6 +363,21 @@ test_0e() { # LU-13417
 	rmdir $MOUNT/$tdir.1 $MOUNT/$tdir.2
 }
 run_test 0e "Enable DNE MDT balancing for mkdir in the ROOT"
+
+test_0g() {
+	# fail most of the time, but pass occasionally to verify code
+	if (( RANDOM > RANDOM / 8 )); then
+		error false "test failed this time"
+	fi
+	log "test passed this time"
+}
+run_test_should_fail 0g "verify run_test_should_fail"
+
+test_0h() {
+	# fail all of the time
+	error false "test failed"
+}
+run_test_must_fail 0h "verify run_test_must_fail"
 
 test_1() {
 	test_mkdir $DIR/$tdir

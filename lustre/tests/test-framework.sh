@@ -2389,8 +2389,8 @@ setup_loop_device() {
 
 	do_facet $facet "loop_dev=\\\$($LOSETUP -j $file | cut -d : -f 1);
 			 if [[ -z \\\$loop_dev ]]; then
-				loop_dev=\\\$($LOSETUP -f);
-				$LOSETUP \\\$loop_dev $file || loop_dev=;
+				$LOSETUP -f $file;
+				loop_dev=\\\$($LOSETUP -j $file | cut -d: -f 1);
 			 fi;
 			 echo -n \\\$loop_dev"
 }
@@ -7050,6 +7050,14 @@ log_zfs_info() {
 	fi
 }
 
+cleanup_test_dirs() {
+	local dir="$1"
+	[[ -n "$dir" && -d "$dir" ]] || return 0
+
+	rm -rf "$dir"/[Rdfs][0-9]* ||
+		error "remove sub-test dirs in '$dir' failed"
+}
+
 do_check_and_cleanup_lustre() {
 	log "=== $TESTSUITE: start cleanup $(date +'%H:%M:%S (%s)') ==="
 
@@ -7065,8 +7073,7 @@ do_check_and_cleanup_lustre() {
 
 	if is_mounted $MOUNT; then
 		if $DO_CLEANUP; then
-			[[ -n "$DIR" ]] && rm -rf $DIR/[Rdfs][0-9]* ||
-				error "remove sub-test dirs failed"
+			cleanup_test_dirs "$DIR"
 		else
 			echo "skip cleanup"
 		fi
@@ -7595,7 +7602,10 @@ print_stack_trace() {
 }
 
 report_error() {
-	local TYPE=${TYPE:-"FAIL"}
+	local type=${ERROR_TYPE:-"FAIL"}
+
+	# an expected failure is reported as a plain PASS
+	type=${type%-ISH}
 
 	local dump=true
 	# do not dump logs if $1=false
@@ -7604,7 +7614,7 @@ report_error() {
 		dump=false
 	fi
 
-	log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $* "
+	log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${type}: $* "
 	(print_stack_trace 2) >&2
 	mkdir -p $LOGDIR
 	# We need to dump the logs on all nodes
@@ -7613,12 +7623,12 @@ report_error() {
 	fi
 
 	debugrestore
-	[ "$TESTSUITELOG" ] &&
-		echo "$TESTSUITE: $TYPE: $TESTNAME $*" >> $TESTSUITELOG
-	if [ -z "$*" ]; then
+	[[ -z "$TESTSUITELOG" ]] ||
+		echo "$TESTSUITE: ${type}: $TESTNAME $*" >> $TESTSUITELOG
+	if [[ -z "$*" ]]; then
 		echo "error() without useful message, please fix" > $LOGDIR/err
 	else
-		if [[ `echo $TYPE | grep ^IGNORE` ]]; then
+		if [[ $type =~ ^IGNORE ]]; then
 			echo "$@" > $LOGDIR/ignore
 		else
 			echo "$@" > $LOGDIR/err
@@ -7695,7 +7705,7 @@ error_exit() {
 # e.g. error_ignore bz5494 "your message" or
 # error_ignore LU-5494 "your message"
 error_ignore() {
-	local TYPE="IGNORE ($1)"
+	local ERROR_TYPE="IGNORE ($1)"
 	shift
 	report_error false "$@"
 }
@@ -7952,12 +7962,24 @@ run_test() {
 		return 0
 	else
 		run_one_logged $testnum "$testmsg"
-		# TODO: Avoid running out of space!?
-		if [[ "$FSTYPE" == "wbcfs" ]]; then
-			rm -rf "$MOUNT/*"
-		fi
 		return $?
 	fi
+}
+
+run_test_should_fail() {
+	local testnum=$1
+	local testmsg=${2:-""}
+
+	local ERROR_TYPE="PASS-ISH"
+	run_test $testnum "$testmsg"
+}
+
+run_test_must_fail() {
+	local testnum=$1
+	local testmsg=${2:-""}
+
+	local ERROR_TYPE="PASS"
+	run_test $testnum "$testmsg"
 }
 
 log() {
@@ -8178,15 +8200,22 @@ run_one_logged() {
 			echo "$TESTNAME returned $rc" | tee $LOGDIR/err
 
 		if [[ -f $LOGDIR/err ]]; then
-			test_error=$(cat $LOGDIR/err)
-			TEST_STATUS="FAIL"
+			if [[ $ERROR_TYPE =~ ^PASS ]]; then
+				log "Test ${testnum} failed as expected"
+				rm -f $LOGDIR/err # Clear expected error
+			else
+				test_error=$(cat $LOGDIR/err)
+			fi
 		elif [[ -f $LOGDIR/ignore ]]; then
 			test_error=$(cat $LOGDIR/ignore)
 		elif [[ -f $LOGDIR/skip ]]; then
 			test_error=$(cat $LOGDIR/skip)
-			TEST_STATUS="SKIP"
-		else
-			TEST_STATUS="PASS"
+		elif [[ $ERROR_TYPE == "PASS-ISH" ]]; then
+			log "Test ${testnum} passed but really wanted to fail"
+		elif [[ $ERROR_TYPE == "PASS" ]]; then
+			rc=1
+			test_error="Test ${testnum} passed but expected to fail"
+			echo "$test_error" | tee $LOGDIR/err
 		fi
 
 		pass "$testnum" "(${duration_sub}s)"
@@ -8223,6 +8252,10 @@ run_one_logged() {
 		$FAIL_ON_ERROR && exit $rc
 	fi
 
+	# TODO: Avoid running out of space!?
+	if [[ "$FSTYPE" == "wbcfs" ]]; then
+		cleanup_test_dirs "$MOUNT"
+	fi
 	umask $SAVE_UMASK
 
 	unset TESTNAME
@@ -10882,7 +10915,7 @@ check_mount_and_prep()
 {
 	is_mounted $MOUNT || setupall
 
-	rm -rf $DIR/[df][0-9]* || error "Fail to cleanup the env!"
+	cleanup_test_dirs "$DIR"
 	mkdir_on_mdt0 $DIR/$tdir || error "Fail to mkdir $DIR/$tdir."
 	for ((mdtidx = 0; mdtidx < $MDSCOUNT; mdtidx++)); do
 		local name="MDT$(printf '%04x' $mdtidx)"
