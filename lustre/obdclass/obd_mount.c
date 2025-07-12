@@ -657,6 +657,8 @@ static int lustre_free_lsi(struct lustre_sb_info *lsi)
 				lsi->lsi_lmd->lmd_exclude_count);
 		OBD_FREE(lsi->lsi_lmd->lmd_mgs,
 			 strlen(lsi->lsi_lmd->lmd_mgs) + 1);
+		OBD_FREE(lsi->lsi_lmd->lmd_mgsname,
+			 strlen(lsi->lsi_lmd->lmd_mgsname) + 1);
 		OBD_FREE(lsi->lsi_lmd->lmd_osd_type,
 			 strlen(lsi->lsi_lmd->lmd_osd_type) + 1);
 		OBD_FREE(lsi->lsi_lmd->lmd_params, 4096);
@@ -1110,9 +1112,10 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char *ptr, char **tail)
 enum lmd_mnt_flags {
 	LMD_OPT_RECOVERY_TIME_SOFT	= LMD_FLG_NUM_FLAGS + 1,
 	LMD_OPT_RECOVERY_TIME_HARD,
+	LMD_OPT_EXCLUDE,
+	LMD_OPT_MGSNAME,
 	LMD_OPT_MGSNODE,
 	LMD_OPT_MGSSEC,
-	LMD_OPT_EXCLUDE,
 	LMD_OPT_SVNAME,
 	LMD_OPT_PARAM,
 	LMD_OPT_OSD,
@@ -1144,9 +1147,10 @@ static const match_table_t lmd_flags_table = {
 
 	{LMD_OPT_RECOVERY_TIME_SOFT,	"recovery_time_soft=%u"},
 	{LMD_OPT_RECOVERY_TIME_HARD,	"recovery_time_hard=%u"},
+	{LMD_OPT_EXCLUDE,		"exclude=%s"},
+	{LMD_OPT_MGSNAME,		"mgsname=%s"},
 	{LMD_OPT_MGSNODE,		"mgsnode=%s"},
 	{LMD_OPT_MGSSEC,		"mgssec=%s"},
-	{LMD_OPT_EXCLUDE,		"exclude=%s"},
 	{LMD_OPT_SVNAME,		"svname=%s"},
 	{LMD_OPT_PARAM,			"param=%s"},
 	{LMD_OPT_OSD,			"osd=%s"},
@@ -1421,6 +1425,9 @@ int lmd_parse(char *options, struct lustre_mount_data *lmd)
 			if (rc == 0)
 				lmd->lmd_recovery_time_hard = max_t(int, tmp,
 								    time_min);
+			break;
+		case LMD_OPT_MGSNAME:
+			rc = lmd_parse_string(&lmd->lmd_mgsname, args->from);
 			break;
 		case LMD_OPT_MGSNODE:
 			/* Assume the next mount opt is the first

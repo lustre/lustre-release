@@ -12229,6 +12229,85 @@ test_160() {
 }
 run_test 160 "MGC updates failnodes from all participants"
 
+test_161() {
+
+	setup
+
+	local custom_mgsname="test-mgs-custom"
+
+	umount $MOUNT
+
+	# Test 1: Verify explicit "-o mgsname=MGSNAME" appears in /proc/mounts,
+	# df, mount
+	mount -t lustre -o mgsname=$custom_mgsname $MGSNID:/$FSNAME $MOUNT ||
+		error "mount with mgsname=$custom_mgsname failed"
+
+	# Verify mgsname appears in /proc/mounts
+	grep "$custom_mgsname:/$FSNAME" /proc/mounts ||
+		error "mgsname not found in /proc/mounts"
+
+	# Verify mgsname appears in mount output
+	mount | grep "$custom_mgsname:/$FSNAME.*$MOUNT" ||
+		error "mgsname not found in mount output"
+
+	# Verify df command works
+	df $MOUNT > /dev/null || error "df failed with mgsname"
+
+	umount $MOUNT
+	wait_update_facet client "mount | grep $MOUNT" "" 5 ||
+		error "failed to unmount $MOUNT"
+
+	# Test 2: Verify mgsname generation when mounting without mgsname option
+	# When mounting with hostname like "test-mgs@tcp:/lustre", it should
+	# automatically generate mgsname and show "test-mgs@tcp:/lustre" in
+	# mount, df, and /proc/mounts output
+
+	# Extract IP and network type from MGSNID
+	local mgs_ip=$(echo $MGSNID | cut -d'@' -f1)
+	local mgs_nettype=$(echo $MGSNID | cut -d'@' -f2)
+	local test_hostname="test-mgs-auto"
+
+	# Check if hostname is already resolvable before adding to /etc/hosts
+	if getent hosts $test_hostname >/dev/null 2>&1 ||
+		ping -c1 -W1 $test_hostname >/dev/null 2>&1; then
+		echo "Hostname $test_hostname is already resolvable"
+		local added_to_hosts=false
+	else
+		echo "Adding temporary hostname entry to /etc/hosts:" \
+		     "$mgs_ip $test_hostname"
+		echo "$mgs_ip $test_hostname" >> /etc/hosts
+		local added_to_hosts=true
+		# Ensure cleanup happens even if test fails
+		stack_trap "sed -i '/$mgs_ip $test_hostname/d' /etc/hosts" EXIT
+	fi
+
+	# Mount using the hostname to trigger automatic mgsname generation
+	mount -t lustre $test_hostname@$mgs_nettype:/$FSNAME $MOUNT ||
+		error "mount with hostname $test_hostname@$mgs_nettype failed"
+
+	# Check that automatic mgsname was generated and appears in /proc/mounts
+	local device_in_proc=$(awk -v mount="$MOUNT" '$2 == mount {print $1}' \
+			       /proc/mounts)
+
+	# The auto-generated mgsname should show the hostname, not the IP
+	local expected_device="$test_hostname@$mgs_nettype:/$FSNAME"
+	echo "Test hostname: $test_hostname@$mgs_nettype"
+	echo "Expected device: $expected_device"
+	echo "Device in /proc/mounts: $device_in_proc"
+
+	[[ "$device_in_proc" == "$expected_device" ]] ||
+		error "device '$device_in_proc' != expected '$expected_device'"
+
+	# Verify hostname also appears in mount output
+	mount | grep "$test_hostname@$mgs_nettype:/$FSNAME.*$MOUNT" ||
+		error "hostname not found in mount output"
+
+	umount $MOUNT
+
+	# Cleanup handled by stack_trap if hostname was added
+}
+run_test 161 "test '-o mgsname' option"
+
 cleanup_200() {
 	local modopts=$1
 	stopall

@@ -237,6 +237,23 @@ Warning! 'network' option is incompatible with LNet Dynamic Peer Discovery.
 If you want to restrict client NID, please make sure LNet Dynamic Peer Discovery
 is disabled.
 .TP
+.BI mgsname= MGSNAME
+Specify a custom hostname for the MGS that will be displayed in
+.BR /proc/mounts
+instead of the resolved IP address. The network type (e.g.,
+.BR @tcp ,
+.BR @o2ib )
+is automatically extracted from the first MGS NID in the device string and
+should be included in the hostname.
+If this option is not specified and the device string contains a hostname
+(not an IP address), the hostname will be automatically extracted and used
+to generate the mgsname option.
+This option is purely cosmetic and does not affect the actual connection to the
+MGS, which is still determined by the device string. This can be useful for
+making mount entries more readable in system monitoring tools and if MGSNAME is
+specified as a hostname with DNS resolution that resolves to multiple NIDs
+instead of numeric addresses.
+.TP
 .B test_dummy_encryption
 Enable test dummy encryption mode.
 .RE
@@ -373,6 +390,31 @@ process for the case that clients are known to be unavailable:
 .RS
 .EX
 .B # mount -t lustre_tgt -L testfs-MDT0000 -o abort_recov /mnt/test/mdt
+.EE
+.RE
+.PP
+Mount a client filesystem with a custom MGS name for display purposes.
+The network type
+.B @o2ib
+will be automatically appended to
+.B mgs-cluster
+in
+.BR /proc/mounts :
+.RS
+.EX
+.B # mount -t lustre -o mgsname=cfs21@o2ib 10.0.0.2,10.0.0.4@o2ib:/testfs /mnt/myfs
+.EE
+.RE
+.PP
+Mount a client filesystem with automatic MGS name generation. The hostname
+.B test-mgs
+will be automatically extracted from the device string and
+.B mgsname=test-mgs@tcp
+will be appended to the list of mount options for display in
+.BR /proc/mounts :
+.RS
+.EX
+.B # mount -t lustre cfs21@o2ib:/testfs /mnt/myfilesystem
 .EE
 .RE
 .SH AVAILABILITY

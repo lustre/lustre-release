@@ -104,6 +104,7 @@ struct lustre_mount_data {
 	char   *lmd_params;	/* lustre params */
 	u32    *lmd_exclude;	/* array of OSTs to ignore */
 	char   *lmd_mgs;	/* MGS nid */
+	char   *lmd_mgsname;	/* MGS hostname for display */
 	char   *lmd_osd_type;	/* OSD type */
 	char   *lmd_nidnet;     /* network to restrict this client to */
 };

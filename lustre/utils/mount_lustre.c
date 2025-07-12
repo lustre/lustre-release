@@ -83,6 +83,7 @@ static void usage(FILE *out)
 		"\t<cliopt>: one or more comma separated client options:\n"
 		"\t\texclude=<ostname>[:<ostname>]: list of inactive OSTs (e.g. lustre-OST0001)\n"
 		"\t\tlocalflock: enable POSIX flock only on local client\n"
+		"\tmgsname=HOSTNAME: MGS hostname for display in /proc/mounts\n"
 		"\t\tretry=<num>: number of times mount is retried by client\n"
 #ifdef HAVE_GSS
 		"\t\tskpath=<file|directory>: path of keys to load into kernel keyring\n"
@@ -258,19 +259,21 @@ static int parse_options(struct mount_opts *mop, char *orig_options,
 		 * the form of param=value. We should pay attention not to
 		 * remove those mount options, see bug 22097.
 		 */
-		if (val && strncmp(arg, "max_sectors_kb", 14) == 0) {
+		if (strcmp(opt, "force") == 0) {
+			/* XXX special check for 'force' option */
+			++mop->mo_force;
+			printf("force: %d\n", mop->mo_force);
+		} else if (val && strncmp(arg, "max_sectors_kb", 14) == 0) {
 			fprintf(stderr,
 				"%s: max_sectors_kb is ignored\n",
 				progname);
 		} else if (val &&
 			   strncmp(arg, "md_stripe_cache_size", 20) == 0) {
 			mop->mo_md_stripe_cache_size = atoi(val + 1);
-		} else if (val && strncmp(arg, "retry", 5) == 0) {
-			mop->mo_retry = atoi(val + 1);
-			if (mop->mo_retry > MAX_RETRIES)
-				mop->mo_retry = MAX_RETRIES;
-			else if (mop->mo_retry < 0)
-				mop->mo_retry = 0;
+		} else if (val && strncmp(arg, "mgsname", 7) == 0) {
+			rc = append_option(options, options_len, opt, NULL);
+			if (rc != 0)
+				goto out_options;
 		} else if (val && strncmp(arg, "mgssec", 6) == 0) {
 			rc = append_option(options, options_len, opt, NULL);
 			if (rc != 0)
@@ -280,10 +283,12 @@ static int parse_options(struct mount_opts *mop, char *orig_options,
 			rc = append_option(options, options_len, opt, NULL);
 			if (rc != 0)
 				goto out_options;
-		} else if (strcmp(opt, "force") == 0) {
-			/* XXX special check for 'force' option */
-			++mop->mo_force;
-			printf("force: %d\n", mop->mo_force);
+		} else if (val && strncmp(arg, "retry", 5) == 0) {
+			mop->mo_retry = atoi(val + 1);
+			if (mop->mo_retry > MAX_RETRIES)
+				mop->mo_retry = MAX_RETRIES;
+			else if (mop->mo_retry < 0)
+				mop->mo_retry = 0;
 #ifdef HAVE_GSS
 		} else if (val && strncmp(opt, "skpath=", 7) == 0) {
 			if (strlen(val) + 1 >= sizeof(mop->mo_skpath)) {
@@ -648,12 +653,14 @@ static void set_defaults(struct mount_opts *mop)
 	mop->mo_nosvc = 0;
 }
 
-static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
+static int parse_opts(int argc, char *const argv[], struct mount_opts *mop,
+		      char *options, size_t options_len)
 {
 	static struct option long_opts[] = {
 	{ .val = 1,	.name = "force",	.has_arg = no_argument },
 	{ .val = 'f',	.name = "fake",		.has_arg = no_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'M',	.name = "mgsname",	.has_arg = required_argument },
 	{ .val = 'n',	.name = "nomtab",	.has_arg = no_argument },
 	{ .val = 'o',	.name = "options",	.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
@@ -666,7 +673,7 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 	char *ptr;
 	int opt, rc;
 
-	while ((opt = getopt_long(argc, argv, "fhno:vV",
+	while ((opt = getopt_long(argc, argv, "fhM:no:vV",
 				  long_opts, NULL)) != EOF){
 		switch (opt) {
 		case 1:
@@ -679,6 +686,12 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 			break;
 		case 'h':
 			usage(stdout);
+			break;
+		case 'M':
+			rc = append_option(options, options_len, "mgsname=",
+					   optarg);
+			if (rc != 0)
+				return rc;
 			break;
 		case 'n':
 			++mop->mo_nomtab;
@@ -934,9 +947,17 @@ int main(int argc, char *const argv[])
 	}
 	maxopt_len = MIN(g_pagesize, 64 * 1024);
 
-	rc = parse_opts(argc, argv, &mop);
+	options = malloc(maxopt_len);
+	if (!options) {
+		fprintf(stderr, "can't allocate memory for options\n");
+		rc = ENOMEM;
+		goto out_mo_source;
+	}
+	options[0] = '\0';
+
+	rc = parse_opts(argc, argv, &mop, options, maxopt_len);
 	if (rc || version)
-		return rc;
+		goto out_options;
 
 	if (verbose) {
 		for (i = 0; i < argc; i++)
@@ -945,13 +966,6 @@ int main(int argc, char *const argv[])
 		       mop.mo_source, mop.mo_target);
 		printf("options(%zu/%zu) = %s\n", strlen(mop.mo_orig_options),
 		       maxopt_len, mop.mo_orig_options);
-	}
-
-	options = malloc(maxopt_len);
-	if (!options) {
-		fprintf(stderr, "can't allocate memory for options\n");
-		rc = ENOMEM;
-		goto out_mo_source;
 	}
 
 	if (strlen(mop.mo_orig_options) >= maxopt_len) {
@@ -1022,6 +1036,29 @@ int main(int argc, char *const argv[])
 			progname, mop.mo_usource);
 		goto out_options;
 #endif
+	}
+
+	/*
+	 * Auto-generate mgsname from device string if not already specified,
+	 * and convert_hostname() has replaced the hostname with an IP address.
+	 */
+	if (client && !strstr(options, "mgsname=") &&
+	    strchr(mop.mo_usource, '@')) {
+		char *end = strpbrk(mop.mo_usource, ",:");
+
+		if (end && strncmp(mop.mo_usource, mop.mo_source,
+				   end - mop.mo_usource) != 0) {
+			char sep = *end;
+
+			*end = '\0'; /* temporarily NUL terminate mgsname */
+			rc = append_option(options, maxopt_len, "mgsname=",
+					   mop.mo_usource);
+			if (verbose)
+				printf("add option mgsname=%s: rc = %d\n",
+				       mop.mo_usource, rc);
+			*end = sep;
+			rc = 0;
+		}
 	}
 
 	/*

@@ -79,6 +79,23 @@ static int ll_drop_inode(struct inode *inode)
 	return drop;
 }
 
+static int ll_show_devname(struct seq_file *m, struct dentry *root)
+{
+	struct lustre_sb_info *lsi = s2lsi(root->d_sb);
+	struct lustre_mount_data *lmd = lsi->lsi_lmd;
+
+	if (lmd && lmd->lmd_mgsname) {
+		struct ll_sb_info *sbi = lsi->lsi_llsbi;
+
+		seq_printf(m, "%s:/%s", lmd->lmd_mgsname, sbi->ll_fsname);
+	} else if (lmd && lmd->lmd_dev) {
+		seq_puts(m, lmd->lmd_dev);
+	} else {
+		seq_puts(m, "<unknown>");
+	}
+	return 0;
+}
+
 /* exported operations */
 const struct super_operations lustre_super_operations = {
 	.alloc_inode   = ll_alloc_inode,
@@ -90,6 +107,7 @@ const struct super_operations lustre_super_operations = {
 	.umount_begin  = ll_umount_begin,
 	.remount_fs    = ll_remount_fs,
 	.show_options  = ll_show_options,
+	.show_devname  = ll_show_devname,
 };
 
 /**

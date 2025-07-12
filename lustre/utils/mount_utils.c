@@ -171,6 +171,29 @@ char *strscpy(char *dst, char *src, int buflen)
 	return strscat(dst, src, buflen);
 }
 
+/*
+ * Check if filesystem is already mounted by comparing filesystem names.
+ * For Lustre client mounts, extract and compare the filesystem name part
+ * (after ":/" in the mount source) to handle cases where hostnames differ
+ * but refer to the same filesystem.
+ */
+static int compare_lustre_sources(const char *src1, const char *src2)
+{
+	const char *fs1, *fs2;
+
+	/* Find filesystem part after ":/" */
+	fs1 = strstr(src1, ":/");
+	fs2 = strstr(src2, ":/");
+
+	/* If both have ":/" pattern, compare filesystem names */
+	if (fs1 && fs2) {
+		src1 = fs1 + 2; /* skip ":/" */
+		src2 = fs2 + 2; /* skip ":/" */
+	}
+
+	return strcmp(src1, src2) == 0;
+}
+
 int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
 {
 	FILE *fp;
@@ -181,8 +204,8 @@ int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
 		return 0;
 
 	while ((mnt = getmntent(fp)) != NULL) {
-		if ((strcmp(mnt->mnt_fsname, spec1) == 0 ||
-		     strcmp(mnt->mnt_fsname, spec2) == 0) &&
+		if ((compare_lustre_sources(mnt->mnt_fsname, spec1) ||
+		     compare_lustre_sources(mnt->mnt_fsname, spec2)) &&
 		    (!mtpt || strcmp(mnt->mnt_dir, mtpt) == 0) &&
 		    (!type || strcmp(mnt->mnt_type, type) == 0)) {
 			endmntent(fp);
