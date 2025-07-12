@@ -1,4 +1,4 @@
-.TH LFS-MIRROR-EXTEND 1 2025-05-23 Lustre "Lustre User Utilities"
+.TH LFS-MIRROR-EXTEND 1 2025-07-11 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-extend \- add mirror(s) to an existing file
 .SH SYNOPSIS
@@ -7,8 +7,10 @@ lfs-mirror-extend \- add mirror(s) to an existing file
 .RB [ --fid | -F " [" --lustre-dir = \fILUSTRE_MOUNT_POINT ]]
 .RB [ --mirror-count | -N [[ = ] \fIMIRROR_COUNT ]]
 .RB [ --no-verify ]
-.RB [ --stats | --stats-interval=\fISECONDS ]
-.RI [ SETSTRIPE_OPTIONS "|\fB-f " VICTIM_FILE ]
+.RB [ --stats | --stats-interval = \fISECONDS ]
+.RI [ SETSTRIPE_OPTIONS
+.RB "| " -f
+.IR VICTIM_FILE ]
 .I FILES_FROM
 .YS
 .SH DESCRIPTION
@@ -21,7 +23,13 @@ to a mirrored file.
 .I FILES_FROM
 may be:
 .TP
-.IR FILENAME " [...]"
+.BR -0 ", " --null
+Read file names from stdin by default. Each file name is followed by a NUL char.
+Usually is used after a pipeline from
+.B 'lfs find --print0'
+command.
+.TP
+.IR FILENAME " [" FILENAME " ...]"
 File names are listed on command line.
 Multiple file names are separated by space char.
 .TP
@@ -46,95 +54,96 @@ is specified at the same time,
 file names are separated by a NUL char.
 .P
 The
-.BR --mirror-count | -N
-option is optional and indicates how many
-mirrors that have the same layout will be added. It can be repeated multiple
-times to separate mirrors that have different layouts. The
-.I MIRROR_COUNT
-can be specified with a preceding '=' to indicate the number of total mirrors
-desired for the layout, such as
-.BI --mirror-count== TOTAL_MIRROR_COUNT
-or
-.B -N=\c
-.IR TOTAL_MIRROR_COUNT .
-This will create mirrors until the total
-number of mirrors in the layout match
-.IR TOTAL_MIRROR_COUNT ,
-this also means that if there are already at least
-.I TOTAL_MIRROR_COUNT
-mirrors in the layout then no new mirrors will be created. The
-.I MIRROR_COUNT
-argument is optional and defaults to 1 if it's not specified;
-if specified, it must follow the option without a space. If
-.BR --mirror-count | -N
-is not specified, the default value of 1 will be used.
-.P
-The
 .I SETSTRIPE_OPTIONS
-specify the specific layout for the mirror. It can
-be a plain layout with specific striping pattern or a composite layout like
-Progressive File Layout (PFL) (see
-.BR lfs-setstripe (1)).
+specify the specific layout for the mirror. These are the same options that are
+used by
+.BR lfs-setstripe (1).
 If
 .I SETSTRIPE_OPTIONS
 are not specified,
 then the stripe options inherited from the previous component will be used.
 If
 .I VICTIM_FILE
-exists, then the
-command will merge the layout from that file as a mirror added to the
-mirrored file. After the command is finished, the victim file will be
-removed. The
-.I SETSTRIPE_OPTIONS
-cannot be specified with
-.B -f
-.I VICTIM_FILE
-option in one command line.
-.P
-If
-.I VICTIM_FILE
-is specified, the utility will verify that the file contents
-from
-.I VICTIM_FILE
-are the same as
-.IR FILENAME .
-Otherwise the command will return failure. However, option
-.B --no-verify
-can be used to override this verification.
-The option can save siginificant time on file
-comparison if the file size is large,
-but use it only when the file contents are known to be the same.
-.P
-If no option is specified, then the command will return an error.
+is specified and exists, then the command will merge the layout from that
+file as a mirror added to the mirrored file.
+After the command is finished, the victim file will be removed.
 .SH OPTIONS
 .TP
-.BR \-\-chunk\-size = \fISIZE_MB
+.BR --chunk-size = \fISIZE_MB
 The buffer chunk size in MB used to transfer data. It is 1 (MB) by default.
-But if \fB--aio-tasks\fR=0, the default value is 64 (MB).
+But if
+.BR --aio-tasks =0,
+the default value is 64 (MB).
 .TP
 .BR --fid ", " -F
-FID(s) are provided from command line/stdin/\fILIST_FILE\fR instead of file path(s).
-Option
-.BR --lustre-dir = \fILUSTRE_MOUNT_POINT\fR
+FID(s) are provided from command
+.RI line/stdin/ LIST_FILE
+instead of file path(s). Option
+.BR --lustre-dir =\c
+.I LUSTRE_MOUNT_POINT
 may be specified at the same time.
 .TP
-.BR --lustre-dir = \fILUSTRE_MOUNT_POINT\fR
+.BR -f ", " --file " " \fIVICTIM_FILE
+First, the contents of
+.I VICTIM_FILE
+will be verified to be the same as
+.IR FILENAME .
+If they are, the layout of
+.I VICTIM_FILE
+will be merged as a mirror added to the mirrored file.
+Otherwise the layout of
+.I VICTIM_FILE
+will be unchanged.
+However,
+.BR --no-verify
+can be specified to override this check.
+Once the command is complete
+.I VICTIM_FILE
+will be removed.
+This option cannot be specified with
+.I SETSTRIPE_OPTIONS
+option.
+.TP
+.BR --lustre-dir = \fILUSTRE_MOUNT_POINT
 The mount point of Lustre file system on which FIDs are.
 If there is only one mounted Lustre file system, this option is not necessary.
 This option must be specified together with
 .BR --fid .
 .TP
-.BR -N ", " --mirror-count [\fIMIRROR_COUNT ]
-The number of mirrors that have the same layout to be added. The option can be
-repeated multiple times to separate mirrors that have different layouts. The
+.BR -N ", " --mirror-count [[ = ] \fIMIRROR_COUNT ]
+Specifies that the next
 .I MIRROR_COUNT
-argument is optional and defaults to 1 if it's not specified;
-if specified, it must follow the option without a space.
+mirrors will have the following layout. This option can be repeated multiple
+times to separate mirrors that have different layouts. The
+.I MIRROR_COUNT
+argument is optional and will default to 1 if not specified. This lets a single
+mirror be specified easily with
+.BR -N .
+The
+.BR --mirror-count | -N
+option itself is also optional, and if not specified only 1 mirror will be
+created.
+The
+.I MIRROR_COUNT
+can be specified with a preceding '=' to indicate the number of
+.B total
+mirrors desired for the layout, such as
+.BI --mirror-count== TOTAL_MIRROR_COUNT
+or
+.B -N=\c
+.IR TOTAL_MIRROR_COUNT .
+This will create mirrors until the total
+number of mirrors in the layout is at least
+.IR TOTAL_MIRROR_COUNT .
+This also means that if there are already at least
+.I TOTAL_MIRROR_COUNT
+mirrors in the layout then no new mirrors will be created.
 .TP
 .I SETSTRIPE_OPTIONS
-The layout of one mirror. The options are the same as those for
-.BR lfs-setstripe (1)
-command.
+These options specify the layout of the mirrors,
+they can be a plain layout with specific striping pattern
+or a composite layout like Progressive File Layout (PFL) (see
+.BR lfs-setstripe (1)).
 If
 .I SETSTRIPE_OPTIONS
 are not specified, then the stripe options inherited
@@ -143,17 +152,11 @@ from the previous component will be used. This option cannot be specified with
 .I VICTIM_FILE
 option.
 .TP
-.BR -f ", " --file " " \fIVICTIM_FILE
-The layout of
-.I VICTIM_FILE
-will be merged as a mirror added to the mirrored file.
-This option cannot be specified with
-.I SETSTRIPE_OPTIONS
-option.
-.TP
 .BR --no-verify
 This option indicates not to verify the mirror(s) from victim file(s) in case
-the victim file(s) contains the same data as the original mirrored file.
+the victim file(s) contains the same data as the original mirrored file. This
+option can save siginificant time on file comparison if the file size is large,
+but it should only be used when the file contents are known to be the same.
 .TP
 .BR --stats
 This option enables progress updates every 5 seconds, in YAML format.
@@ -163,7 +166,7 @@ This option enables progress updates every
 .I STATS_INTERVAL
 seconds, in YAML format.
 .TP
-.BR -W ", " --bandwidth " \fIBANDWIDTH_MB\fR[" MG ]
+.BR -W ", " --bandwidth " " \fIBANDWIDTH_MB [ MG ]
 Limit the read and write bandwidth a mirror extend consumes to no more than
 .I BANDWIDTH_MB
 MiB/s. An optional suffix can be used to specify units in
