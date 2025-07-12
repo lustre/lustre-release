@@ -1,51 +1,52 @@
-.TH LFS-QUOTA 1 2022-02-26 "Lustre" "Lustre Utilities"
+.TH LFS-QUOTA 1 2025-07-11 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-quota \- display quota limits and status for users, groups, or projects.
 .SH SYNOPSIS
 .SY "lfs quota"
-.RB [ -q | --quiet ]
-.RB [ -v | --verbose ]
-.RB [ -h | --human-readable ]
-.RB [ -o | --ost
-.IR OBD_UUID | OST_IDX
-.RB "| " -m | --mdt
-.IR MDT_IDX ]
-.RB [ -u | --user
-.IR USER " |"
-.BI -g | --group GROUP
-.BR "| " -p | --projid
-.IR PROJID ]
-.RB [ --pool
-.IR OST_POOL_NAME ]
-.RB [ --delimiter
-.IR DELIMITER ]
-.EX
 .RB [ --blocks | --busage | --space ]
 .RB [ --block-softlimit | --bsoftlimit ]
 .RB [ --block-hardlimit | --bhardlimit ]
 .RB [ --block-grace | --bgrace | --btime ]
+.RB [ --delimiter
+.IR DELIMITER ]
 .RB [ --filesystem | --mount-point ]
+.RB [ -h | --human-readable ]
 .RB [ --inodes | --iusage ]
 .RB [ --inode-softlimit | --isoftlimit ]
 .RB [ --inode-hardlimit | --ihardlimit ]
 .RB [ --inode-grace | --igrace | --itime ]
-.EE
+.RB [{ -o | --ost
+.IR OBD_UUID | OST_IDX\c
+.RB "}|{" -m | --mdt
+.IR MDT_IDX }]
+.RB [ --pool
+.IR OST_POOL_NAME ]
+.RB [ -q | --quiet ]
+.RB [{ -u | --user
+.IR USER "}|{"\c
+.BR -g | --group
+.IR GROUP "}|{"\c
+.BR -p | --projid
+.IR PROJID }]
+.RB [ -v | --verbose ]
 .RI [ MOUNT_POINT " ...]"
 .SY "lfs quota"
-.BR [ -hq ]
 .RB { -U | --default-usr | -G | --default-grp | -P | --default-prj }
 .RI [ MOUNT_POINT " ...]"
 .SY "lfs quota"
-.B -t | --times
+.BR -t | --times
 .RB { -u | -g | -p }
 .RI [ MOUNT_POINT " ...]"
 .SY "lfs quota"
-.B -a | --all
+.BR -a | --all
 .RB { -u | -g | -p }
+.RB [ -s
+.IR START_QID ]
+.RB [ -e
+.IR END_QID ]
 .RI [ MOUNT_POINT " ...]"
 .YS
 .SH DESCRIPTION
-.PP
 .TP
 .BR "lfs quota " [ \fIMOUNT_POINT " ...]"
 Display disk usage and limits for individual users, groups, and projects for
@@ -56,10 +57,56 @@ individual MDTs and OSTs can be specified with the
 .B --ost
 or
 .B --mdt
-options.  A user, group, or project ID can be specified.
+options. A user, group, or project ID can be specified.
 If user, group, and project are omitted, quotas for the
 current uid/gid/projid are shown.
-If no MOUNT_POINT is specified, quotas for all Lustre mountpoints will be shown.
+If no
+.I MOUNT_POINT
+is specified, quotas for all Lustre mountpoints will be shown.
+.TP
+.BR "lfs quota " { -U | -G | -P "} [" \fIMOUNT_POINT " ...]"
+Display default quota values for users, groups, or projects.
+This command requires superuser permissions.
+.TP
+.BR "lfs quota -a" " {" -u | -g | -p "} [" \fIMOUNT_POINT " ...]
+Display disk usage and limits for all users, groups, or projects that exist
+across all mounted filesystems.
+.B --start-qid
+and
+.B --end-qid
+can be specified to have only a select range of qids for the given group be
+shown.
+.TP
+.BR "lfs quota -t" " {" -u | -g | -p "} [" \fIMOUNT_POINT " ...]"
+Display grace times for users, groups, or projects.
+Time values use the
+.RB \(dqXX w XX d XX h XX m XX s \(dq
+format, which specifies weeks, days, hours, minutes, seconds.
+.SH OPTIONS
+.TP
+.BR --blocks ", " --busage ", " --space ", " --kbytes
+Print only the
+.BR kbytes / usage
+column representing the block space usage.
+If other column options are specified, all specified columns will be printed.
+.TP
+.BR --block-softlimit ", " --bsoftlimit
+Print only the
+.B bquota
+column representing the block soft-limit.
+If other column options are specified, all specified columns will be printed.
+.TP
+.BR --block-hardlimit ", " --bhardlimit
+Print only the
+.B blimit
+column representing the block hard-limit.
+If other column options are specified, all specified columns will be printed.
+.TP
+.BR --blocks-grace ", " --bgrace ", " --btime
+Print only the
+.B bgrace
+column representing the block grace time.
+If other column options are specified, all specified columns will be printed.
 .TP
 .BR -d ", " --delimiter = \fIDELIMITER
 Use the string
@@ -67,83 +114,75 @@ Use the string
 as the column delimiter. This allows for easier parsing of the output, and could
 be used to put the output into CVS format for a spreadsheet.
 .TP
-.BR -h | --human-readable
+.BR --filesystem ", " --mount-point
+Print only the
+.B filesystem
+column representing either the mount point or device name.
+If other column options are specified, all specified columns will be printed.
+.TP
+.BR -h ", " --human-readable
 This will change the formatting of
 block storage and time values. Without this option block storage values
 are in kilobytes and times are in seconds. With this option block storage
 values use the common metric binary suffixes
 .BR K ", " M ", " G ", " T ", " P ", and " E
 which specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60 bytes,
-respectively.  Time values will use the "XXwXXdXXhXXmXXs" format, which
-specifies weeks, days, hours, minutes, seconds.
+respectively.
 .TP
-.BR --blocks | --busage | --space | --kbytes
-Print only the
-.BR kbytes / usage
-column representing the block space usage.
-If other column options are specified, all specified columns will be printed.
-.TP
-.BR --block-softlimit | --bsoftlimit
-Print only the
-.B bquota
-column representing the block soft-limit.
-If other column options are specified, all specified columns will be printed.
-.TP
-.BR --block-hardlimit | --bhardlimit
-Print only the
-.B blimit
-column representing the block hard-limit.
-If other column options are specified, all specified columns will be printed.
-.TP
-.BR --blocks-grace | --bgrace | --btime
-Print only the
-.B bgrace
-column representing the block grace time.
-If other column options are specified, all specified columns will be printed.
-.TP
-.BR --filesystem | --mount-point
-Print only the
-.B filesystem
-column representing either the mount point or device name.
-If other column options are specified, all specified columns will be printed.
-.TP
-.BR -g | --group " {" \fIGROUP | \fIGID }
-Display quota information for group name \fIGROUP\fR or numeric \fIGID\fR.
-.TP
-.BR --inodes | --iusage | --files
+.BR --inodes ", " --iusage ", " --files
 Print only the
 .B files
 column representing the number of inodes used.
 If other column options are specified, all specified columns will be printed.
 .TP
-.BR --inode-softlimit | --isoftlimit
+.BR --inode-softlimit ", " --isoftlimit
 Print only the
 .B iquota
 column representing the inode soft-limit.
 If other column options are specified, all specified columns will be printed.
 .TP
-.BR --inode-hardlimit | --ihardlimit
+.BR --inode-hardlimit ", " --ihardlimit
 Print only the
 .B ilimit
 column representing the inode hard-limit.
 If other column options are specified, all specified columns will be printed.
 .TP
-.BR --ilocks-grace | --igrace | --itime
+.BR --ilocks-grace ", " --igrace ", " --itime
 Print only the
 .B igrace
 column representing the inode grace time.
 If other column options are specified, all specified columns will be printed.
 .TP
-.BR -m | --mdt " " \fIMDT_IDX
-Display quota information for MDT \fIMDT_IDX\fR.
+.BR -q ", " --quiet
+Do not display the table or column headers,
+all other information will be printed.
+.SS SINGLE QUOTA
+The following options are only available when none of
+.BR -a ", " -t ", " -U ", " -G ", and " -P
+are specified.
 .TP
-.BR -o | --ost " " \fIOST_IDX
-Display quota information for OST \fIOST_IDX\fR.
+.BR -g ", " --group " {" \fIGROUP | \fIGID }
+Display quota information for group name
+.I GROUP
+or numeric
+.IR GID .
+Can be used without specifying the mount point to get quota information
+from all filesystems for the specified
+.IR GROUP | GID .
 .TP
-.BR --pool " " \fIPOOL_NAME
-Display quota information for OST pool \fIPOOL_NAME\fR.
+.BR -m ", " --mdt " " \fIMDT_IDX
+Display quota information for MDT
+.IR MDT_IDX .
 .TP
-.BR -p | --projid " {" \fIPROJID | \fIPROJNAME }
+.BR -o ", " --ost " " \fIOST_IDX
+Display quota information for OST
+.IR OST_IDX .
+.TP
+.BI --pool " POOL_NAME"
+Display quota information for OST pool
+.IR POOL_NAME .
+.TP
+.BR -p ", " --projid " {" \fI PROJECT | \fIPROJID }
 Display quota information for project
 .IR PROJID | PROJNAME .
 A username or group name can be used in place of
@@ -153,15 +192,11 @@ by specifying
 or
 .BI g: GROUPNAME
 respectively.
+Can be used without specifying the mount point to get quota information
+from all filesystems for the specified
+.IR PROJID .
 .TP
-.BR -q | --quiet
-Display only the line containing the data.
-The line saying what the data is, and the column headers will not be printed.
-.TP
-.BR -g | --group " {" \fIGROUP | \fIGID }
-Display quota information for group name \fIGROUP\fR or numeric \fIGID\fR.
-.TP
-.BR -u | --user " {" \fIUSER \fR| \fIUID \fR}
+.BR -u ", " --user " {" \fIUSER | \fIUID }
 Display quota information for user name
 .I USER
 or numeric
@@ -170,27 +205,40 @@ Can be used without specifying the mount point to get quota information
 from all filesystems for the specified
 .IR USER | UID .
 .TP
-.BR -p | --projid " " \fIPROJID
-Display quota information for project \fIPROJID\fR.
-.TP
-.BR -v | --verbose
+.BR -v ", " --verbose
 Display per-MDT and per-OST statistics in addition
 to the usual system wide data. An asterisk near the OST or MDT means that
 the quota is exceeded only for that specific target. The user is over the
 quota only if an asterisk is near the whole filesystem usage.
 Inactive target will also be printed but marked as "inact".
+.SS ALL QUOTA
+These options are only available when
+.BR -a | --all
+is specified.
 .TP
-.BR "lfs quota " { -U | -G | -P "} " MOUNT_POINT
-Display default quota values for users, groups, or projects.
-This command requires super user permissions.
+.BR -e ", " --end-qid \fIEND_QID
+Specify the end of a range for qids to be shown.
+If
+.I START_QID
+is not specified then the range will go from 0 to
+.IR END_QID.
 .TP
-.BR -G | --default-grp " {" \fIGROUP | \fIGID }
+.BR -s ", " --start-qid " " \fISTART_QID
+Specify the start of a range for qids to be shown.
+If
+.I END_QID
+is not specified then the range will go from
+.I START_QID
+until the qid with the highest value is printed.
+.SS DEFAULT QUOTA
+.TP
+.BR -G ", " --default-grp " {" \fIGROUP | \fIGID }
 Display default quota limits for group name
 .I GROUP
 or numeric
 .IR GID .
 .TP
-.BI -P " PROJID"
+.BR -P ", " --default-prj " {" \fIPROJECT | \fIPROJID }
 Display default quota limits for project
 .I PROJID
 or
@@ -204,41 +252,45 @@ Display default quota limits for username
 or numeric
 .IR UID .
 .TP
-.BR "lfs quota -a" " {" -u | -g | -p "} " \fIMOUNT_POINT
-.TP
-Display all quota setting for all users, groups, or projects.
-.TP
-.B "lfs quota -a -u"
-.TP
-Display all quota settings for all users across all mounted filesystems.
-.TP
-.BR "lfs quota -t" | --times " {" -u | -g | -p "} [" --pool " \fIPOOL_NAME\fR] " \fIMOUNT_POINT
-Display grace times for users, groups, or projects.
-Time values use the "XXwXXdXXhXXmXXs" format, which specifies
-weeks, days, hours, minutes, seconds.
+.BI --pool " POOL_NAME"
+Display default quota information for OST pool
+.IR POOL_NAME .
 .SH EXAMPLES
-.TP
+Display quotas and usage for current user, group, and project:
+.EX
 .B $ lfs quota /mnt/lustre
-Display quotas and usage for current user, group, and project
-.TP
+.EE
+.PP
+Display quotas and usage for user 'bob':
+.EX
 .B # lfs quota -u bob /mnt/lustre
-Display quotas and usage for user 'bob'
-.TP
+.EE
+.PP
+Display default user quotas:
+.EX
 .B # lfs quota -U /mnt/lustre
-Display default user quotas
-.TP
+.EE
+.PP
+Display grace times for user quotas on /mnt/lustre:
+.EX
 .B $ lfs quota -t -u /mnt/lustre
-Display grace times for user quotas on /mnt/lustre
-.TP
-.B # lfs quota -u ivan --pool flash_pool /mnt/lustre
+.EE
+.PP
 Display quotas and usage for user
 .B ivan
 from the OST pool
-.BR flash_pool .
-.TP
-.B $ lfs quota -t -g --pool flash_pool /mnt/lustre
+.BR flash_pool :
+.EX
+.B # lfs quota -u ivan --pool flash_pool /mnt/lustre
+.EE
+.PP
 Display grace times for group quotas for the OST pool
-.BR flash_pool .
+.BR flash_pool :
+.EX
+.B $ lfs quota -t -g --pool flash_pool /mnt/lustre
+.EE
+.PP
+Display only the filesystem blocks and inodes columns:
 .EX
 .B $ lfs quota --filesystem --blocks --inodes
 Disk quotas for usr root (uid 0):
@@ -250,6 +302,8 @@ Disk quotas for grp root (gid 0):
      /mnt/lustre     5236     308
     /mnt/lustre2     5236     308
 .EE
+.PP
+Change the delimiter to make the table available in CVS format:
 .EX
 .B $ lfs quota --delimiter="," /mnt/lustre
 Disk quotas for usr root (uid 0):
@@ -259,6 +313,12 @@ Disk quotas for grp root (gid 0):
       Filesystem, kbytes, bquota, blimit, bgrace,  files, iquota, ilimit, igrace
      /mnt/lustre,   4360,      0,      0,      -,    265,      0,      0,      -
 .EE
+.SH AVAILABILITY
+.B lfs quota
+is part of the
+.BR lustre (7)
+filesystem package since release 1.7.0
+.\" Added in commit 1.6.0-2132-gcefa8cda2b
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-setquota(1),
