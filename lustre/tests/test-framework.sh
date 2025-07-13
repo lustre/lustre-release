@@ -1131,6 +1131,7 @@ load_modules_local() {
 	load_module ptlrpc/gss/ptlrpc_gss
 	load_module fld/fld
 	load_module fid/fid
+	load_module ec/ec
 	load_module lmv/lmv
 	load_module osc/osc
 	load_module lov/lov

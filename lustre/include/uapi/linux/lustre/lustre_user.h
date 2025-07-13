@@ -789,6 +789,7 @@ enum lov_pattern {
 	LOV_PATTERN_NONE =		0x000,
 	LOV_PATTERN_RAID0 =		0x001,
 	LOV_PATTERN_RAID1 =		0x002,
+	LOV_PATTERN_PARITY	 =	0x004,
 	LOV_PATTERN_MDT =		0x100,
 	LOV_PATTERN_OVERSTRIPING =	0x200,
 	LOV_PATTERN_FOREIGN =		0x400,
@@ -813,6 +814,7 @@ static inline bool lov_pattern_supported(enum lov_pattern pattern)
 
 	return pattern_base == LOV_PATTERN_RAID0 ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
+	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_PARITY) ||
 	       pattern_base == LOV_PATTERN_MDT;
 }
 

@@ -1840,6 +1840,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LOV_PATTERN_RAID0);
 	LASSERTF(LOV_PATTERN_RAID1 == 0x00000002UL, "found 0x%.8xUL\n",
 		(unsigned)LOV_PATTERN_RAID1);
+	LASSERTF(LOV_PATTERN_PARITY == 0x00000004UL, "found 0x%.8xUL\n",
+		 (unsigned int)LOV_PATTERN_PARITY);
 	LASSERTF(LOV_PATTERN_MDT == 0x00000100UL, "found 0x%.8xUL\n",
 		(unsigned)LOV_PATTERN_MDT);
 	LASSERTF(LOV_PATTERN_OVERSTRIPING == 0x00000200UL, "found 0x%.8xUL\n",
