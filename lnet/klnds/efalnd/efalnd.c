@@ -2114,6 +2114,7 @@ kefalnd_destroy_tx_pool(struct kefa_ni *efa_ni)
 		}
 	}
 	LIBCFS_FREE(tx_pool->obj_arr, pool_size * sizeof(struct kefa_tx));
+	tx_pool->obj_arr = NULL;
 }
 
 static int
@@ -2611,6 +2612,7 @@ kefalnd_destroy_fmr_pool(struct kefa_obj_pool *fmr_pool)
 	}
 
 	LIBCFS_FREE(fmr_pool->obj_arr, fmr_pool->pool_size * sizeof(struct kefa_fmr));
+	fmr_pool->obj_arr = NULL;
 }
 
 static int
