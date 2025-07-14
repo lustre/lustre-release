@@ -202,6 +202,9 @@ enum llapi_layout_verbose  {
 	VERBOSE_EXT_SIZE	=  0x40000,
 	VERBOSE_INHERIT		=  0x80000,
 	VERBOSE_INHERIT_RR	= 0x100000,
+	VERBOSE_COMPRESS_TYPE	= 0x200000,
+	VERBOSE_COMPRESS_LEVEL	= 0x400000,
+	VERBOSE_COMPRESS_CHUNK	= 0x800000,
 	VERBOSE_DEFAULT		= VERBOSE_STRIPE_COUNT | VERBOSE_STRIPE_SIZE |
 				  VERBOSE_STRIPE_OFFSET | VERBOSE_POOL |
 				  VERBOSE_OBJID | VERBOSE_GENERATION |
@@ -212,11 +215,6 @@ enum llapi_layout_verbose  {
 				  VERBOSE_MIRROR_ID | VERBOSE_EXT_SIZE |
 				  VERBOSE_INHERIT | VERBOSE_INHERIT_RR
 };
-/* Compatibility with original names */
-#define VERBOSE_SIZE	VERBOSE_STRIPE_SIZE
-#define VERBOSE_COUNT	VERBOSE_STRIPE_COUNT
-#define VERBOSE_OFFSET	VERBOSE_STRIPE_OFFSET
-#define VERBOSE_LAYOUT	VERBOSE_PATTERN
 
 enum {
 	NEWERXY_ATIME = 0,	/* neweraY */
@@ -993,10 +991,11 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
  * stored using RAID0.  That is, data will be split evenly and without
  * redundancy across all OSTs in the layout.
  */
-#define LLAPI_LAYOUT_RAID0		0ULL
-#define LLAPI_LAYOUT_MDT		2ULL
-#define LLAPI_LAYOUT_OVERSTRIPING	4ULL
-#define LLAPI_LAYOUT_FOREIGN		8ULL
+#define LLAPI_LAYOUT_RAID0		0x00000000ULL
+#define LLAPI_LAYOUT_MDT		0x00000002ULL
+#define LLAPI_LAYOUT_OVERSTRIPING	0x00000004ULL
+#define LLAPI_LAYOUT_FOREIGN		0x00000008ULL
+#define LLAPI_LAYOUT_COMPRESS		0x00000010ULL
 
 /**
  * The layout includes a specific set of OSTs on which to allocate.

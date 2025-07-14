@@ -6858,7 +6858,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			break;
 		case 'c':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
-				param->fp_verbose |= VERBOSE_COUNT;
+				param->fp_verbose |= VERBOSE_STRIPE_COUNT;
 				param->fp_max_depth = 0;
 			}
 			break;
@@ -7246,7 +7246,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 		switch (c) {
 		case 'c':
 		case 'T':
-			param.fp_verbose |= VERBOSE_COUNT;
+			param.fp_verbose |= VERBOSE_STRIPE_COUNT;
 			break;
 		case 'D':
 			param.fp_get_default_lmv = 1;
