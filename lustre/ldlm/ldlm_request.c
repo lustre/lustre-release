@@ -1950,17 +1950,30 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 	pf = ldlm_cancel_lru_policy(ns, lru_flags);
 	LASSERT(pf != NULL);
 
+	spin_lock(&ns->ns_lock);
+	if (ns->ns_lock_cache_ops &&
+	    ns->ns_lock_cache_ops->llco_try_batch_demote_locks) {
+		int batch_size = (min == INT_MAX) ? INT_MAX :
+				 LDLM_LFRU_PRIV_PER_ROUND_LIMIT;
+
+		ns->ns_lock_cache_ops->llco_try_batch_demote_locks(ns,
+								   batch_size);
+	}
+	spin_unlock(&ns->ns_lock);
+
 	/* For any flags, stop scanning if @max is reached. */
-	while (!list_empty(&ns->ns_unused_list) && (max == 0 || added < max)) {
+	while (!list_empty(&ns->ns_unused_normal_list) &&
+	       (max == 0 || added < max)) {
 		struct ldlm_lock *lock;
 		struct list_head *item, *next;
 		enum ldlm_policy_res result;
 		ktime_t last_use = ktime_set(0, 0);
 
 		spin_lock(&ns->ns_lock);
-		item = no_wait ? ns->ns_last_pos : &ns->ns_unused_list;
+		item = no_wait ? ns->ns_last_pos :
+		       &ns->ns_unused_normal_list;
 		for (item = item->next, next = item->next;
-		     item != &ns->ns_unused_list;
+		     item != &ns->ns_unused_normal_list;
 		     item = next, next = item->next) {
 			lock = list_entry(item, struct ldlm_lock, l_lru);
 
@@ -1976,7 +1989,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 			 */
 			ldlm_lock_remove_from_lru_nolock(lock);
 		}
-		if (item == &ns->ns_unused_list) {
+		if (item == &ns->ns_unused_normal_list) {
 			spin_unlock(&ns->ns_lock);
 			break;
 		}
@@ -2023,7 +2036,8 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		lock_res_and_lock(lock);
 		/* Check flags again under the lock. */
 		if (ldlm_is_canceling(lock) ||
-		    ldlm_lock_remove_from_lru_check(lock, last_use) == 0) {
+		    ldlm_lock_remove_from_lru_check(lock, last_use, false) ==
+		    0) {
 			/*
 			 * Another thread is removing lock from LRU, or
 			 * somebody is already doing CANCEL, or there

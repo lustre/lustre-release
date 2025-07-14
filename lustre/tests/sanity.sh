@@ -16721,10 +16721,18 @@ test_124c() {
 	echo "sleep $((recalc_p * 2)) seconds..."
 	sleep $((recalc_p * 2))
 
+	# There's threshold of priv_list eviction each round, hence
+	# priv_count here may larger than 0. And there maybe lru shrink
+	# invoked just after $priv_count and before $remaining which
+	# could cause $remaining smaller than 0
+	local priv_count=$($LCTL get_param -n $nsdir.lock_unused_priv_count)
 	local remaining=$($LCTL get_param -n $nsdir.lock_unused_count)
+	local normal_count=$((remaining - priv_count))
+
 	# restore lru_max_age
 	$LCTL set_param -n $nsdir.lru_max_age $max_age
-	[ $remaining -eq 0 ] || error "$remaining locks are not canceled"
+	(( normal_count <= 0 )) ||
+		error "$normal_count locks are not canceled"
 	unlinkmany $DIR/$tdir/f $nr
 }
 run_test 124c "LRUR cancel very aged locks"
@@ -16734,7 +16742,7 @@ test_124d() {
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
 		skip_env "no lru resize on server"
 
-	# cache ununsed locks on client
+	# cache unused locks on client
 	local nr=100
 
 	lru_resize_disable mdc
@@ -16743,9 +16751,9 @@ test_124d() {
 
 	# asynchronous object destroy at MDT could cause bl ast to client
 	test_mkdir $DIR/$tdir
+	stack_trap "unlinkmany $DIR/$tdir/f $nr" EXIT
 	createmany -o $DIR/$tdir/f $nr ||
 		error "failed to create $nr files in $DIR/$tdir"
-	stack_trap "unlinkmany $DIR/$tdir/f $nr" EXIT
 
 	ls -l $DIR/$tdir > /dev/null
 
@@ -16763,11 +16771,193 @@ test_124d() {
 	echo "sleep $((recalc_p * 2)) seconds..."
 	sleep $((recalc_p * 2))
 
+	local priv_count=$($LCTL get_param -n $nsdir.lock_unused_priv_count)
 	local remaining=$($LCTL get_param -n $nsdir.lock_unused_count)
+	local normal_count=$((remaining - priv_count))
 
-	[ $remaining -eq 0 ] || error "$remaining locks are not canceled"
+	(( normal_count <= 0 )) ||
+		error "$normal_count locks are not canceled"
 }
 run_test 124d "cancel very aged locks if lru-resize disabled"
+
+test_124e() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
+	local max_unused=$(default_lru_size)
+	echo "max_unused=$max_unused"
+	lru_resize_disable mdc $max_unused
+	$LCTL set_param $nsdir.lru_priv_score_threshold=1 ||
+		error "fail to set lru_priv_score_threshold"
+	stack_trap "$LCTL set_param $nsdir.lru_priv_score_threshold=1"
+
+	# cache unused locks on client
+	local nr=$((max_unused * 2))
+	mkdir_on_mdt0 $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir/empty $DIR/$tdir/files
+	stack_trap "unlinkmany $DIR/$tdir/files/f $nr"
+	createmany -i0 -o $DIR/$tdir/files/f $nr ||
+		error "failed to create $nr files in $DIR/$tdir/files"
+	# clean cache
+	cancel_lru_locks mdc
+	sleep 5
+	# dir lock should be placed in priv list
+	for ((i = 0; i < 10; i++)); do
+		stat $DIR/$tdir/empty > /dev/null
+	done
+	# try to overflow lru cache
+	ls -l $DIR/$tdir/files > /dev/null
+
+	local unused_cnt=$($LCTL get_param -n $nsdir.lock_unused_count)
+	local priv_cnt=$($LCTL get_param -n $nsdir.lock_unused_priv_count)
+	local priv_hits=$($LCTL get_param -n $nsdir.lock_lru_priv_hits)
+	(( priv_cnt > 0 )) || error "priv_cnt is 0"
+	(( priv_hits > 0 )) || error "priv_hits is 0"
+
+	# lock should been in priv list
+	stat $DIR/$tdir/empty > /dev/null
+	sleep 2
+
+	local new_unused_cnt=$($LCTL get_param -n $nsdir.lock_unused_count)
+	local new_priv_cnt=$($LCTL get_param -n $nsdir.lock_unused_priv_count)
+	local new_priv_hits=$($LCTL get_param -n $nsdir.lock_lru_priv_hits)
+	(( new_unused_cnt == unused_cnt )) ||
+		error "new_cnt($new_unused_cnt) != unused_cnt($unused_cnt)"
+	(( priv_cnt == new_priv_cnt )) ||
+		error "priv_cnt($priv_cnt) != new_priv_cnt($new_priv_cnt)"
+	(( new_priv_hits > priv_hits )) ||
+		error "new_priv_hits($new_priv_hits) <= priv_hits($priv_hits)"
+}
+run_test 124e "LFRU keep priv locks from eviction"
+
+test_124f() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
+	local max_unused=$(default_lru_size)
+	echo "max_unused=$max_unused"
+	lru_resize_disable mdc $max_unused
+	stack_trap "$LCTL set_param $nsdir.lru_priv_score_threshold=1"
+
+	# threshold inc
+	local priv_thres=1
+	$LCTL set_param -n $nsdir.lru_priv_score_threshold=$priv_thres ||
+		error "fail to set lru_priv_score_threshold"
+	# cache unused locks on client
+	local nr=$((max_unused * 4))
+	mkdir_on_mdt0 $DIR/$tdir
+	mkdir_on_mdt0 $DIR/$tdir/files
+	stack_trap "unlinkmany $DIR/$tdir/files/f $nr"
+	createmany -i0 -o $DIR/$tdir/files/f $nr ||
+		error "failed to create $nr files in $DIR/$tdir/files"
+	# clean cache
+	cancel_lru_locks mdc
+	sleep 5
+	# try to overflow lru cache
+	ls -l $DIR/$tdir/files > /dev/null
+	local inc_priv_thres=$(
+		$LCTL get_param -n $nsdir.lru_priv_score_threshold
+	)
+	(( inc_priv_thres > priv_thres )) ||
+		error "new_thres($inc_priv_thres) <= threshold($priv_thres)"
+
+	# threshold dec
+	priv_thres=7
+	$LCTL set_param $nsdir.lru_priv_score_threshold=$priv_thres ||
+		error "failed to set lru_priv_score_threshold to $priv_thres"
+	# clean cache
+	cancel_lru_locks mdc
+	sleep 5
+	# try to overflow lru cache
+	ls -l $DIR/$tdir/files > /dev/null
+	local dec_priv_thres=$(
+		$LCTL get_param -n $nsdir.lru_priv_score_threshold
+	)
+	(( dec_priv_thres < priv_thres )) ||
+		error "new_thres($dec_priv_thres)>=priv_thres($priv_thres)"
+}
+run_test 124f "LFRU priv threshold inc/dec adjustment"
+
+test_124g_run() {
+	local client_nid="$1"
+	local base_dir="$2/$4"
+	local lru_size=$3
+	local policy="$4"
+	local -n ref_enq_res=$5
+	local dummy_nr=$lru_size
+	local nr=$(( lru_size / 4 ))
+
+	mkdir_on_mdt0 "$base_dir"
+	mkdir_on_mdt0 "$base_dir"/dummy
+	createmany -i0 -o "$base_dir"/dummy/f $dummy_nr ||
+		error "failed to create $dummy_nr files in $base_dir/dummy"
+	createmany -i0 -o "$base_dir"/f $nr ||
+		error "failed to create $nr files"
+
+	# record existing enqueue stats
+	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
+	$LCTL set_param $nsdir.lock_cache_policy="$policy" ||
+		echo "failed to set lock_cache_policy to $policy"
+	cancel_lru_locks mdc
+	sleep 5
+	$LCTL get_param $nsdir.lock_unused_count
+
+	local nsservdir="mdt.*-MDT0000.exports.'$client_nid'.ldlm_stats"
+	local res=$(do_facet mds1 $LCTL get_param "$nsservdir")
+	# res format as:
+	# 	ldlm_enqueue              1022 samples [reqs]
+	local o_enq=$(echo "$res" | awk '/ldlm_enqueue/ {print $2}')
+
+	do_facet mds1 $LCTL get_param "$nsservdir"
+	echo "start stat & ls ops..."
+	for ((i = 0; i < 10; i++)); do
+		for ((j = 0; j < nr; j++)); do
+			for ((cnt = 0; cnt < 10; cnt++)); do
+				stat "$base_dir"/f$j > /dev/null
+			done
+		done
+
+		ls -l "$base_dir"/dummy > /dev/null
+		# test only
+		priv_cnt=$($LCTL get_param -n $nsdir.lock_unused_priv_count)
+		res=$(do_facet mds1 $LCTL get_param "$nsservdir")
+		local temp_enq=$(echo "$res" | awk '/ldlm_enqueue/ {print $2}')
+		echo "round$i done, priv_cnt=$priv_cnt, temp_enq=$temp_enq"
+	done
+
+	res=$(do_facet mds1 $LCTL get_param "$nsservdir")
+	local n_enq=$(echo "$res" | awk '/ldlm_enqueue/ {print $2}')
+	ref_enq_res=$(( n_enq - o_enq ))
+	echo "base_dir=$base_dir, priv=$priv_thres"
+	echo "o_enq=$o_enq, n_enq=$n_enq, ref_enq_res=$ref_enq_res"
+	rm -rf $DIR/$tdir/* || error "fail to remove files"
+}
+
+test_124g() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	(( $MDS1_VERSION >= $(version_code 2.16.61) )) ||
+		skip "Need MDS version with at least 2.16.61"
+
+	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
+	local lru_size=$(default_lru_size)
+	lru_resize_disable mdc $lru_size
+	stack_trap "$LCTL set_param $nsdir.lock_cache_policy=LFRU"
+
+	local cli_nid="0@lo"
+	if remote_mds; then
+		cli_nid=$($LCTL list_nids | grep -v "@lo" | head -1)
+	fi
+	mkdir_on_mdt0 $DIR/$tdir
+	local enq_priv_enabled
+	local enq_priv_disable
+	# test with lfru
+	test_124g_run "$cli_nid" "$DIR/$tdir" $lru_size "LFRU" enq_priv_enabled
+	# test with lru
+	test_124g_run "$cli_nid" "$DIR/$tdir" $lru_size "LRU" enq_priv_disable
+
+	echo ">> lfru_enable=$enq_priv_enabled, disable=$enq_priv_disable"
+}
+run_test 124g "LFRU performance test"
 
 test_125() { # 13358
 	$LCTL get_param -n llite.*.client_type | grep -q local ||

@@ -56,6 +56,16 @@ extern struct kset *ldlm_svc_kset;
 #define LDLM_DEFAULT_LRU_SHRINK_BATCH (16)
 #define LDLM_DEFAULT_SLV_RECALC_PCT (10)
 
+/* Min threshold. Only locks with score greater than this thresh could to be
+ * promoted to LFRU priv list.
+ */
+#define LDLM_LFRU_MIN_PRIV_THRESH (1)
+#define LDLM_LFRU_PRIV_LIST_RATIO_LIMIT (30)
+#define LDLM_LFRU_PRIV_PER_ROUND_LIMIT (10)
+#define LDLM_LFRU_UPDATE_WINDOW_DIV (10)
+/* An arbitrary cap for the LFRU score to prevent integer overflow. */
+#define LDLM_LFRU_PRIV_THRESH_CAP (254)
+
 /**
  * LDLM non-error return states
  */
@@ -351,6 +361,8 @@ struct ldlm_ns_bucket {
 enum {
 	/** LDLM namespace lock stats */
 	LDLM_NSS_LOCKS          = 0,
+	LDLM_NSS_LRU_PRIV_HITS	= 1,
+	LDLM_NSS_LRU_HITS	= 2,
 	LDLM_NSS_LAST
 };
 
@@ -381,6 +393,33 @@ enum ldlm_namespace_flags {
 	 /* lru_size is set even before connection */
 	LDLM_NS_LRU_SIZE_SET_BEFORE_CONN,
 	LDLM_NS_NUM_FLAGS
+};
+
+/* lock cache policy used on client side */
+enum ldlm_lock_cache_policy {
+	LDLM_LOCK_CACHE_LRU = 0,
+	LDLM_LOCK_CACHE_LFRU,
+};
+
+struct ldlm_lock_cache_ops {
+	/* Prereq: hold ns->ns_lock */
+	void (*llco_add_lock)(struct ldlm_namespace *ns,
+			      struct ldlm_lock *lock);
+	/* Prereq: hold ns->ns_lock */
+	int (*llco_remove_lock)(struct ldlm_namespace *ns,
+				struct ldlm_lock *lock);
+	/**
+	 *  (optional) demote lock from priv list to normal list.
+	 *  Prereq: hold ns->ns_lock
+	 */
+	void (*llco_demote_lock)(struct ldlm_namespace *ns,
+				 struct ldlm_lock *lock);
+	/**
+	 * (optional) try to demote @batch_size locks.
+	 * Prereq: hold ns->ns_lock
+	 */
+	int (*llco_try_batch_demote_locks)(struct ldlm_namespace *ns,
+					   int batch_size);
 };
 
 /*
@@ -451,10 +490,31 @@ struct ldlm_namespace {
 	 * to release from the head of this list.
 	 * Locks are linked via l_lru field in \see struct ldlm_lock.
 	 */
-	struct list_head	ns_unused_list;
-	/** Number of locks in the LRU list above */
-	int			ns_nr_unused;
+	struct list_head	ns_unused_normal_list;
 	struct list_head	*ns_last_pos;
+	/**
+	 * Implements a Least-Frequently/Recently-Used (LFRU) policy.
+	 * This scheme separates locks into a privileged list and a normal
+	 * list, promoting frequently accessed locks to the privileged list.
+	 * See https://arxiv.org/abs/1702.04078 for details.
+	 *
+	 * Scan-resistant behavior:
+	 * When running `ls -l $dir` on a large directory, the algorithm
+	 * limits cache pollution through dynamic threshold adjustment:
+	 * - Starting threshold: 1
+	 * - Lock scores are incremented on each LRU insertion
+	 * - Example: scores 3, 3, 4, 4, 4, ...
+	 *   * First lock (score=3 > threshold=1) → promoted, threshold → 3
+	 *   * Second lock (score=4 > threshold=3) → promoted, threshold → 4
+	 *   * Remaining locks (score≤4) → stay in normal list
+	 * Result: Only ~2 items promoted during the scan, minimal impact on
+	 * cache performance for frequently-used locks.
+	 */
+	struct list_head	ns_unused_priv_list;
+
+	/** Number of locks in both the normal and priv list */
+	unsigned int		ns_nr_unused;
+	unsigned int		ns_nr_priv;
 
 	/**
 	 * Maximum number of locks permitted in the LRU. If 0, means locks
@@ -462,6 +522,37 @@ struct ldlm_namespace {
 	 * controlled by available memory on this client and on server.
 	 */
 	unsigned int		ns_max_unused;
+	/**
+	 * Tracks the number of accesses in the current window. When it reaches
+	 * `ns_lfru_check_window_size`, we update the privilege threshold
+	 * based on the maximum access frequency observed in this window.
+	 */
+	unsigned int		ns_lfru_access_window_cnt;
+	unsigned int		ns_lfru_check_window_size;
+	/**
+	 * The threshold for promoting locks into the privileged list.
+	 */
+	__u8			ns_lfru_priv_score_threshold;
+	/**
+	 * The maximum access frequency observed for any lock within the
+	 * current window.
+	 * This is used to determine the threshold for promoting locks to
+	 * the privilege list.
+	 */
+	__u8			ns_lfru_max_freq;
+	/**
+	 * A cap on the proportion of privileged locks in the LRU list. The
+	 * value is a fraction of 256, allowing for fast bitwise right shift
+	 * instead of a slower division operation.
+	 */
+	__s8			ns_lfru_priv_ratio_limit_256;
+
+	enum ldlm_lock_cache_policy ns_lock_cache_policy : 3;
+	/**
+	 * LRU cache operations for this namespace.
+	 * \see struct ldlm_lock_cache_ops
+	 */
+	struct ldlm_lock_cache_ops *ns_lock_cache_ops;
 
 	/**
 	 * Cancel batch, if unused lock count exceed lru_size
@@ -764,6 +855,11 @@ enum lvb_type {
  */
 #define LDLM_GID_ANY  ((__u64)-1)
 
+enum lru_list_type {
+	LRU_NORMAL_LIST = 0,
+	LRU_PRIV = 1,
+};
+
 /**
  * LDLM lock structure
  *
@@ -863,7 +959,14 @@ struct ldlm_lock {
 
 	/* content type for lock value block */
 	enum lvb_type		l_lvb_type:3;
-	/* unsigned int		l_unused_bits:10; */
+	/* which list the lock is in */
+	enum lru_list_type	l_lru_type:1;
+	/* unsigned int		l_unused_bits:1; */
+	/**
+	 * Recent access frequency score used in the LFRU algorithm.
+	 * Increased when lock is added to LRU list.
+	 */
+	u8			l_lru_score;
 	u16			l_lvb_len;
 	/* u16			l_unused; */
 

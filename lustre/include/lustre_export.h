@@ -314,7 +314,7 @@ static inline int lprocfs_nid_ldlm_stats_init(struct nid_stat *tmp)
 	lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
 
 	debugfs_create_file("ldlm_stats", 0644, tmp->nid_debugfs,
-			    tmp->nid_stats, &ldebugfs_stats_seq_fops);
+			    tmp->nid_ldlm_stats, &ldebugfs_stats_seq_fops);
 
 	return 0;
 }

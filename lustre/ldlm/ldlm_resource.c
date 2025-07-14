@@ -120,6 +120,33 @@ static ssize_t lock_count_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(lock_count);
 
+static ssize_t lock_lru_priv_hits_show(struct kobject *kobj,
+				       struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	__u64 priv_hits;
+
+	priv_hits = lprocfs_stats_collector(ns->ns_stats,
+					    LDLM_NSS_LRU_PRIV_HITS,
+					    LPROCFS_FIELDS_FLAGS_SUM);
+	return scnprintf(buf, PAGE_SIZE, "%lld\n", priv_hits);
+}
+LUSTRE_RO_ATTR(lock_lru_priv_hits);
+
+static ssize_t lock_lru_hits_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	__u64 lru_hits;
+
+	lru_hits = lprocfs_stats_collector(ns->ns_stats, LDLM_NSS_LRU_HITS,
+					   LPROCFS_FIELDS_FLAGS_SUM);
+	return scnprintf(buf, PAGE_SIZE, "%lld\n", lru_hits);
+}
+LUSTRE_RO_ATTR(lock_lru_hits);
+
 static ssize_t lock_unused_count_show(struct kobject *kobj,
 				      struct attribute *attr,
 				      char *buf)
@@ -131,6 +158,16 @@ static ssize_t lock_unused_count_show(struct kobject *kobj,
 }
 LUSTRE_RO_ATTR(lock_unused_count);
 
+static ssize_t lock_unused_priv_count_show(struct kobject *kobj,
+					   struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", ns->ns_nr_priv);
+}
+LUSTRE_RO_ATTR(lock_unused_priv_count);
+
 static ssize_t lru_size_show(struct kobject *kobj, struct attribute *attr,
 			     char *buf)
 {
@@ -140,7 +177,7 @@ static ssize_t lru_size_show(struct kobject *kobj, struct attribute *attr,
 
 	if (ns_connect_lru_resize(ns))
 		nr = &ns->ns_nr_unused;
-	return sprintf(buf, "%u\n", *nr);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", *nr);
 }
 
 static ssize_t lru_size_store(struct kobject *kobj, struct attribute *attr,
@@ -158,6 +195,9 @@ static ssize_t lru_size_store(struct kobject *kobj, struct attribute *attr,
 		       ldlm_ns_name(ns));
 		/* Try to cancel all @ns_nr_unused locks. */
 		ldlm_cancel_lru(ns, INT_MAX, 0, LDLM_LRU_FLAG_CLEANUP);
+		/* clear lru stats as well */
+		ns->ns_lfru_access_window_cnt = 0;
+		ns->ns_lfru_max_freq = LDLM_LFRU_MIN_PRIV_THRESH;
 		return count;
 	}
 
@@ -406,6 +446,121 @@ static ssize_t dump_stack_on_error_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(dump_stack_on_error);
 
+static ssize_t lru_priv_score_threshold_show(struct kobject *kobj,
+					     struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 ns->ns_lfru_priv_score_threshold);
+}
+
+static ssize_t lru_priv_score_threshold_store(struct kobject *kobj,
+					      struct attribute *attr,
+					      const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	int tmp;
+
+	if (kstrtoint(buffer, 10, &tmp))
+		return -EINVAL;
+
+	ns->ns_lfru_priv_score_threshold = tmp;
+	/* clear lru stats as well */
+	ns->ns_lfru_access_window_cnt = 0;
+	ns->ns_lfru_max_freq = LDLM_LFRU_MIN_PRIV_THRESH;
+
+	return count;
+}
+LUSTRE_RW_ATTR(lru_priv_score_threshold);
+
+static ssize_t lru_priv_ratio_limit_show(struct kobject *kobj,
+					 struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	int ratio_100 = ns->ns_lfru_priv_ratio_limit_256 * 100 / 256;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", ratio_100);
+}
+
+static ssize_t lru_priv_ratio_limit_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	int tmp;
+
+	if (kstrtoint(buffer, 10, &tmp))
+		return -EINVAL;
+
+	ns->ns_lfru_priv_ratio_limit_256 = tmp * 256 / 100;
+
+	return count;
+}
+LUSTRE_RW_ATTR(lru_priv_ratio_limit);
+
+static ssize_t lock_cache_policy_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%s\n",
+			 ns->ns_lock_cache_policy == LDLM_LOCK_CACHE_LRU ?
+			 "LRU" : "LFRU");
+}
+
+static ssize_t lock_cache_policy_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	int policy = -1;
+	char policy_name[16] = {0};
+	size_t len = (count < sizeof(policy_name)) ? count :
+		     sizeof(policy_name) - 1;
+
+	memcpy(policy_name, buffer, len);
+	policy_name[len] = '\0';
+
+	if (strncasecmp(policy_name, "LRU", 3) == 0)
+		policy = LDLM_LOCK_CACHE_LRU;
+	else if (strncasecmp(policy_name, "LFRU", 4) == 0)
+		policy = LDLM_LOCK_CACHE_LFRU;
+	else
+		return -EINVAL;
+
+	if (policy == ns->ns_lock_cache_policy)
+		return count;
+
+	spin_lock(&ns->ns_lock);
+	switch (policy) {
+	case LDLM_LOCK_CACHE_LRU:
+		ns->ns_lock_cache_policy = policy;
+		ns->ns_lock_cache_ops = &ldlm_lru_cache_ops;
+		break;
+	case LDLM_LOCK_CACHE_LFRU:
+		ns->ns_lock_cache_policy = policy;
+		ns->ns_lock_cache_ops = &ldlm_lfru_cache_ops;
+		ns->ns_lfru_access_window_cnt = 0;
+		ns->ns_lfru_priv_score_threshold = LDLM_LFRU_MIN_PRIV_THRESH;
+		ns->ns_lfru_max_freq = LDLM_LFRU_MIN_PRIV_THRESH;
+		break;
+	default:
+		spin_unlock(&ns->ns_lock);
+		return -EINVAL;
+	}
+	spin_unlock(&ns->ns_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(lock_cache_policy);
+
 #ifdef HAVE_SERVER_SUPPORT
 static ssize_t ctime_age_limit_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
@@ -559,7 +714,10 @@ LUSTRE_RW_ATTR(max_parallel_ast);
 static struct attribute *ldlm_ns_attrs[] = {
 	&lustre_attr_resource_count.attr,
 	&lustre_attr_lock_count.attr,
+	&lustre_attr_lock_lru_priv_hits.attr,
+	&lustre_attr_lock_lru_hits.attr,
 	&lustre_attr_lock_unused_count.attr,
+	&lustre_attr_lock_unused_priv_count.attr,
 	&lustre_attr_ns_recalc_pct.attr,
 	&lustre_attr_lru_size.attr,
 	&lustre_attr_lru_cancel_batch.attr,
@@ -567,6 +725,9 @@ static struct attribute *ldlm_ns_attrs[] = {
 	&lustre_attr_early_lock_cancel.attr,
 	&lustre_attr_dirty_age_limit.attr,
 	&lustre_attr_dump_stack_on_error.attr,
+	&lustre_attr_lru_priv_score_threshold.attr,
+	&lustre_attr_lru_priv_ratio_limit.attr,
+	&lustre_attr_lock_cache_policy.attr,
 #ifdef HAVE_SERVER_SUPPORT
 	&lustre_attr_ctime_age_limit.attr,
 	&lustre_attr_lock_timeouts.attr,
@@ -629,6 +790,12 @@ static int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
 	lprocfs_counter_init(ns->ns_stats, LDLM_NSS_LOCKS,
 			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_LOCKS,
 			     "locks");
+	lprocfs_counter_init(ns->ns_stats, LDLM_NSS_LRU_PRIV_HITS,
+			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_LOCKS,
+			     "lock_lru_priv_hits");
+	lprocfs_counter_init(ns->ns_stats, LDLM_NSS_LRU_HITS,
+			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_LOCKS,
+			     "lock_lru_hits");
 
 	return err;
 }
@@ -812,7 +979,8 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 		GOTO(out_hash, rc = -ENOMEM);
 
 	INIT_LIST_HEAD(&ns->ns_list_chain);
-	INIT_LIST_HEAD(&ns->ns_unused_list);
+	INIT_LIST_HEAD(&ns->ns_unused_normal_list);
+	INIT_LIST_HEAD(&ns->ns_unused_priv_list);
 	spin_lock_init(&ns->ns_lock);
 	atomic_set(&ns->ns_bref, 0);
 	init_waitqueue_head(&ns->ns_waitq);
@@ -820,7 +988,8 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	ns->ns_connect_flags = 0;
 	ns->ns_orig_connect_flags = 0;
 	ns->ns_nr_unused = 0;
-	ns->ns_last_pos = &ns->ns_unused_list;
+	ns->ns_nr_priv = 0;
+	ns->ns_last_pos = &ns->ns_unused_normal_list;
 	ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
 	ns->ns_cancel_batch = LDLM_DEFAULT_LRU_SHRINK_BATCH;
 	ns->ns_recalc_pct = LDLM_DEFAULT_SLV_RECALC_PCT;
@@ -833,6 +1002,18 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	ns->ns_max_nolock_size = NS_DEFAULT_MAX_NOLOCK_BYTES;
 	ns->ns_max_parallel_ast = LDLM_DEFAULT_PARALLEL_AST_LIMIT;
 	ns->ns_reclaim_start = 0;
+
+	ns->ns_lfru_access_window_cnt = 0;
+	ns->ns_lfru_max_freq = LDLM_LFRU_MIN_PRIV_THRESH;
+	ns->ns_lfru_priv_score_threshold = LDLM_LFRU_MIN_PRIV_THRESH;
+	ns->ns_lfru_priv_ratio_limit_256 =
+		LDLM_LFRU_PRIV_LIST_RATIO_LIMIT * 256 / 100;
+	ns->ns_lfru_check_window_size =
+		LDLM_DEFAULT_LRU_SIZE / LDLM_LFRU_UPDATE_WINDOW_DIV;
+
+	/* Default to LFRU cache policy */
+	ns->ns_lock_cache_policy = LDLM_LOCK_CACHE_LFRU;
+	ns->ns_lock_cache_ops = &ldlm_lfru_cache_ops;
 
 	rc = ldlm_namespace_sysfs_register(ns);
 	if (rc) {

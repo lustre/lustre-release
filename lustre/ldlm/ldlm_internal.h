@@ -138,11 +138,13 @@ void ldlm_clear_blocking_data(struct ldlm_lock *lock);
 int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
 		      ldlm_desc_ast_t ast_type);
 int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq);
-int ldlm_lock_remove_from_lru_check(struct ldlm_lock *lock, ktime_t last_use);
+int ldlm_lock_remove_from_lru_check(struct ldlm_lock *lock, ktime_t last_use,
+				    bool reuse);
 #define ldlm_lock_remove_from_lru(lock) \
-		ldlm_lock_remove_from_lru_check(lock, ktime_set(0, 0))
+		ldlm_lock_remove_from_lru_check(lock, ktime_set(0, 0), false)
 int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock);
+void ldlm_lock_lru_demote_to_normal_nolock(struct ldlm_lock *lock);
 void ldlm_lock_touch_in_lru(struct ldlm_lock *lock);
 void ldlm_lock_destroy_nolock(struct ldlm_lock *lock);
 
@@ -401,3 +403,7 @@ static inline bool ldlm_res_eq(const struct ldlm_res_id *res0,
 
 /* exports for testing */
 struct ldlm_lock *ldlm_lock_new_testing(struct ldlm_resource *resource);
+
+/* ldlm_cache_policy.c */
+extern struct ldlm_lock_cache_ops ldlm_lru_cache_ops;
+extern struct ldlm_lock_cache_ops ldlm_lfru_cache_ops;
