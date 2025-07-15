@@ -7470,13 +7470,13 @@ build_test_filter() {
 		local need_ver_code
 
 		[[ "$facet" =~ "#" ]] && continue
-		[[ "$need_ver" =~ _VERSION ]] && need_ver_code=$need_ver ||
+		[[ "$need_ver" =~ _VERSION ]] && need_ver_code=${!need_ver} ||
 			need_ver_code=$(version_code $need_ver)
 
 		(( ${!have_ver_code} $op $need_ver_code )) &&
-			echo "- see $facet $op $need_ver for $jira, go $subs" ||
+			echo "- see $have_ver_code $op $need_ver (${!have_ver_code} $op $need_ver_code) for $jira, go $subs" ||
 		{
-			log "- need $facet $op $need_ver for $jira, skip $subs"
+			log "- need $have_ver_code $op $need_ver (${!have_ver_code} $op $need_ver_code) for $jira, skip $subs"
 			for E in $subs; do
 				eval EXCEPT_${E}=true
 			done
