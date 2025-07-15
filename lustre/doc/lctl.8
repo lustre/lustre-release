@@ -178,25 +178,30 @@ Register a new changelog user on specified MDT device with specified parameters.
 .BR lctl-changelog_deregister (8)
 Deregister an existing changelog user on the specified MDT.
 .SS NODEMAP
-An identity mapping feature that facilitates mapping of client UIDs and GIDs to
-local file system UIDs and GIDs, while maintaining POSIX ownership, permissions,
-and quota.
+The nodemap feature allows UIDs, GIDs, and PROJIDs from remote systems to be
+mapped to local sets of UIDs, GIDs, and PROJIDs while retaining POSIX ownership,
+permissions and quota information. As a result, multiple sites with conflicting
+user and group identifiers can operate on a single Lustre file system without
+creating collisions in the UID, GID, or PROJID space.
 .P
-While the nodemap feature is enabled, all client file system access is subject
-to the nodemap identity mapping policy, which consists of the 'default' catchall
-nodemap, and any user-defined nodemaps. The 'default' nodemap maps all client
-identities to 99:99 (nobody:nobody). Administrators can define nodemaps for a
-range of client NIDs which map identities, and these nodemaps can be flagged as
- 'trusted' so identities are accepted without translation, as well as flagged
-as 'admin' meaning that root is not squashed for these nodes.
+Nodemap commands must be run on the MGS from where the current nodemap
+configuration is asynchronously propagated to all server nodes. The nodemap
+configuration further persists across restarts. An exception represents dynamic
+nodemaps (see lctl-nodemap-add (8)) which are defined on the local server only
+and are not persistent.
 .P
-Note: In the current phase of implementation, to use the nodemap functionality
-you only need to enable and define nodemaps on the MDS. The MDSes must also be
-in a nodemap with the admin and trusted flags set. To use quotas with nodemaps,
-you must also use set_param to enable and define nodemaps on the OSS (matching
-what is defined on the MDS). Nodemaps do not currently persist, unless you
-define them with set_param and use the -P flag. Note that there is a hard limit
-to the number of changes you can persist over the lifetime of the file system.
+In addition to assigning client nodes to nodemaps, it is necessary to define a
+privileged nodemap that covers all Lustre server nodes for ID mapping to work
+correctly. The privileged nodemap should have both "admin" and "trusted"
+properties set.
+.P
+The "default" nodemap is a special nodemap which cannot be removed and
+represents a fallback nodemap for all nodes that are not assigned to any other
+nodemap. Because of its special role, only some properties can be set on it,
+such as "squash_uid". ID mapping is explicitly disabled on the "default"
+nodemap. Care should be taken when modifying the "admin" and "trusted"
+properties on the "default" nodemap, especially if Lustre servers are not
+covered by any other nodemap.
 .P
 See also:
 .TP
@@ -206,38 +211,47 @@ Activate/deactivate the nodemap feature.
 .BR lctl-nodemap-add (8)
 Add a new nodemap, to which NID ranges, identities, and properties can be added.
 .TP
-.BR lctl-nodemap-del (8)
-Delete an existing nodemap.
+.BR lctl-nodemap-add-idmap (8)
+Add a UID or GID mapping to a nodemap.
 .TP
 .BR lctl-nodemap-add-range (8)
 Define a range of NIDs for a nodemap.
 .TP
-.BR lctl-nodemap-del-range (8)
-Delete an existing NID range from a nodemap.
+.BR lctl-nodemap-add-offset (8)
+Set a UID/GID/PROJID offset value
 .TP
-.BR lctl-nodemap-add-idmap (8)
-Add a UID or GID mapping to a nodemap.
+.BR lctl-nodemap-del (8)
+Delete an existing nodemap.
 .TP
 .BR lctl-nodemap-del-idmap (8)
 Delete an existing UID or GID mapping from a nodemap.
 .TP
-.BR lctl-nodemap-modify (8)
-Modify a nodemap property.
-.TP
-.BR lctl-nodemap-set-fileset (8)
-Add a fileset to a nodemap.
-.TP
-.BR lctl-nodemap-add-offset (8)
-Set a UID/GID/PROJID offset value
+.BR lctl-nodemap-del-range (8)
+Delete an existing NID range from a nodemap.
 .TP
 .BR lctl-nodemap-del-offset (8)
 Remove a UID/GID/PROJID offset from a nodemap.
 .TP
+.BR lctl-nodemap-fileset-add (8)
+Add a primary or alternate fileset to a nodemap.
+.TP
+.BR lctl-nodemap-fileset-del (8)
+Delete a type of fileset from a nodemap.
+.TP
+.BR lctl-nodemap-fileset-modify (8)
+Modify a fileset in a nodemap, changing its path, type, or access mode.
+.TP
+.BR lctl-nodemap-modify (8)
+Modify a nodemap property.
+.TP
+.BR lctl-nodemap-info (8)
+Print nodemap information.
+.TP
+.BR lctl-nodemap-set-cap (8)
+Set user capabilities on a nodemap.
+.TP
 .BR lctl-nodemap-set-sepol (8)
 Set SELinux policy info on a nodemap.
-.TP
-.BR lctl-nodemap-set-capabilities (8)
-Set user capabilities on a nodemap.
 .SS Configuration logs
 .TP
 .BI clear_conf " DEVICE" \fR| FSNAME
