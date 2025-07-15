@@ -48,6 +48,7 @@
 #include "mount_utils.h"
 
 char *progname;
+int replace = 0;
 int verbose = 1;
 int version;
 static int print_only;
@@ -111,7 +112,6 @@ static void usage(FILE *out)
 		"\t\t--device-size=#N(KB): device size for loop devices\n"
 		"\t\t--mkfsoptions=<opts>: format options\n"
 		"\t\t--reformat: overwrite an existing disk\n"
-		"\t\t--replace: replace an old target with the same index\n"
 		"\t\t--stripe-count-hint=#N: for optimizing MDT inode size\n"
 #else
 		"\t\t--erase-param <key>: erase all instances of a parameter\n"
@@ -121,6 +121,7 @@ static void usage(FILE *out)
 		"\t\t--quota: enable space accounting on old 2.x device.\n"
 		"\t\t--rename: rename the filesystem name\n"
 #endif
+		"\t\t--replace: replace an old target with the same index\n"
 		"\t\t--comment=<user comment>: arbitrary string (%d bytes)\n"
 		"\t\t--dryrun: report what we would do; don't write to disk\n"
 		"\t\t--verbose: e.g. show mkfs progress\n"
@@ -302,6 +303,7 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 						.has_arg = required_argument},
 	{ .val = 'p',	.name =  "param",	.has_arg = required_argument},
 	{ .val = 'q',	.name =  "quiet",	.has_arg = no_argument},
+	{ .val = 'R',	.name =  "replace",	.has_arg = no_argument},
 	{ .val = 's',	.name =  "servicenode",	.has_arg = required_argument},
 	{ .val = 't',	.name =  "network",	.has_arg = required_argument},
 	{ .val = 'u',	.name =  "comment",	.has_arg = required_argument},
@@ -318,29 +320,27 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	{ .val = 'M',	.name =  "mdt",		.has_arg = no_argument},
 	{ .val = 'O',	.name =  "ost",		.has_arg = no_argument},
 	{ .val = 'r',	.name =  "reformat",	.has_arg = no_argument},
-	{ .val = 'R',	.name =  "replace",	.has_arg = no_argument},
 #else
 	{ .val = 'E',	.name =  "erase-param",	.has_arg = required_argument},
 	{ .val = 'e',	.name =  "erase-params",
 						.has_arg = no_argument},
 	{ .val = 'l',	.name =  "nolocallogs", .has_arg = no_argument},
 	{ .val = 'Q',	.name =  "quota",	.has_arg = no_argument},
-	{ .val = 'R',	.name =  "rename",	.has_arg = optional_argument},
+	{ .val = 'r',	.name =  "rename",	.has_arg = optional_argument},
 	{ .val = 'w',	.name =  "writeconf",	.has_arg = no_argument},
 #endif
 	{ .name = NULL } };
-	char *short_opts = "B:f:Ghi:L:m:nNo:p:qs:t:u:vV"
+	char *short_opts = "B:f:Ghi:L:m:nNo:p:qRs:t:u:UvV"
 #ifndef TUNEFS
-			  "b:c:d:k:MOrR";
+			  "b:c:d:k:MOr";
 #else
-			  "E:elQR::w";
+			  "E:elQr::w";
 #endif
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char new_fsname[16] = { 0 };
 	int opt;
 	int rc, longidx;
 	int failnode_set = 0, servicenode_set = 0;
-	int replace = 0;
 	bool index_option = false;
 
 #ifdef TUNEFS
@@ -510,6 +510,9 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		case 'q':
 			verbose--;
 			break;
+		case 'R':
+			replace = 1;
+			break;
 		case 't':
 			if (!IS_MDT(ldd) && !IS_OST(ldd)) {
 				badopt(long_opts[longidx].name, "MDT,OST");
@@ -592,9 +595,6 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		case 'r':
 			mop->mo_flags |= MO_FORCEFORMAT;
 			break;
-		case 'R':
-			replace = 1;
-			break;
 #else /* TUNEFS */
 		case 'E':
 			rc = erase_param(ldd->ldd_params, optarg, false);
@@ -618,7 +618,7 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		case 'Q':
 			mop->mo_flags |= MO_QUOTA;
 			break;
-		case 'R': {
+		case 'r': {
 			char *tmp;
 
 			mop->mo_flags |= MO_RENAME;
@@ -1036,6 +1036,15 @@ int main(int argc, char *const argv[])
 		goto out;
 	}
 #else /* TUNEFS */
+	/* update svname with '-' */
+	if (replace) {
+		struct mount_opts opts;
+
+		opts.mo_ldd = *ldd;
+		opts.mo_source = mop.mo_device;
+		(void)osd_label_lustre(&opts);
+	}
+
 	/* update svname with '=' to refresh config */
 	if (ldd->ldd_flags & LDD_F_WRITECONF) {
 		struct mount_opts opts;

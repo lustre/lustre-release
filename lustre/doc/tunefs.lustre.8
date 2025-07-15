@@ -161,6 +161,37 @@ The flag is reset once new logs are downloaded from MGS.
 .TP
 .B --quota
 Enable space accounting on old 2.x devices.
+.TP
+.B --replace
+Reset the state of a target that is already registered with the MGS
+and is returning an error
+.RB ( EADDRINUSE = 98 )
+that its index is already used, like:
+.RS
+.EX
+.B # mount -t lustre /dev/vg_testfs_ost1/lvost1
+.B mount.lustre: mount failed: Address already in use
+.EE
+.RE
+This might happen if a new target is re-using the index of a
+previous target that was permanently removed or reformatted for
+some reason (e.g. hardware replacement, multiple disk failure), and
+.B mkfs.lustre
+was used to reformat the target without the
+.B --repace
+option. This can also happen if there was an error during initial
+target registration with the MGS (e.g. a network error or MGS failure
+on first mount). This stops the target trying to register with the
+MGS as a newly-added target with the filesystem.
+.br
+.B NOTE:
+this is a potentially dangerous operation that overrides internal
+safety checks in the filesystem. If it used incorrectly it may
+lead to filesystem corruption or data loss, so it should be used
+with caution after verifying that there are not two different devices
+using the same index number (e.g. by checking on all servers with
+.BR blkid (8)
+to that the filesystem UUIDs and volume names are unique).
 .SH EXAMPLES
 Change the MGS NID address. (This should be done on every target disk,
 since they should all be contacting the same MGS.):
@@ -185,18 +216,14 @@ Remove all failover NID locations for this target:
 .EE
 .RE
 .PP
-Upgrade an old 1.4.X Lustre MDT to 1.6. The new filesystem name is "testfs":
+Force the targets to re-register with the MGS on their next mount
+to recreate the filesystem configuration logs in case of an error.
+This should be run for every target disk in the filesystem:
 .RS
 .EX
-.B # tunefs.lustre --mgs --mdt --fsname=testfs /dev/sda
-.EE
-.RE
-.PP
-Upgrade an old 1.4.X Lustre MDT to 1.6, and start with brand-new 1.6
-configuration logs. All old servers and clients must be stopped:
-.RS
-.EX
-.B tunefs.lustre --writeconf --mgs --mdt --fsname=testfs /dev/sda1
+.B # tunefs.lustre --writeconf /dev/vgtestfs/lvtestfs-mdt0
+.br
+.B # tunefs.lustre --writeconf /dev/vgtestfs/lvtestfs-ost0
 .EE
 .RE
 .SH AVAILABILITY
@@ -208,6 +235,7 @@ filesystem package since release 1.4.0
 .SH SEE ALSO
 .BR lfs (1),
 .BR lustre (7),
+.BR blkid (8),
 .BR lctl (8),
 .BR mkfs.lustre (8),
 .BR mount.lustre (8)

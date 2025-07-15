@@ -6072,13 +6072,6 @@ run_test 68 "be able to reserve specific sequences in FLDB"
 # just "precreate" the missing objects. In the past it might try to recreate
 # millions of objects after an OST was reformatted
 test_69() {
-	[[ "$MDS1_VERSION" -lt $(version_code 2.4.2) ]] &&
-		skip "Need MDS version at least 2.4.2"
-
-	[[ "$MDS1_VERSION" -ge $(version_code 2.4.50) ]] &&
-	[[ "$MDS1_VERSION" -lt $(version_code 2.5.0) ]] &&
-		skip "Need MDS version at least 2.5.0"
-
 	setup
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	do_nodes $(osts_nodes) \
@@ -6100,7 +6093,7 @@ test_69() {
 
 	# If the LAST_ID is already over 5 * OST_MAX_PRECREATE, we don't
 	# need to create any files. So, skip this section.
-	if [ $num_create -gt 0 ]; then
+	if (( num_create > 0 )); then
 		# Check the number of inodes available on OST0
 		local files=0
 		local ifree=$($LFS df -i $MOUNT |
@@ -6109,7 +6102,7 @@ test_69() {
 
 		$LFS setstripe -i 0 $DIR/$tdir ||
 			error "$LFS setstripe -i 0 $DIR/$tdir failed"
-		if [ $ifree -lt 10000 ]; then
+		if (( ifree < 10000 )); then
 			files=$(( ifree - 50 ))
 		else
 			files=10000
@@ -6139,13 +6132,34 @@ test_69() {
 	mount_client $MOUNT || error "mount client failed"
 	touch $DIR/$tdir/$tfile-last || error "create file after reformat"
 	local idx=$($LFS getstripe -i $DIR/$tdir/$tfile-last)
-	[ $idx -ne 0 ] && error "$DIR/$tdir/$tfile-last on $idx not 0" || true
+	(( idx == 0 )) || error "$DIR/$tdir/$tfile-last on $idx not 0"
 
 	local iused=$($LFS df -i $MOUNT |
 		awk '/OST0000/ { print $3 }'; exit ${PIPESTATUS[0]})
 	log "On OST0, $iused used inodes rc=$?"
-	[ $iused -ge $((ost_max_pre + 1000)) ] &&
+	(( iused < ost_max_pre + 1000 )) ||
 		error "OST replacement created too many inodes; $iused"
+
+	[[ "$ost1_FSTYPE" != zfs ]] || import_zpool ost1
+	local ostdev=$(ostdevname 1)
+	if do_facet ost1 "$TUNEFS 2>&1" | grep -q -- "--replace"; then
+		umount_client $MOUNT ||
+			error "umount client failed before $TUNEFS"
+		stop_ost || error "stop ost1 failed before $TUNEFS"
+
+		add ost1 $(mkfs_opts ost1 $ostdev) --reformat $ostdev \
+			$(ostvdevname 1) || error "reformat $ostdev failed"
+
+		[[ "$ost1_FSTYPE" != zfs ]] || import_zpool ost1
+		do_facet ost1 "$TUNEFS --replace $ostdev" ||
+			error "$TUNEFS replace $ostdev failed"
+
+		start_ost || error "restart ost1 failed after $TUNEFS"
+		wait_osc_import_state mds ost FULL
+
+		mount_client $MOUNT || error "mount client failed after $TUNEFS"
+	fi
+
 	cleanup || error "cleanup failed with $?"
 }
 run_test 69 "replace an OST with the same index"
