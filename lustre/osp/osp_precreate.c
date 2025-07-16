@@ -36,14 +36,13 @@
  */
 
 /**
- * Check whether statfs data is expired
+ * osp_statfs_need_update() - Check whether statfs data is expired
+ * @d: OSP device
  *
  * OSP device caches statfs data for the target, the function checks
  * whether the data is expired or not.
  *
- * \param[in] d		OSP device
- *
- * \retval		0 - not expired, 1 - expired
+ * Return %0 - not expired or %1 - expired
  */
 static inline int osp_statfs_need_update(struct osp_device *d)
 {
@@ -70,15 +69,16 @@ static void osp_statfs_timer_cb(cfs_timer_cb_arg_t data)
 static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs);
 
 /*
+ * osp_pre_update_status_msfs() - Update currenct precreation status
+ * @d: OSP device
+ * @msfs: statfs data
+ * @rc: new precreate status for device @d
+ *
  * The function updates current precreation status if broken, and
  * updates that cached statfs state if functional, then wakes up waiters.
  * We don't clear opd_pre_status directly here, but rather leave this
  * to osp_pre_update_msfs() to do if everything is OK so that we don't
  * have a race to clear opd_pre_status and then set it to -ENOSPC again.
- *
- * \param[in] d		OSP device
- * \param[in] msfs	statfs data
- * \param[in] rc	new precreate status for device \a d
  */
 static void osp_pre_update_status_msfs(struct osp_device *d,
 				       struct obd_statfs *msfs, int rc)
@@ -98,22 +98,21 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 	osp_pre_update_status_msfs(d, &d->opd_statfs, rc);
 }
 
-
 /**
- * RPC interpret callback for OST_STATFS RPC
+ * osp_statfs_interpret() - RPC interpret callback for OST_STATFS RPC
+ * @env: LU environment provided by the caller
+ * @req: RPC replied
+ * @args: callback data
+ * @rc: RPC result
  *
  * An interpretation callback called by ptlrpc for OST_STATFS RPC when it is
  * replied by the target. It's used to maintain statfs cache for the target.
  * The function fills data from the reply if successful and schedules another
  * update.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] req	RPC replied
- * \param[in] aa	callback data
- * \param[in] rc	RPC result
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
  */
 static int osp_statfs_interpret(const struct lu_env *env,
 				struct ptlrpc_request *req, void *args, int rc)
@@ -174,15 +173,16 @@ out:
 }
 
 /**
- * Send OST_STATFS RPC
+ * osp_statfs_update() - Send OST_STATFS RPC
+ * @env: LU environment provided by the caller
+ * @d: OSP device
  *
  * Sends OST_STATFS RPC to refresh cached statfs data for the target.
  * Also disables scheduled updates as times OSP may need to refresh
  * statfs data before expiration. The function doesn't block, instead
  * an interpretation callback osp_statfs_interpret() is used.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] d		OSP device
+ * Returns %0 on success or %negative on error
  */
 static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
 {
@@ -256,17 +256,16 @@ out:
 }
 
 /**
- * Schedule an immediate update for statfs data
+ * osp_statfs_need_now() - Schedule an immediate update for statfs data
+ * @d: OSP device where statfs data needs to be refreshed
  *
  * If cached statfs data claim no free space, but OSP has got a request to
  * destroy an object (so release some space probably), then we may need to
  * refresh cached statfs data sooner than planned. The function checks there
  * is no statfs update going and schedules immediate update if so.
- * XXX: there might be a case where removed object(s) do not add free space (empty
- * object). If the number of such deletions is high, then we can start to update
- * statfs too often causing a RPC storm. some throttling is needed...
- *
- * \param[in] d		OSP device where statfs data needs to be refreshed
+ * XXX: there might be a case where removed object(s) do not add free space
+ * (empty object). If the number of such deletions is high, then we can start to
+ * update statfs too often causing a RPC storm. some throttling is needed...
  */
 void osp_statfs_need_now(struct osp_device *d)
 {
@@ -283,7 +282,9 @@ void osp_statfs_need_now(struct osp_device *d)
 }
 
 /**
- * Check pool of precreated objects is getting low.
+ * osp_precreate_is_low_nolock() - Check pool of precreated objects is getting
+ * low.
+ * @d: OSP device
  *
  * We should not wait till the pool of the precreated objects is too low,
  * because then there will be a long period of OSP being unavailable for the
@@ -291,9 +292,7 @@ void osp_statfs_need_now(struct osp_device *d)
  * precreation ahead and hopefully have it ready before the current pool is
  * empty. Notice this function relies on external locking by opd_pre_lock.
  *
- * \param[in] d		OSP device
- *
- * \retval		0 - current pool is good enough, 1 - time to precreate
+ * Return %0 - current pool is good enough, or %1 - time to precreate
  */
 static inline int osp_precreate_is_low_nolock(struct osp_device *d)
 {
@@ -310,14 +309,13 @@ static inline int osp_precreate_is_low_nolock(struct osp_device *d)
 }
 
 /**
- * Check pool of precreated objects
+ * osp_precreate_is_low() - Check pool of precreated objects
+ * @d: OSP device
  *
  * This is protected version of osp_precreate_is_low_nolock(), check that
  * for the details.
  *
- * \param[in] d		OSP device
- *
- * \retval		0 - current pool is good enough, 1 - time to precreate
+ * Return %0 - current pool is good enough, or %1 - time to precreate
  */
 static inline int osp_precreate_is_low(struct osp_device *d)
 {
@@ -334,20 +332,20 @@ static inline int osp_precreate_is_low(struct osp_device *d)
 }
 
 /**
- * Write FID into into last_oid/last_seq file
+ * osp_write_last_oid_seq_files() - Write FID into last_oid/last_seq file
+ * @env: LU environment provided by the caller
+ * @osp: OSP device
+ * @fid: fid where sequence/id is taken
+ * @sync: update mode: 0 - asynchronously, 1 - synchronously
  *
  * The function stores the sequence and the in-sequence id into two dedicated
  * files. The sync argument can be used to request synchronous commit, so the
  * function won't return until the updates are committed.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] osp	OSP device
- * \param[in] fid	fid where sequence/id is taken
- * \param[in] sync	update mode: 0 - asynchronously, 1 - synchronously
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
- **/
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
+ */
 int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 				 struct lu_fid *fid, int sync)
 {
@@ -429,7 +427,9 @@ static void osp_update_fldb_cache(const struct lu_env *env,
 }
 
 /**
- * Switch to another sequence
+ * osp_precreate_rollover_new_seq() - Switch to another sequence
+ * @env: LU environment provided by the caller
+ * @osp: OSP device
  *
  * When a current sequence has no available IDs left, OSP has to switch to
  * another new sequence. OSP requests it using the regular FLDB protocol
@@ -441,11 +441,9 @@ static void osp_update_fldb_cache(const struct lu_env *env,
  * While this is very expensive operation, it's supposed to happen infrequently
  * because sequence has LUSTRE_DATA_SEQ_MAX_WIDTH=32M objects by default.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] osp	OSP device
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
  */
 static int osp_precreate_rollover_new_seq(struct lu_env *env,
 					  struct osp_device *osp)
@@ -498,7 +496,13 @@ static int osp_precreate_rollover_new_seq(struct lu_env *env,
 }
 
 /**
- * Find IDs available in current sequence
+ * osp_precreate_fids() - Find IDs available in current sequence
+ * @env: LU environment provided by the caller
+ * @osp: OSP device
+ * @fid: FID the caller wants to start with
+ * @grow: how many the caller wants
+ * @fid: the highest calculated FID [out]
+ * @grow: the number of available IDs calculated [out]
  *
  * The function calculates the highest possible ID and the number of IDs
  * available in the current sequence OSP is using. The number is limited
@@ -506,14 +510,7 @@ static int osp_precreate_rollover_new_seq(struct lu_env *env,
  * in the sequence by nature. The function doesn't require an external
  * locking.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] osp	OSP device
- * \param[in] fid	FID the caller wants to start with
- * \param[in] grow	how many the caller wants
- * \param[out] fid	the highest calculated FID
- * \param[out] grow	the number of available IDs calculated
- *
- * \retval		0 on success, 1 - the sequence is empty
+ * Return %0 on success, %1 - the sequence is empty
  */
 static int osp_precreate_fids(const struct lu_env *env, struct osp_device *osp,
 			      struct lu_fid *fid, int *grow)
@@ -558,7 +555,9 @@ static int osp_precreate_fids(const struct lu_env *env, struct osp_device *osp,
 }
 
 /**
- * Prepare and send precreate RPC
+ * osp_precreate_send() - Prepare and send precreate RPC
+ * @env: LU environment provided by the caller
+ * @d: OSP device
  *
  * The function finds how many objects should be precreated.  Then allocates,
  * prepares and schedules precreate RPC synchronously. Upon reply the function
@@ -566,12 +565,10 @@ static int osp_precreate_fids(const struct lu_env *env, struct osp_device *osp,
  * target wasn't able to create all the objects requested, then the next
  * precreate will be asking for fewer objects (i.e. slow precreate down).
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] d		OSP device
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
- **/
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
+ */
 static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 {
 	struct osp_thread_info	*oti = osp_env_info(env);
@@ -715,20 +712,20 @@ out_req:
 }
 
 /**
- * Get last precreated object from target (OST)
+ * osp_get_lastfid_from_ost() - Get last precreated object from target (OST)
+ * @env: LU environment provided by the caller
+ * @d: OSP device
+ * @update: update or not update last used fid
  *
  * Sends synchronous RPC to the target (OST) to learn the last precreated
  * object. This later is used to remove all unused objects (cleanup orphan
  * procedure). Also, the next object after one we got will be used as a
  * starting point for the new precreates.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] d		OSP device
- * \param[in] update	update or not update last used fid
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
- **/
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
+ */
 static int osp_get_lastfid_from_ost(const struct lu_env *env,
 				    struct osp_device *d, bool update)
 {
@@ -813,7 +810,9 @@ out:
 }
 
 /**
- * Cleanup orphans on OST
+ * osp_precreate_cleanup_orphans() - Cleanup orphans on OST
+ * @env: LU environment provided by the caller
+ * @d: OSP device
  *
  * This function is called in a contex of a dedicated thread handling
  * all the precreation suff. The function waits till local recovery
@@ -823,11 +822,9 @@ out:
  * using specially flagged RPC. During this process OSP is marked
  * unavailable for new objects.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] d		OSP device
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
  */
 static int osp_precreate_cleanup_orphans(struct lu_env *env,
 					 struct osp_device *d)
@@ -990,7 +987,9 @@ out:
 }
 
 /**
- * Update precreate status using statfs data
+ * osp_pre_update_msfs() - Update precreate status using statfs data
+ * @d: OSP device
+ * @msfs: statfs data
  *
  * The function decides whether this OSP should be used for new objects.
  * IOW, whether this OST is used up or has some free space. Cached statfs
@@ -998,7 +997,7 @@ out:
  * request (rc argument) is not success, then just mark OSP unavailable
  * right away.
  *
- * The new statfs data is passed in \a msfs and needs to be stored into
+ * The new statfs data is passed in @msfs and needs to be stored into
  * opd_statfs, but only after the various flags in os_state are set, so
  * that the new statfs data is not visible without appropriate flags set.
  * As such, there is no need to clear the flags here, since this is called
@@ -1010,9 +1009,6 @@ out:
  * the ENOSPC/ENOINO flags unconditionally when there is less than the
  * reserved size free, and still copy them from the old state when there
  * is less than 2*reserved size free space or inodes.
- *
- * \param[in] d		OSP device
- * \param[in] msfs	statfs data
  */
 static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 {
@@ -1120,7 +1116,9 @@ update:
 }
 
 /**
- * Initialize FID for precreation
+ * osp_init_pre_fid() - Initialize FID for precreation
+ * @env: LU environment provided by the caller
+ * @osp: OSP device
  *
  * For a just created new target, a new sequence should be taken.
  * The function checks there is no IDIF in use (if the target was
@@ -1130,10 +1128,9 @@ update:
  * possible object leakage (for the detail see the description for
  * osp_precreate_rollover_new_seq()).
  *
- * \param[in] osp	OSP device
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
  */
 static int osp_init_pre_fid(struct lu_env *env, struct osp_device *osp)
 {
@@ -1213,7 +1210,8 @@ struct opt_args {
 	struct completion	*opta_started;
 };
 /**
- * The core of precreate functionality
+ * osp_precreate_thread() - The core of precreate functionality
+ * @_args: private data the thread (OSP device to handle)
  *
  * The function implements the main precreation loop. Basically it
  * involves connecting to the target, precerate FID initialization,
@@ -1225,10 +1223,9 @@ struct opt_args {
  * After a disconnect, the sequence above repeats. This is keep going
  * until the thread is requested to stop.
  *
- * \param[in] _arg	private data the thread (OSP device to handle)
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
  */
 static int osp_precreate_thread(void *_args)
 {
@@ -1367,7 +1364,10 @@ static int osp_precreate_thread(void *_args)
 }
 
 /**
- * Check when to stop to wait for precreate objects.
+ * osp_precreate_ready_condition() - Check when to stop to wait for precreate
+ * objects.
+ * @env: LU environment provided by the caller
+ * @d: OSP device
  *
  * The caller wanting a new OST object can't wait undefinitely. The
  * function checks for few conditions including available new OST
@@ -1375,10 +1375,7 @@ static int osp_precreate_thread(void *_args)
  * etc. IOW, it checks whether the current OSP state is good to keep
  * waiting or it's better to give up.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] d		OSP device
- *
- * \retval		0 - keep waiting, 1 - no luck
+ * Return %0 - keep waiting, %1 - no luck (give up)
  */
 static int osp_precreate_ready_condition(const struct lu_env *env,
 					 struct osp_device *d)
@@ -1414,7 +1411,10 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
 }
 
 /**
- * Reserve object in precreate pool
+ * osp_precreate_reserve() - Reserve object in precreate pool
+ * @env: LU environment provided by the caller
+ * @d: OSP device
+ * @can_block: True if allowed to block (sleep)
  *
  * When the caller wants to create a new object on this target (target
  * represented by the given OSP), it should declare this intention using
@@ -1429,13 +1429,11 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
  * then the function forces local commit to speedup space release (see
  * osp_sync.c for the details).
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] d		OSP device
- *
- * \retval		0 on success
- * \retval		-ENOSPC when no space on OST
- * \retval		-EAGAIN try later, slow precreation in progress
- * \retval		-EIO when no access to OST
+ * Return:
+ * * %0 on success
+ * * %-ENOSPC when no space on OST
+ * * %-EAGAIN try later, slow precreation in progress
+ * * %-EIO when no access to OST
  */
 int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 			  bool can_block)
@@ -1568,7 +1566,10 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 }
 
 /**
- * Get a FID from precreation pool
+ * osp_precreate_get_fid() - Get a FID from precreation pool
+ * @env: LU environment provided by the caller
+ * @d: OSP device
+ * @fid: generated FID [out]
  *
  * The function is a companion for osp_precreate_reserve() - it assigns
  * a specific FID from the precreate. The function should be called only
@@ -1582,12 +1583,9 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
  * either it's referenced by the committed transaction or it's a subject
  * to the orphan cleanup procedure.
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] d		OSP device
- * \param[out] fid	generated FID
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
  */
 int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 			  struct lu_fid *fid)
@@ -1639,8 +1637,11 @@ int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 	return 0;
 }
 
-/*
- * Set size regular attribute on an object
+/**
+ * osp_object_truncate() - Set size regular attribute on an object
+ * @env: LU environment provided by the caller
+ * @dt: object
+ * @size: size to set.
  *
  * When a striping is created late, it's possible that size is already
  * initialized on the file. Then the new striping should inherit size
@@ -1648,12 +1649,9 @@ int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
  * protocol (OST_PUNCH).
  * XXX: should be re-implemented using OUT ?
  *
- * \param[in] env	LU environment provided by the caller
- * \param[in] dt	object
- * \param[in] size	size to set.
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
  */
 int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 			__u64 size)
@@ -1742,14 +1740,14 @@ out:
 }
 
 /**
- * Initialize precreation functionality of OSP
+ * osp_init_precreate() - Initialize precreation functionality of OSP
+ * @d: OSP device
  *
  * Prepares all the internal structures and starts the precreate thread
  *
- * \param[in] d		OSP device
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * Return:
+ * * %0 on success
+ * * %negative errno on error
  */
 int osp_init_precreate(struct osp_device *d)
 {
@@ -1783,13 +1781,11 @@ int osp_init_precreate(struct osp_device *d)
 }
 
 /**
- * Finish precreate functionality of OSP
- *
+ * osp_precreate_fini() - Finish precreate functionality of OSP
+ * @d: OSP device
  *
  * Asks all the activity (the thread, update timer) to stop, then
  * wait till that is done.
- *
- * \param[in] d		OSP device
  */
 void osp_precreate_fini(struct osp_device *d)
 {
