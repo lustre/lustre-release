@@ -273,7 +273,7 @@ static int lustre_device_done(struct netlink_callback *cb)
 
 /* target_obd handling */
 struct lu_tgt_list {
-	char			ltl_src[MAX_OBD_NAME * 4];
+	char			ltl_src[MAX_OBD_NAME * 3];
 	struct lu_tgt_descs	*ltl_desc;
 };
 
@@ -339,7 +339,7 @@ static int lustre_targets_start(struct netlink_callback *cb)
 			int rem2;
 
 			nla_for_each_nested(prop, target, rem2) {
-				char name[MAX_OBD_NAME * 4], *filter;
+				char name[MAX_OBD_NAME * 3], *filter;
 				struct obd_device *obd;
 				char type[5];
 				ssize_t len;
