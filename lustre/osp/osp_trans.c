@@ -48,7 +48,7 @@
 #include <lustre_net.h>
 #include "osp_internal.h"
 
-/**
+/*
  * The argument for the interpreter callback of osp request.
  */
 struct osp_update_args {
@@ -59,7 +59,7 @@ struct osp_update_args {
 	const struct lu_env	 *oaua_update_env;
 };
 
-/**
+/*
  * Call back for each update request.
  */
 struct osp_update_callback {
@@ -77,15 +77,15 @@ struct osp_update_callback {
 };
 
 /**
- * Allocate new update request
+ * osp_object_update_request_create() - Allocate new update request
+ * @our: osp_udate_request where to create a new update request
+ * @size: request size
  *
  * Allocate new update request and insert it to the req_update_list.
  *
- * \param [in] our	osp_udate_request where to create a new
- *                      update request
- *
- * \retval	0 if creation succeeds.
- * \retval	negative errno if creation fails.
+ * Return:
+ * * %0 if creation succeeds.
+ * * %negative errno if creation fails.
  */
 int osp_object_update_request_create(struct osp_update_request *our,
 				     size_t size)
@@ -101,7 +101,8 @@ int osp_object_update_request_create(struct osp_update_request *our,
 	 * bulk transfer. Some IB HW cannot handle partial pages in SG
 	 * lists (since they create gaps in memory regions) so we
 	 * round the size up to the next multiple of PAGE_SIZE. See
-	 * LU-9983. */
+	 * LU-9983.
+	 */
 	LASSERT(size > 0);
 	size = round_up(size, PAGE_SIZE);
 	OBD_ALLOC_LARGE(ourq, size);
@@ -122,18 +123,16 @@ int osp_object_update_request_create(struct osp_update_request *our,
 }
 
 /**
- * Get current update request
+ * osp_current_object_update_request() - Get current update request
+ * @our: osp update request where to get the current object update.
  *
  * Get current object update request from our_req_list in
  * osp_update_request, because we always insert the new update
  * request in the last position, so the last update request
  * in the list will be the current update req.
  *
- * \param[in] our	osp update request where to get the
- *                      current object update.
- *
- * \retval		the current object update.
- **/
+ * Return the current updated object
+ */
 struct osp_update_request_sub *
 osp_current_object_update_request(struct osp_update_request *our)
 {
@@ -145,14 +144,14 @@ osp_current_object_update_request(struct osp_update_request *our)
 }
 
 /**
- * Allocate and initialize osp_update_request
+ * osp_update_request_create() - Allocate and initialize osp_update_request
+ * @dt: dt device
  *
  * osp_update_request is being used to track updates being executed on
  * this dt_device(OSD or OSP). The update buffer will be 4k initially,
  * and increased if needed.
  *
- * \param [in] dt	dt device
- *
+ * Return:
  * \retval		osp_update_request being allocated if succeed
  * \retval		ERR_PTR(errno) if failed
  */
@@ -251,17 +250,18 @@ object_update_request_dump(const struct object_update_request *ourq,
 }
 
 /**
- * Prepare inline update request
+ * osp_prep_inline_update_req() - Prepare inline update request
+ * @env: execution environment
+ * @req: ptlrpc request
+ * @our: sub osp_update_request to be packed
+ * @repsize: arshad
  *
  * Prepare OUT update ptlrpc inline request, and the request usually includes
  * one update buffer, which does not need bulk transfer.
  *
- * \param[in] env	execution environment
- * \param[in] req	ptlrpc request
- * \param[in] ours	sub osp_update_request to be packed
- *
- * \retval		0 if packing succeeds
- * \retval		negative errno if packing fails
+ * Return:
+ * * %0 if packing succeeds
+ * * %negative errno if packing fails
  */
 static int osp_prep_inline_update_req(const struct lu_env *env,
 				      struct ptlrpc_request *req,
@@ -302,18 +302,18 @@ static int osp_prep_inline_update_req(const struct lu_env *env,
 }
 
 /**
- * Prepare update request.
+ * osp_prep_update_req() - Prepare update request.
+ * @env: execution environment
+ * @imp: import on which ptlrpc request will be sent
+ * @our: pointer to the osp_update_request
+ * @reqp: request to be created
  *
  * Prepare OUT update ptlrpc request, and the request usually includes
- * all of updates (stored in \param ureq) from one operation.
+ * all of updates (stored in @ureq) from one operation.
  *
- * \param[in] env	execution environment
- * \param[in] imp	import on which ptlrpc request will be sent
- * \param[in] ureq	hold all of updates which will be packed into the req
- * \param[in] reqp	request to be created
- *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 			struct osp_update_request *our,
@@ -435,17 +435,17 @@ out_req:
 }
 
 /**
- * Send update RPC.
+ * osp_remote_sync() - Send update RPC.
+ * @env: execution environment
+ * @osp: pointer to the OSP device
+ * @our: hold all of updates which will be packed into the req
+ * @reqp: request to be created
  *
  * Send update request to the remote MDT synchronously.
  *
- * \param[in] env	execution environment
- * \param[in] imp	import on which ptlrpc request will be sent
- * \param[in] our	hold all of updates which will be packed into the req
- * \param[in] reqp	request to be created
- *
- * \retval		0 if RPC succeeds.
- * \retval		negative errno if RPC fails.
+ * Return:
+ * * %0 if RPC succeeds.
+ * * %negative errno if RPC fails.
  */
 int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 		    struct osp_update_request *our,
@@ -476,12 +476,13 @@ int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 }
 
 /**
- * Invalidate all objects in the osp thandle
+ * osp_thandle_invalidate_object() - Invalidate all objects in the osp thandle
+ * @env: execution environment
+ * @oth: osp thandle.
+ * @result:
  *
  * invalidate all of objects in the update request, which will be called
  * when the transaction is aborted.
- *
- * \param[in] oth	osp thandle.
  */
 static void osp_thandle_invalidate_object(const struct lu_env *env,
 					  struct osp_thandle *oth,
@@ -527,14 +528,15 @@ static void osp_trans_stop_cb(const struct lu_env *env,
 }
 
 /**
- * Allocate an osp request and initialize it with the given parameters.
+ * osp_update_callback_init() - Allocate osp request and initialize it with the
+ * given parameters.
+ * @obj: pointer to the operation target
+ * @data: pointer to the data used by the interpreter
+ * @interpreter: pointer to the interpreter function
  *
- * \param[in] obj		pointer to the operation target
- * \param[in] data		pointer to the data used by the interpreter
- * \param[in] interpreter	pointer to the interpreter function
- *
- * \retval			pointer to the asychronous request
- * \retval			NULL if the allocation failed
+ * Return:
+ * * %pointer to the asychronous request
+ * * %NULL if the allocation failed
  */
 static struct osp_update_callback *
 osp_update_callback_init(struct osp_object *obj, void *data,
@@ -556,10 +558,9 @@ osp_update_callback_init(struct osp_object *obj, void *data,
 }
 
 /**
- * Destroy the osp_update_callback.
- *
- * \param[in] env	pointer to the thread context
- * \param[in] ouc	pointer to osp_update_callback
+ * osp_update_callback_fini() - Destroy the osp_update_callback.
+ * @env: pointer to the thread context
+ * @ouc: pointer to osp_update_callback
  */
 static void osp_update_callback_fini(const struct lu_env *env,
 				     struct osp_update_callback *ouc)
@@ -571,18 +572,18 @@ static void osp_update_callback_fini(const struct lu_env *env,
 }
 
 /**
- * Interpret the packaged OUT RPC results.
+ * osp_update_interpret() - Interpret the packaged OUT RPC results.
+ * @env: pointer to the thread context
+ * @req: pointer to the RPC
+ * @args: pointer to data used by the interpreter
+ * @rc: the RPC return value
  *
  * For every packaged sub-request, call its registered interpreter function.
  * Then destroy the sub-request.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] req	pointer to the RPC
- * \param[in] arg	pointer to data used by the interpreter
- * \param[in] rc	the RPC return value
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int osp_update_interpret(const struct lu_env *env,
 				struct ptlrpc_request *req, void *args, int rc)
@@ -690,15 +691,16 @@ static int osp_update_interpret(const struct lu_env *env,
 }
 
 /**
- * Pack all the requests in the shared asynchronous idempotent request queue
- * into a single OUT RPC that will be given to the background ptlrpcd daemon.
+ * osp_unplug_async_request() - Pack all the requests in the shared asynchronous
+ * idempotent request queue into a single OUT RPC that will be given to the
+ * background ptlrpcd daemon.
+ * @env: pointer to the thread context
+ * @osp: pointer to the OSP device
+ * @our: pointer to the shared queue
  *
- * \param[in] env	pointer to the thread context
- * \param[in] osp	pointer to the OSP device
- * \param[in] our	pointer to the shared queue
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int osp_unplug_async_request(const struct lu_env *env,
 			     struct osp_device *osp,
@@ -742,16 +744,17 @@ int osp_unplug_async_request(const struct lu_env *env,
 }
 
 /**
- * Find or create (if NOT exist or purged) the shared asynchronous idempotent
- * request queue - osp_device::opd_async_requests.
+ * osp_find_or_create_async_update_request() - Find or create (if NOT exist or
+ * purged) the shared asynchronous idempotent request queue - osp_device::
+ * opd_async_requests.
+ * @osp: pointer to the OSP device
  *
  * If the osp_device::opd_async_requests is not NULL, then return it directly;
  * otherwise create new osp_update_request and attach it to opd_async_requests.
  *
- * \param[in] osp	pointer to the OSP device
- *
- * \retval		pointer to the shared queue
- * \retval		negative error number on failure
+ * Return:
+ * * %pointer to the shared queue
+ * * %negative error number on failure
  */
 static struct osp_update_request *
 osp_find_or_create_async_update_request(struct osp_device *osp)
@@ -771,19 +774,21 @@ osp_find_or_create_async_update_request(struct osp_device *osp)
 }
 
 /**
- * Insert an osp_update_callback into the osp_update_request.
+ * osp_insert_update_callback() - Insert an osp_update_callback into the
+ * osp_update_request.
+ * @env: pointer to the thread context
+ * @our: pointer to the shared queue
+ * @obj: pointer to the operation target object
+ * @data: pointer to the data used by the interpreter
+ * @interpreter: pointer to the interpreter function
  *
  * Insert an osp_update_callback to the osp_update_request. Usually each update
  * in the osp_update_request will have one correspondent callback, and these
  * callbacks will be called in rq_interpret_reply.
  *
- * \param[in] env		pointer to the thread context
- * \param[in] obj		pointer to the operation target object
- * \param[in] data		pointer to the data used by the interpreter
- * \param[in] interpreter	pointer to the interpreter function
- *
- * \retval			0 for success
- * \retval			negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int osp_insert_update_callback(const struct lu_env *env,
 			       struct osp_update_request *our,
@@ -802,8 +807,17 @@ int osp_insert_update_callback(const struct lu_env *env,
 }
 
 /**
- * Insert an asynchronous idempotent request to the shared request queue that
- * is attached to the osp_device.
+ * osp_insert_async_request() - Insert an asynchronous idempotent request to the
+ * shared request queue that is attached to the osp_device.
+ * @env: pointer to the thread context
+ * @op: operation type, see 'enum update_type'
+ * @obj: pointer to the operation target
+ * @count: array size of the subsequent @lens and @bufs
+ * @lens: buffer length array for the subsequent @bufs
+ * @bufs: the buffers to compose the request
+ * @data: pointer to the data used by the interpreter
+ * @repsize: how many bytes the caller allocated for @data
+ * @interpreter: pointer to the interpreter function
  *
  * This function generates a new osp_async_request with the given parameters,
  * then tries to insert the request into the osp_device-based shared request
@@ -813,18 +827,9 @@ int osp_insert_update_callback(const struct lu_env *env,
  * NOTE: must hold the osp::opd_async_requests_mutex to serialize concurrent
  *	 osp_insert_async_request call from others.
  *
- * \param[in] env		pointer to the thread context
- * \param[in] op		operation type, see 'enum update_type'
- * \param[in] obj		pointer to the operation target
- * \param[in] count		array size of the subsequent \a lens and \a bufs
- * \param[in] lens		buffer length array for the subsequent \a bufs
- * \param[in] bufs		the buffers to compose the request
- * \param[in] data		pointer to the data used by the interpreter
- * \param[in] repsize		how many bytes the caller allocated for \a data
- * \param[in] interpreter	pointer to the interpreter function
- *
- * \retval			0 for success
- * \retval			negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int osp_insert_async_request(const struct lu_env *env, enum update_type op,
 			     struct osp_object *obj, int count,
@@ -917,8 +922,10 @@ void osp_thandle_destroy(const struct lu_env *env,
 }
 
 /**
- * The OSP layer dt_device_operations::dt_trans_create() interface
- * to create a transaction.
+ * osp_trans_create() - The OSP layer dt_device_operations::dt_trans_create()
+ * interface to create a transaction.
+ * @env: pointer to the thread context
+ * @d: pointer to the OSP dt_device
  *
  * There are two kinds of transactions that will involve OSP:
  *
@@ -937,11 +944,9 @@ void osp_thandle_destroy(const struct lu_env *env,
  *    will generate the transaction handler. Such handler will be
  *    used by the whole transaction in subsequent sub-operations.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] d		pointer to the OSP dt_device
- *
- * \retval		pointer to the transaction handler
- * \retval		negative error number on failure
+ * Return:
+ * * %pointer to the transaction handler
+ * * %negative error number on failure
  */
 struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
 {
@@ -965,15 +970,14 @@ struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
 }
 
 /**
- * Add commit callback to transaction.
+ * osp_trans_cb_add() - Add commit callback to transaction.
+ * @th: the thandle
+ * @dcb: commit callback structure
  *
  * Add commit callback to the osp thandle, which will be called
  * when the thandle is committed remotely.
  *
- * \param[in] th	the thandle
- * \param[in] dcb	commit callback structure
- *
- * \retval		only return 0 for now.
+ * Return only 0 for now.
  */
 int osp_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 {
@@ -1042,16 +1046,15 @@ static void osp_request_commit_cb(struct ptlrpc_request *req)
 }
 
 /**
- * callback of osp transaction
+ * osp_trans_callback() - callback of osp transaction
+ * @env: execution environment
+ * @oth: osp thandle
+ * @rc: result of the osp thandle
  *
  * Call all of callbacks for this osp thandle. This will only be
  * called in error handler path. In the normal processing path,
  * these callback will be called in osp_request_commit_cb() and
  * osp_update_interpret().
- *
- * \param [in] env	execution environment
- * \param [in] oth	osp thandle
- * \param [in] rc	result of the osp thandle
  */
 void osp_trans_callback(const struct lu_env *env,
 			struct osp_thandle *oth, int rc)
@@ -1075,7 +1078,10 @@ void osp_trans_callback(const struct lu_env *env,
 }
 
 /**
- * Send the request for remote updates.
+ * osp_send_update_req() - Send the request for remote updates.
+ * @env: pointer to the thread context
+ * @osp: pointer to the OSP device
+ * @our: pointer to the osp_update_request
  *
  * Send updates to the remote MDT. Prepare the request by osp_update_req
  * and send them to remote MDT, for sync request, it will wait
@@ -1083,12 +1089,9 @@ void osp_trans_callback(const struct lu_env *env,
  *
  * Please refer to osp_trans_create() for transaction type.
  *
- * \param[in] env		pointer to the thread context
- * \param[in] osp		pointer to the OSP device
- * \param[in] our		pointer to the osp_update_request
- *
- * \retval			0 for success
- * \retval			negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int osp_send_update_req(const struct lu_env *env,
 			       struct osp_device *osp,
@@ -1202,7 +1205,10 @@ out:
 }
 
 /**
- * Get local thandle for osp_thandle
+ * osp_get_storage_thandle() - Get local thandle for osp_thandle
+ * @env: pointer to the thread context
+ * @th: pointer to the transaction handler
+ * @osp: pointer to the OSP device
  *
  * Get the local OSD thandle from the OSP thandle. Currently, there
  * are a few OSP API (osp_create() and osp_sync_add()) needs
@@ -1218,13 +1224,10 @@ out:
  * These are temporary solution, once OSP accessing OSD object is
  * being fixed properly, this function should be removed. XXX
  *
- * \param[in] env		pointer to the thread context
- * \param[in] th		pointer to the transaction handler
- * \param[in] dt		pointer to the OSP device
- *
- * \retval			pointer to the local thandle
- * \retval			ERR_PTR(errno) if it fails.
- **/
+ * Return:
+ * * %pointer to the local thandle
+ * * %ERR_PTR(errno) if it fails.
+ */
 struct thandle *osp_get_storage_thandle(const struct lu_env *env,
 					struct thandle *th,
 					struct osp_device *osp)
@@ -1251,16 +1254,15 @@ struct thandle *osp_get_storage_thandle(const struct lu_env *env,
 }
 
 /**
- * Set version for the transaction
+ * osp_check_and_set_rpc_version() - Set version for the transaction
+ * @oth: osp thandle to be set version.
+ * @obj: arshad
  *
  * Set the version for the transaction and add the request to
  * the sending list, then after transaction stop, the request
  * will be sent in the order of version by the sending thread.
  *
- * \param [in] oth	osp thandle to be set version.
- *
- * \retval		0 if set version succeeds
- *                      negative errno if set version fails.
+ * Return %0 if set version succeeds or %negative errno if set version fails.
  */
 int osp_check_and_set_rpc_version(struct osp_thandle *oth,
 				  struct osp_object *obj)
@@ -1301,17 +1303,18 @@ int osp_check_and_set_rpc_version(struct osp_thandle *oth,
 }
 
 /**
- * Get next OSP update request in the sending list
+ * osp_get_next_request() - Get next OSP update request in the sending list
+ * @ou: osp update structure.
+ * @ourp: the pointer holding the next update request.
+ *
  * Get next OSP update request in the sending list by version number, next
  * request will be
  * 1. transaction which does not have a version number.
  * 2. transaction whose version == opd_rpc_version.
  *
- * \param [in] ou	osp update structure.
- * \param [out] ourp	the pointer holding the next update request.
- *
- * \retval		true if getting the next transaction.
- * \retval		false if not getting the next transaction.
+ * Return:
+ * * %true if getting the next transaction.
+ * * %false if not getting the next transaction.
  */
 static bool
 osp_get_next_request(struct osp_updates *ou, struct osp_update_request **ourp)
@@ -1343,16 +1346,14 @@ osp_get_next_request(struct osp_updates *ou, struct osp_update_request **ourp)
 }
 
 /**
- * Invalidate update request
+ * osp_invalidate_request() - Invalidate update request
+ * @osp: OSP device whose update requests will be invalidated.
  *
  * Invalidate update request in the OSP sending list, so all of
  * requests in the sending list will return error, which happens
  * when it finds one update (with writing llog) requests fails or
  * the OSP is evicted by remote target. see osp_send_update_thread().
- *
- * \param[in] osp	OSP device whose update requests will be
- *                      invalidated.
- **/
+ */
 void osp_invalidate_request(struct osp_device *osp)
 {
 	struct lu_env env;
@@ -1421,17 +1422,16 @@ void osp_invalidate_request(struct osp_device *osp)
 }
 
 /**
- * Sending update thread
+ * osp_send_update_thread() - Sending update thread
+ * @arg: hold the OSP device.
  *
  * Create thread to send update request to other MDTs, this thread will pull
  * out update request from the list in OSP by version number, i.e. it will
  * make sure the update request with lower version number will be sent first.
  *
- * \param[in] arg	hold the OSP device.
- *
- * \retval		0 if the thread is created successfully.
- * \retal		negative error if the thread is not created
- *                      successfully.
+ * Return:
+ * * %0 if the thread is created successfully.
+ * * %negative error if the thread is not created successfully.
  */
 int osp_send_update_thread(void *arg)
 {
@@ -1492,19 +1492,19 @@ int osp_send_update_thread(void *arg)
 }
 
 /**
- * The OSP layer dt_device_operations::dt_trans_start() interface
- * to start the transaction.
+ * osp_trans_start() - The OSP layer dt_device_operations::dt_trans_start()
+ * interface to start the transaction.
+ * @env: pointer to the thread context
+ * @dt: pointer to the OSP dt_device
+ * @th: pointer to the transaction handler
  *
  * If the transaction is a remote transaction, then related remote
  * updates will be triggered in the osp_trans_stop().
  * Please refer to osp_trans_create() for transaction type.
  *
- * \param[in] env		pointer to the thread context
- * \param[in] dt		pointer to the OSP dt_device
- * \param[in] th		pointer to the transaction handler
- *
- * \retval			0 for success
- * \retval			negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 		    struct thandle *th)
@@ -1527,8 +1527,11 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 }
 
 /**
- * The OSP layer dt_device_operations::dt_trans_stop() interface
- * to stop the transaction.
+ * osp_trans_stop() - The OSP layer dt_device_operations::dt_trans_stop()
+ * interface to stop the transaction.
+ * @env: pointer to the thread context
+ * @dt: pointer to the OSP dt_device
+ * @th: pointer to the transaction handler
  *
  * If the transaction is a remote transaction, related remote
  * updates will be triggered at the end of this function.
@@ -1538,12 +1541,9 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
  *
  * Please refer to osp_trans_create() for transaction type.
  *
- * \param[in] env		pointer to the thread context
- * \param[in] dt		pointer to the OSP dt_device
- * \param[in] th		pointer to the transaction handler
- *
- * \retval			0 for success
- * \retval			negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		   struct thandle *th)
