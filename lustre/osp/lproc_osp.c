@@ -20,12 +20,14 @@
 #include "osp_internal.h"
 
 /**
- * Show OSP active status
+ * active_show() - Show OSP active status
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf)
@@ -46,14 +48,16 @@ static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
 }
 
 /**
- * Activate/Deactivate OSP
+ * active_store() - Activate/Deactivate OSP
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buffer: Buffer in kernel memory (string, which is "1" or "0" to
+ * activate/deactivate OSP)
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string, which is "1" or "0" to activate/deactivate OSP
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 			    const char *buffer, size_t count)
@@ -88,12 +92,14 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(active);
 
 /**
- * Show number of RPCs in flight
+ * sync_in_flight_show() - Show number of RPCs in flight
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t sync_in_flight_show(struct kobject *kobj,
 				   struct attribute *attr,
@@ -108,12 +114,14 @@ static ssize_t sync_in_flight_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(sync_in_flight);
 
 /**
- * Show number of RPCs in processing (including uncommitted by OST)
+ * sync_in_progress_show() - Show number of RPCs in processing
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t sync_in_progress_show(struct kobject *kobj,
 				     struct attribute *attr,
@@ -128,12 +136,14 @@ static ssize_t sync_in_progress_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(sync_in_progress);
 
 /**
- * Show number of changes to sync
+ * sync_changes_show() - Show number of changes to sync
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t sync_changes_show(struct kobject *kobj,
 				 struct attribute *attr,
@@ -147,14 +157,15 @@ static ssize_t sync_changes_show(struct kobject *kobj,
 }
 
 /**
- * Sync changes
+ * sync_changes_store() - Sync changes
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buffer: Buffer in kernel memory
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	unused because any input will do
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t sync_changes_store(struct kobject *kobj, struct attribute *attr,
 				  const char *buffer, size_t count)
@@ -210,12 +221,14 @@ static ssize_t max_sync_changes_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(max_sync_changes);
 
 /**
- * Show maximum number of RPCs in flight allowed
+ * max_rpcs_in_flight_show() - Show maximum number of RPCs in flight allowed
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t max_rpcs_in_flight_show(struct kobject *kobj,
 				       struct attribute *attr,
@@ -229,14 +242,15 @@ static ssize_t max_rpcs_in_flight_show(struct kobject *kobj,
 }
 
 /**
- * Change maximum number of RPCs in flight allowed
+ * max_rpcs_in_flight_store() - Change maximum number of RPCs in flight allowed
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buffer: Buffer in kernel memory (string which represents maximum number)
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t max_rpcs_in_flight_store(struct kobject *kobj,
 					struct attribute *attr,
@@ -300,12 +314,14 @@ static ssize_t max_mod_rpcs_in_flight_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(max_mod_rpcs_in_flight);
 
 /**
- * Show maximum number of RPCs in processing allowed
+ * max_rpcs_in_progress_show() - Show maximum number of RPCs in processing
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t max_rpcs_in_progress_show(struct kobject *kobj,
 					 struct attribute *attr,
@@ -319,14 +335,16 @@ static ssize_t max_rpcs_in_progress_show(struct kobject *kobj,
 }
 
 /**
- * Change maximum number of RPCs in processing allowed
+ * max_rpcs_in_progress_store() - Change maximum number of RPCs in processing
+ * allowed
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buffer: Buffer in kernel memory (string which represents maximum number)
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t max_rpcs_in_progress_store(struct kobject *kobj,
 					  struct attribute *attr,
@@ -353,12 +371,14 @@ static ssize_t max_rpcs_in_progress_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(max_rpcs_in_progress);
 
 /**
- * Show number of objects to precreate next time
+ * create_count_show() - Show number of objects to precreate next time
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t create_count_show(struct kobject *kobj,
 				 struct attribute *attr,
@@ -375,14 +395,16 @@ static ssize_t create_count_show(struct kobject *kobj,
 }
 
 /**
- * Change number of objects to precreate next time
+ * create_count_store() - Change number of objects to precreate next time
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buffer: Buffer in kernel memory (string represents number of objs to
+ * precreate)
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents number of objects to precreate
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t create_count_store(struct kobject *kobj, struct attribute *attr,
 				  const char *buffer, size_t count)
@@ -434,12 +456,14 @@ static ssize_t create_count_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(create_count);
 
 /**
- * Show maximum number of objects to precreate
+ * max_create_count_show() - Show maximum number of objects to precreate
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t max_create_count_show(struct kobject *kobj,
 				     struct attribute *attr,
@@ -456,14 +480,15 @@ static ssize_t max_create_count_show(struct kobject *kobj,
 }
 
 /**
- * Change maximum number of objects to precreate
+ * max_create_count_store() - Change maximum number of objects to precreate
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buffer: Buffer in kernel memory (string which represents maximum number)
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t max_create_count_store(struct kobject *kobj,
 				      struct attribute *attr,
@@ -500,12 +525,14 @@ static ssize_t max_create_count_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(max_create_count);
 
 /**
- * Show last id to assign in creation
+ * prealloc_next_id_show() - Show last id to assign in creation
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t prealloc_next_id_show(struct kobject *kobj,
 				     struct attribute *attr,
@@ -539,14 +566,15 @@ static ssize_t prealloc_next_id_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(prealloc_next_id);
 
 /**
- * Show last created id OST reported
+ * prealloc_last_id_show() - Show last created id OST reported
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
-
 static ssize_t prealloc_last_id_show(struct kobject *kobj,
 				     struct attribute *attr,
 				     char *buf)
@@ -570,12 +598,14 @@ static ssize_t prealloc_last_id_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(prealloc_last_id);
 
 /**
- * Show next FID sequence to precreate
+ * prealloc_next_seq_show() - Show next FID sequence to precreate
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t prealloc_next_seq_show(struct kobject *kobj,
 				      struct attribute *attr,
@@ -596,12 +626,14 @@ static ssize_t prealloc_next_seq_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(prealloc_next_seq);
 
 /**
- * Show last created FID sequence OST reported
+ * prealloc_last_seq_show() - Show last created FID sequence OST reported
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t prealloc_last_seq_show(struct kobject *kobj,
 				      struct attribute *attr,
@@ -622,12 +654,14 @@ static ssize_t prealloc_last_seq_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(prealloc_last_seq);
 
 /**
- * Show the number of ids reserved by declare
+ * prealloc_reserved_show() - Show the number of ids reserved by declare
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t prealloc_reserved_show(struct kobject *kobj,
 				      struct attribute *attr,
@@ -645,12 +679,14 @@ static ssize_t prealloc_reserved_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(prealloc_reserved);
 
 /**
- * Show interval (in seconds) to update statfs data
+ * maxage_show() - Show interval (in seconds) to update statfs data
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t maxage_show(struct kobject *kobj,
 			   struct attribute *attr,
@@ -664,14 +700,16 @@ static ssize_t maxage_show(struct kobject *kobj,
 }
 
 /**
- * Change interval to update statfs data
+ * maxage_store() - Change interval to update statfs data
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buffer: Buffer in kernel memory (string which represents statfs interval
+ * (in seconds))
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents statfs interval (in seconds)
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t maxage_store(struct kobject *kobj, struct attribute *attr,
 			    const char *buffer, size_t count)
@@ -696,13 +734,15 @@ static ssize_t maxage_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(maxage);
 
 /**
- * Show current precreation status: output 0 means success, otherwise negative
- * number is printed
+ * prealloc_status_show() - Show current precreation status: output 0 means
+ * success, otherwise negative number is printed
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t prealloc_status_show(struct kobject *kobj,
 				    struct attribute *attr,
@@ -758,6 +798,11 @@ static ssize_t prealloc_force_new_seq_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(prealloc_force_new_seq);
 
 /**
+ * destroys_in_flight_show() - destroy in-flight show
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
+ *
  * Show the number of RPCs in processing (including uncommitted by OST) plus
  * changes to sync, i.e. this is the total number of changes OST needs to apply
  * and commit.
@@ -767,10 +812,9 @@ LUSTRE_RW_ATTR(prealloc_force_new_seq);
  * on disk, the associated llog records have been cleared, and no synchronous
  * RPC are being processed.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t destroys_in_flight_show(struct kobject *kobj,
 				       struct attribute *attr,
@@ -787,12 +831,14 @@ static ssize_t destroys_in_flight_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(destroys_in_flight);
 
 /**
- * Show changes synced from previous mount
+ * old_sync_processed_show() - Show changes synced from previous mount
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t old_sync_processed_show(struct kobject *kobj,
 				       struct attribute *attr,
@@ -807,12 +853,14 @@ static ssize_t old_sync_processed_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(old_sync_processed);
 
 /**
- * Show maximum number of RPCs in flight
+ * lfsck_max_rpcs_in_flight_show() - Show maximum number of RPCs in flight
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t lfsck_max_rpcs_in_flight_show(struct kobject *kobj,
 					     struct attribute *attr,
@@ -829,14 +877,16 @@ static ssize_t lfsck_max_rpcs_in_flight_show(struct kobject *kobj,
 }
 
 /**
- * Change maximum number of RPCs in flight
+ * lfsck_max_rpcs_in_flight_store() - Change maximum number of RPCs in flight
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buffer: Buffer in kernel memory (string which represents maximum number of
+ * RPCs in flight)
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number of RPCs in flight
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t lfsck_max_rpcs_in_flight_store(struct kobject *kobj,
 					      struct attribute *attr,
@@ -928,8 +978,17 @@ static ssize_t osp_rpc_stats_seq_write(struct file *file,
 LDEBUGFS_SEQ_FOPS(osp_rpc_stats);
 
 /**
+ * reserved_mb_high_show() - show high watermark (in MB)
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
+ *
  * Show high watermark (in megabytes). If available free space at OST is greater
  * than high watermark and object allocation for OST is disabled, enable it.
+ *
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t reserved_mb_high_show(struct kobject *kobj,
 				     struct attribute *attr,
@@ -942,7 +1001,7 @@ static ssize_t reserved_mb_high_show(struct kobject *kobj,
 	return snprintf(buf, PAGE_SIZE, "%u\n", osp->opd_reserved_mb_high);
 }
 
-/**
+/*
  * Change high watermark
  */
 static ssize_t reserved_mb_high_store(struct kobject *kobj,
@@ -974,8 +1033,17 @@ static ssize_t reserved_mb_high_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(reserved_mb_high);
 
 /**
+ * reserved_mb_low_show() - show low watermark (in MB)
+ * @kobj: kernel object associated with the sysfs
+ * @attr: pointer to the attribute structure
+ * @buf: Buffer in kernel memory
+ *
  * Show low watermark (in megabytes). If available free space at OST is less
  * than low watermark, object allocation for OST is disabled.
+ *
+ * Return:
+ * * %>0 return the number of bytes written
+ * * %negative number on error
  */
 static ssize_t reserved_mb_low_show(struct kobject *kobj,
 				    struct attribute *attr,
@@ -988,7 +1056,7 @@ static ssize_t reserved_mb_low_show(struct kobject *kobj,
 	return snprintf(buf, PAGE_SIZE, "%u\n", osp->opd_reserved_mb_low);
 }
 
-/**
+/*
  * Change low watermark
  */
 static ssize_t reserved_mb_low_store(struct kobject *kobj,
@@ -1017,7 +1085,7 @@ static ssize_t reserved_mb_low_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(reserved_mb_low);
 
-/**
+/*
  * Show high watermark of inode.
  */
 static ssize_t reserved_ino_high_show(struct kobject *kobj,
@@ -1031,7 +1099,7 @@ static ssize_t reserved_ino_high_show(struct kobject *kobj,
 	return snprintf(buf, PAGE_SIZE, "%u\n", osp->opd_reserved_ino_high);
 }
 
-/**
+/*
  * Change high watermark of inode.
  */
 static ssize_t reserved_ino_high_store(struct kobject *kobj,
@@ -1061,7 +1129,7 @@ static ssize_t reserved_ino_high_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(reserved_ino_high);
 
-/**
+/*
  * Show low watermark.
  */
 static ssize_t reserved_ino_low_show(struct kobject *kobj,
@@ -1075,7 +1143,7 @@ static ssize_t reserved_ino_low_show(struct kobject *kobj,
 	return snprintf(buf, PAGE_SIZE, "%u\n", osp->opd_reserved_ino_low);
 }
 
-/**
+/*
  * Change low watermark
  */
 static ssize_t reserved_ino_low_store(struct kobject *kobj,
@@ -1260,9 +1328,8 @@ void osp_tunables_fini(struct osp_device *osp)
 }
 
 /**
- * Initialize OSP sysfs / debugfs
- *
- * param[in] osp	OSP device
+ * osp_tunables_init() - Initialize OSP sysfs / debugfs
+ * @osp: OSP device
  */
 void osp_tunables_init(struct osp_device *osp)
 {
