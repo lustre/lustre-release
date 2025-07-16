@@ -9,7 +9,15 @@
 #BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
 BUILD_GEN+=".2"	# LU-9850
 
-DEVEL_KERNEL_TYPE="devel"
+DISTROVER=$(echo "$DISTROMAJ" | egrep -o '[0-9]+')
+if [[ ( "$TARGET_ARCH" =~ "aarch64" || "$TARGET_ARCH" =~ "arm64" ) ]] &&
+   [[ ( "$TARGET_ARCH" =~ "64k" || $(getconf PAGE_SIZE) == 65536 ) ]] &&
+   (( DISTROVER > 8 )); then
+    DEVEL_KERNEL_TYPE=${DEVEL_KERNEL_TYPE:-"64k-devel"}
+    DEVEL_PATH_ARCH=${DEVEL_PATH_ARCH:-"aarch64+64k"}
+else
+    DEVEL_KERNEL_TYPE=${DEVEL_KERNEL_TYPE:-"devel"}
+fi
 RPM_HELPERS_DIR="/usr/lib/rpm/redhat"
 # Pkg which contains ext4 source code
 KERNEL_DEBUGINFO="kernel-debuginfo-common-${TARGET_ARCH}-${lnxmaj}-${lnxrel}.${TARGET_ARCH}.rpm"
@@ -143,14 +151,14 @@ rpm_BUILD_kernel_dirname() {
 
 find_linux_devel_paths() {
     local path="$1"
-    local ARCH=$TARGET_ARCH
 
-    # If DEVEL_PATH_ARCH is set, use it. Added for fc11 as it needs i586 string for i686.
-    if [ $DEVEL_PATH_ARCH ];then
-        ARCH=$DEVEL_PATH_ARCH
-    fi
+    # If DEVEL_PATH_ARCH is set, use it.
+    # - fc11 needs i586 string for i686
+    # - aarch64 + 64K pages needs "aarch64+64k
+    local arch=${DEVEL_PATH_ARCH:-$TARGET_ARCH}
 
-    LINUX=$path/usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}${DEVEL_PATH_ARCH_DELIMETER:-"-"}${ARCH}
+    LINUX=$path/usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}${DEVEL_PATH_ARCH_DELIMETER:-"-"}${arch}
+
     # RHEL doesn't have the -obj tree
     LINUXOBJ=""
 
@@ -159,10 +167,11 @@ find_linux_devel_paths() {
 
 unpack_linux_devel_rpm-rhel() {
     local callers_rpm="$1"
+    local arch=${DEVEL_PATH_ARCH:-$TARGET_ARCH}
 
     # now just sanity check that everything needed to build properly versioned
     # modules is in place
-    if [ ! -f usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}${DEVEL_PATH_ARCH_DELIMETER:-"-"}$TARGET_ARCH/Module.symvers ]; then
+    if [ ! -f usr/src/kernels/${lnxmaj}${lnxmin}-${lnxrel}${DEVEL_PATH_ARCH_DELIMETER:-"-"}$arch/Module.symvers ]; then
         fatal 1 "cannot build kernel modules: the Kernel's Module.symvers is missing."
     fi
 
@@ -183,8 +192,8 @@ find_linux_rpm-rhel() {
     if [ "$(lsb_release -s -i)" = "RedHatEnterpriseServer" ]; then
         sudo="sudo"
     fi
-    if ! $sudo yumdownloader --destdir "$tmpdir" kernel-devel-"$wanted_kernel" > /dev/null; then
-        fatal 1 "failed to fetch kernel-devel-$wanted_kernel with yumdownloader."
+    if ! $sudo yumdownloader --destdir "$tmpdir" kernel-$DEVEL_KERNEL_TYPE-"$wanted_kernel" > /dev/null; then
+        fatal 1 "failed to fetch kernel-$DEVEL_KERNEL_TYPE-$wanted_kernel with yumdownloader."
     fi
     local rpm=$(cd $tmpdir; echo *)
     mv "$tmpdir/$rpm" "$pathtorpms"
