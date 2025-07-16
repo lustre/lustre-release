@@ -4304,6 +4304,45 @@ test_290() {
 }
 run_test 290 "Check that lnet acceptor is using explicit address binding"
 
+test_291() {
+	[[ ${NETTYPE} == tcp* ]] ||
+		skip "Need tcp NETTYPE"
+
+	reinit_dlc || return $?
+	cleanup_lnet || return $?
+
+	local lnid cmd
+
+	load_lnet "accept_port_bulk=989" || error "Failed to load LNet"
+
+	$LCTL net up $LNET_CONFIG_OPT ||
+		error "Failed to load LNet with accept_port_bulk=989"
+
+	$LNETCTL net show -v 1 | grep -q "conns_per_peer: 1" ||
+		error "failed to set conns-per-peer to 1"
+	lnid="$(lctl list_nids | head -n 1)"
+	do_lnetctl ping "$lnid" ||
+		error "failed to ping myself"
+
+	# "lctl --net tcp conn_list" prints the list of active
+	# connections. Since we're pinging ourselves, there should be
+	# 2 Control connections plus 2*conns_per_peer connections
+	# created (one Bulk Input, one Bulk Output in each pair).
+	# Here's the sample output for conns_per_peer set to 1:
+	# 12345-1.1.1.1@tcp I[0]host01->host01:988 2626560/1061296 nonagle
+	# 12345-1.1.1.1@tcp O[0]host01->host01:1022 2626560/1061488 nonagle
+	# 12345-1.1.1.1@tcp C[0]host01->host01:988 2626560/1061296 nonagle
+	# 12345-1.1.1.1@tcp C[0]host01->host01:1023 2626560/1061488 nonagle
+	cmd="printf 'network tcp\nconn_list\n' | lctl | grep -c ':989'"
+
+	# Expect one bulk connection on port 989
+	wait_update $HOSTNAME "$cmd" "1" 10 ||
+		error "expected 1 tcp connection on port 989"
+
+	cleanup_lnet || return $?
+}
+run_test 291 "load lnet using custom accept port for bulk tcp connections"
+
 test_300() {
 	# LU-13274
 	local header

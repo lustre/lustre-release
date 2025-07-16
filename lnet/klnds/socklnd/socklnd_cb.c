@@ -876,6 +876,7 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 	rwlock_t *g_lock;
 	int retry;
 	int rc;
+	int port = lnet_acceptor_port();
 
 	LASSERT(tx->tx_conn == NULL);
 
@@ -929,14 +930,14 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 			sin = (void *)&sa;
 			sin->sin_family = AF_INET;
 			sin->sin_addr.s_addr = id->nid.nid_addr[0];
-			sin->sin_port = htons(lnet_acceptor_port());
+			sin->sin_port = htons(port);
 			break;
 		case 16:
 			sin6 = (void *)&sa;
 			sin6->sin6_family = AF_INET6;
 			memcpy(&sin6->sin6_addr, id->nid.nid_addr,
 			       sizeof(sin6->sin6_addr));
-			sin6->sin6_port = htons(lnet_acceptor_port());
+			sin6->sin6_port = htons(port);
 			break;
 		}
 		rc = ksocknal_add_peer(ni, id, (struct sockaddr *)&sa);
@@ -2000,7 +2001,8 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 		sock = lnet_connect(&peer_ni->ksnp_id.nid,
 				    net->ksnn_interface.ksni_index,
 				    (struct sockaddr *)&conn_cb->ksnr_addr,
-				    peer_ni->ksnp_ni->ni_net_ns);
+				    peer_ni->ksnp_ni->ni_net_ns,
+				    type == SOCKLND_CONN_CONTROL);
 		if (IS_ERR(sock)) {
 			rc = PTR_ERR(sock);
 			goto failed;

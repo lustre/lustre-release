@@ -928,17 +928,19 @@ void lnet_register_lnd(const struct lnet_lnd *lnd);
 void lnet_unregister_lnd(const struct lnet_lnd *lnd);
 
 struct socket *lnet_connect(struct lnet_nid *peer_nid, int interface,
-			    struct sockaddr *peeraddr, struct net *ns);
+			    struct sockaddr *peeraddr, struct net *ns,
+			    bool control);
 void lnet_connect_console_error(int rc, struct lnet_nid *peer_nid,
 				struct sockaddr *sa);
 int lnet_count_acceptor_nets(void);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
+int lnet_acceptor_port_bulk(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
-int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
-			     int ifindex, struct net *ni_net_ns);
-void lnet_acceptor_remove_socket(const char *iface);
+int lnet_acceptor_add_sockets(const char *iface, struct sockaddr *addr,
+			      int ifindex, struct net *ni_net_ns);
+void lnet_acceptor_remove_sockets(const char *iface);
 
 
 struct lnet_inetdev {

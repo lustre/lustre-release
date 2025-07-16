@@ -2503,7 +2503,7 @@ ksocknal_shutdown(struct lnet_ni *ni)
 	/* Delete all peers */
 	ksocknal_del_peer(ni, NULL);
 
-	lnet_acceptor_remove_socket(net->ksnn_interface.ksni_name);
+	lnet_acceptor_remove_sockets(net->ksnn_interface.ksni_name);
 
 	/* Wait for all peer_ni state to clean up */
 	wait_var_event_warning(&net->ksnn_npeers,
@@ -2709,9 +2709,9 @@ ksocknal_startup(struct lnet_ni *ni)
 	     (dev_status <= 0))
 		lnet_set_link_fatal_state(ni, 1);
 
-	rc = lnet_acceptor_add_socket(ksi->ksni_name,
-				      (struct sockaddr *)&ksi->ksni_addr,
-				      ksi->ksni_index, ni->ni_net_ns);
+	rc = lnet_acceptor_add_sockets(ksi->ksni_name,
+				       (struct sockaddr *)&ksi->ksni_addr,
+				       ksi->ksni_index, ni->ni_net_ns);
 	if (rc != 0)
 		goto out_net;
 

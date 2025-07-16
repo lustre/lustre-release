@@ -21,6 +21,7 @@
 #include <linux/module.h>
 
 static int   accept_port    = 988;
+static int   accept_port_bulk = 988;
 static int   accept_backlog = 127;
 static int   accept_timeout = 5;
 
@@ -60,6 +61,14 @@ lnet_acceptor_port(void)
 {
 	return accept_port;
 }
+EXPORT_SYMBOL(lnet_acceptor_port);
+
+int
+lnet_acceptor_port_bulk(void)
+{
+	return accept_port_bulk;
+}
+EXPORT_SYMBOL(lnet_acceptor_port_bulk);
 
 static inline int
 lnet_accept_magic(__u32 magic, __u32 constant)
@@ -68,14 +77,15 @@ lnet_accept_magic(__u32 magic, __u32 constant)
 		magic == __swab32(constant));
 }
 
-EXPORT_SYMBOL(lnet_acceptor_port);
 
 static char *accept_type = "secure";
 
 module_param_named(accept, accept_type, charp, 0444);
 MODULE_PARM_DESC(accept, "Accept connections (secure|all|none)");
 module_param(accept_port, int, 0444);
-MODULE_PARM_DESC(accept_port, "Acceptor's port (same on all nodes)");
+MODULE_PARM_DESC(accept_port, "Acceptor's port for control conns (same on all nodes)");
+module_param(accept_port_bulk, int, 0444);
+MODULE_PARM_DESC(accept_port_bulk, "Acceptor's port for bulk conns (same on all nodes)");
 module_param(accept_backlog, int, 0444);
 MODULE_PARM_DESC(accept_backlog, "Acceptor's listen backlog");
 module_param(accept_timeout, int, 0644);
@@ -145,11 +155,10 @@ static void lnet_acceptor_ready(struct sock *sk, int len)
 	wake_up_interruptible(&lnet_acceptor_state.pta_waitq);
 }
 
-int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
-			     int ifindex, struct net *ni_net_ns)
+static int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
+			     int ifindex, struct net *ni_net_ns, int port)
 {
 	struct listening_socket *lsock;
-	int port = accept_port;
 	int rc;
 	char ip_str[INET6_ADDRSTRLEN];
 
@@ -170,7 +179,7 @@ int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
 	if (!lsock)
 		return -ENOMEM;
 
-	lsock->liss_sock = lnet_sock_listen(accept_port, accept_backlog,
+	lsock->liss_sock = lnet_sock_listen(port, accept_backlog,
 					    ni_net_ns, addr, ifindex);
 
 	if (IS_ERR(lsock->liss_sock)) {
@@ -215,16 +224,16 @@ int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
 		wake_up(&lnet_acceptor_state.pta_waitq);
 	return 0;
 }
-EXPORT_SYMBOL(lnet_acceptor_add_socket);
 
-void lnet_acceptor_remove_socket(const char *iface)
+static void lnet_acceptor_remove_socket(const char *iface, int port)
 {
 	struct listening_socket *lsock, *tmp, *to_free = NULL;
 	bool found = false;
 
 	spin_lock(&socket_lock);
 	list_for_each_entry_safe(lsock, tmp, &socket_list, liss_list) {
-		if (strcmp(lsock->liss_iface, iface) == 0) {
+		if (strcmp(lsock->liss_iface, iface) == 0 &&
+		    port == lsock->liss_port) {
 			list_del(&lsock->liss_list);
 			atomic_dec(&active_sockets);
 
@@ -253,18 +262,45 @@ void lnet_acceptor_remove_socket(const char *iface)
 	if (!found)
 		CERROR("Interface %s not found\n", iface);
 }
-EXPORT_SYMBOL(lnet_acceptor_remove_socket);
+
+int lnet_acceptor_add_sockets(const char *iface, struct sockaddr *addr,
+			      int ifindex, struct net *ni_net_ns)
+{
+	int rc;
+
+	rc = lnet_acceptor_add_socket(iface, addr, ifindex, ni_net_ns,
+				      accept_port);
+
+	if (!rc && accept_port_bulk != accept_port) {
+		rc = lnet_acceptor_add_socket(iface, addr, ifindex, ni_net_ns,
+					      accept_port_bulk);
+		if (rc)
+			lnet_acceptor_remove_socket(iface, accept_port);
+	}
+	return rc;
+}
+EXPORT_SYMBOL(lnet_acceptor_add_sockets);
+
+void lnet_acceptor_remove_sockets(const char *iface)
+{
+	lnet_acceptor_remove_socket(iface, accept_port);
+
+	if (accept_port_bulk != accept_port)
+		lnet_acceptor_remove_socket(iface, accept_port_bulk);
+}
+EXPORT_SYMBOL(lnet_acceptor_remove_sockets);
 
 struct socket *
 lnet_connect(struct lnet_nid *peer_nid, int interface,
-	     struct sockaddr *peeraddr,
-	     struct net *ns)
+	     struct sockaddr *peeraddr, struct net *ns,
+	     bool control)
 {
 	struct lnet_acceptor_connreq cr1;
 	struct lnet_acceptor_connreq_v2 cr2;
 	void *cr;
 	int crsize;
 	struct socket *sock;
+	struct sockaddr_storage destaddr;
 	int rc;
 	int port;
 
@@ -272,12 +308,20 @@ lnet_connect(struct lnet_nid *peer_nid, int interface,
 
 	LASSERT(peeraddr->sa_family == AF_INET ||
 		peeraddr->sa_family == AF_INET6);
+	rpc_copy_addr((struct sockaddr *)&destaddr, peeraddr);
+	if (control)
+		rpc_set_port((struct sockaddr *)&destaddr,
+			     lnet_acceptor_port());
+	else
+		rpc_set_port((struct sockaddr *)&destaddr,
+			     lnet_acceptor_port_bulk());
 
 	for (port = LNET_ACCEPTOR_MAX_RESERVED_PORT;
 	     port >= LNET_ACCEPTOR_MIN_RESERVED_PORT;
 	     --port) {
 		/* Iterate through reserved ports. */
-		sock = lnet_sock_connect(interface, port, peeraddr, ns);
+		sock = lnet_sock_connect(interface, port,
+					 (struct sockaddr *)&destaddr, ns);
 		if (IS_ERR(sock)) {
 			rc = PTR_ERR(sock);
 			if (rc == -EADDRINUSE || rc == -EADDRNOTAVAIL)
