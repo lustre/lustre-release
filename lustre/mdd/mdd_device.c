@@ -131,6 +131,13 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	mdd->mdd_cl.mc_deniednext = 60; /* 60 secs by default */
 	mdd->mdd_cl.mc_enable_shard_pfid = false; /* master pFID by default */
 
+	/* Initialize changelog spinlocks early to avoid "spinlock bad magic"
+	 * errors during cleanup if mdd_changelog_init() is never called due to
+	 * early failures (e.g., OBD_FAIL_MDS_FS_SETUP injection).
+	 */
+	spin_lock_init(&mdd->mdd_cl.mc_lock);
+	spin_lock_init(&mdd->mdd_cl.mc_user_lock);
+
 	dev = lustre_cfg_string(lcfg, 0);
 	if (dev == NULL)
 		RETURN(rc);
@@ -650,9 +657,7 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 	int			 rc;
 
 	mdd->mdd_cl.mc_index = 0;
-	spin_lock_init(&mdd->mdd_cl.mc_lock);
 	mdd->mdd_cl.mc_starttime = ktime_get();
-	spin_lock_init(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = 0;
 
 	/* ensure a GC check will, and a thread run may, occur upon start */
