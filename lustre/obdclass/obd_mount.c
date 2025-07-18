@@ -1428,17 +1428,18 @@ int lustre_parse_monolithic(struct fs_context *fc, void *lmd2_data)
 			rc = lmd_parse_string(&lmd->lmd_mgsname, args->from);
 			break;
 		case LMD_OPT_MGSNODE:
+			s2 = opts;
 			/* Assume the next mount opt is the first
 			 * invalid NID we get to.
 			 */
 			rc = lmd_parse_mgs(lmd, args->from, &opts);
 			if (rc < 0)
 				GOTO(invalid, rc);
+			/* Remove extra NIDs from options string */
+			if (strlen(s2) != strlen(opts)) {
+				char *tmp = strstr(options, s2);
 
-			if (strcmp(options, opts) != 0) {
-				s2 = strstr(options, opts);
-				if (s2)
-					options = s2;
+				memmove(tmp, opts, strlen(opts) + 1);
 			}
 			break;
 		case LMD_OPT_MGSSEC:

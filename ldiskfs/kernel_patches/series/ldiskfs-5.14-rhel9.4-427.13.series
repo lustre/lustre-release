@@ -40,3 +40,4 @@ rhel9.2/ext4-encdata.patch
 rhel9/ext4-add-periodic-superblock-update.patch
 rhel9/ext4-add-DISCARD-stats.patch
 rhel9.4/ext4-add-IGET_NO_CHECKS-flag.patch
+rhel9.2/ext4-add-fstrim-mount-option.patch

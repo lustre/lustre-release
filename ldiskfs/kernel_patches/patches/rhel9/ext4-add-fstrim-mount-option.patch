@@ -1,0 +1,470 @@
+Index: linux-5.14.0-162.23.1.el9_1/fs/ext4/ext4.h
+===================================================================
+--- linux-5.14.0-162.23.1.el9_1.orig/fs/ext4/ext4.h
++++ linux-5.14.0-162.23.1.el9_1/fs/ext4/ext4.h
+@@ -170,6 +170,8 @@ enum SHIFT_DIRECTION {
+ #define EXT4_MB_CR1_OPTIMIZED		0x00010000
+ /* Perform linear traversal for one group */
+ #define EXT4_MB_SEARCH_NEXT_LINEAR	0x00020000
++/* Skip the groups scheduled for fstrim */
++#define EXT4_MB_SKIP_FSTRIM_GROUPS	0x00040000
+ struct ext4_allocation_request {
+ 	/* target inode for block we're allocating */
+ 	struct inode *inode;
+@@ -1279,6 +1281,7 @@ struct ext4_inode_info {
+ #define EXT4_MOUNT2_MB_OPTIMIZE_SCAN	0x00000080 /* Optimize group
+ 						    * scanning in mballoc
+ 						    */
++#define EXT4_MOUNT2_FSTRIM		0x00000100 /* fstrim style DISCARD */
+ 
+ #define clear_opt(sb, opt)		EXT4_SB(sb)->s_mount_opt &= \
+ 						~EXT4_MOUNT_##opt
+@@ -1328,7 +1331,11 @@ extern void mb_set_bits(void *bm, int cu
+ #define EXT4_LABEL_MAX			16
+ 
+ /* Default min freed blocks which we could clear BG_TRIMMED flag */
+-#define EXT4_DEF_BG_TRIMMED_THRESHOLD	128
++#define EXT4_DEF_BG_TRIMMED_THRESHOLD	1024
++
++#define EXT4_DEF_FSTRIM_MIN_BLOCKS	1024
++#define EXT4_DEF_FSTRIM_AVG_FRAG_NO_DELAY	4096
++#define EXT4_DEF_FSTRIM_DELAY_SECS	60
+ 
+ /*
+  * Structure of the super block
+@@ -1620,6 +1627,12 @@ struct ext4_sb_info {
+ 						   after commit completed */
+ 	struct list_head s_discard_list;
+ 	struct work_struct s_discard_work;
++	struct list_head s_fstrim_groups_ready;
++	struct list_head s_fstrim_groups_pending;
++	struct list_head s_fstrim_groups_last_free;
++	spinlock_t s_fstrim_groups_lock;
++	struct task_struct *s_fstrim_task;
++	wait_queue_head_t s_fstrim_wq;
+ 	atomic_t s_retry_alloc_pending;
+ 	struct rb_root s_mb_avg_fragment_size_root;
+ 	rwlock_t s_mb_rb_lock;
+@@ -1686,6 +1699,10 @@ struct ext4_sb_info {
+ 	/* Min freed blocks per group that we could clear BG_TRIMMED on it */
+ 	unsigned long s_bg_trimmed_threshold;
+ 
++	unsigned int s_fstrim_min_blocks;
++	unsigned int s_fstrim_avg_frag_no_delay;
++	unsigned int s_fstrim_delay_secs;
++
+ 	unsigned int s_log_groups_per_flex;
+ 	struct flex_groups * __rcu *s_flex_groups;
+ 	ext4_group_t s_flex_groups_allocated;
+@@ -3671,6 +3688,10 @@ struct ext4_group_info {
+ 	struct rw_semaphore alloc_sem;
+ 	struct rb_node	bb_avg_fragment_size_rb;
+ 	struct list_head bb_largest_free_order_node;
++	struct list_head bb_fstrim_list;
++	struct list_head bb_fstrim_last_free;
++	time64_t	bb_fstrim_start;
++	time64_t	bb_last_free;
+ 	ext4_grpblk_t	bb_counters[];	/* Nr of free power-of-two-block
+ 					 * regions, index is order.
+ 					 * bb_counters[3] = 5 means
+Index: linux-5.14.0-162.23.1.el9_1/fs/ext4/mballoc.c
+===================================================================
+--- linux-5.14.0-162.23.1.el9_1.orig/fs/ext4/mballoc.c
++++ linux-5.14.0-162.23.1.el9_1/fs/ext4/mballoc.c
+@@ -412,6 +412,8 @@ static int ext4_try_to_trim_range(struct
+ 		struct ext4_buddy *e4b, ext4_grpblk_t start,
+ 		ext4_grpblk_t max, ext4_grpblk_t minblocks);
+ 
++static int ext4_mb_fstrim_thread(void *data);
++
+ /*
+  * The algorithm using this percpu seq counter goes below:
+  * 1. We sample the percpu discard_pa_seq counter before trying for block
+@@ -2450,6 +2452,11 @@ static bool ext4_mb_good_group(struct ex
+ 	case 0:
+ 		BUG_ON(ac->ac_2order == 0);
+ 
++		if (test_opt2(ac->ac_sb, FSTRIM) &&
++		    (ac->ac_flags & EXT4_MB_SKIP_FSTRIM_GROUPS) &&
++		    !list_empty(&grp->bb_fstrim_list))
++			return false;
++
+ 		/* Avoid using the first bg of a flexgroup for data files */
+ 		if ((ac->ac_flags & EXT4_MB_HINT_DATA) &&
+ 		    (flex_size >= EXT4_FLEX_SIZE_DIR_ALLOC_SCHEME) &&
+@@ -2467,6 +2474,11 @@ static bool ext4_mb_good_group(struct ex
+ 
+ 		return true;
+ 	case 1:
++		if (test_opt2(ac->ac_sb, FSTRIM) &&
++		    (ac->ac_flags & EXT4_MB_SKIP_FSTRIM_GROUPS) &&
++		    !list_empty(&grp->bb_fstrim_list))
++			return false;
++
+ 		if ((free / fragments) >= ac->ac_g_ex.fe_len)
+ 			return true;
+ 		break;
+@@ -2642,7 +2654,7 @@ static noinline_for_stack int
+ ext4_mb_regular_allocator(struct ext4_allocation_context *ac)
+ {
+ 	ext4_group_t prefetch_grp = 0, ngroups, group, i;
+-	int cr = -1;
++	int cr = -1, orig_cr;
+ 	int err = 0, first_err = 0;
+ 	unsigned int nr = 0, prefetch_ios = 0;
+ 	struct ext4_sb_info *sbi;
+@@ -2700,7 +2712,11 @@ ext4_mb_regular_allocator(struct ext4_al
+ 	}
+ 
+ 	/* Let's just scan groups to find more-less suitable blocks */
+-	cr = ac->ac_2order ? 0 : 1;
++	orig_cr = cr = ac->ac_2order ? 0 : 1;
++
++	if (test_opt2(sb, FSTRIM))
++		ac->ac_flags |= EXT4_MB_SKIP_FSTRIM_GROUPS;
++
+ 	/*
+ 	 * cr == 0 try to get exact allocation,
+ 	 * cr == 3  try to get anything
+@@ -2725,6 +2741,13 @@ repeat:
+ 
+ 			ext4_mb_choose_next_group(ac, &new_cr, &group, ngroups);
+ 			if (new_cr != cr) {
++				if (test_opt2(sb, FSTRIM) &&
++				    new_cr == 2 && orig_cr < 2 &&
++				    (ac->ac_flags & EXT4_MB_SKIP_FSTRIM_GROUPS)) {
++					cr = orig_cr;
++					ac->ac_flags &= ~EXT4_MB_SKIP_FSTRIM_GROUPS;
++					goto repeat;
++				}
+ 				cr = new_cr;
+ 				goto repeat;
+ 			}
+@@ -3345,6 +3368,8 @@ int ext4_mb_add_groupinfo(struct super_b
+ 	meta_group_info[i]->bb_largest_free_order = -1;  /* uninit */
+ 	meta_group_info[i]->bb_group = group;
+ 	meta_group_info[i]->bb_freed_since_trim = 0;
++	INIT_LIST_HEAD(&meta_group_info[i]->bb_fstrim_list);
++	INIT_LIST_HEAD(&meta_group_info[i]->bb_fstrim_last_free);
+ 
+ 	mb_group_bb_bitmap_alloc(sb, meta_group_info[i], group);
+ 	return 0;
+@@ -3619,6 +3644,30 @@ int ext4_mb_init(struct super_block *sb)
+ 	INIT_LIST_HEAD(&sbi->s_discard_list);
+ 	INIT_WORK(&sbi->s_discard_work, ext4_discard_work);
+ 	atomic_set(&sbi->s_retry_alloc_pending, 0);
++	INIT_LIST_HEAD(&sbi->s_fstrim_groups_ready);
++	INIT_LIST_HEAD(&sbi->s_fstrim_groups_pending);
++	INIT_LIST_HEAD(&sbi->s_fstrim_groups_last_free);
++	spin_lock_init(&sbi->s_fstrim_groups_lock);
++	init_waitqueue_head(&sbi->s_fstrim_wq);
++	if (test_opt2(sb, FSTRIM)) {
++		if (bdev_max_discard_sectors(sb->s_bdev)) {
++			sbi->s_fstrim_task = kthread_run(ext4_mb_fstrim_thread,
++							 sb, "fstrim-%s",
++							 sb->s_id);
++			if (IS_ERR(sbi->s_fstrim_task)) {
++				ret = PTR_ERR(sbi->s_fstrim_task);
++				sbi->s_fstrim_task = NULL;
++				ext4_warning(sb, "Failed to create fstrim thread: %d, "
++						 "disabling -o fstrim", ret);
++				clear_opt2(sb, FSTRIM);
++			}
++		} else {
++			ext4_warning(sb, "mounting with \"fstrim\" option, "
++					 "but the device does not support "
++					 "discard, disabling -o fstrim");
++			clear_opt2(sb, FSTRIM);
++		}
++	}
+ 
+ 	sbi->s_mb_max_to_scan = MB_DEFAULT_MAX_TO_SCAN;
+ 	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
+@@ -3674,6 +3723,9 @@ int ext4_mb_init(struct super_block *sb)
+ 
+ 	sbi->s_bg_trimmed_threshold = EXT4_DEF_BG_TRIMMED_THRESHOLD;
+ 
++	sbi->s_fstrim_avg_frag_no_delay = EXT4_DEF_FSTRIM_AVG_FRAG_NO_DELAY;
++	sbi->s_fstrim_delay_secs = EXT4_DEF_FSTRIM_DELAY_SECS;
++
+ 	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
+ 	if (sbi->s_locality_groups == NULL) {
+ 		ret = -ENOMEM;
+@@ -3746,6 +3798,11 @@ int ext4_mb_release(struct super_block *
+ 		WARN_ON_ONCE(!list_empty(&sbi->s_discard_list));
+ 	}
+ 
++	if (test_opt2(sb, FSTRIM) && sbi->s_fstrim_task != NULL) {
++		kthread_stop(sbi->s_fstrim_task);
++		sbi->s_fstrim_task = NULL;
++	}
++
+ 	if (sbi->s_group_info) {
+ 		for (i = 0; i < ngroups; i++) {
+ 			cond_resched();
+@@ -3909,6 +3966,11 @@ void ext4_process_freed_data(struct supe
+ 		list_for_each_entry_safe(entry, tmp, &freed_data_list, efd_list)
+ 			kmem_cache_free(ext4_free_data_cachep, entry);
+ 	}
++
++	if (test_opt2(sb, FSTRIM) &&
++	    (!list_empty(&sbi->s_fstrim_groups_ready) ||
++	     !list_empty(&sbi->s_fstrim_groups_pending)))
++		wake_up(&sbi->s_fstrim_wq);
+ }
+ 
+ int __init ext4_init_mballoc(void)
+@@ -6172,6 +6234,7 @@ static void ext4_mb_clear_bb(handle_t *h
+ 	struct buffer_head *bitmap_bh = NULL;
+ 	struct super_block *sb = inode->i_sb;
+ 	struct ext4_group_desc *gdp;
++	struct ext4_group_info *grp;
+ 	unsigned int overflow;
+ 	ext4_grpblk_t bit;
+ 	struct buffer_head *gd_bh;
+@@ -6188,8 +6251,8 @@ do_more:
+ 	overflow = 0;
+ 	ext4_get_group_no_and_offset(sb, block, &block_group, &bit);
+ 
+-	if (unlikely(EXT4_MB_GRP_BBITMAP_CORRUPT(
+-			ext4_get_group_info(sb, block_group))))
++	grp = ext4_get_group_info(sb, block_group);
++	if (unlikely(!grp || EXT4_MB_GRP_BBITMAP_CORRUPT(grp)))
+ 		return;
+ 
+ 	/*
+@@ -6315,6 +6378,43 @@ do_more:
+ 			gdp->bg_flags &= cpu_to_le16(~EXT4_BG_TRIMMED);
+ 	}
+ 	ext4_group_desc_csum_set(sb, block_group, gdp);
++
++	if (test_opt2(sb, FSTRIM) &&
++	    grp->bb_freed_since_trim >= sbi->s_bg_trimmed_threshold) {
++		ext4_grpblk_t avg_frag;
++
++		avg_frag = (grp->bb_free == 0 || grp->bb_fragments == 0) ?
++				count : (grp->bb_free / grp->bb_fragments);
++		if (avg_frag >= sbi->s_fstrim_min_blocks) {
++			spin_lock(&sbi->s_fstrim_groups_lock);
++			if (list_empty(&grp->bb_fstrim_list)) {
++				grp->bb_fstrim_start = ktime_get_seconds();
++				grp->bb_last_free = grp->bb_fstrim_start;
++				if (avg_frag >=
++				    sbi->s_fstrim_avg_frag_no_delay) {
++					list_add_tail(&grp->bb_fstrim_list,
++					      &sbi->s_fstrim_groups_ready);
++				} else {
++					list_add_tail(&grp->bb_fstrim_list,
++					      &sbi->s_fstrim_groups_pending);
++					list_add_tail(&grp->bb_fstrim_last_free,
++					      &sbi->s_fstrim_groups_last_free);
++				}
++			} else if (!list_empty(&grp->bb_fstrim_last_free)) {
++				grp->bb_last_free = ktime_get_seconds();
++				if (avg_frag >=
++				    sbi->s_fstrim_avg_frag_no_delay) {
++					list_move_tail(&grp->bb_fstrim_list,
++					      &sbi->s_fstrim_groups_ready);
++					list_del_init(&grp->bb_fstrim_last_free);
++				} else {
++					list_move_tail(&grp->bb_fstrim_last_free,
++					      &sbi->s_fstrim_groups_last_free);
++				}
++			}
++			spin_unlock(&sbi->s_fstrim_groups_lock);
++		}
++	}
+ 	ext4_unlock_group(sb, block_group);
+ 
+ 	if (sbi->s_log_groups_per_flex) {
+@@ -6788,6 +6888,84 @@ out_return:
+ 	return ret;
+ }
+ 
++static int ext4_mb_fstrim_thread(void *data)
++{
++	struct super_block *sb = (struct super_block *)data;
++	struct ext4_sb_info *sbi = EXT4_SB(sb);
++	struct ext4_group_info *grp, *tmp;
++	struct list_head fstrim_groups;
++	struct request_queue *q = bdev_get_queue(sb->s_bdev);
++	unsigned int discard_granularity =
++			q->limits.discard_granularity >> sb->s_blocksize_bits;
++	uint64_t minblks;
++	time64_t now;
++	int ret = 0;
++
++	INIT_LIST_HEAD(&fstrim_groups);
++
++	while (!kthread_should_stop()) {
++		wait_event_interruptible(sbi->s_fstrim_wq,
++				!list_empty(&sbi->s_fstrim_groups_ready) ||
++				!list_empty(&sbi->s_fstrim_groups_pending) ||
++				kthread_should_stop());
++		if (kthread_should_stop())
++			break;
++
++		spin_lock(&sbi->s_fstrim_groups_lock);
++		if (list_empty(&sbi->s_fstrim_groups_ready) &&
++		    list_empty(&sbi->s_fstrim_groups_pending)) {
++			spin_unlock(&sbi->s_fstrim_groups_lock);
++			continue;
++		}
++
++		list_splice_init(&sbi->s_fstrim_groups_ready, &fstrim_groups);
++
++		now = ktime_get_seconds();
++		list_for_each_entry_safe(grp, tmp,
++					 &sbi->s_fstrim_groups_pending,
++					 bb_fstrim_list) {
++			if (now - grp->bb_fstrim_start >=
++				sbi->s_fstrim_delay_secs) {
++				list_move_tail(&grp->bb_fstrim_list,
++					      &fstrim_groups);
++				list_del_init(&grp->bb_fstrim_last_free);
++			} else {
++				break;
++			}
++		}
++		list_for_each_entry_safe(grp, tmp,
++					 &sbi->s_fstrim_groups_last_free,
++					 bb_fstrim_last_free) {
++			if (now - grp->bb_last_free >=
++				2 * sbi->s_commit_interval / HZ) {
++				list_move_tail(&grp->bb_fstrim_list,
++					      &fstrim_groups);
++				list_del_init(&grp->bb_fstrim_last_free);
++			} else {
++				break;
++			}
++		}
++		spin_unlock(&sbi->s_fstrim_groups_lock);
++
++		list_for_each_entry_safe(grp, tmp, &fstrim_groups,
++					 bb_fstrim_list) {
++			minblks = sbi->s_fstrim_min_blocks;
++			if (minblks < discard_granularity)
++				minblks = discard_granularity;
++			if (ret >= 0 && !atomic_read(&sbi->s_retry_alloc_pending))
++				ret = ext4_trim_all_free(sb, grp->bb_group, 0,
++					   EXT4_CLUSTERS_PER_GROUP(sb) - 1,
++					   EXT4_NUM_B2C(sbi, minblks), true);
++			list_del_init(&grp->bb_fstrim_list);
++			cond_resched();
++			if (kthread_should_stop())
++				break;
++		}
++	}
++
++	return 0;
++}
++
+ /**
+  * ext4_trim_fs() -- trim ioctl handle function
+  * @sb:			superblock for filesystem
+Index: linux-5.14.0-162.23.1.el9_1/fs/ext4/super.c
+===================================================================
+--- linux-5.14.0-162.23.1.el9_1.orig/fs/ext4/super.c
++++ linux-5.14.0-162.23.1.el9_1/fs/ext4/super.c
+@@ -1766,6 +1766,7 @@ enum {
+ 	Opt_max_dir_size_kb, Opt_nojournal_checksum, Opt_nombcache,
+ 	Opt_no_prefetch_block_bitmaps, Opt_mb_optimize_scan,
+ 	Opt_errors, Opt_data, Opt_data_err, Opt_jqfmt, Opt_dax_type,
++	Opt_fstrim, Opt_nofstrim,
+ #ifdef CONFIG_EXT4_DEBUG
+ 	Opt_fc_debug_max_replay, Opt_fc_debug_force
+ #endif
+@@ -1890,6 +1891,9 @@ static const struct fs_parameter_spec ex
+ 	fsparam_flag	("dioread_lock",	Opt_dioread_lock),
+ 	fsparam_flag	("discard",		Opt_discard),
+ 	fsparam_flag	("nodiscard",		Opt_nodiscard),
++	fsparam_flag	("fstrim",		Opt_fstrim),
++	fsparam_u32	("fstrim",		Opt_fstrim),
++	fsparam_flag	("nofstrim",		Opt_nofstrim),
+ 	fsparam_u32	("init_itable",		Opt_init_itable),
+ 	fsparam_flag	("init_itable",		Opt_init_itable),
+ 	fsparam_flag	("noinit_itable",	Opt_noinit_itable),
+@@ -1959,6 +1963,8 @@ static const struct mount_opts {
+ 	 MOPT_EXT4_ONLY | MOPT_CLEAR},
+ 	{Opt_discard, EXT4_MOUNT_DISCARD, MOPT_SET},
+ 	{Opt_nodiscard, EXT4_MOUNT_DISCARD, MOPT_CLEAR},
++	{Opt_fstrim, EXT4_MOUNT2_FSTRIM, MOPT_SET | MOPT_2},
++	{Opt_nofstrim, EXT4_MOUNT2_FSTRIM, MOPT_CLEAR | MOPT_2},
+ 	{Opt_delalloc, EXT4_MOUNT_DELALLOC,
+ 	 MOPT_EXT4_ONLY | MOPT_SET | MOPT_EXPLICIT},
+ 	{Opt_nodelalloc, EXT4_MOUNT_DELALLOC,
+@@ -2062,6 +2068,7 @@ ext4_sb_read_encoding(const struct ext4_
+ #define EXT4_SPEC_s_fc_debug_max_replay		(1 << 17)
+ #define EXT4_SPEC_s_sb_block			(1 << 18)
+ #define EXT4_SPEC_mb_optimize_scan		(1 << 19)
++#define EXT4_SPEC_s_fstrim_min_blocks		(1 << 20)
+ 
+ struct ext4_fs_context {
+ 	char		*s_qf_names[EXT4_MAXQUOTAS];
+@@ -2094,6 +2101,7 @@ struct ext4_fs_context {
+ 	kuid_t		s_resuid;
+ 	kgid_t		s_resgid;
+ 	ext4_fsblk_t	s_sb_block;
++	unsigned int	s_fstrim_min_blocks;
+ };
+ 
+ static void ext4_fc_free(struct fs_context *fc)
+@@ -2518,6 +2526,13 @@ static int ext4_parse_param(struct fs_co
+ 			return -EINVAL;
+ 		}
+ 		return 0;
++	case Opt_fstrim:
++		ctx_set_mount_opt2(ctx, EXT4_MOUNT2_FSTRIM);
++		ctx->s_fstrim_min_blocks = EXT4_DEF_FSTRIM_MIN_BLOCKS;
++		if (param->type == fs_value_is_string)
++			ctx->s_fstrim_min_blocks = result.uint_32;
++		ctx->spec |= EXT4_SPEC_s_fstrim_min_blocks;
++		return 0;
+ 	}
+ 
+ 	/*
+@@ -3006,6 +3021,7 @@ static void ext4_apply_options(struct fs
+ 	APPLY(s_li_wait_mult);
+ 	APPLY(s_resgid);
+ 	APPLY(s_resuid);
++	APPLY(s_fstrim_min_blocks);
+ 
+ #ifdef CONFIG_EXT4_DEBUG
+ 	APPLY(s_fc_debug_max_replay);
+@@ -5469,6 +5485,12 @@ no_journal:
+ 			clear_opt2(sb, MB_OPTIMIZE_SCAN);
+ 	}
+ 
++	if (test_opt(sb, DISCARD) && test_opt2(sb, FSTRIM)) {
++		ext4_msg(sb, KERN_WARNING,
++			 "fstrim overrides discard option");
++		clear_opt(sb, DISCARD);
++	}
++
+ 	err = ext4_mb_init(sb);
+ 	if (err) {
+ 		ext4_msg(sb, KERN_ERR, "failed to initialize mballoc (%d)",
+Index: linux-5.14.0-162.23.1.el9_1/fs/ext4/sysfs.c
+===================================================================
+--- linux-5.14.0-162.23.1.el9_1.orig/fs/ext4/sysfs.c
++++ linux-5.14.0-162.23.1.el9_1/fs/ext4/sysfs.c
+@@ -246,6 +246,9 @@ EXT4_RW_ATTR_SBI_UI(mb_max_inode_preallo
+ EXT4_RW_ATTR_SBI_UI(mb_max_linear_groups, s_mb_max_linear_groups);
+ EXT4_RW_ATTR_SBI_UI(extent_max_zeroout_kb, s_extent_max_zeroout_kb);
+ EXT4_RW_ATTR_SBI_UI(bg_trimmed_threshold, s_bg_trimmed_threshold);
++EXT4_RW_ATTR_SBI_UI(fstrim_min_blocks, s_fstrim_min_blocks);
++EXT4_RW_ATTR_SBI_UI(fstrim_avg_frag_no_delay, s_fstrim_avg_frag_no_delay);
++EXT4_RW_ATTR_SBI_UI(fstrim_delay_secs, s_fstrim_delay_secs);
+ EXT4_ATTR(trigger_fs_error, 0200, trigger_test_error);
+ EXT4_RW_ATTR_SBI_UI(err_ratelimit_interval_ms, s_err_ratelimit_state.interval);
+ EXT4_RW_ATTR_SBI_UI(err_ratelimit_burst, s_err_ratelimit_state.burst);
+@@ -304,6 +307,9 @@ static struct attribute *ext4_attrs[] =
+ 	ATTR_LIST(max_writeback_mb_bump),
+ 	ATTR_LIST(extent_max_zeroout_kb),
+ 	ATTR_LIST(bg_trimmed_threshold),
++	ATTR_LIST(fstrim_min_blocks),
++	ATTR_LIST(fstrim_avg_frag_no_delay),
++	ATTR_LIST(fstrim_delay_secs),
+ 	ATTR_LIST(trigger_fs_error),
+ 	ATTR_LIST(err_ratelimit_interval_ms),
+ 	ATTR_LIST(err_ratelimit_burst),

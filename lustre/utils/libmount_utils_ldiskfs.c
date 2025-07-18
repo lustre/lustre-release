@@ -1103,8 +1103,11 @@ int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
 
 int ldiskfs_fix_mountopts(struct mkfs_opts *mop, char *mountopts, size_t len)
 {
-	if (strstr(mountopts, "errors=") == NULL)
-		strscat(mountopts, ",errors=remount-ro", len);
+	if (strstr(mountopts, "errors=") == NULL) {
+		if (strlen(mountopts) != 0)
+			strscat(mountopts, ",", len);
+		strscat(mountopts, "errors=remount-ro", len);
+	}
 
 	return 0;
 }
