@@ -1678,6 +1678,16 @@ struct if_quotactl {
 #define qc_allquota_qid_end	qc_dqblk.dqb_btime
 #define qc_allquota_mark	qc_dqblk.dqb_itime
 
+enum lqa_cmd_type {
+	LQA_NEW = 1, /* create an LQA by name */
+	LQA_ADD = 2, /* add a range to LQA */
+	LQA_REM = 3, /* remove a range from an LQA */
+	LQA_DEL = 4, /* destroy an LQA */
+	LQA_LIST = 5 /* list ranges per LQA */
+};
+
+#define LQA_NAME_MAX LOV_MAXPOOLNAME /* Maximum lqa name length */
+
 /* swap layout flags */
 #define SWAP_LAYOUTS_CHECK_DV1		(1 << 0)
 #define SWAP_LAYOUTS_CHECK_DV2		(1 << 1)

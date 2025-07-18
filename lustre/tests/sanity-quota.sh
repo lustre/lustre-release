@@ -7463,6 +7463,53 @@ test_96() {
 }
 run_test 96 "quota grant should be released when big files are deleted"
 
+LQA_NEW="do_facet mds1 $LCTL lqa new --fsname $FSNAME"
+LQA_ADD="do_facet mds1 $LCTL lqa add --fsname $FSNAME"
+LQA_REMOVE="do_facet mds1 $LCTL lqa remove --fsname $FSNAME"
+LQA_DESTROY="do_facet mds1 $LCTL lqa destroy --fsname $FSNAME"
+LQA_LIST="do_facet mds1 $LCTL lqa list --fsname $FSNAME"
+
+test_97a ()
+{
+	local lqa="lqa1"
+	local longstr="0123456789123456789"
+
+	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
+		skip "need MDS >= 2.16.58 to support lctl lqa commands"
+
+	$LQA_NEW && error "lqa_new succeeded with no lqa"
+#define LQA_NAME_MAX 15 /* Maximum lqa name length */
+	$LQA_NEW --name $longstr && error "lqa max name length is 16"
+	$LQA_NEW --name $lqa || error "cannot create $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa || true"
+
+	$LQA_ADD && error "lqa add succeeded with no --name"
+	$LQA_ADD --name $lqa && error "lqa add succeeded wit no range"
+	$LQA_ADD --name $lqa --range -10 && error "lqa add wrong format 1"
+	$LQA_ADD --name $lqa --range 10-9 && error "lqa add wrong format 2"
+	$LQA_ADD --name $lqa --range 10--9 && error "lqa add wrong format 3"
+	$LQA_ADD --name $lqa --range 10 || error "lqa failed to add [10]"
+	$LQA_ADD --name $lqa --range 11-20 || error "lqa failed to add [10-20]"
+
+	$LQA_LIST || error "lqa list failed with no --fsname"
+	$LQA_LIST --name $lqa || error "lqa list failed to show $lqa ranges"
+
+	$LQA_REMOVE && error "lqa remove succeeded with no --name"
+	$LQA_REMOVE --name $lqa && error "lqa remove succeeded with no --range"
+	$LQA_REMOVE --name $lqa --range -10 && error "lqa remove wrong format 1"
+	$LQA_REMOVE --name $lqa --range 10-9 &&
+		error "lqa remove wrong format 2"
+	$LQA_REMOVE --name $lqa --range 10--9 &&
+		error "lqa remove wrong format 3"
+	$LQA_REMOVE --name $lqa --range 10 || error "lqa failed to remove 10"
+	$LQA_REMOVE --name $lqa --range 11-20 ||
+		error "lqa failed to remove 10-20"
+
+	$LQA_DESTROY && error "lqa destroy succeeded with no --name"
+	$LQA_DESTROY --name $lqa || error "cannot destroy $lqa"
+}
+run_test 97a "LQA control commands"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

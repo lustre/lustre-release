@@ -440,6 +440,8 @@ int qmt_pool_new(struct obd_device *obd, char *poolname);
 int qmt_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int qmt_pool_rem(struct obd_device *obd, char *poolname, char *ostname);
 int qmt_pool_del(struct obd_device *obd, char *poolname);
+int qmt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+		  void *karg, void __user *uarg);
 
 #define qmt_sarr_read_down(qpi) down_read(&qpi->qpi_sarr.osts.op_rw_sem)
 #define qmt_sarr_read_up(qpi) up_read(&qpi->qpi_sarr.osts.op_rw_sem)

@@ -336,6 +336,28 @@ command_t lfsck_cmdlist[] = {
 	{ .pc_help = NULL }
 };
 JT_SUBCMD(lfsck);
+
+/**
+ * command_t lqa_cmdlist - lctl lqa commands.
+ */
+command_t lqa_cmdlist[] = {
+	{.pc_name = "new", .pc_func = lctl_lqa_new,
+	 .pc_help = "create new Lustre Quota ID Aggregate (LQA)\n"
+	 "usage: lqa new --fsname FSNAME --name LQANAME"},
+	{.pc_name = "add", .pc_func = lctl_lqa_add,
+	 .pc_help = "add range of quota IDs to the named LQA\n"
+	 "usage: lqa add --fsname FSNAME --name LQANAME --range ID_RANGE"},
+	{.pc_name = "remove", .pc_func = lctl_lqa_rem,
+	 .pc_help = "remove range of quota IDs from the named LQA\n"
+	 "usage: lqa remove --fsname FSNAME --name LQANAME --range ID_RANGE"},
+	{.pc_name = "destroy", .pc_func = lctl_lqa_del,
+	 .pc_help = "destroy the named Lustre Quota ID Aggregate\n"
+	 "usage: lqa destroy --fsname FSNAME --name LQANAME"},
+	{.pc_name = "list", .pc_func = lctl_lqa_list,
+	 .pc_help = "list LQAs, either all for FSNAME or the details for LQANAME\n"
+	 "usage: lqa list --fsname FSNAME [--name LQANAME]"}
+};
+JT_SUBCMD(lqa);
 #endif
 
 command_t cmdlist[] = {
@@ -541,6 +563,24 @@ command_t cmdlist[] = {
 	 "usage: pool_list  <fsname>[.<poolname>] | <pathname>"},
 
 #ifdef HAVE_SERVER_SUPPORT
+	/* LQA commands */
+	{"===  LQA ==", NULL, 0, "lqa management"},
+	{"lqa_new", lctl_lqa_new, 0,
+	 "create new Lustre Quota ID Aggregate (LQA)\n"
+	 "usage: lqa new --fsname FSNAME --name LQANAME"},
+	{"lqa_add", lctl_lqa_add, 0,
+	 "add range of quota IDs to the named LQA\n"
+	 "usage: lqa add --fsname FSNAME --name LQANAME --range ID_RANGE"},
+	{"lqa_remove", lctl_lqa_rem, 0,
+	 "remove range of quota IDs from the named LQA\n"
+	 "usage: lqa remove --fsname FSNAME --name LQANAME --range ID_RANGE"},
+	{"lqa_destroy", lctl_lqa_del, 0,
+	 "destroy the named Lustre Quota ID Aggregate\n"
+	 "usage: lqa destroy --fsname FSNAME --name LQANAME"},
+	{"lqa_list", lctl_lqa_list, 0,
+	 "list LQAs, either all for FSNAME or the details for LQANAME\n"
+	 "usage: lqa list --fsname FSNAME [--name LQANAME]"},
+	{"lqa", jt_lqa, lqa_cmdlist, ""},
 	/* Barrier commands */
 	{"===  Barrier ==", NULL, 0, "barrier management"},
 	{"barrier_freeze", jt_barrier_freeze, 0,

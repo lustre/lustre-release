@@ -159,6 +159,7 @@ enum obd_abort_recovery_flags {
 #define OBD_IOC_FID2PATH	_IOWR('f', 150, OBD_IOC_DATA_TYPE)
 /*	lustre/lustre_user.h	151-159 */
 #define OBD_IOC_QUOTACTL	_IOWR('f', 162, struct if_quotactl)
+#define OBD_IOC_LQACTL		_IOWR('f', 162, struct obd_ioctl_data)
 /*	lustre/lustre_user.h	163-176 */
 #define OBD_IOC_CHANGELOG_REG	_IOW('f', 177, struct obd_ioctl_data)
 #define OBD_IOC_CHANGELOG_DEREG	_IOW('f', 178, struct obd_ioctl_data)

@@ -423,6 +423,7 @@ static const struct obd_ops qmt_obd_ops = {
 	.o_pool_rem	= qmt_pool_rem,
 	.o_pool_add	= qmt_pool_add,
 	.o_pool_del	= qmt_pool_del,
+	.o_iocontrol	= qmt_iocontrol,
 };
 
 /*

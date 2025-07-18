@@ -1325,6 +1325,87 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 	RETURN(rc);
 }
 
+static int lqa_parse_args(struct obd_device *obd, struct obd_ioctl_data *data,
+			  char **lqa, __u32 *start, __u32 *end)
+{
+	int lqalen;
+
+	if (data->ioc_inlbuf1 && data->ioc_inllen1 &&
+	    data->ioc_inllen1 <= LQA_NAME_MAX + 1)
+		*lqa = data->ioc_inlbuf1;
+
+	if (!*lqa)
+		return 0;
+
+	lqalen = strnlen(*lqa, LQA_NAME_MAX + 1);
+	if (!lqalen || lqalen == LQA_NAME_MAX + 1) {
+		CERROR("%s: lqa name is larger than maximum %d: rc = %d\n",
+		       obd->obd_name, LQA_NAME_MAX, -EINVAL);
+		return -EINVAL;
+	}
+
+	if (data->ioc_command == LQA_ADD || data->ioc_command == LQA_REM) {
+		*start = (__u32)data->ioc_u32_1;
+		*end = (__u32)data->ioc_u32_2;
+		if (*end < *start) {
+			CERROR("%s: lqa:%s range has end %d < start %d: rc = %d\n",
+			       obd->obd_name, *lqa, *end, *start, -EINVAL);
+			return -EINVAL;
+		} else {
+			CDEBUG(D_QUOTA, "lqa:%s [%u-%u]\n", *lqa, *start, *end);
+		}
+	}
+
+	return 0;
+}
+
+int qmt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+		  void *karg, void __user *uarg)
+{
+	struct obd_device *obd = exp->exp_obd;
+	struct obd_ioctl_data *data;
+	char *lqa = NULL;
+	__u32 start, end;
+	int rc = 0;
+
+	ENTRY;
+	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
+	       obd->obd_name, cmd, len, karg, uarg);
+	data = karg;
+
+	/* qmt only supports LQA ioctls, for now */
+	if (cmd != OBD_IOC_LQACTL)
+		RETURN(-EINVAL);
+
+	start = end = 0;
+	rc = lqa_parse_args(obd, data, &lqa, &start, &end);
+	if (rc)
+		RETURN(rc);
+
+	switch (data->ioc_command) {
+	case LQA_NEW:
+		CDEBUG(D_QUOTA, "LQA_NEW lqa:%s\n", lqa);
+		break;
+	case LQA_ADD:
+		CDEBUG(D_QUOTA, "LQA_ADD lqa:%s, [%u-%u]\n", lqa, start, end);
+		break;
+	case LQA_REM:
+		CDEBUG(D_QUOTA, "LQA_REM lqa:%s [%u-%u]\n", lqa, start, end);
+		break;
+	case LQA_DEL:
+		CDEBUG(D_QUOTA, "LQA_DEL, lqa:%s\n", lqa);
+		break;
+	case LQA_LIST:
+		CDEBUG(D_QUOTA, "LQA_LIST, lqa:%s\n", lqa);
+		break;
+	default:
+		rc = OBD_IOC_ERROR(obd->obd_name, data->ioc_command,
+				   "unrecognized", -ENOTTY);
+	}
+
+	RETURN(rc);
+}
+
 /* Vector of quota request handlers. This vector is used by the MDT to forward
  * requests to the quota master. */
 struct qmt_handlers qmt_hdls = {
