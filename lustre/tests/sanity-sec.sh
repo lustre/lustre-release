@@ -9009,6 +9009,7 @@ test_75a() {
 	local tf="testfile"
 	local client_trusted
 	local run_as_tenant
+	local have_dom_falloc=true
 	local out
 
 	# This test checks that the enable_resource_id_check flag works
@@ -9035,6 +9036,7 @@ test_75a() {
 	client_tenant=${clients_arr[1]}
 	run_as_tenant="do_node $client_tenant $RUNAS_CMD -u $ID0"
 	run_as_trusted="do_node $client_trusted"
+	check_fallocate_supported mds1 || have_dom_falloc=false
 
 	setup_75a
 
@@ -9199,7 +9201,7 @@ test_75a() {
 	75a_op_test "rm ${MOUNT}/$tfile_tenant" true
 	75a_op_test "rm ${MOUNT}/$tfile_tr" true
 	# 13. Data on MDT cases
-	if [[ "$mds1_FSTYPE" == "ldiskfs" ]]; then
+	if [[ "$mds1_FSTYPE" == "ldiskfs" && $have_dom_falloc == true ]]; then
 		75a_op_test "fallocate -l 1M ${MOUNT}/${tfile_trusted}_dom" true
 	fi
 	75a_op_test "$TRUNCATE ${MOUNT}/${tfile_trusted}_dom 524288" true
@@ -9208,7 +9210,7 @@ test_75a() {
 	75a_read_test "cat ${MOUNT}/${tfile_trusted}_dom" true
 	75a_op_test "rm ${MOUNT}/${tfile_trusted}_dom" true
 
-	if [[ "$mds1_FSTYPE" == "ldiskfs" ]]; then
+	if [[ "$mds1_FSTYPE" == "ldiskfs" && $have_dom_falloc == true ]]; then
 		75a_op_test "fallocate -l 1M ${MOUNT}/${tfile_tenant}_dom" true
 	fi
 	75a_op_test "$TRUNCATE ${MOUNT}/${tfile_tenant}_dom 524288" true
@@ -9323,7 +9325,7 @@ test_75a() {
 	75a_op_test "rm ${MOUNT}/$tfile_tenant" true
 	75a_op_test "rm ${MOUNT}/$tfile_tr" false
 	# 13. Data on MDT cases
-	if [[ "$mds1_FSTYPE" == "ldiskfs" ]]; then
+	if [[ "$mds1_FSTYPE" == "ldiskfs" && $have_dom_falloc == true ]]; then
 		75a_op_test "fallocate -l 1M ${MOUNT}/${tfile_trusted}_dom" \
 			false
 	fi
@@ -9332,7 +9334,7 @@ test_75a() {
 	75a_read_test "cat ${MOUNT}/${tfile_trusted}_dom" false
 	75a_op_test "rm ${MOUNT}/${tfile_trusted}_dom" false
 
-	if [[ "$mds1_FSTYPE" == "ldiskfs" ]]; then
+	if [[ "$mds1_FSTYPE" == "ldiskfs" && $have_dom_falloc == true ]]; then
 		75a_op_test "fallocate -l 1M ${MOUNT}/${tfile_tenant}_dom" true
 	fi
 	75a_op_test "$TRUNCATE ${MOUNT}/${tfile_tenant}_dom 524288" true
