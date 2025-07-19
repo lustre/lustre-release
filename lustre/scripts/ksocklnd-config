@@ -87,7 +87,20 @@ do
 	eval "${logcmd[@]}"
 done
 
-filename='/etc/iproute2/rt_tables'
+# iproute config dir can be found in /etc or in /usr/share
+# If found in /usr/share, we copy it into /etc to avoid modifying
+# distro-provided version
+rt_tables_path="/etc/iproute2/rt_tables"
+if [ ! -f "$rt_tables_path" ]; then
+	distro_path=/usr/share/iproute2/rt_tables
+	if [ ! -f $distro_path ]; then
+		echo "Error: rt_tables file cannot be found"
+		exit 1
+	fi
+	mkdir -p /etc/iproute2/
+	cp $distro_path $rt_tables_path
+fi
+
 n=1
 max_table_num=0
 while read line; do
@@ -120,14 +133,14 @@ while read line; do
 	done
 	#echo "Line No. $n : $line: $max_table_num"
 	n=$((n+1))
-done < $filename
+done < $rt_tables_path
 
 # add entries for unlisted interfaces
 for i in "${interfaces[@]}"
 do
 	if [[ ! " ${interfaces_listed[@]} " =~ " ${i} " ]]; then
 		max_table_num=$((max_table_num+1))
-		echo "$max_table_num $i" >> $filename
+		echo "$max_table_num $i" >> $rt_tables_path
 	fi
 done
 
