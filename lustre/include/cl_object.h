@@ -808,9 +808,9 @@ struct cl_page_slice {
  * \ingroup cl_lock
  */
 enum cl_lock_mode {
-	CLM_READ,
-	CLM_WRITE,
-	CLM_GROUP,
+	CLM_READ = READ,	/* 0 */
+	CLM_WRITE = WRITE,	/* 1 */
+	CLM_GROUP,		/* 2 */
 	CLM_MAX,
 };
 
@@ -818,8 +818,8 @@ enum cl_lock_mode {
  * Requested transfer type.
  */
 enum cl_req_type {
-	CRT_READ,
-	CRT_WRITE,
+	CRT_READ = READ,	/* 0 */
+	CRT_WRITE = WRITE,	/* 1 */
 	CRT_NR
 };
 
