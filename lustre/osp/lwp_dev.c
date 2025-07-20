@@ -46,14 +46,14 @@ static inline struct lu_device *lwp2lu_dev(struct lwp_device *d)
 }
 
 /**
- * Setup LWP device.
+ * lwp_setup() - Setup LWP device.
+ * @env: environment passed by caller
+ * @lwp: LWP device to be setup
+ * @nidstring: remote target NID
  *
- * \param[in] env	environment passed by caller
- * \param[in] lwp	LWP device to be setup
- * \param[in] nidstring	remote target NID
- *
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %0 on success
+ * * %negative number on error
  */
 static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 		     char *nidstring)
@@ -149,12 +149,12 @@ out:
 }
 
 /**
- * Disconnect the import from LWP.
+ * lwp_disconnect() - Disconnect the import from LWP.
+ * @d: LWP device to be disconnected
  *
- * \param[in] d		LWP device to be disconnected
- *
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %0 on success
+ * * %negative number on error
  */
 static int lwp_disconnect(struct lwp_device *d)
 {
@@ -189,16 +189,17 @@ static int lwp_disconnect(struct lwp_device *d)
 }
 
 /**
- * Implementation of lu_device_operations::ldo_process_config.
+ * lwp_process_config() - Implementation of ldo_process_config.
+ * @env: environment passed by caller
+ * @dev: device to be processed
+ * @lcfg: lustre_cfg, LCFG_PRE_CLEANUP or LCFG_CLEANUP
  *
+ * Implementation of lu_device_operations::ldo_process_config.
  * Process a Lustre configuration request.
  *
- * \param[in] env	environment passed by caller
- * \param[in] dev	device to be processed
- * \param[in] lcfg	lustre_cfg, LCFG_PRE_CLEANUP or LCFG_CLEANUP
- *
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %0 on success
+ * * %negative number on error
  */
 static int lwp_process_config(const struct lu_env *env,
 			      struct lu_device *dev, struct lustre_cfg *lcfg)
@@ -230,16 +231,16 @@ static const struct lu_device_operations lwp_lu_ops = {
 };
 
 /**
- * Initialize LWP device.
+ * lwp_init0() - Initialize LWP device.
+ * @env: environment passed by caller
+ * @lwp: device to be initialized
+ * @ldt: not used
+ * @cfg: lustre_cfg contains remote target uuid
  *
- * \param[in] env	environment passed by caller
- * \param[in] lwp	device to be initialized
- * \param[in] ldt	not used
- * \param[in] cfg	lustre_cfg contains remote target uuid
- *
- * \retval		0 on success
- * \retval		-ENODEV if the device name cannot be found
- * \retval		negative numbers on other errors
+ * Return:
+ * * %0 on success
+ * * %-ENODEV if the device name cannot be found
+ * * %negative numbers on other errors
  */
 static int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
@@ -295,16 +296,15 @@ static int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
 }
 
 /**
- * Implementation of lu_device_type_operations::ldto_device_free.
+ * lwp_device_free() - Implementation of ldto_device_free.
+ * @env: environment passed by caller
+ * @lu: device to be freed
  *
+ * Implementation of lu_device_type_operations::ldto_device_free.
  * Free a LWP device.
  *
- * \param[in] env	environment passed by caller
- * \param[in] lu	device to be freed
- *
- * \retval		NULL to indicate that this is the bottom device
- *			of the stack and there are no more devices
- *			below this one to be cleaned up.
+ * Return %NULL to indicate that this is the bottom device of the stack and
+ * there are no more devices below this one to be cleaned up.
  */
 static struct lu_device *lwp_device_free(const struct lu_env *env,
 					 struct lu_device *lu)
@@ -320,16 +320,17 @@ static struct lu_device *lwp_device_free(const struct lu_env *env,
 }
 
 /**
- * Implementation of lu_device_type_operations::ldto_device_alloc.
+ * lwp_device_alloc() - Implementation of ldto_device_alloc.
+ * @env: environment passed by caller
+ * @ldt: device type whose name is LUSTRE_LWP_NAME
+ * @lcfg: lustre_cfg contains remote target UUID
  *
+ * Implementation of lu_device_type_operations::ldto_device_alloc.
  * Allocate a LWP device.
  *
- * \param[in] env	environment passed by caller
- * \param[in] ldt	device type whose name is LUSTRE_LWP_NAME
- * \param[in] lcfg	lustre_cfg contains remote target UUID
- *
- * \retval		pointer of allocated LWP device on success
- * \retval		ERR_PTR(errno) on error
+ * Return:
+ * * %pointer of allocated LWP device on success
+ * * %ERR_PTR(errno) on error
  */
 static struct lu_device *lwp_device_alloc(const struct lu_env *env,
 					  struct lu_device_type *ldt,
@@ -357,14 +358,15 @@ static struct lu_device *lwp_device_alloc(const struct lu_env *env,
 
 
 /**
- * Implementation of lu_device_type_operations::ltdo_device_fini.
+ * lwp_device_fini() - Implementation of ltdo_device_fini.
+ * @env: environment passed by caller
+ * @ludev: device to be finalized
  *
+ * Implementation of lu_device_type_operations::ltdo_device_fini.
  * Finalize LWP device.
  *
- * \param[in] env	environment passed by caller
- * \param[in] ludev	device to be finalized
- *
- * \retval		NULL on success
+ * Return:
+ * * %NULL on success
  */
 static struct lu_device *lwp_device_fini(const struct lu_env *env,
 					 struct lu_device *ludev)
@@ -463,19 +465,20 @@ static void lwp_notify_users(struct obd_export *exp)
 }
 
 /**
- * Implementation of OBD device operations obd_ops::o_connect.
+ * lwp_obd_connect() - Implementation of OBD device operations o_connect.
+ * @env: the environment passed by caller
+ * @exp: export for the connection to be established [out]
+ * @obd: OBD device to perform the connect on
+ * @cluuid: UUID of the OBD device
+ * @data: connect data containing compatibility flags
+ * @localdata: not used
  *
+ * Implementation of OBD device operations obd_ops::o_connect.
  * Create export for LWP, and connect to target server.
  *
- * \param[in] env	the environment passed by caller
- * \param[out] exp	export for the connection to be established
- * \param[in] obd	OBD device to perform the connect on
- * \param[in] cluuid	UUID of the OBD device
- * \param[in] data	connect data containing compatibility flags
- * \param[in] localdata	not used
- *
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %0 on success
+ * * %negative number on error
  */
 static int lwp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 			   struct obd_device *obd, struct obd_uuid *cluuid,
@@ -546,15 +549,16 @@ out_sem:
 }
 
 /**
- * Implementation of OBD device operations obd_ops::o_disconnect.
+ * lwp_obd_disconnect() - Implementation of OBD device operations o_disconnect.
+ * @exp: the export to perform disconnect on
  *
+ * Implementation of OBD device operations obd_ops::o_disconnect.
  * Release export for the LWP. Only disconnect the underlying layers
  * on the final disconnect.
  *
- * \param[in] exp	the export to perform disconnect on
- *
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %0 on success
+ * * %negative number on error
  */
 static int lwp_obd_disconnect(struct obd_export *exp)
 {
@@ -575,14 +579,14 @@ static int lwp_obd_disconnect(struct obd_export *exp)
 }
 
 /**
- * Handle import events for the LWP device.
+ * lwp_import_event() - Handle import events for the LWP device.
+ * @obd: OBD device associated with the import
+ * @imp: the import which event happened on
+ * @event: event type
  *
- * \param[in] obd	OBD device associated with the import
- * \param[in] imp	the import which event happened on
- * \param[in] event	event type
- *
- * \retval		0 on success
- * \retval		negative number on error
+ * Return:
+ * * %0 on success
+ * * %negative number on error
  */
 static int lwp_import_event(struct obd_device *obd, struct obd_import *imp,
 			    enum obd_import_event event)
