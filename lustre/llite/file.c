@@ -708,7 +708,7 @@ static int ll_intent_file_open(struct dentry *de, void *lmm, ssize_t lmmsize,
 	struct ll_sb_info *sbi = ll_i2sbi(de->d_inode);
 	struct dentry *parent = dget_parent(de);
 	char *name = NULL;
-	int len = 0;
+	u64 len = 0;
 	struct md_op_data *op_data;
 	struct ptlrpc_request *req = NULL;
 	int rc;
