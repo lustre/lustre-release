@@ -3090,6 +3090,10 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	/* set this lu_device to obd, because error handling need it */
 	obd->obd_lu_dev = &m->ofd_dt_dev.dd_lu_dev;
 
+	m->ofd_enable_resource_id_repair = 1;
+	m->ofd_id_repair_queue_count =
+		OFD_ID_REPAIR_QUEUE_COUNT_DEFAULT;
+
 	INIT_LIST_HEAD(&m->ofd_id_repair_list);
 	spin_lock_init(&m->ofd_id_repair_lock);
 	init_waitqueue_head(&m->ofd_id_repair_waitq);

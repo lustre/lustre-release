@@ -1529,10 +1529,17 @@ void ofd_repair_resource_ids(const struct lu_env *env, struct ofd_object *fo,
 
 	ENTRY;
 
+	if (ofd->ofd_enable_resource_id_repair == 0)
+		RETURN_EXIT;
+
 	if (!oa || ofd->ofd_osd->dd_rdonly || unlikely(ofd->ofd_readonly))
 		RETURN_EXIT;
 
 	if (!(oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID)))
+		RETURN_EXIT;
+
+	if (atomic_read(&ofd->ofd_id_repair_queued) >=
+	    ofd->ofd_id_repair_queue_count)
 		RETURN_EXIT;
 
 	/* obdo IDs are already mapped to fs_ids in the tgt_handler, and

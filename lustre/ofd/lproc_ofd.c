@@ -335,6 +335,135 @@ static ssize_t enable_resource_id_check_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(enable_resource_id_check);
 
 /**
+ * enable_resource_id_repair_show() - Show if resource ID repair is enabled
+ * on the OST.
+ *
+ * @kobj: kobject for the OFD device
+ * @attr: attribute for the OFD device
+ * @buf: buffer to write the value to
+ *
+ * When enabled, an OST object's UID/GID/PROJID are repaired if they are unset.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+static ssize_t enable_resource_id_repair_show(struct kobject *kobj,
+					      struct attribute *attr, char *buf)
+{
+	struct obd_device *obd =
+		container_of(kobj, struct obd_device, obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 ofd->ofd_enable_resource_id_repair);
+}
+
+/**
+ * enable_resource_id_repair_store() - Enable or disable resource ID repair
+ * on the OST.
+ *
+ * @kobj: kobject for the OFD device
+ * @attr: attribute for the OFD device
+ * @buffer: buffer containing the value to set
+ * @count: length of the buffer
+ *
+ * This is used to interface to userspace administrative tools to enable
+ * or disable resource ID repair on the OST.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+static ssize_t enable_resource_id_repair_store(struct kobject *kobj,
+					       struct attribute *attr,
+					       const char *buffer, size_t count)
+{
+	struct obd_device *obd =
+		container_of(kobj, struct obd_device, obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&ofd->ofd_flags_lock);
+	ofd->ofd_enable_resource_id_repair = val;
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_resource_id_repair);
+
+/**
+ * resource_id_repair_queue_count_show() - Show the resource ID repair queue size
+ *
+ * @kobj: kobject for the OFD device
+ * @attr: attribute for the OFD device
+ * @buf: buffer to write the value to
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+static ssize_t resource_id_repair_queue_count_show(struct kobject *kobj,
+						   struct attribute *attr,
+						   char *buf)
+{
+	struct obd_device *obd =
+		container_of(kobj, struct obd_device, obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 ofd->ofd_id_repair_queue_count);
+}
+
+/**
+ * resource_id_queue_count_store() - Set the resource ID repair queue size
+ *
+ * @kobj: kobject for the OFD device
+ * @attr: attribute for the OFD device
+ * @buffer: buffer containing the value to set
+ * @count: length of the buffer
+ *
+ * This is used to interface to userspace administrative tools to set the number
+ * of queued repair requests.
+ *
+ * Return:
+ * * %0 on success
+ * * %-ERANGE if the value is out of range must be in
+ * [1, OFD_ID_REPAIR_QUEUE_COUNT_LIMIT]
+ * * %negative on failure
+ */
+static ssize_t resource_id_repair_queue_count_store(struct kobject *kobj,
+						    struct attribute *attr,
+						    const char *buffer,
+						    size_t count)
+{
+	struct obd_device *obd =
+		container_of(kobj, struct obd_device, obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1 || val > OFD_ID_REPAIR_QUEUE_COUNT_LIMIT)
+		return -ERANGE;
+
+	spin_lock(&ofd->ofd_flags_lock);
+	ofd->ofd_id_repair_queue_count = val;
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(resource_id_repair_queue_count);
+
+/**
  * Show if the OFD is in no precreate mode.
  *
  * This means OFD has been adminstratively disabled at the OST to prevent
@@ -1054,6 +1183,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_checksum_type.attr,
 	&lustre_attr_degraded.attr,
 	&lustre_attr_enable_resource_id_check.attr,
+	&lustre_attr_enable_resource_id_repair.attr,
 	&lustre_attr_evict_client.attr,
 	&lustre_attr_eviction_count.attr,
 	&lustre_attr_fstype.attr,
@@ -1073,6 +1203,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_readonly.attr,
 	&lustre_attr_recovery_time_hard.attr,
 	&lustre_attr_recovery_time_soft.attr,
+	&lustre_attr_resource_id_repair_queue_count.attr,
 	&lustre_attr_seqs_allocated.attr,
 	&lustre_attr_tot_dirty.attr,
 	&lustre_attr_tot_granted.attr,

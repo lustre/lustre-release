@@ -43,6 +43,10 @@
 /* Special mode value for OST objects with unset attributes */
 #define OFD_UNSET_ATTRS_MODE (S_IFREG | S_ISUID | S_ISGID | S_ISVTX | 0666)
 
+/* Resource ID repair default and limit values */
+#define OFD_ID_REPAIR_QUEUE_COUNT_LIMIT 65536
+#define OFD_ID_REPAIR_QUEUE_COUNT_DEFAULT 1024
+
 /* request stats */
 enum {
 	LPROC_OFD_STATS_READ_BYTES = 0,
@@ -128,7 +132,8 @@ struct ofd_device {
 				 ofd_record_fid_accessed:1,
 				 ofd_lfsck_verify_pfid:1,
 				 ofd_skip_lfsck:1,
-				 ofd_readonly:1;
+				 ofd_readonly:1,
+				 ofd_enable_resource_id_repair:1;
 	struct seq_server_site	 ofd_seq_site;
 	/* the limit of SOFT_SYNC RPCs that will trigger a soft sync */
 	unsigned int		 ofd_soft_sync_limit;
@@ -149,6 +154,7 @@ struct ofd_device {
 	spinlock_t		 ofd_id_repair_lock;
 	wait_queue_head_t	 ofd_id_repair_waitq;
 	atomic_t		 ofd_id_repair_queued;
+	unsigned int		 ofd_id_repair_queue_count;
 };
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)
