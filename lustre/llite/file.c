@@ -5306,7 +5306,7 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		}
 	}
 
-	if (S_ISREG(inode->i_mode) && !lli->lli_synced_to_mds) {
+	if (S_ISREG(inode->i_mode) && !lli->lli_synced_to_mds && !datasync) {
 		/*
 		 * only the first sync on MDS makes sense,
 		 * everything else is stored on OSTs
