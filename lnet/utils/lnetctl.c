@@ -4363,6 +4363,7 @@ static const struct command_mapping cmd_mappings[] = {
 	{"route", LNET_CMD_ROUTES, 0, false},
 	{"discover", LNET_CMD_PING, 0, true},
 	{"ping", LNET_CMD_PING, NLM_F_DUMP, true},
+	{"routing", LNET_CMD_ROUTING, 0, false},
 	{NULL, 0, 0, false}
 };
 
