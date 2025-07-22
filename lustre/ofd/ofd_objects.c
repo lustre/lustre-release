@@ -684,12 +684,6 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 	if (!ofd_object_exists(fo))
 		GOTO(out, rc = -ENOENT);
 
-	ofd_info(env)->fti_obj = fo;
-
-	rc = ofd_check_resource_ids(env, ofd_info(env)->fti_exp);
-	if (unlikely(rc))
-		GOTO(out, rc);
-
 	if (la->la_valid & LA_PROJID &&
 	    CFS_FAIL_CHECK(OBD_FAIL_OUT_DROP_PROJID_SET))
 		la->la_valid &= ~LA_PROJID;
@@ -697,6 +691,10 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);
 	if (rc)
+		GOTO(out, rc);
+
+	rc = ofd_check_resource_ids(env, fo, oa);
+	if (unlikely(rc))
 		GOTO(out, rc);
 
 	rc = ofd_attr_handle_id(env, fo, la, 1 /* is_setattr */);
@@ -804,15 +802,13 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 	if (!ofd_object_exists(fo))
 		RETURN(-ENOENT);
 
-	ofd_info(env)->fti_obj = fo;
-
-	rc = ofd_check_resource_ids(env, ofd_info(env)->fti_exp);
-	if (unlikely(rc))
-		RETURN(rc);
-
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);
 	if (rc != 0)
+		RETURN(rc);
+
+	rc = ofd_check_resource_ids(env, fo, oa);
+	if (unlikely(rc))
 		RETURN(rc);
 
 	if (ff != NULL) {
@@ -943,15 +939,13 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 			GOTO(out, rc);
 	}
 
-	ofd_info(env)->fti_obj = fo;
-
-	rc = ofd_check_resource_ids(env, ofd_info(env)->fti_exp);
-	if (unlikely(rc))
-		GOTO(out, rc);
-
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);
 	if (rc)
+		GOTO(out, rc);
+
+	rc = ofd_check_resource_ids(env, fo, oa);
+	if (unlikely(rc))
 		GOTO(out, rc);
 
 	rc = ofd_attr_handle_id(env, fo, la, 0 /* !is_setattr */);
@@ -1458,10 +1452,8 @@ static int ofd_id_repair_enqueue(struct ofd_device *ofd,
 }
 
 /**
- * ofd_check_resource_id() - check client access to resource via nodemap
- *
+ * __ofd_check_resource_ids() - check client access to resource via nodemap
  * @env: execution environment
- * @exp: OBD export of client
  *
  * Check whether the client is allowed to access the resource by consulting
  * the nodemap with the client's export and the OST objects's UID/GID attr.
@@ -1469,21 +1461,36 @@ static int ofd_id_repair_enqueue(struct ofd_device *ofd,
  * Return:
  * * %0 on success (access is allowed)
  * * %-ECHRNG if access is denied
+ * * %-EAGAIN if the object attributes are unset and need to be repaired (no ID
+ *   check was done in this case)
  */
-int ofd_check_resource_ids(const struct lu_env *env, struct obd_export *exp)
+/**
+ * __ofd_check_resource_ids() - check client access to resource via nodemap
+ * @env: execution environment
+ * @fo: OFD object
+ * @oa: obdo from client
+ *
+ * Check whether the client is allowed to access the resource by consulting
+ * the nodemap with the client's export and the OST objects's UID/GID attr.
+ *
+ * Return:
+ * * %0 on success (access is allowed)
+ * * %-ECHRNG if access is denied
+ * * %-EAGAIN if the object attributes are unset and need to be repaired (no ID
+ *   check was done in this case)
+ */
+static int __ofd_check_resource_ids(const struct lu_env *env,
+				    struct ofd_object *fo,
+				    const struct obdo *oa)
 {
-	struct ofd_object *fo;
-	struct lu_attr la = { 0 };
-	int rc = 0;
+	struct ofd_thread_info *info = ofd_info(env);
+	struct obd_export *exp = info->fti_exp;
+	struct lu_attr la_obj = { 0 };
+	int rc;
 
 	ENTRY;
 
-	if (ofd_exp(exp)->ofd_lut.lut_enable_resource_id_check == 0)
-		RETURN(0);
-
-	fo = ofd_info(env)->fti_obj;
-
-	rc = dt_attr_get(env, ofd_object_child(fo), &la);
+	rc = dt_attr_get(env, ofd_object_child(fo), &la_obj);
 	if (rc) {
 		/* log this case but don't return err code */
 		CERROR("%s: failed to get attr for obj " DFID ": rc = %d\n",
@@ -1492,21 +1499,58 @@ int ofd_check_resource_ids(const struct lu_env *env, struct obd_export *exp)
 		RETURN(0);
 	}
 
-	/* Objects with OFD_UNSET_ATTRS_MODE have no ID associated with them
-	 * yet. Therefore, we can't verify that the stored IDs are valid.
-	 * TODO Instead, the object will be repaired for future accesses based
-	 * on the IDs set on the corresponding MDT inode.
+	/* Objects with set SUID and SGID have no ID associated with them yet.
+	 * Therefore, we can't verify the stored IDs in the ID check. Return
+	 * -EAGAIN to indicate the object needs to be repaired first.
 	 */
-	if (la.la_mode == OFD_UNSET_ATTRS_MODE) {
-		CDEBUG(D_SEC,
-		       "OST object " DFID " has unset attributes (mode=0%o), skipping ID check\n",
-		       PFID(lu_object_fid(&fo->ofo_obj.do_lu)), la.la_mode);
-		RETURN(0);
-	}
+	if ((la_obj.la_mode & S_ISUID) && (la_obj.la_mode & S_ISGID)) {
+		struct lu_attr la_obdo = { 0 };
 
-	RETURN(nodemap_check_resource_ids(exp, la.la_uid, la.la_gid));
+		la_from_obdo(&la_obdo, oa,
+			     OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID);
+
+		/* repair may not be possible in this environment if UID/GID are
+		 * not valid in the client obdo.
+		 */
+		if (!ofd_can_repair_resource_ids(&la_obj, &la_obdo))
+			RETURN(0);
+
+		CDEBUG(D_SEC,
+		       "OST object " DFID
+		       " has unset attributes (mode=0%o), skipping ID check\n",
+		       PFID(lu_object_fid(&fo->ofo_obj.do_lu)), la_obj.la_mode);
+
+		RETURN(-EAGAIN);
+	}
+	RETURN(nodemap_check_resource_ids(exp, la_obj.la_uid, la_obj.la_gid));
 }
 
+/**
+ * ofd_check_resource_ids() - check client access to resource via nodemap.
+ * @env: execution environment
+ * @fo: OFD object
+ * @oa: obdo from client
+ *
+ * Return:
+ * * %0 on success (access is allowed)
+ * * %-ECHRNG if access is denied
+ */
+int ofd_check_resource_ids(const struct lu_env *env, struct ofd_object *fo,
+			   const struct obdo *oa)
+{
+	struct ofd_thread_info *info = ofd_info(env);
+	int rc;
+
+	if (ofd_exp(info->fti_exp)->ofd_lut.lut_enable_resource_id_check == 0)
+		RETURN(0);
+
+	rc = __ofd_check_resource_ids(env, fo, oa);
+	/* EAGAIN indicates needed repair. Caller asked for check only - pass */
+	if (rc == -EAGAIN)
+		rc = 0;
+
+	RETURN(rc);
+}
 
 /**
  * ofd_repair_resource_ids() - repair OST object UID/GID/PROJID
@@ -1555,4 +1599,36 @@ void ofd_repair_resource_ids(const struct lu_env *env, struct ofd_object *fo,
 	}
 
 	(void)ofd_id_repair_enqueue(ofd, &la_obdo, fo);
+}
+
+/**
+ * ofd_check_repair_resource_ids() - check client access to resource via nodemap
+ * and queue ID repair if IDs are unset.
+ * @env: execution environment
+ * @fo: OFD object
+ * @oa: obdo from client or MDT
+ *
+ * Return:
+ * * %0 on success (access is allowed)
+ * * %-ECHRNG if access is denied
+ */
+int ofd_check_repair_resource_ids(const struct lu_env *env,
+				  struct ofd_object *fo, const struct obdo *oa)
+{
+	struct ofd_thread_info *info = ofd_info(env);
+	int rc;
+
+	if (ofd_exp(info->fti_exp)->ofd_lut.lut_enable_resource_id_check == 0) {
+		ofd_repair_resource_ids(env, fo, oa, false);
+		RETURN(0);
+	}
+
+	rc = __ofd_check_resource_ids(env, fo, oa);
+	if (rc == -EAGAIN) {
+		/* force repair - check_ids verified ID repair is possible */
+		ofd_repair_resource_ids(env, fo, oa, true);
+		rc = 0;
+	}
+
+	RETURN(rc);
 }

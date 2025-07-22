@@ -605,7 +605,7 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	if (!ofd_object_exists(fo))
 		GOTO(obj_put, rc = -ENOENT);
 
-	rc = ofd_check_resource_ids(env, exp);
+	rc = ofd_check_resource_ids(env, fo, oa);
 	if (unlikely(rc))
 		GOTO(obj_put, rc);
 
@@ -1257,7 +1257,7 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 	if (!ofd_object_exists(fo))
 		GOTO(out, rc = -ENOENT);
 
-	rc = ofd_check_resource_ids(env, exp);
+	rc = ofd_check_resource_ids(env, fo, oa);
 	if (unlikely(rc))
 		GOTO(out, rc);
 
