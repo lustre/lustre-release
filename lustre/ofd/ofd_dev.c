@@ -3058,13 +3058,13 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	ENTRY;
 
 	obd = class_name2obd(dev);
-	if (obd == NULL) {
+	if (!obd) {
 		CERROR("Cannot find obd with name %s\n", dev);
 		RETURN(-ENODEV);
 	}
 
 	rc = lu_env_refill((struct lu_env *)env);
-	if (rc != 0)
+	if (rc)
 		RETURN(rc);
 
 	obt = obd_obt_init(obd);
@@ -3089,6 +3089,11 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	/* set this lu_device to obd, because error handling need it */
 	obd->obd_lu_dev = &m->ofd_dt_dev.dd_lu_dev;
 
+	INIT_LIST_HEAD(&m->ofd_id_repair_list);
+	spin_lock_init(&m->ofd_id_repair_lock);
+	init_waitqueue_head(&m->ofd_id_repair_waitq);
+	atomic_set(&m->ofd_id_repair_queued, 0);
+
 	/* No connection accepted until configurations will finish */
 	spin_lock(&obd->obd_dev_lock);
 	obd->obd_no_conn = 1;
@@ -3104,7 +3109,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	}
 
 	info = ofd_info_init(env, NULL);
-	if (info == NULL)
+	if (!info)
 		RETURN(-EFAULT);
 
 	rc = ofd_stack_init(env, m, cfg, lmd_flags);
@@ -3169,7 +3174,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	fid.f_ver = 0;
 	rc = local_oid_storage_init(env, m->ofd_osd, &fid,
 				    &m->ofd_los);
-	if (rc != 0)
+	if (rc)
 		GOTO(err_fini_fs, rc);
 
 	nodemap_config = nm_config_file_register_tgt(env, m->ofd_osd,
@@ -3183,13 +3188,19 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	}
 
 	rc = ofd_start_inconsistency_verification_thread(m);
-	if (rc != 0)
+	if (rc)
 		GOTO(err_fini_nm, rc);
+
+	rc = ofd_id_repair_start_thread(m);
+	if (rc)
+		GOTO(err_stop_inconsistency, rc);
 
 	tgt_adapt_sptlrpc_conf(&m->ofd_lut);
 
 	RETURN(0);
 
+err_stop_inconsistency:
+	ofd_stop_inconsistency_verification_thread(m);
 err_fini_nm:
 	nm_config_file_deregister_tgt(env, obt->obt_nodemap_config_file);
 	obt->obt_nodemap_config_file = NULL;
@@ -3239,6 +3250,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 
 	ofd_procfs_fini(m);
 	tgt_fini(env, &m->ofd_lut);
+	ofd_id_repair_stop_thread(m);
 	ofd_stop_inconsistency_verification_thread(m);
 	lfsck_degister(env, m->ofd_osd);
 	ofd_fs_cleanup(env, m);

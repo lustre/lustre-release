@@ -1140,6 +1140,159 @@ int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 	RETURN(rc);
 }
 
+
+struct ofd_id_repair_work {
+	struct lu_fid		 oiw_fid;
+	struct lu_attr		*oiw_la;
+	struct list_head	 oiw_linkage;
+};
+
+struct ofd_id_repair_args {
+	struct lu_env		 oira_env;
+	struct ofd_device	*oira_ofd;
+	struct completion	*oira_started;
+};
+
+/**
+ * ofd_id_repair_thread_main() - main OST object ID repair thread loop
+ * @arg: pointer containing struct ofd_id_repair_args
+ *
+ * Return:
+ * * %0 on successful thread termination
+ */
+static int ofd_id_repair_thread_main(void *_args)
+{
+	struct ofd_id_repair_args *args = _args;
+	struct ofd_device *ofd = args->oira_ofd;
+	struct lu_env *env = &args->oira_env;
+	struct ofd_id_repair_work *work;
+	int rc;
+
+	ENTRY;
+
+	complete(args->oira_started);
+
+	while (!kthread_should_stop()) {
+		wait_event_idle(
+			ofd->ofd_id_repair_waitq,
+			kthread_should_stop() ||
+				atomic_read(&ofd->ofd_id_repair_queued) > 0);
+
+		if (kthread_should_stop())
+			break;
+
+		while (!list_empty(&ofd->ofd_id_repair_list)) {
+			spin_lock(&ofd->ofd_id_repair_lock);
+			if (list_empty(&ofd->ofd_id_repair_list)) {
+				spin_unlock(&ofd->ofd_id_repair_lock);
+				break;
+			}
+
+			work = list_first_entry(&ofd->ofd_id_repair_list,
+						struct ofd_id_repair_work,
+						oiw_linkage);
+			list_del(&work->oiw_linkage);
+			atomic_dec(&ofd->ofd_id_repair_queued);
+			spin_unlock(&ofd->ofd_id_repair_lock);
+
+			// FIXME Call to ID repair impl
+			rc = 0;
+			if (rc)
+				CERROR("%s: failed to repair " DFID ": rc = %d\n",
+				       ofd_name(ofd), PFID(&work->oiw_fid), rc);
+
+			OBD_FREE_PTR(work->oiw_la);
+			OBD_FREE_PTR(work);
+		}
+	}
+
+	lu_env_fini(env);
+	OBD_FREE_PTR(args);
+
+	RETURN(0);
+}
+
+/**
+ * ofd_id_repair_start_thread() - Initialize object ID repair thread for
+ * ofd_device.
+ * @ofd: OFD device
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
+ */
+int ofd_id_repair_start_thread(struct ofd_device *ofd)
+{
+	DECLARE_COMPLETION_ONSTACK(started);
+	struct ofd_id_repair_args *args;
+	struct task_struct *task;
+	int rc = 0;
+
+	ENTRY;
+
+	spin_lock_init(&ofd->ofd_id_repair_lock);
+	init_waitqueue_head(&ofd->ofd_id_repair_waitq);
+
+	OBD_ALLOC_PTR(args);
+	if (!args)
+		RETURN(-ENOMEM);
+
+	args->oira_ofd = ofd;
+	args->oira_started = &started;
+	rc = lu_env_init(&args->oira_env,
+			 ofd->ofd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
+	if (rc) {
+		CERROR("%s: failed to init env: rc = %d\n", ofd_name(ofd), rc);
+		OBD_FREE_PTR(args);
+		RETURN(rc);
+	}
+
+	/* start thread handling creation */
+	task = kthread_create(ofd_id_repair_thread_main, args, "ofd_id_repair");
+	if (IS_ERR(task)) {
+		CERROR("%s: failed to start id repair thread: rc = %ld\n",
+		       ofd_name(ofd), PTR_ERR(task));
+		lu_env_fini(&args->oira_env);
+		OBD_FREE_PTR(args);
+		RETURN(PTR_ERR(task));
+	}
+	ofd->ofd_id_repair_task = task;
+	wake_up_process(task);
+	wait_for_completion(&started);
+
+	RETURN(rc);
+}
+
+/**
+ * ofd_id_repair_stop_thread() - Stop object ID repair thread for ofd_device and
+ * clean up remaining work items.
+ * @ofd: OFD device
+ */
+void ofd_id_repair_stop_thread(struct ofd_device *ofd)
+{
+	struct task_struct *task = ofd->ofd_id_repair_task;
+	struct ofd_id_repair_work *work, *tmp;
+
+	ENTRY;
+
+	ofd->ofd_id_repair_task = NULL;
+	if (task)
+		kthread_stop(task);
+
+	spin_lock(&ofd->ofd_id_repair_lock);
+	/* Clean up remaining work items */
+	list_for_each_entry_safe(work, tmp, &ofd->ofd_id_repair_list,
+				 oiw_linkage) {
+		list_del(&work->oiw_linkage);
+		OBD_FREE_PTR(work->oiw_la);
+		OBD_FREE_PTR(work);
+	}
+	atomic_set(&ofd->ofd_id_repair_queued, 0);
+	spin_unlock(&ofd->ofd_id_repair_lock);
+
+	EXIT;
+}
+
 /**
  * ofd_check_resource_id() - check client access to resource via nodemap
  *

@@ -143,6 +143,12 @@ struct ofd_device {
 	struct attribute	*ofd_read_cache_max_filesize;
 	struct attribute	*ofd_write_cache_enable;
 	time64_t		 ofd_atime_diff;
+	/* Object ID repair */
+	struct task_struct	*ofd_id_repair_task;
+	struct list_head	 ofd_id_repair_list;
+	spinlock_t		 ofd_id_repair_lock;
+	wait_queue_head_t	 ofd_id_repair_waitq;
+	atomic_t		 ofd_id_repair_queued;
 };
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)
@@ -397,6 +403,8 @@ int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la);
 int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 			 struct lu_attr *la, int is_setattr);
+int ofd_id_repair_start_thread(struct ofd_device *ofd);
+void ofd_id_repair_stop_thread(struct ofd_device *ofd);
 int ofd_check_resource_ids(const struct lu_env *env, struct obd_export *exp);
 
 static inline
