@@ -1258,16 +1258,17 @@ out_put:
  */
 static int ofd_getattr_hdl(struct tgt_session_info *tsi)
 {
-	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
-	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
-	struct ost_body		*repbody;
-	struct lustre_handle	 lh = { 0 };
-	struct ofd_object	*fo;
-	__u64			 flags = 0;
-	enum ldlm_mode		 lock_mode = LCK_PR;
-	ktime_t			 kstart = ktime_get();
-	bool			 srvlock;
-	int			 rc;
+	struct ofd_thread_info *fti = tsi2ofd_info(tsi);
+	struct ofd_device *ofd = ofd_exp(tsi->tsi_exp);
+	struct ost_body *repbody;
+	struct lustre_handle lh = { 0 };
+	struct ofd_object *fo;
+	__u64 flags = 0;
+	enum ldlm_mode lock_mode = LCK_PR;
+	ktime_t kstart = ktime_get();
+	bool srvlock;
+	int rc;
+
 	ENTRY;
 
 	LASSERT(tsi->tsi_ost_body != NULL);
@@ -1300,7 +1301,10 @@ static int ofd_getattr_hdl(struct tgt_session_info *tsi)
 
 	rc = ofd_attr_get(tsi->tsi_env, fo, &fti->fti_attr);
 	if (rc == 0) {
-		__u64	 curr_version;
+		__u64 curr_version;
+
+		/* Queue repair of UID/GID/PROJID if not set */
+		ofd_repair_resource_ids(tsi->tsi_env, fo, &repbody->oa, false);
 
 		obdo_from_la(&repbody->oa, &fti->fti_attr,
 			     OFD_VALID_FLAGS | LA_UID | LA_GID | LA_PROJID);

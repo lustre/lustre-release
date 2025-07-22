@@ -9225,7 +9225,9 @@ check_ost_object_ids() {
 	local expected_uid=$2
 	local expected_gid=$3
 	local expected_projid=$4
+	local expected_mode=${5:-""}
 	local objdump=$DIR/$tdir/objdump
+	local obj_uid obj_gid obj_projid obj_mode
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
@@ -9234,12 +9236,19 @@ check_ost_object_ids() {
 	local fid="${fids[3]}:${fids[2]}:0"
 	local objpath=$(ost_fid2_objpath ost1 $fid)
 
-	do_facet ost1 "$DEBUGFS -c -R 'stat $objpath' $(ostdevname 1)" |
-		grep "Project" > $objdump
-	local obj_uid=$(awk '{print $2}' $objdump)
-	local obj_gid=$(awk '{print $4}' $objdump)
-	local obj_projid=$(awk '{print $6}' $objdump)
-	echo "OST object ids and size for file '$file': $(cat $objdump)"
+	do_facet ost1 \
+		"$DEBUGFS -c -R 'stat $objpath' $(ostdevname 1)" > "$objdump"
+
+	read -r obj_uid obj_gid obj_projid obj_mode < <(
+		awk '
+		/^User:/  {u=$2; g=$4; p=$6}
+		/^Inode:/ {m=$6}
+		END {print u, g, p, m}
+  		' "$objdump"
+	)
+
+	echo "OST object metadata dump for file '$file':"
+	cat $objdump
 
 	[[ "$obj_uid" == "$expected_uid" ]] ||
 		error "uid is not set to expected value $expected_uid"
@@ -9247,6 +9256,10 @@ check_ost_object_ids() {
 		error "gid is not set to expected value $expected_gid"
 	[[ "$obj_projid" == "$expected_projid" ]] ||
 		error "projid is not set to expected value $expected_projid"
+	if [[ -n "$expected_mode" ]]; then
+		[[ "$obj_mode" == "$expected_mode" ]] ||
+			error "mode is not set to expected value $expected_mode"
+	fi
 }
 
 check_mdt_inode_ids() {
@@ -9887,6 +9900,117 @@ test_75a() {
 	report_client_view_75a
 }
 run_test 75a "test resource fs IDs against nodemap offset"
+
+cleanup_75b() {
+	do_nodes $(all_osts_nodes) \
+		$LCTL set_param obdfilter.*.enable_resource_id_repair=1 ||
+			error "re-enable resource id repair on OSTs failed"
+}
+
+untag_ost_object_75b() {
+	local file=$1
+	local fids=($($LFS getstripe $file | grep 0x))
+	local fid="${fids[3]}:${fids[2]}:0"
+	local objpath=$(ost_fid2_objpath ost1 $fid)
+
+	# stop all servers before modifying OST objects through debugfs
+	stopall || error "unable to stop"
+
+	# Untag OST object simulating the OST object inode if it was never
+	# tagged. Such OST objects miss UID/GID/PROJID (default to 0) and use
+	# the mode of precreated OST objects:
+	# (S_IFREG | S_ISUID | S_ISGID | S_ISVTX | 0666)
+	do_facet ost1 "$DEBUGFS -w -f /dev/stdin $(ostdevname 1) <<- EOF
+	sif $objpath mode 0107666
+	sif $objpath uid 0
+	sif $objpath gid 0
+	sif $objpath projid 0
+	EOF"
+
+	mountmgs || error "unable to start mgs"
+	mountmds || error "unable to start mds"
+	mountoss || error "unable to start oss"
+	for client in "${clients_arr[@]}"; do
+		zconf_mount_clients $client $MOUNT $MOUNT_OPTS ||
+			error "unable to mount client $client"
+	done
+	wait_ssk
+}
+
+test_75b() {
+	local testdir="${DIR}/$tdir"
+	local testfile="${testdir}/$tfile"
+	local unset_attr_mode="07666"
+
+	# check that enable_resource_id_check flag exists
+	do_facet ost $LCTL get_param -n obdfilter.*.enable_resource_id_repair ||
+		skip "OSS does not have the enable_resource_id_repair flag"
+
+	[[ "$ost1_FSTYPE" == ldiskfs ]] ||
+		skip "ldiskfs only test (using debugfs)"
+
+	do_nodes $(all_osts_nodes) \
+		$LCTL set_param obdfilter.*.enable_resource_id_repair=0 ||
+			error "disabling resource id repair on OSTs failed"
+	# setup
+	run_as_root="do_node ${clients_arr[0]}"
+	run_as_user="do_node ${clients_arr[0]} $RUNAS_CMD -u $ID0"
+	$LFS mkdir $testdir || error "mkdir $tdir failed"
+	chown $ID0:$ID0 $testdir || error "chown $testdir failed"
+
+	# 1. sanity check - striped files are unclaimed by default without IDs
+	$run_as_user $LFS setstripe -c 1 -i 0 $testfile ||
+		error "touch $testfile failed"
+
+	echo "Check OST object IDs (1) - should be unset after file create"
+	check_ost_object_ids $testfile 0 0 0 "$unset_attr_mode"
+
+	# 2. write to file and wait for full sync, IDs should be implicitly set
+	$run_as_user "dd if=/dev/zero of=$testfile bs=1M count=1 && sync" ||
+		error "dd+sync $testfile failed"
+
+	echo "Check OST object IDs (2) - should be set after writting to file"
+	check_ids_sync
+	check_ost_object_ids $testfile $ID0 $ID0 0 "0666"
+
+	# 3. untag OST object simulating the case of a never claimed OST object
+	echo "Check OST object IDs (3) - should be unset after untagging"
+	untag_ost_object_75b $testfile
+	do_nodes $(all_osts_nodes) \
+		$LCTL set_param obdfilter.*.enable_resource_id_repair=0 ||
+			error "disabling resource id repair on OSTs failed"
+	check_ost_object_ids $testfile 0 0 0 "$unset_attr_mode"
+
+	# 4. read from file, IDs remain unset
+	echo "Check OST object IDs (4) - should remain unset with read"
+	$run_as_root "sync; sync; echo 3 > /proc/sys/vm/drop_caches"
+	$run_as_user "dd of=/dev/null if=$testfile bs=1M count=1" ||
+		error "dd $testfile failed"
+	check_ids_sync
+	check_ost_object_ids $testfile 0 0 0 "$unset_attr_mode"
+
+	# 5. enable repair and read from file, IDs repair should be triggered
+	# Only UID and GID are valid during read, PROJID remains unset
+	do_nodes $(all_osts_nodes) \
+		$LCTL set_param obdfilter.*.enable_resource_id_repair=1 ||
+			error "enabling resource id repair on OSTs failed"
+	stack_trap cleanup_75b EXIT
+
+	echo "Check OST object IDs (5) - should be set after repair due to read"
+	$run_as_root "sync; sync; echo 3 > /proc/sys/vm/drop_caches"
+	$run_as_user "dd of=/dev/null if=$testfile bs=1M count=1" ||
+		error "dd $testfile failed"
+	# wait for 10 seconds for repair thread to tag object
+	sleep 10
+	check_ost_object_ids $testfile $ID0 $ID0 0 "01666"
+
+	# 6. set projid on directory - all IDs should be set
+	echo "Check OST object IDs (6) - should be set after setting projid"
+	$LFS project -s -p 42 $testdir
+	check_ids_sync
+	check_ost_object_ids $testfile $ID0 $ID0 42 "0666"
+}
+run_test 75b "test resource ID repair"
 
 cleanup_76() {
 	# unmount client

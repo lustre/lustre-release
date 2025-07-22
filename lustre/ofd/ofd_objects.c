@@ -1454,6 +1454,7 @@ static int ofd_id_repair_enqueue(struct ofd_device *ofd,
 /**
  * __ofd_check_resource_ids() - check client access to resource via nodemap
  * @env: execution environment
+ * @oa: obdo from client
  *
  * Check whether the client is allowed to access the resource by consulting
  * the nodemap with the client's export and the OST objects's UID/GID attr.

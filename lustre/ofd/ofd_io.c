@@ -605,7 +605,7 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	if (!ofd_object_exists(fo))
 		GOTO(obj_put, rc = -ENOENT);
 
-	rc = ofd_check_resource_ids(env, fo, oa);
+	rc = ofd_check_repair_resource_ids(env, fo, oa);
 	if (unlikely(rc))
 		GOTO(obj_put, rc);
 
