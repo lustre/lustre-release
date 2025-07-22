@@ -2461,41 +2461,6 @@ out:
 	RETURN_EXIT;
 }
 
-static ssize_t
-__pcc_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
-{
-	struct file *file = iocb->ki_filp;
-
-#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-	return file->f_op->read_iter(iocb, iter);
-#else
-	struct iovec iov;
-	struct iov_iter i;
-	ssize_t bytes = 0;
-
-	iov_for_each(iov, i, *iter) {
-		ssize_t res;
-
-		res = file->f_op->aio_read(iocb, &iov, 1, iocb->ki_pos);
-		if (-EIOCBQUEUED == res)
-			res = wait_on_sync_kiocb(iocb);
-		if (res <= 0) {
-			if (bytes == 0)
-				bytes = res;
-			break;
-		}
-
-		bytes += res;
-		if (res < iov.iov_len)
-			break;
-	}
-
-	if (bytes > 0)
-		iov_iter_advance(iter, bytes);
-	return bytes;
-#endif
-}
-
 ssize_t pcc_file_read_iter(struct kiocb *iocb,
 			   struct iov_iter *iter, bool *cached)
 {
@@ -2528,7 +2493,7 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 		 * __pcc_file_read_iter uses ->aio_read hook directly
 		 * to add support for ext4-dax.
 		 */
-		result = __pcc_file_read_iter(iocb, iter);
+		result = iocb->ki_filp->f_op->read_iter(iocb, iter);
 		GOTO(out_filp, result);
 	}
 
@@ -2615,7 +2580,7 @@ out_pageprivate2:
 
 	}
 
-	result = __pcc_file_read_iter(iocb, iter);
+	result = iocb->ki_filp->f_op->read_iter(iocb, iter);
 	if (iocb->ki_pos > i_size_read(inode) && result > 0)
 		result -= iocb->ki_pos - i_size_read(inode);
 
@@ -2626,41 +2591,6 @@ out_filp:
 out:
 	pcc_io_fini(inode, PIT_READ, rc, cached);
 	RETURN(result > 0 ? result : rc);
-}
-
-static ssize_t
-__pcc_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
-{
-	struct file *file = iocb->ki_filp;
-
-#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-	return file->f_op->write_iter(iocb, iter);
-#else
-	struct iovec iov;
-	struct iov_iter i;
-	ssize_t bytes = 0;
-
-	iov_for_each(iov, i, *iter) {
-		ssize_t res;
-
-		res = file->f_op->aio_write(iocb, &iov, 1, iocb->ki_pos);
-		if (-EIOCBQUEUED == res)
-			res = wait_on_sync_kiocb(iocb);
-		if (res <= 0) {
-			if (bytes == 0)
-				bytes = res;
-			break;
-		}
-
-		bytes += res;
-		if (res < iov.iov_len)
-			break;
-	}
-
-	if (bytes > 0)
-		iov_iter_advance(iter, bytes);
-	return bytes;
-#endif
 }
 
 ssize_t pcc_file_write_iter(struct kiocb *iocb,
@@ -2690,7 +2620,7 @@ ssize_t pcc_file_write_iter(struct kiocb *iocb,
 	 * the normal vfs interface to the local PCC file system,
 	 * the inode lock is not needed.
 	 */
-	result = __pcc_file_write_iter(iocb, iter);
+	result = iocb->ki_filp->f_op->write_iter(iocb, iter);
 	iocb->ki_filp = file;
 out:
 	pcc_io_fini(inode, PIT_WRITE, result, cached);

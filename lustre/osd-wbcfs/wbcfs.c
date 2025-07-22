@@ -658,7 +658,6 @@ static int memfs_getpage(struct inode *inode, pgoff_t index,
 	return 0;
 }
 
-#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 /* linux/mm/shmem.c shmem_file_read_iter() */
 static ssize_t memfs_file_read_iter(struct kiocb *iocb,
 				    struct iov_iter *to)
@@ -773,210 +772,6 @@ static ssize_t memfs_file_write_iter(struct kiocb *iocb,
 {
 	RETURN(generic_file_write_iter(iocb, iter));
 }
-
-#else
-
-/*
- * It can not use simple_readpage() directly in Linux ramfs especially when
- * there are holes in the file which is cached MemFS. It must rewrite the read
- * VFS interface similar to Linux tmpfs.
- */
-/* linux/mm/filemap.c */
-static int memfs_file_read_actor(read_descriptor_t *desc, struct page *page,
-				 unsigned long offset, unsigned long size)
-{
-	char *kaddr;
-	unsigned long left, count = desc->count;
-
-	if (size > count)
-		size = count;
-
-	/*
-	 * Faults on the destination of a read are common, so do it before
-	 * taking the kmap.
-	 */
-	if (IS_ENABLED(CONFIG_HIGHMEM) &&
-	    !fault_in_pages_writeable(desc->arg.buf, size)) {
-		kaddr = kmap_atomic(page);
-		left = __copy_to_user_inatomic(desc->arg.buf,
-						kaddr + offset, size);
-		kunmap_atomic(kaddr);
-		if (left == 0)
-			goto success;
-	}
-
-	/* Do it the slow way */
-	kaddr = kmap(page);
-	left = __copy_to_user(desc->arg.buf, kaddr + offset, size);
-	kunmap(page);
-
-	if (left) {
-		size -= left;
-		desc->error = -EFAULT;
-	}
-success:
-	desc->count = count - size;
-	desc->written += size;
-	desc->arg.buf += size;
-	return size;
-}
-
-/* linux/mm/shmem.c do_shmem_file_read() */
-static void do_memfs_file_read(struct file *filp,
-			       loff_t *ppos, read_descriptor_t *desc,
-			       read_actor_t actor)
-{
-	struct inode *inode = file_inode(filp);
-	struct address_space *mapping = inode->i_mapping;
-	pgoff_t index;
-	unsigned long offset;
-
-	/*
-	 * Might this read be for a stacking filesystem?  Then when reading
-	 * holes of a sparse file, we actually need to allocate those pages,
-	 * and even mark them dirty, so it cannot exceed the max_blocks limit.
-	 */
-
-	index = *ppos >> PAGE_SHIFT;
-	offset = *ppos & ~PAGE_MASK;
-
-	for (;;) {
-		struct page *page = NULL;
-		pgoff_t end_index;
-		unsigned long nr, ret;
-		loff_t i_size = i_size_read(inode);
-
-		end_index = i_size >> PAGE_SHIFT;
-		if (index > end_index)
-			break;
-		if (index == end_index) {
-			nr = i_size & ~PAGE_MASK;
-			if (nr <= offset)
-				break;
-		}
-
-		desc->error = memfs_getpage(inode, index, &page);
-		if (desc->error) {
-			if (desc->error == -EINVAL)
-				desc->error = 0;
-			break;
-		}
-		if (page)
-			unlock_page(page);
-
-		/*
-		 * We must evaluate after, since reads (unlike writes)
-		 * are called without i_mutex protection against truncate
-		 */
-		nr = PAGE_SIZE;
-		i_size = i_size_read(inode);
-		end_index = i_size >> PAGE_SHIFT;
-		if (index == end_index) {
-			nr = i_size & ~PAGE_MASK;
-			if (nr <= offset) {
-				if (page)
-					put_page(page);
-				break;
-			}
-		}
-		nr -= offset;
-
-		if (page) {
-			/*
-			 * If users can be writing to this page using arbitrary
-			 * virtual addresses, take care about potential aliasing
-			 * before reading the page on the kernel side.
-			 */
-			if (mapping_writably_mapped(mapping))
-				flush_dcache_page(page);
-			/*
-			 * Mark the page accessed if we read the beginning.
-			 */
-			if (!offset)
-				mark_page_accessed(page);
-		} else {
-			page = ZERO_PAGE(0);
-			get_page(page);
-		}
-
-		/*
-		 * Ok, we have the page, and it's up-to-date, so
-		 * now we can copy it to user space...
-		 *
-		 * The actor routine returns how many bytes were actually used..
-		 * NOTE! This may not be the same as how much of a user buffer
-		 * we filled up (we may be padding etc), so we can only update
-		 * "pos" here (the actor routine has to update the user buffer
-		 * pointers and the remaining count).
-		 */
-		ret = actor(desc, page, offset, nr);
-		offset += ret;
-		index += offset >> PAGE_SHIFT;
-		offset &= ~PAGE_MASK;
-
-		put_page(page);
-		if (ret != nr || !desc->count)
-			break;
-
-		cond_resched();
-	}
-
-	*ppos = ((loff_t) index << PAGE_SHIFT) + offset;
-	file_accessed(filp);
-}
-
-static ssize_t memfs_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
-				   unsigned long nr_segs, loff_t pos)
-{
-	struct file *filp = iocb->ki_filp;
-	ssize_t retval;
-	unsigned long seg;
-	size_t count;
-	loff_t *ppos = &iocb->ki_pos;
-
-	retval = generic_segment_checks(iov, &nr_segs, &count, VERIFY_WRITE);
-	if (retval)
-		return retval;
-
-	for (seg = 0; seg < nr_segs; seg++) {
-		read_descriptor_t desc;
-
-		desc.written = 0;
-		desc.arg.buf = iov[seg].iov_base;
-		desc.count = iov[seg].iov_len;
-		if (desc.count == 0)
-			continue;
-		desc.error = 0;
-		do_memfs_file_read(filp, ppos, &desc, memfs_file_read_actor);
-		retval += desc.written;
-		if (desc.error) {
-			retval = retval ?: desc.error;
-			break;
-		}
-		if (desc.count > 0)
-			break;
-	}
-	return retval;
-}
-
-static ssize_t memfs_file_read(struct file *file, char __user *buf,
-			       size_t count, loff_t *ppos)
-{
-	RETURN(do_sync_read(file, buf, count, ppos));
-}
-
-static ssize_t memfs_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
-				    unsigned long nr_segs, loff_t pos)
-{
-	RETURN(generic_file_aio_write(iocb, iov, nr_segs, pos));
-}
-
-static ssize_t memfs_file_write(struct file *file, const char __user *buf,
-				size_t count, loff_t *ppos)
-{
-	RETURN(do_sync_write(file, buf, count, ppos));
-}
-#endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 
 static void memfs_put_super(struct super_block *sb)
 {
@@ -1266,19 +1061,12 @@ static const struct inode_operations memfs_dir_inode_operations = {
 };
 
 static const struct file_operations memfs_file_operations = {
-#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-# ifdef HAVE_SYNC_READ_WRITE
+#ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
 	.write		= new_sync_write,
-# endif
+#endif
 	.read_iter	= memfs_file_read_iter,
 	.write_iter	= memfs_file_write_iter,
-#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
-	.read		= memfs_file_read,
-	.aio_read	= memfs_file_aio_read,
-	.write		= memfs_file_write,
-	.aio_write	= memfs_file_aio_write,
-#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 	.mmap		= generic_file_mmap,
 	.llseek		= generic_file_llseek,
 	.splice_read	= memfs_file_splice_read,

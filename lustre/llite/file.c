@@ -2713,132 +2713,6 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 	return do_file_write_iter(iocb, iter);
 }
 
-#ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-/*
- * XXX: exact copy from kernel code (__generic_file_aio_write_nolock)
- */
-static int ll_file_get_iov_count(const struct iovec *iov,
-				 unsigned long *nr_segs, size_t *count,
-				 int access_flags)
-{
-	size_t cnt = 0;
-	unsigned long seg;
-
-	for (seg = 0; seg < *nr_segs; seg++) {
-		const struct iovec *iv = &iov[seg];
-
-		/*
-		 * If any segment has a negative length, or the cumulative
-		 * length ever wraps negative then return -EINVAL.
-		 */
-		cnt += iv->iov_len;
-		if (unlikely((ssize_t)(cnt|iv->iov_len) < 0))
-			return -EINVAL;
-		if (access_ok(access_flags, iv->iov_base, iv->iov_len))
-			continue;
-		if (seg == 0)
-			return -EFAULT;
-		*nr_segs = seg;
-		cnt -= iv->iov_len;	/* This segment is no good */
-		break;
-	}
-	*count = cnt;
-	return 0;
-}
-
-static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
-				unsigned long nr_segs, loff_t pos)
-{
-	struct iov_iter to;
-	size_t iov_count;
-	ssize_t result;
-
-	ENTRY;
-	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count, VERIFY_READ);
-	if (result)
-		RETURN(result);
-
-	if (!iov_count)
-		RETURN(0);
-
-	ll_iov_iter_init(&to, READ, iov, nr_segs, iov_count);
-
-	RETURN(ll_file_read_iter(iocb, &to));
-}
-
-static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
-			    loff_t *ppos)
-{
-	struct iovec iov = { .iov_base = buf, .iov_len = count };
-	struct kiocb kiocb;
-	ssize_t result;
-
-	ENTRY;
-	if (!count)
-		RETURN(0);
-
-	init_sync_kiocb(&kiocb, file);
-	kiocb.ki_pos = *ppos;
-#ifdef HAVE_KIOCB_KI_LEFT
-	kiocb.ki_left = count;
-#elif defined(HAVE_KI_NBYTES)
-	kiocb.i_nbytes = count;
-#endif
-
-	result = ll_file_aio_read(&kiocb, &iov, 1, kiocb.ki_pos);
-	*ppos = kiocb.ki_pos;
-
-	RETURN(result);
-}
-
-/* Write to a file (through the page cache). AIO stuff */
-static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
-				 unsigned long nr_segs, loff_t pos)
-{
-	struct iov_iter from;
-	size_t iov_count;
-	ssize_t result;
-
-	ENTRY;
-	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count, VERIFY_WRITE);
-	if (result)
-		RETURN(result);
-
-	if (!iov_count)
-		RETURN(0);
-
-	ll_iov_iter_init(&from, WRITE, iov, nr_segs, iov_count);
-
-	RETURN(ll_file_write_iter(iocb, &from));
-}
-
-static ssize_t ll_file_write(struct file *file, const char __user *buf,
-			     size_t count, loff_t *ppos)
-{
-	struct iovec   iov = { .iov_base = (void __user *)buf,
-			       .iov_len = count };
-	struct kiocb kiocb;
-	ssize_t result;
-
-	ENTRY;
-	if (!count)
-		RETURN(0);
-
-	init_sync_kiocb(&kiocb, file);
-	kiocb.ki_pos = *ppos;
-#ifdef HAVE_KIOCB_KI_LEFT
-	kiocb.ki_left = count;
-#elif defined(HAVE_KI_NBYTES)
-	kiocb.ki_nbytes = count;
-#endif
-
-	result = ll_file_aio_write(&kiocb, &iov, 1, kiocb.ki_pos);
-	*ppos = kiocb.ki_pos;
-
-	RETURN(result);
-}
-#endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
-
 int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
 			     __u64 flags, struct lov_user_md *lum,
 			     ssize_t lum_size)
@@ -6747,19 +6621,12 @@ int ll_inode_permission(struct mnt_idmap *idmap, struct inode *inode, int mask)
 
 /* -o localflock - only provides locally consistent flock locks */
 static const struct file_operations ll_file_operations = {
-#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-# ifdef HAVE_SYNC_READ_WRITE
+#ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
 	.write		= new_sync_write,
-# endif
+#endif
 	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
-#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
-	.read		= ll_file_read,
-	.aio_read	= ll_file_aio_read,
-	.write		= ll_file_write,
-	.aio_write	= ll_file_aio_write,
-#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 	.unlocked_ioctl	= ll_file_ioctl,
 	.open		= ll_file_open,
 	.release	= ll_file_release,
@@ -6775,19 +6642,12 @@ static const struct file_operations ll_file_operations = {
 };
 
 static const struct file_operations ll_file_operations_flock = {
-#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-# ifdef HAVE_SYNC_READ_WRITE
+#ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
 	.write		= new_sync_write,
-# endif /* HAVE_SYNC_READ_WRITE */
+#endif /* HAVE_SYNC_READ_WRITE */
 	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
-#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
-	.read		= ll_file_read,
-	.aio_read	= ll_file_aio_read,
-	.write		= ll_file_write,
-	.aio_write	= ll_file_aio_write,
-#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 	.unlocked_ioctl	= ll_file_ioctl,
 	.open		= ll_file_open,
 	.release	= ll_file_release,
@@ -6806,19 +6666,12 @@ static const struct file_operations ll_file_operations_flock = {
 
 /* These are for -o noflock - to return ENOSYS on flock calls */
 static const struct file_operations ll_file_operations_noflock = {
-#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-# ifdef HAVE_SYNC_READ_WRITE
+#ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
 	.write		= new_sync_write,
-# endif /* HAVE_SYNC_READ_WRITE */
+#endif /* HAVE_SYNC_READ_WRITE */
 	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
-#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
-	.read		= ll_file_read,
-	.aio_read	= ll_file_aio_read,
-	.write		= ll_file_write,
-	.aio_write	= ll_file_aio_write,
-#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 	.unlocked_ioctl	= ll_file_ioctl,
 	.open		= ll_file_open,
 	.release	= ll_file_release,

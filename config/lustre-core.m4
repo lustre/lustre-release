@@ -1058,27 +1058,6 @@ AC_DEFUN([LC_HAVE_IOV_ITER_TRUNCATE], [
 ]) # LC_HAVE_IOV_ITER_TRUNCATE
 
 #
-# LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-#
-# 3.16 introduces [read|write]_iter to struct file_operations
-#
-AC_DEFUN([LC_SRC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER], [
-	LB2_LINUX_TEST_SRC([file_function_iter], [
-		#include <linux/fs.h>
-	],[
-		((struct file_operations *)NULL)->read_iter(NULL, NULL);
-		((struct file_operations *)NULL)->write_iter(NULL, NULL);
-	])
-])
-AC_DEFUN([LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'file_operations.[read|write]_iter' exist],
-	[file_function_iter], [
-		AC_DEFINE(HAVE_FILE_OPERATIONS_READ_WRITE_ITER, 1,
-			[file_operations.[read|write]_iter functions exist])
-	])
-]) # LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
-
-#
 # LC_PAGECACHE_GET_PAGE
 #
 # Kernel version 3.16 commit 2457aec63745e235bcafb7ef312b182d8682f0fc
@@ -5186,7 +5165,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_DIRECTIO_USE_ITER
 	LC_SRC_HAVE_IOV_ITER_INIT_DIRECTION
 	LC_SRC_HAVE_IOV_ITER_TRUNCATE
-	LC_SRC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 	LC_SRC_PAGECACHE_GET_PAGE
 
 	# 3.17
@@ -5512,7 +5490,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_DIRECTIO_USE_ITER
 	LC_HAVE_IOV_ITER_INIT_DIRECTION
 	LC_HAVE_IOV_ITER_TRUNCATE
-	LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 	LC_PAGECACHE_GET_PAGE
 
 	# 3.17
