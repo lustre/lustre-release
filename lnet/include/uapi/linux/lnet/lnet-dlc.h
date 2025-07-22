@@ -62,6 +62,7 @@ enum lnet_commands {
 	LNET_CMD_DBG_RECOV	= 11,
 	LNET_CMD_FAULT		= 12,
 	LNET_CMD_ROUTING	= 13,
+	LNET_CMD_BUFFERS	= 14,
 
 	__LNET_CMD_MAX_PLUS_ONE
 };
