@@ -1061,10 +1061,6 @@ static const struct inode_operations memfs_dir_inode_operations = {
 };
 
 static const struct file_operations memfs_file_operations = {
-#ifdef HAVE_SYNC_READ_WRITE
-	.read		= new_sync_read,
-	.write		= new_sync_write,
-#endif
 	.read_iter	= memfs_file_read_iter,
 	.write_iter	= memfs_file_write_iter,
 	.mmap		= generic_file_mmap,

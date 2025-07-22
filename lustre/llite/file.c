@@ -6621,10 +6621,6 @@ int ll_inode_permission(struct mnt_idmap *idmap, struct inode *inode, int mask)
 
 /* -o localflock - only provides locally consistent flock locks */
 static const struct file_operations ll_file_operations = {
-#ifdef HAVE_SYNC_READ_WRITE
-	.read		= new_sync_read,
-	.write		= new_sync_write,
-#endif
 	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
 	.unlocked_ioctl	= ll_file_ioctl,
@@ -6642,10 +6638,6 @@ static const struct file_operations ll_file_operations = {
 };
 
 static const struct file_operations ll_file_operations_flock = {
-#ifdef HAVE_SYNC_READ_WRITE
-	.read		= new_sync_read,
-	.write		= new_sync_write,
-#endif /* HAVE_SYNC_READ_WRITE */
 	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
 	.unlocked_ioctl	= ll_file_ioctl,
@@ -6666,10 +6658,6 @@ static const struct file_operations ll_file_operations_flock = {
 
 /* These are for -o noflock - to return ENOSYS on flock calls */
 static const struct file_operations ll_file_operations_noflock = {
-#ifdef HAVE_SYNC_READ_WRITE
-	.read		= new_sync_read,
-	.write		= new_sync_write,
-#endif /* HAVE_SYNC_READ_WRITE */
 	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
 	.unlocked_ioctl	= ll_file_ioctl,

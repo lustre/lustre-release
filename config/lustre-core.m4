@@ -1376,17 +1376,6 @@ AC_DEFUN([LC_IOV_ITER_RW], [
 ]) # LC_IOV_ITER_RW
 
 #
-# LC_HAVE_SYNC_READ_WRITE
-#
-# 4.1 new_sync_[read|write] no longer exported
-#
-AC_DEFUN([LC_HAVE_SYNC_READ_WRITE], [
-LB_CHECK_EXPORT([new_sync_read], [fs/read_write.c],
-	[AC_DEFINE(HAVE_SYNC_READ_WRITE, 1,
-			[new_sync_[read|write] is exported by the kernel])])
-]) # LC_HAVE_SYNC_READ_WRITE
-
-#
 # LC_HAVE___BI_CNT
 #
 # 4.1 redefined bi_cnt as __bi_cnt in commit dac56212e8127dbc0
