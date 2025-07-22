@@ -73,21 +73,23 @@ static loff_t find_block_dqentry(const struct lu_env *env,
 				 qid_t dqid, uint blk,
 				 struct osd_it_quota *it)
 {
-	dqbuf_t				 buf = getdqbuf();
-	loff_t				 ret;
-	int				 i;
-	struct lustre_disk_dqblk_v2	*ddquot;
-	int				 dqblk_sz;
+	dqbuf_t buf;
+	struct lustre_disk_dqblk_v2 *ddquot;
+	int dqblk_sz;
+	loff_t ret;
+	int i;
 
 	ENTRY;
 
+	buf = getdqbuf();
 	ddquot = (struct lustre_disk_dqblk_v2 *)GETENTRIES(buf);
 	dqblk_sz = sizeof(struct lustre_disk_dqblk_v2);
 	if (!buf)
 		RETURN(-ENOMEM);
 	ret = quota_read_blk(env, obj, type, blk, buf);
 	if (ret < 0) {
-		CERROR("Can't read quota tree block %u.\n", blk);
+		CERROR("%s: cannot read quota tree block %u: rc = %lld\n",
+		       osd_obj2dev(obj)->od_svname, blk, ret);
 		GOTO(out_buf, ret);
 	}
 
@@ -136,17 +138,20 @@ loff_t find_tree_dqentry(const struct lu_env *env,
 			 qid_t dqid, uint blk, int depth,
 			 struct osd_it_quota *it)
 {
-	dqbuf_t	 buf = getdqbuf();
-	loff_t	 ret;
-	u32	*ref = (u32 *) buf;
+	dqbuf_t buf;
+	loff_t ret;
+	u32 *ref;
 
 	ENTRY;
 
+	buf = getdqbuf();
 	if (!buf)
 		RETURN(-ENOMEM);
+	ref = (u32 *)buf;
 	ret = quota_read_blk(env, obj, type, blk, buf);
 	if (ret < 0) {
-		CERROR("Can't read quota tree block %u.\n", blk);
+		CERROR("%s: cannot read quota tree block %u: rc = %lld\n",
+		       osd_obj2dev(obj)->od_svname, blk, ret);
 		GOTO(out_buf, ret);
 	}
 	ret = 0;
@@ -182,14 +187,14 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 		       int type, uint blk, uint index,
 		       struct osd_it_quota *it)
 {
-	dqbuf_t				 buf;
-	loff_t				 ret = 0;
-	struct lustre_disk_dqdbheader	*dqhead;
-	int				 i, dqblk_sz;
-	struct lustre_disk_dqblk_v2	*ddquot;
-	struct osd_quota_leaf		*leaf;
-	ENTRY;
+	struct lustre_disk_dqdbheader *dqhead;
+	int i, dqblk_sz;
+	struct lustre_disk_dqblk_v2 *ddquot;
+	struct osd_quota_leaf *leaf;
+	dqbuf_t buf;
+	loff_t ret = 0;
 
+	ENTRY;
 	/* check if the leaf block has been processed before */
 	list_for_each_entry(leaf, &it->oiq_list, oql_link) {
 		if (leaf->oql_blk == blk)
@@ -203,7 +208,8 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 		RETURN(-ENOMEM);
 	ret = quota_read_blk(env, obj, type, blk, buf);
 	if (ret < 0) {
-		CERROR("Can't read quota tree block %u.\n", blk);
+		CERROR("%s: cannot read quota tree block %u: rc = %lld\n",
+		       osd_obj2dev(obj)->od_svname, blk, ret);
 		GOTO(out_buf, ret);
 	}
 	ret = 1;
@@ -246,17 +252,20 @@ int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
 		      int type, uint blk, int depth, uint index,
 		      struct osd_it_quota *it)
 {
-	dqbuf_t	 buf = getdqbuf();
-	loff_t	 ret;
-	u32	*ref = (u32 *) buf;
+	dqbuf_t	buf;
+	loff_t ret;
+	u32 *ref;
 
 	ENTRY;
 
+	buf = getdqbuf();
 	if (!buf)
 		RETURN(-ENOMEM);
+	ref = (u32 *)buf;
 	ret = quota_read_blk(env, obj, type, blk, buf);
 	if (ret < 0) {
-		CERROR("Can't read quota tree block %u.\n", blk);
+		CERROR("%s: cannot read quota tree block %u: rc = %lld\n",
+		       osd_obj2dev(obj)->od_svname, blk, ret);
 		goto out_buf;
 	}
 	ret = 1;

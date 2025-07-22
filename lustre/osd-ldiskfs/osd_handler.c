@@ -264,7 +264,8 @@ osd_idc_find_or_init(const struct lu_env *env, struct osd_device *osd,
 		rc = osd_oi_lookup(osd_oti_get(env), osd, fid,
 				   &idc->oic_lid, 0);
 		if (unlikely(rc < 0)) {
-			CERROR("can't lookup: rc = %d\n", rc);
+			CERROR("%s: cannot lookup FID "DFID": rc = %d\n",
+			       osd->od_svname, PFID(fid), rc);
 			return ERR_PTR(rc);
 		}
 	} else {
@@ -1869,14 +1870,15 @@ static void osd_trans_commit_complete(struct osd_thandle *oh, int error)
 	LASSERT(oh->ot_handle == NULL);
 
 	if (error)
-		CERROR("transaction @0x%p commit error: %d\n", th, error);
+		CERROR("%s: transaction commit error: rc = %d\n",
+		       osd_name(osd), error);
 
 	/* call per-transaction callbacks if any */
 	list_for_each_entry_safe(dcb, tmp, &oh->ot_commit_dcb_list,
 				 dcb_linkage) {
 		LASSERTF(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC,
-			 "commit callback entry: magic=%x name='%s'\n",
-			 dcb->dcb_magic, dcb->dcb_name);
+			 "%s: commit callback entry: magic=%x name='%s'\n",
+			 osd_name(osd), dcb->dcb_magic, dcb->dcb_name);
 		list_del_init(&dcb->dcb_linkage);
 		dcb->dcb_func(NULL, th, dcb, error);
 	}
@@ -7228,12 +7230,15 @@ static int osd_ldiskfs_filldir(void *ctx,
 	struct lu_fid *fid = &ent->oied_fid;
 	char *buf = it->oie_buf;
 	struct osd_fid_pack *rec;
-	ENTRY;
 
+	ENTRY;
 	/* this should never happen */
 	if (unlikely(namelen == 0 || namelen > LDISKFS_NAME_LEN)) {
-		CERROR("ldiskfs return invalid namelen %d\n", namelen);
-		RETURN(-EIO);
+		int rc = -EIO;
+
+		CERROR("%s: ldiskfs return invalid namelen %d: rc = %d\n",
+		       osd_obj2dev(obj)->od_svname, namelen, rc);
+		RETURN(rc);
 	}
 
 	/* Check for enough space. Note oied_name is not NUL terminated. */
@@ -7340,7 +7345,7 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 		} else {
 #ifdef HAVE_FOP_READDIR
 			rc = filp->f_op->readdir(filp, &buf.ctx, buf.ctx.actor);
-                        buf.ctx.pos = filp->f_pos;
+			buf.ctx.pos = filp->f_pos;
 #else
 			rc = -ENOTDIR;
 #endif

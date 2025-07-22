@@ -152,9 +152,11 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 			*created = false;
 
 		if (!S_ISDIR(old_mode)) {
-			CERROR("found %s (%lu/%u) is mode %o\n", name,
-			       inode->i_ino, inode->i_generation, old_mode);
-			GOTO(out_err, err = -ENOTDIR);
+			err = -ENOTDIR;
+			CERROR("%s: found '%s' (%lu/%u) is mode %o: rc = %d\n",
+			       osd->od_svname, name, inode->i_ino,
+			       inode->i_generation, old_mode, err);
+			GOTO(out_err, err);
 		}
 
 		if (unlikely(osd->od_dt_dev.dd_rdonly))
@@ -234,7 +236,8 @@ static int osd_last_rcvd_subdir_count(struct osd_device *osd)
 		if (le16_to_cpu(lsd.lsd_subdir_count) > 0)
 			count = le16_to_cpu(lsd.lsd_subdir_count);
 	} else if (rc != 0) {
-		CERROR("Can't read last_rcvd file, rc = %d\n", rc);
+		CERROR("%s: cannot read last_rcvd file: rc = %d\n",
+		       osd->od_svname, rc);
 		if (rc > 0)
 			rc = -EFAULT;
 		dput(dlast);

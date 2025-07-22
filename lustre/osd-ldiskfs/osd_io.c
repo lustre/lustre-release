@@ -241,14 +241,14 @@ static void dio_complete_routine(struct bio *bio, int error)
 	 * DO NOT record procfs stats here!!!
 	 */
 	if (unlikely(iobuf == NULL)) {
-		CERROR("***** bio->bi_private is NULL! Dump the bio contents to the console. Please report this to <https://jira.whamcloud.com/>, and probably have to reboot this node.\n");
+		CERROR("***** bio->bi_private is NULL! Dump the bio contents to the console. Please report this to <https://jira.whamcloud.com/>, and probably have to reboot this node: rc = %d\n",
+		       -EIO);
 		CERROR("bi_next: %p, bi_flags: %lx, " __stringify(bi_opf)
 		       ": %x, bi_vcnt: %d, bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, bi_private: %p\n",
 		       bio->bi_next, (unsigned long)bio->bi_flags,
 		       (unsigned int)bio->bi_opf, bio->bi_vcnt, bio_idx(bio),
 		       bio_sectors(bio) << 9, bio->bi_end_io,
-		       atomic_read(&bio->__bi_cnt),
-		       bio->bi_private);
+		       atomic_read(&bio->__bi_cnt), bio->bi_private);
 		return;
 	}
 
@@ -487,10 +487,10 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 							 : REQ_OP_READ,
 					    GFP_NOIO);
 			if (!bio) {
-				CERROR("Can't allocate bio %u pages\n",
-				       block_idx_end - block_idx +
-				       blocks_left_page - 1);
 				rc = -ENOMEM;
+				CERROR("%s: cannot allocate bio %u pages: rc = %d\n",
+				       osd->od_svname, block_idx_end -
+					  block_idx + blocks_left_page - 1, rc);
 				goto out;
 			}
 			bio_set_sector(bio, sector);
@@ -1912,17 +1912,17 @@ int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
 		      int bufsize, int write_NUL, loff_t *offs,
 		      handle_t *handle)
 {
-	struct buffer_head *bh        = NULL;
-	loff_t              offset    = *offs;
-	loff_t              new_size  = i_size_read(inode);
-	unsigned long       block;
-	int                 blocksize = 1 << inode->i_blkbits;
+	struct buffer_head *bh = NULL;
+	loff_t offset = *offs;
+	loff_t new_size = i_size_read(inode);
+	unsigned long block;
+	int blocksize = 1 << inode->i_blkbits;
 	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
-	int                 err = 0;
-	int                 size;
-	int                 boffs;
-	int                 dirty_inode = 0;
 	bool create, sparse, sync = false;
+	int size;
+	int boffs;
+	int dirty_inode = 0;
+	int err = 0;
 
 	if (write_NUL) {
 		/*
@@ -1994,8 +1994,7 @@ int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
 				bh = NULL;
 			}
 
-			CERROR(
-			       "%s: error reading offset %llu (block %lu, size %d, offs %llu), credits %d/%d: rc = %d\n",
+			CERROR("%s: error reading offset %llu (block %lu, size %d, offs %llu), credits %d/%d: rc = %d\n",
 			       osd_ino2name(inode), offset, block, bufsize,
 			       *offs, credits, handle->h_buffer_credits, err);
 			break;
@@ -2005,8 +2004,8 @@ int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
 							   bh,
 							   LDISKFS_JTR_NONE);
 		if (err) {
-			CERROR("journal_get_write_access() returned error %d\n",
-			       err);
+			CERROR("%s: journal_get_write_access() error: rc = %d\n",
+			       osd_ino2name(inode), err);
 			break;
 		}
 		LASSERTF(boffs + size <= bh->b_size,

@@ -876,8 +876,7 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 					      NULL, &osd->od_dt_dev);
 	if (IS_ERR(osd->od_proc_entry)) {
 		rc = PTR_ERR(osd->od_proc_entry);
-		CERROR("Error %d setting up lprocfs for %s\n",
-		       rc, name);
+		CERROR("%s: lprocfs_register() failed: rc = %d\n", name, rc);
 		osd->od_proc_entry = NULL;
 		GOTO(out, rc);
 	}

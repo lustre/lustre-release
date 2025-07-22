@@ -87,19 +87,17 @@ extern struct kmem_cache *dynlock_cachep;
 #define OBD_BRW_MAPPED	OBD_BRW_LOCAL1
 
 struct osd_directory {
-        struct iam_container od_container;
-        struct iam_descr     od_descr;
+	struct iam_container	od_container;
+	struct iam_descr	od_descr;
 };
 
 /*
  * Object Index (oi) instance.
  */
 struct osd_oi {
-        /*
-         * underlying index object, where fid->id mapping in stored.
-         */
-        struct inode         *oi_inode;
-        struct osd_directory  oi_dir;
+	/* underlying index object, where fid->id mapping in stored. */
+	struct inode		*oi_inode;
+	struct osd_directory	 oi_dir;
 };
 
 extern const int osd_dto_credits_noquota[];
@@ -243,17 +241,15 @@ enum osd_t10_type {
  * osd device.
  */
 struct osd_device {
-        /* super-class */
-        struct dt_device          od_dt_dev;
-        /* information about underlying file system */
-        struct vfsmount          *od_mnt;
-        /* object index */
-        struct osd_oi           **od_oi_table;
-        /* total number of OI containers */
-        int                       od_oi_count;
-        /*
-         * Fid Capability
-         */
+	/* super-class */
+	struct dt_device          od_dt_dev;
+	/* information about underlying file system */
+	struct vfsmount          *od_mnt;
+	/* object index */
+	struct osd_oi           **od_oi_table;
+	/* total number of OI containers */
+	int                       od_oi_count;
+	/* FID Capability */
 	unsigned int              od_fl_capa:1,
 				  od_maybe_new:1,
 				  od_igif_inoi:1,
@@ -432,10 +428,10 @@ struct osd_thandle {
 
 	unsigned int		ot_remove_agents:1;
 #if OSD_THANDLE_STATS
-        /** time when this handle was allocated */
+	/** time when this handle was allocated */
 	ktime_t oth_alloced;
 
-        /** time when this thanle was started */
+	/** time when this thanle was started */
 	ktime_t oth_started;
 #endif
 	struct list_head	ot_trunc_locks;
@@ -450,18 +446,18 @@ struct osd_thandle {
  * Basic transaction credit op
  */
 enum dt_txn_op {
-        DTO_INDEX_INSERT,
-        DTO_INDEX_DELETE,
-        DTO_INDEX_UPDATE,
-        DTO_OBJECT_CREATE,
-        DTO_OBJECT_DELETE,
-        DTO_ATTR_SET_BASE,
-        DTO_XATTR_SET,
-        DTO_WRITE_BASE,
-        DTO_WRITE_BLOCK,
-        DTO_ATTR_SET_CHOWN,
+	DTO_INDEX_INSERT,
+	DTO_INDEX_DELETE,
+	DTO_INDEX_UPDATE,
+	DTO_OBJECT_CREATE,
+	DTO_OBJECT_DELETE,
+	DTO_ATTR_SET_BASE,
+	DTO_XATTR_SET,
+	DTO_WRITE_BASE,
+	DTO_WRITE_BLOCK,
+	DTO_ATTR_SET_CHOWN,
 
-        DTO_NR
+	DTO_NR
 };
 
 struct osd_obj_declare {
@@ -501,17 +497,17 @@ enum {
  * Variable size, first byte contains the length of the whole record.
  */
 struct osd_fid_pack {
-        unsigned char fp_len;
-        char fp_area[sizeof(struct lu_fid)];
+	unsigned char	fp_len;
+	char		fp_area[sizeof(struct lu_fid)];
 };
 
 struct osd_it_ea_dirent {
-        struct lu_fid   oied_fid;
-        __u64           oied_ino;
-        __u64           oied_off;
-        unsigned short  oied_namelen;
-        unsigned int    oied_type;
-        char            oied_name[];
+	struct lu_fid	oied_fid;
+	__u64		oied_ino;
+	__u64		oied_off;
+	unsigned short	oied_namelen;
+	unsigned int	oied_type;
+	char		oied_name[];
 } __attribute__((packed));
 
 /**
@@ -546,9 +542,9 @@ struct osd_it_ea {
  * Iterator's in-memory data structure for IAM mode.
  */
 struct osd_it_iam {
-        struct osd_object     *oi_obj;
-        struct iam_path_descr *oi_ipd;
-        struct iam_iterator    oi_it;
+	struct osd_object	*oi_obj;
+	struct iam_path_descr	*oi_ipd;
+	struct iam_iterator	 oi_it;
 };
 
 struct osd_quota_leaf {
@@ -687,13 +683,13 @@ struct osd_thread_info {
 	struct osd_inode_id    oti_id;
 	struct osd_inode_id    oti_id2;
 	struct osd_inode_id    oti_id3;
-        struct ost_id          oti_ostid;
+	struct ost_id          oti_ostid;
 
-        /**
-         * following ipd and it structures are used for osd_index_iam_lookup()
-         * these are defined separately as we might do index operation
-         * in open iterator session.
-         */
+	/**
+	 * following ipd and it structures are used for osd_index_iam_lookup()
+	 * these are defined separately as we might do index operation
+	 * in open iterator session.
+	 */
 
 	/** pre-allocated buffer used by oti_it_ea, size OSD_IT_EA_BUFSIZE */
 	void			*oti_it_ea_buf;
@@ -702,17 +698,17 @@ struct osd_thread_info {
 	/* IAM iterator for index operation. */
 	struct iam_iterator    oti_idx_it;
 
-        /** union to guarantee that ->oti_ipd[] has proper alignment. */
-        union {
-		char	       oti_name[48];
-                char           oti_it_ipd[DX_IPD_MAX_SIZE];
-                long long      oti_alignment_lieutenant;
-        };
+	/** union to guarantee that ->oti_ipd[] has proper alignment. */
+	union {
+		char			oti_name[48];
+		char			oti_it_ipd[DX_IPD_MAX_SIZE];
+		long long		oti_alignment_lieutenant;
+	};
 
-        union {
-                char           oti_idx_ipd[DX_IPD_MAX_SIZE];
-                long long      oti_alignment_lieutenant_colonel;
-        };
+	union {
+		char			oti_idx_ipd[DX_IPD_MAX_SIZE];
+		long long		oti_alignment_lieutenant_colonel;
+	};
 
 	struct osd_idmap_cache oti_cache;
 
@@ -926,15 +922,15 @@ int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
-                      int type, uint blk, int depth, uint index,
-                      struct osd_it_quota *it);
+		      int type, uint blk, int depth, uint index,
+		      struct osd_it_quota *it);
 int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
-                       int type, uint blk, uint index,
-                       struct osd_it_quota *it);
+		       int type, uint blk, uint index,
+		       struct osd_it_quota *it);
 loff_t find_tree_dqentry(const struct lu_env *env,
-                         struct osd_object *obj, int type,
-                         qid_t dqid, uint blk, int depth,
-                         struct osd_it_quota *it);
+			 struct osd_object *obj, int type,
+			 qid_t dqid, uint blk, int depth,
+			 struct osd_it_quota *it);
 /* osd_quota.c */
 int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		    struct lquota_id_info *qi, struct osd_object *obj,
@@ -1050,14 +1046,13 @@ static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
 #if OSD_INVARIANT_CHECKS
 static inline int osd_invariant(const struct osd_object *obj)
 {
-        return
-                obj != NULL &&
-                ergo(obj->oo_inode != NULL,
-                     obj->oo_inode->i_sb == osd_sb(osd_obj2dev(obj)) &&
-                     atomic_read(&obj->oo_inode->i_count) > 0) &&
-                ergo(obj->oo_dir != NULL &&
-                     obj->oo_dir->od_conationer.ic_object != NULL,
-                     obj->oo_dir->od_conationer.ic_object == obj->oo_inode);
+	return obj != NULL &&
+		ergo(obj->oo_inode != NULL,
+		     obj->oo_inode->i_sb == osd_sb(osd_obj2dev(obj)) &&
+		     atomic_read(&obj->oo_inode->i_count) > 0) &&
+		ergo(obj->oo_dir != NULL &&
+		     obj->oo_dir->od_conationer.ic_object != NULL,
+		     obj->oo_dir->od_conationer.ic_object == obj->oo_inode);
 }
 #else
 #define osd_invariant(obj) (1)
@@ -1076,7 +1071,7 @@ static inline int osd_oi_fid2idx(struct osd_device *dev,
 }
 
 static inline struct osd_oi *osd_fid2oi(struct osd_device *osd,
-                                        const struct lu_fid *fid)
+					const struct lu_fid *fid)
 {
 	LASSERTF(!fid_is_idif(fid), DFID"\n", PFID(fid));
 	LASSERTF(!fid_is_last_id(fid), DFID"\n", PFID(fid));
@@ -1091,7 +1086,7 @@ extern const struct lu_device_operations  osd_lu_ops;
 
 static inline int lu_device_is_osd(const struct lu_device *d)
 {
-        return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &osd_lu_ops);
+	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &osd_lu_ops);
 }
 
 static inline struct osd_device *osd_dt_dev(const struct dt_device *d)
@@ -1108,7 +1103,7 @@ static inline struct osd_device *osd_dev(const struct lu_device *d)
 
 static inline struct osd_device *osd_obj2dev(const struct osd_object *o)
 {
-        return osd_dev(o->oo_dt.do_lu.lo_dev);
+	return osd_dev(o->oo_dt.do_lu.lo_dev);
 }
 
 static inline struct super_block *osd_sb(const struct osd_device *dev)
@@ -1161,17 +1156,17 @@ static inline struct osd_object *osd_obj(const struct lu_object *o)
 
 static inline struct osd_object *osd_dt_obj(const struct dt_object *d)
 {
-        return osd_obj(&d->do_lu);
+	return osd_obj(&d->do_lu);
 }
 
 static inline struct lu_device *osd2lu_dev(struct osd_device *osd)
 {
-        return &osd->od_dt_dev.dd_lu_dev;
+	return &osd->od_dt_dev.dd_lu_dev;
 }
 
 static inline journal_t *osd_journal(const struct osd_device *dev)
 {
-        return LDISKFS_SB(osd_sb(dev))->s_journal;
+	return LDISKFS_SB(osd_sb(dev))->s_journal;
 }
 
 static inline struct seq_server_site *osd_seq_site(struct osd_device *osd)
@@ -1194,7 +1189,7 @@ extern struct lu_context_key osd_key;
 
 static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
 {
-        return lu_context_key_get(&env->le_ctx, &osd_key);
+	return lu_context_key_get(&env->le_ctx, &osd_key);
 }
 
 extern const struct dt_body_operations osd_body_ops_new;
@@ -1204,25 +1199,25 @@ extern const struct dt_body_operations osd_body_ops_new;
  */
 static inline
 struct iam_path_descr *osd_it_ipd_get(const struct lu_env *env,
-                                      const struct iam_container *bag)
+				      const struct iam_container *bag)
 {
-        return bag->ic_descr->id_ops->id_ipd_alloc(bag,
-                                           osd_oti_get(env)->oti_it_ipd);
+	return bag->ic_descr->id_ops->id_ipd_alloc(bag,
+						  osd_oti_get(env)->oti_it_ipd);
 }
 
 static inline
 struct iam_path_descr *osd_idx_ipd_get(const struct lu_env *env,
-                                       const struct iam_container *bag)
+				       const struct iam_container *bag)
 {
-        return bag->ic_descr->id_ops->id_ipd_alloc(bag,
-                                           osd_oti_get(env)->oti_idx_ipd);
+	return bag->ic_descr->id_ops->id_ipd_alloc(bag,
+						 osd_oti_get(env)->oti_idx_ipd);
 }
 
 static inline void osd_ipd_put(const struct lu_env *env,
-                               const struct iam_container *bag,
-                               struct iam_path_descr *ipd)
+			       const struct iam_container *bag,
+			       struct iam_path_descr *ipd)
 {
-        bag->ic_descr->id_ops->id_ipd_free(ipd);
+	bag->ic_descr->id_ops->id_ipd_free(ipd);
 }
 
 int osd_calc_bkmap_credits(struct super_block *sb, struct inode *inode,
@@ -1236,22 +1231,23 @@ int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
 
 static inline
 struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,
-                                         struct inode *inode,
-                                         const char *name, const int namelen)
+					 struct inode *inode,
+					 const char *name, const int namelen)
 {
-        struct osd_thread_info *info = osd_oti_get(env);
-        struct dentry *child_dentry = &info->oti_child_dentry;
-        struct dentry *obj_dentry = &info->oti_obj_dentry;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct dentry *child_dentry = &info->oti_child_dentry;
+	struct dentry *obj_dentry = &info->oti_obj_dentry;
 
-        obj_dentry->d_inode = inode;
-        obj_dentry->d_sb = inode->i_sb;
-        obj_dentry->d_name.hash = 0;
+	obj_dentry->d_inode = inode;
+	obj_dentry->d_sb = inode->i_sb;
+	obj_dentry->d_name.hash = 0;
 
-        child_dentry->d_name.hash = 0;
-        child_dentry->d_parent = obj_dentry;
-        child_dentry->d_name.name = name;
-        child_dentry->d_name.len = namelen;
-        return child_dentry;
+	child_dentry->d_name.hash = 0;
+	child_dentry->d_parent = obj_dentry;
+	child_dentry->d_name.name = name;
+	child_dentry->d_name.len = namelen;
+
+	return child_dentry;
 }
 
 extern int osd_trans_declare_op2rb[];
@@ -1407,29 +1403,29 @@ static inline void osd_trans_exec_check(const struct lu_env *env,
  */
 static inline
 void osd_fid_pack(struct osd_fid_pack *pack, const struct dt_rec *fid,
-                  struct lu_fid *befider)
+		  struct lu_fid *befider)
 {
-        fid_cpu_to_be(befider, (struct lu_fid *)fid);
-        memcpy(pack->fp_area, befider, sizeof(*befider));
-        pack->fp_len =  sizeof(*befider) + 1;
+	fid_cpu_to_be(befider, (struct lu_fid *)fid);
+	memcpy(pack->fp_area, befider, sizeof(*befider));
+	pack->fp_len =  sizeof(*befider) + 1;
 }
 
 static inline
 int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
 {
-        int result;
+	int result = 0;
 
-        result = 0;
-        switch (pack->fp_len) {
-        case sizeof *fid + 1:
-                memcpy(fid, pack->fp_area, sizeof *fid);
-                fid_be_to_cpu(fid, fid);
-                break;
-        default:
-                CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
-                result = -EIO;
-        }
-        return result;
+	switch (pack->fp_len) {
+	case sizeof(*fid) + 1:
+		memcpy(fid, pack->fp_area, sizeof(*fid));
+		fid_be_to_cpu(fid, fid);
+		break;
+	default:
+		CERROR("unexpected packed fid size: %d\n", pack->fp_len);
+		result = -EIO;
+	}
+
+	return result;
 }
 
 /**
