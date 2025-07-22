@@ -406,6 +406,8 @@ int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 int ofd_id_repair_start_thread(struct ofd_device *ofd);
 void ofd_id_repair_stop_thread(struct ofd_device *ofd);
 int ofd_check_resource_ids(const struct lu_env *env, struct obd_export *exp);
+void ofd_repair_resource_ids(const struct lu_env *env, struct ofd_object *fo,
+			     const struct obdo *oa, bool force);
 
 static inline
 struct ofd_object *ofd_object_find_exists(const struct lu_env *env,

@@ -1142,9 +1142,9 @@ int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 
 
 struct ofd_id_repair_work {
-	struct lu_fid		 oiw_fid;
-	struct lu_attr		*oiw_la;
-	struct list_head	 oiw_linkage;
+	struct lu_fid		oiw_fid;
+	struct lu_attr		oiw_la;
+	struct list_head	oiw_linkage;
 };
 
 struct ofd_id_repair_args {
@@ -1152,6 +1152,135 @@ struct ofd_id_repair_args {
 	struct ofd_device	*oira_ofd;
 	struct completion	*oira_started;
 };
+
+/**
+ * ofd_can_repair_resource_ids() - check if object IDs should and can be
+ * repaired with the IDs from the current obdo
+ * @la: lu_attr from object
+ * @oa: lu_attr from obdo
+ *
+ * Objects with OFD_UNSET_ATTRS_MODE or any subset of S_ISUID, S_ISGID, and
+ * S_ISVTX have no corresponding ID associated with them yet. Such objects' ID
+ * can be repaired to have the correct IDs, depending on whether the object was
+ * already been written to and valid IDs are available in the obdo for repair.
+ *
+ * Return:
+ * * %true if object needs to be repaired
+ * * %false if object does not need to be repaired
+ */
+static bool ofd_can_repair_resource_ids(const struct lu_attr *la_obj,
+					const struct lu_attr *la_obdo)
+{
+	/* If no valid IDs are available, no repair is possible */
+	if (!(la_obdo->la_valid & LA_UID) && !(la_obdo->la_valid & LA_GID) &&
+	    !(la_obdo->la_valid & LA_PROJID))
+		RETURN(false);
+
+	/* No ID is set yet. Object can be repaired with any subset of IDs */
+	if (la_obj->la_mode == OFD_UNSET_ATTRS_MODE) {
+		/* The object was created and pages not yet flushed by the
+		 * client. Repair is not necessary for this object yet.
+		 * Exemplary use cases:
+		 * - Time fields are set to 0 for unused stripes.
+		 * - ctime == mtime && size == 0 for empty files.
+		 */
+		if (la_obj->la_size == 0 &&
+		    (la_obj->la_ctime == 0 ||
+		     la_obj->la_ctime == la_obj->la_mtime))
+			RETURN(false);
+		RETURN(true);
+	}
+
+	/* If a subset of IDs is unset, the same incoming ID must be valid */
+	if (((la_obdo->la_valid & LA_UID) && (la_obj->la_mode & S_ISUID)) ||
+	    ((la_obdo->la_valid & LA_GID) && (la_obj->la_mode & S_ISGID)) ||
+	    ((la_obdo->la_valid & LA_PROJID) && (la_obj->la_mode & S_ISVTX)))
+		RETURN(true);
+
+	RETURN(false);
+}
+
+/**
+ * ofd_id_repair_one() - repair object UID/GID/PROJID based on work
+ * item called by dedicated thread
+ * @ofd: OFD device
+ * @env: execution environment
+ * @work: work item
+ *
+ * Return:
+ * * %0 on success
+ * * negative on error
+ */
+static int ofd_id_repair_one(struct ofd_device *ofd,
+				  const struct lu_env *env,
+				  struct ofd_id_repair_work *work)
+{
+	struct ofd_object *fo;
+	struct thandle *th;
+	int rc, rc2;
+
+	ENTRY;
+
+	fo = ofd_object_find_exists(env, ofd, &work->oiw_fid);
+	if (IS_ERR(fo)) {
+		if (PTR_ERR(fo) == -ENOENT)
+			RETURN(0);
+
+		RETURN(PTR_ERR(fo));
+	}
+
+	/* clear SUID+SGID+sticky bits if included in oiw_la->la_valid */
+	rc = ofd_attr_handle_id(env, fo, &work->oiw_la, 0 /* !is_setattr */);
+	if (rc)
+		GOTO(out, rc);
+
+	th = ofd_trans_create(env, ofd);
+	if (IS_ERR(th))
+		GOTO(out, rc = PTR_ERR(th));
+
+	rc = dt_declare_attr_set(env, ofd_object_child(fo), &work->oiw_la, th);
+	if (rc)
+		GOTO(out_stop, rc);
+
+	rc = ofd_trans_start(env, ofd, fo, th);
+	if (rc)
+		GOTO(out_stop, rc);
+
+	ofd_write_lock(env, fo);
+
+	if (!ofd_object_exists(fo))
+		GOTO(out_unlock, rc = -ENOENT);
+
+	rc = ofd_attr_handle_id(env, fo, &work->oiw_la, 0 /* !is_setattr */);
+	if (rc)
+		GOTO(out_unlock, rc);
+
+	/* Check if another thread already modified this object. If so,
+	 * ofd_attr_handle_id() will have cleared the la_valid bits (only IDs
+	 * were valid in the first place).
+	 */
+	if (!(work->oiw_la.la_valid & (LA_UID | LA_GID | LA_PROJID)))
+		GOTO(out_unlock, rc = 0);
+
+	rc = dt_attr_set(env, ofd_object_child(fo), &work->oiw_la, th);
+	if (rc)
+		GOTO(out_unlock, rc);
+
+out_unlock:
+	ofd_write_unlock(env, fo);
+out_stop:
+	rc2 = ofd_trans_stop(env, ofd, th, rc);
+	if (rc2)
+		CERROR("%s: failed to stop transaction: rc = %d\n",
+		       ofd_name(ofd), rc2);
+	if (!rc)
+		rc = rc2;
+
+out:
+	ofd_object_put(env, fo);
+
+	RETURN(rc);
+}
 
 /**
  * ofd_id_repair_thread_main() - main OST object ID repair thread loop
@@ -1195,13 +1324,11 @@ static int ofd_id_repair_thread_main(void *_args)
 			atomic_dec(&ofd->ofd_id_repair_queued);
 			spin_unlock(&ofd->ofd_id_repair_lock);
 
-			// FIXME Call to ID repair impl
-			rc = 0;
+			rc = ofd_id_repair_one(ofd, env, work);
 			if (rc)
 				CERROR("%s: failed to repair " DFID ": rc = %d\n",
 				       ofd_name(ofd), PFID(&work->oiw_fid), rc);
 
-			OBD_FREE_PTR(work->oiw_la);
 			OBD_FREE_PTR(work);
 		}
 	}
@@ -1284,13 +1411,50 @@ void ofd_id_repair_stop_thread(struct ofd_device *ofd)
 	list_for_each_entry_safe(work, tmp, &ofd->ofd_id_repair_list,
 				 oiw_linkage) {
 		list_del(&work->oiw_linkage);
-		OBD_FREE_PTR(work->oiw_la);
 		OBD_FREE_PTR(work);
 	}
 	atomic_set(&ofd->ofd_id_repair_queued, 0);
 	spin_unlock(&ofd->ofd_id_repair_lock);
 
 	EXIT;
+}
+
+/**
+ * ofd_id_repair_enqueue() - Enqueue object ID repair
+ * @ofd: OFD device
+ * @oa: obdo from client
+ * @fo: OFD object
+ *
+ * Queue a work task to repair the object attributes using the UID/GID from obdo
+ *
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM if there is not enough memory
+ */
+static int ofd_id_repair_enqueue(struct ofd_device *ofd,
+				 const struct lu_attr *la_obdo,
+				 const struct ofd_object *fo)
+{
+	const struct lu_fid *fid = lu_object_fid(&fo->ofo_obj.do_lu);
+	struct ofd_id_repair_work *work;
+
+	OBD_ALLOC_PTR(work);
+	if (!work)
+		RETURN(-ENOMEM);
+
+	work->oiw_la.la_valid = la_obdo->la_valid;
+	work->oiw_la.la_uid = la_obdo->la_uid;
+	work->oiw_la.la_gid = la_obdo->la_gid;
+	work->oiw_la.la_projid = la_obdo->la_projid;
+	work->oiw_fid = *fid;
+
+	spin_lock(&ofd->ofd_id_repair_lock);
+	list_add_tail(&work->oiw_linkage, &ofd->ofd_id_repair_list);
+	atomic_inc(&ofd->ofd_id_repair_queued);
+	spin_unlock(&ofd->ofd_id_repair_lock);
+	wake_up(&ofd->ofd_id_repair_waitq);
+
+	return 0;
 }
 
 /**
@@ -1341,4 +1505,47 @@ int ofd_check_resource_ids(const struct lu_env *env, struct obd_export *exp)
 	}
 
 	RETURN(nodemap_check_resource_ids(exp, la.la_uid, la.la_gid));
+}
+
+
+/**
+ * ofd_repair_resource_ids() - repair OST object UID/GID/PROJID
+ * @env: execution environment
+ * @fo: OFD object
+ * @oa: obdo from client
+ * @force: force ID repair and don't check object attributes
+ *
+ * Queue a work task to repair the object attributes using the UID/GID/PROJID
+ * from the obdo.
+ */
+void ofd_repair_resource_ids(const struct lu_env *env, struct ofd_object *fo,
+			     const struct obdo *oa, bool force)
+{
+	struct ofd_thread_info *info = ofd_info(env);
+	struct ofd_device *ofd = ofd_exp(info->fti_exp);
+	struct lu_attr la_obj = { 0 };
+	struct lu_attr la_obdo = { 0 };
+	int rc;
+
+	ENTRY;
+
+	if (!oa || ofd->ofd_osd->dd_rdonly || unlikely(ofd->ofd_readonly))
+		RETURN_EXIT;
+
+	if (!(oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID)))
+		RETURN_EXIT;
+
+	/* obdo IDs are already mapped to fs_ids in the tgt_handler, and
+	 * only use ID values for repair that are valid in the obdo.
+	 */
+	la_from_obdo(&la_obdo, oa,
+		     OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID);
+
+	if (!force) {
+		rc = dt_attr_get(env, ofd_object_child(fo), &la_obj);
+		if (rc || !ofd_can_repair_resource_ids(&la_obj, &la_obdo))
+			RETURN_EXIT;
+	}
+
+	(void)ofd_id_repair_enqueue(ofd, &la_obdo, fo);
 }
