@@ -10,6 +10,8 @@
  * (blocking and nonblocking) and poll(), along with an ioctl that
  * returns diagnostic information on an oal device.
  *
+ * Enable access logs by setting obdfilter.TARGET.access_log_size > 0
+ *
  * A control device (/dev/lustre-access-log/control) supports an ioctl()
  * plus poll() method to for oal discovery. See uses of
  * oal_control_event_count and oal_control_wait_queue for details.

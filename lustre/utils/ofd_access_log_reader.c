@@ -655,7 +655,10 @@ static void usage(void)
 "  -l, --list                     print YAML list of available access logs\n"
 "  -d, --debug[=FILE]             print debug messages to FILE (stderr)\n"
 "  -s, --stats=FILE               print stats messages to FILE (stderr)\n"
-"  -t, --trace[=FILE]             print trace messages to FILE (stderr)\n",
+"  -t, --trace[=FILE]             print trace messages to FILE (stderr)\n"
+"\n"
+"Enable access logs by setting obdfilter.TARGET.access_log_size > 0\n"
+"after which TARGET will appear when the --list option is used.\n",
 		program_invocation_short_name);
 }
 
