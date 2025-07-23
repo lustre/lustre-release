@@ -67,7 +67,7 @@ enum {
 #define	LU_CACHE_NR_MIN			4096
 #define	LU_CACHE_NR_MAX			0x80000000UL
 
-/**
+/*
  * Max 256 buckets, we don't want too many buckets because:
  * - consume too much memory (currently max 16K)
  * - avoid unbalanced LRU list
@@ -122,6 +122,10 @@ lu_site_wq_from_fid(struct lu_site *site, struct lu_fid *fid)
 EXPORT_SYMBOL(lu_site_wq_from_fid);
 
 /**
+ * lu_object_put() - Decrease reference counter on object
+ * @env: current lustre environment
+ * @o: lu object to decrease reference from
+ *
  * Decrease reference counter on object. If last reference is freed, return
  * object to the cache, unless lu_object_is_dying(o) holds. In the latter
  * case, free object immediately.
@@ -225,6 +229,10 @@ still_active:
 EXPORT_SYMBOL(lu_object_put);
 
 /**
+ * lu_object_put_nocache() - Put object and don't keep in cache.
+ * @env: current lustre environment
+ * @o: lu object to decrease reference from
+ *
  * Put object and don't keep in cache. This is temporary solution for
  * multi-site objects when its layering is not constant.
  */
@@ -236,7 +244,10 @@ void lu_object_put_nocache(const struct lu_env *env, struct lu_object *o)
 EXPORT_SYMBOL(lu_object_put_nocache);
 
 /**
- * Kill the object and take it out of LRU cache.
+ * lu_object_unhash() - Kill the object and take it out of LRU cache.
+ * @env: current lustre environment
+ * @o: lu object to be killed
+ *
  * Currently used by client code for layout change.
  */
 void lu_object_unhash(const struct lu_env *env, struct lu_object *o)
@@ -264,7 +275,7 @@ void lu_object_unhash(const struct lu_env *env, struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_unhash);
 
-/**
+/*
  * Allocate new object.
  *
  * This follows object creation protocol, described in the comment within
@@ -291,7 +302,7 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
 	return top;
 }
 
-/**
+/*
  * Initialize object.
  *
  * This is called after object hash insertion to avoid returning an object with
@@ -389,9 +400,14 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 }
 
 /**
- * Free \a nr objects from the cold end of the site LRU list.
- * if canblock is 0, then don't block awaiting for another
- * instance of lu_site_purge() to complete
+ * lu_site_purge_objects() - Free @nr objects from cold end of the site LRU list
+ * @env: current lustre environment
+ * @s: pointer to lu_site struct (lustre mount)
+ * @nr: number of objects to purge (-1 to purge all objects)
+ * @canblock: if canblock is 0, then don't block awaiting for another instance
+ * of lu_site_purge() to complete
+ *
+ * Return number of objects purged
  */
 int lu_site_purge_objects(const struct lu_env *env, struct lu_site *s,
 			  int nr, int canblock)
@@ -515,7 +531,7 @@ struct lu_cdebug_data {
 /* context key constructor/destructor: lu_global_key_init, lu_global_key_fini */
 LU_KEY_INIT_FINI(lu_global, struct lu_cdebug_data);
 
-/**
+/*
  * Key, holding temporary buffer. This key is registered very early by
  * lu_global_init().
  */
@@ -714,9 +730,16 @@ try_again:
 }
 
 /**
- * Search cache for an object with the fid \a f. If such object is found,
- * return it. Otherwise, create new object, insert it into cache and return
- * it. In any case, additional reference is acquired on the returned object.
+ * lu_object_find() - Search cache for an object with the fid @f
+ * @env: current lustre environment
+ * @dev: d
+ * @f: globally unique identifier to search object with
+ * @conf: Determin if it is a new object create (LOC_F_NEW) or just lookup
+ *
+ * Additional reference is acquired on the returned object.
+ *
+ * Return object if found. Otherwise, create new object and insert it into cache
+ * and return it. Else ERR_PTR on error
  */
 struct lu_object *lu_object_find(const struct lu_env *env,
 				 struct lu_device *dev, const struct lu_fid *f,
@@ -757,11 +780,18 @@ struct lu_object *lu_object_get_first(struct lu_object_header *h,
 EXPORT_SYMBOL(lu_object_get_first);
 
 /**
- * Core logic of lu_object_find*() functions.
+ * lu_object_find_at() - Core logic of lu_object_find*() functions.
+ * @env: current lustre environment
+ * @dev:  Top-level device for this stack.
+ * @f: globally unique identifier to search object with
+ * @conf: Determin if it is a new object create (LOC_F_NEW) or just lookup
  *
  * Much like lu_object_find(), but top level device of object is specifically
- * \a dev rather than top level device of the site. This interface allows
+ * @dev rather than top level device of the site. This interface allows
  * objects of different "stacking" to be created within the same site.
+ *
+ * Return object if found. Otherwise, create new object and insert it into cache
+ * and return it. Else ERR_PTR on error
  */
 struct lu_object *lu_object_find_at(const struct lu_env *env,
 				    struct lu_device *dev,
@@ -898,7 +928,15 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 }
 EXPORT_SYMBOL(lu_object_find_at);
 
-/* Find object with given fid, return its slice belonging to given device. */
+/**
+ * lu_object_find_slice() - Find object with given fid
+ * @env: current lustre environment
+ * @dev:  Top-level device for this stack.
+ * @f: globally unique identifier to search object with
+ * @conf: Determin if it is a new object create (LOC_F_NEW) or just lookup
+ *
+ * Return slice belonging to given device on success
+ */
 struct lu_object *lu_object_find_slice(const struct lu_env *env,
 				       struct lu_device *dev,
 				       const struct lu_fid *f,
@@ -1254,7 +1292,9 @@ void lu_object_fini(struct lu_object *o)
 EXPORT_SYMBOL(lu_object_fini);
 
 /**
- * Add object \a o as first layer of compound object \a h
+ * lu_object_add_top() - Add object @o as first layer of compound object @h
+ * @h: compound object where object @o will be added
+ * @o: object to be added
  *
  * This is typically called by the ->ldo_object_alloc() method of top-level
  * device.
@@ -1266,10 +1306,11 @@ void lu_object_add_top(struct lu_object_header *h, struct lu_object *o)
 EXPORT_SYMBOL(lu_object_add_top);
 
 /**
- * Add object \a o as a layer of compound object, going after \a before.
+ * lu_object_add() - Add obj @o as a layer of compound obj, going after @before.
+ * @before: layer to add object @o
+ * @o: object to add
  *
- * This is typically called by the ->ldo_object_alloc() method of \a
- * before->lo_dev.
+ * This is typically called by the ->ldo_object_alloc() method of @before.lo_dev
  */
 void lu_object_add(struct lu_object *before, struct lu_object *o)
 {
@@ -1304,7 +1345,14 @@ void lu_object_header_free(struct lu_object_header *h)
 }
 EXPORT_SYMBOL(lu_object_header_free);
 
-/* For compound obj, find its slice, corresponding to the device type dtype  */
+/**
+ * lu_object_locate() - For compound obj, find its slice, corresponding to the
+ * device type dtype
+ * @h: compound object to be search
+ * @dtype: type of object/layer we want to find
+ *
+ * Return pointer to lu_object on success or NULL
+ */
 struct lu_object *lu_object_locate(struct lu_object_header *h,
 				   const struct lu_device_type *dtype)
 {
@@ -1319,7 +1367,9 @@ struct lu_object *lu_object_locate(struct lu_object_header *h,
 EXPORT_SYMBOL(lu_object_locate);
 
 /**
- * Finalize and free devices in the device stack.
+ * lu_stack_fini() - Finalize and free devices in the device stack.
+ * @env: current lustre environment
+ * @top:  Top-level device for this stack.
  *
  * Finalize device stack by purging object cache, and calling
  * lu_device_type_operations::ldto_device_fini() and
@@ -1358,7 +1408,7 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 }
 EXPORT_SYMBOL(lu_stack_fini);
 
-/**
+/*
  * Global counter incremented whenever key is registered, unregistered,
  * revived or quiesced. This is used to void unnecessary calls to
  * lu_context_refill(). No locking is provided, as initialization and shutdown
@@ -1445,7 +1495,7 @@ void lu_context_key_degister(struct lu_context_key *key)
 }
 EXPORT_SYMBOL(lu_context_key_degister);
 
-/**
+/*
  * Register a number of keys. This has to be called after all keys have been
  * initialized by a call to LU_CONTEXT_KEY_INIT().
  */
@@ -1477,7 +1527,7 @@ int lu_context_key_register_many(struct lu_context_key *k, ...)
 }
 EXPORT_SYMBOL(lu_context_key_register_many);
 
-/**
+/*
  * De-register a number of keys. This is a dual to
  * lu_context_key_register_many().
  */
@@ -1534,13 +1584,16 @@ void *lu_context_key_get(const struct lu_context *ctx,
 }
 EXPORT_SYMBOL(lu_context_key_get);
 
-/**
- * List of remembered contexts. XXX document me.
+/*
+ * List of remembered contexts.
  */
+
+/* lu_context tracked for lifetime (until module unload) */
 static LIST_HEAD(lu_context_remembered);
+/* serialization for above */
 static DEFINE_SPINLOCK(lu_context_remembered_guard);
 
-/**
+/*
  * Destroy \a key in all remembered contexts. This is used to destroy key
  * values in "shared" contexts (like service threads), when a module owning
  * the key is about to be unloaded.
@@ -1753,7 +1806,7 @@ void lu_context_exit(struct lu_context *ctx)
 }
 EXPORT_SYMBOL(lu_context_exit);
 
-/**
+/*
  * Allocate for context all missing keys that were registered after context
  * creation. key_set_version is only changed in rare cases when modules
  * are loaded and removed.
@@ -1766,7 +1819,7 @@ int lu_context_refill(struct lu_context *ctx)
 	return keys_fill(ctx);
 }
 
-/**
+/*
  * lu_ctx_tags/lu_ses_tags will be updated if there are new types of
  * obd being added. Currently, this is only used on client side, specifically
  * for echo device client, for other stack (like ptlrpc threads), context are
@@ -1843,7 +1896,7 @@ int lu_env_refill(struct lu_env *env)
 }
 EXPORT_SYMBOL(lu_env_refill);
 
-/**
+/*
  * Currently, this API will only be used by echo client.
  * Because echo client and normal lustre client will share
  * same cl_env cache. So echo client needs to refresh
@@ -1950,6 +2003,11 @@ void lu_env_remove(struct lu_env *env)
 }
 EXPORT_SYMBOL(lu_env_remove);
 
+/**
+ * lu_env_find() - return current lustre environment
+ *
+ * Return valid pointer to lu_env on success or NULL on failure
+ */
 struct lu_env *lu_env_find(void)
 {
 	struct lu_env *env = NULL;
@@ -2178,7 +2236,7 @@ static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx)
 #endif
 }
 
-/**
+/*
  * Output site statistical counters into a buffer. Suitable for
  * lprocfs_rd_*()-style functions.
  */
@@ -2233,7 +2291,7 @@ int lu_kmem_init(struct lu_kmem_descr *caches)
 }
 EXPORT_SYMBOL(lu_kmem_init);
 
-/**
+/*
  * Helper function to finalize a number of kmem slab cached at once. Dual to
  * lu_kmem_init().
  */
@@ -2250,7 +2308,7 @@ void lu_kmem_fini(struct lu_kmem_descr *caches)
 }
 EXPORT_SYMBOL(lu_kmem_fini);
 
-/**
+/*
  * Temporary solution to be able to assign fid in ->do_create()
  * till we have fully-functional OST fids
  */
@@ -2283,7 +2341,7 @@ try_again:
 }
 EXPORT_SYMBOL(lu_object_assign_fid);
 
-/**
+/*
  * allocates object with 0 (non-assiged) fid
  * XXX: temporary solution to be able to assign fid in ->do_create()
  *      till we have fully-functional OST fids
@@ -2359,10 +2417,15 @@ struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, size_t len)
 EXPORT_SYMBOL(lu_buf_check_and_alloc);
 
 /**
- * Increase the size of the \a buf.
- * preserves old data in buffer
- * old buffer remains unchanged on error
- * \retval 0 or -ENOMEM
+ * lu_buf_check_and_grow() - Increase the size of the @buf.
+ * @buf: buffer to increase
+ * @len: new size of the @buf
+ *
+ * Preserves old data in buffer. Old buffer remains unchanged on error
+ *
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM on failure
  */
 int lu_buf_check_and_grow(struct lu_buf *buf, size_t len)
 {
