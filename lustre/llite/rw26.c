@@ -931,14 +931,10 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		struct inode *inode = file_inode(file);
 		struct bdi_writeback *wb;
 
+		__mark_inode_dirty(inode, I_DIRTY_PAGES);
 		spin_lock(&inode->i_lock);
-#ifdef HAVE_INODE_ATTACH_WB_FOLIO
-		inode_attach_wb(inode, page_folio(vmpage));
-#else
-		inode_attach_wb(inode, vmpage);
-#endif
 		wb = inode_to_wb(inode);
-		LASSERTF(wb != NULL, "wb@%pK\n", wb);
+		LASSERT(wb != NULL);
 		if (wb->dirty_exceeded) {
 			unplug = true;
 			prio = IO_PRIO_URGENT;
@@ -990,7 +986,6 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 
 	if (result < 0)
 		io->ci_result = result;
-
 
 out:
 	RETURN(result >= 0 ? copied : result);
