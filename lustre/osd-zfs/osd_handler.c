@@ -782,6 +782,19 @@ static void osd_key_fini(const struct lu_context *ctx,
 	struct osd_thread_info *info = data;
 	struct osd_idmap_cache *idc = info->oti_ins_cache;
 
+	if (info->oti_dio_pages) {
+		int i;
+		for (i = 0; i < PTLRPC_MAX_BRW_PAGES; i++) {
+			struct page *page = info->oti_dio_pages[i];
+			if (page) {
+				ClearPagePrivate2(page);
+				__free_page(page);
+			}
+		}
+		OBD_FREE_PTR_ARRAY_LARGE(info->oti_dio_pages,
+					 PTLRPC_MAX_BRW_PAGES);
+	}
+
 	if (idc != NULL) {
 		LASSERT(info->oti_ins_cache_size > 0);
 		OBD_FREE_PTR_ARRAY_LARGE(idc, info->oti_ins_cache_size);
@@ -795,6 +808,10 @@ static void osd_key_fini(const struct lu_context *ctx,
 static void osd_key_exit(const struct lu_context *ctx,
 			 struct lu_context_key *key, void *data)
 {
+	struct osd_thread_info *info = data;
+
+	LASSERTF(info->oti_dio_pages_used == 0, "%d\n",
+		 info->oti_dio_pages_used);
 }
 
 struct lu_context_key osd_key = {

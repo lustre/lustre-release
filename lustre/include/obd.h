@@ -467,6 +467,8 @@ struct niobuf_local {
 	__u16		lnb_locked:1;
 	/* this lnb corresponds to a hole in the file */
 	__u16		lnb_hole:1;
+	/* page from TLS for dio/fake rw */
+	__u16		lnb_dio:1;
 };
 
 struct tgt_thread_big_cache {

@@ -278,6 +278,10 @@ struct osd_thread_info {
 	char			*oti_seq_name;
 	char			*oti_dir_name;
 	uint64_t		oti_lastid_oid;
+
+	/* just for fake RW now */
+	struct page		**oti_dio_pages;
+	int			oti_dio_pages_used;
 };
 
 extern struct lu_context_key osd_key;

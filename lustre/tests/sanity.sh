@@ -30707,9 +30707,6 @@ run_test 399a "fake write should not be slower than normal write"
 
 test_399b() { # LU-8726 for OST fake read
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	if [ "$ost1_FSTYPE" != "ldiskfs" ]; then
-		skip_env "ldiskfs only test"
-	fi
 
 	test_fake_rw read
 }
