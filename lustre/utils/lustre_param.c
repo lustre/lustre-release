@@ -1331,7 +1331,7 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'n',	.name = "noname",	.has_arg = no_argument},
 	{ .val = 'P',	.name = "perm",		.has_arg = no_argument},
 	{ .val = 'P',	.name = "permanent",	.has_arg = no_argument},
-	{ .val = 't',	.name = "thread",	.has_arg = optional_argument},
+	{ .val = 't',	.name = "threads",	.has_arg = optional_argument},
 	{ .name = NULL },
 	};
 

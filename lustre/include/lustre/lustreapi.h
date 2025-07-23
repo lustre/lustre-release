@@ -502,7 +502,7 @@ struct find_work_queue {
 	int fwq_active_units;
 #endif
 	bool fwq_shutdown;		/* Flag to signal shutdown */
-	int fwq_error;
+	int fwq_error;			/* error code if failed */
 };
 
 int llapi_ostlist(char *path, struct find_param *param);

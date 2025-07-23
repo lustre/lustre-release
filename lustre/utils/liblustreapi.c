@@ -2049,7 +2049,11 @@ int llapi_semantic_traverse(char *path, int size, int parent,
 	}
 
 	while ((dent = readdir64(dir)) != NULL) {
+		struct find_work_queue *queue = param->fp_queue;
 		int rc = 0;
+
+		if (param->fp_thread_count && queue->fwq_shutdown)
+			break;
 
 		if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
 			continue;

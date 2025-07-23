@@ -9,7 +9,7 @@ lctl-set_param \- Lustre filesystem set parameter utility
 .RB [ --file | -F ]
 .RB [ --no-name | -n ]
 .RB [ --permanent | -P ]
-.RB [ --thread | -t\c
+.RB [ --threads | -t\c
 .RI [ THREAD_COUNT ]]
 .IR PARAMETER \= VALUE " ..."
 .SY "lctl set_param -F"
@@ -92,7 +92,7 @@ such as the filesystem and/or target name. This option is only available
 in Lustre 2.5.0 and later clients, older clients cannot set persistent
 parameters, nor will they see them.
 .TP
-.BR -t ", " --thread " ["\fITHREAD_COUNT\fR]
+.BR -t ", " --threads " ["\fITHREAD_COUNT\fR]
 Spawn threads to set multiple parameters in parallel, optionally specifying
 the maximum number of threads to run (with no space between
 .B -t

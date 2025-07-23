@@ -157,6 +157,8 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .RB [[ ! ]
 .BR --type | -t
 .RB { bcdflps }]
+.RB [ --threads
+.IR N ]
 .RB [[ ! ]
 .BR --uid | -u | --user | -U
 .IR UNAME | UID ]
@@ -746,6 +748,16 @@ File has type:
 .RB sym l ink,
 or
 .BR s ocket.
+.TP
+.BI --threads " N"
+Use
+.I N
+threads for parallel directory traversal. If not specified, the default
+thread count is calculated as min(MDT_COUNT * 4, CPU_COUNT / 2),
+where CPU_COUNT is the total number of CPUs configured for Lustre.
+This allows faster scanning of large directory trees by processing
+multiple directories concurrently while respecting the available
+CPU resources.
 .TP
 .BR -u ", " --uid
 File has specified numeric user ID

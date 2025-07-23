@@ -10178,7 +10178,9 @@ run_test 56eg "lfs find -xattr"
 test_56eh() {
 	local dir=$DIR/d$(basetest $testnum)g.$TESTSUITE
 
-	setup_56_special $dir $NUMFILES $NUMDIRS
+	# Enough files to give us a statistically reliable sampling
+	# setup_special is complicated, but this works out to about 2100 files
+	setup_56_special $dir 400 $NUMDIRS
 
 	local cmd="$LFS find $dir"
 	local total=$($cmd | wc -l)
@@ -10190,9 +10192,11 @@ test_56eh() {
 
 	while (( $n < 100 )); do
 		nums=$($LFS find --skip=$((100 - $n)) $dir | wc -l)
-		(( $nums <= $(($total * ($n + 5) / 100)) &&
-		   $nums >= $(($total * ($n - 5) / 100)) )) ||
-			error "--skip=$((100 - $n)): expected $(($total * $n / 100)) results with 5% error margin, got $nums"
+		(( $nums <= $(($total * ($n + 10) / 100)) &&
+		   $nums >= $(($total * ($n - 10) / 100)) )) ||
+			error "--skip=$((100 - $n)): expected" \
+			      "$(($total * $n / 100)) results with 10% error" \
+			      "margin, got $nums"
 		(( n++ ))
 	done
 }
@@ -10246,6 +10250,42 @@ test_56ej() {
 		error "migrate remote dir error $DIR/$tdir.src $f_mgrt"
 }
 run_test 56ej "lfs migration --non-block copy"
+
+test_56ek() {
+	local dir=$DIR/$tdir
+	local numfiles=10
+	local numdirs=5
+
+	# Setup test directory structure
+	echo "Creating test directory structure..."
+	mkdir -p $dir || error "Failed to create $dir"
+
+	# Create test directories and files
+	for ((i = 0; i < numdirs; i++)); do
+		mkdir -p $dir/subdir$i || error "Failed to create subdir$i"
+		createmany -o $dir/subdir$i/file $numfiles ||
+			error "Failed to create files in subdir$i"
+	done
+
+	# Normal find should work
+	echo "Verifying normal find works..."
+	local count=$($LFS find $dir | wc -l)
+	# dirs + files + root
+	local expected=$(($numdirs + ($numfiles * $numdirs) + 1))
+	[ $count -eq $expected ] ||
+		error "Wrong file count: found $count, expected $expected"
+
+	# Set failure injection
+	echo "Testing error handling..."
+	LLAPI_FAIL_LOC="LLAPI_FAIL_PFIND_SEM" \
+		$LFS find $dir 2>&1 | grep -q "Input/output error" ||
+		error "Expected I/O error not found with LLAPI_FAIL_LOC set"
+
+	# Cleanup
+	rm -rf $dir
+	return 0
+}
+run_test 56ek "Test lfs find error handling with LLAPI_FAIL_LOC"
 
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

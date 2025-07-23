@@ -49,6 +49,7 @@
 #include <zlib.h>
 
 #include <libcfs/util/ioctl.h>
+#include <libcfs/util/param.h>
 #include <libcfs/util/parser.h>
 #include <libcfs/util/string.h>
 #include <linux/lnet/nidstr.h>
@@ -486,7 +487,8 @@ command_t cmdlist[] = {
 	 "     [[!] --projid <projid>] [[!] --size|-s [+-]N[bkMGTPE]]\n"
 	 "     [--skip|-k PERCENT] [[!] --stripe-count|-c [+-]<stripes>]\n"
 	 "     [[!] --stripe-index|-i <index,...>]\n"
-	 "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
+	 "     [[!] --stripe-size|-S [+-]N[kMGT]] [--threads N]\n"
+	 "     [[!] --type|-t <filetype>]\n"
 	 "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
 	 "\t !: used before an option indicates 'NOT' requested attribute\n"
 	 "\t -: used before a value indicates less than requested value\n"
@@ -5776,6 +5778,113 @@ static int str2mode_t(const char *input, mode_t *outmode)
 	return ret;
 }
 
+/*
+ * Get the number of CPUs configured for Lustre CPTs
+ * by reading cpu_partition_table parameter.
+ */
+static int get_lustre_cpu_count(void)
+{
+	glob_t paths;
+	FILE *fp;
+	char line[256];
+	int cpu_count = 0;
+	int rc;
+
+	/* Try to get cpu_partition_table parameter */
+	rc = cfs_get_param_paths(&paths, "cpu_partition_table");
+	if (rc != 0)
+		return 0;
+
+	if (paths.gl_pathc == 0) {
+		cfs_free_param_data(&paths);
+		return 0;
+	}
+
+	fp = fopen(paths.gl_pathv[0], "r");
+	if (fp == NULL) {
+		cfs_free_param_data(&paths);
+		return 0;
+	}
+
+	/* Count CPUs in cpu_partition_table
+	 * Format: "cpu_partition_table=0   : 0 1 2 3..."
+	 *         "1   : 16 17 18..."
+	 * Parse each line and count the CPU numbers listed
+	 */
+	while (fgets(line, sizeof(line), fp) != NULL) {
+		char *ptr = line;
+		char *colon_ptr;
+
+		/* Skip whitespace */
+		while (*ptr == ' ' || *ptr == '\t')
+			ptr++;
+
+		/* Look for lines with CPU partition info */
+		if (strncmp(ptr, "cpu_partition_table=", 20) == 0 ||
+		    isdigit(*ptr)) {
+			/* Find the colon separator */
+			colon_ptr = strchr(ptr, ':');
+			if (colon_ptr) {
+				colon_ptr++;
+				while ((colon_ptr = strchr(colon_ptr,
+							   ' ')) != NULL) {
+					cpu_count++;
+					colon_ptr++;
+				}
+			}
+		}
+	}
+
+	fclose(fp);
+	cfs_free_param_data(&paths);
+
+	return cpu_count;
+}
+
+/*
+ * Calculate default thread count for lfs find based on MDT count
+ * and CPU count. Uses the formula:
+ * threads = min(MDT_COUNT * 4, CPU_COUNT / 2)
+ * Falls back to 4 if unable to determine parameters.
+ */
+static int calculate_default_thread_count(const char *path)
+{
+	char mntdir[PATH_MAX] = "";
+	char fsname[PATH_MAX] = "";
+	int default_threads = 4;
+	int mdt_count = 0;
+	int cpu_count = 0;
+	int rc;
+
+	/* Get mount point and filesystem name */
+	rc = llapi_search_mounts(path, 0, mntdir, fsname);
+	if (rc < 0) {
+		/* Fallback to conservative default */
+		return default_threads;
+	}
+
+	/* Get MDT count */
+	rc = llapi_get_obd_count(mntdir, &mdt_count, 1);
+	if (rc < 0 || mdt_count <= 0)
+		mdt_count = 1; /* assume single MDT */
+
+	/* Get CPU count */
+	cpu_count = get_lustre_cpu_count();
+	if (cpu_count <= 0)
+		cpu_count = 1; /* fallback */
+
+	/* Calculate: min(MDT_COUNT * 4, CPU_COUNT / 2) */
+	default_threads = mdt_count * 4;
+	if (default_threads > cpu_count / 2)
+		default_threads = cpu_count / 2;
+
+	/* Ensure minimum of 4 */
+	if (default_threads < 4)
+		default_threads = 4;
+
+	return default_threads;
+}
+
 static int lfs_find(int argc, char **argv)
 {
 	int c, rc;
@@ -5906,7 +6015,7 @@ static int lfs_find(int argc, char **argv)
 			.name = "pool",		.has_arg = required_argument },
 	{ .val = '0',	.name = "print0",	.has_arg = no_argument },
 	{ .val = LFS_THREAD_OPT,
-		.name = "thread",		.has_arg = required_argument },
+			.name = "threads",	.has_arg = required_argument },
 	{ .val = 'P',	.name = "print",	.has_arg = no_argument },
 	{ .val = LFS_PRINTF_OPT,
 			.name = "printf",       .has_arg = required_argument },
@@ -6597,6 +6706,13 @@ static int lfs_find(int argc, char **argv)
 			break;
 		case LFS_THREAD_OPT:
 			param.fp_thread_count = strtol(optarg, &endptr, 0);
+			if (*endptr != '\0' || param.fp_thread_count < 1) {
+				fprintf(stderr,
+					"error: bad thread count '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
+			}
 			break;
 		case 'P': /* we always print, this option is a no-op */
 			break;
@@ -6783,6 +6899,12 @@ static int lfs_find(int argc, char **argv)
 			argv[0], param.fp_min_depth, param.fp_max_depth);
 		ret = CMD_HELP;
 		goto err;
+	}
+
+	/* Set default thread count if not specified */
+	if (param.fp_thread_count == 0) {
+		param.fp_thread_count =
+			calculate_default_thread_count(argv[pathstart]);
 	}
 
 	do {
