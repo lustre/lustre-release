@@ -326,7 +326,6 @@ struct ll_inode_info {
 
 	/* mutex to request for layout lock exclusively. */
 	struct mutex			lli_layout_mutex;
-	struct task_struct		*lli_layout_lock_owner;
 	/* Layout version, protected by lli_layout_lock */
 	__u32				lli_layout_gen;
 	spinlock_t			lli_layout_lock;
@@ -336,8 +335,6 @@ struct ll_inode_info {
 	struct list_head		lli_xattrs; /* ll_xattr_entry->xe_list*/
 	struct list_head		lli_lccs; /* list of ll_cl_context */
 	seqlock_t			lli_page_inv_lock;
-
-	struct task_struct		*lli_inode_lock_owner;
 };
 
 static inline void lli_jobinfo_cpy(const struct ll_inode_info *lli,
@@ -673,17 +670,10 @@ static inline struct pcc_inode *ll_i2pcci(struct inode *inode)
 
 static inline void ll_set_inode_lock_owner(struct inode *inode)
 {
-	ll_i2info(inode)->lli_inode_lock_owner = current;
 }
 
 static inline void ll_clear_inode_lock_owner(struct inode *inode)
 {
-	ll_i2info(inode)->lli_inode_lock_owner = NULL;
-}
-
-static inline struct task_struct *ll_get_inode_lock_owner(struct inode *inode)
-{
-	return ll_i2info(inode)->lli_inode_lock_owner;
 }
 
 /* lock inode and set inode lock owener */

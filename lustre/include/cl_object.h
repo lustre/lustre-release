@@ -440,11 +440,6 @@ struct cl_object_operations {
 				struct cl_object *obj,
 				struct ldlm_lock *lock);
 	/**
-	 * operate upon inode. Used in LOV to lock/unlock inode from vvp layer.
-	 */
-	int (*coo_inode_ops)(const struct lu_env *env, struct cl_object *obj,
-			     enum coo_inode_opc opc, void *data);
-	/**
 	 * Get ProjID for a request.
 	 */
 	void (*coo_req_projid_set)(const struct lu_env *env,
@@ -2202,8 +2197,6 @@ int cl_object_layout_get(const struct lu_env *env, struct cl_object *obj,
 loff_t cl_object_maxbytes(struct cl_object *obj);
 int cl_object_flush(const struct lu_env *env, struct cl_object *obj,
 		    struct ldlm_lock *lock);
-int cl_object_inode_ops(const struct lu_env *env, struct cl_object *obj,
-			enum coo_inode_opc opc, void *data);
 void cl_req_projid_set(const struct lu_env *env, struct cl_object *obj,
 		       __u32 *projid);
 

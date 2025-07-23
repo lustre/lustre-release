@@ -1332,11 +1332,9 @@ void ll_lli_init(struct ll_inode_info *lli)
 		ji->ji_gid = (__u32) -1;
 	}
 	mutex_init(&lli->lli_layout_mutex);
-	lli->lli_layout_lock_owner = NULL;
 	/* ll_cl_context initialize */
 	INIT_LIST_HEAD(&lli->lli_lccs);
 	seqlock_init(&lli->lli_page_inv_lock);
-	lli->lli_inode_lock_owner = NULL;
 }
 
 #define MAX_STRING_SIZE 128
@@ -3164,11 +3162,6 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 	struct address_space *mapping = &inode->i_data;
 	unsigned long nrpages;
 	unsigned long flags;
-
-	LASSERTF((inode->i_state & I_FREEING) || inode_is_locked(inode),
-		 DFID ":inode %px state %#lx, lli_flags %#lx\n",
-		 PFID(ll_inode2fid(inode)), inode,
-		 (unsigned long)inode->i_state, ll_i2info(inode)->lli_flags);
 
 	truncate_inode_pages_final(mapping);
 

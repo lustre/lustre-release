@@ -145,14 +145,6 @@ static int vvp_prune(const struct lu_env *env, struct cl_object *obj)
 		RETURN(rc);
 	}
 
-	if (ll_get_inode_lock_owner(inode) != current)
-		/* ask LOV get inode lock then lo_type_guard */
-		RETURN(-EAGAIN);
-
-	LASSERTF(inode_is_locked(inode), DFID ":inode %p lli_flags %#lx\n",
-		 PFID(lu_object_fid(&obj->co_lu)), inode,
-		 ll_i2info(inode)->lli_flags);
-
 	ll_truncate_inode_pages_final(inode);
 	mapping_clear_exiting(inode->i_mapping);
 
@@ -209,47 +201,6 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	lli_jobinfo_cpy(lli, &attr->cra_jobinfo);
 }
 
-static int vvp_inode_ops(const struct lu_env *env, struct cl_object *obj,
-			 enum coo_inode_opc opc, void *data)
-{
-	struct inode *inode = vvp_object_inode(obj);
-	struct ll_inode_info *lli = ll_i2info(inode);
-	int rc = 0;
-
-	ENTRY;
-	switch (opc) {
-	case COIO_INODE_LOCK:
-		if (ll_get_inode_lock_owner(inode) != current)
-			ll_inode_lock(inode);
-		else
-			rc = -EALREADY;
-		break;
-	case COIO_INODE_UNLOCK:
-		if (ll_get_inode_lock_owner(inode) == current)
-			ll_inode_unlock(inode);
-		else
-			rc = -ENOLCK;
-		break;
-	case COIO_SIZE_LOCK:
-		if (lli->lli_size_lock_owner != current)
-			ll_inode_size_lock(inode);
-		else
-			rc = -EALREADY;
-		break;
-	case COIO_SIZE_UNLOCK:
-		if (lli->lli_size_lock_owner == current)
-			ll_inode_size_unlock(inode);
-		else
-			rc = -ENOLCK;
-		break;
-	default:
-		rc = -EINVAL;
-		break;
-	}
-
-	RETURN(rc);
-}
-
 static void vvp_req_projid_set(const struct lu_env *env, struct cl_object *obj,
 			       __u32 *projid)
 {
@@ -268,7 +219,6 @@ static const struct cl_object_operations vvp_ops = {
 	.coo_prune        = vvp_prune,
 	.coo_glimpse      = vvp_object_glimpse,
 	.coo_req_attr_set = vvp_req_attr_set,
-	.coo_inode_ops    = vvp_inode_ops,
 	.coo_req_projid_set = vvp_req_projid_set,
 };
 

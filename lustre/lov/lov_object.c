@@ -1320,11 +1320,8 @@ static int lov_layout_change(const struct lu_env *unused,
 	new_ops = &lov_dispatch[llt];
 
 	rc = cl_object_prune(env, &lov->lo_cl);
-	if (rc != 0) {
-		if (rc == -EAGAIN)
-			set_bit(LO_NEED_INODE_LOCK, &lov->lo_obj_flags);
+	if (rc != 0)
 		GOTO(out, rc);
-	}
 
 	rc = old_ops->llo_delete(env, lov, &lov->u);
 	if (rc != 0)
@@ -1409,9 +1406,6 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 {
 	struct lov_stripe_md *lsm = NULL;
 	struct lov_object *lov = cl2lov(obj);
-	struct cl_object *top = cl_object_top(obj);
-	bool lock_inode = false;
-	bool inode_size_locked = false;
 	int result = 0;
 	ENTRY;
 
@@ -1430,7 +1424,6 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 		GOTO(out_lsm, result = 0);
 	}
 
-retry:
 	lov_conf_lock(lov);
 	if (conf->coc_opc == OBJECT_CONF_WAIT) {
 		if (test_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags) &&
@@ -1490,50 +1483,14 @@ retry:
 
 	clear_bit(LO_NEED_INODE_LOCK, &lov->lo_obj_flags);
 	result = lov_layout_change(env, lov, lsm, conf);
-	if (result) {
-		if (result == -EAGAIN &&
-		    test_bit(LO_NEED_INODE_LOCK, &lov->lo_obj_flags)) {
-			/**
-			 * we need unlocked lov conf and get inode lock.
-			 * It's possible we have already taken inode's size
-			 * mutex and/or layout mutex, so we need keep such lock
-			 * order, lest deadlock happens:
-			 *   inode lock        (ll_inode_lock())
-			 *   inode size lock   (ll_inode_size_lock())
-			 *   lov conf lock     (lov_conf_lock())
-			 *
-			 * e.g.
-			 *   vfs_setxattr                inode locked
-			 *     ll_lov_setstripe_ea_info  inode size locked
-			 *       ll_prep_inode
-			 *         cl_file_inode_init
-			 *           cl_conf_set
-			 *             lov_conf_set      lov conf locked
-			 */
-			lov_conf_unlock(lov);
-			if (cl_object_inode_ops(env, top, COIO_SIZE_UNLOCK,
-						NULL) == 0)
-				inode_size_locked = true;
-
-			/* take lock in order */
-			if (cl_object_inode_ops(
-					env, top, COIO_INODE_LOCK, NULL) == 0)
-				lock_inode = true;
-			if (inode_size_locked)
-				cl_object_inode_ops(env, top, COIO_SIZE_LOCK,
-						    NULL);
-			goto retry;
-		}
+	if (result)
 		set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
-	} else {
+	else
 		clear_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
-	}
 	EXIT;
 
 out:
 	lov_conf_unlock(lov);
-	if (lock_inode)
-		cl_object_inode_ops(env, top, COIO_INODE_UNLOCK, NULL);
 out_lsm:
 	lov_lsm_put(lsm);
 	CDEBUG(D_INODE, DFID" lo_layout_invalid=%u\n",
