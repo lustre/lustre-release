@@ -2086,6 +2086,9 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 
 	LASSERT(rec->lrh_type == OBD_CFG_REC);
 
+	if (ptr >= end)
+		goto out_overflow;
+
 	if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION))
 		lustre_swab_lustre_cfg(lcfg);
 
@@ -2110,19 +2113,19 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 	/* form YAML entity */
 	ptr += snprintf(ptr, end - ptr, "- { index: %u, event: %s",
 			rec->lrh_index, ldata->ltd_name);
-	if (end - ptr <= 0)
+	if (ptr >= end)
 		goto out_overflow;
 
 	if (lcfg->lcfg_flags) {
 		ptr += snprintf(ptr, end - ptr, ", flags: %#08x",
 				lcfg->lcfg_flags);
-		if (end - ptr <= 0)
+		if (ptr >= end)
 			goto out_overflow;
 	}
 	if (lcfg->lcfg_num) {
 		ptr += snprintf(ptr, end - ptr, ", num: %#08x",
 				lcfg->lcfg_num);
-		if (end - ptr <= 0)
+		if (ptr >= end)
 			goto out_overflow;
 	}
 	if (lcfg->lcfg_nid) {
@@ -2131,14 +2134,14 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 		libcfs_nid2str_r(lcfg->lcfg_nid, nidstr, sizeof(nidstr));
 		ptr += snprintf(ptr, end - ptr, ", nid: %s(%#llx)",
 				nidstr, lcfg->lcfg_nid);
-		if (end - ptr <= 0)
+		if (ptr >= end)
 			goto out_overflow;
 	}
 
 	if (LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
 		ptr += snprintf(ptr, end - ptr, ", device: %s",
 				lustre_cfg_string(lcfg, 0));
-		if (end - ptr <= 0)
+		if (ptr >= end)
 			goto out_overflow;
 	}
 
@@ -2156,12 +2159,20 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 			goto out_done;
 
 		ptr += snprintf(ptr, end - ptr, ", %s: ", ldata->ltd_bufs[0]);
+		if (ptr >= end)
+			goto out_overflow;
 		len = tmp - cfg_str + 1;
 		snprintf(ptr, len, "%s", cfg_str);
 		ptr += len - 1;
+		if (ptr >= end)
+			goto out_overflow;
 
 		ptr += snprintf(ptr, end - ptr, ", %s: ", ldata->ltd_bufs[1]);
+		if (ptr >= end)
+			goto out_overflow;
 		ptr += snprintf(ptr, end - ptr, "%s", tmp + 1);
+		if (ptr >= end)
+			goto out_overflow;
 
 		goto out_done;
 	}
@@ -2172,15 +2183,23 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 		marker = lustre_cfg_buf(lcfg, 1);
 		ptr += snprintf(ptr, end - ptr, ", flags: %#04x",
 				marker->cm_flags);
+		if (ptr >= end)
+			goto out_overflow;
 		ptr += snprintf(ptr, end - ptr, ", version: %d.%d.%d.%d",
 				OBD_OCD_VERSION_MAJOR(marker->cm_vers),
 				OBD_OCD_VERSION_MINOR(marker->cm_vers),
 				OBD_OCD_VERSION_PATCH(marker->cm_vers),
 				OBD_OCD_VERSION_FIX(marker->cm_vers));
+		if (ptr >= end)
+			goto out_overflow;
 		ptr += snprintf(ptr, end - ptr, ", createtime: %lld",
 				marker->cm_createtime);
+		if (ptr >= end)
+			goto out_overflow;
 		ptr += snprintf(ptr, end - ptr, ", canceltime: %lld",
 				marker->cm_canceltime);
+		if (ptr >= end)
+			goto out_overflow;
 
 		goto out_done;
 	}
@@ -2190,7 +2209,7 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 			ptr += snprintf(ptr, end - ptr, ", %s: %s",
 					ldata->ltd_bufs[i - 1],
 					lustre_cfg_string(lcfg, i));
-			if (end - ptr <= 0)
+			if (ptr >= end)
 				goto out_overflow;
 		}
 	}
@@ -2223,42 +2242,61 @@ static int class_config_parse_rec(struct llog_rec_hdr *rec, char *buf, int size)
 	ENTRY;
 
 	LASSERT(rec->lrh_type == OBD_CFG_REC);
+
+	if (ptr >= end)
+		goto out_overflow;
+
 	rc = lustre_cfg_sanity_check(lcfg, REC_DATA_LEN(rec));
 	if (rc < 0)
 		RETURN(rc);
 
-	ptr += snprintf(ptr, end-ptr, "cmd=%05x ", lcfg->lcfg_command);
-	if (lcfg->lcfg_flags)
-		ptr += snprintf(ptr, end-ptr, "flags=%#08x ",
+	ptr += snprintf(ptr, end - ptr, "cmd=%05x ", lcfg->lcfg_command);
+	if (ptr >= end)
+		goto out_overflow;
+	if (lcfg->lcfg_flags) {
+		ptr += snprintf(ptr, end - ptr, "flags=%#08x ",
 				lcfg->lcfg_flags);
+		if (ptr >= end)
+			goto out_overflow;
+	}
 
-	if (lcfg->lcfg_num)
-		ptr += snprintf(ptr, end-ptr, "num=%#08x ", lcfg->lcfg_num);
+	if (lcfg->lcfg_num) {
+		ptr += snprintf(ptr, end - ptr, "num=%#08x ", lcfg->lcfg_num);
+		if (ptr >= end)
+			goto out_overflow;
+	}
 
 	if (lcfg->lcfg_nid) {
 		char nidstr[LNET_NIDSTR_SIZE];
 
 		libcfs_nid2str_r(lcfg->lcfg_nid, nidstr, sizeof(nidstr));
-		ptr += snprintf(ptr, end-ptr, "nid=%s(%#llx)    ",
+		ptr += snprintf(ptr, end - ptr, "nid=%s(%#llx)    ",
 				nidstr, lcfg->lcfg_nid);
+		if (ptr >= end)
+			goto out_overflow;
 	}
 
 	if (lcfg->lcfg_command == LCFG_MARKER) {
 		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
 
-		ptr += snprintf(ptr, end-ptr, "marker=%d(%#x)%s '%s'",
+		ptr += snprintf(ptr, end - ptr, "marker=%d(%#x)%s '%s'",
 				marker->cm_step, marker->cm_flags,
 				marker->cm_tgtname, marker->cm_comment);
+		if (ptr >= end)
+			goto out_overflow;
 	} else {
 		int i;
 
 		for (i = 0; i <  lcfg->lcfg_bufcount; i++) {
-			ptr += snprintf(ptr, end-ptr, "%d:%s  ", i,
+			ptr += snprintf(ptr, end - ptr, "%d:%s  ", i,
 					lustre_cfg_string(lcfg, i));
+			if (ptr >= end)
+				goto out_overflow;
 		}
 	}
 	ptr += snprintf(ptr, end - ptr, "\n");
 	/* return consumed bytes */
+out_overflow:
 	rc = ptr - buf;
 	RETURN(rc);
 }
