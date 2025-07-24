@@ -3424,6 +3424,56 @@ test_71() {
 }
 run_test 71 "check mirror extend parent fid"
 
+test_71() {
+	local comp_file=$DIR/$tfile
+	local id
+
+	$LFS mirror create -N -E1M -S1M -c1 -E 2M -E 3M -E eof \
+		-N -E2M -S1M -c1 -E4M -E eof $comp_file ||
+		error "Create $comp_file failed"
+
+	$LFS getstripe $comp_file
+	id=$($LFS getstripe --mirror-id=1 -I0x10001 $comp_file | grep "l_fid")
+	[[ -z $id ]] && error "1: 1st component uninstantiated"
+	id=$($LFS getstripe --mirror-id=1 -I0x10002 $comp_file | grep "l_fid")
+	[[ -n $id ]] && error "1: 2nd component instantiated"
+	id=$($LFS getstripe --mirror-id=2 -I0x20005 $comp_file | grep "l_fid")
+	[[ -z $id ]] && error "2: 1st component uninstantiated"
+	id=$($LFS getstripe --mirror-id=2 -I0x20006 $comp_file | grep "l_fid")
+	[[ -n $id ]] && error "2: 2nd component instantiated"
+
+	dd if=/dev/urandom bs=1M count=2 >> $comp_file
+	$LFS mirror resync $comp_file || error "cannot resync mirror $comp_file"
+
+	id=$($LFS getstripe --mirror-id=1 -I0x10002 $comp_file | grep "l_fid")
+	[[ -z $id ]] && error "3: 2nd component uninstantiated"
+	id=$($LFS getstripe --mirror-id=1 -I0x10003 $comp_file | grep "l_fid")
+	[[ -n $id ]] && error "3: 3rd component instantiated"
+	id=$($LFS getstripe --mirror-id=2 -I0x20005 $comp_file | grep "l_fid")
+	[[ -z $id ]] && error "4: 1st component uninstantiated"
+	id=$($LFS getstripe --mirror-id=2 -I0x20006 $comp_file | grep "l_fid")
+	[[ -n $id ]] && error "4: 2nd component instantiated"
+
+	$LFS getstripe $comp_file
+
+	dd if=/dev/urandom bs=1M count=1 >> $comp_file
+	$LFS getstripe $comp_file
+	$LFS mirror resync $comp_file || error "cannot resync mirror $comp_file"
+
+	$LFS getstripe $comp_file
+	id=$($LFS getstripe --mirror-id=1 -I0x10003 $comp_file | grep "l_fid")
+	[[ -z $id ]] && error "5: 3rd component uninstantiated"
+	id=$($LFS getstripe --mirror-id=1 -I0x10004 $comp_file | grep "l_fid")
+	[[ -n $id ]] && error "5: 4th component instantiated"
+	id=$($LFS getstripe --mirror-id=2 -I0x20006 $comp_file | grep "l_fid")
+	[[ -z $id ]] && error "6: 2nd component uninstantiated"
+	id=$($LFS getstripe --mirror-id=2 -I0x20007 $comp_file | grep "l_fid")
+	[[ -n $id ]] && error "6: 3rd component instantiated"
+
+	return 0
+}
+run_test 71 "check append on FLR file"
+
 write_file_200() {
 	local tf=$1
 

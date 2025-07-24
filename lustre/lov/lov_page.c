@@ -142,14 +142,14 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 		lio->lis_cached_suboff = suboff;
 	}
 
+	CDEBUG(D_PAGE, "offset %llu, entry %d, stripe %d, suboff %llu\n",
+	       offset, entry, stripe, suboff);
+
 	if (entry < 0 || !lsm_entry_inited(loo->lo_lsm, entry)) {
 		/* non-existing layout component */
 		lov_page_init_empty(env, obj, page, index);
 		RETURN(0);
 	}
-
-	CDEBUG(D_PAGE, "offset %llu, entry %d, stripe %d, suboff %llu\n",
-	       offset, entry, stripe, suboff);
 
 	page->cp_lov_index = lov_comp_index(entry, stripe);
 	LASSERT(page->cp_lov_index != CP_LOV_INDEX_EMPTY);

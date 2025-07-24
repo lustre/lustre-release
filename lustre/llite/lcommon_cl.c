@@ -64,7 +64,6 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
 
 	io = vvp_env_new_io(env);
 	io->ci_obj = obj;
-	io->ci_verify_layout = 1;
 
 	io->u.ci_setattr.sa_attr.lvb_atime = attr->ia_atime.tv_sec;
 	io->u.ci_setattr.sa_attr.lvb_mtime = attr->ia_mtime.tv_sec;
@@ -97,6 +96,7 @@ again:
 			vio->vui_fd = attr->ia_file->private_data;
 
 		result = cl_io_loop(env, io);
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_TRUNC_PAUSE, 2);
 	} else {
 		result = io->ci_result;
 	}

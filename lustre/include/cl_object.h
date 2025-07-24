@@ -1821,6 +1821,7 @@ struct cl_io {
 		} ci_rd;
 		struct cl_wr_io {
 			struct cl_io_rw_common wr;
+			loff_t                 wr_append_lockpos;
 			int                    wr_append;
 			int                    wr_sync;
 		} ci_wr;

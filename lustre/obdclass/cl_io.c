@@ -91,11 +91,11 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 	case CIT_WRITE:
 	case CIT_DATA_VERSION:
 	case CIT_FAULT:
+	case CIT_SETATTR:
 		break;
 	case CIT_FSYNC:
 		LASSERT(!io->ci_need_restart);
 		break;
-	case CIT_SETATTR:
 	case CIT_MISC:
 		/* Check ignore layout change conf */
 		LASSERT(ergo(io->ci_ignore_layout || !io->ci_verify_layout,

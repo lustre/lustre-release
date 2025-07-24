@@ -3179,8 +3179,8 @@ test_27M() {
 			error "Wrong pool name length should report error"
 
 	local orig_count=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_stripe_count)
-	((orig_count == 1)) || error "expected append_stripe_count == 1, got $orig_count"
-	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=1"
+	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=$orig_count"
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=1
 
 	$LFS setstripe $stripe_opt $DIR/$tdir
 
@@ -3189,7 +3189,7 @@ test_27M() {
 	(( $count == $setcount )) ||
 		error "(1) stripe count $count, should be $setcount"
 
-	local appendcount=$orig_count
+	local appendcount=1
 	echo 1 >> $DIR/$tdir/${tfile}.2_append
 	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.2_append)
 	(( $count == $appendcount )) ||
@@ -3635,8 +3635,8 @@ test_27U() {
 	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_pool=none"
 
 	stripe_count=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_stripe_count)
-	((stripe_count == 1)) || error "expected append_stripe_count != 0, got $stripe_count"
 	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=$stripe_count"
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=1
 
 	pool_add $append_pool || error "pool creation failed"
 	pool_add_targets $append_pool 0 1 || error "Pool add targets failed"
@@ -3654,8 +3654,8 @@ test_27U() {
 	[[ "$pool" == "$normal_pool" ]] || error "got pool '$pool', expected '$normal_pool'"
 
 	stripe_count2=$($LFS getstripe -c $file.1)
-	((stripe_count2 == stripe_count)) ||
-		error "got stripe_count '$stripe_count2', expected '$stripe_count'"
+	((stripe_count2 == 1)) ||
+		error "got stripe_count '$stripe_count2', expected 1"
 
 	do_nodes $mdts $LCTL set_param mdd.*.append_pool=$append_pool
 

@@ -1948,6 +1948,8 @@ out:
 #endif
 }
 
+#define RETRY_ATTEMPTS 1000
+
 static ssize_t
 ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		   struct file *file, enum cl_io_type iot,
@@ -1969,7 +1971,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	bool is_aio = false;
 	size_t max_io_bytes;
 	ssize_t result = 0;
-	int retries = 1000;
+	int retries = RETRY_ATTEMPTS;
 	size_t per_bytes;
 	bool partial_io;
 	int rc2 = 0;
@@ -2027,6 +2029,17 @@ restart:
 	io->ci_dio_lock = dio_lock;
 	io->ci_ndelay_tried = retried;
 	io->ci_parallel_dio = is_parallel_dio;
+
+	if (io->u.ci_wr.wr_append) {
+		/* If restarted, attrs are already merged */
+		if (retries == RETRY_ATTEMPTS) {
+			rc = ll_merge_attr(env, inode);
+			if (rc != 0)
+				RETURN(rc);
+		}
+
+		*ppos = i_size_read(inode);
+	}
 
 	if (cl_io_rw_init(env, io, iot, *ppos, per_bytes) == 0) {
 		if (iocb_ki_flags_check(flags, APPEND))
