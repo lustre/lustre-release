@@ -351,19 +351,18 @@ int class_find_param(char *buf, char *key, char **valp)
 EXPORT_SYMBOL(class_find_param);
 
 /**
- * Check whether the proc parameter \a param is an old parameter or not from
- * the array \a ptr which contains the mapping from old parameters to new ones.
+ * class_find_old_param() - Find old & new parameters
+ * @param: proc parameter
+ * @ptr: an array which contains the mapping from old parameters to new ones
+ *
+ * Check whether the proc parameter @param is an old parameter or not from
+ * the array @ptr which contains the mapping from old parameters to new ones.
  * If it's an old one, then return the pointer to the cfg_interop_param struc-
  * ture which contains both the old and new parameters.
  *
- * \param param			proc parameter
- * \param ptr			an array which contains the mapping from
- *				old parameters to new ones
- *
- * \retval valid-pointer	pointer to the cfg_interop_param structure
- *				which contains the old and new parameters
- * \retval NULL			\a param or \a ptr is NULL,
- *				or \a param is not an old parameter
+ * Return:
+ * * %cfg_interop_param: pointer which contains old and new parameters
+ * * %NULL @param or @ptr is NULL, @param is not an old parameter
  */
 struct cfg_interop_param *class_find_old_param(const char *param,
 					       struct cfg_interop_param *ptr)
@@ -392,20 +391,23 @@ struct cfg_interop_param *class_find_old_param(const char *param,
 EXPORT_SYMBOL(class_find_old_param);
 
 /**
- * Finds a parameter in \a params and copies it to \a copy.
+ * class_get_next_param() - Finds a parameter in @params and copies it to @copy
+ * @params: input string of params
+ * @copy: destination buffer
  *
  * Leading spaces are skipped. Next space or end of string is the
  * parameter terminator with the exception that spaces inside single or double
- * quotes get included into a parameter. The parameter is copied into \a copy
+ * quotes get included into a parameter. The parameter is copied into @copy
  * which has to be allocated big enough by a caller, quotes are stripped in
  * the copy and the copy is terminated by 0.
  *
- * On return \a params is set to next parameter or to NULL if last
+ * On return @params is set to next parameter or to NULL if last
  * parameter is returned.
  *
- * \retval 0 if parameter is returned in \a copy
- * \retval 1 otherwise
- * \retval -EINVAL if unbalanced quota is found
+ * Return:
+ * * %0 if parameter is returned in @copy
+ * * %1 on error
+ * * %-EINVAL if unbalanced quota is found
  */
 int class_get_next_param(char **params, char *copy)
 {
@@ -674,8 +676,19 @@ EXPORT_SYMBOL(lustre_cfg_string);
 /********************** class fns **********************/
 
 /**
+ * class_attach() - Create a new OBD device and set the type, name and uuid.
+ * @lcfg: pointer to lustre_cfg (holds parameters like: device name, type, UUID)
+ *
  * Create a new OBD device and set the type, name and uuid.  If successful,
  * the new device can be accessed by either name or uuid.
+ *
+ * Eg: device name: lustre-MDT0000, lustre-OST0001
+ * Eg: type: mdt, ost
+ * Eg: UUID: lustre-MDT0000_UUID, lustre-OST0000_UUID
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int class_attach(struct lustre_cfg *lcfg)
 {
@@ -748,8 +761,16 @@ int class_attach(struct lustre_cfg *lcfg)
 EXPORT_SYMBOL(class_attach);
 
 /**
+ * class_setup() - Set obd device active
+ * @obd: pointer to obd device which is being setup (active)
+ * @lcfg: pointer to lustre_cfg (holds parameters like: device name, type, UUID)
+ *
  * Create hashes, self-export, and call type-specific setup.
  * Setup is effectively the "start this obd" call.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
@@ -862,8 +883,16 @@ err_starting:
 EXPORT_SYMBOL(class_setup);
 
 /**
+ * class_detach() - detach obd device (set it inactive)
+ * @obd: pointer to obd device which is being detach (inactive)
+ * @lcfg: pointer to lustre_cfg (holds parameters like: device name, type, UUID)
+ *
  * We have finished using this OBD and are ready to destroy it.
  * There can be no more references to this obd.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
@@ -895,7 +924,7 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 }
 EXPORT_SYMBOL(class_detach);
 
-/**
+/*
  * Start shutting down the OBD.  There may be in-progess ops when
  * this is called.  We tell them to start shutting down with a call
  * to class_disconnect_exports().
@@ -1033,8 +1062,15 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
 EXPORT_SYMBOL(class_decref);
 
 /**
- * Add a failover NID location.
+ * class_add_conn() - Add server connection with client OBD
+ * @obd: pointer to obd device which adds connection
+ * @lcfg: pointer to lustre_cfg (holds parameter UUID)
+ *
  * Client OBD types contact server OBD types using this NID list.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
@@ -1071,7 +1107,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 }
 EXPORT_SYMBOL(class_add_conn);
 
-/** Remove a failover NID location. */
+/* Remove a failover NID location. */
 static int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	struct obd_import *imp;
@@ -1132,7 +1168,7 @@ struct lustre_profile *class_get_profile(const char *prof)
 }
 EXPORT_SYMBOL(class_get_profile);
 
-/**
+/*
  * Create a named "profile".
  * This defines the MDC and OSC names to use for a client.
  * This also is used to define the LOV to be used by a MDT.
@@ -1268,16 +1304,15 @@ static int (*quota_process_config)(struct lustre_cfg *lcfg) = NULL;
 #endif /* HAVE_SERVER_SUPPORT */
 
 /**
- * Rename the proc parameter in \a cfg with a new name \a new_name.
+ * lustre_cfg_rename() - Rename proc parameter in @cfg with a new name @new_name
+ * @cfg: config structure which contains the proc parameter
+ * @new_name: new name of the proc parameter
  *
- * \param cfg	   config structure which contains the proc parameter
- * \param new_name new name of the proc parameter
- *
- * \retval valid-pointer    pointer to the newly-allocated config structure
- *			    which contains the renamed proc parameter
- * \retval ERR_PTR(-EINVAL) if \a cfg or \a new_name is NULL, or \a cfg does
- *			    not contain a proc parameter
- * \retval ERR_PTR(-ENOMEM) if memory allocation failure occurs
+ * Return:
+ * * %valid pointer to the newly-allocated config structure which contains the
+ *	renamed proc parameter
+ * * %-EINVAL if @cfg/@new_name is NULL, or @cfg does not contain proc parameter
+ * * %-ENOMEM if memory allocation failure occurs
  */
 struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 				     const char *new_name)
@@ -1449,9 +1484,17 @@ EXPORT_SYMBOL(lustre_register_quota_process_config);
 #endif /* HAVE_SERVER_SUPPORT */
 
 /**
+ * class_process_config() - Process configuration commands given in @lcfg
+ * @lcfg: pointer to lustre_cfg (holds parameters like: device name, type, UUID)
+ * @kobj: only for LCFG_PARAM commands(modify a device-specific param via sysfs)
+ *
  * Process configuration commands given in lustre_cfg form.
  * These may come from direct calls (e.g. class_manual_cleanup)
  * or processing the config llog, or ioctl from lctl.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj)
 {
@@ -1782,9 +1825,17 @@ ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 }
 EXPORT_SYMBOL(class_modify_config);
 
-/*
+/**
+ * lustre_cfg_rec_new() - Supplemental functions for config logs
+ * @cmd: lcfg_command_type (eg LCFG_ATTACH)
+ * @bufs: buffer supporting arguments for @cmd
+ *
  * Supplemental functions for config logs, it allocates lustre_cfg
  * buffers plus initialized llog record header at the beginning.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 struct llog_cfg_rec *lustre_cfg_rec_new(int cmd, struct lustre_cfg_bufs *bufs)
 {
@@ -1819,10 +1870,20 @@ void lustre_cfg_rec_free(struct llog_cfg_rec *lcr)
 EXPORT_SYMBOL(lustre_cfg_rec_free);
 
 /**
+ * class_config_llog_handler() - Parse a configuration llog
+ * @env: current lustre environment (not used)
+ * @handle: llog handle
+ * @rec: record header
+ * @data: Passed as data param to class_config_parse_llog
+ *
  * Parse a configuration llog, doing various manipulations on them
  * for various reasons, (modifications for compatibility, skip obsolete
  * records, change uuids, etc), then class_process_config() resulting
  * net records.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int class_config_llog_handler(const struct lu_env *env,
 			      struct llog_handle *handle,
@@ -2124,7 +2185,7 @@ parse_out:
 }
 EXPORT_SYMBOL(class_config_parse_llog);
 
-/**
+/*
  * Get marker cfg_flag
  */
 void llog_get_marker_cfg_flags(struct llog_rec_hdr *rec,
@@ -2147,7 +2208,7 @@ void llog_get_marker_cfg_flags(struct llog_rec_hdr *rec,
 	}
 }
 
-/**
+/*
  * Parse config record and output dump in supplied buffer.
  *
  * This is separated from class_config_dump_handler() to use
@@ -2309,7 +2370,7 @@ out_overflow:
 	return rc;
 }
 
-/**
+/*
  * parse config record and output dump in supplied buffer.
  * This is separated from class_config_dump_handler() to use
  * for ioctl needs as well
@@ -2409,8 +2470,14 @@ int class_config_dump_handler(const struct lu_env *env,
 }
 
 /**
- * Call class_cleanup and class_detach.
+ * class_manual_cleanup() - Call class_cleanup and class_detach.
+ * @obd: device to cleanup
+ *
  * "Manual" only in the sense that we're faking lcfg commands.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int class_manual_cleanup(struct obd_device *obd)
 {
