@@ -608,7 +608,6 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 	}
 
 	cnt->lc_min = LC_MIN_INIT;
-
 	num_entry = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 
 	for (i = 0; i < num_entry; i++) {
@@ -1837,6 +1836,7 @@ void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
 			spin_lock_init(&stats->ls_cnt_header[index].lc_hist->oh_lock);
 	}
 	num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
+	stats->ls_init = ktime_get_real();
 	for (i = 0; i < num_cpu; ++i) {
 		if (!stats->ls_percpu[i])
 			continue;

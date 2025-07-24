@@ -976,7 +976,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 		unlock_res_and_lock(lock);
 
 		/* Do not resend after lock callback timeout */
-		req->rq_delay_limit = ldlm_bl_timeout(lock);
+		req->rq_delay_limit_ns = ktime_set(ldlm_bl_timeout(lock), 0);
 		req->rq_resend_cb = ldlm_update_resend;
 	}
 
@@ -1114,10 +1114,11 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 			lock_res_and_lock(lock);
 		} else {
+			u64 timeout = ldlm_bl_timeout(lock);
 			/* start the lock-timeout clock */
 			ldlm_add_waiting_lock(lock, ldlm_bl_timeout(lock));
 			/* Do not resend after lock callback timeout */
-			req->rq_delay_limit = ldlm_bl_timeout(lock);
+			req->rq_delay_limit_ns = ktime_set(timeout, 0);
 			req->rq_resend_cb = ldlm_update_resend;
 		}
 	}

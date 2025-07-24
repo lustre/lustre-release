@@ -275,7 +275,7 @@ static int mgc_target_register(struct obd_export *exp,
 	ptlrpc_request_set_replen(req);
 	CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
 	/* Limit how long we will wait for the enqueue to complete */
-	req->rq_delay_limit = MGC_TARGET_REG_LIMIT;
+	req->rq_delay_limit_ns = ktime_set(MGC_TARGET_REG_LIMIT, 0);
 
 	/* if the target needs to regenerate the config log in MGS, it's better
 	 * to use some longer limit to let MGC have time to change connection to
@@ -283,7 +283,7 @@ static int mgc_target_register(struct obd_export *exp,
 	 * will fail and exit if the request expired due to delay limit.
 	 */
 	if (mti->mti_flags & (LDD_F_UPDATE | LDD_F_NEED_INDEX))
-		req->rq_delay_limit = MGC_TARGET_REG_LIMIT_MAX;
+		req->rq_delay_limit_ns = ktime_set(MGC_TARGET_REG_LIMIT_MAX, 0);
 
 	rc = ptlrpc_queue_wait(req);
 	if (ptlrpc_client_replied(req)) {

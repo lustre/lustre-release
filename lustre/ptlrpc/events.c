@@ -47,7 +47,7 @@ void request_out_callback(struct lnet_event *ev)
 	sptlrpc_request_out_callback(req);
 
 	spin_lock(&req->rq_lock);
-	req->rq_real_sent = ktime_get_real_seconds();
+	req->rq_real_sent_ns = ktime_get_real();
 	req->rq_req_unlinked = 1;
 	/* reply_in_callback happened before request_out_callback? */
 	if (req->rq_reply_unlinked)
@@ -188,9 +188,9 @@ void client_bulk_callback(struct lnet_event *ev)
 	    CFS_FAIL_ONCE))
 		ev->status = -EIO;
 
-	CDEBUG_LIMIT((ev->status == 0) ? D_NET : D_ERROR,
-		     "event type %d, status %d, desc %p\n",
-		     ev->type, ev->status, desc);
+	CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
+		     "event type %d, status %d, req %p desc %p mbits %llu\n",
+		     ev->type, ev->status, desc->bd_req, desc, ev->match_bits);
 
 	spin_lock(&desc->bd_lock);
 	req = desc->bd_req;

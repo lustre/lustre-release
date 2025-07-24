@@ -1275,7 +1275,7 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
 	list_add_tail(&req->rq_set_chain, &set->set_requests);
 	req->rq_set = set;
 	atomic_inc(&set->set_remaining);
-	req->rq_queued_time = ktime_get_seconds();
+	req->rq_queued_time_ns = ktime_get_real();
 
 	if (req->rq_reqmsg)
 		lustre_msg_set_jobinfo(req->rq_reqmsg, NULL);
@@ -1311,7 +1311,7 @@ void ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
 	 * The set takes over the caller's request reference.
 	 */
 	req->rq_set = set;
-	req->rq_queued_time = ktime_get_seconds();
+	req->rq_queued_time_ns = ktime_get_real();
 	list_add_tail(&req->rq_set_chain, &set->set_new_requests);
 	count = atomic_inc_return(&set->set_new_count);
 	spin_unlock(&set->set_new_req_lock);
@@ -1652,8 +1652,9 @@ static int after_reply(struct ptlrpc_request *req)
 	}
 
 	if (obd->obd_svc_stats) {
+		s64 qtime = ktime_us_delta(work_start, req->rq_queued_time_ns);
 		lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
-				    timediff);
+				    qtime);
 		ptlrpc_lprocfs_rpc_sent(req, timediff);
 	}
 
@@ -2444,6 +2445,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 	unsigned int debug_mask = D_RPCTRACE;
 	int rc = 0;
 	__u32 opc;
+	time64_t real_sent = 0;
 
 	ENTRY;
 	spin_lock(&req->rq_lock);
@@ -2454,14 +2456,16 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 	if (ptlrpc_console_allow(req, opc,
 				 lustre_msg_get_status(req->rq_reqmsg)))
 		debug_mask = D_WARNING;
+	if (req->rq_real_sent_ns)
+		real_sent = ktime_divns(req->rq_real_sent_ns, NSEC_PER_SEC);
 	/* this message is used in replay-single test_200, DO NOT MODIFY */
 	DEBUG_REQ(debug_mask, req, "Request sent has %s: [sent %lld/real %lld]",
 		  req->rq_net_err ? "failed due to network error" :
-		     ((req->rq_real_sent == 0 ||
-		       req->rq_real_sent < req->rq_sent ||
-		       req->rq_real_sent >= req->rq_deadline) ?
+		     ((real_sent == 0 ||
+		       real_sent < req->rq_sent ||
+		       real_sent >= req->rq_deadline) ?
 		      "timed out for sent delay" : "timed out for slow reply"),
-		  req->rq_sent, req->rq_real_sent);
+		  req->rq_sent, real_sent);
 
 	if (imp && obd_debug_peer_on_timeout)
 		LNetDebugPeer(&imp->imp_connection->c_peer);

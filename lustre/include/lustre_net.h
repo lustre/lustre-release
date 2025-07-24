@@ -812,13 +812,13 @@ struct ptlrpc_cli_req {
 	/** optional time limit for send attempts. This is a timeout
 	 *  not a timestamp so timeout_t (s32) is used instead of time64_t
 	 */
-	timeout_t			 cr_delay_limit;
+	ktime_t				 cr_delay_limit_ns;
 	/** time request was first queued */
-	time64_t			 cr_queued_time;
+	ktime_t				 cr_queued_time_ns;
 	/** request sent in nanoseconds */
 	ktime_t				 cr_sent_ns;
 	/** time for request really sent out */
-	time64_t			 cr_sent_out;
+	ktime_t				 cr_sent_out_ns;
 	/** when req reply unlink must finish. */
 	time64_t			 cr_reply_deadline;
 	/** when req bulk unlink must finish. */
@@ -878,10 +878,10 @@ struct ptlrpc_cli_req {
  * be removed step by step to avoid potential abuse
  */
 #define rq_bulk			rq_cli.cr_bulk
-#define rq_delay_limit		rq_cli.cr_delay_limit
-#define rq_queued_time		rq_cli.cr_queued_time
+#define rq_delay_limit_ns	rq_cli.cr_delay_limit_ns
+#define rq_queued_time_ns	rq_cli.cr_queued_time_ns
 #define rq_sent_ns		rq_cli.cr_sent_ns
-#define rq_real_sent		rq_cli.cr_sent_out
+#define rq_real_sent_ns		rq_cli.cr_sent_out_ns
 #define rq_reply_deadline	rq_cli.cr_reply_deadline
 #define rq_bulk_deadline	rq_cli.cr_bulk_deadline
 #define rq_req_deadline		rq_cli.cr_req_deadline
@@ -2526,8 +2526,8 @@ static inline __u32 lustre_request_magic(struct ptlrpc_request *req)
 
 static inline int ptlrpc_send_limit_expired(struct ptlrpc_request *req)
 {
-	if (req->rq_delay_limit != 0 &&
-	    req->rq_queued_time + req->rq_delay_limit < ktime_get_seconds())
+	if (req->rq_delay_limit_ns != 0 &&
+	    req->rq_queued_time_ns + req->rq_delay_limit_ns < ktime_get_real())
 		return 1;
 	return 0;
 }

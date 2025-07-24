@@ -984,6 +984,7 @@ int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	};
 	struct ptlrpc_request *req;
 	int short_limit = cld_is_sptlrpc(cld);
+	u64 delay_limit;
 	int rc;
 
 	ENTRY;
@@ -1011,7 +1012,8 @@ int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 		short_limit = 1;
 
 	/* Limit how long we will wait for the enqueue to complete */
-	req->rq_delay_limit = short_limit ? 5 : MGC_ENQUEUE_LIMIT(exp->exp_obd);
+	delay_limit = short_limit ? 5 : MGC_ENQUEUE_LIMIT(exp->exp_obd);
+	req->rq_delay_limit_ns = ktime_set(delay_limit, 0);
 	rc = ldlm_cli_enqueue(exp, &req, &einfo, &cld->cld_resid, NULL, flags,
 			      NULL, 0, LVB_T_NONE, lockh, 0);
 	/* A failed enqueue should still call the mgc_blocking_ast,
