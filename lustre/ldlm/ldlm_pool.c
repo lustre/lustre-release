@@ -1147,7 +1147,6 @@ static unsigned long ldlm_pools_scan(enum ldlm_side client, int nr,
 	return (client == LDLM_NAMESPACE_SERVER) ? SHRINK_STOP : freed;
 }
 
-#ifdef HAVE_SHRINKER_COUNT
 static unsigned long ldlm_pools_srv_count(struct shrinker *s,
 					  struct shrink_control *sc)
 {
@@ -1173,64 +1172,6 @@ static unsigned long ldlm_pools_cli_scan(struct shrinker *s,
 	return ldlm_pools_scan(LDLM_NAMESPACE_CLIENT, sc->nr_to_scan,
 			       sc->gfp_mask);
 }
-
-static struct ll_shrinker_ops ldlm_pools_srv_sh_ops = {
-	.count_objects	= ldlm_pools_srv_count,
-	.scan_objects	= ldlm_pools_srv_scan,
-	.seeks		= DEFAULT_SEEKS,
-};
-
-static struct ll_shrinker_ops ldlm_pools_cli_sh_ops = {
-	.count_objects	= ldlm_pools_cli_count,
-	.scan_objects	= ldlm_pools_cli_scan,
-	.seeks		= DEFAULT_SEEKS,
-};
-#else
-/*
- * Cancel \a nr locks from all namespaces (if possible). Returns number of
- * cached locks after shrink is finished. All namespaces are asked to
- * cancel approximately equal amount of locks to keep balancing.
- */
-static int ldlm_pools_shrink(enum ldlm_side client, int nr, gfp_t gfp_mask)
-{
-	unsigned long total = 0;
-
-	if (client == LDLM_NAMESPACE_CLIENT && nr != 0 &&
-	    !(gfp_mask & __GFP_FS))
-		return -1;
-
-	total = ldlm_pools_count(client, gfp_mask);
-
-	if (nr == 0 || total == 0)
-		return total;
-
-	return ldlm_pools_scan(client, nr, gfp_mask);
-}
-
-static int ldlm_pools_srv_shrink(struct shrinker *shrinker,
-				 struct shrink_control *sc)
-{
-	return ldlm_pools_shrink(LDLM_NAMESPACE_SERVER,
-				 sc->nr_to_scan, sc->gfp_mask);
-}
-
-static int ldlm_pools_cli_shrink(struct shrinker *shrinker,
-				 struct shrink_control *sc)
-{
-	return ldlm_pools_shrink(LDLM_NAMESPACE_CLIENT,
-				 sc->nr_to_scan, sc->gfp_mask);
-}
-
-static struct ll_shrinker_ops ldlm_pools_srv_sh_ops = {
-	.shrink = ldlm_pools_srv_shrink,
-	.seeks = DEFAULT_SEEKS,
-};
-
-static struct ll_shrinker_ops ldlm_pools_cli_sh_ops = {
-	.shrink = ldlm_pools_cli_shrink,
-	.seeks = DEFAULT_SEEKS,
-};
-#endif /* HAVE_SHRINKER_COUNT */
 
 static time64_t ldlm_pools_recalc_delay(enum ldlm_side side)
 {
@@ -1420,15 +1361,19 @@ int ldlm_pools_init(void)
 #else
 	delay = LDLM_POOL_CLI_DEF_RECALC_PERIOD;
 #endif
-	ldlm_pools_srv_shrinker = ll_shrinker_create(&ldlm_pools_srv_sh_ops, 0,
-						     "ldlm_pools_server");
+	ldlm_pools_srv_shrinker = ll_shrinker_create(0, "ldlm_pools_server");
 	if (IS_ERR(ldlm_pools_srv_shrinker))
 		GOTO(out, rc = PTR_ERR(ldlm_pools_srv_shrinker));
 
-	ldlm_pools_cli_shrinker = ll_shrinker_create(&ldlm_pools_cli_sh_ops, 0,
-						     "ldlm_pools_client");
+	ldlm_pools_srv_shrinker->count_objects = ldlm_pools_srv_count;
+	ldlm_pools_srv_shrinker->scan_objects = ldlm_pools_srv_scan;
+
+	ldlm_pools_cli_shrinker = ll_shrinker_create(0, "ldlm_pools_client");
 	if (IS_ERR(ldlm_pools_cli_shrinker))
 		GOTO(out_shrinker, rc = PTR_ERR(ldlm_pools_cli_shrinker));
+
+	ldlm_pools_cli_shrinker->count_objects = ldlm_pools_cli_count;
+	ldlm_pools_cli_shrinker->scan_objects = ldlm_pools_cli_scan;
 
 	schedule_delayed_work(&ldlm_pools_recalc_work, delay);
 	ldlm_pools_init_done = true;

@@ -2083,53 +2083,6 @@ static unsigned long lu_cache_shrink_scan(struct shrinker *sk,
 	return sc->nr_to_scan - remain;
 }
 
-#ifdef HAVE_SHRINKER_COUNT
-static struct ll_shrinker_ops lu_site_sh_ops = {
-	.count_objects	= lu_cache_shrink_count,
-	.scan_objects	= lu_cache_shrink_scan,
-	.seeks		= DEFAULT_SEEKS,
-};
-
-#else
-/*
- * There exists a potential lock inversion deadlock scenario when using
- * Lustre on top of ZFS. This occurs between one of ZFS's
- * buf_hash_table.ht_lock's, and Lustre's lu_sites_guard lock. Essentially,
- * thread A will take the lu_sites_guard lock and sleep on the ht_lock,
- * while thread B will take the ht_lock and sleep on the lu_sites_guard
- * lock. Obviously neither thread will wake and drop their respective hold
- * on their lock.
- *
- * To prevent this from happening we must ensure the lu_sites_guard lock is
- * not taken while down this code path. ZFS reliably does not set the
- * __GFP_FS bit in its code paths, so this can be used to determine if it
- * is safe to take the lu_sites_guard lock.
- *
- * Ideally we should accurately return the remaining number of cached
- * objects without taking the lu_sites_guard lock, but this is not
- * possible in the current implementation.
- */
-static int lu_cache_shrink(struct shrinker *shrinker,
-			   struct shrink_control *sc)
-{
-	int cached = 0;
-
-	CDEBUG(D_INODE, "Shrink %lu objects\n", sc->nr_to_scan);
-
-	if (sc->nr_to_scan != 0)
-		lu_cache_shrink_scan(shrinker, sc);
-
-	cached = lu_cache_shrink_count(shrinker, sc);
-	return cached;
-}
-
-static struct ll_shrinker_ops lu_site_sh_ops = {
-	.shrink  = lu_cache_shrink,
-	.seeks   = DEFAULT_SEEKS,
-};
-
-#endif /* HAVE_SHRINKER_COUNT */
-
 static struct shrinker *lu_site_shrinker;
 
 /* Initialization of global lu_* data. */
@@ -2162,11 +2115,14 @@ int lu_global_init(void)
 	 * inode, one for ea. Unfortunately setting this high value results in
 	 * lu_object/inode cache consuming all the memory.
 	 */
-	lu_site_shrinker = ll_shrinker_create(&lu_site_sh_ops, 0, "lu_site");
+	lu_site_shrinker = ll_shrinker_create(0, "lu_site");
 	if (IS_ERR(lu_site_shrinker)) {
 		result = PTR_ERR(lu_site_shrinker);
 		goto out_env;
 	}
+
+	lu_site_shrinker->count_objects = lu_cache_shrink_count;
+	lu_site_shrinker->scan_objects = lu_cache_shrink_scan;
 
 	result = rhashtable_init(&lu_env_rhash, &lu_env_rhash_params);
 

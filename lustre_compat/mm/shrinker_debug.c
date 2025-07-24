@@ -14,11 +14,7 @@
 
 #ifndef CONFIG_SHRINKER_DEBUG
 /* RHEL7 is sooooo old and we really don't support it */
-#ifdef HAVE_SHRINKER_COUNT
 static DEFINE_IDA(shrinker_debugfs_ida);
-#else
-static int seq;
-#endif
 static struct dentry *shrinker_debugfs_root;
 
 #ifndef SHRINK_EMPTY
@@ -33,7 +29,6 @@ static unsigned long shrinker_count_objects(struct shrinker *shrinker,
 	int node_id;
 
 	for_each_node(node_id) {
-#ifdef HAVE_SHRINKER_COUNT
 		if (node_id == 0 || (shrinker->flags & SHRINKER_NUMA_AWARE)) {
 			struct shrink_control sc = {
 				.gfp_mask = GFP_KERNEL,
@@ -42,14 +37,6 @@ static unsigned long shrinker_count_objects(struct shrinker *shrinker,
 			};
 
 			nr = shrinker->count_objects(shrinker, &sc);
-#else
-		if (node_id == 0) {
-			struct shrink_control sc = {
-				.gfp_mask = GFP_KERNEL,
-			};
-
-			nr = shrinker->shrink(shrinker, &sc);
-#endif
 			if (nr == SHRINK_EMPTY)
 				nr = 0;
 		} else {
@@ -137,15 +124,12 @@ static ssize_t shrinker_debugfs_scan_write(struct file *file,
 		return -EINVAL;
 
 	sc.nr_to_scan = nr_to_scan;
-#ifdef HAVE_SHRINKER_COUNT
 	sc.nr_scanned = nr_to_scan;
 	sc.nid = node_id;
 	sc.memcg = NULL;
 
 	shrinker->scan_objects(shrinker, &sc);
-#else
-	shrinker->shrink(shrinker, &sc);
-#endif
+
 	return size;
 }
 
@@ -171,13 +155,10 @@ static int shrinker_add_debugfs(struct shrinker *shrinker)
 	if (!shrinker_debugfs_root)
 		return 0;
 
-#ifdef HAVE_SHRINKER_COUNT
 	id = ida_alloc(&shrinker_debugfs_ida, GFP_KERNEL);
 	if (id < 0)
 		return id;
-#else
-	id = seq++;
-#endif
+
 	s->debugfs_id = id;
 
 	snprintf(buf, sizeof(buf), "%s-%d", s->name, id);
@@ -185,11 +166,7 @@ static int shrinker_add_debugfs(struct shrinker *shrinker)
 	/* create debugfs entry */
 	entry = debugfs_create_dir(buf, shrinker_debugfs_root);
 	if (IS_ERR(entry)) {
-#ifdef HAVE_SHRINKER_COUNT
 		ida_free(&shrinker_debugfs_ida, id);
-#else
-		seq--;
-#endif
 		return PTR_ERR(entry);
 	}
 	s->debugfs_entry = entry;
@@ -212,10 +189,9 @@ void ll_shrinker_free(struct shrinker *shrinker)
 	struct ll_shrinker *s = shrinker->private_data;
 #endif /* HAVE_SHRINKER_ALLOC */
 
-#ifdef HAVE_SHRINKER_COUNT
 	if (s->debugfs_entry)
 		ida_free(&shrinker_debugfs_ida, s->debugfs_id);
-#endif
+
 	debugfs_remove_recursive(s->debugfs_entry);
 	kfree(s->name);
 #endif /* !CONFIG_SHRINKER_DEBUG */
@@ -234,9 +210,7 @@ void ll_shrinker_free(struct shrinker *shrinker)
 EXPORT_SYMBOL(ll_shrinker_free);
 
 /* allocate and register a shrinker, return should be checked with IS_ERR() */
-struct shrinker *ll_shrinker_create(struct ll_shrinker_ops *ops,
-				    unsigned int flags,
-				    const char *fmt, ...)
+struct shrinker *ll_shrinker_create(unsigned int flags, const char *fmt, ...)
 {
 	struct shrinker *shrinker;
 #ifndef CONFIG_SHRINKER_DEBUG
@@ -276,14 +250,7 @@ struct shrinker *ll_shrinker_create(struct ll_shrinker_ops *ops,
 	if (!shrinker)
 		return ERR_PTR(-ENOMEM);
 
-#ifdef HAVE_SHRINKER_COUNT
-	shrinker->count_objects = ops->count_objects;
-	shrinker->scan_objects = ops->scan_objects;
-#else
-	shrinker->shrink = ops->shrink;
-#endif
-	shrinker->seeks = ops->seeks;
-
+	shrinker->seeks = DEFAULT_SEEKS;
 #ifdef HAVE_SHRINKER_ALLOC
 	shrinker_register(shrinker);
 #else
@@ -294,13 +261,8 @@ struct shrinker *ll_shrinker_create(struct ll_shrinker_ops *ops,
 	rc = register_shrinker(shrinker, "%pV", &vaf);
 	va_end(args);
  #else
-	if (rc == 0) {
-  #if defined(HAVE_REGISTER_SHRINKER_RET)
+	if (rc == 0)
 		rc = register_shrinker(shrinker);
-  #else
-		register_shrinker(shrinker);
-  #endif
-	}
  #endif
 #endif
   #ifndef CONFIG_SHRINKER_DEBUG

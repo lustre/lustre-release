@@ -8,18 +8,6 @@
 #include <linux/types.h>
 #include <libcfs/libcfs.h>
 
-struct ll_shrinker_ops {
-#ifdef HAVE_SHRINKER_COUNT
-	unsigned long (*count_objects)(struct shrinker *shrinker,
-				       struct shrink_control *sc);
-	unsigned long (*scan_objects)(struct shrinker *shrinker,
-				      struct shrink_control *sc);
-#else
-	int (*shrink)(struct shrinker *shrinker, struct shrink_control *sc);
-#endif
-	int seeks;      /* seeks to recreate an obj */
-};
-
 #ifndef CONFIG_SHRINKER_DEBUG
 struct ll_shrinker {
 	struct shrinker ll_shrinker;
@@ -35,8 +23,7 @@ struct ll_shrinker {
 void ll_shrinker_free(struct shrinker *shrinker);
 
 /* allocate and register a shrinker, return should be checked with IS_ERR() */
-struct shrinker *ll_shrinker_create(struct ll_shrinker_ops *ops,
-				    unsigned int flags,
+struct shrinker *ll_shrinker_create(unsigned int flags,
 				    const char *fmt, ...);
 
 #endif /* _LINUX_SHRINKER_LUSTRE_H */

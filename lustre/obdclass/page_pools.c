@@ -108,7 +108,6 @@ static struct obd_page_pool {
 	/*
 	 * memory shrinker
 	 */
-	struct ll_shrinker_ops opp_shops;
 	struct shrinker *pool_shrinker;
 	struct mutex add_pages_mutex;
 } **page_pools;
@@ -376,19 +375,6 @@ static unsigned long pool_shrink_scan(struct shrinker *s,
 
 	return sc->nr_to_scan;
 }
-
-#ifndef HAVE_SHRINKER_COUNT
-/*
- * could be called frequently for query (@nr_to_scan == 0).
- * we try to keep at least PTLRPC_MAX_BRW_PAGES pages in the pool.
- */
-static int pool_shrink(struct shrinker *shrinker, struct shrink_control *sc)
-{
-	pool_shrink_scan(shrinker, sc);
-
-	return pool_shrink_count(shrinker, sc);
-}
-#endif /* HAVE_SHRINKER_COUNT */
 
 static inline
 int nobjects_to_nptr_pages(unsigned long nobjects)
@@ -1113,18 +1099,14 @@ int obd_pool_init(void)
 		CDEBUG(D_SEC, "Allocated pool %i\n", pool_order);
 		if (pool->opp_ptr_pages == NULL)
 			GOTO(fail, rc = -ENOMEM);
+
 		/* Pass pool number as part of pool_shrinker_seeks value */
-#ifdef HAVE_SHRINKER_COUNT
-		pool->opp_shops.count_objects = pool_shrink_count;
-		pool->opp_shops.scan_objects = pool_shrink_scan;
-#else
-		pool->opp_shops.shrink = pool_shrink;
-		pool->opp_shops.seeks = DEFAULT_SEEKS;
-#endif
-		pool->pool_shrinker = ll_shrinker_create(&pool->opp_shops, 0,
-							 "obd_pool");
+		pool->pool_shrinker = ll_shrinker_create(0, "obd_pool");
 		if (IS_ERR(pool->pool_shrinker))
 			GOTO(fail, rc = PTR_ERR(pool->pool_shrinker));
+
+		pool->pool_shrinker->count_objects = pool_shrink_count;
+		pool->pool_shrinker->scan_objects = pool_shrink_scan;
 
 		pool_shrinkers[pool_order] = pool->pool_shrinker;
 		mutex_init(&pool->add_pages_mutex);

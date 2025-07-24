@@ -4175,30 +4175,6 @@ LIST_HEAD(osc_shrink_list);
 DEFINE_SPINLOCK(osc_shrink_lock);
 bool osc_page_cache_shrink_enabled = true;
 
-#ifdef HAVE_SHRINKER_COUNT
-static struct ll_shrinker_ops osc_cache_sh_ops = {
-	.count_objects	= osc_cache_shrink_count,
-	.scan_objects	= osc_cache_shrink_scan,
-	.seeks		= DEFAULT_SEEKS,
-};
-#else
-static int osc_cache_shrink(struct shrinker *shrinker,
-			    struct shrink_control *sc)
-{
-	if (!osc_page_cache_shrink_enabled)
-		return 0;
-
-	(void)osc_cache_shrink_scan(shrinker, sc);
-
-	return osc_cache_shrink_count(shrinker, sc);
-}
-
-static struct ll_shrinker_ops osc_cache_sh_ops = {
-	.shrink   = osc_cache_shrink,
-	.seeks    = DEFAULT_SEEKS,
-};
-#endif
-
 static struct shrinker *osc_cache_shrinker;
 
 static int __init osc_init(void)
@@ -4222,10 +4198,12 @@ static int __init osc_init(void)
 	if (rc)
 		RETURN(rc);
 
-	osc_cache_shrinker = ll_shrinker_create(&osc_cache_sh_ops, 0,
-						"osc_cache");
+	osc_cache_shrinker = ll_shrinker_create(0, "osc_cache");
 	if (IS_ERR(osc_cache_shrinker))
 		GOTO(out_kmem, rc = PTR_ERR(osc_cache_shrinker));
+
+	osc_cache_shrinker->count_objects = osc_cache_shrink_count;
+	osc_cache_shrinker->scan_objects = osc_cache_shrink_scan;
 
 	/* This is obviously too much memory, only prevent overflow here */
 	if (osc_reqpool_mem_max >= 1 << 12 || osc_reqpool_mem_max == 0)

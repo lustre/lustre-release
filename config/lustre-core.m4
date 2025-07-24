@@ -789,27 +789,6 @@ AC_DEFUN([LC_KIOCB_KI_LEFT], [
 ]) # LC_KIOCB_KI_LEFT
 
 #
-# LC_REGISTER_SHRINKER_RET
-#
-# v3.11-8748-g1d3d4437eae1 register_shrinker returns a status
-#
-AC_DEFUN([LC_SRC_REGISTER_SHRINKER_RET], [
-	LB2_LINUX_TEST_SRC([register_shrinker_ret], [
-		#include <linux/mm.h>
-	],[
-		if (register_shrinker(NULL))
-			unregister_shrinker(NULL);
-	],[])
-])
-AC_DEFUN([LC_REGISTER_SHRINKER_RET], [
-	LB2_MSG_LINUX_TEST_RESULT([if register_shrinker() returns status],
-	[register_shrinker_ret], [
-		AC_DEFINE(HAVE_REGISTER_SHRINKER_RET, 1,
-			[register_shrinker() returns status])
-	])
-]) # LC_REGISTER_SHRINKER_RET
-
-#
 # LC_VFS_RENAME_5ARGS
 #
 # 3.13 has vfs_rename with 5 args
@@ -5210,7 +5189,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_DENTRY_D_U_D_ALIAS_HLIST
 	LC_SRC_HAVE_DENTRY_D_CHILD
 	LC_SRC_KIOCB_KI_LEFT
-	LC_SRC_REGISTER_SHRINKER_RET
 
 	# 3.13
 	LC_SRC_VFS_RENAME_5ARGS
@@ -5538,7 +5516,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_OLDSIZE_TRUNCATE_PAGECACHE
 	LC_PTR_ERR_OR_ZERO_MISSING
 	LC_KIOCB_KI_LEFT
-	LC_REGISTER_SHRINKER_RET
 
 	# 3.13
 	LC_VFS_RENAME_5ARGS

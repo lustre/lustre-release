@@ -219,27 +219,6 @@ AC_DEFUN([LIBCFS_KTIME_COMPARE],[
 ]) # LIBCFS_KTIME_COMPARE
 
 #
-# FC19 3.12 kernel struct shrinker change
-#
-AC_DEFUN([LIBCFS_SRC_SHRINKER_COUNT],[
-	LB2_LINUX_TEST_SRC([shrinker_count_objects], [
-		#include <linux/mmzone.h>
-		#include <linux/shrinker.h>
-	],[
-		struct shrinker shrinker;
-
-		shrinker.count_objects = NULL;
-	])
-])
-AC_DEFUN([LIBCFS_SHRINKER_COUNT],[
-	LB2_MSG_LINUX_TEST_RESULT([if shrinker has 'count_objects'],
-	[shrinker_count_objects], [
-		AC_DEFINE(HAVE_SHRINKER_COUNT, 1,
-			[shrinker has count_objects member])
-	])
-]) # LIBCFS_SHRINKER_COUNT
-
-#
 # Kernel version 3.13 commit aace05097a0fd467230e39acb148be0fdaa90068
 # add match_wildcard() function.
 #
@@ -2564,7 +2543,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_KTIME_AFTER
 	LIBCFS_SRC_KTIME_BEFORE
 	LIBCFS_SRC_KTIME_COMPARE
-	LIBCFS_SRC_SHRINKER_COUNT
 	# 3.13
 	LIBCFS_SRC_MATCH_WILDCARD
 	# 3.14
@@ -2720,7 +2698,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_KTIME_AFTER
 	LIBCFS_KTIME_BEFORE
 	LIBCFS_KTIME_COMPARE
-	LIBCFS_SHRINKER_COUNT
 	# 3.13
 	LIBCFS_MATCH_WILDCARD
 	# 3.14
