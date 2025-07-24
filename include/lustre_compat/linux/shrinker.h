@@ -8,22 +8,26 @@
 #include <linux/types.h>
 #include <libcfs/libcfs.h>
 
-#ifndef CONFIG_SHRINKER_DEBUG
+#if !defined(CONFIG_SHRINKER_DEBUG) || defined(HAVE_REGISTER_SHRINKER_FORMAT_NAMED)
 struct ll_shrinker {
 	struct shrinker ll_shrinker;
 
-	void *private_data;
-
+  #ifndef CONFIG_SHRINKER_DEBUG
 	int debugfs_id;
 	const char *name;
 	struct dentry *debugfs_entry;
+  #endif
+  #ifdef HAVE_REGISTER_SHRINKER_FORMAT_NAMED
+	struct va_format vaf;
+  #endif
 };
+#else
+#define ll_shrinker	shrinker
 #endif
 
+struct shrinker *ll_shrinker_alloc(unsigned int flags,
+				   const char *fmt, ...);
+void ll_shrinker_register(struct shrinker *shrinker);
 void ll_shrinker_free(struct shrinker *shrinker);
-
-/* allocate and register a shrinker, return should be checked with IS_ERR() */
-struct shrinker *ll_shrinker_create(unsigned int flags,
-				    const char *fmt, ...);
 
 #endif /* _LINUX_SHRINKER_LUSTRE_H */

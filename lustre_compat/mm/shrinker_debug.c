@@ -139,7 +139,7 @@ static const struct file_operations shrinker_debugfs_scan_fops = {
 	.write	= shrinker_debugfs_scan_write,
 };
 
-static int shrinker_add_debugfs(struct shrinker *shrinker)
+static int shrinker_add_debugfs(struct shrinker *shrinker, const char *name)
 {
 #ifndef HAVE_SHRINKER_ALLOC
 	struct ll_shrinker *s = container_of(shrinker, struct ll_shrinker,
@@ -161,7 +161,7 @@ static int shrinker_add_debugfs(struct shrinker *shrinker)
 
 	s->debugfs_id = id;
 
-	snprintf(buf, sizeof(buf), "%s-%d", s->name, id);
+	snprintf(buf, sizeof(buf), "%s-%d", name, id);
 
 	/* create debugfs entry */
 	entry = debugfs_create_dir(buf, shrinker_debugfs_root);
@@ -193,7 +193,6 @@ void ll_shrinker_free(struct shrinker *shrinker)
 		ida_free(&shrinker_debugfs_ida, s->debugfs_id);
 
 	debugfs_remove_recursive(s->debugfs_entry);
-	kfree(s->name);
 #endif /* !CONFIG_SHRINKER_DEBUG */
 
 #ifdef HAVE_SHRINKER_ALLOC
@@ -209,74 +208,85 @@ void ll_shrinker_free(struct shrinker *shrinker)
 }
 EXPORT_SYMBOL(ll_shrinker_free);
 
-/* allocate and register a shrinker, return should be checked with IS_ERR() */
-struct shrinker *ll_shrinker_create(unsigned int flags, const char *fmt, ...)
+struct shrinker *ll_shrinker_alloc(unsigned int flags, const char *fmt, ...)
 {
-	struct shrinker *shrinker;
-#ifndef CONFIG_SHRINKER_DEBUG
-	struct ll_shrinker *s;
-#endif
-#if defined(HAVE_REGISTER_SHRINKER_FORMAT_NAMED) || defined(HAVE_SHRINKER_ALLOC)
+	struct shrinker *shrinker = NULL;
+	struct ll_shrinker *s = NULL;
+#ifdef HAVE_SHRINKER_ALLOC
 	struct va_format vaf;
 #endif
 	va_list args;
 	int rc = 0;
 
+	/* Only time we don't need ll_shrinker is with latest kernels
+	 * that have the shrinker debugfs interface turned on.
+	 */
+#if defined(HAVE_REGISTER_SHRINKER_FORMAT_NAMED) || !defined(HAVE_SHRINKER_ALLOC) || !defined(CONFIG_SHRINKER_DEBUG)
+	LIBCFS_ALLOC(s, sizeof(*s));
+	if (s) {
+ #ifdef HAVE_REGISTER_SHRINKER_FORMAT_NAMED
+		s->vaf.fmt = fmt;
+		s->vaf.va = &args;
+ #endif
+	} else {
+		return ERR_PTR(-ENOMEM);
+	}
+#endif
 	va_start(args, fmt);
 #ifdef HAVE_SHRINKER_ALLOC
 	vaf.fmt = fmt;
 	vaf.va = &args;
 	shrinker = shrinker_alloc(flags, "%pV", &vaf);
-	va_end(args);
- #ifndef CONFIG_SHRINKER_DEBUG
-	LIBCFS_ALLOC(s, sizeof(*s));
-	if (!s) {
-		shrinker_free(shrinker);
-		shrinker = NULL;
-	} else {
-		s->name = kvasprintf_const(GFP_KERNEL, fmt, args);
+	if (shrinker)
 		shrinker->private_data = s;
-	}
- #endif
-#else /* !HAVE_SHRINKER_ALLOC */
-	LIBCFS_ALLOC(s, sizeof(*s));
- #if !defined(CONFIG_SHRINKER_DEBUG)
-	if (s)
-		s->name = kvasprintf_const(GFP_KERNEL, fmt, args);
- #endif
-	va_end(args);
+	else
+		rc = -ENOMEM;
+#else
 	shrinker = (struct shrinker *)s;
 #endif
-	if (!shrinker)
-		return ERR_PTR(-ENOMEM);
+#ifndef CONFIG_SHRINKER_DEBUG
+	if (rc == 0) {
+		const char *name = kvasprintf_const(GFP_KERNEL, fmt, args);
+
+		if (strncmp(name, "ldlm_pools", strlen("ldlm_pools")) != 0)
+			rc = shrinker_add_debugfs(shrinker, name);
+
+		kfree(name);
+	}
+#endif
+	va_end(args);
+
+	if (rc < 0) {
+		if (shrinker)
+			ll_shrinker_free(shrinker);
+		return ERR_PTR(rc);
+	}
 
 	shrinker->seeks = DEFAULT_SEEKS;
-#ifdef HAVE_SHRINKER_ALLOC
-	shrinker_register(shrinker);
-#else
- #ifdef HAVE_REGISTER_SHRINKER_FORMAT_NAMED
-	va_start(args, fmt);
-	vaf.fmt = fmt;
-	vaf.va = &args;
-	rc = register_shrinker(shrinker, "%pV", &vaf);
-	va_end(args);
- #else
-	if (rc == 0)
-		rc = register_shrinker(shrinker);
- #endif
-#endif
-  #ifndef CONFIG_SHRINKER_DEBUG
-	if (rc == 0 && s->name &&
-	    strncmp(s->name, "ldlm_pools", strlen("ldlm_pools")) != 0)
-		rc = shrinker_add_debugfs(shrinker);
-  #endif
-	if (rc) {
-		ll_shrinker_free(shrinker);
-		shrinker = ERR_PTR(rc);
-	}
+
 	return shrinker;
 }
-EXPORT_SYMBOL(ll_shrinker_create);
+EXPORT_SYMBOL(ll_shrinker_alloc);
+
+void ll_shrinker_register(struct shrinker *shrinker)
+{
+#ifndef HAVE_SHRINKER_ALLOC
+#ifdef HAVE_REGISTER_SHRINKER_FORMAT_NAMED
+	struct ll_shrinker *s = container_of(shrinker, struct ll_shrinker,
+					     ll_shrinker);
+#endif
+	int rc;
+
+ #ifdef HAVE_REGISTER_SHRINKER_FORMAT_NAMED
+	rc = register_shrinker(shrinker, "%pV", &s->vaf);
+ #else
+	rc = register_shrinker(shrinker);
+ #endif
+#else
+	shrinker_register(shrinker);
+#endif
+}
+EXPORT_SYMBOL(ll_shrinker_register);
 
 #ifndef CONFIG_SHRINKER_DEBUG
 void shrinker_debugfs_fini(void)

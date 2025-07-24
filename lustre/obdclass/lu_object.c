@@ -2115,7 +2115,7 @@ int lu_global_init(void)
 	 * inode, one for ea. Unfortunately setting this high value results in
 	 * lu_object/inode cache consuming all the memory.
 	 */
-	lu_site_shrinker = ll_shrinker_create(0, "lu_site");
+	lu_site_shrinker = ll_shrinker_alloc(0, "lu_site");
 	if (IS_ERR(lu_site_shrinker)) {
 		result = PTR_ERR(lu_site_shrinker);
 		goto out_env;
@@ -2123,6 +2123,8 @@ int lu_global_init(void)
 
 	lu_site_shrinker->count_objects = lu_cache_shrink_count;
 	lu_site_shrinker->scan_objects = lu_cache_shrink_scan;
+
+	ll_shrinker_register(lu_site_shrinker);
 
 	result = rhashtable_init(&lu_env_rhash, &lu_env_rhash_params);
 

@@ -4198,12 +4198,14 @@ static int __init osc_init(void)
 	if (rc)
 		RETURN(rc);
 
-	osc_cache_shrinker = ll_shrinker_create(0, "osc_cache");
+	osc_cache_shrinker = ll_shrinker_alloc(0, "osc_cache");
 	if (IS_ERR(osc_cache_shrinker))
 		GOTO(out_kmem, rc = PTR_ERR(osc_cache_shrinker));
 
 	osc_cache_shrinker->count_objects = osc_cache_shrink_count;
 	osc_cache_shrinker->scan_objects = osc_cache_shrink_scan;
+
+	ll_shrinker_register(osc_cache_shrinker);
 
 	/* This is obviously too much memory, only prevent overflow here */
 	if (osc_reqpool_mem_max >= 1 << 12 || osc_reqpool_mem_max == 0)

@@ -1105,12 +1105,14 @@ int obd_pool_init(void)
 			GOTO(fail, rc = -ENOMEM);
 
 		/* Pass pool number as part of pool_shrinker_seeks value */
-		pool->pool_shrinker = ll_shrinker_create(0, "obd_pool");
+		pool->pool_shrinker = ll_shrinker_alloc(0, "obd_pool");
 		if (IS_ERR(pool->pool_shrinker))
 			GOTO(fail, rc = PTR_ERR(pool->pool_shrinker));
 
 		pool->pool_shrinker->count_objects = pool_shrink_count;
 		pool->pool_shrinker->scan_objects = pool_shrink_scan;
+
+		ll_shrinker_register(pool->pool_shrinker);
 
 		pool_shrinkers[pool_order] = pool->pool_shrinker;
 		mutex_init(&pool->add_pages_mutex);

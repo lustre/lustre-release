@@ -1361,19 +1361,23 @@ int ldlm_pools_init(void)
 #else
 	delay = LDLM_POOL_CLI_DEF_RECALC_PERIOD;
 #endif
-	ldlm_pools_srv_shrinker = ll_shrinker_create(0, "ldlm_pools_server");
+	ldlm_pools_srv_shrinker = ll_shrinker_alloc(0, "ldlm_pools_server");
 	if (IS_ERR(ldlm_pools_srv_shrinker))
 		GOTO(out, rc = PTR_ERR(ldlm_pools_srv_shrinker));
 
 	ldlm_pools_srv_shrinker->count_objects = ldlm_pools_srv_count;
 	ldlm_pools_srv_shrinker->scan_objects = ldlm_pools_srv_scan;
 
-	ldlm_pools_cli_shrinker = ll_shrinker_create(0, "ldlm_pools_client");
+	ll_shrinker_register(ldlm_pools_srv_shrinker);
+
+	ldlm_pools_cli_shrinker = ll_shrinker_alloc(0, "ldlm_pools_client");
 	if (IS_ERR(ldlm_pools_cli_shrinker))
 		GOTO(out_shrinker, rc = PTR_ERR(ldlm_pools_cli_shrinker));
 
 	ldlm_pools_cli_shrinker->count_objects = ldlm_pools_cli_count;
 	ldlm_pools_cli_shrinker->scan_objects = ldlm_pools_cli_scan;
+
+	ll_shrinker_register(ldlm_pools_cli_shrinker);
 
 	schedule_delayed_work(&ldlm_pools_recalc_work, delay);
 	ldlm_pools_init_done = true;
