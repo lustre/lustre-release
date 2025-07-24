@@ -78,6 +78,9 @@ int osc_quota_setdq(struct client_obd *cli, u64 xid, const unsigned int qid[],
 	if ((valid & (OBD_MD_FLALLQUOTA)) == 0)
 		RETURN(0);
 
+	if (cli->cl_quota_last_xid > xid && !(flags & OBD_FL_NO_QUOTA_ALL))
+		RETURN(0);
+
 	mutex_lock(&cli->cl_quota_mutex);
 	cli->cl_root_squash = !!(flags & OBD_FL_ROOT_SQUASH);
 	cli->cl_root_prjquota = !!(flags & OBD_FL_ROOT_PRJQUOTA);
@@ -92,7 +95,7 @@ int osc_quota_setdq(struct client_obd *cli, u64 xid, const unsigned int qid[],
 		cli->cl_quota_last_xid = xid;
 
 	for (type = 0; type < LL_MAXQUOTAS; type++) {
-		unsigned long bits = 0;
+		unsigned long bits, old;
 		u8 *qtypes;
 
 		if ((valid & md_quota_flag(type)) == 0)
@@ -100,62 +103,34 @@ int osc_quota_setdq(struct client_obd *cli, u64 xid, const unsigned int qid[],
 
 		/* lookup the quota IDs in the ID xarray */
 		qtypes = xa_load(&cli->cl_quota_exceeded_ids, qid[type]);
+		if (qtypes) /* ID already cached */
+			old = bits = xa_to_value(qtypes);
+		else
+			old = bits = 0;
+
 		if ((flags & fl_quota_flag(type)) != 0) {
 			/* This ID is getting close to its quota limit, let's
 			 * switch to sync I/O
 			 */
-			if (qtypes) { /* ID already cached */
-				bits = xa_to_value(qtypes);
-				/* test if ID type already set */
-				if (!(bits & BIT(type))) {
-					bits |= BIT(type);
-					rc = xa_err(xa_store(&cli->cl_quota_exceeded_ids,
-							     qid[type],
-							     xa_mk_value(bits),
-							     GFP_KERNEL));
-					if (rc < 0)
-						GOTO(out_unlock, rc);
-				}
-				continue;
-			}
-
-			/* Only insert if we see the this ID for the
-			 * very first time.
-			 */
 			bits |= BIT(type);
-			rc = ll_xa_insert(&cli->cl_quota_exceeded_ids,
-					  qid[type], xa_mk_value(bits),
-					  GFP_KERNEL);
-			if (rc == -ENOMEM)
-				break;
-
-			CDEBUG(D_QUOTA, "%s: setdq to insert for %s %d: rc = %d\n",
-			       cli_name(cli), qtype_name(type), qid[type], rc);
+			CDEBUG(D_QUOTA, "%s: setdq to for %s %d\n",
+			       cli_name(cli), qtype_name(type), qid[type]);
 		} else {
-			/* This ID is now off the hook, let's remove it from
-			 * the xarray
-			 */
-			if (!qtypes)
-				continue;
-
-			bits = xa_to_value(qtypes);
-			if (!(bits & BIT(type)))
-				continue;
-
 			bits &= ~BIT(type);
+			CDEBUG(D_QUOTA, "%s: setdq to remove for %s %d\n",
+			       cli_name(cli), qtype_name(type), qid[type]);
+		}
+		if (old != bits) {
 			if (bits) {
 				rc = xa_err(xa_store(&cli->cl_quota_exceeded_ids,
-						     qid[type],
-						     xa_mk_value(bits),
-						     GFP_KERNEL));
-				if (rc < 0)
-					GOTO(out_unlock, rc);
+					     qid[type],
+					     xa_mk_value(bits),
+					     GFP_KERNEL));
 			} else {
 				xa_erase(&cli->cl_quota_exceeded_ids, qid[type]);
 			}
-
-			CDEBUG(D_QUOTA, "%s: setdq to remove for %s %d\n",
-			       cli_name(cli), qtype_name(type), qid[type]);
+			if (rc < 0)
+				break;
 		}
 	}
 
