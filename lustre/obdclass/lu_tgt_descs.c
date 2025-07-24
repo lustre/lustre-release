@@ -22,12 +22,10 @@
 #include <lu_object.h>
 
 /**
- * lu_prandom_u64_max - returns a pseudo-random u64 number in interval
- * [0, ep_ro)
+ * lu_prandom_u64_max() - returns pseudo-rand u64 number in interval [0, ep_ro)
+ * @ep_ro: right open interval endpoint
  *
- * \param[in] ep_ro	right open interval endpoint
- *
- * \retval a pseudo-random 64-bit number that is in interval [0, ep_ro).
+ * Returns a pseudo-random 64-bit number that is in interval [0, ep_ro).
  */
 u64 lu_prandom_u64_max(u64 ep_ro)
 {
@@ -59,17 +57,17 @@ u64 lu_prandom_u64_max(u64 ep_ro)
 EXPORT_SYMBOL(lu_prandom_u64_max);
 
 /**
- * Add a new target to Quality of Service (QoS) target table.
+ * lu_qos_add_tgt() - Add a new target to Quality of Service (QoS) target table.
+ * @qos: lu_qos data
+ * @tgt: target description
  *
  * Add a new MDT/OST target to the structure representing an OSS. Resort the
  * list of known MDSs/OSSs by the number of MDTs/OSTs attached to each MDS/OSS.
  * The MDS/OSS list is protected internally and no external locking is required.
  *
- * \param[in] qos		lu_qos data
- * \param[in] tgt		target description
- *
- * \retval 0			on success
- * \retval -ENOMEM		on error
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM on error
  */
 int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *tgt)
 {
@@ -147,16 +145,16 @@ out:
 EXPORT_SYMBOL(lu_qos_add_tgt);
 
 /**
- * Remove MDT/OST target from QoS table.
+ * lu_qos_del_tgt() - Remove MDT/OST target from QoS table.
+ * @qos: lu_qos data
+ * @ltd: target description
  *
  * Removes given MDT/OST target from QoS table and releases related
  * MDS/OSS structure if no target remain on the MDS/OSS.
  *
- * \param[in] qos		lu_qos data
- * \param[in] ltd		target description
- *
- * \retval 0			on success
- * \retval -ENOENT		if no server was found
+ * Return:
+ * * %0 on success
+ * * %-ENOENT if no server was found
  */
 int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd)
 {
@@ -190,14 +188,13 @@ out:
 EXPORT_SYMBOL(lu_qos_del_tgt);
 
 /**
- * Calculate weight for a given tgt.
+ * lu_tgt_qos_weight_calc() - Calculate weight for a given tgt.
+ * @tgt: target descriptor
+ * @is_mdt: target table is for MDT selection (use inodes)
  *
  * The final tgt weight uses only free space for OSTs, but combines
  * both free space and inodes for MDTs, minus tgt and server penalties.
  * See ltd_qos_penalties_calc() for how penalties are calculated.
- *
- * \param[in] tgt	target descriptor
- * \param[in] is_mdt	target table is for MDT selection (use inodes)
  */
 void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt, bool is_mdt)
 {
@@ -220,17 +217,17 @@ void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt, bool is_mdt)
 EXPORT_SYMBOL(lu_tgt_qos_weight_calc);
 
 /**
- * Allocate and initialize target table.
+ * lu_tgt_descs_init() - Allocate and initialize target table.
+ * @ltd: target's table to initialize
+ * @is_mdt: target table for MDTs
  *
  * A helper function to initialize the target table and allocate
  * a bitmap of the available targets.
  *
- * \param[in] ltd		target's table to initialize
- * \param[in] is_mdt		target table for MDTs
- *
- * \retval 0			on success
- * \retval negative		negated errno on error
- **/
+ * Return:
+ * * %0 on success
+ * * %negative negated errno on error
+ */
 int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt)
 {
 	mutex_init(&ltd->ltd_mutex);
@@ -276,9 +273,8 @@ int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt)
 EXPORT_SYMBOL(lu_tgt_descs_init);
 
 /**
- * Free bitmap and target table pages.
- *
- * \param[in] ltd	target table
+ * lu_tgt_descs_fini() - Free bitmap and target table pages.
+ * @ltd: target table
  */
 void lu_tgt_descs_fini(struct lu_tgt_descs *ltd)
 {
@@ -294,17 +290,17 @@ void lu_tgt_descs_fini(struct lu_tgt_descs *ltd)
 EXPORT_SYMBOL(lu_tgt_descs_fini);
 
 /**
- * Expand size of target table.
+ * lu_tgt_descs_resize() - Expand size of target table.
+ * @ltd: target table
+ * @newsize: new size of the table
  *
  * When the target table is full, we have to extend the table. To do so,
  * we allocate new memory with some reserve, move data from the old table
  * to the new one and release memory consumed by the old table.
  *
- * \param[in] ltd		target table
- * \param[in] newsize		new size of the table
- *
- * \retval			0 on success
- * \retval			-ENOMEM if reallocation failed
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM if reallocation failed
  */
 static int lu_tgt_descs_resize(struct lu_tgt_descs *ltd, __u32 newsize)
 {
@@ -336,18 +332,17 @@ static int lu_tgt_descs_resize(struct lu_tgt_descs *ltd, __u32 newsize)
 }
 
 /**
- * Add new target to target table.
+ * ltd_add_tgt() - Add new target to target table.
+ * @ltd: target table
+ * @tgt: new target desc
  *
  * Extend target table if it's full, update target table and bitmap.
  * Notice we need to take ltd_rw_sem exclusively before entry to ensure
  * atomic switch.
  *
- * \param[in] ltd		target table
- * \param[in] tgt		new target desc
- *
- * \retval			0 on success
- * \retval			-ENOMEM if reallocation failed
- *				-EEXIST if target existed
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM if reallocation failed or %-EEXIST if target existed
  */
 int ltd_add_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 {
@@ -390,7 +385,9 @@ int ltd_add_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 EXPORT_SYMBOL(ltd_add_tgt);
 
 /**
- * Delete target from target table
+ * ltd_del_tgt() - Delete target from target table
+ * @ltd: target table
+ * @tgt: target desc to be deleted
  */
 void ltd_del_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 {
@@ -404,7 +401,8 @@ void ltd_del_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 EXPORT_SYMBOL(ltd_del_tgt);
 
 /**
- * Calculate penalties per-tgt and per-server
+ * ltd_qos_penalties_calc() - Calculate penalties per-tgt and per-server
+ * @ltd: lu_tgt_descs
  *
  * Re-calculate penalties when the configuration changes, active targets
  * change and after statfs refresh (all these are reflected by LQ_DIRTY flag).
@@ -414,11 +412,9 @@ EXPORT_SYMBOL(ltd_del_tgt);
  * and avoids penalizing server/tgt under light load.
  * See lu_qos_tgt_weight_calc() for how penalties are factored into the weight.
  *
- * \param[in] ltd		lu_tgt_descs
- *
- * \retval 0		on success
- * \retval -EAGAIN	the number of tgt isn't enough or all tgt spaces are
- *			almost the same
+ * Return:
+ * * %0 on success
+ * * %-EAGAIN number of tgt isn't enough or all tgt spaces are almost the same
  */
 int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 {
@@ -577,17 +573,16 @@ out:
 EXPORT_SYMBOL(ltd_qos_penalties_calc);
 
 /**
- * Re-calculate penalties and weights of all tgts.
+ * ltd_qos_update() - Re-calculate penalties and weights of all tgts.
+ * @ltd: lu_tgt_descs
+ * @tgt: recently used tgt
+ * @total_wt: new total weight for the pool [out]
  *
  * The function is called when some target was used for a new object. In
  * this case we should re-calculate all the weights to keep new allocations
  * balanced well.
  *
- * \param[in] ltd		lu_tgt_descs
- * \param[in] tgt		recently used tgt
- * \param[out] total_wt		new total weight for the pool
- *
- * \retval		0
+ * Return 0 always
  */
 int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
 		   __u64 *total_wt)
