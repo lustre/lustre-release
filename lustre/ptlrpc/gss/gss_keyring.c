@@ -981,8 +981,8 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 		/* Do not switch namespace in gss keyring upcall. */
 		caller_pid = 0;
 	}
-	primary = imp->imp_connection->c_self;
-	LNetPrimaryNID(&primary);
+
+	LNetLocalPrimaryNID(&primary);
 
 	/* FIXME !! Needs to support larger NIDs */
 	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%c:%d:%#llx:%s:%#llx:%d",

@@ -115,7 +115,6 @@ ptlrpc_connection_get(struct lnet_processid *peer_orig, struct lnet_nid *self,
 		RETURN(NULL);
 
 	conn->c_peer = peer;
-	conn->c_self = *self;
 	atomic_set(&conn->c_refcount, 1);
 	if (uuid)
 		obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);

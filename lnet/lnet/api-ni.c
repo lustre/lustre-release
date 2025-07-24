@@ -10059,6 +10059,9 @@ bool LNetIsPeerLocal(struct lnet_nid *nid)
 
 	cpt = lnet_net_lock_current();
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		if (net->net_id != LNET_NID_NET(nid))
+			continue;
+
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
 			if (nid_same(&ni->ni_nid, nid)) {
 				lnet_net_unlock(cpt);

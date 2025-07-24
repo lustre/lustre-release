@@ -952,7 +952,8 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 		if ((strcmp(exp->exp_obd->obd_type->typ_name,
 			    LUSTRE_MGS_NAME) == 0) &&
 		    (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_NULL ||
-		     LNetIsPeerLocal(&exp->exp_connection->c_peer.nid)))
+		     (exp->exp_connection &&
+		      LNetIsPeerLocal(&exp->exp_connection->c_peer.nid))))
 			exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_ANY;
 
 		if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_ANY &&
@@ -2741,7 +2742,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 
 	if ((remote_nb[0].rnb_flags & OBD_BRW_MEMALLOC) &&
-	    ptlrpc_connection_is_local(exp->exp_connection))
+	    exp->exp_connection &&
+	    LNetIsPeerLocal(&exp->exp_connection->c_peer.nid))
 		mpflags = memalloc_noreclaim_save();
 
 	/* it is incorrect to return ENOSPC when granted space has been used */

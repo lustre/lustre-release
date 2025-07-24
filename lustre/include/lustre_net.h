@@ -567,8 +567,6 @@ extern bool ptlrpc_pmqos_use_stats_for_duration;
 struct ptlrpc_connection {
 	/** linkage for connections hash table */
 	struct rhash_head	c_hash;
-	/** Our own lnet nid for this connection */
-	struct lnet_nid		c_self;
 	/** Remote side nid for this connection */
 	struct lnet_processid	c_peer;
 	/** UUID of the other side */
@@ -1997,30 +1995,6 @@ struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 int ptlrpc_connection_init(void);
 void ptlrpc_connection_fini(void);
 extern lnet_pid_t ptl_get_pid(void);
-
-/*
- * Check if the peer connection is on the local node.  We need to use GFP_NOFS
- * for requests from a local client to avoid recursing into the filesystem
- * as we might end up waiting on a page sent in the request we're serving.
- *
- * Use __GFP_HIGHMEM so that the pages can use all of the available memory
- * on 32-bit machines.  Use more aggressive GFP_HIGHUSER flags from non-local
- * clients to be able to generate more memory pressure on the OSS and allow
- * inactive pages to be reclaimed, since it doesn't have any other processes
- * or allocations that generate memory reclaim pressure.
- *
- * See b=17576 (bdf50dc9) and b=19529 (3dcf18d3) for details.
- */
-static inline bool ptlrpc_connection_is_local(struct ptlrpc_connection *conn)
-{
-	if (!conn)
-		return false;
-
-	if (nid_same(&conn->c_peer.nid, &conn->c_self))
-		return true;
-
-	RETURN(LNetIsPeerLocal(&conn->c_peer.nid));
-}
 
 /* ptlrpc/niobuf.c */
 /**

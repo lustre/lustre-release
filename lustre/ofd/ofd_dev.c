@@ -2387,7 +2387,8 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 	LASSERT(fo != NULL);
 	dob = ofd_object_child(fo);
 
-	if (ptlrpc_connection_is_local(exp->exp_connection))
+	if (exp->exp_connection &&
+	    LNetIsPeerLocal(&exp->exp_connection->c_peer.nid))
 		dbt |= DT_BUFS_TYPE_LOCAL;
 
 	for (i = 0; i < num_advise; i++, ladvise++) {
