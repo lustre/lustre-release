@@ -35,18 +35,20 @@
 /**************** config llog ********************/
 
 /**
- * Get a config log from the MGS and process it.
- * This func is called for both clients and servers.
- * Continue to process new statements appended to the logs
- * (whenever the config lock is revoked) until lustre_end_log
- * is called.
- *
- * @param sb The superblock is used by the MGC to write to the local copy of
- *   the config log
- * @param logname The name of the llog to replicate from the MGS
- * @param cfg Since the same MGC may be used to follow multiple config logs
+ * lustre_process_log() - Get a config log from the MGS and process it.
+ * @sb: The superblock is used by the MGC to write to local copy of config log
+ * @logname: The name of the llog to replicate from the MGS
+ * @cfg: Since the same MGC may be used to follow multiple config logs
  *   (e.g. ost1, ost2, client), the config_llog_instance keeps the state for
  *   this log, and is added to the mgc's list of logs to follow.
+ *
+ * This func is called for both clients and servers.
+ * Continue to process new statements appended to the logs
+ * (whenever the config lock is revoked) until lustre_end_log is called.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int lustre_process_log(struct super_block *sb, char *logname,
 		       struct config_llog_instance *cfg)
@@ -92,7 +94,16 @@ out:
 }
 EXPORT_SYMBOL(lustre_process_log);
 
-/* Stop watching this config log for updates */
+/**
+ * lustre_end_log() - Stop watching this config log for updates
+ * @sb: The superblock is used by the MGC to write to local copy of config log
+ * @logname: The name of the llog to replicate from the MGS
+ * @cfg: keeps state for this log, and is added to MGC's list of logs to follow.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
 int lustre_end_log(struct super_block *sb, char *logname,
 		   struct config_llog_instance *cfg)
 {
@@ -124,7 +135,7 @@ EXPORT_SYMBOL(lustre_end_log);
 
 /**************** OBD start *******************/
 
-/**
+/*
  * lustre_cfg_bufs are a holdover from 1.4; we can still set these up from
  * lctl (and do for echo cli/srv.
  */
@@ -172,8 +183,21 @@ static int do_lcfg_nid(char *cfgname, struct lnet_nid *nid, int cmd,
 }
 
 /**
+ * lustre_start_simple() - Call class_attach and class_setup.
+ * @obdname: name of new obd device
+ * @type: type of device to start/setup/attach (mdt, ost, mgc)
+ * @uuid: uuid of the device
+ * @s1: optional argument
+ * @s2: optional argument
+ * @s3: optional argument
+ * @s4: optional argument
+ *
  * Call class_attach and class_setup.  These methods in turn call
  * OBD type-specific methods.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 SERVER_ONLY
 int lustre_start_simple(char *obdname, char *type, char *uuid,
@@ -199,7 +223,7 @@ SERVER_ONLY_EXPORT_SYMBOL(lustre_start_simple);
 
 static DEFINE_MUTEX(mgc_start_lock);
 
-/**
+/*
  * Parse MGS failover nodes from provided NID list and add
  * them to existing MGC import
  */
@@ -254,11 +278,10 @@ static bool lustre_add_mgc_failnodes(struct obd_device *obd, char *ptr)
 }
 
 /**
- * Set up a MGC OBD to process startup logs
+ * lustre_start_mgc() - Set up a MGC OBD to process startup logs
+ * @sb: super block of the MGC OBD
  *
- * \param sb [in] super block of the MGC OBD
- *
- * \retval 0 success, otherwise error code
+ * Return 0 success, otherwise error code
  */
 int lustre_start_mgc(struct super_block *sb)
 {
@@ -707,7 +730,7 @@ int lustre_put_lsi(struct super_block *sb)
 }
 EXPORT_SYMBOL(lustre_put_lsi);
 
-/**
+/*
  * SERVER NAME ***
  * <FSNAME><SEPARATOR><TYPE><INDEX>
  * FSNAME is between 1 and 8 characters (inclusive).
@@ -718,12 +741,17 @@ EXPORT_SYMBOL(lustre_put_lsi);
  */
 
 /**
+ * server_name2fsname() - Get the fsname from the server name
+ * @svname: server name including type and index
+ * @fsname: Buffer to copy filesystem name prefix into. Must have at least
+ * 'strlen(fsname) + 1' chars [out]
+ * @endptr: if endptr isn't NULL it is set to end of fsname [out]
+ *
  * Get the fsname ("lustre") from the server name ("lustre-OST003F").
- * @param [in] svname server name including type and index
- * @param [out] fsname Buffer to copy filesystem name prefix into.
- *  Must have at least 'strlen(fsname) + 1' chars.
- * @param [out] endptr if endptr isn't NULL it is set to end of fsname
- * rc < 0  on error
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int server_name2fsname(const char *svname, char *fsname, const char **endptr)
 {
@@ -749,9 +777,15 @@ EXPORT_SYMBOL(server_name2fsname);
 
 #ifdef HAVE_SERVER_SUPPORT
 /**
- * Get service name (svname) from string
- * rc < 0 on error
- * if endptr isn't NULL it is set to end of fsname *
+ * server_name2svname() - Get service name (svname) from string (server)
+ * @label: server name from which to extract service name
+ * @svname: buffer to store extracted service name [out]
+ * @endptr: if endptr isn't NULL it is set to end of fsname
+ * @svsize: size of @svname
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int server_name2svname(const char *label, char *svname, const char **endptr,
 		       size_t svsize)
@@ -777,8 +811,14 @@ EXPORT_SYMBOL(server_name2svname);
 #endif /* HAVE_SERVER_SUPPORT */
 
 /**
- * Get the index from the target name MDTXXXX/OSTXXXX
- * rc = server type, or rc < 0  on error
+ * target_name2index() - Get the index from the target name MDTXXXX/OSTXXXX
+ * @tgtname: target name from which to extract index
+ * @idx: place to store extracted index [out]
+ * @endptr: if endptr isn't NULL it is set to end of tgtname [out]
+ *
+ * Return:
+ * * %positive (server type) on success
+ * * %negative on error
  **/
 SERVER_ONLY int target_name2index(const char *tgtname, u32 *idx, const char **endptr)
 {
@@ -1156,7 +1196,7 @@ static const match_table_t lmd_flags_table = {
 	{LMD_NUM_MOUNT_OPT,		NULL}
 };
 
-/**
+/*
  * Find the first delimiter; comma; from the specified \a buf and
  * make \a *endh point to the string starting with the delimiter.
  * The character ':' is also a delimiter for Lustre but not match_table
@@ -1201,7 +1241,7 @@ static bool lmd_find_delimiter(char *buf, char **endh)
 	return true;
 }
 
-/**
+/*
  * Make sure the string in \a buf is of a valid formt.
  *
  * @buf		a delimiter-separated string
@@ -1260,7 +1300,7 @@ try_again:
 	return true;
 }
 
-/**
+/*
  * Find the first valid string delimited by comma or colon from the specified
  * @buf and parse it to see whether it's a valid nid list. If yes, @*endh
  * will point to the next string starting with the delimiter.
@@ -1306,9 +1346,16 @@ failed:
 }
 
 /**
- * Parse mount line options
+ * lmd_parse() - Parse mount line options
+ * @options: string passed to the mount
+ * @lmd: struct lustre_mount_data populated based on @options [out]
+ *
  * e.g. mount -v -t lustre -o abort_recov uml1:uml2:/lustre-client /mnt/lustre
  * dev is passed as device=uml1:/lustre by mount.lustre_tgt
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int lustre_parse_monolithic(struct fs_context *fc, void *lmd2_data)
 {
