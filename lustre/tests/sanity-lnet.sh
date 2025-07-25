@@ -1121,6 +1121,111 @@ test_28() {
 }
 run_test 28 "Test peer_list"
 
+test_50() {
+	reinit_dlc || return $?
+
+	local param
+
+	for param in alive_router_check_interval router_ping_timeout; do
+		echo 1 > /sys/module/lnet/parameters/$param
+	done
+
+	local tyaml=$TMP/sanity-lnet-$testnum.yaml
+	cat <<EOF > $tyaml
+routing:
+    enable: 1
+EOF
+
+	echo "Enable routing"
+	do_lnetctl import $tyaml ||
+		error "Import failed rc = $?"
+
+	# Get default buffer sizes for later
+	local tiny=$($LNETCTL export --backup |
+		     awk '/\s+tiny:/{print $NF}')
+	local small=$($LNETCTL export --backup |
+		      awk '/\s+small:/{print $NF}')
+	local large=$($LNETCTL export --backup |
+		      awk '/\s+large:/{print $NF}')
+
+	wait_update $HOSTNAME \
+		"$LNETCTL routing show | grep enable | grep -c 1" \
+		"1" "10"
+
+	(($? == 0)) ||
+		error "Routing not enabled"
+
+	cat <<EOF > $tyaml
+routing:
+    enable: 0
+EOF
+
+	echo "Disable routing"
+	do_lnetctl import $tyaml ||
+		error "Import failed rc = $?"
+
+	wait_update $HOSTNAME \
+		"$LNETCTL routing show | grep enable | grep -c 0" \
+		"1" "10"
+	(($? == 0)) ||
+		error "Routing not disabled"
+
+	local ncpt=$($LCTL get_param -n cpu_partition_table | wc -l)
+
+	tiny=$((tiny + ncpt))
+	small=$((small + ncpt))
+	large=$((large + ncpt))
+	cat <<EOF > $tyaml
+routing:
+    enable: 1
+buffers:
+    tiny: $tiny
+    small: $small
+    large: $large
+EOF
+
+	echo "Enable routing w/custom buffer sizses"
+	do_lnetctl import $tyaml ||
+		error "Import failed rc = $?"
+
+	cat /sys/module/lnet/parameters/*buffers
+	local tiny2=$($LNETCTL export --backup |
+		      awk '/\s+tiny:/{print $NF}')
+	local small2=$($LNETCTL export --backup |
+		       awk '/\s+small:/{print $NF}')
+	local large2=$($LNETCTL export --backup |
+		       awk '/\s+large:/{print $NF}')
+
+	((tiny2 == tiny)) ||
+		error "Expect tiny buffers $tiny found $tiny2"
+	((small2 == small)) ||
+		error "Expect small buffers $small found $small2"
+	((large2 == large)) ||
+		error "Expect large buffers $large found $large2"
+}
+run_test 50 "Enable/disable routing via yaml import"
+
+test_51() {
+	reinit_dlc || return $?
+
+	local range=$(cat /sys/module/lnet/parameters/lnet_numa_range)
+	local tyaml=$TMP/sanity-lnet-$testnum.yaml
+
+	((range++))
+	cat <<EOF > $tyaml
+numa:
+    range: $range
+EOF
+
+	do_lnetctl import $tyaml || error "Import failed rc = $?"
+
+	local range2=$(cat /sys/module/lnet/parameters/lnet_numa_range)
+
+	((range2 == range)) ||
+		error "Expect lnet_numa_range $range found $range2"
+}
+run_test 51 "Set numa range via yaml import"
+
 test_99a() {
 	reinit_dlc || return $?
 
