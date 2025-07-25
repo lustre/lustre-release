@@ -329,16 +329,16 @@ out_put:
 EXPORT_SYMBOL(class_unregister_type);
 
 /**
- * Create a new obd device.
+ * class_newdev() - Create a new obd device.
+ * @type_name: obd device type string.
+ * @name: obd device name.
+ * @uuid: obd device UUID
  *
  * Allocate the new obd_device and initialize it.
  *
- * \param[in] type_name obd device type string.
- * \param[in] name      obd device name.
- * \param[in] uuid      obd device UUID
- *
- * \retval newdev         pointer to created obd_device
- * \retval ERR_PTR(errno) on error
+ * Return:
+ * * %newdev pointer to created obd_device
+ * * %ERR_PTR(errno) on error
  */
 struct obd_device *class_newdev(const char *type_name, const char *name,
 				const char *uuid)
@@ -415,11 +415,8 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 }
 
 /**
- * Free obd device.
- *
- * \param[in] obd obd_device to be freed
- *
- * \retval none
+ * class_free_dev() - Free obd device.
+ * @obd: obd_device to be freed
  */
 void class_free_dev(struct obd_device *obd)
 {
@@ -496,13 +493,10 @@ int class_name2dev(const char *name)
 EXPORT_SYMBOL(class_name2dev);
 
 /**
- * Unregister obd device.
+ * class_unregister_device() - Unregister obd device.
+ * @obd: obd_device to be unregistered
  *
  * Remove an obd from obd_dev
- *
- * \param[in] new_obd obd_device to be unregistered
- *
- * \retval none
  */
 void class_unregister_device(struct obd_device *obd)
 {
@@ -517,14 +511,14 @@ void class_unregister_device(struct obd_device *obd)
 }
 
 /**
- * Register obd device.
+ * class_register_device() - Register obd device.
+ * @new_obd: obd_device to be registered
  *
  * Add new_obd to obd_devs
  *
- * \param[in] new_obd obd_device to be registered
- *
- * \retval 0          success
- * \retval -EEXIST    device with this name is registered
+ * Return:
+ * * %0 on success
+ * * %-EEXIST device with this name is registered
  */
 int class_register_device(struct obd_device *new_obd)
 {
@@ -642,14 +636,14 @@ struct obd_device *class_num2obd(int dev_no)
 EXPORT_SYMBOL(class_num2obd);
 
 /**
- * Find obd by name or uuid.
+ * class_str2obd() - Find obd by name or uuid.
+ * @str: obd name or uuid
  *
  * Increment obd's refcount if found.
  *
- * \param[in] str obd name or uuid
- *
- * \retval NULL    if not found
- * \retval obd     pointer to found obd_device
+ * Return:
+ * * %NULL if not found
+ * * %obd pointer to found obd_device
  */
 struct obd_device *class_str2obd(const char *str)
 {
@@ -683,9 +677,11 @@ struct obd_device *class_str2obd(const char *str)
 EXPORT_SYMBOL(class_str2obd);
 
 /**
- * Get obd devices count. Device in any
- *    state are counted
- * \retval obd device count
+ * class_obd_devs_count() - Get obd devices count. Device in any
+ *
+ * Get obd devices count. Device in any state are counted
+ *
+ * Return obd device count
  */
 int class_obd_devs_count(void)
 {
@@ -724,8 +720,12 @@ struct obd_device *class_find_client_obd(struct obd_uuid *tgt_uuid,
 EXPORT_SYMBOL(class_find_client_obd);
 
 /**
- * to notify sptlrpc log for \a fsname has changed, let every relevant OBD
- * adjust sptlrpc settings accordingly.
+ * class_notify_sptlrpc_conf() - notify sptlrpc log for @fsname has changed
+ * @fsname: device name
+ * @namelen: length of @fsname
+ *
+ * To notify sptlrpc log for @fsname has changed, let every relevant OBD adjust
+ * sptlrpc settings accordingly.
  */
 int class_notify_sptlrpc_conf(const char *fsname, int namelen)
 {
@@ -1961,9 +1961,11 @@ void obd_stale_export_put(struct obd_export *exp)
 EXPORT_SYMBOL(obd_stale_export_put);
 
 /**
- * Adjust the position of the export in the stale list,
- * i.e. move to the head of the list if is needed.
- **/
+ * obd_stale_export_adjust() - Adjust position of export in the stale list,
+ * @exp: export to be moved
+ *
+ * Move to the head of the list if is needed.
+ */
 void obd_stale_export_adjust(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);
