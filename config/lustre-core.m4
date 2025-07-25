@@ -596,48 +596,6 @@ AC_DEFUN([LC_HAVE_DIR_CONTEXT], [
 ]) # LC_HAVE_DIR_CONTEXT
 
 #
-# LC_D_COMPARE_5ARGS
-#
-# 3.11 dentry_operations.d_compare() taken 5 arguments.
-#
-AC_DEFUN([LC_SRC_D_COMPARE_5ARGS], [
-	LB2_LINUX_TEST_SRC([d_compare_5args], [
-		#include <linux/dcache.h>
-	],[
-		((struct dentry_operations*)0)->d_compare(NULL,NULL,0,NULL,NULL);
-	])
-])
-AC_DEFUN([LC_D_COMPARE_5ARGS], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'd_compare' taken 5 arguments],
-	[d_compare_5args], [
-		AC_DEFINE(HAVE_D_COMPARE_5ARGS, 1,
-			[d_compare need 5 arguments])
-	])
-]) # LC_D_COMPARE_5ARGS
-
-#
-# LC_HAVE_DCOUNT
-#
-# 3.11 need to access d_count to get dentry reference count
-#
-AC_DEFUN([LC_SRC_HAVE_DCOUNT], [
-	LB2_LINUX_TEST_SRC([d_count], [
-		#include <linux/dcache.h>
-	],[
-		struct dentry de = { };
-		int count;
-
-		count = d_count(&de);
-	])
-])
-AC_DEFUN([LC_HAVE_DCOUNT], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'd_count' exists],
-	[d_count], [
-		AC_DEFINE(HAVE_D_COUNT, 1, [d_count exist])
-	])
-]) # LC_HAVE_DCOUNT
-
-#
 # LC_PID_NS_FOR_CHILDREN
 #
 # 3.11 replaces pid_ns by pid_ns_for_children in struct nsproxy
@@ -700,75 +658,6 @@ AC_DEFUN([LC_PTR_ERR_OR_ZERO_MISSING], [
 ]) # LC_PTR_ERR_OR_ZERO_MISSING
 
 #
-# LC_HAVE_DENTRY_D_U_D_ALIAS
-#
-# 3.11 kernel moved d_alias to the union d_u in struct dentry
-#
-# Some distros move d_alias to d_u but it is still a struct list
-#
-AC_DEFUN([LC_SRC_HAVE_DENTRY_D_U_D_ALIAS_LIST], [
-	LB2_LINUX_TEST_SRC([d_alias_list], [
-		#include <linux/list.h>
-		#include <linux/dcache.h>
-	],[
-		struct dentry de;
-		INIT_LIST_HEAD(&de.d_u.d_alias);
-	])
-])
-AC_DEFUN([LC_HAVE_DENTRY_D_U_D_ALIAS_LIST], [
-	LB2_MSG_LINUX_TEST_RESULT([if list 'dentry.d_u.d_alias' exist],
-	[d_alias_list], [
-		AC_DEFINE(HAVE_DENTRY_D_U_D_ALIAS, 1,
-			[list dentry.d_u.d_alias exist])
-	])
-]) # LC_HAVE_DENTRY_D_U_D_ALIAS_LIST
-
-#
-# LC_HAVE_DENTRY_D_U_D_ALIAS_HLIST
-#
-# Some distros move d_alias to d_u and it is an hlist
-#
-AC_DEFUN([LC_SRC_HAVE_DENTRY_D_U_D_ALIAS_HLIST], [
-	LB2_LINUX_TEST_SRC([d_alias_hlist], [
-		#include <linux/list.h>
-		#include <linux/dcache.h>
-	],[
-		struct dentry de;
-		INIT_HLIST_NODE(&de.d_u.d_alias);
-	])
-])
-AC_DEFUN([LC_HAVE_DENTRY_D_U_D_ALIAS_HLIST], [
-	LB2_MSG_LINUX_TEST_RESULT([if hlist 'dentry.d_u.d_alias' exist],
-	[d_alias_hlist], [
-		AC_DEFINE(HAVE_DENTRY_D_U_D_ALIAS, 1,
-			[list dentry.d_u.d_alias exist])
-	])
-]) # LC_HAVE_DENTRY_D_U_D_ALIAS_HLIST
-
-
-#
-# LC_HAVE_DENTRY_D_CHILD
-#
-# 3.11 kernel d_child has been moved out of the union d_u
-# in struct dentry
-#
-AC_DEFUN([LC_SRC_HAVE_DENTRY_D_CHILD], [
-	LB2_LINUX_TEST_SRC([d_child], [
-		#include <linux/list.h>
-		#include <linux/dcache.h>
-	],[
-		struct dentry de;
-		INIT_LIST_HEAD(&de.d_child);
-	])
-])
-AC_DEFUN([LC_HAVE_DENTRY_D_CHILD], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'dentry.d_child' exist],
-	[d_child], [
-		AC_DEFINE(HAVE_DENTRY_D_CHILD, 1, [dentry.d_child exist])
-	])
-]) # LC_HAVE_DENTRY_D_CHILD
-
-#
 # LC_KIOCB_KI_LEFT
 #
 # 3.12 ki_left removed from struct kiocb
@@ -827,26 +716,6 @@ AC_DEFUN([LC_VFS_UNLINK_3ARGS], [
 			[kernel has vfs_unlink with 3 args])
 	])
 ]) # LC_VFS_UNLINK_3ARGS
-
-# LC_HAVE_D_IS_POSITIVE
-#
-# Kernel version 3.13 b18825a7c8e37a7cf6abb97a12a6ad71af160de7
-# d_is_positive is added
-#
-AC_DEFUN([LC_SRC_HAVE_D_IS_POSITIVE], [
-	LB2_LINUX_TEST_SRC([d_is_positive], [
-		#include <linux/dcache.h>
-	],[
-		d_is_positive(NULL);
-	])
-])
-AC_DEFUN([LC_HAVE_D_IS_POSITIVE], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'd_is_positive' exist],
-	[d_is_positive], [
-		AC_DEFINE(HAVE_D_IS_POSITIVE, 1,
-			['d_is_positive' is available])
-	])
-]) # LC_HAVE_D_IS_POSITIVE
 
 #
 # LC_HAVE_BVEC_ITER
@@ -1924,29 +1793,6 @@ AC_DEFUN([LC_HAVE_DOWN_WRITE_KILLABLE], [
 ]) # LC_HAVE_DOWN_WRITE_KILLABLE
 
 #
-# LC_D_INIT
-#
-# Kernel version 4.7-rc5 commit 285b102d3b745f3c2c110c9c327741d87e64aacc
-# add new d_init to initialize dentry at allocation time
-#
-AC_DEFUN([LC_SRC_D_INIT], [
-	LB2_LINUX_TEST_SRC([d_init], [
-		#include <linux/dcache.h>
-	],[
-		struct dentry_operations ops = { };
-		int rc;
-
-		rc = ops.d_init(NULL);
-	])
-])
-AC_DEFUN([LC_D_INIT], [
-	LB2_MSG_LINUX_TEST_RESULT([if dentry operations supports 'd_init'],
-	[d_init], [
-		AC_DEFINE(HAVE_D_INIT, 1, ['d_init' exists])
-	])
-]) # LC_D_INIT
-
-#
 # LC_DIRECTIO_2ARGS
 #
 # Kernel version 4.7 commit c8b8e32d700fe943a935e435ae251364d016c497
@@ -2049,27 +1895,6 @@ AC_DEFUN([LC_HAVE_POSIX_ACL_VALID_USER_NS], [
 			[posix_acl_valid takes struct user_namespace])
 	])
 ]) # LC_HAVE_POSIX_ACL_VALID_USER_NS
-
-#
-# LC_D_COMPARE_4ARGS
-#
-# Kernel version 4.8 commit 6fa67e707559303e086303aeecc9e8b91ef497d5
-# get rid of 'parent' argument of ->d_compare()
-#
-AC_DEFUN([LC_SRC_D_COMPARE_4ARGS], [
-	LB2_LINUX_TEST_SRC([d_compare_4args], [
-		#include <linux/dcache.h>
-	],[
-		((struct dentry_operations*)0)->d_compare(NULL,0,NULL,NULL);
-	])
-])
-AC_DEFUN([LC_D_COMPARE_4ARGS], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'd_compare' taken 4 arguments],
-	[d_compare_4args], [
-		AC_DEFINE(HAVE_D_COMPARE_4ARGS, 1,
-			[d_compare need 4 arguments])
-	])
-]) # LC_D_COMPARE_4ARGS
 
 #
 # LC_FULL_NAME_HASH_3ARGS
@@ -5118,23 +4943,17 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 3.11
 	LC_SRC_INVALIDATE_RANGE
 	LC_SRC_HAVE_DIR_CONTEXT
-	LC_SRC_D_COMPARE_5ARGS
-	LC_SRC_HAVE_DCOUNT
 	LC_SRC_PID_NS_FOR_CHILDREN
 	LC_SRC_FOP_READDIR
 
 	# 3.12
 	LC_SRC_OLDSIZE_TRUNCATE_PAGECACHE
 	LC_SRC_PTR_ERR_OR_ZERO_MISSING
-	LC_SRC_HAVE_DENTRY_D_U_D_ALIAS_LIST
-	LC_SRC_HAVE_DENTRY_D_U_D_ALIAS_HLIST
-	LC_SRC_HAVE_DENTRY_D_CHILD
 	LC_SRC_KIOCB_KI_LEFT
 
 	# 3.13
 	LC_SRC_VFS_RENAME_5ARGS
 	LC_SRC_VFS_UNLINK_3ARGS
-	LC_SRC_HAVE_D_IS_POSITIVE
 
 	# 3.14
 	LC_SRC_HAVE_BVEC_ITER
@@ -5208,14 +5027,12 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 4.7
 	LC_SRC_D_IN_LOOKUP
-	LC_SRC_D_INIT
 	LC_SRC_DIRECTIO_2ARGS
 	LC_SRC_GENERIC_WRITE_SYNC_2ARGS
 	LC_SRC_FOP_ITERATE_SHARED
 
 	# 4.8
 	LC_SRC_HAVE_POSIX_ACL_VALID_USER_NS
-	LC_SRC_D_COMPARE_4ARGS
 	LC_SRC_FULL_NAME_HASH_3ARGS
 	LC_SRC_STRUCT_POSIX_ACL_XATTR
 	LC_SRC_IOP_XATTR
@@ -5443,11 +5260,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 3.11
 	LC_INVALIDATE_RANGE
 	LC_HAVE_DIR_CONTEXT
-	LC_D_COMPARE_5ARGS
-	LC_HAVE_DCOUNT
-	LC_HAVE_DENTRY_D_U_D_ALIAS_LIST
-	LC_HAVE_DENTRY_D_U_D_ALIAS_HLIST
-	LC_HAVE_DENTRY_D_CHILD
 	LC_PID_NS_FOR_CHILDREN
 	LC_FOP_READDIR
 
@@ -5459,7 +5271,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 3.13
 	LC_VFS_RENAME_5ARGS
 	LC_VFS_UNLINK_3ARGS
-	LC_HAVE_D_IS_POSITIVE
 
 	# 3.14
 	LC_HAVE_BVEC_ITER
@@ -5534,14 +5345,12 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 4.7
 	LC_D_IN_LOOKUP
-	LC_D_INIT
 	LC_DIRECTIO_2ARGS
 	LC_GENERIC_WRITE_SYNC_2ARGS
 	LC_FOP_ITERATE_SHARED
 
 	# 4.8
 	LC_HAVE_POSIX_ACL_VALID_USER_NS
-	LC_D_COMPARE_4ARGS
 	LC_FULL_NAME_HASH_3ARGS
 	LC_STRUCT_POSIX_ACL_XATTR
 	LC_IOP_XATTR

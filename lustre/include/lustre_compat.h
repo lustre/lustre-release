@@ -110,10 +110,6 @@ static inline struct bio *cfs_bio_alloc(struct block_device *bdev,
 	return bio;
 }
 
-#ifndef HAVE_DENTRY_D_CHILD
-#define d_child			d_u.d_child
-#endif
-
 #ifndef HAVE_D_IN_LOOKUP
 static inline int d_in_lookup(struct dentry *dentry)
 {
@@ -183,13 +179,6 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 #endif
 	return rc;
 }
-
-#ifndef HAVE_D_IS_POSITIVE
-static inline bool d_is_positive(const struct dentry *dentry)
-{
-	return dentry->d_inode != NULL;
-}
-#endif
 
 #ifndef HAVE_INODE_LOCK
 # define inode_lock(inode) mutex_lock(&(inode)->i_mutex)
@@ -408,12 +397,6 @@ static inline struct timespec current_time(struct inode *inode)
 #ifndef smp_store_mb
 #define smp_store_mb(var, value) set_mb(var, value) /* set full mem barrier */
 #endif
-
-#ifdef HAVE_D_COUNT
-#  define ll_d_count(d)		d_count(d)
-#else
-#  define ll_d_count(d)		((d)->d_count)
-#endif /* HAVE_D_COUNT */
 
 #ifndef HAVE_IN_COMPAT_SYSCALL
 #define in_compat_syscall	is_compat_task

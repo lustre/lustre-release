@@ -52,8 +52,8 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx)
 	ASSERT_CTXT_MAGIC(new_ctx->magic);
 	OBD_SET_CTXT_MAGIC(save);
 
-	LASSERT(ll_d_count(current->fs->pwd.dentry));
-	LASSERT(ll_d_count(new_ctx->pwd));
+	LASSERT(d_count(current->fs->pwd.dentry));
+	LASSERT(d_count(new_ctx->pwd));
 	save->pwd = dget(current->fs->pwd.dentry);
 	save->pwdmnt = mntget(current->fs->pwd.mnt);
 	save->umask = current_umask();

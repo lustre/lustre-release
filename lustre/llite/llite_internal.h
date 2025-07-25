@@ -42,10 +42,6 @@
 #define VM_FAULT_RETRY 0
 #endif
 
-#ifdef HAVE_DENTRY_D_U_D_ALIAS
-#define d_alias			d_u.d_alias
-#endif
-
 /** Only used on client-side for indicating the tail of dir hash/offset. */
 #define LL_DIR_END_OFF          0x7fffffffffffffffULL
 #define LL_DIR_END_OFF_32BIT    0x7fffffffUL
@@ -1504,12 +1500,6 @@ void ll_io_set_mirror(struct cl_io *io, const struct file *file);
 /* llite/dcache.c */
 
 extern const struct dentry_operations ll_d_ops;
-#ifndef HAVE_D_INIT
-bool ll_d_setup(struct dentry *de, bool do_put);
-#else
-#define ll_d_setup(de, do_put) (true)
-#endif
-
 void ll_intent_drop_lock(struct lookup_intent *lookup);
 void ll_intent_release(struct lookup_intent *lookup);
 void ll_prune_aliases(struct inode *inode);
@@ -2084,7 +2074,7 @@ static inline void d_lustre_invalidate(struct dentry *dentry)
 	CDEBUG(D_DENTRY,
 	       "invalidate dentry "DNAME" (%p) parent %p inode %p refc %d\n",
 	       encode_fn_dentry(dentry), dentry, dentry->d_parent,
-	       dentry->d_inode, ll_d_count(dentry));
+	       dentry->d_inode, d_count(dentry));
 
 	spin_lock(&dentry->d_lock);
 	set_lld_invalid(dentry, 1);

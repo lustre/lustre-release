@@ -171,7 +171,7 @@ static void ll_prune_negative_children(struct inode *dir)
 
 restart:
 	spin_lock(&dir->i_lock);
-	hlist_for_each_entry(dentry, &dir->i_dentry, d_alias) {
+	hlist_for_each_entry(dentry, &dir->i_dentry, d_u.d_alias) {
 		spin_lock(&dentry->d_lock);
 		d_for_each_child(child, dentry) {
 			if (child->d_inode)
@@ -179,7 +179,7 @@ restart:
 
 			spin_lock_nested(&child->d_lock, DENTRY_D_LOCK_NESTED);
 			set_lld_invalid(child, 1);
-			if (!ll_d_count(child)) {
+			if (!d_count(child)) {
 				dget_dlock(child);
 				__d_drop(child);
 				spin_unlock(&child->d_lock);
@@ -581,7 +581,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *dentry)
 	discon_alias = invalid_alias = NULL;
 
 	spin_lock(&inode->i_lock);
-	hlist_for_each_entry(alias, &inode->i_dentry, d_alias) {
+	hlist_for_each_entry(alias, &inode->i_dentry, d_u.d_alias) {
 		LASSERT(alias != dentry);
 
 		spin_lock(&alias->d_lock);
@@ -622,18 +622,14 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 	if (inode) {
 		new = ll_find_alias(inode, de);
 		if (new) {
-			if (!ll_d_setup(new, true))
-				return ERR_PTR(-ENOMEM);
 			d_move(new, de);
 			iput(inode);
 			CDEBUG(D_DENTRY,
 			       "Reuse dentry %p inode %p refc %d flags %#x\n",
-			      new, new->d_inode, ll_d_count(new), new->d_flags);
+			      new, new->d_inode, d_count(new), new->d_flags);
 			return new;
 		}
 	}
-	if (!ll_d_setup(de, false))
-		return ERR_PTR(-ENOMEM);
 	d_add(de, inode);
 
 	/* this needs only to be done for foreign symlink dirs as
@@ -658,7 +654,7 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 	}
 
 	CDEBUG(D_DENTRY, "Add dentry %p inode %p refc %d flags %#x\n",
-	       de, de->d_inode, ll_d_count(de), de->d_flags);
+	       de, de->d_inode, d_count(de), de->d_flags);
 	return de;
 }
 
@@ -2247,11 +2243,8 @@ static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
 
 		LASSERT(it_disposition(&mkdir_it, DISP_LOOKUP_NEG));
 		ll_set_lock_data(sbi->ll_md_exp, inode, &mkdir_it, &bits);
-		if (bits & MDS_INODELOCK_LOOKUP) {
-			if (!ll_d_setup(dchild, false))
-				GOTO(out_fini, rc = -ENOMEM);
+		if (bits & MDS_INODELOCK_LOOKUP)
 			d_lustre_revalidate(dchild);
-		}
 	}
 
 out_fini:

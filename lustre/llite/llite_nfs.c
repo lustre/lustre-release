@@ -140,12 +140,6 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 				RETURN(ERR_PTR(-ENOMEM));
 			}
 
-			if (!ll_d_setup(dot, true)) {
-				inode_unlock(d_inode(sb->s_root));
-				obf = ERR_PTR(-ENOMEM);
-				goto free_dot;
-			}
-
 			/* We are requesting OBF fid then locate inode of
 			 * .lustre FID
 			 */
@@ -178,13 +172,6 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 					obf = ERR_PTR(-ENOMEM);
 					goto free_dot;
 				}
-
-				if (!ll_d_setup(obf, true)) {
-					dput(obf);
-					inode_unlock(d_inode(dot));
-					obf = ERR_PTR(-ENOMEM);
-					goto free_dot;
-				}
 				d_add(obf, inode);
 			}
 			inode_unlock(d_inode(dot));
@@ -203,9 +190,6 @@ free_dot:
 	result = d_obtain_alias(inode);
 	if (IS_ERR(result))
 		RETURN(result);
-
-	if (!ll_d_setup(result, true))
-		RETURN(ERR_PTR(-ENOMEM));
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)
 	/* If we are called by nfsd kthread set lli_open_thrsh_count
