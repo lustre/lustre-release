@@ -3898,12 +3898,15 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	struct osd_object *obj = osd_dt_obj(dt);
 	struct inode *inode = obj->oo_inode;
 	struct osd_thandle *oh;
+	long long	    space;
 	int rc;
 
 	ENTRY;
 
 	if (inode == NULL)
 		RETURN(-ENOENT);
+
+	space = -toqb(LDISKFS_I(inode)->i_disksize);
 
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
@@ -3930,7 +3933,7 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 		RETURN(rc);
 	/* data to be truncated */
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   i_projid_read(inode), 0, oh, obj, NULL,
+				   i_projid_read(inode), space, oh, obj, NULL,
 				   OSD_QID_BLK);
 	if (rc)
 		RETURN(rc);

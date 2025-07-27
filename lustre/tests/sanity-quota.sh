@@ -7227,6 +7227,87 @@ test_95b()
 }
 run_test 95b "df respects squashed project id"
 
+test_delete_big_file() {
+	local equot_expected=$1
+	local testdir=$DIR/$tdir
+	local tfile1=$DIR/$tdir/dd.out.0
+	local tfile2=$DIR/$tdir/dd.out.1
+
+	chown $TSTID:$TSTID $testdir || error "failed to chown $testdir"
+	$LFS project -sp $TSTPRJID $testdir ||
+		error "fail to set project on $testdir"
+
+	$LFS setquota -p $TSTPRJID -B 3G $DIR ||
+		error "failed to set quota limits for $TSTPRJID"
+	$LFS quota -p $TSTPRJID -h $DIR
+
+	$LFS setstripe $tfile1 -i 0 -c 1 || error "setstripe $tfile1 failed"
+	chown $TSTID:$TSTID $tfile1 || error "fail to chown $tfile1"
+
+	$RUNAS fallocate -l2GiB $tfile1 || error "fail to write 2GiB"
+	$RUNAS $DD of=$tfile1 seek=2048 count=1500 oflag=sync &&
+		error "DD should fail on first write"
+
+	$LFS quota -p $TSTPRJID -h $DIR
+
+	rm -f $tfile1
+	sleep 15
+
+	$LFS quota -p $TSTPRJID -h $DIR
+	$LFS setstripe $tfile2 -i 1 -c 1 || error "setstripe $tfile2 failed"
+	chown $TSTID:$TSTID $tfile2 || error "fail to chown $tfile2"
+
+	$RUNAS fallocate -l2GiB $tfile2 || error "fail to write 2GiB"
+
+	(( equot_expected == 1 )) && {
+		$RUNAS $DD of=$tfile2 seek=2048 count=512 oflag=sync &&
+			error "write should fail after deleting big files"
+	}
+	(( equot_expected == 0 )) && {
+		$RUNAS $DD of=$tfile2 seek=2048 count=512 oflag=sync ||
+			error "write should succeed after deleting big files"
+	}
+
+	$LFS quota -p $TSTPRJID -h $DIR
+
+	rm -f $tfile2
+	sleep 10
+	$LFS quota -p $TSTPRJID -h $DIR
+}
+
+test_96() {
+	local smallost
+
+	(( $MDS1_VERSION >= $(version_code 2_16_57) )) ||
+		skip "need OST >= 2.16.57 to run this test"
+
+	[ "$ost1_FSTYPE" == zfs ] &&
+		skip "the test in only needed to run on LDiskFS"
+
+	(( OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	is_project_quota_supported || skip "project is not supported"
+
+	smallost=($($LFS df -o $DIR | awk "/OST00/ { print \$4 }" | sort -n))
+
+	if (( smallost < 3657728 )); then
+		skip "OST is too small, skip the test"
+	fi
+
+	setup_quota_test || error "setup quota failed with $?"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	#define OBD_FAIL_QUOTA_USAGE_NOWAIT 0xA10
+	do_facet ost1 $LCTL set_param fail_loc=0xa10
+	do_facet ost2 $LCTL set_param fail_loc=0xa10
+	test_delete_big_file 1
+
+	do_facet ost1 $LCTL set_param fail_loc=0
+	do_facet ost2 $LCTL set_param fail_loc=0
+	test_delete_big_file 0
+}
+run_test 96 "quota grant should be released when big files are deleted"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

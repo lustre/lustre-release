@@ -235,6 +235,9 @@ struct lquota_id_info {
 	 */
 	long long		 lqi_space;
 
+	/* the space released by truncating big files */
+	long long		 lqi_truncated_space;
+
 	/* quota slave entry structure associated with this ID */
 	struct lquota_entry	*lqi_qentry;
 

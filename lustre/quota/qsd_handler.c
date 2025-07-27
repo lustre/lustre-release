@@ -924,6 +924,13 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 		trans->lqt_id_cnt++;
 	}
 
+	if (qi->lqi_space < 0) {
+		if (found)
+			trans->lqt_ids[i].lqi_truncated_space += -qi->lqi_space;
+		else
+			trans->lqt_ids[i].lqi_truncated_space = -qi->lqi_space;
+	}
+
 	/* manage quota enforcement for this ID */
 	rc = qsd_op_begin0(env, qsd->qsd_type_array[qi->lqi_type],
 			   &trans->lqt_ids[i], qi->lqi_space, local_flags);
@@ -1104,6 +1111,27 @@ static void qsd_op_end0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 			/* no suitable environment, handle adjustment in
 			 * separate thread context */
 			qsd_adjust_schedule(lqe, false, false);
+	}
+
+	/* Currently, ZFS will call qsd_op_end->qsd_op_end0 with env = NULL,
+	 * but ZFS will update the quota after commit, then it doesn't need
+	 * to wait to adjust the quota usage (LU-19068).
+	 */
+	if (!CFS_FAIL_CHECK(OBD_FAIL_QUOTA_USAGE_NOWAIT) &&
+	    env && qid->lqi_truncated_space > 1048576) {
+		__u32 seconds;
+
+		/* one second per gigabyte */
+		seconds = qid->lqi_truncated_space >> 20;
+		if (seconds > 120)
+			seconds = 120;
+
+		lqe_write_lock(lqe);
+		if (lqe->lqe_truncated_time < seconds + ktime_get_seconds())
+			lqe->lqe_truncated_time = seconds + ktime_get_seconds();
+		lqe_write_unlock(lqe);
+
+		qsd_adjust_schedule(lqe, true, false);
 	}
 	lqe_putref(lqe);
 	EXIT;

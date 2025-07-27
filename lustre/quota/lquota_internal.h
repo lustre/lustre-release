@@ -177,6 +177,9 @@ struct lquota_entry {
 	struct mutex		 lqe_glbl_data_lock;
 	struct lqe_glbl_data	*lqe_glbl_data;
 	struct work_struct	 lqe_work; /* workitem to free lvbo */
+
+	/* the time when the blocks belonging to this QID should be truncated */
+	time64_t		 lqe_truncated_time;
 };
 
 #define lqe_qtype(lqe)		(lqe->lqe_site->lqs_qtype)

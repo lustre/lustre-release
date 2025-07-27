@@ -402,8 +402,9 @@ out:
 
 void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 {
-	struct qsd_instance	*qsd = lqe2qqi(lqe)->qqi_qsd;
-	bool			 added = false;
+	struct qsd_instance *qsd = lqe2qqi(lqe)->qqi_qsd;
+	struct lquota_entry *tmp;
+	bool added = false;
 
 	read_lock(&qsd->qsd_lock);
 	if (qsd->qsd_stopping) {
@@ -426,18 +427,28 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 	if (list_empty(&lqe->lqe_link)) {
 		if (!cancel) {
 			lqe->lqe_adjust_time = ktime_get_seconds();
-			if (defer)
-				lqe->lqe_adjust_time += QSD_WB_INTERVAL;
+			if (defer) {
+				if (lqe->lqe_truncated_time)
+					lqe->lqe_adjust_time += 5;
+				else
+					lqe->lqe_adjust_time += QSD_WB_INTERVAL;
+			}
 		} else {
 			lqe->lqe_adjust_time = 0;
 		}
 
 		/* lqe reference transferred to list */
-		if (defer)
-			list_add_tail(&lqe->lqe_link,
-					  &qsd->qsd_adjust_list);
-		else
-			list_add(&lqe->lqe_link, &qsd->qsd_adjust_list);
+		list_for_each_entry(tmp, &qsd->qsd_adjust_list, lqe_link) {
+			if (tmp->lqe_adjust_time >= lqe->lqe_adjust_time) {
+				list_add(&lqe->lqe_link, &tmp->lqe_link);
+				added = true;
+				break;
+			}
+		}
+
+		if (!added)
+			list_add_tail(&lqe->lqe_link, &qsd->qsd_adjust_list);
+
 		added = true;
 	}
 	spin_unlock(&qsd->qsd_adjust_lock);
@@ -455,21 +466,26 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 /* return true if there is pending writeback records or the pending
  * adjust requests */
 static bool qsd_job_pending(struct qsd_instance *qsd, struct list_head *upd,
-			    bool *uptodate)
+			    bool *uptodate, int *wait)
 {
+	time64_t cur;
 	bool	job_pending = false;
 	int	qtype;
 
 	LASSERT(list_empty(upd));
 	*uptodate = true;
+	*wait = QSD_WB_INTERVAL;
 
 	spin_lock(&qsd->qsd_adjust_lock);
+	cur = ktime_get_seconds();
 	if (!list_empty(&qsd->qsd_adjust_list)) {
 		struct lquota_entry *lqe;
 		lqe = list_first_entry(&qsd->qsd_adjust_list,
 				       struct lquota_entry, lqe_link);
-		if (ktime_get_seconds() >= lqe->lqe_adjust_time)
+		if (cur >= lqe->lqe_adjust_time)
 			job_pending = true;
+		else
+			*wait = lqe->lqe_adjust_time - cur;
 	}
 	spin_unlock(&qsd->qsd_adjust_lock);
 
@@ -525,15 +541,16 @@ struct qsd_upd_args {
 
 static int qsd_upd_thread(void *_args)
 {
-	struct qsd_upd_args	*args = _args;
-	struct qsd_instance	*qsd = args->qua_inst;
+	struct qsd_upd_args *args = _args;
+	struct qsd_instance *qsd = args->qua_inst;
 	LIST_HEAD(queue);
-	struct qsd_upd_rec	*upd, *n;
-	struct lu_env		*env = &args->qua_env;
-	int			 qtype, rc = 0;
-	bool			 uptodate;
-	struct lquota_entry	*lqe;
+	struct qsd_upd_rec *upd, *n;
+	struct lu_env *env = &args->qua_env;
+	int qtype, rc = 0;
+	bool uptodate;
+	struct lquota_entry *lqe;
 	time64_t cur_time;
+	int wait_time;
 	ENTRY;
 
 	complete(args->qua_started);
@@ -541,8 +558,8 @@ static int qsd_upd_thread(void *_args)
 		 !kthread_should_stop(); })) {
 		int count = 0;
 
-		if (!qsd_job_pending(qsd, &queue, &uptodate))
-			schedule_timeout(cfs_time_seconds(QSD_WB_INTERVAL));
+		if (!qsd_job_pending(qsd, &queue, &uptodate, &wait_time))
+			schedule_timeout(cfs_time_seconds(wait_time));
 		__set_current_state(TASK_RUNNING);
 
 		while (1) {
@@ -593,8 +610,22 @@ static int qsd_upd_thread(void *_args)
 					qsd_adjust(env, lqe);
 			}
 
-			lqe_putref(lqe);
 			spin_lock(&qsd->qsd_adjust_lock);
+			if (!kthread_should_stop() && uptodate &&
+			    list_empty(&lqe->lqe_link) &&
+			    lqe->lqe_truncated_time > cur_time) {
+				if (lqe->lqe_truncated_time < cur_time + 5)
+					lqe->lqe_adjust_time =
+							lqe->lqe_truncated_time;
+				else
+					lqe->lqe_adjust_time = cur_time + 5;
+
+				list_add_tail(&lqe->lqe_link,
+					      &qsd->qsd_adjust_list);
+			} else {
+				lqe->lqe_truncated_time = 0;
+				lqe_putref(lqe);
+			}
 		}
 		spin_unlock(&qsd->qsd_adjust_lock);
 
