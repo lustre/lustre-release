@@ -2353,10 +2353,22 @@ static void nodemap_save_all_caches(void)
 
 	mutex_lock(&ncf_list_lock);
 	list_for_each_entry(ncf, &ncf_list_head, ncf_list) {
-		struct dt_device *dev = lu2dt_dev(ncf->ncf_obj->do_lu.lo_dev);
-		struct obd_device *obd = ncf->ncf_obj->do_lu.lo_dev->ld_obd;
+		struct dt_device *dev;
+		struct obd_device *obd;
 		struct dt_object *o;
 
+
+		/* Skip entries with NULL ncf_obj, this will not
+		 * happen in general but in case node_save_config_cache
+		 * has failed earlier, NULL entry can exist
+		 */
+		if (ncf->ncf_obj == NULL) {
+			CWARN("nodemap config obj entry is NULL, skipping\n");
+			continue;
+		}
+
+		dev = lu2dt_dev(ncf->ncf_obj->do_lu.lo_dev);
+		obd = ncf->ncf_obj->do_lu.lo_dev->ld_obd;
 		/* put current config file so save conf can rewrite it */
 		dt_object_put_nocache(&env, ncf->ncf_obj);
 		ncf->ncf_obj = NULL;
