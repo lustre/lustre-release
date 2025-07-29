@@ -1031,7 +1031,7 @@ void dt_index_page_adjust(struct page **pages, const u32 npages,
 	u32 nlupgs_mod = nlupgs % LU_PAGE_COUNT;
 
 	if (nlupgs_mod) {
-		void *kaddr = kmap_local_page(pages[pgidx]);
+		void *kaddr;
 		struct lu_idxpage *lip;
 		union lu_page *lp;
 		u32 remain_nlupgs;
@@ -1040,6 +1040,7 @@ void dt_index_page_adjust(struct page **pages, const u32 npages,
 
 		pgidx = nlupgs / LU_PAGE_COUNT;
 		LASSERT(pgidx < npages);
+		kaddr = kmap_local_page(pages[pgidx]);
 		lp = kaddr;
 		remain_nlupgs = LU_PAGE_COUNT - nlupgs_mod;
 
