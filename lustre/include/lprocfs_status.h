@@ -698,9 +698,6 @@ ssize_t ir_factor_store(struct kobject *kobj, struct attribute *attr,
 			const char *buffer, size_t count);
 #endif
 
-extern int lprocfs_single_release(struct inode *i, struct file *f);
-extern int lprocfs_seq_release(struct inode *i, struct file *f);
-
 /* You must use these macros when you want to refer to
  * the import in a client obd_device for a lprocfs entry
  * Note that it is not safe to 'goto', 'return' or 'break'
@@ -838,7 +835,7 @@ static const struct proc_ops name##_fops = {				\
 	.proc_read		= seq_read,				\
 	.proc_write		= custom_seq_write,			\
 	.proc_lseek		= seq_lseek,				\
-	.proc_release		= lprocfs_single_release,		\
+	.proc_release		= single_release,			\
 }
 
 #define LPROC_SEQ_FOPS_RO(name)		__LPROC_SEQ_FOPS(name, NULL)
@@ -882,7 +879,7 @@ static const struct proc_ops name##_fops = {				\
 	static const struct proc_ops name##_##type##_fops = {		\
 		.proc_open	= name##_##type##_open,			\
 		.proc_write	= name##_##type##_write,		\
-		.proc_release	= lprocfs_single_release,		\
+		.proc_release	= single_release,			\
 	};
 
 struct lustre_attr {

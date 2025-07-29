@@ -803,7 +803,7 @@ static int lprocfs_jobstats_seq_release(struct inode *inode, struct file *file)
 
 	lprocfs_job_cleanup(stats, false);
 
-	return lprocfs_seq_release(inode, file);
+	return seq_release(inode, file);
 }
 
 static const struct proc_ops lprocfs_jobstats_seq_fops = {

@@ -21,8 +21,6 @@
 #include <lustre_kernelcomm.h>
 #include <obd_cksum.h>
 
-#ifdef CONFIG_PROC_FS
-
 /* enable start/elapsed_time in stats headers by default */
 unsigned int obd_enable_stats_header = 1;
 
@@ -30,19 +28,9 @@ static int lprocfs_no_percpu_stats = 0;
 module_param(lprocfs_no_percpu_stats, int, 0644);
 MODULE_PARM_DESC(lprocfs_no_percpu_stats, "Do not alloc percpu data for lprocfs stats");
 
+#ifdef CONFIG_PROC_FS
+
 #define MAX_STRING_SIZE 128
-
-int lprocfs_single_release(struct inode *inode, struct file *file)
-{
-	return single_release(inode, file);
-}
-EXPORT_SYMBOL(lprocfs_single_release);
-
-int lprocfs_seq_release(struct inode *inode, struct file *file)
-{
-	return seq_release(inode, file);
-}
-EXPORT_SYMBOL(lprocfs_seq_release);
 
 static umode_t default_mode(const struct proc_ops *ops)
 {
@@ -105,33 +93,6 @@ struct proc_dir_entry *lprocfs_add_symlink(const char *name,
 	return entry;
 }
 EXPORT_SYMBOL(lprocfs_add_symlink);
-
-static const struct file_operations ldebugfs_empty_ops = { };
-
-void ldebugfs_add_vars(struct dentry *parent, struct ldebugfs_vars *list,
-		       void *data)
-{
-	if (IS_ERR_OR_NULL(parent) || IS_ERR_OR_NULL(list))
-		return;
-
-	while (list->name) {
-		umode_t mode = 0;
-
-		if (list->proc_mode != 0000) {
-			mode = list->proc_mode;
-		} else if (list->fops) {
-			if (list->fops->read)
-				mode = 0444;
-			if (list->fops->write)
-				mode |= 0200;
-		}
-		debugfs_create_file(list->name, mode, parent,
-				    list->data ? : data,
-				    list->fops ? : &ldebugfs_empty_ops);
-		list++;
-	}
-}
-EXPORT_SYMBOL_GPL(ldebugfs_add_vars);
 
 static const struct proc_ops lprocfs_empty_ops = { };
 
@@ -206,6 +167,34 @@ lprocfs_register(const char *name, struct proc_dir_entry *parent,
 	return newchild;
 }
 EXPORT_SYMBOL(lprocfs_register);
+#endif /* CONFIG_PROC_FS */
+
+static const struct file_operations ldebugfs_empty_ops = { };
+
+void ldebugfs_add_vars(struct dentry *parent, struct ldebugfs_vars *list,
+		       void *data)
+{
+	if (IS_ERR_OR_NULL(parent) || IS_ERR_OR_NULL(list))
+		return;
+
+	while (list->name) {
+		umode_t mode = 0;
+
+		if (list->proc_mode != 0000) {
+			mode = list->proc_mode;
+		} else if (list->fops) {
+			if (list->fops->read)
+				mode = 0444;
+			if (list->fops->write)
+				mode |= 0200;
+		}
+		debugfs_create_file(list->name, mode, parent,
+				    list->data ? : data,
+				    list->fops ? : &ldebugfs_empty_ops);
+		list++;
+	}
+}
+EXPORT_SYMBOL_GPL(ldebugfs_add_vars);
 
 /* Generic callbacks */
 static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
@@ -1726,17 +1715,18 @@ const struct file_operations ldebugfs_stats_seq_fops = {
 	.read    = seq_read,
 	.write   = lprocfs_stats_seq_write,
 	.llseek  = seq_lseek,
-	.release = lprocfs_seq_release,
+	.release = seq_release,
 };
 EXPORT_SYMBOL(ldebugfs_stats_seq_fops);
 
+#ifdef CONFIG_PROC_FS
 static const struct proc_ops lprocfs_stats_seq_fops = {
 	PROC_OWNER(THIS_MODULE)
 	.proc_open	= lprocfs_stats_seq_open,
 	.proc_read	= seq_read,
 	.proc_write	= lprocfs_stats_seq_write,
 	.proc_lseek	= seq_lseek,
-	.proc_release	= lprocfs_seq_release,
+	.proc_release	= seq_release,
 };
 
 int lprocfs_stats_register(struct proc_dir_entry *root, const char *name,
@@ -1753,6 +1743,7 @@ int lprocfs_stats_register(struct proc_dir_entry *root, const char *name,
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_stats_register);
+#endif /* CONFIG_PROC_FS */
 
 static const char *lprocfs_counter_config_units(const char *name,
 					 enum lprocfs_counter_config config)
@@ -2319,6 +2310,7 @@ char *lprocfs_find_named_value(const char *buffer, const char *name,
 }
 EXPORT_SYMBOL(lprocfs_find_named_value);
 
+#ifdef CONFIG_PROC_FS
 int lprocfs_seq_create(struct proc_dir_entry *parent,
 		       const char *name,
 		       mode_t mode,
@@ -2350,6 +2342,7 @@ int lprocfs_obd_seq_create(struct obd_device *obd,
 				  mode, seq_fops, data);
 }
 EXPORT_SYMBOL(lprocfs_obd_seq_create);
+#endif
 
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value)
 {
@@ -2800,5 +2793,3 @@ failed:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lprocfs_wr_nosquash_nids);
-
-#endif /* CONFIG_PROC_FS*/

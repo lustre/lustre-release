@@ -1108,7 +1108,7 @@ static const struct proc_ops lod_proc_mdt_fops = {
 	.proc_open	= lod_mdts_seq_open,
 	.proc_read	= seq_read,
 	.proc_lseek	= seq_lseek,
-	.proc_release	= lprocfs_seq_release,
+	.proc_release	= seq_release,
 };
 
 static int lod_spill_threshold_pct_seq_show(struct seq_file *m, void *v)

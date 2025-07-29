@@ -307,7 +307,7 @@ static int fldb_seq_release(struct inode *inode, struct file *file)
 
 	param = seq->private;
 	if (param == NULL) {
-		lprocfs_seq_release(inode, file);
+		seq_release(inode, file);
 		return 0;
 	}
 
@@ -321,7 +321,7 @@ static int fldb_seq_release(struct inode *inode, struct file *file)
 	iops->fini(&param->fsp_env, param->fsp_it);
 	lu_env_fini(&param->fsp_env);
 	OBD_FREE_PTR(param);
-	lprocfs_seq_release(inode, file);
+	seq_release(inode, file);
 
 	return 0;
 }
