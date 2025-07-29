@@ -1664,14 +1664,17 @@ out:
 	return rc;
 }
 
-/* local_only means it cannot get remote llogs */
+/* orig_rc is the return value for contacting MGS, if it is not zero,
+ * then this function needs to try local copy of the cfg log.
+ **/
 static int mgc_process_cfg_log(struct obd_device *mgc,
-			       struct config_llog_data *cld, int local_only)
+			       struct config_llog_data *cld, int orig_rc)
 {
 	struct llog_ctxt *ctxt;
 	struct lustre_sb_info *lsi = NULL;
-	int rc = 0;
 	struct lu_env *env;
+	bool local_only = orig_rc != 0;
+	int rc;
 
 	ENTRY;
 	LASSERT(cld);
@@ -1679,7 +1682,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 
 #ifndef HAVE_SERVER_SUPPORT
 	if (local_only)
-		RETURN(-EIO);
+		RETURN(orig_rc);
 #endif
 	if (cld->cld_cfg.cfg_sb)
 		lsi = s2lsi(cld->cld_cfg.cfg_sb);
@@ -1707,7 +1710,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 			rc = mgc_process_server_cfg_log(env, &ctxt, lsi, mgc,
 							cld, !local_only, 0);
 	} else if (local_only) {
-		rc = -EIO;
+		rc = orig_rc;
 	}
 #endif
 	/* When returned from mgc_process_server_cfg_log() the rc can be:
@@ -1880,11 +1883,16 @@ restart:
 	}
 #endif
 	else if (!cld_is_barrier(cld))
-		rc = mgc_process_cfg_log(mgc, cld, rcl != 0);
+		rc = mgc_process_cfg_log(mgc, cld, rcl);
 
 	CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
 	       mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
-	if (rc != -ETIMEDOUT && rc != -EIO && rc != -EAGAIN) {
+
+	/* If rcl != 0 and rc == rcl, then it means MGC can not reach MGS,
+	 * and there is no local config log avaible, so cfg log has never
+	 * been processed.
+	 **/
+	if (rc != -ETIMEDOUT && rc != -EAGAIN && !(rcl != 0 && rc == rcl)) {
 		cld->cld_processed = 1;
 		wake_up(&rq_waitq);
 	}
