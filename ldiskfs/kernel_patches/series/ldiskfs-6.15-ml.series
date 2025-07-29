@@ -35,3 +35,4 @@ linux-6.12/ext4-filename-encode.patch
 rhel9.1/ext4-enc-flag.patch
 linux-6.15/ext4-encdata.patch
 linux-6.15/ext4-add-IGET_NO_CHECKS-flag.patch
+linux-6.15/ext4-journal-commit-transaction-callback.patch

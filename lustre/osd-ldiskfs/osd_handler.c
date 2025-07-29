@@ -1860,10 +1860,8 @@ static int osd_param_is_not_sane(const struct osd_device *dev,
 /*
  * Concurrency: shouldn't matter.
  */
-static void osd_trans_commit_cb(struct super_block *sb,
-				struct ldiskfs_journal_cb_entry *jcb, int error)
+static void osd_trans_commit_complete(struct osd_thandle *oh, int error)
 {
-	struct osd_thandle *oh = container_of(jcb, struct osd_thandle, ot_jcb);
 	struct thandle *th = &oh->ot_super;
 	struct lu_device *lud = &th->th_dev->dd_lu_dev;
 	struct osd_device *osd = osd_dev(lud);
@@ -1891,11 +1889,128 @@ static void osd_trans_commit_cb(struct super_block *sb,
 	OBD_FREE_PTR(oh);
 }
 
+#ifdef HAVE_S_TXN_CB_MAP
+static inline void osd_trans_commit_cb(struct osd_thandle *oh,
+				       journal_t *journal,
+				       transaction_t *transaction, int error)
+{
+	osd_trans_commit_complete(oh, error);
+}
+
+static int cmp_key_txn(const void *transaction, const struct rb_node *node)
+{
+	struct osd_thandle *oh = container_of(node, typeof(*oh), ot_node);
+
+	return (transaction - (void *)oh->ot_transaction);
+}
+
+static int cmp_node_txn(struct rb_node *left, const struct rb_node *node)
+{
+	struct osd_thandle *oh;
+
+	oh = container_of(left, struct osd_thandle, ot_node);
+	return cmp_key_txn(oh->ot_transaction, node);
+}
+
+static void osd_trans_txn_cb(struct ldiskfs_sb_info *sbi, journal_t *journal,
+			     transaction_t *transaction)
+{
+	struct rb_node *node;
+	struct osd_thandle *top = NULL;
+	struct osd_thandle *oh;
+	int error = is_journal_aborted(journal);
+
+	spin_lock(&sbi->s_txn_cb_lock);
+	node = rb_find(transaction, &sbi->s_txn_cb_map, cmp_key_txn);
+	if (!node)
+		goto out;
+	rb_erase(node, &sbi->s_txn_cb_map);
+	top = container_of(node, struct osd_thandle, ot_node);
+	top->ot_transaction = NULL;
+	while ((oh = list_first_entry_or_null(&top->ot_cblist,
+					      struct osd_thandle,
+					      ot_cblist)) != NULL) {
+		list_del_init(&oh->ot_cblist);
+		oh->ot_transaction = NULL;
+		spin_unlock(&sbi->s_txn_cb_lock);
+		/* a callback could sleep */
+		osd_trans_commit_cb(oh, journal, transaction, error);
+		spin_lock(&sbi->s_txn_cb_lock);
+	}
+out:
+	spin_unlock(&sbi->s_txn_cb_lock);
+	if (top)
+		osd_trans_commit_cb(top, journal, transaction, error);
+}
+
+static void osd_trans_register_callback(struct osd_device *osd,
+					struct osd_thandle *oh)
+{
+	struct ldiskfs_sb_info *sbi = LDISKFS_SB(osd_sb(osd));
+	struct rb_node *node;
+	struct osd_thandle *top = NULL;
+	transaction_t *transaction = NULL;
+
+	if (oh && oh->ot_handle)
+		transaction = oh->ot_handle->h_transaction;
+
+	spin_lock(&sbi->s_txn_cb_lock);
+	oh->ot_transaction = transaction;
+	node = rb_find_add(&oh->ot_node, &sbi->s_txn_cb_map, cmp_node_txn);
+	if (node) {
+		/* found existing: add additional osd to be notified */
+		top = container_of(node, struct osd_thandle, ot_node);
+		list_add_tail(&oh->ot_cblist, &top->ot_cblist);
+	}
+	spin_unlock(&sbi->s_txn_cb_lock);
+}
+
+static inline void osd_trans_txn_cb_handler(struct super_block *sb)
+{
+	struct ldiskfs_sb_info *sbi = LDISKFS_SB(sb);
+
+	if (!sbi->s_txn_cb)
+		sbi->s_txn_cb = osd_trans_txn_cb;
+}
+
+static inline void osd_trans_txn_cb_init(struct osd_thandle *oh)
+{
+	INIT_LIST_HEAD(&oh->ot_cblist);
+}
+
+#else /* !HAVE_S_TXN_CB_MAP */
+
+static inline void osd_trans_commit_cb(struct super_block *sb,
+				       struct ldiskfs_journal_cb_entry *jcb,
+				       int error)
+{
+	struct osd_thandle *oh = container_of(jcb, struct osd_thandle, ot_jcb);
+
+	osd_trans_commit_complete(oh, error);
+}
+
+static inline void osd_trans_register_callback(struct osd_device *osd,
+					       struct osd_thandle *oh)
+{
+	ldiskfs_journal_callback_add(oh->ot_handle, osd_trans_commit_cb,
+				     &oh->ot_jcb);
+}
+
+static inline void osd_trans_txn_cb_handler(struct super_block *sb)
+{
+}
+
+static inline void osd_trans_txn_cb_init(struct osd_thandle *oh)
+{
+}
+#endif /* HAVE_S_TXN_CB_MAP */
+
 static struct thandle *osd_trans_create(const struct lu_env *env,
 					struct dt_device *d)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_iobuf *iobuf = &oti->oti_iobuf;
+	struct super_block *sb = osd_sb(osd_dt_dev(d));
 	struct osd_thandle *oh;
 	struct thandle *th;
 
@@ -1912,21 +2027,23 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	/* on pending IO in this thread should left from prev. request */
 	LASSERT(atomic_read(&iobuf->dr_numreqs) == 0);
 
-	sb_start_write(osd_sb(osd_dt_dev(d)));
+	sb_start_write(sb);
 
 	OBD_ALLOC_GFP(oh, sizeof(*oh), GFP_NOFS);
 	if (!oh) {
-		sb_end_write(osd_sb(osd_dt_dev(d)));
+		sb_end_write(sb);
 		RETURN(ERR_PTR(-ENOMEM));
 	}
 
 	oh->ot_quota_trans = &oti->oti_quota_trans;
 	memset(oh->ot_quota_trans, 0, sizeof(*oh->ot_quota_trans));
+	osd_trans_txn_cb_handler(sb);
 	th = &oh->ot_super;
 	th->th_dev = d;
 	th->th_result = 0;
 	oh->ot_credits = 0;
 	oh->oh_declared_ext = 0;
+	osd_trans_txn_cb_init(oh);
 	INIT_LIST_HEAD(&oh->ot_commit_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_stop_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_trunc_locks);
@@ -2188,17 +2305,14 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	if (oh->ot_handle != NULL) {
 		int rc2;
-
-		handle_t *hdl = oh->ot_handle;
+		handle_t *handle = oh->ot_handle;
 
 		/*
 		 * add commit callback
 		 * notice we don't do this in osd_trans_start()
 		 * as underlying transaction can change during truncate
 		 */
-		ldiskfs_journal_callback_add(hdl, osd_trans_commit_cb,
-					     &oh->ot_jcb);
-
+		osd_trans_register_callback(osd, oh);
 		LASSERT(oti->oti_txns == 1);
 		oti->oti_txns--;
 
@@ -2209,10 +2323,10 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 		osd_trans_stop_cb(oh, rc);
 		/* hook functions might modify th_sync */
-		hdl->h_sync = th->th_sync;
+		handle->h_sync = th->th_sync;
 
 		oh->ot_handle = NULL;
-		OSD_CHECK_SLOW_TH(oh, osd, rc2 = ldiskfs_journal_stop(hdl));
+		OSD_CHECK_SLOW_TH(oh, osd, rc2 = ldiskfs_journal_stop(handle));
 		if (rc2 != 0)
 			CERROR("%s: failed to stop transaction: rc = %d\n",
 			       osd_name(osd), rc2);

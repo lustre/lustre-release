@@ -1,0 +1,77 @@
+From b7dec37b4052a43d8dd66c56bbf31bda8788f44c Mon Sep 17 00:00:00 2001
+From: Shaun Tancheff <shaun.tancheff@hpe.com>
+Date: Sun, 20 Jul 2025 09:52:51 +0700
+Subject: [PATCH] LU-19142 osd-ldiskfs: journal commit callback
+
+With the removal of t_private_list from transaction_t
+the ldiskfs commit callback scheme is not available.
+
+Provide and osd-ldiskfs / ldiskfs specific callback scheme
+
+Introduces ext4-journal-commit-transaction-callback.patch
+which can be back-ported to older kernels to maintain
+an independent transaction commit handler.
+
+Test-Parameters: trivial
+Signed-off-by: Shaun Tancheff <shaun.tancheff@hpe.com>
+Change-Id: Ie26be875d3c8f62e64b2cff6ee4ef32a22f673de
+---
+ fs/ext4/ext4.h  | 5 +++++
+ fs/ext4/super.c | 6 ++++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 9e9f7fb7..d0daf7ab 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1515,6 +1515,8 @@ struct ext4_orphan_info {
+ 						 * file blocks */
+ };
+ 
++#define HAVE_S_TXN_CB_MAP	1
++
+ /*
+  * fourth extended-fs super-block data in memory
+  */
+@@ -1751,6 +1753,9 @@ struct ext4_sb_info {
+ 	__u64 s_last_error_block;
+ 	const char *s_last_error_func;
+ 	time64_t s_last_error_time;
++	struct rb_root s_txn_cb_map;
++	void (*s_txn_cb)(struct ext4_sb_info *, journal_t *, transaction_t *);
++	spinlock_t s_txn_cb_lock;
+ 	/*
+ 	 * If we are in a context where we cannot update the on-disk
+ 	 * superblock, we queue the work here.  This is used to update
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 68bb4145..26ca0229 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -502,11 +502,14 @@ static void ext4_maybe_update_superblock(struct super_block *sb)
+ static void ext4_journal_commit_callback(journal_t *journal, transaction_t *txn)
+ {
+ 	struct super_block		*sb = journal->j_private;
++	struct ext4_sb_info		*sbi = EXT4_SB(sb);
+ 
+ 	BUG_ON(txn->t_state == T_FINISHED);
+ 
+ 	ext4_process_freed_data(sb, txn->t_tid);
+ 	ext4_maybe_update_superblock(sb);
++	if (sbi->s_txn_cb)
++		sbi->s_txn_cb(sbi, journal, txn);
+ }
+ 
+ /*
+@@ -5404,6 +5407,9 @@ static int __ext4_fill_super(struct fs_context *fc, struct super_block *sb)
+ 	ext4_atomic_write_init(sb);
+ 	ext4_fast_commit_init(sb);
+ 
++	sbi->s_txn_cb_map = RB_ROOT;
++	sbi->s_txn_cb = NULL;
++	spin_lock_init(&sbi->s_txn_cb_lock);
+ 	sb->s_root = NULL;
+ 
+ 	needs_recovery = (es->s_last_orphan != 0 ||
+-- 
+2.45.2
+

@@ -402,11 +402,17 @@ struct osd_access_lock {
 };
 
 struct osd_thandle {
-        struct thandle          ot_super;
-        handle_t               *ot_handle;
-        struct ldiskfs_journal_cb_entry ot_jcb;
-	struct list_head       ot_commit_dcb_list;
-	struct list_head       ot_stop_dcb_list;
+	struct thandle		ot_super;
+	handle_t	       *ot_handle;
+#ifdef HAVE_S_TXN_CB_MAP
+	transaction_t	       *ot_transaction;
+	struct rb_node		ot_node;
+	struct list_head	ot_cblist;
+#else
+	struct ldiskfs_journal_cb_entry ot_jcb;
+#endif
+	struct list_head	ot_commit_dcb_list;
+	struct list_head	ot_stop_dcb_list;
 	unsigned int		ot_credits;
 	/*
 	 * For iterative operation within one transaction,
