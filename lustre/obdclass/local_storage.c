@@ -171,7 +171,7 @@ void ls_device_put(const struct lu_env *env, struct ls_device *ls)
 	}
 }
 
-/**
+/*
  * local file fid generation
  */
 int local_object_fid_generate(const struct lu_env *env,
@@ -793,7 +793,12 @@ static int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 
 
 /**
- * Initialize local OID storage for required sequence.
+ * local_oid_storage_init() - Initialize local OID storage for required sequence
+ * @env: current lustre environment
+ * @dev: on which the OID storage file will be created
+ * @first_fid: fid OID sequence is being initialized
+ * @los: populated with initialize OID [out]
+ *
  * That may be needed for services that uses local files and requires
  * dynamic OID allocation for them.
  *

@@ -150,21 +150,22 @@ void dt_object_fini(struct dt_object *obj)
 EXPORT_SYMBOL(dt_object_fini);
 
 /**
- * Set directory .do_index_ops.
+ * dt_try_as_dir() - Set directory .do_index_ops.
+ * @env: current lustre environment
+ * @obj: dt object.
+ * @check: check @obj existence and type, return if index ops is set.
  *
  * Set directory index operations, if the caller knows directory exists,
- * \a check should be set to ensure object is directory and exists, while for
+ * @check should be set to ensure object is directory and exists, while for
  * new directories, skip check and the index operations will be used to create
  * ".." under directory.
  *
  * Normally this is called before dt_lookup() to ensure directory objects
  * exists and .do_index_ops is correctly set.
  *
- * \param env	lu_env object.
- * \param obj	dt object.
- * \param check	check \a obj existence and type, return if index ops is set.
- * \retval 1	on success.
- * \retval 0	on error.
+ * Return:
+ * * %1 on success.
+ * * %0 on error.
  */
 int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj, bool check)
 {
@@ -215,9 +216,16 @@ enum dt_format_type dt_mode_to_dft(__u32 mode)
 EXPORT_SYMBOL(dt_mode_to_dft);
 
 /**
- * lookup fid for object named \a name in directory \a dir.
+ * dt_lookup_dir() - lookup fid for object named @name in directory @dir.
+ * @env: current lustre environment
+ * @dir: directory to do the lookup
+ * @name: name of file
+ * @fid: on successful lookup populate fid [out]
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
-
 int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
                   const char *name, struct lu_fid *fid)
 {
@@ -329,15 +337,15 @@ void dt_global_fini(void)
 }
 
 /**
- * Generic read helper. May return an error for partial reads.
+ * dt_read() - Generic read helper. May return an error for partial reads.
+ * @env: current lustre environment
+ * @dt: object to be read
+ * @buf: lu_buf to be filled, with beffer pointer and length
+ * @pos: position to start reading, updated as data is read
  *
- * \param env  lustre environment
- * \param dt   object to be read
- * \param buf  lu_buf to be filled, with buffer pointer and length
- * \param pos position to start reading, updated as data is read
- *
- * \retval real size of data read
- * \retval -ve errno on failure
+ * Return:
+ * * %>0 real size of data read
+ * * %negative on failure
  */
 int dt_read(const struct lu_env *env, struct dt_object *dt,
 	    struct lu_buf *buf, loff_t *pos)
@@ -348,17 +356,19 @@ int dt_read(const struct lu_env *env, struct dt_object *dt,
 EXPORT_SYMBOL(dt_read);
 
 /**
+ * dt_record_read() - Read structures of fixed size from storage
+ * @env: current lustre environment
+ * @dt: object to be read
+ * @buf: lu_buf to be filled, with beffer pointer and length
+ * @pos: position to start reading, updated as data is read
+ *
  * Read structures of fixed size from storage.  Unlike dt_read(), using
  * dt_record_read() will return an error for partial reads.
  *
- * \param env  lustre environment
- * \param dt   object to be read
- * \param buf  lu_buf to be filled, with buffer pointer and length
- * \param pos position to start reading, updated as data is read
- *
- * \retval 0 on successfully reading full buffer
- * \retval -EFAULT on short read
- * \retval -ve errno on failure
+ * Return:
+ * * %0 on successfully reading full buffer
+ * * %-EFAULT on short read
+ * * %negative on failure
  */
 int dt_record_read(const struct lu_env *env, struct dt_object *dt,
                    struct lu_buf *buf, loff_t *pos)
@@ -920,18 +930,19 @@ out:
 EXPORT_SYMBOL(dt_index_walk);
 
 /**
+ * dt_index_read() - Walk key/record pairs of an index
+ * @env: current lustre environment
+ * @dev: is the dt_device storing the index
+ * @ii: is the idx_info structure packed by client in the OBD_IDX_READ request
+ * @rdpg: is the lu_rdpg descriptor
+ *
  * Walk key/record pairs of an index and copy them into 4KB containers to be
- * transferred over the network. This is the common handler for OBD_IDX_READ
- * RPC processing.
+ * transferred over the network. This is the common handler for OBD_IDX_READ RPC
+ * processing.
  *
- * \param env - is the environment passed by the caller
- * \param dev - is the dt_device storing the index
- * \param ii  - is the idx_info structure packed by the client in the
- *              OBD_IDX_READ request
- * \param rdpg - is the lu_rdpg descriptor
- *
- * \retval on success, return sum (in bytes) of all filled containers
- * \retval appropriate error otherwise.
+ * Return:
+ * * %>0 on success (return sum (in bytes) of all filled containers)
+ * * %negative on failure
  */
 int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 		  struct idx_info *ii, const struct lu_rdpg *rdpg)

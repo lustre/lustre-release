@@ -68,10 +68,15 @@ int linkea_init_with_rec(struct linkea_data *ldata)
 EXPORT_SYMBOL(linkea_init_with_rec);
 
 /**
- * Pack a link_ea_entry.
+ * linkea_entry_pack() - Pack a link_ea_entry.
+ * @lee: pointer to link_ea_entry which will be packed with data
+ * @lname: name of the link + length
+ * @pfid: parent dir containing the link
+ *
  * All elements are stored as chars to avoid alignment issues.
  * Numbers are always big-endian
- * \retval record length
+ *
+ * Return record length
  */
 int linkea_entry_pack(struct link_ea_entry *lee, const struct lu_name *lname,
 		      const struct lu_fid *pfid)
@@ -123,8 +128,12 @@ bool linkea_will_overflow(struct linkea_data *ldata,
 EXPORT_SYMBOL(linkea_will_overflow);
 
 /**
- * Add a record to the end of link ea buf
- **/
+ * linkea_add_buf() - Add a record to the end of link ea buf
+ * @ldata: linkea_data where new hard link will be added
+ * @lname: name of link + length to be added
+ * @pfid: parent dir containing the link
+ * @err_on_overflow: if true return -EOVERFLOW if no space is left
+ */
 int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 		   const struct lu_fid *pfid, bool err_on_overflow)
 {
@@ -216,6 +225,9 @@ int linkea_links_new(struct linkea_data *ldata, struct lu_buf *buf,
 EXPORT_SYMBOL(linkea_links_new);
 
 /**
+ * linkea_overflow_shrink() - Mark linkEA as overflow
+ * @ldata: linkea which is to be marked as overflow
+ *
  * Mark the linkEA as overflow with current timestamp,
  * and remove the last linkEA entry.
  *
@@ -267,15 +279,15 @@ int linkea_overflow_shrink(struct linkea_data *ldata)
 EXPORT_SYMBOL(linkea_overflow_shrink);
 
 /**
- * Check if such a link exists in linkEA.
+ * linkea_links_find() - Check if such a link exists in linkEA.
+ * @ldata: link data the search to be done on
+ * @lname: name in the parent's directory entry pointing to this object
+ * @pfid: parent fid the link to be found for
  *
- * \param ldata link data the search to be done on
- * \param lname name in the parent's directory entry pointing to this object
- * \param pfid parent fid the link to be found for
- *
- * \retval   0 success
- * \retval -ENOENT link does not exist
- * \retval -ve on error
+ * Return:
+ * * %0 success
+ * * %-ENOENT link does not exist
+ * * %negative on error
  */
 int linkea_links_find(struct linkea_data *ldata, const struct lu_name *lname,
 		      const struct lu_fid  *pfid)

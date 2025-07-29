@@ -32,9 +32,8 @@ INTERVAL_TREE_DEFINE(struct range_lock, rl_rb, __u64, rl_subtree_last,
 		     START, LAST, static, range_lock)
 
 /**
- * Initialize a range lock tree
- *
- * \param tree [in]	an empty range lock tree
+ * range_lock_tree_init() - Initialize a range lock tree
+ * @tree: an empty range lock tree
  *
  * Pre:  Caller should have allocated the range lock tree.
  * Post: The range lock tree is ready to function.
@@ -48,11 +47,10 @@ void range_lock_tree_init(struct range_lock_tree *tree)
 EXPORT_SYMBOL(range_lock_tree_init);
 
 /**
- * Intialize a range lock node
- *
- * \param lock  [in]	an empty range lock node
- * \param start [in]	start of the covering region
- * \param end   [in]	end of the covering region
+ * range_lock_init() - Intialize a range lock node
+ * @lock: an empty range lock node
+ * @start: start of the covering region
+ * @end: end of the covering region
  *
  * Pre:  Caller should have allocated the range lock node.
  * Post: The range lock node is meant to cover [start, end] region
@@ -72,10 +70,9 @@ void range_lock_init(struct range_lock *lock, __u64 start, __u64 end)
 EXPORT_SYMBOL(range_lock_init);
 
 /**
- * Unlock a range lock, wake up locks blocked by this lock.
- *
- * \param tree [in]	range lock tree
- * \param lock [in]	range lock to be deleted
+ * range_unlock() - Unlock a range lock, wake up locks blocked by this lock.
+ * @tree: range lock tree
+ * @lock: range lock to be deleted
  *
  * If this lock has been granted, relase it; if not, just delete it from
  * the tree or the same region lock list. Wake up those locks only blocked
@@ -110,17 +107,17 @@ void range_unlock(struct range_lock_tree *tree, struct range_lock *lock)
 EXPORT_SYMBOL(range_unlock);
 
 /**
- * Lock a region
- *
- * \param tree [in]	range lock tree
- * \param lock [in]	range lock node containing the region span
- *
- * \retval 0	get the range lock
- * \retval <0	error code while not getting the range lock
+ * range_lock() - Lock a region
+ * @tree: range lock tree
+ * @lock: range lock node containing the region span
  *
  * If there exists overlapping range lock, the new lock will wait and
  * retry, if later it find that it is not the chosen one to wake up,
  * it wait again.
+ *
+ * Return:
+ * * %0 get the range lock
+ * * %<0 error code while not getting the range lock
  */
 int range_lock(struct range_lock_tree *tree, struct range_lock *lock)
 {

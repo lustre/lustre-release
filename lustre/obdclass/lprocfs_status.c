@@ -134,15 +134,15 @@ EXPORT_SYMBOL(ldebugfs_add_symlink);
 static const struct proc_ops lprocfs_empty_ops = { };
 
 /**
- * Add /proc entries.
+ * lprocfs_add_vars() - Add /proc entries.
+ * @root: The parent proc entry on which new entry will be added.
+ * @list: Array of proc entries to be added.
+ * @data: The argument to be passed when entries read/write routines are called
+ * through /proc file.
  *
- * \param root [in]  The parent proc entry on which new entry will be added.
- * \param list [in]  Array of proc entries to be added.
- * \param data [in]  The argument to be passed when entries read/write routines
- *                   are called through /proc file.
- *
- * \retval 0   on success
- *         < 0 on error
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int
 lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
@@ -497,7 +497,15 @@ EXPORT_SYMBOL(lprocfs_server_uuid_seq_show);
 /** add up per-cpu counters */
 
 /**
- * Lock statistics structure for access, possibly only on this CPU.
+ * lprocfs_stats_lock() - Lock statistics structure for access, possibly only
+ * on this CPU.
+ * @stats: statistics structure to lock
+ * @opc: type of operation:
+ *	LPROCFS_GET_SMP_ID: "lock" and return current CPU index
+ *	for incrementing statistics for that CPU
+ *	LPROCFS_GET_NUM_CPU: "lock" and return number of used
+ *	CPU indices to iterate over all indices
+ * @flags: CPU interrupt saved state for IRQ-safe locking [out]
  *
  * The statistics struct may be allocated with per-CPU structures for
  * efficient concurrent update (usually only on server-wide stats), or
@@ -512,16 +520,9 @@ EXPORT_SYMBOL(lprocfs_server_uuid_seq_show);
  *
  * For global statistics, lock the stats structure to prevent concurrent update.
  *
- * \param[in] stats	statistics structure to lock
- * \param[in] opc	type of operation:
- *			LPROCFS_GET_SMP_ID: "lock" and return current CPU index
- *				for incrementing statistics for that CPU
- *			LPROCFS_GET_NUM_CPU: "lock" and return number of used
- *				CPU indices to iterate over all indices
- * \param[out] flags	CPU interrupt saved state for IRQ-safe locking
- *
- * \retval cpuid of current thread or number of allocated structs
- * \retval negative on error (only for opc LPROCFS_GET_SMP_ID + per-CPU stats)
+ * Return:
+ * * %cpuid of current thread or number of allocated structs
+ * * %negative on error (only for opc LPROCFS_GET_SMP_ID + per-CPU stats)
  */
 int lprocfs_stats_lock(struct lprocfs_stats *stats,
 		       enum lprocfs_stats_lock_ops opc,
@@ -555,7 +556,10 @@ int lprocfs_stats_lock(struct lprocfs_stats *stats,
 }
 
 /**
- * Unlock statistics structure after access.
+ * lprocfs_stats_unlock() - Unlock statistics structure after access.
+ * @stats: statistics structure to unlock
+ * @opc: type of operation (current cpuid or number of structs)
+ * @flags: CPU interrupt saved state for IRQ-safe locking
  *
  * Unlock the lock acquired via lprocfs_stats_lock() for global statistics,
  * or unpin this thread from the current cpuid for per-CPU statistics.
@@ -563,9 +567,6 @@ int lprocfs_stats_lock(struct lprocfs_stats *stats,
  * This function must be called using the same arguments as used when calling
  * lprocfs_stats_lock() so that the correct operation can be performed.
  *
- * \param[in] stats	statistics structure to unlock
- * \param[in] opc	type of operation (current cpuid or number of structs)
- * \param[in] flags	CPU interrupt saved state for IRQ-safe locking
  */
 void lprocfs_stats_unlock(struct lprocfs_stats *stats,
 			  enum lprocfs_stats_lock_ops opc,
@@ -1771,15 +1772,15 @@ static void *lprocfs_stats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 }
 
 /**
- * print header of stats including snapshot_time, start_time and elapsed_time.
- *
- * \param seq		the file to print content to
- * \param now		end time to calculate elapsed_time
- * \param ts_init	start time to calculate elapsed_time
- * \param width		the width of key to align them well
- * \param colon		"" or ":"
- * \param show_units	show units or not
- * \param prefix	prefix (indent) before printing each line of header
+ * lprocfs_stats_header() - print header of stats including snapshot_time,
+ * start_time and elapsed_time.
+ * @seq: the file to print content to
+ * @now: end time to calculate elapsed_time
+ * @ts_init: start time to calculate elapsed_time
+ * @width: the width of key to align them well
+ * @colon: "" or ":"
+ * @show_units: show units or not
+ * @prefix: prefix (indent) before printing each line of header
  *			to align them with other content
  */
 void lprocfs_stats_header(struct seq_file *seq, ktime_t now, ktime_t ts_init,
@@ -2435,9 +2436,14 @@ int sysfs_memparse_total(const char *buffer, size_t count, u64 *val,
 EXPORT_SYMBOL(sysfs_memparse_total);
 
 /**
- * Find the string \a name in the input \a buffer, and return a pointer to the
- * value immediately following \a name, reducing \a count appropriately.
- * If \a name is not found the original \a buffer is returned.
+ * lprocfs_find_named_value() - Find the string @name in the input @buffer
+ * @buffer: input string
+ * @name: string to search
+ * @count: size of @buffer
+ *
+ * Returns the string @name in the input @buffer, and return a pointer to the
+ * value immediately following @name, reducing @count appropriately.
+ * If @name is not found the original @buffer is returned.
  */
 char *lprocfs_find_named_value(const char *buffer, const char *name,
 				size_t *count)

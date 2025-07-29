@@ -1109,7 +1109,8 @@ out:
 EXPORT_SYMBOL(llog_reverse_process);
 
 /**
- * new llog API
+ * llog_exist() - new llog API
+ * @loghandle: llog handle of the current llog
  *
  * API functions:
  *      llog_open - open llog, may not exist
@@ -1121,6 +1122,10 @@ EXPORT_SYMBOL(llog_reverse_process);
  *      llog_write_rec - write llog record on disk, need transaction handle
  *      llog_declare_add - declare llog catalog record addition
  *      llog_add - add llog record in catalog, need transaction handle
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int llog_exist(struct llog_handle *loghandle)
 {
@@ -1288,8 +1293,19 @@ int llog_declare_add(const struct lu_env *env, struct llog_handle *lgh,
 EXPORT_SYMBOL(llog_declare_add);
 
 /**
+ * llog_open_create() - open/create llog
+ * @env: current lustre environment
+ * @ctxt: llog context
+ * @res: llog handle of the newly created/open llog [out]
+ * @logid: llog unique id
+ * @name: llog name
+ *
  * Helper function to open llog or create it if doesn't exist.
  * It hides all transaction handling from caller.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int llog_open_create(const struct lu_env *env, struct llog_ctxt *ctxt,
 		     struct llog_handle **res, struct llog_logid *logid,
@@ -1343,7 +1359,15 @@ out:
 EXPORT_SYMBOL(llog_open_create);
 
 /**
- * Helper function to delete existent llog.
+ * llog_erase() - Helper function to delete existent llog.
+ * @env: current lustre environment
+ * @ctxt: llog context
+ * @logid: llog unique id
+ * @name: llog name
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int llog_erase(const struct lu_env *env, struct llog_ctxt *ctxt,
 	       struct llog_logid *logid, char *name)
@@ -1385,26 +1409,27 @@ void llog_get_cookie(const struct lu_env *env, struct llog_cookie *out)
 EXPORT_SYMBOL(llog_get_cookie);
 
 /**
+ * llog_write_cookie() - write record in llog with a custom cookie.
+ * @env: execution environment
+ * @loghandle: llog handle of the current llog
+ * @rec: llog record header. This is a real header of
+ *	the full llog record to write. This is
+ *	the beginning of buffer to write, the length
+ *	of buffer is stored in @rec::lrh_len
+ * @cookie: pointer to the cookie to return back if needed.
+ *	It is used for further cancel of this llog
+ *	record. [in, out]
+ * @idx: index of the llog record. If @idx == -1 then
+ *	this is append case, otherwise @idx is
+ *	the index of record to modify
  * Helper function for write record in llog with a custom cookie.
  * It hides all transaction handling from caller.
  * Valid only with local llog.
  *
- * \param[in]  env		execution environment
- * \param[in]  loghandle	llog handle of the current llog
- * \param[in]  rec		llog record header. This is a real header of
- *				the full llog record to write. This is
- *				the beginning of buffer to write, the length
- *				of buffer is stored in \a rec::lrh_len
- * \param[in,out] reccookie	pointer to the cookie to return back if needed.
- *				It is used for further cancel of this llog
- *				record.
- * \param[in]  idx		index of the llog record. If \a idx == -1 then
- *				this is append case, otherwise \a idx is
- *				the index of record to modify
- *
- * \retval			0 on successful write && \a reccookie == NULL
- *				1 on successful write && \a reccookie != NULL
- * \retval			negative error if write failed
+ * Return:
+ * * %0 on successful write && @cookie == NULL
+ * * %1 on successful write && @cookie != NULL
+ * * %negative error if write failed
  */
 int llog_write_cookie(const struct lu_env *env, struct llog_handle *loghandle,
 		      struct llog_rec_hdr *rec, struct llog_cookie *cookie,
@@ -1534,15 +1559,17 @@ int llog_close(const struct lu_env *env, struct llog_handle *loghandle)
 EXPORT_SYMBOL(llog_close);
 
 /**
+ * llog_is_empty() -  get the llog size in records
+ * @env: execution environment
+ * @ctxt: llog context
+ * @name: llog name
+ *
  * Helper function to get the llog size in records. It is used by MGS
  * mostly to check that config llog exists and contains data.
  *
- * \param[in] env	execution environment
- * \param[in] ctxt	llog context
- * \param[in] name	llog name
- *
- * \retval		true if there are records in llog besides a header
- * \retval		false on error or llog without records
+ * Return:
+ * * %true if there are records in llog besides a header
+ * * %false on error or llog without records
  */
 int llog_is_empty(const struct lu_env *env, struct llog_ctxt *ctxt,
 		  char *name)

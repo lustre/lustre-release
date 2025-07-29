@@ -122,8 +122,8 @@ static void job_putref(struct job_stat *job)
 	kref_put(&job->js_refcount, job_free);
 }
 
-/**
- * Clean up jobstats that were updated more than \a before seconds ago.
+/*
+ * Clean up jobstats that were updated more than @before seconds ago.
  *
  * Since this function may be called frequently, do not scan all of the
  * jobstats on each call, only twice per cleanup interval.  That means stats
@@ -136,14 +136,14 @@ static void job_putref(struct job_stat *job)
  * much easier to do the division when the value is initially set (in seconds)
  * rather than after it has been converted to ktime_t, and maybe a bit faster.
  *
- * If \a clear is true then this will force clean up all jobstats
+ * If @clear is true then this will force clean up all jobstats
  * (e.g. at shutdown).
  *
  * If there is already another thread doing jobstats cleanup, don't try to
  * do this again in the current thread unless this is a force cleanup.
  *
- * \param[in] stats	stucture tracking all job stats for this device
- * \param[in] clear	clear all job stats if true
+ * @stats: stucture tracking all job stats for this device
+ * @clear: clear all job stats if true
  */
 static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool clear)
 {
@@ -785,16 +785,17 @@ static ssize_t lprocfs_jobstats_seq_write(struct file *file,
 }
 
 /**
- * Clean up the seq file state when the /proc file is closed.
+ * lprocfs_jobstats_seq_release() - Clean up the seq file state when the /proc
+ * file is closed.
+ * @inode: struct inode for seq file being closed
+ * @file: struct file for seq file being closed
  *
  * This also expires old job stats from the cache after they have been
  * printed in case the system is idle and not generating new jobstats.
  *
- * \param[in] inode	struct inode for seq file being closed
- * \param[in] file	struct file for seq file being closed
- *
- * \retval		0 on success
- * \retval		negative errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
  */
 static int lprocfs_jobstats_seq_release(struct inode *inode, struct file *file)
 {
