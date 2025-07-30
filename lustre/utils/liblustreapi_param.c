@@ -887,7 +887,9 @@ int llapi_param_display_value(char *path, int version,
 		/* load the reply results */
 		rc = yaml_parser_load(&reply, &results);
 		if (rc == 0) {
-			yaml_parser_log_error(&reply, stderr, "get_param: ");
+			if (!(flags & PARAM_FLAGS_EXTRA_IGNORE_ERROR))
+				yaml_parser_log_error(&reply, stderr,
+						      "get_param: ");
 			yaml_document_delete(&results);
 			rc = -EINVAL;
 			goto free_reply;
@@ -936,7 +938,9 @@ int llapi_param_display_value(char *path, int version,
 		}
 
 		if (rc == 0) {
-			yaml_parser_log_error(&reply, stderr, "get_param: ");
+			if (!(flags & PARAM_FLAGS_EXTRA_IGNORE_ERROR))
+				yaml_parser_log_error(&reply, stderr,
+						      "get_param: ");
 			rc = -EINVAL;
 		}
 	}

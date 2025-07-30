@@ -6835,8 +6835,6 @@ test_54e() {
 run_test 54e "console/tty device works in lustre ======================"
 
 test_55a() {
-	local dev_path="/sys/kernel/debug/lustre/devices"
-
 	load_module kunit/obd_test verbose=2 || error "load_module failed"
 
 	# This must be run in iteractive mode, since attach and setup
@@ -6847,7 +6845,7 @@ test_55a() {
 	EOF"
 
 	echo "Devices:"
-	cat "$dev_path" | tail -n 10
+	$LCTL dl | tail -n 10
 
 	$LCTL --device "obd_name" cleanup
 	$LCTL --device "obd_name" detach
@@ -6861,8 +6859,7 @@ test_55a() {
 run_test 55a "OBD device life cycle unit tests"
 
 test_55b() {
-	local dev_path="/sys/kernel/debug/lustre/devices"
-	local dev_count="$(wc -l $dev_path | awk '{print $1}')"
+	local dev_count="$($LCTL dl | wc -l)"
 
 	# Set up a large number of devices, using the number
 	# that can be set up in about a minute (based on prior
@@ -6882,7 +6879,7 @@ test_55b() {
 
 	echo "Load time: $((SECONDS - start))"
 	echo "Devices:"
-	cat "$dev_path" | tail -n 10
+	$LCTL dl | tail -n 10
 
 	for ((i = 1; i <= num_dev_to_create; i++)); do
 		echo "--device obd_name_$i cleanup"

@@ -76,6 +76,17 @@ device_dump_ctx(struct netlink_callback *cb)
 	return (struct genl_dev_list *)cb->args[0];
 }
 
+/* For 'value' packet it contains
+ *	minor		u16
+ *	status		(2 characters)
+ *	typ_name	(16 for enough space for things like osd-ldiskfs)
+ *	obd_name	MAX_OBD_NAME
+ *	obd_uuid	UUID_MAX
+ *	refcount	u32
+ */
+#define DEVICE_VALUE_PACKET_SIZE	(2 + 2 + 16 + MAX_OBD_NAME + UUID_MAX + 4)
+#define DEVICE_KEY_TABLE_PACKET_SIZE	(44 + 28 + 28 + 28 + 28 + 28 + 32)
+
 /* generic ->start() handler for GET requests */
 static int lustre_device_list_start(struct netlink_callback *cb)
 {
@@ -84,6 +95,7 @@ static int lustre_device_list_start(struct netlink_callback *cb)
 	struct netlink_ext_ack *extack = NULL;
 #endif
 	struct genl_dev_list *glist;
+	unsigned long len = 0;
 	int msg_len, rc = 0;
 
 #ifdef HAVE_NL_DUMP_WITH_EXT_ACK
@@ -138,6 +150,17 @@ static int lustre_device_list_start(struct netlink_callback *cb)
 			NL_SET_ERR_MSG(extack, "No devices found");
 			rc = -ENOENT;
 		}
+		len = DEVICE_VALUE_PACKET_SIZE;
+	} else {
+		len = class_obd_devs_count() * DEVICE_VALUE_PACKET_SIZE;
+	}
+
+	len += DEVICE_KEY_TABLE_PACKET_SIZE;
+	if (len > BIT(sizeof(cb->min_dump_alloc) << 3)) {
+		NL_SET_ERR_MSG(extack, "Netlink msg is too large");
+		rc = -EMSGSIZE;
+	} else {
+		cb->min_dump_alloc = len;
 	}
 report_err:
 	if (rc < 0) {
@@ -175,7 +198,7 @@ static int lustre_device_list_dump(struct sk_buff *msg,
 						LUSTRE_CMD_DEVICES, all);
 		if (rc < 0) {
 			NL_SET_ERR_MSG(extack, "failed to send key table");
-			return rc;
+			goto send_err;
 		}
 	}
 
@@ -238,6 +261,7 @@ static int lustre_device_list_dump(struct sk_buff *msg,
 	obd_device_unlock();
 
 	glist->gdl_start = idx + 1;
+send_err:
 	rc = lnet_nl_send_error(cb->skb, portid, seq, rc);
 
 	return rc < 0 ? rc : msg->len;
@@ -251,7 +275,10 @@ int lustre_old_device_list_dump(struct sk_buff *msg,
 		int rc = lustre_device_list_start(cb);
 
 		if (rc < 0)
-			return rc;
+			return lnet_nl_send_error(cb->skb,
+						  NETLINK_CB(cb->skb).portid,
+						  cb->nlh->nlmsg_seq,
+						  rc);
 	}
 
 	return lustre_device_list_dump(msg, cb);

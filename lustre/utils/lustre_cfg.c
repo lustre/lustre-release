@@ -839,9 +839,9 @@ int jt_device_list(int argc, char **argv)
 		{ .name = "yaml",	.has_arg = no_argument,	.val = 'y' },
 		{ .name = NULL }
 	};
+	int flags = PARAM_FLAGS_EXTRA_IGNORE_ERROR;
 	struct param_opts opts;
 	char buf[MAX_OBD_NAME];
-	int flags = 0;
 	glob_t path;
 	int rc, c;
 	FILE *fp;

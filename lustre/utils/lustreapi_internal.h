@@ -175,6 +175,7 @@ enum lctl_param_flags {
 	PARAM_FLAGS_YAML_FORMAT		= 0x0001,
 	PARAM_FLAGS_SHOW_SOURCE		= 0x0002,
 	PARAM_FLAGS_EXTRA_DETAILS	= 0x0004,
+	PARAM_FLAGS_EXTRA_IGNORE_ERROR	= 0x0008,
 };
 
 int llapi_param_display_value(char *path, int version,
