@@ -339,6 +339,23 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 	return rc;
 }
 
+static int
+kfilnd_tun_defaults(struct lnet_lnd_tunables *tunables,
+		    struct lnet_ioctl_config_lnd_cmn_tunables *cmn)
+{
+	int rc;
+
+	/* sync to latest module settings */
+	rc = kfilnd_tunables_setup(tunables, true, cmn);
+	if (rc < 0)
+		return rc;
+
+	memcpy(&tunables->lnd_tun_u.lnd_kfi, &kfi_default_tunables,
+	       sizeof(kfi_default_tunables));
+
+	return rc;
+}
+
 static const struct ln_key_list kfilnd_tunables_keys = {
 	.lkl_maxattr                    = LNET_NET_KFILND_TUNABLES_ATTR_MAX,
 	.lkl_list                       = {
@@ -437,10 +454,11 @@ static const struct lnet_lnd the_kfilnd = {
 	.lnd_shutdown		= kfilnd_shutdown,
 	.lnd_send		= kfilnd_send,
 	.lnd_recv		= kfilnd_recv,
+	.lnd_tun_defaults	= kfilnd_tun_defaults,
 	.lnd_nl_get		= kfilnd_nl_get,
 	.lnd_nl_set		= kfilnd_nl_set,
-	.lnd_keys		= &kfilnd_tunables_keys,
 	.lnd_get_timeout	= kfilnd_timeout,
+	.lnd_keys		= &kfilnd_tunables_keys,
 };
 
 static int kfilnd_startup(struct lnet_ni *ni)
@@ -459,7 +477,9 @@ static int kfilnd_startup(struct lnet_ni *ni)
 		return -EINVAL;
 	}
 
-	rc = kfilnd_tunables_setup(ni);
+	rc = kfilnd_tunables_setup(&ni->ni_lnd_tunables,
+				   ni->ni_lnd_tunables_set,
+				   &ni->ni_net->net_tunables);
 	if (rc) {
 		CERROR("Can't configure tunable values, rc = %d\n", rc);
 		goto err;

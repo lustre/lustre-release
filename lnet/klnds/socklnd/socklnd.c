@@ -765,6 +765,19 @@ ksocknal_accept(struct lnet_ni *ni, struct socket *sock)
 	return 0;
 }
 
+static int
+ksocknal_tun_defaults(struct lnet_lnd_tunables *tunables,
+		      struct lnet_ioctl_config_lnd_cmn_tunables *cmn)
+{
+	/* sync to latest module settings */
+	ksocknal_tunables_setup(tunables, cmn);
+
+	memcpy(&tunables->lnd_tun_u.lnd_sock, &ksock_default_tunables,
+	       sizeof(ksock_default_tunables));
+
+	return 0;
+}
+
 static const struct ln_key_list ksocknal_tunables_keys = {
 	.lkl_maxattr			= LNET_NET_SOCKLND_TUNABLES_ATTR_MAX,
 	.lkl_list			= {
@@ -806,27 +819,6 @@ ksocknal_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 	return 0;
 }
 
-static inline void
-ksocknal_nl_set_default(int cmd, int type, void *data)
-{
-	struct lnet_lnd_tunables *tunables = data;
-	struct lnet_ioctl_config_socklnd_tunables *lt;
-	struct lnet_ioctl_config_socklnd_tunables *df;
-
-	lt = &tunables->lnd_tun_u.lnd_sock;
-	df = &ksock_default_tunables;
-	switch (type) {
-	case LNET_NET_SOCKLND_TUNABLES_ATTR_CONNS_PER_PEER:
-		lt->lnd_conns_per_peer = df->lnd_conns_per_peer;
-		break;
-	case LNET_NET_SOCKLND_TUNABLES_ATTR_LND_TIMEOUT:
-		lt->lnd_timeout = df->lnd_timeout;
-		fallthrough;
-	default:
-		break;
-	}
-}
-
 static int
 ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 {
@@ -837,12 +829,7 @@ ksocknal_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
 
-	if (!attr) {
-		ksocknal_nl_set_default(cmd, type, data);
-		return 0;
-	}
-
-	if (nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
+	if (!attr || nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
 		return -EINVAL;
 
 	switch (type) {
@@ -2669,7 +2656,17 @@ ksocknal_startup(struct lnet_ni *ni)
 			CWARN("ksocklnd failed to allocate ni_interface\n");
 	}
 
-	ksocknal_tunables_setup(ni);
+	if (!ni->ni_lnd_tunables_set)
+		memcpy(&ni->ni_lnd_tunables.lnd_tun_u.lnd_sock,
+		       &ksock_default_tunables, sizeof(ksock_default_tunables));
+
+	ksocknal_tunables_setup(&ni->ni_lnd_tunables,
+				&ni->ni_net->net_tunables);
+
+	/* conns_per_peer requires access to the interface to query it. */
+	if (!ni->ni_lnd_tunables.lnd_tun_u.lnd_sock.lnd_conns_per_peer)
+		ni->ni_lnd_tunables.lnd_tun_u.lnd_sock.lnd_conns_per_peer =
+			ksocklnd_lookup_conns_per_peer(ni);
 
 	ni->ni_dev_cpt = ifaces[if_idx].li_cpt;
 	ksi->ksni_index = ifaces[if_idx].li_index;
@@ -2746,10 +2743,11 @@ static const struct lnet_lnd the_ksocklnd = {
 	.lnd_recv		= ksocknal_recv,
 	.lnd_notify_peer_down	= ksocknal_notify_gw_down,
 	.lnd_accept		= ksocknal_accept,
+	.lnd_tun_defaults	= ksocknal_tun_defaults,
 	.lnd_nl_get		= ksocknal_nl_get,
 	.lnd_nl_set		= ksocknal_nl_set,
-	.lnd_keys		= &ksocknal_tunables_keys,
 	.lnd_get_timeout	= ksocknal_timeout,
+	.lnd_keys		= &ksocknal_tunables_keys,
 };
 
 static int __init ksocklnd_init(void)

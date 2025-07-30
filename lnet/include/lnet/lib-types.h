@@ -334,14 +334,18 @@ struct lnet_lnd {
 	unsigned int (*lnd_get_dev_prio)(struct lnet_ni *ni,
 					 unsigned int dev_idx);
 
+	/* get LND timeout */
+	int (*lnd_get_timeout)(void);
+
+	/* Grab LND tunable from latest module settings */
+	int (*lnd_tun_defaults)(struct lnet_lnd_tunables *tunables,
+				struct lnet_ioctl_config_lnd_cmn_tunables *cmn);
+
 	/* Handle LND specific Netlink handling */
 	int (*lnd_nl_get)(int cmd, struct sk_buff *msg, int type, void *data);
 	int (*lnd_nl_set)(int cmd, struct nlattr *attr, int type, void *data);
 
 	const struct ln_key_list *lnd_keys;
-
-	/* get LND timeout */
-	int (*lnd_get_timeout)(void);
 };
 
 struct lnet_tx_queue {

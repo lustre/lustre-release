@@ -107,6 +107,8 @@ static char *traffic_class = "best_effort";
 module_param(traffic_class, charp, 0444);
 MODULE_PARM_DESC(traffic_class, "Traffic class - default is \"best_effort\"");
 
+struct lnet_ioctl_config_kfilnd_tunables kfi_default_tunables;
+
 static int
 kfilnd_tcstr2num(char *tcstr)
 {
@@ -125,13 +127,10 @@ kfilnd_tcstr2num(char *tcstr)
 	return -1;
 }
 
-int kfilnd_tunables_setup(struct lnet_ni *ni)
+int kfilnd_tunables_setup(struct lnet_lnd_tunables *lnd_tunables, bool set,
+			  struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables)
 {
-	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
 	struct lnet_ioctl_config_kfilnd_tunables *kfilnd_tunables;
-
-	net_tunables = &ni->ni_net->net_tunables;
-	kfilnd_tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_kfi;
 
 	if (net_tunables->lct_peer_timeout == -1)
 		net_tunables->lct_peer_timeout = peer_timeout;
@@ -150,8 +149,9 @@ int kfilnd_tunables_setup(struct lnet_ni *ni)
 		net_tunables->lct_peer_tx_credits =
 			net_tunables->lct_max_tx_credits;
 
+	kfilnd_tunables = &lnd_tunables->lnd_tun_u.lnd_kfi;
 	kfilnd_tunables->lnd_version = KFILND_MSG_VERSION;
-	if (!ni->ni_lnd_tunables_set) {
+	if (!set) {
 		kfilnd_tunables->lnd_prov_major_version = prov_major_version;
 		kfilnd_tunables->lnd_prov_minor_version = prov_minor_version;
 		kfilnd_tunables->lnd_auth_key = auth_key;
@@ -245,11 +245,26 @@ int kfilnd_tunables_init(void)
 		return -EINVAL;
 	}
 
+	if (strlen(traffic_class) >= LNET_MAX_STR_LEN ||
+	    strlen(traffic_class) == 0) {
+		CERROR("Traffic class length is invalid\n");
+		return -EINVAL;
+	}
+
 	if (kfilnd_tcstr2num(traffic_class) == -1) {
 		CERROR("Invalid traffic_class \"%s\" - Valid values are: best_effort, low_latency, dedicated_access, bulk_data, scavenger, and network_ctrl\n",
 		       traffic_class);
 		return -EINVAL;
 	}
+
+	kfi_default_tunables.lnd_version = KFILND_MSG_VERSION;
+	kfi_default_tunables.lnd_prov_major_version = prov_major_version;
+	kfi_default_tunables.lnd_prov_minor_version = prov_minor_version;
+	kfi_default_tunables.lnd_auth_key = auth_key;
+	strscpy(&kfi_default_tunables.lnd_traffic_class_str[0], traffic_class,
+		sizeof(kfi_default_tunables.lnd_traffic_class_str));
+	kfi_default_tunables.lnd_traffic_class = kfilnd_tcstr2num(traffic_class);
+	kfi_default_tunables.lnd_timeout = kfilnd_timeout();
 
 	return 0;
 }

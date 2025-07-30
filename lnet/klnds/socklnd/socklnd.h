@@ -601,6 +601,8 @@ static inline int ksocknal_conns_per_peer(void)
 	return *ksocknal_tunables.ksnd_conns_per_peer ?: 1;
 }
 
+int ksocklnd_lookup_conns_per_peer(struct lnet_ni *ni);
+
 int ksocknal_startup(struct lnet_ni *ni);
 void ksocknal_shutdown(struct lnet_ni *ni);
 int ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg);
@@ -687,7 +689,8 @@ extern int ksocknal_lib_get_conn_tunables(struct ksock_conn *conn, int *txmem,
 					  int *rxmem, int *nagle);
 
 extern int ksocknal_tunables_init(void);
-extern void ksocknal_tunables_setup(struct lnet_ni *ni);
+void ksocknal_tunables_setup(struct lnet_lnd_tunables *lnd_tunables,
+			     struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables);
 
 extern void ksocknal_lib_csum_tx(struct ksock_tx *tx);
 

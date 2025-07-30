@@ -229,21 +229,12 @@ kiblnd_msg_queue_size(int version, struct lnet_ni *ni)
 }
 
 int
-kiblnd_tunables_setup(struct lnet_ni *ni)
+kiblnd_tunables_setup(struct lnet_lnd_tunables *lnd_tunables,
+		      struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables)
 {
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
-	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
 
-	/*
-	 * if there was no tunables specified, setup the tunables to be
-	 * defaulted
-	 */
-	if (!ni->ni_lnd_tunables_set)
-		memcpy(&ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib,
-		       &kib_default_tunables, sizeof(*tunables));
-
-	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
-
+	tunables = &lnd_tunables->lnd_tun_u.lnd_o2ib;
 	/* Current API version */
 	tunables->lnd_version = CURRENT_LND_VERSION;
 
@@ -254,8 +245,6 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 		       *kiblnd_tunables.kib_ib_mtu);
 		return -EINVAL;
 	}
-
-	net_tunables = &ni->ni_net->net_tunables;
 
 	if (net_tunables->lct_peer_timeout == -1)
 		net_tunables->lct_peer_timeout = peer_timeout;
@@ -302,7 +291,7 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 		tunables->lnd_peercredits_hiw = net_tunables->lct_peer_tx_credits - 1;
 
 	if (tunables->lnd_concurrent_sends == 0)
-			tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits;
+		tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits;
 
 	if (tunables->lnd_concurrent_sends > net_tunables->lct_peer_tx_credits * 2)
 		tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits * 2;

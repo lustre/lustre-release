@@ -309,7 +309,7 @@ static int ksocklnd_speed2cpp(int speed)
 }
 #endif
 
-static int ksocklnd_lookup_conns_per_peer(struct lnet_ni *ni)
+int ksocklnd_lookup_conns_per_peer(struct lnet_ni *ni)
 {
 	int cpp = 1;
 #ifdef HAVE_ETHTOOL_LINK_SETTINGS
@@ -393,22 +393,14 @@ int ksocknal_tunables_init(void)
 	return 0;
 }
 
-void ksocknal_tunables_setup(struct lnet_ni *ni)
+void ksocknal_tunables_setup(struct lnet_lnd_tunables *lnd_tunables,
+			     struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables)
 {
 	struct lnet_ioctl_config_socklnd_tunables *tunables;
-	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
 
-	/* If no tunables specified, setup default tunables */
-	if (!ni->ni_lnd_tunables_set)
-		memcpy(&ni->ni_lnd_tunables.lnd_tun_u.lnd_sock,
-		       &ksock_default_tunables, sizeof(*tunables));
-
-	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_sock;
-
+	tunables = &lnd_tunables->lnd_tun_u.lnd_sock;
 	/* Current API version */
 	tunables->lnd_version = CURRENT_LND_VERSION;
-
-	net_tunables = &ni->ni_net->net_tunables;
 
 	if (net_tunables->lct_peer_timeout == -1)
 		net_tunables->lct_peer_timeout =
@@ -430,10 +422,6 @@ void ksocknal_tunables_setup(struct lnet_ni *ni)
 	if (net_tunables->lct_peer_rtr_credits == -1)
 		net_tunables->lct_peer_rtr_credits =
 			*ksocknal_tunables.ksnd_peerrtrcredits;
-
-	if (!tunables->lnd_conns_per_peer)
-		tunables->lnd_conns_per_peer =
-			ksocklnd_lookup_conns_per_peer(ni);
 
 	if (tunables->lnd_tos < 0)
 		tunables->lnd_tos = tos;

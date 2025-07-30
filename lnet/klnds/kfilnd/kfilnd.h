@@ -132,6 +132,8 @@ enum kfilnd_ni_lnd_tunables_attr {
 
 #define LNET_NET_KFILND_TUNABLES_ATTR_MAX (__LNET_NET_KFILND_TUNABLES_ATTR_MAX_PLUS_ONE - 1)
 
+extern struct lnet_ioctl_config_kfilnd_tunables kfi_default_tunables;
+
 extern struct dentry *kfilnd_debug_dir;
 extern const struct file_operations kfilnd_initiator_state_stats_file_ops;
 extern const struct file_operations kfilnd_target_state_stats_file_ops;
@@ -153,7 +155,8 @@ extern unsigned int wq_high_priority;
 extern unsigned int wq_cpu_intensive;
 extern unsigned int wq_max_active;
 
-int kfilnd_tunables_setup(struct lnet_ni *ni);
+int kfilnd_tunables_setup(struct lnet_lnd_tunables *lnd_tunables, bool set,
+			  struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables);
 int kfilnd_tunables_init(void);
 
 struct kfilnd_transaction;

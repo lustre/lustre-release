@@ -1757,6 +1757,8 @@ kgnilnd_find_net(lnet_nid_t nid, kgn_net_t **netp)
 #define KGNILND_POISON(ptr, c, s) memset(ptr, c, s)
 #endif
 
+#define CURRENT_LND_VERSION 1
+
 enum kgnilnd_ni_lnd_tunables_attr {
 	LNET_NET_GNILND_TUNABLES_ATTR_UNSPEC = 0,
 

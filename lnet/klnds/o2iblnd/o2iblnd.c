@@ -1202,6 +1202,23 @@ kiblnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 	return rc;
 }
 
+static int
+kiblnd_tun_defaults(struct lnet_lnd_tunables *tunables,
+		    struct lnet_ioctl_config_lnd_cmn_tunables *cmn)
+{
+	int rc;
+
+	/* sync to latest module settings */
+	rc = kiblnd_tunables_setup(tunables, cmn);
+	if (rc < 0)
+		return 0;
+
+	memcpy(&tunables->lnd_tun_u.lnd_o2ib, &kib_default_tunables,
+	       sizeof(kib_default_tunables));
+
+	return rc;
+}
+
 static const struct ln_key_list kiblnd_tunables_keys = {
 	.lkl_maxattr                    = LNET_NET_O2IBLND_TUNABLES_ATTR_MAX,
 	.lkl_list			= {
@@ -1286,49 +1303,6 @@ kiblnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 	return 0;
 }
 
-static inline void
-kiblnd_nl_set_default(int cmd, int type, void *data)
-{
-	struct lnet_lnd_tunables *tunables = data;
-	struct lnet_ioctl_config_o2iblnd_tunables *lt;
-	struct lnet_ioctl_config_o2iblnd_tunables *df;
-
-	lt = &tunables->lnd_tun_u.lnd_o2ib;
-	df = &kib_default_tunables;
-	switch (type) {
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_HIW_PEER_CREDITS:
-		lt->lnd_peercredits_hiw = df->lnd_peercredits_hiw;
-		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_MAP_ON_DEMAND:
-		lt->lnd_map_on_demand = df->lnd_map_on_demand;
-		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_CONCURRENT_SENDS:
-		lt->lnd_concurrent_sends = df->lnd_concurrent_sends;
-		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_POOL_SIZE:
-		lt->lnd_fmr_pool_size = df->lnd_fmr_pool_size;
-		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_FLUSH_TRIGGER:
-		lt->lnd_fmr_flush_trigger = df->lnd_fmr_flush_trigger;
-		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_CACHE:
-		lt->lnd_fmr_cache = df->lnd_fmr_cache;
-		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_NTX:
-		lt->lnd_ntx = df->lnd_ntx;
-		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TIMEOUT:
-		lt->lnd_timeout = df->lnd_timeout;
-		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_CONNS_PER_PEER:
-		lt->lnd_conns_per_peer = df->lnd_conns_per_peer;
-		fallthrough;
-	default:
-		break;
-	}
-
-}
-
 static int
 kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 {
@@ -1339,12 +1313,7 @@ kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
 
-	if (!attr) {
-		kiblnd_nl_set_default(cmd, type, data);
-		return 0;
-	}
-
-	if (nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
+	if (!attr || nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
 		return -EINVAL;
 
 	switch (type) {
@@ -3753,7 +3722,16 @@ kiblnd_startup(struct lnet_ni *ni)
 	net->ibn_ni = ni;
 	net->ibn_incarnation = ktime_get_real_ns() / NSEC_PER_USEC;
 
-	kiblnd_tunables_setup(ni);
+	/* if there was no tunables specified, setup the tunables to be
+	 * defaulted
+	 */
+	if (!ni->ni_lnd_tunables_set)
+		memcpy(&ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib,
+		       &kib_default_tunables, sizeof(kib_default_tunables));
+	rc = kiblnd_tunables_setup(&ni->ni_lnd_tunables,
+				   &ni->ni_net->net_tunables);
+	if (rc < 0)
+		goto failed;
 
 	/* Multi-Rail wants each secondary
 	 * IP to be treated as an unique 'struct ni' interface.
@@ -3898,17 +3876,18 @@ failed:
 }
 
 static const struct lnet_lnd the_o2iblnd = {
-	.lnd_type	= O2IBLND,
-	.lnd_startup	= kiblnd_startup,
-	.lnd_shutdown	= kiblnd_shutdown,
-	.lnd_ctl	= kiblnd_ctl,
-	.lnd_send	= kiblnd_send,
-	.lnd_recv	= kiblnd_recv,
-	.lnd_get_dev_prio = kiblnd_get_dev_prio,
-	.lnd_nl_get	= kiblnd_nl_get,
-	.lnd_nl_set	= kiblnd_nl_set,
-	.lnd_keys	= &kiblnd_tunables_keys,
-	.lnd_get_timeout = kiblnd_timeout,
+	.lnd_type		= O2IBLND,
+	.lnd_startup		= kiblnd_startup,
+	.lnd_shutdown		= kiblnd_shutdown,
+	.lnd_ctl		= kiblnd_ctl,
+	.lnd_send		= kiblnd_send,
+	.lnd_recv		= kiblnd_recv,
+	.lnd_get_dev_prio	= kiblnd_get_dev_prio,
+	.lnd_tun_defaults	= kiblnd_tun_defaults,
+	.lnd_nl_get		= kiblnd_nl_get,
+	.lnd_nl_set		= kiblnd_nl_set,
+	.lnd_get_timeout	= kiblnd_timeout,
+	.lnd_keys		= &kiblnd_tunables_keys,
 };
 
 static void ko2inlnd_assert_wire_constants(void)

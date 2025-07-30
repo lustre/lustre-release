@@ -1128,7 +1128,8 @@ int kiblnd_fmr_pool_map(struct kib_fmr_poolset *fps, struct kib_tx *tx,
 			struct kib_fmr *fmr);
 void kiblnd_fmr_pool_unmap(struct kib_fmr *fmr, int status);
 
-int  kiblnd_tunables_setup(struct lnet_ni *ni);
+int kiblnd_tunables_setup(struct lnet_lnd_tunables *lnd_tunables,
+			  struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables);
 int  kiblnd_tunables_init(void);
 
 int  kiblnd_connd (void *arg);

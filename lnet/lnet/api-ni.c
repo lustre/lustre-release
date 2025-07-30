@@ -6166,24 +6166,20 @@ static int lnet_genl_parse_lnd_tunables(struct nlattr *settings,
 	return rc;
 }
 
-static inline void
+static inline int
 lnet_genl_init_tunables(const struct lnet_lnd *lnd,
 			struct lnet_ioctl_config_lnd_tunables *tun)
 {
-	const struct ln_key_list *list = lnd ? lnd->lnd_keys : NULL;
-	int i;
-
 	tun->lt_cmn.lct_peer_timeout = -1;
 	tun->lt_cmn.lct_peer_tx_credits = -1;
 	tun->lt_cmn.lct_peer_rtr_credits = -1;
 	tun->lt_cmn.lct_max_tx_credits = -1;
 
-	if (!list || !lnd->lnd_nl_set || !list->lkl_maxattr)
-		return;
+	if (!lnd || !lnd->lnd_tun_defaults)
+		return 0;
 
 	/* init lnd tunables with default values */
-	for (i = 1; i <= list->lkl_maxattr; i++)
-		lnd->lnd_nl_set(LNET_CMD_NETS, NULL, i, &tun->lt_tun);
+	return lnd->lnd_tun_defaults(&tun->lt_tun, &tun->lt_cmn);
 }
 
 static int
@@ -6213,7 +6209,12 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 	}
 
 	/* Use LND defaults */
-	lnet_genl_init_tunables(lnd, tun);
+	rc = lnet_genl_init_tunables(lnd, tun);
+	if (rc < 0) {
+		GENL_SET_ERR_MSG(info, "default tunables are invalid");
+		GOTO(out, rc);
+	}
+
 	conf->lic_ncpts = 0;
 
 	nla_for_each_nested(settings, entry, rem3) {

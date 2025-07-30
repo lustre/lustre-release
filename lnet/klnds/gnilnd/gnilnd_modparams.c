@@ -13,8 +13,6 @@
 
 #include "gnilnd.h"
 
-#define CURRENT_LND_VERSION 1
-
 static int credits = GNILND_DEFAULT_CREDITS;
 module_param(credits, int, 0444);
 MODULE_PARM_DESC(credits, "# concurrent sends");
