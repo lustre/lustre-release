@@ -5,7 +5,7 @@ rhel8/ext4-prealloc.patch
 ubuntu18/ext4-osd-iop-common.patch
 rhel8.7/ext4-misc.patch
 rhel8.7/ext4-mballoc-extra-checks.patch
-ubuntu18/ext4-hash-indexed-dir-dotdot-update.patch
+rhel8.7/ext4-hash-indexed-dir-dotdot-update.patch
 rhel8.1/ext4-kill-dx-root.patch
 rhel8.7/ext4-mballoc-pa-free-mismatch.patch
 rhel8.4/ext4-data-in-dirent.patch
