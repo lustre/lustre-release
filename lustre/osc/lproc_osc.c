@@ -219,7 +219,7 @@ static ssize_t osc_cached_mb_seq_write(struct file *file,
 
 		env = cl_env_get(&refcheck);
 		if (!IS_ERR(env)) {
-			(void)osc_lru_shrink(env, cli, rc, true);
+			(void)osc_lru_shrink(env, cli, rc, true, NULL);
 			cl_env_put(env, &refcheck);
 		}
 	}
@@ -264,7 +264,8 @@ static ssize_t osc_unevict_cached_mb_store(struct kobject *kobj,
 			 * list.
 			 */
 			(void)osc_lru_shrink(env, cli,
-				atomic_long_read(&cli->cl_lru_in_list), true);
+					atomic_long_read(&cli->cl_lru_in_list),
+					true, NULL);
 			cl_env_put(env, &refcheck);
 		}
 		return count;

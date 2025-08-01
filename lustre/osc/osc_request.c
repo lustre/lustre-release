@@ -3679,7 +3679,7 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		long nr = atomic_long_read(&cli->cl_lru_in_list) >> 1;
 		long target = *(long *)val;
 
-		nr = osc_lru_shrink(env, cli, min(nr, target), true);
+		nr = osc_lru_shrink(env, cli, min(nr, target), true, NULL);
 		*(long *)val -= nr;
 		RETURN(0);
 	}
@@ -3698,7 +3698,7 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		 */
 		ret = osc_lru_shrink(env, cli,
 				     atomic_long_read(&cli->cl_lru_in_list),
-				     true);
+				     true, NULL);
 		if (ret > 0)
 			ret = 0;
 

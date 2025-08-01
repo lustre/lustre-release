@@ -294,7 +294,7 @@ mdc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 
 		env = cl_env_get(&refcheck);
 		if (!IS_ERR(env)) {
-			(void)osc_lru_shrink(env, cli, rc, true);
+			(void)osc_lru_shrink(env, cli, rc, true, NULL);
 			cl_env_put(env, &refcheck);
 		}
 	}
