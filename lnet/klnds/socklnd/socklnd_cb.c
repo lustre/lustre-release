@@ -2136,41 +2136,36 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
  * be updated if failed to create, so caller wouldn't keep try while
  * running out of resource.
  */
-static int
-ksocknal_connd_check_start(time64_t sec, long *timeout)
+static void ksocknal_connd_check_start(time64_t sec, long *timeout)
 {
 	int rc;
 	int total = ksocknal_data.ksnd_connd_starting +
 		    ksocknal_data.ksnd_connd_running;
 
-	if (unlikely(ksocknal_data.ksnd_init < SOCKNAL_INIT_ALL)) {
-		/* still in initializing */
-		return 0;
-	}
+	/* still in initializing */
+	if (unlikely(ksocknal_data.ksnd_init < SOCKNAL_INIT_ALL))
+		return;
 
+	/* can't create more connd, or still have enough
+	 * threads to handle more connecting
+	 */
 	if (total >= *ksocknal_tunables.ksnd_nconnds_max ||
-	    total > ksocknal_data.ksnd_connd_connecting + SOCKNAL_CONND_RESV) {
-		/* can't create more connd, or still have enough
-		 * threads to handle more connecting
-		 */
-		return 0;
-	}
+	    total > ksocknal_data.ksnd_connd_connecting + SOCKNAL_CONND_RESV)
+		return;
 
-	if (list_empty(&ksocknal_data.ksnd_connd_routes)) {
-		/* no pending connecting request */
-		return 0;
-	}
+	/* no pending connecting request */
+	if (list_empty(&ksocknal_data.ksnd_connd_routes))
+		return;
 
+	/* may run out of resource, retry later */
 	if (sec - ksocknal_data.ksnd_connd_failed_stamp <= 1) {
-		/* may run out of resource, retry later */
 		*timeout = cfs_time_seconds(1);
-		return 0;
+		return;
 	}
 
-	if (ksocknal_data.ksnd_connd_starting > 0) {
-		/* serialize starting to avoid flood */
-		return 0;
-	}
+	/* serialize starting to avoid flood */
+	if (ksocknal_data.ksnd_connd_starting > 0)
+		return;
 
 	ksocknal_data.ksnd_connd_starting_stamp = sec;
 	ksocknal_data.ksnd_connd_starting++;
@@ -2182,14 +2177,14 @@ ksocknal_connd_check_start(time64_t sec, long *timeout)
 
 	spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 	if (rc == 0)
-		return 1;
+		return;
 
 	/* we tried ... */
 	LASSERT(ksocknal_data.ksnd_connd_starting > 0);
 	ksocknal_data.ksnd_connd_starting--;
 	ksocknal_data.ksnd_connd_failed_stamp = ktime_get_real_seconds();
 
-	return 1;
+	return;
 }
 
 /* check whether current thread can exit, it will return 1 if there are too
@@ -2263,7 +2258,6 @@ int
 ksocknal_connd(void *arg)
 {
 	spinlock_t *connd_lock = &ksocknal_data.ksnd_connd_lock;
-	struct ksock_connreq *cr;
 	wait_queue_entry_t wait;
 	int cons_retry = 0;
 
@@ -2279,7 +2273,7 @@ ksocknal_connd(void *arg)
 		struct ksock_conn_cb *conn_cb = NULL;
 		time64_t sec = ktime_get_real_seconds();
 		long timeout = MAX_SCHEDULE_TIMEOUT;
-		bool dropped_lock = false;
+		struct ksock_connreq *cr = NULL;
 
 		if (ksocknal_connd_check_stop(sec, &timeout)) {
 			/* wakeup another one to check stop */
@@ -2287,10 +2281,8 @@ ksocknal_connd(void *arg)
 			break;
 		}
 
-		if (ksocknal_connd_check_start(sec, &timeout)) {
-			/* created new thread */
-			dropped_lock = true;
-		}
+		/* Start new thread? */
+		ksocknal_connd_check_start(sec, &timeout);
 
 		cr = list_first_entry_or_null(&ksocknal_data.ksnd_connd_connreqs,
 					      struct ksock_connreq, ksncr_list);
@@ -2298,7 +2290,6 @@ ksocknal_connd(void *arg)
 			/* Connection accepted by the listener */
 			list_del(&cr->ksncr_list);
 			spin_unlock_bh(connd_lock);
-			dropped_lock = true;
 
 			ksocknal_create_conn(cr->ksncr_ni, NULL,
 					     cr->ksncr_sock, SOCKLND_CONN_NONE);
@@ -2320,7 +2311,6 @@ ksocknal_connd(void *arg)
 			list_del(&conn_cb->ksnr_connd_list);
 			ksocknal_data.ksnd_connd_connecting++;
 			spin_unlock_bh(connd_lock);
-			dropped_lock = true;
 
 			if (ksocknal_connect(conn_cb)) {
 				/* consecutive retry */
@@ -2339,25 +2329,20 @@ ksocknal_connd(void *arg)
 			ksocknal_data.ksnd_connd_connecting--;
 		}
 
-		if (dropped_lock) {
-			if (!need_resched())
-				continue;
+		/* Nothing to do for 'timeout' */
+		if (!cr && !conn_cb) {
+			spin_unlock_bh(connd_lock);
+			set_current_state(TASK_INTERRUPTIBLE);
+			add_wait_queue_exclusive(&ksocknal_data.ksnd_connd_waitq,
+						 &wait);
+			schedule_timeout(timeout);
+			remove_wait_queue(&ksocknal_data.ksnd_connd_waitq, &wait);
+			spin_lock_bh(connd_lock);
+		} else if (need_resched()) {
 			spin_unlock_bh(connd_lock);
 			cond_resched();
 			spin_lock_bh(connd_lock);
-			continue;
 		}
-
-		/* Nothing to do for 'timeout'  */
-		set_current_state(TASK_INTERRUPTIBLE);
-		add_wait_queue_exclusive(&ksocknal_data.ksnd_connd_waitq,
-					 &wait);
-		spin_unlock_bh(connd_lock);
-
-		schedule_timeout(timeout);
-
-		remove_wait_queue(&ksocknal_data.ksnd_connd_waitq, &wait);
-		spin_lock_bh(connd_lock);
 	}
 	ksocknal_data.ksnd_connd_running--;
 	spin_unlock_bh(connd_lock);
