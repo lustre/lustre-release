@@ -172,15 +172,23 @@ fi
 %config(noreplace) %{_sysconfdir}/sysconfig/dkms-lustre
 
 %post
+for POSTINST in /usr/lib/dkms/common.postinst; do
+    if [ -f $POSTINST ]; then
+        $POSTINST %{module} %{version}
+        exit $?
+    fi
+done
 dkms add -m %{module} -v %{version} %{!?not_rpm:--rpm_safe_upgrade} ||:
 dkms build -m %{module} -v %{version} || :
-dkms install --force -m %{module} -v %{version} ||:
+dkms install --force -m %{module} -v %{version}
 
 %preun
 dkms remove -m %{module} -v %{version} --all %{!?not_rpm:--rpm_safe_upgrade}
 exit 0
 
 %changelog
+* Sat Jul 12 2025 Shaun Tancheff <shaun.tancheff@hpe.com>
+- Use common.postinst if it is available
 * Wed Dec 11 2024 Jian Yu <yujian@whamcloud.com>
 - Fix the /usr/lib/dkms/common.postinst does not exist warning.
 * Wed May 16 2018 Joe Grund <joe.grund@intel.com>
