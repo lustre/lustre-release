@@ -55,7 +55,6 @@
 #define SOCKNAL_NSCHEDS_HIGH	(SOCKNAL_NSCHEDS << 1)
 
 #define SOCKNAL_PEER_HASH_BITS	7	/* log2 of # peer_ni lists */
-#define SOCKNAL_INSANITY_RECONN	5000	/* connd trying on reconn infinitely */
 #define SOCKNAL_ENOMEM_RETRY	1	/* seconds between retries */
 
 #define SOCKNAL_SINGLE_FRAG_TX      0	/* disable multi-fragment sends */
@@ -368,7 +367,7 @@ struct ksock_conn {
 };
 
 #define SOCKNAL_CONN_COUNT_MAX_BITS	8	/* max conn count bits */
-#define SOCKNAL_MAX_BUSY_RETRIES	3
+#define SOCKNAL_MAX_RETRIES		3
 
 struct ksock_conn_cb {
 	struct list_head	ksnr_connd_list;/* chain on ksnr_connd_routes */
@@ -390,9 +389,9 @@ struct ksock_conn_cb {
 	unsigned int		ksnr_max_conns; /* conns_per_peer at peer
 						 * creation
 						 */
-	unsigned int		ksnr_busy_retry_count;/* counts retry attempts
-						       * due to EALREADY rc
-						       */
+	unsigned int		ksnr_retry_count;/* counts retry attempts
+						  * due to EALREADY rc
+						  */
 };
 
 #define SOCKNAL_KEEPALIVE_PING          1       /* cookie for keepalive ping */

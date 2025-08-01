@@ -2016,18 +2016,15 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 				rc, &peer_ni->ksnp_id.nid,
 				(struct sockaddr *)&conn_cb->ksnr_addr);
 			goto failed;
+		} else if (rc > 0) {
+			/* A +ve RC means I have to retry because I lost the connection
+			 * race or I have to renegotiate protocol version
+			 */
+			conn_cb->ksnr_retry_count++;
+			retry_later = true;
+		} else {
+			conn_cb->ksnr_retry_count = 0;
 		}
-
-		if (rc == EALREADY &&
-		    ksocknal_get_conn_count_by_type(conn_cb, type) > 0)
-			conn_cb->ksnr_busy_retry_count += 1;
-		else
-			conn_cb->ksnr_busy_retry_count = 0;
-
-		/* A +ve RC means I have to retry because I lost the connection
-		 * race or I have to renegotiate protocol version
-		 */
-		retry_later = (rc != 0);
 
 		if (retry_later)
 			CDEBUG(D_NET, "peer_ni %s: conn race, retry later. rc %d\n",
@@ -2039,7 +2036,7 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
 	conn_cb->ksnr_scheduled = 0;
 	conn_cb->ksnr_connecting = 0;
 
-	if (conn_cb->ksnr_busy_retry_count >= SOCKNAL_MAX_BUSY_RETRIES &&
+	if (conn_cb->ksnr_retry_count >= SOCKNAL_MAX_RETRIES &&
 	    type > SOCKLND_CONN_NONE) {
 		/* After so many retries due to EALREADY assume that
 		 * the peer doesn't support as many connections as we want
@@ -2259,7 +2256,6 @@ ksocknal_connd(void *arg)
 {
 	spinlock_t *connd_lock = &ksocknal_data.ksnd_connd_lock;
 	wait_queue_entry_t wait;
-	int cons_retry = 0;
 
 	init_wait(&wait);
 
@@ -2310,22 +2306,12 @@ ksocknal_connd(void *arg)
 		if (conn_cb) {
 			list_del(&conn_cb->ksnr_connd_list);
 			ksocknal_data.ksnd_connd_connecting++;
+
 			spin_unlock_bh(connd_lock);
-
-			if (ksocknal_connect(conn_cb)) {
-				/* consecutive retry */
-				if (cons_retry++ > SOCKNAL_INSANITY_RECONN) {
-					CWARN("massive consecutive re-connecting to %pISc\n",
-					      &conn_cb->ksnr_addr);
-					cons_retry = 0;
-				}
-			} else {
-				cons_retry = 0;
-			}
-
+			ksocknal_connect(conn_cb);
 			ksocknal_conn_cb_decref(conn_cb);
-
 			spin_lock_bh(connd_lock);
+
 			ksocknal_data.ksnd_connd_connecting--;
 		}
 

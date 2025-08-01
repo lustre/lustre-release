@@ -107,21 +107,9 @@ ksocknal_create_conn_cb(struct sockaddr *addr)
 		return NULL;
 
 	refcount_set(&conn_cb->ksnr_refcount, 1);
-	conn_cb->ksnr_peer = NULL;
-	conn_cb->ksnr_retry_interval = 0;         /* OK to connect at any time */
 	rpc_copy_addr((struct sockaddr *)&conn_cb->ksnr_addr, addr);
 	rpc_set_port((struct sockaddr *)&conn_cb->ksnr_addr,
 		     rpc_get_port(addr));
-	conn_cb->ksnr_scheduled = 0;
-	conn_cb->ksnr_connecting = 0;
-	conn_cb->ksnr_connected = 0;
-	conn_cb->ksnr_deleted = 0;
-	conn_cb->ksnr_conn_count = 0;
-	conn_cb->ksnr_ctrl_conn_count = 0;
-	conn_cb->ksnr_blki_conn_count = 0;
-	conn_cb->ksnr_blko_conn_count = 0;
-	conn_cb->ksnr_max_conns = 0;
-	conn_cb->ksnr_busy_retry_count = 0;
 
 	return conn_cb;
 }
