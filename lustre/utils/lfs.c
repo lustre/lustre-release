@@ -503,8 +503,8 @@ command_t cmdlist[] = {
 	 "report filesystem disk space usage or inodes usage "
 	 "of each MDS and all OSDs or a batch belonging to a specific pool.\n"
 	 "Usage: df [--inodes|-i] [--human-readable|-h] [--lazy|-l]\n"
-	 "[--mdt|-m[INDEX]] [--ost|-o[INDEX]]\n"
-	 "[--pool|-p FSNAME[.POOL]] [PATH]"},
+	 "[--mdt|-m[INDEX]] [--ost|-o[INDEX]] [--output|-u] [--no-header|-N]\n"
+	 "[--only-summary|-s] [--pool|-p FSNAME[.POOL]] [PATH]"},
 	{"getname", lfs_getname, 0,
 	 "list instances and specified mount points [for specified path only]\n"
 	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [--uuid|-u]\n"
@@ -7400,6 +7400,26 @@ enum mntdf_flags {
 	MNTDF_VERBOSE	= 0x0008,
 	MNTDF_SHOW	= 0x0010,
 	MNTDF_DECIMAL	= 0x0020,
+	MNTDF_NO_HEADER	= 0x0040,
+	MNTDF_ONLY_SUMMARY = 0x0080,
+};
+
+enum showdf_fields {
+	SHOWDF_UUID   = 0x0001,
+	SHOWDF_BTOTAL = 0x0002,
+	SHOWDF_BUSED  = 0x0004,
+	SHOWDF_BFREE  = 0x0008,
+	SHOWDF_BAVAIL = 0x0010,
+	SHOWDF_BPCT   = 0x0020,
+	SHOWDF_BLOCKS = (SHOWDF_BTOTAL|SHOWDF_BUSED|SHOWDF_BFREE|SHOWDF_BAVAIL|
+			 SHOWDF_BPCT),
+	SHOWDF_ITOTAL = 0x0040,
+	SHOWDF_IUSED  = 0x0080,
+	SHOWDF_IFREE  = 0x0100,
+	SHOWDF_IPCT   = 0x0200,
+	SHOWDF_INODES = (SHOWDF_ITOTAL|SHOWDF_IUSED|SHOWDF_IFREE|SHOWDF_IPCT),
+	SHOWDF_MNTDIR = 0x0400,
+	SHOWDF_DEVICE = 0x0800,
 };
 
 #define COOK(value, base)					\
@@ -7436,77 +7456,108 @@ static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 	return (ratio - (int)ratio) > 0 ? (int)(ratio + 1) : (int)ratio;
 }
 
+/* Helper function to format and print a value with optional cooking */
+static void print_field_value(long long value, enum mntdf_flags flags, int base,
+			      char *suffix)
+{
+	if (flags & MNTDF_COOKED) {
+		double cook_val = (double)value;
+		int i = COOK(cook_val, base);
+
+		if (i > 0)
+			printf(HDF" ", cook_val, suffix[i - 1]);
+		else
+			printf(CDF" ", value);
+	} else {
+		printf(CDF" ", value);
+	}
+}
+
 static int showdf(char *mntdir, struct obd_statfs *stat,
 		  const char *uuid, enum mntdf_flags flags,
-		  char *type, int index, int rc)
+		  char *type, int index, int rc, enum showdf_fields fields,
+		  enum showdf_fields *field_order, int field_count)
 {
-	long long avail, used, total;
-	int ratio = 0;
+	int base = flags & MNTDF_DECIMAL ? 1000 : 1024;
 	char *suffix = flags & MNTDF_DECIMAL ? "kMGTPEZY" : "KMGTPEZY";
-	/* Note if we have >2^64 bytes/fs these buffers will need to be grown */
-	char tbuf[3 * sizeof(__u64)];
-	char ubuf[3 * sizeof(__u64)];
-	char abuf[3 * sizeof(__u64)];
-	char rbuf[3 * sizeof(__u64)];
+	int shift = flags & MNTDF_COOKED ? 0 : 10;
+	long long btotal, bused, bfree, bavail;
+	long long itotal, iused, ifree;
+	int ratio, iratio;
+	int i;
 
 	if (!uuid || !stat)
 		return -EINVAL;
 
 	switch (rc) {
 	case 0:
-		if (flags & MNTDF_INODES) {
-			avail = stat->os_ffree;
-			used = stat->os_files - stat->os_ffree;
-			total = stat->os_files;
-		} else {
-			int shift = flags & MNTDF_COOKED ? 0 : 10;
+		/* Print fields in specified order */
+		for (i = 0; i < field_count; i++) {
+			enum showdf_fields field = field_order[i];
 
-			avail = (stat->os_bavail * stat->os_bsize) >> shift;
-			used  = ((stat->os_blocks - stat->os_bfree) *
-				 stat->os_bsize) >> shift;
-			total = (stat->os_blocks * stat->os_bsize) >> shift;
+			fields |= field;
+
+			switch (field) {
+			case SHOWDF_UUID:
+				printf(UUF" ", uuid);
+				break;
+			case SHOWDF_BTOTAL:
+				btotal = (stat->os_blocks *
+					  stat->os_bsize) >> shift;
+
+				print_field_value(btotal, flags, base, suffix);
+				break;
+			case SHOWDF_BUSED:
+				bused = ((stat->os_blocks - stat->os_bfree) *
+					 stat->os_bsize) >> shift;
+
+				print_field_value(bused, flags, base, suffix);
+				break;
+			case SHOWDF_BFREE:
+				bfree = (stat->os_bfree *
+					 stat->os_bsize) >> shift;
+
+				print_field_value(bfree, flags, base, suffix);
+				break;
+			case SHOWDF_BAVAIL:
+				bavail = (stat->os_bavail *
+					  stat->os_bsize) >> shift;
+
+				print_field_value(bavail, flags, base, suffix);
+				break;
+			case SHOWDF_BPCT:
+				ratio = obd_statfs_ratio(stat, false);
+
+				printf(RDF" ", ratio);
+				break;
+			case SHOWDF_ITOTAL:
+				itotal = stat->os_files;
+
+				print_field_value(itotal, flags, base, suffix);
+				break;
+			case SHOWDF_IUSED:
+				iused = stat->os_files - stat->os_ffree;
+
+				print_field_value(iused, flags, base, suffix);
+				break;
+			case SHOWDF_IFREE:
+				ifree = stat->os_ffree;
+
+				print_field_value(ifree, flags, base, suffix);
+				break;
+			case SHOWDF_IPCT:
+				iratio = obd_statfs_ratio(stat, true);
+
+				printf(RDF" ", iratio);
+				break;
+			case SHOWDF_MNTDIR:
+				printf(" %-s", mntdir);
+				break;
+			default:
+				break;
+			}
 		}
-
-		ratio = obd_statfs_ratio(stat, flags & MNTDF_INODES);
-
-		if (flags & MNTDF_COOKED) {
-			int base = flags & MNTDF_DECIMAL ? 1000 : 1024;
-			double cook_val;
-			int i;
-
-			cook_val = (double)total;
-			i = COOK(cook_val, base);
-			if (i > 0)
-				snprintf(tbuf, sizeof(tbuf), HDF, cook_val,
-					 suffix[i - 1]);
-			else
-				snprintf(tbuf, sizeof(tbuf), CDF, total);
-
-			cook_val = (double)used;
-			i = COOK(cook_val, base);
-			if (i > 0)
-				snprintf(ubuf, sizeof(ubuf), HDF, cook_val,
-					 suffix[i - 1]);
-			else
-				snprintf(ubuf, sizeof(ubuf), CDF, used);
-
-			cook_val = (double)avail;
-			i = COOK(cook_val, base);
-			if (i > 0)
-				snprintf(abuf, sizeof(abuf), HDF, cook_val,
-					 suffix[i - 1]);
-			else
-				snprintf(abuf, sizeof(abuf), CDF, avail);
-		} else {
-			snprintf(tbuf, sizeof(tbuf), CDF, total);
-			snprintf(ubuf, sizeof(tbuf), CDF, used);
-			snprintf(abuf, sizeof(tbuf), CDF, avail);
-		}
-
-		sprintf(rbuf, RDF, ratio);
-		printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s",
-		       uuid, tbuf, ubuf, abuf, rbuf, mntdir);
-		if (type)
+		if (type && fields & SHOWDF_MNTDIR)
 			printf("[%s:%d]", type, index);
 
 		if (stat->os_state) {
@@ -7563,7 +7614,9 @@ struct ll_statfs_buf {
 };
 
 static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
-		 int ops, struct ll_statfs_buf *lsb, int mdt_idx, int ost_idx)
+		 int ops, struct ll_statfs_buf *lsb, int mdt_idx, int ost_idx,
+		 enum showdf_fields fields, enum showdf_fields *field_order,
+		 int field_count)
 {
 	struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
 	struct obd_uuid uuid_buf;
@@ -7580,6 +7633,10 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 	int fd;
 	int rc = 0;
 	int rc2;
+	int total_field_count = 0;
+	enum showdf_fields temp_fields;
+	bool show_headers;
+	bool only_summary;
 
 	if (pool) {
 		poolname = strchr(pool, '.');
@@ -7601,16 +7658,99 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		return rc;
 	}
 
-	if (flags & MNTDF_SHOW && (ost_idx == -1 && mdt_idx == -1)) {
-		if (flags & MNTDF_INODES)
-			printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
-			       "UUID", "Inodes", "IUsed", "IFree",
-			       "IUse%", "Mounted on");
-		else
-			printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
-			       "UUID",
-			       flags & MNTDF_COOKED ? "bytes" : "1K-blocks",
-			       "Used", "Available", "Use%", "Mounted on");
+	/* Set default fields and field order if none specified */
+	if (fields == 0) {
+		if (flags & MNTDF_INODES) {
+			field_count = 0;
+			field_order[field_count++] = SHOWDF_UUID;
+			field_order[field_count++] = SHOWDF_ITOTAL;
+			field_order[field_count++] = SHOWDF_IUSED;
+			field_order[field_count++] = SHOWDF_IFREE;
+			field_order[field_count++] = SHOWDF_IPCT;
+			field_order[field_count++] = SHOWDF_MNTDIR;
+		} else {
+			field_count = 0;
+			field_order[field_count++] = SHOWDF_UUID;
+			field_order[field_count++] = SHOWDF_BTOTAL;
+			field_order[field_count++] = SHOWDF_BUSED;
+			field_order[field_count++] = SHOWDF_BAVAIL;
+			field_order[field_count++] = SHOWDF_BPCT;
+			field_order[field_count++] = SHOWDF_MNTDIR;
+		}
+	}
+
+	/* Count number of fields for header decision */
+	total_field_count = 0;
+	temp_fields = fields;
+
+	while (temp_fields) {
+		if (temp_fields & 1)
+			total_field_count++;
+		temp_fields >>= 1;
+	}
+
+	/* Print headers based on --output usage:
+	 * - For --output: show headers when no specific OST or MDT index is
+	 * specified
+	 * - For --only-summary: never show headers
+	 * - For default: always show headers
+	 * - Never show headers if --no-header is specified
+	 */
+	show_headers = (ost_idx == -1 && mdt_idx == -1 &&
+			!(flags & MNTDF_NO_HEADER) &&
+			!(flags & MNTDF_ONLY_SUMMARY));
+
+	only_summary = (ost_idx == -1 && mdt_idx == -1 &&
+			(flags & MNTDF_ONLY_SUMMARY));
+
+	if (show_headers) {
+		/* Print headers in specified order */
+		int i;
+
+		for (i = 0; i < field_count; i++) {
+			enum showdf_fields field = field_order[i];
+
+			switch (field) {
+			case SHOWDF_UUID:
+				printf(UUF" ", "UUID");
+				break;
+			case SHOWDF_BTOTAL:
+				printf(CSF" ",
+				       flags & MNTDF_COOKED ?
+				       "bytes" : "1K-blocks");
+				break;
+			case SHOWDF_BUSED:
+				printf(CSF" ", "Used");
+				break;
+			case SHOWDF_BFREE:
+				printf(CSF" ", "Free");
+				break;
+			case SHOWDF_BAVAIL:
+				printf(CSF" ", "Available");
+				break;
+			case SHOWDF_BPCT:
+				printf(RSF" ", "Use%");
+				break;
+			case SHOWDF_ITOTAL:
+				printf(CSF" ", "Inodes");
+				break;
+			case SHOWDF_IUSED:
+				printf(CSF" ", "IUsed");
+				break;
+			case SHOWDF_IFREE:
+				printf(CSF" ", "IFree");
+				break;
+			case SHOWDF_IPCT:
+				printf(RSF" ", "IUse%");
+				break;
+			case SHOWDF_MNTDIR:
+				printf(" %-s", "Mounted on");
+				break;
+			default:
+				break;
+			}
+		}
+		printf("\n");
 	}
 
 	for (tp = types; tp->st_name != NULL; tp++) {
@@ -7682,10 +7822,11 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 				lsb->sb_buf[lsb->sb_count].sd_st = stat_buf;
 				lsb->sb_count++;
 			}
-			if (flags & MNTDF_SHOW)
+			if (flags & MNTDF_SHOW && !only_summary)
 				showdf(mntdir, &stat_buf,
 				       obd_uuid2str(&uuid_buf), flags,
-				       tp->st_name, index, rc2);
+				       tp->st_name, index, rc2, fields,
+				       field_order, field_count);
 
 			if (rc2)
 				continue;
@@ -7718,10 +7859,13 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		sum.os_files = (sum.os_files - sum.os_ffree) + ost_ffree;
 		sum.os_ffree = ost_ffree;
 	}
-	if (flags & MNTDF_SHOW && ost_idx == -1 && mdt_idx == -1) {
-		printf("\n");
-		showdf(mntdir, &sum, "filesystem_summary:", flags, NULL, 0, 0);
-		printf("\n");
+	if (((flags & MNTDF_SHOW) && show_headers) || only_summary) {
+		if (!only_summary)
+			printf("\n");
+		showdf(mntdir, &sum, "filesystem_summary:", flags, NULL, 0, 0,
+		       fields, field_order, field_count);
+		if (!only_summary)
+			printf("\n");
 	}
 
 	return rc;
@@ -8318,6 +8462,9 @@ static int lfs_df(int argc, char **argv)
 	enum mntdf_flags flags = MNTDF_SHOW;
 	int ops = 0;
 	int c, rc = 0, rc1 = 0, index = 0, arg_idx = 0;
+	enum showdf_fields fields = 0;
+	enum showdf_fields field_order[16];  /* Store field order */
+	int field_count = 0;
 	char fsname[PATH_MAX] = "", *pool_name = NULL;
 	int mdt_idx = -1;
 	int ost_idx = -1;
@@ -8327,12 +8474,15 @@ static int lfs_df(int argc, char **argv)
 	{ .val = 'i',	.name = "inodes",	.has_arg = no_argument },
 	{ .val = 'l',	.name = "lazy",		.has_arg = no_argument },
 	{ .val = 'm',	.name = "mdt",		.has_arg = optional_argument },
+	{ .val = 'N',	.name = "no-header",	.has_arg = no_argument },
+	{ .val = 's',	.name = "only-summary",	.has_arg = no_argument },
 	{ .val = 'o',	.name = "ost",		.has_arg = optional_argument },
+	{ .val = 'u',	.name = "output",	.has_arg = required_argument},
 	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL} };
 
-	while ((c = getopt_long(argc, argv, "hHilm::o::p:v",
+	while ((c = getopt_long(argc, argv, "hHilm::Nso::p:u:v",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'h':
@@ -8363,6 +8513,12 @@ static int lfs_df(int argc, char **argv)
 				}
 			}
 			break;
+		case 'N':
+			flags |= MNTDF_NO_HEADER;
+			break;
+		case 's':
+			flags |= MNTDF_ONLY_SUMMARY;
+			break;
 		case 'o':
 			ops |= LL_STATFS_LOV;
 			if (optarg) {
@@ -8381,6 +8537,59 @@ static int lfs_df(int argc, char **argv)
 			break;
 		case 'p':
 			pool_name = optarg;
+			break;
+		case 'u':
+			if (optarg) {
+				char *opt;
+				char *saveptr;
+
+				opt = strtok_r(optarg, ",", &saveptr);
+				while (opt != NULL) {
+					enum showdf_fields field = 0;
+
+					if (strcmp(opt, "source") == 0 ||
+					    strcmp(opt, "device") == 0)
+						field = SHOWDF_UUID;
+					else if (strcmp(opt, "size") == 0 ||
+						 strcmp(opt, "total") == 0 ||
+						 strcmp(opt, "btotal") == 0)
+						field = SHOWDF_BTOTAL;
+					else if (strcmp(opt, "itotal") == 0 ||
+						 strcmp(opt, "inodes") == 0)
+						field = SHOWDF_ITOTAL;
+					else if (strcmp(opt, "used") == 0 ||
+						 strcmp(opt, "bused") == 0)
+						field = SHOWDF_BUSED;
+					else if (strcmp(opt, "iused") == 0)
+						field = SHOWDF_IUSED;
+					else if (strcmp(opt, "free") == 0 ||
+						 strcmp(opt, "bfree") == 0)
+						field = SHOWDF_BFREE;
+					else if (strcmp(opt, "avail") == 0 ||
+						 strcmp(opt, "bavail") == 0)
+						field = SHOWDF_BAVAIL;
+					else if (strcmp(opt, "iavail") == 0 ||
+						 strcmp(opt, "ifree") == 0)
+						field = SHOWDF_IFREE;
+					else if (strcmp(opt, "pcent") == 0 ||
+						 strcmp(opt, "usepct") == 0 ||
+						 strcmp(opt, "bpct") == 0 ||
+						 strcmp(opt, "pct") == 0)
+						field = SHOWDF_BPCT;
+					else if (strcmp(opt, "ipcent") == 0 ||
+						 strcmp(opt, "iusepct") == 0 ||
+						 strcmp(opt, "ipct") == 0)
+						field = SHOWDF_IPCT;
+					else if (strcmp(opt, "target") == 0)
+						field = SHOWDF_MNTDIR;
+
+					if (field != 0) {
+						fields |= field;
+						field_order[field_count++] = field;
+					}
+					opt = strtok_r(NULL, ",", &saveptr);
+				}
+			}
 			break;
 		case 'v':
 			flags |= MNTDF_VERBOSE;
@@ -8404,7 +8613,8 @@ static int lfs_df(int argc, char **argv)
 				continue;
 
 			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL,
-				   mdt_idx, ost_idx);
+				   mdt_idx, ost_idx, fields, field_order,
+				   field_count);
 			if (rc || path[0] != '\0')
 				break;
 
@@ -8444,7 +8654,8 @@ static int lfs_df(int argc, char **argv)
 				continue;
 
 			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL,
-				   mdt_idx, ost_idx);
+				   mdt_idx, ost_idx, fields, field_order,
+				   field_count);
 			if (rc || path[0] != '\0') {
 				valid = true;
 

@@ -6,6 +6,10 @@ lfs-df \- report Lustre filesystem disk usage
 .RB [ -i ]
 .RB [ -h | -H ]
 .RB [ --lazy | -l ]
+.RB [ --no-header | -N ]
+.RB [ --only-summary | -s ]
+.RB [ --output | -u
+.IR FIELD_LIST ]
 .RB [ --pool | -p
 .IR FSNAME [. POOL ]]
 .RB [ --mdt | -m ]
@@ -152,6 +156,19 @@ Can be used with
 .BR -o
 to show both types of devices, which is equivalent to having neither option.
 .TP
+.BR -N ", " --no-header
+Suppress column headers in the output. This is useful for scripting and
+automation where only the data values are needed without the header line.
+When combined with
+.BR --output ,
+.BR --ost ", and " --mdt ,
+this allows for clean extraction of specific field values.
+.TP
+.BR -s ", " --only-summary
+Display only the filesystem summary line without showing individual MDT and
+OST entries. This provides a consolidated view of the total filesystem usage,
+Useful for monitoring scripts that only need overall filesystem statistics.
+.TP
 .BR -o ", " --ost "[="\fIINDEX\fR]
 Filter output to show information on
 .B OST
@@ -162,6 +179,85 @@ For example: "-o0" or "--ost=0".
 Can be used with
 .BR -m
 to show both types of devices, which is equivalent to having neither option.
+.TP
+.BR -u ", " --output= \fIFIELD_LIST\fR
+Print only the specified fields in a customizable format.
+This allows printing only specific fields, avoiding the need for complex
+.BR awk (1)
+or
+.BR grep (1)
+parsing to extract values in test scripts and automation.
+Headers are shown when no specific OST or MDT index is specified.
+When a specific target index is given
+(e.g.,
+.B -o0
+or
+.BR -m1 ),
+headers are suppressed for easier scripting.
+Field aliases are provided to match the column
+headings reported by
+.BR df (1).
+Available fields include:
+.RS
+.TP
+.B source
+(alias
+.BR device )
+Display the UUID of the target device.
+.TP
+.B size
+(alias
+.BR total ", " btotal )
+Display the total block space available (in KiB by default).
+.TP
+.B used
+(alias
+.BR bused )
+Display the used block space (in KiB by default).
+.TP
+.B free
+(alias
+.BR bfree )
+Display the free block space (in KiB by default).
+.TP
+.B avail
+(alias
+.BR bavail )
+Display the available block space (in KiB by default).
+.TP
+.B pcent
+(alias
+.BR usepct ", " bpct ", " pct )
+Display the percentage of used block space.
+.TP
+.B itotal
+(alias
+.BR inodes )
+Display the total number of inodes (in KiB by default).
+.TP
+.B iused
+Display the number of used inodes (in KiB by default).
+.TP
+.B iavail
+(alias
+.BR ifree )
+Display the number of free inodes (in KiB by default).
+.TP
+.B ipcent
+(alias
+.BR iusepct ", " ipct )
+Display the percentage of used inodes.
+.TP
+.B target
+Display the mount point path.
+.RE
+.IP
+Fields are displayed in the order specified in
+.IR FIELD_LIST .
+When using
+.BR --output ,
+both block and inode fields can be mixed in the same command, allowing
+users to see comprehensive statistics in a single view.
 .TP
 .BR -p ", " --pool= [ \fIfsname\fR .] \fIpool\fR
 Limit the usage to report only MDTs and OSTs that are in the specified
@@ -268,6 +364,106 @@ filesystem:
 .RS
 .EX
 .B # lfs df -o1 /mnt/testfs
+.EE
+.RE
+.PP
+Display custom fields showing both block and inode statistics:
+.RS
+.EX
+.B # lfs df --output=source,size,used,itotal,iused -h /mnt/lustre
+UUID                       bytes        Used      Inodes       IUsed
+lustre-MDT0000_UUID       122.1M        1.6M       97.7K         275
+lustre-OST0000_UUID       305.8M        1.4M       97.7K         302
+lustre-OST0001_UUID       305.8M        1.4M       97.7K         302
+\&
+filesystem_summary:       611.5M        2.7M       97.7K         275
+.EE
+.RE
+.PP
+Display only available space and usage percentages:
+.RS
+.EX
+.B # lfs df --output=source,avail,pcent,iavail,ipcent /mnt/lustre
+UUID                   Available Use%       IFree IUse%
+lustre-MDT0000_UUID       112156   2%       99725   1%
+lustre-OST0000_UUID       284544   1%       99698   1%
+lustre-OST0001_UUID       284544   1%       99698   1%
+\&
+filesystem_summary:       569088   1%       99725   1%
+.EE
+.RE
+.PP
+Display filesystem summary with custom field order:
+.RS
+.EX
+.B # lfs df --output=pcent,avail,used,size,target /mnt/lustre
+Use%   Available        Used   1K-blocks  Mounted on
+  2%      112156        1664      125056  /mnt/lustre[MDT:0]
+  1%      284544        1400      313104  /mnt/lustre[OST:0]
+  1%      284544        1400      313104  /mnt/lustre[OST:1]
+.P
+  1%      569088        2800      626208  /mnt/lustre
+.EE
+.RE
+.PP
+Single field output with headers (all targets):
+.RS
+.EX
+.B # lfs df --output=avail /mnt/lustre
+Available
+    112156
+    284544
+    284544
+.P
+    569088
+.EE
+.RE
+.PP
+Multiple field output with headers:
+.RS
+.EX
+.B # lfs df --output=source,avail /mnt/lustre
+UUID                   Available
+lustre-MDT0000_UUID       112156
+lustre-OST0000_UUID       284544
+lustre-OST0001_UUID       284544
+.P
+filesystem_summary:       569088
+.EE
+.RE
+.PP
+Multiple field output without headers and filesystem summary:
+.RS
+.EX
+.B # lfs df --output=source,avail --no-header /mnt/lustre
+lustre-MDT0000_UUID       112156
+lustre-OST0000_UUID       284544
+lustre-OST0001_UUID       284544
+.EE
+.RE
+.PP
+OST available space without headers (useful for finding minimum):
+.RS
+.EX
+.B # lfs df --output=avail --no-header -o /mnt/lustre
+     284544
+     284544
+.EE
+.RE
+.PP
+Single field for target OST1 (no headers, ideal for scripting):
+.RS
+.EX
+.B # lfs df --output=avail --ost=1 /mnt/lustre
+     284544
+.EE
+.RE
+.PP
+Display only the filesystem summary:
+.RS
+.EX
+.B # lfs df --only-summary /mnt/lustre
+filesystem_summary:       626208        2800      569088   1%  /mnt/lustre
 .EE
 .RE
 .SH AVAILABILITY

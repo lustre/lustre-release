@@ -6637,7 +6637,7 @@ test_51f() {
 	local ulimit_old=$(ulimit -n)
 	local spare=20 # number of spare fd's for scripts/libraries, etc.
 	local mdt=$($LFS getstripe -m $DIR/$tdir)
-	local numfree=$($LFS df -i --mdt=$mdt $DIR/$tdir | awk '{ print $4 }')
+	local numfree=$($LFS df --mdt=$mdt --output=ifree $DIR/$tdir)
 
 	echo "MDT$mdt numfree=$numfree, max=$max"
 	[[ $numfree -gt $max ]] && numfree=$max || numfree=$((numfree * 7 / 8))
@@ -7222,7 +7222,7 @@ test_56e() {
 		error "expect success $err_eopnotsupp, not $ret"
 
 	# Check for multiple LustreFS argument
-	output=$($LFS df $MOUNT $MOUNT $MOUNT | grep -c "filesystem_summary:")
+	output=$($LFS df $MOUNT $MOUNT $MOUNT --only-summary | wc -l)
 	ret=$?
 
 	[[ $output -eq 3 && $ret -eq 0 ]] ||
@@ -12437,8 +12437,8 @@ test_78() { # bug 10901
 	[[ $F78SIZE -gt $MEMTOTAL ]] && F78SIZE=$MEMTOTAL
 	[[ $F78SIZE -gt 512 ]] && F78SIZE=512
 	[[ $F78SIZE -gt $((MAXFREE / 1024)) ]] && F78SIZE=$((MAXFREE / 1024))
-	SMALLESTOST=$($LFS df -o $DIR | awk '{ print $4 }' | sort -n |
-		      head -n1)
+	SMALLESTOST=$($LFS df --output=avail --no-header -o $DIR | sort -n |
+		      head -1)
 	echo "Smallest OST: $SMALLESTOST"
 	[[ $SMALLESTOST -lt 10240 ]] &&
 		skip "too small OSTSIZE, useless to run large O_DIRECT test"
@@ -18371,7 +18371,7 @@ test_150e() {
 		error "$LFS setstripe -c${OSTCOUNT} $DIR/$tfile failed"
 
 	# Find OST with Minimum Size
-	min_size_ost=$($LFS df | awk "/$FSNAME-OST/ { print \$4 }" |
+	min_size_ost=$($LFS df --output=avail -o --no-header $DIR |
 		       sort -un | head -1)
 
 	# Get 100MB per OST of the available space to reduce run time
@@ -18520,7 +18520,7 @@ test_150g() {
 		space=$((1024 * 100 * OSTCOUNT))
 	else
 		# Find OST with Minimum Size
-		space=$($LFS df | awk "/$FSNAME-OST/ { print \$4 }" |
+		space=$($LFS df --output=avail --no-header -o $DIR |
 			sort -un | head -1)
 		echo "min size OST: $space"
 		space=$(((space * 60)/100 * OSTCOUNT))
@@ -29646,7 +29646,7 @@ test_311() {
 		skip "lustre < 2.8.54 does not contain LU-4825 fix"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	local old_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
+	local old_iused=$($LFS df -i --output=iused --ost=0)
 	echo "old_iused=$old_iused"
 	local mdts=$(mdts_nodes)
 
@@ -29683,7 +29683,7 @@ test_311() {
 
 	local new_iused
 	for i in $(seq 120); do
-		new_iused=$($LFS df -i | awk '/OST0000/ { print $3; exit; }')
+		new_iused=$($LFS df --output=iused --ost=0)
 		echo -n "$new_iused "
 		# system may be too busy to destroy all objs in time, use
 		# a somewhat small value to not fail autotest
@@ -34183,7 +34183,7 @@ test_803a() {
 	sleep 3
 	echo "before create:"
 	$LFS df -i $MOUNT
-	local before_used=$($LFS df -i -m0 | awk '{print $3}')
+	local before_used=$($LFS df --output=iused --mdt=0)
 
 	for i in {1..10}; do
 		$LFS mkdir -c 1 -i 1 $DIR/$tdir/foo$i ||
@@ -34195,7 +34195,7 @@ test_803a() {
 	sleep 3
 	echo "after create:"
 	$LFS df -i $MOUNT
-	local after_used=$($LFS df -i -m0 | awk '{print $3}')
+	local after_used=$($LFS df --output=iused --mdt=0)
 
 	# allow for an llog to be cleaned up during the test
 	[ $after_used -ge $((before_used + 10 - 1)) ] ||
@@ -34212,7 +34212,7 @@ test_803a() {
 	sleep 3 # avoid MDT return cached statfs
 	echo "after unlink:"
 	$LFS df -i $MOUNT
-	after_used=$($LFS df -i -m0 | awk '{print $3}')
+	after_used=$($LFS df --output=iused --mdt=0)
 
 	# allow for an llog to be created during the test
 	[ $after_used -le $((before_used + 1)) ] ||
