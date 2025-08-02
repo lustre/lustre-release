@@ -1134,7 +1134,7 @@ bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 /* mdt/mdt_hsm_cdt_requests.c */
 extern struct cfs_hash_ops cdt_request_cookie_hash_ops;
 extern const struct file_operations mdt_hsm_active_requests_fops;
-void dump_requests(char *prefix, struct coordinator *cdt);
+void __maybe_unused dump_requests(char *prefix, struct coordinator *cdt);
 struct cdt_agent_req *mdt_cdt_alloc_request(struct obd_uuid *uuid,
 					    struct llog_agent_req_rec *rec);
 void mdt_cdt_free_request(struct cdt_agent_req *car);

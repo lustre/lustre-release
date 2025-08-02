@@ -436,7 +436,6 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_scan_request *rq,
 	struct obd_uuid uuid;
 	int len, rc = 0;
 	int fail_request = 0;
-	bool is_registered = false;
 	u32 archive_id = hsr_get_archive_id(rq);
 
 	ENTRY;
@@ -556,7 +555,6 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_scan_request *rq,
 	 * by purge
 	 */
 	if (!purge) {
-		is_registered = true;
 		rc = mdt_hsm_add_hsr(mti, rq, &uuid);
 		if (rc)
 			GOTO(update_records, rc);

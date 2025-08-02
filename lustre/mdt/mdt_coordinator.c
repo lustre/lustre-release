@@ -1235,14 +1235,8 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	struct coordinator *cdt = &mdt->mdt_coordinator;
 	struct mdt_thread_info *cdt_mti;
 	int rc;
-	void *ptr;
 	struct task_struct *task;
 	ENTRY;
-
-	/* functions defined but not yet used
-	 * this avoid compilation warning
-	 */
-	ptr = dump_requests;
 
 	rc = set_cdt_state(cdt, CDT_INIT);
 	if (rc) {

@@ -77,7 +77,7 @@ struct cfs_hash_ops cdt_request_cookie_hash_ops = {
  * dump requests list
  * \param cdt [IN] coordinator
  */
-void dump_requests(char *prefix, struct coordinator *cdt)
+void __maybe_unused dump_requests(char *prefix, struct coordinator *cdt)
 {
 	struct cdt_agent_req	*car;
 
