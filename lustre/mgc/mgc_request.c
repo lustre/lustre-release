@@ -1196,6 +1196,61 @@ static int mgc_import_event(struct obd_device *obd,
 	RETURN(rc);
 }
 
+static int mgc_create_new_conn(struct obd_import *imp, struct lnet_nid *nidlist,
+			       int nid_count, int nid_size,
+			       struct obd_uuid *uuid)
+{
+	struct obd_uuid node_uuid;
+	char prim_nid[LNET_NIDSTR_SIZE] = { 0 };
+	int i = 0;
+	int rc;
+
+	/* client has no existing connection to that target yet, and
+	 * it has list of target NIDs, which may have NIDs on
+	 * networks not set up on client.
+	 * Find first NID in list on a client network and use it as
+	 * primary NID for new connection
+	 */
+	while (i < nid_count) {
+		libcfs_nidstr_r(&nidlist[i], prim_nid, sizeof(prim_nid));
+
+		if (strlen(prim_nid) >= UUID_MAX) {
+			rc = -E2BIG;
+			CDEBUG(D_MGC, "%s: skipping too big NID '%s'\n",
+			      imp->imp_obd->obd_name, prim_nid);
+			i++;
+			continue;
+		}
+
+		obd_str2uuid(&node_uuid, prim_nid);
+		rc = client_import_dyn_add_conn(imp, &node_uuid,
+						&nidlist[i], 1);
+		if (!rc)
+			break;
+		CDEBUG(D_MGC, "%s: can't add conn with NID '%s': rc = %d\n",
+		       imp->imp_obd->obd_name, prim_nid, rc);
+		i++;
+	}
+	if (rc < 0) {
+		CWARN("%s: no valid NIDs for new import connection: rc = %d\n",
+		      imp->imp_obd->obd_name, rc);
+		return rc;
+	}
+
+	CDEBUG(D_INFO, "Adding a connection for %s on %s\n",
+	       imp->imp_obd->obd_name, prim_nid);
+
+	/* Add remaining NIDs in list to that connection */
+	rc = client_import_add_nids_to_conn(imp, nidlist, nid_count,
+					    nid_size, uuid);
+	if (rc < 0)
+		CERROR("%s: failed to update NID list: rc = %d\n",
+		       imp->imp_obd->obd_name, rc);
+
+	return rc;
+}
+
+
 static int mgc_apply_recover_logs(struct obd_device *mgc,
 				  struct config_llog_data *cld,
 				  __u64 max_version,
@@ -1211,7 +1266,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 	int pos = 0;
 	int rc  = 0;
 	int off = 0;
-	unsigned long dynamic_nids;
+	bool dynamic_nids;
 
 	ENTRY;
 	LASSERT(cfg->cfg_instance != 0);
@@ -1222,7 +1277,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 
 	if (!IS_SERVER(s2lsi(cfg->cfg_sb))) {
 		pos = snprintf(inst, sizeof(inst), "%016lx", cfg->cfg_instance);
-		if (pos >= PAGE_SIZE)
+		if (pos >= sizeof(inst))
 			return -E2BIG;
 #ifdef HAVE_SERVER_SUPPORT
 	} else {
@@ -1378,48 +1433,17 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		uuid = (struct obd_uuid *)(buf + pos);
 
 		with_imp_locked(obd, imp, rc) {
-			struct obd_uuid server_uuid;
-			char *primary_nid;
-			int prim_nid_len;
-
-			/* iterate all nids to find one */
-			/* find uuid by nid */
-			/* create import entries if they don't exist */
+			/* refresh existing connection NID list with new one */
 			rc = client_import_add_nids_to_conn(imp, nidlist,
-							   entry->mne_nid_count,
-							   entry->mne_nid_size,
-							   uuid);
-			if (rc != -ENOENT || !dynamic_nids)
-				continue;
-
-			/* create a new connection for this import */
-			primary_nid = libcfs_nidstr(&nidlist[0]);
-			prim_nid_len = strlen(primary_nid) + 1;
-			if (prim_nid_len > UUID_MAX)
-				goto fail;
-
-			strncpy(server_uuid.uuid, primary_nid,
-				prim_nid_len);
-
-			CDEBUG(D_INFO, "Adding a connection for %s\n",
-			       primary_nid);
-
-			rc = client_import_dyn_add_conn(imp, &server_uuid,
-							&nidlist[0], 1);
-			if (rc < 0) {
-				CERROR("%s: Failed to add new connection with NID '%s' to import: rc = %d\n",
-				       obd->obd_name, primary_nid, rc);
-				goto fail;
-			}
-
-			rc = client_import_add_nids_to_conn(imp, nidlist,
-							   entry->mne_nid_count,
-							   entry->mne_nid_size,
-							   uuid);
-			if (rc < 0)
-				CERROR("%s: failed to lookup UUID: rc = %d\n",
-				       obd->obd_name, rc);
-fail:;
+							entry->mne_nid_count,
+							entry->mne_nid_size,
+							uuid);
+			if (rc == -ENOENT &&
+			    (dynamic_nids || obd->obd_dynamic_nids))
+				rc = mgc_create_new_conn(imp, nidlist,
+							 entry->mne_nid_count,
+							 entry->mne_nid_size,
+							 uuid);
 		}
 
 		if (rc == -ENODEV) {

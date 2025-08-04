@@ -142,6 +142,8 @@ int client_import_dyn_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
 			       imp->imp_obd->obd_name, str_uuid, rc);
 			return rc;
 		}
+	} else {
+		ptlrpc_connection_put(ptlrpc_conn);
 	}
 	return import_set_conn(imp, uuid, priority, 1);
 }
@@ -161,7 +163,11 @@ int client_import_add_nids_to_conn(struct obd_import *imp,
 
 	spin_lock(&imp->imp_lock);
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
-		if (class_check_uuid(&conn->oic_uuid, &nidlist[0])) {
+		int i;
+
+		for (i = 0; i < nid_count; i++) {
+			if (!class_check_uuid(&conn->oic_uuid, &nidlist[i]))
+				continue;
 			*uuid = conn->oic_uuid;
 			spin_unlock(&imp->imp_lock);
 			rc = class_add_nids_to_uuid(&conn->oic_uuid, nidlist,
@@ -519,6 +525,17 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	}
 
 	rc = client_import_add_conn(imp, &server_uuid, 1);
+	if (rc == -ENOENT) {
+		CWARN("%s: config has no valid NIDs, force dynamic NIDs\n",
+		      obd->obd_name);
+		rc = 0;
+		/* set dynamic nids parameter in client OBD, so MGC will
+		 * detects that while process IR log for that OBD
+		 */
+		spin_lock(&obd->obd_dev_lock);
+		obd->obd_dynamic_nids = 1;
+		spin_unlock(&obd->obd_dev_lock);
+	}
 	if (rc) {
 		CERROR("can't add initial connection\n");
 		GOTO(err_import, rc);

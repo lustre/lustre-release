@@ -1342,7 +1342,7 @@ int
 LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 {
 	struct lnet_nid pnid = LNET_ANY_NID;
-	bool mr;
+	bool discovery;
 	int i, rc;
 	int flags = lock_prim_nid ? LNET_PEER_LOCK_PRIMARY : 0;
 
@@ -1355,7 +1355,7 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 
 	mutex_lock(&the_lnet.ln_api_mutex);
 
-	mr = lnet_peer_discovery_disabled == 0;
+	discovery = !lnet_peer_discovery_disabled;
 
 	rc = 0;
 
@@ -1363,9 +1363,14 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 		if (nid_is_lo0(&nids[i]))
 			continue;
 
+		/* only add NIDs on local networks if discovery is off */
+		if (!discovery && !lnet_islocalnet(LNET_NID_NET(&nids[i])))
+			continue;
+
 		if (LNET_NID_IS_ANY(&pnid)) {
 			pnid = nids[i];
-			rc = lnet_add_peer_ni(&pnid, &LNET_ANY_NID, mr, flags);
+			rc = lnet_add_peer_ni(&pnid, &LNET_ANY_NID, discovery,
+					      flags);
 			if (rc == -EALREADY) {
 				struct lnet_peer *lp;
 
@@ -1378,15 +1383,17 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 				pnid = lp->lp_primary_nid;
 				/* Drop refcount from lookup */
 				lnet_peer_decref_locked(lp);
-			} else if (mr && !rc) {
+			} else if (rc) {
+				/* reset pnid back to ANY if error */
+				pnid = LNET_ANY_NID;
+			} else if (discovery) {
 				lnet_discover_peer_nid(&pnid);
 			}
-		} else if (lnet_peer_discovery_disabled) {
-			rc = lnet_add_peer_ni(&nids[i], &LNET_ANY_NID, mr,
+		} else if (!discovery) {
+			rc = lnet_add_peer_ni(&nids[i], &LNET_ANY_NID, false,
 					      flags);
 		} else if (!nid_same(&pnid, &nids[i])) {
-			rc = lnet_add_peer_ni(&nids[i], &LNET_ANY_NID,
-					      mr, 0);
+			rc = lnet_add_peer_ni(&nids[i], &LNET_ANY_NID, true, 0);
 			if (!rc) {
 				if (lock_prim_nid) {
 					struct lnet_peer *lp;

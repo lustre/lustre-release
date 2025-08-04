@@ -6638,6 +6638,49 @@ test_73d() { #LU-18896
 }
 run_test 73d "erase + new parameter doesn't corrupt mountdata"
 
+test_73e() {
+	(( $MDS1_VERSION >= $(version_code 2.16.57) )) ||
+		skip "Need server version at least 2.16.57 for dynamic config"
+	remote_servers || skip "need servers on remote nodes"
+
+	cleanup
+	LOAD_MODULES_REMOTE=true load_modules
+
+	INTERFACES=( $(lnet_if_list) )
+	local inf=${INTERFACES[0]}
+	local net=${NETTYPE}42
+
+	stack_trap "cleanup_73c"
+
+	$LNETCTL lnet configure
+	$LNETCTL set discovery 0
+
+	start_mgsmds
+	start_ost
+
+	for rnode in $(remote_nodes_list); do
+		rinf=$(do_rpc_nodes --quiet $rnode lnet_if_list)
+		echo "Node: $rnode, rinf=$rinf"
+		[[ -z $rinf ]] &&
+			error "Failed to determine interface for $rnode"
+		do_node $rnode "$LNETCTL lnet configure"
+		do_node $rnode "$LNETCTL net show"
+		do_rpc_nodes $rnode "$LNETCTL net add --net $net --if $rinf" ||
+			echo "can't add network $net on $node"
+	done
+
+	$LNETCTL net add --net $net --if $inf
+	$LNETCTL net del --net ${NETTYPE}
+	$LNETCTL net show
+
+	local mgs_nid=$(do_facet mgs $LCTL list_nids | grep $net | head -1)
+	echo "Try to mount to MGS NID $mgs_nid"
+	$MOUNT_CMD $mgs_nid:/$FSNAME $MOUNT ||
+		error "Mount fails on $mgs_nid"
+	umount $MOUNT
+}
+run_test 73e "Mount client with dynamic server NIDs"
+
 # LU-15246
 test_74() {
 	(( $MDS1_VERSION >= $(version_code 2.15.57.16) )) ||
