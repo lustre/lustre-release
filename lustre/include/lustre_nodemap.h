@@ -36,6 +36,7 @@ static const struct nodemap_rbac_name {
 	{ NODEMAP_RBAC_IGN_ROOT_PRJQUOTA,	"ignore_root_prjquota"	},
 	{ NODEMAP_RBAC_HSM_OPS,		"hsm_ops"	},
 	{ NODEMAP_RBAC_LOCAL_ADMIN,	"local_admin"	},
+	{ NODEMAP_RBAC_POOL_QUOTA_OPS,	"pool_quota_ops"	},
 };
 
 static const struct nodemap_captype_name {
@@ -229,7 +230,8 @@ int nodemap_set_raise_privs(const char *name, enum nodemap_raise_privs privs,
 			    enum nodemap_rbac_roles rbac_raise);
 int nodemap_set_readonly_mount(const char *name, bool readonly_mount);
 int nodemap_set_deny_mount(const char *name, bool deny_mount);
-bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id);
+bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
+			  __u32 qc_type, __u32 id);
 int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,

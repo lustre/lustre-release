@@ -7193,6 +7193,7 @@ test_64a() {
 	local testfile=$DIR/$tdir/$tfile
 	local srv_uc=""
 	local local_admin=""
+	local pool_quota=""
 	local rbac
 
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
@@ -7203,6 +7204,9 @@ test_64a() {
 
 	(( MDS1_VERSION >= $(version_code 2.16.52) )) &&
 		local_admin="local_admin"
+
+	(( MDS1_VERSION >= $(version_code 2.16.57) )) &&
+		pool_quota="pool_quota_ops"
 
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -7218,6 +7222,7 @@ test_64a() {
 		    fscrypt_admin \
 		    $srv_uc \
 		    $local_admin \
+		    $pool_quota \
 		    ;
 	do
 		[[ "$rbac" =~ "$role" ]] ||
@@ -7346,6 +7351,7 @@ test_64b() {
 run_test 64b "Nodemap enforces dne_ops RBAC roles"
 
 test_64c() {
+	local pool_quota=""
 	local srv_uc=""
 	local rbac
 
@@ -7355,12 +7361,16 @@ test_64c() {
 	(( MDS1_VERSION >= $(version_code 2.16.50) )) &&
 		srv_uc="server_upcall"
 
+	(( MDS1_VERSION >= $(version_code 2.16.57) )) &&
+		pool_quota="pool_quota_ops"
+
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	setup_local_client_nodemap "c0" 1 1
 
 	rbac="quota_ops"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	[ -z "$pool_quota" ] || rbac="$rbac,$pool_quota"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		 --property rbac --value $rbac ||
 		error "setting rbac $rbac failed (1)"
@@ -7375,6 +7385,27 @@ test_64c() {
 	$LFS setquota -p 1000 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT ||
 		error "lfs setquota -p failed"
 	$LFS setquota -p 1000 --delete $MOUNT
+
+	if [[ -n $pool_quota ]]; then
+		set +vx
+		create_pool $FSNAME.pool64c ||
+			error "create OST pool failed"
+		pool_add_targets pool64c 0 ||
+			error "add OSTs into pool failed"
+		set -vx
+		$LFS setquota -u $USER0 --pool pool64c -B 309200 $MOUNT ||
+			error "lfs setquota -u --pool failed (1)"
+		$LFS setquota -u $USER0 --pool pool64c -B 0 $MOUNT ||
+			error "lfs setquota -u --pool failed (2)"
+		$LFS setquota -g $USER0 --pool pool64c -B 309200 $MOUNT ||
+			error "lfs setquota -g --pool failed (1)"
+		$LFS setquota -g $USER0 --pool pool64c -B 0 $MOUNT ||
+			error "lfs setquota -g --pool failed (2)"
+		$LFS setquota -p 1000 --pool pool64c -B 309200 $MOUNT ||
+			error "lfs setquota -p --pool failed (1)"
+		$LFS setquota -p 1000 --pool pool64c -B 0 $MOUNT ||
+			error "lfs setquota -p --pool failed (2)"
+	fi
 
 	$LFS setquota -U -b 10G -B 11G -i 100K -I 105K $MOUNT ||
 		error "lfs setquota -U failed"
@@ -7394,6 +7425,22 @@ test_64c() {
 	$LFS setquota -p 1000 -D $MOUNT ||
 		error "lfs setquota -p -D failed"
 	$LFS setquota -p 1000 --delete $MOUNT
+
+	if [[ -n $pool_quota ]]; then
+		$LFS setquota -U --pool pool64c -B 11G $MOUNT ||
+			error "lfs setquota -U --pool failed (1)"
+		$LFS setquota -U --pool pool64c -B 0 $MOUNT ||
+			error "lfs setquota -U --pool failed (2)"
+		$LFS setquota -G --pool pool64c -B 11G $MOUNT ||
+			error "lfs setquota -G --pool failed (1)"
+		$LFS setquota -G --pool pool64c -B 0 $MOUNT ||
+			error "lfs setquota -G --pool failed (2)"
+		$LFS setquota -P --pool pool64c -B 11G $MOUNT ||
+			error "lfs setquota -P --pool failed (1)"
+		$LFS setquota -P --pool pool64c -B 0 $MOUNT ||
+			error "lfs setquota -P --pool failed (2)"
+	fi
+
 	set +vx
 
 	rbac="none"
@@ -7418,6 +7465,15 @@ test_64c() {
 		error "lfs setquota -p should fail"
 	$LFS setquota -p 1000 --delete $MOUNT
 
+	if [[ -n $pool_quota ]]; then
+		$LFS setquota -u $USER0 --pool pool64c -B 309200 $MOUNT &&
+			error "lfs setquota -u --pool should fail"
+		$LFS setquota -g $USER0 --pool pool64c -B 309200 $MOUNT &&
+			error "lfs setquota -g --pool should fail"
+		$LFS setquota -p 1000 --pool pool64c -B 309200 $MOUNT &&
+			error "lfs setquota -p --pool should fail"
+	fi
+
 	$LFS setquota -U -b 10G -B 11G -i 100K -I 105K $MOUNT &&
 		error "lfs setquota -U should fail"
 	$LFS setquota -G -b 10G -B 11G -i 100K -I 105K $MOUNT &&
@@ -7433,9 +7489,19 @@ test_64c() {
 	$LFS setquota -p 1000 -D $MOUNT &&
 		error "lfs setquota -p -D should fail"
 	$LFS setquota -p 1000 --delete $MOUNT
+
+	if [[ -n $pool_quota ]]; then
+		$LFS setquota -U --pool pool64c -B 11G $MOUNT &&
+			error "lfs setquota -U --pool should fail"
+		$LFS setquota -G --pool pool64c -B 11G $MOUNT &&
+			error "lfs setquota -G --pool should fail"
+		$LFS setquota -P --pool pool64c -B 11G $MOUNT &&
+			error "lfs setquota -P --pool should fail"
+	fi
+
 	set +vx
 }
-run_test 64c "Nodemap enforces quota_ops RBAC roles"
+run_test 64c "Nodemap enforces quota related RBAC roles"
 
 test_64d() {
 	local testfile=$DIR/$tdir/$tfile

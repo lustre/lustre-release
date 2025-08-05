@@ -922,6 +922,7 @@ int mdt_restriper_start(struct mdt_device *mdt)
 	uc->uc_rbac_ignore_root_prjquota = 1;
 	uc->uc_rbac_hsm_ops = 1;
 	uc->uc_rbac_local_admin = 1;
+	uc->uc_rbac_pool_quota_ops = 1;
 
 	task = kthread_create(mdt_restriper_main, info, "mdt_restriper_%03d",
 			      mdt_seq_site(mdt)->ss_node_id);

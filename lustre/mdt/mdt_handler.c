@@ -3550,8 +3550,8 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_SETDEFAULT_POOL:
 	case LUSTRE_Q_DELETEQID:
 	case LUSTRE_Q_RESETQID:
-		if (!nodemap_can_setquota(nodemap, oqctl->qc_type,
-					  oqctl->qc_id))
+		if (!nodemap_can_setquota(nodemap, oqctl->qc_cmd,
+					  oqctl->qc_type, oqctl->qc_id))
 			GOTO(out_nodemap, rc = -EPERM);
 		fallthrough;
 	case Q_GETINFO:
@@ -7299,6 +7299,7 @@ static int mdt_ctxt_add_dirty_flag(struct lu_env *env,
 	mdt_ucred(info)->uc_rbac_ignore_root_prjquota = 1;
 	mdt_ucred(info)->uc_rbac_hsm_ops = 1;
 	mdt_ucred(info)->uc_rbac_local_admin = 1;
+	mdt_ucred(info)->uc_rbac_pool_quota_ops = 1;
 	rc = mdt_add_dirty_flag(info, mfd->mfd_object, &info->mti_attr);
 
 	lu_context_exit(&ses);

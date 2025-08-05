@@ -1825,6 +1825,7 @@ static void echo_ucred_init(struct lu_env *env)
 	ucred->uc_rbac_ignore_root_prjquota = 1;
 	ucred->uc_rbac_hsm_ops = 1;
 	ucred->uc_rbac_local_admin = 1;
+	ucred->uc_rbac_pool_quota_ops = 1;
 }
 
 static void echo_ucred_fini(struct lu_env *env)

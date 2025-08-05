@@ -3645,25 +3645,49 @@ EXPORT_SYMBOL(nodemap_set_squash_projid);
 /**
  * nodemap_can_setquota() - Check if nodemap allows setting quota.
  * @nodemap: nodemap to check access for
+ * @qc_cmd: quota command
  * @qc_type: quota type
  * @id: client id to map
  *
  * If nodemap is not active, always allow.
- * For user and group quota, allow if the nodemap allows root access, unless
- * root does not have local admin role.
+ * For user and group quota, allow if the nodemap allows root access and has
+ * quota_ops role, unless root does not have local admin role.
  * For project quota, allow if project id is not squashed or deny_unknown
  * is not set.
+ * For pool quota, allow if pool_quota_ops role is present.
  *
  * Return:
  * * %true is setquota is allowed, %false otherwise
  */
-bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id)
+bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
+			  __u32 qc_type, __u32 id)
 {
+	/* nodemap is inactive: allow */
 	if (!nodemap_active)
 		return true;
 
-	if (!nodemap || !nodemap->nmf_allow_root_access ||
+	/* nodemap does not allow root access: forbid */
+	if (!nodemap || !nodemap->nmf_allow_root_access)
+		return false;
+
+	/* user/group/project quota type:
+	 * forbid if quota_ops role is not present
+	 */
+	if ((qc_cmd == Q_SETINFO ||
+	     qc_cmd == Q_SETQUOTA ||
+	     qc_cmd == LUSTRE_Q_SETDEFAULT ||
+	     qc_cmd == LUSTRE_Q_DELETEQID ||
+	     qc_cmd == LUSTRE_Q_RESETQID) &&
 	    !(nodemap->nmf_rbac & NODEMAP_RBAC_QUOTA_OPS))
+		return false;
+
+	/* pool quota type:
+	 * forbid if pool_quota_ops role is not present
+	 */
+	if ((qc_cmd == LUSTRE_Q_SETQUOTAPOOL ||
+	     qc_cmd == LUSTRE_Q_SETINFOPOOL ||
+	     qc_cmd == LUSTRE_Q_SETDEFAULT_POOL) &&
+	    !(nodemap->nmf_rbac & NODEMAP_RBAC_POOL_QUOTA_OPS))
 		return false;
 
 	/* deny if local root has not local admin role */
@@ -3672,6 +3696,9 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_type, __u32 id)
 			   nodemap))
 		return false;
 
+	/* project quota type: allow if project id is not squashed
+	 * or deny_unknown is not set.
+	 */
 	if (qc_type == PRJQUOTA) {
 		id = nodemap_map_id(nodemap, NODEMAP_PROJID,
 				    NODEMAP_CLIENT_TO_FS, id);
