@@ -1168,6 +1168,7 @@ static int yaml_netlink_read_handler(void *arg, unsigned char *buffer,
 		data->read += size;
 	} else if (data->complete) {
 		free(data->start);
+		data->start = NULL;
 	}
 	*size_read = size;
 	return 1;
@@ -1902,6 +1903,50 @@ void yaml_emitter_log_error(yaml_emitter_t *emitter, FILE *log)
 		fprintf(log, "Emitter error: %s\n", emitter->problem);
 	default:
 		break;
+	}
+}
+
+/*
+ * yaml_emitter_cleanup - Cleanup request & all memory held by reqeust
+ */
+void yaml_emitter_cleanup(yaml_emitter_t *request)
+{
+	struct yaml_netlink_output *out = NULL;
+
+	if (!request || !request->write_handler_data)
+		return;
+
+	out = request->write_handler_data;
+
+	/* first destroy emitter */
+	yaml_emitter_delete(request);
+
+	if (out)
+		free(out);
+}
+
+/*
+ * yaml_parser_cleanup - Cleanup parser & all memory held by parser
+ */
+void yaml_parser_cleanup(yaml_parser_t *reply)
+{
+	struct yaml_netlink_input *input = NULL;
+
+	if (!reply || !reply->read_handler_data)
+		return;
+
+	input = reply->read_handler_data;
+
+	/* delete parser first */
+	yaml_parser_delete(reply);
+
+	if (input) {
+		if (input->start) {
+			free(input->start);
+			input->start = NULL;
+		}
+
+		free(input);
 	}
 }
 

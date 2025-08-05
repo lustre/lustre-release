@@ -1318,7 +1318,7 @@ emitter_error:
 		rc = -EINVAL;
 		goto parser_error;
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 
 	/* display output */
 	if (nlflags == NLM_F_DUMP)
@@ -1326,7 +1326,7 @@ emitter_error:
 parser_error:
 	if (rc == 0)
 		yaml_parser_log_error(&reply, stderr, NULL);
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	if (print)

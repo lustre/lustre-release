@@ -912,6 +912,16 @@ void yaml_parser_log_error(yaml_parser_t *parser, FILE *log,
  */
 void yaml_emitter_log_error(yaml_emitter_t *emitter, FILE *log);
 
+/*
+ * yaml_emitter_cleanup - Cleanup request & all memory held by reqeust
+ */
+void yaml_emitter_cleanup(yaml_emitter_t *request);
+
+/*
+ * yaml_parser_cleanup - Cleanup parser & all memory held by parser
+ */
+void yaml_parser_cleanup(yaml_parser_t *reply);
+
 /**
  * yaml_netlink_setup_emitter
  *
