@@ -14,6 +14,7 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
+#include <linux/iversion.h>
 #include <linux/file.h>
 #include <linux/quotaops.h>
 #include <linux/highmem.h>
@@ -328,6 +329,24 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock,
 		       DFID"\n", PFID(ll_inode2fid(inode)),
 		       lli, PFID(&lli->lli_pfid));
 		truncate_inode_pages(inode->i_mapping, 0);
+
+		/*
+		 * NFSv4 requires i_version to increase on apparent changes.
+		 * we increase this here so when inode is picked up on next
+		 * lock match we'd find this one. (see linux/iversion.h)
+		 * This is not fully robust, but better than nothing.
+		 * In 5.x kernels they also specify (fs/nfsd/nfsfh.c) that
+		 * it's ok for i_version not to grow monotonically, and
+		 * ctime is used to safeguard against crashes that could lead
+		 * to lose i_version updates, which happens to also cover our
+		 * case I guess.
+		 * See LU-19237 for further discussion of other options here.
+		 *
+		 * XXX: do we want to do this for other bits
+		 * and for non-dirs too?
+		 */
+
+		inode_inc_iversion(inode);
 
 		if (unlikely(!fid_is_zero(&lli->lli_pfid))) {
 			struct inode *master_inode = NULL;
