@@ -16,12 +16,7 @@
 #include <linux/spinlock.h>
 #include <linux/uidgid.h>
 #include <linux/percpu.h>
-#ifdef HAVE_INODE_IVERSION
 #include <linux/iversion.h>
-#else
-#define inode_peek_iversion(__inode)    ((__inode)->i_version)
-#define inode_inc_iversion(__inode)
-#endif
 
 #include <lustre_fid.h>
 

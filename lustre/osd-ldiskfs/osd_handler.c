@@ -22,11 +22,7 @@
 #include <linux/module.h>
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
-#ifdef HAVE_INODE_IVERSION
 #include <linux/iversion.h>
-#else
-#define inode_peek_iversion(__inode)	((__inode)->i_version)
-#endif
 
 /* prerequisite for linux/xattr.h */
 #include <linux/types.h>

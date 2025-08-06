@@ -614,23 +614,6 @@ inode_lock_shared, [
 ]) # LB_HAVE_INODE_LOCK_SHARED
 
 #
-# LB_HAVE_INODE_IVERSION
-#
-AC_DEFUN([LB_HAVE_INODE_IVERSION], [
-LB_CHECK_COMPILE([if iversion primitives defined],
-inode_set_iversion, [
-	#include <linux/iversion.h>
-],[
-	struct inode i;
-
-	inode_set_iversion(&i, 0);
-],[
-	AC_DEFINE(HAVE_INODE_IVERSION, 1,
-		[iversion primitives defined])
-])
-]) # LB_HAVE_INODE_IVERSION
-
-#
 # LB_CONFIG_LDISKFS
 #
 AC_DEFUN([LB_CONFIG_LDISKFS], [
@@ -676,7 +659,6 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT4_INC_DEC_COUNT_2ARGS
 	LB_EXT4_JOURNAL_GET_WRITE_ACCESS_4A
 	LB_HAVE_INODE_LOCK_SHARED
-	LB_HAVE_INODE_IVERSION
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
