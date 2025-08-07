@@ -17,9 +17,7 @@
 #include <linux/xattr.h>
 #include <linux/swap.h>
 #include <linux/statfs.h>
-#ifdef HAVE_FS_CONTEXT_H
 #include <linux/fs_context.h>
-#endif
 
 #include <lustre_compat.h>
 
@@ -803,7 +801,6 @@ static void memfs_put_super(struct super_block *sb)
 	sb->s_fs_info = NULL;
 }
 
-#ifdef HAVE_FS_CONTEXT_H
 static int memfs_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	struct memfs_options *ctx = fc->fs_private;
@@ -888,69 +885,6 @@ static int memfs_init_fs_context(struct fs_context *fc)
 	fc->ops = &memfs_context_ops;
 	return 0;
 }
-
-#else /* !HAVE_FS_CONTEXT_H */
-
-static int memfs_fill_super(struct super_block *sb, void *data, int silent)
-{
-	struct memfs_sb_info *sbinfo;
-	struct inode *inode;
-	int rc;
-
-	/* Round up to L1_CACHE_BYTES to resist false sharing */
-	OBD_ALLOC_PTR(sbinfo);
-	if (!sbinfo)
-		return -ENOMEM;
-
-	sbinfo->msi_mode = S_IRWXUGO | S_ISVTX;
-	sbinfo->msi_uid = current_fsuid();
-	sbinfo->msi_gid = current_fsgid();
-	sb->s_fs_info = sbinfo;
-
-	/*
-	 * Per default we only allow half of the physical ram per
-	 * tmpfs instance, limiting inodes to one per page of lowmem;
-	 * but the internal instance is left unlimited.
-	 */
-	if (!(sb->s_flags & MS_KERNMOUNT)) {
-		sbinfo->msi_max_blocks = memfs_default_max_blocks();
-		sbinfo->msi_max_inodes = memfs_default_max_inodes();
-	} else {
-		sb->s_flags |= MS_NOUSER;
-	}
-
-	sb->s_flags |= MS_NOSEC | MS_NOUSER;
-	sbinfo->msi_free_inodes = sbinfo->msi_max_inodes;
-	sb->s_maxbytes = MAX_LFS_FILESIZE;
-	sb->s_blocksize = PAGE_SIZE;
-	sb->s_blocksize_bits = PAGE_SHIFT;
-	sb->s_magic = WBCFS_MAGIC;
-	sb->s_op = &memfs_ops;
-	sb->s_d_op = &simple_dentry_operations;
-	sb->s_time_gran = 1;
-
-	inode = memfs_create_inode(sb, NULL, S_IFDIR | sbinfo->msi_mode, NULL,
-				   0, true);
-	if (IS_ERR(inode))
-		GOTO(out_fail, rc = PTR_ERR(inode));
-
-	inode->i_uid = sbinfo->msi_uid;
-	inode->i_gid = sbinfo->msi_gid;
-	sb->s_root = d_make_root(inode);
-	if (!sb->s_root)
-		GOTO(out_fail, rc = -ENOMEM);
-	return 0;
-out_fail:
-	memfs_put_super(sb);
-	return rc;
-}
-
-static struct dentry *memfs_mount(struct file_system_type *fs_type,
-				  int flags, const char *dev_name, void *data)
-{
-	return mount_nodev(fs_type, flags, data, memfs_fill_super);
-}
-#endif /* HAVE_FS_CONTEXT_H */
 
 static struct kmem_cache *memfs_inode_cachep;
 
@@ -1114,11 +1048,7 @@ static const struct address_space_operations memfs_aops = {
 static struct file_system_type memfs_fstype = {
 	.owner			= THIS_MODULE,
 	.name			= "wbcfs",
-#ifdef HAVE_FS_CONTEXT_H
 	.init_fs_context	= memfs_init_fs_context,
-#else
-	.mount			= memfs_mount,
-#endif
 	.kill_sb		= kill_litter_super,
 	.fs_flags		= FS_USERNS_MOUNT,
 };
