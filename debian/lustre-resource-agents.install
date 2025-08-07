@@ -1,1 +1,1 @@
-debian/tmp/usr/lib/ocf/resource.d/lustre/*		usr/lib.ocf/resource.d/lustre
+debian/tmp/usr/lib/ocf/resource.d/lustre/*		usr/lib/ocf/resource.d/lustre
