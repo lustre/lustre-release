@@ -25329,6 +25329,33 @@ test_230z() {
 }
 run_test 230z "resume dir migration with bad hash type"
 
+test_230A_check_lmm_oi() {
+	local FID LMM_FID
+
+	FID=$($LFS path2fid "$1")
+	while read LMM_FID; do
+	[[ "$FID" == "$LMM_FID" ]] || {
+		echo "FID=$FID LMM_FID=$LMM_FID"
+		return 1
+	}
+	done < <( $LFS getstripe -v "$1" | awk '/lmm_fid:/ {print $2 }' )
+	return 0
+}
+
+test_230A()
+{
+        (( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+        (( MDS1_VERSION >= $(version_code 2.16.57) )) ||
+                skip "need MDS >= 2.16.57 for lmm_oi migrate update"
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS setstripe -E 10M -c 1 -E -1 -c 1 $DIR/$tdir/file || error "file creation failed"
+	test_230A_check_lmm_oi $DIR/$tdir/file || error "Wrong lmm oi before migrate"
+	$LFS migrate -m 1 $DIR/$tdir || error "migrate failed"
+	test_230A_check_lmm_oi $DIR/$tdir/file || error "Wrong lmm oi after migrate"
+}
+run_test 230A "dir migrate should update lmm_oi"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

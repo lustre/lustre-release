@@ -5848,12 +5848,15 @@ again:
 		for (i = 0; i < count; i++) {
 			lcme = &lcm->lcm_entries[i];
 			v1 = buf->lb_buf + le32_to_cpu(lcme->lcme_offset);
+			if (le32_to_cpu(v1->lmm_magic) == LOV_MAGIC_FOREIGN)
+				continue;
 			if (memcmp(oi, &v1->lmm_oi, sizeof(*oi)) != 0)
 				goto fix;
 		}
 
 		GOTO(out, stripe = true);
-	} else if (memcmp(oi, &lmm->lmm_oi, sizeof(*oi)) == 0) {
+	} else if ((magic != LOV_MAGIC_FOREIGN) &&
+		   memcmp(oi, &lmm->lmm_oi, sizeof(*oi)) == 0) {
 		GOTO(out, stripe = true);
 	}
 
@@ -5904,9 +5907,11 @@ fix:
 		for (i = 0; i < count; i++) {
 			lcme = &lcm->lcm_entries[i];
 			v1 = buf->lb_buf + le32_to_cpu(lcme->lcme_offset);
+			if (le32_to_cpu(v1->lmm_magic) == LOV_MAGIC_FOREIGN)
+				continue;
 			v1->lmm_oi = *oi;
 		}
-	} else {
+	} else if (magic != LOV_MAGIC_FOREIGN) {
 		lmm->lmm_oi = *oi;
 	}
 
