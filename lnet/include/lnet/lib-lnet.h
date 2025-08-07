@@ -800,7 +800,7 @@ int lnet_fail_nid(struct lnet_nid *nid, unsigned int threshold);
 
 /** \addtogroup lnet_fault_simulation @{ */
 
-/* See struct lnet_fault_attr4 for a description of these fields */
+/* See struct lnet_fault_attr for a description of these fields */
 struct lnet_fault_large_attr {
 	struct lnet_nid			fa_src;
 	struct lnet_nid			fa_dst;
@@ -820,6 +820,7 @@ struct lnet_fault_large_attr {
 			u32		la_interval;
 			u32		la_latency;
 		} delay;
+		u64			space[8];
 	} u;
 };
 
