@@ -3089,7 +3089,7 @@ lst_info_batch_ioctl(char *batch, int test, int server,
 static int
 lst_list_batch_all(void)
 {
-	char name[LST_NAME_SIZE];
+	char name[LST_NAME_SIZE] = {0};
 	int rc, i;
 
 	for (i = 0; ; i++) {
