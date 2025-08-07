@@ -807,7 +807,6 @@ static inline bool lov_pattern_supported(enum lov_pattern pattern)
 
 	return pattern_base == LOV_PATTERN_RAID0 ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
-	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_PARITY) ||
 	       pattern_base == LOV_PATTERN_MDT;
 }
 
@@ -990,17 +989,18 @@ enum lov_comp_md_entry_flags {
 
 #define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT | LCME_FL_STALE | \
 				 LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
-				 LCME_FL_EXTENSION)
+				 LCME_FL_EXTENSION | LCME_FL_PARITY)
 
 /* The component flags can be set by users at creation/modification time. */
 #define LCME_USER_COMP_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
-				 LCME_FL_EXTENSION)
+				 LCME_FL_EXTENSION | LCME_FL_PARITY)
 
 /* The mirror flags can be set by users at creation time. */
 #define LCME_USER_MIRROR_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOCOMPR)
 
 /* The allowed flags obtained from the client at component creation time. */
-#define LCME_CL_COMP_FLAGS	(LCME_USER_MIRROR_FLAGS | LCME_FL_EXTENSION)
+#define LCME_CL_COMP_FLAGS	(LCME_USER_MIRROR_FLAGS | LCME_FL_EXTENSION | \
+				 LCME_FL_PARITY)
 
 /* The mirror flags sent by client */
 #define LCME_MIRROR_FLAGS	(LCME_FL_NOSYNC)

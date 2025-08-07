@@ -3616,10 +3616,6 @@ struct llapi_layout_sanity_args {
 	char *fsname;
 };
 
-/* The component flags can be set by users at creation/modification time. */
-#define LCME_USER_COMP_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
-				 LCME_FL_EXTENSION)
-
 /* Inline function to verify the pool name */
 static inline int verify_pool_name(char *fsname, struct llapi_layout *layout)
 {

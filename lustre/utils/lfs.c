@@ -3196,11 +3196,6 @@ static int build_prev_component(struct llapi_layout **layout,
 	return 0;
 }
 
-#ifndef LCME_TEMPLATE_FLAGS
-#define LCME_TEMPLATE_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
-				 LCME_FL_EXTENSION)
-#endif
-
 static int build_layout_from_yaml_node(struct cYAML *node,
 				       struct llapi_layout **layout,
 				       struct lfs_setstripe_args *lsa,
