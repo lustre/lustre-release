@@ -1092,8 +1092,22 @@ load_lnet() {
 
 	if [[ $1 == config_on_load=1 ]]; then
 		if $FORCE_LARGE_NID; then
+			if [[ $NETTYPE != tcp* ]]; then
+				error "FORCE_LARGE_NID only supported by tcp"
+			fi
+
 			do_lnetctl lnet configure -a -l ||
 				return $?
+
+			# Did a large NID actually get configured?
+			local nid=$($LCTL list_nids | head -n 1)
+			local ip=${nid//@*/}
+
+			if ! ip_is_v6 "$ip"; then
+				error "FORCE_LARGE_NID set but $ip is not v6"
+			fi
+
+			return 0
 		else
 			do_lnetctl lnet configure -a ||
 				return $?
