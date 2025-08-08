@@ -798,7 +798,6 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 
 	if (local_flags != NULL) {
 out_flags:
-		LASSERT(qid->lqi_is_blk);
 		if (rc != 0) {
 			*local_flags |= lquota_over_fl(qqi->qqi_qtype);
 		} else {

@@ -518,6 +518,7 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	struct qsd_instance *qsd = NULL;
 	int rcu, rcg, rcp = 0; /* user & group & project rc */
 	struct thandle *th = &oh->ot_super;
+	enum osd_quota_local_flags tmp_flags;
 	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE) ||
 			th->th_ignore_quota;
 
@@ -572,10 +573,20 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 		qi->lqi_id.qid_projid = projid;
 		qi->lqi_ignore_root_proj_quota = th->th_ignore_root_proj_quota;
 		qi->lqi_type = PRJQUOTA;
+
+		tmp_flags = 0;
+		if (local_flags)
+			tmp_flags = *local_flags;
 		rcp = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi,
-				   local_flags);
-		if (local_flags && *local_flags & QUOTA_FL_ROOT_PRJQUOTA)
-			force = th->th_ignore_quota;
+				   &tmp_flags);
+		if (tmp_flags & QUOTA_FL_ROOT_PRJQUOTA) {
+			if (qi->lqi_is_blk)
+				force = th->th_ignore_quota;
+			else
+				force = 0;
+		}
+		if (local_flags)
+			*local_flags = tmp_flags;
 		if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS))
 			rcp = 0;
 	}

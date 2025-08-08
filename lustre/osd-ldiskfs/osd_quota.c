@@ -645,6 +645,7 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	struct lquota_id_info *qi = &info->oti_qi;
 	int rcu, rcg, rcp = 0; /* user & group & project rc */
 	struct thandle *th = &oh->ot_super;
+	enum osd_quota_local_flags tmp_flags;
 	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE) ||
 			th->th_ignore_quota;
 	ENTRY;
@@ -690,10 +691,23 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	qi->lqi_id.qid_projid = projid;
 	qi->lqi_ignore_root_proj_quota = th->th_ignore_root_proj_quota;
 	qi->lqi_type = PRJQUOTA;
-	rcp = osd_declare_qid(env, oh, qi, obj, true, local_flags);
 
-	if (local_flags && *local_flags & QUOTA_FL_ROOT_PRJQUOTA)
-		force = th->th_ignore_quota;
+	tmp_flags = 0;
+	if (local_flags)
+		tmp_flags = *local_flags;
+	rcp = osd_declare_qid(env, oh, qi, obj, true, &tmp_flags);
+	if (tmp_flags & QUOTA_FL_ROOT_PRJQUOTA) {
+		/* Currently, th_ignore_quota is only set for inode quota
+		 * in mdd_trans_create if the user has CAP_SYS_RESOURCE,
+		 * then it should be diabled if root_prj_enable is set. */
+		if (qi->lqi_is_blk)
+			force = th->th_ignore_quota;
+		else
+			force = 0;
+	}
+	if (local_flags)
+		*local_flags = tmp_flags;
+
 	if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS)) {
 		CDEBUG(D_QUOTA, "forced to ignore quota flags = %#x\n",
 		       local_flags ? *local_flags : -1);

@@ -1220,8 +1220,13 @@ test_1i() {
 run_test 1i "Quota pools: different limit and usage relations"
 
 test_1j() {
-	local limit=40 # MB
-	local limit2=$((limit*2)) # MB
+	local blim=40 # MB
+	local blim2=$((blim*2)) # MB
+	local ilim=2048
+	local ilim2=$((ilim*2))
+	local testdir="$DIR/$tdir/test_dir"
+	local testdir1="$DIR/$tdir/test_dir1"
+	local testdir2="$DIR/$tdir/test_dir2"
 	local testf="$DIR/$tdir/$tfile-0"
 	local testf1="$DIR/$tdir/$tfile-1"
 	local testf2="$DIR/$tdir/$tfile-2"
@@ -1237,17 +1242,37 @@ test_1j() {
 
 	setup_quota_test || error "setup quota failed with $?"
 
-	# enable ost quota
+	# enable quota
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# test for Project
 	log "--------------------------------------"
-	log "Project quota (block hardlimit:$limit mb)"
-	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+	log "Project quota (hardlimit: $blim mb, $ilim files)"
+	$LFS setquota -p $TSTPRJID -b 0 -B ${blim}M -i 0 -I ${ilim} $DIR ||
 		error "set project quota failed"
 
-	$LFS setquota -p $TSTPRJID2 -b 0 -B ${limit2}M -i 0 -I 0 $DIR ||
+	$LFS setquota -p $TSTPRJID2 -b 0 -B ${blim2}M -i 0 -I ${ilim2} $DIR ||
 		error "set project quota failed"
+
+	$LFS mkdir -i 0 -c 1 $testdir || error "failed to create $testdir"
+	(( $MDSCOUNT > 1 )) && {
+		$LFS mkdir -i 1 -c 1 $testdir1 ||
+				error "failed to create $testdir1"
+	} || {
+		$LFS mkdir -i 0 -c 1 $testdir1 ||
+				error "failed to create $testdir1"
+	}
+	(( $MDSCOUNT > 2 )) && {
+		$LFS mkdir -i 2 -c 1 $testdir2 ||
+				error "failed to create $testdir2"
+	} || {
+		$LFS mkdir -i 0 -c 1 $testdir2 ||
+				error "failed to create $testdir2"
+	}
+	change_project -sp $TSTPRJID $testdir
+	change_project -sp $TSTPRJID $testdir1
+	change_project -sp $TSTPRJID2 $testdir2
 
 	$LFS setstripe $testf -c 1 -i 0 || error "setstripe $testf failed"
 	$LFS setstripe $testf1 -c 1 -i 1 || error "setstripe $testf1 failed"
@@ -1259,35 +1284,61 @@ test_1j() {
 	$LFS quota -pv $TSTPRJID $DIR
 	$LFS quota -pv $TSTPRJID2 $DIR
 
-	runas -u 0 -g 0 $DD of=$testf count=$limit oflag=direct || true
-	runas -u 0 -g 0 $DD of=$testf count=$((limit/2)) \
-		seek=$limit oflag=direct || true
+	runas -u 0 -g 0 createmany -m ${testdir}/tfile1- $ilim || true
+	runas -u 0 -g 0 createmany -m ${testdir}/tfile2- ${ilim/2} || true
 
-	local procf=osd-$ost1_FSTYPE.$FSNAME-*.quota_slave.root_prj_enable
+	runas -u 0 -g 0 $DD of=$testf count=$blim oflag=direct || true
+	runas -u 0 -g 0 $DD of=$testf count=$((blim/2)) \
+		seek=$blim oflag=direct || true
+
+	local procf=osd-$mds1_FSTYPE.$FSNAME-*.quota_slave.root_prj_enable
+	for ((m = 1; m <= $MDSCOUNT; m++)); do
+		do_facet mds$m $LCTL set_param $procf=1
+		stack_trap "do_facet mds$m $LCTL set_param $procf=0"
+	done
+
+	procf=osd-$ost1_FSTYPE.$FSNAME-*.quota_slave.root_prj_enable
 	do_facet ost1 $LCTL set_param $procf=1 ||
 		error "enable root quotas for project failed"
 	stack_trap "do_facet ost1 $LCTL set_param $procf=0"
 	do_facet ost2 $LCTL set_param $procf=1 ||
 		error "enable root quotas for project failed"
 	stack_trap "do_facet ost2 $LCTL set_param $procf=0"
-	lctl get_param *.*.quota_slave.root_prj_enable
+	lctl get_param osd-*.*.quota_slave.root_prj_enable
 
 	$LFS quota -pv $TSTPRJID $DIR
 	$LFS quota -pv $TSTPRJID2 $DIR
 
 	# check that after enabling root_prj_enable,
 	# root gets EDQUOT as earlier hit the limit
-	runas -u 0 -g 0 $DD of=$testf1 count=$limit oflag=direct || true
-	runas -u 0 -g 0 $DD of=$testf1 count=$((limit/2)) \
-		seek=$limit oflag=direct &&
+	(( $MDS1_VERSION >= $(version_code 2.16.57) )) && {
+		runas -u 0 -g 0 createmany -m ${testdir1}/tfile- $ilim && {
+			$LFS quota -pv $TSTPRJID $DIR
+			$LFS quota -pv $TSTPRJID2 $DIR
+
+			quota_error "project" $TSTPRJID "root create success"
+		}
+	}
+
+	runas -u 0 -g 0 $DD of=$testf1 count=$blim oflag=direct || true
+	runas -u 0 -g 0 $DD of=$testf1 count=$((blim/2)) \
+		seek=$blim oflag=direct &&
 		quota_error "project" $TSTPRJID "root write to project success"
 
 	# check that ROOT still can write to the directories
 	# with different PRJID with larger limit
-	runas -u 0 -g 0 $DD of=$testf2 count=$limit oflag=direct || true
-	runas -u 0 -g 0 $DD of=$testf2 count=$((limit/2)) \
-		seek=$limit oflag=direct ||
-		quota_error "project" $TSTPRJID2 "root write to project success"
+	runas -u 0 -g 0 createmany -m ${testdir2}/tfile1- $ilim || true
+	runas -u 0 -g 0 createmany -m ${testdir2}/tfile2- ${ilim/2} ||
+		quota_error "project" $TSTPRJID2 "root create to project failed"
+
+	runas -u 0 -g 0 $DD of=$testf2 count=$blim oflag=direct || true
+	runas -u 0 -g 0 $DD of=$testf2 count=$((blim/2)) \
+		seek=$blim oflag=direct ||
+		quota_error "project" $TSTPRJID2 "root write to project failed"
+
+	for ((m = 1; m <= $MDSCOUNT; m++)); do
+		do_facet mds$m $LCTL set_param $procf=0
+	done
 
 	do_facet ost1 $LCTL set_param $procf=0 ||
 		error "disable root quotas for project failed"
@@ -1328,6 +1379,11 @@ test_1j() {
 		wait_nm_sync $nm trusted_nodemap
 		wait_nm_sync $nm rbac
 
+		(( $MDS1_VERSION >= $(version_code 2.16.57) )) && {
+			runas -u 0 -g 0 createmany -m ${testdir}/tfile3- $ilim &&
+			quota_error "project" $TSTPRJID "root should fail"
+		}
+
 		runas -u 0 -g 0 $DD of=$testf count=$((limit/2)) \
 			seek=$limit oflag=direct &&
 			quota_error "project" $TSTPRJID "root write should fail"
@@ -1336,7 +1392,12 @@ test_1j() {
 		wait_nm_sync active
 	fi
 
-	runas -u 0 -g 0 $DD of=$testf count=$limit seek=$limit oflag=direct ||
+	(( $MDS1_VERSION >= $(version_code 2.16.57) )) && {
+		runas -u 0 -g 0 createmany -m ${testdir}/tfile4- $ilim ||
+			quota_error "project" $TSTPRJID "root create failed"
+	}
+
+	runas -u 0 -g 0 $DD of=$testf count=$blim seek=$blim oflag=direct ||
 		quota_error "project" $TSTPRJID "root write to project failed"
 
 	# cleanup
