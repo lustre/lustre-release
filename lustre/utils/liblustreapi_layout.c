@@ -19,9 +19,10 @@
 #include <errno.h>
 #include <limits.h>
 #include <assert.h>
-#include <sys/xattr.h>
+#include <sys/mman.h>
 #include <sys/param.h>
 #include <sys/time.h>
+#include <sys/xattr.h>
 #include <time.h>
 
 #include <libcfs/util/list.h>
@@ -3310,6 +3311,7 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc)
 		return -rc;
+	(void)mlock(buf, buflen);
 
 	clock_gettime(CLOCK_MONOTONIC, &start_time);
 	now = last_bw_print = start_time;
@@ -3327,10 +3329,9 @@ int llapi_mirror_resync_many_params(int fd, struct llapi_layout *layout,
 				rc = llapi_mirror_find(layout, pos, end,
 							&mirror_end);
 				if (rc < 0) {
-					free(buf);
 					llapi_error(LLAPI_MSG_ERROR, rc,
 						    "cannot find source mirror");
-					return rc;
+					goto out_free;
 				}
 				src = rc;
 				/* restrict mirror end by resync end */
@@ -3487,7 +3488,8 @@ do_read:
 		}
 		pos += bytes_read;
 	}
-
+out_free:
+	(void)munlock(buf, buflen);
 	free(buf);
 
 	if (rc < 0) {

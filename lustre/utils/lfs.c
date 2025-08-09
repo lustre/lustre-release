@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <sys/param.h>
 #include <sys/quota.h>
 #include <sys/stat.h>
@@ -911,6 +912,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	rc = posix_memalign(&buf, page_size, buf_size);
 	if (rc != 0)
 		return -rc;
+	(void)mlock(buf, buf_size);
 
 	sparse = llapi_file_is_sparse(fd_src);
 	if (sparse) {
@@ -919,8 +921,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			rc = -errno;
 			llapi_error(LLAPI_MSG_ERROR, rc,
 				    "fail to ftruncate dst file to %ld", pos);
-			free(buf);
-			return rc;
+			goto out_free;
 		}
 	}
 
@@ -1035,8 +1036,10 @@ out:
 	/* Try to avoid page cache pollution after migration. */
 	(void)posix_fadvise(fd_src, 0, 0, POSIX_FADV_DONTNEED);
 	(void)posix_fadvise(fd_dst, 0, 0, POSIX_FADV_DONTNEED);
-
+out_free:
+	(void)munlock(buf, buf_size);
 	free(buf);
+
 	return rc;
 }
 
@@ -1853,6 +1856,7 @@ static ssize_t mirror_file_compare(int fd_src, int fd_dst)
 	buf = malloc(buflen * 2);
 	if (!buf)
 		return -ENOMEM;
+	(void)mlock(buf, buflen * 2);
 
 	while (1) {
 		if (!llapi_lease_check(fd_src)) {
@@ -1877,6 +1881,7 @@ static ssize_t mirror_file_compare(int fd_src, int fd_dst)
 		bytes_done += bytes_read;
 	}
 
+	(void)munlock(buf, buflen * 2);
 	free(buf);
 
 	return bytes_done;
@@ -13254,6 +13259,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 				progname, argv[0], rc);
 		goto close_outfd;
 	}
+	(void)mlock(buf, buflen);
 
 	pos = 0;
 	while (1) {
@@ -13304,6 +13310,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	rc = 0;
 
 free_buf:
+	(void)munlock(buf, buflen);
 	free(buf);
 close_outfd:
 	if (outfile)
@@ -13429,6 +13436,7 @@ static inline int lfs_mirror_write(int argc, char **argv)
 			progname, argv[0], rc);
 		goto close_inputfd;
 	}
+	(void)mlock(buf, buflen);
 
 	/* prepare target mirror components instantiation */
 	ioc.lil_mode = LL_LEASE_WRLCK;
@@ -13513,6 +13521,7 @@ static inline int lfs_mirror_write(int argc, char **argv)
 	rc = 0;
 
 free_buf:
+	(void)munlock(buf, buflen);
 	free(buf);
 close_inputfd:
 	if (inputfile)
@@ -14083,6 +14092,7 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc) /* error code is returned directly */
 		return -rc;
+	(void)mlock(buf, buflen);
 
 	if (verbose > 1) {
 		fprintf(stdout, "Verifying chunk "DEXT" on mirror:",
@@ -14147,6 +14157,7 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 	}
 
 error:
+	(void)munlock(buf, buflen);
 	free(buf);
 	return rc;
 }

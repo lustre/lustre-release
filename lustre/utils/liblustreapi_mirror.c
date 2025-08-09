@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <stdarg.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
@@ -301,6 +302,7 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc) /* error code is returned directly */
 		return -rc;
+	(void)mlock(buf, buflen);
 
 	sparse = llapi_mirror_is_sparse(fd, src);
 
@@ -319,10 +321,8 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 				continue;
 			}
 		}
-		if (!nr) {
-			free(buf);
-			return result;
-		}
+		if (!nr) 
+			goto out_free;
 	}
 
 	while (!eof) {
@@ -394,8 +394,6 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 		eof = bytes_read < to_read;
 	}
 
-	free(buf);
-
 	if (nr > 0) {
 		for (i = 0; i < nr; i++) {
 			rc = llapi_mirror_truncate(fd, dst[i], pos);
@@ -409,6 +407,10 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 			}
 		}
 	}
+
+out_free:
+	(void)munlock(buf, buflen);
+	free(buf);
 
 	return nr > 0 ? nr : result;
 }
@@ -450,6 +452,7 @@ int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst, off_t pos,
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc) /* error code is returned directly */
 		return -rc;
+	(void)mlock(buf, buflen);
 
 	while (result < count) {
 		ssize_t bytes_read, bytes_written;
@@ -494,6 +497,7 @@ int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst, off_t pos,
 			break;
 	}
 
+	(void)munlock(buf, buflen);
 	free(buf);
 
 	if (result > 0) {
