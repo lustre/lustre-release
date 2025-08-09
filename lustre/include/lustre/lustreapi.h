@@ -140,11 +140,12 @@ struct llapi_stripe_param {
 
 #define lsp_tgts	lsp_osts
 
-enum {
+enum llapi_migration_flags {
 	LLAPI_MIGRATION_NONBLOCK	= 0x0001,
 	LLAPI_MIGRATION_MIRROR		= 0x0002,
 	LLAPI_MIGRATION_NONDIRECT	= 0x0004,
 	LLAPI_MIGRATION_VERBOSE		= 0x0008,
+	LLAPI_MIGRATION_FLAG_MAX	= 0x8000000000000000ULL,
 };
 
 enum lov_pattern llapi_pattern_to_lov(uint64_t pattern);

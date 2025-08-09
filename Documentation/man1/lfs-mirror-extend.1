@@ -6,7 +6,7 @@ lfs-mirror-extend \- add mirror(s) to an existing file
 .RB [ --bandwidth | --bandwidth-limit | "-W \fIBANDWIDTH_MB" [ MG ]]
 .RB [ --fid | -F " [" --lustre-dir = \fILUSTRE_MOUNT_POINT ]]
 .RB [ --mirror-count | -N [[ = ] \fIMIRROR_COUNT ]]
-.RB [ --no-verify ]
+.RB [ --no-verify "] [" --non-direct | -D ]
 .RB [ --stats | --stats-interval = \fISECONDS ]
 .RI [ SETSTRIPE_OPTIONS
 .RB "| " -f
@@ -157,6 +157,19 @@ This option indicates not to verify the mirror(s) from victim file(s) in case
 the victim file(s) contains the same data as the original mirrored file. This
 option can save siginificant time on file comparison if the file size is large,
 but it should only be used when the file contents are known to be the same.
+.TP
+.BR --non-direct , -D
+Use buffered, not
+.BR O_DIRECT ,
+read and write operations when migrating a file.
+This adds CPU and memory overhead for the data copy between kernel and
+userspace buffers, but avoids synchronous read and write operations
+that may slow down small file operations.
+.br
+This option cannot be used on encrypted files when the encryption key is not
+available. It will result in
+.B -ENOKEY
+being returned.
 .TP
 .BR --stats
 This option enables progress updates every 5 seconds, in YAML format.

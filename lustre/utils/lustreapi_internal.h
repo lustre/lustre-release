@@ -220,6 +220,7 @@ int llapi_semantic_traverse(char *path, int size, int parent,
 #ifndef ONE_MB
 #define ONE_MB (1024 * 1024)
 #endif
+#define DEFAULT_IO_BUFLEN (64 * ONE_MB)
 
 static inline struct timespec timespec_sub(struct timespec *before,
 					   struct timespec *after)

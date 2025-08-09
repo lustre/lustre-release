@@ -30,6 +30,7 @@
 #include <libcfs/util/ioctl.h>
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_ioctl.h>
+#include "lustreapi_internal.h"
 
 /**
  * Set the mirror id for the opening file pointed by @fd, once the mirror
@@ -278,7 +279,7 @@ off_t llapi_mirror_data_seek(int fd, unsigned int id, off_t pos, size_t *size)
  */
 ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 {
-	const size_t buflen = 4 * 1024 * 1024; /* 4M */
+	const size_t buflen = DEFAULT_IO_BUFLEN;
 	void *buf;
 	off_t pos = 0;
 	off_t data_end = 0;
@@ -430,9 +431,9 @@ out_free:
 int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst, off_t pos,
 		      size_t count)
 {
-	const size_t buflen = 4 * 1024 * 1024; /* 4M */
+	const size_t buflen = DEFAULT_IO_BUFLEN;
+	size_t page_size;
 	ssize_t result = 0;
-	ssize_t page_size;
 	void *buf;
 	int rc;
 

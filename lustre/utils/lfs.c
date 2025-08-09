@@ -134,7 +134,7 @@ static int lfs_pcc_delete(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
 
 static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
-			      __u64 migration_flags,
+			      enum llapi_migration_flags migration_flags,
 			      unsigned long long bandwidth_bytes_sec,
 			      long stats_interval_sec);
 
@@ -707,7 +707,7 @@ static uint32_t check_foreign_type_name(const char *foreign_type_name)
 }
 
 static int
-migrate_open_files(const char *name, __u64 migration_flags,
+migrate_open_files(const char *name, enum llapi_migration_flags migration_flags,
 		   const struct llapi_stripe_param *param,
 		   struct llapi_layout *layout, int *fd_src_ptr,
 		   int *fd_dst_ptr, char **err_str)
@@ -817,12 +817,6 @@ source_open:
 	}
 
 	/*
-	 * In case the MDT does not support creation of volatile files
-	 * we should try to unlink it.
-	 */
-	(void)unlink(volatile_file);
-
-	/*
 	 * Not-owner (root?) special case.
 	 * Need to set owner/group of volatile file like original.
 	 * This will allow to pass related check during layout_swap.
@@ -868,7 +862,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			     long stats_interval_sec, off_t file_size_bytes)
 {
 	struct llapi_layout *layout;
-	size_t buf_size = 64 * ONE_MB;
+	size_t buf_size = DEFAULT_IO_BUFLEN;
 	uint64_t stripe_size = ONE_MB;
 	void *buf = NULL;
 	off_t pos = 0;
@@ -1383,7 +1377,7 @@ static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
 	return fd;
 }
 
-static int lfs_migrate(char *name, __u64 migration_flags,
+static int lfs_migrate(char *name, enum llapi_migration_flags migration_flags,
 			struct llapi_stripe_param *param,
 			struct llapi_layout *layout,
 			unsigned long long bandwidth_bytes_sec,
@@ -1652,21 +1646,23 @@ static int mirror_str2state(char *string, __u16 *state, __u16 *neg_state)
  * a linked list that consists of this structure.
  */
 struct mirror_args {
-	__u32			m_count;
-	__u32			m_flags;
-	struct llapi_layout	*m_layout;
-	const char		*m_file;
-	struct mirror_args	*m_next;
-	bool			m_inherit;
+	__u32				m_count;
+	enum lov_comp_md_entry_flags	m_flags;
+	struct llapi_layout		*m_layout;
+	const char			*m_file;
+	struct mirror_args		*m_next;
+	bool				m_inherit;
 };
 
 /**
  * enum mirror_flags - Flags for extending a mirrored file.
- * @MF_NO_VERIFY: Indicates not to verify the mirror(s) from victim file(s)
- *	       in case the victim file(s) contains the same data as the
- *	       original mirrored file.
- * @MF_DESTROY: Indicates to delete the mirror from the mirrored file.
- * @MF_COMP_ID: specified component id instead of mirror id
+ * @MF_NO_VERIFY: indicates to not verify the mirror(s) from victim file(s)
+ *	          and the user asserts the victim file(s) contains the same
+ *	          data as the original mirrored file.
+ * @MF_DESTROY:   indicates to delete the mirror from the mirrored file.
+ * @MF_COMP_ID:   specified component id instead of mirror id
+ * @MF_COMP_POOL: specified component pool instead of mirror id
+ * @MF_FOREIGN:   specified foreign component instead of mirror id
  *
  * Flags for extending a mirrored file.
  */
@@ -1848,17 +1844,23 @@ error:
  */
 static ssize_t mirror_file_compare(int fd_src, int fd_dst)
 {
-	const size_t buflen = 4 * 1024 * 1024; /* 4M */
+	const size_t buflen = DEFAULT_IO_BUFLEN;
 	void *buf;
 	ssize_t bytes_done = 0;
-	ssize_t bytes_read = 0;
+	int rc;
 
-	buf = malloc(buflen * 2);
-	if (!buf)
-		return -ENOMEM;
+	/* first half of buffer used for read, the other half for compare */
+	rc = posix_memalign(&buf, sysconf(_SC_PAGESIZE), buflen * 2);
+	if (rc) {
+		fprintf(stderr, "%s: posix_memalign() failed: %s\n",
+			progname, strerror(rc));
+		return -rc;
+	}
 	(void)mlock(buf, buflen * 2);
 
 	while (1) {
+		ssize_t bytes_read;
+
 		if (!llapi_lease_check(fd_src)) {
 			bytes_done = -EBUSY;
 			break;
@@ -1946,7 +1948,8 @@ layout_get_by_name_or_fid(const char *name_or_fid, const char *path,
 }
 
 static int mirror_extend_file(const char *fname, const char *victim_file,
-			      enum mirror_flags mirror_flags)
+			      enum mirror_flags mirror_flags,
+			      enum llapi_migration_flags migration_flags)
 {
 	int fd = -1;
 	int fdv = -1;
@@ -1954,16 +1957,19 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 	struct stat stbuf_v;
 	struct ll_ioc_lease *data = NULL;
 	char *err_str = "syserror";
+	int open_flags = O_RDWR;
 	int rc;
 
-	fd = open(fname, O_RDWR);
+	if (!(migration_flags & LLAPI_MIGRATION_NONDIRECT))
+		open_flags |= O_DIRECT;
+	fd = open(fname, open_flags);
 	if (fd < 0) {
 		err_str = "open source file";
 		rc = -errno;
 		goto out;
 	}
 
-	fdv = open(victim_file, O_RDWR);
+	fdv = open(victim_file, open_flags);
 	if (fdv < 0) {
 		err_str = "open target file";
 		rc = -errno;
@@ -2062,7 +2068,8 @@ out:
 }
 
 static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
-				bool inherit, uint32_t flags,
+				bool inherit, uint32_t comp_flags,
+				enum llapi_migration_flags migration_flags,
 				unsigned long long bandwidth_bytes_sec,
 				long stats_interval_sec)
 {
@@ -2093,11 +2100,10 @@ static int mirror_extend_layout(char *name, struct llapi_layout *m_layout,
 		}
 	}
 
-	llapi_layout_comp_flags_set(m_layout, flags);
+	llapi_layout_comp_flags_set(m_layout, comp_flags);
 
-	rc = migrate_open_files(name,
-			     LLAPI_MIGRATION_NONDIRECT | LLAPI_MIGRATION_MIRROR,
-			     NULL, m_layout, &fd_src, &fd_dst, &err_str);
+	rc = migrate_open_files(name, migration_flags | LLAPI_MIGRATION_MIRROR,
+				NULL, m_layout, &fd_src, &fd_dst, &err_str);
 	if (rc < 0)
 		goto out;
 
@@ -2165,6 +2171,7 @@ out:
 
 static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 			 enum mirror_flags mirror_flags,
+			 enum llapi_migration_flags migration_flags,
 			 unsigned long long bandwidth_bytes_sec,
 			 long stats_interval_sec)
 {
@@ -2173,7 +2180,7 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 	while (mirror_list) {
 		if (mirror_list->m_file) {
 			rc = mirror_extend_file(fname, mirror_list->m_file,
-						mirror_flags);
+						mirror_flags, migration_flags);
 		} else {
 			__u32 mirror_count = mirror_list->m_count;
 
@@ -2182,6 +2189,7 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 							mirror_list->m_layout,
 							mirror_list->m_inherit,
 							mirror_list->m_flags,
+							migration_flags,
 							bandwidth_bytes_sec,
 							stats_interval_sec);
 				if (rc)
@@ -2637,9 +2645,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   __u16 *mirror_ids, int ids_nr,
 			   long stats_interval_sec, long bandwidth_bytes_sec);
 
-
 static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
-			      __u64 migration_flags,
+			      enum llapi_migration_flags migration_flags,
 			      unsigned long long bandwidth_bytes_sec,
 			      long stats_interval_sec)
 {
@@ -3700,7 +3707,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	bool migrate_mdt_mode = false;
 	bool setstripe_mode = false;
 	bool migration_block = false;
-	__u64 migration_flags = 0;
+	enum llapi_migration_flags migration_flags = 0;
 	__u32 tgts[LOV_MAX_STRIPE_COUNT] = { 0 };
 	int comp_del = 0, comp_set = 0;
 	int comp_add = 0;
@@ -3799,7 +3806,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'd',	.name = "destroy",	.has_arg = no_argument},
 	/* used with "lfs migrate -m" */
 	{ .val = 'd',	.name = "directory",	.has_arg = no_argument},
-	/* --non-direct is only valid in migrate mode */
+	/* --non-direct is only valid in migrate and mirror mode */
 	{ .val = 'D',	.name = "non-direct",	.has_arg = no_argument },
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument},
 	{ .val = 'E',	.name = "component-end",
@@ -4100,9 +4107,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			break;
 		case 'D':
-			if (!migrate_mode) {
+			if (!migrate_mode && !mirror_mode) {
 				fprintf(stderr,
-					"%s %s: -D|--non-direct is valid only for migrate command\n",
+					"%s %s: -D|--non-direct is valid only for migrate or mirror command\n",
 					progname, argv[0]);
 				goto usage_error;
 			}
@@ -4958,6 +4965,7 @@ create_mirror:
 		} else if (opc == SO_MIRROR_EXTEND) {
 			result = mirror_extend(fname, mirror_list,
 					       mirror_flags,
+					       migration_flags,
 					       bandwidth_bytes_sec,
 					       stats_interval_sec);
 		} else if (opc == SO_MIRROR_SPLIT || opc == SO_MIRROR_DELETE) {
@@ -13158,7 +13166,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	int outfd;
 	int c;
 	void *buf;
-	const size_t buflen = 4 << 20;
+	const size_t buflen = DEFAULT_IO_BUFLEN;
 	ssize_t page_size;
 	off_t pos;
 	struct option long_opts[] = {
@@ -13254,8 +13262,8 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	/* allocate buffer */
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc) {
-		fprintf(stderr, "%s %s: posix_memalign returns %d\n",
-				progname, argv[0], rc);
+		fprintf(stderr, "%s %s: posix_memalign() failed: %s\n",
+			progname, argv[0], strerror(rc));
 		goto close_outfd;
 	}
 	(void)mlock(buf, buflen);
@@ -13330,7 +13338,7 @@ static inline int lfs_mirror_write(int argc, char **argv)
 	int inputfd;
 	int c;
 	void *buf;
-	const size_t buflen = 4 << 20;
+	const size_t buflen = DEFAULT_IO_BUFLEN;
 	off_t pos;
 	ssize_t page_size = sysconf(_SC_PAGESIZE);
 	struct ll_ioc_lease_id ioc;
@@ -14067,7 +14075,7 @@ static inline
 int lfs_mirror_verify_chunk(int fd, size_t file_size,
 			    struct verify_chunk *chunk, int verbose)
 {
-	const size_t buflen = 4 * 1024 * 1024; /* 4M */
+	const size_t buflen = DEFAULT_IO_BUFLEN;
 	void *buf;
 	size_t page_size;
 	ssize_t bytes_read;
@@ -14105,6 +14113,8 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 	count = MIN(chunk->chunk.e_end, file_size) - chunk->chunk.e_start;
 	pos = chunk->chunk.e_start;
 	while (bytes_done < count) {
+		bool print = false;
+
 		/* compute initial CRC-32 checksum */
 		crc = crc32(0L, Z_NULL, 0);
 		memset(crc_array, 0, sizeof(crc_array));
@@ -14112,11 +14122,12 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 		bytes_read = 0;
 		for (i = 0; i < chunk->mirror_count; i++) {
 			bytes_read = llapi_mirror_read(fd, chunk->mirror_id[i],
-						       buf, buflen, pos);
+						       buf, MIN(buflen, count),
+						       pos);
 			if (bytes_read < 0) {
 				rc = bytes_read;
 				fprintf(stderr,
-					"%s: failed to read data from mirror %u: %s.\n",
+					"%s: error reading from mirror %u: %s\n",
 					progname, chunk->mirror_id[i],
 					strerror(-rc));
 				goto error;
@@ -14126,22 +14137,23 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 			crc_array[i] = crc32(crc, buf, bytes_read);
 		}
 
-		if (verbose)
-			print_checksums(chunk, crc_array, pos, buflen);
 
 		/* compare CRC-32 checksum values */
 		for (i = 1; i < chunk->mirror_count; i++) {
 			if (crc_array[i] != crc_array[0]) {
-				rc = -EINVAL;
+				rc = -EUCLEAN;
 
 				fprintf(stderr,
-					"%s: chunk "DEXT" has different checksum value on mirror %u:%lx and mirror %u:%lx.\n",
+					"%s: chunk "DEXT" has different checksum value on mirror %u:%lx and mirror %u:%lx: %s\n",
 					progname, PEXT(&chunk->chunk),
 					chunk->mirror_id[0], crc_array[0],
-					chunk->mirror_id[i], crc_array[i]);
-				print_checksums(chunk, crc_array, pos, buflen);
+					chunk->mirror_id[i], crc_array[i],
+					strerror(-rc));
+				print = true;
 			}
 		}
+		if (verbose || print)
+			print_checksums(chunk, crc_array, pos, bytes_read);
 
 		pos += bytes_read;
 		bytes_done += bytes_read;
