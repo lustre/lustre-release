@@ -2707,71 +2707,38 @@ static int ldlm_hpreq_handler(struct ptlrpc_request *req)
 	RETURN(0);
 }
 
-static int ldlm_revoke_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			       struct hlist_node *hnode, void *data)
-
-{
-	struct list_head *rpc_list = data;
-	struct ldlm_lock *lock = cfs_hash_object(hs, hnode);
-
-	lock_res_and_lock(lock);
-
-	if (!ldlm_is_granted(lock)) {
-		unlock_res_and_lock(lock);
-		return 0;
-	}
-
-	LASSERT(lock->l_resource);
-	if (lock->l_resource->lr_type != LDLM_IBITS &&
-	    lock->l_resource->lr_type != LDLM_PLAIN) {
-		unlock_res_and_lock(lock);
-		return 0;
-	}
-
-	if (ldlm_is_ast_sent(lock)) {
-		unlock_res_and_lock(lock);
-		return 0;
-	}
-
-	LASSERT(lock->l_blocking_ast);
-	LASSERT(!lock->l_blocking_lock);
-
-	ldlm_set_ast_sent(lock);
-	if (lock->l_export && lock->l_export->exp_lock_hash) {
-		/*
-		 * NB: it's safe to call cfs_hash_del() even lock isn't
-		 * in exp_lock_hash.
-		 */
-		/*
-		 * In the function below, .hs_keycmp resolves to
-		 * ldlm_export_lock_keycmp()
-		 */
-		cfs_hash_del(lock->l_export->exp_lock_hash,
-			     &lock->l_remote_handle, &lock->l_exp_hash);
-	}
-
-	list_add_tail(&lock->l_rk_ast, rpc_list);
-	ldlm_lock_get(lock);
-
-	unlock_res_and_lock(lock);
-	return 0;
-}
-
 void ldlm_revoke_export_locks(struct obd_export *exp)
 {
-	int rc;
-	LIST_HEAD(rpc_list);
+	struct lu_env *env = lu_env_find();
+	struct lu_env _env;
+	int rc = 0;
 
 	ENTRY;
 
-	cfs_hash_for_each_nolock(exp->exp_lock_hash,
-				 ldlm_revoke_lock_cb, &rpc_list, 0);
-	rc = ldlm_run_ast_work(exp->exp_obd->obd_namespace, &rpc_list,
-			  LDLM_WORK_REVOKE_AST);
+	if (!env) {
+		rc = lu_env_init(&_env, LCT_DT_THREAD);
+		if (rc)
+			RETURN_EXIT;
+		env = &_env;
+		rc = lu_env_add(env);
+		if (rc)
+			GOTO(out_env_fini, rc);
+	}
 
-	if (rc == -ERESTART)
-		ldlm_reprocess_recovery_done(exp->exp_obd->obd_namespace);
+	/* From ldlm_bl_thread_exports:
+	 * If the given export has blocked locks, the next in the list may have
+	 * them too, thus cancel regular locks only if the current export has
+	 * no blocked locks.
+	 */
+	rc = ldlm_export_cancel_blocked_locks(exp);
+	if (rc == 0)
+		ldlm_export_cancel_locks(exp);
 
+	if (env == &_env) {
+		lu_env_remove(env);
+out_env_fini:
+		lu_env_fini(env);
+	}
 	EXIT;
 }
 EXPORT_SYMBOL(ldlm_revoke_export_locks);

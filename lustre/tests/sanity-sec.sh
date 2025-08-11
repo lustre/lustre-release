@@ -1296,9 +1296,10 @@ fops_test_setup() {
 
 	do_facet mgs $LCTL nodemap_modify --name c0 --property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name c0 --property trusted --value 1
-
-	wait_nm_sync c0 admin_nodemap
 	wait_nm_sync c0 trusted_nodemap
+
+	do_nodes $(comma_list $clients) $LCTL set_param \
+		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
 
 	do_node ${clients_arr[0]} rm -rf $DIR/$tdir
 	nm_test_mkdir
@@ -1308,13 +1309,11 @@ fops_test_setup() {
 		--property admin --value $admin
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		--property trusted --value $trust
+	wait_nm_sync c0 trusted_nodemap
 
 	# flush MDT locks to make sure they are reacquired before test
-	do_node ${clients_arr[0]} $LCTL set_param \
+	do_nodes $(comma_list $clients) $LCTL set_param \
 		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
-
-	wait_nm_sync c0 admin_nodemap
-	wait_nm_sync c0 trusted_nodemap
 }
 
 # fileset test directory needs to be initialized on a privileged client
@@ -10498,6 +10497,58 @@ test_81b() {
 	[[ -z "$failed" ]] || error "client ${clients_arr[0]} failed to close"
 }
 run_test 81b "banned client does not block other"
+
+test_82() {
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+	local tf=$DIR/$tdir/$tfile
+	local nm1=c0
+	local nm2=c1
+
+	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
+		skip "Need MDS version >= 2.16.58 for export lock revoke"
+
+	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
+	stack_trap "cleanup_local_client_nodemap $nm2" EXIT
+
+	# create data before nodemap setup
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	echo hi > $tf || error "create $tf failed"
+	chmod 600 $tf || error "chmod 600 $tf failed"
+
+	# setup nodemaps
+	setup_local_client_nodemap $nm2 1 1
+	do_facet mgs $LCTL nodemap_del_range \
+		--name $nm2 --range $client_nid ||
+		error "del range $client_nid to $nm2 failed"
+	setup_local_client_nodemap $nm1 1 1
+
+	# access test file
+	cancel_lru_locks
+	cat $tf || error "from $nm1, cat $tf failed"
+
+	# remove admin from nm1
+	do_facet mgs $LCTL nodemap_modify --name $nm1 \
+		--property admin --value 0 ||
+		error "modify admin=0 on $nm1 failed"
+	wait_nm_sync $nm1 admin_nodemap
+
+	# access test file, should now fail
+	cat $tf && error "cat $tf should fail"
+
+	# move client to other nodemap
+	do_facet mgs $LCTL nodemap_del_range \
+		--name $nm1 --range $client_nid ||
+		error "del range $client_nid to $nm1 failed"
+	do_facet mgs $LCTL nodemap_add_range \
+		--name $nm2 --range $client_nid ||
+		error "add range $client_nid to $nm2 failed"
+	wait_nm_sync $nm2 ranges
+
+	# access test file, should now work
+	cat $tf || error "from $nm2, cat $tf failed"
+}
+run_test 82 "export lock revoked after nodemap change"
 
 test_83() {
 	local user=$(getent passwd $RUNAS_ID | cut -d: -f1)
