@@ -6633,64 +6633,44 @@ int ll_inode_permission(struct mnt_idmap *idmap, struct inode *inode, int mask)
 	RETURN(rc);
 }
 
-# define ll_splice_read		pcc_file_splice_read
-
-/* -o localflock - only provides locally consistent flock locks */
-static const struct file_operations ll_file_operations = {
-	.read_iter	= ll_file_read_iter,
-	.write_iter	= ll_file_write_iter,
-	.unlocked_ioctl	= ll_file_ioctl,
-	.open		= ll_file_open,
-	.release	= ll_file_release,
-	.mmap		= ll_file_mmap,
-	.llseek		= ll_file_seek,
-	.splice_read	= ll_splice_read,
 #ifdef HAVE_ITER_FILE_SPLICE_WRITE
-	.splice_write	= iter_file_splice_write,
+# define ll_file_operations_splice_write .splice_write = iter_file_splice_write,
+#else
+# define ll_file_operations_splice_write
 #endif
-	.fsync		= ll_fsync,
-	.flush		= ll_flush,
-	.fallocate	= ll_fallocate,
-};
 
-static const struct file_operations ll_file_operations_flock = {
-	.read_iter	= ll_file_read_iter,
-	.write_iter	= ll_file_write_iter,
-	.unlocked_ioctl	= ll_file_ioctl,
-	.open		= ll_file_open,
-	.release	= ll_file_release,
-	.mmap		= ll_file_mmap,
-	.llseek		= ll_file_seek,
-	.splice_read	= ll_splice_read,
-#ifdef HAVE_ITER_FILE_SPLICE_WRITE
-	.splice_write	= iter_file_splice_write,
-#endif
-	.fsync		= ll_fsync,
-	.flush		= ll_flush,
-	.flock		= ll_file_flock,
-	.lock		= ll_file_flock,
-	.fallocate	= ll_fallocate,
-};
+#define declare_ll_file_operations(name, op_splice_read, op_flock)	\
+static const struct file_operations ll_file_operations_ ## name = {	\
+	.read_iter	= ll_file_read_iter,				\
+	.write_iter	= ll_file_write_iter,				\
+	.unlocked_ioctl	= ll_file_ioctl,				\
+	.open		= ll_file_open,					\
+	.release	= ll_file_release,				\
+	.mmap		= ll_file_mmap,					\
+	.llseek		= ll_file_seek,					\
+	.splice_read	= op_splice_read,				\
+	ll_file_operations_splice_write					\
+	.fsync		= ll_fsync,					\
+	.flush		= ll_flush,					\
+	.flock		= op_flock,					\
+	.lock		= op_flock,					\
+	.fallocate	= ll_fallocate,					\
+}
+
+/* These are for -o flock - to have distributed flock calls */
+declare_ll_file_operations(flock, pcc_file_splice_read, ll_file_flock);
+/* this variant has no ->splice_read() to avoid knfsd bug (LU-19254) */
+declare_ll_file_operations(flock_nosplice, NULL, ll_file_flock);
+
+/* These are for -o localflock - only provides locally consistent flock locks */
+declare_ll_file_operations(localflock, pcc_file_splice_read, NULL);
+/* this variant has no ->splice_read() to avoid knfsd bug (LU-19254) */
+declare_ll_file_operations(localflock_nosplice, NULL, NULL);
 
 /* These are for -o noflock - to return ENOSYS on flock calls */
-static const struct file_operations ll_file_operations_noflock = {
-	.read_iter	= ll_file_read_iter,
-	.write_iter	= ll_file_write_iter,
-	.unlocked_ioctl	= ll_file_ioctl,
-	.open		= ll_file_open,
-	.release	= ll_file_release,
-	.mmap		= ll_file_mmap,
-	.llseek		= ll_file_seek,
-	.splice_read	= ll_splice_read,
-#ifdef HAVE_ITER_FILE_SPLICE_WRITE
-	.splice_write	= iter_file_splice_write,
-#endif
-	.fsync		= ll_fsync,
-	.flush		= ll_flush,
-	.flock		= ll_file_noflock,
-	.lock		= ll_file_noflock,
-	.fallocate	= ll_fallocate,
-};
+declare_ll_file_operations(noflock, pcc_file_splice_read, ll_file_noflock);
+/* this variant has no ->splice_read() to avoid knfsd bug (LU-19254) */
+declare_ll_file_operations(noflock_nosplice, NULL, ll_file_noflock);
 
 const struct inode_operations ll_file_inode_operations = {
 	.setattr	= ll_setattr,
@@ -6709,16 +6689,28 @@ const struct inode_operations ll_file_inode_operations = {
 #endif
 };
 
-const struct file_operations *ll_select_file_operations(struct ll_sb_info *sbi)
+const struct file_operations *ll_select_file_operations(struct ll_sb_info *sbi,
+							bool with_splice)
 {
-	const struct file_operations *fops = &ll_file_operations_noflock;
+	const struct file_operations *fops_array[][LL_SBI_FLOCK + 1] = {
+		{
+		[LL_SBI_NOFLOCK]    = &ll_file_operations_noflock_nosplice,
+		[LL_SBI_LOCALFLOCK] = &ll_file_operations_localflock_nosplice,
+		[LL_SBI_FLOCK]      = &ll_file_operations_flock_nosplice,
+		},
+		{
+		[LL_SBI_NOFLOCK]    = &ll_file_operations_noflock,
+		[LL_SBI_LOCALFLOCK] = &ll_file_operations_localflock,
+		[LL_SBI_FLOCK]      = &ll_file_operations_flock,
+		},
+	};
 
-	if (test_bit(LL_SBI_FLOCK, sbi->ll_flags))
-		fops = &ll_file_operations_flock;
-	else if (test_bit(LL_SBI_LOCALFLOCK, sbi->ll_flags))
-		fops = &ll_file_operations;
+	BUILD_BUG_ON(LL_SBI_FLOCK < LL_SBI_LOCALFLOCK);
 
-	return fops;
+	return fops_array[with_splice][test_bit(LL_SBI_FLOCK, sbi->ll_flags) ?
+					LL_SBI_FLOCK :
+				  test_bit(LL_SBI_LOCALFLOCK, sbi->ll_flags) ?
+					LL_SBI_LOCALFLOCK : LL_SBI_NOFLOCK];
 }
 
 int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf)

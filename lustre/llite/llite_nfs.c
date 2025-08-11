@@ -191,18 +191,27 @@ free_dot:
 	if (IS_ERR(result))
 		RETURN(result);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)
-	/* If we are called by nfsd kthread set lli_open_thrsh_count
-	 * to one. This will force caching the open lock. To be
-	 * removed once oldest supported Linux kernel is 5.5
-	 */
-	if ((current->flags & PF_KTHREAD) &&
-	    strcmp(current->comm, "nfsd") == 0) {
-		struct ll_inode_info *lli = ll_i2info(inode);
+	if ((current->flags & PF_KTHREAD) && !strcmp(current->comm, "nfsd")) {
+		struct ll_sb_info *sbi = ll_i2sbi(inode);
 
-		lli->lli_open_thrsh_count = 1;
-	}
+		/* knfsd uses this from kernel, disable splice(). LU-19255 */
+		if (S_ISREG(inode->i_mode)) {
+			inode->i_fop = ll_select_file_operations(sbi, false);
+			LASSERT(inode->i_fop->splice_read == NULL);
+		}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0)
+		/* If we are called by nfsd kthread set lli_open_thrsh_count
+		 * to one. This will force caching the open lock. To be
+		 * removed once oldest supported Linux kernel is 5.5
+		 */
+		{
+			struct ll_inode_info *lli = ll_i2info(inode);
+
+			lli->lli_open_thrsh_count = 1;
+		}
 #endif
+	}
 	RETURN(result);
 }
 

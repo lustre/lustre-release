@@ -2762,23 +2762,32 @@ ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 {
 	struct inode *inode = file_inode(in_file);
 	struct file *pcc_file = ll_file2pccf(in_file)->pccf_file;
+	ktime_t kstart = ktime_get();
 	bool cached = false;
 	ssize_t result;
 
 	ENTRY;
 	in_file->f_ra.ra_pages = 0;
-	if (!pcc_file)
-		RETURN(do_sys_splice_read(in_file, ppos, pipe,
-					  count, flags));
+	if (!pcc_file) {
+		result = do_sys_splice_read(in_file, ppos, pipe,
+					    count, flags);
+		GOTO(out, result);
+	}
 
 	pcc_io_init(inode, PIT_SPLICE_READ, in_file, &cached);
-	if (!cached)
-		RETURN(do_sys_splice_read(in_file, ppos, pipe,
-					  count, flags));
+	if (!cached) {
+		result = do_sys_splice_read(in_file, ppos, pipe,
+					    count, flags);
+		GOTO(out, result);
+	}
 
 	result = do_sys_splice_read(pcc_file, ppos, pipe, count, flags);
 
 	pcc_io_fini(inode, PIT_SPLICE_READ, result, &cached);
+
+out:
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SPLICE,
+			   ktime_us_delta(ktime_get(), kstart));
 	RETURN(result);
 }
 

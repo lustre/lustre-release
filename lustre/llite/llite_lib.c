@@ -435,7 +435,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	 */
 	sb->s_flags |= SB_NOSEC;
 #endif
-	sbi->ll_fop = ll_select_file_operations(sbi);
+
+	sbi->ll_fop = ll_select_file_operations(sbi, true);
 
 	/* always ping even if server suppress_pings */
 	if (test_bit(LL_SBI_ALWAYS_PING, sbi->ll_flags))
@@ -1029,13 +1030,13 @@ void ll_kill_super(struct super_block *sb)
  */
 static const match_table_t ll_sbi_flags_name = {
 	{LL_SBI_32BIT_API,		"32bitapi"},
+	{LL_SBI_LOCALFLOCK,		"localflock"},
+	{LL_SBI_FLOCK,			"flock"},
+	{LL_SBI_FLOCK,			"noflock"},
 	{LL_SBI_CHECKSUM,		"checksum"},
 	{LL_SBI_CHECKSUM,		"nochecksum"},
 	{LL_SBI_ENCRYPT,		"encrypt"},
 	{LL_SBI_ENCRYPT,		"noencrypt"},
-	{LL_SBI_FLOCK,			"flock"},
-	{LL_SBI_FLOCK,			"noflock"},
-	{LL_SBI_LOCALFLOCK,		"localflock"},
 	{LL_SBI_FOREIGN_SYMLINK,	"foreign_symlink=%s"},
 	{LL_SBI_LAZYSTATFS,		"lazystatfs"},
 	{LL_SBI_LAZYSTATFS,		"nolazystatfs"},

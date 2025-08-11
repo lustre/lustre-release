@@ -787,11 +787,15 @@ enum stats_track_type {
 /* flags for sbi->ll_flags */
 enum ll_sbi_flags {
 	LL_SBI_32BIT_API,		/* generate 32 bit inodes. */
+	/* LOCALFLOCK and FLOCK should be 1 and 2 to minimize fops_array[]
+	 * size in ll_select_file_operations()
+	 */
+#define LL_SBI_NOFLOCK		      0 /* flock support is disabled */
+	LL_SBI_LOCALFLOCK,		/* local flocks instead of fs-wide */
+	LL_SBI_FLOCK,			/* flock enabled */
 	LL_SBI_ALWAYS_PING,		/* ping even if server suppress_pings */
 	LL_SBI_CHECKSUM,		/* checksum each page as it's written */
 	LL_SBI_ENCRYPT,			/* client side encryption */
-	LL_SBI_FLOCK,			/* flock enabled */
-	LL_SBI_LOCALFLOCK,		/* local flocks instead of fs-wide */
 	LL_SBI_FOREIGN_SYMLINK,		/* foreign fake-symlink support */
 	LL_SBI_FOREIGN_SYMLINK_UPCALL,	/* foreign fake-symlink upcall set */
 	LL_SBI_LAZYSTATFS,		/* lazystatfs mount option */
@@ -1266,6 +1270,7 @@ enum {
 	LPROC_LL_HYBRID_NOSWITCH,
 	LPROC_LL_HYBRID_WRITESIZE_SWITCH,
 	LPROC_LL_HYBRID_READSIZE_SWITCH,
+	LPROC_LL_SPLICE,
 	LPROC_LL_FILE_OPCODES
 };
 
@@ -1341,7 +1346,8 @@ extern const struct address_space_operations ll_aops;
 
 /* llite/file.c */
 extern const struct inode_operations ll_file_inode_operations;
-const struct file_operations *ll_select_file_operations(struct ll_sb_info *sbi);
+const struct file_operations *ll_select_file_operations(struct ll_sb_info *sbi,
+							bool with_splice);
 extern int ll_have_md_lock(struct obd_export *exp, struct inode *inode,
 			   enum mds_ibits_locks *bits,
 			   enum ldlm_mode l_req_mode,

@@ -24237,10 +24237,12 @@ test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))
 	dd if=/dev/urandom of=$DIR/f212 bs=1k count=$size
+	# check path2fid does not trigger nosplice operations
+	$LFS path2fid $DIR/f212
 	sendfile $DIR/f212 $DIR/f212.xyz || error "sendfile wrong"
 	rm -f $DIR/f212 $DIR/f212.xyz
 }
-run_test 212 "Sendfile test ============================================"
+run_test 212 "Sendfile test"
 
 test_213() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=4
