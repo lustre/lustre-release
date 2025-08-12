@@ -2212,6 +2212,23 @@ test_26() {
 }
 run_test 26 "test transferring very large nodemap"
 
+is_multi_fileset_supported() {
+	local facet=${1:-"mgs"}
+	local ver
+
+	if [[ $facet == "mgs" ]]; then
+		ver=$MGS_VERSION
+	elif [[ $facet == mds* ]]; then
+		ver=$MDS1_VERSION
+	elif [[ $facet == ost* ]]; then
+		ver=$OST1_VERSION
+	else
+		error "unknown facet $facet"
+	fi
+
+	(( ver >= $(version_code 2.16.57) ))
+}
+
 do_facet_check_fileset() {
 	local facet=$1
 	local nm=$2
@@ -2223,7 +2240,9 @@ do_facet_check_fileset() {
 		error "unknown fileset type $fset_type"
 	fi
 
-	if [[ $fset_ro == "ro" ]]; then
+	if ! is_multi_fileset_supported $facet; then
+		do_facet $facet $LCTL get_param -n nodemap.${nm}.fileset
+	elif [[ $fset_ro == "ro" ]]; then
 		do_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
 			awk -F '[[:blank:]]|,' '/${fset_type}/ { \
 			if (\\\$4 == \\\"$fset_check\\\" && \\\$7 == \\\"ro\\\" ) \
@@ -2252,6 +2271,19 @@ wait_update_facet_fileset() {
 		error "unknown fileset type $fset_type"
 	fi
 
+	# use fileset old syntax for pre multi fileset servers
+	if ! is_multi_fileset_supported $facet; then
+		if [[ $fset_type == "alternate" ]]; then
+			error "alt filesets not supported on $facet < 2.16.57"
+		fi
+
+		wait_update_facet $facet \
+			"$LCTL get_param nodemap.${nm}.fileset" \
+			"nodemap.${nm}.fileset=$fset_expected" ||
+			error $error_msg
+		return $?
+	fi
+
 	wait_update_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
 		awk '/${fset_type}/ { if (\\\$3 == \\\"$fset_check\\\") print \\\$3 }'" \
 		"$fset_expected" || error $error_msg
@@ -2267,6 +2299,16 @@ wait_nm_sync_fileset() {
 
 	if [[ $fset_type != "primary" && $fset_type != "alternate" ]]; then
 		error "unknown fileset type $fset_type"
+	fi
+
+	# use fileset old syntax for pre multi fileset servers
+	if ! is_multi_fileset_supported; then
+		if [[ $fset_type == "alternate" || $fset_ro == true ]]; then
+			error "alt filesets or read-only filesets not supported on servers"
+		fi
+
+		wait_nm_sync $nm fileset "nodemap.${nm}.fileset=$fset_expected"
+		return $?
 	fi
 
 	# check if ro flag is set for given fileset and print the fileset if yes
@@ -2296,7 +2338,7 @@ nodemap_clear_filesets_and_wait() {
 	echo "Currently set filesets on nodemap '$nm':"
 	do_facet mgs $LCTL get_param nodemap.$nm.fileset
 
-	if (( $MGS_VERSION >= $(version_code 2.16.56) )); then
+	if is_multi_fileset_supported; then
 		do_facet mgs $LCTL nodemap_fileset_del --name $nm --all
 		wait_nm_sync_fileset_cleared $nm
 	fi
@@ -2323,7 +2365,7 @@ stopall_restart_servers() {
 }
 
 nodemap_exercise_fileset() {
-	local have_persistent_fset_cmd
+	local have_persistent_fset_cmd=false
 	local check_proj=true
 	local loop=0
 	local nm="$1"
@@ -2334,7 +2376,6 @@ nodemap_exercise_fileset() {
 
 	# when "have_persistent_fset_cmd" is true, "lctl nodemap_set_fileset"
 	# is persistent, otherwise "lctl set_param -P" must be used
-	have_persistent_fset_cmd=false
 	if (( $MGS_VERSION >= $(version_code 2.16.51) )); then
 		have_persistent_fset_cmd=true
 		subdir="thisisaverylongsubdirtotestlongfilesetsandtotestmultiplefilesetfragmentsonthenodemapiam_${nm}"
@@ -2852,8 +2893,8 @@ test_27ac() {
 	local fileset_llog="/llog_fileset"
 	local fileset_iam="/iam_fileset"
 
-	(( MDS1_VERSION >= $(version_code 2.16.56) )) ||
-		skip "Need OSS >= 2.16.56 llog fileset compatibility"
+	is_multi_fileset_supported "mds1" ||
+		skip "Need MDS >= 2.16.57 llog fileset compatibility"
 
 	if [[ $(facet_active_host mgs) == $(facet_active_host mds) &&
 	      $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
@@ -2937,15 +2978,12 @@ run_test 27ac "test nodemap llog and IAM fileset compatibility"
 
 test_27b() { #LU-10703
 	local i
-	local have_multi_filesets
+	local fset
 
 	(( MDS1_VERSION < $(version_code 2.11.50) )) &&
 		skip "Need MDS >= 2.11.50"
 
 	(( MDSCOUNT < 2 )) && skip "needs >= 2 MDTs"
-
-	(( MDS1_VERSION >= $(version_code 2.16.56) )) &&
-		have_multi_filesets=true
 
 	# if servers run on the same node, it is impossible to tell if they get
 	# synced with the mgs, so this test needs to be skipped
@@ -2969,11 +3007,7 @@ test_27b() { #LU-10703
 			error "set nm$i.fileset=/dir$i failed on MGS"
 		do_facet mgs $LCTL set_param -P nodemap.nm$i.fileset=/dir$i ||
 			error "set nm$i.fileset=/dir$i failed on servers"
-		if $have_multi_filesets; then
-			wait_nm_sync_fileset "nm$i" "/dir$i" "/dir$i" "primary"
-		else
-			wait_nm_sync nm$i fileset "nodemap.nm$i.fileset=/dir$i"
-		fi
+		wait_nm_sync_fileset "nm$i" "/dir$i" "/dir$i" "primary"
 		# set a property to check that the nodemap have been synced
 		# as the sync disables the set_iam flag for llog filesets
 		do_facet mgs $LCTL nodemap_modify --name nm$i \
@@ -2983,8 +3017,8 @@ test_27b() { #LU-10703
 
 	# Check if all the filesets are correct
 	for ((i = 1; i <= MDSCOUNT; i++)); do
-		fset=$(do_facet mds$i $LCTL get_param -n nodemap.nm$i.fileset)
-		[[ $(awk '/primary/ { print $3 }' <<< $fset) == "/dir$i" ]] ||
+		fset=$(do_facet_check_fileset "mds$i" "nm$i" "/dir$i")
+		[[ $fset == "/dir$i" ]] ||
 			error "nm$i.fileset $fset != /dir$i on mds$i"
 		do_facet mgs $LCTL set_param -P -d nodemap.nm$i.fileset ||
 			error "unable to remove fileset rule for nm$i nodemap"
@@ -3004,8 +3038,8 @@ test_27c() {
 	local prim_fileset
 	local alt_fileset
 
-	(( $MGS_VERSION >= $(version_code 2.16.56) )) ||
-		skip "Need MGS >= 2.16.56 for multiple filesets"
+	is_multi_fileset_supported ||
+		skip "Need MGS >= 2.16.57 for multiple filesets"
 
 	# if servers run on the same node, it is impossible to tell if they get
 	# synced with the mgs, so this test needs to be skipped
@@ -3280,8 +3314,8 @@ multi_fileset_test_run() {
 	local ro=${2:-false}
 	local ro_fileset=""
 
-	(( $MGS_VERSION >= $(version_code 2.16.56) )) ||
-		skip "Need MGS >= 2.16.56 for multiple filesets"
+	is_multi_fileset_supported ||
+		skip "Need MGS >= 2.16.57 for multiple filesets"
 
 	# if servers run on the same node, it is impossible to tell if they get
 	# synced with the mgs, so this test needs to be skipped
@@ -3479,8 +3513,8 @@ test_27f() {
 	local invalid_fset="/invalid"
 	local dup_fset="/duplicate"
 
-	(( $MGS_VERSION >= $(version_code 2.16.56) )) ||
-		skip "Need MGS >= 2.16.56 for multiple filesets"
+	is_multi_fileset_supported ||
+		skip "Need MGS >= 2.16.57 for multiple filesets"
 
 	# if servers run on the same node, it is impossible to tell if they get
 	# synced with the mgs, so this test needs to be skipped
@@ -8514,8 +8548,8 @@ test_72d() {
 	local nm2=subnm_test72d
 	local val
 
-	(( OST1_VERSION >= $(version_code 2.16.56) )) ||
-		skip "Need OSS >= 2.16.56 multiple fileset"
+	is_multi_fileset_supported "ost1" ||
+		skip "Need OSS >= 2.16.57 for multiple filesets"
 
 	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
 		skip "Need servers on different hosts"
@@ -8746,8 +8780,8 @@ test_72f() {
 	local fileset_alt2="/alt2"
 	local val
 
-	(( OST1_VERSION >= $(version_code 2.16.56) )) ||
-		skip "Need OSS >= 2.16.56 multiple fileset"
+	is_multi_fileset_supported "ost1" ||
+		skip "Need OSS >= 2.16.57 for multiple filesets"
 
 	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
 		skip "Need servers on different hosts"
