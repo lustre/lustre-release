@@ -104,6 +104,9 @@ setup_fakeif() {
 		    grep $FAKE_IPV6)
 
 	[[ -n $ip4 && -n $ip6 ]] || error "Failed setup $FAKE_IF"
+	wait_update $HOSTNAME \
+		"$netns_exec ip -o a s $FAKE_IF | grep -c tentative" \
+		"0" "10"
 }
 
 cleanup_fakeif() {
