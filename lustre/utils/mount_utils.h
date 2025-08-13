@@ -236,9 +236,9 @@ bool backfs_mount_type_loaded(enum ldd_mount_type mt);
 #endif
 
 #ifdef HAVE_OPENSSL_SSK
-int load_shared_keys(struct mount_opts *mop);
+int load_shared_keys(struct mount_opts *mop, bool client);
 #else
-static inline int load_shared_keys(struct mount_opts *mop)
+static inline int load_shared_keys(struct mount_opts *mop, bool client)
 {
 	return EOPNOTSUPP;
 }

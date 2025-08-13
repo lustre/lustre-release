@@ -10307,6 +10307,128 @@ test_81b() {
 }
 run_test 81b "banned client does not block other"
 
+cleanup_100() {
+	local orig_sk_path="$1"
+	local test_key="$orig_sk_path/$FSNAME-test100.key"
+
+	# Restore original SK_PATH
+	export SK_PATH="$orig_sk_path"
+
+	# Ensure client is unmounted
+	zconf_umount_clients $HOSTNAME $MOUNT 2>/dev/null || true
+
+	# Clear test keys from keyring on all nodes
+	do_nodes $(all_nodes) "keyctl show |
+		awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X" \
+		2>/dev/null || true
+
+	# Remove test key files from all nodes
+	do_nodes $(all_nodes) "rm -f $test_key" 2>/dev/null ||
+		true
+
+	# Reload original key on servers before remounting client
+	# The test key overwrote original key in keyring with same description.
+	do_nodes $(all_server_nodes) \
+		"$LGSS_SK -l $orig_sk_path/$FSNAME.key >/dev/null 2>&1" || true
+
+	# Remount with original configuration
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "unable to remount client with original key"
+	wait_ssk
+}
+
+test_100() {
+	local test_key="$SK_PATH/$FSNAME-test100.key"
+	local orig_sk_path=$SK_PATH
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	local_mode && skip "in local mode."
+
+	stack_trap "cleanup_100 $orig_sk_path" EXIT
+
+	# Create test file at start to verify filesystem continuity throughout
+	test_mkdir $DIR/$tdir
+	touch $DIR/$tdir/$tfile || error "failed to create initial test file"
+
+	# Generate key: Create a new server-type SSK key for testing
+	$LGSS_SK -t server -f $FSNAME -w $test_key -d /dev/urandom -p 512 ||
+		error "failed to create server key"
+
+	# Verify key was created as server type (no client, no prime)
+	local key_type=$($LGSS_SK -r $test_key | awk '/Type:/ {print $0}')
+	[[ "$key_type" =~ server ]] ||
+		error "server key should have server type, got: $key_type"
+	[[ ! "$key_type" =~ client ]] ||
+		error "server key should not have client type, got: $key_type"
+
+	# Verify no prime is present in server key
+	$LGSS_SK -r $test_key 2>/dev/null | grep -q "^Prime (p)" &&
+		error "server key should not have prime field"
+
+	# Distribute key: Propagate the key to all nodes
+	local nodes_list=$(all_nodes)
+	for lnode in ${nodes_list//,/ }; do
+		scp $test_key ${lnode}:$test_key ||
+			error "failed to copy key to $lnode"
+	done
+
+	# Load key: Load the server key on server nodes only
+	# (NOT on clients - client will load it automatically during mount)
+	do_nodes $(all_server_nodes) \
+		"$LGSS_SK -l $test_key >/dev/null 2>&1" ||
+		error "failed to load server key on servers"
+
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# Clear any existing keys from keyring on client
+	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' | \
+    		xargs -IX keyctl unlink X 2>/dev/null || true
+
+	# Mount client using skpath pointing to the server key
+	export SK_PATH=$test_key
+
+	# Capture mount output to verify prime generation message
+	local mount_output
+	mount_output=$(zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS 2>&1)
+	local mount_rc=$?
+	wait_ssk
+
+	if [ $mount_rc -ne 0 ]; then
+		# Restore original key on servers since test key overwrote it
+		do_nodes $(all_server_nodes) \
+			"$LGSS_SK -l $orig_sk_path/$FSNAME.key >/dev/null 2>&1" ||
+				true
+		export SK_PATH="$orig_sk_path"
+		error "mount failed with server key: $mount_output"
+	fi
+
+	# Verify the mount succeeded and prime generation occurred
+	echo "$mount_output" | grep -q "Generating DH parameters" ||
+		error "prime generation message not found in mount output"
+
+	# Verify the key file was modified to client type with prime
+	local new_key_type=$($LGSS_SK -r $test_key | awk '/Type:/ {print $0}')
+
+	[[ "$new_key_type" =~ client ]] ||
+		error "client key should have client type, got: $new_key_type"
+
+	# Verify prime was generated (check if prime field exists)
+	$LGSS_SK -r $test_key 2>/dev/null | grep -q "^Prime (p)" ||
+		error "prime should be present in client key"
+
+	# Test basic filesystem operations to ensure mount is functional
+
+	# Verify the test file created before unmount is still accessible
+	[[ -f $DIR/$tdir/$tfile ]] ||
+		error "file not found after remount with auto-generated prime"
+}
+run_test 100 "SSK automatic prime generation when mounting with server key"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

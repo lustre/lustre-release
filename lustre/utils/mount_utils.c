@@ -1303,7 +1303,7 @@ out:
 
 #ifdef HAVE_GSS
 #ifdef HAVE_OPENSSL_SSK
-int load_shared_keys(struct mount_opts *mop)
+int load_shared_keys(struct mount_opts *mop, bool client)
 {
 	DIR *dir;
 	struct dirent *dentry;
@@ -1324,7 +1324,7 @@ int load_shared_keys(struct mount_opts *mop)
 
 	/* Load individual keys or a directory of them */
 	if (S_ISREG(sbuf.st_mode)) {
-		return sk_load_keyfile(path);
+		return sk_load_keyfile(path, client);
 	} else if (!S_ISDIR(sbuf.st_mode)) {
 		fprintf(stderr, "Invalid shared key path: %s\n", path);
 		return -ENOKEY;
@@ -1369,7 +1369,7 @@ int load_shared_keys(struct mount_opts *mop)
 		if (!S_ISREG(sbuf.st_mode))
 			continue;
 
-		rc = sk_load_keyfile(fullpath);
+		rc = sk_load_keyfile(fullpath, client);
 		if (rc)
 			fprintf(stderr, "Failed to load key %s\n", fullpath);
 	}

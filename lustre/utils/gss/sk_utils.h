@@ -422,9 +422,13 @@ static inline const char *sk_primebits2name(int primebits)
 	return NULL;
 }
 
+extern int fips_mode;
 void sk_init_logging(char *program, int verbose, int fg);
+int gen_ssk_prime(struct sk_keyfile_config *config);
+int write_config_file(char *output_file, struct sk_keyfile_config *config,
+		      bool overwrite);
 struct sk_keyfile_config *sk_read_file(char *filename);
-int sk_load_keyfile(char *path);
+int sk_load_keyfile(char *path, bool client);
 void sk_config_disk_to_cpu(struct sk_keyfile_config *config);
 void sk_config_cpu_to_disk(struct sk_keyfile_config *config);
 int sk_validate_config(const struct sk_keyfile_config *config);

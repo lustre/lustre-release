@@ -1084,7 +1084,7 @@ int main(int argc, char *const argv[])
 #ifdef HAVE_GSS
 	if (mop.mo_skpath[0] != '\0') {
 		/* Treat shared key failures as fatal */
-		rc = load_shared_keys(&mop);
+		rc = load_shared_keys(&mop, client);
 		if (rc) {
 			fprintf(stderr, "%s: Error loading shared keys: %s\n",
 				progname, strerror(rc));

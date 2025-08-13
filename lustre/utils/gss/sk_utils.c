@@ -39,6 +39,8 @@
 # include "err_util.h"
 #endif
 
+int fips_mode = -1;
+
 #ifdef _ERR_UTIL_H_
 /**
  * Initializes logging
@@ -52,6 +54,180 @@ void sk_init_logging(char *program, int verbose, int fg)
 	initerr(program, verbose, fg);
 }
 #endif
+
+#if !defined(HAVE_OPENSSL_EVP_PKEY) && OPENSSL_VERSION_NUMBER >= 0x10100000L
+static int __fetch_ssk_prime(struct sk_keyfile_config *config)
+{
+	const BIGNUM *p;
+	DH *dh = NULL;
+	int primenid;
+	int rc = -1;
+
+	primenid = sk_primebits2primenid(config->skc_prime_bits);
+	dh = DH_new_by_nid(primenid);
+	if (!dh) {
+		fprintf(stderr, "error: dh cannot be init\n");
+		goto prime_end;
+	}
+
+	p = DH_get0_p(dh);
+	if (!p) {
+		fprintf(stderr, "error: cannot get p from dh\n");
+		goto prime_end;
+	}
+
+	if (BN_num_bytes(p) > SK_MAX_P_BYTES) {
+		fprintf(stderr,
+			"error: requested length %d exceeds maximum %d\n",
+			BN_num_bytes(p), SK_MAX_P_BYTES * 8);
+		goto prime_end;
+	}
+
+	if (BN_bn2bin(p, config->skc_p) != BN_num_bytes(p)) {
+		fprintf(stderr, "error: convert BIGNUM p to binary failed\n");
+		goto prime_end;
+	}
+
+	rc = 0;
+
+prime_end:
+	if (rc)
+		fprintf(stderr,
+			"error: fetching SSK prime failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
+	DH_free(dh);
+	return rc;
+}
+#endif
+
+/**
+ * Generates the prime required by the client key, and stores it in the
+ * struct sk_keyfile_config.
+ *
+ * \param[in]	config		config describing the key
+ *
+ * \return	0		success
+ * \return	-1		failure
+ */
+int gen_ssk_prime(struct sk_keyfile_config *config)
+{
+	int rc = -1;
+	const char *primename;
+	EVP_PKEY_CTX *ctx = NULL;
+	EVP_PKEY *dh = NULL;
+	BIGNUM *p = NULL;
+
+	if (fips_mode < 0)
+		fips_mode = FIPS_mode();
+	if (fips_mode) {
+		primename = sk_primebits2name(config->skc_prime_bits);
+		if (!primename) {
+			fprintf(stderr,
+				"error: prime len %d not supported in FIPS mode\n",
+				config->skc_prime_bits);
+			return rc;
+		}
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		fprintf(stdout,
+			"FIPS mode, using well-known prime %s\n", primename);
+#ifndef HAVE_OPENSSL_EVP_PKEY
+		return __fetch_ssk_prime(config);
+#endif
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10100000L */
+	}
+
+	ctx = EVP_PKEY_CTX_new_from_name(NULL, "DH", NULL);
+	if (!ctx || EVP_PKEY_paramgen_init(ctx) != 1) {
+		fprintf(stderr, "error: ctx cannot be init\n");
+		goto prime_end;
+	}
+
+	if (EVP_PKEY_CTX_set_dh_paramgen_prime_len(ctx,
+						config->skc_prime_bits) <= 0 ||
+	    EVP_PKEY_CTX_set_dh_paramgen_generator(ctx, SK_GENERATOR) <= 0) {
+		fprintf(stderr, "error: cannot set prime or generator\n");
+		goto prime_end;
+	}
+
+	if (EVP_PKEY_paramgen(ctx, &dh) != 1) {
+		fprintf(stderr, "error: cannot generate DH parameters\n");
+		goto prime_end;
+	}
+
+	if (!EVP_PKEY_get_bn_param(dh, OSSL_PKEY_PARAM_FFC_P, &p)) {
+		fprintf(stderr, "error: cannot get p from dh\n");
+		goto prime_end;
+	}
+
+	if (BN_num_bytes(p) > SK_MAX_P_BYTES) {
+		fprintf(stderr,
+			"error: cannot generate DH parameters: requested length %d exceeds maximum %d\n",
+			config->skc_prime_bits, SK_MAX_P_BYTES * 8);
+		goto prime_end;
+	}
+	if (BN_bn2bin(p, config->skc_p) != BN_num_bytes(p)) {
+		fprintf(stderr,
+			"error: convert BIGNUM p to binary failed\n");
+		goto prime_end;
+	}
+
+	rc = 0;
+
+prime_end:
+	if (rc)
+		fprintf(stderr,
+			"error: generating SSK prime failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
+	EVP_PKEY_free(dh);
+	EVP_PKEY_CTX_free(ctx);
+	return rc;
+}
+
+/**
+ * Writes sk config to file.
+ *
+ * \param[in]	output_file		output file to write sk config to
+ * \param[in]	config			the sk config to write
+ * \param[in]	overwrite		true to overwrite existing output file
+ *
+ * \return	0		success
+ * \return	-errno		on failure
+ */
+int write_config_file(char *output_file, struct sk_keyfile_config *config,
+		      bool overwrite)
+{
+	size_t rc;
+	int fd;
+	int flags = O_WRONLY | O_CREAT;
+
+	if (!overwrite)
+		flags |= O_EXCL;
+
+	sk_config_cpu_to_disk(config);
+
+	fd = open(output_file, flags, 0400);
+	if (fd < 0) {
+		fprintf(stderr, "error: opening '%s': %s\n", output_file,
+			strerror(errno));
+		return -errno;
+	}
+
+	rc = write(fd, config, sizeof(*config));
+	if (rc < 0) {
+		fprintf(stderr, "error: writing to '%s': %s\n", output_file,
+			strerror(errno));
+		rc = -errno;
+	} else if (rc != sizeof(*config)) {
+		fprintf(stderr, "error: short write to '%s'\n", output_file);
+		rc = -ENOSPC;
+
+	} else {
+		rc = 0;
+	}
+
+	close(fd);
+	return rc;
+}
 
 /**
  * Loads the key from \a filename and returns the struct sk_keyfile_config.
@@ -181,11 +357,12 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
  *
  * \param[in]	path	Path to key file
  * \param[in]	type	Type of key to load which determines the description
+ * \param[in]	client	Client is mounting with a server key
  *
  * \return	0	sucess
  * \return	-1	failure
  */
-int sk_load_keyfile(char *path)
+int sk_load_keyfile(char *path, bool client)
 {
 	struct sk_keyfile_config *config;
 	char description[SK_DESCRIPTION_SIZE + 1];
@@ -201,6 +378,7 @@ int sk_load_keyfile(char *path)
 		return rc2;
 	}
 
+read_sk:
 	config = sk_read_file(path);
 	if (!config)
 		return rc2;
@@ -228,6 +406,23 @@ int sk_load_keyfile(char *path)
 			goto out;
 	}
 	if (config->skc_type & SK_TYPE_SERVER) {
+		if (client) {
+			/* Client is mounting with a server key:
+			 * generate prime on the fly and reload.
+			 */
+			config->skc_type = SK_TYPE_CLIENT;
+
+			/* This message is verified by sanity-sec.sh test_100 */
+			printf("Generating DH parameters to turn %s into a client key, this can take a while...\n",
+				path);
+			if (gen_ssk_prime(config))
+				goto out;
+			if (write_config_file(path, config, true))
+				goto out;
+			free(config);
+			goto read_sk;
+		}
+
 		/* Server keys need to have the file system name in the key */
 		if (config->skc_fsname[0] == '\0') {
 			printerr(0, "Key configuration has no file system "
