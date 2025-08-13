@@ -48,6 +48,7 @@ static void usage(FILE *fp, char *program)
 	fprintf(fp, "-r|--read       <keyfile>	Show keyfile's attributes\n");
 	fprintf(fp, "-w|--write      <keyfile>	Generate keyfile\n\n");
 	fprintf(fp, "Modify/Write Options:\n");
+	fprintf(fp, "-a|--ascii      <keyfile>	Output key in ASCII-encoded format\n");
 	fprintf(fp, "-c|--crypt      <num>	Cipher for encryption "
 		"(Default: AES Counter mode)\n");
 	for (i = 1; i < ARRAY_SIZE(sk_crypt_algs); i++)
@@ -221,6 +222,38 @@ static int parse_mgsnids(char *mgsnids, struct sk_keyfile_config *config)
 	return rc;
 }
 
+static bool check_orig_ascii_format(const char *filename)
+{
+	struct stat st;
+	char *file_data = NULL;
+	bool is_ascii = false;
+	ssize_t bytes_read;
+	int fd, rc;
+
+	fd = open(filename, O_RDONLY);
+	if (fd < 0)
+		return false;
+
+	rc = fstat(fd, &st);
+	if (rc || st.st_size == 0)
+		goto cleanup;
+
+	file_data = malloc(st.st_size + 1);
+	if (!file_data)
+		goto cleanup;
+
+	bytes_read = read(fd, file_data, st.st_size);
+	if (bytes_read > 0) {
+		file_data[bytes_read] = '\0';
+		is_ascii = sk_is_ascii_encoded(file_data, bytes_read);
+	}
+
+cleanup:
+	free(file_data);
+	close(fd);
+	return is_ascii;
+}
+
 int main(int argc, char **argv)
 {
 	struct sk_keyfile_config *config;
@@ -240,12 +273,14 @@ int main(int argc, char **argv)
 	int shared_keylen = -1;
 	int prime_bits = -1;
 	int verbose = 0;
+	bool ascii = false;
 	int i;
 	int opt;
 	enum sk_key_type type = SK_TYPE_INVALID;
 	bool generate_prime = false;
 
 	static struct option long_opts[] = {
+	{ .name = "ascii",	.has_arg = no_argument,	      .val = 'a'},
 	{ .name = "crypt",	.has_arg = required_argument, .val = 'c'},
 	{ .name = "data",	.has_arg = required_argument, .val = 'd'},
 	{ .name = "expire",	.has_arg = required_argument, .val = 'e'},
@@ -267,9 +302,12 @@ int main(int argc, char **argv)
 	{ .name = NULL, } };
 
 	while ((opt = getopt_long(argc, argv,
-				  "c:d:e:f:g:hi:l:m:n:p:r:s:k:t:w:v", long_opts,
-				  NULL)) != EOF) {
+				  "ac:d:e:f:g:hi:l:m:n:p:r:s:k:t:w:v",
+				  long_opts, NULL)) != EOF) {
 		switch (opt) {
+		case 'a':
+			ascii = true;
+			break;
 		case 'c':
 			crypt = sk_name2crypt(optarg);
 			break;
@@ -417,9 +455,16 @@ int main(int argc, char **argv)
 	}
 
 	if (modify) {
+		/* Check if the original file was in ASCII format */
+		bool original_ascii = check_orig_ascii_format(modify);
+
 		config = sk_read_file(modify);
 		if (!config)
 			return EXIT_FAILURE;
+
+		/* Preserve original format unless explicitly overridden */
+		if (original_ascii && !ascii)
+			ascii = true;
 
 		if (type != SK_TYPE_INVALID) {
 			/* generate key when adding client type */
@@ -527,7 +572,7 @@ int main(int argc, char **argv)
 			goto error;
 	}
 
-	if (write_config_file(modify ?: output, config, modify))
+	if (write_config_file(modify ?: output, config, modify, ascii))
 		goto error;
 
 	return EXIT_SUCCESS;

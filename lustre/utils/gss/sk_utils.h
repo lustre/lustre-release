@@ -131,6 +131,10 @@ static inline const BIGNUM *DH_get0_p(const DH *dh)
 #define SK_NONCE_SIZE 4
 #define MAX_MGSNIDS 16
 
+/* ASCII-encoded key format constants */
+#define SK_ASCII_HEADER "Lustre SSK v1.0\n"
+#define SK_ASCII_HEADER_LEN (sizeof(SK_ASCII_HEADER) - 1)
+
 enum sk_ctx_init_buffers {
 	/* Initiator netstring buffer ordering */
 	SK_INIT_VERSION	= 0,
@@ -426,12 +430,16 @@ extern int fips_mode;
 void sk_init_logging(char *program, int verbose, int fg);
 int gen_ssk_prime(struct sk_keyfile_config *config);
 int write_config_file(char *output_file, struct sk_keyfile_config *config,
-		      bool overwrite);
+		      bool overwrite, bool ascii_format);
 struct sk_keyfile_config *sk_read_file(char *filename);
 int sk_load_keyfile(char *path, bool client);
 void sk_config_disk_to_cpu(struct sk_keyfile_config *config);
 void sk_config_cpu_to_disk(struct sk_keyfile_config *config);
 int sk_validate_config(const struct sk_keyfile_config *config);
+int sk_is_ascii_encoded(const char *data, size_t len);
+struct sk_keyfile_config *sk_decode_ascii_key(char *ascii_data, size_t len);
+int sk_encode_ascii_key(const struct sk_keyfile_config *config,
+			char **ascii_data, size_t *ascii_len);
 uint32_t sk_verify_hash(const char *string, const EVP_MD *hash_alg,
 			const gss_buffer_desc *current_hash);
 struct sk_cred *sk_create_cred(const char *fsname, const char *cluster,

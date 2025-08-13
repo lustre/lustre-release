@@ -25,6 +25,7 @@
 #include <libcfs/util/string.h>
 #include <sys/time.h>
 #include <signal.h>
+#include <linux/lustre/lgss.h>
 
 #include "sk_utils.h"
 #include "write_bytes.h"
@@ -183,22 +184,43 @@ prime_end:
 	return rc;
 }
 
+static int write_data_with_error_handling(int fd, const void *data,
+					  size_t expected_size,
+					  const char *output_file,
+					  const char *data_type)
+{
+	ssize_t rc;
+
+	rc = write(fd, data, expected_size);
+	if (rc < 0) {
+		fprintf(stderr, "error: writing %s to '%s': %s\n",
+			data_type, output_file, strerror(errno));
+		return -errno;
+	} else if (rc != expected_size) {
+		fprintf(stderr, "error: short write to '%s'\n", output_file);
+		return -ENOSPC;
+	}
+	return 0;
+}
+
 /**
  * Writes sk config to file.
  *
  * \param[in]	output_file		output file to write sk config to
  * \param[in]	config			the sk config to write
  * \param[in]	overwrite		true to overwrite existing output file
+ * \param[in]	ascii_format		true to write ASCII-encoded output
  *
  * \return	0		success
  * \return	-errno		on failure
  */
 int write_config_file(char *output_file, struct sk_keyfile_config *config,
-		      bool overwrite)
+		      bool overwrite, bool ascii_format)
 {
-	size_t rc;
-	int fd;
 	int flags = O_WRONLY | O_CREAT;
+	char *ascii_data = NULL;
+	size_t ascii_len = 0;
+	int fd, rc;
 
 	if (!overwrite)
 		flags |= O_EXCL;
@@ -212,17 +234,23 @@ int write_config_file(char *output_file, struct sk_keyfile_config *config,
 		return -errno;
 	}
 
-	rc = write(fd, config, sizeof(*config));
-	if (rc < 0) {
-		fprintf(stderr, "error: writing to '%s': %s\n", output_file,
-			strerror(errno));
-		rc = -errno;
-	} else if (rc != sizeof(*config)) {
-		fprintf(stderr, "error: short write to '%s'\n", output_file);
-		rc = -ENOSPC;
+	if (ascii_format) {
+		/* Generate ASCII-encoded output */
+		rc = sk_encode_ascii_key(config, &ascii_data, &ascii_len);
+		if (rc) {
+			fprintf(stderr,
+				"error: failed to encode key in ASCII format\n");
+			close(fd);
+			return -EINVAL;
+		}
 
+		rc = write_data_with_error_handling(fd, ascii_data, ascii_len,
+						    output_file, "ASCII data");
+		free(ascii_data);
 	} else {
-		rc = 0;
+		/* Binary format output */
+		rc = write_data_with_error_handling(fd, config, sizeof(*config),
+						    output_file, "data");
 	}
 
 	close(fd);
@@ -240,17 +268,14 @@ int write_config_file(char *output_file, struct sk_keyfile_config *config,
  */
 struct sk_keyfile_config *sk_read_file(char *filename)
 {
-	struct sk_keyfile_config *config;
+	struct sk_keyfile_config *config = NULL;
+	char *file_data = NULL;
 	char *ptr;
-	size_t rc;
-	size_t remain;
+	size_t bytes_read = 0;
+	size_t max_size;
+	struct stat st;
 	int fd;
-
-	config = malloc(sizeof(*config));
-	if (!config) {
-		printerr(0, "Failed to allocate memory for config\n");
-		return NULL;
-	}
+	ssize_t rc;
 
 	/* allow standard input override */
 	if (strcmp(filename, "-") == 0)
@@ -261,45 +286,89 @@ struct sk_keyfile_config *sk_read_file(char *filename)
 	if (fd == -1) {
 		printerr(0, "Error opening key file '%s': %s\n", filename,
 			 strerror(errno));
-		goto out_free;
-	} else if (fd != STDIN_FILENO) {
-		struct stat st;
+		return NULL;
+	}
 
+	/* Check file permissions for regular files */
+	if (fd != STDIN_FILENO) {
 		rc = fstat(fd, &st);
-		if (rc == 0 && (st.st_mode & ~(S_IFREG | 0600)))
+		if (rc == 0 && (st.st_mode & ~(S_IFREG | 0600))) {
 			fprintf(stderr, "warning: "
 				"secret key '%s' has insecure file mode %#o\n",
 				filename, st.st_mode);
+		}
 	}
 
-	ptr = (char *)config;
-	remain = sizeof(*config);
-	while (remain > 0) {
-		rc = read(fd, ptr, remain);
+	/* Allocate fixed buffer - twice config size should be enough */
+	max_size = 2 * sizeof(struct sk_keyfile_config);
+	file_data = malloc(max_size + 1);
+	if (!file_data) {
+		printerr(0, "Failed to allocate memory for file data\n");
+		goto out_close;
+	}
+
+	/* Read file with size limit */
+	ptr = file_data;
+	while (bytes_read < max_size) {
+		rc = read(fd, ptr, max_size - bytes_read);
 		if (rc == -1) {
 			if (errno == EINTR)
 				continue;
 			printerr(0, "read() failed on %s: %s\n", filename,
 				 strerror(errno));
-			goto out_close;
+			goto out_free;
 		} else if (rc == 0) {
-			printerr(0, "File %s does not have a complete key\n",
-				 filename);
-			goto out_close;
+			break;
 		}
+
 		ptr += rc;
-		remain -= rc;
+		bytes_read += rc;
+	}
+
+	/* Check if file is too large */
+	if (bytes_read >= max_size) {
+		printerr(0,
+			 "File %s too large, exceeds maximum expected size\n",
+			 filename);
+		goto out_free;
 	}
 
 	if (fd != STDIN_FILENO)
 		close(fd);
-	sk_config_disk_to_cpu(config);
+	fd = -1;
+
+	/* Null-terminate for ASCII processing */
+	file_data[bytes_read] = '\0';
+
+	if (sk_is_ascii_encoded(file_data, bytes_read)) {
+		config = sk_decode_ascii_key(file_data, bytes_read);
+
+		/* Free original buffer since decode allocates new one */
+		free(file_data);
+	} else {
+		/* Binary format - check size and process */
+		if (bytes_read != sizeof(struct sk_keyfile_config)) {
+			printerr(0,
+				"File %s does not have a complete key: got %zu bytes, expected %zu bytes\n",
+				filename, bytes_read,
+				sizeof(struct sk_keyfile_config));
+			goto out_free;
+		}
+
+		/* Use the existing buffer as config */
+		config = (struct sk_keyfile_config *)file_data;
+	}
+
+	if (config)
+		sk_config_disk_to_cpu(config);
+
 	return config;
 
-out_close:
-	close(fd);
 out_free:
-	free(config);
+	free(file_data);
+out_close:
+	if (fd != -1)
+		close(fd);
 	return NULL;
 }
 
@@ -421,7 +490,7 @@ read_sk:
 				path);
 			if (gen_ssk_prime(config))
 				goto out;
-			if (write_config_file(path, config, true))
+			if (write_config_file(path, config, true, false))
 				goto out;
 			free(config);
 			goto read_sk;
@@ -609,6 +678,156 @@ int sk_validate_config(const struct sk_keyfile_config *config)
 		printerr(0, "Invalid key type\n");
 		return -1;
 	}
+
+	return 0;
+}
+
+/**
+ * Checks if the given data is ASCII-encoded SSK key format
+ *
+ * \param[in]	data	Data to check
+ * \param[in]	len	Length of data
+ *
+ * \return	1	ASCII-encoded format
+ * \return	0	binary format
+ */
+int sk_is_ascii_encoded(const char *data, size_t len)
+{
+	if (len < SK_ASCII_HEADER_LEN)
+		return 0;
+
+	return memcmp(data, SK_ASCII_HEADER, SK_ASCII_HEADER_LEN) == 0;
+}
+
+/**
+ * Decodes ASCII-encoded SSK key data into sk_keyfile_config structure
+ *
+ * \param[in,out]	ascii_data	ASCII-encoded key data (may be modified)
+ * \param[in]		len		Length of ASCII data
+ *
+ * \return	sk_keyfile_config	success
+ * \return	NULL			failure
+ */
+struct sk_keyfile_config *sk_decode_ascii_key(char *ascii_data, size_t len)
+{
+	struct sk_keyfile_config *config;
+	const char *encoded_start;
+	size_t encoded_len;
+	int decoded_len;
+
+	if (!sk_is_ascii_encoded(ascii_data, len)) {
+		printerr(0, "Data is not ASCII-encoded SSK key format\n");
+		return NULL;
+	}
+
+	/* Skip the header string and any whitespace */
+	encoded_start = ascii_data + SK_ASCII_HEADER_LEN;
+	while (encoded_start < ascii_data + len &&
+	       (*encoded_start == ' ' || *encoded_start == '\t' ||
+		*encoded_start == '\n' || *encoded_start == '\r'))
+		encoded_start++;
+
+	encoded_len = len - (encoded_start - ascii_data);
+	if (encoded_len <= 0) {
+		printerr(0, "No encoded data found after header string\n");
+		return NULL;
+	}
+
+	/* Remove trailing whitespace */
+	while (encoded_len > 0 &&
+	       (encoded_start[encoded_len - 1] == ' ' ||
+		encoded_start[encoded_len - 1] == '\t' ||
+		encoded_start[encoded_len - 1] == '\n' ||
+		encoded_start[encoded_len - 1] == '\r'))
+		encoded_len--;
+
+	decoded_len = gss_base64url_decode((char **)&encoded_start,
+					   ascii_data,
+					   sizeof(struct sk_keyfile_config));
+	if (decoded_len != sizeof(struct sk_keyfile_config)) {
+		printerr(0,
+			"Failed to decode base64url data or incorrect size: got %d bytes, expected %zu bytes\n",
+			decoded_len, sizeof(struct sk_keyfile_config));
+		return NULL;
+	}
+
+	/* Allocate new buffer for the result */
+	config = malloc(sizeof(struct sk_keyfile_config));
+	if (!config) {
+		printerr(0, "Failed to allocate memory for config\n");
+		return NULL;
+	}
+
+	/* Copy the decoded data to the result buffer */
+	memcpy(config, ascii_data, sizeof(struct sk_keyfile_config));
+
+	return config;
+}
+
+/**
+ * Encodes sk_keyfile_config structure into ASCII format
+ *
+ * \param[in]	config		Key configuration to encode
+ * \param[out]	ascii_data	Allocated ASCII-encoded data (caller must free)
+ * \param[out]	ascii_len	Length of ASCII-encoded data
+ *
+ * \return	0	success
+ * \return	-1	failure
+ */
+int sk_encode_ascii_key(const struct sk_keyfile_config *config,
+			char **ascii_data, size_t *ascii_len)
+{
+	char *output = NULL;
+	size_t encoded_len;
+	size_t total_len;
+	char *ptr;
+	int len;
+	int rc;
+
+	if (!config || !ascii_data || !ascii_len) {
+		printerr(0, "Invalid parameters for ASCII encoding\n");
+		return -1;
+	}
+
+	/* Calculate total length: header + encoded data + newline + null
+	 * terminator
+	 */
+	encoded_len = BASE64URL_CHARS(sizeof(struct sk_keyfile_config));
+	total_len = SK_ASCII_HEADER_LEN + encoded_len + 2;
+
+	output = malloc(total_len);
+	if (!output) {
+		printerr(0, "Failed to allocate memory for ASCII output\n");
+		return -1;
+	}
+
+	/* header */
+	memcpy(output, SK_ASCII_HEADER, SK_ASCII_HEADER_LEN);
+
+	ptr = output + SK_ASCII_HEADER_LEN;
+	len = encoded_len + 1; /* +1 for trailing space padding */
+	rc = gss_base64url_encode(&ptr, &len, (const __u8 *)config,
+				  sizeof(*config));
+	if (rc < 0) {
+		printerr(0, "Failed to base64url encode key data\n");
+		free(output);
+		return -1;
+	}
+
+	/* back up pointer to trailing space and bound check for new line */
+	ptr--;
+	if (ptr < output || ptr > output + total_len - 2) {
+		printerr(0,
+			 "Invalid pointer position after base64url encoding\n");
+		free(output);
+		return -1;
+	}
+	/* add newline, overwrite trailing space */
+	*ptr++ = '\n';
+	*ptr = '\0';
+
+	*ascii_data = output;
+	*ascii_len = strlen(output);
 
 	return 0;
 }

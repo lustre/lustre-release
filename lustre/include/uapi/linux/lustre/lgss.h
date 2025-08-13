@@ -263,6 +263,18 @@ static const char base64url_table[] =
  * and Filename Safe Alphabet" specified by RFC 4648.  '='-padding isn't used,
  * as it's unneeded and not required by the RFC.
  * Pad with a trailing space.
+ *
+ * \param dst (in/out) pointer to the destination buffer pointer. Memory space
+ * must be allocated by the caller. On success, the pointer is positioned after
+ * the trailing space.
+ * \param dstlen (in/out) buffer size at @dst; updated to remaining length on
+ * success
+ * \param src the binary data to encode
+ * \param srclen the length of @src in bytes
+ *
+ * \retval 0 on success
+ * \retval -EINVAL if @dstlen is negative on entry
+ * \retval -ENOBUFS if @dstlen is too small
  */
 static inline int gss_base64url_encode(char **dst, int *dstlen,
 				       const __u8 *src, int srclen)

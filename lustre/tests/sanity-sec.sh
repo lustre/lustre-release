@@ -10580,6 +10580,89 @@ test_100() {
 }
 run_test 100 "SSK automatic prime generation when mounting with server key"
 
+clear_keyring_101() {
+	# clear lustre keys from client keyring
+	keyctl show | awk '/lustre/ { print $1 }' | xargs -IX keyctl unlink X ||
+		true
+}
+
+test_101() {
+	local test_dir=${DIR}/$tdir
+	local binary_key=${test_dir}/test.binary.key
+	local ascii_key=${test_dir}/test.ascii.key
+	local ascii_key_attr=${test_dir}/key_attr.txt
+	local ascii_key2=${test_dir}/test.ascii2.key
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	local_mode && skip "cannot run this test in local mode"
+
+	# Create test directory
+	mkdir -p $test_dir || error "failed to create test directory"
+
+	# Generate a binary key first for comparison
+	echo "#1 Creating binary key"
+	$LGSS_SK -t client -f $FSNAME -w $binary_key -d /dev/urandom -p 512 ||
+		error "failed to create binary key"
+
+	# Generate ASCII-encoded key using -a option
+	echo "#2 Creating ASCII-encoded key"
+	$LGSS_SK -t client -f $FSNAME -a -w $ascii_key -d /dev/urandom \
+		-p 512 || error "failed to create ASCII-encoded key"
+
+	# Verify ASCII key has correct header
+	echo "#3 Verifying ASCII key format"
+	head -n1 $ascii_key | grep -q "^Lustre SSK v1.0" ||
+		error "ASCII key does not have correct header"
+
+	# Verify ASCII key is readable and shows same structure as binary
+	echo "#4 Reading ASCII key attributes"
+	$LGSS_SK -r $ascii_key > $ascii_key_attr
+
+	# Verify key contains expected fields
+	grep -q "^Version:" $ascii_key_attr ||
+		error "ASCII key missing Version field"
+	grep -q "^Type:" $ascii_key_attr ||
+		error "ASCII key missing Type field"
+	grep -q "^File system:" $ascii_key_attr ||
+		error "ASCII key missing File system field"
+	local fs1=$(awk '/File system:/ {print $3}' $ascii_key_attr)
+
+	# Modify ASCII key (should preserve ASCII format)
+	echo "#5 Modifying ASCII key"
+	$LGSS_SK -m $ascii_key -e 86400 || error "failed to modify ASCII key"
+
+	# Verify it's still ASCII format after modification
+	head -n1 $ascii_key | grep -q "^Lustre SSK v1.0" ||
+		error "ASCII key lost format after modification"
+
+	# Convert binary key to ASCII using modify with -a
+	echo "#6 Converting binary key to ASCII format"
+	cp $binary_key $ascii_key2
+	$LGSS_SK -a -m $ascii_key2 || error "failed to convert bin key to ASCII"
+
+	# Verify conversion worked
+	head -n1 $ascii_key2 | grep -q "^Lustre SSK v1.0" ||
+		error "binary to ASCII conversion failed"
+
+	# Verify both ASCII keys are readable and have same basic structure
+	echo "#7 Comparing ASCII key structures"
+	$LGSS_SK -r $ascii_key2 > $ascii_key_attr
+	local fs2=$(awk '/File system:/ {print $3}' $ascii_key_attr)
+
+	# Check created key and converted key have the same filesystem name
+	[[ $fs1 == $fs2 ]] || error "filesystem names differ: $fs1 vs $fs2"
+
+	echo "#8 load ASCII key into keyring"
+	clear_keyring_101
+	stack_trap clear_keyring_101 EXIT
+
+	$LGSS_SK -l $ascii_key || error "cannot load $ascii_key"
+	[[ $(keyctl show | awk '/lustre/ { print $7 }') == "lustre:$fs1" ]] ||
+		error "key $ascii_key not listed in keyring"
+}
+run_test 101 "lgss_sk -a and -l support for ascii-encoded SSK keys"
+
 cleanup_102() {
 	local test_key=$1
 
