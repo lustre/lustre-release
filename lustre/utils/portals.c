@@ -1836,7 +1836,7 @@ static int ptl_yaml_route_display(yaml_parser_t *reply)
 		if (rc == 0)
 			break;
 
-		if (event.type == YAML_SEQUENCE_END_EVENT) {
+		if (event.type == YAML_MAPPING_END_EVENT && net[0]) {
 			printf("net %18s hops %d gw %32.128s %s pri %u\n",
 			       net, hops, gw, alive ? "up" : "down",
 			       prio);

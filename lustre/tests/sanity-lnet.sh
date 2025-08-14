@@ -1918,7 +1918,11 @@ test_111() {
 	local num_routes=$($LNETCTL route show 2>/dev/null | grep -c gateway)
 
 	(( num_routes == 499 )) ||
-		error "Expect 499 routes but found $num_routes"
+		error "Expect 499 routes but lnetctl found $num_routes"
+
+	num_routes=$($LCTL show_route 2>/dev/null | grep -c net)
+	(( num_routes == 499 )) ||
+		error "Epect 499 routes but lctl found $num_routes"
 
 	cleanup_router_test
 }
