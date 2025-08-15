@@ -379,6 +379,21 @@ AS_IF([test "x$enable_gss" != xno], [
 ])
 ]) # LC_CONFIG_GSS
 
+#
+# LC_CONFIG_XARRAY_MULTI
+#
+# Xarray multi-tier support. The kernel must support CONFIG_XARRAY_MULTI.
+# Since device zone support depends on this the chances are very small
+# its disabled but just in case.
+#
+AC_DEFUN([LC_SRC_CONFIG_XARRAY_MULTI], [
+	LB2_SRC_CHECK_CONFIG_IM([XARRAY_MULTI])
+])
+AC_DEFUN([LC_CONFIG_XARRAY_MULTI], [
+	LB2_TEST_CHECK_CONFIG_IM([XARRAY_MULTI],[],[AC_MSG_ERROR(
+[Lustre quota requires that CONFIG_XARRAY_MULTI is enabled in your kernel.])])
+]) # LC_CONFIG_XARRAY_MULTI
+
 # LC_OPENSSL_HMAC
 #
 # OpenSSL 1.0+ return int for HMAC functions but older SLES11 versions do not
@@ -2601,28 +2616,6 @@ AC_DEFUN([LC_INODE_TIMESPEC64], [
 			[inode times are using timespec64])
 	])
 ]) # LC_INODE_TIMESPEC64
-
-#
-# LC_RADIX_TREE_TAG_SET
-#
-# kernel 4.20 commit v4.19-rc5-248-g9b89a0355144
-# xarray: Add XArray marks - replaced radix_tree_tag_set
-#
-AC_DEFUN([LC_SRC_RADIX_TREE_TAG_SET], [
-	LB2_LINUX_TEST_SRC([radix_tree_tag_set], [
-		#include <linux/fs.h>
-		#include <linux/radix-tree.h>
-	],[
-		radix_tree_tag_set(NULL, 0, PAGECACHE_TAG_DIRTY);
-	],[-Werror])
-])
-AC_DEFUN([LC_RADIX_TREE_TAG_SET], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'radix_tree_tag_set' exists],
-	[radix_tree_tag_set], [
-		AC_DEFINE(HAVE_RADIX_TREE_TAG_SET, 1,
-			[radix_tree_tag_set exists])
-	])
-]) # LC_RADIX_TREE_TAG_SET
 
 #
 # LC_UAPI_LINUX_MOUNT_H
@@ -5078,6 +5071,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_CONFIG_FHANDLE
 	LC_SRC_POSIX_ACL_CONFIG
 	LC_SRC_HAVE_PROJECT_QUOTA
+	LC_SRC_CONFIG_XARRAY_MULTI
 
 	# 3.11
 	LC_SRC_INVALIDATE_RANGE
@@ -5219,7 +5213,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_ALLOC_FILE_PSEUDO
 
 	# 4.20
-	LC_SRC_RADIX_TREE_TAG_SET
 	LC_SRC_UAPI_LINUX_MOUNT_H
 	LC_SRC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
 
@@ -5401,6 +5394,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_CONFIG_FHANDLE
 	LC_POSIX_ACL_CONFIG
 	LC_HAVE_PROJECT_QUOTA
+	LC_CONFIG_XARRAY_MULTI
 
 	# 3.11
 	LC_INVALIDATE_RANGE
@@ -5544,7 +5538,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_INODE_TIMESPEC64
 
 	# 4.20
-	LC_RADIX_TREE_TAG_SET
 	LC_UAPI_LINUX_MOUNT_H
 	LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
 
@@ -5728,9 +5721,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_GLIBC_SUPPORT_COPY_FILE_RANGE
 	LC_OPENSSL_SSK
 	LC_OPENSSL_GETSEPOL
-
-	# 4.1.0 - Check export
-	LC_HAVE_SYNC_READ_WRITE
 
 	# 4.8 - Check export
 	LC_EXPORT_DEFAULT_FILE_SPLICE_READ

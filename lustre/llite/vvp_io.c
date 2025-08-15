@@ -970,21 +970,6 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 }
 
 /*
- * From kernel v4.19-rc5-248-g9b89a0355144 use XArrary
- * Prior kernels use radix_tree for tags
- */
-static inline void ll_page_tag_dirty(struct page *page,
-				     struct address_space *mapping)
-{
-#ifndef HAVE_RADIX_TREE_TAG_SET
-	__xa_set_mark(&mapping->i_pages, page_index(page), PAGECACHE_TAG_DIRTY);
-#else
-	radix_tree_tag_set(&mapping->page_tree, folio_index_page(page),
-			   PAGECACHE_TAG_DIRTY);
-#endif
-}
-
-/*
  * Kernels 4.2 - 4.5 pass memcg argument to account_page_dirtied()
  * Kernel v5.2-5678-gac1c3e4 no longer exports account_page_dirtied
  */
@@ -1001,7 +986,8 @@ static inline void ll_account_page_dirtied(struct page *page,
 #else
 	vvp_account_page_dirtied(page, mapping);
 #endif
-	ll_page_tag_dirty(page, mapping);
+	__xa_set_mark(&mapping->i_pages, page_index(page),
+		      PAGECACHE_TAG_DIRTY);
 }
 
 /* Taken from kernel set_page_dirty, __set_page_dirty_nobuffers

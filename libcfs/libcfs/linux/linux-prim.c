@@ -125,18 +125,6 @@ int cfs_stack_trace_save_tsk(struct task_struct *task, unsigned long *store,
 }
 #endif
 
-#ifndef HAVE_XARRAY_SUPPORT
-struct kmem_cache *xarray_cachep;
-
-static void xarray_node_ctor(void *arg)
-{
-	struct xa_node *node = arg;
-
-	memset(node, 0, sizeof(*node));
-	INIT_LIST_HEAD(&node->private_list);
-}
-#endif
-
 /*
  * This is opencoding of vfree_atomic from Linux kernel added in 4.10 with
  * minimum changes needed to work on older kernels too.
@@ -202,15 +190,10 @@ int __init cfs_arch_init(void)
 #endif
 	cfs_apply_workqueue_attrs_t =
 		(void *)cfs_kallsyms_lookup_name("apply_workqueue_attrs");
-#ifndef HAVE_XARRAY_SUPPORT
-	xarray_cachep = kmem_cache_create("xarray_cache",
-					  sizeof(struct xa_node), 0,
-					  SLAB_PANIC | SLAB_RECLAIM_ACCOUNT,
-					  xarray_node_ctor);
-#endif
+
 	rc = shrinker_debugfs_init();
 	if (rc < 0)
-		goto free_xcache;
+		goto failed;
 
 #ifdef CONFIG_LL_ENCRYPTION
 	rc = llcrypt_init();
@@ -223,10 +206,7 @@ int __init cfs_arch_init(void)
 free_shrinker:
 	shrinker_debugfs_fini();
 #endif
-free_xcache:
-#ifndef HAVE_XARRAY_SUPPORT
-	kmem_cache_destroy(xarray_cachep);
-#endif
+failed:
 	return rc;
 }
 
@@ -235,9 +215,6 @@ void __exit cfs_arch_exit(void)
 	/* exit_libcfs_vfree_atomic */
 	__flush_workqueue(system_wq);
 
-#ifndef HAVE_XARRAY_SUPPORT
-	kmem_cache_destroy(xarray_cachep);
-#endif
 	shrinker_debugfs_fini();
 #ifdef CONFIG_LL_ENCRYPTION
 	llcrypt_exit();

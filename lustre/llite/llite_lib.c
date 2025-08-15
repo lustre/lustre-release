@@ -3188,15 +3188,15 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 	} /* Workaround end */
 
 	if (nrpages) {
-#ifdef HAVE_XARRAY_SUPPORT
+
 		XA_STATE(xas, &mapping->i_pages, 0);
 		struct page *page;
-#endif
+
 		CWARN("%s: inode="DFID"(%p) nrpages=%lu state %#lx, lli_flags %#lx, see https://jira.whamcloud.com/browse/LU-118\n",
 		      ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)),
 		      inode, nrpages, (unsigned long)inode->i_state,
 		      ll_i2info(inode)->lli_flags);
-#ifdef HAVE_XARRAY_SUPPORT
+
 		rcu_read_lock();
 		xas_for_each(&xas, page, ULONG_MAX) {
 			if (xas_retry(&xas, page))
@@ -3215,7 +3215,6 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 				 "%px", page);
 		}
 		rcu_read_unlock();
-#endif
 	}
 }
 

@@ -191,36 +191,6 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 	grab_cache_page_nowait(mapping, index)
 #endif
 
-/* Old kernels lacked both Xarray support and the page cache
- * using Xarrays. Our back ported Xarray support introduces
- * the real xa_is_value() but we need a wrapper as well for
- * the page cache interaction. Lets keep xa_is_value() separate
- * in old kernels for Xarray support and page cache handling.
- */
-#ifndef HAVE_XARRAY_SUPPORT
-static inline bool ll_xa_is_value(void *entry)
-{
-	return radix_tree_exceptional_entry(entry);
-}
-#else
-#define ll_xa_is_value	xa_is_value
-#endif
-
-/* Linux kernel version v5.0 commit fd9dc93e36231fb6d520e0edd467058fad4fd12d
- * ("XArray: Change xa_insert to return -EBUSY")
- * instead of -EEXIST
- */
-static inline int __must_check ll_xa_insert(struct xarray *xa,
-					    unsigned long index,
-					    void *entry, gfp_t gpf)
-{
-	int rc = xa_insert(xa, index, entry, gpf);
-
-	if (rc == -EEXIST)
-		rc = -EBUSY;
-	return rc;
-}
-
 #ifndef HAVE_TRUNCATE_INODE_PAGES_FINAL
 static inline void truncate_inode_pages_final(struct address_space *map)
 {

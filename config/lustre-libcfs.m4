@@ -1604,28 +1604,6 @@ AC_DEFUN([LIBCFS_TCP_SOCK_SET_KEEPCNT], [
 ]) # LIBCFS_TCP_SOCK_SET_KEEPCNT
 
 #
-# LIBCFS_XARRAY_SUPPORT
-#
-# 4.19-rc5 kernel commit 3159f943aafdbacb2f94c38fdaadabf2bbde2a14
-# replaced the radix tree implementation with Xarrays. This change
-# introduced functionaly needed for general Xarray support
-#
-AC_DEFUN([LIBCFS_SRC_XARRAY_SUPPORT], [
-	LB2_LINUX_TEST_SRC([xarray_support], [
-		#include <linux/xarray.h>
-	],[
-		xa_is_value(NULL);
-	],[-Werror])
-])
-AC_DEFUN([LIBCFS_XARRAY_SUPPORT], [
-	LB2_MSG_LINUX_TEST_RESULT([if page cache uses Xarray],
-	[xarray_support], [
-		AC_DEFINE(HAVE_XARRAY_SUPPORT, 1,
-			[kernel Xarray implementation lacks 'xa_is_value'])
-	])
-]) # LIBCFS_XARRAY_SUPPORT
-
-#
 # LIBCFS_NL_DUMP_EXT_ACK
 #
 # Kernel version 4.19-rc6 commit 4a19edb60d0203cd5bf95a8b46ea8f63fd41194c
@@ -2563,7 +2541,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_TCP_SOCK_SET_NODELAY
 	LIBCFS_SRC_TCP_SOCK_SET_KEEPIDLE
 	# 4.19
-	LIBCFS_SRC_XARRAY_SUPPORT
 	LIBCFS_SRC_NL_DUMP_EXT_ACK
 	# 4.20
 	LIBCFS_SRC_HAVE_IOV_ITER_TYPE
@@ -2718,7 +2695,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_TCP_SOCK_SET_NODELAY
 	LIBCFS_TCP_SOCK_SET_KEEPIDLE
 	# 4.19
-	LIBCFS_XARRAY_SUPPORT
 	LIBCFS_NL_DUMP_EXT_ACK
 	# 4.20
 	LIBCFS_HAVE_IOV_ITER_TYPE
