@@ -1129,7 +1129,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	# make sure all imports are connected and not IDLE
 	do_facet client $LFS df > /dev/null
 	mkdir_on_mdt0 $DIR/$tdir
-	$LFS setstripe -c -1 $MOUNT/$tdir/$tfile
+	$LFS setstripe -c -1 $MOUNT2/$tdir/$tfile
 
 	local mds_nexp=$(do_facet mds1 \
 		lctl get_param -n mdt.${mds1_svc}.num_exports)
