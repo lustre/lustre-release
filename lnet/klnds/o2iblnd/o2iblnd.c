@@ -1280,10 +1280,16 @@ kiblnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 	tuns = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_HIW_PEER_CREDITS,
 		    tuns->lnd_peercredits_hiw);
-	if (tuns->lnd_map_on_demand) {
-		nla_put_flag(msg,
-			     LNET_NET_O2IBLND_TUNABLES_ATTR_MAP_ON_DEMAND);
-	}
+	/* Map on demand is obsolete and should always be set to 1.
+	 * Always report to user the default setting of 1 (True). If
+	 * the user updates their config file on modern systems the
+	 * correct default behavior will replace whatever the users
+	 * selection was previously. Eventually we can even remove
+	 * map_on_demand completely once all systems are using the
+	 * Netlink APIs. User config still having map_on_demand will
+	 * work but the value will be ignored.
+	 */
+	nla_put_flag(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_MAP_ON_DEMAND);
 	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_CONCURRENT_SENDS,
 		    tuns->lnd_concurrent_sends);
 	nla_put_u32(msg, LNET_NET_O2IBLND_TUNABLES_ATTR_FMR_POOL_SIZE,
@@ -1320,9 +1326,6 @@ kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	case LNET_NET_O2IBLND_TUNABLES_ATTR_HIW_PEER_CREDITS:
 		tunables->lnd_tun_u.lnd_o2ib.lnd_peercredits_hiw = nla_get_s64(attr);
 		break;
-	case LNET_NET_O2IBLND_TUNABLES_ATTR_MAP_ON_DEMAND:
-		tunables->lnd_tun_u.lnd_o2ib.lnd_map_on_demand = nla_get_s64(attr);
-		break;
 	case LNET_NET_O2IBLND_TUNABLES_ATTR_CONCURRENT_SENDS:
 		tunables->lnd_tun_u.lnd_o2ib.lnd_concurrent_sends = nla_get_s64(attr);
 		break;
@@ -1351,6 +1354,9 @@ kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	case LNET_NET_O2IBLND_TUNABLES_ATTR_LND_TOS:
 		num = nla_get_s64(attr);
 		tunables->lnd_tun_u.lnd_o2ib.lnd_tos = num;
+		fallthrough;
+	/* map_on_demand is always 1 so ignore any MAP_ON_DEMAND ATTR */
+	case LNET_NET_O2IBLND_TUNABLES_ATTR_MAP_ON_DEMAND:
 		fallthrough;
 	default:
 		break;
@@ -2566,29 +2572,11 @@ kiblnd_net_init_pools(struct kib_net *net, struct lnet_ni *ni, __u32 *cpts,
 		      int ncpts)
 {
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
-#ifdef HAVE_OFED_IB_GET_DMA_MR
-	unsigned long	flags;
-#endif
-	int		cpt;
-	int		rc;
-	int		i;
+	int cpt;
+	int rc;
+	int i;
 
 	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
-
-#ifdef HAVE_OFED_IB_GET_DMA_MR
-	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-	/* if lnd_map_on_demand is zero then we have effectively disabled
-	 * FMR or FastReg and we're using global memory regions
-	 * exclusively.
-	 */
-	if (!tunables->lnd_map_on_demand) {
-		read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
-					   flags);
-		goto create_tx_pool;
-	}
-
-	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
-#endif
 
 	if (tunables->lnd_fmr_pool_size < tunables->lnd_ntx / 4) {
 		CERROR("Can't set fmr pool size (%d) < ntx / 4(%d)\n",
@@ -2629,9 +2617,6 @@ kiblnd_net_init_pools(struct kib_net *net, struct lnet_ni *ni, __u32 *cpts,
 	if (i > 0)
 		LASSERT(i == ncpts);
 
-#ifdef HAVE_OFED_IB_GET_DMA_MR
- create_tx_pool:
-#endif
 	net->ibn_tx_ps = cfs_percpt_alloc(lnet_cpt_table(),
 					  sizeof(struct kib_tx_poolset));
 	if (net->ibn_tx_ps == NULL) {
@@ -2842,28 +2827,11 @@ out_clean_attr:
 	return rc;
 }
 
-#ifdef HAVE_OFED_IB_GET_DMA_MR
-static void
-kiblnd_hdev_cleanup_mrs(struct kib_hca_dev *hdev)
-{
-	if (hdev->ibh_mrs == NULL)
-		return;
-
-	ib_dereg_mr(hdev->ibh_mrs);
-
-	hdev->ibh_mrs = NULL;
-}
-#endif
-
 void
 kiblnd_hdev_destroy(struct kib_hca_dev *hdev)
 {
 	if (hdev->ibh_event_handler.device != NULL)
 		ib_unregister_event_handler(&hdev->ibh_event_handler);
-
-#ifdef HAVE_OFED_IB_GET_DMA_MR
-	kiblnd_hdev_cleanup_mrs(hdev);
-#endif
 
 	if (hdev->ibh_pd != NULL)
 		ib_dealloc_pd(hdev->ibh_pd);
@@ -2873,27 +2841,6 @@ kiblnd_hdev_destroy(struct kib_hca_dev *hdev)
 
 	LIBCFS_FREE(hdev, sizeof(*hdev));
 }
-
-#ifdef HAVE_OFED_IB_GET_DMA_MR
-static int
-kiblnd_hdev_setup_mrs(struct kib_hca_dev *hdev)
-{
-	struct ib_mr *mr;
-	int           acflags = IB_ACCESS_LOCAL_WRITE |
-				IB_ACCESS_REMOTE_WRITE;
-
-	mr = ib_get_dma_mr(hdev->ibh_pd, acflags);
-	if (IS_ERR(mr)) {
-		CERROR("Failed ib_get_dma_mr: %ld\n", PTR_ERR(mr));
-		kiblnd_hdev_cleanup_mrs(hdev);
-		return PTR_ERR(mr);
-	}
-
-	hdev->ibh_mrs = mr;
-
-	return 0;
-}
-#endif
 
 static int
 kiblnd_dummy_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
@@ -3078,14 +3025,6 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 		CERROR("Can't get device attributes: %d\n", rc);
 		goto out;
 	}
-
-#ifdef HAVE_OFED_IB_GET_DMA_MR
-	rc = kiblnd_hdev_setup_mrs(hdev);
-	if (rc != 0) {
-		CERROR("Can't setup device: %d\n", rc);
-		goto out;
-	}
-#endif
 
 	INIT_IB_EVENT_HANDLER(&hdev->ibh_event_handler,
 				hdev->ibh_ibdev, kiblnd_event_handler);

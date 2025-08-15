@@ -493,31 +493,6 @@ AS_IF([test $ENABLEO2IB != "no"], [
 			[HAVE_OFED_IB_ALLOC_FAST_REG_MR])
 	])
 
-	# 4.9 must stop using ib_get_dma_mr and the global MR
-	# We then have to use FMR/Fastreg for all RDMA.
-	AC_DEFUN([LN_SRC_O2IB_IB_GET_DMA_MR], [
-		LB2_OFED_TEST_SRC([ib_get_dma_mr], [
-			#ifdef HAVE_OFED_COMPAT_RDMA
-			#undef PACKAGE_NAME
-			#undef PACKAGE_TARNAME
-			#undef PACKAGE_VERSION
-			#undef PACKAGE_STRING
-			#undef PACKAGE_BUGREPORT
-			#undef PACKAGE_URL
-			#include <linux/compat-2.6.h>
-			#endif
-			#include <rdma/ib_verbs.h>
-		],[
-			ib_get_dma_mr(NULL, 0);
-		],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
-	])
-	AC_DEFUN([LN_O2IB_IB_GET_DMA_MR], [
-		LB2_OFED_TEST_RESULTS(
-			['ib_get_dma_mr' exists],
-			[ib_get_dma_mr],
-			[HAVE_OFED_IB_GET_DMA_MR])
-	])
-
 	# In v4.4 Linux kernel,
 	# commit e622f2f4ad2142d2a613a57fb85f8cf737935ef5
 	# split up struct ib_send_wr so that all non-trivial verbs
@@ -854,7 +829,6 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		LN_SRC_O2IB_RDMA_CREATE_ID_5A
 		LN_SRC_O2IB_IB_CQ_INIT_ATTR
 		LN_SRC_O2IB_IB_ALLOC_FAST_REG_MR
-		LN_SRC_O2IB_IB_GET_DMA_MR
 		LN_SRC_O2IB_IB_RDMA_WR
 		LN_SRC_O2IB_IB_MAP_MR_SG_4A
 		LN_SRC_O2IB_IB_MAP_MR_SG_5A
@@ -874,7 +848,6 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		LN_O2IB_RDMA_CREATE_ID_5A
 		LN_O2IB_IB_CQ_INIT_ATTR
 		LN_O2IB_IB_ALLOC_FAST_REG_MR
-		LN_O2IB_IB_GET_DMA_MR
 		LN_O2IB_IB_RDMA_WR
 		LN_O2IB_IB_MAP_MR_SG_4A
 		LN_O2IB_IB_MAP_MR_SG_5A

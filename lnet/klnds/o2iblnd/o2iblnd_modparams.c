@@ -91,24 +91,7 @@ static int use_fastreg_gaps;
 module_param(use_fastreg_gaps, int, 0444);
 MODULE_PARM_DESC(use_fastreg_gaps, "Enable discontiguous fastreg fragment support. Expect performance drop");
 
-/*
- * map_on_demand is a flag used to determine if we can use FMR or FastReg.
- * This is applicable for kernels which support global memory regions. For
- * later kernels this flag is always enabled, since we will always either
- * use FMR or FastReg
- * For kernels which support global memory regions map_on_demand defaults
- * to 0 which means we will be using global memory regions exclusively.
- * If it is set to a value other than 0, then we will behave as follows:
- *  1. Always default the number of fragments to IBLND_MAX_RDMA_FRAGS
- *  2. Create FMR/FastReg pools
- *  3. Negotiate the supported number of fragments per connection
- *  4. Attempt to transmit using global memory regions only if
- *     map-on-demand is not turned on, otherwise use FMR or FastReg
- *  5. In case of transmitting tx with GAPS over FMR we will need to
- *     transmit it with multiple fragments. Look at the comments in
- *     kiblnd_fmr_map_tx() for an explanation of the behavior.
- *
- * For later kernels we default map_on_demand to 1 and not allow
+/* For modern kernels we default map_on_demand to 1 and not allow
  * it to be set to 0, since there is no longer support for global memory
  * regions. Behavior:
  *  1. Default the number of fragments to IBLND_MAX_RDMA_FRAGS
@@ -117,15 +100,9 @@ MODULE_PARM_DESC(use_fastreg_gaps, "Enable discontiguous fastreg fragment suppor
  *  4. Look at the comments in kiblnd_fmr_map_tx() for an explanation of
  *     the behavior when transmit with GAPS verses contiguous.
  */
-
-#ifdef HAVE_OFED_IB_GET_DMA_MR
-#define MOD_STR "map on demand"
-#else
-#define MOD_STR "map on demand (obsolete)"
-#endif
-static int map_on_demand = 1;
+static int map_on_demand = true;
 module_param(map_on_demand, int, 0444);
-MODULE_PARM_DESC(map_on_demand, MOD_STR);
+MODULE_PARM_DESC(map_on_demand, "map on demand (obsolete)");
 
 /* NB: this value is shared by all CPTs, it can grow at runtime */
 static int fmr_pool_size = 512;
@@ -272,14 +249,12 @@ kiblnd_tunables_setup(struct lnet_lnd_tunables *lnd_tunables,
 	if (tunables->lnd_map_on_demand == UINT_MAX)
 		tunables->lnd_map_on_demand = map_on_demand;
 
-#ifndef HAVE_OFED_IB_GET_DMA_MR
-	/*
-	 * For kernels which do not support global memory regions, always
-	 * enable map_on_demand
+	/* This parameter was meant to allow selecting global memory regions.
+	 * Kernels newer than 4.9+ do not support global memory regions.
+	 * Always enable map_on_demand for these newer kernels.
 	 */
 	if (tunables->lnd_map_on_demand == 0)
 		tunables->lnd_map_on_demand = 1;
-#endif
 
 	if (!tunables->lnd_peercredits_hiw)
 		tunables->lnd_peercredits_hiw = peer_credits_hiw;

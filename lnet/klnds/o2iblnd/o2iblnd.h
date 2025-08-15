@@ -221,9 +221,6 @@ struct kib_hca_dev {
 	__u64                ibh_page_mask;     /* page mask of current HCA */
 	__u64                ibh_mr_size;       /* size of MR */
 	int		     ibh_max_qp_wr;     /* maximum work requests size */
-#ifdef HAVE_OFED_IB_GET_DMA_MR
-	struct ib_mr        *ibh_mrs;           /* global MR */
-#endif
 	struct ib_pd        *ibh_pd;            /* PD */
 	u8                   ibh_port;          /* port number */
 	struct ib_event_handler
