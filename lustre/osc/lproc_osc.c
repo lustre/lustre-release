@@ -798,10 +798,12 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 	write_lat_cum = 0;
 	for (i = 0; i < OBD_HIST_MAX; i++) {
 		unsigned long read_lat =
-			cli->cl_read_io_latency_hist.oh_buckets[i] * 1024 / 1000;
+			cli->cl_read_io_latency_hist.oh_buckets[i];
 		unsigned long write_lat =
-			cli->cl_write_io_latency_hist.oh_buckets[i] * 1024 / 1000;
+			cli->cl_write_io_latency_hist.oh_buckets[i];
 
+		read_lat = binary_usec_to_dec(read_lat);
+		write_lat = binary_usec_to_dec(write_lat);
 		read_lat_cum += read_lat;
 		write_lat_cum += write_lat;
 		seq_printf(seq, "%d:\t\t%10lu %3u %3u   | %10lu %3u %3u\n",

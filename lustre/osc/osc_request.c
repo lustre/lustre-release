@@ -2687,7 +2687,8 @@ static int brw_interpret(const struct lu_env *env,
 	/* Calculate RPC latency in microseconds and update histogram */
 	if (ktime_to_ns(start_time)) {
 		/* binary convertion, must convert to decimal for display */
-		ktime_t latency_us = ktime_sub(completion_time, start_time) >> 10;
+		ktime_t latency = ktime_sub(completion_time, start_time);
+		unsigned int latency_us = ktime_to_ns(latency) >> 10 ?: 1;
 		u32 page_count = aa->aa_page_count;
 		int idx;
 

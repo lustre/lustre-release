@@ -178,21 +178,38 @@ static void osd_iobuf_add_page(struct osd_iobuf *iobuf,
 
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 {
+	struct brw_stats *bs = &d->od_brw_stats;
+	struct obd_hist_pcpu *stats = NULL;
+	unsigned int latency_us;
+	int page_count = iobuf->dr_npages;
+	int idx = fls(page_count) - 1;
 	int rw = iobuf->dr_rw;
 
-	if (iobuf->dr_elapsed_valid) {
-		struct brw_stats *h = &d->od_brw_stats;
-
-		iobuf->dr_elapsed_valid = 0;
-		LASSERT(iobuf->dr_dev == d);
-		LASSERT(iobuf->dr_frags > 0);
-		lprocfs_oh_tally_pcpu(&h->bs_hist[BRW_R_DIO_FRAGS+rw],
-				      iobuf->dr_frags);
-		lprocfs_oh_tally_log2_pcpu(&h->bs_hist[BRW_R_IO_TIME+rw],
-					   ktime_to_ms(iobuf->dr_elapsed));
-	}
-
 	iobuf->dr_error = 0;
+
+	if (!iobuf->dr_elapsed_valid)
+		return;
+	if (unlikely(idx < 0)) {
+		CDEBUG(D_PAGE, "%s: histogram index %d < 0\n",
+		       d->od_svname, idx);
+		idx = 0;
+	}
+	iobuf->dr_elapsed_valid = 0;
+
+	lprocfs_oh_tally_pcpu(&bs->bs_hist[BRW_R_DIO_FRAGS + rw],
+			      iobuf->dr_frags);
+	lprocfs_oh_tally_log2_pcpu(&bs->bs_hist[BRW_R_IO_TIME + rw],
+				   ktime_to_ms(iobuf->dr_elapsed));
+	if (unlikely(idx >= IO_LATENCY_BUCKETS))
+		idx = IO_LATENCY_BUCKETS - 1;
+	latency_us = ktime_to_ns(iobuf->dr_elapsed) >> 10;
+
+	if (rw == READ)
+		stats = bs->bs_read_io_latency_by_size;
+	else if (rw == WRITE)
+		stats = bs->bs_write_io_latency_by_size;
+	if (likely(stats && stats[idx].oh_initialized))
+		lprocfs_oh_tally_log2_pcpu(stats + idx, latency_us);
 }
 
 void osd_bio_fini(struct bio *bio)

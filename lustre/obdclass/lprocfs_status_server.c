@@ -826,29 +826,159 @@ static ssize_t brw_stats_seq_write(struct file *file,
 
 	return len;
 }
-
 LDEBUGFS_SEQ_FOPS(brw_stats);
 
-int lprocfs_init_brw_stats(struct brw_stats *brw_stats)
+static int io_latency_stats_seq_show(struct seq_file *seq, void *v)
 {
-	int i, result;
+	struct brw_stats *bs = seq->private;
+	int num_buckets = IO_LATENCY_BUCKETS;
+	struct obd_hist_pcpu *h;
+	bool hdr_printed;
+	int i, j, kb;
 
+	seq_puts(seq, "io_latency_by_size:\n");
+	spin_lock(&bs->bs_loi_list_lock);
+	lprocfs_stats_header(seq, ktime_get_real(),
+			     bs->bs_io_latency_init, 15, ":", false, "");
+
+	/* Print read latency histograms */
+	for (i = 0, kb = PAGE_SIZE / 1024; i < num_buckets; i++, kb <<= 1) {
+		u64 r;
+
+		h = &bs->bs_read_io_latency_by_size[i];
+		if (unlikely(!h->oh_initialized)) {
+			seq_printf(seq, "rd_%uK: { uninit }\n", kb);
+			continue;
+		}
+
+		hdr_printed = false;
+		for (j = 0; j < OBD_HIST_MAX; j++) {
+			r = percpu_counter_sum(&h->oh_pc_buckets[j]);
+			if (r == 0)
+				continue;
+
+			if (!hdr_printed) {
+				seq_printf(seq, "rd_%uK: { ", kb);
+				hdr_printed = true;
+			}
+			seq_printf(seq, "%dus: %llu, ",
+				   (j == 0) ? 0 : 1 << (j - 1),
+				   binary_usec_to_dec(r));
+		}
+		if (hdr_printed)
+			seq_puts(seq, "}\n");
+	}
+
+	/* Print write latency histograms */
+	for (i = 0, kb = PAGE_SIZE / 1024; i < num_buckets; i++, kb <<= 1) {
+		u64 w;
+
+		h = &bs->bs_write_io_latency_by_size[i];
+		if (unlikely(!h->oh_initialized)) {
+			seq_printf(seq, "wr_%uK: { uninit }\n", kb);
+			continue;
+		}
+
+		hdr_printed = false;
+		for (j = 0; j < OBD_HIST_MAX; j++) {
+
+			w = percpu_counter_sum(&h->oh_pc_buckets[j]);
+			if (w == 0)
+				continue;
+
+			if (!hdr_printed) {
+				seq_printf(seq, "wr_%uK: { ", kb);
+				hdr_printed = true;
+			}
+			seq_printf(seq, "%dus: %llu, ",
+				   (j == 0) ? 0 : 1 << (j - 1),
+				   binary_usec_to_dec(w));
+		}
+		if (hdr_printed)
+			seq_puts(seq, "}\n");
+	}
+
+	spin_unlock(&bs->bs_loi_list_lock);
+
+	return 0;
+}
+
+static ssize_t io_latency_stats_seq_write(struct file *file,
+					  const char __user *buf,
+					  size_t len, loff_t *off)
+{
+	struct seq_file *seq = file->private_data;
+	struct brw_stats *bs = seq->private;
+	int i;
+
+	spin_lock(&bs->bs_loi_list_lock);
+	bs->bs_io_latency_init = ktime_get_real();
+	for (i = 0; i < IO_LATENCY_BUCKETS; i++) {
+		if (likely(bs->bs_read_io_latency_by_size[i].oh_initialized))
+			lprocfs_oh_clear_pcpu(&bs->bs_read_io_latency_by_size[i]);
+	}
+
+	for (i = 0; i < IO_LATENCY_BUCKETS; i++) {
+		if (likely(bs->bs_write_io_latency_by_size[i].oh_initialized))
+			lprocfs_oh_clear_pcpu(&bs->bs_write_io_latency_by_size[i]);
+	}
+	spin_unlock(&bs->bs_loi_list_lock);
+
+	return len;
+}
+LDEBUGFS_SEQ_FOPS(io_latency_stats);
+
+int lprocfs_init_brw_stats(struct brw_stats *bs)
+{
+	int i, rc;
+
+	bs->bs_init = ktime_get_real();
 	for (i = 0; i < BRW_RW_STATS_NUM; i++) {
-		result = lprocfs_oh_alloc_pcpu(&brw_stats->bs_hist[i]);
-		if (result)
+		rc = lprocfs_oh_alloc_pcpu(&bs->bs_hist[i]);
+		if (rc)
 			break;
 	}
 
-	return result;
+	spin_lock_init(&bs->bs_loi_list_lock);
+
+	/* verify IO_LATENCY_BUCKETS is large enough for all RPCs */
+	BUILD_BUG_ON(IO_LATENCY_BUCKETS < PTLRPC_MAX_BRW_BITS - PAGE_SHIFT);
+
+	/* initialize RPC latency by size histograms */
+	bs->bs_io_latency_init = ktime_get_real();
+	for (i = 0; i < IO_LATENCY_BUCKETS; i++) {
+		rc = lprocfs_oh_alloc_pcpu(&bs->bs_read_io_latency_by_size[i]);
+		if (rc) {
+			CWARN("%s: can't init read pcpu stats idx = %u\n",
+			      bs->bs_devname, i);
+			break;
+		}
+	}
+
+	for (i = 0; i < IO_LATENCY_BUCKETS; i++) {
+		rc = lprocfs_oh_alloc_pcpu(&bs->bs_write_io_latency_by_size[i]);
+		if (rc) {
+			CWARN("%s: can't init write pcpu stats idx = %u\n",
+			      bs->bs_devname, i);
+			break;
+		}
+	}
+
+	return rc;
 }
 EXPORT_SYMBOL(lprocfs_init_brw_stats);
 
-void lprocfs_fini_brw_stats(struct brw_stats *brw_stats)
+void lprocfs_fini_brw_stats(struct brw_stats *bs)
 {
 	int i;
 
 	for (i = 0; i < BRW_RW_STATS_NUM; i++)
-		lprocfs_oh_release_pcpu(&brw_stats->bs_hist[i]);
+		lprocfs_oh_release_pcpu(&bs->bs_hist[i]);
+
+	for (i = 0; i < IO_LATENCY_BUCKETS; i++) {
+		lprocfs_oh_release_pcpu(&bs->bs_read_io_latency_by_size[i]);
+		lprocfs_oh_release_pcpu(&bs->bs_write_io_latency_by_size[i]);
+	}
 }
 EXPORT_SYMBOL(lprocfs_fini_brw_stats);
 
@@ -858,7 +988,6 @@ void ldebugfs_register_brw_stats(struct dentry *parent,
 	int i;
 
 	LASSERT(brw_stats);
-	brw_stats->bs_init = ktime_get_real();
 	for (i = 0; i < BRW_RW_STATS_NUM; i++) {
 		struct brw_stats_props *props = brw_stats->bs_props;
 
@@ -876,6 +1005,17 @@ void ldebugfs_register_brw_stats(struct dentry *parent,
 			    &brw_stats_fops);
 }
 EXPORT_SYMBOL(ldebugfs_register_brw_stats);
+
+void ldebugfs_register_io_latency_stats(struct dentry *parent,
+					struct brw_stats *brw_stats)
+{
+	if (!parent)
+		return;
+
+	debugfs_create_file("io_latency_stats", 0644, parent, brw_stats,
+			    &io_latency_stats_fops);
+}
+EXPORT_SYMBOL(ldebugfs_register_io_latency_stats);
 
 int lprocfs_hash_seq_show(struct seq_file *m, void *data)
 {

@@ -394,11 +394,21 @@ struct brw_stats_props {
 	bool		 bsp_scale;
 };
 
+/* hard to get PTLRPC_MAX_BRW_BITS here, verified in lprocfs_init_brw_stats() */
+#define IO_LATENCY_BUCKETS (26 - 12 + 1) /* (PTLRPC_MAX_BRW_BITS - PAGE_SHIFT) */
+
 struct brw_stats {
 	ktime_t			bs_init;
 	struct obd_hist_pcpu	bs_hist[BRW_RW_STATS_NUM];
 	struct brw_stats_props	bs_props[BRW_RW_STATS_NUM / 2];
 	bool			bs_inflight_io_log2;
+	/* latency_by_size index log2(pages), stores "binary usec" (ns >> 10) */
+	ktime_t			bs_io_latency_init;
+	struct obd_hist_pcpu	bs_read_io_latency_by_size[IO_LATENCY_BUCKETS];
+	struct obd_hist_pcpu	bs_write_io_latency_by_size[IO_LATENCY_BUCKETS];
+	u32			bs_max_pages_per_rpc;
+	spinlock_t		bs_loi_list_lock;
+	char			*bs_devname;
 };
 
 int lprocfs_init_brw_stats(struct brw_stats *brw_stats);
@@ -406,6 +416,8 @@ void lprocfs_fini_brw_stats(struct brw_stats *brw_stats);
 
 void ldebugfs_register_brw_stats(struct dentry *parent,
 				 struct brw_stats *brw_stats);
+void ldebugfs_register_io_latency_stats(struct dentry *parent,
+					struct brw_stats *brw_stats);
 #endif /* HAVE_SERVER_SUPPORT */
 
 #define EXTRA_FIRST_OPC LDLM_GLIMPSE_ENQUEUE
@@ -521,6 +533,7 @@ extern int ldebugfs_alloc_obd_stats(struct obd_device *obd,
 				    unsigned int num_stats);
 extern int lprocfs_alloc_md_stats(struct obd_device *obd,
 				  unsigned int num_private_stats);
+#define binary_usec_to_dec(b) (((b) / 1000) * 1024 + ((b) % 1000) * 1024 / 1000)
 void obd_io_latency_stats_clear(struct obd_histogram *read_io_latency_by_size,
 				struct obd_histogram *write_io_latency_by_size,
 				int num_buckets, ktime_t *stats_init);

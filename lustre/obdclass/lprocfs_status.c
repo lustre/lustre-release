@@ -651,7 +651,7 @@ int obd_io_latency_stats_seq_show(struct seq_file *seq,
 				 int num_buckets, ktime_t stats_init,
 				 spinlock_t *list_lock)
 {
-	unsigned long read_tot, write_tot, read_cum, write_cum;
+	bool hdr_printed;
 	int i, j, kb;
 
 	spin_lock(list_lock);
@@ -662,59 +662,53 @@ int obd_io_latency_stats_seq_show(struct seq_file *seq,
 
 	/* Print read latency histograms */
 	for (i = 0, kb = PAGE_SIZE / 1024; i < num_buckets; i++, kb <<= 1) {
+		struct obd_histogram *h = &read_io_latency_by_size[i];
+
 		if (!read_io_latency_by_size)
-			continue;
+			break;
 
-		read_tot = lprocfs_oh_sum(&read_io_latency_by_size[i]);
-
-		if (read_tot == 0)
-			continue;
-
-		seq_printf(seq, "rd_%uK: { ", kb);
-		read_cum = 0;
+		hdr_printed = false;
 		for (j = 0; j < OBD_HIST_MAX; j++) {
-			struct obd_histogram *h = &read_io_latency_by_size[i];
 			unsigned long r = h->oh_buckets[j];
 
 			if (r == 0)
 				continue;
 
-			read_cum += r;
+			if (!hdr_printed) {
+				seq_printf(seq, "rd_%uK: { ", kb);
+				hdr_printed = true;
+			}
 			seq_printf(seq, "%dus: %lu, ",
-				   (j == 0) ? 0 : 1 << (j - 1), r);
-
-			if (read_cum == read_tot)
-				break;
+				   (j == 0) ? 0 : 1 << (j - 1),
+				   binary_usec_to_dec(r));
 		}
-		seq_puts(seq, "}\n");
+		if (hdr_printed)
+			seq_puts(seq, "}\n");
 	}
 	/* Print write latency histograms */
 	for (i = 0, kb = PAGE_SIZE / 1024; i < num_buckets; i++, kb <<= 1) {
+		struct obd_histogram *h = &write_io_latency_by_size[i];
+
 		if (!write_io_latency_by_size)
-			continue;
+			break;
 
-		write_tot = lprocfs_oh_sum(&write_io_latency_by_size[i]);
-
-		if (write_tot == 0)
-			continue;
-
-		seq_printf(seq, "wr_%uK: { ", kb);
-		write_cum = 0;
+		hdr_printed = false;
 		for (j = 0; j < OBD_HIST_MAX; j++) {
-			struct obd_histogram *h = &write_io_latency_by_size[i];
 			unsigned long w = h->oh_buckets[j];
 
 			if (w == 0)
 				continue;
 
-			write_cum += w;
+			if (!hdr_printed) {
+				seq_printf(seq, "wr_%uK: { ", kb);
+				hdr_printed = true;
+			}
 			seq_printf(seq, "%dus: %lu, ",
-				   (j == 0) ? 0 : 1 << (j - 1), w);
-
-			if (write_cum == write_tot)
-				break;
+				   (j == 0) ? 0 : 1 << (j - 1),
+				   binary_usec_to_dec(w));
 		}
-		seq_puts(seq, "}\n");
+		if (hdr_printed)
+			seq_puts(seq, "}\n");
 	}
 
 	spin_unlock(list_lock);

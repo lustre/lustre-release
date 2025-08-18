@@ -127,6 +127,9 @@ static int osd_stats_init(struct osd_device *osd)
 
 	ldebugfs_register_brw_stats(osd->od_dt_dev.dd_debugfs_entry,
 				    &osd->od_brw_stats);
+	/* only for osd-ldiskfs until osd-zfs is fixed, then merge into above */
+	ldebugfs_register_io_latency_stats(osd->od_dt_dev.dd_debugfs_entry,
+					   &osd->od_brw_stats);
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 	osd_symlink_brw_stats(osd);

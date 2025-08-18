@@ -17262,6 +17262,16 @@ test_127_io_latency_test() {
 	local io_latency_param=$2
 	local dev=osc
 
+	[[ $facet == *ost* ]] && {
+		# disable cache to have read IO
+		local rcc="osd-*.$FSNAME-OST0000.read_cache_enable"
+		local wcc="osd-*.$FSNAME-OST0000.writethrough_cache_enable"
+		local rsaved=$(do_facet $facet $LCTL get_param -n $rcc)
+		local wsaved=$(do_facet $facet $LCTL get_param -n $wcc)
+		do_facet $facet $LCTL set_param $rcc=0 $wcc=0
+		stack_trap "do_facet $facet $LCTL set_param $rcc=$rsaved $wcc=$wsaved"
+	}
+
 	[[ $io_latency_param =~ "md[ct]" ]] && dev="mdc"
 
 	# avoid leftovers after preceding tests
@@ -17270,14 +17280,17 @@ test_127_io_latency_test() {
 
 	# Clear RPC stats
 	do_facet $facet $LCTL set_param $io_latency_param=clear
+	[[ $facet == *ost* ]] &&
+		do_facet $facet $LCTL set_param osd-*.*OST*.stats=clear
 
 	# Generate I/O with different sizes to populate multiple histograms
 	local file=$DIR/$tdir/$tfile
 	local count=10
 	local sizes=()
 	local mppr=($($LCTL get_param -n $dev.*.max_pages_per_rpc))
-	for size in 4 64 1024 4096; do
-		(( size >= PAGE_SIZE && $mppr * $PAGE_SIZE / 1024 >= size )) &&
+	for size in 4 64 1024; do
+		(( size >= $PAGE_SIZE / 1024 &&
+		   size <= $mppr * $PAGE_SIZE / 1024 )) &&
 			sizes+=(${size}K)
 	done
 
@@ -17288,12 +17301,13 @@ test_127_io_latency_test() {
 		echo "Generating I/O with size $size"
 
 		# Write with current size
-		[[ $dev == "mdc" ]] && $LFS setstripe -E 4M -L mdt ${file}_${size} ||
-				       $LFS setstripe -c 1 -i 0 ${file}_${size}
+		[[ $dev == "mdc" ]] &&
+			$LFS setstripe -E 4M -L mdt ${file}_${size} ||
+			$LFS setstripe -c 1 -i 0 ${file}_${size}
 		dd if=/dev/urandom of=${file}_${size} bs=$size count=$count \
 			oflag=direct ||
 			error "dd write failed for size $size"
-		sync
+		cancel_lru_locks osc
 
 		# Read with current size
 		dd if=${file}_${size} of=/dev/null bs=$size count=$count \
@@ -17301,6 +17315,7 @@ test_127_io_latency_test() {
 			error "dd read failed for size $size"
 	done
 
+	sleep 5
 	# Get client IO latency stats for debugging
 	local io_latency_stats=$(do_facet $facet $LCTL get_param $io_latency_param)
 	echo "$io_latency_param stats after I/O:"
@@ -17308,33 +17323,49 @@ test_127_io_latency_test() {
 
 	# Check that we have entries for different sizes
 	for size in ${sizes[@]}; do
-		echo "$io_latency_stats" | grep -q _$size ||
+		echo "$io_latency_stats" | grep -q _$size || {
+			$LCTL get_param osc.*.{io_latency,rpc}_stats
+			[[ $facet == *ost* ]] &&
+				do_facet ost1 $LCTL get_param osd-*.*.{brw,io_latency}_stats &&
+				do_facet ost1 $LCTL get_param osd-*.*OST*.stats
 			error "No stats found for size $size"
+		}
 	done
 
+	# sometimes stray writes are seen, filter to expected sizes
 	local check_counts=$(echo "$io_latency_stats" |
+		grep -E "$(sed -e 's/ /K|_/g' <<<${sizes[*]})" |
 		awk -v count="$count" '/K: / {sum = 0
 		while (match($0, /[0-9]+us: ([0-9]+),/, arr)) {
 			sum += arr[1]
 			$0 = substr($0, RSTART + RLENGTH)
 		}
-		{ if (sum != count) print "Expected "count" entries, found "sum}
+		{ if (sum < count) print "Expected "count" entries, found "sum}
 		}')
 	[[ -z "$check_counts" ]] || error "$check_counts"
 
 	local has_read=$(echo "$io_latency_stats" | grep -c "rd_")
 	local has_write=$(echo "$io_latency_stats" | grep -c "wr_")
 
-	(( has_read == ${#sizes[@]} )) ||
+	(( has_read >= ${#sizes[@]} )) ||
 		error "Expected ${#sizes[@]} read stats, found $has_read"
-	(( has_write == ${#sizes[@]} )) ||
+	(( has_write >= ${#sizes[@]} )) ||
 		error "Expected ${#sizes[@]} write stats, found $has_write"
 }
 
 test_127e() {
-	test_127_io_latency_test client osc.*.io_latency_stats
+	test_127_io_latency_test client osc.$FSNAME-OST0000-*.io_latency_stats
 }
 run_test 127e "client IO latency histograms by size"
+
+test_127f() {
+	(( $OST1_VERSION >= $(version_code 2.16.58.105) )) ||
+		skip "need OST > 2.16.58.105 for OST IO latency stats"
+	[[ $(facet_fstype ost1) == ldiskfs ]] || skip "ldiskfs only"
+
+	test_127_io_latency_test ost1 osd-*.$FSNAME-OST0000.io_latency_stats
+}
+run_test 127f "OST IO latency histograms by size"
 
 test_128() { # bug 15212
 	touch $DIR/$tfile

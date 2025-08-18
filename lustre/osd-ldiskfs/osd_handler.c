@@ -8734,6 +8734,7 @@ static int osd_device_init0(const struct lu_env *env,
 	rc = lprocfs_init_brw_stats(&o->od_brw_stats);
 	if (rc)
 		GOTO(out_brw_stats, rc);
+	o->od_brw_stats.bs_devname = o->od_svname;
 
 	/* setup scrub, including OI files initialization */
 	o->od_in_init = 1;
