@@ -550,6 +550,9 @@ char *lustre_cfg_string(struct lustre_cfg *lcfg, u32 index)
 {
 	char *s;
 
+	if (index >= lcfg->lcfg_bufcount)
+		return NULL;
+
 	if (!lcfg->lcfg_buflens[index])
 		return NULL;
 

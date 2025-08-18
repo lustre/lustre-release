@@ -4707,7 +4707,7 @@ static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 		rc = nodemap_fileset_add(nodemap, fset, fset_alt, fset_ro);
 		break;
 	case LCFG_NODEMAP_FILESET_DEL:
-		if (fset[0] == '*')
+		if (fset && fset[0] == '*')
 			rc = nodemap_fileset_clear(nodemap, false);
 		else
 			rc = nodemap_fileset_del(nodemap, fset);

@@ -840,6 +840,9 @@ static int __llog_fileset_cleanup_apply(const struct lu_env *env,
 	size_t lcfg_param_size;
 	int rc = 0;
 
+	if (!nodemap_name || nodemap_name[0] == '\0')
+		RETURN(-EINVAL);
+
 	lcfg_format = "nodemap.%s.fileset=";
 	lcfg_param_size = snprintf(NULL, 0, lcfg_format, nodemap_name) + 1;
 
