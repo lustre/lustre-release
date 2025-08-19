@@ -5524,14 +5524,15 @@ static int lfsck_layout_slave_prep(const struct lu_env *env,
 	if (!lsp->lsp_index_valid)
 		return 0;
 
+	down_write(&llsd->llsd_rb_rwsem);
 	rc = lfsck_layout_llst_add(llsd, lsp->lsp_index);
 	if (rc == 0 && start != NULL && start->ls_flags & LPF_OST_ORPHAN) {
 		LASSERT(!llsd->llsd_rbtree_valid);
-
-		down_write(&llsd->llsd_rb_rwsem);
 		rc = lfsck_rbtree_setup(env, com);
-		up_write(&llsd->llsd_rb_rwsem);
+	} else if (rc == -EALREADY) {
+		rc = 0;
 	}
+	up_write(&llsd->llsd_rb_rwsem);
 
 	CDEBUG(D_LFSCK,
 	       "%s: layout LFSCK slave prep done, start pos [%llu]\n",
