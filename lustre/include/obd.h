@@ -414,10 +414,9 @@ struct lov_obd {
 
 #define lmv_tgt_desc lu_tgt_desc
 
-struct qos_exclude_prefix {
+struct qos_exclude_pattern {
 	struct list_head	qep_list;
-	struct rhash_head	qep_hash;
-	char			qep_name[NAME_MAX + 1];
+	char			qep_name[NAME_MAX + 3]; /* +2 for ".*" */
 };
 
 struct lmv_obd {

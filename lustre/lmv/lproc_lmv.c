@@ -179,21 +179,23 @@ static ssize_t qos_threshold_rr_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(qos_threshold_rr);
 
-/* directories with exclude prefixes will be created on the same MDT as its
- * parent directory, the prefixes are set with the rule as shell environment
- * PATH: ':' is used as separator for prefixes. And for convenience, '+/-' is
- * used to add/remove prefixes.
- */
-static int qos_exclude_prefixes_seq_show(struct seq_file *m, void *v)
+static int qos_exclude_seq_show_internal(struct seq_file *m, void *v,
+						bool is_prefix)
 {
 	struct obd_device *obd = m->private;
 	struct lmv_obd *lmv = &obd->u.lmv;
-	struct qos_exclude_prefix *prefix;
+	struct qos_exclude_pattern *pat;
 
 restart:
 	spin_lock(&lmv->lmv_lock);
-	list_for_each_entry(prefix, &lmv->lmv_qos_exclude_list, qep_list) {
-		seq_printf(m, "%s\n", prefix->qep_name);
+	list_for_each_entry(pat, &lmv->lmv_qos_exclude_list, qep_list) {
+		if (is_prefix) {
+			size_t len = strnlen(pat->qep_name, NAME_MAX + 3);
+			if (len >= 2 && pat->qep_name[len - 2] == '.' &&
+			    pat->qep_name[len - 1] == '*')
+				continue;
+		}
+		seq_printf(m, "%s\n", pat->qep_name);
 		if (seq_has_overflowed(m)) {
 			spin_unlock(&lmv->lmv_lock);
 			kvfree(m->buf);
@@ -209,9 +211,25 @@ restart:
 	return 0;
 }
 
-static ssize_t qos_exclude_prefixes_seq_write(struct file *file,
+/* directories with exclude patterns will be created on the same MDT as its
+ * parent directory, the patterns are set with the rule as shell environment
+ * PATH: ':' is used as separator for patterns. And for convenience, '+/-' is
+ * used to add/remove patterns.
+ */
+static int qos_exclude_patterns_seq_show(struct seq_file *m, void *v)
+{
+	return qos_exclude_seq_show_internal(m, v, false);
+}
+
+static int qos_exclude_prefixes_seq_show(struct seq_file *m, void *v)
+{
+	return qos_exclude_seq_show_internal(m, v, true);
+}
+
+static ssize_t qos_exclude_seq_write_internal(struct file *file,
 					      const char __user *buffer,
-					      size_t count, loff_t *off)
+					      size_t count, loff_t *off,
+					      bool is_prefix)
 {
 	struct obd_device *obd;
 	struct lmv_obd *lmv;
@@ -219,12 +237,12 @@ static ssize_t qos_exclude_prefixes_seq_write(struct file *file,
 	char op = 0;
 	char *p;
 	char *name;
-	char namebuf[NAME_MAX + 1];
-	struct qos_exclude_prefix *prefix;
-	struct qos_exclude_prefix *tmp;
+	char namebuf[NAME_MAX + 3];
+	struct qos_exclude_pattern *pat;
+	struct qos_exclude_pattern *tmp;
 	int len;
 	bool pruned = false;
-	int rc;
+	bool again = false;
 
 	/* one extra char to ensure buf ends with '\0' */
 	OBD_ALLOC(buf, count + 1);
@@ -260,60 +278,60 @@ static ssize_t qos_exclude_prefixes_seq_write(struct file *file,
 			OBD_FREE(buf, count + 1);
 			return -ERANGE;
 		}
-
+		strncpy(namebuf, name, len);
+		namebuf[len] = '\0';
+		again = is_prefix;
 		switch (op) {
 		default:
 			if (!pruned) {
 				spin_lock(&lmv->lmv_lock);
-				list_for_each_entry_safe(prefix, tmp,
+				list_for_each_entry_safe(pat, tmp,
 						&lmv->lmv_qos_exclude_list,
 						qep_list) {
-					list_del(&prefix->qep_list);
-					rhashtable_remove_fast(
-						&lmv->lmv_qos_exclude_hash,
-						&prefix->qep_hash,
-						qos_exclude_hash_params);
-					kfree(prefix);
+					list_del(&pat->qep_list);
+					OBD_FREE_PTR(pat);
 				}
 				spin_unlock(&lmv->lmv_lock);
 				pruned = true;
 			}
 			fallthrough;
 		case '+':
-			prefix = kmalloc(sizeof(*prefix), __GFP_ZERO);
-			if (!prefix) {
+again_plus:
+			OBD_ALLOC_PTR(pat);
+			if (!pat) {
 				OBD_FREE(buf, count + 1);
 				return -ENOMEM;
 			}
-			strncpy(prefix->qep_name, name, len);
-			rc = rhashtable_lookup_insert_fast(
-						&lmv->lmv_qos_exclude_hash,
-						&prefix->qep_hash,
-						qos_exclude_hash_params);
-			if (!rc) {
-				spin_lock(&lmv->lmv_lock);
-				list_add_tail(&prefix->qep_list,
-					      &lmv->lmv_qos_exclude_list);
-				spin_unlock(&lmv->lmv_lock);
-			} else {
-				kfree(prefix);
+			strncpy(pat->qep_name, namebuf, len);
+			spin_lock(&lmv->lmv_lock);
+			list_add_tail(&pat->qep_list,
+						&lmv->lmv_qos_exclude_list);
+			spin_unlock(&lmv->lmv_lock);
+			if (again) {
+				again = false;
+				namebuf[len++] = '.';
+				namebuf[len++] = '*';
+				namebuf[len]   = '\0';
+				goto again_plus;
 			}
 			break;
 		case '-':
-			strncpy(namebuf, name, len);
-			namebuf[len] = '\0';
-			prefix = rhashtable_lookup(&lmv->lmv_qos_exclude_hash,
-						   namebuf,
-						   qos_exclude_hash_params);
-			if (prefix) {
-				spin_lock(&lmv->lmv_lock);
-				list_del(&prefix->qep_list);
-				spin_unlock(&lmv->lmv_lock);
-				rhashtable_remove_fast(
-						&lmv->lmv_qos_exclude_hash,
-						&prefix->qep_hash,
-						qos_exclude_hash_params);
-				kfree(prefix);
+again_minus:
+			spin_lock(&lmv->lmv_lock);
+			list_for_each_entry_safe(pat, tmp,
+				&lmv->lmv_qos_exclude_list, qep_list) {
+				if (strcmp(pat->qep_name, namebuf) == 0) {
+					list_del(&pat->qep_list);
+					OBD_FREE_PTR(pat);
+				}
+			}
+			spin_unlock(&lmv->lmv_lock);
+			if (again) {
+				again = false;
+				namebuf[len++] = '.';
+				namebuf[len++] = '*';
+				namebuf[len]   = '\0';
+				goto again_minus;
 			}
 			break;
 		}
@@ -321,10 +339,30 @@ static ssize_t qos_exclude_prefixes_seq_write(struct file *file,
 
 	OBD_FREE(buf, count + 1);
 	return count;
+
+}
+
+static ssize_t qos_exclude_patterns_seq_write(struct file *file,
+					      const char __user *buffer,
+					      size_t count, loff_t *off)
+{
+	return qos_exclude_seq_write_internal(file, buffer, count, off,
+					      false);
+}
+LDEBUGFS_SEQ_FOPS(qos_exclude_patterns);
+
+static ssize_t qos_exclude_prefixes_seq_write(struct file *file,
+					      const char __user *buffer,
+					      size_t count, loff_t *off)
+{
+	return qos_exclude_seq_write_internal(file, buffer, count, off,
+					      true);
 }
 LDEBUGFS_SEQ_FOPS(qos_exclude_prefixes);
 
 static struct ldebugfs_vars ldebugfs_lmv_obd_vars[] = {
+	{ .name =	"qos_exclude_patterns",
+	  .fops =	&qos_exclude_patterns_fops },
 	{ .name =	"qos_exclude_prefixes",
 	  .fops =	&qos_exclude_prefixes_fops },
 	{ NULL }

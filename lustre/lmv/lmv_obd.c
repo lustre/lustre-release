@@ -24,6 +24,7 @@
 #include <linux/math64.h>
 #include <linux/seq_file.h>
 #include <linux/namei.h>
+#include <linux/glob.h>
 
 #include <lustre_compat/linux/stringhash.h>
 
@@ -1199,47 +1200,13 @@ int lmv_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
-static u32 qos_exclude_hashfh(const void *data, u32 len, u32 seed)
-{
-	const char *name = data;
-
-	return hashlen_hash(hashlen_string((void *)(unsigned long)seed,
-					   name));
-}
-
-static int qos_exclude_cmpfn(struct rhashtable_compare_arg *arg,
-			     const void *obj)
-{
-	const struct qos_exclude_prefix *prefix = obj;
-	const char *name = arg->key;
-
-	return strcmp(name, prefix->qep_name);
-}
-
-const struct rhashtable_params qos_exclude_hash_params = {
-	.key_len	= 1, /* actually variable */
-	.key_offset	= offsetof(struct qos_exclude_prefix, qep_name),
-	.head_offset	= offsetof(struct qos_exclude_prefix, qep_hash),
-	.hashfn		= qos_exclude_hashfh,
-	.obj_cmpfn	= qos_exclude_cmpfn,
-	.automatic_shrinking = true,
-};
-
-void qos_exclude_prefix_free(void *vprefix, void *data)
-{
-	struct qos_exclude_prefix *prefix = vprefix;
-
-	list_del(&prefix->qep_list);
-	kfree(prefix);
-}
-
 static const struct lu_device_operations lmv_lu_ops;
 
 static struct lu_device *lmv_device_alloc(const struct lu_env *env,
 					  struct lu_device_type *ldt,
 					  struct lustre_cfg *lcfg)
 {
-	struct qos_exclude_prefix *prefix;
+	struct qos_exclude_pattern *pat;
 	struct lnet_processid lnet_id;
 	struct obd_device *obd;
 	struct lmv_desc *desc;
@@ -1309,33 +1276,25 @@ static struct lu_device *lmv_device_alloc(const struct lu_env *env,
 		CWARN("%s: error initialize target table: rc = %d\n",
 		      obd->obd_name, rc);
 
-	rc = rhashtable_init(&lmv->lmv_qos_exclude_hash,
-			     &qos_exclude_hash_params);
-	if (rc) {
-		CERROR("%s: qos exclude hash initalize failed: %d\n",
-		       obd->obd_name, rc);
-		GOTO(out_free, rc);
-	}
-
-	prefix = kmalloc(sizeof(*prefix), __GFP_ZERO);
-	if (!prefix)
-		GOTO(out_destroy, rc = -ENOMEM);
+	OBD_ALLOC_PTR(pat);
+	if (!pat)
+		GOTO(out_free, rc = -ENOMEM);
 
 	/* Apache Spark creates a _temporary directory for staging files */
-	strcpy(prefix->qep_name, "_temporary");
-	rc = rhashtable_insert_fast(&lmv->lmv_qos_exclude_hash,
-				    &prefix->qep_hash, qos_exclude_hash_params);
-	if (rc) {
-		kfree(prefix);
-		GOTO(out_destroy, rc);
-	}
+	strcpy(pat->qep_name, "_temporary");
 
-	list_add_tail(&prefix->qep_list, &lmv->lmv_qos_exclude_list);
+	list_add_tail(&pat->qep_list, &lmv->lmv_qos_exclude_list);
+
+	OBD_ALLOC_PTR(pat);
+	if (!pat)
+		GOTO(out_free, rc = -ENOMEM);
+
+	strcpy(pat->qep_name, "_temporary.*");
+
+	list_add_tail(&pat->qep_list, &lmv->lmv_qos_exclude_list);
 
 	RETURN(lu);
 
-out_destroy:
-	rhashtable_destroy(&lmv->lmv_qos_exclude_hash);
 out_free:
 	OBD_FREE_PTR(lu);
 	RETURN(ERR_PTR(rc));
@@ -1348,11 +1307,18 @@ static struct lu_device *lmv_device_free(const struct lu_env *env,
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lu_tgt_desc *tgt;
 	struct lu_tgt_desc *tmp;
+	struct qos_exclude_pattern *pat;
+	struct qos_exclude_pattern *ptmp;
 
 	ENTRY;
 
-	rhashtable_free_and_destroy(&lmv->lmv_qos_exclude_hash,
-				    qos_exclude_prefix_free, NULL);
+	spin_lock(&lmv->lmv_lock);
+	list_for_each_entry_safe(pat, ptmp,
+		&lmv->lmv_qos_exclude_list, qep_list) {
+		list_del(&pat->qep_list);
+		OBD_FREE_PTR(pat);
+	}
+	spin_unlock(&lmv->lmv_lock);
 	fld_client_fini(&lmv->lmv_fld);
 	fld_client_debugfs_fini(&lmv->lmv_fld);
 
@@ -2168,32 +2134,18 @@ static bool lmv_tgt_nocreate(struct lmv_obd *lmv, struct lmv_tgt_desc *tgt)
 static bool lmv_qos_exclude(struct lmv_obd *lmv, struct md_op_data *op_data)
 {
 	const char *name = op_data->op_name;
-	size_t namelen = op_data->op_namelen;
-	char buf[NAME_MAX + 1];
-	struct qos_exclude_prefix *prefix;
-	char *p;
+	struct qos_exclude_pattern *pat;
 
 	/* skip encrypted files */
 	if (op_data->op_file_encctx)
 		return false;
 
-	/* name length may not be validated yet */
-	if (namelen > NAME_MAX)
-		return false;
-
-	p = strrchr(name, '.');
-	if (p) {
-		namelen = p - name;
-		if (!namelen)
-			return false;
-		strncpy(buf, name, namelen);
-		buf[namelen] = '\0';
-		name = buf;
+	list_for_each_entry(pat, &lmv->lmv_qos_exclude_list, qep_list) {
+		if (glob_match(pat->qep_name, name))
+			return true;
 	}
 
-	prefix = rhashtable_lookup_fast(&lmv->lmv_qos_exclude_hash, name,
-					qos_exclude_hash_params);
-	return prefix != NULL;
+	return false;
 }
 
 struct lmv_tgt_desc *lmv_locate_tgt_create(struct obd_device *obd,

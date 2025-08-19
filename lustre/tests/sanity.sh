@@ -32211,9 +32211,6 @@ test_413j()
 run_test 413j "set default LMV by setxattr"
 
 test_413k() {
-	(( $MDS1_VERSION >= $(version_code 2.15.60) )) ||
-		skip "Need server version at least 2.15.60"
-
 	local index1
 	local index2
 	local old=$($LCTL get_param -n lmv.*.qos_exclude_prefixes)
@@ -32246,6 +32243,31 @@ test_413k() {
 		error "prefixes count $count2 != $((count + 26))"
 }
 run_test 413k "QoS mkdir exclude prefixes"
+
+test_413l() {
+	local index1
+	local index2
+	local old=$($LCTL get_param -n lmv.*.qos_exclude_patterns)
+	local count=$($LCTL get_param -n lmv.*.qos_exclude_patterns | wc -l)
+	local patterns="????-????:[a-z][0-9]"
+
+	# add patterns
+	stack_trap "$LCTL set_param lmv.*.qos_exclude_patterns=\"$old\""
+	$LCTL set_param lmv.*.qos_exclude_patterns="+$patterns"
+
+	mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	index1=$($LFS getstripe -m $DIR/$tdir)
+	for dname in abcd-1234 b9; do
+		mkdir "$DIR/$tdir/$dname" || error "mkdir $dname failed"
+		index2=$($LFS getstripe -m "$DIR/$tdir/$dname")
+		((index1 == index2)) ||
+			error "$tdir on MDT$index1, $dname on MDT$index2"
+	done
+
+	# remove patterns
+	$LCTL set_param lmv.*.qos_exclude_patterns="-$patterns"
+}
+run_test 413l "QoS mkdir exclude patterns"
 
 test_413z() {
 	local pids=""
