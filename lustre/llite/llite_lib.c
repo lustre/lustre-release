@@ -761,6 +761,14 @@ retry_connect:
 	}
 
 	LASSERT(fid_is_sane(&sbi->ll_root_fid));
+	err = cl_sb_init(sb);
+	if (err) {
+		CERROR("%s: failed to initialize cl: rc = %d\n", sbi->ll_fsname,
+		       err);
+		ptlrpc_req_put(request);
+		GOTO(out_lock_cn_cb, err);
+	}
+
 	api32 = test_bit(LL_SBI_32BIT_API, sbi->ll_flags);
 	root = ll_iget(sb, cl_fid_build_ino(&sbi->ll_root_fid, api32), &lmd);
 	md_put_lustre_md(sbi->ll_md_exp, &lmd);
@@ -804,7 +812,6 @@ retry_connect:
 			GOTO(out_root, err);
 		}
 	}
-	cl_sb_init(sb);
 
 	sb->s_root = d_make_root(root);
 	if (sb->s_root == NULL) {
@@ -875,6 +882,7 @@ retry_connect:
 	RETURN(err);
 out_root:
 	iput(root);
+	cl_sb_fini(sb);
 out_lock_cn_cb:
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
