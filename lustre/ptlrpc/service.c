@@ -1124,9 +1124,13 @@ static void ptlrpc_server_finish_active_request(
  * Whereas a problem client may be still alive trying hard to reconnect and to
  * resend its RPCs, we should not consider the worst ever case, consisting of
  * a chain of failures on each step. Let this timeout survive a recovery of
- * just 1 failure:
+ * just 1 failure, but let this be the worst possible one - a dead server NID:
+ *
  * - an RPC timeout;
- * - a re-connect success;
+ * - the first re-connect is sent to the same NID and times out;
+ * - the second re-connect to the failover pair returns an error;
+ * - the third re-connect to the original node to a different NID succeeds;
+ * - the RPC resend succeeds;
  *
  * For lock prolong timeout, we are in the middle of the process -
  * BL AST is sent, CANCEL is ahead - it is still 1 reply for the current RPC
@@ -1148,27 +1152,26 @@ static timeout_t ptlrpc_export_timeout(struct obd_device *obd,
 	if (obd_at_off(obd))
 		return obd_timeout / 2;
 
-	LASSERT(at != NULL);
-	at_timeout = at_est2timeout(obd_at_get(obd, at)) + netl;
-
 	if (pinger) {
 		/* There might be a delay till the next RPC. In fact it is two
-		 * PING_INTERVALs due to ptlrpc_pinger_main logic.
-		 * In addition, the ping itself may time out, but no resend will
-		 * be needed, export is updated on re-connect */
-		timeout = 2 * PING_INTERVAL + at_timeout;
+		 * PING_INTERVALs due to ptlrpc_pinger_main logic. */
+		timeout = 2 * PING_INTERVAL;
 	} else {
 		/* For the lock prolong, we have an RPC in hand, which may still
-		 * get its reply lost. Thus, it may be either this one or the
-		 * next client's RPC times out, take the max.
+		 * get its reply lost. Therefore, it may be either this one or
+		 * the next client's RPC times out, take the max.
 		 * Considering the current RPC, take just the left time. */
-		req_timeout = max(rpc_left_time + (netl >> 1), at_timeout);
-		/* Adding the RPC resend time */
+		LASSERT(at != NULL);
+		at_timeout = at_est2timeout(obd_at_get(obd, at)) + netl;
+		req_timeout = max(rpc_left_time + netl, at_timeout);
+		/* Adding the RPC resend time - not needed in the ping evictor
+		 * case, export is updated on re-connect  */
 		timeout = req_timeout + at_timeout;
 	}
 
-	/* Adding the re-connect time */
-	timeout += INITIAL_CONNECT_TIMEOUT + netl;
+	/* Adding the re-connect time: 1st re-connect timeout,
+	 * 2nd reconnect error, 3rd reconnect success. */
+	timeout += 3 * (INITIAL_CONNECT_TIMEOUT + netl);
 
 	/* Let's be a bit more conservative than client */
 	return max(timeout + (timeout >> 4),
@@ -1225,26 +1228,22 @@ static timeout_t ptlrpc_export_pinger_timeout(struct ptlrpc_request *req)
 }
 
 /*
- * In this case the net was down and just came back, when the 1st timeout has
- * been already expired, clients just keep sending re-connects, switching
- * between different connections, thus what is to be covered:
+ * In case the net was down and just came back, when the 1st timeout has been
+ * already expired, clients just keep sending re-connects. Applying the same
+ * formula as in ptlrpc_export_timeout() to this case we get:
  * - a previous reconnect to not yet recovered network, times out;
  * - the second reconnect to the failover pair, ENODEV;
  * - the third reconnect succeeds;
  */
 static timeout_t ptlrpc_export_extra_timeout(struct obd_export *exp)
 {
-	timeout_t netl, tout;
+	timeout_t netl;
 
 	/* As this is not the 1st re-connection failure, the client might
 	 * have net latency get extended to the max - CONNECTION_SWITCH_MAX */
 	netl = obd_at_get(exp->exp_obd,
 			  &exp->exp_imp_reverse->imp_at.iat_net_latency);
-	tout = 3 * (INITIAL_CONNECT_TIMEOUT +
-		    max((timeout_t)CONNECTION_SWITCH_MAX, netl));
-
-	/* Let's be a bit more conservative than client */
-	return tout + (tout >> 4);
+	return 3 * INITIAL_CONNECT_TIMEOUT + CONNECTION_SWITCH_MAX + 2 * netl;
 }
 
 /*
