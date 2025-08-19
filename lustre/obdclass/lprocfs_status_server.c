@@ -332,24 +332,39 @@ void lprocfs_free_per_client_stats(struct obd_device *obd)
 }
 EXPORT_SYMBOL(lprocfs_free_per_client_stats);
 
-static int
-ldebugfs_exp_print_nodemap_seq(struct obd_export *exp, void *cb_data)
+static int ldebugfs_exp_print_nodemap_seq(struct obd_export *exp, void *cb_data)
 {
-	struct lu_nodemap *nodemap = exp->exp_target_data.ted_nodemap;
+	const char *server_type;
 	struct seq_file *m = cb_data;
+	struct lu_nodemap *nodemap;
 
+	/* Skip server types that don't initialize ted_nodemap* fields */
+	server_type = exp->exp_obd->obd_type->typ_name;
+	if (strcmp(server_type, LUSTRE_MDT_NAME) != 0 &&
+	    strcmp(server_type, LUSTRE_OST_NAME) != 0)
+		return 0;
+
+	/* Do not call nodemap_get_from_exp() to avoid circular dependency */
+	spin_lock(&exp->exp_target_data.ted_nodemap_lock);
+	nodemap = exp->exp_target_data.ted_nodemap;
 	if (nodemap)
-		seq_printf(m, "%s\n", nodemap->nm_name);
+		seq_printf(m, "\n { nodemap: %s, uuid: %s },", nodemap->nm_name,
+			   exp->exp_client_uuid.uuid);
+
+	spin_unlock(&exp->exp_target_data.ted_nodemap_lock);
 	return 0;
 }
 
-static int
-ldebugfs_exp_nodemap_seq_show(struct seq_file *m, void *data)
+static int ldebugfs_exp_nodemap_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
+	int rc;
 
-	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
-				       ldebugfs_exp_print_nodemap_seq, m);
+	seq_puts(m, "[");
+	rc = obd_nid_export_for_each(stats->nid_obd, &stats->nid,
+				     ldebugfs_exp_print_nodemap_seq, m);
+	seq_puts(m, "\n]\n");
+	return rc;
 }
 LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_nodemap);
 
