@@ -1980,6 +1980,10 @@ int class_config_llog_handler(const struct lu_env *env,
 		lcfg_new->lcfg_nal = 0; /* illegal value for obsolete field */
 
 		rc = class_process_config(lcfg_new, cfg->cfg_kobj);
+		if (rc && lcfg_new->lcfg_command == LCFG_SETUP) {
+			lcfg_new->lcfg_command = LCFG_DETACH;
+			class_process_config(lcfg_new, NULL);
+		}
 		OBD_FREE(lcfg_new, lustre_cfg_len(lcfg_new->lcfg_bufcount,
 						  lcfg_new->lcfg_buflens));
 out_inst:

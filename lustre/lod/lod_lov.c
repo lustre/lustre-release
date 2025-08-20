@@ -142,6 +142,11 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		RETURN(-EINVAL);
 	}
 
+	if (!test_bit(OBDF_SET_UP, obd->obd_flags)) {
+		CERROR("osp device %s is not set up\n", osp);
+		RETURN(-EINVAL);
+	}
+
 	LASSERT(obd->obd_lu_dev != NULL);
 	LASSERT(obd->obd_lu_dev->ld_site == lod->lod_dt_dev.dd_lu_dev.ld_site);
 
