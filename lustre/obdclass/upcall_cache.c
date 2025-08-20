@@ -25,7 +25,7 @@ static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
 {
 	struct upcall_cache_entry *entry;
 
-	LIBCFS_ALLOC(entry, sizeof(*entry));
+	OBD_ALLOC(entry, sizeof(*entry));
 	if (!entry)
 		return NULL;
 
@@ -571,14 +571,14 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 	int i;
 	ENTRY;
 
-	LIBCFS_ALLOC(cache, sizeof(*cache));
+	OBD_ALLOC(cache, sizeof(*cache));
 	if (!cache)
 		RETURN(ERR_PTR(-ENOMEM));
 
 	rwlock_init(&cache->uc_lock);
 	init_rwsem(&cache->uc_upcall_rwsem);
 	cache->uc_hashsize = hashsz;
-	LIBCFS_ALLOC(cache->uc_hashtable,
+	OBD_ALLOC(cache->uc_hashtable,
 		     sizeof(*cache->uc_hashtable) * cache->uc_hashsize);
 	if (!cache->uc_hashtable)
 		RETURN(ERR_PTR(-ENOMEM));
@@ -601,8 +601,8 @@ void upcall_cache_cleanup(struct upcall_cache *cache)
 	if (!cache)
 		return;
 	upcall_cache_flush_all(cache);
-	LIBCFS_FREE(cache->uc_hashtable,
+	OBD_FREE(cache->uc_hashtable,
 		    sizeof(*cache->uc_hashtable) * cache->uc_hashsize);
-	LIBCFS_FREE(cache, sizeof(*cache));
+	OBD_FREE(cache, sizeof(*cache));
 }
 EXPORT_SYMBOL(upcall_cache_cleanup);

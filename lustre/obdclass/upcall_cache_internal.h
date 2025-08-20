@@ -23,7 +23,10 @@ static void free_entry(struct upcall_cache *cache,
 	list_del(&entry->ue_hash);
 	CDEBUG(D_OTHER, "destroy cache entry %p for key %llu\n",
 	       entry, entry->ue_key);
-	LIBCFS_FREE(entry, sizeof(*entry));
+	if (cache->uc_ops->free_delay)
+		cache->uc_ops->free_delay(entry);
+	else
+		OBD_FREE(entry, sizeof(*entry));
 }
 
 static inline void get_entry(struct upcall_cache_entry *entry)
