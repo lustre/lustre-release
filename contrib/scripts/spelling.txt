@@ -34,8 +34,6 @@ cfs_time_current_64||ktime_get
 cfs_time_current_sec||ktime_get_real_seconds
 ci_nob||ci_bytes
 CLASSERT||BUILD_BUG_ON()
-comma_list.*osts_nodes||osts_nodes
-comma_list.*mdts_nodes||mdts_nodes
 container_of0||container_of_safe
 crw_count||crw_bytes
 msecs_to_jiffies||cfs_time_seconds

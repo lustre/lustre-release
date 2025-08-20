@@ -3,6 +3,8 @@
 #
 ALWAYS_EXCEPT||always_except
 alloca||malloc
+comma_list.*osts_nodes||osts_nodes
+comma_list.*mdts_nodes||mdts_nodes
 sprintf||snprintf
 strcat||strncat
 strcpy||strncpy
