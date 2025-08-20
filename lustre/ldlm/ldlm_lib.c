@@ -2968,10 +2968,8 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 	obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
 	obd->obd_recovery_start = 0;
 	obd->obd_recovery_end = 0;
-
-	hrtimer_init(&obd->obd_recovery_timer, CLOCK_MONOTONIC,
-		     HRTIMER_MODE_ABS);
-	obd->obd_recovery_timer.function = &target_recovery_expired;
+	hrtimer_setup(&obd->obd_recovery_timer, target_recovery_expired,
+		      CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	target_start_recovery_thread(lut, handler);
 }
 EXPORT_SYMBOL(target_recovery_init);

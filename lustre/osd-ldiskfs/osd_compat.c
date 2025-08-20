@@ -133,6 +133,7 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 	struct lu_fid *tfid = &info->oti_fid3;
 	struct inode *inode;
 	struct dentry *dchild;
+	struct dentry *dentry __maybe_unused = NULL;
 	int err = 0;
 
 	ENTRY;
@@ -185,9 +186,9 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 		RETURN(dchild);
 	}
 
-	err = vfs_mkdir(&nop_mnt_idmap, dir->d_inode, dchild, mode);
-	if (err)
-		GOTO(out_err, err);
+	dentry = ll_vfs_mkdir(&nop_mnt_idmap, dir->d_inode, dchild, mode);
+	if (IS_ERR(dentry))
+		GOTO(out_err, err = PTR_ERR(dentry));
 
 	inode = dchild->d_inode;
 	if (created)
@@ -205,7 +206,6 @@ set_fid:
 	RETURN(dchild);
 
 out_err:
-	dput(dchild);
 	return ERR_PTR(err);
 }
 

@@ -1373,7 +1373,7 @@ unsigned long osc_cache_shrink_count(struct shrinker *sk,
 		cached += atomic_long_read(&cli->cl_lru_in_list);
 	spin_unlock(&osc_shrink_lock);
 
-	return (cached  * sysctl_vfs_cache_pressure) / 100;
+	return vfs_pressure_ratio(cached);
 }
 
 /**

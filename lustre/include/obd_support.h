@@ -976,11 +976,16 @@ do {									      \
 #define OBD_FREE_PTR_ARRAY_LARGE(ptr, n)			\
 	OBD_FREE_LARGE(ptr, (n) * sizeof(*(ptr)))
 
+static inline void *__kmem_cache_zalloc(struct kmem_cache *cachep, gfp_t flags)
+{
+	return kmem_cache_zalloc(cachep, flags);
+}
+
 #define __OBD_SLAB_ALLOC_VERBOSE(ptr, slab, cptab, cpt, size, type)	      \
 do {									      \
 	LASSERT(ergo((type) != GFP_ATOMIC, !in_interrupt()));		      \
 	(ptr) = (cptab) == NULL ?					      \
-		kmem_cache_zalloc(slab, (type)) :			      \
+		__kmem_cache_zalloc(slab, (type)) :			      \
 		cfs_mem_cache_cpt_alloc(slab, cptab, cpt, (type) | __GFP_ZERO); \
 	if (likely((ptr)))                                                    \
 		OBD_ALLOC_POST(ptr, size, "slab-alloced");                    \

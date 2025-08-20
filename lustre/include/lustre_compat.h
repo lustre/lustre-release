@@ -624,6 +624,20 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 #define ll_set_acl(ns, inode, acl, type)	ll_set_acl(inode, acl, type)
 #endif
 
+#ifdef HAVE_IOPS_MKDIR_RETURNS_DENTRY
+#define ll_vfs_mkdir(id, inode, dentry, mode)	\
+	vfs_mkdir((id), (inode), (dentry), (mode))
+#else
+#define ll_vfs_mkdir(i, inode, dentry, mode) ({				\
+	int rc = vfs_mkdir((i), (inode), (dentry), (mode));		\
+	if (rc) {							\
+		dput((dentry));						\
+		dentry = ERR_PTR(rc);					\
+	}								\
+	(dentry);							\
+})
+#endif
+
 #ifndef HAVE_GENERIC_ERROR_REMOVE_FOLIO
 #ifdef HAVE_FOLIO_BATCH
 #define generic_folio			folio

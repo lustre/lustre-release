@@ -312,7 +312,7 @@ __osd_dir_it_init(const struct lu_env *env, struct osd_device *dev,
 	else
 		file->f_mode |= FMODE_32BITHASH;
 	file->f_path.dentry = d_find_any_alias(inode);
-	file->f_flags = O_NOATIME | __FMODE_NONOTIFY;
+	file->f_flags = O_NOATIME | FMODE_NONOTIFY;
 	file->f_mapping = inode->i_mapping;
 	file->f_op = inode->i_fop;
 	file->f_inode = inode;

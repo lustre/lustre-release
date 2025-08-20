@@ -2037,9 +2037,9 @@ static unsigned long lu_cache_shrink_count(struct shrinker *sk,
 		cached += percpu_counter_read_positive(&s->ls_lru_len_counter);
 	up_read(&lu_sites_guard);
 
-	cached = (cached / 100) * sysctl_vfs_cache_pressure;
-	CDEBUG(D_INODE, "%ld objects cached, cache pressure %d\n",
-	       cached, sysctl_vfs_cache_pressure);
+	cached = vfs_pressure_ratio(cached);
+	CDEBUG(D_INODE, "%ld objects cached, cache pressure %ld\n",
+	       cached, vfs_pressure_ratio(100));
 
 	return cached;
 }

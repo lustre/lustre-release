@@ -31,7 +31,6 @@
 
 #ifndef HAVE_USER_NAMESPACE_ARG
 #define ll_create_nd(ns, dir, de, mode, ex)	ll_create_nd(dir, de, mode, ex)
-#define ll_mkdir(ns, dir, dch, mode)		ll_mkdir(dir, dch, mode)
 #define ll_mknod(ns, dir, dch, mode, rd)	ll_mknod(dir, dch, mode, rd)
 #ifdef HAVE_IOPS_RENAME_WITH_FLAGS
 #define ll_rename(ns, src, sdc, tgt, tdc, fl)	ll_rename(src, sdc, tgt, tdc, fl)
@@ -2185,8 +2184,8 @@ clear:
 	RETURN(err);
 }
 
-static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
-		    struct dentry *dchild, umode_t mode)
+static inline int do_mkdir(struct inode *dir, struct dentry *dchild,
+			   umode_t mode)
 {
 	struct lookup_intent mkdir_it = { .it_op = IT_CREAT };
 	struct ll_sb_info *sbi = ll_i2sbi(dir);
@@ -2262,6 +2261,29 @@ out_tally:
 
 	RETURN(rc);
 }
+
+#ifdef HAVE_IOPS_MKDIR_RETURNS_DENTRY
+static struct dentry *ll_mkdir(struct mnt_idmap *map, struct inode *dir,
+			       struct dentry *dchild, umode_t mode)
+{
+	int rc = do_mkdir(dir, dchild, mode);
+
+	if (rc)
+		return ERR_PTR(rc);
+	return NULL;
+}
+#elif defined HAVE_USER_NAMESPACE_ARG
+static int ll_mkdir(struct mnt_idmap *map, struct inode *dir,
+		    struct dentry *dchild, umode_t mode)
+{
+	return do_mkdir(dir, dchild, mode);
+}
+#else
+static int ll_mkdir(struct inode *dir, struct dentry *dchild, umode_t mode)
+{
+	return do_mkdir(dir, dchild, mode);
+}
+#endif
 
 static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 {

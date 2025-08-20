@@ -2882,8 +2882,8 @@ static int nrs_tbf_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	atomic_set(&head->th_rule_sequence, 0);
 	spin_lock_init(&head->th_rule_lock);
 	INIT_LIST_HEAD(&head->th_list);
-	hrtimer_init(&head->th_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-	head->th_timer.function = nrs_tbf_timer_cb;
+	hrtimer_setup(&head->th_timer, nrs_tbf_timer_cb, CLOCK_MONOTONIC,
+		      HRTIMER_MODE_REL);
 	rc = head->th_ops->o_startup(policy, head);
 	if (rc)
 		GOTO(out_free_heap, rc);

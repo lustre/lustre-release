@@ -617,6 +617,31 @@ AC_DEFUN([LC_PID_NS_FOR_CHILDREN], [
 ]) # LC_PID_NS_FOR_CHILDREN
 
 #
+# LB2_MSG_LINUX_TEST_RESULT
+#
+# Linux commit v3.11-8733-g55f841ce9395
+#  super: fix calculation of shrinkable objects for small numbers
+#
+AC_DEFUN([LC_SRC_VFS_PRESSURE_RATIO], [
+	LB2_LINUX_TEST_SRC([vfs_pressure_ratio], [
+		#include <linux/dcache.h>
+	],[
+		(void)vfs_pressure_ratio(10);
+	])
+])
+AC_DEFUN([LC_VFS_PRESSURE_RATIO], [
+	LB2_MSG_LINUX_TEST_RESULT([if vfs_pressure_ratio() is available],
+	[vfs_pressure_ratio], [
+		AC_DEFINE(HAVE_VFS_PRESSURE_RATIO, 1,
+			  [vfs_pressure_ratio() is available])
+	], [
+		AC_DEFINE([vfs_pressure_ratio(val)],
+			  [mult_frac((unsigned long)(val), sysctl_vfs_cache_pressure, 100)],
+			  [vfs_pressure_ratio() is not available])
+	])
+]) # LC_VFS_PRESSURE_RATIO
+
+#
 # LC_OLDSIZE_TRUNCATE_PAGECACHE
 #
 # 3.12 truncate_pagecache without oldsize parameter
@@ -4912,12 +4937,126 @@ AC_DEFUN([LC_SRC_HAVE_D_REVALIDATE_WITH_INODE_NAME], [
 	],[-Werror])
 ])
 AC_DEFUN([LC_HAVE_D_REVALIDATE_WITH_INODE_NAME], [
-	LB2_MSG_LINUX_TEST_RESULT([if PagePrivate2() is available],
+	LB2_MSG_LINUX_TEST_RESULT([if d_revalidate() takes inode, name],
 	[dentry_ops_d_revalidate_inode_name], [
 		AC_DEFINE(HAVE_D_REVALIDATE_WITH_INODE_NAME, 1,
 			[dentry operations d_revalidate() takes inode, name])
 	])
 ]) # LC_HAVE_D_REVALIDATE_WITH_INODE_NAME
+
+#
+# LC_HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN
+#
+# Linux v6.14-rc1-45-ge33ce6bd4ea2
+#   mm: Remove grab_cache_page_write_begin()
+#
+AC_DEFUN([LC_SRC_HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN], [
+	LB2_LINUX_TEST_SRC([grab_cache_page_write_begin], [
+		#include <linux/pagemap.h>
+	],[
+		struct address_space *mapping = NULL;
+		pgoff_t index = 0;
+
+		(void)grab_cache_page_write_begin(mapping, index
+#ifdef HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
+			, 0
+#endif
+			);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN], [
+	LB2_MSG_LINUX_TEST_RESULT([if grab_cache_page_write_begin() is available],
+	[grab_cache_page_write_begin], [
+		AC_DEFINE(HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN, 1,
+			[grab_cache_page_write_begin() is available])
+	], [
+		AC_DEFINE([grab_cache_page_write_begin(m, i)],
+			  [pagecache_get_page((m), (i), FGP_WRITEBEGIN, mapping_gfp_mask((m)))],
+			  [grab_cache_page_write_begin() is unavailable])
+	])
+]) # LC_HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN
+
+#
+# LC_HAVE_WAIT_ON_PAGE_LOCKED
+#
+# Linux v6.14-rc1-61-gd96e2802a802
+#   mm: Remove wait_on_page_locked()
+#
+AC_DEFUN([LC_SRC_HAVE_WAIT_ON_PAGE_LOCKED], [
+	LB2_LINUX_TEST_SRC([wait_on_page_locked], [
+		#include <linux/pagemap.h>
+	],[
+		wait_on_page_locked((struct page *)NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_WAIT_ON_PAGE_LOCKED], [
+	LB2_MSG_LINUX_TEST_RESULT([if wait_on_page_locked() is available],
+	[wait_on_page_locked], [
+		AC_DEFINE(HAVE_WAIT_ON_PAGE_LOCKED, 1,
+			[wait_on_page_locked() is available])
+	], [
+		AC_DEFINE([wait_on_page_locked(page)],
+			[folio_wait_locked(page_folio((page)))],
+			[wait_on_page_locked() is unavailable])
+	])
+]) # LC_HAVE_WAIT_ON_PAGE_LOCKED
+
+#
+# LC_HAVE_HRTIMER_SETUP
+#
+# Linux v6.12-rc1-119-g908a1d775422
+#   hrtimers: Introduce hrtimer_setup() to replace hrtimer_init()
+#
+AC_DEFUN([LC_SRC_HAVE_HRTIMER_SETUP], [
+	LB2_LINUX_TEST_SRC([hrtimer_setup], [
+		#include <linux/hrtimer.h>
+
+		static enum hrtimer_restart fn(struct hrtimer *timer)
+		{ return HRTIMER_NORESTART; }
+	],[
+		struct hrtimer *timer = NULL;
+
+		hrtimer_setup(timer, fn, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_HRTIMER_SETUP], [
+	LB2_MSG_LINUX_TEST_RESULT([if hrtimer_setup() is available],
+	[hrtimer_setup], [
+		AC_DEFINE(HAVE_HRTIMER_SETUP, 1,
+			[hrtimer_setup() is available])
+	], [
+		AC_DEFINE([hrtimer_setup(t, f, c, m)],
+			  [(hrtimer_init((t), (c), (m)), (t)->function = (f))],
+			  [hrtimer_setup() is unavailable])
+	])
+]) # LC_HAVE_HRTIMER_SETUP
+
+#
+# LC_HAVE_IOPS_MKDIR_RETURNS_DENTRY
+#
+# Linux v6.14-rc4-9-g88d5baf69082
+#   Change inode_operations.mkdir to return struct dentry *
+#
+AC_DEFUN([LC_SRC_HAVE_IOPS_MKDIR_RETURNS_DENTRY], [
+	LB2_LINUX_TEST_SRC([iops_mkdir_returns_dentry], [
+		#include <linux/fs.h>
+	],[
+		struct inode_operations *iop = NULL;
+		struct dentry *din = NULL;
+		struct inode *parent = NULL;
+		umode_t mode = 0700;
+		struct dentry *dentry;
+
+		dentry = iop->mkdir(&nop_mnt_idmap, parent, din, mode);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_IOPS_MKDIR_RETURNS_DENTRY], [
+	LB2_MSG_LINUX_TEST_RESULT([if inode_operations.mkdir() returns dentry],
+	[iops_mkdir_returns_dentry], [
+		AC_DEFINE(HAVE_IOPS_MKDIR_RETURNS_DENTRY, 1,
+			[inode_operations.mkdir() returns dentry])
+	])
+]) # LC_HAVE_IOPS_MKDIR_RETURNS_DENTRY
 
 #
 # LC_PROG_LINUX
@@ -4947,6 +5086,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_FOP_READDIR
 
 	# 3.12
+	LC_SRC_VFS_PRESSURE_RATIO
 	LC_SRC_OLDSIZE_TRUNCATE_PAGECACHE
 	LC_SRC_PTR_ERR_OR_ZERO_MISSING
 	LC_SRC_KIOCB_KI_LEFT
@@ -5147,7 +5287,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_ALLOC_INODE_SB
 
 	# 5.19
-	LC_SRC_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
 	LC_SRC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
@@ -5228,6 +5367,12 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 6.14
 	LC_SRC_HAVE_D_REVALIDATE_WITH_INODE_NAME
 
+	# 6.15
+	LC_SRC_HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN
+	LC_SRC_HAVE_WAIT_ON_PAGE_LOCKED
+	LC_SRC_HAVE_HRTIMER_SETUP
+	LC_SRC_HAVE_IOPS_MKDIR_RETURNS_DENTRY
+
 	# kernel patch to extend integrity interface
 	LC_SRC_BIO_INTEGRITY_PREP_FN
 ])
@@ -5264,6 +5409,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_FOP_READDIR
 
 	# 3.12
+	LC_VFS_PRESSURE_RATIO
 	LC_OLDSIZE_TRUNCATE_PAGECACHE
 	LC_PTR_ERR_OR_ZERO_MISSING
 	LC_KIOCB_KI_LEFT
@@ -5472,7 +5618,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_ALLOC_INODE_SB
 
 	# 5.19
-	LC_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
 	LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
@@ -5553,6 +5698,12 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 6.14
 	LC_HAVE_D_REVALIDATE_WITH_INODE_NAME
+
+	# 6.15
+	LC_HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN
+	LC_HAVE_WAIT_ON_PAGE_LOCKED
+	LC_HAVE_HRTIMER_SETUP
+	LC_HAVE_IOPS_MKDIR_RETURNS_DENTRY
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN

@@ -529,7 +529,7 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
 	spin_unlock(&ns->ns_lock);
 
 	if (nr == 0)
-		return (unused / 100) * sysctl_vfs_cache_pressure;
+		return vfs_pressure_ratio(unused < 100 ? 0 : unused);
 	else
 		return ldlm_cancel_lru(ns, nr, LCF_ASYNC, 0);
 }

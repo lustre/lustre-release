@@ -3331,7 +3331,6 @@ static int pcc_inode_remove(struct inode *inode, struct dentry *pcc_dentry)
 static struct dentry *
 pcc_mkdir(struct dentry *base, const char *name, umode_t mode)
 {
-	int rc;
 	struct dentry *dentry;
 	struct inode *dir = base->d_inode;
 
@@ -3343,12 +3342,7 @@ pcc_mkdir(struct dentry *base, const char *name, umode_t mode)
 	if (d_is_positive(dentry))
 		goto out;
 
-	rc = vfs_mkdir(&nop_mnt_idmap, dir, dentry, mode);
-	if (rc) {
-		dput(dentry);
-		dentry = ERR_PTR(rc);
-		goto out;
-	}
+	dentry = ll_vfs_mkdir(&nop_mnt_idmap, dir, dentry, mode);
 out:
 	inode_unlock(dir);
 	return dentry;

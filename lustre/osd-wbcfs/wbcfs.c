@@ -29,7 +29,6 @@
 #define inode_init_owner(ns, inode, dir, mode)  \
 	inode_init_owner(inode, dir, mode)
 #define memfs_mknod(ns, dir, dch, mode, rd)	memfs_mknod(dir, dch, mode, rd)
-#define memfs_mkdir(ns, dir, dch, mode)		memfs_mkdir(dir, dch, mode)
 #define memfs_create_nd(ns, dir, de, mode, ex)	\
 	memfs_create_nd(dir, de, mode, ex)
 #endif /* HAVE_USER_NAMESPCE_ARG */
@@ -315,8 +314,8 @@ static int memfs_mknod(struct mnt_idmap *map, struct inode *dir,
 	RETURN(0);
 }
 
-static int memfs_mkdir(struct mnt_idmap *map, struct inode *dir,
-		       struct dentry *dchild, umode_t mode)
+static inline int do_mkdir(struct mnt_idmap *map, struct inode *dir,
+			   struct dentry *dchild, umode_t mode)
 {
 	int rc;
 
@@ -327,6 +326,29 @@ static int memfs_mkdir(struct mnt_idmap *map, struct inode *dir,
 	inc_nlink(dir);
 	return 0;
 }
+
+#ifdef HAVE_IOPS_MKDIR_RETURNS_DENTRY
+static struct dentry *memfs_mkdir(struct mnt_idmap *map, struct inode *dir,
+				  struct dentry *dchild, umode_t mode)
+{
+	int rc = do_mkdir(map, dir, dchild, mode);
+
+	if (rc)
+		return ERR_PTR(rc);
+	return NULL;
+}
+#elif defined HAVE_USER_NAMESPACE_ARG
+static int memfs_mkdir(struct mnt_idmap *map, struct inode *dir,
+		       struct dentry *dchild, umode_t mode)
+{
+	return do_mkdir(map, dir, dchild, mode);
+}
+#else
+static int memfs_mkdir(struct inode *dir, struct dentry *dchild, umode_t mode)
+{
+	return do_mkdir(NULL, dir, dchild, mode);
+}
+#endif
 
 static int memfs_create_nd(struct mnt_idmap *map, struct inode *dir,
 			   struct dentry *dentry, umode_t mode, bool want_excl)
