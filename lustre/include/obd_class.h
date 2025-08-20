@@ -412,8 +412,8 @@ void obd_export_timed_add(struct obd_export *exp, void **data);
 void obd_export_timed_del(struct obd_export *exp);
 struct obd_export *obd_export_timed_get(struct obd_device *obd, bool last);
 
-#ifdef HAVE_SERVER_SUPPORT
 struct obd_type *class_search_type(const char *name);
+#ifdef HAVE_SERVER_SUPPORT
 struct obd_type *class_get_type(const char *name);
 #endif
 void class_put_type(struct obd_type *type);

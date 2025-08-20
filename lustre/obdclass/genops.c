@@ -66,7 +66,7 @@ static void obd_device_free(struct obd_device *obd)
 	OBD_SLAB_FREE_PTR(obd, obd_device_cachep);
 }
 
-SERVER_ONLY struct obd_type *class_search_type(const char *name)
+struct obd_type *class_search_type(const char *name)
 {
 	struct kobject *kobj = kset_find_obj(lustre_kset, name);
 
@@ -76,7 +76,7 @@ SERVER_ONLY struct obd_type *class_search_type(const char *name)
 	kobject_put(kobj);
 	return NULL;
 }
-SERVER_ONLY_EXPORT_SYMBOL(class_search_type);
+EXPORT_SYMBOL(class_search_type);
 
 SERVER_ONLY struct obd_type *class_get_type(const char *name)
 {

@@ -4184,6 +4184,7 @@ static struct shrinker *osc_cache_shrinker;
 static int __init osc_init(void)
 {
 	unsigned int reqpool_size;
+	struct obd_type *type;
 	unsigned int reqsize;
 	int rc;
 
@@ -4245,6 +4246,10 @@ static int __init osc_init(void)
 	if (rc < 0)
 		GOTO(out_stop_grant, rc);
 
+	type = class_search_type(LUSTRE_OSC_NAME);
+	ldebugfs_add_symlink("osc_cache", type->typ_name, "../../shrinker/%s",
+			     shrinker_debugfs_path(osc_cache_shrinker));
+	kobject_put(&type->typ_kobj);
 	RETURN(rc);
 
 out_stop_grant:

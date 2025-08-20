@@ -1045,6 +1045,7 @@ int obd_pool_init(void)
 {
 	struct obd_page_pool *pool;
 	int pool_max_pages = cfs_totalram_pages() / POOLS_COUNT;
+	struct dentry *parent;
 	int pool_order = 0;
 	int to_revert;
 	int rc = 0;
@@ -1064,6 +1065,8 @@ int obd_pool_init(void)
 	OBD_ALLOC(pool_shrinkers, POOLS_COUNT * sizeof(*pool_shrinkers));
 	if (pool_shrinkers == NULL)
 		GOTO(fail2, rc = -ENOMEM);
+
+	parent = debugfs_create_dir("page_pools", debugfs_lustre_root);
 
 	for (pool_order = 0; pool_order < POOLS_COUNT; pool_order++) {
 		OBD_ALLOC(page_pools[pool_order], sizeof(**page_pools));
@@ -1111,6 +1114,15 @@ int obd_pool_init(void)
 
 		ll_shrinker_register(pool->pool_shrinker);
 
+		if (parent) {
+			char path[MAX_OBD_NAME];
+
+			scnprintf(path, sizeof(path), "obd_pool-%d",
+				  pool_order);
+			ldebugfs_add_symlink(path, parent->d_name.name,
+					     "../../shrinker/%s",
+					     shrinker_debugfs_path(pool->pool_shrinker));
+		}
 		pool_shrinkers[pool_order] = pool->pool_shrinker;
 		mutex_init(&pool->add_pages_mutex);
 	}

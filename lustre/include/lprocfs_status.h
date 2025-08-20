@@ -535,8 +535,6 @@ extern int lprocfs_add_clear_entry(struct obd_device *obd,
 #ifdef HAVE_SERVER_SUPPORT
 extern int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *peer_nid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
-struct dentry *ldebugfs_add_symlink(const char *name, const char *target,
-				    const char *format, ...);
 #else
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
@@ -547,6 +545,8 @@ lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 extern struct proc_dir_entry *
 lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
 		    const char *format, ...);
+struct dentry *ldebugfs_add_symlink(const char *name, const char *target,
+				    const char *format, ...);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
 extern ssize_t
