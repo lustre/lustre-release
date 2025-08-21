@@ -616,8 +616,9 @@ simulate_error:
 		ksocknal_uncheck_zc_req(tx);
 
 	/* it's not an error if conn is being closed */
-	ksocknal_close_conn_and_siblings(conn,
-					  (conn->ksnc_closing) ? 0 : rc);
+	if (!error_sim)
+		ksocknal_close_conn_and_siblings(conn,
+						 (conn->ksnc_closing) ? 0 : rc);
 
 	return rc;
 }
