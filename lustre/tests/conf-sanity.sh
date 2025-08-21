@@ -12139,6 +12139,64 @@ test_155() {
 }
 run_test 155 "gap in seq allocation from ofd after restarting"
 
+cleanup_156() {
+	zconf_umount_clients $CLIENTS $MOUNT ||
+	    error "unable to umount clients $CLIENTS"
+}
+
+test_156() {
+	local nid
+	local root_fid_export
+	local root_fid_client
+
+	(( MDS1_VERSION >= $(version_code 2.16.57) )) ||
+		skip "Need MDS version at least 2.16.57"
+
+	reformat
+	setupall
+	stack_trap cleanup_156 EXIT
+
+	nid=$($LCTL list_nids | head -1 | sed  "s/\./\\\./g")
+
+	# check root_fid on mount of export and consistent with client
+	root_fid_client=$($LFS path2fid $MOUNT | tr -d '[]')
+	[[ -n $root_fid_client ]] || error "root_fid_client not set (1)"
+
+	root_fid_export=$(do_facet mds1 \
+		"$LCTL get_param mdt.${FSNAME}*.exports.${nid}.export | \
+		 awk '/root_fid/ { print \\\$2 }'")
+	[[ -n $root_fid_export ]] || error "root_fid_export not set (1)"
+
+	echo "(1) root_fid_export: $root_fid_export"
+	echo "(1) root_fid_client: $root_fid_client"
+
+	[[ "$root_fid_export" == "$root_fid_client" ]] ||
+		error "export $root_fid_export != client $root_fid_client (1)"
+
+	# check root_fid on subdir mount of export is and consistent with client
+	mkdir $MOUNT/$tdir
+	root_fid_client=$($LFS path2fid $MOUNT/$tdir | tr -d '[]')
+	[[ -n $root_fid_client ]] || error "root_fid_client not set (2)"
+
+	zconf_umount_clients $CLIENTS $MOUNT ||
+	    error "unable to umount clients $CLIENTS"
+
+	FILESET=/$tdir zconf_mount_clients $CLIENTS "${MOUNT}" ||
+	    error "unable to mount clients $CLIENTS"
+
+	root_fid_export=$(do_facet mds1 \
+		"$LCTL get_param mdt.${FSNAME}*.exports.${nid}.export | \
+		 awk '/root_fid/ { print \\\$2 }'")
+	[[ -n $root_fid_export ]] || error "root_fid_export not set (2)"
+
+	echo "(2) root_fid_export: $root_fid_export"
+	echo "(2) root_fid_client: $root_fid_client"
+
+	[[ "$root_fid_export" == "$root_fid_client" ]] ||
+		error "export $root_fid_export != client $root_fid_client (2)"
+}
+run_test 156 "root_fid on export consistent with client mount"
+
 test_160() {
 	((OST1_VERSION >= $(version_code 2.16.55) )) ||
 		skip "need OST >= 2.16.55 to have MGC with all failovers"

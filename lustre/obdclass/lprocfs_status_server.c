@@ -257,7 +257,7 @@ ldebugfs_exp_print_export_seq(struct obd_export *exp, void *cb_data)
 	struct obd_connect_data	*ocd;
 
 	LASSERT(exp != NULL);
-	if (exp->exp_nid_stats == NULL)
+	if (!exp->exp_nid_stats)
 		goto out;
 	obd = exp->exp_obd;
 	ocd = &exp->exp_connect_data;
@@ -276,6 +276,12 @@ ldebugfs_exp_print_export_seq(struct obd_export *exp, void *cb_data)
 	seq_printf(m, "    export_flags: [ ");
 	obd_export_flags2str(exp, m);
 	seq_printf(m, " ]\n");
+
+	if (obd->obd_type && strcmp(obd->obd_type->typ_name, "mdt") == 0 &&
+	    fid_is_sane(&exp->exp_root_fid)) {
+		seq_printf(m, "    root_fid: " DFID_NOBRACE "\n",
+			   PFID(&exp->exp_root_fid));
+	}
 
 	if (obd->obd_type &&
 	    strcmp(obd->obd_type->typ_name, "obdfilter") == 0) {
