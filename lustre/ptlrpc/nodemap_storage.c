@@ -964,6 +964,7 @@ static bool nodemap_fileset_is_header(int subid)
  * @nodemap: nodemap where the fileset is set
  * @env: execution environment
  * @idx: index object to delete from
+ * @fset_subid_header: base address (header) for the fileset
  *
  * Return:
  * * %0 on success (ENOENT during idx_delete is ignored)

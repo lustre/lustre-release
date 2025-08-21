@@ -1096,9 +1096,8 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 EXPORT_SYMBOL(nodemap_map_acl);
 
 /**
- * nodemap_map_supplementary_groups() - map supplementary groups received
+ * nodemap_map_suppgid() - map supplementary groups received
  * from the client
- *
  * @nodemap: nodemap
  * @suppgid: id to map
  *
@@ -1115,8 +1114,7 @@ int nodemap_map_suppgid(struct lu_nodemap *nodemap, int suppgid)
 EXPORT_SYMBOL(nodemap_map_suppgid);
 
 /**
- * nodemap_check_resource_id() - check if export can access a resource
- *
+ * nodemap_check_resource_ids() - check if export can access a resource
  * @exp: export to check
  * @fs_uid: uid of the resource
  * @fs_gid: gid of the resource
@@ -1888,7 +1886,6 @@ static void nodemap_fileset_prim_reset(struct lu_nodemap *nodemap)
 /**
  * nodemap_update_fileset_iam_flag() - Update the "nmf_fileset_use_iam" flag and
  * persist it to the nodemap IAM record (if called on the MGS).
- *
  * @nodemap: the nodemap to update
  * @use_iam: the new value for the flag
  *
@@ -1914,7 +1911,6 @@ static int nodemap_update_fileset_iam_flag(struct lu_nodemap *nodemap,
 /**
  * nodemap_has_any_fileset() - Check if nodemap has any filesets(prim or alt)
  * defined
- *
  * @nodemap: nodemap to check
  *
  * The caller must hold the nodemap->nm_fileset_alt_lock.
@@ -1951,7 +1947,7 @@ static int nodemap_fileset_del_primary(struct lu_nodemap *nodemap)
 	return rc;
 }
 
-/**
+/*
  * Deletes an alternate fileset from the nodemap.
  *
  * The caller is expected to hold a write lock for nodemap->nm_fileset_alt_lock.
@@ -1986,7 +1982,6 @@ static int nodemap_fileset_del_alternate(struct lu_nodemap *nodemap,
 /**
  * nodemap_fileset_del() - deletes one fileset from the nodemap's
  * defined filesets
- *
  * @nodemap: the nodemap to delete the fileset from
  * @fileset_path: the fileset to delete
  *
@@ -2082,7 +2077,7 @@ static int nodemap_fileset_clear(struct lu_nodemap *nodemap, bool force)
 	return 0;
 }
 
-/**
+/*
  * Adds a primary fileset to the nodemap.
  *
  * The caller is expected to hold a write lock for nodemap->nm_fileset_alt_lock.
@@ -2139,7 +2134,7 @@ static int nodemap_fileset_add_primary(struct lu_nodemap *nodemap,
 	return rc;
 }
 
-/**
+/*
  * Adds an alternate fileset to the nodemap.
  *
  * The caller is expected to hold a write lock for nodemap->nm_fileset_alt_lock.
@@ -2246,7 +2241,7 @@ out_unlock:
 	return rc;
 }
 
-/**
+/*
  * Modifies a primary fileset on the nodemap.
  *
  * The caller is expected to hold a write lock for nodemap->nm_fileset_alt_lock.
@@ -2357,7 +2352,7 @@ out_cleanup:
 	return rc;
 }
 
-/**
+/*
  * Modifies an alternate fileset on the nodemap.
  *
  * The caller is expected to hold a write lock for nodemap->nm_fileset_alt_lock.
@@ -4629,9 +4624,8 @@ static bool nodemap_is_dynamic(const char *nodemap_name)
 /**
  * cfg_nodemap_fileset_cmd() - Fileset command handler and entry point for
  * all "lctl nodemap_fileset*" ops
- *
  * @lcfg: lustre cfg for fileset operation
- * @dynamic: out, is a dynamic nodemap
+ * @dynamic: is a dynamic nodemap [out]
  * @out_clean_llog_fileset: true if fileset must be cleaned out from llog
  *
  * Return:
@@ -5069,7 +5063,8 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
  * @obd: OBD device
  * @data: IOCTL data
  * @dynamic: if true nodemap will be dynamic (can be modified runtime)
- *	     as out value, tell caller if nodemap is dynamic
+ * @out_clean_llog_fileset: set to true if the llog fileset entry needs to be
+ * cleaned up on the MGS side.
  *
  * Return:
  * * %0 on success
