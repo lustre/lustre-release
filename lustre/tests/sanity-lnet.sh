@@ -4595,6 +4595,8 @@ test_270() {
 run_test 270 "Test NID metadata"
 
 test_280() {
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
 	local rc=0
 
 	modinfo ksocklnd 2>/dev/null || rc=$?
