@@ -1274,7 +1274,7 @@ emitter_error:
 	} else {
 		rc = yaml_lnet_cpt_of_nid_display(&reply);
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 free_reply:
 	if (rc == 0) {
 		yaml_lnet_print_error(NLM_F_DUMP, "cpt-of-nid",
@@ -1282,7 +1282,7 @@ free_reply:
 		rc = -EINVAL;
 	}
 
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;
@@ -1588,7 +1588,7 @@ static int yaml_lnet_route(char *nw, char *gw, int hops, int prio,
 			rc = lustre_lnet_parse_nid_range(&head, gw, &msg);
 			if (rc < 0) {
 				lustre_lnet_free_list(&head);
-				yaml_emitter_delete(&output);
+				yaml_emitter_cleanup(&output);
 				errno = rc;
 				rc = 0;
 				goto free_reply;
@@ -1678,7 +1678,7 @@ free_reply:
 		yaml_lnet_print_error(flags, "route", msg);
 		rc = -EINVAL;
 	}
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;
@@ -2401,13 +2401,13 @@ emitter_error:
 		}
 		yaml_document_delete(&errmsg);
 	}
-	yaml_emitter_delete(&output);
+	yaml_emitter_cleanup(&output);
 free_reply:
 	if (rc == 0) {
 		yaml_lnet_print_error(flags, "net", msg);
 		rc = -EINVAL;
 	}
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;
@@ -3237,7 +3237,7 @@ static int yaml_lnet_peer(char *prim_nid, char *nidstr, bool disable_mr,
 			if (rc < 0) {
 				fprintf(stdout, "can't parse nidrange: \"%s\"\n", nidstr);
 				lustre_lnet_free_list(&head);
-				yaml_emitter_delete(&output);
+				yaml_emitter_cleanup(&output);
 				errno = rc;
 				rc = 0;
 				goto free_reply;
@@ -3245,7 +3245,7 @@ static int yaml_lnet_peer(char *prim_nid, char *nidstr, bool disable_mr,
 
 			if (nl_list_empty(&head.children)) {
 				lustre_lnet_free_list(&head);
-				yaml_emitter_delete(&output);
+				yaml_emitter_cleanup(&output);
 				msg = "Unable to parse nidlist: did not expand to any nids";
 				errno = -ENOENT;
 				rc = 0;
@@ -3258,7 +3258,7 @@ static int yaml_lnet_peer(char *prim_nid, char *nidstr, bool disable_mr,
 
 				if (count++ > LNET_MAX_NIDS_PER_PEER) {
 					lustre_lnet_free_list(&head);
-					yaml_emitter_delete(&output);
+					yaml_emitter_cleanup(&output);
 					msg = "Unable to parse nidlist: specifies more NIDs than allowed";
 					errno = -E2BIG;
 					rc = 0;
@@ -3407,13 +3407,13 @@ emitter_error:
 				rc = 1;
 		}
 	}
-	yaml_emitter_delete(&output);
+	yaml_emitter_cleanup(&output);
 free_reply:
 	if (rc == 0) {
 		yaml_lnet_print_error(flags, "peer", msg);
 		rc = -EINVAL;
 	}
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;
@@ -3661,7 +3661,7 @@ static int yaml_debug_recovery(enum lnet_health_type type)
 		}
 		yaml_document_delete(&errmsg);
 	}
-	yaml_emitter_delete(&output);
+	yaml_emitter_cleanup(&output);
 free_reply:
 	if (rc == 0) {
 		if (!msg)
@@ -3669,7 +3669,7 @@ free_reply:
 
 		fprintf(stdout, "Operation failed: %s\n", msg);
 	}
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;
@@ -5387,7 +5387,7 @@ skip_test:
 emitter_error:
 	if (rc == 0) {
 		yaml_emitter_log_error(&output, stderr);
-		yaml_emitter_delete(&output);
+		yaml_emitter_cleanup(&output);
 		rc = -EINVAL;
 	} else if (!unspec) {
 		yaml_document_t errmsg;
@@ -5416,7 +5416,7 @@ free_reply:
 		yaml_lnet_print_error(flags, "import", msg);
 		rc = -EINVAL;
 	}
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	yaml_parser_delete(&setup);
 	nl_socket_free(sk);
 	if (input)
@@ -6141,7 +6141,7 @@ static int yaml_lnet_ping(char *group, int timeout, struct lnet_nid *src_nid,
 		rc = lustre_lnet_parse_nid_range(&head, nids[i], &msg);
 		if (rc < 0) {
 			lustre_lnet_free_list(&head);
-			yaml_emitter_delete(&output);
+			yaml_emitter_cleanup(&output);
 			errno = rc;
 			rc = 0;
 			goto free_reply;
@@ -6192,14 +6192,14 @@ emitter_error:
 		if (rc == 0)
 			msg = yaml_parser_get_reader_error(&reply);
 	}
-	yaml_emitter_delete(&output);
+	yaml_emitter_cleanup(&output);
 free_reply:
 	if (rc == 0) {
 		yaml_lnet_print_error(-1, group, msg);
 		rc = -EINVAL;
 	}
 
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;
@@ -6866,7 +6866,7 @@ static int jt_fault_show_common(__u32 opc, int argc, char **argv)
 	yaml_emitter_set_output_file(&debug, stdout);
 	rc = yaml_emitter_dump(&debug, &results);
 
-	yaml_emitter_delete(&debug);
+	yaml_emitter_cleanup(&debug);
 	yaml_document_delete(&results);
 
 	return rc == 0 ? -EINVAL : 0;

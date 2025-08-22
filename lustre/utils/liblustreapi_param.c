@@ -854,7 +854,7 @@ error:
 		yaml_emitter_log_error(&request, stderr);
 		rc = -EINVAL;
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 
 	return rc == 1 ? 0 : -EINVAL;
 }
@@ -945,7 +945,7 @@ int llapi_param_display_value(char *path, int version,
 		}
 	}
 free_reply:
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 	return rc == 1 ? 0 : rc;
 }
@@ -985,7 +985,7 @@ int llapi_param_set_value(char *path, char *value, int version,
 
 	yaml_document_delete(&results);
 free_reply:
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 	return rc == 1 ? 0 : rc;
 }

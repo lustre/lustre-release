@@ -631,11 +631,11 @@ skip_params:
 	if (rc == 0) {
 emitter_error:
 		yaml_emitter_log_error(&request, stderr);
-		yaml_emitter_delete(&request);
+		yaml_emitter_cleanup(&request);
 		errmsg = NULL;
 		goto parser_error;
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 
 	while (!done) {
 		rc = yaml_parser_parse(&reply, &event);
@@ -719,7 +719,7 @@ emitter_error:
 parser_error:
 	if (rc == 0 && errmsg)
 		yaml_parser_log_error(&reply, stderr, errmsg);
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	if (((nlflags & NLM_F_DUMP) == NLM_F_DUMP) && rc != 0) {
@@ -1312,7 +1312,7 @@ static int lst_yaml_groups(int nlflags, char *name, int states, bool print)
 	if (rc == 0) {
 emitter_error:
 		yaml_emitter_log_error(&request, stderr);
-		yaml_emitter_delete(&request);
+		yaml_emitter_cleanup(&request);
 		rc = -EINVAL;
 		goto parser_error;
 	}
@@ -1324,7 +1324,7 @@ emitter_error:
 parser_error:
 	if (rc == 0)
 		yaml_parser_log_error(&reply, stderr, NULL);
-	yaml_parser_cleanup(&reply);
+	yaml_parser_delete(&reply);
 	nl_socket_free(sk);
 
 	if (print)

@@ -1879,6 +1879,22 @@ yaml_emitter_set_streaming_output_netlink(yaml_emitter_t *sender,
 	return true;
 }
 
+/**
+ * yaml_emitter_set_output_netlink() - Set output to Netlink socket and not any
+ * YAML document. This is wrapper to yaml_emitter_set_streaming_output_netlink()
+ * @sender: emitter object
+ * @nl: netlink socket
+ * @family: name of socket (lnet)
+ * @version: version number
+ * @cmd: command identifier
+ * @flags: netlink flags (NLM_F_* under liblnetconfig.h)
+ *
+ * Note: Emitter object setup with this function should always call
+ * yaml_emitter_cleanup() and not yaml_emitter_delete(). Otherwise it will
+ * result in memory leak
+ *
+ * Return TRUE on success and FALSE on failure
+ */
 YAML_DECLARE(int)
 yaml_emitter_set_output_netlink(yaml_emitter_t *sender, struct nl_sock *nl,
 				char *family, int version, int cmd, int flags)
@@ -1907,7 +1923,7 @@ void yaml_emitter_log_error(yaml_emitter_t *emitter, FILE *log)
 }
 
 /*
- * yaml_emitter_cleanup - Cleanup request & all memory held by reqeust
+ * yaml_emitter_cleanup - Cleanup request & all memory held by request
  */
 void yaml_emitter_cleanup(yaml_emitter_t *request)
 {

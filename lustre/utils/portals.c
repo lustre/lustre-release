@@ -420,7 +420,7 @@ jt_ptl_list_nids(int argc, char **argv)
 	rc = yaml_parser_set_input_netlink(&reply, sk, false);
 	if (rc == 0) {
 		yaml_parser_log_error(&reply, stderr, NULL);
-		yaml_parser_delete(&reply);
+		yaml_parser_cleanup(&reply);
 		goto old_api;
 	}
 
@@ -428,7 +428,7 @@ jt_ptl_list_nids(int argc, char **argv)
 	rc = yaml_emitter_initialize(&request);
 	if (rc == 0) {
 		yaml_parser_log_error(&reply, stderr, NULL);
-		yaml_parser_delete(&reply);
+		yaml_parser_cleanup(&reply);
 		goto old_api;
 	}
 
@@ -436,8 +436,8 @@ jt_ptl_list_nids(int argc, char **argv)
 					     LNET_CMD_NETS, NLM_F_DUMP);
 	if (rc == 0) {
 		yaml_emitter_log_error(&request, stderr);
-		yaml_emitter_delete(&request);
-		yaml_parser_delete(&reply);
+		yaml_emitter_cleanup(&request);
+		yaml_parser_cleanup(&reply);
 		goto old_api;
 	}
 
@@ -534,7 +534,7 @@ emitter_error:
 		yaml_emitter_log_error(&request, stderr);
 		rc = -EINVAL;
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 
 	while (!done) {
 		rc = yaml_parser_parse(&reply, &event);
@@ -567,7 +567,7 @@ emitter_error:
 
 	if (rc == 0)
 		yaml_parser_log_error(&reply, stderr, NULL);
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 old_api: {
 #ifdef IOC_LIBCFS_GET_NI
 	int count;
@@ -729,7 +729,7 @@ emitter_error:
 		yaml_emitter_log_error(&request, stderr);
 		rc = -EINVAL;
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 
 	while (!done) {
 		rc = yaml_parser_parse(&reply, &event);
@@ -795,7 +795,7 @@ free_reply:
 		rc = 0;
 	}
 
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 	goto finished;
 
@@ -1480,7 +1480,7 @@ emitter_error:
 		rc = -EINVAL;
 		goto old_api;
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 
 	/* Now parse the reply results */
 	while (!done) {
@@ -1538,7 +1538,7 @@ free_reply:
 		/* yaml_* functions return 1 for success */
 		rc = 0;
 	}
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 	return rc;
 old_api:
@@ -1763,11 +1763,11 @@ emitter_error:
 		}
 		yaml_document_delete(&errmsg);
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 free_reply:
 	if (rc == 0)
 		yaml_parser_log_error(&reply, stderr, NULL);
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;
@@ -2144,11 +2144,11 @@ emitter_error:
 		if (rc == 0)
 			msg = yaml_parser_get_reader_error(&reply);
 	}
-	yaml_emitter_delete(&output);
+	yaml_emitter_cleanup(&output);
 free_reply:
 	if (msg)
 		fprintf(stdout, "%s\n", msg);
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;

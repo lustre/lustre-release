@@ -733,11 +733,11 @@ static int yaml_get_device_index(char *source)
 error:
 	if (rc == 0) {
 		yaml_emitter_log_error(&request, stderr);
-		yaml_emitter_delete(&request);
+		yaml_emitter_cleanup(&request);
 		rc = -EINVAL;
 		goto free_reply;
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 
 	while (!done) {
 		rc = yaml_parser_parse(&reply, &event);
@@ -769,7 +769,7 @@ error:
 		yaml_event_delete(&event);
 	}
 free_reply:
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc;

@@ -29,6 +29,7 @@
 #include <float.h>
 #include <limits.h>
 #include <ctype.h>
+#include <lnetconfig/liblnetconfig.h>
 #include "libcfs/util/list.h"
 #include <cyaml.h>
 

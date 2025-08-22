@@ -442,7 +442,7 @@ int yaml_netlink_complete_emitter(yaml_emitter_t *output)
 	if (rc == 0)
 		goto emitter_error;
 
-	yaml_emitter_delete(output);
+	yaml_emitter_cleanup(output);
 emitter_error:
 	return rc;
 }
@@ -549,14 +549,14 @@ int yaml_lnet_configure(int flags, const char **msg)
 
 		rc = yaml_parser_load(&reply, &errmsg);
 	}
-	yaml_emitter_delete(&request);
+	yaml_emitter_cleanup(&request);
 free_reply:
 	if (rc == 0) {
 		*msg = yaml_parser_get_reader_error(&reply);
 		rc = errno;
 	}
 
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	yaml_document_delete(&results);
 	nl_socket_free(sk);
 
@@ -824,7 +824,7 @@ emitter_error:
 				rc = 1;
 		}
 	}
-	yaml_emitter_delete(&output);
+	yaml_emitter_cleanup(&output);
 free_reply:
 	if (rc == 0) {
 		if (!msg)
@@ -839,7 +839,7 @@ free_reply:
 		}
 		rc = errno;
 	}
-	yaml_parser_delete(&reply);
+	yaml_parser_cleanup(&reply);
 	nl_socket_free(sk);
 
 	return rc == 1 ? 0 : rc;
