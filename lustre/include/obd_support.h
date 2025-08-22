@@ -1101,6 +1101,13 @@ struct obd_heat_instance {
 	__u64 ohi_count;
 };
 
+/** additional filesystem attributes for target device */
+struct obd_statfs_info {
+	__u32		os_reserved_mb_low;	/* reserved mb low */
+	__u32		os_reserved_mb_high;	/* reserved mb high */
+	bool		os_enable_pre;		/* enable pre create logic */
+};
+
 /* Define a fixed 4096-byte encryption unit size */
 #define LUSTRE_ENCRYPTION_BLOCKBITS   12
 #define LUSTRE_ENCRYPTION_UNIT_SIZE   ((size_t)1 << LUSTRE_ENCRYPTION_BLOCKBITS)
