@@ -1272,7 +1272,7 @@ static int lst_groups_show_dump(struct sk_buff *msg,
 		void *hdr;
 
 		group = genradix_ptr(&glist->lggl_groups, idx);
-		if (!group)
+		if (!group || !group->lggp_grp)
 			continue;
 
 		hdr = genlmsg_put(msg, portid, seq, &lst_family,

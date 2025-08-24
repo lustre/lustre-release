@@ -255,6 +255,7 @@ int lstcon_group_find(const char *name, struct lstcon_group **grpp)
 		return 0;
 	}
 
+	*grpp = NULL;
 	return -ENOENT;
 }
 

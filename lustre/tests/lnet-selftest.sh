@@ -109,6 +109,10 @@ test_smoke_sub () {
 	echo "$LST new_session --timeo 100000 hh"
 	echo "$LST add_group c $(nids_list $clients)"
 	echo "$LST add_group s $(nids_list $servers)"
+	echo "echo '====================================='"
+	echo "echo 'Listing of bad_group should not crash'"
+	echo "echo '====================================='"
+	echo "$LST list_group s bad_group c"
 	echo "$LST add_batch b"
 
 	declare -a tests
