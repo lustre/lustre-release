@@ -107,9 +107,6 @@ static inline bool iov_iter_is_aligned(const struct iov_iter *i,
 }
 #endif /* HAVE_IOV_ITER_IS_ALIGNED */
 
-ssize_t cfs_kernel_read(struct file *file, void *buf, size_t count,
-			loff_t *pos);
-
 /*
  * For RHEL6 struct kernel_parm_ops doesn't exist. Also
  * the arguments for .set and .get take different

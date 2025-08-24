@@ -225,7 +225,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(file))
 		RETURN(PTR_ERR(file));
 
-	result = cfs_kernel_read(file, buf->lb_buf, buf->lb_len, pos);
+	result = kernel_read(file, buf->lb_buf, buf->lb_len, pos);
 	ihold(inode);
 	fput(file);
 	RETURN(result);

@@ -3704,7 +3704,7 @@ static ssize_t pcc_copy_data(struct file *src, struct file *dst)
 			 * S_PCCCOPY flag is removed in ll_prepare_close().
 			 */
 			inode->i_flags |= S_PCCCOPY;
-		rc2 = cfs_kernel_read(src, buf, buf_len, &pos);
+		rc2 = kernel_read(src, buf, buf_len, &pos);
 		if (rc2 < 0)
 			GOTO(out_free, rc = rc2);
 		else if (rc2 == 0)

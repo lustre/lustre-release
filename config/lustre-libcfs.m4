@@ -1284,29 +1284,6 @@ AC_DEFUN([LIBCFS_MM_TOTALRAM_PAGES_FUNC], [
 ]) # LIBCFS_MM_TOTALRAM_PAGES_FUNC
 
 #
-# LIBCFS_NEW_KERNEL_READ
-#
-# 4.14 commit bdd1d2d3d251c65b74ac4493e08db18971c09240 changed
-# the signature of kernel_read to match other read/write helpers
-# and place offset last.
-#
-AC_DEFUN([LIBCFS_SRC_NEW_KERNEL_READ], [
-	LB2_LINUX_TEST_SRC([kernel_read], [
-		#include <linux/fs.h>
-	],[
-		loff_t pos = 0;
-		kernel_read(NULL, NULL, 0, &pos);
-	],[-Werror])
-])
-AC_DEFUN([LIBCFS_NEW_KERNEL_READ], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'kernel_read()' has loff_t *pos as last parameter],
-	[kernel_read], [
-		AC_DEFINE(HAVE_KERNEL_READ_LAST_POSP, 1,
-			[kernel_read() signature ends with loff_t *pos])
-	])
-]) # LIBCFS_NEW_KERNEL_READ
-
-#
 # LIBCFS_DEFINE_TIMER
 #
 # Kernel version 4.14 commit 1d27e3e2252ba9d949ca82fbdb73cde102cb2067
@@ -2502,7 +2479,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_WAIT_QUEUE_ENTRY
 	# 4.14
 	LIBCFS_SRC_DEFINE_TIMER
-	LIBCFS_SRC_NEW_KERNEL_READ
 	# 4.15
 	LIBCFS_SRC_BITMAP_TO_ARR32
 	LIBCFS_SRC_TIMER_SETUP
@@ -2655,7 +2631,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_WAIT_QUEUE_ENTRY
 	# 4.14
 	LIBCFS_DEFINE_TIMER
-	LIBCFS_NEW_KERNEL_READ
 	# 4.15
 	LIBCFS_BITMAP_TO_ARR32
 	LIBCFS_TIMER_SETUP
