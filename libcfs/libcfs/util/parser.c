@@ -156,6 +156,9 @@ int cfs_parser(int argc, char **argv, command_t cmds[])
 	for (cmd = cmds; cmd->pc_name && i < MAXCMDS; cmd++)
 		top_level[i++] = *cmd;
 
+	if (argc == 2 && (strcmp(argv[0], "help") == 0))
+		return CMD_HELP;
+
 	if (argc > 1)
 		rc = cfs_parser_execarg(argc - 1, argv + 1, cmds);
 	else
