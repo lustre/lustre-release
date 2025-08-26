@@ -167,6 +167,8 @@ struct ofd_device {
 	wait_queue_head_t	 ofd_id_repair_waitq;
 	atomic_t		 ofd_id_repair_queued;
 	unsigned int		 ofd_id_repair_queue_count;
+	/* Failure domain used for FLR stripe allocation */
+	__u32			 ofd_failure_domain;
 };
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)

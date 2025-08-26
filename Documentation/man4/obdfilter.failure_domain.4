@@ -1,0 +1,98 @@
+.TH OBDFILTER...FAILURE_DOMAIN 4 2026-04-07 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+obdfilter.failure_domain \- control the failure_domain for OSTs
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param obdfilter." FSNAME "-OST*.failure_domain"
+.SY
+.BI "lctl set_param obdfilter." FSNAME "-OST*.failure_domain=" DOMAIN_NUMBER
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per-OST device.
+.TP
+.B Config
+.br
+Always present on OST devices.
+.TP
+.B Default
+.br
+.RB "obdfilter." FSNAME "-OST*.failure_domain="
+.br
+.TP
+.B Valid Range
+.br
+.RB "obdfilter." FSNAME "-OST*.failure_domain=0"
+.br
+.RB "obdfilter." FSNAME "-OST*.failure_domain=4294967295"
+
+
+.SH DESCRIPTION
+The integer
+.I DOMAIN_NUMBER
+specifies the failure-domain for the OST.
+OSTs that share some (external to Lustre) resources such as storage enclosures,
+network switches, power supplies, or similar should have different
+.I DOMAIN_NUMBER
+values (within the constraints of the available storage hardware),
+so that file layouts which need to store data redundantly (FLR EC or mirrors)
+can allocate objects on independent failure domains.
+There will typically be multiple OSTs that share a single
+.IR DOMAIN_NUMBER ,
+so that multiple copies of redundant file data are not stored on OSTs that
+may become unavailable at the same time.
+
+No specific meaning is attributed to the numerical value of
+.I DOMAIN_NUMBER
+assigned to each OST (e.g. server, rack, row, building),
+other than whether they are the same or different.
+Except for the value 0. This value means no failure-domain is configured and
+failure-domains should be ignored for this OST.
+
+When allocating files using erasure-coding (--ec) the coverage for
+failure-domain uniqueness differs between normal allocations (-c) and
+allocations using overstriping (-C).
+When normal allocation (-c) is used all stripes in the data and its
+corresponding ec component must all be in different failure-domains.
+When overstriping (-C) is used it is sufficient that all data and ec stripes
+within each raid set are from different failure-domains but the same
+failure-domain can be used from different raid sets.
+
+When used it is recommended that failure-domain is configured for all OSTs.
+
+For EC protected files it is recommended to use overstriping (-C) as all
+raid sets are protected individually.
+
+Currently this is only available for EC protected files.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.RB "obdfilter." FSNAME "-OST*.failure_domain"
+.EE
+.SH EXAMPLES
+.PP
+Set the failure domain to 1 for an OST:
+.EX
+.RB "oss# " "lctl set_param obdfilter.lustrewt-OST0000.failure_domain=1"
+.PP
+Get the failure domain of an OST:
+.EX
+.RB "oss# " "lctl get_param obdfilter.lustrewt-OST0000.failure_domain"
+	1
+.EE
+.SH AVAILABILITY
+.B obdfilter.*.failure_domain
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in 2.17.51.xxx
+.SH SEE ALSO
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)
+

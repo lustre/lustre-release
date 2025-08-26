@@ -593,6 +593,58 @@ static ssize_t readonly_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(readonly);
 
 /**
+ * failure_domain_show() - Show the failure domain of the OFD.
+ * @kobj: Object containing the ODF device.
+ * @attr: not used.
+ * @buf: Buffer to write the failure domain to.
+ *
+ * Return: number of bytes written to buffer.
+ */
+static ssize_t failure_domain_show(struct kobject *kobj,
+				   struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_failure_domain);
+}
+
+/**
+ * failure_domain_store() - Set failure domain for the OFD.
+ * @kobj: Object containing the ODF device.
+ * @attr: not used.
+ * @buf: Buffer to write the failure domain to.
+ * @count: number of bytes in buffer.
+ *
+ * This is used to interface to userspace administrative tools to
+ * set the OST's failure domain.
+ *
+ * Return: 0 on success or negative number for failure.
+ */
+static ssize_t failure_domain_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&ofd->ofd_flags_lock);
+	ofd->ofd_failure_domain = val;
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(failure_domain);
+
+/**
  * fstype_show() - Show OFD filesystem type.
  * @kobj: Kernel object (OFD device)
  * @attr: Pointer to struct attribute
@@ -1216,6 +1268,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_enable_resource_id_repair.attr,
 	&lustre_attr_evict_client.attr,
 	&lustre_attr_eviction_count.attr,
+	&lustre_attr_failure_domain.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_grant_check_threshold.attr,
 	&lustre_attr_grant_compat_disable.attr,
