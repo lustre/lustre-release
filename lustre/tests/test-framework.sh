@@ -9141,7 +9141,7 @@ wait_clients_import_state () {
 		ost* ) proc_path="osc.$(get_clientosc_proc_path \
 					$label).ost_server_uuid" ;;
 		mds* ) proc_path="mdc.$label-mdc-*.mds_server_uuid" ;;
-		mgs* ) proc_path="mgc.$label.mgs_server_uuid" ;;
+		mgs* ) proc_path="mgc.*.mgs_server_uuid" ;;
 		*) error "unknown facet!" ;;
 		esac
 
