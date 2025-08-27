@@ -22430,9 +22430,10 @@ run_test 190a "check lfs project -p works with project name"
 
 test_190b() {
 	local test_dir="$DIR/$tdir"
-	local MAX_FILES=50000
+	local MAX_FILES=100
 	local fc
 
+	[[ $SLOW == "yes" ]] && MAX_FILES=50000
 	local prj=($(get_test_project))
 	echo "proj - ${prj[0]} ${prj[1]}"
 
