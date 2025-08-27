@@ -203,6 +203,7 @@ enum local_oid {
 	 * SLAVE_LLOG_CATALOGS_OID	= 4124UL,
 	 */
 	BATCHID_COMMITTED_OID   = 4125UL,
+	OFD_FAILURE_DOMAIN_OID	= 4126UL,
 };
 
 static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)

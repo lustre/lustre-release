@@ -626,10 +626,11 @@ static ssize_t failure_domain_store(struct kobject *kobj,
 				    struct attribute *attr,
 				    const char *buffer, size_t count)
 {
+	struct lu_env env;
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
-	unsigned int val;
+	unsigned int val, old_val;
 	int rc;
 
 	rc = kstrtouint(buffer, 0, &val);
@@ -637,10 +638,24 @@ static ssize_t failure_domain_store(struct kobject *kobj,
 		return rc;
 
 	spin_lock(&ofd->ofd_flags_lock);
+	old_val = ofd->ofd_failure_domain;
 	ofd->ofd_failure_domain = val;
 	spin_unlock(&ofd->ofd_flags_lock);
 
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		goto failure;
+	rc = ofd_failure_domain_write(&env, ofd);
+	lu_env_fini(&env);
+	if (rc)
+		goto failure;
+
 	return count;
+ failure:
+	spin_lock(&ofd->ofd_flags_lock);
+	ofd->ofd_failure_domain = old_val;
+	spin_unlock(&ofd->ofd_flags_lock);
+	return rc;
 }
 LUSTRE_RW_ATTR(failure_domain);
 

@@ -341,6 +341,7 @@ u64 ofd_seq_last_oid(struct ofd_seq *oseq);
 void ofd_seq_last_oid_set(struct ofd_seq *oseq, u64 id);
 int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 			   struct ofd_seq *oseq);
+int ofd_failure_domain_write(const struct lu_env *env, struct ofd_device *ofd);
 int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd);
 struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, u64 seq);
 void ofd_seq_put(const struct lu_env *env, struct ofd_seq *oseq);
