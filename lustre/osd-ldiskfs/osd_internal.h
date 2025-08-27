@@ -450,6 +450,7 @@ struct osd_thandle {
 	struct lquota_trans    *ot_quota_trans;
 
 	unsigned int		ot_remove_agents:1;
+	unsigned int		ot_quota_credits_accounted:1;
 #if OSD_THANDLE_STATS
 	/** time when this handle was allocated */
 	ktime_t oth_alloced;

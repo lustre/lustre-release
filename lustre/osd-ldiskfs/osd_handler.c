@@ -2045,6 +2045,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	th->th_result = 0;
 	oh->ot_credits = 0;
 	oh->oh_declared_ext = 0;
+	oh->ot_quota_credits_accounted = 0;
 	osd_trans_txn_cb_init(oh);
 	INIT_LIST_HEAD(&oh->ot_commit_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_stop_dcb_list);
@@ -4993,7 +4994,10 @@ upgrade:
 		 * xattr set may involve inode quota change, reserve credits for
 		 * dquot_initialize()
 		 */
-		credits += LDISKFS_MAXQUOTAS_INIT_BLOCKS(sb);
+		if (oh->ot_quota_credits_accounted == 0) {
+			oh->ot_quota_credits_accounted = 1;
+			credits += LDISKFS_MAXQUOTAS_INIT_BLOCKS(sb);
+		}
 	}
 
 	osd_trans_declare_op(env, oh, OSD_OT_XATTR_SET, credits);
@@ -5367,7 +5371,10 @@ static int osd_declare_xattr_del(const struct lu_env *env,
 	 * xattr del may involve inode quota change, reserve credits for
 	 * dquot_initialize()
 	 */
-	oh->ot_credits += LDISKFS_MAXQUOTAS_INIT_BLOCKS(sb);
+	if (oh->ot_quota_credits_accounted == 0) {
+		oh->ot_quota_credits_accounted = 1;
+		oh->ot_credits += LDISKFS_MAXQUOTAS_INIT_BLOCKS(sb);
+	}
 
 	return 0;
 }
