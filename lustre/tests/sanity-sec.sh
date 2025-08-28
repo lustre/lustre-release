@@ -6424,6 +6424,7 @@ setup_local_client_nodemap() {
 	local nm_name=${1:-"c0"}
 	local nm_admin_val=${2:-0}
 	local nm_trusted_val=${3:-0}
+	local nm_cli=${4:-$HOSTNAME}
 	local rc
 
 	if $SHARED_KEY; then
@@ -6440,7 +6441,7 @@ setup_local_client_nodemap() {
 		--property trusted --value 1
 	wait_nm_sync default trusted_nodemap
 
-	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	client_ip=$(host_nids_address $nm_cli $NETTYPE)
 	client_nid=$(h2nettype $client_ip)
 	do_facet mgs $LCTL nodemap_add $nm_name
 	do_facet mgs $LCTL nodemap_add_range \
@@ -10272,7 +10273,7 @@ test_81b() {
 	fid="${fid:1:-1}"
 
 	# setup nodemap
-	setup_local_client_nodemap $nm 1 1
+	setup_local_client_nodemap $nm 1 1 ${clients_arr[0]}
 	client2_ip=$(host_nids_address ${clients_arr[1]} $NETTYPE)
 	client2_nid=$(h2nettype $client2_ip)
 	do_facet mgs $LCTL nodemap_add_range \
