@@ -31,8 +31,10 @@
 #include "gss_internal.h"
 #include "gss_api.h"
 
-static struct dentry *gss_debugfs_dir_lk;
 static struct dentry *gss_debugfs_dir;
+
+static struct kobject *gss_kobj;
+static struct kobject *gss_kobj_lk;
 
 /*
  * statistic of "out-of-sequence-window"
@@ -139,27 +141,27 @@ sptlrpc_krb5_allow_old_client_csum_seq_write(struct file *file,
 LDEBUGFS_SEQ_FOPS(sptlrpc_krb5_allow_old_client_csum);
 
 #ifdef HAVE_GSS_KEYRING
-static int sptlrpc_gss_check_upcall_ns_seq_show(struct seq_file *m, void *data)
+static ssize_t gss_check_upcall_ns_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
 {
-	seq_printf(m, "%u\n", gss_check_upcall_ns);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", gss_check_upcall_ns);
 }
 
-static ssize_t sptlrpc_gss_check_upcall_ns_seq_write(struct file *file,
-						     const char __user *buffer,
-						     size_t count, loff_t *off)
+static ssize_t gss_check_upcall_ns_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buf, size_t count)
 {
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buf, &val);
 	if (rc)
 		return rc;
 
 	gss_check_upcall_ns = val;
 	return count;
 }
-LDEBUGFS_SEQ_FOPS(sptlrpc_gss_check_upcall_ns);
+LUSTRE_RW_ATTR(gss_check_upcall_ns);
 #endif /* HAVE_GSS_KEYRING */
 
 static int rsi_upcall_seq_show(struct seq_file *m,
@@ -417,10 +419,6 @@ static struct ldebugfs_vars gss_debugfs_vars[] = {
 	  .proc_mode =	0200			},
 	{ .name	=	"krb5_allow_old_client_csum",
 	  .fops	=	&sptlrpc_krb5_allow_old_client_csum_fops },
-#ifdef HAVE_GSS_KEYRING
-	{ .name	=	"gss_check_upcall_ns",
-	  .fops	=	&sptlrpc_gss_check_upcall_ns_fops },
-#endif
 	{ .name	=	"rsi_upcall",
 	  .fops	=	&rsi_upcall_fops },
 	{ .name =	"rsi_info",
@@ -441,20 +439,19 @@ static struct ldebugfs_vars gss_debugfs_vars[] = {
  */
 static int gss_lk_debug_level = 1;
 
-static int gss_lk_proc_dl_seq_show(struct seq_file *m, void *v)
+static ssize_t debug_level_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	seq_printf(m, "%u\n", gss_lk_debug_level);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", gss_lk_debug_level);
 }
 
-static ssize_t
-gss_lk_proc_dl_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t debug_level_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buf, size_t count)
 {
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buf, 0, &val);
 	if (rc < 0)
 		return rc;
 
@@ -465,18 +462,39 @@ gss_lk_proc_dl_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LDEBUGFS_SEQ_FOPS(gss_lk_proc_dl);
+LUSTRE_RW_ATTR(debug_level);
 
-static struct ldebugfs_vars gss_lk_debugfs_vars[] = {
-	{ .name	=	"debug_level",
-	  .fops	=	&gss_lk_proc_dl_fops	},
-	{ NULL }
+static struct attribute *gss_attrs[] = {
+#ifdef HAVE_GSS_KEYRING
+	&lustre_attr_gss_check_upcall_ns.attr,
+#endif
+	NULL
+};
+
+static struct attribute_group gss_attr_group = {
+	.attrs = gss_attrs,
+};
+
+static struct attribute *gss_lk_attrs[] = {
+	&lustre_attr_debug_level.attr,
+	NULL
+};
+
+static struct attribute_group gss_lk_attr_group = {
+	.attrs = gss_lk_attrs,
 };
 
 void gss_exit_tunables(void)
 {
-	debugfs_remove_recursive(gss_debugfs_dir_lk);
-	gss_debugfs_dir_lk = NULL;
+	if (gss_kobj_lk) {
+		sysfs_remove_group(gss_kobj_lk, &gss_lk_attr_group);
+		kobject_put(gss_kobj_lk);
+	}
+
+	if (gss_kobj) {
+		sysfs_remove_group(gss_kobj, &gss_attr_group);
+		kobject_put(gss_kobj);
+	}
 
 	debugfs_remove_recursive(gss_debugfs_dir);
 	gss_debugfs_dir = NULL;
@@ -484,14 +502,30 @@ void gss_exit_tunables(void)
 
 int gss_init_tunables(void)
 {
+	int rc;
 	spin_lock_init(&gss_stat_oos.oos_lock);
 
 	gss_debugfs_dir = debugfs_create_dir("gss", sptlrpc_debugfs_dir);
 	ldebugfs_add_vars(gss_debugfs_dir, gss_debugfs_vars, NULL);
 
-	gss_debugfs_dir_lk = debugfs_create_dir("lgss_keyring",
-						gss_debugfs_dir);
-	ldebugfs_add_vars(gss_debugfs_dir_lk, gss_lk_debugfs_vars, NULL);
+	gss_kobj = kobject_create_and_add("gss", sptlrpc_kobj);
+	if (!gss_kobj)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = sysfs_create_group(gss_kobj, &gss_attr_group);
+	if (rc)
+		GOTO(out, rc);
+
+	gss_kobj_lk = kobject_create_and_add("lgss_keyring", gss_kobj);
+	if (!gss_kobj_lk)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = sysfs_create_group(gss_kobj_lk, &gss_lk_attr_group);
+	if (rc)
+		GOTO(out, rc);
 
 	return 0;
+out:
+	gss_exit_tunables();
+	return rc;
 }

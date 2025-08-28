@@ -937,7 +937,7 @@ struct ptlrpc_bulk_sec_desc {
 };
 
 extern struct dentry *sptlrpc_debugfs_dir;
-extern struct proc_dir_entry *sptlrpc_lprocfs_dir;
+extern struct kobject *sptlrpc_kobj;
 
 /*
  * round size up to next power of 2, for slab allocation.

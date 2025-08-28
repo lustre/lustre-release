@@ -385,8 +385,8 @@ static struct ldebugfs_vars sptlrpc_lprocfs_vars[] = {
 struct dentry *sptlrpc_debugfs_dir;
 EXPORT_SYMBOL(sptlrpc_debugfs_dir);
 
-struct proc_dir_entry *sptlrpc_lprocfs_dir;
-EXPORT_SYMBOL(sptlrpc_lprocfs_dir);
+struct kobject *sptlrpc_kobj;
+EXPORT_SYMBOL(sptlrpc_kobj);
 
 int sptlrpc_lproc_init(void)
 {
@@ -396,11 +396,18 @@ int sptlrpc_lproc_init(void)
 						 debugfs_lustre_root);
 	ldebugfs_add_vars(sptlrpc_debugfs_dir, sptlrpc_lprocfs_vars, NULL);
 
+	sptlrpc_kobj = kobject_create_and_add("sptlrpc", &lustre_kset->kobj);
+	if (!sptlrpc_kobj)
+		sptlrpc_lproc_fini();
+
 	return 0;
 }
 
 void sptlrpc_lproc_fini(void)
 {
+	if (sptlrpc_kobj)
+		kobject_put(sptlrpc_kobj);
+
 	debugfs_remove_recursive(sptlrpc_debugfs_dir);
 	sptlrpc_debugfs_dir = NULL;
 }
