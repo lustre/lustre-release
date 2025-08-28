@@ -1262,7 +1262,9 @@ void ll_ras_enter(struct file *f, loff_t pos, size_t bytes)
 	struct inode *inode = file_inode(f);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 
-	spin_lock(&ras->ras_lock);
+	if (!spin_trylock(&ras->ras_lock))
+		return;
+
 	ras->ras_requests++;
 	ras->ras_consecutive_requests++;
 	ras->ras_need_increase_window = false;
