@@ -6112,7 +6112,8 @@ test_44f() {
 	stack_trap "rm -f $DIR/$tfile-*"
 	local i
 	# required space: NUMFILES_44f * 20Mb
-	local NUMFILES_44f=${NUMFILES_44f:-50}
+	local NUMFILES_44f=${NUMFILES_44f:-5}
+	[[ "$SLOW" == "yes" ]] && NUMFILES_44f=50
 
 	for (( i=0; i<NUMFILES_44f; i++ )); do
 		multiop $DIR/$tfile-$i \
