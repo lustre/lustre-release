@@ -1,5 +1,4 @@
 #!/bin/bash
-
 me="${0##*/}"
 
 # convert number of mask bits to x.x.x.x or x:x:x:x:x:x:x:x mask format
@@ -148,10 +147,55 @@ if [ "$checkskipcmd" == "1" ]; then
 	exit 0
 fi
 
+iface_args=$1
+LNETCTL=${LNETCTL:-$(which lnetctl 2>/dev/null)}
+if [[ -z $LNETCTL ]]; then
+   >&2 echo "lnetctl cannot be found in PATH"
+   exit 1
+fi
+if [[ ! -e $LNETCTL ]]; then
+	>&2 echo "$LNETCTL does not exist"
+	exit 1
+fi
+
+if [ -z "$iface_args" ]; then
+	iface_args=$($LNETCTL net show | awk '
+		/^-[[:space:]]+net type: tcp/ {
+		    tcp = 1;
+		    next;
+		}
+		tcp {
+			if ($0 ~ /^[[:space:]]+interfaces:/) {
+				while (getline > 0) {
+					# If line has an iface (eg. "0: eth1")
+					if ($0 ~ /^[[:space:]]+[0-9]+: /) {
+						split($0, arr, ": ");
+						interfaces = interfaces arr[2] ",";
+					}
+					if ($0 ~ /^-[[:space:]]+net type:/ &&
+					    $0 !~ /^-[[:space:]]+net type: tcp/) {
+						tcp = 0;
+						break;
+					}
+				}
+			}
+			if ($0 ~ /^-[[:space:]]+net type:/ &&
+			    $0 !~ /^-[[:space:]]+net type: tcp/) {
+				tcp = 0;
+			}
+		}
+		END {
+			# Remove last comma
+			if (length(interfaces) > 0) {
+				print substr(interfaces, 1, length(interfaces)-1);
+			}
+		}')
+fi
+
 # Extract comma-separated interfaces from the argument
 j=0
 declare -a interfaces
-for i in $(echo $1 | sed "s/,/ /g")
+for i in $(echo $iface_args | sed "s/,/ /g")
 do
 	# verify that the interface exists
 	ipv4_addr=$(/sbin/ip -o -4 addr list $i 2>&- | awk '{print $4}' | cut -d/ -f1)
