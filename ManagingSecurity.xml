@@ -164,19 +164,19 @@ other::---</screen>
   <section xml:id="managingSecurity.isolation">
     <title><indexterm><primary>Isolation</primary></indexterm>
     Isolating Clients to a Sub-directory Tree</title>
-    <para>Isolation is the Lustre implementation of the generic concept of
+    <para>Namespace isolation is the Lustre implementation of the generic concept of
       multi-tenancy, which aims at providing separated namespaces from a single
-      filesystem. Lustre Isolation enables different populations of users on
+      filesystem. Lustre namespace isolation enables different populations of users on
       the same file system beyond normal Unix permissions/ACLs, even when users
       on the clients may have root access. Those tenants share the same file
-      system, but they are isolated from each other: they cannot access or even
-      see each other&apos;s files, and are not aware that they are sharing
+      system, but they are isolated from each other, i.e., they cannot access or even
+      see each other&apos;s files, and they are not aware that they are sharing
       common file system resources.</para>
-    <para>Lustre Isolation leverages the Fileset feature
+    <para>Lustre namespace isolation leverages the Fileset feature
       (<xref linkend="SystemConfigurationUtilities.fileset" />)
-      to mount only a subdirectory of the filesystem rather than the root
+      to restrict clients to subdirectories of the filesystem rather than the root
       directory.
-      In order to achieve isolation, the subdirectory mount, which presents to
+      To achieve namespace isolation, the subdirectory mount, which presents to
       tenants only their own fileset, has to be imposed to the clients. To that
       extent, we make use of the nodemap feature
       (<xref linkend="lustrenodemap.title" />). We group all clients used by a
@@ -196,24 +196,28 @@ other::---</screen>
         Shared-Secret Key also prevents tenant impersonation, because keys
         can be linked to a specific nodemap. See
         <xref linkend="ssknodemaprole" /> for detailed explanations.
-</para>
+      </para>
     </section>
     <section xml:id="managingSecurity.isolation.configuring" remap="h3">
       <title><indexterm><primary>Isolation</primary><secondary>
-        configuring</secondary></indexterm>Configuring Isolation</title>
-      <para>Isolation on Lustre can be achieved by setting the
-        <literal>fileset</literal> parameter on a nodemap entry. All clients
-        belonging to this nodemap entry will automatically mount this fileset
-        instead of the root directory. For example:</para>
+        configuring</secondary></indexterm>Configuring Namespace Isolation</title>
+      <para>
+        Namespace isolation on Lustre can be achieved by setting one
+        <literal>fileset</literal> property (or multiple filesets with Lustre
+        2.17 or later) on a nodemap entry.
+        All clients belonging to this nodemap entry will automatically mount
+        this (primary) fileset instead of the root directory. For example:
+      </para>
       <screen>mgs# lctl nodemap_set_fileset --name tenant1 --fileset '/dir1'</screen>
-      <para>So all clients matching the <literal>tenant1</literal> nodemap will
-        be automatically presented the fileset <literal>/dir1</literal> when
+      <para>
+        So all clients matching the <literal>tenant1</literal> nodemap are
+        presented the fileset <literal>/dir1</literal> when
         mounting. This means these clients are doing an implicit subdirectory
         mount on the subdirectory <literal>/dir1</literal>.
       </para>
       <note>
         <para>
-          If subdirectory defined as fileset does not exist on the file system,
+          If subdirectory defined as fileset does not exist on the filesystem,
           it will prevent any client belonging to the nodemap from mounting
           Lustre.
         </para>
@@ -221,12 +225,17 @@ other::---</screen>
       <para>To delete the fileset parameter, just set it to an empty string:
       </para>
       <screen>mgs# lctl nodemap_set_fileset --name tenant1 --fileset ''</screen>
-      <para condition='l2H'> Using <literal>lctl nodemap_set_fileset</literal>
-      automatically distributes the fileset to all servers and makes isolation
-      permanent.
+      <para condition='l2H'>
+        Using <literal>lctl nodemap_set_fileset</literal> automatically
+        distributes the fileset to all servers and makes isolation permanent.
+        <emphasis role="bold">As of Lustre 2.18</emphasis>, <literal>lctl
+        nodemap_set_fileset</literal> is deprecated in favor of
+        <literal>lctl nodemap_fileset_{add,del,modify}</literal>.
+        Note that <literal>lctl nodemap_set_fileset</literal> can only set the
+        primary fileset and cannot set it as read-only.
       </para>
       <note>
-        <para>
+        <para condition='l2H'>
           <emphasis role="bold">Before Lustre 2.17</emphasis>, making isolation
           permanent requires running <literal>lctl set_param -P</literal> on the
           MGS node:
@@ -239,6 +248,223 @@ other::---</screen>
           nodemap_set_fileset</literal> should be used.
         </para>
       </note>
+    </section>
+    <section xml:id="managingSecurity.isolation.multifilesets" condition='l2H' remap="h3">
+      <title><indexterm><primary>Isolation</primary><secondary>
+        multifilesets</secondary></indexterm>Multiple Filesets</title>
+        <para>
+          Previously, nodemaps supported a single fileset per nodemap.
+          As of Lustre 2.17, it is possible to define multiple filesets per
+          nodemap.
+          The previous single fileset is called a <emphasis
+          role="italic">primary</emphasis> fileset, offering similar behavior
+          and acting as the default subdirectory when clients (associated with
+          the nodemap) mount the filesystem.
+          Additional <emphasis role="italic">alternate</emphasis> filesets can
+          be defined, which offer improved flexibility and allow clients to
+          mount additional subdirectories of the filesystem.
+        </para>
+        <para>
+          Each nodemap supports a single primary fileset and up to 255 alternate
+          filesets.
+          It is possible to only define alternate filesets without a primary
+          fileset.
+          In this case, any subdirectory must be explicitly set at client mount
+          time.
+          Therefore, alternate filesets never enforce a default subdirectory
+          mountpoint for clients.
+          Each fileset can further be set as <emphasis
+          role="italic">read-only</emphasis>, preventing clients from mounting
+          the subdirectory with write access, i.e., the clients implicitly mount
+          the filesystem in <literal>mode=ro</literal> if the read-only fileset
+          applies to the current mount subdirectory.
+        </para>
+        <para>
+          Similar to other nodemap commands, multiple fileset commands must be
+          run on the MGS.
+          The nodemap configuration is then asychonously propagated to the other
+          server targets and persisted.
+        </para>
+        <section xml:id="managingSecurity.isolation.multifilesets.configuration">
+          <title>Managing Multiple Filesets</title>
+          <para>
+            The following commands are used to manage multiple filesets on a
+            nodemap.
+            Please refer to the respective man page of each command for more
+            details and examples.
+            A fileset is added to the nodemap with the <literal>lctl
+            nodemap_fileset_add</literal> command:
+          </para>
+          <screen>lctl nodemap_fileset_add --name NODEMAP_NAME --fileset SUBDIRECTORY [--alt] [--ro]</screen>
+          <itemizedlist>
+            <listitem>
+              <para>
+                <literal>--name</literal> specifies the nodemap that this
+                fileset should be associated with (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--fileset</literal> specifies the subdirectory to
+                restrict the clients to. The fileset must begin with '/'
+                (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--alt</literal> specifies that the fileset is an
+                alternate fileset.
+                If not specified, the fileset is the primary fileset.
+                Multiple primary filesets and duplicate fileset definitions
+                across fileset types are not allowed.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--ro</literal> specifies that the fileset is read-only.
+                If not specified, the fileset is read-write.
+              </para>
+            </listitem>
+          </itemizedlist>
+          <para>
+            A fileset is deleted from the nodemap with the <literal>lctl
+            nodemap_fileset_del</literal> command:
+          </para>
+          <screen>lctl nodemap_fileset_del --name NODEMAP_NAME [--all] [--fileset SUBDIRECTORY]</screen>
+          <itemizedlist>
+            <listitem>
+              <para>
+                <literal>--name</literal> specifies the nodemap that one or all
+                fileset should be deleted from (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--all</literal> specifies that all filesets should be
+                deleted from the nodemap.
+                This option cannot be used with <literal>--fileset</literal>.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--fileset</literal> specifies the fileset to delete
+                from the nodemap.
+                This option cannot be used with <literal>--all</literal>.
+                Either <literal>--all</literal> or <literal>--fileset</literal>
+                must be specified.
+              </para>
+            </listitem>
+          </itemizedlist>
+          <para>
+            Filesets can be updated in-place with the <literal>lctl
+            nodemap_fileset_modify</literal> command:
+          </para>
+          <screen>lctl nodemap_fileset_modify --name NODEMAP_NAME --fileset SUBDIRECTORY \
+  [--rename|-r NEW_SUBDIRECTORY] [--primary|-p] [--alt|-a] [--rw] [--ro]</screen>
+          <itemizedlist>
+            <listitem>
+              <para>
+                <literal>--name</literal> specifies the nodemap containing the
+                fileset to modify (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--fileset</literal> specifies the path of the fileset
+                to modify (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--rename</literal> changes the fileset's path to the
+                specified new subdirectory.
+                The new path must begin with a slash ('<literal>/</literal>')
+                and cannot yet exist as a fileset of that type on the same
+                nodemap.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--primary</literal> converts the fileset to a primary
+                fileset.
+                The flag has no effect if the fileset is already primary.
+                Note that <literal>--primary</literal> can only convert an
+                alternate fileset to primary if there is currently no primary
+                fileset set on the nodemap.
+                This option cannot be used with <literal>--alt</literal>.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--alt</literal> converts the fileset to an alternate
+                fileset.
+                The flag has no effect if the fileset is already alternate.
+                This option cannot be used with <literal>--primary</literal>.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--rw</literal> sets the fileset to read-write access
+                mode.
+                The flag has no effect if the fileset is already set to
+                read-write.
+                This option cannot be used with <literal>--ro</literal>.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--ro</literal> sets the fileset to read-only access
+                mode.
+                The flag has no effect if the fileset is already set to
+                read-only.
+                This option cannot be used with <literal>--rw</literal>.
+              </para>
+            </listitem>
+          </itemizedlist>
+        </section>
+        <section xml:id="managingSecurity.isolation.multifilesets.mounting">
+          <title>How Multiple Filesets affect Client Mounting</title>
+          <para>
+            Filesets can be used to provide namespace isolation within the
+            Lustre filesystem by explicitly restricting clients of a nodemap to
+            specific subdirectories when mounting the client.
+            The restriction depends on whether the fileset is designated as
+            primary, alternate, or read-only. On mounting the Lustre client, the
+            following rules apply:
+          </para>
+          <orderedlist>
+            <listitem>
+              <para>
+                If the nodemap is inactive or no filesets are defined, no
+                subdirectory restrictions are applied.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                If the primary fileset is set and no subdirectory is presented
+                when mounting the Lustre client, the primary fileset's
+                subdirectory is used as the filesystem root directory.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                If any defined fileset (primary or alternate) matches the
+                presented mounted subdirectory exactly or as a prefix, the
+                subdirectory mount is used as the filesystem root directory.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                If the fileset matches in 3, the presented mounting subdirectory
+                is appended to the fileset's subdirectory.
+                </para>
+            </listitem>
+          </orderedlist>
+          <para>
+            If alternate filesets are defined but no primary fileset is set,
+            only 3 applies.
+          </para>
+        </section>
     </section>
   </section>
   <section xml:id="managingSecurity.sepol" condition='l2D'>
