@@ -1281,11 +1281,11 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 	/* As the default nodemap can have a banlist, we need to check this
 	 * before adding a regular NID range to a nodemap.
 	 */
-	down_write(&active_config->nmc_ban_range_tree_lock);
+	down_read(&active_config->nmc_ban_range_tree_lock);
 	range = ban_range_search(config, (struct lnet_nid *)&nid[0]);
 	if (!range)
 		range = ban_range_search(config, (struct lnet_nid *)&nid[1]);
-	up_write(&active_config->nmc_ban_range_tree_lock);
+	up_read(&active_config->nmc_ban_range_tree_lock);
 	if (range) {
 		rc = -EEXIST;
 		CDEBUG(D_SEC,
