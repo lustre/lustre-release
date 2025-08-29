@@ -839,7 +839,7 @@ run_write_append_truncate() {
 
 	chmod 0777 $testdir
 
-	local cmd="$WRITE_APPEND_TRUNCATE -n $write_REP $file"
+	local cmd="$WRITE_APPEND_TRUNCATE -n $write_REP -u $file"
 
 	echo "+ $cmd"
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
