@@ -711,6 +711,8 @@ int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
 
 	mutex_lock(&active_config_lock);
 	if (name) {
+		struct lu_nid_range *range;
+
 		nodemap = nodemap_lookup(name);
 		if (IS_ERR(nodemap)) {
 			rc = PTR_ERR(nodemap);
@@ -725,6 +727,11 @@ int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
 			      exp->exp_obd->obd_name, name, rc);
 			GOTO(out_unlock, rc);
 		}
+		down_read(&active_config->nmc_ban_range_tree_lock);
+		range = ban_range_search(active_config, nid);
+		up_read(&active_config->nmc_ban_range_tree_lock);
+		if (range && range->rn_nodemap == nodemap)
+			banned = true;
 	} else if (nid) {
 		down_read(&active_config->nmc_range_tree_lock);
 		down_read(&active_config->nmc_ban_range_tree_lock);
@@ -1708,12 +1715,13 @@ int nodemap_add_ban_range_helper(struct nodemap_config *config,
 
 	/* Find out if range to be added to ban list is included in
 	 * regular NID ranges for this nodemap.
-	 * If nodemap is default, the ban range must not be included totally or
+	 * If nodemap is default or has gss identification enabled,
+	 * the ban range must not be included totally or
 	 * partially in any regular NID ranges from any other nodemap.
 	 */
 	down_write(&active_config->nmc_range_tree_lock);
 	range = range_find(config, &nid[0], &nid[1], netmask, false);
-	if (is_default_nodemap(nodemap)) {
+	if (is_default_nodemap(nodemap) || nodemap->nmf_gss_identify) {
 		if (range)
 			rc = -EINVAL;
 		if (range_search(config, (struct lnet_nid *)&nid[0]) ||

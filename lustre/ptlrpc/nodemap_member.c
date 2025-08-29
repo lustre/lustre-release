@@ -380,10 +380,23 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 		 */
 		if (nodemap->nmf_gss_identify) {
 			new_nodemap = nodemap_lookup(nodemap->nm_name);
-			if (!IS_ERR(new_nodemap) &&
-			    !new_nodemap->nmf_gss_identify) {
-				nodemap_putref(new_nodemap);
-				new_nodemap = NULL;
+			if (!IS_ERR(new_nodemap)) {
+				struct lu_nid_range *range;
+
+				if (!new_nodemap->nmf_gss_identify) {
+					nodemap_putref(new_nodemap);
+					new_nodemap = NULL;
+					GOTO(classify, 0);
+				}
+				down_read(
+				       &active_config->nmc_ban_range_tree_lock);
+				range = ban_range_search(active_config,
+							 nid);
+				up_read(
+				       &active_config->nmc_ban_range_tree_lock);
+				if (range &&
+				    range->rn_nodemap == new_nodemap)
+					banned = true;
 			}
 		}
 
@@ -391,6 +404,7 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 			/* nodemap_classify_nid requires nmc_range_tree_lock and
 			 * nmc_ban_range_tree_lock
 			 */
+classify:
 			down_read(&active_config->nmc_ban_range_tree_lock);
 			new_nodemap = nodemap_classify_nid(nid, &banned);
 			up_read(&active_config->nmc_ban_range_tree_lock);

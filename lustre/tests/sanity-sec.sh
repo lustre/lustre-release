@@ -10513,6 +10513,7 @@ cleanup_79() {
 test_79() {
 	client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
 	client_nid=$(h2nettype $client_ip)
+	local banprop
 
 	$SHARED_KEY || skip "Need shared key feature for this test"
 
@@ -10562,6 +10563,27 @@ test_79() {
 	wait_ssk
 
 	[[ -f $DIR/this_is_c0 ]] || error "failed to get c0"
+
+	# test banlist support with gss identification
+	banprop=$(do_facet mgs $LCTL get_param nodemap.c0.banlist)
+	if [[ -n $banprop ]]; then
+		do_facet mgs $LCTL nodemap_banlist_add --name c0 \
+		   --range $client_nid ||
+			error "banlist_add on c0 failed"
+		wait_nm_sync c0 banlist
+		stack_trap "do_facet mgs $LCTL nodemap_banlist_del --name c0 \
+			--range $client_nid || true" EXIT
+		# check client access: should be blocked
+		cancel_lru_locks
+		ls $DIR && error "ls $DIR should fail"
+		cat $DIR/this_is_c0 && error "cat $DIR/this_is_c0 should fail"
+		do_facet mgs $LCTL nodemap_banlist_del --name c0 \
+			--range $client_nid
+		wait_nm_sync c0 banlist
+		cancel_lru_locks
+		ls $DIR || error "ls $DIR failed"
+		cat $DIR/this_is_c0 || error "cat $DIR/this_is_c0 failed"
+	fi
 
 	# unmount client
 	umount_client $MOUNT || error "umount $MOUNT failed"
