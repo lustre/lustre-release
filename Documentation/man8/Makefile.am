@@ -5,8 +5,32 @@
 #
 
 MANFILES = 					\
+	lctl.8					\
+	lctl-dl.8				\
+	lctl-device_list.8			\
+	lctl-get_param.8			\
+	lctl-list_param.8			\
+	lctl-network.8				\
+	lctl-pcc.8				\
+	lctl-pool_add.8				\
+	lctl-pool_new.8				\
+	lctl-set_param.8			\
+	ldev.8					\
+	lfs-rm_entry.8				\
+	lfs-rmentry.8				\
+	lgss_sk.8				\
+	lhbadm.8				\
+	ll_decode_linkea.8			\
+	llsom_sync.8				\
+	llstat.8				\
 	lnetctl.8				\
-	lst.8
+	lst.8					\
+	lustre_routes_config.8			\
+	lustre_routes_conversion.8		\
+	lustre_rsync.8				\
+	mount.lustre.8				\
+	plot-llstat.8				\
+	routerstat.8
 
 SERVER_MANFILES =				\
 	lctl-nodemap-activate.8			\
