@@ -36,8 +36,18 @@ my $max_line_length = 80;
 my $ignore_perl_version = 0;
 my $minimum_perl_version = 5.10.0;
 my $spelling_file = "$D/spelling-man.txt";
+my $lustre_pms="$D/exa.dic"; # spell personale(extra) dictionary
 my $color = "auto";
 my $git_command ='export LANGUAGE=en_US.UTF-8; git';
+
+
+# Verify if command name passed as argument is present
+sub command_exists {
+	my $command = shift;
+	# 0 = cmd not found; 1 = cmd is found
+	return system("which '$command' >/dev/null 2>&1") ? 0 : 1;
+}
+
 
 sub help {
 	my ($exitcode) = @_;
@@ -50,6 +60,7 @@ Options:
   -q, --quiet                quiet
   --no-checks                do not show CHECK messages
   -h, --help                 display this help and exit
+  -s, --spell                display complete spelling warnings
 When FILE is - read standard input.
 EOM
 
@@ -59,6 +70,7 @@ EOM
 my $quiet = 0;
 my $check = 1;
 my $help = 0;
+my $spell = 0;
 
 my $conf = which_conf($configuration_file);
 if (-f $conf) {
@@ -89,8 +101,9 @@ if (-f $conf) {
 GetOptions(
 	'q|quiet+'	=> \$quiet,
 	'c|checks!'	=> \$check,
+	's|spell'	=> \$spell,
 	'h|help'	=> \$help,
-) or $help = 2;
+) or $help = 3;
 
 # $help is 1 if either -h, --help or --version is passed as option - exitcode: 0
 # $help is 2 if invalid option is passed - exitcode: 1
@@ -167,6 +180,16 @@ sub get_edit_distance {
 	return $distance[$len1][$len2];
 }
 
+#
+# spell_dict a 'key-value' will hold content of contrib/scripts/spelling-man.txt
+# spelling-man.txt($spelling_file) is organised as:
+# Wrong_value1||Corrected_value1
+# Wrong_value2||Corrected_value2
+# ...
+# spell_dict's 'key' will be Wrong_value1
+# spell_dict's 'value' will Corrected_value1
+#
+my %spell_dict;
 # Load common spelling mistakes and build regular expression list.
 if (open(my $spelling, '<', $spelling_file)) {
 	while (<$spelling>) {
@@ -175,8 +198,13 @@ if (open(my $spelling, '<', $spelling_file)) {
 		$line =~ s/\s*\n?$//g;
 		$line =~ s/^\s*//g;
 
-		next if ($line =~ m/^\s*#/);
-		next if ($line =~ m/^\s*$/);
+		next if ($line =~ m/^\s*#/); # skip commented lines
+		next if ($line =~ m/^\s*$/); # skip empty lines
+
+		# Read all lines from spelling_file which matches str||str
+		if ($line =~ /(.+?)\|\|(.+)/) {
+			$spell_dict{$1} = $2; # populate
+		}
 	}
 	close($spelling);
 } else {
@@ -206,7 +234,7 @@ for my $filename (@ARGV) {
 	if ($filename eq '-') {
 		open($FILE, '<&STDIN');
 	} else {
-# 		remove a/ or b/ from git diff files
+#		remove a/ or b/ from git diff files
 		$filename =~ s/^[ab]\///;
 		open($FILE, '<', $filename) ||
 			die "$P: $filename: open failed - $!\n";
@@ -221,8 +249,10 @@ for my $filename (@ARGV) {
 	}
 	close($FILE);
 
+	our $cmd_exists = command_exists('hunspell'); # chk for hunspell binary
+
 # process man pages differently
-	if (!process($filename)) {
+	if (!process($filename, $cmd_exists)) {
 		$exit = 1;
 	}
 	@rawlines = ();
@@ -299,6 +329,11 @@ sub report {
 
 sub report_dump {
 	our @report;
+}
+
+sub SPELLING_ERR_COUNT {
+	our $spell_count = shift;
+	$spell_count++;
 }
 
 sub ERROR {
@@ -424,6 +459,7 @@ sub find_section_header {
 # https://liw.fi/manpages/
 sub process {
 	my $filepath = shift;
+	our $cmd_exists = shift;
 	$filepath =~ /.*\/(\S+\.([1-8]))$/;
 	my $filename = $1;
 	my $section_number = $2;
@@ -449,6 +485,7 @@ sub process {
 	our $cnt_error = 0;
 	our $cnt_warn = 0;
 	our $cnt_chk = 0;
+	our $spell_count = 0;
 
 	# Trace the real file/line as we go.
 	my $linenr = 0;
@@ -539,6 +576,50 @@ sub process {
 				     "Avoid using \\f[BIR] for formatting purposes, instead use .[BI] or .[BIR][BIR] on a new line. Use \\c at the end of the previous line to use a different format without a space.\n" . $herecurr);
 			}
 		}
+
+# spelling check
+	if ($cmd_exists) {
+		my $spell_cmd="hunspell -a -n -p ";
+		my $spell_cmd_final = join("", $spell_cmd, $lustre_pms);
+		if ($line !~ /^\./) {
+			my $clean_line = $line;
+
+			$clean_line =~ s/[,."()[\]{}!?:;`']//g;
+			my @words = split(/\s+/, $clean_line);
+
+			foreach my $word (@words) {
+				my $lcword = $word;
+
+				# skip characters which should not be spell
+				# checked. Or characters wich are invalid for
+				# hunspell personal dictionary
+				if ($lcword =~ /^[a-zA-Z0-9]+$/ ||
+				    $lcword =~ /%/ || $lcword =~ /\// ||
+				    $lcword =~ /-/ || $lcword =~ /=/ ||
+				    $lcword =~ /^\s*$/ ) {
+					next;
+				}
+
+				my @spell = qx{echo $lcword | $spell_cmd_final};
+				# A successful hunspell would return an '*'
+				# in such case we continue to next word/token
+				if (grep /^\*/, @spell) {
+					next;
+				} else {
+					# spelling error? This needs to be fixed
+					# under lustre_spell.en.pms or man page
+					# corrected for spelling.
+					# Print only if -s command line option
+					# is given by user
+					if ($spell) {
+						WARN("SPELLING_MISTAKE",
+						     "Possible spelling mistake: '$lcword' should be corrected. \n" . $herecurr);
+					}
+					SPELLING_ERR_COUNT($spell_count);
+				}
+			}
+		}
+	}
 
 # check for proper \c usage
 		if ($prevline =~ /\\c/) {
@@ -945,14 +1026,24 @@ EOM
 	}
 
 	print report_dump();
+
 	if ($quiet == 0) {
 		if ($clean == 1) {
 			print "The man page $vname has no obvious style problems.\n";
 		} else {
-			print "total: $cnt_error errors, $cnt_warn warnings, " .
-				(($check)? "$cnt_chk checks, " : "") .
-				"$cnt_lines lines checked\n" .
-				"The man page $vname has style problems.\n";
+			if ($cmd_exists) {
+				print "total: $cnt_error errors, $cnt_warn warnings, " .
+					(($check)? "$cnt_chk checks, " : "") .
+					"$cnt_lines lines checked, " .
+					"$spell_count spelling errors\n" .
+					"The man page $vname has style problems.\n";
+			} else {
+				print "total: $cnt_error errors, $cnt_warn warnings, " .
+					(($check)? "$cnt_chk checks, " : "") .
+					"$cnt_lines lines checked, " .
+					"spelling check not done\n" .
+					"The man page $vname has style problems.\n";
+			}
 		}
 	}
 	return $clean
