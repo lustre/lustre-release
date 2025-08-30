@@ -12157,6 +12157,7 @@ test_156() {
 	stack_trap cleanup_156 EXIT
 
 	nid=$($LCTL list_nids | head -1 | sed  "s/\./\\\./g")
+	local_mode && nid="0@lo"
 
 	# check root_fid on mount of export and consistent with client
 	root_fid_client=$($LFS path2fid $MOUNT | tr -d '[]')
