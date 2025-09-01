@@ -330,6 +330,7 @@ static int mgs_get_fsdb_from_llog(const struct lu_env *env,
 	struct mgs_fsdb_handler_data d = {
 		.fsdb = fsdb,
 	};
+	struct obd_uuid	cfg_uuid = { .uuid = "config_uuid" };
 	int rc;
 
 	ENTRY;
@@ -343,7 +344,7 @@ static int mgs_get_fsdb_from_llog(const struct lu_env *env,
 	if (rc)
 		GOTO(out_pop, rc);
 
-	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN, &cfg_uuid);
 	if (rc)
 		GOTO(out_close, rc);
 
@@ -5516,6 +5517,7 @@ static int mgs_lcfg_fork_one(const struct lu_env *env, struct mgs_device *mgs,
 	int name_buflen;
 	int old_namelen = strlen(oldname);
 	int new_namelen = strlen(newname);
+	struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
 	int rc;
 	ENTRY;
 
@@ -5538,7 +5540,7 @@ static int mgs_lcfg_fork_one(const struct lu_env *env, struct mgs_device *mgs,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = llog_init_handle(env, new_llh, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(env, new_llh, LLOG_F_IS_PLAIN, &cfg_uuid);
 	if (rc)
 		GOTO(out, rc);
 

@@ -1642,7 +1642,8 @@ int llog_backup(const struct lu_env *env, struct obd_device *obd,
 		GOTO(out_backup, rc = -EEXIST);
 	}
 
-	rc = llog_init_handle(env, bllh, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(env, bllh, LLOG_F_IS_PLAIN,
+			      &llh->lgh_hdr->llh_tgtuuid);
 	if (rc)
 		GOTO(out_backup, rc);
 
