@@ -690,10 +690,12 @@ static struct gss_rsc *gss_svc_searchbyctx(rawobj_t *handle)
 {
 	struct gss_rsc rsc;
 	struct gss_rsc *found;
+	int rc;
 
 	memset(&rsc, 0, sizeof(rsc));
-	if (rawobj_dup(&rsc.sc_handle, handle))
-		return NULL;
+	rc = rawobj_dup(&rsc.sc_handle, handle);
+	if (rc)
+		return ERR_PTR(rc);
 
 	found = rsc_entry_get(rsccache, &rsc);
 	__rsc_free(&rsc);

@@ -97,23 +97,19 @@ static int gss_proc_oos_seq_show(struct seq_file *m, void *v)
 }
 LDEBUGFS_SEQ_FOPS_RO(gss_proc_oos);
 
-static ssize_t
-gss_proc_write_secinit(struct file *file, const char *buffer,
-				  size_t count, loff_t *off)
+static ssize_t init_channel_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buf, size_t count)
 {
-        int rc;
+	int rc;
 
-        rc = gss_do_ctx_init_rpc((char *) buffer, count);
-        if (rc) {
-                LASSERT(rc < 0);
-                return rc;
-        }
+	rc = gss_do_ctx_init_rpc((char *)buf, count);
+	if (rc) {
+		LASSERT(rc < 0);
+		return rc;
+	}
 	return count;
 }
-
-static const struct file_operations gss_proc_secinit = {
-	.write = gss_proc_write_secinit,
-};
+LUSTRE_WO_ATTR(init_channel);
 
 static int
 sptlrpc_krb5_allow_old_client_csum_seq_show(struct seq_file *m,
@@ -414,9 +410,6 @@ LDEBUGFS_FOPS_WR_ONLY(gss, rsc_info);
 static struct ldebugfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"replays",
 	  .fops	=	&gss_proc_oos_fops	},
-	{ .name	=	"init_channel",
-	  .fops	=	&gss_proc_secinit,
-	  .proc_mode =	0200			},
 	{ .name	=	"krb5_allow_old_client_csum",
 	  .fops	=	&sptlrpc_krb5_allow_old_client_csum_fops },
 	{ .name	=	"rsi_upcall",
@@ -465,6 +458,7 @@ static ssize_t debug_level_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(debug_level);
 
 static struct attribute *gss_attrs[] = {
+	&lustre_attr_init_channel.attr,
 #ifdef HAVE_GSS_KEYRING
 	&lustre_attr_gss_check_upcall_ns.attr,
 #endif

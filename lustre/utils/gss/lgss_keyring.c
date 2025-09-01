@@ -141,7 +141,7 @@ static int receive_from(int fd, void *buf, size_t size)
 	return 0;
 }
 
-static int gss_do_ioctl(struct lgssd_ioctl_param *param)
+static int gss_do_ioctl(struct lgssd_ioctl_param *param, __s64 *status)
 {
 	int fd, ret;
 	glob_t path;
@@ -168,6 +168,8 @@ static int gss_do_ioctl(struct lgssd_ioctl_param *param)
 
 	logmsg(LL_TRACE, "to down-write\n");
 
+	*status = 0;
+	param->status = status;
 	ret = write(fd, param, sizeof(*param));
 	close(fd);
 	if (ret != sizeof(*param)) {
@@ -195,6 +197,7 @@ static int do_nego_rpc(struct lgss_nego_data *lnd,
 	int res;
 	char outbuf[8192] = { 0 };
 	unsigned int *p;
+	__s64 status;
 	int rc = 0;
 
 	logmsg(LL_TRACE, "start negotiation rpc\n");
@@ -220,7 +223,7 @@ static int do_nego_rpc(struct lgss_nego_data *lnd,
 		param.reply_buf_size = sizeof(outbuf);
 		param.reply_buf = outbuf;
 
-		rc = gss_do_ioctl(&param);
+		rc = gss_do_ioctl(&param, &status);
 		if (rc != 0)
 			return rc;
 	} else {
@@ -238,12 +241,11 @@ static int do_nego_rpc(struct lgss_nego_data *lnd,
 			return rc;
 
 		/* read ioctl status from parent */
-		rc = receive_from(reply_fd[0], &param.status,
-				  sizeof(param.status));
+		rc = receive_from(reply_fd[0], &status, sizeof(status));
 		if (rc != 0)
 			return rc;
 
-		if (param.status == 0) {
+		if (status == 0) {
 			/* read reply buffer from parent */
 			rc = receive_from(reply_fd[0], outbuf, sizeof(outbuf));
 			if (rc != 0)
@@ -252,10 +254,10 @@ static int do_nego_rpc(struct lgss_nego_data *lnd,
 	}
 
 	logmsg(LL_TRACE, "do_nego_rpc: to parse reply\n");
-	if (param.status) {
+	if (status) {
 		logmsg(LL_ERR, "status: %ld (%s)\n",
-		       (long int)param.status, strerror((int)(-param.status)));
-		return param.status;
+		       (long int)status, strerror((int)(-status)));
+		return status;
 	}
 
 	p = (unsigned int *)outbuf;
@@ -1250,6 +1252,7 @@ int main(int argc, char *argv[])
 				struct lgssd_ioctl_param param;
 				char outbuf[8192] = { 0 };
 				void *gss_token = NULL;
+				__s64 status;
 
 				/* get ioctl buffer from child */
 				rc = receive_from(req_fd[0], &param,
@@ -1275,13 +1278,13 @@ int main(int argc, char *argv[])
 				 * out credentials negotiation: as it runs in
 				 * a container, it might not be able to
 				 * perform ioctl */
-				rc = gss_do_ioctl(&param);
+				rc = gss_do_ioctl(&param, &status);
 				if (rc != 0)
 					goto out_token;
 
 				/* send ioctl status to child */
-				rc = send_to(reply_fd[1], &param.status,
-					     sizeof(param.status));
+				rc = send_to(reply_fd[1], &status,
+					     sizeof(status));
 				if (rc != 0)
 					goto out_token;
 				/* send reply buffer to child */

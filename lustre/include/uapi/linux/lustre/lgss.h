@@ -48,10 +48,9 @@ struct lgssd_ioctl_param {
 	__u64 send_token_size;
 	char __user *send_token;
 	__u64 reply_buf_size;
-	char __user *reply_buf;
 	/* out */
-	__s64 status;
-	__u64 reply_length;
+	char __user *reply_buf;
+	__s64 __user *status;
 };
 
 #define GSS_SOCKET_PATH	"/tmp/svcgssd.socket"
