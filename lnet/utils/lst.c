@@ -1357,7 +1357,7 @@ lst_get_node_count(int type, char *str, int *countp,
 		   struct lnet_process_id **idspp)
 {
 	char buf[LST_NAME_SIZE];
-	struct lstcon_test_batch_ent ent;
+	struct lstcon_test_batch_ent ent = {0};
 	struct lstcon_ndlist_ent *entp = &ent.tbe_cli_nle;
 	struct lst_sid sid;
 	unsigned int feats;
