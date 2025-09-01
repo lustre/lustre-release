@@ -283,7 +283,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 	    (llh->llh_count == 1) &&
-	    ((loghandle->lgh_last_idx == llog_max_idx(llh)) ||
+	    ((loghandle->lgh_last_idx == llog_max_idx(loghandle)) ||
 	     (loghandle->u.phd.phd_cat_handle != NULL &&
 	      loghandle->u.phd.phd_cat_handle->u.chd.chd_current_log !=
 		loghandle))) {
@@ -392,6 +392,9 @@ int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 		handle->lgh_cur_offset = llh->llh_hdr.lrh_len;
 		rc = 0;
 	}
+	if (handle->lgh_max_index == 0)
+		handle->lgh_max_index =
+			LLOG_HDR_BITMAP_SIZE(handle->lgh_hdr) - 1;
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_read_header);
@@ -489,7 +492,7 @@ int llog_verify_record(const struct llog_handle *llh, struct llog_rec_hdr *rec)
 		 rec->lrh_len < LLOG_MIN_REC_SIZE)
 		LLOG_ERROR_REC(llh, rec, "bad record len, chunk size is %d",
 			       chunk_size);
-	else if (rec->lrh_index > llog_max_idx(llh->lgh_hdr))
+	else if (rec->lrh_index > llog_max_idx(llh))
 		LLOG_ERROR_REC(llh, rec, "index is too high");
 	else
 		return 0;
@@ -571,16 +574,16 @@ static int llog_process_thread(void *arg)
 	if (unlikely(buf == NULL))
 		GOTO(out_env, rc = -ENOMEM);
 
-	last_index = llog_max_idx(llh);
+	last_index = llog_max_idx(loghandle);
 	if (cd) {
-		if (cd->lpcd_first_idx >= llog_max_idx(llh))
+		if (cd->lpcd_first_idx >= llog_max_idx(loghandle))
 			/* End of the indexes -> Nothing to do */
 			GOTO(out, rc = 0);
 
 		index = cd->lpcd_first_idx + 1;
 		last_called_index = cd->lpcd_first_idx;
 		if (cd->lpcd_last_idx > 0 &&
-		    cd->lpcd_last_idx <= llog_max_idx(llh))
+		    cd->lpcd_last_idx <= llog_max_idx(loghandle))
 			last_index = cd->lpcd_last_idx;
 		else if (cd->lpcd_read_mode & LLOG_READ_MODE_RAW)
 			last_index = loghandle->lgh_last_idx;
@@ -1038,7 +1041,7 @@ int llog_reverse_process(const struct lu_env *env,
 	if (cd != NULL && cd->lpcd_last_idx)
 		index = cd->lpcd_last_idx;
 	else
-		index = llog_max_idx(llh);
+		index = llog_max_idx(loghandle);
 
 	while (rc == 0) {
 		struct llog_rec_hdr *rec;

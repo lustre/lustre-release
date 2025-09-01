@@ -1441,7 +1441,7 @@ again:
 				      d->opd_sync_last_catalog_idx, 0);
 
 next:
-		size = llog_max_idx(llh->lgh_hdr);
+		size = llog_max_idx(llh);
 
 		/* processing reaches catalog bottom */
 		if (d->opd_sync_last_catalog_idx == size)

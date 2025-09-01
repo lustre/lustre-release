@@ -296,6 +296,7 @@ struct llog_handle {
 	const struct llog_operations	*lgh_logops;
 	refcount_t		 lgh_refcount;
 
+	int			lgh_max_index;
 	int			lgh_max_size;
 	bool			lgh_destroyed;
 	unsigned long		lgh_timestamp;
@@ -522,18 +523,19 @@ static inline int llog_connect(struct llog_ctxt *ctxt,
 }
 
 
-static inline int llog_max_idx(struct llog_log_hdr *lh)
+static inline int llog_max_idx(const struct llog_handle *lgh)
 {
 	if (CFS_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) &&
-	    unlikely(lh->llh_flags & LLOG_F_IS_CAT))
+	    unlikely(lgh->lgh_hdr->llh_flags & LLOG_F_IS_CAT)) {
 		return cfs_fail_val;
-	else
-		return LLOG_HDR_BITMAP_SIZE(lh) - 1;
+	}
+	LASSERT(lgh->lgh_max_index > 8192);
+	return lgh->lgh_max_index;
 }
 
 static inline int llog_is_full(struct llog_handle *llh)
 {
-	return llh->lgh_last_idx >= llog_max_idx(llh->lgh_hdr);
+	return llh->lgh_last_idx >= llog_max_idx(llh);
 }
 
 /* Determine if a llog plain of a catalog could be skiped based on record

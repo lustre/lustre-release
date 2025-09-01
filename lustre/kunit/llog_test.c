@@ -530,7 +530,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 
 	CWARN("3c: write records with variable size until BITMAP_SIZE, "
 	      "return -ENOSPC\n");
-	while (num_recs < LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr)) {
+	while (num_recs <= llog_max_idx(llh)) {
 		if ((num_recs % 2) == 0)
 			hdr->lrh_len = 80;
 		else

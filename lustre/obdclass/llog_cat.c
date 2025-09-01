@@ -52,11 +52,11 @@ static int llog_cat_new_log(const struct lu_env *env,
 	struct thandle *handle = NULL;
 	struct dt_device *dt = NULL;
 	struct llog_log_hdr	*llh = cathandle->lgh_hdr;
-	int			 rc, index;
+	int rc, index;
 
 	ENTRY;
 
-	index = (cathandle->lgh_last_idx + 1) % (llog_max_idx(llh) + 1);
+	index = (cathandle->lgh_last_idx + 1) % (llog_max_idx(cathandle) + 1);
 
 	/* check that new llog index will not overlap with the first one.
 	 * - llh_cat_idx is the index just before the first/oldest still in-use
@@ -207,7 +207,7 @@ out_destroy:
 	loghandle->lgh_hdr->llh_flags &= ~LLOG_F_ZAP_WHEN_EMPTY;
 	/* this is to mimic full log, so another llog_cat_current_log()
 	 * can skip it and ask for another onet */
-	loghandle->lgh_last_idx = llog_max_idx(loghandle->lgh_hdr) + 1;
+	loghandle->lgh_last_idx = llog_max_idx(loghandle) + 1;
 	llog_trans_destroy(env, loghandle, th);
 	if (handle != NULL)
 		dt_trans_stop(env, dt, handle);
@@ -946,7 +946,7 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 	cd.lpcd_last_idx = 0;
 	cd.lpcd_read_mode = LLOG_READ_MODE_NORMAL;
 
-	if (startcat > 0 && startcat <= llog_max_idx(llh)) {
+	if (startcat > 0 && startcat <= llog_max_idx(cat_llh)) {
 		/* start from a custom catalog/llog plain indexes*/
 		d.lpd_startidx = startidx;
 		d.lpd_startcat = startcat;
@@ -1082,10 +1082,10 @@ __u32 llog_cat_free_space(struct llog_handle *cat_llh)
 		return cfs_fail_val;
 
 	if (cat_llh->lgh_hdr->llh_count == 1)
-		return llog_max_idx(cat_llh->lgh_hdr);
+		return llog_max_idx(cat_llh);
 
 	if (cat_llh->lgh_last_idx > cat_llh->lgh_hdr->llh_cat_idx)
-		return llog_max_idx(cat_llh->lgh_hdr) +
+		return llog_max_idx(cat_llh) +
 		       cat_llh->lgh_hdr->llh_cat_idx - cat_llh->lgh_last_idx;
 
 	/* catalog is presently wrapped */
@@ -1176,13 +1176,12 @@ EXPORT_SYMBOL(llog_cat_reverse_process);
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int newidx)
 {
 	struct llog_log_hdr *llh = cathandle->lgh_hdr;
-	int idx = llh->llh_cat_idx;
+	int max, idx = llh->llh_cat_idx;
 
 	ENTRY;
 
-	if (find_next_bit_le((void *)LLOG_HDR_BITMAP(llh),
-			     LLOG_HDR_BITMAP_SIZE(llh),
-			     1) == LLOG_HDR_BITMAP_SIZE(llh))
+	max = llog_max_idx(cathandle) + 1;
+	if (find_next_bit_le((void *)LLOG_HDR_BITMAP(llh), max, 1) == max)
 		RETURN(0);
 	/*
 	 * The llh_cat_idx equals to the first used index minus 1.
@@ -1191,7 +1190,7 @@ int llog_cat_set_first_idx(struct llog_handle *cathandle, int newidx)
 	 * abnormal case.
 	 */
 	do {
-		idx = (idx + 1) % (llog_max_idx(llh) + 1);
+		idx = (idx + 1) % (llog_max_idx(cathandle) + 1);
 		if (newidx == idx || !test_bit_le(idx, LLOG_HDR_BITMAP(llh))) {
 			/* update llh_cat_idx for each unset bit,
 			 * expecting the next one is set */

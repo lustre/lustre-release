@@ -553,7 +553,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		       loghandle->lgh_max_size, (int)loghandle->lgh_last_idx,
 		       PLOGID(&loghandle->lgh_id));
 		/* this is to signal that this llog is full */
-		loghandle->lgh_last_idx = llog_max_idx(llh);
+		loghandle->lgh_last_idx = llog_max_idx(loghandle);
 		RETURN(-ENOSPC);
 	}
 
@@ -715,7 +715,7 @@ out_unlock:
 		       loghandle->lgh_max_size, (int)loghandle->lgh_last_idx,
 		       PLOGID(&loghandle->lgh_id));
 		/* this is to signal that this llog is full */
-		loghandle->lgh_last_idx = llog_max_idx(llh);
+		loghandle->lgh_last_idx = llog_max_idx(loghandle);
 	}
 
 	up_write(&loghandle->lgh_last_sem);
@@ -749,7 +749,7 @@ out:
 	} else if (--loghandle->lgh_last_idx == 0 &&
 	    (llh->llh_flags & LLOG_F_IS_CAT) && llh->llh_cat_idx != 0) {
 		/* catalog had just wrap-around case */
-		loghandle->lgh_last_idx = llog_max_idx(llh);
+		loghandle->lgh_last_idx = llog_max_idx(loghandle);
 	}
 
 	LLOG_HDR_TAIL(llh)->lrt_index = loghandle->lgh_last_idx;
