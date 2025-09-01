@@ -1588,6 +1588,7 @@ struct lu_tgt_qos {
 	__u64			 ltq_weight;	/* net weighting */
 	time64_t		 ltq_used;	/* last used time, seconds */
 	bool			 ltq_usable:1;	/* usable for striping */
+	__u32			 ltq_failure_domain;
 };
 
 /* target descriptor */

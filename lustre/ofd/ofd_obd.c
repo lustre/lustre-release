@@ -750,6 +750,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 					  ted->ted_grant >> current_blockbits);
 		osfs->os_bavail -= osfs->os_granted;
 	}
+	osfs->os_failure_domain = ofd->ofd_failure_domain;
 
 	tgt_grant_sanity_check(obd, __func__);
 	CDEBUG(D_CACHE, "%llu blocks: %llu free, %llu avail; "

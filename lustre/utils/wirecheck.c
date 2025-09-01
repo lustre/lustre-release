@@ -1057,7 +1057,7 @@ check_obd_statfs(void)
 	CHECK_MEMBER(obd_statfs, os_state);
 	CHECK_MEMBER(obd_statfs, os_fprecreated);
 	CHECK_MEMBER(obd_statfs, os_granted);
-	CHECK_MEMBER(obd_statfs, os_spare3);
+	CHECK_MEMBER(obd_statfs, os_failure_domain);
 	CHECK_MEMBER(obd_statfs, os_spare4);
 	CHECK_MEMBER(obd_statfs, os_spare5);
 	CHECK_MEMBER(obd_statfs, os_spare6);

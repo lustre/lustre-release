@@ -344,9 +344,9 @@ struct obd_statfs {
 					 * OSTs
 					 */
 	__u32           os_granted;	/* space granted for MDS */
-	__u32           os_spare3;	/* Unused padding fields.  Remember */
-	__u32           os_spare4;	/* to fix lustre_swab_obd_statfs() */
-	__u32           os_spare5;
+	__u32           os_failure_domain; /* domain of related target */
+	__u32           os_spare4;	/* Unused padding fields.  Remember */
+	__u32           os_spare5;	/* to fix lustre_swab_obd_statfs() */
 	__u32           os_spare6;
 	__u32           os_spare7;
 	__u32           os_spare8;

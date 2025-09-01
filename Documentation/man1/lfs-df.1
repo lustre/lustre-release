@@ -248,6 +248,9 @@ Display the number of free inodes (in KiB by default).
 .BR iusepct ", " ipct )
 Display the percentage of used inodes.
 .TP
+.B domain
+Display the failure-domain.
+.TP
 .B target
 Display the mount point path.
 .TP
@@ -399,12 +402,12 @@ Display filesystem summary with custom field order:
 .RS
 .EX
 .B # lfs df --output=pcent,avail,used,size,target /mnt/lustre
-Use%   Available        Used   1K-blocks  Mounted on
-  2%      112156        1664      125056  /mnt/lustre[MDT:0]
-  1%      284544        1400      313104  /mnt/lustre[OST:0]
-  1%      284544        1400      313104  /mnt/lustre[OST:1]
+Use%   Available        Used   1K-blocks Mounted on
+  2%      112156        1664      125056 /mnt/lustre[MDT:0]
+  1%      284544        1400      313104 /mnt/lustre[OST:0]
+  1%      284544        1400      313104 /mnt/lustre[OST:1]
 .P
-  1%      569088        2800      626208  /mnt/lustre
+  1%      569088        2800      626208 /mnt/lustre
 .EE
 .RE
 .PP

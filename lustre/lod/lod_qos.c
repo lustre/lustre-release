@@ -83,9 +83,10 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	rc = dt_statfs_info(env, tgt->ltd_tgt, &tgt->ltd_statfs, &info);
 	if (rc && rc != -ENOTCONN)
 		CERROR("%s: statfs error: rc = %d\n", lod2obd(d)->obd_name, rc);
-
-	if (!rc)
+	if (!rc) {
+		tgt->ltd_qos.ltq_failure_domain = tgt->ltd_statfs.os_failure_domain;
 		rc = lod_statfs_check(ltd, tgt);
+	}
 
 	/* reserving space shouldn't be enough to mark an OST inactive */
 	if (reserve &&

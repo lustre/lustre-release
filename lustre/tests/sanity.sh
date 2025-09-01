@@ -37319,6 +37319,36 @@ test_855() {
 }
 run_test 855 "readdir on open validation"
 
+test_856() {
+	local ostidx=0
+	local param=obdfilter.$(ostname_from_index $ostidx).failure_domain
+	local facet=ost$((ostidx + 1))
+	local domain=55
+
+	(( $OST1_VERSION >= $(version_code 2.17.56) )) ||
+		skip "need OST >= 2.17.56 for os_failure_domain in obd_statfs"
+	(( $CLIENT_VERSION >= $(version_code 2.17.56) )) ||
+		skip "need client >= 2.17.56 for lfs df --output=domain"
+
+	local saved=$(do_facet $facet $LCTL get_param -n $param)
+	stack_trap "do_facet $facet $LCTL set_param -n $param=$saved"
+
+	# test we can get and set the failure_domain on the OST
+	do_facet $facet "$LCTL set_param $param=$domain"
+	local found=$(do_facet $facet $LCTL get_param -n $param)
+	(( $found == $domain )) ||
+		error "Found failure_domain $found, expect $domain"
+
+	# Test it reads back from 'lfs df' (may be cached for a few seconds)
+	wait_update_facet client \
+		"$LFS df --ost=$ostidx --output=domain $MOUNT" "$domain" ||
+	{
+		found=$($LFS df --ost=$ostidx --output=domain $MOUNT)
+		error "'lfs df' found failure-domain $found, expect $domain"
+	}
+}
+run_test 856 "Setting and getting failure_domain"
+
 test_860() {
 	local file=$DIR/$tfile
 	local size

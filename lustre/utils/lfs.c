@@ -8758,6 +8758,7 @@ enum showdf_fields {
 	SHOWDF_MNTDIR = 0x0400,
 	SHOWDF_DEVICE = 0x0800,
 	SHOWDF_STATE  = 0x1000,
+	SHOWDF_DOMAIN = 0x2000,
 };
 
 struct showdf_field_name {
@@ -8792,6 +8793,7 @@ static const struct showdf_field_name showdf_field_names[] = {
 	{ .sdfn_name = "iusepct",	.sdfn_field = SHOWDF_IPCT },
 	{ .sdfn_name = "target",	.sdfn_field = SHOWDF_MNTDIR },
 	{ .sdfn_name = "state",		.sdfn_field = SHOWDF_STATE },
+	{ .sdfn_name = "domain",	.sdfn_field = SHOWDF_DOMAIN },
 };
 
 static enum showdf_fields showdf_str2field(const char *name)
@@ -8826,12 +8828,12 @@ static void showdf_print_available_fields(void)
 	}							\
 	radix;							\
 })
-#define UUF     "%-20s"
-#define CSF     "%11s"
-#define CDF     "%11llu"
-#define HDF     "%8.1f%c"
-#define RSF     "%4s"
-#define RDF     "%3d%%"
+#define UUF     (single_column ? "%s" : "%-20s")
+#define CSF     (single_column ? "%s" : "%11s")
+#define CDF     (single_column ? "%llu" : "%11llu")
+#define HDF     (single_column ? "%.1f%c" : "%8.1f%c")
+#define RSF     (single_column ? "%s" : "%4s")
+#define RDF     (single_column ? "%d%%" : "%3d%%")
 
 static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 {
@@ -8853,7 +8855,7 @@ static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 
 /* Helper function to format and print a value with optional cooking */
 static void print_field_value(long long value, enum mntdf_flags flags, int base,
-			      char *suffix)
+			      char *suffix, bool single_column)
 {
 	if (flags & MNTDF_COOKED) {
 		double cook_val = (double)value;
@@ -8902,9 +8904,10 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 	char *suffix = flags & MNTDF_DECIMAL ? "kMGTPEZY" : "KMGTPEZY";
 	int shift = flags & MNTDF_COOKED ? 0 : 10;
 	long long btotal, bused, bfree, bavail;
-	long long itotal, iused, ifree;
+	long long itotal, iused, ifree, domain;
 	int ratio, iratio;
 	int i;
+	bool single_column = field_count == 1;
 
 	if (!uuid || !stat)
 		return -EINVAL;
@@ -8914,7 +8917,6 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 		/* Print fields in specified order */
 		for (i = 0; i < field_count; i++) {
 			enum showdf_fields field = field_order[i];
-
 			fields |= field;
 
 			if (i > 0)
@@ -8928,25 +8930,29 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 				btotal = (stat->os_blocks *
 					  stat->os_bsize) >> shift;
 
-				print_field_value(btotal, flags, base, suffix);
+				print_field_value(btotal, flags, base, suffix,
+						  single_column);
 				break;
 			case SHOWDF_BUSED:
 				bused = ((stat->os_blocks - stat->os_bfree) *
 					 stat->os_bsize) >> shift;
 
-				print_field_value(bused, flags, base, suffix);
+				print_field_value(bused, flags, base, suffix,
+						  single_column);
 				break;
 			case SHOWDF_BFREE:
 				bfree = (stat->os_bfree *
 					 stat->os_bsize) >> shift;
 
-				print_field_value(bfree, flags, base, suffix);
+				print_field_value(bfree, flags, base, suffix,
+						  single_column);
 				break;
 			case SHOWDF_BAVAIL:
 				bavail = (stat->os_bavail *
 					  stat->os_bsize) >> shift;
 
-				print_field_value(bavail, flags, base, suffix);
+				print_field_value(bavail, flags, base, suffix,
+						  single_column);
 				break;
 			case SHOWDF_BPCT:
 				ratio = obd_statfs_ratio(stat, false);
@@ -8956,17 +8962,20 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			case SHOWDF_ITOTAL:
 				itotal = stat->os_files;
 
-				print_field_value(itotal, flags, base, suffix);
+				print_field_value(itotal, flags, base, suffix,
+						  single_column);
 				break;
 			case SHOWDF_IUSED:
 				iused = stat->os_files - stat->os_ffree;
 
-				print_field_value(iused, flags, base, suffix);
+				print_field_value(iused, flags, base, suffix,
+						  single_column);
 				break;
 			case SHOWDF_IFREE:
 				ifree = stat->os_ffree;
 
-				print_field_value(ifree, flags, base, suffix);
+				print_field_value(ifree, flags, base, suffix,
+						  single_column);
 				break;
 			case SHOWDF_IPCT:
 				iratio = obd_statfs_ratio(stat, true);
@@ -8974,12 +8983,16 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 				printf(RDF, iratio);
 				break;
 			case SHOWDF_MNTDIR:
-				printf(" %-s", mntdir);
+				printf("%-s", mntdir);
 				if (type && fields)
 					printf("[%s:%d]", type, index);
 				break;
 			case SHOWDF_STATE:
 				print_os_state(stat, flags);
+				break;
+			case SHOWDF_DOMAIN:
+				domain = stat->os_failure_domain;
+				printf(CDF, domain);
 				break;
 			default:
 				break;
@@ -8989,10 +9002,10 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 		printf("\n");
 		break;
 	case -ENODATA:
-		printf(UUF": inactive device\n", uuid);
+		printf(UUF, uuid);printf(": inactive device\n");
 		break;
 	default:
-		printf(UUF": %s\n", uuid, strerror(-rc));
+		printf(UUF, uuid);printf(": %s\n", strerror(-rc));
 		break;
 	}
 
@@ -9038,6 +9051,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 	int rc2;
 	bool show_headers;
 	bool only_summary;
+	bool single_column = field_count == 1;
 
 	if (pool) {
 		poolname = strchr(pool, '.');
@@ -9104,41 +9118,47 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		for (i = 0; i < field_count; i++) {
 			enum showdf_fields field = field_order[i];
 
+			if (i > 0)
+				printf(" ");
+
 			switch (field) {
 			case SHOWDF_UUID:
-				printf(UUF" ", "UUID");
+				printf(UUF, "UUID");
 				break;
 			case SHOWDF_BTOTAL:
-				printf(CSF" ",
+				printf(CSF,
 				       flags & MNTDF_COOKED ?
 				       "bytes" : "1K-blocks");
 				break;
 			case SHOWDF_BUSED:
-				printf(CSF" ", "Used");
+				printf(CSF, "Used");
 				break;
 			case SHOWDF_BFREE:
-				printf(CSF" ", "Free");
+				printf(CSF, "Free");
 				break;
 			case SHOWDF_BAVAIL:
-				printf(CSF" ", "Available");
+				printf(CSF, "Available");
 				break;
 			case SHOWDF_BPCT:
-				printf(RSF" ", "Use%");
+				printf(RSF, "Use%");
 				break;
 			case SHOWDF_ITOTAL:
-				printf(CSF" ", "Inodes");
+				printf(CSF, "Inodes");
 				break;
 			case SHOWDF_IUSED:
-				printf(CSF" ", "IUsed");
+				printf(CSF, "IUsed");
 				break;
 			case SHOWDF_IFREE:
-				printf(CSF" ", "IFree");
+				printf(CSF, "IFree");
 				break;
 			case SHOWDF_IPCT:
-				printf(RSF" ", "IUse%");
+				printf(RSF, "IUse%");
 				break;
 			case SHOWDF_MNTDIR:
-				printf(" %-s", "Mounted on");
+				printf("%-s", "Mounted on");
+				break;
+			case SHOWDF_DOMAIN:
+				printf(CSF, "Domain");
 				break;
 			default:
 				break;

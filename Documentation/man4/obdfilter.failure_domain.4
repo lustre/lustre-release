@@ -85,6 +85,16 @@ Get the failure domain of an OST:
 .EX
 .RB "oss# " "lctl get_param obdfilter.lustrewt-OST0000.failure_domain"
 	1
+.PP
+Get the failure domain of all OSTs:
+.EX
+.RB "client# " "lfs df --output=source,size,domain,target"
+	UUID                   1K-blocks      Domain  Mounted on
+	lustrewt-MDT0000_UUID    11600548           0  /mnt/l[MDT:0]
+	lustrewt-OST0000_UUID    19776188           1  /mnt/l[OST:0]
+	lustrewt-OST0001_UUID    19776188         256  /mnt/l[OST:1]
+	lustrewt-OST0002_UUID    19776188         257  /mnt/l[OST:2]
+	...
 .EE
 .SH AVAILABILITY
 .B obdfilter.*.failure_domain
