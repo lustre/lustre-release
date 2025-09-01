@@ -3369,13 +3369,22 @@ lookup:
 }
 
 /**
- * The FID provided could be either an MDT FID or an OST FID, both need to
- * be handled here.
+ * __ll_fid2path() - Convert both MDT & OST FID to filepath
+ * @inode: inode on which to do the lookup
+ * @gfout: filepath [out]
+ * @outsize: size of filepath buffer
+ * @pathlen_orig: for overflow checking. @outsize cannot be larger than this
+ *
+ * The FID provided could be either an MDT FID or an OST FID, both need to be
+ * handled here.
+ *
  * 1. query from fldb-server the actual type of this FID
  * 2a. if it's an OST-FID, try OSC_IOCONTROL(FID2PATH) with given FID, which
  * should return the corresponding parent FID, i.e. the MDT FID
  * 2b. otherwise it's a MDT FID already, continue to step 3
  * 3. take the MDT FID calling MDC_IOCONTROL(FID2PATH)
+ *
+ * Returns 0 on success and %negative on error
  */
 int __ll_fid2path(struct inode *inode, struct getinfo_fid2path *gfout,
 		  size_t outsize, __u32 pathlen_orig)

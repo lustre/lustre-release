@@ -41,6 +41,11 @@
 
 /**
  * ll_get_dir_page() - Get directory page for a given directory inode
+ * @dir: pointer to the directory(inode) for which page is being fetched
+ * @op_data: pointer to the md operation structure
+ * @offset: Offset within page
+ * @hash64: True if lustre client is 64bit else False for 32bit client
+ * @partial_readdir_rc: Used only on partial reads
  *
  * (new) readdir implementation overview.
  *
@@ -107,7 +112,6 @@
  * starting hash and will issue RPC to fetch that page. If there is a hash
  * collision the concerned page is removed.
  *
- *
  * Server.
  *
  * identification of and access to overflow pages
@@ -121,12 +125,6 @@
  * in PAGE_SIZE (if PAGE_SIZE greater than LU_PAGE_SIZE), and the
  * lu_dirpage for this integrated page will be adjusted. See
  * mdc_adjust_dirpages().
- *
- *
- * @dir: pointer to the directory(inode) for which page is being fetched
- * @op_data: pointer to the md operation structure
- * @offset: Offset witchin page
- * @partial_readdir_rc: Used only on partial reads
  *
  * Return:
  * * %Success - pointer to the page structure
