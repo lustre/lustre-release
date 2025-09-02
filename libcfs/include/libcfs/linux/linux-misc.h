@@ -134,13 +134,6 @@ static inline void kernel_param_lock(struct module *mod)
 int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
 			      const struct workqueue_attrs *attrs);
 
-#ifndef HAVE_KSTRTOBOOL_FROM_USER
-
-#define kstrtobool strtobool
-
-int kstrtobool_from_user(const char __user *s, size_t count, bool *res);
-#endif /* HAVE_KSTRTOBOOL_FROM_USER */
-
 #ifndef HAVE_MATCH_WILDCARD
 bool match_wildcard(const char *pattern, const char *str);
 #endif /* !HAVE_MATCH_WILDCARD */
@@ -326,10 +319,6 @@ static inline ssize_t strscpy(char *s1, const char *s2, size_t sz)
 
 	return (len >= sz) ? -E2BIG : len;
 }
-#endif
-
-#ifndef HAVE_BITMAP_TO_ARR32
-void bitmap_to_arr32(u32 *buf, const unsigned long *bitmap, unsigned int nbits);
 #endif
 
 #ifndef HAVE_KOBJ_TYPE_DEFAULT_GROUPS

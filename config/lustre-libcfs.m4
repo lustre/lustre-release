@@ -71,27 +71,6 @@ AS_IF([test "x$enable_panic_dumplog" = xyes], [
 ]) # LIBCFS_CONFIG_PANIC_DUMPLOG
 
 #
-# Kernel version 3.11 introduced ktime_get_ts64
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_GET_TS64], [
-	LB2_LINUX_TEST_SRC([ktime_get_ts64], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		struct timespec64 *ts = NULL;
-
-		ktime_get_ts64(ts);
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_GET_TS64], [
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_ts64' exist],
-	[ktime_get_ts64], [
-		AC_DEFINE(HAVE_KTIME_GET_TS64, 1,
-			['ktime_get_ts64' is available])
-	])
-]) # LIBCFS_KTIME_GET_TS64
-
-#
 # Kernel version 3.12-rc4 commit c2d816443ef30 added prepare_to_wait_event()
 #
 AC_DEFUN([LIBCFS_SRC_PREPARE_TO_WAIT_EVENT],[
@@ -130,114 +109,6 @@ AC_DEFUN([LIBCFS_KERNEL_PARAM_OPS],[
 			['struct kernel_param_ops' is available])
 	])
 ]) # LIBCFS_KERNEL_PARAM_OPS
-
-#
-# Kernel version 3.12 introduced ktime_add
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_ADD],[
-	LB2_LINUX_TEST_SRC([ktime_add], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		ktime_t start = ktime_set(0, 0);
-		ktime_t end = start;
-		ktime_t total;
-
-		total = ktime_add(start, end);
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_ADD],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_add' exist],
-	[ktime_add], [
-		AC_DEFINE(HAVE_KTIME_ADD, 1, [ktime_add is available])
-	])
-]) # LIBCFS_KTIME_ADD
-
-#
-# Kernel version 3.12 introduced ktime_after
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_AFTER],[
-	LB2_LINUX_TEST_SRC([ktime_after], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		ktime_t start = ktime_set(0, 0);
-		ktime_t end = start;
-
-		ktime_after(start, end);
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_AFTER],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_after' exist],
-	[ktime_after], [
-		AC_DEFINE(HAVE_KTIME_AFTER, 1, [ktime_after is available])
-	])
-]) # LIBCFS_KTIME_AFTER
-
-#
-# Kernel version 3.12 introduced ktime_before
-# See linux commit 67cb9366ff5f99868100198efba5ca88aaa6ad25
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_BEFORE],[
-	LB2_LINUX_TEST_SRC([ktime_before], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		ktime_t start = ktime_set(0, 0);
-		ktime_t end = start;
-
-		ktime_before(start, end);
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_BEFORE],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_before' exist],
-	[ktime_before], [
-		AC_DEFINE(HAVE_KTIME_BEFORE, 1, [ktime_before is available])
-	])
-]) # LIBCFS_KTIME_BEFORE
-
-#
-# Kernel version 3.12 introduced ktime_compare
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_COMPARE],[
-	LB2_LINUX_TEST_SRC([ktime_compare], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		ktime_t start = ktime_set(0, 0);
-		ktime_t end = start;
-
-		ktime_compare(start, end);
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_COMPARE],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_compare' exist],
-	[ktime_compare], [
-		AC_DEFINE(HAVE_KTIME_COMPARE, 1,
-			[ktime_compare is available])
-	])
-]) # LIBCFS_KTIME_COMPARE
-
-#
-# Kernel version 3.13 commit aace05097a0fd467230e39acb148be0fdaa90068
-# add match_wildcard() function.
-#
-AC_DEFUN([LIBCFS_SRC_MATCH_WILDCARD],[
-	LB2_LINUX_TEST_SRC([match_wildcard], [
-		#include <linux/parser.h>
-	],[
-		bool match;
-
-		match = match_wildcard(NULL, NULL);
-	])
-])
-AC_DEFUN([LIBCFS_MATCH_WILDCARD],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'match_wildcard' exist],
-	[match_wildcard], [
-		AC_DEFINE(HAVE_MATCH_WILDCARD, 1,
-			[match_wildcard() is available])
-	])
-]) # LIBCFS_MATCH_WILDCARD
 
 #
 # LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG
@@ -286,29 +157,6 @@ AC_DEFUN([LIBCFS_IOV_ITER_HAS_TYPE], [
 ]) # LIBCFS_IOV_ITER_HAS_TYPE
 
 #
-# LIBCFS_HAVE_NS_TO_TIMESPEC64
-#
-# Kernel version 3.16-rc3 commit a84d1169164b274f13b97a23ff235c000efe3b49
-# introduced struct __kernel_old_timeval
-#
-AC_DEFUN([LIBCFS_SRC_HAVE_NS_TO_TIMESPEC64],[
-	LB2_LINUX_TEST_SRC([kernel_old_timeval], [
-		#include <linux/time.h>
-	],[
-		struct timespec64 kts;
-
-		kts = ns_to_timespec64(0);
-	])
-])
-AC_DEFUN([LIBCFS_HAVE_NS_TO_TIMESPEC64],[
-	LB2_MSG_LINUX_TEST_RESULT([if 'ns_to_timespec64()' exist],
-	[kernel_old_timeval], [
-		AC_DEFINE(HAVE_NS_TO_TIMESPEC64, 1,
-			[ns_to_timespec64() is available])
-	])
-]) # LIBCFS_HAVE_NS_TO_TIMESPEC64
-
-#
 # LIBCFS_HAVE_GLOB
 #
 # Kernel version 3.16 commit b01250856b25f4417c51aa33afc451fbf7da1484
@@ -330,193 +178,6 @@ AC_DEFUN([LIBCFS_HAVE_GLOB],[
 ]) # LIBCFS_HAVE_GLOB
 
 #
-# Kernel version 3.17 introduced struct timespec64
-#
-AC_DEFUN([LIBCFS_SRC_TIMESPEC64],[
-	LB2_LINUX_TEST_SRC([timespec64], [
-		#include <linux/time.h>
-	],[
-		struct timespec64 ts;
-
-		ts.tv_sec = 0;
-		ts.tv_nsec = 0;
-	])
-])
-AC_DEFUN([LIBCFS_TIMESPEC64],[
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct timespec64' exist],
-	[timespec64], [
-		AC_DEFINE(HAVE_TIMESPEC64, 1,
-			['struct timespec64' is available])
-	])
-]) # LIBCFS_TIMESPEC64
-
-#
-# Kernel version 3.17 introduced ktime_get_real_ts64
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_GET_REAL_TS64],[
-	LB2_LINUX_TEST_SRC([ktime_get_real_ts64], [
-		#include <linux/ktime.h>
-	],[
-		struct timespec64 *ts = NULL;
-
-		ktime_get_real_ts64(ts);
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_GET_REAL_TS64],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_real_ts64' exist],
-	[ktime_get_real_ts64], [
-		AC_DEFINE(HAVE_KTIME_GET_REAL_TS64, 1,
-			['ktime_get_real_ts64' is available])
-	])
-]) # LIBCFS_KTIME_GET_REAL_TS64
-
-#
-# Kernel version 3.17 introduced ktime_get_real_seconds
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_GET_REAL_SECONDS],[
-	LB2_LINUX_TEST_SRC([ktime_get_real_seconds], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		time64_t now;
-
-		now = ktime_get_real_seconds();
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_GET_REAL_SECONDS],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_real_ts64' exist],
-	[ktime_get_real_seconds], [
-		AC_DEFINE(HAVE_KTIME_GET_REAL_SECONDS, 1,
-			['ktime_get_real_seconds' is available])
-	])
-]) # LIBCFS_KTIME_GET_REAL_SECONDS
-
-#
-# Kernel version 3.17 created ktime_get_ns wrapper
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_GET_NS],[
-	LB2_LINUX_TEST_SRC([ktime_get_ns], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		u64 nanoseconds;
-
-		nanoseconds = ktime_get_ns();
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_GET_NS],[
-	LB2_MSG_LINUX_TEST_RESULT([does function 'ktime_get_ns' exist],
-	[ktime_get_ns], [],[
-		AC_DEFINE(NEED_KTIME_GET_NS, 1,
-			['ktime_get_ns' is not available])
-	])
-]) # LIBCFS_KTIME_GET_NS
-
-#
-# Kernel version 3.17 created ktime_get_real_ns wrapper
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_GET_REAL_NS],[
-	LB2_LINUX_TEST_SRC([ktime_get_real_ns], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		u64 nanoseconds;
-
-		nanoseconds = ktime_get_real_ns();
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_GET_REAL_NS],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_real_ns' exist],
-	[ktime_get_real_ns], [],[
-		AC_DEFINE(NEED_KTIME_GET_REAL_NS, 1,
-			['ktime_get_real_ns' is not available])
-	])
-]) # LIBCFS_KTIME_GET_REAL_NS
-
-#
-# Kernel version 3.17 introduced ktime_to_timespec64
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_TO_TIMESPEC64],[
-	LB2_LINUX_TEST_SRC([ktime_to_timespec64], [
-		#include <linux/hrtimer.h>
-		#include <linux/ktime.h>
-	],[
-		ktime_t now = ktime_set(0, 0);
-		struct timespec64 ts;
-
-		ts = ktime_to_timespec64(now);
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_TO_TIMESPEC64],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_to_timespec64' exist],
-	[ktime_to_timespec64], [
-		AC_DEFINE(HAVE_KTIME_TO_TIMESPEC64, 1,
-			['ktime_to_timespec64' is available])
-	])
-]) # LIBCFS_KTIME_TO_TIMESPEC64
-
-#
-# Kernel version 3.17 introduced timespec64_sub
-#
-AC_DEFUN([LIBCFS_SRC_TIMESPEC64_SUB],[
-	LB2_LINUX_TEST_SRC([timespec64_sub], [
-		#include <linux/time.h>
-	],[
-		struct timespec64 later = { }, earlier = { }, diff;
-
-		diff = timespec64_sub(later, earlier);
-	])
-])
-AC_DEFUN([LIBCFS_TIMESPEC64_SUB],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'timespec64_sub' exist],
-	[timespec64_sub], [
-		AC_DEFINE(HAVE_TIMESPEC64_SUB, 1,
-			['timespec64_sub' is available])
-	])
-]) # LIBCFS_TIMESPEC64_SUB
-
-#
-# Kernel version 3.17 introduced timespec64_to_ktime
-#
-AC_DEFUN([LIBCFS_SRC_TIMESPEC64_TO_KTIME],[
-	LB2_LINUX_TEST_SRC([timespec64_to_ktime], [
-	#include <linux/ktime.h>
-	],[
-		struct timespec64 ts;
-		ktime_t now;
-
-		now = timespec64_to_ktime(ts);
-	])
-])
-AC_DEFUN([LIBCFS_TIMESPEC64_TO_KTIME],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'timespec64_to_ktime' exist],
-	[timespec64_to_ktime], [
-		AC_DEFINE(HAVE_TIMESPEC64_TO_KTIME, 1,
-			['timespec64_to_ktime' is available])
-	])
-]) # LIBCFS_TIMESPEC64_TO_KTIME
-
-#
-# Kernel version 3.19 introduced ktime_get_seconds
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_GET_SECONDS],[
-	LB2_LINUX_TEST_SRC([ktime_get_seconds], [
-		#include <linux/ktime.h>
-	],[
-		time64_t now;
-
-		now = ktime_get_seconds();
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_GET_SECONDS],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_get_seconds' exist],
-	[ktime_get_seconds], [
-		AC_DEFINE(HAVE_KTIME_GET_SECONDS, 1,
-			['ktime_get_seconds' is available])
-	])
-]) # LIBCFS_KTIME_GET_SECONDS
-
-#
 # Kernel version 3.19 commit v3.18-rc2-26-g61ada528dea0
 # introduce wait_woken()
 #
@@ -534,28 +195,6 @@ AC_DEFUN([LIBCFS_WAIT_WOKEN],[
 			['wait_woken, is available'])
 	])
 ]) # LIBCFS_WAIT_WOKEN
-
-#
-# Kernel version 4.0 commit 41fbf3b39d5eca01527338b4d0ee15ee1ae1023c
-# introduced the helper function ktime_ms_delta.
-#
-AC_DEFUN([LIBCFS_SRC_KTIME_MS_DELTA],[
-	LB2_LINUX_TEST_SRC([ktime_ms_delta], [
-		#include <linux/ktime.h>
-	],[
-		ktime_t start = ktime_set(0, 0);
-		ktime_t end = start;
-
-		ktime_ms_delta(start, end);
-	])
-])
-AC_DEFUN([LIBCFS_KTIME_MS_DELTA],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'ktime_ms_delta' exist],
-	[ktime_ms_delta], [
-		AC_DEFINE(HAVE_KTIME_MS_DELTA, 1,
-			['ktime_ms_delta' is available])
-	])
-]) # LIBCFS_KTIME_MS_DELTA
 
 #
 # Kernel version 4.1 commit b51d23e4e9fea6f264d39535c2a62d1f51e7ccc3
@@ -626,26 +265,6 @@ AC_DEFUN([LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK],[
 ]) # LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 
 #
-# Kernel version 4.4 commit ef951599074ba4fad2d0efa0a977129b41e6d203
-# introduced kstrtobool and kstrtobool_from_user.
-#
-AC_DEFUN([LIBCFS_SRC_KSTRTOBOOL_FROM_USER], [
-	LB2_LINUX_TEST_SRC([kstrtobool_from_user], [
-		#include <linux/kernel.h>
-	],[
-		bool result;
-		return kstrtobool_from_user(NULL, 0, &result);
-	])
-])
-AC_DEFUN([LIBCFS_KSTRTOBOOL_FROM_USER], [
-	LB2_MSG_LINUX_TEST_RESULT([if Linux kernel has 'kstrtobool_from_user'],
-	[kstrtobool_from_user], [
-		AC_DEFINE(HAVE_KSTRTOBOOL_FROM_USER, 1,
-			[kernel has kstrtobool_from_user])
-	])
-]) # LIBCFS_KSTRTOBOOL_FROM_USER
-
-#
 # LIBCFS_NETLINK_CALLBACK_START
 #
 # Kernel version 4.4-rc3 commit fc9e50f5a5a4e1fa9ba2756f745a13e693cf6a06
@@ -708,16 +327,6 @@ AC_DEFUN([LIBCFS_RHASHTABLE_REPLACE], [
 			[rhashtable_replace_fast() is available])
 	])
 ]) # LIBCFS_RHASHTABLE_REPLACE
-
-#
-# Kernel version 4.5-rc3 commit 2fe829aca9d7bed5fd6b49c6a1452e5e486b6cc3dd
-# made kset_find_obj() exportable to modules
-#
-AC_DEFUN([LIBCFS_EXPORT_KSET_FIND_OBJ], [
-LB_CHECK_EXPORT([kset_find_obj], [lib/kobject.c],
-	[AC_DEFINE(HAVE_KSET_FIND_OBJ, 1,
-		[kset_find_obj is exported by the kernel])])
-]) # LIBCFS_EXPORT_KSET_FIND_OBJ
 
 #
 # Kernel version 4.6+ commit ef703f49a6c5b909a85149bb6625c4ed0d697186
@@ -1217,29 +826,6 @@ AC_DEFUN([LIBCFS_WAIT_BIT_QUEUE_ENTRY_EXISTS], [
 ]) # LIBCFS_WAIT_BIT_QUEUE_ENTRY_EXISTS
 
 #
-# LIBCFS_NLA_STRDUP
-#
-# Kernel version 4.13-rc1 commit 2cf0c8b3e6942ecafe6ebb1a6d0328a81641bf39
-# created nla_strdup(). This is needed since push strings can be
-# any size.
-#
-AC_DEFUN([LIBCFS_SRC_NLA_STRDUP], [
-	LB2_LINUX_TEST_SRC([nla_strdup], [
-		#include <net/netlink.h>
-	],[
-		char *tmp = nla_strdup(NULL, GFP_KERNEL);
-		(void)tmp;
-	],[])
-])
-AC_DEFUN([LIBCFS_NLA_STRDUP], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'nla_strdup()' exists],
-	[nla_strdup], [
-		AC_DEFINE(HAVE_NLA_STRDUP, 1,
-			['nla_strdup' is available])
-	])
-]) # LIBCFS_NLA_STRDUP
-
-#
 # LIBCFS_WAIT_QUEUE_ENTRY
 #
 # Kernel version 4.13 ac6424b981bce1c4bc55675c6ce11bfe1bbfa64f
@@ -1330,28 +916,6 @@ AC_DEFUN([LIBCFS_LOCKDEP_IS_HELD], [
 			[lockdep_is_held() argument is const])
 	])
 ]) # LIBCFS_LOCKDEP_IS_HELD
-
-#
-# LIBCFS_BITMAP_TO_ARR32
-#
-# Kernel commit v4.15-10794-gc724f19 introduced
-# bitmap_{from,to}_arr32, which are handy functions, to move
-# data back and forth between a bitmap and a u32 array
-#
-AC_DEFUN([LIBCFS_SRC_BITMAP_TO_ARR32], [
-	LB2_LINUX_TEST_SRC([bitmap_to_arr32], [
-		#include <linux/bitmap.h>
-	],[
-		bitmap_to_arr32(NULL, NULL, 0);
-	],[-Werror])
-])
-AC_DEFUN([LIBCFS_BITMAP_TO_ARR32], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'bitmap_to_arr32()' exist],
-	[bitmap_to_arr32], [
-		AC_DEFINE(HAVE_BITMAP_TO_ARR32, 1,
-			[bitmap_to_arr32() exist])
-	])
-]) # LIBCFS_BITMAP_TO_ARR32
 
 #
 # LIBCFS_TIMER_SETUP
@@ -2401,44 +1965,23 @@ dnl # only once the compilation can be done in parallel significantly
 dnl # speeding up the process.
 dnl #
 AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
-	# 3.11
-	LIBCFS_SRC_KTIME_GET_TS64
 	# 3.12
 	LIBCFS_SRC_PREPARE_TO_WAIT_EVENT
 	LIBCFS_SRC_KERNEL_PARAM_OPS
-	LIBCFS_SRC_KTIME_ADD
-	LIBCFS_SRC_KTIME_AFTER
-	LIBCFS_SRC_KTIME_BEFORE
-	LIBCFS_SRC_KTIME_COMPARE
-	# 3.13
-	LIBCFS_SRC_MATCH_WILDCARD
 	# 3.14
 	LIBCFS_SRC_HAVE_MAPPING_AS_EXITING_FLAG
 	# 3.15
 	LIBCFS_SRC_IOV_ITER_HAS_TYPE
 	# 3.16
 	LIBCFS_SRC_HAVE_GLOB
-	# 3.17
-	LIBCFS_SRC_TIMESPEC64
-	LIBCFS_SRC_KTIME_GET_NS
-	LIBCFS_SRC_KTIME_GET_REAL_TS64
-	LIBCFS_SRC_KTIME_GET_REAL_SECONDS
-	LIBCFS_SRC_KTIME_GET_REAL_NS
-	LIBCFS_SRC_KTIME_TO_TIMESPEC64
-	LIBCFS_SRC_TIMESPEC64_SUB
-	LIBCFS_SRC_TIMESPEC64_TO_KTIME
 	# 3.19
-	LIBCFS_SRC_KTIME_GET_SECONDS
 	LIBCFS_SRC_WAIT_WOKEN
-	# 4.0
-	LIBCFS_SRC_KTIME_MS_DELTA
 	# 4.1
 	LIBCFS_SRC_KERNEL_PARAM_LOCK
 	# 4.2
 	LIBCFS_SRC_STRSCPY_EXISTS
 	LIBCFS_SRC_HAVE_TOPOLOGY_SIBLING_CPUMASK
 	# 4.4
-	LIBCFS_SRC_KSTRTOBOOL_FROM_USER
 	LIBCFS_SRC_NETLINK_CALLBACK_START
 	# 4.5
 	LIBCFS_SRC_CRYPTO_HASH_HELPERS
@@ -2453,7 +1996,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	# 4.8
 	LIBCFS_SRC_RHASHTABLE_LOOKUP
 	LIBCFS_SRC_RHLTABLE
-	LIBCFS_SRC_STACKTRACE_OPS
 	# 4.9
 	LIBCFS_SRC_GET_USER_PAGES_GUP_FLAGS
 	LIBCFS_SRC_RHASHTABLE_WALK_ENTER
@@ -2475,15 +2017,12 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_REFCOUNT_T
 	LIBCFS_SRC_MEMALLOC_NORECLAIM
 	# 4.13
-	LIBCFS_SRC_NLA_STRDUP
 	LIBCFS_SRC_WAIT_QUEUE_ENTRY
 	# 4.14
 	LIBCFS_SRC_DEFINE_TIMER
 	# 4.15
-	LIBCFS_SRC_BITMAP_TO_ARR32
 	LIBCFS_SRC_TIMER_SETUP
 	# 4.16
-	LIBCFS_SRC_HAVE_NS_TO_TIMESPEC64
 	LIBCFS_SRC_WAIT_VAR_EVENT
 	# 4.17
 	LIBCFS_SRC_BITMAP_ALLOC
@@ -2552,45 +2091,23 @@ dnl #
 dnl # Check results of kernel interface tests.
 dnl #
 AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
-	# 3.11
-	LIBCFS_KTIME_GET_TS64
 	# 3.12
 	LIBCFS_PREPARE_TO_WAIT_EVENT
 	LIBCFS_KERNEL_PARAM_OPS
-	LIBCFS_KTIME_ADD
-	LIBCFS_KTIME_AFTER
-	LIBCFS_KTIME_BEFORE
-	LIBCFS_KTIME_COMPARE
-	# 3.13
-	LIBCFS_MATCH_WILDCARD
 	# 3.14
 	LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG
 	# 3.15
 	LIBCFS_IOV_ITER_HAS_TYPE
 	# 3.16
 	LIBCFS_HAVE_GLOB
-	# 3.17
-	LIBCFS_HLIST_ADD_AFTER
-	LIBCFS_TIMESPEC64
-	LIBCFS_KTIME_GET_NS
-	LIBCFS_KTIME_GET_REAL_TS64
-	LIBCFS_KTIME_GET_REAL_SECONDS
-	LIBCFS_KTIME_GET_REAL_NS
-	LIBCFS_KTIME_TO_TIMESPEC64
-	LIBCFS_TIMESPEC64_SUB
-	LIBCFS_TIMESPEC64_TO_KTIME
 	# 3.19
-	LIBCFS_KTIME_GET_SECONDS
 	LIBCFS_WAIT_WOKEN
-	# 4.0
-	LIBCFS_KTIME_MS_DELTA
 	# 4.1
 	LIBCFS_KERNEL_PARAM_LOCK
 	# 4.2
 	LIBCFS_STRSCPY_EXISTS
 	LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 	# 4.4
-	LIBCFS_KSTRTOBOOL_FROM_USER
 	LIBCFS_NETLINK_CALLBACK_START
 	# 4.5
 	LIBCFS_CRYPTO_HASH_HELPERS
@@ -2605,7 +2122,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	# 4.8
 	LIBCFS_RHASHTABLE_LOOKUP
 	LIBCFS_RHLTABLE
-	LIBCFS_STACKTRACE_OPS
 	# 4.9
 	LIBCFS_GET_USER_PAGES_GUP_FLAGS
 	LIBCFS_RHASHTABLE_WALK_ENTER
@@ -2627,15 +2143,12 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_REFCOUNT_T
 	LIBCFS_MEMALLOC_NORECLAIM
 	# 4.13
-	LIBCFS_NLA_STRDUP
 	LIBCFS_WAIT_QUEUE_ENTRY
 	# 4.14
 	LIBCFS_DEFINE_TIMER
 	# 4.15
-	LIBCFS_BITMAP_TO_ARR32
 	LIBCFS_TIMER_SETUP
 	# 4.16
-	LIBCFS_HAVE_NS_TO_TIMESPEC64
 	LIBCFS_WAIT_VAR_EVENT
 	# 4.17
 	LIBCFS_BITMAP_ALLOC
@@ -2711,8 +2224,6 @@ AC_MSG_NOTICE([LibCFS kernel checks
 ==============================================================================])
 LIBCFS_CONFIG_PANIC_DUMPLOG
 
-# 4.6 - Export Check
-LIBCFS_EXPORT_KSET_FIND_OBJ
 # 5.0 - Export Check
 LIBCFS_GENRADIX
 # 5.7 - Export Check
