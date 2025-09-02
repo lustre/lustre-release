@@ -690,7 +690,12 @@ static inline void folio_batch_reinit(struct folio_batch *fbatch)
 }
 # endif /* HAVE_FOLIO_BATCH_REINIT */
 
-# define folio_index_page(pg)		folio_index(page_folio((pg)))
+static inline pgoff_t folio_index_page(struct page *page)
+{
+	struct folio *_f = page_folio(page);
+
+	return _f->index + folio_page_idx(_f, page);
+}
 
 #else /* !HAVE_FOLIO_BATCH && !HAVE_FILEMAP_GET_FOLIOS */
 
@@ -720,7 +725,7 @@ static inline void folio_batch_reinit(struct folio_batch *fbatch)
 # define fbatch_at(pvec, n)		((pvec)->pages[(n)])
 # define fbatch_at_npgs(pvec, n)	1
 # define fbatch_at_pg(pvec, n, pg)	((pvec)->pages[(n)])
-# define folio_index_page(pg)		page_index((pg))
+# define folio_index_page(pg)		((pg)->index)
 
 #endif /* HAVE_FOLIO_BATCH && HAVE_FILEMAP_GET_FOLIOS */
 

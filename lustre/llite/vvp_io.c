@@ -986,7 +986,7 @@ static inline void ll_account_page_dirtied(struct page *page,
 #else
 	vvp_account_page_dirtied(page, mapping);
 #endif
-	__xa_set_mark(&mapping->i_pages, page_index(page),
+	__xa_set_mark(&mapping->i_pages, folio_index_page(page),
 		      PAGECACHE_TAG_DIRTY);
 }
 
