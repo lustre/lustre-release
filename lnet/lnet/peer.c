@@ -1338,34 +1338,46 @@ lnet_discover_peer_nid(struct lnet_nid *nid)
 	lnet_net_unlock(cpt);
 }
 
-int
-LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
+void LNetAddPeer(struct lnet_nid *nids, int num_nids)
 {
 	struct lnet_nid pnid = LNET_ANY_NID;
+	char nidstr[LNET_NIDSTR_SIZE] = { 0 };
 	bool discovery;
 	int i, rc;
 	int flags = lock_prim_nid ? LNET_PEER_LOCK_PRIMARY : 0;
 
-	if (!nids || num_nids < 1)
-		return -EINVAL;
+	if (!nids || num_nids < 1) {
+		CDEBUG(D_NET, "Invalid parameters: nids=%p, num_nids=%d\n",
+		       nids, num_nids);
+		return;
+	}
+
+	CDEBUG(D_NET, "Add peer with %d NIDs\n", num_nids);
 
 	rc = LNetNIInit(LNET_PID_ANY);
-	if (rc < 0)
-		return rc;
+	if (rc < 0) {
+		CDEBUG(D_NET, "LNetNIInit failed, rc = %d\n", rc);
+		return;
+	}
 
 	mutex_lock(&the_lnet.ln_api_mutex);
 
 	discovery = !lnet_peer_discovery_disabled;
 
-	rc = 0;
-
 	for (i = 0; i < num_nids; i++) {
-		if (nid_is_lo0(&nids[i]))
-			continue;
+		libcfs_nidstr_r(&nids[i], nidstr, LNET_NIDSTR_SIZE);
+		CDEBUG(D_NET, "Adding NID[%i]: %s\n", i, nidstr);
 
-		/* only add NIDs on local networks if discovery is off */
-		if (!discovery && !lnet_islocalnet(LNET_NID_NET(&nids[i])))
+		if (nid_is_lo0(&nids[i])) {
+			CDEBUG(D_NET, "Skip NID %s as local\n", nidstr);
 			continue;
+		}
+		/* only add NIDs on local networks if discovery is off */
+		if (!discovery && !lnet_islocalnet(LNET_NID_NET(&nids[i]))) {
+			CDEBUG(D_NET, "Skip NID %s on missing network\n",
+			       nidstr);
+			continue;
+		}
 
 		if (LNET_NID_IS_ANY(&pnid)) {
 			pnid = nids[i];
@@ -1374,16 +1386,13 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 			if (rc == -EALREADY) {
 				struct lnet_peer *lp;
 
-				CDEBUG(D_NET, "A peer exists for NID %s\n",
-				       libcfs_nidstr(&pnid));
-				rc = 0;
 				/* Adds a refcount */
 				lp = lnet_find_peer(&pnid);
 				LASSERT(lp);
 				pnid = lp->lp_primary_nid;
 				/* Drop refcount from lookup */
 				lnet_peer_decref_locked(lp);
-			} else if (rc) {
+			} else if (rc && rc != -EEXIST) {
 				/* reset pnid back to ANY if error */
 				pnid = LNET_ANY_NID;
 			} else if (discovery) {
@@ -1397,6 +1406,7 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 			if (!rc) {
 				if (lock_prim_nid) {
 					struct lnet_peer *lp;
+
 					lp = lnet_find_peer(&nids[i]);
 					if (lp) {
 						lp->lp_merge_primary_nid = pnid;
@@ -1406,17 +1416,14 @@ LNetAddPeer(struct lnet_nid *nids, u32 num_nids)
 				lnet_discover_peer_nid(&nids[i]);
 			}
 		}
-
-		if (rc && rc != -EEXIST)
-			goto unlock;
+		if (rc == -EEXIST || rc == -EALREADY)
+			CDEBUG(D_NET, "A peer exists for NID %s\n", nidstr);
+		else if (rc)
+			CDEBUG(D_NET, "Fail to add peer NID %s, rc = %d\n",
+			       nidstr, rc);
 	}
-
-unlock:
 	mutex_unlock(&the_lnet.ln_api_mutex);
-
 	LNetNIFini();
-
-	return rc == -EEXIST ? 0 : rc;
 }
 EXPORT_SYMBOL(LNetAddPeer);
 

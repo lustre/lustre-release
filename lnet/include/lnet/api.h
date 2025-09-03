@@ -151,7 +151,7 @@ int LNetClearLazyPortal(int portal);
 int LNetCtl(unsigned int cmd, void *arg);
 void LNetDebugPeer(struct lnet_processid *id);
 int LNetGetPeerDiscoveryStatus(void);
-int LNetAddPeer(struct lnet_nid *nids, u32 num_nids);
+void LNetAddPeer(struct lnet_nid *nids, int num_nids);
 
 /** @} lnet_misc */
 
