@@ -2718,8 +2718,17 @@ kefalnd_dev_init(struct kefa_ni *efa_ni, char *ifname, __be32 ip_addr)
 	if (rc)
 		goto failed;
 
-	dev_numa_node = ibdev_to_node(efa_dev->ib_dev);
-	efa_dev->cpt = cfs_cpt_of_node(lnet_cpt_table(), dev_numa_node);
+	/* If a user does not specify any cpt, or specifies to use all cpts,
+	 * lnet_ni->ni_cpts will be NULL. See lnet_ni_alloc() and
+	 * lnet_ni_alloc_w_cpt_array() in lnet/lnet/config.c
+	 */
+	if (lnet_ni->ni_cpts)
+		efa_dev->cpt = lnet_ni->ni_cpts[0];
+	else {
+		dev_numa_node = ibdev_to_node(efa_dev->ib_dev);
+		efa_dev->cpt = cfs_cpt_of_node(lnet_cpt_table(), dev_numa_node);
+	}
+
 	if (efa_dev->cpt == CFS_CPT_ANY)
 		efa_dev->cpt = 0;
 
