@@ -8773,8 +8773,8 @@ test_72e() {
 	local exp_cnt_orig
 	local exp_cnt_new
 
-	(( $MDS1_VERSION >= $(version_code 2.16.56) )) ||
-		skip "Need MDS version >= 2.16.56"
+	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
+		skip "Need MDS with reclassify members support"
 
 	stack_trap cleanup_72e EXIT
 
