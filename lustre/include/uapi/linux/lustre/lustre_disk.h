@@ -244,6 +244,7 @@ enum nodemap_idx_type {
  * to lustre_idl.h which will break user land builds.
  */
 #define LUSTRE_NODEMAP_NAME_LENGTH     16
+#define LUSTRE_NODEMAP_GUESS	       "?"
 
 /* lu_nodemap flags */
 enum nm_flag_bits {

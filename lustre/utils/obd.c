@@ -4477,9 +4477,9 @@ int jt_nodemap_del_range(int argc, char **argv)
  */
 int jt_nodemap_banlist_add(int argc, char **argv)
 {
+	char *nodemap_name = LUSTRE_NODEMAP_GUESS;
 	char nid_range[2 * LNET_NIDSTR_SIZE + 2];
 	char *nodemap_range = NULL;
-	char *nodemap_name = NULL;
 	int c, rc = EXIT_SUCCESS;
 
 	static struct option long_opts[] = {
@@ -4504,10 +4504,6 @@ int jt_nodemap_banlist_add(int argc, char **argv)
 		}
 	}
 
-	if (!nodemap_name) {
-		fprintf(stderr, "nodemap_banlist_add: missing nodemap name\n");
-		return CMD_HELP;
-	}
 	if (!nodemap_range) {
 		fprintf(stderr, "nodemap_banlist_add: missing NID range\n");
 		return CMD_HELP;
@@ -4539,9 +4535,9 @@ int jt_nodemap_banlist_add(int argc, char **argv)
  */
 int jt_nodemap_banlist_del(int argc, char **argv)
 {
+	char *nodemap_name = LUSTRE_NODEMAP_GUESS;
 	char nid_range[2 * LNET_NIDSTR_SIZE + 2];
 	char *nodemap_range = NULL;
-	char *nodemap_name = NULL;
 	int c, rc = EXIT_SUCCESS;
 
 	static struct option long_opts[] = {
@@ -4566,10 +4562,6 @@ int jt_nodemap_banlist_del(int argc, char **argv)
 		}
 	}
 
-	if (!nodemap_name) {
-		fprintf(stderr, "nodemap_banlist_del: missing nodemap name\n");
-		return CMD_HELP;
-	}
 	if (!nodemap_range) {
 		fprintf(stderr, "nodemap_banlist_del: missing NID range\n");
 		return CMD_HELP;

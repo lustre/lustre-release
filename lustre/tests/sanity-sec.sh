@@ -10024,12 +10024,16 @@ test_81a() {
 	local nm=c0
 	local dynnm=c1
 	local header="test_81a $RANDOM"
+	local need_nm=0
 	local exp_cnt_orig
 	local exp_cnt_new
 	local banmsg
 
 	(( $MDS1_VERSION >= $(version_code 2.16.57) )) ||
 		skip "Need MDS version >= 2.16.57 for ban list support"
+
+	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
+		need_nm=1
 
 	log $header
 	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
@@ -10065,6 +10069,14 @@ test_81a() {
 	# add ban list to default nodemap
 	stack_trap "do_facet mgs $LCTL nodemap_banlist_del --name default \
 		--range $client_nid || true" EXIT
+	if (( need_nm == 0 )); then
+		do_facet mgs $LCTL nodemap_banlist_add --range 1.1.1.1@tcp999 ||
+		      error "Setting banlist=1.1.1.1@tcp999 on default failed"
+		wait_nm_sync default banlist
+		do_facet mgs $LCTL nodemap_banlist_del --range 1.1.1.1@tcp999 ||
+		      error "Removing banlist=1.1.1.1@tcp999 on default failed"
+		wait_nm_sync default banlist
+	fi
 	do_facet mgs $LCTL nodemap_banlist_add --name default \
 		--range $client_nid ||
 		      error "Setting banlist=$client_nid on default failed"
@@ -10105,8 +10117,16 @@ test_81a() {
 		      error "Setting banlist=$client_nid on default should fail"
 	do_facet mgs $LCTL nodemap_banlist_add --name $nm --range $fake_nid &&
 		error "Setting banlist=$fake_nid on $nm should fail"
+	if (( need_nm == 0 )); then
+		do_facet mgs $LCTL nodemap_banlist_add --range $client_nid ||
+			error "Setting banlist=$client_nid on $nm failed (1)"
+		wait_nm_sync $nm banlist
+		do_facet mgs $LCTL nodemap_banlist_del --range $client_nid ||
+			error "Deleting banlist=$client_nid on $nm failed (1)"
+		wait_nm_sync $nm banlist
+	fi
 	do_facet mgs $LCTL nodemap_banlist_add --name $nm --range $client_nid ||
-		error "Setting banlist=$client_nid on $nm failed"
+		error "Setting banlist=$client_nid on $nm failed (2)"
 	wait_nm_sync $nm banlist
 
 	# check nodemap exports
@@ -10123,7 +10143,7 @@ test_81a() {
 
 	# del ban list
 	do_facet mgs $LCTL nodemap_banlist_del --name $nm --range $client_nid ||
-		error "Deleting banlist=$client_nid on $nm failed"
+		error "Deleting banlist=$client_nid on $nm failed (2)"
 	wait_nm_sync $nm banlist
 
 	# check nodemap exports

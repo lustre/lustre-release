@@ -1585,13 +1585,30 @@ int nodemap_add_banlist(const char *name, const struct lnet_nid nid[2],
 			u8 netmask)
 {
 	struct lu_nodemap *nodemap = NULL;
+	struct lu_nid_range *range;
 	int rc;
 
 	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
-		GOTO(out, rc = PTR_ERR(nodemap));
+	if (strcmp(name, LUSTRE_NODEMAP_GUESS) == 0) {
+		/* We need to search regular NID ranges to find the
+		 * corresponding nodemap.
+		 */
+		down_read(&active_config->nmc_range_tree_lock);
+		range = range_find(active_config, &nid[0], &nid[1],
+				   netmask, false);
+		if (range)
+			nodemap = range->rn_nodemap;
+		else
+			/* take default nodemap if no ranges match */
+			nodemap = active_config->nmc_default_nodemap;
+		nodemap_getref(nodemap);
+		up_read(&active_config->nmc_range_tree_lock);
+	} else {
+		nodemap = nodemap_lookup(name);
+		if (IS_ERR(nodemap)) {
+			mutex_unlock(&active_config_lock);
+			GOTO(out, rc = PTR_ERR(nodemap));
+		}
 	}
 
 	if (!allow_op_on_nm(nodemap))
@@ -1628,10 +1645,26 @@ int nodemap_del_banlist(const char *name, const struct lnet_nid nid[2],
 	int rc = 0;
 
 	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
-		GOTO(out, rc = PTR_ERR(nodemap));
+	if (strcmp(name, LUSTRE_NODEMAP_GUESS) == 0) {
+		/* We need to search regular NID ranges to find the
+		 * corresponding nodemap.
+		 */
+		down_read(&active_config->nmc_range_tree_lock);
+		range = range_find(active_config, &nid[0], &nid[1],
+				   netmask, false);
+		if (range)
+			nodemap = range->rn_nodemap;
+		else
+			/* take default nodemap if no ranges match */
+			nodemap = active_config->nmc_default_nodemap;
+		nodemap_getref(nodemap);
+		up_read(&active_config->nmc_range_tree_lock);
+	} else {
+		nodemap = nodemap_lookup(name);
+		if (IS_ERR(nodemap)) {
+			mutex_unlock(&active_config_lock);
+			GOTO(out, rc = PTR_ERR(nodemap));
+		}
 	}
 
 	if (!allow_op_on_nm(nodemap))

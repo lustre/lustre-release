@@ -5,7 +5,8 @@ lctl-nodemap_banlist_add \- define a range of banned NIDs for a nodemap
 .SY "lctl nodemap_banlist_add"
 or
 .SY "lctl nodemap banlist_add"
-.BI --name " NODEMAP_NAME"
+.RB [ --name
+.IR "NODEMAP_NAME" ]
 .BI --range " NID_RANGE"
 .YS
 .SH DESCRIPTION
@@ -16,6 +17,12 @@ For normal nodemaps, the banned NID range must be included into a regular NID
 range associated with the nodemap.
 For the default nodemap, the added range of banned NIDs must not conflict with
 any NID range defined on any other nodemap.
+.br
+If the
+.BI --name
+option is omitted, the nodemap to add the banlist to will be inferred from the
+existing NID ranges that include the provided ban range. If none is found, the
+default nodemap will be used.
 .br
 Clients with NIDs that fall into the banned range will be blocked by servers,
 and will get 'Operation not permitted' for all requests except unmount. The

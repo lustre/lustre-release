@@ -5,12 +5,19 @@ lctl-nodemap_banlist_del \- delete an existing banned NID range from a nodemap
 .SY "lctl nodemap_banlist_del"
 or
 .SY "lctl nodemap banlist_del"
-.BI --name " NODEMAP_NAME"
+.RB [ --name
+.IR "NODEMAP_NAME" ]
 .BI --range " NID_RANGE"
 .YS
 .SH DESCRIPTION
 .B nodemap_banlist_del
-deletes a banned NID range from a nodemap. Clients will be able to resume normal
+deletes a banned NID range from a nodemap. If the
+.BI --name
+option is omitted, the nodemap to delete the banlist from will be inferred from
+the existing NID ranges that include the provided ban range. If none is found,
+the default nodemap will be used.
+.br
+Clients part of the removed banlist will be able to resume normal
 operations, reconnect to the servers, and will be considered part of this
 nodemap.
 .SH OPTIONS
