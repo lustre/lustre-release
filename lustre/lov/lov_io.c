@@ -1938,7 +1938,8 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 {
 	struct lov_object *lov = cl2lov(obj);
 	struct lov_io *lio = lov_env_io(env);
-	int result;
+	int result = 0;
+
 	ENTRY;
 
 	lio->lis_object = lov;

@@ -1136,7 +1136,7 @@ got:
 int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 		   struct md_attr *ma, const char *name)
 {
-	void *big_lmm;
+	void *big_lmm = NULL;
 	int big_size, rc;
 	bool is_lmv;
 

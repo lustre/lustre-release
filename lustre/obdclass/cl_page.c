@@ -1115,7 +1115,7 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 {
 	struct page *vmpage = cp->cp_vmpage;
 	bool unlock = false;
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 	PASSERT(env, cp, crt == CRT_WRITE);

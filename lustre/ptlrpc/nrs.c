@@ -960,8 +960,8 @@ static int nrs_register_policies_locked(struct ptlrpc_nrs *nrs)
 static int nrs_svcpt_setup_locked0(struct ptlrpc_nrs *nrs,
 				   struct ptlrpc_service_part *svcpt)
 {
-	int				rc;
-	enum ptlrpc_nrs_queue_type	queue;
+	enum ptlrpc_nrs_queue_type queue = PTLRPC_NRS_QUEUE_REG;
+	int rc;
 
 	LASSERT(mutex_is_locked(&nrs_core.nrs_mutex));
 

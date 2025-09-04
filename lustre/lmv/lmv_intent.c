@@ -534,7 +534,8 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 		    ldlm_blocking_callback cb_blocking,
 		    __u64 extra_lock_flags)
 {
-	int rc;
+	int rc = 0;
+
 	ENTRY;
 
 	LASSERT(it != NULL);

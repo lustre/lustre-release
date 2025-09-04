@@ -762,10 +762,12 @@ __u32 lustre_msg_bufcount(struct lustre_msg *m)
 	}
 }
 
+/*
+ * max_len == 0 means the string should fill the buffer
+ */
 char *lustre_msg_string(struct lustre_msg *m, __u32 index, __u32 max_len)
 {
-	/* max_len == 0 means the string should fill the buffer */
-	char *str;
+	char *str = NULL;
 	__u32 slen, blen;
 
 	switch (m->lm_magic) {

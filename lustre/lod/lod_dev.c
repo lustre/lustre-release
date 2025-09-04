@@ -674,14 +674,14 @@ int lodname2mdt_index(char *lodname, u32 *mdt_index)
 int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		      struct dt_device *dt)
 {
-	struct obd_device *obd;
 	struct lod_recovery_data *lrd = NULL;
 	DECLARE_COMPLETION_ONSTACK(started);
+	struct lod_tgt_desc *subtgt = NULL;
 	struct task_struct **taskp;
 	struct task_struct *task;
-	struct lod_tgt_desc *subtgt = NULL;
-	u32 index;
+	struct obd_device *obd;
 	u32 master_index;
+	u32 index = 0;
 	int rc;
 
 	ENTRY;
