@@ -606,6 +606,31 @@ AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
 	],[
 		AC_MSG_ERROR([spa_maxblocksize does not exist])
 	])
+	LB_CHECK_COMPILE([if zfs defines spa_get_min_alloc_range],
+	spa_get_min_alloc_range, [
+		#include <sys/spa.h>
+	],[
+		spa_t *spa = NULL;
+		uint64_t min_alloc, max_alloc;
+
+		spa_get_min_alloc_range(spa, &min_alloc, &max_alloc);
+
+		(void)spa;
+	],[
+		AC_DEFINE(HAVE_SPA_GET_MIN_ALLOC_RANGE, 1,
+			[Have spa_get_min_alloc_range in ZFS])
+	])
+	LB_CHECK_COMPILE([if zfs defines vdev_op_min_alloc],
+	vdev_op_min_alloc, [
+		#include <sys/vdev_impl.h>
+		vdev_ops_t vdev_test_ops = {
+			.vdev_op_min_alloc = NULL,
+		};
+	],[
+	],[
+		AC_DEFINE(HAVE_VDEV_OP_MIN_ALLOC, 1,
+			[Have vdev_op_min_alloc in ZFS])
+	])
 
 	#
 	# ZFS 0.7.x adds support for large dnodes.  This

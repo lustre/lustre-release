@@ -1017,15 +1017,12 @@ static void osd_choose_next_blocksize(struct osd_object *obj,
 	if (dn->dn_datablksz >= osd->od_max_blksz)
 		return;
 
-	/*
-	 * client sends data from own writeback cache after local
-	 * aggregation. there is a chance this is a "unit of write"
-	 * so blocksize.
-	 */
-	if (off != 0)
-		return;
+	if (off == obj->oo_attr.la_size)
+		blksz = (uint32_t)max_t(uint64_t, osd->od_min_blksz, off + len);
+	else
+		blksz = (uint32_t)max_t(uint64_t, osd->od_min_blksz, len);
+	blksz = (uint32_t)min_t(uint64_t, osd->od_max_blksz, blksz);
 
-	blksz = (uint32_t)min_t(uint64_t, osd->od_max_blksz, len);
 	if (!is_power_of_2(blksz))
 		blksz = size_roundup_power2(blksz);
 

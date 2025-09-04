@@ -1112,6 +1112,42 @@ osd_unlinked_drain(const struct lu_env *env, struct osd_device *osd)
 	zap_cursor_fini(&zc);
 }
 
+#ifndef HAVE_SPA_GET_MIN_ALLOC_RANGE
+#include <sys/vdev_impl.h>
+
+static void
+spa_get_min_alloc_range(spa_t *spa, uint64_t *min_alloc, uint64_t *max_alloc)
+{
+#ifdef HAVE_VDEV_OP_MIN_ALLOC
+	vdev_t *rvd = spa->spa_root_vdev;
+	int i;
+
+	*min_alloc = spa->spa_min_alloc;
+	*max_alloc = *min_alloc;
+
+	for (i = 0; i < rvd->vdev_children; i++) {
+		vdev_t *vd = rvd->vdev_child[i];
+		vdev_ops_t *ops = vd->vdev_ops;
+
+		if (vd->vdev_islog || vd->vdev_ishole)
+			continue;
+
+		if (vd->vdev_alloc_bias != VDEV_BIAS_NONE)
+			continue;
+
+		if (ops && ops->vdev_op_min_alloc) {
+			uint64_t top_min_alloc = ops->vdev_op_min_alloc(vd);
+			if (top_min_alloc > *max_alloc)
+				*max_alloc = top_min_alloc;
+		}
+	}
+#else
+	*min_alloc = SPA_MINBLOCKSIZE;
+	*max_alloc = SPA_MINBLOCKSIZE;
+#endif /* HAVE_VDEV_OP_MIN_ALLOC */
+}
+#endif /* HAVE_SPA_GET_MIN_ALLOC_RANGE */
+
 static int osd_mount(const struct lu_env *env,
 		     struct osd_device *o, struct lustre_cfg *cfg)
 {
@@ -1119,6 +1155,7 @@ static int osd_mount(const struct lu_env *env,
 	char *str = lustre_cfg_string(cfg, 2);
 	char *svname = lustre_cfg_string(cfg, 4);
 	time64_t interval = AS_DEFAULT;
+	uint64_t min_alloc, max_alloc;
 	dnode_t *rootdn;
 	const char *opts;
 	bool resetoi = false;
@@ -1172,6 +1209,8 @@ static int osd_mount(const struct lu_env *env,
 
 	o->od_xattr_in_sa = B_TRUE;
 	o->od_max_blksz = spa_maxblocksize(o->od_os->os_spa);
+	spa_get_min_alloc_range(o->od_os->os_spa, &min_alloc, &max_alloc);
+	o->od_min_blksz = max_alloc;
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
 
 	rc = __osd_obj2dnode(o->od_os, o->od_rootid, &rootdn);

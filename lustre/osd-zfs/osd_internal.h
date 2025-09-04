@@ -343,6 +343,7 @@ struct osd_device {
 	uint64_t		 od_remote_parent_dir;
 	uint64_t		 od_index_backup_id;
 	uint64_t		 od_max_blksz;
+	uint64_t		 od_min_blksz;
 	uint64_t		 od_root;
 	uint64_t		 od_O_id;
 	struct osd_oi		**od_oi_table;

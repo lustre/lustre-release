@@ -73,7 +73,6 @@ fi
 
 if [[ "$ost1_FSTYPE" = "zfs" ]]; then
 	always_except LU-1941 130b 130c 130d 130e 130f 130g
-	always_except LU-9054 312
 fi
 
 # Check if running on specific distros to skip certain subtests

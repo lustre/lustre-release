@@ -981,8 +981,7 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 	}
 	/* Block size may be not set; suggest maximal I/O transfers. */
 	if (blksize == 0)
-		blksize = spa_maxblocksize(
-			dmu_objset_spa(osd_obj2dev(obj)->od_os));
+		blksize = osd->od_max_blksz;
 
 	attr->la_blksize = blksize;
 	attr->la_blocks = blocks;
