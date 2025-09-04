@@ -7437,7 +7437,7 @@ static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 }
 
 static int showdf(char *mntdir, struct obd_statfs *stat,
-		  char *uuid, enum mntdf_flags flags,
+		  const char *uuid, enum mntdf_flags flags,
 		  char *type, int index, int rc)
 {
 	long long avail, used, total;
@@ -9415,7 +9415,7 @@ static void diff2str(time_t seconds, char *buf, time_t now)
 	__sec2str(seconds - now, buf);
 }
 
-static void print_quota_val(char *val, int cols, bool print_over,
+static void print_quota_val(const char *val, int cols, bool print_over,
 			    struct quota_param *param)
 {
 	if ((param->qp_detail & (param->qp_detail - 1)) == 0 &&
@@ -9510,7 +9510,7 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 #endif
 
 #define STRBUF_LEN	24
-static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
+static void print_quota(const char *mnt, struct if_quotactl *qctl, int type,
 			int rc, struct quota_param *param)
 {
 	time_t now;

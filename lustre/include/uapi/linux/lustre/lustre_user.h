@@ -1393,7 +1393,7 @@ struct obd_uuid {
 static inline bool obd_uuid_equals(const struct obd_uuid *u1,
 				   const struct obd_uuid *u2)
 {
-	return strcmp((char *)u1->uuid, (char *)u2->uuid) == 0;
+	return strncmp(u1->uuid, u2->uuid, sizeof(u1->uuid)) == 0;
 }
 
 static inline int obd_uuid_empty(struct obd_uuid *uuid)
@@ -1403,28 +1403,27 @@ static inline int obd_uuid_empty(struct obd_uuid *uuid)
 
 static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
 {
-	strncpy((char *)uuid->uuid, tmp, sizeof(*uuid));
-	uuid->uuid[sizeof(*uuid) - 1] = '\0';
+	strncpy(uuid->uuid, tmp, sizeof(uuid->uuid));
+	uuid->uuid[sizeof(uuid->uuid) - 1] = '\0';
 }
 
 /* For printf's only, make sure uuid is terminated */
-static inline char *obd_uuid2str(const struct obd_uuid *uuid)
+static inline const char *obd_uuid2str(const struct obd_uuid *uuid)
 {
 	if (uuid == NULL)
 		return NULL;
 
-	if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
+	if (strnlen(uuid->uuid, sizeof(uuid->uuid)) >= sizeof(uuid->uuid)) {
 		/* Obviously not safe, but for printfs, no real harm done...
 		 * we're always null-terminated, even in a ce.
 		 */
-		static char temp[sizeof(*uuid->uuid)];
+		static char temp[sizeof(uuid->uuid)];
 
-		memcpy(temp, uuid->uuid, sizeof(*uuid->uuid) - 1);
-		temp[sizeof(*uuid->uuid) - 1] = '\0';
-
+		strncpy(temp, uuid->uuid, sizeof(temp));
+		temp[sizeof(temp) - 1] = '\0';
 		return temp;
 	}
-	return (char *)(uuid->uuid);
+	return uuid->uuid;
 }
 
 #define LUSTRE_MAXFSNAME 8

@@ -656,7 +656,7 @@ cfs_hash_dual_bd_finddel_locked(struct cfs_hash *hs, struct cfs_hash_bd *bds,
 
 /* Hash init/cleanup functions */
 struct cfs_hash *
-cfs_hash_create(char *name, unsigned int cur_bits, unsigned int max_bits,
+cfs_hash_create(const char *name, unsigned int cur_bits, unsigned int max_bits,
 		unsigned int bkt_bits, unsigned int extra_bytes,
 		unsigned int min_theta, unsigned int max_theta,
 		struct cfs_hash_ops *ops, unsigned int flags);
