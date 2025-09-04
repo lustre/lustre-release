@@ -480,9 +480,10 @@ test_17b() {
 	# get one of the clients from client list
 	local rcli=$(echo $RCLIENTS | cut -d ' ' -f 1)
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
-	local ldlm_enqueue_min=$(do_facet ost1 find /sys -name ldlm_enqueue_min)
+	local ldlm_enqueue_min=$(do_facet ost1 "find /sys/module \
+				 -name ldlm_enqueue_min")
 	[ -z "$ldlm_enqueue_min" ] &&
-		skip "missing /sys/.../ldlm_enqueue_min" && return 0
+		skip "missing /sys/module/.../ldlm_enqueue_min" && return 0
 
 	$LFS setstripe -i 0 -c 1 -S 1048576 $DIR/$tfile ||
 		error "setstripe failed"
