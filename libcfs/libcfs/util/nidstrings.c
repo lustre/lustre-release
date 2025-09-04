@@ -2189,7 +2189,6 @@ char *cfs_nidstr_find_delimiter(char *nidstr)
 {
 	char *delimiter = nidstr;
 	int hex_count = 0;
-	int hex_sections = 0;
 	bool is_ipv6 = true;
 
 	/* address parsing */
@@ -2206,12 +2205,10 @@ char *cfs_nidstr_find_delimiter(char *nidstr)
 		/* IPv6 addresses are in 0-4 hex digit groups */
 		else if ((isxdigit(*delimiter) || *delimiter == ':') &&
 			 hex_count <= 4 && is_ipv6) {
-			if (*delimiter == ':') {
-				hex_sections++;
+			if (*delimiter == ':')
 				hex_count = 0;
-			} else {
+			else
 				hex_count++;
-			}
 		} else { /* NID is not IPv6 */
 			is_ipv6 = false;
 			if (*delimiter == ':')
