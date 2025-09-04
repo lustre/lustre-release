@@ -3259,6 +3259,8 @@ test_89() {
 	(( $write_size >= 1024 )) || write_size=1024
 	dd if=/dev/zero bs=${write_size}k count=10 of=$DIR/$tdir/$tfile
 	sync
+	# Acquire the OST lock so we can delete while the OST is offline
+	ls -la $DIR/$tdir/$tfile
 	stop ost1
 	facet_failover $SINGLEMDS
 	rm $DIR/$tdir/$tfile

@@ -6652,6 +6652,13 @@ test_108a() {
 	offset=$(lseek_test -l 1000 $DIR2/$tfile)
 	[[ $offset == 2000 ]] || error "offset $offset != 2000"
 
+	# The purpose of this test is to confirm for async IO (buffered writes)
+	# the write does not need to go to disk for the file size to be updated,
+	# but for hybrid/DIO the write does not complete until it goes to disk
+	# We disable hybrid here so this definitely tests async/buffered IO
+	local hybrid=$($LCTL get_param -n llite.*.hybrid_io | head -n1)
+	$LCTL set_param llite.*.hybrid_io=0
+	stack_trap "$LCTL set_param -n llite.*.hybrid_io=$hybrid" EXIT
 	#define OBD_FAIL_OSC_DELAY_IO 0x414
 	$LCTL set_param fail_val=4 fail_loc=0x80000414
 	dd if=/dev/zero of=$DIR1/$tfile count=1 bs=8M conv=notrunc oflag=dsync &

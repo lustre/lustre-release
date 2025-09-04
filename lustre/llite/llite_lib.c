@@ -206,6 +206,7 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	set_bit(LL_SBI_PARALLEL_DIO, sbi->ll_flags);
 	set_bit(LL_SBI_UNALIGNED_DIO, sbi->ll_flags);
 	set_bit(LL_SBI_STATFS_PROJECT, sbi->ll_flags);
+	set_bit(LL_SBI_HYBRID_IO, sbi->ll_flags);
 	ll_sbi_set_encrypt(sbi, true);
 	ll_sbi_set_name_encrypt(sbi, true);
 

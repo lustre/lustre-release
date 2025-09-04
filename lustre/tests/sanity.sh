@@ -34295,13 +34295,26 @@ check_lsom_data()
 	local file=$1
 	local expect=$(stat -c %s $file)
 	local msg=$2
+	local hybrid=$($LCTL get_param -n llite.*.hybrid_io)
 
 	check_lsom_size $1 $expect $msg
 
 	local blocks=$($LFS getsom -b $file)
 	expect=$(stat -c %b $file)
-	[[ $blocks == $expect ]] ||
-		error "$msg $file expected blocks: $expect, got: $blocks"
+
+	# ZFS does not allocate blocks immediately after writes, so the block
+	# size may be incorrect on ZFS with hybrid or direct IO
+	if [[ $hybrid != "1" && "$ost1_FSTYPE" != "zfs" ]]; then
+                local blocks=$($LFS getsom -b $file)
+                expect=$(stat -c %b $file)
+		[[ $blocks == $expect ]] ||
+			error "$msg $file expected blocks: $expect, got: $blocks"
+	elif [[ $hybrid == "1" && "$ost1_FSTYPE" == "zfs" ]]; then
+		if [[ $blocks != $expect ]]; then
+			echo "HIO + ZFS, block mismatch is expected"
+			echo "$msg $file expected blocks: $expect, got: $blocks"
+		fi
+        fi
 }
 
 check_lsom_size()
