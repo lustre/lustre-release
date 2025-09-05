@@ -6428,6 +6428,10 @@ test_45() {
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
 		error "failed to start ost1"
 
+	$LFS df
+	wait_osc_import_state mds ost FULL
+	wait_osc_import_state client ost FULL
+
 	echo "check the quota usage after UID/GID/PROJID is cleared"
 	usage=$(getquota -u $RUNAS_ID global curspace)
 	((usage < cnt * 1024 * 1 / 10)) ||
