@@ -1071,7 +1071,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	str = strim(pattern_dup);
+	str = skip_spaces(pattern_dup);
 	if (*str == 'n' || *str == 'N') {
 		str++; /* skip 'N' char */
 		node = 1; /* NUMA pattern */
@@ -1085,13 +1085,12 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 				if (!cpumask_empty(cpumask_of_node(i)))
 					ncpt++;
 		}
-		str = strim(str);
+		str = skip_spaces(str);
 	}
-
 	if (*str == 'x' || *str == 'X') {
 		str++; /* skip 'X' char */
 		exclude = true;
-		str = strim(str);
+		str = skip_spaces(str);
 	}
 
 	if (*str == 'c' || *str == 'C') {
@@ -1116,7 +1115,6 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 	    (node && ncpt > num_online_nodes()) ||
 	    (!node && ncpt > num_online_cpus())) {
 		CERROR("Invalid pattern '%s', or too many partitions %d\n",
-
 		       pattern_dup, ncpt);
 		rc = -EINVAL;
 		goto err_free_str;
@@ -1141,7 +1139,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 					goto err_free_table;
 				}
 
-				if (exclude) {
+				if (relative) {
 					c = 0;
 					for_each_cpu(rc, cpumask_of_node(i))
 						c++;
@@ -1162,15 +1160,15 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 				       -rc);
 				goto err_free_str;
 			}
-			for_each_cpu(rc, *cfs_cpt_cpumask(cptab, 0))
-				high++;
 		}
+		if (!relative)
+			high = num_online_cpus() - 1;
 	}
 
 	if (!exclude)
 		high = node ? nr_node_ids - 1 : nr_cpu_ids - 1;
 
-	for (str = strim(str), c = 0; /* until break */; c++) {
+	for (c = 0; c < num_possible_cpus() /* should end sooner */; c++) {
 		struct cfs_range_expr *range;
 		struct cfs_expr_list *el;
 		int n;

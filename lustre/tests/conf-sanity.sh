@@ -12423,6 +12423,20 @@ test_200c() {
 
 	[[ $table == $expected ]] ||
 		error "CPU pattern not $expected, found: $table"
+
+	cleanup
+
+	local partitions=1
+	(( nodes < 2 )) || partitions=$((nodes - 1))
+	pattern="N"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\" cpu_npartitions=$partitions"
+
+	load_modules_local libcfs
+	$LCTL get_param -n cpu_partition_table
+	local table=$($LCTL get_param -n cpu_partition_table)
+	actual=$(echo $table | wc -l)
+	(( actual == partitions )) ||
+		error "setting npartitions=$partitions did not override NUMA layout"
 }
 run_test 200c "set CPU pattern using NUMA node layout"
 
@@ -12481,6 +12495,18 @@ test_200d() {
 
 	cleanup
 
+	# Now, set the pattern to exclude CPU n-1
+	pattern="X[$((cpus - 1))]"
+	MODOPTS_LIBCFS="cpu_npartitions=$parts cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs ||
+		error "failed to load modules with pattern: $pattern"
+	echo "table with last CPU excluded:"
+	grep . /sys/module/libcfs/parameters/cpu*
+	$LCTL get_param -n cpu_partition_table
+
+	cleanup
+
 	full_cpu_count=0
 	excluded_count=0
 
@@ -12525,6 +12551,20 @@ test_200d() {
 	# Check if only CPU 1 is excluded
 	(( excluded_count == full_cpu_count - 1 )) ||
 		error "More than one CPU was excluded with pattern: $pattern"
+
+	cleanup
+
+	# Now, set the pattern to exclude CPU n-1
+	pattern="N X[$((cpus - 1))]"
+	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
+
+	load_modules_local libcfs ||
+		error "failed to load modules with pattern: $pattern"
+	echo "table with last CPU excluded:"
+	grep . /sys/module/libcfs/parameters/cpu*
+	$LCTL get_param -n cpu_partition_table
+
+	cleanup
 }
 run_test 200d "set CPU pattern to exclude only CPU 1"
 
