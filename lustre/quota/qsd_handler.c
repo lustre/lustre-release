@@ -731,6 +731,8 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 		/* lqe will be released in qsd_op_end() */
 	}
 
+	LQUOTA_DEBUG(lqe, "op_begin space: %lld", space);
+
 	if (space <= 0) {
 		/* when space is negative or null, we don't need to consume
 		 * quota space. That said, we still want to perform space
@@ -742,8 +744,6 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 		}
 		RETURN(0);
 	}
-
-	LQUOTA_DEBUG(lqe, "op_begin space:%lld", space);
 
 	lqe_write_lock(lqe);
 	lqe->lqe_waiting_write += space;

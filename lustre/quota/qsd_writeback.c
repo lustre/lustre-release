@@ -603,6 +603,11 @@ static int qsd_upd_thread(void *_args)
 			spin_unlock(&qsd->qsd_adjust_lock);
 
 			if (!kthread_should_stop() && uptodate) {
+				if (lqe->lqe_truncated_time != 0)
+					LQUOTA_DEBUG(lqe, "update for big file deletion, uptodate %d, cur_time %llu, until %lld\n",
+						     uptodate, cur_time,
+						     lqe->lqe_truncated_time);
+
 				qsd_refresh_usage(env, lqe);
 				if (lqe->lqe_adjust_time == 0)
 					qsd_id_lock_cancel(env, lqe);
@@ -623,7 +628,9 @@ static int qsd_upd_thread(void *_args)
 				list_add_tail(&lqe->lqe_link,
 					      &qsd->qsd_adjust_list);
 			} else {
-				lqe->lqe_truncated_time = 0;
+				if (lqe->lqe_truncated_time <= cur_time)
+					lqe->lqe_truncated_time = 0;
+
 				lqe_putref(lqe);
 			}
 		}

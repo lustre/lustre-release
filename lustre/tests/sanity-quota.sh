@@ -7350,6 +7350,8 @@ test_delete_big_file() {
 	$LFS quota -p $TSTPRJID -h $DIR
 
 	rm -f $tfile1
+	wait_delete_completed
+
 	sleep 15
 
 	$LFS quota -p $TSTPRJID -h $DIR
