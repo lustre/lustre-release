@@ -4851,7 +4851,7 @@ lfsck_layout_slave_async_interpret(const struct lu_env *env,
 		 * hit failure, it will assume that the target exit the LFSCK
 		 * prcoessing and stop try.
 		 */
-		if (rc == -ENOTCONN || rc == -ESHUTDOWN) {
+		if (rc == -ENOTCONN || rc == -ESHUTDOWN || rc == -EAGAIN) {
 			int max_try = max_t(int, obd_timeout / 30, 3);
 
 			if (++(llst->llst_failures) > max_try)
