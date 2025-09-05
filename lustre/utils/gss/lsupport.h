@@ -113,4 +113,27 @@ out:
 	return rc;
 }
 
+static inline int hex_to_bin(const char *hex, size_t hex_len,
+			     char *out, size_t out_size)
+{
+	size_t byte_len = hex_len / 2;
+	char tmp[3] = { 0 };
+	int i;
+
+	if (!hex || !out)
+		return -EINVAL;
+	if (hex_len % 2 != 0)
+		return -EINVAL;
+	if (byte_len > out_size)
+		return -EINVAL;
+
+	for (i = 0; i < byte_len; i++) {
+		tmp[0] = hex[2 * i];
+		tmp[1] = hex[2 * i + 1];
+		out[i] = strtoul(tmp, NULL, 16);
+	}
+
+	return (int)byte_len;
+}
+
 #endif /* __LSUPPORT_H__ */

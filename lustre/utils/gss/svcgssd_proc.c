@@ -131,7 +131,7 @@ static int do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	if (snprintf(rsc_dd->scd_mechname, sizeof(rsc_dd->scd_mechname),
 		     "%s", mechname) >= sizeof(rsc_dd->scd_mechname))
 		goto out;
-	if (nodemap) {
+	if (nodemap && nodemap[0] != '\0') {
 		if (snprintf(rsc_dd->scd_nmname, sizeof(rsc_dd->scd_nmname),
 			     "%s", nodemap) >= sizeof(rsc_dd->scd_nmname))
 			goto out;
@@ -320,22 +320,23 @@ static int lookup_id(gss_name_t client_name, char *princ, lnet_nid_t nid,
 	return lookup_localname(client_name, princ, nid, uid);
 }
 
-static int
-get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
-	lnet_nid_t nid, uint32_t lustre_svc)
+static int get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
+		   lnet_nid_t nid, uint32_t lustre_svc, char *nm_buf,
+		   size_t nm_buflen)
 {
-	u_int32_t	maj_stat, min_stat;
-	gss_buffer_desc	name;
-	char		*sname, *host, *realm;
-	const int	namebuf_size = 512;
-	char		namebuf[namebuf_size];
-	int		res = -1;
-	gss_OID		name_type = GSS_C_NO_OID;
-	struct passwd	*pw;
+	char *sname, *host, *realm, *service_nm = NULL;
+	gss_OID name_type = GSS_C_NO_OID;
+	u_int32_t maj_stat, min_stat;
+	const int max_namelen = 512;
+	char hostname[max_namelen];
+	gss_buffer_desc name;
+	struct passwd *pw;
+	int res = -1;
 
 	cred->cr_remote = 0;
 	cred->cr_usr_root = cred->cr_usr_mds = cred->cr_usr_oss = 0;
 	cred->cr_uid = cred->cr_mapped_uid = cred->cr_gid = -1;
+	nm_buf[0] = '\0';
 
 	maj_stat = gss_display_name(&min_stat, client_name, &name, &name_type);
 	if (maj_stat != GSS_S_COMPLETE) {
@@ -380,18 +381,36 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 
 	/* 1. check host part */
 	if (host) {
-		if (lnet_nid2hostname(nid, namebuf, namebuf_size)) {
+		/* host part is in the form <HOSTNAME>/<NODEMAP_NAME> */
+		service_nm = strchr(host, '/');
+		if (!service_nm)
+			goto hostcheck;
+
+		*service_nm++ = '\0';
+		if (nm_buflen < LUSTRE_NODEMAP_NAME_LENGTH + 1 ||
+		    strlen(service_nm) > LUSTRE_NODEMAP_NAME_LENGTH) {
+			/* ignore invalid nm name, could be something else */
+			*(service_nm - 1) = '/';
+			service_nm = NULL;
+			goto hostcheck;
+		}
+		snprintf(nm_buf, nm_buflen, "%s", service_nm);
+
+hostcheck:
+		if (lnet_nid2hostname(nid, hostname, max_namelen)) {
 			printerr(LL_ERR,
-				 "ERROR: failed to resolve hostname for %s/%s@%s from %s\n",
-				 sname, host, realm, libcfs_nid2str(nid));
+				 "ERROR: failed to resolve hostname for %s/%s%s%s@%s from %s\n",
+				 sname, host, service_nm ? "/" : "",
+				 service_nm ?: "", realm, libcfs_nid2str(nid));
 			goto out_free;
 		}
 
-		if (strcasecmp(host, namebuf)) {
+		if (strcasecmp(host, hostname)) {
 			printerr(LL_ERR,
-				 "ERROR: %s/%s@%s claimed hostname doesn't match %s, nid %s\n",
-				 sname, host, realm,
-				 namebuf, libcfs_nid2str(nid));
+				 "ERROR: %s/%s%s%s@%s claimed hostname doesn't match %s, nid %s\n",
+				 sname, host, service_nm ? "/" : "",
+				 service_nm ?: "", realm,
+				 hostname, libcfs_nid2str(nid));
 			goto out_free;
 		}
 	} else {
@@ -414,9 +433,10 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 			/* Prevent access to unmapped user from remote realm */
 			if (cred->cr_mapped_uid == -1) {
 				printerr(LL_ERR,
-					 "ERROR: %s%s%s@%s from %s is remote but without mapping\n",
+					 "ERROR: %s%s%s%s%s@%s from %s is remote but without mapping\n",
 					 sname, host ? "/" : "",
-					 host ? host : "", realm,
+					 host ?: "", service_nm ? "/" : "",
+					 service_nm ?: "", realm,
 					 libcfs_nid2str(nid));
 				break;
 			}
@@ -455,8 +475,10 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 				 sname, cred->cr_uid);
 			goto valid;
 		}
-		printerr(LL_ERR, "ERROR: invalid user, %s/%s@%s from %s\n",
-			 sname, host, realm, libcfs_nid2str(nid));
+		printerr(LL_ERR, "ERROR: invalid user, %s%s%s%s%s@%s from %s\n",
+			 sname, host ? "/" : "", host ?: "",
+			 service_nm ? "/" : "", service_nm ?: "",
+			 realm, libcfs_nid2str(nid));
 		break;
 
 valid:
@@ -498,10 +520,11 @@ valid:
 
 out_free:
 	if (!res)
-		printerr(LL_WARN, "%s: authenticated %s%s%s@%s from %s\n",
+		printerr(LL_WARN, "%s: authenticated %s%s%s%s%s@%s from %s\n",
 			 lustre_svc_name[lustre_svc], sname,
-			 host ? "/" : "", host ? host : "", realm,
-			 libcfs_nid2str(nid));
+			 host ? "/" : "", host ?: "",
+			 service_nm ? "/" : "", service_nm ?: "",
+			 realm, libcfs_nid2str(nid));
 	free(sname);
 	return res;
 }
@@ -931,13 +954,14 @@ static int handle_null(struct svc_nego_data *snd)
 
 static int handle_krb(struct svc_nego_data *snd)
 {
-	u_int32_t               ret_flags;
-	gss_name_t              client_name;
-	gss_buffer_desc         ignore_out_tok = {.value = NULL};
-	gss_OID                 mech = GSS_C_NO_OID;
-	gss_cred_id_t           svc_cred;
-	u_int32_t               ignore_min_stat;
-	struct svc_cred         cred;
+	gss_buffer_desc ignore_out_tok = {.value = NULL};
+	char nodemap[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	gss_OID mech = GSS_C_NO_OID;
+	u_int32_t ignore_min_stat;
+	gss_name_t client_name;
+	gss_cred_id_t svc_cred;
+	struct svc_cred cred;
+	u_int32_t ret_flags;
 
 	svc_cred = gssd_select_svc_cred(snd->lustre_svc);
 	if (!svc_cred) {
@@ -968,13 +992,17 @@ static int handle_krb(struct svc_nego_data *snd)
 		goto out_err;
 	}
 
-	if (get_ids(client_name, mech, &cred, snd->nid, snd->lustre_svc)) {
+	if (get_ids(client_name, mech, &cred, snd->nid,
+		    snd->lustre_svc, nodemap, sizeof(nodemap))) {
 		/* get_ids() prints error msg */
 		snd->maj_stat = GSS_S_BAD_NAME; /* XXX ? */
 		gss_release_name(&ignore_min_stat, &client_name);
 		goto out_err;
 	}
 	gss_release_name(&ignore_min_stat, &client_name);
+	if (nodemap[0])
+		printerr(LL_DEBUG, "using nodemap %s for authentication\n",
+			 nodemap);
 
 	/* Context complete. Pass handle_seq in out_handle to use
 	 * for context lookup in the kernel. */
@@ -997,7 +1025,8 @@ static int handle_krb(struct svc_nego_data *snd)
 		gss_delete_sec_context(&ignore_min_stat, &snd->ctx,
 				       &ignore_out_tok);
 
-	do_svc_downcall(&snd->out_handle, &cred, mech, &snd->ctx_token, NULL);
+	do_svc_downcall(&snd->out_handle, &cred, mech,
+			&snd->ctx_token, nodemap);
 	/* We no longer need the context token */
 	if (snd->ctx_token.length)
 		(void)gss_release_buffer(&ignore_min_stat, &snd->ctx_token);
