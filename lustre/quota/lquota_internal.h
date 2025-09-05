@@ -453,7 +453,7 @@ void lquota_site_free(const struct lu_env *, struct lquota_site *);
 #define lqe_find(env, site, id) lqe_locate_find(env, site, id, true)
 struct lquota_entry *lqe_locate_find(const struct lu_env *,
 				     struct lquota_site *,
-				     union lquota_id *, bool);
+				     const union lquota_id *, bool);
 
 static inline void lqe_set_deleted(struct lquota_entry *lqe)
 {

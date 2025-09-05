@@ -7515,15 +7515,15 @@ LQA_REMOVE="do_facet mds1 $LCTL lqa remove --fsname $FSNAME"
 LQA_DESTROY="do_facet mds1 $LCTL lqa destroy --fsname $FSNAME"
 LQA_LIST="do_facet mds1 $LCTL lqa list --fsname $FSNAME"
 
-test_97a ()
+test_97a()
 {
 	local lqa="lqa1"
 	local longstr="0123456789123456789"
 
-	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
-		skip "need MDS >= 2.16.58 to support lctl lqa commands"
+	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "need MDS >= 2.17.50 to support lctl lqa commands"
 
-	$LQA_NEW && error "lqa_new succeeded with no lqa"
+	$LQA_NEW && error "lqa new succeeded with no lqa"
 #define LQA_NAME_MAX 15 /* Maximum lqa name length */
 	$LQA_NEW --name $longstr && error "lqa max name length is 16"
 	$LQA_NEW --name $lqa || error "cannot create $lqa"
@@ -7537,7 +7537,7 @@ test_97a ()
 	$LQA_ADD --name $lqa --range 10 || error "lqa failed to add [10]"
 	$LQA_ADD --name $lqa --range 11-20 || error "lqa failed to add [10-20]"
 
-	$LQA_LIST || error "lqa list failed with no --fsname"
+	$LQA_LIST || error "lqa list failed with no --name"
 	$LQA_LIST --name $lqa || error "lqa list failed to show $lqa ranges"
 
 	$LQA_REMOVE && error "lqa remove succeeded with no --name"
@@ -7555,6 +7555,84 @@ test_97a ()
 	$LQA_DESTROY --name $lqa || error "cannot destroy $lqa"
 }
 run_test 97a "LQA control commands"
+
+test_97b()
+{
+	local lqa="lqa1"
+	local lqa2="lqa2"
+	local max_id=4294967295
+	local max_iter=50
+	local base=1000
+
+	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "need MDS >= 2.17.50 to support lctl lqa commands"
+
+	$LQA_NEW --name $lqa || error "cannot create $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa"
+	$LQA_NEW --name $lqa && error "$lqa should already exist"
+	$LQA_NEW --name $lqa2 || error "cannot create $lqa2"
+	stack_trap "$LQA_DESTROY --name $lqa2"
+	$LQA_LIST | grep -q $lqa || error "lqa $lqa doesnt' exist"
+	$LQA_LIST | grep -q $lqa2 || error "lqa $lqa2 doesnt' exist"
+
+	# PQ could have the same name as LQA
+	pool_add $lqa || error "faled to create pool $lqa"
+	destroy_pool $lqa || error "failed to destroy pool $lqa"
+
+	$LQA_ADD --name $lqa --range 10-19 ||
+		error "cannot add range 10-19 to $lqa"
+	$LQA_LIST --name $lqa | grep -q "10-19" ||
+		error "range 10-19 doesn't exist in $lqa"
+	$LQA_ADD --name $lqa2 --range 10-19 ||
+		error "cannot add range 10-19 to $lqa2"
+	$LQA_LIST --name $lqa2 | grep -q "10-19" ||
+		error "range 10-20 doesn't exist in $lqa2"
+	$LQA_ADD --name $lqa --range 15-31 && error "ranges intersect in $lqa"
+	$LQA_ADD --name $lqa --range 20-29 ||
+		error "cannot add range 20-29 to $lqa"
+	$LQA_ADD --name $lqa --range 30 ||
+		error "cannot add range 30-30 to $lqa"
+	$LQA_REMOVE --name $lqa --range 10-19 ||
+		error "cannot remove range 10-19 from $lqa"
+	$LQA_REMOVE --name $lqa --range 10-19 &&
+		error "range 10-19 has been alread removed from $lqa"
+	$LQA_LIST --name $lqa || grep -q "20-29" ||
+		"range 20-29 doesn't exist in $lqa"
+	$LQA_REMOVE --name $lqa --range 20-29 ||
+		error "cannot remove range 20-29 from $lqa"
+	$LQA_LIST --name $lqa || grep -q "30-30" ||
+		"range 30-30 doesn't exist in $lqa"
+
+	$LQA_DESTROY --name $lqa || error "cannot destroy $lqa"
+	$LQA_DESTROY --name $lqa2 || error "cannot destroy $lqa2"
+	$LQA_NEW --name $lqa || error "cannot recreate $lqa"
+	$LQA_NEW --name $lqa2 || error "cannot recreate $lqa2"
+	$LQA_LIST --name $lqa | (($(wc -l) == 1)) ||
+		echo "$lqa is not empty after recreating"
+
+	[[ "$SLOW" = "yes" ]] && max_iter=500
+	local start=$SECONDS
+	do_facet mds1 "for ((i = 1; i <= $max_iter; i++)); do $LCTL lqa add \
+		       --fsname $FSNAME --name $lqa \
+		       --range \\\$(($max_id - i * $base)); done" ||
+		       error "cannot add $max_iter ranges in a cycle"
+	local end=$SECONDS
+	log "adding $max_iter LQA ranges took $((end - start))s"
+
+	local num=$($LQA_LIST --name $lqa | grep -oE '[0-9]+-[0-9]+' | wc -l)
+	echo "num $num"
+	((num == max_iter)) || error "$lqa ranges num $num != $max_iter"
+	$LQA_ADD --name $lqa --range $((max_id + 10)) &&
+		error "range id > UINT_MAX"
+	start=$SECONDS
+	do_facet mds1 "for i in {1..$max_iter}; do $LCTL lqa remove \
+		       --fsname $FSNAME --name $lqa \
+		       --range \\\$(($max_id - i * $base)); done" ||
+		       error "cannot remove $max_iter ranges in a cycle"
+	end=$SECONDS
+	log "Removing $max_iter LQA ranges took $((end - start))s"
+}
+run_test 97b "Check LQA internals"
 
 quota_fini()
 {

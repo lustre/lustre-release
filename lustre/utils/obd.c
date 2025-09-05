@@ -6366,12 +6366,32 @@ out:
 }
 
 #ifdef HAVE_SERVER_SUPPORT
+static void
+lqa_list_print(const char *fsname, const char *lqa, const char *buf, int len)
+{
+	__u32 *p;
+	int i = 0;
+
+	if (!lqa) {
+		printf("name:%s", len ? "" : " []");
+		for (; i < len / LQA_NAME_MAX; i++)
+			printf("%s%.*s", i ? ", " : " ", LQA_NAME_MAX,
+			       buf + i * LQA_NAME_MAX);
+	} else {
+		printf("name: %s\nranges:%s", lqa, len ? "" : " []");
+		for (p = (__u32 *)buf; i < len / LQA_RANGE_SIZE; i++, p += 2)
+			printf("%s%u-%u", i ? ", " : " ", p[0], p[1]);
+	}
+	printf("\n");
+}
+
 int lqa_ioctl(enum lqa_cmd_type cmd, char *cmdname, char *fsname, char *lqaname,
 	      __u32 start, __u32 end)
 {
 	struct obd_ioctl_data data;
 	int rc, lqalen;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	char lqa_buf[65536];
 
 	if (!fsname)
 		return -EFAULT;
@@ -6404,6 +6424,11 @@ int lqa_ioctl(enum lqa_cmd_type cmd, char *cmdname, char *fsname, char *lqaname,
 		}
 	}
 
+	if (cmd == LQA_LIST) {
+		data.ioc_pbuf2 = lqa_buf;
+		data.ioc_plen2 = sizeof(lqa_buf);
+	}
+
 	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
@@ -6417,6 +6442,11 @@ int lqa_ioctl(enum lqa_cmd_type cmd, char *cmdname, char *fsname, char *lqaname,
 		fprintf(stderr, "error: %s: ioctl: %s\n",
 			jt_cmdname(cmdname), strerror(errno));
 		return -errno;
+	}
+
+	if (cmd == LQA_LIST) {
+		llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		lqa_list_print(fsname, lqaname, data.ioc_pbuf2, data.ioc_plen2);
 	}
 
 	return 0;
@@ -6443,6 +6473,9 @@ static inline int lqa_get_range(const char *range, __u32 *start, __u32 *end)
 
 	if (tmp_end < tmp_start || tmp_start < 0 || tmp_end < 0)
 		return -EINVAL;
+
+	if (tmp_end > UINT_MAX || tmp_start > UINT_MAX)
+		return -ERANGE;
 
 	*start = (__u32)tmp_start;
 	*end = (__u32)tmp_end;

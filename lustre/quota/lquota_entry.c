@@ -305,8 +305,7 @@ static int lqe_read(const struct lu_env *env,
  */
 struct lquota_entry *lqe_locate_find(const struct lu_env *env,
 				     struct lquota_site *site,
-				     union lquota_id *qid,
-				     bool find)
+				     const union lquota_id *qid, bool find)
 {
 	struct lquota_entry	*lqe, *new = NULL;
 	int			 rc = 0;

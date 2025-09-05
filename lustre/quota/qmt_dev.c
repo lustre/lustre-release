@@ -204,6 +204,7 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	if (rc < 0)
 		RETURN(rc);
 
+	atomic_set(&qmt->qmt_lqa_num, 0);
 	/* look-up the obd_device associated with the qmt */
 	obd = class_name2obd(qmt->qmt_svname);
 	if (obd == NULL)
@@ -458,7 +459,7 @@ static int qmt_device_prepare(const struct lu_env *env,
 
 	qmt->qmt_root = qmt_root;
 	/* initialize on-disk indexes associated with each pool */
-	rc = qmt_pool_prepare(env, qmt, qmt_root, NULL);
+	rc = qmt_pool_prepare_all(env, qmt, qmt_root);
 	RETURN(rc);
 }
 

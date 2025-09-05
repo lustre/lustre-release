@@ -1686,7 +1686,13 @@ enum lqa_cmd_type {
 	LQA_LIST = 5 /* list ranges per LQA */
 };
 
+struct lqa_id_range {
+	__u32	 lir_start;
+	__u32	 lir_end;
+};
+
 #define LQA_NAME_MAX LOV_MAXPOOLNAME /* Maximum lqa name length */
+#define LQA_RANGE_SIZE (sizeof(struct lqa_id_range)) /* LQA range size: %u%u */
 
 /* swap layout flags */
 #define SWAP_LAYOUTS_CHECK_DV1		(1 << 0)

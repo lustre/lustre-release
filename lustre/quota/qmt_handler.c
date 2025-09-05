@@ -1351,6 +1351,7 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 static int lqa_parse_args(struct obd_device *obd, struct obd_ioctl_data *data,
 			  char **lqa, __u32 *start, __u32 *end)
 {
+	__u32 cmd = data->ioc_command;
 	int lqalen;
 
 	if (data->ioc_inlbuf1 && data->ioc_inllen1 &&
@@ -1358,7 +1359,7 @@ static int lqa_parse_args(struct obd_device *obd, struct obd_ioctl_data *data,
 		*lqa = data->ioc_inlbuf1;
 
 	if (!*lqa)
-		return 0;
+		return cmd == LQA_LIST ? 0 : -EINVAL;
 
 	lqalen = strnlen(*lqa, LQA_NAME_MAX + 1);
 	if (!lqalen || lqalen == LQA_NAME_MAX + 1) {
@@ -1367,7 +1368,7 @@ static int lqa_parse_args(struct obd_device *obd, struct obd_ioctl_data *data,
 		return -EINVAL;
 	}
 
-	if (data->ioc_command == LQA_ADD || data->ioc_command == LQA_REM) {
+	if (cmd == LQA_ADD || cmd == LQA_REM) {
 		*start = (__u32)data->ioc_u32_1;
 		*end = (__u32)data->ioc_u32_2;
 		if (*end < *start) {
@@ -1386,6 +1387,7 @@ int qmt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		  void *karg, void __user *uarg)
 {
 	struct obd_device *obd = exp->exp_obd;
+	struct qmt_device *qmt = lu2qmt_dev(obd->obd_lu_dev);
 	struct obd_ioctl_data *data;
 	char *lqa = NULL;
 	__u32 start, end;
@@ -1395,6 +1397,12 @@ int qmt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	CDEBUG(D_IOCTL, "%s: cmd=%x len=%u karg=%pK uarg=%pK\n",
 	       obd->obd_name, cmd, len, karg, uarg);
 	data = karg;
+
+	if (IS_ERR_OR_NULL(qmt)) {
+		rc = PTR_ERR_OR_ZERO(qmt) ?: -EFAULT;
+		CERROR("%s: qmt addr is unset: rc = %d\n", obd->obd_name, rc);
+		RETURN(rc);
+	}
 
 	/* qmt only supports LQA ioctls, for now */
 	if (cmd != OBD_IOC_LQACTL)
@@ -1408,18 +1416,23 @@ int qmt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	switch (data->ioc_command) {
 	case LQA_NEW:
 		CDEBUG(D_QUOTA, "LQA_NEW lqa:%s\n", lqa);
+		rc = qmt_lqa_create(obd, qmt, lqa);
 		break;
 	case LQA_ADD:
 		CDEBUG(D_QUOTA, "LQA_ADD lqa:%s, [%u-%u]\n", lqa, start, end);
+		rc = qmt_lqa_add(qmt, lqa, start, end);
 		break;
 	case LQA_REM:
 		CDEBUG(D_QUOTA, "LQA_REM lqa:%s [%u-%u]\n", lqa, start, end);
+		rc = qmt_lqa_remove(qmt, lqa, start, end);
 		break;
 	case LQA_DEL:
 		CDEBUG(D_QUOTA, "LQA_DEL, lqa:%s\n", lqa);
+		rc = qmt_lqa_destroy(obd, qmt, lqa);
 		break;
 	case LQA_LIST:
 		CDEBUG(D_QUOTA, "LQA_LIST, lqa:%s\n", lqa);
+		rc = qmt_lqa_list(qmt, lqa, data);
 		break;
 	default:
 		rc = OBD_IOC_ERROR(obd->obd_name, data->ioc_command,
