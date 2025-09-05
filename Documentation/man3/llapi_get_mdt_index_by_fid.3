@@ -1,0 +1,32 @@
+.TH LLAPI_GET_MDT_INDEX_BY_FID 3 2025-09-02 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_get_mdt_index_by_fid \- obtain the MDT index for a given File Identifier
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_get_mdt_index_by_fid(int " fd ", const struct lu_fid *" fid ","
+.BI "                               int *" mdt_index ");"
+.fi
+.SH DESCRIPTION
+.BR llapi_get_mdt_index_by_fid()
+queries the filesystem to determine which MDT stores the metadata for the
+object identified by
+.IR fid .
+The lookup is performed relative to the filesystem referenced by
+.IR fd .
+If
+.I mdt_index
+is non-NULL, the resolved MDT index is stored at that location.
+.SH RETURN VALUES
+Returns the MDT index a non-negative integer on success or a negative errno
+value on failure.
+.SH AVAILABILITY
+.B llapi_get_mdt_index_by_fid()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.13.50
+.\" Added in commit v2_13_50-48-g21d671b3af
+.SH SEE ALSO
+.BR llapi_layout (7),
+.BR lustreapi (7)

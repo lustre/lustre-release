@@ -1,0 +1,39 @@
+.TH LLAPI_FID2PATH 3 2025-09-02 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_fid2path \- translate a File Identifier to a pathname
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_fid2path(const char *" device ", const char *" fidstr ", char *" path ","
+.BI "                   int " pathlen ", long long *" recno ", int *" linkno ");"
+.fi
+.SH DESCRIPTION
+.BR llapi_fid2path()
+stores the pathname corresponding to the given File Identifier into
+.IR path .
+The resulting pathname may then be used like any other file or directory path.
+.SH RETURN VALUES
+Returns 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.B -EINVAL
+An invalid argument was specified.
+.TP
+.B -ERANGE
+Contains numeric values that exceed valid values for a component.
+.TP
+.B -ENOMEM
+Not enough memory to process the request.
+.SH AVAILABILITY
+.B llapi_fid2path()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.13.50
+.\" Added in commit v2_13_50-48-g21d671b3af
+.SH SEE ALSO
+.BR llapi_fid_parse (3),
+.BR llapi_fid2path_at (3),
+.BR llapi_root_path_open (3),
+.BR llapi_layout (7),
+.BR lustreapi (7)

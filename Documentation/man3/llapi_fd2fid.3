@@ -1,0 +1,31 @@
+.TH LLAPI_FD2FID 3 2025-09-02 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_fd2fid \- return Lustre File Identifier for open file descriptor
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_fd2fid(int " fd ", struct lu_fid *" fid ");"
+.fi
+.SH DESCRIPTION
+.BR llapi_fd2fid()
+retrieves the File Identifier corresponding to the given open file descriptor
+.I fd
+and stores it in
+.IR fid .
+.SH RETURN VALUES
+Returns 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.B -ENOTTY
+Path does not reside on a Lustre filesystem.
+.SH AVAILABILITY
+.B llapi_fd2fid()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.13.50
+.\" Added in commit v2_13_50-48-g21d671b3af
+.SH SEE ALSO
+.BR llapi_path2fid (3),
+.BR llapi_layout (7),
+.BR lustreapi (7)

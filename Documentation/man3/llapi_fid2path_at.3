@@ -1,0 +1,38 @@
+.TH LLAPI_FID2PATH_AT 3 2025-09-02 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_fid2path_at \- resolve a File Identifier to a pathname
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_fid2path_at(int " mnt_fd ", const struct lu_fid *" fid ", char *" path ","
+.BI "                      int " pathlen ", long long *" recno ", int *" linkno ");"
+.fi
+.SH DESCRIPTION
+.BR llapi_fid2path_at()
+stores the pathname corresponding to the given File Identifier into
+.IR path .
+The lookup is performed relative to the filesystem referenced by
+.IR mnt_fd .
+If
+.I recno
+or
+.I linkno
+are non-NULL, they are used to select and return a specific directory entry or
+hardlink of the FID.
+.SH RETURN VALUES
+Returns 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.B -ENOMEM
+Not enough memory to process the request.
+.SH AVAILABILITY
+.B llapi_fid2path_at()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.14.50
+.\" Added in commit v2_14_50-43-gc45558bf56
+.SH SEE ALSO
+.BR llapi_fid2path (3),
+.BR llapi_layout (7),
+.BR lustreapi (7)

@@ -1,0 +1,24 @@
+.TH LLAPI_FID_HASH 3 2025-09-02 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_fid_hash \- compute hash value for a File Identifier
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "unsigned long llapi_fid_hash(const struct lu_fid *" f ", unsigned int " shift ");"
+.fi
+.SH DESCRIPTION
+.BR llapi_fid_hash()
+computes a hash value for a Lustre File Identifier. The FID is flattened to 64
+bits and then hashed.
+.SH RETURN VALUES
+Returns an unsigned long.
+.SH AVAILABILITY
+.B llapi_fid_hash()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.15.54
+.\" Added in commit v2_15_54-149-g0991267eab
+.SH SEE ALSO
+.BR llapi_layout (7),
+.BR lustreapi (7)
