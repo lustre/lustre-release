@@ -9091,8 +9091,12 @@ int lfs_setquota(int argc, char **argv)
 quota_type:
 			if (rc && str2quotaid(&qctl->qc_id, optarg)) {
 				fprintf(stderr,
-					"%s setquota: invalid project id '%s'\n",
-					progname, optarg);
+					"%s setquota: invalid %s '%s'\n",
+					progname,
+					qtype == USRQUOTA ? "user id" :
+					qtype == GRPQUOTA ? "group id" :
+					"project id",
+					optarg);
 				rc = -1;
 				goto out;
 			}
