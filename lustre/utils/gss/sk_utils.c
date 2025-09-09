@@ -305,14 +305,13 @@ out_free:
 
 /**
  * Checks if a key matching \a description is found in the keyring for
- * logging purposes and then attempts to load \a payload of \a psize into a key
- * with \a description.
+ * logging purposes and then attempts to load the payload from \a skc keyfile
+ * config into a key with \a description.
  *
- * \param[in]	payload		Key payload
- * \param[in]	psize		Payload size
+ * \param[in]	skc		keyfile config to load
  * \param[in]	description	Description used for key in keyring
  *
- * \return	0	sucess
+ * \return	>= 0	key serial of key successfully loaded
  * \return	-1	failure
  */
 static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
@@ -356,42 +355,43 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
  * same description are replaced.
  *
  * \param[in]	path	Path to key file
- * \param[in]	type	Type of key to load which determines the description
  * \param[in]	client	Client is mounting with a server key
  *
- * \return	0	sucess
- * \return	-1	failure
+ * \return	> 0	client file system key id if successfully loaded
+ * \return	  0	other key type successfully loaded
+ * \return	< 0	-errno on failure
  */
 int sk_load_keyfile(char *path, bool client)
 {
 	struct sk_keyfile_config *config;
 	char description[SK_DESCRIPTION_SIZE + 1];
 	struct stat buf;
-	int i;
-	int rc;
-	int rc2 = -1;
+	int keyid = 0;
+	int i, rc;
 
 	rc = stat(path, &buf);
 	if (rc == -1) {
 		printerr(0, "stat() failed for file %s: %s\n", path,
 			 strerror(errno));
-		return rc2;
+		return -errno;
 	}
 
 read_sk:
 	config = sk_read_file(path);
 	if (!config)
-		return rc2;
+		return -ENOKEY;
 
 	/* Similar to ssh, require adequate care of key files */
 	if (buf.st_mode & (S_IRGRP | S_IWGRP | S_IWOTH | S_IXOTH)) {
-		printerr(0, "Shared key files must be read/writeable only by "
-			 "owner\n");
-		return -1;
+		printerr(0,
+			 "Shared key files must be readable/writeable only by owner\n");
+		return -EACCES;
 	}
 
-	if (sk_validate_config(config))
+	if (sk_validate_config(config)) {
+		rc = -ENOKEY;
 		goto out;
+	}
 
 	/* The server side can have multiple key files per file system so
 	 * the nodemap name is appended to the key description to uniquely
@@ -400,10 +400,14 @@ read_sk:
 		/* Any key can be an MGS key as long as we are told to use it */
 		rc = snprintf(description, SK_DESCRIPTION_SIZE, "lustre:MGS:%s",
 			      config->skc_nodemap);
-		if (rc >= SK_DESCRIPTION_SIZE)
+		if (rc >= SK_DESCRIPTION_SIZE) {
+			rc = -ENAMETOOLONG;
 			goto out;
-		if (sk_load_key(config, description) == -1)
+		}
+		if (sk_load_key(config, description) == -1) {
+			rc = -ENOKEY;
 			goto out;
+		}
 	}
 	if (config->skc_type & SK_TYPE_SERVER) {
 		if (client) {
@@ -425,26 +429,36 @@ read_sk:
 
 		/* Server keys need to have the file system name in the key */
 		if (config->skc_fsname[0] == '\0') {
-			printerr(0, "Key configuration has no file system "
-				 "attribute.  Can't load as server type\n");
+			printerr(0,
+				 "Key configuration has no file system attribute.  Can't load as server type\n");
+			rc = -ENOKEY;
 			goto out;
 		}
 		rc = snprintf(description, SK_DESCRIPTION_SIZE, "lustre:%s:%s",
 			      config->skc_fsname, config->skc_nodemap);
-		if (rc >= SK_DESCRIPTION_SIZE)
+		if (rc >= SK_DESCRIPTION_SIZE) {
+			rc = -ENAMETOOLONG;
 			goto out;
-		if (sk_load_key(config, description) == -1)
+		}
+		if (sk_load_key(config, description) == -1) {
+			rc = -ENOKEY;
 			goto out;
+		}
 	}
 	if (config->skc_type & SK_TYPE_CLIENT) {
 		/* Load client file system key */
 		if (config->skc_fsname[0] != '\0') {
 			rc = snprintf(description, SK_DESCRIPTION_SIZE,
 				      "lustre:%s", config->skc_fsname);
-			if (rc >= SK_DESCRIPTION_SIZE)
+			if (rc >= SK_DESCRIPTION_SIZE) {
+				rc = -ENAMETOOLONG;
 				goto out;
-			if (sk_load_key(config, description) == -1)
+			}
+			keyid = sk_load_key(config, description);
+			if (keyid == -1) {
+				rc = -ENOKEY;
 				goto out;
+			}
 		}
 
 		/* Load client MGC keys */
@@ -454,18 +468,23 @@ read_sk:
 			rc = snprintf(description, SK_DESCRIPTION_SIZE,
 				      "lustre:MGC%s",
 				      libcfs_nid2str(config->skc_mgsnids[i]));
-			if (rc >= SK_DESCRIPTION_SIZE)
+			if (rc >= SK_DESCRIPTION_SIZE) {
+				rc = -ENAMETOOLONG;
 				goto out;
-			if (sk_load_key(config, description) == -1)
+			}
+			if (sk_load_key(config, description) == -1) {
+				rc = -ENOKEY;
 				goto out;
+			}
 		}
 	}
-
-	rc2 = 0;
+	rc = 0;
 
 out:
 	free(config);
-	return rc2;
+	if (keyid > 0)
+		return keyid;
+	return rc;
 }
 
 /**

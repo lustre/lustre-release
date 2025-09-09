@@ -1038,6 +1038,18 @@ int main(int argc, char *const argv[])
 #endif
 	}
 
+#ifdef HAVE_GSS
+	if (mop.mo_skpath[0] != '\0') {
+		/* Treat shared key failures as fatal */
+		rc = load_shared_keys(&mop, client);
+		if (rc < 0) {
+			fprintf(stderr, "%s: Error loading shared keys: %s\n",
+				progname, strerror(rc));
+			goto out_osd;
+		}
+	}
+#endif /* HAVE_GSS */
+
 	/*
 	 * Auto-generate mgsname from device string if not already specified,
 	 * and convert_hostname() has replaced the hostname with an IP address.
@@ -1081,17 +1093,6 @@ int main(int argc, char *const argv[])
 				argv[0], mop.mo_source);
 	}
 #endif
-#ifdef HAVE_GSS
-	if (mop.mo_skpath[0] != '\0') {
-		/* Treat shared key failures as fatal */
-		rc = load_shared_keys(&mop, client);
-		if (rc) {
-			fprintf(stderr, "%s: Error loading shared keys: %s\n",
-				progname, strerror(rc));
-			goto out_osd;
-		}
-	}
-#endif /* HAVE_GSS */
 
 	if (!mop.mo_fake) {
 		char *fstype;

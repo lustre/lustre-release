@@ -1303,6 +1303,15 @@ out:
 
 #ifdef HAVE_GSS
 #ifdef HAVE_OPENSSL_SSK
+/**
+ * Loads all keys under \a mop->mo_skpath.
+ *
+ * \param[in]	mop	mount options containing skpath
+ *
+ * \return	> 0	last client file system key id if successfully loaded
+ * \return	  0	other key type successfully loaded
+ * \return	< 0	-errno on failure
+ */
 int load_shared_keys(struct mount_opts *mop, bool client)
 {
 	DIR *dir;
@@ -1370,7 +1379,7 @@ int load_shared_keys(struct mount_opts *mop, bool client)
 			continue;
 
 		rc = sk_load_keyfile(fullpath, client);
-		if (rc)
+		if (rc < 0)
 			fprintf(stderr, "Failed to load key %s\n", fullpath);
 	}
 	closedir(dir);

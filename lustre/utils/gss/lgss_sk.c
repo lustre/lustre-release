@@ -391,8 +391,13 @@ int main(int argc, char **argv)
 		return print_config(input);
 
 	if (load) {
-		if (sk_load_keyfile(load, type & SK_TYPE_CLIENT))
+		int rc = sk_load_keyfile(load, type & SK_TYPE_CLIENT);
+
+		if (rc < 0) {
+			fprintf(stderr,
+				"error: loading keyfile failed: rc=%d\n", rc);
 			return EXIT_FAILURE;
+		}
 		return EXIT_SUCCESS;
 	}
 
