@@ -14,7 +14,6 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <openssl/dh.h>
-#include <openssl/engine.h>
 #include <openssl/err.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>

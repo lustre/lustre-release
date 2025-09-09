@@ -715,7 +715,7 @@ fi
 # inside $CONFIGURE_ARGS
 # kmod tools/scripts require "name" directory with kernel modules
 
-%if 0%{?rhel} >= 9
+%if 0%{?rhel} >= 9 || 0%{?fedora} >= 38
 %define _configure eval ./configure
 %define eval_configure %configure
 %else

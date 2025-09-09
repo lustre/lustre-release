@@ -218,10 +218,7 @@ FILE *fsxlogf;
 int badoff = -1;
 
 static void
-vwarnc(code, fmt, ap)
-	int code;
-	const char *fmt;
-	va_list ap;
+vwarnc(int code, const char *fmt, va_list ap)
 {
 	fprintf(stderr, "fsx: ");
 	if (fmt) {
@@ -1625,8 +1622,7 @@ segv(int sig)
 }
 
 static void
-cleanup(sig)
-	int	sig;
+cleanup(int sig)
 {
 	if (sig)
 		prt("signal %d\n", sig);
