@@ -2098,7 +2098,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	int used;
 	int i;
 
-	__page = alloc_page(GFP_KERNEL);
+	__page = alloc_page(GFP_NOFS);
 	if (__page == NULL)
 		return -ENOMEM;
 
