@@ -544,19 +544,85 @@ ldebugfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 }
 EXPORT_SYMBOL(ldebugfs_nid_stats_clear_seq_write);
 
+static int ldebugfs_exp_print_grant_dirty_seq(struct obd_export *exp,
+					    void *cb_data)
+{
+	struct seq_file *m = cb_data;
+	struct tg_export_data *ted = &exp->exp_target_data;
+
+	seq_printf(m, "%lu\n", ted->ted_dirty);
+
+	return 0;
+}
+
+static int ldebugfs_exp_grant_dirty_seq_show(struct seq_file *m, void *data)
+{
+	struct nid_stat *stats = m->private;
+
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
+				       ldebugfs_exp_print_grant_dirty_seq, m);
+}
+LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_grant_dirty);
+
+static int ldebugfs_exp_print_grant_seq(struct obd_export *exp,
+					    void *cb_data)
+{
+	struct seq_file *m = cb_data;
+	struct tg_export_data *ted = &exp->exp_target_data;
+
+	seq_printf(m, "%lu\n", ted->ted_grant);
+
+	return 0;
+}
+
+static int ldebugfs_exp_grant_seq_show(struct seq_file *m, void *data)
+{
+	struct nid_stat *stats = m->private;
+
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
+				       ldebugfs_exp_print_grant_seq, m);
+}
+LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_grant);
+
+static int ldebugfs_exp_print_grant_pending_seq(struct obd_export *exp,
+					    void *cb_data)
+{
+	struct seq_file *m = cb_data;
+	struct tg_export_data *ted = &exp->exp_target_data;
+
+	seq_printf(m, "%lu\n", ted->ted_pending);
+
+	return 0;
+}
+
+static int ldebugfs_exp_grant_pending_seq_show(struct seq_file *m, void *data)
+{
+	struct nid_stat *stats = m->private;
+
+	return obd_nid_export_for_each(stats->nid_obd, &stats->nid,
+				       ldebugfs_exp_print_grant_pending_seq, m);
+}
+LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_grant_pending);
+
 static struct ldebugfs_vars ldebugfs_obd_exports_vars[] = {
-	{ .name =	"nodemap",
-	  .fops =	&ldebugfs_exp_nodemap_fops	},
-	{ .name	=	"uuid",
-	  .fops =	&ldebugfs_exp_uuid_fops		},
-	{ .name	=	"hash",
-	  .fops =	&ldebugfs_exp_hash_fops		},
 	{ .name	=	"export",
 	  .fops =	&ldebugfs_exp_export_fops	},
-	{ .name =	"reply_data",
-	  .fops =	&ldebugfs_exp_replydata_fops	},
 	{ .name	=	"fmd_count",
 	  .fops	=	&ldebugfs_exp_fmd_count_fops	},
+	{ .name	=	"grant_cur",
+	  .fops	=	&ldebugfs_exp_grant_fops	},
+	{ .name	=	"grant_dirty",
+	  .fops	=	&ldebugfs_exp_grant_dirty_fops	},
+	{ .name	=	"grant_pending",
+	  .fops	=	&ldebugfs_exp_grant_pending_fops	},
+	{ .name	=	"hash",
+	  .fops =	&ldebugfs_exp_hash_fops		},
+	{ .name =	"nodemap",
+	  .fops =	&ldebugfs_exp_nodemap_fops	},
+	{ .name =	"reply_data",
+	  .fops =	&ldebugfs_exp_replydata_fops	},
+	{ .name	=	"uuid",
+	  .fops =	&ldebugfs_exp_uuid_fops		},
 	{ NULL }
 };
 
