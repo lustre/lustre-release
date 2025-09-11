@@ -258,7 +258,7 @@ struct lnet_nid_md_entry {
 
 struct lnet_nid_metadata {
 	__u32				num_nid_mappings;
-	struct lnet_nid_md_entry	nid_mappings[0];
+	struct lnet_nid_md_entry	nid_mappings[];
 } __attribute__((packed));
 
 /* NB: value of these features equal to LNET_PROTO_PING_VERSION_x
