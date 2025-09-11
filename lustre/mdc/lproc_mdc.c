@@ -617,6 +617,42 @@ static ssize_t cur_dirty_grant_bytes_show(struct kobject *kobj,
 }
 LUSTRE_RO_ATTR(cur_dirty_grant_bytes);
 
+static ssize_t cur_grant_bytes_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct client_obd *cli = &obd->u.cli;
+
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", cli->cl_avail_grant);
+}
+
+static ssize_t cur_grant_bytes_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer,
+				     size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct client_obd *cli = &obd->u.cli;
+	u64 val;
+	int rc;
+
+	rc = sysfs_memparse(buffer, count, &val, "MiB");
+	if (rc < 0)
+		return rc;
+
+	/* this is only for shrinking grant */
+	if (val >= cli->cl_avail_grant)
+		return 0;
+
+	/* grant shrinking to be implemented later */
+
+	return count;
+}
+LUSTRE_RW_ATTR(cur_grant_bytes);
+
 static ssize_t grant_shrink_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
 {
@@ -717,6 +753,7 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_grant_shrink_interval.attr,
 	&lustre_attr_cur_lost_grant_bytes.attr,
 	&lustre_attr_cur_dirty_grant_bytes.attr,
+	&lustre_attr_cur_grant_bytes.attr,
 	&lustre_attr_dom_min_repsize.attr,
 	&lustre_attr_lsom.attr,
 	&lustre_attr_at_max.attr,
