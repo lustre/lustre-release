@@ -58,7 +58,7 @@ struct kefa_rdma_desc {
 
 struct kefa_immediate_msg_v2 {
 	struct lnet_hdr_nid16 hdr;	/* portals header */
-	char payload[0];		/* piggy-backed payload */
+	char payload[];			/* piggy-backed payload */
 } __packed;
 
 struct kefa_putr_req_msg_v2 {
@@ -111,7 +111,7 @@ struct kefa_conn_req_msg {
 	u64 requests;			/* Requests bit array */
 	u32 src_conn_id;		/* Sender's connection ID */
 	u32 nqps;			/* Number of data QPs on the array */
-	struct kefa_qp_proto data_qps[0]; /* Data QPs array */
+	struct kefa_qp_proto data_qps[]; /* Data QPs array */
 } __packed;
 
 struct kefa_conn_req_ack {
@@ -122,7 +122,7 @@ struct kefa_conn_req_ack {
 	s16 status;			/* enum kefa_comp_status */
 	u32 src_conn_id;		/* Responder's connection ID */
 	u32 nqps;			/* Number of data QPs on the array */
-	struct kefa_qp_proto data_qps[0]; /* Data QPs array */
+	struct kefa_qp_proto data_qps[]; /* Data QPs array */
 } __packed;
 
 struct kefa_msg_v1 {
