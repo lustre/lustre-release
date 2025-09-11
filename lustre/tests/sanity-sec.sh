@@ -83,16 +83,6 @@ check_and_setup_lustre
 
 assert_DIR
 
-# for GSS_SUP
-GSS_REF=$(lsmod | grep ^ptlrpc_gss | awk '{print $3}')
-if [ ! -z "$GSS_REF" -a "$GSS_REF" != "0" ]; then
-	GSS_SUP=1
-	echo "with GSS support"
-else
-	GSS_SUP=0
-	echo "without GSS support"
-fi
-
 MDT=$(mdtname_from_index 0 $MOUNT)
 [[ -z "$MDT" ]] && error "fail to get MDT0000 device name" && exit 1
 do_facet $SINGLEMDS "mkdir -p $CONFDIR"
@@ -238,7 +228,7 @@ run_test 0 "uid permission ============================="
 
 # setuid/gid
 test_1() {
-	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
+	$GSS || skip "without GSS support."
 
 	rm -rf $DIR/$tdir
 	mkdir_on_mdt0 $DIR/$tdir
@@ -11356,11 +11346,14 @@ cleanup_79() {
 	if is_mounted $MOUNT; then
 		umount_client $MOUNT || error "umount $MOUNT failed"
 	fi
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT failed"
+	fi
 
 	cleanup_unload_ssk nm0
 
 	# reset and deactivate nodemaps, remount client
-	do_facet mgs $LCTL nodemap_del nm0
+	do_facet mgs $LCTL nodemap_del nm0 || true
 	$LGSS_SK -l $SK_PATH/$FSNAME.key
 	cleanup_local_client_nodemap c0
 
@@ -11496,6 +11489,35 @@ test_79() {
 		grep -c $client_nid)
 	(( count == mds1_mdtcnt )) ||
 		error "$count exps for $client_nid on nm0 ($mds1_mdtcnt) (2)"
+
+	# mount client on DIR2 with c0 key, should see c0 fileset
+	$MOUNT_CMD -o $MOUNT_OPTS,skpath=$SK_PATH/nodemap/c0.key \
+		$MGSNID:/$FSNAME $MOUNT2 ||
+			error "remount failed (3)"
+	wait_ssk
+
+	[[ -f $DIR2/this_is_c0 ]] || error "failed to get c0 in $DIR2"
+
+	do_facet mds1 $LCTL get_param nodemap.*.exports
+	count=$(do_facet mds1 $LCTL get_param -n nodemap.c0.exports |
+		grep -c $client_nid)
+	(( count == mds1_mdtcnt )) ||
+		error "$count exps for $client_nid on nm0 ($mds1_mdtcnt) (3)"
+
+	# remount client on DIR, should still be part of nm0
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	$MOUNT_CMD -o $MOUNT_OPTS,skpath=$SK_PATH/nodemap/nm0.key \
+		$MGSNID:/$FSNAME $MOUNT ||
+			error "remount failed (4)"
+	wait_ssk
+
+	[[ -f $DIR/this_is_nm0 ]] || error "failed to get nm0 in $DIR"
+
+	do_facet mds1 $LCTL get_param nodemap.*.exports
+	count=$(do_facet mds1 $LCTL get_param -n nodemap.nm0.exports |
+		grep -c $client_nid)
+	(( count == mds1_mdtcnt )) ||
+		error "$count exps for $client_nid on nm0 ($mds1_mdtcnt) (4)"
 }
 run_test 79 "ssk for nodemap identification"
 

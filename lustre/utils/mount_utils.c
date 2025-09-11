@@ -1334,7 +1334,7 @@ int load_shared_keys(struct mount_opts *mop, bool client)
 
 	/* Load individual keys or a directory of them */
 	if (S_ISREG(sbuf.st_mode)) {
-		return sk_load_keyfile(path, client);
+		return sk_load_keyfile(path, client, true, NULL);
 	} else if (!S_ISDIR(sbuf.st_mode)) {
 		fprintf(stderr, "Invalid shared key path: %s\n", path);
 		return -ENOKEY;
@@ -1379,13 +1379,27 @@ int load_shared_keys(struct mount_opts *mop, bool client)
 		if (!S_ISREG(sbuf.st_mode))
 			continue;
 
-		rc = sk_load_keyfile(fullpath, client);
+		rc = sk_load_keyfile(fullpath, client, false, NULL);
 		if (rc < 0)
 			fprintf(stderr, "Failed to load key %s\n", fullpath);
+		else
+			rc = 0;
 	}
 	closedir(dir);
 
 	return rc;
+}
+
+/**
+ * Unloads leftover key \a key
+ *
+ * \param[in]	key	id of key to remove
+ *
+ */
+void unload_shared_key(unsigned int key)
+{
+	if (key > 0)
+		(void)keyctl_unlink(key, KEY_SPEC_USER_KEYRING);
 }
 #endif /* HAVE_OPENSSL_SSK */
 #endif /* HAVE_GSS */

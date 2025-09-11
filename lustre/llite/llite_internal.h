@@ -1007,6 +1007,8 @@ struct ll_sb_info {
 	struct list_head	 ll_all_quota_list;
 
 	struct rhashtable	 ll_proj_sfs_htable;
+	/* SSK key id */
+	int			 ll_skid;
 };
 
 #define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)
@@ -1481,6 +1483,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 			    struct lookup_intent *it, struct dentry *de);
 
 /* llite/llite_lib.c */
+
 extern const struct super_operations lustre_super_operations;
 
 void ll_lli_init(struct ll_inode_info *lli);

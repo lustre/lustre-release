@@ -519,6 +519,52 @@ struct scrub_file {
 	__u8    sf_oi_bitmap[SCRUB_OI_BITMAP_SIZE]; /* OI files recreated */
 };
 
+/* SSK key file constants */
+#define SK_MAX_KEYLEN_BYTES	128
+#define SK_MAX_P_BYTES		2048
+#define MAX_MGSNIDS		16
+
+#ifndef MTI_NAME_MAXLEN
+#define MTI_NAME_MAXLEN		64
+#endif
+
+/* This is the packed structure format of key files that are distributed.
+ * The on-disk format should be stored in big-endian.
+ */
+struct sk_keyfile_config {
+	/* File format version */
+	__u32		skc_version;
+	/* HMAC algorithm used for message integrity */
+	__u16		skc_hmac_alg;
+	/* Crypt algorithm used for privacy mode */
+	__u16		skc_crypt_alg;
+	/* Number of seconds that a context is valid after it is created from
+	 * this keyfile
+	 */
+	__u32		skc_expire;
+	/* Length of shared key in skc_shared_key */
+	__u32		skc_shared_keylen;
+	/* Length of the prime used in the DHKE */
+	__u32		skc_prime_bits;
+	/* Key type */
+	__u8		skc_type;
+	/* Array of MGS NIDs to load key's for.  This is for the client since
+	 * the upcall only knows the target name which is MGC<IP>@<NET>
+	 * Only needed when mounting with mgssec
+	 */
+	__u64		skc_mgsnids[MAX_MGSNIDS];
+	/* File system name for this key.  It can be unused for MGS only keys */
+	char		skc_fsname[MTI_NAME_MAXLEN + 1];
+	/* Nodemap name for this key.  Used by the server side to verify the
+	 * client is in the correct nodemap
+	 */
+	char		skc_nodemap[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	/* Shared key */
+	unsigned char	skc_shared_key[SK_MAX_KEYLEN_BYTES];
+	/* Prime (p) for DHKE */
+	unsigned char	skc_p[SK_MAX_P_BYTES];
+} __attribute__((packed));
+
 /** @} disk */
 
 #endif /* _UAPI_LUSTRE_DISK_H */

@@ -693,7 +693,7 @@ static int handle_sk(struct svc_nego_data *snd)
 	printerr(LL_DEBUG, "Using nodemap name %s for authentication\n",
 		 snd->nm_name);
 
-	skc = sk_create_cred(target, snd->nm_name, be32toh(flags));
+	skc = sk_create_cred(target, snd->nm_name, NULL, be32toh(flags));
 	if (!skc) {
 		printerr(LL_ERR, "Failed to create sk credentials\n");
 		goto cleanup_buffers;

@@ -1135,6 +1135,10 @@ static int ll_options(char *options, struct super_block *sb)
 			    match_wildcard("defcontext", s1) ||
 			    match_wildcard("rootcontext", s1))
 				continue;
+			if (match_wildcard("skid=*", s1)) {
+				sbi->ll_skid = simple_strtoul(s1 + 5, NULL, 10);
+				continue;
+			}
 
 			LCONSOLE_ERROR("Unknown option '%s', won't mount.\n",
 				       s1);
@@ -1431,6 +1435,14 @@ int ll_fill_super(struct super_block *sb)
 	strncpy(sbi->ll_fsname, profilenm, len);
 	sbi->ll_fsname[len] = '\0';
 
+	err = gss_rename_sk_key(sbi->ll_skid, sbi->ll_fsname,
+				sbi->ll_sb_uuid.uuid);
+	if (err) {
+		CDEBUG(D_SEC, "Renaming SSK key %d failed: rc = %d\n",
+		       sbi->ll_skid, err);
+		GOTO(out_free_cfg, err);
+	}
+
 	/* Mount info */
 	snprintf(name, sizeof(name), "%.*s-%016lx", len,
 		 profilenm, cfg_instance);
@@ -1583,6 +1595,8 @@ void ll_put_super(struct super_block *sb)
 		/* Only if client_common_fill_super succeeded */
 		client_common_put_super(sb);
 	}
+	gss_cleanup_sk_key(sbi->ll_skid, sbi->ll_fsname,
+			   sbi->ll_sb_uuid.uuid);
 
 	/* imitate failed cleanup */
 	if (CFS_FAIL_CHECK(OBD_FAIL_OBD_CLEANUP))

@@ -113,15 +113,15 @@ static inline const BIGNUM *DH_get0_p(const DH *dh)
 #define FIPS_mode()	0
 #endif
 
-/* Some limits and defaults */
+/* Some limits and defaults.
+ * SK_MAX_KEYLEN_BYTES, SK_MAX_P_BYTES, MAX_MGSNIDS and struct sk_keyfile_config
+ * are defined in lustre_disk.h (UAPI, shared with kernel).
+ */
 #define SK_CONF_VERSION 1
 #define SK_MSG_VERSION 1
 #define SK_GENERATOR 2
 #define SK_SESSION_MAX_KEYLEN_BYTES 1024
-#define SK_MAX_KEYLEN_BYTES 128
-#define SK_MAX_P_BYTES 2048
 #define SK_NONCE_SIZE 4
-#define MAX_MGSNIDS 16
 
 /* ASCII-encoded key format constants */
 #define SK_ASCII_HEADER "Lustre SSK v1.0\n"
@@ -156,39 +156,6 @@ enum sk_key_type {
 	SK_TYPE_SERVER	= 0x2,
 	SK_TYPE_MGS	= 0x4,
 };
-
-/* This is the packed structure format of key files that are distributed.
- * The on disk format should be store in big-endian. */
-struct sk_keyfile_config {
-	/* File format version */
-	uint32_t	skc_version;
-	/* HMAC algorithm used for message integrity */
-	uint16_t	skc_hmac_alg;
-	/* Crypt algorithm used for privacy mode */
-	uint16_t	skc_crypt_alg;
-	/* Number of seconds that a context is valid after it is created from
-	 * this keyfile */
-	uint32_t	skc_expire;
-	/* Length of shared key in skc_shared_key */
-	uint32_t	skc_shared_keylen;
-	/* Length of the prime used in the DHKE */
-	uint32_t	skc_prime_bits;
-	/* Key type */
-	uint8_t		skc_type;
-	/* Array of MGS NIDs to load key's for.  This is for the client since
-	 * the upcall only knows the target name which is MGC<IP>@<NET>
-	 * Only needed when mounting with mgssec */
-	lnet_nid_t	skc_mgsnids[MAX_MGSNIDS];
-	/* File system name for this key.  It can be unused for MGS only keys */
-	char		skc_fsname[MTI_NAME_MAXLEN + 1];
-	/* Nodemap name for this key.  Used by the server side to verify the
-	 * client is in the correct nodemap */
-	char		skc_nodemap[LUSTRE_NODEMAP_NAME_LENGTH + 1];
-	/* Shared key */
-	unsigned char	skc_shared_key[SK_MAX_KEYLEN_BYTES];
-	/* Prime (p) for DHKE */
-	unsigned char	skc_p[SK_MAX_P_BYTES];
-} __attribute__((packed));
 
 /* Format passed to the kernel from userspace
  * Internally to the kernel alg name is expected to be 128 */
@@ -425,7 +392,7 @@ int gen_ssk_prime(struct sk_keyfile_config *config);
 int write_config_file(char *output_file, struct sk_keyfile_config *config,
 		      bool overwrite, bool ascii_format);
 struct sk_keyfile_config *sk_read_file(char *filename);
-int sk_load_keyfile(char *path, bool client);
+int sk_load_keyfile(char *path, bool client, bool randomize, char *mntdir);
 void sk_config_disk_to_cpu(struct sk_keyfile_config *config);
 void sk_config_cpu_to_disk(struct sk_keyfile_config *config);
 int sk_validate_config(const struct sk_keyfile_config *config);
@@ -436,7 +403,7 @@ int sk_encode_ascii_key(const struct sk_keyfile_config *config,
 uint32_t sk_verify_hash(const char *string, const EVP_MD *hash_alg,
 			const gss_buffer_desc *current_hash);
 struct sk_cred *sk_create_cred(const char *fsname, const char *cluster,
-			       const uint32_t flags);
+			       const char *uuid, const uint32_t flags);
 #ifndef HAVE_OPENSSL_EVP_PKEY
 int sk_speedtest_dh_valid(unsigned int usec_check_max, pid_t *child);
 #endif

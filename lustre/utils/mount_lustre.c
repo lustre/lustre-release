@@ -931,6 +931,9 @@ int set_client_params(char *fsname)
 int main(int argc, char *const argv[])
 {
 	struct mount_opts mop;
+#ifdef HAVE_GSS
+	unsigned int key = -1;
+#endif
 	char *options;
 	int i, flags;
 	int rc;
@@ -1074,10 +1077,22 @@ int main(int argc, char *const argv[])
 	if (mop.mo_skpath[0] != '\0') {
 		/* Treat shared key failures as fatal */
 		rc = load_shared_keys(&mop, client);
+		key = rc;
 		if (rc < 0) {
 			fprintf(stderr, "%s: Error loading shared keys: %s\n",
-				progname, strerror(rc));
-			goto out_osd;
+				progname, strerror(-rc));
+			goto out_unload;
+		}
+		/* rc > 0 means a valid key serial was returned, so forward it
+		 * to the kernel
+		 */
+		if (rc) {
+			char keyid[32];
+
+			snprintf(keyid, sizeof(keyid), "%d", key);
+			rc = append_option(options, maxopt_len, "skid=", keyid);
+			if (rc != 0)
+				goto out_unload;
 		}
 	}
 #endif /* HAVE_GSS */
@@ -1111,7 +1126,7 @@ int main(int argc, char *const argv[])
 	 */
 	rc = append_option(options, maxopt_len, "device=", mop.mo_source);
 	if (rc != 0)
-		goto out_osd;
+		goto out_unload;
 
 	if (verbose)
 		printf("mounting device %s at %s, flags=%#x options=%s\n",
@@ -1260,8 +1275,13 @@ int main(int argc, char *const argv[])
 		}
 	}
 
-out_osd:
+out_unload:
+#ifdef HAVE_GSS
+	/* unload temporary key, most useful if kernel does not handle it */
+	unload_shared_key(key);
+#endif
 #ifdef HAVE_SERVER_SUPPORT
+out_osd:
 	if (!client)
 		osd_fini();
 #endif

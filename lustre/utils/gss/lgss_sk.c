@@ -78,6 +78,7 @@ static void usage(FILE *fp, char *program)
 	fprintf(fp, "                        Not a seed value. "
 		"This is the actual key value.\n\n");
 	fprintf(fp, "Other Options:\n");
+	fprintf(fp, "-u|--update     <dir>	Only when loading a key, mount path to update the key for\n");
 	fprintf(fp, "-v|--verbose           Increase verbosity for errors\n");
 	exit(EXIT_FAILURE);
 }
@@ -265,6 +266,7 @@ int main(int argc, char **argv)
 	char *mgsnids = NULL;
 	char *nodemap = NULL;
 	char *fsname = NULL;
+	char *update_path = NULL;
 	char *tmp;
 	char *tmp2;
 	int crypt = SK_CRYPT_EMPTY;
@@ -297,12 +299,13 @@ int main(int argc, char **argv)
 	{ .name = "prime-bits",	.has_arg = required_argument, .val = 'p'},
 	{ .name = "read",	.has_arg = required_argument, .val = 'r'},
 	{ .name = "type",	.has_arg = required_argument, .val = 't'},
+	{ .name = "update",	.has_arg = required_argument, .val = 'u'},
 	{ .name = "verbose",	.has_arg = no_argument,	      .val = 'v'},
 	{ .name = "write",	.has_arg = required_argument, .val = 'w'},
 	{ .name = NULL, } };
 
 	while ((opt = getopt_long(argc, argv,
-				  "ac:d:e:f:g:hi:l:m:n:p:r:s:k:t:w:v",
+				  "ac:d:e:f:g:hi:k:l:m:n:p:r:s:t:u:vw:",
 				  long_opts, NULL)) != EOF) {
 		switch (opt) {
 		case 'a':
@@ -396,6 +399,9 @@ int main(int argc, char **argv)
 			}
 			free(tmp2);
 			break;
+		case 'u':
+			update_path = optarg;
+			break;
 		case 'v':
 			verbose++;
 			break;
@@ -419,6 +425,10 @@ int main(int argc, char **argv)
 		usage(stderr, argv[0]);
 		return EXIT_FAILURE;
 	}
+	if (update_path && !load) {
+		usage(stderr, argv[0]);
+		return EXIT_FAILURE;
+	}
 
 	/* init gss logger for foreground (no syslog) which prints to stderr */
 	initerr(NULL, verbose, 1);
@@ -429,7 +439,8 @@ int main(int argc, char **argv)
 		return print_config(input);
 
 	if (load) {
-		int rc = sk_load_keyfile(load, type & SK_TYPE_CLIENT);
+		int rc = sk_load_keyfile(load, type & SK_TYPE_CLIENT, false,
+					 update_path);
 
 		if (rc < 0) {
 			fprintf(stderr,

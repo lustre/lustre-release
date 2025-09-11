@@ -828,6 +828,175 @@ search:
 	}
 }
 
+/* SSK key desc is in the form "lustre:<fsname>:<client uuid>" */
+#define GSS_SK_KEY_DESC_SZ (9 + MTI_NAME_MAXLEN + UUID_MAX)
+
+/* Rename SSK key that was inserted in the kernel keyring at mount specifically
+ * for this client, so that it uses a key description in the form
+ * "lustre:<fsname>:<client uuid>". Having the client UUID in the key desc
+ * allows request_key() to find this client-specific key by putting the UUID
+ * into the callout info for context negotiation that happens in userspace.
+ */
+int gss_rename_sk_key(key_serial_t skid, const char *fsname, const char *uuid)
+{
+	key_ref_t orig_key_ref, user_keyring_ref, new_key_ref;
+	const struct user_key_payload *ukp;
+	struct key *orig_key, *user_kr;
+	char desc[GSS_SK_KEY_DESC_SZ];
+	size_t buflen;
+	ssize_t plen;
+	void *buf;
+	int rc = 0;
+
+	ENTRY;
+
+	/* no key id, nothing to do */
+	if (likely(!skid))
+		RETURN(0);
+
+	/* find original key, knowing its serial */
+	orig_key_ref = lookup_user_key(skid, 0, KEY_NEED_SEARCH);
+	if (IS_ERR(orig_key_ref)) {
+		rc = PTR_ERR(orig_key_ref);
+		CDEBUG(D_SEC, "%s:%s: lookup_user_key(%d) failed: rc = %d\n",
+		       fsname, uuid, skid, rc);
+		/* ignore error in case original key is not found */
+		RETURN(0);
+	}
+	orig_key = key_ref_to_ptr(orig_key_ref);
+
+	buflen = sizeof(struct sk_keyfile_config);
+	OBD_ALLOC(buf, buflen);
+	if (!buf)
+		GOTO(out_put1, rc = -ENOMEM);
+
+	/* read and copy payload safely under RCU */
+	rcu_read_lock();
+	ukp = user_key_payload_rcu(orig_key);
+	if (!ukp) {
+		rcu_read_unlock();
+		CDEBUG(D_SEC, "%s:%s: no payload on key %d\n",
+		       fsname, uuid, skid);
+		GOTO(out_free, rc = -ENODATA);
+	}
+	plen = ukp->datalen;
+	if (plen > buflen) {
+		rcu_read_unlock();
+		CERROR("%s:%s: key %d: invalid SSK payload size %zd > %zu\n",
+		       fsname, uuid, skid, plen, buflen);
+		GOTO(out_free, rc = -EINVAL);
+	}
+	memcpy(buf, ukp->data, plen);
+	rcu_read_unlock();
+
+	/* get ref to user keyring */
+	user_keyring_ref = lookup_user_key(KEY_SPEC_USER_KEYRING, 0,
+					   KEY_NEED_WRITE);
+	if (IS_ERR(user_keyring_ref)) {
+		rc = PTR_ERR(user_keyring_ref);
+		CDEBUG(D_SEC, "%s:%s: lookup_user_keyring failed: rc = %d\n",
+		       fsname, uuid, rc);
+		GOTO(out_free, rc);
+	}
+	user_kr = key_ref_to_ptr(user_keyring_ref);
+
+	/* create key with original payload and new desc
+	 * in the form "lustre:<fsname>:<client uuid>"
+	 */
+	snprintf(desc, sizeof(desc), "lustre:%s:%s", fsname, uuid);
+	new_key_ref = key_create_or_update(user_keyring_ref, "user", desc,
+					   buf, (size_t)plen,
+					   KEY_POS_ALL | KEY_USR_ALL |
+					   KEY_GRP_ALL | KEY_OTH_ALL,
+					   0);
+
+	if (IS_ERR(new_key_ref)) {
+		rc = PTR_ERR(new_key_ref);
+		CDEBUG(D_SEC,
+		       "key_create_or_update(%d) with desc %s failed: rc= %d\n",
+		       skid, desc, rc);
+		GOTO(out_put2, rc);
+	}
+	CDEBUG(D_SEC, "installed key %d with desc %s\n",
+	       key_ref_to_ptr(new_key_ref)->serial, desc);
+	key_ref_put(new_key_ref);
+
+	/* now original key can be removed */
+	rc = key_unlink(user_kr, orig_key);
+	CDEBUG(D_SEC, "%s:%s: key_unlink(%d) %s: rc = %d\n",
+	       fsname, uuid, skid, rc ? "failed" : "success", rc);
+	/* ignore error in case original key is not removed */
+	rc = 0;
+
+out_put2:
+	key_put(user_kr);
+out_free:
+	OBD_FREE(buf, buflen);
+out_put1:
+	key_put(orig_key);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(gss_rename_sk_key);
+
+/* Cleanup SSK key that was inserted in the kernel keyring specifically
+ * for this client, in the form "lustre:<fsname>:<client uuid>".
+ */
+void gss_cleanup_sk_key(key_serial_t skid, const char *fsname, const char *uuid)
+{
+	key_ref_t orig_key_ref, user_keyring_ref, key_ref;
+	struct key *orig_key, *target_key, *user_kr;
+	char desc[GSS_SK_KEY_DESC_SZ];
+	int rc;
+
+	ENTRY;
+
+	/* no key id, nothing to do */
+	if (likely(!skid))
+		RETURN_EXIT;
+
+	snprintf(desc, sizeof(desc), "lustre:%s:%s", fsname, uuid);
+
+	/* get ref to user keyring */
+	user_keyring_ref = lookup_user_key(KEY_SPEC_USER_KEYRING, 0,
+					   KEY_NEED_WRITE);
+	if (IS_ERR(user_keyring_ref)) {
+		CDEBUG(D_SEC, "%s:%s: lookup_user_keyring failed: rc = %ld\n",
+		       fsname, uuid, PTR_ERR(user_keyring_ref));
+		RETURN_EXIT;
+	}
+	user_kr = key_ref_to_ptr(user_keyring_ref);
+
+	/* find key to remove */
+#ifdef HAVE_KEYRING_SEARCH_4ARGS
+	key_ref = keyring_search(user_keyring_ref, &key_type_user, desc, false);
+#else
+	key_ref = keyring_search(user_keyring_ref, &key_type_user, desc);
+#endif
+
+	if (!IS_ERR(key_ref)) {
+		/* unlink the key */
+		target_key = key_ref_to_ptr(key_ref);
+		rc = key_unlink(user_kr, target_key);
+		CDEBUG(D_SEC, "key_unlink(%d) with desc %s %s: rc = %d\n",
+		       target_key->serial, desc, rc ? "failed" : "success", rc);
+		key_put(target_key);
+	}
+
+	/* find and remove original key, in case it was left behind */
+	orig_key_ref = lookup_user_key(skid, 0, KEY_NEED_SEARCH);
+	if (!IS_ERR(orig_key_ref)) {
+		orig_key = key_ref_to_ptr(orig_key_ref);
+		rc = key_unlink(user_kr, orig_key);
+		CDEBUG(D_SEC, "%s:%s: key_unlink(%d) %s: rc = %d\n",
+		       fsname, uuid, skid, rc ? "failed" : "success", rc);
+		key_put(orig_key);
+	}
+
+	key_put(user_kr);
+	RETURN_EXIT;
+}
+EXPORT_SYMBOL(gss_cleanup_sk_key);
+
 /**
  * \retval a valid context on success
  * \retval -ev error number or NULL on error
@@ -837,6 +1006,8 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                                               struct vfs_cred *vcred,
                                               int create, int remove_dead)
 {
+	const size_t sizeof_u32 = sizeof(u32) * 2 + 3; /* string + : */
+	const size_t sizeof_u64 = sizeof(u64) * 2 + 3; /* string + : */
 	struct obd_import *imp = sec->ps_import;
 	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
 	struct ptlrpc_cli_ctx *ctx = NULL;
@@ -944,11 +1115,21 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 
 	construct_key_desc(desc, sizeof(desc), sec, vcred->vc_uid);
 
-	/* callout info format:
-	 * secid:mech:uid:gid:sec_flags:svc_flag:svc_type:peer_nid:target_uuid:
-	 * self_nid:pid
-	 */
-	coinfo_size = sizeof(struct obd_uuid) + MAX_OBD_NAME + 64;
+	/* callout info format */
+	coinfo_size = sizeof_u32        /* secid */ +
+		      8                 /* mech */ +
+		      sizeof_u32        /* uid */ +
+		      sizeof_u32        /* gid */ +
+		      4                 /* sec_flags */ +
+		      2                 /* svc_flag */ +
+		      sizeof_u32        /* svc_type */ +
+		      sizeof_u64        /* peer_nid */ +
+		      MAX_OBD_NAME + 1  /* target_uuid */ +
+		      sizeof_u64        /* self_nid */ +
+		      sizeof_u32        /* pid */ +
+		      UUID_MAX + 1      /* client_uuid */ +
+		      1;
+
 	OBD_ALLOC(coinfo, coinfo_size);
 	if (coinfo == NULL)
 		goto out;
@@ -973,14 +1154,15 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	LNetLocalPrimaryNID(&primary);
 
 	/* FIXME !! Needs to support larger NIDs */
-	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%c:%d:%#llx:%s:%#llx:%d",
+	snprintf(coinfo, coinfo_size,
+		 "%d:%s:%u:%u:%s:%c:%d:%#llx:%s:%#llx:%d:%s",
 		 sec->ps_id, sec2gsec(sec)->gs_mech->gm_name,
 		 vcred->vc_uid, vcred->vc_gid,
 		 sec_part_flags, svc_flag, import_to_gss_svc(imp),
 		 lnet_nid_to_nid4(&imp->imp_connection->c_peer.nid),
 		 imp->imp_obd->obd_name,
 		 lnet_nid_to_nid4(&primary),
-		 caller_pid);
+		 caller_pid, obd_uuid2str(&imp->imp_obd->obd_uuid));
 
 	CDEBUG(D_SEC, "requesting key for %s\n", desc);
 

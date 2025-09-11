@@ -37,7 +37,8 @@ static int lgss_sk_prepare_cred(struct lgss_cred *cred)
 		break;
 	}
 
-	cred->lc_mech_cred = sk_create_cred(cred->lc_tgt_uuid, NULL, flags);
+	cred->lc_mech_cred = sk_create_cred(cred->lc_tgt_uuid, NULL,
+					    cred->lc_cluuid, flags);
 	if (cred->lc_mech_cred == NULL) {
 		printerr(0, "sk: cannot create credential: %s\n",
 			 cred->lc_tgt_uuid);

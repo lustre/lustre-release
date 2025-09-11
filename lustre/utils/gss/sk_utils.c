@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <linux/lustre/lgss.h>
 
+#include <lustre/lustreapi.h>
 #include "sk_utils.h"
 #include "write_bytes.h"
 
@@ -423,14 +424,16 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
  * using a description determined by the the \a type.  Existing keys with the
  * same description are replaced.
  *
- * \param[in]	path	Path to key file
- * \param[in]	client	Client is mounting with a server key
+ * \param[in]	path		Path to key file
+ * \param[in]	client		Client is mounting with a server key
+ * \param[in]	randomize	true to randomize key desc, only apply to client
+ * \param[in]	mntdir		Client mount dir
  *
  * \return	> 0	client file system key id if successfully loaded
  * \return	  0	other key type successfully loaded
  * \return	< 0	-errno on failure
  */
-int sk_load_keyfile(char *path, bool client)
+int sk_load_keyfile(char *path, bool client, bool randomize, char *mntdir)
 {
 	struct sk_keyfile_config *config;
 	char description[SK_DESCRIPTION_SIZE + 1];
@@ -517,8 +520,52 @@ read_sk:
 	if (config->skc_type & SK_TYPE_CLIENT) {
 		/* Load client file system key */
 		if (config->skc_fsname[0] != '\0') {
+			char uuid[UUID_MAX + 2] = { 0 }; /* additional '\n' */
+			char rand[5];
+
+			if (mntdir) {
+				char fsname[LUSTRE_MAXFSNAME + 1];
+
+				/* If mount path is provided, check it refers to
+				 * the same fs as the key.
+				 */
+				rc = llapi_get_fsname(mntdir, fsname,
+						      sizeof(fsname));
+				if (rc < 0) {
+					printerr(0,
+						 "Cannot get Lustre fsname for %s: rc=%d\n",
+						 mntdir, rc);
+					goto out;
+				}
+				if (strcmp(fsname, config->skc_fsname) != 0) {
+					rc = -EINVAL;
+					printerr(0,
+						 "Key to load is for file system %s, but %s is mounted at %s: rc=%d\n",
+						 config->skc_fsname, fsname,
+						 mntdir, rc);
+					goto out;
+				}
+
+				/* Fetch uuid from mount point */
+				rc = llapi_get_agent_uuid(mntdir, uuid,
+							  sizeof(uuid));
+				if (rc < 0) {
+					printerr(0,
+						 "Cannot get client uuid for %s: rc=%d\n",
+						 mntdir, rc);
+					goto out;
+				}
+				if (uuid[strlen(uuid) - 1] == '\n')
+					uuid[strlen(uuid) - 1] = '\0';
+			}
+
+			/* add random chars at end of key if requested... */
+			if (randomize)
+				snprintf(rand, sizeof(rand), "%.4lX", random());
 			rc = snprintf(description, SK_DESCRIPTION_SIZE,
-				      "lustre:%s", config->skc_fsname);
+				      "lustre:%s%s%s", config->skc_fsname,
+				      randomize || mntdir ? ":" : "",
+				      randomize ? rand : (mntdir ? uuid : ""));
 			if (rc >= SK_DESCRIPTION_SIZE) {
 				rc = -ENAMETOOLONG;
 				goto out;
@@ -527,6 +574,14 @@ read_sk:
 			if (keyid == -1) {
 				rc = -ENOKEY;
 				goto out;
+			}
+
+			/* ... and also load legacy key desc for interop */
+			if (randomize) {
+				rc = snprintf(description, SK_DESCRIPTION_SIZE,
+					      "lustre:%s", config->skc_fsname);
+				if (rc < SK_DESCRIPTION_SIZE)
+					(void)sk_load_key(config, description);
 			}
 		}
 
@@ -916,7 +971,7 @@ static inline int sk_config_has_mgsnid(struct sk_keyfile_config *config,
 
 /**
  * Create an sk_cred structure populated with initial configuration info and the
- * key.  \a tgt and \a nodemap are used in determining the expected key
+ * key. \a tgt \a uuid and \a nodemap are used in determining the expected key
  * description so the key can be found by searching the keyring.
  * This is done because there is no easy way to pass keys from the mount command
  * all the way to the request_key call.  In addition any keys can be dynamically
@@ -927,13 +982,14 @@ static inline int sk_config_has_mgsnid(struct sk_keyfile_config *config,
  * \param[in]	nodemap		Cluster name for the key.  This correlates to
  *				the nodemap name and is used by the server side.
  *				For the client this will be NULL.
+ * \param[in]	uuid		Client uuid
  * \param[in]	flags		Flags for the credentials
  *
  * \return	sk_cred Allocated struct sk_cred on success
  * \return	NULL	failure
  */
 struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
-			       const uint32_t flags)
+			       const char *uuid, const uint32_t flags)
 {
 	struct sk_keyfile_config *config;
 	struct sk_kernel_ctx *kctx;
@@ -974,6 +1030,7 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 	}
 	memcpy(fsname, tgt, len);
 
+build_desc:
 	if (nodemap) {
 		if (mgsnid)
 			rc = snprintf(description, SK_DESCRIPTION_SIZE,
@@ -982,8 +1039,8 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 			rc = snprintf(description, SK_DESCRIPTION_SIZE,
 				      "lustre:%s:%s", fsname, nodemap);
 	} else {
-		rc = snprintf(description, SK_DESCRIPTION_SIZE, "lustre:%s",
-			      fsname);
+		rc = snprintf(description, SK_DESCRIPTION_SIZE, "lustre:%s%s%s",
+			      fsname, uuid ? ":" : "", uuid ?: "");
 	}
 
 	if (rc >= SK_DESCRIPTION_SIZE) {
@@ -1002,6 +1059,10 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 	sk_key = keyctl_search(KEY_SPEC_USER_KEYRING, "user",
 			       description, 0);
 	if (sk_key == -1) {
+		if (!nodemap && uuid) {
+			uuid = NULL;
+			goto build_desc;
+		}
 		printerr(1, "No key found for %s\n", description);
 		return NULL;
 	}

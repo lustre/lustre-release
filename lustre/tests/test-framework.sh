@@ -9573,6 +9573,7 @@ combination()
 }
 
 calc_connection_cnt() {
+	local clients=${CLIENTS:-$HOSTNAME}
 	local dir=$1
 
 	# MDT->MDT = 2 * C(M, 2)
@@ -9587,10 +9588,14 @@ calc_connection_cnt() {
 	local cnt_mdt2ost=$((MDSCOUNT * OSTCOUNT))
 	local cnt_cli2ost=$((num_clients * OSTCOUNT))
 	local cnt_cli2mdt=$((num_clients * MDSCOUNT))
-	if is_mounted $MOUNT2; then
-		cnt_cli2mdt=$((cnt_cli2mdt * 2))
-		cnt_cli2ost=$((cnt_cli2ost * 2))
-	fi
+	for c in ${clients//,/ }; do
+		do_node $c grep lustre /proc/mounts |
+			grep -qw $MOUNT2
+		if [[ $? -eq 0 ]]; then
+			((cnt_cli2mdt += MDSCOUNT))
+			((cnt_cli2ost += OSTCOUNT))
+		fi
+	done
 	if local_mode; then
 		cnt_mdt2mdt=0
 		cnt_mdt2ost=0

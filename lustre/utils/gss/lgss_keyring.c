@@ -31,6 +31,7 @@
 #include <sys/wait.h>
 #include <getopt.h>
 
+#include <linux/lustre/lustre_user.h>
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
 #include "lsupport.h"
@@ -96,6 +97,7 @@ struct keyring_upcall_param {
 			kup_is_mdt:1,
 			kup_is_ost:1;
 	uint32_t        kup_pid;
+	char		kup_cluuid[UUID_MAX];
 };
 
 /****************************************
@@ -825,40 +827,50 @@ static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
  *  [8]: target_uuid    (string)
  *  [9]: self_nid        (uint64)
  *  [10]: pid            (uint)
+ *  [11]: client uuid    (string)
  */
 static int parse_callout_info(const char *coinfo,
                               struct keyring_upcall_param *uparam)
 {
-	const int       nargs = 11;
-	char            buf[1024];
-	char           *string = buf;
-	int             length, i;
-	char           *data[nargs];
-	char           *pos;
+	const int nargs = 12;
+	const int nargs_min = 11; /* for compatibility with older kernel code */
+	char buf[1024];
+	char *string = buf;
+	int length, i;
+	char *data[nargs];
+	char *pos;
 
-        length = strlen(coinfo) + 1;
-        if (length > 1024) {
-                logmsg(LL_ERR, "coinfo too long\n");
-                return -1;
-        }
-        memcpy(buf, coinfo, length);
+	length = strlen(coinfo) + 1;
+	if (length > 1024) {
+		logmsg(LL_ERR, "coinfo too long\n");
+		return -1;
+	}
+	memcpy(buf, coinfo, length);
 
-        for (i = 0; i < nargs - 1; i++) {
-                pos = strchr(string, ':');
-                if (pos == NULL) {
-                        logmsg(LL_ERR, "short of components\n");
-                        return -1;
-                }
+	for (i = 0; i < nargs; i++) {
+		data[i] = string;
+		pos = strchr(string, ':');
 
-                *pos = '\0';
-                data[i] = string;
-                string = pos + 1;
-        }
-        data[i] = string;
+		if (!pos) {
+			if (i >= nargs_min - 1) {
+				i++;
+				break;
+			}
+			logmsg(LL_ERR,
+			       "short components, need minimum %d, got %d\n",
+			       nargs_min, i + 1);
+			return -1;
+		}
+		*pos = '\0';
+		string = pos + 1;
+	}
+	for (; i < nargs; i++)
+		data[i] = NULL;
 
-	logmsg(LL_TRACE, "components: %s,%s,%s,%s,%s,%c,%s,%s,%s,%s,%s\n",
+	logmsg(LL_TRACE, "components: %s,%s,%s,%s,%s,%c,%s,%s,%s,%s,%s,%s\n",
 	       data[0], data[1], data[2], data[3], data[4], data[5][0],
-	       data[6], data[7], data[8], data[9], data[10]);
+	       data[6], data[7], data[8], data[9], data[10],
+	       data[11] ?: "<unset>");
 
 	uparam->kup_secid = strtol(data[0], NULL, 0);
 	snprintf(uparam->kup_mech, sizeof(uparam->kup_mech), "%s", data[1]);
@@ -876,15 +888,22 @@ static int parse_callout_info(const char *coinfo,
 	snprintf(uparam->kup_tgt, sizeof(uparam->kup_tgt), "%s", data[8]);
 	uparam->kup_selfnid = strtoll(data[9], NULL, 0);
 	uparam->kup_pid = strtol(data[10], NULL, 0);
+	if (data[11])
+		snprintf(uparam->kup_cluuid, sizeof(uparam->kup_cluuid), "%s",
+			 data[11]);
+	else
+		uparam->kup_cluuid[0] = '\0';
 
 	logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u, "
 	       "is_root %d, is_mdt %d, is_ost %d, svc type %c, svc %d, "
-	       "nid 0x%"PRIx64", tgt %s, self nid 0x%"PRIx64", pid %d\n",
+	       "nid 0x%"PRIx64", tgt %s, self nid 0x%"PRIx64", pid %d, "
+	       "uuid %s\n",
 	       uparam->kup_secid, uparam->kup_mech,
 	       uparam->kup_uid, uparam->kup_gid,
 	       uparam->kup_is_root, uparam->kup_is_mdt, uparam->kup_is_ost,
 	       uparam->kup_svc_type, uparam->kup_svc, uparam->kup_nid,
-	       uparam->kup_tgt, uparam->kup_selfnid, uparam->kup_pid);
+	       uparam->kup_tgt, uparam->kup_selfnid, uparam->kup_pid,
+	       uparam->kup_cluuid[0] != '\0' ? uparam->kup_cluuid : "<unset>");
 	return 0;
 }
 
@@ -1127,6 +1146,8 @@ int main(int argc, char *argv[])
 	cred->lc_tgt_uuid = uparam.kup_tgt;
 	cred->lc_svc_type = uparam.kup_svc_type;
 	cred->lc_self_nid = uparam.kup_selfnid;
+	cred->lc_cluuid =
+		uparam.kup_cluuid[0] != '\0' ? uparam.kup_cluuid : NULL;
 
 	/* Is caller in different namespace? */
 	/* If passed caller's pid is 0, it means we have to stick
