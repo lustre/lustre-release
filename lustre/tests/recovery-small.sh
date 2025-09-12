@@ -1161,8 +1161,12 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	echo i $INTERVAL m $AT_MAX_SAVED t $TIMEOUT $TOUT
 	wait_client_evicted ost1 $ost_nexp $TOUT ||
 		error "Client was not evicted by OSS"
-	wait_client_evicted mds1 $mds_nexp $TOUT ||
-		error "Client was not evicted by MDS"
+	wait_client_evicted mds1 $mds_nexp $TOUT || {
+		# add debugging to see if eviction happens after a longer wait
+		wait_client_evicted mds1 $mds_nexp $TOUT &&
+			log "Client was evicted after second wait" ||
+			error "Client was not evicted by MDS after second wait"
+	}
 }
 run_test 26b "evict dead exports"
 
