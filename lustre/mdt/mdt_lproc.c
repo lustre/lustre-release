@@ -125,18 +125,19 @@ mdt_rename_stats_seq_write(struct file *file, const char __user *buf,
 
 	return len;
 }
-LPROC_SEQ_FOPS(mdt_rename_stats);
+LDEBUGFS_SEQ_FOPS(mdt_rename_stats);
 
-static int lproc_mdt_attach_rename_seqstat(struct mdt_device *mdt)
+static void lproc_mdt_attach_rename_seqstat(struct mdt_device *mdt)
 {
+	struct obd_device *obd = mdt2obd_dev(mdt);
 	int i;
 
 	for (i = 0; i < RENAME_LAST; i++)
 		spin_lock_init(&mdt->mdt_rename_stats.rs_hist[i].oh_lock);
 	mdt->mdt_rename_stats.rs_init = ktime_get_real();
 
-	return lprocfs_obd_seq_create(mdt2obd_dev(mdt), "rename_stats", 0644,
-				      &mdt_rename_stats_fops, mdt);
+	debugfs_create_file("rename_stats", 0644, obd->obd_debugfs_entry, mdt,
+			    &mdt_rename_stats_fops);
 }
 
 void mdt_rename_counter_tally(struct mdt_thread_info *info,
@@ -342,12 +343,12 @@ static ssize_t identity_flush_store(struct kobject *kobj,
 }
 LUSTRE_WO_ATTR(identity_flush);
 
-static ssize_t
-lprocfs_identity_info_seq_write(struct file *file, const char __user *buffer,
-				size_t count, void *data)
+static ssize_t identity_info_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer, size_t count)
 {
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	struct identity_downcall_data *param;
 	int size = sizeof(*param), rc, checked = 0;
@@ -363,11 +364,7 @@ again:
 	if (param == NULL)
 		return -ENOMEM;
 
-	if (copy_from_user(param, buffer, size)) {
-		CERROR("%s: bad identity data\n", mdt_obd_name(mdt));
-		GOTO(out, rc = -EFAULT);
-	}
-
+	memcpy(param, buffer, size);
 	if (checked == 0) {
 		checked = 1;
 		if (param->idd_magic != IDENTITY_DOWNCALL_MAGIC) {
@@ -407,7 +404,7 @@ out:
 
 	return rc ? rc : count;
 }
-LPROC_SEQ_FOPS_WR_ONLY(mdt, identity_info);
+LUSTRE_WO_ATTR(identity_info);
 
 static ssize_t identity_int_expire_show(struct kobject *kobj,
 					struct attribute *attr, char *buf)
@@ -469,44 +466,21 @@ static ssize_t identity_int_flush_store(struct kobject *kobj,
 }
 LUSTRE_WO_ATTR(identity_int_flush);
 
-static int mdt_site_stats_seq_show(struct seq_file *m, void *data)
+static ssize_t mdt_evict_client_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return lu_site_stats_seq_print(mdt_lu_site(mdt), m);
-}
-LPROC_SEQ_FOPS_RO(mdt_site_stats);
-
-#define BUFLEN LNET_NIDSTR_SIZE
-
-static ssize_t
-lprocfs_mds_evict_client_seq_write(struct file *file, const char __user *buf,
-				   size_t count, loff_t *off)
-{
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	char *kbuf;
+	size_t len = min_t(size_t, LNET_NIDSTR_SIZE - 1, count);
 	char *tmpbuf;
 	int rc = 0;
 
-	OBD_ALLOC(kbuf, BUFLEN);
-	if (kbuf == NULL)
-		return -ENOMEM;
-
-	/*
-	 * OBD_ALLOC() will zero kbuf, but we only copy BUFLEN - 1
-	 * bytes into kbuf, to ensure that the string is NUL-terminated.
-	 * LNET_NIDSTR_SIZE includes space for a trailing NUL already.
-	 */
-	if (copy_from_user(kbuf, buf, min_t(unsigned long, BUFLEN - 1, count)))
-		GOTO(out, rc = -EFAULT);
-	tmpbuf = skip_spaces(kbuf);
+	tmpbuf = skip_spaces(buffer);
 	tmpbuf = strsep(&tmpbuf, " \t\n\f\v\r");
-
 	if (strncmp(tmpbuf, "nid:", 4) != 0) {
-		count = lprocfs_evict_client_seq_write(file, buf, count, off);
+		count = evict_client_store(kobj, attr, buffer, len);
 		goto out;
 	}
 
@@ -521,19 +495,26 @@ lprocfs_mds_evict_client_seq_write(struct file *file, const char __user *buf,
 			       tmpbuf + 4, rc);
 	}
 
-	/* See the comments in function lprocfs_wr_evict_client()
-	 * in ptlrpc/lproc_ptlrpc.c for details. - jay */
+	/* See the comments in function evict_client_stor()
+	 * in obdclass/lproc_status_server.c for details. - jay
+	 */
 	class_incref(obd, __func__, current);
 	obd_export_evict_by_nid(obd, tmpbuf + 4);
 	class_decref(obd, __func__, current);
-
-
 out:
-	OBD_FREE(kbuf, BUFLEN);
 	return rc < 0 ? rc : count;
 }
+LUSTRE_ATTR(evict_client, 0200, NULL, mdt_evict_client_store);
 
-#undef BUFLEN
+static int site_stats_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return lu_site_stats_seq_print(mdt_lu_site(mdt), m);
+}
+
+LDEBUGFS_SEQ_FOPS_RO(site_stats);
 
 static ssize_t commit_on_sharing_show(struct kobject *kobj,
 				      struct attribute *attr, char *buf)
@@ -615,7 +596,8 @@ mdt_root_squash_seq_write(struct file *file, const char __user *buffer,
 	return lprocfs_wr_root_squash(buffer, count, squash,
 				      mdt_obd_name(mdt));
 }
-LPROC_SEQ_FOPS(mdt_root_squash);
+
+LDEBUGFS_SEQ_FOPS(mdt_root_squash);
 
 static int mdt_nosquash_nids_seq_show(struct seq_file *m, void *data)
 {
@@ -649,7 +631,8 @@ mdt_nosquash_nids_seq_write(struct file *file, const char __user *buffer,
 	return lprocfs_wr_nosquash_nids(buffer, count, squash,
 					mdt_obd_name(mdt));
 }
-LPROC_SEQ_FOPS(mdt_nosquash_nids);
+
+LDEBUGFS_SEQ_FOPS(mdt_nosquash_nids);
 
 static ssize_t enable_cap_mask_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
@@ -1308,39 +1291,6 @@ static ssize_t max_mod_rpcs_in_flight_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(max_mod_rpcs_in_flight);
 
-/*
- * mdt_checksum_type(server) proc handling
- */
-static int mdt_checksum_type_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct lu_target *lut;
-	enum cksum_types pref;
-	int i;
-
-	if (!obd)
-		return 0;
-
-	lut = obd2obt(obd)->obt_lut;
-	/* select fastest checksum type on the server */
-	pref = obd_cksum_type_select(obd->obd_name,
-				     lut->lut_cksum_types_supported,
-				     lut->lut_dt_conf.ddp_t10_cksum_type);
-
-	for (i = 0; cksum_name[i] != NULL; i++) {
-		if ((BIT(i) & lut->lut_cksum_types_supported) == 0)
-			continue;
-
-		if (pref == BIT(i))
-			seq_printf(m, "[%s] ", cksum_name[i]);
-		else
-			seq_printf(m, "%s ", cksum_name[i]);
-	}
-	seq_puts(m, "\n");
-
-	return 0;
-}
-
 static ssize_t job_xattr_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
 {
@@ -1426,14 +1376,12 @@ static ssize_t job_xattr_store(struct kobject *kobj, struct attribute *attr,
 	return count;
 }
 
-LPROC_SEQ_FOPS_RO(mdt_checksum_type);
-
-LPROC_SEQ_FOPS_RO_TYPE(mdt, hash);
-LPROC_SEQ_FOPS_WR_ONLY(mdt, mds_evict_client);
-LPROC_SEQ_FOPS_RW_TYPE(mdt, checksum_dump);
-LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mdt, hash);
 /* belongs to export directory */
 LDEBUGFS_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);
+
+LUSTRE_ATTR(checksum_dump, 0644, dt_checksum_dump_show, dt_checksum_dump_store);
+LUSTRE_ATTR(checksum_type, 0444, dt_checksum_type_show, NULL);
 
 LUSTRE_RW_ATTR(job_cleanup_interval);
 LUSTRE_RW_ATTR(job_xattr);
@@ -1474,11 +1422,13 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_ir_factor.attr,
 	&lustre_attr_num_exports.attr,
 	&lustre_attr_grant_check_threshold.attr,
+	&lustre_attr_evict_client.attr,
 	&lustre_attr_eviction_count.attr,
 	&lustre_attr_identity_expire.attr,
 	&lustre_attr_identity_acquire_expire.attr,
 	&lustre_attr_identity_upcall.attr,
 	&lustre_attr_identity_flush.attr,
+	&lustre_attr_identity_info.attr,
 	&lustre_attr_identity_int_expire.attr,
 	&lustre_attr_identity_int_acquire_expire.attr,
 	&lustre_attr_identity_int_flush.attr,
@@ -1517,40 +1467,31 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_dir_split_count.attr,
 	&lustre_attr_dir_split_delta.attr,
 	&lustre_attr_dir_restripe_nsonly.attr,
+	&lustre_attr_checksum_dump.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
+	&lustre_attr_checksum_type.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
 	NULL,
 };
 
 KOBJ_ATTRIBUTE_GROUPS(mdt); /* creates mdt_groups from mdt_attrs */
 
-static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
-	{ .name =	"recovery_status",
-	  .fops =	&mdt_recovery_status_fops		},
-	{ .name =	"identity_info",
-	  .fops =	&mdt_identity_info_fops			},
-	{ .name =	"site_stats",
-	  .fops =	&mdt_site_stats_fops			},
-	{ .name =	"evict_client",
-	  .fops =	&mdt_mds_evict_client_fops		},
-	{ .name =	"checksum_dump",
-	  .fops =	&mdt_checksum_dump_fops			},
-	{ .name =	"hash_stats",
-	  .fops =	&mdt_hash_fops				},
-	{ .name =	"root_squash",
-	  .fops =	&mdt_root_squash_fops			},
-	{ .name =	"nosquash_nids",
-	  .fops =	&mdt_nosquash_nids_fops			},
-	{ .name =	"checksum_type",
-	  .fops =	&mdt_checksum_type_fops		},
-	{ NULL }
-};
-
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(mdt, recovery_stale_clients);
 
 static struct ldebugfs_vars ldebugfs_mdt_obd_vars[] = {
+	{ .name =	"hash_stats",
+	  .fops =	&mdt_hash_fops				},
+	{ .name =	"nosquash_nids",
+	  .fops =	&mdt_nosquash_nids_fops			},
+	{ .name =	"recovery_status",
+	  .fops =	&mdt_recovery_status_fops		},
 	{ .name =	"recovery_stale_clients",
 	  .fops =	&mdt_recovery_stale_clients_fops	},
+	{ .name =	"root_squash",
+	  .fops =	&mdt_root_squash_fops			},
+	{ .name =	"site_stats",
+	  .fops =	&site_stats_fops			},
 	{ NULL }
 };
 
@@ -1685,14 +1626,13 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 	LASSERT(name != NULL);
 
 	obd->obd_ktype.default_groups = KOBJ_ATTR_GROUPS(mdt);
-	obd->obd_vars = lprocfs_mdt_obd_vars;
+	obd->obd_debugfs_vars = ldebugfs_mdt_obd_vars;
 	rc = lprocfs_obd_setup(obd, true);
 	if (rc) {
 		CERROR("%s: cannot create proc entries: rc = %d\n",
 		       mdt_obd_name(mdt), rc);
 		return rc;
 	}
-	ldebugfs_add_vars(obd->obd_debugfs_entry, ldebugfs_mdt_obd_vars, obd);
 
 	rc = tgt_tunables_init(&mdt->mdt_lut);
 	if (rc) {
@@ -1734,10 +1674,7 @@ int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 	rc = lprocfs_job_stats_init(obd, ARRAY_SIZE(mdt_stats),
 				    mdt_stats_counter_init);
 
-	rc = lproc_mdt_attach_rename_seqstat(mdt);
-	if (rc)
-		CERROR("%s: MDT can not create rename stats rc = %d\n",
-		       mdt_obd_name(mdt), rc);
+	lproc_mdt_attach_rename_seqstat(mdt);
 
 	RETURN(rc);
 }
