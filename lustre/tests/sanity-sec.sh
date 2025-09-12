@@ -10574,6 +10574,114 @@ test_100() {
 }
 run_test 100 "SSK automatic prime generation when mounting with server key"
 
+cleanup_102() {
+	local test_key=$1
+
+	# Unmount client
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	# Clear test key from keyring on all nodes
+	do_nodes $(comma_list $(all_nodes)) "keyctl show |
+		awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X" \
+		2>/dev/null || true
+
+	# Remove test key file from all nodes
+	do_nodes $(comma_list $(all_nodes)) \
+		"rm -f $test_key" 2>/dev/null || true
+	rm -f $MOUNT/.lgss 2>/dev/null || true
+
+	# Reload original key on servers
+	do_nodes $(comma_list $(all_server_nodes)) \
+		"$LGSS_SK -l $SK_PATH/$FSNAME.key" || true
+
+	# Remount client
+	zconf_mount $HOSTNAME $MOUNT || error "re-mount $MOUNT failed"
+	if [ "$MOUNT_2" ]; then
+		zconf_mount $HOSTNAME $MOUNT2 ||
+			error "remount $MOUNT2 failed"
+	fi
+	wait_ssk
+}
+
+test_102() {
+	local test_key=$SK_PATH/$FSNAME-$TESTNAME.key
+	local mount_key=$MOUNT/.lgss
+	local nodes=$(all_nodes)
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	local_mode && skip "in local mode."
+
+	stack_trap "cleanup_102 $test_key"
+
+	# Create test file to verify filesystem access
+	test_mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	touch $DIR/$tdir/$tfile || error "failed to create initial test file"
+
+	# Unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# Generate key to test automatic loading
+	$LGSS_SK -t server -f $FSNAME -w $test_key -d /dev/urandom -p 512 ||
+		error "failed to create client key"
+
+	# Verify the key file was created
+	[[ -s $test_key ]] || error "key file is empty"
+
+	# Distribute key to all nodes
+	for lnode in ${nodes//,/ }; do
+		scp $test_key ${lnode}:$test_key ||
+			error "failed to copy key to $lnode"
+	done
+
+	# Load key on servers, this overrides the key from test-framework
+	do_nodes $(comma_list $(all_server_nodes)) "$LGSS_SK -l $test_key" ||
+		error "failed to load test key on servers"
+
+	# Verify server key presence in keyring
+	do_nodes $(comma_list $(all_server_nodes)) \
+		"keyctl show | grep lustre" || error "no lustre keys loaded"
+
+	# Clear any existing keys from keyring on client
+	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
+		xargs -IX keyctl unlink X 2>/dev/null || true
+
+	# Mount should fail without .lgss key file and without skpath
+	echo "Mount client (1): $MOUNT_CMD -o user_xattr,flock $MGSNID:/$FSNAME $MOUNT"
+	$MOUNT_CMD -o user_xattr,flock $MGSNID:/$FSNAME $MOUNT &&
+		error "mount should have failed without .lgss key file"
+
+	# Generate client key and copy to mount point for automatic loading
+	$LGSS_SK -t client -m $test_key || error "failed to generate client key"
+	cp $test_key $mount_key || error "failed to copy key to mount point"
+	chmod 600 $mount_key || error "failed to set key permissions"
+
+	echo "Mount client (2): $MOUNT_CMD -o user_xattr,flock $MGSNID:/$FSNAME $MOUNT"
+	$MOUNT_CMD -o user_xattr,flock $MGSNID:/$FSNAME $MOUNT ||
+		error "unable to mount client with automatic .lgss key loading"
+	wait_ssk
+
+	[[ -f $DIR/$tdir/$tfile ]] || error "$DIR/$tdir/$tfile does not exist"
+
+	# Test remount to verify persistence of .lgss key loading
+	umount $MOUNT || error "unable to umount"
+	# Clear test key from keyring on all nodes
+	keyctl show | awk '/lustre/ { print $1 }' |
+		xargs -IX keyctl unlink X 2>/dev/null || true
+	echo "Mount client (3): $MOUNT_CMD -o user_xattr,flock $MGSNID:/$FSNAME $MOUNT"
+	$MOUNT_CMD -o user_xattr,flock $MGSNID:/$FSNAME $MOUNT ||
+		error "unable to mount client with automatic .lgss key loading"
+	wait_ssk
+
+	[[ -f $DIR/$tdir/$tfile ]] || error "$DIR/$tdir/$tfile does not exist"
+}
+run_test 102 "SSK automatic key loading from mount point"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

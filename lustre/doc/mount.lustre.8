@@ -141,6 +141,12 @@ Path to a file or directory with the keyfile(s) to load for this mount command.
 Keys are inserted into the KEY_SPEC_SESSION_KEYRING keyring with a description
 containing "lustre:" and a suffix which depends on whether the context of the
 mount command is for an MGS, MDT/OST, or client.
+If no
+.B skpath
+is specified for client mounts, the mount command will automatically check for
+a keyfile named
+.B .lgss
+in the mount point directory and load it if present.
 This option is only available when built with --enable-gss.
 .TP
 .BI exclude= OSTLIST

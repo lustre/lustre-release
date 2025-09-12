@@ -87,6 +87,7 @@ static void usage(FILE *out)
 		"\t\tretry=<num>: number of times mount is retried by client\n"
 #ifdef HAVE_GSS
 		"\t\tskpath=<file|directory>: path of keys to load into kernel keyring\n"
+		"\t\t\t(clients also auto-load <mountpoint>/.lgss if present)\n"
 #endif
 		"\t\t(no)user_fid2path: disable* or enable user $MOUNT/.lustre/fid access\n"
 		"\t\t(no)checksum: disable or enable* data checksums\n"
@@ -1039,6 +1040,27 @@ int main(int argc, char *const argv[])
 	}
 
 #ifdef HAVE_GSS
+	/* For client mounts, auto check for .lgss file in mount point */
+	if (client && mop.mo_skpath[0] == '\0') {
+		char lgss_path[PATH_MAX];
+		struct stat lgss_stat;
+		int ret;
+
+		ret = snprintf(lgss_path, sizeof(lgss_path), "%s/.lgss",
+			       mop.mo_target);
+		if (ret > 0 && ret < sizeof(lgss_path) &&
+		    stat(lgss_path, &lgss_stat) == 0 &&
+		    S_ISREG(lgss_stat.st_mode)) {
+			if (verbose)
+				printf("Found SSK key file %s, loading\n",
+				       lgss_path);
+
+			/* Set the skpath to the .lgss file */
+			strscpy(mop.mo_skpath, lgss_path,
+				sizeof(mop.mo_skpath));
+		}
+	}
+
 	if (mop.mo_skpath[0] != '\0') {
 		/* Treat shared key failures as fatal */
 		rc = load_shared_keys(&mop, client);
