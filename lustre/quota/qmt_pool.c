@@ -888,6 +888,8 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 				 */
 				rc = 0;
 			}
+			if (!rc)
+				pool->qpi_slv_nr[stype][qtype]++;
 			qmt_sarr_write_up(pool);
 
 			if (rc) {
@@ -896,6 +898,11 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 				       pool->qpi_name, rc);
 				GOTO(out, rc);
 			}
+		} else {
+			/* No array to store DOM indexes. Just increment the
+			 * slave number in data global pool.
+			 */
+			pool->qpi_slv_nr[stype][qtype]++;
 		}
 
 		/* look-up pool in charge of this global index FID */
@@ -907,11 +914,18 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 		for (i = 0; i < qti_pools_cnt(env); i++) {
 			struct qmt_pool_info *qpi = qti_pools_env(env)[i];
 
+			if (qmt_pool_global(qpi))
+				continue;
 			if (qpi->qpi_lqa) {
 				CDEBUG(D_QUOTA, "Adding new idx%d to lqa-%s-%s\n",
 				       idx, RES_NAME(pool_type), qpi->qpi_name);
 				qmt_sarr_pool_add(qpi, idx, stype);
 			}
+			/* Global pool's slv_nr is used to create lgd and needs
+			 * to be incremented right after adding new target to
+			 * the pool protected with op_rw_sem. It is not required
+			 * for lqa and PQ.
+			 */
 			qpi->qpi_slv_nr[stype][qtype]++;
 		}
 
@@ -936,18 +950,20 @@ out:
  * \retval - valid pointer to lquota entry on success, appropriate error on
  *           failure
  */
-struct lquota_entry *qmt_pool_lqe_lookup(const struct lu_env *env,
+struct lquota_entry *qmt_pool_lqe_lookup_lqa(const struct lu_env *env,
 					 struct qmt_device *qmt,
 					 int pool_type, int qtype,
 					 union lquota_id *qid,
-					 char *pool_name)
+					 char *pool_name, char *lqa_name)
 {
 	struct qmt_pool_info	*pool;
 	struct lquota_entry	*lqe;
 	ENTRY;
 
 	/* look-up pool responsible for this global index FID */
-	pool = qmt_pool_lookup_name(env, qmt, pool_type, pool_name);
+	pool = qmt_pool_lookup_name_lqa(env, qmt, pool_type,
+					pool_name ? : lqa_name,
+					lqa_name ? true : false);
 	if (IS_ERR(pool))
 		RETURN(ERR_CAST(pool));
 

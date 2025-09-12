@@ -521,7 +521,7 @@ command_t cmdlist[] = {
 #ifdef HAVE_SYS_QUOTA_H
 	{"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
 	 "usage: setquota [-t] {-u|-U|-g|-G|-p|-P ID} {-b|-B|-i|-I LIMIT}\n"
-	 "                [--pool POOL] MOUNT_POINT\n"
+	 "                [--lqa LQA_NAME] [--pool POOL] MOUNT_POINT\n"
 	 "       setquota {-u|-g|-p ID} {--default|--delete} MOUNT_POINT\n"},
 	{"quota", lfs_quota, 0, "Display disk usage and limits.\n"
 	 "usage: quota [-q] [-v] [-h] [-o OBD_UUID|-o OST_IDX|-m MDT_IDX]\n"
@@ -536,6 +536,7 @@ command_t cmdlist[] = {
 	 "             [--inode-softlimit|--isoftlimit]\n"
 	 "             [--inode-hardlimit|--ihardlimit]\n"
 	 "             [--inode-grace|--igrace|--itime]\n"
+	 "             [--lqa LQA_NAME]\n"
 	 "             [--pool OST_POOL_NAME]\n"
 	 "             [MOUNT_POINT ...]\n"
 	 "       quota -t {-u|-g|-p} [--pool OST_POOL_NAME] [MOUNT_POINT ...]\n"
@@ -3876,6 +3877,8 @@ enum {
 	LFS_LUSTRE_DIR,
 	LFS_MIN_FREE_OPT,
 	LFS_MAX_FREE_OPT,
+	LFS_LQA_OPT,
+	LFS_QUOTA_DEFAULT_OPT,
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -9405,16 +9408,40 @@ static inline int has_times_option(int argc, char **argv)
 	return 0;
 }
 
-static inline int lfs_verify_poolarg(char *pool)
+static inline int has_lqa_option(int argc, char **argv)
 {
-	if (strnlen(optarg, LOV_MAXPOOLNAME + 1) > LOV_MAXPOOLNAME) {
-		fprintf(stderr,
-			"Pool name '%.*s' is longer than %d\n",
-			LOV_MAXPOOLNAME, pool, LOV_MAXPOOLNAME);
-		return 1;
-	}
+	int i;
+
+	for (i = 1; i < argc; i++)
+		if (!strcmp(argv[i], "--lqa"))
+			return 1;
+
 	return 0;
 }
+
+/* return true if arg is insane */
+static inline bool lfs_arg_insane(const char *arg, int len, const char *name)
+{
+	const char *c;
+
+	if (strnlen(arg, len + 1) > len) {
+		fprintf(stderr, "%s name '%.*s' is longer than %d\n", name, len,
+			arg, len);
+		return true;
+	}
+
+	for (c = arg; *c != '\0'; c++) {
+		if (isalnum(*c) || *c == '_')
+			continue;
+		fprintf(stderr, "%s name '%.*s' has illegal characters %d\n",
+			name, len, arg, len);
+		return true;
+	}
+
+	return false;
+}
+#define lfs_poolarg_insane(pool) lfs_arg_insane(pool, LOV_MAXPOOLNAME, "Pool")
+#define lfs_lqaarg_insane(lqa) lfs_arg_insane(lqa, LQA_NAME_MAX, "LQA")
 
 /* special grace time, only notify the user when its quota is over soft limit
  * but doesn't block new writes until the hard limit is reached.
@@ -9433,6 +9460,7 @@ static int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 	{ .val = 'g',	.name = "group",	.has_arg = no_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "inode-grace",	.has_arg = required_argument },
+	{ .val = LFS_LQA_OPT, .name = "lqa",	.has_arg = required_argument },
 	{ .val = LFS_POOL_OPT, .name = "pool",	.has_arg = required_argument },
 	{ .val = 'p',	.name = "projid",	.has_arg = no_argument },
 	{ .val = 't',	.name = "times",	.has_arg = no_argument },
@@ -9482,8 +9510,15 @@ static int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 		case 'p':
 			qtype = PRJQUOTA;
 			goto quota_type;
+		case LFS_LQA_OPT:
+			if (lfs_lqaarg_insane(optarg))
+				return -1;
+			snprintf(qctl->qc_lqaname, LQA_NAME_MAX + 1, "%s",
+				 optarg);
+			qctl->qc_cmd  = LUSTRE_Q_SETINFOLQA;
+			break;
 		case LFS_POOL_OPT:
-			if (lfs_verify_poolarg(optarg))
+			if (lfs_poolarg_insane(optarg))
 				return -1;
 			snprintf(qctl->qc_poolname, LOV_MAXPOOLNAME + 1, "%s",
 				 optarg);
@@ -9715,6 +9750,8 @@ int lfs_setquota(int argc, char **argv)
 	{ .val = 'r',	.name = "reset",	.has_arg = no_argument },
 	{ .val = 'u',	.name = "user",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "default-usr",	.has_arg = no_argument },
+	{ .val = LFS_LQA_OPT,
+			.name = "lqa",		.has_arg = required_argument },
 	{ .val = LFS_POOL_OPT,
 			.name = "pool",		.has_arg = required_argument },
 	{ .name = NULL } };
@@ -9722,7 +9759,10 @@ int lfs_setquota(int argc, char **argv)
 	bool use_default = false;
 	int qtype, qctl_len;
 
-	qctl_len = sizeof(*qctl) + LOV_MAXPOOLNAME + 1;
+	/* By default LOV_MAXPOOLNAME and LQA_NAME_MAX should be equal. Handle a
+	 * case if it would be changed in future.
+	 */
+	qctl_len = sizeof(*qctl) + max(LOV_MAXPOOLNAME + 1, LQA_NAME_MAX + 1);
 	qctl = malloc(qctl_len);
 	if (!qctl)
 		return -ENOMEM;
@@ -9862,8 +9902,23 @@ quota_type_def:
 					(unsigned long long)dqb->dqb_ihardlimit,
 					progname);
 			break;
+		case LFS_LQA_OPT:
+			if (lfs_lqaarg_insane(optarg)) {
+				rc = -1;
+				goto out;
+			}
+			if (qctl->qc_type == ALLQUOTA) {
+				fprintf(stderr, "LQA requires to specify quota type\n");
+				rc = CMD_HELP;
+				goto out;
+			}
+			snprintf(qctl->qc_lqaname, LQA_NAME_MAX + 1, "%s",
+				 optarg);
+			qctl->qc_cmd = LUSTRE_Q_SETQUOTALQA;
+			qctl->qc_id = 1;
+			break;
 		case LFS_POOL_OPT:
-			if (lfs_verify_poolarg(optarg)) {
+			if (lfs_poolarg_insane(optarg)) {
 				rc = -1;
 				goto out;
 			}
@@ -9965,7 +10020,7 @@ quota_type_def:
 		/* sigh, we can't just set blimits/ilimits */
 		struct if_quotactl *tmp_qctl;
 
-		tmp_qctl = calloc(1, sizeof(*qctl) + LOV_MAXPOOLNAME + 1);
+		tmp_qctl = calloc(1, qctl_len);
 		if (!tmp_qctl)
 			goto out;
 
@@ -9973,8 +10028,12 @@ quota_type_def:
 			tmp_qctl->qc_cmd = LUSTRE_Q_GETQUOTAPOOL;
 			snprintf(tmp_qctl->qc_poolname, LOV_MAXPOOLNAME + 1,
 				 "%s", qctl->qc_poolname);
+		} else if (qctl->qc_cmd == LUSTRE_Q_SETQUOTALQA) {
+			tmp_qctl->qc_cmd = LUSTRE_Q_GETQUOTALQA;
+			snprintf(tmp_qctl->qc_lqaname, LQA_NAME_MAX + 1,
+				 "%s", qctl->qc_lqaname);
 		} else {
-			tmp_qctl->qc_cmd  = LUSTRE_Q_GETQUOTA;
+			tmp_qctl->qc_cmd = LUSTRE_Q_GETQUOTA;
 		}
 		tmp_qctl->qc_type = qctl->qc_type;
 		tmp_qctl->qc_id = qctl->qc_id;
@@ -10194,7 +10253,8 @@ static void print_quota(const char *mnt, struct if_quotactl *qctl, int type,
 	if (qctl->qc_cmd == LUSTRE_Q_GETQUOTA || qctl->qc_cmd == Q_GETOQUOTA ||
 	    qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL ||
 	    qctl->qc_cmd == LUSTRE_Q_GETDEFAULT ||
-	    qctl->qc_cmd == LUSTRE_Q_GETDEFAULT_POOL) {
+	    qctl->qc_cmd == LUSTRE_Q_GETDEFAULT_POOL ||
+	    qctl->qc_cmd == LUSTRE_Q_GETQUOTALQA) {
 		int bover = 0, iover = 0;
 		struct obd_dqblk *dqb = &qctl->qc_dqblk;
 		char numbuf[3][STRBUF_LEN + 2]; /* 2 for brackets or wildcard */
@@ -10341,6 +10401,7 @@ use_qid_value:
 		printf("\n");
 	} else if (qctl->qc_cmd == LUSTRE_Q_GETINFO ||
 		   qctl->qc_cmd == LUSTRE_Q_GETINFOPOOL ||
+		   qctl->qc_cmd == LUSTRE_Q_GETINFOLQA ||
 		   qctl->qc_cmd == Q_GETOINFO) {
 		char bgtimebuf[40];
 		char igtimebuf[40];
@@ -10510,12 +10571,17 @@ static int print_one_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		((qctl->qc_dqblk.dqb_valid & (QIF_LIMITS|QIF_USAGE)) !=
 		 (QIF_LIMITS|QIF_USAGE));
 
+	inacc |= (qctl->qc_cmd == LUSTRE_Q_GETQUOTALQA &&
+		  !(qctl->qc_dqblk.dqb_valid & QIF_LIMITS));
+
 	print_quota(mnt, qctl, QC_GENERAL, rc, param);
+
 
 	if (!param->qp_show_qid && !param->qp_show_default &&
 	    param->qp_verbose && qctl->qc_valid == QC_GENERAL &&
 	    qctl->qc_cmd != LUSTRE_Q_GETINFO &&
-	    qctl->qc_cmd != LUSTRE_Q_GETINFOPOOL) {
+	    qctl->qc_cmd != LUSTRE_Q_GETINFOPOOL &&
+	    qctl->qc_cmd != LUSTRE_Q_GETINFOLQA) {
 		char strbuf[STRBUF_LEN];
 
 		rc1 = print_obd_quota(mnt, qctl, 1, param,
@@ -10811,11 +10877,12 @@ static int do_quota_op(char *mnt, struct if_quotactl *qctl,
 	struct if_quotactl *qctl_tmp;
 	char **poollist = NULL;
 	char *buf = NULL;
-	int poolcount, i, rc = 0;
+	int poolcount, extra, i, rc = 0;
 
+	extra = max(LOV_MAXPOOLNAME + 1, LQA_NAME_MAX + 1);
 	/* avoid modifying the original qctl */
-	qctl_tmp = malloc(sizeof(*qctl_tmp) + LOV_MAXPOOLNAME + 1);
-	memcpy(qctl_tmp, qctl, sizeof(*qctl_tmp) + LOV_MAXPOOLNAME + 1);
+	qctl_tmp = malloc(sizeof(*qctl_tmp) + extra);
+	memcpy(qctl_tmp, qctl, sizeof(*qctl_tmp) + extra);
 
 	if (qctl_tmp->qc_cmd == LUSTRE_Q_ITERQUOTA) {
 		rc = iter_all_quota(mnt, qctl_tmp, param);
@@ -10865,7 +10932,7 @@ static int lfs_quota(int argc, char **argv)
 	char namebuf[DEF_PW_SIZE_MAX];
 	size_t name_max;
 	__u32 start_qid = 0, end_qid = 0;
-	int c, qtype, rc = 0;
+	int c, qtype, qctl_len, rc = 0;
 	long idx = 0;
 	bool all = false;
 
@@ -10873,6 +10940,8 @@ static int lfs_quota(int argc, char **argv)
 	{ .val = 'a',	.name = "all",		.has_arg = required_argument },
 	{ .val = 'e',	.name = "end-qid",	.has_arg = required_argument },
 	{ .val = 'd',	.name = "delimiter",	.has_arg = required_argument },
+	{ .val = LFS_QUOTA_DEFAULT_OPT,
+			.name = "default",	.has_arg = no_argument },
 	{ .val = 'g',	.name = "group",	.has_arg = required_argument },
 	{ .val = 'G',	.name = "default-grp",	.has_arg = no_argument },
 	{ .val = 'h',	.name = "human-readable", .has_arg = no_argument },
@@ -10887,6 +10956,7 @@ static int lfs_quota(int argc, char **argv)
 	{ .val = 'n',	.name = "num",		.has_arg = no_argument },
 	{ .val = 'o',	.name = "ost-index",	.has_arg = required_argument },
 	{ .val = 'o',	.name = "ost",		.has_arg = required_argument },
+	{ .val = LFS_LQA_OPT, .name = "lqa",	.has_arg = required_argument },
 	{ .val = LFS_POOL_OPT, .name = "pool",	.has_arg = optional_argument },
 	{ .val = 'p',	.name = "projid",	.has_arg = required_argument },
 	{ .val = 'P',	.name = "default-prj",	.has_arg = no_argument },
@@ -10946,7 +11016,8 @@ static int lfs_quota(int argc, char **argv)
 			.name = "itime",	.has_arg = no_argument },
 	{ .name = NULL } };
 
-	qctl = calloc(1, sizeof(*qctl) + LOV_MAXPOOLNAME + 1);
+	qctl_len = sizeof(*qctl) + max(LOV_MAXPOOLNAME + 1, LQA_NAME_MAX + 1);
+	qctl = calloc(1, qctl_len);
 	if (!qctl)
 		return -ENOMEM;
 
@@ -10994,6 +11065,9 @@ static int lfs_quota(int argc, char **argv)
 				goto out;
 			}
 			end_qid = strtoul(optarg, NULL, 0);
+			break;
+		case LFS_QUOTA_DEFAULT_OPT:
+			param.qp_show_default = 1;
 			break;
 		case 'G':
 			param.qp_show_default = 1;
@@ -11060,12 +11134,28 @@ static int lfs_quota(int argc, char **argv)
 		case 'p':
 			qtype = PRJQUOTA;
 			goto quota_type;
+		case LFS_LQA_OPT:
+			if (!param.qp_show_default ||
+			    qctl->qc_type == ALLQUOTA) {
+				fprintf(stderr, "Specity LQA quota type with -U,-G, or -P\n");
+				rc = CMD_HELP;
+				goto out;
+			}
+			if (lfs_lqaarg_insane(optarg)) {
+				rc = -1;
+				goto out;
+			}
+			snprintf(qctl->qc_lqaname, LQA_NAME_MAX + 1, "%s",
+				 optarg);
+			qctl->qc_cmd = LUSTRE_Q_GETQUOTALQA;
+			qctl->qc_id = 1;
+			break;
 		case LFS_POOL_OPT:
 			if ((!optarg) && (argv[optind] != NULL) &&
 				(argv[optind][0] != '-') &&
 				(argv[optind][0] != '/')) {
 				optarg = argv[optind++];
-				if (lfs_verify_poolarg(optarg)) {
+				if (lfs_poolarg_insane(optarg)) {
 					rc = -EINVAL;
 					goto out;
 				}
@@ -11200,11 +11290,13 @@ quota_type:
 				break;
 			}
 		} else {
+			int cmd = qctl->qc_cmd;
+
 			qctl->qc_valid = QC_GENERAL;
-			qctl->qc_cmd = qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL ?
-					LUSTRE_Q_GETDEFAULT_POOL :
-					LUSTRE_Q_GETDEFAULT;
-			qctl->qc_id = 0;
+			if (cmd != LUSTRE_Q_GETQUOTALQA)
+				qctl->qc_cmd = cmd == LUSTRE_Q_GETQUOTAPOOL ?
+					       LUSTRE_Q_GETDEFAULT_POOL :
+					       LUSTRE_Q_GETDEFAULT;
 		}
 
 		if (rc) {

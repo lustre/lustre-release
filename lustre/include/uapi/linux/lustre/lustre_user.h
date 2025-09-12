@@ -1504,6 +1504,10 @@ static inline __u64 stoqb(__kernel_size_t space)
 #define LUSTRE_Q_ITERQUOTA	0x800017  /* iterate quota information */
 #define LUSTRE_Q_ITEROQUOTA	0x800018  /* iterate obd quota information */
 #define LUSTRE_Q_GETALLQUOTA	0x800019  /* get all quota information */
+#define LUSTRE_Q_GETQUOTALQA	0x80001a  /* get LQA quota */
+#define LUSTRE_Q_SETQUOTALQA	0x80001b  /* set LQA quota */
+#define LUSTRE_Q_GETINFOLQA	0x80001c  /* get LQA quota info */
+#define LUSTRE_Q_SETINFOLQA	0x80001d  /* set LQA quota info */
 /* In the current Lustre implementation, the grace time is either the time
  * or the timestamp to be used after some quota ID exceeds the soft limt,
  * 48 bits should be enough, its high 16 bits can be used as quota flags.
@@ -1540,6 +1544,12 @@ static inline __u64 stoqb(__kernel_size_t space)
 	 cmd == LUSTRE_Q_GETINFOPOOL ||		\
 	 cmd == LUSTRE_Q_SETDEFAULT_POOL ||	\
 	 cmd == LUSTRE_Q_GETDEFAULT_POOL)
+
+#define LUSTRE_Q_CMD_IS_LQA(cmd)		\
+	(cmd == LUSTRE_Q_GETQUOTALQA ||		\
+	 cmd == LUSTRE_Q_SETQUOTALQA ||		\
+	 cmd == LUSTRE_Q_SETINFOLQA ||		\
+	 cmd == LUSTRE_Q_GETINFOLQA)
 
 #define ALLQUOTA 255       /* set all quota */
 static inline const char *qtype_name(int qtype)
@@ -1664,16 +1674,16 @@ enum {
 };
 
 struct if_quotactl {
-	__u32                   qc_cmd;
-	__u32                   qc_type;
-	__u32                   qc_id;
-	__u32                   qc_stat;
-	__u32                   qc_valid;
-	__u32                   qc_idx;
-	struct obd_dqinfo       qc_dqinfo;
-	struct obd_dqblk        qc_dqblk;
-	char                    obd_type[16];
-	struct obd_uuid         obd_uuid;
+	__u32			qc_cmd;
+	__u32			qc_type;
+	__u32			qc_id;
+	__u32			qc_stat;
+	__u32			qc_valid;
+	__u32			qc_idx;
+	struct obd_dqinfo	qc_dqinfo;
+	struct obd_dqblk	qc_dqblk;
+	char			obd_type[16];
+	struct obd_uuid		obd_uuid;
 	char			qc_poolname[];
 };
 

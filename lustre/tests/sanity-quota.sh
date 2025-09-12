@@ -1463,6 +1463,98 @@ test_1j() {
 }
 run_test 1j "Enable project quota enforcement for root"
 
+LQA_NEW="do_facet mds1 $LCTL lqa new --fsname $FSNAME"
+LQA_ADD="do_facet mds1 $LCTL lqa add --fsname $FSNAME"
+LQA_REMOVE="do_facet mds1 $LCTL lqa remove --fsname $FSNAME"
+LQA_DESTROY="do_facet mds1 $LCTL lqa destroy --fsname $FSNAME"
+LQA_LIST="do_facet mds1 $LCTL lqa list --fsname $FSNAME"
+
+test_1k() {
+	local lqa="lqa1"
+	local glbl_limit=1024 # MB
+	local hard=20 # MB
+	local range_min=$TSTID
+	local range_max=$TSTID
+	local tfile1="$DIR/$tdir/$tfile-0"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "need MDS >= 2.17.50 to support lfs lqa commands"
+
+	setup_quota_test || error "setup quota failed with $?"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+
+	((TSTID > TSTPRJID)) || range_max=$TSTPRJID
+	((TSTID < TSTPRJID)) || range_min=$TSTPRJID
+	range_min=$((range_min/2))
+	range_max=$((range_max+100))
+	echo "range_min $range_min, range_max $range_max"
+
+	$LQA_NEW --name $lqa || error "cannot create $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa"
+
+	$LQA_ADD --name $lqa --range $range_min-$range_max ||
+		error "cannot add range $range_min-$range_max to $lqa"
+
+	# Set quota to the user to notify slaves with the limits. It is required
+	# until LQAs start notifying slaves with new limits for all IDs from the
+	# range automatically.
+	$LFS setquota -u $TSTID -B ${glbl_limit}M $DIR ||
+		error "set hard block limit to user $TSTID failed"
+	wait_quota_synced ost1 OST0000 usr $TSTID hardlimit $((glbl_limit*1024))
+
+	$LFS setquota -U --lqa $lqa -B ${hard}M $DIR ||
+		error "set user quota failed for lqa:$lqa"
+	$LFS quota -U --lqa $lqa $DIR
+
+	$LFS setstripe $tfile1 -i 0 -c 1 || error "1: setstripe $tfile1 failed"
+	chown $TSTUSR.$TSTUSR $tfile1 || error "1: chown $tfile1 failed"
+
+	test_1_check_write $tfile1 "user" $hard
+
+	rm -f $tfile1
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	$LFS setquota -U --lqa $lqa -B 0 -b 0 $DIR ||
+		error "set user quota failed for lqa:$lqa"
+
+	$LFS setquota -g $TSTID -B ${glbl_limit}M $DIR ||
+		error "set hard block limit to group $TSTID failed"
+	wait_quota_synced ost1 OST0000 usr $TSTID hardlimit $((glbl_limit*1024))
+
+	$LFS setquota -G --lqa $lqa -B ${hard}M $DIR ||
+		error "set grp quota failed for lqa:$lqa"
+	$LFS setstripe $tfile1 -i 0 -c 1 || error "2: setstripe $tfile1 failed"
+	chown $TSTUSR.$TSTUSR $tfile1 || error "2: chown $tfile1 failed"
+
+	test_1_check_write $tfile1 "group" $hard
+
+	is_project_quota_supported || skip "Project quota is not supported"
+
+	rm -f $tfile1
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	$LFS setquota -G --lqa $lqa -B 0 -b 0 $DIR ||
+		error "set group quota failed for lqa:$lqa"
+
+	$LFS setquota -p $TSTPRJID -B ${glbl_limit}M $DIR ||
+		error "set hard block limit to group $TSTID failed"
+	wait_quota_synced ost1 OST0000 prj $TSTPRJID hardlimit \
+		$((glbl_limit*1024))
+
+	$LFS setquota -P --lqa $lqa -B ${hard}M $DIR ||
+		error "set project quota failed for lqa:$lqa"
+
+	$LFS setstripe $tfile1 -i 0 -c 1 || error "3: setstripe $tfile1 failed"
+	chown $TSTUSR:$TSTUSR $tfile1 || error "3: chown $tfile1 failed"
+	change_project -p $TSTPRJID $tfile1
+
+	test_1_check_write $tfile1 "project" $hard
+}
+run_test 1k "LQA: Block hard limit (normal use and out of quota)"
+
 test_1l() {
 	local tfile2=$MOUNT2/$tdir/$tfile.2
 	local tfile1=$DIR/$tdir/$tfile.1
@@ -7555,12 +7647,6 @@ test_96() {
 }
 run_test 96 "quota grant should be released when big files are deleted"
 
-LQA_NEW="do_facet mds1 $LCTL lqa new --fsname $FSNAME"
-LQA_ADD="do_facet mds1 $LCTL lqa add --fsname $FSNAME"
-LQA_REMOVE="do_facet mds1 $LCTL lqa remove --fsname $FSNAME"
-LQA_DESTROY="do_facet mds1 $LCTL lqa destroy --fsname $FSNAME"
-LQA_LIST="do_facet mds1 $LCTL lqa list --fsname $FSNAME"
-
 test_97a()
 {
 	local lqa="lqa1"
@@ -7679,6 +7765,38 @@ test_97b()
 	log "Removing $max_iter LQA ranges took $((end - start))s"
 }
 run_test 97b "Check LQA internals"
+
+test_97c ()
+{
+	local lqa="lqa1"
+	local bhard=8000 # KB
+	local bsoft=7000 # KB
+	local ihard=4000
+	local isoft=3000
+	local limit
+
+	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "need MDS >= 2.17.50 to support lfs lqa commands"
+
+	$LQA_NEW --name $lqa || error "cannot create $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa"
+
+	$LQA_ADD --name $lqa --range 10-19 ||
+		error "cannot add range 10-19 to $lqa"
+	$LFS setquota -U --lqa $lqa -B ${bhard} -b ${bsoft} -I ${ihard} \
+		-i ${isoft} $DIR || error "set user quota failed for lqa:$lqa"
+	$LFS quota -U --lqa $lqa $DIR
+
+	limit=$($LFS quota -U --lqa $lqa -Bq)
+	((limit == bhard)) || error "bhard limit $limit != $bhard for lqa:$lqa"
+	limit=$($LFS quota -U --lqa $lqa -bq)
+	((limit == bsoft)) || error "bsoft limit $limit != $bhard for lqa:$lqa"
+	limit=$($LFS quota -U --lqa $lqa --ihardlimit -q)
+	((limit == ihard)) || error "ihard limit $limit != $bhard for lqa:$lqa"
+	limit=$($LFS quota -U --lqa $lqa --isoftlimit -q)
+	((limit == isoft)) || error "isoft limit $limit != $bhard for lqa:$lqa"
+}
+run_test 97c "LQA lfs quota commands"
 
 quota_fini()
 {

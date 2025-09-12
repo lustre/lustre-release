@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.0
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2025, DataDirect Networks Inc, all rights reserved.
  */

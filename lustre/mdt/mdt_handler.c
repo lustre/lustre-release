@@ -3559,6 +3559,8 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_SETQUOTAPOOL:
 	case LUSTRE_Q_SETINFOPOOL:
 	case LUSTRE_Q_SETDEFAULT_POOL:
+	case LUSTRE_Q_SETQUOTALQA:
+	case LUSTRE_Q_SETINFOLQA:
 	case LUSTRE_Q_DELETEQID:
 	case LUSTRE_Q_RESETQID:
 		if (!nodemap_can_setquota(nodemap, oqctl->qc_cmd,
@@ -3570,6 +3572,8 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_GETDEFAULT:
 	case LUSTRE_Q_GETQUOTAPOOL:
 	case LUSTRE_Q_GETINFOPOOL:
+	case LUSTRE_Q_GETQUOTALQA:
+	case LUSTRE_Q_GETINFOLQA:
 	case LUSTRE_Q_GETDEFAULT_POOL:
 	case LUSTRE_Q_ITERQUOTA:
 		if (qmt == NULL)
@@ -3643,6 +3647,10 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_GETQUOTAPOOL:
 	case LUSTRE_Q_SETINFOPOOL:
 	case LUSTRE_Q_GETINFOPOOL:
+	case LUSTRE_Q_SETQUOTALQA:
+	case LUSTRE_Q_GETQUOTALQA:
+	case LUSTRE_Q_SETINFOLQA:
+	case LUSTRE_Q_GETINFOLQA:
 	case LUSTRE_Q_SETDEFAULT_POOL:
 	case LUSTRE_Q_GETDEFAULT_POOL:
 	case LUSTRE_Q_DELETEQID:

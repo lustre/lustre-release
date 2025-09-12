@@ -1599,6 +1599,7 @@ struct obd_quotactl {
 	struct obd_dqblk	qc_dqblk;
 	char			qc_poolname[];
 };
+#define qc_lqaname qc_poolname
 
 #define qc_iter_md_offset	qc_dqblk.dqb_bhardlimit
 #define qc_iter_dt_offset	qc_dqblk.dqb_ihardlimit
@@ -1627,9 +1628,11 @@ do {									\
 #define QCTL_COPY(out, in)						\
 do {									\
 	QCTL_COPY_NO_PNAME(out, in);					\
-	if (LUSTRE_Q_CMD_IS_POOL(in->qc_cmd)) {				\
+	if (LUSTRE_Q_CMD_IS_POOL(in->qc_cmd) ||				\
+	    LUSTRE_Q_CMD_IS_LQA(in->qc_cmd)) {				\
 		size_t len = strnlen(in->qc_poolname, LOV_MAXPOOLNAME);	\
 									\
+		BUILD_BUG_ON(LQA_NAME_MAX != LOV_MAXPOOLNAME);		\
 		memcpy(out->qc_poolname, in->qc_poolname, len);		\
 		out->qc_poolname[len] = '\0';				\
 	}								\

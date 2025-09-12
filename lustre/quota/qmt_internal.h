@@ -446,9 +446,11 @@ struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 				      char *pool_name, int idx, bool add,
 				      union lquota_id *qid, bool is_lqa);
 
-struct lquota_entry *qmt_pool_lqe_lookup(const struct lu_env *,
+#define qmt_pool_lqe_lookup(env, qmt, rtype, qtype, qid, pool) \
+		qmt_pool_lqe_lookup_lqa(env, qmt, rtype, qtype, qid, pool, NULL)
+struct lquota_entry *qmt_pool_lqe_lookup_lqa(const struct lu_env *,
 					 struct qmt_device *, int, int,
-					 union lquota_id *, char *);
+					 union lquota_id *, char *, char *);
 int qmt_pool_lqes_lookup(const struct lu_env *, struct qmt_device *, int,
 			 int, int, union lquota_id *, char *, int);
 int qmt_pool_lqes_lookup_spec(const struct lu_env *env, struct qmt_device *qmt,

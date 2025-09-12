@@ -2147,11 +2147,13 @@ static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
 		RETURN(-ENOMEM);
 
 
-	if (LUSTRE_Q_CMD_IS_POOL(oqctl->qc_cmd))
-		req_capsule_set_size(&req->rq_pill,
-				     &RMF_OBD_QUOTACTL,
+	if (LUSTRE_Q_CMD_IS_POOL(oqctl->qc_cmd) ||
+	    LUSTRE_Q_CMD_IS_LQA(oqctl->qc_cmd)) {
+		BUILD_BUG_ON(LQA_NAME_MAX != LOV_MAXPOOLNAME);
+		req_capsule_set_size(&req->rq_pill, &RMF_OBD_QUOTACTL,
 				     RCL_CLIENT,
 				     sizeof(*oqc) + LOV_MAXPOOLNAME + 1);
+	}
 
 	if (oqctl->qc_cmd == LUSTRE_Q_ITERQUOTA ||
 	    oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)

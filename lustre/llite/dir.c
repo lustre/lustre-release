@@ -1677,6 +1677,8 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 	case LUSTRE_Q_SETDEFAULT:
 	case LUSTRE_Q_SETQUOTAPOOL:
 	case LUSTRE_Q_SETINFOPOOL:
+	case LUSTRE_Q_SETQUOTALQA:
+	case LUSTRE_Q_SETINFOLQA:
 	case LUSTRE_Q_SETDEFAULT_POOL:
 	case LUSTRE_Q_DELETEQID:
 	case LUSTRE_Q_RESETQID:
@@ -1689,6 +1691,7 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 	case Q_GETQUOTA:
 	case LUSTRE_Q_GETDEFAULT:
 	case LUSTRE_Q_GETQUOTAPOOL:
+	case LUSTRE_Q_GETQUOTALQA:
 	case LUSTRE_Q_GETDEFAULT_POOL:
 	case LUSTRE_Q_ITERQUOTA:
 	case LUSTRE_Q_GETALLQUOTA:
@@ -1698,6 +1701,7 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 		break;
 	case Q_GETINFO:
 	case LUSTRE_Q_GETINFOPOOL:
+	case LUSTRE_Q_GETINFOLQA:
 		break;
 	default:
 		CERROR("%s: unsupported quotactl op: %#x: rc = %d\n",
@@ -1747,8 +1751,10 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 		struct obd_quotactl *oqctl;
 		int oqctl_len = sizeof(*oqctl);
 
-		if (LUSTRE_Q_CMD_IS_POOL(cmd))
+		if (LUSTRE_Q_CMD_IS_POOL(cmd) || LUSTRE_Q_CMD_IS_LQA(cmd)) {
+			BUILD_BUG_ON(LQA_NAME_MAX != LOV_MAXPOOLNAME);
 			oqctl_len += LOV_MAXPOOLNAME + 1;
+		}
 
 		OBD_ALLOC(oqctl, oqctl_len);
 		if (oqctl == NULL)
@@ -2513,7 +2519,8 @@ out_req:
 	}
 	case OBD_IOC_QUOTACTL: {
 		struct if_quotactl *qctl;
-		int qctl_len = sizeof(*qctl) + LOV_MAXPOOLNAME + 1;
+		int qctl_len = sizeof(*qctl) + max(LOV_MAXPOOLNAME + 1,
+						   LQA_NAME_MAX + 1);
 
 		OBD_ALLOC(qctl, qctl_len);
 		if (!qctl)
@@ -2522,11 +2529,15 @@ out_req:
 		if (copy_from_user(qctl, uarg, sizeof(*qctl)))
 			GOTO(out_quotactl, rc = -EFAULT);
 
-		if (LUSTRE_Q_CMD_IS_POOL(qctl->qc_cmd)) {
-			char __user *from = uarg +
-					offsetof(typeof(*qctl), qc_poolname);
-			if (copy_from_user(qctl->qc_poolname, from,
-					   LOV_MAXPOOLNAME + 1))
+		if (LUSTRE_Q_CMD_IS_POOL(qctl->qc_cmd) ||
+		    LUSTRE_Q_CMD_IS_LQA(qctl->qc_cmd)) {
+			char __user *from;
+			unsigned long len;
+
+			BUILD_BUG_ON(LQA_NAME_MAX != LOV_MAXPOOLNAME);
+			from = uarg + offsetof(typeof(*qctl), qc_poolname);
+			len = LOV_MAXPOOLNAME + 1;
+			if (copy_from_user(qctl->qc_poolname, from, len))
 				GOTO(out_quotactl, rc = -EFAULT);
 		}
 
