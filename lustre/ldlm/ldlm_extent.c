@@ -26,7 +26,6 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#include <libcfs/libcfs.h>
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <obd.h>

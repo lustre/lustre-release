@@ -24,7 +24,6 @@
  */
 #include <obd.h>
 #include <obd_support.h>
-#include <libcfs/libcfs.h>
 
 /* fid_cpu_to_be() */
 #include <lustre_fid.h>

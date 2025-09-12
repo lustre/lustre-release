@@ -24,6 +24,11 @@
 #include <linux/uio.h>
 #include <linux/kallsyms.h>
 
+static inline unsigned long cfs_time_seconds(time64_t seconds)
+{
+	return nsecs_to_jiffies64(seconds * NSEC_PER_SEC);
+}
+
 /*
  * Since 4.20 commit 00e23707442a75b404392cef1405ab4fd498de6b
  * iov_iter: Use accessor functions to access an iterator's type and direction.
@@ -328,14 +333,6 @@ static inline ssize_t strscpy(char *s1, const char *s2, size_t sz)
 #else
 #define KOBJ_ATTR_GROUPS(_name)		_name##_groups
 #define KOBJ_ATTRIBUTE_GROUPS(_name)	ATTRIBUTE_GROUPS(_name)
-#endif
-
-#ifndef CONFIG_SHRINKER_DEBUG
-void shrinker_debugfs_fini(void);
-int shrinker_debugfs_init(void);
-#else
-static inline void shrinker_debugfs_fini(void) {};
-static inline int shrinker_debugfs_init(void) { return 0; };
 #endif
 
 #endif /* __LIBCFS_LINUX_MISC_H__ */

@@ -36,7 +36,6 @@
 #define __FLD_INTERNAL_H
 
 #include <obd.h>
-#include <libcfs/libcfs.h>
 #include <lustre_fld.h>
 
 struct fld_stats {

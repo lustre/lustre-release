@@ -14,7 +14,6 @@
 #ifndef _UPCALL_CACHE_H
 #define _UPCALL_CACHE_H
 
-#include <libcfs/libcfs.h>
 #include <uapi/linux/lnet/lnet-types.h>
 #include <uapi/linux/lustre/lustre_disk.h>
 #include <obd.h>

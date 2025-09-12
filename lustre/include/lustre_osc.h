@@ -24,7 +24,6 @@
 #ifndef LUSTRE_OSC_H
 #define LUSTRE_OSC_H
 
-#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <cfs_hash.h>
 #include <cl_object.h>

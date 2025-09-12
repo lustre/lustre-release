@@ -29,9 +29,9 @@
 #endif
 
 #include <lustre_compat.h>
-#include <libcfs/linux/linux-time.h>
-#include <libcfs/linux/linux-misc.h>
-#include <libcfs/linux/linux-mem.h>
+#include <lustre_compat/linux/timer.h>
+#include <lustre_compat/linux/linux-misc.h>
+#include <lustre_compat/linux/linux-mem.h>
 #include <lustre_compat/linux/xarray.h>
 #include <lustre_compat/linux/wait_bit.h>
 #include <lustre_compat/linux/wait.h>

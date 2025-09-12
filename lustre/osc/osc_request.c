@@ -14,9 +14,9 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include <linux/workqueue.h>
-#include <libcfs/libcfs.h>
 #include <linux/falloc.h>
 #include <lustre_compat/linux/shrinker.h>
+
 #include <lprocfs_status.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>

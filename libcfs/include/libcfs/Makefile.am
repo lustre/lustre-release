@@ -4,16 +4,5 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-SUBDIRS = linux util
-DIST_SUBDIRS = linux util
-SUBDIRS += crypto
-DIST_SUBDIRS += crypto
-
-libcfsdir = $(includedir)/libcfs
-
-EXTRA_DIST = \
-	libcfs.h \
-	libcfs_debug.h \
-	libcfs_fail.h \
-	libcfs_private.h \
-	libcfs_caps.h
+SUBDIRS = util
+DIST_SUBDIRS = util

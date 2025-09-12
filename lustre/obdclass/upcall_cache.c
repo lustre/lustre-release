@@ -15,7 +15,6 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#include <libcfs/libcfs.h>
 #include <uapi/linux/lnet/lnet-types.h>
 #include <upcall_cache.h>
 #include "upcall_cache_internal.h"

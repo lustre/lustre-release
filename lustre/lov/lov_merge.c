@@ -13,7 +13,6 @@
 
 #define DEBUG_SUBSYSTEM S_LOV
 
-#include <libcfs/libcfs.h>
 #include <cl_object.h>
 #include <obd_class.h>
 #include "lov_internal.h"

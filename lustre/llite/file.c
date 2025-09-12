@@ -28,10 +28,10 @@
 #ifdef HAVE_LINUX_FILELOCK_HEADER
 #include <linux/filelock.h>
 #endif
+#include <lustre_compat/linux/linux-misc.h>
 
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_swab.h>
-#include <libcfs/linux/linux-misc.h>
 
 #include "cl_object.h"
 #include "llite_internal.h"

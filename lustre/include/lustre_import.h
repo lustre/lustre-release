@@ -22,7 +22,7 @@
 #include <linux/time.h>
 #include <linux/types.h>
 #include <linux/workqueue.h>
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 
 /* Adaptive Timeout stuff */

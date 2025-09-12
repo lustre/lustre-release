@@ -15,8 +15,8 @@
  * Author: Liang Zhen <liang@whamcloud.com>
  */
 
-#include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
+
 #include "timer.h"
 #include "conrpc.h"
 #include "console.h"

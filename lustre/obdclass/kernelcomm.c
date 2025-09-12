@@ -22,8 +22,8 @@
 #include <linux/file.h>
 #include <lustre_compat/linux/glob.h>
 #include <linux/types.h>
+#include <lustre_compat/net/linux-net.h>
 
-#include <libcfs/linux/linux-net.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_kernelcomm.h>

@@ -17,7 +17,6 @@
 
 #include <linux/math64.h>
 #include <linux/sort.h>
-#include <libcfs/libcfs.h>
 
 #include <obd_class.h>
 #include "lov_internal.h"

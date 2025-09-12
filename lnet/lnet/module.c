@@ -11,6 +11,8 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/miscdevice.h>
+#include <linux/libcfs/libcfs.h>
+
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet_crypto.h>
 #include <uapi/linux/lnet/lnet-dlc.h>

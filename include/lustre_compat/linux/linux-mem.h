@@ -30,21 +30,6 @@
 
 unsigned long cfs_totalram_pages(void);
 
-#ifndef HAVE_MEMALLOC_RECLAIM
-static inline unsigned int memalloc_noreclaim_save(void)
-{
-	unsigned int flags = current->flags & PF_MEMALLOC;
-
-	current->flags |= PF_MEMALLOC;
-	return flags;
-}
-
-static inline void memalloc_noreclaim_restore(unsigned int flags)
-{
-	current->flags = (current->flags & ~PF_MEMALLOC) | flags;
-}
-#endif /* !HAVE_MEMALLOC_RECLAIM */
-
 #ifndef HAVE_BITMAP_ALLOC
 static inline unsigned long *bitmap_alloc(unsigned int nbits, gfp_t flags)
 {

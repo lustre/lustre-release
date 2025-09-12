@@ -6,7 +6,6 @@
 #include <linux/mm.h>
 #include <linux/shrinker.h>
 #include <linux/types.h>
-#include <libcfs/libcfs.h>
 
 #if !defined(CONFIG_SHRINKER_DEBUG) || defined(HAVE_REGISTER_SHRINKER_FORMAT_NAMED)
 struct ll_shrinker {
@@ -21,8 +20,14 @@ struct ll_shrinker {
 	struct va_format vaf;
   #endif
 };
+
+void shrinker_debugfs_fini(void);
+int shrinker_debugfs_init(void);
 #else
 #define ll_shrinker	shrinker
+
+static inline void shrinker_debugfs_fini(void) {};
+static inline int shrinker_debugfs_init(void) { return 0; };
 #endif
 
 struct shrinker *ll_shrinker_alloc(unsigned int flags,

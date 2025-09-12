@@ -26,7 +26,6 @@
 #include <linux/sched/mm.h>
 #endif
 
-#include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <uapi/linux/lustre/lustre_ver.h>
 #include <uapi/linux/lustre/lustre_cfg.h>

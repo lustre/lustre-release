@@ -14,7 +14,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/sunrpc/addr.h>
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 #include <uapi/linux/lnet/nidstr.h>
 #include <lnet/lib-types.h>
 #include <linux/ctype.h>

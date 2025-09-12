@@ -16,7 +16,6 @@
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
 
-#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_support.h>
 #include <obd_class.h>

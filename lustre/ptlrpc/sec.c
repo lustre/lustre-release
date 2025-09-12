@@ -20,7 +20,6 @@
 #include <linux/crypto.h>
 #include <linux/key.h>
 
-#include <libcfs/libcfs.h>
 #include <lnet/lnet_crypto.h>
 #include <obd.h>
 #include <obd_class.h>

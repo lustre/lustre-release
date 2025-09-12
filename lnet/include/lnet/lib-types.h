@@ -19,6 +19,7 @@
 # error This include is only for kernel use.
 #endif
 
+#include <linux/bvec.h>
 #include <linux/kthread.h>
 #include <linux/uio.h>
 #include <linux/semaphore.h>

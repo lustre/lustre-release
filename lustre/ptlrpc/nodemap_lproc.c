@@ -15,7 +15,7 @@
 #include <lustre_net.h>
 #include <lustre_export.h>
 #include <obd_class.h>
-#include <libcfs/libcfs_caps.h>
+#include <linux/libcfs/libcfs_caps.h>
 #include "nodemap_internal.h"
 
 static LIST_HEAD(nodemap_pde_list);

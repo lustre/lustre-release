@@ -23,9 +23,7 @@
 #include <linux/pagemap.h>
 #include <linux/poll.h>
 #include <linux/uaccess.h>
-#include <libcfs/linux/linux-fs.h>
-#include <libcfs/libcfs.h>
-
+#include <linux/libcfs/libcfs.h>
 
 enum cfs_trace_buf_type {
 	CFS_TCD_TYPE_PROC = 0,

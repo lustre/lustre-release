@@ -72,15 +72,15 @@
 #include <linux/aio.h>
 #include <linux/fs.h>
 
-#include <libcfs/libcfs.h>
-#include <lu_object.h>
 #include <linux/atomic.h>
 #include <linux/mutex.h>
 #include <linux/radix-tree.h>
 #include <linux/spinlock.h>
 #include <linux/wait.h>
 #include <linux/pagevec.h>
-#include <libcfs/linux/linux-misc.h>
+
+#include <lustre_compat/linux/linux-misc.h>
+#include <lu_object.h>
 #include <lustre_dlm.h>
 #include <lustre_compat.h>
 

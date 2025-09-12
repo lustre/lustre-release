@@ -21,9 +21,6 @@
  *
  * @{
  */
-
-#include <libcfs/libcfs.h>
-
 #ifdef HAVE_GROUP_INFO_GID
 
 #define CFS_GROUP_AT(gi, i) ((gi)->gid[(i)])

@@ -16,8 +16,6 @@
 #ifndef __FID_INTERNAL_H
 #define __FID_INTERNAL_H
 
-#include <libcfs/libcfs.h>
-
 #ifdef HAVE_SERVER_SUPPORT
 # define HAVE_SEQ_SERVER
 

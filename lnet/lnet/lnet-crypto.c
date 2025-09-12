@@ -8,7 +8,7 @@
 #include <crypto/hash.h>
 #include <linux/scatterlist.h>
 #include <linux/pagemap.h>
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 #include <lnet/lnet_crypto.h>
 #include "adler.h"
 

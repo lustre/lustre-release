@@ -21,8 +21,6 @@
 
 #include <linux/crc32.h>
 
-#include <libcfs/libcfs.h>
-
 #include <llog_swab.h>
 #include <lustre_disk.h>
 #include <lustre_net.h>
@@ -30,6 +28,7 @@
 #include <obd_cksum.h>
 #include <obd_class.h>
 #include <obd_support.h>
+
 #include "ptlrpc_internal.h"
 
 static inline __u32 lustre_msg_hdr_size_v2(__u32 count)

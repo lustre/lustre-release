@@ -22,8 +22,6 @@
 #include <lustre_compat/linux/stringhash.h>
 #include <lustre_compat/linux/rhashtable.h>
 
-#include <libcfs/libcfs.h>
-#include <libcfs/linux/linux-fs.h>
 #include <obd.h>
 
 #include "lov_internal.h"

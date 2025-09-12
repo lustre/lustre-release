@@ -18,7 +18,6 @@
 
 #define DEBUG_SUBSYSTEM S_FLD
 
-#include <libcfs/libcfs.h>
 #include <linux/module.h>
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -27,6 +26,7 @@
 #include <obd_support.h>
 #include <lustre_fld.h>
 #include <lustre_fid.h>
+
 #include "fld_internal.h"
 
 static int

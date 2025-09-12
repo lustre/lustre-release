@@ -40,7 +40,6 @@
  * struct OBD_{ALLOC,FREE}*()
  */
 #include <obd_support.h>
-#include <libcfs/libcfs.h>
 /* struct ptlrpc_thread */
 #include <lustre_net.h>
 #include <lustre_fid.h>

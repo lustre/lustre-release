@@ -25,7 +25,6 @@
 #include <linux/page-flags.h>
 #include <linux/pagemap.h>
 
-#include <libcfs/libcfs.h>
 #include "llite_internal.h"
 #include "vvp_internal.h"
 

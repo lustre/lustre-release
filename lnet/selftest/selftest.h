@@ -18,12 +18,12 @@
 
 #define LNET_ONLY
 
-#include <libcfs/libcfs.h>
+#include <linux/refcount.h>
+#include <linux/libcfs/libcfs.h>
 #include <lnet/api.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/lib-types.h>
 #include <uapi/linux/lnet/lnetst.h>
-#include <linux/refcount.h>
 
 #include "rpc.h"
 #include "timer.h"

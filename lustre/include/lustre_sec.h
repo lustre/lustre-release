@@ -14,6 +14,10 @@
 #ifndef _LUSTRE_SEC_H_
 #define _LUSTRE_SEC_H_
 
+#include <linux/module.h>
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
+
 /** \defgroup sptlrpc sptlrpc
  *
  * @{

@@ -10,8 +10,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/uaccess.h>
-
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
 #define LNET_LOFFT_BITS		(sizeof(loff_t) * 8)

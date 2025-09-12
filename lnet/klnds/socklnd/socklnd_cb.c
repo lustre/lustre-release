@@ -13,7 +13,6 @@
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
-#include <libcfs/linux/linux-mem.h>
 #include "socklnd.h"
 #include <linux/sunrpc/addr.h>
 

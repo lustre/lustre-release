@@ -85,7 +85,6 @@
 #include <linux/seq_file.h>
 #include <linux/log2.h>
 
-#include <libcfs/libcfs.h>
 #include <cfs_hash.h>
 #include <obd_class.h>
 

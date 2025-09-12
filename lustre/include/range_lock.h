@@ -19,7 +19,7 @@
 #ifndef _RANGE_LOCK_H
 #define _RANGE_LOCK_H
 
-#include <libcfs/libcfs.h>
+#include <lustre_compat/linux/linux-misc.h>
 
 #define RL_FMT "[%llu, %llu]"
 #define RL_PARA(range)					\

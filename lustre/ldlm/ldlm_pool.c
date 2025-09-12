@@ -75,7 +75,6 @@
 
 #include <linux/workqueue.h>
 #include <lustre_compat/linux/shrinker.h>
-#include <libcfs/linux/linux-mem.h>
 #include <lustre_dlm.h>
 #include <cl_object.h>
 #include <obd_class.h>

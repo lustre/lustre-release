@@ -19,7 +19,6 @@
 
 #define DEBUG_SUBSYSTEM S_FLD
 
-#include <libcfs/libcfs.h>
 #include <linux/module.h>
 
 #include <obd.h>
@@ -29,6 +28,7 @@
 #include <lustre_fld.h>
 #include <lustre_req_layout.h>
 #include <lprocfs_status.h>
+
 #include "fld_internal.h"
 
 /* context key constructor/destructor: fld_key_init, fld_key_fini */

@@ -29,14 +29,6 @@
 #include <linux/time.h>
 #include <asm/div64.h>
 
-/*
- * Generic kernel stuff
- */
-static inline unsigned long cfs_time_seconds(time64_t seconds)
-{
-	return nsecs_to_jiffies64(seconds * NSEC_PER_SEC);
-}
-
 #ifdef HAVE_NEW_DEFINE_TIMER
 # ifndef TIMER_DATA_TYPE
 # define TIMER_DATA_TYPE struct timer_list *

@@ -38,7 +38,7 @@
 #include <lprocfs_status.h>
 #include "mdt_internal.h"
 #include <obd_cksum.h>
-#include <libcfs/libcfs_caps.h>
+#include <linux/libcfs/libcfs_caps.h>
 
 /**
  * The rename stats output would be YAML formats, like

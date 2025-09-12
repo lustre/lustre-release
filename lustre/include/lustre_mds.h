@@ -23,7 +23,6 @@
  */
 
 #include <lustre_handles.h>
-#include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>

@@ -16,8 +16,6 @@
 #include <linux/sunrpc/addr.h>
 #include <net/addrconf.h>
 
-#include <libcfs/linux/linux-net.h>
-
 #include "o2iblnd.h"
 
 static const struct lnet_lnd the_o2iblnd;

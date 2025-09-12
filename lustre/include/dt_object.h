@@ -28,7 +28,8 @@
 #include <obd_support.h>
 #include <lu_object.h>
 #include <lustre_quota.h>
-#include <libcfs/libcfs.h>
+
+#include <lprocfs_status.h>
 
 struct seq_file;
 struct proc_dir_entry;

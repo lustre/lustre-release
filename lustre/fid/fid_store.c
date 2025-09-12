@@ -17,7 +17,6 @@
 
 #define DEBUG_SUBSYSTEM S_FID
 
-#include <libcfs/libcfs.h>
 #include <dt_object.h>
 #include <obd_support.h>
 #include <lustre_fid.h>

@@ -27,7 +27,6 @@
 
 #include <linux/fs_struct.h>
 #include <linux/kthread.h>
-#include <libcfs/libcfs.h>
 #include <lustre_net.h>
 #include <lustre_lib.h>
 #include <lustre_ha.h>

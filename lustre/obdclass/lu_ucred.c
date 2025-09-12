@@ -19,7 +19,6 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <lu_object.h>
 #include <md_object.h>

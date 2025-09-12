@@ -25,7 +25,6 @@
 #include <crypto/skcipher.h>
 #include <linux/key-type.h>
 #include <linux/seq_file.h>
-#include <libcfs/linux/linux-misc.h>
 
 #include "llcrypt_private.h"
 

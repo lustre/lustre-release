@@ -23,9 +23,9 @@
 #include <net/sock.h>
 #include <linux/inetdevice.h>
 
-#include <libcfs/linux/linux-time.h>
-#include <libcfs/linux/linux-net.h>
-#include <libcfs/libcfs.h>
+#include <lustre_compat/linux/linux-misc.h>
+#include <lustre_compat/net/linux-net.h>
+#include <linux/libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet_compat.h>
 

@@ -21,6 +21,8 @@
 #endif
 #include <linux/interval_tree_generic.h>
 #include <uapi/linux/lustre/lustre_user.h>
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
 #include <range_lock.h>
 
 #define START(node)	((node)->rl_start)

@@ -14,6 +14,12 @@
 #ifndef _LIBCFS_FAIL_H
 #define _LIBCFS_FAIL_H
 
+#include <linux/types.h>
+#include <lustre_compat/linux/linux-misc.h>
+#include <linux/libcfs/libcfs.h>
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
+
 extern unsigned long cfs_fail_loc;
 extern unsigned int cfs_fail_val;
 extern int cfs_fail_err;

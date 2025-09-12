@@ -8,7 +8,6 @@
 
 #include <linux/fs.h>
 #include <linux/fs_struct.h>
-#include <libcfs/libcfs.h>
 #include <lvfs.h>
 #include <obd_class.h>
 

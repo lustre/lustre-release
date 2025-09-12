@@ -6,7 +6,6 @@
  * Copyright (c) 2013, Intel Corporation.
  */
 
-#include <libcfs/libcfs.h>
 #include <lustre_errno.h>
 
 #ifdef LUSTRE_TRANSLATE_ERRNOS

@@ -21,7 +21,8 @@
 #endif
 #include <net/genetlink.h>
 
-#include <libcfs/linux/linux-net.h>
+#include <linux/libcfs/libcfs.h>
+#include <lustre_compat/net/linux-net.h>
 #include <lnet/udsp.h>
 #include <lnet/lib-lnet.h>
 

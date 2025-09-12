@@ -16,7 +16,6 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <linux/workqueue.h>
-#include <libcfs/libcfs.h>
 
 #include <obd_support.h>
 #include <obd_class.h>

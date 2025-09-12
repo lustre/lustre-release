@@ -19,12 +19,12 @@
 #else
 #include <stdarg.h>
 #endif
-#include <libcfs/libcfs.h>
-#include <obd_support.h>
-#include <uapi/linux/lustre/lustre_idl.h>
 #include <linux/percpu_counter.h>
 #include <linux/rhashtable.h>
 #include <linux/ctype.h>
+
+#include <obd_support.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 
 struct seq_file;
 struct proc_dir_entry;

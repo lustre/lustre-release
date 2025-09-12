@@ -28,7 +28,7 @@
 #include <linux/security.h>
 #include <linux/pagevec.h>
 #include <linux/workqueue.h>
-#include <libcfs/linux/linux-fs.h>
+#include <lustre_compat/linux/linux-fs.h>
 #include <lustre_compat/linux/shrinker.h>
 #include <lustre_compat/linux/xarray.h>
 #include <obd_support.h>

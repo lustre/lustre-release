@@ -14,7 +14,7 @@
 #ifndef __LIBCFS_TRACEFILE_H__
 #define __LIBCFS_TRACEFILE_H__
 
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs_debug.h>
 
 #define TRACEFILE_NAME_SIZE 1024
 extern char      cfs_tracefile[TRACEFILE_NAME_SIZE];

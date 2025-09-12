@@ -19,7 +19,6 @@
 #ifndef LOV_CL_INTERNAL_H
 #define LOV_CL_INTERNAL_H
 
-#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <cl_object.h>
 #include "lov_internal.h"

@@ -18,8 +18,6 @@
 
 #include <linux/kthread.h>
 #include <linux/list.h>
-#include <libcfs/libcfs.h>
-#include <libcfs/linux/linux-mem.h>
 #include <lustre_errno.h>
 #include <lustre_dlm.h>
 #include <obd_class.h>

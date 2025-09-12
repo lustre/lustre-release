@@ -4,4 +4,4 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-SUBDIRS = libcfs uapi
+SUBDIRS = libcfs

@@ -51,7 +51,7 @@
 #define DEBUG_SUBSYSTEM S_LND
 
 #include <libcfs/libcfs.h>
-#include <libcfs/linux/linux-net.h>
+#include <lustre_compat/linux/linux-net.h>
 #include <lnet/lib-lnet.h>
 #include "kfi_endpoint.h"
 #include "kfi_errno.h"

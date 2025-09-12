@@ -16,7 +16,7 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <lustre_compat/linux/shrinker.h>
-#include <libcfs/linux/linux-mem.h>
+#include <lustre_compat/linux/linux-mem.h>
 
 #include <obd.h>
 #include <obd_class.h>

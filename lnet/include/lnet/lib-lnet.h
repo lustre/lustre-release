@@ -23,8 +23,9 @@
 #include <lustre_compat/linux/generic-radix-tree.h>
 #include <lustre_compat/linux/hash.h>
 #include <linux/netdevice.h>
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
 
-#include <libcfs/libcfs.h>
 #include <lnet/api.h>
 #include <lnet/lib-cpt.h>
 #include <lnet/lib-types.h>

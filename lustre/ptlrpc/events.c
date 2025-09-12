@@ -13,7 +13,6 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <libcfs/libcfs.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <obd_class.h>

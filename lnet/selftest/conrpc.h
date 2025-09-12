@@ -18,7 +18,6 @@
 #ifndef __LST_CONRPC_H__
 #define __LST_CONRPC_H__
 
-#include <libcfs/libcfs.h>
 #include <lnet/lib-types.h>
 #include "rpc.h"
 #include "selftest.h"

@@ -20,8 +20,6 @@
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
 
-#include <libcfs/libcfs.h>
-
 #include <obd.h>
 #include "llite_internal.h"
 #include "vvp_internal.h"

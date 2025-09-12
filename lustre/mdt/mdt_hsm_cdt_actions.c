@@ -16,7 +16,6 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
-#include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <lustre_export.h>
 #include <obd.h>

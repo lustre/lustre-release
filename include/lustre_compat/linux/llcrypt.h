@@ -28,7 +28,7 @@
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <lustre_disk.h>
-#include <uapi/linux/llcrypt.h>
+#include <lustre_compat/uapi/linux/llcrypt.h>
 
 #define LL_CRYPTO_BLOCK_SIZE		16
 

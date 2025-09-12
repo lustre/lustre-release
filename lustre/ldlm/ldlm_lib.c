@@ -25,7 +25,7 @@
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/kthread.h>
-#include <libcfs/libcfs.h>
+
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>

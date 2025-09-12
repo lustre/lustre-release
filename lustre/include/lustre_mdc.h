@@ -29,7 +29,6 @@
 #endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 #include <lustre_handles.h>
 #include <lustre_intent.h>
-#include <libcfs/libcfs.h>
 #include <obd_class.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>

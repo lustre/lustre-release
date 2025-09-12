@@ -18,11 +18,11 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
+
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
 #include <linux/utsname.h>
 
-#include <libcfs/libcfs.h>
 #include <cfs_hash.h>
 #include <obd_support.h>
 #include <obd_class.h>

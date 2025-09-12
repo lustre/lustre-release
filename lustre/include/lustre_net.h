@@ -30,7 +30,6 @@
 #include <linux/rhashtable.h>
 #include <linux/uio.h>
 #include <linux/pm_qos.h>
-#include <libcfs/libcfs.h>
 #include <lnet/api.h>
 #include <lnet/lib-types.h>
 #include <uapi/linux/lnet/nidstr.h>

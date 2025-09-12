@@ -20,8 +20,9 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/percpu_counter.h>
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
 
-#include <libcfs/libcfs.h>
 #include <lnet/lib-cpt.h>
 #include <lprocfs_status.h>
 #include <lustre_handles.h>

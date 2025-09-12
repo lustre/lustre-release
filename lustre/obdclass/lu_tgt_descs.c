@@ -13,8 +13,8 @@
 #include <linux/module.h>
 #include <linux/list.h>
 #include <linux/random.h>
-#include <libcfs/libcfs.h>
-#include <libcfs/linux/linux-mem.h>
+
+#include <lustre_compat/linux/linux-mem.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_disk.h>

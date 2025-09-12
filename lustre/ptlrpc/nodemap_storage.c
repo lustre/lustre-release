@@ -24,7 +24,6 @@
  *	NODEMAP_GLOBAL_IDX	stores whether or not nodemaps are active
  */
 
-#include <libcfs/libcfs.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
@@ -41,7 +40,7 @@
 #include <lustre_nodemap.h>
 #include <obd_class.h>
 #include <obd_support.h>
-#include <libcfs/libcfs_caps.h>
+#include <linux/libcfs/libcfs_caps.h>
 #include "nodemap_internal.h"
 
 /* list of registered nodemap index files, except MGS */

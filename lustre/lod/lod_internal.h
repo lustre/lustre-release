@@ -17,7 +17,6 @@
 #ifndef _LOD_INTERNAL_H
 #define _LOD_INTERNAL_H
 
-#include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_cfg.h>
 #include <obd.h>
 #include <dt_object.h>

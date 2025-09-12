@@ -120,7 +120,7 @@
 #define LL_IOC_GET_ENCRYPTION_KEY_STATUS FS_IOC_GET_ENCRYPTION_KEY_STATUS
 
 #else /* HAVE_LUSTRE_CRYPTO && !CONFIG_LL_ENCRYPTION */
-#include <libcfs/crypto/llcrypt.h>
+#include <lustre_compat/linux/llcrypt.h>
 
 #define llcrypt_prepare_readdir(inode) llcrypt_get_encryption_info(inode)
 

@@ -26,7 +26,6 @@
  * struct OBD_{ALLOC,FREE}*()
  */
 #include <obd_support.h>
-#include <libcfs/libcfs.h>
 
 #include "osd_internal.h"
 #include "osd_oi.h"

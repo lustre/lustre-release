@@ -571,22 +571,6 @@ AC_DEFUN([LIBCFS_HAVE_NODE_NR_WRITEBACK], [
 ]) # LIBCFS_HAVE_NODE_NR_WRITEBACK
 
 #
-# LIBCFS_REFCOUNT_T
-#
-# Kernel version 4.10-rc3 commit f405df5de3170c00e5c54f8b7cf4766044a032ba
-# introduced refcount_t which is atomic_t plus over flow guards.
-#
-AC_DEFUN([LIBCFS_SRC_REFCOUNT_T], [
-	LB2_CHECK_LINUX_HEADER_SRC([linux/refcount.h], [-Werror])
-])
-AC_DEFUN([LIBCFS_REFCOUNT_T], [
-	LB2_CHECK_LINUX_HEADER_RESULT([linux/refcount.h], [
-		AC_DEFINE(HAVE_REFCOUNT_T, 1,
-			[refcount_t is supported])
-	])
-]) # LIBCFS_REFCOUNT_T
-
-#
 # HAVE_NLA_PUT_U64_64BIT
 #
 # Kernel version 4.10 commit 73520786b0793c612ef4de3e9addb2ec411bea20
@@ -606,26 +590,6 @@ AC_DEFUN([LIBCFS_NLA_PUT_U64_64BIT], [
 			['nla_put_u64_64bit' is available])
 	])
 ]) # LIBCFS_NLA_PUT_U64_64BIT
-
-#
-# Kernel version 4.12 commit 499118e966f1d2150bd66647c8932343c4e9a0b8
-# introduce memalloc_noreclaim_{save,restore}
-#
-AC_DEFUN([LIBCFS_SRC_MEMALLOC_NORECLAIM], [
-	LB2_LINUX_TEST_SRC([memalloc_noreclaim], [
-		#include <linux/sched/mm.h>
-	],[
-		int flag = memalloc_noreclaim_save();
-		memalloc_noreclaim_restore(flag);
-	])
-])
-AC_DEFUN([LIBCFS_MEMALLOC_NORECLAIM], [
-	LB2_MSG_LINUX_TEST_RESULT([if memalloc_noreclaim_{save,restore} exist],
-	[memalloc_noreclaim], [
-		AC_DEFINE(HAVE_MEMALLOC_RECLAIM, 1,
-			[memalloc_noreclaim_{save,restore}() is supported])
-	])
-]) # LIBCFS_MEMALLOC_NORECLAIM
 
 #
 # LIBCFS_SCHED_HEADERS
@@ -744,22 +708,6 @@ AC_DEFUN([LIBCFS_CPUS_READ_LOCK], [
 ]) # LIBCFS_CPUS_READ_LOCK
 
 #
-# LIBCFS_HAVE_PROCESSOR_HEADER
-#
-# Kernel version 4.12-rc3 commit fd851a3cdc196bfc1d229b5f22369069af532bf8
-# introduce processor.h
-#
-AC_DEFUN([LIBCFS_SRC_HAVE_PROCESSOR_HEADER], [
-	LB2_CHECK_LINUX_HEADER_SRC([linux/processor.h], [-Werror])
-])
-AC_DEFUN([LIBCFS_HAVE_PROCESSOR_HEADER], [
-	LB2_CHECK_LINUX_HEADER_RESULT([linux/processor.h], [
-		AC_DEFINE(HAVE_PROCESSOR_H, 1,
-			[processor.h is present])
-	],[])
-]) # LIBCFS_HAVE_PROCESSOR_HEADER
-
-#
 # LIBCFS_HAVE_WAIT_BIT_HEADER
 #
 # Kernel verison 4.12-rc6 commit 5dd43ce2f69d42a71dcacdb13d17d8c0ac1fe8f7
@@ -773,7 +721,7 @@ AC_DEFUN([LIBCFS_HAVE_WAIT_BIT_HEADER], [
 		AC_DEFINE(HAVE_WAIT_BIT_HEADER_H, 1,
 			[wait_bit.h is present])
 	],[])
-]) # LIBCFS_HAVE_PROCESSOR_HEADER
+]) # LIBCFS_HAVE_WAIT_BIT_HEADER
 
 #
 # Kernel version 4.12-rc6 commmit 2055da97389a605c8a00d163d40903afbe413921
@@ -2011,11 +1959,8 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_RHT_BUCKET_VAR
 	# 4.12
 	LIBCFS_SRC_CPUS_READ_LOCK
-	LIBCFS_SRC_HAVE_PROCESSOR_HEADER
 	LIBCFS_SRC_WAIT_QUEUE_TASK_LIST_RENAME
 	LIBCFS_SRC_WAIT_BIT_QUEUE_ENTRY_EXISTS
-	LIBCFS_SRC_REFCOUNT_T
-	LIBCFS_SRC_MEMALLOC_NORECLAIM
 	# 4.13
 	LIBCFS_SRC_WAIT_QUEUE_ENTRY
 	# 4.14
@@ -2137,11 +2082,8 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_RHT_BUCKET_VAR
 	# 4.12
 	LIBCFS_CPUS_READ_LOCK
-	LIBCFS_HAVE_PROCESSOR_HEADER
 	LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME
 	LIBCFS_WAIT_BIT_QUEUE_ENTRY_EXISTS
-	LIBCFS_REFCOUNT_T
-	LIBCFS_MEMALLOC_NORECLAIM
 	# 4.13
 	LIBCFS_WAIT_QUEUE_ENTRY
 	# 4.14
@@ -2310,11 +2252,7 @@ libcfs/Makefile
 libcfs/autoMakefile
 libcfs/include/Makefile
 libcfs/include/libcfs/Makefile
-libcfs/include/uapi/Makefile
-libcfs/include/libcfs/linux/Makefile
 libcfs/include/libcfs/util/Makefile
-libcfs/include/libcfs/crypto/Makefile
-libcfs/include/uapi/linux/Makefile
 libcfs/libcfs/Makefile
 libcfs/libcfs/autoMakefile
 libcfs/libcfs/linux/Makefile

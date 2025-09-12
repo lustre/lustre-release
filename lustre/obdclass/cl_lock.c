@@ -19,11 +19,12 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/list.h>
-#include <libcfs/libcfs.h>
+
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_fid.h>
 #include <cl_object.h>
+
 #include "cl_internal.h"
 
 static void __cl_lock_trace(int level, const struct lu_env *env,

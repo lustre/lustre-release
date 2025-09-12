@@ -5,7 +5,6 @@
 #ifdef HAVE_PRANDOM_H
 #include <linux/prandom.h>
 #endif
-#include <libcfs/libcfs.h>
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <obd.h>

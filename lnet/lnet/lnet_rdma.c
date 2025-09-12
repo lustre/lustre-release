@@ -3,7 +3,7 @@
 /* This file is part of Lustre, http://www.lustre.org/ */
 
 #include <lnet/lnet_rdma.h>
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 
 /* MAX / MIN conflict */
 #include <lnet/lib-lnet.h>

@@ -22,6 +22,7 @@
 
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
+#include <lustre_compat/linux/linux-mem.h>
 
 #ifdef LIBCFS_DEBUG
 

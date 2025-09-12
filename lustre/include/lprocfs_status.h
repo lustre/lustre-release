@@ -26,8 +26,7 @@
 #include <linux/string_helpers.h>
 #include <linux/seq_file.h>
 
-#include <libcfs/libcfs.h>
-#include <libcfs/linux/linux-fs.h>
+#include <lustre_compat/linux/linux-fs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 
 /*

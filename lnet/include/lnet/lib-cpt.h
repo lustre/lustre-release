@@ -65,14 +65,14 @@
 #ifndef __LIBCFS_CPU_H__
 #define __LIBCFS_CPU_H__
 
-#include <linux/cpu.h>
+#include <lustre_compat/linux/cpu.h>
 #include <linux/cpuset.h>
 #include <linux/slab.h>
 #include <linux/topology.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
 
-#include <libcfs/linux/linux-cpu.h>
+#include <lustre_compat/linux/linux-misc.h>
 
 /* any CPU partition */
 #define CFS_CPT_ANY		(-1)

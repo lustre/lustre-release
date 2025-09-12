@@ -14,7 +14,6 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #include <linux/delay.h>
-#include <libcfs/libcfs.h>
 
 #include <obd_class.h>
 #include "lov_internal.h"

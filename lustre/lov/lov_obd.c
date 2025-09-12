@@ -17,7 +17,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LOV
-#include <libcfs/libcfs.h>
 
 #include <cl_object.h>
 #include <lustre_dlm.h>

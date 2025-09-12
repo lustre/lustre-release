@@ -30,10 +30,8 @@
  * struct OBD_{ALLOC,FREE}*()
  */
 #include <obd_support.h>
-#include <libcfs/libcfs.h>
 
 #include "osd_internal.h"
-
 /* ext_depth() */
 #include <ldiskfs/ldiskfs_extents.h>
 #include <ldiskfs/ldiskfs.h>

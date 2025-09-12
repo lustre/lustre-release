@@ -22,17 +22,17 @@
 #include <linux/sched/signal.h>
 #endif
 
-#include <libcfs/linux/linux-misc.h>
-#include <libcfs/linux/linux-mem.h>
-#include <libcfs/linux/linux-time.h>
+#include <lustre_compat/linux/linux-misc.h>
+#include <lustre_compat/linux/linux-mem.h>
+#include <lustre_compat/linux/timer.h>
 #include <lustre_compat/linux/wait_bit.h>
 #include <lustre_compat/linux/wait.h>
-#include <libcfs/linux/linux-fortify-string.h>
+#include <lustre_compat/linux/fortify-string.h>
 
 #include <uapi/linux/lnet/libcfs_ioctl.h>
-#include <libcfs/libcfs_debug.h>
-#include <libcfs/libcfs_private.h>
-#include <libcfs/libcfs_fail.h>
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
+#include <linux/libcfs/libcfs_fail.h>
 
 #define LIBCFS_VERSION	"0.7.1"
 

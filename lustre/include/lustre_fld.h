@@ -20,7 +20,6 @@
  */
 
 #include <uapi/linux/lustre/lustre_idl.h>
-#include <libcfs/libcfs.h>
 #include <seq_range.h>
 #include <lustre_fid.h>
 

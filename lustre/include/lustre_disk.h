@@ -26,7 +26,6 @@
 #include <linux/types.h>
 #include <linux/backing-dev.h>
 #include <linux/list.h>
-#include <libcfs/libcfs.h>
 #if !defined(CONFIG_LL_ENCRYPTION) && defined(HAVE_LUSTRE_CRYPTO)
 #include <lustre_crypto.h>
 #endif

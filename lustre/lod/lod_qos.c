@@ -18,8 +18,8 @@
 
 #include <asm/div64.h>
 #include <linux/random.h>
+#include <lustre_compat/linux/linux-misc.h>
 
-#include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_swab.h>
 #include <obd_class.h>

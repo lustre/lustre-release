@@ -16,12 +16,13 @@
 
 #define DEBUG_SUBSYSTEM S_FLD
 
-#include <libcfs/libcfs.h>
 #include <linux/module.h>
+
 #include <obd_support.h>
 #include <dt_object.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
+
 #include "fld_internal.h"
 
 static const char fld_index_name[] = "fld";

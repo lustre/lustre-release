@@ -16,7 +16,6 @@
  * Author: Oleg Drokin <oleg.drokin@sun.com>
  */
 
-#include <libcfs/libcfs.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <obd.h>

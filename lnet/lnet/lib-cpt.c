@@ -17,8 +17,7 @@
 #include <linux/sched.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 #include <lnet/lib-types.h>
 #include <lnet/lib-cpt.h>
 

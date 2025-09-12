@@ -11,8 +11,6 @@
 #include <linux/slab.h>
 #include <linux/sched.h>
 
-#include <libcfs/libcfs.h>
-
 #include <obd_support.h>
 #include "osd_dynlocks.h"
 #include "osd_internal.h"

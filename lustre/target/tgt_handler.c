@@ -17,7 +17,6 @@
 #include <linux/delay.h>
 #include <linux/uidgid.h>
 
-#include <libcfs/linux/linux-mem.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_cksum.h>

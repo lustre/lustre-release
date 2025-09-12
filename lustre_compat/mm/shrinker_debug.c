@@ -12,6 +12,9 @@
 #include <linux/memcontrol.h>
 #include <lustre_compat/linux/shrinker.h>
 
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
+
 #ifndef CONFIG_SHRINKER_DEBUG
 /* RHEL7 is sooooo old and we really don't support it */
 static DEFINE_IDA(shrinker_debugfs_ida);

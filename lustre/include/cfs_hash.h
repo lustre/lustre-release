@@ -19,7 +19,8 @@
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 #include <linux/refcount.h>
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
 
 /* disable debug */
 #define CFS_HASH_DEBUG_NONE	0

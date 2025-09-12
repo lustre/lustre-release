@@ -15,7 +15,7 @@
 #include <linux/sched/signal.h>
 #endif
 #include <linux/uaccess.h>
-
+#include <linux/libcfs/libcfs.h>
 #include <lnet/udsp.h>
 #include <lnet/lib-lnet.h>
 #include <uapi/linux/lnet/lnet-dlc.h>

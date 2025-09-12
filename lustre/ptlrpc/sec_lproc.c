@@ -15,7 +15,6 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#include <libcfs/libcfs.h>
 #include <linux/crypto.h>
 
 #include <obd.h>
@@ -225,8 +224,9 @@ static ssize_t sepol_seq_write_old(struct obd_device *obd,
 		GOTO(out, rc);
 	}
 
-	rc = sptlrpc_sepol_update(imp, ktime_set(param->sdd_sepol_mtime, 0),
-				  param->sdd_sepol, len);
+	with_imp_locked(obd, imp, rc)
+		rc = sptlrpc_sepol_update(imp, ktime_set(param->sdd_sepol_mtime,
+					  0), param->sdd_sepol, len);
 out:
 	OBD_FREE(param, maxparam);
 

@@ -19,9 +19,9 @@
 #define __LST_CONSOLE_H__
 
 #include <linux/uaccess.h>
-
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 #include <lnet/lib-types.h>
+
 #include "selftest.h"
 #include "conrpc.h"
 

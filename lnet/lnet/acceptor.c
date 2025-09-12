@@ -12,13 +12,14 @@
 
 #include <linux/completion.h>
 #include <net/sock.h>
-#include <lnet/lib-lnet.h>
 #include <linux/sunrpc/addr.h>
 #include <linux/net.h>
 #include <linux/inet.h>
 #include <linux/netdevice.h>
 #include <linux/inetdevice.h>
 #include <linux/module.h>
+#include <linux/libcfs/libcfs.h>
+#include <lnet/lib-lnet.h>
 
 static int   accept_port    = 988;
 static int   accept_port_bulk = 988;

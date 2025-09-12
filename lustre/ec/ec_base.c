@@ -29,8 +29,9 @@
  */
 
 #include <linux/limits.h>
+#include <linux/module.h>
 #include <linux/string.h>	/* for memset */
-#include <libcfs/libcfs.h>
+
 #include "erasure_code.h"
 
 /* Global GF(256) tables */

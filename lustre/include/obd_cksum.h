@@ -13,7 +13,9 @@
 
 #ifndef __OBD_CKSUM
 #define __OBD_CKSUM
-#include <libcfs/libcfs.h>
+
+#include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_private.h>
 #include <lnet/lnet_crypto.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 

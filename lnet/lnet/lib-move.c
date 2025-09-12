@@ -14,10 +14,12 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/pagemap.h>
+#include <linux/nsproxy.h>
 #include <linux/mm.h>
 
+#include <linux/libcfs/libcfs.h>
+#include <linux/libcfs/libcfs_fail.h>
 #include <lnet/lib-lnet.h>
-#include <linux/nsproxy.h>
 #include <lnet/lnet_rdma.h>
 #include <net/net_namespace.h>
 

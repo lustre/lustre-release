@@ -12,7 +12,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#include <libcfs/linux/linux-mem.h>
+
 #include <obd_support.h>
 #include <lustre_net.h>
 #include <lustre_lib.h>

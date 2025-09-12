@@ -33,11 +33,11 @@
 #ifdef HAVE_FILEATTR_GET
 #include <linux/fileattr.h>
 #endif
-
 #ifndef HAVE_CPUS_READ_LOCK
-#include <libcfs/linux/linux-cpu.h>
+#include <lustre_compat/linux/cpu.h>
 #endif
-#include <libcfs/linux/linux-misc.h>
+#include <lustre_compat/linux/linux-misc.h>
+
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_ioctl_old.h>
 #ifdef HAVE_UAPI_LINUX_MOUNT_H

@@ -15,7 +15,7 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/random.h>
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 
 unsigned long cfs_fail_loc;
 EXPORT_SYMBOL(cfs_fail_loc);

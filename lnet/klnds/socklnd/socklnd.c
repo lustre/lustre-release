@@ -19,6 +19,7 @@
 #include <linux/kernel.h>
 #include <linux/sunrpc/addr.h>
 #include <net/addrconf.h>
+
 #include "socklnd.h"
 
 static const struct lnet_lnd the_ksocklnd;

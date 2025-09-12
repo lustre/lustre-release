@@ -32,7 +32,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <libcfs/libcfs.h>
+#include <linux/libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include <uapi/linux/lustre/lustre_ver.h>
 #include "tracefile.h"
