@@ -375,6 +375,10 @@ static const struct ln_key_list kfilnd_tunables_keys = {
 			.lkp_value      = "traffic_class",
 			.lkp_data_type  = NLA_STRING,
 		},
+		[LNET_NET_KFILND_TUNABLES_ATTR_TRAFFIC_CLASS_NUM]  = {
+			.lkp_value      = "traffic_class_num",
+			.lkp_data_type  = NLA_S32,
+		},
 		[LNET_NET_KFILND_TUNABLES_ATTR_TIMEOUT]  = {
 			.lkp_value      = "timeout",
 			.lkp_data_type  = NLA_S32,
@@ -383,7 +387,8 @@ static const struct ln_key_list kfilnd_tunables_keys = {
 };
 
 static int
-kfilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
+kfilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data,
+	      bool export_backup)
 {
 	struct lnet_lnd_tunables *tunables;
 	struct lnet_ni *ni = data;
@@ -403,8 +408,13 @@ kfilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 		    tunables->lnd_tun_u.lnd_kfi.lnd_auth_key);
 	nla_put_string(msg, LNET_NET_KFILND_TUNABLES_ATTR_TRAFFIC_CLASS,
 		       tunables->lnd_tun_u.lnd_kfi.lnd_traffic_class_str);
-	nla_put_s32(msg, LNET_NET_KFILND_TUNABLES_ATTR_TIMEOUT,
-		    kfilnd_timeout());
+	if (!export_backup) {
+		nla_put_s32(msg,
+			    LNET_NET_KFILND_TUNABLES_ATTR_TRAFFIC_CLASS_NUM,
+			    tunables->lnd_tun_u.lnd_kfi.lnd_traffic_class);
+		nla_put_s32(msg, LNET_NET_KFILND_TUNABLES_ATTR_TIMEOUT,
+			    kfilnd_timeout());
+	}
 
 	return 0;
 }

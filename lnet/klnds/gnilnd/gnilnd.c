@@ -52,7 +52,8 @@ static const struct ln_key_list kgnilnd_tunables_keys = {
 };
 
 static int
-kgnilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
+kgnilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data,
+	       bool export_backup)
 {
 	struct lnet_ni *ni = data;
 
@@ -62,8 +63,9 @@ kgnilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data)
 	if (cmd != LNET_CMD_NETS || type != LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES)
 		return -EOPNOTSUPP;
 
-	nla_put_u32(msg, LNET_NET_GNILND_TUNABLES_ATTR_LND_TIMEOUT,
-		    kgnilnd_timeout());
+	if (!export_backup)
+		nla_put_u32(msg, LNET_NET_GNILND_TUNABLES_ATTR_LND_TIMEOUT,
+			    kgnilnd_timeout());
 	return 0;
 }
 
@@ -74,18 +76,6 @@ kgnilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
-
-	if (!attr)
-		return 0;
-
-	if (nla_type(attr) != LN_SCALAR_ATTR_INT_VALUE)
-		return -EINVAL;
-
-	if (type == LNET_NET_GNILND_TUNABLES_ATTR_LND_TIMEOUT) {
-		s64 timeout = nla_get_s64(attr);
-
-		ni->ni_lnd_tunables.lnd_tun_u.lnd_gni.lnd_timeout = timeout;
-	}
 
 	return 0;
 }

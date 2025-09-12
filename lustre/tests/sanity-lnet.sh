@@ -4047,8 +4047,36 @@ test_241() {
 
 	# Restore tunable timeout to old value
 	do_lnetctl net set --net ${NETTYPE} --lnd-timeout ${old_lnd_to}
+
 }
 run_test 241 "Check setting LND timeout value via lnetctl updates tunables"
+
+test_245() {
+	reinit_dlc || return $?
+
+	add_net ${NETTYPE} ${INTERFACES[0]} || return $?
+
+	local param count paramlist="timeout"
+
+	[[ $NETTYPE != kfi* ]] || paramlist+=" traffic_class_num"
+
+	for param in $paramlist; do
+		echo "Check $param present in net show -v"
+		count=$($LNETCTL net show -v | grep -c " \+$param:")
+
+		((count == 1)) ||
+			error "$param parameter is missing"
+
+		echo "Check $param absent from export -b"
+		count=$($LNETCTL export -b | grep -c " \+$param:")
+
+		((param == 0)) ||
+			error "$param parameter is present"
+	done
+
+	return 0
+}
+run_test 245 "Check read-only params do not appear in export --backup"
 
 ### Test that linux route is added for each ni
 test_250() {

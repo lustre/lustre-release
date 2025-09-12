@@ -343,7 +343,8 @@ struct lnet_lnd {
 				struct lnet_ioctl_config_lnd_cmn_tunables *cmn);
 
 	/* Handle LND specific Netlink handling */
-	int (*lnd_nl_get)(int cmd, struct sk_buff *msg, int type, void *data);
+	int (*lnd_nl_get)(int cmd, struct sk_buff *msg, int type, void *data,
+			  bool export_backup);
 	int (*lnd_nl_set)(int cmd, struct nlattr *attr, int type, void *data);
 
 		/* find cached metadata associated with nid */

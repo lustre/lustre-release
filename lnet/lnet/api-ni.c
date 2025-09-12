@@ -6080,7 +6080,7 @@ skip_msg_stats:
 					lnd_ni_tun = nla_nest_start(msg, 0);
 					rc = lnd->lnd_nl_get(LNET_CMD_NETS, msg,
 							     LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES,
-							     ni);
+							     ni, export_backup);
 					if (rc < 0) {
 						NL_SET_ERR_MSG(extack,
 							       "failed to get lnd tunables");
