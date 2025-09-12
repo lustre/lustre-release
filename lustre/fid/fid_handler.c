@@ -313,7 +313,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 restart:
 	rc = seq_server_check_and_alloc_super(env, seq);
 	if (rc < 0) {
-		if (rc == -EINPROGRESS) {
+		if (rc == -EINPROGRESS || rc == -EAGAIN) {
 			static int printed;
 
 			if (printed++ % 8 == 0)

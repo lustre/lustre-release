@@ -208,7 +208,7 @@ static int seq_client_alloc_seq(const struct lu_env *env,
 	if (lu_seq_range_is_exhausted(&seq->lcs_space)) {
 		rc = seq_client_alloc_meta(env, seq);
 		if (rc) {
-			if (rc != -EINPROGRESS)
+			if (rc != -EINPROGRESS && rc != -EAGAIN)
 				CERROR("%s: Cannot allocate new meta-sequence: rc = %d\n",
 				       seq->lcs_name, rc);
 			RETURN(rc);
@@ -311,7 +311,7 @@ int seq_client_alloc_fid(const struct lu_env *env,
 
 		rc = seq_client_alloc_seq(env, seq, &seqnr);
 		if (rc) {
-			if (rc != -EINPROGRESS)
+			if (rc != -EINPROGRESS && rc != -EAGAIN)
 				CERROR("%s: Can't allocate new sequence: rc = %d\n",
 				       seq->lcs_name, rc);
 		} else {
