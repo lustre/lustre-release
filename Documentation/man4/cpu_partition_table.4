@@ -1,0 +1,49 @@
+.TH CPU_PARTITION_TABLE 4 2025-09-15 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+cpu_partition_table \- Display of the CPU format
+.SH SYNOPSIS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 444 " | " -r--r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.SH DESCRIPTION
+.B cpu_partition_table
+is a representation of how the CPU cores are distributed across mutliple
+partitions. The table is formatted as follows:
+.EX
+PART0	: CPU_CORE [CPU_CORE ...]
+PART1	: CPU_CORE [CPU_CORE ...]
+\&...
+.EE
+where
+.IR PART0 ", " PART1 ,
+etc. are the partition numbers and CPU_CORE is the
+id of the CPU core.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B cpu_partition_table
+.EE
+.SH EXAMPLES
+The default CPT layout puts 4 cores in each partition, for a system with 16
+cores:
+.EX
+.B cpu_partition_table=0	: 0 1 2 3
+1	: 4 5 6 7
+2	: 8 9 10 11
+3	: 12 13 14 15
+.EE
+.SH AVAILABILITY
+.B cpu_partition_table
+is part of the
+.BR lustre (7)
+filesystem package.
+.\" commit #
+.SH SEE ALSO
+.BR cpu_partition_distance (4)

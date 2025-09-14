@@ -1246,6 +1246,114 @@ int jt_lctl_findparam(int argc, char **argv)
 	return rc;
 }
 
+/**
+ * Modifies param to remove any device name.
+ * Ex. NNN.lustre-OST0000.MMM -> NNN.MMM
+ * \param[in] param	parameter name
+ *
+ * \retval 0		success
+ * \retval -errno	error
+ */
+static int man_path(char *param)
+{
+	char *tmp;
+	char *dot;
+	char *dot2;
+
+	tmp = strstr(param, "llite");
+	if (tmp) {
+		dot = strchr(tmp, '.');
+		if (!dot) {
+			*tmp = '\0';
+			return 0;
+		}
+		if (tmp == param)
+			param = dot + 1;
+	}
+
+	dot = strchr(param, '.');
+	while (dot) {
+		dot2 = strchr(dot + 1, '.');
+		tmp = strchr(dot, '-');
+		if (tmp) {
+			if (!dot2) {
+				*tmp = '\0';
+				break;
+			}
+			if (tmp < dot2) {
+				memmove(dot+1, dot2+1, strlen(dot2+1) + 1);
+				dot = dot2;
+			}
+		}
+		tmp = strchr(dot, '@');
+		if (tmp) {
+			if (!dot2) {
+				*tmp = '\0';
+				break;
+			}
+			if (tmp < dot2) {
+				memmove(dot+1, dot2+1, strlen(dot2+1) + 1);
+				dot = dot2;
+			}
+		}
+		dot = dot2;
+	}
+
+	return 0;
+}
+
+static int helpparam_cmdline(int argc, char **argv, struct param_opts *popt)
+{
+	popt->po_show_name = 0;
+	popt->po_only_name = 1;
+	popt->po_follow_symlinks = 1;
+	popt->po_merge = 1;
+	popt->po_dshbak = 1;
+
+	return param_out_cmdline(argc, argv, popt, "");
+}
+
+int jt_lctl_helpparam(int argc, char **argv)
+{
+	int rc = 0, index;
+	struct param_opts popt;
+	char *path;
+
+	memset(&popt, 0, sizeof(popt));
+	index = helpparam_cmdline(argc, argv, &popt);
+	if (index != argc - 1)
+		return CMD_HELP;
+
+	path = strdup(argv[index]);
+
+	rc = jt_clean_path(&popt, path);
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: cleaning '%s': %s\n",
+			jt_cmdname(argv[0]), path, strerror(-rc));
+		goto out;
+	}
+
+	rc = do_param_op(&popt, path, NULL, LIST_PARAM, NULL);
+	if (rc < 0) {
+		if (rc == -ENOENT && getuid() != 0) {
+			rc = llapi_param_display_value(path, 0,
+						       PARAM_FLAGS_SHOW_SOURCE,
+						       stdout);
+		}
+		if (rc < 0)
+			rc = execlp("man", "man", argv[index], NULL);
+		goto out;
+	}
+
+	man_path(argv[index]);
+
+	rc = execlp("man", "man", argv[index], NULL);
+
+out:
+	free(path);
+	return rc;
+}
+
 static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
 	popt->po_show_name = 1;

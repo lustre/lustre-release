@@ -1,0 +1,61 @@
+.TH CPU_PARTITION_DISTANCE 4 2025-09-15 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+cpu_partition_distance \-
+.SH SYNOPSIS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 444 " | " -r--r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.SH DESCRIPTION
+.B cpu_partition_distance
+shows the maximum NUMA distance between all source nodes to all destination
+nodes in each partition. The distance values are used to determine the best
+network interface for each thread to use when sending messages,
+in order to minimize cross-NUMA memory access.
+The NUMA distance reported between two nodes the ratio of the latency to access
+memory on the destination node from the source node compared to that of
+accessing local memory, the values are normalized to 10 (1.0x) meaning that if
+the distance between two nodes is
+.IR DIST ,
+then there will be
+.RI ( DIST /10)x
+more latency to access remote memory.
+These values are taken from `/sys/devices/system/node/*/distance`
+parameters provided by the kernel.
+.PP
+The distance output is formatted as follows:
+.EX
+CPT0	: CPT0:DIST00 CPT1:DIST01 ...
+CPT1	: CPT0:DIST10 CPT1:DIST11 ...
+\&...
+.EE
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B cpu_partition_distance
+.EE
+.SH EXAMPLES
+For a system with 4 partitions:
+.RS
+.EX
+cpu_partition_distance=
+0	: 0:10 1:12 2:10 3:11
+1	: 0:12 1:10 2:14 3:10
+2	: 0:10 1:14 2:10 3:11
+3	: 0:11 1:10 2:11 3:10
+.EE
+.RE
+.SH AVAILABILITY
+.B cpu_partition_distance
+is part of the
+.BR lustre (7)
+filesystem package.
+.\" commit #
+.SH SEE ALSO
+.BR cpu_partition_table (4)

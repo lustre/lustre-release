@@ -1,0 +1,40 @@
+.TH LCTL-HELP_PARAM 8 "2025-09-17" Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-help_param \- show documentation for Lustre parameters
+.SH SYNOPSIS
+.SY "lctl help_param"
+.I PARAM
+.YS
+.SH DESCRIPTION
+Opens the man page documentation for
+.IR PARAM .
+This is helpful because the man page files do not always match the parameter
+name since the OBD-device-specific part of the parameter is excluded from the
+man page title. Additionally, the tab completion support allows users to look
+through each subset of parameters if they are not sure of the exact name.
+.SH OPTIONS
+.B lctl help_param
+does not currently support any options.
+.SH EXAMPLES
+Find which params are available for fld.cli-*:
+.EX
+.RS
+.B # lctl help_param fld.cli-lustre-clilmv-ffff907f78edc000.
+.I fld.cli-lustre-clilmv-ffff907f78edc000.cache_flush
+.I fld.cli-lustre-clilmv-ffff907f78edc000.hash
+.I fld.cli-lustre-clilmv-ffff907f78edc000.targets
+.RE
+.EE
+.SH AVAILABILITY
+.B lctl help_param
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0
+.\" Added in commit v2_17_5x
+.SH SEE ALSO
+.BR lfs (1),
+.BR lustre (7),
+.BR lctl-find_param (8),
+.BR lctl-get_param (8),
+.BR lctl-list_param (8),
+.BR lctl-set_param (8)

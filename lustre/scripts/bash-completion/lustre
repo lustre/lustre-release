@@ -300,13 +300,15 @@ _lctl()
 		fi
 		return 0
 		;;
-	get_param|list_param|set_param)
+	get_param|list_param|set_param|find_param|help_param)
 		local filter="s/=$//"
+		local opts=""
 		[[ "$sub" == "set_param" ]] && filter="/[^=/]$/d"
+		[[ "$sub" == "help_param" ]] && opts="-b"
 		mapfile -t COMPREPLY < <(
-		    "$cmd" list_param -F "${cur#[\"\']}*" 2>/dev/null |
+		    "$cmd" list_param -F $opts "${cur#[\"\']}*" 2>/dev/null |
 		    sed -e "$filter" -e 's#/$#.#' \
-			-e "s#^${cur//\*/[^.]*}#$cur#"
+		        -e "s#^${cur//\*/[^.]*}#$cur#"
 		)
 		compopt -o nospace
 

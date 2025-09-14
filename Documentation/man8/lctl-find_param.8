@@ -3,6 +3,7 @@
 lctl-find_param \- search for parameters matching patterns
 .SH SYNOPSIS
 .SY "lctl find_param"
+.RB [ --dshbak | -b ]
 .RB [ --color | "-c auto" | always | never ]
 .RB [ --links | -l ]
 .RB [ --no-links | -L ]
@@ -22,6 +23,13 @@ This command is equivalent to
 The various options supported by
 .B lctl find_param
 are listed and explained below:
+.TP
+.BR -b ", " --dshbak
+Aggregate parameters with wildcards whenever a device number appears in the
+parameter name.
+By default --merge is enabled with this option to merge the simplified names.
+Specify --no-merge if you want the parameter names with wildcards but do not
+want them to be merged.
 .TP
 .BR -c ", " --color=auto|always|never
 Use one of auto|always|never as the rule of when to apply color. The default is

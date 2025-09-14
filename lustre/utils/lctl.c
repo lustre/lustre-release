@@ -466,52 +466,48 @@ command_t cmdlist[] = {
 	 "usage: recover [MDC/OSC device]"},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	{"conf_param", jt_lcfg_confparam, 0,
-	 "set a permanent config parameter.\n"
-	 "This command must be run on the MGS node\n"
+	 "set a permanent config parameter, must be run on the MGS node.\n"
 	 "usage: conf_param [-d] <target.keyword=val>\n"
 	 "  -d  Delete the permanent setting from the configuration."},
 #endif
 	{"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
-	 "usage: get_param [--dshbak|-b] [--color|-c auto|always|never]\n"
-	 "		   [--classify|-F] [--header|-H] [--links|-l]\n"
-	 "		   [--no-links|-L] [--no-name|-n] [--only-name|-N]\n"
-	 "		   [--merge|-m] [--no-merge|-M] [--module|-o]\n"
-	 "		   [--path|-p] [--readable|-r] [--recursive|-R]\n"
-	 "		   [--only-tunable|-t] [--writable|-w] [--yaml|-y]\n"
-	 "		   PARAM1 [PARAM2 ...]\n"
-	 "Get the value of Lustre or LNET parameter from the specified path.\n"
-	 "The path can contain shell-style filename patterns.\n"},
+	 "get value of Lustre or LNet parameter(s) from specified path,\n"
+	 "which can contain shell-style filename patterns.\n"
+	 "usage: get_param [--dshbak|-b] [--color|-c auto|always|never] [--classify|-F]\n"
+	 "                 [--header|-H] [--links|-l] [--no-links|-L]\n"
+	 "                 [--merge|-m] [--no-merge|-M] [--no-name|-n] [--only-name|-N]\n"
+	 "                 [--module|-o] [--path|-p] [--readable|-r] [--recursive|-R]\n"
+	 "                 [--only-tunable|-t] [--writable|-w] [--yaml|-y]\n"
+	 "                 PARAM1 [PARAM2 ...]\n"},
 	{"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-	 "usage: set_param [--client|-C[FSNAME]] [--delete|-d]\n"
-	 "		   [--file|-F YAML_PARAM FILE] [--module|-o]\n"
-	 "		   [--no-name|-n] [--permanent|-P]"
+	 "set the value of the Lustre or LNET parameter at the specified path.\n"
+	 "usage: set_param [--client|-C[FSNAME]] [--delete|-d] [--no-name|-n]\n"
+	 "		   [--file|-F YAML_PARAM FILE] [--module|-o] [--permanent|-P]\n"
 #ifdef HAVE_LIBPTHREAD
 	 " [--thread|-t[THREAD_COUNT]]"
 #endif
 	 "\n"
-	 "		 PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"
-	 "Set the value of the Lustre or LNET parameter at the specified path.\n"},
+	 "		 PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"},
 	{"apply_yaml", jt_lcfg_applyyaml, 0, "alias for 'set_param -F'\n"
 	 "usage: apply_yaml YAML_PARAM_FILE\n"},
 	{"list_param", jt_lcfg_listparam, 0,
-	 "list the Lustre or LNET parameter name\n"
+	 "list the name of Lustre or LNet parameter from the specified path.\n"
 	 "usage: list_param [--dshbak|-b] [--color|-c auto|always|never]\n"
-	 "		    [--only-dir|-D] [--classify|-F] [--links|-l]\n"
-	 "		    [--no-links|-L] [--merge|-m] [--no-merge|-M]\n"
-	 "		    [--module|-o] [--path|-p] [--readable|-r]\n"
-	 "		    [--recursive|-R] [--only-tunable|-t] [--writable|-w]\n"
-	 "		    PARAM1 [PARAM2 ...]\n"
-	 "List the name of Lustre or LNet parameter from the specified path.\n"},
-	 {"find_param", jt_lctl_findparam, 0,
-	 "find the Lustre or LNet parameter names matching a pattern\n"
-	 "usage: find_param [--color|-c auto|always|never] [--links|-l]\n"
-	 "		    [--no-links|-L] [--no-name|-n] [--only-name|-N]\n"
-	 "		    [--merge|-m] [--no-merge|-M] [--module|-o] [--path|-p]\n"
-	 "		    PATTERN1 [PATTERN2 ...]\n"
-	 "Search recursively for parameters matching the given pattern(s).\n"},
+	 "                  [--only-dir|-D] [--classify|-F] [--links|-l] [--no-links|-L]\n"
+	 "                  [--merge|-m] [--no-merge|-M] [--module|-o] [--path|-p]\n"
+	 "                  [--readable|-r] [--recursive|-R] [--only-tunable|-t]\n"
+	 "                  [--writable|-w] PARAM1 [PARAM2 ...]\n"},
+	{"find_param", jt_lctl_findparam, 0,
+	 "search recursively for parameters matching the given pattern(s).\n"
+	 "usage: find_param [--dshbak|-b] [--color|-c auto|always|never] [--links|-l]\n"
+	 "                  [--no-links|-L] [--merge|-m] [--no-merge|-M] [--path|-p]\n"
+	 "                  [--no-name|-n] [--only-name|-N] PATTERN1 [PATTERN2 ...]\n"},
+	{"help_param", jt_lctl_helpparam, 0,
+	 "usage: help_param PARAM\n"
+	 "Show help for the specified Lustre or LNet parameter.\n"},
 	{"del_ost", jt_del_ost, 0, "permanently delete OST records\n"
-	 "usage: del_ost [--dryrun] --target FSNAME-OSTxxxx\n"
-	 "Cancel the config records for a specific OST to forget about it.\n"},
+	 "cancel records from MGS config logs to remove an OST permanently.\n"
+	 "usage: del_ost [--dryrun] --target FSNAME-OSTxxxx\n"},
 
 	/* Debug commands */
 	{"==== debugging control ====", NULL, 0, "debug"},
