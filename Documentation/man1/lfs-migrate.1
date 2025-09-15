@@ -14,10 +14,13 @@ lfs-migrate \- migrate files or directories between MDTs or OSTs.
 .I DIRECTORY
 .YS
 .SH DESCRIPTION
-Migrate OST objects between OSTs for the file(s) specified by \fIFILES_FROM\fR,
-or recursively migrate
+Migrate OST objects between OSTs for the file(s) specified by
+.IR FILES_FROM ,
+or with
+.B -m
+migrate
 .I DIRECTORY
-and all inodes/directories therein between MDTs.
+and all inodes/subdirectories therein to other MDTs (recursively by default).
 
 .SH OPTIONS
 .SS OST MIGRATE OPTIONS
@@ -29,6 +32,7 @@ hardware reasons), to change the stripe count or other layout parameters
 of a file (e.g. to increase the bandwidth of a file by striping it over
 multiple OSTs), or to move the file between different classes of storage
 (e.g. SSD vs. HDD OSTs, or local vs. remote OSTs in different pools).
+.P
 .IR FILES_FROM
 may be:
 .TP
@@ -41,10 +45,16 @@ Read file names from stdin by default. Each file name is followed by a NUL char.
 Usually is used after a pipeline from \fBlfs find --print0\fR command.
 .TP
 .BR --files-from = \fILIST_FILE
-Read file names from file \fILIST_FILE\fR. One line for each file name.
-If \fILIST_FILE\fR is \fB-\fR, read from stdandard input.
-If \fB--null\fR is also specified, file names are separated by a NUL char.
-
+Read file names from file
+.IR LIST_FILE .
+One line for each file name.  If
+.I LIST_FILE
+is
+.BR - ,
+read filenames from standard input.
+If
+.B --null
+is also specified, file names are separated by a NUL char in the input.
 .P
 In OST object migration mode, the command supports the same
 .I SETSTRIPE_OPTIONS
@@ -147,14 +157,14 @@ for details.
 .BR -m ", " --mdt-index=\fIMDT_INDEX [, \fIMDT_INDEX ,...]
 The specified
 .I DIRECTORY
-.B and all subdirectories and inodes
+.B and (by default) all subdirectories and inodes
 will be migrated to the MDT with the specified
 .IR MDT_INDEX .
 This is useful if new MDTs have been added to a filesystem and existing user or
 project directories should be migrated off old MDTs to balance the space usage
 and future metadata workload. If
 .I MDT_INDEX
-is -1, the MDT index will be balanced by free space and inodes among
+is -1, the MDT index will be selected to balance by free space and inodes among
 available MDTs. If multiple
 .I MDT_INDEX
 values are specified in a comma-separated list, then all
@@ -162,7 +172,9 @@ subdirectories will be
 .B striped
 across all of the specified MDT indices as if an equivalent
 .BI -c N
-option were given.
+option were given.  This is typically
+.B NOT
+what you want to do.
 .TP
 .BR -c ", " --mdt-count= \fICOUNT
 All directories and subdirectories in the tree will be striped across
@@ -213,9 +225,22 @@ reasonably uniform, but not cryptographically strong,
 hashing of the filename. (default)
 .TP
 .B crush (type 3)
-CRUSH hash algorithm. This is a consistent hash
-algorithm, so minimum sub files need to relocate
-during directory restripe.
+CRUSH hash algorithm. This is a consistent hash algorithm,
+so minimum sub files need to relocate during directory restripe.
+.TP
+.B crush2 (type 4)
+CRUSH hash algorithm (as above),
+with optimizations that allow temporary names created by the
+.IR mktemp (3)
+family of functions to have both temporary and final names hash
+to the same MDT index.
+This allows renaming the temporary name to the final name without
+creating a remote directory entry or doing a cross-MDT rename (e.g.
+.B test_foo.XXXXXX
+or
+.B .test_foo.XXXXXXXXXX
+is on the same MDT as
+.BR test_foo ).
 .RE
 .SS NOTES
 Only the root user can migrate directories. Files that have been archived by
@@ -259,7 +284,7 @@ file size):
 .PP
 Recursively move the subdirectories and inodes contained in directory
 .B remotedir
-from its current MDT to MDT0000 and MDT0002. The
+from its current MDT to a 2-striped directory on MDT0000 and MDT0002. The
 .B testremote
 directory and all of its subdirectories will be striped across both MDTs:
 .EX

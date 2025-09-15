@@ -14,20 +14,16 @@ lfs-mirror-extend \- add mirror(s) to an existing file
 .I FILES_FROM
 .YS
 .SH DESCRIPTION
-This command adds mirror(s) to existing file(s) specified by \fIFILES_FROM\fR.
+This command adds mirror(s) to existing file(s) specified by
+.IR FILES_FROM .
 .P
-The file to be extended can already be a mirrored file, or just a regular
-non-mirrored file. If it's a non-mirrored file, the command will convert it
-to a mirrored file.
+The file(s) to be extended can already be a mirrored file,
+or just a regular non-mirrored file.
+If it's a non-mirrored file,
+then the command will convert it to a mirrored file.
 .P
 .I FILES_FROM
 may be:
-.TP
-.BR -0 ", " --null
-Read file names from stdin by default. Each file name is followed by a NUL char.
-Usually is used after a pipeline from
-.B 'lfs find --print0'
-command.
 .TP
 .IR FILENAME " [" FILENAME " ...]"
 File names are listed on command line.
@@ -49,14 +45,13 @@ is
 .RB ' - ',
 read from stdin.
 If
-.B--null
+.B --null
 is specified at the same time,
 file names are separated by a NUL char.
-.P
-The
+.TP
 .I SETSTRIPE_OPTIONS
-specify the specific layout for the mirror. These are the same options that are
-used by
+specify the specific layout for the mirror.
+These are the same options that are used by
 .BR lfs-setstripe (1).
 If
 .I SETSTRIPE_OPTIONS
@@ -75,13 +70,13 @@ But if
 .BR --aio-tasks =0,
 the default value is 64 (MB).
 .TP
-.BR --fid ", " -F
+.BR -F ", " --fid
 FID(s) are provided from command
 .RI line/stdin/ LIST_FILE
 instead of file path(s). Option
 .BR --lustre-dir =\c
 .I LUSTRE_MOUNT_POINT
-may be specified at the same time.
+must be specified at the same time.
 .TP
 .BR -f ", " --file " " \fIVICTIM_FILE
 First, the contents of
@@ -101,14 +96,7 @@ Once the command is complete
 .I VICTIM_FILE
 will be removed.
 This option cannot be specified with
-.I SETSTRIPE_OPTIONS
-option.
-.TP
-.BR --lustre-dir = \fILUSTRE_MOUNT_POINT
-The mount point of Lustre file system on which FIDs are.
-If there is only one mounted Lustre file system, this option is not necessary.
-This option must be specified together with
-.BR --fid .
+.IR SETSTRIPE_OPTIONS .
 .TP
 .BR -N ", " --mirror-count [[ = ] \fIMIRROR_COUNT ]
 Specifies that the next
@@ -116,8 +104,8 @@ Specifies that the next
 mirrors will have the following layout. This option can be repeated multiple
 times to separate mirrors that have different layouts. The
 .I MIRROR_COUNT
-argument is optional and will default to 1 if not specified. This lets a single
-mirror be specified easily with
+argument is optional and will default to 1 if not specified.
+This lets a single mirror be specified easily with
 .BR -N .
 The
 .BR --mirror-count | -N
@@ -138,19 +126,6 @@ number of mirrors in the layout is at least
 This also means that if there are already at least
 .I TOTAL_MIRROR_COUNT
 mirrors in the layout then no new mirrors will be created.
-.TP
-.I SETSTRIPE_OPTIONS
-These options specify the layout of the mirrors,
-they can be a plain layout with specific striping pattern
-or a composite layout like Progressive File Layout (PFL) (see
-.BR lfs-setstripe (1)).
-If
-.I SETSTRIPE_OPTIONS
-are not specified, then the stripe options inherited
-from the previous component will be used. This option cannot be specified with
-.B -f
-.I VICTIM_FILE
-option.
 .TP
 .BR --no-verify
 This option indicates not to verify the mirror(s) from victim file(s) in case
