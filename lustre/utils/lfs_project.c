@@ -73,7 +73,7 @@ static int project_get_fsxattr(const char *pathname, struct fsxattr *fsx,
 
 	ret = lstat(pathname, st);
 	if (ret) {
-		fprintf(stderr, "%s: failed to stat '%s': %s\n",
+		fprintf(stderr, "%s: failed to lstat '%s': %s\n",
 			progname, pathname, strerror(errno));
 		ret = -errno;
 		goto out;
@@ -333,9 +333,9 @@ static int lfs_project_iterate(const char *pathname,
 	int ret = 0;
 	int rc = 0;
 
-	ret = stat(pathname, &st);
+	ret = lstat(pathname, &st);
 	if (ret) {
-		fprintf(stderr, "%s: failed to stat '%s': %s\n",
+		fprintf(stderr, "%s: failed to lstat '%s': %s\n",
 			progname, pathname, strerror(errno));
 		return ret;
 	}

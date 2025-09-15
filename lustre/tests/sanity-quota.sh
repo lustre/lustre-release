@@ -5128,21 +5128,26 @@ test_64() {
 	touch $dir1/file
 	ln -s $dir1/file $dir1/file_link
 	ln -s bad $dir1/bad_link
-	ln -s self $dir1/self_link
+	ln -s self_link $dir1/self_link
 	mkfifo $dir1/fifo
 
-	$LFS project -srp $TSTPRJID $dir1 >&/dev/null ||
+	$LFS project -p $((TSTPRJID-1)) $dir1/bad_link ||
+		error "set project on bad link should succeed"
+	$LFS project -p $((TSTPRJID-1)) $dir1/self_link ||
+		error "set project on recursive link should succeed"
+
+	$LFS project -srp $TSTPRJID $dir1 ||
 		error "set project should succeed"
 
 	used=$(getquota -p $TSTPRJID global curinodes)
-	(( $used == 6 )) || error "expected 4 got $used"
-	$LFS project -rC $dir1 >&/dev/null ||
+	(( $used == 6 )) || error "expected 6 got $used"
+	$LFS project -rC $dir1 ||
 		error "clear project should succeed"
 
 	used=$(getquota -p $TSTPRJID global curinodes)
 	(( $used == 0 )) || error "expected 0 got $used"
 }
-run_test 64 "lfs project on non dir/files should succeed"
+run_test 64 "lfs project on non-dir/files should succeed"
 
 test_65() {
 	local SIZE=10 # MB
