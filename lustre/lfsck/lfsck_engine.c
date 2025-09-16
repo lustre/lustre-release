@@ -18,6 +18,7 @@
 #include <lustre_fid.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
+#include <lu_target.h>
 
 #include "lfsck_internal.h"
 
@@ -569,7 +570,7 @@ static int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
 	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, false);
 	lfsck_close_dir(env, lfsck, result);
 
-	while (thread_is_running(&lfsck->li_thread) && rc > 0 &&
+	while (!lfsck_should_stop(lfsck) && rc > 0 &&
 	       !list_empty(&lfsck->li_list_lmv)) {
 		struct lfsck_lmv_unit *llu;
 
@@ -621,8 +622,8 @@ static int lfsck_double_scan(const struct lu_env *env,
 			rc1 = rc;
 	}
 
-	wait_event_idle(lfsck->li_thread.t_ctl_waitq,
-			atomic_read(&lfsck->li_double_scan_count) == 0);
+	wait_var_event(lfsck, atomic_read(&lfsck->li_double_scan_count) == 0 ||
+			lfsck_should_stop(lfsck));
 
 	if (lfsck->li_status != LS_PAUSED &&
 	    lfsck->li_status != LS_CO_PAUSED) {
@@ -675,21 +676,19 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 	struct dt_it *di = lfsck->li_di_dir;
 	struct lu_dirent *ent = (struct lu_dirent *)info->lti_key;
 	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
-	struct ptlrpc_thread *thread = &lfsck->li_thread;
 	struct lfsck_assistant_object *lso = NULL;
-	int rc;
+	int rc = 0;
 	__u16 type;
 
 	ENTRY;
-	do {
-		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY2, cfs_fail_val) &&
-		    unlikely(!thread_is_running(thread))) {
+	while (rc == 0 && !lfsck_should_stop(lfsck)) {
+		if (LFSCK_FAIL_TIMEOUT(lfsck, OBD_FAIL_LFSCK_DELAY2,
+				       cfs_fail_val)) {
 			CDEBUG(D_LFSCK,
 			       "%s: scan dir exit for engine stop, parent "DFID", cookie %#llx\n",
 			       lfsck_lfsck2name(lfsck),
 			       PFID(lfsck_dto2fid(dir)), lfsck->li_cookie_dir);
-
-			GOTO(out, rc = 0);
+			GOTO(out, rc);
 		}
 
 		lfsck->li_new_scanned++;
@@ -746,21 +745,8 @@ checkpoint:
 
 		/* Rate control. */
 		lfsck_control_speed(lfsck);
-		if (unlikely(!thread_is_running(thread))) {
-			CDEBUG(D_LFSCK,
-			       "%s: scan dir exit for engine stop, parent "DFID", cookie %#llx\n",
-			       lfsck_lfsck2name(lfsck),
-			       PFID(lfsck_dto2fid(dir)),
-			       lfsck->li_cookie_dir);
-			GOTO(out, rc = 0);
-		}
-
-		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2)) {
-			spin_lock(&lfsck->li_lock);
-			thread_set_flags(thread, SVC_STOPPING);
-			spin_unlock(&lfsck->li_lock);
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2))
 			GOTO(out, rc = -EINVAL);
-		}
 
 		rc = iops->next(env, di);
 		if (rc < 0)
@@ -768,7 +754,7 @@ checkpoint:
 			       "%s dir engine fail to locate next for the directory "DFID": rc = %d\n",
 			       lfsck_lfsck2name(lfsck),
 			       PFID(&lfsck->li_pos_current.lp_dir_parent), rc);
-	} while (rc == 0);
+	}
 
 	if (rc > 0 && !lfsck->li_oit_over)
 		lfsck_close_dir(env, lfsck, rc);
@@ -812,16 +798,16 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 	struct dt_it *di = lfsck->li_di_oit;
 	struct lu_fid *fid = &info->lti_fid;
 	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
-	struct ptlrpc_thread *thread = &lfsck->li_thread;
 	struct seq_server_site *ss = lfsck_dev_site(lfsck);
 	__u32 idx = lfsck_dev_idx(lfsck);
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 	if (unlikely(ss == NULL))
 		RETURN(-EIO);
 
-	do {
+	while (!lfsck_should_stop(lfsck) &&
+	       (rc == 0 || lfsck->li_di_dir != NULL)) {
 		struct dt_object *target;
 
 		if (lfsck->li_di_dir != NULL) {
@@ -833,12 +819,11 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 		if (unlikely(lfsck->li_oit_over))
 			RETURN(1);
 
-		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY1, cfs_fail_val) &&
-		    unlikely(!thread_is_running(thread))) {
+		if (LFSCK_FAIL_TIMEOUT(lfsck, OBD_FAIL_LFSCK_DELAY1,
+				       cfs_fail_val)) {
 			CDEBUG(D_LFSCK,
 			       "%s: OIT scan exit for engine stop, cookie %llu\n",
 			       lfsck_lfsck2name(lfsck), iops->store(env, di));
-
 			RETURN(0);
 		}
 
@@ -967,12 +952,8 @@ checkpoint:
 		/* Rate control. */
 		lfsck_control_speed(lfsck);
 
-		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL1)) {
-			spin_lock(&lfsck->li_lock);
-			thread_set_flags(thread, SVC_STOPPING);
-			spin_unlock(&lfsck->li_lock);
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL1))
 			RETURN(-EINVAL);
-		}
 
 		rc = iops->next(env, di);
 		if (unlikely(rc > 0))
@@ -984,15 +965,7 @@ checkpoint:
 			       "%s oit engine fail to locate next at %llu: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), iops->store(env, di),
 			       rc);
-
-		if (unlikely(!thread_is_running(thread))) {
-			CDEBUG(D_LFSCK,
-			       "%s: OIT scan exit for engine stop, cookie %llu\n",
-			       lfsck_lfsck2name(lfsck), iops->store(env, di));
-			RETURN(0);
-		}
-	} while (rc == 0 || lfsck->li_di_dir != NULL);
-
+	}
 	RETURN(rc);
 }
 
@@ -1001,26 +974,26 @@ int lfsck_master_engine(void *args)
 	struct lfsck_thread_args *lta = args;
 	struct lu_env *env = &lta->lta_env;
 	struct lfsck_instance *lfsck = lta->lta_lfsck;
-	struct ptlrpc_thread *thread = &lfsck->li_thread;
 	struct dt_object *oit_obj = lfsck->li_obj_oit;
 	const struct dt_it_ops *oit_iops = &oit_obj->do_index_ops->dio_it;
 	struct dt_it *oit_di;
 	int rc;
 
 	ENTRY;
-	/*
-	 * thread is spawned with all signals set to SIG_IGN, re-enable
-	 * SIGINT for lfsck_stop() to awaken and stop the thread.
+	/* incase lfsck thread falls in loop of sending RPC, allow signal to
+	 * interrupt it.
 	 */
 	allow_signal(SIGINT);
-	spin_lock(&lfsck->li_lock);
-	lfsck->li_task = current;
-	spin_unlock(&lfsck->li_lock);
+
+	wait_var_event(lfsck, lfsck->li_start_unplug || kthread_should_stop());
+	if (kthread_should_stop())
+		GOTO(fini_args, rc = 0);
 
 	/* There will be some objects verification during the LFSCK start,
 	 * such as the subsequent lfsck_verify_lpf(). Trigger low layer OI
 	 * OI scrub before that to handle the potential inconsistence.
 	 */
+
 	oit_di = oit_iops->init(env, oit_obj, lfsck->li_args_oit);
 	if (IS_ERR(oit_di)) {
 		rc = PTR_ERR(oit_di);
@@ -1053,28 +1026,15 @@ int lfsck_master_engine(void *args)
 		GOTO(fini_oit, rc);
 
 	CDEBUG(D_LFSCK,
-	       "LFSCK entry: oit_flags = %#x, dir_flags = %#x, oit_cookie = %llu, dir_cookie = %#llx, parent = "DFID", pid = %d\n",
-	       lfsck->li_args_oit, lfsck->li_args_dir,
+	       "%s entry: oit_flags = %#x, dir_flags = %#x, oit_cookie = %llu, dir_cookie = %#llx, parent = "DFID", pid = %d\n",
+	       lfsck_lfsck2name(lfsck), lfsck->li_args_oit, lfsck->li_args_dir,
 	       lfsck->li_pos_checkpoint.lp_oit_cookie,
 	       lfsck->li_pos_checkpoint.lp_dir_cookie,
 	       PFID(&lfsck->li_pos_checkpoint.lp_dir_parent),
 	       current->pid);
 
-	spin_lock(&lfsck->li_lock);
-	if (unlikely(!thread_is_starting(thread))) {
-		spin_unlock(&lfsck->li_lock);
-		GOTO(fini_oit, rc = 0);
-	}
-
-	thread_set_flags(thread, SVC_RUNNING);
-	spin_unlock(&lfsck->li_lock);
-	wake_up(&thread->t_ctl_waitq);
-
-	wait_event_idle(thread->t_ctl_waitq,
-			lfsck->li_start_unplug ||
-			!thread_is_running(thread));
-	if (!thread_is_running(thread))
-		GOTO(fini_oit, rc = 0);
+	lfsck->li_master_ready = 1;
+	wake_up_var(lfsck);
 
 	if (!list_empty(&lfsck->li_list_scan) ||
 	    list_empty(&lfsck->li_list_double_scan))
@@ -1084,8 +1044,9 @@ int lfsck_master_engine(void *args)
 
 	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, false);
 	CDEBUG(D_LFSCK,
-	       "LFSCK exit: oit_flags = %#x, dir_flags = %#x, oit_cookie = %llu, dir_cookie = %#llx, parent = "DFID", pid = %d: rc = %d\n",
-	       lfsck->li_args_oit, lfsck->li_args_dir,
+	       "%s %p exit: oit_flags = %#x, dir_flags = %#x, oit_cookie = %llu, dir_cookie = %#llx, parent = "DFID", pid = %d: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), current, lfsck->li_args_oit,
+	       lfsck->li_args_dir,
 	       lfsck->li_pos_checkpoint.lp_oit_cookie,
 	       lfsck->li_pos_checkpoint.lp_dir_cookie,
 	       PFID(&lfsck->li_pos_checkpoint.lp_dir_parent),
@@ -1111,13 +1072,11 @@ fini_oit:
 	/* XXX: Purge the pinned objects in the future. */
 
 fini_args:
-	spin_lock(&lfsck->li_lock);
-	thread_set_flags(thread, SVC_STOPPED);
-	lfsck->li_task = NULL;
-	spin_unlock(&lfsck->li_lock);
-	wake_up(&thread->t_ctl_waitq);
 	lfsck_thread_args_fini(lta);
-	return rc;
+	if (xchg(&lfsck->li_task, NULL) == NULL)
+		wait_var_event(lfsck, kthread_should_stop());
+	wake_up_var(lfsck);
+	RETURN(rc);
 }
 
 static inline bool lfsck_assistant_req_empty(struct lfsck_assistant_data *lad)
@@ -1190,7 +1149,7 @@ again:
 
 	laia->laia_ltds = ltds;
 	spin_lock(&ltds->ltd_lock);
-	while (!list_empty(phase_head)) {
+	while (!list_empty(phase_head) && !lfsck_should_stop(lfsck)) {
 		struct list_head *phase_list;
 		__u32		 *gen;
 
@@ -1571,10 +1530,10 @@ int lfsck_assistant_engine(void *args)
 	struct lfsck_thread_info *info = lfsck_env_info(env);
 	struct lfsck_request *lr = &info->lti_lr;
 	struct lfsck_assistant_data *lad = com->lc_data;
-	struct ptlrpc_thread *mthread = &lfsck->li_thread;
-	struct ptlrpc_thread *athread = &lad->lad_thread;
 	const struct lfsck_assistant_operations *lao = lad->lad_ops;
 	struct lfsck_assistant_req *lar;
+	struct list_head *tmp;
+	struct list_head *next;
 	int rc = 0;
 	int rc1 = 0;
 	int rc2;
@@ -1582,6 +1541,11 @@ int lfsck_assistant_engine(void *args)
 	ENTRY;
 	CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread start\n",
 	       lfsck_lfsck2name(lfsck), lad->lad_name);
+
+	/* incase lfsck thread falls in loop of sending RPC, allow signal to
+	 * interrupt it.
+	 */
+	allow_signal(SIGINT);
 
 	memset(lr, 0, sizeof(*lr));
 	lr->lr_event = LE_START;
@@ -1595,25 +1559,9 @@ int lfsck_assistant_engine(void *args)
 		GOTO(fini, rc);
 	}
 
-	/*
-	 * thread is spawned with all signals set to SIG_IGN, re-enable
-	 * SIGINT for lfsck_stop() to awaken and stop the thread.
-	 */
-	allow_signal(SIGINT);
-	spin_lock(&lad->lad_lock);
-	lad->lad_task = current;
-	thread_set_flags(athread, SVC_RUNNING);
-	spin_unlock(&lad->lad_lock);
-	wake_up(&mthread->t_ctl_waitq);
-
-	while (1) {
-		while (!list_empty(&lad->lad_req_list)) {
-			bool wakeup = false;
-
-			if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags) ||
-				     !thread_is_running(mthread)))
-				GOTO(cleanup, rc = lad->lad_post_result);
-
+	while (!lfsck_should_stop(lfsck)) {
+		while (!list_empty(&lad->lad_req_list) &&
+		       !lfsck_should_stop(lfsck)) {
 			lar = list_first_entry(&lad->lad_req_list,
 					       struct lfsck_assistant_req,
 					       lar_list);
@@ -1632,23 +1580,20 @@ int lfsck_assistant_engine(void *args)
 			 * handled to avoid too frequent thread schedule.
 			 */
 			if (lad->lad_prefetched <= (bk->lb_async_windows / 2))
-				wakeup = true;
+				wake_up_var(lfsck);
 			spin_unlock(&lad->lad_lock);
-			if (wakeup)
-				wake_up(&mthread->t_ctl_waitq);
 
 			lao->la_req_fini(env, lar);
 			if (rc < 0 && bk->lb_param & LPF_FAILOUT)
 				GOTO(cleanup, rc);
 		}
 
-		wait_event_idle(athread->t_ctl_waitq,
-				!lfsck_assistant_req_empty(lad) ||
-				test_bit(LAD_EXIT, &lad->lad_flags) ||
+		wait_var_event(lfsck, !lfsck_assistant_req_empty(lad) ||
+				lfsck_should_stop(lfsck) ||
 				test_bit(LAD_TO_POST, &lad->lad_flags) ||
 				test_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags));
 
-		if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags)))
+		if (unlikely(lfsck_should_stop(lfsck)))
 			GOTO(cleanup, rc = lad->lad_post_result);
 
 		if (!list_empty(&lad->lad_req_list))
@@ -1658,14 +1603,9 @@ int lfsck_assistant_engine(void *args)
 			CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread post\n",
 			       lfsck_lfsck2name(lfsck), lad->lad_name);
 
-			if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags)))
-				GOTO(cleanup, rc = lad->lad_post_result);
-
 			clear_bit(LAD_TO_POST, &lad->lad_flags);
 			LASSERT(lad->lad_post_result > 0);
-
-			/* Wakeup the master engine to go ahead. */
-			wake_up(&mthread->t_ctl_waitq);
+			wake_up_var(lfsck);
 
 			memset(lr, 0, sizeof(*lr));
 			lr->lr_event = LE_PHASE1_DONE;
@@ -1682,7 +1622,7 @@ int lfsck_assistant_engine(void *args)
 			clear_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags);
 			atomic_inc(&lfsck->li_double_scan_count);
 			set_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags);
-			wake_up(&mthread->t_ctl_waitq);
+			wake_up_var(lfsck);
 
 			com->lc_new_checked = 0;
 			com->lc_new_scanned = 0;
@@ -1705,7 +1645,8 @@ int lfsck_assistant_engine(void *args)
 			if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_NO_DOUBLESCAN))
 				GOTO(cleanup, rc = 0);
 
-			while (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags)) {
+			while (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags) &&
+			       !lfsck_should_stop(lfsck)) {
 				int seconds = 30;
 
 				rc = lfsck_assistant_query_others(env, com);
@@ -1719,18 +1660,13 @@ int lfsck_assistant_engine(void *args)
 				 * per 30 seconds if we are not notified.
 				 */
 				while (seconds > 0 &&
-				       wait_event_idle_timeout(
-					       athread->t_ctl_waitq,
+				       wait_var_event_timeout(lfsck,
 					       lfsck_phase2_next_ready(lad) ||
-					       test_bit(LAD_EXIT,
-							&lad->lad_flags) ||
-					       !thread_is_running(mthread),
+					       lfsck_should_stop(lfsck),
 					       cfs_time_seconds(1)) == 0)
 					seconds -= 1;
 
-				if (unlikely(
-					test_bit(LAD_EXIT, &lad->lad_flags) ||
-					!thread_is_running(mthread)))
+				if (lfsck_should_stop(lfsck))
 					GOTO(cleanup, rc = 0);
 
 				if (seconds == 0)
@@ -1740,11 +1676,6 @@ p2_next:
 				rc = lao->la_handler_p2(env, com);
 				if (rc != 0)
 					GOTO(cleanup, rc);
-
-				if (unlikely(
-					test_bit(LAD_EXIT, &lad->lad_flags) ||
-					!thread_is_running(mthread)))
-					GOTO(cleanup, rc = 0);
 			}
 		}
 	}
@@ -1755,10 +1686,10 @@ cleanup:
 	if (rc < 0)
 		lad->lad_assistant_status = rc;
 
-	if (test_bit(LAD_EXIT, &lad->lad_flags) && lad->lad_post_result <= 0)
+	if (lfsck_should_stop(lfsck) &&
+	    lad->lad_post_result <= 0)
 		lao->la_fill_pos(env, com, &lfsck->li_pos_checkpoint);
 
-	thread_set_flags(athread, SVC_STOPPING);
 	while (!list_empty(&lad->lad_req_list)) {
 		lar = list_first_entry(&lad->lad_req_list,
 				       struct lfsck_assistant_req,
@@ -1831,7 +1762,7 @@ cleanup:
 	 * So not update the on-disk trace file under such case.
 	 */
 	if (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags)) {
-		if (!test_bit(LAD_EXIT, &lad->lad_flags))
+		if (!lfsck_should_stop(lfsck))
 			rc1 = lao->la_double_scan_result(env, com, rc);
 
 		CDEBUG(D_LFSCK,
@@ -1840,21 +1771,34 @@ cleanup:
 	}
 
 fini:
-	if (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags))
+	if (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags)) {
 		atomic_dec(&lfsck->li_double_scan_count);
-
-	spin_lock(&lad->lad_lock);
+		wake_up_var(lfsck);
+	}
 	lad->lad_assistant_status = (rc1 != 0 ? rc1 : rc);
-	thread_set_flags(athread, SVC_STOPPED);
-	lad->lad_task = NULL;
-	spin_unlock(&lad->lad_lock);
+
+	spin_lock(&lfsck->li_mdt_descs.ltd_lock);
+	list_for_each_safe(tmp, next, &lad->lad_mdt_phase1_list)
+		list_del_init(tmp);
+	list_for_each_safe(tmp, next, &lad->lad_mdt_phase2_list)
+		list_del_init(tmp);
+	spin_unlock(&lfsck->li_mdt_descs.ltd_lock);
+
+	spin_lock(&lfsck->li_ost_descs.ltd_lock);
+	list_for_each_safe(tmp, next, &lad->lad_ost_phase1_list)
+		list_del_init(tmp);
+	list_for_each_safe(tmp, next, &lad->lad_ost_phase2_list)
+		list_del_init(tmp);
+	spin_unlock(&lfsck->li_ost_descs.ltd_lock);
 
 	CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread exit: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), lad->lad_name,
 	       lad->lad_assistant_status);
 
 	lfsck_thread_args_fini(lta);
-	wake_up(&mthread->t_ctl_waitq);
-
+	if (xchg(&lad->lad_task, NULL) == NULL)
+		wait_var_event(lfsck, kthread_should_stop());
+	set_bit(LAD_STOPPED, &lad->lad_flags);
+	wake_up_var(lfsck);
 	return rc;
 }

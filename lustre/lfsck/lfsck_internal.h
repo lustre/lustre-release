@@ -659,7 +659,6 @@ struct lfsck_instance {
 
 	refcount_t		  li_ref;
 	atomic_t		  li_double_scan_count;
-	struct ptlrpc_thread	  li_thread;
 	struct task_struct	 *li_task;
 
 	/* The time for last checkpoint, seconds */
@@ -735,7 +734,8 @@ struct lfsck_instance {
 				  li_drop_dryrun:1, /* Ever dryrun, not now. */
 				  li_master:1, /* Master instance or not. */
 				  li_current_oit_processed:1,
-				  li_start_unplug:1;
+				  li_start_unplug:1,
+				  li_master_ready:1; /* master engine is ready */
 	struct lfsck_rec_lmv_save li_rec_lmv_save[LFSCK_REC_LMV_MAX_DEPTH];
 };
 
@@ -834,7 +834,6 @@ struct lfsck_assistant_data {
 	struct list_head			 lad_mdt_phase2_list;
 
 	const char				*lad_name;
-	struct ptlrpc_thread			 lad_thread;
 	struct task_struct			*lad_task;
 
 	const struct lfsck_assistant_operations	*lad_ops;
@@ -853,8 +852,8 @@ enum {
 	LAD_TO_POST = 0,
 	LAD_TO_DOUBLE_SCAN = 1,
 	LAD_IN_DOUBLE_SCAN = 2,
-	LAD_EXIT = 3,
-	LAD_INCOMPLETE = 4,
+	LAD_INCOMPLETE = 3,
+	LAD_STOPPED = 4,
 };
 
 #define LFSCK_TMPBUF_LEN	64
@@ -971,14 +970,13 @@ int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 int lfsck_query_all(const struct lu_env *env, struct lfsck_component *com);
 int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 			  struct lfsck_start_param *lsp);
+void lfsck_stop_assistant(struct lfsck_assistant_data *lad);
 int lfsck_checkpoint_generic(const struct lu_env *env,
 			     struct lfsck_component *com);
 void lfsck_post_generic(const struct lu_env *env,
 			struct lfsck_component *com, int *result);
 int lfsck_double_scan_generic(const struct lu_env *env,
 			      struct lfsck_component *com, int status);
-void lfsck_quit_generic(const struct lu_env *env,
-			struct lfsck_component *com);
 int lfsck_load_one_trace_file(const struct lu_env *env,
 			      struct lfsck_component *com,
 			      struct dt_object *parent,
@@ -1547,4 +1545,23 @@ lfsck_trans_create(const struct lu_env *env, struct dt_device *dev,
 
 	return dt_trans_create(env, dev);
 }
+
+static inline bool lfsck_should_stop(struct lfsck_instance *lfsck)
+{
+	return kthread_should_stop() || !lfsck->li_task;
+}
+
+/* ret 1 if lfsck should stop, 0 otherwise */
+#define LFSCK_FAIL_TIMEOUT(lfsck, id, timeout)				\
+({									\
+	int rc = 0;							\
+									\
+	if (CFS_FAIL_CHECK(id)) {					\
+		wait_var_event_timeout(lfsck, lfsck_should_stop(lfsck),	\
+			cfs_time_seconds(timeout));			\
+		if (lfsck_should_stop(lfsck))				\
+			rc = 1;						\
+	}								\
+	rc;								\
+})
 #endif /* _LFSCK_INTERNAL_H */

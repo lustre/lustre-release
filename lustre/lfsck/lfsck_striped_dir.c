@@ -129,6 +129,7 @@
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_lmv.h>
+#include <lu_target.h>
 
 #include "lfsck_internal.h"
 
@@ -1611,7 +1612,6 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 	struct lmv_mds_md_v1 *lmv = &info->lti_lmv;
 	struct lfsck_instance *lfsck = com->lc_lfsck;
 	struct lfsck_namespace *ns = com->lc_file_ram;
-	struct ptlrpc_thread *thread = &lfsck->li_thread;
 	struct lu_dirent *ent = (struct lu_dirent *)info->lti_key;
 	struct lfsck_bookmark *bk = &lfsck->li_bookmark_ram;
 	struct lfsck_lmv *llmv = NULL;
@@ -1654,10 +1654,10 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 	else if (rc > 0)
 		rc = 0;
 
-	while (rc == 0) {
-		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY3, cfs_fail_val) &&
-		    unlikely(!thread_is_running(thread)))
-			GOTO(out, rc = 0);
+	while (rc == 0 && !lfsck_should_stop(lfsck)) {
+		if (LFSCK_FAIL_TIMEOUT(lfsck, OBD_FAIL_LFSCK_DELAY3,
+				cfs_fail_val))
+			break;
 
 		rc = iops->rec(env, di, (struct dt_rec *)ent, args);
 		if (rc == 0)
@@ -1688,23 +1688,13 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 
 		/* Rate control. */
 		lfsck_control_speed(lfsck);
-		if (unlikely(!thread_is_running(thread)))
-			GOTO(out, rc = 0);
-
-		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2)) {
-			spin_lock(&lfsck->li_lock);
-			thread_set_flags(thread, SVC_STOPPING);
-			spin_unlock(&lfsck->li_lock);
-
+		if (CFS_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2))
 			GOTO(out, rc = -EINVAL);
-		}
-
 next:
 		rc = iops->next(env, di);
 	}
 
 	GOTO(out, rc);
-
 out:
 	iops->put(env, di);
 	iops->fini(env, di);
