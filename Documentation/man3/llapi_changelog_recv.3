@@ -29,6 +29,179 @@ initializes
 with CHANGELOG_FLAG_FOLLOW flag,
 .B llapi_changelog_recv()
 can block waiting for new records.
+.PP
+.SS "Changelog record format"
+.B llapi_changelog_recv()
+allocates a
+.B struct changelog_rec
+structure and fills it with the next changelog record.
+The minimal changelog record struct has the following fields:
+.PP
+.EX
+struct changelog_rec {
+        __u16             cr_namelen;     /* entry name length in bytes */
+        __u16             cr_flags;       /* enum changelog_rec_flags */
+        __u32             cr_type;        /* enum changelog_rec_type */
+        __u64             cr_index;       /* changelog record number */
+        __u64             cr_prev;        /* last cr_index used by cr_tfid */
+        __u64             cr_time;
+        union {
+            struct lu_fid cr_tfid;        /* target FID */
+            __u32         cr_markerflags; /* CL_MARK flags */
+        };
+        struct lu_fid     cr_pfid;        /* parent FID */
+} __attribute__ ((packed));
+.EE
+.PP
+The changelog record name length
+.B cr_namelen
+is the length of the directory entry name of the target file or directory.
+The name is stored in the record after the fixed-size fields.
+.PP
+The changelog record index
+.B cr_index
+is always unique and monotonically increasing.
+However, a changelog consumer may not necessarily process all records,
+so may see gaps in the index sequence.
+.PP
+The changelog record timestamp
+.B cr_time
+is a 64-bit value representing the time of the changelog record in
+nanoseconds since the Epoch.  The top 34 bits represent the seconds
+since the Epoch, and the bottom 30 bits represent the nanoseconds.
+.PP
+The changelog target FID
+.B cr_tfid
+is the FID of the file or directory that is the subject of the record.
+The parent FID
+.B cr_pfid
+is the FID of the parent directory of the target FID, if applicable.
+The changelog record name is relative to the parent FID.
+.SS "Changelog record flags"
+The high 4 bits of
+.B cr_flags
+field can have the following values:
+.EX
+enum changelog_rec_flags {
+    CLF_VERSION,     /* initial version record */
+    CLF_RENAME,      /* rename in cr_sfid, cr_spfid */
+    CLF_JOBID,       /* jobid in cr_jobid */
+    CLF_EXTRA_FLAGS, /* extra flags in cr_extra_flags */
+    CLF_FLAGMASK,    /* mask off per-record flags */
+    CLF_VERMASK,
+};
+.EE
+The low 12 bits of
+.B cr_flags
+can be used for per-record flags.  Currently defined per-record flags for
+.B CL_UNLINK
+are:
+.EX
+    CLF_UNLINK_LAST,        /* Unlink of last hardlink */
+    CLF_UNLINK_HSM_EXISTS,  /* File has something in HSM */
+.EE
+Currently defined per-record flags for
+.B CL_RENAME
+are:
+.EX
+    CLF_RENAME_LAST,        /* rename unlink last link of target */
+    CLF_RENAME_LAST_EXISTS, /* unlink last link of HSM target */
+.EE
+.SS "Changelog record types"
+The changelog record
+.B cr_type
+field describes the operation event type and can have the following values:
+.EX
+enum changelog_rec_type {
+    CL_NONE,       /* no event */
+    CL_MARK,       /* internal marker with initial version */
+    CL_CREATE,     /* new file created */
+    CL_MKDIR,      /* new directory created */
+    CL_HARDLINK,   /* new hard link created */
+    CL_SOFTLINK,   /* new symbolic link created */
+    CL_MKNOD,      /* new device node created */
+    CL_UNLINK,     /* file unlinked */
+    CL_RMDIR,      /* directory removed */
+    CL_RENAME,     /* file or directory renamed */
+    CL_EXT,        /* namespace extended record (2nd half of rename) */
+    CL_OPEN,       /* file opened */
+    CL_CLOSE,      /* file closed */
+    CL_LAYOUT,     /* file layout/striping modified */
+    CL_TRUNC,      /* file truncated */
+    CL_SETATTR,    /* file attributes changed, precedence over xTIME */
+    CL_SETXATTR,   /* file extended attributes changed */
+    CL_HSM,        /* HSM specific events, see flags */
+    CL_MTIME,      /* mtime changed, precendence over CTIME, ATIME */
+    CL_CTIME,      /* ctime changed, precendence over ATIME */
+    CL_ATIME,      /* atime changed, but no other attributes */
+    CL_MIGRATE,    /* file layout migrated */
+    CL_FLRW,       /* FLR: file was firstly written */
+    CL_RESYNC,     /* FLR: file was resync-ed */
+    CL_GETXATTR,   /* file extended attributes read */
+    CL_DN_OPEN,    /* file open denied */
+};
+.EE
+.SS "Changelog extended records"
+.B struct changelog_rec
+can be extended with the following fields if corresponding flags are set:
+.EX
+        /* extension for RENME, when cr_flags & CLF_RENAME. */
+        struct changelog_ext_rename {
+                struct lu_fid    cr_sfid;   /* source fid, or zero */
+                struct lu_fid    cr_spfid;  /* source parent fid, or zero */
+        };
+
+        /* extension for JOBID, when cr_flags & CLF_JOBID. */
+        struct changelog_ext_jobid {
+                char  cr_jobid[LUSTRE_JOBID_SIZE]; /* NUL-terminated string */
+        };
+
+        /* extension for additional flags, when cr_flags & CLF_EXTRA_FLAGS. */
+        struct changelog_ext_extra_flags {
+                __u64 cr_extra_flags; /* Additional CLFE_* flags */
+        };
+.EE
+.SS "Changelog extra extensions"
+.B struct changelog_rec
+can be extended with the following extra fields if corresponding flags
+are set in
+.BR "struct changelog_ext_extra_flags" .
+.B cr_extra_flags
+field can have the following values:
+.EX
+        CLFE_UIDGID,   /* changelog_ext_uidgid */
+        CLFE_NID,      /* changelog_ext_nid */
+        CLFE_OPEN,     /* changelog_ext_openmode */
+        CLFE_XATTR,    /* changelog_ext_xattr */
+        CLFE_NID_BE,   /* changelog_ext_nid is struct lnet_nid */
+.EE
+.EX
+        /* extra extension for UID/GID, when cr_extra_flags & CLFE_UIDGID. */
+        struct changelog_ext_uidgid {
+                __u64     cr_uid;
+                __u64     cr_gid;
+        };
+
+        /* extra extension for NID, when cr_extra_flags & CLFE_NID. */
+        struct changelog_ext_nid {
+                /* If CLFE_NID_BE is not set cr_nid is of the lnet_nid_t type.
+                 * If CLFE_NID_BE is set then this is struct lnet_nid.
+                 */
+                __u64     cr_nid;
+                __u64     extra;
+                __u32     padding;
+        };
+
+        /* extra extension for low 32 bits of MDS_OPEN_* flags. */
+        struct changelog_ext_openmode {
+                __u32 cr_openflags; /* enum mds_open_flags */
+        };
+
+        /* extra extension to include xattr name */
+        struct changelog_ext_xattr {
+                char cr_xattr[XATTR_NAME_MAX + 1]; /* NUL-terminated string */
+        };
+.EE
 .SH RETURN VALUES
 .TP 15
 .SM 0
@@ -57,11 +230,12 @@ implements the following command:
 .BI "lfs changelog [--follow] " MDTNAME " [" STARTREC " [" ENDREC "]]"
 .EE
 .SH AVAILABILITY
-.B llapi_changelog_recv
+.B llapi_changelog_recv()
 is part of the
 .BR lustre (7)
-user application interface library since release 2.4.0
+user application interface library since release 2.4.0.
 .\# Added in commit 2.3.53-7-gf715e4e298
+.br
 .SH SEE ALSO
 .BR lfs-changelog (1),
 .BR llapi_changelog_clear (3),
