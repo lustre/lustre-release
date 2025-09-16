@@ -284,6 +284,7 @@ retry:
 					CERROR("No net device for interface %d\n",
 					       interface);
 					rcu_read_unlock();
+					rc = -ENODEV;
 					goto failed;
 				}
 				ipv6_dev_get_saddr(ns, dev, &rem->sin6_addr, 0,
