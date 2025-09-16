@@ -315,9 +315,12 @@ if [[ $NETTYPE =~ (tcp|o2ib)[0-9]* ]]; then
 		always_except LU-17457 208
 		always_except LU-9680 213
 		always_except LU-17458 220
+		always_except LU-19314 228
 		always_except LU-5960 230
 		always_except LU-9680 231
 		always_except LU-17457 255
+		always_except LU-19334 257
+		always_except LU-19363 270
 		always_except LU-9680 302
 
 		FAKE_NID="${FAKE_IPV6}@tcp"
