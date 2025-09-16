@@ -421,20 +421,20 @@ static int lmv_tgt_seq_show(struct seq_file *p, void *v)
 }
 
 static const struct seq_operations lmv_tgt_sops = {
-        .start                 = lmv_tgt_seq_start,
-        .stop                  = lmv_tgt_seq_stop,
-        .next                  = lmv_tgt_seq_next,
-        .show                  = lmv_tgt_seq_show,
+	.start                 = lmv_tgt_seq_start,
+	.stop                  = lmv_tgt_seq_stop,
+	.next                  = lmv_tgt_seq_next,
+	.show                  = lmv_tgt_seq_show,
 };
 
 static int lmv_target_seq_open(struct inode *inode, struct file *file)
 {
-        struct seq_file         *seq;
-        int                     rc;
+	struct seq_file         *seq;
+	int                     rc;
 
-        rc = seq_open(file, &lmv_tgt_sops);
-        if (rc)
-                return rc;
+	rc = seq_open(file, &lmv_tgt_sops);
+	if (rc)
+		return rc;
 
 	seq = file->private_data;
 	seq->private = inode->i_private;

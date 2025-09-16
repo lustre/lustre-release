@@ -84,7 +84,7 @@ int mdc_resource_cancel_unused_res(struct obd_export *exp,
 				   enum ldlm_mode mode, __u64 bits);
 int mdc_resource_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
 			       struct list_head *cancels, enum ldlm_mode mode,
-                               __u64 bits);
+			       __u64 bits);
 /* mdc/mdc_request.c */
 int mdc_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 		  struct lu_fid *fid, struct md_op_data *op_data);
@@ -107,7 +107,7 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 		kernel_cap_t capability, __u64 rdev,
 		struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
-             struct ptlrpc_request **request);
+	     struct ptlrpc_request **request);
 int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 		const char *old, size_t oldlen, const char *new, size_t newlen,
 		struct ptlrpc_request **request);

@@ -421,7 +421,7 @@ static int lov_cl_add_target(const struct lu_env *env, struct lu_device *dev,
 			lov_cl_del_target(env, dev, index);
 			rc = PTR_ERR(cl);
 		}
-        }
+	}
 
 out:
 	lov_tgts_putref(obd);

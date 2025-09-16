@@ -102,8 +102,8 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, it, &req, cb_blocking,
 			    extra_lock_flags);
-        if (rc)
-                GOTO(out_free_op_data, rc);
+	if (rc)
+		GOTO(out_free_op_data, rc);
 
 	/*
 	 * LLite needs LOOKUP lock to track dentry revocation in order to

@@ -888,7 +888,7 @@ static int lov_delete_composite(const struct lu_env *env,
 }
 
 static void lov_fini_empty(const struct lu_env *env, struct lov_object *lov,
-                           union lov_layout_state *state)
+			   union lov_layout_state *state)
 {
 	LASSERT(lov->lo_type == LLT_EMPTY || lov->lo_type == LLT_RELEASED);
 }
@@ -1230,7 +1230,7 @@ static inline void lov_conf_thaw(struct lov_object *lov)
 	struct lov_object                      *__obj = (obj);          \
 	int                                     __lock = !!(lock);      \
 	typeof(lov_dispatch[0].op(__VA_ARGS__)) __result;               \
-                                                                        \
+									\
 	if (__lock)                                                     \
 		lov_conf_freeze(__obj);					\
 	__result = LOV_2DISPATCH_NOLOCK(obj, op, __VA_ARGS__);          \
@@ -1243,13 +1243,13 @@ static inline void lov_conf_thaw(struct lov_object *lov)
  * Performs a locked double-dispatch based on the layout type of an object.
  */
 #define LOV_2DISPATCH(obj, op, ...)                     \
-        LOV_2DISPATCH_MAYLOCK(obj, op, 1, __VA_ARGS__)
+	LOV_2DISPATCH_MAYLOCK(obj, op, 1, __VA_ARGS__)
 
 #define LOV_2DISPATCH_VOID(obj, op, ...)                                \
 do {                                                                    \
 	struct lov_object                      *__obj = (obj);          \
 	enum lov_layout_type                    __llt;                  \
-                                                                        \
+									\
 	lov_conf_freeze(__obj);						\
 	__llt = __obj->lo_type;                                         \
 	LASSERT(__llt < ARRAY_SIZE(lov_dispatch));			\

@@ -61,7 +61,7 @@ static int ll_readlink_internal(struct inode *inode,
 	}
 
 	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, symlen,
-                                     LUSTRE_OPC_ANY, NULL);
+				     LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
@@ -88,7 +88,7 @@ static int ll_readlink_internal(struct inode *inode,
 		CERROR("%s: inode "DFID": symlink length %d not expected %d\n",
 		       sbi->ll_fsname, PFID(ll_inode2fid(inode)),
 		       body->mbo_eadatasize - 1, symlen - 1);
-                GOTO(failed, rc = -EPROTO);
+		GOTO(failed, rc = -EPROTO);
 	}
 
 	*symname = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_MD);

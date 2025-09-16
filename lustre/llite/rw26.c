@@ -769,7 +769,7 @@ again:
 		struct vvp_io *vio = vvp_env_io(env);
 		struct cl_page_list *plist = &vio->u.readwrite.vui_queue;
 
-                /* if the page is already in dirty cache, we have to commit
+		/* if the page is already in dirty cache, we have to commit
 		 * the pages right now; otherwise, it may cause deadlock
 		 * because it holds page lock of a dirty page and request for
 		 * more grants. It's okay for the dirty page to be the first

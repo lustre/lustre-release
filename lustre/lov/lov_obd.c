@@ -716,7 +716,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	init_rwsem(&lov->lov_notify_lock);
 
 	INIT_LIST_HEAD(&lov->lov_pool_list);
-        lov->lov_pool_count = 0;
+	lov->lov_pool_count = 0;
 	rc = lov_pool_hash_init(&lov->lov_pools_hash_body);
 	if (rc < 0) {
 		lu_tgt_descs_fini(ltd);

@@ -273,7 +273,7 @@ pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, int index,
 
 /* lov_request.c */
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
-                        struct lov_request_set **reqset);
+			struct lov_request_set **reqset);
 int lov_fini_statfs_set(struct lov_request_set *set);
 
 /* lov_obd.c */
