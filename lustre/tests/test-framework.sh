@@ -3043,7 +3043,6 @@ sanity_mount_check () {
 	sanity_mount_check_clients || return 2
 }
 
-# mount clients if not mouted
 zconf_mount_clients() {
 	local clients=$1
 	local mnt=$2
@@ -3051,113 +3050,62 @@ zconf_mount_clients() {
 	opts=${opts:+-o $opts}
 	local flags=${4:-$MOUNT_FLAGS}
 	local device=$MGSNID:/$FSNAME$FILESET
+
 	if [ -z "$mnt" -o -z "$FSNAME" ]; then
-		echo "Bad conf mount command: opt=$flags $opts dev=$device " \
-		     "mnt=$mnt"
+		echo "Bad conf mount command: opt=$flags $opts dev=$device mnt=$mnt"
 		exit 1
 	fi
 
 	echo "Starting client $clients: $flags $opts $device $mnt"
 	do_nodes $clients mkdir -p $mnt
-	if [ -n "$FILESET" -a -z "$SKIP_FILESET" ]; then
+
+	# disable FILESET if not supported or skipped
+	if [[ -n $FILESET ]]; then
+		(( MDS1_VERSION >= $(version_code 2.9.0) )) &&
+			[[ -z $SKIP_FILESET ]] ||
+				device=$MGSNID:/$FSNAME
+	fi
+
+	if $GSS_SK; then
+		opts=$(add_sk_mntflag $opts)
+	fi
+
+	for nmclient in ${clients//,/ }; do
+		local i=0
+
 		if $GSS_SK && ($SK_UNIQUE_NM || $SK_S2S); then
-			# Mount with own nodemap key
-			local i=0
-			# Mount all server nodes first with per-NM keys
-			for nmclient in ${clients//,/ }; do
-				do_nodes $(comma_list $(all_server_nodes)) \
+			# Load per-NM keys on servers
+			do_nodes $(comma_list $(all_server_nodes)) \
 				"$LGSS_SK -t server -l $SK_PATH/nodemap/c$i.key"
-				i=$((i + 1))
-			done
-			# set perms for per-nodemap keys else permission denied
-			do_nodes $(comma_list $(all_nodes)) \
+
+			# Set perms for per-nodemap keys else permission denied
+			do_nodes $(comma_list $(all_server_nodes)) \
 				"keyctl show | grep lustre | cut -c1-11 |
 				sed -e 's/ //g;' |
 				xargs -IX keyctl setperm X 0x3f3f3f3f"
-			local mountkey=$SK_PATH/$FSNAME-nmclient.key
-			i=0
-			for nmclient in ${clients//,/ }; do
-				if $SK_UNIQUE_NM; then
-					mountkey=$SK_PATH/nodemap/c$i.key
-				fi
-				do_node $nmclient "! grep -q $mnt' ' \
-					/proc/mounts || umount $mnt"
-				local prunedopts=$(add_sk_mntflag $opts);
-				prunedopts=$(echo $prunedopts | sed -e \
-					"s#skpath=[^ ^,]*#skpath=$mountkey#g")
-				set -x
-				do_nodes $(comma_list $(all_server_nodes)) \
-					"keyctl show"
-				set +x
-				do_node $nmclient $MOUNT_CMD $flags \
-					$prunedopts $MGSNID:/$FSNAME $mnt ||
-					return 1
-				i=$((i + 1))
-			done
-		else
-			do_nodes $clients "! grep -q $mnt' ' /proc/mounts ||
-					umount $mnt"
-			do_nodes $clients $MOUNT_CMD $flags $opts \
-					$MGSNID:/$FSNAME $mnt || return 1
-		fi
-		#disable FILESET if not supported
-		do_nodes $clients lctl get_param -n \
-			mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
-				device=$MGSNID:/$FSNAME
-		do_nodes $clients "! grep -q $mnt' ' /proc/mounts ||
-			umount $mnt"
-	fi
+			do_nodes $(comma_list $(all_server_nodes)) \
+				"keyctl show"
 
-	if $GSS_SK && ($SK_UNIQUE_NM || $SK_S2S); then
-		# Mount with nodemap key
-		local i=0
-		local mountkey=$SK_PATH/$FSNAME-nmclient.key
-		for nmclient in ${clients//,/ }; do
+			local mountkey=$SK_PATH/$FSNAME-nmclient.key
 			if $SK_UNIQUE_NM; then
 				mountkey=$SK_PATH/nodemap/c$i.key
 			fi
-			local prunedopts=$(echo $opts | sed -e \
+			opts=$(echo $opts | sed -e \
 				"s#skpath=[^ ^,]*#skpath=$mountkey#g");
-			do_node $nmclient "! grep -q $mnt' ' /proc/mounts ||
-				umount $mnt"
-			do_node $nmclient "
-		running=\\\$(mount | grep -c $mnt' ');
-		rc=0;
-		if [ \\\$running -eq 0 ] ; then
-			mkdir -p $mnt;
-			$MOUNT_CMD $flags $prunedopts $device $mnt;
-			rc=\\\$?;
-		else
-			lustre_mnt_count=\\\$(mount | grep $mnt' ' | \
-				grep 'type lustre' | wc -l);
-			if [ \\\$running -ne \\\$lustre_mnt_count ] ; then
-				echo zconf_mount_clients FAILED: \
-					mount count \\\$running, not matching \
-					with mount count of 'type lustre' \
-					\\\$lustre_mnt_count;
-				rc=1;
-			fi;
-		fi;
-	exit \\\$rc" || return ${PIPESTATUS[0]}
-
-			i=$((i + 1))
-		done
-	else
-
-		local tmpopts=$opts
-		if $SHARED_KEY; then
-			tmpopts=$(add_sk_mntflag $opts)
 		fi
-		do_nodes $clients "
-running=\\\$(mount | grep -c $mnt' ');
-rc=0;
-if [ \\\$running -eq 0 ] ; then
-	mkdir -p $mnt;
-	$MOUNT_CMD $flags $tmpopts $device $mnt;
-	rc=\\\$?;
-fi;
-exit \\\$rc" || return ${PIPESTATUS[0]}
-	fi
+
+		do_node $nmclient "
+			running=\\\$(mount | grep -c $mnt' ');
+			rc=0;
+			if [ \\\$running -eq 0 ] ; then
+				echo Mount client \\\$(hostname): $MOUNT_CMD $flags $opts $device $mnt
+				$MOUNT_CMD $flags $opts $device $mnt;
+				rc=\\\$?;
+			fi;
+			exit \\\$rc" || return ${PIPESTATUS[0]}
+
+		i=$((i + 1))
+	done
 
 	echo "Started clients $clients: "
 	do_nodes $clients "mount | grep $mnt' '"
