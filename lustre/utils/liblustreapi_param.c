@@ -242,8 +242,9 @@ int copy_file_expandable(const char *path, char **buf, size_t *file_size)
 {
 	long page_size;
 	char *temp_buf;
-	int rc = 0, fd;
 	FILE *fp;
+	int fd;
+	int rc = 0;
 
 	page_size = sysconf(_SC_PAGESIZE);
 	if (page_size < 0) {
@@ -252,7 +253,7 @@ int copy_file_expandable(const char *path, char **buf, size_t *file_size)
 	}
 
 	fp = open_memstream(buf, file_size);
-	if (fp == NULL) {
+	if (!fp) {
 		rc = -errno;
 		goto out;
 	}
@@ -264,7 +265,7 @@ int copy_file_expandable(const char *path, char **buf, size_t *file_size)
 	}
 
 	temp_buf = calloc(1, page_size);
-	if (buf == NULL) {
+	if (!temp_buf) {
 		rc = -ENOMEM;
 		goto close_file;
 	}
