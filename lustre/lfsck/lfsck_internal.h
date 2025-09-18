@@ -758,7 +758,8 @@ struct lfsck_thread_args {
 	struct lu_env			 lta_env;
 	struct lfsck_instance		*lta_lfsck;
 	struct lfsck_component		*lta_com;
-	struct lfsck_start_param	*lta_lsp;
+	struct lfsck_start_param	 lta_lsp;
+	struct lfsck_start		 lta_start;
 };
 
 struct lfsck_assistant_req {

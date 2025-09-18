@@ -1930,7 +1930,11 @@ lfsck_thread_args_init(struct lfsck_instance *lfsck,
 	if (com != NULL)
 		lta->lta_com = lfsck_component_get(com);
 
-	lta->lta_lsp = lsp;
+	lta->lta_lsp = *lsp;
+	if (lsp->lsp_start) {
+		lta->lta_start = *lsp->lsp_start;
+		lta->lta_lsp.lsp_start = &lta->lta_start;
+	}
 
 	return lta;
 }
