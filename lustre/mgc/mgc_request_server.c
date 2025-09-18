@@ -308,6 +308,12 @@ static int mgc_nid_notify_interpret(const struct lu_env *env,
 {
 	struct mgs_target_info *mti;
 
+	if (!ptlrpc_client_replied(req) ||
+	    lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
+		CDEBUG(D_MGC, "fail to send NID notify, rc = %d\n", rc);
+		return rc;
+	}
+
 	mti = req_capsule_server_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
 	if (!mti)
 		return -EPROTO;
