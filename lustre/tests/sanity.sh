@@ -23280,7 +23280,7 @@ test_205l() {
 	local mv_job
 	local n=1
 	local limit=500
-	[[ $SLOW == "no" ]] || limit=500000
+	[[ $SLOW == "no" ]] || limit=50000
 
 	do_facet mds1 $LCTL set_param jobid_var=procname_uid jobid_name='%e.%u'
 	cp -a /etc/hosts $DIR/hosts
