@@ -23277,18 +23277,17 @@ test_205l() {
 	local tmpdir=$(mktemp -d /tmp/jobstat-XXXXXX)
 	local jobs=$tmpdir/jobs.txt
 	local mv_save=${tmpdir}/local_mv
+	local mdts=$(mdts_nodes)
 	local mv_job
 	local n=1
 	local limit=500
 	[[ $SLOW == "no" ]] || limit=50000
 
-	do_facet mds1 $LCTL set_param jobid_var=procname_uid jobid_name='%e.%u'
 	cp -a /etc/hosts $DIR/hosts
 	cp $(which mv) ${mv_save}
-	do_facet mds1 $LCTL set_param mdt.*.job_cleanup_interval=5
+	do_nodes $mdts "$LCTL set_param jobid_var=procname_uid jobid_name=%e.%u mdt.*.job_cleanup_interval=5"
 	sleep 5
-	do_facet mds1 $LCTL set_param mdt.*.job_stats=clear
-	do_facet mds1 $LCTL set_param mdt.*.job_cleanup_interval=0
+	do_nodes $mdts "$LCTL set_param mdt.*.job_stats=clear mdt.*.job_cleanup_interval=0"
 	sleep 5
 	# Add a series of easily identifyable jobs
 	for ((n = 0; n < limit; n++)); do
@@ -23299,7 +23298,7 @@ test_205l() {
 		mv ${mv_job} ${mv_save}
 	done
 	# Duplicates indicate restart issues
-	do_facet mds1 \
+	do_nodes $mdts \
 		"$LCTL get_param mdt.*.job_stats | grep job_id: | cut -d. -f2" \
 		> ${jobs}
 	local dupes=$(grep -v -e "^${RUNAS_ID}\$" -e '^0$' ${jobs} | sort |
@@ -23310,9 +23309,9 @@ test_205l() {
 	local njobs=$(grep -v -e "^${RUNAS_ID}\$" -e '^0$' ${jobs} | wc -l)
 	(( ${njobs} == ${limit} )) ||
 		error "seq_write wrote ${njobs} jobs expected ${limit}."
-	do_facet mds1 $LCTL set_param mdt.*.job_cleanup_interval=5
+	do_nodes $mdts "$LCTL set_param mdt.*.job_cleanup_interval=5"
 	sleep 5
-	do_facet mds1 $LCTL set_param mdt.*.job_stats=clear
+	do_nodes $mdts "$LCTL set_param mdt.*.job_stats=clear"
 	# On success the scrach files are not interesting
 	rm -fr ${tmpdir}
 }
