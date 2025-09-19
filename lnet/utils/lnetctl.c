@@ -4416,6 +4416,124 @@ print_error:
 	return rc;
 }
 
+static int handle_udsp_sequences(yaml_parser_t *setup, char cmd, int flags,
+				 struct cYAML *show_rc)
+{
+	char *src = NULL, *dst = NULL, *rte = NULL;
+	long seq_no = -1, idx = -1, prio = -1;
+	union lnet_udsp_action action;
+	struct cYAML *err_rc = NULL;
+	yaml_event_t event;
+	bool done = false;
+	int rc = 1;
+
+	while (!done) {
+		char *value;
+
+		rc = yaml_parser_parse(setup, &event);
+		if (rc == 0)
+			goto failed;
+
+		/* Finished one of the UDSP rules. */
+		if (event.type == YAML_MAPPING_END_EVENT && idx != -1) {
+			switch (flags) {
+			case 0: /* delete */
+				rc = lustre_lnet_del_udsp(idx, seq_no,
+							  &err_rc);
+				break;
+			case NLM_F_DUMP:
+				rc = lustre_lnet_show_udsp(idx, seq_no,
+							   &show_rc, &err_rc);
+				break;
+			case NLM_F_CREATE:
+			default:
+				action.udsp_priority = prio;
+				rc = lustre_lnet_add_udsp(src, dst, rte,
+							  prio ? "priority" : "",
+							  &action, idx,
+							  seq_no, &err_rc);
+				break;
+			}
+
+			/* reset values */
+			idx = -1;
+			if (src) {
+				free(src);
+				src = NULL;
+			}
+			if (dst) {
+				free(dst);
+				dst = NULL;
+			}
+			if (rte) {
+				free(rte);
+				rte = NULL;
+			}
+
+			if (rc < 0)
+				goto failed;
+		}
+
+		if (event.type != YAML_SCALAR_EVENT) {
+			if (event.type == YAML_SEQUENCE_END_EVENT)
+				done = true;
+
+			yaml_event_delete(&event);
+			continue;
+		}
+
+		value = (char *)event.data.scalar.value;
+		if (!strcmp(value, "idx") ||
+		    !strcmp(value, "priority")) {
+			char *key = strdup(value);
+			long value;
+
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(setup, &event);
+			if (rc == 0) {
+				free(key);
+				goto failed;
+			}
+
+			rc = yaml_lnet_extract_long(setup, &event,
+						    key, &value, flags);
+			if (rc) {
+				free(key);
+				goto failed;
+			}
+
+			if (!strcmp(key, "priority"))
+				prio = value;
+			else
+				idx = value;
+			free(key);
+		} else if (!strcmp(value, "src") ||
+			   !strcmp(value, "dst") ||
+			   !strcmp(value, "rte")) {
+			char *key = strdup(value);
+
+			yaml_event_delete(&event);
+			rc = yaml_parser_parse(setup, &event);
+			if (rc == 0) {
+				free(key);
+				goto failed;
+			}
+
+			value = (char *)event.data.scalar.value;
+			if (!strcmp(key, "src"))
+				src = strdup(value);
+			else if (!strcmp(key, "dst"))
+				dst = strdup(value);
+			else if (!strcmp(key, "rte"))
+				rte = strdup(value);
+		}
+
+		yaml_event_delete(&event);
+	}
+failed:
+	return rc;
+}
+
 static int handle_global_parameter(yaml_parser_t *setup, yaml_event_t *event,
 				   char cmd, int flags, struct cYAML *show_rc)
 {
@@ -5202,6 +5320,20 @@ static int jt_import(int argc, char **argv)
 			if (rc == 0)
 				goto emitter_error;
 			unspec = false;
+		} else if (!strcmp(scalar_value, "udsp")) {
+			if (op != LNET_CMD_UNSPEC) {
+				rc = yaml_netlink_complete_emitter(&output);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			op = LNET_CMD_UNSPEC;
+
+			rc = handle_udsp_sequences(&setup, cmd, flags,
+						   show_rc);
+			if (rc < 0)
+				goto free_reply;
+			else if (rc == 0)
+				goto emitter_error;
 		} else if (!strcmp(scalar_value, "ip2nets")) {
 			if (op != LNET_CMD_UNSPEC) {
 				rc = yaml_netlink_complete_emitter(&output);
