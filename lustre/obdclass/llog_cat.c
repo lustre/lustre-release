@@ -1173,42 +1173,42 @@ int llog_cat_reverse_process(const struct lu_env *env,
 }
 EXPORT_SYMBOL(llog_cat_reverse_process);
 
-static int llog_cat_set_first_idx(struct llog_handle *cathandle, int idx)
+static int llog_cat_set_first_idx(struct llog_handle *cathandle, int newidx)
 {
 	struct llog_log_hdr *llh = cathandle->lgh_hdr;
-	int idx_nbr;
+	int idx = llh->llh_cat_idx;
 
 	ENTRY;
 
-	idx_nbr = llog_max_idx(llh) + 1;
+	if (find_next_bit_le((void *)LLOG_HDR_BITMAP(llh),
+			     LLOG_HDR_BITMAP_SIZE(llh),
+			     1) == LLOG_HDR_BITMAP_SIZE(llh))
+		RETURN(0);
 	/*
-	 * The llh_cat_idx equals to the first used index minus 1
-	 * so if we canceled the first index then llh_cat_idx
-	 * must be renewed.
+	 * The llh_cat_idx equals to the first used index minus 1.
+	 * We scan from llh_cat_idx + 1 disregard which index
+	 * was canceled to avoid llh_cat_idx cannot go forward in
+	 * abnormal case.
 	 */
-	if (llh->llh_cat_idx == (idx - 1)) {
-		llh->llh_cat_idx = idx;
-
-		while (idx != cathandle->lgh_last_idx) {
-			idx = (idx + 1) % idx_nbr;
-			if (!test_bit_le(idx, LLOG_HDR_BITMAP(llh))) {
-				/* update llh_cat_idx for each unset bit,
-				 * expecting the next one is set */
-				llh->llh_cat_idx = idx;
-			} else if (idx == 0) {
-				/* skip header bit */
-				llh->llh_cat_idx = 0;
-				continue;
-			} else {
-				/* the first index is found */
-				break;
-			}
+	do {
+		idx = (idx + 1) % (llog_max_idx(llh) + 1);
+		if (newidx == idx || !test_bit_le(idx, LLOG_HDR_BITMAP(llh))) {
+			/* update llh_cat_idx for each unset bit,
+			 * expecting the next one is set */
+			llh->llh_cat_idx = idx;
+		} else if (idx == 0) {
+			/* skip header bit */
+			llh->llh_cat_idx = 0;
+			continue;
+		} else {
+			/* the first index is found */
+			break;
 		}
+	} while (idx != cathandle->lgh_last_idx);
 
-		CDEBUG(D_HA, "catlog "DFID" first idx %u, last_idx %u\n",
-		       PLOGID(&cathandle->lgh_id), llh->llh_cat_idx,
-		       cathandle->lgh_last_idx);
-	}
+	CDEBUG(D_HA, "catlog "DFID" first idx %u, last_idx %u\n",
+	       PLOGID(&cathandle->lgh_id), llh->llh_cat_idx,
+	       cathandle->lgh_last_idx);
 
 	RETURN(0);
 }
