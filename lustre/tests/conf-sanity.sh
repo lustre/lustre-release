@@ -12263,7 +12263,7 @@ test_161() {
 	df $MOUNT > /dev/null || error "df failed with mgsname"
 
 	umount $MOUNT
-	wait_update_facet client "mount | grep $MOUNT" "" 5 ||
+	wait_update_facet client "mount | grep ' $MOUNT '" "" 5 ||
 		error "failed to unmount $MOUNT"
 
 	# Test 2: Verify mgsname generation when mounting without mgsname option
@@ -12273,21 +12273,20 @@ test_161() {
 
 	# Extract IP and network type from MGSNID
 	local mgs_ip=$(echo $MGSNID | cut -d'@' -f1)
-	local mgs_nettype=$(echo $MGSNID | cut -d'@' -f2)
+	local mgs_nettype=$(echo $MGSNID | cut -d'@' -f2 | cut -d',' -f1)
 	local test_hostname="test-mgs-auto"
 
 	# Check if hostname is already resolvable before adding to /etc/hosts
 	if getent hosts $test_hostname >/dev/null 2>&1 ||
 		ping -c1 -W1 $test_hostname >/dev/null 2>&1; then
 		echo "Hostname $test_hostname is already resolvable"
-		local added_to_hosts=false
 	else
 		echo "Add temp hostname to /etc/hosts: $mgs_ip $test_hostname"
-		cp -a /etc/hosts /etc/hosts.bak
+		local tmphosts=$(mktemp)
+		cp -a /etc/hosts $tmphosts
 		echo "$mgs_ip $test_hostname" >> /etc/hosts
-		local added_to_hosts=true
 		# Ensure temp hostname is removed even if test fails
-		stack_trap "cp /etc/hosts.bak /etc/hosts"
+		stack_trap "cat $tmphosts >/etc/hosts; rm -f $tmphosts" EXIT
 	fi
 
 	# Mount using the hostname to trigger automatic mgsname generation
