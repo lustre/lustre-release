@@ -152,7 +152,9 @@ as these operations only need read access to fscrypt metadata.
 - local_admin, to allow mapped root to perform admin operations on files, unless
 it is squashed.
 .br
-- quota_ops, to allow quota modifications.
+- quota_ops, to allow UID/GID/ProjID quota modifications.
+.br
+- pool_quota_ops, to allow pool quota modifications.
 .br
 - server_upcall, to define which identity upcall to use. If set, identity upcall
 is defined by server side tunable. If not set, identity upcall is forced to
