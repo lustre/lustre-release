@@ -1676,15 +1676,14 @@ run_test 61b "test race mds llog sync vs llog cleanup"
 #test race  cancel cookie cb vs llog cleanup
 test_61c() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-	local osts=$(osts_nodes)
 
 	#   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
 	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
-	set_nodes_failloc $osts 0x80000222
+	set_nodes_failloc $(osts_nodes) 0x80000222
 	rm $DIR/$tfile
 	sleep 10
 	fail ost1
-	set_nodes_failloc $osts 0x0
+	set_nodes_failloc $(osts_nodes) 0x0
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
