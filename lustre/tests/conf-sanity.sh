@@ -4308,6 +4308,12 @@ test_43a() {
 
 	test_43a_check_nosquash_nids "$nidlist"
 
+	if (( $MDS1_VERSION < $(version_code v2_16_50-4-g4b12a9dcaf) )); then
+		log "Need server version at least v2_16_50-4-g4b12a9dcaf"
+		cleanup || error "cleanup failed with $?"
+		return 0
+	fi
+
 	if ! [[ $NETTYPE =~ ^(tcp|o2ib) ]]; then
 		log "Skip nidmask test for NETTYPE = $NETTYPE"
 		cleanup || error "cleanup failed with $?"
