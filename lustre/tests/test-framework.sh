@@ -3328,7 +3328,7 @@ facets_hosts () {
 	local facets=$1
 
 	for facet in ${facets//,/ }; do
-		hosts=$(expand_list $hosts $(facet_host $facet) )
+		hosts=$(expand_list $hosts $(facet_active_host $facet))
 	done
 
 	echo $hosts
