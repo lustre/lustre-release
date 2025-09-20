@@ -37,28 +37,6 @@
 #include <lustre_compat/linux/wait.h>
 #include <lustre_crypto.h>
 
-/* Linux v5.1-rc5 214d8ca6ee ("stacktrace: Provide common infrastructure")
- * CONFIG_ARCH_STACKWALK indicates that save_stack_trace_tsk symbol is not
- * exported. Use symbol_get() to find if save_stack_trace_tsk is available.
- */
-#ifdef CONFIG_ARCH_STACKWALK
-static unsigned int (*task_dump_stack_t)(struct task_struct *task,
-					 unsigned long *store,
-					 unsigned int size,
-					 unsigned int skipnr);
-
-int cfs_stack_trace_save_tsk(struct task_struct *task, unsigned long *store,
-			     unsigned int size, unsigned int skipnr)
-{
-	if (task_dump_stack_t)
-		return task_dump_stack_t(task, store, size, skipnr);
-
-	pr_info("No stack, save_stack_trace_tsk() could not be found\n");
-
-	return 0;
-}
-#endif
-
 /*
  * This is opencoding of vfree_atomic from Linux kernel added in 4.10 with
  * minimum changes needed to work on older kernels too.
@@ -123,10 +101,7 @@ int __init cfs_arch_init(void)
 		pr_info("lustre_symbols_init: error %d\n", rc);
 		return rc;
 	}
-#ifdef CONFIG_ARCH_STACKWALK
-	task_dump_stack_t =
-		(void *)cfs_kallsyms_lookup_name("stack_trace_save_tsk");
-#endif
+
 	rc = shrinker_debugfs_init();
 	if (rc < 0)
 		goto failed;

@@ -286,15 +286,6 @@ rb_find_add(struct rb_node *node, struct rb_root *tree,
 #define INTERVAL_TREE_EMPTY(_root) RB_EMPTY_ROOT(_root)
 #endif /* HAVE_INTERVAL_TREE_CACHED */
 
-/* Linux v5.1-rc5 214d8ca6ee ("stacktrace: Provide common infrastructure")
- * CONFIG_ARCH_STACKWALK indicates that save_stack_trace_tsk symbol is not
- * exported. Use symbol_get() to find if save_stack_trace_tsk is available.
- */
-#ifdef CONFIG_ARCH_STACKWALK
-int cfs_stack_trace_save_tsk(struct task_struct *task, unsigned long *store,
-			     unsigned int size, unsigned int skipnr);
-#endif
-
 #ifndef memset_startat
 /** from linux 5.19 include/linux/string.h: */
 #define memset_startat(obj, v, member)					\
