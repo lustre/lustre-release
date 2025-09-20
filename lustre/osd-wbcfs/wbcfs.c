@@ -19,6 +19,7 @@
 #include <linux/statfs.h>
 #include <linux/fs_context.h>
 
+#include <lustre_compat/linux/linux-mem.h>
 #include <lustre_compat.h>
 
 #include "wbcfs.h"

@@ -48,13 +48,6 @@ static inline void bitmap_free(const unsigned long *bitmap)
 }
 #endif /* !HAVE_BITMAP_ALLOC */
 
-/*
- * Shrinker
- */
-#ifndef SHRINK_STOP
-# define SHRINK_STOP (~0UL)
-#endif
-
 #ifndef HAVE_MMAP_LOCK
 static inline void mmap_write_lock(struct mm_struct *mm)
 {
@@ -94,18 +87,6 @@ static inline bool mmap_write_trylock(struct mm_struct *mm)
 }
  #endif /* HAVE_MMAP_WRITE_TRYLOCK */
 #endif
-
-#ifdef HAVE_VMALLOC_2ARGS
-#define __ll_vmalloc(size, flags) __vmalloc(size, flags)
-#else
-#define __ll_vmalloc(size, flags) __vmalloc(size, flags, PAGE_KERNEL)
-#endif
-
-void init_libcfs_vfree_atomic(void);
-void exit_libcfs_vfree_atomic(void);
-
-/* atomic-context safe vfree */
-void libcfs_vfree_atomic(const void *addr);
 
 #ifndef HAVE_KFREE_SENSITIVE
 #define kfree_sensitive(x)      kzfree(x)

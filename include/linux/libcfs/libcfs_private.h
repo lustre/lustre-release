@@ -21,8 +21,7 @@
 #endif
 
 #include <linux/slab.h>
-#include <linux/vmalloc.h>
-#include <lustre_compat/linux/linux-mem.h>
+#include <lustre_compat/linux/vmalloc.h>
 
 #ifdef LIBCFS_DEBUG
 
@@ -211,7 +210,7 @@ do {									\
 	if (likely(ptr)) {						\
 		LIBCFS_FREE_PRE(ptr, (size), "kfreed");			\
 		if (unlikely(s > LIBCFS_VMALLOC_SIZE))			\
-			libcfs_vfree_atomic(ptr);			\
+			compat_vfree_atomic(ptr);			\
 		else							\
 			kfree(ptr);					\
 	}								\
