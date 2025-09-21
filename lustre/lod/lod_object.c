@@ -3296,8 +3296,7 @@ unlock:
 
 /**
  * lod_layout_convert() - Convert a plain file lov_mds_md to a composite layout
- * @info: the thread info::lti_ea_store buffer contains little endian plain file
- * layout [in,out]
+ * @buf: (lu_buf struct)buffer contains little endian plain file layout [in,out]
  *
  * Returns 0 on success, <0 on failure
  */
