@@ -2,11 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 set -e
 
-# temporarily disable review-dne-subtest-change sessions from looping
-# 30 minutes for each modified subtest, so that splitting conf-sanity
-# does not trigger hundreds of hours of testing and unusual failures.
-export ONLY_REPEAT=${ONLY_MINUTES:+1}
-
 ONLY=${ONLY:-"$*"}
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
