@@ -7373,7 +7373,7 @@ random_ost_indices() {
 		ost_indices+=" $index"
 		i=$((i+1))
 	done
-	echo $ost_indices
+	comma_list $ost_indices
 }
 
 # Here we exercise the stripe placement functionality on a file system that
@@ -7403,7 +7403,7 @@ test_82a() { # LU-4665
 	local i
 	local ost_indices
 
-	ost_indices=$(comma_list $(random_ost_indices 3))
+	ost_indices=$(random_ost_indices 3)
 
 	stack_trap "restore_ostindex" EXIT
 	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
@@ -7505,7 +7505,7 @@ test_82b() { # LU-4665
 	local i
 	local ost_indices
 
-	ost_indices=$(comma_list $(random_ost_indices 4))
+	ost_indices=$(random_ost_indices 4)
 
 	stack_trap "restore_ostindex" EXIT
 	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
@@ -10760,8 +10760,7 @@ cleanup_123aj() {
 	do_facet mgs "$LCTL set_param -P -d  ${svc}.nrs_policies" || true
 
 	# restore old NRS policy
-	do_nodes $(comma_list $(osts_nodes)) \
-		"$LCTL set_param ${svc}.nrs_policies=fifo"
+	do_nodes $(osts_nodes) "$LCTL set_param ${svc}.nrs_policies=fifo"
 }
 
 check_compound_param_val() {
@@ -11515,7 +11514,7 @@ test_135() {
 	stack_trap "echo $rl > /sys/module/libcfs/parameters/libcfs_console_ratelimit"
 
 	test_mkdir -c 1 -i 0 $DIR/$tdir || error "Failed to create directory"
-	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param \
+	do_nodes $(osts_nodes) $LCTL set_param \
 		seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
 
 	changelog_chmask "ALL" || error "changelog_chmask failed"
