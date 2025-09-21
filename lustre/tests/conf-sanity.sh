@@ -12236,7 +12236,6 @@ test_160() {
 run_test 160 "MGC updates failnodes from all participants"
 
 test_161() {
-
 	setup
 
 	local custom_mgsname="test-mgs-custom"
@@ -12279,19 +12278,19 @@ test_161() {
 		echo "Hostname $test_hostname is already resolvable"
 		local added_to_hosts=false
 	else
-		echo "Adding temporary hostname entry to /etc/hosts:" \
-		     "$mgs_ip $test_hostname"
+		echo "Add temp hostname to /etc/hosts: $mgs_ip $test_hostname"
+		cp -a /etc/hosts /etc/hosts.bak
 		echo "$mgs_ip $test_hostname" >> /etc/hosts
 		local added_to_hosts=true
-		# Ensure cleanup happens even if test fails
-		stack_trap "sed -i '/$mgs_ip $test_hostname/d' /etc/hosts" EXIT
+		# Ensure temp hostname is removed even if test fails
+		stack_trap "cp /etc/hosts.bak /etc/hosts"
 	fi
 
 	# Mount using the hostname to trigger automatic mgsname generation
 	mount -t lustre $test_hostname@$mgs_nettype:/$FSNAME $MOUNT ||
 		error "mount with hostname $test_hostname@$mgs_nettype failed"
 
-	# Check that automatic mgsname was generated and appears in /proc/mounts
+	# Check if automatic mgsname was generated and appears in /proc/mounts
 	local device_in_proc=$(awk -v mount="$MOUNT" '$2 == mount {print $1}' \
 			       /proc/mounts)
 
@@ -12307,10 +12306,7 @@ test_161() {
 	# Verify hostname also appears in mount output
 	mount | grep "$test_hostname@$mgs_nettype:/$FSNAME.*$MOUNT" ||
 		error "hostname not found in mount output"
-
-	umount $MOUNT
-
-	# Cleanup handled by stack_trap if hostname was added
+	cleanup
 }
 run_test 161 "test '-o mgsname' option"
 
