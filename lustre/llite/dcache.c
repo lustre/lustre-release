@@ -51,8 +51,6 @@ static void ll_release(struct dentry *de)
 /**
  * ll_dcompare() - Compare if two dentries are the same. Don't match if the
  * existing dentry is marked invalid.
- *
- * @parent: parent directory
  * @dentry: directory which is being compared
  * @len: length
  * @str: name of directory being compared
