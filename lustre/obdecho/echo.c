@@ -477,15 +477,15 @@ const struct obd_ops echo_obd_ops = {
 };
 
 /**
- * Echo Server request handler for OST_CREATE RPC.
+ * esd_create_hdl() - Echo Server request handler for OST_CREATE RPC.
+ * @tsi: target session environment for this request
  *
  * This is part of request processing. Its simulates the object
  * creation on OST.
  *
- * \param[in] tsi	target session environment for this request
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int esd_create_hdl(struct tgt_session_info *tsi)
 {
@@ -532,15 +532,15 @@ static int esd_create_hdl(struct tgt_session_info *tsi)
 }
 
 /**
- * Echo Server request handler for OST_DESTROY RPC.
+ * esd_destroy_hdl() - Echo Server request handler for OST_DESTROY RPC.
+ * @tsi: target session environment for this request
  *
  * This is Echo Server part of request handling. It simulates the objects
  * destroy on OST.
  *
- * \param[in] tsi	target session environment for this request
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int esd_destroy_hdl(struct tgt_session_info *tsi)
 {
@@ -577,16 +577,16 @@ static int esd_destroy_hdl(struct tgt_session_info *tsi)
 }
 
 /**
- * Echo Server request handler for OST_GETATTR RPC.
+ * esd_getattr_hdl() - Echo Server request handler for OST_GETATTR RPC.
+ * @tsi: target session environment for this request
  *
  * This is Echo Server part of request handling. It returns an object
  * attributes to the client. All objects have the same attributes in
  * Echo Server.
  *
- * \param[in] tsi	target session environment for this request
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int esd_getattr_hdl(struct tgt_session_info *tsi)
 {
@@ -618,15 +618,15 @@ static int esd_getattr_hdl(struct tgt_session_info *tsi)
 }
 
 /**
- * Echo Server request handler for OST_SETATTR RPC.
+ * esd_setattr_hdl() - Echo Server request handler for OST_SETATTR RPC.
+ * @tsi: target session environment for this request
  *
  * This is Echo Server part of request handling. It sets common
  * attributes from request to the Echo Server objects.
  *
- * \param[in] tsi	target session environment for this request
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int esd_setattr_hdl(struct tgt_session_info *tsi)
 {
@@ -660,7 +660,7 @@ static int esd_setattr_hdl(struct tgt_session_info *tsi)
 #define OST_BRW_READ	OST_READ
 #define OST_BRW_WRITE	OST_WRITE
 
-/**
+/*
  * Table of Echo Server specific request handlers
  *
  * This table contains all opcodes accepted by Echo Server and
@@ -708,7 +708,7 @@ static struct tgt_opc_slice esd_common_slice[] = {
 	}
 };
 
-/**
+/*
  * lu_device_operations matrix for ECHO SRV device is NULL,
  * this device is just serving incoming requests immediately
  * without building a stack of lu_devices.
@@ -716,18 +716,19 @@ static struct tgt_opc_slice esd_common_slice[] = {
 static const struct lu_device_operations echo_srv_lu_ops = { 0 };
 
 /**
- * Initialize Echo Server device with parameters in the config log \a cfg.
+ * echo_srv_init0() - Initialize Echo Server device with parameters in the
+ * config log(@cfg)
+ * @env: execution environment
+ * @esd: Echo Server device
+ * @ldt: LU device type of Echo Server
+ * @cfg: configuration log
  *
  * This is the main starting point of Echo Server initialization. It fills all
  * parameters with their initial values and starts Echo Server.
  *
- * \param[in] env	execution environment
- * \param[in] m		Echo Server device
- * \param[in] ldt	LU device type of Echo Server
- * \param[in] cfg	configuration log
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int echo_srv_init0(const struct lu_env *env,
 			  struct echo_srv_device *esd,
@@ -810,13 +811,12 @@ err_out:
 }
 
 /**
- * Stop the Echo Server device.
+ * echo_srv_fini() - Stop the Echo Server device.
+ * @env: execution environment
+ * @esd: ESD device
  *
  * This function stops the Echo Server device and all its subsystems.
  * This is the end of Echo Server lifecycle.
- *
- * \param[in] env	execution environment
- * \param[in] esd		ESD device
  */
 static void echo_srv_fini(const struct lu_env *env,
 			  struct echo_srv_device *esd)
@@ -854,15 +854,14 @@ static void echo_srv_fini(const struct lu_env *env,
 }
 
 /**
- * Implementation of lu_device_type_operations::ldto_device_fini.
+ * echo_srv_device_fini() - Implementation of ldto_device_fini.
+ * @env: execution environment
+ * @d: LU device of ESD
  *
  * Finalize device. Dual to echo_srv_device_init(). It is called from
  * obd_precleanup() and stops the current device.
  *
- * \param[in] env	execution environment
- * \param[in] d		LU device of ESD
- *
- * \retval		NULL
+ * Returns NULL always
  */
 static struct lu_device *echo_srv_device_fini(const struct lu_env *env,
 					      struct lu_device *d)
@@ -873,14 +872,13 @@ static struct lu_device *echo_srv_device_fini(const struct lu_env *env,
 }
 
 /**
- * Implementation of lu_device_type_operations::ldto_device_free.
+ * echo_srv_device_free() - Implementation of ldto_device_free.
+ * @env: execution environment
+ * @d: LU device of ESD
  *
  * Free Echo Server device. Dual to echo_srv_device_alloc().
  *
- * \param[in] env	execution environment
- * \param[in] d		LU device of ESD
- *
- * \retval		NULL
+ * Returns NULL always
  */
 static struct lu_device *echo_srv_device_free(const struct lu_env *env,
 					      struct lu_device *d)
@@ -893,17 +891,16 @@ static struct lu_device *echo_srv_device_free(const struct lu_env *env,
 }
 
 /**
- * Implementation of lu_device_type_operations::ldto_device_alloc.
+ * echo_srv_device_alloc() - Implementation of ldto_device_alloc
+ * @env: execution environment
+ * @t: lu_device_type of ESD device
+ * @cfg: configuration log
  *
  * This function allocates the new Echo Server device. It is called from
  * obd_setup() if OBD device had lu_device_type defined.
  *
- * \param[in] env	execution environment
- * \param[in] t		lu_device_type of ESD device
- * \param[in] cfg	configuration log
- *
- * \retval		pointer to the lu_device of just allocated OFD
- * \retval		ERR_PTR of return value on error
+ * Return pointer to the lu_device of just allocated OFD on success else
+ * ERR_PTR of return value on error
  */
 static struct lu_device *echo_srv_device_alloc(const struct lu_env *env,
 					       struct lu_device_type *t,

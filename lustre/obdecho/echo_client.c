@@ -35,9 +35,7 @@
 
 #include "echo_internal.h"
 
-/** \defgroup echo_client Echo Client
- * @{
- */
+/* echo_client Echo Client  */
 
 /* echo thread key have a CL_THREAD flag, which set cl_env function directly */
 #define ECHO_MD_CTX_TAG (LCT_REMEMBER | LCT_MD_THREAD)
@@ -76,7 +74,7 @@ struct echo_object_conf {
 #ifdef HAVE_SERVER_SUPPORT
 static const char echo_md_root_dir_name[] = "ROOT_ECHO";
 
-/**
+/*
  * In order to use the values of members in struct mdd_device,
  * we define an alias structure here.
  */
@@ -95,9 +93,7 @@ static int echo_client_setup(const struct lu_env *env,
 			     struct lustre_cfg *lcfg);
 static int echo_client_cleanup(struct obd_device *obd);
 
-/** \defgroup echo_helpers Helper functions
- * @{
- */
+/* echo_helpers Helper functions */
 static struct echo_device *cl2echo_dev(const struct cl_device *dev)
 {
 	return container_of_safe(dev, struct echo_device, ed_cl);
@@ -162,7 +158,7 @@ static struct obd_device *emd2obd_dev(struct echo_md_device *d)
 }
 #endif /* HAVE_SERVER_SUPPORT */
 
-/** @} echo_helpers */
+/* echo_helpers */
 
 static int cl_echo_object_put(struct echo_object *eco);
 
@@ -217,11 +213,15 @@ static struct lu_kmem_descr echo_caches[] = {
 	}
 };
 
-/** \defgroup echo_lu_ops lu_object operations
+/**
+ * echo_object_init() - initilize echo_object
+ * @env: lustre execution environment
+ * @obj: pointer to lu_object
+ * @conf: pointer to conf lu_object_conf (holding params to initilize)
  *
- * operations for echo lu object.
- *
- * @{
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int echo_object_init(const struct lu_env *env, struct lu_object *obj,
 			    const struct lu_object_conf *conf)
@@ -327,14 +327,9 @@ static const struct lu_object_operations echo_lu_obj_ops = {
 	.loo_object_print     = echo_object_print,
 	.loo_object_invariant = NULL
 };
-/** @} echo_lu_ops */
+/* echo_lu_ops */
 
-/** \defgroup echo_lu_dev_ops  lu_device operations
- *
- * Operations for echo lu device.
- *
- * @{
- */
+/* Operations for echo lu device  */
 static struct lu_object *echo_object_alloc(const struct lu_env *env,
 					   const struct lu_object_header *hdr,
 					   struct lu_device *dev)
@@ -364,13 +359,20 @@ static const struct lu_device_operations echo_device_lu_ops = {
 	.ldo_object_alloc   = echo_object_alloc,
 };
 
-/** @} echo_lu_dev_ops */
+/* echo_lu_dev_ops */
 
-/** \defgroup echo_init Setup and teardown
- *
+/* echo_init Setup and teardown
  * Init and fini functions for echo client.
+ */
+
+/**
+ * echo_site_init() - initilize client side echo_device
+ * @env: lustre execution environment
+ * @ed: pointer to echo_device which is getting intitilize [out]
  *
- * @{
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 static int echo_site_init(const struct lu_env *env, struct echo_device *ed)
 {
@@ -866,13 +868,11 @@ static struct lu_device_type echo_device_type = {
 	.ldt_ops      = &echo_device_type_ops,
 	.ldt_ctx_tags = LCT_CL_THREAD | LCT_MD_THREAD | LCT_DT_THREAD,
 };
-/** @} echo_init */
+/** echo_init */
 
-/** \defgroup echo_exports Exported operations
+/** echo_exports Exported operations
  *
  * exporting functions to echo client
- *
- * @{
  */
 
 /* Interfaces to echo client obd device */
@@ -968,7 +968,7 @@ static int cl_echo_object_put(struct echo_object *eco)
 	RETURN(0);
 }
 
-/** @} echo_exports */
+/* echo_exports */
 
 static u64 last_object_id;
 
@@ -2626,4 +2626,4 @@ MODULE_LICENSE("GPL");
 module_init(obdecho_init);
 module_exit(obdecho_exit);
 
-/** @} echo_client */
+/* echo_client */
