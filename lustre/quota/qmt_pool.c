@@ -1342,8 +1342,18 @@ static int qmt_pool_recalc(void *args)
 						glbl_pool->qpi_root,
 						&qti->qti_fid,
 						&uuid);
-			if (IS_ERR(slv_obj))
+			/* If one of the quota types is disabled, slv_obj for
+			 * that type doesn't exist. It is a legal case - let's
+			 * handle objects for enabled types.
+			 */
+			if (IS_ERR(slv_obj)) {
+				if (PTR_ERR(slv_obj) == -ENOENT)
+					continue;
+				CERROR("%s: pool:%s recalculation failed: rc = %ld\n",
+				       pool->qpi_qmt->qmt_svname,
+				       pool->qpi_name, PTR_ERR(slv_obj));
 				GOTO(out_stop, rc = PTR_ERR(slv_obj));
+			}
 
 			CDEBUG(D_QUOTA, "slv_obj is found %p for uuid %s\n",
 			       slv_obj, uuid.uuid);
