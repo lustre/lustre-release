@@ -104,7 +104,7 @@ static int mdd_chlg_garbage_collect(void *data)
 	struct mdd_device *mdd = data;
 	struct lu_env *env = NULL;
 	int rc;
-	struct llog_ctxt *ctxt;
+	struct llog_ctxt *ctxt, *uctxt;
 
 	ENTRY;
 
@@ -121,12 +121,16 @@ static int mdd_chlg_garbage_collect(void *data)
 	if (rc)
 		GOTO(out_free, rc);
 
-	ctxt = llog_get_context(mdd2obd_dev(mdd),
+	uctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
-	if (!ctxt)
+	if (!uctxt)
 		GOTO(out_env, rc = -ENXIO);
-	if (!(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
-		GOTO(out_ctxt, rc = -ENXIO);
+	if (!(uctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
+		GOTO(out_uctxt, rc = -ENXIO);
+
+	ctxt = llog_get_context(mdd2obd_dev(mdd), LLOG_CHANGELOG_ORIG_CTXT);
+	if (!ctxt)
+		GOTO(out_uctxt, rc = -ENXIO);
 
 	for (;;) {
 		__u32 time_now = (__u32)ktime_get_real_seconds();
@@ -136,7 +140,12 @@ static int mdd_chlg_garbage_collect(void *data)
 			.mcgc_name = { 0 },
 		};
 
-		rc = llog_cat_process(env, ctxt->loc_handle,
+		/* Prior each iteration check if emergency GC is still needed */
+		if (mdd->mdd_changelog_emrg_gc &&
+		    mdd_changelog_is_space_safe(env, mdd, ctxt->loc_handle, 0))
+			mdd->mdd_changelog_emrg_gc = false;
+
+		rc = llog_cat_process(env, uctxt->loc_handle,
 				      mdd_changelog_gc_cb, &mcgc, 0, 0);
 		if (rc)
 			GOTO(out_ctxt, rc);
@@ -150,10 +159,8 @@ static int mdd_chlg_garbage_collect(void *data)
 		      mdd->mdd_cl.mc_index - mcgc.mcgc_minrec);
 
 		mdd_changelog_user_purge(env, mdd, mcgc.mcgc_id);
-
-		if (mdd->mdd_changelog_emrg_gc &&
-		    mdd_changelog_is_space_safe(env, mdd, ctxt->loc_handle, 0))
-			mdd->mdd_changelog_emrg_gc = false;
+		/* purge just the oldest user in emergency per GC run */
+		mdd->mdd_changelog_emrg_gc = false;
 
 		if (kthread_should_stop())
 			GOTO(out_ctxt, rc = 0);
@@ -161,6 +168,8 @@ static int mdd_chlg_garbage_collect(void *data)
 	EXIT;
 out_ctxt:
 	llog_ctxt_put(ctxt);
+out_uctxt:
+	llog_ctxt_put(uctxt);
 out_env:
 	lu_env_fini(env);
 out_free:

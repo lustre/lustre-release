@@ -921,27 +921,22 @@ bool mdd_changelog_is_space_safe(const struct lu_env *env,
 		llog_size = clamp_t(unsigned long long,
 				    (sfs.os_blocks * sfs.os_bsize) >> 6,
 				    2 << 20, 128 << 20);
-		/* llog_cat_free_space() gives free slots, we need occupied,
-		 * so subtruct free from total slots minus one for header
-		 */
-		llog_size *= LLOG_HDR_BITMAP_SIZE(lgh->lgh_hdr) - 1 -
-			     llog_cat_free_space(lgh);
+		/* amount of plain llogs in use plus catalog itself */
+		llog_size *= lgh->lgh_hdr->llh_count + 1;
 	} else {
 		/* get exact llog size */
 		llog_size = llog_cat_size(env, lgh);
 	}
-	CDEBUG(D_HA, "%s:%s changelog size is %lluMB, space limit is %lluMB\n",
-	       mdd2obd_dev(mdd)->obd_name, estimate ? " estimated" : "",
-	       llog_size >> 20, free_space_limit >> 20);
 
-	if (llog_size > free_space_limit) {
-		CWARN("%s: changelog uses %lluMB with %lluMB space limit\n",
-		      mdd2obd_dev(mdd)->obd_name, llog_size >> 20,
-		      free_space_limit >> 20);
-		return false;
-	}
+	if (llog_size <= free_space_limit)
+		return true;
 
-	return true;
+	CDEBUG_LIMIT(estimate ? D_HA : D_WARNING,
+		     "%s:%s changelog size %lluMB with %lluMB space limit\n",
+		     mdd2obd_dev(mdd)->obd_name, estimate ? " estimated" : "",
+		     llog_size >> 20, free_space_limit >> 20);
+
+	return false;
 }
 
 /**
