@@ -2002,7 +2002,7 @@ no_bulk:
 	RETURN(0);
 
 out:
-	ptlrpc_req_finished(req);
+	ptlrpc_req_put(req);
 	RETURN(rc);
 }
 
