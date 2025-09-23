@@ -229,15 +229,19 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 		return sprintf(buf, "LBUG\n");
 
 	obd_device_lock();
-	obd_device_for_each_cond(dev_no, obd, test_bit(OBDF_ATTACHED, obd->obd_flags) &&
-				 test_bit(OBDF_SET_UP, obd->obd_flags) && !obd->obd_stopping &&
-				 !obd->obd_read_only) {
+	obd_device_for_each_cond(dev_no, obd, test_bit(OBDF_ATTACHED,
+						       obd->obd_flags) &&
+				 test_bit(OBDF_SET_UP, obd->obd_flags) &&
+				 !obd->obd_stopping && !obd->obd_read_only) {
 		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 
 		class_incref(obd, __func__, current);
 		obd_device_unlock();
-		if (obd_health_check(NULL, obd))
+		if (obd_health_check(NULL, obd)) {
+			CERROR("%s: device reported unhealthy\n",
+			       obd->obd_name);
 			healthy = false;
+		}
 		obd_device_lock();
 		class_decref(obd, __func__, current);
 
@@ -689,33 +693,6 @@ static const struct file_operations checksum_speed_fops = {
 	.release = seq_release,
 };
 
-static int
-health_check_seq_show(struct seq_file *m, void *unused)
-{
-	struct obd_device *obd = NULL;
-	unsigned long dev_no = 0;
-
-	obd_device_lock();
-	obd_device_for_each_cond(dev_no, obd, test_bit(OBDF_ATTACHED, obd->obd_flags) &&
-				 test_bit(OBDF_SET_UP, obd->obd_flags) && !obd->obd_stopping) {
-		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-
-		class_incref(obd, __func__, current);
-		obd_device_unlock();
-		if (obd_health_check(NULL, obd)) {
-			seq_printf(m, "device %s reported unhealthy\n",
-				   obd->obd_name);
-		}
-		obd_device_lock();
-		class_decref(obd, __func__, current);
-	}
-	obd_device_unlock();
-
-	return 0;
-}
-
-LDEBUGFS_SEQ_FOPS_RO(health_check);
-
 struct kset *lustre_kset;
 EXPORT_SYMBOL_GPL(lustre_kset);
 
@@ -769,9 +746,6 @@ int class_procfs_init(void)
 
 	debugfs_create_file("devices", 0444, debugfs_lustre_root, NULL,
 			    &obd_device_list_fops);
-
-	debugfs_create_file("health_check", 0444, debugfs_lustre_root,
-			    NULL, &health_check_fops);
 
 	debugfs_create_file("checksum_speed", 0444, debugfs_lustre_root,
 			    NULL, &checksum_speed_fops);
