@@ -131,6 +131,41 @@ static ssize_t qos_prio_free_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(qos_prio_free);
 
+static ssize_t qos_rr_index_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lmv_obd *lmv = &obd->u.lmv;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", lmv->lmv_qos_rr_index %
+					lmv->lmv_mdt_descs.ltd_tgts_size);
+}
+
+static ssize_t qos_rr_index_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lmv_obd *lmv = &obd->u.lmv;
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	/* It doesn't really matter what value is stored here, since it will
+	 * always be used modulo of the current MDT count.  It is actually
+	 * better if this value is not constrained to 0..MDTCOUNT-1, because
+	 * it will continue to work even if the number of MDTs changes.
+	 */
+	lmv->lmv_qos_rr_index = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(qos_rr_index);
+
 static ssize_t qos_threshold_rr_show(struct kobject *kobj,
 				     struct attribute *attr,
 				     char *buf)
@@ -455,6 +490,7 @@ static struct attribute *lmv_attrs[] = {
 	&lustre_attr_numobd.attr,
 	&lustre_attr_qos_maxage.attr,
 	&lustre_attr_qos_prio_free.attr,
+	&lustre_attr_qos_rr_index.attr,
 	&lustre_attr_qos_threshold_rr.attr,
 	NULL,
 };

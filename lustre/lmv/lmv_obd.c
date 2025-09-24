@@ -1252,7 +1252,8 @@ static struct lu_device *lmv_device_alloc(const struct lu_env *env,
 
 	/*
 	 * initialize rr_index to lower 32bit of netid, so that client
-	 * can distribute subdirs evenly from the beginning.
+	 * can distribute new subdir creation in round-robin directories
+	 * relatively evenly across MDTs from the beginning.
 	 */
 	while (LNetGetId(i++, &lnet_id, true) != -ENOENT) {
 		if (!nid_is_lo0(&lnet_id.nid)) {

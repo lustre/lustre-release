@@ -31931,6 +31931,28 @@ most_full_mdt() {
 	echo -n $min_index
 }
 
+test_413A() {
+	local index=0
+
+	echo "before"
+	do_nodes $CLIENTS $LCTL get_param lmv.*.qos_rr_index
+	for client in ${CLIENTS//,/ }; do
+		do_node $client $LCTL set_param -n lmv.*.qos_rr_index=$index
+		((index++))
+	done
+	echo "after"
+	do_nodes $CLIENTS $LCTL get_param lmv.*.qos_rr_index
+	index=0
+	for client in ${CLIENTS//,/ }; do
+		got=$(do_node $client $LCTL get_param -n lmv.*.qos_rr_index)
+		((got == index)) ||
+			error "lmv.*.qos_rr_index was $got != $index"
+		((index++))
+	done
+	echo "all OSCs set correctly"
+}
+run_test 413A "get and set qos_rr_index on all clients"
+
 test_413a() {
 	[ $MDSCOUNT -lt 2 ] &&
 		skip "We need at least 2 MDTs for this test"
