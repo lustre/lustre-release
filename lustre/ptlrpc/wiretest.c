@@ -6668,7 +6668,9 @@ void lustre_assert_wire_constants(void)
 		 (unsigned)NODEMAP_RAISE_PRIV_FORBID_ENC);
 	LASSERTF(NODEMAP_RAISE_PRIV_CAPS == 0x00000080UL, "found 0x%.8xUL\n",
 		 (unsigned)NODEMAP_RAISE_PRIV_CAPS);
-	LASSERTF(NODEMAP_RAISE_PRIV_NONE == 0xffffff00UL, "found 0x%.8xUL\n",
+	LASSERTF(NODEMAP_RAISE_PRIV_DENY_MNT == 0x00000100UL, "found 0x%.8xUL\n",
+		 (unsigned)NODEMAP_RAISE_PRIV_DENY_MNT);
+	LASSERTF(NODEMAP_RAISE_PRIV_NONE == 0xfffffe00UL, "found 0x%.8xUL\n",
 		 (unsigned)NODEMAP_RAISE_PRIV_NONE);
 	LASSERTF(NODEMAP_RAISE_PRIV_ALL == 0xffffffffUL, "found 0x%.8xUL\n",
 		 (unsigned)NODEMAP_RAISE_PRIV_ALL);

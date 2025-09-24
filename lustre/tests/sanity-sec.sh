@@ -8506,6 +8506,9 @@ test_72c() {
 		--property readonly_mount --value 0 ||
 		error "modify readonly_mount for $mgsnm on MGS failed"
 	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
+		--property deny_mount --value 1 ||
+		error "modify deny_mount for $mgsnm on MGS failed"
+	do_facet mgs $LCTL nodemap_modify --name $mgsnm \
 		--property rbac --value file_perms,quota_ops,byfid_ops ||
 		error "modify rbac for $mgsnm on MGS failed"
 	wait_nm_sync $mgsnm rbac '' inactive
@@ -8543,6 +8546,9 @@ test_72c() {
 	       --property child_raise_privileges \
 	       --value trusted,admin &&
 	    error "modify nm.child_raise_privileges for $nm on mds1 should fail"
+	do_facet mds1 $LCTL nodemap_modify --name $nm \
+		--property deny_mount --value 0 &&
+		error "modify deny_mount for $nm on mds1 should fail"
 
 	do_facet mds1 $LCTL nodemap_del $nm ||
 		error "failed to delete dynamic nodemap $nm"

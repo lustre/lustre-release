@@ -234,6 +234,7 @@ static bool allow_op_on_nm(struct lu_nodemap *nodemap)
  * - nmf_rbac_raise
  * - nmf_forbid_encryption
  * - nm_capabilities
+ * - nmf_deny_mount
  * If nmf_raise_privs grants corresponding privilege, any change on these
  * properties is permitted. Otherwise, only lowering privileges is possible,
  * which means:
@@ -245,6 +246,7 @@ static bool allow_op_on_nm(struct lu_nodemap *nodemap)
  * - nmf_rbac_raise to fewer roles
  * - nmf_forbid_encryption from 1 (parent) to 0
  * - nm_capabilities of child is a subset of parent's
+ * - nmf_deny_mount from 0 (parent) to 1
  *
  * Return:
  * * %true		if the modification is allowed
@@ -294,6 +296,8 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
 		newcaps = (kernel_cap_t *)&val;
 		return cap_issubset(*newcaps,
 				    nodemap->nm_parent_nm->nm_capabilities);
+	case NODEMAP_RAISE_PRIV_DENY_MNT:
+		return (!nodemap->nm_parent_nm->nmf_deny_mount || prop_val);
 	default:
 		return true;
 	}
@@ -3912,13 +3916,18 @@ int nodemap_set_deny_mount(const char *name, bool deny_mount)
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -ENXIO);
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_DENY_MNT,
+				deny_mount))
+		GOTO(out_putref, rc = -EPERM);
 
 	nodemap->nmf_deny_mount = deny_mount;
 	rc = nodemap_idx_nodemap_update(nodemap);
 
 	nm_member_revoke_locks(nodemap);
+out_putref:
 	nodemap_putref(nodemap);
-
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_set_deny_mount);

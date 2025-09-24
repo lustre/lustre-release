@@ -66,6 +66,7 @@ static const struct nodemap_priv_name {
 	/* NODEMAP_RAISE_PRIV_RBAC uses the rbac roles directly */
 	{ NODEMAP_RAISE_PRIV_FORBID_ENC,	"forbid_encryption"	},
 	{ NODEMAP_RAISE_PRIV_CAPS,		"caps"	},
+	{ NODEMAP_RAISE_PRIV_DENY_MNT,		"deny_mount"		},
 };
 
 enum fileset_modify_type {
