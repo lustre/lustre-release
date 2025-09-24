@@ -4992,6 +4992,9 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 	char errmsg[LNET_MAX_STR_LEN];
 	bool tunables_set = false;
 	bool lnd_tunables_set = false;
+	/* Track configured networks to ensure uniqueness for ip2nets */
+	__u32 *configured_nets = NULL;
+	size_t nets_cnt = 0;
 
 	init_ip2nets_tunables(&ip2nets, &tunables);
 
@@ -5005,6 +5008,16 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 		/* Reached the end of the ip2nets sequence */
 		if (event.type == YAML_SEQUENCE_END_EVENT) {
 			yaml_event_delete(&event);
+			if (nets_cnt == 0) {
+				/* If none of the rules applied then return an
+				 * error
+				 */
+				rc = -EINVAL;
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "No ip2nets rules applied");
+				goto print_error;
+			}
+
 			goto out;
 		}
 
@@ -5014,25 +5027,41 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 			char *net;
 			lnet_nid_t *nids = NULL;
 			__u32 nnids = 0;
-			char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+			bool duplicate_net = false;
+			int i;
+			__u32 *tmp;
 
 			rc = lustre_lnet_resolve_ip2nets_rule(&ip2nets, &nids,
-							      &nnids, err_str,
-							      sizeof(err_str));
+							      &nnids, errmsg,
+							      sizeof(errmsg));
 			if (nids)
 				free(nids);
 
+			/* NO_MATCH is okay for ip2nets, but anything else is
+			 * an error
+			 */
 			if (rc != LUSTRE_CFG_RC_NO_ERR &&
-			    rc != LUSTRE_CFG_RC_MATCH)
+			    rc != LUSTRE_CFG_RC_NO_MATCH)
 				goto print_error;
 
-			if (list_empty(&ip2nets.ip2nets_net.nw_intflist)) {
-				snprintf(err_str, sizeof(err_str),
-					 "No interfaces match ip2nets rules");
-				rc = -ENOENT;
-				goto print_error;
+			/* Skip configuration if resolution failed */
+			if (rc != LUSTRE_CFG_RC_NO_ERR)
+				goto cleanup_block;
+
+			/* Check for duplicate networks in ip2nets sequences */
+			for (i = 0; i < nets_cnt; i++) {
+				if (configured_nets[i] ==
+				    ip2nets.ip2nets_net.nw_id) {
+					duplicate_net = true;
+					break;
+				}
 			}
 
+			/* Skip configuration if duplicate */
+			if (duplicate_net)
+				goto cleanup_block;
+
+			/* Configure the network interface */
 			net = libcfs_net2str(ip2nets.ip2nets_net.nw_id);
 			if (tunables_set || lnd_tunables_set)
 				tun = &tunables;
@@ -5040,14 +5069,29 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 			rc = yaml_lnet_config_ni(net, NULL,
 						 &ip2nets.ip2nets_net, tun, -1,
 						 global_cpts, LNET_GENL_VERSION,
-						 NLM_F_CREATE, stdout);
+						 flags, stdout);
 			if (rc < 0) {
-				snprintf(err_str, sizeof(err_str),
+				snprintf(errmsg, sizeof(errmsg),
 					 "Failed to configure NI on net '%s' rc = %d",
 					 net, rc);
 				goto print_error;
 			}
 
+			/* Record successfully configured network for ip2nets */
+			tmp = realloc(configured_nets, (nets_cnt + 1) *
+				      sizeof(*configured_nets));
+
+			if (!tmp) {
+				rc = -ENOMEM;
+				snprintf(errmsg, sizeof(errmsg),
+					 "Out of memory tracking configured nets");
+				goto print_error;
+			}
+			configured_nets = tmp;
+			configured_nets[nets_cnt] = ip2nets.ip2nets_net.nw_id;
+			nets_cnt++;
+
+cleanup_block:
 			free_ip2nets_lists(&ip2nets);
 			init_ip2nets_tunables(&ip2nets, &tunables);
 			global_cpts = NULL;
@@ -5173,6 +5217,9 @@ yaml_parser_error:
 	}
 out:
 	free_ip2nets_lists(&ip2nets);
+	if (configured_nets)
+		free(configured_nets);
+
 	return (rc < 0) ? rc : 1;
 }
 

@@ -1606,7 +1606,7 @@ static int lustre_lnet_kfi_intf2nid(struct lnet_dlc_intf_descr *intf,
 
 	rc = sscanf(intf->intf_name, "cxi%u", &nic_index);
 	if (rc != 1)
-		return LUSTRE_CFG_RC_NO_MATCH;
+		return LUSTRE_CFG_RC_BAD_PARAM;
 
 	size = snprintf(NULL, 0, cxi_nic_addr_path, nic_index) + 1;
 	nic_addr_path = malloc(size);
@@ -1617,11 +1617,11 @@ static int lustre_lnet_kfi_intf2nid(struct lnet_dlc_intf_descr *intf,
 	rc = read_sysfs_file(nic_addr_path, "nic_addr", val, 1, sizeof(val));
 	free(nic_addr_path);
 	if (rc)
-		return LUSTRE_CFG_RC_NO_MATCH;
+		return LUSTRE_CFG_RC_BAD_PARAM;
 
 	addr = strtol(val, NULL, 16);
 	if (addr == LONG_MIN || addr == LONG_MAX)
-		return LUSTRE_CFG_RC_NO_MATCH;
+		return LUSTRE_CFG_RC_BAD_PARAM;
 
 	*nid_addr = addr;
 
@@ -1677,6 +1677,7 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 		if (rc) {
 			snprintf(err_str, str_len,
 				 "\"cannot read gni nid\"");
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
 			goto failed;
 		}
 		gni_num = atoi(val);
@@ -1735,7 +1736,7 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 out:
 	*nnids = count;
 
-	return 0;
+	return LUSTRE_CFG_RC_NO_ERR;
 
 failed:
 	free(*nids);
@@ -1769,7 +1770,8 @@ failed:
  */
 static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 					struct list_head *intf_list,
-					struct list_head *ip_ranges)
+					struct list_head *ip_ranges,
+					char *err_str, size_t str_len)
 {
 	int rc;
 	__u32 ip;
@@ -1803,6 +1805,8 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 				return LUSTRE_CFG_RC_MATCH;
 			}
 		}
+
+		snprintf(err_str, str_len, "No UP interfaces were found");
 		return LUSTRE_CFG_RC_NO_MATCH;
 	}
 
@@ -1847,6 +1851,9 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 		if (!list_empty(intf_list))
 			return LUSTRE_CFG_RC_MATCH;
 
+		snprintf(err_str, str_len,
+			 "IP pattern(s) do not match available interfaces");
+
 		return LUSTRE_CFG_RC_NO_MATCH;
 	}
 
@@ -1871,15 +1878,20 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 		}
 
 		if (ifaddr == NULL) {
+			snprintf(err_str, str_len, "No interface matching '%s'",
+				 intf_descr->intf_name);
 			list_del(&intf_descr->intf_on_network);
 			free_intf_descr(intf_descr);
-			continue;
+			return LUSTRE_CFG_RC_NO_MATCH;
 		}
 
 		if ((ifaddr->ifa_flags & IFF_UP) == 0) {
+			snprintf(err_str, str_len,
+				 "Matched interface '%s' is not UP",
+				 intf_descr->intf_name);
 			list_del(&intf_descr->intf_on_network);
 			free_intf_descr(intf_descr);
-			continue;
+			return LUSTRE_CFG_RC_NO_MATCH;
 		}
 
 		ip = ((struct sockaddr_in *)ifaddr->ifa_addr)->sin_addr.s_addr;
@@ -1892,9 +1904,16 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 		}
 
 		if (!rc) {
-			/* no match for this interface */
+			/* This interface was specified by user but does not
+			 * match any IP-range that was specified. Therefore,
+			 * this ip2nets rule doesn't apply to this node
+			 */
+			snprintf(err_str, str_len,
+				 "Interface '%s' doesn't match an IP pattern",
+				 intf_descr->intf_name);
 			list_del(&intf_descr->intf_on_network);
 			free_intf_descr(intf_descr);
+			return LUSTRE_CFG_RC_NO_MATCH;
 		}
 	}
 
@@ -1917,10 +1936,9 @@ int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
 
 	rc = lustre_lnet_match_ip_to_intf(ifa,
 					  &ip2nets->ip2nets_net.nw_intflist,
-					  &ip2nets->ip2nets_ip_ranges);
+					  &ip2nets->ip2nets_ip_ranges, err_str,
+					  str_len);
 	if (rc != LUSTRE_CFG_RC_MATCH) {
-		snprintf(err_str, str_len,
-			 "\"couldn't match ip to existing interfaces\"");
 		freeifaddrs(ifa);
 		return rc;
 	}
