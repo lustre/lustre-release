@@ -873,7 +873,7 @@ AS_IF([test $ENABLEO2IB != "no"], [
 AC_DEFUN([LN_CONFIG_EFALND], [
 AC_MSG_CHECKING([whether to enable EFA LND])
 AC_ARG_ENABLE([efa],
-	AC_HELP_STRING([--enable-efa=[yes|no|<path>]],
+	AS_HELP_STRING([--enable-efa=[yes|no|<path>]],
 		       [enable EFA LND]),
 	[], [enable_efa="no"])
 
