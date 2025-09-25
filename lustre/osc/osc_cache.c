@@ -3504,6 +3504,43 @@ bool osc_discard_cb(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(osc_discard_cb);
 
+static void osc_buffered_read_check_cb(const struct lu_env *env, void *cbdata)
+{
+	struct osc_object *osc = (struct osc_object *)cbdata;
+	struct osc_extent *ext;
+	struct osc_extent *next;
+	bool unplug = false;
+
+	ENTRY;
+
+	osc_object_lock(osc);
+	/*
+	 * Check buffered read extents.
+	 * As we failed to acquire @invalidate_lock, there should be a read or
+	 * fault process holding the shared @invalidate_lock.
+	 * Move the reading extent waiting for RPC slots to high priority list,
+	 * thus they can be fired as soon as possible to avoid the possible
+	 * deadlock.
+	 */
+	list_for_each_entry_safe(ext, next, &osc->oo_reading_exts, oe_link) {
+		EASSERT(ext->oe_state == OES_LOCK_DONE, ext);
+		/* Skip write extent and direct I/O */
+		if (!ext->oe_rw || ext->oe_dio || ext->oe_srvlock)
+			continue;
+
+		list_move_tail(&ext->oe_link, &osc->oo_hp_read_exts);
+		OSC_EXTENT_DUMP(D_CACHE, ext,
+				"HP read this extent for invalidate_lock\n");
+		unplug = true;
+	}
+	osc_object_unlock(osc);
+
+	if (unplug)
+		osc_io_unplug(env, osc_cli(osc), osc);
+
+	EXIT;
+}
+
 /**
  * Discard pages protected by the given lock. This function traverses radix
  * tree to find all covering pages and discard them. If a page is being covered
@@ -3515,6 +3552,7 @@ EXPORT_SYMBOL(osc_discard_cb);
 int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 			   pgoff_t start, pgoff_t end, bool discard)
 {
+	struct cl_object *clob = cl_object_top(osc2cl(osc));
 	struct osc_thread_info *info = osc_env_info(env);
 	struct cl_io *io = osc_env_new_io(env);
 	osc_page_gang_cbt cb;
@@ -3522,9 +3560,10 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 
 	ENTRY;
 
-	io->ci_obj = cl_object_top(osc2cl(osc));
+	cl_object_invalidate_lock(env, clob, osc_buffered_read_check_cb, osc);
+
+	io->ci_obj = clob;
 	io->ci_ignore_layout = 1;
-	io->ci_invalidate_page_cache = 1;
 	io->u.ci_misc.lm_next_rpc_time = ktime_get_seconds() +
 					 5 * obd_timeout / 16;
 	result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
@@ -3539,6 +3578,8 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 			     info->oti_next_index, end, cb, osc);
 out:
 	cl_io_fini(env, io);
+	cl_object_invalidate_unlock(env, clob);
+
 	RETURN(result);
 }
 

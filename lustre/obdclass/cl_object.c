@@ -292,6 +292,38 @@ void cl_object_dirty_for_sync(const struct lu_env *env, struct cl_object *top)
 }
 EXPORT_SYMBOL(cl_object_dirty_for_sync);
 
+/* Acquire invalidate_lock of the inode mapping. */
+void cl_object_invalidate_lock(const struct lu_env *env, struct cl_object *top,
+			       buffered_read_check_cbt cb, void *cbdata)
+{
+	struct cl_object *obj;
+
+	ENTRY;
+
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_invalidate_lock != NULL)
+			obj->co_ops->coo_invalidate_lock(env, obj, cb, cbdata);
+	}
+	EXIT;
+}
+EXPORT_SYMBOL(cl_object_invalidate_lock);
+
+/* Release invalidate_lock of the inode mapping. */
+void cl_object_invalidate_unlock(const struct lu_env *env,
+				 struct cl_object *top)
+{
+	struct cl_object *obj;
+
+	ENTRY;
+
+	cl_object_for_each(obj, top) {
+		if (obj->co_ops->coo_invalidate_unlock != NULL)
+			obj->co_ops->coo_invalidate_unlock(env, obj);
+	}
+	EXIT;
+}
+EXPORT_SYMBOL(cl_object_invalidate_unlock);
+
 /**
  * cl_object_glimpse() - Notifies layers (bottom-to-top) that glimpse AST was
  * received.
