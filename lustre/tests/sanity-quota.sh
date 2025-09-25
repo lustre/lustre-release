@@ -759,6 +759,12 @@ test_1b() {
 		"user quota isn't released after deletion"
 	resetquota -u $TSTUSR
 
+	sync
+	sync
+
+	debugfs -R "ls /quota_master/dt-0x0" /tmp/lustre-mdt1
+	debugfs -R "ls /quota_master/dt-qpool1" /tmp/lustre-mdt1
+
 	# test for group
 	log "--------------------------------------"
 	log "Group quota (block hardlimit:$global_limit MB)"
@@ -7118,12 +7124,11 @@ test_94()
 		--property trusted --value 1
 	wait_nm_sync $nm trusted_nodemap
 
-	$LFS quota -u -a $MOUNT | head -n 10
+	$LFS quota -u -a -n $MOUNT | head -n 10
 	while IFS= read -r line; do
 		(( lineno++ >= 2 )) || continue
 		read -r qid qval <<< "$line"
-		numid=$(id -u "$qid" 2>/dev/null || echo "$qid")
-		((numid <= lim)) ||
+		((qid <= lim)) ||
 			error "Access to foreign quota uid range $qid"
 		# squash id is not sequential plus it might have QIDs set in
 		# prevous tests. So check limits only for the first idcount QIDs
@@ -7135,13 +7140,12 @@ test_94()
 		fi
 	done < <($LFS quota -u -a --bhardlimit $MOUNT)
 
-	$LFS quota -g -a $MOUNT | head -n 10
+	$LFS quota -g -a -n $MOUNT | head -n 10
 	lineno=0
 	while IFS= read -r line; do
 		(( lineno++ >= 2 )) || continue
 		read -r qid qval <<< "$line"
-		numid=$(getent group $qid | cut -d: -f3)
-		((numid <= lim)) ||
+		((qid <= lim)) ||
 			error "Access to foreign quota gid range $qid"
 		if ((lineno - 2 <= idcount)); then
 			local exp=$((off + lineno -3))
@@ -7151,7 +7155,7 @@ test_94()
 	done < <($LFS quota -g -a --bhardlimit $MOUNT)
 
 	is_project_quota_supported && {
-		$LFS quota -p -a $MOUNT | head -n 10
+		$LFS quota -p -a -n $MOUNT | head -n 10
 		lineno=0
 		while IFS= read -r line; do
 			(( lineno++ >= 2 )) || continue

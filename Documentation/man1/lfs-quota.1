@@ -40,6 +40,7 @@ lfs-quota \- display quota limits and status for users, groups, or projects.
 .SY "lfs quota"
 .BR -a | --all
 .RB { -u | -g | -p }
+.RB [ -n ]
 .RB [ -s
 .IR START_QID ]
 .RB [ -e
@@ -68,14 +69,15 @@ is specified, quotas for all Lustre mountpoints will be shown.
 Display default quota values for users, groups, or projects.
 This command requires superuser permissions.
 .TP
-.BR "lfs quota -a" " {" -u | -g | -p "} [" \fIMOUNT_POINT " ...]
+.BR "lfs quota -a" " {" -u | -g | -p "} [" -n "] [" \fIMOUNT_POINT " ...]
 Display disk usage and limits for all users, groups, or projects that exist
 across all mounted filesystems.
+.B -n
+display the numeric value of the quota IDs instead of its name
 .B --start-qid
 and
 .B --end-qid
-can be specified to have only a select range of qids for the given group be
-shown.
+display the value of the quota IDs only in the select range.
 .TP
 .BR "lfs quota -t" " {" -u | -g | -p "} [" \fIMOUNT_POINT " ...]"
 Display grace times for users, groups, or projects.

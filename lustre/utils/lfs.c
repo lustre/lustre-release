@@ -85,6 +85,7 @@ struct quota_param {
 	unsigned int	 qp_show_pools:1;
 	unsigned int	 qp_show_qid:1;
 	unsigned int	 qp_show_title:1;
+	unsigned int	 qp_show_qid_num:1;
 	__u32		 qp_detail;
 };
 
@@ -531,7 +532,7 @@ command_t cmdlist[] = {
 	 "             [MOUNT_POINT ...]\n"
 	 "       quota -t {-u|-g|-p} [--pool OST_POOL_NAME] [MOUNT_POINT ...]\n"
 	 "       quota [-hqv] {-U|-G|-P} [--pool OST_POOL_NAME] [MOUNT_POINT ...]\n"
-	 "       quota -a {-u|-g|-p} [-s START_QID] [-e END_QID] [MOUNT_POINT ...]\n"},
+	 "       quota -a {-u|-g|-p} [-n] [-s START_QID] [-e END_QID] [MOUNT_POINT ...]\n"},
 	{"project", lfs_project, 0,
 	 "Change or list project attribute for specified file or directory.\n"
 	 "usage: project [-d|--directory] [-r|--recursive] FILE|DIRECTORY...\n"
@@ -9783,6 +9784,11 @@ static void print_quota(const char *mnt, struct if_quotactl *qctl, int type,
 				name_max = sizeof(namebuf);
 			}
 
+			if (param->qp_show_qid_num) {
+				name[0] = '\0';
+				goto use_qid_value;
+			}
+
 			if (qctl->qc_type == USRQUOTA) {
 				rc2 = uid2name(name, name_max, qctl->qc_id);
 			} else if (qctl->qc_type == GRPQUOTA) {
@@ -9790,6 +9796,8 @@ static void print_quota(const char *mnt, struct if_quotactl *qctl, int type,
 			} else if (qctl->qc_type == PRJQUOTA) {
 				rc2 = prjid2name(name, name_max, qctl->qc_id);
 			}
+
+use_qid_value:
 			if (rc2 || name[0] == '\0')
 				snprintf(name, sizeof(namebuf), "%u",
 					 qctl->qc_id);
@@ -10414,6 +10422,7 @@ static int lfs_quota(int argc, char **argv)
 	 */
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument },
+	{ .val = 'n',	.name = "num",		.has_arg = no_argument },
 	{ .val = 'o',	.name = "ost-index",	.has_arg = required_argument },
 	{ .val = 'o',	.name = "ost",		.has_arg = required_argument },
 	{ .val = LFS_POOL_OPT, .name = "pool",	.has_arg = optional_argument },
@@ -10491,7 +10500,7 @@ static int lfs_quota(int argc, char **argv)
 	qctl->qc_type = ALLQUOTA;
 	obd_uuid = (char *)qctl->obd_uuid.uuid;
 
-	while ((c = getopt_long(argc, argv, "abBe:gGhi:I:m:o:pPqs:tuUv",
+	while ((c = getopt_long(argc, argv, "abBe:gGhi:I:m:no:pPqs:tuUv",
 		long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'a':
@@ -10552,6 +10561,9 @@ static int lfs_quota(int argc, char **argv)
 			}
 			param.qp_valid = qctl->qc_valid = QC_MDTIDX;
 			qctl->qc_idx = idx;
+			break;
+		case 'n':
+			param.qp_show_qid_num = 1;
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 22, 53, 0)
 		case 'I':
