@@ -1200,10 +1200,10 @@ int nodemap_idx_fileset_update_header(
 	if (!nodemap || !fset_info_old || !fset_info_new)
 		RETURN(-EINVAL);
 
-	if (!nodemap_mgs()) {
-		if (nodemap->nm_dyn)
-			return 0;
+	if (nodemap->nm_dyn)
+		return 0;
 
+	if (!nodemap_mgs()) {
 		rc = -EINVAL;
 		CERROR("%s: cannot add nodemap config to non-existing MGS: rc = %d\n",
 		       nodemap->nm_name, rc);
