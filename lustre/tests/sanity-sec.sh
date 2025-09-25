@@ -2322,7 +2322,7 @@ wait_nm_sync_fileset() {
 			print \$4 }'"
 	fi
 
-	wait_nm_sync $nm fileset "$fset_expected" "" "$awk_expr"
+	wait_nm_sync $nm fileset "$fset_expected" "inactive" "$awk_expr"
 }
 
 wait_nm_sync_fileset_cleared() {
@@ -8742,16 +8742,57 @@ test_72d() {
 		error "dynamic modify fileset to $fileset6 failed"
 	val=$(do_facet_check_fileset ost1 $nm2 "$fileset6" "primary")
 	[[ "$val" == "$fileset6" ]] ||
-		error "$nm2 should have fileset $fileset6"
+		error "$nm2 should have fileset $fileset6 (4)"
 
 	do_facet ost1 $LCTL nodemap_set_fileset --name $nm2 \
 		--fileset $fileset3 ||
 		error "dynamic modify fileset to $fileset3 failed (2)"
 	val=$(do_facet_check_fileset ost1 $nm2 "$fileset3" "primary")
 	[[ "$val" == "$fileset3" ]] ||
-		error "$nm2 should have fileset $fileset3"
+		error "$nm2 should have fileset $fileset3 (5)"
 
 	do_facet ost1 $LCTL get_param -R nodemap.*
+
+	# tests for LU-19426 below. Fix not included in 2.16.57
+	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
+		return 0
+
+	do_facet ost1 $LCTL nodemap_del $nm ||
+		error "removing dynamic nodemap on server failed"
+	do_facet mgs $LCTL nodemap_fileset_del --name $mgsnm --all ||
+		error "deleting fileset for $mgsnm on MGS failed"
+	do_facet mgs $LCTL nodemap_fileset_add --name $mgsnm \
+		--fileset $filesetp --alt ||
+		error "adding alt fileset for $mgsnm on MGS failed"
+	wait_nm_sync_fileset $mgsnm "$filesetp" "$filesetp" "alternate"
+
+	do_facet ost1 $LCTL nodemap_add -d -p $mgsnm $nm ||
+		error "dynamic nodemap on server failed (4)"
+	val=$(do_facet ost1 $LCTL get_param -n nodemap.$nm.id)
+	if [[ -z "$val" || "$val" == "0" ]]; then
+		error "dynamic nodemap wrong id $val (3)"
+	fi
+	val=$(do_facet_check_fileset ost1 $nm "$filesetp" "alternate")
+	[[ "$val" == "$filesetp" ]] ||
+		error "$nm should have fileset $filesetp (6)"
+	local fileset7="/outsidedir"
+	# attempt to set fileset outside parent's namespace restrictions.
+	# previously succeeded and fixed by LU-19426
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm \
+		--fileset $fileset7 &&
+		error "dyn set fileset to $fileset7 should fail (out-of-bounds)"
+	do_facet ost1 $LCTL nodemap_fileset_add --name $nm \
+		--fileset $fileset7 &&
+		error "dyn add fileset to $fileset7 should fail (out-of-bounds)"
+	local fileset8="/subdir/mydir"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm \
+		--fileset $fileset8 ||
+		error "dyn set prim fileset to $fileset8 failed"
+	do_facet ost1 $LCTL nodemap_set_fileset --name $nm --fileset 'clear' ||
+		error "remove prim fileset failed"
+	do_facet ost1 $LCTL nodemap_fileset_add --name $nm \
+		--fileset $fileset8 ||
+		error "dyn add prim fileset to $fileset8 failed"
 }
 run_test 72d "fileset inheritance for dynamic nodemap"
 

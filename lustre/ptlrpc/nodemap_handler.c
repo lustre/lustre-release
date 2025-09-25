@@ -2603,15 +2603,15 @@ static int nodemap_set_fileset_prim_iam(struct lu_nodemap *nodemap,
 	if (fileset_path[0] != '/')
 		RETURN(-EINVAL);
 
+	rc = check_fileset_add_vs_parent(nodemap, fileset_path);
+	if (rc)
+		RETURN(rc);
+
 	/* if fileset is not set, add it instead */
 	if (!nodemap->nm_fileset_prim) {
 		rc = nodemap_fileset_add_primary(nodemap, fileset_path, false);
 		GOTO(out, rc);
 	}
-
-	rc = check_fileset_add_vs_parent(nodemap, fileset_path);
-	if (rc)
-		RETURN(rc);
 
 	fileset_size = strlen(fileset_path) + 1;
 
