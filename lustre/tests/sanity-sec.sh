@@ -9649,6 +9649,9 @@ test_75a() {
 			error "disabling resource id check on OSTs failed"
 
 	report_client_view_75a() {
+		# LU-18569 skip ls -l on ubuntu clients to investigate failures
+		[[ "$CLIENT_OS_ID_LIKE" =~ "ubuntu" ]] && return
+
 		echo "Trusted view:"
 		$run_as_trusted ls -al $fileset_subdir
 		echo "------------------------------"
