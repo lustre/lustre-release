@@ -292,6 +292,7 @@ strcat||strncat
 strcpy||strncpy
 strlcpy||strscpy
 struct timeval||struct timespec64
+sysctl_vfs_cache_pressure||vfs_pressure_ratio
 tempnam||mkstemp
 time_t||timeout_t
 timer_setup||cfs_timer_setup

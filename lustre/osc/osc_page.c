@@ -1402,8 +1402,8 @@ unsigned long osc_cache_shrink_count(struct shrinker *sk,
 	list_for_each_entry(cli, &osc_shrink_list, cl_shrink_list)
 		cached += atomic_long_read(&cli->cl_lru_in_list);
 	spin_unlock(&osc_shrink_lock);
-	CDEBUG(D_CACHE, "LRU shrink count %ld, sysctl_vfs_cache_pressure %d\n",
-	       cached, sysctl_vfs_cache_pressure);
+	CDEBUG(D_CACHE, "LRU shrink count %ld, sysctl_vfs_cache_pressure %ld\n",
+	       cached, vfs_pressure_ratio(100));
 
 	return vfs_pressure_ratio(cached);
 }
