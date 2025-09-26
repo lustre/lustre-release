@@ -486,9 +486,8 @@ static int lov_add_mdc_target(const struct lu_env *env, struct lu_device *d,
 		obd_device_unlock();
 
 		if (!lmv_obd) {
-			CERROR("%s: cannot find LMV OBD by UUID (%s)\n",
-			       lov_obd->obd_name,
-			       obd_uuid2str(&lmv_obd->obd_uuid));
+			CERROR("%s: cannot find a LMV OBD to access FLD\n",
+			       lov_obd->obd_name);
 			RETURN(-ENODEV);
 		}
 		ld->ld_lmv = lmv_obd;
