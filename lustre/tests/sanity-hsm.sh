@@ -3686,6 +3686,9 @@ double_verify_reset_hsm_param() {
 }
 
 test_100() {
+	(( MDS1_VERSION >= $(version_code v2_16_56-53-g39f1380c20) )) ||
+		skip "need mds >= 2.16.56.53 for max_requests fix"
+
 	double_verify_reset_hsm_param loop_period
 	double_verify_reset_hsm_param grace_delay
 	double_verify_reset_hsm_param active_request_timeout
@@ -3806,6 +3809,9 @@ test_104() {
 run_test 104 "Copy tool data field"
 
 test_105() {
+	(( MDS1_VERSION >= $(version_code v2_16_56-53-g39f1380c20) )) ||
+		skip "need mds >= 2.16.56.53 for max_requests fix"
+
 	local max_requests=$(get_hsm_param max_requests)
 	mkdir_on_mdt0 $DIR/$tdir
 	local i=""
