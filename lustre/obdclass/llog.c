@@ -200,6 +200,7 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	struct llog_log_hdr	*llh;
 	struct thandle		*th;
 	__u32			 tmp_lgc_index;
+	int			 old_cat = -1;
 	int			 rc, i = 0;
 	int rc1;
 	bool subtract_count = false;
@@ -261,6 +262,10 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	subtract_count = true;
 	spin_unlock(&loghandle->lgh_hdr_lock);
 
+	if (llh->llh_flags & LLOG_F_IS_CAT) {
+		old_cat = llh->llh_cat_idx;
+		llog_cat_set_first_idx(loghandle, index[0]);
+	}
 	/* Since llog_process_thread use lgi_cookie, it`s better to save them
 	 * and restore after using
 	 */
@@ -307,6 +312,10 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 out_unlock:
 	if (rc < 0) {
+		if (old_cat != -1) {
+			llh->llh_cat_idx = old_cat;
+			old_cat = -1;
+		}
 		/* restore bitmap while holding a mutex */
 		spin_lock(&loghandle->lgh_hdr_lock);
 		if (subtract_count) {
@@ -323,6 +332,8 @@ out_trans:
 	if (rc == 0)
 		rc = rc1;
 	if (rc1 < 0) {
+		if (old_cat != -1)
+			llh->llh_cat_idx = old_cat;
 		spin_lock(&loghandle->lgh_hdr_lock);
 		if (subtract_count)
 			loghandle->lgh_hdr->llh_count += num;
@@ -444,6 +455,9 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		INIT_LIST_HEAD(&handle->u.chd.chd_head);
 		llh->llh_size = sizeof(struct llog_logid_rec);
 		llh->llh_flags |= LLOG_F_IS_FIXSIZE;
+		/* Fixing llh_cat_idx if it has problem */
+		if (rc == 0)
+			llog_cat_set_first_idx(handle, llh->llh_cat_idx);
 	} else if (!(flags & LLOG_F_IS_PLAIN)) {
 		CERROR("%s: unknown flags: %#x (expected %#x or %#x)\n",
 		       loghandle2name(handle), flags, LLOG_F_IS_CAT,

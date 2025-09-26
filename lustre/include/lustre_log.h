@@ -167,6 +167,7 @@ int llog_cat_retain_cb(const struct lu_env *env, struct llog_handle *cat,
 int llog_cat_modify_rec(const struct lu_env *env, struct llog_handle *cathandle,
 			struct llog_logid *lid, struct llog_rec_hdr *hdr,
 			struct llog_cookie *cookie);
+int llog_cat_set_first_idx(struct llog_handle *cathandle, int newidx);
 /* llog_obd.c */
 int llog_setup(const struct lu_env *env, struct obd_device *obd,
 	       struct obd_llog_group *olg, int index,

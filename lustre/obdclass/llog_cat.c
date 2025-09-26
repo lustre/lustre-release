@@ -1173,7 +1173,7 @@ int llog_cat_reverse_process(const struct lu_env *env,
 }
 EXPORT_SYMBOL(llog_cat_reverse_process);
 
-static int llog_cat_set_first_idx(struct llog_handle *cathandle, int newidx)
+int llog_cat_set_first_idx(struct llog_handle *cathandle, int newidx)
 {
 	struct llog_log_hdr *llh = cathandle->lgh_hdr;
 	int idx = llh->llh_cat_idx;
@@ -1212,6 +1212,7 @@ static int llog_cat_set_first_idx(struct llog_handle *cathandle, int newidx)
 
 	RETURN(0);
 }
+EXPORT_SYMBOL(llog_cat_set_first_idx);
 
 /* Cleanup deleted plain llog traces from catalog */
 int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
@@ -1238,13 +1239,13 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 	if (cathandle->lgh_obj == NULL)
 		return 0;
 
-	/* cancel record and decrease count, then move llh_cat_idx */
+	/* cancel record and decrease count, then move llh_cat_idx
+	 * llog_cat_set_first_idx() is called inside llog_cancel_arr_rec()
+	 */
 	/* remove plain llog entry from catalog by index */
 	rc = llog_cancel_rec(env, cathandle, index);
 	if (rc < 0)
 		return rc;
-
-	llog_cat_set_first_idx(cathandle, index);
 
 	if (loghandle)
 		CDEBUG(D_HA,
