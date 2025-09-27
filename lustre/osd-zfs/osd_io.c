@@ -1164,9 +1164,11 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			 */
 			for (j = 0; j < apages; j++)
 				lnb[i + j].lnb_page = NULL;
-			dmu_assign_arcbuf(&obj->oo_dn->dn_bonus->db,
-					  lnb[i].lnb_file_offset,
-					  lnb[i].lnb_data, oh->ot_tx);
+			ll_dmu_assign_arcbuf_by_dbuf(&obj->oo_dn->dn_bonus->db,
+						     lnb[i].lnb_file_offset,
+						     lnb[i].lnb_data,
+						     oh->ot_tx,
+						     DB_RF_MUST_SUCCEED);
 			/* drop the reference, otherwise osd_put_bufs()
 			 * will be releasing it - bad!
 			 */

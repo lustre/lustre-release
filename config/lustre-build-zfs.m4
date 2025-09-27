@@ -774,22 +774,6 @@ AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
 		AC_MSG_ERROR([dmu_tx_hold_write_by_dnode does not exist])
 	])
 	#
-	# ZFS 0.7.x adds new method dmu_write_by_dnode
-	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_write_by_dnode'],
-	dmu_write_by_dnode, [
-		#include <sys/zap.h>
-		#include <sys/dnode.h>
-	],[
-		dnode_t *dn = NULL;
-		dmu_write_by_dnode(dn, 0, 0, NULL, NULL);
-	],[
-		AC_DEFINE(HAVE_DMU_WRITE_BY_DNODE, 1,
-			[Have dmu_write_by_dnode() in ZFS])
-	],[
-		AC_MSG_ERROR([dmu_write_by_dnode does not exist])
-	])
-	#
 	# ZFS 0.7.x adds new method dmu_read_by_dnode
 	#
 	LB_CHECK_COMPILE([if ZFS has 'dmu_read_by_dnode'],
@@ -913,5 +897,77 @@ AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
 	],[
 		AC_DEFINE(HAVE_ZFS_REFCOUNT_HEADER, 1,
 			[Have zfs_refcount.h])
+	])
+	#
+	# zfs-2.3.99-237-gf69631992
+	# dmu_tx: rename dmu_tx_assign() flags from TXG_* to DMU_TX_*
+	# DMU_TX_WAIT define removed and changed to enum
+	#
+	LB_CHECK_COMPILE([if ZFS has 'DMU_TX_WAIT'],
+	dmu_tx_wait_enum, [
+		#include <sys/zap.h>
+		#include <sys/dnode.h>
+		#include <sys/dmu.h>
+	],[
+		int flag = DMU_TX_WAIT;
+		(void) flag;
+	],[
+		AC_DEFINE([HAVE_DMU_TX_WAIT], 1,
+			  [DMU_TX_WAIT exists and define or enum])
+	], [
+		AC_DEFINE([DMU_TX_WAIT], [TXG_WAIT],
+			  [DMU_TX_WAIT does not exist as define or enum])
+	])
+	#
+	# ZFS 2.4
+	#
+	LB_CHECK_COMPILE([if ZFS has 'dmu_write_by_dnode_flags'],
+	dmu_write_by_dnode_flags, [
+		#include <sys/zap.h>
+		#include <sys/dnode.h>
+		#include <sys/dmu.h>
+	],[
+		dnode_t *dn = NULL;
+		dmu_flags_t flags = 0;
+		dmu_write_by_dnode(dn, 0, 0, NULL, NULL, flags);
+	],[
+		AC_DEFINE([HAVE_DMU_WRITE_BY_DNODE_WITH_FLAGS_ARG], 1,
+			  [Have dmu_write_by_dnode() with flags in ZFS])
+		AC_DEFINE([ll_dmu_write_by_dnode(dn, off, sz, buf, tx, f)],
+			  [dmu_write_by_dnode((dn), (off), (sz), (buf), (tx), (f))],
+			  [dmu_write_by_dnode has flags])
+	], [
+		AC_DEFINE([HAVE_DMU_WRITE_BY_DNODE_WITHOUT_FLAGS], 1,
+			  [Have dmu_write_by_dnode without flags arg])
+		AC_DEFINE([ll_dmu_write_by_dnode(dn, off, sz, buf, tx, f)],
+			  [dmu_write_by_dnode((dn), (off), (sz), (buf), (tx))],
+			  [dmu_write_by_dnode does not have flags arg])
+	])
+
+	LB_CHECK_COMPILE([if ZFS has 'dmu_assign_arcbuf_by_dbuf' with flags],
+	dmu_assign_arcbuf_by_dbuf_flags, [
+		#include <sys/zap.h>
+		#include <sys/dnode.h>
+		#include <sys/arc.h>
+		#include <sys/dmu.h>
+	],[
+		dmu_buf_t *h = NULL;
+		uint64_t off = 0;
+		arc_buf_t *buf = NULL;
+		dmu_tx_t *tx = NULL;
+		dmu_flags_t flags = 0;
+		(void)dmu_assign_arcbuf_by_dbuf(h, off, buf, tx, flags);
+	],[
+		AC_DEFINE([HAVE_DMU_ASSIGN_ARCBUF_BY_DBUF_WITH_FLAGS], 1,
+			  [Have dmu_assign_arcbuf_by_dbuf() with flags])
+		AC_DEFINE([ll_dmu_assign_arcbuf_by_dbuf(h, off, buf, tx, f)],
+			  [dmu_assign_arcbuf_by_dbuf((h), (off), (buf), (tx), (f))],
+			  [dmu_assign_arcbuf_by_dbuf has flags])
+	], [
+		AC_DEFINE([HAVE_DMU_ASSIGN_ARCBUF_BY_DBUF_WITHOUT_FLAGS], 1,
+			  [Have dmu_assign_arcbuf_by_dbuf() does not have flags])
+		AC_DEFINE([ll_dmu_assign_arcbuf_by_dbuf(h, off, buf, tx, f)],
+			  [dmu_assign_arcbuf_by_dbuf((h), (off), (buf), (tx))],
+			  [dmu_assign_arcbuf_by_dbuf does not have flags arg])
 	])
 ])

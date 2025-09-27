@@ -61,14 +61,6 @@
 #undef kmem_cache_free
 #endif
 
-/*
- * zfs-2.3.99-237-gf69631992
- * dmu_tx: rename dmu_tx_assign() flags from TXG_* to DMU_TX_*
- */
-#ifndef DMU_TX_WAIT
-#define DMU_TX_WAIT		TXG_WAIT
-#endif
-
 #define ZFS_VERSION_CODE	\
 	OBD_OCD_VERSION(ZFS_MAJOR, ZFS_MINOR, ZFS_PATCH, ZFS_FIX)
 
@@ -1021,7 +1013,7 @@ static inline void osd_dmu_write(struct osd_device *osd, dnode_t *dn,
 				 const char *buf, dmu_tx_t *tx)
 {
 	LASSERT(dn);
-	dmu_write_by_dnode(dn, offset, size, buf, tx);
+	ll_dmu_write_by_dnode(dn, offset, size, buf, tx, 0);
 }
 
 static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
