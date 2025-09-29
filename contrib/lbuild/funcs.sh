@@ -226,6 +226,7 @@ autodetect_target() {
 	sles15.4) target="$(uname -r | cut -d . -f 1,2)-sles15sp4";;
 	sles15.5) target="$(uname -r | cut -d . -f 1,2)-sles15sp5";;
 	sles15.6) target="$(uname -r | cut -d . -f 1,2)-sles15sp6";;
+	sles15.7) target="$(uname -r | cut -d . -f 1,2)-sles15sp7";;
           fc18)   target="3.x-fc18";;
 	  oe2203) target="5.10-oe2203";;
        oe2203.sp1) target="5.10-oe2203sp1";;
