@@ -9,7 +9,8 @@
 #
 
 if MODULES
-modulefs_DATA = kinode.ko
+modulefs_DATA = ec_test.ko
+modulefs_DATA += kinode.ko
 modulefs_DATA += obd_test.ko
 modulefs_DATA += obd_mod_rpcs_test.ko
 if SERVER

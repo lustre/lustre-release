@@ -71,6 +71,7 @@ lmodules=[
 'lustre/obdecho/obdecho.ko',
 'lustre/mgc/mgc.ko',
 'lustre/red/red.ko',
+'lustre/kunit/ec_test.ko',
 'lustre/kunit/kinode.ko',
 'lustre/ost/ost.ko',
 'lustre/mgs/mgs.ko',

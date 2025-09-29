@@ -186,6 +186,7 @@ fi
 if grep -q ' --enable-tests' <<< \${OPTS}; then
     # MODULE NAME              PATH TO MODULE   INSTALL PATH
     # ----------------------   --------------   ------------
+    module ec_test             lustre/kunit     lustre
     module obd_mod_rpcs_test   lustre/kunit     lustre
     module kinode              lustre/kunit     lustre
     module obd_test            lustre/kunit     lustre

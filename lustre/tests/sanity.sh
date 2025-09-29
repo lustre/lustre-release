@@ -35955,6 +35955,26 @@ test_909() {
 }
 run_test 909 "Verify mdt index"
 
+test_910()
+{
+	local run_id=$RANDOM
+
+	# Try to insert the module.
+	load_module kunit/ec_test run_id=$run_id ||
+		error "load_module failed"
+
+	# Anything but success is a test failure
+	dmesg | grep -q \
+	    "lustre_ec_test_$run_id: EC test passed" ||
+	    error "EC test failed"
+
+	# Remove the test module
+	rmmod -v ec_test ||
+		error "rmmod failed (may trigger a failure in a later test)"
+}
+run_test 910 "Test the erasure_coding module"
+
+
 complete_test $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre
