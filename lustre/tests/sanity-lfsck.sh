@@ -5158,10 +5158,15 @@ test_31c() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 
 	echo "Trigger namespace LFSCK to re-generate master LMV EA"
-	$START_NAMESPACE -r -A ||
+	$START_NAMESPACE -r ||
 		error "(2) Fail to start LFSCK for namespace"
 
-	wait_all_targets_blocked namespace completed 3
+	wait_update_facet mds1 "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(3) unexpected status"
+	}
 
 	local repaired=$($SHOW_NAMESPACE |
 			 awk '/^striped_dirs_repaired/ { print $2 }')
