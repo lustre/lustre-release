@@ -1975,6 +1975,24 @@ static inline int md_batch_add(struct obd_export *exp, struct lu_batch *bh,
 	return exp->exp_obd->obd_type->typ_md_ops->m_batch_add(exp, bh, item);
 }
 
+static inline int md_dirpage_add(struct obd_export *exp,
+				 struct inode *inode,
+				 struct page **pool,
+				 unsigned int cfs_pgs,
+				 unsigned int lu_pgs, int is_hash64)
+{
+	int rc;
+	const struct md_ops	*md_ops;
+
+	rc = exp_check_ops(exp);
+	if (rc)
+		return rc;
+
+	md_ops = exp->exp_obd->obd_type->typ_md_ops;
+	return md_ops->m_dirpage_add(exp, inode, pool, cfs_pgs,
+				     lu_pgs, is_hash64);
+}
+
 /* OBD Metadata Support */
 
 extern int obd_init_caches(void);

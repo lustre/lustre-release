@@ -3082,8 +3082,6 @@ int mdt_object_striped(struct mdt_thread_info *mti, struct mdt_object *obj)
 	return (rc > 0) ? 1 : (rc == -ENODATA) ? 0 : rc;
 }
 
-#define DIR_READ_ON_OPEN_PAGES 1
-
 static int mdt_dir_read_on_open(struct mdt_thread_info	*info,
 				struct lustre_handle *lhc)
 {
@@ -3123,15 +3121,13 @@ static int mdt_dir_read_on_open(struct mdt_thread_info	*info,
 	rdpg->rp_attrs = LUDA_FID | LUDA_TYPE;
 	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_64BITHASH)
 		rdpg->rp_attrs |= LUDA_64BITHASH;
-	rdpg->rp_count  = min_t(unsigned int, req->rq_reqmsg->lm_repsize,
-			    DIR_READ_ON_OPEN_PAGES << PAGE_SHIFT);
+	rdpg->rp_count  = req->rq_reqmsg->lm_repsize;
 	rdpg->rp_npages = 0;
 
 	rc = req_capsule_server_grow(pill, &RMF_NIOBUF_INLINE, rdpg->rp_count);
-	if (rc != 0) {
+	if (rc != 0)
 		/* failed to grow data buffer, just exit */
 		GOTO(out_err, rc = -E2BIG);
-	}
 
 	/* re-take MDT_BODY and NIOBUF_INLINE buffers after the buffer grow */
 	mbo = req_capsule_server_get(pill, &RMF_MDT_BODY);
@@ -3160,6 +3156,8 @@ out_put:
 out_rnb:
 	if (rc < 0)
 		req_capsule_shrink(pill, &RMF_NIOBUF_INLINE, 0, RCL_SERVER);
+	else
+		req_capsule_shrink(pill, &RMF_NIOBUF_INLINE, rc, RCL_SERVER);
 out_err:
 	if (rc)
 		CDEBUG(D_INFO, "read dir on open failed with rc = %d\n", rc);

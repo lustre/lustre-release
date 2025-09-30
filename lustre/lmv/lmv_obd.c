@@ -4483,6 +4483,25 @@ static int lmv_batch_add(struct obd_export *exp, struct lu_batch *bh,
 	RETURN(rc);
 }
 
+static int lmv_dirpage_add(struct obd_export *exp,
+			   struct inode *inode,
+			   struct page **pool,
+			   unsigned int cfs_pgs,
+			   unsigned int lu_pgs, int is_hash64)
+{
+	struct lmv_obd *lmv = &exp->exp_obd->u.lmv;
+	struct lmv_tgt_desc *tgt = lmv_tgt(lmv, 0);
+	int rc;
+
+	ENTRY;
+
+	if (tgt == NULL || tgt->ltd_exp == NULL)
+		RETURN(-EINVAL);
+	rc =  md_dirpage_add(tgt->ltd_exp,
+			     inode, pool, cfs_pgs, lu_pgs, is_hash64);
+	RETURN(rc);
+}
+
 static const struct obd_ops lmv_obd_ops = {
 	.o_owner                = THIS_MODULE,
 	.o_connect              = lmv_connect,
@@ -4534,6 +4553,7 @@ static const struct md_ops lmv_md_ops = {
 	.m_batch_add		= lmv_batch_add,
 	.m_batch_stop		= lmv_batch_stop,
 	.m_batch_flush		= lmv_batch_flush,
+	.m_dirpage_add		= lmv_dirpage_add,
 };
 
 static const struct lu_device_operations lmv_lu_ops = {

@@ -1392,6 +1392,10 @@ struct md_ops {
 			     bool wait);
 	int (*m_batch_add)(struct obd_export *exp, struct lu_batch *bh,
 			   struct md_op_item *item);
+	int (*m_dirpage_add)(struct obd_export *exp, struct inode *inode,
+			     struct page **pool,
+			     unsigned int cfs_pgs, unsigned int lu_pgs,
+			     int is_hash64);
 };
 
 static inline struct md_open_data *obd_mod_alloc(void)

@@ -641,18 +641,24 @@ out_io:
 
 	EXIT;
 }
+
 void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
 {
 	struct obd_export *exp = ll_i2mdexp(inode);
-	void *data;
+	char *data;
+	struct page **page_pool;
 	struct page *page;
-	struct lu_dirpage *dp;
-	int is_hash64;
-	int rc;
-	unsigned long	offset;
-	__u64		hash;
 	unsigned int i;
+	unsigned int rep_size;
 	unsigned int npages;
+	unsigned int rd_pgs;
+	unsigned int lu_pgs;
+	int 		is_hash64;
+	struct lu_dirpage *dp;
+	int 		rc;
+	unsigned long   offset;
+	__u64		hash;
+	gfp_t gfp;
 
 	ENTRY;
 
@@ -667,38 +673,56 @@ void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
 	if (data == NULL)
 		RETURN_EXIT;
 
-	npages = req_capsule_get_size(&req->rq_pill, &RMF_NIOBUF_INLINE,
-				      RCL_SERVER);
-	if (npages < sizeof(*dp))
+	rep_size = req_capsule_get_size(&req->rq_pill, &RMF_NIOBUF_INLINE,
+					RCL_SERVER);
+	if (rep_size < sizeof(struct lu_dirpage))
 		RETURN_EXIT;
 
-	/* div rou*/
-	npages = DIV_ROUND_UP(npages, PAGE_SIZE);
+	npages = (rep_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	lu_pgs = rep_size >> LU_PAGE_SHIFT;
+
 	is_hash64 = test_bit(LL_SBI_64BIT_HASH, ll_i2sbi(inode)->ll_flags);
+	gfp = mapping_gfp_mask(inode->i_mapping);
 
-	for (i = 0; i < npages; i++) {
-		page = __page_cache_alloc(mapping_gfp_mask(inode->i_mapping));
-		if (!page)
-			continue;
+	OBD_ALLOC_PTR_ARRAY(page_pool, npages);
+	if (page_pool == NULL)
+		RETURN_EXIT;
 
-		lock_page(page);
-		SetPageUptodate(page);
+	for (rd_pgs = 0; rd_pgs < npages; rd_pgs++) {
+		page = __page_cache_alloc(gfp);
+		if (page == NULL)
+			break;
+		page_pool[rd_pgs] = page;
 
 		dp = kmap_local_page(page);
+		CDEBUG(D_INFO, "page %p - %p - %p -> %llu %llu\n", page, dp, data, dp->ldp_hash_start, dp->ldp_hash_end);
 		memcpy(dp, data, PAGE_SIZE);
-		hash = le64_to_cpu(dp->ldp_hash_start);
 		kunmap_local(dp);
 
-		offset = hash_x_index(hash, is_hash64);
-
-		prefetchw(&page->flags);
-		rc = add_to_page_cache_lru(page, inode->i_mapping, offset,
-				   GFP_KERNEL);
-		if (rc == 0)
-			unlock_page(page);
-
-		put_page(page);
+		data += PAGE_SIZE;
 	}
+	if (rd_pgs == 0)
+		goto exit;
+
+	page = page_pool[0];
+	dp = kmap_local_page(page);
+	hash = le64_to_cpu(dp->ldp_hash_start);
+	kunmap_local(dp);
+
+	offset = hash_x_index(hash, is_hash64);
+
+	prefetchw(&page->flags);
+	rc = add_to_page_cache_lru(page, inode->i_mapping, offset, GFP_KERNEL);
+	if (rc == 0)
+		md_dirpage_add(exp, inode, page_pool, rd_pgs, lu_pgs, is_hash64);
+exit:
+	if (rc < 0) {
+		/* release extra pages */
+		for (i = 0; i < rd_pgs; i++)
+			put_page(page_pool[i]);
+	}
+	OBD_FREE_PTR_ARRAY(page_pool, npages);
+
 	EXIT;
 }
 

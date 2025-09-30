@@ -35709,6 +35709,32 @@ test_854() {
 }
 run_test 854 "verify llite.*.max_cached_mb setting"
 
+test_855() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+        [[ $($LCTL get_param mdc.*.import) =~ connect_flags.*readdir_open ]] ||
+                skip "server does not support readdir_open"
+	local nrfiles=1000
+	local fname="$DIR/$tdir/$tfile"
+
+	test_mkdir -c 1 -i 0 "$(dirname $fname)"
+
+	stack_trap "simple_cleanup_common $nrfiles" EXIT
+
+	local old=$($LCTL get_param -n llite.*.dir_read_on_open)
+	$LCTL set_param -n llite.*.dir_read_on_open=1
+	stack_trap "$LCTL set_param -n llite.*.dir_read_on_open=$old" EXIT
+
+	createmany -m "$fname" $nrfiles
+
+	cancel_lru_locks mdc
+	lctl set_param mdc.*.stats clear
+	local num_ls=$(ls -1 $DIR/$tdir | wc -l)
+	local mds_readpage=$(calc_stats mdc.*.stats mds_readpage)
+	(( $mds_readpage == 0 )) || error "readpages: $mds_readpage"
+	(( $nrfiles == $num_ls )) || error "incorrect reading dir"
+}
+run_test 855 "readdir on open validation"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

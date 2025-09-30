@@ -547,6 +547,7 @@ retry_connect:
 	sb->s_magic = LL_SUPER_MAGIC;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 	sbi->ll_inode_cache_enabled = 1;
+	sbi->ll_dir_open_read = 1;
 	sbi->ll_namelen = min_t(u32, osfs->os_namelen, NAME_MAX);
 	sbi->ll_mnt.mnt = current->fs->root.mnt;
 	sbi->ll_mnt_ns = current->nsproxy->mnt_ns;

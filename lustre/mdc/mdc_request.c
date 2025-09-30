@@ -1249,6 +1249,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 {
 	int i;
+	ENTRY;
 
 	for (i = 0; i < cfs_pgs; i++) {
 		void *addr = kmap_local_page(pages[i]);
@@ -1301,6 +1302,54 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 #define mdc_adjust_dirpages(pages, cfs_pgs, lu_pgs) do {} while (0)
 #endif	/* PAGE_SIZE > LU_PAGE_SIZE */
 
+static int mdc_dirpage_add(struct obd_export *exp,
+			   struct inode *inode,
+			   struct page **page_pool,
+			   unsigned int rd_pgs,
+			   unsigned int lu_pgs, int is_hash64)
+{
+	int i;
+	ENTRY;
+
+	mdc_adjust_dirpages(page_pool, rd_pgs, lu_pgs);
+
+	SetPageUptodate(page_pool[0]);
+	unlock_page(page_pool[0]);
+
+	CDEBUG(D_CACHE, "read %u/%u\n", rd_pgs, lu_pgs);
+
+	for (i = 1; i < rd_pgs; i++) {
+		unsigned long	offset;
+		__u64		hash;
+		int ret;
+		struct lu_dirpage *dp;
+		struct page *page;
+
+		page = page_pool[i];
+
+		SetPageUptodate(page);
+
+		dp = kmap_local_page(page);
+		hash = le64_to_cpu(dp->ldp_hash_start);
+		kunmap_local(dp);
+
+		offset = hash_x_index(hash, is_hash64);
+
+		prefetchw(&page->flags);
+		ret = add_to_page_cache_lru(page, inode->i_mapping, offset,
+					    GFP_KERNEL);
+		if (ret == 0)
+			unlock_page(page);
+		else
+			CDEBUG(D_VFSTRACE,
+			       "page %lu add to page cache failed: rc = %d\n",
+			       offset, ret);
+		put_page(page);
+	}
+
+	return 0;
+}
+
 /* parameters for readdir page */
 struct readpage_param {
 	struct md_op_data	*rp_mod;
@@ -1324,13 +1373,13 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	struct readpage_param *rp = data;
 	struct page **page_pool;
 	struct page *page;
-	struct lu_dirpage *dp;
 	struct md_op_data *op_data = rp->rp_mod;
 	struct ptlrpc_request *req;
 	int max_pages;
 	struct inode *inode;
 	struct lu_fid *fid;
 	int rd_pgs = 0; /* number of pages actually read */
+	int lu_pgs = 0;
 	int npages;
 	int i;
 	int rc;
@@ -1343,7 +1392,7 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	LASSERT(inode != NULL);
 	gfp = mapping_gfp_mask(inode->i_mapping);
 
-	OBD_ALLOC_PTR_ARRAY_LARGE(page_pool, max_pages);
+	OBD_ALLOC_PTR_ARRAY(page_pool, max_pages);
 	if (page_pool != NULL) {
 		page_pool[0] = page0;
 	} else {
@@ -1363,58 +1412,29 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	if (rc < 0) {
 		/* page0 is special, which was added into page cache early */
 		cfs_delete_from_page_cache(page0);
-	} else {
-		int lu_pgs;
-
-		rd_pgs = (req->rq_bulk->bd_nob_transferred + PAGE_SIZE - 1) >>
-			PAGE_SHIFT;
-		lu_pgs = req->rq_bulk->bd_nob_transferred >> LU_PAGE_SHIFT;
-		LASSERT(!(req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK));
-
-		CDEBUG(D_INODE, "read %d(%d) pages\n", rd_pgs, lu_pgs);
-
-		mdc_adjust_dirpages(page_pool, rd_pgs, lu_pgs);
-
-		SetPageUptodate(page0);
+		unlock_page(page0);
+		goto exit;
 	}
-	unlock_page(page0);
 
+	rd_pgs = (req->rq_bulk->bd_nob_transferred + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	lu_pgs = req->rq_bulk->bd_nob_transferred >> LU_PAGE_SHIFT;
+	LASSERT(!(req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK));
 	ptlrpc_req_put(req);
-	CDEBUG(D_CACHE, "read %d/%d pages\n", rd_pgs, npages);
-	for (i = 1; i < npages; i++) {
-		unsigned long	offset;
-		__u64		hash;
-		int ret;
 
+	mdc_dirpage_add(NULL, inode, page_pool, rd_pgs, lu_pgs, rp->rp_hash64);
+exit:
+	/* release extra pages */
+	for (i = 1; i < npages; i++) {
 		page = page_pool[i];
 
 		if (rc < 0 || i >= rd_pgs) {
 			put_page(page);
 			continue;
 		}
-
-		SetPageUptodate(page);
-
-		dp = kmap_local_page(page);
-		hash = le64_to_cpu(dp->ldp_hash_start);
-		kunmap_local(dp);
-
-		offset = hash_x_index(hash, rp->rp_hash64);
-
-		prefetchw(&page->flags);
-		ret = add_to_page_cache_lru(page, inode->i_mapping, offset,
-					    GFP_KERNEL);
-		if (ret == 0)
-			unlock_page(page);
-		else
-			CDEBUG(D_VFSTRACE,
-			       "page %lu add to page cache failed: rc = %d\n",
-			       offset, ret);
-		put_page(page);
 	}
 
 	if (page_pool != &page0)
-		OBD_FREE_PTR_ARRAY_LARGE(page_pool, max_pages);
+		OBD_FREE_PTR_ARRAY(page_pool, max_pages);
 
 	RETURN(rc);
 }
@@ -3127,6 +3147,7 @@ static const struct md_ops mdc_md_ops = {
 	.m_batch_stop		= cli_batch_stop,
 	.m_batch_flush		= cli_batch_flush,
 	.m_batch_add		= mdc_batch_add,
+	.m_dirpage_add		= mdc_dirpage_add,
 };
 
 dev_t mdc_changelog_dev;
