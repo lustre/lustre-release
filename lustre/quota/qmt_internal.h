@@ -562,4 +562,5 @@ int qmt_lqa_add(struct qmt_device *qmt, char *name, __u32 start, __u32 end);
 int qmt_lqa_remove(struct qmt_device *qmt, char *name, __u32 start, __u32 end);
 int qmt_lqa_list(struct qmt_device *qmt, char *name, struct obd_ioctl_data *dt);
 bool qmt_lqa_contain_id(struct qmt_pool_info *qpi, __u64 id);
+int qmt_lqa_init_from_disk(struct qmt_device *qmt);
 #endif /* _QMT_INTERNAL_H */

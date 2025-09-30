@@ -460,6 +460,21 @@ static int qmt_device_prepare(const struct lu_env *env,
 	qmt->qmt_root = qmt_root;
 	/* initialize on-disk indexes associated with each pool */
 	rc = qmt_pool_prepare_all(env, qmt, qmt_root);
+	if (rc)
+		RETURN(rc);
+
+	/* initialize LQA ranges from disk */
+	rc = qmt_lqa_init_from_disk(qmt);
+	if (rc) {
+		CWARN("%s: Failed to initialize LQA ranges from disk: rc = %d\n",
+		      qmt->qmt_svname, rc);
+		/* LQA failure should not prevent QMT startup */
+		rc = 0;
+	} else {
+		CDEBUG(D_QUOTA, "%s: Successfully initialized LQA ranges from disk\n",
+		       qmt->qmt_svname);
+	}
+
 	RETURN(rc);
 }
 

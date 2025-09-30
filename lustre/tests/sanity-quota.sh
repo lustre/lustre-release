@@ -4551,13 +4551,17 @@ test_get_allquota() {
 		[ ${g_blimits[$i]} -eq $g_blimit ] ||
 		error "block limit for group ID $((start_qid + i - 3)) is wrong"
 		[ ${u_iusage2[$i]} -eq $((u_iusage[$i] + 1)) ] ||
-		error "file usage for user ID $((start_qid + i - 3)) is wrong ${u_iusage[$i]}, ${u_iusage2[$i]}"
+		error "file usage for user ID $((start_qid + i - 3)) is wrong" \
+			"${u_iusage[$i]}, ${u_iusage2[$i]}"
 		[ ${u_busage2[$i]} -ge $((u_busage[$i] + 4)) ] ||
-		error "block usage for user ID $((start_qid + i - 3)) is wrong ${u_busage[$i]}, ${u_busage2[$i]}"
+		error "block usage for user ID $((start_qid + i - 3)) wrong" \
+			"${u_busage[$i]}, ${u_busage2[$i]}"
 		[ ${g_iusage2[$i]} -eq $((g_iusage[$i] + 1)) ] ||
-		error "file usage for group ID $((start_qid + i - 3)) is wrong ${g_iusage[$i]}, ${g_iusage2[$i]}"
+		error "file usage for group ID $((start_qid + i - 3)) wrong" \
+			"${g_iusage[$i]}, ${g_iusage2[$i]}"
 		[ ${g_busage2[$i]} -ge $((g_busage[$i] + 4)) ] ||
-		error "block usage for group ID $((start_qid + i - 3)) is wrong ${g_busage[$i]}, ${g_busage2[$i]}"
+		error "block usage for group ID $((start_qid + i - 3)) wrong" \
+			"${g_busage[$i]}, ${g_busage2[$i]}"
 	done
 
 	unlinkmany ${TFILE} $qid_cnt
@@ -7787,6 +7791,7 @@ test_97c ()
 		-i ${isoft} $DIR || error "set user quota failed for lqa:$lqa"
 	$LFS quota -U --lqa $lqa $DIR
 
+	echo "Verifying initial LQA quota limits"
 	limit=$($LFS quota -U --lqa $lqa -Bq)
 	((limit == bhard)) || error "bhard limit $limit != $bhard for lqa:$lqa"
 	limit=$($LFS quota -U --lqa $lqa -bq)
@@ -7795,8 +7800,103 @@ test_97c ()
 	((limit == ihard)) || error "ihard limit $limit != $bhard for lqa:$lqa"
 	limit=$($LFS quota -U --lqa $lqa --isoftlimit -q)
 	((limit == isoft)) || error "isoft limit $limit != $bhard for lqa:$lqa"
+
+	# Restart MDS to test LQA quota limits consistency
+	echo "Restarting MDS to test LQA quota limits consistency"
+	stop mds1 || error "Failed to stop MDS"
+
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS ||
+		error "Failed to start MDS"
+	wait_recovery_complete mds1 || error "MDS recovery failed"
+
+	echo "Verifying LQA quota limits consistency after MDS restart"
+	$LFS quota -U --lqa $lqa $DIR
+
+	# Check that LFS quota settings haven't been changed after MDS restart
+	limit=$($LFS quota -U --lqa $lqa -Bq)
+	((limit == bhard)) ||
+		error "bhard limit $limit != $bhard after restart for lqa:$lqa"
+	limit=$($LFS quota -U --lqa $lqa -bq)
+	((limit == bsoft)) ||
+		error "bsoft limit $limit != $bsoft after restart for lqa:$lqa"
+	limit=$($LFS quota -U --lqa $lqa --ihardlimit -q)
+	((limit == ihard)) ||
+		error "ihard limit $limit != $ihard after restart for lqa:$lqa"
+	limit=$($LFS quota -U --lqa $lqa --isoftlimit -q)
+	((limit == isoft)) ||
+		error "isoft limit $limit != $isoft after restart for lqa:$lqa"
+
+	echo "SUCCESS: LQA quota limits are consistent after MDS restart"
 }
-run_test 97c "LQA lfs quota commands"
+run_test 97c "LQA lfs quota commands and MDS restart consistency"
+
+test_97d() {
+	local lqa="lqa1"
+	local lqa2="lqa2"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "need MDS >= 2.17.50 to support lctl lqa commands"
+
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# Create LQA tenants using standard commands
+	echo "Creating LQA tenants"
+	$LQA_NEW --name $lqa || error "Failed to create LQA tenant $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa" EXIT
+	$LQA_NEW --name $lqa2 || error "Failed to create LQA tenant $lqa2"
+	stack_trap "$LQA_DESTROY --name $lqa2" EXIT
+
+	# Add ranges using standard commands
+	echo "Adding ranges to LQA tenants"
+	$LQA_ADD --name $lqa --range 1000-2000 ||
+		error "Failed to add range 1000-2000 to $lqa"
+	$LQA_ADD --name $lqa2 --range 2200-2800 ||
+		error "Failed to add range 2200-2800 to $lqa2"
+
+	# Verify LQA tenants exist and have ranges
+	echo "Verifying LQA ranges were added correctly"
+	$LQA_LIST --name $lqa | grep -q "1000-2000" ||
+		error "Range 1000-2000 not found in $lqa"
+	$LQA_LIST --name $lqa2 | grep -q "2200-2800" ||
+		error "Range 2200-2800 not found in $lqa2"
+
+	# Display current ranges for verification
+	echo "Current ranges in $lqa:"
+	$LQA_LIST --name $lqa
+	echo "Current ranges in $lqa2:"
+	$LQA_LIST --name $lqa2
+
+	# Restart MDS to test LQA range persistence
+	echo "Restarting MDS to test LQA range persistence"
+	stop mds1 || error "Failed to stop MDS"
+
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS ||
+		error "Failed to start MDS"
+	wait_recovery_complete mds1 || error "MDS recovery failed"
+	# Check if LQA ranges survived MDS restart (automatic recreation)
+	echo "Checking if LQA ranges survived MDS restart"
+
+	# Tenants should be automatically recreated from disk with their ranges
+	echo "Verifying automatic tenant recreation and range loading"
+	echo "Current ranges in $lqa after restart:"
+	$LQA_LIST --name $lqa
+	echo "Current ranges in $lqa2 after restart:"
+	$LQA_LIST --name $lqa2
+
+	# Check if ranges were automatically restored from disk
+	local restored_ranges1=$($LQA_LIST --name $lqa 2>/dev/null |
+				  grep -v "LQA:" | wc -l)
+	local restored_ranges2=$($LQA_LIST --name $lqa2 2>/dev/null |
+				  grep -v "LQA:" | wc -l)
+
+	# Test passes if ranges were automatically restored from disk
+	[[ $restored_ranges1 -gt 0 && $restored_ranges2 -gt 0 ]] ||
+		error "LQA ranges were not automatically restored"
+
+	echo "SUCCESS: LQA disk persistence working"
+}
+run_test 97d "LQA disk persistence using standard commands"
 
 quota_fini()
 {

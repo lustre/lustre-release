@@ -1616,7 +1616,7 @@ static int qmt_pool_add_rem(struct obd_device *obd, char *poolname,
 
 	qpi = qmt_pool_lookup_name(&env, qmt, LQUOTA_RES_DT, poolname);
 	if (IS_ERR(qpi)) {
-		CWARN("%s: can't find pool %s: rc = %long\n",
+		CWARN("%s: can't find pool %s: rc = %ld\n",
 		      obd->obd_name, poolname, PTR_ERR(qpi));
 		GOTO(out, rc = PTR_ERR(qpi));
 	}
