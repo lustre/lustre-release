@@ -365,7 +365,7 @@ struct osp_it {
 	void			 *ooi_ent;
 	void			 *ooi_cur_kaddr;
 	struct lu_idxpage	 *ooi_cur_idxpage;
-	struct page		 **ooi_pages;
+	struct folio		 **ooi_folios;
 };
 
 #define OSP_THANDLE_MAGIC	0x20141214

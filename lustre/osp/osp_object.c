@@ -1770,25 +1770,25 @@ struct dt_it *osp_it_init(const struct lu_env *env, struct dt_object *dt,
  */
 void osp_it_fini(const struct lu_env *env, struct dt_it *di)
 {
-	struct osp_it	*it = (struct osp_it *)di;
-	struct page	**pages	= it->ooi_pages;
-	int		npages = it->ooi_total_npages;
-	int		i;
+	struct osp_it *it = (struct osp_it *)di;
+	struct folio **folios = it->ooi_folios;
+	int npages = it->ooi_total_npages;
+	int i;
 
-	if (pages != NULL) {
+	if (folios != NULL) {
 		i = npages;
 		while (--i >= 0) {
-			if (pages[i]) {
+			if (folios[i]) {
 				if (it->ooi_cur_kaddr) {
 					void *kaddr = it->ooi_cur_kaddr;
 
-					kunmap(kmap_to_page(kaddr));
+					ll_kunmap_local(kaddr);
 					it->ooi_cur_kaddr = NULL;
 				}
-				__free_page(pages[i]);
+				folio_put(folios[i]);
 			}
 		}
-		OBD_FREE_PTR_ARRAY(pages, npages);
+		OBD_FREE_PTR_ARRAY(folios, npages);
 	}
 	OBD_FREE_PTR(it);
 }
@@ -1798,7 +1798,7 @@ void osp_it_fini(const struct lu_env *env, struct dt_it *di)
  * @env: pointer to the thread context
  * @it: pointer to the iteration structure
  *
- * The new records will be filled in an array of pages. The OSP side
+ * The new records will be filled in an array of folios. The OSP side
  * allows 1MB bulk data to be transferred.
  *
  * Return:
@@ -1809,7 +1809,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 {
 	struct lu_device	 *dev	= it->ooi_obj->do_lu.lo_dev;
 	struct osp_device	 *osp	= lu2osp_dev(dev);
-	struct page		**pages;
+	struct folio		**folios;
 	struct ptlrpc_request	 *req	= NULL;
 	struct ptlrpc_bulk_desc  *desc;
 	struct idx_info 	 *ii;
@@ -1822,16 +1822,18 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 	npages = min_t(unsigned int, OFD_MAX_BRW_SIZE, 1 << 20);
 	npages /= PAGE_SIZE;
 
-	OBD_ALLOC_PTR_ARRAY(pages, npages);
-	if (pages == NULL)
+	OBD_ALLOC_PTR_ARRAY(folios, npages);
+	if (folios == NULL)
 		RETURN(-ENOMEM);
 
-	it->ooi_pages = pages;
+	it->ooi_folios = folios;
 	it->ooi_total_npages = npages;
 	for (i = 0; i < npages; i++) {
-		pages[i] = alloc_page(GFP_NOFS);
-		if (pages[i] == NULL)
+		folios[i] = folio_alloc(GFP_KERNEL, 0);
+		if (IS_ERR_OR_NULL(folios[i])) {
+			folios[i] = NULL;
 			RETURN(-ENOMEM);
+		}
 	}
 
 	req = ptlrpc_request_alloc(osp->opd_obd->u.cli.cl_import,
@@ -1878,8 +1880,8 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < npages; i++)
-		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_SIZE);
+		desc->bd_frag_ops->add_kiov_frag(desc, folio_page(folios[i], 0),
+						 0, PAGE_SIZE);
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
@@ -1899,7 +1901,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 	npages = (ii->ii_count + LU_PAGE_COUNT - 1) >>
 		 (PAGE_SHIFT - LU_PAGE_SHIFT);
 	if (npages > it->ooi_total_npages) {
-		CERROR("%s: returned more pages than expected, %u > %u\n",
+		CERROR("%s: returned more folios than expected, %u > %u\n",
 		       osp->opd_obd->obd_name, npages, it->ooi_total_npages);
 		GOTO(out, rc = -EINVAL);
 	}
@@ -1926,8 +1928,8 @@ out:
  * that depends on the LU_PAGE_COUNT. If it is not the last lu_page
  * in current system page, then move the iteration cursor to the next
  * lu_page in current system page. Otherwise, if there are more system
- * pages in the cache, then move the iteration cursor to the next system
- * page. If all the cached records (pages) have been iterated, then fetch
+ * folios in the cache, then move the iteration cursor to the next system
+ * page. If all the cached records (folios) have been iterated, then fetch
  * more records via osp_it_fetch().
  *
  * Return:
@@ -1939,7 +1941,7 @@ int osp_it_next_page(const struct lu_env *env, struct dt_it *di)
 {
 	struct osp_it		*it = (struct osp_it *)di;
 	struct lu_idxpage	*idxpage;
-	struct page		**pages;
+	struct folio		**folios;
 	int			rc;
 	int			i;
 	ENTRY;
@@ -1983,23 +1985,25 @@ process_page:
 			goto process_idxpage;
 		}
 
-		kunmap(kmap_to_page(it->ooi_cur_kaddr));
+		ll_kunmap_local(it->ooi_cur_kaddr);
 		it->ooi_cur_kaddr = NULL;
 		it->ooi_pos_page++;
 
 start:
-		pages = it->ooi_pages;
+		folios = it->ooi_folios;
 		if (it->ooi_pos_page < it->ooi_valid_npages) {
-			it->ooi_cur_kaddr = kmap(pages[it->ooi_pos_page]);
+			it->ooi_cur_kaddr =
+				ll_kmap_local_folio(folios[it->ooi_pos_page],
+						    0);
 			it->ooi_pos_lu_page = 0;
 			goto process_page;
 		}
 
 		for (i = 0; i < it->ooi_total_npages; i++) {
-			if (pages[i] != NULL)
-				__free_page(pages[i]);
+			if (folios[i] != NULL)
+				folio_put(folios[i]);
 		}
-		OBD_FREE_PTR_ARRAY(pages, it->ooi_total_npages);
+		OBD_FREE_PTR_ARRAY(folios, it->ooi_total_npages);
 
 		it->ooi_pos_page = 0;
 		it->ooi_total_npages = 0;
@@ -2008,7 +2012,7 @@ start:
 		it->ooi_ent = NULL;
 		it->ooi_cur_kaddr = NULL;
 		it->ooi_cur_idxpage = NULL;
-		it->ooi_pages = NULL;
+		it->ooi_folios = NULL;
 	}
 
 	if (it->ooi_next == II_END_OFF)
