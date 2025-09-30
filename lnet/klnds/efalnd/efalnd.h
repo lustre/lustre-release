@@ -19,6 +19,7 @@
 
 #include <linux/bvec.h>
 #include <linux/rhashtable.h>
+#include <linux/libcfs/libcfs.h>
 
 #include <lnet/lib-lnet.h>
 #include <lnet/lib-types.h>
