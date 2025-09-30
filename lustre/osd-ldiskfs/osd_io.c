@@ -601,54 +601,54 @@ static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	struct osd_device *d = osd_obj2dev(osd_dt_obj(dt));
-	struct page *page;
+	struct folio *folio;
 	int cur;
 
 	LASSERT(inode);
 
 	if (cache) {
-		page = find_or_create_page(inode->i_mapping,
-					   offset >> PAGE_SHIFT, gfp_mask);
-
-		if (likely(page)) {
-			LASSERT(!PagePrivate2(page));
-			wait_on_page_writeback(page);
+		folio = get_folio_create(inode->i_mapping, offset >> PAGE_SHIFT,
+					 FGP_LOCK | FGP_ACCESSED | FGP_CREAT,
+					 gfp_mask);
+		if (!IS_ERR_OR_NULL(folio)) {
+			LASSERT(!folio_test_private_2(folio));
+			folio_wait_writeback(folio);
+			return fpgptr(folio);
 		} else {
 			lprocfs_counter_add(d->od_stats, LPROC_OSD_NO_PAGE, 1);
+			return NULL;
 		}
-
-		return page;
 	}
 
 	if (inode->i_mapping->nrpages) {
 		/* consult with pagecache, but do not create new pages */
 		/* this is normally used once */
-		page = find_lock_page(inode->i_mapping, offset >> PAGE_SHIFT);
-		if (page) {
-			wait_on_page_writeback(page);
-			return page;
+		folio = get_folio_lock(inode->i_mapping, offset >> PAGE_SHIFT,
+					FGP_LOCK, gfp_mask);
+		if (!IS_ERR_OR_NULL(folio)) {
+			folio_wait_writeback(folio);
+			return fpgptr(folio);
 		}
 	}
 
-	LASSERT(oti->oti_dio_pages);
+	LASSERT(oti->oti_dio_folios);
 	cur = oti->oti_dio_pages_used;
-	page = oti->oti_dio_pages[cur];
-
-	if (unlikely(!page)) {
+	folio = oti->oti_dio_folios[cur];
+	if (IS_ERR_OR_NULL(folio)) {
 		LASSERT(cur < PTLRPC_MAX_BRW_PAGES);
-		page = alloc_page(gfp_mask);
-		if (!page)
+		folio = folio_alloc(gfp_mask, 0);
+		if (IS_ERR_OR_NULL(folio))
 			return NULL;
-		oti->oti_dio_pages[cur] = page;
-		SetPagePrivate2(page);
-		lock_page(page);
+		oti->oti_dio_folios[cur] = folio;
+		folio_set_private_2(folio);
+		folio_lock(folio);
 	}
 
-	ClearPageUptodate(page);
-	page_folio(page)->index = offset >> PAGE_SHIFT;
+	folio_clear_uptodate(folio);
+	folio->index = offset >> PAGE_SHIFT;
 	oti->oti_dio_pages_used++;
 
-	return page;
+	return fpgptr(folio);
 }
 
 /*
@@ -808,10 +808,10 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 	}
 
 bypass_checks:
-	if (!cache && unlikely(!oti->oti_dio_pages)) {
-		OBD_ALLOC_PTR_ARRAY_LARGE(oti->oti_dio_pages,
+	if (!cache && unlikely(!oti->oti_dio_folios)) {
+		OBD_ALLOC_PTR_ARRAY_LARGE(oti->oti_dio_folios,
 					  PTLRPC_MAX_BRW_PAGES);
-		if (!oti->oti_dio_pages)
+		if (!oti->oti_dio_folios)
 			return -ENOMEM;
 	}
 

@@ -770,7 +770,7 @@ struct osd_thread_info {
 	unsigned int		oti_declare_ops_used[OSD_OT_MAX];
 	struct osd_directory	oti_iam;
 
-	struct page		**oti_dio_pages;
+	struct folio		**oti_dio_folios;
 	int			oti_dio_pages_used;
 
 	struct osd_it_ea_dirent *oti_seq_dirent;

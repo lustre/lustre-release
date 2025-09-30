@@ -8285,19 +8285,21 @@ static void osd_key_fini(const struct lu_context *ctx,
 	struct ldiskfs_inode_info *lli = LDISKFS_I(info->oti_inode);
 	struct osd_idmap_cache *idc = info->oti_ins_cache;
 
-	if (info->oti_dio_pages) {
+	if (info->oti_dio_folios) {
 		int i;
+
 		for (i = 0; i < PTLRPC_MAX_BRW_PAGES; i++) {
-			struct page *page = info->oti_dio_pages[i];
-			if (page) {
-				LASSERT(PagePrivate2(page));
-				LASSERT(PageLocked(page));
-				ClearPagePrivate2(page);
-				unlock_page(page);
-				__free_page(page);
+			struct folio *folio = info->oti_dio_folios[i];
+
+			if (!IS_ERR_OR_NULL(folio)) {
+				LASSERT(folio_test_private_2(folio));
+				LASSERT(folio_test_locked(folio));
+				folio_clear_private_2(folio);
+				folio_unlock(folio);
+				folio_put(folio);
 			}
 		}
-		OBD_FREE_PTR_ARRAY_LARGE(info->oti_dio_pages,
+		OBD_FREE_PTR_ARRAY_LARGE(info->oti_dio_folios,
 					 PTLRPC_MAX_BRW_PAGES);
 	}
 
@@ -8414,8 +8416,7 @@ static int osd_mount(const struct lu_env *env,
 	const char *name = lustre_cfg_string(cfg, 0);
 	const char *dev = lustre_cfg_string(cfg, 1);
 	const char *opts;
-	unsigned long page, s_flags = 0, lmd_flags = 0;
-	struct page *__page;
+	unsigned long s_flags = 0, lmd_flags = 0;
 	struct file_system_type *type;
 	char *options = NULL;
 	const char *str;
@@ -8463,12 +8464,9 @@ static int osd_mount(const struct lu_env *env,
 
 	if (opts != NULL && strstr(opts, "force_over_1024tb") != NULL)
 		force_over_1024tb = 1;
-
-	__page = alloc_page(GFP_KERNEL);
-	if (__page == NULL)
+	OBD_ALLOC_GFP(options, PAGE_SIZE, GFP_KERNEL);
+	if (!options)
 		GOTO(out, rc = -ENOMEM);
-	page = (unsigned long)page_address(__page);
-	options = (char *)page;
 	*options = '\0';
 	if (opts != NULL) {
 		/* strip out the options for back compatiblity */
@@ -8604,10 +8602,8 @@ static int osd_mount(const struct lu_env *env,
 out_mnt:
 	mntput(o->od_mnt);
 	o->od_mnt = NULL;
-
 out:
-	if (__page)
-		__free_page(__page);
+	OBD_FREE(options, PAGE_SIZE);
 
 	return rc;
 }

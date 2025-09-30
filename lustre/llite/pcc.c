@@ -2513,55 +2513,56 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 	/* Proceed to decryption of PCC-RO page cache pages */
 	for (index = start_index; index <= end_index; index++) {
 		struct address_space *mapping;
-		struct page *vmpage = NULL;
+		struct folio *folio = NULL;
 		unsigned int offs = 0;
 
 		mapping = file_inode(pccf->pccf_file)->i_mapping;
-		vmpage = find_or_create_page(mapping, index,
-					     mapping_gfp_mask(mapping));
-		if (vmpage == NULL)
+		folio = get_folio_grab(mapping, index,
+				       FGP_LOCK | FGP_ACCESSED | FGP_CREAT,
+				       mapping_gfp_mask(mapping));
+		if (IS_ERR_OR_NULL(folio))
 			continue;
 
 		/* vmpage has already been decrypted */
-		if (PagePrivate2(vmpage))
+		if (folio_test_private_2(folio))
 			goto out_pageprivate2;
 
-		if (PageDirty(vmpage))
+		if (folio_test_dirty(folio))
 			/* this should not happen with PCC-RO */
 			GOTO(out_pageprivate2, rc = -EIO);
-		if (!PageUptodate(vmpage)) {
+		if (!folio_test_uptodate(folio)) {
 #ifdef HAVE_AOPS_READ_FOLIO
 			rc = mapping->a_ops->read_folio(pccf->pccf_file,
-							page_folio(vmpage));
+							folio);
 #else
-			rc = mapping->a_ops->readpage(pccf->pccf_file, vmpage);
+			rc = mapping->a_ops->readpage(pccf->pccf_file,
+						      fpgptr(folio));
 #endif
 			if (rc) {
-				put_page(vmpage);
+				folio_put(folio);
 				continue;
 			}
-			lock_page(vmpage);
-			if (!PageUptodate(vmpage))
+			folio_lock(folio);
+			if (!folio_test_uptodate(folio))
 				GOTO(out_pageprivate2, rc = -EIO);
 		}
 
 		while (offs < PAGE_SIZE) {
-			u64 lblk_num = ((u64)folio_index_page(vmpage) <<
+			u64 lblk_num = ((u64)folio->index <<
 					(PAGE_SHIFT - blockbits)) +
 				       (offs >> blockbits);
 			unsigned int i;
 
 			/* do not decrypt if page is all 0s */
-			if (memchr_inv(page_address(vmpage) + offs, 0,
-				       LUSTRE_ENCRYPTION_UNIT_SIZE) ==
-			    NULL)
+			if (is_empty_folio(folio, offs,
+					   LUSTRE_ENCRYPTION_UNIT_SIZE))
 				break;
 
 			for (i = offs;
 			     i < offs + LUSTRE_ENCRYPTION_UNIT_SIZE;
 			     i += blocksize, lblk_num++) {
 				rc = llcrypt_decrypt_block_inplace(inode,
-								   vmpage,
+								fpgptr(folio),
 								   blocksize, i,
 								   lblk_num);
 				if (rc)
@@ -2575,12 +2576,11 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 		/* set PagePrivate2 flag so that we know
 		 * this page is now decrypted
 		 */
-		SetPagePrivate2(vmpage);
+		folio_set_private_2(folio);
 
 out_pageprivate2:
-		unlock_page(vmpage);
-		put_page(vmpage);
-
+		folio_unlock(folio);
+		folio_put(folio);
 	}
 
 	result = iocb->ki_filp->f_op->read_iter(iocb, iter);
