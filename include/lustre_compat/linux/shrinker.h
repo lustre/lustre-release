@@ -20,11 +20,14 @@ struct ll_shrinker {
 	struct va_format vaf;
   #endif
 };
+#else
+#define ll_shrinker	shrinker
+#endif
 
+#if !defined(CONFIG_SHRINKER_DEBUG)
 void shrinker_debugfs_fini(void);
 int shrinker_debugfs_init(void);
 #else
-#define ll_shrinker	shrinker
 
 static inline void shrinker_debugfs_fini(void) {};
 static inline int shrinker_debugfs_init(void) { return 0; };

@@ -35,6 +35,7 @@
 #include <lustre_compat/linux/xarray.h>
 #include <lustre_compat/linux/wait_bit.h>
 #include <lustre_compat/linux/wait.h>
+#include <lustre_compat/linux/shrinker.h>
 #include <lustre_crypto.h>
 
 int __init cfs_arch_init(void)
