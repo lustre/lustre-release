@@ -16999,9 +16999,12 @@ test_127_io_latency_test() {
 	# Generate I/O with different sizes to populate multiple histograms
 	local file=$DIR/$tdir/$tfile
 	local count=10
-	local sizes=(4K 64K 1024K)
+	local sizes=()
 	local mppr=($($LCTL get_param -n $dev.*.max_pages_per_rpc))
-	(( $mppr * $PAGE_SIZE / 1024 >= 4096 )) && sizes+=(4096K)
+	for size in 4 64 1024 4096; do
+		(( size >= PAGE_SIZE && $mppr * $PAGE_SIZE / 1024 >= size )) &&
+			sizes+=(${size}K)
+	done
 
 	$LFS mkdir -i 0 $DIR/$tdir
 	stack_trap "rm -f ${file}_*"
@@ -17029,8 +17032,8 @@ test_127_io_latency_test() {
 	echo "$io_latency_stats"
 
 	# Check that we have entries for different sizes
-	for size in $sizes; do
-		grep -q $size <<<$io_latency_stats ||
+	for size in ${sizes[@]}; do
+		echo "$io_latency_stats" | grep -q _$size ||
 			error "No stats found for size $size"
 	done
 
