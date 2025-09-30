@@ -37,18 +37,6 @@
 #include <lustre_compat/linux/wait.h>
 #include <lustre_crypto.h>
 
-static int (*cfs_apply_workqueue_attrs_t)(struct workqueue_struct *wq,
-					  const struct workqueue_attrs *attrs);
-
-int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
-			      const struct workqueue_attrs *attrs)
-{
-	if (cfs_apply_workqueue_attrs_t)
-		return cfs_apply_workqueue_attrs_t(wq, attrs);
-	return 0;
-}
-EXPORT_SYMBOL_GPL(cfs_apply_workqueue_attrs);
-
 /* Linux v5.1-rc5 214d8ca6ee ("stacktrace: Provide common infrastructure")
  * CONFIG_ARCH_STACKWALK indicates that save_stack_trace_tsk symbol is not
  * exported. Use symbol_get() to find if save_stack_trace_tsk is available.
@@ -130,13 +118,15 @@ int __init cfs_arch_init(void)
 #ifndef HAVE_WAIT_VAR_EVENT
 	wait_bit_init();
 #endif
+	rc = lustre_symbols_init();
+	if (rc < 0) {
+		pr_info("lustre_symbols_init: error %d\n", rc);
+		return rc;
+	}
 #ifdef CONFIG_ARCH_STACKWALK
 	task_dump_stack_t =
 		(void *)cfs_kallsyms_lookup_name("stack_trace_save_tsk");
 #endif
-	cfs_apply_workqueue_attrs_t =
-		(void *)cfs_kallsyms_lookup_name("apply_workqueue_attrs");
-
 	rc = shrinker_debugfs_init();
 	if (rc < 0)
 		goto failed;

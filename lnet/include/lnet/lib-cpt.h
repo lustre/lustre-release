@@ -71,8 +71,7 @@
 #include <linux/topology.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
-
-#include <lustre_compat/linux/linux-misc.h>
+#include <lustre_compat/linux/workqueue.h>
 
 /* any CPU partition */
 #define CFS_CPT_ANY		(-1)
@@ -325,19 +324,27 @@ struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
 						int flags, int cpt, int nthrs)
 {
 	cpumask_var_t *mask = cfs_cpt_cpumask(tbl, cpt);
-	struct workqueue_attrs attrs = { };
+	struct workqueue_attrs *attrs;
 	struct workqueue_struct *wq;
 
-	wq = alloc_workqueue("%s", WQ_UNBOUND | flags, nthrs, wq_name);
-	if (!wq)
+	attrs = compat_alloc_workqueue_attrs();
+	if (!attrs)
 		return ERR_PTR(-ENOMEM);
 
-	if (mask && alloc_cpumask_var(&attrs.cpumask, GFP_KERNEL)) {
-		cpumask_copy(attrs.cpumask, *mask);
+	wq = alloc_workqueue("%s", WQ_UNBOUND | flags, nthrs, wq_name);
+	if (!wq) {
+		kfree(attrs);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	if (mask) {
+		cpumask_copy(attrs->cpumask, *mask);
 		cpus_read_lock();
-		cfs_apply_workqueue_attrs(wq, &attrs);
+		compat_apply_workqueue_attrs(wq, attrs);
 		cpus_read_unlock();
-		free_cpumask_var(attrs.cpumask);
+		/* Same as free_workqueue_attrs() which is not exported */
+		free_cpumask_var(attrs->cpumask);
+		kfree(attrs);
 	}
 
 	return wq;

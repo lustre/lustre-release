@@ -33,6 +33,8 @@
 #include <lustre_compat/linux/xarray.h>
 #include <obd_support.h>
 
+#include <lustre_compat/linux/linux-misc.h>
+
 #ifdef HAVE_4ARGS_VFS_SYMLINK
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
 		       vfs_symlink(dir, dentry, path, mode)

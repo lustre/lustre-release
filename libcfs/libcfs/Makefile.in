@@ -23,6 +23,9 @@ COMPAT_LIB := @top_srcdir@/lustre_compat/lib/
 include $(libcfs_dir)/../../lustre_compat/lib/Makefile
 libcfs-compat-objs += $(patsubst %,$(COMPAT_LIB)%,$(lib_objs))
 
+COMPAT_MODULE := @top_srcdir@/lustre_compat/
+include $(libcfs_dir)/../../lustre_compat/Makefile
+libcfs-compat-objs += $(patsubst %,$(COMPAT_MODULE)%,$(module_objs))
 
 libcfs-linux-objs := linux-prim.o
 

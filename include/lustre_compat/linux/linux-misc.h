@@ -29,6 +29,10 @@ static inline unsigned long cfs_time_seconds(time64_t seconds)
 	return nsecs_to_jiffies64(seconds * NSEC_PER_SEC);
 }
 
+/* TODO: This will soon be private... */
+void *cfs_kallsyms_lookup_name(const char *name);
+int lustre_symbols_init(void);
+
 /*
  * Since 4.20 commit 00e23707442a75b404392cef1405ab4fd498de6b
  * iov_iter: Use accessor functions to access an iterator's type and direction.
@@ -135,9 +139,6 @@ static inline void kernel_param_lock(struct module *mod)
 	__kernel_param_lock();
 }
 #endif /* ! HAVE_KERNEL_PARAM_LOCK */
-
-int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
-			      const struct workqueue_attrs *attrs);
 
 #ifndef HAVE_MATCH_WILDCARD
 bool match_wildcard(const char *pattern, const char *str);
@@ -304,18 +305,6 @@ int cfs_stack_trace_save_tsk(struct task_struct *task, unsigned long *store,
 	       sizeof(*(obj)) - offsetof(typeof(*(obj)), member));	\
 })
 #endif /* memset_startat() */
-
-#ifdef HAVE_KALLSYMS_LOOKUP_NAME
-static inline void *cfs_kallsyms_lookup_name(const char *name)
-{
-	return (void *)kallsyms_lookup_name(name);
-}
-#else
-static inline void *cfs_kallsyms_lookup_name(const char *name)
-{
-	return NULL;
-}
-#endif
 
 #ifndef HAVE_STRSCPY
 static inline ssize_t strscpy(char *s1, const char *s2, size_t sz)
