@@ -563,7 +563,7 @@ static bool qqi_reint_delayed(struct qsd_qtype_info *qqi)
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	struct qsd_upd_rec	*upd;
 	struct lquota_entry	*lqe, *n;
-	int			 dqacq = 0;
+	int			 warn = 1, dqacq = 0;
 	bool			 delay = false;
 	ENTRY;
 
@@ -592,7 +592,7 @@ static bool qqi_reint_delayed(struct qsd_qtype_info *qqi)
 	/* check if the reintegration has already started or finished */
 	if ((qqi->qqi_glb_uptodate && qqi->qqi_slv_uptodate) ||
 	     qqi->qqi_reint || qsd->qsd_stopping || qsd->qsd_updating)
-		GOTO(out_lock, delay = true);
+		GOTO(out_nowarn, delay = true);
 
 	/* there could be some unfinished global or index entry updates
 	 * (very unlikely), to avoid them messing up with the reint
@@ -609,10 +609,12 @@ static bool qqi_reint_delayed(struct qsd_qtype_info *qqi)
 	qqi->qqi_reint = 1;
 
 	EXIT;
+out_nowarn:
+	warn = 0;
 out_lock:
 	write_unlock(&qsd->qsd_lock);
 out:
-	if (delay)
+	if (warn)
 		CERROR("%s: Delaying reintegration for qtype:%d until pending "
 		       "updates are flushed.\n",
 		       qsd->qsd_svname, qqi->qqi_qtype);
