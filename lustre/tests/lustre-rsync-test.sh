@@ -44,8 +44,8 @@ export LRSYNC="$LRSYNC -v -c no -d 2"
 
 # Number of seconds to run dbench
 DBENCH_TIME=${DBENCH_TIME:-60}
-TGT=$TMP/target
-TGT2=$TMP/target2
+TGT=$(dirname $DIR)/target
+TGT2=${TGT}2
 MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid |
 	awk '{ gsub(/_UUID/,""); print $1 }' | head -n1)
 
