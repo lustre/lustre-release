@@ -125,6 +125,7 @@ void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
  *	given a string of the format:
  *	<expr.expr.expr.expr> parse each expr into
  *	a lustre_lnet_ip_range_descr structure and insert on the list.
+ *	For IPv6: <ipv6_addr>[/<prefix>] parse as single address or CIDR
  *
  *	This function is called from
  *		YAML on each ip-range.
@@ -143,14 +144,156 @@ int lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range)
 	INIT_LIST_HEAD(&ip_range->ipr_entry);
 	INIT_LIST_HEAD(&ip_range->ipr_expr);
 
-	rc = cfs_ip_addr_parse(str_ip_range, strlen(str_ip_range),
-			       &ip_range->ipr_expr);
-	if (rc != 0)
-		return LUSTRE_CFG_RC_BAD_PARAM;
+	/* Check if this is an IPv6 address by looking for ':' */
+	if (strchr(str_ip_range, ':') != NULL) {
+		char *addrstr;
+		char *slash;
+		__u32 addr[4];
+		size_t asize = 0;
+		int i, j;
+
+		ip_range->ipr_is_ipv6 = true;
+
+		/* Make a copy since strsep modifies the string */
+		addrstr = strdup(str_ip_range);
+		if (!addrstr) {
+			free(ip_range);
+			return LUSTRE_CFG_RC_OUT_OF_MEM;
+		}
+
+		/* Parse prefix length if present */
+		slash = strchr(addrstr, '/');
+		if (slash) {
+			unsigned int prefix_len;
+
+			*slash = '\0';
+			slash++;
+			if (!cfs_str2num_check(slash, strlen(slash),
+					       &prefix_len, 1, 128)) {
+				free(addrstr);
+				free(ip_range);
+				return LUSTRE_CFG_RC_BAD_PARAM;
+			}
+			ip_range->ipr_prefix_len = (__u8)prefix_len;
+		} else {
+			/* No prefix length means single host (/128) */
+			ip_range->ipr_prefix_len = 128;
+		}
+
+		/* Parse IPv6 address */
+		if (!libcfs_ip_str2addr_size(addrstr, strlen(addrstr),
+					     (__be32 *)addr, &asize) ||
+		    asize != 16) {
+			free(addrstr);
+			free(ip_range);
+			return LUSTRE_CFG_RC_BAD_PARAM;
+		}
+
+		/* Store the parsed address */
+		memcpy(&ip_range->ipr_addr.ipv6, addr, sizeof(struct in6_addr));
+
+		/* Calculate netmask and network address */
+		memset(&ip_range->ipr_netmask.ipv6, 0,
+		       sizeof(struct in6_addr));
+		for (i = ip_range->ipr_prefix_len, j = 0; i > 0; i -= 8, j++) {
+			if (i >= 8)
+				ip_range->ipr_netmask.ipv6.s6_addr[j] = 0xff;
+			else
+				ip_range->ipr_netmask.ipv6.s6_addr[j] =
+					(unsigned long)(0xffU << (8 - i));
+		}
+
+		for (i = 0; i < sizeof(struct in6_addr); i++)
+			ip_range->ipr_netaddr.ipv6.s6_addr[i] =
+				ip_range->ipr_addr.ipv6.s6_addr[i] &
+				ip_range->ipr_netmask.ipv6.s6_addr[i];
+
+		free(addrstr);
+	} else {
+		/* Parse IPv4 address */
+		ip_range->ipr_is_ipv6 = false;
+		rc = cfs_ip_addr_parse(str_ip_range, strlen(str_ip_range),
+				       &ip_range->ipr_expr);
+		if (rc != 0) {
+			free(ip_range);
+			return LUSTRE_CFG_RC_BAD_PARAM;
+		}
+	}
 
 	list_add_tail(&ip_range->ipr_entry, list);
 
 	return LUSTRE_CFG_RC_NO_ERR;
+}
+
+/*
+ * lustre_lnet_match_ipv6_netmask
+ *	Checks if an IPv6 address matches a netmask/network address.
+ *
+ * \retval true if the address matches the network
+ * \retval false otherwise
+ */
+static bool
+lustre_lnet_match_ipv6_netmask(const struct in6_addr *addr,
+			       const struct in6_addr *netmask,
+			       const struct in6_addr *netaddr)
+{
+	int i;
+
+	for (i = 0; i < sizeof(struct in6_addr); i++) {
+		if ((addr->s6_addr[i] & netmask->s6_addr[i]) !=
+		    netaddr->s6_addr[i])
+			return false;
+	}
+
+	return true;
+}
+
+/*
+ * ip_addr_in_range
+ *	Check if an IPv4 or IPv6 address matches any IP range in the list.
+ *
+ * \param[in] ifaddr	The interface address to check
+ * \param[in] ip_ranges	List of IP ranges to match against
+ *
+ * \retval true if the address matches any range
+ * \retval false if no match found
+ */
+static bool
+ip_addr_in_range(struct ifaddrs *ifaddr, struct list_head *ip_ranges)
+{
+	struct lustre_lnet_ip_range_descr *ip_range;
+	int family = ifaddr->ifa_addr->sa_family;
+	int rc;
+
+	if (family == AF_INET) {
+		__u32 ip = ((struct sockaddr_in *)
+			    ifaddr->ifa_addr)->sin_addr.s_addr;
+
+		list_for_each_entry(ip_range, ip_ranges, ipr_entry) {
+			if (ip_range->ipr_is_ipv6)
+				continue;
+
+			rc = cfs_ip_addr_match(bswap_32(ip),
+					       &ip_range->ipr_expr);
+			if (rc)
+				return true;
+		}
+	} else if (family == AF_INET6) {
+		struct in6_addr *ipv6 = &((struct sockaddr_in6 *)
+					  ifaddr->ifa_addr)->sin6_addr;
+
+		list_for_each_entry(ip_range, ip_ranges, ipr_entry) {
+			if (!ip_range->ipr_is_ipv6)
+				continue;
+
+			if (lustre_lnet_match_ipv6_netmask(ipv6,
+						&ip_range->ipr_netmask.ipv6,
+						&ip_range->ipr_netaddr.ipv6))
+				return true;
+		}
+	}
+
+	return false;
 }
 
 int lustre_lnet_add_intf_descr(struct list_head *list, char *intf,
@@ -1775,10 +1918,8 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 					__u32 net_id)
 {
 	int rc;
-	__u32 ip;
 	struct lnet_dlc_intf_descr *intf_descr, *tmp;
 	struct ifaddrs *ifaddr = ifa;
-	struct lustre_lnet_ip_range_descr *ip_range;
 	int family;
 
 	/*
@@ -1795,7 +1936,7 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 
 			family = ifaddr->ifa_addr->sa_family;
 			if (family == AF_INET &&
-			    strcmp(ifaddr->ifa_name, "lo") != 0) {
+			    strcmp(ifaddr->ifa_name, "lo")) {
 				rc = lustre_lnet_add_intf_descr
 					(intf_list, ifaddr->ifa_name,
 					strlen(ifaddr->ifa_name));
@@ -1827,26 +1968,14 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 			if ((ifaddr->ifa_flags & IFF_UP) == 0)
 				continue;
 
-			family = ifaddr->ifa_addr->sa_family;
-			if (family == AF_INET) {
-				ip = ((struct sockaddr_in *)ifaddr->ifa_addr)->
-					sin_addr.s_addr;
+			if (!ip_addr_in_range(ifaddr, ip_ranges))
+				continue;
 
-				list_for_each_entry(ip_range, ip_ranges,
-						    ipr_entry) {
-					rc = cfs_ip_addr_match(bswap_32(ip),
-							&ip_range->ipr_expr);
-					if (!rc)
-						continue;
-
-					rc = lustre_lnet_add_intf_descr
-					  (intf_list, ifaddr->ifa_name,
-					   strlen(ifaddr->ifa_name));
-
-					if (rc != LUSTRE_CFG_RC_NO_ERR)
-						return rc;
-				}
-			}
+			rc = lustre_lnet_add_intf_descr(intf_list,
+							ifaddr->ifa_name,
+							strlen(ifaddr->ifa_name));
+			if (rc != LUSTRE_CFG_RC_NO_ERR)
+				return rc;
 		}
 
 		if (!list_empty(intf_list))
@@ -1860,75 +1989,75 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 
 	/*
 	 * If an interface is explicitly specified the ip-range might or
-	 * might not be specified. if specified the interface needs to match the
-	 * ip-range. If no ip-range then the interfaces are
-	 * automatically matched if they are all up.
+	 * might not be specified. if specified the interface needs to match n
+	 * ip-range. If no ip-range then the interfaces are automatically
+	 * matched if they are all up.
 	 * If > 1 interfaces all the interfaces must match for the NI to
 	 * be configured.
 	 */
 	list_for_each_entry_safe(intf_descr, tmp, intf_list, intf_on_network) {
+		bool found_match = false;
+
+		/* An interface may have multiple IP addresses (e.g., IPv4,
+		 * IPv6, link-local, global). We need to check ALL addresses on
+		 * the interface to see if any match the ip-range specification.
+		 */
 		for (ifaddr = ifa; ifaddr != NULL; ifaddr = ifaddr->ifa_next) {
 			if (ifaddr->ifa_addr == NULL)
 				continue;
 
-			family = ifaddr->ifa_addr->sa_family;
-			if (family == AF_INET &&
-			    strcmp(intf_descr->intf_name,
-				   ifaddr->ifa_name) == 0)
+			/* Skip if not the interface we're looking for */
+			if (strcmp(intf_descr->intf_name, ifaddr->ifa_name))
+				continue;
+
+			/* Check if interface is UP */
+			if ((ifaddr->ifa_flags & IFF_UP) == 0) {
+				list_del(&intf_descr->intf_on_network);
+				free_intf_descr(intf_descr);
 				break;
-		}
-
-		if (ifaddr == NULL) {
-			/*
-			 * kfilnd interfaces like cxi0 may refer to hardware
-			 * devices not visible as standard Linux network
-			 * interfaces. Accept them without validation only if:
-			 * 1. This is a kfilnd network
-			 * 2. No ip-ranges were specified (validation required)
-			 * 3. Interface matches cxi[0-9]+ pattern
-			 */
-			if (LNET_NETTYP(net_id) == KFILND &&
-			    list_empty(ip_ranges)) {
-				unsigned int idx;
-
-				if (sscanf(intf_descr->intf_name, "cxi%u",
-					   &idx) == 1)
-					continue;
 			}
 
-			snprintf(err_str, str_len, "No interface matching '%s'",
-				 intf_descr->intf_name);
-			list_del(&intf_descr->intf_on_network);
-			free_intf_descr(intf_descr);
-			return LUSTRE_CFG_RC_NO_MATCH;
-		}
-
-		if ((ifaddr->ifa_flags & IFF_UP) == 0) {
-			snprintf(err_str, str_len,
-				 "Matched interface '%s' is not UP",
-				 intf_descr->intf_name);
-			list_del(&intf_descr->intf_on_network);
-			free_intf_descr(intf_descr);
-			return LUSTRE_CFG_RC_NO_MATCH;
-		}
-
-		ip = ((struct sockaddr_in *)ifaddr->ifa_addr)->sin_addr.s_addr;
-
-		rc = 1;
-		list_for_each_entry(ip_range, ip_ranges, ipr_entry) {
-			rc = cfs_ip_addr_match(bswap_32(ip), &ip_range->ipr_expr);
-			if (rc)
-				break;
-		}
-
-		if (!rc) {
-			/* This interface was specified by user but does not
-			 * match any IP-range that was specified. Therefore,
-			 * this ip2nets rule doesn't apply to this node
+			/* Automatic match if no ranges were specified,
+			 * otherwise we check against the ranges
 			 */
-			snprintf(err_str, str_len,
-				 "Interface '%s' doesn't match an IP pattern",
-				 intf_descr->intf_name);
+			if (list_empty(ip_ranges) ||
+			    ip_addr_in_range(ifaddr, ip_ranges)) {
+				found_match = true;
+				break;
+			}
+		}
+
+		if (!found_match) {
+			if (!ifaddr) {
+				/*
+				 * kfilnd interfaces like cxi0 may refer to
+				 * hardware devices not visible as standard
+				 * Linux network interfaces. Accept them without
+				 * validation only if:
+				 * 1. This is a kfilnd network
+				 * 2. No ip-ranges were specified
+				 * 3. Interface matches cxi[0-9]+ pattern
+				 */
+				if (LNET_NETTYP(net_id) == KFILND &&
+				    list_empty(ip_ranges)) {
+					unsigned int idx;
+
+					if (sscanf(intf_descr->intf_name,
+						   "cxi%u", &idx) == 1)
+						continue;
+				}
+				snprintf(err_str, str_len,
+					 "No interface matching '%s'",
+					 intf_descr->intf_name);
+			} else if ((ifaddr->ifa_flags & IFF_UP) == 0) {
+				snprintf(err_str, str_len,
+					 "Matched interface '%s' is not UP",
+					 intf_descr->intf_name);
+			} else {
+				snprintf(err_str, str_len,
+					 "Interface '%s' doesn't match an IP pattern",
+					 intf_descr->intf_name);
+			}
 			list_del(&intf_descr->intf_on_network);
 			free_intf_descr(intf_descr);
 			return LUSTRE_CFG_RC_NO_MATCH;

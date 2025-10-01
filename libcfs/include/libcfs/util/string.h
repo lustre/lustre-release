@@ -129,5 +129,7 @@ int cfs_parse_nid_parts(char *str, struct list_head *addr,
 			struct list_head *net_num, __u32 *net_type);
 int cfs_abs_path(const char *request_path, char **resolved_path);
 char *strim(char *s);
+int libcfs_ip_str2addr_size(const char *str, int nob,
+			     __be32 *addr, size_t *alen);
 
 #endif

@@ -2265,6 +2265,200 @@ EOF
 }
 run_test 157 "Check import failure with malformed ip2nets YAML"
 
+test_158() {
+	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
+
+	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+
+	local if0_ipv6=$(ip -o -6 a s ${INTERFACES[0]} | awk '{print $4}' |
+			 grep -v '^fe80::' | head -n 1 | cut -d/ -f1)
+
+	echo "Check import of ip2nets with single IPv6 address"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+ip2nets:
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${INTERFACES[0]}
+    ip-range:
+        0: ${if0_ipv6}
+EOF
+
+	do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
+}
+run_test 158 "Check import of ip2nets with single IPv6 address"
+
+test_159() {
+	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
+
+	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+
+	local if0_ipv6=$(ip -o -6 a s ${INTERFACES[0]} | awk '{print $4}' |
+			 grep -v '^fe80::' | head -n 1 | cut -d/ -f1)
+
+	echo "Check import of ip2nets with IPv6 /128 CIDR"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+ip2nets:
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${INTERFACES[0]}
+    ip-range:
+        0: ${if0_ipv6}/128
+EOF
+
+	do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
+}
+run_test 159 "Check import of ip2nets with IPv6 /128 CIDR notation"
+
+test_160() {
+	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
+
+	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	setup_fakeif || error "Failed to add fake IF"
+
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+	add_net "${NETTYPE}" "${FAKE_IF}" || return $?
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+
+	local if0_ipv6=$(ip -o -6 a s ${INTERFACES[0]} | awk '{print $4}' |
+			 grep -v '^fe80::' | head -n 1 | cut -d/ -f1)
+
+	echo "Check import of ip2nets with two IPv6 interfaces"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+ip2nets:
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${INTERFACES[0]}
+        1: ${FAKE_IF}
+    ip-range:
+        0: ${if0_ipv6}
+        1: ${FAKE_IPV6}
+EOF
+
+	do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
+
+	echo "Additional rules for same net should not change config"
+
+	cat <<EOF >> $TMP/sanity-lnet-$testnum.yaml
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${INTERFACES[0]}
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${FAKE_IF}
+    ip-range:
+        0: ${FAKE_IPV6}
+EOF
+
+	do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
+
+	add_net "${NETTYPE}2" "${INTERFACES[0]}"
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+
+	echo "Additional rule for second net should apply"
+
+	cat <<EOF >> $TMP/sanity-lnet-$testnum.yaml
+  - net-spec: ${NETTYPE}2
+    interfaces:
+        0: ${INTERFACES[0]}
+    ip-range:
+        0: ${if0_ipv6}
+EOF
+
+	do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
+
+	cleanup_fakeif
+}
+run_test 160 "Check correct application of multiple IPv6 ip2nets rules"
+
+test_161() {
+	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
+
+	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+
+	local if0_ipv6=$(ip -o -6 a s ${INTERFACES[0]} | awk '{print $4}' |
+			 grep -v '^fe80::' | head -n 1)
+	local network_addr=$(echo "$if0_ipv6" | cut -d/ -f1)
+	local prefix_len=$(cut -d/ -f2<<<"$if0_ipv6")
+
+	[[ -n $network_addr && -n $prefix_len ]] ||
+		error "Failed to get net addr or prefix len"
+
+	echo "Check import of ip2nets with various IPv6 prefix lengths"
+
+	local i
+
+	for i in {1..4}; do
+		cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+ip2nets:
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${INTERFACES[0]}
+    ip-range:
+        0: ${network_addr}/${prefix_len}
+EOF
+
+		echo "Testing with /${prefix_len} prefix"
+		do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
+
+		prefix_len=$((prefix_len/2))
+	done
+}
+run_test 161 "Check import of ip2nets with various IPv6 prefix lengths"
+
+test_162() {
+	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
+
+	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+
+	reinit_dlc || return $?
+
+	local if0_ipv6=$(ip -o -6 a s ${INTERFACES[0]} | awk '{print $4}' |
+			 grep -v '^fe80::' | head -n 1 | sed 's,/[0-9]\+$,,')
+
+	echo "Check import with non-matching IPv6 address (should fail)"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+ip2nets:
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${INTERFACES[0]}
+    ip-range:
+        0: 2001:db8:dead:beef::1
+EOF
+
+	! do_lnetctl import "$TMP/sanity-lnet-$testnum.yaml" ||
+		error "Import should have failed with non-matching IPv6"
+}
+run_test 162 "Check ip2nets import failure with non-matching IPv6"
+
 test_199() {
 	[[ ${NETTYPE} == tcp* || ${NETTYPE} == o2ib* ]] ||
 		skip "Need tcp or o2ib NETTYPE"

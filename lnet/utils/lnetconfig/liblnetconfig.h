@@ -104,11 +104,26 @@ struct lustre_lnet_ip2nets {
 /*
  * lustre_lnet_ip_range_descr
  *	Describes an IP range.
- *	Each octect is an expression
+ *	For IPv4: Each octet is an expression (ipr_expr)
+ *	For IPv6: Single address or CIDR netmask (ipr_addr, ipr_netmask)
  */
 struct lustre_lnet_ip_range_descr {
 	struct list_head ipr_entry;
-	struct list_head ipr_expr;
+	struct list_head ipr_expr;	/* IPv4 expression list */
+	bool ipr_is_ipv6;		/* true if IPv6, false if IPv4 */
+	union {
+		struct in_addr ipv4;
+		struct in6_addr ipv6;
+	} ipr_addr;			/* IPv6 base address */
+	union {
+		struct in_addr ipv4;
+		struct in6_addr ipv6;
+	} ipr_netmask;			/* IPv6 netmask */
+	union {
+		struct in_addr ipv4;
+		struct in6_addr ipv6;
+	} ipr_netaddr;			/* IPv6 network address */
+	__u8 ipr_prefix_len;		/* IPv6 prefix length */
 };
 
 /* This UDSP structures need to match the kernel space structures

@@ -157,7 +157,7 @@ out:
 	return rc;
 }
 
-static int
+int
 libcfs_ip_str2addr_size(const char *str, int nob,
 			__be32 *addr, size_t *alen)
 {
