@@ -359,7 +359,7 @@ static int execute_line(char *line)
 		fprintf(stderr, "\n");
 		break;
 	case CMD_NONE:
-		fprintf(stderr, "No such command. Try --list-commands to see available commands.\n");
+		cfs_parser_help(1, NULL);
 		break;
 	case CMD_INCOMPLETE:
 		if (cmd == NULL || cmd->pc_sub_cmd == NULL) {
