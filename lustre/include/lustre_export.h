@@ -527,13 +527,6 @@ static inline bool imp_connect_replay_create(struct obd_import *imp)
 #define imp_connect_replay_create(exp) true
 #endif
 
-static inline bool imp_connect_unaligned_dio(struct obd_import *imp)
-{
-	struct obd_connect_data *ocd = &imp->imp_connect_data;
-
-	return (ocd->ocd_connect_flags2 & OBD_CONNECT2_UNALIGNED_DIO);
-}
-
 static inline bool exp_connect_unaligned_dio(struct obd_export *exp)
 {
 	return (exp_connect_flags2(exp) & OBD_CONNECT2_UNALIGNED_DIO);

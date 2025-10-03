@@ -73,14 +73,7 @@
  * RPC count.
  */
 #define PTLRPC_BULK_OPS_MASK	(~((__u64)PTLRPC_BULK_OPS_COUNT - 1))
-/*
- * Unaligned DIO adjust MD size for alignment to the interop page size
- * Enable page alignmen interop range:
- *  MD_MAX_INTEROP_PAGE_SIZE(64k) <-> MD_MIN_INTEROP_PAGE_SIZE(4k)
- */
-#define MD_MIN_INTEROP_PAGE_SHIFT	12
-#define MD_MIN_INTEROP_PAGE_SIZE	(1u << MD_MIN_INTEROP_PAGE_SHIFT)
-#define MD_MAX_INTEROP_PAGE_SIZE	(1u << 16)
+#define PTLRPC_BULK_INTEROP_PAGE_SIZE	4096
 /**
  * Define maxima for bulk I/O.
  *
@@ -1422,12 +1415,12 @@ extern const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_nopin_ops;
 struct ptlrpc_bulk_desc {
 	unsigned int	bd_refs; /* number MD's assigned including zero-sends */
 	/** completed with failure */
-	unsigned long bd_failure:1;
+	unsigned long bd_failure:1,
 	/** client side */
-	unsigned short bd_md_offset; /* offset in 4k pages ranged [0, 15] */
-	unsigned int bd_registered:1,
-	/* bulk request is RDMA transfer, use page->host as real address */
-		     bd_is_rdma:1;
+		    bd_registered:1,
+	/* bulk request is GPU RDMA transfer, use page->host as real address */
+		     bd_is_rdma:1,
+		     bd_is_srv:1; /* export or import should be used */
 	/** For serialization with callback */
 	spinlock_t bd_lock;
 	/** {put,get}{source,sink}{kvec,kiov} */
