@@ -1222,6 +1222,9 @@ lnet_parse_routes(const char *routes, int *im_a_router)
 
 	*im_a_router = 0;
 
+	if (strlen(routes))
+		CWARN("Kernel parsing of LNet routes is deprecated. Consider converting to LNet YAML configuration.\n");
+
 	if (lnet_str2tbs_sep(&tbs, routes) < 0) {
 		CERROR("Error parsing routes\n");
 		rc = -EINVAL;
@@ -1568,6 +1571,8 @@ lnet_parse_ip2nets(const char **networksp, const char *ip2nets)
 	int nip;
 	int rc;
 	int i;
+
+	CWARN("Kernel parsing of ip2nets is deprecated. Consider converting to LNet YAML configuration.\n");
 
 	if (current->nsproxy && current->nsproxy->net_ns)
 		nip = lnet_inet_enumerate(&ifaces, current->nsproxy->net_ns,

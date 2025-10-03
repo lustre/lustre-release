@@ -25,6 +25,7 @@
 #include <lustre_compat/net/linux-net.h>
 #include <lnet/udsp.h>
 #include <lnet/lib-lnet.h>
+#include <uapi/linux/lustre/lustre_ver.h>
 
 #define D_LNI D_CONSOLE
 
@@ -39,17 +40,19 @@ struct lnet the_lnet = {
 };		/* THE state of the network */
 EXPORT_SYMBOL(the_lnet);
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 static char *ip2nets = "";
 module_param(ip2nets, charp, 0444);
-MODULE_PARM_DESC(ip2nets, "LNET network <- IP table");
+MODULE_PARM_DESC(ip2nets, "LNET network <- IP table (Deprecated)");
+
+static char *routes = "";
+module_param(routes, charp, 0444);
+MODULE_PARM_DESC(routes, "routes to non-local networks (Deprecated)");
+#endif
 
 static char *networks = "";
 module_param(networks, charp, 0444);
 MODULE_PARM_DESC(networks, "local networks");
-
-static char *routes = "";
-module_param(routes, charp, 0444);
-MODULE_PARM_DESC(routes, "routes to non-local networks");
 
 static int rnet_htable_size = LNET_REMOTE_NETS_HASH_DEFAULT;
 module_param(rnet_htable_size, int, 0444);
@@ -599,15 +602,18 @@ response_tracking_set(const char *val, cfs_kernel_param_arg_t *kp)
 	return 0;
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 static const char *
 lnet_get_routes(void)
 {
 	return routes;
 }
+#endif
 
 static const char *
 lnet_get_networks(void)
 {
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 	const char *nets;
 	int rc;
 
@@ -620,6 +626,7 @@ lnet_get_networks(void)
 		rc = lnet_parse_ip2nets(&nets, ip2nets);
 		return (rc == 0) ? nets : NULL;
 	}
+#endif
 
 	if (*networks != 0)
 		return networks;
@@ -3192,7 +3199,6 @@ void lnet_lib_exit(void)
 int
 LNetNIInit(lnet_pid_t requested_pid)
 {
-	int im_a_router = 0;
 	int rc;
 	int ni_bytes;
 	struct lnet_ping_buffer	*pbuf;
@@ -3253,7 +3259,10 @@ LNetNIInit(lnet_pid_t requested_pid)
 	if (rc < 0)
 		goto err_empty_list;
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 	if (!the_lnet.ln_nis_from_mod_params) {
+		int im_a_router = 0;
+
 		rc = lnet_parse_routes(lnet_get_routes(), &im_a_router);
 		if (rc != 0)
 			goto err_shutdown_lndnis;
@@ -3265,6 +3274,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 		if (the_lnet.ln_routing == LNET_ROUTING_ENABLED)
 			LCONSOLE_INFO("Message forwarding enabled\n");
 	}
+#endif
 
 	rc = lnet_acceptor_start();
 	if (rc != 0)
@@ -3319,9 +3329,11 @@ err_acceptor_stop:
 	the_lnet.ln_refcount = 0;
 	lnet_acceptor_stop();
 err_destroy_routes:
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 	if (!the_lnet.ln_nis_from_mod_params)
 		lnet_destroy_routes();
 err_shutdown_lndnis:
+#endif
 	lnet_shutdown_lndnets();
 err_empty_list:
 	lnet_unprepare();
