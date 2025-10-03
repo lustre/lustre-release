@@ -416,20 +416,21 @@ static ssize_t max_read_ahead_mb_store(struct kobject *kobj,
 	u64 ra_max_mb, pages_number;
 	int rc;
 
-	rc = sysfs_memparse(buffer, count, &ra_max_mb, "MiB");
+	rc = sysfs_memparse_total(buffer, count, &ra_max_mb,
+				  cfs_totalram_pages() << (PAGE_SHIFT - 1),
+				  "MiB");
+	if (rc == -ERANGE) {
+		CERROR("%s: cannot set max_read_ahead_mb=%llu > totalram/2=%luMB: rc = %d\n",
+		       sbi->ll_fsname, ra_max_mb >> 20,
+		       PAGES_TO_MiB(cfs_totalram_pages() / 2), rc);
+		return rc;
+	}
 	if (rc)
 		return rc;
 
 	pages_number = round_up(ra_max_mb, 1024 * 1024) >> PAGE_SHIFT;
 	CDEBUG(D_INFO, "%s: set max_read_ahead_mb=%llu (%llu pages)\n",
 	       sbi->ll_fsname, PAGES_TO_MiB(pages_number), pages_number);
-	if (pages_number > cfs_totalram_pages() / 2) {
-		/* 1/2 of RAM */
-		CERROR("%s: cannot set max_read_ahead_mb=%llu > totalram/2=%luMB\n",
-		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
-		       PAGES_TO_MiB(cfs_totalram_pages() / 2));
-		return -ERANGE;
-	}
 
 	spin_lock(&sbi->ll_lock);
 	sbi->ll_ra_info.ra_max_pages = pages_number;
@@ -460,17 +461,19 @@ static ssize_t max_read_ahead_per_file_mb_store(struct kobject *kobj,
 	u64 ra_max_file_mb, pages_number;
 	int rc;
 
-	rc = sysfs_memparse(buffer, count, &ra_max_file_mb, "MiB");
+	rc = sysfs_memparse_total(buffer, count, &ra_max_file_mb,
+				  sbi->ll_ra_info.ra_max_pages << PAGE_SHIFT,
+				  "MiB");
+	if (rc == -ERANGE) {
+		CERROR("%s: cannot set max_read_ahead_per_file_mb=%llu > max_read_ahead_mb=%lu: rc = %d\n",
+		       sbi->ll_fsname, ra_max_file_mb >> 20,
+		       PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages), rc);
+		return rc;
+	}
 	if (rc)
 		return rc;
 
 	pages_number = round_up(ra_max_file_mb, 1024 * 1024) >> PAGE_SHIFT;
-	if (pages_number > sbi->ll_ra_info.ra_max_pages) {
-		CERROR("%s: cannot set max_read_ahead_per_file_mb=%llu > max_read_ahead_mb=%lu\n",
-		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
-		       PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages));
-		return -ERANGE;
-	}
 
 	spin_lock(&sbi->ll_lock);
 	sbi->ll_ra_info.ra_max_pages_per_file = pages_number;
@@ -497,9 +500,18 @@ static ssize_t max_read_ahead_whole_mb_store(struct kobject *kobj,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 	u64 ra_max_whole_mb, pages_number;
+	u64 max_limit;
 	int rc;
 
-	rc = sysfs_memparse(buffer, count, &ra_max_whole_mb, "MiB");
+	max_limit = sbi->ll_ra_info.ra_max_pages_per_file << PAGE_SHIFT;
+	rc = sysfs_memparse_total(buffer, count, &ra_max_whole_mb, max_limit,
+				 "MiB");
+	if (rc == -ERANGE) {
+		CERROR("%s: cannot set max_read_ahead_whole_mb=%llu > max_read_ahead_per_file_mb=%lu: rc = %d\n",
+		       sbi->ll_fsname, ra_max_whole_mb >> 20,
+		       PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages_per_file), rc);
+		return rc;
+	}
 	if (rc)
 		return rc;
 
@@ -507,13 +519,6 @@ static ssize_t max_read_ahead_whole_mb_store(struct kobject *kobj,
 	/* Cap this at the current max readahead window size, the readahead
 	 * algorithm does this anyway so it's pointless to set it larger.
 	 */
-	if (pages_number > sbi->ll_ra_info.ra_max_pages_per_file) {
-		CERROR("%s: cannot set max_read_ahead_whole_mb=%llu > max_read_ahead_per_file_mb=%lu\n",
-		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
-		       PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages_per_file));
-
-		return -ERANGE;
-	}
 
 	spin_lock(&sbi->ll_lock);
 	sbi->ll_ra_info.ra_max_read_ahead_whole_pages = pages_number;
@@ -588,9 +593,9 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 	rc = sysfs_memparse_total(ptr, count, &value,
 				  cfs_totalram_pages() << PAGE_SHIFT, "MiB");
 	if (rc == -ERANGE) {
-		CERROR("%s: can't set max cache more than %lu MB\n",
-		       sbi->ll_fsname,
-		       PAGES_TO_MiB(cfs_totalram_pages()));
+		CERROR("%s: cannot set max_cached_mb=%llu MB more than %lu MB: rc = %d\n",
+		       sbi->ll_fsname, value >> 20,
+		       PAGES_TO_MiB(cfs_totalram_pages()), rc);
 		RETURN(rc);
 	}
 	if (rc)

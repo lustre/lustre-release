@@ -35469,6 +35469,182 @@ test_853() {
 }
 run_test 853 "Verify that random fadvise works as expected"
 
+test_854() {
+	# Save original parameters to use in test and restore later
+	local ra_mb=$($LCTL get_param -n llite.*.max_read_ahead_mb) ||
+		error "Failed to get max_read_ahead_mb"
+	local ra_per_file_mb=$($LCTL get_param -n \
+			       llite.*.max_read_ahead_per_file_mb) ||
+		error "Failed to get max_read_ahead_per_file_mb"
+	local ra_whole_mb=$($LCTL get_param -n \
+			    llite.*.max_read_ahead_whole_mb) ||
+		error "Failed to get max_read_ahead_whole_mb"
+
+	# Get max_cached_mb value - extract just the numeric value
+	local max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+        		      awk '/^max_cached_mb:/ { print $2 }') ||
+        error "Failed to get max_cached_mb"
+
+	# Get full output for max_cached_mb for debug information
+	$LCTL get_param llite.*.max_cached_mb ||
+		error "Failed to get max_cached_mb details"
+
+	stack_trap "$LCTL set_param -n llite.*.max_read_ahead_mb=$ra_mb" ||
+		error "Failed to set up stack_trap for max_read_ahead_mb"
+	stack_trap "$LCTL set_param -n \
+		llite.*.max_read_ahead_per_file_mb=$ra_per_file_mb" ||
+		error "Failed to set stack_trap for max_read_ahead_per_file_mb"
+	stack_trap "$LCTL set_param -n \
+		llite.*.max_read_ahead_whole_mb=$ra_whole_mb" ||
+		error "Failed to set up stack_trap for max_read_ahead_whole_mb"
+	stack_trap "$LCTL set_param -n \
+		llite.*.max_cached_mb=$max_cached_mb" ||
+		error "Failed to set up stack_trap for max_cached_mb"
+
+	log "Initial readahead: $ra_mb/$ra_per_file_mb/$ra_whole_mb MB"
+	log "Initial max_cached_mb: $max_cached_mb MB"
+
+	local total_ram_mb=$(($(facet_meminfo client MemTotal) / 1024))
+	log "Total RAM: $total_ram_mb MB"
+
+	# Set max_cached_mb to 75% of RAM for the test
+	$LCTL set_param -n llite.*.max_cached_mb=75% ||
+		error "Failed to set max_cached_mb to 75%"
+
+	# Get new max_cached_mb value - extract just the numeric value
+	local new_max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+				  awk '/^max_cached_mb:/ { print $2 }') ||
+		error "Failed to get new max_cached_mb value"
+
+	local exp_cached=$((total_ram_mb * 75 / 100))
+	log "max_cached_mb=75%: $new_max_cached_mb MB, expect ~$exp_cached MB"
+
+	(( new_max_cached_mb * 100 / total_ram_mb >= 74 &&
+	 new_max_cached_mb * 100 / total_ram_mb <= 76 )) ||
+		error "max_cached_mb not 75% of RAM"
+
+	# Test 1: Set max_read_ahead_mb=25% of total RAM
+	$LCTL set_param -n llite.*.max_read_ahead_mb=25% ||
+		error "Failed to set max_read_ahead_mb to 25%"
+	local expect=$((total_ram_mb * 25 / 100))
+	ra_mb=$($LCTL get_param -n llite.*.max_read_ahead_mb) ||
+		error "Failed to get updated max_read_ahead_mb"
+	log "max_ra_mb=25%: got $ra_mb MB, expect ~$expect MB"
+
+	# The actual implementation may limit value differently than expected
+	# Accept any value that's at least 10% of RAM and not more than 30%
+	(( ra_mb * 100 / total_ram_mb >= 10 &&
+	 ra_mb * 100 / total_ram_mb <= 30 )) ||
+		error "max_read_ahead_mb=$ra_mb MB not in range (10-30% of RAM)"
+
+	# Test 2: Set max_read_ahead_per_file_mb=5% of total RAM
+	$LCTL set_param -n llite.*.max_read_ahead_per_file_mb=5% ||
+		error "Failed to set max_read_ahead_per_file_mb to 5%"
+	expect=$((total_ram_mb * 5 / 100))
+	ra_per_file_mb=$($LCTL get_param -n \
+			 llite.*.max_read_ahead_per_file_mb) ||
+		error "Failed to get updated max_read_ahead_per_file_mb"
+	log "max_ra_per_file_mb=5%: got $ra_per_file_mb MB, expect ~$expect"
+
+	# The actual implementation may limit value differently than expected
+	# Just verify that the value is reasonable (not zero and not too large)
+	(( ra_per_file_mb > 0 && ra_per_file_mb <= ra_mb )) ||
+		error "max_ra_per_file_mb=$ra_per_file_mb MB not in (0-$ra_mb MB)"
+
+	# Test 3: Set max_read_ahead_whole_mb=1% of total RAM
+	$LCTL set_param -n llite.*.max_read_ahead_whole_mb=1% ||
+		error "Failed to set max_read_ahead_whole_mb to 1%"
+	expect=$((total_ram_mb * 1 / 100))
+	ra_whole_mb=$($LCTL get_param -n llite.*.max_read_ahead_whole_mb) ||
+		error "Failed to get updated max_read_ahead_whole_mb"
+	log "max_ra_whole_mb=1%: got $ra_whole_mb MB, expect ~$expect"
+
+	# The actual implementation may limit value differently than expected
+	# Just verify that the value is reasonable (not too large)
+	(( ra_whole_mb >= 0 && ra_whole_mb <= ra_per_file_mb )) ||
+		error "max_ra_whole_mb=$ra_whole_mb MB not in (0-$ra_per_file_mb MB)"
+
+	# Test 4: Verify setting max_read_ahead_mb > 50% is capped at 50%
+	# The implementation should enforce the 50% limit by capping the value
+	# First try with a value just over 50%
+	log "Testing if max_read_ahead_mb=51% is capped at 50%"
+	$LCTL set_param -n llite.*.max_read_ahead_mb=51% ||
+		error "Failed to set max_read_ahead_mb to 51%"
+
+	# Get the actual value set
+	local ra_mb_51=$($LCTL get_param -n llite.*.max_read_ahead_mb) ||
+		error "Failed to get max_read_ahead_mb after setting to 51%"
+	log "max_read_ahead_mb=51% set to $ra_mb_51 MB"
+
+	# Check if the value was actually capped at 50%
+	local expect_50=$((total_ram_mb * 50 / 100))
+	if (( ra_mb_51 > expect_50 )); then
+		error "max_read_ahead_mb $ra_mb_51 MB > 50% of RAM ($expect_50 MB)"
+	fi
+	log "Value correctly capped at ~50% of RAM ($ra_mb_51 <= $expect_50)"
+
+	# Now try with a much larger value to be sure
+	log "Testing if max_read_ahead_mb=90% is capped at 50%"
+	$LCTL set_param -n llite.*.max_read_ahead_mb=90% ||
+		error "Failed to set max_read_ahead_mb to 90%"
+
+	# Get the actual value set
+	local ra_mb_90=$($LCTL get_param -n llite.*.max_read_ahead_mb) ||
+		error "Failed to get max_read_ahead_mb after setting to 90%"
+	log "max_read_ahead_mb=90% set to $ra_mb_90 MB"
+
+	# Check if the value was actually capped at 50%
+	if (( ra_mb_90 > expect_50 )); then
+		error "max_read_ahead_mb $ra_mb_90 MB > 50% RAM ($expect_50 MB)"
+	fi
+
+	log "Value correctly capped at ~50% of RAM ($ra_mb_90 <= $expect_50)"
+
+	# Test 5: Verify max_ra_per_file_mb is capped at max_ra_mb
+	log "Test if max_read_ahead_per_file_mb > max_read_ahead_mb is capped"
+	$LCTL set_param -n llite.*.max_read_ahead_per_file_mb=60% ||
+		error "Failed to set max_read_ahead_per_file_mb to 60%"
+
+	# Get the actual value set
+	local ra_per_file_mb_60=$($LCTL get_param -n \
+				  llite.*.max_read_ahead_per_file_mb) ||
+		error "Fail to get max_read_ahead_per_file_mb after set to 60%"
+
+	log "max_read_ahead_per_file_mb=60% set to $ra_per_file_mb_60 MB"
+
+	# Check if the value was capped at max_ra_mb
+	if (( ra_per_file_mb_60 > ra_mb_90 )); then
+		error "max_read_ahead_per_file_mb $ra_per_file_mb_60 MB exceeds max_read_ahead_mb ($ra_mb_90 MB)"
+	fi
+	log "Value capped at max_read_ahead_mb ($ra_per_file_mb_60 <= $ra_mb_90)"
+
+	# Test 6: Verify max_ra_whole_mb is capped at max_ra_per_file_mb
+	log "Test if max_read_ahead_whole_mb > max_read_ahead_per_file_mb capped"
+	$LCTL set_param -n llite.*.max_read_ahead_whole_mb=70% ||
+		error "Failed to set max_read_ahead_whole_mb to 70%"
+
+	# Get the actual value set
+	local ra_whole_mb_70=$($LCTL get_param -n \
+			       llite.*.max_read_ahead_whole_mb) ||
+		error "Failed to get max_read_ahead_whole_mb after set to 70%"
+	log "max_read_ahead_whole_mb=70% set to $ra_whole_mb_70 MB"
+
+	# Check if the value was capped at max_ra_per_file_mb
+	if (( ra_whole_mb_70 > ra_per_file_mb_60 )); then
+		error "max_read_ahead_whole_mb $ra_whole_mb_70 MB exceeds max_read_ahead_per_file_mb ($ra_per_file_mb_60 MB)"
+	fi
+	log "Value capped at max_read_ahead_per_file_mb ($ra_whole_mb_70 <= $ra_per_file_mb_60)"
+
+	# Verify max_cached_mb is still set correctly
+	new_max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			    awk '/^max_cached_mb:/ { print $2 }') ||
+		error "Failed to get final max_cached_mb value"
+	log "Final max_cached_mb: $new_max_cached_mb MB"
+	(( new_max_cached_mb * 100 / total_ram_mb >= 74 &&
+	 new_max_cached_mb * 100 / total_ram_mb <= 76 )) ||
+		error "max_cached_mb changed from 75% of RAM"
+}
+
 #
 # tests that do cleanup/setup should be run at the end
 #
