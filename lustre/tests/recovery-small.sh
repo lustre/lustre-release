@@ -1125,27 +1125,32 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 
 	check_timeout || return 1
 	clients_up
-	zconf_mount $HOSTNAME $MOUNT2 ||
-                { error "Failed to mount $MOUNT2"; return 2; }
-	# make sure all imports are connected and not IDLE
-	do_facet client $LFS df > /dev/null
-	mkdir_on_mdt0 $DIR/$tdir
-	$LFS setstripe -c -1 $MOUNT2/$tdir/$tfile
 
-	local mds_nexp=$(do_facet mds1 \
-		lctl get_param -n mdt.${mds1_svc}.num_exports)
-	local ost_nexp=$(do_facet ost1 \
-		lctl get_param -n obdfilter.${ost1_svc}.num_exports)
 	# must be equal on all the nodes
 	local INTERVAL=$(do_facet $SINGLEMDS lctl get_param -n ping_interval)
 	local AT_MAX_SAVED=$(at_max_get mds1)
 	local ENQUEUE_MIN=$(do_facet $SINGLEMDS \
 		lctl get_param -n ldlm.ldlm_enqueue_min)
 
+	# set it before the new export got its first exp_deadline,
+	# in case it is large, small at_max has no effect on it.
 	at_max_set $TIMEOUT mds1
 	at_max_set $TIMEOUT ost1
 	stack_trap "at_max_set $AT_MAX_SAVED mds1" EXIT
 	stack_trap "at_max_set $AT_MAX_SAVED ost1" EXIT
+
+	zconf_mount $HOSTNAME $MOUNT2 ||
+                { error "Failed to mount $MOUNT2"; return 2; }
+	# make sure all imports are connected and not IDLE
+	do_facet client $LFS df > /dev/null
+
+	local mds_nexp=$(do_facet mds1 \
+		lctl get_param -n mdt.${mds1_svc}.num_exports)
+	local ost_nexp=$(do_facet ost1 \
+		lctl get_param -n obdfilter.${ost1_svc}.num_exports)
+
+	mkdir_on_mdt0 $DIR/$tdir
+	$LFS setstripe -c -1 $MOUNT2/$tdir/$tfile
 
 	echo "starting with '$ost_nexp' OST and '$mds_nexp' MDS exports"
 
@@ -1158,15 +1163,12 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	TOUT=$((TOUT + (TOUT >> 4)))
 	# take a bit more the test sake
 	TOUT=$(((TOUT > ENQUEUE_MIN ? TOUT : ENQUEUE_MIN) + 5))
-	echo i $INTERVAL m $AT_MAX_SAVED t $TIMEOUT $TOUT
+	echo i $INTERVAL m $AT_MAX_SAVED t $TIMEOUT e $ENQUEUE_MIN wait $TOUT
+
 	wait_client_evicted ost1 $ost_nexp $TOUT ||
 		error "Client was not evicted by OSS"
-	wait_client_evicted mds1 $mds_nexp $TOUT || {
-		# add debugging to see if eviction happens after a longer wait
-		wait_client_evicted mds1 $mds_nexp $TOUT &&
-			log "Client was evicted after second wait" ||
-			error "Client was not evicted by MDS after second wait"
-	}
+	wait_client_evicted mds1 $mds_nexp $TOUT ||
+		error "Client was not evicted by MDS"
 }
 run_test 26b "evict dead exports"
 
