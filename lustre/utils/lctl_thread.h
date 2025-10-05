@@ -57,6 +57,7 @@ struct param_opts {
 	unsigned int po_dshbak:1;
 	unsigned int po_color:1;
 	unsigned int po_client:1;
+	unsigned int po_module:1;
 	unsigned int po_parallel_threads;
 	unsigned int po_permissions;
 	char *po_fsname;

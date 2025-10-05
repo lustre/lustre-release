@@ -8,6 +8,7 @@ lctl-find_param \- search for parameters matching patterns
 .RB [ --no-links | -L ]
 .RB [ --merge | -m ]
 .RB [ --no-merge | -M ]
+.RB [ --module | -o ]
 .RB [ --path | -p ]
 .IR PATTERN1 " [" PATTERN2 " ...]"
 .YS
@@ -51,6 +52,10 @@ This option is equivalent to
 .BI "'lctl list_param -R \(dq*\(dq | grep -E " PATTERN '
 which is useful to avoid printing copies of the same parameter when their values
 are different like many of the '.stats' parameters.
+.TP
+.BR -o ", " --module
+Include modules params in the parameter search path, meaning that matching
+module parameters will be shown along side with Lustre parameters.
 .TP
 .B -p ", " --path
 Print the parameter path instead of the parameter name.

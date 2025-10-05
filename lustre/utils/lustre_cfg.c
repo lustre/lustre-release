@@ -878,7 +878,7 @@ int jt_device_list(int argc, char **argv)
 	if (rc == 0)
 		return 0;
 
-	rc = llapi_param_get_paths("devices", &path);
+	rc = llapi_param_get_paths("devices", &path, 0);
 	if (rc < 0)
 		return rc;
 

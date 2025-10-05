@@ -31262,24 +31262,24 @@ cleanup_401db() {
 }
 
 test_401db() { #LU-9544
-	local new_val=6
-
-	local saved_val=$($LCTL get_param -n at_min)
+	local param="at_min"
+	local saved_val=$($LCTL get_param -n $param)
+	local new_val=$((saved_val + 6))
 
 	stack_trap "cleanup_401db $saved_val"
 
-	do_facet mgs $LCTL set_param -P at_min=$new_val ||
-		error "failed to set at_min=$new_val"
+	do_facet mgs $LCTL set_param -P $param=$new_val ||
+		error "failed to set $param=$new_val"
 
-	wait_update $HOSTNAME "$LCTL get_param -n at_min" $new_val
-	local expected=$($LCTL get_param -n at_min)
+	wait_update $HOSTNAME "$LCTL get_param -n $param" $new_val
+	local expected=$($LCTL get_param -n $param)
 
-	do_facet mgs $LCTL set_param -P -d at_min=$new_val ||
-		error "failed to delete at_min"
+	do_facet mgs $LCTL set_param -P -d $param=$new_val ||
+		error "failed to delete $param"
 
 	echo "Wait for erroneous changes"
-	wait_update_cond $HOSTNAME "$LCTL get_param -n at_min" != $new_val
-	local result=$($LCTL get_param -n at_min)
+	wait_update_cond $HOSTNAME "$LCTL get_param -n $param" != $new_val
+	local result=$($LCTL get_param -n $param)
 
 	! [[ "$result" =~ "=" ]] || {
 		echo "result:$result"
@@ -31302,13 +31302,23 @@ test_401e() { # LU-14779
 }
 run_test 401e "verify 'lctl get_param' works with NID in parameter"
 
-test_401f() {
+test_401fa() {
 	$LCTL list_param -RpL "*" | while read path; do
 		[[ ! -L $path ]] ||
 			error "list_param -RpL returned the symlink: '$path'"
 	done
 }
-run_test 401f "check 'lctl list_param' doesn't follow symlinks with --no-links"
+run_test 401fa "check 'lctl list_param' doesn't follow symlinks with --no-links"
+
+test_401fb() {
+	local modules=$(ls /sys/module/{lnet,osc,mdd,obdclass,ofd,ptlrpc,mgc,ksocklnd,mdt,osd_ldiskfs,lquota}/parameters/* | wc -l)
+	local params=$($LCTL list_param -M "*" | wc -l)
+	local module_params=$($LCTL list_param -M --module "*" | wc -l)
+
+	(( modules + params == module_params )) ||
+		error "expected $((modules+params)) params, got $module_params"
+}
+run_test 401fb "check 'lctl {get,list,set}_param' only sees modules params with --module"
 
 test_401ga() {
 	local paramdir=/etc/lustre

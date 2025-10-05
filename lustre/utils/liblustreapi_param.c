@@ -97,8 +97,14 @@ get_lustre_param_path(const char *obd_type, const char *filter,
 	}
 
 	if (type == FILTER_BY_NONE) {
-		if (cfs_get_param_paths(param, "%s", param_name) != 0)
-			rc = -errno;
+		if (filter && strstr(filter, "module")) {
+			if (cfs_get_param_paths(param, "%s%s", "module",
+						param_name) != 0)
+				rc = -errno;
+		} else {
+			if (cfs_get_param_paths(param, "%s", param_name) != 0)
+				rc = -errno;
+		}
 	} else if (param_name != NULL) {
 		if (cfs_get_param_paths(param, "%s/%s/%s",
 				       obd_type, pattern, param_name) != 0)
@@ -175,9 +181,11 @@ err:
 	return rc;
 }
 
-int llapi_param_get_paths(const char *pattern, glob_t *paths)
+int llapi_param_get_paths(const char *pattern, glob_t *paths,
+			  enum llapi_param_flags flags)
 {
-	return get_lustre_param_path(NULL, NULL, FILTER_BY_NONE,
+	return get_lustre_param_path(NULL, flags & LLAPI_PARAM_MODULES ?
+				     "module" : NULL, FILTER_BY_NONE,
 				     pattern, paths);
 }
 

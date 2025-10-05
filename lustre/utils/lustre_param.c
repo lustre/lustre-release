@@ -142,14 +142,14 @@ static char *format_param(const char *filename, struct stat *st,
 	}
 
 	/* Take the original filename string and chop off the glob addition */
-	tmp = strstr(filename, "/lustre/");
-	if (!tmp) {
-		tmp = strstr(filename, "/lnet/");
-		if (tmp)
-			tmp += strlen("/lnet/");
-	} else {
+	if ((tmp = strstr(filename, "/parameters/")))
+		tmp += strlen("/parameters/");
+	else if ((tmp = strstr(filename, "/lustre/")))
 		tmp += strlen("/lustre/");
-	}
+	else if ((tmp = strstr(filename, "/lnet/")))
+		tmp += strlen("/lnet/");
+	else
+		tmp = (char *)filename;
 
 	/* Allocate return string */
 	param_name = strdup(tmp);
@@ -714,12 +714,16 @@ static int do_param_op(struct param_opts *popt, char *pattern, char *value,
 	struct lctl_param_dir *pdir;
 	glob_t paths;
 	char *tmp, *opname = parameter_opname[oper];
+	int flags = 0;
 	int rc, i;
 
 	if (!wq && popt_is_parallel(*popt))
 		return -EINVAL;
 
-	rc = llapi_param_get_paths(pattern, &paths);
+	if (popt->po_module)
+		flags |= LLAPI_PARAM_MODULES;
+
+	rc = llapi_param_get_paths(pattern, &paths, flags);
 	if (rc) {
 		rc = -errno;
 		if (!popt->po_recursive && !(rc == -ENOENT && getuid() != 0)) {
@@ -831,6 +835,8 @@ paths_loop:
 		    (st.st_mode & popt->po_permissions) ^ popt->po_permissions)
 			continue;
 		if (popt->po_tunable && stats_param(paths.gl_pathv[i]))
+			continue;
+		if (!popt->po_module && strstr(paths.gl_pathv[i], "/module/"))
 			continue;
 
 		param_name = format_param(paths.gl_pathv[i], &st, popt);
@@ -1011,6 +1017,7 @@ static int param_out_cmdline(int argc, char **argv, struct param_opts *popt,
 	{ .val = 'n',	.name = "no-name",	.has_arg = no_argument},
 	{ .val = 'N',	.name = "only-name",	.has_arg = no_argument},
 	{ .val = 'N',	.name = "name-only",	.has_arg = no_argument},
+	{ .val = 'o',	.name = "module",	.has_arg = no_argument},
 	{ .val = 'p',	.name = "path",		.has_arg = no_argument},
 	{ .val = 'r',	.name = "readable",	.has_arg = no_argument},
 	{ .val = 'R',	.name = "recursive",	.has_arg = no_argument},
@@ -1076,6 +1083,9 @@ static int param_out_cmdline(int argc, char **argv, struct param_opts *popt,
 		case 'N':
 			popt->po_only_name = 1;
 			break;
+		case 'o':
+			popt->po_module = 1;
+			break;
 		case 'p':
 			popt->po_only_pathname = 1;
 			break;
@@ -1124,7 +1134,7 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	 */
 	popt->po_merge = 1;
 
-	return param_out_cmdline(argc, argv, popt, "bc::DFlLmMprRtw");
+	return param_out_cmdline(argc, argv, popt, "bc::DFlLmMoprRtw");
 }
 
 int jt_lcfg_listparam(int argc, char **argv)
@@ -1181,7 +1191,7 @@ static int findparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	popt->po_merge = 1;
 	popt->po_recursive = 1;
 
-	return param_out_cmdline(argc, argv, popt, "bc:lLnNmMp");
+	return param_out_cmdline(argc, argv, popt, "bc:lLmMnNop");
 }
 
 int jt_lctl_findparam(int argc, char **argv)
@@ -1241,7 +1251,7 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	popt->po_show_name = 1;
 	popt->po_follow_symlinks = 1;
 
-	return param_out_cmdline(argc, argv, popt, "bc:FHlLnNmMprRtwy");
+	return param_out_cmdline(argc, argv, popt, "bc:FHlLmMnNoprRtwy");
 }
 
 int jt_lcfg_getparam(int argc, char **argv)
@@ -1349,6 +1359,7 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'F',	.name = "file",		.has_arg = no_argument},
 	{ .val = 'n',	.name = "noname",	.has_arg = no_argument},
+	{ .val = 'o',	.name = "module",	.has_arg = no_argument},
 	{ .val = 'P',	.name = "perm",		.has_arg = no_argument},
 	{ .val = 'P',	.name = "permanent",	.has_arg = no_argument},
 	{ .val = 't',	.name = "threads",	.has_arg = optional_argument},
@@ -1367,11 +1378,12 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	popt->po_parallel_threads = 0;
 	popt->po_follow_symlinks = 1;
 	popt->po_client = 0;
+	popt->po_module = 0;
 	opterr = 0;
 
 	/* reset optind for each getopt_long() in case of multiple calls */
 	optind = 0;
-	while ((ch = getopt_long(argc, argv, "C::dFnPt::",
+	while ((ch = getopt_long(argc, argv, "C::dFnoPt::",
 				 long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'C':
@@ -1395,6 +1407,9 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 			break;
 		case 'n':
 			popt->po_show_name = 0;
+			break;
+		case 'o':
+			popt->po_module = 1;
 			break;
 		case 'P':
 			if (popt->po_client) {
@@ -1604,7 +1619,7 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 				jt_cmdname(func), param_name, strerror(-rc));
 			goto out;
 		}
-		rc = llapi_param_get_paths(tmp_path, &paths);
+		rc = llapi_param_get_paths(tmp_path, &paths, 0);
 		if (rc) {
 			rc = -errno;
 			fprintf(stderr,

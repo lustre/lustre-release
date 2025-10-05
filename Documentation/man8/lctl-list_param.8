@@ -11,6 +11,7 @@ lctl-list_param \- list configuration parameter names
 .RB [ --no-links | -L ]
 .RB [ --merge | -m ]
 .RB [ --no-merge | -M ]
+.RB [ --module | -o ]
 .RB [ --path | -p ]
 .RB [ --readable | -r ]
 .RB [ --recursive | -R ]
@@ -59,6 +60,10 @@ Enabled by default.
 .BR -M ", " --no-merge
 Do not merge parameters. All parameters will be shown, regardless if they are
 have the same name or not. Duplicate parameters will be printed in yellow.
+.TP
+.BR -o ", " --module
+Include modules params in the parameter search path, meaning that matching
+module parameters will be shown along side with Lustre parameters.
 .TP
 .BR -p ", " --path
 Print the parameter path instead of the parameter name.

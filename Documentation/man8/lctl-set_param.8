@@ -8,6 +8,7 @@ lctl-set_param \- Lustre filesystem set parameter utility
 .RB [ --delete | -d ]
 .RB [ --file | -F ]
 .RB [ --no-name | -n ]
+.RB [ --module | -o ]
 .RB [ --permanent | -P ]
 .RB [ --threads | -t\c
 .RI [ THREAD_COUNT ]]
@@ -74,6 +75,12 @@ or from any other valid llog configuration log as listed by
 .TP
 .BR -n ", " --no-name
 Disable printing of the parameter name after setting it.
+.TP
+.BR -o ", " --module
+Allow module parameters to be visible to the
+.B lctl set_param
+command.
+The module parameters will be set on the local node at module load time.
 .TP
 .BR -P ", " --permanent
 Set
