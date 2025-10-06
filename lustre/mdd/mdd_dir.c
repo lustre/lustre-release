@@ -181,18 +181,18 @@ static int mdd_links_read_with_rec(const struct lu_env *env,
 }
 
 /**
- * Get parent FID of the directory
+ * mdd_parent_fid() - Get parent FID of the directory
+ * @env: execution environment
+ * @obj: object from which to find the parent FID
+ * @attr: attribute of the object
+ * @fid: fid to get the parent FID [out]
  *
  * Read parent FID from linkEA, if that fails, then do lookup
  * dotdot to get the parent FID.
  *
- * \param[in] env	execution environment
- * \param[in] obj	object from which to find the parent FID
- * \param[in] attr	attribute of the object
- * \param[out] fid	fid to get the parent FID
- *
- * \retval		0 if getting the parent FID succeeds.
- * \retval		negative errno if getting the parent FID fails.
+ * Return:
+ * * %0 if getting the parent FID succeeds.
+ * * %negative errno if getting the parent FID fails.
  */
 static inline int mdd_parent_fid(const struct lu_env *env,
 				 struct mdd_object *obj,
@@ -250,7 +250,7 @@ int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid)
 }
 
 /*
- * return 1: if \a tfid is the fid of the ancestor of \a mo;
+ * return 1: if @tfid is the fid of the ancestor of @mo;
  * return 0: if not;
  * otherwise: values < 0, errors.
  */
@@ -332,16 +332,17 @@ static int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
 	RETURN(rc);
 }
 
-/*
- * Check that @dir contains no entries except (possibly) dot and dotdot.
+/**
+ * mdd_dir_is_empty() - Check that @dir contains no entries except (possibly)
+ * dot and dotdot.
+ * @env: execution environment
+ * @dir: dir object to check for emptyness
  *
  * Returns:
- *
- *             0        empty
- *      -ENOTDIR        not a directory object
- *    -ENOTEMPTY        not empty
- *           -ve        other error
- *
+ * * %0 on empty
+ * * %-ENOTDIR not a directory object
+ * * %-ENOTEMPTY not empty
+ * * %negative other error
  */
 int mdd_dir_is_empty(const struct lu_env *env, struct mdd_object *dir)
 {
@@ -386,19 +387,20 @@ int mdd_dir_is_empty(const struct lu_env *env, struct mdd_object *dir)
 	RETURN(result);
 }
 
-/*
+/**
+ * __mdd_may_link() - Determine if the target object can be hard linked
+ * @env: thread environment
+ * @obj: object being linked to
+ * @la: attributes of @obj
+ *
  * Determine if the target object can be hard linked, and right now it only
  * checks if the link count reach the maximum limit. Note: for ldiskfs, the
  * directory nlink count might exceed the maximum link count(see
  * osd_object_ref_add), so it only check nlink for non-directories.
  *
- * \param[in] env	thread environment
- * \param[in] obj	object being linked to
- * \param[in] la	attributes of \a obj
- *
- * \retval		0 if \a obj can be hard linked
- * \retval		negative error if \a obj is a directory or has too
- *			many links
+ * Return:
+ * * %0 if @obj can be hard linked
+ * * %negative error if @obj is a directory or has too many links
  */
 static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj,
 			  const struct lu_attr *la)
@@ -420,17 +422,16 @@ static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj,
 }
 
 /**
- * Check whether it may create the cobj under the pobj.
+ * mdd_may_create() - Check whether it may create the cobj under the pobj.
+ * @env: execution environment
+ * @pobj: the parent directory
+ * @pattr: the attribute of the parent directory
+ * @cobj: the child to be created
+ * @check_perm: if check WRITE|EXEC permission for parent
  *
- * \param[in] env	execution environment
- * \param[in] pobj	the parent directory
- * \param[in] pattr	the attribute of the parent directory
- * \param[in] cobj	the child to be created
- * \param[in] check_perm	if check WRITE|EXEC permission for parent
- *
- * \retval		= 0 create the child under this dir is allowed
- * \retval              negative errno create the child under this dir is
- *                      not allowed
+ * Return:
+ * * %0 create the child under this dir is allowed
+ * * %negative errno create the child under this dir is not allowed
  */
 int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 		   const struct lu_attr *pattr, struct mdd_object *cobj,
@@ -563,19 +564,21 @@ int mdd_may_delete(const struct lu_env *env, struct mdd_object *tpobj,
 }
 
 /**
+ * mdd_link_sanity_check() - Check whether it can create the link file
+ * @env: execution environment
+ * @tgt_obj: the target directory
+ * @tattr: attributes of target directory
+ * @lname: the link name
+ * @src_obj: source object for link
+ * @cattr: attributes for source object
+ *
  * Check whether it can create the link file(linked to @src_obj) under
  * the target directory(@tgt_obj), and src_obj has been locked by
  * mdd_write_lock.
  *
- * \param[in] env	execution environment
- * \param[in] tgt_obj	the target directory
- * \param[in] tattr	attributes of target directory
- * \param[in] lname	the link name
- * \param[in] src_obj	source object for link
- * \param[in] cattr	attributes for source object
- *
- * \retval		= 0 it is allowed to create the link file under tgt_obj
- * \retval              negative error not allowed to create the link file
+ * Return:
+ * * %0 it is allowed to create the link file under @tgt_obj
+ * * %negative error not allowed to create the link file
  */
 static int mdd_link_sanity_check(const struct lu_env *env,
 				 struct mdd_object *tgt_obj,
@@ -877,15 +880,16 @@ int mdd_changelog_write_rec(const struct lu_env *env,
 }
 
 /**
- * Checks that changelog consumes safe amount of space comparing
- * with FS free space
+ * mdd_changelog_is_space_safe() - Checks that changelog consumes safe amount of
+ * space comparing with FS free space
+ * @env: current lu_env
+ * @mdd: current MDD device
+ * @lgh: changelog catalog llog handle
+ * @estimate: get exact llog size or estimate it.
  *
- * \param env - current lu_env
- * \param mdd - current MDD device
- * \param lgh - changelog catalog llog handle
- * \param estimate - get exact llog size or estimate it.
- *
- * \retval true/false
+ * Return:
+ * * %true on success
+ * * %false on failure
  */
 bool mdd_changelog_is_space_safe(const struct lu_env *env,
 				 struct mdd_device *mdd,
@@ -941,15 +945,16 @@ bool mdd_changelog_is_space_safe(const struct lu_env *env,
 }
 
 /**
+ * mdd_changelog_emrg_cleanup() - Checks if there is enough space in changelog
+ * @env: current lu_env
+ * @mdd: current MDD device
+ * @lgh: changelog catalog llog handle
+ *
  * Checks if there is enough space in changelog itself and in FS and force
  * emergency changelog cleanup if needed. It will purge users one by one
  * from the oldest one while emergency conditions are true.
  *
- * \param env - current lu_env
- * \param mdd - current MDD device
- * \param lgh - changelog catalog llog handle
- *
- * \retval true if emergency cleanup is needed for changelog
+ * Return %true if emergency cleanup is needed for changelog
  */
 static bool mdd_changelog_emrg_cleanup(const struct lu_env *env,
 				       struct mdd_device *mdd,
@@ -1140,18 +1145,21 @@ void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
 }
 
 /**
- * Set the parent FID at \a pfid for a namespace change changelog record, using
+ * mdd_changelog_ns_pfid_set() - Set the parent FID at @pfid for a namespace
+ * change changelog record
+ * @env: execution environment
+ * @mdd: mdd device
+ * @parent: parent object
+ * @pattr: parent attribute
+ * @pfid: parent fid
+ *
+ * Set the parent FID at @pfid for a namespace change changelog record, using
  * XATTR_NAME_LMV and linkEA from the remote object to obtain the correct
  * parent FID for striped directories
  *
- * \param[in] env - environment
- * \param[in] mdd - mdd device
- * \param[in] parent - parent object
- * \param[in] pattr - parent attribute
- * \param[out] pfid - parent fid
- *
- * \retval 0 success
- * \retval -errno failure
+ * Return:
+ * * %0 success
+ * % %-errno failure
  */
 static int mdd_changelog_ns_pfid_set(const struct lu_env *env,
 				     struct mdd_device *mdd,
@@ -1207,21 +1215,21 @@ struct changelog_digest_filename {
 };
 
 /**
- * Utility function to process filename in changelog
- *
- * \param[in] name     file name
- * \param[in] namelen  file name len
- * \param[in] fid      file FID
- * \param[in] enc      is object encrypted?
- * \param[out]ln       pointer to the struct lu_name to hold the real name
+ * changelog_name2digest() - Utility function to process filename in changelog
+ * @name: file name
+ * @namelen: file name len
+ * @fid: file FID
+ * @enc: is object encrypted?
+ * @ln: pointer to the struct lu_name to hold the real name
  *
  * If file is not encrypted, output name is just the file name.
  * If file is encrypted, file name needs to be decoded then digested if the name
  * is also encrypted. In this case a new buffer is allocated, and ln->ln_name
  * needs to be freed by the caller.
  *
- * \retval   0, on success
- * \retval -ve, on error
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 static int changelog_name2digest(const char *name, int namelen,
 				 const struct lu_fid *fid,
@@ -1311,18 +1319,29 @@ out:
 	RETURN(rc);
 }
 
-/** Store a namespace change changelog record
+/**
+ * mdd_changelog_ns_store() - Store a namespace change into changelog record
+ * @env: execution environment
+ * @mdd: metadata device
+ * @type: changelog record types
+ * @clf_flags: current flags
+ * @target: mdd_object of change
+ * @parent: target parent object
+ * @pattr: target parent attribute
+ * @sfid: source object fid
+ * @sparent: source parent object
+ * @spattr: source parent attribute
+ * @tname: target name string
+ * @sname: source name string
+ * @handle: transaction handle
+ *
+ * Store namespace changes (Eg create, mkdir) that modify the filesystem.
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.
- * \param target - mdd_object of change
- * \param parent - target parent object
- * \param pattr - target parent attribute
- * \param sfid - source object fid
- * \param sparent - source parent object
- * \param spattr - source parent attribute
- * \param tname - target name string
- * \param sname - source name string
- * \param handle - transaction handle
+ *
+ * Return:
+ * * %0 on success
+ * * %errno on failure
  */
 int mdd_changelog_ns_store(const struct lu_env *env,
 			   struct mdd_device *mdd,
@@ -2111,7 +2130,14 @@ static bool mdd_hsm_archive_exists(const struct lu_env *env,
 }
 
 /**
- * Delete name entry and the object.
+ * mdd_unlink() - Delete name entry and the object.
+ * @env: execution environment
+ * @pobj: the directory(parent) to delete files
+ * @cobj: file(child object) to be deleted
+ * @lname: the name of the deleted file/dir
+ * @ma: create specification
+ * @no_name: flag for destroy (see notes below)
+ *
  * Note: no_name == 1 means it only destory the object, i.e. name_entry
  * does not exist for this object, and it could only happen during resending
  * of remote unlink. see the comments in mdt_reint_unlink. Unfortunately, lname
@@ -2445,21 +2471,21 @@ static int mdd_object_initialize(const struct lu_env *env,
 }
 
 /**
+ * mdd_create_sanity_check() - sanity check while creating file/dir
+ * @env: execution environment
+ * @pobj: the directory to create files
+ * @pattr: the attributes of the directory
+ * @lname: the name of the created file/dir
+ * @cattr: the attributes of the file/dir
+ * @spec: create specification
+ *
  * This function checks whether it can create a file/dir under the
  * directory(@pobj). The directory(@pobj) is not being locked by
  * mdd lock.
  *
- * \param[in] env	execution environment
- * \param[in] pobj	the directory to create files
- * \param[in] pattr	the attributes of the directory
- * \param[in] lname	the name of the created file/dir
- * \param[in] cattr	the attributes of the file/dir
- * \param[in] spec	create specification
- *
- * \retval		= 0 it is allowed to create file/dir under
- *                      the directory
- * \retval              negative error not allowed to create file/dir
- *                      under the directory
+ * Return:
+ * * %0 it is allowed to create file/dir under the directory
+ * * %negative error not allowed to create file/dir under the directory
  */
 static int mdd_create_sanity_check(const struct lu_env *env,
 				   struct md_object *pobj,
@@ -2797,9 +2823,9 @@ static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 	RETURN(rc);
 }
 
-/**
+/*
  * Create a metadata object and initialize it, set acl, xattr.
- **/
+ */
 static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			     struct mdd_object *son, struct lu_attr *attr,
 			     struct md_op_spec *spec, struct lu_buf *acl_buf,
@@ -3020,7 +3046,13 @@ stop:
 }
 
 /**
- * Create object and insert it into namespace.
+ * mdd_create() - Create object and insert it into namespace.
+ * @env: execution environment
+ * @pobj: parent object
+ * @lname: name of child being created
+ * @child: child object being created [in, out]
+ * @spec: additional create parameters
+ * @ma: attributes for new child object
  *
  * Two operations have to be performed:
  *
@@ -3052,14 +3084,9 @@ stop:
  * 1. create            (mdd_create_object_internal())
  * 2. insert            (__mdd_index_insert(), lookup again)
  *
- * \param[in] pobj	parent object
- * \param[in] lname	name of child being created
- * \param[in,out] child	child object being created
- * \param[in] spec	additional create parameters
- * \param[in] ma	attributes for new child object
- *
- * \retval		0 on success
- * \retval		negative errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
  */
 int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		      const struct lu_name *lname, struct md_object *child,
@@ -3809,12 +3836,13 @@ out_pending:
 	return rc;
 }
 
-/**
+/*
  * Check whether we should migrate the file/dir
- * return val
- *	< 0  permission check failed or other error.
- *	= 0  the file can be migrated.
- **/
+ *
+ * Return:
+ * * %negative permission check failed or other error.
+ * * %0 the file can be migrated.
+ */
 static int mdd_migrate_sanity_check(const struct lu_env *env,
 				    struct mdd_device *mdd,
 				    struct mdd_object *spobj,
@@ -4236,13 +4264,25 @@ static int mdd_iterate_linkea(const struct lu_env *env,
 }
 
 /**
+ * mdd_migrate_linkea_prepare() - Prepare linkea
+ * @env: execution environment
+ * @mdd: MDD metadata device
+ * @spobj: source parent object
+ * @tpobj: target parent object
+ * @sobj: source object
+ * @sname: source name
+ * @tname: target name
+ * @attr: source attributes
+ * @ldata: pointer to linkea_data
+ *
  * Prepare linkea, and check whether file needs migrate: if source still has
  * link on source MDT, no need to migrate, just update namespace on source and
  * target parents.
  *
- * \retval	0 do migrate
- * \retval	1 don't migrate
- * \retval	-errno on failure
+ * Return:
+ * * %0 do migrate
+ * * %1 don't migrate
+ * * %-errno on failure
  */
 static int mdd_migrate_linkea_prepare(const struct lu_env *env,
 				      struct mdd_device *mdd,
@@ -4482,9 +4522,9 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	return rc;
 }
 
-/**
- * migrate dirent from \a spobj to \a tpobj.
- **/
+/*
+ * migrate dirent from @spobj to @tpobj.
+ */
 static int mdd_migrate_update(const struct lu_env *env,
 			      struct mdd_object *spobj,
 			      struct mdd_object *tpobj,
@@ -4545,27 +4585,31 @@ static int mdd_migrate_update(const struct lu_env *env,
 }
 
 /**
- * Migrate file/dir to target MDT.
+ * mdd_migrate_create() - Migrate file/dir to target MDT.
+ * @env: execution environment
+ * @spobj: source parent object
+ * @tpobj: target parent object
+ * @sobj: source object
+ * @tobj: target object
+ * @sname: source name
+ * @tname: target name
+ * @spattr: source parent attributes
+ * @tpattr: target parent attributes
+ * @attr: source attributes
+ * @sbuf: source LMV buf
+ * @ldata: pointer to linkea_data
+ * @xattrs: extended attributes
+ * @ma: pointer to md_attr struct
+ * @spec: migrate create spec
+ * @hint: target creation hint
+ * @handle: tranasction handle
  *
- * Create target according to \a spec, and then migrate xattrs, if it's
+ * Create target according to @spec, and then migrate xattrs, if it's
  * directory, migrate source stripes to target.
  *
- * \param[in] env	execution environment
- * \param[in] spobj	source parent object
- * \param[in] tpobj	target parent object
- * \param[in] sobj	source object
- * \param[in] tobj	target object
- * \param[in] lname	file name
- * \param[in] spattr	source parent attributes
- * \param[in] tpattr	target parent attributes
- * \param[in] attr	source attributes
- * \param[in] sbuf	source LMV buf
- * \param[in] spec	migrate create spec
- * \param[in] hint	target creation hint
- * \param[in] handle	tranasction handle
- *
- * \retval	0 on success
- * \retval	-errno on failure
+ * Return:
+ * * %0 on success
+ * * %-errno on failure
  **/
 static int mdd_migrate_create(const struct lu_env *env,
 			      struct mdd_object *spobj,
@@ -4755,7 +4799,17 @@ static int mdd_migrate_cmd_check(const struct lu_env *env, struct mdd_device *md
 }
 
 /**
- * Internal function to migrate directory or file between MDTs.
+ * mdd_migrate_object() - Internal function to migrate directory or file between
+ * MDTs.
+ * @env: execution environment
+ * @spobj: source parent object
+ * @tpobj: target parent object
+ * @sobj: source object
+ * @tobj: target object
+ * @sname: source name
+ * @tname: target name
+ * @spec: target creation spec
+ * @ma: used to update @tpobj mtime and ctime [out]
  *
  * migrate source to target in following steps:
  *   1. create target, append source stripes after target's if it's directory,
@@ -4763,18 +4817,9 @@ static int mdd_migrate_cmd_check(const struct lu_env *env, struct mdd_device *md
  *   2. update namespace: migrate dirent from source parent to target parent,
  *      update file linkea, and destroy source if it's not needed any more.
  *
- * \param[in] env	execution environment
- * \param[in] spobj	source parent object
- * \param[in] tpobj	target parent object
- * \param[in] sobj	source object
- * \param[in] tobj	target object
- * \param[in] sname	source file name
- * \param[in] tname	target file name
- * \param[in] spec	target creation spec
- * \param[in] ma	used to update \a pobj mtime and ctime
- *
- * \retval		0 on success
- * \retval		-errno on failure
+ * Return:
+ * * %0 on success
+ * * %-errno on failure
  */
 static int mdd_migrate_object(const struct lu_env *env,
 			      struct mdd_object *spobj,
@@ -4957,19 +5002,19 @@ out:
 }
 
 /**
- * Migrate directory or file between MDTs.
+ * mdd_migrate() - Migrate directory or file between MDTs.
+ * @env: execution environment
+ * @md_spobj: source parent object
+ * @md_tpobj: target parent object
+ * @md_sobj: source object
+ * @lname: file name
+ * @md_tobj: target object
+ * @spec: target creation spec
+ * @ma: used to update @md_tpobj mtime and ctime [out]
  *
- * \param[in] env	execution environment
- * \param[in] md_spobj	source parent object
- * \param[in] md_tpobj	target parent object
- * \param[in] md_sobj	source object
- * \param[in] lname	file name
- * \param[in] md_tobj	target object
- * \param[in] spec	target creation spec
- * \param[in] ma	used to update \a pobj mtime and ctime
- *
- * \retval		0 on success
- * \retval		-errno on failure
+ * Return:
+ * * %0 on success
+ * * %-errno on failure
  */
 static int mdd_migrate(const struct lu_env *env, struct md_object *md_spobj,
 		       struct md_object *md_tpobj, struct md_object *md_sobj,
@@ -5373,11 +5418,20 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 }
 
 /**
- * plain directory split:
- * 1. create \a tobj as plain directory.
- * 2. append \a obj as first stripe of \a tobj.
- * 3. migrate xattrs from \a obj to \a tobj.
- * 4. split \a tobj to specific stripe count.
+ * mdd_dir_split_plain() - plain directory split
+ * @env: execution environment
+ * @mdd: MDD (metadata device)
+ * @pobj: Parent dir being split
+ * @obj: first stripe (shard 0) of @tobj
+ * @tobj: Newly created plain dir (shard 1)
+ * @xattrs: extended attribute from @obj to @tobj
+ * @mlc: pointer to object's layout
+ * @hint: performance hint
+ * @handle: operations callback
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on errno
  */
 static int mdd_dir_split_plain(const struct lu_env *env,
 				struct mdd_device *mdd,
