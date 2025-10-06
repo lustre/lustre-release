@@ -52,7 +52,7 @@ static struct lu_kmem_descr mdd_caches[] = {
 	}
 };
 
-/**
+/*
  * Mod params for the fs-wide (stored in ROOT) default dir layout,
  * to be set and stored in EA, if EA is absent yet:
  *
@@ -834,8 +834,19 @@ int mdd_changelog_write_header(const struct lu_env *env,
 }
 
 /**
+ * obf_lookup() - Lookup method for "fid" object
+ * @env: execution environment
+ * @p: parent metadata object
+ * @lname: name to be lookup
+ * @f: FID returned after lookup [out]
+ * @spec: not used
+ *
  * Lookup method for "fid" object. Only filenames with correct SEQ:OID format
  * are valid. We also check if object with passed fid exists or not.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int obf_lookup(const struct lu_env *env, struct md_object *p,
 		      const struct lu_name *lname, struct lu_fid *f,
@@ -1450,12 +1461,21 @@ out_los:
 }
 
 /**
- * Implementation of lu_device_operations::ldo_fid_alloc() for MDD.
+ * mdd_fid_alloc() - Implementation of ldo_fid_alloc() for MDD.
+ * @env: execution environment
+ * @d: pointer to lu_device struct
+ * @fid: FID populated after alloc [out]
+ * @parent: parent object
+ * @name: object name
  *
  * Find corresponding device by passed parent and name, and allocate FID from
  * there.
  *
  * see include/lu_object.h for the details.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdd_fid_alloc(const struct lu_env *env, struct lu_device *d,
 			 struct lu_fid *fid, struct lu_object *parent,
@@ -1657,7 +1677,7 @@ struct mdd_changelog_name_check_data {
 	__u32	    mcnc_id;
 };
 
-/**
+/*
  * changelog_recalc_mask callback
  *
  * Is is called per each registered user and calculates combined mask of
@@ -1846,7 +1866,7 @@ struct mdd_changelog_recalc_mask_data {
 	__u32		   mcrm_mask;
 };
 
-/**
+/*
  * changelog_recalc_mask callback
  *
  * Is is called per each registered user and calculates combined mask of
@@ -1917,13 +1937,20 @@ struct mdd_changelog_user_purge {
 };
 
 /**
- * changelog_user_purge callback
+ * mdd_changelog_user_purge_cb() - changelog_user_purge callback
+ * @env: executing environemnt
+ * @llh: log handle for the changelog
+ * @hdr: header of the changelog
+ * @data: struct mdd_changelog_user_clear
  *
- * Is called once per user.
+ * - Is called once per user.
+ * - Check to see the user requested is available from rec.
+ * - Truncate the changelog.
+ * - Keep track of the total number of users (calls).
  *
- * Check to see the user requested is available from rec.
- * Truncate the changelog.
- * Keep track of the total number of users (calls).
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdd_changelog_user_purge_cb(const struct lu_env *env,
 				       struct llog_handle *llh,
@@ -2044,13 +2071,20 @@ struct mdd_changelog_user_clear {
 };
 
 /**
- * changelog_clear callback
+ * mdd_changelog_clear_cb() - changelog_clear callback
+ * @env: executing environemnt
+ * @llh: log handle for the changelog
+ * @hdr: header of the changelog
+ * @data: struct mdd_changelog_user_clear
  *
- * Is called once per user.
- *
+ * clearing entries from a Lustre changelog. Is called once per user.
  * Check to see the user requested is available from rec.
  * Check the oldest (smallest) record for boundary conditions.
  * Truncate the changelog.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdd_changelog_clear_cb(const struct lu_env *env,
 				  struct llog_handle *llh,
