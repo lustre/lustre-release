@@ -152,11 +152,16 @@ stop:
 }
 
 /**
- * Fix mode and ACL according to the default ACL(buf)
- * \retval = 0 ACL does not need to be reset.
- * \retval = 1 ACL needs to be reset.
- * \retval < 0 error.
- **/
+ * __mdd_fix_mode_acl() - Fix mode and ACL according to the default ACL(@buf)
+ * @env: current lustre environment
+ * @buf: buffer holding ACL data
+ * @mode: permission [out]
+ *
+ * Returns:
+ * * %0 ACL does not need to be reset
+ * * %1 ACL needs to be reset
+ * * %negative on error
+ */
 int __mdd_fix_mode_acl(const struct lu_env *env, struct lu_buf *buf,
 		       __u32 *mode)
 {

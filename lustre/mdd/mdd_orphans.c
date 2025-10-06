@@ -123,14 +123,17 @@ int mdd_orphan_declare_insert(const struct lu_env *env, struct mdd_object *obj,
 }
 
 /**
- *  add an orphan \a obj to the orphan index.
- *  \param obj file or directory.
- *  \param th  transaction for index insert.
+ * mdd_orphan_insert() - add an orphan @obj to the orphan index.
+ * @env: current lustre environment
+ * @obj: file or directory.
+ * @th: transaction for index insert.
  *
- *  \pre obj nlink == 0 && obj->mod_count != 0
+ * pre requirement: obj nlink == 0 && obj->mod_count != 0 (link count is
+ * zero && At-least is still opened by one or more process)
  *
- *  \retval 0  success
- *  \retval  -ve index operation error.
+ * Return:
+ * * %0 on success
+ * * %negative index operation error.
  */
 int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
 		      struct thandle *th)
@@ -212,14 +215,16 @@ int mdd_orphan_declare_delete(const struct lu_env *env, struct mdd_object *obj,
 }
 
 /**
- *  delete an orphan \a obj from orphan index.
- *  \param obj file or directory.
- *  \param th  transaction for index deletion and object destruction.
+ * mdd_orphan_delete() - delete an orphan @obj from orphan index.
+ * @env: current lustre environment
+ * @obj: file or directory.
+ * @th: transaction for index deletion and object destruction.
  *
- *  \pre obj->mod_count == 0 && ORPHAN_OBJ is set for obj.
+ * pre: obj->mod_count == 0 && ORPHAN_OBJ is set for obj.
  *
- *  \retval 0  success
- *  \retval  -ve index operation error.
+ * Return:
+ * * %0 on success
+ * * %negative index operation error.
  */
 int mdd_orphan_delete(const struct lu_env *env, struct mdd_object *obj,
 		      struct thandle *th)
@@ -321,14 +326,16 @@ stop:
 }
 
 /**
- * Delete unused orphan with FID \a lf from PENDING directory
+ * mdd_orphan_key_test_and_delete() - Delete unused orphan with FID @lf from
+ * PENDING directory
+ * @env: current lustre environment
+ * @mdd: MDD device finishing recovery
+ * @lf: FID of file or directory to delete
+ * @key: cookie for this entry in index iterator
  *
- * \param mdd  MDD device finishing recovery
- * \param lf   FID of file or directory to delete
- * \param key  cookie for this entry in index iterator
- *
- * \retval 0   success
- * \retval -ve error
+ * Return:
+ * * %0 success
+ * * %negative error
  */
 static int mdd_orphan_key_test_and_delete(const struct lu_env *env,
 					  struct mdd_device *mdd,
@@ -364,16 +371,18 @@ static int mdd_orphan_key_test_and_delete(const struct lu_env *env,
 }
 
 /**
- * delete unreferenced files and directories in the PENDING directory
+ * mdd_orphan_index_iterate() - delete unreferenced files and directories in the
+ * PENDING directory
+ * @env: current lustre environment
+ * @thread:  info about orphan cleanup thread
  *
  * Files that remain in PENDING after client->MDS recovery has completed
  * have to be referenced (opened) by some client during recovery, or they
  * will be deleted here (for clients that did not complete recovery).
  *
- * \param thread  info about orphan cleanup thread
- *
- * \retval 0   success
- * \retval -ve error
+ * Return:
+ * * %0 success
+ * * %negative error
  */
 static int mdd_orphan_index_iterate(const struct lu_env *env,
 				    struct mdd_generic_thread *thread)
@@ -454,7 +463,9 @@ out:
 }
 
 /**
- * open the PENDING directory for device \a mdd
+ * mdd_orphan_index_init() - open the PENDING directory for device @mdd
+ * @env: current lustre environment
+ * @mdd: mdd device being started.
  *
  * The PENDING directory persistently tracks files and directories that were
  * unlinked from the namespace (nlink == 0) but are still held open by clients.
@@ -463,11 +474,10 @@ out:
  * are linked into the PENDING directory on disk, and only deleted if all
  * clients close them, or the MDS finishes client recovery without any client
  * reopening them (i.e. former clients didn't join recovery).
- *  \param d   mdd device being started.
  *
- *  \retval 0  success
- *  \retval  -ve index operation error.
- *
+ * Return:
+ * * %0 success
+ * * %negative index operation error.
  */
 int mdd_orphan_index_init(const struct lu_env *env, struct mdd_device *mdd)
 {
@@ -535,8 +545,14 @@ out:
 }
 
 /**
- *  Iterate orphan index to cleanup orphan objects after recovery is done.
- *  \param d   mdd device in recovery.
+ * mdd_orphan_cleanup() - Iterate orphan index to cleanup orphan objects after
+ * recovery is done.
+ * @env: current lustre environment
+ * @d: mdd device in recovery.
+ *
+ * Return:
+ * * %0 success
+ * * %negative error
  */
 int mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d)
 {
