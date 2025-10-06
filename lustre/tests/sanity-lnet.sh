@@ -6218,6 +6218,690 @@ test_502() {
 }
 run_test 502 "Verify lnetctl peer set --health (MR)"
 
+test_600() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp0
+      interfaces:
+          0: eth0
+          1: eth1
+      ip-range:
+          0: 10.0.0.*
+    - net-spec: o2ib0
+      ip-range:
+          0: 192.168.[1-2].*
+EOF
+
+	$LEGACY2YAML 'tcp0(eth0,eth1) 10.0.0.*; o2ib0 192.168.[1-2].*' \
+		> $actual || error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 600 "lnet_legacy2yaml: basic ip2nets conversion"
+
+test_601() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: tcp0
+      gateway: 10.0.0.1@o2ib0
+      hop: 1
+EOF
+
+	$LEGACY2YAML "routes='tcp0 1 10.0.0.1@o2ib0'" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 601 "lnet_legacy2yaml: basic routes conversion"
+
+test_602() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: tcp0
+      gateway: 10.0.0.1@o2ib0
+      hop: 2
+      priority: 7
+EOF
+
+	$LEGACY2YAML "routes='tcp0 2 10.0.0.1@o2ib0:7'" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 602 "lnet_legacy2yaml: routes with priority"
+
+test_603() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: tcp0
+      gateway: 10.0.0.1@o2ib0
+      hop: 1
+EOF
+
+	$LEGACY2YAML "routes='tcp0 10.0.0.1@o2ib0'" --default-hop \
+		> $actual || error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 603 "lnet_legacy2yaml: default hop flag"
+
+test_604() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: tcp0
+      gateway: 10.0.0.1@o2ib0
+      hop: 3
+EOF
+
+	$LEGACY2YAML --default-hop 3 "routes='tcp0 10.0.0.1@o2ib0'" \
+		> $actual || error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 604 "lnet_legacy2yaml: default hop with explicit value"
+
+test_605() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp
+      ip-range:
+          0: "*.*.*.*"
+EOF
+
+	$LEGACY2YAML 'tcp *.*.*.*' > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 605 "lnet_legacy2yaml: quote leading star in IP pattern"
+
+test_606() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local ip_file="$TMP/sanity-lnet-$testnum-ip.rules"
+	local routes_file="$TMP/sanity-lnet-$testnum-routes.rules"
+
+	echo 'tcp0 10.1.0.*' > "$ip_file"
+	echo 'tcp0 1 10.1.0.1@o2ib0:9' > "$routes_file"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp0
+      ip-range:
+          0: 10.1.0.*
+route:
+    - net: tcp0
+      gateway: 10.1.0.1@o2ib0
+      hop: 1
+      priority: 9
+EOF
+
+	$LEGACY2YAML -i "$ip_file" -r "$routes_file" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+
+	rm -f "$ip_file" "$routes_file"
+}
+run_test 606 "lnet_legacy2yaml: file inputs"
+
+test_607() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local opts
+
+	opts="options lnet 'ip2nets=\"tcp0 10.0.0.*\""
+	opts+=" routes=\"tcp0 1 10.0.0.2@o2ib0\"'"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp0
+      ip-range:
+          0: 10.0.0.*
+route:
+    - net: tcp0
+      gateway: 10.0.0.2@o2ib0
+      hop: 1
+EOF
+
+	$LEGACY2YAML "$opts" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 607 \
+	"lnet_legacy2yaml: options line with combined ip2nets and routes"
+
+test_608() {
+	local output
+
+	output=$($LEGACY2YAML 'tcp0' 2>&1)
+	local rc=$?
+
+	((rc == 2)) || error "Expected exit code 2, got $rc"
+	echo "$output" | grep -iq 'error' ||
+		error "Expected error message in output"
+}
+run_test 608 "lnet_legacy2yaml: error on invalid rule (missing IP pattern)"
+
+test_609() {
+	local output
+
+	# Run with no stdin and no args - expect error
+	output=$(echo -n "" | $LEGACY2YAML 2>&1)
+	local rc=$?
+
+	((rc == 1)) || error "Expected exit code 1, got $rc"
+	echo "$output" | grep -iq "no ip2nets, routes, or networks data" ||
+		error "Expected 'no data' message in output"
+}
+run_test 609 "lnet_legacy2yaml: error on no input"
+
+test_610() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local ip1="$TMP/sanity-lnet-$testnum-ip1.rules"
+	local ip2="$TMP/sanity-lnet-$testnum-ip2.rules"
+	local r1="$TMP/sanity-lnet-$testnum-r1.rules"
+
+	echo 'tcp0 10.0.0.*' > "$ip1"
+	echo 'o2ib0 192.168.0.*' > "$ip2"
+	echo 'tcp0 1 10.0.0.1@o2ib0' > "$r1"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp0
+      ip-range:
+          0: 10.0.0.*
+    - net-spec: o2ib0
+      ip-range:
+          0: 192.168.0.*
+route:
+    - net: tcp0
+      gateway: 10.0.0.1@o2ib0
+      hop: 1
+    - net: o2ib0
+      gateway: 192.168.0.1@tcp0
+      hop: 1
+EOF
+
+	$LEGACY2YAML -i "$ip1" -i "$ip2" -r "$r1" \
+		"routes='o2ib0 1 192.168.0.1@tcp0'" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+
+	rm -f "$ip1" "$ip2" "$r1"
+}
+run_test 610 \
+	"lnet_legacy2yaml: multiple files and inline, check order"
+
+test_611() {
+	local output
+
+	output=$($LEGACY2YAML "routes='tcp0 0 10.0.0.1@o2ib0'" 2>&1)
+	local rc=$?
+
+	((rc == 2)) || error "Expected exit code 2, got $rc"
+	echo "$output" | grep -iq "hopcount" ||
+		error "Expected hopcount error in output"
+}
+run_test 611 "lnet_legacy2yaml: invalid hopcount"
+
+test_612() {
+	local output
+
+	output=$($LEGACY2YAML 'tcp0 10.0.0' 2>&1)
+	local rc=$?
+
+	((rc == 2)) || error "Expected exit code 2, got $rc"
+	echo "$output" | grep -iq "invalid.*ip pattern" ||
+		error "Expected invalid IP pattern error in output"
+}
+run_test 612 "lnet_legacy2yaml: malformed IP pattern"
+
+test_613() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp0
+      ip-range:
+          0: 10.0.0.*
+          1: 10.0.1.*
+EOF
+
+	$LEGACY2YAML 'tcp0 10.0.0.* 10.0.1.*' > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 613 \
+	"lnet_legacy2yaml: multiple IP patterns in single rule"
+
+test_614() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp0
+      interfaces:
+          0: eth0
+          1: eth1
+      ip-range:
+          0: 10.0.0.*
+          1: 10.0.1.*
+EOF
+
+	$LEGACY2YAML 'tcp0(eth0,eth1) 10.0.0.* 10.0.1.*' > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 614 "lnet_legacy2yaml: interfaces enumeration with multiple IP ranges"
+
+test_615() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local modprobe_file="$TMP/sanity-lnet-$testnum-modprobe.conf"
+
+	cat <<EOF > "$modprobe_file"
+# Modprobe configuration file for LNet
+options lnet ip2nets="tcp0(eth0) 10.1.0.*"
+
+# Routes configuration
+options lnet routes="tcp0 1 10.1.0.1@o2ib0:9"
+
+# Line continuation test
+options lnet \\
+  ip2nets="o2ib0 192.168.1.*"
+EOF
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp0
+      interfaces:
+          0: eth0
+      ip-range:
+          0: 10.1.0.*
+    - net-spec: o2ib0
+      ip-range:
+          0: 192.168.1.*
+route:
+    - net: tcp0
+      gateway: 10.1.0.1@o2ib0
+      hop: 1
+      priority: 9
+EOF
+
+	$LEGACY2YAML -m "$modprobe_file" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+
+	rm -f "$modprobe_file"
+}
+run_test 615 "lnet_legacy2yaml: modprobe configuration file input"
+
+test_616() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local modprobe_file="$TMP/sanity-lnet-$testnum-modprobe.conf"
+	local ip_file="$TMP/sanity-lnet-$testnum-ip.rules"
+
+	cat <<EOF > "$modprobe_file"
+options lnet ip2nets="tcp0 10.0.0.*"
+options lnet routes="tcp0 1 10.0.0.1@o2ib0"
+EOF
+
+	echo 'o2ib0 192.168.0.*' > "$ip_file"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+ip2nets:
+    - net-spec: tcp0
+      ip-range:
+          0: 10.0.0.*
+    - net-spec: o2ib0
+      ip-range:
+          0: 192.168.0.*
+route:
+    - net: tcp0
+      gateway: 10.0.0.1@o2ib0
+      hop: 1
+EOF
+
+	$LEGACY2YAML -m "$modprobe_file" -i "$ip_file" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+
+	rm -f "$modprobe_file" "$ip_file"
+}
+run_test 616 \
+	"lnet_legacy2yaml: combining modprobe file with explicit ip2nets file"
+
+test_617() {
+	reinit_dlc || return $?
+
+	local modprobe_file="$TMP/sanity-lnet-$testnum-modprobe.conf"
+	local yaml_file="$TMP/sanity-lnet-$testnum.yaml"
+	local export_file="$TMP/sanity-lnet-$testnum-expected.yaml"
+	local actual_file="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local if0_ip
+	local ip_pattern
+
+	# Get IP address of the first interface and create pattern
+	if0_ip=$(ip -o -4 a s ${INTERFACES[0]} | awk '{print $4}' | \
+		 sed 's/\/.*//' | head -n 1)
+	[[ -n $if0_ip ]] || error "Cannot determine IP for ${INTERFACES[0]}"
+
+	# Create IP pattern matching the network (e.g., 192.168.1.*)
+	ip_pattern=$(awk -F. '{print $1"."$2"."$3".*"}' <<< "${if0_ip}")
+
+	echo "Configuring network ${NETTYPE} on ${INTERFACES[0]}"
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	$LNETCTL export --backup > "$export_file" ||
+		error "lnetctl export failed"
+
+	echo "Generating modprobe configuration"
+	cat <<EOF > "$modprobe_file"
+options lnet ip2nets="${NETTYPE}(${INTERFACES[0]}) ${ip_pattern}"
+EOF
+
+	echo "Generated modprobe configuration:"
+	cat "$modprobe_file"
+
+	echo "Converting modprobe config to YAML"
+	$LEGACY2YAML -m "$modprobe_file" > "$yaml_file" ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	echo "Generated YAML configuration:"
+	cat "$yaml_file"
+
+	reinit_dlc || return $?
+
+	do_lnetctl import < "$yaml_file" ||
+		error "lnetctl import failed"
+
+	$LNETCTL export --backup > "$actual_file" ||
+		error "lnetctl export after import failed"
+
+	compare_yaml_files ||
+		error "Round-trip YAML comparison failed"
+
+	rm -f "$modprobe_file" "$yaml_file" "$export_file" "$new_export"
+}
+run_test 617 \
+	"lnet_legacy2yaml: round-trip tunables from LNet to modprobe to YAML"
+
+test_618() {
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: tcp7
+      gateway: 10.3.3.[6-12]@tcp
+      hop: 8
+      priority: 20
+EOF
+
+	local cfg="tcp7: { gateway: 10.3.3.[6-12]@tcp, priority: 20, hop: 8 }"
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	$LEGACY2YAML -r <(echo "$cfg") > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 618 "lnet_legacy2yaml: alternative route format"
+
+test_619() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local routes_file="$TMP/sanity-lnet-$testnum-routes.conf"
+
+	cat <<EOF > "$routes_file"
+# Alternative route format examples
+tcp1: { gateway: 10.1.1.2@tcp0, priority: 3 }  # High priority route
+# This is a comment line
+tcp4: { gateway: 10.3.3.4@tcp }
+tcp6: { gateway: 10.3.3.6@tcp, hop: 2, priority: 5 }
+tcp7: { gateway: 10.3.3.[6-12]@tcp, priority: 20, hop: 8 }
+EOF
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: tcp1
+      gateway: 10.1.1.2@tcp0
+      priority: 3
+    - net: tcp4
+      gateway: 10.3.3.4@tcp
+    - net: tcp6
+      gateway: 10.3.3.6@tcp
+      hop: 2
+      priority: 5
+    - net: tcp7
+      gateway: 10.3.3.[6-12]@tcp
+      hop: 8
+      priority: 20
+EOF
+
+	$LEGACY2YAML -r "$routes_file" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+
+	rm -f "$routes_file"
+}
+run_test 619 "lnet_legacy2yaml: multiple alternative format routes from file"
+
+test_620() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local routes_file="$TMP/sanity-lnet-$testnum-routes.conf"
+
+	cat <<EOF > "$routes_file"
+# Mixed route formats
+tcp1: { gateway: 10.1.1.2@tcp0, priority: 3 }
+tcp0 1 10.2.2.3@tcp1
+tcp6: { gateway: 10.3.3.6@tcp, hop: 2, priority: 5 }
+tcp2 2 10.4.4.5@tcp0:7
+EOF
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: tcp1
+      gateway: 10.1.1.2@tcp0
+      priority: 3
+    - net: tcp0
+      gateway: 10.2.2.3@tcp1
+      hop: 1
+    - net: tcp6
+      gateway: 10.3.3.6@tcp
+      hop: 2
+      priority: 5
+    - net: tcp2
+      gateway: 10.4.4.5@tcp0
+      hop: 2
+      priority: 7
+EOF
+
+	$LEGACY2YAML -r "$routes_file" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+
+	rm -f "$routes_file"
+}
+run_test 620 "lnet_legacy2yaml: mixed legacy and alternative route formats"
+
+test_621() {
+	local cfg="tcp0: { gateway: 10.0.0.1@o2ib0, hop: 0 }"
+	local output
+
+	output=$($LEGACY2YAML -r <(echo "$cfg") 2>&1)
+	local rc=$?
+
+	((rc == 2)) || error "Expected exit code 2, got $rc"
+	echo "$output" | grep -iq "hopcount.*out of range" ||
+		error "Expected hopcount out of range error in output"
+}
+run_test 621 "lnet_legacy2yaml: alternative format with invalid hopcount"
+
+test_622() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local cfg="tcp5: { gateway: 10.5.5.5@tcp0 }"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+route:
+    - net: tcp5
+      gateway: 10.5.5.5@tcp0
+      hop: 3
+EOF
+
+	$LEGACY2YAML -r <(echo "$cfg") --default-hop 3 > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 622 "lnet_legacy2yaml: alternative format with default-hop flag"
+
+test_623() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+net:
+    - net type: tcp
+EOF
+
+	$LEGACY2YAML 'options lnet networks=tcp' > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 623 "lnet_legacy2yaml: basic networks conversion"
+
+test_624() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+net:
+    - net type: tcp0
+      local NI(s):
+        - interfaces:
+              0: eth0
+EOF
+
+	$LEGACY2YAML 'options lnet networks=tcp0(eth0)' > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 624 "lnet_legacy2yaml: networks with interfaces"
+
+test_625() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+net:
+    - net type: tcp0
+      local NI(s):
+        - interfaces:
+              0: eth0
+    - net type: o2ib
+      local NI(s):
+        - interfaces:
+              0: ib0
+EOF
+
+	$LEGACY2YAML 'options lnet networks=tcp0(eth0),o2ib(ib0)' > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+}
+run_test 625 "lnet_legacy2yaml: multiple networks"
+
+test_626() {
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local modprobe_file="$TMP/sanity-lnet-$testnum-modprobe.conf"
+
+	cat <<EOF > "$modprobe_file"
+options lnet networks=tcp0(eth0),o2ib(ib0)
+options lnet ip2nets="tcp1(eth1) 192.168.1.*"
+options lnet routes="tcp0 1 10.0.0.1@o2ib0"
+EOF
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+net:
+    - net type: tcp0
+      local NI(s):
+        - interfaces:
+              0: eth0
+    - net type: o2ib
+      local NI(s):
+        - interfaces:
+              0: ib0
+ip2nets:
+    - net-spec: tcp1
+      interfaces:
+          0: eth1
+      ip-range:
+          0: 192.168.1.*
+route:
+    - net: tcp0
+      gateway: 10.0.0.1@o2ib0
+      hop: 1
+EOF
+
+	$LEGACY2YAML -m "$modprobe_file" > $actual ||
+		error "lnet_legacy2yaml failed with rc=$?"
+
+	compare_yaml_files || error "YAML comparison failed"
+
+	rm -f "$modprobe_file"
+}
+run_test 626 "lnet_legacy2yaml: mixed networks, ip2nets, and routes"
+
+test_627() {
+	local output
+
+	output=$($LEGACY2YAML 'options lnet networks=tcp0(eth0' 2>&1)
+	local rc=$?
+
+	((rc == 2)) || error "Expected exit code 2, got $rc"
+	echo "$output" | grep -iq "Invalid network specification" ||
+		error "Expected invalid network specification error in output"
+}
+run_test 627 "lnet_legacy2yaml: invalid networks format"
+
+test_628() {
+	local output
+
+	output=$($LEGACY2YAML 'tcp0(eth0) 10.0.0.* tcp1(eth1) 192.168.1.*' 2>&1)
+	local rc=$?
+
+	((rc == 2)) || error "Expected exit code 2, got $rc"
+	echo "$output" | grep -iq "Multiple network rules must be separated" ||
+		error "Expected missing delimiter error in output"
+}
+run_test 628 "lnet_legacy2yaml: missing delimiter error"
+
+test_629() {
+	local output
+
+	output=$($LEGACY2YAML 'options lnet routes="tcp0 1 10.0.0.1@o2ib0 10.0.0.2@o2ib0"' 2>&1)
+	local rc=$?
+
+	((rc == 2)) || error "Expected exit code 2, got $rc"
+	echo "$output" | grep -iq "multiple gateway specifications found" ||
+		error "Expected multiple gateway error in output"
+}
+run_test 629 "lnet_legacy2yaml: multiple gateways error"
+
 complete_test $SECONDS
 cleanup_testsuite
 exit_status

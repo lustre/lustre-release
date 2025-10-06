@@ -362,6 +362,7 @@ R:	Chris Horn <chris.horn@hpe.com>
 S:	Supported
 F:	Documentation/dlc.txt
 F:	lustre/conf/ko2iblnd.conf
+F:	lustre/doc/lnet_legacy2yaml.8
 F:	lustre/doc/lst.8
 F:	lustre/doc/lustre_routes_config.8
 F:	lustre/doc/lustre_routes_conversion.8

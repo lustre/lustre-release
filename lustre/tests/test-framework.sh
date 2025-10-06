@@ -556,6 +556,9 @@ init_test_env() {
 	export LNET_SYSCTL_CONFIG=${LNET_SYSCTL_CONFIG:-"$LUSTRE/scripts/lnet-sysctl-config"}
 	[ ! -f "$LNET_SYSCTL_CONFIG" ] &&
 		export LNET_SYSCTL_CONFIG=$(which lnet-sysctl-config 2> /dev/null)
+	export LEGACY2YAML=${LEGACY2YAML:-"$LUSTRE/scripts/lnet_legacy2yaml"}
+	[ ! -f "$LEGACY2YAML" ] &&
+		export LEGACY2YAML=$(which lnet_legacy2yaml 2> /dev/null)
 
 	export PERM_CMD=$(echo ${PERM_CMD:-"$LCTL conf_param"})
 

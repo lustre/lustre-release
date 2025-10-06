@@ -1,0 +1,337 @@
+.\" SPDX-License-Identifier: GPL-2.0
+.TH LNET_LEGACY2YAML 8 2025-10-20 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lnet_legacy2yaml \- convert legacy LNet module parameters to YAML
+.SH SYNOPSIS
+.SY lnet_legacy2yaml
+.RI [ options ]
+.RI [ inline-legacy-string ]
+.YS
+.SY lnet_legacy2yaml
+.RI [ -i
+.IR ip2nets_file ]
+.RI [ -r
+.IR routes_file ]
+.RI [ -n
+.IR networks_file ]
+.RI [ -m
+.IR modprobe_file ]
+.RI [ -o
+.IR output_file ]
+.RI [ --default-hop
+.RI [ HOP ]]
+.RI [ inline-legacy-string ]
+.YS
+.SH DESCRIPTION
+The
+.B lnet_legacy2yaml
+utility parses deprecated Lustre LNet module parameter syntaxes
+.RB ( ip2nets= ,
+.BR routes= ,
+and
+.BR networks= )
+and emits an equivalent YAML document usable by
+.BR lnetctl (8)
+via
+.IP
+lnetctl import < output.yaml
+.P
+Kernel parsing of ip2nets was deprecated in Lustre 2.10; user space
+now resolves interface patterns. This tool facilitates migration from
+legacy module configuration files (e.g.
+.B modprobe.conf
+/
+.BR lustre.conf )
+to the YAML form consumed by modern LNet configuration workflows.
+.P
+Input may be supplied through any combination of positional inline
+argument, file options, or standard input. If no positional inline
+argument is provided and stdin is not a TTY, data is read from stdin.
+Multiple sources accumulate: ip2nets files first, route files, then
+inline/stdin content.
+.SH OPTIONS
+.TP
+.BR -i ", " --ip2nets " \fIFILE\fP"
+File containing one or more ip2nets rules separated by semicolons (;)
+or newlines. May be specified multiple times.
+.TP
+.BR -r ", " --routes " \fIFILE\fP"
+File containing one or more routes entries separated by semicolons (;)
+or newlines. May be specified multiple times.
+.TP
+.BR -n ", " --networks " \fIFILE\fP"
+File containing one or more networks entries separated by commas (,)
+or newlines. May be specified multiple times.
+.TP
+.BR -m ", " --modprobe " \fIFILE\fP"
+Modprobe configuration file (e.g.
+.BR /etc/modprobe.d/lnet.conf )
+to parse for lnet module parameters. The tool extracts
+.B ip2nets= ,
+.B routes= ,
+and
+.B networks=
+values from lines matching
+.IP
+.B options lnet ip2nets="..." routes="..." networks="..."
+.IP
+May be specified multiple times. Line continuations (backslash-newline)
+are supported.
+.TP
+.BR -o ", " --output " \fIFILE\fP"
+Write YAML to FILE instead of stdout.
+.TP
+.B --default-hop " [\fIHOP\fP]"
+Assign a default hopcount to routes lacking an explicit hop token.
+If HOP is omitted, 1 is used. Range: 1\-255. Explicit hopcounts in input
+are never overridden.
+.TP
+.BR -h ", " --help
+Display usage summary.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Usage error or no data provided.
+.TP
+.B 2
+Parsing error or file I/O error (message on stderr).
+.SH NOTES
+.SS Legacy networks Syntax
+Comma-separated list of network specifications:
+.IP
+.I nettype
+.RI [ id ]
+.RI [ ( iface-list ) ]
+.P
+Examples:
+.IP
+.B "tcp"
+.br
+.B "tcp0(eth0)"
+.br
+.B "tcp0(eth0),o2ib(ib0)"
+.SS Legacy ip2nets Syntax
+Each rule:
+.I net-spec ip-pattern
+.RI "{ " ip-pattern " }"
+.P
+Net spec:
+.I nettype id
+optionally followed by interface list in parentheses, e.g.:
+.IP
+.B "tcp0(eth0,eth1) 192.168.0.*"
+.P
+IP patterns support wildcards
+.RB ( * )
+and bracket expressions for sets/ranges, e.g.:
+.IP
+132.6.[1-3].[2-8/2]
+.P
+Rules are separated by semicolons or newlines. The first matching rule
+for a given network wins.
+.SS Legacy routes Syntax
+Two route formats are supported:
+.P
+.B "Legacy format:"
+.IP
+.I netspec
+.RI [ hopcount ]
+.I gateway
+.RI "{ " gateway " ... }"
+.P
+Gateway NIDs may end with an optional priority suffix:
+.BR gateway:PRIORITY
+(e.g.
+.BR 10.0.0.1@o2ib0:5 ).
+The first numeric token (1\-255) after the network spec is treated as
+hopcount. If omitted and
+.B --default-hop
+is not used, hop is left unspecified in YAML.
+.P
+.B "Alternative format (lustre_routes_config syntax):"
+.IP
+.I network
+.BR ": { gateway: " gateway @ exitnet
+.RI "[ , " "hop: " hopcount ]
+.RI "[ , " "priority: " priority " ] }"
+.P
+This format explicitly names parameters and allows them in any order.
+Parameters are separated by commas. The
+.B gateway
+parameter is mandatory; hop and priority are optional.
+.P
+Examples:
+.IP
+.nf
+tcp1: { gateway: 10.1.1.2@tcp0, priority: 3 }
+tcp4: { gateway: 10.3.3.4@tcp }
+tcp6: { gateway: 10.3.3.6@tcp, hop: 2, priority: 5 }
+tcp7: { gateway: 10.3.3.[6-12]@tcp, priority: 20, hop: 8 }
+.fi
+.P
+Both formats may be mixed freely in the same input file or stream.
+The tool automatically detects which format each line uses.
+.SS YAML Output Format
+The tool emits up to three top-level sequences:
+.IP
+net:
+.br
+ip2nets:
+.br
+route:
+.P
+Example:
+.nf
+net:
+  - net type: tcp0
+    local NI(s):
+    -     interfaces:
+              0: eth0
+ip2nets:
+  - net-spec: tcp0
+    interfaces:
+         0: eth0
+    ip-range:
+         0: 192.168.0.[2,4]
+  - net-spec: o2ib0
+    ip-range:
+         0: 192.168.0.*
+route:
+  - net: tcp0
+    gateway: 10.0.0.[1-2]@o2ib0
+    hop: 2
+    priority: 5
+  - net: tcp0
+    gateway: 10.0.0.[3-4]@o2ib0
+    hop: 2
+    priority: 10
+.fi
+.P
+Any IP pattern beginning with an asterisk (e.g. *.*.*.*) is
+automatically wrapped in double quotes to avoid YAML alias semantics.
+.SS Behavior Notes
+.IP \(bu 2
+Rule / entry separators: semicolon (;) or newline.
+.IP \(bu
+Comments initiated by '#' are stripped (not valid inside bracket
+expressions).
+.IP \(bu
+IP patterns are preserved verbatim (no expansion of bracket/range
+expressions).
+.IP \(bu
+Interfaces are listed in the order provided.
+.IP \(bu
+Multiple ip2nets/routes/networks files are concatenated in given order.
+.IP \(bu
+Gateway priority parsed only when final colon + digits suffix present
+(naive IPv6 avoidance). This limitation does not apply to the
+alternative route format where priority is explicitly named.
+.IP \(bu
+Both legacy and alternative route formats may be freely mixed in the
+same file. Each line is automatically detected and parsed according to
+its format.
+.IP \(bu
+Modprobe files are processed first, followed by explicit ip2nets files,
+routes files, networks files, then inline/stdin content.
+.IP \(bu
+Line continuations in modprobe files (backslash-newline) are handled
+automatically.
+.SH CAVEATS
+.IP \(bu 2
+Does not expand bracket/range expressions to concrete addresses.
+.IP \(bu
+Simple validation only; malformed nested bracket constructs may not
+produce intuitive errors.
+.IP \(bu
+Priority parsing does not support IPv6 literal addresses with trailing
+numeric segments separated by colons.
+.SH EXAMPLES
+Convert networks parameter:
+.IP
+.nf
+.B $ lnet_legacy2yaml 'options lnet networks="tcp0(eth0),o2ib(ib0)"'
+net:
+  - net type: tcp0
+    local NI(s):
+    -     interfaces:
+              0: eth0
+  - net type: o2ib
+    local NI(s):
+    -     interfaces:
+              0: ib0
+.fi
+.P
+Convert simple ip2nets string:
+.IP
+.nf
+.B $ lnet_legacy2yaml \e
+.B "  " 'tcp0(eth0,eth1) 10.0.0.*; o2ib0 192.168.[1-2].*'
+.fi
+.P
+Extract both parameters from an options line:
+.IP
+.nf
+.B $ lnet_legacy2yaml \e
+.B "  " 'options lnet ip2nets="tcp0 10.0.0.*" \e
+.B "  " routes="tcp0 1 10.0.0.1@o2ib0"'
+.fi
+.P
+Parse modprobe configuration file:
+.IP
+.nf
+.B $ lnet_legacy2yaml -m /etc/modprobe.d/lnet.conf \e
+.B "  " -o lnet.yaml
+.fi
+.P
+Convert routes using alternative format:
+.IP
+.nf
+.B $ cat routes.conf
+tcp1: { gateway: 10.1.1.2@tcp0, priority: 3 }
+tcp4: { gateway: 10.3.3.4@tcp }
+tcp6: { gateway: 10.3.3.6@tcp, hop: 2, priority: 5 }
+tcp7: { gateway: 10.3.3.[6-12]@tcp, priority: 20, hop: 8 }
+.B $ lnet_legacy2yaml -r routes.conf
+route:
+  - net: tcp1
+    gateway: 10.1.1.2@tcp0
+    priority: 3
+  - net: tcp4
+    gateway: 10.3.3.4@tcp
+  - net: tcp6
+    gateway: 10.3.3.6@tcp
+    hop: 2
+    priority: 5
+  - net: tcp7
+    gateway: 10.3.3.[6-12]@tcp
+    hop: 8
+    priority: 20
+.fi
+.P
+Files plus default hop:
+.IP
+.nf
+.B $ lnet_legacy2yaml -i ip.rules -r routes.rules \e
+.B "  " --default-hop 2 -o lnet.yaml
+.fi
+.P
+Import into LNet:
+.IP
+.nf
+.B $ lnetctl import < lnet.yaml
+.fi
+.SH AUTHORS
+Generated with assistance from automated tooling; further maintained
+by Lustre contributors.
+.SH AVAILABILITY
+.B lnet_legacy2yaml
+is part of the
+.BR lustre (7)
+filesystem package since release 2.17.0
+.\" Added in commit v2_16_XX
+.SH SEE ALSO
+.BR lustre (7),
+.BR lnetctl (8)
