@@ -600,6 +600,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	LASSERT(lsm->lsm_entry_count > 0);
 	LASSERT(lov->lo_lsm == NULL);
 	lov->lo_lsm = lsm_addref(lsm);
+	LASSERT(lov->lo_lsm);
 	set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
 
 	dump_lsm(D_INODE, lsm);
@@ -828,6 +829,8 @@ static int lov_init_released(const struct lu_env *env,
 	LASSERT(lov->lo_lsm == NULL);
 
 	lov->lo_lsm = lsm_addref(lsm);
+	LASSERT(lov->lo_lsm);
+
 	return 0;
 }
 
@@ -842,6 +845,8 @@ static int lov_init_foreign(const struct lu_env *env,
 	LASSERT(lov->lo_lsm == NULL);
 
 	lov->lo_lsm = lsm_addref(lsm);
+	LASSERT(lov->lo_lsm);
+
 	return 0;
 }
 

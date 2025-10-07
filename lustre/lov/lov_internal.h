@@ -327,8 +327,9 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 
 static inline struct lov_stripe_md *lsm_addref(struct lov_stripe_md *lsm)
 {
-	kref_get(&lsm->lsm_refc);
-	return lsm;
+	if (kref_get_unless_zero(&lsm->lsm_refc))
+		return lsm;
+	return NULL;
 }
 
 static inline bool lov_oinfo_is_dummy(const struct lov_oinfo *loi)
