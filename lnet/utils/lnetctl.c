@@ -2060,7 +2060,6 @@ lnet_yaml_emit_cpt_sequence(yaml_emitter_t *emitter, struct cfs_expr_list *cpts)
 	rc = 1;
 
 out_free_expr:
-	cfs_expr_list_free(cpts);
 	if (count > 0)
 		free(cpt_array);
 
@@ -2219,6 +2218,8 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 
 	list_for_each_entry(intf, &nw_descr->nw_intflist,
 			    intf_on_network) {
+		struct cfs_expr_list *cpt_expr = NULL;
+
 		yaml_mapping_start_event_initialize(&event, NULL,
 						    (yaml_char_t *)YAML_MAP_TAG,
 						    1, YAML_ANY_MAPPING_STYLE);
@@ -2339,8 +2340,13 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 				goto emitter_error;
 		}
 
-		if (global_cpts) {
-			rc = lnet_yaml_emit_cpt_sequence(&output, global_cpts);
+		if (intf->cpt_expr)
+			cpt_expr = intf->cpt_expr;
+		else if (global_cpts)
+			cpt_expr = global_cpts;
+
+		if (cpt_expr) {
+			rc = lnet_yaml_emit_cpt_sequence(&output, cpt_expr);
 			if (rc == 0)
 				goto emitter_error;
 		}
@@ -4334,7 +4340,6 @@ struct command_mapping {
 };
 
 static const struct command_mapping cmd_mappings[] = {
-	{"net", LNET_CMD_NETS, 0, false},
 	{"peer", LNET_CMD_PEERS, 0, false},
 	{"route", LNET_CMD_ROUTES, 0, false},
 	{"discover", LNET_CMD_PING, 0, true},
@@ -4696,7 +4701,6 @@ handle_cmn_tunable(__u32 net_id,
 	struct lnet_ioctl_config_lnd_cmn_tunables *cmn_tun = &tunables->lt_cmn;
 	char *key;
 	long value;
-	char errmsg[LNET_MAX_STR_LEN];
 	int rc;
 
 	key = strdup((char *)event->data.scalar.value);
@@ -4722,16 +4726,14 @@ handle_cmn_tunable(__u32 net_id,
 	} else if (!strcmp(key, "credits")) {
 		cmn_tun->lct_max_tx_credits = value;
 	} else {
-		snprintf(errmsg, LNET_MAX_STR_LEN, "invalid key '%s'", key);
-		errno = rc = -EINVAL;
+		fprintf(stderr,
+			"Ignoring unrecognized key '%s' for 'tunables'\n",
+			key);
 	}
 
 	yaml_event_delete(event);
 
-	if (rc)
-		yaml_lnet_print_error(flags, "import", errmsg);
-	else
-		rc = 1;
+	rc = 1;
 
 out_free_key:
 	free(key);
@@ -4799,14 +4801,13 @@ handle_lnd_tunable(__u32 net_id,
 		else if (LNET_NETTYP(net_id) == O2IBLND)
 			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_tos = value;
 	} else {
-		snprintf(errmsg, LNET_MAX_STR_LEN,
-			 "Unrecognized key '%s' for 'lnd tunables'", key);
-		errno = rc = -EINVAL;
-		yaml_lnet_print_error(flags, "import", errmsg);
-		goto out_free_key;
+		fprintf(stderr,
+			"Ignoring unrecognized key '%s' for 'lnd tunables'\n",
+			key);
 	}
 
 	yaml_event_delete(event);
+
 	rc = 1;
 
 out_free_key:
@@ -4979,9 +4980,29 @@ yaml_parser_error:
  *          <lnd_param1>: <val>
  *          <lnd_param2>: <val>
  *          <...>
+ *    CPT: "[<expr]"
+ *
+ * or
+ *
+ * net:
+ *  - net type: <net>[NUM]
+ *    interfaces:
+ *        0: <intf name>['['<expr>']']
+ *        1: <intf name>['['<expr>']']
+ *    tunables:
+ *          peer_timeout: <NUM>
+ *          peer_credits: <NUM>
+ *          peer_buffer_credits: <NUM>
+ *          credits: <NUM>
+ *    lnd tunables:
+ *          <lnd_param1>: <val>
+ *          <lnd_param2>: <val>
+ *          <...>
+ *    CPT: "[<expr]"
  */
 static int
-handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
+handle_net_config_sequence(yaml_parser_t *setup, int flags,
+			   bool is_ip2nets_sequence)
 {
 	struct lustre_lnet_ip2nets ip2nets;
 	struct lnet_dlc_network_descr *nw_descr = &ip2nets.ip2nets_net;
@@ -4995,6 +5016,8 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 	/* Track configured networks to ensure uniqueness for ip2nets */
 	__u32 *configured_nets = NULL;
 	size_t nets_cnt = 0;
+	unsigned int seq_depth = 0;
+	unsigned int map_depth = 0;
 
 	init_ip2nets_tunables(&ip2nets, &tunables);
 
@@ -5005,10 +5028,27 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 		if (!rc)
 			goto yaml_parser_error;
 
-		/* Reached the end of the ip2nets sequence */
-		if (event.type == YAML_SEQUENCE_END_EVENT) {
+		switch (event.type) {
+		case YAML_SEQUENCE_START_EVENT:
+			seq_depth++;
+			break;
+		case YAML_SEQUENCE_END_EVENT:
+			seq_depth--;
+			break;
+		case YAML_MAPPING_START_EVENT:
+			map_depth++;
+			break;
+		case YAML_MAPPING_END_EVENT:
+			map_depth--;
+			break;
+		default:
+			break;
+		}
+
+		/* Reached the end of the ip2nets/net sequence */
+		if (event.type == YAML_SEQUENCE_END_EVENT && seq_depth == 0) {
 			yaml_event_delete(&event);
-			if (nets_cnt == 0) {
+			if (is_ip2nets_sequence && nets_cnt == 0) {
 				/* If none of the rules applied then return an
 				 * error
 				 */
@@ -5022,13 +5062,13 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 		}
 
 		/* Reached the end of a network specification block */
-		if (event.type == YAML_MAPPING_END_EVENT) {
+		if (event.type == YAML_MAPPING_END_EVENT && map_depth == 0) {
 			struct lnet_ioctl_config_lnd_tunables *tun = NULL;
 			char *net;
 			lnet_nid_t *nids = NULL;
 			__u32 nnids = 0;
 			bool duplicate_net = false;
-			int i;
+			size_t i;
 			__u32 *tmp;
 
 			rc = lustre_lnet_resolve_ip2nets_rule(&ip2nets, &nids,
@@ -5041,7 +5081,8 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 			 * an error
 			 */
 			if (rc != LUSTRE_CFG_RC_NO_ERR &&
-			    rc != LUSTRE_CFG_RC_NO_MATCH)
+			    !(is_ip2nets_sequence &&
+			      rc == LUSTRE_CFG_RC_NO_MATCH))
 				goto print_error;
 
 			/* Skip configuration if resolution failed */
@@ -5057,8 +5098,8 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 				}
 			}
 
-			/* Skip configuration if duplicate */
-			if (duplicate_net)
+			/* Skip configuration for ip2nets if duplicate */
+			if (duplicate_net && is_ip2nets_sequence)
 				goto cleanup_block;
 
 			/* Configure the network interface */
@@ -5094,6 +5135,8 @@ handle_ip2nets_sequence(yaml_parser_t *setup, int flags)
 cleanup_block:
 			free_ip2nets_lists(&ip2nets);
 			init_ip2nets_tunables(&ip2nets, &tunables);
+			if (global_cpts)
+				cfs_expr_list_free(global_cpts);
 			global_cpts = NULL;
 			tunables_set = lnd_tunables_set = false;
 		}
@@ -5106,17 +5149,27 @@ cleanup_block:
 
 		value = (char *)event.data.scalar.value;
 
-		/* "net-spec" must be the first scalar */
-		if (ip2nets.ip2nets_net.nw_id == LNET_NET_ANY &&
-		    strcmp(value, "net-spec")) {
-			snprintf(errmsg, LNET_MAX_STR_LEN,
-				 "Malformed input. Expect 'net-spec' found '%s'",
-				 value);
-			rc = -EINVAL;
-			goto print_error;
+		/* "net-spec" must be the first scalar for an ip2nets sequence,
+		 * and "net type" must be the first in a net sequence
+		 */
+		if (ip2nets.ip2nets_net.nw_id == LNET_NET_ANY) {
+			if (is_ip2nets_sequence && strcmp(value, "net-spec")) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Malformed input. Expect 'net-spec' found '%s'",
+					 value);
+				rc = -EINVAL;
+				goto print_error;
+			} else if (!is_ip2nets_sequence &&
+				 strcmp(value, "net type")) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Malformed input. Expect 'net type' found '%s'",
+					 value);
+				rc = -EINVAL;
+				goto print_error;
+			}
 		}
 
-		if (!strcmp(value, "net-spec")) {
+		if (!strcmp(value, "net-spec") || !strcmp(value, "net type")) {
 			yaml_event_delete(&event);
 
 			rc = yaml_parser_parse(setup, &event);
@@ -5147,7 +5200,21 @@ cleanup_block:
 			} else if (!rc) {
 				goto yaml_parser_error;
 			}
+		} else if (!strcmp(value, "local NI(s)")) {
+			if (is_ip2nets_sequence) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "local NI(s)' not valid for ip2nets");
+				rc = -EINVAL;
+				goto print_error;
+			}
 		} else if (!strcmp(value, "ip-range")) {
+			if (!is_ip2nets_sequence) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "'ip-range' only valid for ip2nets");
+				rc = -EINVAL;
+				goto print_error;
+			}
+
 			yaml_event_delete(&event);
 
 			rc = parse_yaml_list(setup, &ip2nets.ip2nets_ip_ranges,
@@ -5219,6 +5286,8 @@ out:
 	free_ip2nets_lists(&ip2nets);
 	if (configured_nets)
 		free(configured_nets);
+	if (global_cpts)
+		cfs_expr_list_free(global_cpts);
 
 	return (rc < 0) ? rc : 1;
 }
@@ -5381,14 +5450,23 @@ static int jt_import(int argc, char **argv)
 				goto free_reply;
 			else if (rc == 0)
 				goto emitter_error;
-		} else if (!strcmp(scalar_value, "ip2nets")) {
+		} else if (!strcmp(scalar_value, "ip2nets") ||
+			   !strcmp(scalar_value, "net")) {
+			bool is_ip2nets = strcmp(scalar_value, "ip2nets") == 0;
+
+			/* The "route" yaml block can contain a "net" key */
+			if (!is_ip2nets && op == LNET_CMD_ROUTES)
+				goto skip_test;
+
 			if (op != LNET_CMD_UNSPEC) {
 				rc = yaml_netlink_complete_emitter(&output);
 				if (rc == 0)
 					goto emitter_error;
 			}
 			op = LNET_CMD_UNSPEC;
-			rc = handle_ip2nets_sequence(&setup, flags);
+
+			rc = handle_net_config_sequence(&setup, flags,
+							is_ip2nets);
 			if (rc < 0)
 				goto free_reply;
 			else if (rc == 0)
@@ -5405,6 +5483,7 @@ static int jt_import(int argc, char **argv)
 			if (rc == 0)
 				goto emitter_error;
 
+			cfs_expr_list_free(global_cpts);
 			global_cpts = NULL;
 			continue;
 		} else if (!strcmp(scalar_value, "global")) {

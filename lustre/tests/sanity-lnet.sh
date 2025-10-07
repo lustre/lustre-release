@@ -5540,6 +5540,39 @@ test_410() {
 }
 run_test 410 "No segfault in lnetctl fault command"
 
+test_450() {
+	[[ $NETTYPE == tcp* ]] || skip "Need tcp NETTYPE"
+
+	reinit_dlc || return $?
+
+	setup_fakeif || return $?
+
+	add_net "$NETTYPE" "${INTERFACES[0]}" || return $?
+	add_net "$NETTYPE" "$FAKE_IF" || return $?
+
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+net:
+    - net type: $NETTYPE
+      local NI(s):
+        - interfaces:
+              0: ${INTERFACES[0]}
+              1: ${FAKE_IF}
+EOF
+
+	do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
+
+	do_lnetctl import --del $TMP/sanity-lnet-$testnum.yaml ||
+		error "Import --del failed with rc = $?"
+
+	[[ -z $($LCTL list_nids) ]] ||
+		error "NIDs still configured \"$($LCTL list_nids)\""
+
+	cleanup_fakeif
+}
+run_test 450 "Check import of multiple interfaces"
+
 test_500() {
 	reinit_dlc || return $?
 

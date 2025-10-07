@@ -1771,7 +1771,8 @@ failed:
 static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 					struct list_head *intf_list,
 					struct list_head *ip_ranges,
-					char *err_str, size_t str_len)
+					char *err_str, size_t str_len,
+					__u32 net_id)
 {
 	int rc;
 	__u32 ip;
@@ -1878,6 +1879,23 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 		}
 
 		if (ifaddr == NULL) {
+			/*
+			 * kfilnd interfaces like cxi0 may refer to hardware
+			 * devices not visible as standard Linux network
+			 * interfaces. Accept them without validation only if:
+			 * 1. This is a kfilnd network
+			 * 2. No ip-ranges were specified (validation required)
+			 * 3. Interface matches cxi[0-9]+ pattern
+			 */
+			if (LNET_NETTYP(net_id) == KFILND &&
+			    list_empty(ip_ranges)) {
+				unsigned int idx;
+
+				if (sscanf(intf_descr->intf_name, "cxi%u",
+					   &idx) == 1)
+					continue;
+			}
+
 			snprintf(err_str, str_len, "No interface matching '%s'",
 				 intf_descr->intf_name);
 			list_del(&intf_descr->intf_on_network);
@@ -1937,7 +1955,8 @@ int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
 	rc = lustre_lnet_match_ip_to_intf(ifa,
 					  &ip2nets->ip2nets_net.nw_intflist,
 					  &ip2nets->ip2nets_ip_ranges, err_str,
-					  str_len);
+					  str_len,
+					  ip2nets->ip2nets_net.nw_id);
 	if (rc != LUSTRE_CFG_RC_MATCH) {
 		freeifaddrs(ifa);
 		return rc;
