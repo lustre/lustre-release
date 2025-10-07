@@ -18656,18 +18656,19 @@ test_150ia() {
 	[[ "$DOM" == "yes" ]] &&
 		$LFS setstripe -E1M -L mdt -E eof $DIR/$tfile
 
+	local BLOCK_SIZE=65536
 	echo "Verify fallocate(zero): range within the file"
-	yes 'A' | dd of=$DIR/$tfile bs=$PAGE_SIZE count=8 ||
-		error "dd failed for bs $PAGE_SIZE and count 8"
+	yes 'A' | dd of=$DIR/$tfile bs=$BLOCK_SIZE count=8 ||
+		error "dd failed for bs $BLOCK_SIZE and count 8"
 
 	# zero range page aligned
-	local offset=$((2 * PAGE_SIZE))
-	local length=$((4 * PAGE_SIZE))
+	local offset=$((2 * BLOCK_SIZE))
+	local length=$((4 * BLOCK_SIZE))
 	out=$(fallocate -z --offset $offset -l $length $DIR/$tfile 2>&1) ||
 		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
 
 	# precomputed md5sum
-	local expect="f6b2adb9a352ee2b9d1f54a629e7998c"
+	local expect="879e6c3bf37da2014adda326c8d5db73"
 	cksum=($(md5sum $DIR/$tfile))
 	[[ "${cksum[0]}" == "$expect" ]] ||
 		error "unexpected MD5SUM after zero: ${cksum[0]}"
@@ -18678,7 +18679,7 @@ test_150ia() {
 	out=$(fallocate -z --offset $offset -l $length $DIR/$tfile 2>&1) ||
 		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
 
-	expect="19912462c2a304a225df656b80844ba5"
+	expect="2ff89a843b5a656ca21036a2472a0aac"
 	cksum=($(md5sum $DIR/$tfile))
 	[[ "${cksum[0]}" == "$expect" ]] ||
 		error "unexpected MD5SUM after zero(partial): ${cksum[0]}"
