@@ -242,7 +242,7 @@ __must_hold(&ni->ni_lock)
 		return LNET_NI_STATUS_UP;
 	else if (atomic_read(&ni->ni_fatal_error_on))
 		return LNET_NI_STATUS_DOWN;
-	else if (lnet_routing_enabled() && ni->ni_status)
+	else if (ni->ni_status)
 		return *ni->ni_status;
 	else
 		return LNET_NI_STATUS_UP;
@@ -1259,6 +1259,17 @@ lnet_dec_healthv_locked(atomic_t *healthv)
 }
 
 static inline void
+lnet_dec_ni_healthv_locked(struct lnet_ni *ni)
+{
+	/* Decrement health and if health value transitioned to 0 then update
+	 * status to DOWN
+	 */
+	if (lnet_dec_healthv_locked(&ni->ni_healthv) &&
+	    atomic_read(&ni->ni_healthv) == 0)
+		lnet_ni_set_status(ni, LNET_NI_STATUS_DOWN);
+}
+
+static inline void
 lnet_dec_lpni_healthv_locked(struct lnet_peer_ni *lpni)
 {
 	 /* only adjust the net health if the lpni health value changed */
@@ -1271,6 +1282,17 @@ lnet_inc_healthv(atomic_t *healthv)
 {
 	return lnet_atomic_add_unless_max(healthv, lnet_health_sensitivity,
 					  LNET_MAX_HEALTH_VALUE);
+}
+
+static inline void
+lnet_inc_ni_healthv(struct lnet_ni *ni)
+{
+	/* Increment health and if health value transitioned to maximum then
+	 * update status to UP
+	 */
+	if (lnet_inc_healthv(&ni->ni_healthv) &&
+	    atomic_read(&ni->ni_healthv) == LNET_MAX_HEALTH_VALUE)
+		lnet_ni_set_status(ni, LNET_NI_STATUS_UP);
 }
 
 static inline void

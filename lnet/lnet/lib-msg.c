@@ -465,7 +465,7 @@ lnet_ni_add_to_recoveryq_locked(struct lnet_ni *ni,
 }
 
 static void
-lnet_handle_local_failure(struct lnet_ni *local_ni)
+lnet_handle_local_failure(struct lnet_ni *ni)
 {
 	/*
 	 * the lnet_net_lock(0) is used to protect the addref on the ni
@@ -478,8 +478,9 @@ lnet_handle_local_failure(struct lnet_ni *local_ni)
 		return;
 	}
 
-	lnet_dec_healthv_locked(&local_ni->ni_healthv);
-	lnet_ni_add_to_recoveryq_locked(local_ni, &the_lnet.ln_mt_localNIRecovq,
+	lnet_dec_ni_healthv_locked(ni);
+
+	lnet_ni_add_to_recoveryq_locked(ni, &the_lnet.ln_mt_localNIRecovq,
 					ktime_get_seconds());
 	lnet_net_unlock(0);
 }
@@ -768,8 +769,7 @@ lnet_health_check(struct lnet_msg *msg)
 	bool lo = false;
 	bool attempt_local_resend;
 	bool attempt_remote_resend;
-	bool handle_local_health;
-	bool handle_remote_health;
+	bool handle_remote_health = true;
 	ktime_t now;
 	int cpt;
 
@@ -839,22 +839,12 @@ lnet_health_check(struct lnet_msg *msg)
 	if (hstatus != LNET_MSG_STATUS_OK) {
 		struct lnet_ping_info *pi;
 
-		/* Don't further decrement the health value if a recovery
-		 * message failed.
-		 */
-		if (msg->msg_recovery)
-			handle_local_health = handle_remote_health = false;
-		else
-			handle_local_health = handle_remote_health = true;
-
 		/* For local failures, health/recovery/resends are not needed if
 		 * I only have a single (non-lolnd) interface.
 		 */
 		pi = &the_lnet.ln_ping_target->pb_info;
-		if (lnet_ping_at_least_two_entries(pi)) {
-			handle_local_health = false;
+		if (lnet_ping_at_least_two_entries(pi))
 			attempt_local_resend = false;
-		}
 
 		/* For remote failures, health/recovery/resends are not needed
 		 * if the peer only has a single interface. Special case for
@@ -889,7 +879,8 @@ lnet_health_check(struct lnet_msg *msg)
 		 * Ping counts are reset to 0 as appropriate to allow for
 		 * faster recovery.
 		 */
-		lnet_inc_healthv(&ni->ni_healthv);
+		lnet_inc_ni_healthv(ni);
+
 		/*
 		 * It's possible msg_txpeer is NULL in the LOLND
 		 * case. Only increment the peer's health if we're
@@ -932,14 +923,12 @@ lnet_health_check(struct lnet_msg *msg)
 	case LNET_MSG_STATUS_LOCAL_ABORTED:
 	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
 	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
-		if (handle_local_health)
-			lnet_handle_local_failure(ni);
+		lnet_handle_local_failure(ni);
 		if (attempt_local_resend)
 			return lnet_attempt_msg_resend(msg);
 		break;
 	case LNET_MSG_STATUS_LOCAL_ERROR:
-		if (handle_local_health)
-			lnet_handle_local_failure(ni);
+		lnet_handle_local_failure(ni);
 		return -1;
 	case LNET_MSG_STATUS_REMOTE_DROPPED:
 		if (handle_remote_health)
@@ -955,8 +944,7 @@ lnet_health_check(struct lnet_msg *msg)
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
 		if (handle_remote_health)
 			lnet_handle_remote_failure(lpni);
-		if (handle_local_health)
-			lnet_handle_local_failure(ni);
+		lnet_handle_local_failure(ni);
 		return -1;
 	default:
 		LBUG();

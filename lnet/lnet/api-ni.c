@@ -4323,6 +4323,13 @@ lnet_ni_set_healthv(struct lnet_nid *nid, int value)
 					      &the_lnet.ln_mt_localNIRecovq);
 				lnet_ni_addref_locked(ni, 0);
 			}
+
+			/* Update status based on health value transition */
+			if (value == 0)
+				lnet_ni_set_status(ni, LNET_NI_STATUS_DOWN);
+			else if (value == LNET_MAX_HEALTH_VALUE)
+				lnet_ni_set_status(ni, LNET_NI_STATUS_UP);
+
 			if (!all) {
 				lnet_net_unlock(LNET_LOCK_EX);
 				return;

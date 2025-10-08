@@ -3243,10 +3243,15 @@ static inline void handle_disc_lpni_health(struct lnet_peer_ni *lpni,
 	spin_unlock(&lpni->lpni_lock);
 
 	/* Decrement health when transitioning from UP to DOWN */
-	if (old_status != new_status && new_status == LNET_NI_STATUS_DOWN) {
-		lnet_net_lock(0);
-		lnet_handle_remote_failure_locked(lpni);
-		lnet_net_unlock(0);
+	if (old_status != new_status) {
+		CDEBUG(D_NET, "lpni %s(%p) status changed from %#x to %#x\n",
+		       libcfs_nidstr(&lpni->lpni_nid), lpni, old_status,
+		       new_status);
+		if (new_status == LNET_NI_STATUS_DOWN) {
+			lnet_net_lock(0);
+			lnet_handle_remote_failure_locked(lpni);
+			lnet_net_unlock(0);
+		}
 	} else if (new_status == LNET_NI_STATUS_UP && !lpni->lpni_last_alive) {
 		/* Set health to max if the initial status is UP */
 		atomic_set(&lpni->lpni_healthv, LNET_MAX_HEALTH_VALUE);

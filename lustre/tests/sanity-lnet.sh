@@ -2556,7 +2556,7 @@ function restore_lnet_params() {
 	while read param value; do
 		[[ $param == max_intf ]] && continue
 		[[ $param == lnd_timeout ]] && continue
-		$LNETCTL set ${param} ${value} ||
+		do_lnetctl set ${param} ${value} ||
 			error "Failed to restore ${param} to ${value}"
 	done < $LNET_PARAMS_FILE
 }
@@ -2938,7 +2938,7 @@ test_204() {
 		       ${LNET_LOCAL_NO_RESEND_STATUSES}; do
 		do_lnet_health_ping_test "${hstatus}" || return $?
 		check_no_resends || return $?
-		check_no_local_health || return $?
+		check_local_health || return $?
 	done
 
 	cleanup_health_test || return $?
@@ -3121,7 +3121,7 @@ test_209() {
 	lnet_health_post
 
 	check_no_resends || return $?
-	check_no_local_health || return $?
+	check_local_health || return $?
 	check_no_remote_health || return $?
 
 	cleanup_health_test || return $?
@@ -3534,7 +3534,7 @@ function check_ni_status() {
 	local expect="$2"
 
 	local status=$($LNETCTL net show |
-		       grep -A 1 ${nid} |
+		       grep -wA 1 ${nid} |
 		       awk '/status/{print $NF}')
 
 	echo "NI ${nid} expect status \"${expect}\" found \"${status}\""
@@ -4493,6 +4493,200 @@ check_parameter() {
 		     tee /dev/stderr | \
 		     grep -c "^ \+${para}: ${value}$") != ${#INTERFACES[@]} ))
 }
+
+test_234() {
+	reinit_dlc || return $?
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	local nid=$($LCTL list_nids | head -n 1)
+
+	# Verify NI starts with UP status and maximum health
+	check_ni_status "$nid" up
+
+	local health=$($LNETCTL net show -v 2 --net ${NETTYPE} |
+		       awk '/health value/{print $NF}')
+	echo "Initial health value: $health"
+	((health == 1000)) ||
+		error "NI $nid should start with health value 1000, found $health"
+
+	# Prevent recovery pings from incrementing health during this test
+	local hs=$($LNETCTL global show |
+		   awk '/^\s+health_sensitivity:/{print $NF}')
+	do_lnetctl set health_sensitivity 0 ||
+		error "Failed to set health_sensitivity 0"
+
+	# Manually set health to 0 - should transition status to DOWN
+	echo "Setting health value to 0"
+	do_lnetctl net set --health 0 --nid $nid ||
+		error "Failed to set health to 0"
+
+	# Verify status changed to DOWN
+	check_ni_status "$nid" down
+
+	# Verify health is actually 0
+	health=$($LNETCTL net show -v 2 --net ${NETTYPE} |
+		 awk '/health value/{print $NF}')
+	echo "Health value after setting to 0: $health"
+	((health == 0)) ||
+		error "NI $nid health should be 0, found $health"
+
+	# Set health back to maximum - should transition status to UP
+	echo "Setting health value to 1000"
+	do_lnetctl net set --health 1000 --nid $nid ||
+		error "Failed to set health to 1000"
+
+	# Verify status changed back to UP
+	check_ni_status "$nid" up
+
+	# Verify health is at maximum
+	health=$($LNETCTL net show -v 2 --net ${NETTYPE} |
+		 awk '/health value/{print $NF}')
+	echo "Health value after setting to 1000: $health"
+	((health == 1000)) ||
+		error "NI $nid health should be 1000, found $health"
+
+	do_lnetctl set health_sensitivity $hs ||
+		error "Failed to set health_sensitivity $hs"
+
+	return 0
+}
+run_test 234 "Verify NI status changes with manual health value transitions"
+
+test_235() {
+	[[ ${NETTYPE} == kfi* ]] && skip "kfi doesn't support drop rules"
+
+	reinit_dlc || return $?
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+	add_net "${NETTYPE}1" "${INTERFACES[0]}" || return $?
+
+	local nid1=$($LCTL list_nids | head -n 1)
+	local nid2=$($LCTL list_nids | tail -n 1)
+
+	# Verify both NIDs start with UP status
+	check_ni_status "$nid1" up
+	check_ni_status "$nid2" up
+
+	# Add drop rule to cause local failures on nid1
+	echo "Adding drop rule for $nid1"
+	$LCTL net_drop_add -s $nid1 -d $nid1 -m GET -r 1 -e local_timeout ||
+		error "Failed to add drop rule"
+
+	# Manually set health to 100 to force NI into recovery
+	echo "Setting health to 100 for $nid1"
+	do_lnetctl net set --health 100 --nid $nid1 ||
+		error "Failed to set health to 100"
+
+	# Recovery ping should cause health to decrement to 0, and status set
+	# to DOWN
+	wait_update $HOSTNAME \
+		"$LNETCTL net show --net ${NETTYPE} | \
+		 awk '/^\\\s+status:/{print \\\$NF}'" \
+		"down" "60"
+
+	(($? == 0)) || error "NI status did not go down"
+
+	# Verify nid2 is still UP
+	check_ni_status "$nid2" up
+
+	# Clear drop rules
+	$LCTL net_drop_del -a
+
+	# Set health 900, recovery ping should increment to max and status set
+	# to UP
+	echo "Restoring health to 900 for $nid1"
+	do_lnetctl net set --health 900 --nid $nid1 ||
+		error "Failed to set health to 900"
+
+	# Verify status is back to UP
+	wait_update $HOSTNAME \
+		"$LNETCTL net show --net ${NETTYPE} | \
+		 awk '/^\\\s+status:/{print \\\$NF}'" \
+		"up" "60"
+
+	(($? == 0)) || error "NI status did not go up"
+
+	return 0
+}
+run_test 235 "Verify NI status DOWN when health reaches 0 after failures"
+
+check_remote_peer_ni_status() {
+	local node="$1"
+	local nid="$2"
+	local expect="$3"
+	local rc
+
+	wait_update $node \
+		"$LNETCTL peer show --nid $nid | \
+		 grep -E -A 1 '\s+nid: ${nid}$' | \
+		 awk '/\s+state:/{print \\\$NF}'" \
+		 "$expect" "60"
+
+	rc=$?
+	(($rc == 0)) ||
+		error "Expect peer NI state \"$expect\" for $nid on $node"
+
+	return $rc
+}
+
+test_236() {
+	setup_router_test || return $?
+
+	do_basic_rtr_test || return $?
+
+	# Add another net on local host and router
+	add_net "${NETTYPE}3" "${INTERFACES[0]}" || return $?
+
+	local router=${ROUTERS[0]}
+	local rtr_interfaces=( ${ROUTER_INTERFACES[$router]} )
+
+	do_net_add $router ${NETTYPE}3 ${rtr_interfaces[0]} ||
+		return $?
+
+	local nid1=$($LCTL list_nids | head -1)
+	local nid2=$($LCTL list_nids | tail -1)
+
+	check_ni_status "$nid1" up
+	check_ni_status "$nid2" up
+
+	# Router shows both interfaces as up
+	check_remote_peer_ni_status "$router" "$nid1" "up" || return $?
+	check_remote_peer_ni_status "$router" "$nid2" "up" || return $?
+
+	# Drop traffic on nid1
+	$LCTL net_drop_add -s $nid1 -d $nid1 -r 1 -e local_timeout ||
+		error "Failed to add drop rule"
+
+	# Set health to 0
+	do_lnetctl net set --health 0 --nid $nid1 ||
+		error "Failed to set health to 0"
+
+	# Verify nid1 status is down, nid2 up
+	check_ni_status "$nid1" down
+	check_ni_status "$nid2" up
+
+	# Verify new NI status is reflected on router
+	check_remote_peer_ni_status "$router" "$nid1" "down" || return $?
+	check_remote_peer_ni_status "$router" "$nid2" "up" || return $?
+
+	# Clear drop rules, verify status transitions back to UP
+	$LCTL net_drop_del -a || return $?
+	do_lnetctl net set --health 900 --nid $nid1 ||
+		error "Failed to set health to 900"
+	wait_update $HOSTNAME \
+		"$LNETCTL net show --net ${NETTYPE} | \
+		 awk '/^\\\s+status:/{print \\\$NF}'" \
+		"up" "60"
+
+	(($? == 0)) || error "NI status did not go to up"
+
+	# Verify new NI status is reflected on router
+	check_remote_peer_ni_status "$router" "$nid1" "up" || return $?
+	check_remote_peer_ni_status "$router" "$nid2" "up" || return $?
+
+	cleanup_router_test
+}
+run_test 236 "Local NI state propagates to routers"
 
 test_241() {
 	reinit_dlc || return $?
