@@ -51,6 +51,7 @@
 #define LGSS_SVC_MDS_STR        "lustre_mds"
 #define LGSS_SVC_OSS_STR        "lustre_oss"
 #define LGSS_SVC_HOST_STR       "host"
+#define LGSS_SVC_ROLE_STR       "lustre_role"
 #define LGSS_USR_ROOT_STR       "lustre_root"
 
 typedef enum {

@@ -62,6 +62,7 @@ extern int srv_ioc_dev;
 #define GSSD_SERVICE_MDS			"lustre_mds"
 #define GSSD_SERVICE_OSS			"lustre_oss"
 #define GSSD_SERVICE_HOST			"host"
+#define GSSD_SERVICE_ROLE			"lustre_role"
 #define LUSTRE_ROOT_NAME			"lustre_root"
 
 #endif /* _RPC_SVCGSSD_H_ */

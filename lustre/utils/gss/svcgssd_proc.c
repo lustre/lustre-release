@@ -379,6 +379,19 @@ static int get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		goto out_free;
 	}
 
+	/* No host for GSSD_SERVICE_ROLE, just <NODEMAP_NAME> */
+	if (strcmp(sname, GSSD_SERVICE_ROLE) == 0) {
+		service_nm = host;
+		host = NULL;
+		if (nm_buflen < LUSTRE_NODEMAP_NAME_LENGTH + 1 ||
+		    strlen(service_nm) > LUSTRE_NODEMAP_NAME_LENGTH) {
+			printerr(LL_ERR, "invalid creds %s/%s@%s from %s\n",
+				 sname, service_nm, realm, libcfs_nid2str(nid));
+			goto out_free;
+		}
+		snprintf(nm_buf, nm_buflen, "%s", service_nm);
+	}
+
 	/* 1. check host part */
 	if (host) {
 		/* host part is in the form <HOSTNAME>/<NODEMAP_NAME> */
@@ -414,8 +427,8 @@ hostcheck:
 			goto out_free;
 		}
 	} else {
-		if (!strcmp(sname, GSSD_SERVICE_MDS) ||
-		    !strcmp(sname, GSSD_SERVICE_OSS)) {
+		if (strcmp(sname, GSSD_SERVICE_MDS) == 0 ||
+		    strcmp(sname, GSSD_SERVICE_OSS) == 0) {
 			printerr(LL_ERR,
 				 "ERROR: %s@%s from %s doesn't bind with hostname\n",
 				 sname, realm, libcfs_nid2str(nid));
@@ -445,8 +458,9 @@ hostcheck:
 
 		/* Now we know we are dealing with a local realm */
 
-		if (!strcmp(sname, LUSTRE_ROOT_NAME) ||
-		    !strcmp(sname, GSSD_SERVICE_HOST)) {
+		if (strcmp(sname, LUSTRE_ROOT_NAME) == 0 ||
+		    strcmp(sname, GSSD_SERVICE_HOST) == 0 ||
+		    strcmp(sname, GSSD_SERVICE_ROLE) == 0) {
 			cred->cr_uid = 0;
 			cred->cr_usr_root = 1;
 			goto valid;
@@ -491,8 +505,9 @@ valid:
 		}
 		fallthrough;
 	case LUSTRE_GSS_SVC_OSS:
-		if (!strcmp(sname, LUSTRE_ROOT_NAME) ||
-		    !strcmp(sname, GSSD_SERVICE_HOST)) {
+		if (strcmp(sname, LUSTRE_ROOT_NAME) == 0 ||
+		    strcmp(sname, GSSD_SERVICE_HOST) == 0 ||
+		    strcmp(sname, GSSD_SERVICE_ROLE) == 0) {
 			cred->cr_uid = 0;
 			cred->cr_usr_root = 1;
 		} else if (!strcmp(sname, GSSD_SERVICE_MDS)) {

@@ -216,8 +216,8 @@ int svc_princ_verify_host(krb5_context ctx,
 
 	if (lgss_krb5_strcasecmp(krb5_princ_component(ctx, princ, 1),
 				 namebuf)) {
-		logmsg(loglevel, "service principal: hostname %.*s "
-		       "doesn't match localhost %s\n",
+		logmsg(loglevel,
+		       "service principal: hostname %.*s doesn't match localhost %s\n",
 		       krb5_princ_component(ctx, princ, 1)->length,
 		       krb5_princ_component(ctx, princ, 1)->data,
 		       namebuf);
@@ -263,7 +263,9 @@ static int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 	if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
 			     LGSS_SVC_HOST_STR) == 0 ||
 	    lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
-			     LGSS_USR_ROOT_STR) == 0)
+			     LGSS_USR_ROOT_STR) == 0 ||
+	    lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
+			     LGSS_SVC_ROLE_STR) == 0)
 		cred_type = LGSS_ROOT_CRED_ROOT;
 	else if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
 				  LGSS_SVC_MGS_STR) == 0)
@@ -294,8 +296,12 @@ static int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 					"%s%s",
 					buf == wanted ? "" : ",",
 					LGSS_USR_ROOT_STR);
-			snprintf(buf, sizeof(wanted) - (buf - wanted), ",%s",
-				 LGSS_SVC_HOST_STR);
+			buf += snprintf(buf, sizeof(wanted) - (buf - wanted),
+					",%s",
+					LGSS_SVC_HOST_STR);
+			buf += snprintf(buf, sizeof(wanted) - (buf - wanted),
+					",%s",
+					LGSS_SVC_ROLE_STR);
 		}
 		logmsg(LL_WARN,
 		       "Found in cc principal %.*s, but expecting one of %s instead\n",
@@ -317,7 +323,9 @@ static int lkrb5_cc_check_tgt_princ(krb5_context ctx,
 			return -1;
 		}
 	} else {
-		if (svc_princ_verify_host(ctx, princ, self_nid, LL_WARN)) {
+		if (lgss_krb5_strcmp(krb5_princ_name(ctx, princ),
+				     LGSS_SVC_ROLE_STR) != 0 &&
+		    svc_princ_verify_host(ctx, princ, self_nid, LL_WARN)) {
 			logmsg(LL_DEBUG, "%.*s: doesn't belong to this node\n",
 			       krb5_princ_name(ctx, princ)->length,
 			       krb5_princ_name(ctx, princ)->data);
@@ -717,8 +725,9 @@ static int lkrb5_refresh_root_tgt_cc(krb5_context ctx, unsigned int root_flags,
 		princname = krb5_princ_name(ctx, kte.principal);
 
 		if ((root_flags & LGSS_ROOT_CRED_ROOT) != 0 &&
-		    (!lgss_krb5_strcmp(princname, LGSS_USR_ROOT_STR) ||
-		     !lgss_krb5_strcmp(princname, LGSS_SVC_HOST_STR))) {
+		    (lgss_krb5_strcmp(princname, LGSS_USR_ROOT_STR) == 0 ||
+		     lgss_krb5_strcmp(princname, LGSS_SVC_HOST_STR) == 0 ||
+		     lgss_krb5_strcmp(princname, LGSS_SVC_ROLE_STR) == 0)) {
 			flag = LGSS_ROOT_CRED_ROOT;
 		} else if ((root_flags & LGSS_ROOT_CRED_MDT) != 0 &&
 			   !lgss_krb5_strcmp(princname, LGSS_SVC_MDS_STR)) {
@@ -737,10 +746,12 @@ static int lkrb5_refresh_root_tgt_cc(krb5_context ctx, unsigned int root_flags,
 				continue;
 			}
 		} else {
-			if (svc_princ_verify_host(ctx, kte.principal, self_nid,
+			if (lgss_krb5_strcmp(princname,
+					     LGSS_SVC_ROLE_STR) != 0 &&
+			    svc_princ_verify_host(ctx, kte.principal, self_nid,
 						  LL_TRACE)) {
-				logmsg(LL_TRACE, "doesn't belong to this "
-				       "node, skip\n");
+				logmsg(LL_TRACE,
+				       "doesn't belong to this node, skip\n");
 				continue;
 			}
 		}
