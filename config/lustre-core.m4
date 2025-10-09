@@ -6128,8 +6128,6 @@ lustre/kernel_patches/targets/5.10-oe2203sp1.target
 lustre/kernel_patches/targets/5.10-oe2203sp2.target
 lustre/ldlm/Makefile
 lustre/ldlm/autoMakefile
-lustre/ec/autoMakefile
-lustre/ec/Makefile
 lustre/fid/Makefile
 lustre/fid/autoMakefile
 lustre/llite/Makefile

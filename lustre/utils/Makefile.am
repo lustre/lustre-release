@@ -6,8 +6,10 @@ AM_LDFLAGS := $(UTILS_LDFLAGS)
 
 if UTILS
 
+SUBDIRS = . erasurecode
+
 if GSS
-SUBDIRS = . gss
+SUBDIRS += gss
 GSSSRC = gss/err_util.c gss/err_util.h
 GSSLIB = -lm
 if GSS_SSK
@@ -21,6 +23,7 @@ else
 GSSSRC =
 GSSLIB =
 endif
+
 
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre

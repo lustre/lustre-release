@@ -1,5 +1,11 @@
 MODULES := ec
-ec-objs := ec_base.o
+ec-objs := ec_kmod.o
+
+lobj         = ec_base.o ec_base_aliases.o
+
+ec_base_o_CPPFLAGS = -I . -DGF_LARGE_TABLES
+
+ec-objs += $(lobj)
 
 EXTRA_DIST = $(ec-objs:%.o=%.c)
 

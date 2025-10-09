@@ -19,6 +19,8 @@ EXTRA_DIST = \
 	cfs_hash.h \
 	cl_object.h \
 	dt_object.h \
+	ec_base.h \
+	gf_vect_mul.h \
 	erasure_code.h \
 	llog_swab.h \
 	lprocfs_status.h \
