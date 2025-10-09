@@ -3973,18 +3973,16 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
 	/* pool quota type:
 	 * forbid if pool_quota_ops role is not present
 	 */
-	if ((qc_cmd == LUSTRE_Q_SETQUOTAPOOL ||
-	     qc_cmd == LUSTRE_Q_SETINFOPOOL ||
-	     qc_cmd == LUSTRE_Q_SETDEFAULT_POOL) &&
+	if (LUSTRE_Q_CMD_IS_POOL(qc_cmd) &&
 	    !(nodemap->nmf_rbac & NODEMAP_RBAC_POOL_QUOTA_OPS))
 		RETURN(false);
 
-	/* TODO:
-	 * 1. Add a check for LQA.
-	 * 2. Do we need smth like nodemap_can_getquota? Should tenant be able
-	 *    to get quota for LQA? At first look, tenant knows nothging about
-	 *    a nodemap it relates and the same should work for LQA.
+	/* lqa quota type:
+	 * forbid if lqa_quota_ops role is not present
 	 */
+	if (LUSTRE_Q_CMD_IS_LQA(qc_cmd) &&
+	    !(nodemap->nmf_rbac & NODEMAP_RBAC_LQA_QUOTA_OPS))
+		RETURN(false);
 
 	/* deny if local root has not local admin role */
 	if (!is_local_root(mapped_root_uid, nodemap))

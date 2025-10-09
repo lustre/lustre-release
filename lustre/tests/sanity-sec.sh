@@ -7328,6 +7328,7 @@ test_64a() {
 	local srv_uc=""
 	local local_admin=""
 	local pool_quota=""
+	local lqa_quota=""
 	local rbac
 
 	(( MDS1_VERSION >= $(version_code 2.15.54) )) ||
@@ -7341,6 +7342,9 @@ test_64a() {
 
 	(( MDS1_VERSION >= $(version_code 2.16.57) )) &&
 		pool_quota="pool_quota_ops"
+
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) &&
+		lqa_quota="lqa_quota_ops"
 
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -7357,6 +7361,7 @@ test_64a() {
 		    $srv_uc \
 		    $local_admin \
 		    $pool_quota \
+		    $lqa_quota \
 		    ;
 	do
 		[[ "$rbac" =~ "$role" ]] ||
@@ -7486,6 +7491,8 @@ run_test 64b "Nodemap enforces dne_ops RBAC roles"
 
 test_64c() {
 	local pool_quota=""
+	local lqa_quota=""
+	local lqa="lqa1"
 	local srv_uc=""
 	local rbac
 
@@ -7498,6 +7505,9 @@ test_64c() {
 	(( MDS1_VERSION >= $(version_code 2.16.57) )) &&
 		pool_quota="pool_quota_ops"
 
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) &&
+		lqa_quota="lqa_quota_ops"
+
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	setup_local_client_nodemap "c0" 1 1
@@ -7505,6 +7515,7 @@ test_64c() {
 	rbac="quota_ops"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	[ -z "$pool_quota" ] || rbac="$rbac,$pool_quota"
+	[ -z "$lqa_quota" ] || rbac="$rbac,$lqa_quota"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		 --property rbac --value $rbac ||
 		error "setting rbac $rbac failed (1)"
@@ -7575,6 +7586,30 @@ test_64c() {
 			error "lfs setquota -P --pool failed (2)"
 	fi
 
+	if [[ -n $lqa_quota ]]; then
+		set +vx
+		do_facet mds1 $LCTL lqa new --fsname $FSNAME --name $lqa ||
+			error "cannot create $lqa"
+		stack_trap "do_facet mds1 $LCTL lqa destroy \
+			--fsname $FSNAME --name $lqa" EXIT
+		do_facet mds1 $LCTL lqa add --fsname $FSNAME \
+			--name $lqa --range $RUNAS_ID-$RUNAS_ID ||
+				error "cannot range $RUNAS_ID-$RUNAS_ID to $lqa"
+		set -vx
+
+		$LFS setquota -U --lqa $lqa -B 309200 $DIR ||
+			error "lfs setquota -U --lqa failed (1)"
+		$LFS setquota -U --lqa $lqa -B 0 $DIR ||
+			error "lfs setquota -U --lqa failed (2)"
+		$LFS setquota -G --lqa $lqa -B 309200 $DIR ||
+			error "lfs setquota -G --lqa failed (1)"
+		$LFS setquota -G --lqa $lqa -B 0 $DIR ||
+			error "lfs setquota -G --lqa failed (2)"
+		$LFS setquota -P --lqa $lqa -B 309200 $DIR ||
+			error "lfs setquota -P --lqa failed (1)"
+		$LFS setquota -P --lqa $lqa -B 0 $DIR ||
+			error "lfs setquota -P --lqa failed (2)"
+	fi
 	set +vx
 
 	rbac="none"
@@ -7632,7 +7667,14 @@ test_64c() {
 		$LFS setquota -P --pool pool64c -B 11G $MOUNT &&
 			error "lfs setquota -P --pool should fail"
 	fi
-
+	if [[ -n $lqa_quota ]]; then
+		$LFS setquota -U --lqa $lqa -B 309200 $DIR &&
+			error "lfs setquota -U --lqa should fail"
+		$LFS setquota -G --lqa $lqa -B 309200 $DIR &&
+			error "lfs setquota -G --lqa should fail"
+		$LFS setquota -P --lqa $lqa -B 309200 $DIR &&
+			error "lfs setquota -P --lqa should fail"
+	fi
 	set +vx
 }
 run_test 64c "Nodemap enforces quota related RBAC roles"
