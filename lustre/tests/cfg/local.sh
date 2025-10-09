@@ -94,6 +94,7 @@ LDISKFS_MKFS_OPTS=${LDISKFS_MKFS_OPTS:-}
 ZFS_MKFS_OPTS=${ZFS_MKFS_OPTS:-}
 
 LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
+! $FORCE_LARGE_NID || LOAD_MODULES_REMOTE=true
 
 DEF_STRIPE_SIZE=${DEF_STRIPE_SIZE:-}   # filesystem default stripe size in bytes
 DEF_STRIPE_COUNT=${DEF_STRIPE_COUNT:-} # filesystem default stripe count

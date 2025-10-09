@@ -7,6 +7,10 @@ init_logging
 
 ALWAYS_EXCEPT="$LNET_SELFTEST_EXCEPT"
 
+if $FORCE_LARGE_NID; then
+	always_except LU-19364 smoke
+fi
+
 build_test_filter
 
 [ x$LST = x ] && skip_env "lst not found LST=$LST"
