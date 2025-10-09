@@ -938,14 +938,17 @@ test_28A() { # was test_28
 	local orig=$($LCTL get_param -n $TEST)
 	local max=$($LCTL get_param -n \
 			llite.$FSNAME-*.max_read_ahead_per_file_mb)
+	local new=$orig
 
 	orig=${orig%%.[0-9]*}
 	max=${max%%.[0-9]*}
 	echo "ORIG:$orig MAX:$max"
-	[[ $max -le $orig ]] && orig=$((max - 3))
-	echo "ORIG:$orig MAX:$max"
+	(( $max > $orig )) || new=$((max - 3))
+	echo "NEW:$new MAX:$max"
+	stack_trap "cleanup"
+	stack_trap "set_persistent_param_and_check client $TEST $PARAM $orig"
 
-	local final=$((orig + 1))
+	local final=$((new + 1))
 
 	set_persistent_param_and_check client "$TEST" "$PARAM" $final
 	final=$((final + 1))
@@ -960,8 +963,6 @@ test_28A() { # was test_28
 	else
 		echo "New config success: got $result"
 	fi
-	set_persistent_param_and_check client "$TEST" "$PARAM" $orig
-	cleanup || error "cleanup failed with rc $?"
 }
 run_test 28A "permanent parameter setting"
 
