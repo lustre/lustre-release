@@ -59,7 +59,7 @@ unload_dep_modules_inclusive() {
 	local MODULE=$1
 
 	# if $MODULE not loaded, return 0
-	lsmod | egrep -q "^\<$MODULE\>" || return 0
+	lsmod | grep -E -q "^\<$MODULE\>" || return 0
 	unload_dep_modules_exclusive $MODULE || return 1
 
 	if $DEBUG; then
@@ -81,7 +81,7 @@ while [ $# -gt 0 ]; do
 			exit 0
 			;;
 		-d|--debug-kernel)
-			if lsmod | egrep -q '^libcfs'; then
+			if lsmod | grep -E -q '^libcfs'; then
 				DEBUG='true'
 			else
 				echo "Debug unavailable: libcfs is not loaded" >&2

@@ -1,0 +1,112 @@
+source ${LBUILD_DIR}/lbuild-rhel
+
+# increment this if you have made a change that should force a new kernel
+# to build built
+BUILD_GEN+=".0"
+
+SPEC_NAME="kernel.spec"
+DEVEL_PATH_ARCH_DELIMETER="."
+USE_KABI=true
+
+# force local definition of %dist into ~/.rpmmacros
+# to avoid verbose extended strings like ".el10.centos"
+# in kernel version and rpm names
+#
+RMAC=$HOME/.rpmmacros
+grep '^%dist' $RMAC &> /dev/null || echo '%dist .el10' >> $RMAC
+
+# We modify the RHEL10 kmodtool script, because it expects
+# the kernel source to be in the correct packaged RHEL location.
+# lbuild does not put the source in correct packaged RHEL location.
+RHEL_KMODTOOL=/usr/lib/rpm/redhat/kmodtool
+LBUILD_KMODTOOL="${LBUILD_DIR}/rhel10/kmodtool"
+cp  $RHEL_KMODTOOL $LBUILD_KMODTOOL
+pushd ${LBUILD_DIR}/rhel10
+# Replace the hardcoded /usr/src/kernels with our build path
+tmp="${TOPDIR}/reused/usr/src/kernels"
+sed -i "s|/usr/src/kernels|${tmp}|g" ${LBUILD_DIR}/rhel10/kmodtool
+chmod 755 kmodtool
+popd
+# Next we replace %kernel_module_package with one that is nearly
+# identical, but calls lbuild's modified kmodtool script.
+# We need to cleanout the previous entry
+sed -i "/^%kernel_module_package/,/^)}$/d" $RMAC
+sed -e "s|REPLACE_ME|$LBUILD_KMODTOOL|" -e "s|/usr/src/kernels|${tmp}|g" \
+    ${LBUILD_DIR}/rhel10/rpmmacros.template > ${LBUILD_DIR}/rhel10/rpmmacros
+cat ${LBUILD_DIR}/rhel10/rpmmacros >> $RMAC
+
+patch_spec_rhel10() {
+	sed -i -e '/Provides: kernel-uname-r =/a\
+Provides: kernel-lustre = %{KVERREL}%{uname_suffix %{?1:+%{1}}}\\' \
+	       -e '/Provides: kernel-devel-uname-r =/a\
+Provides: kernel-devel-lustre = %{KVERREL}%{uname_suffix %{?1:+%{1}}}\\' \
+	       -e '/^    find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer -name/a\
+	cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4\
+	rm -f $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4/ext4-inode-test*' \
+	SPECS/$SPEC_NAME 2>&1 ||
+		fatal 1 "Error while editing SPECS/$SPEC_NAME"
+}
+
+patch_spec() {
+	local buildid="$1"
+
+	# the el10 .spec file requires patch names to begin with "patch-3."
+	# so rename the lustre patch from lbuild to one the .spec will like
+	mv $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch \
+		$TOPDIR/SOURCES/patch-${lnxmaj}-lustre.patch
+
+	# edit the SPEC with our changes
+	patch_spec_rhel10 "$buildid"
+	sed -i -e '/^# empty final patch to facilitate testing of kernel patches/i\
+# adds Lustre patches\
+Patch99995: patch-%{version}-lustre.patch' \
+	       -e '/^ApplyOptionalPatch linux-kernel-test.patch/i\
+\
+# lustre patch\
+ApplyOptionalPatch patch-%{version}-lustre.patch\
+' \
+	SPECS/$SPEC_NAME 2>&1 ||
+		fatal 1 "Error while editing SPECS/$SPEC_NAME"
+}
+
+unpack_linux_devel_rpm-rhel10() {
+	local callers_rpm="$1"
+
+	unpack_linux_devel_rpm-rhel "$callers_rpm"
+}
+
+get_rpmbuildopts() {
+	if $KERNEL_LUSTRE_NAMING; then
+		echo -e "--define \"variant -lustre\" \c"
+	fi
+
+	echo "--with firmware --without debug"
+}
+
+find_linux_rpm-rhel10() {
+	local prefix="$1"
+	local wanted_kernel="$2"
+	local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
+
+	find_linux_rpm-rhel "$prefix" "$wanted_kernel" "$pathtorpms"
+}
+
+kernel_srpm_location() {
+	local base_os="http://mirror.stream.centos.org/10-stream/BaseOS"
+
+	echo "$base_os/source/tree/Packages/"
+}
+
+kernel_debuginfo_location() {
+	local base_os="http://mirror.stream.centos.org/10-stream/BaseOS"
+
+	echo "$base_os/$TARGET_ARCH/debug/tree/Packages/"
+}
+
+apply_kmod_requires_conflicts() {
+	if $PATCHLESS; then
+		# don't allow the patched kernel to be considered as
+		# a valid kernel for the patchless client
+		echo "Conflicts:      kernel-lustre" >> rpm/kmp-lustre.preamble
+	fi
+}
