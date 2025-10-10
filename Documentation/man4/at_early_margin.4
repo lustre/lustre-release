@@ -1,0 +1,44 @@
+.TH AT_EARLY_MARGIN 4 2025-10-09 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+at_early_margin \- How soon before an RPC deadline to send an early reply
+.SH SYNOPSIS
+.SY "lctl set_param"
+.YS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.TP
+.B Default
+.B at_early_margin=5
+.SH DESCRIPTION
+.B at_early_margin
+is the amount of time (in seconds) before the Lustre server sends an early
+reply to an RPC.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B at_early_margin
+.EE
+.SH EXAMPLES
+.EX
+at_early_margin=5
+.EE
+.SH AVAILABILITY
+.B at_early_margin
+is part of the
+.BR lustre (7)
+filesystem package.
+.\" commit #
+.SH SEE ALSO
+.BR at_extra (4),
+.BR at_history (4),
+.BR at_max (4),
+.BR at_min (4),
+.BR ldlm_enqueue_min (4)

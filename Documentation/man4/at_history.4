@@ -1,0 +1,67 @@
+.TH AT_HISTORY 4 2025-10-09 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+at_history \- Request history maximum age for adaptime timeouts (sec)
+.SH SYNOPSIS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.TP
+.B Default
+.B at_history=600
+.SH DESCRIPTION
+The adaptive timeout will remember the slowest event that took place in the
+past. However, if this event is older than
+.B at_history
+seconds, then it will be discarded for future calculations of the timeout.
+This means that a larger
+.B at_history
+will cause the timeout to be more stable, but it will also take longer to
+react to a change in the network.
+Similarly, a smaller
+.B at_history
+will cause the timeout to be more responsive, but it will also be more
+volatile.
+.P:
+.B at_history
+is preferred to be set as a per-target tunable using the
+.BI *. FS_NAME - TARGET .at_history
+parameter instead of the global parameter.
+This avoid issues if a single client mounts two filesystems with different
+.B at_history
+values.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B at_history
+.EE
+.SH EXAMPLES
+.EX
+at_history=600
+.EE
+.SH AVAILABILITY
+.B at_history
+is part of the
+.BR lustre (7)
+filesystem package.
+.\" commit #
+.SH SEE ALSO
+.BR at_early_margin (4),
+.BR at_extra (4),
+.BR at_max (4),
+.BR at_min (4),
+.BR ldlm_enqueue_min (4),
+.BR lmv.target_obds.at_history (4),
+.BR lov.target_obds.at_history (4),
+.BR mdc.at_history (4),
+.BR mdt.at_history (4),
+.BR mgc.at_history (4),
+.BR mgs.at_history (4),
+.BR obdfilter.at_history (4),
+.BR osc.at_history (4)

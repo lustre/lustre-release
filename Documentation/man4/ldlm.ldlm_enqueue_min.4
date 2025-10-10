@@ -1,0 +1,58 @@
+.TH LDLM.LDLM_ENQUEUE_MIN 4 2025-10-09 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+ldlm.ldlm_enqueue_min \- lock enqueue timeout minimum
+.SH SYNOPSIS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.TP
+.B Default
+.B ldlm.ldlm_enqueue_min=100
+.SH DESCRIPTION
+.B ldlm_enqueue_min
+is the minimum lock enqueue time.
+The time it takes to enqueue a lock, shown as the ldlm_enqueue operation in the
+stats files, is the maximum of the measured enqueue estimate
+(influenced by at_min and at_max parameters),
+multiplied by a weighting factor and the value of ldlm_enqueue_min.
+.PP
+Lustre Distributed Lock Manager (LDLM) lock enqueues have a dedicated minimum
+ldlm_enqueue_min. Lock enqueue timeouts increase as the measured enqueue times
+increase (similar to adaptive timeouts).
+.PP
+It is preferred to set
+.B ldlm_enqueue_min
+as a per-target tunable with
+.BI *. FSNAME *.ldlm_enqueue_min
+instead of the global parameter. This avoids issues if a client mounts multiple
+filesystems with different
+.B ldlm_enqueue_min
+tunable settings.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B ldlm.ldlm_enqueue_min
+.EE
+.SH EXAMPLES
+.EX
+.B ldlm.ldlm_enqueue_min=100
+.EE
+.SH AVAILABILITY
+.B ldlm_enqueue_min
+is part of the
+.BR lustre (7)
+filesystem package.
+.\" commit #
+.SH SEE ALSO
+.BR at_early_margin (4),
+.BR at_extra (4),
+.BR at_history (4),
+.BR at_max (4),
+.BR at_min (4)

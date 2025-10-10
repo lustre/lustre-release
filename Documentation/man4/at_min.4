@@ -1,0 +1,67 @@
+.TH AT_MIN 4 2025-10-09 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+at_min \- Adaptive timeout minimum (sec)
+.SH SYNOPSIS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.TP
+.B Default
+.B at_min = 5
+.SH DESCRIPTION
+.B at_min
+is the minimum processing time that a server will report.
+Ideally, at_min should be left at its default value.
+Clients base their timeouts on this value,
+but they do not use this value directly.
+.PP
+If, for some reason (usually due to temporary network outages or sudden spikes
+in load immediately after mount),
+the adaptive timeout value is too short and clients time out their RPCs,
+you can increase the at_min value to compensate for this.
+.PP
+Adaptive timeouts are used to determine appropriate waiting times before the
+client will resend an RPC.
+.PP
+It is preferred to set
+.B at_min
+as a per-target tunable using the
+.BI *. FSNAME - TARGET *.at_min
+parameter instead of the global parameter. This avoids issues if a single
+client mounts two separate filesystems with different at_min tunable settings.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B at_min
+.EE
+.SH EXAMPLES
+.EX
+at_min=5
+.EE
+.SH AVAILABILITY
+.B at_min
+is part of the
+.BR lustre (7)
+filesystem package.
+.\" commit #
+.SH SEE ALSO
+.BR at_early_margin (4),
+.BR at_extra (4),
+.BR at_history (4),
+.BR at_max (4),
+.BR ldlm_enqueue_min (4),
+.BR lmv.target_obds.at_min (4),
+.BR lov.target_obds.at_min (4),
+.BR mdc.at_min (4),
+.BR mdt.at_min (4),
+.BR mgc.at_min (4),
+.BR mgs.at_min (4),
+.BR obdfilter.at_min (4),
+.BR osc.at_min (4)

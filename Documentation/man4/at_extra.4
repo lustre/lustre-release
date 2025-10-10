@@ -1,0 +1,56 @@
+.TH AT_EXTRA 4 2025-10-09 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+at_extra \- How much extra time to give with each early reply (in seconds)
+.SH SYNOPSIS
+.SY "lctl set_param"
+.YS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.TP
+.B Default
+.B at_extra=30
+.SH DESCRIPTION
+.B at_extra
+is the incremental amount of time that a server requests for every time there is
+an early reply. The server does not know how much time the RPC will take, so it
+asks for a fixed value. The default provides a balance between sending too many
+early replies for the same RPC and overestimating the actual completion time.
+.PP
+When a server finds a queued request about to time out and needs to send an
+early reply out, the server adds the at_extra value. If the time expires,
+the Lustre server drops the request, and the client enters recovery status and
+reconnects to restore the connection to normal status.
+.PP
+If you see multiple early replies for the same RPC asking for 30-second
+increases, change at_extra to a larger number to cut down on early replies sent
+and, therefore, network load.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B at_extra
+.EE
+.SH EXAMPLES
+If there are many early replies, increasing at_extra will reduce network load:
+.EX
+lctl set_param -P at_extra=90
+.EE
+.SH AVAILABILITY
+.B at_extra
+is part of the
+.BR lustre (7)
+filesystem package.
+.\" commit #
+.SH SEE ALSO
+.BR at_early_margin (4),
+.BR at_history (4),
+.BR at_max (4),
+.BR at_min (4),
+.BR ldlm_enqueue_min (4)

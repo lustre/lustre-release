@@ -1,0 +1,75 @@
+.TH AT_MAX 4 2025-10-09 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+at_max \- Adaptive timeout maximum (sec)
+.SH SYNOPSIS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.TP
+.B Default
+.B at_max=600
+.SH DESCRIPTION
+.B at_max
+is an upper limit on the service time estimate. If
+.B at_max
+is reached, then the RPC timeout will not increase further even if RPCs
+take longer to complete under heavy load.
+Adaptive timeouts are used to determine appropriate waiting times.
+This includes the rolling maximum RPC and network delays over the past
+.BR at_history (4)
+seconds.
+.PP
+Setting
+.B at_max
+to 0 causes adaptive timeouts to be disabled and the fixed
+.B timeout
+parameter is used to calculate timeouts instead.
+.PP
+If slow hardware causes the service estimate to increase beyond the default
+.B at_max
+value, increase
+.B at_max
+to the maximum time you are willing to wait for an RPC completion.
+.PP
+It is preferred to set
+.B at_max
+as a per-target tunable using the
+.BI *. FSNAME - TARGET *.at_max
+parameter instead of the global at_max parameter. This avoids issues if a
+single client mounts two separate filesystems with different at_max settings.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B at_max
+.EE
+.SH EXAMPLES
+.EX
+at_max=600
+.EE
+.SH AVAILABILITY
+.B at_max
+is part of the
+.BR lustre (7)
+filesystem package.
+.\" commit #
+.SH SEE ALSO
+.BR at_early_margin (4),
+.BR at_extra (4),
+.BR at_history (4),
+.BR at_min (4),
+.BR ldlm_enqueue_min (4),
+.BR lmv.target_obds.at_max (4),
+.BR lov.target_obds.at_max (4),
+.BR mdc.at_max (4),
+.BR mdt.at_max (4),
+.BR mgc.at_max (4),
+.BR mgs.at_max (4),
+.BR obdfilter.at_max (4),
+.BR osc.at_max (4)
