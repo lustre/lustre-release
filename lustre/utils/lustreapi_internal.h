@@ -247,4 +247,13 @@ void llapi_stats_log(struct timespec *now, struct timespec *start_time,
 		     struct timespec *last_print, int stats_interval_sec,
 		     uint64_t read_bytes, uint64_t write_bytes,
 		     uint64_t offset, uint64_t file_size_bytes);
+
+#ifndef BIT
+#define BIT(nr) (1ULL << (nr))
+#endif
+int llapi_convert_mask2str(char *str, int size, __u64 mask,
+			   const char *(*bit2str)(int), char sep);
+int llapi_convert_str2mask(const char *str, const char *(*bit2str)(int bit),
+			   __u64 *oldmask, __u64 minmask, __u64 allmask,
+			   __u64 defmask);
 #endif /* _LUSTREAPI_INTERNAL_H_ */
