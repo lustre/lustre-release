@@ -391,6 +391,7 @@ static const struct req_msg_field *ost_grant_shrink_client[] = {
 static const struct req_msg_field *mds_getinfo_client[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_GETINFO_KEY,
+	&RMF_GETINFO_VAL
 };
 
 static const struct req_msg_field *mds_fid2path_client[] = {

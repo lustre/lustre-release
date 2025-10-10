@@ -2045,6 +2045,14 @@ struct changelog_ext_xattr {
 	char cr_xattr[XATTR_NAME_MAX + 1]; /**< zero-terminated string. */
 };
 
+/* Changelog filter for kernel-side filtering */
+struct changelog_filter {
+	__u64 cf_mask;
+	__u32 cf_user_id;
+	__u32 cf_padding;
+	char  cf_username[30]; /* CHANGELOG_USER_NAMELEN_FULL */
+};
+
 static inline struct changelog_ext_extra_flags *changelog_rec_extra_flags(
 	const struct changelog_rec *rec);
 

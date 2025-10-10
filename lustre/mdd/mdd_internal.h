@@ -462,6 +462,12 @@ extern int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry,
 extern int lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry,
 				       mode_t *mode_p, int count);
 
+/* mdd_mask.c */
+int mdd_changelog_user_lookup(const struct lu_env *env,
+			      struct mdd_device *mdd,
+			      const struct changelog_filter *req,
+			      struct changelog_filter *reply);
+
 /* inline functions */
 static inline int lu_device_is_mdd(struct lu_device *d)
 {

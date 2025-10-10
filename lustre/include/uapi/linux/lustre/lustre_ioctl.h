@@ -163,6 +163,7 @@ enum obd_abort_recovery_flags {
 #define OBD_IOC_CHANGELOG_REG	_IOW('f', 177, struct obd_ioctl_data)
 #define OBD_IOC_CHANGELOG_DEREG	_IOW('f', 178, struct obd_ioctl_data)
 #define OBD_IOC_CHANGELOG_CLEAR	_IOW('f', 179, struct obd_ioctl_data)
+#define OBD_IOC_CHANGELOG_FILTER _IOW('f', 179, struct changelog_filter)
 #define OBD_IOC_PROCESS_CFG	_IOWR('f', 184, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PARAM		_IOW('f', 187, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_POOL		_IOWR('f', 188, OBD_IOC_DATA_TYPE)

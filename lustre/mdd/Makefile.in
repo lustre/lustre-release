@@ -7,6 +7,7 @@
 MODULES := mdd
 mdd-objs := \
 	mdd_acl.o \
+	mdd_changelog.o \
 	mdd_device.o \
 	mdd_dir.o \
 	mdd_lock.o \

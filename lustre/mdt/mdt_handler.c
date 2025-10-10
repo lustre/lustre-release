@@ -6248,6 +6248,46 @@ static int mdt_llog_open(struct tgt_session_info *tsi)
 	RETURN(tgt_llog_open(tsi));
 }
 
+static int mdt_changelog_get_user_info(struct tgt_session_info *tsi)
+{
+	struct mdt_thread_info *info = tsi2mdt_info(tsi);
+	struct mdt_device *mdt = info->mti_mdt;
+	struct changelog_filter *in;
+	struct changelog_filter *out;
+	int rc = 0;
+
+	ENTRY;
+
+	/* Get data from request */
+	in = req_capsule_client_get(tsi->tsi_pill, &RMF_GETINFO_VAL);
+	if (in == NULL) {
+		DEBUG_REQ(D_IOCTL, tgt_ses_req(tsi), "no GETINFO VAL");
+		RETURN(err_serious(-EPROTO));
+	}
+
+	/* Set reply size and prepare for reply data */
+	req_capsule_set_size(tsi->tsi_pill, &RMF_GETINFO_VAL, RCL_SERVER,
+			     sizeof(struct changelog_filter));
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (rc)
+		RETURN(err_serious(rc));
+	out = req_capsule_server_get(tsi->tsi_pill, &RMF_GETINFO_VAL);
+	if (out == NULL)
+		RETURN(err_serious(-EPROTO));
+
+	/* Forward to MDD layer */
+	rc = mdt->mdt_child->md_ops->mdo_iocontrol(info->mti_env,
+						   mdt->mdt_child,
+						   OBD_IOC_CHANGELOG_FILTER,
+						   sizeof(*in), in);
+	out->cf_mask = in->cf_mask;
+	out->cf_user_id = in->cf_user_id;
+	strscpy(out->cf_username, in->cf_username, sizeof(out->cf_username));
+
+	mdt_thread_info_fini(info);
+	RETURN(rc);
+}
+
 #define OBD_FAIL_OST_READ_NET	OBD_FAIL_OST_BRW_NET
 #define OBD_FAIL_OST_WRITE_NET	OBD_FAIL_OST_BRW_NET
 #define OST_BRW_READ	OST_READ
@@ -8030,6 +8070,9 @@ int mdt_get_info(struct tgt_session_info *tsi)
 		mdt_thread_info_fini(info);
 	} else if (KEY_IS(KEY_FIEMAP)) {
 		rc = mdt_fiemap_get(tsi);
+	} else if (KEY_IS(KEY_CHANGELOG_USER)) {
+		req_capsule_extend(tsi->tsi_pill, &RQF_MDS_GET_INFO);
+		rc = mdt_changelog_get_user_info(tsi);
 	} else {
 		rc = err_serious(-EOPNOTSUPP);
 	}

@@ -2271,6 +2271,10 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 		barrier_exit(mdd->mdd_bottom);
 		RETURN(rc);
 	}
+	case OBD_IOC_CHANGELOG_FILTER: {
+		rc = mdd_changelog_user_lookup(env, mdd, karg, karg);
+		RETURN(rc);
+	}
 	case OBD_IOC_START_LFSCK: {
 		rc = lfsck_start(env, mdd->mdd_bottom, karg);
 		RETURN(rc);
