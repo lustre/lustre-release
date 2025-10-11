@@ -1684,6 +1684,12 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 	/* gcc8 dislikes when strcmp() is called against NULL */
 	return "";
 }
+
+static inline void bip_set_seed(struct bio_integrity_payload *bip,
+				sector_t seed)
+{
+}
+
 #endif /* !CONFIG_BLK_DEV_INTEGRITY */
 
 #ifdef HAVE_BLK_INTEGRITY_NOVERIFY

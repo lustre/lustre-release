@@ -280,6 +280,7 @@ static void bio_integrity_fault_inject(struct bio *bio)
 	}
 }
 
+#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)
 static int bio_dif_compare(__u16 *expected_guard_buf, void *bio_prot_buf,
 			   unsigned int sectors, int tuple_size)
 {
@@ -347,6 +348,14 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 	}
 	return 0;
 }
+#else /* !IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY) */
+static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
+				     struct osd_iobuf *iobuf, int index)
+{
+	return 0;
+}
+#endif
+
 
 #ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
 static blk_status_t osd_bio_integrity_process(struct bio *bio,
