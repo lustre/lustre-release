@@ -35,7 +35,7 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 			     const struct lu_fid *parent_fid,
 			     struct ptlrpc_request **reqp,
 			     ldlm_blocking_callback cb_blocking,
-			     __u64 extra_lock_flags,
+			     __u64 extra_lock_flags, __u32 *suppgids,
 			     const char *secctx_name, __u32 secctx_name_size)
 {
 	struct obd_device	*obd = exp->exp_obd;
@@ -99,6 +99,14 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 		       DFID"\n",
 		       secctx_name_size, secctx_name, PFID(&body->mbo_fid1));
 	}
+	/* add suppgids from client */
+	if (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_OPEN) && suppgids) {
+		op_data->op_suppgids[0] = suppgids[0];
+		op_data->op_suppgids[1] = suppgids[1];
+	} else {
+		op_data->op_suppgids[0] = -1;
+		op_data->op_suppgids[1] = -1;
+	}
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, it, &req, cb_blocking,
 			    extra_lock_flags);
@@ -136,7 +144,7 @@ out:
 int lmv_revalidate_slaves(struct obd_export *exp,
 			  const struct lmv_stripe_md *lsm,
 			  ldlm_blocking_callback cb_blocking,
-			  int extra_lock_flags)
+			  int extra_lock_flags, __u32 *suppgids)
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;
@@ -189,6 +197,13 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		 */
 		op_data->op_bias = MDS_CROSS_REF;
 		op_data->op_cli_flags = CLI_NO_SLOT;
+		if (suppgids) {
+			op_data->op_suppgids[0] = suppgids[0];
+			op_data->op_suppgids[1] = suppgids[1];
+		} else {
+			op_data->op_suppgids[0] = -1;
+			op_data->op_suppgids[1] = -1;
+		}
 
 		tgt = lmv_tgt_retry(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
 		if (!tgt)
@@ -391,6 +406,7 @@ retry:
 	if (unlikely((body->mbo_valid & OBD_MD_MDS))) {
 		rc = lmv_intent_remote(exp, it, &op_data->op_fid1, reqp,
 				       cb_blocking, extra_lock_flags,
+				       op_data->op_suppgids,
 				       op_data->op_file_secctx_name,
 				       op_data->op_file_secctx_name_size);
 		if (rc != 0)
@@ -487,7 +503,8 @@ retry:
 			rc = lmv_revalidate_slaves(exp,
 						   &op_data->op_lso2->lso_lsm,
 						   cb_blocking,
-						   extra_lock_flags);
+						   extra_lock_flags,
+						   op_data->op_suppgids);
 			if (rc != 0)
 				RETURN(rc);
 		}
@@ -516,7 +533,7 @@ retry:
 	/* Not cross-ref case, just get out of here. */
 	if (unlikely((body->mbo_valid & OBD_MD_MDS))) {
 		rc = lmv_intent_remote(exp, it, NULL, reqp, cb_blocking,
-				       extra_lock_flags,
+				       extra_lock_flags, op_data->op_suppgids,
 				       op_data->op_file_secctx_name,
 				       op_data->op_file_secctx_name_size);
 		if (rc != 0)

@@ -278,6 +278,12 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 			mode >>= 3;
 	}
 
+	CDEBUG(D_SEC,
+	       "Checking permissions for "DFID" mask %x la_mode %05o mode %05o la_uid %u la_gid %u, fsuid %u, fsgid %u, suppgids %d %d\n",
+	       PFID(mdd_object_fid(obj)), may_mask, la->la_mode, mode,
+	       la->la_uid, la->la_gid, uc->uc_fsuid, uc->uc_fsgid,
+	       uc->uc_suppgids[0], uc->uc_suppgids[1]);
+
 	if (((mode & may_mask & S_IRWXO) == may_mask))
 		RETURN(0);
 
@@ -292,8 +298,8 @@ check_capabilities:
 		if (cap_raised(uc->uc_cap, CAP_DAC_READ_SEARCH))
 			RETURN(0);
 
-	CDEBUG(D_SEC, "permission denied, mode %x, fsuid %u, uid %u\n",
-	       la->la_mode, uc->uc_fsuid, la->la_uid);
+	CDEBUG(D_SEC, "permission denied for "DFID"\n",
+	       PFID(mdd_object_fid(obj)));
 
 	RETURN(-EACCES);
 }

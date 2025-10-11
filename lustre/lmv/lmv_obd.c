@@ -4218,7 +4218,7 @@ static int lmv_merge_attr(struct obd_export *exp,
 	if (!lmv_dir_striped(lso))
 		return 0;
 
-	rc = lmv_revalidate_slaves(exp, lsm, cb_blocking, 0);
+	rc = lmv_revalidate_slaves(exp, lsm, cb_blocking, 0, NULL);
 	if (rc < 0)
 		return rc;
 
