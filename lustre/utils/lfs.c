@@ -14194,6 +14194,9 @@ void print_chunks(const char *fname, struct verify_chunk *chunks,
  * print_checksums() - Print CRC-32 checksum values.
  * @chunk: A chunk and its corresponding valid mirror ids.
  * @crc:   CRC-32 checksum values on the chunk for each valid mirror.
+ * @pos:   Start offset of the chunk.
+ * @len:   Length of the chunk.
+ * @layout: Mirror component layout.
  *
  * This function prints CRC-32 checksum values on @chunk for
  * each valid mirror that covers it.
@@ -14202,16 +14205,163 @@ void print_chunks(const char *fname, struct verify_chunk *chunks,
  */
 static inline
 void print_checksums(struct verify_chunk *chunk, unsigned long *crc,
-		     unsigned long long pos, unsigned long long len)
+		     unsigned long long pos, unsigned long long len,
+		     struct llapi_layout *layout)
 {
 	int i;
 
 	fprintf(stdout,
 		"CRC-32 checksum value for chunk "DEXT":\n", pos, pos + len);
-	for (i = 0; i < chunk->mirror_count; i++)
-		fprintf(stdout, "Mirror %u:\t%#lx\n",
-			chunk->mirror_id[i], crc[i]);
+	for (i = 0; i < chunk->mirror_count; i++) {
+		bool is_stale = false;
+
+		/* Check if this mirror is stale */
+		if (layout) {
+			int rc = llapi_layout_comp_use(layout,
+						   LLAPI_LAYOUT_COMP_USE_FIRST);
+
+			while (rc == 0) {
+				uint32_t mirror_id, comp_flags;
+
+				rc = llapi_layout_mirror_id_get(layout,
+								&mirror_id);
+				if (rc == 0 &&
+				    mirror_id == chunk->mirror_id[i]) {
+					rc = llapi_layout_comp_flags_get(layout,
+								   &comp_flags);
+
+					if (rc == 0 &&
+					    (comp_flags & LCME_FL_STALE))
+						is_stale = true;
+
+					break;
+				}
+				rc = llapi_layout_comp_use(layout,
+						    LLAPI_LAYOUT_COMP_USE_NEXT);
+				if (rc < 0)
+					break;
+			}
+		}
+
+		if (is_stale)
+			fprintf(stdout, "Mirror %u:\t%#lx (stale)\n",
+				chunk->mirror_id[i], crc[i]);
+		else
+			fprintf(stdout, "Mirror %u:\t%#lx\n",
+				chunk->mirror_id[i], crc[i]);
+	}
 	fprintf(stdout, "\n");
+}
+
+/**
+ * print_stale_mirrors() - Print stale mirrors with checksums.
+ * @fd:     File descriptor of the mirrored file.
+ * @layout: Mirror component layout.
+ * @file_size: Size of the file.
+ * @verbose: Verbose mode.
+ *
+ * This function finds stale mirrors and displays them with checksums
+ * in the same format as normal verification output.
+ *
+ * Return: number of stale mirrors found, or negative error code.
+ */
+static inline
+int print_stale_mirrors(int fd, struct llapi_layout *layout,
+			size_t file_size, int verbose)
+{
+	int stale_count = 0;
+	int rc = 0;
+	bool header_printed = false;
+
+	if (!layout)
+		goto check_only;
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	while (rc == 0) {
+		uint32_t mirror_id, comp_flags;
+
+		rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+		if (rc < 0)
+			break;
+
+		rc = llapi_layout_comp_flags_get(layout, &comp_flags);
+		if (rc < 0)
+			break;
+
+		if (comp_flags & LCME_FL_STALE) {
+			/* Print header only once */
+			if (!header_printed) {
+				fprintf(stdout, "CRC-32 checksum value for chunk [0, 0x%lx):\n",
+					file_size);
+				header_printed = true;
+			}
+
+			/* Calculate and display checksum for stale mirror */
+			const size_t buflen = 4 * 1024 * 1024; /* 4M */
+			void *buf;
+			ssize_t bytes_read;
+			unsigned long crc;
+
+			if (posix_memalign(&buf, sysconf(_SC_PAGESIZE),
+					   buflen) == 0) {
+				bytes_read = llapi_mirror_read(fd,
+							       mirror_id, buf,
+							       MIN(buflen,
+								   file_size),
+							       0);
+				if (bytes_read > 0) {
+					crc = crc32(crc32(0L, Z_NULL, 0), buf,
+						    bytes_read);
+					fprintf(stdout,
+						"Mirror %u:\t%#lx (stale)\n",
+						mirror_id, crc);
+				} else {
+					fprintf(stdout,
+						"Mirror %u:\t(stale - read error)\n",
+						mirror_id);
+				}
+				free(buf);
+			} else {
+				fprintf(stdout,
+					"Mirror %u:\t(stale - alloc error)\n",
+					mirror_id);
+			}
+			stale_count++;
+		}
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0) {
+			rc = 0; /* End of components */
+			break;
+		}
+	}
+
+	if (header_printed)
+		fprintf(stdout, "\n");
+
+	return stale_count;
+
+check_only:
+	/* Just count stale mirrors without printing */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	while (rc == 0) {
+		uint32_t comp_flags;
+
+		rc = llapi_layout_comp_flags_get(layout, &comp_flags);
+		if (rc < 0)
+			break;
+
+		if (comp_flags & LCME_FL_STALE)
+			stale_count++;
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0) {
+			rc = 0; /* End of components */
+			break;
+		}
+	}
+
+	return stale_count;
 }
 
 /**
@@ -14259,18 +14409,20 @@ void filter_mirror_id(struct verify_chunk *chunks, int chunk_count,
 
 /**
  * lfs_mirror_prepare_chunk() - Find mirror chunks to be verified.
- * @layout:      Mirror component list.
- * @chunks:      Array of chunks.
- * @chunks_size: Array size of @chunks.
+ * @layout:        Mirror component list.
+ * @chunks:        Array of chunks.
+ * @chunks_size:   Array size of @chunks.
+ * @include_stale: Whether to include stale mirrors in chunks.
  *
  * This function scans the components in @layout from offset 0 to LUSTRE_EOF
  * to find out chunk segments and store them in @chunks array.
  *
  * The @mirror_id array in each element of @chunks will store the valid
- * mirror ids that cover the chunk. If a mirror component covering the
- * chunk has LCME_FL_STALE or LCME_FL_OFFLINE flag, then the mirror id
- * will not be stored into the @mirror_id array, and the chunk for that
- * mirror will not be verified.
+ * mirror ids that cover the chunk. If @include_stale is false and a mirror
+ * component covering the chunk has LCME_FL_STALE or LCME_FL_OFFLINE flag,
+ * then the mirror id will not be stored into the @mirror_id array, and the
+ * chunk for that mirror will not be verified. If @include_stale is true,
+ * stale mirrors will be included for verification.
  *
  * The @mirror_count in each element of @chunks will store the number of
  * mirror ids in @mirror_id array. If @mirror_count is 0, it indicates the
@@ -14300,7 +14452,7 @@ void filter_mirror_id(struct verify_chunk *chunks, int chunk_count,
 static inline
 int lfs_mirror_prepare_chunk(struct llapi_layout *layout,
 			     struct verify_chunk *chunks,
-			     size_t chunks_size)
+			     size_t chunks_size, bool include_stale)
 {
 	uint64_t start;
 	uint64_t end;
@@ -14348,7 +14500,8 @@ int lfs_mirror_prepare_chunk(struct llapi_layout *layout,
 				goto error;
 			}
 
-			if (flags & LCME_FL_STALE || flags & LCME_FL_OFFLINE)
+			if (!include_stale && (flags & LCME_FL_STALE ||
+					       flags & LCME_FL_OFFLINE))
 				goto next;
 
 			rc = llapi_layout_mirror_id_get(layout, &mirror_id);
@@ -14406,6 +14559,7 @@ error:
  * @file_size: Size of the mirrored file.
  * @chunk:     A chunk and its corresponding valid mirror ids.
  * @verbose:   Verbose mode.
+ * @layout:    Mirror component layout.
  *
  * This function verifies a @chunk contains exactly the same data
  * ammong the mirrors that cover it.
@@ -14418,7 +14572,8 @@ error:
  */
 static inline
 int lfs_mirror_verify_chunk(int fd, size_t file_size,
-			    struct verify_chunk *chunk, int verbose)
+			    struct verify_chunk *chunk, int verbose,
+			    struct llapi_layout *layout)
 {
 	const size_t buflen = DEFAULT_IO_BUFLEN;
 	void *buf;
@@ -14498,7 +14653,8 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 			}
 		}
 		if (verbose || print)
-			print_checksums(chunk, crc_array, pos, bytes_read);
+			print_checksums(chunk, crc_array, pos, bytes_read,
+					layout);
 
 		pos += bytes_read;
 		bytes_done += bytes_read;
@@ -14620,7 +14776,8 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 
 	/* find out mirror chunks to be verified */
 	chunk_count = lfs_mirror_prepare_chunk(layout, chunks_array,
-					       ARRAY_SIZE(chunks_array));
+					       ARRAY_SIZE(chunks_array),
+					       ids_nr > 0);
 	if (chunk_count < 0) {
 		rc = chunk_count;
 		goto free_layout;
@@ -14632,6 +14789,16 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 
 	if (verbose > 2)
 		print_chunks(fname, chunks_array, chunk_count);
+
+	if (ids_nr <= 0) {
+		/* Check for and display stale mirrors */
+		rc1 = print_stale_mirrors(fd, layout, stbuf.st_size, verbose);
+		if (rc1 > 0) {
+			rc2 = -ESTALE;
+		} else if (rc1 < 0) {
+			rc2 = rc1;
+		}
+	}
 
 	for (idx = 0; idx < chunk_count; idx++) {
 		if (chunks_array[idx].chunk.e_start >= stbuf.st_size) {
@@ -14677,7 +14844,8 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 
 		/* verify one chunk */
 		rc1 = lfs_mirror_verify_chunk(fd, stbuf.st_size,
-					      &chunks_array[idx], verbose);
+					      &chunks_array[idx], verbose,
+					      layout);
 		if (rc1 < 0) {
 			rc2 = rc1;
 			if (!verbose) {

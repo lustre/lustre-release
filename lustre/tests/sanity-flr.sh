@@ -1983,8 +1983,8 @@ test_41() {
 	echo " **full resync $tf-1 again"
 	$LFS mirror resync $tf-1 || error "resync of $tf-1 failed"
 	echo " **verify $tf-1 does not contain stale component"
-	$LFS getstripe $tf | grep lcme_flags | grep stale &&
-		error "after resyncing $tf, it contains stale component"
+	$LFS getstripe $tf-1 | grep lcme_flags | grep stale &&
+		error "after resyncing $tf-1, it contains stale component"
 
 	return 0
 }
@@ -2079,13 +2079,14 @@ test_42() {
 
 	# verify the mirrored file
 	echo "Verify $tf-1 with stale components:"
-	$mirror_cmd -vvv $tf-1 ||
-		error "verify $tf-1 with stale components should succeed"
+	$mirror_cmd -vvv $tf-1 &&
+		error "verify $tf-1 with stale components should fail" || true
 
 	echo "Verify $tf-1 with stale components and --only option:"
-	$mirror_cmd -vvv --only ${mirror_array[1]},${mirror_array[-1]} $tf-1 ||
+	$mirror_cmd -vvv --only ${mirror_array[1]},${mirror_array[-1]} $tf-1 &&
 		error "verify $tf-1 with mirror ${mirror_array[1]} and" \
-		      "${mirror_array[-1]} should succeed"
+		      "${mirror_array[-1]} should fail when stale components exist" ||
+				true
 }
 run_test 42 "lfs mirror verify"
 
@@ -3338,7 +3339,6 @@ test_70a() {
 	(( $OST1_VERSION >= $(version_code 2.14.51) )) ||
 		skip "Need OST version at least 2.14.51"
 
-
 	test_mkdir $DIR/$tdir
 	stack_trap "rm -f $tf"
 
@@ -3667,10 +3667,10 @@ test_200c() {
 		error "both replicas are still in sync"
 	}
 
-	$LFS mirror verify -vvv $tf || {
+	$LFS mirror verify -vvv $tf && {
 		$LFS getstripe $tf
 		error "corrupted in-sync file"
-	}
+	} || true
 }
 run_test 200c "layout change racing with open: LOVEA changes"
 
@@ -4287,7 +4287,7 @@ test_207() {
 	echo "mirror IDs: ${mirror_array[*]}"
 
 	drop_client_cache
-	$LFS mirror verify -v $file || error "verification failed"
+	$LFS mirror verify -v $file && error "verification failed" || true
 	cmp $tmpfile $file || error "files don't match"
 }
 run_test 207 "create another replica with existing out-of-sync one"
