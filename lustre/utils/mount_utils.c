@@ -1334,7 +1334,7 @@ int load_shared_keys(struct mount_opts *mop, bool client)
 
 	/* Load individual keys or a directory of them */
 	if (S_ISREG(sbuf.st_mode)) {
-		return sk_load_keyfile(path, client, true, NULL);
+		return sk_load_keyfile(path, client, true, NULL, false, -1);
 	} else if (!S_ISDIR(sbuf.st_mode)) {
 		fprintf(stderr, "Invalid shared key path: %s\n", path);
 		return -ENOKEY;
@@ -1379,7 +1379,7 @@ int load_shared_keys(struct mount_opts *mop, bool client)
 		if (!S_ISREG(sbuf.st_mode))
 			continue;
 
-		rc = sk_load_keyfile(fullpath, client, false, NULL);
+		rc = sk_load_keyfile(fullpath, client, false, NULL, false, -1);
 		if (rc < 0)
 			fprintf(stderr, "Failed to load key %s\n", fullpath);
 		else

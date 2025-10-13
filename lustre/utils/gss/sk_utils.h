@@ -147,8 +147,8 @@ enum sk_ctx_init_buffers {
 	SK_RESP_BUFFERS	= 4,
 };
 
-/* String consisting of "lustre:fsname:nodemap_hash" */
-#define SK_DESCRIPTION_SIZE (9 + MTI_NAME_MAXLEN + LUSTRE_NODEMAP_NAME_LENGTH)
+/* String consisting of "lustre:fsname:nodemap:yyyymmdd_HHMMSS_USECS" */
+#define SK_DESCRIPTION_SIZE (32 + MTI_NAME_MAXLEN + LUSTRE_NODEMAP_NAME_LENGTH)
 
 enum sk_key_type {
 	SK_TYPE_INVALID	= 0x0,
@@ -392,7 +392,8 @@ int gen_ssk_prime(struct sk_keyfile_config *config);
 int write_config_file(char *output_file, struct sk_keyfile_config *config,
 		      bool overwrite, bool ascii_format);
 struct sk_keyfile_config *sk_read_file(char *filename);
-int sk_load_keyfile(char *path, bool client, bool randomize, char *mntdir);
+int sk_load_keyfile(char *path, bool client, bool randomize, char *mntdir,
+		    bool suffix, int timeout);
 void sk_config_disk_to_cpu(struct sk_keyfile_config *config);
 void sk_config_cpu_to_disk(struct sk_keyfile_config *config);
 int sk_validate_config(const struct sk_keyfile_config *config);

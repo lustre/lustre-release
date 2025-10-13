@@ -374,19 +374,86 @@ out_close:
 }
 
 /**
+ * Build an array of all keys in the user keyring that start with
+ * the given description.
+ *
+ * \param[in]	description    description to match keys against
+ *
+ * \retval	array of keys, last element is a zero key
+ *		NULL in case of error
+ */
+static key_serial_t *build_keys_array(char *description)
+{
+	key_serial_t *tmp_keys, *curr_key;
+	key_serial_t *keys_array;
+	ssize_t user_kr_len;
+	int i;
+
+	user_kr_len = keyctl_read_alloc(KEY_SPEC_USER_KEYRING,
+					(void **)&tmp_keys);
+	if (user_kr_len < 0) {
+		printerr(0, "Cannot find any key in user keyring\n");
+		return NULL;
+	}
+
+	keys_array = malloc((user_kr_len / sizeof(key_serial_t) + 1) *
+			    sizeof(key_serial_t));
+	if (!keys_array)
+		return NULL;
+
+	curr_key = keys_array;
+	for (i = 0; i < user_kr_len / sizeof(key_serial_t); i++) {
+		key_serial_t k = tmp_keys[i];
+		char *desc = NULL, *sep;
+		ssize_t len;
+
+		len = keyctl_describe_alloc(k, &desc);
+		if (len < 0)
+			/* ignore keys that cannot be read */
+			continue;
+
+		/* The whole description string looks like:
+		 * "type;uid;gid;perm;description"
+		 * We are only interested in the final "description".
+		 */
+		sep = strstr(desc, description);
+		if (!sep || sep == desc || *(sep - 1) != ';')
+			goto next;
+		if (sep[strlen(description)] != '\0' &&
+		    sep[strlen(description)] != ':')
+			goto next;
+
+		*curr_key = k;
+		curr_key++;
+next:
+		free(desc);
+	}
+	/* Finish the array with a zero key */
+	*curr_key = 0;
+
+	free(tmp_keys);
+	return keys_array;
+}
+
+/**
  * Checks if a key matching \a description is found in the keyring for
  * logging purposes and then attempts to load the payload from \a skc keyfile
  * config into a key with \a description.
  *
  * \param[in]	skc		keyfile config to load
  * \param[in]	description	Description used for key in keyring
+ * \param[in]	suffix		true to avoid overwriting existing server key,
+ *				by adding a suffix to the key desc
+ * \param[in]	timeout		timeout in seconds to apply on already existing
+ *				keys with same desc
  *
  * \return	>= 0	key serial of key successfully loaded
  * \return	-1	failure
  */
 static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
-				const char *description)
+				char *description, bool suffix, int timeout)
 {
+	key_serial_t *keys = NULL, *key_p;
 	struct sk_keyfile_config payload;
 	key_serial_t key;
 
@@ -397,9 +464,42 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
 
 	/* Check to see if a key is already loaded matching description */
 	key = keyctl_search(KEY_SPEC_USER_KEYRING, "user", description, 0);
-	if (key != -1)
-		printerr(2, "Key %d found in session keyring, replacing\n",
-			 key);
+	if (key != -1) {
+		if (suffix) {
+			/* append timestamp to key desc,
+			 * SK_DESCRIPTION_SIZE has room for it.
+			 */
+			size_t desclen = strlen(description);
+			struct timeval tv;
+			struct tm *tm;
+
+			/* get list of former keys */
+			keys = build_keys_array(description);
+
+			gettimeofday(&tv, NULL);
+			tm = localtime(&tv.tv_sec);
+
+			/* timestamp expressed as yyyymmdd_HHMMSS_USECS */
+			if (snprintf((char *)description + desclen,
+				     SK_DESCRIPTION_SIZE - desclen,
+				     ":%04d%02d%02d_%02d%02d%02d_%06ld",
+				     tm->tm_year + 1900, tm->tm_mon + 1,
+				     tm->tm_mday, tm->tm_hour, tm->tm_min,
+				     tm->tm_sec, tv.tv_usec) >=
+			    SK_DESCRIPTION_SIZE - desclen) {
+				free(keys);
+				return -1;
+			}
+
+			printerr(2,
+				 "Key %d found in user keyring, inserting new key with desc %s\n",
+				 key, description);
+		} else {
+			printerr(2,
+				 "Key %d found in user keyring, replacing\n",
+				 key);
+		}
+	}
 
 	key = add_key("user", description, &payload, sizeof(payload),
 		      KEY_SPEC_USER_KEYRING);
@@ -412,10 +512,28 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
 				 perm, key);
 		printerr(2, "Added key %d with description %s\n", key,
 			 description);
+
+		/* expire former keys to some time in the future */
+		key_p = keys;
+		while (key_p && *key_p) {
+			if (timeout == -1)
+				timeout = 2 * 24 * 60 * 60; /* 2 days */
+
+			if (keyctl_set_timeout(*key_p, timeout) < 0)
+				printerr(2,
+					 "Failed to set timeout %ds on key %d\n",
+					 timeout, *key_p);
+			else
+				printerr(2,
+					 "Setting timeout %ds on former key %d\n",
+					 timeout, *key_p);
+			key_p++;
+		}
 	} else {
 		printerr(0, "Failed to add key with %s\n", description);
 	}
 
+	free(keys);
 	return key;
 }
 
@@ -428,12 +546,17 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
  * \param[in]	client		Client is mounting with a server key
  * \param[in]	randomize	true to randomize key desc, only apply to client
  * \param[in]	mntdir		Client mount dir
+ * \param[in]	suffix		true to avoid overwriting existing server key,
+ *				by adding a suffix to the key desc
+ * \param[in]	timeout		timeout in seconds to apply on already existing
+ *				keys with same desc
  *
  * \return	> 0	client file system key id if successfully loaded
  * \return	  0	other key type successfully loaded
  * \return	< 0	-errno on failure
  */
-int sk_load_keyfile(char *path, bool client, bool randomize, char *mntdir)
+int sk_load_keyfile(char *path, bool client, bool randomize, char *mntdir,
+		    bool suffix, int timeout)
 {
 	struct sk_keyfile_config *config;
 	char description[SK_DESCRIPTION_SIZE + 1];
@@ -476,7 +599,7 @@ read_sk:
 			rc = -ENAMETOOLONG;
 			goto out;
 		}
-		if (sk_load_key(config, description) == -1) {
+		if (sk_load_key(config, description, suffix, timeout) == -1) {
 			rc = -ENOKEY;
 			goto out;
 		}
@@ -512,7 +635,7 @@ read_sk:
 			rc = -ENAMETOOLONG;
 			goto out;
 		}
-		if (sk_load_key(config, description) == -1) {
+		if (sk_load_key(config, description, suffix, timeout) == -1) {
 			rc = -ENOKEY;
 			goto out;
 		}
@@ -570,7 +693,7 @@ read_sk:
 				rc = -ENAMETOOLONG;
 				goto out;
 			}
-			keyid = sk_load_key(config, description);
+			keyid = sk_load_key(config, description, false, -1);
 			if (keyid == -1) {
 				rc = -ENOKEY;
 				goto out;
@@ -581,7 +704,8 @@ read_sk:
 				rc = snprintf(description, SK_DESCRIPTION_SIZE,
 					      "lustre:%s", config->skc_fsname);
 				if (rc < SK_DESCRIPTION_SIZE)
-					(void)sk_load_key(config, description);
+					(void)sk_load_key(config, description,
+							  false, -1);
 			}
 		}
 
@@ -596,7 +720,7 @@ read_sk:
 				rc = -ENAMETOOLONG;
 				goto out;
 			}
-			if (sk_load_key(config, description) == -1) {
+			if (sk_load_key(config, description, false, -1) == -1) {
 				rc = -ENOKEY;
 				goto out;
 			}
