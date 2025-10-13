@@ -2428,10 +2428,11 @@ lnet_ni_unlink_locked(struct lnet_ni *ni)
 static void
 lnet_clear_zombies_nis_locked(struct lnet_net *net)
 {
-	int		i;
-	int		islo;
-	struct lnet_ni	*ni;
 	struct list_head *zombie_list = &net->net_ni_zombie;
+	enum lnet_ni_state state;
+	struct lnet_ni *ni;
+	int islo;
+	int i;
 
 	/*
 	 * Now wait for the NIs I just nuked to show up on the zombie
@@ -2445,9 +2446,13 @@ lnet_clear_zombies_nis_locked(struct lnet_net *net)
 		int j;
 
 		list_del_init(&ni->ni_netlist);
-		/* the ni should be in deleting state. If it's not it's
-		 * a bug */
-		LASSERT(ni->ni_state == LNET_NI_STATE_DELETING);
+
+		lnet_ni_lock(ni);
+		state = ni->ni_state;
+		lnet_ni_unlock(ni);
+
+		/* the ni should be in deleting state. If it's not it's a bug */
+		LASSERT(state == LNET_NI_STATE_DELETING);
 		cfs_percpt_for_each(ref, j, ni->ni_refs) {
 			if (*ref == 0)
 				continue;
