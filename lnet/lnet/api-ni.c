@@ -7838,6 +7838,7 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 		struct lnet_peer_ni *lpni = NULL;
 		struct nlattr *nid_list;
 		struct lnet_peer *lp;
+		unsigned int state;
 		int count = 1;
 		void *hdr;
 
@@ -7867,8 +7868,14 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 		if (lnet_peer_is_multi_rail(lp))
 			nla_put_flag(msg, LNET_PEER_NI_ATTR_MULTIRAIL);
 
-		if (gnlh->version >= 3)
-			nla_put_u32(msg, LNET_PEER_NI_ATTR_STATE, lp->lp_state);
+		if (gnlh->version >= 3) {
+			spin_lock(&lp->lp_lock);
+			state = lp->lp_state;
+			spin_unlock(&lp->lp_lock);
+
+			/* add (peer state)lp_state to @msg */
+			nla_put_u32(msg, LNET_PEER_NI_ATTR_STATE, state);
+		}
 
 		nid_list = nla_nest_start(msg, LNET_PEER_NI_ATTR_PEER_NI_LIST);
 		while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
