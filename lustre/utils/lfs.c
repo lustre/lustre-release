@@ -1294,6 +1294,75 @@ static int lfs_component_set(char *fname, int comp_id, const char *pool,
 	return rc;
 }
 
+static int lfs_component_set_by_mirror(char *fname, __u16 mirror_id,
+				       __u32 flags, __u32 neg_flags)
+{
+	struct llapi_layout *layout = NULL;
+	int rc = 0;
+	int comp_count = 0;
+
+	layout = llapi_layout_get_by_path(fname, 0);
+	if (!layout) {
+		fprintf(stderr, "%s: cannot get layout of '%s': %s\n",
+			progname, fname, strerror(errno));
+		return -errno;
+	}
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0) {
+		fprintf(stderr, "%s: cannot move to first component of '%s': %s\n",
+			progname, fname, strerror(-rc));
+		goto free_layout;
+	}
+
+	/* Count components and find matching mirror components */
+	while (rc == 0) {
+		uint32_t comp_mirror_id;
+		uint32_t comp_id;
+
+		rc = llapi_layout_mirror_id_get(layout, &comp_mirror_id);
+		if (rc < 0)
+			break;
+
+		if (comp_mirror_id == mirror_id) {
+			rc = llapi_layout_comp_id_get(layout, &comp_id);
+			if (rc < 0)
+				break;
+
+			/* Set flags on this component */
+			rc = lfs_component_set(fname, comp_id, NULL, flags,
+					       neg_flags);
+			if (rc < 0) {
+				fprintf(stderr, "%s: cannot set flags on component %u of mirror %u in '%s': %s\n",
+					progname, comp_id, mirror_id, fname,
+					strerror(-rc));
+				goto free_layout;
+			}
+			comp_count++;
+		}
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0) {
+			rc = 0; /* End of components */
+			break;
+		}
+	}
+
+	if (comp_count == 0) {
+		fprintf(stderr, "%s: no components found for mirror %u in '%s'\n",
+			progname, mirror_id, fname);
+		rc = -EINVAL;
+	} else {
+		printf("Set flags on %d component(s) of mirror %u in '%s'\n",
+		       comp_count, mirror_id, fname);
+		rc = 0;
+	}
+
+free_layout:
+	llapi_layout_free(layout);
+	return rc;
+}
+
 static int lfs_component_del(char *fname, __u32 comp_id,
 			     __u32 flags, __u32 neg_flags)
 {
@@ -4608,9 +4677,9 @@ create_mirror:
 		}
 	}
 
-	if (comp_set && !comp_id && !lsa.lsa_pool_name) {
+	if (comp_set && !comp_id && !lsa.lsa_pool_name && !mirror_id) {
 		fprintf(stderr,
-			"%s %s: --component-set doesn't have component-id set\n",
+			"%s %s: --component-set doesn't have component-id or mirror-id set\n",
 			progname, argv[0]);
 		goto usage_error;
 	}
@@ -4953,10 +5022,16 @@ create_mirror:
 					     layout, bandwidth_bytes_sec,
 					     stats_interval_sec);
 		} else if (comp_set != 0) {
-			result = lfs_component_set(fname, comp_id,
-						   lsa.lsa_pool_name,
-						   lsa.lsa_comp_flags,
-						   lsa.lsa_comp_neg_flags);
+			if (mirror_id != 0)
+				result = lfs_component_set_by_mirror(fname,
+								     mirror_id,
+								     lsa.lsa_comp_flags,
+								     lsa.lsa_comp_neg_flags);
+			else
+				result = lfs_component_set(fname, comp_id,
+							lsa.lsa_pool_name,
+							lsa.lsa_comp_flags,
+							lsa.lsa_comp_neg_flags);
 		} else if (comp_del != 0) {
 			result = lfs_component_del(fname, comp_id,
 						   lsa.lsa_comp_flags,

@@ -4589,6 +4589,40 @@ test_211() {
 }
 run_test 211 "mirror delete should not cause bad size"
 
+test_212() {
+	local tf=$DIR/$tfile
+
+	$LFS mirror create -N2 $tf || error "create mirrored file $tf failed"
+
+	# write some data to the file
+	echo "data for test" > $tf || error "write $tf failed"
+
+	# verify file is in write-pending state after initial write
+	verify_flr_state $tf "wp"
+
+	# resync to get to read-only state
+	$LFS mirror resync $tf
+
+	# verify file is now in read-only state (no stale components)
+	verify_flr_state $tf "ro"
+
+	# Verify should return success when mirrors are consistent
+	$LFS mirror verify $tf ||
+		error "mirror verify should succeed when mirrors are consistent"
+
+	$LFS setstripe --comp-set --comp-flags=stale --mirror-id=2 $tf ||
+		error "Failed to set stale flag to $tf for mirror 2"
+
+	$LFS getstripe --mirror-id=2 $tf | grep -q stale ||
+		error "no stale components found for mirror 2"
+
+	# Verify should return error when mirrors have stale components
+	$LFS mirror verify $tf &&
+		error "verify should return error when components are stale" ||
+			true
+}
+run_test 212 "Testing lfs setstripe --comp-set --comp-flags=stale --mirror-id"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
