@@ -10100,7 +10100,7 @@ static int lnet_numa_cmd(struct sk_buff *skb, struct genl_info *info)
 	struct netlink_ext_ack *extack = NULL;
 	int msg_len, rem, rc = 0;
 	struct nlattr *entry;
-	int range;
+	int range = 0; /* default range */
 
 	ENTRY;
 #ifdef HAVE_NL_PARSE_WITH_EXT_ACK
