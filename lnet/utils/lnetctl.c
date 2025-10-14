@@ -6198,51 +6198,49 @@ static int yaml_lnet_ping(char *group, int timeout, struct lnet_nid *src_nid,
 	if (rc == 0)
 		goto emitter_error;
 
-	if (timeout != 1000 || (src_nid && nid_addr_is_set(src_nid))) {
-		if (src_nid && nid_addr_is_set(src_nid)) {
-			char *src_nidstr = libcfs_nidstr(src_nid);
+	if (src_nid) {
+		char *src_nidstr = libcfs_nidstr(src_nid);
 
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"source",
-						     strlen("source"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"source",
+					     strlen("source"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
 
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)src_nidstr,
-						     strlen(src_nidstr), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		}
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)src_nidstr,
+					     strlen(src_nidstr), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
 
-		if (timeout != 1000) {
-			char time[23];
+	if (timeout != 1000) {
+		char time[23];
 
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"timeout",
-						     strlen("timeout"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"timeout",
+					     strlen("timeout"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
 
-			snprintf(time, sizeof(time), "%u", timeout);
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_INT_TAG,
-						     (yaml_char_t *)time,
-						     strlen(time), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		}
+		snprintf(time, sizeof(time), "%u", timeout);
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_INT_TAG,
+					     (yaml_char_t *)time,
+					     strlen(time), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
 	}
 
 	yaml_scalar_event_initialize(&event, NULL,
@@ -6370,8 +6368,8 @@ static int jt_ping(int argc, char **argv)
 	if (rc < 0)
 		return rc;
 
-	rc = yaml_lnet_ping("ping", timeout, &src, optind, argc, argv,
-			    NLM_F_DUMP);
+	rc = yaml_lnet_ping("ping", timeout, src_nidstr ? &src : NULL, optind,
+			    argc, argv, NLM_F_DUMP);
 	if (rc <= 0) {
 		if (rc != -EOPNOTSUPP)
 			return rc;

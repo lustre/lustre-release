@@ -96,7 +96,32 @@ static inline bool nid_is_nid4(const struct lnet_nid *nid)
 	return NID_ADDR_BYTES(nid) == 4;
 }
 
-/* check for address set */
+/**
+ * nid_addr_is_set - check if address portion of NID is set
+ * @nid: the NID to check
+ *
+ * This function attempts to distinguish between NIDs where:
+ * 1. Only the network is specified (nid_type and nid_num set, address unset)
+ * 2. A full NID is specified (network and address both set)
+ *
+ * LIMITATIONS AND KNOWN ISSUES:
+ * This function returns false for any NID whose address bytes are all zero.
+ * However, this creates ambiguity because NIDs like "0@kfi" or "0@gni" are
+ * valid, fully-specified NIDs where the address portion is legitimately zero.
+ *
+ * The function cannot distinguish between:
+ * - A network-only NID (e.g., "kfi0" with no specific address)
+ * - A fully-qualified NID with address=0 (e.g., "0@kfi")
+ *
+ * This is a fundamental limitation because struct lnet_nid has no explicit
+ * field to mark "address not specified" vs "address is zero". Both cases
+ * result in nid_addr[] being all zeros.
+ *
+ * Callers should be aware that if a user explicitly specifies an address of 0,
+ * this function will incorrectly return false.
+ *
+ * Return: true if any byte in the address portion is non-zero, false otherwise
+ */
 static inline bool nid_addr_is_set(const struct lnet_nid *nid)
 {
 	__u8 *addr = (__u8 *)(&nid->nid_addr[0]);

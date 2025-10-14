@@ -162,7 +162,7 @@ lnet_dyn_unconfigure_ni(struct libcfs_ioctl_hdr *hdr)
 	lnet_nid4_to_nid(conf->lic_nid, &nid);
 	mutex_lock(&lnet_config_mutex);
 	if (the_lnet.ln_niinit_self)
-		rc = lnet_dyn_del_ni(&nid);
+		rc = lnet_dyn_del_ni(&nid, true);
 	else
 		rc = -EINVAL;
 	mutex_unlock(&lnet_config_mutex);

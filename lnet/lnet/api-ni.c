@@ -4028,7 +4028,7 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net_id,
 	return rc;
 }
 
-int lnet_dyn_del_ni(struct lnet_nid *nid)
+int lnet_dyn_del_ni(struct lnet_nid *nid, bool allow_net_del)
 {
 	struct lnet_net *net;
 	struct lnet_ni *ni;
@@ -4058,8 +4058,8 @@ int lnet_dyn_del_ni(struct lnet_nid *nid)
 		goto unlock_net;
 	}
 
-	if (!nid_addr_is_set(nid)) {
-		/* remove the entire net */
+	if (!nid_addr_is_set(nid) && allow_net_del) {
+		CDEBUG(D_NET, "remove the entire net\n");
 		net_bytes = lnet_get_net_ni_bytes_locked(net);
 
 		lnet_net_unlock(0);
@@ -6561,7 +6561,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 
 				found = true;
 				lnet_net_unlock(LNET_LOCK_EX);
-				rc = lnet_dyn_del_ni(&ni->ni_nid);
+				rc = lnet_dyn_del_ni(&ni->ni_nid, false);
 				break;
 			}
 
@@ -6571,7 +6571,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 				lnet_net_unlock(LNET_LOCK_EX);
 			}
 		} else {
-			rc = lnet_dyn_del_ni(&nid);
+			rc = lnet_dyn_del_ni(&nid, false);
 		}
 
 		if (rc < 0) {

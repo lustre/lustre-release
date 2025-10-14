@@ -676,7 +676,7 @@ int lnet_dyn_del_net(__u32 net);
 int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net,
 		    struct lnet_nid *nid,
 		    struct lnet_ioctl_config_lnd_tunables *tun);
-int lnet_dyn_del_ni(struct lnet_nid *nid);
+int lnet_dyn_del_ni(struct lnet_nid *nid, bool allow_net_del);
 int lnet_clear_lazy_portal(struct lnet_ni *ni, int portal, char *reason);
 struct lnet_net *lnet_get_net_locked(__u32 net_id);
 void lnet_net_clr_pref_rtrs(struct lnet_net *net);
