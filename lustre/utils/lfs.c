@@ -125,6 +125,8 @@ static inline int lfs_mirror_verify(int argc, char **argv);
 static inline int lfs_mirror_read(int argc, char **argv);
 static inline int lfs_mirror_write(int argc, char **argv);
 static inline int lfs_mirror_copy(int argc, char **argv);
+static inline int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids,
+					 int ids_nr, int verbose);
 static int lfs_pcc_attach(int argc, char **argv);
 static int lfs_pcc_attach_fid(int argc, char **argv);
 static int lfs_pcc_detach(int argc, char **argv);
@@ -309,6 +311,7 @@ command_t mirror_cmdlist[] = {
 		"usage: lfs mirror resync [--only MIRROR_ID[,...]]|\n"
 		"\t\t[--stats|--stats-interval=SECONDS]\n"
 		"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"
+		"\t\t[--force-resync|-f]\n"
 		"\t\tMIRRORED_FILE [MIRRORED_FILE2...]\n" },
 	{ .pc_name = "verify", .pc_func = lfs_mirror_verify,
 	  .pc_help = "Verify mirrored file(s).\n"
@@ -2715,7 +2718,8 @@ free_layout:
 static inline
 int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   __u16 *mirror_ids, int ids_nr,
-			   long stats_interval_sec, long bandwidth_bytes_sec);
+			   long stats_interval_sec, long bandwidth_bytes_sec,
+			   bool force_resync);
 
 static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 			      enum llapi_migration_flags migration_flags,
@@ -2764,7 +2768,7 @@ static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 
 	rc = lfs_mirror_resync_file(name, data, NULL, 0,
 				    stats_interval_sec,
-				    bandwidth_bytes_sec);
+				    bandwidth_bytes_sec, false);
 	if (rc) {
 		err_str = "cannot resync file";
 		goto out;
@@ -5082,7 +5086,8 @@ create_mirror:
 					result = lfs_mirror_resync_file(fname,
 							ioc, NULL, 0,
 							stats_interval_sec,
-							bandwidth_bytes_sec);
+							bandwidth_bytes_sec,
+							false);
 					if (result)
 						fprintf(stderr,
 							"Cannot resync file\n");
@@ -13101,10 +13106,167 @@ error:
 	return rc;
 }
 
-static inline
+/**
+ * Returns the number of components to resync, or negative error code
+ */
+static int lfs_mirror_force_resync(const char *fname,
+				   struct llapi_layout *layout,
+				   struct llapi_resync_comp *comp_array,
+				   __u16 *mirror_ids, int ids_nr)
+{
+	int idx = 0;
+	uint16_t source_mirror = 0;
+	int rc;
+
+	/* First pass: find a source mirror (not in target list) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0) {
+		fprintf(stderr, "%s: failed to position to first component: %s\n",
+			progname, strerror(-rc));
+		return rc;
+	}
+
+	while (rc == 0) {
+		uint32_t mirror_id, comp_flags;
+		int i, found = 0;
+
+		rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+		if (rc < 0)
+			break;
+
+		/* Check if this mirror is in our target list */
+		for (i = 0; i < ids_nr; i++) {
+			if (mirror_ids[i] == mirror_id) {
+				found = 1;
+				break;
+			}
+		}
+
+		/* If not in target list, use as source */
+		if (!found) {
+			rc = llapi_layout_comp_flags_get(layout, &comp_flags);
+			if (rc == 0 && !(comp_flags & LCME_FL_STALE)) {
+				source_mirror = mirror_id;
+				break;
+			}
+		}
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0) {
+			rc = 0;
+			break;
+		}
+	}
+
+	if (source_mirror == 0) {
+		/* No non-target source found, use target mirror as source
+		 * and mark other mirrors as stale
+		 */
+		source_mirror = mirror_ids[0];
+		fprintf(stdout,
+			"%s: using target mirror %u as source (no other non-stale mirrors found).\n",
+			progname, source_mirror);
+	}
+
+	fprintf(stdout,
+		"%s: using mirror %u as source for force resync.\n",
+		progname, source_mirror);
+
+	/* Second pass: find components to mark as stale */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0) {
+		fprintf(stderr, "%s: failed to position to first component: %s\n",
+			progname, strerror(-rc));
+		return rc;
+	}
+
+	while (idx < 1024) { /* comp_array size limit */
+		uint32_t mirror_id, comp_id;
+		uint64_t start, end;
+		int i, is_target = 0;
+
+		rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+		if (rc < 0)
+			break;
+
+		/* Check if this mirror is in our target list */
+		for (i = 0; i < ids_nr; i++) {
+			if (mirror_ids[i] == mirror_id) {
+				is_target = 1;
+				break;
+			}
+		}
+
+		bool collect_this = false;
+
+		if (source_mirror == mirror_ids[0]) {
+			/* Target is source, collect non-target mirrors */
+			collect_this = !is_target;
+		} else {
+			/* Non-target is source, collect target mirrors */
+			collect_this = is_target;
+		}
+
+		if (collect_this) {
+			rc = llapi_layout_comp_id_get(layout, &comp_id);
+			if (rc < 0)
+				break;
+
+			rc = llapi_layout_comp_extent_get(layout, &start, &end);
+			if (rc < 0)
+				break;
+
+			comp_array[idx].lrc_mirror_id = mirror_id;
+			comp_array[idx].lrc_id = comp_id;
+			comp_array[idx].lrc_start = start;
+			comp_array[idx].lrc_end = end;
+			idx++;
+		}
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc != 0) {
+			rc = 0;
+			break;
+		}
+	}
+
+	if (idx <= 0) {
+		fprintf(stderr,
+			"%s: no components found for specified mirrors.\n",
+			progname);
+		return -EINVAL;
+	}
+
+	/* Mark the collected components as stale */
+	int stale_count = 0;
+
+	for (int i = 0; i < idx; i++) {
+		rc = lfs_component_set((char *)fname, comp_array[i].lrc_id,
+				       NULL, LCME_FL_STALE, 0);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s: failed to set stale flag on component %u: %s\n",
+				progname, comp_array[i].lrc_id, strerror(-rc));
+			/* Continue with other components */
+		} else {
+			stale_count++;
+		}
+	}
+
+	fprintf(stdout,
+		"%s: marked %d components as stale for force resync.\n",
+		progname, stale_count);
+	fprintf(stdout,
+		"%s: proceeding with resync of %d components.\n",
+		progname, idx);
+
+	return idx; /* Return number of components to resync */
+}
+
 int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   __u16 *mirror_ids, int ids_nr,
-			   long stats_interval_sec, long bandwidth_bytes_sec)
+			   long stats_interval_sec, long bandwidth_bytes_sec,
+			   bool force_resync)
 {
 	struct llapi_resync_comp comp_array[1024] = { { 0 } };
 	struct llapi_layout *layout;
@@ -13169,21 +13331,68 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 					    ARRAY_SIZE(comp_array),
 					    mirror_ids, ids_nr);
 	if (comp_size <= 0) {
-		rc = comp_size;
-		goto free_layout;
+		if (force_resync && ids_nr > 0) {
+
+			comp_size = lfs_mirror_force_resync(fname, layout,
+							    comp_array,
+							    mirror_ids, ids_nr);
+			if (comp_size < 0) {
+				rc = comp_size;
+				goto free_layout;
+			}
+		} else if (force_resync) {
+			/* --force-resync requires --only option */
+			rc = -EINVAL;
+			fprintf(stderr,
+				"%s: --force-resync requires --only option to specify target mirrors.\n",
+				progname);
+			goto free_layout;
+		} else if (ids_nr > 0) {
+			/* --only specified but no stale components and
+			 * no --force-resync
+			 * Check if mirrors are consistent - if not, error
+			 */
+			rc = lfs_mirror_verify_file(fname, NULL, 0, 0);
+			if (rc < 0) {
+				/* mirrors inconsistent but no stale flags */
+				fprintf(stderr,
+					"%s: mirrors are inconsistent but no stale components marked in '%s'. Use 'lfs mirror resync --only %d --force-resync' to force resync.\n",
+					progname, fname, mirror_ids[0]);
+				goto free_layout;
+			}
+			/* Mirrors are consistent - succeed as no-op */
+			rc = 0;
+			goto free_layout;
+		} else {
+			/* Normal resync with no stale components and no --only
+			 * Check if mirrors are consistent - if not, error
+			 */
+			rc = lfs_mirror_verify_file(fname, NULL, 0, 0);
+			if (rc < 0) {
+				/* file has inconsistency but no stale flags */
+				fprintf(stderr,
+					"%s: mirrors are inconsistent but no stale components marked in '%s'. Use 'lfs mirror resync --only N --force-resync' to force resync specific mirrors.\n",
+					progname, fname);
+				goto free_layout;
+			}
+			/* Mirrors are consistent - succeed as no-op */
+			rc = 0;
+			goto free_layout;
+		}
 	}
 
 	ioc->lil_mode = LL_LEASE_WRLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC;
 	rc = llapi_lease_set(fd, ioc);
 	if (rc < 0) {
-		if (rc == -EALREADY)
+		if (rc == -EALREADY) {
 			rc = 0;
-		else
+		} else {
 			fprintf(stderr,
 			    "%s: '%s' llapi_lease_get_ext resync failed: %s.\n",
 				progname, fname, strerror(-rc));
-		goto free_layout;
+			goto free_layout;
+		}
 	}
 
 	/* get the read range [start, end) */
@@ -13206,6 +13415,12 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	rc = llapi_mirror_resync_many_params(fd, layout, comp_array, comp_size,
 					     start, end, stats_interval_sec,
 					     bandwidth_bytes_sec);
+
+	/* If resync succeeded, manually set lrc_synced for all components */
+	if (rc == 0)
+		for (int i = 0; i < comp_size; i++)
+			comp_array[i].lrc_synced = 1;
+
 	if (rc < 0)
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "fail to mirror resync '%s'\n", fname);
@@ -13266,6 +13481,7 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	{ .val = LFS_STATS_OPT, .name = "stats", .has_arg = no_argument},
 	{ .val = LFS_STATS_INTERVAL_OPT,
 			.name = "stats-interval", .has_arg = required_argument},
+	{ .val = 'f',	.name = "force-resync", .has_arg = no_argument },
 	{ .name = NULL } };
 	struct ll_ioc_lease *ioc = NULL;
 	__u16 mirror_ids[128] = { 0 };
@@ -13275,8 +13491,9 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	int ids_nr = 0;
 	int c;
 	int rc = 0;
+	bool force_resync = false;
 
-	while ((c = getopt_long(argc, argv, "ho:W:", long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "ho:W:f", long_opts, NULL)) >= 0) {
 		char *end;
 		switch (c) {
 		case 'o':
@@ -13305,6 +13522,9 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 			break;
 		case LFS_STATS_INTERVAL_OPT:
 			stats_interval_sec = strtol(optarg, &end, 0);
+			break;
+		case 'f':
+			force_resync = true;
 			break;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
@@ -13349,7 +13569,7 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 		rc = lfs_mirror_resync_file(argv[optind], ioc,
 					    mirror_ids, ids_nr,
 					    stats_interval_sec,
-					    bandwidth_bytes_sec);
+					    bandwidth_bytes_sec, force_resync);
 		/* ignore previous file's error, continue with next file */
 
 		/* reset ioc */

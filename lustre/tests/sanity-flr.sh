@@ -1962,24 +1962,38 @@ test_41() {
 	dd if=/dev/zero of=$tf-1 bs=1M count=2 conv=notrunc ||
 		error "writing $tf-1 failed"
 
-	echo " **only resync mirror 2"
+	echo " **only resync mirror 2 (without force, should fail)"
 	verify_flr_state $tf-1 "wp"
-	$LFS mirror resync --only 2 $tf-1 ||
-		error "resync mirror 2 of $tf-1 failed"
+	$LFS mirror resync --only 2 $tf-1 >/dev/null 2>&1 && \
+		error "resync mirror 2 without --force-resync should fail"
+
+	echo " **only resync mirror 2 (with --force-resync)"
+	$LFS mirror resync --only 2 --force-resync $tf-1 ||
+		error "resync mirror 2 of $tf-1 with --force-resync failed"
+
 	verify_flr_state $tf "ro"
 
+	echo " **verify mirrors are now consistent after force resync"
+	$LFS mirror verify $tf-1 ||
+		error "mirrors should be consistent after force resync"
+
 	# resync synced mirror
-	echo " **resync mirror 2 again"
-	$LFS mirror resync --only 2 $tf-1 ||
+	echo " **resync mirror 2 again (with --force-resync)"
+	$LFS mirror resync --only 2 --force-resync $tf-1 ||
 		error "resync mirror 2 of $tf-1 failed"
-	verify_flr_state $tf "ro"
+	verify_flr_state $tf-1 "ro"
+
+	# verify should succeed now
+	echo " **verify should now succeed after resync"
+	$LFS mirror verify $tf-1 || error "verify failed after resync"
+
 	echo " **verify $tf-1 contains stale component"
-	$LFS getstripe $tf-1 | grep lcme_flags | grep stale > /dev/null ||
-		error "after writing $tf-1, it does not contain stale component"
+	$LFS getstripe $tf-1 | grep lcme_flags | grep stale > /dev/null &&
+		error "after resyncing $tf-1, it still contains stale component"
 
 	echo " **full resync $tf-1"
 	$LFS mirror resync $tf-1 || error "resync of $tf-1 failed"
-	verify_flr_state $tf "ro"
+	verify_flr_state $tf-1 "ro"
 	echo " **full resync $tf-1 again"
 	$LFS mirror resync $tf-1 || error "resync of $tf-1 failed"
 	echo " **verify $tf-1 does not contain stale component"
@@ -2023,9 +2037,12 @@ test_42() {
 			error "write $i failed"
 	done
 
-	# resync the mirrored files
-	$LFS mirror resync $tf-1 $tf-2 ||
-		error "resync $tf-1 $tf-2 failed"
+	# resync the mirrored files - use force resync for new behavior
+	for i in $tf-1 $tf-2; do
+		get_mirror_ids $i
+		$LFS mirror resync --force-resync --only=${mirror_array[0]} $i ||
+			error "force resync $i failed"
+	done
 
 	# verify the mirrored files
 	$mirror_cmd $tf-1 $tf-2 ||
@@ -2048,7 +2065,12 @@ test_42() {
 			error "change $tf-1 with seek=$i failed"
 	done
 
-	$LFS mirror resync $tf-1 || error "resync $tf-1 failed"
+	# Use force resync to make mirrors consistent before merge
+	get_mirror_ids $tf-1
+	$LFS mirror resync --force-resync --only=${mirror_array[0]} $tf-1 ||
+		error "force resync $tf-1 failed"
+
+	# Now extend with the modified $tf to create controlled inconsistencies
 	$LFS mirror extend --no-verify -N -f $tf $tf-1 ||
 		error "merge $tf into $tf-1 failed"
 
@@ -4359,7 +4381,10 @@ test_208a() {
 	dd if=/dev/zero of=$tf bs=8M count=1 || error "can't dd (1)"
 	$LFS mirror extend -N -c1 -o1 $tf || error "can't create mirror"
 	$LFS mirror extend -N -c2 -o 2,3 $tf || error "can't create mirror"
-	$LFS mirror resync $tf || error "can't resync"
+	$LFS mirror resync --only 2 --force-resync $tf ||
+		error "can't resync mirror 2"
+	$LFS mirror resync --only 3 --force-resync $tf ||
+		error "can't resync mirror 3"
 	$LFS getstripe $tf
 
 	log "set OST0000 non-rotational"
@@ -4402,7 +4427,10 @@ test_208b() {
 	dd if=/dev/zero of=$tf bs=8M count=1 || error "can't dd (1)"
 	$LFS mirror extend -N -c1 -o1 $tf || error "can't create mirror"
 	$LFS mirror extend -N -c2 -o 2,3 $tf || error "can't create mirror"
-	$LFS mirror resync $tf || error "can't resync"
+	$LFS mirror resync --only 2 --force-resync $tf ||
+		error "can't resync mirror 2"
+	$LFS mirror resync --only 3 --force-resync $tf ||
+		error "can't resync mirror 3"
 	$LFS getstripe $tf | grep -q flags.*stale && error "still stale"
 
 	log "set OST0000 non-rotational"
@@ -4411,7 +4439,10 @@ test_208b() {
 	do_nodes $osts \
 		$LCTL set_param osd*.*OST0000*.nonrotational=1
 	check_ost_used $tf write 0
-	$LFS mirror resync $tf || error "can't resync"
+	$LFS mirror resync --only 2 --force-resync $tf ||
+		error "can't resync mirror 2"
+	$LFS mirror resync --only 3 --force-resync $tf ||
+		error "can't resync mirror 3"
 
 	log "set OST0002 and OST0003 non-rotational, two fast OSTs is better"
 	do_nodes $osts \
@@ -4420,7 +4451,10 @@ test_208b() {
 		$LCTL set_param osd*.*OST0002*.nonrotational=1 \
 			osd*.*OST0003*.nonrotational=1
 	check_ost_used $tf write 2 3
-	$LFS mirror resync $tf || error "can't resync"
+	$LFS mirror resync --only 2 --force-resync $tf ||
+		error "can't resync mirror 2"
+	$LFS mirror resync --only 3 --force-resync $tf ||
+		error "can't resync mirror 3"
 
 	log "set mirror 1 on OST0001 preferred"
 	$LFS setstripe --comp-set -I 0x20001 --comp-flags=prefer $tf ||

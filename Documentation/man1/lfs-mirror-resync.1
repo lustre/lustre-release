@@ -7,6 +7,7 @@ lfs-mirror-resync \- resynchronize an out-of-sync mirrored file
 .IR MIRROR_ID [,...]]
 .RB [ --bandwidth= | -W
 .IR BANDWIDTH_MB ]
+.RB [ --force-resync | -f ]
 .RB [ --stats ]
 .RB [ --stats-interval=\c
 .IR INTERVAL_SECONDS ]
@@ -20,6 +21,9 @@ name
 If there is no stale mirror for the
 .IR MIRRORED_FILE (s),
 then the command does nothing.
+If mirrors are inconsistent but no components are marked as stale, the command
+will fail with an error message suggesting the use of
+.BR --force-resync .
 Otherwise, it will copy data from synced mirror to stale mirror(s),
 and mark all successfully copied mirror(s) as SYNC.
 .P
@@ -49,6 +53,14 @@ is the numerical unique identifier for a mirror. Multiple
 .IR MIRROR_ID s
 are separated by comma. This option cannot
 be used when multiple mirrored files are specified.
+.TP
+.BR -f ", " --force-resync
+Force resynchronization of specified mirrors even when they are not marked as
+stale. This option requires the
+.B --only
+option to specify which mirrors to resync. When mirrors are inconsistent but
+no components are marked as stale, normal resync will fail with an error
+message suggesting the use of this option.
 .TP
 .BR --stats
 This option enables progress updates every 5 seconds, in YAML format.
@@ -80,6 +92,14 @@ are not marked as STALE:
 .RS
 .EX
 .B # lfs mirror resync --only 4,5 /mnt/lustre/file1
+.EE
+.RE
+.PP
+Force resynchronization of mirror 2 when mirrors are inconsistent but not marked
+as stale:
+.RS
+.EX
+.B # lfs mirror resync --only 2 --force-resync /mnt/lustre/file1
 .EE
 .RE
 .SH AVAILABILITY
