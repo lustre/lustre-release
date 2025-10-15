@@ -126,7 +126,7 @@ static inline int lfs_mirror_read(int argc, char **argv);
 static inline int lfs_mirror_write(int argc, char **argv);
 static inline int lfs_mirror_copy(int argc, char **argv);
 static inline int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids,
-					 int ids_nr, int verbose);
+					 int ids_nr, int verbose, int stale);
 static int lfs_pcc_attach(int argc, char **argv);
 static int lfs_pcc_attach_fid(int argc, char **argv);
 static int lfs_pcc_detach(int argc, char **argv);
@@ -316,7 +316,8 @@ command_t mirror_cmdlist[] = {
 	{ .pc_name = "verify", .pc_func = lfs_mirror_verify,
 	  .pc_help = "Verify mirrored file(s).\n"
 		"usage: lfs mirror verify [--only MIRROR_ID[,...]]\n"
-		"\t\t[--verbose|-v] MIRRORED_FILE [MIRRORED_FILE2 ...]\n" },
+		"\t\t[--stale|-s] [--verbose|-v]\n"
+		"\t\tMIRRORED_FILE [MIRRORED_FILE2 ...]\n" },
 	{ .pc_help = NULL }
 };
 LFS_SUBCMD(mirror);
@@ -13352,7 +13353,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			 * no --force-resync
 			 * Check if mirrors are consistent - if not, error
 			 */
-			rc = lfs_mirror_verify_file(fname, NULL, 0, 0);
+			rc = lfs_mirror_verify_file(fname, NULL, 0, 0, 0);
 			if (rc < 0) {
 				/* mirrors inconsistent but no stale flags */
 				fprintf(stderr,
@@ -13367,7 +13368,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			/* Normal resync with no stale components and no --only
 			 * Check if mirrors are consistent - if not, error
 			 */
-			rc = lfs_mirror_verify_file(fname, NULL, 0, 0);
+			rc = lfs_mirror_verify_file(fname, NULL, 0, 0, 0);
 			if (rc < 0) {
 				/* file has inconsistency but no stale flags */
 				fprintf(stderr,
@@ -14969,6 +14970,354 @@ error:
 	return rc;
 }
 
+struct mirror_info {
+	uint32_t mirror_id;
+	uint32_t flags;
+	unsigned long checksum;
+	bool has_prefwr;
+	bool has_prefrd;
+};
+
+/**
+ * compare_mirror_checksums() - Compare checksums of all mirrors for a chunk.
+ * @fd:        File descriptor of the mirrored file.
+ * @chunk:     A chunk and its corresponding valid mirror ids.
+ * @mirrors:   Array to store mirror information including checksums.
+ * @mirror_count: Number of mirrors.
+ *
+ * This function reads data from each mirror and computes checksums to
+ * determine which mirrors have consistent vs inconsistent data.
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+static int compare_mirror_checksums(int fd, struct verify_chunk *chunk,
+				    struct mirror_info *mirrors,
+				    int mirror_count)
+{
+	const size_t buflen = DEFAULT_IO_BUFLEN;
+	void *buf;
+	size_t page_size;
+	ssize_t bytes_read;
+	off_t pos;
+	unsigned long crc;
+	int i;
+	int rc = 0;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0)
+		return -errno;
+
+	rc = posix_memalign(&buf, page_size, buflen);
+	if (rc)
+		return -rc;
+	(void)mlock(buf, buflen);
+
+	/* Read from each mirror and compute checksum */
+	pos = chunk->chunk.e_start;
+	crc = crc32(0L, Z_NULL, 0);
+
+	for (i = 0; i < mirror_count; i++) {
+		bytes_read = llapi_mirror_read(fd, mirrors[i].mirror_id,
+					       buf, MIN(buflen,
+					       chunk->chunk.e_end - pos), pos);
+		if (bytes_read < 0) {
+			rc = bytes_read;
+			fprintf(stderr,
+				"%s: error reading from mirror %u: %s\n",
+				progname, mirrors[i].mirror_id,
+				strerror(-rc));
+			goto out;
+		}
+
+		mirrors[i].checksum = crc32(crc, buf, bytes_read);
+	}
+
+out:
+	(void)munlock(buf, buflen);
+	free(buf);
+	return rc;
+}
+
+/**
+ * get_mirror_properties() - Get properties of all mirrors.
+ * @layout:    Mirror component layout.
+ * @mirrors:   Array to store mirror information.
+ * @max_mirrors: Maximum number of mirrors to process.
+ *
+ * This function iterates through all mirror components and extracts
+ * their properties including mirror IDs and preference flags.
+ *
+ * Return: Number of mirrors found or a negative error code on failure.
+ */
+static int get_mirror_properties(struct llapi_layout *layout,
+				 struct mirror_info *mirrors, int max_mirrors)
+{
+	int mirror_count = 0;
+	uint32_t mirror_id, flags;
+	int rc;
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0)
+		return rc;
+
+	do {
+		rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+		if (rc < 0)
+			return rc;
+
+		rc = llapi_layout_comp_flags_get(layout, &flags);
+		if (rc < 0)
+			return rc;
+
+		/* Check if this mirror ID is already in our array */
+		int found = -1;
+
+		for (int i = 0; i < mirror_count; i++) {
+			if (mirrors[i].mirror_id == mirror_id) {
+				found = i;
+				break;
+			}
+		}
+
+		if (found == -1) {
+			if (mirror_count >= max_mirrors)
+				return -E2BIG;
+			found = mirror_count++;
+			mirrors[found].mirror_id = mirror_id;
+			mirrors[found].flags = 0;
+			mirrors[found].has_prefwr = false;
+			mirrors[found].has_prefrd = false;
+		}
+
+		mirrors[found].flags |= flags;
+		if (flags & LCME_FL_PREF_WR)
+			mirrors[found].has_prefwr = true;
+		if (flags & LCME_FL_PREF_RD)
+			mirrors[found].has_prefrd = true;
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	} while (rc == 0);
+
+	return mirror_count;
+}
+
+/**
+ * auto_mark_stale_mirrors() - Intelligently mark inconsistent mirrors as stale.
+ * @fd:      File descriptor of the mirrored file.
+ * @layout:  Mirror component layout.
+ * @fname:   File name for error reporting.
+ * @verbose: Verbosity level for output.
+ *
+ * This function analyzes mirror inconsistencies and marks only the mirrors
+ * that should be stale based on intelligent heuristics:
+ * - For 2 mirrors with different checksums: mark non-prefwr mirror as stale
+ * - For multiple mirrors: mark mirrors that don't match the majority checksum
+ * - Use prefwr/prefrd flags as tie-breakers when determining majority
+ * - Only processes chunks where mirrors have different checksums
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+static inline
+int auto_mark_stale_mirrors(int fd, struct llapi_layout *layout,
+			    const char *fname, int verbose)
+{
+	struct verify_chunk chunks_array[1024] = { };
+	struct mirror_info mirrors[LUSTRE_MIRROR_COUNT_MAX];
+	int chunk_count = 0;
+	int mirror_count;
+	int rc;
+
+	/* Get all mirror properties */
+	mirror_count = get_mirror_properties(layout, mirrors,
+					     LUSTRE_MIRROR_COUNT_MAX);
+	if (mirror_count < 0) {
+		fprintf(stderr,
+			"%s: failed to get mirror properties for '%s': %s\n",
+			progname, fname, strerror(-mirror_count));
+		return mirror_count;
+	}
+
+	if (mirror_count < 2) {
+		fprintf(stderr, "%s: file '%s' has less than 2 mirrors\n",
+			progname, fname);
+		return -EINVAL;
+	}
+
+	chunk_count = lfs_mirror_prepare_chunk(layout, chunks_array,
+					       ARRAY_SIZE(chunks_array),
+					       false);
+	if (chunk_count < 0) {
+		fprintf(stderr, "%s: failed to prepare chunks for '%s': %s\n",
+			progname, fname, strerror(-chunk_count));
+		return chunk_count;
+	}
+
+	/* For each chunk, compare mirror checksums */
+	for (int i = 0; i < chunk_count; i++) {
+		struct verify_chunk *chunk = &chunks_array[i];
+		unsigned long checksums[LUSTRE_MIRROR_COUNT_MAX];
+		int checksum_groups[LUSTRE_MIRROR_COUNT_MAX];
+		int group_counts[LUSTRE_MIRROR_COUNT_MAX] = {0};
+		int num_groups = 0;
+		int majority_group = -1;
+		int max_count = 0;
+
+		/* Compare checksums for this chunk */
+		rc = compare_mirror_checksums(fd, chunk, mirrors, mirror_count);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s: failed to compare checksums for '%s': %s\n",
+				progname, fname, strerror(-rc));
+			return rc;
+		}
+
+		/* Group mirrors by checksum */
+		for (int j = 0; j < mirror_count; j++) {
+			checksums[j] = mirrors[j].checksum;
+			checksum_groups[j] = -1;
+
+			/* Find existing group with same checksum */
+			for (int g = 0; g < num_groups; g++) {
+				for (int k = 0; k < j; k++) {
+					if (checksum_groups[k] == g &&
+					    checksums[k] == checksums[j]) {
+						checksum_groups[j] = g;
+						group_counts[g]++;
+						goto next_mirror;
+					}
+				}
+			}
+
+			/* Create new group if not found */
+			if (checksum_groups[j] == -1) {
+				checksum_groups[j] = num_groups;
+				group_counts[num_groups] = 1;
+				num_groups++;
+			}
+next_mirror:
+			continue;
+		}
+
+		/* Find majority group, with tie-breaking */
+		for (int g = 0; g < num_groups; g++) {
+			if (group_counts[g] > max_count) {
+				max_count = group_counts[g];
+				majority_group = g;
+			} else if (group_counts[g] == max_count &&
+				   max_count > 1) {
+				/* prefer group with prefwr mirrors */
+				bool current_has_prefwr = false;
+				bool candidate_has_prefwr = false;
+
+				/* Check if current majority group has
+				 * prefwr mirrors
+				 */
+				for (int k = 0; k < mirror_count; k++) {
+					if (checksum_groups[k] == majority_group &&
+					    mirrors[k].has_prefwr) {
+						current_has_prefwr = true;
+						break;
+					}
+				}
+
+				/* Check if candidate group has
+				 * prefwr mirrors
+				 */
+				for (int k = 0; k < mirror_count; k++) {
+					if (checksum_groups[k] == g &&
+					    mirrors[k].has_prefwr) {
+						candidate_has_prefwr = true;
+						break;
+					}
+				}
+
+				/* Prefer group with prefwr mirrors */
+				if (candidate_has_prefwr &&
+				    !current_has_prefwr) {
+					majority_group = g;
+				}
+			}
+		}
+
+		/* If all mirrors have same checksum, nothing to mark */
+		if (num_groups == 1)
+			continue;
+
+		/* Validate that we found a majority group */
+		if (majority_group == -1) {
+			fprintf(stderr,
+				"%s: failed to determine majority group for chunk %d in '%s'\n",
+				progname, i, fname);
+			return -EINVAL;
+		}
+
+		if (verbose > 1) {
+			printf("Found %d checksum groups for chunk %d, majority group %d has %d mirrors\n",
+			       num_groups, i, majority_group, max_count);
+		}
+
+		/* Special case for 2 mirrors with different checksums */
+		if (mirror_count == 2 && num_groups == 2) {
+			int prefwr_mirror = -1;
+			int non_prefwr_mirror = -1;
+
+			/* Find prefwr vs non-prefwr mirrors */
+			for (int j = 0; j < mirror_count; j++) {
+				if (mirrors[j].has_prefwr)
+					prefwr_mirror = j;
+				else
+					non_prefwr_mirror = j;
+			}
+
+			/* mark non-prefwr as stale */
+			if (prefwr_mirror >= 0 && non_prefwr_mirror >= 0) {
+				printf("Marking non-prefwr mirror %u as stale\n",
+				       mirrors[non_prefwr_mirror].mirror_id);
+
+				rc = lfs_component_set_by_mirror((char *)fname,
+					mirrors[non_prefwr_mirror].mirror_id,
+					LCME_FL_STALE, 0);
+				if (rc != 0) {
+					fprintf(stderr,
+						"%s: failed to mark mirror %u stale in '%s': %s\n",
+						progname,
+						mirrors[non_prefwr_mirror].mirror_id,
+						fname, strerror(-rc));
+					return rc;
+				}
+				continue;
+			}
+		}
+
+		/* Mark mirrors that don't match majority as stale */
+		for (int j = 0; j < mirror_count; j++) {
+			if (checksum_groups[j] != majority_group) {
+				/* This mirror is inconsistent, mark it stale */
+				printf("Marking mirror %u as stale (has_prefwr=%s)\n",
+				       mirrors[j].mirror_id,
+				       mirrors[j].has_prefwr ? "yes" : "no");
+
+				rc = lfs_component_set_by_mirror((char *)fname,
+					mirrors[j].mirror_id,
+					LCME_FL_STALE, 0);
+				if (rc != 0) {
+					fprintf(stderr,
+						"%s: failed to mark mirror %u stale in '%s': %s\n",
+						progname, mirrors[j].mirror_id,
+						fname, strerror(-rc));
+					return rc;
+				}
+			}
+		}
+	}
+
+	if (verbose > 0) {
+		printf("Successfully marked inconsistent mirrors as stale in '%s'\n",
+		       fname);
+	}
+	return 0;
+}
+
 /**
  * lfs_mirror_verify_file() - Verify a mirrored file.
  * @fname:      Mirrored file name.
@@ -14990,7 +15339,7 @@ error:
  */
 static inline
 int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
-			   int verbose)
+			   int verbose, int stale)
 {
 	struct verify_chunk chunks_array[1024] = { };
 	struct llapi_layout *layout = NULL;
@@ -15143,10 +15492,26 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 					      layout);
 		if (rc1 < 0) {
 			rc2 = rc1;
-			if (!verbose) {
+			if (!verbose && !stale) {
 				rc = rc1;
 				goto free_layout;
 			}
+		}
+	}
+
+	/* If stale marking is requested and there were verification errors,
+	 * try to automatically mark mirrors as stale
+	 */
+	if (stale && rc2 < 0) {
+		int mark_rc = auto_mark_stale_mirrors(fd, layout, fname,
+						      verbose);
+
+		if (mark_rc < 0) {
+			fprintf(stderr,
+				"%s: failed to auto-mark stale mirrors in '%s': %s\n",
+				progname, fname, strerror(-mark_rc));
+		} else {
+			rc2 = mark_rc;
 		}
 	}
 
@@ -15177,6 +15542,7 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 	__u16 mirror_ids[LUSTRE_MIRROR_COUNT_MAX] = { 0 };
 	int ids_nr = 0;
 	int c;
+	int stale = 0;
 	int verbose = 0;
 	int rc = 0;
 	int rc1 = 0;
@@ -15185,12 +15551,13 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
+	{ .val = 's',	.name = "stale",	.has_arg = no_argument},
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
 
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
-	while ((c = getopt_long(argc, argv, "ho:v", long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "ho:sv", long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 'o':
 			rc = parse_mirror_ids(mirror_ids,
@@ -15210,6 +15577,9 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 				rc = CMD_HELP;
 				goto error;
 			}
+			break;
+		case 's':
+			stale = 1;
 			break;
 		case 'v':
 			verbose++;
@@ -15247,7 +15617,7 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 	rc = 0;
 	for (; optind < argc; optind++) {
 		rc1 = lfs_mirror_verify_file(argv[optind], mirror_ids, ids_nr,
-					     verbose);
+					     verbose, stale);
 		if (rc1 < 0)
 			rc = rc1;
 	}

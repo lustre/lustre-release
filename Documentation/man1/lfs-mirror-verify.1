@@ -5,6 +5,7 @@ lfs-mirror-verify \- verify mirrored file(s)
 .SY "lfs mirror verify"
 .RB [ --only
 .IR MIRROR_ID [, MIRROR_ID2 ,...]]
+.RB [ --stale | -s ]
 .RB [ --verbose | -v ]
 .IR MIRRORED_FILE " [" MIRRORED_FILE2 " ...]"
 .YS
@@ -39,6 +40,12 @@ option is specified,
 then the command will print where the differences are if the data do not match.
 Otherwise, the command will just return an error in that case.
 This option can be repeated for multiple times to print more information.
+.P
+if
+.BR --stale | -s
+option is specified,
+then the command will check the mirrors of file and mark them stale based on
+the data consistency and intelligent heuristics.
 .SH OPTIONS
 .TP
 .BR --only " \fIMIRROR_ID" [,\fIMIRROR_ID2 ,...]
@@ -49,6 +56,10 @@ need to be verified. The
 is the numerical unique identifier for a mirror. Multiple
 .IR MIRROR_ID s
 are separated by comma.
+.TP
+.BR -s ", " --stale
+This option indicates the command will check the mirrors of file and mark them
+stale based on the data consistency and intelligent heuristics.
 .TP
 .BR -v ", " --verbose
 This option indicates the command will print where the differences are if the

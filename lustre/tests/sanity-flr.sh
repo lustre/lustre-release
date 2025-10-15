@@ -4623,7 +4623,7 @@ test_211() {
 }
 run_test 211 "mirror delete should not cause bad size"
 
-test_212() {
+test_212a() {
 	local tf=$DIR/$tfile
 
 	$LFS mirror create -N2 $tf || error "create mirrored file $tf failed"
@@ -4655,7 +4655,62 @@ test_212() {
 		error "verify should return error when components are stale" ||
 			true
 }
-run_test 212 "Testing lfs setstripe --comp-set --comp-flags=stale --mirror-id"
+run_test 212a "Testing lfs setstripe --comp-set --comp-flags=stale --mirror-id"
+
+test_212b() {
+	local tf=$DIR/$tfile
+
+	# Create 3-mirror file for comprehensive testing
+	$LFS mirror create -N3 $tf || error "create 3-mirror file $tf failed"
+
+	# Write initial data to all mirrors
+	echo "initial data for all mirrors" > $tf || error "write $tf failed"
+	$LFS mirror resync $tf || error "initial resync failed"
+	verify_flr_state $tf "ro"
+
+	# Verify behavior with consistent mirrors
+	$LFS mirror verify -v $tf ||
+		error "verify should succeed with consistent mirrors"
+
+	# Create inconsistency by writing to specific mirror
+	echo "Writing different data to mirror 2 only"
+	$LFS mirror write -N 2 $tf <<< "mirror 2 specific data" ||
+		error "failed to write to mirror 2"
+
+	# Verify should fail with inconsistent mirrors
+	echo "=== Verify inconsistent mirrors ==="
+	$LFS mirror verify $tf &&
+		error "verify should fail when mirrors are inconsistent" ||
+		echo "verify correctly failed with inconsistent mirrors"
+
+	# Test --stale option behavior
+	$LFS mirror verify --stale $tf
+	local stale_rc=$?
+
+	if [ $stale_rc -eq 0 ]; then
+
+		# Check if any mirrors were marked as stale
+		local stale_count=$($LFS getstripe $tf | grep -c "stale")
+		if [ $stale_count -gt 0 ]; then
+			echo "Found $stale_count stale components"
+		else
+			error "No stale components found"
+		fi
+	else
+		error "mirror verify --stale failed with rc=$stale_rc"
+	fi
+
+	# Resync and verify final state
+	echo "=== Resync and final verification ==="
+	$LFS mirror resync $tf || error "final resync failed"
+	verify_flr_state $tf "ro"
+
+	$LFS mirror verify $tf ||
+		error "mirrors should be consistent after final resync"
+
+	echo "verify --stale test completed successfully"
+}
+run_test 212b "Testing lfs mirror verify --stale option"
 
 complete_test $SECONDS
 check_and_cleanup_lustre
