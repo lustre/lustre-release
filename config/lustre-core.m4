@@ -3071,6 +3071,26 @@ AC_DEFUN([LC_FSCRYPT_PREPARE_READDIR], [
 ]) # LC_FSCRYPT_PREPARE_READDIR
 
 #
+# LC_SET_POSIX_ACL_USER_NS
+# Linux commit v5.11-rc4-8-ge65ce2a50cf6
+#   acl: handle idmapped mounts
+#
+AC_DEFUN([LC_SRC_SET_POSIX_ACL_USER_NS], [
+	LB2_LINUX_TEST_SRC([set_posix_acl_user_ns], [
+		#include <linux/posix_acl.h>
+	],[
+		set_posix_acl((struct user_namespace *)NULL, (struct inode*)NULL, 0, NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_SET_POSIX_ACL_USER_NS], [
+	LB2_MSG_LINUX_TEST_RESULT([if set_posix_acl() has user namespace argument],
+	[set_posix_acl_user_ns], [
+		AC_DEFINE(HAVE_SET_POSIX_ACL_USER_NS, 1,
+			[set_posix_acl() has user namespace argument])
+	])
+]) # LC_SET_POSIX_ACL_USER_NS
+
+#
 # LC_BIO_SET_DEV
 #
 # Linux: v5.11-rc5-9-g309dca309fc3
@@ -4020,6 +4040,27 @@ AC_DEFUN([LC_IOP_GET_INODE_ACL], [
 			[inode_operations has .get_inode_acl member function])
 	])
 ]) # LC_IOP_GET_INODE_ACL
+
+#
+# LC_HAVE_POSIX_ACL_TYPE
+#
+# Linux commit v6.1-rc1-15-ge4cc9163032f
+#   acl: add vfs_set_acl()
+#
+AC_DEFUN([LC_SRC_HAVE_POSIX_ACL_TYPE], [
+	LB2_LINUX_TEST_SRC([posix_acl_type], [
+		#include <linux/posix_acl_xattr.h>
+	],[
+		posix_acl_type(NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_POSIX_ACL_TYPE], [
+	LB2_MSG_LINUX_TEST_RESULT([if posix_acl_type() is available],
+	[posix_acl_type], [
+		AC_DEFINE(HAVE_POSIX_ACL_TYPE, 1,
+			[posix_acl_type() is available])
+	])
+]) # LC_HAVE_POSIX_ACL_TYPE
 
 #
 # LC_HAVE_FOLIO_MAPCOUNT
@@ -5202,6 +5243,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_FSCRYPT_PREPARE_READDIR
 
 	# 5.11
+	LC_SRC_SET_POSIX_ACL_USER_NS
 	LC_SRC_BIO_SET_DEV
 
 	# 5.12
@@ -5250,6 +5292,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
 	LC_SRC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
 	LC_SRC_IOP_GET_INODE_ACL
+	LC_SRC_HAVE_POSIX_ACL_TYPE
 
 	# 6.2
 	LC_SRC_HAVE_GET_RANDOM_U32_BELOW
@@ -5529,6 +5572,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_FSCRYPT_PREPARE_READDIR
 
 	# 5.11
+	LC_SET_POSIX_ACL_USER_NS
 	LC_BIO_SET_DEV
 
 	# 5.12
@@ -5579,6 +5623,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL
 	LC_HAVE_FILEMAP_GET_FOLIOS_CONTIG
 	LC_IOP_GET_INODE_ACL
+	LC_HAVE_POSIX_ACL_TYPE
 
 	# 6.2
 	LC_HAVE_GET_RANDOM_U32_BELOW

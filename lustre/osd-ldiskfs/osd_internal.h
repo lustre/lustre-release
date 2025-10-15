@@ -804,6 +804,96 @@ extern int ldiskfs_pdo;
 #define DECLARE_BVEC_ITER_ALL(iter) int iter
 #endif
 
+#ifndef HAVE_POSIX_ACL_TYPE
+static inline int posix_acl_type(const char *name)
+{
+	if (strcmp(name, XATTR_NAME_POSIX_ACL_ACCESS) == 0)
+		return ACL_TYPE_ACCESS;
+	if (strcmp(name, XATTR_NAME_POSIX_ACL_DEFAULT) == 0)
+		return ACL_TYPE_DEFAULT;
+
+	return -1;
+}
+#endif
+
+static inline int __osd_acl_get(struct inode *inode, const char *name,
+				void *buf, int len)
+{
+	struct posix_acl *acl;
+	int acl_type, error;
+
+	acl_type = posix_acl_type(name);
+	if (acl_type < 0)
+		return -EINVAL;
+
+#ifdef HAVE_IOP_GET_INODE_ACL
+	acl = get_inode_acl(inode, acl_type);
+#else
+	acl = get_acl(inode, acl_type);
+#endif
+	if (IS_ERR(acl))
+		return PTR_ERR(acl);
+	if (!acl)
+		return -ENODATA;
+
+	error = posix_acl_to_xattr(&init_user_ns, acl, buf, len);
+	posix_acl_release(acl);
+
+	return error;
+}
+
+static inline int __osd_acl_set(struct dentry *dentry, struct inode *inode,
+				const char *name, const void *buf,
+				int buflen)
+{
+	int acl_type;
+	int error;
+	struct posix_acl *acl = NULL;
+
+	acl_type = posix_acl_type(name);
+	if (acl_type < 0)
+		return -EINVAL;
+
+	if (buflen) {
+		acl = posix_acl_from_xattr(&init_user_ns, buf, buflen);
+		if (IS_ERR(acl))
+			return PTR_ERR(acl);
+	}
+
+#ifdef HAVE_MNT_IDMAP_ARG
+	error = set_posix_acl(&nop_mnt_idmap, dentry, acl_type, acl);
+#elif defined HAVE_ACL_WITH_DENTRY
+	error = set_posix_acl(&init_user_ns, dentry, acl_type, acl);
+#elif defined HAVE_SET_POSIX_ACL_USER_NS
+	error = set_posix_acl(&init_user_ns, inode, acl_type, acl);
+#else
+	error = set_posix_acl(inode, acl_type, acl);
+#endif
+	posix_acl_release(acl);
+
+	return error;
+}
+
+static inline int __osd_acl_del(struct dentry *dentry, struct inode *inode,
+				const char *name)
+{
+	int acl_type;
+
+	acl_type = posix_acl_type(name);
+	if (acl_type < 0)
+		return -EINVAL;
+
+#ifdef HAVE_MNT_IDMAP_ARG
+	return set_posix_acl(&nop_mnt_idmap, dentry, acl_type, NULL);
+#elif defined HAVE_ACL_WITH_DENTRY
+	return set_posix_acl(&init_user_ns, dentry, acl_type, NULL);
+#elif defined HAVE_SET_POSIX_ACL_USER_NS
+	return set_posix_acl(&init_user_ns, inode, acl_type, NULL);
+#else
+	return set_posix_acl(inode, acl_type, NULL);
+#endif
+}
+
 static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
 				  const char *name, void *buf, int len)
 {
@@ -812,7 +902,11 @@ static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
 
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-	return ll_vfs_getxattr(dentry, inode, name, buf, len);
+	if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0 ||
+	    strcmp(name, XATTR_NAME_ACL_DEFAULT) == 0)
+		return __osd_acl_get(inode, name, buf, len);
+	else
+		return ll_vfs_getxattr(dentry, inode, name, buf, len);
 }
 
 static inline int __osd_xattr_set(struct osd_thread_info *info,
@@ -824,7 +918,24 @@ static inline int __osd_xattr_set(struct osd_thread_info *info,
 	dquot_initialize(inode);
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-	return ll_vfs_setxattr(dentry, inode, name, buf, buflen, fl);
+	if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0 ||
+	    strcmp(name, XATTR_NAME_ACL_DEFAULT) == 0)
+		return __osd_acl_set(dentry, inode, name, buf, buflen);
+	else
+		return ll_vfs_setxattr(dentry, inode, name, buf, buflen, fl);
+}
+
+static inline int __osd_xattr_del(struct inode *inode, struct dentry *dentry,
+				  const char *name)
+{
+	dquot_initialize(inode);
+	dentry->d_inode = inode;
+	dentry->d_sb = inode->i_sb;
+	if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0 ||
+	    strcmp(name, XATTR_NAME_ACL_DEFAULT) == 0)
+		return __osd_acl_del(dentry, inode, name);
+	else
+		return ll_vfs_removexattr(dentry, inode, name);
 }
 
 static inline char *osd_oid_name(char *name, size_t name_size,

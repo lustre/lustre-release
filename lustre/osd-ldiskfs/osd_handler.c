@@ -5412,10 +5412,7 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 				obj->oo_pfid_in_lma = 0;
 		}
 	} else {
-		dquot_initialize(inode);
-		dentry->d_inode = inode;
-		dentry->d_sb = inode->i_sb;
-		rc = ll_vfs_removexattr(dentry, inode, name);
+		rc = __osd_xattr_del(inode, dentry, name);
 	}
 
 	osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);
