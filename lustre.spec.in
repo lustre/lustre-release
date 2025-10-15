@@ -658,8 +658,8 @@ This survey tests LNet performance between a group of clients and servers.
 %endif
 %prep
 %setup -qn lustre-%{version}
-ln lustre/ChangeLog ChangeLog-lustre
-ln lnet/ChangeLog ChangeLog-lnet
+ln lustre/ChangeLog ChangeLog-lustre-%{version}
+ln lnet/ChangeLog ChangeLog-lnet-%{version}
 
 %build
 # Set an explicit path to our Linux tree, if we can.

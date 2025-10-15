@@ -11,6 +11,5 @@
 %else
 %{modules_fs_path}/%{lustre_name}/*
 %endif
-%doc COPYING
-%doc ChangeLog-lustre
-%doc ChangeLog-lnet
+%doc ChangeLog-lustre-%{version}
+%doc ChangeLog-lnet-%{version}
