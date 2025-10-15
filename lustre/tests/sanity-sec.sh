@@ -12428,6 +12428,144 @@ test_102() {
 }
 run_test 102 "SSK automatic key loading from mount point"
 
+cleanup_103() {
+	local test_key="$SK_PATH/$FSNAME-test103.key"
+
+	# ensure client is unmounted
+	umount_client $MOUNT || true
+
+	# clear test key from keyring on all server nodes
+	do_nodes $(comma_list $(all_server_nodes)) "keyctl show |
+		grep lustre:$FSNAME:default: | cut -c1-11 | sed -e 's/ //g;' |
+		xargs -IX keyctl unlink X" || true
+
+	# clear any existing keys from keyring on client
+	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
+		xargs -IX keyctl unlink X 2>/dev/null || true
+
+	# Remove test key file from all nodes
+	do_nodes $(comma_list $(all_nodes)) "rm -f $test_key" ||
+		true
+
+	# reload test-framework key on servers
+	do_nodes $(comma_list $(all_server_nodes)) \
+		"$LGSS_SK -l $SK_PATH/$FSNAME.key -vvv" ||
+		error "failed to reload key on servers"
+
+	# Remount client
+	zconf_mount $HOSTNAME $MOUNT || error "re-mount $MOUNT failed"
+	if [[ "$MOUNT_2" ]]; then
+		zconf_mount $HOSTNAME $MOUNT2 ||
+			error "remount $MOUNT2 failed"
+	fi
+	wait_ssk
+}
+
+test_103() {
+	local test_key="$SK_PATH/$FSNAME-test103.key"
+	local timeout=60
+	local sleeppid
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	local_mode && skip "in local mode."
+
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS >= 2.17.50 for multiple similar keys"
+
+	stack_trap cleanup_103 EXIT
+
+	test_mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
+
+	# generate new SSK key for same fs
+	$LGSS_SK -t server -f $FSNAME -w $test_key -d /dev/urandom -p 512 ||
+		error "failed to create SSK key"
+
+	# distribute new key to all nodes
+	local nodes_list=$(all_nodes)
+	for lnode in ${nodes_list//,/ }; do
+		scp $test_key ${lnode}:$test_key ||
+			error "failed to copy key to $lnode"
+	done
+
+	# load new key on servers with -s to not overwrite already existing key
+	do_nodes $(comma_list $(all_server_nodes)) \
+		"$LGSS_SK -l $test_key -s -vvv -x $timeout" ||
+		error "failed to load key on servers"
+
+	# start timer for key expiration
+	sleep $((timeout + 10)) &
+	sleeppid=$!
+
+	# unmount client completely
+	umount_client $MOUNT || error "umount $MOUNT failed (1)"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	# remount client: should work by using old key
+	$MOUNT_CMD -o $MOUNT_OPTS,skpath=$SK_PATH/$FSNAME.key \
+		$MGSNID:/$FSNAME $MOUNT ||
+			error "remount failed (1)"
+	wait_ssk
+
+	[[ -f $DIR/$tdir/$tfile ]] ||
+		error "file $DIR/$tdir/$tfile does not exist (1)"
+
+	umount_client $MOUNT || error "umount $MOUNT failed (2)"
+	# clear any existing keys from keyring on client
+	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' | \
+		xargs -IX keyctl unlink X 2>/dev/null || true
+
+	# remount client: should work by using new key
+	$LGSS_SK -t client -m $test_key || error "failed to generate client key"
+	$MOUNT_CMD -o $MOUNT_OPTS,skpath=$test_key $MGSNID:/$FSNAME $MOUNT ||
+			error "remount failed (2)"
+	wait_ssk
+
+	[[ -f $DIR/$tdir/$tfile ]] ||
+		error "file $DIR/$tdir/$tfile does not exist (2)"
+
+	umount_client $MOUNT || error "umount $MOUNT failed (3)"
+	# clear any existing keys from keyring on client
+	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' | \
+		xargs -IX keyctl unlink X 2>/dev/null || true
+
+	# remount with former key
+	$MOUNT_CMD -o $MOUNT_OPTS,skpath=$SK_PATH/$FSNAME.key \
+		$MGSNID:/$FSNAME $MOUNT ||
+			error "remount failed (3)"
+	wait_ssk
+
+	[[ -f $DIR/$tdir/$tfile ]] ||
+		error "file $DIR/$tdir/$tfile does not exist (3)"
+
+	# wait for key expiration
+	wait $sleeppid
+
+	cancel_lru_locks
+	$LFS flushctx $DIR
+	# access with old key should fail as it expired on server side
+	[[ -f $DIR/$tdir/$tfile ]] &&
+		error "file $DIR/$tdir/$tfile should be inaccessible"
+
+	umount_client $MOUNT || error "umount $MOUNT failed (4)"
+	# clear any existing keys from keyring on client
+	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' | \
+		xargs -IX keyctl unlink X 2>/dev/null || true
+
+	# remount client: should work by using new key
+	$LGSS_SK -t client -m $test_key || error "failed to generate client key"
+	$MOUNT_CMD -o $MOUNT_OPTS,skpath=$test_key $MGSNID:/$FSNAME $MOUNT ||
+			error "remount failed (4)"
+	wait_ssk
+
+	[[ -f $DIR/$tdir/$tfile ]] ||
+		error "file $DIR/$tdir/$tfile does not exist (4)"
+}
+run_test 103 "Multiple SSK keys on server side"
+
 test_300() {
 	local principal="mock_iam_test"
 	local mount_opts=$(csa_add "$MOUNT_OPTS" "" "user_principal=$principal")

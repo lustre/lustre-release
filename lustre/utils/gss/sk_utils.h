@@ -404,7 +404,8 @@ int sk_encode_ascii_key(const struct sk_keyfile_config *config,
 uint32_t sk_verify_hash(const char *string, const EVP_MD *hash_alg,
 			const gss_buffer_desc *current_hash);
 struct sk_cred *sk_create_cred(const char *fsname, const char *cluster,
-			       const char *uuid, const uint32_t flags);
+			       const char *uuid, const uint32_t flags,
+			       void **user_keys_p, void **key_p);
 #ifndef HAVE_OPENSSL_EVP_PKEY
 int sk_speedtest_dh_valid(unsigned int usec_check_max, pid_t *child);
 #endif

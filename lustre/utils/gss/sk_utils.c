@@ -1101,6 +1101,11 @@ static inline int sk_config_has_mgsnid(struct sk_keyfile_config *config,
  * all the way to the request_key call.  In addition any keys can be dynamically
  * added to the keyrings and still found.  The keyring that needs to be used
  * must be the session keyring.
+ * This function can be called repeatedly to cycle through multiple matching
+ * keys in the kernel keyring, if non-NULL pointers are provided for
+ * \a user_keys_p and \a key_p. The \a key_p pointer is internally updated to
+ * point to the key to use. When \a user_keys_p is no longer needed, it must be
+ * freed by the caller.
  *
  * \param[in]	tgt		Target file system
  * \param[in]	nodemap		Cluster name for the key.  This correlates to
@@ -1108,30 +1113,25 @@ static inline int sk_config_has_mgsnid(struct sk_keyfile_config *config,
  *				For the client this will be NULL.
  * \param[in]	uuid		Client uuid
  * \param[in]	flags		Flags for the credentials
+ * \param[out]	user_keys_p	Pointer to keys array, must be freed by caller
+ * \param[in,out]  key_p	Pointer to current key in array, internal use
  *
  * \return	sk_cred Allocated struct sk_cred on success
  * \return	NULL	failure
  */
 struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
-			       const char *uuid, const uint32_t flags)
+			       const char *uuid, const uint32_t flags,
+			       void **user_keys_p, void **key_p)
 {
+	char description[SK_DESCRIPTION_SIZE + 1] = { 0 };
+	char fsname[MTI_NAME_MAXLEN + 1] = { 0 };
 	struct sk_keyfile_config *config;
 	struct sk_kernel_ctx *kctx;
 	struct sk_cred *skc = NULL;
-	char description[SK_DESCRIPTION_SIZE + 1];
-	char fsname[MTI_NAME_MAXLEN + 1];
 	const char *mgsnid = NULL;
-	char *ptr;
 	long sk_key;
-	int keylen;
-	int len;
-	int rc;
-
-	printerr(2, "Creating credentials for target: %s with nodemap: %s\n",
-		 tgt, nodemap);
-
-	memset(description, 0, sizeof(description));
-	memset(fsname, 0, sizeof(fsname));
+	char *ptr;
+	int len, keylen, rc;
 
 	/* extract the file system name from target */
 	ptr = index(tgt, '-');
@@ -1154,6 +1154,12 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 	}
 	memcpy(fsname, tgt, len);
 
+	if (key_p && *key_p)
+		goto use_key;
+
+	printerr(2, "Creating credentials for target: %s with nodemap: %s\n",
+		 tgt, nodemap);
+
 build_desc:
 	if (nodemap) {
 		if (mgsnid)
@@ -1172,23 +1178,39 @@ build_desc:
 		return NULL;
 	}
 
-	/* It may be a good idea to move Lustre keys to the gss_keyring
-	 * (lgssc) type so that they expire when Lustre modules are removed.
-	 * Unfortunately it can't be done at mount time because the mount
-	 * syscall could trigger the Lustre modules to load and until that
-	 * point we don't have a lgssc key type.
-	 *
-	 * TODO: Query the community for a consensus here  */
-	printerr(2, "Searching for key with description: %s\n", description);
-	sk_key = keyctl_search(KEY_SPEC_USER_KEYRING, "user",
-			       description, 0);
-	if (sk_key == -1) {
-		if (!nodemap && uuid) {
-			uuid = NULL;
-			goto build_desc;
+	if (key_p && user_keys_p && *user_keys_p == NULL) {
+		if (*key_p) {
+			printerr(0, "Invalid key index\n");
+			return NULL;
 		}
-		printerr(1, "No key found for %s\n", description);
-		return NULL;
+
+		*user_keys_p = build_keys_array(description);
+		if (!*user_keys_p)
+			return NULL;
+		*key_p = *user_keys_p;
+	}
+
+	if (key_p && *key_p) {
+use_key:
+		sk_key = *((key_serial_t *)*key_p);
+		if (!sk_key) {
+			printerr(0, "No more valid keys in user keyring\n");
+			return NULL;
+		}
+		printerr(2, "Using key with serial 0x%lx\n", sk_key);
+	} else {
+		printerr(2, "Searching for key with description: %s\n",
+			 description);
+		sk_key = keyctl_search(KEY_SPEC_USER_KEYRING, "user",
+				       description, 0);
+		if (sk_key == -1) {
+			if (!nodemap && uuid) {
+				uuid = NULL;
+				goto build_desc;
+			}
+			printerr(1, "No key found for %s\n", description);
+			return NULL;
+		}
 	}
 
 	keylen = keyctl_read_alloc(sk_key, (void **)&config);
@@ -1276,6 +1298,10 @@ build_desc:
 	memcpy(skc->sc_p.value, config->skc_p, skc->sc_p.length);
 
 	free(config);
+
+	if (key_p && *key_p)
+		/* update key pointer to next in array */
+		*key_p = ((key_serial_t *)*key_p) + 1;
 
 	return skc;
 

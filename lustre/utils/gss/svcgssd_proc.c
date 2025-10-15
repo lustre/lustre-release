@@ -632,6 +632,8 @@ static int handle_sk(struct svc_nego_data *snd)
 	uint32_t rc = GSS_S_DEFECTIVE_TOKEN;
 	uint32_t version;
 	uint32_t flags;
+	void *user_keys = NULL;
+	void *keyp = NULL;
 	int attempts = 0, i, ret;
 
 	printerr(LL_DEBUG, "Handling sk request\n");
@@ -693,7 +695,10 @@ static int handle_sk(struct svc_nego_data *snd)
 	printerr(LL_DEBUG, "Using nodemap name %s for authentication\n",
 		 snd->nm_name);
 
-	skc = sk_create_cred(target, snd->nm_name, NULL, be32toh(flags));
+create_cred:
+	sk_free_cred(skc);
+	skc = sk_create_cred(target, snd->nm_name, NULL, be32toh(flags),
+			     &user_keys, &keyp);
 	if (!skc) {
 		printerr(LL_ERR, "Failed to create sk credentials\n");
 		goto cleanup_buffers;
@@ -708,7 +713,7 @@ static int handle_sk(struct svc_nego_data *snd)
 		printerr(LL_ERR,
 			 "Peer DHKE prime does not meet the size required by keyfile: %zd bits\n",
 			 skc->sc_p.length * 8);
-		goto cleanup_buffers;
+		goto create_cred;
 	}
 
 	/* Throw out the p from the server and use the wire data */
@@ -720,7 +725,7 @@ static int handle_sk(struct svc_nego_data *snd)
 	if (bufs[SK_INIT_RANDOM].length !=
 	    sizeof(skc->sc_kctx.skc_peer_random)) {
 		printerr(LL_ERR, "Invalid size for client random\n");
-		goto cleanup_buffers;
+		goto create_cred;
 	}
 
 	memcpy(&skc->sc_kctx.skc_peer_random, bufs[SK_INIT_RANDOM].value,
@@ -738,7 +743,13 @@ static int handle_sk(struct svc_nego_data *snd)
 	if (rc != GSS_S_COMPLETE) {
 		printerr(LL_ERR, "HMAC verification error: 0x%x from peer %s\n",
 			 rc, libcfs_nid2str((lnet_nid_t)snd->nid));
-		goto cleanup_partial;
+		skc->sc_p.value = NULL;
+		skc->sc_p.length = 0;
+		skc->sc_nodemap_hash.value = NULL;
+		skc->sc_nodemap_hash.length = 0;
+		skc->sc_hmac.value = NULL;
+		skc->sc_hmac.length = 0;
+		goto create_cred;
 	}
 
 redo:
@@ -857,6 +868,7 @@ cleanup_buffers:
 	for (i = 0; i < SK_INIT_BUFFERS; i++)
 		free(bufs[i].value);
 	sk_free_cred(skc);
+	free(user_keys);
 	snd->maj_stat = rc;
 	return -1;
 
