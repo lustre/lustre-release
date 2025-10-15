@@ -145,7 +145,7 @@ test_1() {
 
 	log "done"
 
-	wait_delete_completed
+	wait_delete_completed 300
 	sleep 5 # let MDS refresh aggregated statfs
 	echo "usage after removing all files"
 	$LFS df

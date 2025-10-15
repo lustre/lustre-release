@@ -4035,7 +4035,7 @@ fstrim_inram_devs() {
 
 wait_delete_completed() {
 	wait_delete_completed_mds $1 || return $?
-	wait_destroy_complete || return $?
+	wait_destroy_complete $1 || return $?
 	fstrim_inram_devs
 }
 
