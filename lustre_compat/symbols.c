@@ -10,6 +10,7 @@
  */
 
 #include <linux/kprobes.h>
+#include <lustre_compat/linux/security.h>
 #include <lustre_compat/linux/workqueue.h>
 
 #include <linux/libcfs/libcfs.h>
@@ -57,7 +58,7 @@ struct workqueue_attrs *compat_alloc_workqueue_attrs(void)
 {
 	return __alloc_workqueue_attrs();
 }
-EXPORT_SYMBOL_GPL(compat_alloc_workqueue_attrs);
+EXPORT_SYMBOL(compat_alloc_workqueue_attrs);
 
 static int (*__apply_workqueue_attrs)(struct workqueue_struct *wq,
 				      const struct workqueue_attrs *attrs);
@@ -67,12 +68,29 @@ int compat_apply_workqueue_attrs(struct workqueue_struct *wq,
 {
 	return __apply_workqueue_attrs(wq, attrs);
 }
-EXPORT_SYMBOL_GPL(compat_apply_workqueue_attrs);
+EXPORT_SYMBOL(compat_apply_workqueue_attrs);
 
 #ifdef alloc_workqueue_attrs
 # define ALLOC_WQ_ATTRS_FUNC	"alloc_workqueue_attrs_noprof"
 #else
 # define ALLOC_WQ_ATTRS_FUNC	"alloc_workqueue_attrs"
+#endif
+
+#ifdef CONFIG_SECURITY
+static int (*__security_file_alloc)(struct file *file);
+static void (*__security_file_free)(struct file *file);
+
+int compat_security_file_alloc(struct file *file)
+{
+	return __security_file_alloc(file);
+}
+EXPORT_SYMBOL(compat_security_file_alloc);
+
+void compat_security_file_free(struct file *file)
+{
+	return __security_file_free(file);
+}
+EXPORT_SYMBOL(compat_security_file_free);
 #endif
 
 int lustre_symbols_init(void)
@@ -93,6 +111,16 @@ int lustre_symbols_init(void)
 	__apply_workqueue_attrs = cfs_kallsyms_lookup_name("apply_workqueue_attrs");
 	if (!__apply_workqueue_attrs)
 		return -EINVAL;
+
+#ifdef CONFIG_SECURITY
+	__security_file_alloc = cfs_kallsyms_lookup_name("security_file_alloc");
+	if (!__security_file_alloc)
+		return -EINVAL;
+
+	__security_file_free = cfs_kallsyms_lookup_name("security_file_free");
+	if (!__security_file_free)
+		return -EINVAL;
+#endif
 
 	return 0;
 }

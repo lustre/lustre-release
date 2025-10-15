@@ -2862,7 +2862,6 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 			loff_t offset, int whence)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
-	struct osd_device *dev = osd_obj2dev(obj);
 	struct inode *inode = obj->oo_inode;
 	struct file *file;
 	loff_t result;
@@ -2873,15 +2872,12 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(inode);
 	LASSERT(offset >= 0);
 
-	file = osd_alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
-				     inode->i_fop);
+	file = osd_get_filp_for_inode(osd_oti_get(env), inode);
 	if (IS_ERR(file))
 		RETURN(PTR_ERR(file));
 
-	file->f_mode |= FMODE_64BITHASH;
 	result = file->f_op->llseek(file, offset, whence);
-	ihold(inode);
-	fput(file);
+	compat_security_file_free(file);
 	/*
 	 * If 'offset' is beyond end of object file then treat it as not error
 	 * but valid case for SEEK_HOLE and return 'offset' as result.
@@ -3070,15 +3066,13 @@ static int osd_execute_fallocate(const struct lu_env *env,
 	struct file *file;
 	int rc;
 
-	file = osd_alloc_file_pseudo(inode, d->od_mnt, "/", O_NOATIME,
-				     inode->i_fop);
+	file = osd_get_filp_for_inode(osd_oti_get(env), inode);
 	if (IS_ERR(file))
-		RETURN(PTR_ERR(file));
+		return PTR_ERR(file);
 
 	file->f_mode |= FMODE_64BITHASH;
 	rc = file->f_op->fallocate(file, mode, start, end - start);
-	ihold(inode);
-	fput(file);
+	compat_security_file_free(file);
 	if (rc == 0)
 		osd_partial_page_flush_punch(d, inode, start, end - 1);
 	return rc;

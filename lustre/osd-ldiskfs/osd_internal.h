@@ -27,6 +27,7 @@
 #include <linux/dcache.h>
 /* struct dirent64 */
 #include <linux/dirent.h>
+#include <lustre_compat/linux/security.h>
 #include <linux/statfs.h>
 #include <linux/bio.h>
 #include <linux/file.h>
@@ -622,23 +623,6 @@ struct osd_iobuf {
 #define osd_dirty_inode(inode, flag)  (inode)->i_sb->s_op->dirty_inode((inode), flag)
 #define osd_i_blocks(inode, size) ((size) >> (inode)->i_blkbits)
 
-extern atomic_t descriptors_cnt;
-extern unsigned int ldiskfs_flush_descriptors_cnt;
-extern struct work_struct flush_fput;
-#define osd_alloc_file_pseudo(inode, mnt, name, flags, fops)		\
-({									\
-	struct file *__f;						\
-	int __descriptors_cnt;						\
-	__f = alloc_file_pseudo(inode, mnt, name, flags, fops);		\
-	__descriptors_cnt = atomic_inc_return(&descriptors_cnt);	\
-	if (unlikely(__descriptors_cnt >= ldiskfs_flush_descriptors_cnt)) {\
-		/* drop here to skip queue_work */			\
-		atomic_set(&descriptors_cnt, 0);			\
-		queue_work(system_long_wq, &flush_fput);		\
-	}								\
-	__f;								\
-})
-
 #if defined HAVE_INODE_TIMESPEC64 || defined HAVE_INODE_GET_MTIME_SEC
 # define osd_timespec			timespec64
 #else
@@ -691,6 +675,7 @@ struct osd_thread_info {
 	 * used for index operations.
 	 */
 	struct dentry          oti_obj_dentry;
+	struct file            oti_file;
 	struct dentry          oti_child_dentry;
 
 	/** dentry for Iterator context. */
@@ -1054,6 +1039,8 @@ int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 			      const struct osd_inode_id *id,
 			      int ops, bool force,
 			      enum oi_check_flags flags, bool *exist);
+struct file *osd_get_filp_for_inode(struct osd_thread_info *oti,
+				    struct inode *inode);
 
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,

@@ -70,10 +70,6 @@ int ldiskfs_track_declares_assert;
 module_param(ldiskfs_track_declares_assert, int, 0644);
 MODULE_PARM_DESC(ldiskfs_track_declares_assert, "LBUG during tracking of declares");
 
-struct work_struct flush_fput;
-atomic_t descriptors_cnt;
-unsigned int ldiskfs_flush_descriptors_cnt = 5000;
-
 /* 1 GiB in 512-byte sectors */
 static int ldiskfs_delayed_unlink_blocks = (1 << (30 - 9));
 
@@ -155,6 +151,29 @@ static int osd_root_get(const struct lu_env *env,
 {
 	lu_local_obj_fid(f, OSD_FS_ROOT_OID);
 	return 0;
+}
+
+struct file *osd_get_filp_for_inode(struct osd_thread_info *oti,
+				    struct inode *inode)
+{
+	struct file *file = &oti->oti_file;
+	int rc;
+
+	rc = compat_security_file_alloc(file);
+	if (rc)
+		return ERR_PTR(rc);
+
+	inode->i_flags |= S_NOSEC;
+	file->f_pos = 0;
+	file->f_mode = FMODE_64BITHASH | FMODE_NONOTIFY;
+	file->f_flags = O_NOATIME;
+	file->f_op = inode->i_fop;
+	file->f_inode = inode;
+	file->f_mapping = inode->i_mapping;
+	file->f_path.dentry = &oti->oti_obj_dentry;
+	file->f_path.dentry->d_inode = inode;
+
+	return file;
 }
 
 /*
@@ -523,6 +542,8 @@ static struct inode *osd_iget2(struct osd_thread_info *info,
 		if (id->oii_gen == OSD_OII_NOGEN)
 			osd_id_gen(id, inode->i_ino, inode->i_generation);
 
+		/* Disable LSM security */
+		inode->i_flags |= S_PRIVATE;
 		/*
 		 * Do not update file c/mtime in ldiskfs.
 		 * NB: we don't have any lock to protect this because we don't
@@ -1008,8 +1029,8 @@ WRAP_FILLDIR_FN(do_, osd_stripe_dir_filldir)
 static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 			 struct inode *inode)
 {
+	struct dentry *dentry = &oti->oti_obj_dentry;
 	struct lu_buf *buf = &oti->oti_big_buf;
-	struct file *filp;
 	struct lmv_mds_md_v1 *lmv1;
 	struct osd_check_lmv_buf oclb = {
 		.oclb_ctx.actor = osd_stripe_dir_filldir,
@@ -1017,6 +1038,7 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 		.oclb_dev = dev,
 		.oclb_found = false,
 	};
+	struct file *filp;
 	int rc = 0;
 
 	ENTRY;
@@ -1024,20 +1046,11 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 	oti->oti_obj_dentry.d_inode = inode;
 	oti->oti_obj_dentry.d_sb = inode->i_sb;
 
-	filp = osd_alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
-				     inode->i_fop);
-	if (IS_ERR(filp))
-		RETURN(-ENOMEM);
-
-	filp->f_mode |= FMODE_64BITHASH;
-	filp->f_pos = 0;
-	ihold(inode);
 again:
-	rc = __osd_xattr_get(inode, filp->f_path.dentry, XATTR_NAME_LMV,
+	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMV,
 			     buf->lb_buf, buf->lb_len);
 	if (rc == -ERANGE) {
-		rc = __osd_xattr_get(inode, filp->f_path.dentry,
-				     XATTR_NAME_LMV, NULL, 0);
+		rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMV, NULL, 0);
 		if (rc > 0) {
 			lu_buf_realloc(buf, rc);
 			if (buf->lb_buf == NULL)
@@ -1065,6 +1078,8 @@ again:
 	if (le32_to_cpu(lmv1->lmv_magic) != LMV_MAGIC_V1)
 		GOTO(out, rc = 0);
 
+	filp = osd_get_filp_for_inode(oti, inode);
+
 	CFS_FAIL_CHECK_RESET(OBD_FAIL_OFD_IGET_FAIL_TO_START,
 			     OBD_FAIL_OFD_IGET_FAIL);
 	do {
@@ -1076,9 +1091,8 @@ again:
 	} while (rc >= 0 && oclb.oclb_items > 0 && !oclb.oclb_found &&
 		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
 	CFS_FAIL_CHECK_RESET(OBD_FAIL_OFD_IGET_FAIL, 0);
-
+	compat_security_file_free(filp);
 out:
-	fput(filp);
 	if (rc < 0)
 		CDEBUG(D_LFSCK,
 		       "%s: cannot check LMV, ino = %lu/%u: rc = %d\n",
@@ -3310,9 +3324,9 @@ static int osd_inode_setattr(const struct lu_env *env,
 	if (bits & LA_FLAGS) {
 		struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
 
-		/* always keep S_NOCMTIME */
+		/* always keep S_NOCMTIME and disable LSM security */
 		inode->i_flags = ll_ext_to_inode_flags(attr->la_flags) |
-				 S_NOCMTIME;
+				 S_NOCMTIME | S_PRIVATE;
 #if defined(S_ENCRYPTED)
 		/* Always remove S_ENCRYPTED, because ldiskfs must not be
 		 * aware of encryption status. It is just stored into LMA
@@ -3644,8 +3658,10 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 					      osd_sb(osd)->s_root->d_inode,
 				     mode, &iattr);
 	if (!IS_ERR(inode)) {
-		/* Do not update file c/mtime in ldiskfs. */
-		inode->i_flags |= S_NOCMTIME;
+		/* Do not update file c/mtime in ldiskfs and
+		 * disable LSM security
+		 */
+		inode->i_flags |= (S_NOCMTIME | S_PRIVATE);
 
 		/*
 		 * For new created object, it must be consistent,
@@ -5436,21 +5452,15 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 			   __u64 start, __u64 end)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
-	struct osd_device *dev = osd_obj2dev(obj);
 	struct inode *inode = obj->oo_inode;
 	struct file *file;
 	int rc;
 
 	ENTRY;
-	file = osd_alloc_file_pseudo(inode, dev->od_mnt, "/", O_NOATIME,
-				     inode->i_fop);
-	if (IS_ERR(file))
-		RETURN(PTR_ERR(file));
+	file = osd_get_filp_for_inode(osd_oti_get(env), inode);
 
-	file->f_mode |= FMODE_64BITHASH;
 	rc = vfs_fsync_range(file, start, end, 0);
-	ihold(inode);
-	fput(file);
+	compat_security_file_free(file);
 
 	RETURN(rc);
 }
@@ -7153,14 +7163,20 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 			GOTO(out_free, rc);
 	}
 	oie->oie_obj = NULL;
+
 	file = &oie->oie_file;
+	rc = compat_security_file_alloc(file);
+	if (rc)
+		GOTO(out_free, rc);
+
 	/* Only FMODE_64BITHASH or FMODE_32BITHASH should be set, NOT both. */
 	if (attr & LUDA_64BITHASH)
 		file->f_mode |= FMODE_64BITHASH;
 	else
 		file->f_mode |= FMODE_32BITHASH;
+	file->f_mode |= FMODE_NONOTIFY;
 	file->f_path.dentry = obj_dentry;
-	file->f_flags = O_NOATIME | FMODE_NONOTIFY;
+	file->f_flags = O_NOATIME;
 	file->f_mapping = inode->i_mapping;
 	file->f_op = inode->i_fop;
 	file->f_inode = inode;
@@ -7385,7 +7401,6 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 	struct osd_object *obj = it->oie_obj;
 	struct htree_lock *hlock = NULL;
 	struct file *filp = &it->oie_file;
-	struct inode *ino = file_inode(filp);
 	int rc = 0;
 	struct osd_filldir_cbs buf = {
 		.ctx.actor = osd_ldiskfs_filldir,
@@ -7407,30 +7422,7 @@ int osd_ldiskfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 		}
 	}
 
-#ifdef HAVE_FOP_ITERATE_SHARED
-	inode_lock_shared(ino);
-#else
-	inode_lock(ino);
-#endif
-	if (!IS_DEADDIR(ino)) {
-		if (filp->f_op->iterate_shared) {
-			buf.ctx.pos = filp->f_pos;
-			rc = filp->f_op->iterate_shared(filp, &buf.ctx);
-			filp->f_pos = buf.ctx.pos;
-		} else {
-#ifdef HAVE_FOP_READDIR
-			rc = filp->f_op->readdir(filp, &buf.ctx, buf.ctx.actor);
-			buf.ctx.pos = filp->f_pos;
-#else
-			rc = -ENOTDIR;
-#endif
-		}
-	}
-#ifdef HAVE_FOP_ITERATE_SHARED
-	inode_unlock_shared(ino);
-#else
-	inode_unlock(ino);
-#endif
+	rc = iterate_dir(filp, &buf.ctx);
 	if (rc)
 		GOTO(unlock, rc);
 
@@ -8332,6 +8324,7 @@ static void osd_key_fini(const struct lu_context *ctx,
 		info->oti_ins_cache_size = 0;
 	}
 	OBD_FREE_PTR(info->oti_lookup_cache);
+
 	OBD_FREE_PTR(info);
 }
 
@@ -8390,12 +8383,6 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 	RETURN(0);
 }
 
-#ifdef HAVE_FLUSH_DELAYED_FPUT
-# define cfs_flush_delayed_fput() flush_delayed_fput()
-#else
-void (*cfs_flush_delayed_fput)(void);
-#endif /* HAVE_FLUSH_DELAYED_FPUT */
-
 static void osd_umount(const struct lu_env *env, struct osd_device *o)
 {
 	ENTRY;
@@ -8411,9 +8398,6 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 		mntput(o->od_mnt);
 		o->od_mnt = NULL;
 	}
-
-	/* to be sure all delayed fput are finished */
-	cfs_flush_delayed_fput();
 
 	EXIT;
 }
@@ -9178,39 +9162,6 @@ static ssize_t track_declares_assert_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(track_declares_assert);
 
-static ssize_t flush_descriptors_cnt_show(struct kobject *kobj,
-					 struct attribute *attr, char *buf)
-{
-	return scnprintf(buf, PAGE_SIZE, "%u\n", ldiskfs_flush_descriptors_cnt);
-}
-
-static ssize_t flush_descriptors_cnt_store(struct kobject *kobj,
-					  struct attribute *attr,
-					  const char *buffer, size_t count)
-{
-	int rc;
-
-	rc = kstrtou32(buffer, 0, &ldiskfs_flush_descriptors_cnt);
-	if (rc)
-		return rc;
-	return count;
-}
-LUSTRE_RW_ATTR(flush_descriptors_cnt);
-
-static void osd_flush_fput(struct work_struct *work)
-{
-	/* flush file descriptors when too many files */
-	CDEBUG_LIMIT(D_HA, "Flushing file descriptors limit %d\n",
-		     ldiskfs_flush_descriptors_cnt);
-
-	/* descriptors_cnt triggers the threshold when a flush is started,
-	 * but all pending descriptors will be flushed each time, so it
-	 * doesn't need to exactly match the number of descriptors.
-	 */
-	atomic_set(&descriptors_cnt, 0);
-	cfs_flush_delayed_fput();
-}
-
 static int __init osd_init(void)
 {
 	struct kobject *kobj;
@@ -9227,7 +9178,6 @@ static int __init osd_init(void)
 	if (rc)
 		return rc;
 
-	atomic_set(&descriptors_cnt, 0);
 	osd_oi_mod_init();
 
 	rc = lu_kmem_init(ldiskfs_caches);
@@ -9259,24 +9209,8 @@ static int __init osd_init(void)
 			rc = 0;
 		}
 
-		rc = sysfs_create_file(kobj,
-				       &lustre_attr_flush_descriptors_cnt.attr);
-		if (rc) {
-			CWARN("%s: flush_descriptors_cnt registration failed: rc = %d\n",
-			      "osd-ldiskfs", rc);
-			rc = 0;
-		}
-
 		kobject_put(kobj);
 	}
-
-#ifndef HAVE_FLUSH_DELAYED_FPUT
-	if (unlikely(cfs_flush_delayed_fput == NULL))
-		cfs_flush_delayed_fput =
-			cfs_kallsyms_lookup_name("flush_delayed_fput");
-#endif
-
-	INIT_WORK(&flush_fput, osd_flush_fput);
 
 	return rc;
 }
@@ -9285,13 +9219,10 @@ static void __exit osd_exit(void)
 {
 	struct kobject *kobj;
 
-	cancel_work_sync(&flush_fput);
 	kobj = kset_find_obj(lustre_kset, LUSTRE_OSD_LDISKFS_NAME);
 	if (kobj) {
 		sysfs_remove_file(kobj,
 				  &lustre_attr_track_declares_assert.attr);
-		sysfs_remove_file(kobj,
-				  &lustre_attr_flush_descriptors_cnt.attr);
 		kobject_put(kobj);
 	}
 	class_unregister_type(LUSTRE_OSD_LDISKFS_NAME);
