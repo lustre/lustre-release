@@ -3565,6 +3565,7 @@ lnet_fill_ni_info_legacy(struct lnet_ni *ni,
 	struct lnet_ioctl_net_config *net_config;
 	struct lnet_ioctl_config_lnd_tunables *lnd_cfg = NULL;
 	size_t min_size, tunable_size = 0;
+	ssize_t rc;
 	int i;
 
 	if (!ni || !config || !nid_is_nid4(&ni->ni_nid))
@@ -3577,9 +3578,13 @@ lnet_fill_ni_info_legacy(struct lnet_ni *ni,
 	if (!ni->ni_interface)
 		return;
 
-	strncpy(net_config->ni_interface,
-		ni->ni_interface,
-		sizeof(net_config->ni_interface));
+	rc = strscpy(net_config->ni_interface, ni->ni_interface,
+		    sizeof(net_config->ni_interface));
+	if (rc < 0) {
+		CDEBUG(D_NET, "%s too long for dest buffer: rc = %zd\n",
+		       ni->ni_interface, rc);
+		return;
+	}
 
 	config->cfg_nid = lnet_nid_to_nid4(&ni->ni_nid);
 	config->cfg_config_u.cfg_net.net_peer_timeout =
