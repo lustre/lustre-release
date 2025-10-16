@@ -5422,7 +5422,7 @@ static int lnet_udsp_info_send(struct sk_buff *msg, int attr,
 	struct nlattr *udsp_list_info;
 	int i;
 
-	CFS_ALLOC_PTR(udsp);
+	LIBCFS_ALLOC_ATOMIC(udsp, sizeof(*udsp));
 	if (!udsp)
 		return -ENOMEM;
 
