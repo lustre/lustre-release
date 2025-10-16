@@ -8045,21 +8045,22 @@ test_56rf()
 run_test 56rf "check lfs find -printf width format specifiers for lustre specific formats"
 
 test_56s() { # LU-611 #LU-9369
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "need at least 2 OSTs"
+	(( $OSTCOUNT >= 2 )) || skip_env "need at least 2 OSTs"
 
 	local dir=$DIR/$tdir
 	local onestripe=$(((NUMDIRS + 1) * NUMFILES))
+	local count=$((OSTCOUNT > 2 ? OSTCOUNT - 1 : 2))
 
 	setup_56 $dir $NUMFILES $NUMDIRS "-c 1"
-	for i in $(seq $NUMDIRS); do
-		$LFS setstripe -c $((OSTCOUNT + 1)) $dir/dir$i/$tfile
+	for ((i = 1; i <= $NUMDIRS; i++)); do
+		$LFS setstripe -c $count $dir/dir$i/$tfile
 	done
 
 	local expected=$NUMDIRS
-	local cmd="$LFS find -c $OSTCOUNT $dir"
+	local cmd="$LFS find -c $count $dir"
 	local nums=$($cmd | wc -l)
 
-	[ $nums -eq $expected ] || {
+	(( $nums == $expected )) || {
 		$LFS getstripe -R $dir
 		error "'$cmd' wrong: found $nums, expected $expected"
 	}
@@ -8067,7 +8068,7 @@ test_56s() { # LU-611 #LU-9369
 	expected=$((NUMDIRS + onestripe))
 	cmd="$LFS find -stripe-count +0 -type f $dir"
 	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] || {
+	(( $nums == $expected )) || {
 		$LFS getstripe -R $dir
 		error "'$cmd' wrong: found $nums, expected $expected"
 	}
@@ -8075,22 +8076,22 @@ test_56s() { # LU-611 #LU-9369
 	expected=$onestripe
 	cmd="$LFS find -stripe-count 1 -type f $dir"
 	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] || {
+	(( $nums == $expected )) || {
 		$LFS getstripe -R $dir
 		error "'$cmd' wrong: found $nums, expected $expected"
 	}
 
 	cmd="$LFS find -stripe-count -2 -type f $dir"
 	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] || {
+	(( $nums == $expected )) || {
 		$LFS getstripe -R $dir
 		error "'$cmd' wrong: found $nums, expected $expected"
 	}
 
 	expected=0
-	cmd="$LFS find -stripe-count $((OSTCOUNT + 1)) -type f $dir"
+	cmd="$LFS find -stripe-count $((count + 1)) -type f $dir"
 	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] || {
+	(( $nums == $expected )) || {
 		$LFS getstripe -R $dir
 		error "'$cmd' wrong: found $nums, expected $expected"
 	}
