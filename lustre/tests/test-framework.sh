@@ -12424,12 +12424,10 @@ wait_nm_sync() {
 		out1=$value;
 	fi
 
-	# if servers run on the same node, it is impossible to tell if they get
-	# synced with the mgs, so just wait an arbitrary 10 seconds
+	# if servers run on the same node, no synchronization is done.
+	# Therefore, we can skip the sync check without waiting.
 	if [[ $(facet_active_host mgs) == $(facet_active_host mds) &&
 	      $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
-		echo "waiting 10 secs for sync"
-		sleep 10
 		return 0
 	fi
 

@@ -2075,6 +2075,9 @@ test_25a() {
 
 	nodemap_version_check || return 0
 
+	# in local mode the exports order on the nodemap cannot be compared
+	local_mode && skip "test does not support local mode"
+
 	# stop clients for this test
 	zconf_umount_clients $CLIENTS $MOUNT ||
 	    error "unable to umount clients $CLIENTS"
@@ -2544,13 +2547,6 @@ test_27a() {
 	(( $MDS1_VERSION < $(version_code 2.11.50) )) &&
 		skip "Need MDS >= 2.11.50"
 
-	# if servers run on the same node, it is impossible to tell if they get
-	# synced with the mgs, so this test needs to be skipped
-	if [[ $(facet_active_host mgs) == $(facet_active_host mds) ]] &&
-	   [[ $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
-		skip "local mode not supported"
-	fi
-
 	for nm in "default" "c0"; do
 		if [[ "$nm" == "default" && "$SHARED_KEY" == "true" ]]; then
 			echo "Skipping nodemap $nm with SHARED_KEY"
@@ -2991,13 +2987,6 @@ test_27b() { #LU-10703
 
 	(( MDSCOUNT < 2 )) && skip "needs >= 2 MDTs"
 
-	# if servers run on the same node, it is impossible to tell if they get
-	# synced with the mgs, so this test needs to be skipped
-	if [[ $(facet_active_host mgs) == $(facet_active_host mds) ]] &&
-	   [[ $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
-		skip "local mode not supported"
-	fi
-
 	nodemap_test_setup
 	trap nodemap_test_cleanup EXIT
 
@@ -3046,13 +3035,6 @@ test_27c() {
 
 	is_multi_fileset_supported ||
 		skip "Need MGS >= 2.16.57 for multiple filesets"
-
-	# if servers run on the same node, it is impossible to tell if they get
-	# synced with the mgs, so this test needs to be skipped
-	if [[ $(facet_active_host mgs) == $(facet_active_host mds) ]] &&
-	   [[ $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
-		skip "local mode not supported"
-	fi
 
 	# clients are re-mounted later when all filesets are removed
 	stack_trap nodemap_exercise_fileset_cleanup EXIT
@@ -3323,13 +3305,6 @@ multi_fileset_test_run() {
 	is_multi_fileset_supported ||
 		skip "Need MGS >= 2.16.57 for multiple filesets"
 
-	# if servers run on the same node, it is impossible to tell if they get
-	# synced with the mgs, so this test needs to be skipped
-	if [[ $(facet_active_host mgs) == $(facet_active_host mds) ]] &&
-	   [[ $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
-		skip "local mode not supported"
-	fi
-
 	local mult_fset_root=$tdir
 	local fs_root=$tfile
 
@@ -3521,13 +3496,6 @@ test_27f() {
 
 	is_multi_fileset_supported ||
 		skip "Need MGS >= 2.16.57 for multiple filesets"
-
-	# if servers run on the same node, it is impossible to tell if they get
-	# synced with the mgs, so this test needs to be skipped
-	if [[ $(facet_active_host mgs) == $(facet_active_host mds) &&
-	      $(facet_active_host mgs) == $(facet_active_host ost1) ]]; then
-		skip "local mode not supported"
-	fi
 
 	stack_trap nodemap_test_cleanup EXIT
 
@@ -8260,6 +8228,7 @@ dyn_nm_helper() {
 	rbac_val=$(do_facet mgs $LCTL get_param -n nodemap.$mgsnm.rbac)
 
 	stack_trap "do_facet $facet $LCTL nodemap_del $nm || true" EXIT
+	# check that persistent nodemap cannot be created on non MGS nodes
 	if [[ "$(facet_active_host mgs)" != \
 			"$(facet_active_host $facet)" ]]; then
 		do_facet $facet $LCTL nodemap_add $nm &&
@@ -8442,6 +8411,7 @@ dyn_nm_helper() {
 	val=$(do_facet $facet $LCTL get_param nodemap.$nm.id)
 	[[ -z "$val" ]] || error "nodemap should be gone, got $val"
 
+	# changes to persistent nodemaps should not be possible on non-MGS nodes
 	if [[ "$(facet_active_host mgs)" != \
 			"$(facet_active_host $facet)" ]]; then
 		do_facet $facet $LCTL nodemap_add_range --name $mgsnm \
@@ -8468,9 +8438,6 @@ dyn_nm_helper() {
 test_72a() {
 	(( OST1_VERSION >= $(version_code 2.16.54) )) ||
 		skip "Need OSS >= 2.16.54 dynamic nodemaps"
-
-	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
-		skip "Need servers on different hosts"
 
 	dyn_nm_helper ost1
 }
@@ -8626,12 +8593,18 @@ test_72d() {
 	local nm=nm_test72d
 	local nm2=subnm_test72d
 	local val
+	local same_server_node=false
 
 	is_multi_fileset_supported "ost1" ||
 		skip "Need OSS >= 2.16.57 for multiple filesets"
 
-	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
-		skip "Need servers on different hosts"
+	# When MGS and OST are colocated, we need to explicitly remove the
+	# dynamic nodemap.
+	# FIXME we should be able to rely on the nodemap synchronization wiping
+	# all dynamic nodemaps even if the MGS and OST are colocated. In this
+	# case, "same_server_node" should be removed and not separately handled.
+	[[ "$(facet_active_host mgs)" == "$(facet_active_host ost1)" ]] &&
+		same_server_node=true
 
 	stack_trap "cleanup_72d $mgsnm $nm $nm2" EXIT
 
@@ -8674,6 +8647,10 @@ test_72d() {
 		--fileset $filesetp ||
 		error "modify fileset for $mgsnm on MGS failed"
 	wait_nm_sync $mgsnm fileset '' inactive
+
+	if $same_server_node; then
+		do_facet ost1 $LCTL nodemap_del $nm
+	fi
 
 	do_facet ost1 $LCTL nodemap_add -d -p $mgsnm $nm ||
 		error "dynamic nodemap on server failed (2)"
@@ -8898,13 +8875,19 @@ test_72f() {
 	local fileset_prim="/primary"
 	local fileset_alt1="/alt1"
 	local fileset_alt2="/alt2"
+	local same_server_node=false
 	local val
 
 	is_multi_fileset_supported "ost1" ||
 		skip "Need OSS >= 2.16.57 for multiple filesets"
 
-	[[ "$(facet_active_host mgs)" != "$(facet_active_host ost1)" ]] ||
-		skip "Need servers on different hosts"
+	# When MGS and OST are colocated, we need to explicitly remove the
+	# dynamic nodemap.
+	# FIXME we should be able to rely on the nodemap synchronization wiping
+	# all dynamic nodemaps even if the MGS and OST are colocated. In this
+	# case, "same_server_node" should be removed and not separately handled.
+	[[ "$(facet_active_host mgs)" == "$(facet_active_host ost1)" ]] &&
+		same_server_node=true
 
 	stack_trap "cleanup_72f $mgsnm $nm" EXIT
 
@@ -8979,6 +8962,10 @@ test_72f() {
 		--fileset $fileset_alt2 --alt --ro ||
 		error "add fileset $fileset_alt2 to $mgsnm failed"
 	wait_nm_sync $mgsnm fileset '' inactive
+
+	if $same_server_node; then
+		do_facet ost1 $LCTL nodemap_del $nm
+	fi
 
 	# create dynamic nodemap
 	do_facet ost1 $LCTL nodemap_add -d -p $mgsnm $nm ||
