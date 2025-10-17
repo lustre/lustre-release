@@ -4888,7 +4888,7 @@ get_env_vars() {
 		echo -n " FSTYPE=$FSTYPE"
 	fi
 
-	for var in LNETLND NETTYPE; do
+	for var in LNETLND NETTYPE FORCE_LARGE_NID; do
 		if [ -n "${!var}" ]; then
 			echo -n " $var=${!var}"
 		fi
