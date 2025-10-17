@@ -17548,12 +17548,19 @@ test_130i() {
 	$LFS setstripe -E 1M -L mdt -E -1 -c2 -S 131072 -o1,0 $dom_file ||
 		error "setstripe on $dom_file"
 
-	local blks=$((128 * 3))
-	local expected=$(((blks / 3) * 4))
+	local page_kb=$((PAGE_SIZE / 1024))
+	# each component should be 1 MiB in size, 1/2 of it is written
+	local blks=$((1024 * 3 / page_kb / 2))
+	local expected=$(((blks / 3) * page_kb))
+
+	echo "BLKS: $blks"
+	echo "PAGE_SIZE: $PAGE_SIZE"
+	echo "PAGE_KB: $page_kb"
+	echo "EXPECTED: $expected"
 
 	for ((i = 0; i < $blks; i++)); do
-		dd if=/dev/zero of=$dom_file count=1 bs=4k seek=$((2 * i)) \
-			conv=notrunc > /dev/null 2>&1 ||
+		dd if=/dev/zero of=$dom_file count=1 bs=${page_kb}k \
+			seek=$((2 * i)) conv=notrunc > /dev/null 2>&1 ||
 			error "dd failed to $dom_file"
 	done
 
@@ -17586,6 +17593,8 @@ test_130i() {
 	if (( num_luns != 3 )); then
 		error "num devices: $num_luns, but 3 expected"
 	fi
+
+	echo "LUN_LEN: $lun_len"
 	if (( lun_len != expected )); then
 		error "dev #$last_lun: $lun_len != $expected"
 	fi
