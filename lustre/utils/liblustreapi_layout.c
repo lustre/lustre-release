@@ -31,7 +31,7 @@
 #include "lustreapi_internal.h"
 #include "lstddef.h"
 
-/**
+/*
  * Layout component, which contains all attributes of a plain
  * V1/V3/FOREIGN(HSM) layout.
  */
@@ -79,7 +79,7 @@ struct llapi_layout_comp {
 #define llc_archive_ver	llc_hsm.lhb_archive_ver
 #define llc_uuid	llc_hsm.lhb_uuid
 
-/**
+/*
  * An Opaque data type abstracting the layout of a Lustre file.
  */
 struct llapi_layout {
@@ -94,13 +94,12 @@ struct llapi_layout {
 };
 
 /**
- * Compute the number of elements in the lmm_objects array of \a lum
- * with size \a lum_size.
+ * llapi_layout_objects_in_lum() - Compute the number of elements in the
+ * lmm_objects array of @lum with size @lum_size.
+ * @lum: the struct lov_user_md to check
+ * @lum_size: the number of bytes in @lum
  *
- * \param[in] lum	the struct lov_user_md to check
- * \param[in] lum_size	the number of bytes in \a lum
- *
- * \retval		number of elements in array lum->lmm_objects
+ * Return number of elements in array lum->lmm_objects
  */
 static int llapi_layout_objects_in_lum(struct lov_user_md *lum, size_t lum_size)
 {
@@ -127,7 +126,7 @@ static int llapi_layout_objects_in_lum(struct lov_user_md *lum, size_t lum_size)
 		return (lum_size - base_size) / sizeof(lum->lmm_objects[0]);
 }
 
-/**
+/*
  * Byte-swap the fields of struct lov_user_md.
  *
  * XXX Rather than duplicating swabbing code here, we should eventually
@@ -215,15 +214,16 @@ llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 }
 
 /**
- * (Re-)allocate llc_objects[] to \a num_stripes stripes.
+ * __llapi_comp_objects_realloc() - copy existing object to new object
+ * @comp: existing layout to be modified
+ * @new_stripes: number of stripes in new layout
  *
+ * (Re-)allocate llc_objects[] to @num_stripes stripes.
  * Copy over existing llc_objects[], if any, to the new llc_objects[].
  *
- * \param[in] layout		existing layout to be modified
- * \param[in] num_stripes	number of stripes in new layout
- *
- * \retval	0 if the objects are re-allocated successfully
- * \retval	-1 on error with errno set
+ * Return:
+ * * %0 if the objects are re-allocated successfully
+ * * %negative on error with errno set
  */
 static int __llapi_comp_objects_realloc(struct llapi_layout_comp *comp,
 					unsigned int new_stripes)
@@ -259,12 +259,11 @@ static int __llapi_comp_objects_realloc(struct llapi_layout_comp *comp,
 }
 
 /**
- * Allocate storage for a llapi_layout_comp with \a num_stripes stripes.
+ * __llapi_comp_alloc() - Allocate storage for a llapi_layout_comp with
+ * @num_stripes stripes.
+ * @num_stripes: number of stripes in new layout
  *
- * \param[in] num_stripes	number of stripes in new layout
- *
- * \retval	valid pointer if allocation succeeds
- * \retval	NULL if allocation fails
+ * Return valid pointer if allocation succeeds or NULL if allocation fails
  */
 static struct llapi_layout_comp *__llapi_comp_alloc(unsigned int num_stripes)
 {
@@ -305,10 +304,10 @@ static struct llapi_layout_comp *__llapi_comp_alloc(unsigned int num_stripes)
 }
 
 /**
- * Allocate storage for a HSM component with \a length buffer.
+ * __llapi_comp_hsm_alloc() - Alloc storage for HSM component with @length buffer.
+ * @length: size of allocation
  *
- * \retval	valid pointer if allocation succeeds
- * \retval	NULL if allocate fails
+ * Return valid pointer if allocation succeeds or NULL if allocate fails
  */
 static struct llapi_layout_comp *__llapi_comp_hsm_alloc(uint32_t length)
 {
@@ -341,9 +340,8 @@ static struct llapi_layout_comp *__llapi_comp_hsm_alloc(uint32_t length)
 }
 
 /**
- * Free memory allocated for \a comp
- *
- * \param[in] comp	previously allocated by __llapi_comp_alloc()
+ * __llapi_comp_free() - Free memory allocated for @comp
+ * @comp: previously allocated by __llapi_comp_alloc()
  */
 static void __llapi_comp_free(struct llapi_layout_comp *comp)
 {
@@ -355,9 +353,8 @@ static void __llapi_comp_free(struct llapi_layout_comp *comp)
 }
 
 /**
- * Free memory allocated for \a layout.
- *
- * \param[in] layout	previously allocated by llapi_layout_alloc()
+ * llapi_layout_free() - Free memory allocated for @layout.
+ * @layout: previously allocated by llapi_layout_alloc()
  */
 void llapi_layout_free(struct llapi_layout *layout)
 {
@@ -374,10 +371,10 @@ void llapi_layout_free(struct llapi_layout *layout)
 }
 
 /**
- * Allocate and initialize a llapi_layout structure.
+ * __llapi_layout_alloc() - Allocate and initialize a llapi_layout structure.
  *
- * \retval	valid llapi_layout pointer on success
- * \retval	NULL if memory allocation fails
+ * Returns valid llapi_layout pointer on success or NULL if memory allocation
+ * fails
  */
 static struct llapi_layout *__llapi_layout_alloc(void)
 {
@@ -402,10 +399,10 @@ static struct llapi_layout *__llapi_layout_alloc(void)
 }
 
 /**
- * Allocate and initialize a new plain layout.
+ * llapi_layout_alloc() - Allocate and initialize a new plain layout.
  *
- * \retval	valid llapi_layout pointer on success
- * \retval	NULL if memory allocation fails
+ * Return valid llapi_layout pointer on success or NULL if memory allocation
+ * fails
  */
 struct llapi_layout *llapi_layout_alloc(void)
 {
@@ -429,14 +426,14 @@ struct llapi_layout *llapi_layout_alloc(void)
 }
 
 /**
- * Check if the given \a lum_size is large enough to hold the required
- * fields in \a lum.
+ * llapi_layout_lum_truncated() - Check if the given @lum_size is large enough
+ * to hold the required fields in @lum.
+ * @lum: the struct lov_user_md to check
+ * @lum_size: the number of bytes in @lum
  *
- * \param[in] lum	the struct lov_user_md to check
- * \param[in] lum_size	the number of bytes in \a lum
- *
- * \retval true		the \a lum_size is too small
- * \retval false	the \a lum_size is large enough
+ * Return:
+ * * %true the @lum_size is too small
+ * * %false the @lum_size is large enough
  */
 static bool llapi_layout_lum_truncated(struct lov_user_md *lum, size_t lum_size)
 {
@@ -467,7 +464,8 @@ static bool llapi_layout_lum_truncated(struct lov_user_md *lum, size_t lum_size)
 }
 
 /* Verify if the objects count in lum is consistent with the
- * stripe count in lum. It applies to regular file only. */
+ * stripe count in lum. It applies to regular file only.
+ */
 static bool llapi_layout_lum_valid(struct lov_user_md *lum, int lum_size)
 {
 	struct lov_comp_md_v1 *comp_v1 = NULL;
@@ -506,15 +504,16 @@ static bool llapi_layout_lum_valid(struct lov_user_md *lum, int lum_size)
 }
 
 /**
- * Convert the data from a lov_user_md to a newly allocated llapi_layout.
- * The caller is responsible for freeing the returned pointer.
+ * llapi_layout_get_by_xattr() - Convert data from  lov_user_md to llapi_layout
+ * @lov_xattr: LOV user metadata xattr to copy data from
+ * @lov_xattr_size: size the lov_xattr_size passed in
+ * @flags: flags to control how layout is retrieved
  *
- * \param[in] lov_xattr		LOV user metadata xattr to copy data from
- * \param[in] lov_xattr_size	size the lov_xattr_size passed in
- * \param[in] flags		flags to control how layout is retrieved
+ * Convert the data from a lov_user_md to a newly allocated llapi_layout. The
+ * caller is responsible for freeing the returned pointer.
  *
- * \retval		valid llapi_layout pointer on success
- * \retval		NULL if memory allocation fails
+ * Return valid llapi_layout pointer on success or NULL if memory allocation
+ * fails
  */
 struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 					      ssize_t lov_xattr_size,
@@ -731,10 +730,10 @@ out_layout:
 }
 
 /**
- * Get \p lum_size from a lov_user_md \p lum
- * \param[in] lum	lov_user_md to get lum_size
+ * get_lum_size() - Get @lum_size from a lov_user_md @lum
+ * @lum: lov_user_md to get lum_size
  *
- * \retval -1 on error and lum_size on success
+ * Returns -1 on error and lum_size on success
  */
 static size_t get_lum_size(struct lov_user_md *lum)
 {
@@ -758,13 +757,12 @@ static size_t get_lum_size(struct lov_user_md *lum)
 
 
 /**
- * Set \p lum on the file descriptor \p fd and write the lum on the file
- * referenced by the file descriptor
+ * llapi_layout_set_by_xattr() - Set @lum on the file descriptor @fd and write
+ * the lum on the file referenced by the file descriptor
+ * @fd: open file descriptor
+ * @lum: lov_user_md to write on the file
  *
- * \param[in] fd	open file descriptor
- * \param[in] lum	lov_user_md to write on the file
- *
- * \retval -1 on error and set errno
+ * Returns -1 on error and set errno
  */
 int llapi_layout_set_by_xattr(int fd, struct lov_user_md *lum)
 {
@@ -809,13 +807,14 @@ enum lov_pattern llapi_pattern_to_lov(uint64_t llapi_pattern)
 }
 
 /**
+ * llapi_layout_to_lum() - Convert data from llapi_layout to lov_user_md.
+ * @layout: the layout to copy from
+ *
  * Convert the data from a llapi_layout to a newly allocated lov_user_md.
  * The caller is responsible for freeing the returned pointer.
  *
- * \param[in] layout	the layout to copy from
- *
- * \retval	valid lov_user_md pointer on success
- * \retval	NULL if memory allocation fails or the layout is invalid
+ * Return valid lov_user_md pointer on success or NULL if memory allocation
+ * fails or the layout is invalid
  */
 static struct lov_user_md *
 llapi_layout_to_lum(const struct llapi_layout *layout)
@@ -976,11 +975,10 @@ error:
 }
 
 /**
- * Get the parent directory of a path.
- *
- * \param[in] path	path to get parent of
- * \param[out] buf	buffer in which to store parent path
- * \param[in] size	size in bytes of buffer \a buf
+ * get_parent_dir() - Get the parent directory of a path.
+ * @path: path to get parent of
+ * @buf: buffer in which to store parent path [out]
+ * @size: size in bytes of buffer @buf
  */
 static void get_parent_dir(const char *path, char *buf, size_t size)
 {
@@ -998,12 +996,13 @@ static void get_parent_dir(const char *path, char *buf, size_t size)
 }
 
 /**
- * Substitute unspecified attribute values in \a layout with values
+ * inherit_sys_attributes() - Substitute unspecified attribute values in layout
+ * @layout: layout to inherit values from
+ * @path: file path of the filesystem
+ *
+ * Substitute unspecified attribute values in @layout with values
  * from fs global settings. (lov.stripesize, lov.stripecount,
  * lov.stripeoffset)
- *
- * \param[in] layout	layout to inherit values from
- * \param[in] path	file path of the filesystem
  */
 static void inherit_sys_attributes(struct llapi_layout *layout,
 				   const char *path)
@@ -1029,12 +1028,10 @@ static void inherit_sys_attributes(struct llapi_layout *layout,
 }
 
 /**
- * Get the current component of \a layout.
+ * __llapi_layout_cur_comp() - Get the current component of @layout.
+ * @layout: layout to get current component
  *
- * \param[in] layout	layout to get current component
- *
- * \retval	valid llapi_layout_comp pointer on success
- * \retval	NULL on error
+ * Return valid llapi_layout_comp pointer on success or NULL on error
  */
 static struct llapi_layout_comp *
 __llapi_layout_cur_comp(const struct llapi_layout *layout)
@@ -1058,12 +1055,12 @@ __llapi_layout_cur_comp(const struct llapi_layout *layout)
 }
 
 /**
- * Test if any attributes of \a layout are specified.
+ * is_any_specified() - Test if any attributes of @layout are specified.
+ * @layout: the layout to check
  *
- * \param[in] layout	the layout to check
- *
- * \retval true		any attributes are specified
- * \retval false	all attributes are unspecified
+ * Return:
+ * * %true any attributes are specified
+ * * %false all attributes are unspecified
  */
 static bool is_any_specified(const struct llapi_layout *layout)
 {
@@ -1084,7 +1081,10 @@ static bool is_any_specified(const struct llapi_layout *layout)
 }
 
 /**
- * Get the striping layout for the file referenced by file descriptor \a fd.
+ * llapi_layout_get_by_fd() - Get the striping layout for the file referenced
+ * by file descriptor @fd.
+ * @fd: open file descriptor
+ * @flags: open file descriptor
  *
  * If the filesystem does not support the "lustre." xattr namespace, the
  * file must be on a non-Lustre filesystem, so set errno to ENOTTY per
@@ -1094,11 +1094,7 @@ static bool is_any_specified(const struct llapi_layout *layout)
  * If the kernel gives us back less than the expected amount of data,
  * we fail with errno set to EINTR.
  *
- * \param[in] fd	open file descriptor
- * \param[in] flags	open file descriptor
- *
- * \retval	valid llapi_layout pointer on success
- * \retval	NULL if an error occurs
+ * Return valid llapi_layout pointer on success or NULL if an error occurs
  */
 struct llapi_layout *llapi_layout_get_by_fd(int fd,
 					    enum llapi_layout_get_flags flags)
@@ -1138,13 +1134,14 @@ out:
 }
 
 /**
- * Set \p layout on the file descriptor \p fd and write the layout on the
+ * llapi_layout_set_by_fd() - Set @layout on the file descriptor @fd
+ * @fd: open file descriptor
+ * @layout: layout to write on the file
+ *
+ * Set @layout on the file descriptor @fd and write the layout on the
  * file referenced by the file descriptor
  *
- * \param[in] fd	open file descriptor
- * \param[in] layout	layout to write on the file
- *
- * \retval -1 on error and set errno
+ * Return %0 on success or -1 on error and set errno
  */
 int llapi_layout_set_by_fd(int fd, struct llapi_layout *layout)
 {
@@ -1179,7 +1176,8 @@ int llapi_layout_set_by_fd(int fd, struct llapi_layout *layout)
 }
 
 /**
- * Get the expected striping layout for a file at \a path.
+ * llapi_layout_expected() - Get expected striping layout for a file at @path.
+ * @path: Path to get striping info
  *
  * Substitute expected inherited attribute values for unspecified
  * attributes.  Unspecified attributes may belong to directories and
@@ -1189,15 +1187,12 @@ int llapi_layout_set_by_fd(int fd, struct llapi_layout *layout)
  * there, otherwise it is inherited from the filesystem root.
  * Unspecified attributes normally have the value LLAPI_LAYOUT_DEFAULT.
  *
- * The complete \a path need not refer to an existing file or directory,
+ * The complete @path need not refer to an existing file or directory,
  * but some leading portion of it must reside within a lustre filesystem.
  * A use case for this interface would be to obtain the literal striping
  * values that would be assigned to a new file in a given directory.
  *
- * \param[in] path	path for which to get the expected layout
- *
- * \retval	valid llapi_layout pointer on success
- * \retval	NULL if an error occurs
+ * Return valid llapi_layout pointer on success or NULL if an error occurs
  */
 static struct llapi_layout *llapi_layout_expected(const char *path)
 {
@@ -1268,17 +1263,14 @@ static struct llapi_layout *llapi_layout_expected(const char *path)
 }
 
 /**
- * Get the striping layout for the file at \a path.
+ * llapi_layout_get_by_path() - Get the striping layout for the file at @path
+ * @path: path for which to get the layout
+ * @flags: flags to control how layout is retrieved
  *
- * If \a flags contains LLAPI_LAYOUT_GET_EXPECTED, substitute
- * expected inherited attribute values for unspecified attributes. See
- * llapi_layout_expected().
+ * If @flags contains LLAPI_LAYOUT_GET_EXPECTED, substitute expected inherited
+ * attribute values for unspecified attributes. See llapi_layout_expected().
  *
- * \param[in] path	path for which to get the layout
- * \param[in] flags	flags to control how layout is retrieved
- *
- * \retval	valid llapi_layout pointer on success
- * \retval	NULL if an error occurs
+ * Return valid llapi_layout pointer on success or NULL on error
  */
 struct llapi_layout *llapi_layout_get_by_path(const char *path,
 					      enum llapi_layout_get_flags flags)
@@ -1315,13 +1307,13 @@ do_open:
 }
 
 /**
- * Get the layout for the file with FID \a fidstr in filesystem \a lustre_dir.
+ * llapi_layout_get_by_fid() - Get the layout for the file with @fid in
+ * filesystem @lustre_dir.
+ * @lustre_dir: path within Lustre filesystem containing @fid
+ * @fid: Lustre identifier of file to get layout for
+ * @flags: open file descriptor
  *
- * \param[in] lustre_dir	path within Lustre filesystem containing \a fid
- * \param[in] fid		Lustre identifier of file to get layout for
- *
- * \retval	valid llapi_layout pointer on success
- * \retval	NULL if an error occurs
+ * Return valid llapi_layout pointer on success or NULL if an error occurs
  */
 struct llapi_layout *llapi_layout_get_by_fid(const char *lustre_dir,
 					     const struct lu_fid *fid,
@@ -1351,13 +1343,13 @@ struct llapi_layout *llapi_layout_get_by_fid(const char *lustre_dir,
 }
 
 /**
- * Get the stripe count of \a layout.
+ * llapi_layout_stripe_count_get() - Get the stripe count of @layout.
+ * @layout: layout to get stripe count from
+ * @count: integer to store stripe count in [out]
  *
- * \param[in] layout	layout to get stripe count from
- * \param[out] count	integer to store stripe count in
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid
+ * Return
+ * * %0 on success
+ * * %negative if arguments are invalid
  */
 int llapi_layout_stripe_count_get(const struct llapi_layout *layout,
 				  uint64_t *count)
@@ -1419,13 +1411,13 @@ static bool llapi_layout_stripe_index_is_valid(int64_t stripe_index)
 }
 
 /**
- * Set the stripe count of \a layout.
+ * llapi_layout_stripe_count_set() - Set the stripe count of @layout.
+ * @layout: layout to set stripe count in
+ * @count: value to be set
  *
- * \param[in] layout	layout to set stripe count in
- * \param[in] count	value to be set
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid
  */
 int llapi_layout_stripe_count_set(struct llapi_layout *layout,
 				  uint64_t count)
@@ -1446,14 +1438,14 @@ int llapi_layout_stripe_count_set(struct llapi_layout *layout,
 }
 
 /**
- * Get the stripe/extension size of \a layout.
+ * layout_stripe_size_get() - Get the stripe/extension size of @layout.
+ * @layout: layout to get stripe size from
+ * @size: integer to store stripe size in [out]
+ * @extension: flag if extenion size is requested
  *
- * \param[in] layout	layout to get stripe size from
- * \param[out] size	integer to store stripe size in
- * \param[in] extension flag if extenion size is requested
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid
  */
 static int layout_stripe_size_get(const struct llapi_layout *layout,
 				  uint64_t *size, bool extension)
@@ -1502,14 +1494,14 @@ int llapi_layout_extension_size_get(const struct llapi_layout *layout,
 }
 
 /**
- * Set the stripe/extension size of \a layout.
+ * layout_stripe_size_set() - Set the stripe/extension size of @layout.
+ * @layout: layout to set stripe size in
+ * @size: value to be set
+ * @extension: flag if extenion size is passed
  *
- * \param[in] layout	layout to set stripe size in
- * \param[in] size	value to be set
- * \param[in] extension flag if extenion size is passed
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid
  */
 static int layout_stripe_size_set(struct llapi_layout *layout,
 				  uint64_t size, bool extension)
@@ -1558,13 +1550,13 @@ int llapi_layout_extension_size_set(struct llapi_layout *layout,
 }
 
 /**
- * Get the RAID pattern of \a layout.
+ * llapi_layout_pattern_get() - Get the RAID pattern of @layout.
+ * @layout: layout to get pattern from
+ * @pattern: integer to store pattern in [out]
  *
- * \param[in] layout	layout to get pattern from
- * \param[out] pattern	integer to store pattern in
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid
  */
 int llapi_layout_pattern_get(const struct llapi_layout *layout,
 			     uint64_t *pattern)
@@ -1586,14 +1578,13 @@ int llapi_layout_pattern_get(const struct llapi_layout *layout,
 }
 
 /**
- * Set the pattern of \a layout.
+ * llapi_layout_pattern_set() - Set the pattern of @layout.
+ * @layout: layout to set pattern in
+ * @pattern: value to be set
  *
- * \param[in] layout	layout to set pattern in
- * \param[in] pattern	value to be set
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid or RAID pattern
- *		is unsupported
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid or RAID pattern is unsupported
  */
 int llapi_layout_pattern_set(struct llapi_layout *layout, uint64_t pattern)
 {
@@ -1625,20 +1616,21 @@ static inline int stripe_number_roundup(int stripe_number)
 }
 
 /**
- * Set the OST index of stripe number \a stripe_number to \a ost_index.
+ * llapi_layout_ost_index_set() - Set the OST index of stripe number
+ * @stripe_number to @ost_index.
+ * @layout: layout to set OST index in
+ * @stripe_number: stripe number to set index for
+ * @ost_index: the index to set
  *
  * If only the starting stripe's OST index is specified, then this can use
  * the normal LOV_MAGIC_{V1,V3} layout type.  If multiple OST indices are
  * given, then allocate an array to hold the list of indices and ensure that
  * the LOV_USER_MAGIC_SPECIFIC layout is used when creating the file.
  *
- * \param[in] layout		layout to set OST index in
- * \param[in] stripe_number	stripe number to set index for
- * \param[in] ost_index		the index to set
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid or an unsupported stripe number
- *		was specified, error returned in errno
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid or an unsupported stripe number was
+ *   specified, error returned in errno
  */
 int llapi_layout_ost_index_set(struct llapi_layout *layout, int stripe_number,
 			       uint64_t ost_index)
@@ -1708,14 +1700,17 @@ static int reset_index_cb(struct llapi_layout *layout, void *cbdata)
 }
 
 /**
- * Reset the OST index on all components in \a layout to LLAPI_LAYOUT_DEFAULT.
+ * llapi_layout_ost_index_reset() - Reset the OST index on all components in
+ * @layout to LLAPI_LAYOUT_DEFAULT.
+ * @layout: layout to reset OST index in
  *
  * This is useful when reusing a file layout that was copied from an existing
  * file and to be used for a new file (e.g. when mirroring or migrating or
  * copying a file), so the objects are allocated on different OSTs.
  *
- * \retval  0 Success.
- * \retval -ve errno Error with errno set to non-zero value.
+ * Return:
+ * * %0 Success.
+ * * %negative errno Error with errno set to non-zero value.
  */
 int llapi_layout_ost_index_reset(struct llapi_layout *layout)
 {
@@ -1730,16 +1725,16 @@ int llapi_layout_ost_index_reset(struct llapi_layout *layout)
 }
 
 /**
- * Get the OST index associated with stripe \a stripe_number.
+ * llapi_layout_ost_index_get() - Get OST index associated with @stripe_number.
+ * @layout: layout to get index from
+ * @stripe_number: stripe number to get index for
+ * @index: integer to store index in [out]
  *
  * Stripes are indexed starting from zero.
  *
- * \param[in] layout		layout to get index from
- * \param[in] stripe_number	stripe number to get index for
- * \param[out] index		integer to store index in
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid
  */
 int llapi_layout_ost_index_get(const struct llapi_layout *layout,
 			       uint64_t stripe_number, uint64_t *index)
@@ -1775,15 +1770,14 @@ int llapi_layout_ost_index_get(const struct llapi_layout *layout,
 }
 
 /**
+ * llapi_layout_pool_name_get() - Get the pool name of layout @layout.
+ * @layout: layout to get pool name from
+ * @dest: buffer to store pool name in [out]
+ * @n: size in bytes of buffer @dest
  *
- * Get the pool name of layout \a layout.
- *
- * \param[in] layout	layout to get pool name from
- * \param[out] dest	buffer to store pool name in
- * \param[in] n		size in bytes of buffer \a dest
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid
  */
 int llapi_layout_pool_name_get(const struct llapi_layout *layout, char *dest,
 			       size_t n)
@@ -1810,13 +1804,13 @@ int llapi_layout_pool_name_get(const struct llapi_layout *layout, char *dest,
 }
 
 /**
- * Set the name of the pool of layout \a layout.
+ * llapi_layout_pool_name_set() - Set the name of the pool of layout @layout.
+ * @layout: layout to set pool name in
+ * @pool_name: pool name to set
  *
- * \param[in] layout	layout to set pool name in
- * \param[in] pool_name	pool name to set
- *
- * \retval	0 on success
- * \retval	-1 if arguments are invalid or pool name is too long
+ * Return:
+ * * %0 on success
+ * * %negative if arguments are invalid or pool name is too long
  */
 int llapi_layout_pool_name_set(struct llapi_layout *layout,
 			       const char *pool_name)
@@ -1843,19 +1837,19 @@ int llapi_layout_pool_name_set(struct llapi_layout *layout,
 }
 
 /**
- * Open and possibly create a file with a given \a layout.
+ * llapi_layout_file_open() - Open and possibly create file with given @layout.
+ * @path: name of the file to open
+ * @open_flags: open() flags
+ * @mode: permissions to create file, filtered by umask
+ * @layout: layout to create new file with
  *
- * If \a layout is NULL this function acts as a simple wrapper for
- * open().  By convention, ENOTTY is returned in errno if \a path
+ * If @layout is NULL this function acts as a simple wrapper for
+ * open(). By convention, ENOTTY is returned in errno if @path
  * refers to a non-Lustre file.
  *
- * \param[in] path		name of the file to open
- * \param[in] open_flags	open() flags
- * \param[in] mode		permissions to create file, filtered by umask
- * \param[in] layout		layout to create new file with
- *
- * \retval		non-negative file descriptor on successful open
- * \retval		-1 if an error occurred
+ * Return:
+ * * %non-negative file descriptor on successful open
+ * * %negative if an error occurred
  */
 int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 			   const struct llapi_layout *layout)
@@ -1931,18 +1925,18 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 }
 
 /**
- * Create a file with a given \a layout.
+ * llapi_layout_file_create() - Create a file with a given @layout.
+ * @path: name of the file to open
+ * @open_flags: open() flags
+ * @mode: permissions to create new file with
+ * @layout: layout to create new file with
  *
  * Force O_CREAT and O_EXCL flags on so caller is assured that file was
- * created with the given \a layout on successful function return.
+ * created with the given @layout on successful function return.
  *
- * \param[in] path		name of the file to open
- * \param[in] open_flags	open() flags
- * \param[in] mode		permissions to create new file with
- * \param[in] layout		layout to create new file with
- *
- * \retval		non-negative file descriptor on successful open
- * \retval		-1 if an error occurred
+ * Return:
+ * * %non-negative file descriptor on successful open
+ * * %negative if an error occurred
  */
 int llapi_layout_file_create(const char *path, int open_flags, int mode,
 			     const struct llapi_layout *layout)
@@ -1962,9 +1956,7 @@ int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags)
 	return 0;
 }
 
-/**
- * Set flags to the header of a component layout.
- */
+/* Set flags to the header of a component layout */
 int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags)
 {
 	if (layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
@@ -2100,14 +2092,13 @@ static bool llapi_layout_mirror_count_is_valid(uint16_t count)
 }
 
 /**
- * llapi_layout_mirror_count_get() - Get mirror count from the header of
- *				     a layout.
+ * llapi_layout_mirror_count_get() - Get mirror count from header of a layout.
  * @layout: Layout to get mirror count from.
  * @count:  Returned mirror count value.
  *
  * This function gets mirror count from the header of a layout.
  *
- * Return: 0 on success or -1 on failure.
+ * Return: 0 on success or %negative on failure.
  */
 int llapi_layout_mirror_count_get(struct llapi_layout *layout,
 				  uint16_t *count)
@@ -2128,7 +2119,7 @@ int llapi_layout_mirror_count_get(struct llapi_layout *layout,
  *
  * This function sets mirror count to the header of a layout.
  *
- * Return: 0 on success or -1 on failure.
+ * Return: 0 on success or %negative on failure.
  */
 int llapi_layout_mirror_count_set(struct llapi_layout *layout,
 				  uint16_t count)
@@ -2148,14 +2139,15 @@ int llapi_layout_mirror_count_set(struct llapi_layout *layout,
 }
 
 /**
- * Fetch the start and end offset of the current layout component.
+ * llapi_layout_comp_extent_get() - Fetch the start and end offset of the
+ * current layout component.
+ * @layout: the layout component
+ * @start: extent start, inclusive [out]
+ * @end: extent end, exclusive [out]
  *
- * \param[in] layout	the layout component
- * \param[out] start	extent start, inclusive
- * \param[out] end	extent end, exclusive
- *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_extent_get(const struct llapi_layout *layout,
 				 uint64_t *start, uint64_t *end)
@@ -2178,14 +2170,14 @@ int llapi_layout_comp_extent_get(const struct llapi_layout *layout,
 }
 
 /**
- * Set the layout extent of a layout.
+ * llapi_layout_comp_extent_set() - Set the layout extent of a layout.
+ * @layout: the layout to be set
+ * @start: extent start, inclusive
+ * @end: extent end, exclusive
  *
- * \param[in] layout	the layout to be set
- * \param[in] start	extent start, inclusive
- * \param[in] end	extent end, exclusive
- *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_extent_set(struct llapi_layout *layout,
 				 uint64_t start, uint64_t end)
@@ -2209,13 +2201,14 @@ int llapi_layout_comp_extent_set(struct llapi_layout *layout,
 }
 
 /**
- * Gets the attribute flags of the current component.
+ * llapi_layout_comp_flags_get() - Gets the attribute flags of the current
+ * component.
+ * @layout: the layout component
+ * @flags: stored the returned component flags [out]
  *
- * \param[in] layout	the layout component
- * \param[out] flags	stored the returned component flags
- *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_flags_get(const struct llapi_layout *layout,
 				uint32_t *flags)
@@ -2237,13 +2230,14 @@ int llapi_layout_comp_flags_get(const struct llapi_layout *layout,
 }
 
 /**
- * Sets the specified flags of the current component leaving other flags as-is.
+ * llapi_layout_comp_flags_set() - Sets the specified flags of the current
+ * component leaving other flags as-is.
+ * @layout: the layout component
+ * @flags: component flags to be set
  *
- * \param[in] layout	the layout component
- * \param[in] flags	component flags to be set
- *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_flags_set(struct llapi_layout *layout, uint32_t flags)
 {
@@ -2259,13 +2253,14 @@ int llapi_layout_comp_flags_set(struct llapi_layout *layout, uint32_t flags)
 }
 
 /**
- * Clears the flags specified in the flags leaving other flags as-is.
+ * llapi_layout_comp_flags_clear() - Clears the flags specified in the flags
+ * leaving other flags as-is.
+ * @layout:	the layout component
+ * @flags:	component flags to be cleared
  *
- * \param[in] layout	the layout component
- * \param[in] flags	component flags to be cleared
- *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_flags_clear(struct llapi_layout *layout,
 				  uint32_t flags)
@@ -2282,13 +2277,14 @@ int llapi_layout_comp_flags_clear(struct llapi_layout *layout,
 }
 
 /**
- * Fetches the file-unique component ID of the current layout component.
+ * llapi_layout_comp_id_get() - Fetches the file-unique component ID of the
+ * current layout component.
+ * @layout: the layout component
+ * @id: stored the returned component ID [out]
  *
- * \param[in] layout	the layout component
- * \param[out] id	stored the returned component ID
- *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id)
 {
@@ -2308,13 +2304,13 @@ int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id)
 }
 
 /**
- * Return the mirror id of the current layout component.
+ * llapi_layout_mirror_id_get() - Return mirror id of current layout component.
+ * @layout: the layout component
+ * @id: stored the returned mirror ID [out]
  *
- * \param[in] layout	the layout component
- * \param[out] id	stored the returned mirror ID
- *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id)
 {
@@ -2335,16 +2331,18 @@ int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id)
 }
 
 /**
- * Adds a component to \a layout, the new component will be added to
+ * llapi_layout_comp_add() - Adds a component to @layout
+ * @layout: existing composite or plain layout
+ *
+ * Adds a component to @layout, the new component will be added to
  * the tail of components list and it'll inherit attributes of existing
- * ones. The \a layout will change it's current component pointer to
+ * ones. The @layout will change it's current component pointer to
  * the newly added component, and it'll be turned into a composite
  * layout if it was not before the adding.
  *
- * \param[in] layout	existing composite or plain layout
- *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_add(struct llapi_layout *layout)
 {
@@ -2383,15 +2381,16 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 	return 0;
 }
 /**
- * Adds a first component of a mirror to \a layout.
- * The \a layout will change it's current component pointer to
- * the newly added component, and it'll be turned into a composite
- * layout if it was not before the adding.
+ * llapi_layout_add_first_comp() - Adds a first component of a mirror to @layout
+ * @layout: existing composite or plain layout
  *
- * \param[in] layout		existing composite or plain layout
+ * The @layout will change it's current component pointer to the newly added
+ * component, and it'll be turned into a composite layout if it was not before
+ * the adding.
  *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_add_first_comp(struct llapi_layout *layout)
 {
@@ -2415,14 +2414,16 @@ int llapi_layout_add_first_comp(struct llapi_layout *layout)
 }
 
 /**
- * Deletes current component from the composite layout. The component
- * to be deleted must be the tail of components list, and it can't be
- * the only component in the layout.
+ * llapi_layout_comp_del() - Deletes current component from the composite layout
+ * @layout: composite layout
  *
- * \param[in] layout	composite layout
+ * Deletes current component from the composite layout. The component to be
+ * deleted must be the tail of components list, and it can't be the only
+ * component in the layout.
  *
- * \retval	0 on success
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_del(struct llapi_layout *layout)
 {
@@ -2455,14 +2456,14 @@ int llapi_layout_comp_del(struct llapi_layout *layout)
 }
 
 /**
- * Move the current component pointer to the component with
- * specified component ID.
+ * llapi_layout_comp_use_id() - Move the current component pointer to the
+ * component with specified component ID.
+ * @layout: composite layout
+ * @comp_id: component ID
  *
- * \param[in] layout	composite layout
- * \param[in] id	component ID
- *
- * \retval	=0 : moved successfully
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_comp_use_id(struct llapi_layout *layout, uint32_t comp_id)
 {
@@ -2493,18 +2494,20 @@ int llapi_layout_comp_use_id(struct llapi_layout *layout, uint32_t comp_id)
 }
 
 /**
- * Move the current component pointer to a specified position.
+ * llapi_layout_comp_use() - Move the current component pointer to a specified
+ * position.
  *
- * \param[in] layout	composite layout
- * \param[in] pos	the position to be moved, it can be:
- *			LLAPI_LAYOUT_COMP_USE_FIRST: use first component
- *			LLAPI_LAYOUT_COMP_USE_LAST: use last component
- *			LLAPI_LAYOUT_COMP_USE_NEXT: use component after current
- *			LLAPI_LAYOUT_COMP_USE_PREV: use component before current
+ * @layout: composite layout
+ * @pos: the position to be moved, it can be:
+ *       LLAPI_LAYOUT_COMP_USE_FIRST: use first component
+ *       LLAPI_LAYOUT_COMP_USE_LAST: use last component
+ *       LLAPI_LAYOUT_COMP_USE_NEXT: use component after current
+ *       LLAPI_LAYOUT_COMP_USE_PREV: use component before current
  *
- * \retval	=0 : moved successfully
- * \retval	=1 : at last component with NEXT, at first component with PREV
- * \retval	<0 if error occurs
+ * Return:
+ * * %0 moved successfully
+ * * %1 at last component with NEXT, at first component with PREV
+ * * %negative if error occurs
  */
 int llapi_layout_comp_use(struct llapi_layout *layout,
 			  enum llapi_layout_comp_use pos)
@@ -2561,10 +2564,13 @@ int llapi_layout_comp_use(struct llapi_layout *layout,
 }
 
 /**
- * Add layout component(s) to an existing file.
+ * llapi_layout_file_comp_add() - Add layout component(s) to an existing file.
+ * @path: The path name of the file
+ * @layout: The layout component(s) to be added
  *
- * \param[in] path	The path name of the file
- * \param[in] layout	The layout component(s) to be added
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_file_comp_add(const char *path,
 			       const struct llapi_layout *layout)
@@ -2652,13 +2658,17 @@ out:
 }
 
 /**
+ * llapi_layout_file_comp_del() - Delete component(s) by component id
+ * @path: path name of the file
+ * @id: unique component ID
+ * @flags: flags: LCME_FL_* or; negative flags: (LCME_FL_NEG|LCME_FL_*)
+ *
  * Delete component(s) by the specified component id or component flags
  * from an existing file.
  *
- * \param[in] path	path name of the file
- * \param[in] id	unique component ID
- * \param[in] flags	flags: LCME_FL_* or;
- *			negative flags: (LCME_FL_NEG|LCME_FL_*)
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 {
@@ -2843,15 +2853,19 @@ static int llapi_layout_apply_flags(struct llapi_layout *layout, uint32_t *ids,
 	return rc;
 }
 /**
+ * llapi_layout_file_comp_set() - Change flags by component ID of components
+ * @path: path name of the file
+ * @ids: An array of component IDs
+ * @flags: flags: LCME_FL_* or; negative flags: (LCME_FL_NEG|LCME_FL_*)
+ * @count: Number of elements in ids and flags array
+ *
  * Change flags by component ID of components of an existing file.
  * The component to be modified is specified by the comp->lcme_id value,
  * which must be a unique component ID.
  *
- * \param[in] path	path name of the file
- * \param[in] ids	An array of component IDs
- * \param[in] flags	flags: LCME_FL_* or;
- *			negative flags: (LCME_FL_NEG|LCME_FL_*)
- * \param[in] count	Number of elements in ids and flags array
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
  */
 int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 			       size_t count)
@@ -2990,12 +3004,12 @@ out:
 }
 
 /**
- * Check if the file layout is composite.
+ * llapi_layout_is_composite() - Check if the file layout is composite.
+ * @layout: the file layout to check
  *
- * \param[in] layout	the file layout	to check
- *
- * \retval true		composite
- * \retval false	not composite
+ * Return:
+ * * %true composite
+ * * %false not composite
  */
 bool llapi_layout_is_composite(struct llapi_layout *layout)
 {
@@ -3003,15 +3017,16 @@ bool llapi_layout_is_composite(struct llapi_layout *layout)
 }
 
 /**
- * Iterate every components in the @layout and call callback function @cb.
+ * llapi_layout_comp_iterate() - Iterate every components in the @layout and
+ * call callback function @cb.
+ * @layout: component layout list.
+ * @cb: callback function called for each component
+ * @cbdata: callback data passed to the callback function
  *
- * \param[in] layout	component layout list.
- * \param[in] cb	callback function called for each component
- * \param[in] cbdata	callback data passed to the callback function
- *
- * \retval < 0				error happens during the iteration
- * \retval LLAPI_LAYOUT_ITER_CONT	finished the iteration w/o error
- * \retval LLAPI_LAYOUT_ITER_STOP	got something, stop the iteration
+ * Return:
+ * * %negative error happens during the iteration
+ * * %LLAPI_LAYOUT_ITER_CONT finished the iteration w/o error
+ * * %LLAPI_LAYOUT_ITER_STOP got something, stop the iteration
  */
 int llapi_layout_comp_iterate(struct llapi_layout *layout,
 			      llapi_layout_iter_cb cb, void *cbdata)
@@ -3051,7 +3066,7 @@ int llapi_layout_comp_iterate(struct llapi_layout *layout,
  * This function copies all of the components from @src_layout and
  * appends them to @dst_layout.
  *
- * Return: 0 on success or -1 on failure.
+ * Return: 0 on success or %negative on failure.
  */
 int llapi_layout_merge(struct llapi_layout **dst_layout,
 		       const struct llapi_layout *src_layout)
@@ -3120,13 +3135,13 @@ error:
 }
 
 /**
- * Get the last initialized component
+ * llapi_layout_get_last_init_comp() - Get the last initialized component
+ * @layout: component layout list.
  *
- * \param[in] layout	component layout list.
- *
- * \retval 0		found
- * \retval -EINVAL	not found
- * \retval -EISDIR	directory layout
+ * Return:
+ * * %0 found
+ * * %-EINVAL not found
+ * * %-EISDIR directory layout
  */
 int llapi_layout_get_last_init_comp(struct llapi_layout *layout)
 {
@@ -3159,13 +3174,14 @@ int llapi_layout_get_last_init_comp(struct llapi_layout *layout)
 }
 
 /**
- * Interit stripe info from the file's component to the mirror
+ * llapi_layout_mirror_inherit() - Interit stripe info from the file's component
+ * to the mirror
+ * @f_layout: file component layout list.
+ * @m_layout: mirro component layout list.
  *
- * \param[in] layout	file component layout list.
- * \param[in] layout	mirro component layout list.
- *
- * \retval 0		on success
- * \retval -EINVAL	on error
+ * Return:
+ * * %0 on success
+ * * %-EINVAL on error
  */
 int llapi_layout_mirror_inherit(struct llapi_layout *f_layout,
 				struct llapi_layout *m_layout)
@@ -3190,17 +3206,15 @@ int llapi_layout_mirror_inherit(struct llapi_layout *f_layout,
 }
 
 /**
- * Find all stale components.
+ * llapi_mirror_find_stale() - Find all stale components.
+ * @layout: component layout list.
+ * @comp: array of stale component info. [out]
+ * @comp_size: array size of @comp.
+ * @mirror_ids: array of mirror id that only components belonging to these
+ *              mirror will be collected.
+ * @ids_nr: number of mirror ids array.
  *
- * \param[in] layout		component layout list.
- * \param[out] comp		array of stale component info.
- * \param[in] comp_size		array size of @comp.
- * \param[in] mirror_ids	array of mirror id that only components
- *				belonging to these mirror will be collected.
- * \param[in] ids_nr		number of mirror ids array.
- *
- * \retval		number of component info collected on success or
- *			an error code on failure.
+ * Return number of component info collected on success or error code on failure
  */
 int llapi_mirror_find_stale(struct llapi_layout *layout,
 		struct llapi_resync_comp *comp, size_t comp_size,
@@ -3713,7 +3727,7 @@ static inline int verify_pool_name(char *fsname, struct llapi_layout *layout)
 	return 0;
 }
 
-/**
+/*
  * When modified, adjust llapi_stripe_param_verify() if needed as well.
  */
 static int llapi_layout_sanity_cb(struct llapi_layout *layout,
@@ -3916,7 +3930,14 @@ void llapi_layout_sanity_perror(int error)
 				  llapi_layout_strerror[error]);
 }
 
-/* Walk a layout and enforce sanity checks that apply to > 1 component
+/**
+ * llapi_layout_sanity() - Enforce sanity checks
+ * @layout: component layout list.
+ * @incomplete: if layout is complete or not - some checks can only be done on
+ * complete layouts.
+ * @flr: set when this is called from FLR mirror create
+ *
+ * Walk a layout and enforce sanity checks that apply to > 1 component
  *
  * The core idea here is that of sanity checking individual tokens vs semantic
  * checking.
@@ -3930,35 +3951,33 @@ void llapi_layout_sanity_perror(int error)
  * valid when adjacent to one another", or "can we set these flags on adjacent
  * components"?
  *
- * \param[in] layout            component layout list.
- * \param[in] incomplete        if layout is complete or not - some checks can
- *                              only be done on complete layouts.
- * \param[in] flr		set when this is called from FLR mirror create
- *
- * \retval                      0, success, positive: various errors, see
- *                              llapi_layout_sanity_perror, -1, failure
+ * Return:
+ * * %0 on success
+ * * %negative on failure (see llapi_layout_sanity_perror)
  */
 
-int llapi_layout_sanity(struct llapi_layout *layout,
-			bool incomplete, bool flr)
+int llapi_layout_sanity(struct llapi_layout *layout, bool incomplete, bool flr)
 {
 	return llapi_layout_v2_sanity(layout, incomplete, flr, NULL);
 }
 
-/* This function has been introduced to do pool name checking
+/**
+ * llapi_layout_v2_sanity() - Do pool name checking
+ * @layout: component layout list.
+ * @incomplete: if layout is complete or not - some checks can
+ *              only be done on complete layouts.
+ * @flr: set when this is called from FLR mirror create
+ * @fsname: filesystem name is used to check pool name, if
+ *          NULL no pool name check is performed
+ *
+ * This function has been introduced to do pool name checking
  * on top of llapi_layout_sanity, the file name passed in this
  * function is used later to verify if pool exist. The older version
  * of the sanity function is passing NULL for the filename
- * Input arguments ---
- * \param[in] layout            component layout list.
- * \param[in] incomplete        if layout is complete or not - some checks can
- *                              only be done on complete layouts.
- * \param[in] flr		set when this is called from FLR mirror create
- * \param[in] fsname		filesystem name is used to check pool name, if
- *				NULL no pool name check is performed
  *
- * \retval                      0, success, positive: various errors, see
- *                              llapi_layout_sanity_perror, -1, failure
+ * Return:
+ * * %0 on success
+ * * %negative on failure (see llapi_layout_sanity_perror)
  */
 
 int llapi_layout_v2_sanity(struct llapi_layout *layout,
