@@ -4981,9 +4981,17 @@ static int lfsck_namespace_double_scan(const struct lu_env *env,
 
 	rc = lfsck_double_scan_generic(env, com, ns->ln_status);
 	if (test_bit(LAD_STOPPED, &lad->lad_flags)) {
+		struct lfsck_instance *lfsck = com->lc_lfsck;
+		struct list_head *tmp;
+		struct list_head *next;
+
 		LASSERT(list_empty(&lad->lad_req_list));
 		LASSERT(list_empty(&lad->lad_mdt_phase1_list));
-		LASSERT(list_empty(&lad->lad_mdt_phase2_list));
+
+		spin_lock(&lfsck->li_mdt_descs.ltd_lock);
+		list_for_each_safe(tmp, next, &lad->lad_mdt_phase2_list)
+			list_del_init(tmp);
+		spin_unlock(&lfsck->li_mdt_descs.ltd_lock);
 	}
 
 	return rc;

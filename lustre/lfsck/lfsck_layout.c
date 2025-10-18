@@ -6374,12 +6374,24 @@ static int lfsck_layout_master_double_scan(const struct lu_env *env,
 	rc = lfsck_double_scan_generic(env, com, lo->ll_status);
 
 	if (test_bit(LAD_STOPPED, &lad->lad_flags)) {
+		struct lfsck_instance *lfsck = com->lc_lfsck;
+		struct list_head *tmp;
+		struct list_head *next;
+
 		LASSERT(lad->lad_task == NULL);
 		LASSERT(list_empty(&lad->lad_req_list));
 		LASSERT(list_empty(&lad->lad_ost_phase1_list));
 		LASSERT(list_empty(&lad->lad_mdt_phase1_list));
-		LASSERT(list_empty(&lad->lad_ost_phase2_list));
-		LASSERT(list_empty(&lad->lad_mdt_phase2_list));
+
+		spin_lock(&lfsck->li_mdt_descs.ltd_lock);
+		list_for_each_safe(tmp, next, &lad->lad_mdt_phase2_list)
+			list_del_init(tmp);
+		spin_unlock(&lfsck->li_mdt_descs.ltd_lock);
+
+		spin_lock(&lfsck->li_ost_descs.ltd_lock);
+		list_for_each_safe(tmp, next, &lad->lad_ost_phase2_list)
+			list_del_init(tmp);
+		spin_unlock(&lfsck->li_ost_descs.ltd_lock);
 	}
 
 	return rc;
@@ -6517,17 +6529,30 @@ static void lfsck_layout_slave_data_release(const struct lu_env *env,
 static void lfsck_layout_master_quit(const struct lu_env *env,
 				     struct lfsck_component *com)
 {
+	struct lfsck_instance *lfsck = com->lc_lfsck;
 	struct lfsck_assistant_data *lad = com->lc_data;
+	struct list_head *tmp;
+	struct list_head *next;
 
 	LASSERT(lad != NULL);
 
 	lfsck_stop_assistant(lad);
 
 	LASSERT(list_empty(&lad->lad_req_list));
-	LASSERT(list_empty(&lad->lad_ost_phase1_list));
-	LASSERT(list_empty(&lad->lad_ost_phase2_list));
-	LASSERT(list_empty(&lad->lad_mdt_phase1_list));
-	LASSERT(list_empty(&lad->lad_mdt_phase2_list));
+
+	spin_lock(&lfsck->li_mdt_descs.ltd_lock);
+	list_for_each_safe(tmp, next, &lad->lad_mdt_phase1_list)
+		list_del_init(tmp);
+	list_for_each_safe(tmp, next, &lad->lad_mdt_phase2_list)
+		list_del_init(tmp);
+	spin_unlock(&lfsck->li_mdt_descs.ltd_lock);
+
+	spin_lock(&lfsck->li_ost_descs.ltd_lock);
+	list_for_each_safe(tmp, next, &lad->lad_ost_phase1_list)
+		list_del_init(tmp);
+	list_for_each_safe(tmp, next, &lad->lad_ost_phase2_list)
+		list_del_init(tmp);
+	spin_unlock(&lfsck->li_ost_descs.ltd_lock);
 }
 
 static void lfsck_layout_slave_quit(const struct lu_env *env,

@@ -1532,8 +1532,6 @@ int lfsck_assistant_engine(void *args)
 	struct lfsck_assistant_data *lad = com->lc_data;
 	const struct lfsck_assistant_operations *lao = lad->lad_ops;
 	struct lfsck_assistant_req *lar;
-	struct list_head *tmp;
-	struct list_head *next;
 	int rc = 0;
 	int rc1 = 0;
 	int rc2;
@@ -1776,20 +1774,6 @@ fini:
 		wake_up_var(lfsck);
 	}
 	lad->lad_assistant_status = (rc1 != 0 ? rc1 : rc);
-
-	spin_lock(&lfsck->li_mdt_descs.ltd_lock);
-	list_for_each_safe(tmp, next, &lad->lad_mdt_phase1_list)
-		list_del_init(tmp);
-	list_for_each_safe(tmp, next, &lad->lad_mdt_phase2_list)
-		list_del_init(tmp);
-	spin_unlock(&lfsck->li_mdt_descs.ltd_lock);
-
-	spin_lock(&lfsck->li_ost_descs.ltd_lock);
-	list_for_each_safe(tmp, next, &lad->lad_ost_phase1_list)
-		list_del_init(tmp);
-	list_for_each_safe(tmp, next, &lad->lad_ost_phase2_list)
-		list_del_init(tmp);
-	spin_unlock(&lfsck->li_ost_descs.ltd_lock);
 
 	CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread exit: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), lad->lad_name,
