@@ -164,7 +164,7 @@ int jt_snapshot_mount(int argc, char **argv);
 int jt_snapshot_umount(int argc, char **argv);
 #endif /* HAVE_SERVER_SUPPORT */
 int jt_nodemap_activate(int argc, char **argv);
-int jt_nodemap_add(int argc, char **argv);
+int jt_nodemap_new(int argc, char **argv);
 int jt_nodemap_del(int argc, char **argv);
 int jt_nodemap_modify(int argc, char **argv);
 int jt_nodemap_add_offset(int argc, char **argv);

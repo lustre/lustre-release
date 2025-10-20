@@ -102,7 +102,7 @@ SAVE_PWD=$PWD
 
 if (( $MDS1_VERSION >= $(version_code 2.16.51) )); then
 	nodemap_activate="nodemap activate"
-	nodemap_add="nodemap add"
+	nodemap_new="nodemap add"
 	nodemap_del="nodemap del"
 	nodemap_info="nodemap info"
 	nodemap_modify="nodemap modify"
@@ -116,7 +116,7 @@ if (( $MDS1_VERSION >= $(version_code 2.16.51) )); then
 	nodemap_set_sepol="nodemap set_sepol"
 else
 	nodemap_activate="nodemap_activate"
-	nodemap_add="nodemap_add"
+	nodemap_new="nodemap_add"
 	nodemap_del="nodemap_del"
 	nodemap_info="nodemap_info"
 	nodemap_modify="nodemap_modify"
@@ -128,6 +128,13 @@ else
 	nodemap_test_id="nodemap_test_id"
 	nodemap_set_fileset="nodemap_set_fileset"
 	nodemap_set_sepol="nodemap_set_sepol"
+fi
+
+if (( (MDS1_REL > ES7) ||
+      (MDS1_REL == ES7 && MDS1_VERSION >= $(version_code 2.16.0-ddn40))  ||
+      (MDS1_REL == ES6 && MDS1_VERSION >= $(version_code 2.14.0-ddn230)) ||
+      (MDS1_REL == MASTER && MDS1_VERSION >= $(version_code 2.16.61)) )); then
+	nodemap_new="nodemap new"
 fi
 
 sec_login() {
@@ -301,10 +308,10 @@ create_nodemaps() {
 	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
 
-		do_facet mgs $LCTL $nodemap_add $csum
+		do_facet mgs $LCTL $nodemap_new $csum
 		rc=$?
 		if [ $rc -ne 0 ]; then
-			echo "$nodemap_add $csum failed with $rc"
+			echo "$nodemap_new $csum failed with $rc"
 			return $rc
 		fi
 

@@ -12,29 +12,9 @@ or
 .BI --name " NODEMAP_NAME"
 .YS
 .SH DESCRIPTION
-.B nodemap_add
-creates and names a new nodemap to which NID ranges, process identities,
-and properties can be added to limit or otherwise manage capabilities
-and filesystem access permission of those NID(s).
-.SH OPTIONS
-.TP
-.BR -d ", " --dynamic
-Adds a temporary in-memory nodemap on the local node instead of a persistent
-one.
-.TP
-.BI -p ", " --parent " PARENT_NAME"
-Mandatory for dynamic nodemap. Specifies the parent nodemap to inherit
-properties from. This can be "default".
-.TP
-.BI --name " NODEMAP_NAME"
-The name to give the new nodemap. It can be any alphanumeric string of maximum
-length 16, except
-.RB \(dq default \(dq.
-.SH EXAMPLES
-.EX
-.B # lctl nodemap_add --name remotesite
-.B # lctl nodemap_add --name othersite
-.EE
+Please use
+.B lctl nodemap_new
+instead to create a new nodemap.
 .SH AVAILABILITY
 .B lctl nodemap_add
 is part of the
@@ -50,3 +30,4 @@ filesystem package since release 2.6.0
 .BR lctl-nodemap-del-idmap (8),
 .BR lctl-nodemap-del-range (8),
 .BR lctl-nodemap-modify (8)
+.BR lctl-nodemap-new (8),

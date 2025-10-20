@@ -4034,7 +4034,7 @@ int jt_nodemap_activate(int argc, char **argv)
  *
  * \retval			0 on success
  */
-int jt_nodemap_add(int argc, char **argv)
+int jt_nodemap_new(int argc, char **argv)
 {
 	char nm_to_send[LUSTRE_NODEMAP_NAME_LENGTH*2 + 2];
 	char *nodemap_name = NULL, *parent_nm = NULL;
@@ -4068,7 +4068,7 @@ int jt_nodemap_add(int argc, char **argv)
 
 	if (!nodemap_name) {
 		if (optind >= argc) {
-			fprintf(stderr, "nodemap_add: missing nodemap name\n");
+			fprintf(stderr, "%s: missing nodemap name\n", argv[0]);
 			return CMD_HELP;
 		}
 		nodemap_name = argv[optind];
@@ -4076,19 +4076,21 @@ int jt_nodemap_add(int argc, char **argv)
 
 	if (dynamic && !parent_nm) {
 		fprintf(stderr,
-			"nodemap_add: missing parent for dynamic nodemap\n");
+			"%s: missing parent for dynamic nodemap\n", argv[0]);
 		return CMD_HELP;
 	}
 
 	if (!dynamic) {
 		if (!is_mgs()) {
 			fprintf(stderr,
-				"nodemap_add: non-dynamic nodemap only allowed on MGS node\n");
+				"%s: non-dynamic nodemap only allowed on MGS node\n",
+				argv[0]);
 			return CMD_HELP;
 		}
 		if (parent_nm) {
 			fprintf(stderr,
-				"nodemap_add: invalid parent for non-dynamic nodemap\n");
+				"%s: invalid parent for non-dynamic nodemap\n",
+				argv[0]);
 			return CMD_HELP;
 		}
 	}
@@ -5736,7 +5738,7 @@ int jt_nodemap_activate(int argc, char **argv)
 	return -EOPNOTSUPP;
 }
 
-int jt_nodemap_add(int argc, char **argv)
+int jt_nodemap_new(int argc, char **argv)
 {
 	fprintf(stderr, "error: %s: invalid ioctl\n",
 		jt_cmdname(argv[0]));
