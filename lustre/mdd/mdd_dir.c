@@ -1374,7 +1374,13 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		} else {
 			enc = info->mdi_pattr.la_valid & LA_FLAGS &&
 				info->mdi_pattr.la_flags & LUSTRE_ENCRYPT_FL;
-			tfid = (struct lu_fid *)mdd_object_fid(target);
+			if (!target) {
+				/* this is lfs rm_entry with no target fid */
+				tfid = &info->mdi_fid2;
+				memset(tfid, 0, sizeof(*tfid));
+			} else {
+				tfid = (struct lu_fid *)mdd_object_fid(target);
+			}
 		}
 		rc = changelog_name2digest(tname->ln_name, tname->ln_namelen,
 					   tfid, enc, ltname);
@@ -2064,11 +2070,10 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 		rc = mdd_declare_finish_unlink(env, c, handle);
 		if (rc)
 			return rc;
-
-		/* FIXME: need changelog for remove entry */
-		rc = mdd_declare_changelog_store(env, mdd, CL_UNLINK, name,
-						 NULL, handle);
 	}
+
+	rc = mdd_declare_changelog_store(env, mdd, CL_UNLINK, name,
+					 NULL, handle);
 
 	return rc;
 }

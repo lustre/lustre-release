@@ -9178,6 +9178,13 @@ test_73() {
 	diglong1=$($LFS fid2path $MOUNT $fid)
 	diglong1=$(basename $diglong1)
 
+	# generate a changelog record for rm_entry
+	is_rmentry_supported && {
+		echo "test rm_entry"
+		touch $DIR/$tdir/rmentry
+		$LFS rm_entry $DIR/$tdir/rmentry || error "lfs rm_entry"
+	}
+
 	# access changelogs
 	echo "changelogs dump"
 	changelog_dump || error "failed to dump changelogs"
@@ -9193,6 +9200,13 @@ test_73() {
 			awk '{print $12}')
 	[[ $diglong1 == $diglong2 ]] ||
 		error "name $diglong2 in RENME is not $diglong1"
+
+	is_rmentry_supported && {
+		local cr
+		echo "verify rm_entry"
+		cr=$(changelog_find -type UNLNK -target-fid "0:0x0:0x0")
+		[[ -n $cr ]] || error "can't found rm_entry"
+	}
 }
 run_test 73 "encrypted names in changelogs"
 
