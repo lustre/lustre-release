@@ -2296,9 +2296,13 @@ static int do_activate(int argc, char **argv, int flag)
 }
 
 /**
- * Replace nids for given device.
+ * jt_replace_nids() - Replace nids for given device.
+ * @argc: number of args
+ * @argv: variable string arguments
+ *
  * lctl replace_nids <devicename> <nid1>[,nid2,nid3]
  * Command should be started on MGS server.
+ *
  * Only MGS server should be started (command execution
  * returns error in another cases). Command mount
  * -t lustre <MDT partition> -o nosvc <mount point>
@@ -2308,9 +2312,11 @@ static int do_activate(int argc, char **argv, int flag)
  * records copied as is except add_uuid and setup. This records
  * are skipped and recorded with new nids and uuid.
  *
- * \see mgs_replace_nids
- * \see mgs_replace_log
- * \see mgs_replace_nids_handler
+ * see mgs_replace_nids
+ * see mgs_replace_log
+ * see mgs_replace_nids_handler
+ *
+ * Return 0 on success or %negative on error
  */
 int jt_replace_nids(int argc, char **argv)
 {
@@ -2450,7 +2456,10 @@ int jt_obd_mdc_lookup(int argc, char **argv)
 
 #ifdef HAVE_SERVER_SUPPORT
 /**
- * Clear config logs for given device or filesystem.
+ * jt_lcfg_clear() - Clear config logs for given device or filesystem.
+ * @argc: number of args
+ * @argv: variable string arguments
+ *
  * lctl clear_conf <devicename|fsname>
  * Command has to be run on MGS node having MGS device mounted with -o
  * nosvc.
@@ -2460,10 +2469,12 @@ int jt_obd_mdc_lookup(int argc, char **argv)
  * marked SKIP do not get copied to new log. Others are copied as-is.
  * Original file is renamed to log.${time}.bak.
  *
- * \see mgs_clear_configs
- * \see mgs_replace_log
- * \see mgs_clear_config_handler
- **/
+ * see mgs_clear_configs
+ * see mgs_replace_log
+ * see mgs_clear_config_handler
+ *
+ * Return 0 on success or %negative on error
+ */
 int jt_lcfg_clear(int argc, char **argv)
 {
 	int rc;
@@ -2796,17 +2807,17 @@ out:
 }
 
 /**
- * Iterate over llog records, typically YAML-formatted configuration logs
+ * jt_llog_print_iter() - Iterate over llog records, typically YAML-formatted
+ * configuration logs
+ * @logname: name of llog file or FID
+ * @start: first record to process
+ * @end: last record to process (inclusive)
+ * @record_cb: callback for records. Return -ve error, or +ve abort.
+ * @private: private data passed to the @record_cb function [in, out]
+ * @reverse: print the llog records from the beginning or the end
+ * @raw: raw log
  *
- * \param logname[in]	name of llog file or FID
- * \param start[in]	first record to process
- * \param end[in]	last record to process (inclusive)
- * \param cb[in]	callback for records. Return -ve error, or +ve abort.
- * \param private[in,out] private data passed to the \a record_cb function
- * \param reverse[in]	print the llog records from the beginning or the end
- *
- * \retval		0 on success
- *			others handled by the caller
+ * Return 0 on success (others handled by the caller)
  */
 int jt_llog_print_iter(char *logname, long start, long end,
 		       int (record_cb)(const char *record, void *private),
@@ -3288,17 +3299,15 @@ void obd_finalize(int argc, char **argv)
 }
 
 /**
- * Get the index of the last llog record
+ * llog_last_index() - Get the index of the last llog record
+ * @logname: pointer to config log name
  *
  * logid:            [0x3:0xa:0x0]:0
  * flags:            4 (plain)
  * records_count:    57
  * last_index:       57
  *
- * \param logname[in]	pointer to config log name
- *
- * \retval		> 0 on success
- *			<= 0 on error
+ * Return 0 on success or %negative on error
  */
 static long llog_last_index(char *logname)
 {
@@ -3373,14 +3382,14 @@ struct llog_del_ost_priv {
 };
 
 /**
- * Callback to search and delete ostname in llog
+ * llog_del_ost_cb() - Callback to search and delete ostname in llog
+ * @record: pointer to llog record
+ * @data: pointer to ostname
  *
- * \param record[in]	pointer to llog record
- * \param data[in]	pointer to ostname
- *
- * \retval		1 if ostname is found and entry deleted
- *			0 if ostname is not found
- *			< 0 if error
+ * Return:
+ * * %1 if ostname is found and entry deleted
+ * * %0 if ostname is not found
+ * * %negative if error
  */
 static int llog_del_ost_cb(const char *record, void *data)
 {
@@ -3438,15 +3447,15 @@ static int llog_del_ost_cb(const char *record, void *data)
 }
 
 /**
- * Search and delete ost in llog
+ * llog_del_ost() - Search and delete ost in llog
+ * @logname: pointer to config log name
+ * @last_index: the index of the last llog record
+ * @ostname: pointer to ost name
+ * @dryrun: dry run
  *
- * \param logname[in]		pointer to config log name
- * \param last_index[in]	the index of the last llog record
- * \param ostname[in]		pointer to ost name
- * \param dryrun[in]		dry run?
- *
- * \retval			1 if ostname is found and deleted
- *				0 if ostname is not found
+ * Return:
+ * * %1 if ostname is found and deleted
+ * * %0 if ostname is not found
  */
 static int llog_del_ost(char *logname, long last_index, char *ostname,
 			int dryrun)
@@ -3888,16 +3897,13 @@ out:
 
 #ifdef HAVE_SERVER_SUPPORT
 /**
- * Format and send the ioctl to the MGS.
+ * nodemap_cmd() - Format and send the ioctl to the MGS.
+ * @cmd: IOCTL to send
+ * @dynamic: If true, targets is local MDS/OSS. If false target is MGS
+ * @ret_data: void pointer to return anything from ioctl
+ * @ret_size: size of @ret_data
  *
- * \param	cmd		IOCTL to send
- * \param	ret_data	void pointer to return anything from
- *				ioctl
- * \param	num_args	number of arguments to pack into the
- *				ioctl buffer
- * \param	argv[]		variable number of string arguments
- *
- * \retval			0 on success, -errno on failure
+ * Return 0 on success, -errno on failure
  */
 static int nodemap_cmd(enum lcfg_command_type cmd, bool dynamic,
 		       void *ret_data, unsigned int ret_size, ...)
@@ -3998,14 +4004,13 @@ out:
 }
 
 /**
- * activate nodemap functions
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_activate() - activate nodemap functions
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * argv[0]			1 for activate or 0 for deactivate
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_activate(int argc, char **argv)
 {
@@ -4025,14 +4030,13 @@ int jt_nodemap_activate(int argc, char **argv)
 }
 
 /**
- * add a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_add() - add a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * argv[0]			nodemap name
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_new(int argc, char **argv)
 {
@@ -4134,14 +4138,13 @@ out:
 }
 
 /**
- * delete a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_del() - delete a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * argv[0]			nodemap name
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_del(int argc, char **argv)
 {
@@ -4190,14 +4193,13 @@ out:
 }
 
 /**
- * test a nid for nodemap membership
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_test_nid() - test a nid for nodemap membership
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * argv[0]			properly formatted nid
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_test_nid(int argc, char **argv)
 {
@@ -4240,16 +4242,14 @@ int jt_nodemap_test_nid(int argc, char **argv)
 }
 
 /**
- * test a nodemap id pair for mapping
- *
- * \param	argc		number of args
- * \param	argv[[]		variable string arguments
- *
- * \retval			0 on success
+ * jt_nodemap_test_id() - test a nodemap id pair for mapping
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * The argv array should contain the nodemap name, the id
  * to checking the mapping on, and the id type (UID or GID)
  *
+ * Return 0 on success
  */
 int jt_nodemap_test_id(int argc, char **argv)
 {
@@ -4297,12 +4297,12 @@ int jt_nodemap_test_id(int argc, char **argv)
 }
 
 /**
- * parse nid range
+ * parse_nid_range() - parse nid range
+ * @nodemap_range: range string
+ * @nid_range: nid range string, min_nid:max_nid
+ * @range_len: length
  *
- * \param	nodemap_range	--range string
- * \param	nid_range	nid range string, min_nid:max_nid
- *
- * \retval			0 on success
+ * Return 0 on success
  */
 static int parse_nid_range(char *nodemap_range, char *nid_range, int range_len)
 {
@@ -4345,15 +4345,14 @@ static int parse_nid_range(char *nodemap_range, char *nid_range, int range_len)
 }
 
 /**
- * add an nid range to a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_add_range() - add an nid range to a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --range			properly formatted nid range
  *
- * \retval			0 on success, -errno on error
+ * Return 0 on success or -ERRNO on error
  */
 int jt_nodemap_add_range(int argc, char **argv)
 {
@@ -4406,15 +4405,14 @@ int jt_nodemap_add_range(int argc, char **argv)
 }
 
 /**
- * delete an nid range to a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_del_range() - delete an nid range to a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --range			properly formatted nid range
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_del_range(int argc, char **argv)
 {
@@ -4467,15 +4465,14 @@ int jt_nodemap_del_range(int argc, char **argv)
 }
 
 /**
- * add a banned nid range to a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_banlist_add() - add a banned nid range to a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --range			properly formatted banned nid range
  *
- * \retval			0 on success, -errno on error
+ * Return 0 on success
  */
 int jt_nodemap_banlist_add(int argc, char **argv)
 {
@@ -4525,15 +4522,14 @@ int jt_nodemap_banlist_add(int argc, char **argv)
 }
 
 /**
- * delete a banned nid range from a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_banlist_del() - delete a banned nid range from a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --range			properly formatted banned nid range
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_banlist_del(int argc, char **argv)
 {
@@ -4583,15 +4579,14 @@ int jt_nodemap_banlist_del(int argc, char **argv)
 }
 
 /**
- * set a fileset on a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_set_fileset() - set a fileset on a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --fileset			fileset name
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_set_fileset(int argc, char **argv)
 {
@@ -4648,16 +4643,15 @@ int jt_nodemap_set_fileset(int argc, char **argv)
 }
 
 /**
- * add a fileset to a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_fileset_add() - add a fileset to a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --fileset			fileset name
  * --alt			refer to an alternate fileset
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_fileset_add(int argc, char **argv)
 {
@@ -4717,15 +4711,14 @@ int jt_nodemap_fileset_add(int argc, char **argv)
 }
 
 /**
- * delete a fileset from a nodemap
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_fileset_del() - delete a fileset from a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --fileset			fileset name
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_fileset_del(int argc, char **argv)
 {
@@ -4784,10 +4777,9 @@ int jt_nodemap_fileset_del(int argc, char **argv)
 }
 
 /**
- * Modifies an existing fileset
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_fileset_modify() - Modifies an existing fileset
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --fileset			the existing fileset name
@@ -4795,7 +4787,7 @@ int jt_nodemap_fileset_del(int argc, char **argv)
  * --ro/--rw			whether fileset should be rw or ro
  * --alt/--primary		whether the fileset should be alt or primary
  *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_fileset_modify(int argc, char **argv)
 {
@@ -4907,15 +4899,14 @@ int jt_nodemap_fileset_modify(int argc, char **argv)
 }
 
 /**
- * set SELinux policy info on a nodemap
+ * jt_nodemap_set_sepol() - set SELinux policy info on a nodemap
+ * @argc: number of args
+ * @argv: variable string arguments
  *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * --name	nodemap name
+ * --sepol	SELinux policy info
  *
- * --name			nodemap name
- * --sepol			SELinux policy info
- *
- * \retval			0 on success
+ * Return 0 on success
  */
 int jt_nodemap_set_sepol(int argc, char **argv)
 {
@@ -5061,10 +5052,9 @@ int jt_nodemap_set_cap(int argc, char **argv)
 }
 
 /**
- * modify a nodemap's behavior
- *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_modify() - modify a nodemap's behavior
+ * @argc: number of args
+ * @argv: variable string arguments
  *
  * --name			nodemap name
  * --property			nodemap property to change
@@ -5072,7 +5062,7 @@ int jt_nodemap_set_cap(int argc, char **argv)
  *				Can also be in the form of property=value
  * --value			value to set property
  *
- * \retval			0 on success
+ * Returns 0 on success
  */
 int jt_nodemap_modify(int argc, char **argv)
 {
@@ -5206,21 +5196,21 @@ int jt_nodemap_modify(int argc, char **argv)
 }
 
 /**
- * Output information about nodemaps.
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * jt_nodemap_info() - Output information about nodemaps.
+ * @argc: number of args
+ * @argv: variable string arguments
  *
- *
- * --name			nodemap to present info about
- * --property			nodemap property to present
- * --list			list nodemap state, all nodemaps, and properties
+ * --name	nodemap to present info about
+ * --property	nodemap property to present
+ * --list	list nodemap state, all nodemaps, and properties
  *
  * deprecated positional parameters:
- * [list|nodemap_name|all]	\a list will list all nodemaps (default).
- *				Specifying a \a nodemap_name will
+ * [list|nodemap_name|all]	@list will list all nodemaps (default).
+ *				Specifying a @nodemap_name will
  *				display info about that specific nodemap.
- *				\a all will display info for all nodemaps.
- * \retval			0 on success
+ *				@all will display info for all nodemaps.
+ *
+ * Returns 0 on success
  */
 int jt_nodemap_info(int argc, char **argv)
 {
@@ -5444,16 +5434,15 @@ int jt_nodemap_info(int argc, char **argv)
 }
 
 /**
- * Add a nodemap's UID/GID/PROJID offset
+ * jt_nodemap_add_offset() - Add a nodemap's UID/GID/PROJID offset
+ * @argc: args count
+ * @argv: string arguments
  *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * --name	nodemap name
+ * --offset	UID/GID/PROJID offset
+ * --limit	number of maximum entries
  *
- * --name			nodemap name
- * --offset			UID/GID/PROJID offset
- * --limit			number of maximum entries
- *
- * \retval			0 on success
+ * Returns 0 on success
  */
 int jt_nodemap_add_offset(int argc, char **argv)
 {
@@ -5533,14 +5522,13 @@ int jt_nodemap_add_offset(int argc, char **argv)
 }
 
 /**
- * Delete a nodemap's UID/GID/PROJID offset
+ * jt_nodemap_del_offset() - Delete a nodemap's UID/GID/PROJID offset
+ * @argc: args count
+ * @argv: string arguments
  *
- * \param	argc		number of args
- * \param	argv[]		variable string arguments
+ * --name nodemap name
  *
- * --name			nodemap name
- *
- * \retval			0 on success
+ * Returns 0 on success
  */
 int jt_nodemap_del_offset(int argc, char **argv)
 {
@@ -5975,7 +5963,10 @@ struct llog_pool_list_data {
 };
 
 /**
- * Callback to list pool information in llog
+ * llog_poollist_cb() - Callback to list pool information in llog
+ * @record: to llog record
+ * @data: to struct llog_pool_list_data
+ *
  * - { index: 74, event: new_pool, device: tfs-clilov, fsname: tfs, pool: tmp }
  * - { index: 77, event: add_pool, device: tfs-clilov, fsname: tfs, pool: tmp,
  *     ost: tfs-OST0000_UUID }
@@ -5983,11 +5974,9 @@ struct llog_pool_list_data {
  *     pool: tmp, ost: tfs-OST0003_UUID }
  * - { index: 227, event: del_pool, device: tfs-clilov, fsname: tfs, pool: tmp }
  *
- * \param record[in]	pointer to llog record
- * \param data[in]	pointer to struct llog_pool_list_data
- *
- * \retval		0 on success
- *			<0 on error
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 static int llog_poollist_cb(const char *record, void *data)
 {
@@ -6072,13 +6061,13 @@ out:
 }
 
 /**
- * List pool information by config log
+ * llog_poollist() - List pool information by config log
+ * @fsname: pointer to filesystem name
+ * @poolname: to pool name
  *
- * \param fsname[in]	pointer to filesystem name
- * \param poolname[in]	pointer to pool name
- *
- * \retval		0 on success
- *			< 0 on error
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int llog_poollist(char *fsname, char *poolname)
 {
