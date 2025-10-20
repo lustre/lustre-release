@@ -1813,6 +1813,20 @@ err:
 }
 
 #ifdef HAVE_KFI_SGL
+/**
+ * kfilnd_tn_set_sgl_buf - Set up scatter-gather list for transaction
+ * @ni: LNet network interface
+ * @tn: Transaction structure to configure
+ * @kiov: Array of bio_vec structures describing the buffer
+ * @num_iov: Number of elements in kiov array
+ * @offset: Byte offset into the kiov array where data starts
+ * @nob: Number of bytes to map
+ *
+ * This function creates and maps a scatter-gather table for DMA operations.
+ * It handles both GPU and non-GPU buffers differently.
+ *
+ * Return: 0 on success, negative errno on failure
+ */
 static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 				 struct kfilnd_transaction *tn,
 				 struct bio_vec *kiov, int num_iov, int offset,
@@ -1837,7 +1851,8 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 	max_nkiov = num_iov;
 	rc = sg_alloc_table(&tn->tn_sgt, max_nkiov, GFP_KERNEL);
 	if (rc) {
-		CERROR("sg_alloc_table failed rc = %d\n", rc);
+		CERROR("%s: sg_alloc_table failed rc = %d\n",
+		       ni->ni_interface, rc);
 		return rc;
 	}
 
@@ -1846,8 +1861,8 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 		LASSERT(num_iov > 0);
 
 		if (!sg) {
-			CERROR("lacking enough sg entries to map tx: rc = %d\n",
-			       -EFAULT);
+			CERROR("%s: lacking enough sg entries to map tx: rc = %d\n",
+			       ni->ni_interface, -EFAULT);
 			sg_free_table(&tn->tn_sgt);
 			return -EFAULT;
 		}
@@ -1880,6 +1895,15 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 				     0);
 	}
 
+	if (rc < 0) {
+		CERROR("%s: %s failed rc = %d\n", ni->ni_interface,
+		       tn->tn_gpu ? "lnet_rdma_map_sg_attrs" :
+		       "dma_map_sgtable", rc);
+		sg_free_table(&tn->tn_sgt);
+		return rc;
+	}
+
+	/* Set tn_sgt_mapped so kfilnd_tn_free() will free tn_sgt */
 	tn->tn_sgt_mapped = true;
 
 	/* tn_num_iovec used for convenience in some debug messages */
@@ -1891,7 +1915,7 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 	       tn->tn_sgt.orig_nents, tn->tn_sgt.nents, tn->tn_gpu ? "y" : "n",
 	       rc);
 
-	return rc < 0 ? rc : 0;
+	return 0;
 }
 
 #else
