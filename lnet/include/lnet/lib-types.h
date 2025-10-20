@@ -2127,6 +2127,9 @@ struct lnet {
 	struct work_struct		ln_pb_update_work;
 
 	atomic_t                        ln_pb_update_ready;
+
+	/* Global count of published NIs/NIDs */
+	atomic_t			ln_ni_total;
 };
 
 static const struct nla_policy scalar_attr_policy[LN_SCALAR_MAX + 1] = {

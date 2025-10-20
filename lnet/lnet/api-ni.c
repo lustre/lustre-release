@@ -35,6 +35,7 @@
  */
 struct lnet the_lnet = {
 	.ln_api_mutex = __MUTEX_INITIALIZER(the_lnet.ln_api_mutex),
+	.ln_ni_total = ATOMIC_INIT(0),
 };		/* THE state of the network */
 EXPORT_SYMBOL(the_lnet);
 
@@ -2422,6 +2423,7 @@ lnet_ni_unlink_locked(struct lnet_ni *ni)
 	/* move it to zombie list and nobody can find it anymore */
 	LASSERT(!list_empty(&ni->ni_netlist));
 	list_move(&ni->ni_netlist, &ni->ni_net->net_ni_zombie);
+	atomic_dec(&the_lnet.ln_ni_total);
 	lnet_ni_decref_locked(ni, 0);
 }
 
@@ -2616,6 +2618,12 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 	struct lnet_tx_queue	*tq;
 	int			i;
 	struct lnet_net		*net = ni->ni_net;
+	int cur  = atomic_read(&the_lnet.ln_ni_total);
+	int maxn = READ_ONCE(lnet_interfaces_max);
+
+	/* take into account lo */
+	if (cur >= maxn - 1)
+		return -ENOSPC;
 
 	mutex_lock(&the_lnet.ln_lnd_mutex);
 
@@ -2688,6 +2696,8 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 		lnet_ni_tq_credits(ni) * LNET_CPT_NUMBER,
 		ni->ni_net->net_tunables.lct_peer_rtr_credits,
 		ni->ni_net->net_tunables.lct_peer_timeout);
+
+	atomic_inc(&the_lnet.ln_ni_total);
 
 	return 0;
 failed0:
@@ -6529,6 +6539,10 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 		case -ERANGE:
 			GENL_SET_ERR_MSG(info,
 					 "invalid CPT set");
+			break;
+		case -ENOSPC:
+			GENL_SET_ERR_MSG(info,
+					 "too many NIs, check lnet_interfaces_max");
 			break;
 		case 0:
 			break;
