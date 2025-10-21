@@ -6084,7 +6084,6 @@ lustre/Makefile
 lustre/autoMakefile
 lustre/conf/Makefile
 lustre/conf/resource/Makefile
-lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre/Makefile
 lustre/include/uapi/linux/lustre/Makefile

@@ -75,6 +75,8 @@ LIBMAN = 					\
 	llapi_layout_pattern_set.3		\
 	llapi_layout_pool_name_get.3		\
 	llapi_layout_pool_name_set.3		\
+	llapi_layout_set_by_fd.3		\
+	llapi_layout_set_by_xattr.3		\
 	llapi_layout_stripe_count_get.3		\
 	llapi_layout_stripe_count_set.3		\
 	llapi_layout_stripe_size_get.3		\
