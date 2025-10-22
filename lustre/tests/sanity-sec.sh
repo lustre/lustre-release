@@ -10897,6 +10897,44 @@ test_83() {
 }
 run_test 83 "Suppgids for cross-MDT ops"
 
+test_84() {
+	local nm=c0
+
+	(( MDS1_VERSION > $(version_code 2.16.61) )) ||
+		skip "Need MDS version at least 2.16.61 for correct squashing"
+
+	mkdir -p $DIR/$tdir/$USER0
+	touch $DIR/$tdir/$USER0/fileA
+	chown -R $ID0:$ID0 $DIR/$tdir
+	chown $ID0:$ID1 $DIR/$tdir/$USER0/fileA
+
+	stack_trap cleanup_local_client_nodemap EXIT
+	setup_local_client_nodemap $nm 1 1
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property squash_uid=$ID0 ||
+			error "cannot set squash_uid=$ID0 on $nm"
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property squash_gid=$ID0 ||
+			error "cannot set squash_gid=$ID0 on $nm"
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property squash_projid=$ID0 ||
+			error "cannot set squash_projid=$ID0 on $nm"
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property deny_unknown=1 ||
+			error "cannot set deny_unknown=1 on $nm"
+	wait_nm_sync $nm deny_unknown
+
+	$RUNAS_CMD -u $ID0 touch $DIR/$tdir/file01 ||
+		error "touch $DIR/$tdir/file01 failed"
+	$RUNAS_CMD -u $ID0 mkdir $DIR/$tdir/dir01 ||
+		error "mkdir $DIR/$tdir/dir01 failed"
+	$RUNAS_CMD -u $ID0 ls -l $DIR/$tdir/$USER0 ||
+		error "ls -l $DIR/$tdir/$USER0 failed"
+	$RUNAS_CMD -u $ID0 chown $ID0:$ID0 $DIR/$tdir/$USER0/fileA ||
+		error "chown $ID0:$ID0 $DIR/$tdir/$USER0/fileA failed"
+}
+run_test 84 "do not squash trusted ids"
+
 cleanup_100() {
 	local orig_sk_path="$1"
 	local test_key="$orig_sk_path/$FSNAME-test100.key"

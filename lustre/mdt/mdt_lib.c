@@ -214,6 +214,10 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	LASSERT(ucred != NULL);
 
 	ucred->uc_valid = UCRED_INVALID;
+	ucred->uc_o_uid = pud->pud_uid;
+	ucred->uc_o_gid = pud->pud_gid;
+	ucred->uc_o_fsuid = pud->pud_fsuid;
+	ucred->uc_o_fsgid = pud->pud_fsgid;
 
 	nodemap = nodemap_get_from_exp(info->mti_exp);
 	if (IS_ERR(nodemap))
@@ -231,14 +235,8 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		pud->pud_groups[i] = nodemap_map_suppgid(nodemap,
 							 pud->pud_groups[i]);
 
-	ucred->uc_o_uid = pud->pud_uid;
-	ucred->uc_o_gid = pud->pud_gid;
-	ucred->uc_o_fsuid = pud->pud_fsuid;
-	ucred->uc_o_fsgid = pud->pud_fsgid;
-
 	ucred->uc_uid = pud->pud_uid;
 	ucred->uc_gid = pud->pud_gid;
-
 	ucred->uc_fsuid = pud->pud_fsuid;
 	ucred->uc_fsgid = pud->pud_fsgid;
 
@@ -264,11 +262,9 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		GOTO(out_nodemap, rc = -EACCES);
 	}
 
-	if (nodemap &&
-	    ucred->uc_o_uid == nodemap_map_id(nodemap, NODEMAP_UID,
-					      NODEMAP_CLIENT_TO_FS,
-					      nodemap->nm_squash_uid) &&
-	    nodemap->nmf_deny_unknown)
+	if (nodemap && nodemap->nmf_deny_unknown &&
+	    nodemap_id_is_squashed(nodemap, ucred->uc_o_uid, NODEMAP_UID,
+				   NODEMAP_CLIENT_TO_FS))
 		/* deny access before we get identity ref */
 		GOTO(out, rc = -EACCES);
 
@@ -343,10 +339,10 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	}
 
 	/* clear suppgids if uid or gid was squashed. */
-	if (nodemap &&
-	    (ucred->uc_o_uid == nodemap->nm_squash_uid ||
-	     ucred->uc_o_gid == nodemap->nm_squash_gid)) {
-
+	if (nodemap_id_is_squashed(nodemap, ucred->uc_o_uid, NODEMAP_UID,
+				   NODEMAP_CLIENT_TO_FS) ||
+	    nodemap_id_is_squashed(nodemap, ucred->uc_o_gid, NODEMAP_GID,
+				   NODEMAP_CLIENT_TO_FS)) {
 		ucred->uc_cap = CAP_EMPTY_SET;
 		ucred->uc_suppgids[0] = -1;
 		ucred->uc_suppgids[1] = -1;
@@ -547,11 +543,9 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	struct mdt_device *mdt = info->mti_mdt;
 	struct md_identity *identity = NULL;
 
-	if (nodemap &&
-	    uc->uc_o_uid == nodemap_map_id(nodemap, NODEMAP_UID,
-					   NODEMAP_CLIENT_TO_FS,
-					   nodemap->nm_squash_uid) &&
-	    nodemap->nmf_deny_unknown)
+	if (nodemap && nodemap->nmf_deny_unknown &&
+	    nodemap_id_is_squashed(nodemap, uc->uc_o_uid, NODEMAP_UID,
+				   NODEMAP_CLIENT_TO_FS))
 		/* deny access before we get identity ref */
 		RETURN(-EACCES);
 
@@ -574,10 +568,10 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	}
 	uc->uc_identity = identity;
 
-	if (nodemap &&
-	    (uc->uc_o_uid == nodemap->nm_squash_uid ||
-	     uc->uc_o_gid == nodemap->nm_squash_gid)) {
-
+	if (nodemap_id_is_squashed(nodemap, uc->uc_o_uid, NODEMAP_UID,
+				   NODEMAP_CLIENT_TO_FS) ||
+	    nodemap_id_is_squashed(nodemap, uc->uc_o_gid, NODEMAP_GID,
+				   NODEMAP_CLIENT_TO_FS)) {
 		uc->uc_cap = CAP_EMPTY_SET;
 		uc->uc_suppgids[0] = -1;
 		uc->uc_suppgids[1] = -1;
@@ -649,6 +643,12 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	int rc;
 
 	ENTRY;
+
+	uc->uc_o_uid = body->mbo_uid;
+	uc->uc_o_gid = body->mbo_gid;
+	uc->uc_o_fsuid = body->mbo_fsuid;
+	uc->uc_o_fsgid = body->mbo_fsgid;
+
 	nodemap = nodemap_get_from_exp(info->mti_exp);
 	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
@@ -664,10 +664,10 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
 	LASSERT(uc != NULL);
 	uc->uc_valid = UCRED_INVALID;
-	uc->uc_o_uid = uc->uc_uid = body->mbo_uid;
-	uc->uc_o_gid = uc->uc_gid = body->mbo_gid;
-	uc->uc_o_fsuid = uc->uc_fsuid = body->mbo_fsuid;
-	uc->uc_o_fsgid = uc->uc_fsgid = body->mbo_fsgid;
+	uc->uc_uid = body->mbo_uid;
+	uc->uc_gid = body->mbo_gid;
+	uc->uc_fsuid = body->mbo_fsuid;
+	uc->uc_fsgid = body->mbo_fsgid;
 	uc->uc_suppgids[0] = nodemap_map_suppgid(nodemap, body->mbo_suppgid);
 	uc->uc_suppgids[1] = -1;
 	uc->uc_ginfo = NULL;
@@ -687,6 +687,10 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 	int rc;
 
 	ENTRY;
+
+	uc->uc_o_uid = uc->uc_o_fsuid = uc->uc_fsuid;
+	uc->uc_o_gid = uc->uc_o_fsgid = uc->uc_fsgid;
+
 	nodemap = nodemap_get_from_exp(info->mti_exp);
 	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
@@ -699,8 +703,8 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 				      NODEMAP_CLIENT_TO_FS, uc->uc_fsgid);
 
 	uc->uc_valid = UCRED_INVALID;
-	uc->uc_o_uid = uc->uc_o_fsuid = uc->uc_uid = uc->uc_fsuid;
-	uc->uc_o_gid = uc->uc_o_fsgid = uc->uc_gid = uc->uc_fsgid;
+	uc->uc_uid = uc->uc_fsuid;
+	uc->uc_gid = uc->uc_fsgid;
 	uc->uc_ginfo = NULL;
 
 	rc = old_init_ucred_common(info, nodemap);

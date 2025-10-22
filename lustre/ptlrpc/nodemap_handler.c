@@ -888,6 +888,7 @@ EXPORT_SYMBOL(nodemap_get_from_exp);
  * @id_type: NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
  * @tree_type: NODEMAP_CLIENT_TO_FS or NODEMAP_FS_TO_CLIENT
  * @id: id to map
+ * @id_is_squashed: out param, true if id is squashed
  *
  * if the nodemap_active is false, just return the passed id without mapping
  *
@@ -907,9 +908,10 @@ EXPORT_SYMBOL(nodemap_get_from_exp);
  * Return:
  * * %mapped id according to the rules below.
  */
-__u32 nodemap_map_id(struct lu_nodemap *nodemap,
-		     enum nodemap_id_type id_type,
-		     enum nodemap_tree_type tree_type, __u32 id)
+static __u32 __nodemap_map_id(struct lu_nodemap *nodemap,
+			      enum nodemap_id_type id_type,
+			      enum nodemap_tree_type tree_type, __u32 id,
+			      bool *id_is_squashed)
 {
 	struct lu_idmap *idmap = NULL;
 	__u32 offset_start;
@@ -918,6 +920,9 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	bool attempted_squash = false;
 
 	ENTRY;
+
+	if (id_is_squashed)
+		*id_is_squashed = false;
 
 	if (!nodemap_active)
 		GOTO(out, found_id);
@@ -998,6 +1003,8 @@ map:
 	GOTO(offset, found_id);
 
 squash:
+	if (id_is_squashed)
+		*id_is_squashed = true;
 	if (id_type == NODEMAP_UID)
 		found_id = nodemap->nm_squash_uid;
 	else if (id_type == NODEMAP_GID)
@@ -1032,6 +1039,13 @@ offset:
 	}
 out:
 	RETURN(found_id);
+}
+
+__u32 nodemap_map_id(struct lu_nodemap *nodemap,
+		     enum nodemap_id_type id_type,
+		     enum nodemap_tree_type tree_type, __u32 id)
+{
+	return __nodemap_map_id(nodemap, id_type, tree_type, id, NULL);
 }
 EXPORT_SYMBOL(nodemap_map_id);
 
@@ -1122,6 +1136,32 @@ int nodemap_map_suppgid(struct lu_nodemap *nodemap, int suppgid)
 EXPORT_SYMBOL(nodemap_map_suppgid);
 
 /**
+ * nodemap_id_is_squashed() - check if ID is squashed by nodemap
+ * @nodemap: nodemap
+ * @id: id to check
+ * @type: id type, NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
+ * @tree_type: tree type, NODEMAP_CLIENT_TO_FS or NODEMAP_FS_TO_CLIENT
+ *
+ * Checks whether an ID is squashed in the provided nodemap.
+ *
+ * Return:
+ * * %true if ID is squashed
+ */
+bool nodemap_id_is_squashed(struct lu_nodemap *nodemap, __u32 id,
+			    enum nodemap_id_type type,
+			    enum nodemap_tree_type tree_type)
+{
+	bool id_is_squashed = false;
+	__u32 tempid;
+
+	tempid = __nodemap_map_id(nodemap, type, tree_type, id,
+				  &id_is_squashed);
+
+	return id_is_squashed;
+}
+EXPORT_SYMBOL(nodemap_id_is_squashed);
+
+/**
  * nodemap_check_resource_ids() - check if export can access a resource
  * @exp: export to check
  * @fs_uid: uid of the resource
@@ -1140,8 +1180,6 @@ int nodemap_check_resource_ids(struct obd_export *exp, __u32 fs_uid,
 			       __u32 fs_gid)
 {
 	struct lu_nodemap *nodemap;
-	__u32 client_uid, client_gid;
-	__u32 client_squashed_uid, client_squashed_gid;
 	int rc = 0;
 
 	ENTRY;
@@ -1150,19 +1188,10 @@ int nodemap_check_resource_ids(struct obd_export *exp, __u32 fs_uid,
 	if (IS_ERR_OR_NULL(nodemap))
 		RETURN(0);
 
-	client_uid = nodemap_map_id(nodemap, NODEMAP_UID, NODEMAP_FS_TO_CLIENT,
-				    fs_uid);
-	client_gid = nodemap_map_id(nodemap, NODEMAP_GID, NODEMAP_FS_TO_CLIENT,
-				    fs_gid);
-	client_squashed_uid = nodemap_map_id(nodemap, NODEMAP_UID,
-					     NODEMAP_FS_TO_CLIENT,
-					     nodemap->nm_squash_uid);
-	client_squashed_gid = nodemap_map_id(nodemap, NODEMAP_GID,
-					     NODEMAP_FS_TO_CLIENT,
-					     nodemap->nm_squash_gid);
-
-	if (client_uid == client_squashed_uid &&
-	    client_gid == client_squashed_gid) {
+	if (nodemap_id_is_squashed(nodemap, fs_uid, NODEMAP_UID,
+				   NODEMAP_FS_TO_CLIENT) &&
+	    nodemap_id_is_squashed(nodemap, fs_gid, NODEMAP_GID,
+				   NODEMAP_FS_TO_CLIENT)) {
 		CDEBUG(D_SEC,
 		       "Nodemap %s: access denied for export %s (at %s) fs_uid=%u fs_gid=%u\n",
 		       nodemap->nm_name, obd_uuid2str(&exp->exp_client_uuid),
