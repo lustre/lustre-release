@@ -64,6 +64,7 @@ my $max_line_length = 80;
 my $ignore_perl_version = 0;
 my $minimum_perl_version = 5.10.0;
 my $min_conf_desc_length = 4;
+my $max_messages = 200;  # 0 means unlimited
 my $spelling_file = "$D/spelling.txt";
 my $spelling_file_userspace = "$D/userspace_spelling.txt";
 my $codespell = 0;
@@ -118,6 +119,7 @@ Options:
                              if exceeded, warn on patches
                              requires --strict for use with --file
   --min-conf-desc-length=n   set the min description length, if shorter, warn
+  --max-messages=n           maximum number of error/warn messages printed (default $max_messages)
   --tab-size=n               set the number of spaces for tab (default $tabsize)
   --root=PATH                PATH to the kernel tree root
   --no-summary               suppress the per-file summary
@@ -316,6 +318,7 @@ GetOptions(
 	'list-types!'	=> \$list_types,
 	'max-line-length=i' => \$max_line_length,
 	'min-conf-desc-length=i' => \$min_conf_desc_length,
+	'max-messages=i' => \$max_messages,
 	'tab-size=i'	=> \$tabsize,
 	'root=s'	=> \$root,
 	'summary!'	=> \$summary,
@@ -2400,11 +2403,26 @@ sub show_type {
 
 sub report {
 	my ($level, $type, $msg) = @_;
+	our $cnt_error;
+	our $cnt_warn;
 
 	if (!show_type($type) ||
 	    (defined $tst_only && $msg !~ /\Q$tst_only\E/)) {
 		return 0;
 	}
+
+	# Check if we've reached the maximum number of messages
+	if ($max_messages > 0 && ($cnt_error + $cnt_warn) == $max_messages) {
+		warn "$P: Maximum number of messages reached ($max_messages)\n";
+		warn "$P: Use --max-messages=0 to see all messages\n";
+		$level="ERROR";
+		$msg="Maximum number of messages reached ($max_messages), " .
+		     "use --max-messages=0 to see all messages";
+	} elsif ($max_messages > 0 && ($cnt_error + $cnt_warn) > $max_messages) {
+		# we've already output the maximum number of messages
+		return 1;
+	}
+
 	my $output = '';
 	if ($color) {
 		if ($level eq 'ERROR') {
