@@ -1872,8 +1872,16 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 	/* Enqueue layout lock and get layout version. We need to do this
 	 * even for operations requiring to open file, such as read and write,
 	 * because it might not grant layout lock in IT_OPEN.
+	 *
+	 * However, fsync operations should NOT acquire layout locks because:
+	 * 1. fsync only flushes already-mapped pages to disk
+	 * 2. The mapping from file offsets to OST objects already occurred
+	 *    during the original write operations that populated the page cache
+	 * 3. Layout changes should only affect NEW writes, not existing cache
+	 * 4. Acquiring layout locks during fsync can cause deadlocks when
+	 *    fsync is called from within write operations (EX-12989)
 	 */
-	if (result == 0 && !io->ci_ignore_layout) {
+	if (result == 0 && !io->ci_ignore_layout && io->ci_type != CIT_FSYNC) {
 		result = ll_layout_refresh(inode, &vio->vui_layout_gen);
 		if (result == -ENOENT)
 			/* If the inode on MDS has been removed, but the objects
