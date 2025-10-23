@@ -2432,7 +2432,8 @@ char *lprocfs_find_named_value(const char *buffer, const char *name,
 		val++;
 
 	*count = 0;
-	while (val < buffer + buflen && isalnum(*val)) {
+	while (val < buffer + buflen &&
+	       (isalnum(*val) || *val == '%' || *val == '.')) {
 		++*count;
 		++val;
 	}

@@ -35612,7 +35612,7 @@ test_854() {
 	# Get the actual value set
 	local ra_mb_51=$($LCTL get_param -n llite.*.max_read_ahead_mb) ||
 		error "Failed to get max_read_ahead_mb after setting to 51%"
-	log "max_read_ahead_mb=51% set to $ra_mb_51 MB"
+	log "max_read_ahead_mb is $ra_mb_51 MB"
 
 	# Check if the value was actually capped at 50%
 	local expect_50=$((total_ram_mb * 50 / 100))
@@ -35629,7 +35629,7 @@ test_854() {
 	# Get the actual value set
 	local ra_mb_90=$($LCTL get_param -n llite.*.max_read_ahead_mb) ||
 		error "Failed to get max_read_ahead_mb after setting to 90%"
-	log "max_read_ahead_mb=90% set to $ra_mb_90 MB"
+	log "max_read_ahead_mb is $ra_mb_90 MB"
 
 	# Check if the value was actually capped at 50%
 	if (( ra_mb_90 > expect_50 )); then
@@ -35648,7 +35648,7 @@ test_854() {
 				  llite.*.max_read_ahead_per_file_mb) ||
 		error "Fail to get max_read_ahead_per_file_mb after set to 60%"
 
-	log "max_read_ahead_per_file_mb=60% set to $ra_per_file_mb_60 MB"
+	log "max_read_ahead_per_file_mb is $ra_per_file_mb_60 MB"
 
 	# Check if the value was capped at max_ra_mb
 	if (( ra_per_file_mb_60 > ra_mb_90 )); then
@@ -35665,7 +35665,7 @@ test_854() {
 	local ra_whole_mb_70=$($LCTL get_param -n \
 			       llite.*.max_read_ahead_whole_mb) ||
 		error "Failed to get max_read_ahead_whole_mb after set to 70%"
-	log "max_read_ahead_whole_mb=70% set to $ra_whole_mb_70 MB"
+	log "max_read_ahead_whole_mb is $ra_whole_mb_70 MB"
 
 	# Check if the value was capped at max_ra_per_file_mb
 	if (( ra_whole_mb_70 > ra_per_file_mb_60 )); then
@@ -35673,15 +35673,20 @@ test_854() {
 	fi
 	log "Value capped at max_read_ahead_per_file_mb ($ra_whole_mb_70 <= $ra_per_file_mb_60)"
 
-	# Verify max_cached_mb is still set correctly
+	# Verify max_cached_mb is still set correctly (we set it to 75% earlier)
 	new_max_cached_mb=$($LCTL get_param llite.*.max_cached_mb |
 			    awk '/^max_cached_mb:/ { print $2 }') ||
 		error "Failed to get final max_cached_mb value"
 	log "Final max_cached_mb: $new_max_cached_mb MB"
+
+	# We set it to 75% earlier, verify it's still around that value
 	(( new_max_cached_mb * 100 / total_ram_mb >= 74 &&
 	 new_max_cached_mb * 100 / total_ram_mb <= 76 )) ||
-		error "max_cached_mb changed from 75% of RAM"
+		error "max_cached_mb=$new_max_cached_mb MB not close to 75% of RAM"
+
+	log "max_cached_mb percentage functionality verified successfully"
 }
+run_test 854 "verify llite.*.max_cached_mb setting"
 
 #
 # tests that do cleanup/setup should be run at the end
