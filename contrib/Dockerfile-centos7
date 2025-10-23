@@ -20,13 +20,18 @@
 
 FROM centos:7
 
+RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/CentOS-*.repo
+RUN sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/CentOS-*.repo
+RUN sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/CentOS-*.repo
+
 RUN yum install -y gcc autoconf libtool which make patch diffutils file \
 	binutils-devel install -y python38 python3-devel elfutils-devel \
 	libselinux-devel libaio-devel libyaml-devel bc libnl3-devel bison \
 	flex libmount-devel
 
 # to build lipe
-RUN yum install -y json-c-devel redhat-lsb-core libssh-devel libattr-devel
+RUN yum install -y json-c-devel redhat-lsb-core libssh-devel libattr-devel \
+	guile guile-devel
 
 # to build ZFS
 RUN yum install -y libtirpc-devel libblkid-devel openssl-devel libuuid-devel
@@ -47,7 +52,7 @@ RUN /bin/bash -c \
 
 # to build zfs we need the kernel built
 RUN /bin/bash -c \
-	"cd /tmp/linux-kernel; [[ ! -s arch/x86/boot/bzImage ]] && make oldconfig && make -j8 bzImage"
+	"cd /tmp/linux-kernel; [[ -s arch/x86/boot/bzImage ]] || make -j8 oldconfig bzImage"
 
 # build and install ZFS
 RUN /bin/bash -c \
