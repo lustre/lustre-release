@@ -2900,6 +2900,7 @@ int nodemap_fileset_get_root(struct lu_nodemap *nodemap,
 	size_t combined_path_len;
 	char *fset = NULL;
 	bool fset_ro = false;
+	bool found = false;
 	int fset_size, rc;
 
 	if (!nodemap || !fileset_out || !fileset_size_out)
@@ -2954,26 +2955,35 @@ int nodemap_fileset_get_root(struct lu_nodemap *nodemap,
 		      == fileset_src &&
 		    (fileset_src[strlen(nodemap->nm_fileset_prim)] == '/' ||
 		     fileset_src[strlen(nodemap->nm_fileset_prim)] == '\0')) {
-			rc = strscpy(fset, fileset_src, fset_size);
-			if (rc < 0)
-				GOTO(out, rc = -ENAMETOOLONG);
-
 			fset_ro = nodemap->nm_fileset_prim_ro;
-			GOTO(out, rc = 0);
+			found = true;
 		}
 	}
 
+	/* if fileset_src matches any fileset either exactly or as a prefix,
+	 * there is a match.
+	 */
 	fset_alt = fileset_alt_search_path(&nodemap->nm_fileset_alt,
 					   fileset_src, true);
 	if (fset_alt) {
-		/* if fileset_src matches any fileset either exactly or as
-		 * a prefix, set fileset_out to fileset_src
+		/* if prim fileset matched, check which fileset is closest and
+		 * use its read-only flag
 		 */
+		if (found) {
+			if (strlen(nodemap->nm_fileset_prim) <
+			    strlen(fset_alt->nfa_path))
+				fset_ro = fset_alt->nfa_ro;
+		} else {
+			fset_ro = fset_alt->nfa_ro;
+			found = true;
+		}
+	}
+
+	/* A matching fileset was found, set fset to fileset_src and go out */
+	if (found) {
 		rc = strscpy(fset, fileset_src, fset_size);
 		if (rc < 0)
 			GOTO(out, rc = -ENAMETOOLONG);
-
-		fset_ro = fset_alt->nfa_ro;
 		GOTO(out, rc = 0);
 	}
 

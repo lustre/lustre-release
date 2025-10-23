@@ -3338,11 +3338,14 @@ multi_fileset_test_run() {
 
 	# setup filesets
 	do_facet mgs $LCTL nodemap_fileset_add $ro_fileset --name $nm \
-		--fileset "/${mult_fset_root}/${subd_p}"
+		--fileset "/${mult_fset_root}/${subd_p}" ||
+		error "unable to add primary fileset (1)"
 	do_facet mgs $LCTL nodemap_fileset_add --alt $ro_fileset --name $nm \
-		--fileset "/${mult_fset_root}/${subd_alt_foo}"
+		--fileset "/${mult_fset_root}/${subd_alt_foo}" ||
+		error "unable to add alt fileset (1)"
 	do_facet mgs $LCTL nodemap_fileset_add --alt $ro_fileset --name $nm \
-		--fileset "/${mult_fset_root}/${subd_alt_home}"
+		--fileset "/${mult_fset_root}/${subd_alt_home}" ||
+		error "unable to add alt fileset (2)"
 
 	wait_nm_sync_fileset $nm "/${mult_fset_root}/${subd_alt_home}" \
 		"/${mult_fset_root}/${subd_alt_home}" "alternate" $ro
@@ -3391,7 +3394,8 @@ multi_fileset_test_run() {
 
 	# remove primary fileset and retest primary fileset cases for failure
 	do_facet mgs $LCTL nodemap_fileset_del --name $nm \
-		--fileset "/${mult_fset_root}/${subd_p}"
+		--fileset "/${mult_fset_root}/${subd_p}" ||
+		error "unable to delete primary fileset (1)"
 
 	wait_nm_sync_fileset $nm "/${mult_fset_root}/${subd_p}" \
 		"" "primary" $ro
@@ -3411,7 +3415,8 @@ multi_fileset_test_run() {
 
 	# remove one alt fileset and retest relevant alt fileset case
 	do_facet mgs $LCTL nodemap_fileset_del --name $nm \
-		--fileset "/${mult_fset_root}/${subd_alt_foo}"
+		--fileset "/${mult_fset_root}/${subd_alt_foo}" ||
+		error "unable to delete alt fileset (1)"
 
 	wait_nm_sync_fileset $nm "/${mult_fset_root}/${subd_alt_foo}" \
 		"" "alternate" $ro
@@ -3420,7 +3425,8 @@ multi_fileset_test_run() {
 	multi_fileset_test_failure "/${mult_fset_root}/${subd_alt_foo}"
 
 	do_facet mgs $LCTL nodemap_fileset_del --name $nm \
-		--fileset "/${mult_fset_root}/${subd_alt_home}"
+		--fileset "/${mult_fset_root}/${subd_alt_home}" ||
+		error "unable to delete alt fileset (2)"
 
 	wait_nm_sync_fileset $nm "/${mult_fset_root}/${subd_alt_home}" \
 		"" "alternate" $ro
@@ -3443,6 +3449,48 @@ multi_fileset_test_run() {
 	# client can mount ${subddir_no_fileset}
 	multi_fileset_test_success "/${mult_fset_root}/${subd_no_fset}" \
 		"${MOUNT}/${prefix}${subd_no_fset}"
+
+	if (( $MGS_VERSION >= $(version_code 2.16.59) )) && $ro; then
+		local prim_subdir=${subd_p}/$subsubd_p0
+
+		# LU-19506
+		# verify mount uses the closest matched fileset (needed for ro)
+		# 1: prim fileset is rw and alt fileset (prim subdir) is ro
+		do_facet mgs $LCTL nodemap_fileset_del --name $nm --all ||
+			error "unable to delete all filesets (1)"
+		do_facet mgs $LCTL nodemap_fileset_add --name $nm \
+			--fileset "/${mult_fset_root}/$subd_p" ||
+			error "unable to add primary fileset (2)"
+		do_facet mgs $LCTL nodemap_fileset_add --alt --ro --name $nm \
+			--fileset "/${mult_fset_root}/$prim_subdir"||
+			error "unable to add alt fileset (3)"
+
+		wait_nm_sync_fileset $nm "/${mult_fset_root}/$prim_subdir" \
+			"/${mult_fset_root}/$prim_subdir" "alternate" $ro
+
+		multi_fileset_test_success "/${mult_fset_root}/${subd_p}" \
+			"${MOUNT}/${prefix}${subd_p}" false
+		multi_fileset_test_success "/${mult_fset_root}/$prim_subdir" \
+			"${MOUNT}/${prefix}${subsubd_p0}" true
+
+		# 2: prim fileset (alt subdir) is ro and alt fileset is rw
+		do_facet mgs $LCTL nodemap_fileset_del --name $nm --all ||
+			error "unable to delete all filesets (2)"
+		do_facet mgs $LCTL nodemap_fileset_add --ro --name $nm \
+			--fileset "/${mult_fset_root}/$prim_subdir"||
+			error "unable to add primary fileset (3)"
+		do_facet mgs $LCTL nodemap_fileset_add --alt --name $nm \
+			--fileset "/${mult_fset_root}/$subd_p" ||
+			error "unable to add alt fileset (4)"
+
+		wait_nm_sync_fileset $nm "/${mult_fset_root}/$subd_p" \
+			"/${mult_fset_root}/$subd_p" "alternate"
+
+		multi_fileset_test_success "/${mult_fset_root}/$prim_subdir" \
+			"${MOUNT}/${prefix}${subsubd_p0}" true
+		multi_fileset_test_success "/${mult_fset_root}/${subd_p}" \
+			"${MOUNT}/${prefix}${subd_p}" false
+	fi
 
 	multi_fileset_test_cleanup $nm
 

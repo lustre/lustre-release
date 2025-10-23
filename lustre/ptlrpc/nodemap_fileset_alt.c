@@ -229,41 +229,50 @@ EXPORT_SYMBOL(fileset_alt_search_id);
  * fileset_alt_search_path() - Search for a fileset by its fileset path.
  * @root: pointer to the root of the rb tree
  * @fileset_path: path of the fileset to search
- * @prefix_search: search for a fileset that is a prefix to
+ * @prefix_search: search for a fileset that is the closest prefix to
  *		   fileset_path rather than an exact match
  *
  * Return lu_fileset_alt structure on success, NULL otherwise
  */
 struct lu_fileset_alt *fileset_alt_search_path(struct rb_root *root,
-					   const char *fileset_path,
-					   bool prefix_search)
+					       const char *fileset_path,
+					       bool prefix_search)
 {
 	struct rb_node *node;
-	struct lu_fileset_alt *fileset;
-	bool found = false;
+	struct lu_fileset_alt *tmp;
+	struct lu_fileset_alt *fileset = NULL;
+	size_t fileset_len = 0;
+	size_t tmp_len;
 	int rc;
 
 	/* search the full tree for a fileset with the given path */
 	for (node = rb_first(root); node; node = rb_next(node)) {
-		fileset = rb_entry(node, struct lu_fileset_alt, nfa_rb);
+		tmp = rb_entry(node, struct lu_fileset_alt, nfa_rb);
 		if (prefix_search) {
 			/* accepted (rc = 0) if fileset_path starts like alt
 			 * fileset, and is followed by '/' (subdirectory)
 			 * or '\0' (identical)
 			 */
-			rc = (strstr(fileset_path, fileset->nfa_path)
-				!= fileset_path ||
-			     (fileset_path[strlen(fileset->nfa_path)] != '/' &&
-			      fileset_path[strlen(fileset->nfa_path)] != '\0'));
+			rc = (strstr(fileset_path, tmp->nfa_path) !=
+				      fileset_path ||
+			      (fileset_path[strlen(tmp->nfa_path)] != '/' &&
+			       fileset_path[strlen(tmp->nfa_path)] != '\0'));
+			if (!rc) {
+				tmp_len = strlen(tmp->nfa_path);
+				if (tmp_len > fileset_len) {
+					fileset = tmp;
+					fileset_len = tmp_len;
+				}
+			}
 		} else {
-			rc = strcmp(fileset_path, fileset->nfa_path);
-		}
-		if (!rc) {
-			found = true;
-			break;
+			rc = strcmp(fileset_path, tmp->nfa_path);
+			if (!rc) {
+				fileset = tmp;
+				break;
+			}
 		}
 	}
-	return found ? fileset : NULL;
+	return fileset;
 }
 EXPORT_SYMBOL(fileset_alt_search_path);
 
