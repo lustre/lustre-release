@@ -6654,7 +6654,7 @@ test_73e() {
 
 	INTERFACES=( $(lnet_if_list) )
 	local inf=${INTERFACES[0]}
-	local net=${NETTYPE}42
+	local net
 
 	stack_trap "cleanup_73c"
 
@@ -6671,10 +6671,15 @@ test_73e() {
 			error "Failed to determine interface for $rnode"
 		do_node $rnode "$LNETCTL lnet configure"
 		do_node $rnode "$LNETCTL net show"
-		do_rpc_nodes $rnode "$LNETCTL net add --net $net --if $rinf" ||
-			echo "can't add network $net on $node"
+
+		for ((n = 10; n <= 50; n++)); do
+			net=${NETTYPE}$n
+			do_rpc_nodes $rnode "$LNETCTL net add --net $net --if $rinf" ||
+			echo "can't add network $net on $rnode"
+		done
 	done
 
+	net=${NETTYPE}50
 	$LNETCTL net add --net $net --if $inf
 	$LNETCTL net del --net ${NETTYPE}
 	$LNETCTL net show

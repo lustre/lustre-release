@@ -170,8 +170,8 @@ int client_import_add_nids_to_conn(struct obd_import *imp,
 				continue;
 			*uuid = conn->oic_uuid;
 			spin_unlock(&imp->imp_lock);
-			rc = class_add_nids_to_uuid(&conn->oic_uuid, nidlist,
-						    nid_count, nid_size);
+			rc = class_add_nids_to_uuid(&conn->oic_uuid, nidlist + i,
+						    nid_count - i, nid_size);
 			RETURN(rc);
 		}
 	}

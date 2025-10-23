@@ -1243,7 +1243,7 @@ static int mgc_create_new_conn(struct obd_import *imp, struct lnet_nid *nidlist,
 	       imp->imp_obd->obd_name, prim_nid);
 
 	/* Add remaining NIDs in list to that connection */
-	rc = client_import_add_nids_to_conn(imp, nidlist, nid_count,
+	rc = client_import_add_nids_to_conn(imp, nidlist + i, nid_count - i,
 					    nid_size, uuid);
 	if (rc < 0)
 		CERROR("%s: failed to update NID list: rc = %d\n",
