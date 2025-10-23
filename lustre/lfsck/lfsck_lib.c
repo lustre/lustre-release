@@ -3343,9 +3343,11 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 		GOTO(put, rc = -EPERM);
 	}
 
-	if (!lfsck->li_task)
+	mutex_lock(&lfsck->li_mutex);
+	if (!lfsck->li_task) {
 		/* no error if LFSCK is stopped, or not started */
-		GOTO(put, rc = 0);
+		GOTO(unlock, rc = 0);
+	}
 
 	master_task = xchg(&lfsck->li_task, NULL);
 stop_assistant:
@@ -3388,6 +3390,8 @@ stop_assistant:
 	if (stop->ls_flags & LPF_BROADCAST)
 		rc1 = lfsck_stop_all(env, lfsck, stop);
 	EXIT;
+unlock:
+	mutex_unlock(&lfsck->li_mutex);
 put:
 	lfsck_instance_put(env, lfsck);
 
