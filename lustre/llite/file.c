@@ -2580,11 +2580,11 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 		RETURN(-EFBIG);
 
 	if (unlikely(lock_inode))
-		ll_inode_lock(inode);
+		inode_lock(inode);
 	result = __generic_file_write_iter(iocb, iter);
 
 	if (unlikely(lock_inode))
-		ll_inode_unlock(inode);
+		inode_unlock(inode);
 
 	/* If the page is not already dirty, ll_tiny_write_begin returns
 	 * -ENODATA.  We continue on to normal write.
@@ -3347,9 +3347,9 @@ lookup:
 		if (enckey == 0 || nameenc == 0)
 			continue;
 
-		ll_inode_lock(parent);
+		inode_lock(parent);
 		de = lookup_one_len(p, de_parent, len);
-		ll_inode_unlock(parent);
+		inode_unlock(parent);
 		if (IS_ERR_OR_NULL(de) || !de->d_inode) {
 			dput(de_parent);
 			rc = -ENODATA;
@@ -3844,7 +3844,6 @@ static int ll_hsm_import(struct inode *inode, struct file *file,
 			 ATTR_ATIME | ATTR_ATIME_SET;
 
 	inode_lock(inode);
-	/* inode lock owner set in ll_setattr_raw()*/
 	rc = ll_setattr_raw(file_dentry(file), attr, 0, true);
 	if (rc == -ENODATA)
 		rc = 0;
@@ -3895,7 +3894,6 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 		RETURN(-EINVAL);
 
 	inode_lock(inode);
-	/* inode lock owner set in ll_setattr_raw()*/
 	rc = ll_setattr_raw(file_dentry(file), &ia, OP_XVALID_CTIME_SET,
 			    false);
 	inode_unlock(inode);
@@ -4274,10 +4272,10 @@ int ll_ioctl_project(struct file *file, unsigned int cmd, void __user *uarg)
 	/* apply child dentry if name is valid */
 	name_len = strnlen(lu_project.project_name, NAME_MAX);
 	if (name_len > 0 && name_len <= NAME_MAX) {
-		ll_inode_lock(inode);
+		inode_lock(inode);
 		child_dentry = lookup_one_len(lu_project.project_name,
 					      dentry, name_len);
-		ll_inode_unlock(inode);
+		inode_unlock(inode);
 		if (IS_ERR(child_dentry)) {
 			rc = PTR_ERR(child_dentry);
 			goto out;
@@ -5930,7 +5928,7 @@ again:
 		spin_unlock(&och->och_mod->mod_open_req->rq_lock);
 	}
 	LASSERT(locked == false);
-	ll_inode_lock(child_inode);
+	inode_lock(child_inode);
 	locked = true;
 
 	rc = md_rename(ll_i2sbi(parent)->ll_md_exp, op_data,
@@ -5966,7 +5964,7 @@ again:
 	/* Try again if the lease has cancelled. */
 	if (rc == -EAGAIN && S_ISREG(child_inode->i_mode)) {
 		LASSERT(locked == true);
-		ll_inode_unlock(child_inode);
+		inode_unlock(child_inode);
 		locked = false;
 		goto again;
 	}
@@ -5980,7 +5978,7 @@ out_data:
 	ll_finish_md_op_data(op_data);
 out_iput:
 	if (locked)
-		ll_inode_unlock(child_inode);
+		inode_unlock(child_inode);
 	iput(child_inode);
 	RETURN(rc);
 }

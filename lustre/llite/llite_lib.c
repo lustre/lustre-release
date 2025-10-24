@@ -2062,10 +2062,10 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 	 */
 	op_data->op_attr.ia_valid &= ~(TIMES_SET_FLAGS | ATTR_SIZE);
 	if (S_ISREG(inode->i_mode))
-		ll_inode_lock(inode);
+		inode_lock(inode);
 	rc = simple_setattr(&nop_mnt_idmap, dentry, &op_data->op_attr);
 	if (S_ISREG(inode->i_mode))
-		ll_inode_unlock(inode);
+		inode_unlock(inode);
 	op_data->op_attr.ia_valid = ia_valid;
 
 	rc = ll_update_inode(inode, &md);
@@ -2304,9 +2304,6 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 
 	ENTRY;
 
-	/* VFS has locked the inode before calling this */
-	ll_set_inode_lock_owner(inode);
-
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
 	       "START file "DNAME":"DFID"(%p) current size %llu, valid attrs %x, mode %x, uid %d, gid %d, new size %llu, atime %lld.%.9ld, mtime %lld.%.9ld, ctime %lld.%.9ld\n",
 	       encode_fn_dentry(dentry), PFID(ll_inode2fid(inode)), inode,
@@ -2366,7 +2363,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 		       ktime_get_real_seconds());
 
 	if (S_ISREG(inode->i_mode))
-		ll_inode_unlock(inode);
+		inode_unlock(inode);
 
 	/* We always do an MDS RPC, even if we're only changing the size;
 	 * only the MDS knows whether truncate() should fail with -ETXTBUSY
@@ -2540,7 +2537,7 @@ out:
 		ll_finish_md_op_data(op_data);
 
 	if (S_ISREG(inode->i_mode)) {
-		ll_inode_lock(inode);
+		inode_lock(inode);
 		if ((attr->ia_valid & ATTR_SIZE) && !hsm_import)
 			inode_dio_wait(inode);
 		/* Once we've got the i_mutex, it's safe to set the S_NOSEC
@@ -2565,8 +2562,6 @@ clear:
 	       (long long) attr->ia_atime.tv_sec, attr->ia_atime.tv_nsec,
 	       (long long) attr->ia_mtime.tv_sec, attr->ia_mtime.tv_nsec,
 	       (long long) attr->ia_ctime.tv_sec, attr->ia_ctime.tv_nsec, rc);
-
-	ll_clear_inode_lock_owner(inode);
 
 	RETURN(rc);
 }
@@ -2816,7 +2811,6 @@ void ll_inode_size_lock(struct inode *inode)
 
 	lli = ll_i2info(inode);
 	mutex_lock(&lli->lli_size_mutex);
-	lli->lli_size_lock_owner = current;
 }
 
 void ll_inode_size_unlock(struct inode *inode)
@@ -2824,7 +2818,6 @@ void ll_inode_size_unlock(struct inode *inode)
 	struct ll_inode_info *lli;
 
 	lli = ll_i2info(inode);
-	lli->lli_size_lock_owner = NULL;
 	mutex_unlock(&lli->lli_size_mutex);
 }
 

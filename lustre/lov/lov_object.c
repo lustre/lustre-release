@@ -1481,7 +1481,6 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 		GOTO(out, result = -ERESTARTSYS);
 	}
 
-	clear_bit(LO_NEED_INODE_LOCK, &lov->lo_obj_flags);
 	result = lov_layout_change(env, lov, lsm, conf);
 	if (result)
 		set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);

@@ -239,11 +239,10 @@ struct ll_inode_info {
 
 		/* for non-directory */
 		struct {
+			struct range_lock_tree	lli_write_tree;
 			struct mutex		lli_size_mutex;
-			struct task_struct	*lli_size_lock_owner;
 			char			*lli_symlink_name;
 			struct ll_trunc_sem	lli_trunc_sem;
-			struct range_lock_tree	lli_write_tree;
 			struct mutex		lli_setattr_mutex;
 
 			struct rw_semaphore	lli_glimpse_sem;
@@ -666,28 +665,6 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 static inline struct pcc_inode *ll_i2pcci(struct inode *inode)
 {
 	return ll_i2info(inode)->lli_pcc_inode;
-}
-
-static inline void ll_set_inode_lock_owner(struct inode *inode)
-{
-}
-
-static inline void ll_clear_inode_lock_owner(struct inode *inode)
-{
-}
-
-/* lock inode and set inode lock owener */
-static inline void ll_inode_lock(struct inode *inode)
-{
-	inode_lock(inode);
-	ll_set_inode_lock_owner(inode);
-}
-
-/* clear inode lock owner and unlock it */
-static inline void ll_inode_unlock(struct inode *inode)
-{
-	ll_clear_inode_lock_owner(inode);
-	inode_unlock(inode);
 }
 
 /* default to use at least 16M for fast read if possible */

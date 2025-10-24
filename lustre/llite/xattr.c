@@ -92,8 +92,6 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 	int rc;
 
 	ENTRY;
-	/* VFS has locked the inode before calling this */
-	ll_set_inode_lock_owner(inode);
 
 	/* When setxattr() is called with a size of 0 the value is
 	 * unconditionally replaced by "". When removexattr() is
@@ -201,8 +199,6 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 				LPROC_LL_REMOVEXATTR : LPROC_LL_SETXATTR,
 			   ktime_us_delta(ktime_get(), kstart));
 out:
-	ll_clear_inode_lock_owner(inode);
-
 	RETURN(rc);
 }
 
@@ -406,9 +402,6 @@ static int ll_xattr_set(const struct xattr_handler *handler,
 	LASSERT(inode);
 	LASSERT(name);
 
-	/* VFS has locked the inode before calling this */
-	ll_set_inode_lock_owner(inode);
-
 	CDEBUG(D_VFSTRACE, "VFS Op:inode=" DFID "(%p), xattr %s\n",
 	       PFID(ll_inode2fid(inode)), inode, name);
 
@@ -468,8 +461,6 @@ static int ll_xattr_set(const struct xattr_handler *handler,
 	rc = ll_xattr_set_common(handler, map, dentry, inode, name,
 				 value, size, flags);
 out:
-	ll_clear_inode_lock_owner(inode);
-
 	return rc;
 }
 
