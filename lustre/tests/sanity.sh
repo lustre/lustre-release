@@ -10571,8 +10571,8 @@ test_60f() {
 run_test 60f "change debug_path works"
 
 test_60g() {
-	(( $MDS1_VERSION >= $(version_code v2_12_57-61-g02b5a407081c) )) ||
-		skip "Need MDS >= v2_12_57-61-g02b5a407081c for statahead fix"
+	(( $MDS1_VERSION >= $(version_code v2_16_56-96-gd0c75da78301) )) ||
+		skip "Need MDS >= v2_16_56-96-gd0c75da78301 for symlink fix"
 
 	local pid
 	local i
