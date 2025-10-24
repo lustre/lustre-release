@@ -1689,7 +1689,7 @@ static int ll_lease_file_resync(struct obd_client_handle *och,
 		RETURN(PTR_ERR(op_data));
 
 	if (copy_from_user(&ioc, uarg, sizeof(ioc)))
-		RETURN(-EFAULT);
+		GOTO(out, rc = -EFAULT);
 
 	/* before starting file resync, it's necessary to clean up page cache
 	 * in client memory, otherwise once the layout version is increased,
