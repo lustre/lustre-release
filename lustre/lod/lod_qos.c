@@ -1290,6 +1290,20 @@ repeat_find:
 		}
 	}
 	if (i == ost_count) {
+		/*
+		 * For uninitialized PFL components, the stripe offset may be
+		 * invalid (e.g., pointing to a deactivated OST). In this case,
+		 * fall back to QoS allocation instead of failing. This can
+		 * happen during migration when old layouts have deprecated
+		 * stripe offsets stored in lmm_layout_gen.
+		 */
+		if (!lod_comp_inited(lod_comp)) {
+			CDEBUG(D_LAYOUT,
+			       "Uninitialized component %d has invalid start index %d, using QoS allocation\n",
+			       comp_idx, lod_comp->llc_stripe_offset);
+			lod_comp->llc_stripe_offset = LOV_OFFSET_DEFAULT;
+			GOTO(out, rc = -EAGAIN);
+		}
 		CERROR("Start index %d not found in pool '%s'\n",
 		       lod_comp->llc_stripe_offset,
 		       lod_comp->llc_pool ? lod_comp->llc_pool : "");
@@ -2908,6 +2922,21 @@ repeat:
 			rc = lod_ost_alloc_specific(env, lo, stripe,
 						    ost_indices, flags, th,
 						    comp_idx, reserve);
+			/*
+			 * For uninitialized components with invalid stripe
+			 * offset, fall back to QoS allocation
+			 */
+			if (rc == -EAGAIN) {
+				rc = lod_ost_alloc_qos(env, lo, stripe,
+						       ost_indices, flags, th,
+						       comp_idx, reserve);
+				if (rc == -EAGAIN)
+					rc = lod_ost_alloc_rr(env, lo, stripe,
+							      ost_indices,
+							      flags, th,
+							      comp_idx,
+							      reserve);
+			}
 		}
 put_ldts:
 		lod_putref(d, &d->lod_ost_descs);
