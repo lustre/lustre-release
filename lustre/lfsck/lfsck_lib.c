@@ -2578,11 +2578,12 @@ void lfsck_post_generic(const struct lu_env *env,
 	struct lfsck_assistant_data *lad = com->lc_data;
 
 	lad->lad_post_result = *result;
-	set_bit(LAD_TO_POST, &lad->lad_flags);
-	if (*result <= 0)
+	if (*result <= 0) {
 		lfsck_stop_assistant(lad);
-	else
+	} else {
+		set_bit(LAD_TO_POST, &lad->lad_flags);
 		wake_up_var(com->lc_lfsck);
+	}
 
 	CDEBUG(D_LFSCK, "%s: waiting for assistant to do %s post, rc = %d\n",
 	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, *result);
