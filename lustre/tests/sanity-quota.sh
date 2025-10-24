@@ -7253,7 +7253,7 @@ test_94()
 	done < <($LFS quota -g -a --bhardlimit $MOUNT)
 
 	is_project_quota_supported && {
-		$LFS quota -p -a $MOUNT | head -n 10
+		$LFS quota -p -a -n $MOUNT | head -n 10
 		lineno=0
 		while IFS= read -r line; do
 			(( lineno++ >= 2 )) || continue
@@ -7264,7 +7264,7 @@ test_94()
 				error "Quota prj $qid lim is $qval expect $off"
 			((lineno <= 3)) ||
 				error "Quota prj $qid val $qval not expected"
-		done < <($LFS quota -p -a --bhardlimit $MOUNT)
+		done < <($LFS quota -p -a -n --bhardlimit $MOUNT)
 	}
 
 	return 0
