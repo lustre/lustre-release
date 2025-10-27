@@ -591,23 +591,23 @@ Index: linux-stage/fs/ext4/mballoc.c
  			/*
  			 * Batch reads of the block allocation bitmaps
 @@ -2651,6 +2992,8 @@ int ext4_seq_mb_stats_show(struct seq_fi
- 		   atomic64_read(&sbi->s_bal_cX_groups_considered[0]));
+ 		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_groups_considered[0]));
  	seq_printf(seq, "\t\tuseless_loops: %llu\n",
- 		   atomic64_read(&sbi->s_bal_cX_failed[0]));
+ 		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[0]));
 +	seq_printf(seq, "\t\tbad_suggestions: %u\n",
 +		   atomic_read(&sbi->s_bal_cr0_bad_suggestions));
  
  	seq_puts(seq, "\tcr1_stats:\n");
- 	seq_printf(seq, "\t\thits: %llu\n", atomic64_read(&sbi->s_bal_cX_hits[1]));
+ 	seq_printf(seq, "\t\thits: %llu\n", (unsigned long long)atomic64_read(&sbi->s_bal_cX_hits[1]));
 @@ -2658,6 +3001,8 @@ int ext4_seq_mb_stats_show(struct seq_fi
- 		   atomic64_read(&sbi->s_bal_cX_groups_considered[1]));
+ 		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_groups_considered[1]));
  	seq_printf(seq, "\t\tuseless_loops: %llu\n",
- 		   atomic64_read(&sbi->s_bal_cX_failed[1]));
+ 		   (unsigned long long)atomic64_read(&sbi->s_bal_cX_failed[1]));
 +	seq_printf(seq, "\t\tbad_suggestions: %u\n",
 +		   atomic_read(&sbi->s_bal_cr1_bad_suggestions));
  
  	seq_puts(seq, "\tcr2_stats:\n");
- 	seq_printf(seq, "\t\thits: %llu\n", atomic64_read(&sbi->s_bal_cX_hits[2]));
+ 	seq_printf(seq, "\t\thits: %llu\n", (unsigned long long)atomic64_read(&sbi->s_bal_cX_hits[2]));
 @@ -2945,8 +3290,11 @@ int ext4_mb_add_groupinfo(struct super_b
  	INIT_LIST_HEAD(&meta_group_info[i]->bb_prealloc_list);
  	init_rwsem(&meta_group_info[i]->alloc_sem);

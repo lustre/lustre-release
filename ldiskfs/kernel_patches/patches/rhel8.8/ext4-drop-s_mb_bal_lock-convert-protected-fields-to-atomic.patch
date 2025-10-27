@@ -64,7 +64,7 @@ Index: linux-stage/fs/ext4/mballoc.c
 +	seq_printf(seq, "\tbuddies_generated: %u\n",
 +		   atomic_read(&sbi->s_mb_buddies_generated));
 +	seq_printf(seq, "\tbuddies_time_used: %llu\n",
-+		   atomic64_read(&sbi->s_mb_generation_time));
++		   (unsigned long long)atomic64_read(&sbi->s_mb_generation_time));
  	seq_printf(seq, "\tpreallocated: %u\n",
  		   atomic_read(&sbi->s_mb_preallocated));
  	seq_printf(seq, "\tdiscarded: %u\n",
@@ -96,7 +96,7 @@ Index: linux-stage/fs/ext4/mballoc.c
 -				sbi->s_mb_generation_time);
 +		       "mballoc: %u generated and it took %Lu",
 +				atomic_read(&sbi->s_mb_buddies_generated),
-+				atomic64_read(&sbi->s_mb_generation_time));
++				(unsigned long long)atomic64_read(&sbi->s_mb_generation_time));
  		ext4_msg(sb, KERN_INFO,
  		       "mballoc: %u preallocated, %u discarded",
  				atomic_read(&sbi->s_mb_preallocated),
