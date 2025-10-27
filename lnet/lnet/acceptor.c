@@ -573,6 +573,12 @@ lnet_acceptor(void *arg)
 					cfs_time_seconds(1));
 				}
 				if (atomic_dec_and_test(&lsock->refcnt)) {
+					/* publish restore before release */
+					if (lsock->liss_sock && lsock->liss_sock->sk) {
+						WRITE_ONCE(lsock->liss_sock->sk->sk_data_ready,
+							   lnet_acceptor_state.pta_odata);
+						smp_wmb();
+					}
 					sock_release(lsock->liss_sock);
 					kfree(lsock);
 				}
@@ -612,6 +618,12 @@ lnet_acceptor(void *arg)
 				goto failed;
 
 			if (atomic_dec_and_test(&lsock->refcnt)) {
+				/* publish restore before release */
+				if (lsock->liss_sock && lsock->liss_sock->sk) {
+					WRITE_ONCE(lsock->liss_sock->sk->sk_data_ready,
+						   lnet_acceptor_state.pta_odata);
+					smp_wmb();
+				}
 				sock_release(lsock->liss_sock);
 				kfree(lsock);
 			}
@@ -623,6 +635,12 @@ failed:
 				newsock = NULL;
 			}
 			if (atomic_dec_and_test(&lsock->refcnt)) {
+				/* publish restore before release */
+				if (lsock->liss_sock && lsock->liss_sock->sk) {
+					WRITE_ONCE(lsock->liss_sock->sk->sk_data_ready,
+						   lnet_acceptor_state.pta_odata);
+					smp_wmb();
+				}
 				sock_release(lsock->liss_sock);
 				kfree(lsock);
 			}
