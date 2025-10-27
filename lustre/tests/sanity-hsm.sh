@@ -417,7 +417,7 @@ wait_all_done() {
 
 	local cmd="$LCTL get_param -n $HSM_PARAM.actions"
 	[[ -n $fid ]] && cmd+=" | grep '$fid'"
-	cmd+=" | egrep 'WAITING|STARTED'"
+	cmd+=" | grep -E 'WAITING|STARTED'"
 
 	wait_update_facet --verbose mds1 "$cmd" "" $timeout ||
 		error "requests did not complete"

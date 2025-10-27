@@ -1939,7 +1939,7 @@ test_32() { # LU-15707
 	$LFS setstripe -p ignore $DIR/$tdir/$tfile ||
 		error "setstripe fail on $DIR/$tdir/$tfile"
 
-	! ( $LFS getstripe -p $DIR/$tdir/$tfile | egrep -q "[^ ]+" ) ||
+	! ( $LFS getstripe -p $DIR/$tdir/$tfile | grep -E -q "[^ ]+" ) ||
 		error "fail to create $DIR/$tdir/$tfile without pool"
 
 	# Test with start index

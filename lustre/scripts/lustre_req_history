@@ -36,7 +36,7 @@ fi
 
 tempip=`lctl list_nids | cut -d "@" -f1`
 
-echo $tempip | egrep '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
+echo $tempip | grep -E '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
 if [ $? -ne 0 ] ; then
         CLIENT=`host $tempip | cut -d" " -f4`
 else

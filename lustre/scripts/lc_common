@@ -495,7 +495,7 @@ get_csv_nodelist() {
     # Check the CSV file
     ! check_file ${csv_file} 2>&1 && return 1
 
-    all_nodelist=$(egrep -v "([[:space:]]|^)#" ${csv_file} | cut -d, -f 1)
+    all_nodelist=$(grep -E -v "([[:space:]]|^)#" ${csv_file} | cut -d, -f 1)
     all_nodelist=$(comma_list ${all_nodelist})
 
     echo ${all_nodelist}
@@ -1004,7 +1004,7 @@ get_lustre_items() {
         [ -z "`echo ${LINE} | awk '/[[:alnum:]]/ {print $0}'`" ] && continue
 
         # Get rid of the comment line
-        [ -z "`echo \"${LINE}\" | egrep -v \"([[:space:]]|^)#\"`" ] && continue
+        [ -z "`echo \"${LINE}\" | grep -E -v \"([[:space:]]|^)#\"`" ] && continue
 
         # Skip the Linux MD/LVM line
         marker=$(echo ${LINE} | cut -d, -f 2)

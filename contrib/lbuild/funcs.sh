@@ -35,8 +35,9 @@ find_rpm() {
         fi
         case "$match_type" in
             provides)
-                # match is any valid ERE (i.e. given to egrep) match
-                if rpm -q --provides -p "$file" 2>&$STDOUT | egrep "$match" >&$STDOUT; then
+                # match is any valid ERE (i.e. given to grep -E) match
+                if rpm -q --provides -p "$file" 2>&$STDOUT |
+			grep -E "$match" >&$STDOUT; then
                     echo "$file"
                     popd >/dev/null
                     return 0

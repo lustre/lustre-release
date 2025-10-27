@@ -265,7 +265,7 @@ run_Dbench() {
 		return 0
 	fi
 
-	dp_run_cmd "dbench -D $TDIR $DP_NUM | egrep -v 'warmup|execute'"
+	dp_run_cmd "dbench -D $TDIR $DP_NUM | grep -E -v 'warmup|execute'"
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		error "Dbench failed, aborting"
 	fi

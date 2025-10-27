@@ -154,7 +154,7 @@ AC_DEFUN([LB_SPL], [
 	#
 	AS_IF([test x$enable_zfs = xyes], [
 		AC_MSG_CHECKING([spl source version])
-		AS_IF([fgrep -q SPL_META_VERSION $splobj/spl_config.h], [
+		AS_IF([grep -F -q SPL_META_VERSION $splobj/spl_config.h], [
 			splver=$((echo "#include <spl_config.h>";
 			    echo "splver=SPL_META_VERSION-SPL_META_RELEASE") |
 			    cpp -I $splobj |
@@ -279,7 +279,7 @@ AC_DEFUN([LB_ZFS], [
 	#
 	AS_IF([test x$enable_zfs = xyes], [
 		AC_MSG_CHECKING([zfs source version])
-		AS_IF([fgrep -q ZFS_META_VERSION $zfsobj/zfs_config.h], [
+		AS_IF([grep -F -q ZFS_META_VERSION $zfsobj/zfs_config.h], [
 			zfsver=$((echo "#include <zfs_config.h>";
 			    echo "zfsver=ZFS_META_VERSION-ZFS_META_RELEASE") |
 			    cpp -I $zfsobj |

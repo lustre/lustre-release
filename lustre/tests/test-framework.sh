@@ -127,7 +127,7 @@ print_summary () {
 		if [ -f $log ]; then
 			skipped=$(grep excluded $log |
 				awk '{ printf " %s", $3 }' | sed 's/test_//g')
-			slow=$(egrep "^PASS|^FAIL" $log |
+			slow=$(grep -E "^PASS|^FAIL" $log |
 				tr -d "("| sed s/s\)$//g | sort -nr -k 3 |
 				head -n5 |  awk '{ print $2":"$3"s" }')
 			total=$(grep duration $log | awk '{ print $2 }')
@@ -135,7 +135,7 @@ print_summary () {
 				status=Done
 			fi
 			if $DDETAILS; then
-				local durations=$(egrep "^PASS|^FAIL" $log |
+				local durations=$(grep -E "^PASS|^FAIL" $log |
 					tr -d "("| sed s/s\)$//g |
 					awk '{ print $2":"$3"|" }')
 				details=$(printf "%s\n%s %s %s\n" "$details" \
@@ -798,7 +798,7 @@ lustre_build_version_node() {
 		ver=$(do_node $node "$LCTL --version 2>/dev/null" |
 		      cut -d' ' -f2)
 	fi
-	local lver=$(egrep -i "lustre: |version: " <<<"$ver" | head -n 1)
+	local lver=$(grep -E -i "lustre: |version: " <<<"$ver" | head -n 1)
 	[ -n "$lver" ] && ver="$lver"
 
 	lver=$(sed -e 's/[^:]*: //' -e 's/^v//' -e 's/[ -].*//' <<<$ver |
@@ -1243,8 +1243,8 @@ load_modules () {
 
 check_mem_leak () {
 	LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd_memory.*leaked" || true)
-	LEAK_PORTALS=$(dmesg | tail -n 20 | egrep -i "libcfs.*memory leaked" ||
-		true)
+	LEAK_PORTALS=$(dmesg | tail -n 20 |
+		       grep -E -i "libcfs.*memory leaked" || true)
 	if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
 		echo "$LEAK_LUSTRE" 1>&2
 		echo "$LEAK_PORTALS" 1>&2
@@ -7604,7 +7604,7 @@ complete_test() {
 	local duration=$1
 
 	banner "test complete, duration $duration sec"
-	[ -f "$TESTSUITELOG" ] && egrep .FAIL $TESTSUITELOG || true
+	[ -f "$TESTSUITELOG" ] && grep -E .FAIL $TESTSUITELOG || true
 	echo "duration $duration" >>$TESTSUITELOG
 }
 
@@ -8815,7 +8815,7 @@ _wait_import_state () {
 	local i=0
 
 	CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2 | uniq)
-	while ! echo "${CONN_STATE}" | egrep -q "^${expected}\$" ; do
+	while ! echo "${CONN_STATE}" | grep -E -q "^${expected}\$" ; do
 		if [[ "${expected}" == "DISCONN" ]]; then
 			# for disconn we can check after proc entry is removed
 			[[ -z "${CONN_STATE}" ]] && return 0

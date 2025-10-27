@@ -253,7 +253,7 @@ get_lvm_items() {
         let "line_num += 1"
 
         # Skip the comment line
-        [ -z "`echo \"${LINE}\" | egrep -v \"([[:space:]]|^)#\"`" ] && continue
+        [ -z "`echo \"${LINE}\" | grep -E -v \"([[:space:]]|^)#\"`" ] && continue
 
         # Skip the non-LVM line
         line_marker=$(echo ${LINE} | cut -d, -f 2)

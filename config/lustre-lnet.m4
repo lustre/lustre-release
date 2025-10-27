@@ -99,7 +99,7 @@ case $with_o2ib in
 			O2IBDIR+="|/openib"
 
 			O2IBDIR_PATH=$(eval $LSPKG $O2IBPKG 2>/dev/null |
-				       egrep "${O2IBDIR}$" |
+				       grep -E "${O2IBDIR}$" |
 				       grep -v /ofed_scripts/ | head -n1)
 
 			# Nowadays, path should always be
@@ -888,7 +888,7 @@ AS_CASE([$enable_efa],
 
 		EFA_PKG="efa"
 		EFA_HEADER="efa_verbs.h"
-		EFA_HEADER_PATH=$(eval "$LS_PKG $EFA_PKG" | egrep "$EFA_HEADER" | head -n1)
+		EFA_HEADER_PATH=$(eval "$LS_PKG $EFA_PKG" | grep -E "$EFA_HEADER" | head -n1)
 		AS_IF([test -n "$EFA_HEADER_PATH"], [
 			EFA_INCLUDE_PATH=$(dirname $EFA_HEADER_PATH)
 		])

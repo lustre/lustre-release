@@ -13,6 +13,6 @@ while /bin/true ; do
 	cp -p $PROG $DIR/$file > /dev/null 2>&1
 	$DIR/$file 0.$((RANDOM % 5 + 1)) 2> /dev/null
 	sleep $((RANDOM % 3))
-done 2>&1 | egrep -v "Segmentation fault|Bus error"
+done 2>&1 | grep -E -v "Segmentation fault|Bus error"
 
 export LANG=$org_LANG

@@ -205,7 +205,7 @@ check_srvIPaddr() {
 	declare hostname=$2
 
 	# Get the corresponding IP address of the hostname from /etc/hosts table
-	real_IPaddr=`egrep "[[:space:]]$hostname([[:space:]]|$)" /etc/hosts \
+	real_IPaddr=`grep -E "[[:space:]]$hostname([[:space:]]|$)" /etc/hosts \
                      | awk '{print $1}'`
         if [ -z "$real_IPaddr" ]; then
                 echo >&2 "`basename $0`: Hostname $hostname does not exist in" \

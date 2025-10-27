@@ -185,7 +185,7 @@ get_md_items() {
         let "line_num += 1"
 
         # Skip the comment line
-        [ -z "`echo \"${LINE}\" | egrep -v \"([[:space:]]|^)#\"`" ] && continue
+        [ -z "`echo \"${LINE}\" | grep -E -v \"([[:space:]]|^)#\"`" ] && continue
 
         # Skip the non-MD line
         [ "$(echo ${LINE} | cut -d, -f 2)" != "${MD_MARKER}" ] && continue
@@ -386,7 +386,7 @@ construct_mdadm_cmdline() {
                         fi
 
                         # Construct the teardown command line
-                        mdadm_cmd="(cat /proc/mdstat | egrep \"^md[[:digit:]]\" |"
+                        mdadm_cmd="(cat /proc/mdstat | grep -E \"^md[[:digit:]]\" |"
                         mdadm_cmd=${mdadm_cmd}" while read md rest; do ${MDADM} -S /dev/\$md; done)"
                     else
                         # Construct the remove command line

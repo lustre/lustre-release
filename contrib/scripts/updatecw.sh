@@ -218,16 +218,16 @@ git ls-files $DIRS | while read FILE; do
 		continue ;;
 	esac
 
-	OLDCOPY=$(egrep "$INTCOPY" $FILE | tail -n1)
+	OLDCOPY=$(grep -E "$INTCOPY" $FILE | tail -n1)
 	# Skip files that already have a copyright for this year
-	[ -n "$(egrep -e $THISYEAR <<<"$OLDCOPY")" ] && continue
+	[ -n "$(grep -E -e $THISYEAR <<<"$OLDCOPY")" ] && continue
 
 	ADDCOPY=false
 	# Pick only files that have changed since $START
 	# %ai author dates holds has bad data, use %ci instead
 	# Exclude revert commits and the patch being reverted.
 	git log --follow --since=$START --pretty=format:"%ci %ae %H" $FILE |
-		grep -v -f $EXCFILE | egrep -e "$AUTHOR" |
+		grep -v -f $EXCFILE | grep -E -e "$AUTHOR" |
 		while read YYYY TTTT TZZZ AUTHOR HASH; do
 			REVERT=$(git show -s $HASH |
 				 awk '/This reverts commit/ { print $4 }')
@@ -243,7 +243,7 @@ git ls-files $DIRS | while read FILE; do
 	# Skip files not modified by $AUTHOR
 	[ -s "$TMPFILE" ] || continue
 
-	if [ -z "$(egrep -e "$OLDCOPY1" $FILE)" ]; then
+	if [ -z "$(grep -E -e "$OLDCOPY1" $FILE)" ]; then
 		case $FILE in
 		*.[ch])
 			echo "$FILE: ** NO COPYRIGHT. INSPECT  **"
@@ -255,7 +255,8 @@ git ls-files $DIRS | while read FILE; do
 
 	if [ -z "$(grep "$INTCOPY" <<<"$OLDCOPY")" ]; then
 		ADDCOPY=true
-		OLDCOPY="$(egrep "$OLDCOPY1|$OLDCOPY2" $FILE| tail -n1| tr / .)"
+		OLDCOPY="$(grep -E "$OLDCOPY1|$OLDCOPY2" $FILE |
+			   tail -n1 | tr / .)"
 	fi
 
 	# Get commit dates

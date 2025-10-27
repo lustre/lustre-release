@@ -298,7 +298,7 @@ test_5g() {
 	[ "$CLIENT_VERSION" -lt $(version_code 2.9.53) ] &&
 		skip "automount of debugfs missing before 2.9.53"
 	umount /sys/kernel/debug
-	$LCTL get_param -n devices | egrep -v "error" && \
+	$LCTL get_param -n devices | grep -E -v "error" &&
 		error "lctl can't access debugfs data"
 	grep " debugfs " /etc/mtab || error "debugfs failed to remount"
 }
@@ -872,7 +872,7 @@ test_26() {
 	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x80000135"
 	start_mds && error "MDS started but should not have started"
 	$LCTL get_param -n devices
-	DEVS=$($LCTL get_param -n devices | egrep -v MG | wc -l)
+	DEVS=$($LCTL get_param -n devices | grep -E -v MG | wc -l)
 	[ $DEVS -gt 0 ] && error "number of devices is $DEVS, should be zero"
 	# start mds to drop writeconf setting
 	start_mds || error "Unable to start MDS"
@@ -1195,7 +1195,7 @@ test_30b() {
 	# field. Hopefully that's not already a failover address for an existing
 	# node, but if so try again until it is an unused NID for this cluster.
 	local ostnid=$(do_facet ost1 "$LCTL list_nids | tail -1")
-	local origval=$(echo $ostnid | egrep -oi "[0-9a-f]*@")
+	local origval=$(echo $ostnid | grep -E -oi "[0-9a-f]*@")
 	# this will match on first loop, but keeps fake NID logic in one place
 	local newnid=$ostnid
 
@@ -3908,7 +3908,7 @@ test_39() {
 	PTLDEBUG=+malloc
 	setup
 	cleanup || error "cleanup failed with $?"
-	perl $SRCDIR/leak_finder.pl $TMP/debug 2>&1 | egrep '*** Leak:' &&
+	perl $SRCDIR/leak_finder.pl $TMP/debug 2>&1 | grep -E '*** Leak:' &&
 		error "memory leak detected" || true
 }
 run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
@@ -10154,7 +10154,7 @@ test_115() {
 	local dbfs_ver=$(do_facet mds1 $DEBUGFS -V 2>&1)
 
 	echo "debugfs version: $dbfs_ver"
-	echo "$dbfs_ver" | egrep -w "1.44.3.wc1|1.44.5.wc1|1.45.2.wc1" &&
+	echo "$dbfs_ver" | grep -E -w "1.44.3.wc1|1.44.5.wc1|1.45.2.wc1" &&
 		skip_env "This version of debugfs doesn't show inode number"
 
 	local IMAGESIZE=$((3072 << 30)) # 3072 GiB

@@ -2857,7 +2857,7 @@ test_27H() {
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=4k count=4 || error "dd failed"
 	$LFS getstripe -y $DIR/$tdir/$tfile
 	(( $($LFS getstripe -y $DIR/$tdir/$tfile |
-	     egrep -c "l_ost_idx: [02]$") == "2" )) ||
+	     grep -E -c "l_ost_idx: [02]$") == "2" )) ||
 		error "expected l_ost_idx: [02]$ not matched"
 
 	# make sure ost list has been cleared
@@ -6673,7 +6673,7 @@ test_52a() {
 					error "link worked"
 	echo foo >> $DIR/$tdir/foo || error "append foo failed"
 	mrename $DIR/$tdir/foo $DIR/$tdir/foo_ren && error "rename worked"
-	lsattr $DIR/$tdir/foo | egrep -q "^-+a[-e]+ $DIR/$tdir/foo" ||
+	lsattr $DIR/$tdir/foo | grep -E -q "^-+a[-e]+ $DIR/$tdir/foo" ||
 						     error "lsattr"
 	chattr -a $DIR/$tdir/foo || error "chattr -a failed"
 	cp -r $DIR/$tdir $TMP/
@@ -6695,7 +6695,7 @@ test_52b() {
 	mrename $DIR/$tdir/foo $DIR/$tdir/foo_ren && error "rename worked"
 	[ -f $DIR/$tdir/foo ] || error "$tdir/foo is not a file"
 	[ -f $DIR/$tdir/foo_ren ] && error "$tdir/foo_ren is not a file"
-	lsattr $DIR/$tdir/foo | egrep -q "^-+i[-e]+ $DIR/$tdir/foo" ||
+	lsattr $DIR/$tdir/foo | grep -E -q "^-+i[-e]+ $DIR/$tdir/foo" ||
 							error "lsattr"
 	chattr -i $DIR/$tdir/foo || error "chattr failed"
 
@@ -6947,17 +6947,17 @@ test_56a() {
 	[[ $numcomp == 0 ]] && numcomp=1
 
 	# test lfs getstripe with --recursive
-	local filenum=$($LFS getstripe -r $dir | egrep -c "obdidx|l_ost_idx")
+	local filenum=$($LFS getstripe -r $dir | grep -E -c "obdidx|l_ost_idx")
 
 	[[ $filenum -eq $((numfiles * 2)) ]] ||
 		error "$LFS getstripe -r: found $filenum != $((numfiles * 2))"
-	filenum=$($LFS getstripe $dir | egrep -c "obdidx|l_ost_idx")
+	filenum=$($LFS getstripe $dir | grep -E -c "obdidx|l_ost_idx")
 	[[ $filenum -eq $numfiles ]] ||
 		error "$LFS getstripe $dir: found $filenum, not $numfiles"
 	echo "$LFS getstripe showed obdidx or l_ost_idx"
 
 	# test lfs getstripe with file instead of dir
-	filenum=$($LFS getstripe $dir/file1 | egrep -c "obdidx|l_ost_idx")
+	filenum=$($LFS getstripe $dir/file1 | grep -E -c "obdidx|l_ost_idx")
 	[[ $filenum -eq 1 ]] ||
 		error "$LFS getstripe $dir/file1: found $filenum, not 1"
 	echo "$LFS getstripe file1 passed"
@@ -18034,7 +18034,7 @@ test_133f() {
 	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
 	local skipped_params='force_lbug|changelog_mask|daemon_file'
 	$LCTL list_param -FR '*' | grep '=' | tr -d = |
-		egrep -v "$skipped_params" |
+		grep -E -v "$skipped_params" |
 		xargs -n 1 find $proc_dirs -name |
 		xargs -n 1 badarea_io ||
 		error "client badarea_io failed"
@@ -18062,7 +18062,7 @@ test_133g() {
 		fi
 		if [ $facet_ver -ge $(version_code 2.5.54) ]; then
 			do_facet $facet "$LCTL list_param -FR '*' | grep '=' |
-				tr -d = | egrep -v $skipped_params |
+				tr -d = | grep -E -v $skipped_params |
 				xargs -n 1 find $proc_dirs_str -name |
 				xargs -n 1 badarea_io" ||
 					error "$facet badarea_io failed"
@@ -21971,7 +21971,7 @@ test_172() {
 	umount $MOUNT || error "umount $MOUNT failed"
 	stack_trap "mount_client $MOUNT"
 
-	(( $($LCTL dl | egrep -c " osc | lov | lmv | mdc ") > 0 )) ||
+	(( $($LCTL dl | grep -E -c " osc | lov | lmv | mdc ") > 0 )) ||
 		error "no client OBDs are remained"
 
 	$LCTL dl | while read devno state type name foo; do
@@ -21986,8 +21986,8 @@ test_172() {
 		esac
 	done
 
-	if (( $($LCTL dl | egrep -c " osc | lov | lmv | mdc ") > 0 )); then
-		$LCTL dl | egrep " osc | lov | lmv | mdc "
+	if (( $($LCTL dl | grep -E -c " osc | lov | lmv | mdc ") > 0 )); then
+		$LCTL dl | grep -E " osc | lov | lmv | mdc "
 		error "some client OBDs are still remained"
 	fi
 
@@ -23628,7 +23628,8 @@ check_lnet_proc_stats() {
 	local l=$(cat "$TMP/lnet_$1" |wc -l)
 	[ $l = 1 ] || (cat "$TMP/lnet_$1" && error "$2 is not of 1 line: $l")
 
-	grep -E "$3" "$TMP/lnet_$1" || (cat "$TMP/lnet_$1" && error "$2 misformatted")
+	grep -E "$3" "$TMP/lnet_$1" ||
+		(cat "$TMP/lnet_$1" && error "$2 misformatted")
 }
 
 # uses 1st arg as trailing part of filename, 2nd arg as description for reports,
@@ -26321,12 +26322,12 @@ test_248a() {
 	# small read with fast read enabled
 	$LCTL set_param -n llite.*.fast_read=1
 	local t_fast=$(dd if=$DIR/$tfile of=/dev/null bs=4k 2>&1 |
-		egrep -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
+		grep -E -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
 		sed -e 's/,/./' -e 's/[eE]+*/\*10\^/')
 	# small read with fast read disabled
 	$LCTL set_param -n llite.*.fast_read=0
 	local t_slow=$(dd if=$DIR/$tfile of=/dev/null bs=4k 2>&1 |
-		egrep -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
+		grep -E -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
 		sed -e 's/,/./' -e 's/[eE]+*/\*10\^/')
 
 	# verify that fast read is 4 times faster for cache read
@@ -26340,13 +26341,13 @@ test_248a() {
 	# 1k non-cache read
 	cancel_lru_locks osc
 	local t_1k=$(dd if=$DIR/$tfile of=/dev/null bs=1k 2>&1 |
-		egrep -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
+		grep -E -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
 		sed -e 's/,/./' -e 's/[eE]+*/\*10\^/')
 
 	# 1M non-cache read
 	cancel_lru_locks osc
 	local t_1m=$(dd if=$DIR/$tfile of=/dev/null bs=1k 2>&1 |
-		egrep -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
+		grep -E -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
 		sed -e 's/,/./' -e 's/[eE]+*/\*10\^/')
 
 	# verify that big IO is not 4 times faster than small IO

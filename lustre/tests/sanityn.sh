@@ -5414,8 +5414,10 @@ wait_policy_state() {
 	for time in {1..60}; do
 		local nbr_started
 
-		nbr_started=$(do_facet mds1 $LCTL get_param mds.MDS.mdt.nrs_policies |
-			egrep -A2 "name: ${policy}$" | grep -c "state: $state")
+		nbr_started=$(do_facet mds1 \
+			      $LCTL get_param mds.MDS.mdt.nrs_policies |
+			      grep -E -A2 "name: ${policy}$" |
+			      grep -c "state: $state")
 
 		[[ "$nbr_started" != 2 ]] || return 0
 		sleep 1

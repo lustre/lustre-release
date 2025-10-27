@@ -75,7 +75,7 @@ status ()
 	# 151 - health_check unhealthy
 	# 152 - LBUG
 	RETVAL=3
-	egrep -q "lnet" /proc/modules && STATE="loaded"
+	grep -E -q "lnet" /proc/modules && STATE="loaded"
 
 	# check for any routes - on a portals router this is the only thing
 	VAR=$(lctl get_param -n routes 2>&1)

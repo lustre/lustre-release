@@ -583,7 +583,8 @@ test_18a() {
 
 	do_facet client cp $TMP/$tfile $f
 	sync
-	local osc2dev=`lctl get_param -n devices | grep ${ost2_svc}-osc- | egrep -v 'MDT' | awk '{print $1}'`
+	local osc2dev=$($LCTL get_param -n devices | grep ${ost2_svc}-osc- |
+			grep -E -v 'MDT' | awk '{print $1}')
 	$LCTL --device $osc2dev deactivate || return 3
 	# my understanding is that there should be nothing in the page
 	# cache after the client reconnects?
@@ -1356,7 +1357,7 @@ test_54() {
 	cat $DIR2/$tfile.missing # save transno = 0, rc != 0 into last_rcvd
 	fail $SINGLEMDS
 	umount $MOUNT2
-	ERROR=$(dmesg | egrep "(test 54|went back in time)" | tail -n1 |
+	ERROR=$(dmesg | grep -E "(test 54|went back in time)" | tail -n1 |
 		grep "went back in time")
 	[ x"$ERROR" == x ] || error "back in time occured"
 }

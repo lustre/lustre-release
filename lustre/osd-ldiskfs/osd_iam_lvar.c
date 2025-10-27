@@ -746,7 +746,7 @@ static const struct iam_leaf_operations lvar_leaf_ops = {
  */
 
 enum {
-	/* egrep -i '^o?x?[olabcdef]*$' /usr/share/dict/words */
+	/* grep -E -i '^o?x?[olabcdef]*$' /usr/share/dict/words */
 	IAM_LVAR_ROOT_MAGIC = 0xb01dface
 };
 

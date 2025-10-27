@@ -9,7 +9,7 @@
 #BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
 BUILD_GEN+=".2"	# LU-9850
 
-DISTROVER=$(echo "$DISTROMAJ" | egrep -o '[0-9]+')
+DISTROVER=$(echo "$DISTROMAJ" | grep -E -o '[0-9]+')
 if [[ ( "$TARGET_ARCH" =~ "aarch64" || "$TARGET_ARCH" =~ "arm64" ) ]] &&
    [[ ( "$TARGET_ARCH" =~ "64k" || $(getconf PAGE_SIZE) == 65536 ) ]] &&
    (( DISTROVER > 8 )); then

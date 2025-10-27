@@ -42,7 +42,7 @@
 	%global kmodtool %{-s*}%{!-s:REPLACE_ME} \
 	%global kmod_version %{-v*}%{!-v:%{version}} \
 	%global kmod_release %{-r*}%{!-r:%{release}} \
-	%global latest_kernel %({ rpm -q --qf '%%{VERSION}-%%{RELEASE}.%%{ARCH}\\\\n' `rpm -qa | egrep "^kernel(-rt|-aarch64)?-devel" | /usr/lib/rpm/redhat/rpmsort -r | head -n 1`; echo '%%%%{nil}'; } | head -n 1) \
+	%global latest_kernel %({ rpm -q --qf '%%{VERSION}-%%{RELEASE}.%%{ARCH}\\\\n' `rpm -qa | grep -E "^kernel(-rt|-aarch64)?-devel" | /usr/lib/rpm/redhat/rpmsort -r | head -n 1`; echo '%%%%{nil}'; } | head -n 1) \
 	%{!?kernel_version:%{expand:%%global kernel_version %{latest_kernel}}} \
 	%global kverrel %(%{kmodtool} verrel %{?kernel_version} 2>/dev/null) \
 	flavors="default" \

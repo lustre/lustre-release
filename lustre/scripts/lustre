@@ -614,7 +614,7 @@ health_check ()
 	# 151 - health_check unhealthy
 	# 152 - LBUG
 	RETVAL=3
-	egrep -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
+	grep -E -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
 
 	# check for any configured devices (may indicate partial startup)
 	VAR=$(lctl get_param version 2>&1)

@@ -75,11 +75,11 @@ lb_cv_utsrelease=""
 utsrelease1=$LINUX_OBJ/include/generated/utsrelease.h
 utsrelease2=$LINUX_OBJ/include/linux/utsrelease.h
 utsrelease3=$LINUX_OBJ/include/linux/version.h
-AS_IF([test -r $utsrelease1 && fgrep -q UTS_RELEASE $utsrelease1],
+AS_IF([test -r $utsrelease1 && grep -F -q UTS_RELEASE $utsrelease1],
 	[utsrelease=$utsrelease1],
-[test -r $utsrelease2 && fgrep -q UTS_RELEASE $utsrelease2],
+[test -r $utsrelease2 && grep -F -q UTS_RELEASE $utsrelease2],
 	[utsrelease=$utsrelease2],
-[test -r $utsrelease3 && fgrep -q UTS_RELEASE $utsrelease3],
+[test -r $utsrelease3 && grep -F -q UTS_RELEASE $utsrelease3],
 	[utsrelease=$utsrelease3])
 AS_IF([test -n "$utsrelease"],
 	[lb_cv_utsrelease=$(awk -F \" '/ UTS_RELEASE / { print [$]2 }' $utsrelease)],
@@ -117,7 +117,7 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 	# Check for RedHat first (no need to check KERNEL_FOUND
 	AC_CACHE_CHECK([for RedHat kernel release number], lb_cv_rhel_kernel_version, [
 		lb_cv_rhel_kernel_version=""
-		AS_IF([fgrep -q RHEL_RELEASE $LINUX_OBJ/include/$VERSION_HDIR/version.h], [
+		AS_IF([grep -F -q RHEL_RELEASE $LINUX_OBJ/include/$VERSION_HDIR/version.h], [
 			lb_cv_rhel_kernel_version=$(awk '/ RHEL_MAJOR / { print [$]3 }' \
 				$LINUX_OBJ/include/$VERSION_HDIR/version.h)$(awk \
 				'/ RHEL_MINOR / { print [$]3 }' \
@@ -146,7 +146,7 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 	AS_IF([test "x$KERNEL_FOUND" = "xno"], [
 		AC_CACHE_CHECK([for Ubuntu kernel signature], lb_cv_ubuntu_kernel_sig, [
 			lb_cv_ubuntu_kernel_sig="no"
-			AS_IF([fgrep -q "UTS_UBUNTU_RELEASE_ABI" $LINUX_OBJ/include/generated/utsrelease.h], [
+			AS_IF([grep -F -q "UTS_UBUNTU_RELEASE_ABI" $LINUX_OBJ/include/generated/utsrelease.h], [
 				lb_cv_ubuntu_kernel_sig="yes"
 			])
 		])
@@ -174,13 +174,13 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 		AC_CACHE_CHECK([for ELRepo -ml kernel signature on CentOS],
 				lb_cv_mainline_kernel_sig, [
 			lb_cv_mainline_kernel_sig="no"
-			AS_IF([fgrep -q '.el7.' $LINUX_OBJ/include/generated/utsrelease.h], [
+			AS_IF([grep -F -q '.el7.' $LINUX_OBJ/include/generated/utsrelease.h], [
 				lb_cv_mainline_kernel_sig="yes"
 			])
-			AS_IF([fgrep -q '.el8.' $LINUX_OBJ/include/generated/utsrelease.h], [
+			AS_IF([grep -F -q '.el8.' $LINUX_OBJ/include/generated/utsrelease.h], [
 				lb_cv_mainline_kernel_sig="yes"
 			])
-			AS_IF([fgrep -q '.el9.' $LINUX_OBJ/include/generated/utsrelease.h], [
+			AS_IF([grep -F -q '.el9.' $LINUX_OBJ/include/generated/utsrelease.h], [
 				lb_cv_mainline_kernel_sig="yes"
 			])
 		])
@@ -194,7 +194,7 @@ AC_DEFUN([LB_LINUX_RELEASE], [
 	AS_IF([test "x$KERNEL_FOUND" = "xno"], [
 		AC_CACHE_CHECK([for openEuler kernel version number], lb_cv_openeuler_kernel_version, [
 			lb_cv_openeuler_kernel_version=""
-			AS_IF([fgrep -q OPENEULER_VERSION $LINUX_OBJ/include/$VERSION_HDIR/version.h], [
+			AS_IF([grep -F -q OPENEULER_VERSION $LINUX_OBJ/include/$VERSION_HDIR/version.h], [
 				lb_cv_openeuler_kernel_version=$(awk '/ OPENEULER_MAJOR / { print [$]3 }' \
 					$LINUX_OBJ/include/$VERSION_HDIR/version.h).$(awk \
 					'/ OPENEULER_MINOR / { print [$]3 }' \
@@ -542,7 +542,7 @@ LC_LBUG_WITH_LOC_IN_OBJTOOL
 AC_DEFUN([LB_USES_DPKG], [
 AC_CACHE_CHECK([if this distro uses dpkg], lb_cv_uses_dpkg, [
 lb_cv_uses_dpkg="no"
-AS_CASE([$(egrep -q 'ubuntu|debian' /etc/os-release && which dpkg 2>/dev/null)],
+AS_CASE([$(grep -E -q 'ubuntu|debian' /etc/os-release && which dpkg 2>/dev/null)],
         [*/dpkg], [lb_cv_uses_dpkg="yes"])
 ])
 uses_dpkg=$lb_cv_uses_dpkg

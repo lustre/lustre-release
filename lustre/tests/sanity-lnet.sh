@@ -2547,7 +2547,7 @@ run_test 203 "add a network using an interface in the non-default namespace"
 
 LNET_PARAMS_FILE="$TMP/$TESTSUITE.parameters"
 function save_lnet_params() {
-	$LNETCTL global show | egrep -v '^global:$' |
+	$LNETCTL global show | grep -E -v '^global:$' |
 			       sed 's/://' > $LNET_PARAMS_FILE
 }
 
@@ -2824,7 +2824,7 @@ setup_health_test() {
 
 	$LNETCTL net show
 
-	$LNETCTL peer show -v 2 | egrep -e nid -e health
+	$LNETCTL peer show -v 2 | grep -E -e nid -e health
 
 	$LCTL set_param debug=+net
 
@@ -3581,7 +3581,7 @@ get_ni_stat() {
 	local stat=$2
 
 	$LNETCTL net show -v 2 |
-		egrep -e nid -e $stat |
+		grep -E -e nid -e $stat |
 		grep -wA 1 $nid |
 		awk '/'$stat':/{print $NF}'
 }
@@ -3804,7 +3804,7 @@ test_218() {
 	del_drop_rule -a
 
 	[[ $health_recovered -ne 2 ]] &&
-		do_lnetctl net show -v 2 | egrep -e nid -e health &&
+		do_lnetctl net show -v 2 | grep -E -e nid -e health &&
 		error "Health hasn't recovered"
 
 	return 0
