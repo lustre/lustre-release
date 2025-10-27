@@ -682,19 +682,29 @@ command_t cmdlist[] = {
 	{ 0, 0, 0, NULL }
 };
 
+/*
+ * Convert input string (dir hash) to its number value
+ *
+ * Return 0 on unrecognized hash (failure) or positive value on success
+ */
 static int check_hashtype(const char *hashtype)
 {
-	int type_num = atoi(hashtype);
+	int type_num;
 	int i;
 
+	if (!hashtype)
+		goto out;
+
+	type_num = atoi(hashtype);
+
 	/* numeric hash type */
-	if (hashtype && lmv_is_known_hash_type(type_num))
+	if (lmv_is_known_hash_type(type_num))
 		return type_num;
 	/* string hash type */
 	for (i = LMV_HASH_TYPE_ALL_CHARS; i < ARRAY_SIZE(mdt_hash_name); i++)
 		if (strcmp(hashtype, mdt_hash_name[i]) == 0)
 			return i;
-
+out:
 	return 0;
 }
 
