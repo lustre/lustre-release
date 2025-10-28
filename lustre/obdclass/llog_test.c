@@ -1186,23 +1186,90 @@ static int test_8_cb(const struct lu_env *env, struct llog_handle *llh,
 	return 0;
 }
 
+static int llog_zeroes(const struct lu_env *env, struct dt_object *o,
+		      __u64 start, __u64 end)
+{
+	struct lu_attr la;
+	struct thandle *th;
+	struct dt_device *d;
+	char *buf;
+	loff_t pos = start;
+	struct lu_buf lb;
+	int rc;
+
+	ENTRY;
+
+	OBD_ALLOC(buf, end - start);
+	if (!buf)
+		RETURN(-ENOMEM);
+
+	LASSERT(o);
+	d = lu2dt_dev(o->do_lu.lo_dev);
+	LASSERT(d);
+
+	rc = dt_attr_get(env, o, &la);
+	if (rc)
+		GOTO(free, rc);
+
+	CDEBUG(D_OTHER, "llog size %llu\n", la.la_size);
+	rc = sizeof(struct llog_log_hdr) + sizeof(struct llog_mini_rec);
+	if (la.la_size < end) {
+		CERROR("llog size %llu is small for punch at [%llu;%llu]\n",
+		       la.la_size, start, end);
+		GOTO(free, rc = 0);
+	}
+
+	th = dt_trans_create(env, d);
+	if (IS_ERR(th))
+		GOTO(free, rc = PTR_ERR(th));
+
+	lb.lb_buf = buf;
+	lb.lb_len = end - start;
+	rc = dt_declare_write(env, o, &lb, pos, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start_local(env, d, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_write(env, o, &lb, &pos, th);
+	if (rc)
+		GOTO(stop, rc);
+stop:
+	dt_trans_stop(env, d, th);
+free:
+	OBD_FREE(buf, end - start);
+
+	RETURN(rc);
+}
+
+struct llog_test8_rec {
+	struct llog_rec_hdr ltr_hdr;
+	__u64 padding[29];
+	struct llog_rec_tail ltr_tail;
+} __attribute__((packed));
+
 static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 {
 	struct llog_handle *llh = NULL;
 	char name[10];
 	int rc, rc2, i;
 	int orig_counter;
-	struct llog_mini_rec lmr;
+	struct llog_test8_rec ltr;
 	struct llog_ctxt *ctxt;
 	struct dt_object *obj = NULL;
+	int plain_pos;
+	int reclen = sizeof(ltr);
 
 	ENTRY;
 
 	ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
 	LASSERT(ctxt);
 
-	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
-	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
+	/* simulate generic llog records with 256-bytes size */
+	ltr.ltr_hdr.lrh_len = ltr.ltr_tail.lrt_len = reclen;
+	ltr.ltr_hdr.lrh_type = LLOG_OP_MAGIC;
 
 	CWARN("8a: fill the first plain llog\n");
 	rc = llog_open(env, ctxt, &llh, &cat_logid, NULL, LLOG_OPEN_EXISTS);
@@ -1220,24 +1287,28 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	plain_counter = 0;
 	rc = llog_cat_process(env, llh, test_8_cb, "foobar", 0, 0);
 	if (rc != 0) {
-		CERROR("5a: process with test_8_cb failed: %d\n", rc);
+		CERROR("8a: process with test_8_cb failed: %d\n", rc);
 		GOTO(out, rc);
 	}
 	orig_counter = plain_counter;
 
-	for (i = 0; i < 100; i++) {
-		rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL);
+	for (i = 0; i < 20; i++) {
+		rc = llog_cat_add(env, llh, &ltr.ltr_hdr, NULL);
 		if (rc) {
 			CERROR("5a: add record failed\n");
 			GOTO(out, rc);
 		}
 	}
+	CWARN("8b: first llog "DFID"\n",
+	      PFID(lu_object_fid(&llh->u.chd.chd_current_log->lgh_obj->do_lu)));
 
-	/* grab the current plain llog, we'll corrupt it later */
-	obj = llh->u.chd.chd_current_log->lgh_obj;
-	LASSERT(obj);
-	lu_object_get(&obj->do_lu);
-	CWARN("8a: pin llog "DFID"\n", PFID(lu_object_fid(&obj->do_lu)));
+	/* get llog index in catalog to clear it later */
+	plain_pos = (llh->lgh_last_idx - 1) * sizeof(struct llog_logid_rec);
+	/* destroy plain llog to don't leave it orphaned */
+	list_del_init(&llh->u.chd.chd_current_log->u.phd.phd_entry);
+	llog_destroy(env, llh->u.chd.chd_current_log);
+	llog_close(env, llh->u.chd.chd_current_log);
+	llh->u.chd.chd_current_log = NULL;
 
 	rc2 = llog_cat_close(env, llh);
 	if (rc2) {
@@ -1261,14 +1332,22 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	}
 
 	for (i = 0; i < 100; i++) {
-		rc = llog_cat_add(env, llh, &lmr.lmr_hdr, NULL);
+		rc = llog_cat_add(env, llh, &ltr.ltr_hdr, NULL);
 		if (rc) {
 			CERROR("8b: add record failed\n");
 			GOTO(out, rc);
 		}
 	}
-	CWARN("8b: second llog "DFID"\n",
-	      PFID(lu_object_fid(&llh->u.chd.chd_current_log->lgh_obj->do_lu)));
+	/* grab the current plain llog, we'll corrupt it later */
+	obj = llh->u.chd.chd_current_log->lgh_obj;
+	LASSERT(obj);
+	lu_object_get(&obj->do_lu);
+	CWARN("8b: pin llog "DFID"\n", PFID(lu_object_fid(&obj->do_lu)));
+
+	/* must lost all 20 records */
+	CWARN("8b: clean first llog record in catalog\n");
+	llog_zeroes(env, llh->lgh_obj, 8192 + plain_pos,
+		    8192 + plain_pos + sizeof(struct llog_logid_rec));
 
 	rc2 = llog_cat_close(env, llh);
 	if (rc2) {
@@ -1278,10 +1357,12 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 		GOTO(out_put, rc);
 	}
 
-	/* Here was 8c: drop two records from the first plain llog
-	 * llog_truncate was bad idea cause it creates a wrong state,
-	 * lgh_last_idx is wrong and two records belongs to zeroed buffer
-	 */
+	/* lost 28 records, from 5 to 32 in block */
+	CWARN("8c: corrupt first chunk in the middle\n");
+	llog_zeroes(env, obj, 8192 + reclen * 4, 8192 + reclen * 10);
+	/* lost whole chunk - 32 records */
+	CWARN("8c: corrupt second chunk at start\n");
+	llog_zeroes(env, obj, 16384, 16384 + reclen);
 
 	CWARN("8d: count survived records\n");
 	rc = llog_open(env, ctxt, &llh, &cat_logid, NULL, LLOG_OPEN_EXISTS);
@@ -1303,9 +1384,12 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 		GOTO(out, rc);
 	}
 
-	if (orig_counter + 200 != plain_counter) {
+	/* if llog processing skips bad data as expected then 80
+	 * records from 120 should be lost
+	 */
+	if (orig_counter + 120 - 80 != plain_counter) {
 		CERROR("found %d records (expected %d)\n", plain_counter,
-		       orig_counter + 200);
+		       orig_counter + 120 - 80);
 		rc = -EIO;
 	}
 
@@ -1444,7 +1528,7 @@ static int llog_test_process_thread(void *arg)
 				      NULL, lpi->lpi_cbdata, 1, 0, true);
 
 	complete(&lpi->lpi_completion);
-
+	msleep(MSEC_PER_SEC / 2);
 	lpi->lpi_rc = rc;
 	if (rc)
 		CWARN("10h: Error during catalog processing %d\n", rc);
@@ -2193,7 +2277,6 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	struct llog_ctxt *ctxt;
 	struct dt_object *o;
 	struct lu_env env;
-	struct lu_context test_session;
 	int rc;
 
 	ENTRY;
@@ -2220,13 +2303,6 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (rc)
 		RETURN(rc);
 
-	rc = lu_context_init(&test_session, LCT_SERVER_SESSION);
-	if (rc)
-		GOTO(cleanup_env, rc);
-	test_session.lc_thread = (struct ptlrpc_thread *)current;
-	lu_context_enter(&test_session);
-	env.le_ses = &test_session;
-
 	CWARN("Setup llog-test device over %s device\n",
 	      lustre_cfg_string(lcfg, 1));
 
@@ -2236,7 +2312,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	rc = llog_setup(&env, tgt, &tgt->obd_olg, LLOG_TEST_ORIG_CTXT, tgt,
 			&llog_osd_ops);
 	if (rc)
-		GOTO(cleanup_session, rc);
+		GOTO(cleanup_env, rc);
 
 	/* use MGS llog dir for tests */
 	ctxt = llog_get_context(tgt, LLOG_CONFIG_ORIG_CTXT);
@@ -2254,9 +2330,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	rc = llog_run_tests(&env, tgt);
 	if (rc)
 		llog_test_cleanup(obd);
-cleanup_session:
-	lu_context_exit(&test_session);
-	lu_context_fini(&test_session);
+
 cleanup_env:
 	lu_env_fini(&env);
 	RETURN(rc);
