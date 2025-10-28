@@ -837,6 +837,10 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 
 		restart = false;
 
+		rc = ofd_attr_handle_id(env, fo, la, 1 /* is_setattr */);
+		if (rc != 0)
+			RETURN(rc);
+
 		th = ofd_trans_create(env, ofd);
 		if (IS_ERR(th))
 			RETURN(PTR_ERR(th));
@@ -855,7 +859,8 @@ int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 				GOTO(stop, rc);
 		}
 
-		rc = dt_declare_fallocate(env, dob, start, end, mode, th, NULL);
+		rc = dt_declare_fallocate(env, dob, la, start, end, mode, th,
+					  NULL);
 		if (rc)
 			GOTO(stop, rc);
 

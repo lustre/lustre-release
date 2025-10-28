@@ -2374,14 +2374,16 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_declare_fallocate(const struct lu_env *env,
-				 struct dt_object *dt, __u64 start, __u64 end,
-				 int mode, struct thandle *th,
+				 struct dt_object *dt, struct lu_attr *attr,
+				 __u64 start, __u64 end, int mode,
+				 struct thandle *th,
 				 enum dt_fallocate_error_t *error_code)
 {
 	struct osd_thandle *oh = container_of(th, struct osd_thandle, ot_super);
 	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	long long quota_space = 0;
+	qid_t uid, gid, projid;
 	/* 5 is max tree depth. (inode + 4 index blocks) */
 	int depth = 5;
 	int rc;
@@ -2423,8 +2425,18 @@ static int osd_declare_fallocate(const struct lu_env *env,
 			LDISKFS_META_TRANS_BLOCKS(inode->i_sb);
 	}
 
-	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   i_projid_read(inode), quota_space, oh,
+	uid = i_uid_read(inode);
+	gid = i_gid_read(inode);
+	projid = i_projid_read(inode);
+	if (attr) {
+		if (attr->la_valid & LA_UID)
+			uid = attr->la_uid;
+		if (attr->la_valid & LA_GID)
+			gid = attr->la_gid;
+		if (attr->la_valid & LA_PROJID)
+			projid = attr->la_projid;
+	}
+	rc = osd_declare_inode_qid(env, uid, gid, projid, quota_space, oh,
 				   osd_dt_obj(dt), NULL, OSD_QID_BLK);
 	if (rc)
 		RETURN(rc);

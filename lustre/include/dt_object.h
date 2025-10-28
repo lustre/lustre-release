@@ -1459,8 +1459,9 @@ struct dt_body_operations {
 	 * Return: 0 on success, negative on error
 	 */
 	int (*dbo_declare_fallocate)(const struct lu_env *env,
-				    struct dt_object *dt, __u64 start,
-				    __u64 end, int mode, struct thandle *th,
+				    struct dt_object *dt, struct lu_attr *attr,
+				    __u64 start, __u64 end, int mode,
+				    struct thandle *th,
 				    enum dt_fallocate_error_t *error_code);
 
 	/**
@@ -2730,7 +2731,8 @@ static inline int dt_ladvise(const struct lu_env *env, struct dt_object *dt,
 }
 
 static inline int dt_declare_fallocate(const struct lu_env *env,
-				       struct dt_object *dt, __u64 start,
+				       struct dt_object *dt,
+				       struct lu_attr *attr, __u64 start,
 				       __u64 end, int mode, struct thandle *th,
 				       enum dt_fallocate_error_t *error_code)
 {
@@ -2742,7 +2744,7 @@ static inline int dt_declare_fallocate(const struct lu_env *env,
 	if (!dt->do_body_ops->dbo_declare_fallocate)
 		return -EOPNOTSUPP;
 
-	return dt->do_body_ops->dbo_declare_fallocate(env, dt, start, end,
+	return dt->do_body_ops->dbo_declare_fallocate(env, dt, attr, start, end,
 						      mode, th, error_code);
 }
 

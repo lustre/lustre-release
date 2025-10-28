@@ -1122,6 +1122,7 @@ run_test 1g "Quota pools: Block hard limit with wide striping"
 
 test_1h() {
 	local limit=10 # MB
+	local testdir="$DIR/$tdir"
 	local testfile="$DIR/$tdir/$tfile-0"
 
 	check_set_fallocate_or_skip
@@ -1153,6 +1154,53 @@ test_1h() {
 	used=$(getquota -u $TSTUSR global curspace)
 	[ $used -eq 0 ] || quota_error u $TSTUSR \
 		"user quota isn't released after deletion"
+
+	$LFS setstripe -i 0 -c 1 $testdir || error "setstripe $testdir failed"
+
+	$RUNAS fallocate -l$((count + 2))MiB $testfile &&
+		quota_error u $TSTUSR "Write success, expect EDQUOT"
+	$LFS quota -u $TSTID
+
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR ||
+		error "reset user quota failed"
+	$LFS setquota -g $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+		error "set group quota failed"
+
+	wait_quota_synced ost1 OST0000 grp $TSTID hardlimit $((limit*1024))
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	$RUNAS fallocate -l$((count + 2))MiB $testfile &&
+		quota_error g $TSTUSR "Write success, expect EDQUOT"
+	$LFS quota -g $TSTID
+
+	! is_project_quota_supported &&
+		echo "Skip project quota is not supported" && return 0
+
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR ||
+		error "reset group quota failed"
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+		error "set project quota failed"
+
+	wait_quota_synced ost1 OST0000 prj $TSTPRJID hardlimit $((limit*1024))
+
+	# make sure the system is clean
+	used=$(getquota -p $TSTPRJID global curinodes)
+	[ $used -ne 0 ] &&
+		error "Used inodes($used) for project $TSTPRJID isn't 0"
+
+	change_project -sp $TSTPRJID $DIR/$tdir
+
+	$RUNAS fallocate -l$((count + 2))MiB $testfile &&
+		quota_error p $TSTUSR "Write success, expect EDQUOT"
+	$LFS quota -p $TSTPRJID $DIR
 }
 run_test 1h "Block hard limit test using fallocate"
 
@@ -7362,7 +7410,9 @@ test_delete_big_file() {
 	$LFS setstripe $tfile2 -i 1 -c 1 || error "setstripe $tfile2 failed"
 	chown $TSTID:$TSTID $tfile2 || error "fail to chown $tfile2"
 
-	$RUNAS fallocate -l2GiB $tfile2 || error "fail to write 2GiB"
+	$RUNAS fallocate -l2GiB $tfile2 || {
+		(( equot_expected == 0 )) && error "fail to write 2GiB"
+	}
 
 	(( equot_expected == 1 )) && {
 		$RUNAS $DD of=$tfile2 seek=2048 count=512 oflag=sync &&

@@ -887,7 +887,7 @@ static int mdt_object_fallocate(const struct lu_env *env, struct dt_device *dt,
 		if (rc)
 			GOTO(stop, rc);
 
-		rc = dt_declare_fallocate(env, dob, start, end, mode, th,
+		rc = dt_declare_fallocate(env, dob, la, start, end, mode, th,
 					  error_code);
 		if (rc)
 			GOTO(stop, rc);
