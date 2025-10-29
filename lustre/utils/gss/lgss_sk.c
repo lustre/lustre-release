@@ -46,6 +46,7 @@ static void usage(FILE *fp, char *program)
 		"session keyring\n");
 	fprintf(fp, "-m|--modify     <keyfile>	Modify keyfile's attributes\n");
 	fprintf(fp, "-r|--read       <keyfile>	Show keyfile's attributes\n");
+	fprintf(fp, "-R|--remove     <keyfile>	Remove key from user's session keyring\n");
 	fprintf(fp, "-w|--write      <keyfile>	Generate keyfile\n\n");
 	fprintf(fp, "Modify/Write Options:\n");
 	fprintf(fp, "-a|--ascii      <keyfile>	Output key in ASCII-encoded format\n");
@@ -261,13 +262,14 @@ int main(int argc, char **argv)
 {
 	struct sk_keyfile_config *config;
 	char *datafile = NULL;
+	char *fsname = NULL;
 	char *input = NULL;
 	char *load = NULL;
 	char *modify = NULL;
-	char *output = NULL;
 	char *mgsnids = NULL;
 	char *nodemap = NULL;
-	char *fsname = NULL;
+	char *output = NULL;
+	char *remove = NULL;
 	char *update_path = NULL;
 	char *tmp;
 	char *tmp2;
@@ -302,6 +304,7 @@ int main(int argc, char **argv)
 	{ .name = "nodemap",	.has_arg = required_argument, .val = 'n'},
 	{ .name = "prime-bits",	.has_arg = required_argument, .val = 'p'},
 	{ .name = "read",	.has_arg = required_argument, .val = 'r'},
+	{ .name = "remove",	.has_arg = required_argument, .val = 'R'},
 	{ .name = "suffix",	.has_arg = no_argument,	      .val = 's'},
 	{ .name = "type",	.has_arg = required_argument, .val = 't'},
 	{ .name = "update",	.has_arg = required_argument, .val = 'u'},
@@ -311,7 +314,7 @@ int main(int argc, char **argv)
 	{ .name = NULL, } };
 
 	while ((opt = getopt_long(argc, argv,
-				  "ac:d:e:f:g:hi:k:l:m:n:p:r:st:u:vw:x:",
+				  "ac:d:e:f:g:hi:k:l:m:n:p:r:R:st:u:vw:x:",
 				  long_opts, NULL)) != EOF) {
 		switch (opt) {
 		case 'a':
@@ -379,6 +382,9 @@ int main(int argc, char **argv)
 		case 'r':
 			input = optarg;
 			break;
+		case 'R':
+			remove = optarg;
+			break;
 		case 's':
 			suffix = true;
 			break;
@@ -433,7 +439,13 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	if (!input && !output && !load && !modify) {
+	if (!input && !output && !load && !modify && !remove) {
+		usage(stderr, argv[0]);
+		return EXIT_FAILURE;
+	}
+	if (remove && (load || modify || input || output)) {
+		fprintf(stderr,
+			"error: remove option cannot be combined with other operations\n");
 		usage(stderr, argv[0]);
 		return EXIT_FAILURE;
 	}
@@ -465,6 +477,17 @@ int main(int argc, char **argv)
 		if (rc < 0) {
 			fprintf(stderr,
 				"error: loading keyfile failed: rc=%d\n", rc);
+			return EXIT_FAILURE;
+		}
+		return EXIT_SUCCESS;
+	}
+
+	if (remove) {
+		int rc = sk_remove_keyfile(remove);
+
+		if (rc < 0) {
+			fprintf(stderr, "error: removing key failed: rc=%d\n",
+				rc);
 			return EXIT_FAILURE;
 		}
 		return EXIT_SUCCESS;

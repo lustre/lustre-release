@@ -12115,6 +12115,11 @@ test_93() {
 }
 run_test 93 "incremental RBAC role modifications"
 
+clear_client_keyring() {
+	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
+		xargs -IX keyctl unlink X 2>/dev/null || true
+}
+
 cleanup_100() {
 	local orig_sk_path="$1"
 	local test_key="$orig_sk_path/$FSNAME-test100.key"
@@ -12194,8 +12199,7 @@ test_100() {
 	fi
 
 	# Clear any existing keys from keyring on client
-	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' | \
-    		xargs -IX keyctl unlink X 2>/dev/null || true
+	clear_client_keyring
 
 	# Mount client using skpath pointing to the server key
 	export SK_PATH=$test_key
@@ -12394,8 +12398,7 @@ test_102() {
 		"keyctl show | grep lustre" || error "no lustre keys loaded"
 
 	# Clear any existing keys from keyring on client
-	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
-		xargs -IX keyctl unlink X 2>/dev/null || true
+	clear_client_keyring
 
 	# Mount should fail without .lgss key file and without skpath
 	echo "Mount client (1): $MOUNT_CMD -o user_xattr,flock $MGSNID:/$FSNAME $MOUNT"
@@ -12440,8 +12443,7 @@ cleanup_103() {
 		xargs -IX keyctl unlink X" || true
 
 	# clear any existing keys from keyring on client
-	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
-		xargs -IX keyctl unlink X 2>/dev/null || true
+	clear_client_keyring
 
 	# Remove test key file from all nodes
 	do_nodes $(comma_list $(all_nodes)) "rm -f $test_key" ||
@@ -12515,8 +12517,7 @@ test_103() {
 
 	umount_client $MOUNT || error "umount $MOUNT failed (2)"
 	# clear any existing keys from keyring on client
-	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' | \
-		xargs -IX keyctl unlink X 2>/dev/null || true
+	clear_client_keyring
 
 	# remount client: should work by using new key
 	$LGSS_SK -t client -m $test_key || error "failed to generate client key"
@@ -12529,8 +12530,7 @@ test_103() {
 
 	umount_client $MOUNT || error "umount $MOUNT failed (3)"
 	# clear any existing keys from keyring on client
-	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' | \
-		xargs -IX keyctl unlink X 2>/dev/null || true
+	clear_client_keyring
 
 	# remount with former key
 	$MOUNT_CMD -o $MOUNT_OPTS,skpath=$SK_PATH/$FSNAME.key \
@@ -12552,8 +12552,7 @@ test_103() {
 
 	umount_client $MOUNT || error "umount $MOUNT failed (4)"
 	# clear any existing keys from keyring on client
-	keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' | \
-		xargs -IX keyctl unlink X 2>/dev/null || true
+	clear_client_keyring
 
 	# remount client: should work by using new key
 	$LGSS_SK -t client -m $test_key || error "failed to generate client key"
@@ -12565,6 +12564,131 @@ test_103() {
 		error "file $DIR/$tdir/$tfile does not exist (4)"
 }
 run_test 103 "Multiple SSK keys on server side"
+
+cleanup_104() {
+	local test_key=$1
+	local nm=$2
+
+	keyctl show
+
+	umount_client $MOUNT || true
+	umount_client $MOUNT2 || true
+
+	# clear all keys on client
+	clear_client_keyring
+
+	# remove key files and nodemap
+	rm -f ${test_key}*
+	do_facet mgs $LCTL nodemap_del $nm || true
+
+	# load original key back and remount client
+	$LGSS_SK -l $SK_PATH/$FSNAME.key ||
+		error "failed to load original key on client"
+
+	zconf_mount $HOSTNAME $MOUNT || error "re-mount $MOUNT failed"
+	if [[ "$MOUNT_2" ]]; then
+		zconf_mount $HOSTNAME $MOUNT2 ||
+			error "remount $MOUNT2 failed"
+	fi
+	wait_ssk
+}
+
+test_104() {
+	local test_key="${SK_PATH}/${FSNAME}-test${testnum}"
+	local mgs_key="${test_key}-mgs.key"
+	local server_key="${test_key}-server.key"
+	local server_key2="${test_key}-server2.key"
+	local client_key="${test_key}-client.key"
+	local nm=test_${testnum}
+	local key_cnt
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	local_mode && skip "in local mode."
+
+	# needs lgss_sk -s support for this test
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS >= 2.17.50 for multiple similar keys"
+
+	stack_trap "cleanup_104 $test_key $nm" EXIT
+
+	# clear all keys on client
+	clear_client_keyring
+
+	umount_client $MOUNT || error "umount client at $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+
+	do_facet mgs $LCTL nodemap_add $nm
+
+	# generate a key for each type for the same fs
+	$LGSS_SK -t mgs -f $FSNAME -w $mgs_key -n $nm -d /dev/urandom -p 512 ||
+		error "failed to create MGS key"
+	$LGSS_SK -t server -f $FSNAME -w $server_key -n $nm -d /dev/urandom \
+		-p 512 || error "failed to create server key"
+	$LGSS_SK -t server -f $FSNAME -w $server_key2 -n $nm -d /dev/urandom \
+		-p 512 || error "failed to create server key 2"
+	$LGSS_SK -t client -f $FSNAME -w $client_key -n $nm -d /dev/urandom \
+		-p 512 || error "failed to create client key"
+
+	# No need to distribute keys since this test only interacts with lgss_sk
+	# and the kernel keyring. Key loading, etc, is exercised in other tests.
+
+	# load all keys including with suffixes
+	$LGSS_SK -t mgs -l $mgs_key -vvv || error "failed to load MGS key (1)"
+	$LGSS_SK -t mgs -l $mgs_key -vvv -s ||
+		error "failed to load MGS key (2)"
+	$LGSS_SK -t server -l $server_key -vvv ||
+		error "failed to load server key (1)"
+	$LGSS_SK -t server -l $server_key -vvv -s ||
+		error "failed to load server key (2)"
+	# also use a different server key with same name
+	# remove must be able to distinguish keys later based on payload
+	$LGSS_SK -t server -l $server_key2 -vvv -s ||
+		error "failed to load server key (3)"
+	$LGSS_SK -t server -l $server_key2 -vvv -s ||
+		error "failed to load server key (4)"
+	$LGSS_SK -t client -l $client_key -vvv ||
+		error "failed to load client key"
+
+	# sanity check that all keys were loaded
+	key_cnt=$(keyctl show | grep lustre | wc -l)
+	(( key_cnt == 7 )) ||
+		error "wrong # keys in keyring after loading. Expected 7, got $key_cnt (1)"
+
+	# remove mgs keys
+	$LGSS_SK -R $mgs_key -vvv ||
+		error "failed to remove MGS key"
+
+	key_cnt=$(keyctl show | grep lustre | wc -l)
+	(( key_cnt == 5 )) ||
+		error "wrong # keys in keyring after removing MGS key. Expected 5, got $key_cnt (2)"
+
+	# remove client key
+	$LGSS_SK -R $client_key -vvv ||
+		error "failed to remove client keys"
+
+	key_cnt=$(keyctl show | grep lustre | wc -l)
+	(( key_cnt == 4 )) ||
+		error "wrong # keys in keyring after removing client key. Expected 4, got $key_cnt (3)"
+
+	# remove server keys
+	$LGSS_SK -R $server_key -vvv ||
+		error "failed to remove server keys"
+
+	key_cnt=$(keyctl show | grep lustre | wc -l)
+	(( key_cnt == 2 )) ||
+		error "wrong # keys in keyring after removing server key. Expected 2, got $key_cnt (4)"
+
+	$LGSS_SK -R $server_key2 -vvv ||
+		error "failed to remove server keys (2)"
+
+	key_cnt=$(keyctl show | grep lustre | wc -l)
+	(( key_cnt == 0 )) ||
+		error "wrong # keys in keyring after removing server key. Expected 0, got $key_cnt (5)"
+}
+run_test 104 "SSK key removal from keyring"
 
 test_300() {
 	local principal="mock_iam_test"

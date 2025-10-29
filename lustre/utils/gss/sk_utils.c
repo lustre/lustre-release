@@ -377,31 +377,39 @@ out_close:
  * Build an array of all keys in the user keyring that start with
  * the given description.
  *
- * \param[in]	description    description to match keys against
+ * \param[in]	description   description to match keys against
+ * \param[out]	keys_array    found array of keys, last element is a zero key
  *
- * \retval	array of keys, last element is a zero key
- *		NULL in case of error
+ * \retval	0		success
+ * \retval	-errno		on failure
  */
-static key_serial_t *build_keys_array(char *description)
+static int build_keys_array(char *description, key_serial_t **keys_array)
 {
 	key_serial_t *tmp_keys, *curr_key;
-	key_serial_t *keys_array;
+	key_serial_t *keys_array_;
 	ssize_t user_kr_len;
 	int i;
+
+	if (!keys_array)
+		return -EINVAL;
 
 	user_kr_len = keyctl_read_alloc(KEY_SPEC_USER_KEYRING,
 					(void **)&tmp_keys);
 	if (user_kr_len < 0) {
 		printerr(0, "Cannot find any key in user keyring\n");
-		return NULL;
+		*keys_array = NULL;
+		return -ENOENT;
 	}
 
-	keys_array = malloc((user_kr_len / sizeof(key_serial_t) + 1) *
+	keys_array_ = malloc((user_kr_len / sizeof(key_serial_t) + 1) *
 			    sizeof(key_serial_t));
-	if (!keys_array)
-		return NULL;
+	if (!keys_array_) {
+		free(tmp_keys);
+		*keys_array = NULL;
+		return -ENOMEM;
+	}
 
-	curr_key = keys_array;
+	curr_key = keys_array_;
 	for (i = 0; i < user_kr_len / sizeof(key_serial_t); i++) {
 		key_serial_t k = tmp_keys[i];
 		char *desc = NULL, *sep;
@@ -432,7 +440,10 @@ next:
 	*curr_key = 0;
 
 	free(tmp_keys);
-	return keys_array;
+
+	*keys_array = keys_array_;
+
+	return 0;
 }
 
 /**
@@ -472,9 +483,17 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
 			size_t desclen = strlen(description);
 			struct timeval tv;
 			struct tm *tm;
+			int rc;
 
 			/* get list of former keys */
-			keys = build_keys_array(description);
+			rc = build_keys_array(description, &keys);
+			if (rc) {
+				printerr(0,
+					 "Failed to build keys array: rc=%d\n",
+					 rc);
+				free(keys);
+				return -1;
+			}
 
 			gettimeofday(&tv, NULL);
 			tm = localtime(&tv.tv_sec);
@@ -593,9 +612,9 @@ read_sk:
 	 * identify it */
 	if (config->skc_type & SK_TYPE_MGS) {
 		/* Any key can be an MGS key as long as we are told to use it */
-		rc = snprintf(description, SK_DESCRIPTION_SIZE, "lustre:MGS:%s",
+		rc = snprintf(description, sizeof(description), "lustre:MGS:%s",
 			      config->skc_nodemap);
-		if (rc >= SK_DESCRIPTION_SIZE) {
+		if (rc >= sizeof(description)) {
 			rc = -ENAMETOOLONG;
 			goto out;
 		}
@@ -629,9 +648,9 @@ read_sk:
 			rc = -ENOKEY;
 			goto out;
 		}
-		rc = snprintf(description, SK_DESCRIPTION_SIZE, "lustre:%s:%s",
+		rc = snprintf(description, sizeof(description), "lustre:%s:%s",
 			      config->skc_fsname, config->skc_nodemap);
-		if (rc >= SK_DESCRIPTION_SIZE) {
+		if (rc >= sizeof(description)) {
 			rc = -ENAMETOOLONG;
 			goto out;
 		}
@@ -685,11 +704,11 @@ read_sk:
 			/* add random chars at end of key if requested... */
 			if (randomize)
 				snprintf(rand, sizeof(rand), "%.4lX", random());
-			rc = snprintf(description, SK_DESCRIPTION_SIZE,
+			rc = snprintf(description, sizeof(description),
 				      "lustre:%s%s%s", config->skc_fsname,
 				      randomize || mntdir ? ":" : "",
 				      randomize ? rand : (mntdir ? uuid : ""));
-			if (rc >= SK_DESCRIPTION_SIZE) {
+			if (rc >= sizeof(description)) {
 				rc = -ENAMETOOLONG;
 				goto out;
 			}
@@ -701,9 +720,9 @@ read_sk:
 
 			/* ... and also load legacy key desc for interop */
 			if (randomize) {
-				rc = snprintf(description, SK_DESCRIPTION_SIZE,
+				rc = snprintf(description, sizeof(description),
 					      "lustre:%s", config->skc_fsname);
-				if (rc < SK_DESCRIPTION_SIZE)
+				if (rc < sizeof(description))
 					(void)sk_load_key(config, description,
 							  false, -1);
 			}
@@ -713,10 +732,10 @@ read_sk:
 		for (i = 0; i < MAX_MGSNIDS; i++) {
 			if (config->skc_mgsnids[i] == LNET_NID_ANY)
 				continue;
-			rc = snprintf(description, SK_DESCRIPTION_SIZE,
+			rc = snprintf(description, sizeof(description),
 				      "lustre:MGC%s",
 				      libcfs_nid2str(config->skc_mgsnids[i]));
-			if (rc >= SK_DESCRIPTION_SIZE) {
+			if (rc >= sizeof(description)) {
 				rc = -ENAMETOOLONG;
 				goto out;
 			}
@@ -732,6 +751,158 @@ out:
 	free(config);
 	if (keyid > 0)
 		return keyid;
+	return rc;
+}
+
+/**
+ * Checks if keys matching \a description are found in the keyring. Each key is
+ * verified against the key from \a skc, and if it matches, the key is revoked
+ * and removed from the keyring.
+ *
+ * \param[in]	skc		keyfile config to load
+ * \param[in]	description	Description used for key in keyring
+ *
+ * \retval	0		success (at least one key removed)
+ * \retval	< 0		failure (no key removed)
+ */
+static int sk_remove_key(const struct sk_keyfile_config *skc, char *description)
+{
+	key_serial_t *keys = NULL;
+	struct sk_keyfile_config file_payload;
+	struct sk_keyfile_config *keyring_payload;
+	size_t key_bytes;
+	int removed_cnt = 0;
+	int i, payload_len, rc;
+
+	memcpy(&file_payload, skc, sizeof(*skc));
+	/* store key length in bytes for later key comparison before swab */
+	key_bytes = file_payload.skc_shared_keylen / 8;
+
+	/* In the keyring use the disk layout so keyctl pipe can be used */
+	sk_config_cpu_to_disk(&file_payload);
+
+	rc = build_keys_array(description, &keys);
+	if (rc)
+		return rc;
+
+	/* for each key on the keyring, sanity check first before unlink:
+	 * 1. skc_shared_keylen matches for the file key and keyring key
+	 * 2. skc_shared_key matches for the file key and keyring key
+	 */
+	for (i = 0; keys[i] != 0; i++) {
+		payload_len = keyctl_read_alloc(keys[i], (void **)&keyring_payload);
+		if (payload_len < 0) {
+			printerr(0, "failed to read key %d - skipping\n", keys[i]);
+			continue;
+		}
+		if (payload_len != sizeof(struct sk_keyfile_config)) {
+			printerr(0, "key %d has unexpected size %d - skipping\n",
+				keys[i], payload_len);
+			goto next;
+		}
+
+		if (keyring_payload->skc_shared_keylen !=
+		    file_payload.skc_shared_keylen) {
+			printerr(1,
+				"key %d has different shared key length - skipping\n",
+				keys[i]);
+			goto next;
+		}
+
+		if (memcmp(keyring_payload->skc_shared_key,
+			   file_payload.skc_shared_key, key_bytes) != 0) {
+			printerr(1,
+				 "key %d has different shared key - skipping\n",
+				 keys[i]);
+			goto next;
+		}
+
+		rc = keyctl_revoke(keys[i]);
+		if (rc == -1) {
+			printerr(0, "failed to revoke key %d: %s\n", keys[i],
+				 strerror(errno));
+			goto next;
+		}
+		rc = keyctl_unlink(keys[i], KEY_SPEC_USER_KEYRING);
+		if (rc == -1) {
+			printerr(0, "failed to unlink key %d: %s\n", keys[i],
+				 strerror(errno));
+			goto next;
+		}
+		printerr(2, "Key %d revoked and removed from keyring\n",
+			 keys[i]);
+		removed_cnt++;
+
+next:
+		free(keyring_payload);
+	}
+
+	free(keys);
+
+	if (removed_cnt > 0)
+		printerr(1, "Removed %d key(s) from keyring\n", removed_cnt);
+	else
+		printerr(0, "No matching key found to remove\n");
+
+	return removed_cnt > 0 ? 0 : -ENOKEY;
+}
+
+/**
+ * Removes the key from \a path, verifies it and removes matching keys from the
+ * keyring.
+ *
+ * \param[in]	path		Path to key file
+ *
+ * \retval	0		success (at least one key removed)
+ * \retval	< 0		failure (no key removed)
+ */
+int sk_remove_keyfile(char *path)
+{
+	struct sk_keyfile_config *config;
+	char description[SK_DESCRIPTION_SIZE + 1] = { 0 };
+	struct stat buf;
+	int rc;
+
+	rc = stat(path, &buf);
+	if (rc == -1) {
+		printerr(0, "stat() failed for file %s: %s\n", path,
+			 strerror(errno));
+		return -errno;
+	}
+
+	config = sk_read_file(path);
+	if (!config)
+		return -ENOKEY;
+
+	rc = sk_validate_config(config);
+	if (rc != 0) {
+		rc = -EINVAL;
+		goto out;
+	}
+
+	if (config->skc_type & SK_TYPE_MGS) {
+		rc = snprintf(description, sizeof(description), "lustre:MGS:%s",
+			      config->skc_nodemap);
+	} else if (config->skc_type & SK_TYPE_SERVER) {
+		rc = snprintf(description, sizeof(description), "lustre:%s:%s",
+			      config->skc_fsname, config->skc_nodemap);
+	} else if (config->skc_type & SK_TYPE_CLIENT) {
+		rc = snprintf(description, sizeof(description), "lustre:%s",
+			      config->skc_fsname);
+	} else {
+		printerr(0, "Invalid key type\n");
+		rc = -EINVAL;
+		goto out;
+	}
+
+	if (rc >= sizeof(description)) {
+		rc = -ENAMETOOLONG;
+		goto out;
+	}
+
+	rc = sk_remove_key(config, description);
+out:
+	free(config);
 	return rc;
 }
 
@@ -1163,17 +1334,17 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 build_desc:
 	if (nodemap) {
 		if (mgsnid)
-			rc = snprintf(description, SK_DESCRIPTION_SIZE,
+			rc = snprintf(description, sizeof(description),
 				      "lustre:MGS:%s", nodemap);
 		else
-			rc = snprintf(description, SK_DESCRIPTION_SIZE,
+			rc = snprintf(description, sizeof(description),
 				      "lustre:%s:%s", fsname, nodemap);
 	} else {
-		rc = snprintf(description, SK_DESCRIPTION_SIZE, "lustre:%s%s%s",
+		rc = snprintf(description, sizeof(description), "lustre:%s%s%s",
 			      fsname, uuid ? ":" : "", uuid ?: "");
 	}
 
-	if (rc >= SK_DESCRIPTION_SIZE) {
+	if (rc >= sizeof(description)) {
 		printerr(0, "Invalid key description\n");
 		return NULL;
 	}
@@ -1184,9 +1355,12 @@ build_desc:
 			return NULL;
 		}
 
-		*user_keys_p = build_keys_array(description);
-		if (!*user_keys_p)
+		rc = build_keys_array(description,
+				      (key_serial_t **)user_keys_p);
+		if (rc) {
+			printerr(0, "Failed to build keys array: rc=%d\n", rc);
 			return NULL;
+		}
 		*key_p = *user_keys_p;
 	}
 

@@ -394,6 +394,7 @@ int write_config_file(char *output_file, struct sk_keyfile_config *config,
 struct sk_keyfile_config *sk_read_file(char *filename);
 int sk_load_keyfile(char *path, bool client, bool randomize, char *mntdir,
 		    bool suffix, int timeout);
+int sk_remove_keyfile(char *path);
 void sk_config_disk_to_cpu(struct sk_keyfile_config *config);
 void sk_config_cpu_to_disk(struct sk_keyfile_config *config);
 int sk_validate_config(const struct sk_keyfile_config *config);
