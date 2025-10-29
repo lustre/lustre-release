@@ -627,7 +627,7 @@ download_ofed() {
 			download_file "$location/$file" "$KERNELTREE" "$force"
 			;;
 		mlnx)
-			location="http://www.mellanox.com/downloads/ofed/MLNX_OFED-${ofed_version}"
+			location="https://content.mellanox.com/ofed/MLNX_OFED-${ofed_version}"
 			# this is a work around for suse distro (sles11.3). what we need is
 			# sles11sp3. We really need to redesign how we use target and distro
 			[[ $distro_name =~ sles ]] && distro_name=${DISTRO/./sp}
