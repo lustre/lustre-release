@@ -731,10 +731,6 @@ static inline pgoff_t folio_index_page(struct page *page)
 
 #endif /* HAVE_FOLIO_BATCH && HAVE_FILEMAP_GET_FOLIOS */
 
-#ifndef HAVE_FLUSH___WORKQUEUE
-#define __flush_workqueue(wq)	flush_scheduled_work()
-#endif
-
 #ifdef HAVE_NSPROXY_COUNT_AS_REFCOUNT
 #define nsproxy_dec(ns)		refcount_dec(&(ns)->count)
 #else

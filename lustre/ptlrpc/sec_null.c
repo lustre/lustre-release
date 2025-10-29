@@ -200,7 +200,7 @@ void null_free_repbuf(struct ptlrpc_sec *sec,
 {
 	LASSERT(req->rq_repbuf);
 
-	OBD_FREE_LARGE(req->rq_repbuf, req->rq_repbuf_len);
+	OBD_FREE_LARGE_ATOMIC(req->rq_repbuf, req->rq_repbuf_len);
 	req->rq_repbuf = NULL;
 	req->rq_repbuf_len = 0;
 }

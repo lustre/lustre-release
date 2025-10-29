@@ -13,4 +13,7 @@
 
 extern void compat_vfree_atomic(const void *addr);
 
+void init_compat_vfree_atomic(void);
+void exit_compat_vfree_atomic(void);
+
 #endif /* __LICBFS_LINUX_VMALLOC_H */

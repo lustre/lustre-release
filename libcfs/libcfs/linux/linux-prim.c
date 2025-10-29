@@ -36,6 +36,7 @@
 #include <lustre_compat/linux/wait_bit.h>
 #include <lustre_compat/linux/wait.h>
 #include <lustre_compat/linux/shrinker.h>
+#include <lustre_compat/linux/vmalloc.h>
 #include <lustre_crypto.h>
 
 int __init cfs_arch_init(void)
@@ -45,6 +46,8 @@ int __init cfs_arch_init(void)
 #ifndef HAVE_WAIT_VAR_EVENT
 	wait_bit_init();
 #endif
+	init_compat_vfree_atomic();
+
 	rc = lustre_symbols_init();
 	if (rc < 0) {
 		pr_info("lustre_symbols_init: error %d\n", rc);
@@ -72,6 +75,7 @@ failed:
 
 void __exit cfs_arch_exit(void)
 {
+	exit_compat_vfree_atomic();
 	shrinker_debugfs_fini();
 #ifdef CONFIG_LL_ENCRYPTION
 	llcrypt_exit();

@@ -574,7 +574,7 @@ void plain_free_reqbuf(struct ptlrpc_sec *sec,
 {
 	ENTRY;
 	if (!req->rq_pool) {
-		OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
+		OBD_FREE_LARGE_ATOMIC(req->rq_reqbuf, req->rq_reqbuf_len);
 		req->rq_reqbuf = NULL;
 		req->rq_reqbuf_len = 0;
 	}

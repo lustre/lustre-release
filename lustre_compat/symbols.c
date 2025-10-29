@@ -69,14 +69,6 @@ int compat_apply_workqueue_attrs(struct workqueue_struct *wq,
 }
 EXPORT_SYMBOL_GPL(compat_apply_workqueue_attrs);
 
-static void (*__vfree_atomic)(const void *addr);
-
-void compat_vfree_atomic(const void *addr)
-{
-	__vfree_atomic(addr);
-}
-EXPORT_SYMBOL_GPL(compat_vfree_atomic);
-
 int lustre_symbols_init(void)
 {
 	int rc;
@@ -94,10 +86,6 @@ int lustre_symbols_init(void)
 
 	__apply_workqueue_attrs = cfs_kallsyms_lookup_name("apply_workqueue_attrs");
 	if (!__apply_workqueue_attrs)
-		return -EINVAL;
-
-	__vfree_atomic = cfs_kallsyms_lookup_name("vfree_atomic");
-	if (!__vfree_atomic)
 		return -EINVAL;
 
 	return 0;

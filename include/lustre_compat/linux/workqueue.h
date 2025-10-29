@@ -24,4 +24,8 @@ struct workqueue_attrs *compat_alloc_workqueue_attrs(void);
 int compat_apply_workqueue_attrs(struct workqueue_struct *wq,
 				  const struct workqueue_attrs *attrs);
 
+#ifndef HAVE_FLUSH___WORKQUEUE
+#define __flush_workqueue(wq)  flush_scheduled_work()
+#endif
+
 #endif /* __LIBCFS_WORKQUEUE_H__ */

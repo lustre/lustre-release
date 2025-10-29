@@ -943,7 +943,7 @@ do {									\
 	}								\
 } while (0)
 
-#define OBD_FREE_LARGE(ptr, size)					      \
+#define OBD_FREE_LARGE_ATOMIC(ptr, size)			\
 do {									      \
 	if (is_vmalloc_addr(ptr)) {					      \
 		OBD_FREE_PRE(ptr, size, "vfreed");			      \
@@ -952,6 +952,15 @@ do {									      \
 	} else {							      \
 		OBD_FREE(ptr, size);					      \
 	}                                                                     \
+} while (0)
+
+#define OBD_FREE_LARGE(ptr, size)				\
+do {								\
+	if (likely(ptr)) {					\
+		OBD_FREE_PRE(ptr, size, "kvfree");		\
+		kvfree(ptr);					\
+		POISON_PTR(ptr);				\
+	}							\
 } while (0)
 
 #define OBD_FREE_PTR_ARRAY_LARGE(ptr, n)			\
