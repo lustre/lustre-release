@@ -363,8 +363,9 @@ static int acquire_user_cred_and_check(char *ccname)
 				    &desired_mechs, GSS_C_INITIATE,
 				    &gss_cred, NULL, NULL);
 	if (maj_stat != GSS_S_COMPLETE) {
-		logmsg_gss(LL_INFO, mech, maj_stat, min_stat,
-			   "failed gss_acquire_cred");
+		logmsg_gss(LL_WARN, mech, maj_stat, min_stat,
+			   "Cannot get a GSS credential from cache '%s'",
+			   ccname);
 		return -1;
 	}
 
@@ -859,7 +860,7 @@ static int lkrb5_prepare_user_cred(struct lgss_cred *cred)
 
 end_ccache:
 	if (rc)
-		logmsg(LL_ERR, "cannot get user %u ccname: %s\n",
+		logmsg(LL_ERR, "Cannot find KRB cred cache for user %u: %s\n",
 		       cred->lc_uid, strerror(-rc));
 	else
 		logmsg(LL_INFO, "using krb5 cache name: %s\n", (char *)ccname);
