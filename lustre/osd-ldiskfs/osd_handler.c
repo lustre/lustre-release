@@ -8675,7 +8675,7 @@ static int osd_device_init0(const struct lu_env *env,
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
 	o->od_enable_projid_xattr = 0;
-	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
+	o->od_readcache_max_filesize = (totalram_pages() << PAGE_SHIFT) / 64;
 	o->od_readcache_max_iosize = OSD_READCACHE_MAX_IO_MB << 20;
 	o->od_writethrough_max_iosize = OSD_WRITECACHE_MAX_IO_MB << 20;
 	o->od_scrub.os_scrub.os_auto_scrub_interval = AS_DEFAULT;
