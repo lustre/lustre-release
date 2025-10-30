@@ -242,12 +242,12 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	if (reqbody == NULL)
 		RETURN(err_serious(-EFAULT));
 
-	rc = mdt_init_ucred(info, reqbody);
-	if (rc)
-		RETURN(err_serious(rc));
-
 	rc = mdt_check_resource_ids(info, info->mti_object);
 	if (unlikely(rc))
+		RETURN(err_serious(rc));
+
+	rc = mdt_init_ucred(info, reqbody);
+	if (rc)
 		RETURN(err_serious(rc));
 
 	next = mdt_object_child(info->mti_object);
