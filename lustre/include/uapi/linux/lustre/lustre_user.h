@@ -1706,6 +1706,7 @@ struct lqa_id_range {
 #define SWAP_LAYOUTS_KEEP_MTIME		(1 << 2)
 #define SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
 #define SWAP_LAYOUTS_CLOSE		(1 << 4)
+#define SWAP_LAYOUTS_WITH_DV12		(1 << 5)
 
 /* Skip the UID/GID check before a swap layout for a release (server only) */
 #define SWAP_LAYOUTS_MDS_RELEASE	(1 << 31)

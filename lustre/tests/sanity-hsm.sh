@@ -6318,6 +6318,36 @@ test_607c()
 }
 run_test 607c "'lfs swap_layouts' should set dirty flag on HSM file"
 
+test_607d()
+{
+	(( MDS1_VERSION >= $(version_code v2_17_50-193) )) ||
+		skip "need MDS >= 2.17.50 to avoid dirty on empty file"
+
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	mkdir_on_mdt0 $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local fid=$(create_empty_file "$f")
+
+	copytool setup
+
+	$LFS hsm_archive "$f" || error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS migrate -n -i 1 "$f" ||
+		error "could not migrate file to OST 1"
+
+	! ( $LFS hsm_state "$f" | grep dirty ) || error "dirty flag found"
+
+	$LFS hsm_release "$f" ||
+		error "could not release file after non blocking migrate"
+	$LFS hsm_restore "$f" ||
+		error "could not restore file after non blocking migrate"
+	wait_request_state $fid RESTORE SUCCEED
+}
+run_test 607d "Migrate should not set HSM dirty flag for an empty file"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -2630,9 +2630,15 @@ static bool swap_hsm_set_dirty(struct lu_buf *out_buf, struct lu_buf *src_buf)
  *        0 do not update HSM xattr
  *   -EPERM data version mismatch, no swap
  */
-static int swap_hsm_update_version(struct lu_buf *out_buf, __u64 out_dv,
-				   struct lu_buf *src_buf, __u64 src_dv)
+static int swap_hsm_update_version(struct sl_hsm_object_info *out,
+				   struct sl_hsm_object_info *src,
+				   __u64 flags)
 {
+
+	struct lu_buf *out_buf = out->hsm_buf;
+	struct lu_buf *src_buf = src->hsm_buf;
+	__u64 out_dv = out->dv;
+	__u64 src_dv = src->dv;
 	struct md_hsm src_hsm;
 
 	/* Put lb_len as a second argument since we know that src_buf is a valid
@@ -2645,7 +2651,7 @@ static int swap_hsm_update_version(struct lu_buf *out_buf, __u64 out_dv,
 		return 0;
 
 	/* migration with old client -> set the dirty flag */
-	if (!src_dv || !out_dv) {
+	if (!(flags & SWAP_LAYOUTS_WITH_DV12)) {
 		src_hsm.mh_flags |= HS_DIRTY;
 		goto hsm2buf;
 	}
@@ -2687,7 +2693,8 @@ static int swap_layouts_prepare_hsm_attr(const struct lu_env *env,
 					 struct mdd_device *mdd,
 					 struct thandle *handle,
 					 struct sl_hsm_object_info *fst,
-					 struct sl_hsm_object_info *snd)
+					 struct sl_hsm_object_info *snd,
+					 __u64 flags)
 {
 	unsigned long o_fst_fl;
 	unsigned long o_snd_fl;
@@ -2720,8 +2727,7 @@ static int swap_layouts_prepare_hsm_attr(const struct lu_env *env,
 
 	if ((o_snd_fl & VOLATILE_OBJ) && rc2) {
 		/* migration of fst */
-		rc = swap_hsm_update_version(snd->hsm_buf, snd->dv,
-					     fst->hsm_buf, fst->dv);
+		rc = swap_hsm_update_version(snd, fst, flags);
 		if (rc == 0)
 			return 0;
 		if (rc < 0)
@@ -2967,8 +2973,8 @@ retry:
 	snd_info.o = snd_o;
 	snd_info.hsm_buf = snd_hsm_buf;
 	snd_info.dv = dv2;
-	rc = swap_layouts_prepare_hsm_attr(env, mdd, handle, &fst_info,
-					   &snd_info);
+	rc = swap_layouts_prepare_hsm_attr(env, mdd, handle,
+					   &fst_info, &snd_info, flags);
 	if (rc)
 		GOTO(stop, rc);
 
