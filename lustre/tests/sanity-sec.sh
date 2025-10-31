@@ -2061,8 +2061,8 @@ function filter_nodemap_info() {
 	local facet=$1
 
 	shift
-	awkcmd='/^nodemap[.].*[.]dt_stats=/{ignore=1; next}
-		/^nodemap[.].*[.]md_stats=/{ignore=1; next}
+	awkcmd='/^nodemap[.].*[.]dt_stats[:=]/{ignore=1; next}
+		/^nodemap[.].*[.]md_stats[:=]/{ignore=1; next}
 		/^nodemap./{ignore=0}
 		{if(ignore==0)print}'
 
@@ -2226,6 +2226,62 @@ test_25b() {
 }
 run_test 25b "test nodemap info values"
 
+cleanup_25c() {
+	# back to non-nodemap setup
+	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
+		error "unable to umount client ${clients_arr[0]}"
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=false
+	fi
+
+	# cleanup deletes set traps
+	nodemap_test_cleanup
+	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
+		error "unable to remount client ${clients_arr[0]}"
+	wait_ssk
+}
+
+test_25c() {
+	local nm="c0"
+	local fileset="/$tdir"
+	verify_yaml_available || skip_env "YAML verification not installed"
+	(( $MGS_VERSION >= $(version_code 2.16.59) )) ||
+		skip "Need MGS >= 2.16.59 for get_param yaml output"
+
+	$LFS mkdir -c 1 "${DIR}${fileset}" ||
+		error "failed to mkdir ${DIR}${fileset}"
+	nodemap_test_setup
+	stack_trap cleanup_25c
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+	fi
+
+	# fill some more values on nodemap
+	do_facet mgs $LCTL nodemap_fileset_add --name $nm --fileset $fileset ||
+		error "unable to add fileset"
+	do_facet mgs $LCTL nodemap_add_offset --name $nm \
+		--offset 1000000 --limit 100000 || error "cannot set offset $nm"
+	wait_nm_sync $nm offset
+
+	# remount client to populate nodemap exports
+	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
+		error "unable to umount client ${clients_arr[0]}"
+	FILESET="/" \
+		zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
+		error "unable to remount client ${clients_arr[0]}"
+	wait_ssk
+
+	# Ignore per-nodemap stats when checking for YAML-compliance
+	echo "Filtered nodemap output:"
+	filter_nodemap_info mds1 get_param -R -y nodemap
+
+	filter_nodemap_info mds1 get_param -R -y nodemap | verify_yaml ||
+		error "nodemap yaml could not be verified"
+}
+run_test 25c "test yaml-compliance for nodemap"
+
 test_26() {
 	nodemap_version_check || return 0
 
@@ -2271,12 +2327,12 @@ do_facet_check_fileset() {
 		do_facet $facet $LCTL get_param -n nodemap.${nm}.fileset
 	elif [[ $fset_ro == "ro" ]]; then
 		do_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
-			awk -F '[[:blank:]]|,' '/${fset_type}/ { \
+			awk -F '[[:blank:]]+|,' '/${fset_type}/ { \
 			if (\\\$4 == \\\"$fset_check\\\" && \\\$7 == \\\"ro\\\" ) \
 			print \\\$4 }'"
 	else
 		do_facet $facet "$LCTL get_param nodemap.${nm}.fileset | \
-			awk -F '[[:blank:]]|,' '/${fset_type}/ { \
+			awk -F '[[:blank:]]+|,' '/${fset_type}/ { \
 			if (\\\$4 == \\\"$fset_check\\\" && \\\$7 != \\\"ro\\\" ) \
 			print \\\$4 }'"
 	fi
@@ -2340,11 +2396,11 @@ wait_nm_sync_fileset() {
 
 	# check if ro flag is set for given fileset and print the fileset if yes
 	if $fset_ro; then
-		awk_expr="awk -F '[[:blank:]]|,' '/$fset_type/ { \
+		awk_expr="awk -F '[[:blank:]]+|,' '/$fset_type/ { \
 			if (\$4 == \"$fset_check\" && \$7 == \"ro\") \
 			print \$4 }'"
 	else
-		awk_expr="awk -F '[[:blank:]]|,' '/$fset_type/ { \
+		awk_expr="awk -F '[[:blank:]]+|,' '/$fset_type/ { \
 			if (\$4 == \"$fset_check\" && \$7 != \"ro\") \
 			print \$4 }'"
 	fi

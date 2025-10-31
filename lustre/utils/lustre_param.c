@@ -317,24 +317,46 @@ void print_param_internal(struct lctl_param_file *lpf, char *value,
 	if (popt->po_color && color)
 		printf("%s", color);
 
-	if (popt->po_header && value && strchr(value, '\n')) {
+	/* multi-line params */
+	if ((popt->po_yaml || popt->po_header) && value &&
+	    strchr(value, '\n')) {
 		char *nl;
 		char *tmp = value;
 
-		do {
-			/* split at first '\n' if any */
+		/* split at first '\n' if any, handle first line */
+		nl = strchrnul(tmp, '\n');
+		if (popt->po_yaml)
+			printf("%s: %.*s", lpf->lpf_name, (int)(nl - tmp) + 1,
+			       tmp);
+		else
+			printf("%s=%.*s", lpf->lpf_name, (int)(nl - tmp) + 1,
+			       tmp);
+		tmp = nl + 1;
+
+		while (strchr(tmp, '\n')) {
 			nl = strchrnul(tmp, '\n');
-			printf("%s=%.*s", lpf->lpf_name,
-			       (int)(nl-tmp) + 1, tmp);
+			if (popt->po_yaml)
+				printf("%.*s", (int)(nl - tmp) + 1, tmp);
+			else
+				printf("%s=%.*s", lpf->lpf_name,
+				       (int)(nl - tmp) + 1, tmp);
+
 			tmp = nl + 1;
-		} while (strchr(tmp, '\n'));
-		printf("%s=%s\n", lpf->lpf_name, tmp);
+		}
+		/* handle last line */
+		if (popt->po_yaml)
+			printf("%s", tmp);
+		else
+			printf("%s=%s", lpf->lpf_name, tmp);
 	} else {
 		if (popt->po_show_name)
 			printf("%s", lpf->lpf_name);
 
 		if (!popt->po_only_name && popt->po_show_name) {
-			printf("=");
+			if (popt->po_yaml)
+				printf(": ");
+			else
+				printf("=");
 			/* put multiline params on newline */
 			if (value && strchr(value, '\n'))
 				printf("\n");
@@ -343,8 +365,8 @@ void print_param_internal(struct lctl_param_file *lpf, char *value,
 		if (!popt->po_only_name && value) {
 			if (popt->po_color && value != lpf->lpf_val)
 				highlight_param_diff(value, lpf->lpf_val,
-						     color ?
-						     color : COLOR_RESET);
+						     color ? color :
+							     COLOR_RESET);
 			else
 				printf("%s", value);
 		}
