@@ -313,7 +313,8 @@ again:
 							    &RMF_MDT_BODY);
 
 		if (b) {
-			b->mbo_valid |= OBD_MD_NAMEHASH;
+			if (op_data->op_bias & MDS_NAMEHASH)
+				b->mbo_valid |= OBD_MD_NAMEHASH;
 			b->mbo_fid2 = op_data->op_fid2;
 		}
 	}

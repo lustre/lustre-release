@@ -2097,6 +2097,7 @@ enum mds_op_bias {
 	/* Compat flag with clients that do not send old and new data version
 	 * after swap layout */
 	MDS_CLOSE_LAYOUT_SWAP_HSM	= 1 << 25,
+	MDS_NAMEHASH		= 1 << 26,
 };
 
 #define MDS_CLOSE_INTENT (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP |         \

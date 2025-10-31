@@ -993,6 +993,61 @@ out:
 	RETURN(rc);
 }
 
+/* If it's open-by-FID, convert fname to FID, set both fid1 and fid2 to this
+ * FID, and clear name.  This can aovid round-trip to MDT0 if the FID is not
+ * located on MDT0.
+ */
+static void obf_mod_fixup(struct md_op_data *op_data, struct lookup_intent *it)
+{
+	struct lu_fid fid;
+	const char *name = op_data->op_name;
+
+	if (op_data->op_code != LUSTRE_OPC_ANY)
+		return;
+
+	if (fid_is_sane(&op_data->op_fid2))
+		return;
+
+	if (!op_data->op_namelen)
+		return;
+
+	if (name[0] == '[') {
+		if (op_data->op_namelen < 2)
+			return;
+		name++;
+	}
+
+	if (sscanf(name, SFID, RFID(&fid)) != 3)
+		return;
+
+	if (!fid_is_sane(&fid))
+		return;
+
+	if (!fid_is_norm(&fid) && !fid_is_igif(&fid) &&
+	    !fid_is_root(&fid) && !fid_seq_is_dot(fid.f_seq))
+		return;
+
+	op_data->op_fid2 = fid;
+	op_data->op_bias = MDS_FID_OP;
+	if (op_data->op_flags & MF_OPNAME_KMALLOCED) {
+		/* allocated via ll_setup_filename called
+		 * from ll_prep_md_op_data
+		 */
+		kfree(op_data->op_name);
+		op_data->op_flags &= ~MF_OPNAME_KMALLOCED;
+	}
+	op_data->op_name = NULL;
+	op_data->op_namelen = 0;
+
+	if (it->it_op & IT_OPEN)
+		it->it_open_flags |= MDS_OPEN_BY_FID;
+	else
+		/* getattr by FID in the old way, otherwise MDT will complain
+		 * name is missing.
+		 */
+		op_data->op_fid1 = fid;
+}
+
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 				   struct lookup_intent *it,
 				   struct pcc_create_attach *pca,
@@ -1052,10 +1107,12 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	}
 	if (!fid_is_zero(&fid)) {
 		op_data->op_fid2 = fid;
-		op_data->op_bias = MDS_FID_OP;
+		op_data->op_bias = MDS_FID_OP | MDS_NAMEHASH;
 		if (it->it_op & IT_OPEN)
 			it->it_open_flags |= MDS_OPEN_BY_FID;
 	}
+	if (fid_is_obf(ll_inode2fid(parent)))
+		obf_mod_fixup(op_data, it);
 
 	if (!sbi->ll_dir_open_read && it->it_op & IT_OPEN &&
 	    it->it_open_flags & O_DIRECTORY)

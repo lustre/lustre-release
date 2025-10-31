@@ -3994,7 +3994,7 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 		if (pfid && !fid_is_zero(pfid)) {
 			if (i2 == NULL)
 				op_data->op_fid2 = fid;
-			op_data->op_bias = MDS_FID_OP;
+			op_data->op_bias = MDS_FID_OP | MDS_NAMEHASH;
 		}
 		if (fname.disk_name.name &&
 		    fname.disk_name.name != (unsigned char *)name) {
