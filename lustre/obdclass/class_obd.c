@@ -317,7 +317,7 @@ int class_handle_ioctl(unsigned int cmd, void __user *uarg)
 	CDEBUG(D_IOCTL, "obdclass: cmd=%x len=%u uarg=%pK\n", cmd, len, uarg);
 	if (unlikely(_IOC_TYPE(cmd) != 'f' && !OBD_IOC_BARRIER_ALLOW(cmd) &&
 		     !IOC_OSC_SET_ACTIVE_ALLOW(cmd)))
-		RETURN(OBD_IOC_ERROR(obd->obd_name, cmd, "unknown", -ENOTTY));
+		RETURN(OBD_IOC_ERROR("obdclass", cmd, "unknown", -ENOTTY));
 
 	rc = obd_ioctl_getdata(&data, &len, uarg);
 	if (rc) {
