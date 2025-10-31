@@ -204,19 +204,19 @@ again:
 	}
 
 	/* Allocate a new peer for the cache. */
-	kp = kzalloc(sizeof(*kp), GFP_KERNEL);
+	kp = kzalloc(sizeof(*kp), GFP_NOFS);
 	if (!kp) {
 		rc = -ENOMEM;
 		goto err;
 	}
 
-	node = kasprintf(GFP_KERNEL, "%#x", nid_addr);
+	node = kasprintf(GFP_NOFS, "%#x", nid_addr);
 	if (!node) {
 		rc = -ENOMEM;
 		goto err_free_peer;
 	}
 
-	service = kasprintf(GFP_KERNEL, "%u", net_num);
+	service = kasprintf(GFP_NOFS, "%u", net_num);
 	if (!service) {
 		rc = -ENOMEM;
 		goto err_free_node_str;

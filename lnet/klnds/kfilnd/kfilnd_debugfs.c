@@ -198,3 +198,43 @@ const struct file_operations kfilnd_reset_stats_file_ops = {
 	.owner = THIS_MODULE,
 	.write = kfilnd_reset_stats_file_write,
 };
+
+static int kfilnd_mempool_stats_file_show(struct seq_file *s, void *unused)
+{
+	int tn_min, tn_curr, msg_min, msg_curr;
+
+	if (kfilnd_tn_get_mempool_stats(&tn_min, &tn_curr,
+					&msg_min, &msg_curr) == 0) {
+		seq_puts(s, "Transaction Mempool:\n");
+		seq_printf(s, "  min_reserve: %d\n", tn_min);
+		seq_printf(s, "  curr_avail: %d\n", tn_curr);
+		seq_printf(s, "  elements_allocated: %d\n", tn_min - tn_curr);
+
+		seq_puts(s, "\nMessage Buffer Mempool:\n");
+		seq_printf(s, "  min_reserve: %d\n", msg_min);
+		seq_printf(s, "  curr_avail: %d\n", msg_curr);
+		seq_printf(s, "  elements_allocated: %d\n", msg_min - msg_curr);
+	} else {
+		seq_puts(s, "Transaction Mempool:\n");
+		seq_puts(s, "  Not initialized\n");
+		seq_puts(s, "\nMessage Buffer Mempool:\n");
+		seq_puts(s, "  Not initialized\n");
+	}
+
+	return 0;
+}
+
+static int kfilnd_mempool_stats_file_open(struct inode *inode,
+					  struct file *file)
+{
+	return single_open(file, kfilnd_mempool_stats_file_show,
+			   inode->i_private);
+}
+
+const struct file_operations kfilnd_mempool_stats_file_ops = {
+	.owner = THIS_MODULE,
+	.open = kfilnd_mempool_stats_file_open,
+	.read = seq_read,
+	.llseek  = seq_lseek,
+	.release = seq_release,
+};

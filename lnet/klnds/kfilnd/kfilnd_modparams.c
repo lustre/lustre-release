@@ -79,6 +79,16 @@ static int peer_credits = 16;
 module_param(peer_credits, int, 0444);
 MODULE_PARM_DESC(peer_credits, "Number of concurrent sends to 1 peer");
 
+static int tn_reserve_min = -1;
+module_param(tn_reserve_min, int, 0644);
+MODULE_PARM_DESC(tn_reserve_min,
+		 "Transaction mempool reserve size (-1 for auto: peer_credits * num_cpts * 2)");
+
+static int msg_reserve_min = -1;
+module_param(msg_reserve_min, int, 0644);
+MODULE_PARM_DESC(msg_reserve_min,
+		 "Message buffer mempool reserve size (-1 for auto: peer_credits * num_cpts * 2)");
+
 static int peer_buffer_credits = -1;
 module_param(peer_buffer_credits, int, 0444);
 MODULE_PARM_DESC(peer_buffer_credits,
@@ -267,4 +277,19 @@ int kfilnd_tunables_init(void)
 	kfi_default_tunables.lnd_timeout = kfilnd_timeout();
 
 	return 0;
+}
+
+int kfilnd_get_tn_reserve_min(void)
+{
+	return tn_reserve_min;
+}
+
+int kfilnd_get_msg_reserve_min(void)
+{
+	return msg_reserve_min;
+}
+
+int kfilnd_get_peer_credits(void)
+{
+	return peer_credits;
 }

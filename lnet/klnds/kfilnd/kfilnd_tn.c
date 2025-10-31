@@ -16,9 +16,14 @@
 #include "kfilnd_dom.h"
 #include "kfilnd_peer.h"
 #include <asm/checksum.h>
+#include <linux/mempool.h>
 
 static struct kmem_cache *tn_cache;
 static struct kmem_cache *imm_buf_cache;
+
+/* Mempool for guaranteed allocation under memory pressure */
+static mempool_t *tn_cache_mp;
+static mempool_t *imm_buf_cache_mp;
 
 static __sum16 kfilnd_tn_cksum(void *ptr, int nob)
 {
@@ -1589,9 +1594,9 @@ void kfilnd_tn_free(struct kfilnd_transaction *tn)
 
 	/* Free send message buffer if needed. */
 	if (tn->tn_tx_msg.msg)
-		kmem_cache_free(imm_buf_cache, tn->tn_tx_msg.msg);
+		mempool_free(tn->tn_tx_msg.msg, imm_buf_cache_mp);
 
-	kmem_cache_free(tn_cache, tn);
+	mempool_free(tn, tn_cache_mp);
 }
 
 /*
@@ -1613,14 +1618,16 @@ static struct kfilnd_transaction *kfilnd_tn_alloc_common(struct kfilnd_ep *ep,
 
 	tn_alloc_ts = ktime_get();
 
-	tn = kmem_cache_zalloc(tn_cache, GFP_KERNEL);
+	tn = mempool_alloc(tn_cache_mp, GFP_NOFS);
 	if (!tn) {
 		rc = -ENOMEM;
 		goto err;
 	}
+	/* mempool_alloc doesn't zero, so manually zero the structure */
+	memset(tn, 0, sizeof(*tn));
 
 	if (alloc_msg) {
-		tn->tn_tx_msg.msg = kmem_cache_alloc(imm_buf_cache, GFP_KERNEL);
+		tn->tn_tx_msg.msg = mempool_alloc(imm_buf_cache_mp, GFP_NOFS);
 		if (!tn->tn_tx_msg.msg) {
 			rc = -ENOMEM;
 			goto err_free_tn;
@@ -1657,7 +1664,7 @@ static struct kfilnd_transaction *kfilnd_tn_alloc_common(struct kfilnd_ep *ep,
 	return tn;
 
 err_free_tn:
-	kmem_cache_free(tn_cache, tn);
+	mempool_free(tn, tn_cache_mp);
 err:
 	return ERR_PTR(rc);
 }
@@ -1790,8 +1797,33 @@ err:
  */
 void kfilnd_tn_cleanup(void)
 {
+	mempool_destroy(imm_buf_cache_mp);
+	mempool_destroy(tn_cache_mp);
 	kmem_cache_destroy(imm_buf_cache);
 	kmem_cache_destroy(tn_cache);
+}
+
+/**
+ * kfilnd_tn_get_mempool_stats() - Get mempool statistics.
+ * @tn_min: Pointer to store transaction mempool min_nr
+ * @tn_curr: Pointer to store transaction mempool curr_nr
+ * @msg_min: Pointer to store message buffer mempool min_nr
+ * @msg_curr: Pointer to store message buffer mempool curr_nr
+ *
+ * Return: 0 if mempools are initialized, -EINVAL otherwise.
+ */
+int kfilnd_tn_get_mempool_stats(int *tn_min, int *tn_curr,
+				int *msg_min, int *msg_curr)
+{
+	if (!tn_cache_mp || !imm_buf_cache_mp)
+		return -EINVAL;
+
+	*tn_min = tn_cache_mp->min_nr;
+	*tn_curr = tn_cache_mp->curr_nr;
+	*msg_min = imm_buf_cache_mp->min_nr;
+	*msg_curr = imm_buf_cache_mp->curr_nr;
+
+	return 0;
 }
 
 /**
@@ -1801,6 +1833,31 @@ void kfilnd_tn_cleanup(void)
  */
 int kfilnd_tn_init(void)
 {
+	int num_cpts = cfs_cpt_number(lnet_cpt_table());
+	int min_tn, min_msg;
+	int reserve_min, msg_min, credits;
+
+#define KFILND_RESERVE_SAFETY_FACTOR 2
+
+	/* Calculate reserves: peer_credits * num_cpts * safety_factor */
+	reserve_min = kfilnd_get_tn_reserve_min();
+	msg_min = kfilnd_get_msg_reserve_min();
+	credits = kfilnd_get_peer_credits();
+
+	if (reserve_min < 0)
+		min_tn = credits * num_cpts * KFILND_RESERVE_SAFETY_FACTOR;
+	else
+		min_tn = reserve_min;
+
+	if (msg_min < 0)
+		min_msg = credits * num_cpts * KFILND_RESERVE_SAFETY_FACTOR;
+	else
+		min_msg = msg_min;
+
+	CDEBUG(D_NET, "kfilnd: mempool reserves: %d transactions, %d buffers (peer_credits=%d, num_cpts=%d, safety=%d)\n",
+	       min_tn, min_msg, credits, num_cpts,
+	       KFILND_RESERVE_SAFETY_FACTOR);
+
 	tn_cache = kmem_cache_create("kfilnd_tn",
 				     sizeof(struct kfilnd_transaction), 0,
 				     SLAB_HWCACHE_ALIGN, NULL);
@@ -1813,8 +1870,28 @@ int kfilnd_tn_init(void)
 	if (!imm_buf_cache)
 		goto err_tn_cache_destroy;
 
+	tn_cache_mp = mempool_create_slab_pool(min_tn, tn_cache);
+	if (!tn_cache_mp)
+		goto err_imm_buf_cache_destroy;
+
+	CDEBUG(D_NET, "Created tn_cache_mp with %d reserves\n", min_tn);
+
+	imm_buf_cache_mp = mempool_create_slab_pool(min_msg, imm_buf_cache);
+	if (!imm_buf_cache_mp)
+		goto err_tn_cache_mp_destroy;
+
+	CDEBUG(D_NET, "Created imm_buf_cache_mp with %d reserves\n", min_msg);
+
+	/* Initialize debugfs mempool stats */
+	debugfs_create_file("mempool_stats", 0444, kfilnd_debug_dir, NULL,
+			    &kfilnd_mempool_stats_file_ops);
+
 	return 0;
 
+err_tn_cache_mp_destroy:
+	mempool_destroy(tn_cache_mp);
+err_imm_buf_cache_destroy:
+	kmem_cache_destroy(imm_buf_cache);
 err_tn_cache_destroy:
 	kmem_cache_destroy(tn_cache);
 err:
@@ -1858,7 +1935,7 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 	}
 
 	max_nkiov = num_iov;
-	rc = sg_alloc_table(&tn->tn_sgt, max_nkiov, GFP_KERNEL);
+	rc = sg_alloc_table(&tn->tn_sgt, max_nkiov, GFP_NOFS);
 	if (rc) {
 		CERROR("%s: sg_alloc_table failed rc = %d\n",
 		       ni->ni_interface, rc);

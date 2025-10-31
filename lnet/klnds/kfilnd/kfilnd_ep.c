@@ -962,7 +962,7 @@ err:
 
 int kfilnd_ep_get_key(struct kfilnd_ep *ep)
 {
-	return ida_simple_get(&ep->keys, 1, KFILND_EP_KEY_MAX, GFP_KERNEL);
+	return ida_simple_get(&ep->keys, 1, KFILND_EP_KEY_MAX, GFP_NOFS);
 }
 
 void kfilnd_ep_put_key(struct kfilnd_ep *ep, unsigned int key)
