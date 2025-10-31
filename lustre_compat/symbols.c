@@ -69,6 +69,12 @@ int compat_apply_workqueue_attrs(struct workqueue_struct *wq,
 }
 EXPORT_SYMBOL_GPL(compat_apply_workqueue_attrs);
 
+#ifdef alloc_workqueue_attrs
+# define ALLOC_WQ_ATTRS_FUNC	"alloc_workqueue_attrs_noprof"
+#else
+# define ALLOC_WQ_ATTRS_FUNC	"alloc_workqueue_attrs"
+#endif
+
 int lustre_symbols_init(void)
 {
 	int rc;
@@ -80,7 +86,7 @@ int lustre_symbols_init(void)
 	if (!cfs_kallsyms_lookup_name("kallsyms_lookup_name"))
 		return -EINVAL;
 
-	__alloc_workqueue_attrs = cfs_kallsyms_lookup_name("alloc_workqueue_attrs");
+	__alloc_workqueue_attrs = cfs_kallsyms_lookup_name(ALLOC_WQ_ATTRS_FUNC);
 	if (!__alloc_workqueue_attrs)
 		return -EINVAL;
 
