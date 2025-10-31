@@ -3694,13 +3694,15 @@ EXPORT_SYMBOL(nodemap_set_squash_projid);
 bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
 			  __u32 qc_type, __u32 id)
 {
+	__u32 mapped_root_uid;
+
 	/* nodemap is inactive: allow */
 	if (!nodemap_active)
 		return true;
 
 	/* nodemap does not allow root access: forbid */
 	if (!nodemap || !nodemap->nmf_allow_root_access)
-		return false;
+		RETURN(false);
 
 	/* user/group/project quota type:
 	 * forbid if quota_ops role is not present
@@ -3711,7 +3713,15 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
 	     qc_cmd == LUSTRE_Q_DELETEQID ||
 	     qc_cmd == LUSTRE_Q_RESETQID) &&
 	    !(nodemap->nmf_rbac & NODEMAP_RBAC_QUOTA_OPS))
-		return false;
+		RETURN(false);
+
+	mapped_root_uid =
+		nodemap_map_id(nodemap, NODEMAP_UID, NODEMAP_CLIENT_TO_FS, 0);
+
+	/* deny setting default quota if this nodemap maps root to != 0 */
+	if ((qc_cmd == LUSTRE_Q_SETDEFAULT ||
+	     qc_cmd == LUSTRE_Q_SETDEFAULT_POOL) && mapped_root_uid != 0)
+		RETURN(false);
 
 	/* pool quota type:
 	 * forbid if pool_quota_ops role is not present
@@ -3720,13 +3730,11 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
 	     qc_cmd == LUSTRE_Q_SETINFOPOOL ||
 	     qc_cmd == LUSTRE_Q_SETDEFAULT_POOL) &&
 	    !(nodemap->nmf_rbac & NODEMAP_RBAC_POOL_QUOTA_OPS))
-		return false;
+		RETURN(false);
 
 	/* deny if local root has not local admin role */
-	if (!is_local_root(nodemap_map_id(nodemap, NODEMAP_UID,
-					  NODEMAP_CLIENT_TO_FS, 0),
-			   nodemap))
-		return false;
+	if (!is_local_root(mapped_root_uid, nodemap))
+		RETURN(false);
 
 	/* project quota type: allow if project id is not squashed
 	 * or deny_unknown is not set.
@@ -3737,7 +3745,7 @@ bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
 
 		if (id == nodemap->nm_squash_projid &&
 		    nodemap->nmf_deny_unknown)
-			return false;
+			RETURN(false);
 	}
 
 	return true;
