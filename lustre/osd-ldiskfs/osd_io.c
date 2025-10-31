@@ -1958,8 +1958,8 @@ static int osd_ldiskfs_writelink(struct inode *inode, char *buffer, int buflen)
 	return 0;
 }
 
-struct buffer_head *osd_getnblk(handle_t *handle, struct osd_object *o,
-				ldiskfs_lblk_t block, int nr)
+static struct buffer_head *osd_getnblk(handle_t *handle, struct osd_object *o,
+				       ldiskfs_lblk_t block, int nr)
 {
 	struct osd_block_ready_map *brm = o->oo_brm;
 	struct buffer_head *bh, *ret = NULL;
@@ -2098,8 +2098,8 @@ static struct buffer_head *osd_brm_getblk(handle_t *handle,
 	return bh;
 }
 
-int osd_ldiskfs_write_fast(struct osd_object *o,  void *buf,
-		      int bufsize, loff_t *offs, handle_t *handle)
+static int osd_ldiskfs_write_fast(struct osd_object *o,  void *buf, int bufsize,
+				  loff_t *offs, handle_t *handle)
 {
 	struct inode *inode = o->oo_inode;
 	int blocksize = 1 << inode->i_blkbits;

@@ -2434,7 +2434,7 @@ noinline static void osd_delayed_iput(struct inode *inode,
 	}
 }
 
-void osd_drop_preallocated_space(struct osd_object *o)
+static void osd_drop_preallocated_space(struct osd_object *o)
 {
 	struct inode *inode = o->oo_inode;
 	struct address_space *mapping = inode->i_mapping;
