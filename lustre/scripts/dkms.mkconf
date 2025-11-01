@@ -35,7 +35,7 @@ POST_REMOVE="lustre-dkms_post-remove.sh \$module \$module_version \$kernelver \$
 EOF
 if [ $pkgname = "lustre-zfs" -o $pkgname = "lustre-all" ] ; then
 	cat >>${filename} <<EOF
-BUILD_DEPENDS[0]="zfs"
+BUILD_DEPENDS[\${#BUILD_DEPENDS[@]}]="zfs"
 EOF
 fi
 cat >>${filename} <<EOF
@@ -90,6 +90,23 @@ fi
 NO_WEAK_MODULES="\$no_weak_modules"
 AUTOINSTALL="yes"
 MAKE[0]="make -j \`nproc\`"
+# If any of these packages exist they need to be autoinstall'd before lustre
+for m in \$(ls -1 \$dkms_tree); do
+	[[ \$m == "zfs" ]] &&
+		BUILD_DEPENDS[\${#BUILD_DEPENDS[@]}]=\$m
+	[[ \$m == "mlnx-ofed-kernel" ]] &&
+		BUILD_DEPENDS[\${#BUILD_DEPENDS[@]}]=\$m
+	[[ \$m == "cray-kfabric" ]] &&
+		BUILD_DEPENDS[\${#BUILD_DEPENDS[@]}]=\$m
+	[[ \$m == "cray-cxi-driver" ]] &&
+		BUILD_DEPENDS[\${#BUILD_DEPENDS[@]}]=\$m
+	[[ \$m == "cray-slingshot-base-link" ]] &&
+		BUILD_DEPENDS[\${#BUILD_DEPENDS[@]}]=\$m
+	[[ \$m == "kdreg2" ]] &&
+		BUILD_DEPENDS[\${#BUILD_DEPENDS[@]}]=\$m
+	[[ \$m == "sl-driver" ]] &&
+		BUILD_DEPENDS[\${#BUILD_DEPENDS[@]}]=\$m
+done
 # Determine which, if any, o2ib to install:
 can_o2ib_mofed=no
 can_o2ib_in_kernel=no

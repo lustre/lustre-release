@@ -23,6 +23,23 @@ PACKAGE_VERSION="@UPVERSION@"
 
 no_weak_modules=yes
 strip_default=no
+# If any of these packages exist they need to be autoinstall'd before lustre
+for m in $(ls -1 $dkms_tree); do
+	[[ $m == "mlnx-ofed-kernel" ]] &&
+		BUILD_DEPENDS[${#BUILD_DEPENDS[@]}]=$m
+	[[ $m == "cray-kfabric" ]] &&
+		BUILD_DEPENDS[${#BUILD_DEPENDS[@]}]=$m
+	[[ $m == "zfs" ]] &&
+		BUILD_DEPENDS[${#BUILD_DEPENDS[@]}]=$m
+	[[ $m == "cray-cxi-driver" ]] &&
+		BUILD_DEPENDS[${#BUILD_DEPENDS[@]}]=$m
+	[[ $m == "cray-slingshot-base-link" ]] &&
+		BUILD_DEPENDS[${#BUILD_DEPENDS[@]}]=$m
+	[[ $m == "kdreg2" ]] &&
+		BUILD_DEPENDS[${#BUILD_DEPENDS[@]}]=$m
+	[[ $m == "sl-driver" ]] &&
+		BUILD_DEPENDS[${#BUILD_DEPENDS[@]}]=$m
+done
 OPTS=""
 if [[ "x${PACKAGE_NAME}" = "xlustre-client-modules" ]] ; then
     OPTS="${OPTS} --disable-server --disable-quilt"
