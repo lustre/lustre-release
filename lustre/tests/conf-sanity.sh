@@ -10919,6 +10919,9 @@ test_123F() {
 run_test 123F "clear and reset all parameters using set_param -F"
 
 test_123G() {
+	(( MGS_VERSION >= $(version_code v2_15_58-66-g29cfdc2f1e7a) )) ||
+		skip "Need MGS >= v2_15_58-66-g29cfdc2f1e7a for apply_yaml fix"
+
 	local yaml_file
 	local cfgfiles
 	local orig_val
