@@ -3807,6 +3807,9 @@ test_48() {
 	local file=$DIR/$tfile
 	local -a lpcc_path
 
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
 	setup_loopdev client $loopfile $mntpt 60
 	mkdir $hsm_root || error "mkdir $hsm_root failed"
 	setup_pcc_mapping client \
@@ -4217,6 +4220,9 @@ test_99b() {
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 	local cnt=50
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 200
 	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
