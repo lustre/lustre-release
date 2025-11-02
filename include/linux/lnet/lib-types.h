@@ -1455,104 +1455,106 @@ struct lnet_peer_ni {
 
 struct lnet_peer {
 	/* chain on pt_peer_list */
-	struct list_head	lp_peer_list;
+	struct list_head	 lp_peer_list;
 
 	/* list of peer nets */
-	struct list_head	lp_peer_nets;
+	struct list_head	 lp_peer_nets;
 
 	/* list of messages pending discovery*/
-	struct list_head	lp_dc_pendq;
+	struct list_head	 lp_dc_pendq;
 
 	/* chain on router list */
-	struct list_head	lp_rtr_list;
-
-	/* primary NID of the peer */
-	struct lnet_nid		lp_primary_nid;
-
-	/* source NID to use during discovery */
-	struct lnet_nid		lp_disc_src_nid;
-	/* destination NID to use during discovery */
-	struct lnet_nid		lp_disc_dst_nid;
-
-	/* net to perform discovery on */
-	__u32			lp_disc_net_id;
-
-	/* CPT of peer_table */
-	int			lp_cpt;
-
-	/* number of NIDs on this peer */
-	int			lp_nnis;
-
-	/* # refs from lnet_route::lr_gateway */
-	int			lp_rtr_refcount;
+	struct list_head	 lp_rtr_list;
 
 	/* messages blocking for router credits */
-	struct list_head	lp_rtrq;
+	struct list_head	 lp_rtrq;
 
 	/* routes on this peer */
-	struct list_head	lp_routes;
-
-	/* reference count */
-	atomic_t		lp_refcount;
-
-	/* lock protecting peer state flags and lpni_rtrq */
-	spinlock_t		lp_lock;
-
-	/* peer state flags */
-	unsigned		lp_state;
-
-	/* buffer for data pushed by peer */
-	struct lnet_ping_buffer	*lp_data;
-
-	/* MD handle for ping in progress */
-	struct lnet_handle_md	lp_ping_mdh;
-
-	/* MD handle for push in progress */
-	struct lnet_handle_md	lp_push_mdh;
-
-	/* number of bytes for sizing pb_info in push data */
-	int			lp_data_bytes;
-
-	/* NI config sequence number of peer */
-	__u32			lp_peer_seqno;
-
-	/* Local NI config sequence number acked by peer */
-	__u32			lp_node_seqno;
-
-	/* Local NI config sequence number sent to peer */
-	__u32			lp_node_seqno_sent;
-
-	/* Ping error encountered during discovery. */
-	int			lp_ping_error;
-
-	/* Push error encountered during discovery. */
-	int			lp_push_error;
-
-	/* Error encountered during discovery. */
-	int			lp_dc_error;
-
-	/* time it was put on the ln_dc_working queue */
-	time64_t		lp_last_queued;
+	struct list_head	 lp_routes;
 
 	/* link on discovery-related lists */
-	struct list_head	lp_dc_list;
+	struct list_head	 lp_dc_list;
 
 	/* tasks waiting on discovery of this peer */
-	wait_queue_head_t	lp_dc_waitq;
+	wait_queue_head_t	 lp_dc_waitq;
 
-	/* cached peer aliveness */
-	bool			lp_alive;
+	/* primary NID of the peer */
+	struct lnet_nid		 lp_primary_nid;
 
-	/* sequence number used to round robin traffic to this peer's
-	 * nets/NIs
-	 */
-	__u32                   lp_send_seq;
+	/* source NID to use during discovery */
+	struct lnet_nid		 lp_disc_src_nid;
 
-	/* timestamp of primary nid lock */
-	__u64			lp_prim_lock_ts;
+	/* destination NID to use during discovery */
+	struct lnet_nid		 lp_disc_dst_nid;
 
 	/* merge and assign this NID as primary when discovery completes */
-	struct lnet_nid         lp_merge_primary_nid;
+	struct lnet_nid		 lp_merge_primary_nid;
+
+	/* buffer for data pushed by peer */
+	struct lnet_ping_buffer *lp_data;
+
+	/* MD handle for ping in progress */
+	struct lnet_handle_md	 lp_ping_mdh;
+
+	/* MD handle for push in progress */
+	struct lnet_handle_md	 lp_push_mdh;
+
+	/* time it was put on the ln_dc_working queue */
+	time64_t		 lp_last_queued;
+
+	/* timestamp of primary nid lock */
+	__u64			 lp_prim_lock_ts;
+
+	/* lock protecting peer state flags and lpni_rtrq */
+	spinlock_t		 lp_lock;
+
+	/* reference count */
+	atomic_t		 lp_refcount;
+
+	/* peer state flags */
+	unsigned int		  lp_state;
+
+	/* net to perform discovery on */
+	__u32			 lp_disc_net_id;
+
+	/* CPT of peer_table */
+	int			 lp_cpt;
+
+	/* number of NIDs on this peer */
+	int			 lp_nnis;
+
+	/* # refs from lnet_route::lr_gateway */
+	int			 lp_rtr_refcount;
+
+	/* number of bytes for sizing pb_info in push data */
+	int			 lp_data_bytes;
+
+	/* NI config sequence number of peer */
+	__u32			 lp_peer_seqno;
+
+	/* Local NI config sequence number acked by peer */
+	__u32			 lp_node_seqno;
+
+	/* Local NI config sequence number sent to peer */
+	__u32			 lp_node_seqno_sent;
+
+	/* Ping error encountered during discovery. */
+	int			 lp_ping_error;
+
+	/* Push error encountered during discovery. */
+	int			 lp_push_error;
+
+	/* Error encountered during discovery. */
+	int			 lp_dc_error;
+
+	/*
+	 * sequence number used to round robin traffic to this peer's
+	 * nets/NIs
+	 */
+	__u32			 lp_send_seq;
+
+	/* cached peer aliveness */
+	bool			 lp_alive;
 };
 
 /*
