@@ -7579,6 +7579,49 @@ test_82b() { # LU-4665
 }
 run_test 82b "specify OSTs for file with --pool and --ost-list options"
 
+test_82c() {
+	(( $MDS1_VERSION >= $(version_code 2.16.59.50) )) ||
+		skip "MDS needs to be at least 2.16.59.50"
+
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+
+	stopall
+
+	save_ostindex 4
+
+	# Format OSTs with random sparse indices
+	local ost_indices=$(random_ost_indices 4)
+
+	stack_trap "restore_ostindex" EXIT
+	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
+	OST_INDEX_LIST=[$ost_indices] formatall
+
+	# Setup Lustre filesystem
+	start_mgsmds || error "start_mgsmds failed"
+	for i in $(seq $OSTCOUNT); do
+		start ost$i $(ostdevname $i) $OST_MOUNT_OPTS ||
+			error "start ost$i failed"
+	done
+
+	mount_client $MOUNT || error "mount client $MOUNT failed"
+
+	wait_osts_up
+
+	echo -e "\n$OSTCOUNT OSTs with sparse indices $ost_indices"
+	$LFS setstripe -c 4 $DIR/$tfile
+	$LFS getstripe $DIR/$tfile
+	check_obdidx $DIR/$tfile $ost_indices
+
+	$LFS mirror extend -N -Eeof -c4 $DIR/$tfile
+	$LFS getstripe $DIR/$tfile
+	local ost_ids=$(comma_list $($LFS getstripe $DIR/$tfile |
+		awk '/l_ost_idx/ {print $5}' | xargs))
+	[[ $ost_ids = $ost_indices ]] ||
+		error "List of OST indices on mirrored $file is $ost_ids, \
+		       should be $ost_indices"
+}
+run_test 82c "specify sparse OSTs for setstripe (should not crash)"
+
 test_83() {
 	[[ "$OST1_VERSION" -ge $(version_code 2.6.91) ]] ||
 		skip "Need OST version at least 2.6.91"

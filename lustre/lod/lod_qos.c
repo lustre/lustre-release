@@ -2636,25 +2636,33 @@ free_comp:
 static int lod_prepare_avoidance(const struct lu_env *env,
 				 struct lod_object *lo)
 {
-	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_device *d = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
 	unsigned long *bitmap = NULL;
+	__u32 new_ost_size = d->lod_ost_size;
 	__u32 *new_oss = NULL;
+	__u32 new_oss_size;
 
-	lag->lag_ost_avail = lod->lod_ost_count;
+	/*
+	 * usually there are multiple OSTs in one OSS, but we don't
+	 * know the exact OSS number, so we choose a safe option,
+	 * using OST count to allocate the array to store the OSS
+	 * id.
+	 */
+	new_oss_size = d->lod_ost_count;
 
 	/* reset OSS avoid guide array */
 	lag->lag_oaa_count = 0;
-	if (lag->lag_oss_avoid_array &&
-	    lag->lag_oaa_size < lod->lod_ost_count) {
+	if (lag->lag_oss_avoid_array && lag->lag_oaa_size < d->lod_ost_count) {
 		OBD_FREE_PTR_ARRAY(lag->lag_oss_avoid_array, lag->lag_oaa_size);
 		lag->lag_oss_avoid_array = NULL;
 		lag->lag_oaa_size = 0;
 	}
 
 	/* init OST avoid guide bitmap */
+	lag->lag_ost_avail = d->lod_ost_count;
 	if (lag->lag_ost_avoid_bitmap) {
-		if (lod->lod_ost_count <= lag->lag_ost_avoid_size) {
+		if (new_ost_size <= lag->lag_ost_avoid_size) {
 			bitmap_zero(lag->lag_ost_avoid_bitmap,
 				    lag->lag_ost_avoid_size);
 		} else {
@@ -2664,19 +2672,13 @@ static int lod_prepare_avoidance(const struct lu_env *env,
 	}
 
 	if (!lag->lag_ost_avoid_bitmap) {
-		bitmap = bitmap_zalloc(lod->lod_ost_count, GFP_KERNEL);
+		bitmap = bitmap_zalloc(new_ost_size, GFP_KERNEL);
 		if (!bitmap)
 			return -ENOMEM;
 	}
 
 	if (!lag->lag_oss_avoid_array) {
-		/**
-		 * usually there are multiple OSTs in one OSS, but we don't
-		 * know the exact OSS number, so we choose a safe option,
-		 * using OST count to allocate the array to store the OSS
-		 * id.
-		 */
-		OBD_ALLOC_PTR_ARRAY(new_oss, lod->lod_ost_count);
+		OBD_ALLOC_PTR_ARRAY(new_oss, new_oss_size);
 		if (!new_oss) {
 			bitmap_free(bitmap);
 			return -ENOMEM;
@@ -2685,11 +2687,11 @@ static int lod_prepare_avoidance(const struct lu_env *env,
 
 	if (new_oss) {
 		lag->lag_oss_avoid_array = new_oss;
-		lag->lag_oaa_size = lod->lod_ost_count;
+		lag->lag_oaa_size = new_oss_size;
 	}
 	if (bitmap) {
 		lag->lag_ost_avoid_bitmap = bitmap;
-		lag->lag_ost_avoid_size = lod->lod_ost_count;
+		lag->lag_ost_avoid_size = new_ost_size;
 	}
 
 	return 0;
