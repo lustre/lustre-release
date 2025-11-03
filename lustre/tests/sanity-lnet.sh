@@ -2110,6 +2110,25 @@ EOF
 }
 run_test 152 "Check import of ip2nets with wildcard IP patterns"
 
+create_ipv4_range() {
+	local stepped=${1:-false}
+
+	local if0_ip=$(ip -o -4 a s ${INTERFACES[0]} | awk '{print $4}' |
+		       sed 's/\/.*//')
+	local if0_net=$(echo "$if0_ip" | cut -d. -f1-3)
+	local if0_host=$(echo "$if0_ip" | cut -d. -f4)
+	local range_start=$((if0_host - 4 < 0 ? 0 : if0_host - 4))
+	local range_end=$((if0_host + 4 > 255 ? 255 : if0_host + 4))
+
+	if ${stepped}; then
+		(((if0_host - range_start) % 2 == 0)) || range_start=${if0_host}
+
+		echo "${if0_net}.[${range_start}-${range_end}/2]"
+	else
+		echo "${if0_net}.[${range_start}-${range_end}]"
+	fi
+}
+
 test_153() {
 	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
 
@@ -2121,12 +2140,7 @@ test_153() {
 
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
 
-	local if0_ip=$(ip -o -4 a s ${INTERFACES[0]} | awk '{print $4}' |
-		       sed 's/\/.*//')
-	local if0_net=$(echo "$if0_ip" | cut -d. -f1-3)
-	local if0_host=$(echo "$if0_ip" | cut -d. -f4)
-	local range_start=$((if0_host - 2 < 1 ? 1 : if0_host - 2))
-	local range_end=$((if0_host + 2 > 254 ? 254 : if0_host + 2))
+	local ip_range=$(create_ipv4_range)
 
 	echo "Check import of ip2nets with IP address ranges"
 
@@ -2136,7 +2150,7 @@ ip2nets:
     interfaces:
         0: ${INTERFACES[0]}
     ip-range:
-        0: ${if0_net}.[${range_start}-${range_end}]
+        0: ${ip_range}
 EOF
 
 	do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
@@ -2156,14 +2170,7 @@ test_154() {
 
 	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
 
-	local if0_ip=$(ip -o -4 a s ${INTERFACES[0]} | awk '{print $4}' |
-		       sed 's/\/.*//')
-	local if0_net=$(echo "$if0_ip" | cut -d. -f1-3)
-	local if0_host=$(echo "$if0_ip" | cut -d. -f4)
-	local range_start=$((if0_host - 4 < 1 ? 1 : if0_host - 4))
-	local range_end=$((if0_host + 4 > 254 ? 254 : if0_host + 4))
-
-	(((if0_host - range_start) % 2 == 0)) || range_start=${if0_host}
+	local ip_range=$(create_ipv4_range true)
 
 	echo "Check import of ip2nets with stepped IP address ranges"
 
@@ -2173,7 +2180,7 @@ ip2nets:
     interfaces:
         0: ${INTERFACES[0]}
     ip-range:
-        0: ${if0_net}.[${range_start}-${range_end}/2]
+        0: ${ip_range}
 EOF
 
 	do_import_test "$TMP/sanity-lnet-$testnum.yaml" || return $?
