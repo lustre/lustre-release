@@ -3503,10 +3503,11 @@ static int lmv_rmfid(struct obd_export *exp, struct fid_array *fa,
 	}
 
 	/* split FIDs by targets */
-	OBD_ALLOC_PTR_ARRAY(fas, tgt_count);
+	OBD_ALLOC_PTR_ARRAY_LARGE(fas, tgt_count);
 	if (fas == NULL)
 		GOTO(out, rc = -ENOMEM);
-	OBD_ALLOC_PTR_ARRAY(rcs, tgt_count);
+
+	OBD_ALLOC_PTR_ARRAY_LARGE(rcs, tgt_count);
 	if (rcs == NULL)
 		GOTO(out_fas, rc = -ENOMEM);
 
@@ -3520,15 +3521,17 @@ static int lmv_rmfid(struct obd_export *exp, struct fid_array *fa,
 			continue;
 		}
 		LASSERT(idx < tgt_count);
-		if (!fas[idx])
-			OBD_ALLOC(fas[idx], offsetof(struct fid_array,
-				  fa_fids[fa->fa_nr]));
-		if (!fas[idx])
-			GOTO(out, rc = -ENOMEM);
-		if (!rcs[idx])
-			OBD_ALLOC_PTR_ARRAY(rcs[idx], fa->fa_nr);
-		if (!rcs[idx])
-			GOTO(out, rc = -ENOMEM);
+		if (!fas[idx]) {
+			OBD_ALLOC_LARGE(fas[idx], offsetof(struct fid_array,
+							   fa_fids[fa->fa_nr]));
+			if (!fas[idx])
+				GOTO(out_rcs, rc = -ENOMEM);
+		}
+		if (!rcs[idx]) {
+			OBD_ALLOC_PTR_ARRAY_LARGE(rcs[idx], fa->fa_nr);
+			if (!rcs[idx])
+				GOTO(out_rcs, rc = -ENOMEM);
+		}
 
 		fat = fas[idx];
 		fat->fa_fids[fat->fa_nr++] = fa->fa_fids[i];
@@ -3557,22 +3560,20 @@ static int lmv_rmfid(struct obd_export *exp, struct fid_array *fa,
 			j += fat->fa_nr;
 		}
 	}
+out_rcs:
+	for (i = 0; i < tgt_count; i++) {
+		if (fas[i])
+			OBD_FREE_LARGE(fas[i], offsetof(struct fid_array,
+							fa_fids[fa->fa_nr]));
+		if (rcs[i])
+			OBD_FREE_PTR_ARRAY_LARGE(rcs[i], fa->fa_nr);
+	}
+	OBD_FREE_PTR_ARRAY_LARGE(rcs, tgt_count);
+out_fas:
+	OBD_FREE_PTR_ARRAY_LARGE(fas, tgt_count);
+out:
 	if (set != _set)
 		ptlrpc_set_destroy(set);
-
-out:
-	for (i = 0; i < tgt_count; i++) {
-		if (fas && fas[i])
-			OBD_FREE(fas[i], offsetof(struct fid_array,
-						fa_fids[fa->fa_nr]));
-		if (rcs && rcs[i])
-			OBD_FREE_PTR_ARRAY(rcs[i], fa->fa_nr);
-	}
-	if (rcs)
-		OBD_FREE_PTR_ARRAY(rcs, tgt_count);
-out_fas:
-	if (fas)
-		OBD_FREE_PTR_ARRAY(fas, tgt_count);
 
 	RETURN(rc);
 }
