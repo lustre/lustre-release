@@ -2470,6 +2470,54 @@ static int find_mirror_id_by_pool(struct llapi_layout *layout, void *cbdata)
 	return LLAPI_LAYOUT_ITER_STOP;
 }
 
+struct parity_check_cbdata {
+	uint32_t	mirror_id;
+	bool		is_parity;
+};
+
+static int check_parity_mirror(struct llapi_layout *layout, void *cbdata)
+{
+	struct parity_check_cbdata *d = cbdata;
+	uint32_t mirror_id;
+	uint32_t flags;
+	int rc;
+
+	rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+	if (rc < 0)
+		return rc;
+	if (mirror_id != d->mirror_id)
+		return LLAPI_LAYOUT_ITER_CONT;
+
+	rc = llapi_layout_comp_flags_get(layout, &flags);
+	if (rc < 0)
+		return rc;
+
+	d->is_parity = !!(flags & LCME_FL_PARITY);
+	return LLAPI_LAYOUT_ITER_STOP;
+}
+
+/**
+ * is_parity_mirror() - Check if a mirror is a parity mirror.
+ * @layout:    Layout to check.
+ * @mirror_id: Mirror ID to check.
+ *
+ * A parity mirror has the LCME_FL_PARITY flag set on all its components.
+ * We only need to check the first component since either all components
+ * in a mirror are parity or none are (mixed parity mirrors are invalid).
+ *
+ * Return: true if mirror is a parity mirror, false otherwise.
+ */
+static bool is_parity_mirror(struct llapi_layout *layout, uint32_t mirror_id)
+{
+	struct parity_check_cbdata d = {
+		.mirror_id = mirror_id,
+		.is_parity = false,
+	};
+
+	llapi_layout_comp_iterate(layout, check_parity_mirror, &d);
+	return d.is_parity;
+}
+
 static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata)
 {
 	char buf[LOV_MAXPOOLNAME + 1];
@@ -2650,6 +2698,18 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 			fprintf(stderr,
 				"error %s: file '%s' does not contain mirror with id %u\n",
 				progname, fname, id);
+			goto free_layout;
+		}
+	}
+
+	/* Check if this is a parity mirror */
+	if (is_parity_mirror(layout, mirror_id)) {
+		/* Parity mirrors can only be split with -d (destroy) */
+		if (!(mflags & MF_DESTROY)) {
+			fprintf(stderr,
+				"error %s: mirror %u is a parity mirror and can only be destroyed with -d flag\n",
+				progname, mirror_id);
+			rc = -EINVAL;
 			goto free_layout;
 		}
 	}

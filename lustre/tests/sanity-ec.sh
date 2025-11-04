@@ -1690,7 +1690,7 @@ test_6e() {
 }
 run_test 6e "Write fails when only parity mirror is non-stale"
 
-test_7() {
+test_7a() {
 	enable_ec
 
 	local tf=$DIR/$tfile
@@ -1784,7 +1784,157 @@ test_7() {
 	echo "Final data mirror checksum: $sum1"
 	echo "Final parity mirror checksum: $sum2"
 }
-run_test 7 "nosync flag on parity mirror prevents resync updates"
+run_test 7a "nosync flag on parity mirror prevents resync updates"
+
+test_7b() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local ids
+
+	# Create file with EC
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+		error "setstripe failed"
+
+	verify_mirror_count $tf 2
+
+	# Get mirror IDs
+	ids=($($LFS getstripe $tf | awk '/lcme_mirror_id:/ {print $2}' |
+		sort -u | tr '\n' ' '))
+
+	(( ${#ids[@]} == 2 )) ||
+		error "expected 2 mirrors, got ${#ids[@]}"
+
+	# Determine which mirror is parity (has LCME_FL_PARITY flag)
+	local data_mirror_id=${ids[0]}
+	local parity_mirror_id=${ids[1]}
+	local flags=$($LFS getstripe --mirror-id=${ids[1]} $tf |
+		      awk '/lcme_flags:/ {print $2; exit}')
+
+	if [[ ! $flags =~ "parity" ]]; then
+		# First mirror is parity, swap them
+		data_mirror_id=${ids[1]}
+		parity_mirror_id=${ids[0]}
+	fi
+
+	# Verify we identified them correctly
+	flags=$($LFS getstripe --mirror-id=$parity_mirror_id $tf |
+		awk '/lcme_flags:/ {print $2; exit}')
+	[[ $flags =~ "parity" ]] ||
+		error "mirror $parity_mirror_id should be parity mirror"
+
+	# Try to split parity mirror without -d (should fail)
+	$LFS mirror split --mirror-id $parity_mirror_id $tf 2>&1 |
+		grep -q "parity mirror" ||
+		error "split without -d should fail for parity mirror"
+
+	# Verify mirror count unchanged
+	verify_mirror_count $tf 2
+
+	# Split parity mirror with -d (should succeed)
+	$LFS mirror split --mirror-id $parity_mirror_id -d $tf ||
+		error "split -d should succeed for parity mirror"
+
+	# Verify only data mirror remains
+	verify_mirror_count $tf 1
+
+	# Verify remaining mirror is the data mirror
+	local remaining_id=$($LFS getstripe $tf |
+			     awk '/lcme_mirror_id:/ {print $2; exit}')
+	(( remaining_id == data_mirror_id )) ||
+		error "remaining mirror should be data mirror"
+}
+run_test 7b "mirror split -d works for parity mirrors, regular split fails"
+
+test_7c() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local ids
+
+	# Create file with multiple components and EC
+	$LFS setstripe -E 128M --ec 4+2 -E -1 --ec 4+2 $tf ||
+		error "setstripe failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 4
+
+	# Get mirror IDs
+	ids=($($LFS getstripe $tf | awk '/lcme_mirror_id:/ {print $2}' |
+		sort -u | tr '\n' ' '))
+
+	(( ${#ids[@]} == 2 )) ||
+		error "expected 2 mirrors, got ${#ids[@]}"
+
+	# Find parity mirror
+	local parity_mirror_id
+	local flags=$($LFS getstripe --mirror-id=${ids[1]} $tf |
+		      awk '/lcme_flags:/ {print $2; exit}')
+
+	if [[ $flags =~ "parity" ]]; then
+		parity_mirror_id=${ids[1]}
+	else
+		parity_mirror_id=${ids[0]}
+	fi
+
+	# Split parity mirror with -d
+	$LFS mirror split --mirror-id $parity_mirror_id -d $tf ||
+		error "split -d failed for parity mirror"
+
+	# Verify only data mirror remains with 2 components
+	verify_mirror_count $tf 1
+	verify_comp_count $tf 2
+}
+run_test 7c "mirror split -d works for multi-component parity mirrors"
+
+test_7d() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local ids
+
+	# Create file with regular mirror + EC mirror
+	$LFS mirror create -N -E -1 -c 2 \
+			   -N -E -1 -c 4 --ec 4+2 $tf ||
+		error "mirror create failed"
+
+	verify_mirror_count $tf 3
+
+	# Get all mirror IDs
+	ids=($($LFS getstripe $tf | awk '/lcme_mirror_id:/ {print $2}' |
+		sort -u | tr '\n' ' '))
+
+	(( ${#ids[@]} == 3 )) ||
+		error "expected 3 mirrors, got ${#ids[@]}"
+
+	# Find parity mirror (should be the last one)
+	local parity_mirror_id
+	for id in "${ids[@]}"; do
+		local flags=$($LFS getstripe --mirror-id=$id $tf |
+			      awk '/lcme_flags:/ {print $2; exit}')
+		if [[ $flags =~ "parity" ]]; then
+			parity_mirror_id=$id
+			break
+		fi
+	done
+
+	[[ -n $parity_mirror_id ]] ||
+		error "could not find parity mirror"
+
+	# Split parity mirror with -d
+	$LFS mirror split --mirror-id $parity_mirror_id -d $tf ||
+		error "split -d failed for parity mirror"
+
+	# Verify 2 mirrors remain (2 data mirrors)
+	verify_mirror_count $tf 2
+}
+run_test 7d "mirror split -d works with mixed regular and EC mirrors"
 
 test_10() {
 	local tf=${DIR}/${tdir}/$tfile
