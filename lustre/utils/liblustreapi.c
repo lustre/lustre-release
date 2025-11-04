@@ -3153,7 +3153,7 @@ static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		if (yaml)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "lmv_objects:\n");
-		else if (lum->lum_stripe_count >= 0)
+		else if (lum->lum_stripe_count > 0)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "mdtidx\t\t FID[seq:oid:ver]\n");
 

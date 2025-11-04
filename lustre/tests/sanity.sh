@@ -7082,6 +7082,23 @@ test_56bc() {
 }
 run_test 56bc "check '$LFS getdirstripe --yaml' params are valid"
 
+test_56bd() {
+	(( $MDSCOUNT >= 2 )) || skip "need >= 2 MDTs"
+
+	local dir1=$DIR/$tdir.dir1
+	local dir2=$DIR/$tdir.dir2
+
+	$LFS setdirstripe -c 1 $dir1 || error "failed to setstripe"
+	$LFS setdirstripe -c 2 $dir2 || error "failed to setstripe"
+
+	$LFS getdirstripe $dir1 | grep -q "mdtidx" &&
+		error "getdirstripe printed component header when it should not have"
+
+	$LFS getdirstripe $dir2 | grep -q "mdtidx" ||
+		error "getdirstripe did not print component header when it should have"
+}
+run_test 56bd "check '$LFS getdirstripe' output contains header only when needed"
+
 test_56c() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
