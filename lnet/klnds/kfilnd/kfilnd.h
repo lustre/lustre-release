@@ -780,11 +780,13 @@ struct kfilnd_transaction {
 	/* Set to true if @tn_sgt is mapped */
 	bool			tn_sgt_mapped;
 	struct sg_table		tn_sgt;
+	/* The number of segments originally allocated */
+	unsigned int		tn_sgt_alloc_nents;
 	enum dma_data_direction	tn_dmadir;
 #else
 	struct bio_vec		tn_kiov[LNET_MAX_IOV];
-#endif
 	unsigned int		tn_num_iovec;
+#endif
 
 	/* Force RDMA */
 	bool			tn_gpu;

@@ -222,7 +222,12 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 
 	KFILND_TN_DEBUG(tn, "%s in %u bytes in %u frags",
 			msg_type_to_str(lnd_msg_type), tn->tn_nob,
-			tn->tn_num_iovec);
+#ifdef HAVE_KFI_SGL
+			tn->tn_sgt.nents
+#else
+			tn->tn_num_iovec
+#endif
+			);
 
 	/* Start the state machine processing this transaction */
 	kfilnd_tn_event_handler(tn, event, 0);
@@ -353,7 +358,12 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 
 	KFILND_TN_DEBUG(tn, "%s in %u bytes in %u frags",
 			msg_type_to_str(rxmsg->type), tn->tn_nob,
-			tn->tn_num_iovec);
+#ifdef HAVE_KFI_SGL
+			tn->tn_sgt.nents
+#else
+			tn->tn_num_iovec
+#endif
+			);
 
 	kfilnd_tn_event_handler(tn, event, status);
 

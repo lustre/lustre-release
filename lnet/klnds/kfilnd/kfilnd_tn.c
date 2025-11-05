@@ -1559,6 +1559,15 @@ void kfilnd_tn_event_handler(struct kfilnd_transaction *tn,
 		mutex_unlock(&tn->tn_lock);
 }
 
+#ifdef HAVE_KFI_SGL
+static void kfilnd_tn_sgt_free(struct kfilnd_transaction *tn)
+{
+	/* Restore orig_nents before free */
+	tn->tn_sgt.orig_nents = tn->tn_sgt_alloc_nents;
+	sg_free_table(&tn->tn_sgt);
+}
+#endif
+
 /**
  * kfilnd_tn_free() - Free a transaction.
  */
@@ -1575,7 +1584,7 @@ void kfilnd_tn_free(struct kfilnd_transaction *tn)
 
 #ifdef HAVE_KFI_SGL
 	if (tn->tn_sgt_mapped)
-		sg_free_table(&tn->tn_sgt);
+		kfilnd_tn_sgt_free(tn);
 #endif
 
 	/* Free send message buffer if needed. */
@@ -1883,6 +1892,12 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 
 	tn->tn_dmadir = tn->sink_buffer ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 
+	/* Save orig_nents so it can be restored prior to sg_free_table() */
+	tn->tn_sgt_alloc_nents = tn->tn_sgt.orig_nents;
+
+	/* dma_[un]map_sgtable() expects all orig_nents segments to be
+	 * populated, but only sg_count of them are actually populated.
+	 */
 	tn->tn_sgt.orig_nents = sg_count;
 
 	if (tn->tn_gpu) {
@@ -1899,21 +1914,18 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 		CERROR("%s: %s failed rc = %d\n", ni->ni_interface,
 		       tn->tn_gpu ? "lnet_rdma_map_sg_attrs" :
 		       "dma_map_sgtable", rc);
-		sg_free_table(&tn->tn_sgt);
+		kfilnd_tn_sgt_free(tn);
 		return rc;
 	}
 
 	/* Set tn_sgt_mapped so kfilnd_tn_free() will free tn_sgt */
 	tn->tn_sgt_mapped = true;
 
-	/* tn_num_iovec used for convenience in some debug messages */
-	tn->tn_num_iovec = tn->tn_sgt.nents;
-
 	CDEBUG(D_NET,
-	       "tn %p tn_sgt %p sgl %p dir %u nob %d orig_nents %u nents %u gpu %s rc %d\n",
+	       "tn %p tn_sgt %p sgl %p dir %u nob %d alloc_nents %u orig_nents %u nents %u gpu %s\n",
 	       tn, &tn->tn_sgt, tn->tn_sgt.sgl, tn->tn_dmadir, tn->tn_nob,
-	       tn->tn_sgt.orig_nents, tn->tn_sgt.nents, tn->tn_gpu ? "y" : "n",
-	       rc);
+	       tn->tn_sgt_alloc_nents, tn->tn_sgt.orig_nents, tn->tn_sgt.nents,
+	       tn->tn_gpu ? "y" : "n");
 
 	return 0;
 }
