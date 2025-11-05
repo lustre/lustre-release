@@ -668,6 +668,50 @@ static ssize_t writethrough_max_io_mb_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(writethrough_max_io_mb);
 
+static ssize_t inflight_io_log2_show(struct kobject *kobj,
+					  struct attribute *attr, char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 osd->od_brw_stats.bs_inflight_io_log2);
+}
+
+static ssize_t inflight_io_log2_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+	struct brw_stats *brw_stats = &osd->od_brw_stats;
+	bool val;
+	int rc;
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	if (brw_stats->bs_inflight_io_log2 != val) {
+		brw_stats->bs_inflight_io_log2 = val;
+		/* Clear stats on change to avoid mixed histogram data */
+		lprocfs_oh_clear_pcpu(&brw_stats->bs_hist[BRW_R_RPC_HIST]);
+		lprocfs_oh_clear_pcpu(&brw_stats->bs_hist[BRW_W_RPC_HIST]);
+	}
+	return count;
+}
+LUSTRE_RW_ATTR(inflight_io_log2);
+
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 52, 0)
 static ssize_t index_in_idif_show(struct kobject *kobj, struct attribute *attr,
 				  char *buf)
@@ -834,6 +878,7 @@ static struct attribute *ldiskfs_attrs[] = {
 	&lustre_attr_readcache_max_filesize.attr,
 	&lustre_attr_readcache_max_io_mb.attr,
 	&lustre_attr_writethrough_max_io_mb.attr,
+	&lustre_attr_inflight_io_log2.attr,
 	NULL,
 };
 

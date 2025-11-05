@@ -788,6 +788,7 @@ static void display_brw_stats(struct seq_file *seq, const char *name,
 	}
 }
 
+static const char disk_inflight_io_name[] = "disk I/Os in flight";
 static const struct brw_stats_props brw_props[] = {
 	{ .bsp_name	= "pages per bulk r/w",
 	  .bsp_units	= "rpcs",
@@ -801,9 +802,9 @@ static const struct brw_stats_props brw_props[] = {
 	{ .bsp_name	= "disk fragmented I/Os",
 	  .bsp_units	= "ios",
 	  .bsp_scale	= false				},
-	{ .bsp_name	= "disk I/Os in flight",
+	{ .bsp_name	= disk_inflight_io_name,
 	  .bsp_units	= "ios",
-	  .bsp_scale	= false				},
+	  .bsp_scale	= false                         },
 	{ .bsp_name	= "I/O time (1/1000s)",
 	  .bsp_units	= "ios",
 	  .bsp_scale	= true				},
@@ -825,14 +826,21 @@ static int brw_stats_seq_show(struct seq_file *seq, void *v)
 			     ":", true, "");
 
 	for (i = 0; i < ARRAY_SIZE(brw_stats->bs_props); i++) {
+		bool scale = brw_stats->bs_props[i].bsp_scale;
+
 		if (!brw_stats->bs_props[i].bsp_name)
 			continue;
+
+		if (!strcmp(brw_stats->bs_props[i].bsp_name,
+			    disk_inflight_io_name)) {
+			scale = brw_stats->bs_inflight_io_log2;
+		}
 
 		display_brw_stats(seq, brw_stats->bs_props[i].bsp_name,
 				  brw_stats->bs_props[i].bsp_units,
 				  &brw_stats->bs_hist[i * 2],
 				  &brw_stats->bs_hist[i * 2 + 1],
-				  brw_stats->bs_props[i].bsp_scale);
+				  scale);
 	}
 
 	return 0;

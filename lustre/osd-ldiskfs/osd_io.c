@@ -294,14 +294,26 @@ static void record_start_io(struct osd_iobuf *iobuf, int size)
 
 	if (iobuf->dr_rw == 0) {
 		atomic_inc(&osd->od_r_in_flight);
-		lprocfs_oh_tally_pcpu(&h->bs_hist[BRW_R_RPC_HIST],
-				 atomic_read(&osd->od_r_in_flight));
+		if (h->bs_inflight_io_log2)
+			lprocfs_oh_tally_log2_pcpu(
+				&h->bs_hist[BRW_R_RPC_HIST],
+				atomic_read(&osd->od_r_in_flight));
+		else
+			lprocfs_oh_tally_pcpu(
+				&h->bs_hist[BRW_R_RPC_HIST],
+				atomic_read(&osd->od_r_in_flight));
 		lprocfs_oh_tally_log2_pcpu(&h->bs_hist[BRW_R_DISK_IOSIZE],
 					   size);
 	} else if (iobuf->dr_rw == 1) {
 		atomic_inc(&osd->od_w_in_flight);
-		lprocfs_oh_tally_pcpu(&h->bs_hist[BRW_W_RPC_HIST],
-				 atomic_read(&osd->od_w_in_flight));
+		if (h->bs_inflight_io_log2)
+			lprocfs_oh_tally_log2_pcpu(
+				&h->bs_hist[BRW_W_RPC_HIST],
+				atomic_read(&osd->od_w_in_flight));
+		else
+			lprocfs_oh_tally_pcpu(
+				&h->bs_hist[BRW_W_RPC_HIST],
+				atomic_read(&osd->od_w_in_flight));
 		lprocfs_oh_tally_log2_pcpu(&h->bs_hist[BRW_W_DISK_IOSIZE],
 					   size);
 	} else {

@@ -398,6 +398,7 @@ struct brw_stats {
 	ktime_t			bs_init;
 	struct obd_hist_pcpu	bs_hist[BRW_RW_STATS_NUM];
 	struct brw_stats_props	bs_props[BRW_RW_STATS_NUM / 2];
+	bool			bs_inflight_io_log2;
 };
 
 int lprocfs_init_brw_stats(struct brw_stats *brw_stats);
