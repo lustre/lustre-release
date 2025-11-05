@@ -3906,7 +3906,7 @@ static int mdd_xattrs_migrate_prep(const struct lu_env *env,
 
 	ENTRY;
 
-	if (S_ISREG(attr->la_mode)) {
+	if (S_ISREG(mdd_object_type(sobj))) {
 		LASSERT(tobj != NULL);
 
 		fid_to_lmm_oi(mdd_object_fid(tobj), &oi);
