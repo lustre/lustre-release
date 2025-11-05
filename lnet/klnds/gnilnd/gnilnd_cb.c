@@ -394,7 +394,7 @@ kgnilnd_cksum_kiov(unsigned int nkiov, struct bio_vec *kiov,
 				 "odd fraglen %u on nkiov %d, nob %u bv_len %u offset %u kiov 0x%p\n",
 				 fraglen, nkiov, nob, kiov->bv_len,
 				 offset, kiov);
-			kaddr = kmap_local_page(kiov->bv_page)
+			kaddr = kmap_local_page(kiov->bv_page);
 			addr = kaddr + kiov->bv_offset + offset;
 			tmpck = _kgnilnd_cksum(cksum, addr, fraglen);
 

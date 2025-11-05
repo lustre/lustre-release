@@ -72,8 +72,6 @@ kgnilnd_nl_get(int cmd, struct sk_buff *msg, int type, void *data,
 static int
 kgnilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 {
-	struct lnet_ni *ni = data;
-
 	if (cmd != LNET_CMD_NETS)
 		return -EOPNOTSUPP;
 
