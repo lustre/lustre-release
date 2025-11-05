@@ -937,13 +937,12 @@ out:
 
 void osd_procfs_fini(struct osd_device *osd)
 {
-	lprocfs_fini_brw_stats(&osd->od_brw_stats);
-
-	if (osd->od_stats)
-		lprocfs_stats_free(&osd->od_stats);
-
 	if (osd->od_proc_entry)
 		lprocfs_remove(&osd->od_proc_entry);
 
 	dt_tunables_fini(&osd->od_dt_dev);
+
+	lprocfs_fini_brw_stats(&osd->od_brw_stats);
+	if (osd->od_stats)
+		lprocfs_stats_free(&osd->od_stats);
 }
