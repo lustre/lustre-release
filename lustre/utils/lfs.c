@@ -30,6 +30,7 @@
 #include <grp.h>
 #include <inttypes.h>
 #include <libgen.h>
+#include <math.h>
 #include <mntent.h>
 #include <pwd.h>
 #include <regex.h>
@@ -222,6 +223,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
 	"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"			\
+	"\t\t[--auto|--auto-stripe|-A]\n"				\
 	"\t\t[--block|-b] [--non-block|-n]\n"				\
 	"\t\t[--lustre-dir=LUSTRE_MOUNT_POINT --fid]\n"			\
 	"\t\t[--non-direct|-D] [--verbose|-v] FILENAME\n"		\
@@ -2727,6 +2729,128 @@ free_layout:
 }
 
 static inline
+int calc_stripe(const char *filename, off_t *size, off_t *obj_max_kb,
+		int cap, int min_free, int max_free, const char *pool)
+{
+	off_t filekb = *size / 1024;
+	off_t filegb = filekb / 1048576;
+	off_t stripe_count = 1;
+	off_t ost_max_count = 0;
+
+	/* Files up to 1GB will have 1 stripe */
+	if (filegb < 1)
+		return 1;
+
+	/* Calculate stripe count using sqrt(size_in_GB) + 1 */
+	stripe_count = (off_t)(sqrt((double)filegb) + 1);
+
+	if (*obj_max_kb == 0) {
+		char mntdir[PATH_MAX] = {'\0'}, fsname[PATH_MAX] = "";
+		char *poolname = NULL;
+		struct obd_statfs stat_buf;
+		struct obd_uuid uuid_buf;
+		off_t ost_min_kb = LLONG_MAX;
+		__u32 index;
+		int fd, rc;
+		off_t avail;
+
+		/* Calculate cap on object size at 1% of smallest OST
+		 * but only include OSTs that have 256MB+ available space
+		 */
+		rc = llapi_search_mounts(filename, 0, mntdir, fsname);
+		if (rc < 0) {
+			fprintf(stderr,
+				"warning: unable to find mount point for '%s'\n",
+				filename);
+			return stripe_count;
+		}
+
+		fd = open(mntdir, O_RDONLY);
+		if (fd < 0) {
+			fprintf(stderr,
+				"warning: unable to open mount point '%s': %s\n",
+				mntdir, strerror(errno));
+			return stripe_count;
+		}
+
+		if (pool) {
+			poolname = strchr(pool, '.');
+			if (poolname) {
+				if (strncmp(fsname, pool,
+					    strlen(fsname)) != 0) {
+					fprintf(stderr,
+						"warning: filesystem name mismatch in pool '%s'\n",
+						pool);
+					close(fd);
+					return stripe_count;
+				}
+				poolname++;
+			} else {
+				poolname = (char *)pool;
+			}
+		}
+
+		for (index = 0; index < LOV_ALL_STRIPES; index++) {
+			memset(&stat_buf, 0, sizeof(struct obd_statfs));
+			memset(&uuid_buf, 0, sizeof(struct obd_uuid));
+
+			rc = llapi_obd_fstatfs(fd, LL_STATFS_LOV, index,
+					       &stat_buf, &uuid_buf);
+			if (rc == -ENODEV)
+				break;
+			if (rc == -EAGAIN || rc == -ENODATA)
+				continue;
+			if (rc < 0)
+				continue;
+
+			if (poolname && llapi_search_ost(fsname, poolname,
+							 obd_uuid2str(&uuid_buf)) != 1)
+				continue;
+
+			avail = (stat_buf.os_bavail * stat_buf.os_bsize) >> 10;
+			if (max_free && avail > max_free)
+				avail = max_free;
+			if (avail >= min_free) {
+				ost_max_count++;
+				if (avail < ost_min_kb)
+					ost_min_kb = avail;
+			}
+		}
+
+		close(fd);
+		if (ost_max_count == 0)
+			return -1;
+
+		if (ost_min_kb == LLONG_MAX) {
+			fprintf(stderr,
+				"warning: unable to determine minimum OST size, object size not capped\n");
+				*obj_max_kb = 0;
+		} else {
+			*obj_max_kb = ost_min_kb / cap;
+		}
+	}
+
+	/* Check if obj_max_kb is 0 after calculation attempt */
+	if (*obj_max_kb == 0) {
+		fprintf(stderr,
+			"warning: unable to determine minimum OST size, object size not capped\n");
+		return stripe_count;
+	}
+
+	/* If disk usage would exceed the cap, increase the number of stripes.
+	 * Round up to the nearest MB to ensure file will fit.
+	 */
+	if (*obj_max_kb > 0 && filekb > stripe_count * (*obj_max_kb))
+		stripe_count = (filekb + (*obj_max_kb) - 1024) / (*obj_max_kb);
+
+	/* Limit the count to the number of eligible OSTs */
+	if (ost_max_count > 0 && stripe_count > ost_max_count)
+		return ost_max_count;
+
+	return stripe_count >= 1 ? stripe_count : 1;
+}
+
+static inline
 int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   __u16 *mirror_ids, int ids_nr,
 			   long stats_interval_sec, long bandwidth_bytes_sec,
@@ -3742,6 +3866,8 @@ enum {
 	LFS_FILES_FROM,
 	LFS_THREAD_OPT,
 	LFS_LUSTRE_DIR,
+	LFS_MIN_FREE_OPT,
+	LFS_MAX_FREE_OPT,
 };
 
 #ifndef LCME_USER_MIRROR_FLAGS
@@ -3826,6 +3952,15 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	unsigned long long bandwidth_unit = ONE_MB;
 	long stats_interval_sec = 0;
 	bool null_mode = false;
+	bool stripe_count_set = false;
+	bool min_free_set = false;
+	bool cap_set = false;
+	bool comp_end_set = false;
+	bool auto_stripe = false;
+	off_t obj_max_kb = 0;
+	int cap = 100;
+	int min_free = 256 * 1024;
+	int max_free = 0;
 	const char *files_from = NULL;
 	FILE *files_from_fp = NULL;
 	int delim = '\n';
@@ -3878,6 +4013,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = LFS_LUSTRE_DIR,
 		.name = "lustre-dir",		.has_arg = required_argument},
 	{ .val = '0',	.name = "null",		.has_arg = no_argument },
+	{ .val = 'A',	.name = "auto-stripe",	.has_arg = no_argument },
 	/* find { .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
 		/* --block is only valid in migrate mode */
 	{ .val = 'b',	.name = "block",	.has_arg = no_argument },
@@ -3908,11 +4044,13 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "comp-id",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "component-id",	.has_arg = required_argument},
+	{ .val = 'K',	.name = "auto-cap",	.has_arg = required_argument},
 /* find { .val = 'l',	.name = "lazy",		.has_arg = no_argument }, */
-	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
+	{ .val = 'L',	.name = "layout",	.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument},
+	{ .val = 'M',	.name = "min-free",	.has_arg = required_argument},
 	/* --non-block is only valid in migrate mode */
 	{ .val = 'n',	.name = "non-block",	.has_arg = no_argument },
 	{ .val = 'N',	.name = "mirror-count",	.has_arg = optional_argument},
@@ -3935,10 +4073,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument},
 	{ .val = 'W',  .name = "bandwidth-limit", .has_arg = required_argument},
 	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
+	{ .val = 'X',	.name = "max-free",	.has_arg = required_argument},
 /* dirstripe { .val = 'X',.name = "max-inherit",.has_arg = required_argument }*/
-	{ .val = 'y',	.name = "yaml",		.has_arg = required_argument },
-	{ .val = 'z',   .name = "ext-size",	.has_arg = required_argument},
-	{ .val = 'z',   .name = "extension-size", .has_arg = required_argument},
+	{ .val = 'y',	.name = "yaml",		.has_arg = required_argument},
+	{ .val = 'z',	.name = "ext-size",	.has_arg = required_argument},
+	{ .val = 'z',	.name = "extension-size", .has_arg = required_argument},
 	{ .val = LFS_MIGRATE_NOFIX, .name = "clear-fixed", .has_arg = no_argument},
 	{ .name = NULL } };
 
@@ -3966,7 +4105,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	}
 
 	while ((c = getopt_long(argc, argv,
-				"0bc:C:dDE:f:FhH:i:I:m:N::no:p:L:s:S:vx:W:y:z:",
+				"0Abc:C:dDE:f:FhH:i:I:K:m:M:N::no:p:L:s:S:vx:X:W:y:z:",
 				long_opts, NULL)) >= 0) {
 		size_units = 1;
 		switch (c) {
@@ -4134,6 +4273,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case '0':
 			null_mode = true;
 			break;
+		case 'A':
+			auto_stripe = true;
+			break;
 		case 'b':
 			if (!migrate_mode) {
 				fprintf(stderr,
@@ -4157,7 +4299,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
 			/* only allow count -2..-32 for overstriped files */
-			if (errno != 0 || *end != '\0'|| optarg == end ||
+			if (errno != 0 || *end != '\0' || optarg == end ||
 			    lsa.lsa_stripe_count <
 				(overstriped ? LLAPI_OVERSTRIPE_COUNT_MAX :
 					       LLAPI_OVERSTRIPE_COUNT_MIN) ||
@@ -4175,6 +4317,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				lsa.lsa_stripe_count = LLAPI_LAYOUT_WIDE_MIN -
 					(lsa.lsa_stripe_count + 1);
 			}
+			stripe_count_set = true;
 			break;
 		case 'd':
 			if (migrate_mode) {
@@ -4203,6 +4346,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			migration_flags |= LLAPI_MIGRATION_NONDIRECT;
 			break;
 		case 'E':
+			comp_end_set = true;
 			if (lsa.lsa_comp_end != 0) {
 				result = comp_args_to_layout(lpp, &lsa, true);
 				if (result) {
@@ -4298,6 +4442,16 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			has_m_file = true;
 			break;
+		case 'K':
+			cap = atoi(optarg);
+			cap_set = true;
+			if (cap <= 0) {
+				fprintf(stderr,
+					"%s %s: invalid -K|--auto-cap value '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
+			}
+			break;
 		case 'L':
 			if (strcmp(argv[optind - 1], "mdt") == 0) {
 				/* Can be only the first component */
@@ -4345,6 +4499,16 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			lsa.lsa_tgts = tgts;
 			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
 				lsa.lsa_stripe_off = tgts[0];
+			break;
+		case 'M':
+			min_free = atoi(optarg);
+			min_free_set = true;
+			if (min_free < 0) {
+				fprintf(stderr,
+					"%s %s: invalid min-free value '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
+			}
 			break;
 		case 'n':
 			if (!migrate_mode) {
@@ -4503,7 +4667,7 @@ create_mirror:
 				goto usage_error;
 			}
 			migrate_mdt_param.fp_verbose = VERBOSE_DETAIL;
-			migration_flags = LLAPI_MIGRATION_VERBOSE;
+			migration_flags |= LLAPI_MIGRATION_VERBOSE;
 			break;
 		case 'x':
 			xattr = optarg;
@@ -4520,6 +4684,15 @@ create_mirror:
 					"error: %s: bad value for bandwidth '%s'\n",
 					argv[0], optarg);
 				goto error;
+			}
+			break;
+		case 'X':
+			max_free = atoi(optarg);
+			if (max_free < 0) {
+				fprintf(stderr,
+					"%s %s: invalid max-free value '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
 			}
 			break;
 		case 'y':
@@ -4548,6 +4721,41 @@ create_mirror:
 	}
 
 	fname = argv[optind];
+
+	if (cap_set && (!migrate_mode || !auto_stripe)) {
+		fprintf(stderr,
+			"%s %s: -K|--auto-cap valid only for migrate command with --auto-stripe\n",
+			progname, argv[0]);
+		goto usage_error;
+	}
+
+	if (max_free > 0 && (!migrate_mode || !auto_stripe)) {
+		fprintf(stderr,
+			"%s %s: --max-free valid only for migrate command with --auto-stripe\n",
+			progname, argv[0]);
+		goto usage_error;
+	}
+
+	if (min_free_set && (!migrate_mode || !auto_stripe)) {
+		fprintf(stderr,
+			"%s %s: --min-free valid only for migrate command with --auto-stripe\n",
+			progname, argv[0]);
+		goto usage_error;
+	}
+
+	if (stripe_count_set && auto_stripe) {
+		fprintf(stderr,
+			"%s %s: -c|--stripe-count incompatible with -A|--auto-stripe\n",
+			progname, argv[0]);
+			goto usage_error;
+	}
+
+	if (comp_end_set && auto_stripe) {
+		fprintf(stderr,
+			"%s %s: -E|--component-end incompatible with -A|--auto-stripe\n",
+			progname, argv[0]);
+		goto usage_error;
+	}
 
 	/* for 'lfs migrate' and 'lfs mirror extend' command,
 	 *
@@ -5031,6 +5239,54 @@ create_mirror:
 					result = -errno;
 					goto error;
 				}
+			}
+
+			/* Handle auto-striping */
+			if (auto_stripe) {
+				struct stat st;
+				int calc_stripe_count;
+
+				result = stat(fname, &st);
+				if (result) {
+					fprintf(stderr,
+						"%s: cannot stat file '%s': %s\n",
+						progname, fname,
+						strerror(errno));
+					result = -errno;
+					goto error;
+				}
+
+				/*
+				 * obj_max_kb is passed by reference to allow
+				 * calc_stripe() to calculate and return the
+				 * maximum object size per OST for subsequent
+				 * calls to this function.
+				 */
+				calc_stripe_count =
+					calc_stripe(fname, &st.st_size,
+						    &obj_max_kb, cap, min_free,
+						    max_free,
+						    lsa.lsa_pool_name);
+
+				if (calc_stripe_count < 0) {
+					fprintf(stderr,
+						"%s: auto-striping failed for '%s'\n",
+						progname, fname);
+					result = -EINVAL;
+					goto error;
+				}
+
+				/* Update stripe count in param */
+				param->lsp_stripe_count = calc_stripe_count;
+
+				if (layout) {
+					llapi_layout_free(layout);
+					layout = NULL;
+				}
+
+				if (migration_flags & LLAPI_MIGRATION_VERBOSE)
+					printf("%s: auto-striping set stripe count to %d\n",
+					       fname, calc_stripe_count);
 			}
 
 			result = lfs_migrate(fname, migration_flags, param,

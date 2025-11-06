@@ -5,6 +5,13 @@ lfs-migrate \- migrate files or directories between MDTs or OSTs.
 .SY "lfs migrate"
 .RB [ -h ]
 .RB [ -v ]
+.RB [ -A
+.RB [ -K
+.IR CAP ]
+.RB [ -M
+.IR MIN_FREE ]
+.RB [ -X
+.I MAX_FREE ]]
 .RI [ SETSTRIPE_OPTIONS " ... ]"
 .IR FILES_FROM
 .SY "lfs migrate"
@@ -68,13 +75,31 @@ will copy the data from the existing file(s) using the new layout parameters
 to the new OST(s). In contrast,
 .B lfs setstripe
 is used for creating new (empty) files with the specified layout.
-For OST object migration, there additional options available:
+For OST object migration, there are additional options available:
 .PP
 If setstripe is restricted to specified users, this also applies to
 .B lfs migrate.
 See
 .BR lfs-setstripe (1)
 for details.
+.TP
+.B -A
+Automatically determine the stripe count for the file, using the algorithm
+count = sqrt(filesize_in_GB) + 1. This option may not be specified at the
+same time as the
+.B -c
+or
+.B -R
+options.
+.TP
+.BI -K " CAP"
+When
+.B -A
+is set, limit the migrated file to use on each OST at most
+.RI 1/ CAP
+of the available space of the smallest OST. If this option is not
+set, a default value of 100 is used, limiting the object size to 1% of available
+space.
 .TP
 .BR -b ", " --block
 Block access to the file by other applications during data migration
@@ -118,6 +143,23 @@ The mount point of Lustre file system on which FIDs are.
 If there is only one mounted Lustre file system, this option is not necessary.
 This option must be specified together with
 .BR --fid .
+.TP
+.BR -M ", " --min-free \fIMIN_FREE
+When
+.B -A
+is set, only consider OSTs with free space greater than the
+.I MIN_FREE
+value to be available for migration. The value is specified in
+KB. If this option is not set, a default of 256MB is used.
+.TP
+.BR -X ", " --max-free \fIMAX_FREE
+When
+.B -A
+is set,
+.I MAX_FREE
+is the maximum amount of free space that can be considered available
+for the migration of the file on each OST. The value is specified in KB.
+This option is useful for testing, by simulating OSTs that are nearly full.
 .TP
 .BR -n ", " --non-block
 Abort migration if concurrent file access is detected. This can be
@@ -283,6 +325,24 @@ into a new layout with 2 stripes:
 .EX
 .RS
 .B # lfs migrate -c 2 /mnt/lustre/file1
+.RE
+.EE
+.PP
+This migrates
+.B file2
+using automatic striping (stripe count calculated based on file size):
+.EX
+.RS
+.B # lfs migrate -A /mnt/lustre/file2
+.RE
+.EE
+.PP
+This migrates
+.B file3
+using automatic striping with custom capacity limits (5% of OST space):
+.EX
+.RS
+.B # lfs migrate -A -K 20 /mnt/lustre/file3
 .RE
 .EE
 .PP

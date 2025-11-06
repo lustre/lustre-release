@@ -8292,7 +8292,7 @@ test_56wa() {
 	(( OSTCOUNT <= 1 )) || expected=$((OSTCOUNT - 1))
 
 	# lfs_migrate file
-	local cmd="$LFS_MIGRATE -y -v -c $expected $dir/file1"
+	local cmd="$LFS migrate -v -c $expected $dir/file1"
 
 	echo "$cmd"
 	eval $cmd || error "$cmd failed"
@@ -8471,13 +8471,9 @@ test_56wc() {
 		error "incompatible -R and -E options not detected"
 	$LFS_MIGRATE -R -A "$file1" &&
 		error "incompatible -R and -A options not detected"
-	$LFS_MIGRATE -A -c 1 "$file1" &&
+	$LFS migrate -A -c 1 "$file1" &> /dev/null &&
 		error "incompatible -A and -c options not detected"
-	$LFS_MIGRATE -A -S 1M "$file1" &&
-		error "incompatible -A and -S options not detected"
-	$LFS_MIGRATE -A -p pool "$file1" &&
-		error "incompatible -A and -p options not detected"
-	$LFS_MIGRATE -A -E eof -c 1 "$file1" &&
+	$LFS migrate -A -E eof -c 1 "$file1" &> /dev/null &&
 		error "incompatible -A and -E options not detected"
 	echo "done."
 
@@ -8493,9 +8489,9 @@ test_56wc() {
 
 	# Ensure long options are supported
 	echo -n "Verifying long options supported..."
-	$LFS_MIGRATE --non-block "$file1" ||
+	$LFS migrate --non-block "$file1" ||
 		error "long option without argument not supported"
-	$LFS_MIGRATE --stripe-size 512K "$file1" ||
+	$LFS migrate --stripe-size 512K "$file1" ||
 		error "long option with argument not supported"
 	cur_ssize=$($LFS getstripe -S "$file1")
 	(( cur_ssize == 524288 )) ||
@@ -8507,7 +8503,7 @@ test_56wc() {
 
 	if (( OSTCOUNT > 1 )); then
 		echo -n "Verifying explicit stripe count can be set..."
-		$LFS_MIGRATE -c 2 "$file1" || error "migrate failed"
+		$LFS migrate -c 2 "$file1" || error "migrate failed"
 		cur_scount=$($LFS getstripe -c "$file1")
 		(( cur_scount == 2 )) || error "migrate -c $cur_scount != 2"
 		[[ "$(md5sum $file1)" == "$md5" ]] ||
@@ -8546,7 +8542,7 @@ test_56wc() {
 	orig_ssize=$($LFS getstripe -S "$file1" 2>/dev/null)
 	$LFS setstripe -S 2M -c 1 "$DIR/$tdir" &> /dev/null ||
 		error "cannot set stripe on parent directory"
-	$LFS_MIGRATE "$file1" || error "migrate failed"
+	$LFS migrate "$file1" || error "migrate failed"
 	cur_ssize=$($LFS getstripe -S "$file1")
 	(( cur_ssize == orig_ssize )) ||
 		error "migrate by default $cur_ssize != $orig_ssize"
@@ -8555,7 +8551,7 @@ test_56wc() {
 
 	# Ensure file name properly detected when final option has no argument
 	echo -n "Verifying file name properly detected..."
-	$LFS_MIGRATE "$file1" ||
+	$LFS migrate "$file1" ||
 		error "file name interpreted as option argument"
 	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (7)"
 	echo "done."
@@ -8563,7 +8559,7 @@ test_56wc() {
 	# Ensure PFL arguments are passed through properly
 	echo -n "Verifying PFL options passed through..."
 	new_scount=$(((OSTCOUNT + 1) / 2))
-	$LFS_MIGRATE -E 1M -c 1 -E 16M -c $new_scount -E eof -c -1 "$file1" ||
+	$LFS migrate -E 1M -c 1 -E 16M -c $new_scount -E eof -c -1 "$file1" ||
 		error "migrate PFL arguments failed"
 	cur_comp=$($LFS getstripe --comp-count $file1)
 	(( cur_comp == 3 )) || error "component count '$cur_comp' != 3"
@@ -8613,15 +8609,15 @@ test_56we() {
 	touch $tf || error "cannot touch $tf"
 
 	echo -n "Make sure --non-direct|-D works..."
-	$LFS_MIGRATE -y --non-direct -v $tf 2>&1 |
-		grep -q "lfs migrate --non-direct" ||
+	$LFS migrate --non-direct -v $tf 2>&1 |
+		grep -q "$tf" ||
 		error "--non-direct option cannot work correctly"
-	$LFS_MIGRATE -y -D -v $tf 2>&1 |
-		grep -q "lfs migrate -D" ||
+	$LFS migrate -D -v $tf 2>&1 |
+		grep -q "$tf" ||
 		error "-D option cannot work correctly"
 	echo "done."
 }
-run_test 56we "check lfs_migrate --non-direct|-D support"
+run_test 56we "check lfs migrate --non-direct|-D support"
 
 test_56x() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
@@ -8741,8 +8737,8 @@ test_56xD() {
 
 	echo "FIDs: $fids"
 	echo "with --lustre-dir option"
-	$LFS_MIGRATE -y -o 0 --lustre-dir $DIR --fid $fids||
-		error "failed to run lfs_migrate with --fid and --lustre-dir argument"
+	$LFS migrate -o 0 --lustre-dir $DIR --fid $fids||
+		error "failed to run lfs migrate with --fid and --lustre-dir argument"
 
 	echo "without --lustre-dir option"
 	$LFS_MIGRATE -y -o 1 -S 2M --fid $fids||
@@ -8939,7 +8935,7 @@ test_56xc() {
 	$TRUNCATE "$dir/20mb" 20971520 || error "cannot create 20MB test file"
 	echo "done"
 	echo -n "Verifying small file autostripe count is 1..."
-	$LFS_MIGRATE -y -A -C 1 "$dir/20mb" ||
+	$LFS migrate -A -K 1 "$dir/20mb" ||
 		error "cannot migrate 20MB file"
 	local stripe_count=$($LFS getstripe -c "$dir/20mb") ||
 		error "cannot get stripe for $dir/20mb"
@@ -8963,7 +8959,7 @@ test_56xc() {
 	local avail=$($LCTL get_param -n llite.$FSNAME*.kbytesavail)
 	if (( avail > 524288 * OSTCOUNT )); then
 		echo -n "Migrating 1GB file..."
-		$LFS_MIGRATE -y -A -C 1 "$dir/1gb" ||
+		$LFS migrate -A -K 1 "$dir/1gb" ||
 			error "cannot migrate 1GB file"
 		echo "done"
 		echo -n "Verifying autostripe count is sqrt(n) + 1..."
@@ -8982,7 +8978,7 @@ test_56xc() {
 		local kb_per_ost=349526
 
 		echo -n "Migrating 1GB file with limit..."
-		$LFS_MIGRATE -y -A -C 1 -X $kb_per_ost "$dir/1gb" ||
+		$LFS migrate -A -K 1 -X $kb_per_ost "$dir/1gb" ||
 			error "cannot migrate 1GB file with limit"
 		echo "done"
 
@@ -9022,22 +9018,22 @@ test_56xd() {
 	dd if=/dev/zero of=$f_mgrt bs=1M count=4
 
 	# 1. test option --yaml
-	$LFS_MIGRATE -y --yaml $yamlfile $f_mgrt ||
+	$LFS migrate --yaml $yamlfile $f_mgrt ||
 		error "cannot migrate $f_mgrt with --yaml $yamlfile"
 	layout_before=$(get_layout_param $f_yaml)
 	layout_after=$(get_layout_param $f_mgrt)
 	[ "$layout_after" == "$layout_before" ] ||
-		error "lfs_migrate --yaml: $layout_after != $layout_before"
+		error "lfs migrate --yaml: $layout_after != $layout_before"
 
 	# 2. test option --copy
-	$LFS_MIGRATE -y --copy $f_copy $f_mgrt ||
+	$LFS migrate --copy $f_copy $f_mgrt ||
 		error "cannot migrate $f_mgrt with --copy $f_copy"
 	layout_before=$(SKIP_INDEX=yes get_layout_param $f_copy)
 	layout_after=$(SKIP_INDEX=yes get_layout_param $f_mgrt)
 	[ "$layout_after" == "$layout_before" ] ||
-		error "lfs_migrate --copy: $layout_after != $layout_before"
+		error "lfs migrate --copy: $layout_after != $layout_before"
 }
-run_test 56xd "check lfs_migrate --yaml and --copy support"
+run_test 56xd "check lfs migrate --yaml and --copy support"
 
 test_56xe() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
