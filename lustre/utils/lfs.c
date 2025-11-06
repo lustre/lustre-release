@@ -9697,7 +9697,7 @@ int lfs_setquota(int argc, char **argv)
 						.has_arg = required_argument },
 	{ .val = 'B',	.name = "block-hardlimit",
 						.has_arg = required_argument },
-	{ .val = 'd',	.name = "default",	.has_arg = no_argument },
+	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
 	{ .val = LFS_SETQUOTA_DELETE,
 			.name = "delete",	.has_arg = no_argument },
 	{ .val = 'g',	.name = "group",	.has_arg = required_argument },
