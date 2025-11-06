@@ -504,6 +504,8 @@ test_10() {
 
 	# get rid of gss context and credentials for user
 	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context (1)"
+	# give time for userland
+	sleep 5
 	$RUNAS grep lgssc /proc/keys
 	stack_trap restore_krb5_cred EXIT
 
@@ -513,6 +515,8 @@ test_10() {
 	# revoke session keyring for user and access to fs in the same su -
 	su - $(id -n -u $RUNAS_ID) -c "keyctl revoke @s && ls -ld $DIR/$tdir" ||
 		error "revoke + ls failed"
+	# give time for userland
+	sleep 5
 	$RUNAS grep lgssc /proc/keys
 
 	# refcount on lgssc keys should be 2
@@ -523,6 +527,8 @@ test_10() {
 
 	# get rid of gss context for user
 	$RUNAS $LFS flushctx $MOUNT || error "can't flush context (2)"
+	# give time for userland
+	sleep 5
 	$RUNAS grep lgssc /proc/keys
 	count=$($RUNAS grep lgssc /proc/keys | grep -v "Running as" | wc -l)
 	[[ $count == 0 ]] || error "remaining $count keys for user"
@@ -583,6 +589,63 @@ test_11() {
 	kdestroy
 }
 run_test 11 "KCM ccache"
+
+test_13() {
+	local count
+
+	$LFS mkdir -i 0 -c $MDSCOUNT $DIR/$tdir ||
+		error "mkdir $DIR/$tdir failed"
+	chmod 0777 $DIR/$tdir || error "chmod $DIR/$tdir failed"
+	$RUNAS ls -ld $DIR/$tdir || error "ls -ld $DIR/$tdir failed"
+	$RUNAS grep lgssc /proc/keys
+
+	# get rid of gss context and credentials for user
+	$RUNAS $LFS flushctx -k -r $MOUNT || error "can't flush context"
+	stack_trap restore_krb5_cred EXIT
+	# give time for userland
+	sleep 5
+	$RUNAS grep lgssc /proc/keys
+
+	# restore krb credentials
+	restore_krb5_cred
+
+	# unlink user keyring from session keyring, and access file system
+	su - $(id -n -u $RUNAS_ID) -c "keyctl unlink @u @s && \
+				       ls -ld $DIR/$tdir" ||
+		error "unlink + ls failed"
+	# give time for userland
+	sleep 5
+	$RUNAS grep lgssc /proc/keys
+	count=$($RUNAS grep -c lgssc /proc/keys | grep -v "Running as")
+	(( count == MDSCOUNT )) ||
+		error "expected $MDSCOUNT keys in the keyring, found $count (1)"
+
+	# unlink user keyring, and get rid of gss context and user credentials
+	su - $(id -n -u $RUNAS_ID) -c "keyctl unlink @u @s && \
+				       $LFS flushctx -k -r $MOUNT" ||
+		error "unlink + flushctx failed"
+	# give time for userland
+	sleep 5
+	$RUNAS grep lgssc /proc/keys
+	count=$($RUNAS grep -c lgssc /proc/keys | grep -v "Running as")
+	(( count == 0 )) ||
+		error "expecting 0 keys remaining, found $count"
+
+	# restore krb credentials
+	restore_krb5_cred
+
+	# unlink user keyring from session keyring, and access file system
+	su - $(id -n -u $RUNAS_ID) -c "keyctl unlink @u @s && \
+				       ls -ld $DIR/$tdir" ||
+		error "unlink + ls failed"
+	# give time for userland
+	sleep 5
+	$RUNAS grep lgssc /proc/keys
+	count=$($RUNAS grep -c lgssc /proc/keys | grep -v "Running as")
+	(( count == MDSCOUNT )) ||
+		error "expected $MDSCOUNT keys in the keyring, found $count (2)"
+}
+run_test 13 "Support unlinked user keyring"
 
 #
 # following tests will manipulate flavors and may end with any flavor set,

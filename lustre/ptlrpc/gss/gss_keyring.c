@@ -997,19 +997,12 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	CDEBUG(D_SEC, "requesting key for %s\n", desc);
 
 	if (vcred->vc_uid) {
-		/* If the session keyring is revoked, it must not be used by
-		 * request_key(), otherwise we would get -EKEYREVOKED and
-		 * the user keyring would not even be searched.
-		 * So prepare new creds with no session keyring.
-		 */
-		if (current_cred()->session_keyring &&
-		    test_bit(KEY_FLAG_REVOKED,
-			     &current_cred()->session_keyring->flags)) {
-			new_cred = prepare_creds();
-			if (new_cred) {
-				new_cred->session_keyring = NULL;
-				old_cred = override_creds(new_cred);
-			}
+		new_cred = prepare_creds();
+		if (new_cred) {
+			new_cred->thread_keyring =
+				get_user_keyring(current_cred());
+			new_cred->jit_keyring = KEY_REQKEY_DEFL_THREAD_KEYRING;
+			old_cred = override_creds(new_cred);
 		}
 	}
 
@@ -1069,19 +1062,18 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 			key_invalidate_locked(key);
 		}
 
-		create_new = 1;
+		if (is_root)
+			create_new = 1;
 	}
 
 	up_write(&key->sem);
 
-	/* We want user keys to be linked to the user keyring (see call to
-	 * keyctl_instantiate() from prepare_and_instantiate() in userspace).
-	 * But internally request_key() links the key to the session or
-	 * user session keyring, depending on jit_keyring value. Avoid that by
-	 * unlinking the key from this keyring. It will spare
-	 * us pain when we need to remove the key later on.
+	/* We want root keys to be linked to the session keyring.
+	 * But internally request_key() links the key to an independent, newly
+	 * created session keyring. Avoid that by unlinking the key from this
+	 * keyring, to save us pain when we need to remove the key later on.
 	 */
-	if (!is_root || create_new)
+	if (create_new)
 		request_key_unlink(key, true);
 
 	key_put(key);
@@ -1123,19 +1115,12 @@ static void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec, uid_t uid,
 	construct_key_desc(desc, sizeof(desc), sec, uid);
 
 	if (uid) {
-		/* If the session keyring is revoked, it must not be used by
-		 * request_key(), otherwise we would get -EKEYREVOKED and
-		 * the user keyring would not even be searched.
-		 * So prepare new creds with no session keyring.
-		 */
-		if (current_cred()->session_keyring &&
-		    test_bit(KEY_FLAG_REVOKED,
-			     &current_cred()->session_keyring->flags)) {
-			new_cred = prepare_creds();
-			if (new_cred) {
-				new_cred->session_keyring = NULL;
-				old_cred = override_creds(new_cred);
-			}
+		new_cred = prepare_creds();
+		if (new_cred) {
+			new_cred->thread_keyring =
+				get_user_keyring(current_cred());
+			new_cred->jit_keyring = KEY_REQKEY_DEFL_THREAD_KEYRING;
+			old_cred = override_creds(new_cred);
 		}
 	}
 
@@ -1558,29 +1543,37 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 	 * the session keyring is created upon upcall, and don't change all
 	 * the way until upcall finished, so rcu lock is not needed here.
 	 *
-	 * But for end users, link to the user keyring. This simplifies key
-	 * management, makes them shared accross all user sessions, and avoids
-	 * unfortunate key leak if lfs flushctx is not called at user logout.
+	 * But for end users, we want the key to be linked to the user keyring.
+	 * This simplifies key management, makes them shared across all user
+	 * sessions, and avoids unfortunate key leak if lfs flushctx is not
+	 * called at user logout.
 	 */
 	uid = from_kuid(&init_user_ns, current_uid());
-	if (uid == 0)
-		keyring = get_session_keyring(current_cred());
-	else
-		keyring = get_user_keyring(current_cred());
+	if (uid) {
+		/* Linking user keys to the user keyring is already done at this
+		 * point by request_key() internally, thanks to the
+		 * 'thread keyring' trick used in gss_sec_lookup_ctx_kr().
+		 */
+		CDEBUG(D_SEC,
+		       "key %08x (%p) instantiated, ctx %p\n",
+		       key->serial, key, key_get_payload(key, 0));
+		RETURN(0);
+	}
 
+	/* At this point we are dealing with keys for root */
+	keyring = get_session_keyring(current_cred());
 	lockdep_off();
 	rc = key_link(keyring, key);
 	lockdep_on();
-	if (unlikely(rc)) {
+	if (unlikely(rc))
 		CERROR("failed to link key %08x to keyring %08x: %d\n",
 		       key->serial, keyring->serial, rc);
-		GOTO(out, rc);
-	}
+	else
+		CDEBUG(D_SEC,
+		       "key %08x (%p) linked to keyring %08x and instantiated, ctx %p\n",
+		       key->serial, key, keyring->serial,
+		       key_get_payload(key, 0));
 
-	CDEBUG(D_SEC,
-	      "key %08x (%p) linked to keyring %08x and instantiated, ctx %p\n",
-	       key->serial, key, keyring->serial, key_get_payload(key, 0));
-out:
 	key_put(keyring);
 	RETURN(rc);
 }
