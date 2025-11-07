@@ -2819,14 +2819,14 @@ boot_node() {
 }
 
 facets_hosts () {
-    local facets=$1
-    local hosts
+	local facets=$1
+	local hosts
 
-    for facet in ${facets//,/ }; do
-        hosts=$(expand_list $hosts $(facet_host $facet) )
-    done
+	for facet in ${facets//,/ }; do
+		hosts=$(expand_list $hosts $(facet_active_host $facet))
+	done
 
-    echo $hosts
+	echo $hosts
 }
 
 _check_progs_installed () {
