@@ -245,7 +245,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"setdirstripe|mkdir --foreign[=FOREIGN_TYPE] -x|-xattr STRING " \
 	"		[--mode|-o MODE] [--flags HEX] DIRECTORY\n"
 
-/**
+/*
  * LFS_SUBCMD() - Parse and execute lfs subcommands.
  * @argc: The count of lfs subcommand line arguments.
  * @argv: Array of strings for lfs subcommand line arguments.
@@ -271,7 +271,7 @@ static int lfs_##name(int argc, char **argv)			\
 	return rc < 0 ? -rc : rc;				\
 }
 
-/**
+/*
  * command_t mirror_cmdlist - lfs mirror commands.
  */
 command_t mirror_cmdlist[] = {
@@ -327,7 +327,7 @@ command_t mirror_cmdlist[] = {
 };
 LFS_SUBCMD(mirror);
 
-/**
+/*
  * command_t pcc_cmdlist - lfs pcc commands.
  */
 command_t pcc_cmdlist[] = {
@@ -370,7 +370,7 @@ command_t pcc_cmdlist[] = {
 };
 LFS_SUBCMD(pcc);
 
-/**
+/*
  * command_t hsm_cmdlist - lfs hsm commands.
  */
 command_t hsm_cmdlist[] = {
@@ -1170,13 +1170,15 @@ out_unlock:
 }
 
 /**
+ * check_lease() - Helper for migrate_copy_data
+ * @fd: File descriptor on which to check the lease.
+ *
  * Internal helper for migrate_copy_data(). Check lease and report error if
  * need be.
  *
- * \param[in]  fd           File descriptor on which to check the lease.
- *
- * \retval 0       Migration can keep on going.
- * \retval -errno  Error occurred, abort migration.
+ * Return:
+ * * %0 Migration can keep on going.
+ * * %-errno Error occurred, abort migration.
  */
 static int check_lease(int fd)
 {
@@ -1792,7 +1794,7 @@ static int mirror_str2state(char *string, __u16 *state, __u16 *neg_state)
 	return -EINVAL;
 }
 
-/**
+/*
  * struct mirror_args - Command-line arguments for mirror(s).
  * @m_count:  Number of mirrors to be created with this layout.
  * @m_flags:  Mirror level flags, only 'prefer' is supported.
@@ -1815,7 +1817,7 @@ struct mirror_args {
 	bool				m_has_ec;
 };
 
-/**
+/*
  * enum mirror_flags - Flags for extending a mirrored file.
  * @MF_NO_VERIFY: indicates to not verify the mirror(s) from victim file(s)
  *	          and the user asserts the victim file(s) contains the same
@@ -1837,7 +1839,8 @@ enum mirror_flags {
 
 /**
  * mirror_create_sanity_check() - Check mirror list.
- * @list:  A linked list that stores the mirror arguments.
+ * @fname: file to be created
+ * @list: A linked list that stores the mirror arguments.
  *
  * This function does a sanity check on @list for creating
  * a mirrored file.
@@ -2028,9 +2031,11 @@ error:
 }
 
 /**
- * Compare files and check lease on @fd.
+ * mirror_file_compare() - Compare files and check lease on @fd_src
+ * @fd_src: Source file
+ * @fd_dst: Destination file
  *
- * \retval bytes number of bytes are the same
+ * Return bytes number of bytes are the same
  */
 static ssize_t mirror_file_compare(int fd_src, int fd_dst)
 {
@@ -3094,20 +3099,21 @@ out:
 }
 
 /**
- * Parse a string containing an target index list into an array of integers.
+ * parse_targets() - Parse a string containing an target index list into an
+ *                   array of integers.
+ * @tgts: array to store indices in [out]
+ * @size: size of @tgts array
+ * @offset: starting index in @tgts
+ * @arg: string containing OST index list
+ * @duplicates: tell caller list contains duplicates [out]
  *
  * The input string contains a comma delimited list of individual
  * indices and ranges, for example "1,2-4,7". Add the indices into the
- * \a tgts array and remove duplicates.
+ * @tgts array and remove duplicates.
  *
- * \param[out] tgts		array to store indices in
- * \param[in] size		size of \a tgts array
- * \param[in] offset		starting index in \a tgts
- * \param[in] arg		string containing OST index list
- * \param[out] duplicates	tell caller list contains duplicates
- *
- * \retval positive    number of indices in \a tgts
- * \retval -EINVAL     unable to parse \a arg
+ * Return:
+ * * %>0 number of indices in @tgts
+ * * %-EINVAL unable to parse @arg
  */
 static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
 			 bool *duplicates)
@@ -3309,8 +3315,9 @@ static int lsa_args_stripe_count_check(struct lfs_setstripe_args *lsa)
 
 /**
  * comp_args_to_layout() - Create or extend a composite layout.
- * @composite:       Pointer to the composite layout.
- * @lsa:             Stripe options for the new component.
+ * @composite: Pointer to the composite layout.
+ * @lsa: Stripe options for the new component.
+ * @set_extent: If %true then extend else if %false create
  *
  * This function creates or extends a composite layout by adding a new
  * component with stripe options from @lsa.
@@ -3748,18 +3755,17 @@ err:
 }
 
 /**
- * Get the extension size from the next (SEL) component and extend the
- * current component on it. The start of the next component is to be
- * adjusted as well.
+ * layout_extend_comp() - Get the extension size from the next (SEL) component
+ *                        and extend the current component on it. The start of
+ *                        the next component is to be adjusted as well.
+ * @layout: the current layout
+ * @start: the start of the current component
+ * @end: the end of the current component [in, out]
+ * @offset: the offset to adjust the end position to instead of extension size
  *
- * \param[in] layout	the current layout
- * \param[in] start	the start of the current component
- * \param[in,out] end	the end of the current component
- * \param[in] offset	the offset to adjust the end position to instead of
- *			extension size
- *
- * \retval 0		- extended successfully
- * \retval < 0		- error
+ * Return:
+ * * %0 extended successfully
+ * * %negative on error
  */
 static int layout_extend_comp(struct llapi_layout *layout,
 			      uint64_t start, uint64_t *end,
@@ -3823,7 +3829,7 @@ static int layout_extend_comp(struct llapi_layout *layout,
 	return 0;
 }
 
-/**
+/*
  * In 'lfs setstripe --component-add' mode, we need to fetch the extent
  * end of the last component in the existing file, and adjust the
  * first extent start of the components to be added accordingly.
@@ -6554,9 +6560,13 @@ static int name2attrs(char *name, __u64 *attrs, __u64 *neg_attrs)
 
 /**
  * xattr_match_info_append() - add the supplied name and value regex patterns
- *     to the supplied xattr_match_info struct.
+ *                             to the supplied xattr_match_info struct.
+ * @xmi: key-value store (pointer to struct xattr_match_info)
+ * @exclude: If %true exclude extended attr, else if %false include attr
+ * @name_pattern: extended attributes name
+ * @value_pattern: extended attributes value
  *
- * Return: 0 for success, nonzero if any errors encountered.
+ * Return: %0 for success, nonzero if any errors encountered.
  */
 int xattr_match_info_append(struct xattr_match_info *xmi, bool exclude,
 			    char *name_pattern, char *value_pattern)
@@ -6697,6 +6707,9 @@ void xattr_match_info_free(struct xattr_match_info *xmi)
 /**
  * compile_xattr_match_regex() - Compile regexes for matching xattr names and
  * values, returning an error if either fails to compile.
+ * @optarg: Input (example NAME=VALUE)
+ * @exclude: If %true exclude extended attr, else if %false include attr
+ * @param: Pointer to struct find_param
  *
  * The argument should be in the form "NAME=VALUE". The first '=' found
  * is assumed to be the separator between the name regex and the value regex.
@@ -13326,7 +13339,7 @@ static int lfs_hsm_state(int argc, char **argv)
 #define LFS_HSM_SET   0
 #define LFS_HSM_CLEAR 1
 
-/**
+/*
  * Generic function to set or clear HSM flags.
  * Used by hsm_set and hsm_clear.
  *
@@ -13489,13 +13502,15 @@ static int lfs_hsm_clear(int argc, char **argv)
 }
 
 /**
- * Check file state and return its fid, to be used by lfs_hsm_request().
+ * lfs_hsm_prepare_file() - Check file state and return its fid,
+ *                          to be used by lfs_hsm_request().
+ * @file: Path to file to check
+ * @fid: Pointer to allocated lu_fid struct. [in, out]
+ * @last_dev: Pointer to last device id used. [in, out]
  *
- * \param[in]     file      Path to file to check
- * \param[in,out] fid       Pointer to allocated lu_fid struct.
- * \param[in,out] last_dev  Pointer to last device id used.
- *
- * \return 0 on success.
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int lfs_hsm_prepare_file(const char *file, struct lu_fid *fid,
 				dev_t *last_dev)
@@ -14170,8 +14185,17 @@ next:
 }
 
 /**
+ * parse_mirror_ids() - Parse mirror ids
+ * @ids: parsed mirror ids [out]
+ * @size: maximum size of ids(mirror)
+ * @arg: input string (example "1,2-4,7")
+ *
  * The input string contains a comma delimited list of component ids and
  * ranges, for example "1,2-4,7".
+ *
+ * * Return:
+ * * %>=0 number of mirror ids parsed into @ids
+ * * %-EINVAL malformed @arg
  */
 static int parse_mirror_ids(__u16 *ids, int size, char *arg)
 {
@@ -14403,8 +14427,8 @@ error:
 	return rc;
 }
 
-/**
- * Returns the number of components to resync, or negative error code
+/*
+ * Returns number of components to resync, or %negative error code
  */
 static int lfs_mirror_force_resync(const char *fname,
 				   struct llapi_layout *layout,
@@ -15112,10 +15136,14 @@ static int lfs_somsync(int argc, char **argv)
 }
 
 /**
- * Check whether two files are the same file
- * \retval	0  same file
- * \retval	1  not the same file
- * \retval	<0 error code
+ * check_same_file() - Check whether two files are the same file
+ * @fd: File descriptor of file1
+ * @f2: Path name of file2
+ *
+ * Return:
+ * * %0 same file
+ * * %1 not the same file
+ * * %negative error code
  */
 static inline int check_same_file(int fd, const char *f2)
 {
@@ -15827,9 +15855,9 @@ void print_chunks(const char *fname, struct verify_chunk *chunks,
 /**
  * print_checksums() - Print CRC-32 checksum values.
  * @chunk: A chunk and its corresponding valid mirror ids.
- * @crc:   CRC-32 checksum values on the chunk for each valid mirror.
- * @pos:   Start offset of the chunk.
- * @len:   Length of the chunk.
+ * @crc: CRC-32 checksum values on the chunk for each valid mirror.
+ * @pos: Start offset of the chunk.
+ * @len: Length of the chunk.
  * @layout: Mirror component layout.
  *
  * This function prints CRC-32 checksum values on @chunk for
@@ -16764,10 +16792,11 @@ error:
 
 /**
  * lfs_mirror_verify_file() - Verify a mirrored file.
- * @fname:      Mirrored file name.
+ * @fname: Mirrored file name.
  * @mirror_ids: Specified mirror ids to be verified.
- * @ids_nr:     Number of specified mirror ids.
- * @verbose:    Verbose mode.
+ * @ids_nr: Number of specified mirror ids.
+ * @verbose: Verbose mode.
+ * @stale: %True if stale marking is requested
  *
  * This function verifies that each SYNC mirror of a mirrored file
  * specified by @fname contains exactly the same data.
