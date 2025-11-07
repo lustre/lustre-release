@@ -3213,11 +3213,6 @@ multi_fileset_test_cleanup() {
 		error "unable to mount client ${clients_arr[0]}"
 	wait_ssk
 
-	do_node ${clients_arr[0]} rm "${DIR}/$tfile" ||
-		error "unable to remove test file ${DIR}/$tfile"
-	do_node ${clients_arr[0]} rm -rf "${DIR}/$tdir" ||
-		error "unable to remove dir ${DIR}/$tdir"
-
 	if [[ -n "$FILESET" && -z "$SKIP_FILESET" ]]; then
 		cleanup_mount $MOUNT
 		zconf_mount_clients $CLIENTS $MOUNT
@@ -3471,6 +3466,12 @@ multi_fileset_test_run() {
 		multi_fileset_test_success "/${mult_fset_root}/${subd_p}" \
 			"${MOUNT}/${prefix}${subd_p}" false
 		multi_fileset_test_success "/${mult_fset_root}/$prim_subdir" \
+			"${MOUNT}/${prefix}${subsubd_p0}" true
+		# exercise multi fileset mount case 4 appending mounting subdir
+		# to primary fileset. In this case, the appended fileset
+		# represents an alt fileset which means its read-only flag needs
+		# to be taken into account.
+		multi_fileset_test_success "/$subsubd_p0" \
 			"${MOUNT}/${prefix}${subsubd_p0}" true
 
 		# 2: prim fileset (alt subdir) is ro and alt fileset is rw

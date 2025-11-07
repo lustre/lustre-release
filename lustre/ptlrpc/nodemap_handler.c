@@ -3002,6 +3002,16 @@ int nodemap_fileset_get_root(struct lu_nodemap *nodemap,
 			GOTO(out, rc = -ENAMETOOLONG);
 
 		fset_ro = nodemap->nm_fileset_prim_ro;
+
+		/* check whether the appended fileset is represented by any
+		 * alternate fileset with a different read-only flag. In this
+		 * case the alternate fileset's read-only flag takes precedence.
+		 */
+		fset_alt = fileset_alt_search_path(&nodemap->nm_fileset_alt,
+						   fset, true);
+		if (fset_alt)
+			fset_ro = fset_alt->nfa_ro;
+
 		GOTO(out, rc = 0);
 	}
 

@@ -52,7 +52,9 @@ mounted subdirectory exactly or as a prefix, the subdirectory mount is used
 as the file system root.
 .IP 4.
 If fileset matches in 3, the presented mounting subdirectory is appended to
-the primary fileset.
+the primary fileset. Note, if the resulting subdirectory is matched by any other
+(alternate) fileset that has the read-only flag set, read-only is enforced for
+this mounting subdirectory.
 .PP
 If no primary fileset is set, only 3 applies.
 .SH OPTIONS
