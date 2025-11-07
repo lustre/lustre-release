@@ -17,13 +17,13 @@
 
 #if HAVE_LIBPTHREAD
 /**
- * Initialize the given set_param work queue.
+ * spwq_init() - Initialize the given set_param work queue.
+ * @wq: the work queue to initialize [out]
+ * @popt: the options passed to set_param
  *
- * \param[out] wq  the work queue to initialize
- * \param[in] popt the options passed to set_param
- *
- * \retval 0 if successful
- * \retval -errno if unsuccessful
+ * Return:
+ * * %0 if successful
+ * * %-errno if unsuccessful
  */
 int spwq_init(struct sp_workq *wq, struct param_opts *popt)
 {
@@ -38,12 +38,12 @@ int spwq_init(struct sp_workq *wq, struct param_opts *popt)
 }
 
 /**
- * Destroy and free space used by a set_param work queue.
+ * spwq_destroy() - Destroy and free space used by a set_param work queue.
+ * @wq: the work queue to destroy
  *
- * \param[in] wq the work queue to destroy
- *
- * \retval 0 if successful
- * \retval -errno if unsuccessful
+ * Return:
+ * * %0 if successful
+ * * %-errno if unsuccessful
  */
 int spwq_destroy(struct sp_workq *wq)
 {
@@ -72,13 +72,14 @@ int spwq_destroy(struct sp_workq *wq)
 }
 
 /**
- * Expand the size of a work queue to fit the requested number of items.
+ * spwq_expand() - Expand the size of a work queue to fit the requested number
+ *                 of items.
+ * @wq: the work queue to expand [out]
+ * @num_items: the number of items to make room for in @wq
  *
- * \param[in,out] wq    the work queue to expand
- * \param[in] num_items the number of items to make room for in \a wq
- *
- * \retval 0 if successful
- * \retval -errno if unsuccessful
+ * Return:
+ * * %0 if successful
+ * * %-errno if unsuccessful
  */
 int spwq_expand(struct sp_workq *wq, size_t num_items)
 {
@@ -110,15 +111,15 @@ int spwq_expand(struct sp_workq *wq, size_t num_items)
 }
 
 /**
- * Add an item to a set_param work queue. Not thread-safe.
+ * spwq_add_item() - Add an item to a set_param work queue. Not thread-safe.
+ * @wq: the work queue to which the item should be added [in, out]
+ * @path: the full path to the parameter file (will be copied)
+ * @param_name: the name of the parameter (will be copied)
+ * @value: the value for the parameter (will not be copied)
  *
- * \param[in,out] wq     the work queue to which the item should be added
- * \param[in] path       the full path to the parameter file (will be copied)
- * \param[in] param_name the name of the parameter (will be copied)
- * \param[in] value      the value for the parameter (will not be copied)
- *
- * \retval 0 if successful
- * \retval -errno if unsuccessful
+ * Return:
+ * * %0 if successful
+ * * %-errno if unsuccessful
  */
 int spwq_add_item(struct sp_workq *wq, char *path,
 			 char *param_name, char *value)
@@ -157,13 +158,14 @@ int spwq_add_item(struct sp_workq *wq, char *path,
 }
 
 /**
- * Gets the next item from the set_param \a wq in a thread-safe manner.
+ * spwq_next_item() - Gets the next item from the set_param @wq in a thread-safe
+ *                    manner.
+ * @wq: the workq from which to obtain the next item
+ * @wi: the next work item in @wq, will be set to NULL if @wq empty [out]
  *
- * \param[in] wq  the workq from which to obtain the next item
- * \param[out] wi the next work item in \a wa, will be set to NULL if \wq empty
- *
- * \retval 0 if successful (empty work queue is considered successful)
- * \retval -errno if unsuccessful
+ * Return:
+ * * %0 if successful (empty work queue is considered successful)
+ * * %-errno if unsuccessful
  */
 static int spwq_next_item(struct sp_workq *wq, struct sp_work_item **wi)
 {
@@ -186,12 +188,12 @@ static int spwq_next_item(struct sp_workq *wq, struct sp_work_item **wi)
 }
 
 /**
- * A set_param worker thread which sets params from the workq.
+ * sp_thread() - A set_param worker thread which sets params from the workq.
+ * @arg: a pointer to a struct sp_workq
  *
- * \param[in] arg a pointer to a struct sp_workq
- *
- * \retval 0 if successful
- * \retval -errno if unsuccessful
+ * Return:
+ * * %0 if successful
+ * * %-errno if unsuccessful
  */
 static void *sp_thread(void *arg)
 {
@@ -222,12 +224,12 @@ static void *sp_thread(void *arg)
 }
 
 /**
- * Spawn threads and set parameters in a work queue in parallel.
+ * sp_run_threads() - Spawn threads & set parameters in a work queue in parallel
+ * @wq: the work queue containing parameters to set
  *
- * \param[in] wq the work queue containing parameters to set
- *
- * \retval 0 if successful
- * \retval -errno if unsuccessful
+ * Return:
+ * * %0 if successful
+ * * %-errno if unsuccessful
  */
 int sp_run_threads(struct sp_workq *wq)
 {
