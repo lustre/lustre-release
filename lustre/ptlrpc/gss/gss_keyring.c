@@ -1663,6 +1663,8 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
 		CERROR("negotiation: rpc err %d, gss err %x\n",
 		       nego_rpc_err, nego_gss_err);
 
+		gctx->gc_gss_err = nego_gss_err;
+
 		rc = nego_rpc_err ? nego_rpc_err : -EACCES;
 	} else {
 		rc = rawobj_extract_local_alloc(&gctx->gc_handle,

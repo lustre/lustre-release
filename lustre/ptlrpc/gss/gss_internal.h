@@ -170,6 +170,7 @@ struct gss_cli_ctx {
 	__u32			gc_flavor;
 	__u32			gc_proc;
 	__u32			gc_win;
+	__u32			gc_gss_err;
 	atomic_t		gc_seq;
 	rawobj_t		gc_handle;
 	struct gss_ctx		*gc_mechctx;
