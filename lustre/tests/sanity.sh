@@ -17055,6 +17055,10 @@ test_127_io_latency_test() {
 
 	[[ $io_latency_param =~ "md[ct]" ]] && dev="mdc"
 
+	# avoid leftovers after preceding tests
+	cancel_lru_locks osc
+	sleep 1
+
 	# Clear RPC stats
 	do_facet $facet $LCTL set_param $io_latency_param=clear
 
