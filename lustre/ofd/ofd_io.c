@@ -1092,6 +1092,9 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 		rc = dt_attr_set(env, dt_obj, la, th);
 		if (rc)
 			GOTO(out_unlock, rc);
+
+		if (!(la->la_mode & (S_ISUID | S_ISGID | S_ISVTX)))
+			ofd_obj->ofo_resource_ids_set = 1;
 	}
 
 	fl = ofd_object_ff_update(env, ofd_obj, oa, ff);

@@ -190,7 +190,8 @@ struct ofd_object {
 	struct filter_fid	ofo_ff;
 	time64_t		ofo_atime_ondisk;
 	unsigned int		ofo_pfid_checking:1,
-				ofo_pfid_verified:1;
+				ofo_pfid_verified:1,
+				ofo_resource_ids_set:1;
 };
 
 static inline struct ofd_object *ofd_obj(struct lu_object *o)

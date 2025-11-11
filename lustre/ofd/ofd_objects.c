@@ -1155,7 +1155,9 @@ struct ofd_id_repair_args {
 /**
  * ofd_can_repair_resource_ids() - check if object IDs should and can be
  * repaired with the IDs from the current obdo
- * @la: lu_attr from object
+ * @env: lu_env
+ * @fo: ofd_object
+ * @la: lu_attr from object. Can be NULL. If so, dt_attr_get() is called for fo
  * @oa: lu_attr from obdo
  *
  * Objects with OFD_UNSET_ATTRS_MODE or any subset of S_ISUID, S_ISGID, and
@@ -1167,13 +1169,36 @@ struct ofd_id_repair_args {
  * * %true if object needs to be repaired
  * * %false if object does not need to be repaired
  */
-static bool ofd_can_repair_resource_ids(const struct lu_attr *la_obj,
+static bool ofd_can_repair_resource_ids(const struct lu_env *env,
+					struct ofd_object *fo,
+					const struct lu_attr *la_obj,
 					const struct lu_attr *la_obdo)
 {
+	struct lu_attr la_tmp = { 0 };
+	int rc;
+
+	if (fo->ofo_resource_ids_set)
+		RETURN(false);
+
 	/* If no valid IDs are available, no repair is possible */
 	if (!(la_obdo->la_valid & LA_UID) && !(la_obdo->la_valid & LA_GID) &&
 	    !(la_obdo->la_valid & LA_PROJID))
 		RETURN(false);
+
+	if (!la_obj) {
+		rc = dt_attr_get(env, ofd_object_child(fo), &la_tmp);
+		if (rc)
+			RETURN(false);
+		la_obj = &la_tmp;
+	}
+
+	/* No repair needed - all ids set. Set per-object bit for fast path */
+	if (!(la_obj->la_mode & (S_ISUID | S_ISGID | S_ISVTX))) {
+		ofd_write_lock(env, fo);
+		fo->ofo_resource_ids_set = 1;
+		ofd_write_unlock(env, fo);
+		RETURN(false);
+	}
 
 	/* No ID is set yet. Object can be repaired with any subset of IDs */
 	if (la_obj->la_mode == OFD_UNSET_ATTRS_MODE) {
@@ -1264,6 +1289,9 @@ static int ofd_id_repair_one(struct ofd_device *ofd,
 	rc = dt_attr_set(env, ofd_object_child(fo), &work->oiw_la, th);
 	if (rc)
 		GOTO(out_unlock, rc);
+
+	if (!(work->oiw_la.la_mode & (S_ISUID | S_ISGID | S_ISVTX)))
+		fo->ofo_resource_ids_set = 1;
 
 out_unlock:
 	ofd_write_unlock(env, fo);
@@ -1518,7 +1546,7 @@ static int __ofd_check_resource_ids(const struct lu_env *env,
 		/* repair may not be possible in this environment if UID/GID are
 		 * not valid in the client obdo.
 		 */
-		if (!ofd_can_repair_resource_ids(&la_obj, &la_obdo))
+		if (!ofd_can_repair_resource_ids(env, fo, &la_obj, &la_obdo))
 			RETURN(0);
 
 		CDEBUG(D_SEC,
@@ -1573,13 +1601,14 @@ void ofd_repair_resource_ids(const struct lu_env *env, struct ofd_object *fo,
 {
 	struct ofd_thread_info *info = ofd_info(env);
 	struct ofd_device *ofd = ofd_exp(info->fti_exp);
-	struct lu_attr la_obj = { 0 };
 	struct lu_attr la_obdo = { 0 };
-	int rc;
 
 	ENTRY;
 
 	if (ofd->ofd_enable_resource_id_repair == 0)
+		RETURN_EXIT;
+
+	if (fo->ofo_resource_ids_set)
 		RETURN_EXIT;
 
 	if (!oa || ofd->ofd_osd->dd_rdonly || unlikely(ofd->ofd_readonly))
@@ -1598,11 +1627,8 @@ void ofd_repair_resource_ids(const struct lu_env *env, struct ofd_object *fo,
 	la_from_obdo(&la_obdo, oa,
 		     OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID);
 
-	if (!force) {
-		rc = dt_attr_get(env, ofd_object_child(fo), &la_obj);
-		if (rc || !ofd_can_repair_resource_ids(&la_obj, &la_obdo))
-			RETURN_EXIT;
-	}
+	if (!force && !ofd_can_repair_resource_ids(env, fo, NULL, &la_obdo))
+		RETURN_EXIT;
 
 	(void)ofd_id_repair_enqueue(ofd, &la_obdo, fo);
 }
