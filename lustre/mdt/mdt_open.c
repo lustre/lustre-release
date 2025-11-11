@@ -28,6 +28,9 @@ static const char mfd_open_handle_owner[] = "mdt";
 static int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep,
 			   struct mdt_lock_handle *lhc);
 
+static void mdt_pack_attr_acl(struct mdt_thread_info *info,
+			      struct mdt_object *o);
+
 /* Create a new mdt_file_data struct, initialize it,
  * and insert it to global hash table */
 struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
@@ -1289,8 +1292,16 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 
 			rc = mo_permission(info->mti_env, NULL,
 					   mdt_object_child(o), NULL, mask);
-			if (rc)
+			if (rc) {
+				if (rc == -EACCES) {
+					/* in case of EACCES,
+					 * hint the client with supp groups
+					 * and ACLs
+					 */
+					mdt_pack_attr_acl(info, o);
+				}
 				goto out;
+			}
 
 			mdt_prep_ma_buf_from_rep(info, o, ma, open_flags);
 			rc = mdt_attr_get_complex(info, o, ma);

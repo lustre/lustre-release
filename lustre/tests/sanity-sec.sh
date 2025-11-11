@@ -10590,7 +10590,9 @@ run_test 82 "export lock revoked after nodemap change"
 test_83() {
 	local user=$(getent passwd $RUNAS_ID | cut -d: -f1)
 	local grp=grptest83
+	local grp2=grptest832
 	local grpid=5000
+	local grp2id=5001
 	local subd=subdir
 
 	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
@@ -10607,13 +10609,19 @@ test_83() {
 	touch $DIR/$tdir/$subd/$tfile ||
 		error "touch $DIR/$tdir/$subd/$tfile failed"
 
-	# create a specific group and add it as a supplementary group for $USER0
+	# create two groups and add them as supp groups for $USER0
 	groupadd -g $grpid $grp
+	groupadd -g $grp2id $grp2
 	stack_trap "groupdel $grp" EXIT
+	stack_trap "groupdel $grp2" EXIT
 	usermod -aG $grp $user
+	usermod -aG $grp2 $user
 	stack_trap "gpasswd -d $user $grp" EXIT
+	stack_trap "gpasswd -d $user $grp2" EXIT
 
-	chown -R root:$grp $DIR/$tdir || error "chown $DIR/$tdir failed"
+	chown root:$grp $DIR/$tdir || error "chown $DIR/$tdir failed"
+	chown -R root:$grp2 $DIR/$tdir/$subd ||
+		error "chown $DIR/$tdir/$subd failed"
 	chmod 770 $DIR/$tdir || error "chmod $DIR/$tdir failed"
 	chmod 770 $DIR/$tdir/$subd || error "chmod $DIR/$tdir/$subd failed"
 	chmod 660 $DIR/$tdir/$subd/$tfile ||
@@ -10630,7 +10638,7 @@ test_83() {
 	wait_ssk
 
 	su - $USER0 -c "ls $DIR/$tdir/$subd/*" ||
-		error "ls $DIR/$tdir/$subd/ as $USER0 failed"
+		error "ls $DIR/$tdir/$subd/* as $USER0 failed"
 }
 run_test 83 "Suppgids for cross-MDT ops"
 
