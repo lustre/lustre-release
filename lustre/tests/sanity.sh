@@ -18667,7 +18667,7 @@ test_150ia() {
 
 	local BLOCK_SIZE=65536
 	echo "Verify fallocate(zero): range within the file"
-	yes 'A' | dd of=$DIR/$tfile bs=$BLOCK_SIZE count=8 ||
+	yes 'A' | dd of=$DIR/$tfile bs=$BLOCK_SIZE count=8 iflag=fullblock ||
 		error "dd failed for bs $BLOCK_SIZE and count 8"
 
 	# zero range page aligned
