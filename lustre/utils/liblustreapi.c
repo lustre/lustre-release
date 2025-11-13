@@ -3332,10 +3332,18 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 				     (unsigned long long)entry->lcme_timestamp);
 		} else {
 			time_t stamp = entry->lcme_timestamp;
-			char *date_str = asctime(localtime(&stamp));
+			struct tm tm_buf;
+			char date_str[64];
 
-			date_str[strlen(date_str) - 1] = '\0';
-			llapi_printf(LLAPI_MSG_NORMAL, "'%s'", date_str);
+			/* Use localtime_r() and strftime() for thread safety
+			 * with parallel find.
+			 */
+			if (localtime_r(&stamp, &tm_buf)) {
+				strftime(date_str, sizeof(date_str), "%c",
+					 &tm_buf);
+				llapi_printf(LLAPI_MSG_NORMAL, "'%s'",
+					     date_str);
+			}
 		}
 
 		separator = "\n";
@@ -4882,6 +4890,7 @@ static int printf_format_timestamp(char *seq, char *buffer, size_t size,
 				   int *wrote, struct find_param *param)
 {
 	struct statx_timestamp ts = { 0, 0 };
+	struct tm tm_buf;
 	struct tm *tm;
 	time_t t;
 	int rc = 0;
@@ -4940,8 +4949,10 @@ static int printf_format_timestamp(char *seq, char *buffer, size_t size,
 	if (rc) {
 		/* Found valid format, print to buffer */
 		t = ts.tv_sec;
-		tm = localtime(&t);
-		*wrote = strftime(buffer, size, fmt, tm);
+		/* Use localtime_r() for thread safety with parallel find */
+		tm = localtime_r(&t, &tm_buf);
+		if (tm)
+			*wrote = strftime(buffer, size, fmt, tm);
 	}
 
 	return rc;
@@ -5434,8 +5445,11 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 		*wrote = snprintf(buffer, size, "%"PRIu64, blocks);
 		break;
 	case 'g': { /* groupname of owner*/
-		static char save_gr_name[LOGIN_NAME_MAX + 1];
-		static gid_t save_gid = -1;
+		/* __thread makes these variables thread-local to avoid
+		 * races with parallel find worker threads.
+		 */
+		static __thread char save_gr_name[LOGIN_NAME_MAX + 1];
+		static __thread gid_t save_gid = -1;
 
 		if (save_gid != param->fp_lmd->lmd_stx.stx_gid) {
 			struct group *gr;
@@ -5486,8 +5500,11 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 				   (uint64_t) param->fp_lmd->lmd_stx.stx_size);
 		break;
 	case 'u': {/* username of owner */
-		static char save_username[LOGIN_NAME_MAX + 1];
-		static uid_t save_uid = -1;
+		/* __thread makes these variables thread-local to avoid
+		 * races with parallel find worker threads.
+		 */
+		static __thread char save_username[LOGIN_NAME_MAX + 1];
+		static __thread uid_t save_uid = -1;
 
 		if (save_uid != param->fp_lmd->lmd_stx.stx_uid) {
 			struct passwd *pw;
