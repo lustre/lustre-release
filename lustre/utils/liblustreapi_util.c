@@ -40,7 +40,7 @@
 bool liblustreapi_initialized;
 
 /**
- * Initialize the library once at startup.
+ * liblustreapi_init() - Initialize the library once at startup.
  *
  * Initializes the random number generator (random()). Get
  * data from different places in case one of them fails. This
@@ -75,8 +75,11 @@ static __attribute__ ((constructor)) void liblustreapi_init(void)
 }
 
 /**
- * Return the release version for the Lustre modules, e.g. 2.6.92.
+ * llapi_get_version_string() - Return release version for the Lustre modules
+ * @version: buffer to store build version string [in, out]
+ * @version_size: size of \a version
  *
+ * Return the release version for the Lustre modules, e.g. 2.6.92.
  * The "version" file in /proc currently returns only the line:
  * lustre: 2.8.52
  *
@@ -84,11 +87,9 @@ static __attribute__ ((constructor)) void liblustreapi_init(void)
  * kernel: patchless_client
  * build: v2_6_92_0-gadb3ee4-2.6.32-431.29.2.el6_lustre.g36cd22b.x86_64
  *
- * \param version[in,out]	buffer to store build version string
- * \param version_size[in]	size of \a version
- *
- * \retval			0 on success
- * \retval			-1 on failure, errno set
+ * Return:
+ * * %0 on success
+ * * %-1 on failure, errno is set
  */
 int llapi_get_version_string(char *version, unsigned int version_size)
 {
@@ -132,17 +133,17 @@ int llapi_get_version_string(char *version, unsigned int version_size)
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0)
 /**
- * Return the build version of the Lustre code.
+ * llapi_get_version() - Return the build version of the Lustre code.
+ * @buffer: temporary buffer to hold version string
+ * @buffer_size: length of the @buffer
+ * @version: pointer to the start of build version string [out]
  *
  * The **version argument is pointless, so llapi_get_version_string() is
- * better to use in the future, but give users a few versions to fix * it.
+ * better to use in the future, but give users a few versions to fix it.
  *
- * \param buffer[in]		temporary buffer to hold version string
- * \param buffer_size[in]	length of the \a buffer
- * \param version[out]		pointer to the start of build version string
- *
- * \retval			0 on success
- * \retval			-ve errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int llapi_get_version(char *buffer, int buffer_size, char **version)
 {
@@ -273,14 +274,13 @@ int llapi_search_ost(const char *fsname, const char *poolname,
 }
 
 /**
- * Return the open fd for a given device/path provided
+ * llapi_root_path_open() - Return the open fd for a given device/path provided
+ * @device: buffer holding device or path string
+ * @rootfd: file descriptor after successful opening of @device(path) [out]
  *
- * \param device[in]		buffer holding device or path string
- * \param rootfd[out]		file descriptor after successful opening of
- *                              of above path or device
- *
- * \retval			0 on success
- * \retval			-ve on failure
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int llapi_root_path_open(const char *device, int *rootfd)
 {
@@ -300,14 +300,16 @@ int llapi_root_path_open(const char *device, int *rootfd)
 }
 
 /**
- * Call IOCTL to remove file by fid. The fd must be valid and fa
- * (fid_array) struct must allready be populated.
+ * llapi_rmfid_at() - Call IOCTL to remove file by fid.
+ * @fd: valid descriptor of device/path
+ * @fa: fid_array struct holding fids
  *
- * \param fd[in]		valid descriptor of device/path
- * \param fa[in]		fid_array struct holding fids
+ * Call IOCTL to remove file by fid. The @fd must be valid and @fa(fid_array)
+ * struct must allready be populated.
  *
- * \retval			0 on success
- * \retval			-ve/errno on failure
+ * Return:
+ * * %0 on success
+ * * %-errno on failure
  */
 int llapi_rmfid_at(int fd, struct fid_array *fa)
 {
