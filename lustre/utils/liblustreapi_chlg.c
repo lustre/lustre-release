@@ -46,7 +46,7 @@ static int chlg_dev_path(char *path, size_t path_len, const char *device)
 #define CHANGELOG_PRIV_MAGIC 0xCA8E1080
 #define CHANGELOG_BUFFER_SZ  4096
 
-/**
+/*
  * Record state for efficient changelog consumption.
  * Read chunks of CHANGELOG_BUFFER_SZ bytes.
  */
@@ -68,13 +68,17 @@ struct changelog_private {
 };
 
 /**
- * Start reading from a changelog
+ * llapi_changelog_start() - Start reading from a changelog
+ * @priv: Opaque private control structure
+ * @flags: Start flags (e.g. CHANGELOG_FLAG_JOBID)
+ * @device: Report changes recorded on this MDT
+ * @startrec: Report changes beginning with this record number
  *
- * @param priv      Opaque private control structure
- * @param flags     Start flags (e.g. CHANGELOG_FLAG_JOBID)
- * @param device    Report changes recorded on this MDT
- * @param startrec  Report changes beginning with this record number
- * (just call llapi_changelog_fini when done; don't need an endrec)
+ * Just call llapi_changelog_fini when done; don't need an endrec
+ *
+ * Return:
+ * * %0 on success
+ * * %-errno on failure
  */
 int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 			  const char *device, long long startrec)
@@ -157,11 +161,12 @@ out_free_cp:
 }
 
 /**
- * Parse user string to extract numeric ID if possible
+ * changelog_parse_username() - Parse user string to extract numeric ID if
+ *                              possible
+ * @username: User name or ID (e.g. "cl1", "cl1-user", "1", or "user")
+ * @user_id: User ID number (0 will let MDT parse the username) [out]
  *
- * @param[in] username	User name or ID (e.g. "cl1", "cl1-user", "1", or "user")
- * @param[out] user_id	User ID number (0 will let MDT parse the username)
- * @return 0 on success, < 0 on error.
+ * Return %0 on success and %negative on error
  */
 static int changelog_parse_username(const char *username, __u32 *user_id)
 {
@@ -188,18 +193,19 @@ static int changelog_parse_username(const char *username, __u32 *user_id)
 }
 
 /**
- * Start reading changelog for a specific user with a specific mask
+ * llapi_changelog_start_user() - Start reading changelog for a specific user
+ *                                with a specific mask
+ * @priv: Opaque private control structure
+ * @flags: Start flags (e.g. CHANGELOG_FLAG_JOBID)
+ * @device: Report changes recorded on this MDT
+ * @username: Changelog user name or ID, e.g. "cl1", "cl1-user", "1", or "user"
+ * @mask: Changelog record mask in numeric form, 0 means the user's
+ *	    registered mask will be used.
+ *	    (Please see llapi_convert_str2mask/mask2str() for converting
+ *	    mask string to numeric form and vice versa.)
+ * @startrec: Report changes beginning with this record number
  *
- * @param priv      Opaque private control structure
- * @param flags     Start flags (e.g. CHANGELOG_FLAG_JOBID)
- * @param device    Report changes recorded on this MDT
- * @param username  Changelog user name or ID, e.g. "cl1", "cl1-user", "1", or
- *		    "user"
- * @param mask      Changelog record mask in numeric form, 0 means the user's
- *		    registered mask will be used.
- *		    (Please see llapi_convert_str2mask/mask2str() for converting
- *		    mask string to numeric form and vice versa.)
- * @param startrec  Report changes beginning with this record number
+ * Return %0 on success and %negative on error
  */
 int llapi_changelog_start_user(void **priv, enum changelog_send_flag flags,
 			       const char *device, const char *username,
@@ -268,10 +274,10 @@ static ssize_t chlg_read_bulk(struct changelog_private *cp)
 }
 
 /**
- * Returns a file descriptor to poll on.
+ * llapi_changelog_get_fd() - Returns a file descriptor to poll on.
+ * @priv:  Opaque changelog reader structure.
  *
- * \@param[in]  priv  Opaque changelog reader structure.
- * @return valid file descriptor on success, negated errno code on failure.
+ * Return valid file descriptor on success, %-errno code on failure.
  */
 int llapi_changelog_get_fd(void *priv)
 {
@@ -284,10 +290,17 @@ int llapi_changelog_get_fd(void *priv)
 }
 
 /**
+ * llapi_changelog_repack_rec() - create new changelog_rec
+ * @rec: changelog_rec sent by the kernel
+ * @crf_wanted: Flags (CLF_*) which should be copied to new changelog_rec
+ * @cref_want: Extra flags (CLFE_*) which should be copied to new changelog_rec
+ *
  * Messages containing changelog records sent by the kernel are collected in
  * llapi_changelog_recv(). Those messages contain everything that the kernel
  * can support. Our user land application might have no interest in many of
  * those extra fields so we then repack the rec with only what we want.
+ *
+ * Returns new changelog_rec or NULL on error
  */
 struct changelog_rec *
 llapi_changelog_repack_rec(const struct changelog_rec *rec,
@@ -511,12 +524,15 @@ out:
 }
 
 /**
- * Set extra flags for reading changelogs
- *
- * @param priv		Opaque private control structure
- * @param extra_flags	Read extra flags (e.g. CHANGELOG_EXTRA_FLAG_UIDGID)
+ * llapi_changelog_set_xflags() - Set extra flags for reading changelogs
+ * @priv: Opaque private control structure
+ * @extra_flags: Read extra flags (e.g. CHANGELOG_EXTRA_FLAG_UIDGID)
  *
  * Just call this function right after llapi_changelog_start().
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int llapi_changelog_set_xflags(void *priv,
 			       enum changelog_send_extra_flag extra_flags)
