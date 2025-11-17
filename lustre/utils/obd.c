@@ -5177,6 +5177,17 @@ int jt_nodemap_modify(int argc, char **argv)
 		if (errno == ERANGE)
 			squash = -1;
 
+		if (squash == 0 &&
+		    (cmd == LCFG_NODEMAP_SQUASH_UID ||
+		     cmd == LCFG_NODEMAP_SQUASH_GID)) {
+			errno = EINVAL;
+			fprintf(stderr,
+				"error: %s: cannot squash to ID 0 on nodemap '%s': %s\n",
+				jt_cmdname(argv[0]), nodemap_name,
+				strerror(errno));
+			return CMD_HELP;
+		}
+
 		if (offset_limit && squash >= offset_limit)
 			fprintf(stderr,
 				"Warning: it is not recommended to have a squash value outside of the offset range [ 0, %d ] as it will not be mapped properly.\n",

@@ -10935,6 +10935,31 @@ test_84() {
 }
 run_test 84 "do not squash trusted ids"
 
+test_85() {
+	local nm=c0
+	local val
+
+	(( MDS1_VERSION > $(version_code 2.16.61) )) ||
+		skip "Need MDS version at least 2.16.61 for correct squashing"
+
+	stack_trap cleanup_local_client_nodemap EXIT
+	setup_local_client_nodemap $nm 1 1
+	do_facet mgs $LCTL nodemap_modify --name $nm --property squash_uid=0 &&
+		error "setting squash_uid=0 on $nm should fail"
+	do_facet mgs $LCTL nodemap_modify --name $nm --property squash_gid=0 &&
+		error "setting squash_gid=0 on $nm should fail"
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property deny_unknown=1 ||
+			error "cannot set deny_unknown=1 on $nm"
+	wait_nm_sync $nm deny_unknown
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.squash_uid)
+	(( val != 0 )) || error "squash_uid should not be 0 on $nm"
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.squash_gid)
+	(( val != 0 )) || error "squash_gid should not be 0 on $nm"
+}
+run_test 85 "forbid squashing to UID/GID 0"
+
 cleanup_100() {
 	local orig_sk_path="$1"
 	local test_key="$orig_sk_path/$FSNAME-test100.key"

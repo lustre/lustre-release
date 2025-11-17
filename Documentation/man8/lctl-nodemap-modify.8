@@ -46,6 +46,7 @@ should be mapped to.
 When offsets are defined on the nodemap, the squash value should be in the
 offset range [ 0, offset_limit-1 ], otherwise squashed UIDs would escape
 offsetting.
+Note squashing to UID 0 (root) is not permitted.
 .TP
 .B squash_gid
 Defaults to
@@ -58,6 +59,7 @@ and root (if not admin) should be mapped to.
 When offsets are defined on the nodemap, the squash value should be in the
 offset range [ 0, offset_limit-1 ], otherwise squashed GIDs would escape
 offsetting.
+Note squashing to GID 0 (root) is not permitted.
 .TP
 .B squash_projid
 Defaults to

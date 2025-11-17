@@ -5102,12 +5102,20 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 		rc = kstrtouint(param, 10, &int_id);
 		if (rc)
 			break;
+		if (int_id == 0) {
+			rc = -EINVAL;
+			break;
+		}
 		rc = nodemap_set_squash_uid(nodemap_name, int_id);
 		break;
 	case LCFG_NODEMAP_SQUASH_GID:
 		rc = kstrtouint(param, 10, &int_id);
 		if (rc)
 			break;
+		if (int_id == 0) {
+			rc = -EINVAL;
+			break;
+		}
 		rc = nodemap_set_squash_gid(nodemap_name, int_id);
 		break;
 	case LCFG_NODEMAP_SQUASH_PROJID:
