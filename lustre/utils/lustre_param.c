@@ -71,18 +71,20 @@
 #define COLOR_LINK	COLOR_CYAN
 
 /**
+ * sp_parse_param_value() - Parse the argument to set_param
+ * @argc: number of arguments remaining in argv
+ * @argv: list of param-value arguments to set_param (this function will
+ *        modify the strings by overwriting '=' with '\0')
+ * @param: the parameter name [out]
+ * @value: the parameter value [out]
+ *
  * Parse the arguments to set_param and return the first parameter and value
  * pair and the number of arguments consumed.
  *
- * \param[in] argc   number of arguments remaining in argv
- * \param[in] argv   list of param-value arguments to set_param (this function
- *                   will modify the strings by overwriting '=' with '\0')
- * \param[out] param the parameter name
- * \param[out] value the parameter value
- *
- * \retval the number of args consumed from argv (1 for "param=value" format, 2
- *         for "param value" format)
- * \retval -errno if unsuccessful
+ * Return:
+ * * number of args consumed from argv
+ *   (1 for "param=value" format, 2 for "param value" format)
+ * * %-errno if unsuccessful
  */
 static int sp_parse_param_value(int argc, char **argv, char **param,
 				char **value)
@@ -113,14 +115,14 @@ static int sp_parse_param_value(int argc, char **argv, char **param,
 }
 
 /**
- * Format a parameter path in the same format as sysctl.
+ * format_param() - Format a parameter path in the same format as sysctl.
+ * @filename: file name of the parameter
+ * @st: parameter file stats
+ * @popt: set/get param options
+ *
  * E.g. obdfilter.lustre-OST0000.stats
  *
- * \param[in] filename	file name of the parameter
- * \param[in] st	parameter file stats
- * \param[in] popt	set/get param options
- *
- * \retval allocated pointer containing modified filename
+ * Return allocated pointer containing modified filename
  */
 static char *format_param(const char *filename, struct stat *st,
 			  struct param_opts *popt)
@@ -174,16 +176,14 @@ static char *format_param(const char *filename, struct stat *st,
 }
 
 /**
- * Turns a lctl parameter string into a procfs/sysfs subdirectory path pattern.
+ * jt_clean_path() - Turns a lctl parameter string into a procfs/sysfs
+ * subdirectory path pattern.
+ * @popt: Used to control parameter usage. For this function it is used to see
+ * if the path has a added suffix.
+ * @path: lctl parameter string that is turned into the subdirectory path
+ * pattern that is used to search the procfs/sysfs tree.
  *
- * \param[in] popt		Used to control parameter usage. For this
- *				function it is used to see if the path has
- *				a added suffix.
- * \param[in,out] path		lctl parameter string that is turned into
- *				the subdirectory path pattern that is used
- *				to search the procfs/sysfs tree.
- *
- * \retval -errno on error.
+ * Return %0 on success or %-errno on error.
  */
 int jt_clean_path(struct param_opts *popt, char *path)
 {
@@ -260,7 +260,7 @@ int jt_clean_path(struct param_opts *popt, char *path)
 	return 0;
 }
 
-/**
+/*
  * The application lctl can perform three operations for lustre
  * tunables. This enum defines those three operations which are
  *
@@ -376,18 +376,17 @@ void print_param_internal(struct lctl_param_file *lpf, char *value,
 }
 
 /**
- * Print the parameter to the console.
+ * print_param() - Print the parameter to the console.
+ * @lpf: parameter to be printed
+ * @popt: pointer to the parameter options
  *
- * \param[in]		p	parameter to be printed
- * \param[in]		popt	pointer to the parameter options
- * \param[in]		color	ANSI color to print the param in
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error.
  */
 void print_param(struct lctl_param_file *lpf, struct param_opts *popt)
 {
-	char *color = NULL;
+	char *color = NULL; /* ANSI color to print the param in */
 	int i;
 
 	if (popt->po_tunable && !S_ISREG(lpf->lpf_mode))
@@ -427,13 +426,14 @@ void print_param_dir(struct lctl_param_dir *dir, struct param_opts *popt)
 }
 
 /**
- * Read the value of parameter into buf
+ * read_param() - Read the value of parameter into buf
+ * @path: full path to the parameter
+ * @buf: a pointer to a pointer to a buffer [in, out]
+ * @quiet: If false do not complain
  *
- * \param[in]		path	full path to the parameter
- * \param[in,out]	buf	a pointer to a pointer to a buffer
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error.
  */
 static int read_param(const char *path, char **buf, bool quiet)
 {
@@ -455,15 +455,15 @@ static int read_param(const char *path, char **buf, bool quiet)
 }
 
 /**
- * Set a parameter to a specified value
+ * write_param() - Set a parameter to a specified value
+ * @path: full path to the parameter
+ * @param_name: lctl parameter format of the parameter path
+ * @popt: set/get param options
+ * @value: value to set the parameter to
  *
- * \param[in] path		full path to the parameter
- * \param[in] param_name	lctl parameter format of the parameter path
- * \param[in] popt		set/get param options
- * \param[in] value		value to set the parameter to
- *
- * \retval number of bytes written on success.
- * \retval -errno on error.
+ * Return:
+ * * number of bytes written on success.
+ * * %-errno on error.
  */
 int write_param(const char *path, const char *param_name,
 		struct param_opts *popt, const char *value)
@@ -697,17 +697,16 @@ int add_dir_to_tree(struct lctl_param_dir *root, struct lctl_param_dir **dir,
 }
 
 /**
- * Perform a read, write or just a listing of a parameter
+ * do_param_op() - Perform a read, write or just a listing of a parameter
+ * @popt: list,set,get parameter options
+ * @pattern: search filter for the path of the parameter
+ * @value: value to set the parameter if write operation
+ * @oper: what operation to perform with the parameter
+ * @wq: work queue which work items will be added or NULL if not parallel [out]
  *
- * \param[in] popt	list,set,get parameter options
- * \param[in] pattern	search filter for the path of the parameter
- * \param[in] value	value to set the parameter if write operation
- * \param[in] oper	what operation to perform with the parameter
- * \param[out] wq	the work queue to which work items will be added or NULL
- *			if not in parallel
- *
- * \retval number of bytes written on success.
- * \retval -errno on error and prints error message.
+ * Return:
+ * * number of bytes written on success.
+ * * %-errno on error and prints error message.
  */
 static int do_param_op(struct param_opts *popt, char *pattern, char *value,
 		       enum parameter_operation oper, struct sp_workq *wq)
@@ -1296,11 +1295,11 @@ int jt_lcfg_getparam(int argc, char **argv)
 }
 
 /**
+ * setparam_check_deprecated() - Parses set_param path
+ * @path: The set_param key to be checked for deprecation.
+ *
  * Parses a cleaned set_param path and checks whether it is deprecated. If yes,
  * the user is notified with a warning. This function does not exit the program.
- *
- * \param[in] path	The set_param key to be checked for deprecation.
- *
  */
 static void setparam_check_deprecated(const char *path)
 {
@@ -1336,13 +1335,12 @@ static void setparam_check_deprecated(const char *path)
 }
 
 /**
- * Parses the commandline options to set_param.
+ * setparam_cmdline() - Parses the commandline options to set_param.
+ * @argc: count of arguments given to set_param
+ * @argv: array of arguments given to set_param
+ * @popt: where set_param options will be saved [out]
  *
- * \param[in] argc	count of arguments given to set_param
- * \param[in] argv	array of arguments given to set_param
- * \param[out] popt	where set_param options will be saved
- *
- * \retval index in argv of the first nonoption argv element (optind value)
+ * Return index in argv of the first nonoption argv element (optind value)
  */
 static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
@@ -1439,13 +1437,13 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 }
 
 /**
- * Main set_param function.
+ * jt_lcfg_setparam() - Main set_param function.
+ * @argc: count of arguments given to set_param
+ * @argv: array of arguments given to set_param
  *
- * \param[in] argc	count of arguments given to set_param
- * \param[in] argv	array of arguments given to set_param
- *
- * \retval 0 if successful
- * \retval -errno if unsuccessful
+ * Return:
+ * * %0 if successful
+ * * %-errno if unsuccessful
  */
 int jt_lcfg_setparam(int argc, char **argv)
 {
