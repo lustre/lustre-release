@@ -146,14 +146,12 @@ static inline const char *llapi_hsm_ct_ev2str(int type)
 }
 
 /**
- * Writes a JSON event to the monitor FIFO. Noop if no FIFO has been
- * registered.
+ * llapi_hsm_write_json_event() - Writes a JSON event to the monitor FIFO.
+ * @event: A list of llapi_json_items comprising a single JSON-formatted event.
  *
- * \param event              A list of llapi_json_items comprising a
- *                           single JSON-formatted event.
+ * Writes JSON event to the monitor FIFO. Noop if no FIFO has been registered.
  *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Retval %0 on success or %-errno on error.
  */
 static int llapi_hsm_write_json_event(struct llapi_json_item_list **event)
 {
@@ -213,15 +211,15 @@ static int llapi_hsm_write_json_event(struct llapi_json_item_list **event)
 }
 
 /**
+ * llapi_hsm_log_ct_registration() - Hook for llapi_hsm_copytool_register
+ * @priv: Opaque private control structure.
+ * @event_type: The type of event (register or unregister).
+ *
  * Hook for llapi_hsm_copytool_register and llapi_hsm_copytool_unregister
  * to generate JSON events suitable for consumption by a copytool
  * monitoring process.
  *
- * \param priv               Opaque private control structure.
- * \param event_type         The type of event (register or unregister).
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Retval %0 on success or %-errno on error.
  */
 static int llapi_hsm_log_ct_registration(struct hsm_copytool_private **priv,
 					 __u32 event_type)
@@ -292,6 +290,13 @@ out_free:
 }
 
 /**
+ * llapi_hsm_log_ct_progress() - Log copytool progress
+ * @phcp: Opaque action handle returned by llapi_hsm_action_start.
+ * @hai: The hsm_action_item describing the request.
+ * @progress_type: The ct_progress_type describing the update.
+ * @total: The total expected bytes for the request.
+ * @current: The current copied byte count for the request.
+ *
  * Given a copytool progress update, construct a JSON event suitable for
  * consumption by a copytool monitoring process.
  *
@@ -322,15 +327,7 @@ out_free:
  *  "level": "INFO",
  *  "message": "lhsmtool_posix[42]: copytool fs=lustre archive#=2 item_count=1"}
  *
- * \param hcp                Opaque action handle returned by
- *                           llapi_hsm_action_start.
- * \param hai                The hsm_action_item describing the request.
- * \param progress_type      The ct_progress_type describing the update.
- * \param total              The total expected bytes for the request.
- * \param current            The current copied byte count for the request.
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Retval %0 on success or %-errno on error.
  */
 static int llapi_hsm_log_ct_progress(struct hsm_copyaction_private **phcp,
 				     const struct hsm_action_item *hai,
@@ -445,15 +442,15 @@ out_free:
 }
 
 /**
+ * llapi_hsm_register_event_fifo() - For given path create a filehandle
+ * @path: Path to monitor FIFO.
+ *
  * Given a path to a FIFO, create a filehandle for nonblocking writes to it.
  * Intended to be used for copytool monitoring processes that read an
  * event stream from the FIFO. Events written in the absence of a reader
  * are lost.
  *
- * \param path               Path to monitor FIFO.
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Retval %0 on success or %-errno on error.
  */
 int llapi_hsm_register_event_fifo(const char *path)
 {
@@ -518,12 +515,11 @@ int llapi_hsm_register_event_fifo(const char *path)
 }
 
 /**
- * Given a path to a FIFO, close its filehandle and delete the FIFO.
+ * llapi_hsm_unregister_event_fifo() - Given a path to a FIFO, close its
+ *                                     filehandle and delete the FIFO.
+ * @path: Path to monitor FIFO.
  *
- * \param path               Path to monitor FIFO.
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return %0 on success or %-errno on error.
  */
 int llapi_hsm_unregister_event_fifo(const char *path)
 {
@@ -545,16 +541,15 @@ int llapi_hsm_unregister_event_fifo(const char *path)
 }
 
 /**
+ * llapi_hsm_log_error() - Custom logging callback
+ * @level: The message loglevel.
+ * @_rc: The returncode associated with the message.
+ * @fmt: The message format string.
+ * @args: Arguments to be formatted by the format string.
+ *
  * Custom logging callback to be used when a monitoring FIFO has been
  * registered. Formats log entries as JSON events suitable for
  * consumption by a copytool monitoring process.
- *
- * \param level              The message loglevel.
- * \param _rc                The returncode associated with the message.
- * \param fmt                The message format string.
- * \param args               Arguments to be formatted by the format string.
- *
- * \retval None.
  */
 void llapi_hsm_log_error(enum llapi_message_level level, int _rc,
 			 const char *fmt, va_list args)
@@ -966,13 +961,20 @@ static int ct_open_by_fid(const struct hsm_copytool_private *ct,
 }
 
 /**
- * Get metadata attributes of file by FID.
+ * ct_md_getattr() - Get metadata attributes of file by FID.
+ * @ct: pointer to struct hsm_copytool_private
+ * @fid: FID to get attributes
+ * @stx: attribues returned [out]
  *
  * Use the IOC_MDC_GETFILEINFO ioctl (to send a MDS_GETATTR_NAME RPC)
- * to get the attributes of the file identified by \a fid. This
+ * to get the attributes of the file identified by @fid. This
  * returns only the attributes stored on the MDT and avoids taking
  * layout locks or accessing OST objects. It also bypasses the inode
- * cache. Attributes are returned in \a st.
+ * cache. Attributes are returned in @stx.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int ct_md_getattr(const struct hsm_copytool_private *ct,
 			 const struct lu_fid *fid,
@@ -1381,11 +1383,13 @@ int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
 }
 
 /**
+ * llapi_hsm_action_get_fd() - Get file descriptor to be used for copying data.
+ * @hcp: pointer to struct hsm_copyaction_private
+ *
  * Get a file descriptor to be used for copying data. It's up to the
  * caller to close the FDs obtained from this function.
  *
- * @retval a file descriptor on success.
- * @retval a negative error code on failure.
+ * Retval a file descriptor on success or %negative error code on failure.
  */
 int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
 {
@@ -1407,17 +1411,25 @@ int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
 }
 
 /**
- * Import an existing hsm-archived file into Lustre.
+ * llapi_hsm_import() - Import an existing hsm-archived file into Lustre.
+ * @dst: path to Lustre destination (e.g. /mnt/lustre/my/file).
+ * @archive: archive number.
+ * @st: struct stat buffer containing file ownership, perm, etc.
+ * @stripe_size: currently ignored
+ * @stripe_offset: currently ignored
+ * @stripe_count: currently ignored
+ * @stripe_pattern: currently ignored
+ * @pool_name: name of pool
+ * @newfid: Filled with new Lustre fid. [out]
  *
  * Caller must access file by (returned) newfid value from now on.
  *
- * \param dst      path to Lustre destination (e.g. /mnt/lustre/my/file).
- * \param archive  archive number.
- * \param st       struct stat buffer containing file ownership, perm, etc.
- * \param stripe_* Striping options.  Currently ignored, since the restore
- *                 operation will set the striping.  In V2, this striping might
- *                 be used.
- * \param newfid[out] Filled with new Lustre fid.
+ * Striping options. Currently ignored, since the restore operation will set the
+ * striping. In V2, this striping might be used.
+ *
+ * Return:
+ * * %0 on success.
+ * * %negative on error.
  */
 int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 		     unsigned long long stripe_size, int stripe_offset,
@@ -1476,14 +1488,14 @@ out_unlink:
 }
 
 /**
- * Return the current HSM states and HSM requests related to file pointed by \a
- * path.
+ * llapi_hsm_state_get_fd() - Return the current HSM states and HSM requests
+ *                            related to file pointed by @path.
+ * @fd: file discriptor
+ * @hus: Should be allocated by caller. Will be filled with current file states.
  *
- * \param hus  Should be allocated by caller. Will be filled with current file
- *             states.
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error.
  */
 int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus)
 {
@@ -1496,11 +1508,17 @@ int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus)
 	return rc;
 }
 
-/**
- * Return the current HSM states and HSM requests related to file pointed by \a
- * path.
+/*
+ * llapi_hsm_state_get() - Return current HSM states and HSM requests related
+ *                         to file pointed by @path
+ * @path: file path
+ * @hus: Should be allocated by caller. Will be filled with current file states.
  *
- * see llapi_hsm_state_get_fd() for args use and return
+ * see llapi_hsm_state_get() for args use and return
+ *
+ * Return:
+ * * %0 on success.
+ * * %-errno on error.
  */
 int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus)
 {
@@ -1518,18 +1536,19 @@ int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus)
 }
 
 /**
- * Set HSM states of file pointed by \a fd
+ * llapi_hsm_state_set_fd() - Set HSM states of file pointed by @fd
+ * @fd: file descriptor
+ * @setmask: Bitmask for flag to be set.
+ * @clearmask: Bitmask for flag to be cleared.
+ * @archive_id: Archive number identifier to use. 0 means no change.
  *
  * Using the provided bitmasks, the current HSM states for this file will be
- * changed. \a archive_id could be used to change the archive number also. Set
+ * changed. @archive_id could be used to change the archive number also. Set
  * it to 0 if you do not want to change it.
  *
- * \param setmask      Bitmask for flag to be set.
- * \param clearmask    Bitmask for flag to be cleared.
- * \param archive_id  Archive number identifier to use. 0 means no change.
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error.
  */
 int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,
 			   __u32 archive_id)
@@ -1554,9 +1573,17 @@ int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,
 }
 
 /**
- * Set HSM states of file pointed by \a path.
+ * llapi_hsm_state_set() - Set HSM states of file pointed by @path.
+ * @path: file path for which HSM states is to be modified
+ * @setmask: mask to "set" state flag
+ * @clearmask: mask to "clear" state flag
+ * @archive_id: Archive number identifier to use. 0 means no change.
  *
  * see llapi_hsm_state_set_fd() for args use and return
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
 			__u32 archive_id)
@@ -1575,13 +1602,14 @@ int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
 }
 
 /**
- * Return the current HSM request related to file pointed by \a path.
+ * llapi_hsm_current_action() - Return the current HSM request related to file
+ *                              pointed by @path.
+ * @path: file path from which to return current HSM
+ * @hca: Should be allocated by caller. Will be filled with current file actions
  *
- * \param hca  Should be allocated by caller. Will be filled with current file
- *             actions.
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error.
  */
 int llapi_hsm_current_action(const char *path, struct hsm_current_action *hca)
 {
@@ -1601,10 +1629,14 @@ int llapi_hsm_current_action(const char *path, struct hsm_current_action *hca)
 }
 
 /**
+ * llapi_hsm_user_request_alloc() - Allocate a hsm_user_request
+ * @itemcount: hsm_user_item struct count
+ * @data_len: additional data
+ *
  * Allocate a hsm_user_request with the specified carateristics.
  * This structure should be freed with free().
  *
- * \return an allocated structure on success, NULL otherwise.
+ * Return an allocated structure on success or NULL otherwise.
  */
 struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
 						      int data_len)
@@ -1619,12 +1651,11 @@ struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
 }
 
 /**
- * Send a HSM request to Lustre, described in \param request.
+ * llapi_hsm_request() - Send a HSM request to Lustre, described in @request.
+ * @path: Fullpath to the file to operate on.
+ * @request: The request, allocated with llapi_hsm_user_request_alloc().
  *
- * \param path	  Fullpath to the file to operate on.
- * \param request The request, allocated with llapi_hsm_user_request_alloc().
- *
- * \return 0 on success, an error code otherwise.
+ * Return %0 on success, an error code otherwise.
  */
 int llapi_hsm_request(const char *path, const struct hsm_user_request *request)
 {
