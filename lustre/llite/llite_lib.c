@@ -65,7 +65,7 @@ struct proj_sfs_cache {
 	struct rhash_head	psc_linkage;
 	struct kstatfs		psc_sfs;
 	time64_t		psc_age;
-	struct mutex		psc_mutex;
+	struct rw_semaphore	psc_lock;
 };
 
 static const struct rhashtable_params proj_sfs_cache_params = {
@@ -2787,61 +2787,56 @@ out:
 	RETURN(rc);
 }
 
-static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
+/* Called with ps->psc_lock held for write */
+static int ll_statfs_project(struct inode *inode, struct proj_sfs_cache *ps,
+			     struct kstatfs *sfs)
 {
-	struct ll_inode_info *lli = ll_i2info(inode);
-	struct ll_sb_info *sbi = ll_s2sbi(inode->i_sb);
 	struct if_quotactl qctl = {
 		.qc_cmd = LUSTRE_Q_GETQUOTA,
 		.qc_type = PRJQUOTA,
 		.qc_valid = QC_GENERAL,
 	};
-	struct proj_sfs_cache *ps, *orig;
+	struct obd_dqblk *dqblk = &qctl.qc_dqblk;
 	u64 limit, curblock;
-	int ret;
+	int ret = 0;
 
 	ENTRY;
-
-	ps = rhashtable_lookup_fast(&sbi->ll_proj_sfs_htable,
-				    &lli->lli_projid,
-				    proj_sfs_cache_params);
-	if (!ps) {
-		OBD_ALLOC_PTR(ps);
-		if (!ps)
-			RETURN(-ENOMEM);
-		ps->psc_id = lli->lli_projid;
-		mutex_init(&ps->psc_mutex);
-		orig = rhashtable_lookup_get_insert_fast(&sbi->ll_proj_sfs_htable,
-							&ps->psc_linkage,
-							proj_sfs_cache_params);
-		if (orig) {
-			OBD_FREE_PTR(ps);
-			if (IS_ERR(orig))
-				RETURN(PTR_ERR(orig));
-			ps = orig;
-		}
-	}
-
-	if (ktime_get_seconds() - ps->psc_age < sbi->ll_statfs_max_age) {
-		*sfs = ps->psc_sfs;
-		RETURN(0);
-	}
-
-	mutex_lock(&ps->psc_mutex);
-	if (ktime_get_seconds() - ps->psc_age < sbi->ll_statfs_max_age) {
-		*sfs = ps->psc_sfs;
-		GOTO(out, ret = 0);
-	}
-
 	qctl.qc_id = ll_i2info(inode)->lli_projid;
-	ret = quotactl_ioctl(inode->i_sb, &qctl);
+
+	/* Skip quotactl_ioctl if quota limits, usage and inodes were returned
+	 * in OBD_STATFS_SUM statfs request. It is a valid case if MDT returned
+	 * only limits or limits with only space usage or inodes. Space usage or
+	 * inodes flags are set if current project ID resides in an LQA or if
+	 * there are no quotas. Once the usage cache is ready, it should be
+	 * always set. If one of flags is not set, remaining data (space usage
+	 * or inode number) will be retrieved in quotactl_ioctl.
+	 */
+	if (sfs->f_flags & OS_STATFS_QLIMITS && sfs->f_flags & OS_STATFS_QINODES
+	    && sfs->f_flags & OS_STATFS_QSPACE)
+		goto set_ps;
+
+	if (sfs->f_flags & OS_STATFS_QINODES)
+		dqblk->dqb_valid |= QIF_INODES;
+	if (sfs->f_flags & OS_STATFS_QSPACE)
+		dqblk->dqb_valid |= QIF_SPACE;
+
+	ret = quotactl_ioctl(inode->i_sb, &qctl,
+			     sfs->f_flags & OS_STATFS_QLIMITS);
 	if (ret) {
 		/* ignore errors if project ID does not have
 		 * a quota limit or feature unsupported.
 		 */
 		if (ret == -ESRCH || ret == -EOPNOTSUPP)
 			ret = 0;
-		GOTO(out, ret);
+		/* MDT has already clamped f_blocks/f_files to the limits,
+		 * do not report more free space/inodes than the total.
+		 */
+		if (sfs->f_flags & OS_STATFS_QLIMITS) {
+			sfs->f_bfree = min(sfs->f_bfree, sfs->f_blocks);
+			sfs->f_bavail = min(sfs->f_bavail, sfs->f_blocks);
+			sfs->f_ffree = min(sfs->f_ffree, sfs->f_files);
+		}
+		RETURN(ret);
 	}
 
 	/*
@@ -2855,53 +2850,143 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 			ll_i2sbi(inode)->ll_fsname, sfs->f_bsize);
 	}
 
-	limit = ((qctl.qc_dqblk.dqb_bsoftlimit ?
-		 qctl.qc_dqblk.dqb_bsoftlimit :
-		 qctl.qc_dqblk.dqb_bhardlimit) * 1024) / sfs->f_bsize;
-	if (limit && sfs->f_blocks > limit) {
-		curblock = (qctl.qc_dqblk.dqb_curspace +
-				sfs->f_bsize - 1) / sfs->f_bsize;
-		sfs->f_blocks = limit;
-		sfs->f_bfree = sfs->f_bavail =
-			(sfs->f_blocks > curblock) ?
-			(sfs->f_blocks - curblock) : 0;
+	/* Apply the limit even if QIF_SPACE is not set, i.e. usage could not
+	 * be collected from all OSTs. Partial usage is better than reporting
+	 * whole FS free space against the project limit.
+	 */
+	if (!(sfs->f_flags & OS_STATFS_QSPACE)) {
+		if (sfs->f_flags & OS_STATFS_QLIMITS)
+			limit = sfs->f_blocks;
+		else
+			limit = ((dqblk->dqb_bsoftlimit ? dqblk->dqb_bsoftlimit
+				: dqblk->dqb_bhardlimit) * 1024) / sfs->f_bsize;
+
+		if (limit && (sfs->f_blocks > limit ||
+		    (sfs->f_flags & OS_STATFS_QLIMITS))) {
+			sfs->f_blocks = limit;
+			curblock = (dqblk->dqb_curspace + sfs->f_bsize - 1) /
+				   sfs->f_bsize;
+			sfs->f_bfree = sfs->f_bavail =
+				(sfs->f_blocks > curblock) ?
+				(sfs->f_blocks - curblock) : 0;
+		}
 	}
 
-	limit = qctl.qc_dqblk.dqb_isoftlimit ?
-		qctl.qc_dqblk.dqb_isoftlimit :
-		qctl.qc_dqblk.dqb_ihardlimit;
-	if (limit && sfs->f_files > limit) {
-		sfs->f_files = limit;
-		sfs->f_ffree = (sfs->f_files >
-			qctl.qc_dqblk.dqb_curinodes) ?
-			(sfs->f_files - qctl.qc_dqblk.dqb_curinodes) : 0;
+	if (!(sfs->f_flags & OS_STATFS_QINODES)) {
+		if (sfs->f_flags & OS_STATFS_QLIMITS)
+			limit = sfs->f_files;
+		else
+			limit = dqblk->dqb_isoftlimit ?: dqblk->dqb_ihardlimit;
+
+		if (limit && (sfs->f_files > limit ||
+		    (sfs->f_flags & OS_STATFS_QLIMITS))) {
+			sfs->f_files = limit;
+			sfs->f_ffree = (sfs->f_files > dqblk->dqb_curinodes) ?
+				(sfs->f_files - dqblk->dqb_curinodes) : 0;
+		}
 	}
 
+set_ps:
 	ps->psc_sfs = *sfs;
 	ps->psc_age = ktime_get_seconds();
 
-out:
-	mutex_unlock(&ps->psc_mutex);
-
 	RETURN(ret);
+}
+
+/* Returns NULL if sfs is filled from the per-projid cache, ERR_PTR() on
+ * allocation or hash insert failure, otherwise the cache entry to be
+ * refreshed.
+ */
+static struct proj_sfs_cache *ll_statfs_project_get(struct inode *inode,
+						    struct kstatfs *sfs)
+{
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct ll_sb_info *sbi = ll_s2sbi(inode->i_sb);
+	struct proj_sfs_cache *ps, *orig;
+	unsigned int max_age = sbi->ll_statfs_max_age;
+
+	ENTRY;
+	ps = rhashtable_lookup_fast(&sbi->ll_proj_sfs_htable,
+				&lli->lli_projid, proj_sfs_cache_params);
+	if (ps) {
+		down_read(&ps->psc_lock);
+		if (ktime_get_seconds() - ps->psc_age < max_age) {
+			*sfs = ps->psc_sfs;
+			up_read(&ps->psc_lock);
+			RETURN(NULL);
+		}
+		up_read(&ps->psc_lock);
+	} else {
+		struct rhashtable *sfs_htable;
+
+		OBD_ALLOC_PTR(ps);
+		if (!ps)
+			RETURN(ERR_PTR(-ENOMEM));
+		ps->psc_id = lli->lli_projid;
+		sfs_htable = &sbi->ll_proj_sfs_htable;
+		init_rwsem(&ps->psc_lock);
+		orig = rhashtable_lookup_get_insert_fast(sfs_htable,
+							 &ps->psc_linkage,
+							 proj_sfs_cache_params);
+		if (orig) {
+			OBD_FREE_PTR(ps);
+			if (IS_ERR(orig))
+				RETURN(orig);
+			ps = orig;
+		}
+	}
+
+	RETURN(ps);
 }
 
 int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 {
 	struct super_block *sb = de->d_sb;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_inode_info *lli = ll_i2info(de->d_inode);
+	struct proj_sfs_cache *ps = NULL;
 	struct obd_statfs osfs;
 	__u64 fsid = huge_encode_dev(sb->s_dev);
 	ktime_t kstart = ktime_get();
+	__u32 flags = OBD_STATFS_SUM;
 	int rc;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:sb=%s (%p) "DNAME" proj=%u\n", sb->s_id, sb,
 	       encode_fn_dentry(de), ll_i2info(de->d_inode)->lli_projid);
 
+	if (test_bit(LL_SBI_STATFS_PROJECT, sbi->ll_flags) &&
+	    test_bit(LLIF_PROJECT_INHERIT, &lli->lli_flags)) {
+		ps = ll_statfs_project_get(de->d_inode, sfs);
+		if (IS_ERR_OR_NULL(ps))
+			return PTR_ERR_OR_ZERO(ps);
+
+		/* Only one thread sends MDS_STATFS for this project ID, others
+		 * wait here and take the result from the refreshed cache.
+		 */
+		down_write(&ps->psc_lock);
+		if (ktime_get_seconds() - ps->psc_age <
+		    sbi->ll_statfs_max_age) {
+			*sfs = ps->psc_sfs;
+			up_write(&ps->psc_lock);
+			return 0;
+		}
+
+		osfs.os_fprecreated = lli->lli_projid;
+		/* OBD_STATFS_FOR_MDT0 should be removed when/if quota limits
+		 * will be available on all MDTs. Now we pay this price as one
+		 * statfs to MDT0 is cheaper than one statfs to one of MDTs plus
+		 * quotactl request to MDT0.
+		 */
+		flags |= OBD_STATFS_PRJ_QUOTAS | OBD_STATFS_FOR_MDT0;
+	}
+
 	/* Some amount of caching on the client is allowed */
-	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_SUM);
-	if (rc)
+	rc = ll_statfs_internal(sbi, &osfs, flags);
+	if (rc) {
+		if (ps)
+			up_write(&ps->psc_lock);
 		return rc;
+	}
 
 	statfs_unpack(sfs, &osfs);
 
@@ -2926,9 +3011,11 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	sfs->f_fsid.val[0] = (__u32)fsid;
 	sfs->f_fsid.val[1] = (__u32)(fsid >> 32);
 	sfs->f_namelen = sbi->ll_namelen;
-	if (test_bit(LL_SBI_STATFS_PROJECT, sbi->ll_flags) &&
-	    test_bit(LLIF_PROJECT_INHERIT, &ll_i2info(de->d_inode)->lli_flags))
-		return ll_statfs_project(de->d_inode, sfs);
+	if (ps) {
+		rc = ll_statfs_project(de->d_inode, ps, sfs);
+		up_write(&ps->psc_lock);
+		return rc;
+	}
 
 	ll_stats_ops_tally(sbi, LPROC_LL_STATFS,
 			   ktime_us_delta(ktime_get(), kstart));

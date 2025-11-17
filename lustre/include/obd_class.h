@@ -49,6 +49,9 @@
 					 * the statfs mutex of a different
 					 * device.
 					 */
+#define OBD_STATFS_PRJ_QUOTAS	0x0020	/* Get quota limits, space and inodes
+					 * usage for project id.
+					 */
 
 #define OBD_MAX_INDEX xa_limit_31b.max
 
@@ -1109,7 +1112,7 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 	CDEBUG(D_SUPER, "%s: age %lld, max_age %lld\n",
 	       obd->obd_name, obd->obd_osfs_age, max_age);
 	/* ignore cache if aggregated isn't expected */
-	if (obd->obd_osfs_age < max_age ||
+	if (obd->obd_osfs_age < max_age || flags & OBD_STATFS_PRJ_QUOTAS ||
 	    ((obd->obd_osfs.os_state & OS_STATFS_SUM) &&
 	     !(flags & OBD_STATFS_SUM))) {
 		/* The RPC will block anyway, so avoid sending many at once.
@@ -1124,7 +1127,9 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 						     ? SINGLE_DEPTH_NESTING : 0);
 		if (rc)
 			RETURN(rc);
+
 		if (obd->obd_osfs_age < max_age ||
+		    flags & OBD_STATFS_PRJ_QUOTAS ||
 		    ((obd->obd_osfs.os_state & OS_STATFS_SUM) &&
 		     !(flags & OBD_STATFS_SUM))) {
 			rc = obd->obd_type->typ_dt_ops->o_statfs(env, exp, osfs,
@@ -1140,11 +1145,16 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 			       obd->obd_name, &obd->obd_osfs,
 			       osfs->os_bavail, osfs->os_blocks,
 			       osfs->os_ffree, osfs->os_files);
-
-			spin_lock(&obd->obd_osfs_lock);
-			memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
-			obd->obd_osfs_age = ktime_get_seconds();
-			spin_unlock(&obd->obd_osfs_lock);
+			/* With OBD_STATFS_PRJ_QUOTAS statfs data is cached per
+			 * project ID in superblock htable.
+			 */
+			if (!(flags & OBD_STATFS_PRJ_QUOTAS)) {
+				spin_lock(&obd->obd_osfs_lock);
+				memcpy(&obd->obd_osfs, osfs,
+				       sizeof(obd->obd_osfs));
+				obd->obd_osfs_age = ktime_get_seconds();
+				spin_unlock(&obd->obd_osfs_lock);
+			}
 		}
 		mutex_unlock(statfs_mutex);
 	} else {

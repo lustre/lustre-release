@@ -280,6 +280,9 @@ enum obd_statfs_state {
 				  OS_STATFS_NOCREATE | OS_STATFS_ENOSPC |
 				  OS_STATFS_ENOINO,
 	OS_STATFS_UPGRADE	= OS_STATFS_NONROT,
+	OS_STATFS_QSPACE	= 0x00000800, /**< contains quota space usage */
+	OS_STATFS_QINODES	= 0x00001000, /**< contains quota inode usage */
+	OS_STATFS_QLIMITS	= 0x00002000, /**< contains quota limits */
 };
 
 struct obd_statfs_state_name {
@@ -343,7 +346,9 @@ struct obd_statfs {
 	__u32		os_state;       /**< obd_statfs_state OS_STATFS_* */
 	__u32		os_fprecreated;	/* objs available now to the caller */
 					/* used in QoS code to find preferred
-					 * OSTs
+					 * OSTs. On the client with flag
+					 * OBD_STATFS_PRJ_QUOTAS it is used to
+					 * pass projid between layers.
 					 */
 	__u32           os_granted;	/* space granted for MDS */
 	__u32           os_failure_domain; /* domain of related target */
@@ -1676,6 +1681,8 @@ static inline __u64 stoqb(__kernel_size_t space)
 #define LUSTRE_Q_SETQUOTALQA	0x80001b  /* set LQA quota */
 #define LUSTRE_Q_GETINFOLQA	0x80001c  /* get LQA quota info */
 #define LUSTRE_Q_SETINFOLQA	0x80001d  /* set LQA quota info */
+/* get minimum user quota limits (personal or LQA) */
+#define LUSTRE_Q_GETQUOTAMIN	0x80001e
 /* In the current Lustre implementation, the grace time is either the time
  * or the timestamp to be used after some quota ID exceeds the soft limt,
  * 48 bits should be enough, its high 16 bits can be used as quota flags.

@@ -1330,7 +1330,8 @@ struct folio *ll_get_dir_folio(struct inode *dir, struct md_op_data *op_data,
 			       int *partial_readdir_rc);
 void ll_release_dir_folio(struct inode *inode, struct folio *folio,
 			  bool remove);
-int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl);
+int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl,
+		   bool limits_valid);
 void ll_quota_iter_check_and_cleanup(struct ll_sb_info *sbi, bool check);
 
 /* llite/namei.c */

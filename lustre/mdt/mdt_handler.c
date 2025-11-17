@@ -453,6 +453,90 @@ out:
 	return rc;
 }
 
+static int mdt_getquota_min(struct tgt_session_info *tsi,
+			    struct obd_statfs *sfs,
+			    __u32 projid)
+{
+	struct obd_export *exp  = tsi->tsi_exp;
+	struct mdt_device *mdt = mdt_exp2dev(exp);
+	struct lu_device *qmt = mdt->mdt_qmt_dev;
+	struct obd_quotactl qctl;
+	struct obd_dqblk *dqblk = &qctl.qc_dqblk;
+	struct lu_nodemap *nodemap;
+	__u64 limit;
+	__u32 id;
+	int rc;
+
+	ENTRY;
+	nodemap = nodemap_get_from_exp(exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+	id = nodemap_map_id(nodemap, NODEMAP_PROJID,
+			    NODEMAP_CLIENT_TO_FS, projid);
+
+	memset(&qctl, 0, sizeof(qctl));
+	qctl.qc_cmd = LUSTRE_Q_GETQUOTAMIN;
+	qctl.qc_type = PRJQUOTA;
+	qctl.qc_id = id;
+	rc = qmt_hdls.qmth_quotactl(tsi->tsi_env, qmt, nodemap, &qctl, NULL);
+	if (rc)
+		GOTO(out, rc);
+
+	limit = ((dqblk->dqb_bsoftlimit ? dqblk->dqb_bsoftlimit :
+		  dqblk->dqb_bhardlimit) * 1024) / sfs->os_bsize;
+	if (limit && sfs->os_blocks > limit) {
+		sfs->os_blocks = limit;
+		if (dqblk->dqb_valid & QIF_SPACE) {
+			u64 curblock;
+
+			curblock = (dqblk->dqb_curspace + sfs->os_bsize - 1) /
+				   sfs->os_bsize;
+			sfs->os_bfree = sfs->os_bavail =
+				sfs->os_blocks > curblock ?
+				sfs->os_blocks - curblock : 0;
+			/* No space anymore. Also if the minimum limit or
+			 * minimum remaining space relates to LQA.
+			 */
+			sfs->os_state |= OS_STATFS_QSPACE;
+		}
+	} else {
+		/* No need to gather the space usage on the client, if limit is
+		 * not set. Even if it is set, but larger than the total FS
+		 * size, we shouldn't take into account personal project ID
+		 * usage as the client will get -ENOSPC sooner than -EDQUOT.
+		 */
+		sfs->os_state |= OS_STATFS_QSPACE;
+	}
+
+	limit = dqblk->dqb_isoftlimit ?
+		dqblk->dqb_isoftlimit :
+		dqblk->dqb_ihardlimit;
+	if (limit && sfs->os_files > limit) {
+		sfs->os_files = limit;
+		if (dqblk->dqb_valid & QIF_INODES) {
+			sfs->os_ffree = sfs->os_files > dqblk->dqb_curinodes ?
+					sfs->os_files - dqblk->dqb_curinodes :
+					0;
+			/* The minimum limit or minimum remaining inodes number
+			 * relates to LQA. If not, inodes number reached the
+			 * minimum limit.
+			 */
+			sfs->os_state |= OS_STATFS_QINODES;
+		}
+	} else {
+		/* No need to gather inodes on the client. */
+		sfs->os_state |= OS_STATFS_QINODES;
+	}
+
+	if (dqblk->dqb_valid & QIF_LIMITS)
+		sfs->os_state |= OS_STATFS_QLIMITS;
+
+	GOTO(out, rc);
+out:
+	nodemap_putref(nodemap);
+	return rc;
+}
+
 static int mdt_statfs(struct tgt_session_info *tsi)
 {
 	struct ptlrpc_request *req = tgt_ses_req(tsi);
@@ -565,9 +649,15 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 		osfs->os_bavail <<= current_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bsize = 1 << COMPAT_BSIZE_SHIFT;
 	}
+
+	if (mdt->mdt_qmt_dev && reqbody &&
+	    reqbody->mbo_valid & OBD_MD_FLPROJID)
+		rc = mdt_getquota_min(tsi, osfs, reqbody->mbo_projid);
+
 	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_STATFS,
 				 ktime_us_delta(ktime_get(), kstart));
+
 out:
 	mdt_thread_info_fini(info);
 	RETURN(rc);

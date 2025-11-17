@@ -1667,7 +1667,8 @@ static int quotactl_getallquota(struct ll_sb_info *sbi,
 	RETURN(rc);
 }
 
-int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
+int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl,
+		   bool limits_valid)
 {
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	int cmd = qctl->qc_cmd;
@@ -1757,6 +1758,7 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 	} else {
 		struct obd_quotactl *oqctl;
 		int oqctl_len = sizeof(*oqctl);
+		bool has_space, has_inodes;
 
 		if (LUSTRE_Q_CMD_IS_POOL(cmd) || LUSTRE_Q_CMD_IS_LQA(cmd)) {
 			BUILD_BUG_ON(LQA_NAME_MAX != LOV_MAXPOOLNAME);
@@ -1768,63 +1770,76 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 			RETURN(-ENOMEM);
 
 		QCTL_COPY(oqctl, qctl);
-		rc = obd_quotactl(sbi->ll_md_exp, oqctl);
-		if (rc) {
-			OBD_FREE(oqctl, oqctl_len);
-			RETURN(rc);
+		/* If we come here from ll_statfs_project, it has already
+		 * retrieved limits through mdt statfs.
+		 */
+		if (!limits_valid) {
+			rc = obd_quotactl(sbi->ll_md_exp, oqctl);
+			if (rc) {
+				OBD_FREE(oqctl, oqctl_len);
+				RETURN(rc);
+			}
 		}
 		/* If QIF_SPACE is not set, client should collect the
 		 * space usage from OSSs by itself
 		 */
-		if ((cmd == Q_GETQUOTA || cmd == LUSTRE_Q_GETQUOTAPOOL) &&
-		    !(oqctl->qc_dqblk.dqb_valid & QIF_SPACE) &&
-		    !oqctl->qc_dqblk.dqb_curspace) {
-			struct obd_quotactl *oqctl_tmp;
-			int qctl_len = sizeof(*oqctl_tmp) + LOV_MAXPOOLNAME + 1;
+		has_space = oqctl->qc_dqblk.dqb_valid & QIF_SPACE;
+		has_inodes = oqctl->qc_dqblk.dqb_valid & QIF_INODES;
+		if ((cmd == LUSTRE_Q_GETQUOTAPOOL || cmd == Q_GETQUOTA) &&
+		    (!has_space || !has_inodes)) {
+			struct obd_quotactl *oqc_tmp;
+			int qctl_len = sizeof(*oqc_tmp) +
+				max(LOV_MAXPOOLNAME + 1, LQA_NAME_MAX + 1);
 
-			OBD_ALLOC(oqctl_tmp, qctl_len);
-			if (oqctl_tmp == NULL)
+			OBD_ALLOC(oqc_tmp, qctl_len);
+			if (oqc_tmp == NULL)
 				GOTO(out, rc = -ENOMEM);
 
 			if (cmd == LUSTRE_Q_GETQUOTAPOOL) {
-				oqctl_tmp->qc_cmd = LUSTRE_Q_GETQUOTAPOOL;
-				memcpy(oqctl_tmp->qc_poolname,
+				oqc_tmp->qc_cmd = LUSTRE_Q_GETQUOTAPOOL;
+				memcpy(oqc_tmp->qc_poolname,
 				       qctl->qc_poolname,
 				       LOV_MAXPOOLNAME + 1);
 			} else {
-				oqctl_tmp->qc_cmd = Q_GETOQUOTA;
+				oqc_tmp->qc_cmd = Q_GETOQUOTA;
 			}
-			oqctl_tmp->qc_id = oqctl->qc_id;
-			oqctl_tmp->qc_type = oqctl->qc_type;
+			oqc_tmp->qc_id = oqctl->qc_id;
+			oqc_tmp->qc_type = oqctl->qc_type;
 
-			/* collect space usage from OSTs */
-			oqctl_tmp->qc_dqblk.dqb_curspace = 0;
-			rc = obd_quotactl(sbi->ll_dt_exp, oqctl_tmp);
-			/*
-			 * Keep partial OST usage on error, but leave
-			 * QIF_SPACE clear.
-			 */
-			oqctl->qc_dqblk.dqb_curspace =
-				oqctl_tmp->qc_dqblk.dqb_curspace;
-			if (!rc)
-				oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
+			if (!has_space) {
+				/* collect space usage from OSTs */
+				oqc_tmp->qc_dqblk.dqb_curspace = 0;
+				rc = obd_quotactl(sbi->ll_dt_exp, oqc_tmp);
+				/*
+				 * Keep partial OST usage on error, but leave
+				 * QIF_SPACE clear.
+				 */
+				oqctl->qc_dqblk.dqb_curspace =
+					oqc_tmp->qc_dqblk.dqb_curspace;
+				if (!rc)
+					oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
+			}
 
-			/* collect space & inode usage from MDTs */
-			oqctl_tmp->qc_cmd = Q_GETOQUOTA;
-			oqctl_tmp->qc_dqblk.dqb_curspace = 0;
-			oqctl_tmp->qc_dqblk.dqb_curinodes = 0;
-			rc = obd_quotactl(sbi->ll_md_exp, oqctl_tmp);
+			/* collect space (DoM, dirs) & inode usage from MDTs */
+			oqc_tmp->qc_cmd = Q_GETOQUOTA;
+			oqc_tmp->qc_dqblk.dqb_curspace = 0;
+			oqc_tmp->qc_dqblk.dqb_curinodes = 0;
+
+			rc = obd_quotactl(sbi->ll_md_exp, oqc_tmp);
 			if (!rc || rc == -EREMOTEIO) {
-				oqctl->qc_dqblk.dqb_curspace +=
-					oqctl_tmp->qc_dqblk.dqb_curspace;
-				oqctl->qc_dqblk.dqb_curinodes =
-					oqctl_tmp->qc_dqblk.dqb_curinodes;
-				oqctl->qc_dqblk.dqb_valid |= QIF_INODES;
-			} else {
+				if (!has_space)
+					oqctl->qc_dqblk.dqb_curspace +=
+						oqc_tmp->qc_dqblk.dqb_curspace;
+				if (!has_inodes) {
+					oqctl->qc_dqblk.dqb_curinodes =
+						oqc_tmp->qc_dqblk.dqb_curinodes;
+					oqctl->qc_dqblk.dqb_valid |= QIF_INODES;
+				}
+			} else if (!has_space) {
 				oqctl->qc_dqblk.dqb_valid &= ~QIF_SPACE;
 			}
 
-			OBD_FREE(oqctl_tmp, qctl_len);
+			OBD_FREE(oqc_tmp, qctl_len);
 		}
 out:
 		QCTL_COPY(qctl, oqctl);
@@ -2568,7 +2583,7 @@ out_req:
 				GOTO(out_quotactl, rc = -EFAULT);
 		}
 
-		rc = quotactl_ioctl(inode->i_sb, qctl);
+		rc = quotactl_ioctl(inode->i_sb, qctl, false);
 		if ((rc == 0 || rc == -ENODATA) &&
 		    copy_to_user(uarg, qctl, sizeof(*qctl)))
 			rc = -EFAULT;

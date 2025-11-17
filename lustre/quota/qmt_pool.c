@@ -335,7 +335,7 @@ static inline int qti_pools_add(const struct lu_env *env,
 		pools[qti->qti_pools_cnt++] = qpi;
 	}
 
-	CDEBUG(D_QUOTA, "Pool %s is added, pools %p qti_pools %p pool_num %d\n",
+	CDEBUG(D_QUOTA, "Pool %s is added, pools %px qti_pools %px pool_num %d\n",
 	       qpi->qpi_name, pools, qti->qti_pools, qti->qti_pools_cnt);
 
 	return 0;
@@ -347,17 +347,19 @@ static inline int qti_pools_add(const struct lu_env *env,
  * \param env	- is the environment passed by the caller
  * \param qmt	- is the quota master target
  * \param rtype - is the type of this pool, either LQUOTA_RES_MD or
- *                    LQUOTA_RES_DT.
+ *                    LQUOTA_RES_DT
  * \param pool_name - is the pool name to search for
- * \param idx	- OST or MDT index to search for. When it is >= 0, function
- *		returns array with pointers to all pools that include
- *		targets with requested index.
- *		idx == QMT_POOL_IDX_GLB, pool_name == NULL: return only global
- *		pool.
- *		idx == QMT_POOL_IDX_ALL, add == true, qid != NULL: return an
- *		array of a global pool plus all PQs and LQAs containing qid.
+ * \param idx	- OST or MDT index to search for:
+ *		* idx >= 0: return an array with the pointers to all pools that
+ *		  include targets with requested index
+ *		* idx == QMT_POOL_IDX_GLB, add == false, qid == NULL: return
+ *		  only global pool
+ *		* idx == QMT_POOL_IDX_GLB, add == true, qid != NULL: return
+ *		  global pool and LQAs containing qid
+ *		* idx == QMT_POOL_IDX_ALL, add == true, qid != NULL: return an
+ *		  array of a global pool plus all PQs and LQAs containing qid
  * \param add	- add to qti_pool_arr if true
- * \param qid	- quota id to lookup find appropriate LQA pools
+ * \param qid	- quota id to lookup appropriate LQA pools
  * \param lqa	- lookup for LQA pool by name
  */
 struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
@@ -413,6 +415,7 @@ struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 			rc = qti_pools_add(env, pos);
 			if (rc)
 				break;
+			continue;
 		}
 
 		if (pos->qpi_lqa != lqa)
@@ -427,8 +430,8 @@ struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 					break;
 			} else {
 				qpi_getref(pool);
+				break;
 			}
-			break;
 		}
 	}
 	up_read(&qmt->qmt_pool_lock);
@@ -771,7 +774,7 @@ static int qmt_lgd_extend_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			lqe->lqe_qunit;
 		lgd->lqeg_arr[lgd->lqeg_num_used].lge_edquot_nu = 0;
 		lgd->lqeg_arr[lgd->lqeg_num_used].lge_qunit_nu = 0;
-		LQUOTA_DEBUG(lqe, "add tgt idx:%d used %d alloc %d\n",
+		LQUOTA_DEBUG(lqe, "add tgt idx:%d used %d alloc %d",
 			     lgd->lqeg_arr[lgd->lqeg_num_used].lge_idx,
 			     lgd->lqeg_num_used, lgd->lqeg_num_alloc);
 		lgd->lqeg_num_used++;
@@ -1281,7 +1284,7 @@ static int qmt_site_recalc_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 		bool need_notify = false;
 		int rc;
 
-		LQUOTA_DEBUG(lqe, "lqe_recalc_granted %llu\n",
+		LQUOTA_DEBUG(lqe, "lqe_recalc_granted %llu",
 			     lqe->lqe_recalc_granted);
 		lqe->lqe_granted = lqe->lqe_recalc_granted;
 		/* Always returns true, if there is no slaves in a pool */

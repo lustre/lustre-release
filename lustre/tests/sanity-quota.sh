@@ -8160,6 +8160,10 @@ test_97c ()
 		-i ${isoft} $DIR || error "set user quota failed for lqa:$lqa"
 	$LFS quota -U --lqa $lqa $DIR
 
+	echo "Verifying the title"
+	$LFS quota -U --lqa $lqa | grep -q "^Disk usr quotas for LQA:$lqa$" ||
+		error "lfs quota title for lqa is wrong"
+
 	echo "Verifying initial LQA quota limits"
 	limit=$($LFS quota -U --lqa $lqa -Bq)
 	((limit == bhard)) || error "bhard limit $limit != $bhard for lqa:$lqa"
@@ -8266,33 +8270,115 @@ test_97d() {
 }
 run_test 97d "LQA disk persistence using standard commands"
 
-test_97e()
-{
-	local lqa="lqa1"
+test_97e() {
+	local lqa1="lqa1"
+	local lqa2="lqa2"
+	local glbl_bhard=1024 # MB
+	local glbl_soft=900 # MB
+	local glbl_ihard=100000
+	local glbl_isoft=90000
+	local bhard=$((20 * 1024)) # KB
+	local bhard2=$((bhard * 2)) # KB
+	local bsoft=$((19 * 1024)) # KB
+	local bsoft2=$((bsoft - 1024)) # KB
+	local ihard=1555
+	local ihard2=$((ihard * 2))
+	local isoft=1333
+	local isoft2=$((isoft + 20))
+	local range_min=$((TSTPRJID/2))
+	local range_max=$((TSTPRJID+100))
+	local dir="$DIR/$tdir"
+	local itotal
+	local size
 
-	(( $MDS1_VERSION >= $(version_code 2.17.56) )) ||
-		skip "need MDS >= 2.17.56 to reject invalid lqa ranges"
+	is_project_quota_supported ||
+		skip "skip project quota unsupported"
 
-	$LQA_NEW --name $lqa || error "cannot create $lqa"
-	stack_trap "$LQA_DESTROY --name $lqa || true"
+	(( $MDS1_VERSION >= $(version_code 2.17.61) )) ||
+		skip "need MDS >= 2.17.61 to support LQA limits in statfs"
 
-	$LQA_ADD --name $lqa --range 10a &&
-		error "lqa add succeeded with invalid range 10a"
-	$LQA_ADD --name $lqa --range 10-11b &&
-		error "lqa add succeeded with invalid range 10-11b"
-	$LQA_ADD --name $lqa --range 10- &&
-		error "lqa add succeeded with invalid range 10-"
+	setup_quota_test || error "setup quota failed with $?"
 
-	$LQA_REMOVE --name $lqa --range 10a &&
-		error "lqa remove succeeded with invalid range 10a"
-	$LQA_REMOVE --name $lqa --range 10-11b &&
-		error "lqa remove succeeded with invalid range 10-11b"
-	$LQA_REMOVE --name $lqa --range 10- &&
-		error "lqa remove succeeded with invalid range 10-"
+	df -h $dir
+	df -i $dir
 
-	$LQA_DESTROY --name $lqa || error "cannot destroy $lqa"
+	echo "range_min $range_min, range_max $range_max"
+	$LQA_NEW --name $lqa1 || error "cannot create $lqa1"
+	stack_trap "$LQA_DESTROY --name $lqa1"
+	$LQA_ADD --name $lqa1 --range $range_min-$range_max ||
+		error "cannot add range $range_min-$range_max to $lqa1"
+
+	$LQA_NEW --name $lqa2 || error "cannot create $lqa2"
+	stack_trap "$LQA_DESTROY --name $lqa2"
+	$LQA_ADD --name $lqa2 --range $range_min-$range_max ||
+		error "cannot add range $range_min-$range_max to $lqa2"
+
+	$LFS setquota -p $TSTPRJID -B ${glbl_bhard}M -b ${glbl_soft}M \
+		-I $glbl_ihard -i $glbl_isoft $DIR ||
+			error "set limits to project:$TSTPRJID failed"
+
+	$LFS setquota -P --lqa $lqa1 -B ${bhard}K -b ${bsoft}K -I $ihard \
+		-i $isoft $DIR || error "1: set prj quota failed for lqa:$lqa1"
+	$LFS setquota -P --lqa $lqa2 -B ${bhard2}K -b ${bsoft2}K -I $ihard2 \
+		-i $isoft2 $DIR || error "2: set prj quota failed for lqa:$lqa2"
+
+	change_project -p $TSTPRJID -s $dir
+	df -h $dir
+	df -i $dir
+
+	read size itotal <<< $(df $dir --output=size,itotal | \
+		awk 'NR>1 {print $1, $2}')
+	# lqa1 has minimum isoft limit, lqa2 has minimum bsoft limit
+	echo "size $size itotal $itotal"
+	((size == bsoft2)) || error "1: size:$size != bsoft:$bsoft"
+	((itotal == isoft)) || error "1: itotal:$itotal != isoft:$isoft"
+	# Set TSTPRJID soft limit lower than lqa1
+	local min_isoft=$((isoft - 20))
+	$LFS setquota -p $TSTPRJID -i $min_isoft $DIR ||
+		error "set hard block limit to group $TSTID failed"
+	local max_age=$($LCTL get_param -n llite.*.statfs_max_age)
+	sleep $((max_age + 2))
+	read size itotal <<< $(df $dir --output=size,itotal | \
+		awk 'NR>1 {print $1, $2}')
+	# Now min isoft belongs to TSTPRJID while min bsoft is still to lqa2
+	echo "size $size itotal $itotal"
+	((size == bsoft2)) || error "2: size:$size != bsoft:$bsoft"
+	((itotal == min_isoft)) || error "2: itotal:$itotal != isoft:$min_isoft"
 }
-run_test 97e "LQA add/remove should reject invalid ranges"
+run_test 97e "df respects LQA project limits"
+
+test_97f() {
+	local bhard=$((20 * 1024)) # KB
+	local bsoft=$((19 * 1024)) # KB
+	local ihard=1555
+	local isoft=1333
+	local dir="$DIR/$tdir"
+	local itotal
+	local size
+
+	is_project_quota_supported ||
+		skip "skip project quota unsupported"
+
+	(( MDS1_VERSION < $(version_code 2.17.57) )) ||
+		skip "need MDS < 2.17.57 to check statfs interop"
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	$LFS setquota -p $TSTPRJID -B ${bhard}K -b ${bsoft}K \
+		-I $ihard -i $isoft $DIR ||
+			error "set limits to project:$TSTPRJID failed"
+
+	change_project -p $TSTPRJID -s $dir
+	df -h $dir
+	df -i $dir
+
+	read size itotal <<< $(df $dir --output=size,itotal | \
+		awk 'NR>1 {print $1, $2}')
+	echo "size $size itotal $itotal"
+	((size == bsoft)) || error "1: size:$size != bsoft:$bsoft"
+	((itotal == isoft)) || error "1: itotal:$itotal != isoft:$isoft"
+}
+run_test 97f "statfs quotas from the client works with old MDS"
 
 test_97g() {
 	local rstart=$((TSTPRJID-10))
@@ -8326,6 +8412,34 @@ test_97g() {
 	return 0
 }
 run_test 97g "new LQA limits should affect all lqes in the system"
+
+test_97h()
+{
+	local lqa="lqa1"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.56) )) ||
+		skip "need MDS >= 2.17.56 to reject invalid lqa ranges"
+
+	$LQA_NEW --name $lqa || error "cannot create $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa || true"
+
+	$LQA_ADD --name $lqa --range 10a &&
+		error "lqa add succeeded with invalid range 10a"
+	$LQA_ADD --name $lqa --range 10-11b &&
+		error "lqa add succeeded with invalid range 10-11b"
+	$LQA_ADD --name $lqa --range 10- &&
+		error "lqa add succeeded with invalid range 10-"
+
+	$LQA_REMOVE --name $lqa --range 10a &&
+		error "lqa remove succeeded with invalid range 10a"
+	$LQA_REMOVE --name $lqa --range 10-11b &&
+		error "lqa remove succeeded with invalid range 10-11b"
+	$LQA_REMOVE --name $lqa --range 10- &&
+		error "lqa remove succeeded with invalid range 10-"
+
+	$LQA_DESTROY --name $lqa || error "cannot destroy $lqa"
+}
+run_test 97h "LQA add/remove should reject invalid ranges"
 
 test_97i()
 {

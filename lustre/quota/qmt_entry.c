@@ -184,10 +184,12 @@ static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 	struct qmt_pool_info	*pool = (struct qmt_pool_info *)arg;
 
 	libcfs_debug_msg(msgdata,
-			 "%pV qmt:%s pool:%s-%s id:%llu enforced:%d hard:%llu soft:%llu granted:%llu time:%llu qunit: %llu edquot:%d may_rel:%llu revoke:%lld default:%s\n",
+			 "%pV qmt:%s pool:%s%s-%s qtype:%s id:%llu enforced:%d hard:%llu soft:%llu granted:%llu time:%llu qunit: %llu edquot:%d may_rel:%llu revoke:%lld default:%s\n",
 			 vaf, pool->qpi_qmt->qmt_svname,
+			 pool->qpi_lqa ? "lqa-" : "",
 			 RES_NAME(pool->qpi_rtype),
 			 pool->qpi_name,
+			 qtype_name(lqe_qtype(lqe)),
 			 lqe->lqe_id.qid_uid, lqe->lqe_enforced,
 			 lqe->lqe_hardlimit, lqe->lqe_softlimit,
 			 lqe->lqe_granted, lqe->lqe_gracetime,

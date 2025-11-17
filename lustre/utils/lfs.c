@@ -91,6 +91,7 @@ struct quota_param {
 	unsigned int	 qp_show_title:1;
 	unsigned int	 qp_show_qid_num:1;
 	unsigned int	 qp_show_root:1;
+	unsigned int	 qp_show_lqa:1;
 	__u32		 qp_detail;
 };
 
@@ -11259,6 +11260,9 @@ static void print_quota_title(char *name, struct if_quotactl *qctl,
 		printf("Disk %s quotas\n", qtype_name(qctl->qc_type));
 	} else if (param->qp_show_default) {
 		printf("Disk default %s quota:\n", qtype_name(qctl->qc_type));
+	} else if (param->qp_show_lqa) {
+		printf("Disk %s quotas for LQA:%s\n", qtype_name(qctl->qc_type),
+		       qctl->qc_lqaname);
 	} else {
 		printf("Disk quotas for %s %s (%cid %u):\n",
 		       qtype_name(qctl->qc_type), name,
@@ -12239,6 +12243,8 @@ static int lfs_quota(int argc, char **argv)
 			snprintf(qctl->qc_lqaname, LQA_NAME_MAX + 1, "%s",
 				 optarg);
 			qctl->qc_cmd = LUSTRE_Q_GETQUOTALQA;
+			param.qp_show_default = 0;
+			param.qp_show_lqa = 1;
 			qctl->qc_id = 1;
 			break;
 		case LFS_POOL_OPT:

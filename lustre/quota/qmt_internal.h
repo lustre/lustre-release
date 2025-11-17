@@ -293,6 +293,8 @@ struct qmt_thread_info *qmt_info(const struct lu_env *env)
 #define qti_lqe_soft(env, i)	(qti_lqes(env)[i]->lqe_softlimit)
 #define qti_lqe_granted(env, i)	(qti_lqes(env)[i]->lqe_granted)
 #define qti_lqe_qunit(env, i)	(qti_lqes(env)[i]->lqe_qunit)
+#define qti_lqe_enforced(env, i)	(qti_lqes(env)[i]->lqe_enforced)
+#define qti_lqe_islqa(env, i)	(lqe2qpi(qti_lqes(env)[i])->qpi_lqa)
 
 /* helper routine to convert a lu_device into a qmt_device */
 static inline struct qmt_device *lu2qmt_dev(struct lu_device *ld)
@@ -426,8 +428,8 @@ int qmt_pool_new_conn(const struct lu_env *, struct qmt_device *,
 		      struct obd_uuid *);
 
 #define GLB_POOL_NAME	"0x0"
-#define QMT_POOL_IDX_GLB -1
-#define QMT_POOL_IDX_ALL -2
+#define QMT_POOL_IDX_GLB	-1 /* Global pool, plus LQAs if qid is set */
+#define QMT_POOL_IDX_ALL	-2 /* Global pool, PQs and LQAs */
 #define qmt_pool_lookup_glb(env, qmt, type) \
 		qmt_pool_lookup(env, qmt, type, NULL, QMT_POOL_IDX_GLB, false, \
 				NULL, false)
@@ -441,12 +443,15 @@ int qmt_pool_new_conn(const struct lu_env *, struct qmt_device *,
 /*
  * Until MDT pools are not emplemented, all MDTs belong to
  * global pool, thus lookup lqes only in global pool for the
- * DOM case.
+ * DOM case. LQAs are skipped for DOM as LQA recalculation
+ * doesn't account DOM grants. qid should be always passed
+ * once LQA recalculation supports DOM (LU-21142).
  */
 
 #define qmt_pool_lookup_arr(env, qmt, type, idx, stype, qid) \
 		qmt_pool_lookup(env, qmt, type, NULL, \
-		qmt_dom(type, stype) ? QMT_POOL_IDX_GLB : idx, true, qid, false)
+		qmt_dom(type, stype) ? QMT_POOL_IDX_GLB : idx, true, \
+		qmt_dom(type, stype) ? NULL : qid, false)
 #define qmt_pool_lookup_arr_all(env, qmt, type, qid) \
 		qmt_pool_lookup(env, qmt, type, NULL, QMT_POOL_IDX_ALL, true, \
 				qid, false)

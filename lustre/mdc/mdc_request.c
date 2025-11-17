@@ -1693,6 +1693,14 @@ static int mdc_statfs(const struct lu_env *env,
 		if (body == NULL)
 			GOTO(out, rc = -EPROTO);
 		body->mbo_valid = OBD_MD_FLAGSTATFS;
+		if (flags & OBD_STATFS_PRJ_QUOTAS) {
+			/* If MDT doesn't support STATFS_PRJ_QUOTAS, mbo_projid
+			 * will be ignored.
+			 */
+			body->mbo_valid |= OBD_MD_FLPROJID;
+			body->mbo_projid = osfs->os_fprecreated;
+			osfs->os_fprecreated = 0;
+		}
 	}
 
 	ptlrpc_request_set_replen(req);

@@ -2360,6 +2360,12 @@ void lustre_assert_wire_constants(void)
 		 (unsigned int)OS_STATFS_SUM);
 	LASSERTF(OS_STATFS_NONROT == 0x00000200UL, "found 0x%.8xUL\n",
 		 (unsigned int)OS_STATFS_NONROT);
+	LASSERTF(OS_STATFS_QSPACE == 0x00000800UL, "found 0x%.8xUL\n",
+		 (unsigned int)OS_STATFS_QSPACE);
+	LASSERTF(OS_STATFS_QINODES == 0x00001000UL, "found 0x%.8xUL\n",
+		 (unsigned int)OS_STATFS_QINODES);
+	LASSERTF(OS_STATFS_QLIMITS == 0x00002000UL, "found 0x%.8xUL\n",
+		 (unsigned int)OS_STATFS_QLIMITS);
 
 	/* Checks for struct obd_ioobj */
 	LASSERTF((int)sizeof(struct obd_ioobj) == 24, "found %lld\n",

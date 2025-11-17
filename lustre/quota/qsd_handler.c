@@ -186,7 +186,7 @@ static bool qsd_calc_adjust(struct lquota_entry *lqe, struct quota_body *qbody)
 
 		lqe->lqe_revoke = 0;
 
-		LQUOTA_DEBUG(lqe, "revoke pre-acquired quota: %llu - %llu\n",
+		LQUOTA_DEBUG(lqe, "revoke pre-acquired quota: %llu - %llu",
 			     granted, usage);
 		qbody->qb_count = granted - usage;
 		qbody->qb_flags = QUOTA_DQACQ_FL_REL;
@@ -1059,7 +1059,7 @@ static void qsd_op_end0(const struct lu_env *env, struct lquota_id_info *qid)
 	if (qid->lqi_space > 0) {
 		if (lqe->lqe_pending_write < qid->lqi_space) {
 			LQUOTA_ERROR(lqe,
-				     "More pending write quota to reduce (pending %llu, space %lld)\n",
+				     "More pending write quota to reduce (pending %llu, space %lld)",
 				     lqe->lqe_pending_write, qid->lqi_space);
 			lqe->lqe_pending_write = 0;
 		} else {

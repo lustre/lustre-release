@@ -230,7 +230,7 @@ again:
 				goto again;
 			}
 
-			LQUOTA_ERROR(lqe, "lgd held by qmt_wq: %px\n", lgd);
+			LQUOTA_ERROR(lqe, "lgd held by qmt_wq: %px", lgd);
 			lqe_putref(lqe);
 			GOTO(out_put_qpi, rc = -EBUSY);
 		}
@@ -341,7 +341,7 @@ static bool qmt_set_revoke(struct lu_env *env, struct lquota_entry *lqe_gl,
 			for (i = 0; i < qti_lqes_cnt(env); i++) {
 				lqe = qti_lqes(env)[i];
 				LQUOTA_DEBUG(lqe,
-					     "lge_qunit %llu least_qunit %lu idx %d\n",
+					     "lge_qunit %llu least_qunit %lu idx %d",
 					     lgd->lqeg_arr[lge_idx].lge_qunit,
 					     least_qunit, idx);
 				if (lqe->lqe_qunit == least_qunit) {
@@ -474,7 +474,7 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 				qmt_dom(lqe_rtype(lqe), stype) ? -1 : idx);
 		if (rc || qti->qti_body.qb_count != lvb->lvb_id_rel)
 			LQUOTA_ERROR(lqe,
-				     "failed to release quota space on glimpse %llu!=%llu : rc = %d\n",
+				     "failed to release quota space on glimpse %llu!=%llu : rc = %d",
 				     qti->qti_body.qb_count,
 				     lvb->lvb_id_rel, rc);
 	}

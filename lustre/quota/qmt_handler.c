@@ -20,19 +20,24 @@
  *
  * \param env     - is the environment passed by the caller
  * \param qmt     - is the quota master target
- * \param restype - is the pool type, either block (i.e. LQUOTA_RES_DT) or inode
+ * \param rtype   - is the pool type, either block (i.e. LQUOTA_RES_DT) or inode
  *                  (i.e. LQUOTA_RES_MD)
  * \param qtype   - is the quota type
  * \param id      - is the quota indentifier for which we want to acces quota
  *                  settings.
  * \param hard    - is the output variable where to copy the hard limit
  * \param soft    - is the output variable where to copy the soft limit
+ * \param granted - is the space or inode granted by the id
  * \param time    - is the output variable where to copy the grace time
+ * \param is_default - get default quotas, if true
+ * \param pool_name - is the name of the pool to lookup the id
+ * \param lqa_name - is the name of the LQA. In this case it always returns the
+ *		     limits for the id = 1.
  */
 static int qmt_get(const struct lu_env *env, struct qmt_device *qmt,
-		   __u8 restype, __u8 qtype, union lquota_id *id, __u64 *hard,
-		   __u64 *soft, __u64 *time, bool is_default, char *pool_name,
-		   char *lqa_name)
+		   __u8 rtype, __u8 qtype, union lquota_id *id, __u64 *hard,
+		   __u64 *soft, __u64 *granted, __u64 *time, bool is_default,
+		   char *pool_name, char *lqa_name)
 {
 	struct lquota_entry	*lqe;
 
@@ -41,7 +46,7 @@ static int qmt_get(const struct lu_env *env, struct qmt_device *qmt,
 	LASSERT(!is_default || id->qid_uid == 0);
 
 	/* look-up lqe structure containing quota settings */
-	lqe = qmt_pool_lqe_lookup_lqa(env, qmt, restype, qtype, id, pool_name,
+	lqe = qmt_pool_lqe_lookup_lqa(env, qmt, rtype, qtype, id, pool_name,
 				      lqa_name);
 	if (IS_ERR(lqe))
 		RETURN(PTR_ERR(lqe));
@@ -53,6 +58,9 @@ static int qmt_get(const struct lu_env *env, struct qmt_device *qmt,
 		*hard = lqe->lqe_hardlimit;
 	if (soft != NULL)
 		*soft = lqe->lqe_softlimit;
+	if (granted != NULL)
+		*granted = lqe->lqe_granted *
+			   (rtype == LQUOTA_RES_DT ? 1024 : 1);
 	if (time != NULL) {
 		*time = lqe->lqe_gracetime;
 		if (lqe->lqe_is_default)
@@ -63,6 +71,96 @@ static int qmt_get(const struct lu_env *env, struct qmt_device *qmt,
 
 	lqe_putref(lqe);
 	RETURN(0);
+}
+
+/* Get the minimum limit among the global pool lqe and LQAs containing id.
+ * In case of out of space(granted > soft_limit) set granted to the minimum
+ * limit. If the minimum limit belongs to the LQA and all lqes still have some
+ * space, set granted to the difference between the minimum limit and the
+ * minimum remaining space. This tells the user how much space/inodes can be
+ * utilized before receiving -EDQUOT error. Otherwise(cur_is_set is false),
+ * granted is not set and the actual usage will be constructed on the client
+ * by querying quota slaves.
+ */
+static int qmt_get_min(const struct lu_env *env, struct qmt_device *qmt,
+		       __u8 rtype, __u8 qtype, union lquota_id *id, __u64 *hard,
+		       __u64 *soft, __u64 *granted, bool *cur_is_set)
+{
+	int i, rc, stype;
+	__u64 min = 0, remaining = 0;
+	bool nospace = false, rem_is_lqa = false, min_is_lqa = false;
+	bool in_lqa = false;
+
+	ENTRY;
+	*soft = *hard = 0;
+	*granted = 0;
+	*cur_is_set = false;
+
+	stype = rtype == LQUOTA_RES_DT ? QMT_STYPE_OST : QMT_STYPE_MDT;
+	rc = qmt_pool_lqes_lookup(env, qmt, rtype, stype, qtype, id, NULL,
+				  QMT_POOL_IDX_GLB);
+	if (rc)
+		RETURN(rc);
+
+	for (i = 0; i < qti_lqes_cnt(env); i++) {
+		__u64 min_tmp, granted_tmp;
+
+		if (!qti_lqe_enforced(env, i))
+			continue;
+
+		/* If lqe enforced at least hard limit is set */
+		min_tmp = qti_lqe_soft(env, i) ?: qti_lqe_hard(env, i);
+		/* Got it without lock. If enforce changed, skip it */
+		if (!min_tmp)
+			continue;
+
+		if (!in_lqa && qti_lqe_islqa(env, i))
+			in_lqa = true;
+
+		granted_tmp = READ_ONCE(qti_lqe_granted(env, i));
+		LQUOTA_DEBUG(qti_lqes(env)[i], "nospace %d remaining %llu min %llu",
+			     nospace, remaining, min);
+		if (!nospace) {
+			if (min_tmp > granted_tmp) {
+				__u64 dif = min_tmp - granted_tmp;
+
+				if (dif < remaining || !remaining) {
+					rem_is_lqa = qti_lqe_islqa(env, i);
+					remaining = dif;
+				}
+			} else {
+				nospace = true;
+			}
+		}
+
+		if (!min)
+			min = min_tmp;
+		else if (min_tmp > min)
+			continue;
+
+		min = min_tmp;
+		min_is_lqa = qti_lqe_islqa(env, i);
+	}
+
+	if (min) {
+		/* statfs returns soft if it is set as soft is always < hard */
+		*soft = *hard = min;
+		if (nospace || min_is_lqa || rem_is_lqa) {
+			*cur_is_set = true;
+			*granted = nospace ? min : min - remaining;
+			*granted *= rtype == LQUOTA_RES_DT ? 1024 : 1;
+		}
+	} else {
+		/* min == 0 means there is no enforced LQEs for that projId.
+		 * No reasons to collect the usage from the QSDs at the client.
+		 */
+		*cur_is_set = true;
+	}
+
+	qti_lqes_fini(env);
+	CDEBUG(D_QUOTA, "min:%llu granted:%llu cur_is_set:%d in_lqa:%d\n", min,
+	       *granted, *cur_is_set, in_lqa);
+	RETURN(rc);
 }
 
 struct qmt_entry_iter_data {
@@ -138,7 +236,7 @@ static int qmt_entry_iter_lqa_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	LASSERT(kref_read(&lqe->lqe_ref) > 0);
 
-	LQUOTA_DEBUG(lqe, "Check that lqe relates to LQA: %s\n", qpi->qpi_name);
+	LQUOTA_DEBUG(lqe, "Check that lqe relates to LQA: %s", qpi->qpi_name);
 
 	if (lqe->lqe_id.qid_uid == 0 || !lqe->lqe_enforced)
 		return 0;
@@ -622,7 +720,7 @@ static int qmt_reset_qid(const struct lu_env *env, struct qmt_device *qmt,
 	lqe->lqe_is_reset = 1;
 	rc = qmt_glb_write(env, th, lqe, LQUOTA_BUMP_VER, &ver);
 	if (rc) {
-		LQUOTA_ERROR(lqe, "failed to write quota global rec\n");
+		LQUOTA_ERROR(lqe, "failed to write quota global rec");
 
 		if (softlimit != 0)
 			lqe->lqe_softlimit = softlimit;
@@ -706,9 +804,9 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 	int size = buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN;
 	bool is_default = false;
 	bool is_first_iter = false;
+	bool cur_is_set;
 
 	ENTRY;
-
 	LASSERT(qmt != NULL);
 
 	if (oqctl->qc_type >= LL_MAXQUOTAS)
@@ -729,7 +827,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 		/* read inode grace time */
 		rc = qmt_get(env, qmt, LQUOTA_RES_MD, oqctl->qc_type, id, NULL,
-			     NULL, &oqctl->qc_dqinfo.dqi_igrace, false,
+			     NULL, NULL, &oqctl->qc_dqinfo.dqi_igrace, false,
 			     poolname, lqaname);
 		/* There could be no MD pool, so try to find DT pool */
 		if (rc && rc != -ENOENT)
@@ -737,7 +835,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 		/* read block grace time */
 		rc = qmt_get(env, qmt, LQUOTA_RES_DT, oqctl->qc_type, id, NULL,
-			     NULL, &oqctl->qc_dqinfo.dqi_bgrace, false,
+			     NULL, NULL, &oqctl->qc_dqinfo.dqi_bgrace, false,
 			     poolname, lqaname);
 		break;
 
@@ -830,29 +928,66 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		id->qid_uid = oqctl->qc_cmd == LUSTRE_Q_GETQUOTALQA ? 1 :
 			      oqctl->qc_id;
 
+		/* Return granted resources for GETQUOTALQA */
+		dqb->dqb_curinodes = 0;
+		dqb->dqb_curspace = 0;
 		/* look-up inode quota settings */
 		rc = qmt_get(env, qmt, LQUOTA_RES_MD, oqctl->qc_type, id,
 			     &dqb->dqb_ihardlimit, &dqb->dqb_isoftlimit,
-			     &dqb->dqb_itime, is_default, poolname, lqaname);
+			     &dqb->dqb_curinodes, &dqb->dqb_itime, is_default,
+			     poolname, lqaname);
 		/* There could be no MD pool, so try to find DT pool */
 		if (rc && rc != -ENOENT)
 			break;
 		else
 			dqb->dqb_valid |= QIF_ILIMITS | QIF_ITIME;
 
-		/* master isn't aware of actual inode usage */
-		dqb->dqb_curinodes = 0;
+		/* Master isn't aware of actual inode usage. Return granted
+		 * inodes for LQA.
+		 */
+		if (LUSTRE_Q_CMD_IS_LQA(oqctl->qc_cmd))
+			dqb->dqb_valid |= QIF_INODES;
+		else
+			dqb->dqb_curinodes = 0;
 
 		/* look-up block quota settings */
 		rc = qmt_get(env, qmt, LQUOTA_RES_DT, oqctl->qc_type, id,
 			     &dqb->dqb_bhardlimit, &dqb->dqb_bsoftlimit,
-			     &dqb->dqb_btime, is_default, poolname, lqaname);
+			     &dqb->dqb_curspace, &dqb->dqb_btime, is_default,
+			     poolname, lqaname);
 		if (rc)
 			break;
 
 		dqb->dqb_valid |= QIF_BLIMITS | QIF_BTIME;
-		/* master doesn't know the actual block usage */
-		dqb->dqb_curspace = 0;
+		/* Master isn't aware of actual block usage. Return granted
+		 * space for LQA.
+		 */
+		if (LUSTRE_Q_CMD_IS_LQA(oqctl->qc_cmd))
+			dqb->dqb_valid |= QIF_SPACE;
+		else
+			dqb->dqb_curspace = 0;
+		break;
+	case LUSTRE_Q_GETQUOTAMIN:
+		id->qid_uid = oqctl->qc_id;
+		rc = qmt_get_min(env, qmt, LQUOTA_RES_MD, oqctl->qc_type, id,
+				 &dqb->dqb_ihardlimit, &dqb->dqb_isoftlimit,
+				 &dqb->dqb_curinodes, &cur_is_set);
+		if (rc)
+			break;
+
+		dqb->dqb_valid |= QIF_ILIMITS;
+		if (cur_is_set)
+			dqb->dqb_valid |= QIF_INODES;
+
+		rc = qmt_get_min(env, qmt, LQUOTA_RES_DT, oqctl->qc_type, id,
+				 &dqb->dqb_bhardlimit, &dqb->dqb_bsoftlimit,
+				 &dqb->dqb_curspace, &cur_is_set);
+		if (rc)
+			break;
+
+		dqb->dqb_valid |= QIF_BLIMITS;
+		if (cur_is_set)
+			dqb->dqb_valid |= QIF_SPACE;
 		break;
 
 	case LUSTRE_Q_SETDEFAULT:
@@ -904,7 +1039,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		id->qid_uid = oqctl->qc_id;
 		/* save the quota setting before resetting */
 		rc = qmt_get(env, qmt, LQUOTA_RES_MD, oqctl->qc_type, id,
-			     &dqb->dqb_ihardlimit, &dqb->dqb_isoftlimit,
+			     &dqb->dqb_ihardlimit, &dqb->dqb_isoftlimit, NULL,
 			     &dqb->dqb_itime, false, NULL, NULL);
 		if (rc)
 			break;
@@ -912,7 +1047,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 			dqb->dqb_valid |= QIF_ILIMITS | QIF_ITIME;
 
 		rc = qmt_get(env, qmt, LQUOTA_RES_DT, oqctl->qc_type, id,
-			     &dqb->dqb_bhardlimit, &dqb->dqb_bsoftlimit,
+			     &dqb->dqb_bhardlimit, &dqb->dqb_bsoftlimit, NULL,
 			     &dqb->dqb_btime, false, NULL, NULL);
 		if (rc)
 			break;
@@ -960,7 +1095,7 @@ static inline bool qmt_lqes_can_rel(const struct lu_env *env, __u64 cnt)
 	for (i = 0; i < qti_lqes_cnt(env); i++) {
 		if (cnt > qti_lqe_granted(env, i)) {
 			LQUOTA_ERROR(qti_lqes(env)[i],
-				     "Can't release %llu that is larger than lqe_granted.\n",
+				     "Can't release %llu that is larger than lqe_granted.",
 				     cnt);
 			can_release = false;
 		}

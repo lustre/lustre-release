@@ -1471,6 +1471,12 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 	/* distribute statfs among MDTs */
 	idx = lmv_select_statfs_mdt(exp, lmv, flags);
 
+	/* If the flag is set, os_fprecreated stores projID. It is required to
+	 * return quotas in statfs.
+	 */
+	if (flags & OBD_STATFS_PRJ_QUOTAS)
+		temp->os_fprecreated = osfs->os_fprecreated;
+
 	for (i = 0; i < lmv->lmv_mdt_descs.ltd_tgts_size; i++, idx++) {
 		idx = idx % lmv->lmv_mdt_descs.ltd_tgts_size;
 		tgt = lmv_tgt(lmv, idx);
