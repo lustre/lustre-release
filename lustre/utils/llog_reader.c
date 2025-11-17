@@ -100,7 +100,7 @@ static int is_fstype_ext(int fd)
 	return (st.f_type == EXT4_SUPER_MAGIC);
 }
 
-/**
+/*
  * Attempt to display a path to the object (file) containing changelog entries,
  * referred to by this changelog_catalog record.
  *

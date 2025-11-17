@@ -31,16 +31,16 @@
 #include <lustre/libiam.h>
 
 
-/**
- * Stores \a val at \a dst, where the latter is possibly unaligned. Uses
+/*
+ * Stores @val at @dst, where the latter is possibly unaligned. Uses
  * memcpy(). This macro is needed to avoid dependency of user level tools on
  * the kernel headers.
  */
-#define STORE_UNALIGNED(val, dst)               \
-({                                              \
-	typeof(*(dst)) __val = (val);           \
+#define STORE_UNALIGNED(val, dst)		\
+({						\
+	typeof(*(dst)) __val = (val);		\
 						\
-	memcpy(dst, &__val, sizeof *(dst));     \
+	memcpy(dst, &__val, sizeof *(dst));	\
 })
 
 

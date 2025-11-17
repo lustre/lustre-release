@@ -431,12 +431,13 @@ static bool is_e2fsprogs_feature_supp(const char *feature)
 }
 
 /**
- * append_unique: append @key or @key=@val pair to @buf only if @key does not
- *                exists
- *      @buf: buffer to hold @key or @key=@val
- *      @prefix: prefix string before @key
- *      @key: key string
- *      @val: value string if it's a @key=@val pair
+ * append_unique() -  append @key or @key=@val pair to @buf only if @key does
+ *                    not exists
+ * @buf: buffer to hold @key or @key=@val
+ * @prefix: prefix string before @key
+ * @key: key string
+ * @val: value string if it's a @key=@val pair
+ * @maxbuflen: max len of @buf
  */
 static void append_unique(char *buf, char *prefix, char *key, char *val,
 			  size_t maxbuflen)
@@ -548,11 +549,12 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 }
 
 /**
- * moveopts_to_end: find the option string, move remaining strings to
- *                  where option string starts, and append the option
- *                  string at the end
- *      @start: where the option string starts before the move
- *      RETURN: where the option string starts after the move
+ * moveopts_to_end() -  find the option string, move remaining strings to
+ *                      where option string starts, and append the option
+ *                      string at the end
+ * @start: where the option string starts before the move
+ *
+ * Return the option string starts after the move
  */
 static char *moveopts_to_end(char *start)
 {

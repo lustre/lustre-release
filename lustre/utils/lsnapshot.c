@@ -307,17 +307,22 @@ out:
 }
 
 /**
+ * snapshot_load_conf_one() - Read one line from snapshot conf file & load
+ * @si: Pointer to snapshot_instance after loading [out]
+ * @buf: buffer holding snapshot conf data
+ * @line_num: Position within @buf
+ * @is_ldev: If %false use old format /etc/lsnapshot/${fsname}.conf
+ *           If %true use new format /etc/ldev.conf
+ *
  * For old snasphot tools, the configration is in /etc/lsnapshot/${fsname}.conf,
  * the format is:
  * <host> <pool_dir> <pool> <local_fsname> <role(,s)> <index>
  *
  * For example:
- *
  * host-mdt1 /tmp myfs-mdt1 mdt1 MGS,MDT 0
  * host-mdt2 /tmp myfs-mdt2 mdt2 MDT 1
  * host-ost1 /tmp myfs-ost1 ost1 OST 0
  * host-ost2 /tmp myfs-ost2 ost2 OST 1
- *
  *
  * For new snasphot tools, the configration is in /etc/ldev.conf, which is not
  * only for snapshot, but also for other purpose. The format is:
@@ -332,14 +337,13 @@ out:
  * Snapshot only uses the fields <host>, <label> and <device>.
  *
  * For example:
- *
  * host-mdt1 - myfs-MDT0000 zfs:/tmp/myfs-mdt1/mdt1
  *
- *
- * \retval	 0	for success
- * \retval	+ve	the line# with which the current line is conflict
- * \retval	-EAGAIN	skip current line
- * \retval	-ve	other failures
+ * Return:
+ * * %0 for success
+ * * %positive the line# with which the current line is conflict
+ * * %-EAGAIN skip current line
+ * * %negative other failures
  */
 static int snapshot_load_conf_one(struct snapshot_instance *si,
 				  char *buf, int line_num, bool is_ldev)

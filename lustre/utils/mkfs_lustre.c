@@ -222,6 +222,12 @@ static inline void badopt(const char *opt, char *type)
 
 #ifdef TUNEFS
 /**
+ * erase_param() - Removes all existing instances depending upon param
+ * @buf: the buffer holding on-disk server parameters.
+ * @param: the parameter whose instances are to be removed from \a buf.
+ * @withval: true means the parameter is in the form of "key=<value>"
+ *           false means the parameter is in the form of "key"
+ *
  * Removes all existing instances of the parameter passed in \a param,
  * which are in the form of "key=<value>", from the buffer at \a buf.
  *
@@ -229,14 +235,10 @@ static inline void badopt(const char *opt, char *type)
  * "--erase-param", or in the form of "key=<value>" when passed by option
  * "--param".
  *
- * \param buf	  the buffer holding on-disk server parameters.
- * \param param	  the parameter whose instances are to be removed from \a buf.
- * \param withval true means the parameter is in the form of "key=<value>"
- *		  false means the parameter is in the form of "key"
- *
- * \retval 0	  success, parameter was erased,
- * \retval 1	  success, parameter was not found, don't need to do erase_ldd,
- * \retval EINVAL failure, invalid input parameter.
+ * Return:
+ * * %0 success, parameter was erased,
+ * * %1 success, parameter was not found, don't need to do erase_ldd,
+ * * %-EINVAL failure, invalid input parameter.
  */
 static int erase_param(const char *const buf, const char *const param,
 		       bool withval)
