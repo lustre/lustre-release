@@ -2004,7 +2004,8 @@ static void target_start_recovery_timer(struct obd_device *obd)
 
 	obd->obd_recovery_start = ktime_get_seconds();
 	delay = ktime_set(obd->obd_recovery_start +
-			  obd->obd_recovery_timeout, 0);
+			  obd->obd_recovery_timeout,
+			  NSEC_PER_SEC / 2);
 	hrtimer_start(&obd->obd_recovery_timer, delay, HRTIMER_MODE_ABS);
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -2070,7 +2071,8 @@ static void extend_recovery_timer(struct obd_device *obd, timeout_t dr_timeout,
 		ktime_t end, now;
 
 		obd->obd_recovery_timeout = timeout;
-		end = ktime_set(obd->obd_recovery_start + timeout, 0);
+		end = ktime_set(obd->obd_recovery_start + timeout,
+				NSEC_PER_SEC / 2);
 		now = ktime_set(ktime_get_seconds(), 0);
 		left_ns = ktime_sub(end, now);
 		hrtimer_start(&obd->obd_recovery_timer, end, HRTIMER_MODE_ABS);
