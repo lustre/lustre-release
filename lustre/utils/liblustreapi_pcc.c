@@ -25,9 +25,8 @@
 #include "lustreapi_internal.h"
 #include "libhsm_scanner.h"
 
-/**
+/*
  * Fetch and attach a file to readwrite PCC.
- *
  */
 static int llapi_pcc_attach_rw_fd(int fd, __u32 archive_id)
 {
@@ -210,7 +209,15 @@ int llapi_pcc_attach_fid(const char *mntpath, const struct lu_fid *fid,
 	return rc;
 }
 
-
+/**
+ * llapi_pcc_attach_fid_str() - Attach file to the PCC
+ * @mntpath: Fullpath to the client mount point.
+ * @fidstr: file to be attach (FID)
+ * @id: unique id
+ * @type: PCC type
+ *
+ * Return %0 on successful attachment or %negative on error
+ */
 int llapi_pcc_attach_fid_str(const char *mntpath, const char *fidstr,
 			     __u32 id, enum lu_pcc_type type)
 {
@@ -230,12 +237,11 @@ int llapi_pcc_attach_fid_str(const char *mntpath, const char *fidstr,
 }
 
 /**
- * detach PCC cache of a file by using fd.
+ * llapi_pcc_detach_fd() - detach PCC cache of a file by using fd.
+ * @fd: File handle.
+ * @flags: Detach flags.
  *
- * \param fd		File handle.
- * \param flags		Detach flags.
- *
- * \return 0 on success, an error code otherwise.
+ * Return %0 on success or %-errno on failure
  */
 int llapi_pcc_detach_fd(int fd, __u32 flags)
 {
@@ -251,13 +257,12 @@ int llapi_pcc_detach_fd(int fd, __u32 flags)
 }
 
 /**
- * detach PCC cache of a file via FID.
+ * llapi_pcc_detach_at() - detach PCC cache of a file via FID.
+ * @dirfd: Dir file handle.
+ * @fid: FID of the file.
+ * @flags: Detach flags.
  *
- * \param dirfd		Dir file handle.
- * \param fid		FID of the file.
- * \param flags		Detach flags.
- *
- * \return 0 on success, an error code otherwise.
+ * Return %0 on success or %-errno on failure
  */
 int llapi_pcc_detach_at(int dirfd, const struct lu_fid *fid,
 			enum lu_pcc_detach_flags flags)
@@ -273,13 +278,12 @@ int llapi_pcc_detach_at(int dirfd, const struct lu_fid *fid,
 }
 
 /**
- * detach PCC cache of a file via FID.
+ * llapi_pcc_detach_fid() - detach PCC cache of a file via FID.
+ * @mntpath: Fullpath to the client mount point.
+ * @fid: FID of the file.
+ * @flags: Detach flags.
  *
- * \param mntpath	Fullpath to the client mount point.
- * \param fid		FID of the file.
- * \param flags		Detach flags.
- *
- * \return 0 on success, an error code otherwise.
+ * Return %0 on success or %-errno on failure
  */
 int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
 			 __u32 flags)
@@ -312,13 +316,12 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
 }
 
 /**
- * detach PCC cache of a file via FID.
+ * llapi_pcc_detach_fid_str() - detach PCC cache of a file via FID.
+ * @mntpath: Fullpath to the client mount point.
+ * @fidstr: FID string of the file.
+ * @flags: Detach flags.
  *
- * \param mntpath	Fullpath to the client mount point.
- * \param fidstr	FID string of the file.
- * \param flags		Detach flags.
- *
- * \return 0 on success, an error code otherwise.
+ * Return %0 on success or %-errno on failure
  */
 int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
 			     __u32 flags)
@@ -339,12 +342,11 @@ int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
 }
 
 /**
- * detach PCC cache of a file.
+ * llapi_pcc_detach_file() - detach PCC cache of a file.
+ * @path: Fullpath to the file to operate on.
+ * @flags: Detach flags.
  *
- * \param path		Fullpath to the file to operate on.
- * \param flags		Detach flags.
- *
- * \return 0 on success, an error code otherwise.
+ * Return %0 on success or %-errno on failure
  */
 int llapi_pcc_detach_file(const char *path, __u32 flags)
 {
@@ -368,12 +370,11 @@ int llapi_pcc_detach_file(const char *path, __u32 flags)
 }
 
 /**
- * Return the current PCC state related to a file.
+ * llapi_pcc_state_get_fd() - Return the current PCC state related to a file.
+ * @fd: File handle for the parent directory.
+ * @state: PCC state info.
  *
- * \param fd	File handle for the parent directory.
- * \param state	PCC state info.
- *
- * \return 0 on success, an error code otherwise.
+ * Return %0 on success or %-errno on failure
  */
 int llapi_pcc_state_get_fd(int fd, struct lu_pcc_state *state)
 {
@@ -386,7 +387,7 @@ int llapi_pcc_state_get_fd(int fd, struct lu_pcc_state *state)
 	return rc;
 }
 
-/**
+/*
  * Return the current PCC state related to file pointed by a path.
  *
  * see llapi_pcc_state_get_fd() for args use and return
@@ -429,7 +430,11 @@ int llapi_pcc_state_get(const char *path, struct lu_pcc_state *state)
 }
 
 /**
- * Add/delete a PCC backend on a client.
+ * llapi_pccdev_set() - Add/delete a PCC backend on a client.
+ * @mntpath: Fullpath to the client mount point.
+ * @cmd: command to be executed
+ *
+ * Return %0 on success or %-errno on failure
  */
 int llapi_pccdev_set(const char *mntpath, const char *cmd)
 {
@@ -478,7 +483,10 @@ out:
 }
 
 /**
- * List all PCC backend devices on a client.
+ * llapi_pccdev_get() - List all PCC backend devices on a client.
+ * @mntpath: Fullpath to the client mount point.
+ *
+ * Return %0 on success or %-errno on failure
  */
 int llapi_pccdev_get(const char *mntpath)
 {
