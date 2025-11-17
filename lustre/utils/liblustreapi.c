@@ -194,7 +194,7 @@ void llapi_printf(enum llapi_message_level level, const char *fmt, ...)
 	errno = tmp_errno;
 }
 
-/**
+/*
  * Set a custom error logging function. Passing in NULL will reset the logging
  * callback to its default value.
  *
@@ -212,7 +212,7 @@ llapi_log_callback_t llapi_error_callback_set(llapi_log_callback_t cb)
 	return old;
 }
 
-/**
+/*
  * Set a custom info logging function. Passing in NULL will reset the logging
  * callback to its default value.
  *
@@ -231,18 +231,19 @@ llapi_log_callback_t llapi_info_callback_set(llapi_log_callback_t cb)
 }
 
 /**
- * Convert a size string (with optional suffix) into binary value.
+ * llapi_parse_size() - Convert a size string (with optional suffix) into binary
+ *                      value.
+ * @optarg: string containing numeric value with optional
+ *          KMGTPE suffix to specify the unit size.
+ *          The @string may be a decimal value.
+ * @size: pointer to integer numeric value to be returned [out]
+ * @size_units: units of @string if dimensionless.  Must be
+ *              initialized by caller. If zero, units = bytes.
+ * @bytes_spec: if suffix 'b' means bytes or 512-byte sectors.
  *
- * \param optarg [in]		string containing numeric value with optional
- *				KMGTPE suffix to specify the unit size.
- *				The \a string may be a decimal value.
- * \param size [out]		pointer to integer numeric value to be returned
- * \param size_units [in]	units of \a string if dimensionless.  Must be
- *				initialized by caller. If zero, units = bytes.
- * \param bytes_spec [in]	if suffix 'b' means bytes or 512-byte sectors.
- *
- * \retval 0			success
- * \retval -EINVAL		negative or too large size, or unknown suffix
+ * Return:
+ * * %0 success
+ * * %-EINVAL negative or too large size, or unknown suffix
  */
 int llapi_parse_size(const char *optarg, unsigned long long *size,
 		     unsigned long long *size_units, int bytes_spec)
@@ -326,16 +327,17 @@ int llapi_parse_size(const char *optarg, unsigned long long *size,
 }
 
 /**
- * Verify the setstripe parameters before using.
+ * llapi_stripe_param_verify() - Verify the setstripe parameters before using.
+ * @param: stripe parameters
+ * @pool_name: pool name
+ * @fsname: lustre FS name
+ *
  * This is a pair method for comp_args_to_layout()/llapi_layout_sanity_cb()
  * when just 1 component or a non-PFL layout is given.
  *
- * \param[in] param		stripe parameters
- * \param[in] pool_name		pool name
- * \param[in] fsname		lustre FS name
- *
- * \retval			0, success
- *				< 0, error code on failre
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int llapi_stripe_param_verify(const struct llapi_stripe_param *param,
 				     const char **pool_name, char *fsname)
@@ -511,15 +513,13 @@ int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize)
 }
 
 /**
- * Open a Lustre file.
+ * llapi_file_open_param() - Open a Lustre file.
+ * @name: the name of the file to be opened
+ * @flags: access mode, see flags in open(2)
+ * @mode: permission of the file if it is created, see mode in open(2)
+ * @param: stripe pattern of the newly created file
  *
- * \param name     the name of the file to be opened
- * \param flags    access mode, see flags in open(2)
- * \param mode     permission of the file if it is created, see mode in open(2)
- * \param param    stripe pattern of the newly created file
- *
- * \retval         file descriptor of opened file
- * \retval         negative errno on failure
+ * Return file descriptor of opened file or %negative errno on failure
  */
 int llapi_file_open_param(const char *name, int flags, mode_t mode,
 			  const struct llapi_stripe_param *param)
@@ -989,14 +989,14 @@ int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
 }
 
 /**
- * Create a Lustre directory.
+ * llapi_dir_create() - Create a Lustre directory.
+ * @name: the name of the directory to be created
+ * @mode: permission of the file if it is created, see mode in open(2)
+ * @param: stripe pattern of the newly created directory
  *
- * \param name     the name of the directory to be created
- * \param mode     permission of the file if it is created, see mode in open(2)
- * \param param    stripe pattern of the newly created directory
- *
- * \retval         0 on success
- * \retval         negative errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
  */
 int llapi_dir_create(const char *name, mode_t mode,
 		     const struct llapi_stripe_param *param)
@@ -1085,16 +1085,16 @@ out:
 }
 
 /**
- * Create a foreign directory.
+ * llapi_dir_create_foreign() - Create a foreign directory.
+ * @name: the name of the directory to be created
+ * @mode: permission of the file if it is created, see mode in open(2)
+ * @type: foreign type to be set in LMV EA
+ * @flags: foreign flags to be set in LMV EA
+ * @value: foreign pattern to be set in LMV EA
  *
- * \param name     the name of the directory to be created
- * \param mode     permission of the file if it is created, see mode in open(2)
- * \param type     foreign type to be set in LMV EA
- * \param flags    foreign flags to be set in LMV EA
- * \param value    foreign pattern to be set in LMV EA
- *
- * \retval         0 on success
- * \retval         negative errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
  */
 int llapi_dir_create_foreign(const char *name, mode_t mode, __u32 type,
 			     __u32 flags, const char *value)
@@ -1200,15 +1200,14 @@ int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
 }
 
 /**
- * Get the list of pool members.
- * \param poolname    string of format \<fsname\>.\<poolname\>
- * \param members     caller-allocated array of char*
- * \param list_size   size of the members array
- * \param buffer      caller-allocated buffer for storing OST names
- * \param buffer_size size of the buffer
+ * llapi_get_poolmembers() - Get the list of pool members.
+ * @poolname: string of format \<fsname\>.\<poolname\>
+ * @members: caller-allocated array of char*
+ * @list_size: size of the members array
+ * @buffer: caller-allocated buffer for storing OST names
+ * @buffer_size: size of the buffer
  *
- * \return number of members retrieved for this pool
- * \retval -error failure
+ * Return number of members retrieved for this pool or %-error on failure
  */
 int llapi_get_poolmembers(const char *poolname, char **members,
 			  int list_size, char *buffer, int buffer_size)
@@ -1282,15 +1281,14 @@ int llapi_get_poolmembers(const char *poolname, char **members,
 }
 
 /**
- * Get the list of pools in a filesystem.
- * \param name        filesystem name or path
- * \param poollist    caller-allocated array of char*
- * \param list_size   size of the poollist array
- * \param buffer      caller-allocated buffer for storing pool names
- * \param buffer_size size of the buffer
+ * llapi_get_poollist() - Get the list of pools in a filesystem.
+ * @name: filesystem name or path
+ * @poollist: caller-allocated array of char*
+ * @list_size: size of the poollist array
+ * @buffer: caller-allocated buffer for storing pool names
+ * @buffer_size: size of the buffer
  *
- * \return number of pools retrieved for this filesystem
- * \retval -error failure
+ * Return number of pools retrieved for this filesystem or %-error on failure
  */
 int llapi_get_poollist(const char *name, char **poollist, int list_size,
 		       char *buffer, int buffer_size)
@@ -1414,15 +1412,15 @@ int llapi_poollist(const char *name)
 }
 
 /**
- * Get buffer that holds uuids and the list of pools in a filesystem.
+ * llapi_get_poolbuf() - Get buffer that holds uuids plus list of pools in a FS.
+ * @name: filesystem name or path
+ * @buf: bufffer that has to be freed if function returns 0
+ * @pools: pointer to the list of pools in buffer
+ * @poolcount: number of pools
  *
- * \param name		filesystem name or path
- * \param buf		bufffer that has to be freed if function returns 0
- * \param pools		pointer to the list of pools in buffer
- * \param poolcount	number of pools
- *
- * \return 0 when found at least 1 pool, i.e. poolcount  > 0
- * \retval -error failure
+ * Return:
+ * * %0 when found at least 1 pool, i.e. poolcount  > 0
+ * * %-error failure
  */
 int llapi_get_poolbuf(const char *name, char **buf,
 		      char ***pools, int *poolcount)
@@ -1911,15 +1909,14 @@ retry_getfileinfo:
 }
 
 /**
- * Get the mirror layout info from a file.
- *
- * \param path [in]		a string containing the file path
- * \param lmmbuf [out]		pointer to an lov_user_md_v1 buffer
- *				that will be set with the mirror layout info
- *				from the file specified by \a path.
- *
- * \retval 0			success
- * \retval -errno		on error
+ * llapi_get_lmm_from_path() - Get the mirror layout info from a file.
+ * @path: a string containing the file path
+ * @lmmbuf: pointer to an lov_user_md_v1 buffer
+ *          that will be set with the mirror layout info
+ *          from the file specified by @path.
+ * Return:
+ * * %0 success
+ * * %-errno on error
  */
 int llapi_get_lmm_from_path(const char *path, struct lov_user_md_v1 **lmmbuf)
 {
@@ -3500,7 +3497,7 @@ static int find_comp_end_cmp(unsigned long long end, struct find_param *param)
 	return match;
 }
 
-/**
+/*
  * An example of "getstripe -v" for a two components PFL file:
  *
  * composite_header:
@@ -4191,9 +4188,12 @@ static int find_newerxy_check(struct find_param *param, int mds, bool from_mdt)
 }
 
 /**
- * Check whether the stripes matches the indexes user provided
- *       1   : matched
- *       0   : Unmatched
+ * check_obd_match() - Check if the stripes matches the indexes user provided
+ * @param: pointer to struct find_param
+ *
+ * Return:
+ * * %1 on matched
+ * * %0 on Unmatched
  */
 static int check_obd_match(struct find_param *param)
 {
@@ -4262,11 +4262,10 @@ static int check_mdt_match(struct find_param *param)
 	return 0;
 }
 
-/**
- * Check whether the obd is active or not, if it is
- * not active, just print the object affected by this
- * failed target
- **/
+/*
+ * Check whether the obd is active or not, if it is not active, just print the
+ * object affected by this failed target
+ */
 static void print_failed_tgt(struct find_param *param, char *path, int type)
 {
 	struct obd_statfs stat_buf;
@@ -4669,13 +4668,18 @@ static int find_check_attr_options(struct find_param *param)
 }
 
 /**
- * xattr_reg_match() - return true if the supplied string matches the pattern.
+ * xattr_reg_match() - Match string with regular expression
+ * @pattern: regular expression
+ * @str: string from which @pattern to match
+ * @len: length of @str
  *
  * This requires the regex to match the entire supplied string, not just a
- *     substring.
+ * substring.
  *
  * str must be null-terminated. len should be passed in anyways to avoid an
- *     extra call to strlen(str) when the length is already known.
+ * extra call to strlen(str) when the length is already known.
+ *
+ * Return %true if @str match @pattern else %false
  */
 static bool xattr_reg_match(regex_t *pattern, const char *str, int len)
 {
@@ -4691,9 +4695,13 @@ static bool xattr_reg_match(regex_t *pattern, const char *str, int len)
 
 /**
  * xattr_done_matching() - return true if all supplied patterns have been
- *     matched, allowing to skip checking any remaining xattrs on a file.
+ *                         matched, allowing to skip checking any remaining
+ *                         xattrs on a file.
+ * @xmi: struct for xattr arguments to lfs find
  *
- *     This is only allowed if there are no "exclude" patterns.
+ * Note: This is only allowed if there are no "exclude" patterns.
+ *
+ * Returns %true if all supplied patters have been matched else %false
  */
 static int xattr_done_matching(struct xattr_match_info *xmi)
 {
@@ -7192,11 +7200,12 @@ int llapi_get_connect_flags(const char *mnt, __u64 *flags)
 }
 
 /**
- * Flush cached pages from all clients.
+ * llapi_file_flush() - Flush cached pages from all clients.
+ * @fd: File descriptor
  *
- * \param fd	File descriptor
- * \retval 0	success
- * \retval < 0	error
+ * Return:
+ * * %0 on success
+ * * %negative on error.
  */
 int llapi_file_flush(int fd)
 {
@@ -7206,14 +7215,14 @@ int llapi_file_flush(int fd)
 }
 
 /**
- * Flush dirty pages from all clients.
+ * llapi_fsync() - Flush dirty pages from all clients.
+ * @fd: File descriptor
  *
  * OSTs will take LCK_PR to flush dirty pages from clients.
  *
- * \param[in]	fd	File descriptor
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return
+ * * %0 on success.
+ * * %-errno on error.
  */
 int llapi_fsync(int fd)
 {
