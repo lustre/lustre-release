@@ -293,7 +293,7 @@ static int get_opts(int argc, char *const argv[])
 	free(data); \
 })
 
-/**
+/*
  * Calculate SELinux status information.
  * String that represents SELinux status info has the following format:
  * <mode>:<policy name>:<policy version>:<policy hash>

@@ -43,7 +43,7 @@ static int jt_##name(int argc, char **argv)			\
 	return rc < 0 ? -rc : rc;				\
 }
 
-/**
+/*
  * command_t pcc_cmdlist - lctl pcc commands.
  */
 command_t pcc_cmdlist[] = {
@@ -66,7 +66,7 @@ command_t pcc_cmdlist[] = {
 };
 JT_SUBCMD(pcc);
 
-/**
+/*
  * command_t changelog_cmdlist - lctl changelog commands.
  */
 command_t changelog_cmdlist[] = {
@@ -85,7 +85,7 @@ command_t changelog_cmdlist[] = {
 };
 JT_SUBCMD(changelog);
 
-/**
+/*
  * command_t net_drop_cmdlist - lctl net_drop commands.
  */
 command_t net_drop_cmdlist[] = {
@@ -111,7 +111,7 @@ command_t net_drop_cmdlist[] = {
 };
 JT_SUBCMD(net_drop);
 
-/**
+/*
  * command_t net_delay_cmdlist - lctl net_delay commands.
  */
 command_t net_delay_cmdlist[] = {
@@ -137,7 +137,7 @@ command_t net_delay_cmdlist[] = {
 };
 JT_SUBCMD(net_delay);
 
-/**
+/*
  * command_t nodemap_cmdlist - lctl nodemap commands.
  */
 command_t nodemap_cmdlist[] = {
@@ -217,7 +217,7 @@ command_t nodemap_cmdlist[] = {
 JT_SUBCMD(nodemap);
 
 #ifdef HAVE_SERVER_SUPPORT
-/**
+/*
  * command_t barrier_cmdlist - lctl barrier commands.
  */
 command_t barrier_cmdlist[] = {
@@ -238,7 +238,7 @@ command_t barrier_cmdlist[] = {
 };
 JT_SUBCMD(barrier);
 
-/**
+/*
  * command_t snaptshot_cmdlist - lctl snapshot commands.
  */
 command_t snapshot_cmdlist[] = {
@@ -281,7 +281,7 @@ command_t snapshot_cmdlist[] = {
 };
 JT_SUBCMD(snapshot);
 
-/**
+/*
  * command_t llog_cmdlist - lctl llog commands.
  */
 command_t llog_cmdlist[] = {
@@ -309,7 +309,7 @@ command_t llog_cmdlist[] = {
 };
 JT_SUBCMD(llog);
 
-/**
+/*
  * command_t lfsck_cmdlist - lctl lfsck commands.
  */
 command_t lfsck_cmdlist[] = {
