@@ -612,7 +612,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 	return ops;
 }
 
-/**
+/*
  * Unload plugin and free backfs_ops structure. Must be called the same number
  * of times as load_backfs_module is.
  */
@@ -1304,13 +1304,14 @@ out:
 #ifdef HAVE_GSS
 #ifdef HAVE_OPENSSL_SSK
 /**
- * Loads all keys under \a mop->mo_skpath.
+ * load_shared_keys() - Loads all keys under @mop->mo_skpath.
+ * @mop: mount options containing skpath
+ * @client: True if Client is mounting with a server key
  *
- * \param[in]	mop	mount options containing skpath
- *
- * \return	> 0	last client file system key id if successfully loaded
- * \return	  0	other key type successfully loaded
- * \return	< 0	-errno on failure
+ * Return:
+ * * %positive when last client file system key id if successfully loaded
+ * * %0 other key type successfully loaded
+ * * %-errno on failure
  */
 int load_shared_keys(struct mount_opts *mop, bool client)
 {

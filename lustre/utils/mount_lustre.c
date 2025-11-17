@@ -883,6 +883,8 @@ int parse_param_file(char *path)
 }
 
 /**
+ * check_vm_dirty_ratio() - Check vm.dirty_ratio
+ *
  * Check if vm.dirty_ratio is set to a value that may cause performance issues.
  * Lustre's writeback support does not work well with vm_dirty_ratio set to 0.
  * Values below 10 can cause inefficient write behavior under load.
