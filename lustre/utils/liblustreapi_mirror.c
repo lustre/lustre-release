@@ -33,17 +33,18 @@
 #include "lustreapi_internal.h"
 
 /**
+ * llapi_mirror_set() - Set the mirror id for the opening file pointed by @fd
+ * @fd: file descriptor, must be opened with O_DIRECT
+ * @id: mirror id (If @id is zero, it will clear the mirror id setting)
+ *
  * Set the mirror id for the opening file pointed by @fd, once the mirror
  * is set successfully, the policy to choose mirrors will be disabed and the
  * following I/O from this file descriptor will be led to this dedicated
  * mirror @id.
- * If @id is zero, it will clear the mirror id setting.
  *
- * \param fd	file descriptor, must be opened with O_DIRECT
- * \param id	mirror id
- *
- * \retval	0 on success.
- * \retval	-errno on failure.
+ * Return:
+ * * %0 on success.
+ * * %-errno on failure.
  */
 int llapi_mirror_set(int fd, unsigned int id)
 {
@@ -72,10 +73,10 @@ int llapi_mirror_set(int fd, unsigned int id)
 	return rc;
 }
 
-/**
+/*
  * Clear mirror id setting.
  *
- * \See llapi_mirror_set() for details.
+ * See llapi_mirror_set() for details.
  */
 int llapi_mirror_clear(int fd)
 {
@@ -83,18 +84,20 @@ int llapi_mirror_clear(int fd)
 }
 
 /**
+ * llapi_mirror_read() - Read data from a specified mirror with @id.
+ * @fd: file descriptor, should be opened with O_DIRECT
+ * @id: mirror id to be read from
+ * @buf: read buffer
+ * @count: number of bytes to be read
+ * @pos: file postion where the read starts
+ *
  * Read data from a specified mirror with @id. This function won't read
  * partial read result; either file end is reached, or number of @count bytes
  * is read, or an error will be returned.
  *
- * \param fd	file descriptor, should be opened with O_DIRECT
- * \param id	mirror id to be read from
- * \param buf	read buffer
- * \param count	number of bytes to be read
- * \param pos	file postion where the read starts
- *
- * \result >= 0	Number of bytes has been read
- * \result < 0	The last seen error
+ * Return:
+ * * %>=0 Number of bytes has been read
+ * * %negative on failure(last seen error)
  */
 ssize_t llapi_mirror_read(int fd, unsigned int id, void *buf, size_t count,
 			  off_t pos)
@@ -238,16 +241,18 @@ bool llapi_mirror_is_sparse(int fd, unsigned int id)
 }
 
 /**
+ * llapi_mirror_data_seek() - Seek data in a specified mirror with @id.
+ * @fd: file descriptor, should be opened with O_DIRECT
+ * @id: mirror id to be read from
+ * @pos: position for start data seek from
+ * @size: size of data segment found
+ *
  * Seek data in a specified mirror with @id. This function looks for the
  * first data segment from given offset and returns its offset and length
  *
- * \param fd	file descriptor, should be opened with O_DIRECT
- * \param id	mirror id to be read from
- * \param pos	position for start data seek from
- * \param size	size of data segment found
- *
- * \result >= 0	Number of bytes has been read
- * \result < 0	The last seen error
+ * Return:
+ * * %>=0 Number of bytes has been read
+ * * %negative on failure(last seen error)
  */
 off_t llapi_mirror_data_seek(int fd, unsigned int id, off_t pos, size_t *size)
 {
@@ -265,17 +270,19 @@ off_t llapi_mirror_data_seek(int fd, unsigned int id, off_t pos, size_t *size)
 }
 
 /**
+ * llapi_mirror_copy_many() - Copy contents from @src to multiple @dst
+ * @fd: file descriptor, should be opened with O_DIRECT
+ * @src: source mirror id, usually a valid mirror
+ * @dst: an array of destination mirror ids
+ * @count: number of elements in array @dst
+ *
  * Copy data contents from source mirror @src to multiple destinations
  * pointed by @dst. The destination array @dst will be altered to store
  * successfully copied mirrors.
  *
- * \param fd	file descriptor, should be opened with O_DIRECT
- * \param src	source mirror id, usually a valid mirror
- * \param dst	an array of destination mirror ids
- * \param count	number of elements in array @dst
- *
- * \result > 0	Number of mirrors successfully copied
- * \result < 0	The last seen error
+ * Return:
+ * * %>0 Number of bytes has been read
+ * * %negative on failure(last seen error)
  */
 ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 {
@@ -417,16 +424,18 @@ out_free:
 }
 
 /**
+ * llapi_mirror_copy() - Copy contents from @src to target mirror @dst.
+ * @fd: file descriptor, should be opened with O_DIRECT
+ * @src: source mirror id, usually a valid mirror
+ * @dst: mirror id of copy destination
+ * @pos: start file pos
+ * @count: number of bytes to be copied
+ *
  * Copy data contents from source mirror @src to target mirror @dst.
  *
- * \param fd	file descriptor, should be opened with O_DIRECT
- * \param src	source mirror id, usually a valid mirror
- * \param dst	mirror id of copy destination
- * \param pos   start file pos
- * \param count	number of bytes to be copied
- *
- * \result > 0	Number of mirrors successfully copied
- * \result < 0	The last seen error
+ * Return:
+ * * %>0 Number of bytes has been read
+ * * %negative on failure(last seen error)
  */
 int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst, off_t pos,
 		      size_t count)
