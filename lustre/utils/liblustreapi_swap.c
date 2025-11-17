@@ -22,21 +22,24 @@
 #include <lustre/lustreapi.h>
 
 /**
+ * llapi_get_data_version() - Get file data pointed by @fd
+ * @fd: file discriptor
+ * @data_version: data version [out]
+ * @flags: 0: no flush pages, usually used when process has already taken locks;
+ *         LL_DV_RD_FLUSH: OSTs will take LCK_PR to flush dirty pages from
+ *                         clients;
+ *         LL_DV_WR_FLUSH: OSTs will take LCK_PW to flush all caching pages from
+ *                         clients.
+ *
  * Get a 64-bit value representing the version of file data pointed by fd.
  *
  * Each write or truncate, flushed on OST, will change this value. You can use
  * this value to verify if file data was modified. This only checks the file
  * data, not metadata.
  *
- * \param  flags  0: no flush pages, usually used it the process has already
- *		    taken locks;
- *                LL_DV_RD_FLUSH: OSTs will take LCK_PR to flush dirty pages
- *                  from clients;
- *                LL_DV_WR_FLUSH: OSTs will take LCK_PW to flush all caching
- *                  pages from clients.
- *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error.
  */
 int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
 {
@@ -76,11 +79,16 @@ int llapi_get_ost_layout_version(int fd, __u32 *layout_version)
 }
 
 /**
+ * llapi_hsm_data_version_set() - Set data version in the HSM xattr
+ * @fd: file discriptor
+ * @data_version: data version to set
+ *
  * Set the data version in the HSM xattr on the MDT inode of a file to a
  * specific value.
  *
- * \retval 0 on success.
- * \retval -errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error.
  */
 int llapi_hsm_data_version_set(int fd, __u64 data_version)
 {
@@ -209,10 +217,21 @@ int llapi_create_volatile_idx(const char *directory, int mdt_idx,
 }
 
 /**
- * Swap the layouts between 2 file descriptors
- * the 2 files must be open for writing
- * first fd received the ioctl, second fd is passed as arg
- * this is assymetric but avoid use of root path for ioctl
+ * llapi_fswap_layouts_grouplock() - Swap the layouts between 2 files
+ * @fd1: path of file1(src)
+ * @fd2: path of file2(dst). (After swap, file1 will point to file2 data)
+ * @dv1: Data version of file pointed by @path1
+ * @dv2: Data version of file pointed by @path2
+ * @gid: Random generated group id
+ * @flags: Used for timestamps during swapped
+ *
+ * Note1: Both the 2 files must be open for writing
+ * Note2: First fd received the ioctl, second fd is passed as arg
+ *        this is assymetric but avoid use of root path for ioctl
+ *
+ * Return:
+ * * %0 on success.
+ * * %-errno on failure.
  */
 int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
 				  int gid, __u64 flags)
@@ -292,8 +311,18 @@ int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2, __u64 flags)
 }
 
 /**
- * Swap the layouts between 2 files
- * the 2 files are open in write
+ * llapi_swap_layouts() - Swap the layouts between 2 files
+ * @path1: path of file1(src)
+ * @path2: path of file2(dst). (After swap, file1 will point to file2 data)
+ * @dv1: Data version of file pointed by @path1
+ * @dv2: Data version of file pointed by @path2
+ * @flags: Used for timestamps during swapped
+ *
+ * Note: Both the 2 files must be open for writing
+ *
+ * Return:
+ * * %0 on success.
+ * * %-errno on failure.
  */
 int llapi_swap_layouts(const char *path1, const char *path2,
 		       __u64 dv1, __u64 dv2, __u64 flags)
@@ -330,13 +359,13 @@ out:
 }
 
 /**
- * Take group lock.
+ * llapi_group_lock() - Take group lock.
+ * @fd: File to lock.
+ * @gid: Group Identifier.
  *
- * \param fd   File to lock.
- * \param gid  Group Identifier.
- *
- * \retval 0 on success.
- * \retval -errno on failure.
+ * Return:
+ * * %0 on success.
+ * * %-errno on failure.
  */
 int llapi_group_lock(int fd, int gid)
 {
@@ -368,13 +397,13 @@ int llapi_group_lock64(int fd, __u64 gid)
 }
 
 /**
- * Put group lock.
+ * llapi_group_unlock() - Put group lock.
+ * @fd: File to unlock.
+ * @gid: Group Identifier.
  *
- * \param fd   File to unlock.
- * \param gid  Group Identifier.
- *
- * \retval 0 on success.
- * \retval -errno on failure.
+ * Return:
+ * * %0 on success.
+ * * %-errno on failure.
  */
 int llapi_group_unlock(int fd, int gid)
 {
