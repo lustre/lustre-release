@@ -64,18 +64,18 @@ static int copy_strip_dne_path(const char *src, char *tgt, size_t tgtlen)
 }
 
 /**
- * parse a FID from a string into a binary lu_fid
+ * llapi_fid_parse() - parse a FID from a string into a binary lu_fid
+ * @fidstr: string to be parsed
+ * @fid: Lustre File IDentifier [out]
+ * @endptr: pointer to first invalid/unused character in @fidstr [out]
  *
  * Only the format of the FID is checked, not whether the numeric value
  * contains a valid FID sequence or object ID or version. Optional leading
  * whitespace and '[' from the standard FID format are skipped.
  *
- * \param[in] fidstr	string to be parsed
- * \param[out] fid	Lustre File IDentifier
- * \param[out] endptr	pointer to first invalid/unused character in @fidstr
- *
- * \retval	0 on success
- * \retval	-errno on failure
+ * Return:
+ * * %0 on success
+ * * %-errno on failure
  */
 int llapi_fid_parse(const char *fidstr, struct lu_fid *fid, char **endptr)
 {
@@ -379,15 +379,15 @@ int llapi_path2parent(const char *path, unsigned int linkno,
 }
 
 /**
- * Convert a struct lu_fid into a struct file_handle
+ * llapi_fid_to_handle() - Convert a struct lu_fid into a struct file_handle
+ * @_handle: a newly allocated struct file_handle on success [out]
+ * @fid: a Lustre File IDentifier
  *
- * \param[out] _handle	a newly allocated struct file_handle on success
- * \param[in]  fid	a Lustre File IDentifier
+ * On success, the caller is responsible for freeing @_handle.
  *
- * \retval		0 on success
- * \retval		negative errno if an error occured
- *
- * On success, the caller is responsible for freeing \p handle.
+ * Return:
+ * * %0 on success
+ * * %negative errno if an error occured
  */
 int llapi_fid_to_handle(struct file_handle **_handle, const struct lu_fid *fid)
 {
@@ -412,14 +412,14 @@ int llapi_fid_to_handle(struct file_handle **_handle, const struct lu_fid *fid)
 }
 
 /**
- * Attempt to open a file with a Lustre File IDentifier
+ * llapi_open_by_fid_at() - Attempt to open a file with a Lustre File IDentifier
+ * @lustre_fd: an open file descriptor for an object in lustre
+ * @fid: a Lustre File IDentifier of the file to open
+ * @flags: open(2) flags
  *
- * \param[in] lustre_fd		an open file descriptor for an object in lustre
- * \param[in] fid		a Lustre File IDentifier of the file to open
- * \param[in] flags		open(2) flags
- *
- * \retval			non-negative file descriptor on success
- * \retval			negative errno if an error occured
+ * Return:
+ * * %non-negative file descriptor on success
+ * * %negative errno if an error occured
  */
 int llapi_open_by_fid_at(int lustre_fd, const struct lu_fid *fid, int flags)
 {
@@ -442,15 +442,17 @@ int llapi_open_by_fid_at(int lustre_fd, const struct lu_fid *fid, int flags)
 }
 
 /**
- * Attempt to open a file with Lustre file identifier \a fid
+ * llapi_open_by_fid() - Open a file with FID
+ * @lustre_dir: path within Lustre filesystem containing @fid
+ * @fid: Lustre file identifier of file to open
+ * @flags: open() flags
+ *
+ * Attempt to open a file with Lustre file identifier @fid
  * and return an open file descriptor.
  *
- * \param[in] lustre_dir	path within Lustre filesystem containing \a fid
- * \param[in] fid		Lustre file identifier of file to open
- * \param[in] flags		open() flags
- *
- * \retval			non-negative file descriptor on successful open
- * \retval			negative errno if an error occurred
+ * Return:
+ * * %non-negative file descriptor on successful open
+ * * %negative errno if an error occurred
  */
 int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
 		      int flags)
