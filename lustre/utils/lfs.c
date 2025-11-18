@@ -15771,9 +15771,14 @@ int print_stale_mirrors(int fd, struct llapi_layout *layout,
 			break;
 
 		if (comp_flags & LCME_FL_STALE) {
+			bool is_nosync = comp_flags & LCME_FL_NOSYNC;
+			const char *flag_str = is_nosync ?
+					       "nosync,stale" : "stale";
+
 			/* Print header only once */
 			if (!header_printed) {
-				fprintf(stdout, "CRC-32 checksum value for chunk [0, 0x%lx):\n",
+				fprintf(stdout,
+					"CRC-32 checksum value for chunk [0, 0x%lx):\n",
 					file_size);
 				header_printed = true;
 			}
@@ -15795,20 +15800,22 @@ int print_stale_mirrors(int fd, struct llapi_layout *layout,
 					crc = crc32(crc32(0L, Z_NULL, 0), buf,
 						    bytes_read);
 					fprintf(stdout,
-						"Mirror %u:\t%#lx (stale)\n",
-						mirror_id, crc);
+						"Mirror %u:\t%#lx (%s)\n",
+						mirror_id, crc, flag_str);
 				} else {
 					fprintf(stdout,
-						"Mirror %u:\t(stale - read error)\n",
-						mirror_id);
+						"Mirror %u:\t(%s - read error)\n",
+						mirror_id, flag_str);
 				}
 				free(buf);
 			} else {
 				fprintf(stdout,
-					"Mirror %u:\t(stale - alloc error)\n",
-					mirror_id);
+					"Mirror %u:\t(%s - alloc error)\n",
+					mirror_id, flag_str);
 			}
-			stale_count++;
+			/* Only count non-nosync stale as errors */
+			if (!is_nosync)
+				stale_count++;
 		}
 
 		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
@@ -15981,6 +15988,12 @@ int lfs_mirror_prepare_chunk(struct llapi_layout *layout,
 					progname, strerror(errno));
 				goto error;
 			}
+
+			/* Skip nosync components - they are intentionally
+			 * excluded from resync so should not be verified
+			 */
+			if (flags & LCME_FL_NOSYNC)
+				goto next;
 
 			if (!include_stale && (flags & LCME_FL_STALE ||
 					       flags & LCME_FL_OFFLINE))

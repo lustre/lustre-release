@@ -1562,6 +1562,102 @@ test_6e() {
 }
 run_test 6e "Write fails when only parity mirror is non-stale"
 
+test_7() {
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Create EC file: data mirror + parity mirror
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+		error "create EC file failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 2
+
+	# Get component IDs - data mirror is mirror_id 1, parity is mirror_id 2
+	local data_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2} /lcme_mirror_id:.*1$/ {print id; exit}')
+	local parity_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2} /lcme_mirror_id:.*2$/ {print id; exit}')
+
+	echo "Data component: $data_comp_id, Parity component: $parity_comp_id"
+
+	[[ -n "$data_comp_id" ]] || error "could not find data component ID"
+	[[ -n "$parity_comp_id" ]] ||
+		error "could not find parity component ID"
+
+	# Verify EC parameters on parity component
+	verify_comp_parity $tf $parity_comp_id
+	verify_ec_stripe_count $tf $parity_comp_id 4 2
+
+	# Write initial data and resync
+	dd if=/dev/urandom of=$tf bs=1M count=2 ||
+		error "write to EC file failed"
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	# Verify both mirrors are in sync (init, not stale)
+	$LFS getstripe -I$data_comp_id $tf | grep -q "init" ||
+		error "data mirror should be init after resync"
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "init" ||
+		error "parity mirror should be init after resync"
+
+	# Save checksum of parity mirror
+	local sum0=$($LFS mirror read -N2 $tf | dd bs=1M count=2 | md5sum)
+	echo "Initial parity mirror checksum: $sum0"
+
+	# Set nosync flag on parity mirror to snapshot it
+	$LFS setstripe --comp-set -I $parity_comp_id --comp-flags=nosync \
+		$tf || error "failed to set nosync on parity mirror"
+
+	# Verify nosync flag is set
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "nosync" ||
+		error "nosync flag not set on parity mirror"
+
+	# Write new data - this should update data mirror but not parity
+	dd if=/dev/urandom of=$tf bs=1M count=2 ||
+		error "second write to EC file failed"
+
+	# Resync - parity mirror should remain stale due to nosync flag
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	# Verify parity mirror is still stale and has nosync flag
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "stale" ||
+		error "parity mirror should be stale after resync with nosync"
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "nosync" ||
+		error "nosync flag should still be set on parity mirror"
+
+	# Verify parity mirror content hasn't changed
+	local sum1=$($LFS mirror read -N1 $tf | md5sum)
+	local sum2=$($LFS mirror read -N2 $tf | dd bs=1M count=2 | md5sum)
+
+	echo "Data mirror checksum: $sum1"
+	echo "Parity mirror checksum: $sum2"
+	[[ $sum0 = $sum2 ]] ||
+		error "parity mirror changed: $sum0 vs $sum2"
+
+	# Clear nosync flag and resync to update parity mirror
+	$LFS setstripe --comp-set -I $parity_comp_id \
+		--comp-flags=^nosync $tf ||
+		error "failed to clear nosync on parity mirror"
+
+	$LFS mirror resync $tf || error "final resync failed"
+
+	# After clearing nosync and resyncing, both mirrors should be init
+	$LFS getstripe -I$data_comp_id $tf | grep -q "init" ||
+		error "data mirror should be init after final resync"
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "init" ||
+		error "parity mirror should be init after final resync"
+
+	# Verify parity mirror is now updated
+	sum1=$($LFS mirror read -N1 $tf | md5sum)
+	sum2=$($LFS mirror read -N2 $tf | md5sum)
+	echo "Final data mirror checksum: $sum1"
+	echo "Final parity mirror checksum: $sum2"
+}
+run_test 7 "nosync flag on parity mirror prevents resync updates"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
