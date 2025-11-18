@@ -248,8 +248,8 @@ static bool idmaps_match(struct rb_root *old, struct rb_root *new)
 
 /**
  * nodemap_change_need_update() - Compare old and new nodemap definitions
- * @old_nodemap: old nodemap
- * @new_nodemap: new nodemap
+ * @old: old nodemap
+ * @new: new nodemap
  *
  * If nodemaps are different, the client must revoke its locks.
  * Callers should hold the active_config_lock and active_config
