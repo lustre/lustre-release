@@ -13,6 +13,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/libcfs/libcfs_fail.h>
 #include <lnet/lib-lnet.h>
 
 void
@@ -898,7 +899,8 @@ lnet_health_check(struct lnet_msg *msg)
 			 * I'm a router, then set that lpni's health to
 			 * maximum so we can commence communication
 			 */
-			if (lnet_isrouter(lpni) || lnet_routing_enabled()) {
+			if ((lnet_isrouter(lpni) || lnet_routing_enabled()) &&
+			     likely(!CFS_FAIL_CHECK(CFS_FAIL_RTR_HEALTH_INC))) {
 				lnet_set_lpni_healthv_locked(lpni,
 					LNET_MAX_HEALTH_VALUE);
 			} else {

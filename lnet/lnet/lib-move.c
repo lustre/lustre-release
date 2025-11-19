@@ -2999,6 +2999,38 @@ lnet_handle_send_case_locked(struct lnet_send_data *sd)
 	}
 }
 
+/* Determine whether to allow MR forwarding for this message.
+ * NB: MR forwarding is allowed if the message originator and the
+ * destination are both MR capable, and the destination lpni that was
+ * originally chosen by the originator is unhealthy or down.
+ * The MR status of the destination lpni is checked later during path selection.
+ */
+static bool
+lnet_mr_forwarding_allowed(struct lnet_peer_ni *dst_lpni,
+			   struct lnet_nid *src_nid, int cpt)
+{
+	struct lnet_peer_ni *src_lpni;
+	bool mr_forwarding_allowed;
+
+	src_lpni = lnet_peerni_by_nid_locked(src_nid, NULL, cpt);
+	if (IS_ERR(src_lpni))
+		return false;
+
+	if (!lnet_peer_is_multi_rail(src_lpni->lpni_peer_net->lpn_peer))
+		mr_forwarding_allowed = false;
+	else if (!lnet_is_peer_ni_alive(dst_lpni))
+		mr_forwarding_allowed = true;
+	else if (atomic_read(&dst_lpni->lpni_healthv) < LNET_MAX_HEALTH_VALUE)
+		mr_forwarding_allowed = true;
+	else
+		mr_forwarding_allowed = false;
+
+	/* Drop ref taken by lnet_peerni_by_nid_locked() */
+	lnet_peer_ni_decref_locked(src_lpni);
+
+	return mr_forwarding_allowed;
+}
+
 static int
 lnet_select_pathway(struct lnet_nid *src_nid,
 		    struct lnet_nid *dst_nid,
@@ -3109,31 +3141,12 @@ again:
 	if (msg->msg_routing && (send_case & LOCAL_DST))
 		final_hop = true;
 
-	/* Determine whether to allow MR forwarding for this message.
-	 * NB: MR forwarding is allowed if the message originator and the
-	 * destination are both MR capable, and the destination lpni that was
-	 * originally chosen by the originator is unhealthy or down.
-	 * We check the MR capability of the destination further below
-	 */
 	mr_forwarding_allowed = false;
 	if (final_hop) {
-		struct lnet_peer *src_lp;
-		struct lnet_peer_ni *src_lpni;
+		if (lnet_mr_forwarding_allowed(lpni, &msg->msg_hdr.src_nid,
+					       cpt))
+			mr_forwarding_allowed = true;
 
-		src_lpni = lnet_peerni_by_nid_locked(&msg->msg_hdr.src_nid,
-						   NULL, cpt);
-		/* We don't fail the send if we hit any errors here. We'll just
-		 * try to send it via non-multi-rail criteria
-		 */
-		if (!IS_ERR(src_lpni)) {
-			/* Drop ref taken by lnet_peerni_by_nid_locked() */
-			lnet_peer_ni_decref_locked(src_lpni);
-			src_lp = lpni->lpni_peer_net->lpn_peer;
-			if (lnet_peer_is_multi_rail(src_lp) &&
-			    !lnet_is_peer_ni_alive(lpni))
-				mr_forwarding_allowed = true;
-
-		}
 		CDEBUG(D_NET, "msg %p MR forwarding %s\n", msg,
 		       mr_forwarding_allowed ? "allowed" : "not allowed");
 	}

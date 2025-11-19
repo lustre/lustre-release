@@ -1448,19 +1448,23 @@ declare -A ROUTER_NIDS
 declare -A RPEER_NIDS
 LNIDS=()
 LOCAL_NET=${NETTYPE}
+LOCAL_NET2=${NETTYPE}2
 REMOTE_NET=${NETTYPE}1
+REMOTE_NET2=${NETTYPE}3
 setup_router_test() {
 	(( $MDS1_VERSION >= $(version_code 2.15.0) )) ||
 		skip "need at least 2.15.0 for load_lnet"
 
 	local routers_required=1
 	local rpeers_required=1
+	local mr_peers=false
 	local flag
 
-	while getopts "r:p:" flag; do
+	while getopts "mp:r:" flag; do
 		case $flag in
-			r) routers_required="$OPTARG";;
+			m) mr_peers=true;;
 			p) rpeers_required="$OPTARG";;
+			r) routers_required="$OPTARG";;
 			*) ;;
 		esac
 	done
@@ -1496,6 +1500,12 @@ setup_router_test() {
 			return $?
 		do_net_add $router $REMOTE_NET ${router_interfaces[0]} ||
 			return $?
+		if $mr_peers; then
+			do_net_add $router $LOCAL_NET2 ${router_interfaces[0]} ||
+				return $?
+			do_net_add $router $REMOTE_NET2 ${router_interfaces[0]} ||
+				return $?
+		fi
 	done
 
 	for rpeer in ${!RPEER_INTERFACES[@]}; do
@@ -1503,10 +1513,18 @@ setup_router_test() {
 
 		do_net_add $rpeer $REMOTE_NET ${rpeer_interfaces[0]} ||
 			return $?
+		if $mr_peers; then
+			do_net_add $rpeer $REMOTE_NET2 ${rpeer_interfaces[0]} ||
+				return $?
+		fi
 	done
 
 	add_net $LOCAL_NET ${INTERFACES[0]} ||
 		return $?
+	if $mr_peers; then
+		add_net $LOCAL_NET2 ${INTERFACES[0]} ||
+			return $?
+	fi
 
 	for router in ${!ROUTER_INTERFACES[@]}; do
 		ROUTER_NIDS[$router]=$(do_node $router $LCTL list_nids \
@@ -4694,6 +4712,99 @@ test_236() {
 	cleanup_router_test
 }
 run_test 236 "Local NI state propagates to routers"
+
+do_mr_forwarding_test() {
+	local expect_mr_forwarding="$1"
+
+	local rpeer=${RPEERS[0]}
+	local rpeer_nids=( ${RPEER_NIDS[$rpeer]} )
+
+	do_lnetctl discover ${rpeer_nids[0]} ||
+		error "Discovery failed with rc = $?"
+
+	local router=${ROUTERS[0]}
+	local i
+
+#define CFS_FAIL_RTR_HEALTH_INC                0xe004
+	do_node $router "$LCTL set_param fail_loc=0xe004" ||
+		error "Failed to set fail_loc rc = $?"
+	do_node $router "$LNETCTL set health_sensitivity 0" ||
+		error "Failed to set health_sensitivity 0 rc = $?"
+	do_node $router "$LNETCTL peer set --health 0 --nid ${rpeer_nids[0]}" ||
+		error "Failed to set health 0 for ${rpeer_nids[0]} rc = $?"
+
+	local pre_sends=( $(do_node $router \
+			    "$LNETCTL peer show -v --nid ${rpeer_nids[0]}" |
+			    awk '/send_count/{print $NF}' | xargs echo) )
+
+	do_node $router "$LNETCTL peer show -v 2 | grep -e nid -e health"
+
+	local my_nid=$($LCTL list_nids | head -n 1)
+
+	for i in {1..50}; do
+		do_lnetctl ping --source ${my_nid} ${rpeer_nids[0]} ||
+			error "Ping failed with rc=$?"
+	done
+
+	local post_sends=( $(do_node $router \
+			     "$LNETCTL peer show -v --nid ${rpeer_nids[0]}" |
+			     awk '/send_count/{print $NF}' | xargs echo ) )
+
+	do_node $router "$LNETCTL peer show -v 2 | grep -e nid -e health"
+
+	echo "pre_sends: ${pre_sends[@]}"
+	echo "post_sends: ${post_sends[@]}"
+
+	do_node $router "$LCTL set_param fail_loc=0" ||
+		error "Failed to set fail_loc rc = $?"
+
+	if [[ ${#pre_sends[@]} != 2 ]] || [[ ${#post_sends[@]} != 2 ]]; then
+		error "Unexpected send counts"
+	fi
+
+	if $expect_mr_forwarding ; then
+		((post_sends[1] - pre_sends[1] >= 50)) ||
+			error "Expected ${post_sends[1]}-${pre_sends[1]} >= 50"
+	else
+		((post_sends[1] - pre_sends[1] < 50)) ||
+			error "Expected ${post_sends[1]}-${pre_sends[1]} < 50"
+	fi
+
+	return 0
+}
+
+test_237() {
+	setup_router_test -m || return $?
+
+	do_basic_rtr_test || return $?
+
+	do_mr_forwarding_test true || return $?
+
+	cleanup_router_test
+}
+run_test 237 "Check MR forwarding feature"
+
+test_238() {
+	setup_router_test -m
+
+	do_lnetctl set discovery 0 ||
+		error "Failed to disable discovery rc = $?"
+
+	do_basic_rtr_test || return $?
+
+	# Router should show non-MR for me
+	local my_nid=$($LCTL list_nids | head -n 1)
+	local mr=$(do_node ${ROUTERS[0]} "$LNETCTL peer show --nid $my_nid" |
+		   awk '/Multi-Rail:/{print $NF}')
+
+	[[ $mr == false ]] ||
+		error "Expect 'Multi-Rail: false', found $mr"
+
+	do_mr_forwarding_test false || return $?
+
+	cleanup_router_test
+}
+run_test 238 "Check MR forwarding feature skipped for non-MR source"
 
 test_241() {
 	reinit_dlc || return $?
