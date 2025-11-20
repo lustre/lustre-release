@@ -426,12 +426,17 @@ int qmt_pool_new_conn(const struct lu_env *, struct qmt_device *,
 		      struct obd_uuid *);
 
 #define GLB_POOL_NAME	"0x0"
+#define QMT_POOL_IDX_GLB -1
+#define QMT_POOL_IDX_ALL -2
 #define qmt_pool_lookup_glb(env, qmt, type) \
-		qmt_pool_lookup(env, qmt, type, NULL, -1, false, NULL, false)
+		qmt_pool_lookup(env, qmt, type, NULL, QMT_POOL_IDX_GLB, false, \
+				NULL, false)
 #define qmt_pool_lookup_name(env, qmt, type, name) \
-		qmt_pool_lookup(env, qmt, type, name, -1, false, NULL, false)
+		qmt_pool_lookup(env, qmt, type, name, QMT_POOL_IDX_GLB, false, \
+				NULL, false)
 #define qmt_pool_lookup_name_lqa(env, qmt, type, name, is_lqa) \
-		qmt_pool_lookup(env, qmt, type, name, -1, false, NULL, is_lqa)
+		qmt_pool_lookup(env, qmt, type, name, QMT_POOL_IDX_GLB, false, \
+				NULL, is_lqa)
 
 /*
  * Until MDT pools are not emplemented, all MDTs belong to
@@ -441,7 +446,10 @@ int qmt_pool_new_conn(const struct lu_env *, struct qmt_device *,
 
 #define qmt_pool_lookup_arr(env, qmt, type, idx, stype, qid) \
 		qmt_pool_lookup(env, qmt, type, NULL, \
-		qmt_dom(type, stype) ? -1 : idx, true, qid, false)
+		qmt_dom(type, stype) ? QMT_POOL_IDX_GLB : idx, true, qid, false)
+#define qmt_pool_lookup_arr_all(env, qmt, type, qid) \
+		qmt_pool_lookup(env, qmt, type, NULL, QMT_POOL_IDX_ALL, true, \
+				qid, false)
 struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 				      struct qmt_device *qmt, int rtype,
 				      char *pool_name, int idx, bool add,
@@ -475,6 +483,45 @@ int qmt_start_pool_recalc(struct lu_env *env, struct qmt_pool_info *qpi);
 #define qmt_sarr_write_up(qpi) up_write(&qpi_sarr_tgts(qpi)->op_rw_sem)
 int qmt_sarr_get_idx(struct qmt_pool_info *qpi, int arr_idx);
 unsigned int qmt_sarr_count(struct qmt_pool_info *qpi);
+
+#define qti_pools(qti)	(qti->qti_pools_num > QMT_MAX_POOL_NUM ? \
+				qti->qti_pools : qti->qti_pools_small)
+#define qti_pools_env(env) \
+	(qmt_info(env)->qti_pools_num > QMT_MAX_POOL_NUM ? \
+		qmt_info(env)->qti_pools : qmt_info(env)->qti_pools_small)
+#define qti_pools_cnt(env)	(qmt_info(env)->qti_pools_cnt)
+static inline void qti_pools_init(const struct lu_env *env)
+{
+	struct qmt_thread_info	*qti = qmt_info(env);
+
+	qti->qti_pools_cnt = 0;
+	qti->qti_pools_num = QMT_MAX_POOL_NUM;
+}
+
+static inline void qti_pools_fini(const struct lu_env *env)
+{
+	struct qmt_thread_info	*qti = qmt_info(env);
+	struct qmt_pool_info	**pools = qti->qti_pools;
+	int i;
+
+	LASSERT(qti->qti_pools_cnt > 0);
+
+	pools = qti_pools(qti);
+	for (i = 0; i < qti->qti_pools_cnt; i++) {
+		up_read(&pools[i]->qpi_recalc_sem);
+		qpi_putref(env, pools[i]);
+	}
+
+	if (qti->qti_pools_num > QMT_MAX_POOL_NUM)
+		OBD_FREE(qti->qti_pools,
+			 qti->qti_pools_num * sizeof(struct qmt_pool_info *));
+}
+struct lquota_entry *
+qmt_lqe_lookup(const struct lu_env *env, struct lquota_site *site,
+	       union lquota_id *qid, bool find);
+
+#define qmt_lqe_locate(env, site, id) qmt_lqe_lookup(env, site, id, false)
+#define qmt_lqe_find(env, site, id) qmt_lqe_lookup(env, site, id, true)
 
 /* qmt_entry.c */
 extern const struct lquota_entry_operations qmt_lqe_ops;
@@ -530,8 +577,8 @@ void qmt_setup_lqe_gd(const struct lu_env *,  struct qmt_device *,
 		qmt_seed_glbe_all(env, lqeg, true, false, false)
 #define qmt_seed_glbe(env, lqeg, pool_locked) \
 		qmt_seed_glbe_all(env, lqeg, true, true, pool_locked)
-void qmt_seed_glbe_all(const struct lu_env *, struct lqe_glbl_data *,
-		       bool, bool, bool);
+bool qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
+		       bool qunit, bool edquot, bool pool_locked);
 
 /* qmt_handler.c */
 int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,

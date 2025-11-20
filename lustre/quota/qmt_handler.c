@@ -118,6 +118,130 @@ lqes_fini:
 	qti_lqes_fini(env);
 }
 
+struct qmt_entry_iter_lqa {
+	const struct lu_env *qeil_env;
+	struct qmt_pool_info *qeil_qpi;
+};
+
+static int qmt_entry_iter_lqa_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+			     struct hlist_node *hnode, void *d)
+{
+	struct qmt_entry_iter_lqa *iter = (struct qmt_entry_iter_lqa *)d;
+	const struct lu_env *env = iter->qeil_env;
+	struct qmt_pool_info *qpi = iter->qeil_qpi;
+	struct qmt_pool_info *res;
+	struct lquota_entry *lqe, *lqe_gl;
+	bool need_notify = false;
+	int i, rc = 0;
+
+	LASSERT(qpi->qpi_lqa);
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	LASSERT(kref_read(&lqe->lqe_ref) > 0);
+
+	LQUOTA_DEBUG(lqe, "Check that lqe relates to LQA: %s\n", qpi->qpi_name);
+
+	if (lqe->lqe_id.qid_uid == 0 || !lqe->lqe_enforced)
+		return 0;
+
+	if (!qmt_lqa_contain_id(qpi, lqe->lqe_id.qid_uid))
+		return 0;
+
+	qti_pools_init(env);
+	res = qmt_pool_lookup_arr_all(env, qpi->qpi_qmt, lqe_rtype(lqe),
+				      &lqe->lqe_id);
+	if (IS_ERR(res))
+		goto out_pools;
+
+	qti_lqes_init(env);
+	for (i = 0; i < qti_pools_cnt(env); i++) {
+		struct qmt_pool_info *pool;
+		struct lquota_entry *lqep;
+
+		pool = qti_pools_env(env)[i];
+		/* Don't take into account pools without slaves */
+		if (!qpi_slv_nr(pool, lqe_qtype(lqe)))
+			continue;
+
+		/* Use the global lqe directly instead of re-looking it up */
+		if (qmt_pool_global(pool)) {
+			lqep = lqe;
+			lqe_getref(lqep);
+		} else {
+			lqep = qmt_lqe_find(env, pool->qpi_site[lqe_qtype(lqe)],
+					    &lqe->lqe_id);
+			if (IS_ERR(lqep))
+				continue;
+			/* Always add lqe from LQA we are setting new limits
+			 * regardless of its enforced flag. Even if it became
+			 * not enforced, it still should take part in a reseed
+			 * process. Skip other not enforced lqes.
+			 */
+			if ((lqe2qpi(lqep) != qpi) && !lqep->lqe_enforced) {
+				lqe_putref(lqep);
+				continue;
+			}
+		}
+		if (qti_lqes_add(env, lqep)) {
+			lqe_putref(lqep);
+			rc = -ENOMEM;
+			CWARN("%s: Can't add new lqe. Proceed with earlier added: rc = %d\n",
+			      qpi->qpi_qmt->qmt_svname, rc);
+			break;
+		}
+	}
+	/* The array should include at least one LQA lqe and global lqe.
+	 * If there is no global lqe, no one to notify with new limits, so skip.
+	 */
+	if (qti_lqes_cnt(env) < 2) {
+		CDEBUG(D_QUOTA, "lqes array must have at least 2 lqes\n");
+		goto out_lqes;
+	}
+
+	lqe_gl = qti_lqes_glbl(env);
+	if (!lqe_gl->lqe_is_global) {
+		CERROR("%s: No global lqe for id:%llu: rc = %d\n",
+		       qpi->qpi_qmt->qmt_svname, lqe->lqe_id.qid_uid, rc);
+		goto out_lqes;
+	}
+	/* We came here traversing the hash of the global pool. Incoming lqe
+	 * is a global lqe and should present in qti_lqes array. Something
+	 * seriously broken, if it doesn't.
+	 */
+	LASSERT(lqe_gl->lqe_is_global);
+
+	mutex_lock(&lqe_gl->lqe_glbl_data_lock);
+	if (lqe_gl->lqe_glbl_data)
+		need_notify = qmt_seed_glbe(env, lqe_gl->lqe_glbl_data, false);
+	mutex_unlock(&lqe_gl->lqe_glbl_data_lock);
+
+	if (need_notify)
+		qmt_id_lock_notify(qpi->qpi_qmt, lqe_gl);
+out_lqes:
+	qti_lqes_fini(env);
+out_pools:
+	qti_pools_fini(env);
+
+	return 0;
+}
+
+static void qmt_set_lqa_notify(const struct lu_env *env, struct qmt_device *qmt,
+			       struct lquota_entry *lqe)
+{
+	struct qmt_entry_iter_lqa iter_data;
+	struct qmt_pool_info *qpi;
+
+	qpi = qmt_pool_lookup_glb(env, qmt, lqe_rtype(lqe));
+	if (IS_ERR(qpi))
+		return;
+
+	iter_data.qeil_env = env;
+	iter_data.qeil_qpi = lqe2qpi(lqe);
+	cfs_hash_for_each(qpi->qpi_site[lqe_qtype(lqe)]->lqs_hash,
+			       qmt_entry_iter_lqa_cb, &iter_data);
+
+	qpi_putref(env, qpi);
+}
+
 /*
  * Update quota settings for a given lqe.
  *
@@ -285,8 +409,12 @@ out_nolock:
 		 * we can't init and add new lqes to don't overwrite already
 		 * added.
 		 */
-		if (!qti_lqes_inited(env) && need_id_notify)
-			qmt_set_id_notify(env, qmt, lqe);
+		if (!qti_lqes_inited(env) && need_id_notify) {
+			if (lqe2qpi(lqe)->qpi_lqa)
+				qmt_set_lqa_notify(env, qmt, lqe);
+			else
+				qmt_set_id_notify(env, qmt, lqe);
+		}
 	}
 
 	return rc;

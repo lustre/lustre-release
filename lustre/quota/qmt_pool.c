@@ -48,7 +48,8 @@ static inline void qmt_stop_pool_recalc(struct qmt_pool_info *qpi);
 static const union lquota_id lqa_qid = {
 	.qid_uid = QMT_LQA_QID
 };
-static inline struct lquota_entry *
+
+struct lquota_entry *
 qmt_lqe_lookup(const struct lu_env *env, struct lquota_site *site,
 	       union lquota_id *qid, bool find)
 {
@@ -59,8 +60,6 @@ qmt_lqe_lookup(const struct lu_env *env, struct lquota_site *site,
 
 	return lqe_locate_find(env, site, qid, find);
 }
-#define qmt_lqe_locate(env, site, id) qmt_lqe_lookup(env, site, id, false)
-#define qmt_lqe_find(env, site, id) qmt_lqe_lookup(env, site, id, true)
 
 /*
  * Static helper functions not used outside the scope of this file
@@ -300,21 +299,6 @@ void qmt_pool_free(const struct lu_env *env, struct qmt_pool_info *pool)
 	EXIT;
 }
 
-static inline void qti_pools_init(const struct lu_env *env)
-{
-	struct qmt_thread_info	*qti = qmt_info(env);
-
-	qti->qti_pools_cnt = 0;
-	qti->qti_pools_num = QMT_MAX_POOL_NUM;
-}
-
-#define qti_pools(qti)	(qti->qti_pools_num > QMT_MAX_POOL_NUM ? \
-				qti->qti_pools : qti->qti_pools_small)
-#define qti_pools_env(env) \
-	(qmt_info(env)->qti_pools_num > QMT_MAX_POOL_NUM ? \
-		qmt_info(env)->qti_pools : qmt_info(env)->qti_pools_small)
-#define qti_pools_cnt(env)	(qmt_info(env)->qti_pools_cnt)
-
 static inline int qti_pools_add(const struct lu_env *env,
 				struct qmt_pool_info *qpi)
 {
@@ -357,25 +341,6 @@ static inline int qti_pools_add(const struct lu_env *env,
 	return 0;
 }
 
-static inline void qti_pools_fini(const struct lu_env *env)
-{
-	struct qmt_thread_info	*qti = qmt_info(env);
-	struct qmt_pool_info	**pools = qti->qti_pools;
-	int i;
-
-	LASSERT(qti->qti_pools_cnt > 0);
-
-	pools = qti_pools(qti);
-	for (i = 0; i < qti->qti_pools_cnt; i++) {
-		up_read(&pools[i]->qpi_recalc_sem);
-		qpi_putref(env, pools[i]);
-	}
-
-	if (qti->qti_pools_num > QMT_MAX_POOL_NUM)
-		OBD_FREE(qti->qti_pools,
-			 qti->qti_pools_num * sizeof(struct qmt_pool_info *));
-}
-
 /*
  * Look-up a pool in a list based on the type.
  *
@@ -387,6 +352,10 @@ static inline void qti_pools_fini(const struct lu_env *env)
  * \param idx	- OST or MDT index to search for. When it is >= 0, function
  *		returns array with pointers to all pools that include
  *		targets with requested index.
+ *		idx == QMT_POOL_IDX_GLB, pool_name == NULL: return only global
+ *		pool.
+ *		idx == QMT_POOL_IDX_ALL, add == true, qid != NULL: return an
+ *		array of a global pool plus all PQs and LQAs containing qid.
  * \param add	- add to qti_pool_arr if true
  * \param qid	- quota id to lookup find appropriate LQA pools
  * \param lqa	- lookup for LQA pool by name
@@ -414,7 +383,7 @@ struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 	 * or MDT. Possibly this would return a list of pools that includes
 	 * needed target(OST/MDT). */
 	pool = NULL;
-	if (idx == -1 && !pool_name)
+	if (idx == QMT_POOL_IDX_GLB && !pool_name)
 		pool_name = GLB_POOL_NAME;
 
 	list_for_each_entry(pos, &qmt->qmt_pool_list, qpi_linkage) {
@@ -439,6 +408,13 @@ struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 			continue;
 		}
 
+		/* All pools and LQAs containing QID */
+		if (idx == QMT_POOL_IDX_ALL && add && qid) {
+			rc = qti_pools_add(env, pos);
+			if (rc)
+				break;
+		}
+
 		if (pos->qpi_lqa != lqa)
 			continue;
 
@@ -460,7 +436,7 @@ struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 	if (rc)
 		GOTO(out_err, rc);
 
-	if (idx >= 0 && qti_pools_cnt(env))
+	if ((idx >= 0 || idx == QMT_POOL_IDX_ALL) && qti_pools_cnt(env))
 		pool = qti_pools_env(env)[0];
 
 	RETURN(pool ? : ERR_PTR(-ENOENT));

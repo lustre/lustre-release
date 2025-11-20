@@ -8299,6 +8299,39 @@ test_97e()
 }
 run_test 97e "LQA add/remove should reject invalid ranges"
 
+test_97g() {
+	local rstart=$((TSTPRJID-10))
+	local rend=$((TSTPRJID+10))
+	local testdir=$DIR/$tdir
+	local ilimit=10000
+	local lqa_ilimit=1100
+	local lqa="lqa1"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "need MDS >= 2.17.58 to notify slaves with LQA limits"
+
+	setup_quota_test || error "setup quota failed with $?"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
+
+	$LQA_NEW --name $lqa || error "cannot create $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa"
+	$LQA_ADD --name $lqa --range $rstart-$rend ||
+		error "lqa:$lqa failed to add range $rstart:$rend"
+
+	$LFS setquota -p $TSTPRJID -I $ilimit $DIR ||
+		error "failed to set prj:$TSTPRJID quota limits"
+
+	change_project -sp $((TSTPRJID)) $testdir
+
+	$LFS setquota -P --lqa $lqa -I$lqa_ilimit $DIR ||
+		error "lqa:$lqa: failed to set inode quota limits"
+
+	$RUNAS createmany -m ${testdir}/tfile1- $((lqa_ilimit+1000)) &&
+		error "succeeded to create $((lqa_ilimit+1000)) files"
+	return 0
+}
+run_test 97g "new LQA limits should affect all lqes in the system"
+
 test_98() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
 

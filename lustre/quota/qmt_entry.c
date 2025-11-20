@@ -1154,16 +1154,16 @@ int qmt_map_lge_idx(struct lqe_glbl_data *lgd, int ostidx)
 	return k;
 }
 
-void qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
+bool qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
 		       bool qunit, bool edquot, bool pool_locked)
 {
 	struct qmt_pool_info *qpi;
 	int i, j;
+	bool nu = false;
 
 	ENTRY;
-
 	if (!qti_lqes_cnt(env))
-		RETURN_EXIT;
+		RETURN(nu);
 	/* lqes array is sorted by qunit - the first entry has minimum qunit.
 	 * Thus start seeding global qunit's array beginning from the 1st lqe
 	 * and appropriate pool. If pools overlapped, slaves from this
@@ -1276,7 +1276,7 @@ qunit_lbl:
 			qmt_sarr_read_up(qpi);
 	}
 	/* TODO: only for debug purposes - remove it later */
-	for (i = 0; i < lgd->lqeg_num_used; i++)
+	for (i = 0; i < lgd->lqeg_num_used; i++) {
 		CDEBUG(D_QUOTA,
 			"lgd i %d tgt_idx %d qunit %lu nu %d;  edquot %d nu %d\n",
 			i, lgd->lqeg_arr[i].lge_idx,
@@ -1284,8 +1284,12 @@ qunit_lbl:
 			lgd->lqeg_arr[i].lge_qunit_nu,
 			lgd->lqeg_arr[i].lge_edquot,
 			lgd->lqeg_arr[i].lge_edquot_nu);
+		if (!nu && (lgd->lqeg_arr[i].lge_qunit_nu ||
+		    lgd->lqeg_arr[i].lge_edquot_nu))
+			nu = true;
+	}
 
-	EXIT;
+	RETURN(nu);
 }
 
 void qmt_setup_lqe_gd(const struct lu_env *env, struct qmt_device *qmt,
