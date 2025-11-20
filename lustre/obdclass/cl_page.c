@@ -136,8 +136,8 @@ static ssize_t ll_get_iov_memory(int rw, struct iov_iter *iter,
 				size_t maxsize)
 {
 #if defined(HAVE_DIO_ITER)
+	ssize_t bytes;
 	size_t start;
-	size_t bytes;
 
 	bytes = iov_iter_get_pages_alloc2(iter, &cdp->cdp_pages, maxsize,
 					  &start);
