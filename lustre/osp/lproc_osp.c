@@ -17,6 +17,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <lustre_log.h>
 #include "osp_internal.h"
 
 /**
@@ -219,6 +220,46 @@ static ssize_t max_sync_changes_store(struct kobject *kobj,
 }
 
 LUSTRE_RW_ATTR(max_sync_changes);
+
+static ssize_t sync_current_llog_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	struct llog_handle *cath, *lgh;
+	struct llog_ctxt *ctxt;
+	struct llog_logid *catid = NULL;
+	struct llog_logid *plid = NULL;
+	int rc = 0;
+
+	ctxt = llog_get_context(osp->opd_obd, LLOG_MDS_OST_ORIG_CTXT);
+	if (IS_ERR_OR_NULL(ctxt))
+		return 0;
+	cath = ctxt->loc_handle;
+	if (!cath || !cath->lgh_hdr)
+		goto out;
+	LASSERT(cath->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
+	catid = &cath->lgh_id;
+	lgh = cath->u.chd.chd_current_log;
+	if (lgh) {
+		plid = &lgh->lgh_id;
+		rc = snprintf(buf, PAGE_SIZE,
+			     DFID" (%d plains), current "DFID"\n",
+			     PLOGID(catid),
+			     cath->lgh_hdr ? cath->lgh_hdr->llh_count : 0,
+			     PLOGID(plid));
+	} else {
+		rc = snprintf(buf, PAGE_SIZE,
+			     DFID" (%d plains)\n", PLOGID(catid),
+			     cath->lgh_hdr ? cath->lgh_hdr->llh_count : 0);
+	}
+out:
+	llog_ctxt_put(ctxt);
+	return rc;
+}
+LUSTRE_RO_ATTR(sync_current_llog);
 
 /**
  * max_rpcs_in_flight_show() - Show maximum number of RPCs in flight allowed
@@ -1274,6 +1315,7 @@ static struct attribute *osp_obd_attrs[] = {
 	&lustre_attr_max_sync_changes.attr,
 	&lustre_attr_force_sync.attr,
 	&lustre_attr_old_sync_processed.attr,
+	&lustre_attr_sync_current_llog.attr,
 	&lustre_attr_create_count.attr,
 	&lustre_attr_max_create_count.attr,
 	&lustre_attr_reserved_mb_high.attr,

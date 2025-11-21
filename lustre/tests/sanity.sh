@@ -10509,7 +10509,7 @@ test_60b() { # bug 6411
 					print from_begin
 			  }")
 
-	[[ $LLOG_COUNT -gt 120 ]] &&
+	(( LLOG_COUNT <= 130 )) ||
 		error "CDEBUG_LIMIT not limiting messages ($LLOG_COUNT)" || true
 }
 run_test 60b "limit repeated messages from CERROR/CWARN"

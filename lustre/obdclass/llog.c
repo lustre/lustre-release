@@ -856,7 +856,7 @@ out:
 	if (cd != NULL)
 		cd->lpcd_last_idx = last_called_index;
 
-	if (unlikely(rc == -EIO && loghandle->lgh_obj != NULL)) {
+	if ((rc == -EIO || rc == -EINVAL) && loghandle->lgh_obj != NULL) {
 		if (dt_object_remote(loghandle->lgh_obj)) {
 			/* If it is remote object, then -EIO might means
 			 * disconnection or eviction, let's return -EAGAIN,

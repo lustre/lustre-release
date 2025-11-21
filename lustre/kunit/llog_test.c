@@ -2282,6 +2282,205 @@ out_close:
 	RETURN(rc);
 }
 
+static int llog_obj_truncate(const struct lu_env *env,
+			     struct dt_object *obj,
+			     loff_t size)
+{
+	struct dt_device *dd;
+	struct lu_attr *attr;
+	struct thandle *th;
+	int		  rc;
+
+	ENTRY;
+
+	OBD_ALLOC_PTR(attr);
+	if (attr == NULL)
+		RETURN(-ENOMEM);
+
+	LASSERT(obj);
+	dd = lu2dt_dev(obj->do_lu.lo_dev);
+	if (IS_ERR_OR_NULL(dd))
+		GOTO(attr_free, rc = -EINVAL);
+
+	attr->la_size = size;
+	attr->la_valid = LA_SIZE;
+
+	th = dt_trans_create(env, dd);
+	if (IS_ERR(th))
+		GOTO(attr_free, rc = PTR_ERR(th));
+
+	rc = dt_declare_punch(env, obj, size, OBD_OBJECT_EOF, th);
+	if (rc)
+		GOTO(cleanup, rc);
+	rc = dt_declare_attr_set(env, obj, attr, th);
+	if (rc)
+		GOTO(cleanup, rc);
+	rc = dt_trans_start_local(env, dd, th);
+	if (rc)
+		GOTO(cleanup, rc);
+
+	rc = dt_punch(env, obj, size, OBD_OBJECT_EOF, th);
+	if (rc == 0)
+		rc = dt_attr_set(env, obj, attr, th);
+
+cleanup:
+	dt_trans_stop(env, dd, th);
+attr_free:
+	OBD_FREE_PTR(attr);
+
+	RETURN(rc);
+}
+
+/* truncate one-by-one bytes and check the catalog is still functional */
+static int llog_test_12(const struct lu_env *env, struct obd_device *obd)
+{
+	struct llog_handle *cath, *llh;
+	struct llog_mini_rec lmr;
+	struct llog_cookie cookie;
+	struct llog_logid catid;
+	int rc, rc2, i, numrecs;
+	struct llog_ctxt *ctxt;
+	struct dt_object *obj;
+	struct lu_attr *attr;
+	int bytes2trunc;
+	char name[10];
+
+	ENTRY;
+
+	OBD_ALLOC_PTR(attr);
+	if (attr == NULL)
+		RETURN(-ENOMEM);
+
+	ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
+
+	scnprintf(name, sizeof(name), "%x", llog_test_rand + 3);
+	CWARN("12: create a catalog log with name: %s\n", name);
+	rc = llog_open_create(env, ctxt, &cath, NULL, name);
+	if (rc) {
+		CERROR("12: llog_create failed: rc=%d\n", rc);
+		GOTO(ctxt_release, rc);
+	}
+	catid = cath->lgh_id;
+
+	rc = llog_init_handle(env, cath, LLOG_F_IS_CAT, &uuid);
+	if (rc) {
+		CERROR("12: can't init llog handle: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	numrecs = 0;
+
+	/* truncated plain llog cases */
+	for (bytes2trunc = sizeof(lmr); bytes2trunc >= 4; bytes2trunc--) {
+
+		for (i = 0; i < 10; i++) {
+			rc = llog_cat_add(env, cath, &lmr.lmr_hdr, &cookie);
+			if (rc != 1) {
+				CERROR("12: add to cat failed: rc=%d\n", rc);
+				GOTO(out, rc);
+			}
+			numrecs++;
+		}
+		plain_counter = 0;
+		rc = llog_cat_process(env, cath, plain_print_cb, "fooba", 0, 0);
+		if (rc) {
+			CERROR("12: cat process failed: rc=%d\n", rc);
+			GOTO(out, rc);
+		}
+		if (plain_counter != numrecs) {
+			CERROR("12: found %d recs, expect %d\n",
+			       plain_counter, numrecs);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		llh = cath->u.chd.chd_current_log;
+		LASSERT(cath->u.chd.chd_current_log);
+
+		obj = llh->u.chd.chd_current_log->lgh_obj;
+		LASSERT(obj);
+		lu_object_get(&obj->do_lu);
+
+		rc = llog_cat_close(env, cath);
+		LASSERT(rc == 0);
+
+		rc = dt_attr_get(env, obj, attr);
+		if (rc) {
+			CERROR("12: attr_get failed: rc=%d\n", rc);
+			GOTO(out, rc);
+		}
+
+		LCONSOLE_INFO("12: truncate %d bytes\n", bytes2trunc);
+		rc = llog_obj_truncate(env, obj, attr->la_size - bytes2trunc);
+		if (rc) {
+			CERROR("12: truncate failed: rc=%d\n", rc);
+			GOTO(out, rc);
+		}
+
+		dt_object_put(env, obj);
+
+		LCONSOLE_INFO("12: re-open and process the catalog\n");
+		rc = llog_open(env, ctxt, &cath, &catid,
+			       NULL, LLOG_OPEN_EXISTS);
+		if (rc) {
+			CERROR("12: llog_create with logid failed: %d\n", rc);
+			GOTO(ctxt_release, rc);
+		}
+		rc = llog_init_handle(env, cath, LLOG_F_IS_CAT, &uuid);
+		if (rc) {
+			CERROR("12: can't init llog handle: %d\n", rc);
+			GOTO(out, rc);
+		}
+
+		plain_counter = 0;
+		rc = llog_cat_process(env, cath, plain_print_cb, "foobar", 0, 0);
+		if (rc) {
+			CERROR("12: cat process failed: rc=%d\n", rc);
+			GOTO(out, rc);
+		}
+		if (plain_counter != 0) {
+			CERROR("12: found %d recs, expect 0\n", plain_counter);
+			GOTO(out, rc = -EINVAL);
+		}
+		LCONSOLE_INFO("12: try to add to the catalog\n");
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, &cookie);
+		if (rc != 1) {
+			CERROR("12: add to cat failed: rc=%d\n", rc);
+			GOTO(out, rc);
+		}
+		numrecs = 1;
+
+		plain_counter = 0;
+		rc = llog_cat_process(env, cath, plain_print_cb, "fooba", 0, 0);
+		if (rc) {
+			CERROR("12: cat process failed: rc=%d\n", rc);
+			GOTO(out, rc);
+		}
+		if (plain_counter != numrecs) {
+			CERROR("12: found %d recs, expect %d\n",
+			       plain_counter, numrecs);
+			GOTO(out, rc = -EINVAL);
+		}
+	}
+
+out:
+	CWARN("12: put newly-created catalog\n");
+	rc2 = llog_cat_close(env, cath);
+	if (rc2) {
+		CERROR("12: close log %s failed: %d\n", name, rc2);
+		if (rc == 0)
+			rc = rc2;
+	}
+ctxt_release:
+	llog_ctxt_put(ctxt);
+	OBD_FREE_PTR(attr);
+	RETURN(rc);
+}
+
+
 /*
  * -------------------------------------------------------------------------
  * Tests above, boring obd functions below
@@ -2341,6 +2540,10 @@ static int llog_run_tests(const struct lu_env *env, struct obd_device *obd)
 		GOTO(cleanup, rc);
 
 	rc = llog_test_11(env, obd);
+	if (rc)
+		GOTO(cleanup, rc);
+
+	rc = llog_test_12(env, obd);
 	if (rc)
 		GOTO(cleanup, rc);
 

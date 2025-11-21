@@ -2775,6 +2775,20 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 	}
 
+	if (obj->oo_brm) {
+		/* reset block lookup/preallocation cache */
+		struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+		struct osd_block_ready_map *brm = obj->oo_brm;
+		int i;
+
+		down(&ei->i_append_sem);
+		for (i = 0; i < OSD_BRM_MAX; i++) {
+			brm[i].start = 1UL << 31;
+			brm[i].end = 1UL << 31;
+		}
+		up(&ei->i_append_sem);
+	}
+
 	inode_lock(inode);
 	/* add to orphan list to ensure truncate completion
 	 * if this transaction succeed. ldiskfs_truncate()
@@ -3028,6 +3042,29 @@ static void osd_partial_page_flush_punch(struct osd_device *d,
 	}
 }
 
+static void osd_invalidate_partial_page(struct inode *inode, loff_t offset)
+{
+	struct address_space *mapping = inode->i_mapping;
+	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+	struct page *page;
+	int rc;
+
+	if (!test_bit(LDISKFS_INODE_JOURNAL_DATA, &ei->i_flags))
+		return;
+
+	page = find_or_create_page(mapping, i_size_read(inode) >> PAGE_SHIFT,
+				   mapping_gfp_constraint(mapping, ~__GFP_FS));
+	if (!page)
+		return;
+
+	rc = osd_jbd_invalidate_page(LDISKFS_SB(inode->i_sb)->s_journal,
+				     page, 0, PAGE_SIZE);
+	LASSERTF(rc == 0, "  last page %lu %s%s rc=%d\n", page->index,
+		 PageChecked(page) ? "C" : "", PageDirty(page) ? "D" : "", rc);
+	unlock_page(page);
+	put_page(page);
+}
+
 /*
  * For a partial-page truncate, flush the page to disk immediately to
  * avoid data corruption during direct disk write.  b=17397
@@ -3047,6 +3084,9 @@ static void osd_partial_page_flush(struct osd_device *d, struct inode *inode,
 		invalidate_mapping_pages(inode->i_mapping, offset >> PAGE_SHIFT,
 					 offset >> PAGE_SHIFT);
 	}
+
+	/* to prevent ldiskfs warning about forgottent page */
+	osd_invalidate_partial_page(inode, offset);
 }
 
 void osd_execute_truncate(struct osd_object *obj)
