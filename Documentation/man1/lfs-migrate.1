@@ -167,6 +167,21 @@ used with OST space balancing migration to avoid interfering with file
 access by applications if there is not a requirement to migrate any
 particular file to the new layout.
 .TP
+.BR --restripe
+Restripe the file using the default directory striping layout. This option
+copies the default layout from the parent directory and applies it to the
+file being migrated. This option may not be specified at the same time as the
+.B -c
+or
+.B -S
+or
+.B -p
+or
+.B -A
+or
+.B -E
+options.
+.TP
 .BR --stats
 This option enables progress updates every 5 seconds, in YAML format.
 .TP

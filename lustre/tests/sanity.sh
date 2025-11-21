@@ -8550,27 +8550,27 @@ test_56wc() {
 
 	# File currently set to -S 512K -c 1
 
-	# Ensure -c and -S options are rejected when -R is set
+	# Ensure -c and -S options are rejected when --restripe is set
 	echo -n "Verifying incompatible options are detected..."
-	$LFS_MIGRATE -R -c 1 "$file1" &&
-		error "incompatible -R and -c options not detected"
-	$LFS_MIGRATE -R -S 1M "$file1" &&
-		error "incompatible -R and -S options not detected"
-	$LFS_MIGRATE -R -p pool "$file1" &&
-		error "incompatible -R and -p options not detected"
-	$LFS_MIGRATE -R -E eof -c 1 "$file1" &&
-		error "incompatible -R and -E options not detected"
-	$LFS_MIGRATE -R -A "$file1" &&
-		error "incompatible -R and -A options not detected"
-	$LFS migrate -A -c 1 "$file1" &> /dev/null &&
+	$LFS migrate --restripe -c 1 "$file1" &&
+		error "incompatible --restripe and -c options not detected"
+	$LFS migrate --restripe -S 1M "$file1" &&
+		error "incompatible --restripe and -S options not detected"
+	$LFS migrate --restripe -p pool "$file1" &&
+		error "incompatible --restripe and -p options not detected"
+	$LFS migrate --restripe -E eof -c 1 "$file1" &&
+		error "incompatible --restripe and -E options not detected"
+	$LFS migrate --restripe -A "$file1" &&
+		error "incompatible --restripe and -A options not detected"
+	$LFS migrate -A -c 1 "$file1" &&
 		error "incompatible -A and -c options not detected"
-	$LFS migrate -A -E eof -c 1 "$file1" &> /dev/null &&
+	$LFS migrate -A -E eof -c 1 "$file1" &&
 		error "incompatible -A and -E options not detected"
 	echo "done."
 
 	# Ensure unrecognized options are passed through to 'lfs migrate'
 	echo -n "Verifying -S option is passed through to lfs migrate..."
-	$LFS_MIGRATE -y -S 1M "$file1" || error "migration failed"
+	$LFS migrate -S 1M "$file1" || error "migration failed"
 	cur_ssize=$($LFS getstripe -S "$file1")
 	(( cur_ssize == 1048576 )) || error "migrate -S $cur_ssize != 1048576"
 	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (1)"
@@ -8615,10 +8615,10 @@ test_56wc() {
 	echo -n "Verifying restripe option uses parent stripe settings..."
 	parent_ssize=$($LFS getstripe -S $DIR/$tdir 2>/dev/null)
 	parent_scount=$($LFS getstripe -c $DIR/$tdir 2>/dev/null)
-	$LFS_MIGRATE -R "$file1" || error "migrate failed"
+	$LFS migrate --restripe "$file1" || error "migrate failed"
 	cur_ssize=$($LFS getstripe -S "$file1")
 	(( cur_ssize == parent_ssize )) ||
-		error "migrate -R stripe_size $cur_ssize != $parent_ssize"
+		error "migrate --restripe stripe_size $cur_ssize != $parent_ssize"
 	cur_scount=$($LFS getstripe -c "$file1")
 	(( cur_scount == parent_scount )) ||
 		error "migrate -R stripe_count $cur_scount != $parent_scount"
@@ -8660,7 +8660,7 @@ test_56wc() {
 	[[ "$(md5sum $file1)" == "$md5" ]] || error "file data has changed (8)"
 	echo "done."
 }
-run_test 56wc "check unrecognized options for lfs_migrate are passed through"
+run_test 56wc "check unrecognized options for lfs migrate are passed through"
 
 test_56wd() {
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
@@ -8832,7 +8832,7 @@ test_56xD() {
 		error "failed to run lfs migrate with --fid and --lustre-dir argument"
 
 	echo "without --lustre-dir option"
-	$LFS_MIGRATE -y -o 1 -S 2M --fid $fids||
+	$LFS migrate -o 1 -S 2M --fid $fids||
 		error "failed to run lfs_migrate with --fid argument"
 
 	$LFS getstripe $tf3

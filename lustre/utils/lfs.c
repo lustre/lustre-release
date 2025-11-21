@@ -227,7 +227,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\t\t[--block|-b] [--non-block|-n]\n"				\
 	"\t\t[--lustre-dir=LUSTRE_MOUNT_POINT --fid]\n"			\
 	"\t\t[--non-direct|-D] [--verbose|-v] FILENAME\n"		\
-	"\t\t[--stats-interval SECONDS]\n"				\
+	"\t\t[--restripe] [--stats-interval SECONDS]\n"			\
 	"\t\t-0|--null|--files-from=LIST_FILE|FILENAME ...\n"
 
 #define SETDIRSTRIPE_USAGE						\
@@ -743,8 +743,12 @@ migrate_open_files(const char *name, enum llapi_migration_flags migration_flags,
 	struct stat		 st;
 	struct stat		 stv;
 
-	if (!param && !layout) {
-		*err_str = "layout information";
+	/*
+	 * Ensure param and layout are mutually exclusive.
+	 * If both are set, it indicates a programming error in the caller.
+	 */
+	if (param != NULL && layout != NULL) {
+		*err_str = "both param and layout specified";
 		return -EINVAL;
 	}
 
@@ -818,15 +822,22 @@ source_open:
 		if (layout) {
 			/* Returns -1 and sets errno on error: */
 			fd_dst = llapi_layout_file_open(volatile_file,
-							 open_flags, open_mode,
-							 layout);
+							open_flags, open_mode,
+							layout);
 			if (fd_dst < 0)
 				fd_dst = -errno;
-		} else {
+		} else if (param) {
 			/* Does the right thing on error: */
 			fd_dst = llapi_file_open_param(volatile_file,
 							open_flags,
 							open_mode, param);
+		} else {
+			/* Neither layout nor param specified - use default
+			 * striping from parent directory
+			 */
+			fd_dst = open(volatile_file, open_flags, open_mode);
+			if (fd_dst < 0)
+				fd_dst = -errno;
 		}
 	} while (fd_dst < 0 && (rc = fd_dst) == -EEXIST);
 
@@ -3048,9 +3059,6 @@ struct lfs_setstripe_args {
 
 static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
 {
-	unsigned int mirror_count = lsa->lsa_mirror_count;
-	bool first_comp = lsa->lsa_first_comp;
-
 	memset(lsa, 0, sizeof(*lsa));
 
 	lsa->lsa_stripe_size = LLAPI_LAYOUT_DEFAULT;
@@ -3059,9 +3067,6 @@ static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
 	lsa->lsa_pattern = LLAPI_LAYOUT_RAID0;
 	lsa->lsa_hash = LMV_HASH_TYPE_UNKNOWN;
 	lsa->lsa_pool_name = NULL;
-
-	lsa->lsa_mirror_count = mirror_count;
-	lsa->lsa_first_comp = first_comp;
 }
 
 /**
@@ -3078,6 +3083,8 @@ static inline void setstripe_args_init_inherit(struct lfs_setstripe_args *lsa)
 	unsigned long long stripe_size;
 	long long stripe_count;
 	char *pool_name = NULL;
+	unsigned int mirror_count = lsa->lsa_mirror_count;
+	bool first_comp = lsa->lsa_first_comp;
 
 	if (lsa->lsa_pattern == LLAPI_LAYOUT_MDT)
 		stripe_size = LLAPI_LAYOUT_DEFAULT;
@@ -3091,6 +3098,8 @@ static inline void setstripe_args_init_inherit(struct lfs_setstripe_args *lsa)
 	lsa->lsa_stripe_size = stripe_size;
 	lsa->lsa_stripe_count = stripe_count;
 	lsa->lsa_pool_name = pool_name;
+	lsa->lsa_mirror_count = mirror_count;
+	lsa->lsa_first_comp = first_comp;
 }
 
 static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
@@ -3859,6 +3868,7 @@ enum {
 	LFS_PRINTF_LS,
 	LFS_NO_FOLLOW_OPT,
 	LFS_HEX_IDX_OPT,
+	LFS_RESTRIPE_OPT,
 	LFS_STATS_OPT,
 	LFS_STATS_INTERVAL_OPT,
 	LFS_LINKS_OPT,
@@ -3970,6 +3980,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	bool auto_stripe = false;
 	off_t obj_max_kb = 0;
 	int cap = 100;
+	int long_idx;
+	bool restripe = false;
 	int min_free = 256 * 1024;
 	int max_free = 0;
 	const char *files_from = NULL;
@@ -4014,6 +4026,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			.name = "mode",		.has_arg = required_argument},
 	{ .val = LFS_LAYOUT_COPY,
 			.name = "copy",		.has_arg = required_argument},
+	{ .val = LFS_RESTRIPE_OPT,
+			.name = "restripe",	.has_arg = no_argument},
 	{ .val = LFS_STATS_OPT,
 			.name = "stats",	.has_arg = no_argument},
 	{ .val = LFS_STATS_INTERVAL_OPT,
@@ -4117,7 +4131,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 	while ((c = getopt_long(argc, argv,
 				"0Abc:C:dDE:f:FhH:i:I:K:m:M:N::no:p:L:s:S:vx:X:W:y:z:",
-				long_opts, NULL)) >= 0) {
+				long_opts, &long_idx)) >= 0) {
 		size_units = 1;
 		switch (c) {
 		case 0:
@@ -4214,7 +4228,14 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			break;
 		}
+		case LFS_RESTRIPE_OPT:
+			if (auto_stripe)
+				goto restripe_error;
+			restripe = true;
+			break;
 		case LFS_LAYOUT_FOREIGN_OPT:
+			if (restripe)
+				goto restripe_error;
 			if (optarg) {
 				/* check pure numeric */
 				type = strtoul(optarg, &end, 0);
@@ -4251,6 +4272,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			break;
 		case LFS_LAYOUT_COPY:
+			if (restripe)
+				goto restripe_error;
 			from_copy = true;
 			template = optarg;
 			break;
@@ -4285,6 +4308,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			null_mode = true;
 			break;
 		case 'A':
+			if (restripe)
+				goto restripe_error;
 			auto_stripe = true;
 			break;
 		case 'b':
@@ -4307,6 +4332,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 			fallthrough;
 		case 'c':
+			if (auto_stripe || restripe) {
+				fprintf(stderr,
+					"%s %s: -c|--stripe-count incompatible with -A|auto-stripe or --restripe\n",
+					progname, argv[0]);
+				goto usage_error;
+			}
 			errno = 0;
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
 			/* only allow count -2..-32 for overstriped files */
@@ -4357,7 +4388,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			migration_flags |= LLAPI_MIGRATION_NONDIRECT;
 			break;
 		case 'E':
-			comp_end_set = true;
+			if (auto_stripe || restripe) {
+				fprintf(stderr,
+					"%s %s: -E|--component-end incompatible with -A|--auto-stripe or --restripe\n",
+					progname, argv[0]);
+				goto usage_error;
+			}
 			if (lsa.lsa_comp_end != 0) {
 				result = comp_args_to_layout(lpp, &lsa, true);
 				if (result) {
@@ -4386,6 +4422,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					goto usage_error;
 				}
 			}
+			comp_end_set = true;
 			break;
 		case 'F':
 			fid_mode = true;
@@ -4464,6 +4501,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			break;
 		case 'L':
+			if (restripe)
+				goto restripe_error;
 			if (strcmp(argv[optind - 1], "mdt") == 0) {
 				/* Can be only the first component */
 				if (layout) {
@@ -4531,6 +4570,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			migration_flags |= LLAPI_MIGRATION_NONBLOCK;
 			break;
 		case 'N':
+			if (restripe)
+				goto restripe_error;
 create_mirror:
 			if (opc == SO_SETSTRIPE) {
 				opc = SO_MIRROR_CREATE;
@@ -4636,6 +4677,8 @@ create_mirror:
 				fprintf(stderr,
 					"warning: '--ost-list' is deprecated, use '--ost' instead\n");
 #endif
+			if (restripe)
+				goto restripe_error;
 			if (lsa.lsa_pattern == LLAPI_LAYOUT_MDT) {
 				fprintf(stderr,
 					"%s %s: -o|--ost incompatible with DoM layout\n",
@@ -4666,6 +4709,8 @@ create_mirror:
 				lsa.lsa_stripe_off = tgts[0];
 			break;
 		case 'p':
+			if (restripe)
+				goto restripe_error;
 			if (!optarg)
 				goto usage_error;
 
@@ -4675,6 +4720,8 @@ create_mirror:
 				lsa.lsa_pool_name = optarg;
 			break;
 		case 'S':
+			if (restripe)
+				goto restripe_error;
 			result = llapi_parse_size(optarg, &lsa.lsa_stripe_size,
 						  &size_units, 0);
 			/* assume units of KB if too small to be valid */
@@ -4725,6 +4772,8 @@ create_mirror:
 			}
 			break;
 		case 'y':
+			if (restripe)
+				goto restripe_error;
 			from_yaml = true;
 			template = optarg;
 			break;
@@ -4866,8 +4915,9 @@ create_mirror:
 	}
 
 	/* lfs migrate $filename should keep the file's layout by default */
-	if (migrate_mode && !layout && !from_yaml &&
-	    !setstripe_args_specified(&lsa) && !lsa.lsa_pool_name)
+	if (migrate_mode && !layout && !from_yaml && !restripe &&
+	    !auto_stripe && !setstripe_args_specified(&lsa) &&
+	    !lsa.lsa_pool_name)
 		from_copy = true;
 
 	if (xattr && !foreign_mode) {
@@ -5083,7 +5133,7 @@ create_mirror:
 
 		migrate_mdt_param.fp_lmv_md = lmu;
 		migrate_mdt_param.fp_migrate = 1;
-	} else if (!layout) {
+	} else if (!layout && !from_yaml && !from_copy) {
 		if (lsa_args_stripe_count_check(&lsa))
 			goto usage_error;
 
@@ -5236,7 +5286,15 @@ create_mirror:
 			fname = buf;
 		}
 
-		if (from_copy) {
+		/* Handle restripe */
+		if (restripe) {
+			llapi_layout_free(layout);
+			layout = NULL;
+			free(param);
+			param = NULL;
+
+			setstripe_args_init(&lsa);
+		} else if (from_copy) {
 			layout = layout_get_by_name_or_fid(template ?: fname,
 							   fname, 0, O_RDONLY);
 			if (!layout) {
@@ -5265,10 +5323,7 @@ create_mirror:
 					result = -errno;
 					goto error;
 				}
-			}
-
-			/* Handle auto-striping */
-			if (auto_stripe) {
+			} else if (auto_stripe) {
 				struct stat st;
 				int calc_stripe_count;
 
@@ -5431,9 +5486,40 @@ create_mirror:
 	llapi_layout_free(layout);
 	lfs_mirror_list_free(mirror_list);
 	return result2;
+restripe_error:
+	{
+		int idx = -1;
+		char optbuf[128];
+
+		if (c < 256) {
+			for (int i = 0; long_opts[i].name != NULL; i++) {
+				if (long_opts[i].val == c) {
+					idx = i;
+					break;
+				}
+			}
+		} else {
+			idx = long_idx;
+		}
+
+		if (idx >= 0) {
+			if (c < 256)
+				snprintf(optbuf, sizeof(optbuf),
+					 "-%c|--%s", c, long_opts[idx].name);
+			else
+				snprintf(optbuf, sizeof(optbuf),
+					 "--%s", long_opts[idx].name);
+
+			fprintf(stderr,
+				"%s %s: %s incompatible with --restripe\n",
+				progname, argv[0], optbuf);
+		}
+		goto usage_error;
+	}
 usage_error:
 	result = CMD_HELP;
 error:
+	free(param);
 	llapi_layout_free(layout);
 	lfs_mirror_list_free(mirror_list);
 	if (files_from_fp != NULL && files_from_fp != stdin)
