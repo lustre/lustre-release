@@ -414,21 +414,24 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 {
 	struct cl_read_ahead *ra = NULL;
 	/* busy page count is per stride */
-	int rc = 0, count = 0, busy_page_count = 0;
+	int busy_page_count = 0;
 	pgoff_t page_idx;
+	int count = 0;
+	int rc = 0;
 
-	LASSERT(ria != NULL);
 	RIA_DEBUG(ria);
 
 	for (page_idx = ria->ria_start_idx;
-	     page_idx <= ria->ria_end_idx && ria->ria_reserved > 0;
+	     page_idx <= ria->ria_end_idx;
 	     page_idx++) {
 		if (skip_index && page_idx == skip_index)
 			continue;
+		/* if the page is in the window, proceed to do readahead */
 		if (ras_inside_ra_window(page_idx, ria)) {
 			/* if we haven't checked lock coverage yet or if we're
 			 * outside the current lock, we must call in to
-			 * cl_io_read_ahead to check for a lock
+			 * cl_io_read_ahead to check for a lock and ensure we're
+			 * inside that lock
 			 */
 			if (!ra || ra->cra_end_idx == 0 ||
 			    ra->cra_end_idx < page_idx) {
@@ -440,18 +443,20 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 					break;
 
 				INIT_LIST_HEAD(&ra->cra_linkage);
+				/* cl_io_read_ahead may not set rpc pages */
+				ra->cra_rpc_pages = ras->ras_rpc_pages;
 				rc = cl_io_read_ahead_prep(env, io, page_idx,
 							   ra);
 				if (rc < 0) {
 					OBD_FREE_PTR(ra);
 					break;
 				}
+				ras->ras_rpc_pages = ra->cra_rpc_pages;
 
 				list_add_tail(&ra->cra_linkage,
 					      &ria->ria_cl_ra_list);
-				/*
-				 * Only shrink ria_end_idx if the matched
-				 * LDLM lock doesn't cover more.
+				/* if the LDLM lock doesn't cover the required
+				 * range, reduce the readahead end and stop here
 				 */
 				if (page_idx > ra->cra_end_idx) {
 					ria->ria_end_idx = ra->cra_end_idx;
@@ -461,16 +466,7 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 				CDEBUG(D_READA, "idx: %lu, ra: %lu, rpc: %lu\n",
 				       page_idx, ra->cra_end_idx,
 				       ra->cra_rpc_pages);
-				LASSERTF(ra->cra_end_idx >= page_idx,
-					 "object: %px, indcies %lu / %lu\n",
-					 io->ci_obj, ra->cra_end_idx, page_idx);
-				/* update read ahead RPC size.
-				 * NB: it's racy but doesn't matter */
-				if (ras->ras_rpc_pages != ra->cra_rpc_pages &&
-				    ra->cra_rpc_pages > 0)
-					ras->ras_rpc_pages = ra->cra_rpc_pages;
 				if (!skip_index) {
-					/* trim (align with optimal RPC size) */
 					end_idx = ras_align(ras,
 							ria->ria_end_idx + 1);
 					if (end_idx > 0 && !ria->ria_eof)
@@ -482,7 +478,6 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 			if (page_idx > ria->ria_end_idx)
 				break;
 
-			/* If the page is inside the read-ahead window */
 			rc = ll_read_ahead_page(env, io, queue, page_idx,
 						MAYNEED);
 			if (rc < 0 && rc != -EBUSY)
@@ -491,7 +486,7 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 				busy_page_count++;
 				CDEBUG(D_READA,
 				       "skip busy page: %lu\n", page_idx);
-				/* For page unaligned readahead the first
+				/* For page unaligned readahead the first and
 				 * last pages of each region can be read by
 				 * another reader on the same node, and so
 				 * may be busy. So only stop for > 2 busy
@@ -506,14 +501,17 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 			 * really did readahead on that page.
 			 */
 			if (rc == 0) {
-				ria->ria_reserved--;
 				count++;
+				ria->ria_reserved--;
+				/* no more reserved pages */
+				if (ria->ria_reserved == 0)
+					break;
 			}
+		/* this page isn't in the readahead window, but if we're in
+		 * strided, it might be this is the stride gap - check and move
+		 * the window to the next stride if so
+		 */
 		} else if (stride_io_mode(ras)) {
-			/* If it is not in the read-ahead window, and it is
-			 * read-ahead mode, then check whether it should skip
-			 * the stride gap.
-			 */
 			loff_t pos = (loff_t)page_idx << PAGE_SHIFT;
 			u64 offset;
 

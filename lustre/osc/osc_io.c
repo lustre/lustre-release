@@ -68,6 +68,7 @@ static int osc_io_read_ahead_prep(const struct lu_env *env,
 	dlmlock = osc_dlmlock_at_pgoff(env, osc, start, 0);
 	if (dlmlock != NULL) {
 		struct lov_oinfo *oinfo = osc->oo_oinfo;
+		pgoff_t lock_end_idx;
 
 		LASSERT(dlmlock->l_ast_data == osc);
 		if (dlmlock->l_req_mode != LCK_PR) {
@@ -79,14 +80,13 @@ static int osc_io_read_ahead_prep(const struct lu_env *env,
 		}
 
 		ra->cra_rpc_pages = osc_cli(osc)->cl_max_pages_per_rpc;
-		ra->cra_end_idx =
-			dlmlock->l_policy_data.l_extent.end >> PAGE_SHIFT;
+		lock_end_idx = dlmlock->l_policy_data.l_extent.end >> PAGE_SHIFT;
+		/* restrict RA to lock end or EOF */
+		ra->cra_end_idx = min_t(pgoff_t, lock_end_idx,
+					(oinfo->loi_kms - 1) >> PAGE_SHIFT);
 		ra->cra_release = osc_read_ahead_release;
 		ra->cra_dlmlock = dlmlock;
 		ra->cra_oio = oio;
-		ra->cra_end_idx = min_t(pgoff_t,
-					ra->cra_end_idx,
-					(oinfo->loi_kms - 1) >> PAGE_SHIFT);
 		result = 0;
 	}
 
