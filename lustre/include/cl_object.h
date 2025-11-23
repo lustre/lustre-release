@@ -1405,7 +1405,6 @@ struct cl_read_ahead {
 
 	/* Callback data for cra_release routine */
 	void		*cra_dlmlock;
-	void		*cra_oio;
 
 	/*
 	 * Linkage to track all cl_read_aheads for a read-ahead operations,

@@ -43,10 +43,8 @@ static void osc_io_fini(const struct lu_env *env, const struct cl_io_slice *io)
 void osc_read_ahead_release(const struct lu_env *env, struct cl_read_ahead *ra)
 {
 	struct ldlm_lock *dlmlock = ra->cra_dlmlock;
-	struct osc_io *oio = ra->cra_oio;
 	struct lustre_handle lockh;
 
-	oio->oi_is_readahead = 0;
 	ldlm_lock2handle(dlmlock, &lockh);
 	ldlm_lock_decref(&lockh, LCK_PR);
 	ldlm_lock_put(dlmlock);
@@ -86,7 +84,6 @@ static int osc_io_read_ahead_prep(const struct lu_env *env,
 					(oinfo->loi_kms - 1) >> PAGE_SHIFT);
 		ra->cra_release = osc_read_ahead_release;
 		ra->cra_dlmlock = dlmlock;
-		ra->cra_oio = oio;
 		result = 0;
 	}
 
