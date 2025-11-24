@@ -25,13 +25,11 @@
  */
 
 /**
- * Allocate a new sub IO
+ * lov_sub_alloc() - Allocate a new sub IO
+ * @lio: top level lov IO structure
+ * @index: index into lov (stripe)
  *
- * \param[in] lio	top level lov IO structure
- * \param[in] index	index into lov (stripe)
- *
- * \retval		Pointer to allocated lov_io_sub
- * 			structure
+ * Return Pointer to allocated lov_io_sub structure
  */
 static inline struct lov_io_sub *lov_sub_alloc(struct lov_io *lio, int index)
 {
@@ -56,11 +54,9 @@ static inline struct lov_io_sub *lov_sub_alloc(struct lov_io *lio, int index)
 }
 
 /**
- * Release a sub IO
- *
- * \param[in] lio	top level lov IO structure
- * \param[in] sub	sub io to individual stripe
- *
+ * lov_sub_free() - Release a sub IO
+ * @lio: top level lov IO structure
+ * @sub: sub io to individual stripe
  */
 static inline void lov_sub_free(struct lov_io *lio, struct lov_io_sub *sub)
 {
@@ -187,8 +183,19 @@ out:
 	RETURN(sub);
 }
 
-/**
+/*
  * Lov io operations.
+ */
+
+/**
+ * lov_io_subio_init() -  Initilize LOV I/O operation
+ * @env: lustre environment
+ * @lio: Pointer to struct lov_io
+ * @io: highlevel I/O request
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
 			     struct cl_io *io)
@@ -204,7 +211,7 @@ static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
 	RETURN(0);
 }
 
-/**
+/*
  * Decide if it will need write intent RPC
  */
 static int lov_io_mirror_write_intent(struct lov_io *lio,
@@ -1370,8 +1377,15 @@ static int lov_dio_submit(const struct lu_env *env,
 }
 
 /**
+ * lov_io_submit() - lov implementation of cl_operations::cio_submit() method.
+ * @env: lustre execution environment
+ * @io: highlevel I/O request
+ * @ios: LOV specific IO
+ * @crt: Requested transfer type
+ * @queue: Page queue
+ *
  * lov implementation of cl_operations::cio_submit() method. It takes a list
- * of pages in \a queue, splits it into per-stripe sub-lists, invokes
+ * of pages in @queue, splits it into per-stripe sub-lists, invokes
  * cl_io_submit() on underlying devices to submit sub-lists, and then splices
  * everything back.
  *
@@ -1383,6 +1397,10 @@ static int lov_dio_submit(const struct lu_env *env,
  * not-memory cleansing context), and in case of memory shortage, these
  * pre-allocated resources are used by lov_io_submit() under
  * lov_device::ld_mutex mutex.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int lov_io_submit(const struct lu_env *env,
 			 struct cl_io *io,
@@ -1830,7 +1848,7 @@ static const struct cl_io_operations lov_io_ops = {
 	.cio_commit_async		= lov_io_commit_async,
 };
 
-/**
+/*
  * Empty lov io operations.
  */
 static void lov_empty_io_fini(const struct lu_env *env,
@@ -1871,7 +1889,7 @@ static void lov_empty_impossible(const struct lu_env *env,
 
 #define LOV_EMPTY_IMPOSSIBLE ((void *)lov_empty_impossible)
 
-/**
+/*
  * An io operation vector for files without stripes.
  */
 static const struct cl_io_operations lov_empty_io_ops = {
@@ -2065,8 +2083,17 @@ bool lov_io_layout_at_confirm(struct lov_io *lio, int entry, __u64 offset)
 		return true;
 	return false;
 }
+
 /**
+ * lov_io_layout_at() - Return the index in composite layout given file offset
+ * @lio: Pointer to struct lov_io
+ * @offset: Offset in the composite layout
+ *
  * Return the index in composite:lo_entries by the file offset
+ *
+ * Return:
+ * * %>=0 composite index where offset is located
+ * * %negative on error
  */
 int lov_io_layout_at(struct lov_io *lio, __u64 offset)
 {
