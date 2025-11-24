@@ -32,14 +32,16 @@
 /********************** Class functions ********************/
 
 /**
- * Find all logs in CONFIG directory and link then into list.
+ * class_dentry_readdir() - Link logs in CONFIG directory into list.
+ * @env: pointer to the thread context
+ * @mgs: pointer to the mgs device
+ * @log_list: the list to hold the found llog name entry [out]
  *
- * \param[in] env	pointer to the thread context
- * \param[in] mgs	pointer to the mgs device
- * \param[out] log_list	the list to hold the found llog name entry
+ * Find all logs in CONFIG directory and link them into list.
  *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
  **/
 int class_dentry_readdir(const struct lu_env *env, struct mgs_device *mgs,
 			 struct list_head *log_list)
@@ -887,7 +889,7 @@ static int mgs_search_pool_cb(const struct lu_env *env,
 	RETURN(0);
 }
 
-/**
+/*
  * Search a pool in a MGS configuration.
  * Return code:
  * positive - return the status of the pool,
@@ -991,7 +993,7 @@ static int mgs_modify_handler(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/**
+/*
  * Modify an existing config log record (for CM_SKIP or CM_EXCLUDE)
  * Return code:
  * 0 - modified successfully,
@@ -1252,7 +1254,7 @@ static int param_is_compound(const char *param)
 	return 0;
 }
 
-/**
+/*
  * Mark param section with CM_SKIP matching param name and value
  * Return code:
  * 0 - deleted successfully,
@@ -1368,14 +1370,13 @@ struct mgs_replace_data {
 };
 
 /**
- * Check: a) if block should be skipped
- * b) is it target block
+ * check_markers() - Check if block should be skipped or it is a target
+ * @lcfg: current configuration record being processed
+ * @mrd: pointer to struct mgs_replace_data (for NID)
  *
- * \param[in] lcfg
- * \param[in] mrd
- *
- * \retval 0 should not to be skipped
- * \retval 1 should to be skipped
+ * Return:
+ * * %0 should not to be skipped
+ * * %1 should be skipped
  */
 static int check_markers(struct lustre_cfg *lcfg,
 			 struct mgs_replace_data *mrd)
@@ -1511,9 +1512,15 @@ static inline int record_setup(const struct lu_env *env,
 }
 
 /**
- * \retval <0 record processing error
- * \retval n record is processed. No need copy original one.
- * \retval 0 record is not processed.
+ * process_command() - Helper function mgs_replace_nids_handler for NID replace
+ * @env: lustre execution environment
+ * @lcfg: current configuration record being processed
+ * @mrd: pointer to struct mgs_replace_data (for NID)
+ *
+ * Return:
+ * * %negative record processing error
+ * * %positive record is processed. No need copy original one.
+ * * %0 record is not processed.
  */
 static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 			   struct mgs_replace_data *mrd)
@@ -1648,14 +1655,17 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 }
 
 /**
- * Handler that called for every record in llog.
+ * mgs_replace_nids_handler() - Handler that called for every record in llog.
+ * @env: lustre execution environment
+ * @llh: log to be processed
+ * @rec: current record
+ * @data: mgs_replace_data structure
+ *
  * Records are processed in order they placed in llog.
  *
- * \param[in] llh       log to be processed
- * \param[in] rec       current record
- * \param[in] data      mgs_replace_data structure
- *
- * \retval 0    success
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mgs_replace_nids_handler(const struct lu_env *env,
 				    struct llog_handle *llh,
@@ -1864,29 +1874,23 @@ static int mgs_replace_nids_log(const struct lu_env *env,
 }
 
 /**
- * Parse device name and get file system name and/or device index
+ * mgs_parse_devname() - Parse device name and get FS name and/or device index
+ * @devname: device name (ex. lustre-MDT0000)
+ * @fsname: file system name extracted from @devname and returned to the
+ *          caller (optional)
+ * @index: device index extracted from @devname and returned to the
+ *         caller (optional)
  *
- * @devname	device name (ex. lustre-MDT0000)
- * @fsname	file system name extracted from @devname and returned
- *		to the caller (optional)
- * @index	device index extracted from @devname and returned to
- *		the caller (optional)
+ * Return:
+ * * %0 success if we are only interested in extracting fsname from devname.
+ *      i.e index is NULL
+ * * %LDD_F_SV_TYPE_* Besides extracting the fsname the user also wants the
+ *                    index. Report to the user the type of obd device the
+ *                    returned index belongs too.
  *
- * RETURN	0			success if we are only interested in
- *					extracting fsname from devname.
- *					i.e index is NULL
- *
- *		LDD_F_SV_TYPE_*		Besides extracting the fsname the
- *					user also wants the index. Report to
- *					the user the type of obd device the
- *					returned index belongs too.
- *
- *		-EINVAL			The obd device name is improper so
- *					fsname could not be extracted.
- *
- *		-ENXIO			Failed to extract the index out of
- *					the obd device name. Most likely an
- *					invalid obd device name
+ * * %-EINVAL The obd device name is improper so fsname could not be extracted.
+ * * %-ENXIO Failed to extract the index out of the obd device name. Most likely
+ *           an invalid obd device name
  */
 static int mgs_parse_devname(char *devname, char *fsname, u32 *index)
 {
@@ -1957,14 +1961,15 @@ static int name_create_mdt(char **logname, char *fsname, int mdt_idx)
 }
 
 /**
- * Replace nids for \a device to \a nids values
+ * mgs_replace_nids() - Replace nids for @device to @nids values
+ * @env: lustre execution environment
+ * @mgs: MGS obd device
+ * @devname: nids need to be replaced for this device (ex. lustre-OST0000)
+ * @nids: nids list (ex. nid1,nid2,nid3)
  *
- * \param obd           MGS obd device
- * \param devname       nids need to be replaced for this device
- * (ex. lustre-OST0000)
- * \param nids          nids list (ex. nid1,nid2,nid3)
- *
- * \retval 0    success
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mgs_replace_nids(const struct lu_env *env,
 		     struct mgs_device *mgs,
@@ -2041,18 +2046,22 @@ out:
 }
 
 /**
+ * mgs_clear_config_handler() - clear config record
+ * @env: lustre execution environment
+ * @llh: log to be processed
+ * @rec: current record
+ * @data: mgs_replace_data structure
+ *
  * This is called for every record in llog. Some of records are
  * skipped, others are copied to new log as is.
- * Records to be skipped are
- *  marker records marked SKIP
- *  records enclosed between SKIP markers
+ * Records to be skipped are:
+ *   marker records marked SKIP
+ *   records enclosed between SKIP markers
  *
- * \param[in] llh	log to be processed
- * \param[in] rec	current record
- * \param[in] data	mgs_replace_data structure
- *
- * \retval 0	success
- **/
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
 static int mgs_clear_config_handler(const struct lu_env *env,
 				    struct llog_handle *llh,
 				    struct llog_rec_hdr *rec, void *data)
@@ -2136,15 +2145,15 @@ static bool config_to_clear(const char *logname)
 }
 
 /**
- * Clear config logs for \a name
+ * mgs_clear_configs() - Clear config logs for @name
+ * @env: lustre environment
+ * @mgs: MGS device
+ * @name: name of device or of filesystem (ex. lustre-OST0000 or lustre) in
+ *        later case all logs will be cleared
  *
- * \param env
- * \param mgs		MGS device
- * \param name		name of device or of filesystem
- *			(ex. lustre-OST0000 or lustre) in later case all logs
- *			will be cleared
- *
- * \retval 0		success
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mgs_clear_configs(const struct lu_env *env,
 		     struct mgs_device *mgs, const char *name)
@@ -2453,9 +2462,18 @@ next:
 }
 
 /**
- * Replace a mdt name in MDT configuration name
+ * mgs_replace_mdtname() - Replace a mdt name in MDT configuration name
+ * @name: Target string (eg: fsname-lustre-MDT0000)
+ * @size: size of @name
+ * @mdtsrc: Old(src) MDT name (eg: lustre-MDT0000)
+ * @mdtnew: New MDT name which will replace @mdtsrc
+ *
  * mdtname should be formated like this: <fsname>-MDT<mdtindex>
- **/
+ *
+ * Return:
+ * * %0 on success or @name or @size is NULL
+ * * %negative on failure
+ */
 static
 int mgs_replace_mdtname(char *name, size_t size, char *mdtsrc, char *mdtnew)
 {
@@ -2525,11 +2543,11 @@ bool mgs_copy_skipped(struct cfg_marker *marker, struct mgs_target_info *mti,
 	return false;
 }
 
-/**
+/*
  * Update the marker->cm_tgtname with the new MDT target name:
  *	marker ... lustre-MDT0000  'mdt.identity_upcall'
  * -->	marker ... lustre-MDT0003  'mdt.identity_upcall'
- **/
+ */
 static inline
 void mgs_copy_update_marker(char *fsname, struct cfg_marker *marker,
 			    char *mdtsrc, char *mdtnew)
@@ -2545,13 +2563,13 @@ struct mgs_copy_data {
 	bool			mcd_skip;
 };
 
-/**
+/*
  * Walk through MDT config log records and convert the related records
  * into the target.
  *
  * The osp sections (add osp/add osc) are excluded. Those sections are
  * generated from client configuration by mgs_steal_osp_rec_from_client()
- **/
+ */
 static int mgs_copy_mdt_llog_handler(const struct lu_env *env,
 				      struct llog_handle *llh,
 				      struct llog_rec_hdr *rec, void *data)
@@ -2792,10 +2810,10 @@ int mgs_steal_skipped(struct mgs_steal_data *msd,
 	return false;
 }
 
-/**
+/*
  * Walk through client config log for mdc/osc records and convert the related
  * records in osp records for the new MDT target.
- **/
+ */
 static int mgs_steal_client_llog_handler(const struct lu_env *env,
 					 struct llog_handle *llh,
 					 struct llog_rec_hdr *rec, void *data)
@@ -5052,6 +5070,17 @@ end:
 	RETURN(rc);
 }
 
+/**
+ * mgs_write_log_target() - write config log entry for a new/updated target
+ * @env: Lustre envieronment
+ * @mgs: Pointer to MGS (Device which operation is done)
+ * @mti: Pointer to struct mgs_target_info (Info passed to target device)
+ * @fsdb: Pointer to struct fs_db (Lustre internal database)
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
 int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 			 struct mgs_target_info *mti, struct fs_db *fsdb)
 {
@@ -5860,20 +5889,22 @@ int mgs_params_fsdb_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 }
 
 /**
- * Fill in the mgs_target_info based on data devname and param provide.
+ * mgs_set_conf_param() - Fill mgs_target_info based on data devname
+ * @env: thread context
+ * @mgs: mgs device
+ * @mti: mgs target info. We want to set this based other paramters
+ *       passed to this function. Once setup we write it to the config logs.
+ * @devname: optional OBD device name
+ * @param: string that contains both what tunable to set and the value to set
+ *         it to.
+ * @del: if %true param will be deleted else it will be modified
  *
- * @env		thread context
- * @mgs		mgs device
- * @mti		mgs target info. We want to set this based other paramters
- *		passed to this function. Once setup we write it to the config
- *		logs.
- * @devname	optional OBD device name
- * @param	string that contains both what tunable to set and the value to
- *		set it to.
+ * Fill in the mgs_target_info based on data devname or param provide.
  *
- * RETURN	0 for success
- *		negative error number on failure
- **/
+ * Return:
+ * * %0 for success
+ * * %negative on failure
+ */
 static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 			      struct mgs_target_info *mti, const char *devname,
 			      const char *param, bool del)
@@ -6226,7 +6257,22 @@ int mgs_pool_sanity(const struct lu_env *env, struct mgs_device *mgs,
 	return rc;
 }
 
-
+/**
+ * mgs_pool_cmd() - Handle pool related command
+ * @env: lustre execution environment
+ * @mgs: MGS device
+ * @cmd: cmd to execute (eg: LFCG_POOL_NEW or LCFG_POOL_DEL)
+ * @fsname: lustre filesystem name
+ * @poolname: Name of storage pool
+ * @ostname: Name of OST. (NULL in case of non OST pool cmd)
+ *
+ * Handle pool related command. (Creating / Deleting pools and adding / removing
+ * OST from pools)
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
 int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		 enum lcfg_command_type cmd, char *fsname,
 		 char *poolname, char *ostname)
