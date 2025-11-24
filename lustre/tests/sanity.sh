@@ -35735,6 +35735,50 @@ test_855() {
 }
 run_test 855 "readdir on open validation"
 
+test_860() {
+	local file=$DIR/$tfile
+	local size
+
+	# Create a test file with known content
+	echo "0123456789ABCDEF" > $file
+	size=$(stat -c%s $file)
+	echo "File size: $size bytes"
+
+	# Test Xe (SEEK_END with offset 0) - should return file size
+	local result=$($MULTIOP $file oXepc)
+	echo "Xe result: $result"
+	(( result == size )) ||
+		error "Xe failed: expected $size, got $result"
+
+	# Test Xe with positive offset - seek past EOF
+	result=$($MULTIOP $file oXe5pc)
+	echo "Xe5 result: $result"
+	(( result == size + 5 )) ||
+		error "Xe5 failed: expected $((size + 5)), got $result"
+
+	# Test Xe with negative offset - seek before EOF
+	result=$($MULTIOP $file oXe-5pc)
+	echo "Xe-5 result: $result"
+	(( result == size - 5 )) ||
+		error "Xe-5 failed: expected $((size - 5)), got $result"
+
+	# Test that Xe actually positions the file pointer correctly
+	# by seeking to EOF-3, writing 3 bytes, and verifying file size
+	# doesn't change (we're overwriting existing bytes)
+	local file2=$DIR/${tfile}.2
+	echo "0123456789ABCDEF" > $file2
+	local size2=$(stat -c%s $file2)
+	$MULTIOP $file2 OXe-3w3c
+	local new_size=$(stat -c%s $file2)
+	(( new_size == size2 )) ||
+		error "Xe-3 positioning failed: size changed from $size2 to $new_size"
+
+	# Test XX reserved prefix - should error
+	$MULTIOP $file oXXc 2>&1 | grep -q "reserved for future use" ||
+		error "XX should be reserved"
+}
+run_test 860 "verify multiop Xe (SEEK_END) command"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

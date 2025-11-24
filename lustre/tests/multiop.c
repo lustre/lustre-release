@@ -48,10 +48,10 @@ sem_t sem;
 char usage[] =
 "Usage: %s filename command-sequence [path...]\n"
 "    command-sequence items:\n"
-"	 A  fsetxattr(\"user.multiop\")\n"
 "	 a[num] fgetxattr(\"user.multiop\") [optional buffer size, default 0]\n"
-"	 c  close\n"
+"	 A  fsetxattr(\"user.multiop\")\n"
 "	 B[num] call setstripe ioctl to create stripes\n"
+"	 c  close\n"
 "	 C[num] create with optional stripes\n"
 "	 d  mkdir\n"
 "	 D  open(O_DIRECTORY)\n"
@@ -59,15 +59,15 @@ char usage[] =
 "	 E[+|-] get lease. +/-: expect lease to (not) exist\n"
 "	 f  statfs\n"
 "	 F  print FID\n"
-"	 G gid get grouplock\n"
 "	 g gid put grouplock\n"
+"	 G gid get grouplock\n"
 "	 H[num] create HSM released file with num stripes\n"
-"	 I  fiemap\n"
 "	 i  random fadvise\n"
+"	 I  fiemap\n"
 "	 J  madvise(MADV_HUGEPAGE)\n"
 "	 K  link path to filename\n"
-"	 L  link\n"
 "	 l  symlink filename to path\n"
+"	 L  link\n"
 "	 m  mknod\n"
 "	 M  rw mmap to EOF (must open and stat prior)\n"
 "	 n  rename path to filename\n"
@@ -75,6 +75,7 @@ char usage[] =
 "	 o  open(O_RDONLY)\n"
 "	 O  open(O_CREAT|O_RDWR)\n"
 "	 p  print return value of last command\n"
+"	 P[num] write optional length as a single syscall\n"
 "	 Q  open filename (should be dir), stat first entry to init statahead"
 "	 r[num] read [optional length]\n"
 "	 R  reference entire mmap-ed region\n"
@@ -87,9 +88,12 @@ char usage[] =
 "	 v  verbose\n"
 "	 V  open a volatile file\n"
 "	 w[num] write optional length\n"
-"	 P[num] like w, but only one write call\n"
-"	 x  get file data version\n"
 "	 W  write entire mmap-ed region\n"
+"	 x  get file data version\n"
+"	 X[cmd] prefix for extended commands:\n"
+"	     Xe[num] lseek(SEEK_END) [optional offset, default 0]\n"
+"	     Xx  get OST layout version\n"
+"	     XX  reserved for future use as a sub-prefix\n"
 "	 y  fsync\n"
 "	 Y  fdatasync\n"
 "	 z[num] lseek(SEEK_SET) [optional offset, default 0]\n"
@@ -866,19 +870,45 @@ int main(int argc, char **argv)
 			printf("dataversion is %ju\n", (uintmax_t)dv);
 			break;
 		}
-		case 'X': {
-			__u32 layout_version;
+		case 'X':
+			commands++;
+			switch (*commands) {
+			case 'e': {
+				off_t off;
 
-			rc = llapi_get_ost_layout_version(fd, &layout_version);
-			if (rc) {
-				fprintf(stderr,
-					"cannot get ost layout version %lld\n",
-					rc);
-				exit(-rc);
+				len = atoi(commands + 1);
+				off = lseek(fd, len, SEEK_END);
+				if (off == (off_t)-1) {
+					save_errno = errno;
+					perror("lseek");
+					exit(save_errno);
+				}
+
+				rc = off;
+				break;
 			}
-			printf("ostlayoutversion: %u\n", layout_version);
+			case 'x': {
+				__u32 layout_version;
+
+				rc = llapi_get_ost_layout_version(fd,
+								   &layout_version);
+				if (rc) {
+					fprintf(stderr,
+						"cannot get ost layout version %lld\n",
+						rc);
+					exit(-rc);
+				}
+				printf("ostlayoutversion: %u\n", layout_version);
+				break;
+			}
+			case 'X':
+				/* reserved for future use as a sub-prefix */
+				errx(-1, "'XX' prefix reserved for future use as a sub-prefix");
+				break;
+			default:
+				errx(-1, "unknown 'X' subcommand: %c", *commands);
+			}
 			break;
-		}
 		case 'y':
 			if (fsync(fd) == -1) {
 				save_errno = errno;
@@ -932,6 +962,8 @@ int main(int argc, char **argv)
 		case '7':
 		case '8':
 		case '9':
+			/* preserve rc from previous command */
+			rc = last_rc;
 			break;
 		default:
 			fprintf(stderr, "unknown command \"%c\"\n", *commands);

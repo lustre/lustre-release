@@ -1487,7 +1487,7 @@ get_file_layout_version() {
 }
 
 get_ost_layout_version() {
-	$MULTIOP $1 oXc | awk '/ostlayoutversion/{print $2}'
+	$MULTIOP $1 oXxc | awk '/ostlayoutversion/{print $2}'
 }
 
 verify_ost_layout_version() {
