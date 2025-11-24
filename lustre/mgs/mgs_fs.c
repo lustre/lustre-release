@@ -22,17 +22,17 @@
 #include "mgs_internal.h"
 
 /**
- * Initialize MGS per-export statistics.
+ * mgs_export_stats_init() - Initialize MGS per-export statistics.
+ * @obd: OBD device
+ * @exp: OBD export
+ * @localdata: NID of client
  *
  * This function sets up procfs entries for various MGS export counters. These
  * counters are for per-client statistics tracked on the server.
  *
- * \param[in] obd	OBD device
- * \param[in] exp	OBD export
- * \param[in] localdata	NID of client
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 			  void *localdata)

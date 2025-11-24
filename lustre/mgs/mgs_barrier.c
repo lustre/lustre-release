@@ -20,20 +20,20 @@
 #include "mgs_internal.h"
 
 /**
- * Handle the barrier lock glimpse reply.
+ * mgs_barrier_gl_interpret_reply() - Handle the barrier lock glimpse reply.
+ * @env: pointer to the thread context
+ * @req: pointer to the glimpse callback RPC request
+ * @data: pointer the async glimpse callback data
+ * @rc: the glimpse callback RPC return value
  *
  * The barrier lock glimpse reply contains the target MDT's index and
  * the barrier operation status on such MDT. With such infomation. If
  * the MDT given barrier status is the expected one, then set related
  * 'fsdb''s barrier bitmap; otherwise record the failure or status.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] req	pointer to the glimpse callback RPC request
- * \param[in] data	pointer the async glimpse callback data
- * \param[in] rc	the glimpse callback RPC return value
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative on failure
  */
 static int mgs_barrier_gl_interpret_reply(const struct lu_env *env,
 					  struct ptlrpc_request *req,
@@ -78,21 +78,21 @@ out:
 }
 
 /**
- * Send glimpse callback to the barrier locks holders.
+ * mgs_barrier_glimpse_lock() - Send glimpse callback to barrier locks holders
+ * @env: pointer to the thread context
+ * @mgs: pointer to the MGS device
+ * @fsdb: pointer the barrier 'fsdb'
+ * @timeout: indicate when the barrier will be expired
+ * @expected: the expected barrier status on remote servers (MDTs)
  *
  * The glimpse callback takes the current barrier status. The barrier locks
  * holders (on the MDTs) will take related barrier actions according to the
  * given barrier status, then return their local barrier status.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] mgs	pointer to the MGS device
- * \param[in] fsdb	pointer the barrier 'fsdb'
- * \param[in] timeout	indicate when the barrier will be expired
- * \param[in] expected	the expected barrier status on remote servers (MDTs)
- *
- * \retval		positive number for unexpected barrier status
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %>0 positive number for unexpected barrier status
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int mgs_barrier_glimpse_lock(const struct lu_env *env,
 				    struct mgs_device *mgs,
@@ -254,7 +254,10 @@ static inline bool mgs_barrier_tests_disabled(struct barrier_ctl *bc,
 }
 
 /**
- * Create the barrier for the given instance.
+ * mgs_barrier_freeze() - Create the barrier for the given instance.
+ * @env: pointer to the thread context
+ * @mgs: pointer to the MGS device
+ * @bc: pointer the barrier control structure
  *
  * We use two-phases barrier to guarantee that after the barrier setup:
  * 1) All the server side pending async modification RPCs have been flushed.
@@ -285,12 +288,9 @@ static inline bool mgs_barrier_tests_disabled(struct barrier_ctl *bc,
  * Every barrier instance will call dt_sync() to make all async transactions
  * to be committed locally.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] mgs	pointer to the MGS device
- * \param[in] bc	pointer the barrier control structure
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mgs_barrier_freeze(const struct lu_env *env,
 			      struct mgs_device *mgs,

@@ -160,7 +160,8 @@ static int nidtbl_fill_entry(struct mgs_nidtbl_target *tgt,
 	}
 	return rc;
 }
-/**
+
+/*
  * Fetch nidtbl entries whose version are not less than @version
  * nidtbl entries will be packed in @pages by @unit_size units - entries
  * shouldn't cross unit boundaries.
@@ -504,7 +505,13 @@ static unsigned int mti_nidnet(struct mgs_target_info *mti, int i)
 }
 
 /**
- * parse incoming target info and update NID lists
+ * mgs_build_nidlists() - parse incoming target info and update NID lists
+ * @tgt: Target type OST or MDT
+ * @mti: pointer to mgs_target_info (which has the updated NID information)
+ *
+ * Return:
+ * * %0 of success
+ * * %negative on failure
  */
 static int mgs_build_nidlists(struct mgs_nidtbl_target *tgt,
 			      struct mgs_target_info *mti)
@@ -851,6 +858,14 @@ static int delogname(char *logname, char *fsname, int *typ)
 	return 0;
 }
 
+/**
+ * mgs_get_ir_logs() -  handle a @req to get part of the NID table
+ * @req: Pointer to request struct
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
 int mgs_get_ir_logs(struct ptlrpc_request *req)
 {
 	struct lu_env *env = req->rq_svc_thread->t_env;
