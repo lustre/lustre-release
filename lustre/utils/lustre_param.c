@@ -1466,10 +1466,12 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	{ .val = 'C',	.name = "client",	.has_arg = optional_argument},
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'F',	.name = "file",		.has_arg = no_argument},
+	{ .val = 'n',	.name = "no-name",	.has_arg = no_argument},
 	{ .val = 'n',	.name = "noname",	.has_arg = no_argument},
 	{ .val = 'o',	.name = "module",	.has_arg = no_argument},
 	{ .val = 'P',	.name = "perm",		.has_arg = no_argument},
 	{ .val = 'P',	.name = "permanent",	.has_arg = no_argument},
+	{ .val = 'q',	.name = "quiet",	.has_arg = no_argument},
 	{ .val = 't',	.name = "threads",	.has_arg = optional_argument},
 	{ .name = NULL },
 	};
@@ -1491,7 +1493,7 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 	/* reset optind for each getopt_long() in case of multiple calls */
 	optind = 0;
-	while ((ch = getopt_long(argc, argv, "C::dFnoPt::",
+	while ((ch = getopt_long(argc, argv, "C::dFnoPqt::",
 				 long_opts, NULL)) != -1) {
 		switch (ch) {
 		case 'C':
@@ -1527,6 +1529,9 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 				return -1;
 			}
 			popt->po_perm = 1;
+			break;
+		case 'q':
+			popt->po_show_name = 0;
 			break;
 		case 't':
 #if HAVE_LIBPTHREAD

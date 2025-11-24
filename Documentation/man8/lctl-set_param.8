@@ -1,4 +1,4 @@
-.TH LCTL-SET_PARAM 8 2026-03-06 Lustre "Lustre Configuration Utilities"
+.TH LCTL-SET_PARAM 8 2026-08-19 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-set_param \- Lustre tunable parameter setting utility
 .SH SYNOPSIS
@@ -10,6 +10,7 @@ lctl-set_param \- Lustre tunable parameter setting utility
 .RB [ --no-name | -n ]
 .RB [ --module | -o ]
 .RB [ --permanent | -P ]
+.RB [ --quiet | -q ]
 .RB [ --threads | -t\c
 .RI [ THREAD_COUNT ]]
 .IR PARAMETER \= VALUE " ..."
@@ -46,7 +47,7 @@ or contain wildcards to match some or all device instances.
 Parameters can only be modified by the root user for security reasons.
 .SH OPTIONS
 The various options supported by
-.B lctl get_param
+.B lctl set_param
 are listed and explained below:
 .TP
 .BR -C ", " --client
@@ -112,6 +113,11 @@ and
 such as the
 .B FSNAME
 and/or specific target name.
+.TP
+.BR -q ", " --quiet
+Disable printing information.
+This option is an alias for
+.BR -n .
 .TP
 .BR -t ", " --threads " ["\fITHREAD_COUNT\fR]
 Spawn threads to set multiple parameters in parallel, optionally specifying

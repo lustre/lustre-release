@@ -469,7 +469,7 @@ command_t cmdlist[] = {
 	 "set the value of the Lustre or LNET parameter at the specified path.\n"
 	 "usage: set_param [--client|-C[FSNAME]] [--delete|-d]\n"
 	 "                 [--file|-F YAML_PARAM_FILE] [--no-name|-n] [--module|-o]\n"
-	 "                 [--permanent|-P]"
+	 "                 [--permanent|-P] [--quiet|-q]"
 #ifdef HAVE_LIBPTHREAD
 	 " [--thread|-t[THREAD_COUNT]]"
 #endif
