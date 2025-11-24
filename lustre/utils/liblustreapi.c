@@ -2955,7 +2955,7 @@ void lov_dump_hsm_lmm(void *lum, char *path, int depth,
 
 		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_magic:         0x%08X\n",
 			     space, lhm->lhm_magic);
-		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_pattern:       hsm\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_pattern:       foreign\n",
 			     space);
 		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_length:        %u\n",
 			     space, lhm->lhm_length);
