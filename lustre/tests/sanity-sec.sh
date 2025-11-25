@@ -7814,8 +7814,8 @@ test_64g() {
 	local testfile=$DIR/$tdir/$tfile
 	local mdts=$(all_mdts_nodes)
 
-	(( MDS1_VERSION >= $(version_code v2_16_50-98-g3b04d6ac1d) )) ||
-		skip "Need MDS >= 2.16.50.98 for role-based controls"
+	(( MDS1_VERSION >= $(version_code 2.16.51) )) ||
+		skip "Need MDS >= 2.16.51 for role-based controls"
 
 	# Add groups, and client to new group, on client only.
 	# Server is not aware.
