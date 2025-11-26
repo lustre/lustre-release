@@ -256,8 +256,11 @@ lnet_peer_alloc(struct lnet_nid *nid)
 	 * to ever use a different interface when sending messages to
 	 * myself.
 	 */
-	if (nid_is_lo0(nid))
+	if (nid_is_lo0(nid)) {
+		spin_lock(&lp->lp_lock);
 		lp->lp_state = LNET_PEER_NO_DISCOVERY;
+		spin_unlock(&lp->lp_lock);
+	}
 	lp->lp_cpt = lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 
 	CDEBUG(D_NET, "%p nid %s\n", lp, libcfs_nidstr(&lp->lp_primary_nid));
@@ -340,15 +343,21 @@ lnet_peer_detach_peer_ni_locked(struct lnet_peer_ni *lpni)
 	 * take another look at it. This is a no-op if discovery for
 	 * this peer did the detaching.
 	 */
+	spin_lock(&lp->lp_lock);
 	if (list_empty(&lp->lp_peer_nets)) {
+		spin_unlock(&lp->lp_lock);
 		list_del_init(&lp->lp_peer_list);
 		ptable = the_lnet.ln_peer_tables[lp->lp_cpt];
 		ptable->pt_peers--;
 	} else if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING) {
 		/* Discovery isn't running, nothing to do here. */
+		spin_unlock(&lp->lp_lock);
 	} else if (lp->lp_state & LNET_PEER_DISCOVERED) {
+		spin_unlock(&lp->lp_lock);
 		lnet_peer_queue_for_discovery(lp);
 		wake_up(&the_lnet.ln_dc_waitq);
+	} else {
+		spin_unlock(&lp->lp_lock);
 	}
 	CDEBUG(D_NET, "peer %s NID %s\n",
 		libcfs_nidstr(&lp->lp_primary_nid),
@@ -507,13 +516,15 @@ lnet_peer_del_nid(struct lnet_peer *lp, struct lnet_nid *nid,
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_nid primary_nid = lp->lp_primary_nid;
-	int rc = 0;
 	bool force = (flags & LNET_PEER_RTR_NI_FORCE_DEL) ? true : false;
+	bool locked = true;
+	int rc = 0;
 
+	spin_lock(&lp->lp_lock);
 	if (!(flags & LNET_PEER_CONFIGURED)) {
 		if (lp->lp_state & LNET_PEER_CONFIGURED) {
 			rc = -EPERM;
-			goto out;
+			goto out_locked;
 		}
 	}
 
@@ -523,8 +534,11 @@ lnet_peer_del_nid(struct lnet_peer *lp, struct lnet_nid *nid,
 	if (lp->lp_state & LNET_PEER_LOCK_PRIMARY &&
 	    nid_same(&primary_nid, nid)) {
 		rc = -EPERM;
-		goto out;
+		goto out_locked;
 	}
+
+	locked = false;
+	spin_unlock(&lp->lp_lock);
 
 	lpni = lnet_peer_ni_find_locked(nid);
 	if (!lpni) {
@@ -561,6 +575,9 @@ lnet_peer_del_nid(struct lnet_peer *lp, struct lnet_nid *nid,
 
 	lnet_net_unlock(LNET_LOCK_EX);
 
+out_locked:
+	if (locked)
+		spin_unlock(&lp->lp_lock);
 out:
 	CDEBUG(D_NET, "peer %s NID %s flags %#x: %d\n",
 	       libcfs_nidstr(&primary_nid), libcfs_nidstr(nid),
@@ -916,13 +933,17 @@ lnet_push_update_to_peers(int force)
 	for (cpt = 0; cpt < lncpt; cpt++) {
 		ptable = the_lnet.ln_peer_tables[cpt];
 		list_for_each_entry(lp, &ptable->pt_peer_list, lp_peer_list) {
-			if (force) {
-				spin_lock(&lp->lp_lock);
-				if (lp->lp_state & LNET_PEER_MULTI_RAIL)
-					lp->lp_state |= LNET_PEER_FORCE_PUSH;
-				spin_unlock(&lp->lp_lock);
-			}
+			bool need_push = false;
+
+			spin_lock(&lp->lp_lock);
+			if (force && (lp->lp_state & LNET_PEER_MULTI_RAIL))
+				lp->lp_state |= LNET_PEER_FORCE_PUSH;
+
 			if (lnet_peer_needs_push(lp))
+				need_push = true;
+			spin_unlock(&lp->lp_lock);
+
+			if (need_push)
 				lnet_peer_queue_for_discovery(lp);
 		}
 	}
@@ -1132,11 +1153,14 @@ lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni, struct lnet_nid *nid)
 	}
 
 	/* A non-MR node may have only one preferred NI per peer_ni */
+	spin_lock(&lp->lp_lock);
 	if (lpni->lpni_pref_nnids > 0 &&
 	    !(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
+		spin_unlock(&lp->lp_lock);
 		rc = -EPERM;
 		goto out;
 	}
+	spin_unlock(&lp->lp_lock);
 
 	/* add the new preferred nid to the list of preferred nids */
 	if (lpni->lpni_pref_nnids != 0) {
@@ -1236,6 +1260,9 @@ lnet_peer_primary_nid_locked(struct lnet_nid *nid, struct lnet_nid *result)
 	}
 }
 
+/* peer state lock (lp_lock) already taken. Must exit function with lock in
+ * acquired state
+ */
 bool
 lnet_is_discovery_disabled_locked(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
@@ -1407,6 +1434,7 @@ void LNetPrimaryNID(struct lnet_nid *nid)
 	struct lnet_peer_ni *lpni;
 	struct lnet_nid orig;
 	int rc = 0;
+	bool locked;
 	int cpt;
 
 	if (!nid || nid_is_lo0(nid))
@@ -1442,6 +1470,7 @@ again:
 		spin_unlock(&lp->lp_lock);
 		goto out_decref;
 	}
+	locked = !(lock_prim_nid && (lp->lp_state & LNET_PEER_LOCK_PRIMARY));
 	spin_unlock(&lp->lp_lock);
 
 	/* If primary nid locking is enabled, discovery is performed
@@ -1450,10 +1479,7 @@ again:
 	 * Messages to the peer will not go through until the discovery is
 	 * complete.
 	 */
-	if (lock_prim_nid && lp->lp_state & LNET_PEER_LOCK_PRIMARY)
-		rc = lnet_discover_peer_locked(lpni, cpt, false);
-	else
-		rc = lnet_discover_peer_locked(lpni, cpt, true);
+	rc = lnet_discover_peer_locked(lpni, cpt, locked);
 	if (rc)
 		goto out_decref;
 
@@ -1683,13 +1709,16 @@ lnet_peer_add(struct lnet_nid *nid, unsigned int flags)
 		 * the Multi-Rail flag. Otherwise the assumption is
 		 * that an existing peer is being modified.
 		 */
+		spin_lock(&lp->lp_lock);
 		if (lp->lp_state & LNET_PEER_CONFIGURED) {
 			if (!nid_same(&lp->lp_primary_nid, nid))
 				rc = -EEXIST;
 			else if ((lp->lp_state ^ flags) & LNET_PEER_MULTI_RAIL)
 				rc = -EPERM;
+			spin_unlock(&lp->lp_lock);
 			goto out;
 		} else if (lp->lp_state & LNET_PEER_LOCK_PRIMARY) {
+			spin_unlock(&lp->lp_lock);
 			if (nid_same(&lp->lp_primary_nid, nid))
 				rc = -EEXIST;
 			/* we're trying to recreate an existing peer which
@@ -1708,10 +1737,12 @@ lnet_peer_add(struct lnet_nid *nid, unsigned int flags)
 			 * do anything if primary nid is not being changed
 			 */
 			if (nid_same(&lp->lp_primary_nid, nid)) {
+				spin_unlock(&lp->lp_lock);
 				rc = -EEXIST;
 				goto out;
 			}
 		}
+		spin_unlock(&lp->lp_lock);
 		/* Delete and recreate the peer.
 		 * We can get here:
 		 * 1. If the peer is being recreated as a configured NID
@@ -1764,16 +1795,18 @@ lnet_peer_add_nid(struct lnet_peer *lp, struct lnet_nid *nid,
 {
 	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
+	bool locked = true;
 	int rc = 0;
 
 	LASSERT(lp);
 	LASSERT(nid);
 
+	spin_lock(&lp->lp_lock);
 	/* A configured peer can only be updated through configuration. */
 	if (!(flags & LNET_PEER_CONFIGURED)) {
 		if (lp->lp_state & LNET_PEER_CONFIGURED) {
 			rc = -EPERM;
-			goto out;
+			goto out_locked;
 		}
 	}
 
@@ -1782,16 +1815,16 @@ lnet_peer_add_nid(struct lnet_peer *lp, struct lnet_nid *nid,
 	 * that would leave the peer struct in an invalid state.
 	 */
 	if (flags & LNET_PEER_MULTI_RAIL) {
-		spin_lock(&lp->lp_lock);
 		if (!(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
 			lp->lp_state |= LNET_PEER_MULTI_RAIL;
 			lnet_peer_clr_non_mr_pref_nids(lp);
 		}
-		spin_unlock(&lp->lp_lock);
 	} else if (lp->lp_state & LNET_PEER_MULTI_RAIL) {
 		rc = -EPERM;
-		goto out;
+		goto out_locked;
 	}
+	locked = false;
+	spin_unlock(&lp->lp_lock);
 
 	lpni = lnet_peer_ni_find_locked(nid);
 	if (lpni) {
@@ -1894,16 +1927,24 @@ lnet_peer_add_nid(struct lnet_peer *lp, struct lnet_nid *nid,
 			rc = -ENOMEM;
 			goto out_free_lpni;
 		}
-	} else if (!(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
-		rc = -ENOTUNIQ;
-		goto out_free_lpni;
+	} else {
+		spin_lock(&lp->lp_lock);
+		if (!(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
+			spin_unlock(&lp->lp_lock);
+			rc = -ENOTUNIQ;
+			goto out_free_lpni;
+		}
+		spin_unlock(&lp->lp_lock);
 	}
 
 	return lnet_peer_attach_peer_ni(lp, lpn, lpni, flags);
 
 out_free_lpni:
 	lnet_peer_ni_decref_locked(lpni);
-out:
+out_locked:
+	if (locked)
+		spin_unlock(&lp->lp_lock);
+
 	CDEBUG(D_NET, "peer %s NID %s flags %#x: %d\n",
 	       libcfs_nidstr(&lp->lp_primary_nid), libcfs_nidstr(nid),
 	       flags, rc);
@@ -1925,8 +1966,10 @@ lnet_peer_set_primary_nid(struct lnet_peer *lp, struct lnet_nid *nid,
 	if (nid_same(&lp->lp_primary_nid, nid))
 		goto out;
 
+	spin_lock(&lp->lp_lock);
 	if (!(lp->lp_state & LNET_PEER_LOCK_PRIMARY))
 		lp->lp_primary_nid = *nid;
+	spin_unlock(&lp->lp_lock);
 
 	rc = lnet_peer_add_nid(lp, nid, flags);
 	if (rc) {
@@ -1938,11 +1981,15 @@ out:
 	 * been locked, then we don't want to flag this scenario as
 	 * a failure
 	 */
+	spin_lock(&lp->lp_lock);
 	if (lp->lp_state & LNET_PEER_CONFIGURED ||
-	    lp->lp_state & LNET_PEER_LOCK_PRIMARY)
+	    lp->lp_state & LNET_PEER_LOCK_PRIMARY) {
+		spin_unlock(&lp->lp_lock);
 		return 0;
+	}
+	spin_unlock(&lp->lp_lock);
 
-	CDEBUG(D_NET, "peer %s NID %s: %d\n",
+	CDEBUG(D_NET, "peer %s NID %s: rc = %d\n",
 	       libcfs_nidstr(&old), libcfs_nidstr(nid), rc);
 
 	return rc;
@@ -2028,10 +2075,11 @@ __must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer *lp = NULL;
 	struct lnet_peer_ni *lpni;
+	int rc;
 
 	/* The prim_nid must always be specified */
 	if (LNET_NID_IS_ANY(prim_nid))
-		return -EINVAL;
+		GOTO(out, rc = -EINVAL);
 
 	if (mr)
 		flags |= LNET_PEER_MULTI_RAIL;
@@ -2046,16 +2094,17 @@ __must_hold(&the_lnet.ln_api_mutex)
 	/* Look up the prim_nid, which must exist. */
 	lpni = lnet_peer_ni_find_locked(prim_nid);
 	if (!lpni)
-		return -ENOENT;
+		GOTO(out, rc = -ENOENT);
 	lp = lpni->lpni_peer_net->lpn_peer;
 	lnet_peer_ni_decref_locked(lpni);
 
 	/* Peer must have been configured. */
+	spin_lock(&lp->lp_lock);
 	if ((flags & LNET_PEER_CONFIGURED) &&
 	    !(lp->lp_state & LNET_PEER_CONFIGURED)) {
 		CDEBUG(D_NET, "peer %s was not configured\n",
 		       libcfs_nidstr(prim_nid));
-		return -ENOENT;
+		GOTO(out_locked, rc = -ENOENT);
 	}
 
 	/* Primary NID must match */
@@ -2063,24 +2112,29 @@ __must_hold(&the_lnet.ln_api_mutex)
 		CDEBUG(D_NET, "prim_nid %s is not primary for peer %s\n",
 		       libcfs_nidstr(prim_nid),
 		       libcfs_nidstr(&lp->lp_primary_nid));
-		return -ENODEV;
+		GOTO(out_locked, rc = -ENODEV);
 	}
 
 	/* Multi-Rail flag must match. */
 	if ((lp->lp_state ^ flags) & LNET_PEER_MULTI_RAIL) {
 		CDEBUG(D_NET, "multi-rail state mismatch for peer %s\n",
 		       libcfs_nidstr(prim_nid));
-		return -EPERM;
+		GOTO(out_locked, rc = -EPERM);
 	}
 
-	if (lnet_peer_is_uptodate(lp) && !(flags & LNET_PEER_CONFIGURED)) {
+	if (lnet_peer_is_uptodate_locked(lp) &&
+	    !(flags & LNET_PEER_CONFIGURED)) {
 		CDEBUG(D_NET,
 		       "Don't add temporary peer NI for uptodate peer %s\n",
 		       libcfs_nidstr(&lp->lp_primary_nid));
-		return -EINVAL;
+		GOTO(out_locked, rc = -EINVAL);
 	}
-
+	spin_unlock(&lp->lp_lock);
 	return lnet_peer_add_nid(lp, nid, flags);
+out_locked:
+	spin_unlock(&lp->lp_lock);
+out:
+	return rc;
 }
 
 int lnet_user_add_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid,
@@ -2102,8 +2156,10 @@ lnet_reset_peer(struct lnet_peer *lp)
 	lnet_peer_cancel_discovery(lp);
 
 	flags = LNET_PEER_CONFIGURED;
+	spin_lock(&lp->lp_lock);
 	if (lp->lp_state & LNET_PEER_MULTI_RAIL)
 		flags |= LNET_PEER_MULTI_RAIL;
+	spin_unlock(&lp->lp_lock);
 
 	list_for_each_entry_safe(lpn, lpntmp, &lp->lp_peer_nets, lpn_peer_nets) {
 		list_for_each_entry_safe(lpni, lpnitmp, &lpn->lpn_peer_nis,
@@ -2121,7 +2177,9 @@ lnet_reset_peer(struct lnet_peer *lp)
 	}
 
 	/* mark it for discovery the next time we use it */
+	spin_lock(&lp->lp_lock);
 	lp->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
+	spin_unlock(&lp->lp_lock);
 	return 0;
 }
 
@@ -2169,21 +2227,30 @@ lnet_del_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid,
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
+	spin_lock(&lp->lp_lock);
 	if (LNET_NID_IS_ANY(nid) || nid_same(nid, &lp->lp_primary_nid)) {
 		if (!force && lp->lp_state & LNET_PEER_LOCK_PRIMARY) {
 			CERROR("peer %s created by Lustre. Must preserve primary NID, but will remove other NIDs\n",
 			       libcfs_nidstr(&lp->lp_primary_nid));
-			return lnet_reset_peer(lp);
+			goto out_reset_locked;
 		} else {
-			return lnet_peer_del(lp);
+			goto out_del_locked;
 		}
 	}
 
 	flags = LNET_PEER_CONFIGURED;
+
 	if (lp->lp_state & LNET_PEER_MULTI_RAIL)
 		flags |= LNET_PEER_MULTI_RAIL;
+	spin_unlock(&lp->lp_lock);
 
 	return lnet_peer_del_nid(lp, nid, flags);
+out_reset_locked:
+	spin_unlock(&lp->lp_lock);
+	return lnet_reset_peer(lp);
+out_del_locked:
+	spin_unlock(&lp->lp_lock);
+	return lnet_peer_del(lp);
 }
 
 void
@@ -2342,6 +2409,9 @@ lnet_peer_is_uptodate(struct lnet_peer *lp)
  * A forced Ping or Push is also handled by the discovery thread.
  *
  * Otherwise look at whether the peer needs rediscovering.
+ *
+ * peer state lock (lp_lock) already taken. Must exit function with lock in
+ * acquired state
  */
 bool
 lnet_peer_is_uptodate_locked(struct lnet_peer *lp)
@@ -3520,6 +3590,9 @@ static bool lnet_is_nid_in_ping_info(struct lnet_nid *nid,
  * discovery thread should call lnet_peer_discovery_complete() which will
  * drop that reference as well as wake any waiters that may also be holding a
  * ref on the peer
+ *
+ * peer state lock (lp_lock) already taken. Must exit function with lock in
+ * acquired state
  */
 static int lnet_peer_deletion(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
@@ -3588,6 +3661,9 @@ clear_discovering:
 
 /*
  * Update a peer using the data received.
+ *
+ * peer state lock (lp_lock) already taken. Must exit function with lock in
+ * acquired state
  */
 static int lnet_peer_data_present(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
@@ -3744,6 +3820,9 @@ out:
  * A ping failed. Clear the PING_FAILED state and set the
  * FORCE_PING state, to ensure a retry even if discovery is
  * disabled. This avoids being left with incorrect state.
+ *
+ * peer state lock (lp_lock) already taken. Must exit function with lock in
+ * acquired state
  */
 static int lnet_peer_ping_failed(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
@@ -3769,7 +3848,12 @@ __must_hold(&lp->lp_lock)
 	return rc ? rc : LNET_REDISCOVER_PEER;
 }
 
-/* Active side of ping. */
+/*
+ * Active side of ping.
+ *
+ * peer state lock (lp_lock) already taken. Must exit function with lock in
+ * acquired state
+ */
 static int lnet_peer_send_ping(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
@@ -3825,7 +3909,8 @@ fail_error:
 
 /*
  * This function exists because you cannot call LNetMDUnlink() from an
- * event handler.
+ * event handler. peer state lock (lp_lock) already taken. Must exit function
+ * with lock in acquired state
  */
 static int lnet_peer_push_failed(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
@@ -3850,6 +3935,9 @@ __must_hold(&lp->lp_lock)
 
 /*
  * Mark the peer as discovered.
+ *
+ * peer state lock (lp_lock) already taken. Must exit function with lock in
+ * acquired state
  */
 static int lnet_peer_discovered(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
@@ -3865,7 +3953,11 @@ __must_hold(&lp->lp_lock)
 	return 0;
 }
 
-/* Active side of push. */
+/* Active side of push.
+ *
+ * peer state lock (lp_lock) already taken. Must exit function with lock in
+ * acquired state
+ */
 static int lnet_peer_send_push(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
@@ -4400,7 +4492,9 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 	cfg->prcfg_cfg_nid = lnet_nid_to_nid4(&lp->lp_primary_nid);
 	cfg->prcfg_count = lp->lp_nnis;
 	cfg->prcfg_size = size;
+	spin_lock(&lp->lp_lock);
 	cfg->prcfg_state = lp->lp_state;
+	spin_unlock(&lp->lp_lock);
 
 	/* Allocate helper buffers. */
 	rc = -ENOMEM;
