@@ -436,7 +436,10 @@ static int qsd_reint_main(void *_args)
 		GOTO(out_env_init, rc = 0);
 
 	LASSERT(qsd->qsd_exp != NULL);
-	LASSERT(qqi->qqi_glb_uptodate == 0 || qqi->qqi_slv_uptodate == 0);
+
+	/* Has qsd_process_upd already updated the index? */
+	if (qqi->qqi_glb_uptodate != 0 && qqi->qqi_slv_uptodate != 0)
+		GOTO(out_env_init,  rc = 0);
 
 	memset(&qti->qti_lvb, 0, sizeof(qti->qti_lvb));
 

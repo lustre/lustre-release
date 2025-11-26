@@ -1651,7 +1651,8 @@ struct quota_body {
 	__u64		qb_slv_ver; /* slave index file version */
 	struct lustre_handle	qb_lockh;     /* per-ID lock handle */
 	struct lustre_handle	qb_glb_lockh; /* global lock handle */
-	__u64		qb_padding1[4];
+	__u64		qb_glb_ver; /* global index file version */
+	__u64		qb_padding1[3];
 };
 
 /* When the quota_body is used in the reply of quota global intent

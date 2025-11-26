@@ -1138,6 +1138,9 @@ out_locked:
 	LQUOTA_DEBUG_LQES(env, "dqacq ends count:%llu ver:%llu rc:%d",
 		     repbody->qb_count, repbody->qb_slv_ver, rc);
 	qti_lqes_write_unlock(env);
+
+	repbody->qb_glb_ver = dt_version_get(env, LQE_GLB_OBJ(lqe));
+
 out:
 	qti_lqes_restore_fini(env);
 
@@ -1239,6 +1242,26 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 	repbody = req_capsule_server_get(&req->rq_pill, &RMF_QUOTA_BODY);
 	if (repbody == NULL)
 		RETURN(err_serious(-EFAULT));
+
+	if (qbody->qb_id.qid_uid == 0 && qbody->qb_count == 0 &&
+	    qbody->qb_usage == 0 && qbody->qb_flags == QUOTA_DQACQ_FL_REPORT) {
+		struct qmt_pool_info *qpi;
+
+		rc = lquota_extract_fid(&qbody->qb_fid, &rtype, &qtype);
+		if (rc)
+			RETURN(-EINVAL);
+
+		qpi = qmt_pool_lookup_glb(env, qmt, rtype);
+		if (IS_ERR(qpi))
+			RETURN(PTR_ERR(qpi));
+
+		*repbody = *qbody;
+		repbody->qb_glb_ver = dt_version_get(env,
+						     qpi->qpi_glb_obj[qtype]);
+
+		qpi_putref(env, qpi);
+		RETURN(0);
+	}
 
 	/* verify if global lock is stale */
 	if (!lustre_handle_is_used(&qbody->qb_glb_lockh))

@@ -311,8 +311,9 @@ static int qsd_glb_glimpse_ast(struct ldlm_lock *lock, void *data)
 	 * We can't afford disk io in the context of glimpse callback handling
 	 * thread, so the on-disk global limits update has to be deferred.
 	 */
-	qsd_upd_schedule(qqi, NULL, &desc->gl_id, (union lquota_rec *)&rec,
-			 desc->gl_ver, true);
+	if (!CFS_FAIL_CHECK(OBD_FAIL_QUOTA_DROP_VER_UPDATE))
+		qsd_upd_schedule(qqi, NULL, &desc->gl_id,
+				 (union lquota_rec *)&rec, desc->gl_ver, true);
 	EXIT;
 out_qqi:
 	qqi_putref(qqi);

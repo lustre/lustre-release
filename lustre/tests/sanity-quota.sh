@@ -2551,6 +2551,47 @@ test_7e() {
 }
 run_test 7e "Quota reintegration (inode limits)"
 
+# quota reintegration automatically
+test_7f() {
+	(( $OST1_VERSION >= $(version_code 2.16.58) )) ||
+		skip "need OST >= 2.16.58 for quota reint timeout"
+
+	local blk_limit=1048576
+	local testfile="$DIR/$tdir/$tfile-0"
+
+	setup_quota_test || error "setup quota failed with $?"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	$LFS setquota -u $TSTID -b 0 -B $blk_limit $DIR ||
+		error "failed to set quota for $TSTUSR"
+
+	wait_quota_synced "ost1" "OST0000" "usr" $TSTID "hardlimit" "$blk_limit"
+
+	$LFS quota -v -u $TSTID $DIR
+
+	#define OBD_FAIL_QUOTA_DROP_VER_UPDATE  0xA11
+	do_facet ost1 $LCTL set_param fail_loc=0xa11
+
+	$LFS setquota -u $TSTID2 -b 0 -B $blk_limit $DIR ||
+		error "failed to set quota for $TSTUSR2"
+
+	sleep 5
+
+	value=$(get_quota_on_qsd ost1 OST0000 usr $TSTID2 hardlimit)
+	(( value == 0)) || error "hardlimit for $TSTID2 is not 0 ($value)"
+
+	# trigger quota request from OST1
+	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	$RUNAS $DD of=$testfile count=$(( blk_limit / 1024 )) oflag=direct
+
+	value=$(get_quota_on_qsd ost1 OST0000 usr $TSTID2 hardlimit)
+	(( value == blk_limit)) ||
+		error "Quota for $TSTID2 is not synced ($value)"
+}
+run_test 7f "Quota reintegration automatically"
+
 # run dbench with quota enabled
 test_8() {
 	local BLK_LIMIT="100g" #100G
@@ -2698,7 +2739,7 @@ test_12a() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "needs >= 2 OSTs"
 
 	local blimit=22 # MB
-	local blk_cnt=$((blimit - 5))
+	local blk_cnt=$((blimit - OSTCOUNT - 2))
 	local TESTFILE0="$DIR/$tdir/$tfile"-0
 	local TESTFILE1="$DIR/$tdir/$tfile"-1
 

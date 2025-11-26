@@ -4784,10 +4784,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct quota_body, qb_glb_lockh));
 	LASSERTF((int)sizeof(((struct quota_body *)0)->qb_glb_lockh) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct quota_body *)0)->qb_glb_lockh));
-	LASSERTF((int)offsetof(struct quota_body, qb_padding1[4]) == 112, "found %lld\n",
-		 (long long)(int)offsetof(struct quota_body, qb_padding1[4]));
-	LASSERTF((int)sizeof(((struct quota_body *)0)->qb_padding1[4]) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct quota_body *)0)->qb_padding1[4]));
+	LASSERTF((int)offsetof(struct quota_body, qb_glb_ver) == 80, "found %lld\n",
+		 (long long)(int)offsetof(struct quota_body, qb_glb_ver));
+	LASSERTF((int)sizeof(((struct quota_body *)0)->qb_glb_ver) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct quota_body *)0)->qb_glb_ver));
+	LASSERTF((int)offsetof(struct quota_body, qb_padding1[3]) == 112, "found %lld\n",
+		 (long long)(int)offsetof(struct quota_body, qb_padding1[3]));
+	LASSERTF((int)sizeof(((struct quota_body *)0)->qb_padding1[3]) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct quota_body *)0)->qb_padding1[3]));
 #endif /* HAVE_SERVER_SUPPORT */
 
 	/* Checks for struct mgs_target_info */

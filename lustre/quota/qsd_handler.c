@@ -15,42 +15,6 @@
 #include "qsd_internal.h"
 
 /**
- * helper function bumping lqe_pending_req if there is no quota request in
- * flight for the lquota entry \a lqe. Otherwise, EBUSY is returned.
- */
-static inline int qsd_request_enter(struct lquota_entry *lqe)
-{
-	/* is there already a quota request in flight? */
-	if (lqe->lqe_pending_req != 0) {
-		LQUOTA_DEBUG(lqe, "already a request in flight");
-		return -EBUSY;
-	}
-
-	if (lqe->lqe_pending_rel != 0) {
-		LQUOTA_ERROR(lqe, "no request in flight with pending_rel=%llu",
-			     lqe->lqe_pending_rel);
-		LBUG();
-	}
-
-	lqe->lqe_pending_req++;
-	return 0;
-}
-
-/**
- * Companion of qsd_request_enter() dropping lqe_pending_req to 0.
- */
-static inline void qsd_request_exit(struct lquota_entry *lqe)
-{
-	if (lqe->lqe_pending_req != 1) {
-		LQUOTA_ERROR(lqe, "lqe_pending_req != 1!!!");
-		LBUG();
-	}
-	lqe->lqe_pending_req--;
-	lqe->lqe_pending_rel = 0;
-	wake_up(&lqe->lqe_waiters);
-}
-
-/**
  * Check whether a qsd instance is all set to send quota request to master.
  * This includes checking whether:
  * - the connection to master is set up and usable,
@@ -296,13 +260,10 @@ static inline bool qsd_adjust_needed(struct lquota_entry *lqe)
  * Callback function called when an acquire/release request sent to the master
  * is completed
  */
-static void qsd_req_completion(const struct lu_env *env,
-			       struct qsd_qtype_info *qqi,
-			       struct quota_body *reqbody,
-			       struct quota_body *repbody,
-			       struct lustre_handle *lockh,
-			       struct lquota_lvb *lvb,
-			       void *arg, int ret)
+void qsd_req_completion(const struct lu_env *env, struct qsd_qtype_info *qqi,
+			struct quota_body *reqbody, struct quota_body *repbody,
+			struct lustre_handle *lockh, struct lquota_lvb *lvb,
+			void *arg, int ret)
 {
 	struct lquota_entry	*lqe = (struct lquota_entry *)arg;
 	struct qsd_thread_info	*qti;
@@ -337,6 +298,11 @@ static void qsd_req_completion(const struct lu_env *env,
 				     ret, reqbody->qb_flags);
 		GOTO(out, ret);
 	}
+
+	if (repbody != NULL && repbody->qb_id.qid_uid == 0 &&
+	    repbody->qb_count == 0 && repbody->qb_usage == 0 &&
+	    repbody->qb_flags == QUOTA_DQACQ_FL_REPORT)
+		GOTO(out_noadjust, ret);
 
 	/* Set the lqe_lockh */
 	if (lustre_handle_is_used(lockh) &&
@@ -413,6 +379,18 @@ out_noadjust:
 	/* release reference on per-ID lock */
 	if (lustre_handle_is_used(lockh))
 		ldlm_lock_decref(lockh, qsd_id_einfo.ei_mode);
+
+	if (repbody != NULL) {
+		if (qqi->qqi_glb_ver == repbody->qb_glb_ver)
+			qqi->qqi_last_version_update_time = ktime_get_seconds();
+		else if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_DROP_VER_UPDATE) ||
+			 qqi->qqi_last_version_update_time <
+			 (ktime_get_seconds() -
+			  		qqi->qqi_qsd->qsd_ver_reint_timeout)) {
+			qqi->qqi_glb_uptodate = 0;
+			qsd_start_reint_thread(qqi);
+		}
+	}
 
 	if (cancel) {
 		qsd_adjust_schedule(lqe, false, true);

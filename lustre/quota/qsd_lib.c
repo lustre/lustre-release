@@ -250,6 +250,37 @@ qsd_timeout_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(qsd_timeout);
 
+static int qsd_ver_reint_timeout_seq_show(struct seq_file *m, void *data)
+{
+	struct qsd_instance *qsd = m->private;
+	LASSERT(qsd != NULL);
+
+	seq_printf(m, "%d\n", qsd->qsd_ver_reint_timeout);
+	return 0;
+}
+
+static ssize_t
+qsd_ver_reint_timeout_seq_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct qsd_instance *qsd = m->private;
+	time64_t timeout;
+	int rc;
+
+	LASSERT(qsd != NULL);
+	rc = kstrtoll_from_user(buffer, count, 0, &timeout);
+	if (rc)
+		return rc;
+
+	if (timeout < 0)
+		return -EINVAL;
+
+	qsd->qsd_ver_reint_timeout = timeout;
+	return count;
+}
+LPROC_SEQ_FOPS(qsd_ver_reint_timeout);
+
 static int qsd_root_prj_enable_seq_show(struct seq_file *m, void *data)
 {
 	struct qsd_instance *qsd = m->private;
@@ -287,6 +318,8 @@ static struct lprocfs_vars lprocfs_quota_qsd_vars[] = {
 	  .fops	=	&qsd_force_reint_fops	},
 	{ .name	=	"timeout",
 	  .fops	=	&qsd_timeout_fops	},
+	{ .name	=	"verion_mismatch_timeout",
+	  .fops	=	&qsd_ver_reint_timeout_fops	},
 	{ .name	=	"root_prj_enable",
 	  .fops	=	&qsd_root_prj_enable_fops	},
 	{ NULL }
@@ -561,6 +594,9 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 		       qsd->qsd_svname, rc);
 		GOTO(out, rc);
 	}
+
+	qqi->qqi_last_version_update_time = ktime_get_seconds();
+
 	EXIT;
 out:
 	if (rc)
@@ -690,6 +726,7 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	qsd->qsd_is_md = is_md;
 	qsd->qsd_updating = false;
 	qsd->qsd_exclusive = excl;
+	qsd->qsd_ver_reint_timeout = 3 * obd_timeout;
 
 	/* copy service name */
 	rc = strscpy(qsd->qsd_svname, svname, sizeof(qsd->qsd_svname));
