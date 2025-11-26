@@ -533,8 +533,8 @@ intf_max_set(const char *val, const struct kernel_param *kp)
 static int
 response_tracking_set(const char *val, const struct kernel_param *kp)
 {
-	int rc;
 	unsigned long new_value;
+	int rc;
 
 	rc = kstrtoul(val, 0, &new_value);
 	if (rc) {
@@ -542,7 +542,7 @@ response_tracking_set(const char *val, const struct kernel_param *kp)
 		return -EINVAL;
 	}
 
-	if (new_value < 0 || new_value > 3) {
+	if (new_value > 3) {
 		CWARN("Invalid value (%lu) for 'lnet_response_tracking'\n",
 		      new_value);
 		return -EINVAL;
