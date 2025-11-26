@@ -6087,6 +6087,7 @@ lustre/conf/resource/Makefile
 lustre/include/Makefile
 lustre/include/lustre/Makefile
 lustre/include/uapi/linux/lustre/Makefile
+lustre/kernel_patches/targets/6.12-rhel10.1.target
 lustre/kernel_patches/targets/6.12-rhel10.0.target
 lustre/kernel_patches/targets/5.14-rhel9.7.target
 lustre/kernel_patches/targets/5.14-rhel9.6.target
