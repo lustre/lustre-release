@@ -124,7 +124,8 @@ void dump_diff(char *orig_buf, char *buf, int size, long _off)
 void lp_gethostname(void)
 {
 	if (gethostname(hostname, 1024) == -1) {
-		fprintf(stderr, "gethostname: (%d)%s", errno, strerror(errno));
+		fprintf(stderr, "gethostname: (%d)%s\n", errno,
+			strerror(errno));
 		MPI_Abort(MPI_COMM_WORLD, 2);
 	}
 }

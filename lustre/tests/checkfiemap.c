@@ -187,7 +187,7 @@ int main(int argc, char **argv)
 
 	fd = open(argv[optind], O_RDONLY);
 	if (fd < 0) {
-		fprintf(stderr, "cannot open %s for reading, error %i",
+		fprintf(stderr, "cannot open %s for reading, error %i\n",
 			argv[optind], errno);
 		return -1;
 	}
@@ -221,7 +221,7 @@ int main(int argc, char **argv)
 	}
 close:
 	if (close(fd) < 0)
-		fprintf(stderr, "closing %s, error %i", argv[optind], errno);
+		fprintf(stderr, "closing %s, error %i\n", argv[optind], errno);
 
 	return rc;
 }

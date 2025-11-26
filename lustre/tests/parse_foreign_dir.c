@@ -61,9 +61,10 @@ int main(int argc, char **argv)
 
 	if (len2 < offsetof(struct lmv_foreign_md, lfm_value)) {
 		fprintf(stderr, "trusted.lov size=%zu too small\n", len2);
-		fprintf(stderr, "printing its content in hex anyway :\n");
+		fprintf(stderr, "printing its content in hex anyway:\n");
 		for (i = 0; i < len2; i++)
 			fprintf(stderr, "%02x", *((char *)lfm + i));
+		fprintf(stderr, "\n");
 		exit(1);
 	}
 

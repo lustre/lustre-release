@@ -65,7 +65,7 @@ int main(int argc, char **argv)
 
 	fd = open(argv[optind + 1], O_RDONLY);
 	if (fd < 0) {
-		fprintf(stderr, "cannot open %s for reading, error %d",
+		fprintf(stderr, "cannot open %s for reading, error %d\n",
 			argv[optind + 1], errno);
 		return -1;
 	}
