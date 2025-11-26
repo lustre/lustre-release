@@ -6936,7 +6936,9 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 				}
 				lnet_peer_ni_decref_locked(lpni);
 				lp = lpni->lpni_peer_net->lpn_peer;
+				spin_lock(&lp->lp_lock);
 				lp->lp_state = nla_get_s64(pnid_prop);
+				spin_unlock(&lp->lp_lock);
 			} else if (nla_strcmp(pnid_prop, "peer ni") == 0) {
 				struct nlattr *rlist;
 				int rem3;

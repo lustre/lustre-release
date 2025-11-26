@@ -1180,8 +1180,12 @@ rescan:
 		/* If we're currently discovering the peer then don't
 		 * issue another discovery
 		 */
-		if (rtr->lp_state & LNET_PEER_RTR_DISCOVERY)
+		spin_lock(&rtr->lp_lock);
+		if (rtr->lp_state & LNET_PEER_RTR_DISCOVERY) {
+			spin_unlock(&rtr->lp_lock);
 			continue;
+		}
+		spin_unlock(&rtr->lp_lock);
 
 		now = ktime_get_real_seconds();
 
