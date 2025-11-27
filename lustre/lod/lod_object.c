@@ -2486,6 +2486,7 @@ static int lod_dir_layout_set(const struct lu_env *env,
 		if (!dt_object_exists(lo->ldo_stripe[i]))
 			continue;
 
+		slave_lmv->lmv_master_mdt_index = cpu_to_le32(i);
 		rc = lod_sub_xattr_set(env, lo->ldo_stripe[i], &slave_buf,
 				       XATTR_NAME_LMV, fl, th);
 		if (rc)
@@ -9200,13 +9201,7 @@ static int lod_dir_layout_shrink(const struct lu_env *env,
 			continue;
 
 		if (i < final_stripe_count) {
-			rc = lod_fld_lookup(env, lod,
-					    lu_object_fid(&dto->do_lu),
-					    &mdtidx, &type);
-			if (rc)
-				RETURN(rc);
-
-			lmv->lmv_master_mdt_index = cpu_to_le32(mdtidx);
+			lmv->lmv_master_mdt_index = cpu_to_le32(i);
 			rc = lod_sub_xattr_set(env, dto, lmv_buf,
 					       XATTR_NAME_LMV,
 					       LU_XATTR_REPLACE, th);
