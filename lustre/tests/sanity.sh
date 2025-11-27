@@ -18954,12 +18954,14 @@ test_150ib() {
 		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
 	# block allocate, size remains
 	blocks=$(stat -c '%b' $DIR/$tfile)
-	if [[ "$DOM" == "yes" ]]; then
-		(( blocks == blocks_after_extend_ind )) ||
-			error "extend failed:$blocks!=$blocks_after_extend_ind"
-	else
+	local features=$(do_facet mds1 "$DEBUGFS -c -R stats $(mdsdevname 1)" |
+		grep "Filesystem features:")
+	if [[ "$features" == *extent* ]]; then
 		(( blocks == blocks_after_extend_ext )) ||
 			error "extend failed:$blocks!=$blocks_after_extend_ext"
+	else
+		(( blocks == blocks_after_extend_ind )) ||
+			error "extend failed:$blocks!=$blocks_after_extend_ind"
 	fi
 	lsz=$(stat -c '%s' $DIR/$tfile)
 	(( lsz == expect_len)) ||
@@ -18997,19 +18999,29 @@ test_150ic() {
 	# now let's extend the range to [0, 128M), to trigger BRWs
 	local offset=0
 	local length=$((128 * MB1))
-	# Given per block 4KB size, per index block could hold
-	# 1024 block index. 128MB needs data block 32768,
-	# index block 1(L2) + 32(L1)
-	local want_blocks=$((128 * MB1 / 512 + 33 * 8))
 
 	touch $DIR/$tfile
 	out=$(fallocate -z --offset $offset -l $length $DIR/$tfile 2>&1) ||
 		skip_eopnotsupp "$out|fallocate: offset $offset and len $length"
 
+	local features=$(do_facet mds1 "$DEBUGFS -c -R stats $(mdsdevname 1)" |
+			grep "Filesystem features:")
+
 	# Verify zero prealloc worked.
 	local blocks=$(stat -c '%b' $DIR/$tfile)
-	(( blocks == want_blocks )) ||
-		error "zero prealloc failed:$blocks!=$want_blocks"
+
+	if [[ "$features" == *extent* ]]; then
+		local want_blocks=$((128 * MB1 / 512))
+		(( blocks >= want_blocks && blocks <= want_blocks + 16 * 8 )) ||
+			error "zero prealloc failed:$blocks!=$want_blocks"
+	else
+		# Given per block 4KB size, per index block could hold
+		# 1024 block index. 128MB needs data block 32768,
+		# index block 1(L2) + 32(L1)
+		local want_blocks=$((128 * MB1 / 512 + 33 * 8))
+		(( blocks == want_blocks )) ||
+			error "zero prealloc failed:$blocks!=$want_blocks"
+	fi
 
 	local expect="fde9e0818281836e4fc0edfede2b8762"
 	local cksum=($(md5sum $DIR/$tfile))
