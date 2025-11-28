@@ -8703,18 +8703,17 @@ test_72d() {
 	local nm=nm_test72d
 	local nm2=subnm_test72d
 	local val
-	local same_server_node=false
+	local delete_dyn_nm=false
 
 	is_multi_fileset_supported "ost1" ||
 		skip "Need OSS >= 2.16.57 for multiple filesets"
 
 	# When MGS and OST are colocated, we need to explicitly remove the
-	# dynamic nodemap.
-	# FIXME we should be able to rely on the nodemap synchronization wiping
-	# all dynamic nodemaps even if the MGS and OST are colocated. In this
-	# case, "same_server_node" should be removed and not separately handled.
+	# dynamic nodemap on earlier versions (LU-19478) because nodemap
+	# synchronization does not explicitly wipe them.
 	[[ "$(facet_active_host mgs)" == "$(facet_active_host ost1)" ]] &&
-		same_server_node=true
+		(( OST1_VERSION < $(version_code 2.16.61) )) &&
+		delete_dyn_nm=true
 
 	stack_trap "cleanup_72d $mgsnm $nm $nm2" EXIT
 
@@ -8757,7 +8756,7 @@ test_72d() {
 		error "modify fileset for $mgsnm on MGS failed"
 	wait_nm_sync $mgsnm fileset '' inactive
 
-	if $same_server_node; then
+	if $delete_dyn_nm; then
 		do_facet ost1 $LCTL nodemap_del $nm
 	fi
 
@@ -8984,19 +8983,18 @@ test_72f() {
 	local fileset_prim="/primary"
 	local fileset_alt1="/alt1"
 	local fileset_alt2="/alt2"
-	local same_server_node=false
+	local delete_dyn_nm=false
 	local val
 
 	is_multi_fileset_supported "ost1" ||
 		skip "Need OSS >= 2.16.57 for multiple filesets"
 
 	# When MGS and OST are colocated, we need to explicitly remove the
-	# dynamic nodemap.
-	# FIXME we should be able to rely on the nodemap synchronization wiping
-	# all dynamic nodemaps even if the MGS and OST are colocated. In this
-	# case, "same_server_node" should be removed and not separately handled.
+	# dynamic nodemap on earlier versions (LU-19478) because nodemap
+	# synchronization does not explicitly wipe them.
 	[[ "$(facet_active_host mgs)" == "$(facet_active_host ost1)" ]] &&
-		same_server_node=true
+		(( OST1_VERSION < $(version_code 2.16.61) )) &&
+		delete_dyn_nm=true
 
 	stack_trap "cleanup_72f $mgsnm $nm" EXIT
 
@@ -9072,7 +9070,7 @@ test_72f() {
 		error "add fileset $fileset_alt2 to $mgsnm failed"
 	wait_nm_sync $mgsnm fileset '' inactive
 
-	if $same_server_node; then
+	if $delete_dyn_nm; then
 		do_facet ost1 $LCTL nodemap_del $nm
 	fi
 

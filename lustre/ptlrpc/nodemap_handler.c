@@ -4157,6 +4157,45 @@ out:
 }
 EXPORT_SYMBOL(nodemap_del);
 
+/**
+ * nodemap_clear_dynamic_nodemaps() - Remove all dynamic nodemaps
+ *
+ * This function iterates over all persistent nodemaps and deletes their
+ * sub-nodemaps.
+ */
+void nodemap_clear_dynamic_nodemaps(void)
+{
+	struct lu_nodemap *nodemap, *tmp;
+	struct lu_nodemap *dyn_nm, *dyn_nm_tmp;
+	LIST_HEAD(nodemap_list);
+
+	mutex_lock(&active_config_lock);
+	cfs_hash_for_each_safe(active_config->nmc_nodemap_hash, nm_hash_list_cb,
+			       &nodemap_list);
+
+	/* take refs on persistent nodemaps, remove dynamic ones from list */
+	list_for_each_entry_safe(nodemap, tmp, &nodemap_list, nm_list) {
+		if (nodemap->nm_dyn)
+			list_del(&nodemap->nm_list);
+		else
+			nodemap_getref(nodemap);
+	}
+	mutex_unlock(&active_config_lock);
+
+	/* for each persistent nodemap, delete its sub-nodemaps */
+	list_for_each_entry_safe(nodemap, tmp, &nodemap_list, nm_list) {
+		list_for_each_entry_safe(dyn_nm, dyn_nm_tmp,
+					 &nodemap->nm_subnodemaps,
+					 nm_parent_entry) {
+			/* nodemap_del() recursively deletes sub-dyn-nodemaps */
+			nodemap_del(dyn_nm->nm_name, NULL);
+		}
+
+		nodemap_putref(nodemap);
+	}
+}
+EXPORT_SYMBOL(nodemap_clear_dynamic_nodemaps);
+
 /* Do not call this method directly unless the ranges and nodemap have been
  * previously verified.
  * Store separate offset+limit in case this needs to be changed

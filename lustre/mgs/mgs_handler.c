@@ -933,6 +933,37 @@ out:
 	return rc;
 }
 
+/**
+ * mgs_has_local_targets() - check if MGS is co-located with an MDT or OST
+ *
+ * Check if there are any MDT or OST targets on the MGS node. This is done by
+ * checking whether the device types are registered.
+ *
+ * Return: true if MDT or OST type exists, false otherwise
+ */
+static bool mgs_has_local_targets(void)
+{
+	struct obd_type *mdt_type;
+	struct obd_type *ost_type;
+	bool has_targets = false;
+
+	mdt_type = class_search_type(LUSTRE_MDT_NAME);
+	if (mdt_type) {
+		kobject_put(&mdt_type->typ_kobj);
+		has_targets = true;
+	}
+
+	if (!has_targets) {
+		ost_type = class_search_type(LUSTRE_OST_NAME);
+		if (ost_type) {
+			kobject_put(&ost_type->typ_kobj);
+			has_targets = true;
+		}
+	}
+
+	return has_targets;
+}
+
 static int mgs_iocontrol_nodemap(const struct lu_env *env,
 				 struct mgs_device *mgs,
 				 struct obd_ioctl_data *data)
@@ -973,6 +1004,10 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 			CWARN("%s: failed to cleanup llog fileset: %d\n",
 			      mgs->mgs_obd->obd_name, rc2);
 	}
+
+	/* if MGS is co-located with an MDT or OST, clear dynamic nodemaps */
+	if (mgs_has_local_targets())
+		nodemap_clear_dynamic_nodemaps();
 
 	/* revoke nodemap lock */
 	rc = mgs_find_or_make_fsdb(env, mgs, LUSTRE_NODEMAP_NAME, &fsdb);
