@@ -690,8 +690,8 @@ static int handle_sk(struct svc_nego_data *snd)
 				 "Cluster hash failed validation: 0x%x\n", rc);
 			goto cleanup_buffers;
 		}
-		nmname_out = snd->nm_name;
 	}
+	nmname_out = snd->nm_name;
 	printerr(LL_DEBUG, "Using nodemap name %s for authentication\n",
 		 snd->nm_name);
 

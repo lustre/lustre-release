@@ -402,9 +402,9 @@ void __nodemap_member_switch(struct obd_export *exp,
  */
 void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 {
+	struct lu_nodemap *new_nodemap, *gss_nodemap = NULL;
 	struct obd_export *exp;
 	struct obd_export *tmp;
-	struct lu_nodemap *new_nodemap;
 
 	ENTRY;
 
@@ -431,30 +431,36 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 		    !rhashtable_init(&nm_cmp_cache, &nm_cmp_cache_params))
 			use_nm_cmp_cache = true;
 
-		/* If gssonly_identification is enforced for this nodemap, we
-		 * need to stick with it, and do not rely on NID ranges, unless
-		 * it has lost its gss_id flag in the new nodemap config.
+		/* When available, fetch the nodemap name stored in the sec part
+		 * of the import associated with this export: this is the
+		 * nodemap for which the client was authenticated.
+		 * If gssid is set on this nodemap, use it as the new nodemap.
 		 */
-		if (nodemap->nmf_gss_identify) {
-			new_nodemap = nodemap_lookup(nodemap->nm_name);
-			if (!IS_ERR(new_nodemap)) {
-				struct lu_nid_range *range;
+		if (exp->exp_imp_reverse) {
+			struct lu_nid_range *range;
+			struct ptlrpc_sec *sec;
 
-				if (!new_nodemap->nmf_gss_identify) {
-					nodemap_putref(new_nodemap);
-					new_nodemap = NULL;
-					GOTO(classify, 0);
-				}
-				down_read(
-				       &active_config->nmc_ban_range_tree_lock);
-				range = ban_range_search(active_config,
-							 nid);
-				up_read(
-				       &active_config->nmc_ban_range_tree_lock);
-				if (range &&
-				    range->rn_nodemap == new_nodemap)
-					banned = true;
+			sec = sptlrpc_import_sec_ref(exp->exp_imp_reverse);
+			if (!sec || sec->ps_nm_name[0] == '\0') {
+				sptlrpc_sec_put(sec);
+				GOTO(classify, 0);
 			}
+
+			new_nodemap = nodemap_lookup(sec->ps_nm_name);
+			sptlrpc_sec_put(sec);
+			if (IS_ERR(new_nodemap))
+				GOTO(classify, 0);
+
+			if (!new_nodemap->nmf_gss_identify) {
+				gss_nodemap = new_nodemap;
+				new_nodemap = NULL;
+				GOTO(classify, 0);
+			}
+			down_read(&active_config->nmc_ban_range_tree_lock);
+			range = ban_range_search(active_config, nid);
+			up_read(&active_config->nmc_ban_range_tree_lock);
+			if (range && range->rn_nodemap == new_nodemap)
+				banned = true;
 		}
 
 		if (IS_ERR_OR_NULL(new_nodemap)) {
@@ -465,6 +471,18 @@ classify:
 			down_read(&active_config->nmc_ban_range_tree_lock);
 			new_nodemap = nodemap_classify_nid(nid, &banned);
 			up_read(&active_config->nmc_ban_range_tree_lock);
+			if (gss_nodemap) {
+				nodemap_putref(new_nodemap);
+				if (new_nodemap != gss_nodemap) {
+					CWARN("%s: not reclassifying %s to nodemap %s, inconsistent with nodemap %s used in authentication: rc = %d\n",
+					      exp->exp_obd->obd_name,
+					      libcfs_nidstr(nid),
+					      new_nodemap->nm_name,
+					      gss_nodemap->nm_name, -EPERM);
+					new_nodemap = gss_nodemap;
+				}
+				gss_nodemap = NULL;
+			}
 		}
 
 		if (IS_ERR(new_nodemap))
@@ -487,12 +505,11 @@ classify:
 			exp->exp_banned = 0;
 		}
 
-		if (new_nodemap != nodemap) {
+		if (new_nodemap != nodemap)
 			__nodemap_member_switch(exp, new_nodemap,
 						banned, newly_banned);
-		} else {
+		else
 			nodemap_putref(new_nodemap);
-		}
 	}
 
 	if (use_nm_cmp_cache) {

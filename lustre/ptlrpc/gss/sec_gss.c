@@ -1077,11 +1077,16 @@ int gss_sec_create_common(struct gss_sec *gsec,
 	sec->ps_import = class_import_get(imp);
 	spin_lock_init(&sec->ps_lock);
 	INIT_LIST_HEAD(&sec->ps_gc_list);
+	sec->ps_nm_name[0] = '\0';
 
 	if (!svcctx) {
 		sec->ps_gc_interval = GSS_GC_INTERVAL;
 	} else {
 		LASSERT(sec_is_reverse(sec));
+
+		if (svcctx->sc_nodemap)
+			strscpy(sec->ps_nm_name, svcctx->sc_nodemap,
+				sizeof(sec->ps_nm_name));
 
 		/* never do gc on reverse sec */
 		sec->ps_gc_interval = 0;

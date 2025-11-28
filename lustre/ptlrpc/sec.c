@@ -2328,8 +2328,17 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 nm_switch:
 #ifdef HAVE_SERVER_SUPPORT
 	if (!rc && req->rq_svc_ctx && req->rq_svc_ctx->sc_nodemap) {
+		struct ptlrpc_sec *sec;
+
+		sec = sptlrpc_import_sec_ref(exp->exp_imp_reverse);
+		if (sec &&
+		    strcmp(sec->ps_nm_name, req->rq_svc_ctx->sc_nodemap) != 0)
+			strscpy(sec->ps_nm_name, req->rq_svc_ctx->sc_nodemap,
+				sizeof(sec->ps_nm_name));
+		sptlrpc_sec_put(sec);
+
 		rc = nodemap_member_switch(exp, req->rq_svc_ctx->sc_nodemap,
-					   true);
+					   false);
 		if (rc) {
 			/* do not fail on issue with nodemap switch */
 			CDEBUG(D_SEC, "%s: could not switch nodemap: rc = %d\n",

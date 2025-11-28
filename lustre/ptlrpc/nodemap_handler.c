@@ -691,7 +691,7 @@ EXPORT_SYMBOL(nodemap_parse_idmap);
 int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
 		       struct obd_export *exp)
 {
-	struct lu_nodemap *nodemap;
+	struct lu_nodemap *nodemap = NULL;
 	bool banned = false;
 	char *name = NULL;
 	int rc;
@@ -714,10 +714,15 @@ int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
 			GOTO(out, rc);
 		}
 		if (!nodemap->nmf_gss_identify) {
-			rc = -EPERM;
-			CWARN("%s: error adding to nodemap %s, gssonly_identification not set: rc = %d\n",
-			      exp->exp_obd->obd_name, name, rc);
-			GOTO(out_unlock, rc);
+			if (nid) {
+				nodemap_putref(nodemap);
+				GOTO(try_nid, rc = -EPERM);
+			} else {
+				rc = -EPERM;
+				CWARN("%s: error adding to nodemap %s, gssonly_identification not set: rc = %d\n",
+				      exp->exp_obd->obd_name, name, rc);
+				GOTO(out_unlock, rc);
+			}
 		}
 		down_read(&active_config->nmc_ban_range_tree_lock);
 		range = ban_range_search(active_config, nid);
@@ -725,6 +730,7 @@ int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
 		if (range && range->rn_nodemap == nodemap)
 			banned = true;
 	} else if (nid) {
+try_nid:
 		down_read(&active_config->nmc_range_tree_lock);
 		down_read(&active_config->nmc_ban_range_tree_lock);
 		nodemap = nodemap_classify_nid(nid, &banned);
@@ -736,6 +742,13 @@ int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
 			      exp->exp_obd->obd_name, rc);
 			mutex_unlock(&active_config_lock);
 			GOTO(out, rc);
+		}
+		if (name && strcmp(nodemap->nm_name, name) != 0) {
+			rc = -EPERM;
+			CWARN("%s: error adding to nodemap %s, inconsistent with nodemap %s used in authentication: rc = %d\n",
+			      exp->exp_obd->obd_name, nodemap->nm_name, name,
+			      rc);
+			GOTO(out_unlock, rc);
 		}
 	} else {
 		rc = -EINVAL;

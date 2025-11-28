@@ -826,6 +826,9 @@ struct sptlrpc_sepol {
 	char		ssp_sepol[];
 };
 
+/* Taken from lustre_disk.h, needed for ps_nm_name */
+#define LUSTRE_NODEMAP_NAME_LENGTH     16
+
 /**
  * The ptlrpc_sec represents the client side ptlrpc security facilities,
  * each obd_import (both regular and reverse import) must associate with
@@ -851,6 +854,9 @@ struct ptlrpc_sec {
 	ktime_t				ps_sepol_checknext;
 	/** SELinux policy file information */
 	struct sptlrpc_sepol		*ps_sepol;
+
+	/** nodemap name for gss identification */
+	char			     ps_nm_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 
 	/*
 	 * garbage collection

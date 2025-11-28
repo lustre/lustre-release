@@ -2982,15 +2982,12 @@ zconf_mount() {
 
 	echo "Starting client: $client: $flags $opts $device $mnt"
 	do_node $client mkdir -p $mnt
-	if [ -n "$FILESET" -a -z "$SKIP_FILESET" ];then
-		do_node $client $MOUNT_CMD $flags $opts $MGSNID:/$FSNAME \
-			$mnt || return $?
-		#disable FILESET if not supported
-		do_nodes $client lctl get_param -n \
-			mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
+
+	# disable FILESET if not supported or skipped
+	if [[ -n $FILESET ]]; then
+		(( MDS1_VERSION >= $(version_code 2.9.0) )) &&
+			[[ -z $SKIP_FILESET ]] ||
 				device=$MGSNID:/$FSNAME
-		do_node $client "! grep -q $mnt' ' /proc/mounts ||
-			umount $mnt"
 	fi
 	if $GSS_SK && ($SK_UNIQUE_NM || $SK_S2S); then
 		# Mount using nodemap key
@@ -3121,6 +3118,7 @@ zconf_mount_clients() {
 	opts=${opts:+-o $opts}
 	local flags=${4:-$MOUNT_FLAGS}
 	local device=$MGSNID:/$FSNAME$FILESET
+	local i=0
 
 	if [ -z "$mnt" -o -z "$FSNAME" ]; then
 		echo "Bad conf mount command: opt=$flags $opts dev=$device mnt=$mnt"
@@ -3142,8 +3140,6 @@ zconf_mount_clients() {
 	fi
 
 	for nmclient in ${clients//,/ }; do
-		local i=0
-
 		if $GSS_SK && ($SK_UNIQUE_NM || $SK_S2S); then
 			# Load per-NM keys on servers
 			do_nodes $(comma_list $(all_server_nodes)) \

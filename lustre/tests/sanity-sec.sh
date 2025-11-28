@@ -1269,6 +1269,7 @@ run_test 15 "test id mapping"
 create_fops_nodemaps() {
 	local i=0
 	local client
+
 	for client in $clients; do
 		local client_ip=$(host_nids_address $client $NETTYPE)
 		local client_nid=$(h2nettype $client_ip)
@@ -1286,6 +1287,25 @@ create_fops_nodemaps() {
 				--idtype gid --idmap ${map} || return 1
 		done
 
+		if $SHARED_KEY; then
+			export SK_UNIQUE_NM=true
+
+			# Load per-NM keys on servers
+			do_nodes $(comma_list $(all_server_nodes)) \
+				"$LGSS_SK -t server -l $SK_PATH/nodemap/c$i.key"
+
+			# Load per-NM keys on corresponding clients
+			do_node $client \
+				"$LGSS_SK -t client -l $SK_PATH/nodemap/c$i.key"
+
+			# flush gss context to force client to re-authenticate
+			# with per-NM key
+			do_node $client "$LFS flushctx $MOUNT || true"
+			if [ "$MOUNT_2" ]; then
+				do_node $client "$LFS flushctx $MOUNT2 || true"
+			fi
+		fi
+
 		i=$((i + 1))
 	done
 	wait_nm_sync c$((i - 1)) idmap
@@ -1296,10 +1316,26 @@ create_fops_nodemaps() {
 delete_fops_nodemaps() {
 	local i=0
 	local client
+
 	for client in $clients; do
 		do_facet mgs $LCTL nodemap_del c${i} || return 1
 		i=$((i + 1))
 	done
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=false
+
+		do_nodes $(comma_list $clients) \
+			"$LGSS_SK -t client -l $SK_PATH/$FSNAME.key"
+
+		# flush gss context to force client to re-authenticate
+		do_nodes $(comma_list $clients) "$LFS flushctx $MOUNT || true"
+		if [ "$MOUNT_2" ]; then
+			do_nodes $(comma_list $clients) \
+				"$LFS flushctx $MOUNT2 || true"
+		fi
+	fi
+
 	return 0
 }
 
@@ -1702,6 +1738,8 @@ nodemap_test_setup() {
 
 	do_facet mgs $LCTL nodemap_activate $active_nodemap
 	wait_nm_sync active
+
+	wait_ssk
 }
 
 nodemap_test_cleanup() {
@@ -1720,6 +1758,7 @@ nodemap_test_cleanup() {
 	wait_nm_sync active 0
 
 	export SK_UNIQUE_NM=false
+	wait_ssk
 	return 0
 }
 
@@ -6549,11 +6588,30 @@ setup_local_client_nodemap() {
 	local nm_admin_val=${2:-0}
 	local nm_trusted_val=${3:-0}
 	local nm_cli=${4:-$HOSTNAME}
+	local needremount=false
+	local needremount2=false
 	local rc
 
 	if $SHARED_KEY; then
 		export SK_UNIQUE_NM=true
 		export FILESET="/"
+
+		if $(do_node $nm_cli cat /proc/mounts | grep lustre |
+			grep -wq $MOUNT); then
+			zconf_umount $nm_cli $MOUNT ||
+				error "umount $MOUNT failed"
+			needremount=true
+		fi
+		if $(do_node $nm_cli cat /proc/mounts | grep lustre |
+			grep -wq $MOUNT2); then
+			zconf_umount $nm_cli $MOUNT2 ||
+				error "umount $MOUNT2 failed"
+			needremount2=true
+		fi
+
+		# Load per-NM key on servers
+		do_nodes $(comma_list $(all_server_nodes)) \
+			"$LGSS_SK -t server -l $SK_PATH/nodemap/${nm_name}.key"
 	fi
 
 	do_facet mgs $LCTL nodemap_del $nm_name || true
@@ -6578,10 +6636,31 @@ setup_local_client_nodemap() {
 
 	do_facet mgs $LCTL nodemap_activate 1
 	wait_nm_sync active
+
+	$needremount && {
+		zconf_mount $nm_cli $MOUNT ${MOUNT_OPTS} ||
+			error "remount $MOUNT failed"
+	}
+	$needremount2 && {
+		zconf_mount $nm_cli $MOUNT2 ${MOUNT_OPTS} ||
+			error "remount $MOUNT2 failed"
+	}
+	wait_ssk
 }
 
 cleanup_local_client_nodemap() {
 	local nm_name=${1:-"c0"}
+	local needremount2=false
+
+	if $SHARED_KEY; then
+		if is_mounted $MOUNT; then
+			umount_client $MOUNT || error "umount $MOUNT failed"
+		fi
+		if is_mounted $MOUNT2; then
+			umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+			needremount2=true
+		fi
+	fi
 
 	do_facet mgs $LCTL nodemap_del $nm_name || true
 	do_facet mgs $LCTL nodemap_modify --name default \
@@ -6598,8 +6677,12 @@ cleanup_local_client_nodemap() {
 	fi
 	if ! is_mounted $MOUNT; then
 		mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount failed"
-		wait_ssk
 	fi
+	$needremount2 && {
+		mount_client $MOUNT2 ${MOUNT_OPTS} ||
+			error "remount $MOUNT2 failed"
+	}
+	wait_ssk
 }
 
 cleanup_local_client_nodemap_with_mounts() {
@@ -9784,6 +9867,10 @@ test_72e() {
 	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
 		skip "Need MDS with reclassify members support"
 
+	if $SHARED_KEY; then
+		skip "need non-shared key for this test"
+	fi
+
 	stack_trap cleanup_72e EXIT
 
 	# unmount client completely
@@ -11230,6 +11317,20 @@ function parse_nodemap_stats() {
 		awk "$awkcmd"
 }
 
+cleanup_78() {
+	local sk_unique_nm=${1:-false}
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=$sk_unique_nm
+
+		zconf_umount_clients $CLIENTS $MOUNT ||
+			error "unable to umount clients $CLIENTS"
+		zconf_mount_clients $CLIENTS $MOUNT ||
+			error "unable to umount clients $CLIENTS"
+		wait_ssk
+	fi
+}
+
 test_78() {
 	local activedefault
 	local td=$DIR/$tdir
@@ -11241,6 +11342,8 @@ test_78() {
 	test_mkdir -i0 -c1 $td || error "can't mkdir $td"
 	chmod a+rwx $td || error "can't chmod"
 	$LFS setstripe -i0 -c1 $td || error "can't set def striping"
+
+	stack_trap cleanup_78 EXIT
 
 	# make sure servers are in a privileged nodemap (default here)
 	do_facet mgs $LCTL nodemap_modify --name default \
@@ -11286,6 +11389,8 @@ test_78() {
 		$LCTL nodemap_modify --name c1 --property trusted --value 1
 		wait_nm_sync c1 trusted_nodemap
 	}
+
+	cleanup_78 true
 
 	# clear lru before IOs, as clients have been moved to a nodemap
 	do_nodes $(comma_list $clients) $LCTL set_param \
@@ -11695,6 +11800,12 @@ test_81a() {
 	ls $DIR/$tdir || error "ls $DIR/$tdir failed (3)"
 	cat $DIR/$tdir/$tfile || error "cat $DIR/$tdir/$tfile failed (3)"
 
+	# the rest of the test cannot be executed with SSK, as we do not have
+	# a key for the dynamic nodemap
+	if $SHARED_KEY; then
+		return 0;
+	fi
+
 	# create dynamic nodemap
 	do_facet mds1 $LCTL nodemap_add -d -p $nm $dynnm ||
 		error "failed to create dynamic nodemap"
@@ -11725,12 +11836,6 @@ test_81a() {
 
 	# unmount while in ban list: should succeed
 	umount_client $MOUNT || error "umount $MOUNT failed (2)"
-
-	# the rest of the test cannot be executed with SSK, as we do not have
-	# a key for the dynamic nodemap
-	if $SHARED_KEY; then
-		return 0;
-	fi
 
 	# remount while in ban list: should fail
 	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS &&
@@ -11773,10 +11878,21 @@ test_81a() {
 }
 run_test 81a "nodemap ban list"
 
+cleanup_81b() {
+	cleanup_local_client_nodemap_with_mounts
+
+	zconf_umount ${clients_arr[1]} $MOUNT ||
+		error "umount $MOUNT for ${clients_arr[1]} failed"
+	zconf_mount ${clients_arr[1]} $MOUNT ||
+		error "remount $MOUNT for ${clients_arr[1]} failed"
+	wait_ssk
+}
+
 test_81b() {
 	local client1_ip=$(host_nids_address ${clients_arr[0]} $NETTYPE)
 	local client1_nid=$(h2nettype $client1_ip)
 	local tf=$DIR/$tdir/$tfile
+	local mnt_opts=$MOUNT_OPTS
 	local client2_ip
 	local client2_nid
 	local nm=c0
@@ -11788,7 +11904,7 @@ test_81b() {
 	(( $MDS1_VERSION >= $(version_code 2.16.57) )) ||
 		skip "Need MDS version >= 2.16.57 for ban list support"
 
-	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
+	stack_trap cleanup_81b EXIT
 
 	# create data before nodemap setup
 	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -11807,6 +11923,17 @@ test_81b() {
 		--name $nm --property deny_unknown --value 1 ||
 		error "deny_unknown=1 on $nm failed"
 	wait_nm_sync $nm deny_unknown
+
+	# 2nd client is also part of $nm, so need to remount with the key for it
+	if $SHARED_KEY; then
+		mnt_opts=${mnt_opts},skpath=$SK_PATH/nodemap/${nm}.key
+	fi
+	zconf_umount ${clients_arr[1]} $MOUNT ||
+		error "umount $MOUNT on ${clients_arr[1]} failed"
+	do_node ${clients_arr[1]} $MOUNT_CMD -o $mnt_opts \
+		$MGSNID:/$FSNAME $MOUNT ||
+			error "mount $MOUNT on ${clients_arr[1]} failed"
+	wait_ssk
 
 	# from 1st client, write to file and pause
 	rmultiop_start ${clients_arr[0]} $tf OP1024yY_c ||
@@ -11841,6 +11968,10 @@ test_82() {
 
 	(( $MDS1_VERSION >= $(version_code 2.16.58) )) ||
 		skip "Need MDS version >= 2.16.58 for export lock revoke"
+
+	if $SHARED_KEY; then
+		skip "Conflicting test with SSK"
+	fi
 
 	stack_trap cleanup_local_client_nodemap_with_mounts EXIT
 	stack_trap "cleanup_local_client_nodemap $nm2" EXIT
@@ -12787,6 +12918,86 @@ test_105() {
 		error "no exports for $client_nid on $nm_gss (2)"
 }
 run_test 105 "update nodemap membership on flavor change"
+
+cleanup_106() {
+	local nm=$1
+
+	# ensure client is unmounted
+	umount_client $MOUNT || true
+	clear_client_keyring
+
+	# clear key from keyring on all server nodes
+	do_nodes $(comma_list $(all_server_nodes)) "keyctl show |
+		grep lustre:$FSNAME:$nm | cut -c1-11 | sed -e 's/ //g;' |
+		xargs -IX keyctl unlink X" || true
+
+	# remove nodemap, will also remount client on first mount point
+	cleanup_local_client_nodemap $nm
+
+	if [[ "$MOUNT_2" ]]; then
+		restore_mount $MOUNT2
+	fi
+}
+
+test_106() {
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+	local nm=c0
+	local ssk=$SK_PATH/nodemap/$nm.key
+	local exp_cnt
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	local_mode && skip "in local mode."
+
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS >= 2.17.50 for gssonly switch"
+
+	stack_trap "cleanup_106 $nm"
+
+	# unmount all clients
+	cleanup_mount $MOUNT
+	if [[ "$MOUNT_2" ]]; then
+		cleanup_mount $MOUNT2
+	fi
+	clear_client_keyring
+
+	# create c0 nodemap, with regular NID range
+	setup_local_client_nodemap $nm 1 1
+	wait_nm_sync $nm trusted_nodemap
+
+	# Load c0 key on all nodes
+	do_nodes $(comma_list $(all_nodes)) \
+		"$LGSS_SK -l $ssk >/dev/null 2>&1" ||
+		error "failed to load $ssk key"
+
+	# mount client now that c0 key is loaded, should be in c0 nodemap
+	$MOUNT_CMD -o user_xattr,flock $MGSNID:/$FSNAME $MOUNT ||
+		error "mount failed with $ssk"
+
+	# check nodemap exports, should be in c0
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+		  grep MDT | grep -c $client_nid")
+	(( exp_cnt > 0 )) ||
+		error "no exports for $client_nid on $nm (1)"
+
+	do_facet mgs $LCTL nodemap_del_range \
+		--name $nm --range $client_nid ||
+		error "del range $client_nid from $nm failed"
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property gssonly_identification --value 1 ||
+		error "setting gssonly_identification on $nm failed"
+	wait_nm_sync $nm gssonly_identification
+
+	# check nodemap exports, should still be in c0
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt=$(do_facet mds1 "$LCTL get_param nodemap.$nm.exports |
+		  grep MDT | grep -c $client_nid")
+	(( exp_cnt > 0 )) ||
+		error "no exports for $client_nid on $nm (2)"
+}
+run_test 106 "switch nodemap to gssonly"
 
 test_300() {
 	local principal="mock_iam_test"

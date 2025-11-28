@@ -27051,7 +27051,6 @@ test_247b() {
 
 	rm -rf $MOUNT/$tdir
 	mkdir -p $submount || error "mkdir $submount failed"
-	SKIP_FILESET=1
 	FILESET="$FILESET/$tdir" mount_client $submount &&
 		error "mount $submount should fail"
 	rmdir $submount
