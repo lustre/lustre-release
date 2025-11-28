@@ -267,7 +267,7 @@ int nodemap_test_id(struct lnet_nid *nid, enum nodemap_id_type idtype,
 
 int server_iocontrol_nodemap(struct obd_device *obd,
 			     struct obd_ioctl_data *data, bool *dynamic,
-			     bool *out_clean_llog_fileset);
+			     bool *out_clean_llog_fileset, bool *out_ro_cmd);
 
 struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 						   struct dt_object *obj,

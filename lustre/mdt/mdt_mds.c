@@ -656,7 +656,7 @@ static int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	if (cmd != OBD_IOC_NODEMAP)
 		GOTO(out, rc = -EINVAL);
 
-	rc = server_iocontrol_nodemap(obd, data, &dynamic, NULL);
+	rc = server_iocontrol_nodemap(obd, data, &dynamic, NULL, NULL);
 	if (rc)
 		GOTO(out, rc);
 

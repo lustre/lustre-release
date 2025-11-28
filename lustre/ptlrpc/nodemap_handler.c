@@ -5149,6 +5149,8 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
  * @dynamic: if true nodemap will be dynamic (can be modified runtime)
  * @out_clean_llog_fileset: set to true if the llog fileset entry needs to be
  * cleaned up on the MGS side.
+ * @out_ro_cmd: set to true if the command is read-only and does not change the
+ * nodemap configuration.
  *
  * Return:
  * * %0 on success
@@ -5156,7 +5158,7 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
  */
 int server_iocontrol_nodemap(struct obd_device *obd,
 			     struct obd_ioctl_data *data, bool *dynamic,
-			     bool *out_clean_llog_fileset)
+			     bool *out_clean_llog_fileset, bool *out_ro_cmd)
 {
 	char name_buf[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	struct lustre_cfg *lcfg = NULL;
@@ -5234,6 +5236,8 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 					sizeof(name_buf)));
 		if (rc != 0)
 			GOTO(out_lcfg, rc = -EFAULT);
+		if (out_ro_cmd)
+			*out_ro_cmd = true;
 		break;
 	case LCFG_NODEMAP_TEST_ID:
 		if (lcfg->lcfg_bufcount != 4)
@@ -5270,6 +5274,8 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 		if (copy_to_user(data->ioc_pbuf1, fs_idstr,
 				 sizeof(fs_idstr)) != 0)
 			GOTO(out_lcfg, rc = -EINVAL);
+		if (out_ro_cmd)
+			*out_ro_cmd = true;
 		break;
 	case LCFG_NODEMAP_ADD_OFFSET:
 	case LCFG_NODEMAP_ADD_RANGE:

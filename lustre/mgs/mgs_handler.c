@@ -939,6 +939,7 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 {
 	bool clean_llog_fileset = false;
 	bool dynamic = false;
+	bool ro_cmd = false;
 	struct fs_db *fsdb;
 	int rc;
 
@@ -951,11 +952,12 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 	}
 
 	rc = server_iocontrol_nodemap(mgs->mgs_obd, data, &dynamic,
-				      &clean_llog_fileset);
+				      &clean_llog_fileset, &ro_cmd);
 	if (rc)
 		GOTO(out, rc);
 
-	if (dynamic)
+	/* For dyn. nodemap and ro commands, skip nodemap config distribution */
+	if (dynamic || ro_cmd)
 		GOTO(out, rc);
 
 	/* A llog fileset entry might still exist and needs to be removed */
@@ -978,6 +980,7 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		CWARN("%s: cannot make nodemap fsdb: rc = %d\n",
 		      mgs->mgs_obd->obd_name, rc);
 	} else {
+		/* require targets to fetch the nodemap config from MGS */
 		mgs_revoke_lock(mgs, fsdb, MGS_CFG_T_NODEMAP);
 		mgs_put_fsdb(mgs, fsdb);
 	}
