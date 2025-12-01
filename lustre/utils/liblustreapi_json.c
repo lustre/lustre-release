@@ -227,21 +227,24 @@ int llapi_json_destroy_list(struct llapi_json_item_list **json_items)
 	return 0;
 }
 
-/** Add an item to a list of JSON items.
- * \param	json_items	Item list handle
- * \param	key		Item key name
- * \param	type		Item key type
- * \param	val		Item key value
+/**
+ * llapi_json_add_item() - Add an item to a list of JSON items.
+ * @json_items: Item list handle
+ * @key: Item key name
+ * @type: Item key type
+ * @val: Item key value
  *
- * \retval	0 on success.
- * \retval	-errno on error.
+ * Return:
+ * * %0 on success.
+ * * %negative on error.
  */
 int llapi_json_add_item(struct llapi_json_item_list **json_items,
 			char *key, __u32 type, void *val)
 {
-	struct llapi_json_item_list	*list;
-	struct llapi_json_item		*new_item;
+	struct llapi_json_item_list *list;
+	struct llapi_json_item *new_item;
 	size_t len;
+	int rc = 0;
 
 	if (json_items == NULL || *json_items == NULL)
 		return -EINVAL;
@@ -257,8 +260,10 @@ int llapi_json_add_item(struct llapi_json_item_list **json_items,
 
 	len = strlen(key) + 1;
 	new_item->lji_key = calloc(len, sizeof(char));
-	if (new_item->lji_key == NULL)
-		return -ENOMEM;
+	if (new_item->lji_key == NULL) {
+		rc = -ENOMEM;
+		goto out_item;
+	}
 
 	snprintf(new_item->lji_key, len, "%s", key);
 	new_item->lji_type = type;
@@ -277,14 +282,17 @@ int llapi_json_add_item(struct llapi_json_item_list **json_items,
 	case LLAPI_JSON_STRING:
 		len = strlen((char *)val) + 1;
 		new_item->lji_string = calloc(len, sizeof(char));
-		if (new_item->lji_string == NULL)
-			return -ENOMEM;
+		if (new_item->lji_string == NULL) {
+			rc = -ENOMEM;
+			goto out_key;
+		}
 		snprintf(new_item->lji_string, len, "%s", (char *)val);
 		break;
 	default:
 		llapi_err_noerrno(LLAPI_MSG_ERROR, "Unknown JSON type: %d",
 				  new_item->lji_type);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto out_key;
 	}
 
 	if (list->ljil_item_count == 0) {
@@ -295,5 +303,11 @@ int llapi_json_add_item(struct llapi_json_item_list **json_items,
 	}
 	list->ljil_item_count++;
 
-	return 0;
+	return rc;
+out_key:
+	free(new_item->lji_key);
+out_item:
+	free(new_item);
+
+	return rc;
 }
