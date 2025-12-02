@@ -176,7 +176,7 @@ static void *pool_proc_next(struct seq_file *s, void *v, loff_t *pos)
 
 /**
  * pool_proc_start() - Start seq_file iteration via /proc for a single pool
- * @seq: new sequence file structure to initialize
+ * @s: new sequence file structure to initialize
  * @pos: initial target number at which to start iteration
  *
  * The @pos parameter may be non-zero, indicating that the iteration

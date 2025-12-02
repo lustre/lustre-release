@@ -19,13 +19,8 @@
 
 #include "lov_cl_internal.h"
 
-/** \addtogroup lov
- *  @{
- */
+/* LOV lock operations. */
 
-/**
- * Lov lock operations.
- */
 static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
 						   const struct cl_lock *parent,
 						   struct lov_lock_sub *lls)
@@ -82,12 +77,18 @@ static int lov_sublock_init(const struct lu_env *env,
 }
 
 /**
- * Creates sub-locks for a given lov_lock for the first time.
+ * lov_lock_sub_init() - Creates sub-locks for given lov_lock for the first time
+ * @env: lustre execution environment
+ * @io: High level IO request
+ * @obj: Pointer to cl_object (lov_object)
+ * @lock: Pointer to struct cl_lock (top level lock)
  *
  * Goes through all sub-objects of top-object, and creates sub-locks on every
  * sub-object intersecting with top-lock extent. This is complicated by the
  * fact that top-lock (that is being created) can be accessed concurrently
  * through already created sub-locks (possibly shared with other top-locks).
+ *
+ * Returns pointer to lov_lock on success else %negative errno on failure
  */
 static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 					  const struct cl_io *io,
@@ -226,11 +227,21 @@ static void lov_lock_fini(const struct lu_env *env,
 }
 
 /**
- * Implementation of cl_lock_operations::clo_enqueue() for lov layer. This
+ * lov_lock_enqueue() - enqueue LOV (top-level) lock
+ * @env: lustre execution environment
+ * @slice: Sub part of cl_lock (lock associated only with LOV)
+ * @io: Client IO descriptor
+ * @anchor: This is used for to wait for the resources before getting lock.
+ *
+ * Implementation of cl_lock_operations::clo_enqueue() for LOV layer. This
  * function is rather subtle, as it enqueues top-lock (i.e., advances top-lock
  * state machine from CLS_QUEUING to CLS_ENQUEUED states) by juggling sub-lock
  * state machines in the face of sub-locks sharing (by multiple top-locks),
  * and concurrent sub-lock cancellations.
+ *
+ * Returns:
+ * * %0 on success
+ * * %negative on failure
  */
 static int lov_lock_enqueue(const struct lu_env *env,
 			    const struct cl_lock_slice *slice,
@@ -366,5 +377,3 @@ int lov_lock_init_empty(const struct lu_env *env, struct cl_object *obj,
 	}
 	RETURN(result);
 }
-
-/** @} lov */
