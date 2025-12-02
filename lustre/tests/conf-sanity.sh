@@ -1921,7 +1921,15 @@ t32_verify_quota() {
 			return 1
 		}
 
-		$LFS quota -v -u $T32_QID --pool $qpool $pool_dir
+		do_facet mgs "$LCTL pool_list $fsname.$qpool" || {
+			echo "$LCTL pool_list $fsname.$qpool failed"
+			return 1
+		}
+
+		$LFS quota -v -u $T32_QID --pool $qpool $pool_dir || {
+			echo "$LFS quota $pool_dir failed"
+			return 1
+		}
 
 		qval=$(DIR=$pool_dir getquota -u $T32_QID \
 		       global curspace $qpool)
@@ -2521,12 +2529,13 @@ t32_test() {
 		   [[ -s $pool_list ]]; then
 			local pool_name=$(head -1 $pool_list | awk '{print $2}')
 
-			$r $LCTL pool_new $pool_name || {
+			FSNAME=$fsname pool_add ${pool_name##$fsname.} 2 || {
 				error_noexit "create $pool_name failed"
 				return 1
 			}
 
-			$r $LCTL pool_add $pool_name $fsname-OST[0-1/1] || {
+			FSNAME=$fsname pool_add_targets ${pool_name##$fsname.} \
+				0 1 1 2 || {
 				error_noexit "add $pool_name failed"
 				return 1
 			}
