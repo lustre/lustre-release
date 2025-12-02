@@ -207,6 +207,7 @@ static inline int mdd_parent_fid(const struct lu_env *env,
 
 	ENTRY;
 
+	CDEBUG(D_INFO, "find parent for "DFID"\n", PFID(mdd_object_fid(obj)));
 	LASSERTF(S_ISDIR(mdd_object_type(obj)),
 		 "%s: FID "DFID" is not a directory type = %o\n",
 		 mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)),
@@ -250,8 +251,8 @@ int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid)
 }
 
 /*
- * return 1: if @tfid is the fid of the ancestor of @mo;
- * return 0: if not;
+ * return 1: if @tfid is the FID of the ancestor of @mo;
+ * return 0: if they are the same FID or in a different subtree;
  * otherwise: values < 0, errors.
  */
 static int mdd_is_parent(const struct lu_env *env,
@@ -260,24 +261,39 @@ static int mdd_is_parent(const struct lu_env *env,
 			const struct lu_attr *attr,
 			const struct lu_fid *tfid)
 {
-	struct mdd_object *mp;
+	static bool dumped;
+	const struct lu_fid *mofid;
 	struct lu_fid *pfid;
+	int count;
 	int rc;
 
-	LASSERT(!lu_fid_eq(mdd_object_fid(mo), tfid));
-	pfid = &mdd_env_info(env)->mdi_fid;
+	mofid = mdd_object_fid(mo);
+	CDEBUG(D_INFO, "%s: check if "DFID" is a child of "DFID"\n",
+		mdd2obd_dev(mdd)->obd_name, PFID(mofid), PFID(tfid));
+	if (lu_fid_eq(mofid, tfid))
+		return 0;
 
-	if (mdd_is_root(mdd, mdd_object_fid(mo)))
+	if (mdd_is_root(mdd, mofid))
 		return 0;
 
 	if (mdd_is_root(mdd, tfid))
 		return 1;
 
+	pfid = &mdd_env_info(env)->mdi_fid;
 	rc = mdd_parent_fid(env, mo, attr, pfid);
 	if (rc)
 		return rc;
 
-	while (1) {
+	/* PATH_MAX / 2 would be the maximum "normal" iteration limit for a
+	 * a directory tree with single-character names "a/b/c/d/...", but
+	 * let's be accepting of potential subdirectory mount trees that may
+	 * exceed the normal pathname limits (this has been seen before).
+	 * The most important thing is not the actual limit, but that the
+	 * loop iteration is bounded (LU-12800, LU-11218, LU-10406).
+	 */
+	for (count = 0; count < PATH_MAX; count++) {
+		struct mdd_object *mp;
+
 		if (lu_fid_eq(pfid, tfid))
 			return 1;
 
@@ -299,7 +315,15 @@ static int mdd_is_parent(const struct lu_env *env,
 			return rc;
 	}
 
-	return 0;
+	rc = -ELOOP;
+	CERROR("%s: walk from "DFID" to "DFID" stuck at "DFID": rc = %d\n",
+	       mdd2obd_dev(mdd)->obd_name, PFID(mofid), PFID(tfid), PFID(pfid),
+	       rc);
+	if (!dumped) {
+		dumped = true;
+		libcfs_debug_dumplog();
+	}
+	return rc;
 }
 
 /*
