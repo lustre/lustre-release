@@ -188,6 +188,8 @@ struct mgs_object {
 	int			mgo_reserved;
 };
 
+#define MGS_ERR_EMPTY_CLIENT_LOG	(-ENODATA)
+
 int mgs_init_fsdb_list(struct mgs_device *mgs);
 int mgs_cleanup_fsdb_list(struct mgs_device *mgs);
 int mgs__mgs_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs);

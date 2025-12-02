@@ -21,6 +21,7 @@
 #define D_MGS D_CONFIG
 
 #include <obd.h>
+#include <obd_support.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_sec.h>
@@ -30,6 +31,64 @@
 #include "mgs_internal.h"
 
 /********************** Class functions ********************/
+/**
+ * mgs_fsdb_exists_in_configs() - Check if a filesystem configuration exists
+ *                               in the CONFIGS directory.
+ * @env:    pointer to the thread context
+ * @mgs:    pointer to the MGS device
+ * @fsname: filesystem name to check
+ *
+ * Return:
+ * * 1 if the filesystem configuration exists
+ * * 0 if the filesystem configuration does not exist
+ * * negative error number on failure
+ */
+static int mgs_fsdb_exists_in_configs(const struct lu_env *env,
+				      struct mgs_device *mgs,
+				      const char *fsname)
+{
+	struct list_head log_list;
+	struct mgs_direntry *dirent, *n;
+	int rc, found = 0;
+	int fsname_len = strlen(fsname);
+
+	ENTRY;
+
+	rc = class_dentry_readdir(env, mgs, &log_list);
+	if (rc)
+		RETURN(rc);
+
+	if (list_empty(&log_list))
+		RETURN(0);
+
+	/* Look for any config file matching this filesystem name */
+	list_for_each_entry_safe(dirent, n, &log_list, mde_list) {
+		CDEBUG(D_MGS, "Checking CONFIGS entry: '%s' against fsname: '%s'\n",
+		       dirent->mde_name, fsname);
+
+		/* Check for exact match (params file) or fsname- prefix */
+		if ((strcmp(fsname, dirent->mde_name) == 0) ||
+		    (strlen(dirent->mde_name) > fsname_len &&
+		     strncmp(fsname, dirent->mde_name, fsname_len) == 0 &&
+		     dirent->mde_name[fsname_len] == '-')) {
+			CDEBUG(D_MGS, "Found matching CONFIGS entry: '%s' for fsname: '%s'\n",
+			       dirent->mde_name, fsname);
+			found = 1;
+		}
+		list_del_init(&dirent->mde_list);
+		mgs_direntry_free(dirent);
+		if (found)
+			break;
+	}
+
+	/* Clean up remaining entries */
+	list_for_each_entry_safe(dirent, n, &log_list, mde_list) {
+		list_del_init(&dirent->mde_list);
+		mgs_direntry_free(dirent);
+	}
+
+	RETURN(found);
+}
 
 /**
  * class_dentry_readdir() - Link logs in CONFIG directory into list.
@@ -595,6 +654,27 @@ int mgs_find_or_make_fsdb_nolock(const struct lu_env *env,
 	ENTRY;
 
 	fsdb = mgs_find_fsdb(mgs, name);
+
+	/* Check if new filesystem registration is allowed */
+	if (!allow_register && !fsdb && strcmp(name, PARAMS_FILENAME) != 0 &&
+	    strcmp(name, MGSSELF_NAME) != 0 && !logname_is_barrier(name)) {
+		/* Check if this filesystem was previously registered by looking
+		 * in the CONFIGS directory. If it exists there, allow it to
+		 * register again even with allow_register=0
+		 */
+		int exists = mgs_fsdb_exists_in_configs(env, mgs, name);
+
+		if (exists < 0) {
+			rc = exists;
+			RETURN(rc);
+		} else if (exists == 0) {
+			rc = -EACCES;
+			CERROR("%s: New filesystem registration disabled. Use 'lctl set_param allow_register=1' to allow new filesystem registrations: rc = %d\n",
+			       name, rc);
+			RETURN(rc);
+		}
+	}
+
 	if (!fsdb) {
 		fsdb = mgs_new_fsdb(env, mgs, name);
 		if (IS_ERR(fsdb))
@@ -622,10 +702,19 @@ int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs,
 	RETURN(rc);
 }
 
-/* 1 = index in use
- * 0 = index unused
- * -1= empty client log
- */
+/**
+ * mgs_check_index() - Check the status of target index.
+ * @env: pointer to the thread context
+ * @mgs: pointer to the mgs device
+ * @mti: the target info to check
+ *
+ * Check the status of target index.
+ *
+ * Return:
+ * * 1 if index in use
+ * * 0 if index unused
+ * * MGS_ERR_EMPTY_CLIENT_LOG if empty client log
+ **/
 int mgs_check_index(const struct lu_env *env,
 		    struct mgs_device *mgs,
 		    struct mgs_target_info *mti)
@@ -644,7 +733,7 @@ int mgs_check_index(const struct lu_env *env,
 	}
 
 	if (test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags))
-		GOTO(out, rc = -1);
+		GOTO(out, rc = MGS_ERR_EMPTY_CLIENT_LOG);
 
 	if (mti->mti_flags & LDD_F_SV_TYPE_OST)
 		imap = fsdb->fsdb_ost_index_map;

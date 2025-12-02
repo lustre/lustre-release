@@ -12326,6 +12326,211 @@ test_156() {
 }
 run_test 156 "root_fid on export consistent with client mount"
 
+cleanup_157a() {
+	echo "Cleaning up test 157a..."
+	# Re-enable registration
+	do_facet mgs "$LCTL set_param allow_register=1" || true
+	stop fs2mds -f 2>/dev/null || true
+	cleanup
+}
+
+test_157a() {
+	stopall
+	setup
+
+	do_facet mgs $LCTL get_param -n allow_register ||
+        	skip "MGS does not have the allow_register tunable"
+
+	# Verify interface works
+	do_facet mgs "$LCTL set_param allow_register=1" ||
+		error "failed to set allow_register=1"
+	[[ $(do_facet mgs "$LCTL get_param -n allow_register") == 1 ]] ||
+		error "allow_register proc shows wrong value"
+	do_facet mgs "$LCTL set_param allow_register=0" ||
+		error "failed to set allow_register=0"
+	[[ $(do_facet mgs "$LCTL get_param -n allow_register") == 0 ]] ||
+		error "allow_register proc shows wrong value"
+
+	# Test blocking functionality with new filesystem
+	local test_fsname=fs$RANDOM
+	local fs2mdsdev=$(mdsdevname 1_2)
+	local fs2mdsvdev=$(mdsvdevname 1_2)
+
+	stack_trap "cleanup_157a"
+
+	stop fs2mds -f 2>/dev/null || true
+
+	# start new filesystem - should fail with registration blocked
+
+	add fs2mds $(mkfs_opts mds1 ${fs2mdsdev}) --fsname=${test_fsname} \
+		--index=1 --reformat --mgsnode=$MGSNID $fs2mdsdev $fs2mdsvdev ||
+		error "mkfs should succeed even with allow_register=0"
+
+	# Try to start the filesystem - should fail due to registration blocking
+	if start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS; then
+		stop fs2mds -f
+		error "filesystem start should fail when allow_register=0"
+	fi
+
+	# Check for expected error message in dmesg
+	err_msg=$(do_facet mgs dmesg | tail -30 |
+		  grep -c "New filesystem registration disabled")
+
+	(( $err_msg > 0 )) ||
+		echo "Warning: Expected blocking message not found in dmesg"
+
+	# Re-enable registration
+	do_facet mgs "$LCTL set_param allow_register=1"
+
+	# Now the filesystem should be able to start successfully
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS ||
+		error "filesystem registration failed with allow_register=unlimited"
+
+	# Verify the filesystem is running
+	do_facet fs2mds "$LCTL get_param mdt.${test_fsname}*.recovery_status" ||
+		error "filesystem not properly started"
+
+	stop fs2mds -f 2>/dev/null || true
+
+	# Again Disable registration
+	do_facet mgs "$LCTL set_param allow_register=0"
+
+	# filesystem should be able to start successfully (already registered)
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS ||
+		error "filesystem start should succeed when already registered"
+
+	# Verify the filesystem is running
+	do_facet fs2mds "$LCTL get_param mdt.${test_fsname}*.recovery_status" ||
+		error "filesystem not properly started"
+
+	stop fs2mds -f 2>/dev/null || true
+
+	# Stop the MGS to test restart scenario
+	if ! combined_mgs_mds; then
+		stop_mgs || error "failed to stop MGS"
+		start_mgs || error "failed to restart MGS"
+	else
+		stop_mdt 1 || error "failed to stop MDS1 (with MGS)"
+		start_mdt 1 || error "failed to restart MDS1 (with MGS)"
+	fi
+
+	wait_recovery_complete mgs
+
+	# disable registration to test registered targets should still work
+	do_facet mgs "$LCTL set_param allow_register=0" ||
+		error "failed to disable registration after MGS restart"
+
+	# previously registered MDT can start with allow_register=0
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
+	if [ $? -eq 0 ]; then
+		# Verify the filesystem is running
+		do_facet fs2mds "$LCTL get_param \
+				 mdt.${test_fsname}*.recovery_status" ||
+			error "filesystem not properly started after restart"
+		stop fs2mds -f 2>/dev/null || true
+	else
+		error "Registered MDT failed to start after MGS restart"
+	fi
+
+	echo "allow_register functionality test completed successfully"
+}
+run_test 157a "test allow_register for MDT registration and MGS restart"
+
+cleanup_157b() {
+	echo "Cleaning up test 157b..."
+	stop fs2ost -f 2>/dev/null || true
+	stop fs3ost -f 2>/dev/null || true
+	do_facet mgs "$LCTL set_param allow_register=1" || true
+	cleanup
+}
+
+test_157b() {
+	setup
+
+	do_facet mgs $LCTL get_param -n allow_register ||
+		skip "MGS does not have the allow_register tunable"
+
+	# existing targets can re-register, new targets blocked
+
+	local test_fsname=fs$RANDOM
+	local fs2ostdev=$(ostdevname 1_2)
+	local fs2ostvdev=$(ostvdevname 1_2)
+	local fs3ostdev=$(ostdevname 2_2)
+	local fs3ostvdev=$(ostvdevname 2_2)
+
+	stack_trap "cleanup_157b"
+
+	stop fs2ost -f 2>/dev/null || true
+	stop fs3ost -f 2>/dev/null || true
+
+	add fs2ost $(mkfs_opts ost1 ${fs2ostdev}) --fsname=${test_fsname} \
+		--index=0 --reformat --mgsnode=$MGSNID $fs2ostdev $fs2ostvdev ||
+		error "mkfs failed for initial OST0"
+
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS ||
+		error "failed to start initial OST0"
+
+	# Verify OST0 is running
+	do_facet fs2ost "$LCTL get_param \
+			 obdfilter.${test_fsname}*.recovery_status" ||
+		error "OST0 not properly started"
+
+	# Now disable registration
+	do_facet mgs "$LCTL set_param allow_register=0"
+
+	# Existing target (OST0) should be able to restart
+	stop fs2ost -f || error "Failed to stop OST0"
+
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS ||
+		error "existing OST0 should restart with allow_register=0"
+
+	do_facet fs2ost "$LCTL get_param obdfilter.${test_fsname}*.recovery_status" ||
+		error "restarted OST0 not working properly"
+
+	# New target with same filesystem name should be blocked
+	add fs3ost $(mkfs_opts ost2 ${fs3ostdev}) --fsname=${test_fsname} \
+		--index=1 --reformat --mgsnode=$MGSNID $fs3ostdev $fs3ostvdev ||
+		error "mkfs should succeed for OST1 formatting"
+
+	# Try to start new OST1 - should fail due to registration blocking
+	if start fs3ost $fs3ostdev $OST_MOUNT_OPTS; then
+		stop fs3ost -f
+		error "New OST1 should not register with allow_register=0"
+	fi
+
+	# Check for expected error message
+	err_msg=$(do_facet mgs dmesg | tail -30 |
+		  grep -c "New target registration disabled")
+
+	(( $err_msg > 0 )) ||
+		echo "Warning: Expected blocking message not found in dmesg"
+
+	# Re-enable registration and verify new target can now register
+	do_facet mgs "$LCTL set_param allow_register=1"
+
+	start fs3ost $fs3ostdev $OST_MOUNT_OPTS ||
+		error "OST1 should be able to register after re-enabling"
+
+	do_facet fs3ost "$LCTL get_param obdfilter.${test_fsname}*.recovery_status" ||
+		error "new OST1 not working properly"
+
+	# Disable registration again and verify existing targets still work
+	do_facet mgs "$LCTL set_param allow_register=0"
+
+	stop fs2ost -f || error "Failed to stop OST0"
+	stop fs3ost -f || error "Failed to stop OST1"
+
+	# Both should be able to restart (they're now both existing targets)
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS ||
+		error "existing OST0 should restart with allow_register=0"
+
+	start fs3ost $fs3ostdev $OST_MOUNT_OPTS ||
+		error "existing OST1 should restart with allow_register=0"
+
+	echo "Passed: Existing targets can re-register, new targets blocked"
+}
+run_test 157b "verify allow_register (block new OSTs, allow existing)"
+
 test_160() {
 	((OST1_VERSION >= $(version_code 2.16.55) )) ||
 		skip "need OST >= 2.16.55 to have MGC with all failovers"

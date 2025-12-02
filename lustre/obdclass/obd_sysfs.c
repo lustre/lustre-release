@@ -140,6 +140,27 @@ static ssize_t expected_clients_store(struct kobject *kobj,
 	return count;
 }
 LUSTRE_RW_ATTR(expected_clients);
+
+static ssize_t allow_register_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", allow_register);
+}
+
+static ssize_t allow_register_store(struct kobject *kobj,
+				    struct attribute *attr, const char *buffer,
+				    size_t count)
+{
+	int val, rc;
+
+	rc = kstrtoint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	allow_register = val;
+	return count;
+}
+LUSTRE_ATTR(allow_register, 0644, allow_register_show, allow_register_store);
 #endif
 
 static ssize_t memused_show(struct kobject *kobj, struct attribute *attr,
@@ -614,11 +635,12 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_attr_memused_max.attr,
 	&lustre_attr_memused.attr,
 #ifdef CONFIG_LUSTRE_FS_SERVER
-	&lustre_sattr_bulk_timeout.u.attr,
+	&lustre_attr_allow_register.attr,
 	&lustre_attr_enable_health_write.attr,
 	&lustre_attr_expected_clients.attr,
-	&lustre_sattr_ldlm_timeout.u.attr,
 	&lustre_attr_no_transno.attr,
+	&lustre_sattr_bulk_timeout.u.attr,
+	&lustre_sattr_ldlm_timeout.u.attr,
 #endif
 	&lustre_attr_enable_fname_encoding.attr,
 	&lustre_attr_lbug_on_eviction.attr,

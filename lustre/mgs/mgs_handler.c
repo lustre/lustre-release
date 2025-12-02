@@ -274,7 +274,7 @@ static int mgs_check_target(const struct lu_env *env,
 		LCONSOLE_ERROR("%s claims to have registered, but this MGS does not know about it, preventing registration.\n",
 			       mti->mti_svname);
 		rc = -ENOENT;
-	} else if (rc == -1) {
+	} else if (rc == MGS_ERR_EMPTY_CLIENT_LOG) {
 		LCONSOLE_ERROR("Client log %s-client has disappeared! Regenerating all logs.\n",
 			       mti->mti_fsname);
 		mti->mti_flags |= LDD_F_WRITECONF;
@@ -499,6 +499,29 @@ process:
 
 	if (mti->mti_flags & LDD_F_NEED_INDEX)
 		mti->mti_flags |= LDD_F_WRITECONF;
+
+	/* Check if new target registration is allowed */
+	if (!allow_register) {
+		rc = mgs_check_index(tsi->tsi_env, mgs, mti);
+		if (rc == 0) {
+			/* Target index not found - this is a new target */
+			rc = -EACCES;
+			LCONSOLE_ERROR("%s: New target registration disabled. Use 'lctl set_param allow_register=1' to allow new target registrations.\n",
+				       mti->mti_svname);
+			GOTO(out_norevoke, rc);
+		}
+
+		if (rc < 0 && rc != MGS_ERR_EMPTY_CLIENT_LOG) {
+			/* Error checking index */
+			CERROR("%s: Error checking target index: rc = %d\n",
+			       mti->mti_svname, rc);
+			GOTO(out_norevoke, rc);
+		}
+		/* rc == 1 means target was previously registered, allow it */
+		/* rc == MGS_ERR_EMPTY_CLIENT_LOG:
+		 * empty client log, will be handled below
+		 */
+	}
 
 	if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPDATE))) {
 		/* We're just here as a startup ping. */
