@@ -1924,6 +1924,17 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 	if (!test_bit(LL_SBI_HYBRID_IO, sbi->ll_flags))
 		RETURN(false);
 
+	/*
+	 * PCC data copy in buffered I/O mode is using the kernel buffer
+	 * which cannot be used by direct I/O. Thus disable hybrid I/O
+	 * switch for the file doing PCC attach.
+	 * TODO: Improve this by remembering pid that does the attaching
+	 * in buffered I/O mode. Only disable I/O mode switch for the attach
+	 * process via that pid.
+	 */
+	if (ll_i2info(inode)->lli_pcc_state & PCC_STATE_FL_ATTACHING)
+		RETURN(false);
+
 	/* we only log hybrid IO stats if we hit the actual switching logic -
 	 * not if hybrid IO is disabled or the IO was never a candidate to
 	 * switch
