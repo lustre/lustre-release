@@ -505,7 +505,14 @@ index 24e1276..ae94c33 100644
  			ext4_warning_inode(dir,
  					   "dx entry: count %u beyond limit %u",
  					   count, dx_get_limit(entries));
-@@ -914,8 +1158,75 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
+@@ -908,14 +1152,82 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
+ 		block = dx_get_block(at);
+ 		for (i = 0; i <= level; i++) {
+ 			if (blocks[i] == block) {
++				ext4_htree_spin_unlock(lck); /* release spin */
+ 				ext4_warning_inode(dir,
+ 					"dx entry: tree cycle block %u points back to block %u",
+ 					blocks[level], block);
  				goto fail;
  			}
  		}

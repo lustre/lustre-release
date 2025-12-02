@@ -500,10 +500,19 @@ index a7dd2f2..046fc45 100644
  			ext4_warning_inode(dir,
  					   "dx entry: count %u beyond limit %u",
  					   count, dx_get_limit(entries));
-@@ -892,6 +1135,74 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
- 		frame->entries = entries;
- 		frame->at = at;
- 
+@@ -895,14 +1138,82 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
+ 		block = dx_get_block(at);
+ 		for (i = 0; i <= level; i++) {
+ 			if (blocks[i] == block) {
++				ext4_htree_spin_unlock(lck); /* release spin */
+ 				ext4_warning_inode(dir,
+ 					"dx entry: tree cycle block %u points back to block %u",
+ 					blocks[level], block);
+ 				goto fail;
+ 			}
+ 		}
+-		if (++level > indirect)
++
 +		if (indirect == level) { /* the last index level */
 +			struct ext4_dir_lock_data *ld;
 +			u64 myblock;
@@ -568,19 +577,9 @@ index a7dd2f2..046fc45 100644
 +				ext4_htree_de_unlock(lck);
 +				continue;
 +			}
-+			return frame;
+ 			return frame;
 +		}
 +		dx = at;
-+
- 		block = dx_get_block(at);
- 		for (i = 0; i <= level; i++) {
- 			if (blocks[i] == block) {
-@@ -901,8 +1212,7 @@ dx_probe(struct ext4_filename *fname, struct inode *dir,
- 				goto fail;
- 			}
- 		}
--		if (++level > indirect)
--			return frame;
 +		++level;
  		blocks[level] = block;
  		frame++;

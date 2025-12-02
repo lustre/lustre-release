@@ -490,7 +490,14 @@ Index: linux-4.18.0-423.el8/fs/ext4/namei.c
  			ext4_warning_inode(dir,
  					   "dx entry: count %u beyond limit %u",
  					   count, dx_get_limit(entries));
-@@ -901,8 +1143,70 @@ dx_probe(struct ext4_filename *fname, st
+@@ -895,14 +1137,77 @@ dx_probe(struct ext4_filename *fname, st
+ 		block = dx_get_block(at);
+ 		for (i = 0; i <= level; i++) {
+ 			if (blocks[i] == block) {
++				ext4_htree_spin_unlock(lck); /* release spin */
+ 				ext4_warning_inode(dir,
+ 					"dx entry: tree cycle block %u points back to block %u",
+ 					blocks[level], block);
  				goto fail;
  			}
  		}
