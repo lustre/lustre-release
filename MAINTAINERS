@@ -158,7 +158,7 @@ F:	lustre/utils/llapi_param.c
 
 Lustre Data Checksums
 R:	Li Xi <lixi@whamcloud.com>
-R:	Andreas Dilger <adilger@whamcloud.com>
+R:	Andreas Dilger <adilger@thelustrecollective.com>
 S:	Supported
 F:	lustre/include/uapi/linux/lustre/lustre_idl.h
 F:	lustre/include/uapi/linux/lustre/lustre_user.h
@@ -448,7 +448,7 @@ F:	lustre/osd-wbcfs/
 F:	lustre/utils/libmount_utils_wbcfs.c
 
 Lustre Patch Commit Hooks
-R:	Andreas Dilger <adilger@whamcloud.com>
+R:	Andreas Dilger <adilger@thelustrecollective.com>
 S:	Odd Fixes
 F:	contrib/git-hooks/
 F:	contrib/scripts/checkpatch.pl
@@ -474,7 +474,7 @@ F:	lustre/*/*lproc*.[ch]
 F:	lustre/obdclass/obdsysfs.c
 
 Lustre Protocol Compatibility
-R:	Andreas Dilger <adilger@whamcloud.com>
+R:	Andreas Dilger <adilger@thelustrecollective.com>
 S:	Supported
 F:	lustre/include/uapi/linux/lustre/lustre_idl.h
 F:	lustre/include/uapi/linux/lustre/lustre_user.h
@@ -520,12 +520,12 @@ S:	Supported
 F:	lustre/tests/
 
 Lustre User Documentation
-R:	Andreas Dilger <adilger@whamcloud.com>
+R:	Andreas Dilger <adilger@thelustrecollective.com>
 S:	Supported
 F:	lustre/doc/*.[1-9]
 
 Lustre User Library Interface
-R:	Andreas Dilger <adilger@whamcloud.com>
+R:	Andreas Dilger <adilger@thelustrecollective.com>
 S:	Supported
 F:	lustre/doc/llapi_*.3
 F:	lustre/doc/lustreapi.7
@@ -535,7 +535,7 @@ F:	lustre/utils/liblustreapi*.c
 F:	lustre/utils/lustreapi_internal.h
 
 Lustre User Tools
-R:	Andreas Dilger <adilger@whamcloud.com>
+R:	Andreas Dilger <adilger@thelustrecollective.com>
 R:	Olaf Faaland <faaland1@llnl.gov>
 S:	Supported
 F:	lustre/doc/lfs*.1
