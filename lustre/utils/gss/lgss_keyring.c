@@ -557,9 +557,9 @@ static int do_keyctl_update(char *reason, key_serial_t keyid,
 			return -1;
 		}
 
-		logmsg(LL_WARN, "key %08x: %sing too soon, try again\n",
+		logmsg(LL_INFO, "key %08x: %sing too soon, try again\n",
 		       keyid, reason);
-		sleep(2);
+		sleep(1);
 	}
 
 	logmsg(LL_INFO, "key %08x: %sed\n", keyid, reason);
@@ -593,8 +593,9 @@ static int error_kernel_key(key_serial_t keyid, int rpc_error, int gss_error,
 	/* no matter if revoking key was successful or not, always try unlink */
 	rc2 = keyctl_unlink(keyid, inst_keyring);
 	if (rc2) {
-		logmsg(LL_ERR, "unlink key %08x from %d: %s\n",
-		       keyid, inst_keyring, strerror(errno));
+		if (rc2 != ENOENT)
+			logmsg(LL_ERR, "unlink key %08x from %d: %s\n",
+			       keyid, inst_keyring, strerror(errno));
 		if (!rc)
 			rc = rc2;
 	} else {
