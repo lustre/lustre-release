@@ -3385,9 +3385,9 @@ test_71() {
 	$LFS mirror extend -N -c1 -i0 $tf || error "mirror extend $tf failed"
 
 	local id=$($LFS getstripe -I $tf)
-	local ost=$($LFS getstripe -v -I$id $tf | awk '/l_ost_idx/ {print $5}')
-	local fid=$($LFS getstripe -v -I$id $tf | awk '/l_fid/ {print $7}')
-	local pfid=$($LFS getstripe -v -I$id $tf | awk '/lmm_fid/ {print $2}')
+	local ost=$($LFS getstripe --yaml -v -I$id $tf | awk '/l_ost_idx/ {print $3}')
+	local fid=$($LFS getstripe --yaml -v -I$id $tf | awk '/l_fid/ {print $2}')
+	local pfid=$($LFS getstripe --yaml -v -I$id $tf | awk '/lmm_fid/ {print $2}')
 
 	ost=$(echo $ost | sed -e "s/,$//g")
 	ost=$((ost + 1))
@@ -3407,10 +3407,8 @@ test_71() {
 		clients_up
 	fi
 
-	local pseq=$(echo $ff | awk -F '[:= ]' '/parent/ { print $4 }')
-	local poid=$(echo $ff | awk -F '[:= ]' '/parent/ { print $5 }')
-	local pver=$(echo $ff | awk -F '[:= ]' '/parent/ { print $6 }')
-	local parent="$pseq:$poid:$pver"
+	# Get parent fid formatted without brace
+	parent=$(echo $ff |  grep -oP 'parent=\K\S+' | tr -d '[]')
 
 	log " ** lfs fid2path $MOUNT $parent"
 	$LFS fid2path $MOUNT "$parent" || {

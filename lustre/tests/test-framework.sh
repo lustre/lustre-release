@@ -12694,16 +12694,17 @@ check_seq_oid()
 		# fid: parent=[0x200000400:0x1e:0x0] stripe=1 stripe_count=2 \
 		#	stripe_size=1048576 component_id=1 component_start=0 \
 		#	component_end=33554432
-		local ff_parent=$(sed -e 's/.*parent=.//' <<<$ff)
+		local ff_parent=$(grep -oP 'parent=\K\S+' <<<$ff | tr -d '[]')
 		local ff_pseq=$(cut -d: -f1 <<<$ff_parent)
 		local ff_poid=$(cut -d: -f2 <<<$ff_parent)
-		local ff_pstripe
+
+		# $LL_DECODE_FILTER_FID does not print "stripe="; look
+		# into f_ver by default. See comment on ff_parent.
+		local ff_pstripe=$(cut -d: -f3 <<<$ff_parent)
+
+		# If there is a stripe information use it.
 		if grep -q 'stripe=' <<<$ff; then
 			ff_pstripe=$(sed -e 's/.*stripe=//' -e 's/ .*//' <<<$ff)
-		else
-			# $LL_DECODE_FILTER_FID does not print "stripe="; look
-			# into f_ver in this case.  See comment on ff_parent.
-			ff_pstripe=$(cut -d: -f3 <<<$ff_parent | sed -e 's/]//')
 		fi
 
 		# compare lmm_seq and filter_fid->ff_parent.f_seq
