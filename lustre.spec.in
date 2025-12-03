@@ -212,11 +212,12 @@
 %endif
 
 %{!?mpi_name: %global mpi_name openmpi}
+%{!?release_id: %global release_id @RELEASE_ID@}
 
 Summary: Lustre File System
 Name: %{lustre_name}
 Version: %{version}
-Release: 1%{?dist}
+Release: %{release_id}%{?dist}
 License: GPL-2.0-only AND LGPL-2.1-or-later
 %if 0%{?suse_version} >= 1310
 # SUSE needs Group for the kernel_module_package macro

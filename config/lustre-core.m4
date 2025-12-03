@@ -6046,6 +6046,20 @@ AS_IF([test "x$with_bash_completion_dir" = "xyes"], [
 ])
 AC_SUBST([BASH_COMPLETION_DIR])
 AC_MSG_RESULT([$BASH_COMPLETION_DIR])
+
+AC_MSG_CHECKING([for release ID])
+AC_ARG_WITH([release_id],
+	AS_HELP_STRING([--with-release-id=id],
+		[Specify release ID: (default=1)]),
+	[],
+	[with_release_id=1])
+AS_IF([test "x$with_release_id" = "xyes" -o "x$with_release_id" = "x"], [
+	RELEASE_ID=1
+], [
+	RELEASE_ID=$with_release_id
+])
+AC_SUBST([RELEASE_ID])
+AC_MSG_RESULT([$RELEASE_ID])
 ]) # LC_CONFIGURE
 
 #

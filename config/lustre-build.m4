@@ -732,7 +732,7 @@ AC_SUBST(MOSTLYCLEANFILES)
 LB_CONFIG_RPMBUILD_OPTIONS
 LB_CONFIG_CACHE_OPTIONS
 
-AS_IF([test -d $TEST_DIR -a "x${PARALLEL_BUILD_OPT}" != "xdebug"], [
+AS_IF([test -d "$TEST_DIR" -a "x${PARALLEL_BUILD_OPT}" != "xdebug"], [
 	AC_MSG_NOTICE([remove temporary parallel configure dir $TEST_DIR])
 	rm -rf $TEST_DIR
 ])
