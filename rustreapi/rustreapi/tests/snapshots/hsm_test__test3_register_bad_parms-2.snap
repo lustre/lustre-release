@@ -1,0 +1,9 @@
+---
+source: rustreapi/tests/hsm_test.rs
+expression: result
+---
+Err(
+    NotLustreFileSystem(
+        "/tmp",
+    ),
+)

@@ -1,0 +1,12 @@
+[hooks]
+pre-commit = [
+  "cargo fmt --all -- --check",
+  "cargo ci_machete",
+  "cargo ci_spelling",
+  "cargo ci_clippy",
+  "cargo ci_test",
+  "cargo ci_doc_test",
+]
+
+[logging]
+verbose = true

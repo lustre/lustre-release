@@ -1,0 +1,11 @@
+---
+source: rustreapi/tests/hsm_test.rs
+expression: result
+snapshot_kind: text
+---
+Err(
+    MsgErrno(
+        "Failed to register copytool",
+        EINVAL,
+    ),
+)

@@ -1,0 +1,30 @@
+[package]
+authors.workspace = true
+categories = ["network-programming", "api-bindings"]
+description = "Safe Rust bindings for Lustre LNet configuration"
+edition.workspace = true
+keywords = ["lustre", "lnet", "networking", "hpc"]
+license.workspace = true
+name = "lnetconfig"
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+cstrbuf = { version = "0.3.0", path = "../cstrbuf" }
+lnetconfig-sys = { version = "0.3.0", path = "../lnetconfig-sys" }
+nix.workspace = true
+serde = { version = "1.0.219", features = ["derive"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[build-dependencies]
+lu-version = { version = "0.3.0", path = "../lu-version" }
+
+[features]
+LUSTRE_2_14 = []
+LUSTRE_2_15 = []
+LUSTRE_2_16 = []
+LUSTRE_2_17 = []
+LUSTRE_2_18 = []

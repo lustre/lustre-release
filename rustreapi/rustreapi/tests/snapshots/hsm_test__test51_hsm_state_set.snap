@@ -1,0 +1,16 @@
+---
+source: rustreapi/tests/hsm_test.rs
+expression: result
+---
+Ok(
+    HsmCurrent {
+        states: HsmState[Exists, Archived],
+        archive_id: 64,
+        progress_state: Waiting,
+        action: Noop,
+        extent: Extent {
+            offset: 0,
+            length: 0,
+        },
+    },
+)

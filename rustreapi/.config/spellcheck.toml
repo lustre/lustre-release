@@ -1,0 +1,30 @@
+dev_comments = false
+skip_readme = false
+
+[hunspell]
+extra_dictionaries = ["lustre.dic"]
+lang = "en_US"
+search_dirs = ["."]
+skip_os_lookups = true
+tokenization_splitchars = "\",;:.!?#(){}[]|/_-‒'`&@§¶…"
+use_builtin = true
+
+[hunspell.quirks]
+allow_concatenation = false
+allow_dashes = false
+allow_emojis = true
+check_footnote_references = true
+transform_regex = [
+  "^~?[0-9]+%$",
+  "^~?[0-9]+h$",
+  "^~?[0-9]+MB",
+  "^~?[0-9]+",
+  "MDT[0-9]+s?$",
+  "OST[0-9]+s?$",
+  "rfc[0-9]+$",
+]
+
+[nlprules]
+
+[reflow]
+max_line_length = 80

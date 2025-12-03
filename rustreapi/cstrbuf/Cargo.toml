@@ -1,0 +1,13 @@
+[package]
+authors.workspace = true
+categories = ["no-std", "memory-management"]
+description = "Fixed-size C string buffer utilities"
+edition.workspace = true
+keywords = ["cstring", "ffi", "buffer", "no-std"]
+license.workspace = true
+name = "cstrbuf"
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+memchr.workspace = true

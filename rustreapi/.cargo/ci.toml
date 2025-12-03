@@ -1,0 +1,5 @@
+[build]
+rustflags = ["-Dunreachable-pub", "-Dwarnings", "-Dclippy::cast_lossless"]
+
+[net]
+retry = 6

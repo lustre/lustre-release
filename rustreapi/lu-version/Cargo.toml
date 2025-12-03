@@ -1,0 +1,13 @@
+[package]
+authors.workspace = true
+categories = ["development-tools::build-utils"]
+description = "Lustre version detection utilities"
+edition.workspace = true
+keywords = ["lustre", "version", "build"]
+license.workspace = true
+name = "lu-version"
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+regex = "1.11.1"

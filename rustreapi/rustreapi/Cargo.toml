@@ -1,0 +1,54 @@
+[package]
+authors.workspace = true
+categories = ["filesystem", "api-bindings"]
+description = "Safe Rust bindings for the Lustre Tools API"
+edition.workspace = true
+keywords = ["lustre", "filesystem", "hpc", "storage"]
+license.workspace = true
+name = "rustreapi"
+readme = "../README.md"
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+bitmask-enum.workspace = true
+changelog-sys = { version = "0.3.0", path = "../changelog-sys" }
+chrono.workspace = true
+clap.workspace = true
+cstrbuf = { version = "0.3.0", path = "../cstrbuf" }
+libc.workspace = true
+lnetconfig = { version = "0.3.0", path = "../lnetconfig" }
+lustreapi-sys = { version = "0.3.0", path = "../lustreapi-sys" }
+nix.workspace = true
+polling.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+insta.workspace = true
+sequential-test.workspace = true
+
+[build-dependencies]
+lu-version = { version = "0.3.0", path = "../lu-version" }
+
+[[test]]
+name = "hsm_test"
+test = false
+
+[[test]]
+name = "layout_test"
+test = false
+
+[[bench]]
+harness = false
+name = "fid_bench"
+
+[features]
+LUSTRE_2_14 = []
+LUSTRE_2_15 = []
+LUSTRE_2_16 = []
+LUSTRE_2_17 = []
+LUSTRE_2_18 = []

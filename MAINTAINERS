@@ -548,3 +548,8 @@ F:	lustre/scripts/lustre_rmmod
 F:	lustre/utils/
 X:	lustre/utils/gss/
 
+Lustre User Library Rust Interface
+R:	Robert Read <rread@thelustrecollective.com>
+S:	Supported
+F:	rustreapi/
+

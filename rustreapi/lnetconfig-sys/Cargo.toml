@@ -1,0 +1,20 @@
+[package]
+authors.workspace = true
+categories = ["external-ffi-bindings", "network-programming"]
+description = "Raw FFI bindings for Lustre's lnetconfig library"
+edition.workspace = true
+keywords = ["lustre", "lnet", "ffi", "networking"]
+license.workspace = true
+name = "lnetconfig-sys"
+repository.workspace = true
+version.workspace = true
+
+links = "lnetconfig"
+
+[dependencies]
+
+
+[build-dependencies]
+bindgen.workspace = true
+cc.workspace = true
+lu-version = { version = "0.3.0", path = "../lu-version" }

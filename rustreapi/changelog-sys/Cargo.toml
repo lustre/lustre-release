@@ -1,0 +1,27 @@
+[package]
+authors.workspace = true
+categories = ["external-ffi-bindings", "filesystem"]
+description = "Raw FFI bindings for Lustre changelog API"
+edition.workspace = true
+keywords = ["lustre", "changelog", "ffi", "filesystem"]
+license.workspace = true
+name = "changelog-sys"
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+
+[build-dependencies]
+bindgen.workspace = true
+cc.workspace = true
+lu-version = { version = "0.3.0", path = "../lu-version" }
+
+[lints.clippy]
+missing_safety_doc = "allow"
+
+[features]
+LUSTRE_2_14 = []
+LUSTRE_2_15 = []
+LUSTRE_2_16 = []
+LUSTRE_2_17 = []
+LUSTRE_2_18 = []

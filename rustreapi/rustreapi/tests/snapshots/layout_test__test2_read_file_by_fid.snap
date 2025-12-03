@@ -1,0 +1,20 @@
+---
+source: rustreapi/tests/layout_test.rs
+expression: v
+---
+[
+    Layout {
+        pattern: 0,
+        stripe_size: 1048576,
+        stripe_count: 2,
+        stripe_offset: 1,
+        objects_valid: false,
+        pool_name: Some(
+            "testp",
+        ),
+        start: 0,
+        end: 18446744073709551615,
+        comp_id: 0,
+        lcmd_flags: 0,
+    },
+]

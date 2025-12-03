@@ -1,0 +1,23 @@
+[alias]
+ci_check = "check --config=.cargo/ci.toml --locked"
+ci_clippy = """clippy --config=.cargo/ci.toml \
+--locked \
+--all-targets \
+-- \
+--deny clippy::unwrap_used \
+--deny warnings \
+--allow deprecated"""
+
+ci_doc_test = "test --locked --workspace --doc"
+ci_machete = "--config=.cargo/ci.toml machete"
+ci_spelling = "spellcheck --code 1 -vv -r -g"
+ci_test = "test --locked --workspace"
+install_rusty_hook = "install --git https://github.com/swellaby/rusty-hook.git --locked"
+install_spellcheck = "install --locked  --git https://github.com/whamcloud/cargo-spellcheck --branch whamcloud cargo-spellcheck"
+install_tools = """install \
+cargo-machete \
+cargo-insta \
+just \
+cargo-workspaces \
+cargo-sweep \
+cargo-llvm-cov"""

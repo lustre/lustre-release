@@ -1,0 +1,15 @@
+set shell := ["sh", "-cue"]
+
+doc:
+    RUSTDOCFLAGS="--enable-index-page --default-theme=ayu --html-in-header=doc-assets/header.html --html-after-content=doc-assets/after-content.html -Zunstable-options" cargo +nightly doc --no-deps
+
+spellcheck:
+    cargo ci_spelling
+
+check:
+    cargo fmt --all
+    cargo fmt --all -- --check
+    cargo ci_machete
+    cargo ci_spelling
+    cargo ci_clippy
+    cargo ci_test
