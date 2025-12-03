@@ -2858,7 +2858,7 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 	/* if the network is not unique then we don't want to keep
 	 * it around after we're done. Free it. Otherwise add that
 	 * net to the global the_lnet.ln_nets */
-	if (net_l != net && net_l != NULL) {
+	if (net_l != net) {
 		/*
 		 * TODO - note. currently the tunables can not be updated
 		 * once added
