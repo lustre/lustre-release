@@ -6134,11 +6134,11 @@ skip_msg_stats:
 					nla_put_s32(msg, LNET_NET_LOCAL_NI_DEV_CPT,
 						    ni->ni_dev_cpt);
 
-				/* Report cpts. We could send this as a nested list
-				 * of integers but older versions of the tools
-				 * except a string. The new versions can handle
-				 * both formats so in the future we can change
-				 * this to a nested list.
+				/* Report cpts. We could send this as a nested
+				 * list of integers but older versions of the
+				 * tools except a string. The new versions can
+				 * handle both formats so in the future we can
+				 * change this to a nested list.
 				 */
 				len = snprintf(cpts, buf_len, "\"[");
 				cpt = cpts + len;
@@ -6147,6 +6147,12 @@ skip_msg_stats:
 				if (ni->ni_ncpts == LNET_CPT_NUMBER && !ni->ni_cpts)  {
 					for (j = 0; j < ni->ni_ncpts; j++) {
 						len = snprintf(cpt, buf_len, "%d,", j);
+						if (len < 0 || len >= buf_len) {
+							NL_SET_ERR_MSG(extack,
+								       "Output Error/Truncated");
+							GOTO(net_unlock,
+							     rc = -E2BIG);
+						}
 						buf_len -= len;
 						cpt += len;
 					}
@@ -6156,11 +6162,17 @@ skip_msg_stats:
 					     j < LNET_MAX_SHOW_NUM_CPT; j++) {
 						len = snprintf(cpt, buf_len, "%d,",
 							       ni->ni_cpts[j]);
+						if (len < 0 || len >= buf_len) {
+							NL_SET_ERR_MSG(extack,
+								       "Output Error/truncated");
+							GOTO(net_unlock,
+							     rc = -E2BIG);
+						}
 						buf_len -= len;
 						cpt += len;
 					}
 				}
-				snprintf(cpt - 1, sizeof(cpts), "]\"");
+				snprintf(cpt - 1, buf_len, "]\"");
 
 				nla_put_string(msg, LNET_NET_LOCAL_NI_CPTS, cpts);
 			} else {
