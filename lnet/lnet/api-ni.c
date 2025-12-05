@@ -3472,17 +3472,21 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 		   struct lnet_ioctl_element_stats *stats,
 		   __u32 tun_size)
 {
+	const struct lnet_lnd *net_lnd;
 	size_t min_size = 0;
 	int i;
-	const struct lnet_lnd *net_lnd;
 
 	if (!ni || !cfg_ni || !tun || !nid_is_nid4(&ni->ni_nid))
 		return;
 
 	if (ni->ni_interface != NULL) {
-		strncpy(cfg_ni->lic_ni_intf,
-			ni->ni_interface,
-			sizeof(cfg_ni->lic_ni_intf));
+		i = strscpy(cfg_ni->lic_ni_intf, ni->ni_interface,
+			    sizeof(cfg_ni->lic_ni_intf));
+		if (i < 0) {
+			CDEBUG(D_NET, "%s too long for dest buffer: rc = %d\n",
+			       ni->ni_interface, i);
+			return;
+		}
 	}
 
 	cfg_ni->lic_nid = lnet_nid_to_nid4(&ni->ni_nid);
