@@ -29,10 +29,12 @@ static void qsd_reint_completion(const struct lu_env *env,
 {
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	__u64			*slv_ver = (__u64 *)arg;
+	struct obd_import	*imp = class_exp2cliimp(qsd->qsd_exp);
 	ENTRY;
 
 	if (rc) {
-		CDEBUG_LIMIT(rc != -EAGAIN ? D_ERROR : D_QUOTA,
+		CDEBUG_LIMIT((imp->imp_state != LUSTRE_IMP_FULL ||
+			      rc == -EAGAIN) ? D_QUOTA : D_ERROR,
 			     "%s: failed to enqueue global quota lock, glb fid:"
 			     DFID", rc:%d\n", qsd->qsd_svname,
 			     PFID(&req_qbody->qb_fid), rc);
