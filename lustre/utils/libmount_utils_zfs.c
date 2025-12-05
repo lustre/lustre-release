@@ -486,8 +486,8 @@ int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 		uint64_t mh = zpool_get_prop_int(pool, ZPOOL_PROP_MULTIHOST,
 						 NULL);
 		if (!mh)
-			fprintf(stderr, "%s: %s is configured for failover "
-				"but zpool does not have multihost enabled\n",
+			fprintf(stderr,
+				"%s: warning: %s is configured for failover, but zpool does not have multihost enabled\n",
 				progname, ds);
 	}
 
