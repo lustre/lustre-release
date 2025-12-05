@@ -99,7 +99,6 @@ static struct static_lustre_uintvalue_attr lustre_sattr_##name =	\
 
 LUSTRE_STATIC_UINT_ATTR(debug_peer_on_timeout, &obd_debug_peer_on_timeout);
 LUSTRE_STATIC_UINT_ATTR(dump_on_timeout, &obd_dump_on_timeout);
-LUSTRE_STATIC_UINT_ATTR(dump_on_eviction, &obd_dump_on_eviction);
 LUSTRE_STATIC_UINT_ATTR(at_min, &at_min);
 LUSTRE_STATIC_UINT_ATTR(at_max, &at_max);
 LUSTRE_STATIC_UINT_ATTR(at_extra, &at_extra);
@@ -107,7 +106,6 @@ LUSTRE_STATIC_UINT_ATTR(at_early_margin, &at_early_margin);
 LUSTRE_STATIC_UINT_ATTR(at_history, &at_history);
 LUSTRE_STATIC_UINT_ATTR(at_unhealthy_factor, &at_unhealthy_factor);
 LUSTRE_STATIC_UINT_ATTR(enable_stats_header, &obd_enable_stats_header);
-LUSTRE_STATIC_UINT_ATTR(lbug_on_eviction, &obd_lbug_on_eviction);
 LUSTRE_STATIC_UINT_ATTR(ping_interval, &ping_interval);
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -466,6 +464,80 @@ static ssize_t debug_raw_pointers_store(struct kobject *kobj,
 	return count;
 }
 
+static const char *const eviction_names[] = {
+	"1",		/* DUMP_SUBS_OLD */
+	"llite",	/* DUMP_PTLRPC_CONN */
+	"ldlm",         /* DUMP_LDLM_LOCK */
+	"stale",	/* DUMP_RECOVERY_STALE */
+	"pinger"        /* DUMP_PINGER */
+};
+
+static inline const char *eviction_type2str(int type)
+{
+	if (type >= 0 && type < ARRAY_SIZE(eviction_names))
+		return eviction_names[type];
+	return NULL;
+}
+
+static ssize_t dump_on_eviction_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	return cfs_mask2str(buf, PAGE_SIZE, obd_dump_on_eviction,
+			    eviction_type2str, ' ');
+}
+
+static ssize_t both_on_eviction_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count, unsigned int *val)
+{
+	u64 fl = *val;
+	u64 max_mask = (1 << (ARRAY_SIZE(eviction_names) + 1)) - 1;
+	int rc;
+
+	rc = kstrtou64(buffer, 0, &fl);
+	/* check flags fits to str array */
+	if (!rc && !(fl & ~max_mask)) {
+		*val = fl;
+		return count;
+	}
+
+	rc = cfs_str2mask(buffer, eviction_type2str, &fl, 0, max_mask, 0);
+
+	if (!rc && fl != *val)
+		*val = fl;
+
+	return count;
+}
+
+static ssize_t dump_on_eviction_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count)
+{
+	return both_on_eviction_store(kobj, attr, buffer, count,
+				      &obd_dump_on_eviction);
+}
+
+static ssize_t lbug_on_eviction_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	return cfs_mask2str(buf, PAGE_SIZE, obd_lbug_on_eviction,
+			    eviction_type2str, ' ');
+}
+
+static ssize_t lbug_on_eviction_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count)
+{
+	return both_on_eviction_store(kobj, attr, buffer, count,
+				      &obd_lbug_on_eviction);
+}
+
+
 /* Root for /sys/kernel/debug/lustre */
 struct dentry *debugfs_lustre_root;
 EXPORT_SYMBOL_GPL(debugfs_lustre_root);
@@ -486,6 +558,8 @@ LUSTRE_RW_ATTR(jobid_name);
 LUSTRE_RW_ATTR(jobid_this_session);
 LUSTRE_RW_ATTR(timeout);
 LUSTRE_RW_ATTR(debug_raw_pointers);
+LUSTRE_RW_ATTR(dump_on_eviction);
+LUSTRE_RW_ATTR(lbug_on_eviction);
 
 static struct attribute *lustre_attrs[] = {
 	&lustre_attr_version.attr,
@@ -500,7 +574,7 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_attr_max_dirty_mb.attr,
 	&lustre_sattr_debug_peer_on_timeout.u.attr,
 	&lustre_sattr_dump_on_timeout.u.attr,
-	&lustre_sattr_dump_on_eviction.u.attr,
+	&lustre_attr_dump_on_eviction.attr,
 	&lustre_sattr_at_min.u.attr,
 	&lustre_sattr_at_max.u.attr,
 	&lustre_sattr_at_extra.u.attr,
@@ -516,7 +590,7 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_attr_no_transno.attr,
 #endif
 	&lustre_attr_enable_fname_encoding.attr,
-	&lustre_sattr_lbug_on_eviction.u.attr,
+	&lustre_attr_lbug_on_eviction.attr,
 	&lustre_sattr_ping_interval.u.attr,
 	NULL,
 };

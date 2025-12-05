@@ -522,6 +522,11 @@ static int ping_evictor_main(void *arg)
 					      exp->exp_last_request_time);
 				CDEBUG(D_HA, "Last request was at %lld\n",
 				       exp->exp_last_request_time);
+
+				if (do_dump_on_eviction(exp->exp_obd,
+							DUMP_PINGER))
+					libcfs_debug_dumplog();
+
 				class_fail_export(exp);
 				class_export_put(exp);
 				spin_lock(&obd->obd_dev_lock);

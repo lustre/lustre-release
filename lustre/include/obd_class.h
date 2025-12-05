@@ -2035,16 +2035,37 @@ extern char obd_jobid_name[];
 extern unsigned int obd_lbug_on_eviction;
 extern unsigned int obd_dump_on_eviction;
 
-static inline bool do_dump_on_eviction(struct obd_device *exp_obd)
+enum obd_dump_subsystem {
+	DUMP_SUBS_OLD = 0x0001,
+	DUMP_PTLRPC_CONN = 0x0002,
+	DUMP_LDLM_LOCK = 0x0004,
+	DUMP_RECOVERY_STALE = 0x0008,
+	DUMP_PINGER = 0x0010
+};
+
+static inline bool do_dump_subs_mask(unsigned int val,
+				     enum obd_dump_subsystem subs)
 {
-	if (obd_lbug_on_eviction &&
+	/* supporing old behaviour for val = 1 */
+	if (unlikely((val & DUMP_SUBS_OLD &&
+	    subs & (DUMP_PTLRPC_CONN | DUMP_LDLM_LOCK | DUMP_RECOVERY_STALE)) ||
+	    val & subs))
+		return true;
+	return false;
+}
+
+static inline bool do_dump_on_eviction(struct obd_device *exp_obd,
+				       enum obd_dump_subsystem subs)
+{
+	if (do_dump_subs_mask(obd_lbug_on_eviction, subs) &&
 	    strncmp(exp_obd->obd_type->typ_name, LUSTRE_MGC_NAME,
 		    strlen(LUSTRE_MGC_NAME))) {
-		CERROR("LBUG upon eviction\n");
+		CERROR("%s: LBUG upon eviction %d %d\n", exp_obd->obd_name,
+		       obd_lbug_on_eviction, subs);
 		LBUG();
 	}
 
-	return obd_dump_on_eviction;
+	return do_dump_subs_mask(obd_dump_on_eviction, subs);
 }
 
 /* statfs_pack.c */

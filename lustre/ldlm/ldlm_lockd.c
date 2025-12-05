@@ -254,7 +254,8 @@ static int expired_lock_main(void *arg)
 					   lock->l_blast_sent,
 					   obd_export_nid2str(export));
 				ldlm_lock_to_ns(lock)->ns_timeouts++;
-				if (do_dump_on_eviction(export->exp_obd))
+				if (do_dump_on_eviction(export->exp_obd,
+							DUMP_LDLM_LOCK))
 					do_dump++;
 				class_fail_export(export);
 			}

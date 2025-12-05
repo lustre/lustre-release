@@ -1583,8 +1583,9 @@ static int ptlrpc_invalidate_import_thread(void *data)
 	       imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
 	       libcfs_nidstr(&imp->imp_connection->c_peer.nid));
 
-	if (do_dump_on_eviction(imp->imp_obd)) {
-		CERROR("dump the log upon eviction\n");
+	if (do_dump_on_eviction(imp->imp_obd, DUMP_PTLRPC_CONN)) {
+		CERROR("%s: dump the log upon eviction\n",
+		       imp->imp_obd->obd_name);
 		libcfs_debug_dumplog();
 	}
 
@@ -1638,6 +1639,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
 			  &target_start, &target_len);
 		connect_flags = imp->imp_connect_data.ocd_connect_flags;
+
 		/* Don't care about MGC eviction */
 		if (strcmp(imp->imp_obd->obd_type->typ_name,
 			   LUSTRE_MGC_NAME) != 0 &&
@@ -1645,7 +1647,13 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 			/* below message checked in test-framework client_evicted() */
 			LCONSOLE(D_ERROR, "%s: This client was evicted by %.*s; in progress operations using this service will fail.\n",
 				 imp->imp_obd->obd_name, target_len, target_start);
-			LASSERTF(!obd_lbug_on_eviction, "LBUG upon eviction\n");
+
+			if (do_dump_on_eviction(imp->imp_obd,
+						DUMP_PTLRPC_CONN)) {
+				CERROR("%s: dump the log upon eviction\n",
+				       imp->imp_obd->obd_name);
+				libcfs_debug_dumplog();
+			}
 		}
 		CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
 		       obd2cli_tgt(imp->imp_obd),

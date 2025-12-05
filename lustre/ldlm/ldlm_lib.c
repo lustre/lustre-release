@@ -1852,7 +1852,8 @@ static void target_finish_recovery(struct lu_target *lut)
 			      atomic_read(&obd->obd_connected_clients),
 			      obd->obd_stale_clients,
 			      obd->obd_stale_clients == 1 ? "was" : "were");
-		if (obd->obd_stale_clients && do_dump_on_eviction(obd))
+		if (obd->obd_stale_clients &&
+		    do_dump_on_eviction(obd, DUMP_RECOVERY_STALE))
 			libcfs_debug_dumplog();
 	}
 
