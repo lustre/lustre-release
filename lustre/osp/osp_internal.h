@@ -228,6 +228,11 @@ struct osp_device {
 	/* last generated id */
 	ktime_t				 opd_sync_next_commit_cb;
 	atomic_t			 opd_commits_registered;
+	time64_t			 opd_sync_llog_checked_at;
+	int				 opd_sync_llog_plains;
+	int				 opd_sync_llog_positive_nr;
+	int				 opd_sync_llog_total_diff;
+	struct mutex			 opd_sync_health_mutex;
 
 	/*
 	 * statfs related fields: OSP maintains it on its own

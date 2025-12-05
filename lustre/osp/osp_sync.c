@@ -56,7 +56,7 @@
  */
 
 #define OSP_MAX_RPCS_IN_FLIGHT		8
-#define OSP_MAX_RPCS_IN_PROGRESS	4096
+#define OSP_MAX_RPCS_IN_PROGRESS	16384
 #define OSP_MAX_SYNC_CHANGES		2000000000
 
 #define OSP_JOB_MAGIC		0x26112005
@@ -354,6 +354,69 @@ int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 	RETURN(rc);
 }
 
+#define OSP_SYNC_HEALTH_CHECK_PERIOD		20
+#define OSP_SYNC_HEALTH_MAX_GROW_PERIODS	16
+
+/*
+ * watch osp llog size to warn if it's been growing too large
+ */
+static void osp_sync_llog_health_check(struct osp_device *d,
+				       struct llog_handle *lgh)
+{
+	time64_t now = ktime_get_seconds();
+	struct llog_log_hdr *h;
+	int diff;
+
+	if (likely(now - d->opd_sync_llog_checked_at <=
+	           OSP_SYNC_HEALTH_CHECK_PERIOD))
+		return;
+
+	if (!mutex_trylock(&d->opd_sync_health_mutex))
+		return;
+
+	d->opd_sync_llog_checked_at = now;
+
+	h = lgh->lgh_hdr;
+	if (unlikely(!h))
+		goto out;
+
+	if (d->opd_sync_llog_plains == 0) {
+		d->opd_sync_llog_plains = h->llh_count;
+		goto out;
+	}
+
+	/*
+	 * if the catalog has less than 1/3, then
+	 * something is wrong with llog processing
+	 * or
+	 * number of plain llogs has been just growing for long
+	 */
+	diff = (int)h->llh_count - d->opd_sync_llog_plains;
+	if (diff >= 0) {
+		d->opd_sync_llog_positive_nr++;
+		d->opd_sync_llog_total_diff += diff;
+	} else {
+		/* llog shrinked, reset the counter */
+		d->opd_sync_llog_positive_nr = 0;
+		d->opd_sync_llog_total_diff = 0;
+	}
+	if (h->llh_count > (8 * lgh->lgh_hdr_size * 2 / 3) ||
+	    (d->opd_sync_llog_total_diff > 5 &&
+	     d->opd_sync_llog_positive_nr > OSP_SYNC_HEALTH_MAX_GROW_PERIODS)) {
+		CWARN("%s: %d plain llogs, was %d, check MDS-OST sync (%d %d)\n",
+		      d->opd_obd->obd_name, lgh->lgh_hdr->llh_count,
+		      d->opd_sync_llog_plains, d->opd_sync_llog_total_diff,
+		      d->opd_sync_llog_positive_nr);
+		d->opd_sync_llog_positive_nr = 0;
+		d->opd_sync_llog_total_diff = 0;
+	}
+
+	d->opd_sync_llog_plains = h->llh_count;
+
+out:
+	mutex_unlock(&d->opd_sync_health_mutex);
+}
+
 /**
  * osp_sync_add_rec() - Generate a llog record for a given change.
  * @env: LU environment provided by the caller
@@ -441,6 +504,8 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 		/* see comment in osp_sync_declare_add() */
 		RETURN(0);
 	}
+
+	osp_sync_llog_health_check(d, ctxt->loc_handle);
 
 	rc = llog_add(env, ctxt->loc_handle, &osi->osi_hdr, &osi->osi_cookie,
 		      storage_th);
@@ -1658,6 +1723,7 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 	INIT_LIST_HEAD(&d->opd_sync_committed_there);
 	INIT_LIST_HEAD(&d->opd_sync_error_list);
 	atomic_set(&d->opd_sync_error_count, 0);
+	mutex_init(&d->opd_sync_health_mutex);
 
 	if (d->opd_storage->dd_rdonly)
 		RETURN(0);
