@@ -854,7 +854,8 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_FLR_EC	       0x10000000000ULL	/* parity support */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
- * is not in use by some other branch/patch.  Email adilger@whamcloud.com
+ * is not in use by some other branch/patch.
+ * Email adilger@thelustrecollective.com and lustre-devel@lists.lustre.org
  * to reserve the new OBD_CONNECT value for use by your feature. Then, submit
  * a small patch against master and LTS branches that ONLY adds the new flag,
  * updates obd_connect_names[], adds the flag to check_obd_connect_data(),

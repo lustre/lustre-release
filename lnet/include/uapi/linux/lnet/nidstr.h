@@ -48,9 +48,10 @@ enum {
 	TOFULND		= 17, /* Fujitsu Torus Fusion                 */
 	EFALND		= 18, /* Amazon Elastic Fabric Adapter        */
 	BXI3LND		= 19, /* Bull BXIv3 Fabric Interface          */
-	/* Please email adilger@whamcloud.com and lustre-devel@lists.lustre.org
-	 * to reserve new LND numbers before they are used anywhere.  This only
-	 * takes a few minutes, and will save everyone a lot of grief later.
+	/* Please send email to both adilger@thelustrecollective.com and
+	 * lustre-devel@lists.lustre.org to reserve new LND numbers before
+	 * they are used anywhere.  This will only take a few minutes,
+	 * and will save everyone a lot of grief later.
 	 */
 	NUM_LNDS
 };
