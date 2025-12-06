@@ -1679,6 +1679,7 @@ nodemap_test_setup() {
 		--property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property trusted --value 1
+	wait_nm_sync default trusted_nodemap
 
 	do_facet mgs $LCTL nodemap_activate $active_nodemap
 	wait_nm_sync active
@@ -1694,6 +1695,7 @@ nodemap_test_cleanup() {
 		 --property admin --value 0
 	do_facet mgs $LCTL nodemap_modify --name default \
 		 --property trusted --value 0
+	wait_nm_sync default trusted_nodemap
 
 	do_facet mgs $LCTL nodemap_activate 0
 	wait_nm_sync active 0
@@ -6520,6 +6522,7 @@ setup_local_client_nodemap() {
 	fi
 
 	do_facet mgs $LCTL nodemap_del $nm_name || true
+	wait_nm_sync $nm_name id ''
 
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property admin --value 1
