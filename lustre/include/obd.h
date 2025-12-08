@@ -1539,9 +1539,4 @@ static inline struct inode *page2inode(struct page *page)
 	}
 }
 
-static inline bool obd_is_osd_wbcfs(const struct obd_device *obd)
-{
-	return !strstr(obd->obd_name, LUSTRE_OSD_WBCFS_NAME);
-}
-
 #endif /* __OBD_H */
