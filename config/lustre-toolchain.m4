@@ -173,6 +173,31 @@ AC_DEFUN([LTC_CC_NO_STRINGOP_OVERFLOW], [
 ]) # LTC_CC_NO_STRINGOP_OVERFLOW
 
 #
+# LTC_CC_NO_GNU
+#
+# Check if compiler supports -Wno-gnu
+# To suppress warnings about valid GNU extensions used in the kernel
+#
+AC_DEFUN([LTC_CC_NO_GNU], [
+	AC_MSG_CHECKING([for -Wno-gnu support])
+
+	saved_flags="$CFLAGS"
+	CFLAGS="-Werror -Wno-gnu"
+
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])], [
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-gnu"
+		AC_SUBST(EXTRA_KCFLAGS)
+		EXTRA_CFLAGS="$EXTRA_CFLAGS -Wno-gnu"
+		AC_SUBST(EXTRA_CFLAGS)
+		AC_MSG_RESULT([yes])
+	], [
+		AC_MSG_RESULT([no])
+	])
+
+	CFLAGS="$saved_flags"
+]) # LTC_CC_NO_GNU
+
+#
 # LTC_TOOLCHAIN_CONFIGURE
 #
 # main configure steps
@@ -191,6 +216,7 @@ LTC_CONFIG_ERROR
 LTC_CC_NO_FORMAT_TRUNCATION
 LTC_CC_NO_STRINGOP_TRUNCATION
 LTC_CC_NO_STRINGOP_OVERFLOW
+LTC_CC_NO_GNU
 
 if test $ac_test_CFLAGS; then
 	CFLAGS=$ac_save_CFLAGS
