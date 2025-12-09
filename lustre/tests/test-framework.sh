@@ -9967,17 +9967,13 @@ wait_flavor()
 	return 1
 }
 
-restore_to_default_flavor()
-{
+remove_flavor_all() {
 	local proc="mgs.MGS.live.$FSNAME"
-
-	echo "restoring to default flavor..."
-
 	local nrule=$(do_facet mgs lctl get_param -n $proc 2>/dev/null |
-		grep ".srpc.flavor" | wc -l)
+		      grep ".srpc.flavor" | wc -l)
 
 	# remove all existing rules if any
-	if [ $nrule -ne 0 ]; then
+	if (( nrule > 0 )); then
 		echo "$nrule existing rules"
 		for rule in $(do_facet mgs lctl get_param -n $proc 2>/dev/null |
 		    grep ".srpc.flavor."); do
@@ -9990,7 +9986,14 @@ restore_to_default_flavor()
 	# verify no rules left
 	nrule=$(do_facet mgs lctl get_param -n $proc 2>/dev/null |
 		grep ".srpc.flavor." | wc -l)
-	[ $nrule -ne 0 ] && error "still $nrule rules left"
+	(( nrule == 0 )) || error "still $nrule rules left"
+}
+
+restore_to_default_flavor()
+{
+	echo "restoring to default flavor..."
+
+	remove_flavor_all
 
 	# wait for default flavor to be applied
 	if $GSS_SK; then

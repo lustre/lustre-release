@@ -224,6 +224,8 @@ bool nodemap_has_dynamic_nodemaps(void);
 int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
 		       struct obd_export *exp);
 void nodemap_del_member(struct obd_export *exp);
+int nodemap_member_switch(struct obd_export *exp, char *new_nm_name,
+			  bool gssonly);
 int nodemap_parse_range(const char *range_string, struct lnet_nid range[2],
 			u8 *netmask);
 int nodemap_parse_idmap(const char *nodemap_name, char *idmap_str,

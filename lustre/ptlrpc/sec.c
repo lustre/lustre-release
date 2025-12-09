@@ -2133,7 +2133,8 @@ static int flavor_allowed(struct sptlrpc_flavor *exp,
 int sptlrpc_target_export_check(struct obd_export *exp,
 				struct ptlrpc_request *req)
 {
-	struct sptlrpc_flavor   flavor;
+	struct sptlrpc_flavor flavor;
+	int rc;
 
 	if (exp == NULL)
 		return 0;
@@ -2194,8 +2195,9 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 		exp->exp_flvr_adapt = 0;
 		spin_unlock(&exp->exp_lock);
 
-		return sptlrpc_import_sec_adapt(exp->exp_imp_reverse,
-						req->rq_svc_ctx, &flavor);
+		rc = sptlrpc_import_sec_adapt(exp->exp_imp_reverse,
+					      req->rq_svc_ctx, &flavor);
+		GOTO(nm_switch, rc);
 	}
 
 	/*
@@ -2234,9 +2236,10 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 			flavor = exp->exp_flvr;
 			spin_unlock(&exp->exp_lock);
 
-			return sptlrpc_import_sec_adapt(exp->exp_imp_reverse,
-							req->rq_svc_ctx,
-							&flavor);
+			rc = sptlrpc_import_sec_adapt(exp->exp_imp_reverse,
+						      req->rq_svc_ctx,
+						      &flavor);
+			GOTO(nm_switch, rc);
 		} else {
 			CDEBUG(D_SEC,
 			       "exp %p (%x|%x|%x): is current flavor, install rvs ctx\n",
@@ -2245,8 +2248,10 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 			       exp->exp_flvr_old[1].sf_rpc);
 			spin_unlock(&exp->exp_lock);
 
-			return sptlrpc_svc_install_rvs_ctx(exp->exp_imp_reverse,
-							   req->rq_svc_ctx);
+			rc = sptlrpc_svc_install_rvs_ctx(exp->exp_imp_reverse,
+							 req->rq_svc_ctx);
+
+			GOTO(nm_switch, rc);
 		}
 	}
 
@@ -2319,6 +2324,21 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 	      exp->exp_flvr_expire[1] ?
 	      (s64)(exp->exp_flvr_expire[1] - ktime_get_real_seconds()) : 0);
 	return -EACCES;
+
+nm_switch:
+#ifdef HAVE_SERVER_SUPPORT
+	if (!rc && req->rq_svc_ctx && req->rq_svc_ctx->sc_nodemap) {
+		rc = nodemap_member_switch(exp, req->rq_svc_ctx->sc_nodemap,
+					   true);
+		if (rc) {
+			/* do not fail on issue with nodemap switch */
+			CDEBUG(D_SEC, "%s: could not switch nodemap: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
+			rc = 0;
+		}
+	}
+#endif
+	return rc;
 }
 EXPORT_SYMBOL(sptlrpc_target_export_check);
 

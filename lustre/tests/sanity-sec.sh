@@ -12432,6 +12432,8 @@ test_102() {
 run_test 102 "SSK automatic key loading from mount point"
 
 cleanup_103() {
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
 	local test_key="$SK_PATH/$FSNAME-test103.key"
 
 	# ensure client is unmounted
@@ -12453,6 +12455,11 @@ cleanup_103() {
 	do_nodes $(comma_list $(all_server_nodes)) \
 		"$LGSS_SK -l $SK_PATH/$FSNAME.key -vvv" ||
 		error "failed to reload key on servers"
+
+	# check old exports have been gc'ed
+	wait_update_facet --verbose mds1 \
+		"$LCTL get_param nodemap.default.exports |
+			grep -c $client_nid" 0 120 || true
 
 	# Remount client
 	zconf_mount $HOSTNAME $MOUNT || error "re-mount $MOUNT failed"
@@ -12689,6 +12696,97 @@ test_104() {
 		error "wrong # keys in keyring after removing server key. Expected 0, got $key_cnt (5)"
 }
 run_test 104 "SSK key removal from keyring"
+
+cleanup_105() {
+	local nm_nid=$1
+	local nm_gss=$2
+
+	# ensure client is unmounted
+	umount_client $MOUNT || true
+
+	# remove nodemaps
+	do_facet mgs $LCTL nodemap_del $nm_nid
+	cleanup_local_client_nodemap $nm_gss
+
+	# remount all clients
+	restore_mount $MOUNT
+	if [[ "$MOUNT_2" ]]; then
+		restore_mount $MOUNT2
+	fi
+
+	restore_to_default_flavor
+}
+
+test_105() {
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+	local nm_nid=nm0
+	local nm_gss=c0
+	local exp_cnt
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	local_mode && skip "in local mode."
+
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS >= 2.17.50 for sec change nm update"
+
+	stack_trap "cleanup_105 $nm_nid $nm_gss"
+
+	# deactivate SSK for now
+	remove_flavor_all
+	wait_flavor cli2mdt null
+	wait_flavor cli2ost null
+
+	# unmount all clients
+	cleanup_mount $MOUNT
+	if [[ "$MOUNT_2" ]]; then
+		cleanup_mount $MOUNT2
+	fi
+
+	# create c0 nodemap with gssonly, SSK key already created by t-f
+	setup_local_client_nodemap $nm_gss 1 1
+	do_facet mgs $LCTL nodemap_del_range \
+		--name $nm_gss --range $client_nid ||
+		error "del range $client_nid from $nm_gss failed"
+	do_facet mgs $LCTL nodemap_modify --name $nm_gss \
+		--property gssonly_identification --value 1 ||
+		error "setting gssonly_identification on $nm_gss failed"
+	wait_nm_sync $nm_gss gssonly_identification
+
+	# create nm0 nodemap, with regular NID range
+	setup_local_client_nodemap $nm_nid 1 1
+	wait_nm_sync $nm_nid trusted_nodemap
+
+	# remount client to take nodemap into account
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount failed"
+
+	# check nodemap exports, should be in nm0 because flavor is null
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt=$(do_facet mds1 "$LCTL get_param nodemap.$nm_nid.exports |
+		  grep MDT | grep -c $client_nid")
+	(( exp_cnt > 0 )) ||
+		error "no exports for $client_nid on $nm_nid (1)"
+	exp_cnt=$(do_facet mds1 "$LCTL get_param nodemap.$nm_gss.exports |
+		  grep MDT | grep -c $client_nid")
+	(( exp_cnt == 0 )) ||
+		error "$exp_cnt != 0 exports for $client_nid on $nm_gss (1)"
+
+	restore_to_default_flavor || error "restore $SK_FLAVOR flavor failed"
+
+	# check nodemap exports, should have switched to c0
+	do_facet mds1 "$LCTL get_param nodemap.*.exports"
+	exp_cnt=$(do_facet mds1 "$LCTL get_param nodemap.$nm_nid.exports |
+		  grep MDT | grep -c $client_nid")
+	(( exp_cnt == 0 )) ||
+		error "$exp_cnt != 0 exports for $client_nid on $nm_nid (2)"
+	exp_cnt=$(do_facet mds1 "$LCTL get_param nodemap.$nm_gss.exports |
+		  grep MDT | grep -c $client_nid")
+	(( exp_cnt > 0 )) ||
+		error "no exports for $client_nid on $nm_gss (2)"
+}
+run_test 105 "update nodemap membership on flavor change"
 
 test_300() {
 	local principal="mock_iam_test"

@@ -805,6 +805,66 @@ out:
 EXPORT_SYMBOL(nodemap_del_member);
 
 /**
+ * nodemap_member_switch() - move an export to a new nodemap
+ * @exp: obd_export structure for the connection that is being moved
+ * @new_nm_name: new nodemap to switch the export to
+ * @gssonly: true if we require the new nodemap to have gssonly_identification
+ *
+ * Move an export to a new nodemap.
+ * This will decrease the refcount on the old nodemap, and increase the refcount
+ * on the new nodemap.
+ *
+ * Return:
+ * * %-EINVAL		export is NULL, or new_nm_name is invalid
+ * * %-ENOENT		nodemap not found
+ * * %-EPERM		nodemap does not have gssonly_identification property
+ */
+int nodemap_member_switch(struct obd_export *exp, char *new_nm_name,
+			  bool gssonly)
+{
+	struct lu_nodemap *old_nodemap = NULL, *new_nodemap;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!new_nm_name || !exp)
+		RETURN(-EINVAL);
+
+	/* Using ac lock to prevent nodemap reclassification while deleting. */
+	mutex_lock(&active_config_lock);
+
+	new_nodemap = nodemap_lookup(new_nm_name);
+	if (IS_ERR(new_nodemap)) {
+		rc = PTR_ERR(new_nodemap);
+		CDEBUG(D_SEC, "%s: nodemap '%s' does not exist: rc = %d\n",
+		       exp->exp_obd->obd_name, new_nm_name, rc);
+		GOTO(out, rc);
+	}
+
+	if (gssonly && !new_nodemap->nmf_gss_identify)
+		GOTO(out, rc = -EPERM);
+
+	/* do nothing if nodemap does not change */
+	old_nodemap = nodemap_get_from_exp(exp);
+	if (new_nodemap == old_nodemap) {
+		nodemap_putref(new_nodemap);
+		GOTO(out, rc = 0);
+	}
+
+	__nodemap_member_switch(exp, new_nodemap, false, false);
+
+out:
+	mutex_unlock(&active_config_lock);
+	/* in case of success, keep the new_nodemap ref from nodemap_lookup */
+	if (rc && !IS_ERR(new_nodemap))
+		nodemap_putref(new_nodemap);
+	if (!IS_ERR_OR_NULL(old_nodemap))
+		nodemap_putref(old_nodemap);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(nodemap_member_switch);
+
+/**
  * nodemap_add_idmap_helper() - add an idmap to the proper nodemap trees
  * @nodemap: nodemap to add idmap to
  * @id_type: NODEMAP_UID or NODEMAP_GID

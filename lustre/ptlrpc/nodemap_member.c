@@ -331,6 +331,63 @@ out_end:
 }
 
 /**
+ * __nodemap_member_switch() - move an export to a new nodemap
+ * @exp: obd_export structure for the connection that is being moved
+ * @new_nodemap: new nodemap to switch the export to
+ * @banned: true if export is in banlist of new_nodemap
+ * @newly_banned: true if export was not banned before change
+ *
+ * Move an export to a new nodemap.
+ * This has to be done 'by hand' because ted_nodemap should never be NULL on
+ * a live export, so nm_member_del() cannot be called.
+ * This needs to be called with the active_config_lock held.
+ *
+ */
+void __nodemap_member_switch(struct obd_export *exp,
+			     struct lu_nodemap *new_nodemap,
+			     bool banned, bool newly_banned)
+{
+	struct lu_nodemap *old_nodemap;
+	bool need_revoke = false;
+
+	/* could deadlock if new_nodemap also reclassifying,
+	 * active_config_lock serializes reclassifies
+	 */
+	mutex_lock(&new_nodemap->nm_member_list_lock);
+
+	list_del_init(&exp->exp_target_data.ted_nodemap_member);
+
+	spin_lock(&exp->exp_target_data.ted_nodemap_lock);
+	old_nodemap = exp->exp_target_data.ted_nodemap;
+	exp->exp_target_data.ted_nodemap = new_nodemap;
+	spin_unlock(&exp->exp_target_data.ted_nodemap_lock);
+	if (old_nodemap)
+		nodemap_putref(old_nodemap);
+
+	list_add(&exp->exp_target_data.ted_nodemap_member,
+		 &new_nodemap->nm_member_list);
+	mutex_unlock(&new_nodemap->nm_member_list_lock);
+
+	nm_register_obd_stats(new_nodemap, exp);
+
+	if (nodemap_active) {
+		if (!old_nodemap) {
+			need_revoke = true;
+		} else {
+			down_read(&old_nodemap->nm_idmap_lock);
+			if (newly_banned ||
+			    nodemap_change_need_update(old_nodemap,
+						       new_nodemap))
+				need_revoke = true;
+			up_read(&old_nodemap->nm_idmap_lock);
+		}
+	}
+
+	if (need_revoke)
+		nm_member_exp_revoke(exp, banned);
+}
+
+/**
  * nm_member_reclassify_nodemap() - Reclassify members of a nodemap
  * @nodemap: nodemap with members to reclassify
  *
@@ -431,36 +488,8 @@ classify:
 		}
 
 		if (new_nodemap != nodemap) {
-			/* could deadlock if new_nodemap also reclassifying,
-			 * active_config_lock serializes reclassifies
-			 */
-			mutex_lock(&new_nodemap->nm_member_list_lock);
-
-			/* don't use member_del because ted_nodemap
-			 * should never be NULL with a live export
-			 */
-			list_del_init(&exp->exp_target_data.ted_nodemap_member);
-
-			/* keep the new_nodemap ref from classify */
-			spin_lock(&exp->exp_target_data.ted_nodemap_lock);
-			exp->exp_target_data.ted_nodemap = new_nodemap;
-			spin_unlock(&exp->exp_target_data.ted_nodemap_lock);
-			nodemap_putref(nodemap);
-
-			list_add(&exp->exp_target_data.ted_nodemap_member,
-				 &new_nodemap->nm_member_list);
-			mutex_unlock(&new_nodemap->nm_member_list_lock);
-
-			nm_register_obd_stats(new_nodemap, exp);
-
-			if (nodemap_active) {
-				down_read(&nodemap->nm_idmap_lock);
-				if (newly_banned ||
-				    nodemap_change_need_update(nodemap,
-							       new_nodemap))
-					nm_member_exp_revoke(exp, banned);
-				up_read(&nodemap->nm_idmap_lock);
-			}
+			__nodemap_member_switch(exp, new_nodemap,
+						banned, newly_banned);
 		} else {
 			nodemap_putref(new_nodemap);
 		}

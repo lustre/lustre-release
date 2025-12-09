@@ -219,6 +219,9 @@ int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp);
 void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp);
 void nm_member_delete_list(struct lu_nodemap *nodemap);
 struct lu_nodemap *nodemap_classify_nid(struct lnet_nid *nid, bool *banned);
+void __nodemap_member_switch(struct obd_export *exp,
+			     struct lu_nodemap *new_nodemap,
+			     bool banned, bool newly_banned);
 void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap);
 void nm_member_revoke_locks(struct lu_nodemap *nodemap);
 void nm_member_revoke_locks_always(struct lu_nodemap *nodemap);
