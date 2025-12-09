@@ -2262,6 +2262,12 @@ int lod_use_defined_striping(const struct lu_env *env,
 			lod_comp->llc_extent.e_end = le64_to_cpu(ext->e_end);
 			lod_comp->llc_flags =
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags);
+			if (lod_comp->llc_flags & LCME_FL_PARITY) {
+				lod_comp->llc_dstripe_count =
+					comp_v1->lcm_entries[i].lcme_dstripe_count;
+				lod_comp->llc_cstripe_count =
+					comp_v1->lcm_entries[i].lcme_cstripe_count;
+			}
 			if (lod_comp->llc_flags & LCME_FL_NOSYNC)
 				lod_comp->llc_timestamp = le64_to_cpu(
 					comp_v1->lcm_entries[i].lcme_timestamp);
@@ -2548,6 +2554,13 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			lod_comp->llc_flags =
 				comp_v1->lcm_entries[i].lcme_flags &
 					LCME_CL_COMP_FLAGS;
+
+			if (lod_comp->llc_flags & LCME_FL_PARITY) {
+				lod_comp->llc_dstripe_count =
+					comp_v1->lcm_entries[i].lcme_dstripe_count;
+				lod_comp->llc_cstripe_count =
+					comp_v1->lcm_entries[i].lcme_cstripe_count;
+			}
 		}
 
 		pool_name = NULL;

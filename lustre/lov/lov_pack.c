@@ -265,6 +265,10 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 		if (lsme->lsme_flags & LCME_FL_NOSYNC)
 			lcme->lcme_timestamp =
 				cpu_to_le64(lsme->lsme_timestamp);
+		if (lsme->lsme_flags & LCME_FL_PARITY) {
+			lcme->lcme_dstripe_count = lsme->lsme_dstripe_count;
+			lcme->lcme_cstripe_count = lsme->lsme_cstripe_count;
+		}
 		lcme->lcme_extent.e_start =
 			cpu_to_le64(lsme->lsme_extent.e_start);
 		lcme->lcme_extent.e_end =

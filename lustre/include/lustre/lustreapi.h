@@ -206,6 +206,7 @@ enum llapi_layout_verbose  {
 	VERBOSE_COMPRESS_TYPE	= 0x200000,
 	VERBOSE_COMPRESS_LEVEL	= 0x400000,
 	VERBOSE_COMPRESS_CHUNK	= 0x800000,
+	VERBOSE_EC_COUNT	= 0x1000000,
 	VERBOSE_DEFAULT		= VERBOSE_STRIPE_COUNT | VERBOSE_STRIPE_SIZE |
 				  VERBOSE_STRIPE_OFFSET | VERBOSE_POOL |
 				  VERBOSE_OBJID | VERBOSE_GENERATION |
@@ -214,7 +215,8 @@ enum llapi_layout_verbose  {
 				  VERBOSE_COMP_START | VERBOSE_COMP_END |
 				  VERBOSE_COMP_ID | VERBOSE_MIRROR_COUNT |
 				  VERBOSE_MIRROR_ID | VERBOSE_EXT_SIZE |
-				  VERBOSE_INHERIT | VERBOSE_INHERIT_RR
+				  VERBOSE_INHERIT | VERBOSE_INHERIT_RR |
+				  VERBOSE_EC_COUNT
 };
 
 enum {
@@ -1410,6 +1412,16 @@ int llapi_layout_comp_add_extent(struct llapi_layout *layout,
 int llapi_layout_comp_add_ec(struct llapi_layout *layout, uint32_t mirror_id,
 			     uint64_t start, uint64_t end,
 			     uint8_t dstripe_count, uint8_t cstripe_count);
+/**
+ * Get EC coding stripe count from the current component.
+ */
+int llapi_layout_ec_cstripe_count_get(const struct llapi_layout *layout,
+				      uint8_t *cstripe_count);
+/**
+ * Get EC data stripe count from the current component.
+ */
+int llapi_layout_ec_dstripe_count_get(const struct llapi_layout *layout,
+				      uint8_t *dstripe_count);
 /**
  * Adds a first component of a mirror to the existing composite layout.
  */

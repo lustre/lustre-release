@@ -174,6 +174,9 @@ struct lod_layout_component {
 			struct lu_tgt_pool	  llc_ostlist;
 			struct dt_object	**llc_stripe;
 			__u32			 *llc_ost_indices;
+			/* EC component */
+			__u8			  llc_dstripe_count;
+			__u8			  llc_cstripe_count;
 		};
 		struct { /* Foreign mirror layout component */
 			__u32			  llc_length;

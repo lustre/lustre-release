@@ -3346,6 +3346,22 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 		separator = "\n";
 	}
 
+	/* Display EC-specific information for parity components */
+	if (verbose & VERBOSE_EC_COUNT &&
+	    (entry->lcme_flags & LCME_FL_PARITY)) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_EC_COUNT)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%4slcme_dstripe_count:  ", " ");
+		llapi_printf(LLAPI_MSG_NORMAL, "%u%s",
+				entry->lcme_dstripe_count, separator);
+		if (verbose & ~VERBOSE_EC_COUNT)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%4slcme_cstripe_count:  ", " ");
+		llapi_printf(LLAPI_MSG_NORMAL, "%u", entry->lcme_cstripe_count);
+		separator = "\n";
+	}
+
 	if (verbose & VERBOSE_COMP_START) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_COMP_START)

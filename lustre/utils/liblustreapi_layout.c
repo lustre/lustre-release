@@ -657,6 +657,12 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 			comp->llc_flags = ent->lcme_flags;
 			if (comp->llc_flags & LCME_FL_NOSYNC)
 				comp->llc_timestamp = ent->lcme_timestamp;
+			if (comp->llc_flags & LCME_FL_PARITY) {
+				comp->llc_dstripe_count =
+					ent->lcme_dstripe_count;
+				comp->llc_cstripe_count =
+					ent->lcme_cstripe_count;
+			}
 		} else {
 			comp->llc_extent.e_start = 0;
 			comp->llc_extent.e_end = LUSTRE_EOF;
@@ -970,6 +976,10 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 			ent->lcme_flags = comp->llc_flags;
 			if (ent->lcme_flags & LCME_FL_NOSYNC)
 				ent->lcme_timestamp = comp->llc_timestamp;
+			if (ent->lcme_flags & LCME_FL_PARITY) {
+				ent->lcme_dstripe_count = comp->llc_dstripe_count;
+				ent->lcme_cstripe_count = comp->llc_cstripe_count;
+			}
 			ent->lcme_extent.e_start = comp->llc_extent.e_start;
 			ent->lcme_extent.e_end = comp->llc_extent.e_end;
 			ent->lcme_size = blob_size;
@@ -2673,6 +2683,70 @@ int llapi_layout_comp_add_ec(struct llapi_layout *layout, uint32_t mirror_id,
 	comp->llc_flags |= LCME_FL_IS_LINK_ID;
 	layout->llot_curr_link_id++;
 
+	return 0;
+}
+
+/**
+ * Get EC coding stripe count from the current component.
+ *
+ * \param[in] layout		existing layout
+ * \param[out] cstripe_count	EC coding stripe count
+ *
+ * \retval	0 on success
+ * \retval	<0 if error occurs
+ */
+int llapi_layout_ec_cstripe_count_get(const struct llapi_layout *layout,
+				      uint8_t *cstripe_count)
+{
+	struct llapi_layout_comp *comp;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (!comp)
+		return -1;
+
+	if (!cstripe_count) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (!(comp->llc_flags & LCME_FL_PARITY)) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*cstripe_count = comp->llc_cstripe_count;
+	return 0;
+}
+
+/**
+ * Get EC data stripe count from the current component.
+ *
+ * \param[in] layout		existing layout
+ * \param[out] dstripe_count	EC data stripe count
+ *
+ * \retval	0 on success
+ * \retval	<0 if error occurs
+ */
+int llapi_layout_ec_dstripe_count_get(const struct llapi_layout *layout,
+				      uint8_t *dstripe_count)
+{
+	struct llapi_layout_comp *comp;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (!comp)
+		return -1;
+
+	if (!dstripe_count) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (!(comp->llc_flags & LCME_FL_PARITY)) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*dstripe_count = comp->llc_dstripe_count;
 	return 0;
 }
 

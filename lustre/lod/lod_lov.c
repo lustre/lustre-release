@@ -965,6 +965,10 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		if (lod_comp->llc_flags & LCME_FL_NOSYNC)
 			lcme->lcme_timestamp =
 				cpu_to_le64(lod_comp->llc_timestamp);
+		if (lod_comp->llc_flags & LCME_FL_PARITY) {
+			lcme->lcme_dstripe_count = lod_comp->llc_dstripe_count;
+			lcme->lcme_cstripe_count = lod_comp->llc_cstripe_count;
+		}
 		if (lod_comp->llc_flags & LCME_FL_EXTENSION && !is_dir)
 			lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_SEL);
 
@@ -1367,6 +1371,12 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			lod_comp->llc_flags =
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags);
 
+			if (lod_comp->llc_flags & LCME_FL_PARITY) {
+				lod_comp->llc_dstripe_count =
+					comp_v1->lcm_entries[i].lcme_dstripe_count;
+				lod_comp->llc_cstripe_count =
+					comp_v1->lcm_entries[i].lcme_cstripe_count;
+			}
 			if (lod_comp->llc_flags & LCME_FL_NOSYNC)
 				lod_comp->llc_timestamp = le64_to_cpu(
 					comp_v1->lcm_entries[i].lcme_timestamp);

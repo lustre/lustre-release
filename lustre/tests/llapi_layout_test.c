@@ -2442,6 +2442,75 @@ static void test49(void)
 	llapi_layout_free(layout);
 }
 
+/**
+ * Helper function to verify a component's EC parameters.
+ *
+ * \param[in] layout		layout to verify
+ * \param[in] expected_dstripe	expected dstripe count
+ * \param[in] expected_cstripe	expected cstripe count
+ * \param[in] comp_desc		description for error messages
+ *
+ * Note: Only parity comps have EC parameters set and the LCME_FL_PARITY flag.
+ */
+static void __verify_ec_comp(struct llapi_layout *layout,
+			     uint8_t expected_dstripe,
+			     uint8_t expected_cstripe,
+			     const char *comp_desc)
+{
+	uint32_t flags;
+	uint8_t cstripe, dstripe;
+	int rc;
+
+	rc = llapi_layout_comp_flags_get(layout, &flags);
+	ASSERTF(rc == 0, "%s: failed to get flags, errno = %d",
+		comp_desc, errno);
+
+	/* EC parameters are only set on parity components */
+	ASSERTF(flags & LCME_FL_PARITY,
+		"%s: PARITY flag not set on EC component", comp_desc);
+
+	rc = llapi_layout_ec_dstripe_count_get(layout, &dstripe);
+	ASSERTF(rc == 0, "%s: failed to get dstripe, errno = %d",
+		comp_desc, errno);
+	ASSERTF(dstripe == expected_dstripe,
+		"%s: dstripe %u != expected %u",
+		comp_desc, dstripe, expected_dstripe);
+
+	rc = llapi_layout_ec_cstripe_count_get(layout, &cstripe);
+	ASSERTF(rc == 0, "%s: failed to get cstripe, errno = %d",
+		comp_desc, errno);
+	ASSERTF(cstripe == expected_cstripe,
+		"%s: cstripe %u != expected %u",
+		comp_desc, cstripe, expected_cstripe);
+}
+
+/**
+ * Helper function to verify a component's extent.
+ *
+ * \param[in] layout		layout to verify
+ * \param[in] expected_start	expected extent start
+ * \param[in] expected_end	expected extent end
+ * \param[in] comp_desc		description for error messages
+ */
+static void __verify_comp_extent(struct llapi_layout *layout,
+				 uint64_t expected_start,
+				 uint64_t expected_end,
+				 const char *comp_desc)
+{
+	uint64_t start, end;
+	int rc;
+
+	rc = llapi_layout_comp_extent_get(layout, &start, &end);
+	ASSERTF(rc == 0, "%s: failed to get extent, errno = %d",
+		comp_desc, errno);
+	ASSERTF(start == expected_start,
+		"%s: extent start %"PRIu64" != expected %"PRIu64,
+		comp_desc, start, expected_start);
+	ASSERTF(end == expected_end,
+		"%s: extent end %"PRIu64" != expected %"PRIu64,
+		comp_desc, end, expected_end);
+}
+
 #define T50FILE		"f50"
 #define T50_DESC	"verify mixed parity mirror is rejected"
 static void test50(void)
@@ -2637,6 +2706,27 @@ static void test52(void)
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	llapi_layout_free(layout);
+
+	/* Verify the created file has the correct layout */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* Move to first component (Mirror 1, data component) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M1 data comp");
+	/* Note: stripe count may be capped by number of OSTs */
+
+	/* Move to second component (Mirror 2, EC parity component) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M2 EC parity");
+	/* EC(6,2) - dstripe=6, cstripe=2 */
+	__verify_ec_comp(layout, 6, 2, "M2 EC parity");
+
+	llapi_layout_free(layout);
 }
 
 #define T53FILE		"f53"
@@ -2701,6 +2791,34 @@ static void test53(void)
 
 	rc = close(fd);
 	ASSERTF(rc == 0, "errno = %d", errno);
+
+	llapi_layout_free(layout);
+
+	/* Verify the created file has the correct layout */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* M1 COMP1: [0, 1GiB] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 1024*1024*1024ULL, "M1 COMP1");
+
+	/* M1 COMP2: [1GiB, EOF] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M1 COMP2");
+
+	/* M2 EC1: [0, 1GiB] with EC(4,2) - dstripe=4, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 1024*1024*1024ULL, "M2 EC1");
+	__verify_ec_comp(layout, 4, 2, "M2 EC1");
+
+	/* M2 EC2: [1GiB, EOF] with EC(6,2) - dstripe=6, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M2 EC2");
+	__verify_ec_comp(layout, 6, 2, "M2 EC2");
 
 	llapi_layout_free(layout);
 }
@@ -2799,6 +2917,60 @@ static void test54(void)
 
 	rc = close(fd);
 	ASSERTF(rc == 0, "errno = %d", errno);
+
+	llapi_layout_free(layout);
+
+	/* Verify the created file has the correct layout */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* M1 COMP1: [0, 256MiB] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 256*1024*1024ULL, "M1 COMP1");
+
+	/* M1 COMP2: [256MiB, 512MiB] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 256*1024*1024ULL, 512*1024*1024ULL,
+			     "M1 COMP2");
+
+	/* M1 COMP3: [512MiB, 1GiB] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 512*1024*1024ULL, 1024*1024*1024ULL,
+			     "M1 COMP3");
+
+	/* M1 COMP4: [1GiB, EOF] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M1 COMP4");
+
+	/* M2 EC1: [0, 256MiB] with EC(2,1) - dstripe=2, cstripe=1 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 256*1024*1024ULL, "M2 EC1");
+	__verify_ec_comp(layout, 2, 1, "M2 EC1");
+
+	/* M2 EC2: [256MiB, 512MiB] with EC(4,2) - dstripe=4, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 256*1024*1024ULL, 512*1024*1024ULL,
+			     "M2 EC2");
+	__verify_ec_comp(layout, 4, 2, "M2 EC2");
+
+	/* M2 EC3: [512MiB, 1GiB] with EC(6,2) - dstripe=6, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 512*1024*1024ULL, 1024*1024*1024ULL,
+			     "M2 EC3");
+	__verify_ec_comp(layout, 6, 2, "M2 EC3");
+
+	/* M2 EC4: [1GiB, EOF] with EC(8,3) - dstripe=8, cstripe=3 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M2 EC4");
+	__verify_ec_comp(layout, 8, 3, "M2 EC4");
 
 	llapi_layout_free(layout);
 }
@@ -2963,6 +3135,45 @@ static void test56(void)
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	llapi_layout_free(layout);
+
+	/* Verify the created file has the correct layout */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* M1 COMP1: [0, 1GiB] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 1024*1024*1024ULL, "M1 COMP1");
+
+	/* M1 COMP2: [1GiB, EOF] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M1 COMP2");
+
+	/* M2 EC1: [0, 1GiB] with EC(4,2) - dstripe=4, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 1024*1024*1024ULL, "M2 EC1");
+	__verify_ec_comp(layout, 4, 2, "M2 EC1");
+
+	/* M2 EC2: [1GiB, EOF] with EC(6,2) - dstripe=6, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M2 EC2");
+	__verify_ec_comp(layout, 6, 2, "M2 EC2");
+
+	/* M3 COMP1: [0, 2GiB] - regular data component (no EC) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 2*1024*1024*1024ULL, "M3 COMP1");
+
+	/* M3 COMP2: [2GiB, EOF] - regular data component (no EC) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 2*1024*1024*1024ULL, LUSTRE_EOF,
+			     "M3 COMP2");
+
+	llapi_layout_free(layout);
 }
 
 #define T57FILE		"f57"
@@ -3070,6 +3281,45 @@ static void test57(void)
 
 	rc = close(fd);
 	ASSERTF(rc == 0, "errno = %d", errno);
+
+	llapi_layout_free(layout);
+
+	/* Verify the created file has the correct layout */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* M1 COMP1: [0, 1GiB] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 1024*1024*1024ULL, "M1 COMP1");
+
+	/* M1 COMP2: [1GiB, EOF] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M1 COMP2");
+
+	/* M2 EC1: [0, 1GiB] with EC(4,2) - dstripe=4, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 1024*1024*1024ULL, "M2 EC1");
+	__verify_ec_comp(layout, 4, 2, "M2 EC1");
+
+	/* M2 EC2: [1GiB, EOF] with EC(6,2) - dstripe=6, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M2 EC2");
+	__verify_ec_comp(layout, 6, 2, "M2 EC2");
+
+	/* M3 COMP1: [0, 2GiB] - regular data component (no EC) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 2*1024*1024*1024ULL, "M3 COMP1");
+
+	/* M3 COMP2: [2GiB, EOF] - regular data component (no EC) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 2*1024*1024*1024ULL, LUSTRE_EOF,
+			     "M3 COMP2");
 
 	llapi_layout_free(layout);
 }
@@ -3183,6 +3433,64 @@ static void test58(void)
 
 	rc = close(fd);
 	ASSERTF(rc == 0, "errno = %d", errno);
+
+	llapi_layout_free(layout);
+
+	/* Verify the created file has the correct layout */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* M1 COMP1: [0, 512MiB] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 512*1024*1024ULL, "M1 COMP1");
+
+	/* M1 COMP2: [512MiB, 1GiB] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 512*1024*1024ULL, 1024*1024*1024ULL,
+			     "M1 COMP2");
+
+	/* M1 COMP3: [1GiB, EOF] - data component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF,
+			     "M1 COMP3");
+
+	/* M2 EC1: [0, 512MiB] with EC(2,1) - dstripe=2, cstripe=1 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 512*1024*1024ULL, "M2 EC1");
+	__verify_ec_comp(layout, 2, 1, "M2 EC1");
+
+	/* M2 EC2: [512MiB, 1GiB] with EC(4,2) - dstripe=4, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 512*1024*1024ULL, 1024*1024*1024ULL,
+			     "M2 EC2");
+	__verify_ec_comp(layout, 4, 2, "M2 EC2");
+
+	/* M2 EC3: [1GiB, EOF] with EC(6,2) - dstripe=6, cstripe=2 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 1024*1024*1024ULL, LUSTRE_EOF, "M2 EC3");
+	__verify_ec_comp(layout, 6, 2, "M2 EC3");
+
+	/* M3 COMP1: [0, 2GiB] - regular data component (no EC) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, 2*1024*1024*1024ULL, "M3 COMP1");
+
+	/* M3 COMP2: [2GiB, EOF] - regular data component (no EC) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 2*1024*1024*1024ULL, LUSTRE_EOF,
+			     "M3 COMP2");
+
+	/* M4 COMP1: [0, EOF] - regular data component (no EC) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M4 COMP1");
 
 	llapi_layout_free(layout);
 }
