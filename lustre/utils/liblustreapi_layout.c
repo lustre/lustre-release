@@ -2676,6 +2676,14 @@ int llapi_layout_comp_add_ec(struct llapi_layout *layout, uint32_t mirror_id,
 	 * corresponding data components.
 	 */
 	parity_comp->llc_stripe_size = comp->llc_stripe_size;
+	/*
+	 * Copy pool name from the matching data component so that
+	 * parity components inherit the same pool placement.
+	 */
+	if (comp->llc_pool_name[0] != '\0')
+		snprintf(parity_comp->llc_pool_name,
+			 sizeof(parity_comp->llc_pool_name), "%s",
+			 comp->llc_pool_name);
 
 	/* bi-directional link for data and parity components */
 	parity_comp->llc_mirror_link_id = layout->llot_curr_link_id;

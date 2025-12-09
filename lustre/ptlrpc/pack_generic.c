@@ -2461,10 +2461,10 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 			CDEBUG(lvl, "\tlcme_mirror_link_id: %#x\n",
 			       ent->lcme_mirror_link_id);
 		if (ent->lcme_flags & LCME_FL_PARITY) {
-			CDEBUG_LIMIT(lvl, "\tlcme_dstripe_count: %u\n",
-				     ent->lcme_dstripe_count);
-			CDEBUG_LIMIT(lvl, "\tlcme_cstripe_count: %u\n",
-				     ent->lcme_cstripe_count);
+			CDEBUG(lvl, "\tlcme_dstripe_count: %u\n",
+			       ent->lcme_dstripe_count);
+			CDEBUG(lvl, "\tlcme_cstripe_count: %u\n",
+			       ent->lcme_cstripe_count);
 		}
 		CDEBUG(lvl, "\tlcme_extent.e_start: %llu\n",
 		       ent->lcme_extent.e_start);

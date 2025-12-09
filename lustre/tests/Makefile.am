@@ -40,6 +40,7 @@ noinst_SCRIPTS += sanity-scrub.sh scrub-performance.sh ha.sh pjdfstest.sh
 noinst_SCRIPTS += sanity-lfsck.sh lfsck-performance.sh
 noinst_SCRIPTS += sanity-hsm.sh sanity-lsnapshot.sh sanity-pfl.sh sanity-flr.sh
 noinst_SCRIPTS += sanity-dom.sh sanity-pcc.sh dom-performance.sh sanity-lnet.sh
+noinst_SCRIPTS += sanity-ec.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += test-groups/regression test-groups/regression-mpi
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh

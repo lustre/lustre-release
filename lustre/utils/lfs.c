@@ -200,6 +200,8 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\t\t[--comp-set --comp-id|-I COMP_ID|--comp-flags=COMP_FLAGS]\n"     \
 	"\t\t[--component-end|-E END_OFFSET]\n"			\
 	"\t\t[--copy=SOURCE_LAYOUT_FILE]|--yaml|-y YAML_TEMPLATE_FILE]\n"     \
+	"\t\t[--ec|--ec-stripe-count DATA+PARITY]\n"		\
+	"\t\t[--ec-expert DATA+PARITY]\n"			\
 	"\t\t[--extension-size|--ext-size|-z EXT_SIZE]\n"	\
 	"\t\t[--help|-h]\n"					\
 	"\t\t[--foreign=FOREIGN_TYPE --xattr|-x LAYOUT]\n"	\
@@ -1748,6 +1750,8 @@ static int mirror_str2state(char *string, __u16 *state, __u16 *neg_state)
  * @m_layout: Mirror layout.
  * @m_file:   A victim file. Its layout will be split and used as a mirror.
  * @m_next:   Point to the next node of the list.
+ * @m_inherit: Whether to inherit unspecified attributes from previous mirror.
+ * @m_has_ec: True if this layout already contains EC parity components.
  *
  * Command-line arguments for mirror(s) will be parsed and stored in
  * a linked list that consists of this structure.
@@ -1759,6 +1763,7 @@ struct mirror_args {
 	const char			*m_file;
 	struct mirror_args		*m_next;
 	bool				m_inherit;
+	bool				m_has_ec;
 };
 
 /**
@@ -1832,11 +1837,17 @@ static int mirror_create_sanity_check(const char *fname,
 				return -EINVAL;
 			}
 		}
-		rc = llapi_layout_v2_sanity(list->m_layout, false, true,
-					    fsname);
-		if (rc) {
-			llapi_layout_sanity_perror(rc);
-			return rc;
+
+		/* Skip validation for layouts with EC parity - they will
+		 * be validated after merging in mirror_create().
+		 */
+		if (!list->m_has_ec) {
+			rc = llapi_layout_v2_sanity(list->m_layout, false, true,
+						    fsname);
+			if (rc) {
+				llapi_layout_sanity_perror(rc);
+				return rc;
+			}
 		}
 
 		list = list->m_next;
@@ -1905,6 +1916,12 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 			goto error;
 		}
 
+		/* If this layout already contains EC parity components,
+		 * the layout contains multiple mirrors (data + parity).
+		 * We need to merge it m_count times, and each merge adds
+		 * 2 mirrors (data + parity), so the total mirror count
+		 * is m_count * 2.
+		 */
 		for (i = 0; i < cur_mirror->m_count; i++) {
 			rc = llapi_layout_merge(&layout, cur_mirror->m_layout);
 			if (rc) {
@@ -1915,7 +1932,16 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 				goto error;
 			}
 		}
-		mirror_count += cur_mirror->m_count;
+
+		if (cur_mirror->m_has_ec) {
+			/* Layout contains 2 mirrors (data + parity), so
+			 * each merge adds 2 mirrors.
+			 */
+			mirror_count += cur_mirror->m_count * 2;
+		} else {
+			mirror_count += cur_mirror->m_count;
+		}
+
 		cur_mirror = cur_mirror->m_next;
 	}
 
@@ -1929,6 +1955,14 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 		rc = -errno;
 		fprintf(stderr, "error: %s: set mirror count failed: %s\n",
 			progname, strerror(errno));
+		goto error;
+	}
+
+	/* Validate the merged layout */
+	rc = llapi_layout_sanity(layout, false, true);
+	if (rc) {
+		llapi_layout_sanity_perror(rc);
+		rc = -EINVAL;
 		goto error;
 	}
 
@@ -3041,6 +3075,13 @@ static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
 	return rc < 0 ? rc : nr;
 }
 
+/* EC specification for a component */
+struct ec_spec {
+	int comp_index;        /* Which component this applies to (-1 = not set) */
+	uint8_t data_count;    /* k in k+m */
+	uint8_t parity_count;  /* m in k+m */
+};
+
 struct lfs_setstripe_args {
 	unsigned long long	 lsa_comp_end;
 	unsigned long long	 lsa_stripe_size;
@@ -3057,10 +3098,20 @@ struct lfs_setstripe_args {
 	bool			 lsa_extension_comp;
 	__u32			*lsa_tgts;
 	char			*lsa_pool_name;
+	/* EC support */
+	struct ec_spec		*lsa_ec_specs;  /* Array of EC specifications */
+	int			 lsa_ec_spec_count; /* Number of EC specs */
+	int			 lsa_comp_count;    /* Total components added */
+	bool			 lsa_has_ec;        /* Whether --ec was specified */
 };
 
 static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
 {
+	struct ec_spec *ec_specs = lsa->lsa_ec_specs;
+	int ec_spec_count = lsa->lsa_ec_spec_count;
+	int comp_count = lsa->lsa_comp_count;
+	bool has_ec = lsa->lsa_has_ec;
+
 	memset(lsa, 0, sizeof(*lsa));
 
 	lsa->lsa_stripe_size = LLAPI_LAYOUT_DEFAULT;
@@ -3069,6 +3120,11 @@ static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
 	lsa->lsa_pattern = LLAPI_LAYOUT_RAID0;
 	lsa->lsa_hash = LMV_HASH_TYPE_UNKNOWN;
 	lsa->lsa_pool_name = NULL;
+
+	lsa->lsa_ec_specs = ec_specs;
+	lsa->lsa_ec_spec_count = ec_spec_count;
+	lsa->lsa_comp_count = comp_count;
+	lsa->lsa_has_ec = has_ec;
 }
 
 /**
@@ -3786,6 +3842,10 @@ static inline bool arg_is_eof(char *arg)
 	       !strncmp(arg, "eof", strlen("eof"));
 }
 
+/* Forward declaration */
+static int apply_ec_specs(struct ec_spec *ec_specs, int ec_spec_count,
+			  int comp_count, int **ec_map);
+
 /**
  * lfs_mirror_alloc() - Allocate a mirror argument structure.
  *
@@ -3855,6 +3915,8 @@ enum {
 	LFS_COMP_SET_OPT,
 	LFS_COMP_ADD_OPT,
 	LFS_COMP_NO_VERIFY_OPT,
+	LFS_EC_STRIPE_COUNT_OPT,
+	LFS_EC_EXPERT_OPT,
 	LFS_PROJID_OPT,
 	LFS_LAYOUT_FLAGS_OPT, /* used for mirror and foreign flags */
 	LFS_MIRROR_ID_OPT,
@@ -3900,6 +3962,380 @@ enum {
 #endif
 
 /* functions */
+
+/**
+ * apply_ec_specs() - Apply EC specifications to all components.
+ * @ec_specs:      Array of EC specifications.
+ * @ec_spec_count: Number of EC specifications.
+ * @comp_count:    Total number of components.
+ * @ec_map:        Output array mapping component index to EC spec index.
+ *
+ * Apply EC specifications to components: each --ec value applies to its
+ * component and inherits to subsequent components until replaced by another
+ * --ec. The first --ec also applies to any earlier components.
+ *
+ * Return: 0 on success, -ENOMEM on failure.
+ */
+static int apply_ec_specs(struct ec_spec *ec_specs, int ec_spec_count,
+			  int comp_count, int **ec_map)
+{
+	int *map;
+	int i, j;
+
+	if (ec_spec_count == 0 || comp_count == 0)
+		return -EINVAL;
+
+	/* Allocate map: component index -> EC spec index (-1 = none) */
+	map = malloc(comp_count * sizeof(int));
+	if (!map)
+		return -ENOMEM;
+
+	/* Initialize all to -1 (no EC) */
+	for (i = 0; i < comp_count; i++)
+		map[i] = -1;
+
+	/* Single EC spec: applies to all components */
+	if (ec_spec_count == 1) {
+		for (i = 0; i < comp_count; i++)
+			map[i] = 0;
+		*ec_map = map;
+		return 0;
+	}
+
+	/*
+	 * Multiple EC specs: each inherits to subsequent components.
+	 * Each --ec value applies to its component and all following
+	 * components until replaced by the next --ec (or end of components).
+	 */
+	for (i = 0; i < ec_spec_count; i++) {
+		int comp_idx = ec_specs[i].comp_index;
+		int next_boundary = comp_count;
+
+		/* Find next EC boundary */
+		for (j = i + 1; j < ec_spec_count; j++) {
+			if (ec_specs[j].comp_index > comp_idx) {
+				next_boundary = ec_specs[j].comp_index;
+				break;
+			}
+		}
+
+		/* Apply from comp_idx to next_boundary */
+		for (j = comp_idx; j < next_boundary; j++)
+			map[j] = i;
+	}
+
+	/*
+	 * Apply first --ec to any earlier components.
+	 * Fill in any remaining gaps (map[i] == -1) with the first
+	 * EC spec found to the right.
+	 */
+	for (i = 0; i < comp_count; i++) {
+		if (map[i] == -1) {
+			/* Find first EC spec to the right */
+			for (j = i + 1; j < comp_count; j++) {
+				if (map[j] != -1) {
+					map[i] = map[j];
+					break;
+				}
+			}
+		}
+	}
+
+	*ec_map = map;
+	return 0;
+}
+
+/**
+ * create_ec_parity_mirror() - Create parity mirror from data mirror.
+ * @layout:          Layout containing the data mirror.
+ * @ec_specs:        Array of EC specifications.
+ * @ec_spec_count:   Number of EC specifications.
+ *
+ * Create a parity mirror by iterating through the data mirror components,
+ * extracting their properties (extent, stripe_size, pool), and creating
+ * matching EC parity components with the appropriate EC parameters.
+ *
+ * The caller is responsible for setting the mirror count on the layout.
+ * In mirror mode, mirror_create() sets the mirror count. In non-mirror mode,
+ * the caller should set the mirror count to 2 (data + parity) after calling
+ * this function.
+ *
+ * Return: 0 on success, negative error code on failure.
+ */
+static int create_ec_parity_mirror(struct llapi_layout *layout,
+				   struct ec_spec *ec_specs,
+				   int ec_spec_count)
+{
+	struct {
+		uint64_t start;
+		uint64_t end;
+		uint64_t stripe_count;
+		uint32_t mirror_id;
+		int ec_idx;
+	} *comp_info = NULL;
+	int *ec_map = NULL;
+	int rc, i, comp_count;
+
+	if (!layout || !ec_specs || ec_spec_count == 0)
+		return -EINVAL;
+
+	/* Move to first component of data mirror */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc) {
+		fprintf(stderr, "error: cannot move to first component: %s\n",
+			strerror(errno));
+		return rc;
+	}
+
+	/* Count components by iterating through them */
+	comp_count = 1;
+	while (llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT) == 0)
+		comp_count++;
+
+	/*
+	 * Normalize EC spec comp_index values to be relative to this mirror.
+	 * The comp_index values are global (across all mirrors), but we need
+	 * them to be local (starting from 0) for propagation to work correctly.
+	 */
+	int min_comp_index = INT_MAX;
+
+	for (i = 0; i < ec_spec_count; i++) {
+		if (ec_specs[i].comp_index < min_comp_index)
+			min_comp_index = ec_specs[i].comp_index;
+	}
+
+	/* Create a temporary copy of EC specs with normalized comp_index */
+	struct ec_spec *normalized_specs = calloc(ec_spec_count,
+						  sizeof(struct ec_spec));
+	if (!normalized_specs) {
+		fprintf(stderr, "error: cannot allocate normalized EC specs\n");
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < ec_spec_count; i++) {
+		normalized_specs[i] = ec_specs[i];
+		normalized_specs[i].comp_index -= min_comp_index;
+	}
+
+	/* Apply EC specs to get mapping for each component */
+	rc = apply_ec_specs(normalized_specs, ec_spec_count, comp_count,
+			    &ec_map);
+	free(normalized_specs);
+	if (rc) {
+		fprintf(stderr, "error: failed to apply EC specs: %s\n",
+			strerror(-rc));
+		return rc;
+	}
+
+	rc = llapi_layout_mirror_count_sync(layout);
+	if (rc) {
+		fprintf(stderr, "error: cannot sync mirror count: %s\n",
+			strerror(errno));
+		goto out_free;
+	}
+
+	/* Allocate array to store component info */
+	comp_info = calloc(comp_count, sizeof(*comp_info));
+	if (!comp_info) {
+		rc = -ENOMEM;
+		goto out_free;
+	}
+
+	/* Move back to first component */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc) {
+		fprintf(stderr, "error: cannot move to first component: %s\n",
+			strerror(errno));
+		goto out_free;
+	}
+
+	/* Collect extent information from all data mirror components */
+	for (i = 0; i < comp_count; i++) {
+		int ec_idx = ec_map[i];
+
+		if (ec_idx < 0 || ec_idx >= ec_spec_count) {
+			fprintf(stderr,
+				"error: invalid EC mapping for component %d\n",
+				i);
+			rc = -EINVAL;
+			goto out_free;
+		}
+
+		/* Get component extent */
+		rc = llapi_layout_comp_extent_get(layout,
+						  &comp_info[i].start,
+						  &comp_info[i].end);
+		if (rc) {
+			fprintf(stderr,
+				"error: cannot get component %d extent: %s\n",
+				i, strerror(errno));
+			goto out_free;
+		}
+
+		/* Get component stripe count */
+		rc = llapi_layout_stripe_count_get(layout,
+						   &comp_info[i].stripe_count);
+		if (rc) {
+			fprintf(stderr,
+				"error: cannot get component %d stripe count: %s\n",
+				i, strerror(errno));
+			goto out_free;
+		}
+
+		/* Get component mirror ID */
+		rc = llapi_layout_mirror_id_get(layout,
+						&comp_info[i].mirror_id);
+		if (rc) {
+			fprintf(stderr,
+				"error: cannot get component %d mirror ID: %s\n",
+				i, strerror(errno));
+			goto out_free;
+		}
+
+		comp_info[i].ec_idx = ec_idx;
+
+		/* Move to next component for next iteration */
+		if (i < comp_count - 1) {
+			rc = llapi_layout_comp_use(layout,
+						   LLAPI_LAYOUT_COMP_USE_NEXT);
+			if (rc) {
+				fprintf(stderr,
+					"error: cannot move to next component: %s\n",
+					strerror(errno));
+				goto out_free;
+			}
+		}
+	}
+
+	/* Now create EC components for each data component */
+	for (i = 0; i < comp_count; i++) {
+		uint8_t data_count, parity_count;
+
+		/* Get EC parameters for this component */
+		data_count = ec_specs[comp_info[i].ec_idx].data_count;
+		parity_count = ec_specs[comp_info[i].ec_idx].parity_count;
+
+		/*
+		 * Reduce EC data count if the actual stripe count is less
+		 * than k. E.g.: -E 128M -c 4 -E -1 -c 16 --ec 8+2
+		 * creates EC 4+2 for first component and EC 8+2 for second.
+		 */
+		if (comp_info[i].stripe_count < data_count)
+			data_count = comp_info[i].stripe_count;
+
+		/* Create EC parity component */
+		rc = llapi_layout_comp_add_ec(layout, comp_info[i].mirror_id,
+					      comp_info[i].start,
+					      comp_info[i].end,
+					      data_count, parity_count);
+		if (rc) {
+			fprintf(stderr,
+				"error: cannot add EC component [%llu, %llu] to protect mirror id %u with EC(%u+%u): %s\n",
+				(unsigned long long)comp_info[i].start,
+				(unsigned long long)comp_info[i].end,
+				comp_info[i].mirror_id, data_count,
+				parity_count, strerror(errno));
+			goto out_free;
+		}
+	}
+
+	/* Validate the layout */
+	rc = llapi_layout_sanity(layout, false, false);
+	if (rc)
+		goto out_free;
+
+	rc = 0;
+
+out_free:
+	free(comp_info);
+	free(ec_map);
+	return rc;
+}
+
+/* EC stripe count limits for non-expert mode */
+#define LOV_EC_DATA_STRIPES_RECOMMENDED   32
+#define LOV_EC_CODING_STRIPES_RECOMMENDED 4
+
+/**
+ * parse_ec_stripe_count() - Parse EC stripe count in k+m or k:m format.
+ * @optarg:      String containing EC stripe count (e.g., "4+2" or "4:2").
+ * @data_count:  Pointer to store data stripe count (k).
+ * @parity_count: Pointer to store parity stripe count (m).
+ * @ec_expert:   Whether --ec-expert flag was specified.
+ *
+ * Parse the EC stripe count string in "k+m" or "k:m" format where k is the
+ * number of data stripes and m is the number of parity stripes.
+ *
+ * Return: 0 on success, -EINVAL on failure.
+ */
+static int parse_ec_stripe_count(const char *optarg, uint8_t *data_count,
+				  uint8_t *parity_count, bool ec_expert)
+{
+	char *end;
+	unsigned long data, parity;
+	char *sep;
+
+	/* Find the '+' or ':' separator */
+	sep = strchr(optarg, '+');
+	if (!sep)
+		sep = strchr(optarg, ':');
+	if (!sep) {
+		fprintf(stderr,
+			"error: invalid EC stripe count '%s', expected format: DATA+PARITY or DATA:PARITY\n",
+			optarg);
+		return -EINVAL;
+	}
+
+	/* Parse data count */
+	errno = 0;
+	data = strtoul(optarg, &end, 0);
+	if (errno != 0 || end != sep || data == 0 || data < 2 ||
+	    data > UINT8_MAX) {
+		fprintf(stderr,
+			"error: invalid data stripe count in '%s'\n", optarg);
+		return -EINVAL;
+	}
+
+	/* Parse parity count */
+	errno = 0;
+	parity = strtoul(sep + 1, &end, 0);
+	if (errno != 0 || *end != '\0' || parity == 0 || parity > UINT8_MAX) {
+		fprintf(stderr,
+			"error: invalid parity stripe count in '%s'\n",
+			optarg);
+		return -EINVAL;
+	}
+
+	/* Validate EC parameters */
+	if (parity > data) {
+		fprintf(stderr,
+			"error: parity count (%lu) must be less than or equal to data count (%lu)\n",
+			parity, data);
+		return -EINVAL;
+	}
+
+	/* Check supported limits unless --ec-expert is specified */
+	if (!ec_expert) {
+		if (data > LOV_EC_DATA_STRIPES_RECOMMENDED) {
+			fprintf(stderr,
+				"error: data stripe count (%lu) exceeds supported limit (%u). Use --ec-expert to override.\n",
+				data, LOV_EC_DATA_STRIPES_RECOMMENDED);
+			return -EINVAL;
+		}
+
+		if (parity > LOV_EC_CODING_STRIPES_RECOMMENDED) {
+			fprintf(stderr,
+				"error: parity stripe count (%lu) exceeds supported limit (%u). Use --ec-expert to override.\n",
+				parity, LOV_EC_CODING_STRIPES_RECOMMENDED);
+			return -EINVAL;
+		}
+	}
+
+	*data_count = (uint8_t)data;
+	*parity_count = (uint8_t)parity;
+
+	return 0;
+}
 
 static int guess_only_lustre_mount_root(char *mntdir)
 {
@@ -4062,6 +4498,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument},
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument},
+	{ .val = LFS_EC_STRIPE_COUNT_OPT,
+			.name = "ec",		.has_arg = required_argument},
+	{ .val = LFS_EC_STRIPE_COUNT_OPT,
+			.name = "ec-stripe-count", .has_arg = required_argument},
+	{ .val = LFS_EC_EXPERT_OPT,
+			.name = "ec-expert",	.has_arg = required_argument},
 	{ .val = 'f',	.name = "file",		.has_arg = required_argument },
 	{ .val = 'F',	.name = "fid",		.has_arg = no_argument },
 /* find	{ .val = 'g',	.name = "gid",		.has_arg = no_argument }, */
@@ -4405,6 +4847,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					goto usage_error;
 				}
 
+				lsa.lsa_comp_count++;
 				setstripe_args_init_inherit(&lsa);
 			}
 
@@ -4427,6 +4870,43 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			comp_end_set = true;
 			break;
+		case LFS_EC_STRIPE_COUNT_OPT:
+		case LFS_EC_EXPERT_OPT: {
+			uint8_t data_count, parity_count;
+			struct ec_spec *new_specs;
+			bool ec_expert = (c == LFS_EC_EXPERT_OPT);
+
+			/* Parse EC stripe count */
+			result = parse_ec_stripe_count(optarg, &data_count,
+						       &parity_count,
+						       ec_expert);
+			if (result)
+				goto usage_error;
+
+			/* Allocate or expand EC specs array */
+			new_specs = realloc(lsa.lsa_ec_specs,
+					    (lsa.lsa_ec_spec_count + 1) *
+					    sizeof(struct ec_spec));
+			if (!new_specs) {
+				fprintf(stderr,
+					"%s %s: cannot allocate EC spec array: %s\n",
+					progname, argv[0],
+					strerror(ENOMEM));
+				result = -ENOMEM;
+				goto error;
+			}
+
+			lsa.lsa_ec_specs = new_specs;
+			lsa.lsa_ec_specs[lsa.lsa_ec_spec_count].comp_index =
+				lsa.lsa_comp_count;
+			lsa.lsa_ec_specs[lsa.lsa_ec_spec_count].data_count =
+				data_count;
+			lsa.lsa_ec_specs[lsa.lsa_ec_spec_count].parity_count =
+				parity_count;
+			lsa.lsa_ec_spec_count++;
+			lsa.lsa_has_ec = true;
+			break;
+		}
 		case 'F':
 			fid_mode = true;
 			break;
@@ -4666,9 +5146,43 @@ create_mirror:
 					goto error;
 				}
 
-				setstripe_args_init_inherit(&lsa);
+				lsa.lsa_comp_count++;
+
+				/* Create EC parity mirror if this mirror has EC */
+				if (lsa.lsa_has_ec &&
+				    lsa.lsa_ec_spec_count > 0) {
+					result = create_ec_parity_mirror(
+							last_mirror->m_layout,
+							lsa.lsa_ec_specs,
+							lsa.lsa_ec_spec_count);
+					if (result) {
+						fprintf(stderr,
+							"error: %s: failed to create EC parity mirror\n",
+							progname);
+						lfs_mirror_free(new_mirror);
+						goto error;
+					}
+
+					/* Mark that this layout already contains
+					 * EC parity components. The layout now
+					 * contains 2 mirrors (data + parity).
+					 * We keep m_count at its original value
+					 * (e.g., 1 for -N, 2 for -N2, etc.), and
+					 * set m_has_ec=true so that mirror_create()
+					 * knows to multiply the mirror count by 2.
+					 */
+					last_mirror->m_has_ec = true;
+
+					/* Clear EC specs for next mirror */
+					free(lsa.lsa_ec_specs);
+					lsa.lsa_ec_specs = NULL;
+					lsa.lsa_ec_spec_count = 0;
+					lsa.lsa_has_ec = false;
+				}
 
 				last_mirror->m_next = new_mirror;
+
+				setstripe_args_init_inherit(&lsa);
 			}
 
 			last_mirror = new_mirror;
@@ -4947,6 +5461,45 @@ create_mirror:
 		return CMD_HELP;
 	}
 
+	/* Validate EC options */
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 17, 90, 0)
+#error "Remove LFS_EC_OK check for 2.18 release"
+#endif
+	if (lsa.lsa_has_ec) {
+		static bool ec_warning_printed;
+
+		if (!ec_warning_printed &&
+		    getenv("LFS_EC_OK") == NULL) {
+			fprintf(stderr,
+				"WARNING: Erasure coding implementation is incomplete and not yet intended for production use. This message will be removed once erasure coding is complete. To turn on erasure coding support, set LFS_EC_OK=yes to acknowledge this limitation.\n");
+			ec_warning_printed = true;
+			result = -EOPNOTSUPP;
+			goto error;
+		}
+
+		if (foreign_mode) {
+			fprintf(stderr,
+				"error: %s: --ec cannot be used with --foreign\n",
+				progname);
+			goto usage_error;
+		}
+
+		if (comp_add || comp_del || comp_set) {
+			fprintf(stderr,
+				"error: %s: --ec cannot be used with --component-add/del/set\n",
+				progname);
+			goto usage_error;
+		}
+
+		/*
+		 * Automatically create a [0,EOF] component if --ec was
+		 * specified without -E, similar to how compression and
+		 * mirror addition work.
+		 */
+		if (lsa.lsa_comp_end == 0 && !mirror_mode)
+			lsa.lsa_comp_end = LUSTRE_EOF;
+	}
+
 	if (mirror_mode && (!mirror_total_mode || mirror_count)) {
 		if (mirror_count == 0)
 			goto create_mirror;
@@ -4963,6 +5516,70 @@ create_mirror:
 				progname);
 			result = -EINVAL;
 			goto error;
+		}
+		lsa.lsa_comp_count++;
+	}
+
+	/* Create EC parity mirror if --ec without -N was specified */
+	if (lsa.lsa_has_ec && lsa.lsa_ec_spec_count > 0) {
+		if (mirror_mode && last_mirror) {
+			result = create_ec_parity_mirror(
+					last_mirror->m_layout,
+					lsa.lsa_ec_specs,
+					lsa.lsa_ec_spec_count);
+			if (result) {
+				fprintf(stderr,
+					"error: %s: failed to create EC parity mirror\n",
+					progname);
+				goto error;
+			}
+
+			/* Mark that this layout already contains EC parity
+			 * components
+			 */
+			last_mirror->m_has_ec = true;
+		} else if (layout) {
+			/* In non-mirror mode, add parity mirror to layout */
+			uint16_t mirror_count = 0;
+
+			/* Verify layout doesn't already have multiple mirrors.
+			 * A freshly created layout has mirror_count = 1.
+			 */
+			result = llapi_layout_mirror_count_get(layout,
+							       &mirror_count);
+			if (result) {
+				fprintf(stderr,
+					"error: %s: failed to get mirror count: %s\n",
+					progname, strerror(errno));
+				goto error;
+			}
+
+			if (mirror_count > 1) {
+				fprintf(stderr,
+					"error: %s: layout already has %u mirrors, cannot add EC\n",
+					progname, mirror_count);
+				result = -EINVAL;
+				goto error;
+			}
+
+			result = create_ec_parity_mirror(layout,
+							 lsa.lsa_ec_specs,
+							 lsa.lsa_ec_spec_count);
+			if (result) {
+				fprintf(stderr,
+					"error: %s: failed to create EC parity mirror\n",
+					progname);
+				goto error;
+			}
+
+			/* Set mirror count to 2 (data + parity) */
+			result = llapi_layout_mirror_count_set(layout, 2);
+			if (result) {
+				fprintf(stderr,
+					"error: %s: failed to set mirror count: %s\n",
+					progname, strerror(errno));
+				goto error;
+			}
 		}
 	}
 
@@ -5530,6 +6147,7 @@ error:
 	if (lustre_dir_fd >= 0)
 		close(lustre_dir_fd);
 	free(buf);
+	free(lsa.lsa_ec_specs);
 	return result;
 }
 

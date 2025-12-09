@@ -363,6 +363,98 @@ them is low on space, the remaining extension component region is added to the
 next component.
 .RE
 .TP
+.B --ec\fR, \fB--ec-stripe-count \fR\fIDATA_STRIPES\fB+\fIPARITY_STRIPES\fR
+Enable Erasure Coding (EC) for the file or directory layout by specifying
+the number of
+.I DATA_STRIPES
+per RAID Set and
+.I PARITY_STRIPES
+per RAID Set in the format
+.IB DATA+PARITY
+or
+.IB DATA:PARITY.
+For example,
+.B --ec 8+2
+specifies RAID Sets with 8 data stripes and 2 parity stripes each,
+providing fault tolerance for up to 2 OST failures per RAID Set.
+.PP
+.RS
+When \fB--ec\fR is specified, a parity mirror is automatically created
+that matches the structure of the data mirror using Lustre's File Level
+Replication (FLR) mechanism. The parity mirror contains the erasure coding
+information needed to reconstruct data in case of OST failures.
+.PP
+The current EC implementation is "read-only" or "offline" erasure coding.
+Any write operation to the file causes the parity mirror to become stale.
+While stale, the parity information cannot be used for data reconstruction.
+The parity mirror must be resynchronized using the
+.BR lfs-mirror-resync (1)
+command to bring it back into sync with the data mirror. Once resynchronized,
+the parity mirror provides protection for read operations, allowing data
+recovery in case of OST failures. This behavior is identical to how
+non-parity Lustre mirrors work. See
+.BR lfs-mirror-create (1)
+and
+.BR lfs-mirror-resync (1)
+for more information on mirror operations.
+.PP
+For data components with
+.I STRIPE_COUNT
+greater than
+.IR DATA_STRIPES ,
+the data component's stripes are divided into one or more independent RAID
+sets, each containing at most
+.I DATA_STRIPES
+data stripes, each with
+.I PARITY_STRIPES
+parity stripes. Each RAID Set is an independent protection domain. For example,
+a 16-stripe RAID0 data component with \fB--ec 8+2\fR is divided into 2 RAID
+Sets of 8+2 (requiring 4 total parity stripes in two independent domains).
+A 15-stripe data component with \fB--ec 8+2\fR is divided into one 8+2 RAID
+set and one 7+2 RAID Set.
+.PP
+The
+.I DATA_STRIPES
+value must be at least 2, and
+.I PARITY_STRIPES
+must be at least 1 and less than or equal to
+.I DATA_STRIPES.
+The supported limits are 32 data stripes and 4 parity stripes.
+.PP
+For 1-stripe components the EC mirror will be created with only 1
+parity stripe (ie. only single device redundancy). If 2 (or more)
+device redundancy is required for all components, then files should be
+created with
+.I STRIPE_COUNT=2
+(or more) data stripes.
+.PP
+.B EC Option Inheritance and Order Independence
+.PP
+The \fB--ec\fR option can appear anywhere in the command line and applies
+to all components within the same mirror to ensure the file data can be
+recovered even when
+.I PARITY_STRIPES
+OSTs used by the file have failed. When a single \fB--ec\fR option
+is specified, it applies to all components in the parity mirror. When
+multiple \fB--ec\fR options are used, each one inherits to subsequent
+components until it is replaced by another \fB--ec\fR option.  The first
+\fB--ec\fR option applies to any components earlier in the command.
+.PP
+The \fB--ec\fR option is per-mirror and only applies within a single mirror
+definition (specified by \fB-N\fR). Different mirrors can have different
+EC configurations or no EC at all.
+.RE
+.TP
+.B --ec-expert
+Equivalent to \fB--ec\fR but allows EC stripe counts that exceed the
+supported limits of 32 data stripes or 4 parity stripes. This option
+is intended for expert users who understand the performance and
+reliability implications, or for testing purposes.
+.PP
+.RS
+The maximum allowed values are 255 for \fIDATA\fR and 15 for \fIPARITY\fR.
+.RE
+.TP
 .B --component-add
 Add components to the end an existing composite file.  It is not possible
 to add components incrementally to the default directory layout, since the
@@ -570,6 +662,87 @@ with non-lustre/free-format
 layout/LOV EA and flags
 .BR 0xda08
 .
+.TP
+.B lfs setstripe -E -1 -c 8 --ec 8+2 /mnt/lustre/file1
+This creates
+.B file1
+with an Erasure Coding layout using 8 data stripes and 2 parity stripes.
+The file will have two mirrors: a data mirror with 8 stripes and a parity
+mirror with the erasure coding information. Since the data component has
+8 stripes and the EC specification is 8+2, this creates a single RAID Set
+with 8 data stripes and 2 parity stripes, providing fault tolerance for
+up to 2 OST failures with 25% storage overhead.
+.TP
+.B lfs setstripe --ec 8+2 -E -1 -c 8 /mnt/lustre/file1a
+This is equivalent to the previous example, demonstrating if only a single
+\fB--ec\fR option is specified, it applies to all components.
+.TP
+.B lfs setstripe -E 1G -c 4 --ec 4+2 -E -1 -c 8 --ec 8+2 /mnt/lustre/file2
+This creates
+.B file2
+with a composite EC layout. The first component (0 to 1GiB) uses 4 data
+stripes with 2 parity stripes (4+2 EC), and the second component (1GiB to
+EOF) uses 8 data stripes with 2 parity stripes (8+2 EC). Each component
+has both data and parity mirrors.
+.TP
+.B lfs setstripe -E 128M --ec 8+2 -E -1 -c 4 /mnt/lustre/file2a
+This creates
+.B file2a
+with a composite EC layout where a single \fB--ec 8+2\fR applies to all
+components. Both the first component (0 to 128MiB) and the second component
+(128MiB to EOF) will use 8+2 EC, demonstrating that one \fB--ec\fR option
+applies to all components in the parity mirror.
+.TP
+.B lfs setstripe -E 128M --ec 4+2 -E 512M -E -1 --ec 8+2 /mnt/lustre/file2b
+This creates
+.B file2b
+with three components demonstrating multiple \fB--ec\fR options. The first
+component (0 to 128MiB) uses 4+2 EC. The second component (128MiB to 512MiB)
+also uses 4+2 EC (inherited from the first \fB--ec\fR). The third component
+(512MiB to EOF) uses 8+2 EC, as specified by the second \fB--ec\fR option.
+.TP
+.B lfs setstripe -E -1 -c 16 --ec 8+2 /mnt/lustre/file3
+This creates
+.B file3
+with 16 data stripes divided into 2 independent RAID Sets. Each RAID Set
+contains 8 data stripes and 2 parity stripes (8+2), for a total of 4 parity
+stripes across both RAID Sets. Each RAID Set can tolerate up to 2 OST
+failures independently.
+.TP
+.B lfs setstripe -E -1 -c 20 --ec 8+2 /mnt/lustre/file3a
+This creates
+.B file3a
+with 20 data stripes; this does not evenly divide into 8+2 RAID Sets. The
+stripes are automatically divided into multiple RAID Sets of optimal size:
+two 7+2 RAID Sets (14 data stripes, 4 parity stripes) and one 6+2 RAID Set
+(6 data stripes, 2 parity stripes). This maintains the requested level of
+redundancy while creating RAID Sets which are as close to the requested
+dimensions as possible.
+.TP
+.B lfs setstripe -E -1 -c 256 --ec-expert 64+4 /mnt/lustre/file4
+This creates
+.B file4
+with an EC layout that exceeds the supported limits (32 data stripes,
+4 parity stripes). The \fB--ec-expert\fR option allows the use of up to
+255 data stripes and up to 15 parity stripes per RAID Set. With 256 data
+stripes and 64+4 EC, this creates four 64+4 RAID Sets, for a total of 16
+parity stripes. This is intended for advanced users who understand the
+performance and reliability implications.
+.TP
+.B lfs setstripe -N -E 128M -E -1 --ec 8+2 -N -E 256M -E -1 /mnt/lustre/file5
+This creates
+.B file5
+with two mirrors. The first mirror has two components with 8+2 EC applied
+to both. The second mirror has two components with no EC (plain RAID0).
+This demonstrates that \fB--ec\fR is per-mirror: the \fB--ec 8+2\fR only
+applies to the first mirror (between the first and second \fB-N\fR), and
+does not affect the second mirror.
+.TP
+.B lfs setstripe -E -1 -c 8 --ec 8+2 /mnt/lustre/dir1
+This sets the default EC layout on
+.B dir1
+so that new files created in this directory will automatically use an
+8+2 EC layout with 8 data stripes and 2 parity stripes.
 .SH SEE ALSO
 .BR lctl (1),
 .BR lfs (1),

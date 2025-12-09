@@ -4380,6 +4380,79 @@ static void test65(void)
 	llapi_layout_free(filelayout);
 }
 
+#define T66_DESC	"EC mirror can override copied pool via llapi"
+static void test66(void)
+{
+	struct llapi_layout *layout;
+	char data_pool[LOV_MAXPOOLNAME + 1] = { '\0' };
+	char ec_pool[LOV_MAXPOOLNAME + 1] = { '\0' };
+	char pool_override[LOV_MAXPOOLNAME * 2 + 1];
+	int rc;
+
+	/* Use the actual pool name with fsname prefix for override */
+	snprintf(pool_override, sizeof(pool_override), "lustre.%s", poolname);
+
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* Mirror 1: data mirror on pool "poolname" */
+	rc = llapi_layout_stripe_count_set(layout, 4);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_pool_name_set(layout, poolname);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Mirror 2: EC mirror initially copies data mirror pool */
+	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 4, 2);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_mirror_count_set(layout, 2);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Verify data mirror pool */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_pool_name_get(layout, data_pool,
+					  sizeof(data_pool));
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(strcmp(data_pool, poolname) == 0,
+		"data mirror pool %s != %s", data_pool, poolname);
+
+	/* Verify EC mirror initially has copied pool */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_pool_name_get(layout, ec_pool, sizeof(ec_pool));
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(strcmp(ec_pool, poolname) == 0,
+		"EC mirror initial pool %s != %s", ec_pool, poolname);
+
+	/* Override pool only on EC mirror using fsname.pool format */
+	rc = llapi_layout_pool_name_set(layout, pool_override);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_pool_name_get(layout, ec_pool, sizeof(ec_pool));
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(strcmp(ec_pool, poolname) == 0,
+		"EC mirror pool %s != %s", ec_pool, poolname);
+
+	/* Data mirror pool must remain unchanged */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_pool_name_get(layout, data_pool,
+					  sizeof(data_pool));
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(strcmp(data_pool, poolname) == 0,
+		"data mirror pool changed to %s", data_pool);
+
+	llapi_layout_free(layout);
+}
+
 static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(0),
 	TEST_REGISTER(1),
@@ -4445,6 +4518,7 @@ static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(63),
 	TEST_REGISTER(64),
 	TEST_REGISTER(65),
+	TEST_REGISTER(66),
 	TEST_REGISTER_END
 };
 
