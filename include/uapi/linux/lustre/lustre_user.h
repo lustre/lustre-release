@@ -1021,8 +1021,11 @@ enum lov_comp_md_entry_flags {
 	LCME_FL_NOCOMPR   = 0x00000400, /* the component should not be
 					 * compressed
 					 */
-	LCME_FL_IS_LINK_ID = 0x40000000, /* EC: llc_protected_ref is link ID
-					  * (transient, not stored on disk)
+	LCME_FL_IS_LINK_ID = 0x40000000, /* EC: llc_protected_ref is link ID;
+					  * transient on a file layout (resolved
+					  * to mirror_id_of(id) at create), but
+					  * persisted on a directory default
+					  * template until a file inherits it
 					  */
 	LCME_FL_NEG	  = 0x80000000	/* used to indicate a negative flag,
 					 * won't be stored on disk

@@ -5380,6 +5380,7 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 	struct lov_user_md_v1 *v1 = NULL;
 	struct lov_user_md_v3 *v3 = NULL;
 	struct lov_comp_md_v1 *lcm = NULL;
+	struct lov_comp_md_entry_v1 *lcme = NULL;
 	__u32 magic;
 	int append_stripe_count = dah != NULL ? dah->dah_append_stripe_count : 0;
 	const char *append_pool = (dah != NULL &&
@@ -5467,20 +5468,37 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 		memset(llc, 0, offsetof(typeof(*llc), llc_pool));
 
 		if (lcm != NULL) {
+			lcme = &lcm->lcm_entries[i];
 			v1 = (struct lov_user_md *)((char *)lcm +
-						    lcm->lcm_entries[i].lcme_offset);
+						    lcme->lcme_offset);
 
 			if (want_composite) {
-				llc->llc_extent = lcm->lcm_entries[i].lcme_extent;
+				llc->llc_extent = lcme->lcme_extent;
 				/* We only inherit certain flags from the layout */
-				llc->llc_flags = lcm->lcm_entries[i].lcme_flags &
-					LCME_TEMPLATE_FLAGS;
+				llc->llc_flags = lcme->lcme_flags &
+						 LCME_TEMPLATE_FLAGS;
+
+				/*
+				 * A directory default is a template that
+				 * persists the unbound EC link between data and
+				 * parity comps (LCME_FL_IS_LINK_ID + shared
+				 * id). For directory templates that have a link
+				 * id set, the ids and its flag must be
+				 * inherited as well to files to be created. The
+				 * link is later bound by lod_bind_data_parity()
+				 */
+				if (lcme->lcme_flags & LCME_FL_IS_LINK_ID) {
+					llc->llc_mirror_link_id =
+						lcme_timestamp_id_unpack(
+							lcme->lcme_time_and_id);
+					llc->llc_flags |= LCME_FL_IS_LINK_ID;
+				}
 			}
 			if (llc->llc_flags & LCME_FL_PARITY) {
 				llc->llc_dstripe_count =
-					lcm->lcm_entries[i].lcme_dstripe_count;
+					lcme->lcme_dstripe_count;
 				llc->llc_cstripe_count =
-					lcm->lcm_entries[i].lcme_cstripe_count;
+					lcme->lcme_cstripe_count;
 			}
 		}
 

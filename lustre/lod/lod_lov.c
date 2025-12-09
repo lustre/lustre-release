@@ -978,8 +978,15 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		lcme->lcme_id = cpu_to_le32(lod_comp->llc_id);
 
 		/* component could be un-inistantiated */
-		lcme->lcme_flags = cpu_to_le32(lod_comp->llc_flags &
-					       ~LCME_FL_IS_LINK_ID);
+		lcme->lcme_flags = cpu_to_le32(lod_comp->llc_flags);
+		/*
+		 * LCME_FL_IS_LINK_ID is transient for an instantiated file
+		 * layout (resolved by lod_bind_data_parity() later at create).
+		 * A directory default is a template that persists the unbound
+		 * EC link, so keep it here for directories.
+		 */
+		if (!is_dir)
+			lcme->lcme_flags &= ~cpu_to_le32(LCME_FL_IS_LINK_ID);
 		lcme->lcme_time_and_id = cpu_to_le64(
 				lcme_timestamp_and_id_pack(lod_comp->llc_timestamp,
 					lod_comp->llc_mirror_link_id));

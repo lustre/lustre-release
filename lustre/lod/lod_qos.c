@@ -2840,7 +2840,9 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 	__u32 *ost_indices = NULL;
 	enum lod_uses_hint flags = LOD_USES_ASSIGNED_STRIPE;
 	int stripe_len;
-	int i, rc = 0;
+	int i, j, rc = 0;
+	bool data_comp_found = false;
+
 	ENTRY;
 
 	LASSERT(lo);
@@ -2863,7 +2865,75 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 	if (lod_comp->llc_pool)
 		lod_check_and_spill_pool(env, d, &lod_comp->llc_pool);
 
-	if (likely(lod_comp->llc_stripe == NULL)) {
+	/*
+	 * If this is a parity component, find its data component so we can size
+	 * it correctly (one OST per parity per raidset). Parity components need
+	 * at least llc_cstripe_count number of stripes.
+	 *
+	 * Data and parity comps are paired via their "mirror_link_id". It can
+	 * either be a link id, in which case the data/parity comp share the
+	 * same id, or it is a mirror id, in which case each component's
+	 * "mirror_link_id" field points to the other's mirror id. Initially,
+	 * the llapi assigns the link id and it is later resolved to the
+	 * (permanently-stored) mirror id by lod_bind_data_parity().
+	 */
+	if (lod_comp->llc_flags & LCME_FL_PARITY) {
+		bool is_link_id = lod_comp->llc_flags & LCME_FL_IS_LINK_ID;
+
+		lod_comp->llc_stripe_count = lod_comp->llc_cstripe_count;
+
+		if (lod_comp->llc_mirror_link_id == 0)
+			GOTO(out, rc = -EINVAL);
+
+		for (j = 0;  j < lo->ldo_comp_cnt; j++) {
+			struct lod_layout_component *tmp_comp;
+			struct ec_split_comp sc;
+			__u16 link_id;
+
+			tmp_comp = &lo->ldo_comp_entries[j];
+
+			/* only a data component can match a parity component */
+			if (tmp_comp->llc_flags & LCME_FL_PARITY)
+				continue;
+
+			/* resolve the candidate's link id for the comparison */
+			if (is_link_id) {
+				if (!(tmp_comp->llc_flags & LCME_FL_IS_LINK_ID))
+					continue;
+				link_id = tmp_comp->llc_mirror_link_id;
+			} else {
+				link_id = mirror_id_of(tmp_comp->llc_id);
+			}
+
+			/* linked d/p components share the same link id */
+			if (link_id != lod_comp->llc_mirror_link_id)
+				continue;
+
+			/* sanity: link id matches; extents must also match */
+			if (tmp_comp->llc_extent.e_start !=
+				    lod_comp->llc_extent.e_start ||
+			    tmp_comp->llc_extent.e_end !=
+				    lod_comp->llc_extent.e_end)
+				continue;
+
+			ec_split_stripes(tmp_comp->llc_stripe_count,
+					 lod_comp->llc_dstripe_count, &sc);
+			lod_comp->llc_stripe_count =
+				(sc.esc_n0 + sc.esc_n1) *
+				lod_comp->llc_cstripe_count;
+			data_comp_found = true;
+			break;
+		}
+
+		/*
+		 * A parity component being allocated must have a matching data
+		 * component. Another case should not happen and so we error out
+		 */
+		if (!data_comp_found)
+			GOTO(out, rc = -EINVAL);
+	}
+
+	if (likely(!lod_comp->llc_stripe)) {
 		/*
 		 * no striping has been created so far
 		 */

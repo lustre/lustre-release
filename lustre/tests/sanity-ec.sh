@@ -585,6 +585,118 @@ test_1j() {
 }
 run_test 1j "verify EC component inherits stripe size from data component"
 
+test_1k() {
+	local td=$DIR/$tdir
+	local subdir=$td/subdir
+	local tf=$subdir/$tfile
+	local ef=$subdir/explicit
+	local ids
+
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+
+	test_mkdir $td
+
+	# Set default EC layout on the parent directory
+	$LFS setstripe -E 128M -E -1 --ec 4+2 $td ||
+		error "setstripe for $td failed"
+
+	# create another dir layer to verify the link id is inherited correctly
+	mkdir $subdir || error "mkdir for $subdir failed"
+
+	# ... and create a file in that subdir
+	touch $tf || error "touch for $tf failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 4
+
+	# Get component IDs
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+
+	# Verify data mirror components (mirror 1)
+	verify_comp_extent $tf ${ids[0]} 0 134217728
+	verify_comp_extent $tf ${ids[1]} 134217728 EOF
+
+	# Verify parity mirror components (mirror 2)
+	verify_comp_parity $tf ${ids[2]}
+	verify_ec_stripe_count $tf ${ids[2]} 4 2
+	verify_comp_extent $tf ${ids[2]} 0 134217728
+
+	verify_comp_parity $tf ${ids[3]}
+	verify_ec_stripe_count $tf ${ids[3]} 4 2
+	verify_comp_extent $tf ${ids[3]} 134217728 EOF
+
+	# verify that explicit EC layouts on new files overwrite dir defaults
+	$LFS setstripe -E -1 --ec 2+1 $ef ||
+		error "explicit setstripe fir $ef failed"
+	verify_mirror_count $ef 2
+	verify_comp_count $ef 2
+	ids=($($LFS getstripe $ef | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	verify_comp_parity $ef ${ids[1]}
+	verify_ec_stripe_count $ef ${ids[1]} 2 1
+}
+run_test 1k "default EC layout inherited through nested directories"
+
+test_1l() {
+	local td=$DIR/$tdir
+	local subdir=$td/subdir
+	local tf=$subdir/$tfile
+	local ids
+
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+
+	test_mkdir $td
+
+	# Two EC mirrors, each a PFL with mixed EC params
+	#   mirror 1: [0,128M) 2+1, [128M,EOF) 4+2
+	#   mirror 2: [0,64M)  4+2, [64M,EOF)  3+2
+	# yields 4 mirrors (2 data + 2 parity) and 8 components.
+	$LFS setstripe -N -E 128M --ec 2+1 -E -1 --ec 4+2 \
+		       -N -E 64M --ec 4+2 -E -1 --ec 3+2 $td ||
+		error "setstripe complex EC layout for $td failed"
+
+	# A subdir inherits the complex default, and a file created in it must
+	# inherit the full layout (every component/mirror and its EC params).
+	mkdir $subdir || error "mkdir for $subdir failed"
+	touch $tf || error "touch for $tf failed"
+
+	verify_mirror_count $tf 4
+	verify_comp_count $tf 8
+
+	# Get component IDs (4 mirrors x 2 PFL comps, in mirror order)
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+
+	# Mirror 1 data components
+	verify_comp_extent $tf ${ids[0]} 0 134217728
+	verify_comp_extent $tf ${ids[1]} 134217728 EOF
+
+	# Mirror 1 parity components (2+1, then 4+2)
+	verify_comp_parity $tf ${ids[2]}
+	verify_ec_stripe_count $tf ${ids[2]} 2 1
+	verify_comp_extent $tf ${ids[2]} 0 134217728
+
+	verify_comp_parity $tf ${ids[3]}
+	verify_ec_stripe_count $tf ${ids[3]} 4 2
+	verify_comp_extent $tf ${ids[3]} 134217728 EOF
+
+	# Mirror 2 data components
+	verify_comp_extent $tf ${ids[4]} 0 67108864
+	verify_comp_extent $tf ${ids[5]} 67108864 EOF
+
+	# Mirror 2 parity components (4+2, then 3+2)
+	verify_comp_parity $tf ${ids[6]}
+	verify_ec_stripe_count $tf ${ids[6]} 4 2
+	verify_comp_extent $tf ${ids[6]} 0 67108864
+
+	verify_comp_parity $tf ${ids[7]}
+	verify_ec_stripe_count $tf ${ids[7]} 3 2
+	verify_comp_extent $tf ${ids[7]} 67108864 EOF
+}
+run_test 1l "default EC layout inherited through nested dirs (complex)"
+
 test_2a() {
 	enable_ec
 	local tf=$DIR/$tfile
