@@ -1433,6 +1433,10 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		if (!lov_pattern_available(pattern))
 			GOTO(out, rc = -EINVAL);
 
+		/* paranoidly set parity component pattern */
+		if (lod_comp->llc_flags & LCME_FL_PARITY)
+			pattern |= LOV_PATTERN_PARITY;
+
 		if (pattern & LOV_PATTERN_MDT) {
 			if (lod_comp->llc_extent.e_start != 0) {
 				CERROR("%s: DOM entry must be the first stripe "

@@ -2850,6 +2850,10 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 		lod_comp->llc_pattern = v1->lmm_pattern;
+
+		/* set parity component pattern */
+		if (lod_comp->llc_flags & LCME_FL_PARITY)
+			lod_comp->llc_pattern |= LOV_PATTERN_PARITY;
 		/**
 		 * limit stripe count so that it's less than/equal to
 		 * extent_size / stripe_size.
@@ -5472,6 +5476,10 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 
 		if (append_stripe_count != 0 || append_pool != NULL)
 			llc->llc_pattern = LOV_PATTERN_RAID0;
+
+		/* set parity component pattern */
+		if (want_composite && (llc->llc_flags & LCME_FL_PARITY))
+			llc->llc_pattern |= LOV_PATTERN_PARITY;
 
 		if (append_stripe_count != 0)
 			llc->llc_stripe_count = append_stripe_count;

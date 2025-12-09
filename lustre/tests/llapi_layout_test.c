@@ -26,6 +26,7 @@
 #include <sys/types.h>
 
 #include <lustre/lustreapi.h>
+#include <linux/lustre/lustre_user.h>
 #include "llapi_test_utils.h"
 
 static char *poolname = "testpool";
@@ -2459,6 +2460,7 @@ static void __verify_ec_comp(struct llapi_layout *layout,
 {
 	uint32_t flags;
 	uint8_t cstripe, dstripe;
+	uint64_t pattern;
 	int rc;
 
 	rc = llapi_layout_comp_flags_get(layout, &flags);
@@ -2468,6 +2470,14 @@ static void __verify_ec_comp(struct llapi_layout *layout,
 	/* EC parameters are only set on parity components */
 	ASSERTF(flags & LCME_FL_PARITY,
 		"%s: PARITY flag not set on EC component", comp_desc);
+
+	/* Verify pattern has LOV_PATTERN_PARITY bit set */
+	rc = llapi_layout_pattern_get(layout, &pattern);
+	ASSERTF(rc == 0, "%s: failed to get pattern, errno = %d",
+		comp_desc, errno);
+	ASSERTF(pattern & LOV_PATTERN_PARITY,
+		"%s: LOV_PATTERN_PARITY not set in pattern 0x%lx",
+		comp_desc, pattern);
 
 	rc = llapi_layout_ec_dstripe_count_get(layout, &dstripe);
 	ASSERTF(rc == 0, "%s: failed to get dstripe, errno = %d",

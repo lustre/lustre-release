@@ -2302,6 +2302,10 @@ int lod_use_defined_striping(const struct lu_env *env,
 		lod_comp->llc_pattern = le32_to_cpu(v1->lmm_pattern);
 		lod_comp->llc_stripe_size = le32_to_cpu(v1->lmm_stripe_size);
 		lod_comp->llc_stripe_count = le16_to_cpu(v1->lmm_stripe_count);
+
+		/* set parity component pattern */
+		if (lod_comp->llc_flags & LCME_FL_PARITY)
+			lod_comp->llc_pattern |= LOV_PATTERN_PARITY;
 		/**
 		 * limit stripe count so that it's less than/equal to
 		 * extent_size / stripe_size.
@@ -2608,6 +2612,9 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			       lod_comp->llc_stripe_count);
 			GOTO(free_comp, rc = -EINVAL);
 		}
+		/* set parity component pattern */
+		if (lod_comp->llc_flags & LCME_FL_PARITY)
+			lod_comp->llc_pattern |= LOV_PATTERN_PARITY;
 		/**
 		 * limit stripe count so that it's less than/equal to
 		 * extent_size / stripe_size.

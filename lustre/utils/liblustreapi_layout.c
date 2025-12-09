@@ -2036,6 +2036,7 @@ static struct {
 } lov_pattern_names[] = {
 	{ LOV_PATTERN_RAID0,		"raid0" },
 	{ LOV_PATTERN_RAID1,		"raid1" },
+	{ LOV_PATTERN_PARITY,		"parity" },
 	{ LOV_PATTERN_MDT,		"mdt" },
 	{ LOV_PATTERN_OVERSTRIPING,	"overstriped" },  /* getstripe */
 	{ LOV_PATTERN_OVERSTRIPING,	"overstriping" }, /* setstripe compat */
