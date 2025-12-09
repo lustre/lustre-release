@@ -14505,27 +14505,28 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   long stats_interval_sec, long bandwidth_bytes_sec,
 			   bool force_resync)
 {
-	struct llapi_resync_comp comp_array[1024] = { { 0 } };
+	struct llapi_resync_comp stale_comp_array[1024] = { { 0 } };
 	struct llapi_layout *layout;
 	struct stat stbuf;
+	int stale_data_comp_count = 0;
+	int stale_ec_comp_count = 0;
 	uint32_t flr_state;
 	uint64_t start;
 	uint64_t end;
-	int comp_size = 0;
 	int idx;
 	int fd;
 	int rc;
 	int rc2;
 
 	if (stat(fname, &stbuf) < 0) {
-		fprintf(stderr, "%s: cannot stat file '%s': %s.\n",
-			progname, fname, strerror(errno));
+		fprintf(stderr, "%s: cannot stat file '%s': %s.\n", progname,
+			fname, strerror(errno));
 		rc = -errno;
 		goto error;
 	}
 	if (!S_ISREG(stbuf.st_mode)) {
-		fprintf(stderr, "%s: '%s' is not a regular file.\n",
-			progname, fname);
+		fprintf(stderr, "%s: '%s' is not a regular file.\n", progname,
+			fname);
 		rc = -EINVAL;
 		goto error;
 	}
@@ -14533,8 +14534,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	/* Allow mirror resync even without the key on encrypted files */
 	fd = open(fname, O_DIRECT | O_RDWR | O_CIPHERTEXT);
 	if (fd < 0) {
-		fprintf(stderr, "%s: cannot open '%s': %s.\n",
-			progname, fname, strerror(errno));
+		fprintf(stderr, "%s: cannot open '%s': %s.\n", progname, fname,
+			strerror(errno));
 		rc = -errno;
 		goto error;
 	}
@@ -14558,23 +14559,37 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	flr_state &= LCM_FL_FLR_MASK;
 	if (flr_state == LCM_FL_NONE) {
 		rc = -EINVAL;
-		fprintf(stderr, "%s: '%s' is not a FLR file.\n",
-			progname, fname);
+		fprintf(stderr, "%s: '%s' is not a FLR file.\n", progname,
+			fname);
 		goto free_layout;
 	}
 
-	/* get stale component info */
-	comp_size = llapi_mirror_find_stale(layout, comp_array,
-					    ARRAY_SIZE(comp_array),
-					    mirror_ids, ids_nr);
-	if (comp_size <= 0) {
-		if (force_resync && ids_nr > 0) {
+	/* get stale component info for regular mirrors */
+	stale_data_comp_count = llapi_mirror_find_stale(
+		layout, stale_comp_array, ARRAY_SIZE(stale_comp_array),
+		mirror_ids, ids_nr);
+	if (stale_data_comp_count < 0) {
+		rc = stale_data_comp_count;
+		goto free_layout;
+	}
 
-			comp_size = lfs_mirror_force_resync(fname, layout,
-							    comp_array,
-							    mirror_ids, ids_nr);
-			if (comp_size < 0) {
-				rc = comp_size;
+	/* get stale component info for ec mirrors */
+	stale_ec_comp_count = llapi_ec_find_stale(
+		layout, &stale_comp_array[stale_data_comp_count],
+		ARRAY_SIZE(stale_comp_array) - stale_data_comp_count,
+		mirror_ids, ids_nr);
+	if (stale_ec_comp_count < 0) {
+		rc = stale_ec_comp_count;
+		goto free_layout;
+	}
+
+	if (stale_data_comp_count + stale_ec_comp_count == 0) {
+		if (force_resync && ids_nr > 0) {
+			stale_data_comp_count = lfs_mirror_force_resync(
+				fname, layout, stale_comp_array, mirror_ids,
+				ids_nr);
+			if (stale_data_comp_count < 0) {
+				rc = stale_data_comp_count;
 				goto free_layout;
 			}
 		} else if (force_resync) {
@@ -14626,42 +14641,68 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			rc = 0;
 		} else {
 			fprintf(stderr,
-			    "%s: '%s' llapi_lease_get_ext resync failed: %s.\n",
+				"%s: '%s' llapi_lease_get_ext resync failed: %s.\n",
 				progname, fname, strerror(-rc));
 			goto free_layout;
 		}
 	}
 
+	/*
+	 * There are no data replicas to resync but there might be ec mirrors
+	 * that need to be re-synced.
+	 */
+	if (!stale_data_comp_count)
+		goto ec_resync;
+
 	/* get the read range [start, end) */
-	start = comp_array[0].lrc_start;
-	end = comp_array[0].lrc_end;
-	for (idx = 1; idx < comp_size; idx++) {
-		if (comp_array[idx].lrc_start < start)
-			start = comp_array[idx].lrc_start;
-		if (end < comp_array[idx].lrc_end)
-			end = comp_array[idx].lrc_end;
+	start = stale_comp_array[0].lrc_start;
+	end = stale_comp_array[0].lrc_end;
+	for (idx = 1; idx < stale_data_comp_count; idx++) {
+		if (stale_comp_array[idx].lrc_start < start)
+			start = stale_comp_array[idx].lrc_start;
+		if (end < stale_comp_array[idx].lrc_end)
+			end = stale_comp_array[idx].lrc_end;
 	}
 
 	rc = llapi_lease_check(fd);
 	if (rc != LL_LEASE_WRLCK) {
-		fprintf(stderr, "%s: '%s' lost lease lock.\n",
-			progname, fname);
+		fprintf(stderr, "%s: '%s' lost lease lock.\n", progname, fname);
 		goto free_layout;
 	}
 
-	rc = llapi_mirror_resync_many_params(fd, layout, comp_array, comp_size,
-					     start, end, stats_interval_sec,
+	rc = llapi_mirror_resync_many_params(fd, layout, stale_comp_array,
+					     stale_data_comp_count, start, end,
+					     stats_interval_sec,
 					     bandwidth_bytes_sec);
 
 	/* If resync succeeded, manually set lrc_synced for all components */
 	if (rc == 0)
-		for (int i = 0; i < comp_size; i++)
-			comp_array[i].lrc_synced = 1;
+		for (int i = 0; i < stale_data_comp_count; i++)
+			stale_comp_array[i].lrc_synced = 1;
 
-	if (rc < 0)
-		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "fail to mirror resync '%s'\n", fname);
+	if (rc < 0) {
+		llapi_error(LLAPI_MSG_ERROR, rc, "fail to mirror resync '%s'\n",
+			    fname);
+		goto free_layout;
+	}
 
+ec_resync:
+	/*
+	 * If we have stale ec comps then resync them, otherwise
+	 * skip to updating the timestamps and finishing the resync.
+	 */
+	if (!stale_ec_comp_count)
+		goto finish_resync;
+	rc = llapi_ec_resync_many_params(
+		fd, layout, &stale_comp_array[stale_data_comp_count],
+		stale_ec_comp_count, stats_interval_sec, bandwidth_bytes_sec);
+	if (rc < 0) {
+		llapi_error(LLAPI_MSG_ERROR, rc, "fail to ec resync '%s'\n",
+			    fname);
+		goto free_layout;
+	}
+
+finish_resync:
 	rc2 = migrate_set_timestamps(fd, &stbuf);
 	if (rc2 < 0) {
 		fprintf(stderr, "%s: '%s' cannot set timestamps: %s\n",
@@ -14675,9 +14716,11 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	ioc->lil_mode = LL_LEASE_UNLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC_DONE;
 	ioc->lil_count = 0;
-	for (idx = 0; idx < comp_size; idx++) {
-		if (comp_array[idx].lrc_synced) {
-			ioc->lil_ids[ioc->lil_count] = comp_array[idx].lrc_id;
+	for (idx = 0; idx < stale_data_comp_count + stale_ec_comp_count;
+	     idx++) {
+		if (stale_comp_array[idx].lrc_synced) {
+			ioc->lil_ids[ioc->lil_count] =
+				stale_comp_array[idx].lrc_id;
 			ioc->lil_count++;
 		}
 	}
@@ -14693,9 +14736,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			rc = -EBUSY;
 		else
 			rc = rc2;
-		fprintf(stderr, "%s: resync file '%s' failed: %s.\n",
-			progname, fname,
-			rc2 == 0 ? "lost lease lock" : strerror(-rc2));
+		fprintf(stderr, "%s: resync file '%s' failed: %s.\n", progname,
+			fname, rc2 == 0 ? "lost lease lock" : strerror(-rc2));
 
 		llapi_lease_release(fd);
 		goto free_layout;

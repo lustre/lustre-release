@@ -15,6 +15,9 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_EC_EXCEPT "
+always_except LU-12688 6d 6f
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+# tests 6d/6f: pending lfs mirror verify support for EC components
 
 build_test_filter
 

@@ -122,6 +122,8 @@ liblustreapi_la_SOURCES = libhsm_scanner.c \
 			  liblustreapi_root.c \
 			  liblustreapi_swap.c \
 			  liblustreapi_util.c \
+			  erasurecode/ec_base.c \
+			  erasurecode/ec_base_aliases.c \
 			  lustreapi_internal.h
 liblustreapi_la_CFLAGS = -fPIC -D_GNU_SOURCE $(LIBNL3_CFLAGS) \
 			 -I $(top_builddir)/lnet/utils \
