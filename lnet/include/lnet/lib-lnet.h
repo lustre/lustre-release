@@ -652,8 +652,6 @@ extern void lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni,
 extern int lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni,
 				  struct lnet_nid *nid);
 extern void lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni);
-extern int lnet_peer_del_pref_nid(struct lnet_peer_ni *lpni,
-				  struct lnet_nid *nid);
 void lnet_peer_ni_set_selection_priority(struct lnet_peer_ni *lpni,
 					 __u32 priority);
 extern void lnet_ni_add_to_recoveryq_locked(struct lnet_ni *ni,

@@ -1201,64 +1201,6 @@ out:
 	return rc;
 }
 
-int
-lnet_peer_del_pref_nid(struct lnet_peer_ni *lpni, struct lnet_nid *nid)
-{
-	struct lnet_peer *lp = lpni->lpni_peer_net->lpn_peer;
-	struct lnet_nid_list *ne = NULL;
-	int rc = 0;
-
-	if (lpni->lpni_pref_nnids == 0) {
-		rc = -ENOENT;
-		goto out;
-	}
-
-	if (lpni->lpni_pref_nnids == 1) {
-		if (!nid_same(&lpni->lpni_pref.nid, nid)) {
-			rc = -ENOENT;
-			goto out;
-		}
-	} else {
-		list_for_each_entry(ne, &lpni->lpni_pref.nids, nl_list) {
-			if (nid_same(&ne->nl_nid, nid))
-				goto remove_nid_entry;
-		}
-		rc = -ENOENT;
-		ne = NULL;
-		goto out;
-	}
-
-remove_nid_entry:
-	lnet_net_lock(LNET_LOCK_EX);
-	spin_lock(&lpni->lpni_lock);
-	if (lpni->lpni_pref_nnids == 1)
-		lpni->lpni_pref.nid = LNET_ANY_NID;
-	else {
-		list_del_init(&ne->nl_list);
-		if (lpni->lpni_pref_nnids == 2) {
-			struct lnet_nid_list *ne, *tmp;
-
-			list_for_each_entry_safe(ne, tmp,
-						 &lpni->lpni_pref.nids,
-						 nl_list) {
-				lpni->lpni_pref.nid = ne->nl_nid;
-				list_del_init(&ne->nl_list);
-				LIBCFS_FREE(ne, sizeof(*ne));
-			}
-		}
-	}
-	lpni->lpni_pref_nnids--;
-	lpni->lpni_state &= ~LNET_PEER_NI_NON_MR_PREF;
-	spin_unlock(&lpni->lpni_lock);
-	lnet_net_unlock(LNET_LOCK_EX);
-
-	LIBCFS_FREE(ne, sizeof(*ne));
-out:
-	CDEBUG(D_NET, "peer %s nid %s: %d\n",
-	       libcfs_nidstr(&lp->lp_primary_nid), libcfs_nidstr(nid), rc);
-	return rc;
-}
-
 void
 lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni)
 {
