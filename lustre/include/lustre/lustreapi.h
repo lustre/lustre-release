@@ -1026,6 +1026,11 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 #define LLAPI_LAYOUT_IDX_MAX	0x00000000FFFFFFFFULL
 
 /**
+ * Mirror link ID value meaning "not linked to any parity component".
+ */
+#define LLAPI_MIRROR_LINK_NONE	0
+
+/**
  * Flags to modify how layouts are retrieved.
  */
 /******************** Stripe Count ********************/
@@ -1326,6 +1331,7 @@ static const struct comp_flag_name {
 	{ LCME_FL_COMPRESS,	"compress" },
 	{ LCME_FL_PARTIAL,	"partial" },
 	{ LCME_FL_NOCOMPR,	"nocompr" },
+	{ LCME_FL_IS_LINK_ID,	"link_id" },
 };
 
 /* HSM component flags table */
@@ -1384,9 +1390,26 @@ int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id);
  */
 int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id);
 /**
+ * Fetches the mirror link ID of the current layout component.
+ * Returns LLAPI_MIRROR_LINK_NONE if not linked to any parity component.
+ */
+int llapi_layout_comp_mirror_link_id_get(const struct llapi_layout *layout,
+					 uint16_t *id);
+/**
  * Adds one component to the existing composite or plain layout.
  */
 int llapi_layout_comp_add(struct llapi_layout *layout);
+/**
+ * Adds one component to the existing composite or plain layout with extent.
+ */
+int llapi_layout_comp_add_extent(struct llapi_layout *layout,
+				 uint64_t start, uint64_t end);
+/**
+ * Adds one EC component to the existing composite or plain layout.
+ */
+int llapi_layout_comp_add_ec(struct llapi_layout *layout, uint32_t mirror_id,
+			     uint64_t start, uint64_t end,
+			     uint8_t dstripe_count, uint8_t cstripe_count);
 /**
  * Adds a first component of a mirror to the existing composite layout.
  */

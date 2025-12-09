@@ -2728,6 +2728,10 @@ test_27D() {
 		SKIP27D+=" -s 32,33"
 	(( $MDS1_VERSION >= $(version_code $SEL_VER) )) ||
 		SKIP27D+=" -s 34"
+	local ec_enable=$($LCTL get_param -n llite.*.enable_erasure_coding)
+	$LCTL set_param llite.*.enable_erasure_coding=1
+	stack_trap "$LCTL set_param -n \
+		llite.*.enable_erasure_coding=$ec_enable"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $SKIP27D ||
 		error "llapi_layout_test failed"
 

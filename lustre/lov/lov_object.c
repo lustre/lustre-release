@@ -681,8 +681,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		}
 
 		lle->lle_extent = &lle->lle_lsme->lsme_extent;
-		if (!lov_pattern_supported(
-				lov_pattern(lle->lle_lsme->lsme_pattern)) ||
+		if (!lov_pattern_supported(lle->lle_lsme->lsme_pattern) ||
 		    !lov_supported_comp_magic(lle->lle_lsme->lsme_magic))
 			lle->lle_valid = 0;
 		else
@@ -747,8 +746,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		if (lsme_is_foreign(lle->lle_lsme))
 			continue;
 
-		if (!lov_pattern_supported(
-				lov_pattern(lle->lle_lsme->lsme_pattern)) ||
+		if (!lov_pattern_supported(lle->lle_lsme->lsme_pattern) ||
 		    !lov_supported_comp_magic(lle->lle_lsme->lsme_magic))
 			continue;
 
@@ -878,8 +876,7 @@ static int lov_delete_composite(const struct lu_env *env,
 		if (lsme) {
 			if (lsme_is_foreign(lsme))
 				continue;
-			if (!lov_pattern_supported(lov_pattern(
-							lsme->lsme_pattern)) ||
+			if (!lov_pattern_supported(lsme->lsme_pattern) ||
 			    !lov_supported_comp_magic(lsme->lsme_magic))
 				continue;
 		}
@@ -2379,8 +2376,7 @@ int lov_read_and_clear_async_rc(struct cl_object *clob)
 				int j;
 
 				if (!lsme_inited(lse) ||
-				    !lov_pattern_supported(
-					    lov_pattern(lse->lsme_pattern)) ||
+				    !lov_pattern_supported(lse->lsme_pattern) ||
 				    !lov_supported_comp_magic(lse->lsme_magic))
 					break;
 

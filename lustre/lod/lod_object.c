@@ -5445,7 +5445,7 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 		       v1->lmm_stripe_size, (__s16)v1->lmm_stripe_offset,
 		       append_pool ?: "", append_stripe_count);
 
-		if (!lov_pattern_supported(v1->lmm_pattern) &&
+		if (!lov_pattern_available(v1->lmm_pattern) &&
 		    !(v1->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
 			lod_free_def_comp_entries(lds);
 			RETURN(-EINVAL);

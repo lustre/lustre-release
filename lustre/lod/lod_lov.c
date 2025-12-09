@@ -1420,7 +1420,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		pattern = le32_to_cpu(lmm->lmm_pattern);
-		if (!lov_pattern_supported(lov_pattern(pattern)))
+		if (!lov_pattern_available(pattern))
 			GOTO(out, rc = -EINVAL);
 
 		if (pattern & LOV_PATTERN_MDT) {
@@ -1733,7 +1733,7 @@ static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
 	if (!is_from_disk && lum->lmm_pattern == LOV_PATTERN_NONE)
 		lum->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
 
-	if (!lov_pattern_supported(le32_to_cpu(lum->lmm_pattern))) {
+	if (!lov_pattern_available(le32_to_cpu(lum->lmm_pattern))) {
 		CDEBUG(D_LAYOUT, "bad userland stripe pattern: %#x\n",
 		       le32_to_cpu(lum->lmm_pattern));
 		GOTO(out, rc = -EINVAL);

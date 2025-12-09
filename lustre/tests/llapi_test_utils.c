@@ -157,6 +157,7 @@ int run_tests(const char *lustre_dir, struct test_tbl_entry *tst_tbl)
 	struct test_tbl_entry *tst;
 	char fsname[8 + 1];
 	struct stat st;
+	int saved_msg_level = llapi_msg_get_level();
 	int rc;
 
 	if (lustre_dir == NULL)
@@ -165,7 +166,7 @@ int run_tests(const char *lustre_dir, struct test_tbl_entry *tst_tbl)
 	if (tst_tbl == NULL)
 		DIE("no test table provided\n");
 
-	llapi_msg_set_level(LLAPI_MSG_OFF);
+	llapi_msg_set_level(LLAPI_MSG_ERROR);
 
 	if (stat(lustre_dir, &st) < 0)
 		DIE("cannot stat %s: %s\n", lustre_dir, strerror(errno));
@@ -189,6 +190,8 @@ int run_tests(const char *lustre_dir, struct test_tbl_entry *tst_tbl)
 			 tst->tte_num))
 			rc++;
 	}
+
+	llapi_msg_set_level(saved_msg_level);
 
 	return rc;
 }

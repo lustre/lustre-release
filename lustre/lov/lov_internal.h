@@ -33,9 +33,12 @@ struct lov_stripe_md_entry {
 	u64			lsme_timestamp;
 	union {
 		struct { /* For stripe objects */
+			/* EC info */
 			u32	lsme_stripe_size;
 			u16	lsme_stripe_count;
 			u16	lsme_layout_gen;
+			u8	lsme_dstripe_count;
+			u8	lsme_cstripe_count;
 			char	lsme_pool_name[LOV_MAXPOOLNAME + 1];
 			struct lov_oinfo	*lsme_oinfo[];
 		};
@@ -98,6 +101,17 @@ struct lov_stripe_md {
 };
 
 #define lsm_foreign(lsm) (lsm->lsm_entries[0])
+
+static inline bool lsme_is_parity(const struct lov_stripe_md_entry *lsme)
+{
+	return lsme->lsme_flags & LCME_FL_PARITY;
+}
+
+static inline bool lsm_entry_is_parity(const struct lov_stripe_md *lsm,
+					int index)
+{
+	return lsme_is_parity(lsm->lsm_entries[index]);
+}
 
 static inline bool lsme_is_foreign(const struct lov_stripe_md_entry *lsme)
 {

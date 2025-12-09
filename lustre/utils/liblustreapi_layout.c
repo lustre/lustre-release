@@ -52,6 +52,11 @@ struct llapi_layout_comp {
 			 * initialized.
 			 */
 			uint32_t	llc_objects_count;
+			/**
+			 * EC parity comp specific fields.
+			 */
+			uint8_t		llc_dstripe_count;
+			uint8_t		llc_cstripe_count;
 			struct lov_user_ost_data_v1 *llc_objects;
 		};
 		struct { /* For FOREIGN/HSM layout. */
@@ -70,6 +75,8 @@ struct llapi_layout_comp {
 	uint32_t		llc_id;		/* unique ID of component */
 	/* mirror ID this component belongs to */
 	uint32_t		llc_mirror_id;
+	/* mirror ID this comp protects/is protected from through parities */
+	uint16_t		llc_mirror_link_id;
 	uint32_t		llc_flags;	/* LCME_FL_* flags */
 	uint64_t		llc_timestamp;	/* snapshot timestamp */
 	/* linked to the llapi_layout components list */
@@ -90,6 +97,7 @@ struct llapi_layout {
 	uint32_t	llot_flags;
 	bool		llot_is_composite;
 	uint16_t	llot_mirror_count;
+	uint16_t	llot_curr_link_id;
 	/* Cursor pointing to one of the components in llot_comp_list */
 	struct llapi_layout_comp *llot_cur_comp;
 	struct list_head	  llot_comp_list;
@@ -301,6 +309,7 @@ static struct llapi_layout_comp *__llapi_comp_alloc(unsigned int num_stripes)
 	comp->llc_flags = 0;
 	comp->llc_id = 0;
 	comp->llc_mirror_id = 0;
+	comp->llc_mirror_link_id = LLAPI_MIRROR_LINK_NONE;
 	INIT_LIST_HEAD(&comp->llc_list);
 
 	return comp;
@@ -395,6 +404,7 @@ static struct llapi_layout *__llapi_layout_alloc(void)
 	layout->llot_flags = 0;
 	layout->llot_is_composite = false;
 	layout->llot_mirror_count = 1;
+	layout->llot_curr_link_id = 1;
 	layout->llot_cur_comp = NULL;
 	INIT_LIST_HEAD(&layout->llot_comp_list);
 
@@ -1432,6 +1442,11 @@ int llapi_layout_stripe_count_set(struct llapi_layout *layout,
 	if (comp == NULL)
 		return -1;
 
+	if (comp->llc_flags & LCME_FL_PARITY) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	if (!llapi_layout_stripe_count_is_valid(count)) {
 		errno = EINVAL;
 		return -1;
@@ -1517,7 +1532,8 @@ static int layout_stripe_size_set(struct llapi_layout *layout,
 	if (comp == NULL)
 		return -1;
 
-	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN) {
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN ||
+	    comp->llc_flags & LCME_FL_PARITY) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -2295,6 +2311,12 @@ int llapi_layout_comp_flags_set(struct llapi_layout *layout, uint32_t flags)
 {
 	struct llapi_layout_comp *comp;
 
+	/* LCME_FL_PARITY cannot be set with this function */
+	if (flags & LCME_FL_PARITY) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
 		return -1;
@@ -2383,6 +2405,35 @@ int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id)
 }
 
 /**
+ * llapi_layout_comp_mirror_link_id_get() - Return mirror link ID of current
+ * layout component.
+ * @layout: the layout component
+ * @id: stored the returned  mirror link ID [out]
+ *
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
+ */
+int llapi_layout_comp_mirror_link_id_get(const struct llapi_layout *layout,
+					 uint16_t *id)
+{
+	struct llapi_layout_comp *comp;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (!comp)
+		return -1;
+
+	if (!id) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*id = comp->llc_mirror_link_id;
+
+	return 0;
+}
+
+/**
  * llapi_layout_comp_add() - Adds a component to @layout
  * @layout: existing composite or plain layout
  *
@@ -2398,8 +2449,28 @@ int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id)
  */
 int llapi_layout_comp_add(struct llapi_layout *layout)
 {
+	return llapi_layout_comp_add_extent(layout, 0, 0);
+}
+
+int llapi_layout_comp_add_extent(struct llapi_layout *layout,
+				 uint64_t start, uint64_t end)
+{
 	struct llapi_layout_comp *last, *comp, *new;
-	bool composite = layout->llot_is_composite;
+	bool save_composite;
+
+	/* Validate input parameters */
+	if (!layout) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	/* extent start should be less than extent end */
+	if (start != 0 && start >= end) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	save_composite = layout->llot_is_composite;
 
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
@@ -2411,24 +2482,196 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 
 	last = list_last_entry(&layout->llot_comp_list, typeof(*last),
 			       llc_list);
-
 	list_add_tail(&new->llc_list, &layout->llot_comp_list);
 
-	/* We must mark the layout composite for the sanity check, but it may
-	 * not stay that way if the check fails */
 	layout->llot_is_composite = true;
 	layout->llot_cur_comp = new;
 
-	/* We need to set a temporary non-zero value for "end" when we call
+	/* If no extent was provided:
+	 * We need to set a temporary non-zero value for "end" when we call
 	 * comp_extent_set, so we use LUSTRE_EOF-1, which is > all allowed
 	 * for the end of the previous component.  (If we're adding this
-	 * component, the end of the previous component cannot be EOF.) */
-	if (llapi_layout_comp_extent_set(layout, last->llc_extent.e_end,
-					LUSTRE_EOF - 1)) {
+	 * component, the end of the previous component cannot be EOF.)
+	 */
+	if (start == 0 && end == 0) {
+		start = last->llc_extent.e_end;
+		end = LUSTRE_EOF - 1;
+	}
+	if (llapi_layout_comp_extent_set(layout, start, end)) {
 		(void)llapi_layout_comp_del(layout);
-		layout->llot_is_composite = composite;
+		layout->llot_is_composite = save_composite;
 		return -1;
 	}
+
+	return 0;
+}
+
+static int layout_ec_verify_stripes(__u64 stripe_count, __u8 k, __u8 p)
+{
+	struct ec_split_comp sc;
+
+	/* Validate stripe counts */
+	if (p == 0 || k == 0)
+		return -EINVAL;
+
+	/*
+	 * The total number of parities we will need across all the raid
+	 * sets can not exceed the number of stripes in the data comp
+	 * it protects.
+	 */
+	ec_split_stripes(stripe_count, k, &sc);
+	if (sc.esc_n0 * sc.esc_k0 + sc.esc_n1 * sc.esc_k1 != stripe_count ||
+	    (sc.esc_n0 + sc.esc_n1) * p  > stripe_count)
+		return -EINVAL;
+
+	return 0;
+}
+
+/**
+ * llapi_layout_comp_add_ec() - Adds a EC component to @layout
+ * @layout:	existing composite or plain layout
+ * @mirror_id:	mirror id of the data component to be protected by the EC
+ *		component, a mirror id of 0 is invalid
+ * @start:	start offset of the extent
+ * @end:	end offset of the extent
+ * @dstripe_count: number of data stripes
+ * @cstripe_count: number of coding stripes
+ *
+ * Adds a EC component to @layout at the tail of components list and if
+ * @comp_id is specified, the EC component will protect the data component for
+ * the specified mirror id. A data component can only protected by one EC
+ * component. The @layout will change it's current component pointer to the
+ * newly added EC component, and it'll be turned into a composite layout if it
+ * was not before the adding.
+ *
+ * Before (and after) adding the EC component the mirror count and IDs are
+ * synced to ensure the EC component is added to the correct mirror.
+ *
+ * Return:
+ * * %0		on success
+ * * %negative	if error occurs
+ */
+int llapi_layout_comp_add_ec(struct llapi_layout *layout, uint32_t mirror_id,
+			     uint64_t start, uint64_t end,
+			     uint8_t dstripe_count, uint8_t cstripe_count)
+{
+	struct llapi_layout_comp *parity_comp, *comp;
+	bool found = false;
+	int rc;
+
+	/* Validate input parameters */
+	if (!layout) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	/* Validate extent parameters */
+	if (mirror_id == 0 || start >= end) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	/* Validate EC stripe count limits */
+	if (dstripe_count > LOV_EC_MAX_DATA_STRIPES) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (cstripe_count > LOV_EC_MAX_CODING_STRIPES) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	/* Sync mirror count and IDs so that the data component can be found */
+	rc = llapi_layout_mirror_count_sync(layout);
+	if (rc)
+		return rc;
+
+	/*
+	 * Find the matching data component. A data component with the same
+	 * extent must exist before adding an EC component.
+	 */
+	list_for_each_entry(comp, &layout->llot_comp_list, llc_list) {
+		if (comp->llc_mirror_id != mirror_id)
+			continue;
+		/* component to protect should not be a parity component */
+		if (comp->llc_flags & LCME_FL_PARITY) {
+			errno = EINVAL;
+			return -1;
+		}
+
+		if (comp->llc_extent.e_start == start &&
+		    comp->llc_extent.e_end == end) {
+			/* Data comp is already protected by a parity comp */
+			if (comp->llc_mirror_link_id !=
+			    LLAPI_MIRROR_LINK_NONE) {
+				errno = EINVAL;
+				return -1;
+			}
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		errno = ENOENT;
+		return -1;
+	}
+
+	/*
+	 * If the data component's stripe count is still LLAPI_LAYOUT_DEFAULT,
+	 * set it to dstripe_count (the number of data stripes in the EC layout)
+	 */
+	if (comp->llc_stripe_count == LLAPI_LAYOUT_DEFAULT ||
+	    comp->llc_stripe_count == LLAPI_LAYOUT_WIDE)
+		comp->llc_stripe_count = dstripe_count;
+
+	/* Parity components require non-zero cstripe and dstripe */
+	if (layout_ec_verify_stripes(comp->llc_stripe_count,
+				     dstripe_count, cstripe_count)) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	rc = llapi_layout_comp_add_extent(layout, start, end);
+	if (rc)
+		return rc;
+
+	/* Sync mirror count and IDs to generate the mirror ID for the new
+	 * parity component, which is needed for the bi-directional link.
+	 */
+	rc = llapi_layout_mirror_count_sync(layout);
+	if (rc) {
+		(void)llapi_layout_comp_del(layout);
+		return rc;
+	}
+
+	parity_comp = __llapi_layout_cur_comp(layout);
+	if (!parity_comp) {
+		(void)llapi_layout_comp_del(layout);
+		return -1;
+	}
+
+	parity_comp->llc_flags |= LCME_FL_PARITY;
+	parity_comp->llc_cstripe_count = cstripe_count;
+	parity_comp->llc_dstripe_count = dstripe_count;
+
+	/* mark the data component as protected indirectly */
+	comp->llc_cstripe_count = cstripe_count;
+	comp->llc_dstripe_count = dstripe_count;
+
+	/*
+	 * Copy stripe size from the matching data component.
+	 * EC/parity components must have the same stripe size as their
+	 * corresponding data components.
+	 */
+	parity_comp->llc_stripe_size = comp->llc_stripe_size;
+
+	/* bi-directional link for data and parity components */
+	parity_comp->llc_mirror_link_id = layout->llot_curr_link_id;
+	comp->llc_mirror_link_id = layout->llot_curr_link_id;
+	parity_comp->llc_flags |= LCME_FL_IS_LINK_ID;
+	comp->llc_flags |= LCME_FL_IS_LINK_ID;
+	layout->llot_curr_link_id++;
 
 	return 0;
 }
@@ -2481,6 +2724,11 @@ int llapi_layout_add_first_comp(struct llapi_layout *layout)
 int llapi_layout_comp_del(struct llapi_layout *layout)
 {
 	struct llapi_layout_comp *comp;
+	struct llapi_layout_comp *data_comp = NULL;
+	uint32_t comp_mirror_link_id = 0;
+	bool is_parity_comp = false;
+	uint64_t comp_start = 0;
+	uint64_t comp_end = 0;
 
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
@@ -2489,6 +2737,44 @@ int llapi_layout_comp_del(struct llapi_layout *layout)
 	if (!layout->llot_is_composite) {
 		errno = EINVAL;
 		return -1;
+	}
+
+	if (comp->llc_flags & LCME_FL_PARITY) {
+		bool found = false;
+
+		/* Save protected comp info to clear link later on data comp */
+		is_parity_comp = true;
+		comp_start = comp->llc_extent.e_start;
+		comp_end = comp->llc_extent.e_end;
+		comp_mirror_link_id = comp->llc_flags & LCME_FL_IS_LINK_ID ?
+					      comp->llc_mirror_link_id :
+					      comp->llc_mirror_id;
+
+		/* find the protected data component */
+		list_for_each_entry(data_comp, &layout->llot_comp_list,
+				    llc_list) {
+			if (data_comp->llc_mirror_link_id ==
+				    comp_mirror_link_id &&
+			    data_comp->llc_extent.e_start == comp_start &&
+			    data_comp->llc_extent.e_end == comp_end) {
+				found = true;
+				break;
+			}
+		}
+
+		/* data component must exist; otherwise layout is invalid */
+		if (!found) {
+			errno = ENOENT;
+			return -1;
+		}
+	} else {
+		/* A data comp that is protected by a parity comp can't be
+		 * deleted until the parity comp is deleted.
+		 */
+		if (comp->llc_mirror_link_id != LLAPI_MIRROR_LINK_NONE) {
+			errno = EINVAL;
+			return -1;
+		}
 	}
 
 	/* It must be the tail of the list (for PFL, can be relaxed
@@ -2504,6 +2790,13 @@ int llapi_layout_comp_del(struct llapi_layout *layout)
 
 	list_del_init(&comp->llc_list);
 	__llapi_comp_free(comp);
+
+	if (!is_parity_comp)
+		return 0;
+
+	/* Clear link on protected data_component */
+	data_comp->llc_mirror_link_id = LLAPI_MIRROR_LINK_NONE;
+	data_comp->llc_flags &= ~LCME_FL_IS_LINK_ID;
 
 	return 0;
 }
@@ -3715,6 +4008,13 @@ enum llapi_layout_comp_sanity_error {
 	LSE_FOREIGN_EXTENSION,
 	LSE_MIRROR_COUNT_INVALID,
 	LSE_MIRROR_COUNT_MISMATCH,
+	LSE_EC_PARAM,
+	LSE_EC_MATCH_DATA,
+	LSE_EC_DUP,
+	LSE_EC_OVERLAP,
+	LSE_EC_MIXED_MIRROR,
+	LSE_EC_DATA_COMP_UNSET_LINK_ID,
+	LSE_EC_UNPROTECTED_DATA,
 	LSE_LAST,
 };
 
@@ -3757,6 +4057,20 @@ const char *const llapi_layout_strerror[] =
 		"Mirror count is invalid",
 	[LSE_MIRROR_COUNT_MISMATCH] =
 		"Mirror count doesn't match component structure",
+	[LSE_EC_PARAM] =
+		"EC component should have valid parameters",
+	[LSE_EC_MATCH_DATA] =
+		"EC component should have matching data component",
+	[LSE_EC_DUP] =
+		"Parity component should not protect multiple data components",
+	[LSE_EC_OVERLAP] =
+		"EC components should not overlap in the same mirror",
+	[LSE_EC_MIXED_MIRROR] =
+		"Mirror contains both PARITY and non-PARITY components",
+	[LSE_EC_DATA_COMP_UNSET_LINK_ID] =
+		"Data component should link to parity component",
+	[LSE_EC_UNPROTECTED_DATA] =
+		"All data components in the mirror must be protected by parity",
 };
 
 struct llapi_layout_sanity_args {
@@ -3766,6 +4080,9 @@ struct llapi_layout_sanity_args {
 	int lsa_rc;
 	char *fsname;
 	uint16_t lsa_mirror_count;
+	/* Track parity state for mixed mirror detection */
+	bool lsa_in_parity;
+	uint64_t lsa_last_parity_end;
 };
 
 /* Inline function to verify the pool name */
@@ -3821,7 +4138,11 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 	else
 		next = NULL;
 
-	/* Start of zero implies a new mirror */
+	/*
+	 * Start of zero implies a new mirror.
+	 * With parity-first allowed, any component at e_start == 0 marks
+	 * the start of a new mirror, regardless of PARITY flag.
+	 */
 	if (comp->llc_extent.e_start == 0) {
 		first_comp = true;
 		args->lsa_mirror_count++;
@@ -3832,6 +4153,7 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 			goto out_err;
 		}
 
+		/* Reset prev at mirror boundary */
 		prev = NULL;
 	}
 
@@ -3859,13 +4181,16 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 			args->lsa_rc = LSE_FLAGS;
 	} else if (!args->lsa_incomplete) {
 		if (args->lsa_flr) {
-			if (comp->llc_flags & ~LCME_USER_COMP_FLAGS)
+			if (comp->llc_flags &
+			    ~(LCME_USER_COMP_FLAGS | LCME_FL_IS_LINK_ID))
 				args->lsa_rc = LSE_FLAGS;
 		} else {
 			if (comp->llc_flags &
 			    ~(LCME_FL_EXTENSION | LCME_FL_PREF_RW |
-			      LCME_FL_NOCOMPR))
+			      LCME_FL_NOCOMPR | LCME_FL_PARITY |
+			      LCME_FL_IS_LINK_ID)) {
 				args->lsa_rc = LSE_FLAGS;
+			}
 		}
 	}
 	if (args->lsa_rc)
@@ -3973,6 +4298,176 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 		goto out_err;
 	}
 
+	/* Any component should not have LCME_FL_IS_LINK_ID flag and
+	 * llc_ondisk flag set since the former flag is transient.
+	 */
+	if (comp->llc_ondisk && (comp->llc_flags & LCME_FL_IS_LINK_ID)) {
+		args->lsa_rc = LSE_FLAGS;
+		goto out_err;
+	}
+
+	/* EC parity component specific validation */
+	if (comp->llc_flags & LCME_FL_PARITY) {
+		struct llapi_layout_comp *data_comp = NULL;
+		struct llapi_layout_comp *search_comp;
+		bool is_link_id = comp->llc_flags & LCME_FL_IS_LINK_ID;
+
+		/*
+		 * Skip EC validation for components that are already on disk.
+		 * They were validated when created, and we may not have all
+		 * the necessary information (like stripe counts) when just
+		 * modifying component flags.
+		 */
+		if (comp->llc_ondisk)
+			goto skip_ec_validation;
+
+		list_for_each_entry(search_comp, &layout->llot_comp_list,
+				    llc_list) {
+			__u16 search_comp_mirror_link_id =
+				is_link_id ? search_comp->llc_mirror_link_id :
+					     search_comp->llc_mirror_id;
+			__u16 comp_mirror_link_id =
+				is_link_id ? comp->llc_mirror_link_id :
+					     comp->llc_mirror_id;
+
+			/* Skip parity components */
+			if (search_comp->llc_flags & LCME_FL_PARITY)
+				continue;
+
+			/* Comp should link to data comp to protect */
+			if (comp->llc_mirror_link_id !=
+			    search_comp_mirror_link_id)
+				continue;
+
+			/* Check if extents match */
+			if (search_comp->llc_extent.e_start !=
+				    comp->llc_extent.e_start ||
+			    search_comp->llc_extent.e_end !=
+				    comp->llc_extent.e_end)
+				continue;
+
+			/* Data comp and parity comp should have same flag */
+			if ((search_comp->llc_flags & LCME_FL_IS_LINK_ID) !=
+			    (comp->llc_flags & LCME_FL_IS_LINK_ID)) {
+				args->lsa_rc = LSE_EC_PARAM;
+				goto out_err;
+			}
+
+			/* Data comp should link to parity component */
+			if (search_comp->llc_mirror_link_id !=
+			    comp_mirror_link_id) {
+				args->lsa_rc = LSE_EC_DATA_COMP_UNSET_LINK_ID;
+				goto out_err;
+			}
+
+			/* Parity comp should not have multiple data comps */
+			if (data_comp) {
+				args->lsa_rc = LSE_EC_DUP;
+				goto out_err;
+			}
+			data_comp = search_comp;
+		}
+
+		if (!data_comp) {
+			args->lsa_rc = LSE_EC_MATCH_DATA;
+			goto out_err;
+		}
+
+		/* EC parameter validation */
+		if (layout_ec_verify_stripes(data_comp->llc_stripe_count,
+					     comp->llc_dstripe_count,
+					     comp->llc_cstripe_count)) {
+			args->lsa_rc = LSE_EC_PARAM;
+			goto out_err;
+		}
+
+		/*
+		 * EC/parity components must have the same stripe size as
+		 * their matching data components.
+		 */
+		if (comp->llc_stripe_size != data_comp->llc_stripe_size) {
+			args->lsa_rc = LSE_EC_PARAM;
+			goto out_err;
+		}
+
+		/*
+		 * Check that the protected data mirror is complete, i.e., the
+		 * extents covers [0, EOF], and all its data components are
+		 * protected by parity.
+		 */
+		uint64_t min_data_start = LUSTRE_EOF;
+		uint64_t max_data_end = 0;
+		uint16_t data_mirror_id = data_comp->llc_mirror_id;
+
+		list_for_each_entry(search_comp, &layout->llot_comp_list,
+				    llc_list) {
+			if (search_comp->llc_flags & LCME_FL_PARITY)
+				continue;
+			if (search_comp->llc_mirror_id != data_mirror_id)
+				continue;
+
+			/* Check extent coverage is complete */
+			if (search_comp->llc_extent.e_start < min_data_start)
+				min_data_start =
+					search_comp->llc_extent.e_start;
+			if (search_comp->llc_extent.e_end > max_data_end)
+				max_data_end = search_comp->llc_extent.e_end;
+
+			/* Every data component in the mirror must be protected
+			 * by a parity component
+			 */
+			if (search_comp->llc_mirror_link_id ==
+			    LLAPI_MIRROR_LINK_NONE) {
+				args->lsa_rc = LSE_EC_UNPROTECTED_DATA;
+				goto out_err;
+			}
+		}
+
+		/* Data mirror must be complete: extents cover [0, EOF] */
+		if (min_data_start != 0 || max_data_end != LUSTRE_EOF) {
+			args->lsa_rc = LSE_EC_PARAM;
+			goto out_err;
+		}
+
+skip_ec_validation:
+		/* Continue with other validation checks */
+		;
+	}
+
+	/*
+	 * Detect mixed parity mirrors: once we see a parity component,
+	 * all subsequent components in that mirror must be parity until
+	 * we hit a new mirror boundary (e_start == 0).
+	 */
+	if (comp->llc_flags & LCME_FL_PARITY) {
+		/* Entering or continuing parity mode */
+		if (!args->lsa_in_parity) {
+			/* First parity component in this mirror */
+			if (comp->llc_extent.e_start != 0) {
+				/* Parity can only start at mirror boundary */
+				args->lsa_rc = LSE_EC_MIXED_MIRROR;
+				goto out_err;
+			}
+			args->lsa_in_parity = true;
+		}
+		args->lsa_last_parity_end = comp->llc_extent.e_end;
+	} else {
+		/* Non-parity component */
+		if (args->lsa_in_parity) {
+			/*
+			 * Switching from parity to non-parity within a
+			 * mirror is not allowed. Non-parity after parity
+			 * must start a new mirror (e_start == 0).
+			 */
+			if (comp->llc_extent.e_start != 0) {
+				args->lsa_rc = LSE_EC_MIXED_MIRROR;
+				goto out_err;
+			}
+			/* New mirror started, exit parity mode */
+			args->lsa_in_parity = false;
+		}
+	}
+
 	return LLAPI_LAYOUT_ITER_CONT;
 
 out_err:
@@ -4062,6 +4557,8 @@ int llapi_layout_v2_sanity(struct llapi_layout *layout,
 	args.lsa_incomplete = incomplete;
 	args.fsname = fsname;
 	args.lsa_mirror_count = 0; /* tracks actual mirror count for each cb */
+	args.lsa_in_parity = false;
+	args.lsa_last_parity_end = 0;
 
 	/* When we modify an existing layout, this tells us if it's FLR */
 	if (curr->llc_mirror_id > 0)

@@ -1971,6 +1971,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LCME_FL_COMPRESS != 0x00000100);
 	BUILD_BUG_ON(LCME_FL_PARTIAL != 0x00000200);
 	BUILD_BUG_ON(LCME_FL_NOCOMPR != 0x00000400);
+	BUILD_BUG_ON(LCME_FL_IS_LINK_ID != 0x40000000);
 	BUILD_BUG_ON(LCME_FL_NEG != 0x80000000);
 
 	/* Checks for struct lov_comp_md_v1 */

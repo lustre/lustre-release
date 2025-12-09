@@ -802,12 +802,26 @@ enum lov_pattern {
 #define LOV_OFFSET_DEFAULT      ((__u16)-1)
 #define LMV_OFFSET_DEFAULT      ((__u32)-1)
 
+/* current client IO only understand these patterns */
 static inline bool lov_pattern_supported(enum lov_pattern pattern)
 {
-	enum lov_pattern pattern_base = pattern & ~LOV_PATTERN_F_RELEASED;
+	enum lov_pattern pattern_base = pattern & ~(LOV_PATTERN_F_RELEASED |
+						    LOV_PATTERN_F_MASK);
 
 	return pattern_base == LOV_PATTERN_RAID0 ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
+	       pattern_base == LOV_PATTERN_MDT;
+}
+
+/* but we can set and server allows for these patterns */
+static inline bool lov_pattern_available(enum lov_pattern pattern)
+{
+	enum lov_pattern pattern_base = pattern & ~(LOV_PATTERN_F_RELEASED |
+						    LOV_PATTERN_F_MASK);
+
+	return pattern_base == LOV_PATTERN_RAID0 ||
+	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
+	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_PARITY) ||
 	       pattern_base == LOV_PATTERN_MDT;
 }
 
@@ -869,6 +883,10 @@ static inline bool lov_pool_is_reserved(const char *pool)
 #define LOV_ALL_STRIPES_WIDE  0xffe0 /* LLAPI_OVERSTRIPE_COUNT_MAX */
 #define LOV_V1_INSANE_STRIPE_INDEX (LOV_ALL_STRIPES_WIDE - 1) /* max index */
 #define LOV_V1_INSANE_STRIPE_COUNT LOV_V1_INSANE_STRIPE_INDEX /* deprecated */
+
+/* EC (Erasure Coding) stripe count limits */
+#define LOV_EC_MAX_DATA_STRIPES   255  /* max data stripes for EC */
+#define LOV_EC_MAX_CODING_STRIPES 15   /* max coding/parity stripes for EC */
 
 #define XATTR_LUSTRE_PREFIX	"lustre."
 #define XATTR_LUSTRE_PIN	XATTR_LUSTRE_PREFIX"pin"
@@ -983,6 +1001,9 @@ enum lov_comp_md_entry_flags {
 	LCME_FL_NOCOMPR   = 0x00000400, /* the component should not be
 					 * compressed
 					 */
+	LCME_FL_IS_LINK_ID = 0x40000000, /* EC: llc_protected_ref is link ID
+					  * (transient, not stored on disk)
+					  */
 	LCME_FL_NEG	  = 0x80000000	/* used to indicate a negative flag,
 					 * won't be stored on disk
 					 */
@@ -990,7 +1011,8 @@ enum lov_comp_md_entry_flags {
 
 #define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT | LCME_FL_STALE | \
 				 LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
-				 LCME_FL_EXTENSION | LCME_FL_PARITY)
+				 LCME_FL_EXTENSION | LCME_FL_PARITY | \
+				 LCME_FL_IS_LINK_ID)
 
 /* The component flags can be set by users at creation/modification time. */
 #define LCME_USER_COMP_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
@@ -1010,7 +1032,7 @@ enum lov_comp_md_entry_flags {
  * from the default/template layout set on a directory.
  */
 #define LCME_TEMPLATE_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
-				 LCME_FL_EXTENSION)
+				 LCME_FL_EXTENSION | LCME_FL_PARITY)
 
 /* lcme_id can be specified as certain flags, and the first
  * bit of lcme_id is used to indicate that the ID is representing

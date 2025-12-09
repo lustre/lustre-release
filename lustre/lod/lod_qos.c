@@ -377,10 +377,16 @@ out:
  * all stripes or 3/4 of stripes.  The code is written this way to avoid
  * returning 0 for stripe_count < 4, like "stripe_count * 3 / 4" would do.
  *
+ * Parity components are a special case. Here we must always have the requested
+ * number of stripes
+ *
  * Returns acceptable stripecount
  */
 static int lod_stripe_count_min(__u32 stripe_count, enum lod_uses_hint flags)
 {
+	if (flags & LCME_FL_PARITY)
+		return stripe_count;
+
 	return (flags & LOD_USES_DEFAULT_STRIPE ?
 		stripe_count - (stripe_count / 4) : stripe_count);
 }
@@ -2567,7 +2573,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 
 		if (v1->lmm_pattern == 0)
 			v1->lmm_pattern = LOV_PATTERN_RAID0;
-		if (!lov_pattern_supported(lov_pattern(v1->lmm_pattern))) {
+		if (!lov_pattern_available(v1->lmm_pattern)) {
 			CDEBUG(D_LAYOUT, "%s: invalid pattern: %x\n",
 			       lod2obd(d)->obd_name, v1->lmm_pattern);
 			GOTO(free_comp, rc = -EINVAL);
@@ -2985,6 +2991,7 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		lod_comp = &lo->ldo_comp_entries[i];
 		extent = &lod_comp->llc_extent;
 		CDEBUG(D_OTHER, "comp[%d] %lld "DEXT"\n", i, size, PEXT(extent));
+
 		if (!lo->ldo_is_composite || size >= extent->e_start) {
 			rc = lod_qos_prep_create(env, lo, attr, th, i, 0);
 			if (rc)

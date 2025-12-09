@@ -77,7 +77,7 @@ static int lsm_lmm_verify_v1v3(struct lov_mds_md *lmm, size_t lmm_size,
 		goto out;
 	}
 
-	if (!lov_pattern_supported(lov_pattern(pattern))) {
+	if (!lov_pattern_available(pattern)) {
 		static int nr;
 		static ktime_t time2_clear_nr;
 		ktime_t now = ktime_get();
@@ -131,7 +131,7 @@ static void lsme_free(struct lov_stripe_md_entry *lsme)
 	if (!lsme_inited(lsme) ||
 	    lsme->lsme_pattern & LOV_PATTERN_F_RELEASED ||
 	    !lov_supported_comp_magic(lsme->lsme_magic) ||
-	    !lov_pattern_supported(lov_pattern(lsme->lsme_pattern)))
+	    !lov_pattern_available(lsme->lsme_pattern))
 		stripe_count = 0;
 	for (i = 0; i < stripe_count; i++)
 		OBD_SLAB_FREE_PTR(lsme->lsme_oinfo[i], lov_oinfo_slab);
@@ -189,7 +189,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 
 	pattern = le32_to_cpu(lmm->lmm_pattern);
 	if (pattern & LOV_PATTERN_F_RELEASED || !inited ||
-	    !lov_pattern_supported(lov_pattern(pattern)))
+	    !lov_pattern_available(pattern))
 		stripe_count = 0;
 	else
 		stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
@@ -758,8 +758,7 @@ void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 			if (!lsme_inited(lse) ||
 			    lse->lsme_pattern & LOV_PATTERN_F_RELEASED ||
 			    !lov_supported_comp_magic(lse->lsme_magic) ||
-			    !lov_pattern_supported(
-				    	lov_pattern(lse->lsme_pattern)))
+			    !lov_pattern_available(lse->lsme_pattern))
 				continue;
 			for (j = 0; j < lse->lsme_stripe_count; j++) {
 				CDEBUG_LIMIT(level,

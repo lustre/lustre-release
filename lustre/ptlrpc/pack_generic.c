@@ -2457,6 +2457,12 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 		if (ent->lcme_flags & LCME_FL_NOSYNC)
 			CDEBUG(lvl, "\tlcme_timestamp: %llu\n",
 					ent->lcme_timestamp);
+		if (ent->lcme_flags & LCME_FL_PARITY) {
+			CDEBUG_LIMIT(lvl, "\tlcme_dstripe_count: %#x\n",
+				     ent->lcme_dstripe_count);
+			CDEBUG_LIMIT(lvl, "\tlcme_cstripe_count: %#x\n",
+				     ent->lcme_cstripe_count);
+		}
 		CDEBUG(lvl, "\tlcme_extent.e_start: %llu\n",
 		       ent->lcme_extent.e_start);
 		CDEBUG(lvl, "\tlcme_extent.e_end: %llu\n",
