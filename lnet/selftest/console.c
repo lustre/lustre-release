@@ -737,53 +737,6 @@ lstcon_nodes_getent(struct list_head *head, int *index_p,
 	return 0;
 }
 
-int
-lstcon_group_info(char *name, struct lstcon_ndlist_ent __user *gents_p,
-		  int *index_p, int *count_p,
-		  struct lstcon_node_ent __user *dents_up)
-{
-	struct lstcon_ndlist_ent *gentp;
-	struct lstcon_group *grp;
-	struct lstcon_ndlink *ndl;
-	int rc;
-
-	rc = lstcon_group_find(name, &grp);
-	if (rc != 0) {
-		CDEBUG(D_NET, "%s: Can't find group: rc = %d\n", name, rc);
-		return rc;
-	}
-
-	if (dents_up != NULL) {
-		/* verbose query */
-		rc = lstcon_nodes_getent(&grp->grp_ndl_list, index_p,
-					 count_p, dents_up);
-		lstcon_group_decref(grp);
-
-		return rc;
-	}
-
-	/* non-verbose query */
-	CFS_ALLOC_PTR(gentp);
-	if (gentp == NULL) {
-		CERROR("Can't allocate ndlist_ent\n");
-		lstcon_group_decref(grp);
-
-		return -ENOMEM;
-	}
-
-	list_for_each_entry(ndl, &grp->grp_ndl_list, ndl_link)
-		LST_NODE_STATE_COUNTER(ndl->ndl_node, gentp);
-
-	rc = copy_to_user(gents_p, gentp,
-			  sizeof(struct lstcon_ndlist_ent)) ? -EFAULT : 0;
-
-	CFS_FREE_PTR(gentp);
-
-	lstcon_group_decref(grp);
-
-	return 0;
-}
-
 static int
 lstcon_batch_find(const char *name, struct lstcon_batch **batpp)
 {

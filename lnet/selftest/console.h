@@ -201,10 +201,6 @@ extern int lstcon_nodes_add(char *name, int nnd,
 extern int lstcon_nodes_remove(char *name, int nnd,
 			       struct lnet_process_id __user *nds_up,
 			       struct list_head __user *result_up);
-extern int lstcon_group_info(char *name,
-			     struct lstcon_ndlist_ent __user *gent_up,
-			     int *index_p, int *ndent_p,
-			     struct lstcon_node_ent __user *ndents_up);
 extern int lstcon_batch_add(char *name);
 extern int lstcon_batch_run(char *name, int timeout,
 			    struct list_head __user *result_up);
