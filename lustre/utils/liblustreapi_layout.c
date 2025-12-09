@@ -32,7 +32,24 @@
 #include "lstddef.h"
 #include "lustreapi_internal.h"
 
-/*
+/**
+ * Data structure when computing/verifying parities holding a list
+ * of all regions in the parity stripe that depends on data from
+ * the data stripes.
+ * This allows us to only verify/write the parts of the parity stripes
+ * that are actually used for protecting the data stripes and to ignore
+ * those regions that do not need parity data.
+ * For example regions that are covered by a "hole" in all the corresponding
+ * data stripes of are beyond eof for the data mirror.
+ */
+struct ec_parity_coverage {
+	struct ec_parity_coverage *next;
+	uint64_t pos;
+	uint64_t len;
+};
+
+
+/**
  * Layout component, which contains all attributes of a plain
  * V1/V3/FOREIGN(HSM) layout.
  */
@@ -4274,11 +4291,11 @@ out_free:
  * * %negative error code from pread() on read failure
  */
 static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
-				     uint64_t data_pos, int num_data_stripes,
-				     uint64_t ec_pos, int num_ec_stripes,
-				     int ec_id, uint64_t stripe_size,
-				     uint64_t end_pos, uint8_t *stripe_ptrs[],
-				     uint8_t *encode_matrix, uint8_t *g_tbls)
+		uint64_t data_pos, int num_data_stripes,
+		uint64_t ec_pos, int num_ec_stripes,
+		uint64_t stripe_size, uint64_t end_pos,
+		uint8_t *stripe_ptrs[],
+		uint8_t *encode_matrix, uint8_t *g_tbls)
 {
 	uint64_t bytes_left;
 	int rc, i, k, p, m;
@@ -4355,10 +4372,12 @@ static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
 
 static int
 llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
-			uint64_t ec_pos, int ec_id, uint8_t *stripe_ptrs[])
+			uint64_t ec_pos, int ec_id, uint8_t *stripe_ptrs[],
+			struct ec_parity_coverage *cov)
 {
 	int rc, i;
 	int m = k + p;
+	struct ec_parity_coverage *c;
 
 	for (i = k; i < m; i++) {
 		size_t to_write;
@@ -4366,17 +4385,27 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
 		uint8_t *write_buf;
 
 		write_buf = stripe_ptrs[i];
-		to_write = stripe_size;
-		bytes_written = llapi_mirror_write(fd, ec_id, write_buf,
-						   to_write, ec_pos);
-		if (bytes_written < 0) {
-			llapi_error(LLAPI_MSG_ERROR, bytes_written,
-			      "could not write ec parities");
-			rc = bytes_written;
-			goto out;
+		for (c = cov; c; c = c->next) {
+			uint64_t off = ec_pos + (i - k) * stripe_size + c->pos;
+
+			to_write = c->len;
+			bytes_written = llapi_mirror_write(fd,
+							   mirror_id_of(ec_id),
+							   &write_buf[c->pos],
+				   to_write, off);
+			if (bytes_written < 0) {
+				llapi_error(LLAPI_MSG_ERROR, bytes_written,
+					    "could not write ec parities");
+				rc = bytes_written;
+				goto out;
+			}
+			assert(bytes_written == to_write);
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "Wrote parity #%d range=0x%llx-0x%llx\n",
+				     i - k,
+				     (unsigned long long)off,
+				     (unsigned long long)(off + c->len));
 		}
-		assert(bytes_written == to_write);
-		ec_pos += bytes_written;
 	}
 
 	rc = 0;
@@ -4410,47 +4439,299 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
  */
 static int llapi_ec_verify_parities(int fd, uint64_t stripe_size, int k, int p,
 				    uint64_t ec_pos, int ec_id,
-				    uint8_t *stripe_ptrs[])
+				    uint8_t *stripe_ptrs[],
+				    struct ec_parity_coverage *cov)
 {
+	struct ec_parity_coverage *c;
 	int rc;
 	int i;
 
 	for (i = 0; i < p; i++) {
-		size_t to_read;
-		ssize_t bytes_read;
-		uint8_t *rb;
+		uint8_t *read_buf = stripe_ptrs[0];
 
-		rb = stripe_ptrs[0];
-		to_read = stripe_size;
-		bytes_read = llapi_mirror_read(fd, ec_id, rb, to_read, ec_pos);
-		if (bytes_read < 0) {
-			llapi_error(LLAPI_MSG_ERROR, bytes_read,
-				    "could not read ec parities");
-			rc = bytes_read;
-			goto out;
+		for (c = cov; c; c = c->next) {
+			uint64_t off = ec_pos + i * stripe_size + c->pos;
+			size_t to_read = c->len;
+			ssize_t bytes_read;
+
+			bytes_read = llapi_mirror_read(fd, mirror_id_of(ec_id),
+						       &read_buf[c->pos],
+						       to_read, off);
+			if (bytes_read < 0) {
+				llapi_error(LLAPI_MSG_ERROR, bytes_read,
+					    "could not read ec parities");
+				rc = bytes_read;
+				goto out;
+			}
+			/*
+			 * Short read from parity component indicates the
+			 * parity data was not written for this region.
+			 */
+			if (bytes_read != to_read) {
+				rc = -EINVAL;
+				llapi_error(
+					LLAPI_MSG_ERROR, rc,
+					"parity %d short read: got %zd expected %zu",
+					i, bytes_read, to_read);
+				goto out;
+			}
+			if (memcmp(&read_buf[c->pos],
+				   &stripe_ptrs[k + i][c->pos],
+				   c->len)) {
+				rc = -EINVAL;
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "parity mismatch at ec_pos=%llu",
+					    (unsigned long long)off);
+				goto out;
+			}
+			llapi_printf(
+				LLAPI_MSG_NORMAL,
+				"Verified parity #%d range=0x%llx-0x%llx\n", i,
+				(unsigned long long)off,
+				(unsigned long long)(off + c->len));
 		}
-		/*
-		 * Short read from parity component indicates the parity
-		 * data was not written for this stripe. This is a mismatch.
-		 */
-		if (bytes_read != to_read) {
-			rc = -EINVAL;
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "parity %d short read: got %zd expected %zu",
-				    i, bytes_read, to_read);
-			goto out;
-		}
-		if (memcmp(rb, stripe_ptrs[k + i], bytes_read)) {
-			rc = -EINVAL;
-			llapi_error(LLAPI_MSG_ERROR, rc, "parity %d mismatch",
-				    i);
-			goto out;
-		}
-		ec_pos += bytes_read;
 	}
 
 	rc = 0;
  out:
+	return rc;
+}
+
+/**
+ * Compute the parity coverage for a single SEEK_DATA region
+ */
+static int ec_compute_parity_coverage_single(int fd, uint64_t stripe_start_pos,
+					     uint64_t data_pos, uint64_t len,
+					     struct ec_parity_coverage **cov)
+{
+	size_t data_len;
+	off_t data_off;
+	struct ec_parity_coverage *c;
+
+	data_off = llapi_data_seek(fd, data_pos, &data_len);
+	if (data_off < 0) {
+		llapi_error(LLAPI_MSG_ERROR, data_off,
+			    "failed to SEEK_DATA");
+		return data_off;
+	}
+	/* normalize data_off and data_pos to start of stripe */
+	data_off -= stripe_start_pos;
+	data_pos -= stripe_start_pos;
+
+	if (data_len == 0 || data_off >= data_pos + len)
+		return len;
+
+	/*
+	 * Clamp data_off+data_len so that it does not extend beyond
+	 * data_pos+len
+	 */
+	if (data_off + data_len > data_pos + len)
+		data_len = len - (data_off - data_pos);
+
+	/* If this will be the first region in the list */
+	if (*cov == NULL || data_off < (*cov)->pos) {
+		c = malloc(sizeof(struct ec_parity_coverage));
+		if (c == NULL)
+			return -ENOMEM;
+		c->next = *cov;
+		c->pos = data_off;
+		c->len = data_len;
+
+		*cov = c;
+
+		/* merge if the new head overlaps with the previous head */
+		c = (*cov)->next;
+		while (c &&
+		    c->pos <= (*cov)->pos + (*cov)->len) {
+			if (c->pos + c->len > (*cov)->pos + (*cov)->len)
+				(*cov)->len = c->pos + c->len - (*cov)->pos;
+			(*cov)->next = c->next;
+			free(c);
+			c = (*cov)->next;
+		}
+
+		return data_off - data_pos + data_len;
+	}
+
+	/* Skip forward until we find which cov to insert this range behind */
+	while ((*cov)->next && data_off > (*cov)->next->pos)
+		cov = &(*cov)->next;
+
+	if (data_off <= (*cov)->pos + (*cov)->len) {
+		/*
+		 * This range starts inside or immediately after the current
+		 * cov so we can just extend its length.
+		 */
+		(*cov)->len = data_off - (*cov)->pos + data_len;
+	} else {
+		/*
+		 * This range starts beyond the end of the current cov.
+		 * Create a new entry. If it overlaps with the next entry
+		 * we can merge them below.
+		 */
+		c = malloc(sizeof(struct ec_parity_coverage));
+		if (c == NULL)
+			return -ENOMEM;
+		c->next = (*cov)->next;
+		c->pos = data_off;
+		c->len = data_len;
+		(*cov)->next = c;
+		cov = &(*cov)->next;
+	}
+
+	/* merge if the new head overlaps with the previous head */
+	c = (*cov)->next;
+	while (c &&
+	       c->pos <= (*cov)->pos + (*cov)->len) {
+		if (c->pos + c->len > (*cov)->pos + (*cov)->len)
+			(*cov)->len = c->pos + c->len - (*cov)->pos;
+		(*cov)->next = c->next;
+		free(c);
+		c = (*cov)->next;
+	}
+
+	return data_off - data_pos + data_len;
+}
+
+/**
+ * Compute the parity coverage for a single stripe
+ */
+static int
+ec_compute_parity_coverage_stripe(int fd, uint64_t data_pos,
+				  uint64_t stripe_size,
+				  struct ec_parity_coverage **cov)
+{
+	int rc;
+	uint64_t len = stripe_size;
+	uint64_t stripe_start_pos = data_pos;
+
+	/* If we already cover the whole stripe there is nothing more to do. */
+	if (*cov && (*cov)->pos == 0 && (*cov)->len == stripe_size)
+		return 0;
+
+	while (len) {
+		rc = ec_compute_parity_coverage_single(fd, stripe_start_pos,
+				       data_pos, len, cov);
+		if (rc <= 0)
+			return rc;
+		if (rc > len)
+			return 0;
+		data_pos += rc;
+		len -= rc;
+	}
+
+	return 0;
+}
+
+/**
+ * Compute the parity coverage for an entire raid set.
+ *
+ * The parity coverate is the set of ranges in the parity stripe that are
+ * computed from actual file data in the corresponding data stripes.
+ * This takes into account both EOF as well as holes in a sparse file.
+ *
+ * All the examples are for a file with --ec 2+1. I.e. Two data stripes
+ * and one parity stripe.
+ * Stripe size is 64kb.
+ *
+ * In the examples below we also assume byte level granularity
+ * on the data and hole sections. This is for illustration purposes
+ * but is unlikely in real world as the data regions reported from
+ * SEEK_DATA/SEEK_HOLE will depend on the underlying filesystem of
+ * the OST hosting the data stripes and will most often be
+ * aligned to full 4kb blocks.
+ *
+ *
+ * Example:
+ * A File containing 6 bytes of data at offset 0. EOF is at offset 6.
+ * +--------------------------+
+ * | data |                   | Stripe #0, data in range 0-6
+ * +--------------------------+
+ *        ^ EOF at offset 6
+ *
+ * +--------------------------+
+ * |                          | Stripe #1, no data.
+ * +--------------------------+
+ *
+ * In this case the parity stripe will contain parity data in the range 0 - 6.
+ * The rest of the parity stripe is undefined, a hole, as there is no data
+ * for the range 6 - end_of_stripe
+ *
+ *
+ * A File containing 6 bytes of data at offset 0. EOF is at offset 48.
+ * +--------------------------+
+ * | data | hole |            | Stripe #0, data in range 0-6
+ * +--------------------------+
+ *               ^ EOF at offset 48
+ *
+ * +--------------------------+
+ * |                          | Stripe #1, no data.
+ * +--------------------------+
+ *
+ * In this case the parity stripe will contain parity data in the range 0 - 6.
+ * The rest of the parity stripe is undefined, a hole, as there is no data
+ * for the range 6 - end_of_stripe
+ * While EOF is at offset 48, there range 6 - 48 is a hole and contains no data
+ * and thus do not contribute to partity data.
+ *
+ *
+ * Example:
+ * A File containing data in the ranged 0 - 6 and 70000 - 70006
+ * +--------------------------+
+ * | data |       hole        | Stripe #0, data in range 0-6
+ * +--------------------------+
+ * ^ start of stripe #0 at offset 0
+ *
+ * +--------------------------+
+ * |         |data|           | Stripe #1, data in the range 70000 - 70006
+ * +--------------------------+
+ * ^              ^ EOF at offset 70006
+ * | start of stripe #0 at offset 65536
+ *
+ * In this case the parity stripe will contain parity data in the two ranges
+ * 0 - 6  due to the data in stripe #0 range 0 - 6
+ * 4464 - 4470 due to the data in stripe #1, range 70000 - 70006
+ *
+ *
+ * Example:
+ * A File containing data in the ranged 10 - 2048 and 66536 - 70000
+ * +--------------------------+
+ * | | data |      hole       | Stripe #0, data in range 10 - 2048
+ * +--------------------------+
+ * ^ start of stripe #0 at offset 0
+ *
+ * +--------------------------+
+ * |    |  data  |            | Stripe #1, data in the range 66536 - 70000
+ * +--------------------------+
+ * ^ start of stripe #1 at offset 66536 - 70000
+ *
+ * In this case the parity stripe will contain parity in a single range
+ * that is the result of merging the two ranges of data in stripe #0 and #1
+ * 10 - 4464  Due to the merger of the two ranges 10 - 2048 and 1024 - 4464
+ *
+ */
+static int ec_compute_parity_coverage_raidset(int fd, uint64_t data_pos, int k,
+					      uint64_t stripe_size,
+					      struct ec_parity_coverage **cov)
+{
+	int i, rc;
+
+	for (i = 0; i < k; i++) {
+		rc = ec_compute_parity_coverage_stripe(fd, data_pos,
+						       stripe_size, cov);
+		if (rc)
+			goto out_free;
+		data_pos += stripe_size;
+	}
+
+	return 0;
+ out_free:
+	while (*cov) {
+		struct ec_parity_coverage *tmp = (*cov)->next;
+
+		free(*cov);
+		*cov = tmp;
+	}
 	return rc;
 }
 
@@ -4468,52 +4749,65 @@ llapi_ec_resync_or_verify_raidset(int fd, struct llapi_layout *layout,
 	int rc = 0;
 	size_t data_len;
 	off_t data_off;
+	struct ec_parity_coverage *cov = NULL;
 
 	if (data_pos >= end_pos)
-		return 0;
+		goto out_free;
 
 	data_off = llapi_data_seek(fd, data_pos, &data_len);
 	if (data_off < 0) {
 		rc = data_off;
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "failed to SEEK_DATA");
-		return rc;
+		goto out_free;
 	}
 
 	if (data_off >= data_pos + k * data_comp->llc_stripe_size)
-		return 0;
+		goto out_free;
 
 	if (!data_len)
-		return 0;
+		goto out_free;
 
 	llapi_printf(LLAPI_MSG_NORMAL,
 		     "Compute/verify raidset range=%llu-%llu\n",
 		     (unsigned long long)data_pos,
 		     (unsigned long long)(data_pos +
 					  k * data_comp->llc_stripe_size));
+
+	rc = ec_compute_parity_coverage_raidset(fd, data_pos, k,
+		      data_comp->llc_stripe_size, &cov);
+	if (rc)
+		goto out_free;
+
 	rc = llapi_ec_compute_parities(fd, layout,
 				       data_pos, k,
 				       ec_pos, p,
-				       mirror_id_of(ec_comp->llc_id),
 				       data_comp->llc_stripe_size, end_pos,
 				       stripe_ptrs, encode_matrix, g_tbls);
 	if (rc)
-		return rc;
+		goto out_free;
 	if (is_verify) {
 		rc = llapi_ec_verify_parities(fd,
 			      data_comp->llc_stripe_size, k, p, ec_pos,
-			      mirror_id_of(ec_comp->llc_id), stripe_ptrs);
+					      ec_comp->llc_id, stripe_ptrs, cov);
 		if (rc)
-			return rc;
+			goto out_free;
 	} else {
 		rc = llapi_ec_write_parities(fd,
 			     data_comp->llc_stripe_size, k, p, ec_pos,
-			     mirror_id_of(ec_comp->llc_id), stripe_ptrs);
+					     ec_comp->llc_id, stripe_ptrs, cov);
 		if (rc)
-			return rc;
+			goto out_free;
 	}
 
-	return 0;
+ out_free:
+	while (cov) {
+		struct ec_parity_coverage *tmp = cov->next;
+
+		free(cov);
+		cov = tmp;
+	}
+	return rc;
 }
 
 /**
@@ -4553,7 +4847,7 @@ static int
 llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 			       struct llapi_layout_comp *data_comp,
 			       struct llapi_layout_comp *ec_comp,
-			       bool is_verify)
+			       int is_verify)
 {
 	int rc = 0, i, k, p, m;
 	struct stat stbuf;

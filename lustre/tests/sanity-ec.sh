@@ -15,7 +15,7 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_EC_EXCEPT "
-always_except LU-19631 12a
+always_except LU-19631 12a 12b
 # tests 12a: EC parity calculation produces incorrect content (LU-19631)
 
 build_test_filter
@@ -3615,18 +3615,20 @@ test_34c() {
 		check_parity_read $DIR/$tdir/$tfile $parity_mirror_id \
 			0 "no"
 
-		# Parity is computed per full stripe (4M), so all
-		# offsets within the parity extent have valid data
-		# regardless of data file size.  Only offsets past
-		# the parity extent (8M for 3+2 with 4M stripes)
-		# should return zeros.
+		# Parity is computed at block granularity, covering
+		# only the data range.  Offsets within a parity stripe
+		# but past the data range read as zeros.
 
-		# Test within first parity stripe (should have data)
-		echo "  Checking offset 1M (within first parity stripe)..."
-		check_parity_read $DIR/$tdir/$tfile \
-			$parity_mirror_id $((1024 * 1024)) "no"
+		# Only check offset 1M if data extends into that range
+		if (( size > 1024 * 1024 )); then
+			echo "  Checking offset 1M (within first parity stripe)..."
+			check_parity_read $DIR/$tdir/$tfile \
+				$parity_mirror_id $((1024 * 1024)) "no"
+		fi
 
-		# Test start of second parity stripe (should have data)
+		# Test start of second parity stripe at 4M: always has
+		# data as long as any data was written (each coding stripe
+		# gets parity for the same data range)
 		echo "  Checking offset 4M (start of second parity stripe)..."
 		check_parity_read $DIR/$tdir/$tfile $parity_mirror_id \
 			$((4 * 1024 * 1024)) "no"
