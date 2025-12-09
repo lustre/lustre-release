@@ -1,0 +1,496 @@
+			**************************************
+			* Overview of Erasure Coding support *
+			**************************************
+
+Contents
+1. Introduction
+        1.1 Definitions
+2. Command interface
+        2.1 lfs setstripe
+	2.1.1 raid set aware stripe allocation
+	2.2 lfs getstripe
+	2.3 lfs mirror resync
+	2.4 lfs mirror verify
+3. Stripe Layout
+
+
+1. Introduction
+===============
+Erasure coding support in Lustre will be added in several phases.
+This document describes the support in phase 0.
+
+The implementation of EC is similar in concept to RAID-4 where these OST
+objects used in a layout are divided into two separate cases;
+mirrors containing OST objects holding file data, just like
+existing files use RAID-0 acreoss objects in Lustre, but using a new type of
+mirror containing OST objects holding parity data.
+
+This new type of mirrors are indicated in the code by the flag
+LCME_FL_PARITY and in userland indicated by the flag "parity" in the
+lfs getstripe output.
+Unlike other mirror types, this type of mirror does not contain
+file data but instead contain parity stripes.
+
+In this phase parity data will be manually updated after a file has
+changed.
+When the file is modified, any affected parity mirror will be flagged as
+"stale" and the user is required to manually initiate a resync
+to recompute the parities and make the parity mirror valid again.
+This behavior will be improved upon in later phases.
+
+1.1 Definitions
+---------------
+Stripe set:
+    These are the stripes defined for the data comp.
+    The number of stripes in a stripe set is data_comp->llc_stripe_count.
+    Stripe sets are repeated, one after the other, until the end of the
+    comp.
+    Each repetition of a stripe set is called a row and contains
+    'stripe_count * stripe_size = stripe_width' data bytes.
+Raid set:
+    The stripe set is split into smaller groups over which ec parities
+    are computed.
+    This is the raid set.
+    The raid set covers a specific range of each row.
+    A raid set covers the same range for every row.
+    The stripe set is split into raid sets so that there will be
+      c0 number of raid sets with k0 stripes each and
+      c1 number of raid sets with k1 stripes each.
+      k1 == k0 - 1
+      c1 may be 0 if the stripe_count can be evenly divided by k0.
+Raid stride:
+    For a raid set, this is the nubmer of stripes from one row in a raid
+    set until the next row for that raid set.
+    The raid stride is the same for all raid sets in a comp.
+    The raid stride is data_comp->llc_stripe_count.
+Parity stride:
+    This is the number of stripes in the parity mirror until a specific
+    OST object is repeated.
+    It is the same as the number of parities times the number of raid sets.
+
+
+2. Command interface
+====================
+The command line API to manage erasure coding for files is via the
+lfs mirror command.
+This command can be used to set and view the erasure coding configuration
+for a file. This command can also be used to resync a stale ec mirror and
+recompute the parity stripes or to verify that the ec parity mirrors match
+the content of the file data.
+
+
+2.1 lfs setstripe
+-----------------
+Setstripe is used to create EC mirror for a device.
+
+Example:
+Create a file layout using 8 stripes for the data mirror and using
+4+2 for the erasure code protection.
+
+4 means we want to split the number of data stripes (8 in this case)
+into smaller raid-sets of 4, or fewer, data stripes.
+
++2 means that we want 2 parity stripes for each raid set.
+
+As 8 data stripes can be evenly divided by 4 (preferred raid set data size)
+this will result in set of 8 data stripes will be protected as
+2 groups of 4 data stripes each protected by 2 parity stripes.
+
+  $ lfs setstripe -E -1 -S 4M -c 8 --ec 4+2 /mnt/lustre/sahlberg/file
+
+
+2.1.1 raid set aware stripe allocation
+-------------------------------------
+For raid set aware data stripe allocation we always try to allocate the
+requested number of OSTs in the -c n or -C n argument.
+In the latter case, overstriping,  we allow the same OST to be used
+multiple times in the stripeset as long as the OST is not reused within
+the same raid set.
+If there are not enough OSTs for the full request we will still allow it as
+long as we have at least 75% of the requested amount.
+
+
+Stripe allocation for the ec mirror
+-----------------------------------
+For the EC component we require one OST object per parity and raid set.
+If there are not enough unique OSTs for the parity stripes
+then OSTs selected for the data component will be reused as long
+as they are from a different raid set.
+
+
+Examples:
+
+6 OSTs: -c 6 --ec 3+1
+---------------------
+/mnt/l/sahlberg/file
+  lcm_layout_gen:    2
+  lcm_mirror_count:  2
+  lcm_entry_count:   2
+    lcme_id:             65537
+    lcme_mirror_id:      1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  6
+      lmm_stripe_size:   1048576
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+        -   0: { l_ost_idx:   0, l_fid: [0x240000400:0x1822:0x0] }
+        -   1: { l_ost_idx:   1, l_fid: [0x280000400:0x1842:0x0] }
+        -   2: { l_ost_idx:   2, l_fid: [0x2c0000400:0x1882:0x0] }
+        -   3: { l_ost_idx:   3, l_fid: [0x300000400:0x1882:0x0] }
+        -   4: { l_ost_idx:  10, l_fid: [0x440000400:0x1722:0x0] }
+        -   5: { l_ost_idx:  11, l_fid: [0x480000400:0x1722:0x0] }
+    lcme_id:             131074
+    lcme_mirror_id:      2
+    lcme_flags:          init,parity
+    lcme_data_id:        1
+    lcme_dstripe_count:  3
+    lcme_cstripe_count:  1
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  2
+      lmm_stripe_size:   1048576
+      lmm_pattern:       raid0,parity
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 3
+      lmm_objects:
+        -   0: { l_ost_idx:   3, l_fid: [0x300000400:0x1883:0x0] }
+        -   1: { l_ost_idx:   0, l_fid: [0x240000400:0x1823:0x0] }
+
+
+6 OSTs: -C 16 --ec 4+2
+---------------------
+4 data objects per raid set with only 6 OSTs, so the two parity
+objects for each raid set must always be selected from the OSTs
+that are not used for data.
+
+  lcm_layout_gen:    2
+  lcm_mirror_count:  2
+  lcm_entry_count:   2
+    lcme_id:             65537
+    lcme_mirror_id:      1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  16
+      lmm_stripe_size:   1048576
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+        -   0: { l_ost_idx:   0, l_fid: [0x240000400:0x2324:0x0] }
+        -   1: { l_ost_idx:   1, l_fid: [0x280000400:0x23c4:0x0] }
+        -   2: { l_ost_idx:   2, l_fid: [0x2c0000400:0x2384:0x0] }
+        -   3: { l_ost_idx:   3, l_fid: [0x300000400:0x23c4:0x0] }
+        -   4: { l_ost_idx:  10, l_fid: [0x440000400:0x2264:0x0] }
+        -   5: { l_ost_idx:  11, l_fid: [0x480000400:0x2264:0x0] }
+        -   6: { l_ost_idx:   0, l_fid: [0x240000400:0x2325:0x0] }
+        -   7: { l_ost_idx:   1, l_fid: [0x280000400:0x23c5:0x0] }
+        -   8: { l_ost_idx:   2, l_fid: [0x2c0000400:0x2385:0x0] }
+        -   9: { l_ost_idx:   3, l_fid: [0x300000400:0x23c5:0x0] }
+        -  10: { l_ost_idx:  10, l_fid: [0x440000400:0x2265:0x0] }
+        -  11: { l_ost_idx:  11, l_fid: [0x480000400:0x2265:0x0] }
+        -  12: { l_ost_idx:   0, l_fid: [0x240000400:0x2326:0x0] }
+        -  13: { l_ost_idx:   1, l_fid: [0x280000400:0x23c6:0x0] }
+        -  14: { l_ost_idx:   2, l_fid: [0x2c0000400:0x2386:0x0] }
+        -  15: { l_ost_idx:   3, l_fid: [0x300000400:0x23c6:0x0] }
+    lcme_id:             131074
+    lcme_mirror_id:      2
+    lcme_flags:          init,parity
+    lcme_data_id:        0x1
+    lcme_dstripe_count:  4
+    lcme_cstripe_count:  2
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  8
+      lmm_stripe_size:   1048576
+      lmm_pattern:       raid0,parity
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 10
+      lmm_objects:
+        -   0: { l_ost_idx:  10, l_fid: [0x440000400:0x2266:0x0] }
+        -   1: { l_ost_idx:  11, l_fid: [0x480000400:0x2266:0x0] }
+        -   2: { l_ost_idx:   2, l_fid: [0x2c0000400:0x2387:0x0] }
+        -   3: { l_ost_idx:   3, l_fid: [0x300000400:0x23c7:0x0] }
+        -   4: { l_ost_idx:   0, l_fid: [0x240000400:0x2327:0x0] }
+        -   5: { l_ost_idx:   1, l_fid: [0x280000400:0x23c7:0x0] }
+        -   6: { l_ost_idx:  10, l_fid: [0x440000400:0x2267:0x0] }
+        -   7: { l_ost_idx:  11, l_fid: [0x480000400:0x2267:0x0] }
+
+
+2.2 lfs getstripe
+-----------------
+Getstripe is used to view the layout for a file, including the ec
+mirrors, if any.
+
+The following example has file containing two mirrors,
+one data mirror with 8 stripes and one parity mirror.
+
+  $ lfs getstripe /mnt/lustre/sahlberg/file
+
+  lcm_layout_gen:    5
+  lcm_mirror_count:  2
+  lcm_entry_count:   2
+  lcme_id:             65537
+  lcme_mirror_id:      1
+  lcme_flags:          init
+  lcme_extent.e_start: 0
+  lcme_extent.e_end:   EOF
+    lmm_stripe_count:  8
+    lmm_stripe_size:   1048576
+    lmm_pattern:       raid0
+    lmm_layout_gen:    0
+    lmm_stripe_offset: 1
+    lmm_objects:
+    -   0: { l_ost_idx:   1, l_fid: [0x2c0000400:0x2:0x0] }
+    -   1: { l_ost_idx:   2, l_fid: [0x280000400:0x2:0x0] }
+    -   2: { l_ost_idx:   3, l_fid: [0x300000400:0x2:0x0] }
+    -   3: { l_ost_idx:   4, l_fid: [0x340000400:0x2:0x0] }
+    -   4: { l_ost_idx:   5, l_fid: [0x380000400:0x2:0x0] }
+    -   5: { l_ost_idx:   6, l_fid: [0x3c0000400:0x2:0x0] }
+    -   6: { l_ost_idx:   7, l_fid: [0x400000400:0x2:0x0] }
+    -   7: { l_ost_idx:   0, l_fid: [0x240000400:0x2:0x0] }
+
+  lcme_id:             131074
+  lcme_mirror_id:      2
+  lcme_flags:          init,stale,parity
+  lcme_data_id:        1
+  lcme_dstripe_count:  4
+  lcme_cstripe_count:  2
+  lcme_extent.e_start: 0
+  lcme_extent.e_end:   EOF
+    lmm_stripe_count:  2
+    lmm_stripe_size:   1048576
+    lmm_pattern:       raid0,parity
+    lmm_layout_gen:    0
+    lmm_stripe_offset: 2
+    lmm_objects:
+    -   0: { l_ost_idx:   8, l_fid: [0x440000400:0x3:0x0] }
+    -   1: { l_ost_idx:   9, l_fid: [0x480000400:0x3:0x0] }
+    -   2: { l_ost_idx:  10, l_fid: [0x4c0000400:0x3:0x0] }
+    -   3: { l_ost_idx:  11, l_fid: [0x500000400:0x3:0x0] }
+
+lcme_dstripe_count     4
+  is the preferred number of data stripes in each raid group.
+  The actual number of data stripes used may be less than this.
+
+lcme_cstripe_count    2
+  is the number of parities
+
+lcme_data_id         0x01
+  is the mirror id of the data mirror that this ec mirror protects.
+
+lcme_flags:          init,stale,parity
+  means that this is a parity mirror and that it is stale.
+  A stale mirror can not be used to restore missing data.
+
+
+2.3 lfs mirror resync
+---------------------
+Resync is used to re-compute the parities for stale ec mirrors.
+
+After a successful resync the parity mirror will no longer be flagged as
+stale and it can be used to restore data if an OST is lost.
+
+Example:
+  $ lfs mirror resync /mnt/lustre/sahlberg/file
+
+
+2.4 lfs mirror verify
+---------------------
+Verify is used to check and verify that the parity data matches the expected
+value.
+
+Example:
+  $ lfs mirror verify /mnt/lustre/sahlberg/file
+
+
+3. Stripe Layout
+================
+EC parity comps match to a single instance of a data mirror so that
+we can guarantee that the set of OSTs used in the data mirror will not
+overlap with the set of OSTs in the ec mirror.
+
+An EC comp must span the same region of the file as its associated data
+comp and thus the llc_extend.e_start and llc_extent.e_end must match
+between the two. Additionally the EC comp and its data comp must also have
+the same stripe size.
+
+The number of stripes in the EC comp must be equal or less than the number
+of stripes in the data comp, or else the parity data will not fit.
+I.e. there would be more parity data than would fit in the range
+llc_extend.e_start to llc_extent.e_start + llc_extent.e_end.
+Thus for example we can not do 2.8 encoding as the parities would
+take up 4 times more data than the actual data and the corresponding range
+of the file.
+
+As a special case, if there is only a single data stripe then we just store
+a copy of the data as the first (and only) parity instead of computing it
+just as if it was a normal mirror component of a single stripe.
+In this case there can only be a single "parity" stripe for the same reason
+as above.
+
+The data stripe consist of llc_stripe_count number of stripes.
+This might be a large number, much larger than what we want to compute the
+erasure code data over, so we need to split it into smaller raid sets.
+
+Example: we have a stripe set 11 data stripes:
+
+ +-----------------+  \  <- mirror offset: llc_extent.e_start
+ | Data stripe #0  |  |
+ +-----------------+  |
+ | Data stripe #1  |  |
+ +-----------------+  |
+ | Data stripe #2  |  |
+ +-----------------+  |
+ | Data stripe #3  |  |
+ +-----------------+  |
+ | Data stripe #4  |  |
+ +-----------------+  |  Row #0 of the stripe set.
+ | Data stripe #5  |  |
+ +-----------------+  |
+ | Data stripe #6  |  |
+ +-----------------+  |
+ | Data stripe #7  |  |
+ +-----------------+  |
+ | Data stripe #8  |  |
+ +-----------------+  |
+ | Data stripe #9  |  |
+ +-----------------+  |
+ | Data stripe #10 |  |
+ +-----------------+  /
+ ... Repeated until llc_extent.e_end.
+
+Assume we want to use 4.2 erasure coding.
+I.e. 2 parities for raid sets of at most 4 stripes each.
+
+Each row is then split into smaller raid sets using the
+function ec_split_stripes().
+This splits into 2 x 4 stripes + 1 x 3 stripes, like this:
+ +-----------------+  \  <- mirror offset: llc_extent.e_start
+ | Data stripe #0  |  |
+ +-----------------+  |
+ | Data stripe #1  |  |
+ +-----------------+  | RAID set #0, row #0
+ | Data stripe #2  |  |
+ +-----------------+  |
+ | Data stripe #3  |  |
+ +-----------------+  /
+
+ +-----------------+  \
+ | Data stripe #4  |  |
+ +-----------------+  |
+ | Data stripe #5  |  |
+ +-----------------+  | RAID set #1, row #0
+ | Data stripe #6  |  |
+ +-----------------+  |
+ | Data stripe #7  |  |
+ +-----------------+  /
+
+ +-----------------+  \
+ | Data stripe #8  |  |
+ +-----------------+  |
+ | Data stripe #9  |  | RAID set #2, row #0
+ +-----------------+  |
+ | Data stripe #10 |  |
+ +-----------------+  /
+
+ +-----------------+  \  <- mirror offset: llc_extent.e_start
+ | Data stripe #11 |  |     + the raid stride * stripe size
+ +-----------------+  |
+ | Data stripe #12 |  |
+ +-----------------+  | RAID set #0, row #1
+ | Data stripe #13 |  |
+ +-----------------+  |
+ | Data stripe #14 |  |
+ +-----------------+  /
+ ...
+
+For a give data stripe ds, the row it belongs to is:
+  row = ds / data_comp->llc_stripe_count
+
+and which raid set rs it belongs to is given by:
+   _o = ds % data_comp->llc_stripe_count
+   if (_o <= c0 * k0)
+      rs = _o / k0
+   else
+      rs = c0 + (_o - c0 * k0) / k1
+
+
+For each RAID set 2 parities will be computed and they will be laid out
+sequentially in the ec comp as this:
+
+ +---------------------------+ \  <- mirror offset: llc_extent.e_start
+ | Parity #0 for RAID set #0 | |
+ +---------------------------+ | Parity set #0, row #0
+ | Parity #1 for RAID set #0 | |
+ +---------------------------+ X
+ | Parity #0 for RAID set #1 | |
+ +---------------------------+ | Parity set #1, row #0
+ | Parity #1 for RAID set #1 | |
+ +---------------------------+ X
+ | Parity #0 for RAID set #2 | |
+ +---------------------------+ | Parity set #2, row #0
+ | Parity #1 for RAID set #2 | |
+ +---------------------------+ X  <- mirror offset: llc_extent.e_start
+ | Parity #0 for RAID set #0 | |     + parity_stride * stripe size
+ +---------------------------+ | Parity set #0, row #1
+ | Parity #1 for RAID set #0 | |
+ +---------------------------+ X
+ ...
+
+Parity #0 and Parity #1 will be stored in two OST objects for RAID set #0,
+two different objects on different OSTs for RAID set #1, and yet two more
+objects for RAID set #2.  This ensures that the data and parity stripes will
+always be on different OSTs, regardless of the RAID geometry used by each file.
+
+ parity-stripe = row * parity-stride
+                 + raid-set * number-of-parities
+                 + parity
+
+
+If there is a hole that spans the entire raid set then we can skip
+computing the parities and leave it as a hole in the ec comp as well.
+Example, assume there is a hole spanning the entire RAID set #1 above, this
+will result in a parity layout as:
+ +---------------------------+      <- file offset: start of stripe-set
+ | Parity #0 for RAID set #0 |
+ +-----------------+---------+
+ | Parity #1 for RAID set #0 |
+ +---------------------------+
+ |           hole            |
+ +---------------------------+ No data in RAID set #1 so
+ |           hole            | no need to store the parities either.
+ +-----------------+---------+
+ | Parity #0 for RAID set #2 |
+ +-----------------+---------+
+ | Parity #1 for RAID set #2 |
+ +-----------------+---------+
+ |    hole until e_end       |
+ ...
+
+The extent offsets matches between the EC comp and the data comp
+it protects.
+
+Computations are done on whole stripes at a time.
+We compute the parities for a full raid set at a time.
+
+There is no guarantee that the raid set will be fully populated.
+We could for example reach the end of the extent (llc_extent.e_end)
+partially through the raid set, or we could reach EOF.
+In both cases we pad the remainder of the raid set with 0 when we compute
+the parity.
+
+Example: the extent ends partway through the second stripe in raid set #2:
+The raid set is padded with 0 so that we have a full set of stripes to
+compute the parities over.
+ +------------------------+  \
+ |     Data stripe #8     |  |
+ +------------------------+  |
+ | Data stripe #9 | 00000 |  | RAID set #2
+ +------------------------+  |
+ | 0000000000000000000000 |  |
+ +------------------------+  /
