@@ -1,4 +1,4 @@
-// SPDX License Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0
 /* Basic framework for Lustre llapi tests.
  * All tests return 0 on success and non-zero on error.
  * The program will run all tests unless a list of tests to skip is provided.
