@@ -1158,6 +1158,40 @@ test_4g() {
 }
 run_test 4g "reject EC stripe counts exceeding limits without --ec-expert"
 
+test_5a() {
+	enable_ec
+
+	local ids
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf $TMP/$tfile.mirror"
+
+	# Create EC file with data mirror + parity mirror
+	$LFS setstripe -N -E 1M -c 1 -E -1 -c 1 \
+		-N -E 1M -c 8 --ec 8+2 -E -1 -c 4 --ec 4+1 $tf ||
+		error "create EC file failed"
+
+	# Get component IDs
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+
+	# Verify EC parameters on parity components (mirror 3, N3)
+	verify_comp_parity $tf ${ids[4]}
+	verify_ec_stripe_count $tf ${ids[4]} 8 2
+	verify_comp_parity $tf ${ids[5]}
+	verify_ec_stripe_count $tf ${ids[5]} 4 1
+
+	# Test mirror write to parity mirror (N3)
+	$LFS mirror write -N3 -i /etc/passwd $tf ||
+		error "mirror write to parity mirror failed"
+
+	# Verify round-trip: read back what we wrote
+	$LFS mirror read -N3 -o $TMP/$tfile.mirror $tf ||
+		error "mirror read after write failed"
+	cmp $TMP/$tfile.mirror /etc/passwd ||
+		error "mirror write/read round-trip failed"
+}
+run_test 5a "EC mirror read/write commands"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
