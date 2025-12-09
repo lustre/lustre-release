@@ -4453,6 +4453,126 @@ static void test66(void)
 	llapi_layout_free(layout);
 }
 
+#define T67FILE		"f67"
+#define T67_DESC	"verify server blocks prefer flags on parity components"
+static void test67(void)
+{
+	struct llapi_layout *layout;
+	char path[PATH_MAX];
+	uint32_t flags;
+	uint32_t comp_id;
+	uint32_t ids[1];
+	uint32_t flags_array[1];
+	int fd;
+	int rc;
+
+	/* EC requires at least 3 OSTs (2 data + 1 parity minimum) */
+	if (num_osts < 3) {
+		fprintf(stderr, "test64 requires at least 3 OSTs, skipping\n");
+		return;
+	}
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T67FILE);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	/* Create a layout with data mirror and EC parity mirror */
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* Mirror 1: Regular data component [0, EOF] */
+	rc = llapi_layout_stripe_count_set(layout, 2);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Mirror 2: EC parity component [0, EOF] with EC(2,1) */
+	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 2, 1);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Create the file */
+	fd = llapi_layout_file_create(path, 0, 0644, layout);
+	ASSERTF(fd >= 0, "errno = %d", errno);
+	close(fd);
+
+	llapi_layout_free(layout);
+
+	/* Now try to set prefer flags on the parity component using llapi.
+	 * This bypasses the lfs.c client-side validation and tests the
+	 * server-side validation in lod_object.c
+	 */
+
+	/* Get the layout from the file */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* Move to the second component (parity mirror) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Get component ID and verify this is a parity component */
+	rc = llapi_layout_comp_id_get(layout, &comp_id);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_flags_get(layout, &flags);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(flags & LCME_FL_PARITY, "Component should have PARITY flag");
+
+	llapi_layout_free(layout);
+
+	/* Try to set LCME_FL_PREF_RD flag on parity component
+	 * Server should reject it
+	 */
+	ids[0] = comp_id;
+	flags_array[0] = LCME_FL_PREF_RD;
+
+	rc = llapi_layout_file_comp_set(path, ids, flags_array, 1);
+	ASSERTF(rc != 0 && errno == EINVAL,
+		"Server should reject PREF_RD on parity component: rc=%d, errno=%d",
+		rc, errno);
+
+	/* Try LCME_FL_PREF_WR */
+	flags_array[0] = LCME_FL_PREF_WR;
+
+	rc = llapi_layout_file_comp_set(path, ids, flags_array, 1);
+	ASSERTF(rc != 0 && errno == EINVAL,
+		"Server should reject PREF_WR on parity component: rc=%d, errno=%d",
+		rc, errno);
+
+	/* Verify that prefer flags CAN be set on data components */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* Move to first component (data mirror) */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Get component ID and verify this is NOT a parity component */
+	rc = llapi_layout_comp_id_get(layout, &comp_id);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_flags_get(layout, &flags);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(!(flags & LCME_FL_PARITY),
+		"First component should not have PARITY flag");
+
+	llapi_layout_free(layout);
+
+	/* Set LCME_FL_PREF_RW on data component - should succeed */
+	ids[0] = comp_id;
+	flags_array[0] = LCME_FL_PREF_RW;
+
+	rc = llapi_layout_file_comp_set(path, ids, flags_array, 1);
+	ASSERTF(rc == 0,
+		"Server should allow PREF_RW on data component: rc=%d, errno=%d",
+		rc, errno);
+}
+
 static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(0),
 	TEST_REGISTER(1),
@@ -4519,6 +4639,7 @@ static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(64),
 	TEST_REGISTER(65),
 	TEST_REGISTER(66),
+	TEST_REGISTER(67),
 	TEST_REGISTER_END
 };
 

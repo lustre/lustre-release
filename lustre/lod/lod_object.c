@@ -3067,6 +3067,16 @@ static int lod_declare_layout_set(const struct lu_env *env,
 							&lo->ldo_layout_mutex);
 						RETURN(-EUCLEAN);
 					}
+					/* Parity components cannot have any
+					 * prefer flags set
+					 */
+					if ((flags & LCME_FL_PREF_RW) &&
+					    (lod_comp->llc_flags &
+					     LCME_FL_PARITY)) {
+						mutex_unlock(
+							&lo->ldo_layout_mutex);
+						RETURN(-EINVAL);
+					}
 					lod_comp->llc_flags |= flags;
 				}
 				if (mirror_flag) {

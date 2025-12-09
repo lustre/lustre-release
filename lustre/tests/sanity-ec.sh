@@ -1192,6 +1192,78 @@ test_5a() {
 }
 run_test 5a "EC mirror read/write commands"
 
+test_6a() {
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Create EC file with two components in each mirror
+	# Mirror 1 (data): [0, 1M], [1M, EOF]
+	# Mirror 2 (parity): [0, 1M], [1M, EOF] with EC 4+2
+	$LFS setstripe -E 1M -c 2 -E -1 -c 4 --ec 4+2 $tf ||
+		error "create EC file failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 4
+
+	# Get component IDs
+	local ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' |
+			tr '\n' ' '))
+	echo "Component IDs: ${ids[@]}"
+
+	local data_comp1=${ids[0]}
+	local data_comp2=${ids[1]}
+	local parity_comp1=${ids[2]}
+	local parity_comp2=${ids[3]}
+
+	# Verify EC parameters on all parity components
+	verify_comp_parity $tf $parity_comp1
+	verify_ec_stripe_count $tf $parity_comp1 2 2
+	verify_comp_parity $tf $parity_comp2
+	verify_ec_stripe_count $tf $parity_comp2 4 2
+
+	# Test 1: Cannot set prefer on parity component
+	$LFS setstripe --comp-set -I $parity_comp1 --comp-flags=prefer \
+		$tf 2>&1 |
+		grep -q "cannot set prefer flags on parity component" ||
+		error "should not allow prefer on parity component"
+
+	# Test 2: Cannot set prefrd on parity component
+	$LFS setstripe --comp-set -I $parity_comp2 --comp-flags=prefrd \
+		$tf 2>&1 |
+		grep -q "cannot set prefer flags on parity component" ||
+		error "should not allow prefrd on parity component"
+
+	# Test 3: Cannot set prefwr on parity component
+	$LFS setstripe --comp-set -I $parity_comp1 --comp-flags=prefwr \
+		$tf 2>&1 |
+		grep -q "cannot set prefer flags on parity component" ||
+		error "should not allow prefwr on parity component"
+
+	# Test 4: Can set prefwr on data component in data mirror
+	$LFS setstripe --comp-set -I $data_comp1 --comp-flags=prefwr \
+		$tf || error "should allow prefwr on data component"
+	$LFS getstripe -I$data_comp1 $tf | grep -q "prefwr" ||
+		error "prefwr flag not set on data component"
+
+	# Test 5: Can set prefer on data component in data mirror
+	$LFS setstripe --comp-set -I $data_comp2 --comp-flags=prefer \
+		$tf || error "should allow prefer on data component"
+	$LFS getstripe -I$data_comp2 $tf | grep -q "prefer" ||
+		error "prefer flag not set on data component"
+
+	# Test 6: Can set prefrd on data component in data mirror
+	$LFS setstripe --comp-set -I $data_comp1 --comp-flags=^prefwr \
+		$tf || error "failed to clear prefwr"
+	$LFS setstripe --comp-set -I $data_comp1 --comp-flags=prefrd \
+		$tf || error "should allow prefrd on data component"
+	$LFS getstripe -I$data_comp1 $tf | grep -q "prefrd" ||
+		error "prefrd flag not set on data component"
+}
+run_test 6a "Block setting prefer flags on parity components"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

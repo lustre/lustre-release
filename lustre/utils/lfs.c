@@ -1296,6 +1296,54 @@ static int lfs_component_set(char *fname, int comp_id, const char *pool,
 	}
 
 	if (flags) {
+		/* Check if trying to set prefer flags on parity components */
+		if (flags & LCME_FL_PREF_RW) {
+			struct llapi_layout *layout;
+			__u32 comp_flags = 0;
+			__u32 id;
+			bool is_parity_comp = false;
+
+			layout = llapi_layout_get_by_path(fname, 0);
+			if (!layout) {
+				fprintf(stderr,
+					"error %s: file '%s' couldn't get layout: rc=%d\n",
+					progname, fname, errno);
+				return -errno;
+			}
+
+			/* Find the component and check its flags */
+			rc = llapi_layout_comp_use(layout,
+						   LLAPI_LAYOUT_COMP_USE_FIRST);
+			while (rc == 0) {
+				rc = llapi_layout_comp_id_get(layout, &id);
+				if (rc < 0)
+					break;
+
+				if (id == comp_id) {
+					rc = llapi_layout_comp_flags_get(layout,
+								&comp_flags);
+					if (rc < 0)
+						break;
+
+					is_parity_comp = !!(comp_flags &
+							    LCME_FL_PARITY);
+					break;
+				}
+
+				rc = llapi_layout_comp_use(layout,
+						LLAPI_LAYOUT_COMP_USE_NEXT);
+			}
+
+			llapi_layout_free(layout);
+
+			if (is_parity_comp) {
+				fprintf(stderr,
+					"%s: cannot set prefer flags on parity component '%#x' of file '%s'\n",
+					progname, comp_id, fname);
+				return -EINVAL;
+			}
+		}
+
 		ids[count] = comp_id;
 		flags_array[count] = flags;
 		++count;
