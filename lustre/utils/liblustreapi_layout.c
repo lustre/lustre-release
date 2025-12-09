@@ -4482,6 +4482,8 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 	uint8_t *encode_matrix = NULL;
 	uint8_t *g_tbls = NULL;
 	uint8_t *stripe_ptrs[MAX_STRIPE_POINTERS];
+	size_t data_len;
+	off_t data_off;
 
 	rc = fstat(fd, &stbuf);
 	if (rc < 0)
@@ -4546,6 +4548,34 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 	}
 
  one_more_stripeset:
+	data_off = llapi_data_seek(fd, data_pos, &data_len);
+	if (data_off < 0) {
+		rc = data_off;
+		llapi_error(LLAPI_MSG_ERROR, rc, "failed to SEEK_DATA");
+		goto out_free;
+	}
+	/* No more data in this extent */
+	if (data_off >= end_pos) {
+		rc = 0;
+		goto out_free;
+	}
+	/* skip past holes spanning one or more whole stripe sets */
+	if (data_off > data_pos) {
+		uint64_t stripe_set_size = data_comp->llc_stripe_count *
+					   data_comp->llc_stripe_size;
+		uint64_t ec_size = ec_comp->llc_cstripe_count *
+				   ec_comp->llc_stripe_size *
+				   (sc.esc_n0 + sc.esc_n1);
+		int num_stripe_sets = (data_off - data_pos) / stripe_set_size;
+
+		data_pos += num_stripe_sets * stripe_set_size;
+		ec_pos += num_stripe_sets * ec_size;
+	}
+	if (data_pos >= end_pos) {
+		rc = 0;
+		goto out_free;
+	}
+
 	for (i = 0, k = sc.esc_k0; i < sc.esc_n0 + sc.esc_n1; i++) {
 		if (i == sc.esc_n0)
 			k = sc.esc_k1;

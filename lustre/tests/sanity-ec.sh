@@ -15,8 +15,8 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_EC_EXCEPT "
-always_except LU-19631 12
-# tests 12: EC parity calculation produces incorrect content (LU-19631)
+always_except LU-19631 12a
+# tests 12a: EC parity calculation produces incorrect content (LU-19631)
 
 build_test_filter
 
@@ -1817,7 +1817,7 @@ test_11() {
 }
 run_test 11 "can create --ec 2+2"
 
-test_12() {
+test_12a() {
 	local tf=${DIR}/${tdir}/$tfile
 	local tf_data=${DIR}/${tdir}/${tfile}.data
 	local tf_ec=${DIR}/${tdir}/${tfile}.ec
@@ -1825,6 +1825,7 @@ test_12() {
 	# test resyncing a stale ec mirror
 	(( OSTCOUNT < 4 )) && skip_env "needs >= 4 OSTs"
 	enable_ec
+
 
 	test_mkdir $DIR/$tdir
 
@@ -1884,7 +1885,7 @@ test_12() {
 	echo "aca75f6b8ae9a16aa64f8ca38160bfa39bd2a785 $tf_ec" |
 	    sha1sum -c - || error "wrong content in ec mirror"
 }
-run_test 12 "resync stale parities"
+run_test 12a "resync stale parities"
 
 test_13() {
 	local tf=${DIR}/${tdir}/$tfile
