@@ -1054,9 +1054,18 @@ static int lov_attr_get_composite(const struct lu_env *env,
 				  struct cl_object *obj,
 				  struct cl_attr *attr)
 {
-	struct lov_object	*lov = cl2lov(obj);
+	struct lov_object *lov = cl2lov(obj);
 	struct lov_layout_entry *entry;
-	int			 result = 0;
+	int result = 0;
+	/*
+	 * Preserve the incoming cat_size from VVP layer (i_size).
+	 * If we don't find valid size from data components (e.g., when
+	 * doing designated mirror IO to a parity mirror), we'll restore
+	 * this value rather than returning 0.
+	 */
+	loff_t vvp_size = attr->cat_size;
+	bool got_data_size = false;
+	bool has_parity = false;
 
 	ENTRY;
 
@@ -1092,13 +1101,23 @@ static int lov_attr_get_composite(const struct lu_env *env,
 		       lov_attr->cat_ctime, lov_attr->cat_blocks);
 
 		/* merge results */
-		if (lov_attr->cat_kms_valid)
-			attr->cat_kms_valid = 1;
+		/* Parity components: include blocks and timestamps, but not
+		 * size/kms since they don't represent user data
+		 */
+		if (lsm_entry_is_parity(lov->lo_lsm, index))
+			has_parity = true;
+		if (!lsm_entry_is_parity(lov->lo_lsm, index)) {
+			if (lov_attr->cat_kms_valid)
+				attr->cat_kms_valid = 1;
+			if (attr->cat_size < lov_attr->cat_size) {
+				attr->cat_size = lov_attr->cat_size;
+				got_data_size = true;
+			}
+			if (attr->cat_kms < lov_attr->cat_kms)
+				attr->cat_kms = lov_attr->cat_kms;
+		}
+		/* Always include blocks and timestamps, even for parity */
 		attr->cat_blocks += lov_attr->cat_blocks;
-		if (attr->cat_size < lov_attr->cat_size)
-			attr->cat_size = lov_attr->cat_size;
-		if (attr->cat_kms < lov_attr->cat_kms)
-			attr->cat_kms = lov_attr->cat_kms;
 		if (attr->cat_atime < lov_attr->cat_atime)
 			attr->cat_atime = lov_attr->cat_atime;
 		if (attr->cat_ctime < lov_attr->cat_ctime)
@@ -1106,6 +1125,16 @@ static int lov_attr_get_composite(const struct lu_env *env,
 		if (attr->cat_mtime < lov_attr->cat_mtime)
 			attr->cat_mtime = lov_attr->cat_mtime;
 	}
+
+	/*
+	 * EC layout, designated parity-mirror IO: the parity component
+	 * has blocks but the data components didn't report a valid size
+	 * (e.g. their attrs weren't refreshed by this IO). Preserve the
+	 * VVP-layer i_size rather than returning 0 and clobbering the
+	 * inode size in ll_merge_attr().
+	 */
+	if (has_parity && !got_data_size && attr->cat_blocks > 0)
+		attr->cat_size = vvp_size;
 
 	RETURN(0);
 }

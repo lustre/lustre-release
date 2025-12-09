@@ -1996,7 +1996,14 @@ struct cl_io {
 	 */
 			     ci_invalidate_page_cache:1,
 	/* was this IO switched from BIO to DIO for hybrid IO? */
-			     ci_hybrid_switched:1;
+			     ci_hybrid_switched:1,
+	/* this IO is to a parity mirror */
+			     ci_parity_io:1;
+	/**
+	 * EOF for parity components, calculated based on RAID geometry.
+	 * Valid only when ci_parity_io is set.
+	 */
+	loff_t		     ci_parity_eof;
 
 	/**
 	 * How many times the read has retried before this one.

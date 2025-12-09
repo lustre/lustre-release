@@ -4960,7 +4960,7 @@ out_ladvise:
 	}
 	case LL_IOC_FLR_SET_MIRROR: {
 		/* mirror I/O must be direct to avoid polluting page cache
-		 * by stale data.
+		 * with stale or parity data.
 		 */
 		if (!(file->f_flags & O_DIRECT))
 			RETURN(-EINVAL);

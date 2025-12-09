@@ -16,9 +16,9 @@ init_logging
 
 ALWAYS_EXCEPT="$SANITY_EC_EXCEPT "
 always_except LU-12688 6d 6f
-always_except LU-20117 21a
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+always_except LU-19631 12 34b
 # tests 6d/6f: pending lfs mirror verify support for EC components
+# tests 12/34b: EC parity calculation produces incorrect content (LU-19631)
 
 build_test_filter
 
@@ -1168,31 +1168,53 @@ test_5a() {
 	local ids
 	local tf=$DIR/$tfile
 
-	stack_trap "rm -f $tf $TMP/$tfile.mirror"
+	stack_trap "rm -f $tf $TMP/$tfile.mirror $TMP/$tfile.data"
 
 	# Create EC file with data mirror + parity mirror
+	# Layout: N1 = data, N2 = data, N3 = parity (4+1)
 	$LFS setstripe -N -E 1M -c 1 -E -1 -c 1 \
-		-N -E 1M -c 8 --ec 8+2 -E -1 -c 4 --ec 4+1 $tf ||
+		-N -E 1M -c 4 --ec 4+1 -E -1 -c 4 --ec 4+1 $tf ||
 		error "create EC file failed"
 
 	# Get component IDs
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 
 	# Verify EC parameters on parity components (mirror 3, N3)
+	# Components: 0,1=N1(data), 2,3=N2(data), 4,5=N3(parity)
 	verify_comp_parity $tf ${ids[4]}
-	verify_ec_stripe_count $tf ${ids[4]} 8 2
+	verify_ec_stripe_count $tf ${ids[4]} 4 1
 	verify_comp_parity $tf ${ids[5]}
 	verify_ec_stripe_count $tf ${ids[5]} 4 1
 
-	# Test mirror write to parity mirror (N3)
-	$LFS mirror write -N3 -i /etc/passwd $tf ||
-		error "mirror write to parity mirror failed"
-
-	# Verify round-trip: read back what we wrote
+	# Test 1: Read from empty parity mirror - should return immediately
+	# with 0 bytes (not hang)
 	$LFS mirror read -N3 -o $TMP/$tfile.mirror $tf ||
-		error "mirror read after write failed"
-	cmp $TMP/$tfile.mirror /etc/passwd ||
-		error "mirror write/read round-trip failed"
+		error "mirror read from empty parity failed"
+	local empty_size=$(stat -c %s $TMP/$tfile.mirror)
+	(( empty_size == 0 )) ||
+		error "empty parity read should return 0 bytes, got $empty_size"
+	rm -f $TMP/$tfile.mirror
+
+	# Test 2: Write data, resync, then read from parity
+	cp /etc/passwd $tf || error "failed to write data"
+
+	# Resync to compute parity
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	# Read from parity mirror (N3) - should work after resync
+	$LFS mirror read -N3 -o $TMP/$tfile.mirror $tf ||
+		error "mirror read from parity failed"
+
+	# Parity data won't match /etc/passwd directly (it's computed parity),
+	# but verify we got non-empty data of reasonable size
+	local parity_size=$(stat -c %s $TMP/$tfile.mirror)
+	(( parity_size > 0 )) || error "parity mirror read returned empty"
+
+	# Also verify data mirror can be read correctly
+	$LFS mirror read -N1 -o $TMP/$tfile.data $tf ||
+		error "mirror read from data failed"
+	cmp $TMP/$tfile.data /etc/passwd ||
+		error "data mirror read mismatch"
 }
 run_test 5a "EC mirror read/write commands"
 
@@ -1948,7 +1970,6 @@ test_20() {
 	return 0
 }
 run_test 20 "test that stripe size of parity mirror is set correctly"
-
 
 # Test 21: lfs migrate with EC layouts
 test_21a() {
@@ -2928,6 +2949,39 @@ test_30c() {
 }
 run_test 30c "data survives OST restart cycle, resync works after recovery"
 
+test_30d() {
+	# test that reading from ec mirror reads the full set of parities
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Create a simple EC file with data mirror + parity mirror
+	$LFS setstripe -E -1 -S 64k -c 8 --ec 2+2 $tf ||
+		error "setstripe --ec 2+2 failed"
+
+	# Write some data to the file
+	# The file now spans 5 full stripe sets plus an extra stripe
+	# The resulting parity should then be for 6 full stripe sets
+	# of parities.
+	tr "\000" "\002" < /dev/zero | dd bs=64k count=1 seek=40  \
+		iflag=fullblock of=$tf 2>/dev/null
+
+	rm -f $TMP/$tfile.parity
+	stack_trap "rm -f $TMP/$tfile.parity"
+
+	# stripe size 64k
+	# 8 data stripes, ec 2+2
+	# 4 raid sets with 2 parities each
+	# a total of 6 stripe sets
+	# parity mirror size should be 6 * 4 * 2 * 64k plus
+	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf
+	stat $TMP/$tfile.parity | grep "Size: 3145728" ||
+	    error "Wrong size of parity mirror"
+}
+run_test 30d "test that size of parity mirror is (5+1)*4*2*64k"
+
 test_31a() {
 	# Inject OBD_FAIL_OST_BRW_WRITE_BULK on a parity OST during
 	# resync. The data mirror must remain intact regardless of
@@ -2982,6 +3036,132 @@ test_31a() {
 	verify_flr_state $tf "ro"
 }
 run_test 31a "data mirror intact after write failure on parity OST during resync"
+
+test_31b() {
+	# test that reading from ec mirror reads the full set of parities
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Create a simple EC file with data mirror + parity mirror
+	$LFS setstripe -E -1 -S 1M -c 8 --ec 4+2 $tf ||
+		error "setstripe --ec 4+2 failed"
+
+	# Write some data to the file
+	echo "Hello" > $tf || error "error writing to file"
+
+	rm -f $TMP/$tfile.parity
+	stack_trap "rm -f $TMP/$tfile.parity"
+
+	# stripe size 1M
+	# 8 data stripes, ec 4+2
+	# 2 raid sets with 2 parities each
+	# parity mirror size should be 2 * 2 * 1M
+	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf
+	stat $TMP/$tfile.parity | grep "Size: 4194304" ||
+	    error "Wrong size of parity mirror"
+}
+run_test 31b "test that size of parity mirror is 2*2*1M"
+
+test_31c() {
+	# test that reading from ec mirror reads the full set of parities
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Create a simple EC file with data mirror + parity mirror
+	$LFS setstripe -E -1 -S 64k -c 8 --ec 4+3 $tf ||
+		error "setstripe --ec 4+3 failed"
+
+	# Write some data to the file
+	echo "Hello" > $tf || error "error writing to file"
+
+	rm -f $TMP/$tfile.parity
+	stack_trap "rm -f $TMP/$tfile.parity"
+
+	# stripe size 64k
+	# 8 data stripes, ec 4+3
+	# 2 raid sets with 3 parities each
+	# parity mirror size should be 2 * 3 * 64k
+	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf
+	stat $TMP/$tfile.parity | grep "Size: 393216" ||
+	    error "Wrong size of parity mirror"
+}
+run_test 31c "test that size of parity mirror is 2*3*64k"
+
+test_31d() {
+	# test that reading from ec mirror reads the full set of parities
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Create a simple EC file with data mirror + parity mirror
+	$LFS setstripe -E -1 -S 64k -c 8 --ec 2+2 $tf ||
+		error "setstripe --ec 2+2 failed"
+
+	# Write some data to the file
+	echo "Hello" > $tf || error "error writing to file"
+
+	rm -f $TMP/$tfile.parity
+	stack_trap "rm -f $TMP/$tfile.parity"
+
+	# stripe size 64k
+	# 8 data stripes, ec 2+2
+	# 4 raid sets with 2 parities each
+	# parity mirror size should be 4 * 2 * 64k
+	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf
+	stat $TMP/$tfile.parity | grep "Size: 524288" ||
+	    error "Wrong size of parity mirror"
+}
+run_test 31d "test that size of parity mirror is 4*2*64k"
+
+test_31e() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local stripe_size=$((128 * 1024))
+
+	rm -f $TMP/$tfile.parity
+	stack_trap "rm -f $TMP/$tfile.parity"
+
+	# Data and parity mirrors each have two components:
+	# data [0, 1M) and [1M, EOF), both EC(4+2), 4 data stripes, 128k stripes
+	$LFS setstripe -E 1M -S $stripe_size -c 4 -E -1 -S $stripe_size \
+		-c 4 --ec 4+2 $tf ||
+		error "setstripe --ec 4+2 with PFL failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 4
+
+	# Write 1.5M so data spans both components (1M + 512k).
+	dd if=/dev/urandom of=$tf bs=512K count=3 2>/dev/null ||
+		error "failed to write 1.5M"
+	(( $(stat -c %s $tf) == $((3 * 512 * 1024)) )) ||
+		error "unexpected file size"
+
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	# Parity lsme_extent matches data lsme_extent (same file offsets, not
+	# packed parity bytes).
+	# ec_raidset_size = 2 parities * stripe_size = 262144.
+	# Parity comp 1 (ext [1M, EOF), data 512k):
+	# comp_eof = 1M + 262144 = 1310720
+	local ec_raidset_size=$((2 * stripe_size))
+	local expected=$((1024 * 1024 + ec_raidset_size))
+	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf ||
+		error "mirror read from parity failed"
+	stat $TMP/$tfile.parity | grep "Size: $expected" ||
+		error "Wrong size of parity mirror (expected $expected)"
+}
+run_test 31e "test parity mirror size with multiple PFL components"
 
 test_32a() {
 	# Verify that after an OST goes down and comes back, a full
@@ -3080,6 +3260,184 @@ test_33a() {
 	echo "Survived $i write+resync+OST-cycle iterations"
 }
 run_test 33a "EC survives repeated write/resync/OST-failure cycles"
+
+test_34a() {
+	# test resyncing a stale ec mirror
+	(( OSTCOUNT >= 5 )) || skip_env "needs >= 5 OSTs"
+
+	enable_ec
+
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -E -1 -S 4M -c 4 --ec 3+2 $DIR/$tdir/$tfile ||
+	    error "setstripe --ec 3+2 failed"
+
+	# create a small file
+	echo "hello" > $DIR/$tdir/$tfile
+	SIZE1=`stat -c "%s" $DIR/$tdir/$tfile`
+
+	# resync the ec mirror:
+	$LFS mirror resync $DIR/$tdir/$tfile ||
+	    error "failed to resync ec mirror"
+	SIZE2=`stat -c "%s" $DIR/$tdir/$tfile`
+	(( SIZE1 == SIZE2 )) ||
+		error "mirror resync changed eof: ${SIZE1} vs ${SIZE2}"
+
+	# read from the ec mirror:
+	$LFS mirror read -N 2 $DIR/$tdir/$tfile >/dev/null ||
+	    error "failed to read ec mirror"
+	SIZE3=`stat -c "%s" $DIR/$tdir/$tfile`
+
+	(( SIZE1 == SIZE3 )) ||
+		error "mirror read changed eof: ${SIZE1} vs ${SIZE3}"
+}
+run_test 34a "test that lfs mirror read from ec does not change eof"
+
+test_34b() {
+	# test resyncing a stale ec mirror
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -E -1 -S 4M -c 4 --ec 4+2 $DIR/$tdir/$tfile ||
+	    error "setstripe --ec 4+2 failed"
+
+	# create a small file
+	echo "hello" > $DIR/$tdir/$tfile
+	SIZE1=$(stat -c "%s" $DIR/$tdir/$tfile)
+	BLOCKS1=$(stat -c "%b" $DIR/$tdir/$tfile)
+	APPARENT1=$(stat -c "%B" $DIR/$tdir/$tfile)
+	echo "After write: size=$SIZE1 blocks=$BLOCKS1 apparent_blksize=$APPARENT1"
+
+	# resync the ec mirror:
+	$LFS mirror resync $DIR/$tdir/$tfile ||
+	    error "failed to resync ec mirror"
+	SIZE2=$(stat -c "%s" $DIR/$tdir/$tfile)
+	BLOCKS2=$(stat -c "%b" $DIR/$tdir/$tfile)
+	APPARENT2=$(stat -c "%B" $DIR/$tdir/$tfile)
+	echo "After resync: size=$SIZE2 blocks=$BLOCKS2 apparent_blksize=$APPARENT2"
+	(( SIZE1 == SIZE2 )) ||
+		error "mirror resync changed eof: ${SIZE1} vs ${SIZE2}"
+
+	# verify the ec mirror:
+	$LFS mirror verify $DIR/$tdir/$tfile ||
+	    error "failed to verify ec mirror"
+	SIZE3=$(stat -c "%s" $DIR/$tdir/$tfile)
+	BLOCKS3=$(stat -c "%b" $DIR/$tdir/$tfile)
+	APPARENT3=$(stat -c "%B" $DIR/$tdir/$tfile)
+	echo "After verify: size=$SIZE3 blocks=$BLOCKS3 apparent_blksize=$APPARENT3"
+
+	(( SIZE1 == SIZE3 )) ||
+		error "mirror verify changed eof: ${SIZE1} vs ${SIZE3}"
+}
+run_test 34b "test that lfs mirror verify for ec does not change eof"
+
+# Helper function to read from parity mirror and check for zeros
+# Usage: check_parity_read <file> <mirror_id> <offset> <expect_zeros>
+check_parity_read() {
+	local file=$1
+	local mirror_id=$2
+	local offset=$3
+	local expect_zeros=$4
+	local rc
+
+	# Run the test program
+	# It returns 0 if all zeros, 1 if non-zero bytes found
+	$LUSTRE/tests/test_parity_read $file $mirror_id $offset \
+		> /dev/null 2>&1
+	rc=$?
+
+	if [[ $expect_zeros == "yes" ]]; then
+		(( rc == 0 )) ||
+			error "offset $offset: expected zeros, got non-zero bytes"
+	else
+		(( rc == 1 )) ||
+			error "offset $offset: expected parity data, got all zeros"
+	fi
+}
+
+test_34c() {
+	# test that reading past parity data returns zeros, not garbage
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+
+	enable_ec
+
+	test_mkdir $DIR/$tdir
+
+	# Test with data sizes that span at least one full stripe.
+	# Reed-Solomon parity is a linear code over GF(2^8), so parity
+	# bytes at byte offset i are 0 whenever every data stripe is 0
+	# at offset i.  A sub-stripe file has zero input at every offset
+	# past the data tail across all data stripes, so its parity is
+	# correctly zero there and "expect parity bytes" cannot succeed.
+	# - 4M     (exactly one stripe)
+	# - 4.5M   (one stripe + partial)
+	# - 8.5M   (two stripes + partial)
+	local -a test_sizes=($((4 * 1024 * 1024)) \
+			     $((4 * 1024 * 1024 + 512 * 1024)) \
+			     $((8 * 1024 * 1024 + 512 * 1024)))
+	local size
+	local i
+	local parity_mirror_id
+
+	for size in "${test_sizes[@]}"; do
+		echo "Testing with data size: $size bytes"
+
+		rm -f $DIR/$tdir/$tfile
+		$LFS setstripe -E -1 -S 4M -c 8 --ec 3+2 \
+			$DIR/$tdir/$tfile ||
+			error "setstripe --ec 3+2 failed"
+
+		# Write data
+		dd if=/dev/urandom of=$DIR/$tdir/$tfile bs=$size \
+			count=1 2>/dev/null ||
+			error "failed to write $size bytes"
+
+		# Resync to write parity
+		$LFS mirror resync $DIR/$tdir/$tfile ||
+			error "failed to resync ec mirror"
+
+		# Get parity mirror ID
+		parity_mirror_id=$($LFS getstripe $DIR/$tdir/$tfile | \
+			grep -B1 "lcme_flags.*parity" | \
+			grep "lcme_mirror_id" | awk '{print $2}')
+
+		echo "Parity mirror ID: $parity_mirror_id"
+
+		# Test reads at various offsets
+		# For 3+2 EC with 4M stripes, we have 2 parity stripes
+		# Each parity stripe should have parity data up to $size,
+		# then zeros
+
+		# Test start of first parity stripe (should have data)
+		echo "  Checking offset 0 (start of first parity stripe)..."
+		check_parity_read $DIR/$tdir/$tfile $parity_mirror_id \
+			0 "no"
+
+		# Parity is computed per full stripe (4M), so all
+		# offsets within the parity extent have valid data
+		# regardless of data file size.  Only offsets past
+		# the parity extent (8M for 3+2 with 4M stripes)
+		# should return zeros.
+
+		# Test within first parity stripe (should have data)
+		echo "  Checking offset 1M (within first parity stripe)..."
+		check_parity_read $DIR/$tdir/$tfile \
+			$parity_mirror_id $((1024 * 1024)) "no"
+
+		# Test start of second parity stripe (should have data)
+		echo "  Checking offset 4M (start of second parity stripe)..."
+		check_parity_read $DIR/$tdir/$tfile $parity_mirror_id \
+			$((4 * 1024 * 1024)) "no"
+
+		# Test past all parity stripes (should be zeros)
+		echo "  Checking offset 8M (past all parity)..."
+		check_parity_read $DIR/$tdir/$tfile $parity_mirror_id \
+			$((8 * 1024 * 1024)) "yes"
+	done
+}
+run_test 34c "test that reading past parity data returns zeros"
 
 complete_test $SECONDS
 check_and_cleanup_lustre

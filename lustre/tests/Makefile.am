@@ -73,7 +73,7 @@ THETESTS += create_foreign_dir parse_foreign_dir
 THETESTS += check_fallocate splice-test lseek_test expand_truncate_test
 THETESTS += foreign_symlink_striping lov_getstripe_old io_uring_probe
 THETESTS += fadvise_dontneed_helper llapi_root_test llapi_pool_test aheadmany
-THETESTS += monitor_lustrefs
+THETESTS += monitor_lustrefs test_parity_read
 
 if LIBAIO
 THETESTS += aiocp
@@ -128,6 +128,7 @@ createmany_LDADD=$(LIBLUSTREAPI)
 create_foreign_dir_LDADD = $(LIBLUSTREAPI)
 check_fallocate_LDADD = $(LIBLUSTREAPI)
 fsx_LDADD = $(LIBLUSTREAPI)
+test_parity_read_LDADD = $(LIBLUSTREAPI)
 checkfiemap_LDADD = -lpthread
 if LIBAIO
 aiocp_LDADD= -laio

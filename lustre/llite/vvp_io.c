@@ -135,6 +135,21 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 	result = cl_object_attr_get(env, obj, attr);
 	if (result == 0) {
 		kms = attr->cat_kms;
+		/*
+		 * For parity I/O, use ci_parity_eof instead of kms to
+		 * determine if we're past EOF.
+		 */
+		if (io->ci_parity_io && exceed != NULL) {
+			loff_t parity_eof = io->ci_parity_eof;
+			unsigned long cur_index = start >> PAGE_SHIFT;
+
+			if ((parity_eof == 0 && cur_index != 0) ||
+			    (((parity_eof - 1) >> PAGE_SHIFT) < cur_index)) {
+				*exceed = 1;
+				vvp_object_size_unlock(obj);
+				return 0;
+			}
+		}
 		if (pos > kms || !attr->cat_kms_valid) {
 			/*
 			 * A glimpse is necessary to determine whether we
@@ -147,14 +162,16 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 				/* If objective page index exceed end-of-file
 				 * page index, return directly. Do not expect
 				 * kernel will check such case correctly.
+				 * For parity I/O, use ci_parity_eof which is
+				 * calculated from RAID geometry in the LOV
+				 * layer.
 				 */
-				loff_t size = i_size_read(inode);
-				unsigned long cur_index = start >>
-					PAGE_SHIFT;
+				loff_t size = io->ci_parity_io ?
+					io->ci_parity_eof : i_size_read(inode);
+				unsigned long cur_index = start >> PAGE_SHIFT;
 
 				if ((size == 0 && cur_index != 0) ||
-				    (((size - 1) >> PAGE_SHIFT) <
-				     cur_index))
+				    (((size - 1) >> PAGE_SHIFT) < cur_index))
 					*exceed = 1;
 			}
 

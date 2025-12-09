@@ -372,6 +372,22 @@ lov_mirror_entry(struct lov_object *lov, int i)
 				lov->u.composite.lo_mirror_count - 1);	\
 	     lre++)
 
+static inline struct lov_mirror_entry *
+lov_mirror_by_id(struct lov_object *lov, __u16 mirror_id)
+{
+	struct lov_mirror_entry *lre;
+
+	if (!lov_is_flr(lov))
+		return NULL;
+
+	lov_foreach_mirror_entry(lov, lre) {
+		if (lre->lre_mirror_id == mirror_id)
+			return lre;
+	}
+
+	return NULL;
+}
+
 static inline unsigned
 lov_layout_entry_index(struct lov_object *lov, struct lov_layout_entry *entry)
 {

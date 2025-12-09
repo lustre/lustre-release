@@ -137,6 +137,8 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
 	sub_io->ci_ndelay = io->ci_ndelay;
 	sub_io->ci_layout_version = io->ci_layout_version;
 	sub_io->ci_tried_all_mirrors = io->ci_tried_all_mirrors;
+	sub_io->ci_parity_io = io->ci_parity_io;
+	sub_io->ci_parity_eof = io->ci_parity_eof;
 
 	result = cl_io_sub_init(sub->sub_env, sub_io, io->ci_type, sub_obj);
 
@@ -312,8 +314,157 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 	RETURN(0);
 }
 
-static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
-			      struct cl_io *io)
+/**
+ * lov_io_parity_size_comp() - Parity byte span for one data/parity pair
+ * @data_lsme: data component stripe metadata
+ * @parity_lsme: parity component stripe metadata
+ * @data_end: exclusive end of data in file offset space
+ *
+ * Returns how many bytes of parity are written for data in
+ * [data_lsme->lsme_extent.e_start, data_end).
+ * May overestimate (holes) but must not be short.
+ */
+static loff_t lov_io_parity_size_comp(struct lov_stripe_md_entry *data_lsme,
+				      struct lov_stripe_md_entry *parity_lsme,
+				      loff_t data_end)
+{
+	struct ec_split_comp sc;
+	loff_t comp_start = data_lsme->lsme_extent.e_start;
+	loff_t data_upto;
+	__u64 stripe_set_size;
+	__u64 num_stripe_sets;
+	__u64 data_in_extent;
+	int num_raid_sets;
+
+	if (data_end <= comp_start)
+		return 0;
+
+	data_upto = min_t(__u64, (__u64)data_end,
+			  data_lsme->lsme_extent.e_end);
+	ec_split_stripes(data_lsme->lsme_stripe_count,
+			 parity_lsme->lsme_dstripe_count, &sc);
+	num_raid_sets = sc.esc_n0 + sc.esc_n1;
+
+	stripe_set_size = (__u64)data_lsme->lsme_stripe_count *
+			  data_lsme->lsme_stripe_size;
+	data_in_extent = data_upto - comp_start;
+	num_stripe_sets = (data_in_extent + stripe_set_size - 1) /
+			  stripe_set_size;
+
+	return num_stripe_sets * num_raid_sets *
+	       parity_lsme->lsme_cstripe_count *
+	       parity_lsme->lsme_stripe_size;
+}
+
+/**
+ * lov_io_find_data_comp() - Find data component matching parity extent
+ * @obj: lov object
+ * @data_lre: data mirror entry
+ * @parity_ext: parity component extent
+ *
+ * Return: matching layout entry, or NULL
+ */
+static struct lov_layout_entry *
+lov_io_find_data_comp(struct lov_object *obj, struct lov_mirror_entry *data_lre,
+		      struct lu_extent *parity_ext)
+{
+	struct lov_layout_entry *data_lle;
+
+	lov_foreach_mirror_layout_entry(obj, data_lle, data_lre) {
+		if (lu_extent_is_equal(parity_ext,
+				       &data_lle->lle_lsme->lsme_extent))
+			return data_lle;
+	}
+
+	return NULL;
+}
+
+/**
+ * lov_io_parity_eof() - Parity mirror EOF from @data_size and RAID geometry
+ * @obj: lov object
+ * @mirror_index: parity mirror index
+ * @data_size: data mirror file size
+ *
+ * For each parity component below @data_size, add lov_io_parity_size_comp() to
+ * its extent start; return the maximum. May overestimate but not underestimate.
+ *
+ * Return: parity EOF in file offset space, or 0 on error
+ */
+static loff_t lov_io_parity_eof(struct lov_object *obj, int mirror_index,
+				loff_t data_size)
+{
+	struct lov_mirror_entry *parity_lre;
+	struct lov_mirror_entry *data_lre;
+	struct lov_layout_entry *parity_lle;
+	struct lov_layout_entry *data_lle;
+	struct lu_extent *ext;
+	__u16 data_mirror_id;
+	loff_t parity_eof = 0;
+
+	if (data_size == 0)
+		return 0;
+
+	parity_lre = lov_mirror_entry(obj, mirror_index);
+	parity_lle = lov_entry(obj, parity_lre->lre_start);
+
+	if (!(parity_lle->lle_lsme->lsme_pattern & LOV_PATTERN_PARITY))
+		return 0;
+
+	data_mirror_id = parity_lle->lle_lsme->lsme_mirror_link_id;
+	data_lre = lov_mirror_by_id(obj, data_mirror_id);
+	if (data_lre == NULL)
+		return 0;
+
+	lov_foreach_mirror_layout_entry(obj, parity_lle, parity_lre) {
+		loff_t seg_eof;
+
+		ext = &parity_lle->lle_lsme->lsme_extent;
+		if (data_size <= ext->e_start)
+			continue;
+
+		data_lle = lov_io_find_data_comp(obj, data_lre, ext);
+		if (data_lle == NULL) {
+			CERROR(DFID ": no data component matching parity extent "DEXT" (parity mirror %u, data mirror %u)\n",
+			       PFID(lu_object_fid(lov2lu(obj))), PEXT(ext),
+			       parity_lre->lre_mirror_id, data_mirror_id);
+			continue;
+		}
+
+		/*
+		 * Or we could just find the last valid data component,
+		 * e.g. the one with actual data written？For security, I
+		 * prefer not to do this here.
+		 */
+		seg_eof = ext->e_start +
+			  lov_io_parity_size_comp(data_lle->lle_lsme,
+						  parity_lle->lle_lsme,
+						  data_size);
+		if (seg_eof > parity_eof)
+			parity_eof = seg_eof;
+	}
+
+	CDEBUG(D_INODE, DFID ": parity EOF calc: data_size=%lld parity_eof=%lld\n",
+	       PFID(lu_object_fid(lov2lu(obj))), data_size, parity_eof);
+
+	return parity_eof;
+}
+
+static loff_t lov_io_top_file_size(const struct lu_env *env,
+				   struct lov_object *obj)
+{
+	struct cl_object *top_obj = cl_object_top(&obj->lo_cl);
+	struct cl_attr attr = { 0 };
+
+	cl_object_attr_lock(top_obj);
+	if (top_obj->co_ops->coo_attr_get)
+		top_obj->co_ops->coo_attr_get(env, top_obj, &attr);
+	cl_object_attr_unlock(top_obj);
+
+	return attr.cat_size;
+}
+
+static int lov_io_mirror_init(const struct lu_env *env, struct lov_io *lio,
+			      struct lov_object *obj, struct cl_io *io)
 {
 	struct lov_layout_composite *comp = &obj->u.composite;
 	bool skipped_parity = false;
@@ -373,7 +524,37 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 			index++;
 		}
 
-		RETURN(lio->lis_mirror_index < 0 ? -EINVAL : 0);
+		if (lio->lis_mirror_index < 0)
+			RETURN(-EINVAL);
+
+		/* Set ci_parity_io if this is a parity mirror */
+		io->ci_parity_io =
+			lov_mirror_entry(obj, lio->lis_mirror_index)->lre_parity;
+
+		/* Calculate parity EOF if this is a parity mirror */
+		if (io->ci_parity_io) {
+			loff_t file_size;
+
+			/*
+			 * Get file size from the top (VVP) layer only.
+			 * We can't use cl_object_attr_get() here because it
+			 * walks through all layers and the LOV layer would
+			 * reset cat_size to 0 before recalculating from
+			 * stripe attributes (which may not be populated yet).
+			 * The VVP layer's coo_attr_get reads i_size directly
+			 * from the inode.
+			 */
+			file_size = lov_io_top_file_size(env, obj);
+
+			io->ci_parity_eof = lov_io_parity_eof(obj,
+					lio->lis_mirror_index, file_size);
+			CDEBUG(D_INODE, "designated parity IO: mirror_idx=%d, "
+			       "file_size=%llu, parity_eof=%lld\n",
+			       lio->lis_mirror_index, file_size,
+			       io->ci_parity_eof);
+		}
+
+		RETURN(0);
 	}
 
 	result = lov_io_mirror_write_intent(lio, obj, io);
@@ -476,6 +657,25 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 
 	lio->lis_mirror_index = index;
 
+	/* Set ci_parity_io if this is a parity mirror */
+	io->ci_parity_io = lov_mirror_entry(obj, index)->lre_parity;
+
+	/* Calculate parity EOF if this is a parity mirror */
+	if (io->ci_parity_io) {
+		loff_t file_size;
+
+		/*
+		 * Get file size from the top (VVP) layer only.
+		 * See comment in designated mirror path above.
+		 */
+		file_size = lov_io_top_file_size(env, obj);
+
+		io->ci_parity_eof = lov_io_parity_eof(obj, index, file_size);
+		CDEBUG(D_INODE, "mirror selection parity IO: mirror_idx=%d, "
+		       "file_size=%llu, parity_eof=%lld\n",
+		       index, file_size, io->ci_parity_eof);
+	}
+
 	/* we can't use parity mirrors for write unless designated */
 	if (lov_mirror_entry(obj, index)->lre_parity &&
 	    io->ci_type == CIT_WRITE &&
@@ -512,7 +712,7 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 	RETURN(0);
 }
 
-static int lov_io_slice_init(struct lov_io *lio,
+static int lov_io_slice_init(const struct lu_env *env, struct lov_io *lio,
 			     struct lov_object *obj, struct cl_io *io)
 {
 	int index;
@@ -626,7 +826,7 @@ static int lov_io_slice_init(struct lov_io *lio,
 
 	LASSERT(obj->lo_lsm != NULL);
 
-	result = lov_io_mirror_init(lio, obj, io);
+	result = lov_io_mirror_init(env, lio, obj, io);
 	if (result)
 		GOTO(out, result);
 
@@ -1978,7 +2178,7 @@ int lov_io_init_composite(const struct lu_env *env, struct cl_object *obj,
 	ENTRY;
 
 	INIT_LIST_HEAD(&lio->lis_active);
-	result = lov_io_slice_init(lio, lov, io);
+	result = lov_io_slice_init(env, lio, lov, io);
 	if (result)
 		GOTO(out, result);
 

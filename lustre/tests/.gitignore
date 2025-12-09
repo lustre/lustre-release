@@ -97,6 +97,7 @@
 /tchmod
 /test_brw
 /testreq
+/test_parity_read
 /toexcl
 /truncate
 /unlinkmany
