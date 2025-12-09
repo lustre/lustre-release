@@ -4367,11 +4367,83 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
 }
 
 /**
+ * llapi_ec_verify_parities() - Verify on-disk EC parities match the in-memory
+ * parities computed from the data stripes
+ * @fd: file descriptor of the file to verify
+ * @stripe_size: size of a single stripe in bytes
+ * @k: number of data stripes in the RAID set
+ * @p: number of parity stripes in the RAID set
+ * @ec_pos: byte offset within the EC mirror to start reading parities from
+ * @ec_id: mirror id of the EC parity component
+ * @stripe_ptrs: array of stripe buffers; stripe_ptrs[k..k+p-1] hold the
+ *	expected (in-memory) parities to compare against
+ *
+ * Reads each on-disk parity stripe and compares it against the corresponding
+ * computed parity in stripe_ptrs[k + i].
+ *
+ * Note, stripe_ptrs[0] is reused as the read buffer and its contents
+ * are overwritten by this function. The caller must not rely on stripe_ptrs[0]
+ * holding the original data stripe after this call returns.
+ *
+ * Return:
+ * * %0 on success (all parities match)
+ * * %-EINVAL on a short read or parity mismatch
+ * * %negative error code from llapi_mirror_read() on read failure
+ */
+static int llapi_ec_verify_parities(int fd, uint64_t stripe_size, int k, int p,
+				    uint64_t ec_pos, int ec_id,
+				    uint8_t *stripe_ptrs[])
+{
+	int rc;
+	int i;
+
+	for (i = 0; i < p; i++) {
+		size_t to_read;
+		ssize_t bytes_read;
+		uint8_t *rb;
+
+		rb = stripe_ptrs[0];
+		to_read = stripe_size;
+		bytes_read = llapi_mirror_read(fd, ec_id, rb, to_read, ec_pos);
+		if (bytes_read < 0) {
+			llapi_error(LLAPI_MSG_ERROR, bytes_read,
+				    "could not read ec parities");
+			rc = bytes_read;
+			goto out;
+		}
+		/*
+		 * Short read from parity component indicates the parity
+		 * data was not written for this stripe. This is a mismatch.
+		 */
+		if (bytes_read != to_read) {
+			rc = -EINVAL;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "parity %d short read: got %zd expected %zu",
+				    i, bytes_read, to_read);
+			goto out;
+		}
+		if (memcmp(rb, stripe_ptrs[k + i], bytes_read)) {
+			rc = -EINVAL;
+			llapi_error(LLAPI_MSG_ERROR, rc, "parity %d mismatch",
+				    i);
+			goto out;
+		}
+		ec_pos += bytes_read;
+	}
+
+	rc = 0;
+ out:
+	return rc;
+}
+
+/**
  * llapi_ec_resync_comp() - Resync EC parities for a single component
  * @fd: file descriptor of the file to resync
  * @layout: layout structure containing the file layout
  * @data_comp: data component to read from
  * @ec_comp: EC parity component to update
+ * @is_verify: if true, compare the computed parities against the stored ones
+ *             (verify) instead of writing them back (resync)
  *
  * This function resyncs the erasure coding parities for a single component
  * by splitting the stripe set into smaller RAID sets and computing parities
@@ -4396,9 +4468,11 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
  * * %negative error code from llapi_ec_compute_parities() or
  *   llapi_ec_write_parities() on failure
  */
-static int llapi_ec_resync_comp(int fd, struct llapi_layout *layout,
-				struct llapi_layout_comp *data_comp,
-				struct llapi_layout_comp *ec_comp)
+static int
+llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
+			       struct llapi_layout_comp *data_comp,
+			       struct llapi_layout_comp *ec_comp,
+			       bool is_verify)
 {
 	int rc = 0, i, k, p, m;
 	struct stat stbuf;
@@ -4482,12 +4556,21 @@ static int llapi_ec_resync_comp(int fd, struct llapi_layout *layout,
 					       encode_matrix, g_tbls);
 		if (rc)
 			goto out_free;
-		rc = llapi_ec_write_parities(fd, data_comp->llc_stripe_size, k,
-					     p, ec_pos,
-					     mirror_id_of(ec_comp->llc_id),
-					     stripe_ptrs);
-		if (rc)
-			goto out_free;
+
+		if (is_verify) {
+			rc = llapi_ec_verify_parities(
+				fd, data_comp->llc_stripe_size, k, p, ec_pos,
+				mirror_id_of(ec_comp->llc_id), stripe_ptrs);
+			if (rc)
+				goto out_free;
+		} else {
+			rc = llapi_ec_write_parities(
+				fd, data_comp->llc_stripe_size, k, p, ec_pos,
+				mirror_id_of(ec_comp->llc_id), stripe_ptrs);
+			if (rc)
+				goto out_free;
+		}
+
 		data_pos += k * data_comp->llc_stripe_size;
 		ec_pos += ec_comp->llc_cstripe_count * ec_comp->llc_stripe_size;
 		if (data_pos >= end_pos)
@@ -4788,7 +4871,8 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 			llapi_error(LLAPI_MSG_ERROR, rc, "too many parities");
 			goto out;
 		}
-		rc = llapi_ec_resync_comp(fd, layout, data_comp, ec_comp);
+		rc = llapi_ec_resync_or_verify_comp(fd, layout, data_comp,
+						    ec_comp, false);
 		if (rc) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
 			      "failed to sync ec comp");
@@ -4796,6 +4880,59 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 		}
 	}
 	return 0;
+
+out:
+	return rc;
+}
+
+/**
+ * llapi_ec_verify_comps() - Verify EC parity components against their data
+ * @fd:          File descriptor of the mirrored file.
+ * @layout:      Mirror component list.
+ * @ecs:         Array of EC parity component ids to verify.
+ * @ec_count:    Number of entries in @ecs.
+ *
+ * For each EC parity component id in @ecs, locate the matching data component
+ * in @layout, recompute the parities from the data, and compare them against
+ * the on-disk parities. Returns the first failure encountered; remaining
+ * components in @ecs are not checked.
+ *
+ * Return: 0 on success, negative errno on failure.
+ */
+int llapi_ec_verify_comps(int fd, struct llapi_layout *layout, __u32 *ecs,
+			  int ec_count)
+{
+	struct llapi_layout_comp *data_comp;
+	struct llapi_layout_comp *ec_comp;
+	int rc = 0;
+	int i;
+
+	for (i = 0; i < ec_count; i++) {
+		ec_comp = __llapi_layout_find_comp_by_id(layout, ecs[i]);
+		if (!ec_comp) {
+			rc = -ENOENT;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "ec component is missing");
+			goto out;
+		}
+		data_comp = __llapi_layout_find_data_comp_by_parity(layout,
+								    ec_comp);
+		if (!data_comp) {
+			rc = -ENOENT;
+			llapi_error(
+				LLAPI_MSG_ERROR, rc,
+				"ec component does not have a matching data component");
+			goto out;
+		}
+		rc = llapi_ec_resync_or_verify_comp(fd, layout, data_comp,
+						    ec_comp, true);
+		if (rc) {
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "ec verify failed for comp 0x%08x",
+				    ec_comp->llc_id);
+			goto out;
+		}
+	}
 
 out:
 	return rc;

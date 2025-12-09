@@ -15,10 +15,8 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_EC_EXCEPT "
-always_except LU-12688 6d 6f
-always_except LU-19631 12 34b
-# tests 6d/6f: pending lfs mirror verify support for EC components
-# tests 12/34b: EC parity calculation produces incorrect content (LU-19631)
+always_except LU-19631 12
+# tests 12: EC parity calculation produces incorrect content (LU-19631)
 
 build_test_filter
 
@@ -1852,18 +1850,18 @@ test_12() {
 	#  c00000
 
 	echo "fa9fe1782aee74e978e806fb6a0e7a4a1c83610f $tf" \
-	    | sha1sum -c - || error "wrong content in $tf"
+	    | sha1sum -c - || error "wrong content in $tf after write"
 
 	# resync the ec mirror:
 	$LFS mirror resync $tf || error "failed to resync ec mirror"
 
-	# Verify the mirrro is no longer stale
+	# Verify the mirror is no longer stale
 	$LFS getstripe $tf | grep lcme_flags | grep stale &&
 	    error "after resyncing $tf, it still contains stale component"
 
-	# verify the file content did not change after updating the ec mirror
-	echo "fa9fe1782aee74e978e806fb6a0e7a4a1c83610f $tf" | sha1sum -c - ||
-		error "wrong content in $tf"
+	# verify the file content did not change after updating ec mirror
+	echo "fa9fe1782aee74e978e806fb6a0e7a4a1c83610f $tf" |
+		sha1sum -c - || error "wrong content in $tf after resync"
 
 	# Verify the data mirror is still correct
 	rm -f $tf_data
@@ -1871,14 +1869,14 @@ test_12() {
 	echo "fa9fe1782aee74e978e806fb6a0e7a4a1c83610f $tf_data" |
 		sha1sum -c - || error "wrong content in data mirror"
 
-	# Expected content of the ec mirror:
+	# Expected content of the ec mirror (2 parity stripes for 2 data stripes):
+	# Parity stripe 0: XOR of data stripe 0 (0x01) and data stripe 2 (0x03) = 0x9a
+	# Parity stripe 1: XOR of data stripe 1 (0x02) and data stripe 3 (0x00) = 0xfa
 	#  000000 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a
 	#  *
 	#  400000 fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
 	#  *
-	#  800000 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-	#  *
-	#  c00000
+	#  800000
 
 	# Verify we have expected content in the ec mirror
 	rm -f $tf_ec

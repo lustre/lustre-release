@@ -915,9 +915,12 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 				struct llapi_resync_comp *comp_array,
 				int comp_size, unsigned long stats_interval_sec,
 				uint64_t bandwidth_bytes_sec);
+int llapi_ec_verify_comps(int fd, struct llapi_layout *layout,
+			  __u32 *ecs, int ec_count);
 int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 			     struct llapi_resync_comp *comp_array,
 			     int comp_size, uint64_t start, uint64_t end);
+
 /*
  * Flags to control how layouts are retrieved.
  */

@@ -16087,6 +16087,9 @@ int lfs_mirror_prepare_chunk(struct llapi_layout *layout,
 			if (flags & LCME_FL_NOSYNC)
 				goto next;
 
+			if (flags & LCME_FL_PARITY)
+				goto next;
+
 			if (!include_stale && (flags & LCME_FL_STALE ||
 					       flags & LCME_FL_OFFLINE))
 				goto next;
@@ -16610,6 +16613,89 @@ next_mirror:
 }
 
 /**
+ * lfs_mirror_prepare_ec() - Find EC parity components to be verified.
+ * @layout:      Mirror component list.
+ * @ecs:         Output array of EC parity component ids.
+ * @ecs_size:    Capacity of the @ecs array.
+ *
+ * Walks @layout and collects the ids of every EC parity component
+ * (LCME_FL_PARITY) that is eligible for verification. NOSYNC components are
+ * skipped silently; STALE parity components are treated as an error since
+ * their on-disk parities cannot be meaningfully compared against the data.
+ *
+ * Return: number of EC parity components written to @ecs on success, or a
+ * negative errno on failure.
+ */
+static inline int lfs_mirror_prepare_ec(struct llapi_layout *layout, __u32 *ecs,
+					size_t ecs_size)
+{
+	int i, rc;
+
+	memset(ecs, 0, sizeof(*ecs) * ecs_size);
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0) {
+		fprintf(stderr,
+			"%s: move to the first layout component: %s.\n",
+			progname, strerror(errno));
+		goto error;
+	}
+
+	i = 0;
+	rc = 0;
+	while (rc == 0) {
+		uint32_t id, flags;
+
+		rc = llapi_layout_comp_flags_get(layout, &flags);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s: llapi_layout_comp_flags_get failed: %s.\n",
+				progname, strerror(errno));
+			goto error;
+		}
+
+		if (!(flags & LCME_FL_PARITY))
+			goto next;
+
+		/* Skip nosync components - they are intentionally kept stale */
+		if (flags & LCME_FL_NOSYNC)
+			goto next;
+
+		rc = llapi_layout_comp_id_get(layout, &id);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s: Failed to get component id.\n",
+				progname);
+			goto error;
+		}
+
+		if (flags & LCME_FL_STALE) {
+			rc = -ESTALE;
+			fprintf(stderr,
+				"%s: EC component 0x%x is stale.\n",
+				progname, id);
+			goto error;
+		}
+
+		ecs[i] = id;
+		i++;
+
+	next:
+		rc = llapi_layout_comp_use(layout,
+					   LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s: move to the next layout component: %s.\n",
+				progname, strerror(errno));
+			goto error;
+		}
+	}
+
+error:
+	return rc < 0 ? rc : i;
+}
+
+/**
  * lfs_mirror_verify_file() - Verify a mirrored file.
  * @fname:      Mirrored file name.
  * @mirror_ids: Specified mirror ids to be verified.
@@ -16633,11 +16719,13 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 			   int verbose, int stale)
 {
 	struct verify_chunk chunks_array[1024] = { };
+	__u32 ec_array[1024] = { };
 	struct llapi_layout *layout = NULL;
 	struct stat stbuf;
 	uint32_t flr_state;
 	int fd;
-	int chunk_count = 0;
+	int chunk_count;
+	int ec_count;
 	int idx = 0;
 	int rc = 0;
 	int rc1 = 0;
@@ -16806,8 +16894,20 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 		}
 	}
 
-	if (rc2 < 0)
+	if (rc2 < 0) {
 		rc = rc2;
+		goto free_layout;
+	}
+
+	/* find ec components to be verified */
+	ec_count = lfs_mirror_prepare_ec(layout, ec_array,
+					 ARRAY_SIZE(ec_array));
+	if (ec_count < 0) {
+		rc = ec_count;
+		goto free_layout;
+	}
+
+	rc = llapi_ec_verify_comps(fd, layout, ec_array, ec_count);
 
 free_layout:
 	llapi_layout_free(layout);
