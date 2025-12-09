@@ -588,6 +588,7 @@ int lod_fill_mirrors(struct lod_object *lo)
 		bool stale = lod_comp->llc_flags & LCME_FL_STALE;
 		bool preferred = lod_comp->llc_flags & LCME_FL_PREF_WR;
 		bool mirror_hsm = lod_is_hsm(lod_comp);
+		bool mirror_parity = lod_comp->llc_flags & LCME_FL_PARITY;
 		bool init = (lod_comp->llc_stripe != NULL) &&
 			    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
 			    !(lod_comp->llc_pattern & LOV_PATTERN_MDT);
@@ -622,10 +623,27 @@ int lod_fill_mirrors(struct lod_object *lo)
 				pref++;
 		}
 
+		/* This condition only succeeds for the second and subsequent
+		 * components of a mirror
+		 */
 		if (mirror_id_of(lod_comp->llc_id) == mirror_id) {
 			/* Currently HSM mirror does not support PFL. */
 			if (lo->ldo_mirrors[mirror_idx].lme_hsm)
 				RETURN(-EINVAL);
+
+			/* Validate mirror homogeneity: all components in a
+			 * mirror must have the same parity status
+			 */
+			if (mirror_parity !=
+			    lo->ldo_mirrors[mirror_idx].lme_parity) {
+				int rc = -EINVAL;
+
+				CERROR("%s: " DFID ": mirror %d has mixed parity/non-parity components: rc = %d\n",
+				       lod2obd(lod)->obd_name,
+				       PFID(lod_object_fid(lo)), mirror_id, rc);
+				RETURN(rc);
+			}
+
 			lo->ldo_mirrors[mirror_idx].lme_stale |= stale;
 			lo->ldo_mirrors[mirror_idx].lme_prefer |= preferred;
 			lo->ldo_mirrors[mirror_idx].lme_preference += pref;
@@ -652,6 +670,7 @@ int lod_fill_mirrors(struct lod_object *lo)
 		lo->ldo_mirrors[mirror_idx].lme_stale = stale;
 		lo->ldo_mirrors[mirror_idx].lme_prefer = preferred;
 		lo->ldo_mirrors[mirror_idx].lme_hsm = mirror_hsm;
+		lo->ldo_mirrors[mirror_idx].lme_parity = mirror_parity;
 		lo->ldo_mirrors[mirror_idx].lme_preference = pref;
 		lo->ldo_mirrors[mirror_idx].lme_start = i;
 		lo->ldo_mirrors[mirror_idx].lme_end = i;

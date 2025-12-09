@@ -7848,6 +7848,24 @@ static inline int lod_check_ost_avail(const struct lu_env *env,
 }
 
 /**
+ * lod_mirror_is_parity() - Check if a mirror has parity components.
+ * @lo: object
+ * @mirror_idx: mirror index
+ *
+ * This function checks if a mirror contains parity components. The parity
+ * status is cached in the lme_parity flag during mirror initialization in
+ * lod_fill_mirrors().
+ *
+ * Return:
+ * * %true if mirror has only parity components
+ * * %false if mirror has no parity components
+ */
+static inline bool lod_mirror_is_parity(struct lod_object *lo, int mirror_idx)
+{
+	return lo->ldo_mirrors[mirror_idx].lme_parity;
+}
+
+/**
  * lod_primary_pick() - Pick primary mirror for write
  * @env: execution environment
  * @lo: object
@@ -7890,6 +7908,13 @@ static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
 
 		if (lo->ldo_mirrors[index].lme_stale) {
 			CDEBUG(D_LAYOUT, DFID": mirror %d stale\n",
+			       PFID(lod_object_fid(lo)), index);
+			continue;
+		}
+
+		/* parity mirrors should never be selected for writes */
+		if (lod_mirror_is_parity(lo, index)) {
+			CDEBUG(D_LAYOUT, DFID": mirror %d has parity\n",
 			       PFID(lod_object_fid(lo)), index);
 			continue;
 		}
@@ -8528,6 +8553,7 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 		struct thandle *th)
 {
 	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lu_attr *layout_attr = &info->lti_layout_attr;
 	struct lod_layout_component *lod_comp;
 	struct lu_extent extent = { 0 };
@@ -8548,6 +8574,13 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 			continue;
 		if (lo->ldo_mirrors[i].lme_hsm)
 			continue;
+		if (lod_mirror_is_parity(lo, i)) {
+			CERROR("%s: "DFID" found non-stale parity mirror %d\n",
+			       lod2obd(lod)->obd_name,
+			       PFID(lod_object_fid(lo)),
+			       lo->ldo_mirrors[i].lme_id);
+			GOTO(out, rc = -EUCLEAN);
+		}
 
 		primary = i;
 		break;
@@ -8557,6 +8590,13 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 		for (i = 0; i < lo->ldo_mirror_count; i++) {
 			if (lo->ldo_mirrors[i].lme_stale)
 				continue;
+			if (lod_mirror_is_parity(lo, i)) {
+				CERROR("%s: "DFID" found non-stale parity mirror %d\n",
+				       lod2obd(lod)->obd_name,
+				       PFID(lod_object_fid(lo)),
+				       lo->ldo_mirrors[i].lme_id);
+				GOTO(out, rc = -EUCLEAN);
+			}
 			primary = i;
 			break;
 		}

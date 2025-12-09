@@ -229,7 +229,8 @@ enum layout_verify_flags {
 struct lod_mirror_entry {
 	__u16	lme_stale:1,
 		lme_prefer:1,
-		lme_hsm:1;
+		lme_hsm:1,
+		lme_parity:1;
 	/* mirror id */
 	__u16	lme_id;
 	/* preference */

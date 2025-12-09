@@ -1264,6 +1264,304 @@ test_6a() {
 }
 run_test 6a "Block setting prefer flags on parity components"
 
+test_6b() {
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Create EC file: data mirror + parity mirror
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+		error "create EC file failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 2
+
+	# Find data and parity component IDs via the parity flag rather than
+	# relying on mirror id ordering.
+	local data_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2}
+		     /lcme_flags:/ && !/parity/ {print id; exit}')
+	local parity_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2}
+		     /lcme_flags:.*parity/ {print id; exit}')
+
+	echo "Data component: $data_comp_id, Parity component: $parity_comp_id"
+
+	[[ -n "$data_comp_id" ]] || error "could not find data component ID"
+	[[ -n "$parity_comp_id" ]] ||
+		error "could not find parity component ID"
+
+	# Verify EC parameters on parity component
+	verify_comp_parity $tf $parity_comp_id
+	verify_ec_stripe_count $tf $parity_comp_id 4 2
+
+	# Write to file - should select data mirror as primary
+	dd if=/dev/urandom of=$tf bs=1M count=2 ||
+		error "write to EC file failed"
+
+	# After write, data mirror should be non-stale (init),
+	# parity mirror should be stale
+	$LFS getstripe -I$data_comp_id $tf | grep -q "init" ||
+		error "data mirror should be init after write"
+
+	# Verify parity mirror is stale
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "stale" ||
+		error "parity mirror should be stale after write"
+
+	# Snapshot the data before resync so we can verify integrity across it
+	local sum1=$(md5sum $tf | awk '{print $1}')
+
+	# Resync to update parity mirror
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	# After resync, both mirrors should be init (non-stale)
+	$LFS getstripe -I$data_comp_id $tf | grep -q "init" ||
+		error "data mirror should be init after resync"
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "init" ||
+		error "parity mirror should be init after resync"
+
+	local sum2=$(md5sum $tf | awk '{print $1}')
+	[[ "$sum1" == "$sum2" ]] ||
+		error "data changed after resync: $sum1 vs $sum2"
+}
+run_test 6b "EC write selects data mirror, not parity mirror"
+
+test_6c() {
+	enable_ec
+
+	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Create file with 2 data mirrors + 1 EC mirror (data + parity)
+	# Mirror 1 (data): stripe on OST0,1
+	# Mirror 2 (data): stripe on OST2,3
+	# Mirror 3 (data): EC data component with 2 stripes
+	# Mirror 4 (parity): EC parity component with 2+2
+	# EC 2+2 keeps the OST requirement at >= 4 to match the skip above.
+	$LFS setstripe -N -E -1 -c 2 -o 0,1 \
+		-N -E -1 -c 2 -o 2,3 \
+		-N -E -1 -c 2 --ec 2+2 $tf ||
+		error "create multi-mirror EC file failed"
+
+	verify_mirror_count $tf 4
+	verify_comp_count $tf 4
+
+	# Get component IDs for EC verification
+	local ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' |
+			tr '\n' ' '))
+	echo "Component IDs: ${ids[@]}"
+
+	# Verify EC parameters on EC parity component (mirror 4)
+	verify_comp_parity $tf ${ids[3]}
+	verify_ec_stripe_count $tf ${ids[3]} 2 2
+
+	# Write to file - should select one of the data mirrors
+	dd if=/dev/urandom of=$tf bs=1M count=2 ||
+		error "write to EC file failed"
+	$LFS getstripe $tf
+
+	# Get mirror IDs
+	local mirror_ids=($($LFS getstripe $tf |
+		awk '/lcme_mirror_id:/ {print $2}' | sort -u))
+	echo "Mirror IDs: ${mirror_ids[@]}"
+
+	# Count non-stale mirrors (should be 1 - the primary data mirror)
+	local non_stale_count=0
+	local stale_count=0
+	local parity_mirror_id=""
+
+	for mirror_id in "${mirror_ids[@]}"; do
+		# Get first component of this mirror
+		# lcme_id comes before lcme_mirror_id, so we need to save it
+		local comp_id=$($LFS getstripe $tf |
+			awk -v mid="$mirror_id" \
+			'/lcme_id:/ {id=$2} \
+			/lcme_mirror_id:/ {if ($2 == mid) {print id; exit}}')
+
+		if $LFS getstripe -I$comp_id $tf | grep -q "stale"; then
+			((stale_count++))
+		else
+			((non_stale_count++))
+		fi
+
+		# Check if this is the parity mirror
+		if $LFS getstripe -I$comp_id $tf | grep -q "parity"; then
+			parity_mirror_id=$mirror_id
+		fi
+	done
+
+	echo "Non-stale mirrors: $non_stale_count, Stale mirrors: $stale_count"
+	echo "Parity mirror ID: $parity_mirror_id"
+
+	# Should have exactly 1 non-stale mirror (the selected data mirror)
+	(( non_stale_count == 1 )) ||
+		error "expected 1 non-stale mirror, got $non_stale_count"
+
+	# Should have 3 stale mirrors (2 other data mirrors + parity mirror)
+	(( stale_count == 3 )) ||
+		error "expected 3 stale mirrors, got $stale_count"
+
+	# Parity mirror should be stale
+	[[ -n "$parity_mirror_id" ]] ||
+		error "could not find parity mirror"
+	local parity_comp_id=$($LFS getstripe $tf |
+		awk -v mid="$parity_mirror_id" \
+		'/lcme_id:/ {id=$2} \
+		/lcme_mirror_id:/ {if ($2 == mid) {print id; exit}}')
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "stale" ||
+		error "parity mirror should be stale after write"
+}
+run_test 6c "EC with multiple data mirrors - parity never selected"
+
+test_6d() {
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Create EC file: data mirror + parity mirror
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+		error "create EC file failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 2
+
+	# Find data and parity component IDs via the parity flag rather than
+	# relying on mirror id ordering.
+	local data_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2}
+		     /lcme_flags:/ && !/parity/ {print id; exit}')
+	local parity_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2}
+		     /lcme_flags:.*parity/ {print id; exit}')
+
+	echo "Data component: $data_comp_id, Parity component: $parity_comp_id"
+
+	[[ -n "$data_comp_id" ]] || error "could not find data component ID"
+	[[ -n "$parity_comp_id" ]] ||
+		error "could not find parity component ID"
+
+	# Verify EC parameters on parity component
+	verify_comp_parity $tf $parity_comp_id
+	verify_ec_stripe_count $tf $parity_comp_id 4 2
+
+	# Write and resync to get both mirrors in sync
+	dd if=/dev/urandom of=$tf bs=1M count=2 ||
+		error "write to EC file failed"
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	# Verify both mirrors are in sync (init, not stale)
+	$LFS getstripe -I$data_comp_id $tf | grep -q "init" ||
+		error "data mirror should be init after resync"
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "init" ||
+		error "parity mirror should be init after resync"
+
+	# Manually mark parity mirror stale
+	$LFS setstripe --comp-set -I $parity_comp_id --comp-flags=stale \
+		$tf || error "failed to mark parity mirror stale"
+
+	# Verify parity mirror is now stale
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "stale" ||
+		error "parity mirror should be stale after manual marking"
+
+	# Verify data mirror is still init
+	$LFS getstripe -I$data_comp_id $tf | grep -q "init" ||
+		error "data mirror should still be init"
+
+	# Resync should restore parity mirror from data mirror
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	# After resync, both should be init again
+	$LFS getstripe -I$data_comp_id $tf | grep -q "init" ||
+		error "data mirror should be init after resync"
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "init" ||
+		error "parity mirror should be init after resync"
+
+	# Verify data integrity
+	local sum1=$(md5sum $tf | awk '{print $1}')
+	$LFS mirror resync $tf || error "final resync failed"
+	local sum2=$(md5sum $tf | awk '{print $1}')
+	[[ "$sum1" == "$sum2" ]] ||
+		error "data changed after resync: $sum1 vs $sum2"
+}
+run_test 6d "Manually mark parity mirror stale and resync"
+
+test_6e() {
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Create EC file: data mirror + parity mirror
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+		error "create EC file failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 2
+
+	# Find data and parity component IDs via the parity flag rather than
+	# relying on mirror id ordering.
+	local data_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2}
+		     /lcme_flags:/ && !/parity/ {print id; exit}')
+	local parity_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2}
+		     /lcme_flags:.*parity/ {print id; exit}')
+
+	echo "Data component: $data_comp_id, Parity component: $parity_comp_id"
+
+	[[ -n "$data_comp_id" ]] || error "could not find data component ID"
+	[[ -n "$parity_comp_id" ]] ||
+		error "could not find parity component ID"
+
+	# Verify EC parameters on parity component
+	verify_comp_parity $tf $parity_comp_id
+	verify_ec_stripe_count $tf $parity_comp_id 4 2
+
+	# Write and resync to get both mirrors in sync
+	dd if=/dev/urandom of=$tf bs=1M count=2 ||
+		error "write to EC file failed"
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	# Verify both mirrors are in sync (init, not stale)
+	$LFS getstripe -I$data_comp_id $tf | grep -q "init" ||
+		error "data mirror should be init after resync"
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "init" ||
+		error "parity mirror should be init after resync"
+
+	# Manually mark data mirror stale, leaving only parity mirror valid
+	$LFS setstripe --comp-set -I $data_comp_id --comp-flags=stale $tf ||
+		error "failed to mark data mirror stale"
+
+	# Verify data mirror is now stale
+	$LFS getstripe -I$data_comp_id $tf | grep -q "stale" ||
+		error "data mirror should be stale after manual marking"
+
+	# Verify parity mirror is still init (non-stale)
+	$LFS getstripe -I$parity_comp_id $tf | grep -q "init" ||
+		error "parity mirror should still be init"
+
+	# Attempt to write with only parity mirror non-stale should fail
+	# with ENODATA (61 - No data available) because parity mirrors
+	# cannot be selected as write targets
+	dd if=/dev/urandom of=$tf bs=1M count=1 conv=notrunc 2>&1 |
+		grep -q "No data available" ||
+		error "write should fail with ENODATA when only parity" \
+			"mirror is valid"
+
+	# Verify file state unchanged - data mirror still stale
+	$LFS getstripe -I$data_comp_id $tf | grep -q "stale" ||
+		error "data mirror should still be stale after failed write"
+}
+run_test 6e "Write fails when only parity mirror is non-stale"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
