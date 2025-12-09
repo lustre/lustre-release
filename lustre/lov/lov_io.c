@@ -316,6 +316,7 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 			      struct cl_io *io)
 {
 	struct lov_layout_composite *comp = &obj->u.composite;
+	bool skipped_parity = false;
 	int index;
 	int i;
 	int result;
@@ -426,6 +427,14 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 		if (lre->lre_foreign)
 			continue;
 
+		/* skip parity mirrors for read IOs unless designated */
+		if (lre->lre_parity &&
+		    (io->ci_type == CIT_READ || io->ci_type == CIT_FAULT) &&
+		    !io->ci_designated_mirror) {
+			skipped_parity = true;
+			continue;
+		}
+
 		lov_foreach_mirror_layout_entry(obj, lle, lre) {
 			if (!lle->lle_valid)
 				continue;
@@ -442,6 +451,14 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 	} /* each mirror */
 
 	if (i == comp->lo_mirror_count) {
+		/* If we only skipped parity mirrors, return EINVAL */
+		if (skipped_parity) {
+			CERROR(DFID": only parity mirrors available for read "
+			       "I/O at %llu\n",
+			       PFID(lu_object_fid(lov2lu(obj))), lio->lis_pos);
+			RETURN(-EINVAL);
+		}
+
 		CERROR(DFID": failed to find a component covering "
 		       "I/O region at %llu\n",
 		       PFID(lu_object_fid(lov2lu(obj))), lio->lis_pos);
@@ -458,6 +475,15 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 	       comp->lo_mirror_count);
 
 	lio->lis_mirror_index = index;
+
+	/* we can't use parity mirrors for write unless designated */
+	if (lov_mirror_entry(obj, index)->lre_parity &&
+	    io->ci_type == CIT_WRITE &&
+	    io->ci_designated_mirror == 0) {
+		CERROR(DFID": trying to use parity mirror %d for write\n",
+		       PFID(lu_object_fid(lov2lu(obj))), index);
+		RETURN(-EINVAL);
+	}
 
 	/*
 	 * FLR: if all mirrors have been tried once, most likely the network

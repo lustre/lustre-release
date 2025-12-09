@@ -210,7 +210,8 @@ struct lov_mirror_entry {
 	unsigned short	lre_stale:1,	/* set if any components is stale */
 			/* set if one of components in this mirror is valid */
 			lre_valid:1,
-			lre_foreign:1;	/* set if it is a foreign component */
+			lre_foreign:1,	/* set if it is a foreign component */
+			lre_parity:1;	/* set if mirror has parity component */
 	int		lre_preference;	/* overall preference of this mirror */
 
 	unsigned short	lre_start;	/* idx(lo_entries) start idx (mirror) */

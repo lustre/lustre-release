@@ -634,6 +634,8 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		lle->lle_preference = 0;
 		switch (lle->lle_type) {
 		case LOV_PATTERN_RAID0:
+			fallthrough;
+		case LOV_PATTERN_RAID0 | LOV_PATTERN_PARITY:
 			lle->lle_comp_ops = &raid0_ops;
 			break;
 		case LOV_PATTERN_MDT:
@@ -698,6 +700,9 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 				lre->lre_stale |= !lle->lle_valid;
 				lre->lre_foreign |=
 					lsme_is_foreign(lle->lle_lsme);
+				lre->lre_parity |=
+					!!(lov_pattern(lle->lle_lsme->lsme_pattern) &
+					   LOV_PATTERN_PARITY);
 				lre->lre_end = i;
 				continue;
 			}
@@ -720,6 +725,8 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		lre->lre_valid = lle->lle_valid;
 		lre->lre_stale = !lle->lle_valid;
 		lre->lre_foreign = lsme_is_foreign(lle->lle_lsme);
+		lre->lre_parity = !!(lov_pattern(lle->lle_lsme->lsme_pattern) &
+				     LOV_PATTERN_PARITY);
 	}
 
 	/* sanity check for FLR */
@@ -778,6 +785,10 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 			continue;
 
 		if (!lre->lre_valid)
+			continue;
+
+		/* skip parity mirrors for preferred mirror selection */
+		if (lre->lre_parity)
 			continue;
 
 		mirror_count++; /* valid mirror */

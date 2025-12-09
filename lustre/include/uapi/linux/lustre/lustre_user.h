@@ -810,6 +810,7 @@ static inline bool lov_pattern_supported(enum lov_pattern pattern)
 
 	return pattern_base == LOV_PATTERN_RAID0 ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
+	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_PARITY) ||
 	       pattern_base == LOV_PATTERN_MDT;
 }
 
