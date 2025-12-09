@@ -432,7 +432,7 @@ static loff_t lov_io_parity_eof(struct lov_object *obj, int mirror_index,
 
 		/*
 		 * Or we could just find the last valid data component,
-		 * e.g. the one with actual data written？For security, I
+		 * e.g. the one with actual data written? For security, I
 		 * prefer not to do this here.
 		 */
 		seg_eof = ext->e_start +

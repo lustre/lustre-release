@@ -4280,11 +4280,29 @@ static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
 				     uint64_t end_pos, uint8_t *stripe_ptrs[],
 				     uint8_t *encode_matrix, uint8_t *g_tbls)
 {
+	uint64_t bytes_left;
 	int rc, i, k, p, m;
 
 	k = num_data_stripes;
 	p = num_ec_stripes;
 	m = k + p;
+
+	/*
+	 * The buffer is reused across raid sets. Only zero the portions beyond
+	 * end_pos because bytes before it are overwritten by pread(), including
+	 * sparse holes that read back as zeroes.
+	 */
+	bytes_left = end_pos > data_pos ? end_pos - data_pos : 0;
+	for (i = 0; i < k; i++) {
+		if (bytes_left >= stripe_size) {
+			bytes_left -= stripe_size;
+			continue;
+		}
+
+		memset(stripe_ptrs[i] + bytes_left, 0,
+		       stripe_size - bytes_left);
+		bytes_left = 0;
+	}
 
 	for (i = 0; i < k; i++) {
 		size_t to_read;
@@ -4436,8 +4454,70 @@ static int llapi_ec_verify_parities(int fd, uint64_t stripe_size, int k, int p,
 	return rc;
 }
 
+static int
+llapi_ec_resync_or_verify_raidset(int fd, struct llapi_layout *layout,
+				  struct llapi_layout_comp *data_comp,
+				  uint64_t data_pos, int k,
+				  struct llapi_layout_comp *ec_comp,
+				  uint64_t ec_pos, int p,
+				  uint8_t *stripe_ptrs[],
+				  uint8_t *encode_matrix,
+				  uint8_t *g_tbls,
+				  uint64_t end_pos, int is_verify)
+{
+	int rc = 0;
+	size_t data_len;
+	off_t data_off;
+
+	if (data_pos >= end_pos)
+		return 0;
+
+	data_off = llapi_data_seek(fd, data_pos, &data_len);
+	if (data_off < 0) {
+		rc = data_off;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "failed to SEEK_DATA");
+		return rc;
+	}
+
+	if (data_off >= data_pos + k * data_comp->llc_stripe_size)
+		return 0;
+
+	if (!data_len)
+		return 0;
+
+	llapi_printf(LLAPI_MSG_NORMAL,
+		     "Compute/verify raidset range=%llu-%llu\n",
+		     (unsigned long long)data_pos,
+		     (unsigned long long)(data_pos +
+					  k * data_comp->llc_stripe_size));
+	rc = llapi_ec_compute_parities(fd, layout,
+				       data_pos, k,
+				       ec_pos, p,
+				       mirror_id_of(ec_comp->llc_id),
+				       data_comp->llc_stripe_size, end_pos,
+				       stripe_ptrs, encode_matrix, g_tbls);
+	if (rc)
+		return rc;
+	if (is_verify) {
+		rc = llapi_ec_verify_parities(fd,
+			      data_comp->llc_stripe_size, k, p, ec_pos,
+			      mirror_id_of(ec_comp->llc_id), stripe_ptrs);
+		if (rc)
+			return rc;
+	} else {
+		rc = llapi_ec_write_parities(fd,
+			     data_comp->llc_stripe_size, k, p, ec_pos,
+			     mirror_id_of(ec_comp->llc_id), stripe_ptrs);
+		if (rc)
+			return rc;
+	}
+
+	return 0;
+}
+
 /**
- * llapi_ec_resync_comp() - Resync EC parities for a single component
+ * llapi_ec_resync_or_verify_comp() - Resync EC parities for a single component
  * @fd: file descriptor of the file to resync
  * @layout: layout structure containing the file layout
  * @data_comp: data component to read from
@@ -4449,8 +4529,9 @@ static int llapi_ec_verify_parities(int fd, uint64_t stripe_size, int k, int p,
  * by splitting the stripe set into smaller RAID sets and computing parities
  * for each set. The data component's stripes are divided into RAID sets of
  * approximately ec_comp->llc_dstripe_count stripes each, then
- * llapi_ec_compute_parities() is called to compute and write the parities
- * for each RAID set.
+ * llapi_ec_compute_parities() computes the parities for each RAID set, which
+ * are then written back (resync) or, if @is_verify is set, compared against
+ * the stored parities (verify).
  *
  * The function handles the splitting of stripes into two groups:
  * - c0 RAID sets with k stripes each
@@ -4579,28 +4660,18 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 	for (i = 0, k = sc.esc_k0; i < sc.esc_n0 + sc.esc_n1; i++) {
 		if (i == sc.esc_n0)
 			k = sc.esc_k1;
-		rc = llapi_ec_compute_parities(fd, layout, data_pos, k, ec_pos,
-					       p, mirror_id_of(ec_comp->llc_id),
-					       data_comp->llc_stripe_size,
-					       end_pos, stripe_ptrs,
-					       encode_matrix, g_tbls);
+
+		/* Skip raidsets that are covered by an initial hole */
+		if (data_off > data_pos + k * data_comp->llc_stripe_size)
+			goto skip;
+
+		rc = llapi_ec_resync_or_verify_raidset(
+			fd, layout, data_comp, data_pos, k, ec_comp, ec_pos, p,
+			stripe_ptrs, encode_matrix, g_tbls, end_pos, is_verify);
 		if (rc)
 			goto out_free;
 
-		if (is_verify) {
-			rc = llapi_ec_verify_parities(
-				fd, data_comp->llc_stripe_size, k, p, ec_pos,
-				mirror_id_of(ec_comp->llc_id), stripe_ptrs);
-			if (rc)
-				goto out_free;
-		} else {
-			rc = llapi_ec_write_parities(
-				fd, data_comp->llc_stripe_size, k, p, ec_pos,
-				mirror_id_of(ec_comp->llc_id), stripe_ptrs);
-			if (rc)
-				goto out_free;
-		}
-
+skip:
 		data_pos += k * data_comp->llc_stripe_size;
 		ec_pos += ec_comp->llc_cstripe_count * ec_comp->llc_stripe_size;
 		if (data_pos >= end_pos)
@@ -4614,6 +4685,50 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 	free(encode_matrix);
 	free(buf);
 	return rc;
+}
+
+/**
+ * llapi_ec_check_comp_match() - Verify an EC parity component is compatible
+ * with its data component
+ * @data_comp: data component the parities are computed from
+ * @ec_comp: EC parity component to validate against @data_comp
+ *
+ * The data and parity components must agree on stripe size and extent, and the
+ * data component must have enough stripes to hold the requested parities,
+ * otherwise the erasure coding would not fit in the extent.
+ *
+ * Return: 0 if the pair is consistent, -EINVAL otherwise
+ */
+static int llapi_ec_check_comp_match(struct llapi_layout_comp *data_comp,
+				     struct llapi_layout_comp *ec_comp)
+{
+	struct ec_split_comp sc;
+
+	/* data_comp and ec_comp must match in stripe size and region */
+	if (data_comp->llc_stripe_size != ec_comp->llc_stripe_size) {
+		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+			    "data and ec stripe mismatch");
+		return -EINVAL;
+	}
+	if ((data_comp->llc_extent.e_start != ec_comp->llc_extent.e_start) ||
+	    (data_comp->llc_extent.e_end != ec_comp->llc_extent.e_end)) {
+		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+			    "data and ec range mismatch");
+		return -EINVAL;
+	}
+	/*
+	 * If there are more parities than there are data stripes then the
+	 * resulting erasure coding will no longer fit in the extent.
+	 */
+	ec_split_stripes(data_comp->llc_stripe_count,
+			 ec_comp->llc_dstripe_count, &sc);
+	if (data_comp->llc_stripe_count <
+	    (sc.esc_n0 + sc.esc_n1) * ec_comp->llc_cstripe_count) {
+		llapi_error(LLAPI_MSG_ERROR, -EINVAL, "too many parities");
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 /*
@@ -4845,7 +4960,6 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 {
 	int rc, i;
 	struct llapi_layout_comp *ec_comp, *data_comp;
-	struct ec_split_comp sc;
 
 	for (i = 0; i < comp_size; i++) {
 		/* Find the stale ec comp */
@@ -4872,35 +4986,10 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 		if (data_comp->llc_flags & LCME_FL_NOSYNC)
 			continue;
 
-		/* data_comp and ec_comp must match in stripe size and region */
-		if (data_comp->llc_stripe_size != ec_comp->llc_stripe_size) {
-			rc = -EINVAL;
-			llapi_error(LLAPI_MSG_ERROR, rc,
-			      "data and ec stripe mismatch");
+		rc = llapi_ec_check_comp_match(data_comp, ec_comp);
+		if (rc)
 			goto out;
-		}
-		if ((data_comp->llc_extent.e_start !=
-		     ec_comp->llc_extent.e_start) ||
-		    (data_comp->llc_extent.e_end !=
-		     ec_comp->llc_extent.e_end)) {
-			rc = -EINVAL;
-			llapi_error(LLAPI_MSG_ERROR, rc,
-			      "data and ec range mismatch");
-			goto out;
-		}
-		/*
-		 * If there are more parities than there are data stripes
-		 * then the resulting erasure coding will no longer fit in
-		 * the extent.
-		 */
-		ec_split_stripes(data_comp->llc_stripe_count,
-				 ec_comp->llc_dstripe_count, &sc);
-		if (data_comp->llc_stripe_count <
-		    (sc.esc_n0 + sc.esc_n1) * ec_comp->llc_cstripe_count) {
-			rc = -EINVAL;
-			llapi_error(LLAPI_MSG_ERROR, rc, "too many parities");
-			goto out;
-		}
+
 		rc = llapi_ec_resync_or_verify_comp(fd, layout, data_comp,
 						    ec_comp, false);
 		if (rc) {
@@ -4954,6 +5043,11 @@ int llapi_ec_verify_comps(int fd, struct llapi_layout *layout, __u32 *ecs,
 				"ec component does not have a matching data component");
 			goto out;
 		}
+
+		rc = llapi_ec_check_comp_match(data_comp, ec_comp);
+		if (rc)
+			goto out;
+
 		rc = llapi_ec_resync_or_verify_comp(fd, layout, data_comp,
 						    ec_comp, true);
 		if (rc) {

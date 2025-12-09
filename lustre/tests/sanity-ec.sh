@@ -977,7 +977,7 @@ test_3f() {
 run_test 3f "EC inheritance with holes"
 
 test_3g() {
-	(( OSTCOUNT < 6 )) && skip_env "needs >= 6 OSTs"
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tfile
@@ -1941,7 +1941,7 @@ test_10() {
 
 	# The number of parity stripes in the EC mirror must be equal to or
 	# less than the number of data stripes in the same EC mirror.
-	(( OSTCOUNT < 5 )) && skip_env "needs >= 5 OSTs"
+	(( OSTCOUNT >= 5 )) || skip_env "needs >= 5 OSTs"
 	enable_ec
 
 	test_mkdir $DIR/$tdir
@@ -1957,7 +1957,7 @@ run_test 10 "cannot create overly large ec mirrors"
 test_11() {
 	# The number of parity stripes in the EC mirror can be equal to
 	# the number of data stripes in the same EC mirror.
-	(( OSTCOUNT < 4 )) && skip_env "needs >= 4 OSTs"
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 	enable_ec
 
 	test_mkdir $DIR/$tdir
@@ -1973,7 +1973,7 @@ test_12a() {
 	local tf_ec=${DIR}/${tdir}/${tfile}.ec
 
 	# test resyncing a stale ec mirror
-	(( OSTCOUNT < 4 )) && skip_env "needs >= 4 OSTs"
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 	enable_ec
 
 
@@ -2016,7 +2016,7 @@ test_12a() {
 
 	# Verify the data mirror is still correct
 	rm -f $tf_data
-	lfs mirror read --mirror-id 1 -o $tf_data $tf
+	$LFS mirror read --mirror-id 1 -o $tf_data $tf
 	echo "fa9fe1782aee74e978e806fb6a0e7a4a1c83610f $tf_data" |
 		sha1sum -c - || error "wrong content in data mirror"
 
@@ -2031,18 +2031,69 @@ test_12a() {
 
 	# Verify we have expected content in the ec mirror
 	rm -f $tf_ec
-	lfs mirror read --mirror-id 2 -o $tf_ec $tf
+	$LFS mirror read --mirror-id 2 -o $tf_ec $tf
 	echo "aca75f6b8ae9a16aa64f8ca38160bfa39bd2a785 $tf_ec" |
 	    sha1sum -c - || error "wrong content in ec mirror"
 }
 run_test 12a "resync stale parities"
+
+test_12b() {
+	# ZFS lseek does not reliably report holes for dirty data
+	# (dmu_offset_next() returns EBUSY and the txg_wait_synced() retry in
+	# osd_lseek() is not enough), so the resync computes and writes ec
+	# parities across the whole sparse region instead of skipping the holes,
+	# eventually exhausting OST space and failing with ENOSPC.
+	#
+	# This seems to be related to LU-14217 where the fix was not enough. It
+	# needs to be investigated separately.
+	[[ "$ost1_FSTYPE" != "zfs" ]] ||
+		skip "LU-14217: lseek holes unreliable on ZFS"
+
+	# test resyncing a stale ec mirror with huge sparse file
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
+	enable_ec
+
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -E -1 -S 4M -c 3 --ec 2+1 $DIR/$tdir/$tfile ||
+		error "setstripe --ec 2+1 failed"
+
+	# gauge I/O performance so resync can be bounded relative to it later
+	local start=$SECONDS
+	# Write the first 3 stripes with \001, \002 and \003
+	tr "\000" "\001" < /dev/zero | dd bs=64k count=64          \
+		iflag=fullblock of=$DIR/$tdir/$tfile 2>/dev/null
+	# Write some data at ~4 TiB
+	tr "\000" "\002" < /dev/zero | dd bs=64k count=64          \
+		seek=64000000  \
+		iflag=fullblock of=$DIR/$tdir/$tfile 2>/dev/null
+	local elapsed=$((SECONDS - start))
+
+	# Truncate to 10 TiB to have a hole at the end
+	$TRUNCATE $DIR/$tdir/$tfile 10995116277760 ||
+		error "failed to truncate file to 10 TiB"
+
+	# resync the ec mirror. With holes skipped, this should only touch two
+	# data regions and should finish well within 10x of the initial write
+	# time above. A regression would then hit the timeout instead of running
+	# for hours
+	local timeout=$((elapsed * 10))
+	echo "mirror resync timeout set to $timeout"
+	timeout -k 10 $timeout $LFS mirror resync $DIR/$tdir/$tfile ||
+		error "failed to resync ec mirror"
+
+	# Verify the mirror is no longer stale
+	$LFS getstripe $DIR/$tdir/$tfile | grep lcme_flags | grep stale &&
+		error "$DIR/$tdir/$tfile still stale after resync" || true
+}
+run_test 12b "resync huge sparse file (10 TiB)"
 
 test_13() {
 	local tf=${DIR}/${tdir}/$tfile
 	local tf_data=${DIR}/${tdir}/${tfile}.data
 	local tf_ec=${DIR}/${tdir}/${tfile}.ec
 
-	(( OSTCOUNT < 4 )) && skip_env "needs >= 4 OSTs"
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 	enable_ec
 
 	test_mkdir $DIR/$tdir
@@ -2072,13 +2123,13 @@ test_13() {
 	#  c00000
 	rm -f $tf_data
 	stack_trap "rm -f $tf_data"
-	lfs mirror read --mirror-id 1 -o $tf_data $tf
+	$LFS mirror read --mirror-id 1 -o $tf_data $tf
 	echo "fa9fe1782aee74e978e806fb6a0e7a4a1c83610f $tf_data" |
 	    sha1sum -c - || error "wrong content in data mirror"
 
 	rm -f $tf_ec
 	stack_trap "rm -f $tf_ec"
-	lfs mirror read --mirror-id 2 -o $tf_ec $tf
+	$LFS mirror read --mirror-id 2 -o $tf_ec $tf
 	echo "fa9fe1782aee74e978e806fb6a0e7a4a1c83610f $tf_ec" |
 	    sha1sum -c - || error "wrong content in ec mirror"
 }
@@ -2087,7 +2138,7 @@ run_test 13 "parity of single stripe data is just a copy"
 test_20() {
 	local tf=${DIR}/${tdir}/$tfile
 
-	(( OSTCOUNT < 4 )) && skip_env "needs >= 4 OSTs"
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 	enable_ec
 
 	test_mkdir $DIR/$tdir
@@ -2122,7 +2173,7 @@ run_test 20 "test that stripe size of parity mirror is set correctly"
 
 # Test 21: lfs migrate with EC layouts
 test_21a() {
-	(( OSTCOUNT < 3 )) && skip_env "needs >= 3 OSTs"
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tdir/$tfile
@@ -2167,7 +2218,7 @@ test_21a() {
 run_test 21a "migrate plain file to EC layout"
 
 test_21b() {
-	(( OSTCOUNT < 3 )) && skip_env "needs >= 3 OSTs"
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tdir/$tfile
@@ -2207,7 +2258,7 @@ test_21b() {
 run_test 21b "migrate EC file to plain layout"
 
 test_21c() {
-	(( OSTCOUNT < 4 )) && skip_env "needs >= 4 OSTs"
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tdir/$tfile
@@ -2253,7 +2304,7 @@ test_21c() {
 run_test 21c "migrate between different EC configurations"
 
 test_21d() {
-	(( OSTCOUNT < 3 )) && skip_env "needs >= 3 OSTs"
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tdir/$tfile
@@ -2295,7 +2346,7 @@ run_test 21d "migrate PFL file to EC layout"
 
 # Test 22: mirror split with EC
 test_22a() {
-	(( OSTCOUNT < 6 )) && skip_env "needs >= 6 OSTs"
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tdir/$tfile

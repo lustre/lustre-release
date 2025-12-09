@@ -16737,6 +16737,13 @@ static inline int lfs_mirror_prepare_ec(struct llapi_layout *layout, __u32 *ecs,
 			goto error;
 		}
 
+		if (i >= ecs_size) {
+			fprintf(stderr, "%s: ec array is too small.\n",
+				progname);
+			rc = -EINVAL;
+			goto error;
+		}
+
 		ecs[i] = id;
 		i++;
 
