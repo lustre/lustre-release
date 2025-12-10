@@ -883,7 +883,7 @@ struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp)
 EXPORT_SYMBOL(nodemap_get_from_exp);
 
 /**
- * nodemap_map_id() - mapping function for nodemap idmaps
+ * __nodemap_map_id() - mapping function for nodemap idmaps
  * @nodemap: lu_nodemap structure defining nodemap
  * @id_type: NODEMAP_UID or NODEMAP_GID or NODEMAP_PROJID
  * @tree_type: NODEMAP_CLIENT_TO_FS or NODEMAP_FS_TO_CLIENT
