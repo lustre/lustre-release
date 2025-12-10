@@ -2166,6 +2166,9 @@ test_25b() {
 	(( $MGS_VERSION >= $(version_code 2.16.52) )) ||
 		skip "Need MGS >= 2.16.52 for updated nodemap_info"
 
+	# in local mode the exports order on the nodemap cannot be compared
+	local_mode && skip "test does not support local mode"
+
 	nodemap_test_setup
 	stack_trap nodemap_test_cleanup EXIT
 
