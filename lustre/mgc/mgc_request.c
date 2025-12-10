@@ -1033,7 +1033,7 @@ static int mgc_cancel(struct obd_export *exp, enum ldlm_mode mode,
 	RETURN(0);
 }
 
-static void mgc_notify_active(struct obd_device *unused)
+static void mgc_notify_active(struct obd_device *mgc)
 {
 	/* wakeup mgc_requeue_thread to requeue mgc lock */
 	spin_lock(&config_list_lock);
@@ -1041,7 +1041,8 @@ static void mgc_notify_active(struct obd_device *unused)
 	spin_unlock(&config_list_lock);
 	wake_up(&rq_waitq);
 
-	/* TODO: Help the MGS rebuild nidtbl. -jay */
+	/* rebuild NID table on MGS from target on this MGC */
+	obd_notify_observer(mgc, mgc, OBD_NOTIFY_ACTIVE);
 }
 
 static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,

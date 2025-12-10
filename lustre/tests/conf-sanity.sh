@@ -6680,7 +6680,7 @@ test_73e() {
 		[[ -z $rinf ]] &&
 			error "Failed to determine interface for $rnode"
 		do_node $rnode "$LNETCTL lnet configure"
-		do_node $rnode "$LNETCTL net show"
+		do_node $rnode "$LNETCTL set discovery 0"
 
 		for ((n = 10; n <= 50; n++)); do
 			net=${NETTYPE}$n
@@ -6698,6 +6698,36 @@ test_73e() {
 	echo "Try to mount to MGS NID $mgs_nid"
 	$MOUNT_CMD $mgs_nid:/$FSNAME $MOUNT ||
 		error "Mount fails on $mgs_nid"
+	umount $MOUNT
+
+	# reload modules locally to clear all client states
+	unload_modules_local
+	local zkeeper=${KEEP_ZPOOL}
+	stack_trap "KEEP_ZPOOL=$zkeeper"
+	KEEP_ZPOOL="true"
+	if ! combined_mgs_mds ; then
+		stop_mgs || error "stop_mgs failed"
+	else
+		stop_mds || error "stop_mdt 1 failed"
+	fi
+	start_mgsmds
+
+	do_facet mgs $LNETCTL lnet configure
+	do_facet mgs $LNETCTL set discovery 0
+
+	load_modules_local
+	$LNETCTL lnet configure
+	$LNETCTL set discovery 0
+	$LNETCTL net add --net $net --if $inf
+	$LNETCTL net del --net ${NETTYPE}
+	$LNETCTL net show
+
+	echo "Try to mount after MGS remount"
+	$MOUNT_CMD $mgs_nid:/$FSNAME $MOUNT ||
+		error "Mount fails on $mgs_nid"
+	check_mount || error "check client $MOUNT failed"
+	$LFS df $MOUNT
+	check_lfs_df_ret_val $? || error "$LFS df $MOUNT failed"
 	umount $MOUNT
 }
 run_test 73e "Mount client with dynamic server NIDs"

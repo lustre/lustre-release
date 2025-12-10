@@ -12306,6 +12306,7 @@ test_77k() { # LU-10906
 	stack_trap "wait_update $HOSTNAME '$get_checksum' $ORIG_CSUM || true"
 	stack_trap "do_facet mgs $LCTL set_param -P $cksum_param=$ORIG_CSUM"
 
+	set_checksums 1 # so wait_update below will really wait for MGS
 	for i in 0 1; do
 		do_facet mgs $LCTL set_param -P $cksum_param=$i ||
 			error "failed to set checksum=$i on MGS"
@@ -12313,6 +12314,7 @@ test_77k() { # LU-10906
 		#remount
 		echo "remount client, checksum should be $i"
 		remount_client $MOUNT || error "failed to remount client"
+		sleep 1 # to don't race with setting from mount for sure
 		checksum=$(eval $get_checksum)
 		[ $checksum -eq $i ] || error "checksum($checksum) != $i"
 	done

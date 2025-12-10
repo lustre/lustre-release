@@ -327,13 +327,16 @@ static int mgc_nid_notify_interpret(const struct lu_env *env,
 }
 
 static int mgc_nid_notify(struct obd_export *exp,
-			  struct mgs_target_info *mti)
+			  struct mgs_target_info *mti,
+			  struct ptlrpc_request_set *set)
 {
 	struct ptlrpc_request *req;
 	struct mgs_target_info *request_mti;
 	struct mgs_target_nidlist *mtn;
+	struct ptlrpc_bulk_desc *desc;
 	size_t bufsize, nidlist_size;
 	unsigned int avail;
+	int pages = 0;
 	int rc;
 
 	server_mti_print("mgc_nid_notify: req", mti);
@@ -350,15 +353,15 @@ static int mgc_nid_notify(struct obd_export *exp,
 		  sizeof(*mti) - sizeof(*mtn);
 	avail = bufsize / MTN_NIDSTR_SIZE;
 
-	if (mti->mti_nid_count > avail) {
-		/* inline buffer should fit NIDs on single network, but still */
-		CWARN("%s: too many NIDs for buffer: %u > %d\n",
-		      mti->mti_svname, mti->mti_nid_count, avail);
-		mti->mti_nid_count = avail;
-	}
 	nidlist_size = NIDLIST_SIZE(mti->mti_nid_count);
-	req_capsule_set_size(&req->rq_pill, &RMF_MGS_TARGET_NIDLIST,
-			     RCL_CLIENT, sizeof(*mtn) + nidlist_size);
+	if (mti->mti_nid_count <= avail) {
+		/* inline buffer fits NIDs */
+		req_capsule_set_size(&req->rq_pill, &RMF_MGS_TARGET_NIDLIST,
+				     RCL_CLIENT, sizeof(*mtn) + nidlist_size);
+	} else { /* use bulk for big NID lists */
+		pages = DIV_ROUND_UP((sizeof(*mti) & ~PAGE_MASK) +
+				     nidlist_size, PAGE_SIZE);
+	}
 
 	rc = ptlrpc_request_pack(req, LUSTRE_MGS_VERSION, MGS_TARGET_REG);
 	if (rc < 0) {
@@ -379,14 +382,42 @@ static int mgc_nid_notify(struct obd_export *exp,
 		ptlrpc_req_put(req);
 		RETURN(-ENOMEM);
 	}
+
 	mtn->mtn_nids = mti->mti_nid_count;
 	mtn->mtn_flags = NIDLIST_APPEND;
-	memcpy(mtn->mtn_inline_list, mti->mti_nidlist, nidlist_size);
+	if (pages) {
+		mtn->mtn_flags |= NIDLIST_IN_BULK;
+		req->rq_bulk_write = 1;
+		desc = ptlrpc_prep_bulk_imp(req, pages,
+					    MD_MAX_BRW_SIZE >> LNET_MTU_BITS,
+					    PTLRPC_BULK_GET_SOURCE,
+					    MGS_BULK_PORTAL,
+					    &ptlrpc_bulk_kiov_nopin_ops);
+		if (!desc) {
+			ptlrpc_req_put(req);
+			RETURN(-ENOMEM);
+		}
+		desc->bd_frag_ops->add_iov_frag(desc, mti->mti_nidlist,
+						nidlist_size);
+	} else {
+		memcpy(mtn->mtn_inline_list, mti->mti_nidlist, nidlist_size);
+	}
 
 	ptlrpc_request_set_replen(req);
 	req->rq_interpret_reply = mgc_nid_notify_interpret;
 
-	ptlrpcd_add_req(req);
+	if (!pages) {
+		ptlrpcd_add_req(req);
+	} else if (set) {
+		ptlrpc_set_add_req(set, req);
+		ptlrpc_check_set(NULL, set);
+	} else {
+		/* caller provides no set but bulk is used, wait for
+		 * RPC reply to make sure mti is not freed by caller
+		 */
+		rc = ptlrpc_queue_wait(req);
+		ptlrpc_req_put(req);
+	}
 
 	return 0;
 }
@@ -426,7 +457,7 @@ int mgc_set_info_async_server(const struct lu_env *env,
 
 		CDEBUG(D_MGC, "NID notify for %s about %d new NIDs\n",
 		       mti->mti_svname, mti->mti_nid_count);
-		rc =  mgc_nid_notify(exp, mti);
+		rc =  mgc_nid_notify(exp, mti, set);
 		RETURN(rc);
 	}
 	if (KEY_IS(KEY_SET_FS)) {
