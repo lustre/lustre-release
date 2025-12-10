@@ -306,6 +306,7 @@ struct kefa_conn {
 	time64_t last_use_time;	/* last time the conn was used in seconds */
 	struct hlist_node ni_node;	/* node on kefa_ni hashmap */
 	struct kefa_ni *efa_ni;
+	u64 hash_key;
 
 	/* Low frequency fields */
 	struct list_head abort_tx;	/* Only CM iterates this list */

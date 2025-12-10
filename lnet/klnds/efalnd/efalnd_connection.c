@@ -353,6 +353,17 @@ kefalnd_destroy_conn(struct kefa_conn *conn, enum lnet_msg_hstatus hstatus,
 	LIBCFS_FREE(conn, sizeof(*conn));
 }
 
+static u64
+kefalnd_nid_to_key(struct lnet_nid *nid)
+{
+	u64 key;
+
+	key = ((u64)(nid->nid_addr[0] ^ nid->nid_addr[2])) << 32;
+	key |= nid->nid_addr[1] ^ nid->nid_addr[3];
+
+	return key;
+}
+
 static struct kefa_conn *
 kefalnd_create_conn(struct kefa_ni *efa_ni, struct lnet_nid *peer_nid,
 		    enum kefa_conn_type conn_type)
@@ -369,6 +380,7 @@ kefalnd_create_conn(struct kefa_ni *efa_ni, struct lnet_nid *peer_nid,
 	conn->efa_ni = efa_ni;
 	conn->proto_ver = EFALND_MAX_PROTO_VER;
 	conn->remote_nid = *peer_nid;
+	conn->hash_key = kefalnd_nid_to_key(&conn->remote_nid);
 	conn->local_nid = efa_ni->lnet_ni->ni_nid;
 	conn->remote_epoch = 0;
 	conn->last_use_time = ktime_get_seconds();
@@ -510,17 +522,6 @@ kefalnd_establish_conn(struct kefa_conn *conn)
 	return rc;
 }
 
-static u64
-kefalnd_nid_to_key(struct lnet_nid *nid)
-{
-	u64 key;
-
-	key = ((u64)(nid->nid_addr[0] ^ nid->nid_addr[2])) << 32;
-	key |= nid->nid_addr[1] ^ nid->nid_addr[3];
-
-	return key;
-}
-
 static struct kefa_conn *
 kefalnd_lookup_conn_locked(struct kefa_ni *efa_ni, struct lnet_nid *nid,
 			   enum kefa_conn_type conn_type)
@@ -571,8 +572,7 @@ static void
 kefalnd_add_conn_locked(struct kefa_ni *efa_ni, struct kefa_conn *conn)
 __must_hold(&efa_ni->conn_lock)
 {
-	hash_add(efa_ni->conns, &conn->ni_node,
-		 kefalnd_nid_to_key(&conn->remote_nid));
+	hash_add(efa_ni->conns, &conn->ni_node, conn->hash_key);
 }
 
 struct kefa_conn *
@@ -881,12 +881,12 @@ __must_hold(&conn->efa_ni->conn_lock)
 
 	kefalnd_remove_conn_locked(conn);
 
-	/* We set the connection's remote NID to 0 so it won't be found on
+	/* We set the connection's hash key to 0 so it won't be found on
 	 * lookup anymore and set its state to deactivating so the connection
 	 * daemon will remove it.
 	 */
 	kefalnd_set_conn_state(conn, KEFA_CONN_DEACTIVATING);
-	memset(conn->remote_nid.nid_addr, 0, sizeof(conn->remote_nid.nid_addr));
+	conn->hash_key = 0;
 
 	kefalnd_add_conn_locked(efa_ni, conn);
 }
