@@ -294,7 +294,7 @@ test_5f() {
 run_test 5f "mds down, cleanup after failed mount (bug 2712)"
 
 test_5g() {
-	modprobe lustre
+	load_modules
 	[ "$CLIENT_VERSION" -lt $(version_code 2.9.53) ] &&
 		skip "automount of debugfs missing before 2.9.53"
 	umount /sys/kernel/debug
@@ -1258,6 +1258,7 @@ test_30b() {
 run_test 30b "Remove failover nids"
 
 test_31() { # bug 10734
+	load_modules
 	# ipaddr must not exist
 	$MOUNT_CMD 4.3.2.1@tcp:/lustre $MOUNT || true
 	cleanup || error "cleanup failed with rc $?"
@@ -4378,7 +4379,7 @@ test_43b() { # LU-5690
 
 	local fsname=test1234
 
-	load_module llite/lustre
+	load_modules
 	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
 	local host=${client_ip//*./}
 	local net=${client_ip/%$host/}
@@ -12809,8 +12810,9 @@ fi
 
 cleanup_gss
 
-# restore the values of MDSSIZE and OSTSIZE
+# restore the values of MDSSIZE, MGSSIZE, and OSTSIZE
 MDSSIZE=$STORED_MDSSIZE
+MGSSIZE=$STORED_MGSSIZE
 OSTSIZE=$STORED_OSTSIZE
 reformat
 

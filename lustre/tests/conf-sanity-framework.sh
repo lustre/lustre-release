@@ -9,6 +9,7 @@ LUSTRE=${LUSTRE:-$(dirname $0)/..}
 
 
 STORED_MDSSIZE=$MDSSIZE
+STORED_MGSSIZE=$MGSSIZE
 STORED_OSTSIZE=$OSTSIZE
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
@@ -18,6 +19,7 @@ ost1_FSTYPE=${ost1_FSTYPE:-$(facet_fstype ost1)}
 
 MDSSIZE=200000
 [ "$mds1_FSTYPE" = zfs ] && MDSSIZE=400000
+MGSSIZE=$MDSSIZE
 OSTSIZE=200000
 [ "$ost1_FSTYPE" = zfs ] && OSTSIZE=400000
 
