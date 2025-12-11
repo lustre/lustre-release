@@ -162,9 +162,19 @@ void lsm_free(struct kref *kref)
 }
 
 /**
- * Unpack a struct lov_mds_md into a struct lov_stripe_md_entry.
+ * lsme_unpack() - Unpack a struct lov_mds_md into a struct lov_stripe_md_entry.
+ * @lov: Pointer to LOV OBD
+ * @lmm: stripe info
+ * @buf_size: size of @lmm
+ * @pool_name: pool linked to stripe (optional)
+ * @inited: %true if stripe is initialized
+ * @objects: OST info for stripe
+ * @maxbytes: maximum object size [out]
  *
  * The caller should set id and extent.
+ *
+ * Returns pointer to struct lov_stripe_md_entry on success and %negative on
+ * error
  */
 static struct lov_stripe_md_entry *
 lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
@@ -777,6 +787,9 @@ void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 }
 
 /**
+ * lov_fix_ea_for_replay() - Fix EA before preparing reply
+ * @lovea: buffer holding LOV metadata
+ *
  * lmm_layout_gen overlaps stripe_offset field, it needs to be reset back when
  * sending to MDT for passing striping checks
  */

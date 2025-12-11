@@ -55,7 +55,13 @@ u64 lov_stripe_size(struct lov_stripe_md *lsm, int index, u64 ost_size,
 }
 
 /**
- * Compute file level page index by stripe level page offset
+ * lov_stripe_pgoff() - Compute file level page idx by stripe level page offset
+ * @lsm: Striping info
+ * @index: index to layout component
+ * @stripe_index: stripe index
+ * @stripe: Stripe number
+ *
+ * Return page offset.
  */
 pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, int index,
 			 pgoff_t stripe_index, int stripe)
