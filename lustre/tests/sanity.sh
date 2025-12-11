@@ -20938,10 +20938,11 @@ test_160s() {
 	(( nbcl > 0 )) || error "no changelogs found"
 
 	# reduce the max_idle_indexes value to make sure we exceed it
+	local gc_interval=2
 	for param in "changelog_max_idle_indexes=2097446912" \
 		     "changelog_max_idle_time=2592000" \
 		     "changelog_gc=1" \
-		     "changelog_min_gc_interval=2"; do
+		     "changelog_min_gc_interval=$gc_interval"; do
 		local MDT0=$(facet_svc $SINGLEMDS)
 		local var="${param%=*}"
 		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
@@ -20964,7 +20965,7 @@ test_160s() {
 	do_nodes $mdts $LCTL set_param fail_loc=0x16d fail_val=500000000
 
 	# ensure we are past the previous changelog_min_gc_interval set above
-	local sleep2=$((start + 2 - SECONDS))
+	local sleep2=$((start + gc_interval + 1 - SECONDS))
 	(( sleep2 > 0 )) && echo "sleep $sleep2 for interval" && sleep $sleep2
 
 	# Generate one more changelog to trigger GC
