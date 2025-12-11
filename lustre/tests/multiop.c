@@ -286,13 +286,15 @@ int main(int argc, char **argv)
 	size_t total_bytes;
 	struct lu_fid fid;
 	long long last_rc;
-	int len, fd = -1;
 	long long rc = 0;
 	int verbose = 0;
 	int save_errno;
 	bool unaligned;
 	int cmdfile_fd;
+	uint64_t len;
+	char *endptr;
 	int gid = 0;
+	int fd = -1;
 	int flags;
 	char c;
 
@@ -382,7 +384,7 @@ int main(int argc, char **argv)
 				printf("PAUSING\n");
 				fflush(stdout);
 			}
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			if (len <= 0)
 				len = 3600; /* 1 hour */
 			ts.tv_sec = time(NULL) + len;
@@ -398,7 +400,7 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'a':
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			if (xattr_buf_size < len) {
 				xattr_buf = realloc(xattr_buf, len);
 				if (!xattr_buf) {
@@ -438,7 +440,7 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'C':
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			fd = llapi_file_open(fname, O_CREAT | O_WRONLY, 0644,
 					     0, 0, len, 0);
 			if (fd == -1) {
@@ -558,7 +560,7 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'H':
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			fd = llapi_file_open(fname, O_CREAT | O_WRONLY, 0644,
 					     0, 0, len, LOV_PATTERN_RAID0 |
 					     LOV_PATTERN_F_RELEASED);
@@ -704,7 +706,7 @@ int main(int argc, char **argv)
 				unaligned = true;
 				commands++;
 			}
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			if (len <= 0)
 				len = 1;
 			/* for unaligned, we realloc every time, so the
@@ -758,7 +760,7 @@ int main(int argc, char **argv)
 				}
 				if (rc < len) {
 					off = lseek(fd, 0, SEEK_CUR);
-					fprintf(stderr, "short read: %ld ->+ %u -> %ld %lld\n",
+					fprintf(stderr, "short read: %ld ->+ %lu -> %ld %lld\n",
 						start, len, off, rc);
 					if (rc == 0)
 						break;
@@ -799,10 +801,10 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'T':
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			if (ftruncate(fd, len) == -1) {
 				save_errno = errno;
-				printf("ftruncate (%d,%d)\n", fd, len);
+				printf("ftruncate (%d,%lu)\n", fd, len);
 				perror("ftruncate");
 				exit(save_errno);
 			}
@@ -843,7 +845,7 @@ int main(int argc, char **argv)
 				unaligned = true;
 				commands++;
 			}
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			if (len <= 0)
 				len = 1;
 			/* for unaligned, we realloc every time, so the
@@ -904,7 +906,7 @@ int main(int argc, char **argv)
 				}
 				if (rc < len)
 					fprintf(stderr,
-						"short write: %lld/%u\n",
+						"short write: %lld/%lu\n",
 						rc, len);
 				if (commands[0] == 'P')
 					break;
@@ -966,7 +968,7 @@ int main(int argc, char **argv)
 		case 'z': {
 			off_t off;
 
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			off = lseek(fd, len, SEEK_SET);
 			if (off == (off_t)-1) {
 				save_errno = errno;
@@ -980,7 +982,7 @@ int main(int argc, char **argv)
 		case 'Z': {
 			off_t off;
 
-			len = atoi(commands + 1);
+			len = strtoul(commands + 1, &endptr, 10);
 			off = lseek(fd, len, SEEK_CUR);
 			if (off == (off_t)-1) {
 				save_errno = errno;
