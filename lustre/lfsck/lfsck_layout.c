@@ -212,7 +212,11 @@ lfsck_layout_assistant_sync_failures_interpret(const struct lu_env *env,
 }
 
 /**
- * Notify remote LFSCK instances about former failures.
+ * lfsck_layout_assistant_sync_failures() - Notify remote LFSCK instances about
+ *                                          former failures.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @lr: pointer to the lfsck request
  *
  * The local LFSCK instance has recorded which OSTs have ever failed to respond
  * some LFSCK verification requests (maybe because of network issues or the OST
@@ -227,10 +231,6 @@ lfsck_layout_assistant_sync_failures_interpret(const struct lu_env *env,
  * it will scan the bitmap for the ever failed OSTs, and notify them that they
  * have ever missed some OST-object verification and should skip the handling
  * for orphan OST-objects on all MDTs that are in the layout LFSCK.
- *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] lr	pointer to the lfsck request
  */
 static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
 						 struct lfsck_component *com,
@@ -922,13 +922,14 @@ static void lfsck_layout_cpu_to_le(struct lfsck_layout *des,
 }
 
 /**
- * Load the OST bitmap from the lfsck_layout trace file.
+ * lfsck_layout_load_bitmap() - Load the OST bitmap from the lfsck_layout trace
+ *                              file.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- *
- * \retval		0 for success
- * \retval		negative error number on failure or data corruption
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure or data corruption
  */
 static int lfsck_layout_load_bitmap(const struct lu_env *env,
 				    struct lfsck_component *com)
@@ -988,7 +989,9 @@ static int lfsck_layout_load_bitmap(const struct lu_env *env,
 }
 
 /**
- * Load the layout LFSCK trace file from disk.
+ * lfsck_layout_load() - Load the layout LFSCK trace file from disk.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
  *
  * The layout LFSCK trace file records the layout LFSCK status information
  * and other statistics, such as how many objects have been scanned, and how
@@ -996,13 +999,11 @@ static int lfsck_layout_load_bitmap(const struct lu_env *env,
  * failed OSTs during the layout LFSCK. All these information will be loaded
  * from disk to RAM when the layout LFSCK component setup.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- *
- * \retval		positive number for file data corruption, the caller
- *			should reset the layout LFSCK trace file
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for file data corruption, the caller should reset the
+ *   layout LFSCK trace file
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_layout_load(const struct lu_env *env,
 			     struct lfsck_component *com)
@@ -1039,7 +1040,9 @@ static int lfsck_layout_load(const struct lu_env *env,
 }
 
 /**
- * Store the layout LFSCK trace file on disk.
+ * lfsck_layout_store() - Store the layout LFSCK trace file on disk.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
  *
  * The layout LFSCK trace file records the layout LFSCK status information
  * and other statistics, such as how many objects have been scanned, and how
@@ -1047,11 +1050,9 @@ static int lfsck_layout_load(const struct lu_env *env,
  * failed OSTs during the layout LFSCK. All these information will be synced
  * from RAM to disk periodically.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_layout_store(const struct lu_env *env,
 			      struct lfsck_component *com)
@@ -1687,14 +1688,14 @@ log:
 }
 
 /**
- * Get the system default stripe size.
+ * lfsck_layout_get_def_stripesize() - Get the system default stripe size.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @size: pointer to the default stripe size [out]
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- * \param[out] size	pointer to the default stripe size
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_layout_get_def_stripesize(const struct lu_env *env,
 					   struct lfsck_instance *lfsck,
@@ -1727,9 +1728,23 @@ static int lfsck_layout_get_def_stripesize(const struct lu_env *env,
 }
 
 /**
- * \retval	 +1: repaired
- * \retval	  0: did nothing
- * \retval	-ve: on error
+ * lfsck_layout_refill_lovea() - Refill LOV EA
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @handle: transaction handle
+ * @parent: pointer to parent MDT object (dt_object) holding LOV EA
+ * @cfid: FID for the OST-object
+ * @buf: buffer to be written to LOV EA
+ * @lmm: LOV metadata
+ * @slot: LOV metadata pointing to OST
+ * @fl: flag for EA attribute
+ * @ost_idx: Index of OST object
+ * @size: size of @buf
+ *
+ * Return:
+ * * %+1 for repair successfully
+ * * %0 for did nothing
+ * * %negative error number on failure
  */
 static int lfsck_layout_refill_lovea(const struct lu_env *env,
 				     struct lfsck_instance *lfsck,
@@ -2164,9 +2179,22 @@ static int lfsck_layout_extend_v1v3_lovea(const struct lu_env *env,
 }
 
 /**
- * \retval	 +1: repaired
- * \retval	  0: did nothing
- * \retval	-ve: on error
+ * lfsck_layout_update_lovea() - Update LOV EA
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @handle: transaction handle
+ * @rec: pointer to the record for the orphan OST-object
+ * @parent: pointer to parent MDT object (dt_object) holding LOV EA
+ * @cfid: FID for the OST-object
+ * @buf: buffer to be written to LOV EA
+ * @fl: flag for EA attribute
+ * @ost_idx: index of OST on which OST object resides.
+ * @ea_off: the stripe offset in the LOV EA
+ *
+ * Return:
+ * * %+1 for repair successfully
+ * * %0 for did nothing
+ * * %negative error number on failure
  */
 static int lfsck_layout_update_lovea(const struct lu_env *env,
 				     struct lfsck_instance *lfsck,
@@ -2264,9 +2292,19 @@ stop:
 }
 
 /**
- * \retval	 +1: repaired
- * \retval	  0: did nothing
- * \retval	-ve: on error
+ * lfsck_layout_update_pfid() - Update pFID
+ * @env: Lustre environment
+ * @com: pointer to layout lfsck component (holds metadata + state)
+ * @parent: pointer to parent MDT object (dt_object) holding LOV EA
+ * @cfid: pointer to file identifier (lu_fid) of the child (OST) object
+ * @cdev: pointer to dt_device (device state)
+ * @rec: pointer to orphan record (lu_orphan_rec_v3)
+ * @ea_off: the offset of the OST-object in the LOV EA
+ *
+ * Return:
+ * * %+1 for repair successfully
+ * * %0 for did nothing
+ * * %negative error number on failure
  */
 static int lfsck_layout_update_pfid(const struct lu_env *env,
 				    struct lfsck_component *com,
@@ -2307,6 +2345,18 @@ static int lfsck_lovea_size(struct ost_layout *ol, __u32 ea_off)
 }
 
 /**
+ * lfsck_layout_recreate_parent() - create MDT-object with given (partial) LOV EA.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @ltd: pointer to target device descriptor
+ * @rec: pointer to the record for the orphan OST-object
+ * @cfid: pointer to FID for the orphan OST-object
+ * @infix: additional information, such as the FID for original MDT-object and
+ *         the stripe offset in the LOV EA
+ * @type: the type for describing why the orphan MDT-object is created. The
+ *        rules are as following:
+ * @ea_off: the stripe offset in the LOV EA
+ *
  * This function will create the MDT-object with the given (partial) LOV EA.
  *
  * Under some data corruption cases, the MDT-object of the file may be lost,
@@ -2319,16 +2369,6 @@ static int lfsck_lovea_size(struct ost_layout *ol, __u32 ea_off)
  * object. Unfortunately, some others have modified such newly created object.
  * To keep the data (both new and old), the LFSCK will create MDT-object with
  * new FID to reference the original OST-object.
- *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] ltd	pointer to target device descriptor
- * \param[in] rec	pointer to the record for the orphan OST-object
- * \param[in] cfid	pointer to FID for the orphan OST-object
- * \param[in] infix	additional information, such as the FID for original
- *			MDT-object and the stripe offset in the LOV EA
- * \param[in] type	the type for describing why the orphan MDT-object is
- *			created. The rules are as following:
  *
  *  type "C":		Multiple OST-objects claim the same MDT-object and the
  *			same slot in the layout EA. Then the LFSCK will create
@@ -2355,11 +2395,10 @@ static int lfsck_lovea_size(struct ost_layout *ol, __u32 ea_off)
  * The orphan name will be like:
  * ${FID}-${infix}-${type}-${conflict_version}
  *
- * \param[in] ea_off	the stripe offset in the LOV EA
- *
- * \retval		positive on repaired something
- * \retval		0 if needs to repair nothing
- * \retval		negative error number on failure
+ * Return:
+ * * %positive on repaired something
+ * * %0 if needs to repair nothing
+ * * %negative error number on failure
  */
 static int lfsck_layout_recreate_parent(const struct lu_env *env,
 					struct lfsck_component *com,
@@ -2732,6 +2771,19 @@ put:
 }
 
 /**
+ * lfsck_layout_conflict_create() - resolve inconsistencies in file layout
+ * @env: Lustre environment
+ * @com: pointer to layout lfsck component (holds metadata + state)
+ * @ltd: pointer to target descriptor (OST object)
+ * @rec: pointer to orphan record (lu_orphan_rec_v3)
+ * @parent: pointer to parent MDT object (dt_object) holding LOV EA
+ * @cfid: pointer to file identifier (lu_fid) of the child (OST) object
+ * @ea_buf: Pointer to buffer for read/write of EA
+ * @lmm: LOV metadata
+ * @slot: LOV metadata pointing to OST
+ * @ea_off: Offset within LOV EA which points to OST
+ * @lovea_size: LOV EA size
+ *
  * Some OST-object has occupied the specified layout EA slot.
  * Such OST-object may be generated by the LFSCK when repair
  * dangling referenced MDT-object, which can be indicated by
@@ -2740,9 +2792,10 @@ put:
  * will replace it with the orphan OST-object; otherwise the
  * LFSCK will create new MDT-object to reference the orphan.
  *
- * \retval	 +1: repaired
- * \retval	  0: did nothing
- * \retval	-ve: on error
+ * Retrun:
+ * * %+1 repaired
+ * * %0 did nothing
+ * * %negative on error
  */
 static int lfsck_layout_conflict_create(const struct lu_env *env,
 					struct lfsck_component *com,
@@ -2850,9 +2903,20 @@ out:
 }
 
 /**
- * \retval	 +1: repaired
- * \retval	  0: did nothing
- * \retval	-ve: on error
+ * lfsck_layout_recreate_lovea() - Recreate LOV EA
+ * @env: Lustre environment
+ * @com: pointer to layout lfsck component (holds metadata + state)
+ * @ltd: pointer to target descriptor (OST object)
+ * @rec: pointer to orphan record (lu_orphan_rec_v3)
+ * @parent: pointer to parent MDT object (dt_object) holding LOV EA
+ * @cfid: pointer to file identifier (lu_fid) of the child (OST) object
+ * @ost_idx: index of OST on which OST object resides.
+ * @ea_off: offset within LOV EA (OST object)
+ *
+ * Retrun:
+ * * %+1 repaired
+ * * %0 did nothing
+ * * %negative on error
  */
 static int lfsck_layout_recreate_lovea(const struct lu_env *env,
 				       struct lfsck_component *com,
@@ -3465,7 +3529,16 @@ out:
 }
 
 /**
- * Repair the MDT-object with dangling LOV EA reference.
+ * __lfsck_layout_repair_dangling() - Repair the MDT-object with dangling
+ *                                    LOV EA reference.
+ * @env: pointer to the thread context
+ * @com: the layout LFSCK component
+ * @parent: the MDT-object with dangling LOV EA reference
+ * @child: the OST-object to be created
+ * @comp_id: the component ID of the OST-object in the LOV EA
+ * @ea_off: the offset of the OST-object in the LOV EA
+ * @ost_idx: the index of OST on which the OST-object resides
+ * @log: If %true & Debug enabled. Then print debug log
  *
  * we need to repair the inconsistency according to the users' requirement:
  *
@@ -3476,17 +3549,10 @@ out:
  *
  * 2) Re-create the missing OST-object with the FID/owner information.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	the layout LFSCK component
- * \param[in] parent	the MDT-object with dangling LOV EA reference
- * \param[in] child	the OST-object to be created
- * \param[in] comp_id	the component ID of the OST-object in the LOV EA
- * \param[in] ea_off	the offset of the OST-object in the LOV EA
- * \param[in] ost_idx	the index of OST on which the OST-object resides
- *
- * \retval		+1 for repair successfully
- * \retval		0 for did nothing
- * \retval		negative error number on failure
+ * Return:
+ * * %+1 for repair successfully
+ * * %0 for did nothing
+ * * %negative error number on failure
  */
 static int __lfsck_layout_repair_dangling(const struct lu_env *env,
 					  struct lfsck_component *com,
@@ -3667,22 +3733,23 @@ log:
 }
 
 /**
- * Repair the MDT-object with dangling LOV EA reference.
+ * lfsck_layout_repair_dangling() - Repair the MDT-object with dangling LOV EA
+ *                                  reference.
+ * @env: pointer to the thread context
+ * @com: the layout LFSCK component
+ * @pfid: the MDT-object's FID
+ * @cfid: the FID for the OST-object to be created
+ * @comp_id: the component ID of the OST-object in the LOV EA
+ * @ea_off: the offset of the OST-object in the LOV EA
+ * @ost_idx: the index of OST on which the OST-object resides
  *
  * Prepare parameters and call __lfsck_layout_repair_dangling()
  * to repair the dangling LOV EA reference.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	the layout LFSCK component
- * \param[in] pfid	the MDT-object's FID
- * \param[in] cfid	the FID for the OST-object to be created
- * \param[in] comp_id	the component ID of the OST-object in the LOV EA
- * \param[in] ea_off	the offset of the OST-object in the LOV EA
- * \param[in] ost_idx	the index of OST on which the OST-object resides
- *
- * \retval		+1 for repair successfully
- * \retval		0 for did nothing
- * \retval		negative error number on failure
+ * Return:
+ * * %+1 for repair successfully
+ * * %0 for did nothing
+ * * %negative error number on failure
  */
 static int lfsck_layout_repair_dangling(const struct lu_env *env,
 					struct lfsck_component *com,
@@ -7361,9 +7428,14 @@ static void lfsck_orphan_it_fini(const struct lu_env *env,
 }
 
 /**
- * \retval	 +1: the iteration finished
- * \retval	  0: on success, not finished
- * \retval	-ve: on error
+ * lfsck_orphan_it_next() - Move orphan iterator forward
+ * @env: Lustre environment
+ * @di: Pointer to struct dt_it (iterator)
+ *
+ * Return:
+ * * %+1 the iteration finished
+ * * %0 on success, not finished
+ * * %negative on error
  */
 static int lfsck_orphan_it_next(const struct lu_env *env,
 				struct dt_it *di)
@@ -7580,10 +7652,16 @@ out:
 }
 
 /**
- * \retval	 +1: locate to the exactly position
- * \retval	  0: cannot locate to the exactly position,
- *		     call next() to move to a valid position.
- * \retval	-ve: on error
+ * lfsck_orphan_it_get() - Get orphan iterator
+ * @env: Lustre environment
+ * @di: Pointer to struct dt_it (iterator)
+ * @key: Pointer to struct dt_key (target key)
+ *
+ * Return:
+ * * %+1 locate to the exactly position
+ * * %0 cannot locate to the exactly position, call next() to move to a valid
+ *   position.
+ * * %negative on error
  */
 static int lfsck_orphan_it_get(const struct lu_env *env,
 			       struct dt_it *di,
@@ -7643,10 +7721,16 @@ static __u64 lfsck_orphan_it_store(const struct lu_env *env,
 }
 
 /**
- * \retval	 +1: locate to the exactly position
- * \retval	  0: cannot locate to the exactly position,
- *		     call next() to move to a valid position.
- * \retval	-ve: on error
+ * lfsck_orphan_it_load() - Load orphan iterator
+ * @env: Lustre environment
+ * @di: Pointer to struct dt_it (iterator)
+ * @hash: Hash value
+ *
+ * Return:
+ * * %+1 locate to the exactly position
+ * * %0 cannot locate to the exactly position, call next() to move to a valid
+ *   position.
+ * * %negative on error
  */
 static int lfsck_orphan_it_load(const struct lu_env *env,
 				const struct dt_it *di,
