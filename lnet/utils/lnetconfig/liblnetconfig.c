@@ -2780,18 +2780,18 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 	 * no interfaces just the nw_id is specified
 	 */
 	if (nnids == 0) {
-		nids = calloc(1, sizeof(*nids));
-		if (nids == NULL) {
-			snprintf(err_str, sizeof(err_str),
-				"\"out of memory\"");
-			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
-			goto out;
+		LIBCFS_IOC_INIT_V2(data, lic_cfg_hdr);
+		data.lic_nid = LNET_MKNID(nw_descr->nw_id, 0);
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_LOCAL_NI, &data);
+		if (rc < 0) {
+			rc = -errno;
+			snprintf(err_str,
+					sizeof(err_str),
+					"\"cannot del network: %s\"",
+					strerror(errno));
 		}
-		nids[0] = LNET_MKNID(nw_descr->nw_id, 0);
-		nnids = 1;
-	}
-
-	if (LNET_NETTYP(nw_descr->nw_id) == EFALND) {
+	} else if (LNET_NETTYP(nw_descr->nw_id) == EFALND) {
+		/* EFA: delete by interface name */
 		list_for_each_entry(intf, &nw_descr->nw_intflist, intf_on_network) {
 			LIBCFS_IOC_INIT_V2(data, lic_cfg_hdr);
 			data.lic_nid = LNET_MKNID(nw_descr->nw_id,
