@@ -114,7 +114,7 @@ static void iabf_barrier_wait(struct iabf_control *ic, int which)
 {
 	int rc;
 
-	assert(PTHREAD_BARRIER_SERIAL_THREAD == -1);
+	static_assert(PTHREAD_BARRIER_SERIAL_THREAD == -1, "PTHREAD_BARRIER_SERIAL_THREAD must be -1");
 
 	rc = pthread_barrier_wait(&ic->ic_barrier[which]);
 	if (rc > 0)
@@ -129,7 +129,7 @@ static void *iabf_task_thread(void *data)
 
 	iabf_tid = syscall(SYS_gettid);
 
-	assert(PTHREAD_BARRIER_SERIAL_THREAD == -1);
+	static_assert(PTHREAD_BARRIER_SERIAL_THREAD == -1, "PTHREAD_BARRIER_SERIAL_THREAD must be -1");
 
 	while (1) {
 		struct timespec ts[2];

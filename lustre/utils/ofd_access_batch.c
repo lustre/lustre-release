@@ -197,7 +197,7 @@ int alr_batch_add(struct alr_batch *alrb, const char *obd_name,
 	if (alrb == NULL)
 		return 0;
 
-	assert(sizeof(time_t) == sizeof(__u64));
+	static_assert(sizeof(time_t) == sizeof(__u64), "time_t size mismatch");
 
 	fhn_init(&fhn, pfid);
 
