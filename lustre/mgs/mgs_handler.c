@@ -1875,7 +1875,7 @@ static int __init mgs_init(void)
 	if (rc)
 		return rc;
 
-	return class_register_type(&mgs_obd_device_ops, NULL, true,
+	return class_register_type(&mgs_obd_device_ops, NULL, false,
 				   LUSTRE_MGS_NAME, &mgs_device_type);
 }
 

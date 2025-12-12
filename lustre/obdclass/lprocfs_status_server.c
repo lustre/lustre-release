@@ -81,53 +81,6 @@ ssize_t evict_client_store(struct kobject *kobj, struct attribute *attr,
 }
 EXPORT_SYMBOL(evict_client_store);
 
-#ifdef CONFIG_PROC_FS
-#define BUFLEN LNET_NIDSTR_SIZE
-
-ssize_t
-lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
-	char *tmpbuf, *kbuf;
-
-	OBD_ALLOC(kbuf, BUFLEN);
-	if (kbuf == NULL)
-		return -ENOMEM;
-
-	/*
-	 * OBD_ALLOC() will zero kbuf, but we only copy BUFLEN - 1
-	 * bytes into kbuf, to ensure that the string is NUL-terminated.
-	 * LNET_NIDSTR_SIZE includes space for a trailing NUL already.
-	 */
-	if (copy_from_user(kbuf, buffer,
-			   min_t(unsigned long, BUFLEN - 1, count))) {
-		count = -EFAULT;
-		goto out;
-	}
-	tmpbuf = skip_spaces(kbuf);
-	tmpbuf = strsep(&tmpbuf, " \t\n\f\v\r");
-	class_incref(obd, __func__, current);
-
-	if (strncmp(tmpbuf, "nid:", 4) == 0)
-		obd_export_evict_by_nid(obd, tmpbuf + 4);
-	else if (strncmp(tmpbuf, "uuid:", 5) == 0)
-		obd_export_evict_by_uuid(obd, tmpbuf + 5);
-	else
-		obd_export_evict_by_uuid(obd, tmpbuf);
-
-	class_decref(obd, __func__, current);
-
-out:
-	OBD_FREE(kbuf, BUFLEN);
-	return count;
-}
-EXPORT_SYMBOL(lprocfs_evict_client_seq_write);
-
-#undef BUFLEN
-#endif /* CONFIG_PROC_FS*/
-
 ssize_t eviction_count_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf)
 {

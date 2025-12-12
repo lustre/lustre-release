@@ -623,9 +623,6 @@ extern ssize_t
 lprocfs_timeouts_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off);
 #ifdef HAVE_SERVER_SUPPORT
-extern ssize_t
-lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off);
 ssize_t evict_client_store(struct kobject *kobj, struct attribute *attr,
 			   const char *buffer, size_t count);
 #endif
@@ -1172,15 +1169,6 @@ lprocfs_timeouts_seq_write(struct file *file, const char __user *buffer,
 {
 	return 0;
 }
-#ifdef HAVE_SERVER_SUPPORT
-static inline ssize_t
-lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *off)
-{
-	return 0;
-}
-#endif
-
 static inline ssize_t
 lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off)

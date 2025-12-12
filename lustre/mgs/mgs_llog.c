@@ -6062,7 +6062,7 @@ static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
 
 		list_for_each(tmp, &mgs->mgs_fs_db_list) {
 			fsdb = list_entry(tmp, struct fs_db, fsdb_list);
-			if (fsdb->fsdb_has_lproc_entry &&
+			if (fsdb->fsdb_has_debugfs_entry &&
 			    strcmp(fsdb->fsdb_name, "params") != 0 &&
 			    strstr(param, fsdb->fsdb_name)) {
 				snprintf(mti->mti_svname,

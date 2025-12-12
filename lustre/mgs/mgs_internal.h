@@ -150,7 +150,7 @@ struct fs_db {
 	atomic_t	      fsdb_notify_phase;
 	volatile unsigned int fsdb_notify_async:1,
 			      fsdb_notify_stop:1,
-			      fsdb_has_lproc_entry:1,
+			      fsdb_has_debugfs_entry:1,
 			      fsdb_barrier_disabled:1;
 	/* statistic data */
 	ktime_t		fsdb_notify_total;
@@ -168,8 +168,7 @@ struct mgs_device {
 	struct dt_object		*mgs_nidtbl_dir;
 	struct list_head		 mgs_fs_db_list;
 	spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
-	struct proc_dir_entry		*mgs_proc_live;
-	struct proc_dir_entry           *mgs_proc_osd;
+	struct dentry			*mgs_debugfs_live;
 	struct attribute		*mgs_fstype;
 	struct attribute		*mgs_mntdev;
 	time64_t			 mgs_start_time;
@@ -241,10 +240,10 @@ int  mgs_get_ir_logs(struct ptlrpc_request *req);
 int  lprocfs_wr_ir_state(struct file *file, const char __user *buffer,
 			 size_t count, void *data);
 int  lprocfs_rd_ir_state(struct seq_file *seq, void *data);
-ssize_t
-lprocfs_ir_timeout_seq_write(struct file *file, const char __user *buffer,
-			     size_t count, loff_t *off);
-int  lprocfs_ir_timeout_seq_show(struct seq_file *seq, void *data);
+ssize_t ir_timeout_show(struct kobject *kobj, struct attribute *attr,
+			char *buf);
+ssize_t ir_timeout_store(struct kobject *kobj, struct attribute *attr,
+			 const char *buffer, size_t count);
 void mgs_fsc_cleanup(struct obd_export *exp);
 void mgs_fsc_cleanup_by_fsdb(struct fs_db *fsdb);
 int  mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
@@ -262,21 +261,10 @@ int mgs_iocontrol_barrier(const struct lu_env *env,
 			  struct mgs_device *mgs,
 			  struct obd_ioctl_data *data);
 
-#ifdef CONFIG_PROC_FS
 int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name);
 void lproc_mgs_cleanup(struct mgs_device *mgs);
 int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb);
 int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb);
-#else
-static inline int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
-{return 0;}
-static inline void lproc_mgs_cleanup(struct mgs_device *mgs)
-{}
-static inline int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
-{return 0;}
-static inline int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
-{return 0;}
-#endif
 
 /* mgs/lproc_mgs.c */
 enum {

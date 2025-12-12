@@ -1108,17 +1108,16 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
 	return 0;
 }
 
-int lprocfs_ir_timeout_seq_show(struct seq_file *m, void *data)
+ssize_t ir_timeout_show(struct kobject *kobj, struct attribute *attr,
+			char *buf)
 {
-	seq_printf(m, "%lld\n", ir_timeout);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%lld\n", ir_timeout);
 }
 
-ssize_t lprocfs_ir_timeout_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off)
+ssize_t ir_timeout_store(struct kobject *kobj, struct attribute *attr,
+			 const char *buffer, size_t count)
 {
-	return kstrtoll_from_user(buffer, count, 0, &ir_timeout);
+	return kstrtou64(buffer, 10, &ir_timeout);
 }
 
 /* --------------- Handle non IR support clients --------------- */
