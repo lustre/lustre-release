@@ -1001,6 +1001,7 @@ int lnet_ping_info_validate(struct lnet_ping_info *pinfo);
 struct lnet_ping_buffer *lnet_ping_buffer_alloc(int bytes, gfp_t gfp);
 void lnet_ping_buffer_free(struct kref *kref);
 int lnet_get_link_status(struct net_device *dev);
+int lnet_get_link_status_locked(struct net_device *dev);
 __u32 lnet_set_link_fatal_state(struct lnet_ni *ni, unsigned int link_state);
 
 struct lnet_ping_iter {

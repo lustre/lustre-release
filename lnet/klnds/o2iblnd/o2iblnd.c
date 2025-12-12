@@ -3208,7 +3208,7 @@ kiblnd_handle_link_state_change(struct net_device *dev,
 		if (link_down) {
 			ni_state_before = lnet_set_link_fatal_state(ni, 1);
 		} else {
-			state = (lnet_get_link_status(dev) == 0);
+			state = (lnet_get_link_status_locked(dev) == 0);
 			ni_state_before = lnet_set_link_fatal_state(ni,
 								    state);
 		}

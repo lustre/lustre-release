@@ -13,8 +13,12 @@
 #include <linux/ctype.h>
 #include <linux/nsproxy.h>
 #include <linux/ethtool.h>
+#include <linux/rtnetlink.h>
 #include <net/net_namespace.h>
+
 #include <lnet/lib-lnet.h>
+
+#include <lustre_compat/net/netdev_lock.h>
 
 /* tmp struct for parsing routes */
 struct lnet_text_buf {
@@ -1506,7 +1510,7 @@ __u32 lnet_set_link_fatal_state(struct lnet_ni *ni, unsigned int link_state)
 }
 EXPORT_SYMBOL(lnet_set_link_fatal_state);
 
-int lnet_get_link_status(struct net_device *dev)
+int lnet_get_link_status_locked(struct net_device *dev)
 {
 	int ret = -1;
 
@@ -1516,14 +1520,29 @@ int lnet_get_link_status(struct net_device *dev)
 	if (!netif_running(dev)) {
 		ret = 0;
 		CDEBUG(D_NET, "device idx %d not running\n", dev->ifindex);
-	}
-	/* Some devices may not be providing link settings */
-	else if (dev->ethtool_ops->get_link) {
+	} else if (dev->ethtool_ops->get_link) {
+		/* Some devices may not be providing link settings */
 		ret = dev->ethtool_ops->get_link(dev);
 		CDEBUG(D_NET, "device idx %d get_link %u\n",
-		       ret,
-		       dev->ifindex);
+		       ret, dev->ifindex);
 	}
+
+	return ret;
+}
+EXPORT_SYMBOL(lnet_get_link_status_locked);
+
+int lnet_get_link_status(struct net_device *dev)
+{
+	int ret = -1;
+
+	if (!dev)
+		return -1;
+
+	rtnl_lock();
+	netdev_lock_ops(dev);
+	ret = lnet_get_link_status_locked(dev);
+	netdev_unlock_ops(dev);
+	rtnl_unlock();
 
 	return ret;
 }
