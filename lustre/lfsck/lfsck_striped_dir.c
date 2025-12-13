@@ -166,18 +166,19 @@ void lfsck_lmv_put(const struct lu_env *env, struct lfsck_lmv *llmv)
 }
 
 /**
- * Mark the specified directory as read-only by set LUSTRE_IMMUTABLE_FL.
+ * lfsck_disable_master_lmv() - Mark the specified directory as read-only by set
+ *                              LUSTRE_IMMUTABLE_FL.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @obj: pointer to the object to be handled
+ * @del_lmv: true if need to drop the LMV EA
  *
  * The caller has taken the ldlm lock on the @obj already.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] obj	pointer to the object to be handled
- * \param[in] del_lmv	true if need to drop the LMV EA
- *
- * \retval		positive number if nothing to be done
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if nothing to be done
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_disable_master_lmv(const struct lu_env *env,
 				    struct lfsck_component *com,
@@ -263,20 +264,21 @@ static inline bool lfsck_is_valid_slave_lmv(struct lmv_mds_md_v1 *lmv)
 }
 
 /**
- * Remove the striped directory's master LMV EA and mark it as read-only.
+ * lfsck_remove_lmv() - Remove the striped directory's master LMV EA and mark it
+ *                      as read-only.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @obj: pointer to the striped directory to be handled
+ * @lnr: pointer to the namespace request that contains the striped directory
+ *       to be handled and other information
  *
  * Take ldlm lock on the striped directory before calling the
  * lfsck_disable_master_lmv().
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] obj	pointer to the striped directory to be handled
- * \param[in] lnr	pointer to the namespace request that contains the
- *			striped directory to be handled and other information
- *
- * \retval		positive number if nothing to be done
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if nothing to be done
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_remove_lmv(const struct lu_env *env,
 			    struct lfsck_component *com,
@@ -299,17 +301,18 @@ static int lfsck_remove_lmv(const struct lu_env *env,
 }
 
 /**
- * Remove the name entry from the striped directory's master MDT-object.
+ * lfsck_remove_dirent() - Remove the name entry from the striped directory's
+ *                         master MDT-object.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @dir: pointer to the striped directory
+ * @fid: the shard's FID which name entry will be removed
+ * @index: the shard's index which name entry will be removed
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] dir	pointer to the striped directory
- * \param[in] fid	the shard's FID which name entry will be removed
- * \param[in] index	the shard's index which name entry will be removed
- *
- * \retval		positive number for repaired successfully
- * \retval		0 if nothing to be repaired
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for repaired successfully
+ * * %0 if nothing to be repaired
+ * * %negative error number on failure
  */
 static int lfsck_remove_dirent(const struct lu_env *env,
 			       struct lfsck_component *com,
@@ -340,27 +343,26 @@ static int lfsck_remove_dirent(const struct lu_env *env,
 }
 
 /**
- * Remove old shard's name entry and refill the @lslr slot with new shard.
+ * lfsck_replace_lmv() - Remove old shard's name entry and refill the @lslr
+ *                       slot with new shard.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @dir: pointer to the striped directory to be handled
+ * @lslr: pointer to lfsck_disable_master_lmv slot which content will be
+ *        replaced by the given information
+ * @lnr: contain the shard's FID to be used to fill the @lslr slot, it also
+ *       records the known max filled index and the known max stripe count
+ * @lmv: contain the slave LMV EA to be used to fill the @lslr slot
+ * @index: the old shard's index in the striped directory
+ * @flags: the new shard's flags in the @lslr slot
  *
  * Some old shard held the specified @lslr slot, but it is an invalid shard.
  * This function will remove the bad shard's name entry, and refill the @lslr
  * slot with the new shard.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] dir	pointer to the striped directory to be handled
- * \param[in] lslr	pointer to lfsck_disable_master_lmv slot which content
- *			will be replaced by the given information
- * \param[in] lnr	contain the shard's FID to be used to fill the
- *			@lslr slot, it also records the known max filled index
- *			and the known max stripe count
- * \param[in] lmv	contain the slave LMV EA to be used to fill the
- *			@lslr slot
- * \param[in] index	the old shard's index in the striped directory
- * \param[in] flags	the new shard's flags in the @lslr slot
- *
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_replace_lmv(const struct lu_env *env,
 			     struct lfsck_component *com,
@@ -397,7 +399,23 @@ static int lfsck_replace_lmv(const struct lu_env *env,
 }
 
 /**
- * Record the slave LMV EA in the lfsck_lmv::ll_lslr.
+ * lfsck_record_lmv() - Record the slave LMV EA in the lfsck_lmv::ll_lslr.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @dir: pointer to the striped directory to be handled
+ * @lnr: contain the shard's FID to fill the @lslr slot, it also records the
+ *       known max filled index and the known max stripe count
+ * @lmv: pointer to the slave LMV EA to be recorded
+ * @shard_idx: the shard's index used for locating the @lslr slot, it can be the
+ *             index stored in the shard's name, it also can be the index stored
+ *             in the slave LMV EA (for recursive case)
+ * @flags: the shard's flags to be recorded in the @lslr slot to indicate the
+ *         shard status, such as whether has slave LMV EA, whether dangling name
+ *         entry, whether the name entry and slave LMV EA unmatched, and ect
+ * @flags2: when be called recursively, the @flags2 tells the former conflict
+ *          shard's flags in the @lslr slot.
+ * @depth: To prevent to be called recurisively too deep, we define the max
+ *         depth can be called recursively (LFSCK_REC_LMV_MAX_DEPTH) [in, out]
  *
  * If the lfsck_lmv::ll_lslr slot corresponding to the given @shard_idx is free,
  * then fill the slot with the given @lnr/@lmv/@flags directly (maybe need to
@@ -435,32 +453,11 @@ static int lfsck_replace_lmv(const struct lu_env *env,
  * This function may be called recursively, to prevent overflow, we define
  * LFSCK_REC_LMV_MAX_DEPTH to restrict the recursive call depth.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] dir	pointer to the striped directory to be handled
- * \param[in] lnr	contain the shard's FID to fill the @lslr slot,
- *			it also records the known max filled index and
- *			the known max stripe count
- * \param[in] lmv	pointer to the slave LMV EA to be recorded
- * \param[in] shard_idx	the shard's index used for locating the @lslr slot,
- *			it can be the index stored in the shard's name,
- *			it also can be the index stored in the slave LMV EA
- *			(for recursive case)
- * \param[in] flags	the shard's flags to be recorded in the @lslr slot
- *			to indicate the shard status, such as whether has
- *			slave LMV EA, whether dangling name entry, whether
- *			the name entry and slave LMV EA unmatched, and ect
- * \param[in] flags2	when be called recursively, the @flags2 tells the
- *			former conflict shard's flags in the @lslr slot.
- * \param[in,out] depth	To prevent to be called recurisively too deep,
- *			we define the max depth can be called recursively
- *			(LFSCK_REC_LMV_MAX_DEPTH)
- *
- * \retval		zero for success
- * \retval		"-ERANGE" for invalid @shard_idx
- * \retval		"-EEXIST" for the required lslr slot has been
- *			occupied by other shard
- * \retval		other negative error number on failure
+ * Return:
+ * * %zero for success
+ * * %-ERANGE for invalid @shard_idx
+ * * %-EEXIST for the required lslr slot has been occupied by other shard
+ * * %negative error number on failure
  */
 static int lfsck_record_lmv(const struct lu_env *env,
 			    struct lfsck_component *com,
@@ -825,18 +822,19 @@ out:
 }
 
 /**
- * Read LMV from bottom object, so it doesn't contain stripe FIDs.
+ * lfsck_read_stripe_lmv() - Read LMV from bottom object, so it doesn't
+ *                           contain stripe FIDs.
+ * @env: thread env
+ * @lfsck: lfsck instance
+ * @obj: dt object
+ * @lmv: LMV data pointer
  *
  * TODO: test migrating/foreign directory lfsck
  *
- * \param[in] env	thread env
- * \param[in] lfsck	lfsck instance
- * \param[in] obj	dt object
- * \param[out] lmv	LMV data pointer
- *
- * \retval		0 on success
- * \retval		-ENODATA on no LMV, corrupt LMV, dir is dead or foreign
- *			-ev on other failures
+ * Return:
+ * * %0 on success
+ * * %-ENODATA on no LMV, corrupt LMV, dir is dead or foreign %negativev on
+ *             other failures
  */
 int lfsck_read_stripe_lmv(const struct lu_env *env,
 			  struct lfsck_instance *lfsck,
@@ -913,21 +911,21 @@ int lfsck_read_stripe_lmv(const struct lu_env *env,
 }
 
 /**
- * Parse the shard's index from the given shard name.
+ * lfsck_shard_name_to_index() - Parse shard's index from the given shard name.
+ * @env: pointer to the thread context
+ * @name: the shard name
+ * @namelen: the name length
+ * @type: the entry's type
+ * @fid: the entry's FID
  *
  * The valid shard name/type should be:
  * 1) The type must be S_IFDIR
  * 2) The name should be $FID:$index
  * 3) the index should within valid range.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] name	the shard name
- * \param[in] namelen	the name length
- * \param[in] type	the entry's type
- * \param[in] fid	the entry's FID
- *
- * \retval		zero or positive number for the index from the name
- * \retval		negative error number on failure
+ * Return:
+ * * %0 or positive number for the index from the name
+ * * %negative error number on failure
  */
 int lfsck_shard_name_to_index(const struct lu_env *env, const char *name,
 			      int namelen, __u16 type, const struct lu_fid *fid)
@@ -986,7 +984,13 @@ bool lfsck_is_valid_slave_name_entry(const struct lu_env *env,
 }
 
 /**
- * Check whether the given name is a valid entry under the @parent.
+ * lfsck_namespace_check_name() - Check whether the given name is a valid entry
+ *                                under the @parent.
+ * @env: pointer to the thread context
+ * @lfsck: lfsck instance
+ * @parent: the parent directory
+ * @child: the child object to be checked
+ * @cname: the name for the @child in the parent directory
  *
  * If the @parent is a striped directory then the @child should one
  * shard of the striped directory, its name should be $FID:$index.
@@ -994,14 +998,10 @@ bool lfsck_is_valid_slave_name_entry(const struct lu_env *env,
  * If the @parent is a shard of a striped directory, then the name hash
  * should match the MDT, otherwise it is invalid.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] parent	the parent directory
- * \param[in] child	the child object to be checked
- * \param[in] cname	the name for the @child in the parent directory
- *
- * \retval		positive number for invalid name entry
- * \retval		0 if the name is valid or uncertain
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for invalid name entry
+ * * %0 if the name is valid or uncertain
+ * * %negative error number on failure
  */
 int lfsck_namespace_check_name(const struct lu_env *env,
 			       struct lfsck_instance *lfsck,
@@ -1033,17 +1033,17 @@ int lfsck_namespace_check_name(const struct lu_env *env,
 }
 
 /**
- * Update the object's LMV EA with the given @lmv.
+ * lfsck_namespace_update_lmv() - Update object's LMV EA with the given @lmv.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @obj: pointer to the object which LMV EA will be updated
+ * @lmv: pointer to buffer holding the new LMV EA
+ * @locked: whether the caller has held ldlm lock on the @obj or not
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] obj	pointer to the object which LMV EA will be updated
- * \param[in] lmv	pointer to buffer holding the new LMV EA
- * \param[in] locked	whether the caller has held ldlm lock on the @obj or not
- *
- * \retval		positive number for nothing to be done
- * \retval		zero if updated successfully
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for nothing to be done
+ * * %0 if updated successfully
+ * * %negative error number on failure
  */
 int lfsck_namespace_update_lmv(const struct lu_env *env,
 			       struct lfsck_component *com,
@@ -1125,7 +1125,13 @@ out:
 }
 
 /**
- * Check whether allow to re-genereate the lost master LMV EA.
+ * lfsck_allow_regenerate_master_lmv() - Check whether allow to re-genereate the
+ *                                       lost master LMV EA.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @obj: pointer to the master MDT-object to be checked
+ * @cfid: the shard's FID used for verification
+ * @cidx: the shard's index used for verification
  *
  * If the master MDT-object of the striped directory lost its master LMV EA,
  * then before the LFSCK repaired the striped directory, some ones may have
@@ -1134,15 +1140,10 @@ out:
  * re-generate the lost master LMV EA to keep those objects to be visible to
  * client.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] obj	pointer to the master MDT-object to be checked
- * \param[in] cfid	the shard's FID used for verification
- * \param[in] cidx	the shard's index used for verification
- *
- * \retval		positive number if not allow to re-generate LMV EA
- * \retval		zero if allow to re-generate LMV EA
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if not allow to re-generate LMV EA
+ * * %0 if allow to re-generate LMV EA
+ * * %negative error number on failure
  */
 static int lfsck_allow_regenerate_master_lmv(const struct lu_env *env,
 					     struct lfsck_component *com,
@@ -1239,18 +1240,19 @@ out:
 }
 
 /**
- * Notify remote LFSCK instance that the object's LMV EA has been updated.
+ * lfsck_namespace_notify_lmv_remote() - Notify remote LFSCK instance that the
+ *                                       object's LMV EA has been updated.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @obj: pointer to the object on which the LMV EA will be set
+ * @event: indicate either master or slave LMV EA has been updated
+ * @flags: indicate which element(s) in the LMV EA has been updated
+ * @index: the MDT index on which the LFSCK instance to be notified
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] obj	pointer to the object on which the LMV EA will be set
- * \param[in] event	indicate either master or slave LMV EA has been updated
- * \param[in] flags	indicate which element(s) in the LMV EA has been updated
- * \param[in] index	the MDT index on which the LFSCK instance to be notified
- *
- * \retval		positive number if nothing to be done
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if nothing to be done
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_namespace_notify_lmv_remote(const struct lu_env *env,
 					     struct lfsck_component *com,
@@ -1308,15 +1310,17 @@ out:
 }
 
 /**
- * Generate request for local LFSCK instance to rescan the striped directory.
+ * lfsck_namespace_notify_lmv_master_local() - Generate request for local LFSCK
+ *                                             instance to rescan the striped
+ *                                             directory.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @obj: pointer to the striped directory to be rescanned
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] obj	pointer to the striped directory to be rescanned
- *
- * \retval		positive number if nothing to be done
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if nothing to be done
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
 					    struct lfsck_component *com,
@@ -1388,7 +1392,15 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
 }
 
 /**
- * Set master LMV EA for the specified striped directory.
+ * lfsck_namespace_set_lmv_master() - Set master LMV EA for the specified
+ *                                    striped directory.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @obj: pointer to the object on which the LMV EA will be set
+ * @lmv: pointer to the buffer holding the new LMV EA
+ * @cfid: the shard's FID used for verification
+ * @cidx: the shard's index used for verification
+ * @flags: to indicate which element(s) in the LMV EA will be set
  *
  * First, if the master MDT-object of a striped directory lost its LMV EA,
  * then there may be some users have created some files under the master
@@ -1402,17 +1414,10 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
  * (the striped directory) request that will be handled later by the LFSCK
  * instance on the MDT later.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] obj	pointer to the object on which the LMV EA will be set
- * \param[in] lmv	pointer to the buffer holding the new LMV EA
- * \param[in] cfid	the shard's FID used for verification
- * \param[in] cidx	the shard's index used for verification
- * \param[in] flags	to indicate which element(s) in the LMV EA will be set
- *
- * \retval		positive number if nothing to be done
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if nothing to be done
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
 					  struct lfsck_component *com,
@@ -1509,7 +1514,13 @@ log:
 }
 
 /**
- * Repair the bad name hash.
+ * lfsck_namespace_repair_bad_name_hash() - Repair the bad name hash.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @shard: pointer to the shard of the striped directory that contains the bad
+ *         name entry
+ * @llmv: pointer to lfsck LMV EA structure
+ * @name: the name of the bad name hash
  *
  * If the name hash of some name entry under the striped directory does not
  * match the shard of the striped directory, then the LFSCK will repair the
@@ -1518,16 +1529,10 @@ log:
  * finished, the LFSCK will change the striped directory's hash type as
  * LMV_HASH_TYPE_UNKNOWN and mark the lmv flags as LMV_HASH_FLAG_BAD_TYPE.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] shard	pointer to the shard of the striped directory that
- *			contains the bad name entry
- * \param[in] llmv	pointer to lfsck LMV EA structure
- * \param[in] name	the name of the bad name hash
- *
- * \retval		positive number if nothing to be done
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for scanning successfully
+ * * %0 for the scanning is paused
+ * * %negative error number on failure
  */
 int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 					 struct lfsck_component *com,
@@ -1585,7 +1590,11 @@ log:
 }
 
 /**
- * Scan the shard of a striped directory for name hash verification.
+ * lfsck_namespace_scan_shard() - Scan the shard of a striped directory for name
+ *                                hash verification.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @child: pointer to the directory object to be handled
  *
  * During the first-stage scanning, if the LFSCK cannot make sure whether
  * the shard of a stripe directory contains valid slave LMV EA or not, then
@@ -1596,13 +1605,10 @@ log:
  * every name entry under the shard, the name hash will be verified, and for
  * unmatched name entry, the LFSCK will try to fix it.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] child	pointer to the directory object to be handled
- *
- * \retval		positive number for scanning successfully
- * \retval		zero for the scanning is paused
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for scanning successfully
+ * * %0 for the scanning is paused
+ * * %negative error number on failure
  */
 int lfsck_namespace_scan_shard(const struct lu_env *env,
 			       struct lfsck_component *com,
@@ -1704,20 +1710,21 @@ out:
 }
 
 /**
- * Verify the slave object's (of striped directory) LMV EA.
+ * lfsck_namespace_verify_stripe_slave() - Verify the slave object's
+ *                                         (of striped directory) LMV EA.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @obj: pointer to the object which LMV EA will be checked
+ * @llmv: pointer to buffer holding the slave LMV EA
  *
  * For the slave object of a striped directory, before traversing the shard
  * the LFSCK will verify whether its slave LMV EA matches its parent's master
  * LMV EA or not.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] obj	pointer to the object which LMV EA will be checked
- * \param[in] llmv	pointer to buffer holding the slave LMV EA
- *
- * \retval		positive number if nothing to be done
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if nothing to be done
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 					struct lfsck_component *com,
@@ -1843,7 +1850,12 @@ out:
 }
 
 /**
- * Double scan the striped directory or the shard.
+ * lfsck_namespace_striped_dir_rescan() - Double scan the striped directory or
+ *                                        the shard.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @lnr: pointer to the namespace request that contains the sriped directory or
+ *       the shard
  *
  * All the shards' under the given striped directory or its shard have
  * been scanned, the LFSCK has got the global knownledge about the LMV
@@ -1858,13 +1870,9 @@ out:
  * directory, whether the slave LMV EA is invalid or not, and repair it if
  * inconsistent.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] lnr	pointer to the namespace request that contains the
- *			striped directory or the shard
- *
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 				       struct lfsck_component *com,
@@ -2268,7 +2276,12 @@ out:
 }
 
 /**
- * Verify the shard's name entry under the striped directory.
+ * lfsck_namespace_handle_striped_master() - Verify the shard's name entry under
+ *                                           the striped directory.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @lnr: pointer to the namespace request that contains the shard's name, parent
+ *       object, parent's LMV, and ect.
  *
  * Before all shards of the striped directory scanned, the LFSCK cannot
  * know whether the master LMV EA is valid or not, and also cannot know
@@ -2308,13 +2321,9 @@ out:
  * will NOT be a lof of striped directory. So double scanning striped
  * directory will not much affect the LFSCK performance.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] lnr	pointer to the namespace request that contains the
- *			shard's name, parent object, parent's LMV, and ect.
- *
- * \retval		zero for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 					  struct lfsck_component *com,
