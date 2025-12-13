@@ -395,20 +395,20 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
 }
 
 /**
- * Request the specified ibits lock for the given object.
+ * lfsck_ibits_lock() - Request the specified ibits lock for the given object.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @obj: pointer to the dt_object to be locked
+ * @lh: pointer to the lock handle [out]
+ * @bits: the bits for the ldlm lock to be acquired
+ * @mode: the mode for the ldlm lock to be acquired
  *
  * Before the LFSCK modifying on the namespace visible object,
  * it needs to acquire related ibits ldlm lock.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- * \param[in] obj	pointer to the dt_object to be locked
- * \param[out] lh	pointer to the lock handle
- * \param[in] bits	the bits for the ldlm lock to be acquired
- * \param[in] mode	the mode for the ldlm lock to be acquired
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 		     struct dt_object *obj, struct lustre_handle *lh,
@@ -423,20 +423,20 @@ int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 }
 
 /**
- * Request the remote LOOKUP lock for the given object.
+ * lfsck_remote_lookup_lock() - Request remote LOOKUP lock for the given object.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @pobj: pointer to parent dt_object
+ * @obj: pointer to the dt_object to be locked
+ * @lh: pointer to the lock handle [out]
+ * @mode: the mode for the ldlm lock to be acquired
  *
- * If \a pobj is remote, the LOOKUP lock of \a obj is on the MDT where
- * \a pobj is, acquire LOOKUP lock there.
+ * If @pobj is remote, the LOOKUP lock of @obj is on the MDT where
+ * @pobj is, acquire LOOKUP lock there.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- * \param[in] pobj	pointer to parent dt_object
- * \param[in] obj	pointer to the dt_object to be locked
- * \param[out] lh	pointer to the lock handle
- * \param[in] mode	the mode for the ldlm lock to be acquired
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_remote_lookup_lock(const struct lu_env *env,
 			     struct lfsck_instance *lfsck,
@@ -453,13 +453,12 @@ int lfsck_remote_lookup_lock(const struct lu_env *env,
 }
 
 /**
- * Release the the specified ibits lock.
+ * lfsck_ibits_unlock() - Release the the specified ibits lock.
+ * @lh: pointer to the lock handle
+ * @mode: the mode for the ldlm lock to be released
  *
  * If the lock has been acquired before, release it
  * and cleanup the handle. Otherwise, do nothing.
- *
- * \param[in] lh	pointer to the lock handle
- * \param[in] mode	the mode for the ldlm lock to be released
  */
 void lfsck_ibits_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 {
@@ -470,7 +469,14 @@ void lfsck_ibits_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 }
 
 /**
- * Request compound ibits locks for the given <obj, name> pairs.
+ * lfsck_lock() - Request compound ibits locks for the given <obj, name> pairs.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @obj: pointer to the dt_object to be locked
+ * @name: used for building the PDO lock resource
+ * @llh: pointer to the lfsck_lock_handle [out]
+ * @bits: the bits for the ldlm lock to be acquired
+ * @mode: the mode for the ldlm lock to be acquired
  *
  * Before the LFSCK modifying on the namespace visible object, it needs to
  * acquire related ibits ldlm lock. Usually, we can use lfsck_ibits_lock for
@@ -482,16 +488,9 @@ void lfsck_ibits_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
  * <obj, name> pairs: the PDO (Parallel Directory Operations) ibits (UPDATE)
  * lock on the directory object, and the regular ibits lock on the name hash.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- * \param[in] obj	pointer to the dt_object to be locked
- * \param[in] name	used for building the PDO lock resource
- * \param[out] llh	pointer to the lfsck_lock_handle
- * \param[in] bits	the bits for the ldlm lock to be acquired
- * \param[in] mode	the mode for the ldlm lock to be acquired
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 	       struct dt_object *obj, const char *name,
@@ -543,9 +542,9 @@ int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 }
 
 /**
- * Release the the compound ibits locks.
+ * lfsck_unlock() - Release the the compound ibits locks.
  *
- * \param[in] llh	pointer to the lfsck_lock_handle to be released
+ * @llh: pointer to the lfsck_lock_handle to be released
  */
 void lfsck_unlock(struct lfsck_lock_handle *llh)
 {
@@ -583,18 +582,19 @@ static const char dotlustre[] = ".lustre";
 static const char lostfound[] = "lost+found";
 
 /**
- * Remove the name entry from the .lustre/lost+found directory.
+ * lfsck_lpf_remove_name_entry() - Remove the name entry from the
+ *                                 .lustre/lost+found directory.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @name: the name for the name entry to be removed
  *
  * No need to care about the object referenced by the name entry,
  * either the name entry is invalid or redundant, or the referenced
  * object has been processed or will be handled by others.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- * \param[in] name	the name for the name entry to be removed
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_lpf_remove_name_entry(const struct lu_env *env,
 				       struct lfsck_instance *lfsck,
@@ -1011,18 +1011,19 @@ stop:
 }
 
 /**
- * Create the MDTxxxx directory under /ROOT/.lustre/lost+found/
+ * lfsck_create_lpf() - Create the MDTxxxx directory under
+ *                      /ROOT/.lustre/lost+found/
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
  *
  * The /ROOT/.lustre/lost+found/MDTxxxx/ directory is used for holding
  * orphans and other uncertain inconsistent objects found during the
  * LFSCK. Such directory will be created by the LFSCK engine on the
  * local MDT before the LFSCK scanning.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_create_lpf(const struct lu_env *env,
 			    struct lfsck_instance *lfsck)
@@ -1111,17 +1112,18 @@ unlock:
 }
 
 /**
- * Scan .lustre/lost+found for bad name entries and remove them.
+ * lfsck_scan_lpf_bad_entries() - Scan .lustre/lost+found for bad name entries
+ *                                and remove them.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
  *
  * The valid name entry should be "MDTxxxx", the "xxxx" is the MDT device
  * index in the system. Any other formatted name is invalid and should be
  * removed.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_scan_lpf_bad_entries(const struct lu_env *env,
 				      struct lfsck_instance *lfsck)
@@ -1210,7 +1212,17 @@ static int lfsck_update_lpf_entry(const struct lu_env *env,
 }
 
 /**
- * Check whether the @child back references the @parent.
+ * lfsck_verify_lpf_pairs() - Check whether the @child back references the
+ *                            @parent.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @child: pointer to the lost+found sub-directory object
+ * @name: the name for lost+found sub-directory object
+ * @fid: pointer to the buffer to hold the FID of the object
+ *       (called it as parent2) that is referenced via the child's dotdot entry;
+ *       it also can be the FID that is referenced by the name entry under the
+ *       parent2. [out]
+ * @type: to indicate where the child's FID is stored in
  *
  * Two cases:
  * 1) The child's FID is stored in the bookmark file. If the child back
@@ -1234,19 +1246,10 @@ static int lfsck_update_lpf_entry(const struct lu_env *env,
  * 2.3) Otherwise, if we do not know whether the parent2 recognizes the child
  *	or not, then keep them there.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- * \param[in] child	pointer to the lost+found sub-directory object
- * \param[in] name	the name for lost+found sub-directory object
- * \param[out] fid	pointer to the buffer to hold the FID of the object
- *			(called it as parent2) that is referenced via the
- *			child's dotdot entry; it also can be the FID that
- *			is referenced by the name entry under the parent2.
- * \param[in] type	to indicate where the child's FID is stored in
- *
- * \retval		positive number for uncertain inconsistency
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for uncertain inconsistency
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_verify_lpf_pairs(const struct lu_env *env,
 				  struct lfsck_instance *lfsck,
@@ -1385,19 +1388,19 @@ out_done:
 }
 
 /**
- * Verify the /ROOT/.lustre/lost+found/ directory.
+ * lfsck_verify_lpf() - Verify the /ROOT/.lustre/lost+found/ directory.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
  *
  * /ROOT/.lustre/lost+found/ is a special directory to hold the objects that
  * the LFSCK does not exactly know how to handle, such as orphans. So before
  * the LFSCK scanning the system, the consistency of such directory needs to
  * be verified firstly to allow the users to use it during the LFSCK.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- *
- * \retval		positive number for uncertain inconsistency
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for uncertain inconsistency
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 {
@@ -2023,17 +2026,19 @@ lfsck_assistant_object_load(const struct lu_env *env,
 }
 
 /**
+ * lfsck_async_interpret_common() - Generic LFSCK async communication interpretor
+ * @env: pointer to the thread context
+ * @req: pointer to the LFSCK request
+ * @args: pointer to the lfsck_async_interpret_args
+ * @rc: the result for handling the LFSCK request
+ *
  * Generic LFSCK asynchronous communication interpretor function.
  * The LFSCK RPC reply for both the event notification and status
  * querying will be handled here.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] req	pointer to the LFSCK request
- * \param[in] args	pointer to the lfsck_async_interpret_args
- * \param[in] rc	the result for handling the LFSCK request
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 int lfsck_async_interpret_common(const struct lu_env *env,
 				 struct ptlrpc_request *req,
