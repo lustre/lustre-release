@@ -80,7 +80,10 @@ static void lfsck_di_dir_put(const struct lu_env *env,
 }
 
 /**
- * Check whether needs to scan the directory or not.
+ * lfsck_needs_scan_dir() - Check whether needs to scan the directory or not.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
+ * @obj: pointer to the object to be checked
  *
  * 1) If we are not doing namespace LFSCK, or the given @obj is not directory,
  *    then needs not to scan the @obj. Otherwise,
@@ -96,13 +99,10 @@ static void lfsck_di_dir_put(const struct lu_env *env,
  *    directories whether this subdirectory is in a tree that should be scanned.
  *    Set the parent as current @obj, repeat 2)-7).
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- * \param[in] obj	pointer to the object to be checked
- *
- * \retval		positive number if the directory needs to be scanned
- * \retval		0 if the directory needs NOT to be scanned
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if the directory needs to be scanned
+ * * %0 if the directory needs NOT to be scanned
+ * * %negative error number on failure
  */
 static int lfsck_needs_scan_dir(const struct lu_env *env,
 				struct lfsck_instance *lfsck,
@@ -769,7 +769,9 @@ out:
 }
 
 /**
- * Object-table based iteration engine.
+ * lfsck_master_oit_engine() - Object-table based iteration engine.
+ * @env: pointer to the thread context
+ * @lfsck: pointer to the lfsck instance
  *
  * Object-table based iteration is the basic linear engine to scan all the
  * objects on current device in turn. For each object, it calls all the
@@ -783,12 +785,10 @@ out:
  * It also controls the whole LFSCK speed via lfsck_control_speed() to
  * avoid the server to become overload.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] lfsck	pointer to the lfsck instance
- *
- * \retval		positive number if all objects have been scanned
- * \retval		0 if the iteration is stopped or paused
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number if all objects have been scanned
+ * * %0 if the iteration is stopped or paused
+ * * %negative error number on failure
  */
 static int lfsck_master_oit_engine(const struct lu_env *env,
 				   struct lfsck_instance *lfsck)
@@ -1092,17 +1092,18 @@ static inline bool lfsck_assistant_req_empty(struct lfsck_assistant_data *lad)
 }
 
 /**
- * Query the LFSCK status from the instatnces on remote servers.
+ * lfsck_assistant_query_others() - Query the LFSCK status from the instatnces
+ *                                  on remote servers.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
  *
  * The LFSCK assistant thread queries the LFSCK instances on other
  * servers (MDT/OST) about their status, such as whether they have
  * finished the phase1/phase2 scanning or not, and so on.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_assistant_query_others(const struct lu_env *env,
 					struct lfsck_component *com)
@@ -1208,18 +1209,19 @@ out:
 }
 
 /**
- * Notify the LFSCK event to the instances on remote servers.
+ * lfsck_assistant_notify_others() - Notify the LFSCK event to the instances on
+ *                                   remote servers.
+ * @env: pointer to the thread context
+ * @com: pointer to the lfsck component
+ * @lr: pointer to the LFSCK event request
  *
  * The LFSCK assistant thread notifies the LFSCK instances on other
  * servers (MDT/OST) about some events, such as start new scanning,
  * stop the scanning, this LFSCK instance will exit, and so on.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] com	pointer to the lfsck component
- * \param[in] lr	pointer to the LFSCK event request
- *
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int lfsck_assistant_notify_others(const struct lu_env *env,
 					 struct lfsck_component *com,
@@ -1502,6 +1504,9 @@ again:
 }
 
 /**
+ * lfsck_assistant_engine() - LFSCK assistant engine
+ * @args: Pointer to struct lfsck_thread_args
+ *
  * The LFSCK assistant thread is triggered by the LFSCK main engine.
  * They co-work together as an asynchronous pipeline: the LFSCK main
  * engine scans the system and pre-fetches the objects, attributes,
@@ -1518,6 +1523,11 @@ again:
  * LFSCK assistant thread. So under such 1:N multiple asynchronous
  * pipelines mode, the whole LFSCK performance will be much better
  * than check/repair everything by the LFSCK main engine itself.
+ *
+ * Return:
+ * * %positive number if all objects have been scanned
+ * * %0 if the iteration is stopped or paused
+ * * %negative error number on failure
  */
 int lfsck_assistant_engine(void *args)
 {
