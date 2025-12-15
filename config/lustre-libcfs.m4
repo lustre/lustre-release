@@ -2269,6 +2269,5 @@ libcfs/autoMakefile
 libcfs/libcfs/Makefile
 libcfs/libcfs/autoMakefile
 libcfs/libcfs/linux/Makefile
-libcfs/libcfs/crypto/Makefile
 ])
 ]) # LIBCFS_CONFIG_FILES

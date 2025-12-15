@@ -15,6 +15,10 @@ COMPAT_SCHED := @top_srcdir@/lustre_compat/kernel/sched/
 include $(libcfs_dir)/../../lustre_compat/kernel/sched/Makefile
 libcfs-compat-objs += $(patsubst %,$(COMPAT_SCHED)%,$(sched_objs))
 
+COMPAT_FSCRYPT := @top_srcdir@/lustre_compat/fs/crypto/
+include $(libcfs_dir)/../../lustre_compat/fs/crypto/Makefile
+@LLCRYPT_TRUE@libcfs-compat-objs += $(patsubst %,$(COMPAT_FSCRYPT)%,$(fscrypt_objs))
+
 COMPAT_MM := @top_srcdir@/lustre_compat/mm/
 include $(libcfs_dir)/../../lustre_compat/mm/Makefile
 libcfs-compat-objs += $(patsubst %,$(COMPAT_MM)%,$(mm_objs))
@@ -31,18 +35,13 @@ libcfs-linux-objs := linux-prim.o
 
 EXTRA_DIST = $(libcfs-compat-objs:.o=.c)
 
-libcfs-crypto-objs := crypto.o fname.o hkdf.o hooks.o keyring.o
-libcfs-crypto-objs += keysetup.o keysetup_v1.o policy.o
-
 default: all
 
 libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
-libcfs-crypto-objs := $(addprefix crypto/,$(libcfs-crypto-objs))
 
 libcfs-all-objs := debug.o fail.o module.o tracefile.o
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs) $(libcfs-compat-objs)
-@LLCRYPT_TRUE@libcfs-objs += $(libcfs-crypto-objs)
 
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/../libcfs/libcfs
 

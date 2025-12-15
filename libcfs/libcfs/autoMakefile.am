@@ -11,11 +11,11 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-SUBDIRS = linux crypto
-DIST_SUBDIRS = linux crypto
+SUBDIRS = linux
+DIST_SUBDIRS = linux
 
 modulenet_DATA := libcfs.ko
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux/*.o libcfs crypto/*.o
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux/*.o libcfs
 EXTRA_DIST := $(libcfs-all-objs:%.o=%.c) tracefile.h \
 	      fail.c

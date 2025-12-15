@@ -179,7 +179,7 @@ undef.h: config.h.in
 dist-hook: undef.h
 	find include/ -type f \( -name "*.h" \) \
 		-exec cp --parents {} $(distdir) \;
-	find lustre_compat/ -type f \( -name "*.c" -o -iname "Makefile" \) \
+	find lustre_compat/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
 		-exec cp --parents {} $(distdir) \;
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
