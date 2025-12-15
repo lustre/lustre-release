@@ -2103,8 +2103,7 @@ kefalnd_destroy_tx_pool(struct kefa_ni *efa_ni)
 	for (i = 0; i < pool_size; i++) {
 		struct kefa_tx *tx = &((struct kefa_tx *)tx_pool->obj_arr)[i];
 
-		if (tx->frags)
-			LIBCFS_FREE(tx->frags, (EFALND_MAX_TX_FRAGS) * sizeof(*tx->frags));
+		LIBCFS_FREE(tx->frags, (EFALND_MAX_TX_FRAGS) * sizeof(*tx->frags));
 		if (tx->msg) {
 			ib_dma_unmap_single(efa_ni->efa_dev->ib_dev,
 					    tx->msgaddr,

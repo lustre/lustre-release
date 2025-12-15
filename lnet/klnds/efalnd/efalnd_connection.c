@@ -346,9 +346,8 @@ kefalnd_destroy_conn(struct kefa_conn *conn, enum lnet_msg_hstatus hstatus,
 	if (conn->peer_ni)
 		kefalnd_put_peer_ni(conn->peer_ni);
 
-	if (conn->data_qps)
-		LIBCFS_FREE(conn->data_qps,
-			    conn->nqps * sizeof(*conn->data_qps));
+	LIBCFS_FREE(conn->data_qps,
+		    conn->nqps * sizeof(*conn->data_qps));
 
 	LIBCFS_FREE(conn, sizeof(*conn));
 }
