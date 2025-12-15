@@ -4,4 +4,4 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-module_objs := symbols.o
+module_objs := symbols.o misc.o

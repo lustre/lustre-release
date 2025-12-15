@@ -31,8 +31,6 @@ COMPAT_MODULE := @top_srcdir@/lustre_compat/
 include $(libcfs_dir)/../../lustre_compat/Makefile
 libcfs-compat-objs += $(patsubst %,$(COMPAT_MODULE)%,$(module_objs))
 
-libcfs-linux-objs := linux-prim.o
-
 EXTRA_DIST = $(libcfs-compat-objs:.o=.c)
 
 default: all
@@ -41,7 +39,7 @@ libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
 
 libcfs-all-objs := debug.o fail.o module.o tracefile.o
 
-libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs) $(libcfs-compat-objs)
+libcfs-objs := $(libcfs-all-objs) $(libcfs-compat-objs)
 
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/../libcfs/libcfs
 

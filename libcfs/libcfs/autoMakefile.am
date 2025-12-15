@@ -11,11 +11,8 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-SUBDIRS = linux
-DIST_SUBDIRS = linux
-
 modulenet_DATA := libcfs.ko
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux/*.o libcfs
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ libcfs
 EXTRA_DIST := $(libcfs-all-objs:%.o=%.c) tracefile.h \
 	      fail.c

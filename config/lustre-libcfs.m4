@@ -2268,6 +2268,5 @@ libcfs/Makefile
 libcfs/autoMakefile
 libcfs/libcfs/Makefile
 libcfs/libcfs/autoMakefile
-libcfs/libcfs/linux/Makefile
 ])
 ]) # LIBCFS_CONFIG_FILES
