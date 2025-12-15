@@ -3424,7 +3424,7 @@ test_71() {
 }
 run_test 71 "check mirror extend parent fid"
 
-test_71() {
+test_72() {
 	local comp_file=$DIR/$tfile
 	local id
 
@@ -3472,7 +3472,7 @@ test_71() {
 
 	return 0
 }
-run_test 71 "check append on FLR file"
+run_test 72 "check append on FLR file"
 
 write_file_200() {
 	local tf=$1

@@ -2437,8 +2437,8 @@ test_23e() {
 run_test 23e "Append with next real comp: spillover and backward extension"
 
 test_23f() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
-	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+	(( "$MDS1_VERSION" >= $(version_code $SEL_VER) )) ||
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2454,11 +2454,11 @@ test_23f() {
 	dd if=/dev/zero bs=1M oflag=append count=1 of=$comp_file
 	RC=$?
 
-	[ $RC -eq 0 ] || error "dd append failed"
+	(( $RC == 0 )) || error "dd append failed"
 
 	local flg_opts="--comp-start 64M -E EOF --comp-flags extension"
 	local found=$($LFS find $flg_opts $comp_file | wc -l)
-	[ $found -eq 1 ] || error "Append: EXT component (64M-EOF) not found"
+	(( $found == 1 )) || error "Append: EXT component (64M-EOF) not found"
 
 	ost_idx=$($LFS getstripe -I2 -i $comp_file)
 	[ "$ost_idx" == "" ] && error "Append: EXT component doesn't exist"
@@ -2468,11 +2468,11 @@ test_23f() {
 	dd if=/dev/zero bs=1M oflag=append count=1 seek=64 of=$comp_file
 	RC=$?
 
-	[ $RC -eq 0 ] || error "dd append failed"
+	(( $RC == 0 )) || error "dd append failed"
 
 	local flg_opts="--comp-start 64M -E 128M --comp-flags init"
 	local found=$($LFS find $flg_opts $comp_file | wc -l)
-	[ $found -eq 1 ] || error "Append: EXT component (64M-128M) not found"
+	(( $found == 1 )) || error "Append: EXT component (64M-128M) not found"
 
 	ost_idx=$($LFS getstripe -I2 -i $comp_file)
 	[ "$ost_idx" == "" ] && error "Append: EXT component doesn't exist"

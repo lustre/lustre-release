@@ -170,7 +170,7 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	/* with a very few number of free catalog entries */
 	mdd->mdd_changelog_min_free_cat_entries = CHLOG_MIN_FREE_CAT_ENTRIES;
 	/* special default striping for files created with O_APPEND */
-	mdd->mdd_append_stripe_count = 0;
+	mdd->mdd_append_stripe_count = 1;
 	mdd->mdd_append_pool[0] = '\0';
 	mutex_init(&mdd->mdd_changelog_mutex);
 
