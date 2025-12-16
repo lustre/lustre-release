@@ -3452,8 +3452,7 @@ void LNetUnRegisterNIDUpdates(void *cb_data)
 		}
 	}
 	mutex_unlock(&the_lnet.ln_api_mutex);
-	if (delnur)
-		LIBCFS_FREE(delnur, sizeof(*delnur));
+	LIBCFS_FREE(delnur, sizeof(*delnur));
 	CDEBUG(D_NET, "UnRegistering %p party for NID updates\n",
 	       cb_data);
 }
