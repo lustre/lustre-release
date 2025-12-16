@@ -1,0 +1,298 @@
+Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/ext4.h
+===================================================================
+--- linux-6.12.0-55.27.1.el10_0.orig/fs/ext4/ext4.h
++++ linux-6.12.0-55.27.1.el10_0/fs/ext4/ext4.h
+@@ -440,6 +440,7 @@ struct flex_groups {
+ #define EXT4_BG_INODE_UNINIT	0x0001 /* Inode table/bitmap not in use */
+ #define EXT4_BG_BLOCK_UNINIT	0x0002 /* Block bitmap not in use */
+ #define EXT4_BG_INODE_ZEROED	0x0004 /* On-disk itable initialized to zero */
++#define EXT4_BG_TRIMMED		0x0008 /* block group was trimmed */
+ 
+ /*
+  * Macro-instructions used to manage group descriptors
+@@ -1201,6 +1202,7 @@ struct ext4_inode_info {
+ #define EXT2_FLAGS_SIGNED_HASH		0x0001  /* Signed dirhash in use */
+ #define EXT2_FLAGS_UNSIGNED_HASH	0x0002  /* Unsigned dirhash in use */
+ #define EXT2_FLAGS_TEST_FILESYS		0x0004	/* to test development code */
++#define EXT2_FLAGS_TRACK_TRIM		0x0008  /* Track trim status in each bg */
+ 
+ /*
+  * Mount flags set via mount options or defaults
+@@ -1321,6 +1323,9 @@ extern void mb_set_bits(void *bm, int cu
+ 
+ #define EXT4_LABEL_MAX			16
+ 
++/* Default min freed blocks which we could clear BG_TRIMMED flag */
++#define EXT4_DEF_BG_TRIMMED_THRESHOLD	128
++
+ /*
+  * Structure of the super block
+  */
+@@ -1667,6 +1672,9 @@ struct ext4_sb_info {
+ 	/* the size of zero-out chunk */
+ 	unsigned int s_extent_max_zeroout_kb;
+ 
++	/* Min freed blocks per group that we could clear BG_TRIMMED on it */
++	unsigned long s_bg_trimmed_threshold;
++
+ 	unsigned int s_log_groups_per_flex;
+ 	struct flex_groups * __rcu *s_flex_groups;
+ 	ext4_group_t s_flex_groups_allocated;
+@@ -3629,6 +3637,7 @@ struct ext4_group_info {
+ 	struct rb_root  bb_free_root;
+ 	ext4_grpblk_t	bb_first_free;	/* first free block */
+ 	ext4_grpblk_t	bb_free;	/* total free blocks */
++	ext4_grpblk_t	bb_freed_since_trim; /* blocks free since last trim */
+ 	ext4_grpblk_t	bb_fragments;	/* nr of freespace fragments */
+ 	int		bb_avg_fragment_size_order;	/* order of average
+ 							   fragment in BG */
+@@ -3649,7 +3658,6 @@ struct ext4_group_info {
+ };
+ 
+ #define EXT4_GROUP_INFO_NEED_INIT_BIT		0
+-#define EXT4_GROUP_INFO_WAS_TRIMMED_BIT		1
+ #define EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT	2
+ #define EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT	3
+ #define EXT4_GROUP_INFO_BBITMAP_CORRUPT		\
+@@ -3664,13 +3672,6 @@ struct ext4_group_info {
+ 	(test_bit(EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT, &((grp)->bb_state)))
+ #define EXT4_MB_GRP_IBITMAP_CORRUPT(grp)	\
+ 	(test_bit(EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT, &((grp)->bb_state)))
+-
+-#define EXT4_MB_GRP_WAS_TRIMMED(grp)	\
+-	(test_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
+-#define EXT4_MB_GRP_SET_TRIMMED(grp)	\
+-	(set_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
+-#define EXT4_MB_GRP_CLEAR_TRIMMED(grp)	\
+-	(clear_bit(EXT4_GROUP_INFO_WAS_TRIMMED_BIT, &((grp)->bb_state)))
+ #define EXT4_MB_GRP_TEST_AND_SET_READ(grp)	\
+ 	(test_and_set_bit(EXT4_GROUP_INFO_BBITMAP_READ_BIT, &((grp)->bb_state)))
+ 
+Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/ext4_jbd2.h
+===================================================================
+--- linux-6.12.0-55.27.1.el10_0.orig/fs/ext4/ext4_jbd2.h
++++ linux-6.12.0-55.27.1.el10_0/fs/ext4/ext4_jbd2.h
+@@ -120,7 +120,8 @@
+ #define EXT4_HT_MOVE_EXTENTS     9
+ #define EXT4_HT_XATTR           10
+ #define EXT4_HT_EXT_CONVERT     11
+-#define EXT4_HT_MAX             12
++#define EXT4_HT_FS_TRIM		12
++#define EXT4_HT_MAX             13
+ 
+ /**
+  *   struct ext4_journal_cb_entry - Base structure for callback information.
+Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/mballoc.c
+===================================================================
+--- linux-6.12.0-55.27.1.el10_0.orig/fs/ext4/mballoc.c
++++ linux-6.12.0-55.27.1.el10_0/fs/ext4/mballoc.c
+@@ -3549,6 +3549,7 @@ int ext4_mb_add_groupinfo(struct super_b
+ 	meta_group_info[i]->bb_largest_free_order = -1;  /* uninit */
+ 	meta_group_info[i]->bb_avg_fragment_size_order = -1;  /* uninit */
+ 	meta_group_info[i]->bb_group = group;
++	meta_group_info[i]->bb_freed_since_trim = 0;
+ 
+ 	mb_group_bb_bitmap_alloc(sb, meta_group_info[i], group);
+ 	return 0;
+@@ -3897,6 +3898,8 @@ int ext4_mb_init(struct super_block *sb)
+ 		sbi->s_mb_group_prealloc = sbi->s_stripe * 4;
+ 	}
+ 
++	sbi->s_bg_trimmed_threshold = EXT4_DEF_BG_TRIMMED_THRESHOLD;
++
+ 	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
+ 	if (sbi->s_locality_groups == NULL) {
+ 		ret = -ENOMEM;
+@@ -4072,12 +4075,6 @@ static void ext4_free_data_in_buddy(stru
+ 	rb_erase(&entry->efd_node, &(db->bb_free_root));
+ 	mb_free_blocks(NULL, &e4b, entry->efd_start_cluster, entry->efd_count);
+ 
+-	/*
+-	 * Clear the trimmed flag for the group so that the next
+-	 * ext4_trim_fs can trim it.
+-	 */
+-	EXT4_MB_GRP_CLEAR_TRIMMED(db);
+-
+ 	if (!db->bb_free_root.rb_node) {
+ 		/* No more items in the per group rb tree
+ 		 * balance refcounts from ext4_mb_free_metadata()
+@@ -4171,6 +4168,7 @@ ext4_mb_mark_context(handle_t *handle, s
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 	struct buffer_head *bitmap_bh = NULL;
+ 	struct ext4_group_desc *gdp;
++	struct ext4_group_info *grp;
+ 	struct buffer_head *gdp_bh;
+ 	int err;
+ 	unsigned int i, already, changed = len;
+@@ -4198,6 +4196,10 @@ ext4_mb_mark_context(handle_t *handle, s
+ 	if (!gdp)
+ 		goto out_err;
+ 
++	grp = ext4_get_group_info(sb, group);
++	if (unlikely(!grp || EXT4_MB_GRP_BBITMAP_CORRUPT(grp)))
++		goto out_err;
++
+ 	if (handle) {
+ 		BUFFER_TRACE(gdp_bh, "get_write_access");
+ 		err = ext4_journal_get_write_access(handle, sb, gdp_bh,
+@@ -4231,6 +4233,15 @@ ext4_mb_mark_context(handle_t *handle, s
+ 		mb_clear_bits(bitmap_bh->b_data, blkoff, len);
+ 		ext4_free_group_clusters_set(sb, gdp,
+ 			ext4_free_group_clusters(sb, gdp) + changed);
++		/*
++		 * Clear the trimmed flag for the group so that the next
++		 * ext4_trim_fs can trim it.
++		 */
++		grp->bb_freed_since_trim += EXT4_C2B(sbi, changed);
++
++		if (grp->bb_freed_since_trim >= sbi->s_bg_trimmed_threshold ||
++		    !(sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM)))
++			gdp->bg_flags &= cpu_to_le16(~EXT4_BG_TRIMMED);
+ 	}
+ 
+ 	ext4_block_bitmap_csum_set(sb, gdp, bitmap_bh);
+@@ -6784,8 +6795,6 @@ do_more:
+ 					 err);
+ 		}
+ 
+-		EXT4_MB_GRP_CLEAR_TRIMMED(e4b.bd_info);
+-
+ 		ext4_lock_group(sb, block_group);
+ 		mb_free_blocks(inode, &e4b, bit, count_clusters);
+ 	}
+@@ -7063,12 +7072,22 @@ __acquires(ext4_group_lock_ptr(sb, e4b->
+ __releases(ext4_group_lock_ptr(sb, e4b->bd_group))
+ {
+ 	ext4_grpblk_t next, count, free_count, last, origin_start;
++	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
++	struct ext4_group_desc *gdp;
++	struct buffer_head *gd_bh;
++	ext4_grpblk_t freed_last_trimmed_orig = e4b->bd_info->bb_freed_since_trim;
++	bool track_trim = (es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM)) &&
++			  !sb_rdonly(sb);
+ 	bool set_trimmed = false;
+ 	void *bitmap;
+ 
+ 	if (unlikely(EXT4_MB_GRP_BBITMAP_CORRUPT(e4b->bd_info)))
+ 		return 0;
+ 
++	gdp = ext4_get_group_desc(sb, e4b->bd_group, &gd_bh);
++	if (!gdp)
++		return -EIO;
++
+ 	last = ext4_last_grp_cluster(sb, e4b->bd_group);
+ 	bitmap = e4b->bd_bitmap;
+ 	if (start == 0 && max >= last)
+@@ -7110,8 +7129,50 @@ __releases(ext4_group_lock_ptr(sb, e4b->
+ 			break;
+ 	}
+ 
+-	if (set_trimmed)
+-		EXT4_MB_GRP_SET_TRIMMED(e4b->bd_info);
++	if (set_trimmed) {
++		handle_t *handle = NULL;
++		int err = 0;
++
++		ext4_unlock_group(sb, e4b->bd_group);
++		if (track_trim) {
++
++			handle = ext4_journal_start_sb(sb, EXT4_HT_FS_TRIM, 1);
++			if (IS_ERR(handle)) {
++				count = PTR_ERR(handle);
++				goto out_return;
++			}
++			err = ext4_journal_get_write_access(handle, sb, gd_bh,
++							    EXT4_JTR_NONE);
++			if (err) {
++				count = err;
++				goto out_journal;
++			}
++		}
++
++		ext4_lock_group(sb, e4b->bd_group);
++		/* someone freed more blocks after we unlocked the group */
++		if (freed_last_trimmed_orig != e4b->bd_info->bb_freed_since_trim)
++			goto out_journal;
++		e4b->bd_info->bb_freed_since_trim = 0;
++		gdp->bg_flags |= cpu_to_le16(EXT4_BG_TRIMMED);
++		ext4_group_desc_csum_set(sb, e4b->bd_group, gdp);
++		ext4_unlock_group(sb, e4b->bd_group);
++
++		if (track_trim) {
++			err = ext4_handle_dirty_metadata(handle, NULL, gd_bh);
++			if (err)
++				count = err;
++		}
++
++out_journal:
++		if (track_trim) {
++			err = ext4_journal_stop(handle);
++			if (err)
++				count = err;
++		}
++out_return:
++		ext4_lock_group(sb, e4b->bd_group);
++	}
+ 
+ 	return count;
+ }
+@@ -7135,10 +7196,15 @@ ext4_trim_all_free(struct super_block *s
+ 		   ext4_grpblk_t minblocks)
+ {
+ 	struct ext4_buddy e4b;
++	struct ext4_group_desc *gdp;
+ 	int ret;
+ 
+ 	trace_ext4_trim_all_free(sb, group, start, max);
+ 
++	gdp = ext4_get_group_desc(sb, group, NULL);
++	if (!gdp)
++		return -EIO;
++
+ 	ret = ext4_mb_load_buddy(sb, group, &e4b);
+ 	if (ret) {
+ 		return ret;
+@@ -7146,7 +7212,7 @@ ext4_trim_all_free(struct super_block *s
+ 
+ 	ext4_lock_group(sb, group);
+ 
+-	if (!EXT4_MB_GRP_WAS_TRIMMED(e4b.bd_info) ||
++	if (!(gdp->bg_flags & cpu_to_le16(EXT4_BG_TRIMMED)) ||
+ 	    minblocks < EXT4_SB(sb)->s_last_trim_minblks)
+ 		ret = ext4_try_to_trim_range(sb, &e4b, start, max, minblocks);
+ 	else
+Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/super.c
+===================================================================
+--- linux-6.12.0-55.27.1.el10_0.orig/fs/ext4/super.c
++++ linux-6.12.0-55.27.1.el10_0/fs/ext4/super.c
+@@ -3374,6 +3374,10 @@ static int ext4_check_descriptors(struct
+ 				return 0;
+ 			}
+ 		}
++		if (!(sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_TRACK_TRIM))) {
++			gdp->bg_flags &= cpu_to_le16(~EXT4_BG_TRIMMED);
++			ext4_group_desc_csum_set(sb, i, gdp);
++		}
+ 		ext4_unlock_group(sb, i);
+ 		if (!flexbg_flag)
+ 			first_block += EXT4_BLOCKS_PER_GROUP(sb);
+Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/sysfs.c
+===================================================================
+--- linux-6.12.0-55.27.1.el10_0.orig/fs/ext4/sysfs.c
++++ linux-6.12.0-55.27.1.el10_0/fs/ext4/sysfs.c
+@@ -229,6 +229,7 @@ EXT4_RW_ATTR_SBI_UI(mb_small_req, s_mb_s
+ EXT4_RW_ATTR_SBI_UI(mb_large_req, s_mb_large_req);
+ EXT4_RW_ATTR_SBI_UI(mb_max_linear_groups, s_mb_max_linear_groups);
+ EXT4_RW_ATTR_SBI_UI(extent_max_zeroout_kb, s_extent_max_zeroout_kb);
++EXT4_RW_ATTR_SBI_UI(bg_trimmed_threshold, s_bg_trimmed_threshold);
+ EXT4_ATTR(trigger_fs_error, 0200, trigger_test_error);
+ EXT4_RW_ATTR_SBI_PI(err_ratelimit_interval_ms, s_err_ratelimit_state.interval);
+ EXT4_RW_ATTR_SBI_PI(err_ratelimit_burst, s_err_ratelimit_state.burst);
+@@ -283,6 +284,7 @@ static struct attribute *ext4_attrs[] =
+ 	ATTR_LIST(mb_max_linear_groups),
+ 	ATTR_LIST(max_writeback_mb_bump),
+ 	ATTR_LIST(extent_max_zeroout_kb),
++	ATTR_LIST(bg_trimmed_threshold),
+ 	ATTR_LIST(trigger_fs_error),
+ 	ATTR_LIST(err_ratelimit_interval_ms),
+ 	ATTR_LIST(err_ratelimit_burst),

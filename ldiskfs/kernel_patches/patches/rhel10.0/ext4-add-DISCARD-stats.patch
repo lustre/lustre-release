@@ -1,0 +1,279 @@
+Index: linux-5.14.0-503.35.1.el9_5/fs/ext4/ext4.h
+===================================================================
+--- linux-5.14.0-503.35.1.el9_5.orig/fs/ext4/ext4.h
++++ linux-5.14.0-503.35.1.el9_5/fs/ext4/ext4.h
+@@ -1473,7 +1473,10 @@ struct ext4_super_block {
+ 	__le16  s_encoding;		/* Filename charset encoding */
+ 	__le16  s_encoding_flags;	/* Filename charset encoding flags */
+ 	__le32  s_orphan_file_inum;	/* Inode for tracking orphan inodes */
+-	__le32	s_reserved[94];		/* Padding to the end of the block */
++	__le32	s_reserved[89];		/* Padding to the end of the block */
++	__le64	s_kbytes_discarded;	/* nr of lifetime kilobytes discarded */
++/*3F0*/	__le64  s_nr_discard_ops;	/* nr of lifetime discard operations */
++	__le32	s_unused_last;
+ 	__le32	s_checksum;		/* crc32c(superblock) */
+ };
+ 
+@@ -1481,6 +1484,8 @@ struct ext4_super_block {
+ 
+ #ifdef __KERNEL__
+ 
++#define EXT4_HIST_MAX	32
++
+ /* Number of quota types we support */
+ #define EXT4_MAXQUOTAS 3
+ 
+@@ -1581,6 +1586,7 @@ struct ext4_sb_info {
+ 	struct percpu_counter s_dirs_counter;
+ 	struct percpu_counter s_dirtyclusters_counter;
+ 	struct percpu_counter s_sra_exceeded_retry_limit;
++	struct percpu_counter s_discard_ops[EXT4_HIST_MAX];
+ 	struct blockgroup_lock *s_blockgroup_lock;
+ 	struct proc_dir_entry *s_proc;
+ 	struct kobject s_kobj;
+@@ -1682,6 +1688,12 @@ struct ext4_sb_info {
+ 	unsigned long s_sectors_written_start;
+ 	u64 s_kbytes_written;
+ 
++	/* for discard statistics */
++	unsigned long s_sectors_discarded_start;
++	u64 s_kbytes_discarded;
++	unsigned long s_nr_discard_ops_start;
++	u64 s_nr_discard_ops;
++
+ 	/* the size of zero-out chunk */
+ 	unsigned int s_extent_max_zeroout_kb;
+ 
+Index: linux/fs/ext4/super.c
+===================================================================
+--- linux.orig/fs/ext4/super.c
++++ linux/fs/ext4/super.c
+@@ -1212,6 +1212,7 @@ static int ext4_percpu_param_init(struct
+ {
+ 	ext4_fsblk_t block;
+ 	int err;
++	int i;
+ 
+ 	block = ext4_count_free_clusters(sbi->s_sb);
+ 	ext4_free_blocks_count_set(sbi->s_es, EXT4_C2B(sbi, block));
+@@ -1235,6 +1236,12 @@ static int ext4_percpu_param_init(struct
+ 	if (!err)
+ 		err = percpu_init_rwsem(&sbi->s_writepages_rwsem);
+ 
++	if (!err) {
++		for (i = 0; i < EXT4_HIST_MAX && !err; i++)
++			err = percpu_counter_init(&sbi->s_discard_ops[i], 0,
++						  GFP_KERNEL);
++	}
++
+ 	if (err)
+ 		ext4_msg(sbi->s_sb, KERN_ERR, "insufficient memory");
+ 
+@@ -1243,12 +1250,16 @@ static int ext4_percpu_param_init(struct
+ 
+ static void ext4_percpu_param_destroy(struct ext4_sb_info *sbi)
+ {
++	int i;
++
+ 	percpu_counter_destroy(&sbi->s_freeclusters_counter);
+ 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
+ 	percpu_counter_destroy(&sbi->s_dirs_counter);
+ 	percpu_counter_destroy(&sbi->s_dirtyclusters_counter);
+ 	percpu_counter_destroy(&sbi->s_sra_exceeded_retry_limit);
+ 	percpu_free_rwsem(&sbi->s_writepages_rwsem);
++	for (i = 0; i < EXT4_HIST_MAX; i++)
++		percpu_counter_destroy(&sbi->s_discard_ops[i]);
+ }
+ 
+ static void ext4_group_desc_free(struct ext4_sb_info *sbi)
+@@ -5222,6 +5233,10 @@ static int __ext4_fill_super(struct fs_c
+ 	sbi->s_inode_readahead_blks = EXT4_DEF_INODE_READAHEAD_BLKS;
+ 	sbi->s_sectors_written_start =
+ 		part_stat_read(sb->s_bdev, sectors[STAT_WRITE]);
++	sbi->s_sectors_discarded_start =
++		part_stat_read(sb->s_bdev, sectors[STAT_DISCARD]);
++	sbi->s_nr_discard_ops_start =
++		part_stat_read(sb->s_bdev, ios[STAT_DISCARD]);
+ 
+ 	err = ext4_load_super(sb, &logical_sb_block, silent);
+ 	if (err)
+@@ -5229,6 +5244,8 @@ static int __ext4_fill_super(struct fs_c
+ 
+ 	es = sbi->s_es;
+ 	sbi->s_kbytes_written = le64_to_cpu(es->s_kbytes_written);
++	sbi->s_kbytes_discarded = le64_to_cpu(es->s_kbytes_discarded);
++	sbi->s_nr_discard_ops = le64_to_cpu(es->s_nr_discard_ops);
+ 
+ 	err = ext4_init_metadata_csum(sb, es);
+ 	if (err)
+@@ -6127,6 +6144,14 @@ static void ext4_update_super(struct sup
+ 		cpu_to_le64(sbi->s_kbytes_written +
+ 		    ((part_stat_read(sb->s_bdev, sectors[STAT_WRITE]) -
+ 		      sbi->s_sectors_written_start) >> 1));
++	es->s_kbytes_discarded =
++		cpu_to_le64(sbi->s_kbytes_discarded +
++		    ((part_stat_read(sb->s_bdev, sectors[STAT_DISCARD]) -
++		      sbi->s_sectors_discarded_start) >> 1));
++	es->s_nr_discard_ops =
++		cpu_to_le64(sbi->s_nr_discard_ops +
++		    ((part_stat_read(sb->s_bdev, ios[STAT_DISCARD]) -
++		      sbi->s_nr_discard_ops_start)));
+ 	if (percpu_counter_initialized(&sbi->s_freeclusters_counter))
+ 		ext4_free_blocks_count_set(es,
+ 			EXT4_C2B(sbi, percpu_counter_sum_positive(
+Index: linux-5.14.0-503.35.1.el9_5/fs/ext4/sysfs.c
+===================================================================
+--- linux-5.14.0-503.35.1.el9_5.orig/fs/ext4/sysfs.c
++++ linux-5.14.0-503.35.1.el9_5/fs/ext4/sysfs.c
+@@ -23,6 +23,8 @@ typedef enum {
+ 	attr_delayed_allocation_blocks,
+ 	attr_session_write_kbytes,
+ 	attr_lifetime_write_kbytes,
++	attr_lifetime_discard_kbytes,
++	attr_lifetime_discard_ops,
+ 	attr_reserved_clusters,
+ 	attr_sra_exceeded_retry_limit,
+ 	attr_inode_readahead,
+@@ -78,6 +80,26 @@ static ssize_t lifetime_write_kbytes_sho
+ 			  EXT4_SB(sb)->s_sectors_written_start) >> 1)));
+ }
+ 
++static ssize_t lifetime_discard_kbytes_show(struct ext4_sb_info *sbi, char *buf)
++{
++	struct super_block *sb = sbi->s_buddy_cache->i_sb;
++
++	return sysfs_emit(buf, "%llu\n",
++			(unsigned long long)(sbi->s_kbytes_discarded +
++			((part_stat_read(sb->s_bdev, sectors[STAT_DISCARD]) -
++			  EXT4_SB(sb)->s_sectors_discarded_start) >> 1)));
++}
++
++static ssize_t lifetime_discard_ops_show(struct ext4_sb_info *sbi, char *buf)
++{
++	struct super_block *sb = sbi->s_buddy_cache->i_sb;
++
++	return sysfs_emit(buf, "%llu\n",
++			(unsigned long long)(sbi->s_nr_discard_ops +
++			(part_stat_read(sb->s_bdev, ios[STAT_DISCARD]) -
++			 EXT4_SB(sb)->s_nr_discard_ops_start)));
++}
++
+ static ssize_t inode_readahead_blks_store(struct ext4_sb_info *sbi,
+ 					  const char *buf, size_t count)
+ {
+@@ -202,6 +224,8 @@ static struct ext4_attr ext4_attr_##_nam
+ EXT4_ATTR_FUNC(delayed_allocation_blocks, 0444);
+ EXT4_ATTR_FUNC(session_write_kbytes, 0444);
+ EXT4_ATTR_FUNC(lifetime_write_kbytes, 0444);
++EXT4_ATTR_FUNC(lifetime_discard_kbytes, 0444);
++EXT4_ATTR_FUNC(lifetime_discard_ops, 0444);
+ EXT4_ATTR_FUNC(reserved_clusters, 0644);
+ EXT4_ATTR_FUNC(sra_exceeded_retry_limit, 0444);
+ 
+@@ -258,6 +282,8 @@ static struct attribute *ext4_attrs[] =
+ 	ATTR_LIST(delayed_allocation_blocks),
+ 	ATTR_LIST(session_write_kbytes),
+ 	ATTR_LIST(lifetime_write_kbytes),
++	ATTR_LIST(lifetime_discard_kbytes),
++	ATTR_LIST(lifetime_discard_ops),
+ 	ATTR_LIST(reserved_clusters),
+ 	ATTR_LIST(sra_exceeded_retry_limit),
+ 	ATTR_LIST(inode_readahead_blks),
+@@ -391,6 +417,10 @@ static ssize_t ext4_attr_show(struct kob
+ 		return session_write_kbytes_show(sbi, buf);
+ 	case attr_lifetime_write_kbytes:
+ 		return lifetime_write_kbytes_show(sbi, buf);
++	case attr_lifetime_discard_kbytes:
++		return lifetime_discard_kbytes_show(sbi, buf);
++	case attr_lifetime_discard_ops:
++		return lifetime_discard_ops_show(sbi, buf);
+ 	case attr_reserved_clusters:
+ 		return sysfs_emit(buf, "%llu\n",
+ 				(unsigned long long)
+@@ -496,6 +526,56 @@ static ssize_t ext4_attr_store(struct ko
+ 	return 0;
+ }
+ 
++static ssize_t ext4_seq_discard_stats_write(struct file *file,
++					    const char __user *buf,
++					    size_t count, loff_t *pos)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(pde_data(file_inode(file)));
++	int i;
++
++	for (i = 0; i < EXT4_HIST_MAX; i++)
++		percpu_counter_set(&sbi->s_discard_ops[i], 0);
++	return count;
++}
++
++static int ext4_seq_discard_stats_show(struct seq_file *seq, void *offset)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(seq->private);
++	int i;
++	unsigned long total = 0, cur;
++	bool have_nonzero = false;
++
++	for (i = 0; i < EXT4_HIST_MAX; i++) {
++		cur = percpu_counter_sum(&sbi->s_discard_ops[i]);
++		if (cur != 0) {
++			seq_printf(seq, "%s ", have_nonzero ? "," : "sizes: {");
++			if (i < 10)
++				seq_printf(seq, "%luKB: %lu", BIT(i), cur);
++			else if (i < 20)
++				seq_printf(seq, "%luMB: %lu", BIT(i - 10), cur);
++			else
++				seq_printf(seq, "%luGB: %lu", BIT(i - 20), cur);
++			total += cur;
++			have_nonzero = true;
++		}
++	}
++	seq_printf(seq, "%scount: %lu\n", have_nonzero ? " }\n" : "", total);
++	return 0;
++}
++
++static int ext4_seq_discard_stats_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, ext4_seq_discard_stats_show, pde_data(inode));
++}
++
++static const struct proc_ops ext4_seq_discard_stats_fops = {
++	.proc_open	= ext4_seq_discard_stats_open,
++	.proc_read	= seq_read,
++	.proc_lseek	= seq_lseek,
++	.proc_release	= single_release,
++	.proc_write	= ext4_seq_discard_stats_write,
++};
++
+ static void ext4_sb_release(struct kobject *kobj)
+ {
+ 	struct ext4_sb_info *sbi = container_of(kobj, struct ext4_sb_info,
+@@ -552,6 +632,8 @@ int ext4_register_sysfs(struct super_blo
+ 	if (ext4_proc_root)
+ 		sbi->s_proc = proc_mkdir(sb->s_id, ext4_proc_root);
+ 	if (sbi->s_proc) {
++		proc_create_data("discard_stats", 0644, sbi->s_proc,
++				&ext4_seq_discard_stats_fops, sb);
+ 		proc_create_single_data("options", S_IRUGO, sbi->s_proc,
+ 				ext4_seq_options_show, sb);
+ 		proc_create_single_data("es_shrinker_info", S_IRUGO,
+Index: linux/fs/ext4/mballoc.c
+===================================================================
+--- linux.orig/fs/ext4/mballoc.c
++++ linux/fs/ext4/mballoc.c
+@@ -4039,12 +4039,16 @@ static inline int ext4_issue_discard(str
+ 		ext4_group_t block_group, ext4_grpblk_t cluster, int count)
+ {
+ 	ext4_fsblk_t discard_block;
++	unsigned int val;
+ 
+ 	discard_block = (EXT4_C2B(EXT4_SB(sb), cluster) +
+ 			 ext4_group_first_block_no(sb, block_group));
+ 	count = EXT4_C2B(EXT4_SB(sb), count);
+ 	trace_ext4_discard_blocks(sb,
+ 			(unsigned long long) discard_block, count);
++	val = min(fls((count << (sb->s_blocksize_bits - 10)) - 1),
++		  EXT4_HIST_MAX - 1);
++	percpu_counter_inc(&EXT4_SB(sb)->s_discard_ops[val]);
+ 
+ 	return sb_issue_discard(sb, discard_block, count, GFP_NOFS, 0);
+ }

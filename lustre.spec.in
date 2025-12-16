@@ -1178,3 +1178,9 @@ alternatives --remove lustre %{_usrsrc}/lustre-%{version}
 %clean
 rm -rf $RPM_BUILD_ROOT
 rm -rf %{_tmppath}/kmp
+
+%changelog
+* Wed Dec 10 2025 Minh Diep <mdiep@whamcloud.com>
+- build: allow customizable release ID
+* Tue Jun 12 2007 Jody McIntyre <scjody@clusterfs.com>
+- Add the spec file into Lustre branch b1_6.
