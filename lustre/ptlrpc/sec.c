@@ -31,9 +31,6 @@
 
 #include "ptlrpc_internal.h"
 
-#include "gss/gss_err.h"
-#include "gss/gss_internal.h"
-
 static int send_sepol;
 module_param(send_sepol, int, 0644);
 MODULE_PARM_DESC(send_sepol, "Client sends SELinux policy status");
@@ -761,26 +758,9 @@ again:
 	}
 
 	if (unlikely(test_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags))) {
-		int rc2 = 0;
-
 		if (unlikely(test_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags)) &&
-		    (rc2 = sptlrpc_req_replace_dead_ctx(req, sec)) == 0) {
+		    sptlrpc_req_replace_dead_ctx(req, sec) == 0) {
 			ctx = req->rq_cli_ctx;
-			sptlrpc_sec_put(sec);
-			goto again;
-		}
-		if (timeout == MAX_SCHEDULE_TIMEOUT &&
-		    (GSS_ROUTINE_ERROR(ctx2gctx(ctx)->gc_gss_err) ==
-		     GSS_S_NO_CONTEXT || rc2 == -ENODATA)) {
-			/* Context is in error, but if MAX_SCHEDULE_TIMEOUT
-			 * this is very likely for a LDLM req and being
-			 * transient during a failover/failback on server side,
-			 * so try to refresh it !
-			 */
-			CDEBUG(D_SEC,
-			       "ctx is in error (%p, fl %lx), trying to refresh it\n",
-			       ctx, ctx->cc_flags);
-			clear_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
 			sptlrpc_sec_put(sec);
 			goto again;
 		}
@@ -1052,10 +1032,8 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
 	}
 
 	if (cli_ctx_is_error(ctx)) {
-		/* Ignore ctx in error for LDLM, and try to refresh */
-		CDEBUG(D_SEC,
-		       "%s: ctx is in error (%p, fl %lx), try to refresh\n",
-		       imp->imp_obd->obd_name, ctx, ctx->cc_flags);
+		sptlrpc_cli_ctx_put(ctx, 1);
+		RETURN(-EACCES);
 	}
 
 	req = ptlrpc_request_cache_alloc(GFP_NOFS);
