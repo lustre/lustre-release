@@ -21,15 +21,8 @@
 
 #include "osc_internal.h"
 
-/** \addtogroup osc
- *  @{
- */
+/* Object operations. */
 
-/*****************************************************************************
- *
- * Object operations.
- *
- */
 static void osc_obj_build_res_name(struct osc_object *osc,
 				   struct ldlm_res_id *resname)
 {
@@ -44,8 +37,8 @@ static const struct osc_object_operations osc_object_ops = {
 int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 		    const struct lu_object_conf *conf)
 {
-        struct osc_object           *osc   = lu2osc(obj);
-        const struct cl_object_conf *cconf = lu2cl_conf(conf);
+	struct osc_object *osc = lu2osc(obj);
+	const struct cl_object_conf *cconf = lu2cl_conf(conf);
 
 	osc->oo_oinfo = cconf->u.coc_oinfo;
 #ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
@@ -102,7 +95,7 @@ void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 	LASSERT(atomic_read(&osc->oo_nr_ios) == 0);
 
 	lu_object_fini(obj);
-	/* osc doen't contain an lu_object_header, so we don't need call_rcu */
+	/* OSC doen't contain an lu_object_header, so we don't need call_rcu */
 	OBD_SLAB_FREE_PTR(osc, osc_object_kmem);
 }
 EXPORT_SYMBOL(osc_object_free);
@@ -112,8 +105,8 @@ int osc_lvb_print(const struct lu_env *env, void *cookie,
 {
 	return (*p)(env, cookie, "size: %llu mtime: %llu atime: %llu "
 		    "ctime: %llu blocks: %llu",
-                    lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
-                    lvb->lvb_ctime, lvb->lvb_blocks);
+		    lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
+		    lvb->lvb_ctime, lvb->lvb_blocks);
 }
 EXPORT_SYMBOL(osc_lvb_print);
 
@@ -225,7 +218,8 @@ int osc_object_prune(const struct lu_env *env, struct cl_object *obj)
 	struct ldlm_res_id *resname = &osc_env_info(env)->oti_resname;
 
 	/* DLM locks don't hold a reference of osc_object so we have to
-	 * clear it before the object is being destroyed. */
+	 * clear it before the object is being destroyed.
+	 */
 	osc_build_res_name(osc, resname);
 	ldlm_resource_iterate(osc_export(osc)->exp_obd->obd_namespace, resname,
 			      osc_object_ast_clear, osc);
@@ -321,8 +315,13 @@ drop_lock:
 }
 
 /**
+ * osc_req_attr_set() - Update attribute of a client object
+ * @env: Lustre environment
+ * @obj: client object which Attributes is being updated [out]
+ * @attr: pointer to struct cl_req_attr (input comes in this struct)
+ *
  * Implementation of struct cl_object_operations::coo_req_attr_set() for osc
- * layer. osc is responsible for struct obdo::o_id and struct obdo::o_seq
+ * layer. OSC is responsible for struct obdo::o_id and struct obdo::o_seq
  * fields.
  */
 static void osc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
@@ -466,4 +465,3 @@ int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc)
 	RETURN(0);
 }
 EXPORT_SYMBOL(osc_object_invalidate);
-/** @} osc */
