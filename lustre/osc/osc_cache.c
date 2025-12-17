@@ -48,9 +48,7 @@ static void osc_extent_tree_dump0(int mask, struct osc_object *obj,
 static void osc_unreserve_grant(struct client_obd *cli, unsigned int reserved,
 				unsigned int unused);
 
-/** \addtogroup osc
- *  @{
- */
+/* OSC */
 
 /* ------------------ osc extent ------------------ */
 static inline char *ext_flags(struct osc_extent *ext, char *flags)
@@ -251,12 +249,12 @@ out:
 #define sanity_check_nolock(ext) \
 	osc_extent_sanity_check0(ext, __func__, __LINE__)
 
-#define sanity_check(ext) ({                                                   \
-	int __res;                                                             \
-	osc_object_lock((ext)->oe_obj);                                        \
-	__res = sanity_check_nolock(ext);                                      \
-	osc_object_unlock((ext)->oe_obj);                                      \
-	__res;                                                                 \
+#define sanity_check(ext) ({						\
+	int __res;							\
+	osc_object_lock((ext)->oe_obj);					\
+	__res = sanity_check_nolock(ext);				\
+	osc_object_unlock((ext)->oe_obj);				\
+	__res;								\
 })
 
 static inline bool
@@ -266,7 +264,15 @@ overlapped(const struct osc_extent *ex1, const struct osc_extent *ex2)
 }
 
 /**
+ * osc_extent_is_overlapped() - Report if no overlapped extent in the tree.
+ * @obj: Pointer to struct osc_object (all extents)
+ * @ext: osc_extent that is checked for overlap
+ *
  * sanity check - to make sure there is no overlapped extent in the tree.
+ *
+ * Return:
+ * * %0 no overlap found
+ * * %1 overlap found
  */
 static int osc_extent_is_overlapped(struct osc_object *obj,
 				    struct osc_extent *ext)
@@ -368,9 +374,11 @@ static void osc_extent_put(const struct lu_env *env, struct osc_extent *ext)
 }
 
 /**
- * osc_extent_put_trust() is a special version of osc_extent_put() when
- * it's known that the caller is not the last user. This is to address the
- * problem of lacking of lu_env ;-).
+ * osc_extent_put_trust() - Special version of osc_extent_put()
+ * @ext: osc_extent that is checked to be not the last
+ *
+ * Is a special version of osc_extent_put() when it's known that the caller is
+ * not the last user. This is to address the problem of lacking of lu_env ;-).
  */
 static void osc_extent_put_trust(struct osc_extent *ext)
 {
@@ -380,6 +388,11 @@ static void osc_extent_put_trust(struct osc_extent *ext)
 }
 
 /**
+ * osc_extent_search() - Return extent having pgoff @index, or return the
+ *                       greatest previous extent in the tree.
+ * @obj: Pointer to struct osc_object (all extents)
+ * @index: Index to return
+ *
  * Return the extent which includes pgoff @index, or return the greatest
  * previous extent in the tree.
  */
@@ -493,8 +506,17 @@ static void osc_extent_remove(struct osc_extent *ext)
 }
 
 /**
+ * osc_extent_merge() - merge extents to get better performance.
+ * @env: Lustre environment
+ * @cur: Pointer to osc_extent (extent which @victim is being merged too)
+ * @victim: Pointer to osc_extent (extent which is being merged to @cur)
+ *
  * This function is used to merge extents to get better performance. It checks
  * if @cur and @victim are contiguous at block level.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 			    struct osc_extent *victim)
@@ -561,7 +583,11 @@ static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 }
 
 /**
- * Drop user count of osc_extent, and unplug IO asynchronously.
+ * osc_extent_release() - Drop user count of osc_extent, and unplug IO
+ *                        asyncronously.
+ * @env: Lustre environment
+ * @ext: Pointer to osc_extent (extent which is being released)
+ * @prio: priority of IO
  */
 void osc_extent_release(const struct lu_env *env, struct osc_extent *ext,
 			enum cl_io_priority prio)
@@ -648,8 +674,16 @@ void osc_extent_release(const struct lu_env *env, struct osc_extent *ext,
 }
 
 /**
- * Find or create an extent which includes @index, core function to manage
- * extent tree.
+ * osc_extent_find() - Find or create an extent which includes @index, core
+ *                     function to manage extent tree.
+ * @env: Lustre environment
+ * @obj: Pointer to struct osc_object (all extents)
+ * @index: Page index
+ * @grants: Used when creating extent
+ *
+ * Return:
+ * * Valid osc_extent poiner on success
+ * * %negative on failure
  */
 static struct osc_extent *osc_extent_find(const struct lu_env *env,
 					  struct osc_object *obj, pgoff_t index,
@@ -836,7 +870,13 @@ out:
 }
 
 /**
- * Called when IO is finished to an extent.
+ * osc_extent_finish() - Called when IO is finished to an extent.
+ * @env: Lustre environment
+ * @ext: Pointer to osc_extent (extent which is IO finish is called)
+ * @sent: %True if RPC was dispatched
+ * @rc: return value of writeback stored under @ext [out]
+ *
+ * Return %0 always
  */
 int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		      int sent, int rc)
@@ -909,7 +949,14 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 }
 
 /**
- * Wait for the extent's state to become @state.
+ * osc_extent_wait() - Wait for the extent's state to become @state.
+ * @env: Lustre environment
+ * @ext: Pointer to osc_extent (extent which is being waited for state change)
+ * @state: Value of OSC state
+ *
+ * Return:
+ * * %0 on success
+ * * %1 on failure
  */
 static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 			   enum osc_extent_state state)
@@ -955,8 +1002,17 @@ static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 }
 
 /**
+ * osc_extent_truncate() - trunacate an extent
+ * @ext: Pointer to osc_extent (extent which is being truncated)
+ * @trunc_index: truncate extent beyond @trunc_index
+ * @partial: If %False truncate is at page boundry. Else it is partial
+ *
  * Discard pages with index greater than @size. If @ext is overlapped with
  * @size, then partial truncate happens.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 				bool partial)
@@ -1081,8 +1137,16 @@ out:
 }
 
 /**
+ * osc_extent_make_ready() - Make the extent prepared for transfer.
+ * @env: Lustre environment
+ * @ext: Pointer to osc_extent (extent which is being ready for transfer)
+ *
  * This function is used to make the extent prepared for transfer.
  * A race with flusing page - ll_writepage() has to be handled cautiously.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osc_extent_make_ready(const struct lu_env *env,
 				 struct osc_extent *ext)
@@ -1157,9 +1221,18 @@ static int osc_extent_make_ready(const struct lu_env *env,
 }
 
 /**
+ * osc_extent_expand() - Simpilified version of osc_extent_find()
+ * @ext: Extent to expand
+ * @index: Page index
+ * @grants: Used when creating extent
+ *
  * Quick and simple version of osc_extent_find(). This function is frequently
  * called to expand the extent for the same IO. To expand the extent, the
  * page index must be in the same or next chunk of ext->oe_end.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osc_extent_expand(struct osc_extent *ext, pgoff_t index,
 			     unsigned int *grants)
@@ -1419,10 +1492,18 @@ static void osc_release_write_grant(struct client_obd *cli,
 }
 
 /**
+ * osc_reserve_grant() - Reserve grants for IO
+ * @cli: client side OBD
+ * @bytes: Grants(memory) to reserve
+ *
  * To avoid sleeping with object lock held, it's good for us allocate enough
  * grants before entering into critical section.
  *
  * client_obd_list_lock held by caller
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osc_reserve_grant(struct client_obd *cli, unsigned int bytes)
 {
@@ -1472,9 +1553,10 @@ static void osc_unreserve_grant(struct client_obd *cli,
 }
 
 /**
- * Free grant after IO is finished or canceled.
- *
- * @lost_grant is used to remember how many grants we have allocated but not
+ * osc_free_grant() - Free grant after IO is finished or canceled.
+ * @cli: client side OBD
+ * @nr_pages: Number of pages involved in IO
+ * @lost_grant: is used to remember how many grants we have allocated but not
  * used, we should return these grants to OST. There're two cases where grants
  * can be lost:
  * 1. truncate;
@@ -1483,6 +1565,7 @@ static void osc_unreserve_grant(struct client_obd *cli,
  *    chunks to serve this partial write. OSTs don't actually know the page
  *    size on the client side. so clients have to calculate lost grant by the
  *    blocksize on the OST. See tgt_grant_check() for details.
+ * @dirty_grant: grants for dirty pages
  */
 static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 			   unsigned int lost_grant, unsigned int dirty_grant)
@@ -1511,7 +1594,11 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 }
 
 /**
- * The companion to osc_enter_cache(), called when @oap is no longer part of
+ * osc_exit_cache() - Companion to osc_enter_cache()
+ * @cli: client side OBD
+ * @oap: Page not part of dirty accounting
+ *
+ * Companion to osc_enter_cache(), called when @oap is no longer part of
  * the dirty accounting due to error.
  */
 static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap)
@@ -1522,6 +1609,11 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap)
 }
 
 /**
+ * osc_enter_cache_try() - Try & check if @bytes is availabe for @oap caching
+ * @cli: client side OBD
+ * @oap: Page for caching
+ * @bytes: Grants in bytes required
+ *
  * Non-blocking version of osc_enter_cache() that consumes grant only when it
  * is available.
  */
@@ -1573,6 +1665,13 @@ static inline void cli_lock_after_unplug(struct client_obd *cli)
 	spin_lock(&cli->cl_loi_list_lock);
 }
 /**
+ * osc_enter_cache() - reserve dirty page accounting
+ * @env: Lustre environment
+ * @cli: client side OBD
+ * @osc: pointer to the Lustre client object
+ * @oap: Page for caching
+ * @bytes: Grants in bytes required
+ *
  * The main entry to reserve dirty page accounting. Usually the grant reserved
  * in this function will be freed in bulk in osc_free_grant() unless it fails
  * to add osc cache, in that case, it will be freed in osc_exit_cache().
@@ -1872,6 +1971,11 @@ can_merge(const struct osc_extent *ext, const struct osc_extent *in_rpc)
 }
 
 /**
+ * try_to_add_extent_for_io() - Add extent to RPC
+ * @cli: client side OBD
+ * @ext: Pointer to osc_extent (extent which is being added to RPC)
+ * @data: pointer to struct extent_rpc_data
+ *
  * Try to add extent to one RPC. We need to think about the following things:
  * - # of pages must not be over max_pages_per_rpc
  * - extent must be compatible with previous ones
@@ -1942,6 +2046,10 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 }
 
 /**
+ * get_write_extents() - Prepare pages that will be attached to RPC
+ * @obj: Pointer to struct osc_object (all extents)
+ * @rpclist: List of extents that will be write RPC
+ *
  * In order to prevent multiple ptlrpcd from breaking contiguous extents,
  * get_write_extent() takes all appropriate extents in atomic.
  *
@@ -1953,6 +2061,8 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
  * 4. If urgent list is not empty, goto 2;
  * 5. Traverse the extent tree from the 1st extent;
  * 6. Above steps exit if there is no space in this RPC.
+ *
+ * Return IO page count
  */
 static unsigned int get_write_extents(struct osc_object *obj,
 				      struct list_head *rpclist)
@@ -2108,14 +2218,18 @@ static unsigned int get_read_extents(struct osc_object *obj,
 }
 
 /**
- * prepare pages for ASYNC io and put pages in send queue.
+ * osc_send_read_rpc() - prepare pages for ASYNC io and put pages in send queue.
+ * @env: Lustre environment
+ * @cli: client side OBD
+ * @osc: pointer to the Lustre client object
  *
  * \param cmd OBD_BRW_* macroses
  * \param lop pending pages
  *
- * \return zero if no page added to send queue.
- * \return 1 if pages successfully added to send queue.
- * \return negative on errors.
+ * Return:
+ * * %0 if no page added to send queue.
+ * * %1 if pages successfully added to send queue.
+ * * %negative on errors.
  */
 static int
 osc_send_read_rpc(const struct lu_env *env, struct client_obd *cli,
@@ -2558,11 +2672,20 @@ int osc_teardown_async_page(const struct lu_env *env,
 }
 
 /**
+ * osc_flush_async_page() - Called when page is picked up by kernel to write out
+ * @env: Lustre environment
+ * @io: high-level I/O
+ * @ops: asynchronous page to flush
+ *
  * This is called when a page is picked up by kernel to write out.
  *
  * We should find out the corresponding extent and add the whole extent
  * into urgent list. The extent may be being truncated or used, handle it
  * carefully.
+ *
+ * Return:
+ * * %0 on sucess
+ * * %negative on failure
  */
 int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 			 struct osc_page *ops)
@@ -2946,7 +3069,16 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 }
 
 /**
- * Called by osc_io_setattr_start() to freeze and destroy covering extents.
+ * osc_cache_truncate_start() - Called by osc_io_setattr_start() to freeze and
+ *                              destroy covering extents.
+ * @env: Lustre environment
+ * @obj: Pointer to struct osc_object (all extents)
+ * @size: Size in bytes to truncate
+ * @extp: Exptent that needs to be truncated [out]
+ *
+ * Return:
+ * * %0 on sucess
+ * * %negative on failure
  */
 int osc_cache_truncate_start(const struct lu_env *env, struct osc_object *obj,
 			     __u64 size, struct osc_extent **extp)
@@ -3074,7 +3206,10 @@ again:
 EXPORT_SYMBOL(osc_cache_truncate_start);
 
 /**
- * Called after osc_io_setattr_end to add oio->oi_trunc back to cache.
+ * osc_cache_truncate_end() - Called after osc_io_setattr_end to add
+ *                            oio->oi_trunc back to cache.
+ * @env: Lustre environment
+ * @ext: Pointer to osc_extent (extent which is being truncated)
  */
 void osc_cache_truncate_end(const struct lu_env *env, struct osc_extent *ext)
 {
@@ -3104,6 +3239,12 @@ void osc_cache_truncate_end(const struct lu_env *env, struct osc_extent *ext)
 }
 
 /**
+ * osc_cache_wait_range() - Wait for extents in specific range to be written out
+ * @env: Lustre environment
+ * @obj: pointer to the Lustre client object
+ * @start: Start index
+ * @end: End index
+ *
  * Wait for extents in a specific range to be written out.
  * The caller must have called osc_cache_writeback_range() to issue IO
  * otherwise it will take a long time for this function to finish.
@@ -3111,6 +3252,10 @@ void osc_cache_truncate_end(const struct lu_env *env, struct osc_extent *ext)
  * Caller must hold inode_mutex , or cancel exclusive dlm lock so that
  * nobody else can dirty this range of file while we're waiting for
  * extents to be written.
+ *
+ * Return:
+ * * %0 on sucess
+ * * %negative on failure
  */
 int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
 			 pgoff_t start, pgoff_t end)
@@ -3161,13 +3306,17 @@ again:
 EXPORT_SYMBOL(osc_cache_wait_range);
 
 /**
- * Called to write out a range of osc object.
- *
- * @hp     : should be set this is caused by lock cancel;
+ * osc_cache_writeback_range() - Called to write out a range of osc object.
+ * @env: Lustre environment
+ * @obj: pointer to the Lustre client object
+ * @start: Start index
+ * @end: End index
+ * @hp: should be set this is caused by lock cancel;
  * @discard: is set if dirty pages should be dropped - file will be deleted or
- *	   truncated, this implies there is no partially discarding extents.
+ *           truncated, this implies there is no partially discarding extents.
+ * @prio: priority of IO
  *
- * Return how many pages will be issued, or error code if error occurred.
+ * Return how many pages will be issued, or %-ERRNO if error occurred.
  */
 int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 			      pgoff_t start, pgoff_t end, int hp, int discard,
@@ -3331,12 +3480,22 @@ repeat:
 EXPORT_SYMBOL(osc_cache_writeback_range);
 
 /**
- * Returns a list of pages by a given [start, end] of \a obj.
+ * osc_page_gang_lookup() - loop over group(gang) of pages and check for locks
+ *                          or discard them
+ * @env: Lustre environment
+ * @io: client IO context
+ * @osc: pointer to the Lustre client object
+ * @start: Start index
+ * @end: End index
+ * @cb: callback function
+ * @cbdata: Data for callback
  *
  * Gang tree lookup (radix_tree_gang_lookup()) optimization is absolutely
  * crucial in the face of [offset, EOF] locks.
  *
- * Return at least one page in @queue unless there is no covered page.
+ * Return:
+ * * list of pages by a given [start, end] of @obj.
+ * * at least one page in @queue unless there is no covered page.
  */
 bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 			  struct osc_object *osc, pgoff_t start, pgoff_t end,
@@ -3432,7 +3591,7 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(osc_page_gang_lookup);
 
-/**
+/*
  * Check if page @page is covered by an extra lock or discard it.
  */
 static bool check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
@@ -3538,12 +3697,23 @@ bool osc_discard_cb(const struct lu_env *env, struct cl_io *io,
 EXPORT_SYMBOL(osc_discard_cb);
 
 /**
+ * osc_lock_discard_pages() - Handle OSC discard/check for lock of pages
+ * @env: Lustre environment
+ * @osc: pointer to the Lustre client object
+ * @start: Start index
+ * @end: End index
+ * @discard: If %true discard page. Else check for lock
+ *
  * Discard pages protected by the given lock. This function traverses radix
  * tree to find all covering pages and discard them. If a page is being covered
  * by other locks, it should remain in cache.
  *
  * If error happens on any step, the process continues anyway (the reasoning
  * behind this being that lock cancellation cannot be delayed indefinitely).
+ *
+ * Return:
+ * * %0: on Success
+ * * %-ERRNO: on Failure
  */
 int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 			   pgoff_t start, pgoff_t end, bool discard)
@@ -3670,5 +3840,3 @@ out_unlock:
 
 	RETURN(0);
 }
-
-/** @} osc */
