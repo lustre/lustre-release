@@ -56,7 +56,9 @@ fi
 
 if [[ -r /etc/redhat-release ]]; then
 	rhel_version=$(sed -e 's/[^0-9.]*//g' /etc/redhat-release)
-	if (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
+	if (( $(version_code $rhel_version) >= $(version_code 9.7.0) )); then
+		always_except LU-19430 6 7b 35 102
+	elif (( $(version_code $rhel_version) >= $(version_code 9.3.0) )); then
 		always_except LU-17289 102          # fio io_uring
 		always_except LU-17781 33	    # inconsistent LSOM
 	elif (( $(version_code $rhel_version) >= $(version_code 8.9.0) )); then
