@@ -425,13 +425,14 @@ out_nodemap:
 }
 
 /**
- * Check whether allow the client to set supplementary group IDs or not.
+ * allow_client_chgrp() - Check whether allow the client to set supplementary
+ *                        group IDs or not.
+ * @info: pointer to the thread context
+ * @uc: pointer to the RPC user descriptor
  *
- * \param[in] info	pointer to the thread context
- * \param[in] uc	pointer to the RPC user descriptor
- *
- * \retval		true if allow to set supplementary group IDs
- * \retval		false for other cases
+ * Return:
+ * * %true if allow to set supplementary group IDs
+ * * %false for other cases
  */
 bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
 {
@@ -756,7 +757,7 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 }
 
 /**
- * mdt_check_resource_id() - check client access to resource via nodemap
+ * mdt_check_resource_ids() - check client access to resource via nodemap
  *
  * @info: mdt thread environment
  * @obj: mdt object to check
@@ -2169,16 +2170,15 @@ int mdt_fids_different_target(struct mdt_thread_info *info,
 }
 
 /**
- * Check whether \a child is remote object on \a parent.
+ * mdt_is_remote_object() - Check whether @child is remote object on @parent.
+ * @info: thread environment
+ * @parent: parent object, it's the same as child object in getattr_by_fid
+ * @child: child object
  *
- * \param[in]  info	thread environment
- * \param[in]  parent	parent object, it's the same as child object in
- *			getattr_by_fid
- * \param[in]  child	child object
- *
- * \retval 1	is remote object.
- * \retval 0	isn't remote object.
- * \retval < 1  error code
+ * Return:
+ * * %1 is remote object.
+ * * %0 isn't remote object.
+ * * %negative  error code
  */
 int mdt_is_remote_object(struct mdt_thread_info *info,
 			 struct mdt_object *parent,
