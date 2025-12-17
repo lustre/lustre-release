@@ -252,8 +252,20 @@ out:
 }
 
 /**
+ * osc_ladvise_base() - Send LADVISE to OST
+ * @exp: Pointer to obd_export (connection to server)
+ * @oa: Pointer to struct obdo (holds atrributes passed to OST)
+ * @ladvise_hdr: Pointer to struct ladvice_hdr (corresponds to userspace args)
+ * @upcall: Function to be called when RPC is done. Is allowed to be NULL
+ * @cookie: User defined data
+ * @rqset: if NUll return immediately else queue
+ *
  * If rqset is NULL, do not wait for response. Upcall and cookie could also
  * be NULL in this case
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int osc_ladvise_base(struct obd_export *exp, struct obdo *oa,
 		     struct ladvise_hdr *ladvise_hdr,
@@ -400,20 +412,18 @@ EXPORT_SYMBOL(osc_punch_send);
 
 /**
  * osc_fallocate_base() - Handles fallocate request.
- *
- * @exp:	Export structure
- * @oa:		Attributes passed to OSS from client (obdo structure)
- * @upcall:	Primary & supplementary group information
- * @cookie:	Exclusive identifier
- * @rqset:	Request list.
- * @mode:	Operation done on given range.
+ * @exp: Export structure
+ * @oa: Attributes passed to OSS from client (obdo structure)
+ * @upcall: Primary & supplementary group information
+ * @cookie: Exclusive identifier
+ * @mode: Operation done on given range.
  *
  * osc_fallocate_base() - Handles fallocate requests only. Only block
  * allocation or standard preallocate operation is supported currently.
  * Other mode flags is not supported yet. ftruncate(2) or truncate(2)
  * is supported via SETATTR request.
  *
- * Return: Non-zero on failure and O on success.
+ * Returns %0 on success and %negative on failure
  */
 int osc_fallocate_base(struct obd_export *exp, struct obdo *oa,
 		       obd_enqueue_update_f upcall, void *cookie, int mode)
@@ -751,7 +761,7 @@ static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 	}
 }
 
-/**
+/*
  * grant thread data for shrinking space.
  */
 struct grant_thread_data {
@@ -947,7 +957,7 @@ void osc_schedule_grant_work(void)
 }
 EXPORT_SYMBOL(osc_schedule_grant_work);
 
-/**
+/*
  * Start grant thread for returing grant to server for idle clients.
  */
 static int osc_start_grant_work(void)
@@ -1426,6 +1436,7 @@ static struct page *osc_encrypt_pagecache_blocks(struct page *srcpage,
 
 /**
  * osc_finalize_bounce_page() - overlay to llcrypt_finalize_bounce_page
+ * @pagep: pointer to a struct page
  *
  * This overlay function is necessary to handle bounce pages
  * allocated by ourselves.
@@ -2743,9 +2754,19 @@ static void brw_commit(struct ptlrpc_request *req)
 }
 
 /**
+ * osc_build_rpc() - Build RPC based on @cmd
+ * @env: Lustre environment
+ * @cli: client side OBD
+ * @ext_list: linked list of osc_extent structures
+ * @cmd: Command type. (For eg: OBD_BRW_WRITE)
+ *
  * Build an RPC by the list of extent @ext_list. The caller must ensure
  * that the total pages in this list are NOT over max pages per RPC.
  * Extents in the list must be in OES_RPC state.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		  struct list_head *ext_list, int cmd)
@@ -3927,11 +3948,15 @@ static int osc_import_event(struct obd_device *obd, struct obd_import *imp,
 }
 
 /**
+ * osc_cancel_weight() - Determine if lock can be canceled before replay
+ * @lock: Pointer to struct ldlm_lock
+ *
  * Determine whether the lock can be canceled before replaying the lock
  * during recovery, see bug16774 for detailed information.
  *
- * \retval zero the lock can't be canceled
- * \retval other ok to cancel
+ * Return:
+ * * %0 the lock can't be canceled
+ * * %1 the lock ok to cancel
  */
 static int osc_cancel_weight(struct ldlm_lock *lock)
 {
