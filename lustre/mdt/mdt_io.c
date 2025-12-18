@@ -173,13 +173,11 @@ static struct ptlrpc_hpreq_ops mdt_hpreq_rw = {
 };
 
 /**
- * Assign high priority operations to an IO request.
+ * mdt_hp_brw() - Assign high priority operations to an IO request.
+ * @tsi: target session environment for this request
  *
- * Check if the incoming request is a candidate for
- * high-priority processing. If it is, assign it a high
- * priority operations table.
- *
- * \param[in] tsi	target session environment for this request
+ * Check if the incoming request is a candidate for high-priority processing.
+ * If it is, assign it a high priority operations table.
  */
 void mdt_hp_brw(struct tgt_session_info *tsi)
 {
@@ -237,19 +235,18 @@ static int mdt_punch_hpreq_lock_match(struct ptlrpc_request *req,
 }
 
 /**
- * Implementation of ptlrpc_hpreq_ops::hpreq_lock_check for OST_PUNCH request.
+ * mdt_punch_hpreq_check() - OST_PUNCH hp lock check request
+ * @req: the incoming request
  *
+ * Implementation of ptlrpc_hpreq_ops::hpreq_lock_check for OST_PUNCH request.
  * High-priority queue request check for whether the given punch request
- * (\a req) is blocking an LDLM lock cancel. Also checks whether the request is
+ * (@req) is blocking an LDLM lock cancel. Also checks whether the request is
  * covered by an LDLM lock.
  *
-
- *
- * \param[in] req	the incoming request
- *
- * \retval		1 if \a req is blocking an LDLM lock cancel
- * \retval		0 if it is not
- * \retval		-ESTALE if lock is not found
+ * Return:
+ * * %1 if @req is blocking an LDLM lock cancel
+ * * %0 if it is not
+ * * %-ESTALE if lock is not found
  */
 static int mdt_punch_hpreq_check(struct ptlrpc_request *req)
 {
@@ -286,12 +283,13 @@ static int mdt_punch_hpreq_check(struct ptlrpc_request *req)
 }
 
 /**
- * Implementation of ptlrpc_hpreq_ops::hpreq_lock_fini for OST_PUNCH request.
+ * mdt_punch_hpreq_fini() - hpreq lock fini for OST_PUNCH request.
+ * @req: request which is being processed.
  *
+ * Implementation of ptlrpc_hpreq_ops::hpreq_lock_fini for OST_PUNCH request.
  * Called after the request has been handled. It refreshes lock timeout again
  * so that client has more time to send lock cancel RPC.
  *
- * \param[in] req	request which is being processed.
  */
 static void mdt_punch_hpreq_fini(struct ptlrpc_request *req)
 {
@@ -916,13 +914,21 @@ stop:
 }
 
 /**
- * mdt_object_fallocate_zero(): brw(ZERO) over specified region
+ * mdt_object_fallocate_zero() -  brw(ZERO) over specified region
+ * @env: Lustre environment
+ * @exp: Lustre Export
+ * @mdt: MDT device
  * @mo: object to be applied on
  * @start: region start position
  * @end: region end position
+ * @la: Attributes
  *
  * There maybe cases when we need to use BRW to mimic fallocate ops,
  * e.g. when fallocate(zero) is invoked on indirect-mapping inode.
+ *
+ * * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int
 mdt_object_fallocate_zero(const struct lu_env *env, struct obd_export *exp,
@@ -988,15 +994,15 @@ out:
 }
 
 /**
- * MDT request handler for OST_FALLOCATE RPC.
+ * mdt_fallocate_hdl() - MDT request handler for OST_FALLOCATE RPC.
+ * @tsi: target session environment for this request
  *
  * This is part of request processing. Validate request fields,
  * preallocate the given MDT object and pack reply.
  *
- * \param[in] tsi	target session environment for this request
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int mdt_fallocate_hdl(struct tgt_session_info *tsi)
 {
@@ -1198,15 +1204,16 @@ out:
 	RETURN(rc);
 }
 /**
- * Get FIEMAP (FIle Extent MAPping) for object with the given FID.
+ * mdt_fiemap_get() - Get FIEMAP (FIle Extent MAPping) for object with the
+ *                    given FID.
+ * @tsi: target session environment for this request
  *
  * This function returns a list of extents which describes how a file's
  * blocks are laid out on the disk.
  *
- * \param[in] tsi	target session environment for this request
- *
- * \retval		0 if \a fiemap is filled with data successfully
- * \retval		negative value on error
+ * Return:
+ * * %0 if fiemap is filled with data successfully
+ * * %negative value on error
  */
 int mdt_fiemap_get(struct tgt_session_info *tsi)
 {
@@ -1429,11 +1436,17 @@ out:
 }
 
 /**
- * MDT glimpse for Data-on-MDT
+ * mdt_do_glimpse() - MDT glimpse for Data-on-MDT
+ * @env: Lustre enviroment
+ * @ns: DLM namespace
+ * @res: Object that is being operated
  *
  * If there is write lock on client then function issues glimpse_ast to get
  * an actual size from that client.
  *
+ * * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdt_do_glimpse(const struct lu_env *env, struct ldlm_namespace *ns,
 			  struct ldlm_resource *res)
@@ -1532,11 +1545,20 @@ static void mdt_lvb2reply(struct ldlm_resource *res, struct mdt_body *mb,
 }
 
 /**
- * MDT glimpse for Data-on-MDT
+ * mdt_dom_object_size() - MDT glimpse for Data-on-MDT
+ * @env: Lustre environment
+ * @mdt: Metadata device
+ * @fid: FID object which attribute is requested
+ * @mb: struct mdt_body, which will be poplated on success [out]
+ * @dom_lock: If %true get lock before access
  *
  * This function is called when MDT get attributes for the DoM object.
  * If there is write lock on client then function issues glimpse_ast to get
  * an actual size from that client.
+ *
+ * * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
 			const struct lu_fid *fid, struct mdt_body *mb,
@@ -1563,7 +1585,11 @@ int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
 }
 
 /**
- * MDT DoM lock intent policy (glimpse)
+ * mdt_glimpse_enqueue() - MDT DoM lock intent policy (glimpse)
+ * @mti: pointer to struct mdt_thread_info (context)
+ * @ns: DLM namespace
+ * @lockp: pointer to the lock [in, out]
+ * @flags: LDLM flags
  *
  * Intent policy is called when lock has an intent, for DoM file that
  * means glimpse lock and policy fills Lock Value Block (LVB).
@@ -1571,14 +1597,10 @@ int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
  * If already granted lock is found it will be placed in \a lockp and
  * returned back to caller function.
  *
- * \param[in] tsi	 session info
- * \param[in,out] lockp	 pointer to the lock
- * \param[in] flags	 LDLM flags
- *
- * \retval		ELDLM_LOCK_REPLACED if already granted lock was found
- *			and placed in \a lockp
- * \retval		ELDLM_LOCK_ABORTED in other cases except error
- * \retval		negative value on error
+ * Return:
+ * * %ELDLM_LOCK_REPLACED if already granted lock was found and placed in @lockp
+ * * %ELDLM_LOCK_ABORTED in other cases except error
+ * * %negative value on error
  */
 int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 			struct ldlm_lock **lockp, __u64 flags)
@@ -1792,15 +1814,15 @@ bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
 }
 
 /**
- * MDT request handler for OST_GETATTR RPC.
+ * mdt_data_version_get() - MDT request handler for OST_GETATTR RPC.
+ * @tsi: target session environment for this request
  *
  * This is data-specific request to get object and layout versions under
  * IO lock. It is reliable only for Data-on-MDT files.
  *
- * \param[in] tsi target session environment for this request
- *
- * \retval 0 if successful
- * \retval negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int mdt_data_version_get(struct tgt_session_info *tsi)
 {
@@ -2091,11 +2113,16 @@ out:
 }
 
 /**
- * Completion AST for DOM discard locks:
+ * ldlm_dom_discard_cp_ast() - Completion AST for DOM discard locks:
+ * @lock: LDLM lock
+ * @flags: unused
+ * @data: unused
  *
  * CP AST an DOM discard lock is called always right after enqueue or from
  * reprocess if lock was blocked, in the latest case l_ast_data is set to
  * the mdt_object which is kept while there are pending locks on it.
+ *
+ * Return %0 always
  */
 static int ldlm_dom_discard_cp_ast(struct ldlm_lock *lock, __u64 flags,
 				   void *data)
