@@ -3811,6 +3811,9 @@ test_161() {
 run_test 161 "evict osp by ping evictor"
 
 test_162() {
+	(( $MDS1_VERSION >= $(version_code 2.16.55) )) ||
+		skip "Need MDS version at least 2.16.55 for file attribute fix"
+
 	local mntpt=$(facet_mntpt $SINGLEMDS)
 
 	test_mkdir -i 0 -c 1 $DIR/$tdir
