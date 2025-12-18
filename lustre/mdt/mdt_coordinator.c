@@ -75,11 +75,12 @@ err:
 }
 
 /**
- * get obj and HSM attributes on a fid
- * \param mti [IN] context
- * \param fid [IN] object fid
- * \param hsm [OUT] HSM meta data
- * \retval obj or error (-ENOENT if not found)
+ * mdt_hsm_get_md_hsm() - get obj and HSM attributes on a fid
+ * @mti: pointer to struct mdt_thread_info (context)
+ * @fid: object fid
+ * @hsm: Populated with HSM metadata if @fid is found [out]
+ *
+ * Return mdt_object on success or %-ENOENT if not found
  */
 struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 				      const struct lu_fid *fid,
@@ -412,15 +413,18 @@ out_car:
 }
 
 /**
- *  llog_cat_process() callback, used to:
- *  - find waiting request and start action
- *  - purge canceled and done requests
- * \param env [IN] environment
- * \param llh [IN] llog handle
- * \param hdr [IN] llog record
- * \param data [IN/OUT] cb data = struct hsm_scan_data
- * \retval 0 success
- * \retval -ve failure
+ * mdt_coordinator_cb() -  llog_cat_process() callback
+ * @env: lustre environment
+ * @llh: llog handle
+ * @hdr: llog record
+ * @data: pointer to struct hsm_scan_data [in/out]
+ *
+ * llog_cat_process() callback, used to: find waiting request and start action
+ * purge canceled and done requests
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdt_coordinator_cb(const struct lu_env *env,
 			      struct llog_handle *llh,
@@ -556,10 +560,14 @@ static bool cdt_transition[CDT_STATES_COUNT][CDT_STATES_COUNT] = {
 };
 
 /**
- * Change coordinator thread state
- * Some combinations are not valid, so catch them here.
+ * set_cdt_state_locked() - Change coordinator thread state
+ * @cdt: pointer to struct coordinator (coordinator state which is changed)
+ * @new_state: Coordinator new state
  *
- * Returns 0 on success, with old_state set if not NULL, or -EINVAL if
+ * Change coordinator thread state Some combinations are not valid, so catch
+ * them here.
+ *
+ * Return %0 on success, with old_state set if not NULL, or %-EINVAL if
  * the transition was not possible.
  */
 static int set_cdt_state_locked(struct coordinator *cdt,
@@ -635,10 +643,12 @@ static int cdt_start_pending_restore(struct mdt_device *mdt,
 }
 
 /**
- * coordinator thread
- * \param data [IN] obd device
- * \retval 0 success
- * \retval -ve failure
+ * mdt_coordinator() - coordinator thread
+ * @data: obd device
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdt_coordinator(void *data)
 {
@@ -848,14 +858,17 @@ fail_to_start:
 }
 
 /**
- * register a new HSM restore handle for a file and take EX lock on the layout
- * \param mti [IN] thread info
- * \param cdt [IN] coordinator
- * \param fid [IN] fid of the file to restore
- * \param he  [IN] HSM extent
- * \retval 0 success
- * \retval 1 restore handle already exists for the fid
- * \retval -ve failure
+ * cdt_restore_handle_add() - register a new HSM restore handle for a file and
+ *                            take EX lock on the layout
+ * @mti: thread info
+ * @cdt: coordinator
+ * @fid: fid of the file to restore
+ * @he: HSM extent
+ *
+ * Return:
+ * * %0 success
+ * * %1 restore handle already exists for the fid
+ * * %negative failure
  */
 int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 			   const struct lu_fid *fid,
@@ -912,11 +925,13 @@ int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 }
 
 /**
- * lookup a restore handle by FID
- * \param cdt [IN] coordinator
- * \param fid [IN] FID
- * \retval true cdt_restore_handle found
- * \retval false not found
+ * cdt_restore_handle_exists() - lookup a restore handle by FID
+ * @cdt: coordinator
+ * @fid: FID
+ *
+ * Return:
+ * * %true cdt_restore_handle found
+ * * %false not found
  */
 bool cdt_restore_handle_exists(struct coordinator *cdt,
 			       const struct lu_fid *fid)
@@ -946,7 +961,7 @@ void cdt_restore_handle_del(struct mdt_thread_info *mti,
 	cdt_crh_put(crh, mti);
 }
 
-/**
+/*
  * data passed to llog_cat_process() callback
  * to scan requests and take actions
  */
@@ -955,14 +970,18 @@ struct hsm_restore_data {
 };
 
 /**
- *  llog_cat_process() callback, used to:
- *  - find restore request and allocate the restore handle
- * \param env [IN] environment
- * \param llh [IN] llog handle
- * \param hdr [IN] llog record
- * \param data [IN/OUT] cb data = struct hsm_restore_data
- * \retval 0 success
- * \retval -ve failure
+ * hsm_restore_cb() - llog_cat_process() callback
+ * @env: lustre environment
+ * @llh: llog handle
+ * @hdr: llog record
+ * @data: pointer to struct hsm_restore_data [in/out]
+ *
+ * llog_cat_process() callback, used to find restore request and allocate the
+ * restore handle
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int hsm_restore_cb(const struct lu_env *env,
 			  struct llog_handle *llh,
@@ -1016,9 +1035,15 @@ out:
 }
 
 /**
- * restore coordinator state at startup
- * the goal is to take a layout lock for each registered restore request
- * \param mti [IN] context
+ * mdt_hsm_pending_restore() - restore coordinator state at startup
+ * @mti: pointer to struct mdt_thread_info (context)
+ *
+ * restore coordinator state at startup the goal is to take a layout lock for
+ * each registered restore request
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdt_hsm_pending_restore(struct mdt_thread_info *mti)
 {
@@ -1141,10 +1166,12 @@ static int mdt_hsm_max_requests_update(struct coordinator *cdt, u64 new)
 }
 
 /**
- * initialize coordinator struct
- * \param mdt [IN] device
- * \retval 0 success
- * \retval -ve failure
+ * mdt_hsm_cdt_init() - initialize coordinator struct
+ * @mdt: device
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mdt_hsm_cdt_init(struct mdt_device *mdt)
 {
@@ -1222,8 +1249,10 @@ out_request_cookie_hash:
 }
 
 /**
- * free a coordinator thread
- * \param mdt [IN] device
+ * mdt_hsm_cdt_fini() - free a coordinator thread
+ * @mdt: device
+ *
+ * Return %0 always
  */
 int  mdt_hsm_cdt_fini(struct mdt_device *mdt)
 {
@@ -1244,10 +1273,12 @@ int  mdt_hsm_cdt_fini(struct mdt_device *mdt)
 }
 
 /**
- * start a coordinator thread
- * \param mdt [IN] device
- * \retval 0 success
- * \retval -ve failure
+ * mdt_hsm_cdt_start() - start a coordinator thread
+ * @mdt: device
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 {
@@ -1310,8 +1341,12 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 }
 
 /**
- * stop a coordinator thread
- * \param mdt [IN] device
+ * mdt_hsm_cdt_stop() - stop a coordinator thread
+ * @mdt: device
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 {
@@ -1372,13 +1407,14 @@ out:
 }
 
 /**
- * register all agent requests from a scan phase
- * \param mti [IN] context
- * \param rq [IN] request
- * \param uuid [OUT] in case of CANCEL, the uuid of the agent
- *  which is running the CT
- * \retval 0 success
- * \retval -ve failure
+ * mdt_hsm_add_hsr() - register all agent requests from a scan phase
+ * @mti: context
+ * @rq: request
+ * @uuid: in case of CANCEL, the uuid of the agent which is running the CT [out]
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mdt_hsm_add_hsr(struct mdt_thread_info *mti, struct hsm_scan_request *rq,
 		    struct obd_uuid *uuid)
@@ -1467,11 +1503,15 @@ out:
 }
 
 /**
- * swap layouts between 2 fids
- * \param mti [IN] context
- * \param obj [IN]
- * \param dfid [IN]
- * \param mh_common [IN] MD HSM
+ * hsm_swap_layouts() - swap layouts between 2 fids
+ * @mti: pointer to struct mdt_thread_info (context)
+ * @obj: MDT object whose layout will be swapped
+ * @dfid: FID of destination object
+ * @mh_common: MD HSM (attributes to be set on @dfid)
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int hsm_swap_layouts(struct mdt_thread_info *mti,
 			    struct mdt_object *obj, const struct lu_fid *dfid,
@@ -1532,11 +1572,15 @@ out:
 }
 
 /**
- * update status of a completed request
- * \param mti [IN] context
- * \param pgs [IN] progress of the copy tool
- * \retval 0 success
- * \retval -ve failure
+ * hsm_cdt_request_completed() - update status of a completed request
+ * @mti: pointer to struct mdt_thread_info (context)
+ * @pgs: progress of the copy tool
+ * @car: HSM request
+ * @status: Agent status
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 				     struct hsm_progress_kernel *pgs,
@@ -1759,11 +1803,13 @@ out:
 }
 
 /**
- * update status of a request
- * \param mti [IN] context
- * \param pgs [IN] progress of the copy tool
- * \retval 0 success
- * \retval -ve failure
+ * mdt_hsm_update_request_state() - update status of a request
+ * @mti: context
+ * @pgs: progress of the copy tool
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 				 struct hsm_progress_kernel *pgs)
@@ -1894,14 +1940,15 @@ putref:
 
 
 /**
- *  llog_cat_process() callback, used to:
- *  - purge all requests
- * \param env [IN] environment
- * \param llh [IN] llog handle
- * \param hdr [IN] llog record
- * \param data [IN] cb data = struct mdt_thread_info
- * \retval 0 success
- * \retval -ve failure
+ * mdt_cancel_all_cb() - llog_cat_process() callback, used to purge all requests
+ * @env: lustre environment
+ * @llh: llog handle
+ * @hdr: llog record
+ * @data: Pointer to struct mdt_thread_info
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int mdt_cancel_all_cb(const struct lu_env *env,
 			     struct llog_handle *llh,
@@ -1940,8 +1987,12 @@ static int mdt_cancel_all_cb(const struct lu_env *env,
 }
 
 /**
- * cancel all actions
- * \param obd [IN] MDT device
+ * hsm_cancel_all_actions() - cancel all actions
+ * @mdt: MDT device
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int hsm_cancel_all_actions(struct mdt_device *mdt)
 {
@@ -2051,12 +2102,13 @@ out_env:
 }
 
 /**
- * check if a request is compatible with file status
- * \param hai [IN] request description
- * \param archive_id [IN] request archive id
- * \param rq_flags [IN] request flags
- * \param hsm [IN] file HSM metadata
- * \retval boolean
+ * mdt_hsm_is_action_compat() - check if request is compatible with file status
+ * @hai: request description
+ * @archive_id: request archive id
+ * @rq_flags: request flags
+ * @hsm: file HSM metadata
+ *
+ * Return %true if compatible else %false is non-compatible
  */
 bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
 			      u32 archive_id, u64 rq_flags,
@@ -2118,10 +2170,12 @@ static const struct {
 };
 
 /**
- * convert a policy name to a bit
- * \param name [IN] policy name
- * \retval 0 unknown
- * \retval   policy bit
+ * hsm_policy_str2bit() - convert a policy name to a bit
+ * @name: policy name
+ *
+ * Return:
+ * * %0 if unknown
+ * * police bit
  */
 static __u64 hsm_policy_str2bit(const char *name)
 {
@@ -2135,11 +2189,10 @@ static __u64 hsm_policy_str2bit(const char *name)
 }
 
 /**
- * convert a policy bit field to a string
- * \param mask [IN] policy bit field
- * \param hexa [IN] print mask before bit names
- * \param buffer [OUT] string
- * \param count [IN] size of buffer
+ * hsm_policy_bit2str() - convert a policy bit field to a string
+ * @m: seq_file object
+ * @mask: mask policy bit field
+ * @hexa: print mask before bit names
  */
 static void hsm_policy_bit2str(struct seq_file *m, const __u64 mask,
 				const bool hexa)
@@ -2767,10 +2820,12 @@ static struct kobj_type hsm_ktype = {
 };
 
 /**
- * create sysfs entries for coordinator
- * \param mdt [IN]
- * \retval 0 success
- * \retval -ve failure
+ * hsm_cdt_tunables_init() - create sysfs entries for coordinator
+ * @mdt: MDT device
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int hsm_cdt_tunables_init(struct mdt_device *mdt)
 {
@@ -2795,9 +2850,8 @@ int hsm_cdt_tunables_init(struct mdt_device *mdt)
 }
 
 /**
- * remove sysfs entries for coordinator
- *
- * @mdt
+ * hsm_cdt_tunables_fini() - remove sysfs entries for coordinator
+ * @mdt: MDT device
  */
 void hsm_cdt_tunables_fini(struct mdt_device *mdt)
 {
