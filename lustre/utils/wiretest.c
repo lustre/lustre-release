@@ -2602,7 +2602,9 @@ void lustre_assert_wire_constants(void)
 		(unsigned)MDS_CREATE_DEFAULT_LMV);
 	LASSERTF(MDS_CLOSE_LAYOUT_SWAP_HSM == 0x02000000UL, "found 0x%.8xUL\n",
 		(unsigned)MDS_CLOSE_LAYOUT_SWAP_HSM);
-	LASSERTF(MDS_NAMEHASH == 0x04000000UL, "found 0x%.8xUL\n",
+	LASSERTF(MDS_RENAME_AGAIN == 0x04000000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_RENAME_AGAIN);
+	LASSERTF(MDS_NAMEHASH == 0x08000000UL, "found 0x%.8xUL\n",
 		(unsigned)MDS_NAMEHASH);
 
 	/* Checks for struct mdt_body */
