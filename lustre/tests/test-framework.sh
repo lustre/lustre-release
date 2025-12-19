@@ -3148,7 +3148,9 @@ fi"
 
 shutdown_node () {
 	local node=$1
+	local uptime_info=$(do_node $node "uptime" 2>/dev/null || echo "uptime unavailable")
 
+	log "shutdown_node: $node uptime: $uptime_info"
 	echo + $POWER_DOWN $node
 	$POWER_DOWN $node
 }
@@ -3158,9 +3160,10 @@ shutdown_node_hard () {
 	local attempts=$SHUTDOWN_ATTEMPTS
 
 	for i in $(seq $attempts) ; do
-		shutdown_node $host
 		sleep 1
-		wait_for_function --quiet "! ping -w 3 -c 1 $host" 5 1 &&
+		shutdown_node $host
+		sleep 5
+		wait_for_function "! ping -w 3 -c 1 $host" 5 1 &&
 			return 0
 		echo "waiting for $host to fail attempts=$attempts"
 		[ $i -lt $attempts ] ||
@@ -3172,7 +3175,9 @@ shutdown_client() {
 	local client=$1
 	local mnt=${2:-$MOUNT}
 	local attempts=3
+	local uptime_info=$(do_node $client "uptime" 2>/dev/null || echo "uptime unavailable")
 
+	log "shutdown_client: $client uptime: $uptime_info"
 	if [ "$FAILURE_MODE" = HARD ]; then
 		shutdown_node_hard $client
 	else
@@ -3240,7 +3245,9 @@ shutdown_facet() {
 
 reboot_node() {
 	local node=$1
+	local uptime_info=$(do_node $node "uptime" 2>/dev/null || echo "uptime unavailable")
 
+	log "reboot_node: $node uptime before reboot: $uptime_info"
 	echo + $POWER_UP $node
 	$POWER_UP $node
 }
