@@ -2574,8 +2574,7 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
  * and this is where we start setting things up.
  * @param data Mount options (e.g. -o flock,abort_recov)
  */
-static int lustre_tgt_fill_super(struct super_block *sb, void *lmd2_data,
-				 int silent)
+static int lustre_tgt_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	struct lustre_mount_data *lmd;
 	struct lustre_sb_info *lsi;
@@ -2584,7 +2583,7 @@ static int lustre_tgt_fill_super(struct super_block *sb, void *lmd2_data,
 	ENTRY;
 	CDEBUG(D_MOUNT|D_VFSTRACE, "VFS Op: sb %p\n", sb);
 
-	lsi = lustre_init_lsi(sb);
+	lsi = lustre_init_lsi(fc, sb);
 	if (!lsi)
 		RETURN(-ENOMEM);
 	lmd = lsi->lsi_lmd;
@@ -2599,12 +2598,6 @@ static int lustre_tgt_fill_super(struct super_block *sb, void *lmd2_data,
 	 * LU-639: the OBD cleanup of last mount may not finish yet, wait here.
 	 */
 	obd_zombie_barrier();
-
-	/* Figure out the lmd from the mount options */
-	if (lmd_parse(lmd2_data, lmd)) {
-		lustre_put_lsi(sb);
-		GOTO(out, rc = -EINVAL);
-	}
 
 	if (lmd_is_client(lmd)) {
 		rc = -ENODEV;
@@ -2639,11 +2632,29 @@ out:
 }
 
 /***************** FS registration ******************/
-static struct dentry *lustre_tgt_mount(struct file_system_type *fs_type,
-				       int flags, const char *devname,
-				       void *data)
+static int lustre_tgt_get_tree(struct fs_context *fc)
 {
-	return mount_nodev(fs_type, flags, data, lustre_tgt_fill_super);
+	return get_tree_nodev(fc, lustre_tgt_fill_super);
+}
+
+static const struct fs_context_operations lustre_tgt_fs_context_ops = {
+	.parse_monolithic	= lustre_parse_monolithic,
+	.get_tree		= lustre_tgt_get_tree,
+	.free			= lustre_fc_free,
+};
+
+static int lustre_tgt_init_fs_context(struct fs_context *fc)
+{
+	struct lustre_mount_data *lmd;
+
+	OBD_ALLOC_PTR(lmd);
+	if (!lmd)
+		return -ENOMEM;
+
+	kref_init(&lmd->lmd_ref);
+	fc->fs_private = lmd;
+	fc->ops = &lustre_tgt_fs_context_ops;
+	return 0;
 }
 
 /* Register the "lustre_tgt" fs type.
@@ -2657,11 +2668,11 @@ static struct dentry *lustre_tgt_mount(struct file_system_type *fs_type,
  * The long-term goal is to disentangle the client and server mount code.
  */
 static struct file_system_type lustre_tgt_fstype = {
-	.owner		= THIS_MODULE,
-	.name		= "lustre_tgt",
-	.mount		= lustre_tgt_mount,
-	.kill_sb	= kill_anon_super,
-	.fs_flags	= FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
+	.owner			= THIS_MODULE,
+	.name			= "lustre_tgt",
+	.init_fs_context	= lustre_tgt_init_fs_context,
+	.kill_sb		= kill_anon_super,
+	.fs_flags		= FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
 };
 MODULE_ALIAS_FS("lustre_tgt");
 

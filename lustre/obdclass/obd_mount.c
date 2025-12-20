@@ -600,20 +600,42 @@ SERVER_ONLY_EXPORT_SYMBOL(lustre_stop_mgc);
 
 /***************** lustre superblock **************/
 
-struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
+static void lustre_put_lsm_free(struct kref *kref)
 {
+	struct lustre_mount_data *lmd = container_of(kref,
+						     struct lustre_mount_data,
+						     lmd_ref);
+	OBD_FREE(lmd->lmd_dev, strlen(lmd->lmd_dev) + 1);
+	OBD_FREE(lmd->lmd_profile, strlen(lmd->lmd_profile) + 1);
+	OBD_FREE(lmd->lmd_fileset, strlen(lmd->lmd_fileset) + 1);
+	OBD_FREE(lmd->lmd_mgssec, strlen(lmd->lmd_mgssec) + 1);
+	OBD_FREE(lmd->lmd_opts, strlen(lmd->lmd_opts) + 1);
+	if (lmd->lmd_exclude_count)
+		OBD_FREE_PTR_ARRAY(lmd->lmd_exclude,
+				   lmd->lmd_exclude_count);
+	OBD_FREE(lmd->lmd_mgs, strlen(lmd->lmd_mgs) + 1);
+	OBD_FREE(lmd->lmd_mgsname, strlen(lmd->lmd_mgsname) + 1);
+	OBD_FREE(lmd->lmd_osd_type, strlen(lmd->lmd_osd_type) + 1);
+	OBD_FREE(lmd->lmd_params, 4096);
+	OBD_FREE(lmd->lmd_nidnet, strlen(lmd->lmd_nidnet) + 1);
+	OBD_FREE_PTR(lmd);
+}
+
+struct lustre_sb_info *lustre_init_lsi(struct fs_context *fc, struct super_block *sb)
+{
+	struct lustre_mount_data *lmd = fc->fs_private;
 	struct lustre_sb_info *lsi;
 
 	ENTRY;
+	if (!lmd)
+		RETURN(NULL);
 
 	OBD_ALLOC_PTR(lsi);
 	if (!lsi)
 		RETURN(NULL);
-	OBD_ALLOC_PTR(lsi->lsi_lmd);
-	if (!lsi->lsi_lmd) {
-		OBD_FREE_PTR(lsi);
-		RETURN(NULL);
-	}
+
+	kref_get(&lmd->lmd_ref);
+	lsi->lsi_lmd = lmd;
 
 	s2lsi_nocast(sb) = lsi;
 	/* we take 1 extra ref for our setup */
@@ -640,35 +662,9 @@ static int lustre_free_lsi(struct lustre_sb_info *lsi)
 	LASSERT(kref_read(&lsi->lsi_mounts) == 0);
 
 	llcrypt_sb_free(lsi);
-	if (lsi->lsi_lmd != NULL) {
-		OBD_FREE(lsi->lsi_lmd->lmd_dev,
-			 strlen(lsi->lsi_lmd->lmd_dev) + 1);
-		OBD_FREE(lsi->lsi_lmd->lmd_profile,
-			 strlen(lsi->lsi_lmd->lmd_profile) + 1);
-		OBD_FREE(lsi->lsi_lmd->lmd_fileset,
-			 strlen(lsi->lsi_lmd->lmd_fileset) + 1);
-		OBD_FREE(lsi->lsi_lmd->lmd_mgssec,
-			 strlen(lsi->lsi_lmd->lmd_mgssec) + 1);
-		OBD_FREE(lsi->lsi_lmd->lmd_opts,
-			 strlen(lsi->lsi_lmd->lmd_opts) + 1);
-		if (lsi->lsi_lmd->lmd_exclude_count)
-			OBD_FREE(lsi->lsi_lmd->lmd_exclude,
-				sizeof(lsi->lsi_lmd->lmd_exclude[0]) *
-				lsi->lsi_lmd->lmd_exclude_count);
-		OBD_FREE(lsi->lsi_lmd->lmd_mgs,
-			 strlen(lsi->lsi_lmd->lmd_mgs) + 1);
-		OBD_FREE(lsi->lsi_lmd->lmd_mgsname,
-			 strlen(lsi->lsi_lmd->lmd_mgsname) + 1);
-		OBD_FREE(lsi->lsi_lmd->lmd_osd_type,
-			 strlen(lsi->lsi_lmd->lmd_osd_type) + 1);
-		OBD_FREE(lsi->lsi_lmd->lmd_params, 4096);
-		OBD_FREE(lsi->lsi_lmd->lmd_nidnet,
-			 strlen(lsi->lsi_lmd->lmd_nidnet) + 1);
-
-		OBD_FREE_PTR(lsi->lsi_lmd);
-	}
-
-	LASSERT(lsi->lsi_llsbi == NULL);
+	if (lsi->lsi_lmd)
+		kref_put(&lsi->lsi_lmd->lmd_ref, lustre_put_lsm_free);
+	LASSERT(!lsi->lsi_llsbi);
 	OBD_FREE_PTR(lsi);
 
 	RETURN(0);
@@ -1313,10 +1309,10 @@ failed:
  * e.g. mount -v -t lustre -o abort_recov uml1:uml2:/lustre-client /mnt/lustre
  * dev is passed as device=uml1:/lustre by mount.lustre_tgt
  */
-int lmd_parse(char *options, struct lustre_mount_data *lmd)
+int lustre_parse_monolithic(struct fs_context *fc, void *lmd2_data)
 {
-	char *s1, *s2, *opts, *orig_opts, *devname = NULL;
-	struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
+	char *options = lmd2_data, *s1, *s2, *opts, *orig_opts, *devname = NULL;
+	struct lustre_mount_data *lmd = fc->fs_private, *raw = lmd2_data;
 	int rc = 0;
 
 	ENTRY;
@@ -1639,4 +1635,13 @@ invalid:
 
 	RETURN(rc);
 }
-EXPORT_SYMBOL(lmd_parse);
+EXPORT_SYMBOL(lustre_parse_monolithic);
+
+void lustre_fc_free(struct fs_context *fc)
+{
+	struct lustre_mount_data *lmd = fc->fs_private;
+
+	kref_put(&lmd->lmd_ref, lustre_put_lsm_free);
+	fc->fs_private = NULL;
+}
+EXPORT_SYMBOL(lustre_fc_free);

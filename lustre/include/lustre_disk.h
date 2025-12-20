@@ -25,6 +25,7 @@
 #include <asm/byteorder.h>
 #include <linux/types.h>
 #include <linux/backing-dev.h>
+#include <linux/fs_context.h>
 #include <linux/list.h>
 #if !defined(CONFIG_LL_ENCRYPTION) && defined(HAVE_LUSTRE_CRYPTO)
 #include <lustre_crypto.h>
@@ -106,6 +107,7 @@ struct lustre_mount_data {
 	char   *lmd_mgsname;	/* MGS hostname for display */
 	char   *lmd_osd_type;	/* OSD type */
 	char   *lmd_nidnet;     /* network to restrict this client to */
+	struct kref lmd_ref;	/* reference needed for fs_context */
 };
 
 #define lmd_is_client(x) (test_bit(LMD_FLG_CLIENT, (x)->lmd_flags))
@@ -381,9 +383,11 @@ int lustre_stop_mgc(struct super_block *sb);
 int lustre_start_mgc(struct super_block *sb);
 int lustre_common_put_super(struct super_block *sb);
 
-struct lustre_sb_info *lustre_init_lsi(struct super_block *sb);
+struct lustre_sb_info *lustre_init_lsi(struct fs_context *fc,
+				       struct super_block *sb);
 int lustre_put_lsi(struct super_block *sb);
-int lmd_parse(char *options, struct lustre_mount_data *lmd);
+int lustre_parse_monolithic(struct fs_context *fc, void *lmd2_data);
+void lustre_fc_free(struct fs_context *fc);
 
 /* mgc_request.c */
 int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id,

@@ -3607,38 +3607,6 @@ void ll_umount_begin(struct super_block *sb)
 	EXIT;
 }
 
-int ll_remount_fs(struct super_block *sb, int *flags, char *data)
-{
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	char *profilenm = get_profile_name(sb);
-	int err;
-	__u32 read_only;
-
-	if ((*flags & MS_RDONLY) != (sb->s_flags & SB_RDONLY)) {
-		read_only = *flags & MS_RDONLY;
-		err = obd_set_info_async(NULL, sbi->ll_md_exp,
-					 sizeof(KEY_READ_ONLY),
-					 KEY_READ_ONLY, sizeof(read_only),
-					 &read_only, NULL);
-		if (err) {
-			LCONSOLE_WARN("Failed to remount %s %s (%d)\n",
-				      profilenm, read_only ?
-				      "read-only" : "read-write", err);
-			return err;
-		}
-
-		if (read_only)
-			sb->s_flags |= SB_RDONLY;
-		else
-			sb->s_flags &= ~SB_RDONLY;
-
-		if (test_bit(LL_SBI_VERBOSE, sbi->ll_flags))
-			LCONSOLE_WARN("Remounted %s %s\n", profilenm,
-				      read_only ?  "read-only" : "read-write");
-	}
-	return 0;
-}
-
 /**
  * ll_open_cleanup() - Cleanup the open handle that is cached on MDT-side.
  * @sb: super block for this file-system
