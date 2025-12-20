@@ -161,7 +161,7 @@ int class_del_uuid(const char *uuid)
 }
 
 int class_add_nids_to_uuid(struct obd_uuid *uuid, struct lnet_nid *nidlist,
-			   int nid_count, int nid_size)
+			   int nid_count)
 {
 	struct uuid_nid_data *entry;
 	int i;
@@ -181,13 +181,7 @@ int class_add_nids_to_uuid(struct obd_uuid *uuid, struct lnet_nid *nidlist,
 		entry->un_nid_count = 0;
 		CDEBUG(D_NET, "Updating UUID '%s'\n", obd_uuid2str(uuid));
 		for (i = 0; i < nid_count; i++) {
-			if (NID_BYTES(&nidlist[i]) > nid_size)
-				continue;
-
-			memset(&entry->un_nids[entry->un_nid_count], 0,
-			       sizeof(entry->un_nids[entry->un_nid_count]));
-			memcpy(&entry->un_nids[entry->un_nid_count],
-			       &nidlist[i], nid_size);
+			entry->un_nids[entry->un_nid_count] = nidlist[i];
 			entry->un_nid_count++;
 			if (entry->un_nid_count >= MTI_NIDS_MAX) {
 				CDEBUG(D_NET,

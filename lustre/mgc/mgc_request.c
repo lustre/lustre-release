@@ -1199,21 +1199,57 @@ static int mgc_import_event(struct obd_device *obd,
 	RETURN(rc);
 }
 
+static int mgc_build_nidlist(struct lnet_nid *nidlist,
+			     struct mgs_nidtbl_entry *entry)
+{
+	int nid_size = entry->mne_nid_size;
+	int i, total = 0, pos = 0;
+
+	/* in-place update: move NIDs on local net forward if any */
+	for (i = 0; i < entry->mne_nid_count; i++) {
+		struct lnet_nid nid, swp;
+
+		if (entry->mne_nid_type == 0) {
+			lnet_nid4_to_nid(entry->u.nids[i], &nid);
+		} else {
+			if (NID_BYTES(&entry->u.nidlist[i]) > nid_size)
+				continue;
+			memset(&nid, 0, sizeof(struct lnet_nid));
+			memcpy(&nid, &entry->u.nidlist[i], nid_size);
+		}
+
+		/* move local net NIDs ahead */
+		if (LNetHasLocalNet(LNET_NID_NET(&nid))) {
+			if (pos < total) {
+				swp = nidlist[pos];
+				nidlist[pos] = nid;
+				nid = swp;
+			}
+			if (pos == MTI_NIDS_MAX - 1) {
+				nidlist[pos] = nid;
+				break;
+			}
+			pos++;
+		}
+
+		if (total < MTI_NIDS_MAX)
+			nidlist[total++] = nid;
+
+	}
+	CDEBUG(D_NET, "use %d from %d NIDs\n", total, entry->mne_nid_count);
+
+	return total;
+}
+
 static int mgc_create_new_conn(struct obd_import *imp, struct lnet_nid *nidlist,
-			       int nid_count, int nid_size,
-			       struct obd_uuid *uuid)
+			       int nid_count, struct obd_uuid *uuid)
 {
 	struct obd_uuid node_uuid;
 	char prim_nid[LNET_NIDSTR_SIZE] = { 0 };
 	int i = 0;
 	int rc = 0;
 
-	/* client has no existing connection to that target yet, and
-	 * it has list of target NIDs, which may have NIDs on
-	 * networks not set up on client.
-	 * Find first NID in list on a client network and use it as
-	 * primary NID for new connection
-	 */
+	/* Try NIDs until working connection is set up */
 	while (i < nid_count) {
 		libcfs_nidstr_r(&nidlist[i], prim_nid, sizeof(prim_nid));
 
@@ -1245,7 +1281,7 @@ static int mgc_create_new_conn(struct obd_import *imp, struct lnet_nid *nidlist,
 
 	/* Add remaining NIDs in list to that connection */
 	rc = client_import_add_nids_to_conn(imp, nidlist + i, nid_count - i,
-					    nid_size, uuid);
+					    uuid);
 	if (rc < 0)
 		CERROR("%s: failed to update NID list: rc = %d\n",
 		       imp->imp_obd->obd_name, rc);
@@ -1261,6 +1297,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 {
 	struct config_llog_instance *cfg = &cld->cld_cfg;
 	struct lustre_cfg *lcfg;
+	struct lnet_nid *nidlist;
 	struct lustre_cfg_bufs bufs;
 	u64 prev_version = 0;
 	char inst[MTI_NAME_MAXLEN + 1];
@@ -1294,15 +1331,18 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 #endif /* HAVE_SERVER_SUPPORT */
 	}
 
+	OBD_ALLOC_PTR_ARRAY(nidlist, MTI_NIDS_MAX);
+	if (!nidlist)
+		RETURN(-ENOMEM);
+
 	OBD_ALLOC(buf, PAGE_SIZE);
 	if (!buf)
-		return -ENOMEM;
+		GOTO(free_nids, rc = -ENOMEM);
 	bufsz = PAGE_SIZE;
 	pos = 0;
 
 	while (datalen > 0) {
 		struct mgs_nidtbl_entry *entry = (data + off);
-		struct lnet_nid *nidlist = NULL;
 		int entry_len = sizeof(*entry);
 		struct obd_device *obd;
 		struct obd_import *imp;
@@ -1310,6 +1350,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		char *obdname;
 		char *cname;
 		char *params;
+		int nids;
 		bool is_ost;
 
 		rc = -EINVAL;
@@ -1361,23 +1402,8 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		prev_version = entry->mne_version;
 
 		if (entry->mne_nid_type == 0) {
-			int i;
-
-			OBD_ALLOC_PTR_ARRAY(nidlist, entry->mne_nid_count);
-			if (!nidlist) {
-				rc = -ENOMEM;
-				break;
-			}
-
-			/* Keep this nid data swab for normal mixed
-			 * endian handling. LU-1644
-			 */
 			if (mne_swab)
 				lustre_swab_mgs_nidtbl_entry_content(entry);
-
-			/* Turn old NID format to newer format. */
-			for (i = 0; i < entry->mne_nid_count; i++)
-				lnet_nid4_to_nid(entry->u.nids[i], &nidlist[i]);
 		} else {
 			/* Handle the case if struct lnet_nid is expanded in
 			 * the future. The MGS should prevent this but just
@@ -1385,9 +1411,8 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 			 */
 			if (entry->mne_nid_size > sizeof(struct lnet_nid))
 				continue;
-
-			nidlist = entry->u.nidlist;
 		}
+		nids = mgc_build_nidlist(nidlist, entry);
 
 		/*
 		 * Write a string with format "nid::instance" to
@@ -1404,9 +1429,6 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		if (cname == NULL) {
 			CERROR("mgc %s: invalid logname %s\n",
 			       mgc->obd_name, obdname);
-			if (entry->mne_nid_type == 0)
-				OBD_FREE_PTR_ARRAY(nidlist,
-						   entry->mne_nid_count);
 			break;
 		}
 
@@ -1422,11 +1444,11 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 
 		/* find the obd by obdname */
 		obd = class_name2obd(obdname);
-		if (obd == NULL) {
+		if (!obd) {
 			CDEBUG(D_INFO, "mgc %s: cannot find obdname %s\n",
 			       mgc->obd_name, obdname);
 			rc = 0;
-			goto free_nids;
+			continue;
 		}
 
 		/* osc.import = "connection=<Conn UUID>::<target instance>" */
@@ -1437,32 +1459,23 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 
 		with_imp_locked(obd, imp, rc) {
 			/* refresh existing connection NID list with new one */
-			rc = client_import_add_nids_to_conn(imp, nidlist,
-							entry->mne_nid_count,
-							entry->mne_nid_size,
-							uuid);
+			rc = client_import_add_nids_to_conn(imp, nidlist, nids,
+							    uuid);
 			if (rc == -ENOENT &&
 			    (dynamic_nids || obd->obd_dynamic_nids))
-				rc = mgc_create_new_conn(imp, nidlist,
-							 entry->mne_nid_count,
-							 entry->mne_nid_size,
+				rc = mgc_create_new_conn(imp, nidlist, nids,
 							 uuid);
 		}
 
 		if (rc == -ENODEV) {
-			/* client does not connect to the OST yet */
+			/* client may be not connected yet */
 			rc = 0;
-			goto free_nids;
+			continue;
 		}
 
 		if (rc < 0 && rc != -ENOSPC) {
 			CERROR("mgc: cannot find UUID by nid '%s': rc = %d\n",
 			       libcfs_nidstr(&nidlist[0]), rc);
-
-			/* For old NID format case the nidlist was allocated. */
-			if (entry->mne_nid_type == 0)
-				OBD_FREE_PTR_ARRAY(nidlist,
-						   entry->mne_nid_count);
 			break;
 		}
 
@@ -1479,10 +1492,6 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 					       bufs.lcfg_buflen));
 		if (!lcfg) {
 			rc = -ENOMEM;
-			/* For old NID format case the nidlist was allocated. */
-			if (entry->mne_nid_type == 0)
-				OBD_FREE_PTR_ARRAY(nidlist,
-						   entry->mne_nid_count);
 			break;
 		}
 		lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
@@ -1496,15 +1505,12 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		if (rc)
 			CDEBUG(D_INFO, "process config for %s error %d\n",
 			       obdname, rc);
-
 		/* continue, even one with error */
-free_nids:
-		/* For old NID format case the nidlist was allocated. */
-		if (entry->mne_nid_type == 0)
-			OBD_FREE_PTR_ARRAY(nidlist, entry->mne_nid_count);
 	}
 
 	OBD_FREE(buf, PAGE_SIZE);
+free_nids:
+	OBD_FREE_PTR_ARRAY(nidlist, MTI_NIDS_MAX);
 
 	RETURN(rc);
 }

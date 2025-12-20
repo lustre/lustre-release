@@ -151,8 +151,7 @@ EXPORT_SYMBOL(client_import_dyn_add_conn);
 
 int client_import_add_nids_to_conn(struct obd_import *imp,
 				   struct lnet_nid *nidlist,
-				   int nid_count, int nid_size,
-				   struct obd_uuid *uuid)
+				   int nid_count, struct obd_uuid *uuid)
 {
 	struct obd_import_conn *conn;
 	int rc = -ENOENT;
@@ -170,8 +169,8 @@ int client_import_add_nids_to_conn(struct obd_import *imp,
 				continue;
 			*uuid = conn->oic_uuid;
 			spin_unlock(&imp->imp_lock);
-			rc = class_add_nids_to_uuid(&conn->oic_uuid, nidlist + i,
-						    nid_count - i, nid_size);
+			rc = class_add_nids_to_uuid(&conn->oic_uuid, nidlist,
+						    nid_count);
 			RETURN(rc);
 		}
 	}

@@ -2026,7 +2026,7 @@ int lustre_uuid_to_peer(const char *uuid, struct lnet_nid *peer_nid,
 int class_add_uuid(const char *uuid, struct lnet_nid *nid);
 int class_del_uuid (const char *uuid);
 int class_add_nids_to_uuid(struct obd_uuid *uuid, struct lnet_nid *nidlist,
-			   int nid_count, int nid_size);
+			   int nid_count);
 int class_check_uuid(struct obd_uuid *uuid, struct lnet_nid *nid);
 
 /* class_obd.c */

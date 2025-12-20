@@ -1367,6 +1367,15 @@ void LNetAddPeer(struct lnet_nid *nids, int num_nids)
 }
 EXPORT_SYMBOL(LNetAddPeer);
 
+int LNetHasLocalNet(__u32 net)
+{
+	if (net == LNET_NET_ANY)
+		return false;
+
+	return lnet_islocalnet(net);
+}
+EXPORT_SYMBOL(LNetHasLocalNet);
+
 /* TODO @timday: There should be a better way? */
 void LNetLocalPrimaryNID(struct lnet_nid *nid)
 {
