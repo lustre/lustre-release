@@ -3,10 +3,10 @@
 lfs-changelog, lfs-changelog_clear \- client utility to read and clear Lustre changelogs
 .SH SYNOPSIS
 .SY "lfs changelog"
-.RB [ --follow ]
-.RB [ --user
+.RB [ \-\-follow ]
+.RB [ \-\-user
 .IR USERNAME ]
-.RB [ --mask
+.RB [ \-\-mask
 .IR MASK ]
 .I MDTNAME
 .RI [ STARTREC
@@ -17,26 +17,41 @@ lfs-changelog, lfs-changelog_clear \- client utility to read and clear Lustre ch
 .I ENDREC
 .YS
 .SH DESCRIPTION
-.TP
 .B lfs changelog
-Show the metadata changes on an MDT. Start point
+displays the metadata changes on an MDT.
+Start point
 .I STARTREC
 and end point
 .I ENDREC
-points are optional.
-The
-.B --follow
-option will block waiting for new changes.
-The
-.B --user
-option specifies a registered changelog username for filtering. The format of
+are optional.
+.PP
+.B lfs changelog_clear
+indicates that changelog records previous to
+.I ENDREC
+are no longer of interest to a particular consumer
+.IR ID ,
+potentially allowing the MDT to free up disk space.
+An
+.I ENDREC
+of 0 indicates the current last record.
+.PP
+Changelog consumers must be registered on the MDT node using
+.BR lctl-changelog_register (8).
+.SH OPTIONS
+.TP
+.B \-\-follow
+Block and wait for new changelog records to arrive.
+.TP
+.BI \-\-user\  USERNAME
+Specify a registered changelog username for filtering.
+The format of
 .I USERNAME
-can be username or ID, e.g. "cl1", "cl1-user", "1", or "user".
-The
-.B --mask
-option specifies a filtering mask in the same format as
-.BR lctl-changelog_register (8)
-, e.g. "creat,unlnk,+open,-hsm".
+can be a username or numeric ID, e.g., "cl1", "cl1-user", "1", or "user".
+.TP
+.BI \-\-mask\  MASK
+Specify a changelog event filtering mask in the same format as
+.BR lctl-changelog_register (8),
+e.g., "creat,unlnk,+open,-hsm".
 If
 .I MASK
 is not specified, the user's
@@ -44,22 +59,6 @@ is not specified, the user's
 specified to
 .BR lctl-changelog_register (8)
 will be used.
-.TP
-.B lfs changelog_clear
-Indicate that changelog records previous to
-.I ENDREC
-are no longer of
-interest to a particular consumer
-.I ID
-, potentially allowing the MDT to
-free up disk space. An
-.I ENDREC
-of 0 indicates the current last record.
-.PP
-Changelog consumers must be registered on the
-MDT node using:
-.br
-.BI "lctl --device " MDT_NAME " changelog_register"
 .SH RETURN VALUES
 Return 0 on success or a errno value on failure.
 .SH ERRORS
@@ -83,57 +82,59 @@ to striped directories or filesystem objects contained within them; if this
 behavior is needed for compatibility, please set mdd.*.enable_shard_pfid=1. This
 tunable might be deprecated in a future Lustre release.
 .SH EXAMPLES
-Register 2 changelog consumers on the MDT0000:
+Register 2 changelog consumers on MDT0000:
 .RS
 .EX
-.B [root@mds]# lctl --device lustrefs-MDT0000 changelog_register
-lustrefs-MDT0000: Registered changelog userid 'cl1'
-.B [root@mds]# lctl --device lustrefs-MDT0000 changelog_register --user dirwatch -m mkdir+rmdir
-lustrefs-MDT0000: Registered changelog userid 'cl2-dirwatch'
+.B mds# lctl --device lfs1-MDT0000 changelog_register
+lfs1-MDT0000: Registered changelog userid 'cl1'
+.B mds# lctl --device lfs1-MDT0000 changelog_register -u dirs -m mkdir+rmdir
+lfs1-MDT0000: Registered changelog userid 'cl2-dirs'
 .RE
 .PP
 Set changelog mask to generate changelogs for file creations:
 .RS
-.B [root@mds]# lctl set_param mdd.lustrefs-MDT0000.changelog_mask=CREAT
-mdd.lustrefs-MDT0000.changelog_mask=CREAT
+.B mds# lctl set_param mdd.lfs1-MDT0000.changelog_mask=CREAT
+mdd.lfs1-MDT0000.changelog_mask=CREAT
 .RE
 Generate changelogs by creating some files on the fs:
 .RS
-.B [root@client]# touch /mnt/lustrefs/test{1..101}
+.B client# touch /mnt/lfs1/test{1..101}
 .RE
 Read changelog from number 0 to 99 on MDT0000:
 .RS
-.B [root@client]# lfs changelog lustrefs-MDT0000 0 99
+.B client# lfs changelog lfs1-MDT0000 0 99
 0 01CREAT 11:03:54.129724442 2022.11.22 ... p=[0x200000007:0x1:0x0] test1
  ....
 99 01CREAT 11:03:54.129724465 2022.11.22 ... p=[0x200000007:0x1:0x0] test100
 .RE
 .PP
-Read changelog using registered user cl1:
+Read changelog records using registered user cl1:
 .RS
-.B [root@client]# lfs changelog --user cl1 lustrefs-MDT0000
+.B client# lfs changelog --user cl1 lfs1-MDT0000
 100 01CREAT 11:03:54.129724492 2022.11.22 ... p=[0x200000007:0x1:0x0] test101
 .RE
 .PP
-Read changelog using registered user cl2 with additional mask filtering:
+Read changelog records for registered user cl2-dirs with an extra filter mask:
 .RS
-.B [root@client]# lfs changelog --user cl2 --mask unlnk lustrefs-MDT0000
+.B client# lfs changelog --user cl2-dirs --mask unlnk lfs1-MDT0000
 No record found.
 .RE
 .PP
-Indicate to MDT0000 that the changelogs lower than 100 are not needed for cl1:
+Inform MDT0000 that changelogs lower than 100 are not needed for user
+.BR cl1 :
 .RS
-.B [root@client]# lfs changelog_clear lustrefs-MDT0000 cl1 99
+.B client# lfs changelog_clear lfs1-MDT0000 cl1 99
 .RE
 .PP
-Indicate to MDT0000 that the changelogs lower than 100 are not needed for cl2:
+Inform MDT0000 that changelogs lower than 200 are not needed for user
+.BR cl2-dirs :
 .RS
-.B [root@client]# lfs changelog_clear lustrefs-MDT0000 cl2 99
+.B client# lfs changelog_clear lfs1-MDT0000 cl2-dirs 199
 .RE
 .PP
 The changelogs from 0 to 99 are cleared by the MDT:
 .RS
-.B [root@client]# lfs changelog lustrefs-MDT0000 0
+.B client# lfs changelog lfs1-MDT0000 0
 100 01CREAT 11:03:54.129724492 2022.11.22 ... p=[0x200000007:0x1:0x0] test101
 .EE
 .RE
