@@ -2769,6 +2769,44 @@ test_80h() {
 }
 run_test 80h "DNE: create remote dir, drop MDT1 rep, fail 2 MDTs"
 
+test_80i() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	[[ $FAILURE_MODE != "HARD" ||
+		"$(facet_host mds1)" == "$(facet_host mds2)" ]] ||
+		skip "MDTs needs to be on diff hosts for HARD fail mode"
+
+	local xattr=$(dd status=none if=/dev/zero count=1 bs=20000 | tr '\0' 'a')
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir/foo
+	mkdir_on_mdt0 $DIR/$tdir/foo-big
+
+	setfattr -n user.smallattr1 -v "sssss" $DIR/$tdir/foo
+	setfattr -n user.bigattr1 -v $xattr $DIR/$tdir/foo-big
+	setfattr -n user.bigattr2 -v $(tr 'a' 'b' <<< $xattr) $DIR/$tdir/foo-big
+	setfattr -n user.bigattr3 -v $(tr 'a' 'c' <<< $xattr) $DIR/$tdir/foo-big
+
+	replay_barrier mds2
+
+	$LFS migrate -m 1 $DIR/$tdir
+	do_facet mds1 sync
+
+	fail mds1,mds2
+
+	[[ -e $DIR/$tdir/foo ]] || error "$DIR/$tdir/foo doesn't exit"
+	getfattr -n user.smallattr1 $DIR/$tdir/foo ||
+		error "$DIR/$tdir/foo has no user.smallattr1 attr"
+
+	[[ -e $DIR/$tdir/foo-big ]] || error "$DIR/$tdir/foo-big doesn't exit"
+	getfattr -n user.bigattr1 $DIR/$tdir/foo-big > /dev/null ||
+		error "$DIR/$tdir/foo has no user.bigattr1 attr"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 80i "DNE: migrate dir with large xatts, double failover, replay updates from MDT0"
+
 test_81a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	([ $FAILURE_MODE == "HARD" ] &&

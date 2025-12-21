@@ -223,6 +223,9 @@ static int sub_updates_write(const struct lu_env *env,
 	memcpy(lur, &record->lur_hdr, sizeof(record->lur_hdr));
 	lur->lur_update_rec.ur_update_count = 0;
 	lur->lur_update_rec.ur_param_count = 0;
+	lur->lur_update_rec.ur_master_transno =
+		record->lur_update_rec.ur_master_transno;
+	lur->lur_update_rec.ur_batchid = record->lur_update_rec.ur_batchid;
 	start = (char *)&record->lur_update_rec.ur_ops;
 	cur = next = start;
 	do {
@@ -292,6 +295,7 @@ static int sub_updates_write(const struct lu_env *env,
 		lur->lur_update_rec.ur_update_count = 0;
 		lur->lur_update_rec.ur_param_count = 0;
 		lur->lur_update_rec.ur_flags |= UPDATE_RECORD_CONTINUE;
+		lur->lur_update_rec.ur_index++;
 	} while (!eof);
 
 llog_put:

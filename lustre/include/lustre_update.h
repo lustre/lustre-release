@@ -126,7 +126,7 @@ __update_records_size(size_t raw_size)
 }
 
 static inline size_t
-update_records_size(const struct update_records *record)
+update_ops_params_len(const struct update_records *record)
 {
 	size_t op_size = 0;
 	size_t param_size = 0;
@@ -140,8 +140,13 @@ update_records_size(const struct update_records *record)
 		params = update_records_get_params(record);
 		param_size = update_params_size(params, record->ur_param_count);
 	}
+	return op_size + param_size;
+}
 
-	return __update_records_size(op_size + param_size);
+static inline size_t
+update_records_size(const struct update_records *record)
+{
+	return __update_records_size(update_ops_params_len(record));
 }
 
 static inline size_t

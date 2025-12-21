@@ -302,6 +302,7 @@ static int llog_osd_declare_write_rec(const struct lu_env *env,
 	__u32			chunk_size;
 	struct dt_object	*o;
 	int			 rc;
+	int			len;
 
 	ENTRY;
 
@@ -309,12 +310,19 @@ static int llog_osd_declare_write_rec(const struct lu_env *env,
 	LASSERT(th);
 	LASSERT(loghandle);
 	LASSERT(rec);
-	LASSERT(rec->lrh_len <= loghandle->lgh_ctxt->loc_chunk_size);
+
+	chunk_size = loghandle->lgh_ctxt->loc_chunk_size;
+	len = rec->lrh_len;
+
+	/* This declare function can be called for a large llog record
+	 * before splitting  it into smaller pieces.
+	 */
+	if (len > chunk_size)
+		len = chunk_size;
 
 	o = loghandle->lgh_obj;
 	LASSERT(o);
 
-	chunk_size = loghandle->lgh_ctxt->loc_chunk_size;
 	lgi->lgi_buf.lb_len = chunk_size;
 	lgi->lgi_buf.lb_buf = NULL;
 	/* each time we update header */
@@ -326,7 +334,7 @@ static int llog_osd_declare_write_rec(const struct lu_env *env,
 	 * the pad record can be inserted so take into account double
 	 * record size: pad and the actual record into a new block
 	 */
-	lgi->lgi_buf.lb_len = rec->lrh_len * 2;
+	lgi->lgi_buf.lb_len = len * 2;
 	lgi->lgi_buf.lb_buf = NULL;
 	/* XXX: implement declared window or multi-chunks approach */
 	rc = dt_declare_record_write(env, o, &lgi->lgi_buf, -1, th);

@@ -314,8 +314,8 @@ static int dtrq_append_updates(struct distribute_txn_replay_req *dtrq,
 
 	/* Copy the old and new records to the new allocated buffer */
 	memcpy(new_lur, dtrq->dtrq_lur, dtrq->dtrq_lur_size);
-	ptr = (char *)&new_lur->lur_update_rec +
-		update_records_size(&new_lur->lur_update_rec);
+	ptr = (char *)&new_lur->lur_update_rec.ur_ops +
+		update_ops_params_len(&new_lur->lur_update_rec);
 	memcpy(ptr, &record->ur_ops,
 	       update_records_size(record) -
 	       offsetof(struct update_records, ur_ops));
