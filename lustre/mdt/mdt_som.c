@@ -16,11 +16,14 @@
 #include "mdt_internal.h"
 
 /*
- * Swab and extract SOM attributes from on-disk xattr.
+ * lustre_buf2som() - Swab and extract SOM attributes from on-disk xattr.
+ * @buf: is a buffer containing the on-disk LSOM extended attribute.
+ * @rc: is the SOM xattr stored in @buf
+ * @ms: is the md_som structure where to extract SOM attributes.
  *
- * \param buf - is a buffer containing the on-disk LSOM extended attribute.
- * \param rc  - is the SOM xattr stored in \a buf
- * \param ms  - is the md_som structure where to extract SOM attributes.
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int lustre_buf2som(void *buf, int rc, struct md_som *ms)
 {
@@ -97,7 +100,16 @@ int mdt_get_som(struct mdt_thread_info *info, struct mdt_object *obj,
 }
 
 /**
- * Update SOM on-disk attributes.
+ * mdt_set_som() - Update SOM on-disk attributes.
+ * @info: mdt thread info
+ * @obj: MDT object
+ * @flag: state of the SOM attributes
+ * @size: Size of object
+ * @blocks: Number of blocks in object
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mdt_set_som(struct mdt_thread_info *info, struct mdt_object *obj,
 		enum lustre_som_flags flag, __u64 size, __u64 blocks)
@@ -135,7 +147,13 @@ int mdt_set_som(struct mdt_thread_info *info, struct mdt_object *obj,
 }
 
 /**
- * SOM state transition from STRICT to STALE,
+ * mdt_lsom_downgrade() - SOM state transition from STRICT to STALE
+ * @info: mdt thread info
+ * @o: MDT object
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mdt_lsom_downgrade(struct mdt_thread_info *info, struct mdt_object *o)
 {
