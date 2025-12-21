@@ -34,7 +34,10 @@ static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
 }
 
 /**
- * Get version of object by fid.
+ * mdt_obj_version_get() - Get version of object by fid.
+ * @info: struct mdt_thread_info
+ * @o: MDT object
+ * @version: Returned version saved [out]
  *
  * Return real version or ENOENT_VERSION if object doesn't exist
  */
@@ -53,9 +56,14 @@ static void mdt_obj_version_get(struct mdt_thread_info *info,
 }
 
 /**
- * Check version is correct.
+ * mdt_version_check() - Check version is correct.
+ * @req: request struct
+ * @version: version to be saved
+ * @idx: versions index
  *
  * Should be called only during replay.
+ *
+ * Return %0 on success %negative on error.
  */
 static int mdt_version_check(struct ptlrpc_request *req,
 			     __u64 version, int idx)
@@ -88,7 +96,10 @@ static int mdt_version_check(struct ptlrpc_request *req,
 }
 
 /**
- * Save pre-versions in reply.
+ * mdt_version_save() - Save pre-versions in reply.
+ * @req: request struct
+ * @version: version to be saved [out]
+ * @idx: versions index
  */
 static void mdt_version_save(struct ptlrpc_request *req, __u64 version,
 			     int idx)
@@ -106,8 +117,11 @@ static void mdt_version_save(struct ptlrpc_request *req, __u64 version,
 }
 
 /**
- * Save enoent version, it is needed when it is obvious that object doesn't
- * exist, e.g. child during create.
+ * mdt_enoent_version_save() - Save enoent version, it is needed when it is
+ *                             obvious that object doesn't exist, e.g. child
+ *                             during create.
+ * @info: struct mdt_thread_info
+ * @idx: versions index
  */
 static void mdt_enoent_version_save(struct mdt_thread_info *info, int idx)
 {
@@ -119,7 +133,10 @@ static void mdt_enoent_version_save(struct mdt_thread_info *info, int idx)
 }
 
 /**
- * Get version from disk and save in reply buffer.
+ * mdt_version_get_save() - Get version from disk and save in reply buffer.
+ * @info: struct mdt_thread_info
+ * @mto: MDT object
+ * @idx: versions index
  *
  * Versions are saved in reply only during normal operations not replays.
  */
@@ -134,7 +151,12 @@ void mdt_version_get_save(struct mdt_thread_info *info,
 }
 
 /**
- * Get version from disk and check it, no save in reply.
+ * mdt_version_get_check() - Get version from disk & check it, no save in reply.
+ * @info: struct mdt_thread_info
+ * @mto: MTD object
+ * @idx: versions index
+ *
+ * Return %0 on success %negative on error.
  */
 int mdt_version_get_check(struct mdt_thread_info *info,
 			  struct mdt_object *mto, int idx)
@@ -148,7 +170,13 @@ int mdt_version_get_check(struct mdt_thread_info *info,
 }
 
 /**
- * Get version from disk and check if recovery or just save.
+ * mdt_version_get_check_save() - Get version from disk and check if recovery
+ *                                or just save.
+ * @info: struct mdt_thread_info
+ * @mto: MTD object
+ * @idx: versions index
+ *
+ * Return %0 on success %negative on error.
  */
 int mdt_version_get_check_save(struct mdt_thread_info *info,
 			       struct mdt_object *mto, int idx)
@@ -165,10 +193,17 @@ int mdt_version_get_check_save(struct mdt_thread_info *info,
 }
 
 /**
- * Lookup with version checking.
+ * mdt_lookup_version_check() - Lookup with version checking.
+ * @info: struct mdt_thread_info
+ * @p: MDT object
+ * @lname: name of the file/directory to lookup
+ * @fid: pointer to the file identifier (FID) found [out]
+ * @idx: previous object versions index
  *
  * This checks version of 'name'. Many reint functions uses 'name' for child not
  * FID, therefore we need to get object by name and check its version.
+ *
+ * Return %0 on success %negative on error.
  */
 int mdt_lookup_version_check(struct mdt_thread_info *info,
 			     struct mdt_object *p,
@@ -228,9 +263,18 @@ static int mdt_stripes_unlock(struct mdt_thread_info *mti,
 }
 
 /**
+ * mdt_stripes_lock() - Lock slave stripes
+ * @mti: struct mdt_thread_info
+ * @obj: MDT object
+ * @mode: lock mode
+ * @ibits: MDS inode lock bits
+ * @einfo: struct ldlm_enqueue_info
+ *
  * Lock slave stripes if necessary, the lock handles of slave stripes
  * will be stored in einfo->ei_cbdata.
- **/
+ *
+ * Return %0 on success %negative on error.
+ */
 static int mdt_stripes_lock(struct mdt_thread_info *mti, struct mdt_object *obj,
 			    enum ldlm_mode mode, enum mds_ibits_locks ibits,
 			    struct ldlm_enqueue_info *einfo)
@@ -255,20 +299,20 @@ static int mdt_stripes_lock(struct mdt_thread_info *mti, struct mdt_object *obj,
 			      policy);
 }
 
-/** lock object, and stripes if it's a striped directory
+/**
+ * mdt_object_stripes_lock() - lock object, and stripes if it's a striped dir
+ * @info: struct mdt_thread_info
+ * @parent: parent object, if it's NULL, find parent by mdo_lookup()
+ * @child: child object
+ * @lh: lock handle
+ * @einfo: struct ldlm_enqueue_info
+ * @ibits: MDS inode lock bits
+ * @mode: lock mode
  *
  * object should be local, this is called in operations which modify both object
  * and stripes.
  *
- * \param info		struct mdt_thread_info
- * \param parent	parent object, if it's NULL, find parent by mdo_lookup()
- * \param child		child object
- * \param lh		lock handle
- * \param einfo		struct ldlm_enqueue_info
- * \param ibits		MDS inode lock bits
- * \param mode		lock mode
- *
- * \retval		0 on success, -ev on error.
+ * Return %0 on success %negative on error.
  */
 int mdt_object_stripes_lock(struct mdt_thread_info *info,
 			    struct mdt_object *parent,
@@ -460,12 +504,18 @@ unlock_parent:
 }
 
 /*
+ * mdt_create() - File creation operation
+ * @info: struct mdt_thread_info
+ * @lhc: lock handle
+ *
  * VBR: we save three versions in reply:
  * 0 - parent. Check that parent version is the same during replay.
  * 1 - name. Version of 'name' if file exists with the same name or
  * ENOENT_VERSION, it is needed because file may appear due to missed replays.
  * 2 - child. Version of child by FID. Must be ENOENT. It is mostly sanity
  * check.
+ *
+ * Return %0 on success %negative on error.
  */
 static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 {
@@ -859,10 +909,17 @@ out_unlock:
 }
 
 /**
- * Check HSM flags and add HS_DIRTY flag if relevant.
+ * mdt_add_dirty_flag() - Check HSM flags and add HS_DIRTY flag if relevant.
+ * @info: MDT thread specific info
+ * @mo: MDT object
+ * @ma: Metadata attributes
  *
  * A file could be set dirty only if it has a copy in the backend (HS_EXISTS)
  * and is not RELEASED.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma)
