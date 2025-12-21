@@ -91,15 +91,19 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 	RETURN(rc);
 }
 
-/**
- *  llog_cat_process() callback, used to find last used cookie.
- *  The processing ends at the first non-cancel record.
- * \param env [IN] environment
- * \param llh [IN] llog handle
- * \param hdr [IN] llog record
- * \param data [IN/OUT] cb data = coordinator
- * \retval 0 success
- * \retval -ve failure
+/*
+ * hsm_last_cookie_cb() - find last used cookie.
+ * @env: Lustre environment
+ * @llh: llog handle
+ * @hdr: llog record
+ * @data: cb data = coordinator [in, out]
+ *
+ * llog_cat_process() callback, used to find last used cookie.
+ * The processing ends at the first non-cancel record.
+ *
+ * Return:
+ * * %0 success
+ * * %negative failure
  */
 static int hsm_last_cookie_cb(const struct lu_env *env, struct llog_handle *llh,
 			      struct llog_rec_hdr *hdr, void *data)
@@ -118,9 +122,11 @@ static int hsm_last_cookie_cb(const struct lu_env *env, struct llog_handle *llh,
 	RETURN(LLOG_PROC_BREAK);
 }
 
-/**
- * Update the last cookie used by a request.
- * \param mti [IN] context
+/*
+ * cdt_update_last_cookie() - Update the last cookie used by a request.
+ * @env: Lustre environment
+ * @lctxt: llog context handle
+ * @coordinator: pointer to struct coordinator (coordinator state)
  */
 static int cdt_update_last_cookie(const struct lu_env *env,
 				  struct llog_ctxt *lctxt,
@@ -145,13 +151,16 @@ static int cdt_update_last_cookie(const struct lu_env *env,
 }
 
 /**
- * add an entry in agent llog
- * \param env [IN] environment
- * \param mdt [IN] PDT device
- * \param archive_id [IN] backend archive number
- * \param hai [IN] record to register
- * \retval 0 success
- * \retval -ve failure
+ * mdt_agent_record_add() - add an entry in agent llog
+ * @env: Lustre environment
+ * @mdt: MDT device
+ * @archive_id: backend archive number
+ * @flags: Request flags
+ * @hai: record to register
+ *
+ * Return:
+ * * %0 success
+ * * %negative failure
  */
 int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 			 __u32 archive_id, __u64 flags,
@@ -230,9 +239,9 @@ free:
  * op->show() returns 0 in case of success and negative number in case of error.
  *
  */
-/**
- * seq_file iterator for agent_action entry
- */
+
+/* seq_file iterator for agent_action entry */
+
 #define AGENT_ACTIONS_IT_MAGIC 0x19660426
 struct agent_action_iterator {
 	int			 aai_magic;	 /**< magic number */
@@ -244,7 +253,7 @@ struct agent_action_iterator {
 	int			 aai_index;	 /**< idx in cata shown */
 };
 
-/**
+/*
  * seq_file method called to start access to /proc file
  * get llog context + llog handle
  */
@@ -290,7 +299,7 @@ static void *mdt_hsm_actions_debugfs_next(struct seq_file *s, void *v,
 	RETURN(aai);
 }
 
-/**
+/*
  *  llog_cat_process() callback, used to fill a seq_file buffer
  */
 static int hsm_actions_show_cb(const struct lu_env *env,
@@ -343,7 +352,7 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 	RETURN(0);
 }
 
-/**
+/*
  * mdt_hsm_actions_debugfs_show() is called at for each seq record
  * process the llog, with a cb which fill the file_seq buffer
  * to be faster, one show will fill multiple records
@@ -374,7 +383,7 @@ static int mdt_hsm_actions_debugfs_show(struct seq_file *s, void *v)
 	RETURN(rc);
 }
 
-/**
+/*
  * seq_file method called to stop access to /proc file
  * clean + put llog context
  */
@@ -441,7 +450,7 @@ out:
 	return rc;
 }
 
-/**
+/*
  * ldebugfs_release_hsm_actions() is called at end of /proc access.
  * It frees allocated resources and calls cleanup lprocfs methods.
  */
