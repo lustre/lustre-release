@@ -72,9 +72,10 @@ struct cfs_hash_ops cdt_request_cookie_hash_ops = {
 	.hs_put_locked	= cdt_request_cookie_put,
 };
 
-/**
- * dump requests list
- * \param cdt [IN] coordinator
+/*
+ * dump_requests() - dump requests list
+ * @prefix: Unique string to append to output
+ * @cdt: coordinator
  */
 void __maybe_unused dump_requests(char *prefix, struct coordinator *cdt)
 {
@@ -140,7 +141,13 @@ static void mdt_cdt_free_request_tree(struct cdt_req_progress *crp)
 }
 
 /**
- * update data moved information during a request
+ * hsm_update_work() - update data moved information during a request
+ * @crp: Pointer to cdt_req_progress (request progress)
+ * @extent: byte range to operate on
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int hsm_update_work(struct cdt_req_progress *crp,
 			   const struct hsm_extent *extent)
@@ -186,8 +193,9 @@ static int hsm_update_work(struct cdt_req_progress *crp,
 	RETURN(0);
 }
 
-/**
- * init the interval tree associated to a request
+/*
+ * mdt_cdt_init_request_tree() - init the interval tree associated to a request
+ * @crp: Pointer to cdt_req_progress (request progress)
  */
 static void mdt_cdt_init_request_tree(struct cdt_req_progress *crp)
 {
@@ -204,12 +212,14 @@ static inline int hmmr_size(int rec_size)
 			      rec_size, 8);
 }
 
-/** Allocate/init an agent request and its sub-structures.
+/**
+ * mdt_cdt_alloc_request() - Allocate/init an agent request and sub-structures.
+ * @uuid: Device name (identified via uuid)
+ * @rec: Request record
  *
- * \param uuid [IN]
- * \param rec [IN]
- * \retval car [OUT] success valid structure
- * \retval -ve failure
+ * Return:
+ * * Pointer to struct cdt_agent_req on success
+ * * %negative on failure
  */
 struct cdt_agent_req *mdt_cdt_alloc_request(struct obd_uuid *uuid,
 					    struct llog_agent_req_rec *rec)
@@ -235,9 +245,8 @@ struct cdt_agent_req *mdt_cdt_alloc_request(struct obd_uuid *uuid,
 }
 
 /**
- * Free an agent request and its sub-structures.
- *
- * \param car [IN]  Request to be freed.
+ * mdt_cdt_free_request() - Free an agent request and its sub-structures.
+ * @car: Request to be freed.
  */
 void mdt_cdt_free_request(struct cdt_agent_req *car)
 {
@@ -247,8 +256,8 @@ void mdt_cdt_free_request(struct cdt_agent_req *car)
 }
 
 /**
- * inc refcount of a request
- * \param car [IN] request
+ * mdt_cdt_get_request() - inc refcount of a request
+ * @car: request
  */
 void mdt_cdt_get_request(struct cdt_agent_req *car)
 {
@@ -264,9 +273,8 @@ static void mdt_cdt_put_request_free(struct kref *kref)
 }
 
 /**
- * dec refcount of a request
- * free if no more refcount
- * \param car [IN] request
+ * mdt_cdt_put_request() - dec refcount of a request free if no more refcount
+ * @car: request
  */
 void mdt_cdt_put_request(struct cdt_agent_req *car)
 {
@@ -274,11 +282,13 @@ void mdt_cdt_put_request(struct cdt_agent_req *car)
 }
 
 /**
- * add a request to the list
- * \param cdt [IN] coordinator
- * \param car [IN] request
- * \retval 0 success
- * \retval -ve failure
+ * mdt_cdt_add_request() - add a request to the list
+ * @cdt: coordinator
+ * @car: request
+ *
+ * Return:
+ * * %0 success
+ * * %negative failure
  */
 int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *car)
 {
@@ -323,11 +333,11 @@ int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *car)
 }
 
 /**
- * find request in the list by cookie or by fid
- * \param cdt [IN] coordinator
- * \param cookie [IN] request cookie
- * \param fid [IN] fid
- * \retval request pointer or NULL if not found
+ * mdt_cdt_find_request() - find request in the list by cookie or by fid
+ * @cdt: coordinator
+ * @cookie: request cookie
+ *
+ * Return request pointer or %NULL if not found
  */
 struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt, u64 cookie)
 {
@@ -342,10 +352,13 @@ struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt, u64 cookie)
 }
 
 /**
- * remove request from the list
- * \param cdt [IN] coordinator
- * \param cookie [IN] request cookie
- * \retval request pointer
+ * mdt_cdt_remove_request() - remove request from the list
+ * @cdt: coordinator
+ * @cookie: request cookie
+ *
+ * Return:
+ * * %request pointer on success
+ * * %negative on failure
  */
 int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie)
 {
@@ -395,12 +408,15 @@ int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie)
 }
 
 /**
- * update a request in the list
- * on success, add a ref to the request returned
- * \param cdt [IN] coordinator
- * \param pgs [IN] progression (cookie + extent + err)
- * \retval request pointer
- * \retval -ve failure
+ * mdt_cdt_update_request() - update a request in the list
+ * @cdt: coordinator
+ * @pgs: progression (cookie + extent + err)
+ *
+ * update a request in the list on success, add a ref to the request returned
+ *
+ * Return:
+ * * %request pointer
+ * * %negative on failure
  */
 struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
 					  const struct hsm_progress_kernel *pgs)
@@ -436,7 +452,11 @@ struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
 	RETURN(car);
 }
 
-/**
+/*
+ * mdt_hsm_active_requests_proc_start() - method called to start access to /proc
+ * @s: pointer to the seq_file struct
+ * @p: A pointer to an offset
+ *
  * seq_file method called to start access to /proc file
  */
 static void *mdt_hsm_active_requests_proc_start(struct seq_file *s, loff_t *p)
@@ -464,9 +484,13 @@ static void *mdt_hsm_active_requests_proc_start(struct seq_file *s, loff_t *p)
 	RETURN(NULL);
 }
 
-/**
- * seq_file method called to get next item
- * just returns NULL at eof
+/*
+ * mdt_hsm_active_requests_proc_next() - seq_file method called to get next item
+ * @s: pointer to the seq_file struct
+ * @v: pointer to the current item
+ * @p: A pointer to an offset
+ *
+ * seq_file method called to get next item just returns NULL at eof
  */
 static void *mdt_hsm_active_requests_proc_next(struct seq_file *s, void *v,
 					       loff_t *p)
@@ -488,7 +512,7 @@ static void *mdt_hsm_active_requests_proc_next(struct seq_file *s, void *v,
 		RETURN(NULL);
 }
 
-/**
+/*
  * display request data
  */
 static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
@@ -522,7 +546,7 @@ static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
 	RETURN(0);
 }
 
-/**
+/*
  * seq_file method called to stop access to /proc file
  */
 static void mdt_hsm_active_requests_proc_stop(struct seq_file *s, void *v)
@@ -544,9 +568,16 @@ static const struct seq_operations mdt_hsm_active_requests_proc_ops = {
 	.stop		= mdt_hsm_active_requests_proc_stop,
 };
 
-/**
- * public function called at open of /proc file to get
- * list of agents
+/*
+ * ldebugfs_open_hsm_active_requests() - Public function called at open of /proc
+ * @inode: Inode representing the file being opened
+ * @file: Pointer to open file
+ *
+ * public function called at open of /proc file to get list of agents
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int ldebugfs_open_hsm_active_requests(struct inode *inode,
 					     struct file *file)
