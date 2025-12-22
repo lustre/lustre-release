@@ -285,8 +285,6 @@ struct cl_layout {
 
 struct cl_dio_pages;
 
-typedef void (*buffered_read_check_cbt)(const struct lu_env *env, void *cbdata);
-
 /**
  * Operations implemented for each cl object layer.
  *
@@ -378,27 +376,13 @@ struct cl_object_operations {
 	void (*coo_dirty_for_sync)(const struct lu_env *env,
 				   struct cl_object *obj);
 	/**
-	 * Take execlusive invalidate_lock for inode mapping.
-	 * The file system must execlusively acquire invalidate_lock before
-	 * invalidating the page cache in truncate / hole punch / DLM extent
-	 * lock blocking AST path (and thus calling into ->invalidatepage)
-	 * to block races between page cache invalidation and page cache
-	 * filling functions (fault, read, readahead, ...)
+	 * Update object configuration. Called top-to-bottom to modify object
+	 * configuration.
+	 *
+	 * XXX error conditions and handling.
 	 */
-	void (*coo_invalidate_lock)(const struct lu_env *env,
-				    struct cl_object *obj,
-				    buffered_read_check_cbt cb, void *cbdata);
-	/* Release invalidate_lock. */
-	void (*coo_invalidate_unlock)(const struct lu_env *env,
-				      struct cl_object *obj);
-        /**
-         * Update object configuration. Called top-to-bottom to modify object
-         * configuration.
-         *
-         * XXX error conditions and handling.
-         */
-        int (*coo_conf_set)(const struct lu_env *env, struct cl_object *obj,
-                            const struct cl_object_conf *conf);
+	int (*coo_conf_set)(const struct lu_env *env, struct cl_object *obj,
+			    const struct cl_object_conf *conf);
 	/**
 	 * Glimpse ast. Executed when glimpse ast arrives for a lock on this
 	 * object. Layers are supposed to fill parts of \a lvb that will be
@@ -1996,6 +1980,14 @@ struct cl_io {
 	 * io_uring direct IO with flags IOCB_NOWAIT.
 	 */
 			     ci_iocb_nowait:1,
+	/**
+	 * The filesystem must exclusively acquire invalidate_lock before
+	 * invalidating page cache in truncate / hole punch / DLM extent
+	 * lock blocking AST path (and thus calling into ->invalidatepage)
+	 * to block races between page cache invalidation and page cache
+	 * filling functions (fault, read, ...)
+	 */
+			     ci_invalidate_page_cache:1,
 	/* was this IO switched from BIO to DIO for hybrid IO? */
 			     ci_hybrid_switched:1;
 
@@ -2180,10 +2172,6 @@ int  cl_object_attr_update(const struct lu_env *env, struct cl_object *obj,
 			   const struct cl_attr *attr,
 			   enum cl_attr_valid valid);
 void cl_object_dirty_for_sync(const struct lu_env *env, struct cl_object *obj);
-void cl_object_invalidate_lock(const struct lu_env *env, struct cl_object *obj,
-			       buffered_read_check_cbt cb, void *cbdata);
-void cl_object_invalidate_unlock(const struct lu_env *env,
-				 struct cl_object *obj);
 int  cl_object_glimpse(const struct lu_env *env, struct cl_object *obj,
 		       struct ost_lvb *lvb);
 int  cl_conf_set(const struct lu_env *env, struct cl_object *obj,

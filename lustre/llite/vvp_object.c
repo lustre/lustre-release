@@ -104,31 +104,6 @@ static void vvp_dirty_for_sync(const struct lu_env *env, struct cl_object *obj)
 	__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
 }
 
-static void vvp_invalidate_lock(const struct lu_env *env, struct cl_object *obj,
-				buffered_read_check_cbt cb, void *cbdata)
-{
-#ifdef HAVE_INVALIDATE_LOCK
-	struct address_space *mapping = vvp_object_inode(obj)->i_mapping;
-
-	while (!down_write_trylock(&mapping->invalidate_lock)) {
-		cb(env, cbdata);
-		/* FIXME: It may cause waiting write lock starvation. */
-		if (need_resched())
-			cond_resched();
-	}
-#endif /* HAVE_INVALIDATE_LOCK */
-}
-
-static void vvp_invalidate_unlock(const struct lu_env *env,
-				  struct cl_object *obj)
-{
-#ifdef HAVE_INVALIDATE_LOCK
-	struct address_space *mapping = vvp_object_inode(obj)->i_mapping;
-
-	filemap_invalidate_unlock(mapping);
-#endif /* HAVE_INVALIDATE_LOCK */
-}
-
 static int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 			const struct cl_object_conf *conf)
 {
@@ -240,8 +215,6 @@ static const struct cl_object_operations vvp_ops = {
 	.coo_attr_get     = vvp_attr_get,
 	.coo_attr_update  = vvp_attr_update,
 	.coo_dirty_for_sync = vvp_dirty_for_sync,
-	.coo_invalidate_lock	= vvp_invalidate_lock,
-	.coo_invalidate_unlock	= vvp_invalidate_unlock,
 	.coo_conf_set     = vvp_conf_set,
 	.coo_prune        = vvp_prune,
 	.coo_glimpse      = vvp_object_glimpse,
