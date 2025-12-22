@@ -1400,7 +1400,7 @@ fileset_test_cleanup() {
 
 	# flush MDT locks to make sure they are reacquired before test
 	do_node ${clients_arr[0]} $LCTL set_param \
-		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
+		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear || true
 
 	wait_nm_sync $nm trusted_nodemap
 	if [ -n "$FILESET" -a -z "$SKIP_FILESET" ]; then
@@ -4579,7 +4579,7 @@ insert_enc_key() {
 remove_enc_key() {
 	local dummy_key
 
-	$LCTL set_param -n ldlm.namespaces.*.lru_size=clear
+	$LCTL set_param -n ldlm.namespaces.*.lru_size=clear || true
 	sync ; echo 3 > /proc/sys/vm/drop_caches
 	dummy_key=$(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
 	if [ -n "$dummy_key" ]; then
@@ -4589,6 +4589,8 @@ remove_enc_key() {
 }
 
 remount_client_normally() {
+	local ldlmcount=$((MDSCOUNT+OSTCOUNT))
+
 	# remount client without dummy encryption key
 	if is_mounted $MOUNT; then
 		umount_client $MOUNT || error "umount $MOUNT failed"
@@ -4602,7 +4604,16 @@ remount_client_normally() {
 	if [ "$MOUNT_2" ]; then
 		mount_client $MOUNT2 ${MOUNT_OPTS} ||
 			error "remount failed"
+		ldlmcount=$((ldlmcount*2))
 	fi
+
+	# add 1 for the MGS connection
+	((ldlmcount++))
+
+	wait_update_facet --verbose client \
+		"$LCTL get_param -n ldlm.namespaces.*.lru_size | wc -l" \
+		$ldlmcount 120 ||
+			error "leftover ldlms"
 
 	remove_enc_key
 	wait_ssk
