@@ -1,0 +1,74 @@
+.TH LFS-DATA_VERSION 1 2025-12-22 Lustre "Lustre user utilities"
+.SH NAME
+lfs-data_version \- display or update the stored file data version
+.SH SYNOPSIS
+.SY "lfs data_version"
+.RB { --nosync | -n | --read | -r | --write | -w }
+.RB [ --set-hsm | -s ]
+.I FILENAME
+.YS
+.SH DESCRIPTION
+Display the current version of file data for
+.IR FILENAME ,
+and optionally set the data version stored in the HSM xattr.
+.PP
+The data version is the sum of the last committed transaction numbers
+of all data objects of a file for
+.BR write()
+(or similar data modification),
+.BR truncate ()
+(or similar size modification)
+RPC in which an object's file data was modified.  It does not track
+metadata operations on the file such as file permissions, ownership, etc.
+There is no guarantee that one data version is ordered compared to another,
+and should only be used for equality or inequality comparison for a single
+.I FILENAME
+to check if its data objects were changed since the last data_version read.
+.PP
+The data version is typically used by data management engines such as HSM,
+OST object migration, and mirroring,
+primarily to verify that file data has not been changed concurrently by
+another process during a data movement or release operation.
+.PP
+Even when a cache flush is triggered on clients accessing this file using
+.B -r
+or
+.BR -w ,
+race conditions are possible and the data version should be checked before
+and after data management operations to ensure the data did not change
+concurrently.
+.SH OPTIONS
+.TP
+.B -n ", " --nosync
+Read the data version without taking any data lock to sync file data.
+The data version could be stale if cached pages exist on filesystem clients,
+but this option avoids data flush and has less of an impact on the filesystem.
+.TP
+.B -r ", " --read-lock
+Read the data version after getting a read lock on
+.I FILENAME
+to flush its dirty client pages on all clients.
+.TP
+.B -s ", " --set-hsm
+Read the data version from
+.I FILENAME
+(by default using a read lock) and write it to the
+.B trusted.hsm
+xattr.
+.TP
+.B -w ", " --write-lock
+Read the data version after getting a write lock on
+.I FILENAME
+to flush all of its cached data pages from all clients.
+.SH AVAILABILITY
+The
+.B lfs data_version
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.3.0.
+.\" added in commit v2_2_50_0-10-gde7fe0875b
+.SH SEE ALSO
+.BR lfs (1),
+.BR llapi_get_data_version (3),
+.BR llapi_hsm_data_version_set (3),
+.BR lustre (7)

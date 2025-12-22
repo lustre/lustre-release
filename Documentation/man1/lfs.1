@@ -35,28 +35,13 @@ the server status. NOTE:
 .B lfs osts
 may be preferable for some use cases.
 .TP
-.BR data_version " [" -nrw "] " \fIFILENAME
-Display the current version of file data and optionally set the data version
-stored in the HSM xattr. If -n is specified, the data version is read without
-taking a lock. As a consequence, the data version could be outdated if there are
-dirty caches on filesystem clients, but this option will not force data flushes
-and has less of an impact on the filesystem. If -r is specified, the data
-version is read after dirty pages on clients are flushed. If -w is specified,
-the data version is read after all caching pages on clients are flushed. If -s
-is specified, the data version that was read, is also written to the HSM xattr.
-
-Even with -r or -w, race conditions are possible and the data version should be
-checked before and after an operation to be confident the data did not change
-during it.
-.IP
-The data version is the sum of the last committed transaction numbers of all
-data objects of a file. It is used by HSM policy engines for verifying that file
-data has not been changed during an archive operation or before a release
-operation, and by OST migration, primarily for verifying that file data has not
-been changed during a data copy, when done in non-blocking mode.
+.BR data_version
+See
+.BR lfs-data_version (1).
 .TP
 .B flushctx
-See lfs-flushctx(1).
+See
+.BR lfs-flushctx (1).
 .TP
 .BR osts " [" PATH ]
 List all the OSTs for all mounted filesystems. If a
@@ -172,6 +157,7 @@ filesystem package since release 0.10.0
 .BR lctl (8),
 .BR lfs-changelog (1),
 .BR lfs-changelog_clear (1),
+.BR lfs-data_version (1),
 .BR lfs-df (1),
 .BR lfs-fid2path (1),
 .BR lfs-find (1),

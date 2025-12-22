@@ -577,10 +577,9 @@ command_t cmdlist[] = {
 	 "usage: path2fid [--parents] <path> ..."},
 	{"rmfid", lfs_rmfid, 0, "Remove file(s) by FID(s)\n"
 	 "usage: rmfid <fsname|rootpath> <fid> ..."},
-	{"data_version", lfs_data_version, 0, "Display file data version or "
-	 "set the data version in the HSM xattr for a given path.\n"
-	"usage: data_version [-n|-r|-w|-s] <path>"},
-
+	{"data_version", lfs_data_version, 0, "Display file data version, "
+	 "and optionally set the data version in the HSM xattr for FILENAME.\n"
+	"usage: data_version {--nosync|--read|--write} [--set-hsm] FILENAME"},
 	{"hsm_state", lfs_hsm_state, 0,
 	 "Display the HSM information for given files.\n"
 	 "usage: hsm_state FILE"},
@@ -12157,6 +12156,13 @@ out_close:
 
 static int lfs_data_version(int argc, char **argv)
 {
+	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "nosync",	.has_arg = no_argument },
+	{ .val = 'r',	.name = "read-lock",	.has_arg = no_argument },
+	{ .val = 's',	.name = "set-hsm",	.has_arg = no_argument },
+	{ .val = 'w',	.name = "write-lock",	.has_arg = no_argument },
+	{ .name = NULL } };
 	int data_version_flags = LL_DV_RD_FLUSH; /* Read by default */
 	__u64 data_version;
 	char *path;
@@ -12165,13 +12171,7 @@ static int lfs_data_version(int argc, char **argv)
 	int rc;
 	int c;
 
-	if (argc < 2) {
-		fprintf(stderr, "%s: FILE must be specified\n",
-			progname);
-		return CMD_HELP;
-	}
-
-	while ((c = getopt(argc, argv, "hnrws")) != -1) {
+	while ((c = getopt_long(argc, argv, "hnrsw", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
 			data_version_flags = 0;
@@ -12179,11 +12179,11 @@ static int lfs_data_version(int argc, char **argv)
 		case 'r':
 			data_version_flags |= LL_DV_RD_FLUSH;
 			break;
-		case 'w':
-			data_version_flags |= LL_DV_WR_FLUSH;
-			break;
 		case 's':
 			hsm_sync = true;
+			break;
+		case 'w':
+			data_version_flags |= LL_DV_WR_FLUSH;
 			break;
 		default:
 			fprintf(stderr,
@@ -12195,7 +12195,7 @@ static int lfs_data_version(int argc, char **argv)
 		}
 	}
 	if (optind == argc) {
-		fprintf(stderr, "%s data_version: FILE must be specified\n",
+		fprintf(stderr, "%s data_version: FILENAME must be specified\n",
 			progname);
 		return CMD_HELP;
 	}

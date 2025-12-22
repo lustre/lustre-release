@@ -1,0 +1,63 @@
+.TH LLAPI_HSM_DATA_VERSION_SET 3 2025-12-22 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_hsm_data_version_set \- set OST data version to HSM xattr
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_hsm_data_version_set(int " fd ", __u64 " data_version );
+.YS
+.fi
+.SH DESCRIPTION
+Update the file's data version and store it in the
+.B trusted.hsm
+xattr on the file after doing some file data migration operation
+that does not affect the data contents.
+.PP
+The data version is typically fetched via
+.BR llapi_get_data_version (3),
+which should be referenced for details about data version.
+.TP
+.I fd
+open file descriptor
+.TP
+.I data_version
+64-bit integer that contains the file data version.
+.SH RETURN VALUES
+.BR llapi_hsm_data_version_set ()
+returns:
+.TP
+0
+on success
+.TP
+<0
+a negative errno value on failure
+.SH EXAMPLES
+.EX
+	int fd_src;
+	__u64 dv1, dv2;
+\&
+	fd_src = open(filename, O_RDONLY);
+	rc = llapi_get_data_version(fd_src, &dv1, 0);
+	/* manage the file data - migrate, mirror, etc. */
+	rc = llapi_get_data_version(fd_src, &dv2, LL_DV_RD_FLUSH);
+        close(fd_src);
+
+	if (dv1 == dv2)
+		llapi_hsm_data_version_set(fd_src, dv2);
+.EE
+.SH AVAILABILITY
+The
+.BR llapi_hsm_data_version_set ()
+API is part of the
+.BR lustre (7)
+user application interface library since release 2.16.0.
+.\" Added in commit v2_15_90-10-g80a961261a23
+.SH SEE ALSO
+.BR lfs-data_version (1),
+.BR lfs-migrate (1),
+.BR llapi_fswap_layouts (3),
+.BR llapi_fsync (3),
+.BR llapi_hsm_data_version_set (3),
+.BR lustre (7),
+.BR lustreapi (7)

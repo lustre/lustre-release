@@ -43,8 +43,11 @@
  */
 int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
 {
-	int rc;
 	struct ioc_data_version idv;
+	int rc;
+
+	if (!data_version)
+		return -EFAULT;
 
 	idv.idv_flags = (__u32)flags;
 

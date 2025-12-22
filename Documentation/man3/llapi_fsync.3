@@ -1,4 +1,4 @@
-.TH LLAPI_FSYNC 3 2024-09-24 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_FSYNC 3 2025-12-22 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_fsync \- flush dirty pages from all Lustre clients
 .SH SYNOPSIS
@@ -24,7 +24,18 @@ on success
 <0
 a negative errno value on failure
 .SH EXAMPLES
-An example can be found in lfs.c source file.
+Flush a file's data across all clients after a parallel IO operation:
+.EX
+        int fd;
+        int rc;
+\&
+        /* write file concurrently from many clients */
+        rc = llapi_fsync(fd);
+        if (rc == 0)
+                /* success, all client data persistent for this file */
+        else
+                /* error, some problem was seen during data flush */
+.EE
 .SH AVAILABILITY
 The
 .B llapi_fsync
@@ -33,5 +44,6 @@ API is part of the
 user application interface library since release 2.16.0.
 .\" Added in commit v2_15_91-1-g425b9f75225d
 .SH SEE ALSO
+.BR llapi_get_data_version (3),
 .BR lustre (7),
 .BR lustreapi (7)

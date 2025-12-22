@@ -1,0 +1,105 @@
+.TH LLAPI_GET_DATA_VERSION 3 2025-12-22 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_get_data_version \- fetch OST data version for a file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_get_data_version(int " fd ", __u64 *" data_version ", __u64 " flags );
+.YS
+.fi
+.SH DESCRIPTION
+Fetch the combined data version for all OST objects associated with the
+open file handle.  
+.PP
+The data version is the sum of the last committed transaction numbers
+of all data objects of a file for
+.BR write()
+(or similar data modification),
+.BR truncate ()
+(or similar size modification)
+RPC in which an object's file data was modified.  It does not track
+metadata operations on the file such as file permissions, ownership, etc.
+There is no guarantee that one data version is ordered compared to another,
+and should only be used for (in)equality comparison for a single file
+to check if its data objects were changed since the last data_version read.
+.PP
+The data version is typically used by data management engines such as HSM,
+OST object migration, and mirroring,
+primarily to verify that file data has not been changed concurrently by
+another process during a data movement or release operation.
+.PP
+Even when a cache flush is triggered on clients accessing this file,
+race conditions are possible and the data version should be checked before and
+after data management operations to ensure the data did not change concurrently.
+This allows data management operations to avoid blocking application file IO,
+while maintaining data consistency during data copy or migration.
+.TP
+.I fd
+open file descriptor
+.TP
+.I data_version
+pointer to 64-bit integer to store the file version.
+.TP
+.I flags
+flags that affect whether cached file data on clients is flushed before
+fetching the data version.  Flags may have the following values:
+.TP
+.B LL_DV_RD_FLUSH
+OSTs will take a read lock to flush dirty pages of
+.I fd
+from clients.
+.TP
+.B LL_DV_WR_FLUSH
+OSTs will take a write lock to flush all cache pages of
+.I fd
+from clients.
+.TP
+.B LL_DV_SZ_UPDATE
+Update the file size on the client
+.SH RETURN VALUES
+.BR llapi_get_data_version ()
+returns:
+.TP
+0
+on success and
+.I data_version
+contains the file's object data version,
+or zero if no objects are initialized for this file.
+.TP
+<0
+a negative errno value on failure
+.SH EXAMPLES
+.EX
+	int fd_src;
+	__u64 dv1, dv2;
+\&
+again:
+	fd_src = open(filename, O_RDONLY);
+	rc = llapi_get_data_version(fd_src, &dv1, 0);
+	/* perform some data copy operation */
+	rc = llapi_get_data_version(fd_src, &dv2, LL_DV_RD_FLUSH);
+        close(fd_src);
+
+	if (dv1 != dv2) {
+		rc = -EAGAIN;
+		fprintf(stderr, "%s: %s changed during copy, retrying\n",
+                        progname, filename);
+		goto again;
+	}
+.EE
+.SH AVAILABILITY
+The
+.BR llapi_get_data_version ()
+API is part of the
+.BR lustre (7)
+user application interface library since release 2.3.0.
+.\" Added in commit v2_2_50_0-10-gde7fe0875b
+.SH SEE ALSO
+.BR lfs-data_version (1),
+.BR lfs-migrate (1),
+.BR llapi_fswap_layouts (3),
+.BR llapi_fsync (3),
+.BR llapi_get_data_version (3),
+.BR lustre (7),
+.BR lustreapi (7)
