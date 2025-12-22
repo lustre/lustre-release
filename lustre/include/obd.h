@@ -664,7 +664,7 @@ struct obd_device {
 	/* nid-export hash body */
 	struct rhltable			obd_nid_hash;
 	/* nid stats body */
-	struct cfs_hash             *obd_nid_stats_hash;
+	struct rhltable			obd_nid_stats_hash;
 	/* client_generation-export hash body */
 	struct cfs_hash		    *obd_gen_hash;
 	struct list_head	obd_nid_stats;
@@ -817,6 +817,9 @@ int obd_nid_export_for_each(struct obd_device *obd, struct lnet_nid *nid,
 			    void *data);
 int obd_nid_add(struct obd_device *obd, struct obd_export *exp);
 void obd_nid_del(struct obd_device *obd, struct obd_export *exp);
+
+struct nid_stat *obd_nid_stats_get(struct obd_device *obd, struct nid_stat *ns);
+void obd_nid_stats_put(struct obd_device *obd, struct nid_stat *ns);
 
 /* both client and MDT recovery are aborted, or MDT is stopping  */
 static inline bool obd_recovery_abort(struct obd_device *obd)

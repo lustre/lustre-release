@@ -778,11 +778,6 @@ __cfs_hash_set_theta(struct cfs_hash *hs, int min, int max)
 	hs->hs_max_theta = (__u16)max;
 }
 
-/* Generic debug formatting routines mainly for proc handler */
-struct seq_file;
-void cfs_hash_debug_header(struct seq_file *m);
-void cfs_hash_debug_str(struct cfs_hash *hs, struct seq_file *m);
-
 /* Generic djb2 hash algorithm for character arrays. */
 static inline unsigned
 cfs_hash_djb2_hash(const void *key, size_t size, const unsigned int bits)

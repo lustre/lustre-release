@@ -15,6 +15,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/delay.h>
 #include <linux/kobject.h>
 #include <linux/string.h>
 
@@ -32,7 +33,6 @@
 #include "llog_internal.h"
 
 #ifdef HAVE_SERVER_SUPPORT
-static struct cfs_hash_ops nid_stat_hash_ops;
 static struct cfs_hash_ops gen_hash_ops;
 #endif /* HAVE_SERVER_SUPPORT */
 
@@ -240,6 +240,93 @@ out_unlock:
 	return ret;
 }
 EXPORT_SYMBOL(obd_nid_export_for_each);
+
+/*
+ * nid<->nidstats hash operations
+ */
+static u32 nid_stats_keyhash(const void *data, u32 key_len, u32 seed)
+{
+	return jhash2(data, key_len / sizeof(u32), seed);
+}
+
+static int
+nid_stats_keycmp(struct rhashtable_compare_arg *arg, const void *obj)
+{
+	const struct lnet_nid *nid = arg->key;
+	const struct nid_stat *ns = obj;
+
+	return nid_same(&ns->nid, (struct lnet_nid *)nid) ? 0 : -ESRCH;
+}
+
+static void
+nid_stats_exit(void *vdata, void *data)
+{
+	struct nid_stat *ns = vdata;
+
+	nidstat_putref(ns);
+}
+
+static const struct rhashtable_params nid_stats_hash_params = {
+	.key_len		= sizeof(struct lnet_nid),
+	.key_offset		= offsetof(struct nid_stat, nid),
+	.head_offset		= offsetof(struct nid_stat, nid_hash),
+	.hashfn			= nid_stats_keyhash,
+	.obj_cmpfn		= nid_stats_keycmp,
+	.automatic_shrinking	= true,
+};
+
+struct nid_stat *obd_nid_stats_get(struct obd_device *obd, struct nid_stat *ns)
+{
+	struct rhlist_head *exports, *pos;
+	struct nid_stat *ns2 = NULL, *tmp;
+
+	rcu_read_lock();
+	exports = rhltable_lookup(&obd->obd_nid_stats_hash, &ns->nid,
+				  nid_stats_hash_params);
+	if (!exports)
+		goto insert_key;
+
+	rhl_for_each_entry_rcu(tmp, pos, exports, nid_hash) {
+		if (obd == tmp->nid_obd) {
+			nidstat_getref(tmp);
+			ns2 = tmp;
+			goto unlock;
+		}
+	}
+
+	if (!ns2) {
+		int rc;
+insert_key:
+		nidstat_getref(ns);
+		rc = rhltable_insert_key(&obd->obd_nid_stats_hash, &ns->nid,
+					 &ns->nid_hash, nid_stats_hash_params);
+		if (rc < 0) {
+			nidstat_putref(ns);
+			ns2 = ERR_PTR(rc);
+		} else {
+			ns2 = ns;
+		}
+	}
+unlock:
+	rcu_read_unlock();
+
+	return ns2;
+}
+EXPORT_SYMBOL(obd_nid_stats_get);
+
+void obd_nid_stats_put(struct obd_device *obd, struct nid_stat *ns)
+{
+	int rc;
+
+	rcu_read_lock();
+	rc = rhltable_remove(&obd->obd_nid_stats_hash, &ns->nid_hash,
+			     nid_stats_hash_params);
+	if (rc == 0)
+		nidstat_putref(ns);
+	rcu_read_unlock();
+}
+EXPORT_SYMBOL(obd_nid_stats_put);
+
 #endif /* HAVE_SERVER_SUPPORT */
 
 /*********** string parsing utils *********/
@@ -703,7 +790,6 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	 * other fns check that status, and we're not actually set up yet.
 	 */
 	obd->obd_starting = 1;
-	obd->obd_nid_stats_hash = NULL;
 	obd->obd_gen_hash = NULL;
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -719,15 +805,8 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(err_uuid_hash, err = -ENOMEM);
 
 	/* create a nid-stats lustre hash */
-	obd->obd_nid_stats_hash = cfs_hash_create("NID_STATS",
-						  HASH_NID_STATS_CUR_BITS,
-						  HASH_NID_STATS_MAX_BITS,
-						  HASH_NID_STATS_BKT_BITS, 0,
-						  CFS_HASH_MIN_THETA,
-						  CFS_HASH_MAX_THETA,
-						  &nid_stat_hash_ops,
-						  CFS_HASH_DEFAULT);
-	if (!obd->obd_nid_stats_hash)
+	err = rhltable_init(&obd->obd_nid_stats_hash, &nid_stats_hash_params);
+	if (err)
 		GOTO(err_nid_hash, err = -ENOMEM);
 
 	/* create a client_generation-export lustre hash */
@@ -769,10 +848,7 @@ err_gen_hash:
 		obd->obd_gen_hash = NULL;
 	}
 err_nid_stats_hash:
-	if (obd->obd_nid_stats_hash) {
-		cfs_hash_putref(obd->obd_nid_stats_hash);
-		obd->obd_nid_stats_hash = NULL;
-	}
+	rhltable_destroy(&obd->obd_nid_stats_hash);
 err_nid_hash:
 	rhltable_destroy(&obd->obd_nid_hash);
 #endif /* HAVE_SERVER_SUPPORT */
@@ -901,10 +977,8 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	rhltable_free_and_destroy(&obd->obd_nid_hash, nid_export_exit, NULL);
 
 	/* destroy a nid-stats hash body */
-	if (obd->obd_nid_stats_hash) {
-		cfs_hash_putref(obd->obd_nid_stats_hash);
-		obd->obd_nid_stats_hash = NULL;
-	}
+	rhltable_free_and_destroy(&obd->obd_nid_stats_hash, nid_stats_exit,
+				  NULL);
 
 	/* destroy a client_generation-export hash body */
 	if (obd->obd_gen_hash) {
@@ -2385,65 +2459,6 @@ out:
 EXPORT_SYMBOL(class_manual_cleanup);
 
 #ifdef HAVE_SERVER_SUPPORT
-/*
- * nid<->nidstats hash operations
- */
-static unsigned int
-nidstats_hash(struct cfs_hash *hs, const void *key, const unsigned int bits)
-{
-	return cfs_hash_djb2_hash(key, sizeof(struct lnet_nid), bits);
-}
-
-static void *
-nidstats_key(struct hlist_node *hnode)
-{
-	struct nid_stat *ns;
-
-	ns = hlist_entry(hnode, struct nid_stat, nid_hash);
-
-	return &ns->nid;
-}
-
-static int
-nidstats_keycmp(const void *key, struct hlist_node *hnode)
-{
-	return nid_same((struct lnet_nid *)nidstats_key(hnode),
-			 (struct lnet_nid *)key);
-}
-
-static void *
-nidstats_object(struct hlist_node *hnode)
-{
-	return hlist_entry(hnode, struct nid_stat, nid_hash);
-}
-
-static void
-nidstats_get(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct nid_stat *ns;
-
-	ns = hlist_entry(hnode, struct nid_stat, nid_hash);
-	nidstat_getref(ns);
-}
-
-static void
-nidstats_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct nid_stat *ns;
-
-	ns = hlist_entry(hnode, struct nid_stat, nid_hash);
-	nidstat_putref(ns);
-}
-
-static struct cfs_hash_ops nid_stat_hash_ops = {
-	.hs_hash	= nidstats_hash,
-	.hs_key		= nidstats_key,
-	.hs_keycmp	= nidstats_keycmp,
-	.hs_object	= nidstats_object,
-	.hs_get		= nidstats_get,
-	.hs_put_locked	= nidstats_put_locked,
-};
-
 /*
  * client_generation<->export hash operations
  */

@@ -315,17 +315,16 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 
 void lprocfs_free_per_client_stats(struct obd_device *obd)
 {
-	struct cfs_hash *hash = obd->obd_nid_stats_hash;
 	struct nid_stat *stat;
-	ENTRY;
 
+	ENTRY;
 	/* we need extra list - because hash_exit called to early */
 	/* not need locking because all clients is died */
 	while (!list_empty(&obd->obd_nid_stats)) {
 		stat = list_first_entry(&obd->obd_nid_stats,
 					struct nid_stat, nid_list);
 		list_del_init(&stat->nid_list);
-		cfs_hash_del(hash, &stat->nid, &stat->nid_hash);
+		obd_nid_stats_put(obd, stat);
 		lprocfs_free_client_stats(stat);
 	}
 	EXIT;
@@ -432,7 +431,7 @@ ldebugfs_exp_print_hash_seq(struct obd_export *exp, void *cb_data)
 	struct seq_file *m = cb_data;
 
 	if (exp->exp_lock_hash != NULL) {
-		seq_printf(m, "%-*s   cur   min        max theta t-min t-max flags rehash   count distribution\n",
+		seq_printf(m, "%-*s   cur   min        max theta t-min t-max flags  rehash   count  maxdep distribution\n",
 			   HASH_NAME_LEN, "name");
 		ldebugfs_rhash_seq_show("NID_HASH", &obd->obd_nid_hash.ht, m);
 	}
@@ -505,8 +504,8 @@ EXPORT_SYMBOL(lprocfs_nid_stats_clear_seq_show);
 static int ldebugfs_nid_stats_clear_write_cb(void *obj, void *data)
 {
 	struct nid_stat *stat = obj;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_INFO, "refcnt %d\n", atomic_read(&stat->nid_exp_ref_count));
 	if (atomic_read(&stat->nid_exp_ref_count) == 1) {
 		/* object has only hash references. */
@@ -515,7 +514,7 @@ static int ldebugfs_nid_stats_clear_write_cb(void *obj, void *data)
 		spin_unlock(&stat->nid_obd->obd_nid_lock);
 		RETURN(1);
 	}
-	/* we has reference to object - only clear data*/
+	/* we has reference to object - only clear data */
 	if (stat->nid_stats)
 		lprocfs_stats_clear(stat->nid_stats);
 
@@ -529,10 +528,23 @@ ldebugfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct nid_stat *client_stat;
+	struct rhashtable_iter iter;
 	LIST_HEAD(free_list);
 
-	cfs_hash_cond_del(obd->obd_nid_stats_hash,
-			  ldebugfs_nid_stats_clear_write_cb, &free_list);
+	rhashtable_walk_enter(&obd->obd_nid_stats_hash.ht, &iter);
+	rhashtable_walk_start(&iter);
+	while ((client_stat = rhashtable_walk_next(&iter)) != NULL) {
+		if (IS_ERR(client_stat)) {
+			if (PTR_ERR(client_stat) == -EAGAIN)
+				continue;
+			break;
+		}
+
+		if (ldebugfs_nid_stats_clear_write_cb(client_stat, &free_list))
+			obd_nid_stats_put(obd, client_stat);
+	}
+	rhashtable_walk_stop(&iter);
+	rhashtable_walk_exit(&iter);
 
 	while (!list_empty(&free_list)) {
 		client_stat = list_first_entry(&free_list, struct nid_stat,
@@ -634,8 +646,7 @@ int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *nid)
 	int rc = 0;
 
 	ENTRY;
-	if (!exp || !exp->exp_obd || !exp->exp_obd->obd_debugfs_exports ||
-	    !exp->exp_obd->obd_nid_stats_hash)
+	if (!exp || !exp->exp_obd || !exp->exp_obd->obd_debugfs_exports)
 		RETURN(-EINVAL);
 
 	/* not test against zero because eric say:
@@ -655,8 +666,6 @@ int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *nid)
 
 	obd = exp->exp_obd;
 
-	CDEBUG(D_CONFIG, "using hash %p\n", obd->obd_nid_stats_hash);
-
 	OBD_ALLOC_PTR(new_stat);
 	if (new_stat == NULL)
 		RETURN(-ENOMEM);
@@ -666,9 +675,13 @@ int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *nid)
 	/* we need set default refcount to 1 to balance obd_disconnect */
 	atomic_set(&new_stat->nid_exp_ref_count, 1);
 
-	old_stat = cfs_hash_findadd_unique(obd->obd_nid_stats_hash,
-					   &new_stat->nid,
-					   &new_stat->nid_hash);
+	old_stat = obd_nid_stats_get(obd, new_stat);
+	/* old_stat ERR pointer means we failed to add new_stat
+	 * to the hash
+	 */
+	if (IS_ERR(old_stat))
+		GOTO(destroy_new, rc = PTR_ERR(old_stat));
+
 	CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
 	       old_stat, nidstr, atomic_read(&old_stat->nid_exp_ref_count));
 
@@ -923,9 +936,8 @@ int lprocfs_hash_seq_show(struct seq_file *m, void *data)
 		   HASH_NAME_LEN, "name");
 	ldebugfs_rhash_seq_show("UUID_HASH", &obd->obd_uuid_hash, m);
 	ldebugfs_rhash_seq_show("NID_HASH", &obd->obd_nid_hash.ht, m);
+	ldebugfs_rhash_seq_show("NID_STATS", &obd->obd_nid_stats_hash.ht, m);
 
-	cfs_hash_debug_header(m);
-	cfs_hash_debug_str(obd->obd_nid_stats_hash, m);
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_hash_seq_show);

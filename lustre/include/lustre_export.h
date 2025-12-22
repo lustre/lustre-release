@@ -124,7 +124,7 @@ struct mgs_export_data {
  */
 struct nid_stat {
 	struct lnet_nid		 nid;
-	struct hlist_node	 nid_hash;
+	struct rhlist_head	 nid_hash;
 	struct list_head	 nid_list;
 	struct obd_device       *nid_obd;
 	struct dentry		*nid_debugfs;

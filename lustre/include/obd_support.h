@@ -58,9 +58,6 @@ extern bool obd_enable_health_write;
 extern bool obd_enable_fname_encoding;
 
 /* Some hash init argument constants */
-#define HASH_NID_STATS_BKT_BITS 5
-#define HASH_NID_STATS_CUR_BITS 7
-#define HASH_NID_STATS_MAX_BITS 12
 #define HASH_GEN_BKT_BITS 5
 #define HASH_GEN_CUR_BITS 7
 #define HASH_GEN_MAX_BITS 12
