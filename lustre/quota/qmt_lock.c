@@ -12,6 +12,7 @@
 
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
+#include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/workqueue.h>
 
@@ -197,6 +198,7 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 		struct qmt_pool_info	*pool;
 		struct lquota_entry	*lqe;
 		struct lqe_glbl_data	*lgd;
+		int wait = 0;
 
 		pool = qmt_pool_lookup_glb(env, qmt, pool_type);
 		if (IS_ERR(pool))
@@ -210,21 +212,49 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 			GOTO(out, rc = PTR_ERR(lqe));
 		}
 
+again:
+		mutex_lock(&lqe->lqe_glbl_data_lock);
+		/* Is the old lqe_glbl_data still waiting to be freed in
+		 * qmt_lvbo_free_wq?
+		 */
+		if (lqe->lqe_glbl_data) {
+			mutex_unlock(&lqe->lqe_glbl_data_lock);
+
+			wait++;
+			/* wait one second */
+			if (wait < 1000) {
+				msleep_interruptible(1);
+				goto again;
+			}
+
+			LQUOTA_ERROR(lqe, "the lvb is held by qmt_wq: %p\n",
+				     res->lr_lvb_data);
+			lqe_putref(lqe);
+			GOTO(out_put_qpi, rc = -EBUSY);
+		}
+
 		/* TODO: need something like qmt_extend_lqe_gd that has
-		 * to be calledeach time when qpi_slv_nr is incremented */
+		 * to be called each time when qpi_slv_nr is incremented
+		 */
 		lgd = qmt_alloc_lqe_gd(pool, qtype);
 		if (!lgd) {
+			mutex_unlock(&lqe->lqe_glbl_data_lock);
 			lqe_putref(lqe);
-			qpi_putref(env, pool);
-			GOTO(out, rc = -ENOMEM);
+			GOTO(out_put_qpi, rc = -ENOMEM);
 		}
 
 		qmt_setup_lqe_gd(env, qmt, lqe, lgd, pool_type);
+		lqe->lqe_glbl_data = lgd;
+		mutex_unlock(&lqe->lqe_glbl_data_lock);
+
+		qmt_id_lock_notify(qmt, lqe);
 
 		/* store reference to lqe in lr_lvb_data */
 		res->lr_lvb_data = lqe;
-		qpi_putref(env, pool);
 		LQUOTA_DEBUG(lqe, "initialized res lvb");
+
+out_put_qpi:
+		qpi_putref(env, pool);
 	} else {
 		struct dt_object	*obj;
 

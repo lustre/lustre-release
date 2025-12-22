@@ -691,58 +691,55 @@ static int qmt_lgd_extend_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	rc = 0;
 
 	CDEBUG(D_QUOTA, "lgd %px\n", lqe->lqe_glbl_data);
+	old_lqeg_arr = NULL;
+	mutex_lock(&lqe->lqe_glbl_data_lock);
 	if (lqe->lqe_glbl_data) {
 		struct lqe_glbl_data *lgd;
+		struct qmt_pool_info *qpi = lqe2qpi(lqe);
+		int sarr_cnt = qmt_sarr_count(qpi);
 
-		old_lqeg_arr = NULL;
-		mutex_lock(&lqe->lqe_glbl_data_lock);
-		if (lqe->lqe_glbl_data) {
-			struct qmt_pool_info *qpi = lqe2qpi(lqe);
-			int sarr_cnt = qmt_sarr_count(qpi);
+		lgd = lqe->lqe_glbl_data;
+		if (lgd->lqeg_num_alloc < sarr_cnt) {
+			LASSERT((lgd->lqeg_num_alloc + 1) == sarr_cnt);
 
-			lgd = lqe->lqe_glbl_data;
-			if (lgd->lqeg_num_alloc < sarr_cnt) {
-				LASSERT((lgd->lqeg_num_alloc + 1) == sarr_cnt);
-
-				OBD_ALLOC(lqeg_arr,
-					  sizeof(struct lqe_glbl_entry) *
-					  (lgd->lqeg_num_alloc + 16));
-				if (lqeg_arr) {
-					memcpy(lqeg_arr, lgd->lqeg_arr,
-					       sizeof(struct lqe_glbl_entry) *
-					       (lgd->lqeg_num_alloc));
-					old_lqeg_arr = lgd->lqeg_arr;
-					old_num = lgd->lqeg_num_alloc;
-					lgd->lqeg_arr = lqeg_arr;
-					lgd->lqeg_num_alloc += 16;
-					CDEBUG(D_QUOTA,
-					       "extend lqeg_arr:%px from %d to %d\n",
-					       lgd, old_num,
-					       lgd->lqeg_num_alloc);
-				} else {
-					CERROR("%s: cannot allocate new lqeg_arr: rc = %d\n",
-					       qpi->qpi_qmt->qmt_svname,
-					       -ENOMEM);
-					GOTO(out, rc = -ENOMEM);
-				}
+			OBD_ALLOC(lqeg_arr,
+				  sizeof(struct lqe_glbl_entry) *
+				  (lgd->lqeg_num_alloc + 16));
+			if (lqeg_arr) {
+				memcpy(lqeg_arr, lgd->lqeg_arr,
+				       sizeof(struct lqe_glbl_entry) *
+				       (lgd->lqeg_num_alloc));
+				old_lqeg_arr = lgd->lqeg_arr;
+				old_num = lgd->lqeg_num_alloc;
+				lgd->lqeg_arr = lqeg_arr;
+				lgd->lqeg_num_alloc += 16;
+				CDEBUG(D_QUOTA,
+				       "extend lqeg_arr:%px from %d to %d\n",
+				       lgd, old_num,
+				       lgd->lqeg_num_alloc);
+			} else {
+				CERROR("%s: cannot allocate new lqeg_arr: rc = %d\n",
+				       qpi->qpi_qmt->qmt_svname,
+				       -ENOMEM);
+				GOTO(out, rc = -ENOMEM);
 			}
-			lgd->lqeg_arr[lgd->lqeg_num_used].lge_idx =
-				qmt_sarr_get_idx(qpi, sarr_cnt - 1);
-			lgd->lqeg_arr[lgd->lqeg_num_used].lge_edquot =
-				lqe->lqe_edquot;
-			lgd->lqeg_arr[lgd->lqeg_num_used].lge_qunit =
-				lqe->lqe_qunit;
-			lgd->lqeg_arr[lgd->lqeg_num_used].lge_edquot_nu = 0;
-			lgd->lqeg_arr[lgd->lqeg_num_used].lge_qunit_nu = 0;
-			LQUOTA_DEBUG(lqe, "add tgt idx:%d used %d alloc %d\n",
-				     lgd->lqeg_arr[lgd->lqeg_num_used].lge_idx,
-				     lgd->lqeg_num_used, lgd->lqeg_num_alloc);
-			lgd->lqeg_num_used++;
 		}
-out:
-		mutex_unlock(&lqe->lqe_glbl_data_lock);
-		OBD_FREE(old_lqeg_arr, old_num * sizeof(struct lqe_glbl_entry));
+		lgd->lqeg_arr[lgd->lqeg_num_used].lge_idx =
+			qmt_sarr_get_idx(qpi, sarr_cnt - 1);
+		lgd->lqeg_arr[lgd->lqeg_num_used].lge_edquot =
+			lqe->lqe_edquot;
+		lgd->lqeg_arr[lgd->lqeg_num_used].lge_qunit =
+			lqe->lqe_qunit;
+		lgd->lqeg_arr[lgd->lqeg_num_used].lge_edquot_nu = 0;
+		lgd->lqeg_arr[lgd->lqeg_num_used].lge_qunit_nu = 0;
+		LQUOTA_DEBUG(lqe, "add tgt idx:%d used %d alloc %d\n",
+			     lgd->lqeg_arr[lgd->lqeg_num_used].lge_idx,
+			     lgd->lqeg_num_used, lgd->lqeg_num_alloc);
+		lgd->lqeg_num_used++;
 	}
+out:
+	mutex_unlock(&lqe->lqe_glbl_data_lock);
+	OBD_FREE(old_lqeg_arr, old_num * sizeof(struct lqe_glbl_entry));
 
 	return rc;
 }
