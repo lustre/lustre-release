@@ -1025,14 +1025,21 @@ do_lctl() {
 	$LCTL "$@"
 }
 
+KMEMLEAK=${KMEMLEAK:-/sys/kernel/debug/kmemleak}
 load_lnet() {
 	# For kmemleak-enabled kernels we need clear all past state
 	# that obviously has nothing to do with this Lustre run
 	# Disable automatic memory scanning to avoid perf hit.
-	if [ -f /sys/kernel/debug/kmemleak ] ; then
-		echo scan=off > /sys/kernel/debug/kmemleak || true
-		echo scan > /sys/kernel/debug/kmemleak || true
-		echo clear > /sys/kernel/debug/kmemleak || true
+	if [[ -w $KMEMLEAK ]] ; then
+		local kmemleak_out=$(echo scan=off > $KMEMLEAK 2>&1 || true)
+
+		if [[ "$kmemleak_out" =~ "Device or resource busy" ]]; then
+			echo "kmemleak disabled"
+			export KMEMLEAK=disabled
+		else
+			echo scan > $KMEMLEAK || true
+			echo clear > $KMEMLEAK || true
+		fi
 	fi
 
 	echo Loading modules from $LUSTRE

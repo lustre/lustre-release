@@ -30,6 +30,7 @@ print_usage() {
 # Print kernel debug message for lustre modules
 print_debug() {
 	local debug_file
+
 	$LCTL mark "$SCRIPT_NAME : Stop debug"
 	if [[ $DEBUG_RMMOD == "-" ]]; then
 		debug_file="" # dump to stdout
@@ -109,15 +110,26 @@ else
 	unload_all=false
 fi
 
-if [ -f /sys/kernel/debug/kmemleak ] ; then
-	cat /proc/modules >/tmp/kmemleak-modules-list.txt
-	echo scan > /sys/kernel/debug/kmemleak
-	cat /sys/kernel/debug/kmemleak > /tmp/kmemleak-before-unload.txt
-	test -s /tmp/kmemleak-before-unload.txt && logger -t leak-pre -f /tmp/kmemleak-before-unload.txt
-	rm /tmp/kmemleak-before-unload.txt
-	# Clear everything here so that only new leaks show up
-	# after module unload
-	echo clear > /sys/kernel/debug/kmemleak
+export KMEMLEAK=${KMEMLEAK:-/sys/kernel/debug/kmemleak}
+KMEMLEAK_MODS=/tmp/kmemleak-modules-list.txt
+if [[ -w $KMEMLEAK ]]; then
+	kmemleak_out=$(echo scan > $KMEMLEAK 2>&1 || true)
+
+	if [[ "$kmemleak_out" =~ "Device or resource busy" ]]; then
+		echo "kmemleak disabled"
+		export KMEMLEAK=disabled
+	else
+		kmemleak_pre=/tmp/kmemleak-pre-unload.txt
+
+		echo $kmemleak_out
+		cat /proc/modules > $KMEMLEAK_MODS
+		cat $KMEMLEAK > $kmemleak_pre
+		[[ -s $kmemleak_pre ]] && logger -t leak-pre -f $kmemleak_pre
+		rm -f $kmemleak_pre
+		# Clear everything here so that only new leaks show up
+		# after module unload
+		echo clear > $KMEMLEAK
+	fi
 fi
 
 # Manage debug
@@ -152,11 +164,14 @@ if $DEBUG; then
 	print_debug
 fi
 
-if [ -f /sys/kernel/debug/kmemleak ] ; then
-	echo scan > /sys/kernel/debug/kmemleak
-	cat /sys/kernel/debug/kmemleak > /tmp/kmemleak-after-unload.txt
-	test -s /tmp/kmemleak-after-unload.txt && logger -t leak-mods -f /tmp/kmemleak-modules-list.txt && logger -t leak-post -f /tmp/kmemleak-after-unload.txt
-	rm -f /tmp/kmemleak-after-unload.txt /tmp/kmemleak-modules-list.txt
+if [[ -f $KMEMLEAK ]]; then
+	kmemleak_post=/tmp/kmemleak-post-unload.txt
+
+	echo scan > $KMEMLEAK 2>&1 | grep -v "Device or resource busy"
+	cat $KMEMLEAK > $kmemleak_post
+	[[ -s $kmemleak_post ]] && logger -t leak-mods -f $KMEMLEAK_MODS &&
+		logger -t leak-post -f $kmemleak_post
+	rm -f $kmemleak_post $KMEMLEAK_MODS
 fi
 
 exit 0
