@@ -3571,14 +3571,12 @@ kiblnd_startup(struct lnet_ni *ni)
 		ifname = ni->ni_interface;
 	} else {
 		ifname = *kiblnd_tunables.kib_default_ipif;
-		rc = libcfs_strnid(&ni->ni_nid, ifname);
-		if (rc < 0 || ni->ni_nid.nid_type != O2IBLND)
-			memset(&ni->ni_nid, 0, sizeof(ni->ni_nid));
 	}
 
 	if (strlen(ifname) >= sizeof(ibdev->ibd_ifname)) {
-		CERROR("IPoIB interface name too long: %s\n", ifname);
 		rc = -E2BIG;
+		CERROR("%s: IPoIB interface name %zu longer than maximum %zu: rc = %d\n",
+		       ifname, strlen(ifname), sizeof(ibdev->ibd_ifname), rc);
 		goto failed;
 	}
 
@@ -3592,10 +3590,11 @@ kiblnd_startup(struct lnet_ni *ni)
 		goto failed;
 
 	if (nid_addr_is_set(&ni->ni_nid)) {
-		strscpy(ifname, ifaces[i].li_name, sizeof(ifname));
+		ifname = ifaces[i].li_name;
 	} else if (strcmp(ifname, ifaces[i].li_name) != 0) {
-		CERROR("ko2iblnd: No matching interfaces\n");
 		rc = -ENOENT;
+		CERROR("ko2iblnd: Interface name mismatch - expected '%s' but selected '%s': rc = %d\n",
+		       ifname, ifaces[i].li_name, rc);
 		goto failed;
 	}
 
@@ -3695,11 +3694,11 @@ failed:
 	if (net != NULL && net->ibn_dev == NULL && ibdev != NULL)
 		kiblnd_destroy_dev(ibdev);
 
+	CDEBUG(D_NET, "%s: device configuration failed: rc = %d\n",
+	       ifname ? ifname : "", rc);
+
 	kfree(ifaces);
 	kiblnd_shutdown(ni);
-
-	CDEBUG(D_NET, "Configuration of device %s failed: rc = %d\n",
-	       ifname ? ifname : "", rc);
 
 	return -ENETDOWN;
 }
