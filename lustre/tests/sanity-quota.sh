@@ -7424,17 +7424,20 @@ test_delete_big_file() {
 	local testdir=$DIR/$tdir
 	local tfile1=$DIR/$tdir/dd.out.0
 	local tfile2=$DIR/$tdir/dd.out.1
+	local limit=3 # GB
 
 	chown $TSTID:$TSTID $testdir || error "failed to chown $testdir"
 	$LFS project -sp $TSTPRJID $testdir ||
 		error "fail to set project on $testdir"
 
-	$LFS setquota -p $TSTPRJID -B 3G $DIR ||
+	$LFS setquota -p $TSTPRJID -B ${limit}G $DIR ||
 		error "failed to set quota limits for $TSTPRJID"
 	$LFS quota -p $TSTPRJID -h $DIR
 
 	$LFS setstripe $tfile1 -i 0 -c 1 || error "setstripe $tfile1 failed"
 	chown $TSTID:$TSTID $tfile1 || error "fail to chown $tfile1"
+	wait_quota_synced ost1 OST0000 prj $TSTPRJID hardlimit \
+		$((limit*1024*1024))
 
 	$RUNAS fallocate -l2GiB $tfile1 || error "fail to write 2GiB"
 	$RUNAS $DD of=$tfile1 seek=2048 count=1500 oflag=sync &&
@@ -7450,6 +7453,8 @@ test_delete_big_file() {
 	$LFS quota -p $TSTPRJID -h $DIR
 	$LFS setstripe $tfile2 -i 1 -c 1 || error "setstripe $tfile2 failed"
 	chown $TSTID:$TSTID $tfile2 || error "fail to chown $tfile2"
+	wait_quota_synced ost2 OST0001 prj $TSTPRJID hardlimit \
+		$((limit*1024*1024))
 
 	$RUNAS fallocate -l2GiB $tfile2 || {
 		(( equot_expected == 0 )) && error "fail to write 2GiB"
