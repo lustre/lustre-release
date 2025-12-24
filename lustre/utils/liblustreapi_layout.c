@@ -4745,7 +4745,7 @@ llapi_ec_resync_or_verify_raidset(int fd, struct llapi_layout *layout,
 				  uint8_t *stripe_ptrs[],
 				  uint8_t *encode_matrix,
 				  uint8_t *g_tbls,
-				  uint64_t end_pos, int is_verify)
+				  uint64_t end_pos, bool is_verify)
 {
 	int rc = 0;
 	size_t data_len;
@@ -4849,7 +4849,7 @@ static int
 llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 			       struct llapi_layout_comp *data_comp,
 			       struct llapi_layout_comp *ec_comp,
-			       int is_verify)
+			       bool is_verify)
 {
 	int rc = 0, i, k, p, m;
 	struct stat stbuf;

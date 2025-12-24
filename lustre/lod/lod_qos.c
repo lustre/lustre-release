@@ -2576,12 +2576,8 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			lod_comp->llc_mirror_link_id =
 				lcme_timestamp_id_unpack(lcme->lcme_time_and_id);
 
-			if (lod_comp->llc_flags & LCME_FL_PARITY) {
-				lod_comp->llc_dstripe_count =
-					lcme->lcme_dstripe_count;
-				lod_comp->llc_cstripe_count =
-					lcme->lcme_cstripe_count;
-			}
+			lod_comp->llc_dstripe_count = lcme->lcme_dstripe_count;
+			lod_comp->llc_cstripe_count = lcme->lcme_cstripe_count;
 		}
 
 		pool_name = NULL;

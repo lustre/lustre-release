@@ -2857,12 +2857,10 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		lod_comp->llc_extent.e_end = ext->e_end;
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_comp->llc_flags = comp_v1->lcm_entries[i].lcme_flags;
-		if (lod_comp->llc_flags & LCME_FL_PARITY) {
-			lod_comp->llc_dstripe_count =
-				comp_v1->lcm_entries[i].lcme_dstripe_count;
-			lod_comp->llc_cstripe_count =
-				comp_v1->lcm_entries[i].lcme_cstripe_count;
-		}
+		lod_comp->llc_dstripe_count =
+			comp_v1->lcm_entries[i].lcme_dstripe_count;
+		lod_comp->llc_cstripe_count =
+			comp_v1->lcm_entries[i].lcme_cstripe_count;
 
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
@@ -5500,12 +5498,8 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 					llc->llc_flags |= LCME_FL_IS_LINK_ID;
 				}
 			}
-			if (llc->llc_flags & LCME_FL_PARITY) {
-				llc->llc_dstripe_count =
-					lcme->lcme_dstripe_count;
-				llc->llc_cstripe_count =
-					lcme->lcme_cstripe_count;
-			}
+			llc->llc_dstripe_count = lcme->lcme_dstripe_count;
+			llc->llc_cstripe_count = lcme->lcme_cstripe_count;
 		}
 
 		CDEBUG(D_LAYOUT,
