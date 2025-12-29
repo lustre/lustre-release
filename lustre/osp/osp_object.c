@@ -1357,15 +1357,23 @@ void osp_obj_invalidate_cache(struct osp_object *obj)
 {
 	struct osp_xattr_entry *oxe;
 	struct osp_xattr_entry *tmp;
+	struct list_head tmplist;
+
+	INIT_LIST_HEAD(&tmplist);
 
 	spin_lock(&obj->opo_lock);
 	list_for_each_entry_safe(oxe, tmp, &obj->opo_xattr_list, oxe_list) {
 		oxe->oxe_ready = 0;
-		list_del_init(&oxe->oxe_list);
-		osp_oac_xattr_put(oxe);
+		list_move(&oxe->oxe_list, &tmplist);
 	}
 	obj->opo_attr.la_valid = 0;
 	spin_unlock(&obj->opo_lock);
+
+	/* free outside of the spinlock as VMALLOC_FREE() can sleep */
+	list_for_each_entry_safe(oxe, tmp, &tmplist, oxe_list) {
+		list_del_init(&oxe->oxe_list);
+		osp_oac_xattr_put(oxe);
+	}
 }
 
 /**
