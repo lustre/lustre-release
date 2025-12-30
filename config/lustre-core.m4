@@ -2401,25 +2401,6 @@ AC_DEFUN([LC_INTERVAL_TREE_CACHED], [
 ]) # LC_INTERVAL_TREE_CACHED
 
 #
-# LC_IS_ENCRYPTED
-#
-# 4.14 introduced IS_ENCRYPTED and S_ENCRYPTED
-#
-AC_DEFUN([LC_SRC_IS_ENCRYPTED], [
-	LB2_LINUX_TEST_SRC([is_encrypted], [
-		#include <linux/fs.h>
-	],[
-		(void)IS_ENCRYPTED((struct inode *)1);
-	])
-])
-AC_DEFUN([LC_IS_ENCRYPTED], [
-	LB2_MSG_LINUX_TEST_RESULT([if IS_ENCRYPTED is defined],
-	[is_encrypted], [
-		has_is_encrypted="yes"
-	])
-]) # LC_IS_ENCRYPTED used by LC_CONFIG_CRYPTO
-
-#
 # LC_I_PAGES
 #
 # kernel 4.17 commit b93b016313b3ba8003c3b8bb71f569af91f19fc7
@@ -5871,29 +5852,38 @@ AC_ARG_ENABLE([crypto],
 		[enable Lustre client crypto (default is yes), use 'in-kernel' to force use of in-kernel fscrypt instead of embedded llcrypt]),
 	[], [enable_crypto="auto"])
 AS_IF([test "x$enable_crypto" != xno -a "x$enable_dist" = xno], [
-	AC_MSG_RESULT(
-	)
-	LC_IS_ENCRYPTED
-	LC_FSCRYPT_SUPPORT])
-AS_IF([test "x$enable_crypto" = xin-kernel -o "x$enable_modules" = xno -a "x$enable_dist" = xno], [
-	AS_IF([test "x$has_fscrypt_support" = xyes], [
-	      AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via in-kernel fscrypt])], [
-	      AC_MSG_ERROR([Lustre client crypto cannot be enabled via in-kernel fscrypt.])
-	      enable_crypto=no])],
-	[AS_IF([test "x$has_is_encrypted" = xyes], [
-	      AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto via embedded llcrypt])
-	      AC_DEFINE(CONFIG_LL_ENCRYPTION, 1, [embedded llcrypt])
-	      AC_DEFINE(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED, 1, [embedded llcrypt uses llcrypt_dummy_context_enabled()])
-	      enable_crypto="embedded-llcrypt"
-	      enable_llcrypt=yes], [
-	      AS_IF([test "x$enable_crypto" = xyes],
-	            [AC_MSG_ERROR([Lustre client crypto cannot be enabled because of lack of encryption support in your kernel.])])
-	      AS_IF([test "x$enable_crypto" != xno -a "x$enable_dist" = xno],
-	            [AC_MSG_WARN(Lustre client crypto cannot be enabled because of lack of encryption support in your kernel.)])
-	      enable_crypto=no])])
-AS_IF([test "x$enable_dist" != xno], [
-	enable_crypto=yes
-	enable_llcrypt=yes])
+      AS_IF([test "x$enable_crypto" = xin-kernel -o "x$enable_modules" = xno -a "x$enable_dist" = xno], [
+	LB_CHECK_CONFIG_IM([FS_ENCRYPTION], [
+		AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto])
+		LC_FSCRYPT_SUPPORT
+		AS_IF([test "x$has_fscrypt_support" != xyes], [
+			AC_DEFINE(CONFIG_LL_ENCRYPTION, 1,
+				  [Enable Lustre client crypto via embedded llcrypt])
+			AC_DEFINE(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED, 1,
+				  [embedded llcrypt uses llcrypt_dummy_context_enabled()])
+			enable_crypto="embedded-llcrypt"
+			enable_llcrypt=yes
+		],[
+			AC_MSG_RESULT("Enable Lustre client crypto via in-kernel fscrypt")
+			enable_crypto="in-kernel"
+		])
+	],[
+		AC_MSG_WARN(Lustre client crypto cannot be enabled because of lack of encryption support in your kernel.)
+		enable_crypto=no
+	])
+      ],[
+	AC_DEFINE(HAVE_LUSTRE_CRYPTO, 1, [Enable Lustre client crypto])
+	AC_DEFINE(CONFIG_LL_ENCRYPTION, 1,
+		  [Enable Lustre client crypto via embedded llcrypt])
+	AC_DEFINE(HAVE_FSCRYPT_DUMMY_CONTEXT_ENABLED, 1,
+		  [embedded llcrypt uses llcrypt_dummy_context_enabled()])
+	enable_crypto="embedded-llcrypt"
+	enable_llcrypt=yes
+      ])
+      AS_IF([test "x$enable_dist" != xno], [
+	     enable_crypto=yes
+	     enable_llcrypt=yes])
+],[enable_llcrypt="no"])
 AC_MSG_RESULT([$enable_crypto])
 ]) # LC_CONFIG_CRYPTO
 
