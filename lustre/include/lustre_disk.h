@@ -85,6 +85,7 @@ enum lmd_flags {
 	LMD_FLG_LOCAL_RECOV,		/* force recovery for local clients */
 	LMD_FLG_ABORT_RECOV_MDT,	/* Abort recovery between MDTs */
 	LMD_FLG_NO_LOCAL_LOGS,		/* Use config logs from MGS */
+	LMD_FLG_NO_RCLNT,		/* Denied remote client connections */
 	LMD_FLG_NUM_FLAGS
 };
 

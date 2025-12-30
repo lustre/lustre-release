@@ -12399,6 +12399,76 @@ test_161() {
 }
 run_test 161 "test '-o mgsname' option"
 
+test_162() {
+	(( MGS_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MGS version at least 2.17.50"
+	local mhost
+
+	if ! combined_mgs_mds ; then
+		mhost=$(facet_active_host mgs)
+	else
+		mhost=$(facet_active_host mdt1)
+	fi
+
+	[[ ! $(local_node $mhost) ]]  ||
+		skip "Need client and MGS on different nodes"
+
+	setup
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds1 FULL
+
+	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -1)
+	local MDS_NID=$(do_facet $SINGLEMDS $LCTL list_nids | head -1)
+
+	#stop all devices on the same node
+	for ((num=1; num <= $MDSCOUNT; num++)); do
+		[[ "$mhost" != "$(facet_active_host mdt$num)" ]] ||
+			stop_mdt $num
+	done
+	[[ "$mhost" != "$(facet_active_host ost1)" ]] ||
+		stop_ost
+
+	if ! combined_mgs_mds ; then
+		stop_mgs
+		start_mgs "-o noclient"
+	else
+		start_mdt 1 "-o nosvc,noclient"
+	fi
+	stack_trap "do_facet mgs $LCTL dl" ERR
+
+	local FAKE_NIDS="192.168.0.112@tcp1,192.168.0.112@tcp2"
+	local FAKE_FAILOVER="192.168.0.113@tcp1,192.168.0.113@tcp2"
+	local NIDS_AND_FAILOVER="$MDS_NID,$FAKE_NIDS:$FAKE_FAILOVER"
+	echo "set NIDs with failover"
+	do_facet mgs $LCTL replace_nids $FSNAME-MDT0000 $NIDS_AND_FAILOVER ||
+		error "replace nids failed"
+
+	echo "replace MDS nid"
+	do_facet mgs $LCTL replace_nids $FSNAME-MDT0000 $MDS_NID ||
+		error "replace nids failed"
+
+	if ! combined_mgs_mds ; then
+		stop_mgs
+		start_mgs
+	else
+		stop_mdt 1
+	fi
+
+	#start all devices on the same node
+	for ((num=1; num <= $MDSCOUNT; num++)); do
+		[[ "$mhost" != "$(facet_active_host mdt$num)" ]] ||
+			start_mdt $num
+	done
+	[[ "$mhost" != "$(facet_active_host ost1)" ]] ||
+		start_ost
+
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds1 FULL
+
+	check_mount || error "error after nid replace"
+	cleanup || error "cleanup failed"
+	reformat_and_config
+}
+run_test 162 "replace nids with -o noclient"
+
 cleanup_200() {
 	local modopts=$1
 	stopall
@@ -12848,4 +12918,5 @@ reformat
 
 complete_test $SECONDS
 check_and_cleanup_lustre
+
 exit_status

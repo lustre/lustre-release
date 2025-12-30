@@ -2222,6 +2222,9 @@ static int server_show_options(struct seq_file *seq, struct dentry *dentry)
 	if (test_bit(LMD_FLG_MGS, lmd->lmd_flags))
 		seq_puts(seq, ",mgs");
 
+	if (test_bit(LMD_FLG_NO_RCLNT, lmd->lmd_flags))
+		seq_puts(seq, ",noclient");
+
 	if (lmd->lmd_mgs)
 		seq_printf(seq, ",mgsnode=%s", lmd->lmd_mgs);
 

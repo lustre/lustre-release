@@ -17,7 +17,7 @@ This command must be run on the MGS node. Only MGS server should be started
 (command execution returns error in another case).
 .PP
 To start the MGS service only:
-.BI "mount -t lustre " MGT_DEVICE " -o nosvc " MOUNT_POINT
+.BI "mount -t lustre " MGT_DEVICE " -o nosvc,noclient " MOUNT_POINT
 .PP
 Note the
 .B replace_nids

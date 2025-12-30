@@ -77,6 +77,7 @@ static void usage(FILE *out)
 		"\t\tabort_recov: abort server recovery handling\n"
 		"\t\tnosvc: only start MGC/MGS without starting MDS/OSS\n"
 		"\t\tnomgs: only start target MDS/OSS, using existing MGS\n"
+		"\t\tnoclient: do NOT allow clients connections other than MGS local\n"
 		"\t\tnoscrub: do NOT auto start OI scrub unless requested\n"
 		"\t\tskip_lfsck: do NOT auto resume paused/crashed LFSCK\n"
 		"\t\tmd_stripe_cache_size=<num>: set MD RAID device stripe cache size\n"

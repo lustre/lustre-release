@@ -1191,8 +1191,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 			       "stopping" : "not set up"));
 		GOTO(out, rc = -ENODEV);
 	}
-
-	if (target->obd_no_conn) {
+	/* allow only local connection for MGS */
+	if (target->obd_no_conn && !(nid_is_lo0(&req->rq_peer.nid) &&
+			!strcmp(target->obd_name, LUSTRE_MGS_OBDNAME))) {
 		CDEBUG(D_INFO,
 		       "%s: Temporarily refusing client connection from %s\n",
 		       target->obd_name, libcfs_nidstr(&req->rq_peer.nid));

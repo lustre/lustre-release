@@ -10,8 +10,8 @@ lctl-lcfg_clear \- clear filesystem config llog
 (alias
 .BR clear_conf )
 is run on the MGS node, with the MGS device mounted with the
-.B -o nosvc
-flag. It cleans up any records marked
+.B -o nosvc,noclient
+flags. It cleans up any records marked
 .I SKIP
 from the configuration files stored in the
 .I CONFIGS/

@@ -1396,6 +1396,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	struct obd_device		*obd;
 	struct lustre_mount_info	*lmi;
 	struct llog_ctxt		*ctxt;
+	struct lustre_sb_info *lsi;
 	int				 rc;
 
 	ENTRY;
@@ -1432,6 +1433,9 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 
 	/* No recovery for MGCs */
 	obd->obd_replayable = 0;
+	lsi = s2lsi(lmi->lmi_sb);
+	if (test_bit(LMD_FLG_NO_RCLNT, lsi->lsi_lmd->lmd_flags))
+		obd->obd_no_conn = 1;
 
 	rc = tgt_init(env, &mgs->mgs_lut, obd, mgs->mgs_bottom,
 		      mgs_common_slice, OBD_FAIL_MGS_ALL_REQUEST_NET,
