@@ -1,4 +1,4 @@
-.TH LFS-MIGRATE 1 2025-05-23 Lustre "Lustre User Utilities"
+.TH LFS-MIGRATE 1 2025-12-20 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-migrate \- migrate files or directories between MDTs or OSTs.
 .SH SYNOPSIS
@@ -194,6 +194,20 @@ values are specified in a comma-separated list, then the number of specified
 values must match
 .IR COUNT .
 .TP
+.BR -C ", " --mdt-overcount= \fICOUNT
+The number of directory stripes to create, creating > 1 stripe per MDT if
+.I COUNT
+exceeds the number of MDTs in the file system.
+.B 0
+means to use the filesystem-wide default stripe count (default 1), and
+.B range -1 to -5
+means to stripe over all available MDTs in multiple of MDT count. For example,
+.B -1
+means one stripe per MDT,
+.B -2
+means two stripes per MDT, and so on. The maximum is 5 stripes per MDT.
+This allows a single directory to more fully use the capability of each MDT.
+.TP
 .BR -d ", " --directory
 Only migrate the specified
 .I DIRECTORY
@@ -339,10 +353,10 @@ command is part of the
 filesystem package since release 2.4.0
 .\" lfs_setstripe_migrate added in commit v2_3_63_0-6-gead6f5b2b5)
 .SH SEE ALSO
+.BR lctl (8),
 .BR lfs (1),
 .BR lfs-getdirstripe (1),
 .BR lfs_migrate (1),
 .BR lfs-mkdir (1),
 .BR lfs-setdirstripe (1),
-.BR lfs-setstripe (1),
-.BR lctl (8)
+.BR lfs-setstripe (1)

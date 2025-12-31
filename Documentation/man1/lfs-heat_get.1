@@ -5,9 +5,11 @@ lfs-heat_get, lfs-heat_set \- commands used to interact with file heat features
 .SY "lfs heat_get"
 .IR FILE ...
 .SY "lfs heat_set"
+.RB [ --help | -h ]
 .RB [ --clear | -c ]
 .RB [ --on | -O ]
 .RB [ --off | -o ]
+.IR FILE ...
 .YS
 .SH DESCRIPTION
 These are a set of lfs commands used to interact with Lustre file heat feature.
@@ -22,7 +24,10 @@ sets the provided file with heat flags on the file list.
 .BR -c ", " --clear
 Clear file heat on given files.
 .TP
-.BR -c ", " --off
+.BR -h ", " --help
+Print usage message.
+.TP
+.BR -o ", " --off
 Turn off file heat on given files.
 .TP
 .BR -O ", " --on

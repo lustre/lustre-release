@@ -1,0 +1,85 @@
+.TH LFS-SWAP_LAYOUTS 1 2025-12-20 Lustre "Lustre User Utilities"
+.SH NAME
+lfs-swap_layouts \- swap the data layout and OST objects between two files
+.SH SYNOPSIS
+.SY "lfs swap_layouts"
+.RB [ -n ]
+.I FILE1
+.I FILE2
+.YS
+.SH DESCRIPTION
+Swap the data (layout and OST objects) of two regular files. After the swap,
+.I FILE1
+will contain the data that was in
+.IR FILE2 ,
+and
+.I FILE2
+will contain the data that was in
+.IR FILE1 .
+The file names and paths remain unchanged.
+.PP
+This operation is atomic and is commonly used for:
+.IP \(bu 3
+Replacing a file's contents while maintaining the same inode
+.IP \(bu 3
+Implementing atomic file updates
+.IP \(bu 3
+Data migration between different storage layouts
+.SH RESTRICTIONS
+The two files must meet the following requirements:
+.IP \(bu 3
+Both files must be regular files (not directories)
+.IP \(bu 3
+Both files must be in the same Lustre filesystem
+.IP \(bu 3
+Both files must be owned by the same user
+.IP \(bu 3
+Both files must reside on the same MDT
+.IP \(bu 3
+Both files must be writable by the user
+.SH OPTIONS
+.TP
+.B -n
+Do not preserve mtime and atime. By default, the modification time (mtime)
+and access time (atime) are preserved during the swap.
+.SH EXAMPLES
+Swap the layouts of two files:
+.RS
+.EX
+.B $ lfs swap_layouts /mnt/lustre/file1 /mnt/lustre/file2
+.EE
+.RE
+.PP
+Swap layouts without preserving timestamps:
+.RS
+.EX
+.B $ lfs swap_layouts -n /mnt/lustre/file1 /mnt/lustre/file2
+.EE
+.RE
+.PP
+Atomic file replacement pattern:
+.RS
+.EX
+.B $ cp /mnt/lustre/original /mnt/lustre/original.new
+.B $ # modify /mnt/lustre/original.new
+.B $ lfs swap_layouts /mnt/lustre/original /mnt/lustre/original.new
+.B $ rm /mnt/lustre/original.new
+.EE
+.RE
+.SH NOTES
+The swap operation exchanges the data objects and layout information, but
+the file metadata (permissions, ownership, extended attributes) remains
+with the original file names.
+.PP
+Swapping the layout of two directories is not permitted.
+.SH AVAILABILITY
+The
+.B lfs swap_layouts
+command is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-migrate (1),
+.BR lfs-setstripe (1)
+

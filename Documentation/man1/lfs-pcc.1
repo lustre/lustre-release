@@ -1,34 +1,45 @@
-.TH LFS-PCC 1 2025-01-24 "Lustre" "Lustre User Utilities"
+.TH LFS-PCC 1 2025-12-20 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-pcc \- commands used to interact with the Persistent Client Cache (PCC).
 .SH SYNOPSIS
 .SY "lfs pcc attach"
-.BR --id | -i
-.IR "NUM FILE" ...
-.SY "lfs pcc attach"
-.BR --id | -i
-.I NUM
+.RB [ --id | -i
+.IR NUM ]
+.RB [ --readonly | -r ]
+.RB [ --write | -w ]
+.IR "FILE" ...
+.SY "lfs pcc attach_fid"
+.RB [ --id | -i
+.IR NUM ]
 .BR --mnt | -m
-.IR "MNTPATH FID" ...
+.I MNTPATH
+.RB [ --readonly | -r ]
+.RB [ --write | -w ]
+.IR "FID" ...
 .SY "lfs pcc state"
 .IR FILE ...
 .YS
 .SH DESCRIPTION
 .B lfs pcc attach
-.BR --id | -i
-.IR "NUM FILE" ...
+.RB [ --id | -i
+.IR NUM ]
+.RB [ --readonly | -r ]
+.RB [ --write | -w ]
+.IR "FILE" ...
 .IP
-Attach given files on the persistent client cache. Use
-.PP
+Attach given files to the persistent client cache. Use
 .B lfs pcc detach
 to remove the cached files from PCC either manually, or through automatic
 mechanisms for the purpose of the cache space management.
 .PP
-.B lfs pcc attach
-.BR --id | -i
-.I NUM
+.B lfs pcc attach_fid
+.RB [ --id | -i
+.IR NUM ]
 .BR --mnt | -m
-.IR "MNTPATH FID" ...
+.I MNTPATH
+.RB [ --readonly | -r ]
+.RB [ --write | -w ]
+.IR "FID" ...
 .IP
 Attach given files into the persistent client cache by FID(s).
 .PP
@@ -40,9 +51,20 @@ Display the PCC state for given files.
 .TP
 .BR --id ", " -i
 For RW-PCC, it is HSM ARCHIVE ID to choose which backend for cache files.
+If not specified, the default archive ID (0) will be used.
 .TP
 .BR --mnt ", " -m
 Specify the Lustre mount point.
+.TP
+.BR --readonly ", " -r
+Attach the file(s) in readonly mode (RO-PCC).
+.TP
+.BR --write ", " -w
+Attach the file(s) in read-write mode (RW-PCC). This is the default if neither
+.B --readonly
+nor
+.B --write
+is specified.
 Before using RW-PCC, you need to configure HSM root and Archive ID mapping properly:
 .B lfs pcc add $MNTPATH $PCCPATH \ "$PARAM"
 Add one PCC backend to the Lustre client. For RW-PCC, when a file is being
@@ -124,7 +146,7 @@ is part of the
 filesystem package since release 2.13.0
 .\" Added in commit v2_12_53-113-gf172b11688
 .SH SEE ALSO
+.BR lctl-pcc (8),
 .BR lfs (1),
 .BR lfs-hsm (1),
-.BR lfs-pcc-detach (1),
-.BR lctl-pcc (8)
+.BR lfs-pcc-detach (1)

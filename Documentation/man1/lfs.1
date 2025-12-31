@@ -1,4 +1,4 @@
-.TH LFS 1 2024-08-29 Lustre "Lustre User Utilities"
+.TH LFS 1 2025-12-20 Lustre "Lustre User Utilities"
 .SH NAME
 lfs \- client utility for Lustre-specific file layout and other attributes
 .SH SYNOPSIS
@@ -70,6 +70,12 @@ NOTE:
 .B lfs check osts
 may be preferable for some use cases.
 .TP
+.BR mdts " [" PATH ]
+List all the MDTs for all mounted filesystems. If a
+.I PATH
+is provided that is located on a lustre mounted file system
+then only the MDTs belonging to that filesystem are displayed.
+.TP
 .BR pool_list " {" \fIFILESYSTEM }[ .\fIPOOLNAME "] | {" \fIPATHNAME }
 List the pools in
 .I FILESYSTEM
@@ -91,11 +97,6 @@ lfs mkdir is documented in the man page: lfs-mkdir(1). NOTE:
 is an alias of the command
 .B lfs mkdir
 .TP
-.B mv
-lfs mv is deprecated, use lfs
-.B migrate
-instead.
-.TP
 .B migrate
 See lfs-migrate(1).
 .TP
@@ -105,6 +106,11 @@ See lfs-setstripe(1).
 .B unlink_foreign
 Remove the foreign files/dirs that are prevented to be using
 regular unlink/rmdir commands/syscalls. Works also for regular files/dirs.
+.TP
+.BR rm_entry " | " rmentry
+Remove the name entry of a remote directory. This command will only delete
+the name entry, making the remote directory inaccessible. This can only be
+done by the administrator.
 .TP
 .B --version
 Output the build version of the lfs utility.
@@ -155,13 +161,6 @@ List all the MDTs:
 .B # lfs mdts
 .EE
 .RE
-.PP
-Turn quotas of user and group off:
-.RS
-.EX
-.B # lfs quotaoff -ug /mnt/lustre
-.EE
-.RE
 .SH AVAILABILITY
 The
 .B lfs
@@ -170,6 +169,7 @@ command is part of the
 filesystem package since release 0.10.0
 .\" Added in commit 0.9.1
 .SH SEE ALSO
+.BR lctl (8),
 .BR lfs-changelog (1),
 .BR lfs-changelog_clear (1),
 .BR lfs-df (1),
@@ -178,17 +178,26 @@ filesystem package since release 0.10.0
 .BR lfs-flushctx (1),
 .BR lfs-getdirstripe (1),
 .BR lfs-getname (1),
+.BR lfs-getsom (1),
 .BR lfs-getstripe (1),
+.BR lfs-heat_get (1),
+.BR lfs-heat_set (1),
 .BR lfs-hsm (1),
-.BR lfs_migrate (1),
+.BR lfs-ladvise (1),
 .BR lfs-migrate (1),
+.BR lfs_migrate (1),
+.BR lfs-mirror (1),
 .BR lfs-mkdir (1),
 .BR lfs-path2fid (1),
 .BR lfs-pcc (1),
 .BR lfs-project (1),
 .BR lfs-quota (1),
+.BR lfs-rm_entry (8),
+.BR lfs-rmfid (1),
 .BR lfs-setdirstripe (1),
 .BR lfs-setquota (1),
 .BR lfs-setstripe (1),
-.BR lustre (7),
-.BR lctl (8)
+.BR lfs-somsync (1),
+.BR lfs-swap_layouts (1),
+.BR lfs-unlink_foreign (1),
+.BR lustre (7)

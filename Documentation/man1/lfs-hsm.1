@@ -7,21 +7,25 @@ hsm_state, hsm_action, hsm_set, hsm_clear \- lfs commands used to interact with 
 .SY "lfs hsm_action"
 .RI [ FILE "] ..."
 .SY "lfs hsm_set"
+.RB [ --help ]
 .RB [ --norelease ]
 .RB [ --noarchive ]
+.RB [ --dirty ]
 .RB [ --exists ]
 .RB [ --archived ]
 .RB [ --lost ]
 .RB [ --archive-id
 .IR NUM ]
-.RB [ FILE "] ..."
+.RI [ FILE "] ..."
 .SY "lfs hsm_clear"
+.RB [ --help ]
 .RB [ --norelease ]
 .RB [ --noarchive ]
+.RB [ --dirty ]
 .RB [ --exists ]
 .RB [ --archived ]
 .RB [ --lost ]
-.RB [ FILE "] ..."
+.RI [ FILE "] ..."
 .YS
 .SH DESCRIPTION
 These are a set of lfs commands used to interact with Lustre/HSM binding feature.
@@ -44,6 +48,9 @@ Non-privileged user can only change the following flags:
 and
 .BR dirty .
 .SH OPTIONS
+.TP
+.B --help
+Print usage message.
 .TP
 .B --norelease
 File should never be released.

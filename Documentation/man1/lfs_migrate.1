@@ -1,4 +1,4 @@
-.TH LFS_MIGRATE 1 2024-08-20 Lustre "Lustre User Utilities"
+.TH LFS_MIGRATE 1 2025-12-20 Lustre "Lustre User Utilities"
 .SH NAME
 lfs_migrate \- migrate files between Lustre OSTs
 .SH SYNOPSIS
@@ -12,6 +12,9 @@ lfs_migrate \- migrate files between Lustre OSTs
 .I MAX_FREE ]]
 .RB [ --cp ]
 .RB [ --dry-run | -n ]
+.RB [ --fid | -F
+.RB [ --lustre-dir
+.IR LUSTRE_MOUNT_POINT ]]
 .RB [ --help | -h ]
 .RB [ --no-rsync | --rsync ]
 .RB [ --pool | -p
@@ -27,7 +30,7 @@ lfs_migrate \- migrate files between Lustre OSTs
 .RB [ --yes | -y ]
 .RB [ -D ]
 .RB [ -0 ]
-.RI [ FILE | DIR ] ...
+.RI [ FILE | FID | DIR ] ...
 .YS
 .SH DESCRIPTION
 .B lfs_migrate
@@ -92,6 +95,20 @@ Only print the names of files to be migrated.
 .TP
 .B -D
 Do not use direct I/O to copy file contents.
+.TP
+.BR -F ", " --fid
+FID(s) are provided from command line/stdin instead of file path(s).
+Option
+.BR --lustre-dir = \fILUSTRE_MOUNT_POINT
+may be specified at the same time.
+.TP
+.BR --lustre-dir = \fILUSTRE_MOUNT_POINT
+The mount point of Lustre file system on which FID(s) are when
+.B --fid
+is specified.
+If there is only one mounted Lustre file system, this option is not necessary.
+This option must be specified together with
+.BR --fid .
 .TP
 .B -A
 Automatically determine the stripe count for the file, using the algorithm

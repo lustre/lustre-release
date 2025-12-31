@@ -3,6 +3,7 @@
 lfs-getsom \- list file attributes that are stored on an MDS
 .SH SYNOPSIS
 .SY "lfs getsom"
+.RB [ -h ]
 .RB [ -s | -b | -f ]
 .I FILE
 .YS
@@ -12,6 +13,9 @@ with the full path and file name for a file on the Lustre file system. If no
 flags are used, then all file attributes stored on the MDS will be shown.
 .SH OPTIONS
 .TP
+.BR -h
+Print usage message.
+.TP
 .BR -s
 Only show the size value of the SOM data for a given file.
 .TP
@@ -19,8 +23,8 @@ Only show the size value of the SOM data for a given file.
 Only show the blocks value of the SOM data for a given file.
 .TP
 .BR -f
-Only show the flag value of the SOM data for a given file.Valid flags are:
-.Ex
+Only show the flag value of the SOM data for a given file. Valid flags are:
+.EX
 0 - Unknown or no SoM data, must get size from OSTs.
 1 - Known strictly correct, FLR or DoM file (SoM guaranteed).
 2 - Known stale - was right at some point in the past, but it is known \

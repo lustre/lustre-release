@@ -1,4 +1,4 @@
-.TH LFS-GETSTRIPE 1 2024-08-15 Lustre "Lustre User Utilities"
+.TH LFS-GETSTRIPE 1 2025-12-20 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-getstripe \- Lustre client command to print layout parameters of a file
 .SH SYNOPSIS
@@ -22,6 +22,7 @@ lfs-getstripe \- Lustre client command to print layout parameters of a file
 .RB [ KMGTPE ]]]
 .br
 .RB [ --extension-size | --ext-size | -z ]
+.RB [ --default | -D ]
 .RB [ --directory | -d ]
 .RB [ --fid | -F ]
 .RB [ --generation | -g ]
@@ -176,6 +177,9 @@ or
 is used, print components with respectively a larger or smaller
 .I START_OFFSET
 offset.
+.TP
+.BR -D ", " --default
+Show the default layout used when creating new files in the specified directory.
 .TP
 .BR -d ", " --directory
 Get striping information for only the specified directory, like

@@ -1,0 +1,73 @@
+.TH LFS-UNLINK_FOREIGN 1 2025-12-20 Lustre "Lustre User Utilities"
+.SH NAME
+lfs-unlink_foreign \- remove foreign files or directories
+.SH SYNOPSIS
+.SY "lfs unlink_foreign"
+.I FILE
+.RI [ FILE " ...]"
+.YS
+.SH DESCRIPTION
+Remove files or directories with foreign layouts (LOV/LMV) that are normally
+prevented from being removed using regular
+.BR unlink (2)
+or
+.BR rmdir (2)
+system calls. This command also works for regular files and directories.
+.PP
+Foreign files and directories are special Lustre objects that reference
+external data or metadata not stored in the Lustre filesystem. They are
+typically used for:
+.IP \(bu 3
+Symlink-like references to external storage systems
+.IP \(bu 3
+Integration with external data management systems
+.IP \(bu 3
+Placeholder objects for data stored elsewhere
+.PP
+Some foreign types are protected from normal removal operations to preserve
+references to external objects. The
+.B lfs unlink_foreign
+command bypasses this protection and allows removal of these objects.
+.SH OPTIONS
+This command takes no options other than the file or directory paths to remove.
+.SH EXAMPLES
+Remove a single foreign file:
+.RS
+.EX
+.B $ lfs unlink_foreign /mnt/lustre/foreign_file
+.EE
+.RE
+.PP
+Remove multiple foreign files and directories:
+.RS
+.EX
+.B $ lfs unlink_foreign /mnt/lustre/foreign1 /mnt/lustre/foreign_dir
+.EE
+.RE
+.SH NOTES
+This command can also remove regular (non-foreign) files and directories,
+though using standard
+.BR rm (1)
+or
+.BR rmdir (1)
+commands is preferred for regular files.
+.PP
+Foreign files and directories are created using the
+.BR llapi_file_create_foreign (3)
+and
+.BR llapi_dir_create_foreign (3)
+library functions.
+.SH AVAILABILITY
+The
+.B lfs unlink_foreign
+command is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lfs (1),
+.BR llapi_dir_create_foreign (3),
+.BR llapi_file_create_foreign (3),
+.BR llapi_unlink_foreign (3),
+.BR rm (1),
+.BR rmdir (1)
+

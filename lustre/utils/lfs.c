@@ -7107,7 +7107,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	char *end, *tmp;
 
 	while ((c = getopt_long(argc, argv,
-			"-cdDE::FghiI::LmMNoO:pqrRsSvyz",
+			"-cdDE::FghiI::LmMNO:pqrRSvyz",
 			long_opts, NULL)) != -1) {
 		if (neg_opt)
 			--neg_opt;

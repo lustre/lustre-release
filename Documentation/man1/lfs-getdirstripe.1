@@ -3,7 +3,7 @@
 lfs-getdirstripe \- list the layout pattern of a given directory
 .SH SYNOPSIS
 .SY "lfs getdirstripe"
-.RB [ -cDhHimOrTXvy ]...
+.RB [ -cDhHimOrRTvXy ]...
 .IR DIR ...
 .YS
 .SH DESCRIPTION
@@ -47,6 +47,12 @@ information for all sub-directories within the specified directory. This
 can be expanded with
 .BR --recursive ,
 which will recurse into all subdirectories.
+.TP
+.BR -R ", " --raw
+Print MDT index in raw format without converting to a name.
+.TP
+.BR -v ", " --verbose
+Print verbose information about the directory striping.
 .TP
 .BR -X ", " --max-inherit
 Show the inherit depth of default layout.
