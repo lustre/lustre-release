@@ -9,7 +9,7 @@
 # Return lustre version string
 #
 
-DEFAULT_VERSION=2.17.0
+DEFAULT_VERSION=2.17.50
 LVF=LUSTRE-VERSION-FILE
 
 LF='
