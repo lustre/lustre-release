@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<part xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+    <title>Reference</title>
+    <partintro>
+  <para>Part VI includes reference information about Lustre file system user utilities,
+            configuration files and module parameters, programming interfaces, system configuration
+            utilities, and system limits. You will find information in this section about:</para>
+
+  <itemizedlist>
+      <listitem>
+          <para>
+  <link linkend= "lustrerecovery" endterm="lustrerecovery.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "lustreproc" endterm="lustreproc.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "userutilities" endterm="userutilities.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "lustreprogramminginterfaces" endterm="lustreprogramminginterfaces.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "settinglustreproperties" endterm="settinglustreproperties.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "configurationfilesmoduleparameters" endterm="configurationfilesmoduleparameters.title"/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+  <link linkend= "systemconfigurationutilities" endterm="systemconfigurationutilities.title"/>
+             </para>
+         </listitem>
+     </itemizedlist>
+  </partintro>
+
+  <xi:include href="LustreRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="LustreProc.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="UserUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="LustreProgrammingInterfaces.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="SettingLustreProperties.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="ConfigurationFilesModuleParameters.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="SystemConfigurationUtilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="LNetConfigurationApi.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+
+
+</part>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

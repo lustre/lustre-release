@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<part xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+  <info>
+    <title>Tuning a Lustre File System for Performance</title>
+  </info>
+  <partintro>
+  <para>Part IV describes tools and procedures used to tune a Lustre file system for optimum performance. You will find information in this section about:</para>
+
+  <itemizedlist>
+      <listitem>
+          <para>
+              <link linkend='lnetselftest' endterm='lnetselftest.title'/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+              <link linkend='benchmarkingtests' endterm='benchmarkingtests.title'/>
+          </para>
+      </listitem>
+      <listitem>
+          <para>
+              <link linkend='lustretuning' endterm='lustretuning.title'/>
+          </para>
+      </listitem>
+  </itemizedlist>
+
+  </partintro>
+
+
+  <xi:include href="LNetSelfTest.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="BenchmarkingTests.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="LustreTuning.xml"
+   xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+</part>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

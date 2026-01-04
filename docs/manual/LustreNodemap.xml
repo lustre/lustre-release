@@ -1,0 +1,775 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="lustrenodemap" condition='l29'>
+  <title xml:id="lustrenodemap.title">Mapping UIDs and GIDs with
+  Nodemap</title>
+
+  <para>This chapter describes how to map UID and GIDs across a Lustre file
+  system using the nodemap feature, and includes the following
+  sections:</para>
+
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="settingamapping"/></para>
+    </listitem>
+
+    <listitem>
+      <para><xref linkend="nodemapdel"/></para>
+    </listitem>
+
+    <listitem>
+      <para><xref linkend="alteringproperties"/></para>
+    </listitem>
+
+    <listitem>
+      <para><xref linkend="enablingthefeature"/></para>
+    </listitem>
+
+    <listitem>
+      <para><xref linkend="defaultNodemap"/></para>
+    </listitem>
+
+    <listitem>
+      <para><xref linkend="verifyingsettings"/></para>
+    </listitem>
+
+    <listitem>
+      <para><xref linkend="ensuringconsistency"/></para>
+    </listitem>
+  </itemizedlist>
+
+  <section xml:id="settingamapping">
+    <title>Setting a Mapping</title>
+
+    <para>The nodemap feature allows UIDs and GIDs
+    from remote systems to be mapped to local sets of UIDs and GIDs while
+    retaining POSIX ownership, permissions and quota information. As a result,
+    multiple sites with conflicting user and group identifiers can operate on
+    a single Lustre file system without creating collisions in UID or GID
+    space.</para>
+
+    <section remap="h3">
+      <title>Defining Terms</title>
+
+      <para>When the nodemap feature is enabled, client file system access to
+      a Lustre system is filtered through the nodemap identity mapping policy
+      engine. Lustre connectivity is governed by network identifiers, or
+      <emphasis>NIDs</emphasis>, such as
+      <literal>192.168.7.121@tcp</literal>. When an operation is made from a
+      NID, Lustre decides if that NID is part of a
+      <emphasis>nodemap</emphasis>, a policy group consisting of one or
+      more NID ranges. If no policy group exists for that NID, access is
+      squashed to user <literal>nobody</literal> by default. Each policy group
+      also has several <emphasis>properties</emphasis>, such as
+      <literal>trusted</literal>
+      and <literal>admin</literal>, which determine access conditions.
+      A collection of identity maps or
+      <emphasis>idmaps</emphasis> are kept for each policy group. These
+      idmaps determine how UIDs and GIDs on the client are translated into the
+      canonical user space of the local Lustre file system.</para>
+
+      <para>In order for nodemap to function properly, the MGS, MDS, and OSS
+      systems must all have a version of Lustre which supports nodemap.
+      Clients operate transparently and do not require special
+      configuration or knowledge of the nodemap setup.</para>
+
+      <note>
+        <para>
+           A nodemap name has a maximum length of 16 characters, and can
+           contain only alphanumeric characters and '_'.
+        </para>
+      </note>
+
+    </section>
+
+    <section remap="h3">
+      <title>Deciding on NID Ranges</title>
+
+      <para>NIDs can be described as either a singleton address or a range of
+      addresses. A single address is described in standard Lustre NID format,
+      such as <literal>10.10.6.120@tcp</literal>. A range
+      is described using a dash to separate the range, for example,
+      <literal>192.168.20.[0-255]@tcp</literal>.</para>
+
+      <para>The range must be contiguous. The full LNet definition for a
+      nidlist is as follows:</para>
+
+      <screen>
+&lt;nidlist&gt;       :== &lt;nidrange&gt; [ ' ' &lt;nidrange&gt; ]
+&lt;nidrange&gt;      :== &lt;addrrange&gt; '@' &lt;net&gt;
+&lt;addrrange&gt;     :== '*' |
+                        &lt;ipaddr_range&gt; |
+                        &lt;numaddr_range&gt;
+&lt;ipaddr_range&gt;  :==
+        &lt;numaddr_range&gt;.&lt;numaddr_range&gt;.&lt;numaddr_range&gt;.&lt;numaddr_range&gt;
+&lt;numaddr_range&gt; :== &lt;number&gt; |
+                        &lt;expr_list&gt;
+&lt;expr_list&gt;     :== '[' &lt;range_expr&gt; [ ',' &lt;range_expr&gt;] ']'
+&lt;range_expr&gt;    :== &lt;number&gt; |
+                        &lt;number&gt; '-' &lt;number&gt; |
+                        &lt;number&gt; '-' &lt;number&gt; '/' &lt;number&gt;
+&lt;net&gt;           :== &lt;netname&gt; | &lt;netname&gt;&lt;number&gt;
+&lt;netname&gt;       :== "lo" | "tcp" | "o2ib" | "gni"
+&lt;number&gt;        :== &lt;nonnegative decimal&gt; | &lt;hexadecimal&gt;</screen>
+    </section>
+
+    <section remap="h3">
+      <title>Defining a Servers Specific Group</title>
+
+      <para>For proper operations, the Lustre file system
+      <emphasis role="bold">requires</emphasis> to have a privileged group that
+      covers all Lustre server nodes. So the very first step when working with
+      nodemaps is to create such a group with both properties
+      <literal>admin</literal> and <literal>trusted</literal> set. It is
+      recommended to give this group an explicit label such as
+      <literal>TrustedSystem</literal>
+      or some identifier that makes the association clear.</para>
+
+      <para>Let's consider a deployment where the server nodes are in the NID
+      range <literal>192.168.0.[1-10]@tcp</literal>. Create the policy group,
+      add the NID range to that group, and set the properties accordingly using
+      the <literal>lctl</literal> command on the MGS:</para>
+
+      <screen>mgs# lctl nodemap_add <replaceable>TrustedSystems</replaceable>
+mgs# lctl nodemap_add_range --name <replaceable>TrustedSystems</replaceable> --range 192.168.0.[1-10]@tcp
+mgs# lctl nodemap_modify --name <replaceable>TrustedSystems</replaceable> --property admin --value 1
+mgs# lctl nodemap_modify --name <replaceable>TrustedSystems</replaceable> --property trusted --value 1
+</screen>
+
+    </section>
+
+    <section remap="h3">
+      <title>Describing and Deploying a Sample Mapping</title>
+
+      <para>Deploy nodemap by first considering which users need to be
+      mapped, and what sets of network addresses or ranges are involved.
+      Issues of visibility between users must be examined as well.</para>
+
+      <para>Consider a deployment where researchers are working on data
+      relating to birds. The researchers use a computing system which mounts
+      the filesystem from a single IPv4 address, <literal>192.168.0.100</literal>,
+      and sensors which mount the filesystem from an address range
+      <literal>192.168.0.[50-99]</literal>. Name this policy group
+      <literal>BirdResearchSite</literal>. Create the policy group and add the
+      NID ranges to that group on the MGS using the <literal>lctl</literal> command:</para>
+
+      <screen>
+        mgs# lctl nodemap_add <replaceable>BirdResearchSite</replaceable>
+        mgs# lctl nodemap_add_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.100@tcp
+        mgs# lctl nodemap_add_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.[50-99]@tcp
+      </screen>
+
+      <para>
+        Later, additional sensors were added that use addresses in the range
+        <literal>192.168.10.[101-150]</literal> that increased the number of
+        nodes in the <literal>BirdResearchSite</literal> nodemap, but otherwise
+        are managed as part of the same nodemap.
+      </para>
+
+      <screen>
+        mgs# lctl nodemap_add_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.[101-150]@tcp
+      </screen>
+
+      <note>
+        <para>A NID cannot be in more than one policy group. Assign a NID to
+        a new policy group by first removing it from the existing group.</para>
+      </note>
+
+      <para>The researchers use the following identifiers on their host system:</para>
+
+      <itemizedlist>
+        <listitem>
+          <para><literal>swan</literal> (UID 530) member of group
+          <literal>wetlands</literal> (GID 600)</para>
+        </listitem>
+
+        <listitem>
+          <para><literal>duck</literal> (UID 531) member of group
+          <literal>wetlands</literal> (GID 600)</para>
+        </listitem>
+
+        <listitem>
+          <para><literal>hawk</literal> (UID 532) member of group
+          <literal>raptor</literal> (GID 601)</para>
+        </listitem>
+
+        <listitem>
+          <para><literal>merlin</literal> (UID 533) member of group
+          <literal>raptor</literal> (GID 601)</para>
+        </listitem>
+      </itemizedlist>
+
+      <para>Assign a set of six idmaps to this policy group, with four for UIDs,
+      and two for GIDs. Pick a starting point, e.g. UID 11000, with room for
+      additional UIDs and GIDs to be added as the configuration grows.
+      Use the <literal>lctl</literal> command to set up the idmaps:</para>
+
+      <screen>mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype uid --idmap <replaceable>530:11000</replaceable>
+mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype uid --idmap <replaceable>531:11001</replaceable>
+mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype uid --idmap <replaceable>532:11002</replaceable>
+mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype uid --idmap <replaceable>533:11003</replaceable>
+mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype gid --idmap <replaceable>600:11000</replaceable>
+mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype gid --idmap <replaceable>601:11001</replaceable></screen>
+
+      <para>The parameter <literal>530:11000</literal> assigns a client UID,
+      for example UID 530, to a single canonical UID,
+      such as UID 11000. Each assignment is made individually. There is no
+      method to specify a range <literal>530-533:11000-11003</literal>.
+      UID and GID idmaps are assigned separately. There is no implied
+      relationship between the two.</para>
+
+      <para>Files created on the Lustre file system from the
+      <literal>192.168.0.100@tcp</literal> NID using UID
+      <literal>duck</literal> and GID <literal>wetlands</literal> are stored
+      in the Lustre file system using the canonical identifiers, in this case
+      UID 11001 and GID 11000. A different NID, if not part of the same policy
+      group, sees its own view of the same file space.</para>
+
+      <para>Suppose a previously created project directory exists owned by UID
+      11002/GID 11001, with mode 770. When users <literal>hawk</literal> and
+      <literal>merlin</literal> at 192.168.0.100 place files named
+      <literal>hawk-file</literal> and <literal>merlin-file</literal> into the
+      directory, the contents from the 192.168.0.100 client appear as:</para>
+
+      <screen>[merlin@192.168.0.100 projectsite]$ ls -la
+total 34520
+drwxrwx--- 2 hawk   raptor     4096 Jul 23 09:06 .
+drwxr-xr-x 3 nobody nobody     4096 Jul 23 09:02 ..
+-rw-r--r-- 1 hawk   raptor 10240000 Jul 23 09:05 hawk-file
+-rw-r--r-- 1 merlin raptor 25100288 Jul 23 09:06 merlin-file</screen>
+
+      <para>From a privileged view, the canonical owners are displayed:</para>
+
+      <screen>[root@trustedSite projectsite]# ls -la
+total 34520
+drwxrwx--- 2 11002 11001     4096 Jul 23 09:06 .
+drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
+-rw-r--r-- 1 11002 11001 10240000 Jul 23 09:05 hawk-file
+-rw-r--r-- 1 11003 11001 25100288 Jul 23 09:06 merlin-file</screen>
+
+      <para>If UID 11002 or GID 11001 do not exist on the Lustre MDS or MGS,
+      create them in LDAP or other data sources, or trust clients by setting
+      <literal>identity_upcall</literal> to <literal>NONE</literal>. For more
+      information, see <xref linkend="identity_upcall"/>.</para>
+
+      <para>Building a larger and more complex configuration is possible by
+      iterating through the <literal>lctl</literal> commands above. In
+      short:</para>
+
+      <orderedlist>
+        <listitem>
+          <para>Create a name for the policy group.</para>
+        </listitem>
+
+        <listitem>
+          <para>Create a set of NID ranges used by the
+          group.</para>
+        </listitem>
+
+        <listitem>
+          <para>Define which UID and GID translations need to occur for the
+          group.</para>
+        </listitem>
+      </orderedlist>
+    </section>
+    <section remap="h3" condition='l2F'>
+      <title>Mapping Project IDs</title>
+      <para>Like UIDs and GIDs, PROJIDs can be mapped via nodemaps, from client
+      to file system IDs and conversely. To declare a PROJID mapping, use the
+      <literal>projid</literal> type:</para>
+      <screen>mgs# lctl nodemap_add_idmap --name <replaceable>BirdResearchSite</replaceable> --idtype projid --idmap <replaceable>33:1</replaceable></screen>
+    </section>
+    <section remap="h3" condition='l2H'>
+      <title>Defining Mapping Offsets</title>
+      <para>Mapping offsets map all client ids to a new range specified by an
+      offset, such that fs_id = client_id + offset. The
+      <literal>nodemap_add_offset</literal> command defines a mapping offset for
+      a given nodemap and applies the offset to all UID, GID, and PROJID
+      types.</para>
+      <screen>lctl nodemap add_offset --name <replaceable>NAME</replaceable> --offset <replaceable>OFFSET</replaceable> --limit <replaceable>FSID_COUNT</replaceable></screen>
+      <para>This command allows admins to create offset ranges for client
+      systems to avoid overlapping assignments in multi-tenant systems. The
+      <literal>FSID_COUNT</literal> specifies the number of IDs mapped by the
+      range, starting with the <literal>root(0)</literal> user/group/project ID
+      and extending through <literal>FSID_COUNT-1</literal>.</para>
+      <para>An offset range cannot overlap with another offset range. A
+      nodemap can only have one offset defined. To modify the offset already
+      defined, just assign a new value. Any existing files will not
+      automatically be remapped to the new <literal>OFFSET</literal> range. IDs
+      must be manually changed on all files for that nodemap with
+      <literal>chown(1)</literal> and <literal>lfs-project(1)</literal> on a
+      trusted client that has access to the unmapped, canonical file system IDs.
+      Therefore modifying a nodemap offset should be avoided if possible.</para>
+      <para>For example, to map the client UID, GID, and PROJID values from the
+      range 0-199999 to the filesystem UID, GID, and PROJID values to the range
+      100000-299999:</para>
+      <screen>mgs# lctl nodemap_add_offset --name <replaceable>remotesite</replaceable> --offset 100000 --limit 200000</screen>
+      <para>Once an offset is set on a nodemap, please make sure the explicit
+      mappings are defined so that they do not escape the offset range. This
+      means an explicit mapping should not map a client id to a file system id
+      greater than <literal>FSID_COUNT-1</literal>. Similarly, the
+      <literal>squash_uid</literal>, <literal>squash_gid</literal> and
+      <literal>squash_projid</literal> values should not be set to a value
+      greater than <literal>FSID_COUNT-1</literal>. Otherwise this would
+      produce file system ids outside of the offset range.
+      </para>
+      <para>If not zero, the mapping offset is always applied as the last stage
+      of the mapping process.
+      <xref linkend="settingamapping.fig.id_mapping_flow_chart"/> gives a
+      simplified view of the identity mapping process that happens when nodemap is
+      activated, to convert a client id to a file system canonical id.</para>
+      <figure  xml:id="settingamapping.fig.id_mapping_flow_chart">
+        <title>Flow chart: nodemap identity mapping</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" width="65%" align="center"
+            fileref="figures/id_mapping_flow_chart.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Flow chart: nodemap identity mapping</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <para>To deactivate id mapping offset, use the
+      <literal>nodemap_del_offset</literal> command.</para>
+      <screen>lctl nodemap del_offset --name <replaceable>NAME</replaceable></screen>
+      <note><para>As when changing the ID offset value, deleting the ID offset
+      <emphasis>will not remap files created with the offset IDs</emphasis>.
+      It is up to the storage administrator to delete or reset UID/GID/PROJID
+      for files that were created with the mapped IDs.  Generally, an ID offset
+      should remain unchanged for the entire nodemap lifetime and not be deleted
+      without a clear understanding of the operational impact.</para></note>
+    </section>
+  </section>
+
+  <section xml:id="nodemapdel">
+    <title>Removing Nodemaps</title>
+
+    <para>
+      It is possible to delete a NID range from a nodemap, any
+      clients in this NID range will be moved to the default nodemap.
+    </para>
+    <screen>mgs# lctl nodemap_del_range --name <replaceable>BirdResearchSite</replaceable> --range 192.168.0.[101-150]@tcp</screen>
+    <para>
+      When deleting a range from a nodemap it must be the same range that was
+      declared when using nodemap_add_range. This means that it is not possible
+      to remove a range inside of the initial values or a (partially) overlapping
+      range. Also worth noting, if two different ranges are added that are adjacent,
+      they are still treated as two independent ranges and must be each individually
+      deleted.
+    </para>
+
+    <para>
+      When deleting a whole policy group all of the associated ID mappings,
+      NID ranges, and other parameters will be removed, and existing clients
+      will be moved to the default nodemap. The default nodemap cannot be deleted.
+      The syntax is:</para>
+    <screen>mgs# lctl nodemap_del <replaceable>BirdResearchSite</replaceable></screen>
+  </section>
+
+  <section xml:id="alteringproperties">
+    <title>Altering Properties</title>
+
+    <para>Privileged users access mapped systems with rights dependent on
+    certain properties, described below. By default, root access is squashed
+    to user <literal>nobody</literal>, which interferes with most
+    administrative actions.</para>
+
+    <para>For proper operations, the Lustre file system
+    <emphasis role="bold">requires</emphasis> a group that covers all Lustre
+    server nodes, with both properties <literal>admin</literal> and
+    <literal>trusted</literal> set. It is recommended to give this group an
+    explicit label such as <literal>TrustedSystems</literal> or some
+    identifier that makes the association clear.</para>
+
+    <section xml:id="lustrenodemap.alteringproperties.managing" remap="h3">
+      <title>Managing the Properties</title>
+
+      <para>Several properties exist, off by default, which change
+      client behavior: <literal>admin</literal>,
+      <literal>trusted</literal>, <literal>map_mode</literal>,
+      <literal>squash_uid</literal>, <literal>squash_gid</literal>,
+      <literal>squash_projid</literal>, <literal>deny_unknown</literal>,
+      <literal>audit_mode</literal> and <literal>forbid_encryption</literal>.
+      </para>
+
+      <itemizedlist>
+        <listitem>
+          <para>The property <literal>admin</literal> defines whether
+          root is squashed on the policy group. By default, it is
+          squashed, unless this property is enabled. Coupled with the
+          <literal>trusted</literal> property, this will allow unmapped
+          access for backup nodes, transfer points, or other administrative
+          mount points.</para>
+        </listitem>
+
+        <listitem>
+          <para>The <literal>trusted</literal> property permits members
+          of a policy group to see the file system's canonical identifiers.
+          In the above example, UID 11002 and GID 11001 will be seen without
+          translation. This can be utilized when local UID and GID sets
+          already map directly to the specified users.</para>
+        </listitem>
+
+        <listitem>
+          <para condition='l2A'>The <literal>map_mode</literal> property lets
+          control the way mapping is carried out. By default it is set to
+          <literal>all</literal> which means the nodemap will map UIDs, GIDs,
+          and PROJIDs. If set to <literal>uid_only</literal> or just
+          <literal>uid</literal>, only UIDs will be mapped. If set to
+          <literal>gid_only</literal> or just <literal>gid</literal>, only GIDs
+          will be mapped. If set to <literal>projid_only</literal> or just
+          <literal>projid</literal>, only PROJIDs will be mapped. If set to
+          <literal>both</literal>, both UIDs and GIDs will be mapped. Multiple
+          values can be specified, comma separated.</para>
+        </listitem>
+
+        <listitem>
+          <para>The properties <literal>squash_uid</literal>, <literal>
+          squash_gid</literal> and <literal>squash_projid</literal> define the
+          default UID, GID and PROJID respectively that users will be squashed
+          to if unmapped, unless the deny_unknown flag is set, in which case
+          access will still be denied.
+          </para>
+          <note>
+            <para>The <literal>squash_projid</literal> property was introduced
+            in Lustre 2.15</para>
+          </note>
+        </listitem>
+
+        <listitem>
+          <para>The property <literal>deny_unknown</literal> denies all access
+          to users not mapped in a particular nodemap. This is useful if a site
+          is concerned about unmapped users accessing the file system in order to
+          satisfy security requirements.
+          </para>
+        </listitem>
+
+        <listitem>
+          <para condition='l2B'>The property <literal>audit_mode</literal> lets
+          control which Lustre client nodes can trigger the recording of file
+          system access events to the Changelogs. When this flag is set to 1,
+          clients will be able to record file system access events to the
+          Changelogs, if Changelogs are otherwise activated. When set to 0,
+          events are not logged into the Changelogs, no matter if Changelogs are
+          activated or not. By default, this flag is set to 1 in newly created
+          nodemap entries. And it is also set to 1 in 'default' nodemap.</para>
+        </listitem>
+
+        <listitem>
+          <para condition='l2E'>The property
+          <literal>forbid_encryption</literal> prevents clients from using
+          encryption.</para>
+        </listitem>
+
+        <listitem>
+          <para condition='l2G'>The property
+          <literal>readonly_mount</literal> forces clients to a read-only
+          mount if not specified explicitly. By default it is set to 0 which
+          means clients are allowed to mount in read-write mode. Set it to 1
+          to force read-only mount.</para>
+        </listitem>
+
+        <listitem>
+          <para condition='l2G'>The property <literal>rbac</literal> defines
+          different Role-Based Admin Control mechanisms:
+          <itemizedlist>
+            <listitem>
+              <para><literal>byfid_ops</literal>, to allow operations by FID
+              (e.g. 'lfs rmfid').</para>
+            </listitem>
+            <listitem>
+              <para><literal>chlg_ops</literal>, to allow access to Lustre
+              Changelogs.</para>
+            </listitem>
+            <listitem>
+              <para><literal>dne_ops</literal>, to allow operations related to
+              DNE (e.g. 'lfs mkdir').</para>
+            </listitem>
+            <listitem>
+              <para><literal>file_perms</literal>, to allow modifications of
+              file permissions and owners.</para>
+            </listitem>
+            <listitem>
+              <para><literal>fscrypt_admin</literal>, to allow fscrypt related
+              admin tasks (create or modify protectors/policies). Note that even
+              without this role, it is still possible to lock or unlock
+              encrypted directories, as these operations only need read access
+              to fscrypt metadata.</para>
+            </listitem>
+            <listitem>
+              <para><literal>quota_ops</literal>, to allow quota modifications.
+              </para>
+            </listitem>
+          </itemizedlist>
+          The default value for this property is <literal>all</literal>,
+          which means all roles are allowed. Multiple values among those listed
+          above can be specified, comma separated. Apart from all, any role not
+          explicitly specified is forbidden. And to forbid all roles, use
+          <literal>none</literal> value.</para>
+        </listitem>
+
+        <listitem>
+          <para condition='l2H'>The property <literal>deny_mount</literal>
+          controls whether nodes assigned to the nodemap are allowed to mount
+          new Lustre clients. By default this is allowed and the property is set
+          to 0. Set it to 1 to prevent nodes from establishing new client
+          mounts. Note that existing client mounts are not evicted and will
+          continue to work until a remount is attempted.</para>
+        </listitem>
+      </itemizedlist>
+
+      <para>Alter values to either true (1) or false (0) on the MGS:</para>
+
+      <screen>mgs# lctl nodemap_modify --name <replaceable>BirdAdminSite</replaceable> --property trusted --value 1
+mgs# lctl nodemap_modify --name <replaceable>BirdAdminSite</replaceable> --property admin --value 1
+mgs# lctl nodemap_modify --name <replaceable>BirdAdminSite</replaceable> --property deny_unknown --value 1</screen>
+
+      <para>Change values during system downtime to minimize the chance of any
+      ownership or permissions problems if the policy group is active.
+      Although changes can be made live, client caching of data may interfere
+      with modification as there are a few seconds of lead time before the
+      change is distributed.</para>
+    </section>
+
+    <section xml:id="lustrenodemap.alteringproperties.mixing" remap="h3">
+      <title>Mixing Properties</title>
+
+      <para>With both <literal>admin</literal> and <literal>trusted</literal>
+      properties set, the policy group has full access, as if nodemap was
+      turned off, to the Lustre file system. The administrative site for the
+      Lustre file system needs at least one group with both properties in
+      order to perform maintenance or to perform administrative tasks. </para>
+
+      <warning>
+        <para>Lustre server nodes <emphasis role="bold">must</emphasis> be in a
+        policy group with both these properties set to 1. It is recommended to
+        use a policy group labeled <literal>TrustedSystems</literal>
+        or some identifier that makes the association clear.</para>
+      </warning>
+
+      <para>If a policy group has the <literal>admin</literal>
+      property set, but does not have the property
+      <literal>trusted</literal> set, root is mapped directly to
+      root, any explicitly specified UID and GID idmaps are honored, and
+      other access is squashed. If root alters ownership to UIDs or GIDs
+      which are locally known from that host but not part of an idmap, root
+      effectively changes ownership of those files to the default
+      squashed UID and GID.</para>
+
+      <para>If <literal>trusted</literal> is set but <literal>admin</literal>
+      is not, the policy group has full access to the canonical UID and GID
+      sets of the Lustre file system, and root is squashed.</para>
+
+      <para>The deny_unknown property, once enabled, prevents unmapped users
+      from accessing the file system. Root access also is denied, if the
+      <literal>admin</literal> property is off, and root is not part of any
+      mapping.</para>
+
+      <para condition='l2F'>To prevent a client from changing quota settings
+      for a project other than the one assigned to the fileset it is restricted
+      to, you should map the PROJID to itself, set <literal>map_mode</literal>
+      to <literal>projid</literal>, and then <literal>trusted</literal> to
+      0 and <literal>deny_unknown</literal> to 1. This way, only operations on
+      the designated PROJID will be allowed.
+      </para>
+
+      <para>When nodemaps are modified, the change events are queued and
+      distributed across the cluster. Under normal conditions, these changes
+      can take around ten seconds to propagate. During this distribution
+      window, file access could be made via the old or new nodemap settings.
+      Therefore, it is recommended to save changes for a maintenance window
+      or to deploy them while the mapped nodes are not actively writing to the
+      file system.
+      </para>
+  </section>
+</section>
+
+  <section xml:id="enablingthefeature">
+    <title>Enabling the Feature</title>
+
+    <para>The nodemap feature is simple to enable:</para>
+
+    <screen>mgs# lctl nodemap_activate 1</screen>
+
+    <para>Passing the parameter 0 instead of 1 disables the feature again.
+    After deploying the feature, validate the mappings are intact before
+    offering the file system to be mounted by clients.</para>
+
+    <para condition='l28'>So far, changes have been made on the MGS. Prior to
+    Lustre 2.9, changes must also be manually set on MDS systems as well.
+    Also, changes must be manually deployed to OSS servers if quota
+    is enforced, utilizing <literal>lctl set_param</literal>
+    instead of <literal>lctl</literal>. Prior to 2.9,
+    the configuration is not persistent, requiring a script
+    which generates the mapping to be saved and deployed after every Lustre
+    restart. As an example, use this style to deploy settings on the
+    OSS:
+
+    <screen>oss# lctl set_param nodemap.add_nodemap=<replaceable>SiteName</replaceable>
+oss# lctl set_param nodemap.add_nodemap_range='<replaceable>SiteName 192.168.0.15@tcp</replaceable>'
+oss# lctl set_param nodemap.add_nodemap_idmap='<replaceable>SiteName</replaceable> uid <replaceable>510:1700</replaceable>'
+oss# lctl set_param nodemap.add_nodemap_idmap='<replaceable>SiteName</replaceable> gid <replaceable>612:1702</replaceable>'</screen>
+
+    In Lustre 2.9 and later, nodemap
+    configuration is saved on the MGS and distributed automatically to
+    MGS, MDS, and OSS nodes, a process which takes approximately
+    ten seconds in normal circumstances.</para>
+  </section>
+
+  <section xml:id="defaultNodemap">
+    <title><literal>default</literal> Nodemap</title>
+
+    <para>There is a special nodemap called <literal>default</literal>. As the
+      name suggests, it is created by default and cannot be removed. It is like
+      a fallback nodemap, setting the behaviour for Lustre clients that do not
+      match any other nodemap.</para>
+    <para>Because of its special role, only some parameters can be set on the
+      <literal>default</literal> nodemap:</para>
+    <itemizedlist>
+      <listitem>
+        <para><literal>admin</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>trusted</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>squash_uid</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>squash_gid</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>fileset</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>audit_mode</literal></para>
+      </listitem>
+    </itemizedlist>
+    <para>In particular, no UID/GID mapping can be defined on the
+      <literal>default</literal> nodemap.</para>
+    <note>
+      <para>Be careful when altering the <literal>admin</literal> and
+        <literal>trusted</literal> properties of the <literal>default</literal>
+        nodemap, especially if your Lustre servers fall into this nodemap.
+      </para>
+    </note>
+  </section>
+
+  <section xml:id="verifyingsettings">
+    <title>Verifying Settings</title>
+
+    <para>By using <literal>lctl nodemap_info all</literal>, existing nodemap
+    configuration is listed for easy export. This command acts as a shortcut
+    into the configuration interface for nodemap.  On the Lustre MGS, the
+    <literal>nodemap.active</literal> parameter contains a <literal>1</literal>
+    if nodemap is active on the system. Each policy group
+    creates a directory containing the following parameters:</para>
+
+    <itemizedlist>
+      <listitem>
+        <para><literal>admin</literal> and <literal>trusted</literal> each
+          contain a <literal>1</literal> if the values are set, and
+          <literal>0</literal> otherwise.</para>
+      </listitem>
+
+      <listitem>
+        <para><literal>idmap</literal> contains a list of the idmaps for the
+        policy group, while <literal>ranges</literal> contains a list of
+        NIDs for the group.</para>
+      </listitem>
+
+      <listitem>
+        <para><literal>squash_uid</literal> and <literal>squash_gid</literal>
+        determine what UID and GID users are squashed to if needed.</para>
+      </listitem>
+    </itemizedlist>
+
+    <para>The expected outputs for the BirdResearchSite in the example above
+    are:</para>
+
+    <screen>mgs# lctl get_param nodemap.BirdResearchSite.idmap
+
+ [
+  { idtype: uid, client_id: 530, fs_id: 11000 },
+  { idtype: uid, client_id: 531, fs_id: 11001 },
+  { idtype: uid, client_id: 532, fs_id: 11002 },
+  { idtype: uid, client_id: 533, fs_id: 11003 },
+  { idtype: gid, client_id: 600, fs_id: 11000 },
+  { idtype: gid, client_id: 601, fs_id: 11001 }
+ ]
+
+ mgs# lctl get_param nodemap.BirdResearchSite.ranges
+ [
+  { id: 11, start_nid: 192.168.0.100@tcp, end_nid: 192.168.0.100@tcp }
+ ]</screen>
+  </section>
+
+  <section xml:id="ensuringconsistency">
+    <title>Ensuring Consistency</title>
+
+    <para>Consistency issues may arise in a nodemap enabled configuration when
+    Lustre clients mount from an unknown NID range, new UIDs and GIDs that
+    were not part of a known map are added, or there are misconfigurations in
+    the rules. Keep in mind the following when activating nodemap
+    on a production system:</para>
+
+    <itemizedlist>
+      <listitem>
+        <para>Creating new policy groups or idmaps on a production system
+        is allowed, but reserve a maintenance window to alter the <literal>
+        trusted</literal> property to avoid metadata problems.</para>
+      </listitem>
+
+      <listitem>
+        <para>To perform administrative tasks, access the Lustre file system
+        via a policy group with <literal>trusted</literal>
+        and <literal>admin</literal> properties set. This prevents
+        the creation of orphaned and squashed files. Granting the
+        <literal>admin</literal> property without the
+        <literal>trusted</literal> property
+        is dangerous. The root user on the client may know of UIDs
+        and GIDs that are not present in any idmap. If root alters ownership
+        to those identifiers, the ownership is squashed as a result. For
+        example, tar file extracts may be flipped from an expected UID
+        such as UID 500 to <literal>nobody</literal>, normally UID 99.</para>
+      </listitem>
+
+      <listitem>
+        <para>To map distinct UIDs at two or more sites onto a single UID or GID
+        on the Lustre file system, create overlapping idmaps and place each site
+        in its own policy group. Each distinct UID may have its own mapping onto
+        the target UID or GID.</para>
+      </listitem>
+
+      <listitem>
+        <para condition='l28'>In Lustre 2.8, changes must be manually kept in a
+        script file to be re-applied after a Lustre reload, and changes must be
+        made on each OSS, MDS, and MGS nodes, as there is no automatic
+        synchronization between the nodes.</para>
+      </listitem>
+
+      <listitem>
+        <para>If <literal>deny_unknown</literal> is in effect, it is possible
+        for unmapped users to see dentries which were viewed by a mapped user.
+        This is a result of client caching, and unmapped users will not be able
+        to view any file contents.</para>
+      </listitem>
+
+      <listitem>
+        <para>Nodemap activation status can be checked with
+        <literal>lctl nodemap_info</literal>,
+        but extra validation is possible. One way of ensuring valid
+        deployment on a production system is to create a fingerprint of known
+        files with specific UIDs and GIDs mapped to a test
+        client. After bringing the Lustre system online after maintenance, the
+        test client can validate the UIDs and GIDs map correctly before the
+        system is mounted in user space.</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+</chapter>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

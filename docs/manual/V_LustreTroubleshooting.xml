@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<part xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
+    <title>Troubleshooting a Lustre File System</title>
+
+<partintro>
+    <para>Part V provides information about troubleshooting a Lustre file system. You will find information in this section about:</para>
+
+    <itemizedlist>
+        <listitem>
+            <para>
+                <link linkend="lustretroubleshooting" endterm="lustretroubleshooting.title"/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+
+                <link linkend="troubleshootingrecovery" endterm="troubleshootingrecovery.title"/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
+
+                <link linkend="lustredebugging" endterm="lustredebugging.title"/>
+            </para>
+        </listitem>
+    </itemizedlist>
+
+
+</partintro>
+
+  <xi:include href="LustreTroubleshooting.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="TroubleShootingRecovery.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+  <xi:include href="LustreDebugging.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+
+</part>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

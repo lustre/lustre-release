@@ -1,0 +1,1648 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="managingsecurity">
+  <title xml:id="managingsecurity.title">Managing Security in a Lustre File System</title>
+  <para>This chapter describes security features of the Lustre file system and
+    includes the following sections:</para>
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="managingSecurity.acl"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.root_squash"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.isolation"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.sepol"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.clientencryption"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.kerberos"/></para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="managingSecurity.acl">
+    <title><indexterm><primary>Access Control List (ACL)</primary></indexterm>
+    Using ACLs</title>
+    <para>An access control list (ACL), is a set of data that informs an
+      operating system about permissions or access rights that each user or
+      group has to specific system objects, such as directories or files. Each
+      object has a unique security attribute that identifies users who have
+      access to it. The ACL lists each object and user access privileges such as
+      read, write or execute.</para>
+    <section xml:id="managingSecurity.acl.howItWorks" remap="h3">
+      <title><indexterm><primary>Access Control List (ACL)</primary><secondary>
+        how they work</secondary></indexterm>How ACLs Work</title>
+      <para>Implementing ACLs varies between operating systems. Systems that
+        support the Portable Operating System Interface (POSIX) family of
+        standards share a simple yet powerful file system permission model,
+        which should be well-known to the Linux/UNIX administrator. ACLs add
+        finer-grained permissions to this model, allowing for more complicated
+        permission schemes. For a detailed explanation of ACLs on a Linux
+        operating system, refer to the SUSE Labs article
+        <link xl:href="https://www.usenix.org/legacyurl/posix-access-control-lists-linux">
+          Posix Access Control Lists on Linux</link>.</para>
+      <para>We have implemented ACLs according to this model. The Lustre
+        software works with the standard Linux ACL tools, setfacl, getfacl, and
+        the historical chacl, normally installed with the ACL package.</para>
+      <note>
+        <para>ACL support is a system-range feature, meaning that all clients
+          have ACL enabled or not. You cannot specify which clients should
+          enable ACL.</para>
+      </note>
+    </section>
+    <section xml:id="managingSecurity.acl.using" remap="h3">
+      <title><indexterm>
+        <primary>Access Control List (ACL)</primary>
+        <secondary>using</secondary>
+      </indexterm>Using ACLs with the Lustre Software</title>
+      <para>POSIX Access Control Lists (ACLs) can be used with the Lustre
+        software. An ACL consists of file entries representing permissions based
+        on standard POSIX file system object permissions that define three
+        classes of user (owner, group and other). Each class is associated with
+        a set of permissions [read (r), write (w) and execute (x)].</para>
+      <itemizedlist>
+        <listitem>
+          <para>Owner class permissions define access privileges of the file
+            owner.</para>
+        </listitem>
+        <listitem>
+          <para>Group class permissions define access privileges of the owning
+            group.</para>
+        </listitem>
+        <listitem>
+          <para>Other class permissions define access privileges of all users
+            not in the owner or group class.</para>
+        </listitem>
+      </itemizedlist>
+      <para>The <literal>ls -l</literal> command displays the owner, group, and
+        other class permissions in the first column of its output (for example,
+        <literal>-rw-r- --</literal> for a regular file with read and write
+        access for the owner class, read access for the group class, and no
+        access for others).</para>
+      <para>Minimal ACLs have three entries. Extended ACLs have more than the
+        three entries. Extended ACLs also contain a mask entry and may contain
+        any number of named user and named group entries.</para>
+      <para>To check ACLs on the MDS, check that the <literal>acl</literal>
+        connect flag is listed (default since Lustre 1.8):</para>
+      <screen>
+# lctl get_param -n mdc.home-MDT0000-mdc-*.connect_flags | grep acl
+      </screen>
+      <para>ACLs are enabled by default on a Lustre file system, and are
+        controlled on a system-wide basis; either all clients enable ACLs or
+        none do.  Activating ACLs is controlled by MDS mount options
+        <literal>acl</literal>/<literal>noacl</literal> to enable or disable
+        ACLs, respectively.  You do not need to change the client
+        configuration, and the <literal>acl</literal> string will not appear
+        in the client mount options in <literal>/etc/mtab</literal>.
+      </para>
+      <para>If ACLs are not enabled on the MDS, then any attempts to reference
+        an ACL on a client return an <literal>Operation not supported</literal>
+        error.
+      </para>
+    </section>
+    <section xml:id="managingSecurity.acl.examples" remap="h3">
+        <title><indexterm>
+          <primary>Access Control List (ACL)</primary>
+          <secondary>examples</secondary>
+        </indexterm>Examples</title>
+      <para>These examples are taken directly from the POSIX paper referenced
+        above. ACLs on a Lustre file system work exactly like ACLs on any Linux
+        file system. They are manipulated with the standard tools in the
+        standard manner. Below, we create a directory and allow a specific user
+        access.</para>
+      <screen>[phil@client lustre]$ umask 027
+[phil@client lustre]$ mkdir rain
+[phil@client lustre]$ ls -ld rain
+drwxr-x---  2 phil dev 4096 Feb 20 06:50 rain
+[phil@client lustre]$ getfacl rain
+# file: rain
+# owner: phil
+# group: dev
+user::rwx
+group::r-x
+other::---
+
+[phil@client lustre]$ setfacl -m user:chirag:rwx rain
+[phil@client lustre]$ ls -ld rain
+drwxrwx---+ 2 phil dev 4096 Feb 20 06:50 rain
+[phil@client lustre]$ getfacl --omit-header rain
+user::rwx
+user:chirag:rwx
+group::r-x
+mask::rwx
+other::---</screen>
+    </section>
+  </section>
+  <section xml:id="managingSecurity.root_squash">
+    <title><indexterm>
+      <primary>root squash</primary>
+    </indexterm>Using Root Squash</title>
+    <para>Root squash is a security feature which restricts super-user access
+      rights to a Lustre file system. Without the root squash feature enabled,
+      Lustre file system users on untrusted clients could access or modify files
+      owned by root on the file system, including deleting them. Using the root
+      squash feature restricts file access/modifications as the root user.
+      Note, however, that this does <emphasis>not</emphasis> prevent users
+      from accessing files owned by <emphasis>other</emphasis> users.</para>
+    <para>The root squash feature works by re-mapping the user ID (UID) and
+      group ID (GID) of the root user to a UID and GID specified by the system
+      administrator. The preferred way to configure root squash is via nodemaps
+      and the <literal>admin</literal> property. Nodemaps allow root squash on a
+      per-client basis. With UID maps, the clients can even have a local root
+      UID without actually having root access to the filesystem itself.
+    </para>
+    <para>Please refer to explanations about the <literal>admin</literal>
+      property in the chapter dedicated to Nodemaps, in
+      <xref linkend="lustrenodemap.alteringproperties.managing" />.
+    </para>
+  </section>
+  <section xml:id="managingSecurity.isolation">
+    <title><indexterm><primary>Isolation</primary></indexterm>
+    Isolating Clients to a Sub-directory Tree</title>
+    <para>Namespace isolation is the Lustre implementation of the generic concept of
+      multi-tenancy, which aims at providing separated namespaces from a single
+      filesystem. Lustre namespace isolation enables different populations of users on
+      the same file system beyond normal Unix permissions/ACLs, even when users
+      on the clients may have root access. Those tenants share the same file
+      system, but they are isolated from each other, i.e., they cannot access or even
+      see each other&apos;s files, and they are not aware that they are sharing
+      common file system resources.</para>
+    <para>Lustre namespace isolation leverages the Fileset feature
+      (<xref linkend="SystemConfigurationUtilities.fileset" />)
+      to restrict clients to subdirectories of the filesystem rather than the root
+      directory.
+      To achieve namespace isolation, the subdirectory mount, which presents to
+      tenants only their own fileset, has to be imposed to the clients. To that
+      extent, we make use of the nodemap feature
+      (<xref linkend="lustrenodemap.title" />). We group all clients used by a
+      tenant under a common nodemap entry, and we assign to this nodemap entry
+      the fileset to which the tenant is restricted.</para>
+    <section xml:id="managingSecurity.isolation.clientid" remap="h3">
+      <title><indexterm><primary>Isolation</primary><secondary>
+        client identification</secondary></indexterm>Identifying Clients</title>
+      <para>Enforcing multi-tenancy on Lustre relies on the ability to properly
+        identify the client nodes used by a tenant, and trust those identities.
+        This can be achieved by having physical hardware and/or network
+        security, so that client nodes have well-known NIDs. It is also possible
+        to make use of strong authentication with Kerberos or Shared-Secret Key
+        (see <xref linkend="lustressk" />).
+        Kerberos prevents NID spoofing, as every client needs its own
+        credentials, based on its NID, in order to connect to the servers.
+        Shared-Secret Key also prevents tenant impersonation, because keys
+        can be linked to a specific nodemap. See
+        <xref linkend="ssknodemaprole" /> for detailed explanations.
+      </para>
+    </section>
+    <section xml:id="managingSecurity.isolation.configuring" remap="h3">
+      <title><indexterm><primary>Isolation</primary><secondary>
+        configuring</secondary></indexterm>Configuring Namespace Isolation</title>
+      <para>
+        Namespace isolation on Lustre can be achieved by setting one
+        <literal>fileset</literal> property (or multiple filesets with Lustre
+        2.17 or later) on a nodemap entry.
+        All clients belonging to this nodemap entry will automatically mount
+        this (primary) fileset instead of the root directory. For example:
+      </para>
+      <screen>mgs# lctl nodemap_set_fileset --name tenant1 --fileset '/dir1'</screen>
+      <para>
+        So all clients matching the <literal>tenant1</literal> nodemap are
+        presented the fileset <literal>/dir1</literal> when
+        mounting. This means these clients are doing an implicit subdirectory
+        mount on the subdirectory <literal>/dir1</literal>.
+      </para>
+      <note>
+        <para>
+          If subdirectory defined as fileset does not exist on the filesystem,
+          it will prevent any client belonging to the nodemap from mounting
+          Lustre.
+        </para>
+      </note>
+      <para>To delete the fileset parameter, just set it to an empty string:
+      </para>
+      <screen>mgs# lctl nodemap_set_fileset --name tenant1 --fileset ''</screen>
+      <para condition='l2H'>
+        Using <literal>lctl nodemap_set_fileset</literal> automatically
+        distributes the fileset to all servers and makes isolation permanent.
+        <emphasis role="bold">As of Lustre 2.18</emphasis>, <literal>lctl
+        nodemap_set_fileset</literal> is deprecated in favor of
+        <literal>lctl nodemap_fileset_{add,del,modify}</literal>.
+        Note that <literal>lctl nodemap_set_fileset</literal> can only set the
+        primary fileset and cannot set it as read-only.
+      </para>
+      <note>
+        <para condition='l2H'>
+          <emphasis role="bold">Before Lustre 2.17</emphasis>, making isolation
+          permanent requires running <literal>lctl set_param -P</literal> on the
+          MGS node:
+          <literallayout><literal>mgs# lctl set_param nodemap.tenant1.fileset=/dir1</literal>
+<literal>mgs# lctl set_param -P nodemap.tenant1.fileset=/dir1</literal></literallayout>
+          This stores the fileset parameter in the Lustre config logs, allowing
+          the servers to retrieve this information after a restart.
+          <emphasis role="bold">As of Lustre 2.17</emphasis>, this command is
+          deprecated and discouraged and only <literal>lctl
+          nodemap_set_fileset</literal> should be used.
+        </para>
+      </note>
+    </section>
+    <section xml:id="managingSecurity.isolation.multifilesets" condition='l2H' remap="h3">
+      <title><indexterm><primary>Isolation</primary><secondary>
+        multifilesets</secondary></indexterm>Multiple Filesets</title>
+        <para>
+          Previously, nodemaps supported a single fileset per nodemap.
+          As of Lustre 2.17, it is possible to define multiple filesets per
+          nodemap.
+          The previous single fileset is called a <emphasis
+          role="italic">primary</emphasis> fileset, offering similar behavior
+          and acting as the default subdirectory when clients (associated with
+          the nodemap) mount the filesystem.
+          Additional <emphasis role="italic">alternate</emphasis> filesets can
+          be defined, which offer improved flexibility and allow clients to
+          mount additional subdirectories of the filesystem.
+        </para>
+        <para>
+          Each nodemap supports a single primary fileset and up to 255 alternate
+          filesets.
+          It is possible to only define alternate filesets without a primary
+          fileset.
+          In this case, any subdirectory must be explicitly set at client mount
+          time.
+          Therefore, alternate filesets never enforce a default subdirectory
+          mountpoint for clients.
+          Each fileset can further be set as <emphasis
+          role="italic">read-only</emphasis>, preventing clients from mounting
+          the subdirectory with write access, i.e., the clients implicitly mount
+          the filesystem in <literal>mode=ro</literal> if the read-only fileset
+          applies to the current mount subdirectory.
+        </para>
+        <para>
+          Similar to other nodemap commands, multiple fileset commands must be
+          run on the MGS.
+          The nodemap configuration is then asychonously propagated to the other
+          server targets and persisted.
+        </para>
+        <section xml:id="managingSecurity.isolation.multifilesets.configuration">
+          <title>Managing Multiple Filesets</title>
+          <para>
+            The following commands are used to manage multiple filesets on a
+            nodemap.
+            Please refer to the respective man page of each command for more
+            details and examples.
+            A fileset is added to the nodemap with the <literal>lctl
+            nodemap_fileset_add</literal> command:
+          </para>
+          <screen>lctl nodemap_fileset_add --name NODEMAP_NAME --fileset SUBDIRECTORY [--alt] [--ro]</screen>
+          <itemizedlist>
+            <listitem>
+              <para>
+                <literal>--name</literal> specifies the nodemap that this
+                fileset should be associated with (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--fileset</literal> specifies the subdirectory to
+                restrict the clients to. The fileset must begin with '/'
+                (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--alt</literal> specifies that the fileset is an
+                alternate fileset.
+                If not specified, the fileset is the primary fileset.
+                Multiple primary filesets and duplicate fileset definitions
+                across fileset types are not allowed.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--ro</literal> specifies that the fileset is read-only.
+                If not specified, the fileset is read-write.
+              </para>
+            </listitem>
+          </itemizedlist>
+          <para>
+            A fileset is deleted from the nodemap with the <literal>lctl
+            nodemap_fileset_del</literal> command:
+          </para>
+          <screen>lctl nodemap_fileset_del --name NODEMAP_NAME [--all] [--fileset SUBDIRECTORY]</screen>
+          <itemizedlist>
+            <listitem>
+              <para>
+                <literal>--name</literal> specifies the nodemap that one or all
+                fileset should be deleted from (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--all</literal> specifies that all filesets should be
+                deleted from the nodemap.
+                This option cannot be used with <literal>--fileset</literal>.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--fileset</literal> specifies the fileset to delete
+                from the nodemap.
+                This option cannot be used with <literal>--all</literal>.
+                Either <literal>--all</literal> or <literal>--fileset</literal>
+                must be specified.
+              </para>
+            </listitem>
+          </itemizedlist>
+          <para>
+            Filesets can be updated in-place with the <literal>lctl
+            nodemap_fileset_modify</literal> command:
+          </para>
+          <screen>lctl nodemap_fileset_modify --name NODEMAP_NAME --fileset SUBDIRECTORY \
+  [--rename|-r NEW_SUBDIRECTORY] [--primary|-p] [--alt|-a] [--rw] [--ro]</screen>
+          <itemizedlist>
+            <listitem>
+              <para>
+                <literal>--name</literal> specifies the nodemap containing the
+                fileset to modify (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--fileset</literal> specifies the path of the fileset
+                to modify (mandatory).
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--rename</literal> changes the fileset's path to the
+                specified new subdirectory.
+                The new path must begin with a slash ('<literal>/</literal>')
+                and cannot yet exist as a fileset of that type on the same
+                nodemap.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--primary</literal> converts the fileset to a primary
+                fileset.
+                The flag has no effect if the fileset is already primary.
+                Note that <literal>--primary</literal> can only convert an
+                alternate fileset to primary if there is currently no primary
+                fileset set on the nodemap.
+                This option cannot be used with <literal>--alt</literal>.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--alt</literal> converts the fileset to an alternate
+                fileset.
+                The flag has no effect if the fileset is already alternate.
+                This option cannot be used with <literal>--primary</literal>.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--rw</literal> sets the fileset to read-write access
+                mode.
+                The flag has no effect if the fileset is already set to
+                read-write.
+                This option cannot be used with <literal>--ro</literal>.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                <literal>--ro</literal> sets the fileset to read-only access
+                mode.
+                The flag has no effect if the fileset is already set to
+                read-only.
+                This option cannot be used with <literal>--rw</literal>.
+              </para>
+            </listitem>
+          </itemizedlist>
+        </section>
+        <section xml:id="managingSecurity.isolation.multifilesets.mounting">
+          <title>How Multiple Filesets affect Client Mounting</title>
+          <para>
+            Filesets can be used to provide namespace isolation within the
+            Lustre filesystem by explicitly restricting clients of a nodemap to
+            specific subdirectories when mounting the client.
+            The restriction depends on whether the fileset is designated as
+            primary, alternate, or read-only. On mounting the Lustre client, the
+            following rules apply:
+          </para>
+          <orderedlist>
+            <listitem>
+              <para>
+                If the nodemap is inactive or no filesets are defined, no
+                subdirectory restrictions are applied.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                If the primary fileset is set and no subdirectory is presented
+                when mounting the Lustre client, the primary fileset's
+                subdirectory is used as the filesystem root directory.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                If any defined fileset (primary or alternate) matches the
+                presented mounted subdirectory exactly or as a prefix, the
+                subdirectory mount is used as the filesystem root directory.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                If the fileset matches in 3, the presented mounting subdirectory
+                is appended to the fileset's subdirectory.
+                </para>
+            </listitem>
+          </orderedlist>
+          <para>
+            If alternate filesets are defined but no primary fileset is set,
+            only 3 applies.
+          </para>
+        </section>
+    </section>
+  </section>
+  <section xml:id="managingSecurity.sepol" condition='l2D'>
+    <title><indexterm><primary>selinux policy check</primary></indexterm>
+    Checking SELinux Policy Enforced by Lustre Clients</title>
+    <para>SELinux provides a mechanism in Linux for supporting Mandatory Access
+      Control (MAC) policies. When a MAC policy is enforced, the operating
+      system&apos;s (OS) kernel defines application rights,
+      firewalling applications from compromising the entire system.
+      Regular users do not have the ability to override the policy.</para>
+    <para>One purpose of SELinux is to protect the
+      <emphasis role="bold">OS</emphasis> from privilege escalation. To that
+      extent, SELinux defines confined and unconfined domains for processes and
+      users. Each process, user, file is assigned a security context, and
+      rules define the allowed operations by processes and users on files.
+    </para>
+    <para>Another purpose of SELinux can be to protect
+      <emphasis role="bold">data</emphasis> sensitivity, thanks to Multi-Level
+      Security (MLS). MLS works on top of SELinux, by defining the concept of
+      security levels in addition to domains. Each process, user and file is
+      assigned a security level, and the model states that processes and users
+      can read the same or lower security level, but can only write to their own
+      or higher security level.
+    </para>
+    <para>From a file system perspective, the security context of files must be
+      stored permanently. Lustre makes use of the
+      <literal>security.selinux</literal> extended attributes on files to hold
+      this information. Lustre supports SELinux on the client side. All you have
+      to do to have MAC and MLS on Lustre is to enforce the appropriate SELinux
+      policy (as provided by the Linux distribution) on all Lustre clients. No
+      SELinux is required on Lustre servers.
+    </para>
+    <para>Because Lustre is a distributed file system, the specificity when
+      using MLS is that Lustre really needs to make sure data is always accessed
+      by nodes with the SELinux MLS policy properly enforced. Otherwise, data is
+      not protected. This means Lustre has to check that SELinux is properly
+      enforced on client side, with the right, unaltered policy. And if SELinux
+      is not enforced as expected on a client, the server denies its access to
+      Lustre.
+    </para>
+    <section xml:id="managingSecurity.sepol.determining" remap="h3">
+      <title><indexterm><primary>selinux policy check</primary><secondary>
+        determining</secondary></indexterm>Determining SELinux Policy Info
+      </title>
+      <para>A string that represents the SELinux Status info will be used by
+        servers as a reference, to check if clients are enforcing SELinux
+        properly. This reference string can be obtained on a client node known
+        to enforce the right SELinux policy, by calling the
+        <literal>l_getsepol</literal> command line utility:</para>
+        <screen>client# l_getsepol
+SELinux status info: 1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</screen>
+        <para>The string describing the SELinux policy has the following
+          syntax:</para>
+        <para><literal>mode:name:version:hash</literal></para>
+        <para>where:</para>
+          <itemizedlist>
+            <listitem>
+              <para><literal>mode</literal> is a digit telling if SELinux is in
+                Permissive mode (0) or Enforcing mode (1)</para>
+            </listitem>
+            <listitem>
+              <para><literal>name</literal> is the name of the SELinux policy
+              </para>
+            </listitem>
+            <listitem>
+              <para><literal>version</literal> is the version of the SELinux
+              policy</para>
+            </listitem>
+            <listitem>
+              <para><literal>hash</literal> is the computed hash of the binary
+                representation of the policy, as exported in
+                /etc/selinux/<literal>name</literal>/policy/policy.
+                <literal>version</literal></para>
+            </listitem>
+          </itemizedlist>
+    </section>
+    <section xml:id="managingSecurity.sepol.configuring" remap="h3">
+      <title><indexterm><primary>selinux policy check</primary><secondary>
+        enforcing</secondary></indexterm>Enforcing SELinux Policy Check</title>
+      <para>SELinux policy check can be enforced by setting the
+        <literal>sepol</literal> parameter on a nodemap entry. All clients
+        belonging to this nodemap entry must enforce the SELinux policy
+        described by this parameter, otherwise they are denied access to the
+        Lustre file system. For example:</para>
+      <screen>mgs# lctl nodemap_set_sepol --name restricted
+     --sepol '1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f'</screen>
+      <para>So all clients matching the <literal>restricted</literal> nodemap
+        must enforce the SELinux policy which description matches
+        <literal>1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</literal>.
+        If not, they will get Permission Denied when trying to mount or access
+        files on the Lustre file system.</para>
+      <para>To delete the <literal>sepol</literal> parameter, just set it to an
+        empty string:</para>
+      <screen>mgs# lctl nodemap_set_sepol --name restricted --sepol ''</screen>
+      <para>See <xref linkend="lustrenodemap.title" /> for more details about
+        the Nodemap feature.</para>
+    </section>
+    <section xml:id="managingSecurity.sepol.permanent" remap="h3">
+      <title><indexterm><primary>selinux policy check</primary><secondary>
+        making permanent</secondary></indexterm>Making SELinux Policy Check
+        Permanent</title>
+      <para>In order to make SELinux Policy check permanent, the sepol parameter
+        on the nodemap has to be set with <literal>lctl set_param</literal> with
+        the <literal>-P</literal> option.</para>
+      <screen>mgs# lctl set_param nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f
+mgs# lctl set_param -P nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</screen>
+      <para>This way the sepol parameter will be stored in the Lustre config
+      logs, letting the servers retrieve the information after a restart.
+      </para>
+    </section>
+    <section xml:id="managingSecurity.sepol.client" remap="h3">
+      <title><indexterm><primary>selinux policy check</primary><secondary>
+        sending client</secondary></indexterm>Sending SELinux Status Info from
+        Clients</title>
+      <para>In order for Lustre clients to send their SELinux status
+        information, in	case SELinux is enabled locally, the
+        <literal>send_sepol</literal> ptlrpc kernel module's parameter has to be
+        set to a non-zero value. <literal>send_sepol</literal> accepts various
+        values:</para>
+        <itemizedlist>
+            <listitem>
+              <para>0: do not send SELinux policy info;</para>
+            </listitem>
+            <listitem>
+              <para>-1: fetch SELinux policy info for every request;</para>
+            </listitem>
+            <listitem>
+              <para>N > 0: only fetch SELinux policy info every N seconds. Use
+                <literal>N = 2^31-1</literal> to have SELinux policy info
+                fetched only at mount time.</para>
+            </listitem>
+        </itemizedlist>
+        <para>Clients that are part of a nodemap on which
+          <literal>sepol</literal> is defined must send SELinux status info.
+          And the SELinux policy they enforce must match the representation
+          stored into the nodemap. Otherwise they will be denied access to the
+          Lustre file system.</para>
+    </section>
+  </section>
+  <section xml:id="managingSecurity.clientencryption" condition='l2E'>
+    <title><indexterm><primary>Client-side encryption</primary></indexterm>
+    Encrypting files and directories</title>
+    <para>The purpose that client-side encryption wants to serve is to be able
+      to provide a special directory for each user, to safely store sensitive
+      files. The goals are to protect data in transit between clients and
+      servers, and protect data at rest.</para>
+    <para>This feature is implemented directly at the Lustre client level.
+      Lustre client-side encryption relies on kernel <literal>fscrypt</literal>.
+      <literal>fscrypt</literal> is a library which filesystems can hook into to
+      support transparent encryption of files and directories. As a consequence,
+      the key points described below are extracted from
+    <literal>fscrypt</literal> documentation.</para>
+    <para>For full details, please refer to documentation available with the
+      Lustre sources, under the
+      <literal>Documentation/client_side_encryption</literal> directory.
+    </para>
+    <note><para>The client-side encryption feature is available natively on
+      Lustre clients running a Linux distribution with at least kernel 5.4. It
+      is also available thanks to an additional kernel library provided by
+      Lustre, on clients that run a Linux distribution with basic support for
+      encryption, including:</para>
+     <itemizedlist>
+       <listitem><para>CentOS/RHEL 8.1 and later;</para></listitem>
+       <listitem><para>Ubuntu 18.04 and later;</para></listitem>
+       <listitem><para>SLES 15 SP2 and later.</para></listitem>
+     </itemizedlist>
+    </note>
+    <section xml:id="managingSecurity.clientencryption.semantics" remap="h3">
+      <title><indexterm><primary>encryption access semantics</primary>
+      </indexterm>Client-side encryption access semantics</title>
+      <para>Only Lustre clients need access to encryption master keys. Keys are
+        added to the filesystem-level encryption keyring on the Lustre client.
+        <itemizedlist>
+          <listitem>
+            <para><emphasis role="bold">With the key</emphasis></para>
+            <para>With the encryption key, encrypted regular files, directories,
+              and symlinks behave very similarly to their unencrypted
+              counterparts --- after all, the encryption is intended to be
+              transparent. However, astute users may notice some differences in
+              behavior:</para>
+            <itemizedlist>
+              <listitem>
+                <para>Unencrypted files, or files encrypted with a different
+                  encryption policy (i.e. different key, modes, or flags),
+                  cannot be renamed or linked into an encrypted directory.
+                  However, encrypted files can be renamed within an encrypted
+                  directory, or into an unencrypted directory.</para>
+                <note><para>"moving" an unencrypted file into an encrypted
+                  directory, e.g. with the <literal>mv</literal> program, is
+                  implemented in userspace by a copy followed by a delete.  Be
+                  aware the original unencrypted data may remain recoverable
+                  from free space on the disk; it is best to keep all files
+                  encrypted from the very beginning.</para></note>
+              </listitem>
+              <listitem><para>On Lustre, Direct I/O is supported for encrypted
+                files.</para>
+              </listitem>
+              <listitem><para>The <literal>fallocate()</literal> operations
+                <literal>FALLOC_FL_COLLAPSE_RANGE</literal>,
+                <literal>FALLOC_FL_INSERT_RANGE</literal>, and
+                <literal>FALLOC_FL_ZERO_RANGE</literal> are not
+                supported on encrypted files and will fail with
+                <literal>EOPNOTSUPP</literal>.
+                </para>
+              </listitem>
+              <listitem><para>DAX (Direct Access) is not supported on encrypted
+                files.</para>
+              </listitem>
+              <listitem><para condition='l2F'>The st_size of an encrypted
+                symlink will not necessarily give the length of the symlink
+                target as required by POSIX. It will actually give the length of
+                the ciphertext, which will be slightly longer than the plaintext
+                due to NUL-padding and an extra 2-byte overhead.</para>
+              </listitem>
+              <listitem><para condition='l2F'>The maximum length of an encrypted
+                symlink is 2 bytes shorter than the maximum length of an
+                unencrypted symlink.</para>
+              </listitem>
+              <listitem><para><literal>mmap</literal> is supported.  This is
+                possible because the pagecache for an encrypted file contains
+                the plaintext, not the ciphertext.</para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">Without the key</emphasis></para>
+            <para>Some filesystem operations may be performed on encrypted
+              regular files, directories, and symlinks even before their
+              encryption key has been added, or after their encryption key has
+              been removed:</para>
+            <itemizedlist>
+              <listitem>
+                <para>File metadata may be read, e.g. using
+                  <literal>stat()</literal>.</para>
+              </listitem>
+              <listitem>
+                <para condition='l2F'>Directories may be listed, in which case
+                  the filenames will be listed in an encoded form derived from
+                  their ciphertext. The algorithm is subject to change but it is
+                  guaranteed that the presented filenames will be no longer than
+                  NAME_MAX bytes, will not contain the <literal>/</literal> or
+                  <literal>\0</literal> characters, and will uniquely identify
+                  directory entries. The <literal>.</literal> and
+                  <literal>..</literal> directory entries are special. They are
+                  always present and are not encrypted or encoded.</para>
+              </listitem>
+              <listitem>
+                <para>Files may be deleted.  That is, nondirectory files may be
+                  deleted with <literal>unlink()</literal> as usual, and empty
+                  directories may be deleted with <literal>rmdir()</literal> as
+                  usual. Therefore, <literal>rm</literal> and
+                  <literal>rm -r</literal> will work as expected.</para>
+              </listitem>
+              <listitem>
+                <para>Symlink targets may be read and followed, but they will
+                  be presented in encrypted form, similar to filenames in
+                  directories. Hence, they are unlikely to point to anywhere
+                  useful.</para>
+              </listitem>
+            </itemizedlist>
+            <para>Without the key, regular files cannot be opened or truncated.
+              Attempts to do so will fail with <literal>ENOKEY</literal>. This
+              implies that any regular file operations that require a file
+              descriptor, such as <literal>read()</literal>,
+              <literal>write()</literal>, <literal>mmap()</literal>,
+              <literal>fallocate()</literal>, and <literal>ioctl()</literal>,
+              are also forbidden.</para>
+            <para>Also without the key, files of any type (including
+              directories) cannot be created or linked into an encrypted
+              directory, nor can a name in an encrypted directory be the source
+              or target of a rename, nor can an <literal>O_TMPFILE</literal>
+              temporary file be created in an encrypted directory. All such
+              operations will fail with <literal>ENOKEY</literal>.</para>
+            <para>It is not currently possible to backup and restore encrypted
+              files without the encryption key.  This would require special
+              APIs which have not yet been implemented.</para>
+          </listitem>
+          <listitem>
+            <para><emphasis role="bold">Encryption policy enforcement
+              </emphasis></para>
+            <para>After an encryption policy has been set on a directory, all
+             regular files, directories, and symbolic links created in that
+             directory (recursively) will inherit that encryption policy.
+             Special files --- that is, named pipes, device nodes, and UNIX
+             domain sockets --- will not be encrypted.</para>
+           <para>Except for those special files, it is forbidden to have
+             unencrypted files, or files encrypted with a different encryption
+             policy, in an encrypted directory tree.</para>
+           </listitem>
+         </itemizedlist>
+      </para>
+    </section>
+    <section xml:id="managingSecurity.clientencryption.keyhierarchy" remap="h3">
+      <title><indexterm><primary>encryption key hierarchy</primary>
+      </indexterm>Client-side encryption key hierarchy</title>
+      <para>Each encrypted directory tree is protected by a master key.</para>
+      <para>To "unlock" an encrypted directory tree, userspace must provide the
+       appropriate master key.  There can be any number of master keys, each
+       of which protects any number of directory trees on any number of
+       filesystems.</para>
+    </section>
+    <section xml:id="managingSecurity.clientencryption.modes" remap="h3">
+      <title><indexterm><primary>encryption modes usage</primary>
+      </indexterm>Client-side encryption modes and usage</title>
+      <para><literal>fscrypt</literal> allows one encryption mode to be
+       specified for file contents and one encryption mode to be specified for
+       filenames. Different directory trees are permitted to use different
+       encryption modes. Currently, the following pairs of encryption modes are
+       supported:</para>
+       <itemizedlist>
+         <listitem>
+           <para>AES-256-XTS for contents and AES-256-CTS-CBC for filenames
+           </para>
+         </listitem>
+         <listitem>
+           <para>AES-128-CBC for contents and AES-128-CTS-CBC for filenames
+           </para>
+         </listitem>
+       </itemizedlist>
+       <para>If unsure, you should use the (AES-256-XTS, AES-256-CTS-CBC) pair.
+      </para>
+      <warning><para>In Lustre 2.14, client-side encryption only supports
+       content encryption, and not filename encryption. As a consequence, only
+       content encryption mode will be taken into account, and filename
+       encryption mode will be ignored to leave filenames in clear text.</para>
+      </warning>
+      <warning><para condition='l2F'>When Lustre client is built against the
+       embedded kernel library instead of the in-kernel fscrypt, the ability to
+       encrypt file and directory names is governed by new llite parameter named
+       <literal>enable_filename_encryption</literal>, introduced in 2.15, and
+       set to 0 by default.
+       When this parameter is 0, new empty directories configured as encrypted
+       use content encryption only, and not name encryption. This mode is
+       inherited for all subdirectories and files.
+       When <literal>enable_filename_encryption</literal> parameter is set to 1,
+       new empty directories configured as encrypted use full encryption
+       capabilities by encrypting file content and also file and directory
+       names. This mode is inherited for all subdirectories and files.
+       To set the <literal>enable_filename_encryption</literal> parameter
+       globally for all clients, one can do on the MGS:
+<screen>mgs# lctl set_param -P llite.*.enable_filename_encryption=1</screen>
+       Be aware that the <literal>enable_filename_encryption</literal> tuning
+       parameter is not available when Lustre client is built against in-kernel
+       fscrypt. Indeed, the in-kernel fscrypt library always encrypts file name
+       along with file content.<literallayout></literallayout>
+       Also note that new files and directories under a parent encrypted
+       directory created with Lustre 2.14 will not have their names encrypted.
+       Also, because files created with Lustre 2.14 did not have their names
+       encrypted, they will remain so after upgrade to 2.15. To benefit from
+       name encryption for an old directory previously created with Lustre 2.14,
+       you need to do the following after upgrade to 2.15 is complete:
+       <orderedlist>
+         <listitem>
+           <para>create a new encrypted directory. This can use an already
+            existing protector.</para>
+         </listitem>
+         <listitem>
+           <para>unlock the old encrypted directory.</para>
+         </listitem>
+         <listitem>
+           <para>copy all files and directories recursively from the old
+            encrypted directory to the newly created encrypted directory. Note
+            that this operation will re-encrypt all files contents in addition
+            to names.</para>
+         </listitem>
+         <listitem>
+           <para>remove the old encrypted directory.</para>
+         </listitem>
+       </orderedlist>
+      </para>
+      </warning>
+    </section>
+    <section xml:id="managingSecurity.clientencryption.threatmodel" remap="h3">
+      <title><indexterm><primary>encryption threat model</primary>
+      </indexterm>Client-side encryption threat model</title>
+      <itemizedlist>
+        <listitem>
+          <para><emphasis role="bold">Offline attacks</emphasis></para>
+          <para>For the Lustre case, block devices are Lustre targets attached
+            to the Lustre servers. Manipulating the filesystem offline means
+            accessing the filesystem on these targets while Lustre is offline.
+          </para>
+          <para>Provided that a strong encryption key is chosen,
+            <literal>fscrypt</literal> protects the confidentiality of file
+            contents in the event of a single point-in-time permanent offline
+            compromise of the block device content.
+            Lustre client-side encryption does not protect the confidentiality
+            of metadata, e.g. file names, file sizes, file permissions, file
+            timestamps, and extended attributes.  Also, the existence and
+            location of holes (unallocated blocks which logically contain all
+            zeroes) in files is not protected.</para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Online attacks</emphasis></para>
+          <itemizedlist>
+            <listitem>
+              <para>On Lustre client</para>
+              <para>After an encryption key has been added,
+                <literal>fscrypt</literal> does not hide the plaintext file
+                contents or filenames from other users on the same node.
+                Instead, existing access control mechanisms such as file mode
+                bits, POSIX ACLs, LSMs, or namespaces should be used for this
+                purpose.</para>
+              <para>For the Lustre case, it means plaintext file contents or
+                filenames are not hidden from other users on the same Lustre
+                client.</para>
+              <para>An attacker who compromises the system enough to read from
+                arbitrary memory, e.g. by exploiting a kernel security
+                vulnerability, can compromise all encryption keys that are
+                currently in use.
+                However, <literal>fscrypt</literal> allows encryption keys to
+                be removed from the kernel, which may protect them from later
+                compromise. Key removal can be carried out by non-root users.
+                In more detail, the key removal will wipe the master encryption
+                key from kernel memory.  Moreover, it will try to evict all
+                cached inodes which had been "unlocked" using the key, thereby
+                wiping their per-file keys and making them once again appear
+                "locked", i.e. in ciphertext or encrypted form.</para>
+            </listitem>
+            <listitem>
+              <para>On Lustre server</para>
+              <para>An attacker on a Lustre server who compromises the system
+                enough to read arbitrary memory, e.g. by exploiting a kernel
+                security vulnerability, cannot compromise Lustre files content.
+                Indeed, encryption keys are not forwarded to the Lustre servers,
+                and servers do not carry out decryption or encryption.
+                Moreover, bulk RPCs received by servers contain encrypted data,
+                which is written as-is to the underlying filesystem.</para>
+            </listitem>
+          </itemizedlist>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section xml:id="managingSecurity.clientencryption.fscrypt" remap="h3">
+      <title><indexterm><primary>encryption fscrypt policy</primary>
+      </indexterm>Manage encryption on directories</title>
+      <para>By default, Lustre client-side encryption is enabled, letting users
+       define encryption policies on a per-directory basis.</para>
+      <note><para>Administrators can decide to prevent a Lustre client
+       mount-point from using encryption by specifying the
+       <literal>noencrypt</literal> client mount option. This can be also
+       enforced from server side thanks to the
+       <literal>forbid_encryption</literal> property on nodemaps. See
+       <xref linkend="alteringproperties"/> for how to manage nodemaps.
+      </para></note>
+      <para><literal>fscrypt</literal> userspace tool can be used to manage
+       encryption policies. See https://github.com/google/fscrypt for
+       comprehensive explanations. Below are examples on how to use this tool
+       with Lustre. If not told otherwise, commands must be run on Lustre
+       client side.</para>
+      <itemizedlist>
+        <listitem>
+          <para>Two preliminary steps are required before actually deciding
+            which directories to encrypt, and this is the only
+            functionality which requires root privileges. Administrator has to
+            run:</para>
+          <screen># fscrypt setup
+Customizing passphrase hashing difficulty for this system...
+Created global config file at "/etc/fscrypt.conf".
+Metadata directories created at "/.fscrypt".</screen>
+          <para>This first command has to be run on all clients that want to use
+            encryption, as it sets up global fscrypt parameters outside of
+            Lustre.</para>
+          <screen># fscrypt setup /mnt/lustre
+Metadata directories created at "/mnt/lustre/.fscrypt"</screen>
+          <para>This second command has to be run on just one Lustre
+            client.</para>
+          <note><para>The file <literal>/etc/fscrypt.conf</literal> can be
+            edited. It is strongly recommended to set
+            <literal>policy_version</literal> to 2, so that
+            <literal>fscrypt</literal> wipes files from memory when the
+            encryption key is removed.</para></note>
+        </listitem>
+        <listitem>
+          <para>Now a regular user is able to select a directory to
+            encrypt:</para>
+            <screen>$ fscrypt encrypt /mnt/lustre/vault
+The following protector sources are available:
+1 - Your login passphrase (pam_passphrase)
+2 - A custom passphrase (custom_passphrase)
+3 - A raw 256-bit key (raw_key)
+Enter the source number for the new protector [2 - custom_passphrase]: 2
+Enter a name for the new protector: shield
+Enter custom passphrase for protector "shield":
+Confirm passphrase:
+"/mnt/lustre/vault" is now encrypted, unlocked, and ready for use.</screen>
+          <para>Starting from here, all files and directories created under
+            <literal>/mnt/lustre/vault</literal> will be encrypted, according
+            to the policy defined at the previsous step.</para>
+          <note><para>The encryption policy is inherited by all subdirectories.
+            It is not possible to change the policy for a subdirectory.</para>
+          </note>
+        </listitem>
+        <listitem>
+          <para>Another user can decide to encrypt a different directory with
+            its own protector:</para>
+            <screen>$ fscrypt encrypt /mnt/lustre/private
+Should we create a new protector? [y/N] Y
+The following protector sources are available:
+1 - Your login passphrase (pam_passphrase)
+2 - A custom passphrase (custom_passphrase)
+3 - A raw 256-bit key (raw_key)
+Enter the source number for the new protector [2 - custom_passphrase]: 2
+Enter a name for the new protector: armor
+Enter custom passphrase for protector "armor":
+Confirm passphrase:
+"/mnt/lustre/private" is now encrypted, unlocked, and ready for use.</screen>
+        </listitem>
+        <listitem>
+          <para>Users can decide to lock an encrypted directory at any
+            time:</para>
+          <screen>$ fscrypt lock /mnt/lustre/vault
+"/mnt/lustre/vault" is now locked.</screen>
+          <para>This action prevents access to encrypted content, and by
+            removing the key from memory, it also wipes files from memory if
+            they are not still open.</para>
+        </listitem>
+        <listitem>
+          <para>Users regain access to the encrypted directory with the command:
+          </para>
+          <screen>$ fscrypt unlock /mnt/lustre/vault
+Enter custom passphrase for protector "shield":
+"/mnt/lustre/vault" is now unlocked and ready for use.</screen>
+        </listitem>
+        <listitem>
+          <para>Actually, <literal>fscrypt</literal> does not give direct access
+            to master keys, but to protectors that are used to encrypt them.
+            This mechanism gives the ability to change a passphrase:</para>
+            <screen>$ fscrypt status /mnt/lustre
+lustre filesystem "/mnt/lustre" has 2 protectors and 2 policies
+
+PROTECTOR         LINKED  DESCRIPTION
+deacab807bf0e788  No      custom protector "shield"
+e691ae7a1990fc2a  No      custom protector "armor"
+
+POLICY                            UNLOCKED  PROTECTORS
+52b2b5aff0e59d8e0d58f962e715862e  No        deacab807bf0e788
+374e8944e4294b527e50363d86fc9411  No        e691ae7a1990fc2a
+
+$ fscrypt metadata change-passphrase --protector=/mnt/lustre:deacab807bf0e788
+Enter old custom passphrase for protector "shield":
+Enter new custom passphrase for protector "shield":
+Confirm passphrase:
+Passphrase for protector deacab807bf0e788 successfully changed.</screen>
+          <para>It makes also possible to have multiple protectors for the same
+            policy. This is really useful when several users share an encrypted
+            directory, because it avoids the need to share any secret between
+            them.</para>
+           <screen>$ fscrypt status /mnt/lustre/vault
+"/mnt/lustre/vault" is encrypted with fscrypt.
+
+Policy:   52b2b5aff0e59d8e0d58f962e715862e
+Options:  padding:32 contents:AES_256_XTS filenames:AES_256_CTS policy_version:2
+Unlocked: No
+
+Protected with 1 protector:
+PROTECTOR         LINKED  DESCRIPTION
+deacab807bf0e788  No      custom protector "shield"
+
+$ fscrypt metadata create protector /mnt/lustre
+Create new protector on "/mnt/lustre" [Y/n] Y
+The following protector sources are available:
+1 - Your login passphrase (pam_passphrase)
+2 - A custom passphrase (custom_passphrase)
+3 - A raw 256-bit key (raw_key)
+Enter the source number for the new protector [2 - custom_passphrase]: 2
+Enter a name for the new protector: bunker
+Enter custom passphrase for protector "bunker":
+Confirm passphrase:
+Protector f3cc1b5cf9b8f41c created on filesystem "/mnt/lustre".
+
+$ fscrypt metadata add-protector-to-policy
+          --protector=/mnt/lustre:f3cc1b5cf9b8f41c
+          --policy=/mnt/lustre:52b2b5aff0e59d8e0d58f962e715862e
+WARNING: All files using this policy will be accessible with this protector!!
+Protect policy 52b2b5aff0e59d8e0d58f962e715862e with protector f3cc1b5cf9b8f41c? [Y/n] Y
+Enter custom passphrase for protector "bunker":
+Enter custom passphrase for protector "shield":
+Protector f3cc1b5cf9b8f41c now protecting policy 52b2b5aff0e59d8e0d58f962e715862e.
+
+$ fscrypt status /mnt/lustre/vault
+"/mnt/lustre/vault" is encrypted with fscrypt.
+
+Policy:   52b2b5aff0e59d8e0d58f962e715862e
+Options:  padding:32 contents:AES_256_XTS filenames:AES_256_CTS policy_version:2
+Unlocked: No
+
+Protected with 2 protectors:
+PROTECTOR         LINKED  DESCRIPTION
+deacab807bf0e788  No      custom protector "shield"
+f3cc1b5cf9b8f41c  No      custom protector "bunker"</screen>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+  <section xml:id="managingSecurity.kerberos">
+    <title><indexterm><primary>Kerberos</primary></indexterm>
+    Configuring Kerberos (KRB) Security</title>
+    <para>This chapter describes how to use Kerberos with Lustre.</para>
+    <section xml:id="managingSecurity.kerberos.whatisit">
+      <title>What Is Kerberos?</title>
+      <para>Kerberos is a mechanism for authenticating all entities (such as
+        users and servers) on an &quot;unsafe&quot; network. Each of these
+        entities, known as &quot;principals&quot;, negotiate a runtime key with
+        the Kerberos server. This key enables principals to verify that messages
+        from the Kerberos server are authentic. By trusting the Kerberos server,
+        users and services can authenticate one another.</para>
+      <para>Setting up Lustre with Kerberos can provide advanced security
+        protections for the Lustre network. Broadly, Kerberos offers three types
+        of benefit:</para>
+      <itemizedlist>
+        <listitem>
+          <para>Allows Lustre connection peers (MDS, OSS and clients) to
+            authenticate one another.</para>
+        </listitem>
+        <listitem>
+          <para>Protects the integrity of PTLRPC messages from being modified
+            during network transfer.</para>
+        </listitem>
+        <listitem>
+          <para>Protects the privacy of the PTLRPC message from being
+            eavesdropped during network transfer.</para>
+        </listitem>
+      </itemizedlist>
+      <para>
+        Kerberos uses the &quot;kernel keyring&quot; client upcall mechanism.
+      </para>
+    </section>
+    <section xml:id="managingSecurity.kerberos.securityflavor">
+      <title>Security Flavor</title>
+      <para>
+        A security flavor is a string to describe what kind authentication
+        and data transformation be performed upon a PTLRPC connection. It
+        covers both RPC message and BULK data.
+      </para>
+      <para>
+        The supported flavors are described in following table:
+      </para>
+      <informaltable>
+        <tgroup cols="5">
+          <colspec align="left" />
+          <colspec align="left" />
+          <colspec align="left" />
+          <colspec align="left" />
+          <colspec align="left" />
+          <thead>
+            <row>
+              <entry>
+                Base Flavor
+              </entry>
+              <entry>
+                Authentication
+              </entry>
+              <entry>
+                RPC Message Protection
+              </entry>
+              <entry>
+                Bulk Data Protection
+              </entry>
+              <entry>
+                Notes
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">null</emphasis></emphasis>
+              </entry>
+              <entry>
+                N/A
+              </entry>
+              <entry>
+                N/A
+              </entry>
+              <entry>
+                N/A
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">krb5n</emphasis></emphasis>
+              </entry>
+              <entry>
+                GSS/Kerberos5
+              </entry>
+              <entry>
+                null
+              </entry>
+              <entry>
+                checksum
+              </entry>
+              <entry>
+                No protection of RPC message, checksum protection
+                of bulk data, light performance overhead.
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">krb5a</emphasis></emphasis>
+              </entry>
+              <entry>
+                GSS/Kerberos5
+              </entry>
+              <entry>
+                partial integrity (krb5)
+              </entry>
+              <entry>
+                checksum
+              </entry>
+              <entry>
+                Only header of RPC message is integrity protected, and
+                checksum protection of bulk data, more performance
+                overhead compare to krb5n.
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">krb5i</emphasis></emphasis>
+              </entry>
+              <entry>
+                GSS/Kerberos5
+              </entry>
+              <entry>
+                integrity (krb5)
+              </entry>
+              <entry>
+                integrity (krb5)
+              </entry>
+              <entry>
+                transformation algorithm is determined by actual Kerberos
+                algorithms enforced by KDC and principals; heavy performance
+                penalty.
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <emphasis><emphasis role="strong">krb5p</emphasis></emphasis>
+              </entry>
+              <entry>
+                GSS/Kerberos5
+              </entry>
+              <entry>
+                privacy (krb5)
+              </entry>
+              <entry>
+                privacy (krb5)
+              </entry>
+              <entry>
+                transformation privacy protection algorithm is determined
+                by actual Kerberos algorithms enforced by KDC and principals;
+                the heaviest performance penalty.
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section xml:id="managingSecurity.kerberos.kerberossetup">
+      <title>Kerberos Setup</title>
+      <section xml:id="managingSecurity.kerberos.kerberossetup.distribution">
+        <title>Distribution</title>
+        <para>We only support MIT Kerberos 5, from version 1.3.</para>
+        <para>For environmental requirements in general, and clock
+         synchronization in particular, please refer to section
+         <xref linkend="section_rh2_d4w_gk"/>.</para>
+      </section>
+      <section xml:id="managingSecurity.kerberos.kerberossetup.configuration">
+        <title>Principals Configuration</title>
+        <itemizedlist>
+          <listitem>
+            <para>Configure client nodes:</para>
+            <itemizedlist>
+              <listitem>
+                <para>
+                  For each client node, create a <literal>lustre_root</literal>
+                  principal and generate keytab.
+                </para>
+                <screen>kadmin&gt; addprinc -randkey lustre_root/client_host.domain@REALM</screen>
+                <screen>kadmin&gt; ktadd lustre_root/client_host.domain@REALM</screen>
+              </listitem>
+              <listitem>
+                <para>
+                  Install the keytab on the client node.
+                </para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+          <listitem>
+            <para>Configure MGS nodes:</para>
+            <itemizedlist>
+              <listitem>
+                <para>
+                  For each MGS node, create a <literal>lustre_mgs</literal>
+                  principal and generate keytab.
+                </para>
+                <screen>kadmin&gt; addprinc -randkey lustre_mgs/mgs_host.domain@REALM</screen>
+                <screen>kadmin&gt; ktadd lustre_mds/mgs_host.domain@REALM</screen>
+              </listitem>
+              <listitem>
+                <para>
+                  Install the keytab on the MGS nodes.
+                </para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+          <listitem>
+            <para>Configure MDS nodes:</para>
+            <itemizedlist>
+              <listitem>
+                <para>
+                  For each MDS node, create a <literal>lustre_mds</literal>
+                  principal and generate keytab.
+                </para>
+                <screen>kadmin&gt; addprinc -randkey lustre_mds/mds_host.domain@REALM</screen>
+                <screen>kadmin&gt; ktadd lustre_mds/mds_host.domain@REALM</screen>
+              </listitem>
+              <listitem>
+                <para>
+                  Install the keytab on the MDS nodes.
+                </para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+          <listitem>
+            <para>Configure OSS nodes:</para>
+            <itemizedlist>
+              <listitem>
+                <para>
+                  For each OSS node, create a <literal>lustre_oss</literal>
+                  principal and generate keytab.
+                </para>
+                <screen>kadmin&gt; addprinc -randkey lustre_oss/oss_host.domain@REALM</screen>
+                <screen>kadmin&gt; ktadd lustre_oss/oss_host.domain@REALM</screen>
+              </listitem>
+              <listitem>
+                <para>
+                  Install the keytab on the client node.
+                </para>
+              </listitem>
+            </itemizedlist>
+          </listitem>
+        </itemizedlist>
+        <note>
+          <itemizedlist>
+            <listitem>
+              <para>The <emphasis>host.domain</emphasis> should be the FQDN in
+              your network, otherwise server might not recognize any GSS
+              request.</para>
+            </listitem>
+            <listitem>
+              <para>
+                As an alternative for the client keytab, if you want to save
+                the trouble of assigning unique keytab for each client node,
+                you can create a general lustre_root principal and its
+                keytab, and install the same keytab on as many client nodes
+                as you want. <emphasis role="strong">Be aware that in
+                this way one compromised client means all clients are
+                insecure</emphasis>.
+              </para>
+              <screen>kadmin&gt; addprinc -randkey lustre_root@REALM</screen>
+              <screen>kadmin&gt; ktadd lustre_root@REALM</screen>
+            </listitem>
+            <listitem>
+              <para>
+                Lustre support following <emphasis>enctypes</emphasis> for
+                MIT Kerberos 5 version 1.3 or higher:
+              </para>
+              <itemizedlist>
+                <listitem>
+                  <para>
+                    <emphasis>aes128-cts</emphasis>
+                  </para>
+                </listitem>
+                <listitem>
+                  <para>
+                    <emphasis>aes256-cts</emphasis>
+                  </para>
+                </listitem>
+              </itemizedlist>
+            </listitem>
+          </itemizedlist>
+        </note>
+      </section>
+    </section>
+    <section xml:id="managingSecurity.kerberos.network">
+      <title>Networking</title>
+      <para>On networks for which name resolution to IP address is possible,
+        like TCP or InfiniBand, the names used in the principals must be the
+        ones that resolve to the IP addresses used by the Lustre NIDs.</para>
+      <para>If you are using a network which is
+        <emphasis role="strong">NOT</emphasis> TCP or InfiniBand (e.g.
+        PTL4LND), you need to have a <literal>/etc/lustre/nid2hostname</literal>
+        script on <emphasis role="strong">each</emphasis> node, which purpose is
+        to translate NID into hostname.
+        Following is a possible example for PTL4LND:</para>
+      <screen>#!/bin/bash
+set -x
+
+# convert a NID for a LND to a hostname
+
+# called with thre arguments: lnd netid nid
+#   $lnd is the string "PTL4LND", etc.
+#   $netid is the network identifier in hex string format
+#   $nid is the NID in hex format
+# output the corresponding hostname,
+# or error message leaded by a '@' for error logging.
+
+lnd=$1
+netid=$2
+# convert hex NID number to decimal
+nid=$((0x$3))
+
+case $lnd in
+    PTL4LND)   # simply add 'node' at the beginning
+        echo "node$nid"
+        ;;
+    *)
+	echo "@unknown LND: $lnd"
+        ;;
+esac</screen>
+    </section>
+    <section xml:id="managingSecurity.kerberos.requiredpackages">
+      <title>Required packages</title>
+      <para>
+        Every node should have following packages installed:
+      </para>
+      <itemizedlist>
+        <listitem>
+          <para>krb5-workstation</para>
+        </listitem>
+        <listitem>
+          <para>krb5-libs</para>
+        </listitem>
+        <listitem>
+          <para>keyutils</para>
+        </listitem>
+        <listitem>
+          <para>keyutils-libs</para>
+        </listitem>
+      </itemizedlist>
+      <para>On the node used to build Lustre with GSS support, following
+        packages should be installed:</para>
+      <itemizedlist>
+        <listitem>
+          <para>krb5-devel</para>
+        </listitem>
+        <listitem>
+          <para>keyutils-libs-devel</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section xml:id="managingSecurity.kerberos.buildlustre">
+      <title>Build Lustre</title>
+      <para>
+        Enable GSS at configuration time:
+      </para>
+      <screen>./configure --enable-gss --other-options</screen>
+    </section>
+    <section xml:id="managingSecurity.kerberos.running">
+      <title>Running</title>
+      <section xml:id="managingSecurity.kerberos.running.gssdaemons">
+        <title>GSS Daemons</title>
+        <para>
+          Make sure to start the daemon process
+          <literal>lsvcgssd</literal> on each server node (MGS, MDS and OSS)
+          before starting Lustre. The command syntax is:
+        </para>
+        <screen>lsvcgssd [-f] [-v] [-g] [-m] [-o] -k</screen>
+        <itemizedlist>
+          <listitem>
+            <para>-f: run in foreground, instead of as daemon</para>
+          </listitem>
+          <listitem>
+            <para>-v: increase verbosity by 1. For example, to set the verbose
+             level to 3, run 'lsvcgssd -vvv'. Verbose logging can help you make
+             sure Kerberos is set up correctly.
+            </para>
+          </listitem>
+          <listitem>
+            <para>-g: service MGS</para>
+          </listitem>
+          <listitem>
+            <para>-m: service MDS</para>
+          </listitem>
+          <listitem>
+            <para>-o: service OSS</para>
+          </listitem>
+          <listitem>
+            <para>-k: enable kerberos support</para>
+          </listitem>
+        </itemizedlist>
+      </section>
+      <section xml:id="managingSecurity.kerberos.running.settingsecurityflavors">
+        <title>Setting Security Flavors</title>
+        <para>
+          Security flavors can be set by defining sptlrpc rules on the MGS.
+          These rules are persistent, and are in the form:
+          <literal>&lt;spec&gt;=&lt;flavor&gt;</literal>
+        </para>
+        <itemizedlist>
+          <listitem>
+            <para>To add a rule:</para>
+            <screen>mgs&gt; lctl conf_param &lt;spec&gt;=&lt;flavor&gt;</screen>
+            <para>
+              If there is an existing rule on &lt;spec&gt;, it will be
+              overwritten.</para>
+          </listitem>
+          <listitem>
+            <para>To delete a rule:</para>
+            <screen>mgs&gt; lctl conf_param -d &lt;spec&gt;</screen>
+          </listitem>
+          <listitem>
+            <para>To list existing rules:</para>
+            <screen>msg&gt; lctl get_param mgs.MGS.live.&lt;fs-name&gt; | grep "srpc.flavor"</screen>
+          </listitem>
+        </itemizedlist>
+        <note>
+          <itemizedlist>
+            <listitem>
+              <para>If nothing is specified, by default all RPC connections will
+                use <literal>null</literal> flavor, which means no security.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                After you change a rule, it usually takes a few minutes to apply
+                the new rule to all nodes, depending on global system load.
+              </para>
+            </listitem>
+            <listitem>
+              <para>
+                Before you change a rule, make sure affected nodes are ready
+                for the new security flavor. E.g. if you change flavor from
+                <literal>null</literal> to <literal>krb5p</literal>
+                but GSS/Kerberos environment is not properly configured on
+                affected nodes, those nodes might be evicted because they cannot
+                communicate with each other.
+              </para>
+            </listitem>
+          </itemizedlist>
+        </note>
+      </section>
+      <section xml:id="managingSecurity.kerberos.running.rulessyntaxexamples">
+        <title>Rules Syntax &amp; Examples</title>
+        <para>
+          The general syntax is:
+        <literal>
+          &lt;target&gt;.srpc.flavor.&lt;network&gt;[.&lt;direction&gt;]=flavor
+        </literal></para>
+        <itemizedlist>
+          <listitem>
+            <para>
+              <literal>&lt;target&gt;</literal> can be filesystem name, or
+              specific MDT/OST device name. For example
+              <literal>testfs</literal>,
+              <literal>testfs-MDT0000</literal>,
+              <literal>testfs-OST0001</literal>.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              <literal>&lt;network&gt;</literal> is the LNet network name, for
+              example <literal>tcp0</literal>, <literal>o2ib0</literal>, or
+              <literal>default</literal> to not filter on LNet network.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              <literal>&lt;direction&gt;</literal> can be one of
+              <emphasis>cli2mdt</emphasis>, <emphasis>cli2ost</emphasis>,
+              <emphasis>mdt2mdt</emphasis>, <emphasis>mdt2ost</emphasis>.
+              Direction is optional.
+            </para>
+          </listitem>
+        </itemizedlist>
+        <para>
+          Examples:
+        </para>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Apply <literal>krb5i</literal> on
+              <emphasis role="strong">ALL</emphasis> connections for file system
+              <literal>testfs</literal>:
+            </para>
+          </listitem>
+        </itemizedlist>
+        <screen>mgs&gt; lctl conf_param testfs.srpc.flavor.default=krb5i</screen>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Nodes in network <literal>tcp0</literal> use
+              <literal>krb5p</literal>; all other nodes use
+              <literal>null</literal>.
+            </para>
+          </listitem>
+        </itemizedlist>
+        <screen>mgs&gt; lctl conf_param testfs.srpc.flavor.tcp0=krb5p
+mgs&gt; lctl conf_param testfs.srpc.flavor.default=null</screen>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Nodes in network <literal>tcp0</literal> use
+              <literal>krb5p</literal>; nodes in
+              <literal>o2ib0</literal> use <literal>krb5n</literal>;
+              among other nodes, clients use <literal>krb5i</literal>
+              to MDT/OST, MDTs use <literal>null</literal> to other MDTs,
+              MDTs use <literal>krb5a</literal> to OSTs.
+            </para>
+          </listitem>
+        </itemizedlist>
+        <screen>mgs&gt; lctl conf_param testfs.srpc.flavor.tcp0=krb5p
+mgs&gt; lctl conf_param testfs.srpc.flavor.o2ib0=krb5n
+mgs&gt; lctl conf_param testfs.srpc.flavor.default.cli2mdt=krb5i
+mgs&gt; lctl conf_param testfs.srpc.flavor.default.cli2ost=krb5i
+mgs&gt; lctl conf_param testfs.srpc.flavor.default.mdt2mdt=null
+mgs&gt; lctl conf_param testfs.srpc.flavor.default.mdt2ost=krb5a</screen>
+      </section>
+      <section xml:id="managingSecurity.kerberos.running.authenticatenormalusers">
+        <title>Regular Users Authentication</title>
+        <para>
+          On client nodes, non-root users need to issue
+          <literal>kinit</literal> before accessing Lustre, just like other
+           Kerberized applications.
+        </para>
+        <itemizedlist>
+          <listitem>
+            <para>
+              Required by kerberos, the user&apos;s principal
+              (<literal>username@REALM</literal>) should be added to the KDC.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Client and MDT nodes should have the same user database
+              used for name and uid/gid translation.
+            </para>
+          </listitem>
+        </itemizedlist>
+        <para>
+          Regular users can destroy the established security contexts before
+          logging out, by issuing:
+        </para>
+        <screen>lfs flushctx -k -r &lt;mount point&gt;</screen>
+        <para>
+          Here <literal>-k</literal> is to destroy the on-disk Kerberos
+          credential cache, similar to <literal>kdestroy</literal>, and
+          <literal>-r</literal> is to reap the revoked keys from the keyring
+          when flushing the GSS context. Otherwise it only destroys established
+          contexts in kernel memory.
+        </para>
+      </section>
+    </section>
+    <section xml:id="managingSecurity.kerberos.securemgsconnection">
+      <title>Secure MGS connection</title>
+      <para>
+        Each node can specify which flavor to use to connect to the MGS, by
+        using the <literal>mgssec=flavor</literal> mount option.
+        Once a flavor is chosen, it cannot be changed until re-mount.
+      </para>
+      <para>
+        Because a Lustre node only has one connection to the MGS, if there is
+        more than one target or client on the node, they necessarily use the
+        same security flavor to the MGS, being the one enforced when the first
+        connection to the MGS was established.
+      </para>
+      <para>
+        By default, the MGS accepts RPCs with any flavor. But it is possible to
+        configure the MGS to only accept a given flavor. The syntax is identical
+        to what is explained in paragraph
+        <xref linkend="managingSecurity.kerberos.running.rulessyntaxexamples"/>,
+        but with special target <literal>_mgs</literal>:
+      </para>
+      <screen>mgs&gt; lctl conf_param _mgs.srpc.flavor.&lt;network&gt;=&lt;flavor&gt;</screen>
+    </section>
+  </section>
+</chapter>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

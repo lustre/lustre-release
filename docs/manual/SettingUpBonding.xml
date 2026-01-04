@@ -1,0 +1,350 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="settingupbonding">
+  <title xml:id="settingupbonding.title">Setting Up Network Interface Bonding</title>
+  <para>This chapter describes how to use multiple network interfaces in parallel to increase bandwidth and/or redundancy. Topics include:</para>
+  <itemizedlist>
+    <listitem>
+      <para>
+              <xref linkend="network_interface_bonding_overview"/>
+          </para>
+    </listitem>
+    <listitem>
+      <para>
+              <xref linkend="interface_bonding_requirements"/>
+          </para>
+    </listitem>
+    <listitem>
+      <para>
+              <xref linkend="bonding_module_parameters"/>
+          </para>
+    </listitem>
+    <listitem>
+      <para>
+              <xref linkend="setting_up_bonding"/>
+          </para>
+    </listitem>
+    <listitem>
+      <para>
+              <xref linkend="configuring_lustre_with_bonding"/>
+          </para>
+    </listitem>
+    <listitem>
+      <para>
+              <xref linkend="bonding_references"/>
+          </para>
+    </listitem>
+  </itemizedlist>
+  <note>
+    <para>Using network interface bonding is optional.</para>
+  </note>
+  <section xml:id="network_interface_bonding_overview">
+    <title>Network Interface Bonding Overview</title>
+    <para>Bonding, also known as link aggregation, trunking and port trunking, is a method of aggregating multiple physical network links into a single logical link for increased bandwidth.</para>
+    <para>Several different types of bonding are available in the Linux distribution. All these
+      types are referred to as &apos;modes&apos;, and use the bonding kernel module.</para>
+    <para>Modes 0 to 3 allow load balancing and fault tolerance by using multiple interfaces. Mode 4 aggregates a group of interfaces into a single virtual interface where all members of the group share the same speed and duplex settings. This mode is described under IEEE spec 802.3ad, and it is referred to as either &apos;mode 4&apos; or &apos;802.3ad.&apos;</para>
+  </section>
+  <section xml:id="interface_bonding_requirements">
+    <title>Requirements</title>
+    <para>The most basic requirement for successful bonding is that both endpoints of the connection must be capable of bonding. In a normal case, the non-server endpoint is a switch. (Two systems connected via crossover cables can also use bonding.) Any switch used must explicitly handle 802.3ad Dynamic Link Aggregation.</para>
+    <para>The kernel must also be configured with bonding. All supported Lustre kernels have bonding functionality. The network driver for the interfaces to be bonded must have the ethtool functionality to determine slave speed and duplex settings. All recent network drivers implement it.</para>
+    <para>To verify that your interface works with ethtool, run:</para>
+    <screen># which ethtool
+/sbin/ethtool
+ 
+# ethtool eth0
+Settings for eth0:
+           Supported ports: [ TP MII ]
+           Supported link modes:   10baseT/Half 10baseT/Full
+                                   100baseT/Half 100baseT/Full
+           Supports auto-negotiation: Yes
+           Advertised link modes:  10baseT/Half 10baseT/Full
+                                   100baseT/Half 100baseT/Full
+           Advertised auto-negotiation: Yes
+           Speed: 100Mb/s
+           Duplex: Full
+           Port: MII
+           PHYAD: 1
+           Transceiver: internal
+           Auto-negotiation: on
+           Supports Wake-on: pumbg
+           Wake-on: d
+           Current message level: 0x00000001 (1)
+           Link detected: yes
+ 
+# ethtool eth1
+ 
+Settings for eth1:
+   Supported ports: [ TP MII ]
+   Supported link modes:   10baseT/Half 10baseT/Full
+                           100baseT/Half 100baseT/Full
+   Supports auto-negotiation: Yes
+   Advertised link modes:  10baseT/Half 10baseT/Full
+   100baseT/Half 100baseT/Full
+   Advertised auto-negotiation: Yes
+   Speed: 100Mb/s
+   Duplex: Full
+   Port: MII
+   PHYAD: 32
+   Transceiver: internal
+   Auto-negotiation: on
+   Supports Wake-on: pumbg
+   Wake-on: d
+   Current message level: 0x00000007 (7)
+   Link detected: yes
+   To quickly check whether your kernel supports bonding, run:     
+   # grep ifenslave /sbin/ifup
+   # which ifenslave
+   /sbin/ifenslave
+</screen>
+  </section>
+  <section xml:id="bonding_module_parameters">
+    <title>Bonding Module Parameters</title>
+    <para>Bonding module parameters control various aspects of bonding.</para>
+    <para>Outgoing traffic is mapped across the slave interfaces according to the transmit hash
+      policy. We recommend that you set the <literal>xmit_hash_policy</literal> option to the
+      layer3+4 option for bonding. This policy uses upper layer protocol information if available to
+      generate the hash. This allows traffic to a particular network peer to span multiple slaves,
+      although a single connection does not span multiple slaves.</para>
+    <screen>$ xmit_hash_policy=layer3+4</screen>
+    <para>The <literal>miimon</literal> option enables users to monitor the link status. (The
+      parameter is a time interval in milliseconds.) It makes an interface failure transparent to
+      avoid serious network degradation during link failures. A reasonable default setting is 100
+      milliseconds; run:</para>
+    <screen>$ miimon=100</screen>
+    <para>For a busy network, increase the timeout.</para>
+  </section>
+  <section xml:id="setting_up_bonding">
+    <title>Setting Up Bonding</title>
+    <para>To set up bonding:</para>
+    <orderedlist>
+      <listitem>
+        <para>Create a virtual &apos;bond&apos; interface by creating a configuration file:</para>
+        <screen># vi /etc/sysconfig/network-scripts/ifcfg-bond0</screen>
+      </listitem>
+      <listitem>
+        <para>Append the following lines to the file.</para>
+        <screen>DEVICE=bond0
+IPADDR=192.168.10.79 # Use the free IP Address of your network
+NETWORK=192.168.10.0
+NETMASK=255.255.255.0
+USERCTL=no
+BOOTPROTO=none
+ONBOOT=yes</screen>
+      </listitem>
+      <listitem>
+        <para>Attach one or more slave interfaces to the bond interface. Modify the eth0 and eth1 configuration files (using a VI text editor).</para>
+        <orderedlist>
+          <listitem>
+            <para>Use the VI text editor to open the eth0 configuration file.</para>
+            <screen># vi /etc/sysconfig/network-scripts/ifcfg-eth0</screen>
+          </listitem>
+          <listitem>
+            <para>Modify/append the eth0 file as follows:</para>
+            <screen>DEVICE=eth0
+USERCTL=no
+ONBOOT=yes
+MASTER=bond0
+SLAVE=yes
+BOOTPROTO=none</screen>
+          </listitem>
+          <listitem>
+            <para>Use the VI text editor to open the eth1 configuration file.</para>
+            <screen># vi /etc/sysconfig/network-scripts/ifcfg-eth1</screen>
+          </listitem>
+          <listitem>
+            <para>Modify/append the eth1 file as follows:</para>
+            <screen>DEVICE=eth1
+USERCTL=no
+ONBOOT=yes
+MASTER=bond0
+SLAVE=yes
+BOOTPROTO=none
+</screen>
+          </listitem>
+        </orderedlist>
+      </listitem>
+      <listitem>
+        <para>Set up the bond interface and its options in <literal>/etc/modprobe.d/bond.conf</literal>. Start the slave interfaces by your normal network method.</para>
+        <screen># vi /etc/modprobe.d/bond.conf
+</screen>
+        <orderedlist>
+          <listitem>
+            <para>Append the following lines to the file.</para>
+            <screen>alias bond0 bonding
+options bond0 mode=balance-alb miimon=100
+</screen>
+          </listitem>
+          <listitem>
+            <para>Load the bonding module.</para>
+            <screen># modprobe bonding
+# ifconfig bond0 up
+# ifenslave bond0 eth0 eth1
+</screen>
+          </listitem>
+        </orderedlist>
+      </listitem>
+      <listitem>
+        <para>Start/restart the slave interfaces (using your normal network method).</para>
+        <note>
+          <para>You must <literal>modprobe</literal> the bonding module for each bonded interface. If you wish to create bond0 and bond1, two entries in <literal>bond.conf</literal> file are required.</para>
+        </note>
+        <para>The examples below are from systems running Red Hat Enterprise Linux. For setup use:
+            <literal>/etc/sysconfig/networking-scripts/ifcfg-*</literal> The website referenced
+          below includes detailed instructions for other configuration methods, instructions to use
+          DHCP with bonding, and other setup details. We strongly recommend you use this
+          website.</para>
+        <para>
+        <link xl:href="https://wiki.linuxfoundation.org/networking/bonding">
+          http://www.linuxfoundation.org/networking/bonding</link></para>
+      </listitem>
+      <listitem>
+        <para>Check /proc/net/bonding to determine status on bonding. There should be a file there for each bond interface.</para>
+        <screen># cat /proc/net/bonding/bond0
+Ethernet Channel Bonding Driver: v3.0.3 (March 23, 2006)
+ 
+Bonding Mode: load balancing (round-robin)
+MII Status: up
+MII Polling Interval (ms): 0
+Up Delay (ms): 0
+Down Delay (ms): 0
+ 
+Slave Interface: eth0
+MII Status: up
+Link Failure Count: 0
+Permanent HW addr: 4c:00:10:ac:61:e0
+ 
+Slave Interface: eth1
+MII Status: up
+Link Failure Count: 0
+Permanent HW addr: 00:14:2a:7c:40:1d
+</screen>
+      </listitem>
+      <listitem>
+        <para>Use ethtool or ifconfig to check the interface state. ifconfig lists the first bonded interface as &apos;bond0.&apos;</para>
+        <screen>ifconfig
+bond0      Link encap:Ethernet  HWaddr 4C:00:10:AC:61:E0
+   inet addr:192.168.10.79  Bcast:192.168.10.255 \     Mask:255.255.255.0
+   inet6 addr: fe80::4e00:10ff:feac:61e0/64 Scope:Link
+   UP BROADCAST RUNNING MASTER MULTICAST  MTU:1500 Metric:1
+   RX packets:3091 errors:0 dropped:0 overruns:0 frame:0
+   TX packets:880 errors:0 dropped:0 overruns:0 carrier:0
+   collisions:0 txqueuelen:0
+   RX bytes:314203 (306.8 KiB)  TX bytes:129834 (126.7 KiB)
+ 
+eth0       Link encap:Ethernet  HWaddr 4C:00:10:AC:61:E0
+   inet6 addr: fe80::4e00:10ff:feac:61e0/64 Scope:Link
+   UP BROADCAST RUNNING SLAVE MULTICAST  MTU:1500 Metric:1
+   RX packets:1581 errors:0 dropped:0 overruns:0 frame:0
+   TX packets:448 errors:0 dropped:0 overruns:0 carrier:0
+   collisions:0 txqueuelen:1000
+   RX bytes:162084 (158.2 KiB)  TX bytes:67245 (65.6 KiB)
+   Interrupt:193 Base address:0x8c00
+ 
+eth1       Link encap:Ethernet  HWaddr 4C:00:10:AC:61:E0
+   inet6 addr: fe80::4e00:10ff:feac:61e0/64 Scope:Link
+   UP BROADCAST RUNNING SLAVE MULTICAST  MTU:1500 Metric:1
+   RX packets:1513 errors:0 dropped:0 overruns:0 frame:0
+   TX packets:444 errors:0 dropped:0 overruns:0 carrier:0
+   collisions:0 txqueuelen:1000
+   RX bytes:152299 (148.7 KiB)  TX bytes:64517 (63.0 KiB)
+   Interrupt:185 Base address:0x6000
+</screen>
+      </listitem>
+    </orderedlist>
+    <section remap="h3">
+      <title>Examples</title>
+      <para>This is an example showing <literal>bond.conf</literal> entries for bonding Ethernet interfaces <literal>eth1</literal> and <literal>eth2</literal> to <literal>bond0</literal>:</para>
+      <screen># cat /etc/modprobe.d/bond.conf
+alias eth0 8139too
+alias eth1 via-rhine
+alias bond0 bonding
+options bond0 mode=balance-alb miimon=100
+ 
+# cat /etc/sysconfig/network-scripts/ifcfg-bond0
+DEVICE=bond0
+BOOTPROTO=none
+NETMASK=255.255.255.0
+IPADDR=192.168.10.79 # (Assign here the IP of the bonded interface.)
+ONBOOT=yes
+USERCTL=no
+ 
+ifcfg-ethx 
+# cat /etc/sysconfig/network-scripts/ifcfg-eth0
+TYPE=Ethernet
+DEVICE=eth0
+HWADDR=4c:00:10:ac:61:e0
+BOOTPROTO=none
+ONBOOT=yes
+USERCTL=no
+IPV6INIT=no
+PEERDNS=yes
+MASTER=bond0
+SLAVE=yes
+</screen>
+      <para>In the following example, the <literal>bond0</literal> interface is the master (MASTER) while <literal>eth0</literal> and <literal>eth1</literal> are slaves (SLAVE).</para>
+      <note>
+        <para>All slaves of <literal>bond0</literal> have the same MAC address (Hwaddr) - <literal>bond0</literal>. All modes, except TLB and ALB, have this MAC address. TLB and ALB require a unique MAC address for each slave.</para>
+      </note>
+      <screen>$ /sbin/ifconfig
+ 
+bond0Link encap:EthernetHwaddr 00:C0:F0:1F:37:B4
+inet addr:XXX.XXX.XXX.YYY Bcast:XXX.XXX.XXX.255 Mask:255.255.252.0
+UP BROADCAST RUNNING MASTER MULTICAST MTU:1500  Metric:1
+RX packets:7224794 errors:0 dropped:0 overruns:0 frame:0
+TX packets:3286647 errors:1 dropped:0 overruns:1 carrier:0
+collisions:0 txqueuelen:0
+ 
+eth0Link encap:EthernetHwaddr 00:C0:F0:1F:37:B4
+inet addr:XXX.XXX.XXX.YYY Bcast:XXX.XXX.XXX.255 Mask:255.255.252.0
+UP BROADCAST RUNNING SLAVE MULTICAST MTU:1500  Metric:1
+RX packets:3573025 errors:0 dropped:0 overruns:0 frame:0
+TX packets:1643167 errors:1 dropped:0 overruns:1 carrier:0
+collisions:0 txqueuelen:100
+Interrupt:10 Base address:0x1080
+ 
+eth1Link encap:EthernetHwaddr 00:C0:F0:1F:37:B4
+inet addr:XXX.XXX.XXX.YYY Bcast:XXX.XXX.XXX.255 Mask:255.255.252.0
+UP BROADCAST RUNNING SLAVE MULTICAST MTU:1500  Metric:1
+RX packets:3651769 errors:0 dropped:0 overruns:0 frame:0
+TX packets:1643480 errors:0 dropped:0 overruns:0 carrier:0
+collisions:0 txqueuelen:100
+Interrupt:9 Base address:0x1400</screen>
+    </section>
+  </section>
+  <section xml:id="configuring_lustre_with_bonding">
+    <title>Configuring a Lustre File System with Bonding</title>
+    <para>The Lustre software uses the IP address of the bonded interfaces and requires no special
+      configuration. The bonded interface is treated as a regular TCP/IP interface. If needed,
+      specify <literal>bond0</literal> using the Lustre <literal>networks</literal> parameter in
+        <literal>/etc/modprobe</literal>.</para>
+    <screen>options lnet networks=tcp(bond0)</screen>
+  </section>
+  <section xml:id="bonding_references">
+    <title>Bonding References</title>
+    <para>We recommend the following bonding references:</para>
+    <itemizedlist>
+      <listitem>
+        <para>In the Linux kernel source tree, see
+            <literal>documentation/networking/bonding.txt</literal></para>
+      </listitem>
+      <listitem>
+        <para><link xl:href="http://linux-ip.net/html/ether-bonding.html">
+          http://linux-ip.net/html/ether-bonding.html</link>.</para>
+      </listitem>
+      <listitem>
+        <para>Linux Foundation bonding website:
+        <link xl:href="https://www.linuxfoundation.org/networking/bonding">
+          https://www.linuxfoundation.org/networking/bonding</link>. This
+          is the most extensive reference and we highly recommend it. This
+          website includes explanations of more complicated setups, including
+          the use of DHCP with bonding.</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+</chapter>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

@@ -1,0 +1,124 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="understandinglustrenetworking">
+  <title xml:id="understandinglustrenetworking.title">Understanding Lustre Networking (LNet)</title>
+  <para>This chapter introduces Lustre networking (LNet). It includes the following sections:</para>
+  <itemizedlist>
+    <listitem>
+      <para>
+                <xref linkend="understanding_lnet"/>
+            </para>
+    </listitem>
+    <listitem>
+      <para>                           
+                <xref linkend="lnet_key_feature"/>
+            </para>
+    </listitem>
+    <listitem>
+      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="idp694976"/></para>
+    </listitem>
+    <listitem>
+      <para>
+                <xref linkend="supported_networks"/>
+            </para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="understanding_lnet">
+    <title><indexterm>
+        <primary>LNet</primary>
+      </indexterm><indexterm>
+        <primary>LNet</primary>
+        <secondary>understanding</secondary>
+      </indexterm> Introducing LNet</title>
+    <para>In a cluster using one or more Lustre file systems, the network communication
+      infrastructure required by the Lustre file system is implemented using the Lustre networking
+      (LNet) feature.</para>
+    <para>LNet supports many commonly-used network types, such as InfiniBand and IP networks, and
+      allows simultaneous availability across multiple network types with routing between them.
+      Remote direct memory access (RDMA) is permitted when supported by underlying networks using
+      the appropriate Lustre network driver (LND). High availability and recovery features enable
+      transparent recovery in conjunction with failover servers.</para>
+    <para>An LND is a pluggable driver that provides support for a particular network type, for
+      example <literal>ksocklnd</literal> is the driver which implements the TCP Socket LND that
+      supports TCP networks. LNDs are loaded into the driver stack, with one LND for each network
+      type in use.</para>
+    <para>For information about configuring LNet, see <xref linkend="configuringlnet"/>.</para>
+    <para>For information about administering LNet, see <xref linkend="adminlustrepart3"/>.</para>
+  </section>
+  <section xml:id="lnet_key_feature">
+    <title><indexterm>
+        <primary>LNet</primary>
+        <secondary>features</secondary>
+      </indexterm>Key Features of LNet</title>
+    <para>Key features of LNet include:</para>
+    <itemizedlist>
+      <listitem>
+        <para>RDMA, when supported by underlying networks</para>
+      </listitem>
+      <listitem>
+        <para>Support for many commonly-used network types</para>
+      </listitem>
+      <listitem>
+        <para>High availability and recovery</para>
+      </listitem>
+      <listitem>
+        <para>Support of multiple network types simultaneously</para>
+      </listitem>
+      <listitem>
+        <para>Routing among disparate networks</para>
+      </listitem>
+    </itemizedlist>
+    <para>LNet permits end-to-end read/write throughput at or near peak bandwidth rates on a variety
+      of network interconnects.</para>
+  </section>
+  <section xml:id="idp694976">
+    <title><indexterm>
+        <primary>Lustre</primary>
+        <secondary>Networks</secondary>
+      </indexterm>Lustre Networks</title>
+    <para>A Lustre network is comprised of clients and servers running the Lustre software. It need
+      not be confined to one LNet subnet but can span several networks provided routing is possible
+      between the networks. In a similar manner, a single network can have multiple LNet subnets. </para>
+    <para>The Lustre networking stack is comprised of two layers, the LNet code module and the LND.
+      The LNet layer operates above the LND layer in a manner similar to the way the network layer
+      operates above the data link layer. LNet layer is connectionless, asynchronous and does not
+      verify that data has been transmitted while the LND layer is connection oriented and typically
+      does verify data transmission.</para>
+    <para>LNets are uniquely identified by a label comprised of a string corresponding to an LND and
+      a number, such as tcp0, o2ib0, or o2ib1, that uniquely identifies each LNet. Each node on an
+      LNet has at least one network identifier (NID). A NID is a combination of the address of the
+      network interface and the LNet label in the
+          form:<literal><replaceable>address</replaceable>@<replaceable>LNet_label</replaceable></literal>.</para>
+    <para>Examples: <screen>192.168.1.2@tcp0
+10.13.24.90@o2ib1</screen></para>
+    <para>In certain circumstances it might be desirable for Lustre file system traffic to pass
+      between multiple LNets. This is possible using LNet routing. It is important to realize that
+      LNet routing is not the same as network routing. For more details about LNet routing, see
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="configuringlnet"/></para>
+  </section>
+  <section xml:id="supported_networks">
+    <title><indexterm>
+        <primary>LNet</primary>
+        <secondary>supported networks</secondary>
+      </indexterm>Supported Network Types</title>
+    <para>The LNet code module includes LNDs to support many network types including:</para>
+    <itemizedlist>
+      <listitem>
+        <para> InfiniBand: OpenFabrics OFED (o2ib)</para>
+      </listitem>
+      <listitem>
+        <para> TCP (any network carrying TCP traffic, including GigE, 10GigE, and IPoIB)</para>
+      </listitem>
+      <listitem>
+        <para> RapidArray: ra</para>
+      </listitem>
+      <listitem>
+        <para> Quadrics: Elan</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+</chapter>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

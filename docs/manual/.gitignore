@@ -1,0 +1,7 @@
+.DS_Store
+*.orig
+*.rej
+lustre_manual.fo
+lustre_manual.html
+lustre_manual.pdf
+lustre_manual.xhtml

@@ -1,0 +1,194 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="configuringfailover">
+  <title xml:id="configuringfailover.title">Configuring Failover in a Lustre
+  File System</title>
+  <para>This chapter describes how to configure failover in a Lustre file
+  system. It includes:</para>
+  <itemizedlist>
+    <listitem>
+      <para>
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+         linkend="high_availability"/></para>
+    </listitem>
+    <listitem>
+      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+       linkend="failover_setup"
+        /></para>
+    </listitem>
+    <listitem>
+      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+       linkend="administering_failover"/></para>
+    </listitem>
+  </itemizedlist>
+  <para>For an overview of failover functionality in a Lustre file system, see <xref
+      xmlns:xlink="http://www.w3.org/1999/xlink" linkend="understandingfailover"/>.</para>
+  <section xml:id="high_availability">
+    <title><indexterm>
+        <primary>High availability</primary>
+        <see>failover</see>
+      </indexterm><indexterm>
+        <primary>failover</primary>
+      </indexterm>Setting Up a Failover Environment</title>
+    <para>The Lustre software provides failover mechanisms only at the layer of the Lustre file
+      system. No failover functionality is provided for system-level components such as failing
+      hardware or applications, or even for the entire failure of a node, as would typically be
+      provided in a complete failover solution. Failover functionality such as node monitoring,
+      failure detection, and resource fencing must be provided by external HA software, such as
+      PowerMan or the open source Corosync and Pacemaker packages provided by Linux operating system
+      vendors. Corosync provides support for detecting failures, and Pacemaker provides the actions
+      to take once a failure has been detected.</para>
+    <section remap="h3">
+      <title><indexterm>
+          <primary>failover</primary>
+          <secondary>power control device</secondary>
+        </indexterm>Selecting Power Equipment</title>
+      <para>Failover in a Lustre file system requires the use of a remote
+        power control (RPC) mechanism, which comes in different configurations.
+        For example, Lustre server nodes may be equipped with IPMI/BMC devices
+        that allow remote power control.
+        For recommended devices, refer to the list of supported RPC devices
+        on the website for the PowerMan cluster power management utility:</para>
+      <para><link xmlns:xlink="http://www.w3.org/1999/xlink"
+        xlink:href="https://github.com/chaos/powerman/tree/master/etc/devices">
+        https://github.com/chaos/powerman/tree/master/etc/devices</link></para>
+    </section>
+    <section remap="h3">
+      <title><indexterm>
+          <primary>failover</primary>
+          <secondary>power management software</secondary>
+        </indexterm>Selecting Power Management Software</title>
+      <para>Lustre failover requires RPC and management capability to verify
+        that a failed node is off before I/O is directed to the failover node.
+        This avoids double-mounting the two nodes and the risk of
+        unrecoverable data corruption.
+        A variety of power management tools will work.
+        Two packages that have been commonly used with the Lustre software
+        are PowerMan and Pacemaker.</para>
+      <para>The PowerMan cluster power management utility is used to control
+        RPC devices from a central location. PowerMan provides native support
+        for several RPC varieties and Expect-like configuration simplifies
+        the addition of new devices. The latest versions of PowerMan are
+        available at: </para>
+      <para><link xmlns:xlink="http://www.w3.org/1999/xlink"
+             xlink:href="https://github.com/chaos/powerman">
+          https://github.com/chaos/powerman</link></para>
+      <para>STONITH, or &quot;Shoot The Other Node In The Head&quot;
+        is used in conjunction with High Availability node management.
+        This is implemented by Pacemaker to ensure that a peer node
+        that may be importing a shared storage device has been powered
+        off and will not corrupt the shared storage if it continues running.
+      </para>
+    </section>
+    <section>
+      <title><indexterm>
+          <primary>failover</primary>
+          <secondary>high-availability (HA)  software</secondary>
+        </indexterm>Selecting High-Availability (HA) Software</title>
+      <para>The Lustre file system must be set up with high-availability (HA) software to enable a
+        complete Lustre failover solution. Except for PowerMan, the HA software packages mentioned
+        above provide both power management and cluster management.  For information about setting
+        up failover with Pacemaker, see:</para>
+      <itemizedlist>
+        <listitem>
+          <para>Pacemaker Project website:
+            <link xmlns:xlink="http://www.w3.org/1999/xlink"
+             xlink:href="https://clusterlabs.org/">https://clusterlabs.org/
+            </link></para>
+        </listitem>
+        <listitem>
+          <para>Article
+            <emphasis role="italic">Using Pacemaker with a Lustre File System
+            </emphasis>:
+            <link xmlns:xlink="http://www.w3.org/1999/xlink"
+             xlink:href="https://wiki.whamcloud.com/display/PUB/Using+Pacemaker+with+a+Lustre+File+System">
+              https://wiki.whamcloud.com/display/PUB/Using+Pacemaker+with+a+Lustre+File+System</link></para>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+  <section xml:id="failover_setup">
+    <title><indexterm>
+        <primary>failover</primary>
+        <secondary>setup</secondary>
+      </indexterm>Preparing a Lustre File System for Failover</title>
+    <para>To prepare a Lustre file system to be configured and managed as an HA system by a
+      third-party HA application, each storage target (MGT, MGS, OST) must be associated with a
+      second node to create a failover pair. This configuration information is then communicated by
+      the MGS to a client when the client mounts the file system.</para>
+    <para>The per-target configuration is relayed to the MGS at mount time. Some rules related to
+      this are:<itemizedlist>
+        <listitem>
+          <para> When a target is
+            <emphasis role="italic">initially</emphasis> mounted,
+            the MGS reads the configuration information from the target
+            (such as mgt vs. ost, failnode, fsname) to configure the
+            target into a Lustre file system.
+            If the MGS is reading the initial mount configuration,
+            the mounting node becomes that target's &quot;primary&quot; node.
+          </para>
+        </listitem>
+        <listitem>
+          <para>When a target is <emphasis role="underline"><emphasis role="italic"
+                >subsequently</emphasis></emphasis> mounted, the MGS reads the current configuration
+            from the target and, as needed, will reconfigure the MGS database target
+            information</para>
+        </listitem>
+      </itemizedlist></para>
+    <para>When the target is formatted using the <literal>mkfs.lustre</literal> command, the failover
+      service node(s) for the target are designated using the <literal>--servicenode</literal>
+      option. In the example below, an OST with index <literal>0</literal> in the  file system
+        <literal>testfs</literal> is formatted with two service nodes designated to serve as a
+      failover
+      pair:<screen>mkfs.lustre --reformat --ost --fsname testfs --mgsnode=192.168.10.1@o3ib \  
+              --index=0 --servicenode=192.168.10.7@o2ib \
+              --servicenode=192.168.10.8@o2ib \  
+              /dev/sdb</screen></para>
+    <para>More than two potential service nodes can be designated for a target. The target can then
+      be mounted on any of the designated service nodes.</para>
+    <para>When HA is configured on a storage target, the Lustre software
+      enables multi-mount protection (MMP) on that storage target. MMP prevents
+      multiple nodes from simultaneously mounting and thus corrupting the data
+      on the target. For more about MMP, see
+      <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+      linkend="managingfailover"/>.</para>
+    <para>If the MGT has been formatted with multiple service nodes designated, this information
+      must be conveyed to the Lustre client in the mount command used to mount the file system. In
+      the example below, NIDs for two MGSs that have been designated as service nodes for the MGT
+      are specified in the mount command executed on the
+      client:<screen>mount -t lustre 10.10.120.1@tcp1:10.10.120.2@tcp1:/testfs /lustre/testfs</screen></para>
+    <para>When a client mounts the file system, the MGS provides configuration information to the
+      client for the MDT(s) and OST(s) in the file system along with the NIDs for all service nodes
+      associated with each target and the service node on which the target is mounted. Later, when
+      the client attempts to access data on a target, it will try the NID for each specified service
+      node until it connects to the target.</para>
+  </section>
+  <section xml:id="administering_failover">
+    <title>Administering Failover in a Lustre File System</title>
+    <para>For additional information about administering failover features in a Lustre file system, see:<itemizedlist>
+        <listitem>
+          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="failover_ost" /></para>
+        </listitem>
+        <listitem>
+          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="failover_nids"
+            /></para>
+        </listitem>
+        <listitem>
+          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="lustremaint.ChangeAddrFailoverNode"
+            /></para>
+        </listitem>
+        <listitem>
+          <para><xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="mkfs.lustre"
+            /></para>
+        </listitem>
+      </itemizedlist></para>
+  </section>
+</chapter>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

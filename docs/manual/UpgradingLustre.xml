@@ -1,0 +1,470 @@
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="upgradinglustre">
+  <title xml:id="upgradinglustre.title">Upgrading a Lustre File System</title>
+  <para>This chapter describes interoperability between Lustre software
+  releases. It also provides procedures for upgrading from older Lustre 2.x
+  software releases to a more recent 2.y Lustre release a (major release
+  upgrade), and from a Lustre software release 2.x.y to a more recent
+  Lustre software release 2.x.z (minor release upgrade). It includes the
+  following sections:</para>
+  <itemizedlist>
+    <listitem>
+      <para>
+        <xref linkend="interop_upgrade_requirement" />
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="Upgrading_2.x" />
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="Upgrading_2.x.x" />
+      </para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="interop_upgrade_requirement">
+    <title>
+    <indexterm>
+      <primary>Lustre</primary>
+      <secondary>upgrading</secondary>
+      <see>upgrading</see>
+    </indexterm>
+    <indexterm>
+      <primary>upgrading</primary>
+    </indexterm>Release Interoperability and Upgrade Requirements</title>
+    <para>
+      <emphasis role="italic">
+        <emphasis role="bold">Lustre software release 2.x (major)
+        upgrade:</emphasis>
+      </emphasis>
+      <itemizedlist>
+        <listitem>
+          <para>All servers must be upgraded at the same time, while some or
+          all clients may be upgraded independently of the servers.</para>
+        </listitem>
+        <listitem>
+          <para>All servers must be be upgraded to a Linux kernel supported by
+          the Lustre software. See the Lustre Release Notes for your Lustre
+          version for a list of tested Linux distributions.</para>
+        </listitem>
+        <listitem>
+          <para>Clients to be upgraded must be running a compatible Linux
+          distribution as described in the Release Notes.</para>
+        </listitem>
+      </itemizedlist>
+    </para>
+    <para>
+      <emphasis role="italic">
+        <emphasis role="bold">Lustre software release 2.x.y release (minor)
+        upgrade:</emphasis>
+      </emphasis>
+    </para>
+    <itemizedlist>
+      <listitem>
+        <para>All servers must be upgraded at the same time, while some or all
+        clients may be upgraded.</para>
+      </listitem>
+      <listitem>
+        <para>Rolling upgrades are supported for minor releases allowing
+        individual servers and clients to be upgraded without stopping the
+        Lustre file system.</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+  <section xml:id="Upgrading_2.x">
+    <title>
+    <indexterm>
+      <primary>upgrading</primary>
+      <secondary>major release (2.x to 2.x)</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>wide striping</primary>
+    </indexterm>
+    <indexterm>
+      <primary>MDT</primary>
+      <secondary>multiple MDSs</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>ea_inode</primary>
+      <secondary>large_xattr</secondary>
+    </indexterm>Upgrading to Lustre Software Release 2.x (Major
+    Release)</title>
+    <para>The procedure for upgrading from a Lustre software release 2.x to a
+      more recent 2.y major release of the Lustre software is described in this
+      section. To upgrade an existing 2.x installation to a more recent major
+      release, complete the following steps:</para>
+    <orderedlist>
+      <listitem>
+        <para>Create a complete, restorable file system backup.</para>
+        <caution>
+          <para>Before installing the Lustre software, back up ALL data. The
+          Lustre software contains kernel modifications that interact with
+          storage devices and may introduce security issues and data loss if
+          not installed, configured, or administered properly. If a full backup
+          of the file system is not practical, a device-level backup of the MDT
+          file system is recommended. See 
+          <xref linkend="backupandrestore" /> for a procedure.</para>
+        </caution>
+      </listitem>
+      <listitem>
+        <para>Shut down the entire filesystem by following
+        <xref linkend="shutdownLustre"/></para>
+      </listitem>
+      <listitem>
+        <para>Upgrade the Linux operating system on all servers to a compatible
+        (tested) Linux distribution and reboot.</para>
+      </listitem>
+      <listitem>
+        <para>Upgrade the Linux operating system on all clients to a
+        compatible (tested) distribution and reboot.</para>
+      </listitem>
+      <listitem>
+        <para>Download the Lustre server RPMs for your platform from the 
+        <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
+        Lustre Releases</link> repository. See 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+         linkend="table.installed_server_pkg" />for a list of required packages.
+        </para>
+      </listitem>
+      <listitem>
+        <para>Install the Lustre server packages on all Lustre servers (MGS,
+        MDSs, and OSSs).</para>
+        <orderedlist numeration="loweralpha">
+          <listitem>
+            <para>Log onto a Lustre server as the 
+            <literal>root</literal> user</para>
+          </listitem>
+          <listitem>
+            <para>Use the 
+            <literal>yum</literal> command to install the packages:</para>
+            <para>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ... </screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Verify the packages are installed correctly:</para>
+            <para>
+              <screen>rpm -qa|egrep "lustre|wc"</screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Repeat these steps on each Lustre server.</para>
+          </listitem>
+        </orderedlist>
+      </listitem>
+      <listitem>
+        <para>Download the Lustre client RPMs for your platform from the 
+        <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
+        Lustre Releases</link> repository. See 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="table.installed_client_pkg" /> for a list of required packages.
+        </para>
+        <note>
+          <para>The version of the kernel running on a Lustre client must be
+          the same as the version of the 
+          <literal>lustre-client-modules-</literal>
+          <replaceable>ver</replaceable>package being installed. If not, a
+          compatible kernel must be installed on the client before the Lustre
+          client packages are installed.</para>
+        </note>
+      </listitem>
+      <listitem>
+        <para>Install the Lustre client packages on each of the Lustre clients
+        to be upgraded.</para>
+        <orderedlist numeration="loweralpha">
+          <listitem>
+            <para>Log onto a Lustre client as the 
+            <literal>root</literal> user.</para>
+          </listitem>
+          <listitem>
+            <para>Use the 
+            <literal>yum</literal> command to install the packages:</para>
+            <para>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ... </screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Verify the packages were installed correctly:</para>
+            <para>
+              <screen># rpm -qa|egrep "lustre|kernel"</screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Repeat these steps on each Lustre client.</para>
+          </listitem>
+        </orderedlist>
+      </listitem>
+      <listitem>
+        <para>The DNE feature allows using multiple MDTs within a single
+        filesystem namespace, and each MDT can each serve one or more remote
+        sub-directories in the file system. The <literal>root</literal>
+        directory is always located on MDT0.</para>
+        <para>Note that clients running a release prior to the Lustre software
+        release 2.4 can only see the namespace hosted by MDT0 and will return an
+        IO error if an attempt is made to access a directory on another
+        MDT.</para>
+        <para>(Optional) To format an additional MDT, complete these steps:
+        <orderedlist numeration="loweralpha">
+          <listitem>
+            <para>Determine the index used for the first MDT (each MDT must
+            have unique index). Enter:
+            <screen>client$ lctl dl | grep mdc
+36 UP mdc lustre-MDT0000-mdc-ffff88004edf3c00 
+      4c8be054-144f-9359-b063-8477566eb84e 5</screen></para>
+            <para>In this example, the next available index is 1.</para>
+          </listitem>
+          <listitem>
+            <para>Format the new block device as a new MDT at the next
+            available MDT index by entering (on one line):
+            <screen>mds# mkfs.lustre --reformat --fsname=<replaceable>filesystem_name</replaceable> --mdt \
+    --mgsnode=<replaceable>mgsnode</replaceable> --index <replaceable>new_mdt_index</replaceable> 
+<replaceable>/dev/mdt1_device</replaceable></screen></para>
+          </listitem>
+        </orderedlist></para>
+      </listitem>
+      <listitem>
+        <para>(Optional) If you are upgrading from a release before Lustre
+        2.10, to enable the project quota feature enter the following on every
+        ldiskfs backend target while unmounted:
+        <screen>tune2fs -O project /dev/<replaceable>dev</replaceable></screen>
+        </para>
+        <note><para>Enabling the <literal>project</literal> feature will prevent
+            the filesystem from being used by older versions of ldiskfs, so it
+            should only be enabled if the project quota feature is required
+            and/or after it is known that the upgraded release does not need
+            to be downgraded.</para></note>
+      </listitem>
+      <listitem>
+        <para>When setting up the file system, enter:
+        <screen>conf_param $FSNAME.quota.mdt=$QUOTA_TYPE
+conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
+      </listitem>
+      <listitem>
+        <para condition="l2D">(Optional) If upgrading an ldiskfs MDT formatted
+          prior to Lustre 2.13, the "wide striping" feature that allows files
+          to have more than 160 stripes and store other large xattrs was not
+          enabled by default.  This feature can be enabled on existing MDTs
+          by running the following command on all MDT devices:
+        <screen>mds# tune2fs -O ea_inode /dev/<replaceable>mdtdev</replaceable></screen>
+        </para>
+        <para>For more information about wide striping, see 
+        <xref xmlns:xlink="https://www.w3.org/1999/xlink"
+         linkend="wide_striping" />.</para>
+      </listitem>
+      <listitem>
+        <para>Start the Lustre file system by starting the components in the
+        order shown in the following steps:</para>
+        <orderedlist numeration="loweralpha">
+          <listitem>
+            <para>Mount the MGT. On the MGS, run
+            <screen>mgs# mount -a -t lustre</screen></para>
+          </listitem>
+          <listitem>
+            <para>Mount the MDT(s). On each MDT, run:
+            <screen>mds# mount -a -t lustre</screen></para>
+          </listitem>
+          <listitem>
+            <para>Mount all the OSTs. On each OSS node, run:</para>
+            <screen>oss# mount -a -t lustre</screen>
+            <note>
+              <para>This command assumes that all the OSTs are listed in the 
+              <literal>/etc/fstab</literal> file. OSTs that are not listed in
+              the 
+              <literal>/etc/fstab</literal> file, must be mounted individually
+              by running the mount command:</para>
+              <screen>mount -t lustre <replaceable>/dev/block_device</replaceable><replaceable>/mount_point</replaceable></screen>
+            </note>
+          </listitem>
+          <listitem>
+            <para>Mount the file system on the clients. On each client node,
+            run:</para>
+            <screen>client# mount -a -t lustre</screen>
+          </listitem>
+        </orderedlist>
+      </listitem>
+      <listitem>
+        <para condition='l27'>(Optional) If you are upgrading from a release before Lustre
+          2.7, to enable OST FIDs to also store the OST index (to improve
+          reliability of LFSCK and debug messages), <emphasis>after</emphasis>
+          the OSTs are mounted run once on each OSS:
+        <screen>oss# lctl set_param osd-ldiskfs.*.osd_index_in_idif=1</screen>
+        </para>
+        <note><para>Enabling the <literal>index_in_idif</literal> feature will
+          prevent the OST from being used by older versions of Lustre, so it
+          should only be enabled once it is known there is no need for the
+          OST to be downgraded to an earlier release.</para></note>
+      </listitem>
+      <listitem>
+        <para>If a new MDT was added to the filesystem, the new MDT must be
+          attached into the namespace by creating one or more
+          <emphasis>new</emphasis> DNE subdirectories with the
+          <literal>lfs mkdir</literal> command that use the new MDT:
+<screen>
+client# lfs mkdir -i <replaceable>new_mdt_index /testfs/new_dir</replaceable>
+</screen>
+        </para>
+        <para condition='l28'>In Lustre 2.8 and later, it is possible to
+          split a new directory across multiple MDTs by creating it with
+	  multiple stripes:
+<screen>
+client# lfs mkdir -c 2 <replaceable>/testfs/new_striped_dir</replaceable>
+</screen>
+        </para>
+        <para condition='l2D'>In Lustre 2.13 and later, it is possible to set
+          the default directory layout on <emphasis>existing</emphasis>
+          directories so new remote subdirectories are created on less-full
+          MDTs:
+<screen>
+client# lfs setdirstripe -D -c 1 -i -1 <replaceable>/testfs/some_dir</replaceable>
+</screen>
+          See <xref linkend="lfsmkdirbyspace"/> for details.
+        </para>
+        <para condition='l2F'>In Lustre 2.15 and later, if no default
+          directory layout is set on the root directory, the MDS will
+          <emphasis>automatically</emphasis> set the default directory
+          layout the root directory to distribute the top-level directories
+          round-robin across all MDTs, see <xref linkend="fsdefaultlmv"/>.
+        </para>
+      </listitem>
+    </orderedlist>
+    <note>
+      <para>The mounting order described in the steps above must be followed
+      for the initial mount and registration of a Lustre file system after an
+      upgrade. For a normal start of a Lustre file system, the mounting order
+      is MGT, OSTs, MDT(s), clients.</para>
+    </note>
+    <para>If you have a problem upgrading a Lustre file system, see 
+      <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+      linkend="reporting_lustre_problem"/>for ways to get help.</para>
+  </section>
+  <section xml:id="Upgrading_2.x.x">
+    <title>
+    <indexterm>
+      <primary>upgrading</primary>
+      <secondary>2.X.y to 2.X.y (minor release)</secondary>
+    </indexterm>Upgrading to Lustre Software Release 2.x.y (Minor
+    Release)</title>
+    <para>Rolling upgrades are supported for upgrading from any Lustre software
+    release 2.x.y to a more recent Lustre software release 2.X.y. This allows
+    the Lustre file system to continue to run while individual servers (or
+    their failover partners) and clients are upgraded one at a time. The
+    procedure for upgrading a Lustre software release 2.x.y to a more recent
+    minor release is described in this section.</para>
+    <para>To upgrade Lustre software release 2.x.y to a more recent minor
+    release, complete these steps:</para>
+    <orderedlist>
+      <listitem>
+        <para>Create a complete, restorable file system backup.</para>
+        <caution>
+          <para>Before installing the Lustre software, back up ALL data. The
+          Lustre software contains kernel modifications that interact with
+          storage devices and may introduce security issues and data loss if
+          not installed, configured, or administered properly. If a full backup
+          of the file system is not practical, a device-level backup of the MDT
+          file system is recommended. See 
+          <xref linkend="backupandrestore" /> for a procedure.</para>
+        </caution>
+      </listitem>
+      <listitem>
+        <para>Download the Lustre server RPMs for your platform from the 
+        <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
+        Lustre Releases</link> repository. See 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="table.installed_server_pkg" /> for a list of required packages.
+        </para>
+      </listitem>
+      <listitem>
+        <para>For a rolling upgrade, complete any procedures required to keep
+        the Lustre file system running while the server to be upgraded is
+        offline, such as failing over a primary server to its secondary
+        partner.</para>
+      </listitem>
+      <listitem>
+        <para>Unmount the Lustre server to be upgraded (MGS, MDS, or
+        OSS)</para>
+      </listitem>
+      <listitem>
+        <para>Install the Lustre server packages on the Lustre server.</para>
+        <orderedlist numeration="loweralpha">
+          <listitem>
+            <para>Log onto the Lustre server as the 
+            <literal>root</literal> user</para>
+          </listitem>
+          <listitem>
+            <para>Use the 
+            <literal>yum</literal> command to install the packages:</para>
+            <para>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ... </screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Verify the packages are installed correctly:</para>
+            <para>
+              <screen>rpm -qa|egrep "lustre|wc"</screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Mount the Lustre server to restart the Lustre software on the
+            server:
+            <screen>server# mount -a -t lustre</screen></para>
+          </listitem>
+          <listitem>
+            <para>Repeat these steps on each Lustre server.</para>
+          </listitem>
+        </orderedlist>
+      </listitem>
+      <listitem>
+        <para>Download the Lustre client RPMs for your platform from the 
+        <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
+        Lustre Releases</link> repository. See 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="table.installed_client_pkg" /> for a list of required packages.
+        </para>
+      </listitem>
+      <listitem>
+        <para>Install the Lustre client packages on each of the Lustre clients
+        to be upgraded.</para>
+        <orderedlist numeration="loweralpha">
+          <listitem>
+            <para>Log onto a Lustre client as the 
+            <literal>root</literal> user.</para>
+          </listitem>
+          <listitem>
+            <para>Use the 
+            <literal>yum</literal> command to install the packages:</para>
+            <para>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ... </screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Verify the packages were installed correctly:</para>
+            <para>
+              <screen># rpm -qa|egrep "lustre|kernel"</screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Mount the Lustre client to restart the Lustre software on the
+            client:
+            <screen>client# mount -a -t lustre</screen></para>
+          </listitem>
+          <listitem>
+            <para>Repeat these steps on each Lustre client.</para>
+          </listitem>
+        </orderedlist>
+      </listitem>
+    </orderedlist>
+    <para>If you have a problem upgrading a Lustre file system, see 
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+    linkend="reporting_lustre_problem" />for some suggestions for
+    how to get help.</para>
+  </section>
+</chapter>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->

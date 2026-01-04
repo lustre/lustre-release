@@ -1,0 +1,2786 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+ xml:id="systemconfigurationutilities">
+  <title xml:id="systemconfigurationutilities.title">System Configuration Utilities</title>
+  <para>This chapter includes system configuration utilities and includes the following sections:</para>
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="l_getidentity"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="lctl"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_ll_decode_filter_fid"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_llog_reader"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_llstat"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_llverdev"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_lshowmount"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_lst"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_lustre_rmmod"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="lustre_rsync"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="mkfs.lustre"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="mount.lustre"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_routerstat"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="tunefs.lustre"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="config_additional_utility"/></para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="l_getidentity">
+    <title><indexterm><primary>l_getidentity</primary></indexterm>
+l_getidentity</title>
+    <para>The l_getidentity tool normally handles Lustre user/group mapping
+      upcall.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>l_getidentity { $FSNAME-MDT{xxxx}| -d} {uid}</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The <literal>l_getidentity</literal> utility is called from the
+        MDS to map a numeric UID value into the list of supplementary group
+        values for that UID, and writes this into the
+        <literal>mdt.*.identity_info</literal> parameter file.  The list of
+        supplementary groups is cached in the kernel to avoid repeated
+        upcalls.  See <xref linkend="identity_upcall"/> for more
+        details.</para>
+      <para>The <literal>l_getidentity</literal> utility can also be run
+        directly for debugging purposes to ensure that the UID mapping for a
+        particular user is configured correctly, by using the
+        <literal>-d</literal> argument instead of the MDT name.
+      </para>
+    </section>
+    <section remap="h5">
+      <title>Options</title>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para>
+                  <literal>${FSNAME}-MDT{xxxx}</literal></para>
+              </entry>
+              <entry>
+                <para> Metadata server target name</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>uid</literal></para>
+              </entry>
+              <entry>
+                <para> User identifier</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Files</title>
+      <para>The parameter to set the <literal>l_getidentity</literal> path is:
+      </para>
+<screen>mds# lctl set_param -P mdt.*-MDT*.identity_upcall=<replaceable>path</replaceable>
+</screen>
+    </section>
+  </section>
+  <section xml:id="lctl">
+    <title><indexterm><primary>lctl</primary></indexterm>
+lctl</title>
+    <para>The lctl utility is used for root control and configuration. With lctl you can directly control Lustre via an ioctl interface, allowing various configuration, maintenance and debugging features to be accessed.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>lctl [--device <replaceable>devno</replaceable>] <replaceable>command [args]</replaceable></screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The lctl utility can be invoked in interactive mode by issuing the lctl command. After that, commands are issued as shown below. The most common lctl commands are:</para>
+      <screen>dl
+dk
+device
+network <replaceable>up|down</replaceable>
+list_nids
+ping <replaceable>nid</replaceable>help
+quit</screen>
+      <para>For a complete list of available commands, type <literal>help</literal> at the <literal>lctl</literal> prompt. To get basic help on command meaning and syntax, type <literal>help <replaceable>command</replaceable></literal>. Command completion is activated with the TAB key (depending on compile options), and command history is available via the up- and down-arrow keys.</para>
+      <para>For non-interactive use, use the second invocation, which runs the command after connecting to the device.</para>
+    </section>
+    <section remap="h5">
+      <title>Setting Parameters with lctl</title>
+      <para>Lustre parameters are not always accessible using the procfs
+      interface, as it is platform-specific. As a solution,
+      <literal>lctl {get,set}_param</literal> provides a platform-independent
+      interface to the Lustre tunables. Avoid any direct references to
+      <literal>/proc</literal> and <literal>/sys</literal> files in scripts.
+      For future portability, instead use lctl {get,set}_param, which handles
+      these details internally.</para>
+      <para>When the file system is running, use the
+      <literal>lctl set_param</literal> command on the affected node(s) to
+      <emphasis>temporarily</emphasis> set parameters (mapping to items in).
+      The <literal>lctl set_param</literal> command uses this syntax:</para>
+      <screen>lctl set_param [-n] [-P] [-d] <replaceable>obdtype.obdname.property</replaceable>=<replaceable>value</replaceable></screen>
+      <para>For example:</para>
+<screen>mds# lctl set_param mdt.testfs-MDT0000.identity_upcall=NONE</screen>
+      <para condition='l25'>Use <literal>-P</literal> option to set parameters
+      permanently. Option <literal>-d </literal>deletes permanent parameters.
+      For example:
+<screen>
+mgs# lctl set_param -P mdt.testfs-MDT0000.identity_upcall=NONE
+mgs# lctl set_param -P -d mdt.testfs-MDT0000.identity_upcall</screen></para>
+      <para>Many permanent parameters can be set with the
+      <literal>lctl conf_param</literal> utility. In general,
+      <literal>lctl conf_param</literal> can be used to specify any OBD
+      device parameter settable in a /proc/fs/lustre file. The
+      <literal>lctl conf_param</literal> command must be run on the MGS node,
+      and uses this syntax:</para>
+      <screen><replaceable>obd|fsname</replaceable>.obdtype.property=<replaceable>value</replaceable>) </screen>
+      <para>For example:</para>
+      <screen>mgs# lctl conf_param testfs-MDT0000.mdt.identity_upcall=NONE
+$ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
+      <caution>
+        <para>The <literal>lctl conf_param</literal> command
+          <emphasis>permanently</emphasis> sets parameters in the file system
+          configuration for all nodes of the specified type.</para>
+      </caution>
+      <para>To get current Lustre parameter settings, use the
+        <literal>lctl get_param</literal> command on the desired node with the
+        same parameter name as <literal>lctl set_param</literal>:</para>
+<screen>
+# lctl get_param [-n] <replaceable>obdtype.obdname.parameter</replaceable>
+</screen>
+      <para>For example:</para>
+<screen>
+mds# lctl get_param mdt.testfs-MDT0000.identity_upcall
+</screen>
+      <para>To list Lustre parameters that are available to set, use the <literal>lctl list_param</literal> command, with this syntax:</para>
+<screen>
+# lctl list_param [-R] [-F] <replaceable>obdtype.obdname.*</replaceable>
+</screen>
+      <para>For example, to list all of the parameters on the MDT:</para>
+<screen>
+oss# lctl list_param -RF mdt
+</screen>
+      <para>For more information on using lctl to set temporary and permanent parameters, see <xref linkend="setting_param_with_lctl"/>.</para>
+      <para><emphasis role="bold">Network Configuration</emphasis></para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>network up|down|tcp|elan</literal></para>
+              </entry>
+              <entry>
+                <para> Starts or stops LNet, or selects a network type for other <literal>lctl</literal> LNet commands.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>list_nids</literal></para>
+              </entry>
+              <entry>
+                <para> Prints all NIDs on the local node. LNet must be running.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>which_nid <replaceable>nidlist</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> From a list of NIDs for a remote node, identifies the NID on which interface communication will occur.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ping <replaceable>nid</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Checks LNet connectivity via an LNet ping. This uses the fabric appropriate to the specified NID.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>interface_list</literal></para>
+              </entry>
+              <entry>
+                <para> Prints the network interface information for a given <emphasis>network</emphasis> type.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>peer_list</literal></para>
+              </entry>
+              <entry>
+                <para> Prints the known peers for a given <emphasis>network</emphasis> type.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>conn_list</literal></para>
+              </entry>
+              <entry>
+                <para> Prints all the connected remote NIDs for a given <emphasis>network</emphasis> type.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>active_tx</literal></para>
+              </entry>
+              <entry>
+                <para> This command prints active transmits. It is only used for the Elan <emphasis>network</emphasis> type.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>route_list</literal></para>
+              </entry>
+              <entry>
+                <para> Prints the complete routing table.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Device Selection</emphasis></para>
+      <informaltable frame="all">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">&#160;</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>device <replaceable>devname</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> This selects the specified OBD device. All other commands depend on the device being set.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>device_list</literal></para>
+              </entry>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> Shows the local Lustre OBDs, a/k/a <literal>dl</literal>.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Device Operations</emphasis></para>
+      <informaltable frame="all">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          <thead>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>list_param [-F|-R] <replaceable>parameter</replaceable> <replaceable>[parameter ...]</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Lists the Lustre or LNet parameter name.</para>
+                <para>&#160;</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>-F</literal></para>
+              </entry>
+              <entry>
+                <para> Adds &apos;/&apos;, &apos;@&apos; or &apos;=&apos; for directories, symlinks and writeable files, respectively.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>-R</literal></para>
+              </entry>
+              <entry>
+                <para> Recursively lists all parameters under the specified path. If <literal>param_path</literal> is unspecified, all parameters are shown.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>get_param [-n|-N|-F] <replaceable>parameter</replaceable> <replaceable>[parameter ...]</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Gets the value of a Lustre or LNet parameter from the specified path.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>-n</literal></para>
+              </entry>
+              <entry>
+                <para> Prints only the parameter value and not the parameter name.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>-N</literal></para>
+              </entry>
+              <entry>
+                <para> Prints only matched parameter names and not the values; especially useful when using patterns.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>-F</literal></para>
+              </entry>
+              <entry>
+                <para> When <literal>-N</literal> is specified, adds &apos;/&apos;, &apos;@&apos; or &apos;=&apos; for directories, symlinks and writeable files, respectively.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>set_param [-n] <replaceable>parameter</replaceable>=<replaceable>value</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Sets the value of a Lustre or LNet parameter from the specified path.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>-n</literal></para>
+              </entry>
+              <entry>
+                <para> Disables printing of the key name when printing values.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para><literal>conf_param [-d] <replaceable>device|fsname</replaceable> <replaceable>parameter</replaceable>=<replaceable>value</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Sets a permanent configuration parameter for any device
+                  via the MGS. This command must be run on the MGS node.
+                </para>
+                <para>All writeable parameters under
+                  <literal>lctl list_param</literal> (e.g.
+                  <literal>lctl list_param -F osc.*.* | grep =</literal>) can
+                  be permanently set using <literal>lctl conf_param</literal>,
+                  but the conversion of <literal>list_param</literal> names to
+                  <literal>conf_param</literal> names is not obvious, so it is
+                  preferred to use the <literal>set_param -P</literal> command.
+                </para>
+                <para>For more information on setting permanent parameters, see
+                <xref linkend="setting_permanent_params"/>
+                (Setting Permanent Parameters).</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para><literal>-d <replaceable>device|fsname</replaceable>.<replaceable>parameter</replaceable></literal></para>
+                <para>&#160;</para>
+              </entry>
+              <entry>
+                <para> Deletes a parameter setting (use the default value at the next restart). A null value for <replaceable>value</replaceable> also deletes the parameter setting.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>activate</literal></para>
+              </entry>
+              <entry>
+                <para> Re-activates an import after the deactivate operation. This setting is only effective until the next restart (see <literal>conf_param</literal>).</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>deactivate</literal></para>
+              </entry>
+              <entry>
+                <para> Deactivates an import, in particular meaning do not assign new file stripes to an OSC. Running lctl deactivate on the MDS stops new objects from being allocated on the OST. Running lctl deactivate on Lustre clients causes them to return -EIO when accessing objects on the OST instead of waiting for recovery.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>abort_recovery</literal></para>
+              </entry>
+              <entry>
+                <para> Aborts the recovery process on a re-starting MDT or OST.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <note>
+        <para>Lustre tunables are not always accessible using the procfs interface, as it is platform-specific. As a solution, <literal>lctl {get,set,list}_param</literal> has been introduced as a platform-independent interface to the Lustre tunables. Avoid direct references to <literal>/proc/{fs,sys}/{lustre,lnet}</literal>. For future portability, use <literal>lctl {get,set,list}_param</literal> instead.</para>
+      </note>
+      <para><emphasis role="bold">Virtual Block Device Operations</emphasis></para>
+      <para>Lustre can emulate a virtual block device upon a regular file. This emulation is needed when you are trying to set up a swap space via the file.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para><literal>blockdev_attach <replaceable>filename</replaceable> <replaceable>/dev/lloop_device</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Attaches a regular Lustre file to a block device. If the device node does not exist, <literal>lctl</literal> creates it. It is recommend that a device node is created by <literal>lctl</literal> since the emulator uses a dynamical major number.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>blockdev_detach <replaceable>/dev/lloop_device</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Detaches the virtual block device.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>blockdev_info <replaceable>/dev/lloop_device</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Provides information about the Lustre file attached to the device node.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Changelogs</emphasis></para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>changelog_register</literal></para>
+              </entry>
+              <entry>
+                <para> Registers a new changelog user for a particular device.
+                Changelog entries are saved persistently on the MDT with each
+                filesystem operation, and are only purged beyond all registered
+                user&apos;s minimum set point (see
+                <literal>lfs changelog_clear</literal>). This may cause the
+                Changelog to consume a large amount of space, eventually
+                filling the MDT, if a changelog user is registered but never
+                consumes those records.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>changelog_deregister <replaceable>id</replaceable></para>
+              </entry>
+              <entry>
+                <para> Unregisters an existing changelog user. If the
+                user&apos;s &quot;clear&quot; record number is the minimum for
+                the device, changelog records are purged until the next minimum.
+                </para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="bold">Debug</emphasis></para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>debug_daemon</literal></para>
+              </entry>
+              <entry>
+                <para> Starts and stops the debug daemon, and controls the output filename and size.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>debug_kernel <replaceable>[file]</replaceable> [raw]</literal></para>
+              </entry>
+              <entry>
+                <para> Dumps the kernel debug buffer to stdout or a file.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>debug_file <replaceable>input_file</replaceable> <replaceable>[output_file]</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Converts the kernel-dumped debug log from binary to plain text format.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>clear</literal></para>
+              </entry>
+              <entry>
+                <para> Clears the kernel debug buffer.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>mark <replaceable>text</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Inserts marker text in the kernel debug buffer.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>filter <replaceable>subsystem_id|debug_mask</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Filters kernel debug messages by subsystem or mask.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>show <replaceable>subsystem_id|debug_mask</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Shows specific types of messages.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>debug_list <replaceable>subsystems|types</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Lists all subsystem and debug types.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>modules <replaceable>path</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Provides GDB-friendly module information.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Options</title>
+      <para>Use the following options to invoke lctl.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>--device</literal></para>
+              </entry>
+              <entry>
+                <para> Device to be used for the operation (specified by name or number). See device_list.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--ignore_errors | ignore_errors</literal></para>
+              </entry>
+              <entry>
+                <para> Ignores errors during script processing.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <para><literal>lctl</literal></para>
+      <screen>$ lctl
+lctl &gt; dl 
+   0 UP mgc MGC192.168.0.20@tcp btbb24e3-7deb-2ffa-eab0-44dffe00f692 5 
+   1 UP ost OSS OSS_uuid 3 
+   2 UP obdfilter testfs-OST0000 testfs-OST0000_UUID 3 
+lctl &gt; dk /tmp/log Debug log: 87 lines, 87 kept, 0 dropped. 
+lctl &gt; quit</screen>
+    </section>
+    <section remap="h5">
+      <title>See Also</title>
+      <itemizedlist>
+        <listitem>
+          <para> <xref linkend="mkfs.lustre"/>
+          </para>
+        </listitem>
+        <listitem>
+          <para> <xref linkend="mount.lustre"/>
+          </para>
+        </listitem>
+        <listitem>
+          <para> <xref linkend="lctl"/> </para>
+        </listitem>
+        <listitem>
+          <para> <xref linkend="userutilities.lfs"/> </para>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+  <section xml:id="config_ll_decode_filter_fid">
+    <title><indexterm><primary>ll_decode_filter_fid</primary></indexterm>
+ll_decode_filter_fid</title>
+    <para>The <literal>ll_decode_filter_fid</literal> utility displays the
+    Lustre object ID and MDT parent FID.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>ll_decode_filter_fid object_file [object_file ...]</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The ll_decode_filter_fid utility decodes and prints the Lustre OST
+        object ID, MDT FID, stripe index for the specified OST object(s), which
+        is stored in the &quot;trusted.fid&quot; attribute on each OST object.
+        This is accessible to <literal>ll_decode_filter_fid</literal> when the
+        OST file system is mounted locally as type ldiskfs for maintenance.
+      </para>
+      <para>The &quot;trusted.fid&quot; extended attribute is stored on each
+        OST object when it is first modified (data written or attributes set),
+        and is not accessed or modified by Lustre after that time.</para>
+      <para>The OST object ID (objid) may be useful in case of OST directory
+        corruption, though LFSCK can normally reconstruct the entire OST object
+        directory tree, see <xref linkend="lfsckadmin" /> for details.
+        The MDS FID can be useful to determine which MDS inode an OST object
+        is (or was) used by. The stripe index can be used in conjunction with
+        other OST objects to reconstruct the layout of a file even if the MDT
+        inode was lost.
+      </para>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <screen>root@oss1# cd /mnt/ost/lost+found
+root@oss1# ll_decode_filter_fid #123454 #123455 #123458
+#123454: objid=690670 seq=0 parent=[0x751c5:0xfce6e605:0x0]
+#123455: objid=614725 seq=0 parent=[0x18d11:0xebba84eb:0x1]
+#123458: objid=533088 seq=0 parent=[0x21417:0x19734d61:0x0]</screen>
+      <para>This shows that the three files in lost+found have decimal object IDs - 690670, 614725, and 533088, respectively. The object sequence number (formerly object group) is 0 for all current OST objects.</para>
+      <para>The MDT parent inode FIDs are hexadecimal numbers of the form sequence:oid:idx. Since the sequence number is below 0x100000000 in all these cases, the FIDs are in the legacy Inode and Generation In FID (IGIF) namespace and are mapped directly to the MDT inode = seq and generation = oid values; the MDT inodes are 0x751c5, 0x18d11, and 0x21417 respectively. For objects with MDT parent sequence numbers above 0x200000000, this indicates that the FID needs to be mapped via the MDT Object Index (OI) file on the MDT to determine the internal inode number.</para>
+      <para>The idx field shows the stripe number of this OST object in the Lustre RAID-0 striped file.</para>
+    </section>
+  </section>
+  <section xml:id="config_llobdstat">
+    <title><indexterm><primary>llobdstat</primary></indexterm>
+llobdstat</title>
+    <para>The <literal>llobdstat</literal> utility displays the
+    Lustre object ID and MDT parent FID.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>llobdstat ost_name [interval]</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The llobdstat utility displays a line of OST statistics for the given ost_name every interval seconds. It should be run directly on an OSS node. Type <literal>CTRL-C</literal> to stop statistics printing.</para>
+    </section>
+    <section remap="h5">
+      <title>Example</title>
+      <screen># llobdstat liane-OST0002 1
+/usr/bin/llobdstat on /proc/fs/lustre/obdfilter/liane-OST0002/stats
+Processor counters run at 2800.189 MHz
+Read: 1.21431e+07, Write: 9.93363e+08, create/destroy: 24/1499, stat: 34, p\
+unch: 18
+[NOTE: cx: create, dx: destroy, st: statfs, pu: punch ]
+Timestamp Read-delta ReadRate Write-delta WriteRate
+--------------------------------------------------------
+1217026053 0.00MB 0.00MB/s 0.00MB 0.00MB/s
+1217026054 0.00MB 0.00MB/s 0.00MB 0.00MB/s
+1217026055 0.00MB 0.00MB/s 0.00MB 0.00MB/s
+1217026056 0.00MB 0.00MB/s 0.00MB 0.00MB/s
+1217026057 0.00MB 0.00MB/s 0.00MB 0.00MB/s
+1217026058 0.00MB 0.00MB/s 0.00MB 0.00MB/s
+1217026059 0.00MB 0.00MB/s 0.00MB 0.00MB/s st:1</screen>
+    </section>
+    <section remap="h5">
+      <title>Files</title>
+      <screen>/proc/fs/lustre/obdfilter/<replaceable>ostname</replaceable>/stats</screen>
+    </section>
+  </section>
+  <section xml:id="config_llog_reader">
+    <title><indexterm><primary>llog_reader</primary></indexterm>
+llog_reader</title>
+    <para>The llog_reader utility translates a Lustre configuration log into human-readable form.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>llog_reader filename</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The llog_reader utility parses the binary format of Lustre&apos;s on-disk configuration logs. Llog_reader can only read logs; use tunefs.lustre to write to them.</para>
+      <para>To examine a log file on a stopped Lustre server, mount its backing file system as ldiskfs or zfs, then use llog_reader to dump the log file&apos;s contents, for example:</para>
+      <screen>mount -t ldiskfs /dev/sda /mnt/mgs 
+llog_reader /mnt/mgs/CONFIGS/tfs-client</screen>
+      <para>To examine the same log file on a running Lustre server, use the ldiskfs-enabled debugfs utility (called debug.ldiskfs on some distributions) to extract the file, for example:</para>
+      <screen>debugfs -c -R &apos;dump CONFIGS/tfs-client /tmp/tfs-client&apos; /dev/sda 
+llog_reader /tmp/tfs-client</screen>
+      <caution>
+        <para>Although they are stored in the CONFIGS directory, mountdata files do not use the configuration log format and will confuse the llog_reader utility.</para>
+      </caution>
+    </section>
+    <section remap="h5">
+      <title>See Also</title>
+      <para><xref linkend="tunefs.lustre"/></para>
+    </section>
+  </section>
+  <section xml:id="config_llstat">
+    <title><indexterm><primary>llstat</primary></indexterm>
+llstat</title>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>llstat [-c] [-g] [-i <replaceable>interval</replaceable>] <replaceable>stats_file
+</replaceable></screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The llstat utility displays statistics from any of the Lustre
+        statistics parameter files on the local node that share a common format
+        and are updated at <literal>interval</literal> seconds.  To stop stats
+        printing, use <literal>CTRL</literal>-<literal>C.</literal></para>
+    </section>
+    <section remap="h5">
+      <title>Options</title>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>-c</literal></para>
+              </entry>
+              <entry>
+                <para> Clears the statistics file.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>-i</literal></para>
+              </entry>
+              <entry>
+                <para> Specifies the polling period (in seconds).</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>-g</literal></para>
+              </entry>
+              <entry>
+                <para> Specifies graphable output format.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>-h</literal></para>
+              </entry>
+              <entry>
+                <para> Displays help information.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>stats_file</literal></para>
+              </entry>
+              <entry>
+                <para> Specifies either the full path to a statistics file or the shorthand reference, <literal>mds</literal> or <literal>ost</literal></para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Example</title>
+      <para>To monitor /proc/fs/lustre/ost/OSS/ost/stats at 1 second intervals, run;</para>
+      <screen>llstat -i 1 ost</screen>
+    </section>
+    <section remap="h5">
+      <title>Files</title>
+      <para>The llstat files are located at:</para>
+      <screen>/proc/fs/lustre/mdt/MDS/*/stats
+/proc/fs/lustre/mdt/*/exports/*/stats
+/proc/fs/lustre/mdc/*/stats
+/proc/fs/lustre/ldlm/services/*/stats
+/proc/fs/lustre/ldlm/namespaces/*/pool/stats
+/proc/fs/lustre/mgs/MGS/exports/*/stats
+/proc/fs/lustre/ost/OSS/*/stats
+/proc/fs/lustre/osc/*/stats
+/proc/fs/lustre/obdfilter/*/exports/*/stats
+/proc/fs/lustre/obdfilter/*/stats
+/proc/fs/lustre/llite/*/stats
+</screen>
+    </section>
+  </section>
+  <section xml:id="config_llverdev">
+    <title><indexterm><primary>llverdev</primary></indexterm>
+llverdev</title>
+    <para>The llverdev verifies a block device is functioning properly over its full size.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>llverdev [-c <replaceable>chunksize</replaceable>] [-f] [-h] [-o <replaceable>offset</replaceable>] [-l] [-p] [-r] [-t <replaceable>timestamp</replaceable>] [-v] [-w] <replaceable>device</replaceable></screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>Sometimes kernel drivers or hardware devices have bugs that prevent them from accessing the full device size correctly, or possibly have bad sectors on disk or other problems which prevent proper data storage. There are often defects associated with major system boundaries such as 2^32 bytes, 2^31 sectors, 2^31 blocks, 2^32 blocks, etc.</para>
+      <para>The llverdev utility writes and verifies a unique test pattern across the entire device to ensure that data is accessible after it was written, and that data written to one part of the disk is not overwriting data on another part of the disk.</para>
+      <para>It is expected that llverdev will be run on large size devices (TB). It is always better to run llverdev in verbose mode, so that device testing can be easily restarted from the point where it was stopped.</para>
+      <para>Running a full verification can be time-consuming for very large devices. We recommend starting with a partial verification to ensure that the device is minimally sane before investing in a full verification.</para>
+    </section>
+    <section remap="h5">
+      <title>Options</title>
+      <informaltable frame="all">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="33*"/>
+          <colspec colname="c2" colwidth="33*"/>
+          <colspec colname="c3" colwidth="33*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">&#160;</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-c|--chunksize</literal></para>
+              </entry>
+              <entry>
+                <para> I/O chunk size in bytes (default value is 1048576).</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-f|--force</literal></para>
+              </entry>
+              <entry>
+                <para> Forces the test to run without a confirmation that the device will be overwritten and all data will be permanently destroyed.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-h|--help</literal></para>
+              </entry>
+              <entry>
+                <para> Displays a brief help message.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-o <replaceable>offset</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Offset (in kilobytes) of the start of the test (default value is 0).</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-l|--long</literal></para>
+              </entry>
+              <entry>
+                <para> Runs a full check, writing and then reading and verifying every block on the disk.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-p|--partial</literal></para>
+              </entry>
+              <entry>
+                <para> Runs a partial check, only doing periodic checks across the device (1 GB steps).</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-r|--read</literal></para>
+              </entry>
+              <entry>
+                <para> Runs the test in read (verify) mode only, after having previously run the test in <literal>-w</literal> mode.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-t <replaceable>timestamp</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Sets the test start time as printed at the start of a previously-interrupted
+                  test to ensure that validation data is the same across the entire file system
+                  (default value is the current time()).</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-v|--verbose</literal></para>
+              </entry>
+              <entry>
+                <para> Runs the test in verbose mode, listing each read and write operation.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>-w|--write</literal></para>
+              </entry>
+              <entry>
+                <para> Runs the test in write (test-pattern) mode (default runs both read and write).</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <para>Runs a partial device verification on /dev/sda:</para>
+      <screen>llverdev -v -p /dev/sda 
+llverdev: permanently overwrite all data on /dev/sda (yes/no)? y 
+llverdev: /dev/sda is 4398046511104 bytes (4096.0 GB) in size 
+Timestamp: 1009839028 
+Current write offset: 4096 kB</screen>
+      <para>Continues an interrupted verification at offset 4096kB from the start of the device, using the same timestamp as the previous run:</para>
+      <screen>llverdev -f -v -p --offset=4096 --timestamp=1009839028 /dev/sda 
+llverdev: /dev/sda is 4398046511104 bytes (4096.0 GB) in size 
+Timestamp: 1009839028 
+write complete 
+read complete </screen>
+    </section>
+  </section>
+  <section xml:id="config_lshowmount">
+    <title><indexterm><primary>lshowmount</primary></indexterm>
+lshowmount</title>
+    <para>The lshowmount utility shows Lustre exports.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>lshowmount [-ehlv]</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The lshowmount utility shows the hosts that have Lustre mounted to a server. This utility looks for exports from the MGS, MDS, and obdfilter.</para>
+    </section>
+    <section remap="h5">
+      <title>Options</title>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>-e|--enumerate</literal></para>
+              </entry>
+              <entry>
+                <para> Causes lshowmount to list each client mounted on a separate line instead of trying to compress the list of clients into a hostrange string.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>-h|--help</literal></para>
+              </entry>
+              <entry>
+                <para> Causes lshowmount to print out a usage message.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>-l|--lookup</literal></para>
+              </entry>
+              <entry>
+                <para> Causes lshowmount to try to look up the hostname for NIDs that look like IP addresses.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>-v|--verbose</literal></para>
+              </entry>
+              <entry>
+                <para> Causes lshowmount to output export information for each service instead of only displaying the aggregate information for all Lustre services on the server.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Files</title>
+      <screen>/proc/fs/lustre/mgs/<replaceable>server</replaceable>/exports/<replaceable>uuid</replaceable>/nid
+/proc/fs/lustre/mds/<replaceable>server</replaceable>/exports/<replaceable>uuid</replaceable>/nid
+/proc/fs/lustre/obdfilter/<replaceable>server</replaceable>/exports/<replaceable>uuid</replaceable>/nid</screen>
+    </section>
+  </section>
+  <section xml:id="config_lst">
+    <title><indexterm><primary>lst</primary></indexterm>
+lst</title>
+    <para>The lst utility starts LNet self-test.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>lst</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>LNet self-test helps site administrators confirm that Lustre Networking (LNet) has been properly installed and configured. The self-test also confirms that LNet and the network software and hardware underlying it are performing as expected.</para>
+      <para>Each LNet self-test runs in the context of a session. A node can be associated with only one session at a time, to ensure that the session has exclusive use of the nodes on which it is running. A session is create, controlled and monitored from a single node; this is referred to as the self-test console.</para>
+      <para>Any node may act as the self-test console. Nodes are named and allocated to a self-test session in groups. This allows all nodes in a group to be referenced by a single name.</para>
+      <para>Test configurations are built by describing and running test batches. A test batch is a named collection of tests, with each test composed of a number of individual point-to-point tests running in parallel. These individual point-to-point tests are instantiated according to the test type, source group, target group and distribution specified when the test is added to the test batch.</para>
+    </section>
+    <section remap="h5">
+      <title>Modules</title>
+      <para>To run LNet self-test, load these modules: libcfs, lnet, lnet_selftest and any one of the klnds (ksocklnd, ko2iblnd...). To load all necessary modules, run modprobe lnet_selftest, which recursively loads the modules on which lnet_selftest depends.</para>
+      <para>There are two types of nodes for LNet self-test: the console node and test nodes. Both node types require all previously-specified modules to be loaded. (The userspace test node does not require these modules).</para>
+      <para>Test nodes can be in either kernel or in userspace. A console user can invite a kernel test node to join the test session by running lst add_group NID, but the user cannot actively add a userspace test node to the test session. However, the console user can passively accept a test node to the test session while the test node runs lst client to connect to the console.</para>
+    </section>
+    <section remap="h5">
+      <title>Utilities</title>
+      <para>LNet self-test includes two user utilities, lst and lstclient.</para>
+      <para>lst is the user interface for the self-test console (run on the console node). It provides a list of commands to control the entire test system, such as create session, create test groups, etc.</para>
+      <para>lstclient is the userspace self-test program which is linked with userspace LNDs and LNet. A user can invoke lstclient to join a self-test session:</para>
+      <screen>lstclient -sesid CONSOLE_NID group NAME</screen>
+    </section>
+    <section remap="h5">
+      <title>Example Script</title>
+      <para>This is a sample LNet self-test script which simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an IB network (connected via LNet routers), with half the clients reading and half the clients writing.</para>
+      <screen>#!/bin/bash
+export LST_SESSION=$$
+lst new_session read/write
+lst add_group servers 192.168.10.[8,10,12-16]@tcp
+lst add_group readers 192.168.1.[1-253/2]@o2ib
+lst add_group writers 192.168.1.[2-254/2]@o2ib
+lst add_batch bulk_rw
+lst add_test --batch bulk_rw --from readers --to servers     brw read check\
+=simple size=1M
+lst add_test --batch bulk_rw --from writers --to servers     brw write chec\
+k=full size=4K
+# start running
+lst run bulk_rw
+# display server stats for 30 seconds
+lst stat servers &amp; sleep 30; kill $!
+# tear down
+lst end_session </screen>
+    </section>
+  </section>
+  <section xml:id="config_lustre_rmmod">
+    <title><indexterm><primary>lustre_rmmod</primary></indexterm>
+lustre_rmmod.sh</title>
+    <para>The lustre_rmmod.sh utility removes all Lustre and LNet modules (assuming no Lustre services are running). It is located in /usr/bin.</para>
+    <note>
+      <para>The lustre_rmmod.sh utility does not work if Lustre modules are being used or if you have manually run the lctl network up command.</para>
+    </note>
+  </section>
+  <section xml:id="lustre_rsync">
+    <title><indexterm><primary>lustre_rsync</primary></indexterm>
+lustre_rsync</title>
+    <para>The lustre_rsync utility synchronizes (replicates) a Lustre file system to a target file system.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>lustre_rsync --source|-s <replaceable>src</replaceable> --target|-t <replaceable>tgt</replaceable> 
+   --mdt|-m <replaceable>mdt</replaceable> [--user|-u <replaceable>userid</replaceable>]
+   [--xattr|-x <replaceable>yes|no</replaceable>] [--verbose|-v]
+   [--statuslog|-l <replaceable>log</replaceable>] [--dry-run] [--abort-on-err] 
+ 
+lustre_rsync --statuslog|-l <replaceable>log</replaceable>
+ 
+lustre_rsync --statuslog|-l <replaceable>log</replaceable> --source|-s <replaceable>source</replaceable>
+   --target|-t <replaceable>tgt</replaceable> --mdt|-m <replaceable>mdt</replaceable></screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The lustre_rsync utility is designed to synchronize (replicate) a Lustre file system (source) to another file system (target). The target can be a Lustre file system or any other type, and is a normal, usable file system. The synchronization operation is efficient and does not require directory walking, as lustre_rsync uses Lustre MDT changelogs to identify changes in the Lustre file system.</para>
+      <para>Before using lustre_rsync:</para>
+      <itemizedlist>
+        <listitem>
+          <para>A changelog user must be registered (see lctl (8) changelog_register)</para>
+        </listitem>
+      </itemizedlist>
+      <para>- AND -</para>
+      <itemizedlist>
+        <listitem>
+          <para>Verify that the Lustre file system (source) and the replica file system (target) are identical before the changelog user is registered. If the file systems are discrepant, use a utility, e.g. regular rsync (not lustre_rsync) to make them identical.</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section remap="h5">
+      <title>Options</title>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>--source=<replaceable>src</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> The path to the root of the Lustre file system (source) which will be synchronized. This is a mandatory option if a valid status log created during a previous synchronization operation (--statuslog) is not specified.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--target=<replaceable>tgt</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> The path to the root where the source file system will be synchronized (target). This is a mandatory option if the status log created during a previous synchronization operation (--statuslog) is not specified. This option can be repeated if multiple synchronization targets are desired.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--mdt=<replaceable>mdt</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> The metadata device to be synchronized. A changelog user must be registered for this device. This is a mandatory option if a valid status log created during a previous synchronization operation (--statuslog) is not specified.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--user=<replaceable>userid</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> The changelog user ID for the specified MDT. To use lustre_rsync, the changelog user must be registered. For details, see the changelog_register parameter in the lctl man page. This is a mandatory option if a valid status log created during a previous synchronization operation (--statuslog) is not specified.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--statuslog=<replaceable>log</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> A log file to which synchronization status is saved. When lustre_rsync starts, the state of a previous replication is read from here. If the status log from a previous synchronization operation is specified, otherwise mandatory options like --source, --target and --mdt options may be skipped. By specifying options like --source, --target and/or --mdt in addition to the --statuslog option, parameters in the status log can be overridden. Command line options take precedence over options in the status log.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--xattr<replaceable>yes|no</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Specifies whether extended attributes (xattrs) are synchronized or not. The default is to synchronize extended attributes.</para>
+                <para>NOTE: Disabling xattrs causes Lustre striping information not to be synchronized.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--verbose</literal></para>
+              </entry>
+              <entry>
+                <para> Produces a verbose output.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--dry-run</literal></para>
+              </entry>
+              <entry>
+                <para> Shows the output of lustre_rsync commands (copy, mkdir, etc.) on the target file system without actually executing them.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--abort-on-err</literal></para>
+              </entry>
+              <entry>
+                <para> Shows the output of lustre_rsync commands (copy, mkdir, etc.) on the target file system without actually executing them.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <para>Register a changelog user for an MDT (e.g., MDT lustre-MDT0000).</para>
+      <screen>$ ssh 
+$ MDS lctl changelog_register \
+           --device lustre-MDT0000 -n 
+cl1</screen>
+      <para>Synchronize/replicate a Lustre file system (/mnt/lustre) to a target file system (/mnt/target).</para>
+      <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target \ 
+           --mdt=lustre-MDT0000 --user=cl1 \ 
+           --statuslog replicate.log  --verbose 
+Lustre filesystem: lustre 
+MDT device: lustre-MDT0000 
+Source: /mnt/lustre 
+Target: /mnt/target 
+Statuslog: sync.log 
+Changelog registration: cl1 
+Starting changelog record: 0 
+Errors: 0 
+lustre_rsync took 1 seconds 
+Changelog records consumed: 22
+</screen>
+      <para>After the file system undergoes changes, synchronize the changes with the target file system. Only the statuslog name needs to be specified, as it has all the parameters passed earlier.</para>
+      <screen>$ lustre_rsync --statuslog replicate.log --verbose 
+Replicating Lustre filesystem: lustre 
+MDT device: lustre-MDT0000 
+Source: /mnt/lustre 
+Target: /mnt/target 
+Statuslog: replicate.log 
+Changelog registration: cl1 
+Starting changelog record: 22 
+Errors: 0 
+lustre_rsync took 2 seconds 
+Changelog records consumed: 42</screen>
+      <para>Synchronize a Lustre file system (/mnt/lustre) to two target file systems (/mnt/target1 and /mnt/target2).</para>
+      <screen>$ lustre_rsync --source=/mnt/lustre \ 
+   --target=/mnt/target1 --target=/mnt/target2 \ 
+   --mdt=lustre-MDT0000 --user=cl1 
+   --statuslog replicate.log</screen>
+    </section>
+    <section remap="h5">
+      <title>See Also</title>
+      <para><xref linkend="userutilities.lfs"/></para>
+    </section>
+  </section>
+  <section xml:id="mkfs.lustre">
+    <title><indexterm><primary>mkfs.lustre</primary></indexterm>
+mkfs.lustre</title>
+    <para>The <literal>mkfs.lustre</literal> utility formats a disk for a Lustre service.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>mkfs.lustre <replaceable>target_type</replaceable> [options] <replaceable>device</replaceable></screen>
+      <para>where <replaceable>target_type</replaceable> is one of the following:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>--ost</literal></para>
+              </entry>
+              <entry>
+                <para> Object storage target (OST)</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--mdt</literal></para>
+              </entry>
+              <entry>
+                <para> Metadata storage target (MDT)</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--network=<replaceable>net,...</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Network(s) to which to restrict this OST/MDT. This option can be repeated as necessary.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--mgs</literal></para>
+              </entry>
+              <entry>
+                <para> Configuration management service (MGS), one per site. This service can be
+                  combined with one <literal>--mdt</literal> service by specifying both
+                  types.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para><literal>mkfs.lustre</literal> is used to format a disk device for use as part of a
+        Lustre file system. After formatting, a disk can be mounted to start the Lustre service
+        defined by this command.</para>
+      <para>When the file system is created, parameters can simply be added as a
+          <literal>--param</literal> option to the <literal>mkfs.lustre</literal> command. See <xref
+          linkend="tuning_params_mkfs_lustre"/>.</para>
+      <informaltable frame="all">
+        <tgroup cols="3">
+          <colspec colname="c1" colwidth="1*"/>
+          <colspec colname="c2" colwidth="1*"/>
+          <colspec colname="c3" colwidth="3*"/>
+          <thead>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--backfstype=<replaceable>fstype</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Forces a particular format for the backing file system such as ldiskfs (the default) or zfs.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--comment=<replaceable>comment</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Sets a user comment about this disk, ignored by the Lustre software.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--device-size=<replaceable>#</replaceable>>KB</literal></para>
+              </entry>
+              <entry>
+                <para>Sets the device size for loop devices.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--dryrun</literal></para>
+              </entry>
+              <entry>
+                <para>Only prints what would be done; it does not affect the disk.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+              <literal>--servicenode=<replaceable>nid,...</replaceable></literal>
+              </entry>
+              <entry>Sets the NID(s) of all service nodes, including primary
+                and failover partner service nodes. The
+                <literal>--servicenode</literal> option cannot be used with
+                <literal>--failnode</literal> option. See
+                <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                 linkend="failover_setup"/> for
+                more details.</entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--failnode=<replaceable>nid,...</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Sets the NID(s) of a failover service node for a primary server for a target.
+                  The <literal>--failnode</literal> option cannot be used with
+                    <literal>--servicenode</literal> option. See <xref
+                    xmlns:xlink="http://www.w3.org/1999/xlink"
+                    linkend="failover_setup"/>
+                  for more details.<note>
+                    <para>When the <literal>--failnode</literal> option is used, certain
+                      restrictions apply (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                        linkend="failover_setup"/>).</para>
+                  </note></para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--fsname=<replaceable>filesystem_name</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> The Lustre file system of which this service/node will be a part. The default
+                  file system name is <literal>lustre</literal>.</para>
+                <para>&#160;</para>
+                <note>
+                  <para>The file system name is limited to 8 characters.</para>
+                </note>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para>
+                  <literal>--index=<replaceable>index_number</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Specifies the OST or MDT number (0...N). This allows mapping between the OSS
+                  and MDS node and the device on which the OST or MDT is located.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--mkfsoptions=<replaceable>opts</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>  Formats options for the backing file system. For example, ext3 options could be set here.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--mountfsoptions=<replaceable>opts</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>  Sets the mount options used when the backing file system is mounted.</para>
+                <warning><para>Unlike earlier versions of <literal>mkfs.lustre</literal>, this version completely replaces
+                    the default mount options with those specified on the command line, and issues a
+                    warning on stderr if any default mount options are omitted.</para></warning>
+                <para>The defaults for ldiskfs are:</para>
+                <para>MGS/MDT: <literal>errors=remount-ro,iopen_nopriv,user_xattr</literal></para>
+                <para>OST: <literal>errors=remount-ro,extents,mballoc</literal></para>
+                <para condition='l25'>OST: <literal>errors=remount-ro</literal></para>
+                <para>Use care when altering the default mount options.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--network=<replaceable>net,...</replaceable></literal></para>
+                <para>&#160;</para>
+              </entry>
+              <entry>
+                <para>  Network(s) to which to restrict this OST/MDT. This option can be repeated as necessary.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--mgsnode=<replaceable>nid,...</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Sets the NIDs of the MGS node, required for all targets other than the MGS.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--param <replaceable>key</replaceable>=<replaceable>value</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Sets the permanent parameter <replaceable>key</replaceable> to value <replaceable>value</replaceable>. This option can be repeated as necessary. Typical options might include:</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>--param sys.timeout=40</literal>></para>
+              </entry>
+              <entry>
+                <para> System obd timeout.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>--param lov.stripesize=2M</literal></para>
+              </entry>
+              <entry>
+                <para> Default stripe size.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>param lov.stripecount=2</literal></para>
+              </entry>
+              <entry>
+                <para> Default stripe count.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> &#160;</para>
+              </entry>
+              <entry>
+                <para> <literal>--param failover.mode=failout</literal></para>
+              </entry>
+              <entry>
+                <para> Returns errors instead of waiting for recovery.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--quiet</literal></para>
+              </entry>
+              <entry>
+                <para> Prints less information.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--reformat</literal></para>
+              </entry>
+              <entry>
+                <para> Reformats an existing Lustre disk.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--stripe-count-hint=stripes</literal></para>
+              </entry>
+              <entry>
+                <para> Used to optimize the MDT&apos;s inode size.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>--verbose</literal></para>
+              </entry>
+              <entry>
+                <para> Prints more information.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <para>Creates a combined MGS and MDT for file system <literal>testfs</literal> on, e.g., node <literal>cfs21</literal>:</para>
+      <screen>mkfs.lustre --fsname=testfs --mdt --mgs /dev/sda1</screen>
+      <para>Creates an OST for file system <literal>testfs</literal> on any node (using the above
+        MGS):</para>
+      <screen>mkfs.lustre --fsname=testfs --mgsnode=cfs21@tcp0 --ost --index=0 /dev/sdb</screen>
+      <para>Creates a standalone MGS on, e.g., node <literal>cfs22</literal>:</para>
+      <screen>mkfs.lustre --mgs /dev/sda1</screen>
+      <para>Creates an MDT for file system <literal>myfs1</literal> on any node (using the above MGS):</para>
+      <screen>mkfs.lustre --fsname=myfs1 --mdt --mgsnode=cfs22@tcp0 /dev/sda2</screen>
+    </section>
+    <section remap="h5">
+      <title>See Also</title>
+      <itemizedlist>
+        <listitem>
+          <para>
+            <xref linkend="mkfs.lustre"/>
+            mkfs.lustre, </para>
+        </listitem>
+        <listitem>
+          <para>
+            <xref linkend="mount.lustre"/>
+            mount.lustre, </para>
+        </listitem>
+        <listitem>
+          <para><xref linkend="userutilities.lfs"/>lfs</para>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+  <section xml:id="mount.lustre">
+    <title><indexterm><primary>mount.lustre</primary></indexterm>
+mount.lustre</title>
+    <para>The mount.lustre utility starts a Lustre client or target service.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>mount -t lustre [-o options] device mountpoint
+</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The mount.lustre utility starts a Lustre client or target service. This program should not be called directly; rather, it is a helper program invoked through mount(8), as shown above. Use the umount command to stop Lustre clients and targets.</para>
+      <para>There are two forms for the device option, depending on whether a client or a target service is started:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal><replaceable>mgsname</replaceable>:/<replaceable>fsname</replaceable><replaceable>[/subdir]</replaceable></literal></para>
+              </entry>
+              <entry>
+              <para> Mounts the Lustre file system named
+              <replaceable>fsname</replaceable> (optionally starting at
+              subdirectory <replaceable>subdir</replaceable> within the
+              filesystem, if specified) on the client at the directory
+              <replaceable>mountpoint</replaceable>, by contacting the Lustre
+              Management Service at <replaceable>mgsname</replaceable>.  The
+              format for <replaceable>mgsname</replaceable> is defined below. A
+              client file system can be listed in <literal>fstab(5)</literal>
+              for automatic mount at boot time, is usable like any local file
+              system, and provides a full POSIX standard-compliant interface.
+              </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <replaceable>block_device</replaceable></para>
+              </entry>
+              <entry>
+                <para> Starts the target service defined by the
+                <literal>mkfs.lustre(8)</literal> command on the physical disk
+                <replaceable>block_device</replaceable>.  The
+		<replaceable>block_device</replaceable> may be specified using
+		<literal>-L <replaceable>label</replaceable></literal> to find
+		the first block device with that label (e.g.
+		<literal>testfs-MDT0000</literal>), or by UUID using the
+		<literal>-U <replaceable>uuid</replaceable></literal> option.
+		Care should be taken if there is a device-level backup of the
+		target filesystem on the same node, which would have a
+		duplicate label and UUID if it has not been changed with
+		<literal>tune2fs(8)</literal> or similar.  The mounted target
+		service filesystem mounted at
+		<replaceable>mountpoint</replaceable> is only useful for
+		<literal>df(1)</literal> operations and appears in
+		<literal>/proc/mounts</literal> to show the device is in use.
+                </para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Options</title>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>mgsname=<replaceable>mgsnode</replaceable>[:<replaceable>mgsnode</replaceable>]</literal></para>
+              </entry>
+              <entry>
+                <para><replaceable>mgsname</replaceable> is a colon-separated
+                list of <replaceable>mgsnode</replaceable> names where the MGS
+                service may run.  Multiple <replaceable>mgsnode</replaceable>
+                values can be specified if the MGS service is configured for
+                HA failover and may be running on any one of the nodes.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>mgsnode=<replaceable>mgsnid</replaceable>[,<replaceable>mgsnid</replaceable>]</literal></para>
+              </entry>
+              <entry>
+                <para> Each <replaceable>mgsnode</replaceable> may specify a
+                comma-separated list of NIDs, if there are different LNet
+                interfaces for that <literal>mgsnode</literal>.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>mgssec=<replaceable>flavor</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Specifies the encryption flavor for the initial network
+                RPC connection to the MGS.  Non-security flavors are:
+                <literal>null</literal>, <literal>plain</literal>, and
+                <literal>gssnull</literal>, which respectively disable, or
+                have no encryption or integrity features for testing purposes.
+                Kerberos flavors are: <literal>krb5n</literal>,
+                <literal>krb5a</literal>, <literal>krb5i</literal>, and
+                <literal>krb5p</literal>.  Shared-secret key flavors are:
+                <literal>skn</literal>, <literal>ska</literal>,
+                <literal>ski</literal>, and <literal>skpi</literal>, see the
+                <xref linkend="lustressk"/> for more details.  The security
+                flavor for client-to-server connections is specified in the
+                filesystem configuration that the client fetches from the MGS.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>skpath=<replaceable>file|directory</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para condition='l29'>
+		Path to a file or directory with the keyfile(s) to load for
+		this mount command.  Keys are inserted into the
+		<literal>KEY_SPEC_SESSION_KEYRING</literal> keyring in the
+		kernel with a description containing
+		<literal>lustre:</literal> and a suffix which depends on
+		whether the context of the mount command is for an MGS,
+		MDT/OST, or client.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>exclude=<replaceable>ostlist</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Starts a client or MDT with a colon-separated list of
+                known inactive OSTs that it will not try to connect to.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para>In addition to the standard mount(8) options, Lustre understands
+      the following client-specific options:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para><literal>always_ping</literal></para>
+              </entry>
+              <entry>
+                <para condition='l29'>The client will periodically ping the server when it is
+                idle, even if the server <literal>ptlrpc</literal> module
+                is configured with the <literal>suppress_pings</literal>
+                option.  This allows clients to reliably use the filesystem
+                even if they are not part of an external client health
+                monitoring mechanism.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>flock</literal></para>
+              </entry>
+              <entry>
+                <para>Enables advisory file locking support between
+		participating applications using the <literal>flock(2)</literal>
+                system call.  This causes file locking to be coherent across all
+		client nodes also using this mount option.  This is useful if
+		applications need coherent userspace file locking across
+		multiple client nodes, but also imposes communications overhead
+		in order to maintain locking consistency between client nodes.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>localflock</literal></para>
+              </entry>
+              <entry>
+                <para>Enables client-local <literal>flock(2)</literal> support,
+		using only client-local advisory file locking.  This is faster
+		than using the global <literal>flock</literal> option, and can
+		be used for applications that depend on functioning
+		<literal>flock(2)</literal> but run only on a single node.
+		It has minimal overhead using only the Linux kernel's locks.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>noflock</literal></para>
+              </entry>
+              <entry>
+                <para>Disables <literal>flock(2)</literal> support entirely,
+                and is the default option. Applications calling
+                <literal>flock(2)</literal> get an
+                <literal>ENOSYS</literal> error. It is up to the administrator
+                to choose either the <literal>localflock</literal> or
+                <literal>flock</literal> mount option based on their
+                requirements.  It is possible to mount clients with different
+                options, and only those mounted with <literal>flock</literal>
+                will be coherent amongst each other.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lazystatfs</literal></para>
+              </entry>
+              <entry>
+                <para>Allows <literal>statfs(2)</literal> (as used by
+                <literal>df(1)</literal> and <literal>lfs-df(1)</literal>) to
+                return even if some OST or MDT is unresponsive or has been
+                temporarily or permanently disabled in the configuration.
+                This avoids blocking until all of the targets are available.
+                This is the default behavior since Lustre 2.9.0.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>nolazystatfs</literal></para>
+              </entry>
+              <entry>
+                <para>Requires that <literal>statfs(2)</literal> block until all
+                OSTs and MDTs are available and have returned space usage.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>user_xattr</literal></para>
+              </entry>
+              <entry>
+                <para>Enables get/set of extended attributes by regular users
+                in the <literal>user.*</literal> namespace. See the
+                <literal>attr(5)</literal> manual page for more details.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>nouser_xattr</literal></para>
+              </entry>
+              <entry>
+                <para>Disables use of extended attributes in the
+                <literal>user.*</literal> namespace by regular users. Root
+                and system processes can still use extended attributes.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>verbose</literal></para>
+              </entry>
+              <entry>
+                <para> Enable extra mount/umount console messages.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>noverbose</literal></para>
+              </entry>
+              <entry>
+                <para> Disable mount/umount console messages.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>user_fid2path</literal></para>
+              </entry>
+              <entry>
+                <para>Enable FID-to-path translation by regular users.
+		</para>
+		<note><para>This option allows a potential security hole because
+                  it allows regular users direct access to a file by its Lustre
+                  File ID.  This bypasses POSIX path-based permission checks,
+		  and could allow the user to access a file in a directory that
+		  they do not have access to. Regular POSIX file mode and ACL
+		  permission checks are still performed on the file itself, so
+		  users cannot access a file to which they have no permission.
+                </para></note>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>nouser_fid2path</literal></para>
+              </entry>
+              <entry>
+                <para> Disable FID to path translation by
+                regular users. Root and processes with
+                <literal>CAP_DAC_READ_SEARCH</literal> can still perform FID
+                to path translation.
+                </para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para>In addition to the standard mount options and backing disk type
+      (e.g. ldiskfs) options, Lustre understands the following server-specific
+      mount options:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>nosvc</literal></para>
+              </entry>
+              <entry>
+                <para>  Starts the MGC (and MGS, if co-located) for a target service, not the actual service.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>nomgs</literal></para>
+              </entry>
+              <entry>
+                <para>  Starts only the MDT (with a co-located MGS), without starting the MGS.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>abort_recov</literal></para>
+              </entry>
+              <entry>
+                <para>  Aborts client recovery on that server and starts the target service immediately.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>max_sectors_kb=<replaceable>KB</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para condition='l2A'>Sets the block device parameter
+                <literal>max_sectors_kb</literal> limit for the MDT or OST
+                target being mounted to specified maximum number of kilobytes.
+                When <literal>max_sectors_kb</literal> isn't specified as a
+                mount option, it will automatically be set to the
+                <literal>max_hw_sectors_kb</literal> (up to a maximum of 16MiB)
+                for that block device. This default behavior is suited for
+                most users. When <literal>max_sectors_kb=0</literal> is used,
+                the current value for this tunable will be kept.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>md_stripe_cache_size</literal></para>
+              </entry>
+              <entry>
+                <para>  Sets the stripe cache size for server-side disk with a striped RAID configuration.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>recovery_time_soft=<replaceable>timeout</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Allows <literal>timeout</literal> seconds for clients to
+                reconnect for recovery after a server crash. This timeout is
+                incrementally extended if it is about to expire and the server
+                is still handling new connections from recoverable clients.
+                </para>
+                <para>The default soft recovery timeout is 3 times the value
+                of the Lustre timeout parameter (see
+                <xref linkend="section_c24_nt5_dl"/>). The default Lustre
+                timeout is 100 seconds, which would make the soft recovery
+                timeout default to 300 seconds (5 minutes). The soft recovery
+                timeout is set at mount time and will not change if the Lustre
+                timeout is changed after mount time.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>recovery_time_hard=<replaceable>timeout</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>The server is allowed to incrementally extend its timeout
+                up to a hard maximum of <replaceable>timeout</replaceable>
+                seconds.
+                </para>
+                <para>The default hard recovery timeout is 9 times the value
+                of the Lustre timeout parameter (see
+                <xref linkend="section_c24_nt5_dl"/>). The default Lustre
+                timeout is 100 seconds, which would make the hard recovery
+                timeout default to 900 seconds (15 minutes). The hard recovery
+                timeout is set at mount time and will not change if the Lustre
+                timeout is changed after mount time.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>noscrub</literal></para>
+              </entry>
+              <entry>
+                <para>Typically the MDT will detect restoration from a
+                file-level backup during mount. This mount option prevents
+                the OI Scrub from starting automatically when the MDT is
+                mounted. Manually starting LFSCK after mounting provides finer
+                control over the starting conditions. This mount option also
+                prevents OI scrub from occurring automatically when OI
+                inconsistency is detected (see
+                <xref linkend="lfsck_auto_scrub"/>).
+                </para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <para>Starts a client for the Lustre file system
+      <replaceable>chipfs</replaceable> at mount point
+      <replaceable>/mnt/chip</replaceable>. The Management Service is running on
+      a node reachable from this client via the cfs21@tcp0 NID.</para>
+      <screen>mount -t lustre cfs21@tcp0:/chipfs /mnt/chip</screen>
+      <para condition='l29'>Similar to the above example, but mounting a
+      subdirectory under <replaceable>chipfs</replaceable> as a fileset.
+      <screen>mount -t lustre cfs21@tcp0:/chipfs/v1_0 /mnt/chipv1_0</screen>
+      </para>
+      <para>Starts the Lustre metadata target service from /dev/sda1 on mount point /mnt/test/mdt.</para>
+      <screen>mount -t lustre /dev/sda1 /mnt/test/mdt</screen>
+      <para>Starts the testfs-MDT0000 service (using the disk label), but aborts the recovery process.</para>
+      <screen>mount -t lustre -L testfs-MDT0000 -o abort_recov /mnt/test/mdt</screen>
+    </section>
+    <section remap="h5">
+      <title>See Also</title>
+      <itemizedlist>
+        <listitem>
+          <para><xref linkend="mkfs.lustre"/>
+	  </para>
+        </listitem>
+        <listitem>
+          <para>  <xref linkend="tunefs.lustre"/></para>
+        </listitem>
+        <listitem>
+          <para>  <xref linkend="lctl"/></para>
+        </listitem>
+        <listitem>
+          <para>  <xref linkend="userutilities.lfs"/></para>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+  <section xml:id="config_routerstat">
+    <title><indexterm><primary>routerstat</primary></indexterm>
+routerstat</title>
+    <para>The routerstat utility prints Lustre router statistics.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>routerstat [<replaceable>interval</replaceable>]</screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para>The routerstat utility displays LNet router statistics. If no <literal><replaceable>interval</replaceable></literal> is specified, then statistics are sampled and printed only one time. Otherwise, statistics are sampled and printed at the specified <literal><replaceable>interval</replaceable></literal> (in seconds).</para>
+    </section>
+    <section remap="h5">
+      <title>Output</title>
+      <para>The routerstat output includes the following fields:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Output</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>M</literal></para>
+              </entry>
+              <entry>
+                <para> Number of messages currently being processed by LNet (The maximum number of messages ever processed by LNet concurrently)</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>E</literal></para>
+              </entry>
+              <entry>
+                <para> Number of LNet errors</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>S</literal></para>
+              </entry>
+              <entry>
+                <para> Total size (length) of messages sent in bytes/ Number of messages sent</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>R</literal></para>
+              </entry>
+              <entry>
+                <para> Total size (length) of messages received in bytes/ Number of messages received</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>F</literal></para>
+              </entry>
+              <entry>
+                <para> Total size (length) of messages routed in bytes/ Number of messages routed</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>D</literal></para>
+              </entry>
+              <entry>
+                <para> Total size (length) of messages dropped in bytes/ Number of messages dropped</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para>When an <literal><replaceable>interval</replaceable></literal> is specified, additional lines of statistics are printed including the following fields:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Output</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>M</literal></para>
+              </entry>
+              <entry>
+                <para> Number of messages currently being processed by LNet (The maximum number of messages ever processed by LNet concurrently)</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>E</literal></para>
+              </entry>
+              <entry>
+                <para> Number of LNet errors per second</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>S</literal></para>
+              </entry>
+              <entry>
+                <para> Rate of data sent in Mbytes per second/ Count of messages sent per second</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>R</literal></para>
+              </entry>
+              <entry>
+                <para> Rate of data received in Mbytes per second/ Count of messages received per second</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>F</literal></para>
+              </entry>
+              <entry>
+                <para> Rate of data routed in Mbytes per second/ Count of messages routed per second</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>D</literal></para>
+              </entry>
+              <entry>
+                <para> Rate of data dropped in Mbytes per second/ Count of messages dropped per second</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Example</title>
+      <screen># routerstat 1
+M 0(13) E 0 S 117379184/4250 R 878480/4356 F 0/0 D 0/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    8.00/     8 R    0.00/    16 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    8.00/     8 R    0.00/    16 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+...</screen>
+    </section>
+    <section remap="h5">
+      <title>Files</title>
+      <para>The <literal>routerstat</literal> utility extracts statistics data
+      from the LNet <literal>stats</literal> parameter.</para>
+    </section>
+  </section>
+  <section xml:id="tunefs.lustre">
+    <title><indexterm><primary>tunefs.lustre</primary></indexterm>
+tunefs.lustre</title>
+    <para>The <literal>tunefs.lustre</literal> utility modifies configuration
+    information on a Lustre target disk.</para>
+    <section remap="h5">
+      <title>Synopsis</title>
+      <screen>tunefs.lustre [options] <replaceable>/dev/device</replaceable></screen>
+    </section>
+    <section remap="h5">
+      <title>Description</title>
+      <para><literal>tunefs.lustre</literal> is used to modify configuration
+      information on a Lustre target disk. This does not reformat the disk or
+      erase the target information, but incorrectly modifying the configuration
+      information may result in an unusable file system.</para>
+      <caution>
+        <para>Changes made here affect a file system only when the target is mounted the next time.</para>
+      </caution>
+      <para>With <literal>tunefs.lustre</literal>, parameters are
+      &quot;additive&quot; -- new parameters are specified in addition to old
+      parameters, they do not replace them. To erase all previously-specified
+      <literal>tunefs.lustre</literal> parameters and use only newly-specified
+      parameters, run:</para>
+<screen>
+$ tunefs.lustre --erase-params --param=<replaceable>new_parameters</replaceable>
+</screen>
+      <para>The <literal>tunefs.lustre</literal> command can be used to set any
+      parameter settable in a /proc/fs/lustre file and that has its own OBD
+      device. The parameter names generally take the form
+      <replaceable>{obd|fsname}.obdtype.parameter=value</replaceable>.
+      For example:</para>
+<screen>
+$ tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
+</screen>
+    </section>
+    <section remap="h5">
+      <title>Options</title>
+      <para>The tunefs.lustre options are listed and explained below.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>--comment=<replaceable>comment</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Sets a user comment about this disk, ignored by Lustre.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--dryrun</literal></para>
+              </entry>
+              <entry>
+                <para> Only prints what would be done; does not affect the disk.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--erase-params</literal></para>
+              </entry>
+              <entry>
+                <para> Removes all previous parameter information.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <literal>--servicenode=<replaceable>nid,...</replaceable></literal></entry>
+              <entry>Sets the NID(s) of all service nodes, including primary and failover partner
+                service nodes. The <literal>--servicenode</literal> option cannot be used with
+                  <literal>--failnode</literal> option. See
+                  <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                   linkend="failover_setup"/> for
+                more details.</entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--failnode=<replaceable>nid,...</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Sets the NID(s) of a failover service node for a primary
+                  server for a target.  The <literal>--failnode</literal>
+                  option cannot be used with <literal>--servicenode</literal>
+                  option. See <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                    linkend="failover_setup"/> for more details.
+                  <note><para>When the <literal>--failnode</literal> option
+                    is used, certain restrictions apply (see
+                    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+                     linkend="failover_setup"/>).</para></note>
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--fsname=<replaceable>filesystem_name</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> The Lustre file system of which this service will be a part. The default file
+                  system name is <literal>lustre</literal>.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--index=<replaceable>index</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Forces a particular OST or MDT index.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--mountfsoptions=<replaceable>opts</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Sets the mount options used when the backing file system is mounted.</para>
+                <warning><para> Unlike earlier versions of tunefs.lustre, this version completely replaces the existing mount options with those specified on the command line, and issues a warning on stderr if any default mount options are omitted.</para></warning>
+                <para>The defaults for ldiskfs are:</para>
+                <para>MGS/MDT: <literal>errors=remount-ro,iopen_nopriv,user_xattr</literal></para>
+                <para>OST: <literal>errors=remount-ro,extents,mballoc</literal></para>
+                <para condition='l25'>OST: <literal>errors=remount-ro</literal></para>
+                <para>Do not alter the default mount options unless you know what you are doing.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--network=<replaceable>net,...</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Network(s) to which to restrict this OST/MDT. This option can be repeated as necessary.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--mgs</literal></para>
+              </entry>
+              <entry>
+                <para> Adds a configuration management service to this target.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--msgnode=<replaceable>nid,...</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para> Sets the NID(s) of the MGS node; required for all targets other than the MGS.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--nomgs</literal></para>
+              </entry>
+              <entry>
+                <para> Removes a configuration management service to this target.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--quiet</literal></para>
+              </entry>
+              <entry>
+                <para> Prints less information.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--verbose</literal></para>
+              </entry>
+              <entry>
+                <para> Prints more information.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>--writeconf</literal></para>
+              </entry>
+              <entry>
+                <para> Erases all configuration logs for the file system to which this MDT belongs,
+                  and regenerates them. This is dangerous operation. All clients must be unmounted
+                  and servers for this file system should be stopped. All targets (OSTs/MDTs) must
+                  then be restarted to regenerate the logs. No clients should be started until all
+                  targets have restarted.</para>
+                <para>The correct order of operations is:</para>
+                <orderedlist>
+                  <listitem>
+                    <para>Unmount all clients on the file system</para>
+                  </listitem>
+                  <listitem>
+                    <para>Unmount the MDT and all OSTs on the file system</para>
+                  </listitem>
+                  <listitem>
+                    <para>Run <literal>tunefs.lustre --writeconf
+                        <replaceable>device</replaceable></literal> on every server</para>
+                  </listitem>
+                  <listitem>
+                    <para>Mount the MDT and OSTs</para>
+                  </listitem>
+                  <listitem>
+                    <para>Mount the clients</para>
+                  </listitem>
+                </orderedlist>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Examples</title>
+      <para>Change the MGS&apos;s NID address. (This should be done on each target disk, since they should all contact the same MGS.)</para>
+      <screen>tunefs.lustre --erase-param --mgsnode=<replaceable>new_nid</replaceable> --writeconf /dev/sda</screen>
+      <para>Add a failover NID location for this target.</para>
+      <screen>tunefs.lustre --param=&quot;failover.node=192.168.0.13@tcp0&quot; /dev/sda </screen>
+    </section>
+    <section remap="h5">
+      <title>See Also</title>
+      <itemizedlist>
+        <listitem>
+          <para><xref linkend="mkfs.lustre"/>
+          </para>
+        </listitem>
+        <listitem>
+          <para><xref linkend="mount.lustre"/>
+          </para>
+        </listitem>
+        <listitem>
+          <para><xref linkend="lctl"/></para>
+        </listitem>
+        <listitem>
+          <para><xref linkend="userutilities.lfs"/></para>
+        </listitem>
+      </itemizedlist>
+    </section>
+  </section>
+  <section xml:id="config_additional_utility">
+      <title><indexterm><primary>utilities</primary><secondary>system config</secondary></indexterm>
+Additional System Configuration Utilities</title>
+    <para>This section describes additional system configuration utilities for Lustre.</para>
+    <section remap="h3">
+      <title>More Statistics for Application Profiling</title>
+      <para>Lustre includes per-client and improved MDT statistics:</para>
+      <itemizedlist>
+        <listitem>
+          <para> Per-client statistics tracked on the servers</para>
+        </listitem>
+      </itemizedlist>
+      <para>Each MDS and OSS now tracks LDLM and operations statistics for
+      every connected client, for comparisons and simpler collection of
+      distributed job statistics.</para>
+      <screen>{mds,obdfilter}.*.exports
+</screen>
+      <itemizedlist>
+        <listitem>
+          <para> Improved MDT statistics</para>
+        </listitem>
+      </itemizedlist>
+      <para>More detailed MDT operations statistics are collected for better
+      profiling.</para>
+      <screen>mdt.*.md_stats
+</screen>
+    </section>
+    <section remap="h3">
+      <title><indexterm><primary>utilities</primary><secondary>debugging</secondary></indexterm><indexterm><primary>debug</primary><secondary>utilities</secondary></indexterm>
+
+Testing / Debugging Utilities</title>
+      <para>Lustre offers the following test and debugging utilities.</para>
+      <section remap="h5">
+        <title><indexterm><primary>lr_reader</primary></indexterm>
+lr_reader</title>
+        <para>The lr_reader utility translates the content of the <literal>last_rcvd</literal> and <literal>reply_data</literal> files into human-readable form.</para>
+        <para>The following utilities are part of the Lustre I/O kit. For more information, see <xref linkend="benchmarkingtests"/>.</para>
+      </section>
+      <section remap="h5">
+        <title><indexterm>
+            <primary>sgpdd-survey</primary>
+          </indexterm> sgpdd-survey</title>
+        <para>The <literal>sgpdd-survey</literal> utility tests &apos;bare metal&apos; performance,
+          bypassing as much of the kernel as possible. The <literal>sgpdd-survey</literal> tool does
+          not require Lustre, but it does require the sgp_dd package.</para>
+        <caution>
+          <para>The <literal>sgpdd-survey</literal> utility erases all data on the device.</para>
+        </caution>
+      </section>
+      <section remap="h5">
+        <title><indexterm>
+            <primary>obdfilter-survey</primary>
+          </indexterm>obdfilter-survey</title>
+        <para>The <literal>obdfilter-survey</literal> utility is a shell script that tests
+          performance of isolated OSTS, the network via echo clients, and an end-to-end test.</para>
+      </section>
+      <section remap="h5">
+        <title><indexterm><primary>ior-survey</primary></indexterm>ior-survey</title>
+        <para>The ior-survey utility is a script used to run the IOR benchmark. Lustre includes IOR version 2.8.6.</para>
+      </section>
+      <section remap="h5">
+        <title><indexterm>
+            <primary>ost-survey</primary>
+          </indexterm>ost-survey</title>
+        <para>The <literal>ost-survey</literal> utility is an OST performance survey that tests
+          client-to-disk performance of the individual OSTs in a Lustre file system.</para>
+      </section>
+      <section remap="h5">
+        <title><indexterm><primary>stats-collect</primary></indexterm>stats-collect</title>
+        <para>The stats-collect utility contains scripts used to collect application profiling information from Lustre clients and servers.</para>
+      </section>
+    </section>
+    <section remap="h3" condition='l29' xml:id="SystemConfigurationUtilities.fileset">
+      <title><indexterm><primary>fileset</primary></indexterm>Fileset Feature</title>
+      <para> With the fileset feature, Lustre now provides subdirectory mount
+      support.  Subdirectory mounts, also referred to as filesets, allow a
+      client to mount a child directory of a parent filesystem, thereby limiting
+      the filesystem namespace visibility on a specific client.  A common use
+      case is for a client to use a subdirectory mount when there is a desire to
+      limit the visibility of the entire filesystem namesapce to aid in the
+      prevention of accidental file deletions outside of the subdirectory
+      mount.</para>
+      <para>It is important to note that invocation of the subdirectory mount is
+      voluntary by the client and not does prevent access to files that are
+      visible in multiple subdirectory mounts via hard links.  Furthermore, it
+      does not prevent the client from subsequently mounting the whole file
+      system without a subdirectory being specified.</para>
+      <figure xml:id="understandinglustre.fig.fileset">
+        <title>
+        <indexterm>
+          <primary>Lustre</primary>
+          <secondary>fileset</secondary>
+        </indexterm>Lustre fileset</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" width="100%"
+            fileref="./figures/fileset.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Lustre file system fileset feature</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <section remap="h4">
+        <title>Examples</title>
+        <para>The following example will mount the
+        <literal>chipfs</literal> filesystem on client1 and create a
+        subdirectory <literal>v1_1</literal> within that filesystem.  Client2
+        will then mount only the <literal>v1_1</literal> subdirectory as a
+        fileset, thereby limiting access to anything else in the
+        <literal>chipfs</literal> filesystem from client2.</para>
+        <screen>client1# mount -t lustre mgs@tcp:/chipfs /mnt/chip
+client1# mkdir /mnt/chip/v1_1</screen>
+        <screen>client2# mount -t lustre mgs@tcp:/chipfs/v1_1 /mnt/chipv1_1</screen>
+    <para>You can check the created mounts in /etc/mtab. It should look like
+    the following:</para>
+    <screen><replaceable>client1</replaceable>
+mds@tcp0:/chipfs/ /mnt/chip lustre rw         0       0
+</screen><screen>
+<replaceable>client2</replaceable>
+mds@tcp0:/chipfs/v1_1 /mnt/chipv1_1 lustre rw         0       0</screen>
+	<para>Create a directory under the /mnt/chip mount, and get its FID</para>
+    <screen>client1# mkdir /mnt/chip/v1_2
+client1# lfs path2fid /mnt/chip/v1_2
+[0x200000400:0x2:0x0]
+</screen>
+	<para>If you try resolve the FID of the <literal>/mnt/chip/v1_2</literal>
+    path (as created in the example above) on client2, an error will be returned
+    as the FID can not be resolved on client2 since it is not part of the
+    mounted fileset on that client.  Recall that the fileset on client2 mounted
+    the <literal>v1_1</literal> subdirectory beneath the top level
+    <literal>chipfs</literal> filesystem.
+    </para>
+    <screen>client2# lfs fid2path /mnt/chip/v1_2 [0x200000400:0x2:0x0]
+fid2path: error on FID [0x200000400:0x2:0x0]: No such file or directory</screen>
+    <para>Subdirectory mounts do not have the <literal>.lustre</literal>
+    pseudo directory, which prevents clients from opening or accessing files
+    only by FID.</para>
+    <screen>client1# ls /mnt/chipfs/.lustre
+        fid  lost+found</screen>
+    <screen>client2# ls /mnt/chipv1_1/.lustre
+        ls: cannot access /mnt/chipv1_1/.lustre: No such file or directory
+    </screen>
+      </section>
+    </section>
+  </section>
+</chapter>
+<!--
+  vim:expandtab:shiftwidth=2:tabstop=8:
+  -->
