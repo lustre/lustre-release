@@ -1,7 +1,18 @@
 .DS_Store
 *.orig
 *.rej
+
+# Legacy build outputs (old Makefile)
 lustre_manual.fo
 lustre_manual.html
 lustre_manual.pdf
 lustre_manual.xhtml
+
+# Build directory (automake build outputs)
+/build/
+
+# Automake generated files
+Makefile
+Makefile.in
+.deps/
+.dirstamp

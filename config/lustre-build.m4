@@ -434,6 +434,7 @@ AC_DEFUN([LB_CONFIG_FILES], [
 		Makefile
 		autoMakefile]
 		config/Makefile
+		docs/manual/Makefile
 		[Rules:config/Rules.in]
 		AC_PACKAGE_TARNAME[.spec]
 		AC_PACKAGE_TARNAME[-dkms.spec]
@@ -675,6 +676,7 @@ LC_OSD_ADDON
 
 LB_CONFIG_DOCS
 LB_CONFIG_MANPAGES
+LB_CONFIG_MANUAL
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
 LB_CONFIG_LUTF

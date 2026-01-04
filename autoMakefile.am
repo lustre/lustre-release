@@ -13,6 +13,7 @@
 SUBDIRS := @LDISKFS_SUBDIR@ \
 	. \
 	@LUSTREIOKIT_SUBDIR@ \
+	@MANUAL_SUBDIR@ \
 	Documentation \
 	libcfs \
 	lnet \
@@ -20,6 +21,7 @@ SUBDIRS := @LDISKFS_SUBDIR@ \
 
 DIST_SUBDIRS := ldiskfs \
 	lustre-iokit \
+	docs/manual \
 	Documentation \
 	libcfs \
 	lnet \
@@ -75,6 +77,9 @@ help:
 	@echo  '  checkstack-update - Update checkstack.pl'
 	@echo  '  checkstack-clean  - Remove checkstack.pl artifacts'
 	@echo  ''
+	@echo  'Documentation targets (requires ./configure --with-manual):'
+	@echo  '  manual            - Build Lustre Operations Manual (PDF, HTML, Markdown)'
+	@echo  ''
 	@echo  'Packaging targets:'
 	@echo  '  rpms              - Create RPM packages'
 	@echo  '  srpm              - Create source RPM packages'
@@ -85,6 +90,15 @@ help:
 
 checkpatch:
 	@git diff HEAD~1 | ./contrib/scripts/checkpatch.pl
+
+.PHONY: manual
+manual:
+if BUILD_MANUAL
+	$(MAKE) -C docs/manual all
+else
+	@echo "Error: Manual build not configured. Run ./configure --with-manual"
+	@exit 1
+endif
 
 utils:
 	$(MAKE) -C libcfs/libcfs/util
