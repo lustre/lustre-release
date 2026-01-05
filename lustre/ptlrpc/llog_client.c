@@ -64,6 +64,7 @@ static int llog_client_open(const struct lu_env *env,
 	struct llogd_body *body;
 	struct llog_ctxt *ctxt = lgh->lgh_ctxt;
 	struct ptlrpc_request *req = NULL;
+	char *tmp;
 	int rc;
 
 	ENTRY;
@@ -80,9 +81,10 @@ static int llog_client_open(const struct lu_env *env,
 	if (!req)
 		GOTO(out, rc = -ENOMEM);
 
-	if (name)
-		req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
-				     strlen(name) + 1);
+	/* we have to set varlen name buffer even if name is not defined,
+	 * to be able to set mdt_body buffer after */
+	req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+			name ? strlen(name) + 1 : 1);
 
 	rc = ptlrpc_request_pack(req, LUSTRE_LOG_VERSION,
 				 LLOG_ORIGIN_HANDLE_CREATE);
@@ -98,16 +100,14 @@ static int llog_client_open(const struct lu_env *env,
 		body->lgd_logid = *logid;
 	body->lgd_ctxt_idx = ctxt->loc_idx - 1;
 
-	if (name) {
-		char *tmp;
-
-		tmp = req_capsule_client_sized_get(&req->rq_pill, &RMF_NAME,
-						   strlen(name) + 1);
-		LASSERT(tmp);
+	tmp = req_capsule_client_sized_get(&req->rq_pill, &RMF_NAME,
+					   name ? strlen(name) + 1 : 1);
+	LASSERT(tmp);
+	if (name)
 		strcpy(tmp, name);
-
-		do_pack_body(req);
-	}
+	else
+		tmp[0] = '\0';
+	do_pack_body(req);
 
 	rc = ptlrpc_queue_wait(req);
 	if (rc)
