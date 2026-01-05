@@ -681,7 +681,7 @@ static int vvp_do_vmtruncate(struct inode *inode, size_t size)
 	}
 	i_size_write(inode, size);
 
-	ll_truncate_pagecache(inode, size);
+	truncate_pagecache(inode, size);
 	ll_inode_size_unlock(inode);
 	return result;
 }

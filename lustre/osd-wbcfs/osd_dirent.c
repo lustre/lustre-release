@@ -554,13 +554,7 @@ static int osd_memfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 			rc = filp->f_op->iterate_shared(filp, &mctx.super);
 			filp->f_pos = mctx.super.pos;
 		} else {
-#ifdef HAVE_FOP_READDIR
-			rc = filp->f_op->readdir(filp, &mctx.super,
-						 mctx.super.actor);
-			mctx.super.pos = filp->f_pos;
-#else
 			rc = -ENOTDIR;
-#endif
 		}
 	}
 #ifdef HAVE_FOP_ITERATE_SHARED

@@ -178,15 +178,9 @@ void ll_release_page(struct inode *inode, struct page *page,
 	put_page(page);
 }
 
-#ifdef HAVE_DIR_CONTEXT
 int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 		struct dir_context *ctx, int *partial_readdir_rc)
 {
-#else
-int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
-		void *cookie, filldir_t filldir, int *partial_readdir_rc)
-{
-#endif
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	__u64 pos = *ppos;
 	bool is_api32 = ll_need_32bit_api(sbi);
@@ -249,7 +243,6 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 			 * 'ent' through 'lde_name', so the parameter 'name'
 			 * for 'filldir()' must be part of the 'ent'.
 			 */
-#ifdef HAVE_DIR_CONTEXT
 			ctx->pos = lhash;
 			if (!IS_ENCRYPTED(inode)) {
 				done = !dir_emit(ctx, ent->lde_name, namelen,
@@ -271,14 +264,6 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 				done = !dir_emit(ctx, de_name.name, de_name.len,
 						 ino, type);
 			}
-#else
-			/* HAVE_DIR_CONTEXT is defined from kernel 3.11, whereas
-			 * IS_ENCRYPTED is brought by kernel 4.14.
-			 * So there is no need to handle encryption case here.
-			 */
-			done = filldir(cookie, ent->lde_name, namelen, lhash,
-				       ino, type);
-#endif
 		}
 
 		if (done) {
@@ -315,20 +300,12 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 					       is_hash64, partial_readdir_rc);
 		}
 	}
-#ifdef HAVE_DIR_CONTEXT
 	ctx->pos = pos;
-#else
-	*ppos = pos;
-#endif
 	llcrypt_fname_free_buffer(&lltr);
 	RETURN(rc);
 }
 
-#ifdef HAVE_DIR_CONTEXT
 static int ll_iterate(struct file *filp, struct dir_context *ctx)
-#else
-static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
-#endif
 {
 	struct inode *inode = file_inode(filp);
 	struct ll_file_data *lfd = filp->private_data;
@@ -398,14 +375,9 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 
 	op_data->op_fid3 = pfid;
 
-#ifdef HAVE_DIR_CONTEXT
 	ctx->pos = pos;
 	rc = ll_dir_read(inode, &pos, op_data, ctx, &partial_readdir_rc);
 	pos = ctx->pos;
-#else
-	rc = ll_dir_read(inode, &pos, op_data, cookie, filldir,
-			 &partial_readdir_rc);
-#endif
 	lfd->lfd_pos = pos;
 	if (!lfd->fd_partial_readdir_rc)
 		lfd->fd_partial_readdir_rc = partial_readdir_rc;
@@ -419,13 +391,8 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 		if (api32 && hash64)
 			pos = pos >> 32;
 	}
-#ifdef HAVE_DIR_CONTEXT
 	ctx->pos = pos;
-#else
-	filp->f_pos = pos;
-#endif
 	ll_finish_md_op_data(op_data);
-
 out:
 	if (!rc)
 		ll_stats_ops_tally(sbi, LPROC_LL_READDIR,
@@ -3030,11 +2997,7 @@ const struct file_operations ll_dir_operations = {
 	.open		= ll_dir_open,
 	.release	= ll_dir_release,
 	.read		= generic_read_dir,
-#ifdef HAVE_DIR_CONTEXT
 	.iterate_shared	= ll_iterate,
-#else
-	.readdir	= ll_readdir,
-#endif
 	.unlocked_ioctl	= ll_dir_ioctl,
 	.fsync		= ll_fsync,
 	.flush		= ll_dir_flush,

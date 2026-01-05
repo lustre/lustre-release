@@ -76,9 +76,7 @@ static inline void set_lld_invalid(struct dentry *de, int flag)
 #define LLI_INODE_DEAD                  0xdeadd00d
 
 struct ll_getname_data {
-#ifdef HAVE_DIR_CONTEXT
 	struct dir_context	ctx;
-#endif
 	char		*lgd_name;	/* points to buf with NAME_MAX+1 size */
 	struct lu_fid	lgd_fid;	/* target fid we are looking for */
 	int		lgd_found;	/* inode matched? */
@@ -1285,13 +1283,8 @@ enum get_default_layout_type {
 extern const struct file_operations ll_dir_operations;
 extern const struct inode_operations ll_dir_inode_operations;
 extern struct kmem_cache *quota_iter_slab;
-#ifdef HAVE_DIR_CONTEXT
 int ll_dir_read(struct inode *inode, __u64 *pos, struct md_op_data *op_data,
 		struct dir_context *ctx, int *partial_readdir_rc);
-#else
-int ll_dir_read(struct inode *inode, __u64 *pos, struct md_op_data *op_data,
-		void *cookie, filldir_t filldir, int *partial_readdir_rc);
-#endif
 int ll_get_mdt_idx(struct inode *inode);
 int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid);
 struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,

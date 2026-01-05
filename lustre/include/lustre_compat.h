@@ -137,12 +137,6 @@ static inline int d_in_lookup(struct dentry *dentry)
 #define iterate_shared iterate
 #endif
 
-#ifdef HAVE_OLDSIZE_TRUNCATE_PAGECACHE
-#define ll_truncate_pagecache(inode, size) truncate_pagecache(inode, 0, size)
-#else
-#define ll_truncate_pagecache(inode, size) truncate_pagecache(inode, size)
-#endif
-
 #ifdef HAVE_VFS_RENAME_5ARGS
 #define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d, NULL)
 #elif defined HAVE_VFS_RENAME_6ARGS
@@ -210,24 +204,6 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 	((kcap).cap[0])
 #define ll_set_capability_u32(kcap, val32) \
 	((kcap)->cap[0] = val32)
-#endif
-
-#ifndef HAVE_PTR_ERR_OR_ZERO
-static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
-{
-	if (IS_ERR(ptr))
-		return PTR_ERR(ptr);
-	else
-		return 0;
-}
-#endif
-
-#ifdef HAVE_PID_NS_FOR_CHILDREN
-# define ll_task_pid_ns(task) \
-	 ((task)->nsproxy ? ((task)->nsproxy->pid_ns_for_children) : NULL)
-#else
-# define ll_task_pid_ns(task) \
-	 ((task)->nsproxy ? ((task)->nsproxy->pid_ns) : NULL)
 #endif
 
 #ifdef HAVE_FULL_NAME_HASH_3ARGS

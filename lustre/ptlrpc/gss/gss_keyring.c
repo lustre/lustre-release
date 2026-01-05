@@ -1507,15 +1507,10 @@ int gss_svc_install_rctx_kr(struct obd_import *imp,
  ****************************************/
 
 static
-#ifdef HAVE_KEY_TYPE_INSTANTIATE_2ARGS
 int gss_kt_instantiate(struct key *key, struct key_preparsed_payload *prep)
 {
 	const void *data = prep->data;
 	size_t datalen = prep->datalen;
-#else
-int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
-{
-#endif
 	struct key *keyring;
 	int uid, rc;
 
@@ -1583,16 +1578,10 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
  * on the context without fear of loosing refcount.
  */
 static
-#ifdef HAVE_KEY_TYPE_INSTANTIATE_2ARGS
 int gss_kt_update(struct key *key, struct key_preparsed_payload *prep)
 {
 	const void *data = prep->data;
-	__u32 datalen32 = (__u32) prep->datalen;
-#else
-int gss_kt_update(struct key *key, const void *data, size_t datalen)
-{
-	__u32 datalen32 = (__u32) datalen;
-#endif
+	u32 datalen32 = (u32)prep->datalen;
 	struct ptlrpc_cli_ctx *ctx = key_get_payload(key, 0);
 	struct gss_cli_ctx *gctx;
 	rawobj_t tmpobj = RAWOBJ_EMPTY;

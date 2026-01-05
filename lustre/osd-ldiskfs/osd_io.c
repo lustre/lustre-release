@@ -2706,7 +2706,7 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 		    start & ~LUSTRE_ENCRYPTION_MASK)
 			start = (start & LUSTRE_ENCRYPTION_MASK) +
 				LUSTRE_ENCRYPTION_UNIT_SIZE;
-		ll_truncate_pagecache(inode, start);
+		truncate_pagecache(inode, start);
 		rc = osd_trunc_lock(obj, oh, false);
 	}
 

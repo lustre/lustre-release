@@ -1275,8 +1275,10 @@ static void obd_zombie_imp_cull(struct work_struct *ws)
 
 struct obd_import *class_new_import(struct obd_device *obd)
 {
+	struct pid_namespace *curr_pid_ns = current->nsproxy ?
+					    current->nsproxy->pid_ns_for_children :
+					    NULL;
 	struct obd_import *imp;
-	struct pid_namespace *curr_pid_ns = ll_task_pid_ns(current);
 
 	OBD_ALLOC(imp, sizeof(*imp));
 	if (imp == NULL)

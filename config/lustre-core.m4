@@ -289,26 +289,6 @@ AS_IF([test "x$enable_gss_keyring" != xno], [
 ]) # LC_CONFIG_GSS_KEYRING
 
 #
-# LC_KEY_TYPE_INSTANTIATE_2ARGS
-#
-# rhel7 key_type->instantiate takes 2 args (struct key, struct key_preparsed_payload)
-#
-AC_DEFUN([LC_SRC_KEY_TYPE_INSTANTIATE_2ARGS], [
-	LB2_LINUX_TEST_SRC([key_type_instantiate_2args], [
-		#include <linux/key-type.h>
-	],[
-		((struct key_type *)0)->instantiate(0, NULL);
-	])
-])
-AC_DEFUN([LC_KEY_TYPE_INSTANTIATE_2ARGS], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'key_type->instantiate' has two args],
-	[key_type_instantiate_2args], [
-		AC_DEFINE(HAVE_KEY_TYPE_INSTANTIATE_2ARGS, 1,
-			[key_type->instantiate has two args])
-	])
-]) # LC_KEY_TYPE_INSTANTIATE_2ARGS
-
-#
 # LC_CONFIG_SUNRPC
 #
 AC_DEFUN([LC_CONFIG_SUNRPC], [
@@ -541,181 +521,6 @@ AC_DEFUN([LC_HAVE_LIBAIO], [
 		enable_libaio="yes",
 		AC_MSG_WARN([libaio is not installed on the system]))
 ]) # LC_HAVE_LIBAIO
-
-#
-# LC_FOP_READDIR
-#
-# Kernel v3.10+ lost readdir
-#
-AC_DEFUN([LC_SRC_FOP_READDIR], [
-	LB2_LINUX_TEST_SRC([fop_readdir], [
-		#include <linux/fs.h>
-	],[
-		struct file_operations fop;
-		fop.readdir = NULL;
-	])
-])
-AC_DEFUN([LC_FOP_READDIR], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'file_operations' has 'readdir'],
-	[fop_readdir], [
-		AC_DEFINE(HAVE_FOP_READDIR, 1,
-			[file_operations has readdir])
-	])
-]) # LC_FOP_READDIR
-
-#
-# LC_INVALIDATE_RANGE
-#
-# 3.11 invalidatepage requires the length of the range to invalidate
-#
-AC_DEFUN([LC_SRC_INVALIDATE_RANGE], [
-	LB2_LINUX_TEST_SRC([address_space_ops_invalidatepage_3args], [
-		#include <linux/fs.h>
-	],[
-		struct address_space_operations a_ops;
-		a_ops.invalidatepage(NULL, 0, 0);
-	])
-])
-AC_DEFUN([LC_INVALIDATE_RANGE], [
-	LB2_MSG_LINUX_TEST_RESULT(
-	[if 'address_space_operations.invalidatepage' requires 3 arguments],
-	[address_space_ops_invalidatepage_3args], [
-		AC_DEFINE(HAVE_INVALIDATE_RANGE, 1,
-			[address_space_operations.invalidatepage needs 3 arguments])
-	])
-]) # LC_INVALIDATE_RANGE
-
-#
-# LC_HAVE_DIR_CONTEXT
-#
-# 3.11 readdir now takes the new struct dir_context
-#
-AC_DEFUN([LC_SRC_HAVE_DIR_CONTEXT], [
-	LB2_LINUX_TEST_SRC([dir_context], [
-		#include <linux/fs.h>
-	],[
-	#ifdef FMODE_KABI_ITERATE
-	#error "back to use readdir in kabi_extand mode"
-	#else
-		struct dir_context ctx;
-
-		ctx.pos = 0;
-	#endif
-	])
-])
-AC_DEFUN([LC_HAVE_DIR_CONTEXT], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'dir_context' exist],
-	[dir_context], [
-		AC_DEFINE(HAVE_DIR_CONTEXT, 1, [dir_context exist])
-	])
-]) # LC_HAVE_DIR_CONTEXT
-
-#
-# LC_PID_NS_FOR_CHILDREN
-#
-# 3.11 replaces pid_ns by pid_ns_for_children in struct nsproxy
-#
-AC_DEFUN([LC_SRC_PID_NS_FOR_CHILDREN], [
-	LB2_LINUX_TEST_SRC([pid_ns_for_children], [
-		#include <linux/nsproxy.h>
-	],[
-		struct nsproxy ns;
-		ns.pid_ns_for_children = NULL;
-	])
-])
-AC_DEFUN([LC_PID_NS_FOR_CHILDREN], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct nsproxy' has 'pid_ns_for_children'],
-	[pid_ns_for_children], [
-		AC_DEFINE(HAVE_PID_NS_FOR_CHILDREN, 1,
-			  ['struct nsproxy' has 'pid_ns_for_children'])
-	])
-]) # LC_PID_NS_FOR_CHILDREN
-
-#
-# LB2_MSG_LINUX_TEST_RESULT
-#
-# Linux commit v3.11-8733-g55f841ce9395
-#  super: fix calculation of shrinkable objects for small numbers
-#
-AC_DEFUN([LC_SRC_VFS_PRESSURE_RATIO], [
-	LB2_LINUX_TEST_SRC([vfs_pressure_ratio], [
-		#include <linux/dcache.h>
-	],[
-		(void)vfs_pressure_ratio(10);
-	])
-])
-AC_DEFUN([LC_VFS_PRESSURE_RATIO], [
-	LB2_MSG_LINUX_TEST_RESULT([if vfs_pressure_ratio() is available],
-	[vfs_pressure_ratio], [
-		AC_DEFINE(HAVE_VFS_PRESSURE_RATIO, 1,
-			  [vfs_pressure_ratio() is available])
-	], [
-		AC_DEFINE([vfs_pressure_ratio(val)],
-			  [mult_frac((unsigned long)(val), sysctl_vfs_cache_pressure, 100)],
-			  [vfs_pressure_ratio() is not available])
-	])
-]) # LC_VFS_PRESSURE_RATIO
-
-#
-# LC_OLDSIZE_TRUNCATE_PAGECACHE
-#
-# 3.12 truncate_pagecache without oldsize parameter
-#
-AC_DEFUN([LC_SRC_OLDSIZE_TRUNCATE_PAGECACHE], [
-	LB2_LINUX_TEST_SRC([truncate_pagecache_old_size], [
-		#include <linux/mm.h>
-	],[
-		truncate_pagecache(NULL, 0, 0);
-	])
-])
-AC_DEFUN([LC_OLDSIZE_TRUNCATE_PAGECACHE], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'truncate_pagecache' with 'old_size' parameter],
-	[truncate_pagecache_old_size], [
-		AC_DEFINE(HAVE_OLDSIZE_TRUNCATE_PAGECACHE, 1,
-			[with oldsize])
-	])
-]) # LC_OLDSIZE_TRUNCATE_PAGECACHE
-
-#
-# LC_PTR_ERR_OR_ZERO
-#
-# For some reason SLES11SP4 is missing the PTR_ERR_OR_ZERO macro
-# It was added to linux kernel 3.12
-#
-AC_DEFUN([LC_SRC_PTR_ERR_OR_ZERO_MISSING], [
-	LB2_LINUX_TEST_SRC([is_err_or_null], [
-		#include <linux/err.h>
-	],[
-		if (PTR_ERR_OR_ZERO(NULL)) return 0;
-	])
-])
-AC_DEFUN([LC_PTR_ERR_OR_ZERO_MISSING], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'PTR_ERR_OR_ZERO' is missing],
-	[is_err_or_null], [
-		AC_DEFINE(HAVE_PTR_ERR_OR_ZERO, 1,
-			['PTR_ERR_OR_ZERO' exist])
-	])
-]) # LC_PTR_ERR_OR_ZERO_MISSING
-
-#
-# LC_KIOCB_KI_LEFT
-#
-# 3.12 ki_left removed from struct kiocb
-#
-AC_DEFUN([LC_SRC_KIOCB_KI_LEFT], [
-	LB2_LINUX_TEST_SRC([kiocb_ki_left], [
-		#include <linux/aio.h>
-	],[
-		((struct kiocb*)0)->ki_left = 0;
-	])
-])
-AC_DEFUN([LC_KIOCB_KI_LEFT], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct kiocb' with 'ki_left' member],
-	[kiocb_ki_left], [
-		AC_DEFINE(HAVE_KIOCB_KI_LEFT, 1,
-			[ki_left exist])
-	])
-]) # LC_KIOCB_KI_LEFT
 
 #
 # LC_VFS_RENAME_5ARGS
@@ -4919,7 +4724,6 @@ AC_DEFUN([LC_HAVE_TRY_LOOKUP_NOPERM], [
 #
 AC_DEFUN([LC_PROG_LINUX_SRC], [
 	AS_IF([test "x$enable_gss" != xno], [
-		LC_SRC_KEY_TYPE_INSTANTIATE_2ARGS
 		LB2_SRC_CHECK_CONFIG_IM([CRYPTO_MD5])
 		LB2_SRC_CHECK_CONFIG_IM([CRYPTO_SHA1])
 		LB2_SRC_CHECK_CONFIG_IM([CRYPTO_SHA256])
@@ -4933,18 +4737,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_POSIX_ACL_CONFIG
 	LC_SRC_HAVE_PROJECT_QUOTA
 	LC_SRC_CONFIG_XARRAY_MULTI
-
-	# 3.11
-	LC_SRC_INVALIDATE_RANGE
-	LC_SRC_HAVE_DIR_CONTEXT
-	LC_SRC_PID_NS_FOR_CHILDREN
-	LC_SRC_FOP_READDIR
-
-	# 3.12
-	LC_SRC_VFS_PRESSURE_RATIO
-	LC_SRC_OLDSIZE_TRUNCATE_PAGECACHE
-	LC_SRC_PTR_ERR_OR_ZERO_MISSING
-	LC_SRC_KIOCB_KI_LEFT
 
 	# 3.13
 	LC_SRC_VFS_RENAME_5ARGS
@@ -5224,8 +5016,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	AS_IF([test "x$enable_gss" != xno], [
-		LC_KEY_TYPE_INSTANTIATE_2ARGS
-
 		LB2_TEST_CHECK_CONFIG_IM([CRYPTO_MD5], [],
 			[AC_MSG_WARN(
 			[kernel MD5 support is recommended by using GSS.])])
@@ -5247,18 +5037,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_POSIX_ACL_CONFIG
 	LC_HAVE_PROJECT_QUOTA
 	LC_CONFIG_XARRAY_MULTI
-
-	# 3.11
-	LC_INVALIDATE_RANGE
-	LC_HAVE_DIR_CONTEXT
-	LC_PID_NS_FOR_CHILDREN
-	LC_FOP_READDIR
-
-	# 3.12
-	LC_VFS_PRESSURE_RATIO
-	LC_OLDSIZE_TRUNCATE_PAGECACHE
-	LC_PTR_ERR_OR_ZERO_MISSING
-	LC_KIOCB_KI_LEFT
 
 	# 3.13
 	LC_VFS_RENAME_5ARGS

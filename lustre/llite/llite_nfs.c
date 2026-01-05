@@ -307,9 +307,7 @@ static int ll_get_name(struct dentry *dentry, char *name, struct dentry *child)
 	struct ll_getname_data lgd = {
 		.lgd_name = name,
 		.lgd_fid = ll_i2info(child->d_inode)->lli_fid,
-#ifdef HAVE_DIR_CONTEXT
 		.ctx.actor = (filldir_t)ll_nfs_get_name_filldir,
-#endif
 		.lgd_found = 0,
 	};
 	struct md_op_data *op_data;
@@ -330,12 +328,7 @@ static int ll_get_name(struct dentry *dentry, char *name, struct dentry *child)
 		GOTO(out, rc = PTR_ERR(op_data));
 
 	inode_lock(dir);
-#ifdef HAVE_DIR_CONTEXT
 	rc = ll_dir_read(dir, &pos, op_data, &lgd.ctx, NULL);
-#else
-	rc = ll_dir_read(dir, &pos, op_data, &lgd, ll_nfs_get_name_filldir,
-			 NULL);
-#endif
 	inode_unlock(dir);
 	ll_finish_md_op_data(op_data);
 	if (!rc && !lgd.lgd_found)

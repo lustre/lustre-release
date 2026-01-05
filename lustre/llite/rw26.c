@@ -102,12 +102,7 @@ static void ll_invalidate_folio(struct folio *folio, size_t offset, size_t len)
  * relying on struct inode::i_size to limit further accesses.
  */
 static void ll_invalidatepage(struct page *vmpage,
-#ifdef HAVE_INVALIDATE_RANGE
-				unsigned int offset, unsigned int length
-#else
-				unsigned long offset
-#endif
-			     )
+			      unsigned int offset, unsigned int length)
 {
 	struct inode     *inode;
 	struct lu_env    *env;
@@ -122,11 +117,7 @@ static void ll_invalidatepage(struct page *vmpage,
 	 * below because they are run with page locked and all our io is
 	 * happening with locked page too
 	 */
-#ifdef HAVE_INVALIDATE_RANGE
 	if (offset == 0 && length == PAGE_SIZE) {
-#else
-	if (offset == 0) {
-#endif
 		/* See the comment in ll_releasepage() */
 		env = cl_env_percpu_get();
 		LASSERT(!IS_ERR(env));
