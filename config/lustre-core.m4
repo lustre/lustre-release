@@ -1079,168 +1079,6 @@ AC_DEFUN([LC_HAVE_LM_GRANT_2ARGS], [
 ]) # LC_HAVE_LM_GRANT_2ARGS
 
 #
-# LC_NFS_FILLDIR_USE_CTX
-#
-# 3.18 kernel moved from void cookie to struct dir_context
-#
-AC_DEFUN([LC_SRC_NFS_FILLDIR_USE_CTX], [
-	LB2_LINUX_TEST_SRC([filldir_ctx], [
-		#include <linux/fs.h>
-
-		int filldir(struct dir_context *ctx, const char* name,
-			    int i, loff_t off, u64 tmp, unsigned temp);
-		int filldir(struct dir_context *ctx, const char* name,
-			    int i, loff_t off, u64 tmp, unsigned temp)
-		{
-			return 0;
-		}
-	],[
-		struct dir_context ctx = {
-			.actor = filldir,
-		};
-
-		ctx.actor(NULL, "test", 0, (loff_t) 0, 0, 0);
-	],[-Werror])
-])
-AC_DEFUN([LC_NFS_FILLDIR_USE_CTX], [
-	LB2_MSG_LINUX_TEST_RESULT([if filldir_t uses struct dir_context],
-	[filldir_ctx], [
-		AC_DEFINE(HAVE_FILLDIR_USE_CTX, 1,
-			[filldir_t needs struct dir_context as argument])
-	])
-]) # LC_NFS_FILLDIR_USE_CTX
-
-#
-# LC_PERCPU_COUNTER_INIT
-#
-# 3.18	For kernels 3.18 and after percpu_counter_init starts
-#	to pass a GFP_* memory allocation flag for internal
-#	memory allocation purposes.
-#
-AC_DEFUN([LC_SRC_PERCPU_COUNTER_INIT], [
-	LB2_LINUX_TEST_SRC([percpu_counter_init], [
-		#include <linux/percpu_counter.h>
-	],[
-		percpu_counter_init(NULL, 0, GFP_KERNEL);
-	])
-])
-AC_DEFUN([LC_PERCPU_COUNTER_INIT], [
-	LB2_MSG_LINUX_TEST_RESULT([if percpu_counter_init uses GFP_* flag as argument],
-	[percpu_counter_init], [
-		AC_DEFINE(HAVE_PERCPU_COUNTER_INIT_GFP_FLAG, 1,
-			[percpu_counter_init uses GFP_* flag])
-	])
-]) # LC_PERCPU_COUNTER_INIT
-
-#
-# LC_KIOCB_HAS_NBYTES
-#
-# 3.19 kernel removed ki_nbytes from struct kiocb
-#
-AC_DEFUN([LC_SRC_KIOCB_HAS_NBYTES], [
-	LB2_LINUX_TEST_SRC([ki_nbytes], [
-		#include <linux/fs.h>
-	],[
-		struct kiocb iocb = { };
-
-		iocb.ki_nbytes = 0;
-	])
-])
-AC_DEFUN([LC_KIOCB_HAS_NBYTES], [
-	LB2_MSG_LINUX_TEST_RESULT([if struct kiocb has ki_nbytes field],
-	[ki_nbytes], [
-		AC_DEFINE(HAVE_KI_NBYTES, 1, [ki_nbytes field exist])
-	])
-]) # LC_KIOCB_HAS_NBYTES
-
-#
-# LC_HAVE_DQUOT_QC_DQBLK
-#
-# 3.19 has quotactl_ops->[sg]et_dqblk that take struct kqid and qc_dqblk
-# Added in commit 14bf61ffe
-#
-AC_DEFUN([LC_SRC_HAVE_DQUOT_QC_DQBLK], [
-	LB2_LINUX_TEST_SRC([qc_dqblk], [
-		#include <linux/fs.h>
-		#include <linux/quota.h>
-	],[
-			struct quotactl_ops *ops = NULL;
-			struct kqid kqid = { .type = USRQUOTA };
-			struct qc_dqblk *qc = NULL;
-			ops->set_dqblk(NULL, kqid, qc);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_DQUOT_QC_DQBLK], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'quotactl_ops.set_dqblk' takes struct qc_dqblk],
-	[qc_dqblk], [
-		AC_DEFINE(HAVE_DQUOT_QC_DQBLK, 1,
-			[quotactl_ops.set_dqblk takes struct qc_dqblk])
-		AC_DEFINE(HAVE_DQUOT_KQID, 1,
-			[quotactl_ops.set_dqblk takes struct kqid])
-	])
-]) # LC_HAVE_DQUOT_QC_DQBLK
-
-#
-# LC_HAVE_AIO_COMPLETE
-#
-# 3.19 kernel makes aio_complete() static
-#
-AC_DEFUN([LC_SRC_HAVE_AIO_COMPLETE], [
-	LB2_LINUX_TEST_SRC([aio_complete], [
-		#include <linux/aio.h>
-	],[
-		aio_complete(NULL, 0, 0);
-	])
-])
-AC_DEFUN([LC_HAVE_AIO_COMPLETE], [
-	LB2_MSG_LINUX_TEST_RESULT([if kernel has exported aio_complete()],
-	[aio_complete], [
-		AC_DEFINE(HAVE_AIO_COMPLETE, 1, [aio_complete defined])
-	])
-]) # LC_HAVE_AIO_COMPLETE
-
-#
-# LC_HAVE_IS_ROOT_INODE
-#
-# 3.19 kernel adds is_root_inode()
-# Commit a7400222e3eb ("new helper: is_root_inode()")
-#
-AC_DEFUN([LC_SRC_HAVE_IS_ROOT_INODE], [
-	LB2_LINUX_TEST_SRC([is_root_inode], [
-		#include <linux/fs.h>
-	],[
-		is_root_inode(NULL);
-	],[])
-])
-AC_DEFUN([LC_HAVE_IS_ROOT_INODE], [
-	LB2_MSG_LINUX_TEST_RESULT([if kernel has is_root_inode()],
-	[is_root_inode], [
-		AC_DEFINE(HAVE_IS_ROOT_INODE, 1, [is_root_inode defined])
-	])
-]) # LC_HAVE_IS_ROOT_INODE
-
-#
-# LC_BACKING_DEV_INFO_REMOVAL
-#
-# 3.20 kernel removed backing_dev_info from address_space
-#
-AC_DEFUN([LC_SRC_BACKING_DEV_INFO_REMOVAL], [
-	LB2_LINUX_TEST_SRC([backing_dev_info], [
-		#include <linux/fs.h>
-	],[
-		struct address_space mapping;
-
-		mapping.backing_dev_info = NULL;
-	])
-])
-AC_DEFUN([LC_BACKING_DEV_INFO_REMOVAL], [
-	LB2_MSG_LINUX_TEST_RESULT([if struct address_space has backing_dev_info],
-	[backing_dev_info], [
-		AC_DEFINE(HAVE_BACKING_DEV_INFO, 1, [backing_dev_info exist])
-	])
-]) # LC_BACKING_DEV_INFO_REMOVAL
-
-#
 # LC_HAVE_PROJECT_QUOTA
 #
 # Kernel version v4.0-rc1-197-g847aac644e92
@@ -3901,8 +3739,6 @@ AC_DEFUN([LC_NFS_FILLDIR_USE_CTX_RETURN_BOOL], [
 	[filldir_ctx_return_bool], [
 		AC_DEFINE(HAVE_FILLDIR_USE_CTX_RETURN_BOOL, 1,
 			[filldir_t needs struct dir_context and returns bool])
-		AC_DEFINE(HAVE_FILLDIR_USE_CTX, 1,
-			[filldir_t needs struct dir_context as argument])
 		AC_DEFINE(FILLDIR_TYPE, bool,
 			[filldir_t return type is bool or int])
 	],[
@@ -5082,19 +4918,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_INTERVAL_BLK_INTEGRITY
 	LC_SRC_KEY_MATCH_DATA
 
-	# 3.18
-	LC_SRC_NFS_FILLDIR_USE_CTX
-	LC_SRC_PERCPU_COUNTER_INIT
-
-	# 3.19
-	LC_SRC_KIOCB_HAS_NBYTES
-	LC_SRC_HAVE_DQUOT_QC_DQBLK
-	LC_SRC_HAVE_AIO_COMPLETE
-	LC_SRC_HAVE_IS_ROOT_INODE
-
-	# 3.20
-	LC_SRC_BACKING_DEV_INFO_REMOVAL
-
 	# 4.1.0
 	LC_SRC_IOV_ITER_RW
 	LC_SRC_HAVE___BI_CNT
@@ -5404,19 +5227,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 3.17
 	LC_HAVE_INTERVAL_BLK_INTEGRITY
 	LC_KEY_MATCH_DATA
-
-	# 3.18
-	LC_PERCPU_COUNTER_INIT
-	LC_NFS_FILLDIR_USE_CTX
-
-	# 3.19
-	LC_KIOCB_HAS_NBYTES
-	LC_HAVE_DQUOT_QC_DQBLK
-	LC_HAVE_AIO_COMPLETE
-	LC_HAVE_IS_ROOT_INODE
-
-	# 3.20
-	LC_BACKING_DEV_INFO_REMOVAL
 
 	# 4.1.0
 	LC_IOV_ITER_RW

@@ -1712,12 +1712,6 @@ static struct inode *ll_iget_anon_dir(struct super_block *sb,
 		inode_set_atime(inode, 0, 0);
 		inode_set_ctime(inode, 0, 0);
 		inode->i_rdev = 0;
-
-#ifdef HAVE_BACKING_DEV_INFO
-		/* initializing backing dev info. */
-		inode->i_mapping->backing_dev_info =
-						&s2lsi(inode->i_sb)->lsi_bdi;
-#endif
 		inode->i_op = &ll_dir_inode_operations;
 		inode->i_fop = &ll_dir_operations;
 		lli->lli_fid = *fid;
@@ -3231,11 +3225,6 @@ int ll_read_inode2(struct inode *inode, void *opaque)
 		RETURN(rc);
 
 	/* OIDEBUG(inode); */
-
-#ifdef HAVE_BACKING_DEV_INFO
-	/* initializing backing dev info. */
-	inode->i_mapping->backing_dev_info = &s2lsi(inode->i_sb)->lsi_bdi;
-#endif
 	if (S_ISREG(inode->i_mode)) {
 		struct ll_sb_info *sbi = ll_i2sbi(inode);
 

@@ -431,13 +431,10 @@ static void osd_dir_it_put(const struct lu_env *env, struct dt_it *di)
  * * %0 - on success
  * * %1 - on buffer full
  */
-#ifdef HAVE_FILLDIR_USE_CTX
 static FILLDIR_TYPE do_osd_memfs_filldir(struct dir_context *ctx,
-#else
-static int osd_memfs_filldir(void *ctx,
-#endif
-			     const char *name, int namelen,
-			     loff_t offset, __u64 ino, unsigned int d_type)
+					 const char *name, int namelen,
+					 loff_t offset, u64 ino,
+					 unsigned int d_type)
 {
 	struct memfs_dir_context *mctx = (struct memfs_dir_context *)ctx;
 	struct osd_it *oit = (struct osd_it *)mctx->cbdata;

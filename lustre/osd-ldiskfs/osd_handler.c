@@ -936,13 +936,10 @@ struct osd_check_lmv_buf {
  * \retval	0 continue to check next item
  * \retval	-ve for failure
  */
-#ifdef HAVE_FILLDIR_USE_CTX
 static FILLDIR_TYPE do_osd_stripe_dir_filldir(struct dir_context *buf,
-#else
-static int osd_stripe_dir_filldir(void *buf,
-#endif
-				  const char *name, int namelen,
-				  loff_t offset, __u64 ino, unsigned int d_type)
+					      const char *name, int namelen,
+					      loff_t offset, u64 ino,
+					      unsigned int d_type)
 {
 	struct osd_check_lmv_buf *oclb = (struct osd_check_lmv_buf *)buf;
 	struct osd_thread_info *oti = oclb->oclb_info;
@@ -7307,13 +7304,10 @@ struct osd_filldir_cbs {
  * \retval 0 on success
  * \retval 1 on buffer full
  */
-#ifdef HAVE_FILLDIR_USE_CTX
 static FILLDIR_TYPE do_osd_ldiskfs_filldir(struct dir_context *ctx,
-#else
-static int osd_ldiskfs_filldir(void *ctx,
-#endif
-			       const char *name, int namelen,
-			       loff_t offset, __u64 ino, unsigned int d_type)
+					   const char *name, int namelen,
+					   loff_t offset, u64 ino,
+					   unsigned int d_type)
 {
 	struct osd_it_ea *it = ((struct osd_filldir_cbs *)ctx)->it;
 	struct osd_object *obj = it->oie_obj;

@@ -379,11 +379,7 @@ int barrier_register(struct dt_device *key, struct dt_device *next)
 	init_waitqueue_head(&barrier->bi_waitq);
 	rwlock_init(&barrier->bi_rwlock);
 	kref_init(&barrier->bi_ref);
-#ifdef HAVE_PERCPU_COUNTER_INIT_GFP_FLAG
 	rc = percpu_counter_init(&barrier->bi_writers, 0, GFP_KERNEL);
-#else
-	rc = percpu_counter_init(&barrier->bi_writers, 0);
-#endif
 	if (rc)
 		barrier_instance_put(barrier);
 	else

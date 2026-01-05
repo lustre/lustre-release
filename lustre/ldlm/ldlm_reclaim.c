@@ -386,11 +386,7 @@ int ldlm_reclaim_setup(void)
 	ldlm_last_reclaim_age_ns = LDLM_RECLAIM_AGE_MAX;
 	ldlm_last_reclaim_time = ktime_get();
 
-#ifdef HAVE_PERCPU_COUNTER_INIT_GFP_FLAG
 	return percpu_counter_init(&ldlm_granted_total, 0, GFP_KERNEL);
-#else
-	return percpu_counter_init(&ldlm_granted_total, 0);
-#endif
 }
 
 void ldlm_reclaim_cleanup(void)

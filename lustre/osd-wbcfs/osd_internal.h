@@ -214,15 +214,13 @@ static bool fill_fn(struct dir_context *buf, const char *name, int namelen, \
 {									    \
 	return !prefix##fill_fn(buf, name, namelen, offset, ino, d_type);   \
 }
-#elif defined(HAVE_FILLDIR_USE_CTX)
+#else
 #define WRAP_FILLDIR_FN(prefix, fill_fn) \
 static int fill_fn(struct dir_context *buf, const char *name, int namelen,  \
 		   loff_t offset, __u64 ino, unsigned int d_type)	    \
 {									    \
 	return prefix##fill_fn(buf, name, namelen, offset, ino, d_type);    \
 }
-#else
-#define WRAP_FILLDIR_FN(prefix, fill_fn)
 #endif
 
 /*

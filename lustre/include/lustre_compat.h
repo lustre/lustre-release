@@ -486,13 +486,6 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 #define raw_cpu_ptr(p) __this_cpu_ptr(p)
 #endif
 
-#ifndef HAVE_IS_ROOT_INODE
-static inline bool is_root_inode(struct inode *inode)
-{
-	return inode == inode->i_sb->s_root->d_inode;
-}
-#endif
-
 #if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW) || \
 	defined(HAVE_DIRECTIO_2ARGS) || defined(HAVE_IOV_ITER_GET_PAGES_ALLOC2)
 #define HAVE_DIO_ITER 1

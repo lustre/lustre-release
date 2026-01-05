@@ -748,11 +748,7 @@ struct osd_thread_info {
 
 	/* used by quota code */
 	union {
-#if defined(HAVE_DQUOT_QC_DQBLK)
 		struct qc_dqblk		oti_qdq;
-#else
-		struct fs_disk_quota    oti_fdq;
-#endif
 		struct if_dqinfo	oti_dqinfo;
 	};
 	struct lquota_id_info	oti_qi;
@@ -1888,19 +1884,17 @@ bool osd_tx_was_declared(const struct lu_env *env, struct osd_thandle *oth,
 #ifdef HAVE_FILLDIR_USE_CTX_RETURN_BOOL
 #define WRAP_FILLDIR_FN(prefix, fill_fn) \
 static bool fill_fn(struct dir_context *buf, const char *name, int namelen, \
-		    loff_t offset, __u64 ino, unsigned int d_type)	    \
+		    loff_t offset, u64 ino, unsigned int d_type)	    \
 {									    \
 	return !prefix##fill_fn(buf, name, namelen, offset, ino, d_type);   \
 }
-#elif defined(HAVE_FILLDIR_USE_CTX)
+#else
 #define WRAP_FILLDIR_FN(prefix, fill_fn) \
 static int fill_fn(struct dir_context *buf, const char *name, int namelen,  \
-		   loff_t offset, __u64 ino, unsigned int d_type)	    \
+		   loff_t offset, u64 ino, unsigned int d_type)		    \
 {									    \
 	return prefix##fill_fn(buf, name, namelen, offset, ino, d_type);    \
 }
-#else
-#define WRAP_FILLDIR_FN(prefix, fill_fn)
 #endif
 
 #define LDISKFS_OSD_USER_MODIFIABLE	LUSTRE_FL_USER_MODIFIABLE

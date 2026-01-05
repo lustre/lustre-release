@@ -1246,15 +1246,11 @@ EXPORT_SYMBOL(cl_sync_io_wait);
 
 static inline void dio_aio_complete(struct kiocb *iocb, ssize_t res)
 {
-#ifdef HAVE_AIO_COMPLETE
-	aio_complete(iocb, res, 0);
-#else
 	if (iocb->ki_complete)
-# ifdef HAVE_KIOCB_COMPLETE_2ARGS
+#ifdef HAVE_KIOCB_COMPLETE_2ARGS
 		iocb->ki_complete(iocb, res);
-# else
+#else
 		iocb->ki_complete(iocb, res, 0);
-# endif
 #endif
 }
 
