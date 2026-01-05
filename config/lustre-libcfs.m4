@@ -71,132 +71,6 @@ AS_IF([test "x$enable_panic_dumplog" = xyes], [
 ]) # LIBCFS_CONFIG_PANIC_DUMPLOG
 
 #
-# Kernel version 3.12-rc4 commit c2d816443ef30 added prepare_to_wait_event()
-#
-AC_DEFUN([LIBCFS_SRC_PREPARE_TO_WAIT_EVENT],[
-	LB2_LINUX_TEST_SRC([prepare_to_wait_event], [
-		#include <linux/wait.h>
-	],[
-		prepare_to_wait_event(NULL, NULL, 0);
-	])
-])
-AC_DEFUN([LIBCFS_PREPARE_TO_WAIT_EVENT],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'prepare_to_wait_event' exist],
-	[prepare_to_wait_event], [
-		AC_DEFINE(HAVE_PREPARE_TO_WAIT_EVENT, 1,
-			['prepare_to_wait_event' is available])
-	])
-]) # LIBCFS_PREPARE_TO_WAIT_EVENT
-
-#
-# Linux kernel 3.12 introduced struct kernel_param_ops
-# This has been backported to all lustre supported
-# clients except RHEL6. We have to handle the differences.
-#
-AC_DEFUN([LIBCFS_SRC_KERNEL_PARAM_OPS],[
-	LB2_LINUX_TEST_SRC([kernel_param_ops], [
-		#include <linux/module.h>
-	],[
-		struct kernel_param_ops ops;
-
-		ops.set = NULL;
-	])
-])
-AC_DEFUN([LIBCFS_KERNEL_PARAM_OPS],[
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct kernel_param_ops' exist],
-	[kernel_param_ops], [
-		AC_DEFINE(HAVE_KERNEL_PARAM_OPS, 1,
-			['struct kernel_param_ops' is available])
-	])
-]) # LIBCFS_KERNEL_PARAM_OPS
-
-#
-# LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG
-#
-# v3.14-7405-g91b0abe36a7b added AS_EXITING flag with
-# mapping_exiting() and mapping_set_exiting()
-#
-AC_DEFUN([LIBCFS_SRC_HAVE_MAPPING_AS_EXITING_FLAG], [
-m4_pattern_allow([AS_EXITING])
-	LB2_LINUX_TEST_SRC([mapping_exiting_exists], [
-		#include <linux/pagemap.h>
-	],[
-		enum mapping_flags flag = AS_EXITING;
-		(void)flag;
-	],[-Werror])
-])
-AC_DEFUN([LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG], [
-	LB2_MSG_LINUX_TEST_RESULT([if enum mapping_flags has AS_EXITING flag],
-	[mapping_exiting_exists], [
-		AC_DEFINE(HAVE_MAPPING_AS_EXITING_FLAG, 1,
-			[enum mapping_flags has AS_EXITING flag])
-	])
-]) # LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG
-
-#
-# LIBCFS_IOV_ITER_HAS_TYPE
-#
-# kernel 3.15-rc4 commit 71d8e532b1549a478e6a6a8a44f309d050294d00
-# start adding the tag to iov_iter
-#
-AC_DEFUN([LIBCFS_SRC_IOV_ITER_HAS_TYPE], [
-	LB2_LINUX_TEST_SRC([iov_iter_has_type_member], [
-		#include <linux/uio.h>
-	],[
-		struct iov_iter iter = { .type = ITER_KVEC };
-		(void)iter;
-	],
-	[-Werror])
-])
-AC_DEFUN([LIBCFS_IOV_ITER_HAS_TYPE], [
-	LB2_MSG_LINUX_TEST_RESULT([if iov_iter has member type],
-	[iov_iter_has_type_member], [
-		AC_DEFINE(HAVE_IOV_ITER_HAS_TYPE_MEMBER, 1,
-			[if iov_iter has member type])
-	])
-]) # LIBCFS_IOV_ITER_HAS_TYPE
-
-#
-# LIBCFS_HAVE_GLOB
-#
-# Kernel version 3.16 commit b01250856b25f4417c51aa33afc451fbf7da1484
-# added glob support to the Linux kernel
-#
-AC_DEFUN([LIBCFS_SRC_HAVE_GLOB],[
-	LB2_LINUX_TEST_SRC([glob_match], [
-		#include <linux/glob.h>
-	],[
-		return glob_match(NULL, NULL);
-	],[-Werror])
-])
-AC_DEFUN([LIBCFS_HAVE_GLOB],[
-	LB2_MSG_LINUX_TEST_RESULT([if 'glob_match()' exist],
-	[glob_match], [
-		AC_DEFINE(HAVE_GLOB, 1,
-			[glob_match() is available])
-	])
-]) # LIBCFS_HAVE_GLOB
-
-#
-# Kernel version 3.19 commit v3.18-rc2-26-g61ada528dea0
-# introduce wait_woken()
-#
-AC_DEFUN([LIBCFS_SRC_WAIT_WOKEN],[
-	LB2_LINUX_TEST_SRC([wait_woken], [
-		#include <linux/wait.h>
-	],[
-		wait_woken(NULL, 0, 0);
-	])
-])
-AC_DEFUN([LIBCFS_WAIT_WOKEN],[
-	LB2_MSG_LINUX_TEST_RESULT([if function 'wait_woken' exist],
-	[wait_woken], [
-		AC_DEFINE(HAVE_WAIT_WOKEN, 1,
-			['wait_woken, is available'])
-	])
-]) # LIBCFS_WAIT_WOKEN
-
-#
 # Kernel version 4.1 commit b51d23e4e9fea6f264d39535c2a62d1f51e7ccc3
 # create per module locks which added kernel_param_[un]lock(). Older
 # kernels you have to use __kernel_param_[un]lock(). In that case its
@@ -1929,17 +1803,6 @@ dnl # only once the compilation can be done in parallel significantly
 dnl # speeding up the process.
 dnl #
 AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
-	# 3.12
-	LIBCFS_SRC_PREPARE_TO_WAIT_EVENT
-	LIBCFS_SRC_KERNEL_PARAM_OPS
-	# 3.14
-	LIBCFS_SRC_HAVE_MAPPING_AS_EXITING_FLAG
-	# 3.15
-	LIBCFS_SRC_IOV_ITER_HAS_TYPE
-	# 3.16
-	LIBCFS_SRC_HAVE_GLOB
-	# 3.19
-	LIBCFS_SRC_WAIT_WOKEN
 	# 4.1
 	LIBCFS_SRC_KERNEL_PARAM_LOCK
 	# 4.2
@@ -2052,17 +1915,6 @@ dnl #
 dnl # Check results of kernel interface tests.
 dnl #
 AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
-	# 3.12
-	LIBCFS_PREPARE_TO_WAIT_EVENT
-	LIBCFS_KERNEL_PARAM_OPS
-	# 3.14
-	LIBCFS_HAVE_MAPPING_AS_EXITING_FLAG
-	# 3.15
-	LIBCFS_IOV_ITER_HAS_TYPE
-	# 3.16
-	LIBCFS_HAVE_GLOB
-	# 3.19
-	LIBCFS_WAIT_WOKEN
 	# 4.1
 	LIBCFS_KERNEL_PARAM_LOCK
 	# 4.2

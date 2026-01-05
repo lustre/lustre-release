@@ -11,15 +11,6 @@
 #define wait_queue_entry_t wait_queue_t
 #endif
 
-#ifndef HAVE_PREPARE_TO_WAIT_EVENT
-#define __add_wait_queue_entry_tail __add_wait_queue_tail
-#endif
-
-#ifndef HAVE_PREPARE_TO_WAIT_EVENT
-extern long prepare_to_wait_event(wait_queue_head_t *wq_head,
-				  wait_queue_entry_t *wq_entry, int state);
-#endif
-
 /* ___wait_cond_timeout changed number of args in v3.12-rc1-78-g35a2af94c7ce
  * so let's define our own ___wait_cond_timeout1
  */
@@ -451,12 +442,5 @@ do {									\
 	sigprocmask(SIG_SETMASK, &__old_blocked, NULL);			\
 	__ret;								\
 })
-
-#ifndef HAVE_WAIT_WOKEN
-#define WQ_FLAG_WOKEN		0x02
-long wait_woken(wait_queue_entry_t *wait, unsigned int mode, long timeout);
-int woken_wake_function(wait_queue_entry_t *wait, unsigned int mode,
-			int sync, void *key);
-#endif /* HAVE_WAIT_WOKEN */
 
 #endif /* __LICBFS_LINUX_WAIT_H */

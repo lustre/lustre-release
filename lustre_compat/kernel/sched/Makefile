@@ -4,4 +4,4 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-sched_objs := wait.o wait_bit.o
+sched_objs := wait_bit.o

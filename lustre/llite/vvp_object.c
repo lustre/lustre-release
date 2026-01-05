@@ -146,7 +146,7 @@ static int vvp_prune(const struct lu_env *env, struct cl_object *obj)
 	}
 
 	ll_truncate_inode_pages_final(inode);
-	mapping_clear_exiting(inode->i_mapping);
+	clear_bit(AS_EXITING, &inode->i_mapping->flags);
 
 	RETURN(0);
 }

@@ -15,7 +15,8 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <lustre_compat/linux/glob.h>
+#include <linux/glob.h>
+
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_kernelcomm.h>

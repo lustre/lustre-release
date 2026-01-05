@@ -49,7 +49,7 @@
 
 #if OBD_OCD_VERSION(3, 0, 53, 0) > LUSTRE_VERSION_CODE
 static int mdt_max_mod_rpcs_per_client_set(const char *val,
-				cfs_kernel_param_arg_t *kp)
+				const struct kernel_param *kp)
 {
 	unsigned int num;
 	int rc;

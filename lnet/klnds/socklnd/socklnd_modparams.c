@@ -166,8 +166,7 @@ MODULE_PARM_DESC(protocol, "protocol version");
 #endif
 
 static int tos = -1;
-static int param_set_tos(const char *val, cfs_kernel_param_arg_t *kp);
-#ifdef HAVE_KERNEL_PARAM_OPS
+static int param_set_tos(const char *val, const struct kernel_param *kp);
 static const struct kernel_param_ops param_ops_tos = {
 	.set = param_set_tos,
 	.get = param_get_int,
@@ -176,15 +175,12 @@ static const struct kernel_param_ops param_ops_tos = {
 #define param_check_tos(name, p) \
 	__param_check(name, p, int)
 module_param(tos, tos, 0444);
-#else
-module_param_call(tos, param_set_tos, param_get_int, &tos, 0444);
-#endif
 MODULE_PARM_DESC(tos, "Set the type of service (=-1 to disable)");
 
 struct ksock_tunables ksocknal_tunables;
 struct lnet_ioctl_config_socklnd_tunables ksock_default_tunables;
 
-static int param_set_tos(const char *val, cfs_kernel_param_arg_t *kp)
+static int param_set_tos(const char *val, const struct kernel_param *kp)
 {
 	int rc, t;
 

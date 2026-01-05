@@ -39,34 +39,9 @@ int lustre_symbols_init(void);
  * iter_is_iovec() and iov_iter_is_* are available, supply the missing
  * functionality for older kernels.
  */
-#ifdef HAVE_IOV_ITER_TYPE
 #ifndef HAVE_ENUM_ITER_PIPE
 #define iov_iter_is_pipe(iter)	0
 #endif
-#else
-/*
- * Since 3.15-rc4 commit 71d8e532b1549a478e6a6a8a44f309d050294d00
- * The iov iterator has a type and can iterate over numerous vector types.
- * Prior to this only iovec is supported, so all iov_iter_is_* are false.
- */
-#ifdef HAVE_IOV_ITER_HAS_TYPE_MEMBER
-#define iter_is_iovec(iter)		((iter)->type & ITER_IOVEC)
-#define iov_iter_is_kvec(iter)		((iter)->type & ITER_KVEC)
-#define iov_iter_is_bvec(iter)		((iter)->type & ITER_BVEC)
-#if defined HAVE_ENUM_ITER_PIPE
-#define iov_iter_is_pipe(iter)		((iter)->type & ITER_PIPE)
-#else
-#define iov_iter_is_pipe(iter)		0
-#endif
-#define iov_iter_is_discard(iter)	((iter)->type & ITER_DISCARD)
-#else
-#define iter_is_iovec(iter)		1
-#define iov_iter_is_kvec(iter)		0
-#define iov_iter_is_bvec(iter)		0
-#define iov_iter_is_pipe(iter)		0
-#define iov_iter_is_discard(iter)	0
-#endif
-#endif /* HAVE_IOV_ITER_TYPE */
 
 #ifndef HAVE_USER_BACKED_ITER
 #define iter_is_ubuf(iter)		0
@@ -115,18 +90,6 @@ static inline bool iov_iter_is_aligned(const struct iov_iter *i,
 	return true;
 }
 #endif /* HAVE_IOV_ITER_IS_ALIGNED */
-
-/*
- * For RHEL6 struct kernel_parm_ops doesn't exist. Also
- * the arguments for .set and .get take different
- * parameters which is handled below
- */
-#ifdef HAVE_KERNEL_PARAM_OPS
-#define cfs_kernel_param_arg_t const struct kernel_param
-#else
-#define cfs_kernel_param_arg_t struct kernel_param_ops
-#define kernel_param_ops kernel_param
-#endif /* ! HAVE_KERNEL_PARAM_OPS */
 
 #ifndef HAVE_KERNEL_PARAM_LOCK
 static inline void kernel_param_unlock(struct module *mod)

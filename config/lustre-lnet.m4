@@ -1171,27 +1171,6 @@ AC_DEFUN([LN_CONFIG_SOCK_NOT_OWNED_BY_ME], [
 ]) # LN_CONFIG_SOCK_NOT_OWNED_BY_ME
 
 #
-# LN_CONFIG_SK_DATA_READY
-#
-# 3.15 for struct sock the *sk_data_ready() field only takes one argument now
-#
-AC_DEFUN([LN_SRC_CONFIG_SK_DATA_READY], [
-	LB2_LINUX_TEST_SRC([sk_data_ready], [
-		#include <linux/net.h>
-		#include <net/sock.h>
-	],[
-		((struct sock *)0)->sk_data_ready(NULL);
-	],[-Werror])
-])
-AC_DEFUN([LN_CONFIG_SK_DATA_READY], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'sk_data_ready' takes only one argument],
-	[sk_data_ready], [
-	AC_DEFINE(HAVE_SK_DATA_READY_ONE_ARG, 1,
-		[sk_data_ready uses only one argument])
-	])
-]) # LN_CONFIG_SK_DATA_READY
-
-#
 # LN_ETHTOOL_LINK_SETTINGS
 #
 # ethtool_link_settings was added in Linux 4.6
@@ -1346,8 +1325,6 @@ AC_DEFUN([LN_CONFIG_SENDPAGE_OK], [
 
 AC_DEFUN([LN_PROG_LINUX_SRC], [
 	LN_CONFIG_O2IB_SRC
-	# 3.15
-	LN_SRC_CONFIG_SK_DATA_READY
 	# 4.x
 	LN_SRC_CONFIG_SOCK_CREATE_KERN
 	LN_SRC_CONFIG_SOCK_INUSE_ADD
@@ -1368,8 +1345,6 @@ AC_DEFUN([LN_PROG_LINUX_SRC], [
 
 AC_DEFUN([LN_PROG_LINUX_RESULTS], [
 	LN_CONFIG_O2IB_RESULTS
-	# 3.15
-	LN_CONFIG_SK_DATA_READY
 	# 4.x
 	LN_CONFIG_SOCK_CREATE_KERN
 	LN_CONFIG_SOCK_INUSE_ADD

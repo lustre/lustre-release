@@ -57,11 +57,4 @@ static inline struct dentry *file_dentry(const struct file *file)
 #define proc_get_unmapped_area		get_unmapped_area
 #endif
 
-static inline void mapping_clear_exiting(struct address_space *mapping)
-{
-#ifdef HAVE_MAPPING_AS_EXITING_FLAG
-	clear_bit(AS_EXITING, &mapping->flags);
-#endif
-}
-
 #endif /* __LIBCFS_LINUX_CFS_FS_H__ */

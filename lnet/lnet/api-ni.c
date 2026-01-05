@@ -75,8 +75,7 @@ MODULE_PARM_DESC(lnet_numa_range,
  * interface health is decremented by 100 points every failure.
  */
 unsigned int lnet_health_sensitivity = 100;
-static int sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp);
-#ifdef HAVE_KERNEL_PARAM_OPS
+static int sensitivity_set(const char *val, const struct kernel_param *kp);
 static struct kernel_param_ops param_ops_health_sensitivity = {
 	.set = sensitivity_set,
 	.get = param_get_int,
@@ -84,10 +83,6 @@ static struct kernel_param_ops param_ops_health_sensitivity = {
 #define param_check_health_sensitivity(name, p) \
 		__param_check(name, p, int)
 module_param(lnet_health_sensitivity, health_sensitivity, S_IRUGO|S_IWUSR);
-#else
-module_param_call(lnet_health_sensitivity, sensitivity_set, param_get_int,
-		  &lnet_health_sensitivity, S_IRUGO|S_IWUSR);
-#endif
 MODULE_PARM_DESC(lnet_health_sensitivity,
 		"Value to decrement the health value by on error");
 
@@ -96,8 +91,7 @@ MODULE_PARM_DESC(lnet_health_sensitivity,
  * on unhealthy interfaces.
  */
 unsigned int lnet_recovery_interval = 1;
-static int recovery_interval_set(const char *val, cfs_kernel_param_arg_t *kp);
-#ifdef HAVE_KERNEL_PARAM_OPS
+static int recovery_interval_set(const char *val, const struct kernel_param *kp);
 static struct kernel_param_ops param_ops_recovery_interval = {
 	.set = recovery_interval_set,
 	.get = param_get_int,
@@ -105,10 +99,6 @@ static struct kernel_param_ops param_ops_recovery_interval = {
 #define param_check_recovery_interval(name, p) \
 		__param_check(name, p, int)
 module_param(lnet_recovery_interval, recovery_interval, S_IRUGO|S_IWUSR);
-#else
-module_param_call(lnet_recovery_interval, recovery_interval_set, param_get_int,
-		  &lnet_recovery_interval, S_IRUGO|S_IWUSR);
-#endif
 MODULE_PARM_DESC(lnet_recovery_interval,
 		"DEPRECATED - Interval to recover unhealthy interfaces in seconds");
 
@@ -120,27 +110,22 @@ MODULE_PARM_DESC(lnet_recovery_limit,
 unsigned int lnet_max_recovery_ping_interval = 900;
 unsigned int lnet_max_recovery_ping_count = 9;
 static int max_recovery_ping_interval_set(const char *val,
-					  cfs_kernel_param_arg_t *kp);
+					  const struct kernel_param *kp);
 
 #define param_check_max_recovery_ping_interval(name, p) \
 		__param_check(name, p, int)
 
-#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_max_recovery_ping_interval = {
 	.set = max_recovery_ping_interval_set,
 	.get = param_get_int,
 };
 module_param(lnet_max_recovery_ping_interval, max_recovery_ping_interval, 0644);
-#else
-module_param_call(lnet_max_recovery_ping_interval, max_recovery_ping_interval,
-		  param_get_int, &lnet_max_recovery_ping_interval, 0644);
-#endif
 MODULE_PARM_DESC(lnet_max_recovery_ping_interval,
 		 "The max interval between LNet recovery pings, in seconds");
 
 int lnet_interfaces_max = LNET_INTERFACES_MAX_DEFAULT;
 EXPORT_SYMBOL(lnet_interfaces_max);
-static int intf_max_set(const char *val, cfs_kernel_param_arg_t *kp);
+static int intf_max_set(const char *val, const struct kernel_param *kp);
 
 static struct kernel_param_ops param_ops_interfaces_max = {
 	.set = intf_max_set,
@@ -150,17 +135,12 @@ static struct kernel_param_ops param_ops_interfaces_max = {
 #define param_check_interfaces_max(name, p) \
 		__param_check(name, p, int)
 
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_interfaces_max, interfaces_max, 0644);
-#else
-module_param_call(lnet_interfaces_max, intf_max_set, param_get_int,
-		  &param_ops_interfaces_max, 0644);
-#endif
 MODULE_PARM_DESC(lnet_interfaces_max,
 		"Maximum number of interfaces in a node.");
 
 unsigned lnet_peer_discovery_disabled = 0;
-static int discovery_set(const char *val, cfs_kernel_param_arg_t *kp);
+static int discovery_set(const char *val, const struct kernel_param *kp);
 
 static struct kernel_param_ops param_ops_discovery_disabled = {
 	.set = discovery_set,
@@ -169,17 +149,12 @@ static struct kernel_param_ops param_ops_discovery_disabled = {
 
 #define param_check_discovery_disabled(name, p) \
 		__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_peer_discovery_disabled, discovery_disabled, 0644);
-#else
-module_param_call(lnet_peer_discovery_disabled, discovery_set, param_get_int,
-		  &param_ops_discovery_disabled, 0644);
-#endif
 MODULE_PARM_DESC(lnet_peer_discovery_disabled,
 		"Set to 1 to disable peer discovery on this node.");
 
 unsigned int lnet_drop_asym_route;
-static int drop_asym_route_set(const char *val, cfs_kernel_param_arg_t *kp);
+static int drop_asym_route_set(const char *val, const struct kernel_param *kp);
 
 static struct kernel_param_ops param_ops_drop_asym_route = {
 	.set = drop_asym_route_set,
@@ -188,19 +163,13 @@ static struct kernel_param_ops param_ops_drop_asym_route = {
 
 #define param_check_drop_asym_route(name, p)	\
 	__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_drop_asym_route, drop_asym_route, 0644);
-#else
-module_param_call(lnet_drop_asym_route, drop_asym_route_set, param_get_int,
-		  &param_ops_drop_asym_route, 0644);
-#endif
 MODULE_PARM_DESC(lnet_drop_asym_route,
 		 "Set to 1 to drop asymmetrical route messages.");
 
 #define LNET_TRANSACTION_TIMEOUT_DEFAULT 150
 unsigned int lnet_transaction_timeout = LNET_TRANSACTION_TIMEOUT_DEFAULT;
-static int transaction_to_set(const char *val, cfs_kernel_param_arg_t *kp);
-#ifdef HAVE_KERNEL_PARAM_OPS
+static int transaction_to_set(const char *val, const struct kernel_param *kp);
 static struct kernel_param_ops param_ops_transaction_timeout = {
 	.set = transaction_to_set,
 	.get = param_get_int,
@@ -209,17 +178,12 @@ static struct kernel_param_ops param_ops_transaction_timeout = {
 #define param_check_transaction_timeout(name, p) \
 		__param_check(name, p, int)
 module_param(lnet_transaction_timeout, transaction_timeout, S_IRUGO|S_IWUSR);
-#else
-module_param_call(lnet_transaction_timeout, transaction_to_set, param_get_int,
-		  &lnet_transaction_timeout, S_IRUGO|S_IWUSR);
-#endif
 MODULE_PARM_DESC(lnet_transaction_timeout,
 		"Maximum number of seconds to wait for a peer response.");
 
 #define LNET_RETRY_COUNT_DEFAULT 2
 unsigned int lnet_retry_count = LNET_RETRY_COUNT_DEFAULT;
-static int retry_count_set(const char *val, cfs_kernel_param_arg_t *kp);
-#ifdef HAVE_KERNEL_PARAM_OPS
+static int retry_count_set(const char *val, const struct kernel_param *kp);
 static struct kernel_param_ops param_ops_retry_count = {
 	.set = retry_count_set,
 	.get = param_get_int,
@@ -228,17 +192,12 @@ static struct kernel_param_ops param_ops_retry_count = {
 #define param_check_retry_count(name, p) \
 		__param_check(name, p, int)
 module_param(lnet_retry_count, retry_count, S_IRUGO|S_IWUSR);
-#else
-module_param_call(lnet_retry_count, retry_count_set, param_get_int,
-		  &lnet_retry_count, S_IRUGO|S_IWUSR);
-#endif
 MODULE_PARM_DESC(lnet_retry_count,
 		 "Maximum number of times to retry transmitting a message");
 
 unsigned int lnet_response_tracking = 3;
-static int response_tracking_set(const char *val, cfs_kernel_param_arg_t *kp);
+static int response_tracking_set(const char *val, const struct kernel_param *kp);
 
-#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_response_tracking = {
 	.set = response_tracking_set,
 	.get = param_get_int,
@@ -247,10 +206,6 @@ static struct kernel_param_ops param_ops_response_tracking = {
 #define param_check_response_tracking(name, p)  \
 	__param_check(name, p, int)
 module_param(lnet_response_tracking, response_tracking, 0644);
-#else
-module_param_call(lnet_response_tracking, response_tracking_set, param_get_int,
-		  &lnet_response_tracking, 0644);
-#endif
 MODULE_PARM_DESC(lnet_response_tracking,
 		 "(0|1|2|3) LNet Internal Only|GET Reply only|PUT ACK only|Full Tracking (default)");
 
@@ -301,7 +256,7 @@ static int lnet_discover(struct lnet_processid *id, u32 force,
 			 struct lnet_genl_ping_list *dlists);
 
 static int
-sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
+sensitivity_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
 	unsigned *sensitivity = (unsigned *)kp->arg;
@@ -339,7 +294,7 @@ sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 }
 
 static int
-recovery_interval_set(const char *val, cfs_kernel_param_arg_t *kp)
+recovery_interval_set(const char *val, const struct kernel_param *kp)
 {
 	CWARN("'lnet_recovery_interval' has been deprecated\n");
 
@@ -347,7 +302,7 @@ recovery_interval_set(const char *val, cfs_kernel_param_arg_t *kp)
 }
 
 static int
-max_recovery_ping_interval_set(const char *val, cfs_kernel_param_arg_t *kp)
+max_recovery_ping_interval_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
 	unsigned long value;
@@ -380,7 +335,7 @@ max_recovery_ping_interval_set(const char *val, cfs_kernel_param_arg_t *kp)
 }
 
 static int
-discovery_set(const char *val, cfs_kernel_param_arg_t *kp)
+discovery_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
 	unsigned *discovery_off = (unsigned *)kp->arg;
@@ -439,7 +394,7 @@ discovery_set(const char *val, cfs_kernel_param_arg_t *kp)
 }
 
 static int
-drop_asym_route_set(const char *val, cfs_kernel_param_arg_t *kp)
+drop_asym_route_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
 	unsigned int *drop_asym_route = (unsigned int *)kp->arg;
@@ -471,7 +426,7 @@ drop_asym_route_set(const char *val, cfs_kernel_param_arg_t *kp)
 }
 
 static int
-transaction_to_set(const char *val, cfs_kernel_param_arg_t *kp)
+transaction_to_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
 	unsigned *transaction_to = (unsigned *)kp->arg;
@@ -514,7 +469,7 @@ transaction_to_set(const char *val, cfs_kernel_param_arg_t *kp)
 }
 
 static int
-retry_count_set(const char *val, cfs_kernel_param_arg_t *kp)
+retry_count_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
 	unsigned *retry_count = (unsigned *)kp->arg;
@@ -559,7 +514,7 @@ retry_count_set(const char *val, cfs_kernel_param_arg_t *kp)
 }
 
 static int
-intf_max_set(const char *val, cfs_kernel_param_arg_t *kp)
+intf_max_set(const char *val, const struct kernel_param *kp)
 {
 	int value, rc;
 
@@ -581,7 +536,7 @@ intf_max_set(const char *val, cfs_kernel_param_arg_t *kp)
 }
 
 static int
-response_tracking_set(const char *val, cfs_kernel_param_arg_t *kp)
+response_tracking_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
 	unsigned long new_value;

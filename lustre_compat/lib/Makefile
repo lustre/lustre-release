@@ -4,4 +4,4 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-lib_objs := glob.o generic-radix-tree.o
+lib_objs := generic-radix-tree.o

@@ -46,11 +46,7 @@ static struct {
 	struct net		*pta_ns;
 	wait_queue_head_t	pta_waitq;
 	atomic_t		pta_ready;
-#ifdef HAVE_SK_DATA_READY_ONE_ARG
-	void			(*pta_odata)(struct sock *);
-#else
-	void			(*pta_odata)(struct sock *, int);
-#endif
+	void			(*pta_odata)(struct sock *s);
 } lnet_acceptor_state = {
 	.pta_shutdown = 1
 };
@@ -139,18 +135,10 @@ lnet_connect_console_error(int rc, struct lnet_nid *peer_nid,
 }
 EXPORT_SYMBOL(lnet_connect_console_error);
 
-#ifdef HAVE_SK_DATA_READY_ONE_ARG
 static void lnet_acceptor_ready(struct sock *sk)
-#else
-static void lnet_acceptor_ready(struct sock *sk, int len)
-#endif
 {
 	rmb();
-#ifdef HAVE_SK_DATA_READY_ONE_ARG
 	lnet_acceptor_state.pta_odata(sk);
-#else
-	lnet_acceptor_state.pta_odata(sk, 0);
-#endif
 
 	atomic_set(&lnet_acceptor_state.pta_ready, 1);
 	wake_up_interruptible(&lnet_acceptor_state.pta_waitq);

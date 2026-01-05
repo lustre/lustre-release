@@ -2055,7 +2055,7 @@ static const struct obd_ops mgc_obd_ops = {
 };
 
 static int mgc_param_requeue_timeout_min_set(const char *val,
-				     cfs_kernel_param_arg_t *kp)
+				     const struct kernel_param *kp)
 {
 	int rc;
 	unsigned int num;
@@ -2080,12 +2080,7 @@ static const struct kernel_param_ops param_ops_requeue_timeout_min = {
 		__param_check(name, p, unsigned int)
 
 unsigned int mgc_requeue_timeout_min = MGC_TIMEOUT_MIN_SECONDS;
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(mgc_requeue_timeout_min, requeue_timeout_min, 0644);
-#else
-module_param_call(mgc_requeue_timeout_min, mgc_param_requeue_timeout_min_set,
-		  param_get_uint, &param_ops_requeue_timeout_min, 0644);
-#endif
 MODULE_PARM_DESC(mgc_requeue_timeout_min, "Minimal requeue time to refresh logs");
 
 static int __init mgc_init(void)

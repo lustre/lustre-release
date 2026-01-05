@@ -20,7 +20,7 @@
 
 #include <lustre_compat/linux/generic-radix-tree.h>
 #include <linux/file.h>
-#include <lustre_compat/linux/glob.h>
+#include <linux/glob.h>
 #include <linux/types.h>
 #include <lustre_compat/net/linux-net.h>
 

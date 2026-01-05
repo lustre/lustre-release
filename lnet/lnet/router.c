@@ -90,19 +90,14 @@ MODULE_PARM_DESC(router_ping_timeout, "Seconds to wait for the reply to a router
  * The default is set to 100 to ensure we maintain the original behavior.
  */
 unsigned int router_sensitivity_percentage = 100;
-static int rtr_sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp);
+static int rtr_sensitivity_set(const char *val, const struct kernel_param *kp);
 static struct kernel_param_ops param_ops_rtr_sensitivity = {
 	.set = rtr_sensitivity_set,
 	.get = param_get_int,
 };
 #define param_check_rtr_sensitivity(name, p) \
 		__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(router_sensitivity_percentage, rtr_sensitivity, S_IRUGO|S_IWUSR);
-#else
-module_param_call(router_sensitivity_percentage, rtr_sensitivity_set, param_get_int,
-		  &router_sensitivity_percentage, S_IRUGO|S_IWUSR);
-#endif
 MODULE_PARM_DESC(router_sensitivity_percentage,
 		"(Deprecated) How healthy a gateway should be to be used in percent");
 
@@ -113,7 +108,7 @@ static void lnet_del_route_from_rnet(struct lnet_nid *gw_nid,
 				     struct list_head *zombies);
 
 static int
-rtr_sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
+rtr_sensitivity_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
 	unsigned *sen = (unsigned *)kp->arg;
