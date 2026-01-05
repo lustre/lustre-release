@@ -956,16 +956,16 @@ struct req_capsule;
 	.rmf_name    = (name),					\
 	.rmf_flags   = (flags),					\
 	.rmf_size    = (size),					\
-	.rmf_swabber = (void (*)(void *))(swabber),		\
-	.rmf_dumper  = (void (*)(void *))(dumper)		\
+	.rmf_swabber = (void (*)(void *))(void *)(swabber),	\
+	.rmf_dumper  = (void (*)(void *))(void *)(dumper)	\
 }
 
 #define DEFINE_MSGFL(name, flags, size, swab_len, dumper) {	\
 	.rmf_name     = (name),					\
 	.rmf_flags    = (flags),				\
 	.rmf_size     = (size),					\
-	.rmf_swab_len = (int (*)(void *, __u32))(swab_len),	\
-	.rmf_dumper   = (void (*)(void *))(dumper)		\
+	.rmf_swab_len = (int (*)(void *, __u32))(void *)(swab_len), \
+	.rmf_dumper   = (void (*)(void *))(void *)(dumper)	\
 }
 
 struct req_msg_field RMF_GENERIC_DATA =
@@ -2340,8 +2340,6 @@ static void *__req_capsule_get(struct req_capsule *pill,
 	__u32                    len;
 	__u32                    offset;
 
-	void *(*getter)(struct lustre_msg *m, __u32 n, __u32 minlen);
-
 	static const char *rcl_names[RCL_NR] = {
 		[RCL_CLIENT] = "client",
 		[RCL_SERVER] = "server"
@@ -2358,9 +2356,6 @@ static void *__req_capsule_get(struct req_capsule *pill,
 
 	msg = __req_msg(pill, loc);
 	LASSERT(msg != NULL);
-
-	getter = (field->rmf_flags & RMF_F_STRING) ?
-		(typeof(getter))lustre_msg_string : lustre_msg_buf;
 
 	/* req_layout_init() already asserted that field->rmf_size > 0 */
 	if (field->rmf_flags &
@@ -2383,7 +2378,11 @@ static void *__req_capsule_get(struct req_capsule *pill,
 	} else {
 		len = max_t(typeof(field->rmf_size), field->rmf_size, 0);
 	}
-	value = getter(msg, offset, len);
+
+	if (field->rmf_flags & RMF_F_STRING)
+		value = lustre_msg_string(msg, offset, len);
+	else
+		value = lustre_msg_buf(msg, offset, len);
 
 	if (value == NULL) {
 		LASSERT(pill->rc_req != NULL);
