@@ -1579,7 +1579,7 @@ struct vvp_io_args {
 		} normal;
 	} u;
 	/* did we switch this IO from BIO to DIO using hybrid IO? */
-	int	via_hybrid_switched:1;
+	unsigned int	via_hybrid_switched:1;
 };
 
 static inline unsigned int iocb_ki_flags_get(const struct file *file,
