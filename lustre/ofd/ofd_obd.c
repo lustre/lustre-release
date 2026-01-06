@@ -31,17 +31,17 @@
 #include <obd_support.h>
 
 /**
- * Initialize OFD per-export statistics.
+ * ofd_export_stats_init() - Initialize OFD per-export statistics.
+ * @ofd: OFD device
+ * @exp: OBD export
+ * @client_nid: NID of client
  *
  * This function sets up procfs entries for various OFD export counters. These
  * counters are for per-client statistics tracked on the server.
  *
- * \param[in] ofd	 OFD device
- * \param[in] exp	 OBD export
- * \param[in] client_nid NID of client
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_export_stats_init(struct ofd_device *ofd,
 				 struct obd_export *exp,
@@ -78,12 +78,16 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 }
 
 /**
- * Match client and OST server connection feature flags.
+ * ofd_parse_connect_data() - Match client & OST server connection feature flags
+ * @env: execution environment
+ * @exp: the obd_export associated with this client/target pair
+ * @data: stores data for this connect request
+ * @new_connection: is this connection new or not
  *
  * Compute the compatibility flags for a connection request based on
  * features mutually supported by client and server.
  *
- * The obd_export::exp_connect_data.ocd_connect_flags field in \a exp
+ * The obd_export::exp_connect_data.ocd_connect_flags field in @exp
  * must not be updated here, otherwise a partially initialized value may
  * be exposed. After the connection request is successfully processed,
  * the top-level tgt_connect() request handler atomically updates the export
@@ -94,17 +98,10 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
  * full struct obd_connect_data. So care must be taken when accessing fields
  * that are not present in struct obd_connect_data_v1. See LU-16.
  *
- * \param[in] env		execution environment
- * \param[in] exp		the obd_export associated with this
- *				client/target pair
- * \param[in] data		stores data for this connect request
- * \param[in] new_connection	is this connection new or not
- *
- * \retval		0 if success
- * \retval		-EPROTO client and server feature requirements are
- *			incompatible
- * \retval		-EBADF  OST index in connect request doesn't match
- *			real OST index
+ * Return:
+ * * %0 if success
+ * * %-EPROTO client and server feature requirements are incompatible
+ * * %-EBADF  OST index in connect request doesn't match real OST index
  */
 static int ofd_parse_connect_data(const struct lu_env *env,
 				  struct obd_export *exp,
@@ -251,20 +248,20 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 }
 
 /**
- * Re-initialize export upon client reconnection.
+ * ofd_obd_reconnect() - Re-initialize export upon client reconnection.
+ * @env: execution environment
+ * @exp: OBD export
+ * @obd: OFD device
+ * @cluuid: NID of client
+ * @data: connection data from request
+ * @localdata: client NID
  *
  * This function parses connection data from reconnect and resets
  * export statistics.
  *
- * \param[in] env	execution environment
- * \param[in] exp	OBD export
- * \param[in] obd	OFD device
- * \param[in] cluuid	NID of client
- * \param[in] data	connection data from request
- * \param[in] localdata	client NID
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_device *obd, struct obd_uuid *cluuid,
@@ -311,21 +308,21 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 }
 
 /**
- * Initialize new client connection.
+ * ofd_obd_connect() - Initialize new client connection.
+ * @env: execution environment
+ * @_exp: stores pointer to new export [out]
+ * @obd: OFD device
+ * @cluuid: client UUID
+ * @data: connection data from request
+ * @localdata: client NID
  *
  * This function handles new connection to the OFD. The new export is
  * created (in context of class_connect()) and persistent client data is
  * initialized on storage.
  *
- * \param[in] env	execution environment
- * \param[out] _exp	stores pointer to new export
- * \param[in] obd	OFD device
- * \param[in] cluuid	client UUID
- * \param[in] data	connection data from request
- * \param[in] localdata	client NID
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 			   struct obd_device *obd, struct obd_uuid *cluuid,
@@ -399,15 +396,15 @@ out:
 }
 
 /**
- * Disconnect a connected client.
+ * ofd_obd_disconnect() - Disconnect a connected client.
+ * @exp: OBD export
  *
  * This function terminates the client connection. The client export is
  * disconnected (cleaned up) and client data on persistent storage is removed.
  *
- * \param[in] exp	OBD export
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_obd_disconnect(struct obd_export *exp)
 {
@@ -444,15 +441,15 @@ out:
 }
 
 /**
- * Implementation of obd_ops::o_init_export.
+ * ofd_init_export() - Implementation of obd_ops::o_init_export.
+ * @exp: OBD export
  *
  * This function is called from class_new_export() and initializes
  * the OFD-specific data for new export.
  *
- * \param[in] exp	OBD export
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_init_export(struct obd_export *exp)
 {
@@ -478,15 +475,15 @@ static int ofd_init_export(struct obd_export *exp)
 }
 
 /**
- * Implementation of obd_ops::o_destroy_export.
+ * ofd_destroy_export() - Implementation of obd_ops::o_destroy_export.
+ * @exp: OBD export
  *
  * This function is called from class_export_destroy() to cleanup
  * the OFD-specific data for export being destroyed.
  *
- * \param[in] exp	OBD export
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_destroy_export(struct obd_export *exp)
 {
@@ -522,16 +519,17 @@ static int ofd_destroy_export(struct obd_export *exp)
 }
 
 /**
- * Notify all devices in server stack about recovery completion.
+ * ofd_postrecov() - Notify all devices in server stack about recovery
+ *                   completion
+ * @env: execution environment
+ * @ofd: OFD device
  *
  * This function calls ldo_recovery_complete() for all lower devices in the
  * server stack so they will be prepared for normal operations.
  *
- * \param[in] env	execution environment
- * \param[in] ofd	OFD device
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
 {
@@ -555,15 +553,15 @@ int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
 }
 
 /**
- * Implementation of obd_ops::o_postrecov.
+ * ofd_obd_postrecov() - Implementation of obd_ops::o_postrecov.
+ * @obd: OBD device of OFD
  *
  * This function is called from target_finish_recovery() upon recovery
  * completion.
  *
- * \param[in] obd	OBD device of OFD
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_obd_postrecov(struct obd_device *obd)
 {
@@ -585,22 +583,22 @@ static int ofd_obd_postrecov(struct obd_device *obd)
 }
 
 /**
- * Implementation of obd_ops::o_set_info_async.
+ * ofd_set_info_async() - Implementation of obd_ops::o_set_info_async.
+ * @env: execution environment
+ * @exp: OBD export of OFD device
+ * @keylen: length of @key
+ * @key: key name
+ * @vallen: length of @val
+ * @val: the @key value
+ * @set: not used in OFD
  *
  * This function is not called from request handler, it is only used by
  * class_notify_sptlrpc_conf() locally by direct obd_set_info_async() call.
  * \see  ofd_set_info_hdl() for request handler function.
  *
- * \param[in] env	execution environment
- * \param[in] exp	OBD export of OFD device
- * \param[in] keylen	length of \a key
- * \param[in] key	key name
- * \param[in] vallen	length of \a val
- * \param[in] val	the \a key value
- * \param[in] set	not used in OFD
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 			      __u32 keylen, void *key, __u32 vallen, void *val,
@@ -626,22 +624,22 @@ static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 }
 
 /**
- * Implementation of obd_ops::o_get_info.
+ * ofd_get_info() - Implementation of obd_ops::o_get_info.
+ * @env: execution environment
+ * @exp: OBD export of OFD device
+ * @keylen: length of @key
+ * @key: key name
+ * @vallen: length of key value [out]
+ * @val: the key value to return [out]
  *
  * This function is not called from request handler, it is only used by
  * direct call from nrs_orr_range_fill_physical() in ptlrpc, see LU-3239.
  *
  * \see  ofd_get_info_hdl() for request handler function.
  *
- * \param[in]  env	execution environment
- * \param[in]  exp	OBD export of OFD device
- * \param[in]  keylen	length of \a key
- * \param[in]  key	key name
- * \param[out] vallen	length of key value
- * \param[out] val	the key value to return
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 			__u32 keylen, void *key, __u32 *vallen, void *val)
@@ -680,25 +678,25 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 }
 
 /**
- * Implementation of obd_ops::o_statfs.
+ * ofd_statfs() - Implementation of obd_ops::o_statfs.
+ * @env: execution environment
+ * @exp: OBD export of OFD device
+ * @osfs: statistic data to return [out]
+ * @max_age: maximum age for cached data
+ * @flags: not used in OFD
  *
  * This function returns information about a storage file system.
  * It is called from several places by using the OBD API as well as
  * by direct call, e.g. from request handler.
  *
- * \see  ofd_statfs_hdl() for request handler function.
+ * \see ofd_statfs_hdl() for request handler function.
  *
  * Report also the state of the OST to the caller in osfs->os_state
  * (OS_STATFS_READONLY, OS_STATFS_DEGRADED).
  *
- * \param[in]  env	execution environment
- * \param[in]  exp	OBD export of OFD device
- * \param[out] osfs	statistic data to return
- * \param[in]  max_age	maximum age for cached data
- * \param[in]  flags	not used in OFD
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	       struct obd_statfs *osfs, time64_t max_age, __u32 flags)
@@ -806,17 +804,17 @@ out:
 }
 
 /**
- * Implementation of obd_ops::o_setattr.
+ * ofd_echo_setattr() - Implementation of obd_ops::o_setattr.
+ * @env: execution environment
+ * @exp: OBD export of OFD device
+ * @oa: setattr parameters
  *
  * This function is only used by ECHO client when it is run on top of OFD,
  * \see  ofd_setattr_hdl() for request handler function.
-
- * \param[in] env	execution environment
- * \param[in] exp	OBD export of OFD device
- * \param[in] oa	setattr parameters
  *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa)
@@ -896,19 +894,19 @@ out:
 }
 
 /**
- * Destroy OFD object by its FID.
+ * ofd_destroy_by_fid() - Destroy OFD object by its FID.
+ * @env: execution environment
+ * @ofd: OFD device
+ * @fid: FID of object
+ * @orphan: set if object being destroyed is an orphan
  *
  * Supplemental function to destroy object by FID, it is used by request
  * handler and by ofd_echo_destroy() below to find object by FID, lock it
  * and call ofd_destroy() finally.
  *
- * \param[in] env	execution environment
- * \param[in] ofd	OFD device
- * \param[in] fid	FID of object
- * \param[in] orphan	set if object being destroyed is an orphan
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 		       const struct lu_fid *fid, int orphan)
@@ -954,21 +952,21 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 }
 
 /**
- * Implementation of obd_ops::o_destroy.
+ * ofd_echo_destroy() - Implementation of obd_ops::o_destroy.
+ * @env: execution environment
+ * @exp: OBD export of OFD device
+ * @oa: obdo structure with FID
  *
  * This function is only used by ECHO client when it is run on top of OFD,
  * \see  ofd_destroy_hdl() for request handler function.
-
- * \param[in] env	execution environment
- * \param[in] exp	OBD export of OFD device
- * \param[in] oa	obdo structure with FID
  *
  * Note: this is OBD API method which is common API for server OBDs and
  * client OBDs. Thus some parameters used in client OBDs may not be used
  * on server OBDs and vice versa.
  *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_echo_destroy(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa)
@@ -1003,22 +1001,22 @@ out:
 }
 
 /**
- * Implementation of obd_ops::o_create.
+ * ofd_echo_create() - Implementation of obd_ops::o_create.
+ * @env: execution environment
+ * @exp: OBD export of OFD device
+ * @oa: obdo structure with FID sequence to use
  *
  * This function is only used by ECHO client when it is run on top of OFD
  * and just creates an object.
  * \see  ofd_create_hdl() for request handler function.
  *
- * \param[in]  env	execution environment
- * \param[in]  exp	OBD export of OFD device
- * \param[in]  oa	obdo structure with FID sequence to use
- *
  * Note: this is OBD API method which is common API for server OBDs and
  * client OBDs. Thus some parameters used in client OBDs may not be used
  * on server OBDs and vice versa.
  *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 			   struct obdo *oa)
@@ -1105,19 +1103,19 @@ out_sem:
 }
 
 /**
- * Implementation of obd_ops::o_getattr.
+ * ofd_echo_getattr() - Implementation of obd_ops::o_getattr.
+ * @env: execution environment
+ * @exp: OBD export of OFD device
+ * @oa: contains FID of object to get attributes from and is used to return
+ *      attributes back [in,out]
  *
  * This function is only used by ECHO client when it is run on top of OFD
  * and returns attributes of object.
- * \see  ofd_getattr_hdl() for request handler function.
+ * \see ofd_getattr_hdl() for request handler function.
  *
- * \param[in]	  env	execution environment
- * \param[in]	  exp	OBD export of OFD device
- * \param[in,out] oa	contains FID of object to get attributes from and
- *			is used to return attributes back
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_echo_getattr(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa)
@@ -1159,17 +1157,18 @@ out:
 }
 
 /**
- * Get object version for OBD_IOC_GET_OBJ_VERSION ioctl.
+ * ofd_ioc_get_obj_version() - Get object version for OBD_IOC_GET_OBJ_VERSION
+ *                             ioctl.
+ * @env: execution environment
+ * @ofd: OFD device
+ * @karg: ioctl data [out]
  *
  * This is supplemental function for ofd_iocontrol() to return object
  * version for lctl tool.
  *
- * \param[in]  env	execution environment
- * \param[in]  ofd	OFD device
- * \param[out] karg	ioctl data
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_ioc_get_obj_version(const struct lu_env *env,
 				   struct ofd_device *ofd, void *karg)
@@ -1240,19 +1239,19 @@ static int ofd_device_sync(const struct lu_env *env, struct ofd_device *ofd)
 
 
 /**
- * Implementation of obd_ops::o_iocontrol.
+ * ofd_iocontrol() - Implementation of obd_ops::o_iocontrol.
+ * @cmd: ioctl command
+ * @exp: OBD export of OFD
+ * @len: not used
+ * @karg: buffer with data [in, out]
+ * @uarg: not used
  *
  * This is OFD ioctl handling function which is primary interface for
  * Lustre tools like lfs, lctl and lfsck.
  *
- * \param[in]	  cmd	ioctl command
- * \param[in]	  exp	OBD export of OFD
- * \param[in]	  len	not used
- * \param[in,out] karg	buffer with data
- * \param[in]	  uarg	not used
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
@@ -1331,7 +1330,9 @@ out:
 }
 
 /**
- * Implementation of obd_ops::o_health_check.
+ * ofd_health_check() - Implementation of obd_ops::o_health_check.
+ * @nul: not used
+ * @obd: OBD device of OFD
  *
  * This function checks the OFD device health - ability to respond on
  * incoming requests. There are two health_check methods:
@@ -1341,11 +1342,9 @@ out:
  *   is not stuck. This is expensive method and must be manually enabled
  *   by setting the enable_health_write sysfs parameter.
  *
- * \param[in] nul	not used
- * \param[in] obd	OBD device of OFD
- *
- * \retval		0 if successful
- * \retval		negative value in case of error
+ * Return:
+ * * %0 if successful
+ * * %negative value in case of error
  */
 static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 {
