@@ -32,13 +32,14 @@
 #ifdef CONFIG_PROC_FS
 
 /**
- * Show number of FID allocation sequences.
+ * seqs_allocated_show() - Show number of FID allocation sequences.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t seqs_allocated_show(struct kobject *kobj, struct attribute *attr,
 				   char *buf)
@@ -52,13 +53,14 @@ static ssize_t seqs_allocated_show(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RO_ATTR(seqs_allocated);
 
 /**
- * Show total number of grants for precreate.
+ * grant_precreate_show() - Show total number of grants for precreate.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t grant_precreate_show(struct kobject *kobj,
 				    struct attribute *attr,
@@ -73,13 +75,15 @@ static ssize_t grant_precreate_show(struct kobject *kobj,
 LUSTRE_RO_ATTR(grant_precreate);
 
 /**
- * Show number of precreates allowed in a single transaction.
+ * precreate_batch_show() - Show number of precreates allowed in a single
+ *                          transaction.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t precreate_batch_show(struct kobject *kobj,
 				    struct attribute *attr,
@@ -93,15 +97,16 @@ static ssize_t precreate_batch_show(struct kobject *kobj,
 }
 
 /**
- * Change number of precreates allowed in a single transaction.
+ * precreate_batch_store() - Change number of precreates allowed in a single
+ *                           transaction.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents precreate
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %count on success
+ * * %negative number on error
  */
 static ssize_t precreate_batch_store(struct kobject *kobj,
 				     struct attribute *attr,
@@ -128,13 +133,14 @@ static ssize_t precreate_batch_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(precreate_batch);
 
 /**
- * Show number of seconds to delay atime
+ * atime_diff_show() - Show number of seconds to delay atime
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t atime_diff_show(struct kobject *kobj, struct attribute *attr,
 			       char *buf)
@@ -147,15 +153,15 @@ static ssize_t atime_diff_show(struct kobject *kobj, struct attribute *attr,
 }
 
 /**
- * Change number of seconds to delay atime
+ * atime_diff_store() - Change number of seconds to delay atime
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents dealy in seconds
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %@count on success
+ * * %negative number on error
  */
 static ssize_t atime_diff_store(struct kobject *kobj, struct attribute *attr,
 				const char *buffer, size_t count)
@@ -179,13 +185,13 @@ static ssize_t atime_diff_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(atime_diff);
 
 /**
- * Show the last used ID for each FID sequence used by OFD.
+ * last_id_seq_show() - Show the last used ID for each FID sequence used by OFD.
+ * @m: seq_file handle
+ * @data: unused for single entry
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static int last_id_seq_show(struct seq_file *m, void *data)
 {
@@ -217,7 +223,10 @@ static int last_id_seq_show(struct seq_file *m, void *data)
 LDEBUGFS_SEQ_FOPS_RO(last_id);
 
 /**
- * Show if the OFD is in degraded mode.
+ * degraded_show() - Show if the OFD is in degraded mode.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
  * Degraded means OFD has a failed drive or is undergoing RAID rebuild.
  * The MDS will try to avoid using this OST for new object allocations
@@ -225,7 +234,7 @@ LDEBUGFS_SEQ_FOPS_RO(last_id);
  * this OST are slowed down.  It also reduces the contention on the OST
  * RAID device, allowing it to rebuild more quickly.
  *
- * \retval		count of bytes written
+ * Returns count of bytes written
  */
 static ssize_t degraded_show(struct kobject *kobj, struct attribute *attr,
 			     char *buf)
@@ -238,17 +247,19 @@ static ssize_t degraded_show(struct kobject *kobj, struct attribute *attr,
 }
 
 /**
- * Set OFD to degraded mode.
+ * degraded_store() - Set OFD to degraded mode.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents degraded
+ * @count: @buffer length
  *
  * This is used to interface to userspace administrative tools for
  * the underlying RAID storage, so that they can mark an OST
  * as having degraded performance.
  *
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %@count on success
+ * * %negative number on error
  */
 static ssize_t degraded_store(struct kobject *kobj, struct attribute *attr,
 			      const char *buffer, size_t count)
@@ -299,7 +310,6 @@ static ssize_t enable_resource_id_check_show(struct kobject *kobj,
 /**
  * enable_resource_id_check_store() - Enable or disable resource ID checking
  * on the OST.
- *
  * @kobj: kobject for the OFD device
  * @attr: attribute for the OFD device
  * @buffer: buffer containing the value to set
@@ -421,8 +431,7 @@ static ssize_t resource_id_repair_queue_count_show(struct kobject *kobj,
 }
 
 /**
- * resource_id_queue_count_store() - Set the resource ID repair queue size
- *
+ * resource_id_repair_queue_count_store() - Set resource ID repair queue size
  * @kobj: kobject for the OFD device
  * @attr: attribute for the OFD device
  * @buffer: buffer containing the value to set
@@ -434,7 +443,7 @@ static ssize_t resource_id_repair_queue_count_show(struct kobject *kobj,
  * Return:
  * * %0 on success
  * * %-ERANGE if the value is out of range must be in
- * [1, OFD_ID_REPAIR_QUEUE_COUNT_LIMIT]
+ *   [1, OFD_ID_REPAIR_QUEUE_COUNT_LIMIT]
  * * %negative on failure
  */
 static ssize_t resource_id_repair_queue_count_store(struct kobject *kobj,
@@ -464,13 +473,16 @@ static ssize_t resource_id_repair_queue_count_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(resource_id_repair_queue_count);
 
 /**
- * Show if the OFD is in no precreate mode.
+ * no_create_show() - Show if the OFD is in no precreate mode.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
  * This means OFD has been adminstratively disabled at the OST to prevent
  * the MDS from creating any new files on the OST, though existing files
  * can still be read, written, and unlinked.
  *
- * \retval		number of bytes written
+ * Returns number of bytes written
  */
 static ssize_t no_create_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
@@ -483,15 +495,18 @@ static ssize_t no_create_show(struct kobject *kobj, struct attribute *attr,
 }
 
 /**
- * Set OFD to no create mode.
+ * no_create_store() - Set OFD to no create mode.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents dealy in seconds
+ * @count: @buffer length
  *
  * This is used to interface to userspace administrative tools to
  * disable new object creation on the OST.
  *
- * \param[in] count	\a buffer length
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %@count on success
+ * * %negative number on error
  */
 static ssize_t no_create_store(struct kobject *kobj, struct attribute *attr,
 				  const char *buffer, size_t count)
@@ -522,12 +537,15 @@ LUSTRE_RW_ATTR(no_precreate);
 #endif
 
 /**
- * Show if the OFD is in read-only mode.
+ * readonly_show() - Show if the OFD is in read-only mode.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
  * This means OFD has been adminstratively disabled at the OST to prevent
  * writing to the OFD.
  *
- * \retval		number of bytes written
+ * Returns number of bytes written
  */
 static ssize_t readonly_show(struct kobject *kobj, struct attribute *attr,
 			     char *buf)
@@ -540,15 +558,18 @@ static ssize_t readonly_show(struct kobject *kobj, struct attribute *attr,
 }
 
 /**
- * Set OFD to readonly mode.
+ * readonly_store() - Set OFD to readonly mode.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents OST read-only
+ * @count: @buffer length
  *
  * This is used to interface to userspace administrative tools to
  * set the OST read-only.
  *
- * \param[in] count	\a buffer length
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %@count on success
+ * * %negative number on error
  */
 static ssize_t readonly_store(struct kobject *kobj, struct attribute *attr,
 			      const char *buffer, size_t count)
@@ -572,13 +593,14 @@ static ssize_t readonly_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(readonly);
 
 /**
- * Show OFD filesystem type.
+ * fstype_show() - Show OFD filesystem type.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf)
@@ -596,7 +618,10 @@ static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RO_ATTR(fstype);
 
 /**
- * Show journal handling mode: synchronous or asynchronous.
+ * sync_journal_show() - Show journal handling mode: synchronous or asynchronous
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
  * When running in asynchronous mode the journal transactions are not
  * committed to disk before the RPC is replied back to the client.
@@ -606,11 +631,9 @@ LUSTRE_RO_ATTR(fstype);
  * on bulk RPCs, and will have to keep more dirty pages in cache before they
  * are committed on the OST.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t sync_journal_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -623,17 +646,17 @@ static ssize_t sync_journal_show(struct kobject *kobj, struct attribute *attr,
 }
 
 /**
- * Set journal mode to synchronous or asynchronous.
+ * sync_journal_store() - Set journal mode to synchronous or asynchronous.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents modes
+ *          1: synchronous mode
+ *          0: asynchronous mode
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents mode
- *			1: synchronous mode
- *			0: asynchronous mode
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %@count on success
+ * * %negative number on error
  */
 static ssize_t sync_journal_store(struct kobject *kobj, struct attribute *attr,
 				 const char *buffer, size_t count)
@@ -703,16 +726,17 @@ static ssize_t brw_size_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(brw_size);
 
 /**
- * Show the limit of soft sync RPCs.
+ * soft_sync_limit_show() - Show the limit of soft sync RPCs.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
  * This value defines how many IO RPCs with OBD_BRW_SOFT_SYNC flag
  * are allowed before sync update will be triggered.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t soft_sync_limit_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
@@ -725,20 +749,20 @@ static ssize_t soft_sync_limit_show(struct kobject *kobj,
 }
 
 /**
- * Change the limit of soft sync RPCs.
+ * soft_sync_limit_store() - Change the limit of soft sync RPCs.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents dealy in seconds
+ * @count: @buffer length
  *
  * Define how many IO RPCs with OBD_BRW_SOFT_SYNC flag
  * allowed before sync update will be done.
  *
  * This limit is global across all exports.
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents limit
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %@count on success
+ * * %negative number on error
  */
 static ssize_t soft_sync_limit_store(struct kobject *kobj,
 				     struct attribute *attr,
@@ -760,15 +784,14 @@ static ssize_t soft_sync_limit_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(soft_sync_limit);
 
 /**
- * Show the LFSCK speed limit.
+ * lfsck_speed_limit_show() - Show the LFSCK speed limit.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
- * The maximum number of items scanned per second.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t lfsck_speed_limit_show(struct kobject *kobj,
 				      struct attribute *attr, char *buf)
@@ -781,17 +804,17 @@ static ssize_t lfsck_speed_limit_show(struct kobject *kobj,
 }
 
 /**
- * Change the LFSCK speed limit.
+ * lfsck_speed_limit_store() - Change the LFSCK speed limit.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents speed (e.g., "1000").
+ * @count: @buffer length
  *
  * Limit number of items that may be scanned per second.
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents limit
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %@count on success
+ * * %negative number on error
  */
 static ssize_t lfsck_speed_limit_store(struct kobject *kobj,
 				       struct attribute *attr,
@@ -814,13 +837,14 @@ static ssize_t lfsck_speed_limit_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(lfsck_speed_limit);
 
 /**
- * Show LFSCK layout verification stats from the most recent LFSCK run.
+ * lfsck_layout_seq_show() - Show LFSCK layout verification stats from the most
+ *                           recent LFSCK run.
+ * @m: seq_file handle
+ * @data: unused for single entry
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static int lfsck_layout_seq_show(struct seq_file *m, void *data)
 {
@@ -836,13 +860,14 @@ static int lfsck_layout_seq_show(struct seq_file *m, void *data)
 LDEBUGFS_SEQ_FOPS_RO(lfsck_layout);
 
 /**
- * Show if LFSCK performed parent FID verification.
+ * lfsck_verify_pfid_seq_show() - Show if LFSCK performed parent FID
+ *                                verification.
+ * @m: seq_file handle
+ * @data: unused for single entry
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static int lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
 {
@@ -860,20 +885,21 @@ static int lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
 }
 
 /**
- * Set the LFSCK behavior to verify parent FID correctness.
+ * lfsck_verify_pfid_seq_write() - Set the LFSCK behavior to verify parent FID
+ *                                 correctness.
+ * @file: proc file
+ * @buffer: string which represents behavior
+ *          1: verify parent FID
+ *          0: don't verify parent FID
+ * @count: @buffer length
+ * @off: unused for single entry
  *
  * If flag ofd_lfsck_verify_pfid is set then LFSCK does parent FID
  * verification during read/write operations.
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents behavior
- *			1: verify parent FID
- *			0: don't verify parent FID
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %@count on success
+ * * %negative number on error
  */
 static ssize_t
 lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
@@ -1012,13 +1038,14 @@ static int site_stats_seq_show(struct seq_file *m, void *data)
 LDEBUGFS_SEQ_FOPS_RO(site_stats);
 
 /**
- * Show if the OFD enforces T10PI checksum.
+ * checksum_t10pi_enforce_show() - Show if the OFD enforces T10PI checksum.
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:
+ * * %0 on success
+ * * %negative value on error
  */
 static ssize_t checksum_t10pi_enforce_show(struct kobject *kobj,
 					   struct attribute *attr,
@@ -1032,7 +1059,14 @@ static ssize_t checksum_t10pi_enforce_show(struct kobject *kobj,
 }
 
 /**
- * Force specific T10PI checksum modes to be enabled
+ * checksum_t10pi_enforce_store() - Force specific T10PI checksum modes to be
+ *                                  enabled
+ * @kobj: Kernel object (OFD device)
+ * @attr: Pointer to struct attribute
+ * @buffer: string which represents mode
+ *          1: set T10PI checksums enforced
+ *          0: unset T10PI checksums enforced
+ * @count: @buffer length
  *
  * If T10PI *is* supported in hardware, allow only the supported T10PI type
  * to be used. If T10PI is *not* supported by the OSD, setting the enforce
@@ -1042,15 +1076,9 @@ static ssize_t checksum_t10pi_enforce_show(struct kobject *kobj,
  * The final determination of which algorithm to be used depends whether
  * the client supports T10PI or not, and is handled at client connect time.
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents mode
- *			1: set T10PI checksums enforced
- *			0: unset T10PI checksums enforced
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:
+ * * %count on success
+ * * %negative number on error
  */
 static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
 					    struct attribute *attr,
@@ -1120,9 +1148,10 @@ static struct ldebugfs_vars ldebugfs_ofd_gss_vars[] = {
 };
 
 /**
- * Initialize OFD statistics counters
- *
- * param[in] stats	statistics counters
+ * ofd_stats_counter_init() - Initialize OFD statistics counters
+ * @stats: statistics counters
+ * @offset:
+ * @cntr_umask:
  */
 void ofd_stats_counter_init(struct lprocfs_stats *stats, unsigned int offset,
 			    enum lprocfs_counter_config cntr_umask)
@@ -1216,12 +1245,12 @@ static struct attribute *ofd_attrs[] = {
 KOBJ_ATTRIBUTE_GROUPS(ofd); /* creates ofd_groups from ofd_attrs */
 
 /**
- * Initialize all needed procfs entries for OFD device.
+ * ofd_tunables_init() - Initialize all needed procfs entries for OFD device.
+ * @ofd: OFD device
  *
- * \param[in] ofd	OFD device
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_tunables_init(struct ofd_device *ofd)
 {
