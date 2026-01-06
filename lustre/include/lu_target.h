@@ -615,10 +615,15 @@ struct distribute_txn_replay_req *
 distribute_txn_lookup_finish_list(struct target_distribute_txn_data *tdtd,
 				  __u64 transno);
 bool is_req_replayed_by_update(struct ptlrpc_request *req);
+
 enum {
 	ESERIOUS = 0x0001000
 };
 
+/* ESERIOUS errors must be returned during RPC handling by targets when
+ * the RPC reply buffer has not yet been packed.  Otherwise, the LBUG()
+ * in tgt_handle_request0() will be triggered when sending the reply.
+ */
 static inline int err_serious(int rc)
 {
 	LASSERT(rc < 0);
