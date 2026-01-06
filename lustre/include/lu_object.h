@@ -980,6 +980,8 @@ enum lu_context_tag {
 	LCT_LOCAL		= BIT(7),
 	/* session for server thread */
 	LCT_SERVER_SESSION	= BIT(8),
+	/* lc_values have been initialized */
+	LCT_CL_INIT		= BIT(9),
 	/*
 	 * Set when at least one of keys, having values in this context has
 	 * non-NULL lu_context_key::lct_exit() method. This is used to

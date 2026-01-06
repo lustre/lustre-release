@@ -2006,6 +2006,8 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 	 * request processing but some local operation */
 	if (env->le_ses == NULL)
 		return 0;
+	if (!(env->le_ses->lc_tags & LCT_CL_INIT))
+		return -EFAULT;
 
 	LASSERT(tgt->lut_last_rcvd);
 	tsi = tgt_ses_info(env);

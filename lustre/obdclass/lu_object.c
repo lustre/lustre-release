@@ -1576,6 +1576,9 @@ void *lu_context_key_get(const struct lu_context *ctx,
 	LINVRNT(ctx->lc_state == LCS_ENTERED);
 	LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
 	LASSERT(lu_keys[key->lct_index] == key);
+	WARN(!(ctx->lc_tags & LCT_CL_INIT),
+	     "Probable access of uninitialized array lc_tags:%x\n",
+	      ctx->lc_tags);
 	return ctx->lc_value[key->lct_index];
 }
 EXPORT_SYMBOL(lu_context_key_get);
@@ -1638,6 +1641,7 @@ static void keys_fini(struct lu_context *ctx)
 	if (ctx->lc_value == NULL)
 		return;
 
+	ctx->lc_tags &= ~LCT_CL_INIT;
 	for (i = 0; i < ARRAY_SIZE(lu_keys); ++i)
 		key_fini(ctx, i);
 
@@ -1701,6 +1705,9 @@ static int keys_fill(struct lu_context *ctx)
 				ctx->lc_tags |= LCT_HAS_EXIT;
 		}
 	}
+
+	if (rc == 0)
+		ctx->lc_tags |= LCT_CL_INIT;
 
 	up_read(&lu_key_initing);
 	return rc;
