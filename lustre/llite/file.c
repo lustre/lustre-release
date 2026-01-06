@@ -1922,7 +1922,8 @@ static void ll_heat_add(struct inode *inode, enum cl_io_type iot,
 
 static bool
 ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
-			       enum cl_io_type iot, size_t count)
+			       struct iov_iter *iter, enum cl_io_type iot,
+			       size_t count)
 {
 	/* we can only do this with IOCB_FLAGS, since we can't modify f_flags
 	 * because they're visible in userspace.  so we check for IOCB_DIRECT
@@ -1946,6 +1947,13 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 		RETURN(false);
 
 	if (!test_bit(LL_SBI_HYBRID_IO, sbi->ll_flags))
+		RETURN(false);
+
+	/* Pipe iterators cannot work with DIO - iov_iter_get_pages_alloc2()
+	 * will fail or return 0 for pipes, so don't switch to DIO for pipe
+	 * iterators.
+	 */
+	if (iov_iter_is_pipe(iter))
 		RETURN(false);
 
 	/*
@@ -2460,7 +2468,7 @@ static bool is_unaligned_directio(struct kiocb *iocb, struct iov_iter *iter,
 
 /* This I/O could be switched to direct i/o if the kernel is new enough */
 #ifdef IOCB_DIRECT
-	if (ll_hybrid_bio_dio_switch_check(file, iocb, io_type,
+	if (ll_hybrid_bio_dio_switch_check(file, iocb, iter, io_type,
 					   iov_iter_count(iter)))
 		direct_io = true;
 #endif
@@ -2533,7 +2541,7 @@ static ssize_t do_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	args->u.normal.via_iter = to;
 	args->u.normal.via_iocb = iocb;
 
-	if (ll_hybrid_bio_dio_switch_check(file, iocb, CIT_READ,
+	if (ll_hybrid_bio_dio_switch_check(file, iocb, to, CIT_READ,
 					   iov_iter_count(to)) ||
 	    CFS_FAIL_CHECK(OBD_FAIL_LLITE_FORCE_BIO_AS_DIO)) {
 #ifdef IOCB_DIRECT
@@ -2688,7 +2696,7 @@ static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (cached && result != -ENOSPC && result != -EDQUOT)
 		GOTO(out, rc_normal = result);
 
-	if (ll_hybrid_bio_dio_switch_check(file, iocb, CIT_WRITE,
+	if (ll_hybrid_bio_dio_switch_check(file, iocb, from, CIT_WRITE,
 					   iov_iter_count(from)) ||
 	    CFS_FAIL_CHECK(OBD_FAIL_LLITE_FORCE_BIO_AS_DIO)) {
 #ifdef IOCB_DIRECT

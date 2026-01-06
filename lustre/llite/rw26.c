@@ -456,9 +456,14 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 
 	/* the requirement to not return EIOCBQUEUED for pipes (see bottom of
 	 * this function) plays havoc with the unaligned I/O lifecycle, so
-	 * don't allow unaligned I/O on pipes
+	 * don't allow unaligned I/O on pipes.
+	 *
+	 * Additionally, pipe iterators don't have user pages that can be
+	 * pinned for DIO - iov_iter_get_pages_alloc2() will fail or return 0
+	 * for pipes, so reject all pipe iterators for DIO and fall back to
+	 * buffered I/O.
 	 */
-	if (unaligned && iov_iter_is_pipe(iter))
+	if (iov_iter_is_pipe(iter))
 		RETURN(0);
 
 	/* returning 0 here forces the remaining I/O through buffered I/O
