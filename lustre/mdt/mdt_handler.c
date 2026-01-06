@@ -2863,10 +2863,11 @@ int mdt_io_set_info(struct tgt_session_info *tsi)
 
 static int mdt_set_info(struct tgt_session_info *tsi)
 {
-	struct ptlrpc_request	*req = tgt_ses_req(tsi);
-	char			*key;
-	void			*val;
-	int			 keylen, vallen, rc = 0;
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct obd_export *exp = req->rq_export;
+	char *key;
+	void *val;
+	int keylen, vallen, rc = 0;
 
 	ENTRY;
 
@@ -2895,8 +2896,8 @@ static int mdt_set_info(struct tgt_session_info *tsi)
 			struct lu_nodemap *nm = NULL;
 			bool readonly = false;
 
-			if (req->rq_export)
-				nm = nodemap_get_from_exp(req->rq_export);
+			if (exp)
+				nm = nodemap_get_from_exp(exp);
 
 			if (!IS_ERR_OR_NULL(nm)) {
 				readonly = nm->nmf_readonly_mount;
@@ -2906,14 +2907,12 @@ static int mdt_set_info(struct tgt_session_info *tsi)
 			if (unlikely(readonly))
 				RETURN(-EROFS);
 		}
-		spin_lock(&req->rq_export->exp_lock);
+		spin_lock(&exp->exp_lock);
 		if (*(__u32 *)val)
-			*exp_connect_flags_ptr(req->rq_export) |=
-				OBD_CONNECT_RDONLY;
+			*exp_connect_flags_ptr(exp) |= OBD_CONNECT_RDONLY;
 		else
-			*exp_connect_flags_ptr(req->rq_export) &=
-				~OBD_CONNECT_RDONLY;
-		spin_unlock(&req->rq_export->exp_lock);
+			*exp_connect_flags_ptr(exp) &= ~OBD_CONNECT_RDONLY;
+		spin_unlock(&exp->exp_lock);
 	} else if (KEY_IS(KEY_CHANGELOG_CLEAR)) {
 		struct changelog_setinfo *cs = val;
 
@@ -2927,13 +2926,13 @@ static int mdt_set_info(struct tgt_session_info *tsi)
 			__swab32s(&cs->cs_id);
 		}
 
-		if (!mdt_changelog_allow(tsi2mdt_info(tsi)))
+		if (!mdt_changelog_allow(tsi2mdt_info(tsi), exp))
 			RETURN(-EACCES);
-		rc = mdt_iocontrol(OBD_IOC_CHANGELOG_CLEAR, req->rq_export,
+		rc = mdt_iocontrol(OBD_IOC_CHANGELOG_CLEAR, exp,
 				   vallen, val, NULL);
 	} else if (KEY_IS(KEY_EVICT_BY_NID)) {
 		if (vallen > 0)
-			obd_export_evict_by_nid(req->rq_export->exp_obd, val);
+			obd_export_evict_by_nid(exp->exp_obd, val);
 	} else {
 		RETURN(-EINVAL);
 	}
@@ -6238,10 +6237,15 @@ static int mdt_tgt_getxattr(struct tgt_session_info *tsi)
 
 static int mdt_llog_open(struct tgt_session_info *tsi)
 {
-	ENTRY;
+	struct mdt_thread_info *info;
 
-	if (!mdt_changelog_allow(tsi2mdt_info(tsi)))
+	ENTRY;
+	info = tsi2mdt_info(tsi);
+	if (!info)
 		RETURN(err_serious(-EACCES));
+
+	if (!mdt_changelog_allow(info, tsi->tsi_exp))
+		RETURN(-EACCES);
 
 	RETURN(tgt_llog_open(tsi));
 }
