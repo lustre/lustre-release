@@ -31,7 +31,9 @@ struct ofd_intent_args {
 };
 
 /**
- * OFD interval callback.
+ * ofd_intent_cb() - OFD interval callback.
+ * @lock: Pointer to struct ldlm_lock
+ * @arg: intent arguments, gl work list for identified locks [in,out]
  *
  * The interval_callback_t is part of interval_iterate_reverse() and is called
  * for each interval in tree. The OFD interval callback searches for locks
@@ -74,13 +76,10 @@ struct ofd_intent_args {
  * because ofd_intent_cb is only called for PW extent locks, and for PW locks,
  * there is only one lock per interval.
  *
- * \param[in] n		interval node
- * \param[in,out] args	intent arguments, gl work list for identified locks
  *
- * \retval		true if the interval is lower than
- *			file size, caller stops execution
- * \retval		false if callback finished successfully
- *			and caller may continue execution
+ * Return:
+ * * %true if the interval is lower than file size, caller stops execution
+ * * %false if callback finished successfully and caller may continue execution
  */
 static bool ofd_intent_cb(struct ldlm_lock *lock, struct ofd_intent_args *arg)
 {
@@ -151,26 +150,26 @@ out:
 	return rc;
 }
 /**
- * OFD lock intent policy
+ * ofd_intent_policy() - OFD lock intent policy
+ * @env: Lustre environment
+ * @ns: namespace
+ * @lockp: pointer to the lock [in,out]
+ * @req_cookie: incoming request
+ * @mode: LDLM mode
+ * @flags: LDLM flags
+ * @data: opaque data, not used in OFD policy
  *
  * This defines ldlm_namespace::ns_policy interface for OFD.
  * Intent policy is called when lock has an intent, for OFD that
  * means glimpse lock and policy fills Lock Value Block (LVB).
  *
- * If already granted lock is found it will be placed in \a lockp and
+ * If already granted lock is found it will be placed in @lockp and
  * returned back to caller function.
  *
- * \param[in] ns	 namespace
- * \param[in,out] lockp	 pointer to the lock
- * \param[in] req_cookie incoming request
- * \param[in] mode	 LDLM mode
- * \param[in] flags	 LDLM flags
- * \param[in] data	 opaque data, not used in OFD policy
- *
- * \retval		ELDLM_LOCK_REPLACED if already granted lock was found
- *			and placed in \a lockp
- * \retval		ELDLM_LOCK_ABORTED in other cases except error
- * \retval		negative errno on error
+ * Return:
+ * * %ELDLM_LOCK_REPLACED if already granted lock was found and placed in @lockp
+ * * %ELDLM_LOCK_ABORTED in other cases except error
+ * * %negative errno on error
  */
 
 int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
