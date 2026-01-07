@@ -1206,27 +1206,6 @@ AC_DEFUN([LN_ETHTOOL_LINK_SETTINGS], [
 ]) # LN_ETHTOOL_LINK_SETTINGS
 
 #
-# LN_HAVE_HYPERVISOR_IS_TYPE
-#
-# 4.14 commit 79cc74155218316b9a5d28577c7077b2adba8e58
-# x86/paravirt: Provide a way to check for hypervisors
-#
-AC_DEFUN([LN_SRC_HAVE_HYPERVISOR_IS_TYPE], [
-	LB2_LINUX_TEST_SRC([hypervisor_is_type_exists], [
-		#include <asm/hypervisor.h>
-	],[
-		(void)hypervisor_is_type(X86_HYPER_NATIVE);
-	],[-Werror])
-])
-AC_DEFUN([LN_HAVE_HYPERVISOR_IS_TYPE], [
-	LB2_MSG_LINUX_TEST_RESULT([if hypervisor_is_type function is available],
-	[hypervisor_is_type_exists], [
-		AC_DEFINE(HAVE_HYPERVISOR_IS_TYPE, 1,
-			[hypervisor_is_type function exists])
-	])
-]) # LN_HAVE_HYPERVISOR_IS_TYPE
-
-#
 # LN_HAVE_ORACLE_OFED_EXTENSIONS
 #
 # Oracle UEK 5
@@ -1337,6 +1316,28 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 ])
 ]) # LN_USR_RDMA
 
+#
+# LN_CONFIG_SENDPAGE_OK
+#
+# kernel commit v5.9-rc6-325-gc381b07941 added sendpage_ok() helper
+# check if sendpage_ok() is available
+#
+AC_DEFUN([LN_SRC_CONFIG_SENDPAGE_OK], [
+	LB2_LINUX_TEST_SRC([sendpage_ok], [
+		#include <linux/net.h>
+	],[
+		struct page *page = NULL;
+		(void)sendpage_ok(page);
+	],[-Werror])
+])
+AC_DEFUN([LN_CONFIG_SENDPAGE_OK], [
+	LB2_MSG_LINUX_TEST_RESULT([if sendpage_ok() is available],
+	[sendpage_ok], [
+		AC_DEFINE(HAVE_SENDPAGE_OK, 1,
+			[sendpage_ok() is available])
+	])
+]) # LN_CONFIG_SENDPAGE_OK
+
 AC_DEFUN([LN_PROG_LINUX_SRC], [
 	LN_CONFIG_O2IB_SRC
 	# 3.15
@@ -1348,7 +1349,6 @@ AC_DEFUN([LN_PROG_LINUX_SRC], [
 	# 4.6
 	LN_SRC_ETHTOOL_LINK_SETTINGS
 	# 4.14
-	LN_SRC_HAVE_HYPERVISOR_IS_TYPE
 	LN_SRC_HAVE_ORACLE_OFED_EXTENSIONS
 	# 4.16
 	LN_SRC_HAVE_NETDEV_CMD_TO_NAME
@@ -1356,6 +1356,8 @@ AC_DEFUN([LN_PROG_LINUX_SRC], [
 	LN_SRC_CONFIG_SOCK_GETNAME
 	# 5.3 and 4.18.0-193.el8
 	LN_SRC_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
+	# 5.9
+	LN_SRC_CONFIG_SENDPAGE_OK
 ])
 
 AC_DEFUN([LN_PROG_LINUX_RESULTS], [
@@ -1369,7 +1371,6 @@ AC_DEFUN([LN_PROG_LINUX_RESULTS], [
 	# 4.6
 	LN_ETHTOOL_LINK_SETTINGS
 	# 4.14
-	LN_HAVE_HYPERVISOR_IS_TYPE
 	LN_HAVE_ORACLE_OFED_EXTENSIONS
 	# 4.16
 	LN_HAVE_NETDEV_CMD_TO_NAME
@@ -1377,6 +1378,8 @@ AC_DEFUN([LN_PROG_LINUX_RESULTS], [
 	LN_CONFIG_SOCK_GETNAME
 	# 5.3 and 4.18.0-193.el8
 	LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
+	# 5.9
+	LN_CONFIG_SENDPAGE_OK
 ])
 
 #

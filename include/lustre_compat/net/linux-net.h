@@ -198,4 +198,11 @@ static inline void ip_sock_set_tos(struct sock *sk, int val)
 #endif /* HAVE_IP_SET_TOS */
 #endif /* HAVE_KERNEL_SETSOCKOPT */
 
+#if !defined(HAVE_SENDPAGE_OK)
+static inline bool sendpage_ok(struct page *page)
+{
+	return true;
+}
+#endif
+
 #endif /* __LIBCFS_LINUX_NET_H__ */

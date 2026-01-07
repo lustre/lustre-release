@@ -95,15 +95,8 @@ ksocknal_lib_sendpage(struct socket *sock, struct bio_vec *kiov,
 {
 #ifdef MSG_SPLICE_PAGES
 	struct msghdr msg = {.msg_flags = msgflg | MSG_SPLICE_PAGES};
-	int i;
 
 	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, kiov, 1, kiov->bv_len);
-	for (i = 0; i < nkiov; i++) {
-		if (!sendpage_ok(kiov[i].bv_page)) {
-			msg.msg_flags &= ~MSG_SPLICE_PAGES;
-			break;
-		}
-	}
 
 	return sock_sendmsg(sock, &msg);
 #else

@@ -181,17 +181,6 @@ module_param_call(tos, param_set_tos, param_get_int, &tos, 0444);
 #endif
 MODULE_PARM_DESC(tos, "Set the type of service (=-1 to disable)");
 
-static inline bool is_native_host(void)
-{
-#ifdef HAVE_HYPERVISOR_IS_TYPE
-	return hypervisor_is_type(X86_HYPER_NATIVE);
-#elif defined(__x86_64__) || defined(__i386__)
-	return x86_hyper == NULL;
-#else
-	return true;
-#endif
-}
-
 struct ksock_tunables ksocknal_tunables;
 struct lnet_ioctl_config_socklnd_tunables ksock_default_tunables;
 
@@ -383,12 +372,6 @@ int ksocknal_tunables_init(void)
 
 	if (*ksocknal_tunables.ksnd_zc_min_payload < (2 << 10))
 		*ksocknal_tunables.ksnd_zc_min_payload = (2 << 10);
-
-	/* When on a hypervisor set the minimum zero copy size
-	 * above the maximum payload size
-	 */
-	if (!is_native_host())
-		*ksocknal_tunables.ksnd_zc_min_payload = (16 << 20) + 1;
 
 	return 0;
 }

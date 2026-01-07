@@ -1029,8 +1029,17 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 	LASSERT(tx->tx_nkiov <= LNET_MAX_IOV);
 
-	if (payload_nob >= *ksocknal_tunables.ksnd_zc_min_payload)
+	if (payload_nob >= *ksocknal_tunables.ksnd_zc_min_payload) {
+		int i;
+
 		tx->tx_zc_capable = 1;
+		for (i = 0; i < tx->tx_nkiov; i++) {
+			if (!sendpage_ok(tx->tx_kiov[i].bv_page)) {
+				tx->tx_zc_capable = 0;
+				break;
+			}
+		}
+	}
 
 	tx->tx_msg.ksm_csum = 0;
 	tx->tx_msg.ksm_type = KSOCK_MSG_LNET;
