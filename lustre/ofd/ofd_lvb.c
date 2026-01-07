@@ -28,15 +28,15 @@
 #include "ofd_internal.h"
 
 /**
- * Implementation of ldlm_valblock_ops::lvbo_free for OFD.
+ * ofd_lvbo_free() - Implementation of ldlm_valblock_ops::lvbo_free for OFD.
+ * @res: LDLM resource
  *
  * This function frees allocated LVB data if it associated with the given
  * LDLM resource.
  *
- * \param[in] res	LDLM resource
- *
- * \retval		0 on successful setup
- * \retval		negative value on error
+ * Return:
+ * * %0 on successful setup
+ * * %negative value on error
  */
 static int ofd_lvbo_free(struct ldlm_resource *res)
 {
@@ -60,7 +60,8 @@ static bool ofd_resync_allowed(struct ofd_device *ofd)
 }
 
 /**
- * Implementation of ldlm_valblock_ops::lvbo_init for OFD.
+ * ofd_lvbo_init() - Implementation of ldlm_valblock_ops::lvbo_init for OFD.
+ * @res: Pointer to the ldlm_resource (Actual resource)
  *
  * This function allocates and initializes new LVB data for the given
  * LDLM resource if it is not allocated yet. New LVB is filled with attributes
@@ -69,10 +70,9 @@ static bool ofd_resync_allowed(struct ofd_device *ofd)
  *
  * Called with res->lr_lvb_sem held.
  *
- * \param[in] lock	LDLM lock on resource
- *
- * \retval		0 on successful setup
- * \retval		negative value on error
+ * Return:
+ * * %0 on successful setup
+ * * %negative value on error
  */
 static int ofd_lvbo_init(struct ldlm_resource *res)
 {
@@ -163,7 +163,11 @@ out:
 }
 
 /**
- * Implementation of ldlm_valblock_ops::lvbo_update for OFD.
+ * ofd_lvbo_update() - Implementation of ldlm_valblock_ops::lvbo_update for OFD.
+ * @res: Pointer to the ldlm_resource
+ * @lock: LDLM lock
+ * @req: PTLRPC request
+ * @increase_only: don't allow LVB values to decrease
  *
  * When a client generates a glimpse enqueue, it wants to get the current
  * file size and updated attributes for a stat() type operation, but these
@@ -184,12 +188,9 @@ out:
  *  \a req != NULL : called by the DLM itself after a glimpse callback
  *  \a req == NULL : called by the OFD after a disk write
  *
- * \param[in] lock		LDLM lock
- * \param[in] req		PTLRPC request
- * \param[in] increase_only	don't allow LVB values to decrease
- *
- * \retval		0 on successful setup
- * \retval		negative value on error
+ * Return:
+ * * %0 on successful setup
+ * * %negative value on error
  */
 static int ofd_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 			   struct ptlrpc_request *req, int increase_only)
@@ -339,15 +340,14 @@ out:
 }
 
 /**
- * Implementation of ldlm_valblock_ops::lvbo_size for OFD.
+ * ofd_lvbo_size() - Implementation of ldlm_valblock_ops::lvbo_size for OFD.
+ * @lock: LDLM lock
  *
  * This function returns size of LVB data so appropriate RPC size will be
  * reserved. This is used for compatibility needs between server and client
  * of different Lustre versions.
  *
- * \param[in] lock	LDLM lock
- *
- * \retval		size of LVB data
+ * Returns size of LVB data
  */
 static int ofd_lvbo_size(struct ldlm_lock *lock)
 {
@@ -358,16 +358,14 @@ static int ofd_lvbo_size(struct ldlm_lock *lock)
 }
 
 /**
- * Implementation of ldlm_valblock_ops::lvbo_fill for OFD.
+ * ofd_lvbo_fill() - Implementation of ldlm_valblock_ops::lvbo_fill for OFD.
+ * @lock: LDLM lock
+ * @buf: RPC buffer to fill
+ * @buflen: buffer length
  *
  * This function is called to fill the given RPC buffer \a buf with LVB data
  *
- * \param[in] env	execution environment
- * \param[in] lock	LDLM lock
- * \param[in] buf	RPC buffer to fill
- * \param[in] buflen	buffer length
- *
- * \retval		size of LVB data written into \a buf buffer
+ * Returns size of LVB data written into \a buf buffer
  */
 static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int *buflen)
 {
