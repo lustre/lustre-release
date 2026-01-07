@@ -27,18 +27,18 @@
 #include "ofd_internal.h"
 
 /**
- * Get object version from disk and check it.
+ * ofd_version_get_check() - Get object version from disk and check it.
+ * @info: execution thread OFD private data
+ * @fo: OFD object
  *
  * This function checks object version from disk with
  * ofd_thread_info::fti_pre_version filled from incoming RPC. This is part of
  * VBR (Version-Based Recovery) and ensures that object has the same version
  * upon replay as it has during original modification.
  *
- * \param[in]  info	execution thread OFD private data
- * \param[in]  fo	OFD object
- *
- * \retval		0 if version matches
- * \retval		-EOVERFLOW on version mismatch
+ * Return:
+ * * %0 if version matches
+ * * %-EOVERFLOW on version mismatch
  */
 static int ofd_version_get_check(struct ofd_thread_info *info,
 				 struct ofd_object *fo)
@@ -66,16 +66,16 @@ static int ofd_version_get_check(struct ofd_thread_info *info,
 }
 
 /**
- * Get OFD object by FID.
+ * ofd_object_find() - Get OFD object by FID.
+ * @env: execution environment
+ * @ofd: OFD device
+ * @fid: FID of the object
  *
  * This function finds OFD slice of compound object with the given FID.
  *
- * \param[in] env	execution environment
- * \param[in] ofd	OFD device
- * \param[in] fid	FID of the object
- *
- * \retval		pointer to the found ofd_object
- * \retval		ERR_PTR(errno) in case of error
+ * Return:
+ * * %pointer to the found ofd_object
+ * * %ERR_PTR(errno) in case of error
  */
 struct ofd_object *ofd_object_find(const struct lu_env *env,
 				   struct ofd_device *ofd,
@@ -102,7 +102,10 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
 }
 
 /**
- * Get FID of parent MDT object.
+ * ofd_object_ff_load() - Get FID of parent MDT object.
+ * @env: execution environment
+ * @fo: OFD object
+ * @force: force to read EA XATTR_NAME_FID
  *
  * This function reads extended attribute XATTR_NAME_FID of OFD object which
  * contains the MDT parent object FID and saves it in ofd_object::ofo_ff.
@@ -112,13 +115,10 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
  * not the actual FID::f_ver of the parent. We therefore access
  * it via the macro f_stripe_idx.
  *
- * \param[in] env	execution environment
- * \param[in] fo	OFD object
- * \param[in] force	force to read EA XATTR_NAME_FID
- *
- * \retval		0 if successful
- * \retval		-ENODATA if there is no such xattr
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %-ENODATA if there is no such xattr
+ * * %negative value on error
  */
 int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo,
 		       bool force)
@@ -224,7 +224,15 @@ static int ofd_precreate_cb_add(const struct lu_env *env, struct thandle *th,
 }
 
 /**
- * Precreate the given number \a nr of objects in the given sequence \a oseq.
+ * ofd_precreate_objects() - Precreate the given number \a nr of objects in the
+ *                           given sequence \a oseq.
+ * @env: execution environment
+ * @ofd: OFD device
+ * @id: object ID to start precreation from
+ * @oseq: object sequence
+ * @nr: number of objects to precreate
+ * @sync: synchronous precreation flag
+ * @trans_local: start local transaction
  *
  * This function precreates new OST objects in the given sequence.
  * The precreation starts from \a id and creates \a nr objects sequentially.
@@ -240,16 +248,9 @@ static int ofd_precreate_cb_add(const struct lu_env *env, struct thandle *th,
  * update the inode. The ctime = 0 case is also handled specially in
  * osd_inode_setattr(). See LU-221, LU-1042 for details.
  *
- * \param[in] env		execution environment
- * \param[in] ofd		OFD device
- * \param[in] id		object ID to start precreation from
- * \param[in] oseq		object sequence
- * \param[in] nr		number of objects to precreate
- * \param[in] sync		synchronous precreation flag
- * \param[in] trans_local	start local transaction
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 			  u64 id, struct ofd_seq *oseq, int nr, int sync,
@@ -482,7 +483,11 @@ out:
 }
 
 /**
- * Fix the OFD object ownership.
+ * ofd_attr_handle_id() - Fix the OFD object ownership.
+ * @env: execution environment
+ * @fo: OFD object
+ * @la: object attributes
+ * @is_setattr: was this function called from setattr or not
  *
  * If the object still has SUID+SGID bits set, meaning that it was precreated
  * by the MDT before it was assigned to any file, (see ofd_precreate_objects())
@@ -490,13 +495,9 @@ out:
  * the ownership of this object.  We only allow this to happen once (so clear
  * these bits) and later only allow setattr.
  *
- * \param[in] env	 execution environment
- * \param[in] fo	 OFD object
- * \param[in] la	 object attributes
- * \param[in] is_setattr was this function called from setattr or not
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 			 struct lu_attr *la, int is_setattr)
@@ -554,17 +555,18 @@ int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 }
 
 /**
- * Check if it needs to update filter_fid by the value of @oa.
+ * ofd_object_ff_update() - Check if it needs to update filter_fid by the
+ *                          value of @oa.
+ * @env: env
+ * @fo: ofd object
+ * @oa: obdo from client or MDT
+ * @ff: if filter_fid needs updating, this field is used to return the
+ *      new buffer [out]
  *
- * \param[in] env	env
- * \param[in] fo	ofd object
- * \param[in] oa	obdo from client or MDT
- * \param[out] ff	if filter_fid needs updating, this field is used to
- *			return the new buffer
- *
- * \retval < 0		error occurred
- * \retval 0		doesn't need to update filter_fid
- * \retval FL_XATTR_{CREATE,REPLACE}	flag for xattr update
+ * Return:
+ * * %<0 error occurred
+ * * %0 doesn't need to update filter_fid
+ * * %FL_XATTR_{CREATE,REPLACE}	flag for xattr update
  */
 int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
 			 const struct obdo *oa, struct filter_fid *ff)
@@ -655,20 +657,20 @@ int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
 }
 
 /**
- * Set OFD object attributes.
+ * ofd_attr_set() - Set OFD object attributes.
+ * @env: execution environment
+ * @fo: OFD object
+ * @la: object attributes
+ * @oa: obdo carries fid, ost_layout, layout version
  *
  * This function sets OFD object attributes taken from incoming request.
  * It sets not only regular attributes but also XATTR_NAME_FID extended
  * attribute if needed. The "fid" xattr allows the object's MDT parent inode
  * to be found and verified by LFSCK and other tools in case of inconsistency.
  *
- * \param[in] env	execution environment
- * \param[in] fo	OFD object
- * \param[in] la	object attributes
- * \param[in] oa	obdo carries fid, ost_layout, layout version
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la, struct obdo *oa)
@@ -769,21 +771,21 @@ out:
 }
 
 /**
- * Fallocate(Preallocate) space for OFD object.
+ * ofd_object_fallocate() - Fallocate(Preallocate) space for OFD object.
+ * @env: execution environment
+ * @fo: OFD object
+ * @start: start offset to allocate from
+ * @end: end of allocate
+ * @mode: fallocate mode
+ * @la: object attributes
+ * @oa: obdo struct from incoming request
  *
  * This function allocates space for the object from the \a start
  * offset to the \a end offset.
  *
- * \param[in] env	execution environment
- * \param[in] fo	OFD object
- * \param[in] start	start offset to allocate from
- * \param[in] end	end of allocate
- * \param[in] mode	fallocate mode
- * \param[in] la	object attributes
- * \param[in] ff	filter_fid structure
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
 			 __u64 start, __u64 end, int mode, struct lu_attr *la,
@@ -902,22 +904,22 @@ stop:
 }
 
 /**
- * Truncate/punch OFD object.
+ * ofd_object_punch() - Truncate/punch OFD object.
+ * @env: execution environment
+ * @fo: OFD object
+ * @start: start offset to punch from
+ * @end: end of punch
+ * @la: object attributes
+ * @oa: obdo struct from incoming request
  *
  * This function frees all of the allocated object's space from the \a start
  * offset to the \a end offset. For truncate() operations the \a end offset
  * is OBD_OBJECT_EOF. The functionality to punch holes in an object via
  * fallocate(FALLOC_FL_PUNCH_HOLE) is not yet implemented (see LU-3606).
  *
- * \param[in] env	execution environment
- * \param[in] fo	OFD object
- * \param[in] start	start offset to punch from
- * \param[in] end	end of punch
- * \param[in] la	object attributes
- * \param[in] oa	obdo struct from incoming request
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		     __u64 start, __u64 end, struct lu_attr *la,
@@ -1045,18 +1047,18 @@ out:
 }
 
 /**
- * Destroy OFD object.
+ * ofd_destroy() - Destroy OFD object.
+ * @env: execution environment
+ * @fo: OFD object
+ * @orphan: flag to indicate that object is orphaned
  *
  * This function destroys OFD object. If object wasn't used at all (orphan)
  * then local transaction is used, which means the transaction data is not
  * returned back in reply.
  *
- * \param[in] env	execution environment
- * \param[in] fo	OFD object
- * \param[in] orphan	flag to indicate that object is orphaned
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_destroy(const struct lu_env *env, struct ofd_object *fo,
 		       int orphan)
@@ -1112,17 +1114,17 @@ out:
 }
 
 /**
- * Get OFD object attributes.
+ * ofd_attr_get() - Get OFD object attributes.
+ * @env: execution environment
+ * @fo: OFD object
+ * @la: object attributes
  *
  * This function gets OFD object regular attributes. It is used to serve
  * incoming request as well as for local OFD purposes.
  *
- * \param[in] env	execution environment
- * \param[in] fo	OFD object
- * \param[in] la	object attributes
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la)
@@ -1157,8 +1159,8 @@ struct ofd_id_repair_args {
  * repaired with the IDs from the current obdo
  * @env: lu_env
  * @fo: ofd_object
- * @la: lu_attr from object. Can be NULL. If so, dt_attr_get() is called for fo
- * @oa: lu_attr from obdo
+ * @la_obj: lu_attr from object. Can be NULL. If so, dt_attr_get() is called for fo
+ * @la_obdo: lu_attr from obdo
  *
  * Objects with OFD_UNSET_ATTRS_MODE or any subset of S_ISUID, S_ISGID, and
  * S_ISVTX have no corresponding ID associated with them yet. Such objects' ID
@@ -1311,7 +1313,7 @@ out:
 
 /**
  * ofd_id_repair_thread_main() - main OST object ID repair thread loop
- * @arg: pointer containing struct ofd_id_repair_args
+ * @_args: pointer containing struct ofd_id_repair_args
  *
  * Return:
  * * %0 on successful thread termination
@@ -1449,7 +1451,7 @@ void ofd_id_repair_stop_thread(struct ofd_device *ofd)
 /**
  * ofd_id_repair_enqueue() - Enqueue object ID repair
  * @ofd: OFD device
- * @oa: obdo from client
+ * @la_obdo: Pointer to struct lu_attr (file attributes)
  * @fo: OFD object
  *
  * Queue a work task to repair the object attributes using the UID/GID from obdo
@@ -1484,20 +1486,6 @@ static int ofd_id_repair_enqueue(struct ofd_device *ofd,
 	return 0;
 }
 
-/**
- * __ofd_check_resource_ids() - check client access to resource via nodemap
- * @env: execution environment
- * @oa: obdo from client
- *
- * Check whether the client is allowed to access the resource by consulting
- * the nodemap with the client's export and the OST objects's UID/GID attr.
- *
- * Return:
- * * %0 on success (access is allowed)
- * * %-ECHRNG if access is denied
- * * %-EAGAIN if the object attributes are unset and need to be repaired (no ID
- *   check was done in this case)
- */
 /**
  * __ofd_check_resource_ids() - check client access to resource via nodemap
  * @env: execution environment
