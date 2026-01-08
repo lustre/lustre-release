@@ -30,15 +30,14 @@
 
 #define UPDATE_RECORDS_BUFFER_SIZE	8192
 #define UPDATE_PARAMS_BUFFER_SIZE	8192
+
 /**
- * Dump update record.
+ * update_records_dump() - Dump update record.
+ * @records: update records to be dumpped
+ * @mask: debug level mask
+ * @dump_updates: if dump all of updates the updates.
  *
  * Dump all of updates in the update_records, mostly for debugging purpose.
- *
- * \param[in] records	update records to be dumpped
- * \param[in] mask	debug level mask
- * \param[in] dump_params if dump all of updates the updates.
- *
  */
 void update_records_dump(const struct update_records *records,
 			 unsigned int mask, bool dump_updates)
@@ -91,19 +90,18 @@ void update_records_dump(const struct update_records *records,
 }
 
 /**
- * Pack parameters to update records
+ * update_records_param_pack() - Pack parameters to update records
+ * @params: update params in which to insert parameter
+ * @new_param: parameters to be inserted.
+ * @new_param_size: the size of @new_param
+ * @param_count: param offset [out]
  *
  * Find and insert parameter to update records, if the parameter
- * already exists in \a params, then just return the offset of this
+ * already exists in @params, then just return the offset of this
  * parameter, otherwise insert the parameter and return its offset
  *
- * \param[in] params	update params in which to insert parameter
- * \param[in] new_param	parameters to be inserted.
- * \param[in] new_param_size	the size of \a new_param
- *
- * \retval		index inside \a params if parameter insertion
- *                      succeeds.
- * \retval		negative errno if it fails.
+ * Returns index inside @params if parameter insertion succeeds or
+ * %negative errno if it fails.
  */
 static unsigned int update_records_param_pack(struct update_params *params,
 					      const void *new_param,
@@ -137,7 +135,19 @@ static unsigned int update_records_param_pack(struct update_params *params,
 }
 
 /**
- * Pack update to update records
+ * update_records_update_pack() - Pack update to update records
+ * @env: execution environment
+ * @fid: FID of the update.
+ * @op_type: operation type of the update
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_op_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @param_bufs_count: buffers of parameters
+ * @param_bufs: the count of the parameter buffers
+ * @param_sizes: sizes of parameters
  *
  * Pack the update and its parameters to the update records. First it will
  * insert parameters, get the offset of these parameter, then fill the
@@ -145,21 +155,9 @@ static unsigned int update_records_param_pack(struct update_params *params,
  * current update records, it will return -E2BIG here, and the caller might
  * extend the update_record size \see lod_updates_pack.
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the update.
- * \param[in] op_type	operation type of the update
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] param_bufs	buffers of parameters
- * \param[in] params_buf_count	the count of the parameter buffers
- * \param[in] param_size	sizes of parameters
- *
- * \retval		0 if packing succeeds
- * \retval		negative errno if packing fails
+ * Return:
+ * * %0 if packing succeeds
+ * * %negative errno if packing fails
  */
 static int update_records_update_pack(const struct lu_env *env,
 				      const struct lu_fid *fid,
@@ -225,14 +223,13 @@ static int update_records_update_pack(const struct lu_env *env,
 }
 
 /**
- * Calculate update_records size
+ * update_records_update_size() - Calculate update_records size
+ * @param_count: the count of parameters
+ * @sizes: the size array of these parameters
  *
  * Calculate update_records size by param_count and param_sizes array.
  *
- * \param[in] param_count	the count of parameters
- * \param[in] sizes		the size array of these parameters
- *
- * \retval			the size of this update
+ * Returns the size of this update
  */
 static size_t update_records_update_size(__u32 param_count, size_t *sizes)
 {
@@ -250,16 +247,14 @@ static size_t update_records_update_size(__u32 param_count, size_t *sizes)
 }
 
 /**
- * Calculate create update size
+ * update_records_create_size() - Calculate create update size
+ * @env: execution environment
+ * @fid: FID of the object to be created
+ * @attr: attribute of the object to be created
+ * @hint: creation hint
+ * @dof: creation format information
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in] fid	FID of the object to be created
- * \param[in] attr	attribute of the object to be created
- * \param[in] hint	creation hint
- * \param[in] dof	creation format information
- *
- * \retval		size of create update.
+ * Returns size of create update.
  */
 size_t update_records_create_size(const struct lu_env *env,
 				  const struct lu_fid *fid,
@@ -285,24 +280,24 @@ size_t update_records_create_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_create_size);
 
 /**
- * Pack create update
+ * update_records_create_pack() - Pack create update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to be created
+ * @attr: attribute of the object to be created
+ * @hint: creation hint
+ * @dof: creation format information
  *
  * Pack create update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to be created
- * \param[in] attr	attribute of the object to be created
- * \param[in] hint	creation hint
- * \param[in] dof	creation format information
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_create_pack(const struct lu_env *env,
 			       struct update_ops *ops,
@@ -349,14 +344,12 @@ int update_records_create_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_create_pack);
 
 /**
- * Calculate attr set update size
+ * update_records_attr_set_size() - Calculate attr set update size
+ * @env: execution environment
+ * @fid: FID of the object to set attr
+ * @attr: attribute of attr set
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in] fid	FID of the object to set attr
- * \param[in] attr	attribute of attr set
- *
- * \retval		size of attr set update.
+ * Return size of attr set update.
  */
 size_t update_records_attr_set_size(const struct lu_env *env,
 				    const struct lu_fid *fid,
@@ -369,22 +362,22 @@ size_t update_records_attr_set_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_attr_set_size);
 
 /**
- * Pack attr set update
+ * update_records_attr_set_pack() - Pack attr set update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to set attr
+ * @attr: attribute of attr set
  *
  * Pack attr_set update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to set attr
- * \param[in] attr	attribute of attr set
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_attr_set_pack(const struct lu_env *env,
 				 struct update_ops *ops,
@@ -409,12 +402,11 @@ int update_records_attr_set_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_attr_set_pack);
 
 /**
- * Calculate ref add update size
+ * update_records_ref_add_size() - Calculate ref add update size
+ * @env: execution environment
+ * @fid: FID of the object to add reference
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to add reference
- *
- * \retval		size of ref_add udpate.
+ * Returns size of ref_add udpate.
  */
 size_t update_records_ref_add_size(const struct lu_env *env,
 				   const struct lu_fid *fid)
@@ -424,21 +416,21 @@ size_t update_records_ref_add_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_ref_add_size);
 
 /**
- * Pack ref add update
+ * update_records_ref_add_pack() - Pack ref add update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to add reference
  *
  * Pack ref add update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to add reference
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_ref_add_pack(const struct lu_env *env,
 				struct update_ops *ops,
@@ -456,23 +448,23 @@ int update_records_ref_add_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_ref_add_pack);
 
 /**
- * Pack noop update
+ * update_records_noop_pack() - Pack noop update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to add reference
  *
  * Pack no op update into update records. Note: no op means
  * the update does not need do anything, which is only used
  * in test case to verify large size record.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to add reference
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_noop_pack(const struct lu_env *env,
 			     struct update_ops *ops,
@@ -490,12 +482,11 @@ int update_records_noop_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_noop_pack);
 
 /**
- * Calculate ref del update size
+ * update_records_ref_del_size() - Calculate ref del update size
+ * @env: execution environment
+ * @fid: FID of the object to delete reference
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to delete reference
- *
- * \retval		size of ref_del update.
+ * Returns size of ref_del update.
  */
 size_t update_records_ref_del_size(const struct lu_env *env,
 				   const struct lu_fid *fid)
@@ -505,21 +496,21 @@ size_t update_records_ref_del_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_ref_del_size);
 
 /**
- * Pack ref del update
+ * update_records_ref_del_pack() - Pack ref del update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to delete reference
  *
  * Pack ref del update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to delete reference
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_ref_del_pack(const struct lu_env *env,
 				struct update_ops *ops,
@@ -537,12 +528,11 @@ int update_records_ref_del_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_ref_del_pack);
 
 /**
- * Calculate object destroy update size
+ * update_records_destroy_size() - Calculate object destroy update size
+ * @env: execution environment
+ * @fid: FID of the object to delete reference
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to delete reference
- *
- * \retval		size of object destroy update.
+ * Returns size of object destroy update.
  */
 size_t update_records_destroy_size(const struct lu_env *env,
 					  const struct lu_fid *fid)
@@ -552,21 +542,21 @@ size_t update_records_destroy_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_destroy_size);
 
 /**
- * Pack object destroy update
+ * update_records_destroy_pack() - Pack object destroy update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to delete reference
  *
  * Pack object destroy update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to delete reference
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_destroy_pack(const struct lu_env *env,
 				       struct update_ops *ops,
@@ -584,14 +574,13 @@ int update_records_destroy_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_destroy_pack);
 
 /**
- * Calculate index insert update size
+ * update_records_index_insert_size() - Calculate index insert update size
+ * @env: execution environment
+ * @fid: FID of the object to insert index
+ * @rec: record of insertion
+ * @key: key of insertion
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to insert index
- * \param[in] rec	record of insertion
- * \param[in] key	key of insertion
- *
- * \retval		the size of index insert update.
+ * Returns the size of index insert update.
  */
 size_t update_records_index_insert_size(const struct lu_env *env,
 					const struct lu_fid *fid,
@@ -606,23 +595,23 @@ size_t update_records_index_insert_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_index_insert_size);
 
 /**
- * Pack index insert update
+ * update_records_index_insert_pack() - Pack index insert update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to insert index
+ * @rec: record of insertion
+ * @key: key of insertion
  *
  * Pack index insert update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to insert index
- * \param[in] rec	record of insertion
- * \param[in] key	key of insertion
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_index_insert_pack(const struct lu_env *env,
 				     struct update_ops *ops,
@@ -655,13 +644,12 @@ int update_records_index_insert_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_index_insert_pack);
 
 /**
- * Calculate index delete update size
+ * update_records_index_delete_size() - Calculate index delete update size
+ * @env: execution environment
+ * @fid: FID of the object to delete index
+ * @key: key of deletion
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to delete index
- * \param[in] key	key of deletion
- *
- * \retval		the size of index delete update
+ * Returns the size of index delete update
  */
 size_t update_records_index_delete_size(const struct lu_env *env,
 					const struct lu_fid *fid,
@@ -674,22 +662,22 @@ size_t update_records_index_delete_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_index_delete_size);
 
 /**
- * Pack index delete update
+ * update_records_index_delete_pack() - Pack index delete update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to delete index
+ * @key: key of deletion
  *
  * Pack index delete update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|ount] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to delete index
- * \param[in] key	key of deletion
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_index_delete_pack(const struct lu_env *env,
 				     struct update_ops *ops,
@@ -711,15 +699,14 @@ int update_records_index_delete_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_index_delete_pack);
 
 /**
- * Calculate xattr set size
+ * update_records_xattr_set_size() - Calculate xattr set size
+ * @env: execution environment
+ * @fid: FID of the object to set xattr
+ * @buf: xattr to be set
+ * @name: name of the xattr
+ * @flag: flag for setting xattr
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to set xattr
- * \param[in] buf	xattr to be set
- * \param[in] name	name of the xattr
- * \param[in] flag	flag for setting xattr
- *
- * \retval		size of xattr set update.
+ * Returns size of xattr set update.
  */
 size_t update_records_xattr_set_size(const struct lu_env *env,
 				     const struct lu_fid *fid,
@@ -733,24 +720,24 @@ size_t update_records_xattr_set_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_xattr_set_size);
 
 /**
- * Pack xattr set update
+ * update_records_xattr_set_pack() - Pack xattr set update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to set xattr
+ * @buf: xattr to be set
+ * @name: name of the xattr
+ * @flag: flag for setting xattr
  *
  * Pack xattr set update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to set xattr
- * \param[in] buf	xattr to be set
- * \param[in] name	name of the xattr
- * \param[in] flag	flag for setting xattr
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_xattr_set_pack(const struct lu_env *env,
 				  struct update_ops *ops,
@@ -776,13 +763,12 @@ int update_records_xattr_set_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_xattr_set_pack);
 
 /**
- * Calculate xattr delete update size.
+ * update_records_xattr_del_size() - Calculate xattr delete update size.
+ * @env: execution environment
+ * @fid: FID of the object to delete xattr
+ * @name: name of the xattr
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to delete xattr
- * \param[in] name	name of the xattr
- *
- * \retval		size of xattr delet updatee.
+ * Returns size of xattr delet updatee.
  */
 size_t update_records_xattr_del_size(const struct lu_env *env,
 				     const struct lu_fid *fid,
@@ -795,22 +781,22 @@ size_t update_records_xattr_del_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_xattr_del_size);
 
 /**
- * Pack xattr delete update
+ * update_records_xattr_del_pack() - Pack xattr delete update
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to delete xattr
+ * @name: name of the xattr
  *
  * Pack xattr delete update into update records.
  *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to delete xattr
- * \param[in] name	name of the xattr
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_xattr_del_pack(const struct lu_env *env,
 				  struct update_ops *ops,
@@ -832,14 +818,13 @@ int update_records_xattr_del_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_xattr_del_pack);
 
 /**
- * Calculate write update size
+ * update_records_write_size() - Calculate write update size
+ * @env: execution environment
+ * @fid: FID of the object to write into
+ * @buf: buffer to write which includes an embedded size field
+ * @pos: offet in the object to start writing at
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to write into
- * \param[in] buf	buffer to write which includes an embedded size field
- * \param[in] pos	offet in the object to start writing at
- *
- * \retval		size of write udpate.
+ * Returns size of write udpate.
  */
 size_t update_records_write_size(const struct lu_env *env,
 				 const struct lu_fid *fid,
@@ -853,23 +838,21 @@ size_t update_records_write_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_write_size);
 
 /**
- * Pack write update
+ * update_records_write_pack() - Pack write update into update records.
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to write into
+ * @buf: buffer to write which includes an embedded size field
+ * @pos: offet in the object to start writing at
  *
- * Pack write update into update records.
- *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to write into
- * \param[in] buf	buffer to write which includes an embedded size field
- * \param[in] pos	offet in the object to start writing at
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_write_pack(const struct lu_env *env,
 			      struct update_ops *ops,
@@ -895,14 +878,13 @@ int update_records_write_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_write_pack);
 
 /**
- * Calculate size of punch update.
+ * update_records_punch_size() - Calculate size of punch update.
+ * @env: execution environment
+ * @fid: FID of the object to write into
+ * @start: start offset of punch
+ * @end: end offet of punch
  *
- * \param[in] env	execution environment
- * \param[in] fid	FID of the object to write into
- * \param[in] start	start offset of punch
- * \param[in] end	end offet of punch
- *
- * \retval		size of update punch.
+ * Returns size of update punch.
  */
 size_t update_records_punch_size(const struct lu_env *env,
 				 const struct lu_fid *fid,
@@ -915,23 +897,21 @@ size_t update_records_punch_size(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_punch_size);
 
 /**
- * Pack punch
+ * update_records_punch_pack() - Pack punch update into update records.
+ * @env: execution environment
+ * @ops: ur_ops in update records
+ * @op_count: pointer to the count of ops [in,out]
+ * @max_ops_size: maximum size of the update [in,out]
+ * @params: ur_params in update records
+ * @param_count: pointer to the count of params [in,out]
+ * @max_param_size: maximum size of the parameter [in,out]
+ * @fid: FID of the object to write into
+ * @start: start offset of punch
+ * @end: end offet of punch
  *
- * Pack punch update into update records.
- *
- * \param[in] env	execution environment
- * \param[in] ops	ur_ops in update records
- * \param[in|out] op_count	pointer to the count of ops
- * \param[in|out] max_op_size maximum size of the update
- * \param[in] params	ur_params in update records
- * \param[in|out] param_count	pointer to the count of params
- * \param[in|out] max_param_size maximum size of the parameter
- * \param[in] fid	FID of the object to write into
- * \param[in] start	start offset of punch
- * \param[in] end	end offet of punch
- *
- * \retval		0 if packing succeeds.
- * \retval		negative errno if packing fails.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative errno if packing fails.
  */
 int update_records_punch_pack(const struct lu_env *env,
 			      struct update_ops *ops,
@@ -956,15 +936,16 @@ int update_records_punch_pack(const struct lu_env *env,
 EXPORT_SYMBOL(update_records_punch_pack);
 
 /**
- * Create update records in thandle_update_records
+ * tur_update_records_create() - Create update records in
+ *                                thandle_update_records
+ * @tur: thandle_update_records where update_records will be allocated
  *
  * Allocate update_records for thandle_update_records, the initial size
  * will be 4KB.
  *
- * \param[in] tur	thandle_update_records where update_records will be
- *                      allocated
- * \retval		0 if allocation succeeds.
- * \retval		negative errno if allocation fails.
+ * Return:
+ * * %0 if allocation succeeds.
+ * * %negative errno if allocation fails.
  */
 static int tur_update_records_create(struct thandle_update_records *tur)
 {
@@ -983,14 +964,15 @@ static int tur_update_records_create(struct thandle_update_records *tur)
 }
 
 /**
- * Extend update records
+ * tur_update_records_extend() - Extend update records
+ * @tur: thandle_update_records where update_records will be extended.
+ * @new_size: new size of buffer
  *
  * Extend update_records to the new size in thandle_update_records.
  *
- * \param[in] tur	thandle_update_records where update_records will be
- *                      extended.
- * \retval		0 if extension succeeds.
- * \retval		negative errno if extension fails.
+ * Return:
+ * * %0 if extension succeeds.
+ * * %negative errno if extension fails.
  */
 int tur_update_records_extend(struct thandle_update_records *tur,
 			      size_t new_size)
@@ -1016,18 +998,17 @@ int tur_update_records_extend(struct thandle_update_records *tur,
 EXPORT_SYMBOL(tur_update_records_extend);
 
 /**
- * Extend update records
+ * tur_update_extend() - Extend update records
+ * @tur: thandle_update_records to be extend
+ * @new_op_size: update_op size of the update record
+ * @new_param_size: params size of the update record
  *
  * Extend update records in thandle to make sure it is able to hold
  * the update with certain update_op and params size.
  *
- * \param [in] tur	thandle_update_records to be extend
- * \param [in] new_op_size update_op size of the update record
- * \param [in] new_param_size params size of the update record
- *
- * \retval		0 if the update_records is being extended.
- * \retval		negative errno if the update_records is not being
- *                      extended.
+ * Return:
+ * * %0 if the update_records is being extended.
+ * * %negative errno if the update_records is not being extended.
  */
 int tur_update_extend(struct thandle_update_records *tur,
 		      size_t new_op_size, size_t new_param_size)
@@ -1068,15 +1049,15 @@ int tur_update_extend(struct thandle_update_records *tur,
 EXPORT_SYMBOL(tur_update_extend);
 
 /**
- * Create update params in thandle_update_records
+ * tur_update_params_create() - Create update params in thandle_update_records
+ * @tur: thandle_update_records where update_params will be allocated
  *
  * Allocate update_params for thandle_update_records, the initial size
  * will be 4KB.
  *
- * \param[in] tur	thandle_update_records where update_params will be
- *                      allocated
- * \retval		0 if allocation succeeds.
- * \retval		negative errno if allocation fails.
+ * Return:
+ * * %0 if allocation succeeds.
+ * * %negative errno if allocation fails.
  */
 static int tur_update_params_create(struct thandle_update_records *tur)
 {
@@ -1092,14 +1073,15 @@ static int tur_update_params_create(struct thandle_update_records *tur)
 }
 
 /**
- * Extend update params
+ * tur_update_params_extend() - Extend update params
+ * @tur: thandle_update_records where update_params will be extended.
+ * @new_size: new size of buffer
  *
  * Extend update_params to the new size in thandle_update_records.
  *
- * \param[in] tur	thandle_update_records where update_params will be
- *                      extended.
- * \retval		0 if extension succeeds.
- * \retval		negative errno if extension fails.
+ * Return:
+ * * %0 if extension succeeds.
+ * * %negative errno if extension fails.
  */
 int tur_update_params_extend(struct thandle_update_records *tur,
 			     size_t new_size)
@@ -1125,16 +1107,17 @@ int tur_update_params_extend(struct thandle_update_records *tur,
 EXPORT_SYMBOL(tur_update_params_extend);
 
 /**
- * Check and prepare whether it needs to record update.
+ * check_and_prepare_update_record() - Check and prepare whether it needs to
+ *                                     record update.
+ * @env: execution environment
+ * @tur: transaction handle
  *
  * Checks if the transaction needs to record updates, and if it
  * does, then initialize the update record buffer in the transaction.
  *
- * \param[in] env	execution environment
- * \param[in] th	transaction handle
- *
- * \retval		0 if updates recording succeeds.
- * \retval		negative errno if updates recording fails.
+ * Return:
+ * * %0 if updates recording succeeds.
+ * * %negative errno if updates recording fails.
  */
 int check_and_prepare_update_record(const struct lu_env *env,
 				    struct thandle_update_records *tur)
