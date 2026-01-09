@@ -654,6 +654,7 @@ int libcfs_debug_clear_buffer(void)
 	cfs_trace_flush_pages();
 	return 0;
 }
+EXPORT_SYMBOL(libcfs_debug_clear_buffer);
 
 /* Debug markers, although printed by S_LNET should not be be marked as such. */
 #undef DEBUG_SUBSYSTEM
@@ -668,6 +669,7 @@ int libcfs_debug_mark_buffer(const char *text)
 
 	return 0;
 }
+EXPORT_SYMBOL(libcfs_debug_mark_buffer);
 
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_LNET

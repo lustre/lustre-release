@@ -48,7 +48,6 @@
 typedef s32 timeout_t;
 
 int libcfs_setup(void);
-int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data);
 
 #ifdef HAVE_CONST_CTR_TABLE
 #define DEFINE_CTL_TABLE_INIT(__name, init)\

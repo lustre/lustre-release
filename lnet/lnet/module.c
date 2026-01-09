@@ -342,6 +342,34 @@ free:
 	RETURN(err);
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
+/* remove deprecated libcfs ioctl handling, since /dev/lnet has
+ * moved to lnet and there is no way to call these ioctls until
+ * after the lnet module is loaded.  They are replaced by writing
+ * to "debug_marker", handled by libcfs_debug_marker() below.
+ */
+static int libcfs_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
+{
+	switch (cmd) {
+	case IOC_LIBCFS_CLEAR_DEBUG:
+		libcfs_debug_clear_buffer();
+		break;
+	case IOC_LIBCFS_MARK_DEBUG:
+		if (data == NULL ||
+		    data->ioc_inlbuf1 == NULL ||
+		    data->ioc_inlbuf1[data->ioc_inllen1 - 1] != '\0')
+			return -EINVAL;
+
+		libcfs_debug_mark_buffer(data->ioc_inlbuf1);
+		break;
+
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+#endif
+
 static long
 lnet_psdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
