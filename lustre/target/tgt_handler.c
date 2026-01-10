@@ -95,7 +95,10 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 }
 
 /**
- * Validate oa from client.
+ * tgt_validate_obdo() - Validate oa from client.
+ * @tsi: current client session
+ * @oa: obdo struct from client (client-provided object metadata)
+ *
  * If the request comes from 2.0 clients, currently only RSVD seq and IDIF
  * req are valid.
  *    a. objects in Single MDT FS  seq = FID_SEQ_OST_MDT0, oi_id != 0
@@ -108,6 +111,10 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
  *
  * And also oi_id/f_oid should always start from 1. oi_id/f_oid = 0 will
  * be used for LAST_ID file, and only being accessed inside OST now.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa)
 {
@@ -1353,19 +1360,20 @@ EXPORT_SYMBOL(tgt_sync);
  */
 
 /**
- * Unified target BAST
+ * tgt_blocking_ast() - Unified target BAST
+ * @lock: server side lock
+ * @desc: lock desc
+ * @data: ldlm_cb_set_arg
+ * @flag: indicates whether this cancelling or blocking callback
  *
  * Ensure data and metadata are synced to disk when lock is canceled if Sync on
  * Cancel (SOC) is enabled. If it's extent lock, normally sync obj is enough,
  * but if it's cross-MDT lock, because remote object version is not set, a
  * filesystem sync is needed.
  *
- * \param lock server side lock
- * \param desc lock desc
- * \param data ldlm_cb_set_arg
- * \param flag	indicates whether this cancelling or blocking callback
- * \retval	0 on success
- * \retval	negative number on error
+ * Return:
+ * * %0 on success
+ * * %negative number on error
  */
 int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		     void *data, int flag)
@@ -1716,8 +1724,19 @@ void tgt_io_thread_done(struct ptlrpc_thread *thread)
 EXPORT_SYMBOL(tgt_io_thread_done);
 
 /**
+ * tgt_mdt_data_lock() - Get Data-on-MDT file server DLM lock
+ * @ns: LDLM namespace
+ * @res_id: The resource name for the DLM request
+ * @lh: Pointer to lustre_handle (to uniquely identify lock)
+ * @mode: lock types
+ * @flags:  flags sent on wire on ldlm requests
+ *
  * Helper function for getting Data-on-MDT file server DLM lock
  * if asked by client.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int tgt_mdt_data_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 		      struct lustre_handle *lh, int mode, __u64 *flags)
@@ -1743,8 +1762,23 @@ int tgt_mdt_data_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 EXPORT_SYMBOL(tgt_mdt_data_lock);
 
 /**
+ * tgt_extent_lock() - Helper function for getting server side
+ *                     [start, start+count] DLM lock if asked by client.
+ * @env: Lustre environment
+ * @ns: LDLM namespace
+ * @res_id: The resource name for the DLM request
+ * @start: Start server side DLM lock
+ * @end: Number of Lock Count
+ * @lh: Pointer to lustre_handle (to uniquely identify lock)
+ * @mode: lock types
+ * @flags:  flags sent on wire on ldlm requests
+ *
  * Helper function for getting server side [start, start+count] DLM lock
  * if asked by client.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int tgt_extent_lock(const struct lu_env *env, struct ldlm_namespace *ns,
 		    struct ldlm_res_id *res_id, __u64 start, __u64 end,
@@ -2987,16 +3021,16 @@ out:
 EXPORT_SYMBOL(tgt_brw_write);
 
 /**
- * Common request handler for OST_SEEK RPC.
+ * tgt_lseek() - Common request handler for OST_SEEK RPC.
+ * @tsi: target session environment for this request
  *
  * Unified request handling for OST_SEEK RPC.
  * It takes object by its FID, does needed lseek and packs result
  * into reply. Only SEEK_HOLE and SEEK_DATA are supported.
  *
- * \param[in] tsi	target session environment for this request
- *
- * \retval		0 if successful
- * \retval		negative value on error
+ * Return:
+ * * %0 if successful
+ * * %negative value on error
  */
 int tgt_lseek(struct tgt_session_info *tsi)
 {
