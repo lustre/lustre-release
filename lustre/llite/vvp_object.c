@@ -21,6 +21,7 @@
 #include <linux/uidgid.h>
 
 #include <obd.h>
+#include <linux/iversion.h>
 #include "llite_internal.h"
 #include "vvp_internal.h"
 
@@ -94,6 +95,8 @@ static int vvp_attr_update(const struct lu_env *env, struct cl_object *obj,
 		inode_set_ctime(inode, attr->cat_ctime, 0);
 	if (valid & CAT_PROJID)
 		ll_i2info(inode)->lli_projid = attr->cat_projid;
+	if (valid & CAT_KMS)
+		inode_inc_iversion(inode);
 	return 0;
 }
 
