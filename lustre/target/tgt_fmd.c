@@ -36,12 +36,12 @@
 #include "tgt_internal.h"
 
 /**
- * Drop FMD reference and free it if reference drops to zero.
+ * tgt_fmd_put_nolock() - Drop FMD reference and free it if reference drops to
+ *                        zero.
+ * @exp: OBD export
+ * @fmd: FMD to put
  *
  * Must be called with ted_fmd_lock held.
- *
- * \param[in] exp	OBD export
- * \param[in] fmd	FMD to put
  */
 static inline void tgt_fmd_put_nolock(struct obd_export *exp,
 				      struct tgt_fmd_data *fmd)
@@ -57,10 +57,9 @@ static inline void tgt_fmd_put_nolock(struct obd_export *exp,
 }
 
 /**
- * Wrapper to drop FMD reference with ted_fmd_lock held.
- *
- * \param[in] exp	OBD export
- * \param[in] fmd	FMD to put
+ * tgt_fmd_put() - Wrapper to drop FMD reference with ted_fmd_lock held.
+ * @exp: OBD export
+ * @fmd: FMD to put
  */
 static void tgt_fmd_put(struct obd_export *exp, struct tgt_fmd_data *fmd)
 {
@@ -72,7 +71,9 @@ static void tgt_fmd_put(struct obd_export *exp, struct tgt_fmd_data *fmd)
 }
 
 /**
- * Expire FMD entries.
+ * tgt_fmd_expire_nolock() - Expire FMD entries.
+ * @exp: OBD export
+ * @keep: FMD to keep always
  *
  * Expire entries from the FMD list if there are too many
  * of them or they are too old.
@@ -82,9 +83,6 @@ static void tgt_fmd_put(struct obd_export *exp, struct tgt_fmd_data *fmd)
  * The \a keep FMD is not to be expired in any case. This parameter is used
  * by ofd_fmd_find_nolock() to prohibit a FMD that was just found from
  * expiring.
- *
- * \param[in] exp	OBD export
- * \param[in] keep	FMD to keep always
  */
 static void tgt_fmd_expire_nolock(struct obd_export *exp,
 				  struct tgt_fmd_data *keep)
@@ -108,11 +106,10 @@ static void tgt_fmd_expire_nolock(struct obd_export *exp,
 }
 
 /**
- * Expire FMD entries.
+ * tgt_fmd_expire() - Expire FMD entries.
+ * @exp: OBD export
  *
  * This is a wrapper to call ofd_fmd_expire_nolock() with the required lock.
- *
- * \param[in] exp	OBD export
  */
 void tgt_fmd_expire(struct obd_export *exp)
 {
@@ -124,17 +121,17 @@ void tgt_fmd_expire(struct obd_export *exp)
 }
 
 /**
- * Find FMD by specified FID.
+ * tgt_fmd_find_nolock() - Find FMD by specified FID.
+ * @exp: OBD export
+ * @fid: FID of FMD to find
  *
  * Function finds FMD entry by FID in the tg_export_data::ted_fmd_list.
  *
  * Caller must hold tg_export_data::ted_fmd_lock and take FMD reference.
  *
- * \param[in] exp	OBD export
- * \param[in] fid	FID of FMD to find
- *
- * \retval		struct tgt_fmd_data found by FID
- * \retval		NULL is FMD is not found
+ * Return:
+ * * struct tgt_fmd_data found by FID
+ * * %NULL is FMD is not found
  */
 static struct tgt_fmd_data *tgt_fmd_find_nolock(struct obd_export *exp,
 						const struct lu_fid *fid)
@@ -161,15 +158,15 @@ static struct tgt_fmd_data *tgt_fmd_find_nolock(struct obd_export *exp,
 }
 
 /**
- * Find FMD by specified FID with locking.
+ * tgt_fmd_find() - Find FMD by specified FID with locking.
+ * @exp: OBD export
+ * @fid: FID of FMD to find
  *
  * Wrapper to the ofd_fmd_find_nolock() with correct locks.
  *
- * \param[in] exp	OBD export
- * \param[in] fid	FID of FMD to find
- *
- * \retval		struct tgt_fmd_data found by FID
- * \retval		NULL indicates FMD is not found
+ * Return:
+ * * struct tgt_fmd_data found by FID
+ * * %NULL indicates FMD is not found
  */
 static struct tgt_fmd_data *tgt_fmd_find(struct obd_export *exp,
 					 const struct lu_fid *fid)
@@ -187,18 +184,18 @@ static struct tgt_fmd_data *tgt_fmd_find(struct obd_export *exp,
 }
 
 /**
- * Find FMD by FID or create a new one if none is found.
+ * tgt_fmd_get() - Find FMD by FID or create a new one if none is found.
+ * @exp: OBD export
+ * @fid: FID of FMD to find
  *
  * It is possible for this function to return NULL under memory pressure,
  * or if the passed FID is zero (which will only cause old entries to expire).
  * Currently this is not fatal because any FMD state is transient and
  * may also be freed when it gets sufficiently old.
  *
- * \param[in] exp	OBD export
- * \param[in] fid	FID of FMD to find
- *
- * \retval		struct tgt_fmd_data found by FID
- * \retval		NULL indicates FMD is not found
+ * Return:
+ * * struct tgt_fmd_data found by FID
+ * * %NULL indicates FMD is not found
  */
 static struct tgt_fmd_data *tgt_fmd_get(struct obd_export *exp,
 					const struct lu_fid *fid)
@@ -237,6 +234,10 @@ static struct tgt_fmd_data *tgt_fmd_get(struct obd_export *exp,
 
 #ifdef DO_FMD_DROP
 /**
+ * tgt_fmd_drop() - Drop FMD list reference
+ * @exp: OBD export
+ * @fid: FID of FMD to drop
+ *
  * Drop FMD list reference so it will disappear when last reference is dropped
  * to zero.
  *
@@ -247,9 +248,6 @@ static struct tgt_fmd_data *tgt_fmd_get(struct obd_export *exp,
  * NB: this function is used only if DO_FMD_DROP is defined. It is not
  * currently defined, so FMD drop doesn't happen and FMD are dropped only
  * when expired.
- *
- * \param[in] exp	OBD export
- * \param[in] fid	FID of FMD to drop
  */
 void tgt_fmd_drop(struct obd_export *exp, const struct lu_fid *fid)
 {
@@ -268,11 +266,10 @@ EXPORT_SYMBOL(tgt_fmd_drop);
 #endif
 
 /**
- * Remove all entries from FMD list.
+ * tgt_fmd_cleanup() - Remove all entries from FMD list.
+ * @exp: OBD export
  *
  * Cleanup function to free all FMD enries on the given export.
- *
- * \param[in] exp	OBD export
  */
 void tgt_fmd_cleanup(struct obd_export *exp)
 {
@@ -294,13 +291,12 @@ void tgt_fmd_cleanup(struct obd_export *exp)
 }
 
 /**
- * Update FMD with the latest request XID.
+ * tgt_fmd_update() - Update FMD with the latest request XID.
+ * @exp: OBD export
+ * @fid: FID of FMD to find
+ * @xid: request XID
  *
  * Save a new setattr/punch XID in FMD if exists.
- *
- * \param[in] exp	OBD export
- * \param[in] fid	FID of FMD to find
- * \param[in] xid	request XID
  */
 void tgt_fmd_update(struct obd_export *exp, const struct lu_fid *fid, __u64 xid)
 {
@@ -316,15 +312,15 @@ void tgt_fmd_update(struct obd_export *exp, const struct lu_fid *fid, __u64 xid)
 EXPORT_SYMBOL(tgt_fmd_update);
 
 /**
- * Chech that time can be updated by the request with given XID.
+ * tgt_fmd_check() - Chech time can be updated by the request with given XID.
  *
  * Check FMD XID if exists to be less than supplied XID
  *
- * \param[in] exp	OBD export
- * \param[in] fid	FID of FMD to find
- * \param[in] xid	request XID
+ * @exp: OBD export
+ * @fid: FID of FMD to find
+ * @xid: request XID
  *
- * \retval true if FMD has no greater XID, so time attr can be updated
+ * Returns true if FMD has no greater XID, so time attr can be updated
  */
 bool tgt_fmd_check(struct obd_export *exp, const struct lu_fid *fid, __u64 xid)
 {
