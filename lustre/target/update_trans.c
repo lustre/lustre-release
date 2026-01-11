@@ -35,9 +35,9 @@
 #include <lustre_update.h>
 #include <obd.h>
 #include <obd_class.h>
-#include <tgt_internal.h>
 
-#include <tgt_internal.h>
+#include "tgt_internal.h"
+
 /**
  * Dump top mulitple thandle
  *
