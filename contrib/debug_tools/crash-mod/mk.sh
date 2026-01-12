@@ -60,6 +60,7 @@ set_target() {
     ${HAVE_powerpc64__:-false} && TARGET=PPC64  && return
     ${HAVE_x86_64__:-false}    && TARGET=X86_64 && return
     ${HAVE_arm__:-false}       && TARGET=ARM    && return
+    ${HAVE_riscv__:-false}     && TARGET=RISCV64 && return
 }
 
 set_gdb_ver() {
