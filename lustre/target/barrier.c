@@ -112,7 +112,10 @@ static void barrier_set(struct barrier_instance *barrier, __u32 status)
 }
 
 /**
- * Create the barrier for the given instance.
+ * barrier_freeze() - Create the barrier for the given instance.
+ * @env: pointer to the thread context
+ * @barrier: pointer to the barrier instance
+ * @phase1: indicate whether it is phase1 barrier or not
  *
  * We use two-phases barrier to guarantee that after the barrier setup:
  * 1) All the MDT side pending async modification have been flushed.
@@ -143,13 +146,10 @@ static void barrier_set(struct barrier_instance *barrier, __u32 status)
  * Every barrier instance will call dt_sync() to make all async transactions
  * to be committed locally.
  *
- * \param[in] env	pointer to the thread context
- * \param[in] barrier	pointer to the barrier instance
- * \param[in] phase1	indicate whether it is phase1 barrier or not
- *
- * \retval		positive number for timeout
- * \retval		0 for success
- * \retval		negative error number on failure
+ * Return:
+ * * %positive number for timeout
+ * * %0 for success
+ * * %negative error number on failure
  */
 static int barrier_freeze(const struct lu_env *env,
 			  struct barrier_instance *barrier, bool phase1)

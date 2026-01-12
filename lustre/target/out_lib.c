@@ -52,23 +52,23 @@ const char *update_op_str(__u16 opc)
 EXPORT_SYMBOL(update_op_str);
 
 /**
- * Fill object update header
+ * out_update_header_pack() - Fill object update header
+ * @env: execution environment
+ * @update: object update to be filled
+ * @max_update_size: maximum object update size, if the current update length
+ *                   equals or exceeds the size, it will return -E2BIG. [in,out]
+ * @update_op: update type
+ * @fid: object FID of the update
+ * @param_count: the count of the update parameters
+ * @param_sizes: the length of each parameters
+ * @reply_size: Reply size
  *
  * Only fill the object update header, and parameters will be filled later
  * in other functions.
  *
- * \params[in] env		execution environment
- * \params[in] update		object update to be filled
- * \params[in,out] max_update_size	maximum object update size, if the
- *                                      current update length equals or
- *                                      exceeds the size, it will return -E2BIG.
- * \params[in] update_op	update type
- * \params[in] fid		object FID of the update
- * \params[in] param_count	the count of the update parameters
- * \params[in] param_sizes	the length of each parameters
- *
- * \retval			0 if packing succeeds.
- * \retval			-E2BIG if packing exceeds the maximum length.
+ * Return:
+ * * %0 if packing succeeds.
+ * * %-E2BIG if packing exceeds the maximum length.
  */
 static int out_update_header_pack(const struct lu_env *env,
 				  struct object_update *update,
@@ -111,20 +111,21 @@ static int out_update_header_pack(const struct lu_env *env,
 }
 
 /**
- * Packs one update into the update_buffer.
+ * out_update_pack() - Packs one update into the update_buffer.
+ * @env: execution environment
+ * @update: update to be packed
+ * @max_update_size: *maximum size of @update
+ * @op: update operation (enum update_type)
+ * @fid: object FID for this update
+ * @param_count: number of parameters for this update
+ * @param_sizes: array of parameters length of this update
+ * @param_bufs: parameter buffers
+ * @reply_size: Reply size
  *
- * \param[in] env	execution environment
- * \param[in] update	update to be packed
- * \param[in] max_update_size	*maximum size of \a update
- * \param[in] op	update operation (enum update_type)
- * \param[in] fid	object FID for this update
- * \param[in] param_count	number of parameters for this update
- * \param[in] param_sizes	array of parameters length of this update
- * \param[in] param_bufs	parameter buffers
- *
- * \retval		= 0 if updates packing succeeds
- * \retval		negative errno if updates packing fails
- **/
+ * Return:
+ * * %0 if updates packing succeeds
+ * * %negative errno if updates packing fails
+ */
 int out_update_pack(const struct lu_env *env, struct object_update *update,
 		    size_t *max_update_size, enum update_type op,
 		    const struct lu_fid *fid, unsigned int param_count,
@@ -153,19 +154,23 @@ int out_update_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_update_pack);
 
 /**
- * Pack various updates into the update_buffer.
+ * out_create_pack() - Pack various updates into the update_buffer.
+ * @env: execution environment
+ * @update: update to be packed
+ * @max_update_size: maximum size of @update
+ * @fid: fid of this object for the update
+ * @attr: attributes (lu_attr) for the new object
+ * @hint: allocation hints
+ * @dof: object format specifier
  *
  * The following functions pack different updates into the update_buffer
  * So parameters of these API is basically same as its correspondent OSD/OSP
  * API, for detail description of these parameters see osd_handler.c or
  * osp_md_object.c.
  *
- * \param[in] env	execution environment
- * \param[in] ubuf	update buffer
- * \param[in] fid	fid of this object for the update
- *
- * \retval		0 if insertion succeeds.
- * \retval		negative errno if insertion fails.
+ * Return:
+ * * %0 if insertion succeeds.
+ * * %negative errno if insertion fails.
  */
 int out_create_pack(const struct lu_env *env, struct object_update *update,
 		    size_t *max_update_size, const struct lu_fid *fid,
@@ -336,19 +341,22 @@ int out_write_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_write_pack);
 
 /**
- * Pack various readonly updates into the update_buffer.
+ * out_index_lookup_pack() - Pack various readonly updates into update_buffer.
+ * @env: execution environment
+ * @update: update to be packed
+ * @max_update_size: maximum size of @update
+ * @fid: fid of this object for the update
+ * @rec: pointer to a dt_rec struct
+ * @key: key of the sub-object lookup
  *
  * The following update funcs are only used by read-only ops, lookup,
  * getattr etc, so it does not need transaction here. Currently they
  * are only used by OSP.
  *
- * \param[in] env	execution environment
- * \param[in] fid	fid of this object for the update
- * \param[in] ubuf	update buffer
- *
- * \retval		= 0 pack succeed.
- *                      < 0 pack failed.
- **/
+ * Return:
+ * * %0 if packing succeeds.
+ * * %negative if packing fails
+ */
 int out_index_lookup_pack(const struct lu_env *env,
 			  struct object_update *update,
 			  size_t *max_update_size, const struct lu_fid *fid,
@@ -494,7 +502,7 @@ static int out_obj_destroy(const struct lu_env *env, struct dt_object *dt_obj,
 	return rc;
 }
 
-/**
+/*
  * All of the xxx_undo will be used once execution failed,
  * But because all of the required resource has been reserved in
  * declare phase, i.e. if declare succeed, it should make sure
@@ -542,28 +550,25 @@ int out_tx_create_exec(const struct lu_env *env, struct thandle *th,
 }
 
 /**
- * Add create update to thandle
+ * out_create_add_exec() - Add create update to thandle
+ * @env: execution environment
+ * @obj: object to be created
+ * @attr: attributes of the creation
+ * @parent_fid: the fid of the parent
+ * @dof: dt object format of the creation
+ * @ta: thandle execuation args where all of updates of the transaction are stored
+ * @th: thandle for this update
+ * @reply: reply of the updates
+ * @index: index of the reply
+ * @file: file name where the function is called (only for debugging purpose)
+ * @line: line number where the funtion is called (only for debugging purpose)
  *
  * Declare create updates and add the update to the thandle updates
  * exec array.
  *
- * \param [in] env	execution environment
- * \param [in] obj	object to be created
- * \param [in] attr	attributes of the creation
- * \param [in] parent_fid the fid of the parent
- * \param [in] dof	dt object format of the creation
- * \param [in] ta	thandle execuation args where all of updates
- *                      of the transaction are stored
- * \param [in] th	thandle for this update
- * \param [in] reply	reply of the updates
- * \param [in] index	index of the reply
- * \param [in] file	the file name where the function is called,
- *                      which is only for debugging purpose.
- * \param [in] line	the line number where the funtion is called,
- *                      which is only for debugging purpose.
- *
- * \retval		0 if updates is added successfully.
- * \retval		negative errno if update adding fails.
+ * Return:
+ * * %0 if updates is added successfully.
+ * * %negative errno if update adding fails.
  */
 int out_create_add_exec(const struct lu_env *env, struct dt_object *obj,
 			struct lu_attr *attr, struct lu_fid *parent_fid,

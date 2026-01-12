@@ -434,9 +434,9 @@ static int out_xattr_del(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 
-/**
+/*
  * increase ref of the object
- **/
+ */
 static int out_ref_add(struct tgt_session_info *tsi)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
@@ -913,6 +913,9 @@ stop:
 }
 
 /**
+ * out_handle() - Object updates between Targets.
+ * @tsi: session related info
+ *
  * Object updates between Targets. Because all the updates has been
  * dis-assemblied into object updates at sender side, so OUT will
  * call OSD API directly to execute these updates.
@@ -922,6 +925,10 @@ stop:
  *
  * Please refer to lustre/include/lustre/lustre_idl.h for req/reply
  * format.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int out_handle(struct tgt_session_info *tsi)
 {
