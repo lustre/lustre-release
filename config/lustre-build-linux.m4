@@ -437,8 +437,15 @@ Consult build/README.kernel-source for details.
 	EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
 ])
 
-AS_IF([test -n SUBARCH],
-[SUBARCH=$(echo $target_cpu | sed -e 's/powerpc.*/powerpc/' -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/' -e 's/k1om/x86/' -e 's/aarch64.*/arm64/' -e 's/armv7.*/arm/')
+AS_IF([test -n SUBARCH], [
+	case $target_cpu in
+		x86_64|i[3-6]86|k1om) SUBARCH=x86;;
+		aarch64*)             SUBARCH=arm64;;
+		armv7*)               SUBARCH=arm;;
+		powerpc*|ppc*)        SUBARCH=powerpc;;
+		riscv64*)             SUBARCH=riscv;;
+		*)                    SUBARCH=$target_cpu;;
+	esac
 ])
 
 # this is needed before we can build modules
