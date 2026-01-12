@@ -60,7 +60,7 @@
 
 # There should be a better (non-arch dependent) way to require ext4
 # sources
-%define ext4_source_rpm kernel-debuginfo-common-x86_64
+%define ext4_source_rpm kernel-debuginfo-common-%{_arch}
 
 Name:           %{module}-dkms
 
