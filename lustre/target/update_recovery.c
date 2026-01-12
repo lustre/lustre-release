@@ -34,17 +34,16 @@
 #include "tgt_internal.h"
 
 /**
- * Lookup distribute_txn_replay req
+ * dtrq_lookup() - Lookup distribute_txn_replay req
+ * @tdtd: distribute_txn_data, which holds the replay list.
+ * @batchid: batchid used by lookup.
  *
  * Lookup distribute_txn_replay in the replay list by batchid.
  * It is assumed the list has been locked before calling this function.
  *
- * \param[in] tdtd	distribute_txn_data, which holds the replay
- *                      list.
- * \param[in] batchid	batchid used by lookup.
- *
- * \retval		pointer of the replay if succeeds.
- * \retval		NULL if can not find it.
+ * Return:
+ * * pointer of the replay if succeeds.
+ * * %NULL if can not find it.
  */
 static struct distribute_txn_replay_req *
 dtrq_lookup(struct target_distribute_txn_data *tdtd, __u64 batchid)
@@ -62,18 +61,18 @@ dtrq_lookup(struct target_distribute_txn_data *tdtd, __u64 batchid)
 }
 
 /**
- * insert distribute txn replay req
+ * dtrq_insert() - insert distribute txn replay req
+ * @tdtd: target distribute txn data where replay list is
+ * @new: distribute txn replay to be inserted
  *
  * Insert distribute txn replay to the replay list, and it assumes the
  * list has been looked. Note: the replay list is a sorted list, which
  * is sorted by master transno. It is assumed the replay list has been
  * locked before calling this function.
  *
- * \param[in] tdtd	target distribute txn data where replay list is
- * \param[in] new	distribute txn replay to be inserted
- *
- * \retval		0 if insertion succeeds
- * \retval		EEXIST if the dtrq already exists
+ * Return:
+ * * %0 if insertion succeeds
+ * * %EEXIST if the dtrq already exists
  */
 static int dtrq_insert(struct target_distribute_txn_data *tdtd,
 			struct distribute_txn_replay_req *new)
@@ -106,16 +105,15 @@ static int dtrq_insert(struct target_distribute_txn_data *tdtd,
 }
 
 /**
- * create distribute txn replay req
+ * dtrq_create() - create distribute txn replay req
+ * @tdtd: target distribute txn data where replay list is.
+ * @lur: update records from the update log.
  *
  * Allocate distribute txn replay req according to the update records.
  *
- * \param[in] tdtd	target distribute txn data where replay list is.
- * \param[in] record    update records from the update log.
- *
- * \retval		the pointer of distribute txn replay req if
- *                      the creation succeeds.
- * \retval		NULL if the creation fails.
+ * Return:
+ * * pointer of distribute txn replay req if the creation succeeds.
+ * * %NULL if the creation fails.
  */
 static struct distribute_txn_replay_req *
 dtrq_create(struct target_distribute_txn_data *tdtd,
@@ -162,16 +160,16 @@ dtrq_create(struct target_distribute_txn_data *tdtd,
 }
 
 /**
- * Lookup distribute sub replay
+ * dtrq_sub_lookup() - Lookup distribute sub replay
+ * @dtrq: the distribute txn replay req to lookup
+ * @mdt_index: the mdt_index as the key of lookup
  *
  * Lookup distribute sub replay in the sub list of distribute_txn_replay by
  * mdt_index.
  *
- * \param[in] distribute_txn_replay_req	the distribute txn replay req to lookup
- * \param[in] mdt_index			the mdt_index as the key of lookup
- *
- * \retval		the pointer of sub replay if it can be found.
- * \retval		NULL if it can not find.
+ * Return:
+ * * the pointer of sub replay if it can be found.
+ * * %NULL if it can not find.
  */
 struct distribute_txn_replay_req_sub *
 dtrq_sub_lookup(struct distribute_txn_replay_req *dtrq, __u32 mdt_index)
@@ -189,16 +187,16 @@ dtrq_sub_lookup(struct distribute_txn_replay_req *dtrq, __u32 mdt_index)
 }
 
 /**
- * Try to add cookie to sub distribute txn request
+ * dtrq_sub_add_cookie() - Try to add cookie to sub distribute txn request
+ * @dtrqs: sub replay req where cookies to be added.
+ * @cookie: cookie to be added.
  *
  * Check if the update log cookie has been added to the request, if not,
  * add it to the dtrqs_cookie_list.
  *
- * \param[in] dtrqs	sub replay req where cookies to be added.
- * \param[in] cookie	cookie to be added.
- *
- * \retval		0 if the cookie is adding succeeds.
- * \retval		negative errno if adding fails.
+ * Return:
+ * * %0 if the cookie is adding succeeds.
+ * * %negative errno if adding fails.
  */
 static int dtrq_sub_add_cookie(struct distribute_txn_replay_req_sub *dtrqs,
 			       struct llog_cookie *cookie)
@@ -219,16 +217,16 @@ static int dtrq_sub_add_cookie(struct distribute_txn_replay_req_sub *dtrqs,
 }
 
 /**
- * Insert distribute txn sub req replay
+ * dtrq_sub_create_and_insert() - Insert distribute txn sub req replay
+ * @dtrq: d to be added
+ * @cookie: the cookie of the update record
+ * @mdt_index: the mdt_index of the update record
  *
  * Allocate sub replay req and insert distribute txn replay list.
  *
- * \param[in] dtrq	d to be added
- * \param[in] cookie	the cookie of the update record
- * \param[in] mdt_index	the mdt_index of the update record
- *
- * \retval		0 if the adding succeeds.
- * \retval		negative errno if the adding fails.
+ * Return:
+ * * %0 if the adding succeeds.
+ * * %negative errno if the adding fails.
  */
 static int
 dtrq_sub_create_and_insert(struct distribute_txn_replay_req *dtrq,
@@ -271,18 +269,17 @@ dtrq_sub_create_and_insert(struct distribute_txn_replay_req *dtrq,
 }
 
 /**
- * append updates to the current replay updates
+ * dtrq_append_updates() - append updates to the current replay updates
+ * @dtrq: the update replay request where the new update records will be added.
+ * @record: the new update record.
  *
  * Append more updates to the existent replay update. And this is only
  * used when combining mulitple updates into one large updates during
  * replay.
  *
- * \param[in] dtrq	the update replay request where the new update
- *                      records will be added.
- * \param[in] lur	the new update record.
- *
- * \retval		0 if appending succeeds.
- * \retval		negative errno if appending fails.
+ * Return:
+ * * %0 if appending succeeds.
+ * * %negative errno if appending fails.
  */
 static int dtrq_append_updates(struct distribute_txn_replay_req *dtrq,
 			       struct update_records *record)
@@ -335,19 +332,19 @@ static int dtrq_append_updates(struct distribute_txn_replay_req *dtrq,
 }
 
 /**
- * Insert update records to the replay list.
+ * insert_update_records_to_replay_list() - Insert update records to the replay
+ *                                          list.
+ * @tdtd: distribute txn replay data where the replay list is.
+ * @lur: the update record
+ * @cookie: cookie of the record
+ * @mdt_index: mdt index of the record
  *
  * Allocate distribute txn replay req and insert it into the replay
  * list, then insert the update records into the replay req.
  *
- * \param[in] tdtd	distribute txn replay data where the replay list
- *                      is.
- * \param[in] record    the update record
- * \param[in] cookie    cookie of the record
- * \param[in] index	mdt index of the record
- *
- * \retval		0 if the adding succeeds.
- * \retval		negative errno if the adding fails.
+ * Return:
+ * * %0 if the adding succeeds.
+ * * %negative errno if the adding fails.
  */
 int
 insert_update_records_to_replay_list(struct target_distribute_txn_data *tdtd,
@@ -448,14 +445,12 @@ again:
 EXPORT_SYMBOL(insert_update_records_to_replay_list);
 
 /**
- * Dump updates of distribute txns.
+ * dtrq_list_dump() - Dump updates of distribute txns.
+ * @tdtd: distribute txn data where all of distribute txn are listed.
+ * @mask: debug mask
  *
  * Output all of recovery updates in the distribute txn list to the
  * debug log.
- *
- * \param[in] tdtd	distribute txn data where all of distribute txn
- *                      are listed.
- * \param[in] mask	debug mask
  */
 void dtrq_list_dump(struct target_distribute_txn_data *tdtd, unsigned int mask)
 {
@@ -470,11 +465,10 @@ void dtrq_list_dump(struct target_distribute_txn_data *tdtd, unsigned int mask)
 EXPORT_SYMBOL(dtrq_list_dump);
 
 /**
- * Destroy distribute txn replay req
+ * dtrq_destroy() - Destroy distribute txn replay req
+ * @dtrq: distribute txn replqy req to be destroyed.
  *
  * Destroy distribute txn replay req and all of subs.
- *
- * \param[in] dtrq	distribute txn replqy req to be destroyed.
  */
 void dtrq_destroy(struct distribute_txn_replay_req *dtrq)
 {
@@ -507,11 +501,10 @@ void dtrq_destroy(struct distribute_txn_replay_req *dtrq)
 EXPORT_SYMBOL(dtrq_destroy);
 
 /**
- * Destroy all of replay req.
+ * dtrq_list_destroy() - Destroy all of replay req.
+ * @tdtd: target distribute txn data where the replay list is.
  *
  * Destroy all of replay req in the replay list.
- *
- * \param[in] tdtd	target distribute txn data where the replay list is.
  */
 void dtrq_list_destroy(struct target_distribute_txn_data *tdtd)
 {
@@ -534,14 +527,13 @@ void dtrq_list_destroy(struct target_distribute_txn_data *tdtd)
 EXPORT_SYMBOL(dtrq_list_destroy);
 
 /**
- * Get next req in the replay list
+ * distribute_txn_get_next_req() - Get next req in the replay list
+ * @tdtd: distribute txn data where the replay list is
  *
  * Get next req needs to be replayed, since it is a sorted list
  * (by master MDT transno)
  *
- * \param[in] tdtd	distribute txn data where the replay list is
- *
- * \retval		the pointer of update recovery header
+ * Return the pointer of update recovery header
  */
 struct distribute_txn_replay_req *
 distribute_txn_get_next_req(struct target_distribute_txn_data *tdtd)
@@ -562,12 +554,13 @@ distribute_txn_get_next_req(struct target_distribute_txn_data *tdtd)
 EXPORT_SYMBOL(distribute_txn_get_next_req);
 
 /**
+ * distribute_txn_get_next_transno() - Get next transno in the replay list
+ * @tdtd: distribute txn data where the replay list is
+ *
  * Get next transno in the replay list, because this is the sorted
  * list, so it will return the transno of next req in the list.
  *
- * \param[in] tdtd	distribute txn data where the replay list is
- *
- * \retval		the transno of next update in the list
+ * Returns the transno of next update in the list
  */
 __u64 distribute_txn_get_next_transno(struct target_distribute_txn_data *tdtd)
 {
@@ -625,21 +618,21 @@ bool is_req_replayed_by_update(struct ptlrpc_request *req)
 EXPORT_SYMBOL(is_req_replayed_by_update);
 
 /**
- * Check if the update of one object is committed
+ * update_is_committed() - Check if the update of one object is committed
+ * @env: execution environment
+ * @dtrq: replay request
+ * @dt_obj: object for the update
+ * @top_th: top thandle
+ * @st: sub thandle which the update belongs to
  *
  * Check whether the update for the object is committed by checking whether
  * the correspondent sub exists in the replay req. If it is committed, mark
  * the committed flag in correspondent the sub thandle.
  *
- * \param[in] env	execution environment
- * \param[in] dtrq	replay request
- * \param[in] dt_obj	object for the update
- * \param[in] top_th	top thandle
- * \param[in] sub_th	sub thandle which the update belongs to
- *
- * \retval		1 if the update is not committed.
- * \retval		0 if the update is committed.
- * \retval		negative errno if some other failures happen.
+ * Return:
+ * * %1 if the update is not committed.
+ * * %0 if the update is committed.
+ * * %negative errno if some other failures happen.
  */
 static int update_is_committed(const struct lu_env *env,
 			       struct distribute_txn_replay_req *dtrq,
@@ -701,23 +694,23 @@ static int update_is_committed(const struct lu_env *env,
 }
 
 /**
- * Implementation of different update methods for update recovery.
+ * update_recovery_create() - Implementation of different update methods for
+ *                            update recovery.
+ * @env: execution environment
+ * @dt_obj: target object to be created
+ * @op: update operation to be replayed
+ * @params: common update parameters which holds all parameters of the operation
+ * @ta: pointer to the thandle_exec_args struct
+ * @th: transaction handle
  *
  * These following functions update_recovery_$(update_name) implement
  * different updates recovery methods. They will extract the parameters
  * from the common parameters area and call correspondent dt API to redo
  * the update.
  *
- * \param[in] env	execution environment
- * \param[in] op	update operation to be replayed
- * \param[in] params	common update parameters which holds all parameters
- *                      of the operation
- * \param[in] th	transaction handle
- * \param[in] declare	indicate it will do declare or real execution, true
- *                      means declare, false means real execution
- *
- * \retval		0 if it succeeds.
- * \retval		negative errno if it fails.
+ * Return:
+ * * %0 if it succeeds.
+ * * %negative errno if it fails.
  */
 static int update_recovery_create(const struct lu_env *env,
 				  struct dt_object *dt_obj,
@@ -1036,17 +1029,16 @@ static int update_recovery_xattr_del(const struct lu_env *env,
 }
 
 /**
- * Update session information
+ * update_recovery_update_ses() - Update session information
+ * @env: execution environment.
+ * @tdtd: distribute data structure of the recovering tgt.
+ * @th: thandle of this update replay.
+ * @master_th: master sub thandle.
+ * @dtrq: pointer to distribute_txn_replay_req (replay request info)
+ * @ta_arg: the tx arg structure to hold the update for updating reply data.
  *
  * Update session information so tgt_txn_stop_cb()->tgt_last_rcvd_update()
  * can be called correctly during update replay.
- *
- * \param[in] env	execution environment.
- * \param[in] tdtd	distribute data structure of the recovering tgt.
- * \param[in] th	thandle of this update replay.
- * \param[in] master_th	master sub thandle.
- * \param[in] ta_arg	the tx arg structure to hold the update for updating
- *                      reply data.
  */
 static void update_recovery_update_ses(struct lu_env *env,
 				      struct target_distribute_txn_data *tdtd,
@@ -1105,21 +1097,21 @@ static void update_recovery_update_ses(struct lu_env *env,
 }
 
 /**
- * Execute updates in the update replay records
+ * update_recovery_exec() - Execute updates in the update replay records
+ * @env: execution environment
+ * @tdtd: distribute txn replay data which hold all of replay reqs and all
+ *        replay parameters.
+ * @dtrq: distribute transaction replay req.
+ * @ta: thandle execute args.
  *
  * Declare distribute txn replay by update records and add the updates
  * to the execution list. Note: it will check if the update has been
  * committed, and only execute the updates if it is not committed to
  * disk.
  *
- * \param[in] env	execution environment
- * \param[in] tdtd	distribute txn replay data which hold all of replay
- *                      reqs and all replay parameters.
- * \param[in] dtrq	distribute transaction replay req.
- * \param[in] ta	thandle execute args.
- *
- * \retval		0 if declare succeeds.
- * \retval		negative errno if declare fails.
+ * Return:
+ * * %0 if declare succeeds.
+ * * %negative errno if declare fails.
  */
 static int update_recovery_exec(const struct lu_env *env,
 				struct target_distribute_txn_data *tdtd,
@@ -1262,7 +1254,11 @@ next:
 }
 
 /**
- * redo updates on MDT if needed.
+ * distribute_txn_replay_handle() - redo updates on MDT if needed.
+ * @env: execution environment
+ * @tdtd: target distribute txn data, which holds the replay list and all
+ *        parameters needed by replay process.
+ * @dtrq: distribute txn replay req.
  *
  * During DNE recovery, the recovery thread (target_recovery_thread) will call
  * this function to replay distribute txn updates on all MDTs. It only replay
@@ -1272,13 +1268,9 @@ next:
  * updates on that MDT, and only mark the sub transaction has been committed
  * there.
  *
- * \param[in] env	execution environment
- * \param[in] tdtd	target distribute txn data, which holds the replay list
- *                      and all parameters needed by replay process.
- * \param[in] dtrq	distribute txn replay req.
- *
- * \retval		0 if replay succeeds.
- * \retval		negative errno if replay failes.
+ * Return:
+ * * %0 if replay succeeds.
+ * * %negative errno if replay failes.
  */
 int distribute_txn_replay_handle(struct lu_env *env,
 				 struct target_distribute_txn_data *tdtd,
