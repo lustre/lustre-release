@@ -153,7 +153,7 @@
 
 %global modules_fs_path /lib/modules/%{_kver}/%{kmoddir}
 # requires want to set a version including epoch
-%global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//' -e 's/-%{_flavor}//')
+%global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/\.riscv64$//' -e 's/-default$//' -e 's/-%{_flavor}//')
 
 %if "%{_vendor}" == "redhat" || "%{_vendor}" == "fedora" || 0%{?openEuler}
 	%global kmod_prefix kmod-
