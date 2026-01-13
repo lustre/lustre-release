@@ -834,6 +834,7 @@ struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 			tmp = param;
 			while ((tmp = strchr(tmp, '/')) != NULL)
 				*tmp = '.';
+			kfree(path);
 		}
 	}
 
