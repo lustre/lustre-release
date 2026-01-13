@@ -16897,7 +16897,7 @@ test_124g_run() {
 	# record existing enqueue stats
 	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
 	$LCTL set_param $nsdir.lock_cache_policy="$policy" ||
-		echo "failed to set lock_cache_policy to $policy"
+		error "failed to set lock_cache_policy to $policy"
 	cancel_lru_locks mdc
 	sleep 5
 	$LCTL get_param $nsdir.lock_unused_count
@@ -16935,8 +16935,8 @@ test_124g_run() {
 
 test_124g() {
 	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
-	(( $MDS1_VERSION >= $(version_code 2.16.61) )) ||
-		skip "Need MDS version with at least 2.16.61"
+	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS version with at least 2.17.50"
 
 	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
 	local lru_size=$(default_lru_size)
@@ -16956,6 +16956,8 @@ test_124g() {
 	test_124g_run "$cli_nid" "$DIR/$tdir" $lru_size "LRU" enq_priv_disable
 
 	echo ">> lfru_enable=$enq_priv_enabled, disable=$enq_priv_disable"
+	(( $enq_priv_enabled <= $enq_priv_disable )) ||
+		error "enable $enq_priv_enabled > disable $enq_priv_disable"
 }
 run_test 124g "LFRU performance test"
 

@@ -545,7 +545,7 @@ struct ldlm_namespace {
 	 * value is a fraction of 256, allowing for fast bitwise right shift
 	 * instead of a slower division operation.
 	 */
-	__s8			ns_lfru_priv_ratio_limit_256;
+	__u8			ns_lfru_priv_ratio_limit_256;
 
 	enum ldlm_lock_cache_policy ns_lock_cache_policy : 3;
 	/**

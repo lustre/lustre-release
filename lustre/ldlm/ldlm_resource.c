@@ -496,6 +496,14 @@ static ssize_t lru_priv_ratio_limit_store(struct kobject *kobj,
 
 	if (kstrtoint(buffer, 10, &tmp))
 		return -EINVAL;
+	/* limit ratio to a reasonable percentage of total lock count */
+	if (tmp < 10 || tmp > 70) {
+		int rc = -ERANGE;
+
+		CWARN("%s: ratio limit '%s' must be between 10-70%%: rc = %d\n",
+		      ns->ns_name, buffer, rc);
+		return rc;
+	}
 
 	ns->ns_lfru_priv_ratio_limit_256 = tmp * 256 / 100;
 

@@ -173,13 +173,14 @@ static void ldlm_lfru_demote_lock(struct ldlm_namespace *ns,
  *
  * TOO MANY criteria:
  * - priv count exceeds 1/8 of the default LRU size, and
- * - priv count exceeds 1/3 of the current cache size
+ * - priv count exceeds `priv_ratio_limit` (defaults to 1/3)
+ *   of the current cache size
  */
 static inline bool ldlm_lfru_priv_too_many(struct ldlm_namespace *ns)
 {
 	return (ns->ns_nr_priv >= (LDLM_DEFAULT_LRU_SIZE >> 3)) &&
 	       (ns->ns_nr_priv >=
-		ns->ns_nr_unused * ns->ns_lfru_priv_ratio_limit_256 >> 8);
+		(u64)ns->ns_nr_unused * ns->ns_lfru_priv_ratio_limit_256 >> 8);
 }
 
 static int ldlm_lfru_try_batch_demote_locks(struct ldlm_namespace *ns,
