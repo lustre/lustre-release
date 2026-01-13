@@ -32447,6 +32447,10 @@ test_413A() {
 	echo "before"
 	do_nodes $CLIENTS $LCTL get_param lmv.*.qos_rr_index
 	for client in ${CLIENTS//,/ }; do
+		local cli_ver=$(lustre_build_version_node $client)
+
+		(( $(version_code $cli_ver) >= $(version_code 2.16.59.8) )) ||
+			skip "need $client $cli_ver > 2.16.59.8 for qos_rr_index"
 		do_node $client $LCTL set_param -n lmv.*.qos_rr_index=$index
 		((index++))
 	done
