@@ -31,6 +31,9 @@
 
 #include "ptlrpc_internal.h"
 
+#include "gss/gss_err.h"
+#include "gss/gss_internal.h"
+
 static int send_sepol;
 module_param(send_sepol, int, 0644);
 MODULE_PARM_DESC(send_sepol, "Client sends SELinux policy status");
@@ -764,6 +767,22 @@ again:
 			sptlrpc_sec_put(sec);
 			goto again;
 		}
+		if (timeout == MAX_SCHEDULE_TIMEOUT &&
+		    GSS_ROUTINE_ERROR(ctx2gctx(ctx)->gc_gss_err) ==
+		    GSS_S_NO_CONTEXT) {
+			/* Context is in error, but if MAX_SCHEDULE_TIMEOUT
+			 * this is very likely when verifying ctx upon a lock
+			 * coverage verification and thus being transient
+			 * during a failover/failback on server side,
+			 * so try to refresh it !
+			 */
+			CDEBUG(D_SEC,
+			       "ctx is in error (%p, fl %lx), trying to refresh it\n",
+			       ctx, ctx->cc_flags);
+			clear_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
+			sptlrpc_sec_put(sec);
+			goto again;
+		}
 		spin_lock(&req->rq_lock);
 		req->rq_err = 1;
 		spin_unlock(&req->rq_lock);
@@ -1032,8 +1051,10 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
 	}
 
 	if (cli_ctx_is_error(ctx)) {
-		sptlrpc_cli_ctx_put(ctx, 1);
-		RETURN(-EACCES);
+		/* Ignore ctx in error and try to refresh */
+		CDEBUG(D_SEC,
+		       "%s: ctx is in error (%p, fl %lx), try to refresh\n",
+		       imp->imp_obd->obd_name, ctx, ctx->cc_flags);
 	}
 
 	req = ptlrpc_request_cache_alloc(GFP_NOFS);
