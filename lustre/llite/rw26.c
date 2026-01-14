@@ -805,7 +805,8 @@ again:
 		goto again;
 	}
 
-	page = cl_page_find(env, clob, vmpage->index, vmpage, CPT_CACHEABLE);
+	page = cl_page_find(env, clob, folio_index_page(vmpage), vmpage,
+			    CPT_CACHEABLE);
 	if (IS_ERR(page))
 		GOTO(out, result = PTR_ERR(page));
 
@@ -1022,7 +1023,9 @@ const struct address_space_operations ll_aops = {
 	.releasepage		= (void *)ll_releasepage,
 #endif
 	.direct_IO		= ll_direct_IO,
+#ifndef HAVE_FILEMAP_GET_FOLIOS
 	.writepage		= ll_writepage,
+#endif
 	.writepages		= ll_writepages,
 	.write_begin		= ll_write_begin,
 	.write_end		= ll_write_end,

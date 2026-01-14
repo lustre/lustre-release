@@ -966,7 +966,7 @@ static inline struct page *cl_page_vmpage(const struct cl_page *page)
 
 static inline pgoff_t cl_page_index(const struct cl_page *cp)
 {
-	return cl_page_vmpage(cp)->index;
+	return folio_index_page(cl_page_vmpage(cp));
 }
 
 /**

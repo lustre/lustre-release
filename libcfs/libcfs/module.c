@@ -25,6 +25,7 @@
 #include <linux/fs.h>
 #include <linux/file.h>
 #include <linux/list.h>
+#include <linux/namei.h>
 
 #include <linux/sysctl.h>
 #include <linux/debugfs.h>
@@ -614,7 +615,7 @@ void lnet_remove_debugfs(const struct ctl_table *table)
 					      strlen(table->procname));
 		struct dentry *dentry;
 
-		dentry = d_hash_and_lookup(lnet_debugfs_root, &dname);
+		dentry = try_lookup_noperm(&dname, lnet_debugfs_root);
 		debugfs_remove(dentry);
 	}
 }

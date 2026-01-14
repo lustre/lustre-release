@@ -603,57 +603,6 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 })
 #endif
 
-#ifndef HAVE_GENERIC_ERROR_REMOVE_FOLIO
-#ifdef HAVE_FOLIO_BATCH
-#define generic_folio			folio
-#else
-#define generic_folio			page
-#define folio_page(page, n)		(page)
-#define folio_nr_pages(page)		(1)
-#define page_folio(page)		(page)
-#endif
-static inline int generic_error_remove_folio(struct address_space *mapping,
-					     struct generic_folio *folio)
-{
-	int pg, npgs = folio_nr_pages(folio);
-	int err = 0;
-
-	for (pg = 0; pg < npgs; pg++) {
-		err = generic_error_remove_page(mapping, folio_page(folio, pg));
-		if (err)
-			break;
-	}
-	return err;
-}
-#endif
-
-/**
- * delete_from_page_cache is not exported anymore
- */
-#ifdef HAVE_DELETE_FROM_PAGE_CACHE
-#define cfs_delete_from_page_cache(page)	delete_from_page_cache((page))
-#else
-static inline void cfs_delete_from_page_cache(struct page *page)
-{
-	if (!page->mapping)
-		return;
-	LASSERT(PageLocked(page));
-	if (S_ISREG(page->mapping->host->i_mode)) {
-		generic_error_remove_folio(page->mapping, page_folio(page));
-	} else {
-		loff_t lstart = page->index << PAGE_SHIFT;
-		loff_t lend = lstart + PAGE_SIZE - 1;
-		struct address_space *mapping = page->mapping;
-
-		get_page(page);
-		unlock_page(page);
-		truncate_inode_pages_range(mapping, lstart, lend);
-		lock_page(page);
-		put_page(page);
-	}
-}
-#endif
-
 static inline struct page *ll_read_cache_page(struct address_space *mapping,
 					      pgoff_t index, filler_t *filler,
 					      void *data)
@@ -723,6 +672,57 @@ static inline pgoff_t folio_index_page(struct page *page)
 # define folio_index_page(pg)		((pg)->index)
 
 #endif /* HAVE_FOLIO_BATCH && HAVE_FILEMAP_GET_FOLIOS */
+
+#ifndef HAVE_GENERIC_ERROR_REMOVE_FOLIO
+#ifdef HAVE_FOLIO_BATCH
+#define generic_folio			folio
+#else
+#define generic_folio			page
+#define folio_page(page, n)		(page)
+#define folio_nr_pages(page)		(1)
+#define page_folio(page)		(page)
+#endif
+static inline int generic_error_remove_folio(struct address_space *mapping,
+					     struct generic_folio *folio)
+{
+	int pg, npgs = folio_nr_pages(folio);
+	int err = 0;
+
+	for (pg = 0; pg < npgs; pg++) {
+		err = generic_error_remove_page(mapping, folio_page(folio, pg));
+		if (err)
+			break;
+	}
+	return err;
+}
+#endif
+
+/**
+ * delete_from_page_cache is not exported anymore
+ */
+#ifdef HAVE_DELETE_FROM_PAGE_CACHE
+#define cfs_delete_from_page_cache(page)	delete_from_page_cache((page))
+#else
+static inline void cfs_delete_from_page_cache(struct page *page)
+{
+	if (!page->mapping)
+		return;
+	LASSERT(PageLocked(page));
+	if (S_ISREG(page->mapping->host->i_mode)) {
+		generic_error_remove_folio(page->mapping, page_folio(page));
+	} else {
+		loff_t lstart = folio_index_page(page) << PAGE_SHIFT;
+		loff_t lend = lstart + PAGE_SIZE - 1;
+		struct address_space *mapping = page->mapping;
+
+		get_page(page);
+		unlock_page(page);
+		truncate_inode_pages_range(mapping, lstart, lend);
+		lock_page(page);
+		put_page(page);
+	}
+}
+#endif
 
 #ifdef HAVE_NSPROXY_COUNT_AS_REFCOUNT
 #define nsproxy_dec(ns)		refcount_dec(&(ns)->count)
@@ -822,5 +822,13 @@ static inline int folio_mapcount_page(struct page *page)
 #else /* !HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
 # define radix_tree_rcu
 #endif /* HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
+
+#ifndef QSTR
+#define QSTR(name) QSTR_LEN((name), strlen((name)))
+#endif
+
+#ifndef QSTR_LEN
+#define QSTR_LEN(name, len) ((struct qstr)QSTR_INIT((name), (len)))
+#endif
 
 #endif /* _LUSTRE_COMPAT_H */

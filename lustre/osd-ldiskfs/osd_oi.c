@@ -139,8 +139,8 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
 	struct inode  *inode;
 	int rc;
 
-	dentry = osd_lookup_one_len_unlocked(osd, name, osd_sb(osd)->s_root,
-					     strlen(name));
+	dentry = osd_lookup_noperm_unlocked(osd, &QSTR(name),
+					    osd_sb(osd)->s_root);
 	if (IS_ERR(dentry))
 		return ERR_CAST(dentry);
 
@@ -162,8 +162,8 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
 	if (rc)
 		return ERR_PTR(rc);
 
-	dentry = osd_lookup_one_len_unlocked(osd, name, osd_sb(osd)->s_root,
-					     strlen(name));
+	dentry = osd_lookup_noperm_unlocked(osd, &QSTR(name),
+					    osd_sb(osd)->s_root);
 	if (IS_ERR(dentry))
 		return ERR_CAST(dentry);
 
@@ -324,7 +324,8 @@ static int osd_remove_oi_one(struct osd_device *osd, struct dentry *parent,
 	struct dentry *child;
 	int rc;
 
-	child = osd_lookup_one_len_unlocked(osd, name, parent, namelen);
+	child = osd_lookup_noperm_unlocked(osd, &QSTR_LEN(name, namelen),
+					   parent);
 	if (IS_ERR(child)) {
 		rc = PTR_ERR(child);
 	} else {

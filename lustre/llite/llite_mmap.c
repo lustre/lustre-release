@@ -153,7 +153,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = ll_fault_io_init(env, vma, vmpage->index, true);
+	io = ll_fault_io_init(env, vma, folio_index_page(vmpage), true);
 	if (IS_ERR(io))
 		GOTO(out, result = PTR_ERR(io));
 
@@ -196,7 +196,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 			unlock_page(vmpage);
 
 			CDEBUG(D_MMAP, "Race on page_mkwrite %p/%lu, page has been written out, retry.\n",
-			       vmpage, vmpage->index);
+			       vmpage, folio_index_page(vmpage));
 
 			*retry = true;
 			result = -EAGAIN;
@@ -437,7 +437,7 @@ restart:
 	if (vmf->page && result == VM_FAULT_LOCKED) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
 				  current->pid, vma->vm_file->private_data,
-				  vmf->page->index << PAGE_SHIFT, PAGE_SIZE,
+				  vmf->pgoff << PAGE_SHIFT, PAGE_SIZE,
 				  READ);
 		ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
 				   LPROC_LL_FAULT,
@@ -473,7 +473,7 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 	       "START file %s:"DFID", vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu\n",
 	       file_dentry(vma->vm_file)->d_name.name,
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid), vma,
-	       vma->vm_start, vma->vm_end, vma->vm_flags, vmf->page->index);
+	       vma->vm_start, vma->vm_end, vma->vm_flags, vmf->pgoff);
 
 	result = pcc_page_mkwrite(vma, vmf, &cached);
 	if (cached)
@@ -517,7 +517,7 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 	if (result == VM_FAULT_LOCKED) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
 				  current->pid, vma->vm_file->private_data,
-				  vmf->page->index << PAGE_SHIFT, PAGE_SIZE,
+				  vmf->pgoff << PAGE_SHIFT, PAGE_SIZE,
 				  WRITE);
 		ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
 				   LPROC_LL_MKWRITE,
@@ -528,7 +528,7 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 	       "COMPLETED: "DFID": vma=%p start=%#lx end=%#lx vm_flags=%#lx idx=%lu, rc %d\n",
 	       PFID(&ll_i2info(file_inode(vma->vm_file))->lli_fid),
 	       vma, vma->vm_start, vma->vm_end, vma->vm_flags,
-	       vmf->page->index, result);
+	       vmf->pgoff, result);
 	return result;
 }
 

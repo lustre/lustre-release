@@ -1391,7 +1391,8 @@ static struct page *osc_encrypt_pagecache_blocks(struct page *srcpage,
 	const struct inode *inode = srcpage->mapping->host;
 	const unsigned int blockbits = inode->i_blkbits;
 	const unsigned int blocksize = 1 << blockbits;
-	u64 lblk_num = ((u64)srcpage->index << (PAGE_SHIFT - blockbits)) +
+	pgoff_t index = folio_index_page(srcpage);
+	u64 lblk_num = ((u64)index << (PAGE_SHIFT - blockbits)) +
 		(offs >> blockbits);
 	unsigned int i;
 	int err;
@@ -1585,9 +1586,10 @@ retry_encrypt:
 			if (directio) {
 				map_orig = brwpg->bp_page->mapping;
 				brwpg->bp_page->mapping = inode->i_mapping;
-				index_orig = brwpg->bp_page->index;
+				index_orig = folio_index_page(brwpg->bp_page);
 				clpage = oap2cl_page(brw_page2oap(brwpg));
-				brwpg->bp_page->index = clpage->cp_page_index;
+				page_folio(brwpg->bp_page)->index =
+							clpage->cp_page_index;
 			}
 			data_page =
 				osc_encrypt_pagecache_blocks(brwpg->bp_page,
@@ -1596,7 +1598,7 @@ retry_encrypt:
 							    GFP_NOFS);
 			if (directio) {
 				brwpg->bp_page->mapping = map_orig;
-				brwpg->bp_page->index = index_orig;
+				page_folio(brwpg->bp_page)->index = index_orig;
 			}
 			if (lockedbymyself)
 				unlock_page(brwpg->bp_page);
@@ -1821,9 +1823,9 @@ no_bulk:
 			 "i %d p_c %u pg %px [pri %lu ind %lu] off %llu prev_pg %px [pri %lu ind %lu] off %llu\n",
 			 i, page_count,
 			 pg->bp_page, page_private(pg->bp_page),
-			 pg->bp_page->index, pg->bp_off,
+			 folio_index_page(pg->bp_page), pg->bp_off,
 			 pg_prev->bp_page, page_private(pg_prev->bp_page),
-			 pg_prev->bp_page->index, pg_prev->bp_off);
+			 folio_index_page(pg_prev->bp_page), pg_prev->bp_off);
 		LASSERT((pga[0]->bp_flag & OBD_BRW_SRVLOCK) ==
 			(pg->bp_flag & OBD_BRW_SRVLOCK));
 		if (short_io_size != 0 && opc == OST_WRITE) {

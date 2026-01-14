@@ -68,10 +68,10 @@ int do_set_info_async(struct obd_import *imp,
 
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
-#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)				\
+#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)				       \
 	CDEBUG(mask, "page %p map %p index %lu flags %lx count %u priv %0lx: " \
-	       fmt, page, page->mapping, page->index, (long)page->flags, \
-	       page_count(page), page_private(page), ## arg)
+	       fmt, page, page->mapping, folio_index_page(page),	       \
+	       (long)page->flags, page_count(page), page_private(page), ## arg)
 
 /** @} lib */
 

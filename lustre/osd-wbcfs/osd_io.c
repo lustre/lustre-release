@@ -99,7 +99,7 @@ static int osd_get_page(const struct lu_env *env, struct dt_object *dt,
 			SetPagePrivate2(page);
 			lock_page(page);
 			ClearPageUptodate(page);
-			page->index = index;
+			page_folio(page)->index = index;
 			lnb->lnb_hole = 1;
 		}
 	}
@@ -336,7 +336,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 		if (lnb[i].lnb_len == PAGE_SIZE)
 			continue;
 
-		if (maxidx < lnb[i].lnb_page->index) {
+		if (maxidx < folio_index_page(lnb[i].lnb_page)) {
 			long off;
 			char *p = kmap(lnb[i].lnb_page);
 
@@ -435,4 +435,3 @@ const struct dt_body_operations osd_body_ops = {
 	.dbo_punch			= osd_punch,
 	.dbo_lseek			= osd_lseek,
 };
-

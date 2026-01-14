@@ -48,10 +48,10 @@ static void osd_push_ctxt(const struct osd_device *dev,
 	push_ctxt(save, newctxt);
 }
 
-static struct dentry *osd_lookup_one_len_common(struct osd_device *dev,
-						const char *name,
-						struct dentry *base, int len,
-						enum oi_check_flags flags)
+static struct dentry *osd_lookup_noperm_common(struct osd_device *dev,
+					       struct qstr *qstr,
+					       struct dentry *base,
+					       enum oi_check_flags flags)
 {
 	struct dentry *dchild;
 
@@ -66,13 +66,13 @@ static struct dentry *osd_lookup_one_len_common(struct osd_device *dev,
 		 * just have to wait until the other thread is done.
 		 */
 		inode_lock(base->d_inode);
-		dchild = lookup_one_len(name, base, len);
+		dchild = lookup_noperm(qstr, base);
 		inode_unlock(base->d_inode);
 	} else {
 		/* This thread context already has taken the lock.
 		 * Other threads will have to wait until we are done.
 		 */
-		dchild = lookup_one_len(name, base, len);
+		dchild = lookup_noperm(qstr, base);
 	}
 	if (IS_ERR(dchild))
 		return dchild;
@@ -89,37 +89,35 @@ static struct dentry *osd_lookup_one_len_common(struct osd_device *dev,
 }
 
 /**
- * osd_lookup_one_len_unlocked
+ * osd_lookup_noperm_unlocked
  *
  * @dev:	obd device we are searching
- * @name:	pathname component to lookup
+ * @qstr:	pathname component to lookup
  * @base:	base directory to lookup from
- * @len:	maximum length @len should be interpreted to
  *
- * Unlike osd_lookup_one_len, this should be called without the parent
+ * Unlike osd_lookup_noperm, this should be called without the parent
  * i_mutex held, and will take the i_mutex itself.
  */
-struct dentry *osd_lookup_one_len_unlocked(struct osd_device *dev,
-					   const char *name,
-					   struct dentry *base, int len)
+struct dentry *osd_lookup_noperm_unlocked(struct osd_device *dev,
+					  struct qstr *qstr,
+					  struct dentry *base)
 {
-	return osd_lookup_one_len_common(dev, name, base, len, ~OI_LOCKED);
+	return osd_lookup_noperm_common(dev, qstr, base, ~OI_LOCKED);
 }
 
 /**
- * osd_lookup_one_len - lookup single pathname component
+ * osd_lookup_noperm - lookup single pathname component
  *
  * @dev:	obd device we are searching
- * @name:	pathname component to lookup
+ * @qstr:	pathname component to lookup
  * @base:	base directory to lookup from
- * @len:	maximum length @len should be interpreted to
  *
  * The caller must hold inode lock
  */
-struct dentry *osd_lookup_one_len(struct osd_device *dev, const char *name,
-				  struct dentry *base, int len)
+struct dentry *osd_lookup_noperm(struct osd_device *dev, struct qstr *qstr,
+				 struct dentry *base)
 {
-	return osd_lookup_one_len_common(dev, name, base, len, OI_LOCKED);
+	return osd_lookup_noperm_common(dev, qstr, base, OI_LOCKED);
 }
 
 /* utility to make a directory */
@@ -139,7 +137,7 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 
 	// ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
 	CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
-	dchild = osd_lookup_one_len_unlocked(osd, name, dir, strlen(name));
+	dchild = osd_lookup_noperm_unlocked(osd, &QSTR(name), dir);
 	if (IS_ERR(dchild))
 		RETURN(dchild);
 
@@ -220,8 +218,8 @@ static int osd_last_rcvd_subdir_count(struct osd_device *osd)
 
 	ENTRY;
 
-	dlast = osd_lookup_one_len_unlocked(osd, LAST_RCVD, osd_sb(osd)->s_root,
-					    strlen(LAST_RCVD));
+	dlast = osd_lookup_noperm_unlocked(osd, &QSTR(LAST_RCVD),
+					   osd_sb(osd)->s_root);
 	if (IS_ERR(dlast))
 		return PTR_ERR(dlast);
 	else if (dlast->d_inode == NULL)
@@ -1431,8 +1429,7 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			RETURN(-ENOENT);
 	}
 
-	dentry = osd_lookup_one_len_common(osd, name, root, strlen(name),
-					   flags);
+	dentry = osd_lookup_noperm_common(osd, &QSTR(name), root, flags);
 	if (!IS_ERR(dentry)) {
 		inode = dentry->d_inode;
 		if (inode) {

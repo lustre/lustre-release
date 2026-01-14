@@ -640,7 +640,7 @@ static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	ClearPageUptodate(page);
-	page->index = offset >> PAGE_SHIFT;
+	page_folio(page)->index = offset >> PAGE_SHIFT;
 	oti->oti_dio_pages_used++;
 
 	return page;
@@ -955,7 +955,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 	max_page_index = inode->i_sb->s_maxbytes >> PAGE_SHIFT;
 
 	CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
-		inode->i_ino, pages, (*lnbs)->lnb_page->index);
+		inode->i_ino, pages, folio_index_page((*lnbs)->lnb_page));
 
 	if (osd->od_extents_dense)
 		compressed = iobuf->dr_lnbs[0]->lnb_flags & OBD_BRW_COMPRESSED;
@@ -989,17 +989,18 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 			iobuf->dr_lextents++;
 			if (++i != pages)
 				continue;
-		} else if (fp->index + clen == (*lnbs)->lnb_page->index) {
+		} else if (folio_index_page(fp) + clen ==
+			   folio_index_page((*lnbs)->lnb_page)) {
 			/* continue the extent */
 			lnbs++;
 			clen++;
 			if (++i != pages)
 				continue;
 		}
-		if (fp->index + clen > max_page_index)
+		if (folio_index_page(fp) + clen > max_page_index)
 			GOTO(cleanup, rc = -EFBIG);
 		/* process found extent */
-		map.m_lblk = fp->index * blocks_per_page;
+		map.m_lblk = folio_index_page(fp) * blocks_per_page;
 		map.m_len = blen = clen * blocks_per_page;
 
 		/*
@@ -1012,7 +1013,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 		if (iobuf->dr_start_pg_wblks > 0) {
 			total = previous_total = start_blocks =
 				iobuf->dr_start_pg_wblks;
-			map.m_lblk = fp->index * blocks_per_page +
+			map.m_lblk = folio_index_page(fp) * blocks_per_page +
 				total;
 			map.m_len = blen - total;
 			iobuf->dr_start_pg_wblks = 0;
@@ -1128,7 +1129,8 @@ cont_map:
 			 */
 			osd_decay_extent_bytes(osd,
 				(total - previous_total) << inode->i_blkbits);
-			map.m_lblk = fp->index * blocks_per_page + total;
+			map.m_lblk = folio_index_page(fp) * blocks_per_page +
+				     total;
 			map.m_len = blen - total;
 			previous_total = total;
 			goto cont_map;
@@ -1192,7 +1194,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 		if (lnb[i].lnb_len == PAGE_SIZE)
 			continue;
 
-		if (maxidx >= lnb[i].lnb_page->index) {
+		if (maxidx >= folio_index_page(lnb[i].lnb_page)) {
 			osd_iobuf_add_page(iobuf, &lnb[i]);
 		} else {
 			long off;

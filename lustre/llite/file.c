@@ -620,7 +620,7 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 			break;
 		}
 		/* attach VM page to CL page cache */
-		page = cl_page_find(env, obj, vmpage->index, vmpage,
+		page = cl_page_find(env, obj, folio_index_page(vmpage), vmpage,
 				    CPT_CACHEABLE);
 		if (IS_ERR(page)) {
 			ClearPageUptodate(vmpage);
@@ -3396,7 +3396,7 @@ lookup:
 			continue;
 
 		inode_lock(parent);
-		de = lookup_one_len(p, de_parent, len);
+		de = lookup_noperm(&QSTR_LEN(p, len), de_parent);
 		inode_unlock(parent);
 		if (IS_ERR_OR_NULL(de) || !de->d_inode) {
 			dput(de_parent);
@@ -4320,9 +4320,10 @@ int ll_ioctl_project(struct file *file, unsigned int cmd, void __user *uarg)
 	/* apply child dentry if name is valid */
 	name_len = strnlen(lu_project.project_name, NAME_MAX);
 	if (name_len > 0 && name_len <= NAME_MAX) {
+		struct qstr qstr = QSTR_INIT(lu_project.project_name, name_len);
+
 		inode_lock(inode);
-		child_dentry = lookup_one_len(lu_project.project_name,
-					      dentry, name_len);
+		child_dentry = lookup_noperm(&qstr, dentry);
 		inode_unlock(inode);
 		if (IS_ERR(child_dentry)) {
 			rc = PTR_ERR(child_dentry);

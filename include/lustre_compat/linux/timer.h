@@ -46,9 +46,13 @@
 #endif
 
 #ifdef HAVE_TIMER_SETUP
+#ifndef timer_container_of
+#define timer_container_of(var, callback_timer, timer_fieldname)	\
+	container_of(callback_timer, typeof(*var), timer_fieldname)
+#endif
 #define cfs_timer_cb_arg_t struct timer_list *
 #define cfs_from_timer(var, callback_timer, timer_fieldname) \
-	from_timer(var, callback_timer, timer_fieldname)
+	timer_container_of(var, callback_timer, timer_fieldname)
 #define cfs_timer_setup(timer, callback, data, flags) \
 	timer_setup((timer), (callback), (flags))
 #define cfs_timer_cb_arg(var, timer_fieldname) (&(var)->timer_fieldname)

@@ -2151,7 +2151,7 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 	page_locked = true;
 	if (!PageDirty(vmpage)) {
 		/* associate cl_page */
-		clpage = cl_page_find(env, clob, vmpage->index,
+		clpage = cl_page_find(env, clob, folio_index_page(vmpage),
 				      vmpage, CPT_CACHEABLE);
 		if (IS_ERR(clpage))
 			GOTO(pagefini, rc = PTR_ERR(clpage));

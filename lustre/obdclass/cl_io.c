@@ -1556,6 +1556,57 @@ EXPORT_SYMBOL(ll_release_user_pages);
 #define kthread_unuse_mm(mm) unuse_mm(mm)
 #endif
 
+static inline size_t folio_from_iter(struct page *pg,
+				     unsigned long offset, size_t bytes,
+				     struct iov_iter *iter)
+{
+	size_t copied; /* bytes successfully copied */
+
+#if defined(HAVE_COPY_FOLIO_FROM_ITER_ATOMIC)
+	struct folio *folio = page_folio(pg);
+	int pgno = folio_page_idx(folio, pg);
+
+	offset += pgno * PAGE_SIZE;
+	copied = copy_folio_from_iter_atomic(folio, offset, bytes, iter);
+	flush_dcache_folio(folio);
+#elif defined(HAVE_COPY_PAGE_FROM_ITER_ATOMIC)
+	copied = copy_page_from_iter_atomic(pg, offset, bytes, iter);
+	flush_dcache_page(pg);
+#else
+	copied = iov_iter_copy_from_user_atomic(pg, iter, offset, bytes);
+	iov_iter_advance(iter, copied);
+	flush_dcache_page(pg);
+#endif
+	return copied;
+}
+
+static inline size_t folio_to_iter(struct page *pg,
+				   unsigned long offset, size_t bytes,
+				   struct iov_iter *iter)
+{
+	size_t copied; /* bytes successfully copied */
+
+#ifdef HAVE___FILEMAP_GET_FOLIO
+	struct folio *folio = page_folio(pg);
+	int pgno = folio_page_idx(folio, pg);
+
+	offset += pgno * PAGE_SIZE;
+	copied = copy_folio_to_iter(folio, offset, bytes, iter);
+#else
+	copied = copy_page_to_iter(pg, offset, bytes, iter);
+#endif
+	return copied;
+}
+
+static inline size_t folio_iter(struct page *page,
+				unsigned long offset, size_t bytes,
+				struct iov_iter *iter, int rw)
+{
+	if (rw == WRITE)
+		return folio_from_iter(page, offset, bytes, iter);
+	return folio_to_iter(page, offset, bytes, iter);
+}
+
 /* copy IO data to/from internal buffer and userspace iovec */
 static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 {
@@ -1652,22 +1703,7 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 		 */
 		flush_dcache_page(page);
 
-		/* write requires a few extra steps */
-		if (rw == WRITE) {
-#ifndef HAVE_COPY_PAGE_FROM_ITER_ATOMIC
-			copied = iov_iter_copy_from_user_atomic(page, iter,
-								offset, bytes);
-			iov_iter_advance(iter, copied);
-#else
-			copied = copy_page_from_iter_atomic(page, offset, bytes,
-							    iter);
-#endif
-			flush_dcache_page(page);
-
-		} else /* READ */ {
-			copied = copy_page_to_iter(page, offset, bytes, iter);
-		}
-
+		copied = folio_iter(page, offset, bytes, iter, rw);
 		pos += copied;
 		count -= copied;
 

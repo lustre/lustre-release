@@ -41,6 +41,17 @@
 MODULE_IMPORT_NS(CRYPTO_INTERNAL);
 #endif
 
+#if defined(HAVE_FOLIO_BATCH) && defined(HAVE_FILEMAP_GET_FOLIOS)
+static inline pgoff_t folio_index_page(struct page *page)
+{
+	struct folio *_f = page_folio(page);
+
+	return _f->index + folio_page_idx(_f, page);
+}
+#else
+# define folio_index_page(pg)		((pg)->index)
+#endif
+
 static unsigned int num_prealloc_crypto_pages = 32;
 static unsigned int num_prealloc_crypto_ctxs = 128;
 
@@ -247,7 +258,8 @@ struct page *llcrypt_encrypt_pagecache_blocks(struct page *page,
 	const unsigned int blockbits = inode->i_blkbits;
 	const unsigned int blocksize = 1 << blockbits;
 	struct page *ciphertext_page;
-	u64 lblk_num = ((u64)page->index << (PAGE_SHIFT - blockbits)) +
+	pgoff_t index = folio_index_page(page);
+	u64 lblk_num = ((u64)index << (PAGE_SHIFT - blockbits)) +
 		       (offs >> blockbits);
 	unsigned int i;
 	int err;
@@ -327,7 +339,8 @@ int llcrypt_decrypt_pagecache_blocks(struct page *page, unsigned int len,
 	const struct inode *inode = page->mapping->host;
 	const unsigned int blockbits = inode->i_blkbits;
 	const unsigned int blocksize = 1 << blockbits;
-	u64 lblk_num = ((u64)page->index << (PAGE_SHIFT - blockbits)) +
+	pgoff_t index = folio_index_page(page);
+	u64 lblk_num = ((u64)index << (PAGE_SHIFT - blockbits)) +
 		       (offs >> blockbits);
 	unsigned int i;
 	int err;
