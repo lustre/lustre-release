@@ -197,7 +197,7 @@ AS_IF([test $ENABLEO2IB = "no"], [
 		])
 	done
 	if ! $ext_o2ib_found; then
-		case $EXT_ENABLEO2IB in
+		case $ENABLEO2IB in
 			"withpath") AC_MSG_ERROR([bad --with-o2ib path]) ;;
 			*) 	AC_MSG_WARN([
 Auto detection of external O2IB failed. Build of external o2ib disabled.])
