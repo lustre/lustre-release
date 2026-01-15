@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
 /*
- * Copyright (c) 2023-2025, Amazon and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023-2026, Amazon and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  */
 
@@ -31,7 +31,7 @@
 
 #define EFALND_MAJOR_VER        1
 #define EFALND_MINOR_VER        2
-#define EFALND_SUBMINOR_VER     0
+#define EFALND_SUBMINOR_VER     2
 #define EFALND_MAJOR_SHIFT	8
 
 #define KEFA_IFNAME_SIZE		256
