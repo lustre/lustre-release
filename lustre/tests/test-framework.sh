@@ -12675,17 +12675,28 @@ zfs_or_rotational() {
 
 ost_fid2_objpath() {
 	local facet=$1
-	local fid=$2
+	local fid=${2/[\[\]]/}
+	local seq
+	local oidhex
+	local ver
+	local oid
 
-	fid=$(echo $fid | tr -d '[]')
+	IFS=: read seq oidhex ver <<< $fid
+	seq=${seq#0x}
+	oid=${oidhex#0x}
 
-	seq=$(echo $fid | awk -F ':' '{ print $1 }' | sed -e "s/^0x//g")
-	oidhex=$(echo $fid | awk -F ':' '{ print $2 }')
+	(( seq == 1 )) && {
+		if [[ $(facet_fstype $facet) == ldiskfs ]]; then
+			oid=$((16#$oid))
+			echo "O/1/d$((oid%32))/$((oid))"
+		elif [[ $(facet_fstype $facet) == zfs ]]; then
+                        echo "oi.1/$fid"
+		fi
+		return
+	}
 
 	if [ $seq == 0 ] || [ $(facet_fstype $facet) == zfs ]; then
-		oid=$((16#${oidhex#0x}))
-	else
-		oid=${oidhex#0x}
+		oid=$((16#$oid))
 	fi
 
 	echo "O/$seq/d$((oidhex%32))/$oid"

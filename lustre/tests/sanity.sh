@@ -10414,8 +10414,12 @@ test_60a() {
 			skip_env "missing subtest run-llog.sh"
 
 	log "$TEST60_HEAD - from kernel mode"
-	do_facet mgs "$LCTL dk > /dev/null"
+	do_facet mgs "$LCTL clear"
+	local saved_debug=$(do_facet mgs $LCTL get_param -n debug)
+	# ensure we get our records in the debug log
+	do_facet mgs $LCTL set_param debug=all-trace-malloc-net-other-ha-info-inode
 	do_facet mgs "bash run-llog.sh" || error "run-llog.sh failed"
+	do_facet mgs "$LCTL set_param debug='$saved_debug'"
 	do_facet mgs $LCTL dk > $TMP/$tfile
 
 	# LU-6388: test llog_reader
@@ -10448,19 +10452,12 @@ test_60a() {
 	#remount mgs as ldiskfs or zfs type
 	stop mgs || error "stop mgs failed"
 	mount_fstype mgs || error "remount mgs failed"
+	echo "fid_list=${fid_list[@]}"
 	for ((i = 0; i < ${#fid_list[@]}; i++)); do
 		fid=${fid_list[i]}
 		rec=${rec_list[i]}
-		seq=$(echo $fid | awk -F ':' '{ print $1 }' | sed -e "s/^0x//g")
-		oid=$(echo $fid | awk -F ':' '{ print $2 }' | sed -e "s/^0x//g")
-		oid=$((16#$oid))
 
-		case $fstype in
-			ldiskfs )
-				obj_file=$mntpt/$(ost_fid2_objpath mgs $fid) ;;
-			zfs )
-				obj_file=$mntpt/oi.$(($((16#$seq))&127))/$fid ;;
-		esac
+		obj_file=$mntpt/$(ost_fid2_objpath mgs $fid)
 		echo "obj_file is $obj_file"
 		do_facet mgs $llog_reader $obj_file
 
