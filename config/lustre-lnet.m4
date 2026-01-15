@@ -107,7 +107,13 @@ case $with_o2ib in
 			# and we could clean all that complexity
 			# but I don't know how far we should be retro-compatible.
 
-			if test -n "$O2IBDIR_PATH"; then
+			# The steps above cannot retrieve the path in some cases
+			# (e.g mlnx-ofa_kernel-source and mlnx-ofa_kernel-dksm),
+			# so set it to a default value if it is NULL.
+			if test -z "$O2IBDIR_PATH"; then
+				O2IBDIR_PATH="/usr/src/ofa_kernel"
+			fi
+			if test -d $O2IBDIR_PATH; then
 				if test -d $O2IBDIR_PATH/${target_cpu}/${LINUXRELEASE}; then
 					O2IBDIR_PATH=$O2IBDIR_PATH/${target_cpu}/${LINUXRELEASE}
 				fi

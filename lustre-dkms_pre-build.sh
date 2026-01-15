@@ -32,15 +32,6 @@ case $1 in
 	elif [ -f /usr/src/kfabric/default/Module.symvers ]; then
 		KERNEL_STUFF="${KERNEL_STUFF} --with-kfi=/usr/src/kfabric/default"
 	fi
-	O2IBPATH=""
-	if [ -d /usr/src/ofa_kernel/${flavor} ]; then
-		O2IBPATH=/usr/src/ofa_kernel/${flavor}
-	elif [ -d /usr/src/ofa_kernel/default ]; then
-		O2IBPATH=/usr/src/ofa_kernel/default
-	fi
-	if [ -n ${O2IBPATH} ]; then
-		KERNEL_STUFF="${KERNEL_STUFF} --with-o2ib=${O2IBPATH}"
-	fi
 	if [ -n ${kmoddir} ]; then
 		KERNEL_STUFF="${KERNEL_STUFF} --with-kmp-moddir=${kmoddir}/${name}"
 	fi
