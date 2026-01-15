@@ -2882,6 +2882,25 @@ mount_facet() {
 	return $RC
 }
 
+# usage: allow_register_open [window]
+# Open a bounded window on the MGS during which new targets may register.
+# Called around the operations that actually create/register targets
+# (format/add/writeconf), not on module load or on every mount: mounting an
+# already-registered filesystem is allowed with allow_register=0, so only
+# target creation needs a window. Best-effort, since the MGS host may not
+# have obdclass loaded yet.
+allow_register_open() {
+	local window=${1:-5m}
+
+	[[ -n "$window" ]] || return 0
+
+	# Avoid do_facet's hard exit when no MGS host is configured.
+	[[ -n "$(facet_host mgs)" ]] || return 0
+
+	do_facet mgs "$LCTL set_param allow_register=$window" \
+		&>/dev/null || true
+}
+
 # start facet device options
 start() {
 	local facet=$1
@@ -3931,6 +3950,29 @@ wait_update_facet() {
 	local max_wait=$4
 
 	wait_update_cond $verbose $quiet $node "$check" "==" "$expect" $max_wait
+}
+
+# usage: llog_params_last_record <logname> <param>
+# Print the last persisted record for <param> in the MGS's <logname> llog.
+llog_params_last_record() {
+	local logname=$1
+	local param=$2
+
+	do_facet mgs $LCTL llog_print $logname |
+		grep -E "parameter:.*${param}|${param}" | tail -n 1
+}
+
+# usage: check_llog_params_value <logname> <param> <value>
+# Verify the last persisted record for <param> shows <value>.
+check_llog_params_value() {
+	local logname=$1
+	local param=$2
+	local value=$3
+	local rec=$(llog_params_last_record $logname $param)
+
+	echo "$rec" |
+		grep -Eq "value:[[:space:]]*${value}([[:space:],}]|$)|${param}=${value}" ||
+		error "${logname} log does not show ${param}=${value}: $rec"
 }
 
 sync_all_data_mdts() {
@@ -5322,6 +5364,13 @@ add() {
 
 	do_facet ${facet} $MKFS $* || return ${PIPESTATUS[0]}
 
+	# A target that was just formatted may need to register with the MGS.
+	# Open a short, bounded window so it is accepted, rather than leaving
+	# registration open for the whole module load/session. Tests that want
+	# to observe registration being blocked set allow_register themselves
+	# after add().
+	allow_register_open
+
 	if [[ $(facet_fstype $facet) == zfs ]]; then
 		#
 		# After formatting a ZFS target, "cachefile=none" property will
@@ -6136,6 +6185,10 @@ writeconf_all () {
 	local ost_count=${2:-$OSTCOUNT}
 	local rc=0
 
+	# writeconf makes targets re-register, if their config log was lost
+	# they would otherwise be blocked, so open a bounded window.
+	allow_register_open
+
 	for num in $(seq $mdt_count); do
 		DEVNAME=$(mdsdevname $num)
 		writeconf_facet mds$num $DEVNAME || rc=$?
@@ -6168,6 +6221,7 @@ mountmgs() {
 		init_facet_vars mgs $(mgsdevname) $MGS_MOUNT_OPTS
 	else
 		start mgs $(mgsdevname) $MGS_MOUNT_OPTS || return $?
+		allow_register_open
 	fi
 	do_facet mgs "$LCTL set_param -P debug_raw_pointers=Y"
 }
@@ -6237,6 +6291,9 @@ mountmds() {
 	done
 	if combined_mgs_mds ; then
 		do_facet mgs "$LCTL set_param -P debug_raw_pointers=Y"
+		# As in mountmgs(): the combined MGS (on mds1) is up now, so arm
+		# the bounded window in case the format-time arm was skipped.
+		allow_register_open
 	fi
 
 	return $rc
@@ -8312,6 +8369,12 @@ run_one_logged() {
 			[[ -n "$tfile" ]] && rm -vf $DIR/$tfile*
 			iter=" (repeat $ONLY_REPEAT_ITER/$repeat iter,"
 			iter+=" $(((SECONDS - before) / 60))/$ONLY_MINUTES min)"
+		fi
+		# Suites that bring up targets outside add()/gen_config
+		# (e.g. conf-sanity) request a bounded registration window
+		# before each test.
+		if [[ -n "$PER_TEST_ALLOW_REGISTER_WINDOW" ]]; then
+			allow_register_open
 		fi
 		# loop around subshell so stack_trap EXIT triggers each time
 		(run_one $testnum "$testmsg$iter") 2>&1 | tee -i $append $test_log

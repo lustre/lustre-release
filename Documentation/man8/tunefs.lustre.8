@@ -172,6 +172,19 @@ Correct order of operations is:
 * Mount MDT and OSTs.
 * Mount clients
 .EE
+.PP
+If the MGS has new target registration disabled (see
+.BR allow_register (4),
+the default), the config logs erased by
+.B --writeconf
+cannot be regenerated until registration is allowed again: MDT0000 and
+any other target will fail to re-register, reporting a database
+access error. Before restarting the targets, open a registration
+window on the MGS with
+.EX
+.B # lctl set_param allow_register=1h
+.EE
+and close it again once all targets have successfully re-registered.
 .TP
 .B --nolocallogs
 Use configuration logs from the MGS, not local ones.

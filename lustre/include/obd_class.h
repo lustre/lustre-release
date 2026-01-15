@@ -206,6 +206,11 @@ struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 void print_lustre_cfg(struct lustre_cfg *lcfg);
 int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj);
 ssize_t class_set_global(const char *param);
+#ifdef CONFIG_LUSTRE_FS_SERVER
+int class_allow_register_check_persist(const char *param, bool del);
+int class_allow_register_set(const char *buffer);
+void class_allow_register_arm_default(const char *fsname);
+#endif
 ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 			    struct kobject *kobj);
 struct obd_device *class_attach_name(const char *typename, const char *name,

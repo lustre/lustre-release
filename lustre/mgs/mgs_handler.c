@@ -279,7 +279,7 @@ static int mgs_check_target(const struct lu_env *env,
 			       mti->mti_fsname);
 		mti->mti_flags |= LDD_F_WRITECONF;
 		rc = 1;
-	} else {
+	} else if (rc > 0) {
 		/* Index is correctly marked as used */
 		rc = 0;
 	}
@@ -503,10 +503,16 @@ process:
 	/* Check if new target registration is allowed */
 	if (!allow_register) {
 		rc = mgs_check_index(tsi->tsi_env, mgs, mti);
-		if (rc == 0) {
+		/*
+		 * A brand-new filesystem returns MGS_ERR_EMPTY_CLIENT_LOG.
+		 * So rc == 0 here means allow_register was armed/opened
+		 * concurrently elsewhere. Re-check the live value before
+		 * rejecting, so we don't undo that window.
+		 */
+		if (rc == 0 && !allow_register) {
 			/* Target index not found - this is a new target */
 			rc = -EACCES;
-			LCONSOLE_ERROR("%s: New target registration disabled. Use 'lctl set_param allow_register=1' to allow new target registrations.\n",
+			LCONSOLE_ERROR("%s: New target registration disabled. Use 'lctl set_param allow_register=1h' to allow new target registrations.\n",
 				       mti->mti_svname);
 			GOTO(out_norevoke, rc);
 		}
@@ -543,6 +549,10 @@ process:
 	if (mti->mti_flags & LDD_F_WRITECONF) {
 		if (mti->mti_flags & LDD_F_SV_TYPE_MDT &&
 		    mti->mti_stripe_index == 0) {
+			if (!allow_register)
+				LCONSOLE_WARN("%s: writeconf is about to erase the config logs for %s while new target registration is disabled. If MDT0000 or any other target fails to re-register afterwards with 'Can't get db for %s: rc = -13', open a registration window first with 'lctl set_param allow_register=1h' on the MGS, then retry.\n",
+					      obd->obd_name, mti->mti_fsname,
+					      mti->mti_fsname);
 			mgs_put_fsdb(mgs, b_fsdb);
 			b_fsdb = NULL;
 			rc = mgs_erase_logs(tsi->tsi_env, mgs,
@@ -1940,6 +1950,11 @@ static const struct obd_ops mgs_obd_device_ops = {
 	.o_health_check		= mgs_health_check,
 };
 
+static char *mgs_allow_register;
+module_param_named(allow_register, mgs_allow_register, charp, 0444);
+MODULE_PARM_DESC(allow_register,
+		 "boot-time MGS target-registration policy (0, unlimited, or N[s|m|h]); if unset, defaults to 0 but still allows the automatic one-time 24h window, which explicitly setting this parameter suppresses");
+
 static int __init mgs_init(void)
 {
 	int rc;
@@ -1947,6 +1962,15 @@ static int __init mgs_init(void)
 	rc = libcfs_setup();
 	if (rc)
 		return rc;
+
+	if (mgs_allow_register) {
+		rc = class_allow_register_set(mgs_allow_register);
+		if (rc) {
+			CERROR("mgs: invalid allow_register module param '%s': rc = %d\n",
+			       mgs_allow_register, rc);
+			return rc;
+		}
+	}
 
 	return class_register_type(&mgs_obd_device_ops, NULL, false,
 				   LUSTRE_MGS_NAME, &mgs_device_type);

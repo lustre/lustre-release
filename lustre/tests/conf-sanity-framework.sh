@@ -28,6 +28,13 @@ if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 	LDISKFS_MKFS_OPTS=$(csa_add "$LDISKFS_MKFS_OPTS" -E lazy_itable_init)
 fi
 
+# conf-sanity starts extra targets (OST2..OSTCOUNT, extra MDTs) that
+# gen_config() does not register, so ask the harness (run_one_logged) to
+# open a bounded allow_register window before each test. Other suites only
+# start already-registered targets via start()/add() and do not need this.
+PER_TEST_ALLOW_REGISTER_WINDOW=true
+export PER_TEST_ALLOW_REGISTER_WINDOW
+
 gen_config() {
 	# The MGS must be started before the OSTs for a new fs, so start
 	# and stop to generate the startup logs.

@@ -65,8 +65,35 @@ EXPORT_SYMBOL(ldlm_timeout_set);
 /* bulk transfer timeout, give up after 100s by default */
 unsigned int bulk_timeout = 100; /* seconds */
 EXPORT_SYMBOL(bulk_timeout);
-/* allow new filesystem registration, enabled by default */
-int allow_register = 1;
+/* allow new filesystem registration
+ *
+ * Three states.
+ *   0 means registration disabled
+ *   a time value means a limited registration window, e.g. 60s, 1h, 30m,
+ *     auto-reverting to disabled when the timer expires, max 7 days,
+ *     values at or above ALLOW_REGISTER_UNLIMITED get -EINVAL
+ *   unlimited means registration always allowed, no timer
+ *
+ * Default is 0, disabled. As a fail-safe convenience, the first target
+ * to register for an unknown filesystem opens a one-time 24-hour window
+ * via class_allow_register_arm_default(), unless the admin already set
+ * allow_register explicitly via module param or lctl set_param. This
+ * only applies to a truly fresh MGS with no existing filesystem config
+ * log yet. An MGS already managing at least one filesystem never
+ * auto-arms, even for a later unknown fsname after a reboot or module
+ * reload. The window never re-arms itself again during the same module
+ * load.
+ *
+ * Usage examples.
+ *  lctl set_param allow_register=0         disable immediately
+ *  lctl set_param allow_register=60s       enable for 60 seconds
+ *  lctl set_param allow_register=1h        enable for 1 hour
+ *  lctl set_param allow_register=2         enable for 2 hours, default unit
+ *  lctl set_param allow_register=unlimited enable indefinitely
+ *
+ * Time suffixes are s for seconds, m for minutes, h for hours, default h
+ */
+unsigned long allow_register;
 EXPORT_SYMBOL(allow_register);
 /* Adaptive timeout defs here instead of ptlrpc module for /proc/sys/ access */
 unsigned int at_min = 5;

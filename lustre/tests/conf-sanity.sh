@@ -2275,6 +2275,12 @@ t32_test() {
 
 	t32_wait_til_devices_gone $node
 
+	if [ "$writeconf" ]; then
+		# writeconf forces targets to re-register with the MGS. Ensure
+		# registration is allowed.
+		$r $LCTL set_param allow_register=unlimited &>/dev/null || true
+	fi
+
 	$r $MOUNT_TGT -o $mopts $mdt_dev $tmp/mnt/mdt || {
 		$r losetup -a
 		error_noexit "Mounting the MDT"
@@ -2322,6 +2328,8 @@ t32_test() {
 		}
 
 		echo "== mount new MDT....$fs2mdsdev =="
+		# this is a brand-new target that must register with the MGS
+		$r $LCTL set_param allow_register=unlimited &>/dev/null || true
 		$r $MOUNT_TGT -o $mopts $fs2mdsdev $tmp/mnt/mdt1 || {
 			error_noexit "mount mdt1 failed"
 			return 1
@@ -6712,6 +6720,10 @@ test_73c() {
 	done
 
 	echo "restart with 35 nets"
+	# Modules were just reloaded. Ensure the MGS allows target registration
+	# before mounting the pre-existing targets.
+	# Older MGS versions don't have this tunable, so ignore failures here.
+	do_facet mgs "$LCTL set_param allow_register=unlimited" &>/dev/null
 	start_mgsmds
 	start_ost || error "unable to start ost1"
 }
@@ -12676,23 +12688,25 @@ run_test 156 "root_fid on export consistent with client mount"
 
 cleanup_157a() {
 	echo "Cleaning up test 157a..."
-	# Re-enable registration
-	do_facet mgs "$LCTL set_param allow_register=1" || true
 	stop fs2mds -f 2>/dev/null || true
 	cleanup
 }
 
 test_157a() {
-	(( $MGS_VERSION >= $(version_code v2_17_52-30-gf96f38c9e1) )) ||
-		skip "need MGS >= 2.17.52.30 for 'allow_register' tunable"
+	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
 
 	stopall
+	stack_trap "cleanup_157a"
+
+	combined_mgs_mds || start_mgs || error "start_mgs failed"
 	setup
 
 	# Verify interface works
-	do_facet mgs "$LCTL set_param allow_register=1" ||
-		error "failed to set allow_register=1"
-	[[ $(do_facet mgs "$LCTL get_param -n allow_register") == 1 ]] ||
+	do_facet mgs "$LCTL set_param allow_register=unlimited" ||
+		error "failed to set allow_register=unlimited"
+	[[ $(do_facet mgs \
+	     "$LCTL get_param -n allow_register") == unlimited ]] ||
 		error "allow_register proc shows wrong value"
 	do_facet mgs "$LCTL set_param allow_register=0" ||
 		error "failed to set allow_register=0"
@@ -12704,8 +12718,6 @@ test_157a() {
 	local fs2mdsdev=$(mdsdevname 1_2)
 	local fs2mdsvdev=$(mdsvdevname 1_2)
 
-	stack_trap "cleanup_157a"
-
 	stop fs2mds -f 2>/dev/null || true
 
 	# start new filesystem - should fail with registration blocked
@@ -12713,6 +12725,8 @@ test_157a() {
 	add fs2mds $(mkfs_opts mds1 ${fs2mdsdev}) --fsname=${test_fsname} \
 		--index=1 --reformat --mgsnode=$MGSNID $fs2mdsdev $fs2mdsvdev ||
 		error "mkfs should succeed even with allow_register=0"
+
+	do_facet mgs "$LCTL set_param allow_register=0"
 
 	# Try to start the filesystem - should fail due to registration blocking
 	if start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS; then
@@ -12728,7 +12742,7 @@ test_157a() {
 		echo "Warning: Expected blocking message not found in dmesg"
 
 	# Re-enable registration
-	do_facet mgs "$LCTL set_param allow_register=1"
+	do_facet mgs "$LCTL set_param allow_register=unlimited"
 
 	# Now the filesystem should be able to start successfully
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS ||
@@ -12765,8 +12779,8 @@ test_157a() {
 	wait_recovery_complete mgs
 
 	# disable registration to test registered targets should still work
-	do_facet mgs "$LCTL set_param allow_register=0" ||
-		error "failed to disable registration after MGS restart"
+	[[ $(do_facet mgs "$LCTL get_param -n allow_register") == 0 ]] ||
+		error "allow_register proc shows wrong value"
 
 	# previously registered MDT can start with allow_register=0
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS
@@ -12788,14 +12802,14 @@ cleanup_157b() {
 	echo "Cleaning up test 157b..."
 	stop fs2ost -f 2>/dev/null || true
 	stop fs3ost -f 2>/dev/null || true
-	do_facet mgs "$LCTL set_param allow_register=1" || true
 	cleanup
 }
 
 test_157b() {
-	(( $MGS_VERSION >= $(version_code v2_17_52-30-gf96f38c9e1) )) ||
-		skip "need MGS >= 2.17.52.30 for 'allow_register' tunable"
+	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
 
+	stack_trap "cleanup_157b"
 	setup
 
 	# existing targets can re-register, new targets blocked
@@ -12805,8 +12819,6 @@ test_157b() {
 	local fs2ostvdev=$(ostvdevname 1_2)
 	local fs3ostdev=$(ostdevname 2_2)
 	local fs3ostvdev=$(ostvdevname 2_2)
-
-	stack_trap "cleanup_157b"
 
 	stop fs2ost -f 2>/dev/null || true
 	stop fs3ost -f 2>/dev/null || true
@@ -12840,6 +12852,8 @@ test_157b() {
 		--index=1 --reformat --mgsnode=$MGSNID $fs3ostdev $fs3ostvdev ||
 		error "mkfs should succeed for OST1 formatting"
 
+	do_facet mgs "$LCTL set_param allow_register=0"
+
 	# Try to start new OST1 - should fail due to registration blocking
 	if start fs3ost $fs3ostdev $OST_MOUNT_OPTS; then
 		stop fs3ost -f
@@ -12854,7 +12868,7 @@ test_157b() {
 		echo "Warning: Expected blocking message not found in dmesg"
 
 	# Re-enable registration and verify new target can now register
-	do_facet mgs "$LCTL set_param allow_register=1"
+	do_facet mgs "$LCTL set_param allow_register=unlimited"
 
 	start fs3ost $fs3ostdev $OST_MOUNT_OPTS ||
 		error "OST1 should be able to register after re-enabling"
@@ -12878,6 +12892,446 @@ test_157b() {
 	echo "Passed: Existing targets can re-register, new targets blocked"
 }
 run_test 157b "verify allow_register (block new OSTs, allow existing)"
+
+cleanup_157c() {
+	echo "Cleaning up test 157c..."
+	stop fs2ost -f 2>/dev/null || true
+	stop fs3ost -f 2>/dev/null || true
+	cleanup
+}
+
+test_157c() {
+	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
+
+	stack_trap "cleanup_157c"
+	setup
+
+	local test_fsname=fs$RANDOM
+	local fs2ostdev=$(ostdevname 1_2)
+	local fs2ostvdev=$(ostvdevname 1_2)
+	local fs3ostdev=$(ostdevname 2_2)
+	local fs3ostvdev=$(ostvdevname 2_2)
+	local marker="test157c-$(date +%s)-$$"
+	local val
+
+	stop fs2ost -f 2>/dev/null || true
+	stop fs3ost -f 2>/dev/null || true
+
+	do_facet mgs "$LCTL set_param allow_register=unlimited" ||
+		error "Failed to set allow_register=unlimited"
+
+	# Format and start OST0 first, then arm a short registration window.
+	# This avoids consuming most of the timeout in mkfs/mount on slow or
+	# remote devices, which can make the test flaky and fail before the
+	# timeout behaviour is exercised.
+	add fs2ost $(mkfs_opts ost1 ${fs2ostdev}) --fsname=${test_fsname} \
+		--index=0 --reformat --mgsnode=$MGSNID $fs2ostdev $fs2ostvdev ||
+		error "mkfs failed for OST0"
+
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS ||
+		error "failed to start OST0"
+
+	# Set a short timeout (60 seconds) after OST0 is up.
+	start_seconds=$SECONDS
+	do_facet mgs "$LCTL set_param allow_register=60s" ||
+		error "Failed to set allow_register=60s"
+
+	val=$(do_facet mgs $LCTL get_param -n allow_register)
+	[[ "$val" =~ ^[0-9]+s$ ]] ||
+		error "Expected allow_register with suffix 's', got '$val'"
+	val=${val%s}
+	(( val <= 60 && val > 0 )) ||
+		error "Expected allow_register <= 60s, got ${val}s"
+
+	do_facet fs2ost "$LCTL get_param \
+			 obdfilter.${test_fsname}*.recovery_status" ||
+		error "OST0 not properly started"
+
+	do_facet mgs "$LCTL mark '$marker'"
+
+	echo "Waiting for allow_register timeout to expire"
+	rest=$(( start_seconds + 60 - SECONDS ))
+	(( rest < 0 )) && rest=0
+	wait_update_facet mgs \
+		"dmesg | awk '
+		 /$marker/ {found=1; next}
+		 found && /New MDT\/OST registration window disabled/ {print; exit}
+		' | wc -l" "1" $((rest + 10))
+
+	# Try to register new OST1 - should fail due to expired timeout
+	add fs3ost $(mkfs_opts ost2 ${fs3ostdev}) --fsname=${test_fsname} \
+		--index=1 --reformat --mgsnode=$MGSNID $fs3ostdev $fs3ostvdev ||
+		error "mkfs should succeed for OST1 formatting"
+
+	do_facet mgs "$LCTL set_param allow_register=0"
+
+	if start fs3ost $fs3ostdev $OST_MOUNT_OPTS; then
+		stop fs3ost -f
+		error "New OST1 should not register after timeout expired"
+	fi
+
+	# Check for expected error message in dmesg. If the test is run in loop,
+	# the kernel may suppress identical console messages due to message rate
+	# limiting, so not finding the message is treated as a warning rather
+	# than a failure.
+	local check
+	(( ONLY_REPEAT_ITER == 1 )) && check=error || check=log
+
+	err_msg=$(do_facet mgs \
+		  "dmesg | awk '/$marker/{found=1; next} found' |
+		   grep -v 'DEBUG MARKER' |
+		   grep -c 'New target registration disabled'")
+
+	(( err_msg > 0 )) ||
+		$check "Warning: Expected blocking message not found in dmesg"
+
+	# Re-enable registration.
+	do_facet mgs "$LCTL set_param allow_register=unlimited" ||
+		error "Failed to set allow_register=unlimited"
+
+	# Now new OST1 should be able to register
+	start fs3ost $fs3ostdev $OST_MOUNT_OPTS ||
+		error "OST1 should register after re-enabling"
+
+	do_facet fs3ost "$LCTL get_param \
+			 obdfilter.${test_fsname}*.recovery_status" ||
+		error "new OST1 not working properly"
+}
+run_test 157c "test allow_register timeout functionality"
+
+cleanup_157d() {
+	echo "Cleaning up test 157d..."
+
+	# restart_mgsmds_after_unload leaves a window where the config is
+	# down (between stopall and start_mgs/start_mdt succeeding).
+	if ! do_facet mgs "$LCTL get_param -n allow_register" &>/dev/null; then
+		echo "cleanup_157d: MGS not reachable, restarting config"
+		stopall &>/dev/null
+		unload_modules &>/dev/null
+		load_modules
+		combined_mgs_mds || start_mgs
+		start_mdt 1
+	fi
+
+	do_facet mgs "$LCTL set_param -P -d allow_register" || true
+
+	cleanup
+}
+
+restart_mgsmds_after_unload() {
+	stopall || error "stopall failed"
+	LOAD_MODULES_REMOTE=true unload_modules || error "unload_modules failed"
+	LOAD_MODULES_REMOTE=true load_modules || error "load_modules failed"
+
+	if ! combined_mgs_mds; then
+		start_mgs || error "start_mgs failed"
+	fi
+
+	start_mdt 1 || error "start_mdt 1 failed"
+	wait_recovery_complete mgs
+}
+
+# Same-length rewrite of allow_register=0 -> 1 in CONFIGS/params so the
+# legacy boolean "on" path is applied on the next MDT params-log replay.
+rewrite_params_allow_register_0_to_1() {
+	local facet=mgs
+	local params
+
+	combined_mgs_mds && facet=mds1
+	params=$(facet_mntpt $facet)/CONFIGS/params
+
+	stopall || error "stopall failed"
+	mount_fstype $facet || error "mount_fstype $facet failed"
+
+	# Same-length in-place edit (binary-safe slurp) so llog sizes stay valid.
+	do_facet $facet "test -f $params &&
+		perl -0777 -pi -e 's/allow_register=0/allow_register=1/g' $params &&
+		grep -aqo 'allow_register=1' $params" || {
+		unmount_fstype $facet || true
+		error "failed to rewrite allow_register=0 to 1 in $params"
+	}
+
+	unmount_fstype $facet || error "unmount_fstype $facet failed"
+}
+
+test_157d() {
+	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
+
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	combined_mgs_mds ||
+		skip "needs combined MGS/MDT"
+
+	do_facet mds1 "type -p perl >/dev/null" ||
+		skip_env "need perl on mds1 for param logs modification"
+
+	stack_trap "cleanup_157d"
+	setup
+
+	# Persist allow_register=0 and verify it is restored after reload.
+	do_facet mgs "$LCTL set_param -P allow_register=0" ||
+		error "failed to persist allow_register=0"
+
+	wait_update_facet mgs "$LCTL get_param -n allow_register" "0" ||
+		error "allow_register is not 0"
+
+	check_llog_params_value params allow_register 0
+
+	# Timed values cannot be persisted.
+	if do_facet mgs "$LCTL set_param -P allow_register=60s"; then
+		do_facet mgs "$LCTL set_param -P -d allow_register" || true
+		error "timed allow_register should not be persistent"
+	fi
+
+	# Untimed value (expect 0 or unlimited) must be rejected.
+	if do_facet mgs "$LCTL set_param -P allow_register=2"; then
+		do_facet mgs "$LCTL set_param -P -d allow_register" || true
+		error "invalid allow_register value should be rejected"
+	fi
+
+	restart_mgsmds_after_unload
+
+	wait_update_facet mgs "$LCTL get_param -n allow_register" "0" ||
+		error "allow_register=0 was not restored"
+
+	# Change the persisted value from 0 to 1 and verify that
+	# the legacy value 1 is treated as unlimited.
+	rewrite_params_allow_register_0_to_1
+
+	restart_mgsmds_after_unload
+
+	check_llog_params_value params allow_register 1
+
+	wait_update_facet mgs "$LCTL get_param -n allow_register" "unlimited" ||
+		error "allow_register=1 was not restored as unlimited"
+
+	echo "allow_register persistence and legacy 1->unlimited OK"
+}
+run_test 157d "test allow_register -P persistence and legacy 1->unlimited"
+
+cleanup_157e() {
+	echo "Cleaning up test 157e..."
+
+	if [[ "$modprobe_file_157e_created" == true ]]; then
+		do_facet mgs "rm -f $modprobe_file_157e" &>/dev/null
+	elif [[ -n "$modprobe_file_157e" ]]; then
+		do_facet mgs \
+		    "sed -i '/^options mgs allow_register=0\$/d' \
+		     $modprobe_file_157e" &>/dev/null
+	fi
+
+	MODPROBECONF=$old_modprobeconf_157e
+
+	if ! do_facet mgs "$LCTL get_param -n allow_register" &>/dev/null; then
+		echo "cleanup_157e: MGS not reachable, restarting config"
+		stopall &>/dev/null
+		unload_modules &>/dev/null
+		load_modules
+		combined_mgs_mds || start_mgs
+		start_mdt 1
+	fi
+
+	do_facet mgs "$LCTL set_param -P -d allow_register" || true
+
+	cleanup
+}
+
+test_157e() {
+	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
+
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	modprobe_file_157e=$(do_facet mgs \
+		"test -f /etc/modprobe.d/lustre.conf &&
+			echo /etc/modprobe.d/lustre.conf ||
+		 test -f /etc/modprobe.d/Lustre &&
+		 	echo /etc/modprobe.d/Lustre ||
+		 test -f /etc/modprobe.conf && echo /etc/modprobe.conf ||
+		 echo /etc/modprobe.d/lustre.conf")
+
+	if do_facet mgs "test -f $modprobe_file_157e"; then
+		modprobe_file_157e_created=false
+	else
+		modprobe_file_157e_created=true
+	fi
+
+	stack_trap "cleanup_157e"
+	setup
+
+	# Set allow_register=0 via modprobe.d and verify it is applied when
+	# the module is loaded. Use restart_mgsmds_after_unload to ensure
+	# mgs/obdclass are actually unloaded and reloaded.
+	do_facet mgs \
+		"echo 'options mgs allow_register=0' >> $modprobe_file_157e" ||
+		error "failed to add allow_register=0 option to $modprobe_file_157e"
+
+	old_modprobeconf_157e=$MODPROBECONF
+	MODPROBECONF=$modprobe_file_157e
+
+	restart_mgsmds_after_unload ||
+		error "failed to restart mgs/mds with allow_register=0 parameter"
+
+	# Verify allow_register is set to 0
+	wait_update_facet mgs "$LCTL get_param -n allow_register" "0" ||
+		error "allow_register was not set to 0 by module parameter"
+
+	# Verify parameter can be overridden at runtime (non-persistent)
+	do_facet mgs "$LCTL set_param allow_register=60s" ||
+		error "failed to set allow_register to 60s"
+
+	val=$(do_facet mgs $LCTL get_param -n allow_register)
+	[[ "$val" =~ ^[0-9]+s$ ]] ||
+		error "expected allow_register with suffix 's', got '$val'"
+	val=${val%s}
+	(( val <= 60 && val > 0 )) ||
+		error "expected allow_register <= 60s, got ${val}s"
+
+	# Restart mgs/mds and verify parameter is restored from modprobe.d
+	restart_mgsmds_after_unload ||
+		error "failed to restart mgs/mds"
+
+	wait_update_facet mgs "$LCTL get_param -n allow_register" "0" ||
+		error "allow_register=0 was not restored from module parameter"
+
+	# Verify the modprobe.d module parameter never gets written into the
+	# on-disk persistent params log.
+	rec=$(do_facet mgs $LCTL llog_print params 2>/dev/null |
+	      grep -E 'parameter:.*allow_register|allow_register')
+
+	[[ -z "$rec" ]] ||
+		error "modprobe.d allow_register leaked into params log: $rec"
+
+	# Verify precedence: a persisted (-P) value must override the
+	# modprobe.d boot-time default. The params log is replayed after
+	# module init, so the persisted value should win on a combined MGS/MDT.
+	if combined_mgs_mds; then
+		do_facet mgs "$LCTL set_param -P allow_register=unlimited" ||
+			error "failed to persist allow_register=unlimited"
+
+		restart_mgsmds_after_unload ||
+			error "failed to restart mgs/mds with -P allow_register=unlimited set"
+
+		wait_update_facet mgs "$LCTL get_param -n allow_register" \
+			"unlimited" ||
+			error "persistent allow_register=unlimited did not override modprobe.d allow_register=0"
+
+		do_facet mgs "$LCTL set_param -P -d allow_register" ||
+			error "failed to remove persistent allow_register entry"
+	else
+		echo "skipping -P vs modprobe.d precedence check:" \
+			"needs combined MGS/MDT"
+	fi
+
+	echo "mgs allow_register module parameter OK"
+}
+run_test 157e "test allow_register mgs module parameter boot-time enforcement"
+
+cleanup_157f() {
+	echo "Cleaning up test 157f..."
+	stop fs2ost -f 2>/dev/null || true
+	stop fs2mds -f 2>/dev/null || true
+
+	if ! do_facet mgs "$LCTL get_param -n allow_register" &>/dev/null; then
+		echo "cleanup_157f: MGS not reachable, restarting config"
+		stopall &>/dev/null
+		unload_modules &>/dev/null
+		load_modules
+		combined_mgs_mds || start_mgs
+		start_mdt 1
+	fi
+
+	cleanup
+}
+
+test_157f() {
+	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
+
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	stack_trap "cleanup_157f"
+
+	# This test verifies the kernel's one-time automatic registration
+	# window, so it starts from a pristine module state and deliberately
+	# does not go through add(), which opens an explicit window of its own.
+	stopall || error "stopall failed"
+	# Reload modules on the MGS/server nodes too: a local-only reload
+	# leaves the MGS's in-memory allow_register untouched on a multi-node
+	# cluster, so the fresh-module default of 0 would never be observed.
+	LOAD_MODULES_REMOTE=true unload_modules || error "unload_modules failed"
+	LOAD_MODULES_REMOTE=true load_modules || error "load_modules failed"
+
+	local val=$(do_facet fs2mds $LCTL get_param -n allow_register)
+	[[ "$val" == 0 ]] ||
+		error "expected untouched allow_register=0, got '$val'"
+
+	local test_fsname=fs$RANDOM
+	local fs2mdsdev=$(mdsdevname 1_2)
+	local fs2mdsvdev=$(mdsvdevname 1_2)
+
+	stop fs2mds -f 2>/dev/null || true
+	rm -f $TMP/fs2mdsactive
+
+	# Format directly instead of via add() so no explicit registration
+	# window is opened and the kernel auto-arm is the only thing that can
+	# let this brand-new filesystem register.
+	do_facet fs2mds $MKFS $(mkfs_opts mgs ${fs2mdsdev}) \
+		--fsname=${test_fsname} --mdt --index=0 --reformat \
+		$fs2mdsdev $fs2mdsvdev ||
+		error "mkfs failed for fresh MGS"
+
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS ||
+		error "first-ever registration on a fresh MGS should auto-open the registration window"
+
+	do_facet fs2mds "$LCTL get_param mdt.${test_fsname}*.recovery_status" ||
+		error "new filesystem not properly started"
+
+	val=$(do_facet fs2mds $LCTL get_param -n allow_register)
+	[[ "$val" =~ ^[0-9]+s$ ]] ||
+		error "expected auto-armed timed allow_register, got '$val'"
+	val=${val%s}
+	(( val > 0 && val <= 86400 )) ||
+		error "expected auto-armed window <= 24h, got ${val}s"
+
+	local rem_before_fs2=$val
+
+	# A second, unrelated new filesystem registering while the window
+	# is still open must not re-open/reset the timer, so the remaining
+	# time should keep counting down rather than jump back to ~24h.
+	sleep 10
+
+	local test_fsname2=fs$RANDOM
+	local fs2ostdev=$(ostdevname 1_2)
+	local fs2ostvdev=$(ostvdevname 1_2)
+	local MGSNID=$(do_facet fs2mds $LCTL list_nids | xargs | tr ' ' ,)
+
+	stop fs2ost -f 2>/dev/null || true
+	rm -f $TMP/fs2ostactive
+
+	do_facet fs2ost $MKFS $(mkfs_opts ost1 ${fs2ostdev} ${test_fsname2}) \
+		--reformat $fs2ostdev $fs2ostvdev ||
+		error "mkfs failed for second new filesystem"
+
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS ||
+		error "second new filesystem should register within still-open window"
+
+	do_facet fs2ost "$LCTL get_param \
+			 obdfilter.${test_fsname2}*.recovery_status" ||
+		error "second new filesystem not properly started"
+
+	val=$(do_facet fs2mds $LCTL get_param -n allow_register)
+	[[ "$val" =~ ^[0-9]+s$ ]] ||
+		error "expected allow_register still timed, got '$val'"
+	val=${val%s}
+	(( val > 0 && val < rem_before_fs2 )) ||
+		error "second registration reset allow_register: was ${rem_before_fs2}s, now ${val}s"
+
+	echo "allow_register auto-arm 24h window test completed successfully"
+}
+run_test 157f "test allow_register auto-arm default 24-hour window"
 
 test_158() {
 	(( $CLIENT_VERSION >= $(version_code 2.17.57) )) ||

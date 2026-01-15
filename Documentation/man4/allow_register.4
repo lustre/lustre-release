@@ -1,0 +1,462 @@
+.TH ALLOW_REGISTER 4 2026-10-06 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+allow_register \- control registration of new Lustre targets (MDTs/OSTs)
+.SH SYNOPSIS
+.SY
+.BI "lctl set_param allow_register=" TIMEOUT
+.SY
+.B lctl get_param allow_register
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+Global (MGS)
+.TP
+.B Config
+MGS only
+.TP
+.B Initial default
+.br
+.RB allow_register= 0
+(disabled), except for a one-time automatic 24-hour default window opened on
+the first target registration on a truly fresh MGS (one with no filesystem
+config log of any kind yet) after the modules load; see
+.B AUTOMATIC DEFAULT WINDOW
+below.
+.TP
+.B Valid Range
+.br
+.RB allow_register= 0
+.br
+.RB allow_register= 168
+The maximum timed window is 7 days
+.RB ( 168h
+/
+.BR 604800s );
+larger values are rejected with
+.BR EINVAL .
+Use
+.B unlimited
+for an open-ended window.
+.SH DESCRIPTION
+.B allow_register
+controls whether new Lustre filesystem targets (MDTs and OSTs) can register
+with the MGS.
+.B TIMEOUT
+argument specifies how long registration is permitted.
+This parameter provides a security mechanism to limit the window during which
+new filesystems or targets can be added to the cluster.
+.PP
+The parameter supports three types of values:
+.TP
+.B 0
+Registration is disabled. No new targets can register with the MGS.
+Existing targets can continue to operate normally.
+.TP
+.B unlimited
+Registration is enabled indefinitely.
+New targets can register at any time without restriction. No timer is armed.
+.TP
+.IR TIMEOUT [ UNITS ]
+Registration is enabled for a time-limited window of
+.I TIMEOUT
+time, with optional
+.I UNITS
+magnitude (default hours).
+When the timeout expires, registration is automatically disabled (set to 0).
+A console warning message is logged when the timeout expires.
+.PP
+Units supported:
+.RS
+.TP
+.B s
+seconds
+.TP
+.B m
+minutes
+.TP
+.B h
+hours (default if no units is specified)
+.RE
+.PP
+When a time-limited value is set, a timer is started that automatically
+disables registration when it expires.
+Reading the parameter with
+.B "lctl get_param allow_register"
+while a timer is active shows the remaining time with
+an explicit
+.B s
+unit (for example,
+.BR 59s ),
+so that it can be used directly as input to
+.BR "lctl set_param allow_register=59s" .
+.SH AUTOMATIC DEFAULT WINDOW
+.B allow_register
+defaults to
+.B 0
+(disabled) so that a cluster where the administrator never touches this
+parameter is secure by default. To avoid that default also blocking the
+very first setup of a brand-new cluster, the MGS automatically opens a
+one-time, non-persistent
+.B 24-hour
+default window the first time a target registers, but
+.B only
+if the MGS is truly fresh, i.e. it does not yet have a config log for
+.B any
+filesystem in its
+.B CONFIGS
+directory. The window opens as if
+.B "lctl set_param allow_register=24h"
+had been run.
+.PP
+This restriction applies to the MGS as a whole, not to individual filesystem
+names being registered. Once the MGS has a config log for at least one
+filesystem, it will never auto-arm again, even if a subsequent registration
+involves a different, previously unknown filesystem name
+(e.g., after a reboot or an
+.B obdclass
+reload).
+.PP
+This automatic window
+.B never
+re-arms itself: it can fire at most once per module load, regardless of
+how many filesystems or targets are subsequently created. It is also
+skipped entirely if the administrator has already set
+.B allow_register
+explicitly (via
+.BR "lctl set_param" ,
+the MGS
+.B params
+config log, or the
+.B mgs
+module's boot-time parameter) before the first target registers.
+.PP
+Administrators who want registration locked down immediately, even
+during initial setup, can still set
+.B "lctl set_param allow_register=0"
+right after starting the MGS.
+.SH PERSISTENCE
+Stopping and starting the MGS service alone does
+.B not
+reset
+.B allow_register
+while
+.B obdclass
+remains loaded.
+After a full node reboot, or any path that unloads and reloads
+.BR obdclass ,
+the value returns to its initial default of
+.B 0
+(subject to the automatic default window described in
+.B AUTOMATIC DEFAULT WINDOW
+above).
+.PP
+Steady-state values
+.RB ( 0
+and
+.BR unlimited )
+may be written to the MGS
+.B params
+configuration log with
+.BR "lctl set_param -P"
+(see
+.BR lctl-set_param (8)).
+Timed windows cannot be persisted with
+.BR -P
+(rejected with
+.BR EINVAL
+by the MGS):
+only
+.B 0
+and
+.B unlimited
+are allowed.
+Replaying a duration would open a new registration window on every mount.
+.PP
+.B -P
+settings are restored whenever a node processes the
+.B params
+log, which happens on every MDT or OST mount on that node (including a
+failover mount), not just once at boot. Each such replay unconditionally
+overwrites the live value and cancels any running timer, even one just
+opened with
+.BR "lctl set_param allow_register=" N .
+On a combined MGS/MDT node,
+.B "lctl set_param -P allow_register=0"
+restores the lockdown policy after reboot, but this also means opening a
+temporary window and then mounting another target on the
+.B same
+node can close the window early, before targets on other nodes register
+(see
+.B TYPICAL USAGE
+step 3).
+A dedicated MGS-only node does not process the
+.B params
+log, so
+.B -P
+does not restore the persisted value there.
+.PP
+For a dedicated MGS-only node (which does not process the
+.B params
+log), set the
+.B mgs
+kernel module's boot-time
+.B allow_register
+module parameter in
+.B modprobe.d
+for enforcement:
+.EX
+.B options mgs allow_register=0
+.EE
+in a
+.B modprobe.d
+configuration file (see
+.BR modprobe.d (5)).
+This seeds the
+.B obdclass
+global at module load time and ensures the policy is reliably re-applied
+on every boot.
+The module parameter accepts the same
+.BR 0 ,
+.BR unlimited ,
+and
+.IR TIMEOUT [ UNITS ]
+syntax as the runtime parameter.
+It is consulted only once when the
+.B mgs
+module loads.
+A subsequent
+.B lctl set_param allow_register=
+.I VALUE
+overrides it for the remainder of the module's lifetime.
+On a combined MGS/MDT, if both the
+.B mgs
+module parameter and a persisted
+.B -P
+value are configured, the module parameter is applied first at module load
+time, and the persisted
+.B params
+log value is applied afterwards when the MDT mounts and replays it, so the
+persisted
+.B -P
+value takes precedence.
+.PP
+A persisted value always takes priority over a locally-set temporary
+window, whenever it is replayed. To avoid losing a window early on a
+combined MGS/MDT, register all targets sharing the MGS node first, or
+temporarily persist
+.B unlimited
+instead of
+.B 0
+for the maintenance window.
+.SH TYPICAL USAGE
+The intended production workflow combines a persistent lockdown with a
+temporary, local override:
+.IP 1. 4
+Persistently disable registration
+.RB ( "lctl set_param -P allow_register=0"
+on a combined MGS/MDT, or
+.B "options mgs allow_register=0"
+in
+.B modprobe.d
+on a dedicated MGS; see
+.B PERSISTENCE
+above).
+This is the steady-state value the MGS returns to after every reboot.
+.IP 2. 4
+When a new target needs to be added, open a temporary window directly on
+the MGS with a
+.I local
+(non-persistent)
+.BR "lctl set_param allow_register=" N ,
+for example
+.BR "lctl set_param allow_register=1h" .
+This does
+.B not
+change the persisted
+.B 0
+value, it only overrides the live, in-memory value on the running MGS.
+.IP 3. 4
+Register the new target(s)
+.RI ( "mkfs.lustre \-\-mgsnode=..." ,
+or a target mount that triggers registration) while the window is open.
+.B Caution:
+on a combined MGS/MDT, mounting another target on the
+.B same
+node while the window is open can close it early; see
+.B PERSISTENCE
+above.
+.IP 4. 4
+The window counts down and registration is automatically disabled again
+.RB ( allow_register
+reverts to
+.BR 0 )
+when it expires, with no further action required.
+If registration is not needed anymore, it can also be disabled immediately
+with
+.BR "lctl set_param allow_register=0" .
+.PP
+Because the temporary window is set locally and is never written to the
+.B params
+config log (see
+.BR PERSISTENCE ),
+a node reboot or
+.B obdclass
+reload comes back up with registration disabled by default, even if
+an administrator forgot to close the window manually
+(modulo the one-time automatic default window described in
+.BR "AUTOMATIC DEFAULT WINDOW" ,
+which can only reopen if the MGS has no filesystem config log at all,
+i.e. a reformatted or never-used MGS. It does
+.B not
+reopen for an established MGS that already manages at least one
+filesystem, even when asked about a different, still-unknown filesystem name).
+On a combined MGS/MDT, a persisted
+.B "lctl set_param -P allow_register=0"
+is reapplied on reboot before any target can register, reinforcing the
+lockdown. On a dedicated MGS-only node,
+.B -P
+is not processed (see
+.BR PERSISTENCE ),
+so the
+.B mgs
+module's boot-time parameter is the reliable way to enforce lockdown
+across reloads.
+Note that simply stopping and starting the MGS service, without an
+.B obdclass
+reload, does
+.B not
+reset
+.B allow_register
+at all (see
+.BR PERSISTENCE ):
+whatever value was live before the restart, including an open temporary
+window, remains in effect afterward.
+.SH SECURITY CONSIDERATIONS
+Setting
+.B allow_register
+to a time-limited value or 0 improves cluster security by preventing
+unauthorized targets from registering with the MGS.
+When new targets need to be added to a running cluster, a non-zero
+duration needs to be set, with enough time to register the target.
+It is prudent to allow some excess time margin, and then set it
+explicitly back to
+.B 0
+once the maintenance is completed.
+.PP
+Best practices:
+.IP \(bu 2
+Set
+.B allow_register=0
+persistently during normal production operation.
+On a combined MGS/MDT use
+.BR "lctl set_param -P allow_register=0" ,
+on a dedicated MGS set
+.B "options mgs allow_register=0"
+in
+.B modprobe.d
+(see
+.B PERSISTENCE
+above)
+.IP \(bu 2
+When adding new targets, open a temporary, local (non-persistent) window
+with
+.B "lctl set_param allow_register=" N
+on the MGS rather than changing the persistent setting; see
+.B TYPICAL USAGE
+above
+.IP \(bu 2
+Use
+.B unlimited
+only in development or test environments
+.IP \(bu 2
+Before running
+.B "tunefs.lustre \-\-writeconf"
+on any target while
+.B allow_register
+is
+.BR 0 ,
+open a registration window first. A
+.B \-\-writeconf
+erases that filesystem's config logs on the MGS. If registration is
+still disabled when the targets restart and try to re-register, they
+fail with a database access error and the erased logs are not
+regenerated. See
+.BR tunefs.lustre (8)
+.SH MODULES
+This parameter is available on the MGS in the following modules:
+.EX
+.B obdclass
+.EE
+.PP
+The boot-time module parameter of the same name is provided by the
+.B mgs
+module:
+.EX
+.B mgs
+.EE
+.SH EXAMPLES
+Disable registration immediately:
+.EX
+.B mgs# lctl set_param allow_register=0
+.EE
+.PP
+Enable registration for 60 seconds:
+.EX
+.B mgs# lctl set_param allow_register=60s
+.EE
+.PP
+Enable registration for 1 hour:
+.EX
+.B mgs# lctl set_param allow_register=1h
+.EE
+.PP
+Enable registration indefinitely:
+.EX
+.B mgs# lctl set_param allow_register=unlimited
+.EE
+.PP
+Check current registration status:
+.EX
+.B mgs# lctl get_param allow_register
+.EE
+.PP
+Persist lockdown across reboot (combined MGS/MDT, see
+.BR PERSISTENCE ):
+.EX
+.B mgs# lctl set_param -P allow_register=0
+.EE
+.PP
+Lock down registration at boot on a dedicated MGS-only node
+(in a
+.B modprobe.d
+configuration file):
+.EX
+.B options mgs allow_register=0
+.EE
+.PP
+Typical production sequence: persistent lockdown, temporary local window
+to add a target, then automatic re-lockdown (see
+.BR "TYPICAL USAGE" ):
+.EX
+.B mgs# lctl set_param -P allow_register=0
+.B mgs# lctl set_param allow_register=1h
+.B mgs# lctl get_param allow_register
+.EE
+.SH AVAILABILITY
+.B allow_register
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit v2_17_52-30-gf96f38c9e1
+.SH SEE ALSO
+.BR modprobe.d (5),
+.BR lustre (7),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8),
+.BR mkfs.lustre (8),
+.BR mount.lustre (8),
+.BR tunefs.lustre (8)

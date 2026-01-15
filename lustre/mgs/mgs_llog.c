@@ -92,6 +92,40 @@ static int mgs_fsdb_exists_in_configs(const struct lu_env *env,
 }
 
 /**
+ * mgs_configs_dir_has_any_fs() - Check if the CONFIGS directory already
+ *				 has a real filesystem config log.
+ * @env: pointer to the thread context
+ * @mgs: pointer to the MGS device
+ *
+ * Return:
+ * * 1 if a filesystem config log exists
+ * * 0 if none exist, a fresh MGS
+ * * negative error number on failure
+ */
+static int mgs_configs_dir_has_any_fs(const struct lu_env *env,
+				      struct mgs_device *mgs)
+{
+	struct list_head log_list;
+	struct mgs_direntry *dirent, *n;
+	int rc, found = 0;
+
+	ENTRY;
+
+	rc = class_dentry_readdir(env, mgs, &log_list);
+	if (rc)
+		RETURN(rc);
+
+	list_for_each_entry_safe(dirent, n, &log_list, mde_list) {
+		if (!found && strchr(dirent->mde_name, '-') != NULL)
+			found = 1;
+		list_del_init(&dirent->mde_list);
+		mgs_direntry_free(dirent);
+	}
+
+	RETURN(found);
+}
+
+/**
  * class_dentry_readdir() - Link logs in CONFIG directory into list.
  * @env: pointer to the thread context
  * @mgs: pointer to the mgs device
@@ -658,8 +692,7 @@ int mgs_find_or_make_fsdb_nolock(const struct lu_env *env,
 
 	fsdb = mgs_find_fsdb(mgs, name);
 
-	/* Check if new filesystem registration is allowed */
-	if (!allow_register && !fsdb && strcmp(name, PARAMS_FILENAME) != 0 &&
+	if (!fsdb && !allow_register && strcmp(name, PARAMS_FILENAME) != 0 &&
 	    strcmp(name, MGSSELF_NAME) != 0 && !logname_is_barrier(name)) {
 		/* Check if this filesystem was previously registered by looking
 		 * in the CONFIGS directory. If it exists there, allow it to
@@ -667,15 +700,11 @@ int mgs_find_or_make_fsdb_nolock(const struct lu_env *env,
 		 */
 		int exists = mgs_fsdb_exists_in_configs(env, mgs, name);
 
-		if (exists < 0) {
-			rc = exists;
-			RETURN(rc);
-		} else if (exists == 0) {
-			rc = -EACCES;
-			CERROR("%s: New filesystem registration disabled. Use 'lctl set_param allow_register=1' to allow new filesystem registrations: rc = %d\n",
-			       name, rc);
-			RETURN(rc);
-		}
+		if (exists < 0)
+			RETURN(exists);
+
+		if (exists == 0)
+			RETURN(-EACCES);
 	}
 
 	if (!fsdb) {
@@ -714,10 +743,19 @@ int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs,
  *
  * Check the status of target index.
  *
+ * For a new target registration (LDD_F_WRITECONF or LDD_F_UPDATE) whose
+ * filesystem the MGS does not know, with allow_register disabled, this
+ * may arm the global one-time registration window and retry. Only a
+ * fresh MGS with no filesystem config log yet in CONFIGS/ gets this
+ * treatment. An MGS already managing a filesystem never auto-arms.
+ *
  * Return:
  * * 1 if index in use
- * * 0 if index unused
+ * * 0 if index unused (new target)
+ * * -EACCES if new registration is not allowed
+ * * -ERANGE if the peer-supplied index is out of range
  * * MGS_ERR_EMPTY_CLIENT_LOG if empty client log
+ * * other negative values on error
  **/
 int mgs_check_index(const struct lu_env *env,
 		    struct mgs_device *mgs,
@@ -728,9 +766,32 @@ int mgs_check_index(const struct lu_env *env,
 	int rc = 0;
 
 	ENTRY;
-	LASSERT(!(mti->mti_flags & LDD_F_NEED_INDEX));
 
 	rc = mgs_find_or_make_fsdb(env, mgs, mti->mti_fsname, &fsdb);
+	if (rc == -EACCES) {
+		/*
+		 * Only target registration opens the one-time window, not
+		 * a startup ping. Only a fresh MGS may open it. An
+		 * established MGS must not reopen it for an unknown fsname
+		 * after a reboot or module reload.
+		 */
+		if (mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPDATE)) {
+			int has_fs = mgs_configs_dir_has_any_fs(env, mgs);
+
+			if (has_fs < 0)
+				RETURN(has_fs);
+			if (!has_fs)
+				class_allow_register_arm_default(mti->mti_fsname);
+		}
+		if (allow_register)
+			rc = mgs_find_or_make_fsdb(env, mgs, mti->mti_fsname,
+						   &fsdb);
+	}
+	if (rc == -EACCES) {
+		CERROR("%s: New filesystem registration disabled. Use 'lctl set_param allow_register=1h' to allow new filesystem registrations: rc = %d\n",
+		       mti->mti_fsname, rc);
+		RETURN(rc);
+	}
 	if (rc) {
 		CERROR("Can't get db for %s\n", mti->mti_fsname);
 		RETURN(rc);
@@ -739,12 +800,25 @@ int mgs_check_index(const struct lu_env *env,
 	if (test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags))
 		GOTO(out, rc = MGS_ERR_EMPTY_CLIENT_LOG);
 
+	/* NEED_INDEX means a fresh index will be allocated, so this is a new
+	 * target.
+	 */
+	if (mti->mti_flags & LDD_F_NEED_INDEX)
+		GOTO(out, rc = 0);
+
 	if (mti->mti_flags & LDD_F_SV_TYPE_OST)
 		imap = fsdb->fsdb_ost_index_map;
 	else if (mti->mti_flags & LDD_F_SV_TYPE_MDT)
 		imap = fsdb->fsdb_mdt_index_map;
 	else
 		GOTO(out, rc = -EINVAL);
+
+	/* mti_stripe_index is peer-supplied too; keep it inside the bitmap. */
+	if (mti->mti_stripe_index >= INDEX_MAP_MAX_VALUE) {
+		LCONSOLE_ERROR("Server %s requested invalid index %u.\n",
+			       mti->mti_svname, mti->mti_stripe_index);
+		GOTO(out, rc = -ERANGE);
+	}
 
 	if (test_bit(mti->mti_stripe_index, imap))
 		GOTO(out, rc = 1);
@@ -6139,6 +6213,14 @@ static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
 	int dev_type;
 	size_t len;
 	int rc;
+
+	/* Timed allow_register must not be written into the params log. */
+	rc = class_allow_register_check_persist(param, del);
+	if (rc < 0) {
+		CERROR("%s: persistent allow_register only allowed for 0 or unlimited: rc = %d\n",
+		       mgs->mgs_obd->obd_name, rc);
+		GOTO(out, rc);
+	}
 
 	rc = strscpy(mti->mti_params, param, sizeof(mti->mti_params));
 	if (rc < 0)

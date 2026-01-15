@@ -46,7 +46,7 @@ extern unsigned int ping_interval;        /* seconds */
 extern unsigned int obd_timeout_set;
 extern unsigned int ldlm_timeout_set;
 extern unsigned int bulk_timeout;
-extern int allow_register;
+extern unsigned long allow_register;
 extern unsigned int at_min;
 extern unsigned int at_max;
 extern unsigned int at_history;
@@ -58,6 +58,15 @@ extern atomic_long_t obd_dirty_pages;
 extern char obd_jobid_var[];
 extern bool obd_enable_health_write;
 extern bool obd_enable_fname_encoding;
+
+/*
+ * Registration allowed indefinitely (no timer). One second past the max timed
+ * window (7 days) so store can reject any numeric value that would reach or
+ * exceed it (val >= ALLOW_REGISTER_UNLIMITED -> -EINVAL).
+ * Only the "unlimited" keyword sets this; it is never passed to mod_timer().
+ * 7 days stays under the timer-wheel force-expire cutoff.
+ */
+#define ALLOW_REGISTER_UNLIMITED	((7UL * 24 * 3600) + 1)
 
 /* Some hash init argument constants */
 #define HASH_GEN_BKT_BITS 5
