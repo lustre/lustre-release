@@ -47,66 +47,67 @@ extern "C"
 #define INOUT
 
 /* Reserved PTAGs.
-   kernel apps: values  < GNI_PTAG_USER_START,
-   user apps: GNI_PTAG_USER_START <= values <= GNI_PTAG_USER_END
-   HSN boot: value = GNI_PTAG_MAX
-
-   GNI_PTAG_* values were designed for use on Gemini systems.  User
-   applications run on an Aries system should always use a PTAG value of
-   'GNI_FIND_ALLOC_PTAG' to allow the driver to automatically allocate a valid
-   protection tag.
-*/
+ * kernel apps: values  < GNI_PTAG_USER_START,
+ * user apps: GNI_PTAG_USER_START <= values <= GNI_PTAG_USER_END
+ * HSN boot: value = GNI_PTAG_MAX
+ *
+ * GNI_PTAG_* values were designed for use on Gemini systems.  User
+ * applications run on an Aries system should always use a PTAG value of
+ * 'GNI_FIND_ALLOC_PTAG' to allow the driver to automatically allocate a valid
+ * protection tag.
+ */
 enum {
-	GNI_PTAG_LND = 1,
-	GNI_PTAG_OFED,
-	GNI_PTAG_USER_START,
-	GNI_PTAG_LND_KNC = 128,
-	GNI_PTAG_USER_END = 253,
-	GNI_PTAG_HSNBOOT = 254,
-	GNI_PTAG_MAX = 254,
-	GNI_PTAG_LB = 255
+	GNI_PTAG_LND		= 1,
+	GNI_PTAG_OFED		= 2,
+	GNI_PTAG_USER_START	= 3,
+	GNI_PTAG_LND_KNC	= 128,
+	GNI_PTAG_USER_END	= 253,
+	GNI_PTAG_HSNBOOT	= 254,
+	GNI_PTAG_MAX		= 254,
+	GNI_PTAG_LB		= 255
 };
 
 #define GNI_FIND_ALLOC_PTAG GNI_PTAG_LB
 
 /* Reserved PKEYs.
-   kernel apps: values  < GNI_PKEY_USER_START,
-   user apps: GNI_PTAG_USER_START <= values <= GNI_PKEY_USER_END
-   HSN boot: value = GNI_PKEY_MAX */
+ * kernel apps: values  < GNI_PKEY_USER_START,
+ * user apps: GNI_PTAG_USER_START <= values <= GNI_PKEY_USER_END
+ * HSN boot: value = GNI_PKEY_MAX
+ */
 enum {
-	GNI_PKEY_INVALID = 0,
-	GNI_PKEY_LND = 1,
-	GNI_PKEY_OFED,
-	GNI_PKEY_USER_START = 128,
-	GNI_PKEY_USER_END = 65407,
-	GNI_PKEY_HSNBOOT = 65408,
-	GNI_PKEY_MAX = 65534,
-	GNI_PKEY_LB = 65535
+	GNI_PKEY_INVALID	= 0,
+	GNI_PKEY_LND		= 1,
+	GNI_PKEY_OFED		= 2,
+	GNI_PKEY_USER_START	= 128,
+	GNI_PKEY_USER_END	= 65407,
+	GNI_PKEY_HSNBOOT	= 65408,
+	GNI_PKEY_MAX		= 65534,
+	GNI_PKEY_LB		= 65535
 };
 
 
-#define GNI_COOKIE_PKEY_MASK           0xFFFF
-#define GNI_COOKIE_PKEY_SHIFT          16
-#define GNI_COOKIE_CBPS_MDD_MASK       0x7
-#define GNI_COOKIE_CBPS_MDD_SHIFT      3
+#define GNI_COOKIE_PKEY_MASK		0xFFFF
+#define GNI_COOKIE_PKEY_SHIFT		16
+#define GNI_COOKIE_CBPS_MDD_MASK	0x7
+#define GNI_COOKIE_CBPS_MDD_SHIFT	3
 /* Macro to define COOKIE val (most useful to Aries).
  * cbps_mdd should be set at zero for now */
 #define GNI_JOB_CREATE_COOKIE(pkey, cbps_mdd) (((uint32_t)(pkey) << GNI_COOKIE_PKEY_SHIFT) | (((cbps_mdd) & GNI_COOKIE_CBPS_MDD_MASK) << GNI_COOKIE_CBPS_MDD_SHIFT))
 
 /* Registered memory handle */
 typedef struct gni_mem_handle {
-	uint64_t        qword1;
-	uint64_t        qword2;
+	uint64_t	qword1;
+	uint64_t	qword2;
 } gni_mem_handle_t;
 
 typedef enum gni_mem_handle_attr {
-	GNI_MEMHNDL_ATTR_READONLY = 1,
-	GNI_MEMHNDL_ATTR_VMDH,
-	GNI_MEMHNDL_ATTR_MRT,
-	GNI_MEMHNDL_ATTR_GART,
-	GNI_MEMHNDL_ATTR_IOMMU,
-	GNI_MEMHNDL_ATTR_PCI_IOMMU,
-	GNI_MEMHNDL_ATTR_CLONE
+	GNI_MEMHNDL_ATTR_READONLY	= 1,
+	GNI_MEMHNDL_ATTR_VMDH		= 2,
+	GNI_MEMHNDL_ATTR_MRT		= 3,
+	GNI_MEMHNDL_ATTR_GART		= 4,
+	GNI_MEMHNDL_ATTR_IOMMU		= 5,
+	GNI_MEMHNDL_ATTR_PCI_IOMMU	= 6,
+	GNI_MEMHNDL_ATTR_CLONE		= 7,
 } gni_mem_handle_attr_t;
 
 /* Opaque handles */
@@ -120,75 +121,75 @@ typedef struct gni_ce   *gni_ce_handle_t;
 
 /* Short messaging types */
 typedef enum gni_smsg_type {
-	GNI_SMSG_TYPE_INVALID = 0,
-	GNI_SMSG_TYPE_MBOX,
-	GNI_SMSG_TYPE_MBOX_AUTO_RETRANSMIT
+	GNI_SMSG_TYPE_INVALID			= 0,
+	GNI_SMSG_TYPE_MBOX			= 1,
+	GNI_SMSG_TYPE_MBOX_AUTO_RETRANSMIT	= 2,
 } gni_smsg_type_t;
 
 #define GNI_SMSG_ANY_TAG 0xFF
 
 /* Short messaging attributes */
 typedef struct gni_smsg_attr {
-	gni_smsg_type_t         msg_type;
-	void                    *msg_buffer;
-	uint32_t                buff_size;
-	gni_mem_handle_t        mem_hndl;
-	uint32_t                mbox_offset;
-	uint16_t                mbox_maxcredit;
-	uint32_t                msg_maxsize;
+	gni_smsg_type_t		 msg_type;
+	void			*msg_buffer;
+	uint32_t		 buff_size;
+	gni_mem_handle_t	 mem_hndl;
+	uint32_t		 mbox_offset;
+	uint16_t		 mbox_maxcredit;
+	uint32_t		 msg_maxsize;
 } gni_smsg_attr_t;
 
 /* Maximum SMSG retransmit count default values */
 
-#define FMA_SMSG_MAX_RETRANS_DEFAULT    10
+#define FMA_SMSG_MAX_RETRANS_DEFAULT	10
 
 /* Return codes */
 typedef enum gni_return {
-	GNI_RC_SUCCESS = 0,
-	GNI_RC_NOT_DONE,
-	GNI_RC_INVALID_PARAM,
-	GNI_RC_ERROR_RESOURCE,
-	GNI_RC_TIMEOUT,
-	GNI_RC_PERMISSION_ERROR,
-	GNI_RC_DESCRIPTOR_ERROR,
-	GNI_RC_ALIGNMENT_ERROR,
-	GNI_RC_INVALID_STATE,
-	GNI_RC_NO_MATCH,
-	GNI_RC_SIZE_ERROR,
-	GNI_RC_TRANSACTION_ERROR,
-	GNI_RC_ILLEGAL_OP,
-	GNI_RC_ERROR_NOMEM
+	GNI_RC_SUCCESS			= 0,
+	GNI_RC_NOT_DONE			= 1,
+	GNI_RC_INVALID_PARAM		= 2,
+	GNI_RC_ERROR_RESOURCE		= 3,
+	GNI_RC_TIMEOUT			= 4,
+	GNI_RC_PERMISSION_ERROR		= 5,
+	GNI_RC_DESCRIPTOR_ERROR		= 6,
+	GNI_RC_ALIGNMENT_ERROR		= 7,
+	GNI_RC_INVALID_STATE		= 8,
+	GNI_RC_NO_MATCH			= 9,
+	GNI_RC_SIZE_ERROR		= 10,
+	GNI_RC_TRANSACTION_ERROR	= 11,
+	GNI_RC_ILLEGAL_OP		= 12,
+	GNI_RC_ERROR_NOMEM		= 13,
 } gni_return_t;
 
 /* Communication domain modes */
-#define GNI_CDM_MODE_FORK_NOCOPY        0x00000001
-#define GNI_CDM_MODE_FORK_FULLCOPY      0x00000002
-#define GNI_CDM_MODE_FORK_PARTCOPY      0x00000004 /* default */
+#define GNI_CDM_MODE_FORK_NOCOPY	0x00000001
+#define GNI_CDM_MODE_FORK_FULLCOPY	0x00000002
+#define GNI_CDM_MODE_FORK_PARTCOPY	0x00000004 /* default */
 /* Do not kill the application for any type of error. For instance, when debugging. */
-#define GNI_CDM_MODE_ERR_NO_KILL        0x00000008
+#define GNI_CDM_MODE_ERR_NO_KILL	0x00000008
 /* Kill the application for any TRANSACTION errors. By default only a
  * subset will kill an application. The rest of the errors should be
  * reported through the CQ. Using this mode an application can request
  * being killed for all errors.
  */
-#define GNI_CDM_MODE_ERR_ALL_KILL       0x00000010
+#define GNI_CDM_MODE_ERR_ALL_KILL	0x00000010
 /* Enable fast polling for GNI_EpPostDataTest,GNI_EpPostDataTestById
  * and GNI_PostDataProbe/GNI_PostDataProbeById.  Using this option may
  * result in loss of intermediate state information for datagram
  * transactions.
  */
-#define GNI_CDM_MODE_FAST_DATAGRAM_POLL 0x00000020
+#define GNI_CDM_MODE_FAST_DATAGRAM_POLL	0x00000020
 /* Enable transmitting RDMA posts through one BTE channel, instead of
  * defaulting to using all three channels. This may be preferred for
  * some applications.
  */
-#define GNI_CDM_MODE_BTE_SINGLE_CHANNEL 0x00000040
+#define GNI_CDM_MODE_BTE_SINGLE_CHANNEL	0x00000040
 /* User space may specify PCI_IOMMU to be used for all memory
  * transactions. Setting this will always attempt to use the root
  * complex's address translation in the PCI bridge. If this can not be
  * enabled, but is requested, all memory registrations will error.
  */
-#define GNI_CDM_MODE_USE_PCI_IOMMU      0x00000080
+#define GNI_CDM_MODE_USE_PCI_IOMMU	0x00000080
 /* By default, newly created CDM's will allocate out of a shared MDD
  * pool. This pool is only shared within a protection domain. In an
  * IOMMU environment, there is more address space than MDDs available,
@@ -197,21 +198,23 @@ typedef enum gni_return {
  * that. The shared mode flag is for convenience when the feature is
  * disabled during initial implementation stages.
  */
-#define GNI_CDM_MODE_MDD_DEDICATED      0x00000100
-#define GNI_CDM_MODE_MDD_SHARED         0x00000200
-/* By default, users may post transactions with either local or global completion
- * notification, not both.  If receipt of both local and global events is requested
- * users must set DUAL_EVENTS.  Performing a post operation with local and global
- * events enabled without DUAL_EVENTS set will yield an error GNI_RC_INVALID_PARAM.
+#define GNI_CDM_MODE_MDD_DEDICATED	0x00000100
+#define GNI_CDM_MODE_MDD_SHARED		0x00000200
+/* By default, users may post transactions with either local or global
+ * completion notification, not both.  If receipt of both local and global
+ * events is requested users must set DUAL_EVENTS.  Performing a post
+ * operation with local and global events enabled without DUAL_EVENTS set
+ * will yield an error GNI_RC_INVALID_PARAM.
  *
- * In addition, during an EpBind in default mode, transfer requests are allocated
- * equal in size to the number of events in the associated source CQ.  When
- * DUAL_EVENTS is set transfer requests are allocated 1 per 2 CQ event slots.
- * Therefore, a user is limited to posting half as many transactions as CQ events
- * when DUAL_EVENTS is set.  Exceeding this limit will yield an error
+ * In addition, during an EpBind in default mode, transfer requests are
+ * allocated equal in size to the number of events in the associated source CQ.
+ * When DUAL_EVENTS is set transfer requests are allocated 1 per 2 CQ event
+ * slots.
+ * Therefore, a user is limited to posting half as many transactions as CQ
+ * events when DUAL_EVENTS is set.  Exceeding this limit will yield an error
  * GNI_RC_ERROR_RESOURCE.
  */
-#define GNI_CDM_MODE_DUAL_EVENTS        0x00001000
+#define GNI_CDM_MODE_DUAL_EVENTS	0x00001000
 
 /* This mode alters the FMA_SHARED behavior wrt. DLA */
 #define GNI_CDM_MODE_DLA_ENABLE_FORWARDING   0x00004000
@@ -222,8 +225,8 @@ typedef enum gni_return {
  * share FMA descriptors between (CDM's) within a protection domain.  This
  * enables a user to allocate more CDM's than there are FMA descriptors on a
  * node. */
-#define GNI_CDM_MODE_FMA_DEDICATED      0x00010000
-#define GNI_CDM_MODE_FMA_SHARED         0x00020000
+#define GNI_CDM_MODE_FMA_DEDICATED	0x00010000
+#define GNI_CDM_MODE_FMA_SHARED		0x00020000
 /* This mode enables the use of cached AMO operations */
 #define GNI_CDM_MODE_CACHED_AMO_ENABLED 0x00040000
 /* This CDM flag allows applications to request placing the CQs in
@@ -232,22 +235,22 @@ typedef enum gni_return {
  * message injection rate for some applications.
  */
 #define GNI_CDM_MODE_CQ_NIC_LOCAL_PLACEMENT 0x00080000
-#define GNI_CDM_MODE_FLBTE_DISABLE          0x00100000
+#define GNI_CDM_MODE_FLBTE_DISABLE	0x00100000
 /* Prevent mapping the entire FMA window into a process's address space.
  * Making the FMA window smaller reduces a process's memory footprint and
  * initialization overhead.  FMA throughput will be unnaffected while using
  * this mode with FMA transactions under the size configured in the file:
  * /sys/class/gni/kgni0/fma_sm_win_sz (32k by default, cache-aligned). */
-#define GNI_CDM_MODE_FMA_SMALL_WINDOW       0x00200000
+#define GNI_CDM_MODE_FMA_SMALL_WINDOW	0x00200000
 
-#define GNI_CDM_MODE_MASK                   0x0FFFFFFF
+#define GNI_CDM_MODE_MASK		0x0FFFFFFF
 
 /* Upper 4 CDM mode bits are reserved for internal ugni/dmapp usage. */
-#define GNI_CDM_MODE_PRIV_RESERVED_1        0x10000000
-#define GNI_CDM_MODE_PRIV_RESERVED_2        0x20000000
-#define GNI_CDM_MODE_PRIV_RESERVED_3        0x40000000
-#define GNI_CDM_MODE_PRIV_RESERVED_4        0x80000000
-#define GNI_CDM_MODE_PRIV_MASK              0xF0000000
+#define GNI_CDM_MODE_PRIV_RESERVED_1	0x10000000
+#define GNI_CDM_MODE_PRIV_RESERVED_2	0x20000000
+#define GNI_CDM_MODE_PRIV_RESERVED_3	0x40000000
+#define GNI_CDM_MODE_PRIV_RESERVED_4	0x80000000
+#define GNI_CDM_MODE_PRIV_MASK		0xF0000000
 
 /* Endpoint machine state */
 typedef enum gni_post_state{
@@ -260,91 +263,92 @@ typedef enum gni_post_state{
 } gni_post_state_t;
 
 /* The memory attributes associated with the region.*/
-#define GNI_MEM_READWRITE               0x00000000
-#define GNI_MEM_READ_ONLY               0x00000001
-/* Directive to use Virtual MDH while registering this memory region. (user level)*/
-#define GNI_MEM_USE_VMDH                0x00000002
+#define GNI_MEM_READWRITE		0x00000000
+#define GNI_MEM_READ_ONLY		0x00000001
+/* Directive to use Virtual MDH registering this memory region. (user level)*/
+#define GNI_MEM_USE_VMDH		0x00000002
 /* Directive to use GART while registering the memory region */
-#define GNI_MEM_USE_GART                0x00000004
+#define GNI_MEM_USE_GART		0x00000004
 /* Directive not to use GART or MRT as memory is physically contiguous */
-#define GNI_MEM_PHYS_CONT               0x00000008
-/* Valid only for gni_mem_register_segments(): segments are 4KB each, described by phys. addresses */
-#define GNI_MEM_PHYS_SEGMENTS           0x00000010
+#define GNI_MEM_PHYS_CONT		0x00000008
+/* Valid only for gni_mem_register_segments():
+ * segments are 4KB each, described by phys. addresses */
+#define GNI_MEM_PHYS_SEGMENTS		0x00000010
 /* Instruct NIC to enforce strict PI ordering.  On Gemini based platforms, this
-   flag disables the HT "Non-Posted Pass Posted Writes" rule.  On Aries based
-   platforms, this flag disables routing mode (GNI_DLVMODE_*) based ordering
-   for received network requests and responses. */
-#define GNI_MEM_STRICT_PI_ORDERING      0x00000020
+ * flag disables the HT "Non-Posted Pass Posted Writes" rule.  On Aries based
+ * platforms, this flag disables routing mode (GNI_DLVMODE_*) based ordering
+ * for received network requests and responses.  */
+#define GNI_MEM_STRICT_PI_ORDERING	0x00000020
 /* Instruct NIC to issue PI (Processor Interface, e.g. HT) FLUSH command prior
-   to sending network responses for the region */
-#define GNI_MEM_PI_FLUSH                0x00000040
-#define GNI_MEM_MDD_CLONE               0x00000080
+ * to sending network responses for the region */
+#define GNI_MEM_PI_FLUSH		0x00000040
+#define GNI_MEM_MDD_CLONE		0x00000080
 /* Instruct NIC to allow relaxed PI ordering.  On Gemini based platforms, this
-   flag enables reordering of Non-Posted and Posted write requests into the
-   processor by enabling both "Non-Posted Pass Posted Writes" and "Posted Pass
-   Posted Writes" rules.  ("Non-Posted Pass Posted Writes" rule is enabled by
-   default.)  On Aries based platforms, this flag enables reordering of
-   requests not originated in the network.  Note: this flag is overridden by
-   the GNI_MEM_STRICT_PI_ORDERING flag. */
-#define GNI_MEM_RELAXED_PI_ORDERING     0x00000100
+ * flag enables reordering of Non-Posted and Posted write requests into the
+ * processor by enabling both "Non-Posted Pass Posted Writes" and "Posted Pass
+ * Posted Writes" rules.  ("Non-Posted Pass Posted Writes" rule is enabled by
+ * default.)  On Aries based platforms, this flag enables reordering of
+ * requests not originated in the network.  Note: this flag is overridden by
+ * the GNI_MEM_STRICT_PI_ORDERING flag. */
+#define GNI_MEM_RELAXED_PI_ORDERING	0x00000100
 /* Only reserve the PTE range for this block of memory. */
-#define GNI_MEM_RESERVE_REGION          0x00000200
+#define GNI_MEM_RESERVE_REGION		0x00000200
 /* Update the PTE range for the provided block of memory. The first
  * call with this flag will make MDH live. The application may receive
  * page faults if they don't call update region before sending to an
  * address. This will only fill in new pages, and compare old pages to
  * make sure there aren't any changes. */
-#define GNI_MEM_UPDATE_REGION           0x00000400
+#define GNI_MEM_UPDATE_REGION		0x00000400
 /* Tell the driver to force this memory to be shared, despite default
  * CDM_MODE flag. If it is shared, then it will go into a pool of MDDs
  * shared with the same PTAGs. */
-#define GNI_MEM_MDD_SHARED              0x00000800
+#define GNI_MEM_MDD_SHARED		0x00000800
 /* Tell the driver to force this memory to be dedicated, despite
  * default CDM_MODE flag/kernel flags. If it is dedicated, then it
  * will operate like the old MDDs did, and be subject to the same
  * limits. */
-#define GNI_MEM_MDD_DEDICATED           0x00001000
+#define GNI_MEM_MDD_DEDICATED		0x00001000
 /* Directive that the memory region is GPU-resident memory. */
-#define GNI_MEM_CUDA                    0x01000000              /* Cuda device memory */
+#define GNI_MEM_CUDA			0x01000000 /* CUDA device memory */
 
 /* External memory, or resident memory in other PCI devices. These are
  * helper macros, as the different types of external memory have bits
  * assigned to them via the above memory flags */
-#define GNI_EXMEM_FLAGS(flag)           ((flag) >> 24)          /* Isolate exmem type */
-#define GNI_MEM_IS_EXTERNAL(flag)       (GNI_EXMEM_FLAGS(flag))
+#define GNI_EXMEM_FLAGS(flag)		((flag) >> 24) /* Isolate exmem type */
+#define GNI_MEM_IS_EXTERNAL(flag)	(GNI_EXMEM_FLAGS(flag))
 
 typedef struct gni_mem_segment {
-	uint64_t        address; /* address of the segment */
-	uint64_t        length;  /* size of the segment in bytes */
+	uint64_t	address; /* address of the segment */
+	uint64_t	length;  /* size of the segment in bytes */
 } gni_mem_segment_t;
 
 /* CQ modes/attributes of operation */
 typedef uint32_t gni_cq_mode_t;
 
 /* The CQ will be created with blocking disabled. */
-#define GNI_CQ_NOBLOCK          0x00000000
+#define GNI_CQ_NOBLOCK		0x00000000
 /* The CQ will be created with blocking enabled. */
-#define GNI_CQ_BLOCKING         0x00000001
+#define GNI_CQ_BLOCKING		0x00000001
 /* the EMULATED mode is reserved for internal uGNI use only. */
-#define GNI_CQ_EMULATED         0x00000002
+#define GNI_CQ_EMULATED		0x00000002
 /* EMULATED mode cannot be created with blocking enabled. */
 #define GNI_CQ_EMULATED_INVALID (GNI_CQ_EMULATED | GNI_CQ_BLOCKING)
-/* use physical pages when creating the CQ, by default memory mapped space is used.  */
-#define GNI_CQ_PHYS_PAGES       0x00000004
+/* use physical pages when creating CQ, by default memory mapped space used */
+#define GNI_CQ_PHYS_PAGES	0x00000004
 /* This is a "dummy CQ", as in, the CQ will never be checked for
  * events. It acts like a sink to avoid errors on the sender CQ for
  * instances where a remote event is needed. */
-#define GNI_CQ_UNMANAGED        0x00000008
+#define GNI_CQ_UNMANAGED	0x00000008
 
-#define GNI_CQ_IS_NON_BLOCKING(modes)     ((modes & GNI_CQ_BLOCKING) == GNI_CQ_NOBLOCK)
-#define GNI_CQ_IS_BLOCKING(modes)         ((modes & GNI_CQ_BLOCKING) == GNI_CQ_BLOCKING)
-#define GNI_CQ_IS_EMULATED(modes)         ((modes & GNI_CQ_EMULATED) == GNI_CQ_EMULATED)
-#define GNI_CQ_IS_NOT_EMULATED(modes)     ((modes & GNI_CQ_EMULATED) == 0)
+#define GNI_CQ_IS_NON_BLOCKING(modes)	((modes & GNI_CQ_BLOCKING) == GNI_CQ_NOBLOCK)
+#define GNI_CQ_IS_BLOCKING(modes)	((modes & GNI_CQ_BLOCKING) == GNI_CQ_BLOCKING)
+#define GNI_CQ_IS_EMULATED(modes)	((modes & GNI_CQ_EMULATED) == GNI_CQ_EMULATED)
+#define GNI_CQ_IS_NOT_EMULATED(modes)	((modes & GNI_CQ_EMULATED) == 0)
 #define GNI_CQ_IS_INVALID_EMULATED(modes) ((modes & GNI_CQ_EMULATED_INVALID) == GNI_CQ_EMULATED_INVALID)
-#define GNI_CQ_USE_PHYS_PAGES(modes)      ((modes & GNI_CQ_PHYS_PAGES) == GNI_CQ_PHYS_PAGES)
+#define GNI_CQ_USE_PHYS_PAGES(modes)	((modes & GNI_CQ_PHYS_PAGES) == GNI_CQ_PHYS_PAGES)
 
 /* Macros and enum for processing data component of CQEs associated with
-   PostRDMA, PostFma, Short message transactions */
+ * PostRDMA, PostFma, Short message transactions */
 
 /* Completion queue entry (size of type field is 2 bits) */
 #define GNI_CQ_EVENT_TYPE_POST  0x0ULL
@@ -372,20 +376,20 @@ uint64_t gni_cq_get_failed_enqueue_cnt(gni_cq_entry_t);
 uint64_t gni_cq_get_ce_id(gni_cq_entry_t);
 uint64_t gni_cq_get_reductn_id(gni_cq_entry_t);
 uint64_t gni_cq_get_trans_type(gni_cq_entry_t);
-void     gni_cq_set_inst_id(gni_cq_entry_t *,uint64_t);
-void     gni_cq_set_rem_inst_id(gni_cq_entry_t *,uint64_t);
-void     gni_cq_set_tid(gni_cq_entry_t *,uint64_t);
-void     gni_cq_set_msg_id(gni_cq_entry_t *,uint64_t);
-void     gni_cq_set_type(gni_cq_entry_t *,uint64_t);
-void     gni_cq_clr_status(gni_cq_entry_t *);
+void gni_cq_set_inst_id(gni_cq_entry_t *, uint64_t);
+void gni_cq_set_rem_inst_id(gni_cq_entry_t *, uint64_t);
+void gni_cq_set_tid(gni_cq_entry_t *, uint64_t);
+void gni_cq_set_msg_id(gni_cq_entry_t *, uint64_t);
+void gni_cq_set_type(gni_cq_entry_t *, uint64_t);
+void gni_cq_clr_status(gni_cq_entry_t *);
 unsigned gni_cq_status_dla_overflow(gni_cq_entry_t);
 unsigned gni_cq_bte_enq_status(gni_cq_entry_t);
 #endif /* GNI_INLINE_CQ_FUNCTIONS */
 
-#define GNI_CQ_GET_DATA    gni_cq_get_data
-#define GNI_CQ_GET_SOURCE  gni_cq_get_source
-#define GNI_CQ_GET_STATUS  gni_cq_get_status
-#define GNI_CQ_GET_INFO    gni_cq_get_info
+#define GNI_CQ_GET_DATA		gni_cq_get_data
+#define GNI_CQ_GET_SOURCE	gni_cq_get_source
+#define GNI_CQ_GET_STATUS	gni_cq_get_status
+#define GNI_CQ_GET_INFO		gni_cq_get_info
 /*
  * GNI_CQ_GET_INST_ID will allow a user to query an event
  * to get the inst_id value associated with it.
@@ -397,19 +401,19 @@ unsigned gni_cq_bte_enq_status(gni_cq_entry_t);
  * GNI_CQ_GET_REM_INST_ID will allow a user to query a remote event
  * to get the 32 bit remote inst_id value associated with it.
  */
-#define GNI_CQ_GET_REM_INST_ID gni_cq_get_rem_inst_id
-#define GNI_CQ_GET_TID     gni_cq_get_tid
-#define GNI_CQ_GET_MSG_ID  gni_cq_get_msg_id
-#define GNI_CQ_GET_TYPE    gni_cq_get_type
-#define GNI_CQ_OVERRUN     gni_cq_overrun
-#define GNI_CQ_REM_OVERRUN gni_cq_rem_overrun
-#define GNI_CQ_GET_BLOCK_ID           gni_cq_get_block_id
-#define GNI_CQ_GET_UNSUCCESSFUL_CNT   gni_cq_get_unsuccessful_cnt
-#define GNI_CQ_GET_MARKER_ID          gni_cq_get_marker_id
-#define GNI_CQ_GET_FAILED_ENQUEUE_CNT gni_cq_get_failed_enqueue_cnt
-#define GNI_CQ_GET_CE_ID              gni_cq_get_ce_id
-#define GNI_CQ_GET_REDUCTN_ID         gni_cq_get_reductn_id
-#define GNI_CQ_GET_TRANS_TYPE         gni_cq_get_trans_type
+#define GNI_CQ_GET_REM_INST_ID		gni_cq_get_rem_inst_id
+#define GNI_CQ_GET_TID			gni_cq_get_tid
+#define GNI_CQ_GET_MSG_ID		gni_cq_get_msg_id
+#define GNI_CQ_GET_TYPE			gni_cq_get_type
+#define GNI_CQ_OVERRUN			gni_cq_overrun
+#define GNI_CQ_REM_OVERRUN		gni_cq_rem_overrun
+#define GNI_CQ_GET_BLOCK_ID		gni_cq_get_block_id
+#define GNI_CQ_GET_UNSUCCESSFUL_CNT	gni_cq_get_unsuccessful_cnt
+#define GNI_CQ_GET_MARKER_ID		gni_cq_get_marker_id
+#define GNI_CQ_GET_FAILED_ENQUEUE_CNT	gni_cq_get_failed_enqueue_cnt
+#define GNI_CQ_GET_CE_ID		gni_cq_get_ce_id
+#define GNI_CQ_GET_REDUCTN_ID		gni_cq_get_reductn_id
+#define GNI_CQ_GET_TRANS_TYPE		gni_cq_get_trans_type
 /*
  * GNI_CQ_SET_INST_ID will allow a user to set the inst_id
  * value for an event.
@@ -421,14 +425,14 @@ unsigned gni_cq_bte_enq_status(gni_cq_entry_t);
  * GNI_CQ_SET_REM_INST_ID will allow a user to set a 32 bit remote
  * inst_id value for an remote event.
  */
-#define GNI_CQ_SET_REM_INST_ID(entry,val) gni_cq_set_rem_inst_id(&(entry),val)
-#define GNI_CQ_SET_TID(entry,val)     gni_cq_set_tid(&(entry),val)
-#define GNI_CQ_SET_MSG_ID(entry,val)  gni_cq_set_msg_id(&(entry),val)
-#define GNI_CQ_SET_TYPE(entry,val)    gni_cq_set_type(&(entry),val)
-#define GNI_CQ_CLR_STATUS(entry)      gni_cq_clr_status(&(entry))
-#define GNI_CQ_STATUS_OK(entry)      (gni_cq_get_status(entry) == 0)
-#define GNI_CQ_STATUS_DLA_OVERFLOW(entry)   (gni_cq_status_dla_overflow(entry))
-#define GNI_CQ_BTE_ENQ_STATUS(entry)  gni_cq_bte_enq_status(entry)
+#define GNI_CQ_SET_REM_INST_ID(entry, val) gni_cq_set_rem_inst_id(&(entry), val)
+#define GNI_CQ_SET_TID(entry, val)	gni_cq_set_tid(&(entry), val)
+#define GNI_CQ_SET_MSG_ID(entry, val)	gni_cq_set_msg_id(&(entry), val)
+#define GNI_CQ_SET_TYPE(entry, val)	gni_cq_set_type(&(entry), val)
+#define GNI_CQ_CLR_STATUS(entry)	gni_cq_clr_status(&(entry))
+#define GNI_CQ_STATUS_OK(entry)		(gni_cq_get_status(entry) == 0)
+#define GNI_CQ_STATUS_DLA_OVERFLOW(entry) (gni_cq_status_dla_overflow(entry))
+#define GNI_CQ_BTE_ENQ_STATUS(entry)	gni_cq_bte_enq_status(entry)
 
 /* Transaction types (for type field of post descriptor) */
 typedef enum gni_post_type {
@@ -445,7 +449,7 @@ typedef enum gni_post_type {
 } gni_post_type_t;
 
 /* FMA Get or Fetching AMO Flagged Response */
-#define GNI_FMA_FLAGGED_RESPONSE_SIZE   4     /* size in bytes */
+#define GNI_FMA_FLAGGED_RESPONSE_SIZE	4 /* size in bytes */
 
 /* FMA command types (for amo_cmd field of post descriptor) */
 typedef enum gni_fma_cmd_type {
@@ -605,9 +609,9 @@ typedef enum gni_ce_cmd_type {
 
 /* CE result structure */
 typedef struct gni_ce_result {
-	uint64_t        control;
-	uint64_t        result1;
-	uint64_t        result2;
+	uint64_t	control;
+	uint64_t	result1;
+	uint64_t	result2;
 } gni_ce_result_t;
 
 /* CE result operations */
@@ -616,16 +620,16 @@ uint64_t gni_ce_res_status_ok(gni_ce_result_t *);
 uint64_t gni_ce_res_get_fpe(gni_ce_result_t *);
 uint64_t gni_ce_res_get_red_id(gni_ce_result_t *);
 
-#define GNI_CE_RES_GET_STATUS   gni_ce_res_get_status
-#define GNI_CE_RES_STATUS_OK    gni_ce_res_status_ok
-#define GNI_CE_RES_GET_FPE      gni_ce_res_get_fpe
-#define GNI_CE_RES_GET_RED_ID   gni_ce_res_get_red_id
+#define GNI_CE_RES_GET_STATUS	gni_ce_res_get_status
+#define GNI_CE_RES_STATUS_OK	gni_ce_res_status_ok
+#define GNI_CE_RES_GET_FPE	gni_ce_res_get_fpe
+#define GNI_CE_RES_GET_RED_ID	gni_ce_res_get_red_id
 
 /* CE floating point exceptions  */
-#define GNI_CE_FPE_OP_INVAL     0x1
-#define GNI_CE_FPE_OFLOW        0x2
-#define GNI_CE_FPE_UFLOW        0x4
-#define GNI_CE_FPE_PRECISION    0x8
+#define GNI_CE_FPE_OP_INVAL	0x1
+#define GNI_CE_FPE_OFLOW	0x2
+#define GNI_CE_FPE_UFLOW	0x4
+#define GNI_CE_FPE_PRECISION	0x8
 
 /* CE child types */
 typedef enum {
@@ -636,91 +640,91 @@ typedef enum {
 
 /* VCE channel modes, used during GNI_CeConfigure(...) */
 /* Rounding mode, specify 1 */
-#define GNI_CE_MODE_ROUND_UP            0x00000001
-#define GNI_CE_MODE_ROUND_DOWN          0x00000002
-#define GNI_CE_MODE_ROUND_NEAR          0x00000004
-#define GNI_CE_MODE_ROUND_ZERO          0x00000008
+#define GNI_CE_MODE_ROUND_UP		0x00000001
+#define GNI_CE_MODE_ROUND_DOWN		0x00000002
+#define GNI_CE_MODE_ROUND_NEAR		0x00000004
+#define GNI_CE_MODE_ROUND_ZERO		0x00000008
 /* CQE delivery mode, specify 1 */
-#define GNI_CE_MODE_CQE_ONCOMP          0x00000010
-#define GNI_CE_MODE_CQE_ONERR           0x00000040
+#define GNI_CE_MODE_CQE_ONCOMP		0x00000010
+#define GNI_CE_MODE_CQE_ONERR		0x00000040
 /* Routing mode, specify 1 */
-#define GNI_CE_MODE_RC_NMIN_HASH        0x00000080
-#define GNI_CE_MODE_RC_MIN_HASH         0x00000100
-#define GNI_CE_MODE_RC_MNON_HASH        0x00000200
-#define GNI_CE_MODE_RC_ADAPT            0x00000400
+#define GNI_CE_MODE_RC_NMIN_HASH	0x00000080
+#define GNI_CE_MODE_RC_MIN_HASH		0x00000100
+#define GNI_CE_MODE_RC_MNON_HASH	0x00000200
+#define GNI_CE_MODE_RC_ADAPT		0x00000400
 
-#define GNI_CE_MAX_CHILDREN             32
+#define GNI_CE_MAX_CHILDREN		32
 
 /* CQ event types */
-#define GNI_CQMODE_SILENT       0x0000
-#define GNI_CQMODE_LOCAL_EVENT  0x0001
-#define GNI_CQMODE_GLOBAL_EVENT 0x0002
-#define GNI_CQMODE_REMOTE_EVENT 0x0004
-#define GNI_CQMODE_DUAL_EVENTS  ( GNI_CQMODE_LOCAL_EVENT | GNI_CQMODE_GLOBAL_EVENT )
+#define GNI_CQMODE_SILENT	0x0000
+#define GNI_CQMODE_LOCAL_EVENT	0x0001
+#define GNI_CQMODE_GLOBAL_EVENT	0x0002
+#define GNI_CQMODE_REMOTE_EVENT	0x0004
+#define GNI_CQMODE_DUAL_EVENTS	(GNI_CQMODE_LOCAL_EVENT | GNI_CQMODE_GLOBAL_EVENT)
 
 /* Delivery modes */
-#define GNI_DLVMODE_PERFORMANCE 0x0000
-#define GNI_DLVMODE_NO_ADAPT    0x0001
-#define GNI_DLVMODE_NO_HASH     0x0002
-#define GNI_DLVMODE_NO_RADAPT   0x0004
-#define GNI_DLVMODE_IN_ORDER    ( GNI_DLVMODE_NO_ADAPT | GNI_DLVMODE_NO_HASH )
+#define GNI_DLVMODE_PERFORMANCE	0x0000
+#define GNI_DLVMODE_NO_ADAPT	0x0001
+#define GNI_DLVMODE_NO_HASH	0x0002
+#define GNI_DLVMODE_NO_RADAPT	0x0004
+#define GNI_DLVMODE_IN_ORDER	(GNI_DLVMODE_NO_ADAPT | GNI_DLVMODE_NO_HASH)
 
 /* Aries delivery modes */
-#define GNI_DLVMODE_MNON_HASH   GNI_DLVMODE_IN_ORDER
-#define GNI_DLVMODE_NMIN_HASH   0x0008
-#define GNI_DLVMODE_MIN_HASH    0x0010
-#define GNI_DLVMODE_ADAPTIVE0   GNI_DLVMODE_PERFORMANCE
-#define GNI_DLVMODE_ADAPTIVE1   0x0020
-#define GNI_DLVMODE_ADAPTIVE2   0x0040
-#define GNI_DLVMODE_ADAPTIVE3   0x0080
+#define GNI_DLVMODE_MNON_HASH	GNI_DLVMODE_IN_ORDER
+#define GNI_DLVMODE_NMIN_HASH	0x0008
+#define GNI_DLVMODE_MIN_HASH	0x0010
+#define GNI_DLVMODE_ADAPTIVE0	GNI_DLVMODE_PERFORMANCE
+#define GNI_DLVMODE_ADAPTIVE1	0x0020
+#define GNI_DLVMODE_ADAPTIVE2	0x0040
+#define GNI_DLVMODE_ADAPTIVE3	0x0080
 
 #define GNI_DLVMODE_ORDERED_TAIL 0x0100
 
 /* Error Event Categories */
 /* WARNING: DO NOT CHANGE THESE UNLESS YOU CHANGE ghal_err_cat.h */
-#define GNI_ERRMASK_CORRECTABLE_MEMORY   BIT(0)
-#define GNI_ERRMASK_CRITICAL             BIT(1)
-#define GNI_ERRMASK_TRANSACTION          BIT(2)
-#define GNI_ERRMASK_ADDRESS_TRANSLATION  BIT(3)
-#define GNI_ERRMASK_TRANSIENT            BIT(4)
-#define GNI_ERRMASK_INFORMATIONAL        BIT(5)
-#define GNI_ERRMASK_DIAG_ONLY            BIT(6)
-#define GNI_ERRMASK_UNKNOWN_TRANSACTION  BIT(7)
+#define GNI_ERRMASK_CORRECTABLE_MEMORY	BIT(0)
+#define GNI_ERRMASK_CRITICAL		BIT(1)
+#define GNI_ERRMASK_TRANSACTION		BIT(2)
+#define GNI_ERRMASK_ADDRESS_TRANSLATION	BIT(3)
+#define GNI_ERRMASK_TRANSIENT		BIT(4)
+#define GNI_ERRMASK_INFORMATIONAL	BIT(5)
+#define GNI_ERRMASK_DIAG_ONLY		BIT(6)
+#define GNI_ERRMASK_UNKNOWN_TRANSACTION	BIT(7)
 
 /* RDMA mode */
 /* local_addr is a physical address (kernel only) */
-#define GNI_RDMAMODE_PHYS_ADDR  0x0001
+#define GNI_RDMAMODE_PHYS_ADDR	0x0001
 /* instruction to Gemini to wait for all responses from this post and all
  * previous posts before processing the next RDMA descriptor */
-#define GNI_RDMAMODE_FENCE      0x0002
+#define GNI_RDMAMODE_FENCE	0x0002
 /* Disable Aries write combining of incoming GET data */
-#define GNI_RDMAMODE_GETWC_DIS  0x0004
+#define GNI_RDMAMODE_GETWC_DIS	0x0004
 
 /* Post CE modes, used during GNI_PostFma(...) */
 /* Use two operands (only meaningful for single operand collective operations).
  * Single operand CE operations are all variations of AND, OR, XOR and ADD.  */
-#define GNI_CEMODE_TWO_OP               BIT(0)
+#define GNI_CEMODE_TWO_OP		BIT(0)
 /* The provided operands are an intermediate result that has experienced an
  * invalid operation floating point exception. */
-#define GNI_CEMODE_FPE_OP_INVAL         BIT(1)
+#define GNI_CEMODE_FPE_OP_INVAL		BIT(1)
 /* The provided operands are an intermediate result that has experienced an
  * overflow floating point exception */
-#define GNI_CEMODE_FPE_OFLOW            BIT(2)
+#define GNI_CEMODE_FPE_OFLOW		BIT(2)
 /* The provided operands are an intermediate result that has experienced an
  * underflow floating point exception. */
-#define GNI_CEMODE_FPE_UFLOW            BIT(3)
+#define GNI_CEMODE_FPE_UFLOW		BIT(3)
 /* The provided operands are an intermediate result that has experienced an
  * inexact result floating point exception. */
-#define GNI_CEMODE_FPE_PRECISION        BIT(4)
+#define GNI_CEMODE_FPE_PRECISION	BIT(4)
 
 /* Maximum length in bytes of a datagram transaction */
-#define GNI_DATAGRAM_MAXSIZE    128
+#define GNI_DATAGRAM_MAXSIZE	128
 
 /*
  * Maximum length in bytes of a short message,
  * this includes the length of the header and data.
  */
-#define GNI_SMSG_MAX_SIZE       65535
+#define GNI_SMSG_MAX_SIZE	65535
 
 /* Transaction descriptor */
 typedef struct gni_post_descriptor {
@@ -784,24 +788,24 @@ typedef struct gni_post_descriptor {
 
 /* NTT configuration table entries */
 typedef struct gni_ntt_entry {
-	uint32_t        blck_addr;
-	uint32_t        rplc_addr;
-	uint8_t         rplc_size;
+	uint32_t	blck_addr;
+	uint32_t	rplc_addr;
+	uint8_t		rplc_size;
 } gni_ntt_entry_t;
 
 /* NTT configuration descriptor */
 typedef struct gni_ntt_descriptor {
 	/* size of the NTT group to be configured */
-	uint32_t        group_size;
+	uint32_t	group_size;
 	/* NTT granularity */
-	uint8_t         granularity;
+	uint8_t		granularity;
 	/* pointer to the array of new NTT values */
 	union {
-		uint32_t        *table;
+		uint32_t	*table;
 		gni_ntt_entry_t *table_v2;
 	} u;
 	/* configuration flags ( not used )*/
-	uint8_t         flags;
+	uint8_t		flags;
 } gni_ntt_descriptor_t;
 
 /* GNI Error Event */
@@ -817,15 +821,15 @@ typedef struct gni_error_event {
 typedef uint8_t gni_error_mask_t;
 
 /* Job parameters and limits */
-#define GNI_JOB_INVALID_LIMIT           (-1)
+#define GNI_JOB_INVALID_LIMIT		(-1)
 /* Directive for the driver to cleanup NTT at the end of the job */
-#define GNI_JOB_CTRL_NTT_CLEANUP        (0x01)
+#define GNI_JOB_CTRL_NTT_CLEANUP	(0x01)
 /* Job Control CE Channel Masks */
-#define GNI_JOB_CTRL_CE0_MASK           (1<<0)
-#define GNI_JOB_CTRL_CE1_MASK           (1<<1)
-#define GNI_JOB_CTRL_CE2_MASK           (1<<2)
-#define GNI_JOB_CTRL_CE3_MASK           (1<<3)
-#define GNI_JOB_CTRL_ALL_CE_MASK        (GNI_JOB_CTRL_CE0_MASK | \
+#define GNI_JOB_CTRL_CE0_MASK		(1<<0)
+#define GNI_JOB_CTRL_CE1_MASK		(1<<1)
+#define GNI_JOB_CTRL_CE2_MASK		(1<<2)
+#define GNI_JOB_CTRL_CE3_MASK		(1<<3)
+#define GNI_JOB_CTRL_ALL_CE_MASK	(GNI_JOB_CTRL_CE0_MASK | \
 					 GNI_JOB_CTRL_CE1_MASK | \
 					 GNI_JOB_CTRL_CE2_MASK | \
 					 GNI_JOB_CTRL_CE3_MASK)
@@ -928,17 +932,17 @@ extern const char *gni_statistic_str[];
 
 #ifdef __KERNEL__
 
-#define GNI_ERRNO_FUNC_STR_LEN          100
+#define GNI_ERRNO_FUNC_STR_LEN		100
 
 typedef struct gni_errno {
-	uint8_t         valid;
-	char            func[GNI_ERRNO_FUNC_STR_LEN];
-	int             lineno;
-	int             errno;
-	uint64_t        data1;
-	uint64_t        data2;
-	uint64_t        data3;
-	uint64_t        data4;
+	uint8_t		valid;
+	char		func[GNI_ERRNO_FUNC_STR_LEN];
+	int		lineno;
+	int		errno;
+	uint64_t	data1;
+	uint64_t	data2;
+	uint64_t	data3;
+	uint64_t	data4;
 } gni_errno_t;
 
 #endif
@@ -953,56 +957,55 @@ typedef struct gni_errno {
 typedef int gni_msgq_rcv_cb_func(
 		uint32_t snd_id,
 		uint32_t snd_pe,
-		void     *msg,
-		uint8_t  msg_tag,
-		void     *cb_data
+		void	*msg,
+		uint8_t	 msg_tag,
+		void	*cb_data
 		);
 
 /* MSGQ limits */
-#define GNI_MSGQ_MSG_SZ_MAX             128
-#define GNI_MSGQ_NODE_INSTS_MAX         48
+#define GNI_MSGQ_MSG_SZ_MAX		128
+#define GNI_MSGQ_NODE_INSTS_MAX		48
 
 /* MSGQ mode flags */
-#define GNI_MSGQ_MODE_BLOCKING          (0x01)
+#define GNI_MSGQ_MODE_BLOCKING		(0x01)
 
 /* MSGQ structures */
 typedef struct gni_msgq_attr {
-	uint32_t         max_msg_sz;
-	uint32_t         smsg_q_sz;
-	uint32_t         rcv_pool_sz;
-	uint32_t         num_msgq_eps;
-	uint32_t         nloc_insts;
-	uint8_t          modes;
-	uint32_t         rcv_cq_sz;
+	uint32_t	max_msg_sz;
+	uint32_t	smsg_q_sz;
+	uint32_t	rcv_pool_sz;
+	uint32_t	num_msgq_eps;
+	uint32_t	nloc_insts;
+	uint8_t		modes;
+	uint32_t	rcv_cq_sz;
 } gni_msgq_attr_t;
 
 typedef struct gni_msgq_rem_inst {
-	uint32_t         id;      /* instance ID */
-	gni_mem_handle_t mdh;     /* MDH for the shmem region */
-	uint64_t         mdh_off; /* offset into the MDH for the smsg mbox */
+	uint32_t	 id;	  /* instance ID */
+	gni_mem_handle_t mdh;	  /* MDH for the shmem region */
+	uint64_t	 mdh_off; /* offset into the MDH for the smsg mbox */
 } gni_msgq_rem_inst_t;
 
 typedef struct gni_msgq_ep_attr {
-	uint32_t         pe_addr;
-	uint32_t         max_msg_sz;
-	uint32_t         smsg_q_sz;
-	uint32_t         num_insts;
+	uint32_t	pe_addr;
+	uint32_t	max_msg_sz;
+	uint32_t	smsg_q_sz;
+	uint32_t	num_insts;
 	gni_msgq_rem_inst_t insts[GNI_MSGQ_NODE_INSTS_MAX];
 } gni_msgq_ep_attr_t;
 
 #define MAX_BUILD_STRING_LENGTH 80
 
 typedef struct gni_version_info {
-	uint32_t         ugni_version;
-	uint32_t         ugni_svn_revision;
-	char             ugni_build_string[MAX_BUILD_STRING_LENGTH];
-	uint32_t         kgni_version;
-	uint32_t         kgni_svn_revision;
-	char             kgni_build_string[MAX_BUILD_STRING_LENGTH];
+	uint32_t	ugni_version;
+	uint32_t	ugni_svn_revision;
+	char		ugni_build_string[MAX_BUILD_STRING_LENGTH];
+	uint32_t	kgni_version;
+	uint32_t	kgni_svn_revision;
+	char		kgni_build_string[MAX_BUILD_STRING_LENGTH];
 } gni_version_info_t;
 
-/* If return codes are modified, need to modify
-   gni_err_str */
+/* If return codes are modified, need to modify gni_err_str */
 
 extern const char *gni_err_str[];
 

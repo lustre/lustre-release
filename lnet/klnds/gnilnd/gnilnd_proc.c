@@ -18,24 +18,24 @@
 #include <linux/seq_file.h>
 #include <lprocfs_status.h>
 
-#define GNILND_PROC_STATS       "stats"
-#define GNILND_PROC_MDD         "mdd"
-#define GNILND_PROC_SMSG        "smsg"
-#define GNILND_PROC_CONN        "conn"
-#define GNILND_PROC_PEER_CONNS  "peer_conns"
-#define GNILND_PROC_PEER        "peer"
-#define GNILND_PROC_CKSUM_TEST  "cksum_test"
+#define GNILND_PROC_STATS	"stats"
+#define GNILND_PROC_MDD		"mdd"
+#define GNILND_PROC_SMSG	"smsg"
+#define GNILND_PROC_CONN	"conn"
+#define GNILND_PROC_PEER_CONNS	"peer_conns"
+#define GNILND_PROC_PEER	"peer"
+#define GNILND_PROC_CKSUM_TEST	"cksum_test"
 
 static int
 _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 {
-	struct bio_vec          *src, *dest;
-	struct timespec          begin, end, diff;
-	int                      niov;
-	int                      rc = 0;
-	int                      i = 0, j = 0, n;
-	__u16                    cksum, cksum2;
-	__u64                    mbytes;
+	struct bio_vec *src, *dest;
+	struct timespec begin, end, diff;
+	int niov;
+	int rc = 0;
+	int i = 0, j = 0, n;
+	__u16 cksum, cksum2;
+	__u64 mbytes;
 
 	CFS_ALLOC_PTR_ARRAY(src, GNILND_MAX_IOV);
 	CFS_ALLOC_PTR_ARRAY(dest, GNILND_MAX_IOV);
@@ -148,9 +148,9 @@ static ssize_t
 kgnilnd_proc_cksum_test_write(struct file *file, const char __user *ubuffer,
 			      size_t count, loff_t *ppos)
 {
-	char                    dummy[256 + 1] = { '\0' };
-	int                     testno, nloops, nbytes;
-	int                     rc;
+	char dummy[256 + 1] = { '\0' };
+	int testno, nloops, nbytes;
+	int rc;
 	ENTRY;
 
 	if (kgnilnd_data.kgn_init < GNILND_INIT_ALL) {
@@ -183,17 +183,17 @@ kgnilnd_cksum_test_seq_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations kgn_cksum_test_fops = {
-	.owner   = THIS_MODULE,
-	.open    = kgnilnd_cksum_test_seq_open,
-	.write   = kgnilnd_proc_cksum_test_write,
-	.llseek  = seq_lseek,
+	.owner	 = THIS_MODULE,
+	.open	 = kgnilnd_cksum_test_seq_open,
+	.write	 = kgnilnd_proc_cksum_test_write,
+	.llseek	 = seq_lseek,
 	.release = seq_release,
 };
 
 static int
 kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 {
-	kgn_device_t           *dev;
+	kgn_device_t *dev;
 	struct timespec64 now;
 
 	if (kgnilnd_data.kgn_init < GNILND_INIT_ALL) {
@@ -328,12 +328,12 @@ kgnilnd_stats_seq_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations kgn_stats_fops = {
-	.owner   = THIS_MODULE,
-	.open    = kgnilnd_stats_seq_open,
-	.read    = seq_read,
-	.write   = kgnilnd_proc_stats_write,
-	.llseek  = seq_lseek,
-	.release = seq_release,
+	.owner		= THIS_MODULE,
+	.open		= kgnilnd_stats_seq_open,
+	.read		= seq_read,
+	.write		= kgnilnd_proc_stats_write,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
 };
 
 typedef struct {
@@ -953,25 +953,25 @@ kgnilnd_proc_peer_conns_write(struct file *file, const char __user *ubuffer,
 }
 
 /* debug data to print from conns associated with peer nid
-  -  date/time
-  -  peer nid
-  -  mbox_addr (msg_buffer + mbox_offset)
-  -  gnc_dgram_type
-  -  gnc_in_purgatory
-  -  gnc_state
-  -  gnc_error
-  -  gnc_peer_error
-  -  gnc_tx_seq
-  -  gnc_last_tx
-  -  gnc_last_tx_cq
-  -  gnc_rx_seq
-  -  gnc_first_rx
-  -  gnc_last_rx
-  -  gnc_last_rx_cq
-  -  gnc_tx_retrans
-  -  gnc_close_sent
-  -  gnc_close_recvd
-*/
+ * -  date/time
+ * -  peer nid
+ * -  mbox_addr (msg_buffer + mbox_offset)
+ * -  gnc_dgram_type
+ * -  gnc_in_purgatory
+ * -  gnc_state
+ * -  gnc_error
+ * -  gnc_peer_error
+ * -  gnc_tx_seq
+ * -  gnc_last_tx
+ * -  gnc_last_tx_cq
+ * -  gnc_rx_seq
+ * -  gnc_first_rx
+ * -  gnc_last_rx
+ * -  gnc_last_rx_cq
+ * -  gnc_tx_retrans
+ * -  gnc_close_sent
+ * -  gnc_close_recvd
+ */
 
 static int
 kgnilnd_proc_peer_conns_seq_show(struct seq_file *sf, void *v)
@@ -1040,19 +1040,19 @@ kgnilnd_peer_conns_seq_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations kgn_peer_conns_fops = {
-	.owner   = THIS_MODULE,
-	.open    = kgnilnd_peer_conns_seq_open,
-	.read    = seq_read,
-	.write   = kgnilnd_proc_peer_conns_write,
-	.llseek  = seq_lseek,
+	.owner	= THIS_MODULE,
+	.open	= kgnilnd_peer_conns_seq_open,
+	.read	= seq_read,
+	.write	= kgnilnd_proc_peer_conns_write,
+	.llseek	= seq_lseek,
 	.release = seq_release,
 };
 
 static int
 kgnilnd_conn_seq_open(struct inode *inode, struct file *file)
 {
-	struct seq_file       *sf;
-	int                    rc;
+	struct seq_file *sf;
+	int rc;
 
 	rc = seq_open(file, &kgn_conn_sops);
 	if (rc == 0) {
@@ -1072,11 +1072,11 @@ static const struct file_operations kgn_conn_fops = {
 };
 
 typedef struct {
-	__u64                   gpeer_version;
-	struct list_head       *gpeer_list;
-	kgn_peer_t             *gpeer_peer;
-	loff_t                  gpeer_off;
-	int                     gpeer_hashidx;
+	__u64			 gpeer_version;
+	struct list_head	*gpeer_list;
+	kgn_peer_t		*gpeer_peer;
+	loff_t			 gpeer_off;
+	int			 gpeer_hashidx;
 } kgn_peer_seq_iter_t;
 
 int
@@ -1084,8 +1084,8 @@ kgnilnd_peer_seq_seek(kgn_peer_seq_iter_t *gseq, loff_t off)
 {
 	struct list_head *list;
 	kgn_peer_t *peer;
-	loff_t                  here = 0;
-	int                     rc = 0;
+	loff_t here = 0;
+	int rc = 0;
 
 	if (off == 0) {
 		gseq->gpeer_hashidx = 0;
@@ -1149,8 +1149,8 @@ static void *
 kgnilnd_peer_seq_start(struct seq_file *s, loff_t *pos)
 {
 
-	kgn_peer_seq_iter_t     *gseq;
-	int                      rc;
+	kgn_peer_seq_iter_t *gseq;
+	int rc;
 
 	if (kgnilnd_data.kgn_init < GNILND_INIT_ALL) {
 		return NULL;
@@ -1175,7 +1175,7 @@ kgnilnd_peer_seq_start(struct seq_file *s, loff_t *pos)
 static void
 kgnilnd_peer_seq_stop(struct seq_file *s, void *iter)
 {
-	kgn_peer_seq_iter_t     *gseq = iter;
+	kgn_peer_seq_iter_t *gseq = iter;
 
 	LIBCFS_FREE(gseq, sizeof(*gseq));
 }
@@ -1183,9 +1183,9 @@ kgnilnd_peer_seq_stop(struct seq_file *s, void *iter)
 static void *
 kgnilnd_peer_seq_next(struct seq_file *s, void *iter, loff_t *pos)
 {
-	kgn_peer_seq_iter_t    *gseq = iter;
-	int                     rc;
-	loff_t                  next = *pos + 1;
+	kgn_peer_seq_iter_t *gseq = iter;
+	int rc;
+	loff_t next = *pos + 1;
 
 	rc = kgnilnd_peer_seq_seek(gseq, next);
 	*pos = next;
@@ -1199,11 +1199,11 @@ kgnilnd_peer_seq_next(struct seq_file *s, void *iter, loff_t *pos)
 static int
 kgnilnd_peer_seq_show(struct seq_file *s, void *iter)
 {
-	kgn_peer_seq_iter_t    *gseq = iter;
-	kgn_peer_t             *peer;
-	kgn_conn_t             *conn;
-	char                   conn_str;
-	int                    purg_count = 0;
+	kgn_peer_seq_iter_t *gseq = iter;
+	kgn_peer_t *peer;
+	kgn_conn_t *conn;
+	char conn_str;
+	int purg_count = 0;
 	/* there is no header data for peers, so offset 0 is the first
 	 * real entry. */
 
@@ -1271,8 +1271,8 @@ static const struct seq_operations kgn_peer_sops = {
 static int
 kgnilnd_peer_seq_open(struct inode *inode, struct file *file)
 {
-	struct seq_file       *sf;
-	int                    rc;
+	struct seq_file *sf;
+	int rc;
 
 	rc = seq_open(file, &kgn_peer_sops);
 	if (rc == 0) {
@@ -1297,7 +1297,7 @@ void
 kgnilnd_proc_init(void)
 {
 	struct proc_dir_entry *pde;
-	int             rc = 0;
+	int rc = 0;
 	ENTRY;
 
 	/* setup dir */
@@ -1312,7 +1312,8 @@ kgnilnd_proc_init(void)
 	pde = proc_create(GNILND_PROC_CKSUM_TEST, 0200, kgn_proc_root,
 			  &kgn_cksum_test_fops);
 	if (pde == NULL) {
-		CERROR("couldn't create proc entry %s\n", GNILND_PROC_CKSUM_TEST);
+		CERROR("couldn't create proc entry %s\n",
+		       GNILND_PROC_CKSUM_TEST);
 		GOTO(remove_dir, rc = -ENOENT);
 	}
 
