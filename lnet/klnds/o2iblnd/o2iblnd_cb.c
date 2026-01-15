@@ -352,7 +352,7 @@ kiblnd_handle_rx(struct kib_rx *rx)
 	switch (msg->ibm_type) {
 	default:
 		rc = -EPROTO;
-                CERROR("Bad IBLND message type %x from %s: rc = %d\n",
+		CERROR("Bad IBLND message type %x from %s: rc = %d\n",
 		       msg->ibm_type, libcfs_nidstr(&conn->ibc_peer->ibp_nid),
 		       rc);
 		post_credit = IBLND_POSTRX_NO_CREDIT;

@@ -30,55 +30,55 @@ static int rpc_timeout = 64;
 module_param(rpc_timeout, int, 0644);
 MODULE_PARM_DESC(rpc_timeout, "rpc timeout in seconds (64 by default, 0 == never)");
 
-#define sfw_unpack_id(id)               \
-do {                                    \
-	__swab64s(&(id).nid);           \
-	__swab32s(&(id).pid);           \
+#define sfw_unpack_id(id)						\
+do {									\
+	__swab64s(&(id).nid);						\
+	__swab32s(&(id).pid);						\
 } while (0)
 
-#define sfw_unpack_sid(sid)             \
-do {                                    \
-	__swab64s(&(sid).ses_nid);      \
-	__swab64s(&(sid).ses_stamp);    \
+#define sfw_unpack_sid(sid)						\
+do {									\
+	__swab64s(&(sid).ses_nid);					\
+	__swab64s(&(sid).ses_stamp);					\
 } while (0)
 
-#define sfw_unpack_fw_counters(fc)        \
-do {                                      \
-	__swab32s(&(fc).running_ms);      \
-	__swab32s(&(fc).active_batches);  \
-	__swab32s(&(fc).zombie_sessions); \
-	__swab32s(&(fc).brw_errors);      \
-	__swab32s(&(fc).ping_errors);     \
+#define sfw_unpack_fw_counters(fc)					\
+do {									\
+	__swab32s(&(fc).running_ms);					\
+	__swab32s(&(fc).active_batches);				\
+	__swab32s(&(fc).zombie_sessions);				\
+	__swab32s(&(fc).brw_errors);					\
+	__swab32s(&(fc).ping_errors);					\
 } while (0)
 
-#define sfw_unpack_rpc_counters(rc)     \
-do {                                    \
-	__swab32s(&(rc).errors);        \
-	__swab32s(&(rc).rpcs_sent);     \
-	__swab32s(&(rc).rpcs_rcvd);     \
-	__swab32s(&(rc).rpcs_dropped);  \
-	__swab32s(&(rc).rpcs_expired);  \
-	__swab64s(&(rc).bulk_get);      \
-	__swab64s(&(rc).bulk_put);      \
+#define sfw_unpack_rpc_counters(rc)					\
+do {									\
+	__swab32s(&(rc).errors);					\
+	__swab32s(&(rc).rpcs_sent);					\
+	__swab32s(&(rc).rpcs_rcvd);					\
+	__swab32s(&(rc).rpcs_dropped);					\
+	__swab32s(&(rc).rpcs_expired);					\
+	__swab64s(&(rc).bulk_get);					\
+	__swab64s(&(rc).bulk_put);					\
 } while (0)
 
-#define sfw_unpack_lnet_counters(lc)    \
-do {                                    \
-	__swab32s(&(lc).lcc_errors);        \
-	__swab32s(&(lc).lcc_msgs_max);      \
-	__swab32s(&(lc).lcc_msgs_alloc);    \
-	__swab32s(&(lc).lcc_send_count);    \
-	__swab32s(&(lc).lcc_recv_count);    \
-	__swab32s(&(lc).lcc_drop_count);    \
-	__swab32s(&(lc).lcc_route_count);   \
-	__swab64s(&(lc).lcc_send_length);   \
-	__swab64s(&(lc).lcc_recv_length);   \
-	__swab64s(&(lc).lcc_drop_length);   \
-	__swab64s(&(lc).lcc_route_length);  \
+#define sfw_unpack_lnet_counters(lc)					\
+do {									\
+	__swab32s(&(lc).lcc_errors);					\
+	__swab32s(&(lc).lcc_msgs_max);					\
+	__swab32s(&(lc).lcc_msgs_alloc);				\
+	__swab32s(&(lc).lcc_send_count);				\
+	__swab32s(&(lc).lcc_recv_count);				\
+	__swab32s(&(lc).lcc_drop_count);				\
+	__swab32s(&(lc).lcc_route_count);				\
+	__swab64s(&(lc).lcc_send_length);				\
+	__swab64s(&(lc).lcc_recv_length);				\
+	__swab64s(&(lc).lcc_drop_length);				\
+	__swab64s(&(lc).lcc_route_length);				\
 } while (0)
 
-#define sfw_test_active(t)      (atomic_read(&(t)->tsi_nactive) != 0)
-#define sfw_batch_active(b)     (atomic_read(&(b)->bat_nactive) != 0)
+#define sfw_test_active(t)	(atomic_read(&(t)->tsi_nactive) != 0)
+#define sfw_batch_active(b)	(atomic_read(&(b)->bat_nactive) != 0)
 
 static struct smoketest_framework {
 	/* RPCs to be recycled */
@@ -194,7 +194,7 @@ sfw_deactivate_session(void)
 __must_hold(&sfw_data.fw_lock)
 {
 	struct sfw_session *sn = sfw_data.fw_session;
-	int            nactive = 0;
+	int nactive = 0;
 	struct sfw_batch *tsb;
 	struct sfw_test_case *tsc;
 
@@ -1178,7 +1178,7 @@ sfw_add_test(struct srpc_server_rpc *rpc)
 			      request->tsr_ndest;
 
 		return sfw_alloc_pages(rpc, CFS_CPT_ANY, len, 1);
-        }
+	}
 
 	rc = sfw_add_test_instance(bat, rpc);
 	CDEBUG(rc == 0 ? D_NET : D_WARNING,

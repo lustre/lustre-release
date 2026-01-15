@@ -555,7 +555,7 @@ proc_lnet_peers(const struct ctl_table *table, int write,
 			p = NULL;
 			hoff = 1;
 			hash++;
-                }
+		}
 
 		if (peer != NULL) {
 			struct lnet_nid nid = peer->lpni_nid;

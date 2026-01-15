@@ -242,7 +242,7 @@ struct lnet_libmd {
 
 static inline bool lnet_md_is_gpu(struct lnet_libmd *md)
 {
-    return (md != NULL) && !!(md->md_flags & LNET_MD_FLAG_GPU);
+	return (md != NULL) && !!(md->md_flags & LNET_MD_FLAG_GPU);
 }
 
 struct lnet_test_peer {

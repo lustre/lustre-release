@@ -1529,9 +1529,8 @@ int lnet_get_link_status(struct net_device *dev)
 }
 EXPORT_SYMBOL(lnet_get_link_status);
 
-int lnet_inet_select(struct lnet_ni *ni,
-		     struct lnet_inetdev *ifaces,
-                     int num_ifaces)
+int lnet_inet_select(struct lnet_ni *ni, struct lnet_inetdev *ifaces,
+		     int num_ifaces)
 {
 	bool addr_set = nid_addr_is_set(&ni->ni_nid);
 	int if_idx;

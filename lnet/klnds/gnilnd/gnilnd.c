@@ -2524,7 +2524,7 @@ kgnilnd_base_shutdown(void)
 		schedule_timeout_uninterruptible(cfs_time_seconds(1));
 	}
 
-       /* Flag threads to terminate */
+	/* Flag threads to terminate */
 	kgnilnd_data.kgn_shutdown = 1;
 
 	for (i = 0; i < kgnilnd_data.kgn_ndevs; i++) {

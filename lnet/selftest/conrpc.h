@@ -23,13 +23,13 @@
 #include "selftest.h"
 
 /* Console rpc and rpc transaction */
-#define LST_TRANS_TIMEOUT       30
+#define LST_TRANS_TIMEOUT	30
 #define LST_TRANS_MIN_TIMEOUT   3
 
 #define LST_VALIDATE_TIMEOUT(t)	\
 	clamp_t(int, t, LST_TRANS_MIN_TIMEOUT, LST_TRANS_TIMEOUT)
 
-#define LST_PING_INTERVAL       8
+#define LST_PING_INTERVAL	8
 
 struct lstcon_rpc_trans;
 struct lstcon_tsb_hdr;
@@ -47,7 +47,7 @@ struct lstcon_rpc {
 	unsigned int		 crp_unpacked:1; /* reply is unpacked */
 	/** RPC is embedded in other structure and can't free it */
 	unsigned int		 crp_embedded:1;
-        int                      crp_status;     /* console rpc errors */
+	int			 crp_status;	/* console rpc errors */
 	s64			 crp_stamp_ns;	 /* replied time stamp */
 };
 
@@ -67,21 +67,21 @@ struct lstcon_rpc_trans {
 	struct list_head	tas_rpcs_list;	/* queued requests */
 };
 
-#define LST_TRANS_PRIVATE       0x1000
+#define LST_TRANS_PRIVATE	0x1000
 
-#define LST_TRANS_SESNEW        (LST_TRANS_PRIVATE | 0x01)
-#define LST_TRANS_SESEND        (LST_TRANS_PRIVATE | 0x02)
-#define LST_TRANS_SESQRY        0x03
-#define LST_TRANS_SESPING       0x04
+#define LST_TRANS_SESNEW	(LST_TRANS_PRIVATE | 0x01)
+#define LST_TRANS_SESEND	(LST_TRANS_PRIVATE | 0x02)
+#define LST_TRANS_SESQRY	0x03
+#define LST_TRANS_SESPING	0x04
 
-#define LST_TRANS_TSBCLIADD     (LST_TRANS_PRIVATE | 0x11)
-#define LST_TRANS_TSBSRVADD     (LST_TRANS_PRIVATE | 0x12)
-#define LST_TRANS_TSBRUN        (LST_TRANS_PRIVATE | 0x13)
-#define LST_TRANS_TSBSTOP       (LST_TRANS_PRIVATE | 0x14)
-#define LST_TRANS_TSBCLIQRY     0x15
-#define LST_TRANS_TSBSRVQRY     0x16
+#define LST_TRANS_TSBCLIADD	(LST_TRANS_PRIVATE | 0x11)
+#define LST_TRANS_TSBSRVADD	(LST_TRANS_PRIVATE | 0x12)
+#define LST_TRANS_TSBRUN	(LST_TRANS_PRIVATE | 0x13)
+#define LST_TRANS_TSBSTOP	(LST_TRANS_PRIVATE | 0x14)
+#define LST_TRANS_TSBCLIQRY	0x15
+#define LST_TRANS_TSBSRVQRY	0x16
 
-#define LST_TRANS_STATQRY       0x21
+#define LST_TRANS_STATQRY	0x21
 
 typedef int (*lstcon_rpc_cond_func_t)(int, struct lstcon_node *, void *);
 typedef int (*lstcon_rpc_readent_func_t)(int, struct srpc_msg *,

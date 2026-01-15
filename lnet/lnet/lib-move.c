@@ -1069,12 +1069,12 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 void
 lnet_return_tx_credits_locked(struct lnet_msg *msg)
 {
-	struct lnet_peer_ni	*txpeer = msg->msg_txpeer;
-	struct lnet_ni		*txni = msg->msg_txni;
-	struct lnet_msg		*msg2;
+	struct lnet_peer_ni *txpeer = msg->msg_txpeer;
+	struct lnet_ni *txni = msg->msg_txni;
+	struct lnet_msg *msg2;
 
 	if (msg->msg_txcredit) {
-		struct lnet_ni	     *ni = msg->msg_txni;
+		struct lnet_ni *ni = msg->msg_txni;
 		struct lnet_tx_queue *tq = ni->ni_tx_queues[msg->msg_tx_cpt];
 
 		/* give back NI txcredits */
@@ -1106,7 +1106,7 @@ lnet_return_tx_credits_locked(struct lnet_msg *msg)
 		LASSERT((txpeer->lpni_txcredits < 0) ==
 			!list_empty(&txpeer->lpni_txq));
 
-		txpeer->lpni_txqnob -=	msg->msg_len +
+		txpeer->lpni_txqnob -= msg->msg_len +
 					sizeof(struct lnet_hdr_nid4);
 		LASSERT(txpeer->lpni_txqnob >= 0);
 
@@ -1139,15 +1139,15 @@ lnet_return_tx_credits_locked(struct lnet_msg *msg)
 				lnet_net_unlock(msg->msg_tx_cpt);
 				lnet_net_lock(msg2_cpt);
 			}
-                        (void) lnet_post_send_locked(msg2, 1);
+			(void)lnet_post_send_locked(msg2, 1);
 			if (msg2_cpt != msg->msg_tx_cpt) {
 				lnet_net_unlock(msg2_cpt);
 				lnet_net_lock(msg->msg_tx_cpt);
 			}
-                } else {
+		} else {
 			spin_unlock(&txpeer->lpni_lock);
 		}
-        }
+	}
 
 	if (txni != NULL) {
 		msg->msg_txni = NULL;
