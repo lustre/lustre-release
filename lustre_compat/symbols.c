@@ -60,6 +60,14 @@ struct workqueue_attrs *compat_alloc_workqueue_attrs(void)
 }
 EXPORT_SYMBOL(compat_alloc_workqueue_attrs);
 
+static void (*__free_workqueue_attrs)(struct workqueue_attrs *attrs);
+
+void compat_free_workqueue_attrs(struct workqueue_attrs *attrs)
+{
+	return __free_workqueue_attrs(attrs);
+}
+EXPORT_SYMBOL(compat_free_workqueue_attrs);
+
 static int (*__apply_workqueue_attrs)(struct workqueue_struct *wq,
 				      const struct workqueue_attrs *attrs);
 
@@ -106,6 +114,10 @@ int lustre_symbols_init(void)
 
 	__alloc_workqueue_attrs = cfs_kallsyms_lookup_name(ALLOC_WQ_ATTRS_FUNC);
 	if (!__alloc_workqueue_attrs)
+		return -EINVAL;
+
+	__free_workqueue_attrs = cfs_kallsyms_lookup_name("free_workqueue_attrs");
+	if (!__free_workqueue_attrs)
 		return -EINVAL;
 
 	__apply_workqueue_attrs = cfs_kallsyms_lookup_name("apply_workqueue_attrs");

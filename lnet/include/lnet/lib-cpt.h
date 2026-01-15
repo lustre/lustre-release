@@ -333,7 +333,7 @@ struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
 
 	wq = alloc_workqueue("%s", WQ_UNBOUND | flags, nthrs, wq_name);
 	if (!wq) {
-		kfree(attrs);
+		compat_free_workqueue_attrs(attrs);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -342,10 +342,8 @@ struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
 		cpus_read_lock();
 		compat_apply_workqueue_attrs(wq, attrs);
 		cpus_read_unlock();
-		/* Same as free_workqueue_attrs() which is not exported */
-		free_cpumask_var(attrs->cpumask);
-		kfree(attrs);
 	}
+	compat_free_workqueue_attrs(attrs);
 
 	return wq;
 }
