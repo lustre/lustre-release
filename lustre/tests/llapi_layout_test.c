@@ -1750,6 +1750,270 @@ static void test35(void)
 	ASSERTF(strcmp(mypool, poolname) == 0, "invalid pool name");
 }
 
+#define T36_DESC	"verify mirror count is validated"
+static void test36(void)
+{
+	int rc;
+	struct llapi_layout *layout;
+
+	/* Create a complete layout first */
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* Mirror 1 */
+	/* COMP1: [0, 1GiB] */
+	rc = llapi_layout_stripe_count_set(layout, 4);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 0, 1024 * 1024 * 1024ULL);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* COMP2: [1GiB, EOF] */
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 6);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 1024 * 1024 * 1024ULL,
+					  LUSTRE_EOF);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Mirror 2 */
+	/* COMP1: [0, 1GiB] */
+	rc = llapi_layout_add_first_comp(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 4);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 0, 1024 * 1024 * 1024ULL);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* COMP2: [1GiB, EOF] */
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 6);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 1024 * 1024 * 1024ULL,
+					  LUSTRE_EOF);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Verify it fails with invalid mirror count since it is unset */
+	rc = llapi_layout_sanity(layout, false, false);
+	ASSERTF(rc != 0, "errno = %d", errno);
+
+	/* Set the mirror count to 2 and verify it passes */
+	rc = llapi_layout_mirror_count_set(layout, 2);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_sanity(layout, false, false);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Set the mirror count to 3 and verify it fails */
+	rc = llapi_layout_mirror_count_set(layout, 3);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_sanity(layout, false, false);
+	ASSERTF(rc != 0, "errno = %d", errno);
+
+	/* Use llapi_layout_mirror_count_sync to sync the mirror count */
+	rc = llapi_layout_mirror_count_sync(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_sanity(layout, false, false);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Set the mirror count to 0 and use llapi_layout_mirror_count_sync */
+	rc = llapi_layout_mirror_count_set(layout, 0);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_mirror_count_sync(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_sanity(layout, false, false);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	llapi_layout_free(layout);
+}
+
+#define T37FILE "f37"
+#define T37_DESC "verify mirror count and mirror ids for existing files"
+static void test37(void)
+{
+	struct llapi_layout *layout, *filelayout;
+	char path[PATH_MAX];
+	uint64_t s, e;
+	uint16_t mirror_count;
+	uint32_t id;
+	int rc, fd;
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T37FILE);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	/* Create a complete layout first */
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* Mirror 1 */
+	/* COMP1: [0, 1GiB] */
+	rc = llapi_layout_stripe_count_set(layout, 4);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 0, 1024 * 1024 * 1024ULL);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* COMP2: [1GiB, EOF] */
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 6);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 1024 * 1024 * 1024ULL,
+					  LUSTRE_EOF);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Mirror 2 */
+	/* COMP1: [0, 1GiB] */
+	rc = llapi_layout_add_first_comp(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 4);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 0, 1024 * 1024 * 1024ULL);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* COMP2: [1GiB, EOF] */
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 6);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, 1024 * 1024 * 1024ULL,
+					  LUSTRE_EOF);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* sync mirror count and create file*/
+	rc = llapi_layout_mirror_count_sync(layout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	fd = llapi_layout_file_create(path, 0, 0640, layout);
+	ASSERTF(fd >= 0, "errno = %d", errno);
+
+	rc = close(fd);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	llapi_layout_free(layout);
+
+	/* Read the layout back from the file */
+	filelayout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(filelayout != NULL, "errno = %d", errno);
+
+	rc = llapi_layout_sanity(filelayout, false, false);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_use(filelayout, LLAPI_LAYOUT_COMP_USE_LAST);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
+
+	/* Verify the mirror ID is set on the last component after file read.
+	 * Note, mirror count is not set on llapi_layout_get_by_path() and
+	 * requires llapi_layout_mirror_count_sync() to be called.
+	 */
+	rc = llapi_layout_mirror_id_get(filelayout, &id);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(id != 0, "id = %d", id);
+
+	/* Verify the extent of the last component */
+	rc = llapi_layout_comp_extent_get(filelayout, &s, &e);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(s == 1024 * 1024 * 1024ULL && e == LUSTRE_EOF,
+		"s: %" PRIu64 ", e: %" PRIu64 "", s, e);
+
+	/* delete the last 2 components */
+	rc = llapi_layout_comp_del(filelayout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* check the "new" last component */
+	rc = llapi_layout_comp_extent_get(filelayout, &s, &e);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(s == 0 && e == 1024 * 1024 * 1024ULL,
+		"s: %" PRIu64 ", e: %" PRIu64 "", s, e);
+
+	rc = llapi_layout_comp_del(filelayout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_mirror_id_get(filelayout, &id);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(id != 0, "id = %d", id);
+
+	/* sync mirror count (only mirror ids are set on get_by_path()) */
+	rc = llapi_layout_mirror_count_sync(filelayout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Verify the mirror count is now 1 */
+	rc = llapi_layout_mirror_count_get(filelayout, &mirror_count);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(mirror_count == 1, "mirror_count = %d", mirror_count);
+
+	rc = llapi_layout_sanity(filelayout, false, false);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* re-add mirror 2 */
+	/* COMP1: [0, 1GiB] */
+	rc = llapi_layout_add_first_comp(filelayout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_stripe_count_set(filelayout, 4);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(filelayout, 0, 1024 * 1024 * 1024ULL);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* COMP2: [1GiB, EOF] */
+	rc = llapi_layout_comp_add(filelayout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_stripe_count_set(filelayout, 6);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	rc = llapi_layout_comp_extent_set(filelayout, 1024 * 1024 * 1024ULL,
+					  LUSTRE_EOF);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Verify last component has no mirror id set yet */
+	rc = llapi_layout_comp_use(filelayout, LLAPI_LAYOUT_COMP_USE_LAST);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
+
+	rc = llapi_layout_mirror_id_get(filelayout, &id);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(id == 0, "id = %d", id);
+
+	rc = llapi_layout_mirror_count_sync(filelayout);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* Verify last component has mirror id set yet now */
+	rc = llapi_layout_mirror_id_get(filelayout, &id);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(id != 0, "id = %d", id);
+
+	/* Verify the mirror count is 2 */
+	rc = llapi_layout_mirror_count_get(filelayout, &mirror_count);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(mirror_count == 2, "mirror_count = %d", mirror_count);
+
+	rc = llapi_layout_sanity(filelayout, false, false);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	llapi_layout_free(filelayout);
+}
+
 static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(0),
 	TEST_REGISTER(1),
@@ -1787,6 +2051,8 @@ static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(33),
 	TEST_REGISTER(34),
 	TEST_REGISTER(35),
+	TEST_REGISTER(36),
+	TEST_REGISTER(37),
 	TEST_REGISTER_END
 };
 

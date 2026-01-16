@@ -1287,6 +1287,18 @@ int llapi_layout_mirror_count_set(struct llapi_layout *layout,
 				  uint16_t count);
 
 /**
+ * llapi_layout_mirror_count_sync() - Synchronize mirror count from components
+ * @layout: layout to synchronize
+ *
+ * Iterates over all components and counts mirror boundaries (components with
+ * extent start == 0). Updates the layout's mirror count and each component's
+ * mirror ID accordingly.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_mirror_count_sync(struct llapi_layout *layout);
+
+/**
  * Fetch the start and end offset of the current layout component.
  */
 int llapi_layout_comp_extent_get(const struct llapi_layout *layout,

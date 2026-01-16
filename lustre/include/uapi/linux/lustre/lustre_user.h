@@ -588,7 +588,8 @@ struct ll_futimes_3 {
 };
 
 /*
- * Maximum number of mirrors currently implemented.
+ * Arbitrary upper bound on mirrors per file. This does not reflect a limit in
+ * the layout format, nor does it limit the mirror IDs assigned to a component.
  */
 #define LUSTRE_MIRROR_COUNT_MAX		16
 

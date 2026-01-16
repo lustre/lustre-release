@@ -68,11 +68,13 @@ struct llapi_layout_comp {
 	/* fields used only for composite layouts */
 	struct lu_extent	llc_extent;	/* [start, end) of component */
 	uint32_t		llc_id;		/* unique ID of component */
+	/* mirror ID this component belongs to */
+	uint32_t		llc_mirror_id;
 	uint32_t		llc_flags;	/* LCME_FL_* flags */
 	uint64_t		llc_timestamp;	/* snapshot timestamp */
-	struct list_head	llc_list;	/* linked to the llapi_layout
-						   components list */
-	bool		llc_ondisk;
+	/* linked to the llapi_layout components list */
+	struct list_head	llc_list;
+	bool			llc_ondisk;
 };
 
 #define llc_archive_id	llc_hsm.lhb_archive_id
@@ -298,6 +300,7 @@ static struct llapi_layout_comp *__llapi_comp_alloc(unsigned int num_stripes)
 	comp->llc_extent.e_end = LUSTRE_EOF;
 	comp->llc_flags = 0;
 	comp->llc_id = 0;
+	comp->llc_mirror_id = 0;
 	INIT_LIST_HEAD(&comp->llc_list);
 
 	return comp;
@@ -640,6 +643,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 			comp->llc_extent.e_start = ent->lcme_extent.e_start;
 			comp->llc_extent.e_end = ent->lcme_extent.e_end;
 			comp->llc_id = ent->lcme_id;
+			comp->llc_mirror_id = mirror_id_of(ent->lcme_id);
 			comp->llc_flags = ent->lcme_flags;
 			if (comp->llc_flags & LCME_FL_NOSYNC)
 				comp->llc_timestamp = ent->lcme_timestamp;
@@ -2139,6 +2143,54 @@ int llapi_layout_mirror_count_set(struct llapi_layout *layout,
 }
 
 /**
+ * llapi_layout_mirror_count_sync() - Synchronize mirror count from components
+ * @layout: layout to synchronize
+ *
+ * Iterates over all components and counts mirror boundaries (components with
+ * extent start == 0). Updates llot_mirror_count and each component's
+ * llc_mirror_id accordingly. Note, mirror IDs are decoupled from mirror count
+ * and need to be tracked separately.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative if error occurs
+ */
+int llapi_layout_mirror_count_sync(struct llapi_layout *layout)
+{
+	struct llapi_layout_comp *comp;
+	uint16_t mirror_count = 0;
+	uint32_t mirror_id = 0;
+
+	if (!layout || layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	list_for_each_entry(comp, &layout->llot_comp_list, llc_list) {
+		if (comp->llc_extent.e_start == 0) {
+			if (!llapi_layout_mirror_count_is_valid(mirror_count +
+								1)) {
+				errno = EINVAL;
+				return -1;
+			}
+			mirror_count++;
+			mirror_id++;
+		}
+		/* Only count/assign for components without a mirror ID set */
+		if (comp->llc_mirror_id == 0) {
+			comp->llc_mirror_id = mirror_id;
+		} else {
+			/* Track existing mirror IDs */
+			if (comp->llc_mirror_id > mirror_id)
+				mirror_id = comp->llc_mirror_id;
+		}
+	}
+
+	layout->llot_mirror_count = mirror_count;
+	return 0;
+}
+
+/**
  * llapi_layout_comp_extent_get() - Fetch the start and end offset of the
  * current layout component.
  * @layout: the layout component
@@ -2317,15 +2369,15 @@ int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id)
 	struct llapi_layout_comp *comp;
 
 	comp = __llapi_layout_cur_comp(layout);
-	if (comp == NULL)
+	if (!comp)
 		return -1;
 
-	if (id == NULL) {
+	if (!id) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	*id = mirror_id_of(comp->llc_id);
+	*id = comp->llc_mirror_id;
 
 	return 0;
 }
@@ -2380,6 +2432,7 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 
 	return 0;
 }
+
 /**
  * llapi_layout_add_first_comp() - Adds a first component of a mirror to @layout
  * @layout: existing composite or plain layout
@@ -3119,6 +3172,7 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 		new->llc_extent.e_start = comp->llc_extent.e_start;
 		new->llc_extent.e_end = comp->llc_extent.e_end;
 		new->llc_id = comp->llc_id;
+		new->llc_mirror_id = comp->llc_mirror_id;
 		new->llc_flags = comp->llc_flags;
 
 		list_add_tail(&new->llc_list, &new_layout->llot_comp_list);
@@ -3659,6 +3713,8 @@ enum llapi_layout_comp_sanity_error {
 	LSE_ALIGN_END,
 	LSE_ALIGN_EXT,
 	LSE_FOREIGN_EXTENSION,
+	LSE_MIRROR_COUNT_INVALID,
+	LSE_MIRROR_COUNT_MISMATCH,
 	LSE_LAST,
 };
 
@@ -3697,6 +3753,10 @@ const char *const llapi_layout_strerror[] =
 		"The extension size must be aligned by the stripe size",
 	[LSE_FOREIGN_EXTENSION] =
 		"FOREIGN components can't be extension space",
+	[LSE_MIRROR_COUNT_INVALID] =
+		"Mirror count is invalid",
+	[LSE_MIRROR_COUNT_MISMATCH] =
+		"Mirror count doesn't match component structure",
 };
 
 struct llapi_layout_sanity_args {
@@ -3705,6 +3765,7 @@ struct llapi_layout_sanity_args {
 	bool lsa_ondisk;
 	int lsa_rc;
 	char *fsname;
+	uint16_t lsa_mirror_count;
 };
 
 /* Inline function to verify the pool name */
@@ -3763,6 +3824,7 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 	/* Start of zero implies a new mirror */
 	if (comp->llc_extent.e_start == 0) {
 		first_comp = true;
+		args->lsa_mirror_count++;
 		/* Most checks apply only within one mirror, this is an
 		 * exception. */
 		if (prev && prev->llc_extent.e_end != LUSTRE_EOF) {
@@ -3999,9 +4061,10 @@ int llapi_layout_v2_sanity(struct llapi_layout *layout,
 	args.lsa_flr = flr;
 	args.lsa_incomplete = incomplete;
 	args.fsname = fsname;
+	args.lsa_mirror_count = 0; /* tracks actual mirror count for each cb */
 
 	/* When we modify an existing layout, this tells us if it's FLR */
-	if (mirror_id_of(curr->llc_id) > 0)
+	if (curr->llc_mirror_id > 0)
 		args.lsa_flr = true;
 
 	errno = 0;
@@ -4013,6 +4076,14 @@ int llapi_layout_v2_sanity(struct llapi_layout *layout,
 
 	if (rc != LLAPI_LAYOUT_ITER_CONT)
 		rc = args.lsa_rc;
+
+	/* Verify mirror count is valid and matches component structure */
+	if (rc == 0 && layout->llot_is_composite) {
+		if (!llapi_layout_mirror_count_is_valid(args.lsa_mirror_count))
+			rc = LSE_MIRROR_COUNT_INVALID;
+		else if (args.lsa_mirror_count != layout->llot_mirror_count)
+			rc = LSE_MIRROR_COUNT_MISMATCH;
+	}
 
 	layout->llot_cur_comp = curr;
 
