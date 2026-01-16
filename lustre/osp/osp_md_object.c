@@ -661,37 +661,37 @@ static int osp_md_index_delete(const struct lu_env *env,
  */
 static int osp_md_index_it_next(const struct lu_env *env, struct dt_it *di)
 {
-	struct osp_it		*it = (struct osp_it *)di;
-	struct lu_idxpage	*idxpage;
-	struct lu_dirent	*ent = (struct lu_dirent *)it->ooi_ent;
-	int			rc;
-	ENTRY;
+	struct osp_it *it = (struct osp_it *)di;
+	struct lu_idxpage *idxpage;
+	struct lu_dirent *ent;
+	int rc;
 
+	ENTRY;
 again:
 	idxpage = it->ooi_cur_idxpage;
-	if (idxpage != NULL) {
+	if (idxpage) {
 		if (idxpage->lip_nr == 0)
 			RETURN(1);
 
 		it->ooi_pos_ent++;
-		if (ent == NULL) {
-			it->ooi_ent =
-			      (struct lu_dirent *)idxpage->lip_entries;
+		ent = (struct lu_dirent *)it->ooi_ent;
+		if (!ent) {
+			it->ooi_ent = (struct lu_dirent *)idxpage->lip_entries;
 			RETURN(0);
-		} else if (le16_to_cpu(ent->lde_reclen) != 0 &&
-			   it->ooi_pos_ent < idxpage->lip_nr) {
-			ent = (struct lu_dirent *)(((char *)ent) +
-					le16_to_cpu(ent->lde_reclen));
+		}
+		if (le16_to_cpu(ent->lde_reclen) != 0 &&
+		    it->ooi_pos_ent < idxpage->lip_nr) {
+			ent = (struct lu_dirent *)((char *)ent +
+						  le16_to_cpu(ent->lde_reclen));
 			it->ooi_ent = ent;
 			RETURN(0);
-		} else {
-			it->ooi_ent = NULL;
 		}
+		it->ooi_ent = NULL;
 	}
 
 	rc = osp_it_next_page(env, di);
 	if (rc == 0)
-		goto again;
+		GOTO(again, rc);
 
 	RETURN(rc);
 }
