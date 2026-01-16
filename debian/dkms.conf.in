@@ -56,11 +56,11 @@ OPTS="${OPTS} --enable-quota --with-kmp-moddir=updates"
 if [[ -r ${PACKAGE_CONFIG} ]] ; then
    source ${PACKAGE_CONFIG}
    shopt -q -s extglob
-   if [[ -n \${LUSTRE_DKMS_DISABLE_STRIP} ]] ; then
-        [[ \${LUSTRE_DKMS_DISABLE_STRIP,,} == @(y|yes) ]] && strip_default=no
+   if [[ -n ${LUSTRE_DKMS_DISABLE_STRIP} ]] ; then
+        [[ ${LUSTRE_DKMS_DISABLE_STRIP,,} == @(y|yes) ]] && strip_default=no
    fi
-   if [[ -n \${LUSTRE_DKMS_ENABLE_STRIP} ]] ; then
-        [[ \${LUSTRE_DKMS_ENABLE_STRIP,,} == @(y|yes) ]] && strip_default=yes
+   if [[ -n ${LUSTRE_DKMS_ENABLE_STRIP} ]] ; then
+        [[ ${LUSTRE_DKMS_ENABLE_STRIP,,} == @(y|yes) ]] && strip_default=yes
    fi
    if [[ -n ${LUSTRE_DKMS_DISABLE_CDEBUG} ]] ; then
       [[ ${LUSTRE_DKMS_DISABLE_CDEBUG,,} == @(y|yes) ]] &&
@@ -154,7 +154,7 @@ int_mofed=no
 [[ -f ${kernel_source_dir}/include/rdma/ib_verbs.h ]] &&
    can_o2ib_in_kernel=yes
 # Now check if ext_o2ib is explicit, or will be auto-detected:
-o2ib=$(echo ${OPTS} | tr ' ' '\\n' | grep -- '--with-o2ib=' | cut -c 13-)
+o2ib=$(echo ${OPTS} | tr ' ' '\n' | grep -- '--with-o2ib=' | cut -c 13-)
 if [[ "x$o2ib" = "xno" ]] ; then
    can_o2ib_in_kernel=no
 elif [[ -d $o2ib ]] ; then
