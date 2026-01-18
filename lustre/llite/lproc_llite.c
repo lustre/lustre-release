@@ -2250,10 +2250,7 @@ static ssize_t dir_read_on_open_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	if (val)
-		sbi->ll_dir_open_read = 1;
-	else
-		sbi->ll_dir_open_read = 0;
+	sbi->ll_dir_open_read = val;
 
 	return count;
 }
