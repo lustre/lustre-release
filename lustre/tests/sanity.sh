@@ -206,7 +206,7 @@ if [[ "$FSTYPE" = "wbcfs" ]]; then
 fi
 
 build_test_filter
-FAIL_ON_ERROR=false
+FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
 
 proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
 
