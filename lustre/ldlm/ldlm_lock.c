@@ -1822,8 +1822,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 			 * LU-6529, the server will not OOM.
 			 */
 			RETURN(rc);
-		} else if (rc != ELDLM_OK ||
-			   (rc == ELDLM_OK && (*flags & LDLM_FL_INTENT_ONLY))) {
+		} else if (rc != ELDLM_OK || (*flags & LDLM_FL_INTENT_ONLY)) {
 			ldlm_lock_destroy(lock);
 			RETURN(rc);
 		}

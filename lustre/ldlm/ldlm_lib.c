@@ -695,7 +695,7 @@ int client_connect_import(const struct lu_env *env,
 
 	imp->imp_dlm_handle = conn;
 	rc = ptlrpc_init_import(imp);
-	if (rc != 0)
+	if (rc)
 		GOTO(out_ldlm, rc);
 
 	ocd = &imp->imp_connect_data;
@@ -706,7 +706,7 @@ int client_connect_import(const struct lu_env *env,
 	}
 
 	rc = ptlrpc_connect_import(imp);
-	if (rc != 0) {
+	if (rc) {
 		LASSERT(imp->imp_state == LUSTRE_IMP_DISCON);
 		GOTO(out_ldlm, rc);
 	}
