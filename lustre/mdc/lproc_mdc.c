@@ -682,9 +682,6 @@ static ssize_t grant_shrink_store(struct kobject *kobj, struct attribute *attr,
 	bool val;
 	int rc;
 
-	if (obd == NULL)
-		return 0;
-
 	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
