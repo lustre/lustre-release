@@ -184,8 +184,7 @@ static int __ll_page_mkwrite(struct vm_area_struct *vma, struct page *vmpage,
 			 * ENODATA so that VM_FAULT_NOPAGE will be returned
 			 * to handle_mm_fault().
 			 */
-			if (result == 0)
-				result = -ENODATA;
+			result = -ENODATA;
 		} else if (!PageDirty(vmpage)) {
 			/* race, the page has been cleaned by ptlrpcd after
 			 * it was unlocked, it has to be added into dirty
