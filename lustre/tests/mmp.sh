@@ -101,13 +101,14 @@ disable_mmp() {
     return ${PIPESTATUS[0]}
 }
 
-# Set the MMP block to 'fsck' state
-mark_mmp_block() {
-    local facet=$1
-    local device=$2
+# Set the sequence in MMP block
+set_mmp_seq() {
+	local facet=$1
+	local device=$2
+	local seq=$3
 
-    do_facet $facet "$LUSTRE/tests/mmp_mark.sh $device"
-    return ${PIPESTATUS[0]}
+	do_facet $facet "$DEBUGFS -wm -R 'set_mmp_value seq $seq' $device"
+	return ${PIPESTATUS[0]}
 }
 
 # Reset the MMP block (if any) back to the clean state.
@@ -549,12 +550,14 @@ test_8() {
 
 	# After writing a new sequence number into the MMP block, e2fsck will
 	# sleep at least (2 * new_interval + 1) seconds before it goes into
-	# e2fsck passes.
+	# e2fsck passes, if the orginal sequence number is not EXT4_MMP_SEQ_CLEAN
 	new_interval=30
 
 	# MDT
 	saved_interval=$(get_mmp_update_interval $MMP_MDS $MMP_MDSDEV)
 	set_mmp_update_interval $MMP_MDS $MMP_MDSDEV $new_interval
+	# make sure the sequence number is not EXT4_MMP_SEQ_CLEAN
+	set_mmp_seq $MMP_MDS $MMP_MDSDEV 0x1 || return ${PIPESTATUS[0]}
 
 	run_e2fsck $MMP_MDS $MMP_MDSDEV "-fy" &
 	e2fsck_pid=$!
@@ -575,6 +578,8 @@ test_8() {
 	echo
 	saved_interval=$(get_mmp_update_interval $MMP_OSS $MMP_OSTDEV)
 	set_mmp_update_interval $MMP_OSS $MMP_OSTDEV $new_interval
+	# make sure the sequence number is not EXT4_MMP_SEQ_CLEAN
+	set_mmp_seq $MMP_OSS $MMP_OSTDEV 0x1 || return ${PIPESTATUS[0]}
 
 	run_e2fsck $MMP_OSS $MMP_OSTDEV "-fy" &
 	e2fsck_pid=$!
@@ -596,36 +601,44 @@ run_test 8 "mount during e2fsck"
 
 # Test 9 - mount after aborted e2fsck (should never succeed).
 test_9() {
-    start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS || return ${PIPESTATUS[0]}
-    if ! start $MMP_OSS $MMP_OSTDEV $OST_MOUNT_OPTS; then
-        local rc=${PIPESTATUS[0]}
-        stop $MMP_MDS || return ${PIPESTATUS[0]}
-        return $rc
-    fi
-    stop_services primary || return ${PIPESTATUS[0]}
+	local EXT4_MMP_SEQ_FSCK=0xe24d4d50
 
-    mark_mmp_block $MMP_MDS $MMP_MDSDEV || return ${PIPESTATUS[0]}
+	start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS || return ${PIPESTATUS[0]}
+	if ! start $MMP_OSS $MMP_OSTDEV $OST_MOUNT_OPTS; then
+		local rc=${PIPESTATUS[0]}
+		stop $MMP_MDS || return ${PIPESTATUS[0]}
+		return $rc
+	fi
+	stop_services primary || return ${PIPESTATUS[0]}
 
-    log "Mounting $MMP_MDSDEV on $MMP_MDS..."
-    if start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS; then
-        error_noexit "mount $MMP_MDSDEV on $MMP_MDS should fail"
-        stop $MMP_MDS || return ${PIPESTATUS[0]}
-        return 1
-    fi
+	stack_trap "reset_mmp_block $MMP_MDS $MMP_MDSDEV"
 
-    reset_mmp_block $MMP_MDS $MMP_MDSDEV || return ${PIPESTATUS[0]}
+	# write EXT4_MMP_SEQ_FSCK in the mmp block
+	set_mmp_seq $MMP_MDS $MMP_MDSDEV $EXT4_MMP_SEQ_FSCK ||
+		return ${PIPESTATUS[0]}
 
-    mark_mmp_block $MMP_OSS $MMP_OSTDEV || return ${PIPESTATUS[0]}
+	log "Mounting $MMP_MDSDEV on $MMP_MDS..."
+	if start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS; then
+		error_noexit "mount $MMP_MDSDEV on $MMP_MDS should fail"
+		stop $MMP_MDS || return ${PIPESTATUS[0]}
+		return 1
+	fi
 
-    log "Mounting $MMP_OSTDEV on $MMP_OSS..."
-    if start $MMP_OSS $MMP_OSTDEV $OST_MOUNT_OPTS; then
-        error_noexit "mount $MMP_OSTDEV on $MMP_OSS should fail"
-        stop $MMP_OSS || return ${PIPESTATUS[0]}
-        return 2
-    fi
+	stack_trap "reset_mmp_block $MMP_OSS $MMP_OSTDEV"
 
-    reset_mmp_block $MMP_OSS $MMP_OSTDEV || return ${PIPESTATUS[0]}
-    return 0
+	# write EXT4_MMP_SEQ_FSCK in the mmp block
+	set_mmp_seq $MMP_OSS $MMP_OSTDEV $EXT4_MMP_SEQ_FSCK ||
+		return ${PIPESTATUS[0]}
+
+	log "Mounting $MMP_OSTDEV on $MMP_OSS..."
+	if start $MMP_OSS $MMP_OSTDEV $OST_MOUNT_OPTS; then
+		error_noexit "mount $MMP_OSTDEV on $MMP_OSS should fail"
+		stop $MMP_OSS || return ${PIPESTATUS[0]}
+		return 2
+	fi
+
+	CLEANUP_DM_DEV=true stop_services primary || return ${PIPESTATUS[0]}
+	return 0
 }
 run_test 9 "mount after aborted e2fsck"
 
