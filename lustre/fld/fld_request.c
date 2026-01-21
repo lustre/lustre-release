@@ -387,9 +387,9 @@ again:
 			rc = -EAGAIN;
 		}
 		if (rc == -EAGAIN) {
-			ptlrpc_req_put(req);
 			if (msleep_interruptible(2 * MSEC_PER_SEC))
 				GOTO(out_req, rc = -EINTR);
+			ptlrpc_req_put(req);
 			rc = 0;
 			goto again;
 		}
