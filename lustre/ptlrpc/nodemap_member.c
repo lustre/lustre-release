@@ -151,7 +151,8 @@ int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp)
 		      "nodemap %s already member of %s\n", exp,
 		      exp->exp_client_uuid.uuid,
 		      nodemap->nm_name,
-		      (exp->exp_target_data.ted_nodemap == NULL) ? "unknown" :
+		      (exp->exp_target_data.ted_nodemap == NULL) ?
+				NRS_TBF_TYPE_UNKNOWN :
 				exp->exp_target_data.ted_nodemap->nm_name);
 		RETURN(-EEXIST);
 	}

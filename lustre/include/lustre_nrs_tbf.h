@@ -192,6 +192,7 @@ struct nrs_tbf_ops {
 #define NRS_TBF_TYPE_UID	"uid"
 #define NRS_TBF_TYPE_GID	"gid"
 #define NRS_TBF_TYPE_PROJID	"projid"
+#define NRS_TBF_TYPE_UNKNOWN	"unknown"
 #define NRS_TBF_TYPE_MAX_LEN	20
 
 struct nrs_tbf_type {

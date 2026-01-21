@@ -213,6 +213,7 @@ struct nm_config_file {
 };
 
 int nodemap_activate(const bool value);
+struct lu_nodemap *nodemap_lookup_unlocked(const char *name);
 int nodemap_add(const char *nodemap_name, bool dynamic);
 int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset);
 void nodemap_clear_dynamic_nodemaps(void);

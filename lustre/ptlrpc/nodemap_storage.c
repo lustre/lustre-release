@@ -1651,7 +1651,7 @@ static int nodemap_cluster_rec_helper(struct nodemap_config *config,
 	 */
 	if (!nodemap->nmf_fileset_use_iam) {
 		mutex_lock(&active_config_lock);
-		old_nm = nodemap_lookup(rec->ncr.ncr_name);
+		old_nm = nodemap_lookup_locked(rec->ncr.ncr_name);
 		if (!IS_ERR(old_nm) && old_nm->nm_fileset_prim &&
 		    old_nm->nm_fileset_prim[0] != '\0') {
 			OBD_ALLOC(nodemap->nm_fileset_prim,

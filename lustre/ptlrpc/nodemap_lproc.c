@@ -40,9 +40,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 	bool cont = false;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -126,9 +124,7 @@ static int nodemap_offset_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("%s: nodemap not found: rc = %d\n",
@@ -167,9 +163,7 @@ static int nodemap_capabilities_seq_show(struct seq_file *m, void *unused)
 	u64 val;
 	int i, rc = 0;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("%s: nodemap not found: rc = %d\n",
@@ -228,7 +222,7 @@ static int nodemap_ranges_show(struct seq_file *m, void *unused)
 	int rc;
 
 	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
+	nodemap = nodemap_lookup_locked(m->private);
 	if (IS_ERR(nodemap)) {
 		mutex_unlock(&active_config_lock);
 		rc = PTR_ERR(nodemap);
@@ -292,7 +286,7 @@ static int nodemap_ban_ranges_show(struct seq_file *m, void *unused)
 	int rc;
 
 	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
+	nodemap = nodemap_lookup_locked(m->private);
 	if (IS_ERR(nodemap)) {
 		mutex_unlock(&active_config_lock);
 		rc = PTR_ERR(nodemap);
@@ -354,9 +348,7 @@ static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 	bool cont = false;
 	int rc = 0;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -451,9 +443,7 @@ static int nodemap_sepol_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc = 0;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -527,9 +517,7 @@ static int nodemap_exports_show(struct seq_file *m, void *unused)
 	bool cont = false;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -645,9 +633,7 @@ static int nodemap_id_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		int rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -674,9 +660,7 @@ static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		int rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -702,9 +686,7 @@ static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		int rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -730,9 +712,7 @@ static int nodemap_squash_projid_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		int rc = PTR_ERR(nodemap);
 
@@ -759,9 +739,7 @@ static int nodemap_trusted_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		int rc = PTR_ERR(nodemap);
 
@@ -789,9 +767,7 @@ static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -819,9 +795,7 @@ static int nodemap_map_mode_seq_show(struct seq_file *m, void *data)
 	bool need_sep = false;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -864,9 +838,7 @@ static int nodemap_rbac_seq_show(struct seq_file *m, void *data)
 	char *sep = "";
 	int i, rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -912,9 +884,7 @@ static int nodemap_deny_unknown_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -942,9 +912,7 @@ static int nodemap_audit_mode_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -972,9 +940,7 @@ static int nodemap_forbid_encryption_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -1003,9 +969,7 @@ static int nodemap_raise_privs_seq_show(struct seq_file *m, void *data)
 	char *sep = "";
 	int i, rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -1072,9 +1036,7 @@ static int nodemap_readonly_mount_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -1102,9 +1064,7 @@ static int nodemap_deny_mount_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -1134,9 +1094,7 @@ static int nodemap_parent_seq_show(struct seq_file *seq, void *data)
 	char *pname;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(seq->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(seq->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
@@ -1170,9 +1128,7 @@ static int nodemap_gssonly_identify_seq_show(struct seq_file *m, void *data)
 	struct lu_nodemap *nodemap;
 	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup(m->private);
-	mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",

@@ -630,7 +630,7 @@ nrs_tbf_jobid_list_parse(char *orig, struct list_head *jobid_list)
 
 	copy = kstrdup(orig, GFP_KERNEL);
 	if (!copy)
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 	str = copy;
 	INIT_LIST_HEAD(jobid_list);
 	while (str && rc == 0) {
@@ -671,7 +671,7 @@ static inline const char *nrs_ntf2name(enum nrs_tbf_flag ntf)
 	default:
 		if (nrs_tbf_flags_valid(ntf))
 			return NRS_TBF_TYPE_GENERIC;
-		return "unknown";
+		return NRS_TBF_TYPE_UNKNOWN;
 	}
 }
 

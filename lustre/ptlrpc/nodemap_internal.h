@@ -123,8 +123,18 @@ struct lu_nodemap *nodemap_create(const char *name,
 				  struct nodemap_config *config,
 				  bool is_default, bool dynamic);
 void nodemap_putref(struct lu_nodemap *nodemap);
-struct lu_nodemap *nodemap_lookup(const char *name);
-int nodemap_sha_lookup(const char *sha, char *name_buf, size_t name_len);
+struct lu_nodemap *nodemap_lookup_locked(const char *name);
+/* Prefer using nodemap_lookup_locked() over nodemap_lookup().
+ *
+ * It isn't practical to remove nodemap_lookup() completely right now,
+ * since there are many nodemap patches currently in flight.  Once all
+ * of those patches have landed and the last direct nodemap_lookup() user
+ * has been replaced, then the external nodemap_lookup_unlocked() could
+ * be renamed to nodemap_lookup() since it is most widely used and better
+ * follows our function naming convention.
+ */
+#define nodemap_lookup(name) nodemap_lookup_locked(name)
+int nodemap_lookup_sha(const char *sha, char *name_buf, size_t name_len);
 
 int nodemap_procfs_init(void);
 void nodemap_procfs_exit(void);
