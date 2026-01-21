@@ -1981,6 +1981,12 @@ struct lnet {
 	struct list_head		ln_nets;
 	/* Sequence number used to round robin sends across all nets */
 	__u32				ln_net_seq;
+	/*
+	 * Count of NIs/nets with restricted CPT configurations.
+	 * When 0, lnet_nid2cpt() can use fast hash-only path even
+	 * when ni==NULL, since all networks use all CPTs.
+	 */
+	atomic_t			ln_cpt_restricted_count;
 	/* the loopback NI */
 	struct lnet_ni			*ln_loni;
 	/* network zombie list */

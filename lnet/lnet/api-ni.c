@@ -37,6 +37,7 @@
 struct lnet the_lnet = {
 	.ln_api_mutex = __MUTEX_INITIALIZER(the_lnet.ln_api_mutex),
 	.ln_ni_total = ATOMIC_INIT(0),
+	.ln_cpt_restricted_count = ATOMIC_INIT(0),
 };		/* THE state of the network */
 EXPORT_SYMBOL(the_lnet);
 
@@ -1666,6 +1667,32 @@ lnet_cpt_of_nid_locked(struct lnet_nid *nid, struct lnet_ni *ni)
 	return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 }
 
+/*
+ * Map a NID to a CPT.
+ *
+ * We optimize all cases where the NI is provided with fast paths that avoid
+ * lock acquisition.
+ *
+ * Safety analysis for the fast path:
+ *
+ * 1. The ni_cpts pointer and array are set once at NI creation (in
+ *    lnet_ni_alloc()) and never modified afterward, so reading them
+ *    is safe once the NI exists.
+ *
+ * 2. When this function is called from the receive path (lnet_parse,
+ *    lnet_parse_put, lnet_parse_get, etc.), the NI is guaranteed valid:
+ *    - The LND is actively running and receiving messages
+ *    - NI shutdown calls lnd_shutdown() first, which must quiesce all
+ *      receive activity before returning
+ *    - Only after lnd_shutdown() completes is lnet_ni_free() called
+ *    - Therefore, the NI cannot be freed while receives are in flight
+ *
+ * 3. For callers that don't have implicit NI validity guarantees (e.g.,
+ *    those that looked up the NI themselves), passing ni=NULL forces
+ *    the safe slow path that acquires the net_lock.
+ *
+ * Lock is only needed when ni is NULL (must look up the network under lock).
+ */
 int
 lnet_nid2cpt(struct lnet_nid *nid, struct lnet_ni *ni)
 {
@@ -1675,6 +1702,26 @@ lnet_nid2cpt(struct lnet_nid *nid, struct lnet_ni *ni)
 	if (LNET_CPT_NUMBER == 1)
 		return 0; /* the only one */
 
+	/*
+	 * Fast path: NI provided from receive callback and associated
+	 * with all CPTs. The NI is implicitly valid (see function header).
+	 */
+	if (ni) {
+		if (ni->ni_cpts)
+			return ni->ni_cpts[lnet_nid_cpt_hash(nid,
+							     ni->ni_ncpts)];
+		else
+			return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
+	}
+
+	/*
+	 * Fast path for ni==NULL: if no NIs/nets have restricted CPTs,
+	 * we can just hash without looking up the network.
+	 */
+	if (atomic_read(&the_lnet.ln_cpt_restricted_count) == 0)
+		return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
+
+	/* Slow path: ni is NULL, need lock for network lookup */
 	cpt = lnet_net_lock_current();
 
 	cpt2 = lnet_cpt_of_nid_locked(nid, ni);
