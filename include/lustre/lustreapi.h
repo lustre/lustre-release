@@ -508,11 +508,15 @@ struct find_work_unit {
  *   @param Pointer to the find_param structure (field fp_cb_data is used to
  *	    pass callback data)
  *   @de    Directory entry structure (NULL for the root path)
- * Return values:
+ * Return values of the init callback:
  *   0      Continue traversal normally
  *   1      Skip descending into this directory (for directories only)
  *   -1     Stop traversal
  *   Other  Error code
+ * Return values of the fini callback:
+ *   <0     Reported as the traversal error (the first one is returned by
+ *	    llapi_find_with_cb()); it does not stop the walk by itself
+ *   >=0    Ignored
  */
 typedef int (*llapi_find_cb_t)(char *path, int p, int *d,
 			       struct find_param *param, struct dirent64 *de);

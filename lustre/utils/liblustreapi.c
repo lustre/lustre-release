@@ -3459,10 +3459,13 @@ migrate:
 
 out:
 	/* Do not get down anymore? */
-	if (param->fp_depth == param->fp_max_depth)
-		ret = 1;
-	else
+	if (param->fp_depth == param->fp_max_depth) {
+		/* keep a real error rather than the depth marker */
+		if (ret == 0)
+			ret = 1;
+	} else {
 		param->fp_depth++;
+	}
 
 	if (dp != NULL) {
 		/*
@@ -3507,8 +3510,13 @@ static int cb_migrate_mdt_fini(char *path, int p, int *dp,
 		 */
 		ret = close(*dp);
 		*dp = -1;
-		if (ret)
+		if (ret) {
+			ret = -errno;
+			llapi_error(LLAPI_MSG_ERROR, ret,
+				    "%s: error closing '%s' before shrink",
+				    __func__, path);
 			goto out;
+		}
 	}
 
 	lmu->lum_hash_type &= LMV_HASH_TYPE_MASK;
@@ -3680,11 +3688,13 @@ void validate_printf_str(struct find_param *param)
 /*
  * llapi_find_with_cb - Parallel find with custom callbacks
  * @path	Starting path for the traversal
- * @param	Ponter to find_param structure
+ * @param	Pointer to find_param structure
  * @cb_init	Callback invoked for each file/directory entry during traversal,
- *		NULL to use default cb_find_init().
- * @cb_fini	Callback invoked after processing a directory's contents, NULL
- *		to use default cb_common_fini().
+ *		NULL to invoke no callback on entry. See llapi_find_cb_t.
+ * @cb_fini	Callback invoked after @cb_init returned 0 for an entry (after
+ *		its contents for a directory), NULL to invoke no callback.
+ *		A negative return is reported as the traversal error, other
+ *		values are ignored.
  * Return	0 on success, < 0 on error.
  */
 int llapi_find_with_cb(char *path, struct find_param *param,
