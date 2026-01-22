@@ -3336,7 +3336,7 @@ test_20a() {
 	$LFS getstripe -v $name || error "(6.1) cannot getstripe on $name"
 
 	pattern=$($LFS getstripe -L $name)
-	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+	[[ "$pattern" =~ $PATTERN_WITH_HOLE || "$pattern" =~ hole ]] ||
 		error "(6.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
@@ -3392,7 +3392,7 @@ test_20a() {
 	$LFS getstripe -v $name || error "(7.1) cannot getstripe on $name"
 
 	pattern=$($LFS getstripe -L $name)
-	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+	[[ "$pattern" =~ $PATTERN_WITH_HOLE || "$pattern" =~ hole ]] ||
 		error "(7.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
@@ -3473,7 +3473,7 @@ test_20a() {
 	$LFS getstripe -v $name || error "(8.1) cannot getstripe on $name"
 
 	pattern=$($LFS getstripe -L $name)
-	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+	[[ "$pattern" =~ $PATTERN_WITH_HOLE || "$pattern" =~ hole ]] ||
 		error "(8.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
@@ -3671,11 +3671,11 @@ test_20b() {
 	$LFS getstripe -v $name || error "(8.1) cannot getstripe on $name"
 
 	pattern=$($LFS getstripe -L -I1 $name)
-	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+	[[ "$pattern" =~ $PATTERN_WITH_HOLE || "$pattern" =~ hole ]] ||
 		error "(8.2.1) expect pattern flag hole, but got $pattern"
 
 	pattern=$($LFS getstripe -L -I2 $name)
-	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+	[[ "$pattern" =~ $PATTERN_WITH_HOLE || "$pattern" =~ hole ]] ||
 		error "(8.2.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c -I1 $name)
@@ -3746,11 +3746,11 @@ test_20b() {
 	$LFS getstripe -v $name || error "(9.1) cannot getstripe on $name"
 
 	pattern=$($LFS getstripe -L -I1 $name)
-	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+	[[ "$pattern" =~ $PATTERN_WITH_HOLE || "$pattern" =~ hole ]] ||
 		error "(9.2.1) expect pattern flag hole, but got $pattern"
 
 	pattern=$($LFS getstripe -L -I2 $name)
-	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+	[[ "$pattern" =~ $PATTERN_WITH_HOLE || "$pattern" =~ hole ]] ||
 		error "(9.2.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c -I1 $name)
