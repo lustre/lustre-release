@@ -30,7 +30,7 @@ noinst_SCRIPTS += run_dd.sh run_tar.sh run_iozone.sh
 noinst_SCRIPTS += run_dbench.sh run_IOR.sh recovery-double-scale.sh
 noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh
 noinst_SCRIPTS += lustre-rsync-test.sh ost-pools.sh rpc.sh yaml.sh
-noinst_SCRIPTS += lutf.sh
+noinst_SCRIPTS += lutf.sh lcov-merge.sh
 noinst_SCRIPTS += lnet-selftest.sh obdfilter-survey.sh mmp.sh mmp_mark.sh
 noinst_SCRIPTS += sgpdd-survey.sh maloo_upload.sh auster setup-nfs.sh
 noinst_SCRIPTS += mds-survey.sh parallel-scale-nfs.sh large-lun.sh
@@ -48,6 +48,7 @@ nobase_noinst_SCRIPTS += posix/posix.cfg
 nobase_noinst_DATA = acl/*.test
 nobase_noinst_DATA += clientapi/simple_test.c
 nobase_noinst_DATA += except/*.ex
+nobase_noinst_DATA += lcov-merge.sh.in
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
@@ -136,3 +137,7 @@ aiocp_LDADD= -laio
 endif
 statx_LDADD = $(SELINUX)
 endif # TESTS
+
+lcov-merge.sh: lcov-merge.sh.in
+	sed "s:@BUILD_SRC@:$$(realpath $$(pwd)/../..):g" $< > $@
+	chmod a+x $@

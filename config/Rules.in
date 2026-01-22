@@ -23,7 +23,7 @@ EXTRA_CFLAGS += $(EXTRA_POST_CFLAGS)
 override LINUXINCLUDE += $(EXTRA_CFLAGS)
 
 KBUILD_EXTRA_SYMBOLS += @EXTRA_SYMBOLS@
-
+GCOV_PROFILE := @ENABLE_COVERAGE@
 obj-m += $(patsubst %,%.o,$(MODULES))
 
 # Build configuration exports for plain Makefiles

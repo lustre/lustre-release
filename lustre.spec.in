@@ -25,6 +25,7 @@
 %bcond_without mpi
 %bcond_with kabi
 %bcond_with multiple_lnds
+%bcond_with coverage
 %bcond_with mofed
 %bcond_without o2ib
 %bcond_with kfi
@@ -541,6 +542,19 @@ BuildRequires: openmpi2-devel
 This package contains a set of test binaries and scripts that are intended
 to be used by the Lustre testing framework.
 
+%if %{with coverage}
+%package -n %{lustre_name}-coverage
+Summary: Collection of profiling data for a cluster with the Lustre file system
+%if 0%{?rhel} > 8 || 0%{?fedora} > 40
+# rebuild "--with gcov" or build and install contrib-kernel-coverage.spec
+BuildRequires: kernel-gcov
+%endif
+Requires: lcov
+%description -n %{lustre_name}-coverage
+This package includes a profiling sources for Lustre and script to
+generate converage with lcov and fastcov if available.
+%endif
+
 %if %{with lustre_modules}
 %kernel_module_package -n %{name}-tests -p %SOURCE7 -f %SOURCE8 %{_flavor}
 %endif
@@ -768,6 +782,7 @@ WITH_O2IB=""
 	%{?with_lustre_tests:--enable-tests}%{!?with_lustre_tests:--disable-tests} \
 	%{?with_lustre_utils:--enable-utils}%{!?with_lustre_utils:--disable-utils} \
 	%{?with_lustre_modules:--enable-modules}%{!?with_lustre_modules:--disable-modules} \
+	%{?with_coverage:--enable-coverage} \
 	%{!?with_shared:--disable-shared} \
 	%{!?with_static:--disable-static} \
 	%{!?with_lustre_iokit:--disable-iokit} \
@@ -881,6 +896,14 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/mpich ] ; then
 fi
 %endif
 
+%if %{with coverage}
+mkdir -p $RPM_BUILD_ROOT/%{_libdir}/lustre/tests
+GCOV_EXTRA=$RPM_BUILD_ROOT/%{_libdir}/lustre/tests/gcov.tar.xz
+export XZ_OPT="--threads=0"
+find %{_builddir} -name '*.[h,c]' -o -name '*.gcno' |
+	tar --files-from=- --absolute-names -cJf ${GCOV_EXTRA}
+%endif
+
 :> lustre.files
 
 %if %{with servers} && %{with lustre_utils}
@@ -977,10 +1000,20 @@ fi
 %if %{with lustre_tests_lutf}
 echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %endif
+echo '%exclude %{_libdir}/lustre/tests/gcov.tar.xz' >> lustre-tests.files
+echo '%exclude %{_libdir}/lustre/tests/lcov-merge.sh*' >> lustre-tests.files
+# with lustre_tests
 %endif
 
 %if %{with lustre_tests_lutf}
 echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
+%endif
+
+%if %{with coverage}
+%files -n %{lustre_name}-coverage
+%defattr(-,root,root)
+%{_libdir}/lustre/tests/gcov.tar.xz
+%{_libdir}/lustre/tests/lcov-merge.sh
 %endif
 
 %files devel -f lustre-devel.files

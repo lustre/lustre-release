@@ -1,0 +1,148 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+## Prerequisites:
+# Kernel built with GCOV support (tested RHEL 9.6 running 6.12.6 kernel)
+# lcov to generate html report via genhtml
+# fastcov to generate JSON from gcno and gcda files.
+
+## lcov available from epel
+
+## fastcov via pip3
+# sudo pip3 install --upgrade pip
+# sudo pip3 install --root-user-action ignore --upgrade pip
+# sudo pip3 install --root-user-action ignore --prefix=/usr git+https://github.com/rpgillespie6/fastcov.git
+
+## Be verbose (optional):
+VERBOSE=
+SRCDIR=$(dirname $0)
+
+## Where to place lcov output:
+LVERS=$(cat /sys/fs/lustre/version)
+COVERAGE_ROOT=${COVERAGE_ROOT:-/tmp}
+LCOV=${COVERAGE_ROOT}/${LVERS}/lcov.out
+REPORT=${COVERAGE_ROOT}/${LVERS}/lcov
+
+## Running from checkout:
+DBGFS_GCOV=/sys/kernel/debug/gcov
+KERNEL_GCOV=${DBGFS_GCOV}@BUILD_SRC@
+SOURCE_GCOV="/$(echo $KERNEL_GCOV | cut -d/ -f6-)"
+RPMPKG=0
+
+# Note that gcov.tar.xz is only built and needed when RPM packing.
+# Running tests from the local build directory can skip this step.
+
+if [[ -f ${SRCDIR}/gcov.tar.xz ]]; then
+	tar -C / -xf ${SRCDIR}/gcov.tar.xz 2>/dev/null
+	## Running from rpmbuild packages:
+	RPMBUILD_SRC=$(find ${DBGFS_GCOV} -type d -name \*${LVERS})
+	if [[ -d $RPMBUILD_SRC ]]; then
+		KERNEL_GCOV=${RPMBUILD_SRC}
+		SOURCE_GCOV=/$(cut -d/ -f6- <<< $RPMBUILD_SRC)
+	fi
+	if [[ -n \$VERBOSE ]]; then
+		echo "LCOV: $LCOV"
+		echo "KERNEL_GCOV: $KERNEL_GCOV"
+		echo "SOURCE_GCOV: $SOURCE_GCOV"
+	fi
+fi
+
+mkdir -p $LCOV
+all_nodes=""
+for n in _ $(seq 0 10)
+do
+	all_nodes+="\$ost${n}_HOST "
+	all_nodes+="\$mgs${n}_HOST "
+	all_nodes+="\$mds${n}_HOST "
+done
+nodes=$(eval echo $(sed -e 's/__/_/' <<< ${all_nodes}) | tr ' ' '\n' |sort|uniq)
+echo "Collect data from nodes: $(echo ${nodes} | xargs echo)"
+for node in ${nodes}
+do
+	echo ".. Collecting gcov data from $node"
+	ssh -T ${node} << EOF
+echo Scanning for coverage files on $node at
+echo "   $KERNEL_GCOV"
+VERBOSE=$VERBOSE
+for F in \$(find $KERNEL_GCOV ! -type d | xargs echo)
+do
+	FILE=\$(echo \$F | cut -d/ -f10-)
+	DIR=\$(dirname \$FILE)
+	mkdir -p ${LCOV}/${node}/\${DIR}
+
+	[[ -n \$VERBOSE ]] && echo ${LCOV}/${node}/\${FILE}
+	[[ -f \$F ]] && cat \$F > ${LCOV}/${node}/\${FILE}
+done
+cd ${LCOV}
+tar czf ${LCOV}/${node}.tar.gz ${node}
+EOF
+	scp ${node}:${LCOV}/${node}.tar.gz ${LCOV}
+	tar xf ${LCOV}/${node}.tar.gz -C ${LCOV}
+done
+
+node=$(hostname -s)
+echo Scanning for coverage files on $node at
+echo "   $KERNEL_GCOV"
+for F in $(find $KERNEL_GCOV ! -type d)
+do
+	FILE=$(echo $F | cut -d/ -f10-)
+	DIR=$(dirname $FILE)
+	mkdir -p ${LCOV}/${node}/${DIR}
+
+	[[ -n $VERBOSE ]] && echo ${LCOV}/${node}/${FILE}
+	[[ -f $F ]] && cat $F > ${LCOV}/${node}/${FILE}
+done
+
+for node in $(hostname -s) ${nodes}
+do
+	for F in $(find ${LCOV}/${node} ! -type d)
+	do
+		DIR=$(dirname $F)
+		PKGSRC=$(sed -e s:$LCOV/${node}:$SOURCE_GCOV: -e 's:\.gc.*:\.*:' <<< $F)
+		for S in $(ls -1 $PKGSRC 2>/dev/null)
+		do
+			if test -f ${S} -o -L ${S} ; then
+				[[ -n ${VERBOSE} ]] && echo ln -s ${S} ${DIR}
+				ln -s ${S} ${DIR} > /dev/null 2>&1
+			fi
+		done
+	done
+done
+
+FASTCOV=$(command -v fastcov)
+VERBOSE=1
+mkdir -p ${REPORT}
+reports=
+for node in $(hostname -s) ${nodes}
+do
+	RNODE=${REPORT}/report-${node}.info
+	[[ -d ${LCOV}/${node} ]] || continue
+	if [[ -z $FASTCOV ]] ; then
+		[[ -n $VERBOSE ]] &&
+		   echo lcov -d ${LCOV}/${node} -o ${RNODE}
+		lcov -d ${LCOV}/${node} -o ${RNODE}
+		# ignore empty reports
+		[[ -s ${RNODE} ]] &&
+			reports+="--add-tracefile ${RNODE} "
+	else
+		[[ -n $VERBOSE ]] &&
+		   echo ${FASTCOV} -n -d ${LCOV}/${node} --lcov -o ${RNODE}
+		${FASTCOV} -n -d ${LCOV}/${node} --lcov -o ${RNODE}
+		# ignore empty reports
+		[[ -s ${RNODE} ]] &&
+			reports+="--add-tracefile ${RNODE} "
+	fi
+done
+
+[[ -n $VERBOSE ]] && echo lcov ${reports} -o ${REPORT}/report.info
+lcov ${reports} -o ${REPORT}/report.info
+
+[[ -n $VERBOSE ]] &&
+	echo genhtml -o ${REPORT}/code_coverage ${REPORT}/report.info
+genhtml -o ${REPORT}/code_coverage ${REPORT}/report.info
+(cd ${REPORT}; tar cvf code_coverage.tar code_coverage; xz --threads=0 code_coverage.tar)
+
+## view coverage report directly or copy coverage report elsewhere:
+# firefox ${REPORT}/code_coverage/index.html
+
+echo "Report [${REPORT}/code_coverage.tar.xz] is ready"

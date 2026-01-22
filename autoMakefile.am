@@ -212,6 +212,7 @@ undef.h: config.h.in
 	grep -v config.h.in config.h.in > $@
 
 dist-hook: undef.h
+	rm -f $(distdir)/contrib/contrib-kernel-coverage.spec
 	find include/ -type f \( -name "*.h" \) \
 		-exec cp --parents {} $(distdir) \;
 	find lustre/include/ -type f \( -name "*.h" \) \
@@ -448,6 +449,9 @@ debs: undef.h debs_common
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} notests"; \
 		sed -i -e 's/mpi-default-dev,//' -e 's/mpi-default-bin,//' debian/control.main ; \
 	fi; \
+	if test "x@ENABLE_COVERAGE@" = "xy"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} coverage"; \
+	fi; \
 	if test "x$(ENABLE_IOKIT)" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} iokit"; \
 	elif test "x$(ENABLE_IOKIT)" = "xno"; then \
@@ -616,6 +620,7 @@ debs: undef.h debs_common
 	mkdir -p debs && \
 	mv ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb \
 	   ../lustre-iokit_$${VER}_*.deb ../lustre-tests_$${VER}_*.deb \
+	   ../lustre-coverage_$${VER}_*.deb \
 	   ../lustre-*-utils_$${VER}_*.deb $${DEB_SERVER_PKG} $${MULTILNDPKGS} \
 	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \

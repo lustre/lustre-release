@@ -485,6 +485,7 @@ AC_ARG_ENABLE([server],
 # before running, so until LB_CONFIG_MODULES can be reorganized, we
 # call it here.
 LB_CONFIG_MODULES
+LC_CONFIG_COVERAGE
 AS_IF([test x$enable_modules = xno], [enable_server=no])
 LB_CONFIG_LDISKFS
 LB_CONFIG_ZFS
@@ -634,6 +635,9 @@ if test x$enable_static != xyes ; then
 fi
 if test x$enable_mpitests != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without mpi"
+fi
+if test x$enable_coverage != xno ; then
+	RPMBINARGS="$RPMBINARGS --with coverage"
 fi
 
 RPMBUILD_BINARY_ARGS=$RPMBINARGS

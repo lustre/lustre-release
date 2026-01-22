@@ -301,6 +301,29 @@ kernel SUNRPC support is required by using GSS.
 	])])
 ]) # LC_CONFIG_SUNRPC
 
+# LC_CONFIG_COVERAGE
+# Setup for code coverage using gcov,
+# Also check gcov is available and the kernel was built with GCOV support.
+AC_DEFUN([LC_CONFIG_COVERAGE], [
+	AC_MSG_CHECKING([whether to enable gcov code coverage])
+	AC_ARG_ENABLE([coverage], [
+		AS_HELP_STRING([--enable-coverage],
+			[enable gcov code coverage support])],
+			[enable_coverage="yes"], [enable_coverage="no"])
+	AS_IF([test "x$enable_coverage" != xno], [
+		AC_MSG_RESULT([checking])
+		LB_CHECK_CONFIG_IM([GCOV_KERNEL], [
+			AC_MSG_CHECKING([may enable coverage with kernel support])
+		], [
+			AC_MSG_WARN([kernel GCOV support required to enable coverage.])
+			enable_coverage="no"
+			AC_MSG_CHECKING([may enable coverage without kernel support])
+		])
+	])
+	AC_MSG_RESULT([$enable_coverage])
+	AC_SUBST(ENABLE_COVERAGE, ${enable_coverage:0:1})
+]) # LC_CONFIG_COVERAGE
+
 #
 # LC_CONFIG_GSS (default 'auto' (tests for dependencies, if found, enables))
 #

@@ -96,6 +96,18 @@ Description: Test suite for the Lustre filesystem
  .
  This package provides regression test scripts for the Lustre filesystem.
 
+Package: lustre-coverage
+Section: utils
+Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
+Priority: optional
+Depends: lustre-tests (= ${binary:Version}), lcov
+Description: Coverage data and scripts
+ Lustre is a scalable, secure, robust, highly-available cluster file system.
+ This release is maintained by Whamcloud and available from
+ https://wiki.whamcloud.com/
+ .
+ This package provides coverage data and scripts for the Lustre filesystem.
+
 Package: lustre-dev
 Section: libdevel
 Priority: optional
