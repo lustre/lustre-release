@@ -3166,12 +3166,13 @@ test_19b() {
 }
 run_test 19b "OST-object inconsistency self repair"
 
-PATTERN_WITH_HOLE="40000001"
+
+PATTERN_WITH_HOLE="40000001" # LOV_PATTERN_F_HOLE | LOV_PATTERN_RAID0
 PATTERN_WITHOUT_HOLE="raid0"
 
 test_20a() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+	[[ -z "$FILESET" ]] || skip "Not functional for FILESET set"
 	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
 		skip "MDS older than 2.5.55, LU-4887"
 
@@ -3190,7 +3191,7 @@ test_20a() {
 
 	check_mount_and_prep
 	$LFS mkdir -i 0 $DIR/$tdir/a1
-	if [ $OSTCOUNT -gt 2 ]; then
+	if (( $OSTCOUNT > 2 )); then
 		$LFS setstripe -c 3 -i 0 -S 1M $DIR/$tdir/a1
 		bcount=513
 	else
@@ -3217,7 +3218,7 @@ test_20a() {
 	echo ${fid2}
 	$LFS getstripe $DIR/$tdir/a1/f2
 
-	if [ $OSTCOUNT -gt 2 ]; then
+	if (( $OSTCOUNT > 2 )); then
 		dd if=/dev/zero of=$DIR/$tdir/a1/f3 bs=4096 count=$bcount
 		fid3=$($LFS path2fid $DIR/$tdir/a1/f3)
 		echo ${fid3}
@@ -3241,7 +3242,7 @@ test_20a() {
 	do_facet mds1 $LCTL set_param fail_val=1
 	rm -f $DIR/$tdir/a1/f2
 
-	if [ $OSTCOUNT -gt 2 ]; then
+	if (( $OSTCOUNT > 2 )); then
 		echo "To simulate f3 lost MDT-object and OST-object2"
 		do_facet mds1 $LCTL set_param fail_val=2
 		rm -f $DIR/$tdir/a1/f3
@@ -3255,7 +3256,7 @@ test_20a() {
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
 	$START_LAYOUT -r -o || error "(1) Fail to start LFSCK for layout!"
 
-	for k in $(seq $MDSCOUNT); do
+	for ((k = 1; k <= $MDSCOUNT; k++)); do
 		# The LFSCK status query internal is 30 seconds. For the case
 		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
 		# time to guarantee the status sync up.
@@ -3265,28 +3266,22 @@ test_20a() {
 			error "(2) MDS${k} is not the expected 'completed'"
 	done
 
-	for k in $(seq $OSTCOUNT); do
+	for ((k = 1; k <= $OSTCOUNT; k++)); do
 		local cur_status=$(do_facet ost${k} $LCTL get_param -n \
 				obdfilter.$(facet_svc ost${k}).lfsck_layout |
 				awk '/^status/ { print $2 }')
-		[ "$cur_status" == "completed" ] ||
-		error "(3) OST${k} Expect 'completed', but got '$cur_status'"
+		[[ "$cur_status" == "completed" ]] ||
+			error "(3) OST$k Expect 'completed', got '$cur_status'"
 	done
 
 	local repaired=$(do_facet mds1 $LCTL get_param -n \
 			 mdd.$(facet_svc mds1).lfsck_layout |
 			 awk '/^repaired_orphan/ { print $2 }')
-	if [ $OSTCOUNT -gt 2 ]; then
-		[ $repaired -eq 9 ] ||
-			error "(4.1) Expect 9 fixed on mds1, but got: $repaired"
-	else
-		[ $repaired -eq 4 ] ||
-			error "(4.2) Expect 4 fixed on mds1, but got: $repaired"
-	fi
+	expect=$(( $OSTCOUNT > 2 ? 9 : 4 ))
+	(( $repaired == $expect )) ||
+		error "(4.1) Expect $expect fixed on mds1, but got: $repaired"
 
 	mount_client $MOUNT || error "(5.0) Fail to start client!"
-
-	LOV_PATTERN_F_HOLE=0x40000000
 
 	#
 	# ${fid0}-R-0 is the old f0
@@ -3327,7 +3322,7 @@ test_20a() {
 	# ${fid1}-R-0 contains the old f1's stripe1 (and stripe2 if OSTs > 2)
 	#
 	name="$MOUNT/.lustre/lost+found/MDT0000/${fid1}-R-0"
-	if [ $OSTCOUNT -gt 2 ]; then
+	if (( $OSTCOUNT > 2 )); then
 		echo "Check $name, it contains the old f1's stripe1 and stripe2"
 	else
 		echo "Check $name, it contains the old f1's stripe1"
@@ -3340,30 +3335,30 @@ test_20a() {
 		error "(6.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
-	if [ $OSTCOUNT -gt 2 ]; then
-		[ $stripes -eq 3 ] ||
-		error "(6.3.1) expect the stripe count is 3, but got $stripes"
-	else
-		[ $stripes -eq 2 ] ||
-		error "(6.3.2) expect the stripe count is 2, but got $stripes"
-	fi
+	expect=$(( $OSTCOUNT > 2 ? 3 : 2 ))
+	(( $stripes == $expect )) ||
+		error "(6.3.1) expect stripe count $expect, but got $stripes"
 
-	size=$(stat $name | awk '/Size:/ { print $2 }')
-	[ $size -eq $((4096 * $bcount)) ] ||
-		error "(6.4) expect the size $((4096 * $bcount)), but got $size"
+	size=$(stat -c %s $name)
+	expect=$((4096 * $bcount))
+	(( $size == $expect )) ||
+		error "(6.4) expect the size $expect, but got $size"
 
 	cat $name > /dev/null && error "(6.5) normal read $name should fail"
 
-	local failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
-			 bs=4096 2>&1 | grep "Input/output error" | wc -l)
+	local dumpfile=$DIR/$tdir/$tfile.dump
+	local failures=$(dd if=$name of=$dumpfile conv=sync,noerror bs=4096 |&
+			 grep -c "Input/output error")
 
 	# stripe0 is dummy
-	[ $failures -eq 256 ] ||
-		error "(6.6) expect 256 IO failures, but get $failures"
+	expect=256
+	(( $failures == $expect )) ||
+		error "(6.6) expect $expect IO failures, but got $failures"
 
-	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
-	[ $size -eq $((4096 * $bcount)) ] ||
-		error "(6.7) expect the size $((4096 * $bcount)), but got $size"
+	size=$(stat -c %s $dumpfile)
+	expect=$((4096 * $bcount))
+	(( $size == $expect )) ||
+		error "(6.7) expect the size $expect, but got $size"
 
 	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 &&
 		error "(6.8) write to the LOV EA hole should fail"
@@ -3383,7 +3378,7 @@ test_20a() {
 	# ${fid2}-R-0 it contains the old f2's stripe0 (and stripe2 if OSTs > 2)
 	#
 	name="$MOUNT/.lustre/lost+found/MDT0000/${fid2}-R-0"
-	if [ $OSTCOUNT -gt 2 ]; then
+	if (( $OSTCOUNT > 2 )); then
 		echo "Check $name, it contains the old f2's stripe0 and stripe2"
 	else
 		echo "Check $name, it contains the old f2's stripe0"
@@ -3396,26 +3391,28 @@ test_20a() {
 		error "(7.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
-	size=$(stat $name | awk '/Size:/ { print $2 }')
-	if [ $OSTCOUNT -gt 2 ]; then
-		[ $stripes -eq 3 ] ||
-		error "(7.3.1) expect the stripe count is 3, but got $stripes"
+	size=$(stat -c %s $name)
+	if (( $OSTCOUNT > 2 )); then
+		(( $stripes == 3 )) ||
+			error "(7.3.1) expect stripe count 3, but got $stripes"
 
-		[ $size -eq $((4096 * $bcount)) ] ||
-		error "(7.4.1) expect size $((4096 * $bcount)), but got $size"
+		expect=$((4096 * $bcount))
+		(( $size == $expect )) ||
+			error "(7.4.1) expect size $expect, but got $size"
 
 		cat $name > /dev/null &&
 			error "(7.5.1) normal read $name should fail"
 
-		failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
-			   bs=4096 2>&1 | grep "Input/output error" | wc -l)
+		failures=$(dd if=$name of=$dumpfile conv=sync,noerror bs=4096 |&
+			   grep -c "Input/output error")
 		# stripe1 is dummy
-		[ $failures -eq 256 ] ||
-			error "(7.6) expect 256 IO failures, but get $failures"
+		(( $failures == 256 )) ||
+			error "(7.6) expect 256 IO failures, but got $failures"
 
-		size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
-		[ $size -eq $((4096 * $bcount)) ] ||
-		error "(7.7) expect the size $((4096 * $bcount)), but got $size"
+		size=$(stat -c %s $dumpfile)
+		expect=$((4096 * $bcount))
+		(( $size == $expect )) ||
+			error "(7.7) expect the size $expect, but got $size"
 
 		dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
 		seek=300 && error "(7.8.0) write to the LOV EA hole should fail"
@@ -3431,25 +3428,27 @@ test_20a() {
 
 		touch $name || error "(7.10.1) cannot touch $name"
 	else
-		[ $stripes -eq 2 ] ||
-		error "(7.3.2) expect the stripe count is 2, but got $stripes"
+		(( $stripes == 2 )) ||
+			error "(7.3.2) expect stripe count 2, but got $stripes"
 
 		# stripe1 is dummy
-		[ $size -eq $((4096 * (256 + 0))) ] ||
-		error "(7.4.2) expect the size $((4096 * 256)), but got $size"
+		expect=$((4096 * (256 + 0) ))
+		(( $size == $expect )) ||
+			error "(7.4.2) expect the size $expect, but got $size"
 
 		cat $name > /dev/null &&
 			error "(7.5.2) normal read $name should fail"
 
-		failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
-			   bs=4096 2>&1 | grep "Input/output error" | wc -l)
-		[ $failures -eq 256 ] ||
-		error "(7.6.2) expect 256 IO failures, but get $failures"
+		failures=$(dd if=$name of=$dumpfile conv=sync,noerror bs=4096 |&
+			   grep -c "Input/output error")
+		(( $failures == 256 )) ||
+			error "(7.6.2) expect 256 IO failures, got $failures"
 
 		bcount=$((256 * 2))
-		size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
-		[ $size -eq $((4096 * $bcount)) ] ||
-		error "(7.7.2) expect the size $((4096 * $bcount)), got $size"
+		size=$(stat -c %s $dumpfile)
+		expect=$((4096 * $bcount))
+		(( $size == $expect)) ||
+			error "(7.7.2) expect the size $expect, but got $size"
 
 		dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
 		seek=256 && error "(7.8.2) write to the LOV EA hole should fail"
@@ -3462,7 +3461,7 @@ test_20a() {
 
 	rm -f $name || error "(7.11) cannot unlink $name"
 
-	[ $OSTCOUNT -le 2 ] && return
+	(( $OSTCOUNT > 2 )) || return 0
 
 	#
 	# ${fid3}-R-0 should contains the old f3's stripe0 and stripe1
@@ -3477,27 +3476,29 @@ test_20a() {
 		error "(8.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
-	[ $stripes -eq 3 ] ||
+	(( $stripes == 3 )) ||
 		error "(8.3) expect the stripe count is 3, but got $stripes"
 
-	size=$(stat $name | awk '/Size:/ { print $2 }')
+	size=$(stat -c %s $name)
 	# stripe2 is lost
-	[ $size -eq $((4096 * (256 + 256 + 0))) ] ||
-		error "(8.4) expect the size $((4096 * 512)), but got $size"
+	expect=$((4096 * (256 + 256 + 0)))
+	(( $size == $expect )) ||
+		error "(8.4) expect the size $expect, but got $size"
 
 	cat $name > /dev/null &&
 		error "(8.5) normal read $name should fail"
 
-	failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
-		   bs=4096 2>&1 | grep "Input/output error" | wc -l)
+	failures=$(dd if=$name of=$dumpfile conv=sync,noerror bs=4096 |&
+		   grep -c "Input/output error")
 	# stripe2 is dummy
-	[ $failures -eq 256 ] ||
+	(( $failures == 256 )) ||
 		error "(8.6) expect 256 IO failures, but get $failures"
 
 	bcount=$((256 * 3))
-	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
-	[ $size -eq $((4096 * $bcount)) ] ||
-		error "(8.7) expect the size $((4096 * $bcount)), but got $size"
+	size=$(stat -c %s $dumpfile)
+	expect=$((4096 * $bcount))
+	(( $size == $expect )) ||
+		error "(8.7) expect the size $expect, but got $size"
 
 	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
 		seek=512 && error "(8.8) write to the LOV EA hole should fail"
@@ -3512,8 +3513,8 @@ test_20a() {
 run_test 20a "Handle the orphan with dummy LOV EA slot properly"
 
 test_20b() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs" && return
+	[[ -z "$FILESET" ]] || skip "Not functional for FILESET set"
 	(( $MDS1_VERSION > $(version_code 2.5.55) )) ||
 		skip "MDS older than 2.5.55, LU-4887"
 
@@ -3580,29 +3581,30 @@ test_20b() {
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
 	$START_LAYOUT -r -o || error "(3) Fail to start LFSCK for layout!"
 
-	for k in $(seq $MDSCOUNT); do
+	for ((k = 1; k <= $MDSCOUNT; k++)); do
 		# The LFSCK status query internal is 30 seconds. For the case
 		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
 		# time to guarantee the status sync up.
 		wait_update_facet mds${k} "$LCTL get_param -n \
 			mdd.$(facet_svc mds${k}).lfsck_layout |
 			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
-			error "(4) MDS${k} is not the expected 'completed'"
+				error "(4) MDS${k} not the expected 'completed'"
 	done
 
-	for k in $(seq $OSTCOUNT); do
+	for ((k = 1; k <= $OSTCOUNT; k++)); do
 		local cur_status=$(do_facet ost${k} $LCTL get_param -n \
 				obdfilter.$(facet_svc ost${k}).lfsck_layout |
 				awk '/^status/ { print $2 }')
-		[ "$cur_status" == "completed" ] ||
-		error "(5) OST${k} Expect 'completed', but got '$cur_status'"
+		[[ "$cur_status" == "completed" ]] ||
+			error "(5) OST$k Expect 'completed', got '$cur_status'"
 	done
 
 	local repaired=$(do_facet mds1 $LCTL get_param -n \
 			 mdd.$(facet_svc mds1).lfsck_layout |
 			 awk '/^repaired_orphan/ { print $2 }')
-	[ $repaired -eq 8 ] ||
-		error "(6) Expect 8 fixed on mds1, but got: $repaired"
+	local expect=8
+	(( $repaired == $expect )) ||
+		error "(6) Expect $expect fixed on mds1, but got: $repaired"
 
 	#
 	# ${fid0}-R-0 is the old f0
@@ -3613,44 +3615,48 @@ test_20b() {
 	$LFS getstripe -v $name || error "(7.1) cannot getstripe on $name"
 
 	local pattern=$($LFS getstripe -L -I1 $name)
-	[[ "$pattern" = "$PATTERN_WITHOUT_HOLE" ]] ||
+	[[ "$pattern" == "$PATTERN_WITHOUT_HOLE" ]] ||
 		error "(7.2.1) NOT expect pattern flag hole, but got $pattern"
 
 	pattern=$($LFS getstripe -L -I2 $name)
-	[[ "$pattern" = "$PATTERN_WITHOUT_HOLE" ]] ||
+	[[ "$pattern" == "$PATTERN_WITHOUT_HOLE" ]] ||
 		error "(7.2.2) NOT expect pattern flag hole, but got $pattern"
 
 	local stripes=$($LFS getstripe -c -I1 $name)
-	[ $stripes -eq 2 ] ||
-		error "(7.3.1) expect 2 stripes, but got $stripes"
+	expect=2
+	(( $stripes == $expect )) ||
+		error "(7.3.1) expect $expect stripes, but got $stripes"
 
 	stripes=$($LFS getstripe -c -I2 $name)
-	[ $stripes -eq 2 ] ||
-		error "(7.3.2) expect 2 stripes, but got $stripes"
+	(( $stripes == $expect )) ||
+		error "(7.3.2) expect $expect stripes, but got $stripes"
 
 	local e_start=$($LFS getstripe -I1 $name |
 			awk '/lcme_extent.e_start:/ { print $2 }')
-	[ $e_start -eq 0 ] ||
-		error "(7.4.1) expect the COMP1 start at 0, got $e_start"
+	expect=0
+	(( $e_start == $expect )) ||
+		error "(7.4.1) expect the COMP1 start at $expect, got $e_start"
 
 	local e_end=$($LFS getstripe -I1 $name |
 		      awk '/lcme_extent.e_end:/ { print $2 }')
-	[ $e_end -eq 2097152 ] ||
-		error "(7.4.2) expect the COMP1 end at 2097152, got $e_end"
+	expect=2097152
+	(( $e_end == $expect )) ||
+		error "(7.4.2) expect the COMP1 end at $expect, got $e_end"
 
 	e_start=$($LFS getstripe -I2 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
-	[ $e_start -eq 2097152 ] ||
-		error "(7.5.1) expect the COMP2 start at 2097152, got $e_start"
+	(( $e_start == $expect )) ||
+		error "(7.5.1) expect the COMP2 start at $expect, got $e_start"
 
 	e_end=$($LFS getstripe -I2 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
-	[ "$e_end" = "EOF" ] ||
+	[[ "$e_end" == "EOF" ]] ||
 		error "(7.5.2) expect the COMP2 end at (EOF), got $e_end"
 
-	local size=$(stat $name | awk '/Size:/ { print $2 }')
-	[ $size -eq $((4096 * $bcount)) ] ||
-		error "(7.6) expect the size $((4096 * $bcount)), but got $size"
+	local size=$(stat -c %s $name)
+	expect=$((4096 * $bcount))
+	(( $size == $expect )) ||
+		error "(7.6) expect the size $expect, but got $size"
 
 	cat $name > /dev/null || error "(7.7) cannot read $name"
 
@@ -3679,49 +3685,56 @@ test_20b() {
 		error "(8.2.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c -I1 $name)
-	[ $stripes -eq 2 ] ||
-		error "(8.3.2) expect 2 stripes, but got $stripes"
+	expect=2
+	(( $stripes == $expect )) ||
+		error "(8.3.2) expect $expect stripes, but got $stripes"
 
 	stripes=$($LFS getstripe -c -I2 $name)
-	[ $stripes -eq 2 ] ||
-		error "(8.3.2) expect 2 stripes, but got $stripes"
+	(( $stripes == $expect )) ||
+		error "(8.3.2) expect $expect stripes, but got $stripes"
 
 	e_start=$($LFS getstripe -I1 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
-	[ $e_start -eq 0 ] ||
-		error "(8.4.1) expect the COMP1 start at 0, got $e_start"
+	expect=0
+	(( $e_start == $expect )) ||
+		error "(8.4.1) expect the COMP1 start at $expect, got $e_start"
 
 	e_end=$($LFS getstripe -I1 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
-	[ $e_end -eq 2097152 ] ||
-		error "(8.4.2) expect the COMP1 end at 2097152, got $e_end"
+	expect=2097152
+	(( $e_end == $expect )) ||
+		error "(8.4.2) expect the COMP1 end at $expect, got $e_end"
 
 	e_start=$($LFS getstripe -I2 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
-	[ $e_start -eq 2097152 ] ||
-		error "(8.5.1) expect the COMP2 start at 2097152, got $e_start"
+	(( $e_start == $expect )) ||
+		error "(8.5.1) expect the COMP2 start at $expect, got $e_start"
 
 	e_end=$($LFS getstripe -I2 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
-	[ "$e_end" = "EOF" ] ||
+	[[ "$e_end" == "EOF" ]] ||
 		error "(8.5.2) expect the COMP2 end at (EOF), got $e_end"
 
-	size=$(stat $name | awk '/Size:/ { print $2 }')
-	[ $size -eq $((4096 * $bcount)) ] ||
-		error "(8.6) expect the size $((4096 * $bcount)), but got $size"
+	size=$(stat -c %s $name)
+	expect=$((4096 * $bcount))
+	(( $size == $expect )) ||
+		error "(8.6) expect the size $expect, but got $size"
 
 	cat $name > /dev/null && error "(8.7) normal read $name should fail"
 
-	local failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
-			 bs=4096 2>&1 | grep "Input/output error" | wc -l)
+	local dumpfile=$DIR/$tdir/$tfile.dump
+	local failures=$(dd if=$name of=$dumpfile conv=sync,noerror bs=4096 |&
+			 grep -c "Input/output error")
 
 	# The first stripe in each COMP was lost
-	[ $failures -eq 512 ] ||
-		error "(8.8) expect 512 IO failures, but get $failures"
+	expect=512
+	(( $failures == $expect )) ||
+		error "(8.8) expect $expect IO failures, but get $failures"
 
-	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
-	[ $size -eq $((4096 * $bcount)) ] ||
-		error "(8.9) expect the size $((4096 * $bcount)), but got $size"
+	size=$(stat -c %s $dumpfile)
+	expect=$((4096 * $bcount))
+	(( $size == $expect )) ||
+		error "(8.9) expect the size $expect, but got $size"
 
 	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 &&
 		error "(8.10) write to the LOV EA hole should fail"
@@ -3754,31 +3767,34 @@ test_20b() {
 		error "(9.2.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c -I1 $name)
-	[ $stripes -eq 2 ] ||
-		error "(9.3.2) expect 2 stripes, but got $stripes"
+	expect=2
+	(( $stripes == $expect )) ||
+		error "(9.3.2) expect $expect stripes, but got $stripes"
 
 	stripes=$($LFS getstripe -c -I2 $name)
-	[ $stripes -eq 2 ] ||
-		error "(9.3.2) expect 2 stripes, but got $stripes"
+	(( $stripes == $expect )) ||
+		error "(9.3.2) expect $expect stripes, but got $stripes"
 
 	e_start=$($LFS getstripe -I1 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
-	[ $e_start -eq 0 ] ||
-		error "(9.4.1) expect the COMP1 start at 0, got $e_start"
+	expect=0
+	(( $e_start == $expect )) ||
+		error "(9.4.1) expect the COMP1 start at $expect, got $e_start"
 
 	e_end=$($LFS getstripe -I1 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
-	[ $e_end -eq 2097152 ] ||
-		error "(9.4.2) expect the COMP1 end at 2097152, got $e_end"
+	(( $e_end == $expect )) ||
+		error "(9.4.2) expect the COMP1 end at $expect, got $e_end"
 
 	e_start=$($LFS getstripe -I2 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
-	[ $e_start -eq 2097152 ] ||
-		error "(9.5.1) expect the COMP2 start at 2097152, got $e_start"
+	expect=2097152
+	(( $e_start == $expect )) ||
+		error "(9.5.1) expect the COMP2 start at $expect, got $e_start"
 
 	e_end=$($LFS getstripe -I2 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
-	[ "$e_end" = "EOF" ] ||
+	[[ "$e_end" == "EOF" ]] ||
 		error "(9.5.2) expect the COMP2 end at (EOF), got $e_end"
 
 	size=$(stat $name | awk '/Size:/ { print $2 }')
@@ -3786,24 +3802,27 @@ test_20b() {
 	# have ever been some data before. 'stat' will regard it as
 	# no data on the lost stripe.
 	bcount=$((256 * 3))
-	[ $size -eq $((4096 * $bcount)) ] ||
-		error "(9.6) expect size $((4096 * $bcount)), but got $size"
+	expect=$((4096 * $bcount))
+	(( $size == $expect )) ||
+		error "(9.6) expect size $expect, but got $size"
 
 	cat $name > /dev/null &&
 		error "(9.7) normal read $name should fail"
 
-	failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
-		   bs=4096 2>&1 | grep "Input/output error" | wc -l)
-	[ $failures -eq 512 ] ||
-		error "(9.8) expect 256 IO failures, but get $failures"
+	failures=$(dd if=$name of=$dumpfile conv=sync,noerror bs=4096 |&
+		   grep -c "Input/output error")
+	expect=512
+	(( $failures == $expect )) ||
+		error "(9.8) expect $expect IO failures, but get $failures"
 
-	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+	size=$(stat -c %s $dumpfile)
 	# The second stripe in COMP was lost, so we do not know there
 	# have ever been some data before. Since 'dd' skip failure,
 	# it will regard the lost stripe contains data.
 	bcount=$((256 * 4))
-	[ $size -eq $((4096 * $bcount)) ] ||
-		error "(9.9) expect the size $((4096 * $bcount)), but got $size"
+	expect=$((4096 * $bcount))
+	(( $size == $expect )) ||
+		error "(9.9) expect the size $expect, but got $size"
 
 	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
 		seek=300 && error "(9.10) write to the LOV EA hole should fail"
