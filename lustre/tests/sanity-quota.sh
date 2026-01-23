@@ -1463,6 +1463,59 @@ test_1j() {
 }
 run_test 1j "Enable project quota enforcement for root"
 
+test_1l() {
+	local tfile2=$MOUNT2/$tdir/$tfile.2
+	local tfile1=$DIR/$tdir/$tfile.1
+	local qdisk=30 # MB
+
+	is_project_quota_supported ||
+		skip "skip project quota unsupported"
+
+	mount_client $MOUNT2 || error "mount client2 failed"
+	stack_trap "umount_client $MOUNT2"
+	setup_quota_test || error "setup quota failed with $?"
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir || error "setstripe failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	change_project -sp $TSTPRJID $DIR/$tdir ||
+		error "change_project failed"
+
+	# Enable root_prj_enable on MDT0 and OST0
+	local procf=osd-$mds1_FSTYPE.$FSNAME-MDT0000.quota_slave.root_prj_enable
+	do_facet mds1 $LCTL set_param $procf=1 ||
+		error "enable root quota for project failed on mds1"
+	stack_trap "do_facet mds1 $LCTL set_param $procf=0"
+
+	procf=osd-$ost1_FSTYPE.$FSNAME-OST0000.quota_slave.root_prj_enable
+	do_facet ost1 $LCTL set_param $procf=1 ||
+		error "enable root quota for project failed on ost1"
+	stack_trap "do_facet ost1 $LCTL set_param $procf=0"
+
+	# Set project quota limit
+	$LFS setquota -p $TSTPRJID -b 0 -B ${qdisk}M -i 0 -I 0 $DIR ||
+		error "set project quota failed"
+
+	# Fill quota from client 1 using direct IO to guarantee EDQUOT
+	$DD of=$tfile1 count=$((qdisk + 10)) oflag=direct &&
+		error "succeeded, expect EDQUOT"
+
+	# This write() should return success since pages go to cache
+	dd if=/dev/urandom of=$tfile2 bs=1M count=1 ||
+		skip "buffered write $tfile2 failed: $?"
+	local oldsum=($(md5sum $tfile2))
+
+	# Re-read file to verify data persisted
+	cancel_lru_locks osc
+	local newsum=($(md5sum $tfile2))
+	[[ "$newsum" == "$oldsum" ]] || {
+		echo "source file: $oldsum"
+		echo "copied file: $newsum"
+		cmp -bl $tfile1 $tfile2 | head -1024
+		error "old and new files differ"
+	}
+}
+run_test 1l "Async writes should not be rejected by quota with root_prj_enable"
+
 # test inode hardlimit
 test_2() {
 	local testfile="$DIR/$tdir/$tfile-0"

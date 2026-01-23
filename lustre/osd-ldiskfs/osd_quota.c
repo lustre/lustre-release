@@ -689,15 +689,13 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	if (local_flags)
 		tmp_flags = *local_flags;
 	rcp = osd_declare_qid(env, oh, qi, obj, true, &tmp_flags);
-	if (tmp_flags & QUOTA_FL_ROOT_PRJQUOTA) {
+	if (tmp_flags & QUOTA_FL_ROOT_PRJQUOTA &&
+	    !(osd_qid_declare_flags & OSD_QID_IGNORE_ROOT_PRJ))
 		/* Currently, th_ignore_quota is only set for inode quota
 		 * in mdd_trans_create if the user has CAP_SYS_RESOURCE,
-		 * then it should be diabled if root_prj_enable is set. */
-		if (qi->lqi_is_blk)
-			force = th->th_ignore_quota;
-		else
-			force = 0;
-	}
+		 * then it should be ignored if root_prj_enable is set.
+		 */
+		force = 0;
 	if (local_flags)
 		*local_flags = tmp_flags;
 

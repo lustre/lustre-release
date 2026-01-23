@@ -47,9 +47,10 @@ union lquota_rec {
 
 /* flags for inode/block quota accounting */
 enum osd_qid_declare_flags {
-	OSD_QID_INODE	= BIT(0),
-	OSD_QID_BLK	= BIT(1),
-	OSD_QID_FORCE	= BIT(2),
+	OSD_QID_INODE		= BIT(0),
+	OSD_QID_BLK		= BIT(1),
+	OSD_QID_FORCE		= BIT(2), /* Ignore -EDQUOT */
+	OSD_QID_IGNORE_ROOT_PRJ = BIT(3), /* Ignore QUOTA_FL_ROOT_PRJQUOTA */
 };
 
 /* the length of the buffer to contain the quotas gotten from QMT/QSD,

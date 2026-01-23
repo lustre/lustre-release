@@ -1338,7 +1338,11 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		    (lnb[i].lnb_flags & OBD_BRW_SYS_RESOURCE) ||
 		    !(lnb[i].lnb_flags & OBD_BRW_SYNC))
 			declare_flags |= OSD_QID_FORCE;
-
+		/* ASYNC means that the page comes from the cache - it must be
+		 * written anyway.
+		 */
+		if (lnb[i].lnb_flags & OBD_BRW_ASYNC)
+			declare_flags |= OSD_QID_IGNORE_ROOT_PRJ;
 		/*
 		 * Convert unwritten extent might need split extents, could
 		 * not skip it.
