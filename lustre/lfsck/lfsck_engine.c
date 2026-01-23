@@ -927,9 +927,9 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 		target = lfsck_object_find_bottom(env, lfsck, fid);
 		if (IS_ERR(target)) {
 			CDEBUG(D_LFSCK, "%s: OIT scan failed at find target "
-			       DFID", cookie %llu: rc = %d\n",
+			       DFID", cookie %llu: rc = %ld\n",
 			       lfsck_lfsck2name(lfsck), PFID(fid),
-			       iops->store(env, di), rc);
+			       iops->store(env, di), PTR_ERR(target));
 			lfsck_fail(env, lfsck, true);
 			if (bk->lb_param & LPF_FAILOUT)
 				RETURN(PTR_ERR(target));
