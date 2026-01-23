@@ -111,7 +111,7 @@ case $with_o2ib in
 				if test -d $O2IBDIR_PATH/${target_cpu}/${LINUXRELEASE}; then
 					O2IBDIR_PATH=$O2IBDIR_PATH/${target_cpu}/${LINUXRELEASE}
 				fi
-				EXT_O2IBPATHS=$(find $O2IBDIR_PATH -name rdma_cm.h |
+				EXT_O2IBPATHS=$(find -H $O2IBDIR_PATH -name rdma_cm.h |
 					sed -e 's/\/include\/rdma\/rdma_cm.h//')
 			fi
 
