@@ -12416,6 +12416,25 @@ function check_set_fallocate_or_skip()
 	check_set_fallocate || skip "need >= 2.13.57 and ldiskfs for fallocate"
 }
 
+function fast_file_write()
+{
+	local file=$1
+	local size=$2
+	local count=${3:-1}
+
+	if check_fallocate_supported $ost1 >/dev/null; then
+		for ((i=0; i<$count; i++)); do
+			fallocate -l $size $file-$i >/dev/null || return 1
+		done
+	else
+		for ((i=0; i<$count; i++)); do
+			dd if=/dev/zero of=$file-$i bs=$size count=1 |&
+				grep -v -E "records|copied"
+			(( ${PIPESTATUS[0]} == 0 )) || return ${PIPESTATUS[0]}
+		done
+	fi
+}
+
 function disable_opencache()
 {
 	local state=$($LCTL get_param -n "llite.*.opencache_threshold_count" |

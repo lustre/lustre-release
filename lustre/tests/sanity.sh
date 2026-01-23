@@ -2001,13 +2001,8 @@ test_27m() {
 	stack_trap simple_cleanup_common
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile.1
-	if check_fallocate_supported $ost1; then
-		fallocate -l ${MAXFREE}k $DIR/$tdir/$tfile.1 &&
-			error "fallocate should fill OST0"
-	else
-		dd if=/dev/zero of=$DIR/$tdir/$tfile.1 bs=1024 count=$MAXFREE &&
-			error "dd should fill OST0"
-	fi
+	fast_file_write $DIR/$tdir/$tfile.1 1024K $MAXFREE &&
+		error "write should fill OST0"
 	i=2
 	while $LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile.$i; do
 		i=$((i + 1))
@@ -14574,14 +14569,7 @@ test_116a() { # was previously test_116()
 		$LFS setstripe -i $MINI -c 1 $DIR/$tdir/OST${MINI} ||
 			error "setstripe failed"
 		DIFF=$((DIFF2 / 2048))
-		i=0
-		while [ $i -lt $DIFF ]; do
-			i=$((i + 1))
-			dd if=/dev/zero of=$DIR/$tdir/OST${MINI}/$tfile-$i \
-				bs=2M count=1 2>/dev/null
-			echo -n .
-		done
-		echo .
+		fast_file_write $DIR/$tdir/OST${MINI}/$tfile 2M $DIFF
 		sync
 		sleep_maxage
 		free_min_max
@@ -14608,14 +14596,8 @@ test_116a() { # was previously test_116()
 		FILL=600
 	fi
 	echo "writing $FILL files to QOS-assigned OSTs"
-	i=0
-	while [ $i -lt $FILL ]; do
-		i=$((i + 1))
-		dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=200k \
-			count=1 2>/dev/null
-		echo -n .
-	done
-	echo "wrote $i 200k files"
+	fast_file_write $DIR/$tdir/$tfile 200k $FILL
+	echo "wrote $FILL 200k files"
 	sync
 	sleep_maxage
 
@@ -32213,13 +32195,6 @@ generate_uneven_mdts() {
 	local start
 	local cmd
 
-	# fallocate is faster to consume space on MDT, if available
-	if check_fallocate_supported mds$((min_index + 1)); then
-		cmd="fallocate -l 128K "
-	else
-		cmd="$DD bs=128K count=1 of="
-	fi
-
 	echo "using cmd $cmd"
 	for (( i = 0; diff < threshold; i++ )); do
 		testdir=${testdirp}/$i
@@ -32236,9 +32211,8 @@ generate_uneven_mdts() {
 		$LFS setstripe -E 1M -L mdt $testdir ||
 			error "setstripe $testdir failed"
 		start=$SECONDS
-		for (( f = 0; f < TEST413_COUNT; f++ )); do
-			$cmd$testdir/f.$f || error "$cmd$testdir $f failed"
-		done
+		fast_file_write $testdir/f 128K $TEST413_COUNT ||
+			error "fast write failed"
 		sync; sleep 1; sync
 
 		# wait for QOS to update
