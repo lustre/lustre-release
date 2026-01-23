@@ -17,7 +17,6 @@
 # $5 : $arch
 # $6 : $source_tree
 # $7 : $dkms_tree
-# $8 : $kmoddir
 #
 
 kapi=$7/$1/$2/$3/$5/kapi/include

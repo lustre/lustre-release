@@ -26,12 +26,12 @@ PACKAGE_CONFIG_FALLBACK="/etc/sysconfig/lustre"
 # re-evaluate/create dkms.conf on-target based on local build-time products/dependencies
 # (like krb5-devel presence) and also upon configure results/errors before dkms builds
 PRE_BUILD="lustre-dkms_pre-build.sh \$module \$module_version \$kernelver \$kernel_source_dir \
-	 \$arch \$source_tree \$dkms_tree \$kmoddir"
+	 \$arch \$source_tree \$dkms_tree"
 # to ensure all just built Lustre kernel modules will be saved for further install
 POST_BUILD="lustre-dkms_post-build.sh \$module \$module_version \$kernelver \$kernel_source_dir \
-	 \$arch \$source_tree \$dkms_tree \$kmoddir"
+	 \$arch \$source_tree \$dkms_tree"
 POST_REMOVE="lustre-dkms_post-remove.sh \$module \$module_version \$kernelver \$kernel_source_dir \
-	 \$arch \$source_tree \$dkms_tree \$kmoddir"
+	 \$arch \$source_tree \$dkms_tree"
 EOF
 if [ $pkgname = "lustre-zfs" -o $pkgname = "lustre-all" ] ; then
 	cat >>${filename} <<EOF

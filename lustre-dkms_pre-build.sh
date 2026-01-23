@@ -17,7 +17,7 @@
 # $5 : $arch
 # $6 : $source_tree
 # $7 : $dkms_tree
-# $8 : $kmoddir [lustre-client either 'extra|updates']
+#
 
 case $1 in
     lustre-client)
@@ -25,15 +25,11 @@ case $1 in
 	ksrc="$(dirname $4)/source"
 	KERNEL_STUFF="--with-linux=$(realpath $ksrc) --with-linux-obj=$(realpath $4)"
 	name=$1
-	kmoddir=$8
 	flavor=$(echo $3 | tr '-' '\n' | tail -1)
 	if [ -f /usr/src/kfabric/${flavor}/Module.symvers ]; then
 		KERNEL_STUFF="${KERNEL_STUFF} --with-kfi=/usr/src/kfabric/${flavor}"
 	elif [ -f /usr/src/kfabric/default/Module.symvers ]; then
 		KERNEL_STUFF="${KERNEL_STUFF} --with-kfi=/usr/src/kfabric/default"
-	fi
-	if [ -n ${kmoddir} ]; then
-		KERNEL_STUFF="${KERNEL_STUFF} --with-kmp-moddir=${kmoddir}/${name}"
 	fi
 	sh ./autogen.sh
 	;;
