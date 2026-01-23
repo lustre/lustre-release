@@ -195,7 +195,7 @@ static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
 	}
 }
 
-/**
+/*
  * Save a large LOV/LMV EA into the request buffer so that it is available
  * for replay.  We don't do this in the initial request because the
  * original request doesn't need this buffer (at most it sends just the

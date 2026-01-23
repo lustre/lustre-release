@@ -710,11 +710,14 @@ static unsigned int chlg_poll(struct file *file, poll_table *wait)
 }
 
 /**
- * Send MDS_GET_INFO RPC to fetch changelog user information.
+ * mdc_changelog_get_user_info() - Send MDS_GET_INFO RPC to fetch changelog
+ *                                 user information.
+ * @imp: MDC import
+ * @in: User-specific changelog filter
+ * @out: Returned changelog user information [out]
  *
- * @param[in] imp	MDC import
- * @param[in] in	User-specific changelog filter
- * @param[out] out	Returned changelog user information
+ * Return %0 on success with @out properly filled, %negated error code on
+ * failure.
  */
 static int mdc_changelog_get_user_info(struct obd_import *imp,
 				       const struct changelog_filter *in,

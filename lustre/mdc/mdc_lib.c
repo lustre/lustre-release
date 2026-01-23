@@ -21,11 +21,10 @@
 #include <cl_object.h>
 #include "mdc_internal.h"
 
-/*
+/**
  * set_mrc_cr_flags() - Move @flags into high(most significant bits (cr_flags_h)
- *			and low(least significant bits (cr_flags_l)) field under
- *			reint record
- *
+ *                      and low(least significant bits (cr_flags_l)) field under
+ *                      reint record
  * @mrc: instance of mdt_reint_rec
  * @flags: open flags passed from client
  */
@@ -80,16 +79,15 @@ void mdc_pack_body(struct req_capsule *pill, const struct lu_fid *fid,
 }
 
 /**
- * Pack a name (path component) into a request
+ * mdc_pack_name() - Pack a name (path component) into a request
+ * @pill: request pill
+ * @field: request field (usually RMF_NAME)
+ * @name: path component
+ * @name_len: length of path component
  *
- * \param[in]	pill		request pill
- * \param[in]	field		request field (usually RMF_NAME)
- * \param[in]	name		path component
- * \param[in]	name_len	length of path component
+ * @field must be present in @req and of size @name_len + 1.
  *
- * \a field must be present in \a req and of size \a name_len + 1.
- *
- * \a name must be '\0' terminated of length \a name_len and represent
+ * @name must be '\0' terminated of length @name_len and represent
  * a single path component (not contain '/').
  */
 static void mdc_pack_name(struct req_capsule *pill,
