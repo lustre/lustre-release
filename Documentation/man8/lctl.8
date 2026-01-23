@@ -111,6 +111,26 @@ option will display the OBD device information in YAML format.
 Set a permanent configuration parameter for any device via the MGS. This
 command must be run on the MGS node.
 .IP
+[NOTE]
+The conf_param command is deprecated and should not be used for configuring
+Lustre parameters. It only applies settings to targets present at the time the
+command is executed; targets (such as OSTs) added or mounted later will not
+automatically receive these settings. For reliable and consistent
+configuration, use set_param instead. The set_param command immediately applies
+parameter changes to all relevant targets, including those added in the future.
+See
+.BR lctl-set_param (8)
+for details.
+
+For example, replace:
+    lctl conf_param testfs-OST0000.osc.max_rpcs_in_flight=16
+with:
+    lctl set_param -P osc.testfs-*.max_rpcs_in_flight=16
+
+Update any scripts or procedures to use set_param in place of conf_param.
+Use conf_param -d to remove existing conf_param settings; set_param -P
+does not remove them.
+.PP
 The
 .B -d
 option deletes a parameter setting (use the default value at the next restart).
@@ -139,19 +159,6 @@ and some system-wide parameters may be set as well
 sys.timeout, sys.ldlm_timeout.)
 .I DEVICE
 is ignored for system wide parameters.
-.TP
-.B Examples:
-.EX
-# lctl conf_param testfs.sys.at_max=1200
-# lctl conf_param testfs.llite.max_read_ahead_mb=16
-# lctl conf_param testfs-MDT0000.lov.stripesize=2M
-# lctl conf_param lustre-OST0001.osc.active=0
-# lctl conf_param testfs-OST0000.osc.max_dirty_mb=29.15
-# lctl conf_param testfs-OST0000.ost.client_cache_seconds=15
-# lctl conf_param testfs-OST0000.failover.node=1.2.3.4@tcp1
-# lctl conf_param -d testfs-OST0000.bad_param
-.EE
-.RE
 .TP
 .B activate
 Reactivate an import after deactivating, below.

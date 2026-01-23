@@ -1,0 +1,37 @@
+.TH LCTL-CONF_PARAM 8 2026-02-26 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lctl-conf_param \- Lustre filesystem conf_param compatibility notes
+.SH SYNOPSIS
+.SY "lctl conf_param"
+.RB [ -d ]
+.IR TARGET . PARAMETER = VALUE
+.YS
+.SH DESCRIPTION
+.B lctl conf_param
+is deprecated in favor of
+.B lctl set_param -P
+for persistent configuration. However, there are still specific cases where
+.B conf_param
+is required or remains the only reliable mechanism.
+.SH WHEN conf_param IS STILL NEEDED
+.TP
+.B sptlrpc flavor rules
+Persistent sptlrpc rules are still handled through the conf_param path, and
+.B set_param -P
+does not reliably propagate these rules to clients. Use
+.B conf_param
+for sptlrpc flavor configuration, for example:
+.RS
+.EX
+# lctl conf_param testfs.srpc.flavor.tcp1=ska
+# lctl conf_param testfs.srpc.flavor.o2ib0=ska
+# lctl conf_param testfs.srpc.flavor.default=skpi
+.EE
+.RE
+.SH AVAILABILITY
+.B lctl conf_param
+command was added in Lustre 1.4.0 and was deprecated in 2.5.0.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl (8),
+.BR lctl-set_param (8)
