@@ -200,7 +200,7 @@ cleanup() {
 }
 setup() {
 	echo -n "mnt.."
-        load_modules
+	load_modules
 	setupall || exit 10
 	echo "done"
 }
@@ -2890,7 +2890,7 @@ run_test 27I "check that root dir striping does not break parent dir one"
 
 test_27Ia() {
 	(( $MDS1_VERSION >= $(version_code 2.15.61.225) )) ||
-                skip "need MDS >= 2.15.61.255 for pool inheritance fix"
+		skip "need MDS >= 2.15.61.255 for pool inheritance fix"
 
 	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
 
@@ -12679,9 +12679,9 @@ run_test 100 "check local port using privileged port"
 
 function get_named_value()
 {
-    local tag=$1
+	local tag=$1
 
-    grep -w "$tag" | sed "s/^$tag  *\([0-9]*\)  *.*/\1/"
+	grep -w "$tag" | sed "s/^$tag  *\([0-9]*\)  *.*/\1/"
 }
 
 test_101a() {
@@ -28065,12 +28065,12 @@ run_test 271ba "DoM: no glimpse RPC for stat (combined file)"
 get_mdc_stats() {
 	local mdtidx=$1
 	local param=$2
-	local mdt=MDT$(printf %04x $mdtidx)
+	local mdt=$(mdtname_from_index $mdtidx)
 
 	if [ -z $param ]; then
-		lctl get_param -n mdc.*$mdt*.stats
+		$LCTL get_param -n mdc.$mdt*.stats
 	else
-		lctl get_param -n mdc.*$mdt*.stats | awk "/$param/"'{print $2}'
+		$LCTL get_param -n mdc.$mdt*.stats | awk "/$param/"'{print $2}'
 	fi
 }
 
@@ -28115,18 +28115,13 @@ test_271c() {
 }
 run_test 271c "DoM: IO lock at open saves enqueue RPCs"
 
-cleanup_271def_tests() {
-	trap 0
-	rm -f $1
-}
-
 test_271d() {
-	[ $MDS1_VERSION -lt $(version_code 2.10.57) ] &&
-		skip "Need MDS version at least 2.10.57"
+	(( $MDS1_VERSION >= $(version_code v2_11_53_0-56-g13372d6c24) )) ||
+		skip "Need MDS version at least 2.11.53"
 
 	local dom=$DIR/$tdir/dom
 	local tmp=$TMP/$tfile
-	trap "cleanup_271def_tests $tmp" EXIT
+	stack_trap "rm -f $tmp"
 
 	mkdir -p $DIR/$tdir
 
@@ -28145,12 +28140,18 @@ test_271d() {
 	# append data to the same file it should update local page
 	echo "Append to the same page"
 	cat /etc/hosts >> $dom
-	local num=$(get_mdc_stats $mdtidx ost_read)
-	local ra=$(get_mdc_stats $mdtidx req_active)
-	local rw=$(get_mdc_stats $mdtidx req_waittime)
+	local stats=($(get_mdc_stats $mdtidx 'req_wait|req_active|ost_read'))
+	local rw=${stats[0]}
+	local ra=${stats[1]}
+	local num=${stats[2]}
 
-	[ -z $num ] || error "$num READ RPC occured"
-	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
+	[[ -z "$num" ]] || error "$num READ RPC occured"
+	(( $ra == $rw )) || {
+		get_mdc_stats $mdtidx
+		echo "req_active: $ra"
+		echo "req_waittime: $rw"
+		error "$((ra - rw)) resend occured on append"
+	}
 	echo "... DONE"
 
 	# compare content
@@ -28161,28 +28162,32 @@ test_271d() {
 
 	echo "Open and read file"
 	cat $dom > /dev/null
-	local num=$(get_mdc_stats $mdtidx ost_read)
-	local ra=$(get_mdc_stats $mdtidx req_active)
-	local rw=$(get_mdc_stats $mdtidx req_waittime)
+	stats=($(get_mdc_stats $mdtidx 'req_wait|req_active|ost_read'))
+	rw=${stats[0]}
+	ra=${stats[1]}
+	num=${stats[2]}
 
-	[ -z $num ] || error "$num READ RPC occured"
-	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
+	[[ -z "$num" ]] || error "$num READ RPC occured"
+	(( $ra == $rw )) || {
+		get_mdc_stats $mdtidx
+		echo "req_active: $ra"
+		echo "req_waittime: $rw"
+		error "$((ra - rw)) resend occured on open+read"
+	}
 	echo "... DONE"
 
 	# compare content
-	cmp $tmp $dom || error "file miscompare"
-
-	return 0
+	cmp -bl $tmp $dom || error "file miscompare"
 }
 run_test 271d "DoM: read on open (1K file in reply buffer)"
 
 test_271f() {
-	[ $MDS1_VERSION -lt $(version_code 2.10.57) ] &&
-		skip "Need MDS version at least 2.10.57"
+	(( $MDS1_VERSION >= $(version_code v2_11_53_0-56-g13372d6c24) )) ||
+		skip "Need MDS version at least 2.11.53"
 
 	local dom=$DIR/$tdir/dom
 	local tmp=$TMP/$tfile
-	trap "cleanup_271def_tests $tmp" EXIT
+	stack_trap "rm -f $tmp"
 
 	mkdir -p $DIR/$tdir
 
@@ -28199,12 +28204,18 @@ test_271f() {
 
 	echo "Append to the same page"
 	cat /etc/hosts >> $dom
-	local num=$(get_mdc_stats $mdtidx ost_read)
-	local ra=$(get_mdc_stats $mdtidx req_active)
-	local rw=$(get_mdc_stats $mdtidx req_waittime)
+	local stats=($(get_mdc_stats $mdtidx 'req_wait|req_active|ost_read'))
+	local rw=${stats[0]}
+	local ra=${stats[1]}
+	local num=${stats[2]}
 
-	[ -z $num ] || error "$num READ RPC occured"
-	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
+	[[ -z "$num" ]] || error "$num READ RPC occured"
+	(( $ra == $rw )) || {
+		get_mdc_stats $mdtidx
+		echo "req_active: $ra"
+		echo "req_waittime: $rw"
+		error "$((ra - rw)) resend occured on append"
+	}
 	echo "... DONE"
 
 	# compare content
@@ -28215,19 +28226,23 @@ test_271f() {
 
 	echo "Open and read file"
 	cat $dom > /dev/null
-	local num=$(get_mdc_stats $mdtidx ost_read)
-	local ra=$(get_mdc_stats $mdtidx req_active)
-	local rw=$(get_mdc_stats $mdtidx req_waittime)
+	stats=($(get_mdc_stats $mdtidx 'req_wait|req_active|ost_read'))
+	rw=${stats[0]}
+	ra=${stats[1]}
+	num=${stats[2]}
 
-	[ -z $num ] && num=0
-	[ $num -eq 1 ] || error "expect 1 READ RPC, $num occured"
-	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
+	[[ -n "$num" ]] || num=0
+	(( $num == 1 )) || error "expect 1 READ RPC, $num occured"
+	(( $ra == $rw )) || {
+		get_mdc_stats $mdtidx
+		echo "req_active: $ra"
+		echo "req_waittime: $rw"
+		error "$((ra - rw)) resend occured on open+read"
+	}
 	echo "... DONE"
 
 	# compare content
-	cmp $tmp $dom || error "file miscompare"
-
-	return 0
+	cmp -bl $tmp $dom || error "file miscompare"
 }
 run_test 271f "DoM: read on open (200K file and read tail)"
 
@@ -28796,7 +28811,7 @@ test_300d() {
 	#local striped directory
 	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
-        #look at the directories for debug purposes
+	#look at the directories for debug purposes
 	ls -l $DIR/$tdir
 	$LFS getdirstripe $DIR/$tdir
 	ls -l $DIR/$tdir/striped_dir
@@ -28807,7 +28822,7 @@ test_300d() {
 	#remote striped directory
 	$LFS setdirstripe -i 1 -c 2 $DIR/$tdir/remote_striped_dir ||
 		error "set striped dir error"
-        #look at the directories for debug purposes
+	#look at the directories for debug purposes
 	ls -l $DIR/$tdir
 	$LFS getdirstripe $DIR/$tdir
 	ls -l $DIR/$tdir/remote_striped_dir
