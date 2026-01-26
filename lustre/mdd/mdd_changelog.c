@@ -10,7 +10,7 @@
 /*
  * This file is part of Lustre, http://www.lustre.org/
  *
- * Lustre Metadata Server (mdd) routines
+ * Lustre Metadata Server (MDD) routines
  */
 
 #define DEBUG_SUBSYSTEM S_MDS
@@ -23,7 +23,7 @@ struct mdd_changelog_user_lookup_data {
 	int mcul_found;
 };
 
-/**
+/*
  * llog_cat_process() callback to lookup a changelog user record by ID or name.
  */
 static int mdd_changelog_user_lookup_cb(const struct lu_env *env,
@@ -63,15 +63,15 @@ static int mdd_changelog_user_lookup_cb(const struct lu_env *env,
 }
 
 /**
- * Lookup a changelog user record by ID or name.
+ * mdd_changelog_user_lookup() - Lookup a changelog user record by ID or name.
+ * @env: Execution environment
+ * @mdd: Device to lookup user on
+ * @req: Changelog user request
+ * @reply: Changelog user reply [out]
  *
- * \param[in] env	Execution environment
- * \param[in] mdd	Device to lookup user on
- * \param[in] req	Changelog user request
- * \param[out] reply	Changelog user reply
- *
- * \retval 0 on success
- * \retval <0 on error
+ * Return:
+ * * %0 on success
+ * * %negative on error
  */
 int mdd_changelog_user_lookup(const struct lu_env *env,
 			      struct mdd_device *mdd,
