@@ -1,0 +1,69 @@
+.TH LLAPI_DIR_CREATE_FOREIGN 3 2026-01-26 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_dir_create_foreign \- create a foreign directory entry
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_dir_create_foreign(const char *" name ", mode_t " mode ,
+.BI "                             __u32 " type ", __u32 " flags ,
+.BI "                             const char *" value )
+.fi
+.SH DESCRIPTION
+.BR llapi_dir_create_foreign ()
+creates a foreign directory entry that stores a reference to external
+storage or metadata. This allows Lustre to track and manage directories
+that reside outside the Lustre filesystem.
+.PP
+The arguments are as follows:
+.TP 15
+.I name
+The pathname of the directory entry to create. The parent directory must
+already exist and be on a Lustre filesystem.
+.TP
+.I mode
+The permission bits for the new directory, as described in
+.BR open (2).
+.TP
+.I type
+The type of foreign directory. This identifies what kind of external
+storage or system the foreign reference points to.
+.TP
+.I flags
+Flags controlling the behavior of the foreign directory entry.
+.TP
+.I value
+A string value containing the foreign reference information, such as
+a path or identifier in the external system.
+.SH RETURN VALUE
+.BR llapi_dir_create_foreign ()
+returns 0 on success, or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.B -EACCES
+Permission denied on parent directory.
+.TP
+.B -EALREADY
+Stripe already set on existing directory.
+.TP
+.B -EEXIST
+Directory already exists.
+.TP
+.B -EINVAL
+An invalid argument was specified.
+.TP
+.B -ENOENT
+Parent directory does not exist.
+.TP
+.B -ENOMEM
+Not enough memory to allocate a resource.
+.SH AVAILABILITY
+.B llapi_dir_create_foreign ()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.13.0.
+.\" Added in commit 2.12.53-15-gfdad38781c
+.SH SEE ALSO
+.BR llapi_dir_create (3),
+.BR llapi_dir_create_pool (3),
+.BR lustreapi (7)

@@ -1,0 +1,100 @@
+.TH LLAPI_DIR_CREATE 3 2026-01-26 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_dir_create \- create a directory with specified striping
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_dir_create(const char *" name ", mode_t " mode ,
+.BI "                     const struct llapi_stripe_param *" param )
+.fi
+.SH DESCRIPTION
+.BR llapi_dir_create ()
+creates a new directory with the specified
+.I name
+and stripe parameters on a Lustre filesystem.
+This allows explicit control over which MDTs (Metadata Targets) the directory
+is striped across, enabling parallel metadata operations for directories
+with large numbers of entries.
+.PP
+The arguments are as follows:
+.TP 15
+.I name
+The pathname of the directory to create. The parent directory must already
+exist and be on a Lustre filesystem.
+.TP
+.I mode
+The permission bits for the new directory, as described in
+.BR open (2).
+.TP
+.I param
+A pointer to a
+.B struct llapi_stripe_param
+containing the striping configuration. The relevant fields for directories are:
+.RS
+.TP 20
+.I lsp_stripe_count
+The number of MDTs to stripe the directory across. This is typically set
+to '1' unless hundreds of thousands of files will be created directly
+in this directory.
+.TP
+.I lsp_stripe_offset
+The MDT index where the directory should start, or \-1 to allow the system
+to choose based on available space.
+.TP
+.I lsp_stripe_pattern
+The hash algorithm used to distribute directory entries across MDTs.
+Valid values include
+.B LMV_HASH_TYPE_FNV_1A_64
+(default, good distribution),
+.B LMV_HASH_TYPE_CRUSH
+(optimized for migration), and
+.B LMV_HASH_TYPE_ALL_CHARS
+(weak, for testing only).
+.TP
+.I lsp_pool
+Currently ignored, should be set as NULL.
+.TP
+.I lsp_is_specific
+If true, use the
+.I lsp_tgts
+array for specific MDT indices.
+.TP
+.I lsp_max_inherit
+Maximum depth for subdirectories to inherit this default layout.
+.TP
+.I lsp_max_inherit_rr
+Maximum depth for subdirectories to use round-robin MDT selection.
+.RE
+.SH RETURN VALUE
+.BR llapi_dir_create ()
+returns 0 on success, or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.B -EACCES
+Permission denied on parent directory.
+.TP
+.B -EALREADY
+Stripe already set on existing directory.
+.TP
+.B -EEXIST
+Directory already exists.
+.TP
+.B -EINVAL
+An invalid argument was specified.
+.TP
+.B -ENOENT
+Parent directory does not exist.
+.TP
+.B -ENOMEM
+Not enough memory to allocate a resource.
+.SH AVAILABILITY
+.B llapi_dir_create ()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.10.0.
+.\" Added in commit 2.10.56-86-g087ec276de
+.SH SEE ALSO
+.BR llapi_dir_create_foreign (3),
+.BR llapi_dir_create_pool (3),
+.BR lustreapi (7)

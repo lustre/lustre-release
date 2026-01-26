@@ -1,0 +1,88 @@
+.TH LLAPI_DIR_CREATE_POOL 3 2026-01-26 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_dir_create_pool \- create a striped directory with individual parameters
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_dir_create_pool(const char *" name ", int " mode ,
+.BI "                          int " stripe_offset ", int " stripe_count ,
+.BI "                          int " stripe_pattern ,
+.BI "                          const char *" pool_name )
+.fi
+.SH DESCRIPTION
+.BR llapi_dir_create_pool ()
+is a convenience function that creates a new directory with the specified
+.I name
+and striping parameters on a Lustre filesystem.
+It constructs a
+.B struct llapi_stripe_param
+from the individual arguments and calls
+.BR llapi_dir_create (3).
+.PP
+This function provides a simpler interface when only basic striping parameters
+are needed, without requiring the caller to populate the full stripe parameter
+structure.
+.PP
+The arguments are as follows:
+.TP 15
+.I name
+The pathname of the directory to create. The parent directory must already
+exist and be on a Lustre filesystem.
+.TP
+.I mode
+The permission bits for the new directory, as described in
+.BR open (2).
+.TP
+.I stripe_offset
+The MDT index where the directory should start, or \-1 for round-robin
+selection across available MDTs.
+.TP
+.I stripe_count
+The number of MDTs to stripe the directory across.
+A value of 0 uses the filesystem default.
+.TP
+.I stripe_pattern
+The hash algorithm for distributing directory entries across MDTs.
+Valid values include
+.B LMV_HASH_TYPE_FNV_1A_64
+(default, good distribution),
+.B LMV_HASH_TYPE_CRUSH
+(optimized for migration), and
+.B LMV_HASH_TYPE_ALL_CHARS
+(weak, for testing only).
+.TP
+.I pool_name
+Currently ignored, should be set as NULL.
+.SH RETURN VALUE
+.BR llapi_dir_create_pool ()
+returns 0 on success, or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.B -EACCES
+Permission denied on parent directory.
+.TP
+.B -EALREADY
+Stripe already set on existing directory.
+.TP
+.B -EEXIST
+Directory already exists.
+.TP
+.B -EINVAL
+An invalid argument was specified.
+.TP
+.B -ENOENT
+Parent directory does not exist.
+.TP
+.B -ENOMEM
+Not enough memory to allocate a resource.
+.SH AVAILABILITY
+.B llapi_dir_create_pool ()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.4.0.
+.\" Added in commit 2.3.53-7-gf715e4e298
+.SH SEE ALSO
+.BR llapi_dir_create (3),
+.BR llapi_dir_create_foreign (3),
+.BR lustreapi (7)
