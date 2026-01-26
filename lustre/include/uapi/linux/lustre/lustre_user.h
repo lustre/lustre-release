@@ -979,6 +979,12 @@ static inline bool lu_extent_is_overlapped(struct lu_extent *e1,
 	return e1->e_start < e2->e_end && e2->e_start < e1->e_end;
 }
 
+static inline bool lu_extent_is_equal(struct lu_extent *e1,
+				      struct lu_extent *e2)
+{
+	return e1->e_start == e2->e_start && e1->e_end == e2->e_end;
+}
+
 static inline bool lu_extent_is_whole(struct lu_extent *e)
 {
 	return e->e_start == 0 && e->e_end == LUSTRE_EOF;
@@ -1023,7 +1029,7 @@ enum lov_comp_md_entry_flags {
 
 /* The allowed flags obtained from the client at component creation time. */
 #define LCME_CL_COMP_FLAGS	(LCME_USER_MIRROR_FLAGS | LCME_FL_EXTENSION | \
-				 LCME_FL_PARITY)
+				 LCME_FL_PARITY | LCME_FL_IS_LINK_ID)
 
 /* The mirror flags sent by client */
 #define LCME_MIRROR_FLAGS	(LCME_FL_NOSYNC)
@@ -1058,6 +1064,18 @@ enum layout_version_flags {
 
 #define LCME_ID_MASK	LCME_ID_MAX
 
+#define LCME_TIMESTAMP_ID_SHIFT		48
+#define LCME_TIMESTAMP_TIME_MASK	((1ULL << LCME_TIMESTAMP_ID_SHIFT) - 1)
+#define LCME_TIMESTAMP_ID_MASK		((1ULL << (64 - LCME_TIMESTAMP_ID_SHIFT)) - 1)
+
+#define lcme_timestamp_and_id_pack(time, id) \
+	((__u64)((((id) & LCME_TIMESTAMP_ID_MASK) << LCME_TIMESTAMP_ID_SHIFT) | \
+		 ((time) & LCME_TIMESTAMP_TIME_MASK)))
+#define lcme_timestamp_time_unpack(time_id) \
+	((time_id) & LCME_TIMESTAMP_TIME_MASK)
+#define lcme_timestamp_id_unpack(time_id) \
+	(((time_id) >> LCME_TIMESTAMP_ID_SHIFT) & LCME_TIMESTAMP_ID_MASK)
+
 struct lov_comp_md_entry_v1 {
 	__u32			lcme_id;        /* unique id of component */
 	__u32			lcme_flags;     /* LCME_FL_XXX */
@@ -1071,7 +1089,14 @@ struct lov_comp_md_entry_v1 {
 						 */
 	__u32			lcme_size;      /* size of component blob */
 	__u32			lcme_layout_gen;
-	__u64			lcme_timestamp;	/* snapshot time if applicable*/
+	union {
+		__u64		lcme_time_and_id;
+		struct {
+			__u64	lcme_timestamp:48;
+			/* mirror link id for data and parity components */
+			__u16	lcme_mirror_link_id;
+		};
+	};
 	__u8			lcme_dstripe_count;	/* data stripe count,
 							 * k value in EC
 							 */

@@ -961,16 +961,16 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		lcme->lcme_id = cpu_to_le32(lod_comp->llc_id);
 
 		/* component could be un-inistantiated */
-		lcme->lcme_flags = cpu_to_le32(lod_comp->llc_flags);
-		if (lod_comp->llc_flags & LCME_FL_NOSYNC)
-			lcme->lcme_timestamp =
-				cpu_to_le64(lod_comp->llc_timestamp);
-		if (lod_comp->llc_flags & LCME_FL_PARITY) {
-			lcme->lcme_dstripe_count = lod_comp->llc_dstripe_count;
-			lcme->lcme_cstripe_count = lod_comp->llc_cstripe_count;
-		}
+		lcme->lcme_flags = cpu_to_le32(lod_comp->llc_flags &
+					       ~LCME_FL_IS_LINK_ID);
+		lcme->lcme_time_and_id = cpu_to_le64(
+				lcme_timestamp_and_id_pack(lod_comp->llc_timestamp,
+					lod_comp->llc_mirror_link_id));
 		if (lod_comp->llc_flags & LCME_FL_EXTENSION && !is_dir)
 			lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_SEL);
+
+		lcme->lcme_dstripe_count = lod_comp->llc_dstripe_count;
+		lcme->lcme_cstripe_count = lod_comp->llc_cstripe_count;
 
 		lcme->lcme_extent.e_start =
 			cpu_to_le64(lod_comp->llc_extent.e_start);
@@ -1342,10 +1342,13 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 
 		lod_comp = &lo->ldo_comp_entries[i];
 		if (lo->ldo_is_composite) {
-			offs = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
+			struct lov_comp_md_entry_v1 *ent =
+						&comp_v1->lcm_entries[i];
+
+			offs = le32_to_cpu(ent->lcme_offset);
 			lmm = (struct lov_mds_md_v1 *)((char *)comp_v1 + offs);
 
-			ext = &comp_v1->lcm_entries[i].lcme_extent;
+			ext = &ent->lcme_extent;
 			lod_comp->llc_extent.e_start =
 				le64_to_cpu(ext->e_start);
 			if (lod_comp->llc_extent.e_start &
@@ -1368,20 +1371,17 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				GOTO(out, rc = -EINVAL);
 			}
 
-			lod_comp->llc_flags =
-				le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags);
+			lod_comp->llc_flags = le32_to_cpu(ent->lcme_flags);
 
-			if (lod_comp->llc_flags & LCME_FL_PARITY) {
-				lod_comp->llc_dstripe_count =
-					comp_v1->lcm_entries[i].lcme_dstripe_count;
-				lod_comp->llc_cstripe_count =
-					comp_v1->lcm_entries[i].lcme_cstripe_count;
-			}
-			if (lod_comp->llc_flags & LCME_FL_NOSYNC)
-				lod_comp->llc_timestamp = le64_to_cpu(
-					comp_v1->lcm_entries[i].lcme_timestamp);
-			lod_comp->llc_id =
-				le32_to_cpu(comp_v1->lcm_entries[i].lcme_id);
+			lod_comp->llc_timestamp = lcme_timestamp_time_unpack(
+				le64_to_cpu(ent->lcme_time_and_id));
+			lod_comp->llc_mirror_link_id = lcme_timestamp_id_unpack(
+				le64_to_cpu(ent->lcme_time_and_id));
+			lod_comp->llc_dstripe_count =
+				comp_v1->lcm_entries[i].lcme_dstripe_count;
+			lod_comp->llc_cstripe_count =
+				comp_v1->lcm_entries[i].lcme_cstripe_count;
+			lod_comp->llc_id = le32_to_cpu(ent->lcme_id);
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -EINVAL);
 

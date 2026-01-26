@@ -156,11 +156,18 @@ struct lod_device {
 #define lod_remote_mdt_count	lod_mdt_descs.ltd_lmv_desc.ld_tgt_count
 
 struct lod_layout_component {
-	struct lu_extent	  llc_extent;
-	__u32			  llc_id;
-	__u32			  llc_flags;
-	__u32			  llc_magic;
-	__u64			  llc_timestamp; /* snapshot time */
+	struct lu_extent	llc_extent;
+	__u32			llc_id;
+	__u32			llc_flags;
+	__u32			llc_magic;
+	union {
+		__u64		llc_time_and_id;
+		struct {
+			__u64	llc_timestamp:48;
+			/* mirror link id for data and parity components */
+			__u16	llc_mirror_link_id;
+		};
+	};
 	union {
 		struct { /* plain layout V1/V3. */
 			__u32			  llc_pattern;

@@ -1941,10 +1941,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_layout_gen));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_layout_gen) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_layout_gen));
-	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_timestamp) == 36, "found %lld\n",
-		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_timestamp));
-	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_timestamp) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_timestamp));
+	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_time_and_id) == 36, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_time_and_id));
+	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_time_and_id) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_time_and_id));
 	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_dstripe_count) == 44, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_dstripe_count));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_dstripe_count) == 1, "found %lld\n",

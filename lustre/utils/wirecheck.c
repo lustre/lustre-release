@@ -927,7 +927,7 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_offset);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_size);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_layout_gen);
-	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_timestamp);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_time_and_id);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_dstripe_count);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_cstripe_count);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_compr_type);

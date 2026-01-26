@@ -625,13 +625,12 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		lsm->lsm_entries[i] = lsme;
 		lsme->lsme_id = le32_to_cpu(lcme->lcme_id);
 		lsme->lsme_flags = le32_to_cpu(lcme->lcme_flags);
-		if (lsme->lsme_flags & LCME_FL_NOSYNC)
-			lsme->lsme_timestamp =
-				le64_to_cpu(lcme->lcme_timestamp);
-		if (lsme->lsme_flags & LCME_FL_PARITY) {
-			lsme->lsme_dstripe_count = lcme->lcme_dstripe_count;
-			lsme->lsme_cstripe_count = lcme->lcme_cstripe_count;
-		}
+		lsme->lsme_timestamp = lcme_timestamp_time_unpack(
+				le64_to_cpu(lcme->lcme_time_and_id));
+		lsme->lsme_mirror_link_id = lcme_timestamp_id_unpack(
+					le64_to_cpu(lcme->lcme_time_and_id));
+		lsme->lsme_dstripe_count = lcme->lcme_dstripe_count;
+		lsme->lsme_cstripe_count = lcme->lcme_cstripe_count;
 		lu_extent_le_to_cpu(&lsme->lsme_extent, &lcme->lcme_extent);
 
 		if (i == entry_count - 1) {
@@ -754,10 +753,11 @@ void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 				   (int)sizeof(lse->lsme_uuid), lse->lsme_uuid);
 		} else {
 			CDEBUG_LIMIT(level,
-				   DEXT ": id: %u, flags: %x, magic 0x%08X, layout_gen %u, stripe count %u, sstripe size %u, pool: ["LOV_POOLNAMEF"]\n",
+				   DEXT ": id: %u, flags: %x, magic 0x%08X, layout_gen %u, stripe count %u (%u/%u), stripe size %u, pool: ["LOV_POOLNAMEF"]\n",
 				   PEXT(&lse->lsme_extent), lse->lsme_id,
 				   lse->lsme_flags, lse->lsme_magic,
 				   lse->lsme_layout_gen, lse->lsme_stripe_count,
+				   lse->lsme_dstripe_count, lse->lsme_cstripe_count,
 				   lse->lsme_stripe_size, lse->lsme_pool_name);
 			if (!lsme_inited(lse) ||
 			    lse->lsme_pattern & LOV_PATTERN_F_RELEASED ||

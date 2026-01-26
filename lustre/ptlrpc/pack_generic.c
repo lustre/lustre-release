@@ -2454,9 +2454,12 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 		CDEBUG(lvl, "\tentry %d:\n", i);
 		CDEBUG(lvl, "\tlcme_id: %#x\n", ent->lcme_id);
 		CDEBUG(lvl, "\tlcme_flags: %#x\n", ent->lcme_flags);
-		if (ent->lcme_flags & LCME_FL_NOSYNC)
+		if (ent->lcme_timestamp)
 			CDEBUG(lvl, "\tlcme_timestamp: %llu\n",
-					ent->lcme_timestamp);
+					(u64)ent->lcme_timestamp);
+		if (ent->lcme_mirror_link_id != 0)
+			CDEBUG(lvl, "\tlcme_mirror_link_id: %#x\n",
+			       ent->lcme_mirror_link_id);
 		if (ent->lcme_flags & LCME_FL_PARITY) {
 			CDEBUG_LIMIT(lvl, "\tlcme_dstripe_count: %u\n",
 				     ent->lcme_dstripe_count);
@@ -2573,7 +2576,7 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 		}
 		__swab32s(&ent->lcme_id);
 		__swab32s(&ent->lcme_flags);
-		__swab64s(&ent->lcme_timestamp);
+		__swab64s(&ent->lcme_time_and_id);
 		__swab64s(&ent->lcme_extent.e_start);
 		__swab64s(&ent->lcme_extent.e_end);
 		__swab32s(&ent->lcme_offset);

@@ -3071,7 +3071,7 @@ static int lod_declare_layout_set(const struct lu_env *env,
 					lod_comp->llc_flags |= mirror_flag;
 					if (mirror_flag & LCME_FL_NOSYNC)
 						lod_comp->llc_timestamp =
-						       ktime_get_real_seconds();
+							ktime_get_real_seconds();
 				}
 			}
 			changed = true;
@@ -4800,6 +4800,7 @@ static int lod_layout_repeat_comp(const struct lu_env *env,
 	/* This makes the repeated component zero-length, placed at the end of
 	 * the preceding component */
 	new_comp->llc_extent.e_start = new_comp->llc_extent.e_end;
+	new_comp->llc_mirror_link_id = lod_comp->llc_mirror_link_id;
 	new_comp->llc_timestamp = lod_comp->llc_timestamp;
 	new_comp->llc_pool = NULL;
 
@@ -6348,6 +6349,62 @@ again:
 }
 
 /**
+ * lod_bind_data_parity() - Bind a parity component to its data component
+ * @lo: LOD object
+ * @parity_index: index of the parity component
+ *
+ * This function binds a parity component to its corresponding data component
+ * with their mirror ids. The binding is indicated by LCME_FL_IS_LINK_ID flag
+ * set by the llapi. This binding is resolved here and replaced by the mirror id
+ * set by the lod.
+ *
+ * Return:
+ * * %0 on success or if already bound
+ * * %-EINVAL if no matching data component found
+ */
+static int lod_bind_data_parity(struct lod_object *lo, int parity_index)
+{
+	struct lod_layout_component *comp;
+	struct lod_layout_component *comp_parity =
+		&lo->ldo_comp_entries[parity_index];
+	int i;
+
+	ENTRY;
+
+	/* If LCME_FL_IS_LINK_ID is not set, component is already bound */
+	if (!(comp_parity->llc_flags & LCME_FL_IS_LINK_ID))
+		RETURN(0);
+
+	/* Search for data component with matching link id */
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
+		comp = &lo->ldo_comp_entries[i];
+
+		/* Skip parity comps and data comps without link id */
+		if ((comp->llc_flags & LCME_FL_PARITY) ||
+		    !(comp->llc_flags & LCME_FL_IS_LINK_ID))
+			continue;
+
+		if (comp->llc_mirror_link_id != comp_parity->llc_mirror_link_id)
+			continue;
+
+		/* Link id matches - extents must also match */
+		if (!lu_extent_is_equal(&comp->llc_extent,
+					&comp_parity->llc_extent))
+			RETURN(-EINVAL);
+
+		/* Bind comps with their mirror ids, replace llapi link id */
+		comp_parity->llc_mirror_link_id = mirror_id_of(comp->llc_id);
+		comp->llc_mirror_link_id = mirror_id_of(comp_parity->llc_id);
+		comp_parity->llc_flags &= ~LCME_FL_IS_LINK_ID;
+		comp->llc_flags &= ~LCME_FL_IS_LINK_ID;
+
+		RETURN(0);
+	}
+
+	RETURN(-EINVAL);
+}
+
+/**
  * lod_striped_create() - Creation of a striped regular object.
  * @env: execution environment
  * @dt: object
@@ -6407,6 +6464,15 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 								mirror_id, i);
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -ERANGE);
+
+			/* if this is a parity component, we'd setup the
+			 * llc_mirror_link_id for both data and parity comps
+			 */
+			if (lod_comp->llc_flags & LCME_FL_PARITY) {
+				rc = lod_bind_data_parity(lo, i);
+				if (rc)
+					GOTO(out, rc);
+			}
 		}
 
 		if (lod_comp_inited(lod_comp))
@@ -8620,6 +8686,58 @@ static int lod_declare_update_sync_pending(const struct lu_env *env,
 			lod_comp->llc_flags &= ~LCME_FL_STALE;
 			resync_components++;
 			break;
+		}
+	}
+
+	/* Set resync timestamps on EC-linked components */
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
+		struct lod_layout_component *lod_comp;
+
+		lod_comp = &lo->ldo_comp_entries[i];
+
+		if (lod_comp->llc_mirror_link_id == 0)
+			continue;
+
+		if (lod_comp->llc_flags & LCME_FL_PARITY) {
+			struct lod_layout_component *data_comp;
+			int j;
+
+			/* Find linked data component */
+			for (j = 0; j < lo->ldo_comp_cnt; j++) {
+				data_comp = &lo->ldo_comp_entries[j];
+				if (data_comp->llc_flags & LCME_FL_PARITY)
+					continue;
+				if (mirror_id_of(data_comp->llc_id) !=
+				    lod_comp->llc_mirror_link_id)
+					continue;
+				if (!lu_extent_is_equal(
+					&data_comp->llc_extent,
+					&lod_comp->llc_extent))
+					continue;
+				break;
+			}
+			/*
+			 * NOSYNC data comp: inherit its timestamp
+			 * (reflects when the data was written).
+			 * Otherwise use current wall clock time.
+			 */
+			if (j < lo->ldo_comp_cnt &&
+			    (data_comp->llc_flags & LCME_FL_NOSYNC) &&
+			    data_comp->llc_timestamp != 0)
+				lod_comp->llc_timestamp =
+					data_comp->llc_timestamp;
+			else
+				lod_comp->llc_timestamp =
+					ktime_get_real_seconds();
+		} else {
+			/*
+			 * Data component linked to parity:
+			 * preserve existing NOSYNC timestamp,
+			 * otherwise set current time.
+			 */
+			if (lod_comp->llc_flags & LCME_FL_NOSYNC)
+				continue;
+			lod_comp->llc_timestamp = ktime_get_real_seconds();
 		}
 	}
 

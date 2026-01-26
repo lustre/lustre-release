@@ -75,7 +75,7 @@ struct llapi_layout_comp {
 	uint32_t		llc_id;		/* unique ID of component */
 	/* mirror ID this component belongs to */
 	uint32_t		llc_mirror_id;
-	/* mirror ID this comp protects/is protected from through parities */
+	/* mirror link id for data and parity components */
 	uint16_t		llc_mirror_link_id;
 	uint32_t		llc_flags;	/* LCME_FL_* flags */
 	uint64_t		llc_timestamp;	/* snapshot timestamp */
@@ -175,7 +175,7 @@ llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 			ent = &comp_v1->lcm_entries[i];
 			ent->lcme_id = __swab32(ent->lcme_id);
 			ent->lcme_flags = __swab32(ent->lcme_flags);
-			ent->lcme_timestamp = __swab64(ent->lcme_timestamp);
+			ent->lcme_time_and_id = __swab64(ent->lcme_time_and_id);
 			ent->lcme_extent.e_start = __swab64(ent->lcme_extent.e_start);
 			ent->lcme_extent.e_end = __swab64(ent->lcme_extent.e_end);
 			ent->lcme_offset = __swab32(ent->lcme_offset);
@@ -655,14 +655,12 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 			comp->llc_id = ent->lcme_id;
 			comp->llc_mirror_id = mirror_id_of(ent->lcme_id);
 			comp->llc_flags = ent->lcme_flags;
-			if (comp->llc_flags & LCME_FL_NOSYNC)
-				comp->llc_timestamp = ent->lcme_timestamp;
-			if (comp->llc_flags & LCME_FL_PARITY) {
-				comp->llc_dstripe_count =
-					ent->lcme_dstripe_count;
-				comp->llc_cstripe_count =
-					ent->lcme_cstripe_count;
-			}
+			comp->llc_timestamp = lcme_timestamp_time_unpack(
+				ent->lcme_time_and_id);
+			comp->llc_mirror_link_id =
+				lcme_timestamp_id_unpack(ent->lcme_time_and_id);
+			comp->llc_dstripe_count = ent->lcme_dstripe_count;
+			comp->llc_cstripe_count = ent->lcme_cstripe_count;
 		} else {
 			comp->llc_extent.e_start = 0;
 			comp->llc_extent.e_end = LUSTRE_EOF;
@@ -974,12 +972,11 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 			ent = &comp_v1->lcm_entries[ent_idx];
 			ent->lcme_id = comp->llc_id;
 			ent->lcme_flags = comp->llc_flags;
-			if (ent->lcme_flags & LCME_FL_NOSYNC)
-				ent->lcme_timestamp = comp->llc_timestamp;
-			if (ent->lcme_flags & LCME_FL_PARITY) {
-				ent->lcme_dstripe_count = comp->llc_dstripe_count;
-				ent->lcme_cstripe_count = comp->llc_cstripe_count;
-			}
+			ent->lcme_time_and_id =
+				lcme_timestamp_and_id_pack(comp->llc_timestamp,
+					     comp->llc_mirror_link_id);
+			ent->lcme_dstripe_count = comp->llc_dstripe_count;
+			ent->lcme_cstripe_count = comp->llc_cstripe_count;
 			ent->lcme_extent.e_start = comp->llc_extent.e_start;
 			ent->lcme_extent.e_end = comp->llc_extent.e_end;
 			ent->lcme_size = blob_size;
@@ -2752,8 +2749,10 @@ int llapi_layout_ec_dstripe_count_get(const struct llapi_layout *layout,
 }
 
 /**
- * llapi_layout_add_first_comp() - Adds a first component of a mirror to @layout
- * @layout: existing composite or plain layout
+ * Adds a first component of a mirror to \a layout.
+ * The \a layout will change it's current component pointer to
+ * the newly added component, and it'll be turned into a composite
+ * layout if it was not before the adding.
  *
  * The @layout will change it's current component pointer to the newly added
  * component, and it'll be turned into a composite layout if it was not before

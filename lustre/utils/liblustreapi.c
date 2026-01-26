@@ -3317,33 +3317,44 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 		lcme_flags2str(entry->lcme_flags);
 		separator = "\n";
 	}
-	/* print snapshot timestamp if its a nosync comp */
-	if ((verbose & VERBOSE_COMP_FLAGS) &&
-	    (entry->lcme_flags & LCME_FL_NOSYNC)) {
-		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_COMP_FLAGS)
-			llapi_printf(LLAPI_MSG_NORMAL,
-				     "%4slcme_timestamp:      ", " ");
-		if (yaml) {
-			llapi_printf(LLAPI_MSG_NORMAL, "%llu",
-				     (unsigned long long)entry->lcme_timestamp);
-		} else {
-			time_t stamp = entry->lcme_timestamp;
-			struct tm tm_buf;
-			char date_str[64];
-
-			/* Use localtime_r() and strftime() for thread safety
-			 * with parallel find.
-			 */
-			if (localtime_r(&stamp, &tm_buf)) {
-				strftime(date_str, sizeof(date_str), "%c",
-					 &tm_buf);
-				llapi_printf(LLAPI_MSG_NORMAL, "'%s'",
-					     date_str);
-			}
+	/* print mirror_link_id and snapshot timestamp */
+	if (verbose & VERBOSE_COMP_FLAGS) {
+		if (entry->lcme_mirror_link_id != 0) {
+			llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+			if (verbose & ~VERBOSE_COMP_FLAGS)
+				llapi_printf(LLAPI_MSG_NORMAL,
+					     "%4slcme_mirror_link_id: ", " ");
+			llapi_printf(LLAPI_MSG_NORMAL, "%#x",
+				     entry->lcme_mirror_link_id);
+			separator = "\n";
 		}
+		if ((entry->lcme_flags & LCME_FL_NOSYNC) ||
+		    lcme_timestamp_time_unpack(entry->lcme_time_and_id)) {
+			llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+			if (verbose & ~VERBOSE_COMP_FLAGS)
+				llapi_printf(LLAPI_MSG_NORMAL,
+					     "%4slcme_timestamp:      ", " ");
+			if (yaml) {
+				llapi_printf(LLAPI_MSG_NORMAL, "%llu",
+					     (unsigned long long)
+					     lcme_timestamp_time_unpack(entry->lcme_time_and_id));
+			} else {
+				time_t stamp = lcme_timestamp_time_unpack(entry->lcme_time_and_id);
+				struct tm tm_buf;
+				char date_str[64];
 
-		separator = "\n";
+				/* Use localtime_r() and strftime() for thread safety
+				 * with parallel find.
+				 */
+				if (localtime_r(&stamp, &tm_buf)) {
+					strftime(date_str, sizeof(date_str), "%c",
+						 &tm_buf);
+					llapi_printf(LLAPI_MSG_NORMAL, "'%s'",
+						     date_str);
+				}
+			}
+			separator = "\n";
+		}
 	}
 
 	/* Display EC-specific information for parity components */
