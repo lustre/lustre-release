@@ -28,6 +28,52 @@
 #include <lustre_kernelcomm.h>
 #include "mdt_internal.h"
 
+static struct mdt_object *mdt_hsm_get_md_hsm_lock(struct mdt_thread_info *mti,
+						  const struct lu_fid *fid,
+						  struct md_hsm *hsm,
+						  struct mdt_lock_handle *lh,
+						  enum ldlm_mode mode)
+{
+	struct md_attr		*ma;
+	struct mdt_object	*obj;
+	int			 rc;
+	ENTRY;
+
+	memset(hsm, 0, sizeof(*hsm));
+	ma = &mti->mti_attr;
+	ma->ma_need = MA_HSM;
+	ma->ma_valid = 0;
+
+	/* find object by FID */
+	if (!lh)
+		obj = mdt_object_find(mti->mti_env, mti->mti_mdt, fid);
+	else
+		obj = mdt_object_find_lock(mti, fid, lh,
+					   MDS_INODELOCK_XATTR, mode);
+	if (IS_ERR(obj))
+		RETURN(obj);
+
+	if (!mdt_object_exists(obj))
+		GOTO(err, rc = -ENOENT);
+
+	rc = mdt_attr_get_complex(mti, obj, ma);
+	if (rc)
+		GOTO(err, rc);
+
+	if (ma->ma_valid & MA_HSM)
+		*hsm = ma->ma_hsm;
+	ma->ma_valid = 0;
+
+	RETURN(obj);
+
+err:
+	if (lh)
+		mdt_object_unlock(mti, obj, lh, 1);
+	mdt_object_put(mti->mti_env, obj);
+
+	RETURN(ERR_PTR(rc));
+}
+
 /**
  * get obj and HSM attributes on a fid
  * \param mti [IN] context
@@ -39,38 +85,7 @@ struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 				      const struct lu_fid *fid,
 				      struct md_hsm *hsm)
 {
-	struct md_attr		*ma;
-	struct mdt_object	*obj;
-	int			 rc;
-	ENTRY;
-
-	ma = &mti->mti_attr;
-	ma->ma_need = MA_HSM;
-	ma->ma_valid = 0;
-
-	/* find object by FID */
-	obj = mdt_object_find(mti->mti_env, mti->mti_mdt, fid);
-	if (IS_ERR(obj))
-		RETURN(obj);
-
-	if (!mdt_object_exists(obj)) {
-		/* no more object */
-		mdt_object_put(mti->mti_env, obj);
-		RETURN(ERR_PTR(-ENOENT));
-	}
-
-	rc = mdt_attr_get_complex(mti, obj, ma);
-	if (rc) {
-		mdt_object_put(mti->mti_env, obj);
-		RETURN(ERR_PTR(rc));
-	}
-
-	if (ma->ma_valid & MA_HSM)
-		*hsm = ma->ma_hsm;
-	else
-		memset(hsm, 0, sizeof(*hsm));
-	ma->ma_valid = 0;
-	RETURN(obj);
+	return mdt_hsm_get_md_hsm_lock(mti, fid, hsm, NULL, LCK_NL);
 }
 
 void mdt_hsm_dump_hal(int level, const char *prefix,
@@ -1528,9 +1543,10 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 	const struct lu_env *env = mti->mti_env;
 	struct mdt_device *mdt = mti->mti_mdt;
 	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct mdt_lock_handle *mdlh = &mti->mti_lh[MDT_LH_LOCAL];
 	struct mdt_object *obj = NULL;
 	enum changelog_rec_flags clf_flags = 0;
-	struct md_hsm mh;
+	struct md_hsm mh = { 0 };
 	bool is_mh_changed;
 	bool need_changelog = true;
 	int rc = 0;
@@ -1541,7 +1557,8 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 
 	/* find object by FID, mdt_hsm_get_md_hsm() returns obj or err
 	 * if error/removed continue anyway to get correct reporting done */
-	obj = mdt_hsm_get_md_hsm(mti, &car->car_hai.hai_fid, &mh);
+	obj = mdt_hsm_get_md_hsm_lock(mti, &car->car_hai.hai_fid, &mh,
+				      mdlh, LCK_PW);
 	/* we will update MD HSM only if needed */
 	is_mh_changed = false;
 
@@ -1590,6 +1607,15 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 		switch (car->car_hai.hai_action) {
 		case HSMA_ARCHIVE:
 			hsm_set_cl_event(&clf_flags, HE_ARCHIVE);
+
+			/* archive failed -> set to dirty for safety */
+			if (pgs->hpk_errval != EALREADY &&
+			    unlikely((mh.mh_flags & (HS_ARCHIVED|HS_DIRTY)) ==
+				     HS_ARCHIVED)) {
+				hsm_set_cl_flags(&clf_flags, CLF_HSM_DIRTY);
+				mh.mh_flags |= HS_DIRTY;
+				is_mh_changed = true;
+			}
 			break;
 		case HSMA_RESTORE:
 			hsm_set_cl_event(&clf_flags, HE_RESTORE);
@@ -1721,8 +1747,10 @@ out:
 		mo_changelog(env, CL_HSM, clf_flags, mdt->mdt_child,
 			     &car->car_hai.hai_fid);
 
-	if (!IS_ERR(obj))
+	if (!IS_ERR(obj)) {
+		mdt_object_unlock(mti, obj, mdlh, 1);
 		mdt_object_put(mti->mti_env, obj);
+	}
 
 	RETURN(rc);
 }
