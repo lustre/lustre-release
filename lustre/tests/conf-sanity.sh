@@ -12402,6 +12402,7 @@ run_test 161 "test '-o mgsname' option"
 test_162() {
 	(( MGS_VERSION >= $(version_code 2.17.50) )) ||
 		skip "Need MGS version at least 2.17.50"
+	local_mode && skip_env "skip in local mode"
 	local mhost
 
 	if ! combined_mgs_mds ; then
