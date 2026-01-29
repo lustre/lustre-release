@@ -574,10 +574,9 @@ static inline struct ll_statahead_context *ll_sax_get(struct inode *dir)
 	return ctx;
 }
 
-static inline void ll_sax_put(struct inode *dir,
-			      struct ll_statahead_context *ctx)
+static inline void ll_sax_put( struct ll_statahead_context *ctx)
 {
-	struct ll_inode_info *lli = ll_i2info(dir);
+	struct ll_inode_info *lli = ll_i2info(ctx->sax_inode);
 
 	if (atomic_dec_and_lock(&ctx->sax_refcount, &lli->lli_sa_lock)) {
 		LASSERT(list_empty(&ctx->sax_sai_list));
@@ -1535,6 +1534,7 @@ static int ll_statahead_thread(void *arg)
 	struct inode *dir = parent->d_inode;
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct ll_sb_info *sbi = ll_i2sbi(dir);
+	struct ll_statahead_context *ctx;
 	enum ll_sa_pattern pattern;
 	struct lu_batch *bh = NULL;
 	struct sa_entry *entry;
@@ -1652,8 +1652,15 @@ out_stop_agl:
 	}
 	spin_unlock(&lli->lli_sa_lock);
 
+	/*
+	 * ll_sai_put() may free sai (via dput of sai_dentry) and lead to
+	 * lli being freed as well and so we need to save the context
+	 * before that.
+	 */
+	ctx = lli->lli_sax;
 	ll_sai_put(sai);
-	ll_sax_put(dir, lli->lli_sax);
+	if (ctx) // We lost the race to deauthorize statahead?
+		ll_sax_put(ctx);
 
 	return rc;
 }
@@ -1698,7 +1705,7 @@ static void ll_deauthorize_statahead_advise(struct inode *dir, void *key)
 	spin_unlock(&lli->lli_sa_lock);
 	ll_sai_put(sai);
 	LASSERT(lli->lli_sax != NULL);
-	ll_sax_put(dir, lli->lli_sax);
+	ll_sax_put(lli->lli_sax);
 }
 
 /*
@@ -2422,7 +2429,7 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 				if (rc) {
 					CERROR("%s: failed to add sai: rc=%d\n",
 					       sbi->ll_fsname, rc);
-					ll_sax_put(dir, ctx);
+					ll_sax_put(ctx);
 					ctx = NULL;
 					GOTO(out, rc);
 				}
@@ -2444,7 +2451,7 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 				CERROR("%s: failed to add sai: pattern %#X pid=%d rc=%d\n",
 				       sbi->ll_fsname, lli->lli_sa_pattern,
 				       sai->sai_pid, rc);
-				ll_sax_put(dir, ctx);
+				ll_sax_put(ctx);
 				ctx = NULL;
 				GOTO(out, rc);
 			}
@@ -2520,7 +2527,7 @@ out:
 		if (sai)
 			ll_sai_put(sai);
 		if (ctx)
-			ll_sax_put(dir, ctx);
+			ll_sax_put(ctx);
 	}
 
 	if (rc)
@@ -2615,7 +2622,7 @@ int ll_revalidate_statahead(struct inode *dir, struct dentry **dentryp,
 		       *dentryp, rc);
 		if (sai)
 			ll_sai_put(sai);
-		ll_sax_put(dir, ctx);
+		ll_sax_put(ctx);
 	}
 	return rc;
 }
@@ -2738,7 +2745,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 out:
 	if (lfd->fd_sai) {
 		ll_sai_put(sai);
-		ll_sax_put(dir, ctx);
+		ll_sax_put(ctx);
 		lfd->fd_sai = NULL;
 	}
 
@@ -2746,7 +2753,7 @@ out:
 		ll_sai_put(sai);
 
 	if (ctx)
-		ll_sax_put(dir, ctx);
+		ll_sax_put(ctx);
 
 	atomic_dec(&sbi->ll_sa_running);
 	RETURN(rc);
