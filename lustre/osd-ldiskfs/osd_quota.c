@@ -16,7 +16,7 @@
 #include <lustre_quota.h>
 #include "osd_internal.h"
 
-/**
+/*
  * Helpers function to find out the quota type (USRQUOTA/GRPQUOTA) of a
  * given object
  */
@@ -36,18 +36,19 @@ static inline int fid2type(const struct lu_fid *fid)
 	return USRQUOTA;
 }
 
-/**
- * Space Accounting Management
- */
+/* Space Accounting Management */
 
 /**
- * Look up an accounting object based on its fid.
+ * osd_acct_obj_lookup() - Look up an accounting object based on its fid.
+ * @info: is the osd thread info passed by the caller
+ * @osd: is the osd device
+ * @fid: is the fid of the accounting object we want to look up
+ * @id: is the osd_inode_id struct to fill with the inode number of the quota
+ *      file if the lookup is successful
  *
- * \param info - is the osd thread info passed by the caller
- * \param osd  - is the osd device
- * \param fid  - is the fid of the accounting object we want to look up
- * \param id   - is the osd_inode_id struct to fill with the inode number of
- *               the quota file if the lookup is successful
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, struct osd_inode_id *id)
@@ -99,16 +100,18 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 }
 
 /**
- * Return space usage (#blocks & #inodes) consumed by a given uid or gid.
+ * osd_acct_index_lookup() - Return space usage (#blocks & #inodes) consumed
+ *                           by a given uid or gid.
  *
- * \param env   - is the environment passed by the caller
- * \param dtobj - is the accounting object
- * \param dtrec - is the record to fill with space usage information
- * \param dtkey - is the id of the user or group for which we would
- *                like to access disk usage.
+ * @env: is the environment passed by the caller
+ * @dtobj: is the accounting object
+ * @dtrec: is the record to fill with space usage information
+ * @dtkey: is the id of the user or group for which we would like to access
+ *         disk usage.
  *
- * \retval +ve - success : exact match
- * \retval -ve - failure
+ * Return:
+ * * %+ve on success (exact match)
+ * * %negative on failure
  */
 static int osd_acct_index_lookup(const struct lu_env *env,
 				 struct dt_object *dtobj,
@@ -145,10 +148,12 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	       osd_dev(it->oiq_obj->oo_dt.do_lu.lo_dev)->od_svname, rc) \
 
 /**
- * Initialize osd Iterator for given osd index object.
+ * osd_it_acct_init() - Initialize osd Iterator for given osd index object.
+ * @env: Lustre environment
+ * @dt: osd index object
+ * @attr: not used
  *
- * \param  dt    - osd index object
- * \param  attr  - not used
+ * Return struct dt_it on success or %negative on failure
  */
 static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 				      struct dt_object *dt,
@@ -182,9 +187,9 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 }
 
 /**
- * Free given iterator.
- *
- * \param  di   - osd iterator
+ * osd_it_acct_fini() - Free given iterator.
+ * @env: Lustre environment
+ * @di: osd iterator
  */
 static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 {
@@ -206,15 +211,18 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 }
 
 /**
- * Move Iterator to record specified by \a key, if the \a key isn't found,
+ * osd_it_acct_get() - Move Iterator to record specified by @key
+ * @env: Lustre environment
+ * @di: osd iterator
+ * @key: uid or gid
+ *
+ * Move Iterator to record specified by @key, if the @key isn't found,
  * move to the first valid record.
  *
- * \param  di   - osd iterator
- * \param  key  - uid or gid
- *
- * \retval +ve  - di points to the first valid record
- * \retval  +1  - di points to exact matched key
- * \retval -ve  - failure
+ * Return:
+ * * %positive di points to the first valid record
+ * * %+1 di points to exact matched key
+ * * %negative on failure
  */
 static int osd_it_acct_get(const struct lu_env *env, struct dt_it *di,
 			   const struct dt_key *key)
@@ -249,10 +257,10 @@ static int osd_it_acct_get(const struct lu_env *env, struct dt_it *di,
 	RETURN(rc);
 }
 
-/**
- * Release Iterator
- *
- * \param  di   - osd iterator
+/*
+ * osd_it_acct_put() - Release Iterator
+ * @env: Lustre environment
+ * @di: osd iterator
  */
 static void osd_it_acct_put(const struct lu_env *env, struct dt_it *di)
 {
@@ -273,13 +281,14 @@ static int osd_it_add_processed(struct osd_it_quota *it, int depth)
 }
 
 /**
- * Move on to the next valid entry.
+ * osd_it_acct_next() - Move on to the next valid entry.
+ * @env: Lustre environment
+ * @di: osd iterator
  *
- * \param  di   - osd iterator
- *
- * \retval +ve  - iterator reached the end
- * \retval   0  - iterator has not reached the end yet
- * \retval -ve  - unexpected failure
+ * Return:
+ * * %positive iterator reached the end
+ * * %0 iterator has not reached the end yet
+ * * %negative unexpected failure
  */
 static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 {
@@ -348,9 +357,11 @@ static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 }
 
 /**
- * Return pointer to the key under iterator.
+ * osd_it_acct_key() - Return pointer to the key under iterator.
+ * @env: Lustre environment
+ * @di: osd iterator
  *
- * \param  di   - osd iterator
+ * Return pointer to the key under iterator.
  */
 static struct dt_key *osd_it_acct_key(const struct lu_env *env,
 				      const struct dt_it *di)
@@ -362,9 +373,11 @@ static struct dt_key *osd_it_acct_key(const struct lu_env *env,
 }
 
 /**
- * Return size of key under iterator (in bytes)
+ * osd_it_acct_key_size() - Return size of key under iterator (in bytes)
+ * @env: Lustre environment
+ * @di: osd iterator
  *
- * \param  di   - osd iterator
+ * Returns identifier for current quota record
  */
 static int osd_it_acct_key_size(const struct lu_env *env,
 				const struct dt_it *di)
@@ -376,10 +389,15 @@ static int osd_it_acct_key_size(const struct lu_env *env,
 }
 
 /**
- * Return pointer to the record under iterator.
+ * osd_it_acct_rec() - Return pointer to the record under iterator.
+ * @env: Lustre environment
+ * @di: osd iterator
+ * @dtrec: record to fill with space usage information
+ * @attr: not used
  *
- * \param  di    - osd iterator
- * \param  attr  - not used
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osd_it_acct_rec(const struct lu_env *env,
 			   const struct dt_it *di,
@@ -396,9 +414,11 @@ static int osd_it_acct_rec(const struct lu_env *env,
 }
 
 /**
- * Returns cookie for current Iterator position.
+ * osd_it_acct_store() - Returns cookie for current Iterator position.
+ * @env: Lustre environment
+ * @di: osd iterator
  *
- * \param  di    - osd iterator
+ * Return current quota record always
  */
 static __u64 osd_it_acct_store(const struct lu_env *env,
 			       const struct dt_it *di)
@@ -410,15 +430,18 @@ static __u64 osd_it_acct_store(const struct lu_env *env,
 }
 
 /**
- * Restore iterator from cookie. if the \a hash isn't found,
+ * osd_it_acct_load() - Restore iterator from cookie.
+ * @env: Lustre environment
+ * @di: osd iterator
+ * @hash: iterator location cookie
+ *
+ * Restore iterator from cookie. if the @hash isn't found,
  * restore the first valid record.
  *
- * \param  di    - osd iterator
- * \param  hash  - iterator location cookie
- *
- * \retval +ve   - di points to the first valid record
- * \retval  +1   - di points to exact matched hash
- * \retval -ve   - failure
+ * Return:
+ * * %positive and di points to the first valid record
+ * * %+1 and di points to exact matched hash
+ * * %negative on failure
  */
 static int osd_it_acct_load(const struct lu_env *env,
 			    const struct dt_it *di, __u64 hash)
@@ -439,9 +462,7 @@ static int osd_it_acct_load(const struct lu_env *env,
 			       (const struct dt_key *)&hash));
 }
 
-/**
- * Index and Iterator operations for accounting objects
- */
+/* Index and Iterator operations for accounting objects */
 const struct dt_index_operations osd_acct_index_ops = {
 	.dio_lookup = osd_acct_index_lookup,
 	.dio_it = {
@@ -505,19 +526,21 @@ static inline int osd_qid_type(struct osd_thandle *oh, int i)
 }
 
 /**
+ * osd_declare_qid() - Reserve journal credits for quota files
+ * @env: the environment passed by the caller
+ * @oh: osd transaction handle
+ * @qi: quota id & space required for this operation
+ * @obj: osd object, could be NULL when it's under create
+ * @enforce: whether to perform quota enforcement
+ * @local_flags: if the operation is write, return no user quota, no group
+ *               quota, or sync commit flags to the caller
+ *
  * Reserve journal credits for quota files update first, then call
  * ->op_begin() to perform quota enforcement.
  *
- * \param  env     - the environment passed by the caller
- * \param  oh      - osd transaction handle
- * \param  qi      - quota id & space required for this operation
- * \param  obj     - osd object, could be NULL when it's under create
- * \param  enforce - whether to perform quota enforcement
- * \param  flags   - if the operation is write, return no user quota, no
- *                   group quota, or sync commit flags to the caller
- *
- * \retval 0       - success
- * \retval -ve     - failure
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		    struct lquota_id_info *qi, struct osd_object *obj,
@@ -611,21 +634,22 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 }
 
 /**
- * Wrapper for osd_declare_qid()
+ * osd_declare_inode_qid() - Wrapper for osd_declare_qid()
+ * @env: the environment passed by the caller
+ * @uid: user id of the inode
+ * @gid: group id of the inode
+ * @projid: Project id of the inode
+ * @space: how many blocks/inodes will be consumed/released
+ * @oh: osd transaction handle
+ * @obj: osd object, could be NULL when it's under create
+ * @local_flags: if the operation is write, return no user quota, no group
+ *               quota, or sync commit flags to the caller
+ * @osd_qid_declare_flags: indicate this is a inode/block accounting and whether
+ *                         changes are performed by root user
  *
- * \param  env    - the environment passed by the caller
- * \param  uid    - user id of the inode
- * \param  gid    - group id of the inode
- * \param  space  - how many blocks/inodes will be consumed/released
- * \param  oh     - osd transaction handle
- * \param  obj    - osd object, could be NULL when it's under create
- * \param  flags  - if the operation is write, return no user quota, no
- *                  group quota, or sync commit flags to the caller
- * \param osd_qid_flags - indicate this is a inode/block accounting
- *			and whether changes are performed by root user
- *
- * \retval 0      - success
- * \retval -ve    - failure
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 			  __u32 projid, long long space, struct osd_thandle *oh,
