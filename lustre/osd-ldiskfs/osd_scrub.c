@@ -38,8 +38,16 @@
 #define SCRUB_BAD_OIMAP_DECAY_INTERVAL	60
 
 /**
- * Add mapping into scrub.os_inconsistent_item list, and the OI scrub thread
- * will fix them in priority.
+ * osd_scrub_oi_insert() - Add mapping into scrub.os_inconsistent_item list,
+ *                         and the OI scrub thread will fix them in priority.
+ * @dev: OSD device
+ * @fid: FID for object (being inserted)
+ * @id: Target osd_indode_id
+ * @insert: insert(1) or update(0) mapping
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int osd_scrub_oi_insert(struct osd_device *dev, const struct lu_fid *fid,
 			struct osd_inode_id *id, int insert)
@@ -165,11 +173,21 @@ static inline int osd_scrub_has_window(struct lustre_scrub *scrub,
 }
 
 /**
- * update/insert/delete the specified OI mapping (@fid @id) according to the ops
+ * osd_scrub_refresh_mapping() - update/insert/delete the specified OI mapping
+ *                               (@fid @id) according to the ops
+ * @info: thread environment
+ * @dev: OSD device
+ * @fid: FID for object (OI mapping is being updated/insert/deleted)
+ * @id: Target osd_indode_id
+ * @ops: Operation
+ * @force: %True actual scrub will be done
+ * @flags: flags for operation
+ * @exist: if target is already there [out]
  *
- * \retval   1, changed nothing
- * \retval   0, changed successfully
- * \retval -ve, on error
+ * Return:
+ * * %1 changed nothing
+ * * %0 changed successfully
+ * * %negative on error
  */
 int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 			      struct osd_device *dev,
@@ -524,8 +542,14 @@ again:
 }
 
 /**
- * \retval SCRUB_NEXT_OSTOBJ_OLD: FID-on-OST
- * \retval 0: FID-on-MDT
+ * osd_scrub_check_local_fldb() - Check local fldb
+ * @info: thread environment
+ * @dev: OSD device
+ * @fid: unused
+ *
+ * Return:
+ * * %SCRUB_NEXT_OSTOBJ_OLD FID-on-OST
+ * * %0 FID-on-MDT
  */
 static int osd_scrub_check_local_fldb(struct osd_thread_info *info,
 				      struct osd_device *dev,
@@ -1832,10 +1856,22 @@ log:
 
 /**
  * osd_ios_scan_one() - check/fix LMA FID and OI entry for one inode
+ * @info: is the osd thread info passed by the caller
+ * @dev: OSD device
+ * @parent: Parent directory inode
+ * @inode: Inode for File/dir which is getting scanned
+ * @fid: FID for @inode
+ * @name: Name of File/dir
+ * @namelen: Length of @name
+ * @flags: Flags for scan
  *
- * The passed \a inode's \a fid is verified against the LMA FID. If the \a fid
+ * The passed @inode's @fid is verified against the LMA FID. If the @fid
  * is NULL or is empty the IGIF FID is used. The FID is verified in the OI to
  * reference the inode, or fixed if it is missing or references another inode.
+ *
+ * * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int
 osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
@@ -1949,7 +1985,7 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	RETURN(rc);
 }
 
-/**
+/*
  * It scans the /lost+found, and for the OST-object (with filter_fid
  * or filter_fid_18_23), move them back to its proper /O/<seq>/d<x>.
  */
@@ -2915,7 +2951,15 @@ static __u64 osd_otable_it_store(const struct lu_env *env,
 }
 
 /**
- * Set the OSD layer iteration start position as the specified hash.
+ * osd_otable_it_load() - Set the OSD layer iteration start position as the
+ *                        specified hash.
+ * @env: Lustre environment
+ * @di: osd iterator
+ * @hash: Hash to start
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osd_otable_it_load(const struct lu_env *env,
 			      const struct dt_it *di, __u64 hash)
