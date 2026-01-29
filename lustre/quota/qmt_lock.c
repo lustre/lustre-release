@@ -220,6 +220,7 @@ again:
 		 * qmt_lvbo_free_wq?
 		 */
 		if (lqe->lqe_glbl_data) {
+			lgd = lqe->lqe_glbl_data;
 			mutex_unlock(&lqe->lqe_glbl_data_lock);
 
 			wait++;
@@ -229,8 +230,7 @@ again:
 				goto again;
 			}
 
-			LQUOTA_ERROR(lqe, "the lvb is held by qmt_wq: %p\n",
-				     res->lr_lvb_data);
+			LQUOTA_ERROR(lqe, "lgd held by qmt_wq: %px\n", lgd);
 			lqe_putref(lqe);
 			GOTO(out_put_qpi, rc = -EBUSY);
 		}
