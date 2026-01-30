@@ -43,11 +43,21 @@ static inline bool osd_scrub_has_window(struct osd_otable_it *it)
 }
 
 /**
- * update/insert/delete the specified OI mapping (@fid @id) according to the ops
+ * osd_scrub_refresh_mapping() - update/insert/delete the specified OI mapping
+ *                               (@fid @id) according to the ops
+ * @env: Lustre environment
+ * @dev: OSD device
+ * @fid: FID for mapping
+ * @oid: Object ID (OID) (current object which is being mapping)
+ * @ops: Operation to be done for mapping
+ * @force: %True actual scrub will be done
+ * @name: Name of File/dir
  *
- * \retval   1, changed nothing
- * \retval   0, changed successfully
- * \retval -ve, on error
+ *
+ * Return:
+ * * %1 changed nothing
+ * * %0 changed successfully
+ * * %negative on error
  */
 int osd_scrub_refresh_mapping(const struct lu_env *env,
 			      struct osd_device *dev,
@@ -943,9 +953,19 @@ log:
 }
 
 /**
- * verify FID-in-LMA and OI entry for one object
+ * osd_ios_scan_one() - verify FID-in-LMA and OI entry for one object
+ * @env: Lustre environment
+ * @dev: OSD device
+ * @fid: FID for @inode
+ * @parent: Parent directory inode
+ * @oid: Object ID (OID) (current object which is being scanned)
+ * @name: Name of File/dir
+ * @flags: Flags for scan
  *
- * ios: Initial OI Scrub.
+ *
+ * * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osd_ios_scan_one(const struct lu_env *env, struct osd_device *dev,
 			    const struct lu_fid *fid, uint64_t parent,
@@ -1742,7 +1762,15 @@ static __u64 osd_otable_it_store(const struct lu_env *env,
 }
 
 /**
- * Set the OSD layer iteration start position as the specified hash.
+ * osd_otable_it_load() - Set the OSD layer iteration start position as the
+ *                        specified hash.
+ * @env: Lustre environment
+ * @di: osd iterator
+ * @hash: Hash to start
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int osd_otable_it_load(const struct lu_env *env,
 			      const struct dt_it *di, __u64 hash)
