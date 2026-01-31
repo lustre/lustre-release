@@ -60,12 +60,13 @@ static inline __u32 qtype2acct_oid(int qtype)
 }
 
 /**
- * Look-up accounting object to collect space usage information for user
- * or group.
+ * acct_obj_lookup() - Look-up accounting object to collect space usage
+ *                     information for user or group.
+ * @env: is the environment passed by the caller
+ * @dev: is the dt_device storing the accounting object
+ * @type: is the quota type, either USRQUOTA or GRPQUOTA
  *
- * \param env  - is the environment passed by the caller
- * \param dev  - is the dt_device storing the accounting object
- * \param type - is the quota type, either USRQUOTA or GRPQUOTA
+ * Return dt_object on success or %-ENOENT if not found
  */
 struct dt_object *acct_obj_lookup(const struct lu_env *env,
 				  struct dt_device *dev, int type)
@@ -104,12 +105,14 @@ struct dt_object *acct_obj_lookup(const struct lu_env *env,
 }
 
 /**
- * Initialize slave index object to collect local quota limit for user or group.
+ * quota_obj_lookup() - Initialize slave index object to collect local quota
+ *                      limit for user or group.
+ * @env: is the environment passed by the caller
+ * @dev: is the dt_device storing the slave index object
+ * @pool: is the pool type, either LQUOTA_RES_MD or LQUOTA_RES_DT
+ * @type: is the quota type, either USRQUOTA or GRPQUOTA
  *
- * \param env - is the environment passed by the caller
- * \param dev - is the dt_device storing the slave index object
- * \param pool - is the pool type, either LQUOTA_RES_MD or LQUOTA_RES_DT
- * \param type - is the quota type, either USRQUOTA or GRPQUOTA
+ * Return dt_object on success or %-ENOENT if not found
  */
 static struct dt_object *quota_obj_lookup(const struct lu_env *env,
 					  struct dt_device *dev, int pool,
@@ -501,9 +504,13 @@ static inline int lqtype2qtype(int lqtype)
 }
 
 /**
- * Helper routine returning the FID associated with the global index storing
- * quota settings for default storage pool, resource type \pool_type and
- * the quota type \quota_type.
+ * lquota_generate_fid() - Helper routine returning the FID associated with the
+ *                         global index storing quota settings for default
+ *                         storage pool, resource type @pool_type and the quota
+ *                         type @quota_type.
+ * @fid: FID associated with global index [out]
+ * @pool_type: Quota resource type
+ * @quota_type: Quota types (URS, GRP, PRJ)
  */
 void lquota_generate_fid(struct lu_fid *fid, int pool_type, int quota_type)
 {
@@ -515,8 +522,15 @@ void lquota_generate_fid(struct lu_fid *fid, int pool_type, int quota_type)
 }
 
 /**
- * Helper routine used to extract pool type and quota type from a
- * given FID.
+ * lquota_extract_fid() - Helper routine used to extract pool type and quota
+ *                        type from a given FID.
+ * @fid: FID to extrace quota and pool type
+ * @pool_type: Quota resource type
+ * @quota_type: Quota types (URS, GRP, PRJ)
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int lquota_extract_fid(const struct lu_fid *fid,
 		       enum lquota_res_type *pool_type,
