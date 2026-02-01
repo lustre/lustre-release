@@ -66,7 +66,8 @@ static void lqe_hash_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 }
 
 /* lqe hash methods for 64-bit uid/gid, new hash functions would have to be
- * defined for per-directory quota relying on a 128-bit FID */
+ * defined for per-directory quota relying on a 128-bit FID
+ */
 static struct cfs_hash_ops lqe64_hash_ops = {
 	.hs_hash       = lqe64_hash_hash,
 	.hs_key        = lqe64_hash_key,
@@ -132,11 +133,9 @@ static int lqe_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 }
 
 /**
- * Cleanup the entries in the hashtable
- *
- * \param hash     - hash table which stores quota entries
- * \param free_all - free all entries or only free the entries
- *                   without quota enforce ?
+ * lqe_cleanup() - Cleanup the entries in the hashtable
+ * @hash: hash table which stores quota entries
+ * @free_all: free all entries or only free the entries without quota enforce ?
  */
 static void lqe_cleanup(struct cfs_hash *hash, bool free_all)
 {
@@ -165,20 +164,19 @@ retry:
 	EXIT;
 }
 
-/*
- * Allocate a new lquota site.
+/**
+ * lquota_site_alloc() - Allocate a new lquota site.
+ * @env: the environment passed by the caller
+ * @parent: is a pointer to the parent structure, either a qmt_pool_info
+ *          structure on the master or a qsd_qtype_info structure on the slave.
+ * @is_master: is set when the site belongs to a QMT.
+ * @qtype: is the quota type managed by this site
+ * @ops: is the quota entry operation vector to be used for quota entry
+ *       belonging to this site.
  *
- * \param env    - the environment passed by the caller
- * \param parent - is a pointer to the parent structure, either a qmt_pool_info
- *                 structure on the master or a qsd_qtype_info structure on the
- *                 slave.
- * \param is_master - is set when the site belongs to a QMT.
- * \param qtype     - is the quota type managed by this site
- * \param ops       - is the quota entry operation vector to be used for quota
- *                    entry belonging to this site.
- *
- * \retval 0     - success
- * \retval -ve   - failure
+ * Return:
+ * * %0 success
+ * * %negative failure
  */
 struct lquota_site *lquota_site_alloc(const struct lu_env *env, void *parent,
 				      bool is_master, short qtype,
@@ -223,14 +221,14 @@ struct lquota_site *lquota_site_alloc(const struct lu_env *env, void *parent,
 	RETURN(site);
 }
 
-/*
- * Destroy a lquota site.
+/**
+ * lquota_site_free() - Destroy a lquota site.
+ * @env:  - the environment passed by the caller
+ * @site: - lquota site to be destroyed
  *
- * \param env  - the environment passed by the caller
- * \param site - lquota site to be destroyed
- *
- * \retval 0     - success
- * \retval -ve   - failure
+ * Return:
+ * * %0 success
+ * * %negative failure
  */
 void lquota_site_free(const struct lu_env *env, struct lquota_site *site)
 {
@@ -244,8 +242,7 @@ void lquota_site_free(const struct lu_env *env, struct lquota_site *site)
 
 /*
  * Initialize qsd/qmt-specific fields of quota entry.
- *
- * \param lqe - is the quota entry to initialize
+ * @lqe: - is the quota entry to initialize
  */
 static void lqe_init(struct lquota_entry *lqe)
 {
@@ -261,12 +258,17 @@ static void lqe_init(struct lquota_entry *lqe)
 }
 
 /*
+ * lqe_read() - Update a lquota entry.
+ * @env: the environment passed by the caller
+ * @lqe: is the quota entry to refresh
+ * @find: don't create entry on disk if true
+ *
  * Update a lquota entry. This is done by reading quota settings from the
  * on-disk index. The lquota entry must be write locked.
  *
- * \param env - the environment passed by the caller
- * \param lqe - is the quota entry to refresh
- * \param find - don't create entry on disk if true
+ * Return:
+ * * %0 success
+ * * %negative failure
  */
 static int lqe_read(const struct lu_env *env,
 		    struct lquota_entry *lqe, bool find)
@@ -291,15 +293,15 @@ static int lqe_read(const struct lu_env *env,
 }
 
 /*
- * Find or create a quota entry.
+ * lqe_locate_find() - Find or create a quota entry.
+ * @env: the environment passed by the caller
+ * @site: lquota site which stores quota entries in a hash table
+ * @qid: is the quota ID to be found/created
+ * @find: don't create lqe on disk in case of ENOENT if true
  *
- * \param env  - the environment passed by the caller
- * \param site - lquota site which stores quota entries in a hash table
- * \param qid  - is the quota ID to be found/created
- * \param find - don't create lqe on disk in case of ENOENT if true
- *
- * \retval 0     - success
- * \retval -ve   - failure
+ * Return:
+ * * %0 success
+ * * %negative failure
  */
 struct lquota_entry *lqe_locate_find(const struct lu_env *env,
 				     struct lquota_site *site,
