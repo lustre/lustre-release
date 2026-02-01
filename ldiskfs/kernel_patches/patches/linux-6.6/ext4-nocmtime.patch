@@ -18,14 +18,13 @@ Reviewed-by: Bob Glossman <bob.glossman@intel.com>
 Reviewed-by: Fan Yong <fan.yong@intel.com>
 Signed-off-by: Anreas Dilger <andreas.dilger@intel.com> 
 ---
- fs/ext4/ext4.h | 7 +++++++
- 1 file changed, 7 insertions(+)
+ fs/ext4/ext4.h | 9 +++++++++
+ 1 file changed, 9 insertions(+)
 
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
-index adb577aa..218da6ec 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -985,6 +985,13 @@ enum {
+@@ -985,6 +985,15 @@ enum {
  	I_DATA_SEM_EA
  };
  
@@ -36,9 +35,10 @@ index adb577aa..218da6ec 100644
 +	return current_time(inode);
 +}
 +#define current_time(a) ext4_current_time(a)
++#define inode_set_ctime_current(i) \
++	 inode_set_ctime_to_ts((i), current_time((i)))
  
  /*
   * fourth extended file system inode data in memory
 -- 
-2.25.1
 
