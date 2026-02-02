@@ -424,7 +424,7 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 	RETURN(0);
 }
 
-const struct dt_body_operations osd_body_ops = {
+const struct dt_body_operations osd_wbcfs_body_ops = {
 	.dbo_read			= osd_read,
 	.dbo_write			= osd_write,
 	.dbo_bufs_get			= osd_bufs_get,

@@ -28,7 +28,7 @@ static struct ldebugfs_vars ldebugfs_osd_obd_vars[] = {
 
 KOBJ_ATTRIBUTE_GROUPS(wbcfs);
 
-int osd_procfs_init(struct osd_device *osd, const char *name)
+int osd_wbcfs_procfs_init(struct osd_device *osd, const char *name)
 {
 	struct obd_type *type;
 	int rc;
@@ -52,13 +52,13 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 	if (rc) {
 		CERROR("%s: cannot setup sysfs / debugfs entry: %d\n",
 		       name, rc);
-		osd_procfs_fini(osd);
+		osd_wbcfs_procfs_fini(osd);
 	}
 
 	RETURN(rc);
 }
 
-void osd_procfs_fini(struct osd_device *osd)
+void osd_wbcfs_procfs_fini(struct osd_device *osd)
 {
 	dt_tunables_fini(&osd->od_dt_dev);
 }

@@ -784,7 +784,7 @@ static int osd_dir_it_load(const struct lu_env *env,
 	RETURN(rc);
 }
 
-const struct dt_index_operations osd_dir_ops = {
+const struct dt_index_operations osd_wbcfs_dir_ops = {
 	.dio_lookup		= osd_index_dir_lookup,
 	.dio_insert		= osd_index_dir_insert,
 	.dio_delete		= osd_index_dir_delete,

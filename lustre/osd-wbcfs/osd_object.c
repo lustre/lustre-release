@@ -24,7 +24,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 	int rc;
 
 	if (likely(feat == &dt_directory_features)) {
-		dt->do_index_ops = &osd_dir_ops;
+		dt->do_index_ops = &osd_wbcfs_dir_ops;
 		rc = 0;
 	} else if (unlikely(feat == &dt_acct_features)) {
 		/* TODO: Add quota support. */
@@ -57,7 +57,7 @@ static const struct dt_object_operations osd_obj_otable_it_ops = {
 static void __osd_object_init(struct osd_object *obj)
 {
 	LASSERT(obj->oo_inode != NULL);
-	obj->oo_dt.do_body_ops = &osd_body_ops;
+	obj->oo_dt.do_body_ops = &osd_wbcfs_body_ops;
 	obj->oo_dt.do_lu.lo_header->loh_attr |=
 		(LOHA_EXISTS | (obj->oo_inode->i_mode & S_IFMT));
 }
@@ -84,7 +84,7 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	hash = lu_fid_build_ino(fid, 0);
 	inode = ilookup5(osd_sb(osd), hash, memfs_test_inode_by_fid,
 			 (void *)fid);
-	obj->oo_dt.do_body_ops = &osd_body_ops;
+	obj->oo_dt.do_body_ops = &osd_wbcfs_body_ops;
 	if (inode) {
 		obj->oo_inode = inode;
 		__osd_object_init(obj);

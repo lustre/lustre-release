@@ -185,7 +185,7 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	RETURN(rc);
 }
 
-const struct lu_device_operations osd_lu_ops = {
+const struct lu_device_operations osd_wbcfs_lu_ops = {
 	.ldo_object_alloc	= osd_object_alloc,
 	.ldo_process_config	= osd_process_config,
 	.ldo_recovery_complete	= osd_recovery_complete,
@@ -450,7 +450,7 @@ static int __osd_device_init(const struct lu_env *env, struct osd_device *osd,
 	if (rc)
 		RETURN(rc);
 
-	ld->ld_ops = &osd_lu_ops;
+	ld->ld_ops = &osd_wbcfs_lu_ops;
 	osd->od_dt_dev.dd_ops = &osd_dt_ops;
 
 	cplen = strscpy(osd->od_svname, lustre_cfg_string(cfg, 4),
@@ -468,7 +468,7 @@ static int __osd_device_init(const struct lu_env *env, struct osd_device *osd,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = osd_procfs_init(osd, osd->od_svname);
+	rc = osd_wbcfs_procfs_init(osd, osd->od_svname);
 	if (rc)
 		GOTO(out_mnt, rc);
 
@@ -486,7 +486,7 @@ static int __osd_device_init(const struct lu_env *env, struct osd_device *osd,
 out_site:
 	lu_site_fini(&osd->od_site);
 out_procfs:
-	osd_procfs_fini(osd);
+	osd_wbcfs_procfs_fini(osd);
 out_mnt:
 	osd_umount(env, osd);
 out:
@@ -538,7 +538,7 @@ static struct lu_device *osd_device_free(const struct lu_env *env,
 
 	lu_site_fini(&osd->od_site);
 	dt_device_fini(&osd->od_dt_dev);
-	osd_procfs_fini(osd);
+	osd_wbcfs_procfs_fini(osd);
 	OBD_FREE_PTR(osd);
 
 	RETURN(NULL);

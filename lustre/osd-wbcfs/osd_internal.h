@@ -124,16 +124,16 @@ struct osd_hash_it {
 
 extern struct kmem_cache *osd_hash_it_cachep;
 
-extern const struct dt_body_operations osd_body_ops;
+extern const struct dt_body_operations osd_wbcfs_body_ops;
 extern const struct dt_object_operations osd_obj_ops;
 extern const struct lu_object_operations osd_lu_obj_ops;
-extern const struct lu_device_operations osd_lu_ops;
-extern const struct dt_index_operations osd_dir_ops;
+extern const struct lu_device_operations osd_wbcfs_lu_ops;
+extern const struct dt_index_operations osd_wbcfs_dir_ops;
 extern const struct dt_index_operations osd_hash_index_ops;
 
 static inline int lu_device_is_osd(const struct lu_device *d)
 {
-	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &osd_lu_ops);
+	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &osd_wbcfs_lu_ops);
 }
 
 static inline struct osd_device *osd_dt_dev(const struct dt_device *d)
@@ -254,7 +254,7 @@ static inline __u32 lu_fid_build_gen(const struct lu_fid *fid)
  * Lustre procfs
  */
 
-int osd_procfs_init(struct osd_device *osd, const char *name);
-void osd_procfs_fini(struct osd_device *osd);
+int osd_wbcfs_procfs_init(struct osd_device *osd, const char *name);
+void osd_wbcfs_procfs_fini(struct osd_device *osd);
 
 #endif /* _OSD_INTERNAL_H */
