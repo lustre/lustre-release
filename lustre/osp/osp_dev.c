@@ -792,12 +792,16 @@ const struct lu_device_operations osp_lu_ops = {
 static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 		      struct obd_statfs *sfs, struct obd_statfs_info *info)
 {
+	enum lustre_imp_state state = LUSTRE_IMP_CLOSED;
 	struct osp_device *d = dt2osp_dev(dev);
-	struct obd_import *imp = d->opd_obd->u.cli.cl_import;
+	struct obd_import *imp;
+	int rc;
 
 	ENTRY;
 
-	if (imp->imp_state == LUSTRE_IMP_CLOSED)
+	with_imp_locked(d->opd_obd, imp, rc)
+		state = imp->imp_state;
+	if (rc || state == LUSTRE_IMP_CLOSED)
 		RETURN(-ESHUTDOWN);
 
 	if (unlikely(d->opd_imp_active == 0))
