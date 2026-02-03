@@ -293,26 +293,27 @@ lnet_md_validate(const struct lnet_md *umd)
 }
 
 /**
- * Create a memory descriptor and attach it to a ME
- *
- * \param me An ME to associate the new MD with.
- * \param umd Provides initial values for the user-visible parts of a MD.
- * Other than its use for initialization, there is no linkage between this
- * structure and the MD maintained by the LNet.
- * \param unlink A flag to indicate whether the MD is automatically unlinked
- * when it becomes inactive, either because the operation threshold drops to
- * zero or because the available memory becomes less than \a umd.umd_max_size.
- * (Note that the check for unlinking a MD only occurs after the completion
- * of a successful operation on the MD.) The value LNET_UNLINK enables auto
- * unlinking; the value LNET_RETAIN disables it.
- * \param handle On successful returns, a handle to the newly created MD is
- * saved here. This handle can be used later in LNetMDUnlink().
+ * LNetMDAttach() - Create a memory descriptor and attach it to a ME
+ * @me: An ME to associate the new MD with.
+ * @umd: Provides initial values for the user-visible parts of a MD.
+ *       Other than its use for initialization, there is no linkage between this
+ *       structure and the MD maintained by the LNet.
+ * @unlink: A flag to indicate whether the MD is automatically unlinked
+ *          when it becomes inactive, either because the operation threshold
+ *          drops to zero or because the available memory becomes less than
+ *          @umd.umd_max_size. (Note that the check for unlinking a MD only
+ *          occurs after the completion of a successful operation on the MD.)
+ *          The value LNET_UNLINK enables auto unlinking; the value LNET_RETAIN
+ *          disables it.
+ * @handle: On successful returns, a handle to the newly created MD is saved
+ *          here. This handle can be used later in LNetMDUnlink(). [out]
  *
  * The ME will either be linked to the new MD, or it will be freed.
  *
- * \retval 0	   On success.
- * \retval -EINVAL If \a umd is not valid.
- * \retval -ENOMEM If new MD cannot be allocated.
+ * Return:
+ * * %0 On success.
+ * * %-EINVAL If @umd is not valid.
+ * * %-ENOMEM If new MD cannot be allocated.
  */
 int
 LNetMDAttach(struct lnet_me *me, const struct lnet_md *umd,
@@ -359,17 +360,22 @@ LNetMDAttach(struct lnet_me *me, const struct lnet_md *umd,
 EXPORT_SYMBOL(LNetMDAttach);
 
 /**
+ * LNetMDBind() - Create a "free floating" memory descriptor (RDMA)
+ * @umd: memory descriptor
+ * @unlink: memory descripto for unlink
+ * @handle: On successful returns, a handle to the newly created MD is saved
+ *          here. This handle can be used later in LNetMDUnlink(), LNetPut(),
+ *          and LNetGet() operations [out]
+ *
  * Create a "free floating" memory descriptor - a MD that is not associated
  * with a ME. Such MDs are usually used in LNetPut() and LNetGet() operations.
  *
- * \param umd,umd_unlink See the discussion for LNetMDAttach().
- * \param handle On successful returns, a handle to the newly created MD is
- * saved here. This handle can be used later in LNetMDUnlink(), LNetPut(),
- * and LNetGet() operations.
+ * @umd, @unlink See the discussion for LNetMDAttach().
  *
- * \retval 0	   On success.
- * \retval -EINVAL If \a umd is not valid.
- * \retval -ENOMEM If new MD cannot be allocated.
+ * Return:
+ * * %0 On success.
+ * * %-EINVAL If @umd is not valid.
+ * * %-ENOMEM If new MD cannot be allocated.
  */
 int
 LNetMDBind(const struct lnet_md *umd, enum lnet_unlink unlink,
@@ -413,6 +419,9 @@ LNetMDBind(const struct lnet_md *umd, enum lnet_unlink unlink,
 EXPORT_SYMBOL(LNetMDBind);
 
 /**
+ * LNetMDUnlink() - Unlink the memory descriptor from any ME
+ * @mdh: A handle for the MD to be unlinked.
+ *
  * Unlink the memory descriptor from any ME it may be linked to and release
  * the internal resources associated with it. As a result, active messages
  * associated with the MD may get aborted.
@@ -437,10 +446,9 @@ EXPORT_SYMBOL(LNetMDBind);
  * Note that in both cases the unlinked field of the event is always set; no
  * more event will happen on the MD after such an event is logged.
  *
- * \param mdh A handle for the MD to be unlinked.
- *
- * \retval 0	   On success.
- * \retval -ENOENT If \a mdh does not point to a valid MD object.
+ * Return:
+ * * %0 On success.
+ * * %-ENOENT If @mdh does not point to a valid MD object.
  */
 int
 LNetMDUnlink(struct lnet_handle_md mdh)
