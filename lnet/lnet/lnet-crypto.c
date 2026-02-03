@@ -12,28 +12,27 @@
 #include <lnet/lnet_crypto.h>
 #include "adler.h"
 
-/**
- *  Array of hash algorithm speed in MByte per second
- */
+/* Array of hash algorithm speed in MByte per second */
 int cfs_crypto_hash_speeds[CFS_HASH_ALG_MAX];
 EXPORT_SYMBOL(cfs_crypto_hash_speeds);
 
 /**
- * Initialize the state descriptor for the specified hash algorithm.
+ * cfs_crypto_hash_alloc() - Initialize the state descriptor for the specified
+ *                           hash algorithm.
+ * @hash_alg: hash algorithm id (CFS_HASH_ALG_*)
+ * @type: pointer to the hash description in hash_types[] array
+ * @req: ahash request to be initialized [in,out]
+ * @key: initial hash value/state, NULL to use default value
+ * @key_len: length of @key
  *
- * An internal routine to allocate the hash-specific state in \a hdesc for
+ * An internal routine to allocate the hash-specific state in @hdesc for
  * use with cfs_crypto_hash_digest() to compute the hash of a single message,
  * though possibly in multiple chunks.  The descriptor internal state should
  * be freed with cfs_crypto_hash_final().
  *
- * \param[in]  hash_alg	hash algorithm id (CFS_HASH_ALG_*)
- * \param[out] type	pointer to the hash description in hash_types[] array
- * \param[in,out] req	ahash request to be initialized
- * \param[in]  key	initial hash value/state, NULL to use default value
- * \param[in]  key_len	length of \a key
- *
- * \retval		0 on success
- * \retval		negative errno on failure
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
  */
 static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
 				 const struct cfs_crypto_hash_type **type,
@@ -106,26 +105,26 @@ out_free_tfm:
 }
 
 /**
- * Calculate hash digest for the passed buffer.
+ * cfs_crypto_hash_digest() - Calculate hash digest for the passed buffer.
+ * @hash_alg: id of hash algorithm (CFS_HASH_ALG_*)
+ * @buf: data buffer on which to compute hash
+ * @buf_len: length of @buf in bytes
+ * @key: initial value/state for algorithm, if @key = NULL use default initial
+ *       value
+ * @key_len: length of @key in bytes
+ * @hash: pointer to computed hash value, if @hash = NULL then @hash_len is
+ *        to digest size in bytes, retval -ENOSPC [out]
+ * @hash_len: size of @hash buffer [in,out]
  *
  * This should be used when computing the hash on a single contiguous buffer.
  * It combines the hash initialization, computation, and cleanup.
  *
- * \param[in] hash_alg	id of hash algorithm (CFS_HASH_ALG_*)
- * \param[in] buf	data buffer on which to compute hash
- * \param[in] buf_len	length of \a buf in bytes
- * \param[in] key	initial value/state for algorithm, if \a key = NULL
- *			use default initial value
- * \param[in] key_len	length of \a key in bytes
- * \param[out] hash	pointer to computed hash value, if \a hash = NULL then
- *			\a hash_len is to digest size in bytes, retval -ENOSPC
- * \param[in,out] hash_len size of \a hash buffer
- *
- * \retval -EINVAL       \a buf, \a buf_len, \a hash_len, \a hash_alg invalid
- * \retval -ENOENT       \a hash_alg is unsupported
- * \retval -ENOSPC       \a hash is NULL, or \a hash_len less than digest size
- * \retval		0 for success
- * \retval		negative errno for other errors from lower layers.
+ * Return:
+ * * %-EINVAL @buf, @buf_len, @hash_len, @hash_alg invalid
+ * * %-ENOENT @hash_alg is unsupported
+ * * %-ENOSPC @hash is NULL, or @hash_len less than digest size
+ * * %0 for success
+ * * %negative errno for other errors from lower layers.
  */
 int cfs_crypto_hash_digest(enum cfs_crypto_hash_alg hash_alg,
 			   const void *buf, unsigned int buf_len,
@@ -162,7 +161,10 @@ int cfs_crypto_hash_digest(enum cfs_crypto_hash_alg hash_alg,
 EXPORT_SYMBOL(cfs_crypto_hash_digest);
 
 /**
- * Allocate and initialize desriptor for hash algorithm.
+ * cfs_crypto_hash_init() - Allocate and initialize desriptor for hash algorithm
+ * @hash_alg: algorithm id (CFS_HASH_ALG_*)
+ * @key: initial value/state algorithm, if @key = NULL use default initial value
+ * @key_len: length of @key in bytes
  *
  * This should be used to initialize a hash descriptor for multiple calls
  * to a single hash function when computing the hash across multiple
@@ -170,13 +172,9 @@ EXPORT_SYMBOL(cfs_crypto_hash_digest);
  *
  * The hash descriptor should be freed with cfs_crypto_hash_final().
  *
- * \param[in] hash_alg	algorithm id (CFS_HASH_ALG_*)
- * \param[in] key	initial value/state for algorithm, if \a key = NULL
- *			use default initial value
- * \param[in] key_len	length of \a key in bytes
- *
- * \retval		pointer to ahash request
- * \retval		ERR_PTR(errno) in case of error
+ * Return:
+ * * %pointer to ahash request
+ * * %ERR_PTR(errno) in case of error
  */
 struct ahash_request *
 	cfs_crypto_hash_init(enum cfs_crypto_hash_alg hash_alg,
@@ -194,15 +192,16 @@ struct ahash_request *
 EXPORT_SYMBOL(cfs_crypto_hash_init);
 
 /**
- * Update hash digest computed on data within the given \a page
+ * cfs_crypto_hash_update_page() - Update hash digest computed on data within
+ *                                 the given @page
+ * @req: ahash request
+ * @page: data page on which to compute the hash
+ * @offset: offset within @page at which to start hash
+ * @len: length of data on which to compute hash
  *
- * \param[in] req	ahash request
- * \param[in] page	data page on which to compute the hash
- * \param[in] offset	offset within \a page at which to start hash
- * \param[in] len	length of data on which to compute hash
- *
- * \retval		0 for success
- * \retval		negative errno on failure
+ * Return:
+ * * %0 for success
+ * * %negative errno on failure
  */
 int cfs_crypto_hash_update_page(struct ahash_request *req,
 				struct page *page, unsigned int offset,
@@ -219,14 +218,14 @@ int cfs_crypto_hash_update_page(struct ahash_request *req,
 EXPORT_SYMBOL(cfs_crypto_hash_update_page);
 
 /**
- * Update hash digest computed on the specified data
+ * cfs_crypto_hash_update() - Update hash digest computed on the specified data
+ * @req: ahash request
+ * @buf: data buffer on which to compute the hash
+ * @buf_len: length of @buf on which to compute hash
  *
- * \param[in] req	ahash request
- * \param[in] buf	data buffer on which to compute the hash
- * \param[in] buf_len	length of \buf on which to compute hash
- *
- * \retval		0 for success
- * \retval		negative errno on failure
+ * Return:
+ * * %0 for success
+ * * %negative errno on failure
  */
 int cfs_crypto_hash_update(struct ahash_request *req,
 			   const void *buf, unsigned int buf_len)
@@ -241,17 +240,18 @@ int cfs_crypto_hash_update(struct ahash_request *req,
 EXPORT_SYMBOL(cfs_crypto_hash_update);
 
 /**
- * Finish hash calculation, copy hash digest to buffer, clean up hash descriptor
+ * cfs_crypto_hash_final() - Finish hash calculation, copy hash digest to
+ *                           buffer, clean up hash descriptor
+ * @req: ahash request
+ * @hash: pointer to hash buffer to store hash digest [out]
+ * @hash_len: pointer to hash buffer size, if @hash == NULL or
+ *            hash_len == NULL only free @hdesc instead of computing the hash
+ *            [in, out]
  *
- * \param[in]	req		ahash request
- * \param[out]	hash		pointer to hash buffer to store hash digest
- * \param[in,out] hash_len	pointer to hash buffer size, if \a hash == NULL
- *				or hash_len == NULL only free \a hdesc instead
- *				of computing the hash
- *
- * \retval		0 for success
- * \retval		-EOVERFLOW if hash_len is too small for the hash digest
- * \retval		negative errno for other errors from lower layers
+ * Return:
+ * * %0 for success
+ * * %-EOVERFLOW if hash_len is too small for the hash digest
+ * * %negative errno for other errors from lower layers
  */
 int cfs_crypto_hash_final(struct ahash_request *req,
 			  unsigned char *hash, unsigned int *hash_len)
@@ -281,7 +281,12 @@ free:
 EXPORT_SYMBOL(cfs_crypto_hash_final);
 
 /**
- * Compute the speed of specified hash function
+ * cfs_crypto_performance_test() - Compute the speed of specified hash function
+ * @hash_alg: hash algorithm id (CFS_HASH_ALG_*)
+ *
+ * --arshad
+ * \param[in] buf	data buffer on which to compute the hash
+ * \param[in] buf_len	length of \buf on which to compute hash
  *
  * Run a speed test on the given hash algorithm on buffer using a 1MB buffer
  * size.  This is a reasonable buffer size for Lustre RPCs, even if the actual
@@ -292,10 +297,6 @@ EXPORT_SYMBOL(cfs_crypto_hash_final);
  *
  * This function needs to stay the same as obd_t10_performance_test() so that
  * the speeds are comparable.
- *
- * \param[in] hash_alg	hash algorithm id (CFS_HASH_ALG_*)
- * \param[in] buf	data buffer on which to compute the hash
- * \param[in] buf_len	length of \buf on which to compute hash
  */
 static void cfs_crypto_performance_test(enum cfs_crypto_hash_alg hash_alg)
 {
@@ -360,20 +361,22 @@ out_err:
 }
 
 /**
- * hash speed in Mbytes per second for valid hash algorithm
+ * cfs_crypto_hash_speed() - hash speed in Mbytes per second for valid hash
+ *                           algorithm
+ * @hash_alg: hash algorithm id (CFS_HASH_ALG_*)
  *
- * Return the performance of the specified \a hash_alg that was
+ * Return the performance of the specified @hash_alg that was
  * computed using cfs_crypto_performance_test().  If the performance
  * has not yet been computed, do that when it is first requested.
  * That avoids computing the speed when it is not actually needed.
  * To avoid competing threads computing the checksum speed at the
  * same time, only compute a single checksum speed at one time.
  *
- * \param[in] hash_alg	hash algorithm id (CFS_HASH_ALG_*)
  *
- * \retval		positive speed of the hash function in MB/s
- * \retval		-ENOENT if \a hash_alg is unsupported
- * \retval		negative errno if \a hash_alg speed is unavailable
+ * Return:
+ * * %positive speed of the hash function in MB/s
+ * * %-ENOENT if @hash_alg is unsupported
+ * * %negative errno if @hash_alg speed is unavailable
  */
 int cfs_crypto_hash_speed(enum cfs_crypto_hash_alg hash_alg)
 {
@@ -394,7 +397,7 @@ int cfs_crypto_hash_speed(enum cfs_crypto_hash_alg hash_alg)
 EXPORT_SYMBOL(cfs_crypto_hash_speed);
 
 /**
- * Run the performance test for all hash algorithms.
+ * cfs_crypto_test_hashes() - Run the performance test for all hash algorithms.
  *
  * Run the cfs_crypto_performance_test() benchmark for some of the available
  * hash functions at module load time.  This can't be reliably done at runtime
@@ -409,8 +412,9 @@ EXPORT_SYMBOL(cfs_crypto_hash_speed);
  * The actual speeds are available via cfs_crypto_hash_speed() for later
  * comparison.
  *
- * \retval		0 on success
- * \retval		-ENOMEM if no memory is available for test buffer
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM if no memory is available for test buffer
  */
 static int cfs_crypto_test_hashes(void)
 {
@@ -425,9 +429,9 @@ static int cfs_crypto_test_hashes(void)
 static int adler32;
 
 /**
- * Register available hash functions
+ * cfs_crypto_register() - Register available hash functions
  *
- * \retval		0
+ * Return %0 always
  */
 int cfs_crypto_register(void)
 {
@@ -443,7 +447,7 @@ int cfs_crypto_register(void)
 }
 
 /**
- * Unregister previously registered hash functions
+ * cfs_crypto_unregister() - Unregister previously registered hash functions
  */
 void cfs_crypto_unregister(void)
 {
