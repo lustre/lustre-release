@@ -260,9 +260,9 @@ AC_MSG_CHECKING([whether to enable gss keyring backend])
 AC_ARG_ENABLE([gss_keyring],
 	[AS_HELP_STRING([--disable-gss-keyring],
 		[disable gss keyring backend])],
-	[], [AS_IF([test "x$enable_gss" != xno], [
-			enable_gss_keyring="yes"], [
-			enable_gss_keyring="auto"])])
+	[], [AS_IF([test "x$enable_gss" = xauto], [
+			enable_gss_keyring="auto"], [
+			enable_gss_keyring="$enable_gss"])])
 AC_MSG_RESULT([$enable_gss_keyring])
 AS_IF([test "x$enable_gss_keyring" != xno], [
 	LB_CHECK_CONFIG_IM([KEYS], [], [
