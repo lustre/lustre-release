@@ -21,7 +21,7 @@
 #include <lnet/lib-types.h>
 #include <lnet/lib-cpt.h>
 
-/** virtual processing unit */
+/* virtual processing unit */
 struct cfs_cpu_partition {
 	/* CPUs mask for this partition */
 	cpumask_var_t			cpt_cpumask;
@@ -59,7 +59,7 @@ struct cfs_cpt_table {
 struct cfs_cpt_table *cfs_cpt_tab __read_mostly;
 EXPORT_SYMBOL(cfs_cpt_tab);
 
-/**
+/*
  * modparam for setting number of partitions
  *
  *  0 : estimate best value based on cores or NUMA nodes
@@ -69,7 +69,7 @@ EXPORT_SYMBOL(cfs_cpt_tab);
 module_param(cpu_npartitions, int, 0444);
 MODULE_PARM_DESC(cpu_npartitions, "# of CPU partitions");
 
-/**
+/*
  * modparam for setting CPU partitions patterns:
  *
  * i.e:	"0[0-3] 1[4,5,7]", number before bracket is CPU partition ID,
@@ -866,8 +866,18 @@ int cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
 EXPORT_SYMBOL(cfs_cpt_bind);
 
 /**
- * Choose max to \a number CPUs from \a node and set them in \a cpt.
+ * cfs_cpt_choose_ncpus() - Choose max to @number CPUs from @node and set them
+ *                          in @cpt.
+ * @cptab: CPU Partitioning Table
+ * @cpt: partitioning index
+ * @node_mask: CPU Mask
+ * @number: Count of CPU to select
+ *
  * We always prefer to choose CPU in the same core/socket.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
 				cpumask_t *node_mask, int number)
