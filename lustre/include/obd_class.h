@@ -1212,15 +1212,15 @@ static inline void obd_import_event(struct obd_device *obd,
 				    struct obd_import *imp,
 				    enum obd_import_event event)
 {
-	int rc;
-
 	ENTRY;
 
-	rc = obd_check_dev(obd);
-	if (rc)
+	if (!obd) {
+		CERROR("NULL device\n");
 		RETURN_EXIT;
+	}
 
-	if (obd->obd_type->typ_dt_ops->o_import_event)
+	if (test_bit(OBDF_SET_UP, obd->obd_flags) &&
+	    obd->obd_type->typ_dt_ops->o_import_event)
 		obd->obd_type->typ_dt_ops->o_import_event(obd, imp, event);
 
 	EXIT;
