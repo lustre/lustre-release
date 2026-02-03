@@ -3090,14 +3090,15 @@ nla_strnid(struct nlattr **attr, struct lnet_nid *nid, int *rem,
 static struct genl_family lnet_family;
 
 /**
- * Initialize LNet library.
+ * lnet_lib_init() - Initialize LNet library.
  *
  * Automatically called at module loading time. Caller has to call
  * lnet_lib_exit() after a call to lnet_lib_init(), if and only if the
  * latter returned 0. It must be called exactly once.
  *
- * \retval 0 on success
- * \retval -ve on failures.
+ * Return:
+ * * %0 on success
+ * * %negative on failures.
  */
 int lnet_lib_init(void)
 {
@@ -3157,10 +3158,10 @@ int lnet_lib_init(void)
 }
 
 /**
- * Finalize LNet library.
+ * lnet_lib_exit() - Finalize LNet library.
  *
- * \pre lnet_lib_init() called with success.
- * \pre All LNet users called LNetNIFini() for matching LNetNIInit() calls.
+ * pre: lnet_lib_init() called with success.
+ * pre: All LNet users called LNetNIFini() for matching LNetNIInit() calls.
  *
  * As this happens at module-unload, all lnds must already be unloaded,
  * so they must already be unregistered.
@@ -3181,19 +3182,18 @@ void lnet_lib_exit(void)
 }
 
 /**
- * Set LNet PID and start LNet interfaces, routing, and forwarding.
+ * LNetNIInit() - Set LNet PID and start LNet interfaces, routing & forwarding.
+ * @requested_pid: PID requested by the caller.
  *
  * Users must call this function at least once before any other functions.
  * For each successful call there must be a corresponding call to
- * LNetNIFini(). For subsequent calls to LNetNIInit(), \a requested_pid is
+ * LNetNIFini(). For subsequent calls to LNetNIInit(), @requested_pid is
  * ignored.
  *
  * The PID used by LNet may be different from the one requested.
  * See LNetGetId().
  *
- * \param requested_pid PID requested by the caller.
- *
- * \return >= 0 on success, and < 0 error code on failures.
+ * Return %>=0 on success, and %<0 error code on failures.
  */
 int
 LNetNIInit(lnet_pid_t requested_pid)
@@ -3349,13 +3349,13 @@ err_empty_list:
 EXPORT_SYMBOL(LNetNIInit);
 
 /**
- * Stop LNet interfaces, routing, and forwarding.
+ * LNetNIFini() - Stop LNet interfaces, routing, and forwarding.
  *
  * Users must call this function once for each successful call to LNetNIInit().
  * Once the LNetNIFini() operation has been started, the results of pending
  * API operations are undefined.
  *
- * \return always 0 for current implementation.
+ * Returns always %0 for current implementation.
  */
 int
 LNetNIFini(void)
@@ -3458,12 +3458,13 @@ void LNetUnRegisterNIDUpdates(void *cb_data)
 EXPORT_SYMBOL(LNetUnRegisterNIDUpdates);
 
 /**
- * Grabs the ni data from the ni structure and fills the out
- * parameters
- *
- * \param[in] ni network	interface structure
- * \param[out] cfg_ni		NI config information
- * \param[out] tun		network and LND tunables
+ * lnet_fill_ni_info() - Grabs the ni data from the ni structure and fills the
+ *                       out parameters
+ * @ni: network interface structure
+ * @cfg_ni: NI config information [out]
+ * @tun: network and LND tunables [out]
+ * @stats: If %true collect stats via ioctl interfaces
+ * @tun_size: Size of tunables (version/size checking)
  */
 static void
 lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
@@ -3550,15 +3551,14 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 }
 
 /**
+ * lnet_fill_ni_info_legacy() - Grabs the ni data from the ni structure and
+ *                              fills the out parameters
+ * @ni: network	interface structure
+ * @config: config information [out]
+ *
  * NOTE: This is a legacy function left in the code to be backwards
  * compatible with older userspace programs. It should eventually be
  * removed.
- *
- * Grabs the ni data from the ni structure and fills the out
- * parameters
- *
- * \param[in] ni network	interface structure
- * \param[out] config		config information
  */
 static void
 lnet_fill_ni_info_legacy(struct lnet_ni *ni,
@@ -4464,10 +4464,8 @@ lnet_get_peer_ni_recovery_list(struct lnet_ioctl_recovery_list *list)
 	return 0;
 }
 
-/**
- * LNet ioctl handler.
- *
- */
+/* LNet ioctl handler. */
+
 int
 LNetCtl(unsigned int cmd, void *arg)
 {
@@ -10094,12 +10092,12 @@ void LNetDebugPeer(struct lnet_processid *id)
 EXPORT_SYMBOL(LNetDebugPeer);
 
 /**
- * Determine if the specified peer \a nid is on the local node.
+ * LNetIsPeerLocal() - Determine if the specified peer @nid is on the local node.
+ * @nid: peer nid to check
  *
- * \param nid	peer nid to check
- *
- * \retval true		If peer NID is on the local node.
- * \retval false	If peer NID is not on the local node.
+ * Return:
+ * * %true If peer NID is on the local node.
+ * * %false If peer NID is not on the local node.
  */
 bool LNetIsPeerLocal(struct lnet_nid *nid)
 {
@@ -10126,9 +10124,8 @@ bool LNetIsPeerLocal(struct lnet_nid *nid)
 EXPORT_SYMBOL(LNetIsPeerLocal);
 
 /**
- * Retrieve an array of lnet_nid NIDs grouped by networks or for particular
- * network only.
- *
+ * LNetFetchNIDs() - Retrieve an array of lnet_nid NIDs grouped by networks or
+ *                   for particular network only.
  * @cb: callback to pass each new NID to.
  * @netid: if not LNET_NET_ANY then fetch only NIDs on that @netid
  * @data: caller data to pass through.
@@ -10136,7 +10133,7 @@ EXPORT_SYMBOL(LNetIsPeerLocal);
  * Callback is called for each found NID, so that is up to caller
  * how to handle and organize them.
  *
- * Return: 0 or error code from callback
+ * Return %0 or error code from callback
  */
 int LNetFetchNIDs(int (*cb)(void *private, struct lnet_nid *nid),
 		  __u32 netid, void *data)
@@ -10163,16 +10160,18 @@ err_unlock:
 EXPORT_SYMBOL(LNetFetchNIDs);
 
 /**
- * Retrieve the struct lnet_process_id ID of LNet interface at \a index.
+ * LNetGetId() - Get struct lnet_process_id ID of LNet interface at @index.
+ * @index: Index of the interface to look up.
+ * @id: On successful return, this location will hold the
+ *      struct lnet_process_id ID of the interface.
+ * @large_nids: Report large NIDs if this is true.
+ *
+ * Retrieve the struct lnet_process_id ID of LNet interface at @index.
  * Note that all interfaces share a same PID, as requested by LNetNIInit().
  *
- * @index	Index of the interface to look up.
- * @id		On successful return, this location will hold the
- *		struct lnet_process_id ID of the interface.
- * @large_nids	Report large NIDs if this is true.
- *
- * RETURN	0 If an interface exists at \a index.
- *		-ENOENT If no interface has been found.
+ * Return:
+ * * %0 if an interface exists at @index
+ * * %-ENOENT if no interface has been found
  */
 int
 LNetGetId(unsigned int index, struct lnet_processid *id, bool large_nids)
@@ -10710,10 +10709,11 @@ out:
 }
 
 /**
- * Retrieve peer discovery status.
+ * LNetGetPeerDiscoveryStatus() - Retrieve peer discovery status.
  *
- * \retval 1 if lnet_peer_discovery_disabled is 0
- * \retval 0 if lnet_peer_discovery_disabled is 1
+ * Return:
+ * * %1 if lnet_peer_discovery_disabled is 0
+ * * %0 if lnet_peer_discovery_disabled is 1
  */
 int
 LNetGetPeerDiscoveryStatus(void)
