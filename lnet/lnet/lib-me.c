@@ -16,31 +16,35 @@
 #include <lnet/lib-lnet.h>
 
 /**
- * Create and attach a match entry to the match list of \a portal. The new
+ * LNetMEAttach() - Create and attach a match entry to the match list of @portal
+ * @portal: The portal table index where the ME should be attached.
+ * @match_id: Specifies the match criteria for the process ID of
+ *            the requester. The constants LNET_PID_ANY and LNET_NID_ANY can be
+ *            used to wildcard either of the identifiers in the
+ *            struct lnet_process_id structure.
+ * @match_bits: Specify the match criteria to apply to the match bits in the
+ *              incoming request.
+ * @ignore_bits: Specify the match criteria to ignore
+ *              The ignore bits are used to mask out insignificant bits in the
+ *              incoming match bits. The resulting bits are then compared to
+ *              the ME's match bits to determine if the incoming request meets
+ *              the match criteria.
+ * @unlink: Indicates whether the ME should be unlinked when the memory
+ *          descriptor associated with it is unlinked (Note that the check for
+ *          unlinking a ME only occurs when the memory descriptor is unlinked.).
+ *          Valid values are LNET_RETAIN and LNET_UNLINK.
+ * @pos: Indicates whether the new ME should be prepended or
+ *       appended to the match list. Allowed constants: LNET_INS_BEFORE,
+ *       LNET_INS_AFTER.
+ *
+ * Create and attach a match entry to the match list of @portal. The new
  * ME is empty, i.e. not associated with a memory descriptor. LNetMDAttach()
  * can be used to attach a MD to an empty ME.
  *
- * \param portal The portal table index where the ME should be attached.
- * \param match_id Specifies the match criteria for the process ID of
- * the requester. The constants LNET_PID_ANY and LNET_NID_ANY can be
- * used to wildcard either of the identifiers in the struct lnet_process_id
- * structure.
- * \param match_bits,ignore_bits Specify the match criteria to apply
- * to the match bits in the incoming request. The ignore bits are used
- * to mask out insignificant bits in the incoming match bits. The resulting
- * bits are then compared to the ME's match bits to determine if the
- * incoming request meets the match criteria.
- * \param unlink Indicates whether the ME should be unlinked when the memory
- * descriptor associated with it is unlinked (Note that the check for
- * unlinking a ME only occurs when the memory descriptor is unlinked.).
- * Valid values are LNET_RETAIN and LNET_UNLINK.
- * \param pos Indicates whether the new ME should be prepended or
- * appended to the match list. Allowed constants: LNET_INS_BEFORE,
- * LNET_INS_AFTER.
- *
- * \retval A handle to the newly created ME is returned on success
- * \retval ERR_PTR(-EINVAL) If \a portal is invalid.
- * \retval ERR_PTR(-ENOMEM) If new ME object cannot be allocated.
+ * Return:
+ * * A handle to the newly created ME is returned on success
+ * * %ERR_PTR(-EINVAL) If @portal is invalid.
+ * * %ERR_PTR(-ENOMEM) If new ME object cannot be allocated.
  */
 struct lnet_me *
 LNetMEAttach(unsigned int portal,
