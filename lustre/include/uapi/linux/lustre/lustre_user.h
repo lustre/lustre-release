@@ -1362,9 +1362,10 @@ enum {
 	LMV_INHERIT_RR_UNLIMITED	= 255,
 };
 
-static inline int lmv_user_md_size(int stripes, int lmm_magic)
+static inline unsigned int lmv_user_md_size(unsigned int stripes,
+					    unsigned int lmm_magic)
 {
-	int size = sizeof(struct lmv_user_md);
+	unsigned int size = sizeof(struct lmv_user_md);
 
 	if (lmm_magic == LMV_USER_MAGIC_SPECIFIC)
 		size += stripes * sizeof(struct lmv_user_mds_data);
@@ -1433,9 +1434,13 @@ static inline const char *obd_uuid2str(const struct obd_uuid *uuid)
  * e.g. (myfs-OST0007_UUID -> myfs)
  * see also deuuidify.
  */
-static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
+static inline void obd_uuid2fsname(char *buf, char *uuid,
+				   unsigned int buflen)
 {
 	char *p;
+
+	if (buflen == 0)
+		return;
 
 	strncpy(buf, uuid, buflen - 1);
 	buf[buflen - 1] = '\0';
@@ -1928,7 +1933,7 @@ static inline void hsm_set_cl_event(enum changelog_rec_flags *clf_flags,
 				    enum hsm_event he)
 {
 	*clf_flags = (enum changelog_rec_flags)
-		(*clf_flags | (he << CLF_HSM_EVENT_L));
+		((__u32)*clf_flags | ((__u32)he << CLF_HSM_EVENT_L));
 }
 
 static inline __u16 hsm_get_cl_flags(enum changelog_rec_flags clf_flags)
@@ -1940,7 +1945,7 @@ static inline void hsm_set_cl_flags(enum changelog_rec_flags *clf_flags,
 				    unsigned int bits)
 {
 	*clf_flags = (enum changelog_rec_flags)
-		(*clf_flags | (bits << CLF_HSM_FLAG_L));
+		((__u32)*clf_flags | (__u32)(bits << CLF_HSM_FLAG_L));
 }
 
 static inline int hsm_get_cl_error(enum changelog_rec_flags clf_flags)
@@ -2252,8 +2257,12 @@ static inline char *changelog_rec_sname(const struct changelog_rec *rec)
 static
 inline __kernel_size_t changelog_rec_snamelen(const struct changelog_rec *rec)
 {
-	return rec->cr_namelen -
-	       (changelog_rec_sname(rec) - changelog_rec_name(rec));
+	size_t snamelen;
+
+	/* always positive but < cr_namelen,(see changelog_rec_sname() code */
+	snamelen = (size_t)(changelog_rec_sname(rec) - changelog_rec_name(rec));
+
+	return rec->cr_namelen - snamelen;
 }
 
 enum changelog_message_type {
@@ -2492,23 +2501,25 @@ static inline void *hur_data(struct hsm_user_request *hur)
 }
 
 /**
- * Compute the current length of the provided hsm_user_request.  This returns -1
- * instead of an errno because __kernel_ssize_t is defined to be only
- * [ -1, SSIZE_MAX ]
+ * Compute the current length of the provided hsm_user_request. This returns
+ * ~0UL (-1 for 32-bit arches) instead of an errno because __kernel_ssize_t
+ * is defined to be only [ -1, SSIZE_MAX ] there.  On 64-bit architectures
+ * the max return value is 2^32 * (sizeof(hur_user_item) + 1) ~= 2^37 bytes.
  *
- * return -1 on bounds check error.
+ * return -1 on bounds check error (32-bit only).
  */
 static inline __kernel_size_t hur_len(struct hsm_user_request *hur)
 {
-	__u64	size;
+	__u64 size;
 
 	/* can't overflow a __u64 since hr_itemcount is only __u32 */
 	size = offsetof(struct hsm_user_request, hur_user_item[0]) +
 		(__u64)hur->hur_request.hr_itemcount *
 		sizeof(hur->hur_user_item[0]) + hur->hur_request.hr_data_len;
 
-	if ((__kernel_ssize_t)size < 0)
-		return -1;
+	/* this "if (0 && ..)" is removed by the compiler on 64-bit */
+	if (sizeof(__kernel_size_t) == 4 && (__kernel_ssize_t)size < 0)
+		return ~0UL;
 
 	return size;
 }

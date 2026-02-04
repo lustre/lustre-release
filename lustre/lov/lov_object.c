@@ -1666,11 +1666,13 @@ static int fiemap_calc_last_stripe(struct lov_stripe_md *lsm, int index,
  */
 static void fiemap_prepare_and_copy_exts(struct fiemap *fiemap,
 					 struct fiemap_extent *lcl_fm_ext,
-					 int ost_index, unsigned int ext_count,
-					 int current_extent, int abs_stripeno)
+					 unsigned int ost_index,
+					 unsigned int ext_count,
+					 unsigned int current_extent,
+					 unsigned int abs_stripeno)
 {
-	char		*to;
-	unsigned int	ext;
+	unsigned int ext;
+	char *to;
 
 	for (ext = 0; ext < ext_count; ext++) {
 		set_fe_device_stripenr(&lcl_fm_ext[ext], ost_index,
@@ -1974,18 +1976,18 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	struct fiemap *fm_local = NULL;
 	loff_t whole_start;
 	loff_t whole_end;
-	int entry;
-	int start_entry = -1;
-	int end_entry;
-	int cur_stripe = 0;
-	int stripe_count;
+	unsigned int entry;
+	unsigned int start_entry = ~0U;
+	unsigned int end_entry;
+	unsigned int cur_stripe = 0;
+	unsigned int stripe_count;
 	unsigned int buffer_size = FIEMAP_BUFFER_SIZE;
 	int rc = 0;
 	struct fiemap_state fs = { 0 };
 	struct lu_extent range;
-	int cur_ext;
-	int stripe_last = 0;
-	int start_stripe = 0;
+	unsigned int cur_ext;
+	unsigned int stripe_last = 0;
+	unsigned int start_stripe = 0;
 	bool resume = false;
 	ENTRY;
 
@@ -2094,9 +2096,9 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 		cur_stripe += stripes;
 	}
 
-	if (start_entry == -1) {
-		CERROR(DFID": FIEMAP does not init start entry, cur_stripe=%d, "
-		       "stripe_last=%d\n", PFID(lu_object_fid(&obj->co_lu)),
+	if (start_entry == ~0U) {
+		CERROR(DFID": FIEMAP does not init start entry, cur_stripe=%u, "
+		       "stripe_last=%u\n", PFID(lu_object_fid(&obj->co_lu)),
 		       cur_stripe, stripe_last);
 		GOTO(out_fm_local, rc = -EINVAL);
 	}

@@ -35,24 +35,24 @@
  */
 #define fe_device	fe_reserved[0]
 
-static inline int get_fe_device(struct fiemap_extent *fe)
+static inline unsigned int get_fe_device(struct fiemap_extent *fe)
 {
 	return fe->fe_device & 0x1ffff;
 }
-static inline void set_fe_device(struct fiemap_extent *fe, int devno)
+static inline void set_fe_device(struct fiemap_extent *fe, unsigned int devno)
 {
 	fe->fe_device = (fe->fe_device & 0xfffe0000) | (devno & 0x1ffff);
 }
-static inline int get_fe_stripenr(struct fiemap_extent *fe)
+static inline unsigned int get_fe_stripenr(struct fiemap_extent *fe)
 {
 	return fe->fe_device >> 17;
 }
-static inline void set_fe_stripenr(struct fiemap_extent *fe, int nr)
+static inline void set_fe_stripenr(struct fiemap_extent *fe, unsigned int nr)
 {
 	fe->fe_device = (fe->fe_device & 0x1ffff) | (nr << 17);
 }
-static inline void set_fe_device_stripenr(struct fiemap_extent *fe, int devno,
-					  int nr)
+static inline void set_fe_device_stripenr(struct fiemap_extent *fe,
+					  unsigned int devno, unsigned int nr)
 {
 	fe->fe_device = (nr << 17) | (devno & 0x1ffff);
 }
