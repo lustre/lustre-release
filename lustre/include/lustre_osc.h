@@ -550,8 +550,6 @@ int osc_page_cache_add(const struct lu_env *env, struct osc_object *osc,
 		       cl_commit_cbt cb);
 int osc_teardown_async_page(const struct lu_env *env, struct osc_object *obj,
 			    struct osc_page *ops);
-int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
-			 struct osc_page *ops);
 int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 			struct osc_object *obj, struct cl_dio_pages *cdp,
 			struct list_head *list,

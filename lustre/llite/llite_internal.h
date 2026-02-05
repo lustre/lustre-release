@@ -1322,7 +1322,6 @@ int ll_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 		   bool tryagain);
 
 /* llite/rw.c */
-int ll_writepage(struct page *page, struct writeback_control *wbc);
 int ll_writepages(struct address_space *a, struct writeback_control *wbc);
 int ll_readpage(struct file *file, struct page *page);
 #ifdef HAVE_AOPS_READ_FOLIO

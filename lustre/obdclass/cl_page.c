@@ -1226,47 +1226,6 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 EXPORT_SYMBOL(cl_page_make_ready);
 
 /**
- * cl_page_flush() - Called if page is being written back by kernel's intention.
- * @env: current lustre environment
- * @io: pointer to IO operation which wants to flush
- * @cl_page: pointer to cl_page(page) which @io wants to flush (write back)
- *
- * pre  cl_page_is_owned(cl_page, io)
- * post ergo(result == 0, cl_page->cp_state == CPS_PAGEOUT)
- *
- * see cl_page_operations::cpo_flush()
- *
- * Return:
- * * %0 on success
- * * %negative on failure
- */
-int cl_page_flush(const struct lu_env *env, struct cl_io *io,
-		  struct cl_page *cl_page)
-{
-	const struct cl_page_slice *slice;
-	int result = 0;
-	int i;
-
-	ENTRY;
-	LASSERT(cl_page->cp_type != CPT_TRANSIENT);
-	PINVRNT(env, cl_page, cl_page_is_owned(cl_page, io));
-	PINVRNT(env, cl_page, cl_page_invariant(cl_page));
-
-	cl_page_slice_for_each(cl_page, slice, i) {
-		if (slice->cpl_ops->cpo_flush != NULL)
-			result = (*slice->cpl_ops->cpo_flush)(env, slice, io);
-		if (result != 0)
-			break;
-	}
-	if (result > 0)
-		result = 0;
-
-	CL_PAGE_HEADER(D_TRACE, env, cl_page, "%d\n", result);
-	RETURN(result);
-}
-EXPORT_SYMBOL(cl_page_flush);
-
-/**
  * cl_page_clip() - Mark only part(clip) of page for transmission
  * @env: current lustre environment
  * @cl_page: pointer to cl_page(page) which @io wants clip

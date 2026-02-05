@@ -1020,9 +1020,6 @@ const struct address_space_operations ll_aops = {
 	.releasepage		= (void *)ll_releasepage,
 #endif
 	.direct_IO		= ll_direct_IO,
-#ifndef HAVE_FILEMAP_GET_FOLIOS
-	.writepage		= ll_writepage,
-#endif
 	.writepages		= ll_writepages,
 	.write_begin		= ll_write_begin,
 	.write_end		= ll_write_end,

@@ -184,17 +184,6 @@ static void osc_page_clip(const struct lu_env *env,
 	oap->oap_async_flags |= ASYNC_COUNT_STABLE;
 }
 
-static int osc_page_flush(const struct lu_env *env,
-			  const struct cl_page_slice *slice,
-			  struct cl_io *io)
-{
-	struct osc_page *opg = cl2osc_page(slice);
-	int rc = 0;
-	ENTRY;
-	rc = osc_flush_async_page(env, io, opg);
-	RETURN(rc);
-}
-
 static void osc_page_touch(const struct lu_env *env,
 			  const struct cl_page_slice *slice, size_t to)
 {
@@ -213,7 +202,6 @@ static const struct cl_page_operations osc_page_ops = {
 	.cpo_print         = osc_page_print,
 	.cpo_delete        = osc_page_delete,
 	.cpo_clip           = osc_page_clip,
-	.cpo_flush          = osc_page_flush,
 	.cpo_page_touch	   = osc_page_touch,
 };
 

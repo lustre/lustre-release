@@ -923,15 +923,6 @@ struct cl_page_operations {
 	 */
 	void (*cpo_clip)(const struct lu_env *env,
 			 const struct cl_page_slice *slice, int from, int to);
-	/**
-	 * Write out a page by kernel. This is only called by ll_writepage
-	 * right now.
-	 *
-	 * \see cl_page_flush()
-	 */
-	int (*cpo_flush)(const struct lu_env *env,
-			 const struct cl_page_slice *slice,
-			 struct cl_io *io);
 };
 
 /**
@@ -2305,8 +2296,6 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *pg,
 		       enum cl_req_type crt);
 void cl_page_clip(const struct lu_env *env, struct cl_page *pg, int from,
 		  int to);
-int cl_page_flush(const struct lu_env *env, struct cl_io *io,
-		  struct cl_page *pg);
 
 /**
  * \name helper routines
