@@ -265,18 +265,8 @@ extern unsigned int (*vvp_account_page_dirtied)(struct page *page,
 #endif
 
 #ifdef HAVE_FOLIO_MEMCG_LOCK
-#ifdef FOLIO_MEMCG_LOCK_EXPORTED
 #define folio_memcg_lock_page(page)	folio_memcg_lock(page_folio((page)))
 #define folio_memcg_unlock_page(page)	folio_memcg_unlock(page_folio((page)))
-#elif defined(HAVE_KALLSYMS_LOOKUP_NAME)
-/* Use kallsyms_lookup_name to acquire folio_memcg_[un]lock */
-extern void (*vvp_folio_memcg_lock)(struct folio *folio);
-extern void (*vvp_folio_memcg_unlock)(struct folio *folio);
-#define folio_memcg_lock_page(page) \
-	vvp_folio_memcg_lock(page_folio((page)))
-#define folio_memcg_unlock_page(page) \
-	vvp_folio_memcg_unlock(page_folio((page)))
-#endif
 #elif defined HAVE_LOCK_PAGE_MEMCG
 #define folio_memcg_lock_page(page)	lock_page_memcg((page))
 #define folio_memcg_unlock_page(page)	unlock_page_memcg((page))

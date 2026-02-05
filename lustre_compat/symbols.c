@@ -10,6 +10,7 @@
  */
 
 #include <linux/kprobes.h>
+#include <linux/memcontrol.h>
 #include <lustre_compat/linux/security.h>
 #include <lustre_compat/linux/workqueue.h>
 
@@ -84,6 +85,24 @@ EXPORT_SYMBOL(compat_apply_workqueue_attrs);
 # define ALLOC_WQ_ATTRS_FUNC	"alloc_workqueue_attrs"
 #endif
 
+#if !defined(FOLIO_MEMCG_LOCK_EXPORTED) && defined(HAVE_FOLIO_MEMCG_LOCK)
+static void (*__folio_memcg_lock)(struct folio *folio);
+
+void folio_memcg_lock(struct folio *folio)
+{
+	__folio_memcg_lock(folio);
+}
+EXPORT_SYMBOL_GPL(folio_memcg_lock);
+
+static void (*__folio_memcg_unlock)(struct folio *folio);
+
+void folio_memcg_unlock(struct folio *folio)
+{
+	__folio_memcg_unlock(folio);
+}
+EXPORT_SYMBOL_GPL(folio_memcg_unlock);
+#endif
+
 #ifdef CONFIG_SECURITY
 static int (*__security_file_alloc)(struct file *file);
 static void (*__security_file_free)(struct file *file);
@@ -124,6 +143,15 @@ int lustre_symbols_init(void)
 	if (!__apply_workqueue_attrs)
 		return -EINVAL;
 
+#if !defined(FOLIO_MEMCG_LOCK_EXPORTED) && defined(HAVE_FOLIO_MEMCG_LOCK)
+	__folio_memcg_lock = cfs_kallsyms_lookup_name("folio_memcg_lock");
+	if (!__folio_memcg_lock)
+		return -EINVAL;
+
+	__folio_memcg_unlock = cfs_kallsyms_lookup_name("folio_memcg_unlock");
+	if (!__folio_memcg_unlock)
+		return -EINVAL;
+#endif
 #ifdef CONFIG_SECURITY
 	__security_file_alloc = cfs_kallsyms_lookup_name("security_file_alloc");
 	if (!__security_file_alloc)

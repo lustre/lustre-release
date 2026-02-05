@@ -20,7 +20,6 @@
 #include <linux/kthread.h>
 #include <linux/stacktrace.h>
 #include <linux/utsname.h>
-#include <linux/kallsyms.h>
 #include <linux/delay.h>
 #ifdef HAVE_PANIC_NOTIFIER_H
 #include <linux/panic_notifier.h>
