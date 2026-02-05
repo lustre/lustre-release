@@ -50,6 +50,8 @@
 #include <linux/in.h>
 #include <linux/nmi.h>
 
+#include <lustre_compat/linux/timer.h>
+#include <linux/libcfs/libcfs_fail.h>
 #include <lnet/lib-lnet.h>
 
 #include <gni_pub.h>
@@ -992,10 +994,11 @@ static inline void *kgnilnd_vzalloc(int size)
 {
 	void *ret;
 	if (*kgnilnd_tunables.kgn_vzalloc_noretry)
-		ret = __ll_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_ZERO |
-				   __GFP_NORETRY);
+		ret = __compat_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO |
+				       __GFP_ZERO | __GFP_NORETRY);
 	else
-		ret = __ll_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_ZERO);
+		ret = __compat_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO |
+				       __GFP_ZERO);
 
 	LIBCFS_ALLOC_POST(ret, size, "alloc");
 	return ret;

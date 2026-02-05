@@ -16,6 +16,7 @@
 #define _LLCRYPT_PRIVATE_H
 
 #include <lustre_compat/linux/llcrypt.h>
+#include <lustre_compat/linux/linux-mem.h>
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
 #include <crypto/hash.h>

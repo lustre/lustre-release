@@ -16,7 +16,7 @@
 #include <linux/nmi.h>
 #include <linux/pagemap.h>
 
-#include <libcfs/linux/linux-mem.h>
+#include <lustre_compat/linux/linux-mem.h>
 
 #include "gnilnd.h"
 

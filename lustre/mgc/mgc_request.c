@@ -1206,7 +1206,7 @@ static int mgc_create_new_conn(struct obd_import *imp, struct lnet_nid *nidlist,
 	struct obd_uuid node_uuid;
 	char prim_nid[LNET_NIDSTR_SIZE] = { 0 };
 	int i = 0;
-	int rc;
+	int rc = 0;
 
 	/* client has no existing connection to that target yet, and
 	 * it has list of target NIDs, which may have NIDs on
