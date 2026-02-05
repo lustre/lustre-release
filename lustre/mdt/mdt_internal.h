@@ -1444,28 +1444,16 @@ long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       u64 want, bool conservative);
 extern struct kmem_cache *ldlm_glimpse_work_kmem;
 
-static inline bool mdt_changelog_allow(struct mdt_thread_info *info,
-				       struct obd_export *exp)
+static inline bool mdt_changelog_allow(struct mdt_thread_info *info)
 {
 	struct lu_ucred *uc = NULL;
 	bool is_admin;
 	int rc;
 
-	if (!info->mti_body)
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 53, 0)
-	{
-		/* if client does not send mti_body, check nodemap directly */
-		enum nodemap_rbac_roles rbac = NODEMAP_RBAC_ALL;
-		struct lu_nodemap *nodemap;
-
-		nodemap = nodemap_get_from_exp(exp);
-		if (!IS_ERR_OR_NULL(nodemap)) {
-			rbac = nodemap->nmf_rbac;
-			nodemap_putref(nodemap);
-
-		}
-		return rbac & NODEMAP_RBAC_CHLG_OPS;
-	}
+	if (info == NULL || info->mti_body == NULL)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 3, 0)
+		/* return true in case old client did not send mdt body */
+		return true;
 #else
 		return false;
 #endif
